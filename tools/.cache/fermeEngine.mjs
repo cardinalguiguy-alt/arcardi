@@ -4423,6 +4423,111 @@ export function generateTownWorld() {
           ground[i] = C.G_PATH; gravel.push(arcMinX + dx, y);
         }
       }
+      /* ═══════════════════════════════════════════════════════════════════
+         ZIP 439 — 1 bis. LE PONT JAPONAIS, EN TRAVERS DE L'ÉTANG.
+         ───────────────────────────────────────────────────────────────────
+         Demande de Guillaume : le pont en arc de sa planche, « fleuri, façon
+         pont japonais de Monet ». Le pourquoi de la FORME de l'étang est sur
+         `TOWN_POND` — ici, le pourquoi de sa PLACE.
+
+         ⚠️⚠️ LA RANGÉE DE FRANCHISSEMENT DOIT ÊTRE DE LARGEUR IMPAIRE, ET CE
+         N'EST PAS un détail d'arithmétique : un décor est centré sur
+         `pr.x × 16 + 8`, donc sur le MILIEU d'une case. Une nappe de largeur
+         paire a son milieu sur une COUTURE de cases : le pont s'y poserait une
+         demi-case à côté de l'eau qu'il enjambe, penché pour toujours. C'est
+         mot pour mot le défaut de symétrie du 432 (« une position réglée à la
+         main est une position qui penchera »), et la seule parade est de
+         CHOISIR une rangée impaire plutôt que de corriger après coup.
+         ⚠️ ON PREND AUSSI LA PLUS PROCHE DU CENTRE DE L'ÉTANG : franchi près
+         d'une pointe, un pont a de l'eau d'un seul côté et se lit comme une
+         passerelle de bord. Ce qui fait le pont de Monet, c'est l'eau qui
+         s'ouvre des DEUX côtés du tablier.
+         ⚠️ ET LE TABLIER COUVRE TOUTE LA NAPPE, D'UNE RIVE À L'AUTRE. Le
+         sprite, lui, fait 81 px pour une portée de 112 : il reste une case de
+         planches nues à chaque bout, et c'est juste — un garde-corps s'arrête
+         sur la culée, il ne la couvre pas. */
+      {
+        let br = -1, bA = 0, bB = 0, bestD = 1e9;
+        for (let y = p.y + 1; y < p.y + p.h - 1; y++) {
+          let a = 1e9, b = -1, n = 0;
+          for (let x = p.x; x < p.x + p.w; x++) if (ground[id(x, y)] === C.G_WATER) { n++; if (x < a) a = x; b = x; }
+          if (b < 0 || (b - a + 1) !== n) continue;          // nappe coupée : pas un franchissement
+          if (((b - a + 1) & 1) === 0) continue;             // largeur paire : le pont pencherait
+          // Les deux têtes doivent être sur de la terre libre.
+          const wa = id(a - 1, y), wb = id(b + 1, y);
+          if (!inMap(a - 1, y) || ground[wa] === C.G_WATER || solid[wa]) continue;
+          if (!inMap(b + 1, y) || ground[wb] === C.G_WATER || solid[wb]) continue;
+          const d = Math.abs(y + 0.5 - pond.cy);
+          if (d < bestD) { bestD = d; br = y; bA = a; bB = b; }
+        }
+        if (br < 0) console.warn("[VILLE] aucune rangée impaire pour le pont du parc");
+        else {
+          /* Le tablier fait DEUX rangées : à une seule, le pont se lit comme
+             une ligne posée sur l'eau, et on le traverse sans le voir. Deux,
+             c'est la largeur des allées du parc — le pont est un morceau
+             d'allée, pas un objet à part. */
+          for (const y of [br, br + 1]) {
+            for (let x = bA; x <= bB; x++) {
+              if (!inMap(x, y)) continue;
+              const i = id(x, y);
+              if (ground[i] !== C.G_WATER && ground[i] !== C.G_TOWN_LAWN && ground[i] !== C.G_PATH) continue;
+              ground[i] = C.G_BRIDGE; solid[i] = 0; objects[i] = C.O_NONE; objHp.delete(i);
+            }
+          }
+          /* LES DEUX APPROCHES. ⚠️ SANS ELLES LE PONT NE MÈNE NULLE PART : la
+             promenade de l'étang ne longe que la rive sud-est, donc la rive
+             OUEST n'a aucun chemin. On tire l'allée de chaque tête jusqu'à ce
+             qu'elle rencontre du chemin existant, et pas plus loin — une allée
+             qui traverse tout le parc pour rejoindre une allée qui y va déjà
+             est un doublon au sol. */
+          for (const [dir, x0] of [[-1, bA - 1], [1, bB + 1]]) {
+            for (let k = 0; k < 12; k++) {
+              const x = x0 + dir * k;
+              if (!inMap(x, br)) break;
+              let hit = false;
+              for (const y of [br, br + 1]) {
+                const i = id(x, y);
+                if (!inMap(x, y) || solid[i] || ground[i] === C.G_WATER) continue;
+                if (ground[i] === C.G_PATH || ground[i] === C.G_PATH_STONE) { hit = true; continue; }
+                ground[i] = C.G_PATH; gravel.push(x, y);
+              }
+              if (hit && k > 0) break;
+            }
+          }
+          addProp(bA + ((bB - bA) >> 1), br + 1, "archBridge", false);
+          /* ET IL EST FLEURI — c'est la moitié de la demande. Glycines et
+             massifs aux deux têtes, et une lanterne suspendue de chaque côté :
+             ce qui fait le pont de Monet n'est pas l'arc, c'est ce qui pend
+             autour. */
+          for (const [hx, s] of [[bA - 2, -1], [bB + 2, 1]]) {
+            addGarden(hx, br - 1, "hangLamp");
+            addGarden(hx + s, br + 2, "roseBox");
+            beds.push({ x: hx - 1, y: br - 3, w: 3, h: 2, kind: C.BL_LAVENDER });
+            beds.push({ x: hx - 1, y: br + 3, w: 3, h: 2, kind: C.BL_TULIP });
+          }
+          /* ⚠️⚠️ ET LES NYMPHÉAS, QUI SONT LE SUJET. Un pont japonais sur une
+             eau nue n'est pas un pont de Monet, c'est un pont : ce qu'on
+             regarde sur ces tableaux, ce sont les nénuphars, et le pont n'est
+             que ce qui les cadre. La tuile d'eau en pose déjà 8 % au large
+             (`drawTownWaterTile`), ce qui donne deux ou trois pastilles sur un
+             étang de soixante cases — de la garniture, pas un motif.
+             ⚠️ ILS SE POSENT EN HERBIERS DE PART ET D'AUTRE DU TABLIER, jamais
+             dessous : sous un pont, l'ombre les tue, et surtout on ne les
+             verrait pas. Deux paquets de trois à cinq, un au nord, un au sud —
+             c'est ce qui donne au regard une raison de suivre l'eau. */
+          for (const side of [-1, 1]) {
+            const cy2 = br + side * 4;
+            for (let n = 0; n < 5; n++) {
+              const h = (townHash2(bA + n, 811 + side * 37) * 1000) | 0;
+              const lx = bA + 1 + (h % Math.max(1, bB - bA - 1));
+              const ly = cy2 + side * ((h >> 4) % 3);
+              if (!inMap(lx, ly) || ground[id(lx, ly)] !== C.G_WATER) continue;
+              if (props.some(q => q.x === lx && q.y === ly)) continue;
+              addProp(lx, ly, "lily", false);
+            }
+          }
+        }
+      }
       /* 2. LE BELVÉDÈRE. Une terrasse dallée qui avance jusqu'au bord, deux
          bancs qui regardent l'eau, deux lanternes. ⚠️ SA RANGÉE SE TROUVE EN
          DESCENDANT DEPUIS LE CENTRE DE L'ÉTANG jusqu'à la première case sèche,
@@ -4437,10 +4542,26 @@ export function generateTownWorld() {
       for (const off of [-1, -2, 0, 1, -3, 2]) {
         const bx = Math.round(pond.cx) + off;
         let by = Math.round(pond.cy);
-        while (by < p.y + p.h - 3 && inMap(bx, by) && ground[id(bx, by)] === C.G_WATER) by++;
+        /* ⚠️⚠️ ZIP 439 — LA DESCENTE TRAVERSE LE TABLIER DU PONT, ELLE NE
+           S'ARRÊTE PLUS DESSUS. Le pont japonais est posé au-dessus de l'étang
+           par la passe précédente : ses cases ne sont plus de l'eau, donc cette
+           boucle — qui descendait « tant que c'est de l'eau » — s'arrêtait
+           PILE DESSUS et le belvédère y dallait sa terrasse. Mesuré à la
+           génération : quatre des quatorze cases du tablier repassaient en
+           `G_PATH_STONE`, soit un pont coupé en son milieu par un carré de
+           dalles. Rien ne levait, et le contrôle « rien n'a les pieds dans
+           l'eau » disait OK — le belvédère était bien sur du sec.
+           ⚠️ C'est la famille de défauts la plus coûteuse du générateur : une
+           passe qui recouvre une passe antérieure sans le savoir (le buisson
+           enterré sous le parvis du kiosque, 437 ; les décors noyés par
+           l'anse, plus haut dans ce zip). La parade est toujours la même —
+           la passe TARDIVE doit connaître ce que la précoce a posé. */
+        while (by < p.y + p.h - 3 && inMap(bx, by)
+               && (ground[id(bx, by)] === C.G_WATER || ground[id(bx, by)] === C.G_BRIDGE)) by++;
         let free = true;
         for (let x = bx; x < bx + 4; x++) for (let y = by; y < by + 2; y++) {
-          if (!inMap(x, y) || solid[id(x, y)] || ground[id(x, y)] === C.G_WATER) free = false;
+          if (!inMap(x, y) || solid[id(x, y)]) free = false;
+          else if (ground[id(x, y)] === C.G_WATER || ground[id(x, y)] === C.G_BRIDGE) free = false;
         }
         if (free) { bx0 = bx; by0 = by; break; }
       }
@@ -4486,18 +4607,33 @@ export function generateTownWorld() {
       /* 5. LE MOBILIER D'ALLÉE. Lanternes et buissons fleuris le long de la
          croix : c'est ce qui donne son ÉPAISSEUR à une allée. Une allée sans
          rien sur ses côtés est une rayure. */
+      /* ⚠️⚠️ ZIP 439 — LES DÉCORS D'ALLÉE VIENNENT DE LA PLANCHE. Le parc gardait
+         les trois buissons fleuris du 437 et la vasque du 425, dessinés à la
+         main : posés le long d'allées désormais bordées de la haie de la
+         planche et menant à un pont de la planche, ils étaient les DERNIERS
+         objets d'un autre trait dans le parc. C'est la « rupture » que Guillaume
+         refuse — et elle se voit d'autant plus que ces objets sont alignés.
+         ⚠️ ON GARDE LES LAMPADAIRES ET LE KIOSQUE : ce sont des ouvrages de la
+         ville qui n'ont pas d'équivalent sur la planche, et les remplacer
+         voudrait dire les INVENTER, c'est-à-dire refaire exactement ce que ce
+         zip a passé une passe à défaire.
+         ⚠️ LA ROUE FAIT CINQ ET LE PAS SEPT — premiers entre eux. À roue de
+         quatre sur un pas de sept, les deux périodes se resynchronisent toutes
+         les vingt-huit cases et l'allée se met à se répéter visiblement. */
+      const PARC = ["goldBush", "roseBox", "clump", "lavender", "flowerTrough"];
+      let gk = 0;
       for (let x = p.x + 4; x < p.x + p.w - 3; x += 7) {
         if (Math.abs(x - cx) < 3) continue;
-        addGarden(x, cy - 1, (x / 7 | 0) % 2 ? "lamp" : "shrub");
-        addGarden(x + 2, cy + 2, "shrub");
+        addGarden(x, cy - 1, (x / 7 | 0) % 2 ? "lamp" : PARC[gk++ % PARC.length]);
+        addGarden(x + 2, cy + 2, PARC[gk++ % PARC.length]);
       }
       for (let y = p.y + 4; y < p.y + p.h - 3; y += 8) {
         if (Math.abs(y - cy) < 3) continue;
-        addGarden(cx - 1, y, "shrub");
-        addGarden(cx + 2, y + 2, (y / 8 | 0) % 2 ? "shrub" : "lamp");
+        addGarden(cx - 1, y, PARC[gk++ % PARC.length]);
+        addGarden(cx + 2, y + 2, (y / 8 | 0) % 2 ? PARC[gk++ % PARC.length] : "hangLamp");
       }
-      // Deux jardinières encadrent le carrefour des deux allées.
-      addGarden(cx - 1, cy - 1, "planter"); addGarden(cx + 2, cy + 2, "planter");
+      // Deux jardinières fleuries encadrent le carrefour des deux allées.
+      addGarden(cx - 1, cy - 1, "flowerTrough"); addGarden(cx + 2, cy + 2, "bonsai");
       /* Deux bancs de plus, le long de l'allée est-ouest et face aux parterres.
          ⚠️ ILS SONT À SIX CASES L'UN DE L'AUTRE : trois places par banc espacées
          de 0,69 case, donc deux bancs à moins de trois cases partagent une
@@ -5725,7 +5861,18 @@ export function townSpots(tw) {
   // ---- Le mobilier (posé par le générateur, donc lu chez lui).
   for (const pr of tw.props || []) {
     if (pr.kind === "bench") addBench(pr);
-    else if (pr.kind === "planter") add(pr.x, pr.y + 1, "flowers");
+    /* ⚠️⚠️ ZIP 439 — LES JARDINIÈRES DE LA PLANCHE SONT AUSSI DES DESTINATIONS,
+       et l'oubli s'est vu tout de suite : en remplaçant les deux vasques du parc
+       par des décors de la planche, `verify-vallee.mjs` est passé à 26 quartiers
+       sur 27 « avec une raison qu'on y aille ». Un décor n'est pas seulement un
+       dessin — c'est un endroit où un résident va s'arrêter, et le retirer de
+       cette liste retire silencieusement une raison de traverser le parc.
+       ⚠️ Le bonsaï et le bac de roses en sont, le buisson d'or non : on
+       s'arrête devant un objet SOIGNÉ (quelqu'un l'a planté dans un bac), pas
+       devant un buisson. C'est la même distinction que le 428 avait faite entre
+       un banc et une haie. */
+    else if (pr.kind === "planter" || pr.kind === "flowerTrough" || pr.kind === "roseBox"
+             || pr.kind === "bonsai" || pr.kind === "potPink") add(pr.x, pr.y + 1, "flowers");
     else if (pr.kind === "kiosk") { add(pr.x - 2, pr.y + 1, "kiosk"); add(pr.x + 2, pr.y + 1, "kiosk"); }
     else if (pr.kind === "stall") add(pr.x, pr.y + 1, "stall");
     else if (pr.kind === "townWell") add(pr.x + 1, pr.y + 1, "well");

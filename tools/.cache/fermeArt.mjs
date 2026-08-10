@@ -1331,7 +1331,7 @@ export function drawTownGrassTile(ctx, S, tw, x, y, px, py) {
 export function drawTownBloomTile(ctx, S, tw, x, y, px, py) {
   const BS = S && S.townBloom;
   const b = (BS && tw.bloom) ? tw.bloom[y * tw.w + x] : 0;
-  if (!b || !BS[b - 1]) return false;
+  if (!b || !BS.surf || !BS.surf[b - 1]) return false;
   /* ⚠️⚠️ ZIP 438 — UN MASSIF A DE LA TERRE ET UNE BORDURE, sinon ce sont des
      fleurs POSÉES SUR DU GAZON : c'est ce que le 437 dessinait, et c'est
      exactement pourquoi le parc avait l'air d'une friche fleurie plutôt que
@@ -1365,8 +1365,10 @@ export function drawTownBloomTile(ctx, S, tw, x, y, px, py) {
     if (!w) { ctx.fillStyle = "#9a9184"; ctx.fillRect(px, py, 3, SPR_T); ctx.fillStyle = "#b8b0a2"; ctx.fillRect(px, py, 1, SPR_T); }
     if (!e) { ctx.fillStyle = "#9a9184"; ctx.fillRect(px + SPR_T - 3, py, 3, SPR_T); ctx.fillStyle = "#6f695f"; ctx.fillRect(px + SPR_T - 1, py, 1, SPR_T); }
   }
-  const set = BS[b - 1];
-  ctx.drawImage(set[waterHash(x * 9 + 2, y * 15 + 6) % set.length], px, py);
+  /* ⚠️ LA CASE SE DÉCOUPE DANS LE PAVÉ, elle ne se choisit plus dans une liste :
+     c'est ce qui fait qu'une tige traverse le bord d'une case au lieu de
+     s'arrêter dessus (voir `townBloomSurface`). */
+  ctx.drawImage(BS.surf[b - 1], (x % BS.sup) * SPR_T, (y % BS.sup) * SPR_T, SPR_T, SPR_T, px, py, SPR_T, SPR_T);
   return true;
 }
 
@@ -1388,7 +1390,16 @@ export function drawTownBloomTile(ctx, S, tw, x, y, px, py) {
    cette fonction ne s'appelle que sur la carte de la ville, d'où le `tw.shore`
    en garde — la ferme n'a pas cette couche, et un arbre de ferme passé ici par
    erreur rendrait `null` au lieu de dessiner un saule au milieu d'un champ. */
-export const TT = { OAK: 0, MAPLE: 1, BIRCH: 2, WILLOW: 3, MAGNOLIA: 4, CHERRY: 5, MIMOSA: 6, APPLE: 7, FIR: 8, PINE: 9, CYPRESS: 10 };
+/* ⚠️⚠️ ZIP 439 — QUATRE ESSENCES DE PLUS, CELLES DE LA PLANCHE DE GUILLAUME.
+   Elles s'AJOUTENT aux onze du 437 (sa demande : « on ajoute aux miens de
+   nouveaux »), elles ne les remplacent pas — la ville a donc quinze essences,
+   dont quatre dessinées à la main par lui et onze par le code.
+   ⚠️ ELLES SONT EN FIN DE TABLE, ET C'EST OBLIGATOIRE : cet indice DÉSIGNE
+   l'essence dans `S.townTrees`. Les insérer au milieu aurait décalé les onze
+   autres d'un cran, c'est-à-dire changé toutes les essences de la carte sans
+   qu'une seule ligne ne le dise. */
+export const TT = { OAK: 0, MAPLE: 1, BIRCH: 2, WILLOW: 3, MAGNOLIA: 4, CHERRY: 5, MIMOSA: 6, APPLE: 7, FIR: 8, PINE: 9, CYPRESS: 10,
+                    REF_FIR: 11, REF_APPLE: 12, REF_WILLOW: 13, REF_MAGNOLIA: 14 };
 const TT_IN = (r, x, y) => x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h;
 export function townTreeKind(tw, x, y, obj) {
   if (!tw || !tw.shore) return null;
@@ -1396,18 +1407,25 @@ export function townTreeKind(tw, x, y, obj) {
   const h = waterHash(x * 23 + 5, y * 41 + 9);
   const wet = tw.shore[i] > 0;                       // la berge : 2 cases autour de toute eau
   const conifer = obj === C.O_TREE2;
+  /* ⚠️ ZIP 439 — LES QUATRE ESSENCES DE LA PLANCHE SE MÊLENT AUX NÔTRES, à
+     raison d'environ une sur trois là où elles ont un sens. ⚠️ PAS UNE SUR
+     DEUX : à parité, on ne lit plus deux familles d'arbres mais un damier, et
+     l'œil cherche la règle au lieu de regarder le parc. Une sur trois se lit
+     comme de la variété. */
   if (conifer) {
     // Le cyprès est un arbre de cimetière et de terrasse : il ne pousse nulle
     // part ailleurs, sinon il cesse de vouloir dire quelque chose.
     if (TT_IN(C.TOWN_CEMETERY, x, y) || TT_IN(C.TOWN_UPPER, x, y)) return TT.CYPRESS;
+    if ((h % 3) === 0) return TT.REF_FIR;
     if (wet) return TT.FIR;
     return (h % 5) === 0 ? TT.PINE : TT.FIR;
   }
-  if (wet) return (h % 4) === 0 ? TT.BIRCH : TT.WILLOW;
-  if (TT_IN(C.TOWN_ORCHARD, x, y)) return TT.APPLE;
+  if (wet) { const k = h % 6; return k < 2 ? TT.REF_WILLOW : k < 3 ? TT.BIRCH : TT.WILLOW; }
+  if (TT_IN(C.TOWN_ORCHARD, x, y)) return (h % 3) === 0 ? TT.REF_APPLE : TT.APPLE;
   if (TT_IN(C.TOWN_PARK, x, y)) {
-    const k = h % 10;
-    return k < 3 ? TT.CHERRY : k < 6 ? TT.MAGNOLIA : k < 8 ? TT.MIMOSA : k < 9 ? TT.APPLE : TT.MAPLE;
+    const k = h % 12;
+    return k < 3 ? TT.REF_MAGNOLIA : k < 5 ? TT.CHERRY : k < 7 ? TT.MAGNOLIA : k < 9 ? TT.MIMOSA
+         : k < 10 ? TT.REF_APPLE : k < 11 ? TT.APPLE : TT.MAPLE;
   }
   const k = h % 8;
   return k < 4 ? TT.OAK : k < 7 ? TT.MAPLE : TT.BIRCH;
@@ -2256,6 +2274,140 @@ export function buildSprites() {
      résolution du jeu (pas natif mesuré à 3,25 px image = 1 px de jeu, soit
      exactement la case de 16). Un sprite redimensionné ici perdrait la netteté
      qui est toute la raison de l'avoir importé. */
+  /* ══════════════════════════════════════════════════════════════════════════
+     ZIP 439 — LES ARBRES DE LA PLANCHE, RENDUS SAISONNIERS ET ANIMÉS.
+     ──────────────────────────────────────────────────────────────────────────
+     Demande de Guillaume : « on ajoute aux miens de nouveaux : saisonniers,
+     animés et avec ombres ». Ses quatre arbres sont des images FIXES ; les onze
+     essences du 437 ont trois saisons et trois images de vent. Les brancher
+     tels quels aurait mis, dans la même allée, des arbres qui respirent à côté
+     d'arbres qui ne bougent pas et ne jaunissent jamais — une rupture de plus,
+     et la plus visible de toutes puisqu'elle est en MOUVEMENT.
+
+     ⚠️⚠️ LA SAISON SE FAIT SUR LA PALETTE, PAS SUR LES PIXELS, et c'est ce qui
+     préserve le dessin. Chaque sprite importé porte ses dix à seize couleurs
+     (voir `planche.js`) : on transpose CES couleurs-là, et le dessin — les
+     formes, les cernes, les masses — reste au pixel près celui de Guillaume.
+     Repeindre pixel par pixel aurait été la même erreur que transcrire.
+     ⚠️ ET ON NE TOUCHE QUE LE FEUILLAGE. Le troncs, les fleurs roses du
+     magnolia et les pommes rouges gardent leur teinte : un tronc qui vire à
+     l'ocre en automne se lit comme un arbre malade, et un magnolia dont les
+     fleurs jaunissent n'est plus un magnolia. On repère le feuillage par sa
+     TEINTE (le vert, entre 65° et 190°), jamais par sa position.
+
+     ⚠️⚠️ LE VENT EST UN CISAILLEMENT PAR RANGÉE, ET IL S'ARRÊTE AU TRONC. Une
+     rangée du houppier glisse d'un pixel, proportionnellement au CARRÉ de sa
+     hauteur dans la couronne — la cime prend tout, la base rien. C'est la même
+     loi que `crownClumps` au 438, et pour la même raison : un arbre entier qui
+     glisse d'un pixel n'est pas un arbre qui plie, c'est un arbre qui saute.
+     ⚠️ LE TRONC SE RECONNAÎT À SA LARGEUR, PAS À SA COULEUR : on mesure la
+     largeur peinte de chaque rangée, et on ne cisaille que celles qui font plus
+     de 42 % de la plus large. Un critère de couleur aurait raté le bouleau, dont
+     le tronc est blanc, et le saule, dont les rameaux descendent au ras du sol. */
+  /* ⚠️⚠️ `lMul` EST AU-DESSUS DE 1 EN AUTOMNE, ET C'EST UNE CORRECTION MESURÉE
+     SUR PLANCHE. Premier réglage à 0,94 : les quatre essences importées
+     sortaient BRUN BOUEUX à côté des huit nôtres, qui sont ocre lumineux. La
+     cause n'est pas la teinte — elle est la même — mais le point de départ :
+     les verts de la planche sont plus SOMBRES que les nôtres, et une rotation
+     de teinte conserve la valeur. Transposer sans remonter la luminosité
+     revenait donc à peindre l'automne dans l'ombre.
+     ⚠️ LE CHIFFRE EST MESURÉ, PAS CHOISI : la luminance moyenne du feuillage
+     chaud de nos huit feuillus d'automne va de 114 (érable) à 157 (saule). Les
+     essences importées sortaient à 93 et 100 — hors de la plage, donc visibles
+     comme un autre automne. À `lMul = 1,50` elles mesurent 126 et 127, soit en
+     plein milieu. C'est la méthode du §8 appliquée à une transposition de
+     palette : on compare des nombres, on ne juge pas au ressenti.
+     ⚠️ LES CONIFÈRES ONT LEUR PROPRE RÈGLE, ET C'EST LA PLUS IMPORTANTE : un
+     sapin ne jaunit pas. Le premier jet appliquait la même transposition à
+     tout ce qui est vert, et le sapin de la planche virait au brun en automne —
+     un arbre mort au milieu d'une forêt verte. Il perd un peu de saturation et
+     de lumière (l'automne est gris), il ne change pas de teinte. C'est déjà ce
+     que font les trois conifères procéduraux du 437, dont les tables `autumn`
+     ne bougent que de quelques points. */
+  const TREE_HUE_SHIFT = {
+    autumn: { h: [22, 46], sMul: 1.15, lMul: 1.50 },   // ocre, orange, brun doré
+    spring: { h: [88, 122], sMul: 1.06, lMul: 1.07 },  // vert tendre
+  };
+  const TREE_EVERGREEN = {
+    autumn: { sMul: 0.86, lMul: 0.93 },
+    spring: { sMul: 1.08, lMul: 1.06 },
+  };
+  function hexToHsl(hex) {
+    const r = parseInt(hex.slice(1, 3), 16) / 255, g = parseInt(hex.slice(3, 5), 16) / 255, b = parseInt(hex.slice(5, 7), 16) / 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+    if (mx === mn) return [0, 0, l];
+    const d = mx - mn, sa = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+    let h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return [h * 60, sa, l];
+  }
+  function hslToHex(h, sa, l) {
+    h = ((h % 360) + 360) % 360; sa = Math.max(0, Math.min(1, sa)); l = Math.max(0, Math.min(1, l));
+    const c2 = (1 - Math.abs(2 * l - 1)) * sa, x = c2 * (1 - Math.abs((h / 60) % 2 - 1)), m2 = l - c2 / 2;
+    const t = h < 60 ? [c2, x, 0] : h < 120 ? [x, c2, 0] : h < 180 ? [0, c2, x]
+            : h < 240 ? [0, x, c2] : h < 300 ? [x, 0, c2] : [c2, 0, x];
+    return "#" + t.map(v => Math.round((v + m2) * 255).toString(16).padStart(2, "0")).join("");
+  }
+  function seasonPalette(pal, season, evergreen) {
+    const sp = evergreen ? TREE_EVERGREEN[season] : TREE_HUE_SHIFT[season];
+    if (!sp) return pal;
+    return pal.map((hex) => {
+      const [h, sa, l] = hexToHsl(hex);
+      if (sa < 0.12 || h < 65 || h > 190) return hex;      // pas du feuillage : on n'y touche pas
+      if (evergreen) return hslToHex(h, sa * sp.sMul, l * sp.lMul);
+      // Le vert d'origine (65..190) est étalé sur la plage de la saison : deux
+      // verts distincts restent deux teintes distinctes.
+      const t = (h - 65) / 125;
+      return hslToHex(sp.h[0] + t * (sp.h[1] - sp.h[0]), sa * sp.sMul, l * sp.lMul);
+    });
+  }
+  /* Un arbre de la planche, dans sa saison et sa phase de vent, posé dans le
+     gabarit 48×64 des essences du 438. ⚠️ IL EST ANCRÉ PAR LE BAS DE SON OMBRE :
+     les sprites de la planche portent leur ombre portée peinte (c'est elle qu'on
+     a pris soin de ne pas détourer, voir `backgroundMask`), et c'est elle qui
+     donne la ligne de sol. */
+  function plancheTree(name, season, frame, evergreen) {
+    const d = PLANCHE[name];
+    const pal = seasonPalette(d.pal, season, evergreen);
+    const [c, g] = cv(TW_, TH_);
+    // La largeur peinte de chaque rangée : elle sépare la couronne du tronc.
+    const wid = d.rows.map(r => { let n = 0; for (let i = 0; i < r.length; i++) if (r[i] !== ".") n++; return n; });
+    const mx = Math.max(...wid), lim = mx * 0.42;
+    let top = 0; while (top < d.h && wid[top] < lim) top++;
+    let bot = d.h - 1; while (bot > top && wid[bot] < lim) bot--;
+    const ox = ((TW_ - d.w) / 2) | 0, oy = TBASE_ + 4 - d.h;
+    /* ⚠️⚠️ LE CISAILLEMENT EST BORNÉ PAR LA MARGE RÉELLE, ET C'EST LE PIÈGE N°1
+       DES SPRITES (§4) QUI SE REPRÉSENTE. Le magnolia de la planche fait 47 px
+       de large dans un gabarit de 48 : il n'a UN pixel de marge que d'un seul
+       côté. Un cisaillement symétrique de ±2 le faisait déborder du canevas, qui
+       découpe en silence — deux colonnes de fleurs disparaissaient à chaque
+       souffle de vent, sans erreur et sans que la relecture puisse le voir.
+       `render-arbres.mjs` l'a dit au premier lancement.
+       ⚠️ ET ON BORNE PLUTÔT QUE DE SUPPRIMER LE VENT : ainsi bridé, le magnolia
+       oscille entre 0 et +1 au lieu de −1 et +1. Il plie moins que les autres,
+       mais il PLIE — et un seul arbre immobile au milieu d'une allée qui bouge
+       se voit bien davantage qu'un arbre qui bouge un peu moins. */
+    const shMin = -ox, shMax = TW_ - (ox + d.w);
+    for (let y = 0; y < d.h; y++) {
+      const r = d.rows[y];
+      let sh = 0;
+      if (frame && bot > top && y <= bot) {
+        const hgt = Math.max(0, (bot - y) / (bot - top));
+        sh = Math.max(shMin, Math.min(shMax, Math.round(frame * hgt * hgt * 1.8)));
+      }
+      let x = 0;
+      while (x < d.w) {
+        const ch = r[x];
+        if (ch === ".") { x++; continue; }
+        let n = 1;
+        while (x + n < d.w && r[x + n] === ch) n++;
+        g.fillStyle = pal[r.charCodeAt(x) - 48];
+        g.fillRect(ox + x + sh, oy + y, n, 1);
+        x += n;
+      }
+    }
+    return c;
+  }
+
   function plancheSprite(name) {
     const d = PLANCHE[name];
     if (!d) throw new Error("sprite de planche inconnu : " + name);
@@ -4779,43 +4931,115 @@ export function buildSprites() {
      pixel de marge, et c'est le semis qui fait la continuité, pas le contact. */
   const BLOOM_KINDS = [
     // marguerites : tapis bas, blanc et jaune, feuillage sombre
-    { leaf: ["#2f6b2a", "#3f8033"], n: 9, h: [2, 3], pet: ["#f4f1e6", "#ffffff"], core: "#e8c93c", big: false },
+    { leaf: ["#2f6b2a", "#3f8033"], n: 9, h: [2, 3], pet: ["#f4f1e6", "#ffffff"], core: "#e8c93c", shape: "cross" },
     // tulipes : hautes, rouges et roses, en touffes serrées
-    { leaf: ["#2c6b34", "#3d8442"], n: 7, h: [4, 6], pet: ["#cf3a34", "#e0625a", "#d9628f"], core: "#8c1f1c", big: true },
+    { leaf: ["#2c6b34", "#3d8442"], n: 7, h: [4, 6], pet: ["#cf3a34", "#e0625a", "#d9628f"], core: "#8c1f1c", shape: "puff" },
     // lavande et sauge : épis violets, feuillage gris-vert
-    { leaf: ["#5a7a58", "#6d8f68"], n: 8, h: [5, 7], pet: ["#8a6fc4", "#a189d8", "#6f57a8"], core: null, big: false },
+    { leaf: ["#5a7a58", "#6d8f68"], n: 8, h: [5, 7], pet: ["#8a6fc4", "#a189d8", "#6f57a8"], core: "#d8c8f0", shape: "spike" },
     // forsythia et souci : la tache jaune de l'image de référence
-    { leaf: ["#356e33", "#47883f"], n: 8, h: [3, 5], pet: ["#eec22c", "#f7dc5e", "#d9a41f"], core: "#a06c12", big: true },
+    { leaf: ["#356e33", "#47883f"], n: 8, h: [3, 5], pet: ["#eec22c", "#f7dc5e", "#d9a41f"], core: "#a06c12", shape: "puff" },
     // la prairie : semis lâche, quatre couleurs, rien d'aligné
-    { leaf: ["#3d7a36", "#4f8f42"], n: 5, h: [2, 4], pet: ["#f0efe2", "#e8c93c", "#d97a8e", "#9a86cf"], core: null, big: false },
+    { leaf: ["#3d7a36", "#4f8f42"], n: 5, h: [2, 4], pet: ["#f0efe2", "#e8c93c", "#d97a8e", "#9a86cf"], core: null, shape: "cross" },
   ];
-  function townBloomTile(kind, vr) {
-    const [c, g] = cv(T, T), r = makeRnd(0x6b21 + kind * 419 + vr * 37);
+  /* ⚠️⚠️ ZIP 439 — CHAQUE ESPÈCE A UNE FORME DE FLEUR, ET `big: true/false` A
+     DISPARU. Vu en jeu après la montée de densité : les massifs de marguerites
+     et de lavande se lisaient comme du GRÉSIL — un semis de points d'un pixel,
+     c'est-à-dire du bruit, exactement ce que Guillaume appelle « sale » (438).
+     Les tulipes et le forsythia, eux, tenaient : ils avaient `big`.
+     Le défaut n'était donc pas la densité, c'était la TAILLE DE LA FLEUR. À
+     60 % de couverture, une fleur d'un pixel n'est plus une fleur, c'est une
+     texture ; il en faut au moins trois pour qu'une forme se lise.
+     ⚠️ ET LES TROIS FORMES SONT CELLES DES RÉFÉRENCES DE GUILLAUME, pas des
+     variantes graphiques : la CROIX de cinq pixels à cœur contrasté (c'est le
+     dessin de fleur nommé au 438), la BOULE de six pixels pour une corolle
+     pleine, et l'ÉPI vertical de deux pixels de large pour la lavande — dont
+     l'épi EST la silhouette, et qu'une boule aurait effacée. */
+  /* ⚠️⚠️⚠️ ZIP 439 — LE MASSIF EST UN PAVÉ DE 64 px, PLUS UNE TUILE DE 16, ET
+     C'EST UN DÉFAUT VU EN JEU QUI L'A IMPOSÉ. Ce dessin produisait une case à
+     la fois, avec les tiges cantonnées à `x = 2 … T-3` pour qu'aucune ne soit
+     coupée par le bord. Tant que les massifs étaient clairsemés, personne ne
+     voyait la gouttière de deux pixels laissée tout autour de chaque case ; en
+     montant la densité à 60 % (voir plus bas), elle est devenue un QUADRILLAGE
+     BRUN parfaitement régulier par-dessus les fleurs — la grille de 16 px
+     redessinée, une fois de plus, et cette fois PAR la correction précédente.
+     C'est le piège nommé au 434 (« un motif de sol se juge assemblé, et sa
+     période compte plus que ses détails ») et la parade y est déjà écrite : on
+     dessine un pavé de 4×4 tuiles d'un seul tenant et on y découpe la case.
+     ⚠️ ET IL BOUCLE SUR LUI-MÊME (`roadWrap`, comme les revêtements et l'herbe) :
+     toute tige peinte près d'un bord est peinte aussi à −64 et +64. Sans ça on
+     aurait déplacé la couture de 16 à 64 px, c'est-à-dire dessiné une SECONDE
+     grille, plus large et plus laide que la première.
+     ⚠️ LA VARIANTE PAR HACHAGE DISPARAÎT, et c'est un gain : la variété ne vient
+     plus de huit tuiles tirées au sort case par case (donc de huit motifs qui
+     se répètent), elle vient de la POSITION dans le pavé. Deux cases voisines
+     sont forcément différentes, et un massif de six cases sur trois ne montre
+     plus jamais deux fois le même dessin. */
+  function townBloomSurface(kind) {
+    const [c, g] = cv(ROAD_N, ROAD_N), r = makeRnd(0x6b21 + kind * 419);
     const K = BLOOM_KINDS[kind - 1];
-    /* ⚠️ 438 — DENSITÉ DOUBLÉE. Sur terre nue (voir `drawTownBloomTile`), neuf
-       tiges par case laissaient voir plus de terre que de fleurs : un massif
-       qui vient d'être planté, pas un massif en fleurs. */
-    const n = K.n * 2 + ((r() * 4) | 0);
+    /* ⚠️ 438 — DENSITÉ DOUBLÉE, puis 439 — DOUBLÉE ENCORE, ET LE CHIFFRE EST
+       MESURÉ. Vu en jeu, les massifs du parc se lisaient comme un CHAMP
+       LABOURÉ : de grands rectangles de terre brune avec des tiges en rangs.
+       Couverture peinte d'une case : 28 % pour les marguerites, 43 à 46 % pour
+       les autres — plus de la moitié de terre nue. Le repère est la touffe
+       fleurie de la planche de Guillaume, qui couvre 68 % de sa boîte ; à ces
+       facteurs les massifs cultivés montent à 53-64 %.
+       ⚠️⚠️ LA MARGUERITE A SON PROPRE FACTEUR, ET IL EST LE PLUS BAS DES CINQ —
+       à l'inverse de ce que le premier réglage supposait. Elle a la plus petite
+       fleur, on l'a donc d'abord densifiée (×6) pour compenser ; vu en jeu, sa
+       BORDURE d'une case tout autour de chaque parterre est devenue un halo
+       blanc criard qui mangeait les massifs qu'elle borde. Une bordure n'a pas
+       à égaler ce qu'elle borde : son rôle est de FAIRE LIRE le massif comme
+       dessiné (438), et elle le fait mieux en restant basse. C'est aussi
+       l'espèce dont la surface totale est la plus grande dans le parc — la plus
+       petite densité y couvre le plus de terrain.
+       ⚠️⚠️ ET LES FACTEURS ONT ÉTÉ REDESCENDUS quand les fleurs ont grossi (voir
+       `shape` au-dessus) : à ×6 / ×4,6, des corolles de trois à six pixels
+       couvraient 77 à 84 % de la case et la terre disparaissait complètement —
+       on ne lisait plus un massif mais un TAPIS. Densité et taille de fleur ne
+       sont pas deux réglages indépendants : c'est leur PRODUIT qui fait la
+       couverture, et c'est la couverture qu'on mesure. Réglage final : 58 à
+       64 %, la fourchette de la touffe de référence (68 %).
+       ⚠️ LA PRAIRIE GARDE SA DENSITÉ D'ORIGINE : elle n'est pas un massif, c'est
+       un semis lâche sur de l'herbe (ni terre ni bordure, voir
+       `drawTownBloomTile`). La densifier ferait de la rive du lac un parterre —
+       l'inverse exact de l'opposition « ligne construite / ligne qui ne l'est
+       pas » du 437. */
+    const wild = kind === C.BL_WILD;
+    const per = K.n * (wild ? 2 : kind === C.BL_DAISY ? 1.9 : 2.6);
+    const n = Math.round(per * ROAD_SUP * ROAD_SUP);
     for (let k = 0; k < n; k++) {
-      const x = 2 + ((r() * (T - 4)) | 0);
-      /* ⚠️ LA HAUTEUR DE PIED BALAIE TOUTE LA CASE. Premier jet : entre 9 et 14,
-         donc toutes les fleurs de toutes les cases alignées sur la même
-         base — un massif se lisait en RANGS HORIZONTAUX de 16 px, c'est-à-dire
-         la grille de la carte, redessinée en fleurs. C'est le défaut du §4
-         (« l'œil voit la période avant le dessin »), attrapé une fois de plus. */
-      const base = 3 + ((r() * 12) | 0);
+      const x = (r() * ROAD_N) | 0;
+      /* ⚠️ LA HAUTEUR DE PIED BALAIE TOUTE LA CASE. Premier jet (438) : entre 9
+         et 14, donc toutes les fleurs alignées sur la même base — un massif se
+         lisait en RANGS HORIZONTAUX de 16 px, c'est-à-dire encore la grille. */
+      const base = (r() * ROAD_N) | 0;
       const h = K.h[0] + ((r() * (K.h[1] - K.h[0] + 1)) | 0);
-      const top = Math.max(1, base - h);
+      const top = base - h;
       const stem = K.leaf[(r() * K.leaf.length) | 0];
-      for (let y = top; y <= base; y++) P(g, x, y, 1, 1, stem);
+      for (let y = top; y <= base; y++) roadWrap(g, x, y, 1, 1, stem);
       // Deux feuilles à mi-hauteur : sans elles, une tige est un trait.
-      if (h > 3) { P(g, x - 1, base - 1, 1, 1, K.leaf[1]); P(g, x + 1, base - 2, 1, 1, K.leaf[0]); }
+      if (h > 3) { roadWrap(g, x - 1, base - 1, 1, 1, K.leaf[1]); roadWrap(g, x + 1, base - 2, 1, 1, K.leaf[0]); }
       const pet = K.pet[(r() * K.pet.length) | 0];
-      if (K.big) { P(g, x - 1, top - 1, 3, 2, pet); if (K.core) P(g, x, top, 1, 1, K.core); }
-      else { P(g, x, top - 1, 1, 1, pet); if (r() < 0.5) P(g, x + (r() < 0.5 ? -1 : 1), top, 1, 1, pet); if (K.core) P(g, x, top - 1, 1, 1, K.core); }
+      if (K.shape === "puff") {
+        roadWrap(g, x - 1, top - 1, 3, 2, pet);
+        roadWrap(g, x, top - 2, 1, 1, pet);
+        if (K.core) roadWrap(g, x, top, 1, 1, K.core);
+      } else if (K.shape === "spike") {
+        // L'épi : deux pixels de large, la moitié haute plus claire.
+        roadWrap(g, x, top - 2, 1, 4, pet);
+        roadWrap(g, x + 1, top - 1, 1, 3, pet);
+        if (K.core) roadWrap(g, x, top - 2, 1, 1, K.core);
+      } else {
+        // La croix de cinq pixels, et son cœur d'une autre couleur.
+        roadWrap(g, x - 1, top - 1, 3, 1, pet);
+        roadWrap(g, x, top - 2, 1, 3, pet);
+        if (K.core) roadWrap(g, x, top - 1, 1, 1, K.core);
+      }
     }
     return c;
   }
+
   /* Le buisson fleuri. ⚠️ 24 px DE HAUT POUR UNE CASE DE 16 : il DÉBORDE vers
      le nord, comme la haie du 425, et c'est ce débord qui lui donne du volume.
      Le rendu l'ancre par le bas (voir la file de props). */
@@ -10046,8 +10270,10 @@ export function buildSprites() {
        côte assez souvent pour dessiner des RANGS — un massif qui a l'air semé
        au cordeau, c'est-à-dire un champ. Huit suffisent : à cette densité, l'œil
        ne retrouve plus la période. */
-    townBloom: Array.from({ length: C.BL_KINDS }, (_, k) =>
-      Array.from({ length: 8 }, (__, v) => townBloomTile(k + 1, v))),
+    /* ZIP 439 — un PAVÉ de 64 px par espèce, plus huit tuiles de 16 (voir la
+       note de `townBloomSurface`). `sup` voyage avec les images, comme pour
+       `townRoad` : le jour où la période change, le rendu n'a rien à savoir. */
+    townBloom: { sup: ROAD_SUP, surf: Array.from({ length: C.BL_KINDS }, (_, k) => townBloomSurface(k + 1)) },
     townShrub: [0, 1, 2].map(v => townShrubSprite(v)),
     townBoulder: [0, 1, 2].map(v => townBoulderSprite(v)),
     /* ══ ZIP 439 — LES SPRITES DE LA PLANCHE, TELS QUELS ══
@@ -10151,12 +10377,24 @@ export function buildSprites() {
        (§ note du moule). 11 × 3 × 3 = 99 canevas de 48×64, cuits une fois au
        chargement comme tout le reste de ce fichier — le rendu ne fait qu'un
        `drawImage` par arbre et par image, exactement comme avant. */
-    townTrees: TREE_SPECS.map(sp => ({
-      w: TW_, h: TH_, base: TBASE_,
-      summer: [-1, 0, 1].map(f => townTreeSprite(sp, "summer", f)),
-      spring: [-1, 0, 1].map(f => townTreeSprite(sp, "spring", f)),
-      autumn: [-1, 0, 1].map(f => townTreeSprite(sp, "autumn", f)),
-    })),
+    /* ⚠️ L'ORDRE DE CE TABLEAU EST CELUI DE `TT`, et les quatre essences de la
+       planche sont CONCATÉNÉES à la fin — voir la note de `TT`. Elles ont le
+       même gabarit, le même ancrage et le même nombre d'images que les onze
+       autres : `drawTownTree` ne fait aucune distinction, et c'est le point. */
+    townTrees: [
+      ...TREE_SPECS.map(sp => ({
+        w: TW_, h: TH_, base: TBASE_,
+        summer: [-1, 0, 1].map(f => townTreeSprite(sp, "summer", f)),
+        spring: [-1, 0, 1].map(f => townTreeSprite(sp, "spring", f)),
+        autumn: [-1, 0, 1].map(f => townTreeSprite(sp, "autumn", f)),
+      })),
+      ...[["treeFir", 1], ["treeApple", 0], ["treeWillow", 0], ["treeMagnolia", 0]].map(([nm, ev]) => ({
+        w: TW_, h: TH_, base: TBASE_,
+        summer: [-1, 0, 1].map(f => plancheTree(nm, "summer", f, ev)),
+        spring: [-1, 0, 1].map(f => plancheTree(nm, "spring", f, ev)),
+        autumn: [-1, 0, 1].map(f => plancheTree(nm, "autumn", f, ev)),
+      })),
+    ],
     deadTree: deadTree(),
     stump: stump(),
     rock: rock(),

@@ -188,7 +188,19 @@ function shoreRuns(sh, W, H, skip) {
   const built = [];
   for (let y = VP.y; y < VP.y + VP.h; y++) for (let x = VP.x; x < VP.x + VP.w; x++) {
     if (x < 0 || y < 0 || x >= tw.w || y >= tw.h) continue;
-    if (tw.ground[y * tw.w + x] !== C.G_PATH_STONE) continue;
+    /* ⚠️⚠️ ZIP 439 — LE TABLIER D'UN PONT EST UN OUVRAGE, AU MÊME TITRE QUE LA
+       TERRASSE DU BELVÉDÈRE, et il s'exclut pour la même raison. Le pont
+       japonais posé sur l'étang au 439 donne 112 px de bord d'eau parfaitement
+       DROIT — et c'est juste : un tablier EST droit, c'est ce qui le fait lire
+       comme un ouvrage. Ce contrôle cherche un RIVAGE tracé à la règle, pas une
+       construction. Sans cette exclusion il criait « 33 px de rive horizontale »
+       et poussait à tordre les harmoniques de l'étang pour faire taire une
+       mesure qui visait le pont — exactement le piège nommé au 437 à propos de
+       ce même banc et de cette même terrasse. Deux heures de réglage
+       d'harmoniques y sont passées avant de comprendre que la mesure ne parlait
+       pas de l'étang. */
+    const gg = tw.ground[y * tw.w + x];
+    if (gg !== C.G_PATH_STONE && gg !== C.G_BRIDGE) continue;
     built.push({ x: (x - VP.x) * T, y: (y - VP.y) * T, w: T, h: T });
   }
   const W = VP.w * T, H = VP.h * T, r = shoreRuns(etang, W, H, built);
@@ -336,8 +348,15 @@ console.log("\n=== 5. l'étang n'a rien noyé ===\n");
      bord de l'eau ». Le compte exact reste juste pour les massifs taillés, qui
      sont quatre par construction (un par quadrant). */
   ok((kinds.bench || 0) >= 2, "on peut s'asseoir au bord de l'étang", `${kinds.bench || 0} banc(s)`);
+  /* ⚠️ ZIP 439 — LES NYMPHÉAS FLOTTENT, ET C'EST LA MÊME EXCEPTION QUE CELLE
+     ENTRÉE DANS `verify-vallee.mjs` ET `render-parc.mjs` LE MÊME JOUR. Ce
+     contrôle cherche un décor NOYÉ PAR ACCIDENT — un banc que le creusement de
+     l'étang a rattrapé — pas un décor dont la place EST l'eau. Le pont japonais
+     du 439 vient avec ses six herbiers de nénuphars : sans cette ligne, le banc
+     appelait « défaut » le sujet même du tableau. */
+  const FLOTTE = new Set(["lily", "reedsWater", "stepStones"]);
   let dry = 0;
-  for (const q of tw.props) if (inPark(q) && tw.ground[q.y * tw.w + q.x] === C.G_WATER) dry++;
+  for (const q of tw.props) if (inPark(q) && !FLOTTE.has(q.kind) && tw.ground[q.y * tw.w + q.x] === C.G_WATER) dry++;
   ok(dry === 0, "aucun décor du parc n'a les pieds dans l'eau", `${dry} décor(s) noyé(s)`);
 }
 

@@ -49,7 +49,8 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = path.join(ROOT, "tools", "out");
 
 installFakeDOM();
-const mods = await loadFerme(ROOT, ["fermeConstants", "fermeArt", "fermeEngine"]);
+const mods = await loadFerme(ROOT, ["fermeConstants", "fermeArt", "fermeEngine", "planche"]);
+const PL = mods.planche;
 const A = mods.fermeArt, C = mods.fermeConstants, E = mods.fermeEngine;
 const S = A.buildSprites();
 const tw = E.generateTownWorld();
@@ -60,7 +61,20 @@ const ok = (cond, label, detail) => {
   if (!cond) fail++;
 };
 
-const NAMES = ["chêne", "érable", "bouleau", "saule", "magnolia", "cerisier", "mimosa", "pommier", "sapin", "pin", "cyprès"];
+/* ⚠️ ZIP 439 — QUATRE NOMS DE PLUS. Sans eux, les quatre essences importées
+   de la planche s'affichaient « undefined » dans tous les messages du banc :
+   le contrôle mesurait la bonne chose et le rapport était illisible. */
+const NAMES = ["chêne", "érable", "bouleau", "saule", "magnolia", "cerisier", "mimosa", "pommier", "sapin", "pin", "cyprès",
+               "sapin (planche)", "arbre rond (planche)", "saule (planche)", "magnolia (planche)"];
+/* ⚠️⚠️ LES ESSENCES IMPORTÉES SONT HORS DU CONTRÔLE DE PROPRETÉ, et pour la
+   même raison qu'au banc de rive : ce contrôle-là mesure la netteté de NOTRE
+   trait — il a été réécrit quatre fois au 438 pour ça. Appliqué au dessin de
+   Guillaume, il le NOTE (1,4 % de « points perdus », qui sont son tramage), et
+   un banc n'a pas à arbitrer contre la référence qu'on a reçu l'ordre de
+   recopier. Tout le reste — le bord du canevas, les saisons, la silhouette —
+   continue de s'appliquer à elles : ce sont des propriétés de l'INTÉGRATION,
+   pas du dessin. */
+const IMPORTED = (k) => k >= 11;
 const SEASONS = ["summer", "spring", "autumn"];
 const TW = S.townTrees[0].w, TH = S.townTrees[0].h;   // 48×64 depuis le 438
 
@@ -84,9 +98,37 @@ console.log("\n=== 1. rien ne touche le bord du canevas (§4) ===\n");
     let hit = 0;
     for (let x = 0; x < TW; x++) { if (at(px, x, 0)) hit++; if (at(px, x, TH - 1)) hit++; }
     for (let y = 0; y < TH; y++) { if (at(px, 0, y)) hit++; if (at(px, TW - 1, y)) hit++; }
-    if (hit) bad.push(NAMES[k] + "/" + se + " (" + hit + ")");
+    if (hit && !IMPORTED(k)) bad.push(NAMES[k] + "/" + se + " (" + hit + ")");
   }
   ok(bad.length === 0, "aucun pixel peint sur le bord des 33 sprites", bad.length ? bad.join(", ") : "0 débord");
+  /* ⚠️⚠️ ZIP 439 — POUR LES ESSENCES IMPORTÉES, LA RÈGLE DU BORD NE MESURE PAS
+     LE BON RISQUE, ET IL FAUT LE DIRE PLUTÔT QUE DE L'EXEMPTER EN SILENCE.
+     Le magnolia de la planche fait 47 px de large dans un gabarit de 48 : il
+     touche un bord PAR CONSTRUCTION, sans qu'un seul pixel soit perdu. La règle
+     du §4 protège d'un dessin qu'on peint TROP GRAND pour son canevas ; ici le
+     dessin est donné, c'est le gabarit qui est juste. La question utile devient
+     donc : *le rendu contient-il exactement autant de pixels que la source ?*
+     Elle est décisive — elle attrape le cisaillement du vent qui pousserait une
+     colonne hors du cadre, ce qui est le vrai danger de ce mécanisme — et elle
+     ne peut pas se satisfaire d'un dessin qui « a l'air entier ». */
+  {
+    const lost = [];
+    for (let k = 0; k < S.townTrees.length; k++) {
+      if (!IMPORTED(k)) continue;
+      const src = ["treeFir", "treeApple", "treeWillow", "treeMagnolia"][k - 11];
+      const d = PL.PLANCHE[src];
+      let want = 0;
+      for (const r of d.rows) for (const ch of r) if (ch !== ".") want++;
+      for (const se of SEASONS) for (let f = 0; f < 3; f++) {
+        const px = pixelsOf(S.townTrees[k][se][f]);
+        let got = 0;
+        for (let y = 0; y < TH; y++) for (let x = 0; x < TW; x++) if (at(px, x, y)) got++;
+        if (got !== want) lost.push(`${NAMES[k]}/${se}/f${f} : ${got} au lieu de ${want}`);
+      }
+    }
+    ok(lost.length === 0, "aucun pixel perdu au montage des essences importées",
+       lost.length ? lost.slice(0, 4).join(" · ") : "36 images, aucune amputée");
+  }
 }
 
 console.log("\n=== 2. la densité de feuillage (« plus de feuilles ») ===\n");
@@ -199,7 +241,7 @@ console.log("\n=== 2 bis. LA PROPRETÉ — le contraire du grain (438) ===\n");
     return { pct: area ? +(specks / area * 100).toFixed(1) : 0, n: specks };
   };
   const ref = dirt(S.oak), refP = dirt(S.pine);
-  const vals = S.townTrees.map((t, k) => [NAMES[k], dirt(t.summer[1])]);
+  const vals = S.townTrees.map((t, k) => [NAMES[k], IMPORTED(k) ? { pct: 0, n: 0 } : dirt(t.summer[1])]);
   console.log("        ancien chêne " + ref.pct + " % (" + ref.n + " px perdus), ancien sapin " + refP.pct + " %");
   console.log("        " + vals.map(([n, v]) => n + " " + v.pct).join(" · "));
   const worst = Math.max(...vals.map(v => v[1].pct));
@@ -266,7 +308,12 @@ console.log("\n=== 5. la saison change la couleur, pas la forme ===\n");
 
 console.log("\n=== 6. l'essence se déduit du lieu ===\n");
 {
-  const count = new Array(11).fill(0);
+  /* ⚠️ ZIP 439 — LA TABLE SUIT `TT`, ELLE N'EST PLUS ÉCRITE EN DUR. À 11 sur
+     une table de 15, les quatre essences importées tombaient hors du tableau :
+     `count[k]` valait `undefined`, le maximum devenait `NaN`, et le contrôle
+     « aucune essence n'écrase les autres » affichait « NaN % » en PASSANT. Un
+     contrôle qui compare à NaN ne compare rien. */
+  const count = new Array(Object.keys(A.TT).length).fill(0);
   let trees = 0, wetTrees = 0, wetWillow = 0, orchard = 0, orchardApple = 0;
   for (let y = 0; y < tw.h; y++) for (let x = 0; x < tw.w; x++) {
     const i = y * tw.w + x, o = tw.objects[i];
@@ -274,13 +321,17 @@ console.log("\n=== 6. l'essence se déduit du lieu ===\n");
     trees++;
     const k = A.townTreeKind(tw, x, y, o);
     count[k]++;
-    if (tw.shore[i] > 0) { wetTrees++; if (k === A.TT.WILLOW || k === A.TT.FIR || k === A.TT.BIRCH) wetWillow++; }
+    /* ⚠️ LES ESSENCES DE LA PLANCHE COMPTENT COMME LEURS ÉQUIVALENTES : un
+       saule reste un saule qu'il soit dessiné par le code ou par Guillaume. Ce
+       contrôle porte sur le LIEU (« un arbre de berge est-il un arbre de
+       berge ? »), pas sur l'origine du dessin. */
+    if (tw.shore[i] > 0) { wetTrees++; if ([A.TT.WILLOW, A.TT.FIR, A.TT.BIRCH, A.TT.REF_WILLOW, A.TT.REF_FIR].includes(k)) wetWillow++; }
     const or = C.TOWN_ORCHARD;
-    if (x >= or.x && y >= or.y && x < or.x + or.w && y < or.y + or.h) { orchard++; if (k === A.TT.APPLE || k === A.TT.FIR || k === A.TT.PINE) orchardApple++; }
+    if (x >= or.x && y >= or.y && x < or.x + or.w && y < or.y + or.h) { orchard++; if ([A.TT.APPLE, A.TT.FIR, A.TT.PINE, A.TT.REF_APPLE, A.TT.REF_FIR].includes(k)) orchardApple++; }
   }
   console.log("        " + count.map((v, k) => NAMES[k] + " " + v).join(" · "));
   ok(trees > 200, "la ville a de quoi conclure", trees + " arbres");
-  ok(count.filter(v => v > 0).length >= 8, "au moins huit essences sont représentées", count.filter(v => v > 0).length + "/11");
+  ok(count.filter(v => v > 0).length >= 8, "au moins huit essences sont représentées", count.filter(v => v > 0).length + "/" + count.length);
   ok(wetTrees === 0 || wetWillow === wetTrees, "tout arbre de berge est un arbre de berge", wetWillow + "/" + wetTrees);
   ok(orchard === 0 || orchardApple === orchard, "le verger municipal ne porte que des pommiers (ou ses conifères)", orchardApple + "/" + orchard);
   const top = Math.max(...count);

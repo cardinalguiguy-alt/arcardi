@@ -94,8 +94,16 @@ function paint(v, now) {
     if (g === C.G_PATH) { if (!A.drawTownRoadTile(sh.ctx, S, tw, x, y, px, py)) sh.ctx.drawImage(S.path, px, py); }
     else if (g === C.G_PATH_STONE) { if (!A.drawTownFlagTile(sh.ctx, S, tw, x, y, px, py)) { sh.ctx.fillStyle = "#a5a4ab"; sh.ctx.fillRect(px, py, T, T); } }
     else if (g === C.G_BRIDGE) {
-      sh.ctx.fillStyle = "#a9834f"; sh.ctx.fillRect(px, py, T, T);
-      for (let k = 0; k < 4; k++) { sh.ctx.fillStyle = (k % 2) ? "#b78f58" : "#9c7746"; sh.ctx.fillRect(px, py + k * 4, T, 4); }
+      /* ⚠️ ZIP 439 — LA VRAIE LAME, PLUS L'APPROXIMATION. Ce banc peignait le
+         tablier en quatre bandes de couleur, comme le jeu le faisait avant que
+         la lame de la planche n'arrive. Résultat sur `parc-etang.png` : une
+         cassure de ton nette entre le tablier et le sprite du pont — un défaut
+         qui n'existe QUE dans le banc, et qu'on aurait cherché dans le jeu.
+         Un banc qui approxime doit approximer par le VRAI sprite quand il
+         existe (c'est déjà la règle écrite en tête de `PROP_IMG`). */
+      sh.ctx.fillStyle = "#3f7fd0"; sh.ctx.fillRect(px, py, T, T);
+      if (S.townDeck) sh.ctx.drawImage(S.townDeck, px, py);
+      else { sh.ctx.fillStyle = "#a9834f"; sh.ctx.fillRect(px, py, T, T); }
     }
     else if (!A.drawTownGrassTile(sh.ctx, S, tw, x, y, px, py)) sh.ctx.drawImage(S.townGrass[(x * 37 + y * 17) % S.townGrass.length], px, py);
     if (g === C.G_TOWN_LAWN) { sh.ctx.fillStyle = (Math.floor(x / 3) & 1) ? "rgba(24,70,30,0.10)" : "rgba(140,200,120,0.07)"; sh.ctx.fillRect(px, py, T, T); }
@@ -211,8 +219,17 @@ console.log("\n=== 3. le parc a reculé, et il a de quoi être un parc ===\n");
   ok(kinds.size >= 4, "quatre espèces au moins, pour que les quartiers du parc diffèrent", kinds.size + " espèce(s)");
   ok(gravelT >= 80, "les allées sont en gravier", gravelT + " case(s)");
   ok(trees >= 14, "le parc est planté", trees + " arbre(s)");
-  ok((byKind.shrub || 0) >= 6 && (byKind.bench || 0) >= 3, "il y a de quoi s'asseoir et de quoi border les allées",
-     (byKind.bench || 0) + " banc(s), " + (byKind.shrub || 0) + " buisson(s)");
+  /* ⚠️ ZIP 439 — ON NE COMPTE PLUS « LES BUISSONS », ON COMPTE CE QUI BORDE.
+     Le parc n'a plus un seul `shrub` : ses décors d'allée viennent de la
+     planche (buisson d'or, bac de roses, touffe fleurie, lavande, jardinière).
+     Le contrôle écrit sur le NOM d'un décor est mort le jour où le décor a
+     changé de nom, en disant « 0 buisson » d'un parc qui n'en a jamais autant
+     eu. On compte donc la CHOSE — un objet planté le long d'une allée — et pas
+     son identifiant. */
+  const border = ["shrub", "goldBush", "roseBox", "clump", "lavender", "flowerTrough", "bonsai", "topiary"]
+    .reduce((n, k) => n + (byKind[k] || 0), 0);
+  ok(border >= 6 && (byKind.bench || 0) >= 3, "il y a de quoi s'asseoir et de quoi border les allées",
+     (byKind.bench || 0) + " banc(s), " + border + " décor(s) d'allée");
 }
 
 console.log("\n=== 4. rien n'a les pieds dans l'eau, rien ne bouche une allée ===\n");
@@ -277,6 +294,33 @@ console.log("\n=== 4. rien n'a les pieds dans l'eau, rien ne bouche une allée =
       if (seen2 && wet / seen2 > 0.5) { floating++; if (sample.length < 6) sample.push(`(${x},${y})`); }
     }
     ok(floating === 0, "aucun houppier ne flotte sur l'eau", floating + " arbre(s) " + sample.join(" "));
+  }
+  /* ⚠️⚠️ ZIP 439 — ET AUCUNE PASSE NE RECOUVRE LE TABLIER D'UN PONT. Le pont
+     japonais du parc est posé au-dessus de l'étang par une passe du générateur ;
+     ses cases cessent alors d'être de l'eau. La passe SUIVANTE — le belvédère —
+     cherche « la première rangée sèche au sud du centre de l'étang » : elle
+     tombait pile sur le tablier et y dallait sa terrasse. Quatre des quatorze
+     cases du pont repassaient en dallage, soit un pont coupé en son milieu.
+     ⚠️ ET AUCUN CONTRÔLE EXISTANT NE POUVAIT LE VOIR : « rien n'a les pieds dans
+     l'eau » disait OK (le belvédère était bien sur du sec), la circulation
+     passait (on marche sur du dallage comme sur des planches), et le décor du
+     pont était posé au bon endroit. Ce qui manquait est l'invariant : un décor
+     de pont doit reposer sur un tablier COMPLET. C'est la même famille que le
+     buisson enterré sous le parvis du kiosque (437) et que les décors noyés par
+     le creusement de l'anse — une passe tardive qui recouvre une passe précoce
+     sans le savoir. */
+  {
+    const bad = [];
+    for (const q of tw.props) {
+      if (q.kind !== "archBridge") continue;
+      let holes = 0;
+      for (let dx = -2; dx <= 2; dx++) for (let dy = -1; dy <= 0; dy++) {
+        const i = (q.y + dy) * tw.w + (q.x + dx);
+        if (tw.ground[i] !== C.G_BRIDGE) holes++;
+      }
+      if (holes) bad.push(`(${q.x},${q.y}) : ${holes} case(s) hors tablier`);
+    }
+    ok(bad.length === 0, "chaque pont repose sur un tablier complet", bad.join(" · "));
   }
   // Le sentier de la rive doit être continu : on le suit d'ouest en est.
   let holes = 0;

@@ -2965,12 +2965,33 @@ export const TOWN_PARK = { x: 116, y: 74, w: 34, h: 26 };     // le parc et son 
    ⚠️ ET ÇA LIBÈRE LA PLACE QUI MANQUAIT : à 5,9 le contour venait à une case de
    l'allée en croix, donc les quatre massifs et les deux bancs étaient serrés
    contre l'eau. `tools/render-eau.mjs` les compte. */
-export const TOWN_POND = { cx: TOWN_PARK.x + 7.6, cy: TOWN_PARK.y + 6.5, rx: 4.3, ry: 3.1 };
+/* ⚠️⚠️ ZIP 439 — L'ÉTANG A ÉTÉ REFAIT POUR PORTER LE PONT, ET C'EST UNE FORME
+   IMPOSÉE PAR LA GÉOMÉTRIE, PAS UN GOÛT. Demande de Guillaume : le pont en arc
+   de sa planche, « fleuri, façon pont japonais de Monet ». Or ce pont est un
+   sprite qui s'étend d'EST en OUEST : on le traverse d'est en ouest, donc l'eau
+   doit barrer ce passage — c'est-à-dire s'étendre du NORD au SUD. Un étang plus
+   large que haut, comme celui du 437 (9 × 6), ne peut pas porter ce pont : ses
+   deux têtes tomberaient dans l'eau.
+   ⚠️ ET ON NE L'A PAS SIMPLEMENT ÉLARGI, CE QUI AURAIT CONTREDIT LE 437. Sa
+   note disait, à raison, qu'« une mare de parc de quatorze cases de large est
+   un LAC, et l'œil attend d'un lac une berge, un horizon et des barques ». La
+   largeur reste donc celle d'une mare ; c'est la HAUTEUR qui double.
+   ⚠️⚠️ ET LA TAILLE EST PINCÉE, ce qui est tout le dessin. Le lobe k=2 est passé
+   de 0,13 à 0,34 et sa phase à 3π/2, ce qui vaut exactement `m = 1 − 0,34·cos2θ` :
+   le rayon est MINIMUM plein est et plein ouest, MAXIMUM plein nord et plein
+   sud. La mare devient une cacahuète verticale — étroite à l'équateur (six
+   cases, la portée du pont), longue de douze du nord au sud. C'est la
+   composition de Monet : on franchit l'eau à son plus étroit, et elle s'ouvre
+   des deux côtés du tablier.
+   ⚠️ Un k=2 fort N'EST PAS un ovale allongé : un ovale se pince aux DEUX bouts
+   du grand axe, une cacahuète se pince au MILIEU. C'est ce qui donne deux rives
+   face à face à cinq cases l'une de l'autre au lieu d'une rive qui s'éloigne. */
+export const TOWN_POND = { cx: TOWN_PARK.x + 8.2, cy: TOWN_PARK.y + 6.4, rx: 4.6, ry: 4.6 };
 export const TOWN_POND_LOBES = [       // { k: harmonique, a: amplitude, p: phase }
-  { k: 1, a: 0.190, p: 0.80 },         // décentre la masse : une rive plus longue que l'autre
-  { k: 2, a: 0.130, p: 2.35 },         // le haricot
-  { k: 3, a: 0.085, p: 5.10 },         // les criques
-  { k: 5, a: 0.045, p: 1.15 },         // le grain de rive, juste sous la case
+  { k: 1, a: 0.120, p: 0.80 },         // décentre la masse : une rive plus longue que l'autre
+  { k: 2, a: 0.340, p: 4.712 },        // LA TAILLE : étroit à l'est et à l'ouest, long nord-sud
+  { k: 3, a: 0.070, p: 5.10 },         // les criques
+  { k: 5, a: 0.040, p: 1.15 },         // le grain de rive, juste sous la case
 ];
 /* ═══════════════════════════════════════════════════════════════════════════
    ZIP 437 — LES MASSIFS FLEURIS : UNE COUCHE, PAS UN SOL, PAS UN DÉCOR.
