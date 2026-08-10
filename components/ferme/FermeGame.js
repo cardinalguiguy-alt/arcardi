@@ -14849,8 +14849,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              test étroit sur l'emprise exacte de la fontaine. */
           const inFtn = x >= C.TOWN_FOUNTAIN.x && x < C.TOWN_FOUNTAIN.x + 2
                      && y >= C.TOWN_FOUNTAIN.y && y < C.TOWN_FOUNTAIN.y + 2;
+          /* ⚠️ ZIP 435 — ON PEINT LE LIT, PAS L'EAU. Le trait d'eau ne suit
+             plus le bord de la case (voir `drawTownWaterTile` dans fermeArt) :
+             il la TRAVERSE. Ce qui reste hors du contour, sur une case de rive,
+             doit donc montrer le fond de la berge — d'où l'herbe ici, puis la
+             vase de `drawTownShoreTile` par-dessus, puis l'eau. L'ancien
+             `fillRect` bleu pleine case est précisément ce qui dessinait
+             l'escalier de 16 px. */
           if (inFtn) { ctx.fillStyle = "#adacb3"; ctx.fillRect(px, py, T, T); }
-          else { ctx.fillStyle = "#3f7fd0"; ctx.fillRect(px, py, T, T); }
+          else ctx.drawImage(gTiles[(x * 37 + y * 17) % gTiles.length], px, py);
         }
         else if (g === C.G_BRIDGE) {
           /* Zip 426 — LE PONTON DU LAC. Des lames de bois posées SUR l'eau : on
@@ -14867,6 +14874,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.fillStyle = "rgba(20,40,70,0.30)"; ctx.fillRect(px, py + T - 2, T, 2);
         }
         else ctx.drawImage(sprites.grass[0], px, py);
+
+        /* ⚠️⚠️ ZIP 435 — LA BERGE, PUIS LE TRAIT D'EAU, DANS CET ORDRE ET
+           APRÈS LE SOL. Les deux vivent dans fermeArt (§ drawTownWaterTile)
+           pour que `tools/render-eau.mjs` puisse les REGARDER : c'est le piège
+           n°1 du projet, et l'eau est du dessin pur.
+           L'ordre porte tout le fondu : le sol donne le lit, la berge pose la
+           vase et les galets, l'eau vient MORDRE dessus en traversant la case.
+           Inversé, on obtiendrait des galets flottant sur l'eau.
+           ⚠️ Le bassin de la fontaine est hors jeu : ses deux cases sont de
+           l'eau pour la COLLISION seulement (voir plus haut), et sa vasque a
+           son propre dessin. Une berge de galets autour d'une fontaine de
+           pierre serait exactement le rectangle bleu que le 425 a corrigé. */
+        const inFountain = x >= C.TOWN_FOUNTAIN.x && x < C.TOWN_FOUNTAIN.x + 2
+                        && y >= C.TOWN_FOUNTAIN.y && y < C.TOWN_FOUNTAIN.y + 2;
+        if (!inFountain) {
+          A.drawTownShoreTile(ctx, sprites, tw, x, y, px, py);
+          A.drawTownWaterTile(ctx, sprites, tw, x, y, px, py, now);
+        }
 
         /* ---- LA FALAISE. Le parement qui bouche le trou ouvert par le
            décalage, vers le sud. On le dessine en assises de pierre, avec une
@@ -14930,17 +14955,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (x >= C.TOWN_PLATFORM.x && x < C.TOWN_PLATFORM.x + C.TOWN_PLATFORM.w && y >= C.TOWN_PLATFORM.y && y < C.TOWN_PLATFORM.y + C.TOWN_PLATFORM.h) {
           ctx.drawImage(sprites.platform, px, py);
         }
-        // Reflet respirant sur l'eau — les mares du parc, pas la fontaine, qui
-        // a le sien (voir plus bas) : ses cases sont peintes en pierre.
-        if (g === C.G_WATER) {
-          const inFtn2 = x >= C.TOWN_FOUNTAIN.x && x < C.TOWN_FOUNTAIN.x + 2
-                      && y >= C.TOWN_FOUNTAIN.y && y < C.TOWN_FOUNTAIN.y + 2;
-          if (!inFtn2) {
-            const glow = 0.25 + Math.sin(now / 900 + (x + y)) * 0.12;
-            ctx.fillStyle = `rgba(190, 225, 255, ${glow})`;
-            ctx.fillRect(px, py, T, T);
-          }
-        }
+        /* ⚠️ ZIP 435 — LE « REFLET RESPIRANT » DU 425 EST SUPPRIMÉ, PAS
+           DÉPLACÉ. C'était `rgba(190,225,255, 0.25 + sin(now/900 + (x+y))·0.12)`
+           sur la case entière : deux cases voisines en diagonale partageant la
+           même valeur de `x+y`, il peignait une DAMIER DIAGONALE de deux bleus
+           sur toute la nappe, parfaitement visible au zoom du jeu. Un voile
+           pleine case ne peut de toute façon plus exister ici — il déborderait
+           du contour sous-case. Le reflet vit maintenant dans
+           `drawTownWaterTile`, déphasé par un hachage de la case et posé
+           uniquement en pleine eau. */
         /* ⚠️⚠️ LA HAIE SE DESSINE, ET C'EST NON NÉGOCIABLE (425). Le générateur
            la marque dans `solid` : si on ne la peignait pas, on obtiendrait
            plusieurs centaines de MURS INVISIBLES autour des jardins — le pire

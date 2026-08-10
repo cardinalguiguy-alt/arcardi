@@ -4134,17 +4134,109 @@ export function generateTownWorld() {
     const cx = p.x + (p.w >> 1), cy = p.y + (p.h >> 1);
     for (let x = p.x; x < p.x + p.w; x++) for (const dy of [0, 1]) ground[id(x, cy + dy)] = C.G_PATH;
     for (let y = p.y; y < p.y + p.h; y++) for (const dx of [0, 1]) ground[id(cx + dx, y)] = C.G_PATH;
-    // L'étang, dans le quart nord-ouest, en ovale grossier.
-    const px0 = p.x + 4, py0 = p.y + 3, pw = 11, ph = 7;
-    for (let y = 0; y < ph; y++) for (let x = 0; x < pw; x++) {
-      const u = (x - (pw - 1) / 2) / ((pw - 1) / 2), v = (y - (ph - 1) / 2) / ((ph - 1) / 2);
-      if (u * u + v * v <= 1) ground[id(px0 + x, py0 + y)] = C.G_WATER;
+    /* ═══════════════════════════════════════════════════════════════════════
+       ZIP 435 — L'ÉTANG. UN RAYON MODULÉ, PUIS DEUX PASSES DE LISSAGE.
+       ─────────────────────────────────────────────────────────────────────
+       Le POURQUOI de la forme est dans la note de `TOWN_POND` (fermeConstants) ;
+       ici, le POURQUOI DES DEUX PASSES, qui est le vrai piège de l'exercice.
+
+       ⚠️⚠️ UN CONTOUR ORGANIQUE RASTÉRISÉ PRODUIT DES ERGOTS ET DES ENCOCHES
+       D'UNE SEULE CASE, et ils sont PIRES que l'ovale qu'on remplace. Là où
+       l'ellipse en faisait quatre, toujours aux mêmes endroits (donc lisibles
+       comme un losange), les harmoniques en sèment partout — une case d'eau
+       isolée au bout d'une pointe, une case d'herbe seule au fond d'une crique.
+       À 16 px, une case seule ne se lit pas comme « une rive découpée », elle
+       se lit comme un DÉFAUT : un pixel oublié. Et elle est infranchissable,
+       donc c'est aussi un piquet au milieu d'un chemin.
+       ⚠️ La parade est un automate cellulaire à deux règles, appliqué deux
+       fois : une case d'eau qui a moins de deux voisines d'eau redevient de la
+       terre (les ergots meurent), une case de terre qui en a trois se noie (les
+       encoches se comblent). C'est ce qui donne un trait CONTINU sans lisser la
+       forme d'ensemble — les criques du k=3 survivent, les accidents du k=5 non.
+       ⚠️ DEUX PASSES ET PAS UNE : la première crée de nouveaux voisinages, et
+       une seule laissait des escaliers en marche d'escalier d'une case. Trois
+       passes, en revanche, commencent à ronger les pointes qu'on veut garder —
+       mesuré sur `tools/render-eau.mjs`. */
+    const pond = C.TOWN_POND, lobes = C.TOWN_POND_LOBES;
+    const pondBox = { x0: Math.floor(pond.cx - pond.rx * 2), x1: Math.ceil(pond.cx + pond.rx * 2),
+                      y0: Math.floor(pond.cy - pond.ry * 2), y1: Math.ceil(pond.cy + pond.ry * 2) };
+    const inPond = (x, y) => {
+      // On travaille dans l'espace NORMALISÉ (le disque unité) : l'angle y est
+      // réparti régulièrement, donc les lobes gardent la même largeur apparente
+      // sur la longueur comme sur la largeur. Calculé dans l'espace carte, le
+      // k=3 se serait tassé aux deux bouts.
+      const u = (x - pond.cx) / pond.rx, v = (y - pond.cy) / pond.ry;
+      const d = Math.sqrt(u * u + v * v);
+      if (d === 0) return true;
+      const th = Math.atan2(v, u);
+      let m = 1;
+      for (const lo of lobes) m += lo.a * Math.sin(lo.k * th + lo.p);
+      return d <= m;
+    };
+    const wet = new Set();
+    for (let y = pondBox.y0; y <= pondBox.y1; y++) for (let x = pondBox.x0; x <= pondBox.x1; x++) {
+      if (inMap(x, y) && ground[id(x, y)] === C.G_TOWN_LAWN && inPond(x, y)) wet.add(id(x, y));
+    }
+    for (let pass = 0; pass < 2; pass++) {
+      const add = [], del = [];
+      for (let y = pondBox.y0 - 1; y <= pondBox.y1 + 1; y++) for (let x = pondBox.x0 - 1; x <= pondBox.x1 + 1; x++) {
+        if (!inMap(x, y)) continue;
+        const i = id(x, y);
+        let n = 0;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(x + dx, y + dy) && wet.has(id(x + dx, y + dy))) n++;
+        if (wet.has(i)) { if (n < 2) del.push(i); }
+        // ⚠️ Le comblement ne mange QUE du gazon : sans ce test, une encoche au
+        // ras de l'allée en croix aurait noyé une case de chemin, et le parc
+        // aurait perdu son passage sans qu'aucune erreur ne le dise.
+        else if (n >= 3 && ground[i] === C.G_TOWN_LAWN) add.push(i);
+      }
+      for (const i of del) wet.delete(i);
+      for (const i of add) wet.add(i);
+    }
+    for (const i of wet) ground[i] = C.G_WATER;
+    /* ⚠️⚠️ TROIS ARBRES SUR LA RIVE NORD, ET ILS SONT LÀ POUR LEUR REFLET.
+       `drawTownWaterTile` couche les arbres du nord sur l'eau — c'est le détail
+       qui dit « surface » plutôt que « trou bleu ». Compté sur la carte AVANT
+       cet ajout : DEUX cases d'eau de toute la ville avaient un arbre à moins
+       de trois cases au nord, et toutes deux à la distance maximale, donc au
+       reflet le plus faible. Autrement dit, la fonctionnalité était écrite et
+       ne s'exécutait JAMAIS. Un reflet sans rien à refléter est du code mort
+       qui se croit vivant : soit on lui donne de quoi vivre, soit on l'enlève.
+       ⚠️⚠️ ET ILS NE PASSENT PAS PAR `plantTree`, CE QUI EN A TOUT L'AIR D'UNE
+       COQUETTERIE ET N'EN EST PAS UNE. `plantTree` tire l'essence dans `rnd()`,
+       et `rnd()` est LE générateur partagé de toute la fonction : trois tirages
+       de plus décaleraient le flux pour tout ce qui est posé après le parc —
+       verger, cimetière, marché, gare, lac, mobilier. On aurait déplacé la
+       moitié de la ville pour trois arbres. L'essence est donc alternée en
+       clair : zéro tirage consommé, et l'étang est le seul endroit qui bouge. */
+    {
+      let k = 0;
+      for (const tx of [Math.round(pond.cx) - 4, Math.round(pond.cx) + 1, Math.round(pond.cx) + 5]) {
+        let ty = Math.round(pond.cy);
+        while (ty > p.y && inMap(tx, ty) && ground[id(tx, ty)] === C.G_WATER) ty--;
+        const i = id(tx, ty);
+        if (!inMap(tx, ty) || solid[i] || objects[i] !== C.O_NONE || ground[i] !== C.G_TOWN_LAWN) continue;
+        objects[i] = (k++ % 2) ? C.O_TREE2 : C.O_TREE; objHp.set(i, C.TREE_HP);
+      }
     }
     // Bordure d'arbres + bancs face à l'étang.
     for (let x = p.x; x < p.x + p.w; x += 3) { plantTree(x, p.y); plantTree(x + 1, p.y + p.h - 1); }
     for (let y = p.y + 2; y < p.y + p.h - 2; y += 4) { plantTree(p.x, y); plantTree(p.x + p.w - 1, y + 1); }
-    for (const [bx, by] of [[px0 + 2, py0 + ph + 1], [px0 + 6, py0 + ph + 1]]) {
-      if (inMap(bx, by) && !solid[id(bx, by)]) { props.push({ x: bx, y: by, kind: "bench" }); solid[id(bx, by)] = 1; }
+    /* ⚠️ LES BANCS SE POSENT SUR LA RIVE TROUVÉE, PAS SUR UNE LIGNE ÉCRITE.
+       Ils étaient calés sur `py0 + ph + 1`, c'est-à-dire sur le bas de la BOÎTE
+       de l'ancien ovale : avec une rive qui monte et descend, un banc écrit à
+       une hauteur fixe se retrouve soit les pieds dans l'eau, soit à trois
+       cases du bord. On descend donc depuis le centre jusqu'à la première case
+       sèche, et on recule d'une pour laisser passer la berge. C'est le §8 :
+       une position qui DOUBLE une autre description est une divergence en
+       attente — ici, la rive est la seule description. */
+    for (const bx of [Math.round(pond.cx) - 3, Math.round(pond.cx) + 2]) {
+      let by = Math.round(pond.cy);
+      while (by < p.y + p.h - 1 && inMap(bx, by) && ground[id(bx, by)] === C.G_WATER) by++;
+      by += 1;                                   // une case de berge entre l'eau et le banc
+      if (inMap(bx, by) && !solid[id(bx, by)] && ground[id(bx, by)] === C.G_TOWN_LAWN) {
+        props.push({ x: bx, y: by, kind: "bench" }); solid[id(bx, by)] = 1;
+      }
     }
     for (const [tx, ty] of [[cx - 3, cy + 4], [cx + 4, cy + 4], [cx - 3, cy - 4], [cx + 4, cy - 4]]) {
       if (inMap(tx, ty) && !solid[id(tx, ty)] && ground[id(tx, ty)] !== C.G_WATER) { props.push({ x: tx, y: ty, kind: "topiary" }); solid[id(tx, ty)] = 1; }
@@ -4642,7 +4734,109 @@ export function generateTownWorld() {
     const cm = C.TOWN_CEMETERY, gateW = 2, gateX = cm.x + ((cm.w - gateW) >> 1);
     for (let y = cm.y + 1; y <= cm.y + cm.h; y++) for (let dx = 0; dx < gateW; dx++) surface(gateX + dx, y, C.TR_BRICK);
   }
-  return { w: W, h: H, ground, objects, objHp, elev, solid, props, hedge, road };
+  /* ═══════════════════════════════════════════════════════════════════════
+     ZIP 435 — LA PROFONDEUR ET LA BERGE, DEUX COUCHES DÉRIVÉES, APRÈS TOUT.
+     ─────────────────────────────────────────────────────────────────────────
+     ⚠️⚠️ DEUX TABLEAUX PARALLÈLES, PAS DEUX `G_*`, et c'est LITTÉRALEMENT
+     l'arbitrage du 434 sur les revêtements (voir la note de `TR_*`) appliqué à
+     l'eau. Un `G_LAKE_SHORE` en ville — le sol que le monde sombre emploie
+     depuis le 375 — aurait rouvert les quarante tests `ground === G_PATH` et
+     tous les `=== G_WATER` du moteur : marche, A* piéton, A* du taxi, oiseaux,
+     lampadaires, `townSpots`, `blockedTown`. En oublier UN ne lève rien : ça
+     fait juste une berge qu'on ne peut pas traverser, ou un lac qu'on traverse.
+     Le sol garde son identifiant, `depth` dit à quelle profondeur on est et
+     `shore` avec quoi on peint la terre du bord.
+     ⚠️ ELLES SONT LES DERNIÈRES DE LA FONCTION, APRÈS LE REVÊTEMENT, et pour
+     la même raison que lui : elles lisent le sol FINAL. Écrite avant le lac du
+     sud, la berge aurait manqué les trois quarts de l'eau ; écrite avant le
+     revêtement, elle aurait posé des galets sous la promenade en pierre.
+     ⚠️⚠️ ET LA BERGE NE MORD QUE SUR DE LA TERRE MEUBLE. C'est ce test, et
+     lui seul, qui dispense d'un cas particulier pour le quai du lac du sud,
+     pour l'allée en croix du parc et pour le ponton : ils ne sont pas de
+     l'herbe, ils ne reçoivent rien, la question ne se pose pas. */
+  const depth = new Uint8Array(W * H);
+  const shore = new Uint8Array(W * H);
+  {
+    /* Profondeur : transformée de distance à la TERRE, en cases, par vagues
+       successives depuis les cases d'eau qui touchent un bord. Rapportée
+       ensuite à TOWN_WATER_SHELF — une échelle ABSOLUE, voir la note de la
+       constante : c'est ce qui permet à une mare de 4 cases et à un lac de 12
+       d'avoir le même haut-fond, et à l'un de ne pas changer de couleur quand
+       on creuse l'autre. */
+    /* ⚠️⚠️ DISTANCE DE CHANFREIN (5-7), PAS UNE VAGUE À QUATRE VOISINS.
+       Premier jet : une propagation orthogonale, donc la distance de Manhattan,
+       donc des lignes de niveau EN LOSANGE — et un losange sur une grille de
+       16 px, c'est un escalier de plus, cette fois au milieu de l'eau. La
+       diagonale coûte 7/5 = 1,4 au lieu de 1, ce qui approche l'euclidien à 2 %
+       près : les lignes de niveau redeviennent rondes et suivent la forme de la
+       rive au lieu de suivre les axes. Deux balayages suffisent (avant/arrière),
+       c'est la forme classique et elle est en O(W·H). */
+    const INF = 0x3fff, ORT = 5, DIA = 7, dist = new Int16Array(W * H).fill(INF);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      // ⚠️ HORS CARTE COMPTE COMME DE LA TERRE. Sans ça, une nappe qui touche
+      // le bord de la carte se croirait au large jusqu'au rivage, et le lac du
+      // sud — qui affleure y = 165 — n'aurait pas de haut-fond côté carte.
+      if (ground[id(x, y)] !== C.G_WATER) dist[id(x, y)] = 0;
+    }
+    const relax = (i, j, w) => { if (dist[j] + w < dist[i]) dist[i] = dist[j] + w; };
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = id(x, y);
+      if (!dist[i]) continue;
+      if (x > 0) relax(i, id(x - 1, y), ORT);
+      if (y > 0) relax(i, id(x, y - 1), ORT);
+      if (x > 0 && y > 0) relax(i, id(x - 1, y - 1), DIA);
+      if (x < W - 1 && y > 0) relax(i, id(x + 1, y - 1), DIA);
+    }
+    for (let y = H - 1; y >= 0; y--) for (let x = W - 1; x >= 0; x--) {
+      const i = id(x, y);
+      if (!dist[i]) continue;
+      if (x < W - 1) relax(i, id(x + 1, y), ORT);
+      if (y < H - 1) relax(i, id(x, y + 1), ORT);
+      if (x < W - 1 && y < H - 1) relax(i, id(x + 1, y + 1), DIA);
+      if (x > 0 && y < H - 1) relax(i, id(x - 1, y + 1), DIA);
+    }
+    for (let i = 0; i < W * H; i++) {
+      if (ground[i] !== C.G_WATER) continue;
+      // Le plateau est atteint à TOWN_WATER_SHELF cases, au-delà la teinte ne
+      // bouge plus. `dist` est en cinquièmes de case (le poids orthogonal).
+      const t = Math.min(1, (dist[i] / ORT - 1) / C.TOWN_WATER_SHELF);
+      depth[i] = Math.round(Math.max(0, t) * 255);
+    }
+    // Berge : même vague, dans l'autre sens, sur la terre meuble uniquement.
+    let ring = [];
+    for (let i = 0; i < W * H; i++) if (ground[i] === C.G_WATER) ring.push(i);
+    for (let band = 1; band <= C.TOWN_SHORE_BAND; band++) {
+      const next = [];
+      for (const i of ring) {
+        const x = i % W, y = (i / W) | 0;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+          const nx = x + dx, ny = y + dy;
+          if (!inMap(nx, ny)) continue;
+          const j = id(nx, ny), g = ground[j];
+          if (shore[j] || (g !== C.G_GRASS && g !== C.G_TOWN_LAWN)) continue;
+          shore[j] = band; next.push(j);
+        }
+      }
+      ring = next;
+    }
+    /* ⚠️⚠️ ET LA RIVE MOUILLÉE EST MARQUÉE SUR L'EAU ELLE-MÊME (valeur 3).
+       C'est le pendant obligé du trait d'eau sous-case : une case d'eau de bord
+       n'est peinte qu'en PARTIE (le contour la traverse), et sans cette marque
+       on verrait le lit — c'est-à-dire de l'herbe verte — dans le quart de case
+       resté sec, À L'INTÉRIEUR du rivage. Un feston vert le long de la rive :
+       exactement le défaut qu'on prétend corriger, retourné.
+       La valeur 3 ne peut se confondre avec les bandes 1 et 2, qui ne se posent
+       que sur de la terre — le rendu teste le sol avant, de toute façon. */
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = id(x, y);
+      if (ground[i] !== C.G_WATER) continue;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (!inMap(nx, ny) || ground[id(nx, ny)] !== C.G_WATER) { shore[i] = 3; break; }
+      }
+    }
+  }
+  return { w: W, h: H, ground, objects, objHp, elev, solid, props, hedge, road, depth, shore };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

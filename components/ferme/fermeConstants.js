@@ -2911,6 +2911,51 @@ export const TOWN_MONUMENT = { x: 92, y: 78 };      // 2x2, obélisque + vasques
    contrôle l'inverse. Les hauteurs sont donc calées pour s'arrêter AVANT les
    rangées de maisons du sud (y = 102) : 74 + 26 = 100. */
 export const TOWN_PARK = { x: 108, y: 74, w: 34, h: 26 };     // le parc et son étang
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 435 — L'ÉTANG DU PARC : UN CONTOUR, PAS UNE ÉQUATION.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ CE QUI EST REMPLACÉ : `u² + v² ≤ 1`, une ellipse de 11×7. Une ellipse
+   est CONVEXE PAR DÉFINITION — elle ne peut former ni crique, ni pointe, ni
+   presqu'île, quels que soient ses rayons. Et sa rastérisation sur une grille
+   de 16 px lui donnait QUATRE ERGOTS D'UNE SEULE CASE (nord, sud, est, ouest),
+   qui la faisaient lire comme un losange. Mesuré au 434 sur le lac du sud, même
+   famille de défaut : son rivage est `sin(x)`, donc une FONCTION DE x, donc
+   incapable de revenir sur elle-même — 75 colonnes plates sur 95.
+   ⚠️ LA PARADE EST DE DÉCRIRE LE RAYON, PAS LA SURFACE : r(θ) module un rayon
+   moyen par quatre harmoniques. Une seule (k=1) décentre, deux (k=2) donnent
+   un haricot, trois et cinq creusent les criques. C'est non convexe dès que la
+   somme des amplitudes dépasse ~0,25, et c'est exactement ce qu'on veut.
+   ⚠️ AUCUN TIRAGE ALÉATOIRE ICI, ET C'EST VOLONTAIRE. `generateTownWorld`
+   partage UN générateur (graine 0x7041) entre tout ce qu'il pose ; y puiser
+   quatre nombres de plus décalerait la suite du flux, donc TOUS les arbres et
+   TOUT le mobilier de la ville. Les harmoniques sont donc écrites en clair :
+   elles se règlent à l'œil sur `tools/render-eau.mjs`, ce qu'un tirage ne
+   permet pas.
+   ⚠️ LES BORNES SONT CONTRAINTES : le parc porte une allée en croix (x = 125-126,
+   y = 87-88) et une bordure d'arbres sur son pourtour. rx·(1+Σa) doit rester
+   sous 7,5 sinon l'étang mord l'allée — `tools/render-eau.mjs` le contrôle. */
+export const TOWN_POND = { cx: 115.6, cy: 80.5, rx: 5.9, ry: 4.0 };
+export const TOWN_POND_LOBES = [       // { k: harmonique, a: amplitude, p: phase }
+  { k: 1, a: 0.190, p: 0.80 },         // décentre la masse : une rive plus longue que l'autre
+  { k: 2, a: 0.130, p: 2.35 },         // le haricot
+  { k: 3, a: 0.085, p: 5.10 },         // les criques
+  { k: 5, a: 0.045, p: 1.15 },         // le grain de rive, juste sous la case
+];
+/* Largeur de la berge, en cases, autour de TOUTE eau de la ville (couche
+   `world.shore`). 2 = une rangée mouillée au ras de l'eau + une rangée sèche.
+   ⚠️ C'est la même valeur que `LAKE_SHORE_BAND` du lac du monde sombre (375) —
+   pas une coïncidence : c'est la largeur à laquelle l'œil lit une TRANSITION
+   plutôt qu'un liseré, et elle a été trouvée là-bas. */
+export const TOWN_SHORE_BAND = 2;
+/* Profondeur : le plateau (« shelf ») fait 3,5 cases. Au-delà, c'est le large
+   et la teinte ne bouge plus.
+   ⚠️⚠️ UNE ÉCHELLE ABSOLUE, PAS UNE NORMALISATION PAR LA PLUS GRANDE FLAQUE.
+   C'est la leçon du 434 (le seuil d'axe du taxi, faux le jour où l'artère a
+   changé de largeur) prise à l'endroit : normalisé sur le maximum de la carte,
+   l'étang du parc — 4 cases de rayon contre 12 pour le lac du sud — serait
+   resté un haut-fond uniforme, et il aurait CHANGÉ DE COULEUR le jour où l'on
+   creuse le lac d'une case. Une berge se lit en mètres, pas en pourcentage. */
+export const TOWN_WATER_SHELF = 2.6;
 export const TOWN_ORCHARD = { x: 12, y: 38, w: 18, h: 24 };   // le verger municipal
 export const TOWN_MARKET = { x: 38, y: 74, w: 26, h: 26 };    // le champ de foire, dallé et bordé d'arbres
 /* ═══════════════════════════════════════════════════════════════════════════

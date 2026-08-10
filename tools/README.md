@@ -5,7 +5,7 @@ zip 432, sur l'ordre laissé par son §14.2 : « le jour où la liste dépasse l
 chapitre, elle part dans un `tools/README.md` — en ne gardant là-bas QUE ce qui n'existe pas ».
 Le 432 a ajouté deux entrées (`render-ruche.mjs`, `fake-supabase.mjs`) et l'a fait basculer.
 Le 433 en ajoute trois (`verify-taxi`, `render-taxi`, `render-oiseaux`), le 434 une
-(`render-rues`).
+(`render-rues`), le 435 une (`render-eau`).
 
 ⚠️ **`CLAUDE.md` ne garde que la liste des bancs ABSENTS**, et c'est délibéré : c'est elle qui
 protège du banc imaginaire (§14.6 — le 425 décrivait `verify-vallee.mjs` « 74 contrôles, 74/74 »
@@ -150,6 +150,31 @@ jamais recopié d'un zip précédent sans relance.
   MOYENNE des transitions et accusait à tort tout pavage correct (l'intérieur d'une pierre ne
   change pas d'une colonne à l'autre, un joint change beaucoup — la moyenne est tirée vers le
   bas). *Un banc de rendu se vérifie aussi.*
+- **`tools/render-eau.mjs` — 14 contrôles, 14/14 (435).** L'eau de Valley Town et sa berge :
+  l'étang du parc dans son décor, **la même scène quatre minutes plus tard**, le lac du sud, et
+  les **seize configurations de coins** à toutes les profondeurs, hors décor. Il appelle
+  `A.drawTownWaterTile` / `A.drawTownShoreTile`, c'est-à-dire les fonctions du jeu.
+  ⚠️⚠️ **LA GRANDEUR QUI MANQUAIT EST LA RECTITUDE DU RIVAGE**, et c'est Guillaume qui l'a
+  nommée (« les rives sont trop géométriques »). On la mesure comme une côte : la plus longue
+  suite de pixels du trait d'eau alignés sur une même ligne. **Ancien rendu : 16 px minimum par
+  construction** (une case d'eau était un `fillRect` pleine case, donc le rivage ne POUVAIT pas
+  descendre sous une case). Aujourd'hui : **8 px en X comme en Y**, et le seuil est à 16.
+  ⚠️ Les trois autres grandeurs, toutes nouvelles : **la continuité** (zéro pixel sec cerné
+  d'eau — une erreur d'ordre des bits dans la configuration des coins ouvrirait une fissure
+  d'un pixel tout autour du plan d'eau, muette à la relecture et hurlante en jeu) ; **la
+  profondeur** (L **160** au bord contre **54** au large, seuil à 25 d'écart — pas la moyenne,
+  qui ne dit rien, §8) ; **le contraste** (écart-type **27,4** contre **8,3** pour l'ancienne
+  eau, mesuré au 434).
+  ⚠️⚠️ **ET LE BANC S'EST TROMPÉ DE GRANDEUR AVANT LE DESSIN, comme celui des rues.** Il
+  accusait une rive droite de 21 px : il mesurait la RANGÉE DE SAPINS qui borde le parc, peinte
+  en vert-bleu, que son détecteur d'eau (bleu dominant) comptait comme un rivage. Les mesures se
+  font donc sur une scène nue — herbe, berge, eau — et la planche garde son décor, parce qu'une
+  rive se JUGE dans son décor. *Un banc qui échoue peut se tromper de grandeur exactement comme
+  un banc qui passe.*
+  ⚠️ Son cinquième chapitre n'est pas du dessin mais de la RÈGLE, et il a été écrit après avoir
+  perdu un décor : en poussant les harmoniques du contour d'un cran, l'étang a mangé la case du
+  massif taillé (122, 83). Le générateur refuse poliment de poser un décor dans l'eau — donc
+  rien n'a levé, il y avait juste **trois massifs au lieu de quatre**. Il les compte.
 - `verify-constants` · `verify-objects` · `verify-strings` · `verify-syntax` · `verify-gates` ·
   `verify-cycle` · `verify-orchards` · `verify-scope` · `verify-vergers` · `render-fruits`.
 

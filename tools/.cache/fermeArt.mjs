@@ -955,6 +955,184 @@ export function drawTownRoadTile(ctx, S, tw, x, y, px, py) {
   return true;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   ZIP 435 — PEINDRE UNE CASE D'EAU DE VALLEY TOWN, ET SA BERGE.
+   ──────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ ICI, ET PAS DANS `drawTownFrame`, POUR LA RAISON DU §4 : ce qui vit
+   dans la closure du rendu n'est REGARDABLE que par quelqu'un qui joue, et
+   l'eau est du DESSIN. Recopié dans `tools/render-eau.mjs`, il aurait mesuré
+   autre chose que ce qu'on livre. Même contrat que `drawTownRoadTile` (434).
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Le hachage d'un COIN du monde. ⚠️ IL PORTE TOUT LE NATUREL DU RIVAGE (voir
+   la note de `townWaterTile`) et il doit donc être PUR : même entrée, même
+   sortie, chez l'hôte comme chez l'invité, sans une seule diffusion. Les
+   coordonnées sont celles du coin, pas de la case — c'est ce qui fait que les
+   quatre cases qui se le partagent lisent la même réponse. */
+function waterHash(cx, cy) {
+  let n = (Math.imul(cx, 73856093) ^ Math.imul(cy, 19349663)) | 0;
+  n ^= n >>> 13; n = Math.imul(n, 0x5bd1e995); n ^= n >>> 15;
+  return n >>> 0;
+}
+function townIsWater(tw, x, y) {
+  if (x < 0 || y < 0 || x >= tw.w || y >= tw.h) return false;   // hors carte = terre
+  return tw.ground[y * tw.w + x] === C.G_WATER;
+}
+/* Le coin est de l'eau si TROIS de ses quatre cellules le sont, de la terre
+   s'il n'en a qu'une, et c'est le hachage qui tranche à deux — le cas de tous
+   les coins d'une rive droite. */
+function townWaterCorner(tw, cx, cy) {
+  let n = 0;
+  if (townIsWater(tw, cx - 1, cy - 1)) n++;
+  if (townIsWater(tw, cx, cy - 1)) n++;
+  if (townIsWater(tw, cx - 1, cy)) n++;
+  if (townIsWater(tw, cx, cy)) n++;
+  if (n >= 3) return true;
+  if (n <= 1) return false;
+  return (waterHash(cx, cy) & 1) === 1;
+}
+
+/* Rend `true` si elle a peint de l'eau. Elle est appelée sur les cases d'eau
+   ET sur les cases de BERGE : le trait d'eau déborde d'une demi-case là où le
+   hachage a tranché « eau » sur un coin, et sans cet appel il manquerait
+   exactement ce débord — un feston d'herbe le long du rivage.
+   ⚠️ ET IL NE DÉBORDE QUE SUR DE LA BERGE (`tw.shore`). Sans ce garde-fou,
+   l'eau baverait sur la promenade en pierre du lac du sud et sur l'allée du
+   parc : un quai a une arête franche, c'est ce qui le distingue d'une plage. */
+export function drawTownWaterTile(ctx, S, tw, x, y, px, py, now) {
+  const SW = S && S.townWater;
+  if (!SW || !tw.depth) return false;
+  const i = y * tw.w + x, isW = tw.ground[i] === C.G_WATER;
+  if (!isW && !(tw.shore && tw.shore[i] === 1)) return false;
+  const cfg = (townWaterCorner(tw, x, y) ? 1 : 0)
+            | (townWaterCorner(tw, x + 1, y) ? 2 : 0)
+            | (townWaterCorner(tw, x + 1, y + 1) ? 4 : 0)
+            | (townWaterCorner(tw, x, y + 1) ? 8 : 0);
+  if (!isW && cfg === 0) return false;              // rien ne déborde ici
+  const vr = waterHash(x * 3 + 1, y * 7 + 2) & 1;
+  // La berge est le cran le plus haut : un débord d'eau sur la terre, c'est du
+  // haut-fond par définition.
+  const d = isW ? Math.min(SW.depths - 1, ((tw.depth[i] * SW.depths) / 256) | 0) : 0;
+  ctx.drawImage(SW.tiles[cfg][vr][d], px, py);
+
+  /* ⚠️⚠️ LE DÉGRADÉ DOIT TRAVERSER LA CASE, EXACTEMENT COMME LE TRAIT D'EAU.
+     Premier jet : une case = un cran de profondeur = un aplat, et l'étang
+     rendait un ESCALIER DE RECTANGLES BLEUS de 16 px au milieu de l'eau. On
+     avait cassé la grille sur le rivage et on venait de la redessiner au
+     large — le même défaut, déplacé de deux mètres, ce qui est la définition
+     d'une correction ratée.
+     ⚠️ LA PARADE COÛTE UN `drawImage` PAR VOISIN ET AUCUN ATLAS DE PLUS : on
+     repose une BANDE de la MÊME tuile (même configuration, même variante, donc
+     exactement le même contour) au cran du voisin, en semi-transparence, du
+     côté de ce voisin. Le masque étant identique au pixel près, rien ne peut
+     déborder du contour — ce qu'un `fillRect` de dégradé aurait fait sur
+     l'herbe une case sur deux. Deux crans voisins se fondent, et la marche
+     apparente est divisée par deux sans qu'on ait multiplié les tuiles.
+     ⚠️ Réservé à la pleine eau : sur une case de rive, le contour occupe déjà
+     moins d'une demi-case et la bande n'aurait rien à fondre. */
+  const T2 = SPR_T;
+  if (isW) {
+    /* ⚠️⚠️ ET LA PREMIÈRE PARADE ÉTAIT PIRE QUE LE DÉFAUT : quatre bandes
+       semi-transparentes, une par voisin, superposées aux angles — l'étang
+       rendait un TISSU ÉCOSSAIS de rayures horizontales. Deux enseignements,
+       tous deux généraux : un fondu posé sur les QUATRE côtés d'une case n'est
+       pas un dégradé, c'est un cadre ; et deux voiles alpha qui se croisent
+       fabriquent une troisième teinte que personne n'a choisie.
+       ⚠️ On ne fond donc que sur l'AXE DOMINANT du gradient — celui où la
+       profondeur varie le plus — et en OPACITÉ PLEINE, avec le niveau MOYEN
+       entre cette case et sa voisine. Trois bandes le long d'un seul axe font
+       une rampe ; le masque étant celui de la même tuile, rien ne déborde du
+       contour. La résolution apparente est triplée sans une tuile de plus. */
+    const lvl = (xx, yy) => {
+      if (xx < 0 || yy < 0 || xx >= tw.w || yy >= tw.h) return d;
+      const j = yy * tw.w + xx;
+      if (tw.ground[j] !== C.G_WATER) return d;
+      return Math.min(SW.depths - 1, ((tw.depth[j] * SW.depths) / 256) | 0);
+    };
+    const lW = lvl(x - 1, y), lE = lvl(x + 1, y), lN = lvl(x, y - 1), lS = lvl(x, y + 1);
+    const gh = Math.abs(lE - lW), gv = Math.abs(lS - lN);
+    if (gh || gv) {
+      const BW = 5;                     // largeur des bandes d'extrémité
+      const mid = (a) => Math.max(0, Math.min(SW.depths - 1, Math.round((d + a) / 2)));
+      if (gh >= gv) {
+        const a = mid(lW), b = mid(lE);
+        if (a !== d) ctx.drawImage(SW.tiles[cfg][vr][a], 0, 0, BW, T2, px, py, BW, T2);
+        if (b !== d) ctx.drawImage(SW.tiles[cfg][vr][b], T2 - BW, 0, BW, T2, px + T2 - BW, py, BW, T2);
+      } else {
+        const a = mid(lN), b = mid(lS);
+        if (a !== d) ctx.drawImage(SW.tiles[cfg][vr][a], 0, 0, T2, BW, px, py, T2, BW);
+        if (b !== d) ctx.drawImage(SW.tiles[cfg][vr][b], 0, T2 - BW, T2, BW, px, py + T2 - BW, T2, BW);
+      }
+    }
+  }
+
+  /* ---- LES REFLETS. Ils ne se posent QUE sur une case de pleine eau
+     (`cfg === 15`), et ce n'est pas de la prudence de façade : sur une case de
+     rive, le contour ne couvre qu'une partie du carré, et un reflet peint en
+     `fillRect` déborderait sur l'herbe — c'est-à-dire qu'il redessinerait la
+     grille qu'on vient de casser, en clair, une case sur deux. */
+  if (cfg !== 15) return true;
+  const T = SPR_T;
+  /* 1. LE REFLET DE LA BERGE ET DES ARBRES. Un arbre planté au nord se couche
+        sur l'eau vers le SUD, en s'estompant et en ondulant. C'est le détail
+        qui dit « surface » plutôt que « trou bleu », et il ne coûte que deux
+        rectangles. On regarde trois cases au nord : au-delà, un arbre ne se
+        reflète plus dans ce qu'on voit de la mare. */
+  for (let k = 1; k <= 3; k++) {
+    const o = (y - k) >= 0 ? tw.objects[(y - k) * tw.w + x] : 0;
+    if (o !== C.O_TREE && o !== C.O_TREE2) continue;
+    const a = 0.34 - k * 0.07;
+    const sw = Math.round(Math.sin(now / 1300 + x * 0.7 + k) * 1.6);
+    ctx.fillStyle = `rgba(24, 58, 44, ${a})`;
+    ctx.fillRect(px + 3 + sw, py, 10, T);
+    ctx.fillStyle = `rgba(18, 44, 34, ${a * 0.6})`;
+    ctx.fillRect(px + 6 - sw, py + 4, 4, T - 4);
+    break;
+  }
+  /* 2. LA LAME DE LUMIÈRE. Une seule, qui glisse lentement : à 16 px, deux
+        reflets animés dans la même case font de la friture. Sa hauteur est
+        dérivée de la case pour que deux cases voisines ne battent pas ensemble
+        — un lac qui clignote d'un seul bloc se lit comme un défaut d'affichage
+        (c'est ce que faisait le voile `sin(x + y)` du 425 : une damier
+        diagonale de deux bleus, visible en grand sur toute la nappe). */
+  const ph = (waterHash(x, y) % 1000) / 1000;
+  const t = ((now / 5200) + ph) % 1;
+  const ly = ((t * T) | 0);
+  const gl = 0.16 + Math.sin((now / 900) + ph * 6.28) * 0.07;
+  ctx.fillStyle = `rgba(214, 238, 246, ${Math.max(0, gl)})`;
+  ctx.fillRect(px + 2 + ((ph * 5) | 0), py + ly, 7, 1);
+  return true;
+}
+
+/* La berge, sur la TERRE. Elle se pose après le sol et avant l'eau : le trait
+   d'eau vient mordre dessus, donc l'ordre est ce qui donne la rive mouillée. */
+export function drawTownShoreTile(ctx, S, tw, x, y, px, py) {
+  const SW = S && S.townWater;
+  const b = (SW && tw.shore) ? tw.shore[y * tw.w + x] : 0;
+  if (!b) return false;
+  /* La direction de l'eau, moyennée sur les huit voisines puis quantifiée sur
+     les huit orientations bakées. ⚠️ MOYENNÉE ET PAS « LA PREMIÈRE TROUVÉE » :
+     au fond d'une crique, l'eau est à la fois au nord et à l'ouest, et une
+     berge orientée plein nord y aurait laissé un quart de case d'herbe nue
+     entre elle et l'eau — un trou, exactement là où le regard va. */
+  /* ⚠️ SUR L'EAU (valeur 3), ON CHERCHE LA TERRE, PAS L'EAU. La vase d'une
+     case d'eau de bord est du côté de la RIVE, sinon on la peindrait au large
+     et le quart de case resté sec sous le contour redeviendrait vert. */
+  const seek = b === 3;
+  const rad = seek ? 1 : b;
+  let vx = 0, vy = 0;
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+    for (let k = 1; k <= rad; k++) if (townIsWater(tw, x + dx * k, y + dy * k) !== seek) { vx += dx / k; vy += dy / k; }
+  }
+  if (vx === 0 && vy === 0) return false;
+  const ang = Math.atan2(vy, vx);
+  // L'ordre de SHORE_DIRS commence au nord et tourne dans le sens horaire.
+  let dir = Math.round((ang + Math.PI / 2) / (Math.PI / 4)) % 8;
+  if (dir < 0) dir += 8;
+  ctx.drawImage(SW.shore[b - 1][dir][waterHash(x * 5, y * 11) & 1], px, py);
+  return true;
+}
+
 function sprCv(w, h) {
   const c = document.createElement("canvas");
   c.width = w; c.height = h;
@@ -4301,6 +4479,254 @@ export function buildSprites() {
   const KERB_STONE = { face: "#a8a69e", top: "#c6c4bb", dark: "#6f6d67", faceAlt: "#b2b0a7", gutter: "#5d5b58" };
   const KERB_BRICK = { face: "#8f5a44", top: "#b07a5e", dark: "#5f3a2c", faceAlt: "#9c6650", gutter: "#4d3a30" };
 
+  /* ═══════════════════════════════════════════════════════════════════════
+     ZIP 435 — L'EAU DE VALLEY TOWN : LE TRAIT D'EAU QUITTE LA GRILLE.
+     ─────────────────────────────────────────────────────────────────────────
+     ⚠️⚠️ CE QU'ON REMPLACE, ET POURQUOI CE N'EST PAS UN PROBLÈME DE COULEUR :
+     `ctx.fillStyle = "#3f7fd0"; ctx.fillRect(px, py, T, T)`. Une case est de
+     l'eau ou ne l'est pas, donc le trait d'eau SUIT LA GRILLE, donc le rivage
+     est un escalier de 16 px — et il le reste quelle que soit la finesse du
+     contour qu'on dessine dans le générateur. Mesuré au 434 : 57 % des arêtes
+     eau/terre de la ville sont un contact herbe→eau sans un pixel de
+     transition. **C'est la géométrie du DESSIN qu'il faut casser, pas celle de
+     la carte.**
+
+     ⚠️ LA MÉTHODE : LES CARRÉS MARCHEURS SUR LES COINS, PAS SUR LES CASES.
+     Chaque COIN de case vaut « eau » ou « terre » ; le trait d'eau est
+     l'isocontour bilinéaire entre les quatre coins de la case. Trois propriétés
+     tombent gratuitement, et ce sont les trois qu'on cherchait :
+       — il est CONTINU d'une case à l'autre (deux cases voisines partagent
+         leurs deux coins, donc le trait se raccorde exactement — aucune couture
+         possible, ce que quatre tuiles de rive dessinées à la main n'auraient
+         jamais garanti) ;
+       — il est COURBE : l'isocontour d'une bilinéaire est une hyperbole, donc
+         un angle de rive se lit arrondi, jamais en biseau à 45° ;
+       — il TRAVERSE les cases, donc l'escalier disparaît.
+
+     ⚠️⚠️ ET LE COIN AMBIGU EST TIRÉ AU SORT — C'EST LUI QUI FAIT LE NATUREL.
+     Un coin dont deux cellules sur quatre sont de l'eau (c'est le cas de TOUS
+     les coins le long d'une rive droite) n'a pas de bonne réponse : on la tire
+     d'un hachage de ses coordonnées MONDE. Le tirage est donc le même pour les
+     quatre cases qui se partagent ce coin — pas de fissure — et il est le même
+     chez les deux joueurs, sans rien diffuser. Effet : le long d'une rive
+     parfaitement droite dans les données, le trait d'eau ondule d'une
+     demi-case, au hasard mais toujours au même endroit. **Sans ce tirage, la
+     méthode entière rendrait une rive droite… droite.**
+
+     ⚠️ LES SEIZE CONFIGURATIONS SONT BAKÉES, ET C'EST LA SEULE FAÇON DE
+     S'OFFRIR ÇA À 60 IMAGES/S : évaluer la bilinéaire par pixel coûterait 256
+     tests × toutes les cases d'eau visibles, à chaque image. On cuit
+     16 configurations × 2 variantes × 6 profondeurs = 192 tuiles de 16 px une
+     fois pour toutes, et le rendu ne fait qu'un `drawImage`. C'est le même
+     raisonnement que les revêtements du 434.
+     ⚠️ LA VARIANTE N'EST PAS UN CAPRICE : la bosse qui déforme le seuil vaut
+     ZÉRO SUR LES QUATRE BORDS de la case (`16·u(1−u)·v(1−v)`), donc elle
+     gondole l'intérieur du trait SANS déplacer ses points de sortie. Une
+     variante bombe, l'autre creuse. Déformer le seuil d'une constante aurait
+     décollé le trait de celui du voisin — une fissure d'un pixel tout autour
+     du lac, invisible à la relecture et hurlante en jeu. */
+  const WAT_CFG = 16, WAT_VAR = 2, WAT_DEPTH = 8;
+  /* La rampe de profondeur. ⚠️ ELLE CHANGE DE TEINTE, PAS SEULEMENT DE VALEUR :
+     un haut-fond est vaseux et vert, le large est bleu et sourd. Une simple
+     rampe de luminance sur un seul bleu aurait rendu un dégradé de peinture,
+     pas de l'eau — c'est la fausse piste mesurée en §8 (« la sortie est dans la
+     VALEUR » vaut pour le mélange, pas pour la teinte d'un fond vu à travers). */
+  /* ⚠️⚠️ ET ELLE PLONGE VITE. Premier jet : huit crans étalés régulièrement du
+     gris-vert au bleu sombre, sur un plateau de 3,5 cases — regardé sur
+     `render-eau.mjs`, l'étang était un anneau BLANC de deux cases autour d'une
+     tache bleue. La moitié claire d'une rampe régulière occupe la moitié de la
+     surface, et sur une mare de quatre cases de rayon, c'est tout le bord. Un
+     haut-fond se voit sur une case, pas sur trois : les deux premiers crans
+     seuls sont pâles, le reste est du bleu. */
+  const WAT_RAMP = ["#8fb9bd", "#6a9fb4", "#5189ad", "#4174a0", "#356293", "#2b5384", "#234674", "#1c3b63"];
+  const WAT_FOAM = "#dbeef2";      // le liseré clair au ras de la rive, côté lumière
+  const WAT_SHADE = "#1b3d63";     // l'ombre portée de la berge, côté nord-ouest
+
+  function townWaterTile(cfg, vr, d) {
+    /* ⚠️ LA GRAINE NE DÉPEND PAS DE `d`, ET C'EST OBLIGATOIRE. Le rendu
+       recompose une case à partir de TROIS crans de profondeur (voir les
+       bandes de fondu dans `drawTownWaterTile`) : si le grain, les lames de
+       lumière et l'écume changeaient de place d'un cran à l'autre, chaque case
+       d'eau serait hachée en trois dessins différents. Même graine, même
+       placement, seule la teinte bouge. */
+    const [c, g] = cv(T, T), r = makeRnd(0x2ee1 + cfg * 131 + vr * 17);
+    // Les quatre coins, dans l'ordre NO, NE, SE, SO — le même que `cfg` côté rendu.
+    const c00 = (cfg & 1) ? 1 : 0, c10 = (cfg & 2) ? 1 : 0, c11 = (cfg & 4) ? 1 : 0, c01 = (cfg & 8) ? 1 : 0;
+    const AMP = vr ? 0.13 : -0.13;
+    /* `f` déborde d'un pixel de chaque côté : c'est ce qui permet de savoir si
+       un pixel du BORD de la case est au bord de l'eau ou au milieu d'une
+       nappe qui continue chez le voisin. Sans ce débord, on aurait posé un
+       liseré d'écume tout autour de chaque case — la grille, à nouveau, mais
+       en blanc. */
+    const N = T + 2;
+    const wet = new Uint8Array(N * N);
+    for (let py = -1; py <= T; py++) for (let px = -1; px <= T; px++) {
+      const u = (px + 0.5) / T, v = (py + 0.5) / T;
+      let f = c00 * (1 - u) * (1 - v) + c10 * u * (1 - v) + c01 * (1 - u) * v + c11 * u * v;
+      if (cfg === WAT_CFG - 1) f = 1;
+      const bump = 16 * u * (1 - u) * v * (1 - v);
+      const thr = 0.5 + AMP * (bump > 0 ? bump : 0);
+      /* ⚠️ LA CASE D'EAU ISOLÉE (cfg 0) NE DOIT PAS DISPARAÎTRE. Ses quatre
+         coins sont de la terre, donc l'isocontour est vide — et une case
+         d'eau non peinte, c'est de l'herbe au milieu d'une mare. On lui donne
+         une flaque centrée, ce qui est de toute façon la bonne lecture d'un
+         fond d'eau d'une seule case. Le générateur en produit zéro aujourd'hui
+         (deux passes de lissage), mais le lac du sud n'a pas été retouché et
+         rien ne garantit qu'il n'en fabriquera pas demain. */
+      const on = cfg === 0
+        ? ((px - 7.5) * (px - 7.5) / 30 + (py - 7.5) * (py - 7.5) / 30) < 1
+        : f >= thr;
+      if (on) wet[(py + 1) * N + (px + 1)] = 1;
+    }
+    const W_ = (px, py) => wet[(py + 1) * N + (px + 1)] === 1;
+    const base = WAT_RAMP[d];
+    for (let py = 0; py < T; py++) for (let px = 0; px < T; px++) {
+      if (!W_(px, py)) continue;
+      P(g, px, py, 1, 1, base);
+    }
+    // Grain : sans lui l'eau mesure un écart-type de 8 (mesuré au 434 sur
+    // l'ancien aplat), c'est-à-dire une gouache. Deux tons, épars.
+    for (let k = 0; k < 22; k++) {
+      const px = (r() * T) | 0, py = (r() * T) | 0;
+      if (W_(px, py)) P(g, px, py, 1, 1, r() < 0.5 ? WAT_RAMP[Math.min(WAT_DEPTH - 1, d + 1)] : WAT_RAMP[Math.max(0, d - 1)]);
+    }
+    /* LA RIVE, EN DEUX MATIÈRES OPPOSÉES, ET C'EST ELLE QUI FAIT LA
+       PROFONDEUR. La lumière du projet vient du NORD-OUEST (c'est le biseau
+       des pavés du 434) : la berge nord-ouest porte donc son ombre SUR l'eau,
+       et la rive sud-est reçoit la lumière rasante, donc l'écume. Deux liserés
+       de un pixel, jamais les deux du même côté. */
+    for (let py = 0; py < T; py++) for (let px = 0; px < T; px++) {
+      if (!W_(px, py)) continue;
+      let nx = 0, ny = 0, edge = false;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        if (!W_(px + dx, py + dy)) { nx += dx; ny += dy; edge = true; }
+      }
+      if (!edge) continue;
+      const lit = (nx + ny) > 0;                      // normale vers le sud/est
+      /* ⚠️ L'ÉCUME EST DISCONTINUE, ET C'EST LA DIFFÉRENCE ENTRE UNE RIVE ET
+         UN DÉTOURAGE. Premier jet : un pixel clair sur CHAQUE pixel de bord —
+         l'étang se retrouvait cerné d'un trait blanc continu, c'est-à-dire
+         détouré comme un autocollant. Une écume réelle est faite de paquets.
+         Un pixel sur trois saute, tiré du même générateur que le reste de la
+         tuile, donc stable d'une image à l'autre. */
+      if (lit && r() < 0.34) continue;
+      P(g, px, py, 1, 1, lit ? WAT_FOAM : WAT_SHADE);
+    }
+    /* Le reflet du ciel : une ou deux lames claires horizontales, à l'intérieur
+       du trait. ⚠️ ELLES SONT BAKÉES ET NON ANIMÉES — l'animation est ajoutée
+       au rendu, sur les cases de PLEINE eau seulement, où elle ne peut pas
+       déborder du contour (voir drawTownWaterTile). */
+    const lam = 1 + ((r() * 2) | 0);
+    for (let k = 0; k < lam; k++) {
+      const ly = 2 + ((r() * (T - 4)) | 0), lx = 1 + ((r() * (T - 6)) | 0), lw = 3 + ((r() * 3) | 0);
+      for (let q = 0; q < lw; q++) if (W_(lx + q, ly) && W_(lx + q, ly - 1) && W_(lx + q, ly + 1)) {
+        P(g, lx + q, ly, 1, 1, d <= 1 ? "#c7e4ea" : "#7fb5cf");
+      }
+    }
+    return c;
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     LA BERGE. Huit orientations bakées, deux variantes — même raison que les
+     bordures de rue : le faux canevas des bancs ignore `rotate` (§4), donc une
+     berge obtenue par transformation serait invisible là où on la regarde.
+     ⚠️ SA COUVERTURE EST UNE FONCTION DE LA DIRECTION DE L'EAU, pas un
+     rectangle : c'est ce qui empêche la berge de redessiner la grille qu'on
+     vient de casser. Et son bord EXTÉRIEUR est dentelé par colonne — une berge
+     à bord net serait un second rivage, à une case du premier. */
+  const SHORE_DIRS = [[0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1]];
+  function townShoreTile(band, dir, vr) {
+    const [c, g] = cv(T, T), r = makeRnd(0x71a3 + band * 313 + dir * 29 + vr * 5);
+    const [dx, dy] = SHORE_DIRS[dir];
+    const n = Math.hypot(dx, dy), ux = dx / n, uy = dy / n;
+    /* ⚠️ GRIS-VERT ET PAS CHOCOLAT, ET C'EST UNE CORRECTION MESURÉE. Premier
+       jet : de la terre brune sur toute la bande 1 — regardé sur
+       `render-eau.mjs`, l'étang portait un DONUT MARRON de deux cases, plus
+       large que l'eau elle-même. Une berge de mare n'est pas un labour : c'est
+       de la vase grise, des galets et de l'herbe qui continue par-dessus.
+       Les touffes et la mousse doivent RESTER visibles au travers, sinon on a
+       remplacé une frontière nette par une bande nette. */
+    const WET = ["#6a6354", "#736b5b", "#5f5849"];              // vase grise, pas de la terre retournée
+    const PEB = ["#95918a", "#7d7973", "#a8a298", "#6b6762"];   // galets
+    const MOSS = ["#4a6338", "#3d5730"];
+    const TUFT = "#3f7a3c";
+    // Le limon et les galets vus À TRAVERS l'eau : plus sombres et plus froids
+    // que les mêmes matières à l'air libre. Sans ce décalage, la rive immergée
+    // se lirait comme une plage qui affleure.
+    const SILT = ["#4e5a55", "#57635c", "#465250"];
+    const SPEB = ["#6f7a76", "#5e6866", "#7d8783", "#525c5a"];
+    /* Le seuil de couverture. ⚠️ IL A ÉTÉ REMONTÉ DEUX FOIS : la bande mouillée
+       ne couvre plus que le tiers de la case côté eau (elle en couvrait les
+       deux tiers), et la bande sèche n'est plus qu'un semis de galets dans
+       l'herbe. C'est ce qui ramène l'anneau visible de deux cases à une. */
+    /* ⚠️ LA BANDE 3 EST LA RIVE IMMERGÉE — celle qu'on peint SUR une case d'eau,
+       sous le trait. Elle a sa propre matière, et ce n'est pas de la coquetterie :
+       peinte comme la berge sèche, elle mettait de la MOUSSE VERTE et des touffes
+       d'herbe dans l'eau. Vu sur `eau-lac-sud.png` : des îlots d'herbe flottant
+       le long du quai. Sous l'eau il n'y a que du limon et des galets. */
+    const sunk = band === 3;
+    /* ⚠️⚠️ ET ELLE COUVRE BEAUCOUP PLUS LARGE QUE LES DEUX AUTRES. Vu sur
+       `eau-lac-sud.png` : un LISERÉ VERT VIF courait sous toute la promenade du
+       lac. Ce n'était ni la mousse ni une touffe — c'était LE LIT. Le rendu
+       peint l'herbe sous les cases d'eau (il le faut : le trait d'eau traverse
+       la case, il reste du sec à montrer), et là où le contour se retirait, la
+       pelouse ressortait entre les grains de limon. Une bande semée ne peut pas
+       masquer un fond : sur une case d'eau, la rive doit couvrir PLEIN au
+       contact de la terre et ne se dissoudre qu'en allant vers le large. */
+    const thr = band === 2 ? 0.34 : (sunk ? -0.30 : 0.02);
+    const span = sunk ? 0.55 : 0.34;
+    /* ⚠️⚠️ LA COUVERTURE EST UNE DENSITÉ, PAS UN DEMI-PLAN — ET C'EST LA
+       TROISIÈME FOIS QUE CE ZIP PAYE LA MÊME LEÇON. Premier jet : « au-delà du
+       seuil, on remplit », avec une dentelure par rangée. Résultat regardé sur
+       `render-eau.mjs` : la berge se lisait en TRIANGLES nets, un par case,
+       parce que huit orientations bakées + un demi-plan plein = huit triangles.
+       On avait cassé la grille sur le rivage, puis au large, et on venait de la
+       redessiner sur la berge — sous forme de triangles cette fois.
+       ⚠️ La parade est de ne jamais peindre une SURFACE : la distance au bord
+       donne une PROBABILITÉ, et on tire pixel par pixel. Le bord de la berge
+       n'existe alors plus comme trait — il n'y a qu'un semis qui se raréfie.
+       Aucune orientation ne peut plus se lire, et les huit tuiles se raccordent
+       sans qu'on ait rien à faire pour ça. */
+    const dens = (px, py) => {
+      const s = ((px + 0.5) / T - 0.5) * ux + ((py + 0.5) / T - 0.5) * uy;
+      return Math.max(0, Math.min(1, (s - thr) / span));
+    };
+    if (band !== 2) {
+      const body = sunk ? SILT : WET;
+      for (let py = 0; py < T; py++) for (let px = 0; px < T; px++) {
+        const p = dens(px, py);
+        // Sous l'eau, plein au contact de la terre ; sur la berge sèche, jamais
+        // tout à fait plein — c'est ce qui laisse l'herbe respirer au travers.
+        if (r() >= (sunk ? Math.min(1, p * 1.7) : p * 0.92)) continue;
+        P(g, px, py, 1, 1, body[(r() * body.length) | 0]);
+      }
+      for (let k = 0; k < 9; k++) {                              // galets, plutôt côté eau
+        const px = (r() * T) | 0, py = (r() * T) | 0;
+        if (r() >= dens(px, py)) continue;
+        P(g, px, py, 1 + ((r() * 2) | 0), 1 + ((r() * 2) | 0), (sunk ? SPEB : PEB)[(r() * PEB.length) | 0]);
+      }
+      if (!sunk) for (let k = 0; k < 6; k++) {                   // mousse, plutôt côté herbe
+        const px = (r() * T) | 0, py = (r() * T) | 0;
+        if (r() < dens(px, py) * 0.8) P(g, px, py, 2, 1, MOSS[(r() * MOSS.length) | 0]);
+      }
+    } else {
+      for (let k = 0; k < 12; k++) {
+        const px = (r() * T) | 0, py = (r() * T) | 0;
+        if (r() >= dens(px, py)) continue;
+        P(g, px, py, 1 + ((r() * 2) | 0), 1, r() < 0.6 ? PEB[(r() * PEB.length) | 0] : WET[(r() * WET.length) | 0]);
+      }
+    }
+    /* Deux touffes qui débordent sur la terre : c'est ce qui empêche la berge de
+       se lire comme une découpe. ⚠️ JAMAIS SOUS L'EAU, et jamais hors couverture
+       — le `|| r() < 0.4` du premier jet en semait au hasard dans la case, donc
+       des brins d'herbe au milieu de la vase. */
+    if (!sunk) for (let k = 0; k < 2; k++) {
+      const px = 1 + ((r() * (T - 2)) | 0), py = 1 + ((r() * (T - 3)) | 0);
+      if (dens(px, py) > 0.45) { P(g, px, py, 1, 3, TUFT); P(g, px + 1, py + 1, 1, 2, TUFT); }
+    }
+    return c;
+  }
+
   /* ---------------- Objets ---------------- */
   function oakTree() {
     const [c, g] = cv(32, 48);
@@ -7593,6 +8019,20 @@ export function buildSprites() {
       // debout (« soldier course ») pour l'allée du cimetière.
       kerb: { n: townKerbStrip("n", KERB_STONE), s: townKerbStrip("s", KERB_STONE), e: townKerbStrip("e", KERB_STONE), w: townKerbStrip("w", KERB_STONE) },
       kerbBrick: { n: townKerbStrip("n", KERB_BRICK), s: townKerbStrip("s", KERB_BRICK), e: townKerbStrip("e", KERB_BRICK), w: townKerbStrip("w", KERB_BRICK) },
+    },
+    /* ZIP 435 — L'EAU ET SA BERGE. Un seul objet, comme `townRoad` : le rendu
+       en a besoin ENSEMBLE, et `depths` voyage avec les tuiles — le jour où la
+       rampe passe de six à huit crans, le rendu n'a rien à savoir. */
+    townWater: {
+      depths: WAT_DEPTH,
+      // [configuration des 4 coins][variante][cran de profondeur]
+      tiles: Array.from({ length: WAT_CFG }, (_, cfg) =>
+        Array.from({ length: WAT_VAR }, (_, vr) =>
+          Array.from({ length: WAT_DEPTH }, (_, d) => townWaterTile(cfg, vr, d)))),
+      // [bande 1 mouillée · 2 sèche · 3 immergée][une des 8 directions][variante]
+      shore: Array.from({ length: 3 }, (_, b) =>
+        Array.from({ length: 8 }, (_, dir) =>
+          Array.from({ length: 2 }, (_, vr) => townShoreTile(b + 1, dir, vr)))),
     },
     oak: oakTree(),
     pine: pineTree(),

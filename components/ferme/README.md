@@ -1077,3 +1077,135 @@ un trottoir d'un simple biseau de pavé.
   chantier ;
 - **le goudron s'arrête aux quatre bords de l'esplanade** et reprend de l'autre côté. C'est le
   motif urbain voulu (une place n'est pas une chaussée), pas un oubli.
+
+---
+
+## 18. ZIP 435 — L'EAU : LE TRAIT D'EAU QUITTE LA GRILLE
+
+Retour de Guillaume, mot pour mot : « qu'on cesse de faire des rives de lacs verticales ou
+horizontales », avec une référence en image — une mare aux contours courbes, à la rive rocheuse
+et au fond dégradé. Puis : « fais des contours plus courbes et réalistes. Et ensuite crée le
+dessin de profondeur avec l'eau avec des reflets ».
+
+**Chantier limité à l'étang du parc pour la FORME. Le dessin, lui, vaut pour toute l'eau de la
+ville** — c'est la même fonction, et en écrire une seconde pour l'étang aurait été la
+divergence en attente du §8.
+
+### Ce qui n'allait pas, en trois nombres
+
+| | avant | après |
+|---|---|---|
+| plus longue rive alignée | **16 px minimum PAR CONSTRUCTION** | **8 px** |
+| écart-type de la nappe | **8,3** (de la gouache) | **27,4** |
+| L bord / L large | *aucun écart* — un seul bleu | **160 / 54** |
+
+⚠️ **57 % des arêtes eau/terre de la ville étaient un contact herbe→eau sans un pixel de
+transition** (mesuré au 434, sur les 276 arêtes de la carte).
+
+### 1. La forme : un rayon modulé, pas une équation
+
+L'étang était `u² + v² ≤ 1`. **Une ellipse est convexe par définition** : elle ne peut former ni
+crique, ni pointe, ni presqu'île, quels que soient ses rayons — et sa rastérisation lui donnait
+quatre **ergots d'une seule case** (N/S/E/O) qui la faisaient lire comme un losange. Même
+famille que le lac du sud, dont le rivage est `sin(x)`, donc une FONCTION DE x, donc incapable
+de revenir sur elle-même : **75 colonnes plates sur 95**.
+
+`TOWN_POND` décrit maintenant un **rayon** modulé par quatre harmoniques (`TOWN_POND_LOBES`) :
+k=1 décentre, k=2 fait le haricot, k=3 creuse les criques, k=5 donne le grain. Non convexe dès
+que la somme des amplitudes dépasse ~0,25.
+⚠️ **Aucun tirage aléatoire** : `generateTownWorld` partage UN générateur (graine 0x7041) entre
+tout ce qu'il pose ; y puiser quatre nombres de plus décalerait TOUS les arbres et TOUT le
+mobilier de la ville. Les harmoniques sont écrites en clair, et se règlent à l'œil sur le banc.
+⚠️⚠️ **Puis deux passes d'automate cellulaire, et elles ne sont pas cosmétiques.** Un contour
+organique rastérisé sème des ergots et des encoches d'une case PARTOUT — pires que l'ovale
+qu'on remplace, parce qu'à 16 px une case seule ne se lit pas comme « rive découpée » mais
+comme un défaut, et qu'elle est infranchissable. Une case d'eau à moins de deux voisines
+redevient de la terre, une case de terre à trois voisines se noie. **Deux passes** : une seule
+laissait des marches, trois rongeaient les pointes qu'on voulait garder.
+
+### 2. Le dessin : les carrés marcheurs sur les COINS
+
+⚠️⚠️ **C'était la vraie cause, et elle n'est pas dans le générateur.** Une case était de l'eau
+ou ne l'était pas, et l'eau était un `fillRect` pleine case : **le trait d'eau suivait la
+grille, donc le rivage était un escalier de 16 px — et il l'aurait été quelle que soit la
+finesse du contour calculé.**
+
+Chaque **coin** de case vaut « eau » ou « terre » ; le trait d'eau est l'isocontour bilinéaire
+entre les quatre coins. Trois propriétés tombent gratuitement :
+- il est **continu** d'une case à l'autre (deux cases voisines partagent leurs deux coins, donc
+  aucune couture possible — ce que quatre tuiles de rive dessinées à la main n'auraient jamais
+  garanti) ;
+- il est **courbe** (l'isocontour d'une bilinéaire est une hyperbole, donc un angle de rive se
+  lit arrondi, jamais en biseau à 45°) ;
+- il **traverse** les cases.
+
+⚠️⚠️ **ET LE COIN AMBIGU EST TIRÉ AU SORT — c'est lui qui fait le naturel.** Un coin dont deux
+cellules sur quatre sont de l'eau (c'est le cas de TOUS les coins d'une rive droite) n'a pas de
+bonne réponse : on la tire d'un hachage de ses **coordonnées monde**. Même réponse pour les
+quatre cases qui se le partagent — pas de fissure — et même réponse chez les deux joueurs, sans
+rien diffuser. **Sans ce tirage, la méthode entière rendrait une rive droite… droite.**
+
+16 configurations × 2 variantes × 8 profondeurs = **192 tuiles bakées**, un `drawImage` au
+rendu. Même raisonnement que les revêtements du 434.
+⚠️ La variante déforme le seuil par une bosse **nulle sur les quatre bords** (`16·u(1−u)·v(1−v)`) :
+elle gondole l'intérieur du trait sans déplacer ses points de sortie. Une déformation constante
+aurait ouvert une fissure d'un pixel tout autour du plan d'eau.
+
+### 3. La profondeur et les reflets
+
+`world.depth` (0 au ras de la rive, 255 au large) et `world.shore` (1 mouillée · 2 sèche ·
+3 immergée) sont **deux couches parallèles, pas deux `G_*`** — l'arbitrage du 434 appliqué à
+l'eau. Un `G_LAKE_SHORE` en ville aurait rouvert tous les tests de sol du moteur (marche, A*
+piéton, A* du taxi, oiseaux, `townSpots`, `blockedTown`) ; en oublier un ne lève rien, ça fait
+juste une berge infranchissable ou un lac qu'on traverse. Les deux couches sont calculées **en
+toute dernière passe**, après le revêtement, donc sur le sol final.
+
+- **Distance de chanfrein (5-7), pas une vague à quatre voisins** : la distance de Manhattan
+  donne des lignes de niveau en LOSANGE, c'est-à-dire un escalier de plus, au milieu de l'eau.
+- **Échelle absolue** (`TOWN_WATER_SHELF = 2,6 cases`), jamais une normalisation par la plus
+  grande flaque : normalisé sur le maximum de la carte, l'étang — 4 cases de rayon contre 12
+  pour le lac du sud — serait resté un haut-fond uniforme, et il aurait changé de couleur le
+  jour où l'on creuse le lac d'une case.
+- **La rampe plonge vite.** Premier jet : huit crans étalés régulièrement → un anneau BLANC de
+  deux cases autour d'une tache bleue. La moitié claire d'une rampe régulière occupe la moitié
+  de la surface ; sur une mare, c'est tout le bord.
+- **Deux liserés opposés** : la lumière du projet vient du nord-ouest (c'est le biseau des pavés
+  du 434), donc la berge nord-ouest porte son ombre SUR l'eau et la rive sud-est reçoit l'écume.
+  ⚠️ L'écume est **discontinue** (un pixel sur trois saute) : continue, elle détourait l'étang
+  comme un autocollant.
+- **Les reflets** : les arbres du nord se couchent sur l'eau vers le sud en ondulant, et une
+  lame de lumière glisse, **déphasée par un hachage de la case**. L'ancien voile du 425
+  (`sin(now/900 + (x+y))` sur la case entière) peignait une **damier diagonale de deux bleus**
+  sur toute la nappe — deux cases en diagonale partagent la même valeur de `x+y`. Supprimé.
+  ⚠️ Les reflets ne se posent **que sur une case de pleine eau** : ailleurs, un `fillRect`
+  déborderait du contour, c'est-à-dire redessinerait la grille qu'on vient de casser.
+
+### Trois fois la même leçon, dans le même zip
+
+**On casse la grille à un endroit, on la redessine à l'autre.** Payé trois fois :
+1. le fondu de profondeur en quatre bandes alpha, une par voisin → un **tissu écossais** de
+   rayures. *Un fondu posé sur les quatre côtés n'est pas un dégradé, c'est un cadre, et deux
+   voiles alpha qui se croisent fabriquent une troisième teinte que personne n'a choisie.* On
+   ne fond que sur l'**axe dominant**, en opacité pleine, au niveau moyen entre les deux cases ;
+2. la berge en demi-plan plein sur huit orientations bakées → **huit triangles nets**, un par
+   case. La couverture est devenue une **densité** : la distance au bord donne une probabilité,
+   on tire pixel par pixel, et le bord de la berge n'existe plus comme trait ;
+3. le liseré **vert vif** sous toute la promenade du lac : le rendu peint l'herbe sous les cases
+   d'eau (il le faut — le trait traverse la case, il reste du sec à montrer), et là où le
+   contour se retirait, la pelouse ressortait entre les grains de limon. La rive immergée
+   (bande 3) a sa propre matière et couvre **plein** au contact de la terre.
+
+### Ce que ça ne fait pas
+
+- **le lac du sud garde sa forme** : son rivage nord reste `sin(x)` et ses trois autres bords
+  restent les coupes droites du rectangle `TOWN_LAKE` (bord sud : la droite y = 165 sur 96
+  colonnes). Il gagne le dessin — berge, profondeur, écume, reflets — pas la géométrie. C'est
+  le prochain chantier, et il est plus lourd : la promenade, le ponton, les bancs et les
+  lampadaires sont tous accrochés à `shore(x)` ;
+- **la fontaine de la place est hors jeu** : ses deux cases sont de l'eau pour la COLLISION
+  seulement, sa vasque a son propre dessin. Une berge de galets autour d'une fontaine de pierre
+  serait exactement le rectangle bleu que le 425 a corrigé ;
+- **la ferme n'est pas touchée** : sa rivière garde la tuile animée du 232, et les couches
+  `depth`/`shore` n'existent que sur la carte de Valley Town ;
+- **aucun roseau, aucun nénuphar, aucun rocher émergé.** La référence en a ; on n'a livré que la
+  rive et le fond.

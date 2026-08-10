@@ -1,5 +1,53 @@
 # ARCARDI 🎪
 
+> **ZIP 435 — LES RIVES ÉTAIENT DROITES PARCE QUE LE DESSIN L'ÉTAIT, PAS LA CARTE.**
+>
+> Retour de Guillaume : « qu'on cesse de faire des rives de lacs verticales ou
+> horizontales », référence en image à l'appui. Un audit de Valley Town a d'abord
+> mesuré l'étendue du défaut : **57 % des arêtes eau/terre de la ville sont un
+> contact herbe→eau sans un pixel de transition**, l'étang du parc est une
+> ellipse — donc convexe par définition, incapable de former une crique — et le
+> rivage du lac du sud est `sin(x)`, donc une FONCTION DE x, donc **75 colonnes
+> plates sur 95**.
+>
+> ⚠️⚠️ **MAIS LA VRAIE CAUSE N'ÉTAIT PAS DANS LE GÉNÉRATEUR.** Une case d'eau
+> était `fillRect(px, py, 16, 16)` : **le trait d'eau suivait le bord de la
+> case, donc le rivage était un escalier de 16 px — et il l'aurait été quelle
+> que soit la finesse du contour calculé.** On dessine désormais l'isocontour
+> bilinéaire entre les quatre COINS de la case. Il est continu d'une case à
+> l'autre par construction, il est courbe, et il traverse les cases. ⚠️ Et le
+> coin ambigu — deux cellules d'eau sur quatre, c'est-à-dire TOUS les coins
+> d'une rive droite — est tiré d'un **hachage de ses coordonnées monde** :
+> même réponse pour les quatre cases qui se le partagent, même réponse chez les
+> deux joueurs, rien à diffuser. **Sans ce tirage, la méthode rendrait une rive
+> droite… droite.** Mesuré : plus longue rive alignée **16 px minimum par
+> construction → 8 px**.
+>
+> **ET L'EAU A UN FOND.** Deux couches dérivées — `depth` (distance de chanfrein
+> à la rive) et `shore` (berge mouillée / sèche / immergée) — calculées en toute
+> dernière passe, **jamais deux `G_*` de plus** : c'est l'arbitrage du 434 sur
+> les revêtements, appliqué à l'eau. La nappe passe d'un écart-type de **8,3**
+> (de la gouache) à **27,4**, et le large est à **L 54** contre **160** au bord.
+> Les arbres du nord se couchent sur l'eau, une lame de lumière glisse, déphasée
+> par case — l'ancien voile `sin(now + x + y)` peignait une **damier diagonale
+> de deux bleus** sur toute la nappe.
+>
+> ⚠️⚠️ **TROIS FOIS LA MÊME LEÇON DANS LE MÊME ZIP : on casse la grille à un
+> endroit, on la redessine à l'autre.** Le fondu de profondeur en quatre bandes
+> alpha a rendu un **tissu écossais** ; la berge en demi-plan sur huit
+> orientations bakées, **huit triangles nets** ; et le lit d'herbe peint sous
+> l'eau ressortait en **liseré vert vif** sous toute la promenade du lac. Un
+> fondu posé sur les quatre côtés n'est pas un dégradé, c'est un cadre.
+>
+> `tools/render-eau.mjs` (14/14) mesure ce que personne ne mesurait : la
+> rectitude du rivage, la continuité du trait, l'écart de luminance bord/large.
+> ⚠️ **Et il s'est trompé de grandeur avant le dessin** : il accusait une rive
+> droite de 21 px — il mesurait la rangée de SAPINS, peinte en vert-bleu, que son
+> détecteur d'eau comptait comme un rivage. *Un banc qui échoue peut se tromper
+> de grandeur exactement comme un banc qui passe.*
+>
+> Détail complet : **`components/ferme/README.md` §18**.
+
 > **ZIP 433 — TROIS CHOSES RÉGULIÈRES, POSÉES DE TRAVERS.**
 >
 > Le taxi « prenait des virages plus que nécessaire », l'hôtel de ville n'était
