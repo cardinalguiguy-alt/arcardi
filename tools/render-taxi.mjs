@@ -75,4 +75,54 @@ if (hS !== hN) { console.error("❌ la face et le dos n'ont pas la même hauteur
 if (S.taxi.s.ground !== S.taxi.e.ground || S.taxi.n.ground !== S.taxi.e.ground) {
   console.error("❌ les trois vues n'ont pas la même ligne de sol."); process.exit(1);
 }
+
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ ZIP 433 — DEUX INVARIANTS QUI MANQUAIENT, ET DEUX BOGUES QU'ILS AURAIENT
+   ║ ATTRAPÉS DÈS LE 432.
+   ╚══════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ CE BANC DESSINAIT DÉJÀ LES CINQ VUES SUR UNE LIGNE DE SOL COMMUNE, et il
+   n'a rien vu — parce qu'il ne comparait que des NOMBRES DÉCLARÉS (`ground`,
+   `height`), jamais les PIXELS. Or les deux défauts des trois-quarts étaient
+   précisément dans l'écart entre le nombre déclaré et le dessin :
+
+     1. LA VOITURE PLANAIT. Le dessin s'arrêtait cinq pixels au-dessus de la
+        ligne annoncée par `ground`. Au rendu, `py = y·T − ground` : à chaque
+        virage le taxi décollait de son ombre. On mesure donc la DERNIÈRE RANGÉE
+        PEINTE, qui est la seule vérité — un `ground` correct sur un dessin qui
+        ne descend pas jusque-là est un mensonge que rien d'autre ne relève.
+     2. LE TROIS-QUARTS « NE » MONTRAIT UNE VOITURE ROULANT VERS LE NORD-OUEST.
+        Le sens de marche d'un trois-quarts se LIT dans le dessin : le bout le
+        plus BAS à l'écran est le plus proche de la caméra, donc le plus au sud.
+        Nez bas à droite = sud-est ; nez haut à droite = nord-est. Comparer la
+        rangée basse de la moitié gauche à celle de la moitié droite suffit, et
+        c'est indépendant de la façon dont le sprite est construit. */
+{
+  const px = (im) => { const c2 = makeCanvas(im.width, im.height); c2.ctx.drawImage(im, 0, 0); return c2.px; };
+  const lastRow = (im, x0, x1) => {
+    const d = im.__px || px(im);
+    let last = -1;
+    for (let y = 0; y < im.height; y++) for (let x = x0; x < x1; x++)
+      if (d[(y * im.width + x) * 4 + 3] > 8) { last = y; break; }
+    return last;
+  };
+  console.log("\n  === les invariants du véhicule (433) ===\n");
+  console.log("  vue        dernière rangée   ground   bas à gauche / à droite");
+  let bad = 0;
+  for (const [name, im] of [["n", S.taxi.n], ["ne", S.taxi.ne], ["e", S.taxi.e], ["se", S.taxi.se], ["s", S.taxi.s]]) {
+    const low = lastRow(im, 0, im.width);
+    const half = Math.floor(im.width / 2);
+    const lowL = lastRow(im, 0, half), lowR = lastRow(im, half, im.width);
+    console.log("  " + name.padEnd(10) + String(low).padStart(8) + String(im.ground).padStart(11)
+                + "      " + lowL + " / " + lowR);
+    if (low !== im.ground) { console.error("  ❌ « " + name + " » ne touche pas sa ligne de sol : dernier pixel " + low + ", ground " + im.ground); bad++; }
+  }
+  // Le cap, lu dans le dessin. (Les vues w/nw/sw sont les miroirs de celles-ci.)
+  const se = S.taxi.se, ne = S.taxi.ne;
+  const seL = lastRow(se, 0, se.width / 2 | 0), seR = lastRow(se, se.width / 2 | 0, se.width);
+  const neL = lastRow(ne, 0, ne.width / 2 | 0), neR = lastRow(ne, ne.width / 2 | 0, ne.width);
+  if (!(seR > seL)) { console.error("  ❌ « se » : le nez devrait être le bout BAS (il vient vers nous) — " + seL + " / " + seR); bad++; }
+  if (!(neL > neR)) { console.error("  ❌ « ne » : le nez devrait être le bout HAUT (il s'en va) — " + neL + " / " + neR); bad++; }
+  if (bad) process.exit(1);
+  console.log("\n  ✅ les cinq vues portent sur le sol, et les deux trois-quarts roulent du bon côté.");
+}
 console.log("\\n→ tools/out/taxi-vues.png");

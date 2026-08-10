@@ -4,10 +4,11 @@
 Il remplace l'exploration du dépôt pour tout ce qui est global. Le README est un journal
 chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
-État à jour du **zip 432**. Chantier actif : **faire vivre l'économie des deux cartes** — la
-vente a quitté la ferme pour le marché de Valley Town, et le champ de foire ressemble enfin à
-une foire. Tout ce qui concerne la ville, ses habitants ET **ses pièges** est dans
-**`components/ferme/README.md`**, qui fait autorité. **`candyluge` et `crystal` sont EN PAUSE.**
+État à jour du **zip 433**. Chantier actif : **rendre Valley Town habitable au regard** — le
+taxi y roule droit, l'hôtel de ville tient debout, et la place a des pigeons. Tout ce qui
+concerne la ville, ses habitants ET **ses pièges** est dans **`components/ferme/README.md`**,
+qui fait autorité ; les bancs sont dans **`tools/README.md`**. **`candyluge` et `crystal` sont
+EN PAUSE.**
 
 ⚠️⚠️⚠️ **LA CLOSURE DE LA BOUCLE DE RENDU A COÛTÉ DEUX FONCTIONNALITÉS EN DEUX ZIPS. C'EST
 DÉSORMAIS LE PIÈGE N°1 DU PROJET (§4).** Au 430, `tryTownJump` : le saut de rebord mort partout
@@ -32,7 +33,19 @@ colonnade du tribunal de six pixels — **depuis le 425**. Un défaut de symétr
 en regardant l'élément fautif : la rangée est impeccable, c'est son RAPPORT À L'AXE qui est
 faux. Toute position se DÉDUIT désormais d'un centre, et un contrôle de symétrie est entré au
 banc de rendu. **Corollaire général : une position réglée à la main est une position qui
-penchera.**
+penchera.** ⚠️ **Payé DEUX FOIS DE PLUS au 433** : le perron de l'hôtel de ville était centré
+sur le corps de logis alors que la porte est sous le beffroi (on montait trois marches devant
+un mur plein), et le taxi montait dans la bouche de chaque rue latérale parce que sa mesure de
+« milieu de chaussée » comptait l'amorce des rues transversales comme de la chaussée.
+
+⚠️⚠️ **ET UN BANC QUI PASSE NE VEUT PAS DIRE QUE LA CHOSE EST BONNE — IL VEUT DIRE QU'ON
+MESURE AUTRE CHOSE.** Au 433, les douze contrôles du taxi disaient tous OK pendant que
+Guillaume voyait « une trajectoire stupide » : ils mesuraient l'arrivée, la chaussée et la
+vitesse, **jamais la forme du trajet**. Idem pour les pigeons — ils arrivaient, se posaient, ne
+restaient pas en l'air, et se comportaient quand même « comme les animaux de la ferme ». **Quand
+Guillaume voit un défaut qu'aucun banc ne voit, la première question n'est pas « où est le
+bogue » mais « quelle grandeur ne mesure-t-on pas ».** Les deux fois, la réponse tenait en
+trois nombres qu'il a suffi d'ajouter (§10, `tools/README.md`).
 
 
 ---
@@ -153,6 +166,14 @@ coordonnées — et on teste la zone AVANT les distances.**
 - ⚠️⚠️ **UN CANEVAS DÉCOUPE EN SILENCE CE QUI DÉPASSE DE SON CADRE** (427) : une feuille de
   personnage fait 16×24 par pose, un chapeau posé au-dessus de y=0 sort décapité, et rien ne
   le dit. Le banc de rendu l'a montré, la relecture non.
+  ⚠️⚠️ **PAYÉ TROIS FOIS DANS LE SEUL ZIP 433** — l'enseigne de toit du taxi en trois quarts,
+  le drapeau de la mairie, le liseré des oiseaux. C'est le piège le plus répétitif du projet
+  parce qu'il ne coûte RIEN sur le moment : le dessin est joli, il manque juste deux rangées
+  que personne ne cherche. **Deux parades, et la seconde est la vraie :** dimensionner le
+  canevas à partir de ce qui dépasse (le fuyant d'un trois-quarts se retrouve en HAUT, donc le
+  canevas fait `24 + DROP`), et **dessiner serré, RECADRER, PUIS cerner** — cerné dans son
+  cadre juste, le liseré d'un sprite qui touche le bord est lui-même découpé (`padOutline`).
+  ⚠️ Un banc peut l'attraper en une ligne : aucun pixel peint sur le bord du canevas.
 - ⚠️⚠️ **`ctx.fillText` N'EST PAS RASTÉRISABLE HORS NAVIGATEUR** (427) : un nom cuit dans un
   sprite fait planter `tools/render-*.mjs`, c'est-à-dire qu'on perd le seul moyen de REGARDER
   ce dessin. Les textes des bâtiments s'écrivent VIVANTS, au rendu — ce qui les rend en plus
@@ -184,8 +205,9 @@ coordonnées — et on teste la zone AVANT les distances.**
 | Fichier | Rôle |
 |---|---|
 | `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **~20 500 l.** |
-| `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** |
-| `components/ferme/README.md` | **Valley Town, le tribunal, les habitants, la VENTE et les PIÈGES de ces trois zones — autorité (428-431)** |
+| `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** |
+| `components/ferme/README.md` | **Valley Town, le tribunal, les habitants, la VENTE, les OISEAUX et les PIÈGES de ces trois zones — autorité (428-433)** |
+| `tools/README.md` | **les bancs, ce qu'ils attrapent et leurs chiffres — autorité (432-433)** |
 | `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** |
 | `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural. Aucun PNG · **`drawSeated()`** |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
@@ -306,17 +328,21 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 ⚠️⚠️ **LES BANCS ONT DÉMÉNAGÉ DANS `tools/README.md` AU 432**, sur l'ordre laissé par le
 §14.2 du 431 : la liste occupait cinquante lignes et gagnait une entrée par zip. Ce qu'il faut
 savoir sans l'ouvrir : `verify-vallee.mjs` (**172/172**) rejoue le VRAI moteur — circulation,
-murs invisibles, tribunal, coupe de bois, et **des ventes complètes avec l'or compté** ; cinq
-bancs de RENDU dessinent ce qui n'est autrement regardable qu'en jouant (assise, échelle,
-foire, tribunal + **symétrie des façades**, ruche — ce dernier **contrôle aussi que le vol des
-abeilles passe bien DERRIÈRE la ruche**, ce qu'aucune relecture ne peut voir) ;
-**`fake-supabase.mjs` fait tourner deux clients en local**.
+murs invisibles, tribunal, coupe de bois, et **des ventes complètes avec l'or compté** ;
+`verify-taxi.mjs` (**18/18**) rejoue les 132 courses image par image, **y compris la FORME du
+trajet** depuis le 433 ; sept bancs de RENDU dessinent ce qui n'est autrement regardable qu'en
+jouant (assise, échelle, foire, tribunal + **symétrie des façades**, ruche, taxi, **oiseaux —
+ce dernier rejoue aussi quatre minutes de vie de groupe**) ; **`fake-supabase.mjs` fait tourner
+deux clients en local**.
 
 ⚠️ **CE QUI RESTE ICI EST LA LISTE DES BANCS QUI N'EXISTENT PAS, et c'est le point.** Une liste
 de ce qui existe se vérifie en la lançant ; une liste de ce qui n'existe pas ne se vérifie
 jamais — c'est elle, et elle seule, qui protège du banc imaginaire (§14.6) :
 - ⚠️ **`verify-luge`, `verify-boot`, `preview-luge`, `preview.mjs`, `verify-perf` et
   `preview-fps` N'EXISTENT PAS** dans `tools/`.
+- ⚠️ **AUCUN BANC NE REGARDE LA FERME EN IMAGE** : `render-echelle`, `render-foire`,
+  `render-tribunal`, `render-oiseaux` et `render-taxi` ne dessinent que Valley Town et ses
+  habitants. Un décor de la ferme mal proportionné n'a, à ce jour, aucun endroit où se voir.
 - ⚠️ **Le faux canvas de `lib-canvas.mjs` IGNORE `translate`/`rotate` et ne connaît pas
   `fillText`** : les trois poses d'une feuille de personnage s'y superposent, et un sprite qui
   dépend d'une transformation s'y juge faux. Ce n'est pas un bogue du jeu — mais il faut le
@@ -431,6 +457,16 @@ erreur** en choisissant mal.
   élargir la portée du marché, ou raccourcir le trajet — et **aucun ne doit être touché avant
   d'avoir joué**. On a délibérément conservé la prime de cours (jusqu'à +35 %) comme
   contrepartie : le voyage doit PAYER, pas seulement coûter.
+- ⚠️ **LE PAIN DES PIGEONS EST GRATUIT (433) — ARBITRAGE À TRANCHER.** Assis sur un banc de la
+  ville, Espace éparpille des miettes et le vol se rassemble. Le gager sur un `bread` du stock
+  d'artisanat lierait la scène à l'économie qui vient d'être bouclée (joli), mais changerait un
+  geste d'ambiance en dépense — et un joueur assis qui appuie sans rien voir se passer croit
+  que la touche est cassée. **Question de conception, pas de technique.**
+- ⚠️ **LES OISEAUX NE SONT PAS PARTAGÉS ENTRE LES DEUX JOUEURS** (433, décision de Guillaume :
+  « leur comportement doit pas être exactement partagé »). Les emplacements se déduisent de la
+  carte, mais le nombre et les activités sont tirés chez chaque client — deux joueurs sur la
+  même place ne comptent pas les mêmes pigeons. **À JOUER À DEUX** pour dire si ça se remarque ;
+  si oui, le pain seul mérite d'être diffusé (un `send` de trois nombres), pas les oiseaux.
 - **La garde-robe** (427) : les prix sont volontairement très hauts. À jouer pour savoir si
   « très cher » veut dire « on économise pour » ou « on n'y va jamais ».
 - **`candyluge`** : voir `public/candyluge/README.md`, qui fait autorité. La décision qui
@@ -470,13 +506,20 @@ erreur** en choisissant mal.
    Historique : 426 (insuffisant), 427 (profond : §7 → `public/candyluge/README.md`, §9 réduit
    à cinq pièges), 428 (§6 → `components/ferme/README.md`, 507 → 490), 431 (§4 scindé),
    **432 (§10 → `tools/README.md`, 524 → 483)**.
+   ⚠️ **LE 433 N'A PAS ÉLAGUÉ, ET IL LE DIT** : le fichier passe de 492 à ~525 lignes, tout
+   l'apport partant dans les trois fichiers qui font autorité (`components/ferme/README.md` a
+   gagné deux chapitres, `tools/README.md` trois bancs). Ce qui est remonté ici tient en deux
+   points, et les deux valent pour le projet entier : le canevas qui découpe, payé trois fois
+   dans le seul 433 ; et « un banc qui passe pendant que Guillaume voit un défaut ne dit pas
+   que la chose est bonne, il dit qu'on mesure autre chose ». **Le seuil de 200 lignes est
+   dépassé depuis longtemps ; la passe d'élagage réclamée par le point 2 reste DUE.**
    ⚠️⚠️ **LE 432 A EXÉCUTÉ L'ORDRE DU 431, ET LE SEUIL A ÉTÉ FRANCHI EXACTEMENT COMME ANNONCÉ** :
    deux entrées ajoutées (`render-ruche`, `fake-supabase`) ont porté la liste des bancs au-delà
    de la moitié de §10. Elle est partie dans `tools/README.md` ; **il ne reste ici que la liste
    des bancs ABSENTS**, qui est la vraie protection contre le banc imaginaire (§14.6) — une
    liste de ce qui existe se vérifie en la lançant, une liste de ce qui n'existe pas ne se
    vérifie jamais.
-   ⚠️ **L'ORDRE DU PROCHAIN ZIP : §13 EST LE PROCHAIN À GROSSIR.** Il fait quarante lignes de
+   ⚠️ **L'ORDRE DU PROCHAIN ZIP : §13, ET IL A ENCORE GROSSI AU 433 (deux entrées de plus).** Il fait quarante lignes de
    questions ouvertes et n'en perd jamais : chaque zip en ajoute et aucun n'en retire, parce
    qu'une question à laquelle on a répondu se transforme en fonctionnalité et sort du fichier
    par une autre porte. **Le jour où il dépasse §4, il faut le RELIRE ligne à ligne contre le

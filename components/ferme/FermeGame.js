@@ -793,6 +793,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [uiZone, setUiZone] = useState("farm");
   const uiZoneRef = useRef("farm");
   const taxiRef = useRef(null);
+  /* ZIP 433 — LES PIGEONS ET LES COLOMBES DE LA PLACE ET DU PARVIS DU TRIBUNAL.
+     ⚠️ PUREMENT LOCAL : aucune position d'oiseau ne circule (§3 — ce qui peut se
+     déduire ne se diffuse pas). Les emplacements se déduisent de la carte à
+     graine fixe, donc les deux clients posent les mêmes oiseaux aux mêmes cases
+     sans échanger un octet ; l'envol se déduit des positions des joueurs, qui
+     circulent DÉJÀ. C'est ce qui permet à un vol de s'envoler aussi quand c'est
+     le CAMARADE qui approche, pour zéro message. */
+  const townBirdsRef = useRef(null);
+  /* Le pain jeté depuis un banc. ⚠️ LOCAL LUI AUSSI, et c'est une décision, pas
+     un oubli : le diffuser coûterait UN message par jeté (négligeable), mais il
+     faudrait alors le réconcilier — qui l'a jeté, quand il expire, ce qui se
+     passe si l'hôte change. Pour un tas de miettes qui vit vingt secondes, le
+     jeu n'en vaut pas la chandelle. ⚠️ SI GUILLAUME VEUT QUE LE CAMARADE VOIE
+     LE MÊME ATTROUPEMENT, c'est un `send` de trois nombres et rien d'autre. */
+  const townFoodRef = useRef(null);
   const [taxiMenu, setTaxiMenu] = useState(false);   // le panneau « Où allez-vous ? »
   const taxiMenuRef = useRef(false);
   const [taxiPhase, setTaxiPhase] = useState(null);  // miroir React, pour le bouton
@@ -6643,6 +6658,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     CORNER_MIN: C.TAXI_CORNER_MIN, LOOKAHEAD: C.TAXI_LOOKAHEAD,
     TURN_RATE: C.TAXI_TURN_RATE, ARRIVE_R: C.TAXI_ARRIVE_R,
   };
+  /* Même contrat que TAXI_CFG : la règle de vol vit dans le moteur
+     (`E.birdStep`), les nombres dans fermeConstants, et `tools/render-oiseaux.mjs`
+     rejoue les deux ensemble. Ici, on ne fait que les rapprocher. */
+  const BIRD_CFG = {
+    FLUSH_R: C.BIRD_FLUSH_R, ALERT_R: C.BIRD_ALERT_R,
+    ACT_MIN: C.BIRD_ACT_MIN, ACT_MAX: C.BIRD_ACT_MAX,
+    WALK_SPD: C.BIRD_WALK_SPD, RUN_SPD: C.BIRD_RUN_SPD, ACC: C.BIRD_ACC,
+    SEP: C.BIRD_SEP, SEP_F: C.BIRD_SEP_F, COH: C.BIRD_COH,
+    FOOD_R: C.BIRD_FOOD_R, FOOD_EAT_R: C.BIRD_FOOD_EAT_R,
+    EXC_UP: C.BIRD_EXC_UP, EXC_DOWN: C.BIRD_EXC_DOWN,
+    POP_MS: C.BIRD_POP_MS, POP_MIN: C.BIRD_POP_MIN, POP_MAX: C.BIRD_POP_MAX,
+    TAKEOFF: C.BIRD_TAKEOFF, CRUISE: C.BIRD_CRUISE, CLIMB: C.BIRD_CLIMB,
+    CLIMB_DECAY: C.BIRD_CLIMB_DECAY, TURN: C.BIRD_TURN, ALT_MAX: C.BIRD_ALT_MAX,
+    FADE_S: C.BIRD_FADE_S, AWAY_MIN: C.BIRD_AWAY_MIN, AWAY_MAX: C.BIRD_AWAY_MAX,
+    RETURN_D: C.BIRD_RETURN_D, LAND_SPD: C.BIRD_LAND_SPD, LAND_BRAKE: C.BIRD_LAND_BRAKE,
+    FLARE_D: C.BIRD_FLARE_D, LAND_MAX_S: C.BIRD_LAND_MAX_S,
+    WING_FAST: C.BIRD_WING_FAST, WING_GLIDE: C.BIRD_WING_GLIDE, BEAT_S: C.BIRD_BEAT_S,
+  };
   function updateTaxi(dt) {
     const t = taxiRef.current; if (!t) return;
     const now = performance.now();
@@ -6848,6 +6881,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        ⚠️ Le tribunal, lui, ne reçoit AUCUN outil : on n'abat pas une colonne. */
     if (m.zone === "court") return;
     if (m.zone === "town") {
+      /* ⚠️ ASSIS, ESPACE JETTE DU PAIN — et c'est en TÊTE de la branche ville
+         parce que la suite exige une hache : sans ce retour, un joueur assis
+         sans hache en main appuierait sur Espace et il ne se passerait
+         strictement rien. C'est le « propose puis refuse » du 426, dans sa
+         version silencieuse (on ne propose même pas). */
+      if (m.sitOn) { throwCrumbs(); return; }
       if (slotRef.current !== SLOT.tools || toolKindRef.current !== "axe") return;
       const tw = townWorldRef.current; if (!tw) return;
       const tt2 = targetTileTown();
@@ -15496,6 +15535,124 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
       /* ╔══════════════════════════════════════════════════════════════════════
+         ║ ZIP 433 — LES PIGEONS ET LES COLOMBES.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️ LA MENACE EST LA LISTE DE TOUS LES JOUEURS EN VILLE, pas seulement
+         soi : leurs positions arrivent déjà par le réseau, donc faire s'envoler
+         un vol quand c'est le camarade qui approche ne coûte RIEN. L'inverse —
+         n'écouter que son propre fermier — donnerait deux villes différentes
+         pour zéro économie.
+         ⚠️ ET LE PAS DE TEMPS EST BRIDÉ. Un onglet revenu au premier plan rend
+         un `dt` d'une demi-seconde : sans bride, vingt oiseaux sautent de trois
+         cases d'un coup, ce qui se lit comme un bogue de téléportation. On
+         préfère un ralenti d'une image à une téléportation. */
+      {
+        if (!townBirdsRef.current || townBirdsRef.current.w !== tw) {
+          /* ⚠️ LE VOL SE PEUPLE ICI, LOCALEMENT, ET PAS À LA MÊME TAILLE CHEZ
+             LES DEUX JOUEURS (décision de Guillaume). Six sur dix au sol au
+             départ : le reste arrive et repart au fil des minutes, ce qui suffit
+             à ce qu'une place ne soit jamais deux fois la même. */
+          const fl = E.townFlocks(tw);
+          for (const site of fl) {
+            site.birds = [];
+            site.popAt = 0; site.pop = 0;
+            for (let k = 0; k < site.max; k++) site.birds.push(E.newBird(site, Math.random() < 0.4));
+          }
+          townBirdsRef.current = { w: tw, sites: fl };
+        }
+        const nowB = performance.now();
+        const food = townFoodRef.current && townFoodRef.current.until > nowB ? townFoodRef.current : null;
+        if (!food) townFoodRef.current = null;
+        const bdt = Math.min(dt, 0.05);
+        const threats = [{ x: m.x, y: m.y }];
+        for (const p of playersRef.current.values()) if (p.zone === "town" && !p.sleeping) threats.push({ x: p.x, y: p.y });
+        const set0 = sprites.birds;
+        /* LES MIETTES, quelques pixels au sol. Elles ne servent qu'à expliquer
+           l'attroupement : sans elles, on voit vingt pigeons converger sur rien. */
+        if (food) {
+          const fe = elAt(Math.floor(food.x), Math.floor(food.y));
+          pushE(food.y * T - 0.5, fe, () => {
+            // Les miettes s'effacent sur les deux dernières secondes : elles ne
+            // disparaissent pas d'un coup sous le bec des pigeons.
+            ctx.globalAlpha = Math.min(1, (food.until - nowB) / 2500);
+            food.pts.forEach((q, k) => {
+              ctx.fillStyle = k % 3 ? "#e0bd77" : "#c99a5a";
+              ctx.fillRect(Math.round(q.x * T) - 1, Math.round(q.y * T), 2, 1);
+              if (k % 2) ctx.fillRect(Math.round(q.x * T) + 1, Math.round(q.y * T) - 1, 1, 1);
+            });
+            ctx.globalAlpha = 1;
+          });
+        }
+        for (const site of townBirdsRef.current.sites) {
+          E.flockStep(site, bdt, { threats, food }, BIRD_CFG, nowB);
+          if (!set0) continue;
+          for (const b of site.birds) {
+            if (b.st === "away") continue;
+            /* ⚠️ L'ALTITUDE DE TRI EST CELLE DE LA CASE SOUS L'OISEAU AU SOL,
+               figée pendant le vol. Le parvis du tribunal est en Haute-Ville :
+               un oiseau qui relit l'altitude en vol se ferait remonter puis
+               redescendre de quatorze pixels en franchissant la falaise — un
+               saut, au milieu d'un vol. */
+            if (b.st === "ground") b.e = elAt(Math.floor(b.x), Math.floor(b.y));
+            const be = b.e || 0, bb = b;
+            pushE(bb.y * T, be, () => {
+              const set = set0[bb.kind]; if (!set) return;
+              const flying = bb.st === "fly" || bb.st === "land";
+              let im;
+              if (flying) {
+                if ((bb.wingRate || 0) < C.BIRD_WING_GLIDE * 1.6) im = set.glide;
+                else {
+                  // down → mid → up → mid : quatre temps pour trois dessins, ce
+                  // qui est exactement ce que fait une aile (elle repasse par le
+                  // milieu à la montée comme à la descente).
+                  const k = Math.floor(bb.wing / (Math.PI / 2)) % 4;
+                  im = [set.down, set.mid, set.up, set.mid][k];
+                }
+              } else if (bb.act === "alert") im = set.alert;
+              else if (bb.act === "court") im = set.puff;
+              else if (bb.act === "squab") {
+                /* La chamaillerie : on réutilise les DEUX poses de battement au
+                   ras du sol. Dessiner une sixième pose au sol pour une demi-
+                   seconde d'action serait un sprite qu'on ne regarderait jamais
+                   — et les ailes ouvertes disent déjà tout. */
+                im = (((bb.t * 14) | 0) % 2) ? set.up : set.down;
+              } else if (bb.act === "peck") {
+                /* ⚠️ LE COUP DE BEC EST PLUS RAPIDE QUAND L'OISEAU EST EXCITÉ,
+                   et c'est là que se voit le pain : autour d'un quignon, un
+                   pigeon pique trois fois plus vite qu'en flânant. Une seule
+                   ligne, et tout le groupe change de nervosité. */
+                const hz = 2.2 + bb.exc * 5.5;
+                im = (((bb.t * hz + bb.seed) % 2) < 1.05) ? set.peck : set.stand;
+              } else if (bb.spd > 0.18) {
+                // La marche : deux temps, cadencés par la VITESSE réelle, donc
+                // un pigeon pressé trottine et un pigeon qui flâne se dandine.
+                im = (((bb.t * (3 + bb.spd * 3.2)) | 0) % 2) ? set.walk : set.stand;
+              } else im = set.stand;
+              const gx = bb.x * T, gy = bb.y * T;
+              /* L'OMBRE PORTÉE, qui rétrécit et pâlit avec l'altitude. C'est
+                 elle, et elle seule, qui dit à quelle hauteur vole l'oiseau —
+                 sans elle, un oiseau qui monte a juste l'air de s'éloigner. */
+              if (bb.alt > 0.02) {
+                const k2 = Math.max(0.28, 1 - bb.alt / C.BIRD_ALT_MAX);
+                ctx.globalAlpha = 0.26 * k2 * bb.a;
+                ctx.fillStyle = "#1a1a1a";
+                ctx.beginPath(); ctx.ellipse(gx, gy, 4.5 * k2, 1.8 * k2, 0, 0, 7); ctx.fill();
+                ctx.globalAlpha = 1;
+              }
+              const py = Math.round(gy - bb.alt * T) - im.ground;
+              const px3 = Math.round(gx - im.width / 2);
+              ctx.globalAlpha = bb.a;
+              // Le dessin regarde à DROITE ; on retourne au rendu, comme le taxi.
+              if (bb.face < 0) {
+                ctx.save(); ctx.translate(px3 + im.width, py); ctx.scale(-1, 1);
+                ctx.drawImage(im, 0, 0); ctx.restore();
+              } else ctx.drawImage(im, px3, py);
+              ctx.globalAlpha = 1;
+            });
+          }
+        }
+      }
+      /* ╔══════════════════════════════════════════════════════════════════════
          ║ ZIP 432 — LE TAXI À L'ÉCRAN : ombre, fumée, caisse, bulle.
          ╚══════════════════════════════════════════════════════════════════════
          ⚠️ L'ORDRE EST LE SUJET, comme pour les abeilles de la ruche : la fumée
@@ -18186,6 +18343,39 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (d < bestD) { bestD = d; best = seat; }
     }
     return best;   // null = le banc est plein, et on le DIT plutôt que d'empiler
+  }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 433 — JETER DU PAIN AUX PIGEONS, DEPUIS UN BANC.
+     ╚══════════════════════════════════════════════════════════════════════════
+     Demande de Guillaume : « spécialement devant les bancs : quand on est assis,
+     on doit pouvoir jeter du pain et ça attirera des groupes de pigeons ».
+     ⚠️ ON NE MODÉLISE PAS LE QUIGNON, ON MODÉLISE CE QU'IL PROVOQUE — c'est
+     écrit noir sur blanc dans la demande. Le pain est un POINT et une DURÉE ;
+     tout le reste (la ruée, la bousculade, les absents qui reviennent) tombe du
+     modèle de volée dans `E.flockStep`. Un objet ramassable, une hitbox, un
+     décompte de miettes n'ajouteraient rien de visible.
+     ⚠️ IL EST GRATUIT, ET C'EST UN ARBITRAGE À REVOIR AVEC GUILLAUME : le gager
+     sur un `bread` du stock d'artisanat lierait la scène à l'économie (joli),
+     mais transformerait un geste d'ambiance en dépense — et un joueur assis qui
+     appuie sur Espace sans rien voir se passer croit que la touche est cassée.
+     ⚠️ Le point atterrit DEVANT le banc, pas sous les pieds : on jette le pain
+     plus loin que soi, et les pigeons ne viennent pas marcher sur les
+     chaussures. */
+  function throwCrumbs() {
+    const m = meRef.current, tw = townWorldRef.current;
+    if (!m || !tw || !m.sitOn) return;
+    /* ⚠️ UN QUIGNON ÉMIETTÉ FAIT PLUSIEURS TAS, et c'est le détail qui décide
+       de la FORME de l'attroupement : sur un point unique, les pigeons
+       s'empilent en file indienne ; sur cinq miettes éparpillées, ils forment
+       la rosace qu'on voit sur une vraie place. Vu en jeu, corrigé ici. */
+    const cx = m.x + (Math.random() - 0.5) * 1.2, cy = m.y + C.BIRD_CRUMB_AHEAD;
+    const pts = [];
+    for (let k = 0; k < C.BIRD_CRUMB_N; k++) {
+      const a = Math.random() * Math.PI * 2, r = Math.random() * C.BIRD_CRUMB_SPREAD;
+      pts.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r * 0.6 });
+    }
+    townFoodRef.current = { x: cx, y: cy, pts, until: performance.now() + C.BIRD_FOOD_MS, seed: (Math.random() * 1e6) | 0 };
+    pushToast(L.birdCrumbsToast);
   }
   function sitOnBench(pr) {
     const m = meRef.current;

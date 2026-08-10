@@ -114,20 +114,33 @@ console.log("       durée moyenne : " + (sumT / Math.max(1, arrived)).toFixed(1
      centrée sur une rue de deux cases mesurait 0,25 d'écart. Le banc accusait la
      conduite d'un défaut qui était le sien. Un banc de mesure se vérifie aussi
      (§10). */
+  /* ⚠️⚠️ 433 — ET IL FALLAIT LE MÊME GABARIT DE PERSISTANCE QUE `townRoadCenter`.
+     Sonder la largeur AU POINT compte la bouche des rues transversales comme de
+     la chaussée : à hauteur d'une rue latérale, ce banc voyait « cinq cases de
+     large », plaçait l'axe un cran et demi plus haut, et accusait d'un écart de
+     1,5 case une voiture pile au milieu de son avenue. La chaussée, ici comme
+     dans le moteur, est la largeur qui PERSISTE le long de la marche. */
+  const SPAN = 3;
   const axisOffset = (x, y, ang) => {
     const fx = Math.floor(x), fy = Math.floor(y);
     if (!roadAt(x, y)) return null;
     const horiz = Math.abs(Math.cos(ang)) > Math.abs(Math.sin(ang));
-    let nPos = 0, nNeg = 0;
     const R = (ax, ay) => roadAt(ax + 0.5, ay + 0.5);
-    if (horiz) {
-      while (nPos < 6 && R(fx, fy + nPos + 1)) nPos++;
-      while (nNeg < 6 && R(fx, fy - nNeg - 1)) nNeg++;
-    } else {
-      while (nPos < 6 && R(fx + nPos + 1, fy)) nPos++;
-      while (nNeg < 6 && R(fx - nNeg - 1, fy)) nNeg++;
+    let nPos = 6, nNeg = 6, seen = 0;
+    for (let s = -SPAN; s <= SPAN; s++) {
+      const sx = horiz ? fx + s : fx, sy = horiz ? fy : fy + s;
+      if (!R(sx, sy)) continue;
+      let p2 = 0, n2b = 0;
+      if (horiz) {
+        while (p2 < 6 && R(sx, sy + p2 + 1)) p2++;
+        while (n2b < 6 && R(sx, sy - n2b - 1)) n2b++;
+      } else {
+        while (p2 < 6 && R(sx + p2 + 1, sy)) p2++;
+        while (n2b < 6 && R(sx - n2b - 1, sy)) n2b++;
+      }
+      nPos = Math.min(nPos, p2); nNeg = Math.min(nNeg, n2b); seen++;
     }
-    if (nPos >= 6 || nNeg >= 6) return null;         // esplanade : pas d'axe
+    if (!seen || nPos >= 6 || nNeg >= 6) return null;   // esplanade : pas d'axe
     const base = horiz ? fy : fx;
     const mid = (base - nNeg + base + nPos + 1) / 2;
     return Math.abs((horiz ? y : x) - mid);
@@ -165,6 +178,119 @@ console.log("       durée moyenne : " + (sumT / Math.max(1, arrived)).toFixed(1
 }
 ok(corners > 0 && cornerSlow / corners > 0.8, "⚠️ il RALENTIT dans les virages",
    corners ? (cornerSlow + "/" + corners + " virages pris en dessous de la vitesse de croisière") : "aucun virage rencontré");
+
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ ZIP 433 — LE TRAJET NE TOURNE QUE QUAND LA RUE TOURNE.
+   ╚══════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ CE CHAPITRE EXISTE PARCE QUE LES ONZE CONTRÔLES D'AVANT DISAIENT TOUS OK
+   pendant que Guillaume voyait, en jouant, « une trajectoire stupide, il prend
+   des virages plus que nécessaire ». Ils mesuraient l'ARRIVÉE, la CHAUSSÉE, la
+   VITESSE — jamais la FORME du trajet. La voiture arrivait bien, restait bien
+   sur le pavé, ralentissait bien dans les courbes : elle montait simplement dans
+   la bouche de chaque rue transversale au passage, et redescendait.
+
+   ⚠️ CE QU'ON MESURE N'EST PAS « c'est joli » mais trois quantités géométriques
+   qu'un défaut de ce genre fait exploser et qu'une route saine garde basses.
+   Les chiffres ci-dessous ont été obtenus en LANÇANT ce banc contre le moteur
+   du 432 (`git stash`), puis contre celui du 433 :
+
+     |                              | 432   | 433  |
+     |------------------------------|-------|------|
+     | aller-retour (132 trajets)   | 598   | 0    |
+     | rotation cumulée, moyenne    | 969°  | 214° |
+     | rotation cumulée, pire       | 2095° | 462° |
+     | pire détour                  | ×1,11 | ×1,03|
+
+     1. la ROTATION CUMULÉE du tracé : un trajet qui descend une avenue
+        rectiligne ne doit pas tourner ;
+     2. les ALLER-RETOUR : deux virages consécutifs de sens OPPOSÉS, de plus de
+        40° chacun, séparés par moins de trois tuiles. C'est la définition
+        géométrique exacte d'une dent de scie, et une rue n'en produit jamais.
+        ⚠️ Le seuil de DISTANCE est ce qui distingue un tracé légitimement
+        sinueux (une route en S le long du lac, virages espacés) d'un
+        tressautement ; sans lui, on interdirait les belles routes ;
+     3. le DÉTOUR : la longueur du trajet rapportée au plus court chemin
+        roulable, calculé ici par un Dijkstra à part — un banc ne mesure pas un
+        trajet avec l'outil qui l'a produit. */
+console.log("\n=== La forme du trajet (433) ===\n");
+{
+  /* Le plus court chemin PUR, sans aucun surcoût : le dénominateur du détour.
+     Dijkstra octile sur le même graphe — écrit ici et pas dans le moteur, pour
+     que le banc ne mesure pas le trajet avec l'outil qui l'a produit. */
+  const pureLen = (x0, y0, x1, y1) => {
+    const W = nav.w, H = nav.h;
+    const s0 = Math.floor(y0) * W + Math.floor(x0), gI = Math.floor(y1) * W + Math.floor(x1);
+    const g = new Float64Array(W * H).fill(Infinity);
+    const heap = [], key = [];
+    const push = (i, k) => { heap.push(i); key.push(k); let c = heap.length - 1;
+      while (c > 0) { const p = (c - 1) >> 1; if (key[p] <= key[c]) break;
+        [heap[p], heap[c]] = [heap[c], heap[p]]; [key[p], key[c]] = [key[c], key[p]]; c = p; } };
+    const pop = () => { const t0 = heap[0], li = heap.length - 1;
+      heap[0] = heap[li]; key[0] = key[li]; heap.pop(); key.pop();
+      let c = 0; for (;;) { const l = c * 2 + 1, r = l + 1; let m = c;
+        if (l < heap.length && key[l] < key[m]) m = l;
+        if (r < heap.length && key[r] < key[m]) m = r;
+        if (m === c) break;
+        [heap[m], heap[c]] = [heap[c], heap[m]]; [key[m], key[c]] = [key[c], key[m]]; c = m; } return t0; };
+    g[s0] = 0; push(s0, 0);
+    while (heap.length) {
+      const cur = pop(); if (cur === gI) return g[gI];
+      const cx = cur % W, cy = (cur / W) | 0, ce = tw.elev[cur];
+      for (let k = 0; k < 8; k++) {
+        const dx = k < 4 ? [1, -1, 0, 0][k] : [1, 1, -1, -1][k - 4];
+        const dy = k < 4 ? [0, 0, 1, -1][k] : [1, -1, 1, -1][k - 4];
+        const nx = cx + dx, ny = cy + dy;
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+        const nb = ny * W + nx;
+        if (!nav.walk[nb]) continue;
+        if (Math.abs(tw.elev[nb] - ce) > C.TOWN_STEP_MAX) continue;
+        if (dx && dy && (!nav.walk[cy * W + nx] || !nav.walk[ny * W + cx])) continue;
+        const ng = g[cur] + ((dx && dy) ? Math.SQRT2 : 1);
+        if (ng < g[nb]) { g[nb] = ng; push(nb, ng); }
+      }
+    }
+    return Infinity;
+  };
+  let sawtooth = 0, worstSaw = null, maxSpin = 0, worstSpin = null, sumSpin = 0, nP = 0;
+  let maxDetour = 1, worstDet = null;
+  for (const a of stops) for (const b of stops) {
+    if (a === b) continue;
+    const p = E.townRoadPath(tw, a.x, a.y, b.x, b.y);
+    if (!p || p.length < 3) continue;
+    nP++;
+    const ang = [], seg = [];
+    for (let k = 1; k < p.length; k++) {
+      ang.push(Math.atan2(p[k].y - p[k - 1].y, p[k].x - p[k - 1].x));
+      seg.push(Math.hypot(p[k].x - p[k - 1].x, p[k].y - p[k - 1].y));
+    }
+    let spin = 0, len = 0;
+    for (const s of seg) len += s;
+    const d = [];
+    for (let k = 1; k < ang.length; k++) {
+      let da = ang[k] - ang[k - 1];
+      while (da > Math.PI) da -= 2 * Math.PI;
+      while (da < -Math.PI) da += 2 * Math.PI;
+      d.push(da); spin += Math.abs(da);
+    }
+    for (let k = 1; k < d.length; k++) {
+      if (d[k] * d[k - 1] < 0 && Math.abs(d[k]) > 0.7 && Math.abs(d[k - 1]) > 0.7 && seg[k] < 3) {
+        sawtooth++;
+        if (!worstSaw) worstSaw = a.key + "→" + b.key;
+      }
+    }
+    const deg = spin * 180 / Math.PI;
+    sumSpin += deg;
+    if (deg > maxSpin) { maxSpin = deg; worstSpin = a.key + "→" + b.key; }
+    const pure = pureLen(a.x, a.y, b.x, b.y);
+    if (pure > 1 && len / pure > maxDetour) { maxDetour = len / pure; worstDet = a.key + "→" + b.key; }
+  }
+  ok(sawtooth === 0, "⚠️ aucune dent de scie",
+     sawtooth ? (sawtooth + " aller-retour, dont " + worstSaw) : "0 aller-retour sur les " + nP + " trajets");
+  ok(maxSpin < 700, "⚠️ il ne tourne que quand la rue tourne",
+     "rotation cumulée : " + (sumSpin / nP).toFixed(0) + "° en moyenne, " + maxSpin.toFixed(0) + "° au pire (" + worstSpin + ")");
+  ok(maxDetour < 1.12, "aucun détour",
+     "le pire trajet fait ×" + maxDetour.toFixed(2) + " la distance minimale (" + worstDet + ")");
+}
 
 console.log("\n=== Le démarrage et le freinage ===\n");
 {

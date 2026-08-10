@@ -1804,7 +1804,8 @@ export const FERME_STR = {
        ALLER : un « impossible ici » sans destination passe pour une panne. */
     toastFarMarket: "🎪 On ne vend qu'au marché du champ de foire, à Valley Town. Prenez le train !",
     toastMarketNothing: "🎪 Votre panier est vide.",
-    promptTownStand: "↑ ↓ ← → : se lever",
+    promptTownStand: "↑ ↓ ← → : se lever  ·  Espace : jeter du pain",
+    birdCrumbsToast: "Vous émiettez un quignon. Les pigeons arrivent…",
   },
   en: {
     // --- 2026-07 station update (sea creatures, ducks, station, visitors, seasons) ---
@@ -3253,7 +3254,8 @@ export const FERME_STR = {
     chatMarketSell: (gain, bonus, money) => "Sold at the market: " + gain + " gold (+" + bonus + " vs the bin). Till: " + money + ".",
     toastFarMarket: "🎪 Selling only happens at the fairground market in Valley Town. Take the train!",
     toastMarketNothing: "🎪 Your basket is empty.",
-    promptTownStand: "↑ ↓ ← → : stand up",
+    promptTownStand: "↑ ↓ ← → : stand up  ·  Space: throw bread",
+    birdCrumbsToast: "You crumble a crust. The pigeons are coming…",
   },
 };
 

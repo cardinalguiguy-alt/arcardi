@@ -1,4 +1,4 @@
-# Valley Town, le tribunal, et la vie qui s'y passe — état au 432
+# Valley Town, le tribunal, et la vie qui s'y passe — état au 433
 
 Ce fichier est **l'autorité** sur la seconde carte du jeu et sur ses habitants. Il a été
 extrait de `CLAUDE.md` §6 au zip 428, sur l'ordre laissé par le §14.2 du 427 et sur le modèle
@@ -21,6 +21,82 @@ qu'un paragraphe d'orientation, et les pièges qui valent pour tout le projet re
   trouve sont de CONTENU, pas de dessin : dix façades pour vingt-sept parcelles (donc des
   jumelles côte à côte), et un lac qui n'a ni reflet, ni vaguelettes de rive, ni rien à y
   faire. Les corriger demande des décisions, pas des pixels.
+
+---
+
+## 0 bis. ZIP 433 — LE TAXI ROULAIT DE TRAVERS, LA MAIRIE PENCHAIT, ET LA PLACE A DES PIGEONS
+
+Trois demandes de Guillaume dans la même passe, et les deux premières sont la
+**même famille de défaut** : quelque chose de régulier, posé de travers par
+rapport à ce à quoi il se rapporte. C'est la leçon du 431 (la rangée d'étals, la
+colonnade du tribunal), payée deux fois de plus.
+
+### a. « Le taxi a une trajectoire stupide, il prend des virages plus que nécessaire »
+
+⚠️⚠️ **LA CAUSE ÉTAIT DANS `townRoadCenter`, C'EST-À-DIRE DANS LE CORRECTIF DU
+432.** Pour rouler au milieu de la chaussée, on sonde perpendiculairement au sens
+de marche jusqu'aux deux bords du pavé et on repose le point au milieu. Mais une
+sonde perpendiculaire **ne sait pas distinguer la chaussée de la bouche d'une rue
+transversale** : à chaque amorce de rue latérale, elle comptait les deux cases de
+l'avenue PLUS les trois du départ de la petite rue, concluait « cinq cases de
+large ici » et posait le point un cran et demi plus haut. **Le taxi montait donc
+dans la bouche de CHAQUE rue latérale avant de redescendre.**
+
+⚠️ **LA PARADE EST DANS LA DÉFINITION, PAS DANS UN SEUIL : la chaussée est la
+largeur qui PERSISTE le long de la marche.** On sonde sur un gabarit de ±3 cases
+dans le sens du déplacement et on retient la largeur minimale — une amorce de
+deux cases disparaît du minimum, une esplanade le traverse intacte. Aucun cas
+particulier pour les carrefours, et c'est justement aux carrefours qu'on veut que
+la voiture GARDE SA LIGNE.
+
+⚠️ **DEUX AUTRES DÉFAUTS SONT TOMBÉS DANS LA MÊME PASSE, ET AUCUN NE SE VOYAIT :**
+- **`townRoadSimplify` ne s'était JAMAIS déclenchée.** Elle éprouvait la corde à
+  ± 0,5 case de son axe — or une rue est pavée DEUX cases (`paveRow`) et la
+  voiture roule sur la mitoyenne : à un demi-pas de l'axe on tombe pile sur
+  l'herbe. Elle exigeait en plus un dégagement ≥ 2, alors que **4 106 des 5 271
+  cases roulables de la ville ont un dégagement de 1**. Sur 78 % du réseau, aucune
+  corde ne pouvait passer : le chemin restait BRUT, case par case (80 points de
+  passage pour 92 tuiles de la gare à la place, contre 10 aujourd'hui).
+- **Le taxi déposait AU MILIEU DE LA PLACE.** Son dallage est roulable ; l'arrêt
+  « place » tombait donc entre deux parterres, contre l'obélisque, et la voiture
+  traversait le square en diagonale pour s'y garer. `townRoadNear` accepte
+  désormais un drapeau `streetOnly` (vraie rue `G_PATH`, pas esplanade), et les
+  arrêts le demandent en premier. **Un taxi se range au trottoir**, ce que la note
+  du 432 disait déjà pour les poches isolées.
+
+Mesuré par `verify-taxi.mjs` (chiffres obtenus en le lançant contre les deux
+moteurs) : **598 dents de scie → 0**, **969° → 214°** de rotation cumulée par
+course, détour **×1,11 → ×1,03**, durée moyenne **13,9 s → 12,0 s**.
+
+⚠️ **ET LES DEUX TROIS-QUARTS DU VÉHICULE ÉTAIENT FAUX.** Ils annonçaient
+`ground = 23` sur un dessin qui s'arrêtait cinq pixels plus haut — **à chaque
+virage, le taxi décollait de son ombre** — et la vue « nord-est » montrait une
+voiture roulant vers le **nord-ouest** (nez en haut à gauche). Redessinés, et
+`render-taxi.mjs` mesure maintenant des PIXELS et non des nombres déclarés.
+
+### b. « Le town hall n'est pas assez travaillé »
+
+Quatre défauts, dont trois décalages :
+1. ⚠️⚠️ **le perron ne menait nulle part** — trois marches centrées au milieu du
+   corps de logis, alors que la porte est sous le BEFFROI. On montait un escalier
+   posé devant un mur plein ;
+2. **la rangée de fenêtres penchait de sept pixels** (10 px du chaînage gauche,
+   24 du droit) ;
+3. le faîte du toit était à côté de l'axe du mur ;
+4. ⚠️ **la brique n'était pas de la brique, c'était du rondin** : une ligne sombre
+   pleine largeur tous les 4 px et pas UN joint vertical. Ce qui fait la brique
+   n'est pas la ligne d'assise, c'est **l'alternance des joints verticaux d'une
+   assise à l'autre**.
+
+⚠️ **La parade est celle du 431 : plus une seule position réglée à la main.** Deux
+axes (`AX_TOWER`, `AX_BODY`) et tout s'en déduit. Le reste est de l'ajout franc,
+réclamé par « pas assez travaillé » : chambre des cloches à abat-sons (un beffroi
+sans baie n'est qu'une tour), corniche à denticules, appuis et clés de voûte,
+chaînages d'angle en besace, soubassement à refends, ardoises en rangs, cheminée
+qui DESCEND JUSQU'À LA PENTE, drapeau, lanternes, et l'ombre du beffroi portée
+SUR le corps de logis.
+
+### c. Les pigeons et les colombes — **voir le §16**
 
 ---
 
@@ -788,3 +864,93 @@ que la liste est la protection alors que c'est le banc.
   jeu). Cinq résidents descendent le même quai à la même seconde : tous à portée de
   conversation, donc tous appariés d'un coup, donc tous figés à se saluer en boucle. Personne
   ne quittait la gare. **Un débarquement n'est pas une rencontre.**
+
+---
+
+## 16. ZIP 433 — LES PIGEONS ET LES COLOMBES
+
+Demande de Guillaume, en deux temps. D'abord : « des colombes et des pigeons par
+terre sur la place centrale, qui s'envolent élégamment quand on se rapproche trop
+d'elles ; ajoute-les aussi devant le courthouse ; travaille bien le vol ».
+Puis, après essai : **« le comportement social des pigeons n'est pas très
+réaliste […] là tes oiseaux se comportent comme les animaux de la ferme »**.
+
+### Ce qui ne circule PAS sur le réseau, et pourquoi
+
+⚠️⚠️ **AUCUNE POSITION D'OISEAU NE VOYAGE.** Vingt entités à soixante images par
+seconde feraient exploser à elles seules le plafond de dix messages par seconde
+(§3 de `CLAUDE.md`). Deux conséquences, et Guillaume a tranché la seconde
+(« leur comportement doit pas être exactement partagé entre tous les joueurs ») :
+- les **emplacements possibles** se déduisent de la carte, donc tout le monde a
+  des pigeons au même endroit ;
+- le **nombre**, les activités et les envols sont tirés LOCALEMENT. Deux joueurs
+  sur la même place ne comptent pas les mêmes pigeons — c'est assumé, ça ne se
+  remarque pas, et ça coûte zéro message.
+
+⚠️ **L'envol, lui, écoute TOUS les joueurs** : leurs positions circulent déjà,
+donc un vol s'envole aussi quand c'est le camarade qui approche, gratuitement.
+
+### Le modèle : trois mécanismes, aucun cas particulier
+
+⚠️⚠️ **CE QUI CLOCHAIT AU PREMIER JET N'ÉTAIT PAS UN RÉGLAGE, C'ÉTAIT LE MODÈLE.**
+Chaque oiseau avait UNE CASE À LUI et y sautait à intervalle régulier : par
+construction, espacement égal, mouvements réguliers, une seule activité. D'où le
+« comme les animaux de la ferme ». Le modèle actuel (`E.flockStep`) en tient trois :
+
+1. **une ACTIVITÉ**, tirée au sort, de durée variable — planté, picorer, marcher,
+   faire la roue, se chamailler. ⚠️ `idle` est la plus importante : *« ils ne font
+   pas toujours que picorer »*. Un oiseau qui a toujours quelque chose à faire
+   est un automate ;
+2. **des VOISINS** — on s'écarte de qui serre, on revient vers le groupe si l'on
+   s'en éloigne, et il arrive qu'on en SUIVE un (`court`, la parade : on tourne
+   AUTOUR de lui, jabot gonflé). ⚠️ **L'espacement n'est jamais réglé : il TOMBE
+   de ces deux forces opposées** — c'est ce qui produit des grappes serrées et des
+   isolés au lieu d'une grille ;
+3. **une EXCITATION**, qui monte près de la nourriture et dans la foule. Elle
+   pilote la vitesse, la cadence des coups de bec et la probabilité de se
+   chamailler. ⚠️ **Un pigeon seul flâne, dix pigeons autour d'un quignon se
+   battent : c'est le même code, à deux valeurs près.**
+
+Et la vitesse passe par une ACCÉLÉRATION (`BIRD_ACC`), pas par une téléportation :
+c'est elle qui donne « il suit l'autre, accélère, ralentit sa course ».
+
+### Le pain jeté depuis un banc
+
+⚠️ **ON NE MODÉLISE PAS LE QUIGNON, ON MODÉLISE CE QU'IL PROVOQUE** — c'est la
+demande mot pour mot. Assis sur un banc de la ville, **Espace** éparpille des
+miettes devant soi (`throwCrumbs`) : un point, une durée, cinq tas. Tout le reste
+— la ruée, la bousculade, les absents qui reviennent, la cadence de becquetage
+qui triple — tombe du modèle de volée.
+
+⚠️⚠️ **CINQ TAS, PAS UN, ET C'EST UN DÉFAUT VU EN JEU.** Sur un point unique, douze
+pigeons convergents s'empilaient en **file indienne**. Un quignon émietté fait
+plusieurs tas ; chacun a SA miette, et l'attroupement s'étale en rosace.
+`render-oiseaux.mjs` le mesure (allongement du nuage : ×1,13 ; une file donne 4).
+
+⚠️ **LE PAIN EST GRATUIT, ET C'EST UN ARBITRAGE À REVOIR AVEC GUILLAUME.** Le gager
+sur un `bread` du stock d'artisanat lierait la scène à l'économie (joli), mais
+transformerait un geste d'ambiance en dépense — et un joueur assis qui appuie sur
+Espace sans rien voir se passer croit que la touche est cassée.
+
+### Le dessin
+
+⚠️ **NEUF POSES PAR ESPÈCE**, refaites sur les références photo de Guillaume :
+`stand` / `peck` / `walk` / `puff` / `alert` au sol, `down` / `mid` / `up` /
+`glide` en vol. Ce que les références ont changé, et que le premier jet ratait :
+- **un pigeon est LONG ET BAS, pas rond** ; le jabot déborde en avant et en bas
+  des pattes ; la queue est longue et pointue ; **deux barres alaires épaisses** ;
+  **les pattes sont rose vif** (la seule couleur saturée de l'animal) ; le col
+  vire du vert au violet ; et **la tête sort du corps**, séparée par un creux de
+  nuque — sans lui, c'est un galet gris ;
+- **en vol, l'envergure écrase le corps** et **les rémiges sont SÉPARÉES** : on
+  dessine l'aile pleine puis on ÉVIDE un pixel entre les dernières plumes. C'est
+  le seul endroit du fichier où l'on RETIRE de la matière pour ajouter du détail.
+
+⚠️ **Le pigeon est la règle, la colombe l'exception** (`BIRD_DOVE_SHARE = 0,14`) :
+assez pour qu'elle surprenne, pas assez pour croire à un lâcher de mariage.
+
+⚠️ **ET UN CANEVAS DÉCOUPE EN SILENCE.** Les poses sont dessinées serrées, puis
+RECADRÉES de deux pixels, PUIS cernées (`padOutline`) : cerné dans son cadre
+juste, le liseré d'un sprite qui touche le bord est lui-même découpé. Le banc
+refuse désormais toute pose qui touche son bord — ce piège a été payé **trois
+fois dans ce seul zip** (l'enseigne du taxi, le drapeau de la mairie, les ailes).

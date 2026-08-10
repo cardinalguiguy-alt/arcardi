@@ -4,6 +4,7 @@ Ce fichier est **l'autorité** sur les bancs du projet. Il a été extrait de `C
 zip 432, sur l'ordre laissé par son §14.2 : « le jour où la liste dépasse la moitié du
 chapitre, elle part dans un `tools/README.md` — en ne gardant là-bas QUE ce qui n'existe pas ».
 Le 432 a ajouté deux entrées (`render-ruche.mjs`, `fake-supabase.mjs`) et l'a fait basculer.
+Le 433 en ajoute trois (`verify-taxi`, `render-taxi`, `render-oiseaux`).
 
 ⚠️ **`CLAUDE.md` ne garde que la liste des bancs ABSENTS**, et c'est délibéré : c'est elle qui
 protège du banc imaginaire (§14.6 — le 425 décrivait `verify-vallee.mjs` « 74 contrôles, 74/74 »
@@ -71,6 +72,52 @@ jamais recopié d'un zip précédent sans relance.
   tribunal, décalée de six pixels **depuis le 425**. ⚠️ Il ne teste QUE les façades censées
   être symétriques : l'hôtel de ville est asymétrique exprès (beffroi décalé) et l'église porte
   son clocher sur le flanc — les y inscrire reviendrait à demander un jour qu'on les corrige.
+- **`tools/verify-taxi.mjs` — 18 contrôles, 18/18 (433 ; 12 au 432).** Il rejoue les
+  **132 trajets** de la ville image par image avec la VRAIE conduite du moteur
+  (`E.taxiStep`) : arrivée, chaussée, ralentissement en courbe, distance de
+  freinage.
+  ⚠️⚠️ **LE 433 LUI A AJOUTÉ LE CHAPITRE « LA FORME DU TRAJET », ET C'EST LUI QUI
+  MANQUAIT.** Les douze contrôles du 432 disaient tous OK pendant que Guillaume
+  voyait, en jouant, « une trajectoire stupide, il prend des virages plus que
+  nécessaire » : ils mesuraient l'ARRIVÉE, la CHAUSSÉE et la VITESSE, jamais la
+  FORME. On mesure donc trois quantités géométriques, obtenues en lançant ce banc
+  contre les deux moteurs :
+
+  | | 432 | 433 |
+  |---|---|---|
+  | aller-retour (dents de scie) | **598** | **0** |
+  | rotation cumulée, moyenne | **969°** | **214°** |
+  | rotation cumulée, pire | 2095° | 462° |
+  | pire détour | ×1,11 | ×1,03 |
+
+  ⚠️ Son Dijkstra de référence est écrit DANS le banc et pas dans le moteur : on
+  ne mesure pas un trajet avec l'outil qui l'a produit.
+- **`tools/render-taxi.mjs`** (432) — les cinq vues du véhicule sur une ligne de
+  sol commune, plus leurs mesures.
+  ⚠️⚠️ **DEPUIS LE 433 IL COMPARE DES PIXELS, PLUS SEULEMENT DES NOMBRES DÉCLARÉS**,
+  et c'est ce qui manquait : les deux trois-quarts annonçaient `ground = 23` sur
+  un dessin qui s'arrêtait cinq pixels plus haut — **à chaque virage, le taxi
+  décollait de son ombre** — et la vue « nord-est » montrait une voiture roulant
+  vers le **nord-ouest**. Deux invariants les attrapent : la dernière rangée
+  peinte DOIT être `ground`, et le cap se lit dans le dessin (le bout le plus bas
+  est le plus proche de la caméra, donc le plus au sud).
+- **`tools/render-oiseaux.mjs`** (433) — **les pigeons et les colombes, dessinés
+  ET rejoués**. Deux bancs en un, parce que les deux moitiés du défaut sont de
+  natures différentes : neuf poses par espèce (dont quatre qui durent un
+  vingtième de seconde en jeu, donc que personne ne regardera jamais ailleurs
+  qu'ici), et **quatre minutes de vie de groupe à 60 images/s**.
+  ⚠️⚠️ **SON SECOND CHAPITRE EXISTE PARCE QUE LE PREMIER MODÈLE PASSAIT TOUS LES
+  AUTRES CONTRÔLES.** Les oiseaux arrivaient, se posaient, ne restaient pas en
+  l'air — et Guillaume a quand même écrit « ils se comportent comme les animaux
+  de la ferme ». Ce qui manquait n'était mesuré nulle part, et l'est maintenant :
+  la VARIÉTÉ des activités (aucune au-dessus de 55 % du temps, au moins quatre
+  différentes), l'IRRÉGULARITÉ de l'espacement (écart-type de la distance au plus
+  proche voisin), le fait qu'ils ACCÉLÈRENT (nombre de paliers de vitesse
+  distincts), et l'effet du **pain jeté depuis un banc** — il rassemble, il fait
+  revenir les absents, il fait se chamailler, et **la mêlée est une ROSACE, pas
+  une file indienne** (rapport des axes du nuage : ×1,13 ; une file donne 4).
+  ⚠️ Ce dernier contrôle a été écrit APRÈS avoir vu le défaut en jouant : sur un
+  point de pain unique, douze pigeons s'empilaient en chenille.
 - `verify-constants` · `verify-objects` · `verify-strings` · `verify-syntax` · `verify-gates` ·
   `verify-cycle` · `verify-orchards` · `verify-scope` · `verify-vergers` · `render-fruits`.
 

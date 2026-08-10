@@ -1,5 +1,57 @@
 # ARCARDI 🎪
 
+> **ZIP 433 — TROIS CHOSES RÉGULIÈRES, POSÉES DE TRAVERS.**
+>
+> Le taxi « prenait des virages plus que nécessaire », l'hôtel de ville n'était
+> « pas assez travaillé », et la place centrale n'avait pas un pigeon. Les deux
+> premiers défauts sont la MÊME famille, celle du 431 : quelque chose de
+> parfaitement régulier, posé de travers par rapport à ce à quoi il se rapporte.
+>
+> ⚠️⚠️ **LE TAXI MONTAIT DANS LA BOUCHE DE CHAQUE RUE LATÉRALE.** Le correctif du
+> 432 recentrait la voiture en sondant perpendiculairement jusqu'aux bords du
+> pavé — mais une sonde perpendiculaire ne distingue pas la chaussée de l'amorce
+> d'une rue transversale : elle y voyait « cinq cases de large » et posait le
+> point un cran et demi plus haut. La parade est dans la définition, pas dans un
+> seuil : **la chaussée est la largeur qui PERSISTE le long de la marche.**
+> Mesuré sur les 132 trajets : **598 dents de scie → 0**, **969° → 214°** de
+> rotation cumulée par course, détour ×1,11 → ×1,03.
+>
+> ⚠️ Deux défauts voisins sont tombés avec : **la réduction du chemin ne s'était
+> JAMAIS déclenchée** (elle éprouvait la corde à un demi-pas de l'axe, or une rue
+> fait deux cases et la voiture roule sur la mitoyenne — on tombait pile sur
+> l'herbe), et **le taxi déposait au milieu de la place**, entre deux parterres,
+> contre l'obélisque. Un taxi se range au trottoir.
+>
+> ⚠️⚠️ **ET LES DEUX VUES DE TROIS QUARTS DU VÉHICULE ÉTAIENT FAUSSES** : elles
+> annonçaient une ligne de sol que le dessin n'atteignait pas — **à chaque virage
+> le taxi décollait de son ombre** — et la vue « nord-est » montrait une voiture
+> roulant vers le nord-ouest. `render-taxi.mjs` compare désormais des PIXELS, pas
+> des nombres déclarés.
+>
+> **L'HÔTEL DE VILLE**, lui, avait son perron centré au milieu du corps de logis
+> alors que la porte est sous le beffroi : **on montait trois marches devant un
+> mur plein.** Sa rangée de fenêtres penchait de sept pixels, son faîte était à
+> côté de son axe, et sa brique n'était pas de la brique mais du RONDIN (une
+> ligne sombre pleine largeur tous les quatre pixels, pas un joint vertical).
+> Tout se déduit maintenant de deux axes, et le bâtiment a gagné ce que « pas
+> assez travaillé » réclamait : abat-sons au beffroi, corniche à denticules, clés
+> de voûte, chaînages en besace, ardoises en rangs, cheminée, drapeau.
+>
+> **ET LA PLACE A DES PIGEONS.** Premier jet : chaque oiseau avait sa case et y
+> sautait à intervalle régulier — retour de Guillaume, imparable : « ils se
+> comportent comme les animaux de la ferme ». Le modèle a été refait autour de
+> trois mécanismes (une activité tirée au sort, des voisins dont on s'écarte ou
+> qu'on suit, une excitation qui monte dans la foule), d'où l'espacement
+> irrégulier, les poursuites, les accélérations et les chamailleries — **sans un
+> seul cas particulier**. Assis sur un banc, **Espace jette du pain** : cinq tas
+> de miettes, et le vol se rassemble en rosace. Rien de tout ça ne circule sur le
+> réseau : les emplacements se déduisent de la carte, le reste est tiré chez
+> chaque joueur.
+>
+> ⚠️ **Un canevas découpe en silence, et ce piège a été payé TROIS fois dans ce
+> seul zip** : l'enseigne de toit du taxi, le drapeau de la mairie, les ailes des
+> oiseaux. Le banc des oiseaux refuse désormais toute pose qui touche son bord.
+
 > **ZIP 432 — VALLEY TOWN ÉTAIT INJOUABLE À DEUX, ET LA CAUSE TENAIT EN UN MOT MANQUANT.**
 >
 > Retour de Guillaume : « à deux sur Valley Town ça lague les deux joueurs, les images

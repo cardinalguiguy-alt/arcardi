@@ -5162,7 +5162,13 @@ export function townRoadNav(tw) {
    route » et choisir où le taxi vient se ranger. Deux réponses différentes à la
    même question, ce serait un taxi qui se gare là où le joueur n'a pas le droit
    de l'appeler. */
-export function townRoadNear(tw, x, y, maxR, mainOnly) {
+/* ⚠️ `streetOnly` (433) : la case doit être une VRAIE RUE (`G_PATH`), pas une
+   esplanade dallée (`G_PATH_STONE` — la place, le parvis du marché, le quai).
+   Les deux sont roulables et c'est voulu (le taxi traverse le marché), mais on
+   ne DÉPOSE pas au milieu d'un square : la place centrale a une fontaine, un
+   obélisque et quatre parterres, et le taxi s'y faufilait en diagonale pour se
+   garer contre le monument. Un taxi se range au trottoir. */
+export function townRoadNear(tw, x, y, maxR, mainOnly, streetOnly) {
   const nav = townRoadNav(tw); if (!nav) return null;
   const W = nav.w, H = nav.h, cx = Math.floor(x), cy = Math.floor(y);
   const R = Math.max(1, maxR | 0);
@@ -5175,6 +5181,7 @@ export function townRoadNear(tw, x, y, maxR, mainOnly) {
     // ⚠️ `mainOnly` : la case doit être sur le RÉSEAU DE RUES, pas sur un îlot
     // de dallage isolé — sinon on hèle un taxi qui ne peut pas venir.
     if (mainOnly && nav.comp[i] !== nav.main) continue;
+    if (streetOnly && tw.ground[i] !== C.G_PATH) continue;
     const d = Math.hypot(fx + 0.5 - x, fy + 0.5 - y);
     if (d < bestD) { bestD = d; best = { x: fx + 0.5, y: fy + 0.5, d }; }
   }
@@ -5207,13 +5214,38 @@ export function townRoadSameArea(tw, x0, y0, x1, y1) {
    pavée, et on repose le point au milieu de ce segment. Une rue de deux cases
    place la voiture sur la ligne mitoyenne, une avenue de six la place à trois
    cases du trottoir, et une ruelle d'une case ne bouge pas. Une seule règle,
-   aucun cas particulier, et elle se mesure (voir verify-taxi.mjs). */
+   aucun cas particulier, et elle se mesure (voir verify-taxi.mjs).
+
+   ⚠️⚠️ ZIP 433 — ET C'EST CE SONDAGE QUI FAISAIT LA DENT DE SCIE (« le taxi a
+   une trajectoire stupide, il prend des virages plus que nécessaire »). Une
+   sonde perpendiculaire ne sait pas distinguer la CHAUSSÉE de la BOUCHE D'UNE
+   RUE TRANSVERSALE : à chaque amorce de rue latérale, elle comptait les deux
+   cases de l'avenue PLUS les trois cases du départ de la petite rue, concluait
+   « la chaussée fait cinq cases de large ici » et posait le point un cran et
+   demi plus haut. Le taxi montait donc dans la bouche de CHAQUE rue latérale
+   avant de redescendre — mesuré par `verify-taxi.mjs` sur les 132 trajets :
+   **598 aller-retour** et **969° de rotation cumulée par course en moyenne**,
+   contre **0** et **214°** une fois le gabarit posé.
+
+   ⚠️ LA PARADE EST DANS LA DÉFINITION, PAS DANS UN SEUIL : **la chaussée est
+   la largeur qui PERSISTE le long de la marche.** On sonde donc sur un gabarit
+   de `SPAN` cases de part et d'autre, DANS le sens du déplacement, et on retient
+   la largeur MINIMALE. Une amorce de rue de deux cases de large disparaît du
+   minimum ; une esplanade, large sur toute la longueur du gabarit, le traverse
+   intacte. Aucun cas particulier pour les carrefours — et c'est justement aux
+   carrefours qu'on veut que la voiture GARDE SA LIGNE. */
 export function townRoadCenter(tw, pts) {
   const nav = townRoadNav(tw);
   if (!nav || !pts || pts.length < 2) return pts;
   const W = nav.w, H = nav.h;
   const road = (fx, fy) => fx >= 0 && fy >= 0 && fx < W && fy < H && !!nav.walk[fy * W + fx];
   const MAXT = 6;                       // au-delà, c'est une esplanade, pas une rue
+  /* Le gabarit de persistance, en cases. ⚠️ IL DOIT ÊTRE PLUS LARGE QUE LA
+     PLUS LARGE DES RUES TRANSVERSALES, sinon la bouche persiste sur tout le
+     gabarit et on retombe sur la dent de scie. Les rues de Valley Town sont
+     pavées deux cases de large (`paveRow`/`paveCol`), les carrefours quatre :
+     un gabarit de ±3 (sept cases) les enjambe tous. */
+  const SPAN = 3;
   const out = pts.map(p => ({ x: p.x, y: p.y }));
   for (let i = 1; i < out.length - 1; i++) {
     const a2 = out[i - 1], b2 = out[i + 1];
@@ -5235,15 +5267,25 @@ export function townRoadCenter(tw, pts) {
        jet sondait par demi-cases et s'arrêtait sur le dernier échantillon
        ROULABLE, pas sur le bord — il ratait donc systématiquement d'un demi-pas,
        et une rue de deux cases restait décentrée (mesuré : 0,36 case d'écart). */
-    let nPos = 0, nNeg = 0;
-    if (horiz) {
-      while (nPos < MAXT && road(fx, fy + nPos + 1)) nPos++;
-      while (nNeg < MAXT && road(fx, fy - nNeg - 1)) nNeg++;
-    } else {
-      while (nPos < MAXT && road(fx + nPos + 1, fy)) nPos++;
-      while (nNeg < MAXT && road(fx - nNeg - 1, fy)) nNeg++;
+    /* ⚠️ LE MINIMUM SUR LE GABARIT, PAS LA MESURE AU POINT (433, voir l'en-tête).
+       Un échantillon hors chaussée ne dit rien de sa largeur : on le SAUTE, on
+       ne le compte pas comme une largeur nulle — sinon un bout de rue près d'un
+       bord cesserait d'être recentré. */
+    let nPos = MAXT, nNeg = MAXT, seen = 0;
+    for (let s = -SPAN; s <= SPAN; s++) {
+      const sx = horiz ? fx + s : fx, sy = horiz ? fy : fy + s;
+      if (!road(sx, sy)) continue;
+      let p2 = 0, n2 = 0;
+      if (horiz) {
+        while (p2 < MAXT && road(sx, sy + p2 + 1)) p2++;
+        while (n2 < MAXT && road(sx, sy - n2 - 1)) n2++;
+      } else {
+        while (p2 < MAXT && road(sx + p2 + 1, sy)) p2++;
+        while (n2 < MAXT && road(sx - n2 - 1, sy)) n2++;
+      }
+      nPos = Math.min(nPos, p2); nNeg = Math.min(nNeg, n2); seen++;
     }
-    if (nPos >= MAXT || nNeg >= MAXT) continue;
+    if (!seen || nPos >= MAXT || nNeg >= MAXT) continue;
     const base = horiz ? fy : fx;
     const mid = (base - nNeg + base + nPos + 1) / 2;   // milieu de la bande, en monde
     if (horiz) out[i].y = mid; else out[i].x = mid;
@@ -5341,25 +5383,41 @@ export function townRoadPath(tw, x0, y0, x1, y1) {
    maisons ; celle-ci ne peut, par construction, que suivre la rue.
    ⚠️ ET ELLE GARDE LES VRAIS VIRAGES : un angle de rue n'est jamais visible en
    ligne droite depuis l'avant-dernier point, donc il survit à la réduction.
-   C'est ce qui laisse au ralentissement en courbe quelque chose à ralentir. */
+   C'est ce qui laisse au ralentissement en courbe quelque chose à ralentir.
+
+   ⚠️⚠️ ZIP 433 — ELLE NE S'EST JAMAIS DÉCLENCHÉE, ET PERSONNE NE POUVAIT LE
+   VOIR. Deux exigences la rendaient impossible à satisfaire dans Valley Town :
+     · elle éprouvait la corde à **± 0,5 case** de son axe. Une rue est pavée
+       DEUX cases de large (`paveRow`) et la voiture roule sur la mitoyenne :
+       à un demi-pas de l'axe on tombe pile sur la case d'HERBE d'à côté. Toute
+       corde était donc refusée sur toute rue normale ;
+     · elle exigeait un dégagement ≥ 2, alors que **4 106 des 5 271 cases
+       roulables de la ville ont un dégagement de 1** — c'est-à-dire sur 78 %
+       du réseau, y compris toutes les rues droites.
+   Résultat : la réduction rendait le chemin BRUT, case par case (mesuré : 80
+   points de passage pour 92 tuiles de la gare à la place). Elle ne cassait
+   rien — un escalier de centres de cases décrit quand même la rue — mais tout
+   le travail d'anti-zigzag décrit ci-dessus n'existait que sur le papier.
+   ⚠️ LA DEMI-LARGEUR EST CELLE DE LA VOITURE (0,4 case, la caisse fait 0,8),
+   pas un demi-pas de grille ; et le dégagement ne se contrôle plus du tout :
+   c'est `townRoadCenter` qui place l'axe, et couper un carrefour en biais est
+   exactement ce que fait une voiture. Une corde qui reste sur le pavé sur toute
+   sa largeur ne peut pas monter sur le trottoir — c'est le seul invariant utile,
+   et `verify-taxi.mjs` le mesure sur la position RÉELLE du véhicule. */
 export function townRoadSimplify(tw, pts) {
   const nav = townRoadNav(tw);
   if (!nav || !pts || pts.length < 3) return pts;
   const W = nav.w;
+  const HALF = 0.4;                 // demi-largeur de la caisse, en cases
   const clear = (a, b) => {
     const n = Math.max(2, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) * 4));
     for (let k = 0; k <= n; k++) {
       const x = a.x + (b.x - a.x) * (k / n), y = a.y + (b.y - a.y) * (k / n);
       // La caisse a une largeur : on éprouve l'axe ET ses deux bords.
-      /* ⚠️ LA CORDE DOIT AUSSI RESTER DÉGAGÉE, pas seulement roulable : une
-         réduction qui coupe au ras du trottoir défait le travail de la carte de
-         chanfrein juste au-dessus, et c'est le tracé RÉDUIT que la voiture suit. */
-      for (const [ox, oy] of [[0, 0], [0.5, 0], [-0.5, 0], [0, 0.5], [0, -0.5]]) {
+      for (const [ox, oy] of [[0, 0], [HALF, 0], [-HALF, 0], [0, HALF], [0, -HALF]]) {
         const fx = Math.floor(x + ox), fy = Math.floor(y + oy);
         if (fx < 0 || fy < 0 || fx >= nav.w || fy >= nav.h) return false;
-        const j = fy * W + fx;
-        if (!nav.walk[j]) return false;
-        if (nav.clear[j] < 2) return false;
+        if (!nav.walk[fy * W + fx]) return false;
       }
     }
     return true;
@@ -5410,12 +5468,334 @@ export function townTaxiStops(tw) {
   const list = [];
   for (const [key, x, y] of src) {
     /* Rayon large et RÉSEAU DE RUES imposé : on cherche le trottoir le plus
-       proche du lieu, pas la première dalle venue (voir townRoadNav/main). */
-    const near = townRoadNear(tw, x, y, 26, true);
+       proche du lieu, pas la première dalle venue (voir townRoadNav/main).
+       ⚠️ 433 — LA RUE D'ABORD, L'ESPLANADE SEULEMENT S'IL N'Y EN A PAS. Le
+       dallage de la place centrale est roulable, donc l'arrêt « place » tombait
+       DEDANS : le taxi traversait le square en diagonale et se garait contre
+       l'obélisque, en se faufilant entre deux parterres. Un taxi dépose au
+       trottoir et le client finit à pied — c'est déjà la règle écrite plus haut
+       pour les poches isolées, elle valait aussi pour les esplanades. */
+    const near = townRoadNear(tw, x, y, 26, true, true) || townRoadNear(tw, x, y, 26, true);
     if (near) list.push({ key, x: near.x, y: near.y, walk: +near.d.toFixed(1) });
   }
   TOWN_TAXI_CACHE.w = tw; TOWN_TAXI_CACHE.list = list;
   return list;
+}
+
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ ZIP 433 — LES PIGEONS ET LES COLOMBES DE LA PLACE.
+   ╚══════════════════════════════════════════════════════════════════════════
+   Demande de Guillaume : « des colombes et des pigeons par terre sur la place
+   centrale, qui s'envolent élégamment quand on se rapproche trop d'elles ;
+   ajoute-les aussi devant le courthouse ; travaille bien le vol ». Puis, après
+   essai : « le comportement social des pigeons n'est pas très réaliste […] ils
+   se comportent comme les animaux de la ferme ».
+
+   ⚠️⚠️ RIEN DE TOUT ÇA NE CIRCULE SUR LE RÉSEAU, ET C'EST LE POINT D'ARCHITECTURE.
+   Un vol d'oiseaux, c'est vingt entités qui bougent soixante fois par seconde :
+   diffusées, elles feraient exploser à elles seules le plafond de dix messages
+   par seconde du §3. Deux conséquences, et Guillaume a tranché la seconde
+   (« leur comportement doit pas être exactement partagé entre tous les
+   joueurs ») :
+     · les EMPLACEMENTS POSSIBLES se déduisent de la carte, donc tout le monde
+       a des pigeons au même endroit ;
+     · le NOMBRE, les activités et les envols sont tirés LOCALEMENT. Deux
+       joueurs sur la même place ne comptent pas les mêmes pigeons — c'est
+       assumé, ça ne se remarque pas, et ça coûte zéro message.
+   ⚠️ L'envol, lui, écoute TOUS les joueurs : leurs positions circulent déjà,
+   donc un vol s'envole aussi quand c'est le camarade qui approche, gratuitement.
+
+   ⚠️ ET LE COMPORTEMENT VIT DANS LE MOTEUR, PAS DANS LA BOUCLE DE RENDU — même
+   raison que la conduite du taxi juste en dessous : une machine à états dont
+   les règles se contredisent a toujours l'air de marcher quand on la regarde
+   dix secondes. `tools/render-oiseaux.mjs` la rejoue image par image. */
+const TOWN_FLOCK_CACHE = { w: null, list: null };
+/* Les emplacements. ⚠️ DÉRIVÉS DE DEUX RECTANGLES EXISTANTS, jamais écrits en
+   coordonnées : le jour où la place ou le tribunal bougent, les oiseaux
+   suivent — c'est la leçon de `townSpots` et de `townTaxiStops`. */
+export function townFlocks(tw) {
+  if (!tw) return [];
+  if (TOWN_FLOCK_CACHE.w === tw && TOWN_FLOCK_CACHE.list) return TOWN_FLOCK_CACHE.list;
+  const nav = townNav(tw);
+  if (!nav) return [];
+  const W = tw.w;
+  /* Une case accueille un oiseau si elle est PRATICABLE, DALLÉE et DÉGAGÉE de
+     ses huit voisines. La troisième condition n'est pas du luxe : posé contre
+     un parterre, l'oiseau décolle dans la haie et on ne voit qu'un battement
+     derrière un buisson. */
+  const roomy = (x, y) => {
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const fx = x + dx, fy = y + dy;
+      if (fx < 0 || fy < 0 || fx >= tw.w || fy >= tw.h) return false;
+      const i = fy * W + fx;
+      if (!nav.walk[i]) return false;
+      const gnd = tw.ground[i];
+      if (gnd !== C.G_PATH && gnd !== C.G_PATH_STONE) return false;
+      if (tw.objects[i] !== C.O_NONE) return false;
+    }
+    return true;
+  };
+  const sites = [
+    // La place centrale : le gros du vol, autour de la fontaine.
+    { key: "plaza", rect: C.TOWN_PLAZA, n: 14 },
+    // Le parvis du tribunal : la bande dallée devant sa façade sud.
+    { key: "court", rect: { x: C.TOWN_COURT.x - 3, y: C.TOWN_COURT.y + C.TOWN_COURT.h, w: C.TOWN_COURT.w + 6, h: 6 }, n: 9 },
+  ];
+  const list = [];
+  for (const site of sites) {
+    const free = [];
+    for (let y = site.rect.y; y < site.rect.y + site.rect.h; y++)
+      for (let x = site.rect.x; x < site.rect.x + site.rect.w; x++)
+        if (roomy(x, y)) free.push([x, y]);
+    if (!free.length) continue;
+    /* ⚠️⚠️ UNE VOLÉE SE GROUPE, ELLE NE SE SAUPOUDRE PAS. On choisit un CENTRE
+       (la case libre la plus proche du milieu du lieu — au centre d'une place,
+       c'est la fontaine) et le vol vit dans un disque autour de lui. Neuf
+       oiseaux répartis sur trente cases de large, c'est un oiseau par écran,
+       donc AUCUNE volée — et un envol qu'on ne voit pas partir.
+       ⚠️ Le tri est TOTALEMENT DÉTERMINISTE (distance, puis coordonnées) :
+       `Array.sort` ne garantit rien sur les ex æquo (§4 de CLAUDE.md). */
+    const cx0 = site.rect.x + site.rect.w / 2, cy0 = site.rect.y + site.rect.h / 2;
+    free.sort((a, b) => (Math.hypot(a[0] - cx0, a[1] - cy0) - Math.hypot(b[0] - cx0, b[1] - cy0))
+                        || (a[1] - b[1]) || (a[0] - b[0]));
+    const spots = free.slice(0, Math.max(site.n * 3, 24));
+    let sx = 0, sy = 0;
+    for (const q of spots) { sx += q[0] + 0.5; sy += q[1] + 0.5; }
+    const cx = sx / spots.length, cy = sy / spots.length;
+    let r = 0;
+    for (const q of spots) r = Math.max(r, Math.hypot(q[0] + 0.5 - cx, q[1] + 0.5 - cy));
+    list.push({ key: site.key, cx, cy, r: Math.max(2.5, r), spots, max: site.n, birds: [], popAt: 0, pop: 0 });
+  }
+  TOWN_FLOCK_CACHE.w = tw; TOWN_FLOCK_CACHE.list = list;
+  return list;
+}
+/* Un oiseau neuf, posé sur une case libre du site. ⚠️ TOUT EST TIRÉ AU SORT
+   LOCALEMENT (`Math.random`) et non depuis une graine partagée : c'est la
+   décision de Guillaume ci-dessus, et c'est aussi ce qui fait qu'une place
+   n'a pas exactement la même vie deux jours de suite. */
+export function newBird(site, away) {
+  const q = site.spots[(Math.random() * site.spots.length) | 0];
+  return {
+    kind: Math.random() < C.BIRD_DOVE_SHARE ? "dove" : "pigeon",
+    x: q[0] + 0.5 + (Math.random() - 0.5) * 0.6, y: q[1] + 0.5 + (Math.random() - 0.5) * 0.6,
+    vx: 0, vy: 0, alt: 0, ang: Math.random() * 6.28, spd: 0, a: away ? 0 : 1,
+    st: away ? "away" : "ground", act: "idle", actT: Math.random() * C.BIRD_ACT_MAX,
+    exc: 0, tx: 0, ty: 0, follow: -1, bank: Math.random() < 0.5 ? -1 : 1,
+    face: Math.random() < 0.5 ? -1 : 1, wing: Math.random() * 6.28, wingRate: 0,
+    t: 0, wait: away ? Math.random() * 6 : 0, seed: (Math.random() * 1e6) | 0,
+  };
+}
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ UN PAS DE VOLÉE. Le groupe est l'unité, pas l'oiseau — et c'est tout le
+   ║ sujet du deuxième retour de Guillaume.
+   ╚══════════════════════════════════════════════════════════════════════════
+   `ctx` = { threats: [{x,y}], food: {x,y} | null }.
+
+   LES CINQ ACTIVITÉS AU SOL, et pourquoi chacune existe :
+     · `idle`  — planté, il regarde. ⚠️ C'EST LA PLUS IMPORTANTE : « ils ne font
+       pas toujours que picorer ». Un oiseau qui a toujours quelque chose à
+       faire est un automate ;
+     · `peck`  — coups de bec, d'autant plus rapides qu'il est excité ;
+     · `walk`  — il flâne vers un point tiré au sort dans le disque du groupe ;
+     · `court` — la parade : il EN SUIT UN AUTRE, jabot gonflé, en tournant
+       autour de lui. C'est de là que viennent les accélérations, les arrêts
+       nets et les poursuites que décrit la demande ;
+     · `squab` — la chamaillerie : une ruée d'une demi-seconde sur un voisin,
+       ailes battantes. Elle n'apparaît QUE si le groupe est serré ou excité,
+       c'est-à-dire autour du pain.
+
+   ⚠️⚠️ ET L'ESPACEMENT N'EST JAMAIS RÉGLÉ : il TOMBE de deux forces opposées
+   (on s'écarte du voisin trop proche, on revient vers le groupe si l'on s'en
+   éloigne). C'est ce qui produit des grappes serrées et des isolés, au lieu de
+   la grille régulière du premier jet. */
+export function flockStep(site, dt, ctx, cfg, now) {
+  const birds = site.birds;
+  const food = ctx.food || null;
+  const threats = ctx.threats || [];
+  /* ---- LA POPULATION DÉRIVE. On retire une cible de temps en temps ; les
+     oiseaux en trop restent au loin, les manquants reviennent. Le pain, lui,
+     appelle tout le monde — c'est même à ça qu'on le reconnaît. */
+  if (now - site.popAt > cfg.POP_MS) {
+    site.popAt = now;
+    site.pop = Math.round(site.max * (cfg.POP_MIN + Math.random() * (cfg.POP_MAX - cfg.POP_MIN)));
+  }
+  const foodCall = food && Math.hypot(food.x - site.cx, food.y - site.cy) < cfg.FOOD_R;
+  const want = foodCall ? site.max : site.pop;
+  let landed = 0;
+  for (const b of birds) if (b.st !== "away") landed++;
+
+  for (let i = 0; i < birds.length; i++) {
+    const b = birds[i];
+    b.t += dt;
+    // La menace la plus proche, tous joueurs confondus.
+    let td = Infinity, tx = 0, ty = 0;
+    for (const q of threats) {
+      const d = Math.hypot(q.x - b.x, q.y - b.y);
+      if (d < td) { td = d; tx = q.x; ty = q.y; }
+    }
+    if (b.st === "ground") {
+      b.alt = 0; b.a = 1;
+      if (td < cfg.FLUSH_R) {
+        /* ⚠️ IL FUIT DANS LA DIRECTION OPPOSÉE À LA MENACE. Un oiseau qui
+           décolle vers le joueur a l'air d'attaquer. Le `bank` propre à chaque
+           oiseau écarte ensuite les trajectoires en éventail. */
+        b.ang = Math.atan2(b.y - ty, b.x - tx) + (Math.random() - 0.5) * 0.4;
+        b.st = "fly"; b.t = 0; b.spd = cfg.TAKEOFF; b.vz = cfg.CLIMB; b.act = "idle";
+        continue;
+      }
+      if (td < cfg.ALERT_R) { b.act = "alert"; b.vx = b.vy = 0; continue; }
+      if (b.act === "alert") { b.act = "idle"; b.actT = 0; }
+      /* ---- L'EXCITATION : elle monte près du pain et dans la foule, elle
+         retombe seule. Elle pilote la vitesse, le rythme des coups de bec et
+         la probabilité de se chamailler — un seul nombre pour trois effets. */
+      const nearFood = food && Math.hypot(food.x - b.x, food.y - b.y) < cfg.FOOD_EAT_R * 2.5;
+      let crowd = 0;
+      for (let k = 0; k < birds.length; k++) {
+        if (k === i || birds[k].st !== "ground") continue;
+        if (Math.hypot(birds[k].x - b.x, birds[k].y - b.y) < 1.6) crowd++;
+      }
+      const wantExc = (nearFood ? 1 : 0) * 0.75 + Math.min(0.45, crowd * 0.11);
+      b.exc += (wantExc - b.exc) * Math.min(1, dt * (wantExc > b.exc ? cfg.EXC_UP : cfg.EXC_DOWN));
+      // ---- Changement d'activité
+      b.actT -= dt;
+      if (b.actT <= 0) {
+        const r = Math.random();
+        if (food && Math.hypot(food.x - b.x, food.y - b.y) < cfg.FOOD_R) {
+          /* Autour du pain : on se rue, on picore, on se chamaille. Personne ne
+             flâne. */
+          if (Math.hypot(food.x - b.x, food.y - b.y) > cfg.FOOD_EAT_R * 0.55) {
+            /* ⚠️⚠️ ON VISE UNE MIETTE, PAS « LE PAIN ». Premier jet : tous les
+               oiseaux convergeaient vers un point unique avec une gigue — vu en
+               jeu, ils s'empilaient en CHENILLE, une file indienne qui rentre
+               dans le même pixel. Un quignon émietté fait plusieurs tas, et
+               c'est ce qui étale l'attroupement en rosace au lieu d'une file :
+               chacun a SA miette et se chamaille avec son voisin pour elle. */
+            const pts = food.pts;
+            const q = pts && pts.length ? pts[(Math.random() * pts.length) | 0] : food;
+            b.act = "walk";
+            b.tx = q.x + (Math.random() - 0.5) * 0.5;
+            b.ty = q.y + (Math.random() - 0.5) * 0.5;
+          } else if (r < 0.14 && crowd > 1) { b.act = "squab"; b.follow = nearestOther(birds, i); }
+          else { b.act = "peck"; }
+        } else if (r < 0.30) b.act = "idle";
+        else if (r < 0.55) b.act = "peck";
+        else if (r < 0.84) {
+          b.act = "walk";
+          const a = Math.random() * 6.28, rr = Math.random() * site.r;
+          b.tx = site.cx + Math.cos(a) * rr; b.ty = site.cy + Math.sin(a) * rr;
+        } else if (r < 0.96 && crowd > 0) { b.act = "court"; b.follow = nearestOther(birds, i); }
+        else { b.act = "idle"; }
+        b.actT = cfg.ACT_MIN + Math.random() * (cfg.ACT_MAX - cfg.ACT_MIN) * (1 - b.exc * 0.5);
+      }
+      /* ---- LE PILOTAGE. Une vitesse VOULUE, puis on y va progressivement :
+         c'est l'accélération qui manquait (« parfois l'un suit l'autre,
+         accélère, ralentit sa course en le suivant »). */
+      let wx = 0, wy = 0, spd = 0;
+      if (b.act === "walk") {
+        wx = b.tx - b.x; wy = b.ty - b.y;
+        spd = cfg.WALK_SPD * (1 + b.exc * 1.6);
+        if (Math.hypot(wx, wy) < 0.25) { b.act = "peck"; b.actT = 0.4 + Math.random(); }
+      } else if (b.act === "court" && b.follow >= 0 && birds[b.follow] && birds[b.follow].st === "ground") {
+        /* La parade : on ne va pas SUR l'autre, on tourne AUTOUR. Le décalage
+           tangentiel est ce qui donne la ronde du mâle, et il coûte un cosinus. */
+        const o = birds[b.follow];
+        const a = Math.atan2(b.y - o.y, b.x - o.x) + dt * 1.7 * b.bank;
+        wx = o.x + Math.cos(a) * 0.8 - b.x; wy = o.y + Math.sin(a) * 0.8 - b.y;
+        spd = cfg.WALK_SPD * 1.5;
+      } else if (b.act === "squab" && b.follow >= 0 && birds[b.follow]) {
+        const o = birds[b.follow];
+        wx = o.x - b.x; wy = o.y - b.y;
+        spd = cfg.RUN_SPD;
+      }
+      // ---- Séparation : on s'écarte de qui nous serre. C'est elle qui casse
+      // l'espacement régulier, sans qu'aucun espacement ne soit écrit nulle part.
+      for (let k = 0; k < birds.length; k++) {
+        if (k === i || birds[k].st !== "ground") continue;
+        const dx = b.x - birds[k].x, dy = b.y - birds[k].y;
+        const d = Math.hypot(dx, dy);
+        if (d > 0.001 && d < cfg.SEP) {
+          const f = (cfg.SEP - d) / cfg.SEP * cfg.SEP_F;
+          wx += (dx / d) * f; wy += (dy / d) * f;
+          if (spd < cfg.WALK_SPD) spd = cfg.WALK_SPD;
+        }
+      }
+      // ---- Cohésion : hors du disque du groupe, on y revient. Sans elle, la
+      // volée dérive et la place se vide d'un côté en dix minutes.
+      const dc = Math.hypot(b.x - site.cx, b.y - site.cy);
+      if (dc > site.r) {
+        wx += (site.cx - b.x) / dc * cfg.COH; wy += (site.cy - b.y) / dc * cfg.COH;
+        if (spd < cfg.WALK_SPD) spd = cfg.WALK_SPD;
+      }
+      const wl = Math.hypot(wx, wy);
+      const vx = wl > 0.001 ? (wx / wl) * spd : 0, vy = wl > 0.001 ? (wy / wl) * spd : 0;
+      b.vx += (vx - b.vx) * Math.min(1, dt * cfg.ACC);
+      b.vy += (vy - b.vy) * Math.min(1, dt * cfg.ACC);
+      b.x += b.vx * dt; b.y += b.vy * dt;
+      if (Math.abs(b.vx) > 0.05) b.face = b.vx < 0 ? -1 : 1;
+      b.spd = Math.hypot(b.vx, b.vy);
+      continue;
+    }
+    if (b.st === "fly") {
+      b.vz = Math.max(0, b.vz - cfg.CLIMB_DECAY * dt);
+      b.alt += b.vz * dt;
+      b.spd += (cfg.CRUISE - b.spd) * Math.min(1, dt * 2.2);
+      b.ang += b.bank * cfg.TURN * dt * Math.max(0, 1 - b.t / 1.6);
+      b.x += Math.cos(b.ang) * b.spd * dt;
+      b.y += Math.sin(b.ang) * b.spd * dt;
+      b.face = Math.cos(b.ang) < 0 ? -1 : 1;
+      b.wingRate = cfg.WING_FAST + (cfg.WING_GLIDE - cfg.WING_FAST) * Math.min(1, b.t / cfg.BEAT_S);
+      b.wing += b.wingRate * dt;
+      if (b.t > cfg.FADE_S) b.a = Math.max(0, 1 - (b.t - cfg.FADE_S) / 0.7);
+      if (b.a <= 0) { b.st = "away"; b.t = 0; b.wait = cfg.AWAY_MIN + Math.random() * (cfg.AWAY_MAX - cfg.AWAY_MIN); landed--; }
+      continue;
+    }
+    if (b.st === "away") {
+      // Le pain raccourcit l'attente : c'est LUI qui rappelle les absents.
+      if (b.t < (foodCall ? b.wait * 0.25 : b.wait)) continue;
+      if (landed >= want) { b.t = 0; b.wait = 3 + Math.random() * 6; continue; }
+      const q = site.spots[(Math.random() * site.spots.length) | 0];
+      b.hx = q[0] + 0.5; b.hy = q[1] + 0.5;
+      const a = Math.random() * 6.28;
+      b.x = b.hx + Math.cos(a) * cfg.RETURN_D;
+      b.y = b.hy + Math.sin(a) * cfg.RETURN_D;
+      b.alt = cfg.ALT_MAX; b.a = 0; b.spd = cfg.CRUISE * 0.7;
+      b.ang = Math.atan2(b.hy - b.y, b.hx - b.x);
+      b.st = "land"; b.t = 0; b.wing = 0; landed++;
+      continue;
+    }
+    // ---- land : descente en plané, puis cabré.
+    const hx = food ? food.x : b.hx, hy = food ? food.y : b.hy;
+    const dx = hx - b.x, dy = hy - b.y, d = Math.hypot(dx, dy);
+    b.a = Math.min(1, b.a + dt * 2.4);
+    const want2 = Math.atan2(dy, dx);
+    let da = want2 - b.ang; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
+    b.ang += Math.max(-cfg.TURN * dt, Math.min(cfg.TURN * dt, da));
+    /* ⚠️ LA DESCENTE EST PROPORTIONNELLE À LA DISTANCE RESTANTE : l'oiseau
+       touche le sol EN ARRIVANT, pas trois cases avant. Même idée que le
+       freinage du taxi, et même défaut évité — l'atterrissage en l'air. */
+    const flare = d < cfg.FLARE_D;
+    if (flare) b.spd = Math.max(cfg.LAND_SPD, b.spd - cfg.LAND_BRAKE * dt);
+    const step = b.spd * dt;
+    b.alt = Math.max(0, b.alt - (d > 0.05 ? (b.alt / Math.max(0.2, d)) * step : b.alt));
+    b.x += Math.cos(b.ang) * step; b.y += Math.sin(b.ang) * step;
+    b.face = Math.cos(b.ang) < 0 ? -1 : 1;
+    b.wingRate = flare ? cfg.WING_FAST : cfg.WING_GLIDE;
+    b.wing += b.wingRate * dt;
+    b.flare = flare;
+    if ((d < 0.3 && b.alt < 0.08) || b.t > cfg.LAND_MAX_S) {
+      b.alt = 0; b.a = 1; b.spd = 0; b.vx = b.vy = 0;
+      b.st = "ground"; b.act = "peck"; b.t = 0; b.actT = 0.3 + Math.random();
+    }
+  }
+}
+function nearestOther(birds, i) {
+  let best = -1, bd = Infinity;
+  for (let k = 0; k < birds.length; k++) {
+    if (k === i || birds[k].st !== "ground") continue;
+    const d = Math.hypot(birds[k].x - birds[i].x, birds[k].y - birds[i].y);
+    if (d < bd) { bd = d; best = k; }
+  }
+  return best;
 }
 
 /* ╔══════════════════════════════════════════════════════════════════════════

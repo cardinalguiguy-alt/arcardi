@@ -482,7 +482,93 @@ export const TAXI_OFFSCREEN_MARGIN = 4;
 export const TAXI_PARK_MS = 5000;
 export const TAXI_SMOKE_MS = 110;         // cadence des bouffées d'échappement
 export const TAXI_SMOKE_LIFE = 1.15;      // s : durée de vie d'une bouffée
-export const TAXI_BOARD_R = 1.6;          // tuiles : distance pour monter (touche E)
+export const TAXI_BOARD_R = 1.6;
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ ZIP 433 — LES PIGEONS ET LES COLOMBES DE LA PLACE.
+   ╚══════════════════════════════════════════════════════════════════════════
+   ⚠️ TOUT EST ICI ET RIEN N'EST DANS LE DESSIN : le vol se rejoue au banc
+   (`tools/render-oiseaux.mjs`), donc ses nombres doivent être lisibles d'un
+   seul endroit. Voir `birdStep` dans fermeEngine pour ce que chacun fait. */
+export const BIRD_FLUSH_R = 2.3;      // tuiles : à cette distance, ils décollent
+/* ⚠️ LE RAYON D'ALERTE EST PRESQUE LE DOUBLE DU RAYON D'ENVOL, ET C'EST VOULU.
+   C'est dans cet intervalle-là que le joueur voit les têtes se lever : s'il
+   était serré, on n'aurait plus qu'un envol sec, et « élégamment » disparaît. */
+export const BIRD_ALERT_R = 4.2;
+export const BIRD_ROAM = 0.9;         // tuiles : le rayon du sautillement autour de sa case
+export const BIRD_PECK_MIN = 0.7, BIRD_PECK_MAX = 2.6;   // s entre deux sautillements
+export const BIRD_TAKEOFF = 1.6;      // tuiles/s au moment où il quitte le sol
+export const BIRD_CRUISE = 7.2;       // tuiles/s en vol tendu
+export const BIRD_CLIMB = 4.6;        // tuiles/s : la première poussée verticale
+export const BIRD_CLIMB_DECAY = 2.6;  // tuiles/s² : elle s'amortit — sinon c'est une fusée
+export const BIRD_TURN = 2.4;         // rad/s : le virage d'écartement
+export const BIRD_ALT_MAX = 6.0;      // tuiles : la hauteur d'où il revient
+export const BIRD_FADE_S = 1.9;       // s de vol avant de s'effacer au loin
+export const BIRD_AWAY_MIN = 7.0, BIRD_AWAY_MAX = 15.0;  // s d'absence
+export const BIRD_RETURN_D = 9.0;     // tuiles : il revient de LOIN, pas du dessus
+export const BIRD_LAND_SPD = 1.4, BIRD_LAND_BRAKE = 7.0;
+export const BIRD_FLARE_D = 2.2;      // tuiles : distance à laquelle il cabre
+export const BIRD_LAND_MAX_S = 8.0;   // garde-fou : au-delà, il se pose d'autorité
+/* Le battement, en radians/s. ⚠️ RAPIDE AU DÉCOLLAGE, LENT EN PLANÉ — c'est ce
+   contraste qui fait « oiseau » et pas « papillon », et il se voit même à sept
+   pixels. `BIRD_BEAT_S` est le temps qu'il met à passer de l'un à l'autre. */
+export const BIRD_WING_FAST = 26, BIRD_WING_GLIDE = 3.5, BIRD_BEAT_S = 1.3;
+/* ── LA VIE SOCIALE DU GROUPE (deuxième passe, retour de Guillaume) ──────────
+   « Le comportement social des pigeons n'est pas très réaliste. Les vrais
+   pigeons sont rassemblés en groupes souvent, n'ont pas toujours des mouvements
+   réguliers ou un espacement égal. Parfois l'un suit l'autre, accélère,
+   ralentit sa course en suivant l'autre (parade mâle-femelle). Et ils ne font
+   pas toujours que picorer. Là tes oiseaux se comportent comme les animaux de
+   la ferme. »
+
+   ⚠️⚠️ CE QUI CLOCHAIT N'ÉTAIT PAS UN RÉGLAGE, C'ÉTAIT LE MODÈLE. Le premier
+   jet donnait à chaque oiseau une CASE À LUI et le faisait sauter dedans à
+   intervalle régulier : par construction, espacement égal, mouvements
+   réguliers, une seule activité. On remplace par trois mécanismes qui, ensemble,
+   produisent tout ce que la demande décrit — sans une seule ligne de cas
+   particulier :
+     1. un OISEAU A UNE ACTIVITÉ, tirée au sort et de durée variable (rester
+        planté, picorer, marcher, faire la roue, se chamailler) ;
+     2. il a des VOISINS : il s'écarte de ceux qui le serrent, il se rapproche
+        du groupe s'il en est loin, et il lui arrive d'en SUIVRE un — c'est ce
+        qui donne les poursuites, les accélérations et les arrêts nets ;
+     3. il a une EXCITATION, qui monte quand il y a à manger et quand le groupe
+        est dense. Elle pilote la vitesse, la fréquence des coups de bec et la
+        probabilité de se chamailler. Un pigeon seul flâne, dix pigeons autour
+        d'un quignon se battent : c'est le même code, à deux valeurs près. */
+export const BIRD_ACT_MIN = 0.5, BIRD_ACT_MAX = 3.2;   // s : durée d'une activité
+export const BIRD_WALK_SPD = 0.85;      // tuiles/s : l'allure de flânerie
+export const BIRD_RUN_SPD = 2.6;        // tuiles/s : la poursuite, la ruée sur le pain
+export const BIRD_ACC = 7.0;            // tuiles/s² : ⚠️ FINI, il accélère et freine
+/* ⚠️⚠️ L'ÉCARTEMENT EST PLUS FORT QUE L'ATTRAIT DU PAIN, ET IL LE FAUT. Réglé
+   trop mou (0,62 / 2,4), douze pigeons convergeant sur le même point se
+   superposaient en une CHENILLE — vu en jeu, c'est le seul défaut visible du
+   premier essai de la mêlée. Un vrai attroupement est serré mais chaque oiseau
+   garde sa place ; c'est le rapport entre ces deux nombres et `BIRD_FOOD_EAT_R`
+   qui décide de la différence entre une mêlée et une bouillie. */
+export const BIRD_SEP = 0.78;           // tuiles : en dessous, il s'écarte du voisin
+export const BIRD_SEP_F = 3.6;          // force de l'écartement
+export const BIRD_COH = 0.55;           // rappel vers le groupe, au-delà du rayon du site
+/* ⚠️ LE PAIN. On ne modélise pas le quignon, on modélise CE QU'IL PROVOQUE —
+   demande explicite de Guillaume. Un point au sol, une durée, et un rayon
+   d'appel : les oiseaux proches se ruent dessus, les absents reviennent. */
+export const BIRD_FOOD_R = 14;          // tuiles : jusqu'où l'appel porte
+export const BIRD_FOOD_MS = 22000;      // durée d'un jeté de miettes
+export const BIRD_FOOD_EAT_R = 2.6;     // tuiles : le cercle où l'on se bouscule
+export const BIRD_EXC_UP = 1.6, BIRD_EXC_DOWN = 0.35;   // /s : montée et retombée
+/* ⚠️ LA POPULATION VARIE, ET ELLE N'EST PAS LA MÊME CHEZ LES DEUX JOUEURS.
+   « Pas besoin qu'ils soient toujours aussi nombreux à tous les moments de la
+   journée, fais-les spawn aléatoirement. » On tire donc une cible qui dérive,
+   et les oiseaux en trop restent au loin au lieu de revenir. */
+export const BIRD_POP_MS = 45000;       // on retire la cible toutes les 45 s
+export const BIRD_POP_MIN = 0.25, BIRD_POP_MAX = 1.0;   // fraction du vol maximal
+/* ⚠️ LE PIGEON EST LA RÈGLE, LA COLOMBE L'EXCEPTION (demande explicite). Une
+   colombe sur sept : assez pour qu'elle surprenne, pas assez pour qu'on croie
+   à un lâcher de mariage. */
+export const BIRD_DOVE_SHARE = 0.14;
+export const BIRD_CRUMB_AHEAD = 1.9;   // tuiles devant le banc où tombent les miettes
+export const BIRD_CRUMB_N = 5;         // ⚠️ PLUSIEURS TAS, PAS UN : voir throwCrumbs
+export const BIRD_CRUMB_SPREAD = 1.4;  // tuiles : l'éparpillement d'une poignée
+          // tuiles : distance pour monter (touche E)
 // Traversée de la rivière à cheval (chantier 2026-07, demande Guillaume :
 // "on doit pouvoir traverser la rivière à cheval, mais le cheval ralentit
 // par 4 quand il est sur de l'eau") — s'applique au cheval monté ET aux

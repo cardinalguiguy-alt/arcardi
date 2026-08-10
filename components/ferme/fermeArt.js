@@ -2245,7 +2245,7 @@ export function buildSprites() {
   }
 
   /* ══════════════════════════════════════════════════════════════════════════
-     ZIP 425 — LE NOUVEL HÔTEL DE VILLE DE VALLEY TOWN.
+     ZIP 425 — LE NOUVEL HÔTEL DE VILLE DE VALLEY TOWN. REPRIS AU 433.
      ──────────────────────────────────────────────────────────────────────────
      Demande : « un nouveau bâtiment townhall différent des autres quelque part
      au centre ». « Différent des autres » est la contrainte principale, et elle
@@ -2257,67 +2257,272 @@ export function buildSprites() {
          droite. C'est ce déséquilibre qui le rend reconnaissable en une
          fraction de seconde, bien plus que n'importe quel détail.
      Canevas 160×144, ancré par son bord bas.
+
+     ══════════════════════════════════════════════════════════════════════════
+     ZIP 433 — L'AUDIT GRAPHIQUE (demande de Guillaume : « le town hall est pas
+     assez travaillé, regarder ce qui cloche niveau textures, détails,
+     symétrie »). Quatre défauts, et les trois premiers sont des DÉCALAGES —
+     exactement la famille du 431 (la rangée d'étals, la colonnade du tribunal) :
+
+       1. ⚠️⚠️ **LE PERRON NE MENAIT NULLE PART.** Les trois marches étaient
+          centrées sur x = 80, c'est-à-dire au milieu du CORPS DE LOGIS ; la
+          porte, elle, est sous le BEFFROI, à x = 28. On montait donc un escalier
+          posé devant un mur plein, et la seule entrée du bâtiment n'avait pas
+          de marche. Invisible en regardant l'escalier (il est régulier), visible
+          dès qu'on regarde ce à quoi il MÈNE.
+       2. ⚠️⚠️ **LA RANGÉE DE FENÊTRES PENCHAIT DE SEPT PIXELS.** Trois travées
+          régulières, mais posées à 10 px du chaînage gauche et 24 px du droit :
+          la façade avait l'air d'avoir été coupée à droite. Un alignement se
+          juge contre son MUR, jamais contre lui-même.
+       3. ⚠️ **LE FAÎTE DU TOIT ÉTAIT À CÔTÉ DE L'AXE DU MUR** (106 contre 103).
+       ⚠️ LA PARADE EST CELLE DU 431, APPLIQUÉE PARTOUT ICI : plus une seule
+       position réglée à la main. Deux axes (`AX_TOWER`, `AX_BODY`), et TOUT s'en
+       déduit — travées, faîte, perron, horloge, enseigne. « Une position réglée
+       à la main est une position qui penchera. »
+
+       4. ⚠️⚠️ **LA BRIQUE N'ÉTAIT PAS DE LA BRIQUE, C'ÉTAIT DU RONDIN.** Une
+          ligne sombre pleine largeur tous les 4 px, et pas UN joint vertical :
+          à distance, un mur rayé horizontalement se lit comme des madriers
+          empilés — le bâtiment public le plus important de la ville avait la
+          texture d'une cabane. ⚠️ Ce qui fait la brique n'est pas la ligne
+          d'assise, c'est **l'ALTERNANCE DES JOINTS VERTICAUX d'une assise à
+          l'autre** (l'appareil à demi-brique). C'est la leçon de la ruche du
+          432 dite autrement : du détail, c'est une STRUCTURE qu'on voit mieux,
+          pas du bruit.
+     Le reste est de l'ajout franc, réclamé par « pas assez travaillé » : chambre
+     des cloches à abat-sons (un beffroi sans baie n'est qu'une tour), corniche à
+     denticules, appuis et clés de voûte aux fenêtres, chaînages d'angle en
+     besace (long/court alternés, comme un vrai chaînage), soubassement à refends,
+     ardoises posées en rangs, cheminée, drapeau, et une ombre portée du beffroi
+     SUR le corps de logis — sans elle les deux masses sont deux aplats côte à
+     côte, pas un volume devant un autre.
      ══════════════════════════════════════════════════════════════════════════ */
   function townHall2Sprite() {
     const W = 160, H = 144;
     const [c, g] = cv(W, H);
-    const BRICK = "#a8503c", BRICK_D = "#7e3728", BRICK_L = "#c26a52";
-    const STONE = "#e2dccb", STONE_D = "#bfb8a4";
+    const BRICK = "#a8503c", BRICK_D = "#7e3728", BRICK_L = "#c26a52", BRICK_V = "#98462f";
+    const MORTAR = "#8d4433";
+    const STONE = "#e2dccb", STONE_D = "#bfb8a4", STONE_L = "#f2eddd";
     const ROOF = "#4a5a70", ROOF_D = "#33415a", ROOF_L = "#66788f";
+    const SHADE = "rgba(40,24,30,0.20)";
 
-    // Soubassement de pierre + trois marches devant l'entrée.
-    P(g, 4, H - 12, W - 8, 12, STONE_D); P(g, 4, H - 12, W - 8, 2, STONE);
-    for (let s = 0; s < 3; s++) P(g, 58 - s * 3, H - 6 + s * 2, 44 + s * 6, 2, s % 2 ? STONE : STONE_D);
+    /* ── LES DEUX AXES. Tout ce qui suit s'y rapporte ; aucune abscisse n'est
+       écrite « parce que ça tombait bien ». ── */
+    const TW0 = 8, TW1 = 48;                 // le beffroi
+    const BD0 = 52, BD1 = 154;               // le corps de logis
+    const AX_TOWER = (TW0 + TW1) / 2;        // 28
+    const AX_BODY = (BD0 + BD1) / 2;         // 103
+    const GROUND = H - 12;                   // le dessus du soubassement
 
-    // ---- Corps principal (droite), deux niveaux de brique.
-    P(g, 52, 44, W - 58, H - 56, BRICK);
-    for (let y = 46; y < H - 12; y += 4) P(g, 52, y, W - 58, 1, BRICK_D);       // assises
-    P(g, 52, 44, 2, H - 56, BRICK_L);
-    // Chaînages d'angle en pierre : c'est ce qui fait « bâtiment public » et
-    // pas « grange en brique ».
-    for (let y = 44; y < H - 12; y += 8) { P(g, 52, y, 6, 4, STONE); P(g, W - 12, y, 6, 4, STONE); }
-    // Bandeau de pierre entre les deux étages.
-    P(g, 52, 76, W - 58, 4, STONE); P(g, 52, 76, W - 58, 1, "#f2eddd");
-    // Fenêtres cintrées, deux rangées de trois.
-    for (let r = 0; r < 2; r++) for (let i = 0; i < 3; i++) {
-      const wx = 64 + i * 26, wy = 54 + r * 32;
-      P(g, wx - 2, wy - 2, 16, 22, STONE);
-      P(g, wx, wy, 12, 18, "#3d5c78");
-      P(g, wx, wy, 12, 3, "#7fa8c8");
-      P(g, wx + 5, wy, 2, 18, STONE_D); P(g, wx, wy + 8, 12, 1, STONE_D);
-      g.fillStyle = STONE; g.beginPath(); g.arc(wx + 6, wy, 8, Math.PI, 2 * Math.PI); g.fill();
-      g.fillStyle = "#3d5c78"; g.beginPath(); g.arc(wx + 6, wy, 6, Math.PI, 2 * Math.PI); g.fill();
+    /* ── LA BRIQUE, EN APPAREIL À DEMI-BRIQUE. Une assise de 4 px, un joint
+       vertical toutes les 8 px, décalé d'une demi-brique une assise sur deux.
+       ⚠️ LE JOINT HORIZONTAL EST PLUS CLAIR QUE LA BRIQUE, PAS PLUS SOMBRE :
+       le mortier est du sable et de la chaux, il accroche la lumière. Une ligne
+       sombre pleine largeur, c'est une OMBRE — donc un creux, donc un rondin.
+       Le joint vertical, lui, est sombre : il est étroit et reste à l'ombre. ── */
+    const brickWall = (x0, y0, w, h, phase) => {
+      P(g, x0, y0, w, h, BRICK);
+      for (let y = y0; y < y0 + h; y++) {
+        const row = ((y - y0) / 4) | 0;
+        if ((y - y0) % 4 === 3) { P(g, x0, y, w, 1, MORTAR); continue; }
+        // Joints verticaux, décalés d'une demi-brique une assise sur deux.
+        for (let x = x0 + ((row + (phase | 0)) % 2 ? 0 : 4); x < x0 + w; x += 8) P(g, x, y, 1, 1, BRICK_V);
+        // Une brique sur sept est un peu plus claire : c'est ce qui empêche le
+        // mur de moirer, sans ajouter la moindre couleur.
+        for (let x = x0; x < x0 + w; x += 8) {
+          if (((x * 7 + y * 13) % 29) < 5) P(g, x + 1, y, 3, 1, BRICK_L);
+          else if (((x * 5 + y * 11) % 31) < 4) P(g, x + 1, y, 3, 1, BRICK_D);
+        }
+      }
+    };
+    /* Le chaînage d'angle EN BESACE : une pierre longue, une courte, alternées.
+       Toutes de la même taille, ce n'est plus un chaînage, c'est une échelle. */
+    const quoins = (x, y0, y1, toRight) => {
+      for (let y = y0, k = 0; y < y1; y += 8, k++) {
+        const w2 = k % 2 ? 4 : 7;
+        P(g, toRight ? x : x - w2 + 1, y, w2, 5, STONE);
+        P(g, toRight ? x : x - w2 + 1, y, w2, 1, STONE_L);
+        P(g, toRight ? x : x - w2 + 1, y + 4, w2, 1, STONE_D);
+      }
+    };
+    /* Un rang d'ardoises : des écailles décalées, pas un aplat. */
+    const slates = (x0, y0, x1, y1, dxTop) => {
+      for (let y = y0; y < y1; y += 3) {
+        const t = (y - y0) / Math.max(1, y1 - y0);
+        const ax = x0 + dxTop * (1 - t), bx = x1 - dxTop * (1 - t);
+        for (let x = Math.round(ax); x < Math.round(bx); x += 6) {
+          P(g, x + (((y - y0) / 3) | 0) % 2 * 3, y, 1, 3, ROOF_D);
+        }
+        P(g, Math.round(ax), y, Math.round(bx - ax), 1, ((y - y0) / 3 | 0) % 2 ? ROOF : ROOF_L);
+      }
+    };
+
+    /* ── 1. SOUBASSEMENT À REFENDS, sur toute la largeur. ── */
+    P(g, 4, GROUND, W - 8, 12, STONE_D);
+    P(g, 4, GROUND, W - 8, 2, STONE);
+    for (let x = 8; x < W - 8; x += 12) P(g, x, GROUND + 2, 1, 10, "#a9a291");
+    P(g, 4, GROUND + 6, W - 8, 1, "#a9a291");
+
+    /* ── 2. LE CORPS DE LOGIS. ── */
+    brickWall(BD0, 44, BD1 - BD0, GROUND - 44, 0);
+    P(g, BD0, 44, 2, GROUND - 44, BRICK_L);
+    quoins(BD0, 44, GROUND, true);
+    quoins(BD1 - 1, 44, GROUND, false);
+    // Bandeau de pierre entre les deux niveaux.
+    P(g, BD0, 80, BD1 - BD0, 4, STONE); P(g, BD0, 80, BD1 - BD0, 1, STONE_L);
+    P(g, BD0, 83, BD1 - BD0, 1, STONE_D);
+
+    /* Les travées. ⚠️ QUATRE, ET CENTRÉES SUR `AX_BODY` : la rangée se construit
+       à partir de son milieu, jamais à partir de son bord gauche.
+       ⚠️ ET LE REZ-DE-CHAUSSÉE A DES BAIES PLUS HAUTES QUE L'ÉTAGE : c'est la
+       règle de toute façade publique (le niveau noble se voit à ses fenêtres),
+       et c'est aussi ce qui remplit le bas du mur — deux rangées identiques
+       laissaient trente pixels de brique nue au-dessus du soubassement. */
+    const BAYS = 4, PITCH = 24, WINW = 14;
+    const ROWY = [58, 98], ROWH = [16, 22];
+    const bayX = (i) => Math.round(AX_BODY + (i - (BAYS - 1) / 2) * PITCH - WINW / 2);
+    for (let r = 0; r < 2; r++) for (let i = 0; i < BAYS; i++) {
+      const wx = bayX(i), wy = ROWY[r], hh = ROWH[r];
+      // Encadrement de pierre + appui saillant.
+      P(g, wx - 2, wy - 2, WINW + 4, hh + 4, STONE);
+      g.fillStyle = STONE; g.beginPath(); g.arc(wx + WINW / 2, wy - 1, WINW / 2 + 2, Math.PI, 2 * Math.PI); g.fill();
+      P(g, wx - 3, wy + hh + 1, WINW + 6, 2, STONE); P(g, wx - 3, wy + hh + 1, WINW + 6, 1, STONE_L);
+      // Le verre, plus clair en haut (le ciel s'y reflète).
+      P(g, wx, wy, WINW, hh, "#3d5c78");
+      g.fillStyle = "#3d5c78"; g.beginPath(); g.arc(wx + WINW / 2, wy, WINW / 2, Math.PI, 2 * Math.PI); g.fill();
+      P(g, wx, wy, WINW, 4, "#7fa8c8"); P(g, wx, wy, WINW, 1, "#a8c8e0");
+      // Croisée : un meneau, une traverse.
+      P(g, wx + WINW / 2 - 1, wy - 6, 2, hh + 6, STONE_D);
+      P(g, wx, wy + 8, WINW, 1, STONE_D);
+      // Clé de voûte au sommet de l'arc — c'est elle qui fait « bâtiment public ».
+      P(g, wx + WINW / 2 - 2, wy - WINW / 2 - 4, 4, 6, STONE_L);
+      P(g, wx + WINW / 2 - 2, wy - WINW / 2 - 4, 4, 1, STONE);
     }
-    // Toit d'ardoise à deux pentes, débordant.
-    g.fillStyle = ROOF;
-    g.beginPath(); g.moveTo(46, 46); g.lineTo(106, 22); g.lineTo(W - 2, 46); g.fill();
-    g.fillStyle = ROOF_L;
-    g.beginPath(); g.moveTo(46, 46); g.lineTo(106, 22); g.lineTo(106, 27); g.lineTo(54, 46); g.fill();
-    P(g, 46, 44, W - 48, 4, ROOF_D);
+    /* Corniche à denticules sous l'avant-toit. Deux rangées de pierre et une
+       dent tous les 4 px : à cette taille, c'est le détail qui distingue une
+       façade publique d'un pignon de grange. */
+    P(g, BD0 - 2, 40, BD1 - BD0 + 4, 4, STONE);
+    P(g, BD0 - 2, 40, BD1 - BD0 + 4, 1, STONE_L);
+    for (let x = BD0; x < BD1; x += 4) P(g, x, 44, 2, 2, STONE_D);
 
-    // ---- LE BEFFROI (gauche), plus haut que tout le reste.
-    P(g, 8, 26, 40, H - 38, BRICK);
-    for (let y = 28; y < H - 12; y += 4) P(g, 8, y, 40, 1, BRICK_D);
-    P(g, 8, 26, 3, H - 38, BRICK_L);
-    for (let y = 26; y < H - 12; y += 8) { P(g, 8, y, 5, 4, STONE); P(g, 43, y, 5, 4, STONE); }
-    // Porche du beffroi : c'est l'entrée de la mairie.
-    P(g, 18, 96, 20, H - 108, "#5a3a26"); P(g, 27, 96, 2, H - 108, "#3c2618");
-    g.fillStyle = "#5a3a26"; g.beginPath(); g.arc(28, 96, 10, Math.PI, 2 * Math.PI); g.fill();
-    P(g, 15, 84, 26, 4, STONE); P(g, 15, 84, 26, 1, "#f2eddd");
-    // Horloge.
-    P(g, 14, 40, 28, 28, STONE); P(g, 14, 40, 28, 2, "#f2eddd");
-    g.fillStyle = "#2e2a24"; g.beginPath(); g.arc(28, 54, 11, 0, 7); g.fill();
-    g.fillStyle = "#f6f2e4"; g.beginPath(); g.arc(28, 54, 9, 0, 7); g.fill();
-    P(g, 27, 47, 2, 8, "#2e2a24"); P(g, 28, 53, 7, 2, "#2e2a24");
-    for (const [hx, hy] of [[28, 46], [28, 62], [20, 54], [36, 54]]) P(g, hx, hy, 1, 1, "#2e2a24");
-    // Couronnement : corniche, toit pyramidal, girouette.
-    P(g, 4, 22, 48, 6, STONE); P(g, 4, 22, 48, 1, "#f2eddd");
+    /* ── 3. LE TOIT DU CORPS DE LOGIS, à quatre pans, faîte SUR L'AXE. ── */
+    const RX0 = AX_BODY - 56, RX1 = AX_BODY + 56, RTOP = 20, REAVE = 42;
     g.fillStyle = ROOF;
-    g.beginPath(); g.moveTo(2, 23); g.lineTo(28, 2); g.lineTo(54, 23); g.fill();
+    g.beginPath(); g.moveTo(RX0, REAVE); g.lineTo(AX_BODY - 14, RTOP); g.lineTo(AX_BODY + 14, RTOP); g.lineTo(RX1, REAVE); g.closePath(); g.fill();
+    slates(RX0, RTOP, RX1, REAVE, 42);
+    P(g, AX_BODY - 14, RTOP, 28, 2, ROOF_L);                 // le faîtage éclairé
+    P(g, RX0, REAVE - 2, RX1 - RX0, 3, ROOF_D);              // l'égout, à l'ombre
+    P(g, RX0, REAVE + 1, RX1 - RX0, 1, "#2a3548");
+    /* Cheminée, franchement décalée : elle appuie l'asymétrie du bâtiment.
+       ⚠️ ELLE DESCEND JUSQU'À LA PENTE, pas jusqu'à un nombre rond : une souche
+       qui s'arrête en l'air flotte au-dessus du toit, et c'est ce qu'on voit
+       en premier sur une silhouette. Le pied se DÉDUIT donc de la pente. */
+    { const CHX = AX_BODY + 28, CHW = 10;
+      // y de la pente droite au niveau du bord droit de la souche
+      const t = (CHX + CHW - (AX_BODY + 14)) / (RX1 - (AX_BODY + 14));
+      const foot = Math.round(RTOP + t * (REAVE - RTOP)) + 1;
+      P(g, CHX, RTOP - 12, CHW, foot - (RTOP - 12), BRICK);
+      for (let y = RTOP - 10; y < foot; y += 4) P(g, CHX, y, CHW, 1, MORTAR);
+      P(g, CHX, RTOP - 12, 2, foot - (RTOP - 12), BRICK_L);
+      P(g, CHX - 1, RTOP - 15, CHW + 2, 3, STONE_D); P(g, CHX - 1, RTOP - 15, CHW + 2, 1, STONE); }
+
+    /* ── 4. LE BEFFROI. Il passe DEVANT le corps de logis, donc il porte son
+       ombre dessus — deux aplats côte à côte ne font pas deux volumes. ── */
+    /* ⚠️ L'OMBRE COMMENCE AU MUR, PAS AU BEFFROI. Peinte depuis TW1, ses
+       quatre premiers pixels tombaient dans le VIDE entre les deux masses :
+       une bande translucide flottant sur le fond, qu'on ne voit qu'une fois le
+       bâtiment posé sur un sol clair. Une ombre se porte sur quelque chose. */
+    P(g, BD0, 46, 6, GROUND - 46, SHADE);
+    const TTOP = 24;
+    brickWall(TW0, TTOP, TW1 - TW0, GROUND - TTOP, 1);
+    P(g, TW0, TTOP, 3, GROUND - TTOP, BRICK_L);
+    quoins(TW0, TTOP, GROUND, true);
+    quoins(TW1 - 1, TTOP, GROUND, false);
+
+    /* La chambre des cloches : deux baies à abat-sons. ⚠️ UN BEFFROI SANS BAIE
+       N'EST PAS UN BEFFROI — c'est par là que sort le son, et c'est le seul
+       détail qui dit « il y a une cloche dedans » sans dessiner la cloche. */
+    for (const bx of [AX_TOWER - 12, AX_TOWER + 3]) {
+      P(g, bx - 1, 32, 11, 20, STONE);
+      P(g, bx, 34, 9, 17, "#2b2620");
+      g.fillStyle = STONE; g.beginPath(); g.arc(bx + 4.5, 34, 5.5, Math.PI, 2 * Math.PI); g.fill();
+      g.fillStyle = "#2b2620"; g.beginPath(); g.arc(bx + 4.5, 34, 4.5, Math.PI, 2 * Math.PI); g.fill();
+      for (let y = 36; y < 50; y += 3) { P(g, bx, y, 9, 2, "#4a4239"); P(g, bx, y, 9, 1, "#6b6154"); }
+      P(g, bx + 4, 32, 1, 19, STONE_D);                       // le meneau
+    }
+    // Bandeau sous les baies.
+    P(g, TW0 - 1, 54, TW1 - TW0 + 2, 3, STONE); P(g, TW0 - 1, 54, TW1 - TW0 + 2, 1, STONE_L);
+
+    /* L'HORLOGE, centrée sur l'axe de la tour. */
+    const CY = 74;
+    P(g, AX_TOWER - 14, CY - 14, 28, 28, STONE);
+    P(g, AX_TOWER - 14, CY - 14, 28, 2, STONE_L);
+    P(g, AX_TOWER - 14, CY + 12, 28, 2, STONE_D);
+    g.fillStyle = "#2e2a24"; g.beginPath(); g.arc(AX_TOWER, CY, 11, 0, 7); g.fill();
+    g.fillStyle = "#f6f2e4"; g.beginPath(); g.arc(AX_TOWER, CY, 9, 0, 7); g.fill();
+    g.fillStyle = "#ded7c2"; g.beginPath(); g.arc(AX_TOWER - 1, CY + 1, 9, 0.6, 2.4); g.fill();
+    P(g, AX_TOWER - 1, CY - 7, 2, 8, "#2e2a24");              // grande aiguille
+    P(g, AX_TOWER, CY - 1, 6, 2, "#2e2a24");                  // petite aiguille
+    for (const [hx, hy] of [[0, -8], [0, 7], [-8, -1], [7, -1]]) P(g, AX_TOWER + hx, CY + hy, 1, 1, "#2e2a24");
+
+    /* LE PORCHE — LA SEULE ENTRÉE, et donc celle que le perron doit servir. */
+    const DW = 22, DTOP = 104, DX = Math.round(AX_TOWER - DW / 2);
+    P(g, DX - 3, DTOP - 12, DW + 6, 4, STONE); P(g, DX - 3, DTOP - 12, DW + 6, 1, STONE_L);
+    g.fillStyle = STONE; g.beginPath(); g.arc(AX_TOWER, DTOP, DW / 2 + 3, Math.PI, 2 * Math.PI); g.fill();
+    P(g, DX, DTOP, DW, GROUND - DTOP, "#5a3a26");
+    g.fillStyle = "#5a3a26"; g.beginPath(); g.arc(AX_TOWER, DTOP, DW / 2, Math.PI, 2 * Math.PI); g.fill();
+    P(g, DX, DTOP - 8, 2, GROUND - DTOP + 8, "#4a2e1c");
+    P(g, DX + DW - 2, DTOP - 8, 2, GROUND - DTOP + 8, "#4a2e1c");
+    P(g, AX_TOWER - 1, DTOP - 10, 2, GROUND - DTOP + 10, "#3c2618");   // le refend des deux battants
+    for (const px2 of [DX + 4, DX + DW - 8]) P(g, px2, DTOP + 8, 4, 1, "#c9a24a");  // poignées
+    // Deux lanternes de part et d'autre : elles disent « on entre ici ».
+    for (const lx of [DX - 8, DX + DW + 5]) {
+      P(g, lx, 96, 3, 3, "#3a3a42"); P(g, lx - 1, 99, 5, 7, "#4a4a54");
+      P(g, lx, 100, 3, 5, "#ffe9a8"); P(g, lx - 1, 106, 5, 2, "#3a3a42");
+    }
+
+    /* ── 5. LE COURONNEMENT DU BEFFROI : corniche, toit en pavillon, drapeau. ── */
+    P(g, TW0 - 5, TTOP - 5, TW1 - TW0 + 10, 5, STONE);
+    P(g, TW0 - 5, TTOP - 5, TW1 - TW0 + 10, 1, STONE_L);
+    for (let x = TW0 - 4; x < TW1 + 4; x += 4) P(g, x, TTOP, 2, 2, STONE_D);
+    const PX0 = AX_TOWER - 26, PX1 = AX_TOWER + 26, PTOP = 2;
+    g.fillStyle = ROOF;
+    g.beginPath(); g.moveTo(PX0, TTOP - 5); g.lineTo(AX_TOWER, PTOP); g.lineTo(PX1, TTOP - 5); g.closePath(); g.fill();
+    /* ⚠️ LE VERSANT ÉCLAIRÉ SE PEINT AVANT LES ARDOISES, PAS APRÈS. Peint
+       après, il recouvre les écailles d'un aplat clair : la moitié gauche du
+       toit redevenait lisse, et on ne le voit pas en relisant le code — les
+       deux lignes sont justes, c'est leur ORDRE qui efface le travail. */
     g.fillStyle = ROOF_L;
-    g.beginPath(); g.moveTo(2, 23); g.lineTo(28, 2); g.lineTo(28, 7); g.fill();
-    P(g, 27, 0, 2, 4, "#8a8a94");
-    P(g, 29, 0, 7, 3, "#d8b45a");   // girouette dorée : le point le plus haut de la ville basse
+    g.beginPath(); g.moveTo(PX0, TTOP - 5); g.lineTo(AX_TOWER, PTOP); g.lineTo(AX_TOWER, TTOP - 5); g.closePath(); g.fill();
+    slates(PX0, PTOP, PX1, TTOP - 5, 25);
+    /* Mât et drapeau. Il flotte vers la droite, du côté du corps de logis :
+       c'est ce qui rattache visuellement les deux masses. Le drapeau est une
+       FLAMME (triangulaire), pas un rectangle — un rectangle rouge au bout d'un
+       mât se lit comme une brique posée sur le toit.
+       ⚠️⚠️ ET IL TIENT DANS LE CADRE. Mon premier jet plantait le mât NEUF
+       pixels au-dessus du faîte, c'est-à-dire à y = −7 : le canevas a découpé
+       tout le drapeau en silence, et il ne restait qu'un moignon de mât gris
+       (§4 de CLAUDE.md, le haut-de-forme décapité du 427 — le même piège, sur
+       le même genre d'accessoire). Le faîte est à PTOP = 2 : il reste DEUX
+       rangées au-dessus, et rien de plus. La flamme part donc du faîte lui-même
+       et se déploie SUR LE FLANC du toit, ce qui est de toute façon ce qu'on
+       voit d'un drapeau au vent. */
+    P(g, AX_TOWER, PTOP - 2, 1, 8, "#8a8a94");
+    P(g, AX_TOWER - 1, PTOP - 2, 3, 1, "#d8b45a");
+    for (let k = 0; k < 9; k++) P(g, AX_TOWER + 1 + k, PTOP - 1 + ((k / 3) | 0), 1, 5 - ((k / 3) | 0), "#c8433a");
+    for (let k = 0; k < 9; k++) P(g, AX_TOWER + 1 + k, PTOP - 1 + ((k / 3) | 0), 1, 2, "#e0685c");
+
+    /* ── 6. LE PERRON, CENTRÉ SUR LA PORTE. C'est le défaut n°1 du 433 : il
+       était centré sur le corps de logis, donc devant un mur plein. ── */
+    /* ⚠️ ELLES DESCENDENT DEPUIS LE SEUIL, DONC DANS LE SOUBASSEMENT. Posées
+       au-dessus de GROUND, elles étaient peintes SUR LE MUR : un bandeau clair
+       à hauteur de genou, pas un escalier. Le seuil de la porte est en
+       GROUND — c'est de là que part la première marche. */
+    for (let s = 0; s < 3; s++) {
+      const w2 = DW + 8 + s * 10;
+      P(g, Math.round(AX_TOWER - w2 / 2), GROUND + 1 + s * 3, w2, 3, s % 2 ? STONE_D : STONE);
+      P(g, Math.round(AX_TOWER - w2 / 2), GROUND + 1 + s * 3, w2, 1, STONE_L);
+    }
     return c;
   }
 
@@ -5193,97 +5398,448 @@ export function buildSprites() {
   }
 
   /* ╔══════════════════════════════════════════════════════════════════════════
-     ║ ZIP 432 — LES DEUX VUES DE TROIS QUARTS (le virage).
+     ║ ZIP 433 — LES PIGEONS ET LES COLOMBES DE VALLEY TOWN.
+     ╚══════════════════════════════════════════════════════════════════════════
+     Demande de Guillaume : « des colombes et des pigeons qui sont par terre sur
+     la place centrale et qui s'envolent élégamment quand on se rapproche trop
+     d'elles […] détaille bien les oiseaux, ils doivent être beaux (pas trop
+     grands) ».
+
+     ⚠️ L'ÉCHELLE D'ABORD, c'est elle qui décide de tout le reste. Un fermier
+     fait 23 px peints ; un pigeon fait 0,25 m contre 1,75 m, soit 3 px. À trois
+     pixels ce n'est plus un oiseau, c'est une poussière. On tient donc les deux
+     bouts : **7 px de haut, 11 de long, soit 0,30 fermier** — assez pour lire
+     une tête, un œil et une barre d'aile, assez peu pour qu'un vol de neuf
+     oiseaux ne mange pas la place. C'est la même arbitrage que `render-echelle`
+     fait pour les décors, mais dans l'autre sens : ici on grossit exprès.
+
+     ⚠️ SEPT POSES, ET AUCUNE N'EST DÉCORATIVE :
+       · `stand` / `peck` / `alert` — au sol. `alert` (cou tendu, tête haute) est
+         la pose qui rend l'envol LISIBLE : sans elle, l'oiseau passe de « il
+         picore » à « il est en l'air » sans que le joueur comprenne que c'est
+         lui qui l'a fait fuir. C'est le même rôle que le ralentissement du taxi
+         dans les virages — l'intention se montre AVANT le mouvement.
+       · `down` / `mid` / `up` — le battement, dans cet ordre. Trois images
+         suffisent si l'amplitude est franche : une aile à mi-course qui ne
+         serait qu'une interpolation des deux autres ne se voit pas.
+       · `glide` — les ailes tenues, à peine relevées. C'est elle qu'on voit le
+         plus longtemps : le battement ne dure qu'au décollage.
+
+     ⚠️ DEUX ESPÈCES, UNE SEULE GÉOMÉTRIE. La colombe n'est pas « un pigeon
+     blanc » : elle est plus fine, plus claire, et son aile ne porte pas de
+     barres. Mais son squelette est le MÊME code — deux dessins d'un même
+     oiseau finiraient par diverger (§8 de CLAUDE.md), et une volée mélangée se
+     lit précisément parce que les silhouettes sont parentes.
+     ══════════════════════════════════════════════════════════════════════════ */
+  /* ⚠️ LES DEUX PALETTES SONT RELEVÉES SUR LES RÉFÉRENCES, pas inventées : le
+     biset est GRIS BLEUTÉ (pas gris neutre), son aile est plus sombre que son
+     corps, son col vire du VERT au VIOLET, son œil est ORANGE cerclé et ses
+     pattes sont ROSE VIF — sur la photo, c'est la seule couleur saturée de
+     l'animal, et c'est pour ça qu'on la voit à trente mètres.
+     ⚠️ La colombe n'est pas « un pigeon blanc » : son blanc est LÉGÈREMENT
+     BLEUTÉ dans les ombres (référence : les ombres des ailes tirent sur le
+     lilas, jamais sur le beige), elle n'a ni barres alaires ni col irisé, et
+     son bec est fin et sombre. */
+  const BIRD_PAL = {
+    pigeon: {
+      back: "#5d6a7e", body: "#79879b", lit: "#98a5b6", dark: "#3f4a5b",
+      breast: "#9ba3ad", neck: "#3f8f7a", neck2: "#8a5f96",
+      head: "#6b7688", beak: "#33312f", cere: "#e6e2da",
+      eye: "#141414", iris: "#e2761f", leg: "#e8756a", bar: true,
+    },
+    dove: {
+      back: "#dcd9e2", body: "#efedf4", lit: "#ffffff", dark: "#b3b0c0",
+      breast: "#f7f5fa", neck: "#e4e1ea", neck2: "#d6d3e0",
+      head: "#f4f2f8", beak: "#4a453e", cere: "#f0eef4",
+      eye: "#141414", iris: "#c98f6a", leg: "#e0a091", bar: false,
+    },
+  };
+  /* ⚠️⚠️ LE CADRE EST PLUS GRAND QUE LE DESSIN, D'UN PIXEL SUR CHAQUE BORD, ET
+     L'ORDRE EST LE SUJET : on dessine serré, on RECADRE, PUIS on cerne. Cerné
+     dans son cadre juste, le liseré d'un sprite qui touche le bord est lui-même
+     découpé — l'oiseau perd son contour du côté du bec et de la queue, et rien
+     ne le dit (§4 de CLAUDE.md : un canevas découpe en silence). C'est le même
+     piège que l'enseigne du taxi et le drapeau de la mairie, payé une troisième
+     fois dans ce zip ; `render-oiseaux.mjs` refuse désormais toute pose qui
+     touche son bord. */
+  function padOutline(src, groundRow, col) {
+    const PAD = 2;                       // ⚠️ DEUX, PAS UN : le liseré occupe le premier
+    const [c, g] = cv(src.width + PAD * 2, src.height + PAD * 2);   // et il ne doit pas non
+    g.drawImage(src, PAD, PAD);                                     // plus toucher le bord
+    outlineSprite(g, c.width, c.height, col);
+    // La ligne de sol est celle du LISERÉ, pas celle des pattes : c'est lui qui
+    // pose sur la pierre, et c'est lui qu'on voit.
+    c.ground = groundRow + PAD + 1;
+    return c;
+  }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ AU SOL — CINQ POSES. Canevas 15×9, l'oiseau POSE sur la rangée 8.
+     ╚══════════════════════════════════════════════════════════════════════════
+     Il regarde à DROITE ; le rendu retourne pour la gauche.
+
+     ⚠️⚠️ REFAIT SUR LES RÉFÉRENCES DE GUILLAUME (« améliore leur position
+     standing […] le détail des ailes, mais aussi le corps »). Le premier jet
+     était un ovale de douze pixels avec une tête dessus. La photo de pigeon
+     biset dit exactement ce qui manquait, et ce n'est pas du détail :
+
+       1. ⚠️⚠️ **UN PIGEON EST LONG ET BAS, PAS ROND.** Corps + queue font plus
+          de DEUX FOIS la hauteur. Le sprite est donc passé de 12 à 15 px de
+          long À HAUTEUR CONSTANTE — on gagne l'allure sans grossir l'oiseau,
+          ce qui est exactement la contrainte (« pas trop grands »).
+       2. **LE JABOT DÉBORDE EN AVANT ET EN BAS DES PATTES.** C'est lui qui
+          donne au pigeon son air important et son déséquilibre vers l'avant.
+       3. **LA QUEUE EST LONGUE, POINTUE, ET DÉPASSE LOIN DERRIÈRE**, un tiers
+          de l'animal. Un moignon horizontal donne un poussin.
+       4. **DEUX BARRES ALAIRES ÉPAISSES ET SOMBRES** sur la moitié basse de
+          l'aile repliée, et la pointe des rémiges qui CROISE la base de la
+          queue. C'est la marque du biset, celle qu'on reconnaît sans savoir.
+       5. **LES PATTES SONT ROSE VIF.** Sur la référence, c'est la seule couleur
+          saturée de l'animal ; deux pixels corail, et l'oiseau cesse d'être une
+          silhouette grise.
+       6. **LE COL IRISÉ VERT PUIS VIOLET**, juste sous la tête.
+     ⚠️ Et la tête reste PETITE et posée en arrière du jabot, séparée par un
+     creux de nuque : une tête dans l'alignement du corps donne un jouet.
+
+     LES CINQ POSES, et chacune répond à un comportement de `flockStep` :
+       · `stand` — au repos ;
+       · `peck`  — le cou plonge, bec au sol, EN AVANT du corps ;
+       · `walk`  — une patte en avant, l'autre en appui, corps porté devant :
+                   sans elle, un pigeon qui se déplace GLISSE, et rien ne dit
+                   mieux « animal de ferme scripté » ;
+       · `alert` — cou dressé : l'avertissement avant l'envol ;
+       · `puff`  — la parade : jabot gonflé au maximum, tête rentrée dans les
+                   épaules, queue basse et étalée qui traîne au sol.
+     ══════════════════════════════════════════════════════════════════════════ */
+  function birdGroundSprite(kind, pose) {
+    const p = BIRD_PAL[kind];
+    const [c, g] = cv(16, 9);
+    const peck = pose === "peck", alert = pose === "alert";
+    const walk = pose === "walk", puff = pose === "puff";
+    const F = walk ? 1 : 0;                       // en marche, le corps porte d'un pixel devant
+    /* ---- 1. LA QUEUE. ⚠️ ELLE PART SOUS LE CORPS ET DÉPASSE LOIN DERRIÈRE,
+       sur DEUX rangées seulement : une queue aussi épaisse que le corps se
+       confond avec lui et l'oiseau devient un pain. Sur la référence, elle est
+       fine, pointue, et clairement décalée vers le bas. */
+    if (puff) { P(g, 0, 6, 6, 2, p.dark); P(g, 1, 6, 5, 1, p.back); P(g, 0, 7, 3, 1, "#2f3844"); }
+    else { P(g, 0, 5, 6, 2, p.dark); P(g, 1, 5, 5, 1, p.back); P(g, 0, 7, 3, 1, "#2f3844"); }
+    /* ---- 2. LE CORPS, et son dos éclairé. */
+    P(g, 4 + F, 3, 8, 4, p.body);
+    P(g, 5 + F, 3, 6, 1, p.lit);
+    /* ---- 3. LE JABOT : il déborde en AVANT et descend BAS, jusqu'au niveau
+       des pattes. C'est ce déséquilibre vers l'avant qui fait l'allure du
+       pigeon, bien plus que n'importe quel détail de plumage. */
+    const bx = (puff ? 9 : 10) + F, bw = puff ? 4 : 3;
+    P(g, bx, puff ? 2 : 3, bw, puff ? 5 : 4, p.breast);
+    P(g, bx, puff ? 2 : 3, bw, 1, p.lit);
+    /* ---- 4. L'AILE REPLIÉE, en quatre tons du haut vers le bas : couvertures
+       claires, puis LES DEUX BARRES sombres du biset. Elles ne traversent pas
+       tout le flanc — elles s'arrêtent avant le jabot, comme sur la photo. */
+    P(g, 4 + F, 4, 7, 1, p.back);
+    if (p.bar) { P(g, 4 + F, 5, 6, 1, "#39434f"); P(g, 5 + F, 6, 5, 1, "#2c3540"); }
+    else { P(g, 4 + F, 5, 6, 1, p.back); P(g, 5 + F, 6, 5, 1, p.dark); }
+    P(g, 2 + F, 5, 3, 1, p.dark);                 // les rémiges croisent la base de la queue
+    P(g, 3 + F, 6, 2, 1, p.dark);
+    /* ---- 5. LA TÊTE. ⚠️⚠️ ELLE EST AU-DESSUS DU CORPS, PAS DEDANS, et il doit
+       rester du VIDE derrière elle : c'est ce creux de nuque, et lui seul, qui
+       transforme un galet gris en oiseau. Le premier jet la posait dans la
+       silhouette et donnait un sous-marin. */
+    /* ⚠️ EN PICORANT, LA TÊTE PASSE SOUS ET DEVANT LE JABOT, pas dedans. Mon
+       avant-dernier jet la posait à mi-hauteur du jabot : elle y disparaissait
+       entièrement, et la pose « picore » ne se distinguait plus de « debout ».
+       Le bec doit arriver AU SOL — c'est le seul repère qui dise ce qu'il fait. */
+    const hx = (peck ? 12 : puff ? 9 : 10) + F;
+    const hy = alert ? 0 : peck ? 5 : 1;
+    if (alert) { P(g, 11, 1, 2, 3, p.head); }                                // cou dressé
+    else if (peck) { P(g, 11 + F, 4, 2, 2, p.head); }                        // cou plongeant
+    else if (puff) { P(g, 10, 3, 2, 1, p.head); P(g, 9, 3, 4, 1, p.dark); }  // cou rentré dans la collerette
+    else { P(g, 11 + F, 3, 1, 1, p.head); }                                  // la nuque
+    P(g, hx, hy, 3, 2, p.head);
+    P(g, hx, hy, 3, 1, p.lit);
+    P(g, hx, hy + 2, 1, 1, p.neck);               // le col : vert…
+    P(g, hx + 1, hy + 2, 1, 1, p.neck2);          // …puis violet, un pixel chacun
+    P(g, hx + 1, hy, 1, 1, p.eye);
+    P(g, hx + 2, hy, 1, 1, p.iris);               // l'œil orange cerclé
+    P(g, hx + 3, hy, 1, 1, p.cere);               // la cire blanche, au-dessus du bec
+    P(g, hx + 3, hy + 1, 1, 1, p.beak);
+    /* ---- 6. LES PATTES, ROSE VIF. Sur la photo, c'est la seule couleur
+       saturée de l'animal, et c'est pour ça qu'on la voit à trente mètres.
+       ⚠️ En marche elles sont ÉCARTÉES ET DÉCALÉES : c'est ça, un pas. Deux
+       pattes côte à côte qui glissent, c'est un jouet à roulettes. */
+    if (walk) {
+      P(g, 6, 7, 1, 1, p.leg); P(g, 5, 8, 3, 1, p.leg);          // l'arrière, posée
+      P(g, 10, 7, 1, 1, p.leg); P(g, 10, 8, 3, 1, p.leg);        // l'avant, en appui
+    } else if (puff) {
+      P(g, 7, 7, 1, 1, p.leg); P(g, 9, 7, 1, 1, p.leg);
+      P(g, 6, 8, 3, 1, p.leg); P(g, 9, 8, 3, 1, p.leg);
+    } else {
+      const l0 = peck ? 6 : 7, l1 = peck ? 8 : 9;
+      P(g, l0, 7, 1, 1, p.leg); P(g, l1, 7, 1, 1, p.leg);
+      P(g, l0 - 1, 8, 3, 1, p.leg); P(g, l1, 8, 3, 1, p.leg);
+    }
+    return padOutline(c, 8, "#2b2530");
+  }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ EN VOL — QUATRE POSES. Canevas 19×15, corps ancré sur la rangée 11.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️ LE CORPS NE BOUGE PAS D'UNE POSE À L'AUTRE : c'est l'AILE qui bat, pas
+     l'oiseau qui monte et descend. Un corps qui suit l'aile donne un vol de
+     papillon — sautillant, jamais élégant.
+
+     ⚠️⚠️ REFAIT SUR LES RÉFÉRENCES (les colombes au trait, et la colombe
+     détaillée). Ce qu'elles disent, et que le premier jet ratait complètement :
+       1. **L'ENVERGURE ÉCRASE LE CORPS.** Sur toutes les références, une aile
+          seule est plus longue que le corps entier. Le sprite passe donc de 16
+          à 19 px de large, et l'aile occupe DIX colonnes contre six.
+       2. **L'AILE EST POINTUE, PAS ARRONDIE** : elle s'affine régulièrement du
+          moignon à la pointe, et la pointe est un seul pixel.
+       3. ⚠️⚠️ **LES RÉMIGES SONT SÉPARÉES.** C'est LE détail de toutes les
+          références : au bout de l'aile, les longues plumes s'écartent en
+          éventail et on voit le ciel entre elles. On dessine donc l'aile pleine,
+          puis on ÉVIDE un pixel entre les dernières plumes — le seul endroit du
+          fichier où l'on retire de la matière pour ajouter du détail.
+       4. **LA QUEUE EST LONGUE ET EN ÉVENTAIL**, presque aussi longue que le
+          corps, et elle s'étale par le bas.
+     ══════════════════════════════════════════════════════════════════════════ */
+  function birdFlySprite(kind, pose) {
+    const p = BIRD_PAL[kind];
+    const [c, g] = cv(19, 15);
+    /* La plume : une suite de colonnes [x, y, hauteur]. Les trois dernières
+       sont les rémiges — plus sombres, et évidées une sur deux. */
+    const feather = (cols) => {
+      cols.forEach(([x, y, h], i) => {
+        const tip = i >= cols.length - 4;
+        P(g, x, y, 1, h, tip ? p.dark : p.back);
+        P(g, x, y, 1, 1, tip ? p.body : p.lit);
+        if (h > 1) P(g, x, y + h - 1, 1, 1, p.dark);   // bord de fuite : il détache l'aile du corps
+      });
+      for (let i = cols.length - 3; i < cols.length; i += 2) {
+        if (i < 1) continue;
+        const [x, y, h] = cols[i];
+        if (h > 1) g.clearRect(x, y + h - 1, 1, 1);    // le ciel entre les rémiges
+      }
+    };
+    /* ---- L'AILE LOINTAINE : un liseré derrière le corps, décalé. Sans elle
+       l'oiseau n'a qu'une aile, et à cette taille ça se voit tout de suite. */
+    const FAR = {
+      up:    [[9, 4, 2], [8, 3, 2], [7, 2, 2], [6, 1, 2]],
+      mid:   [[7, 5, 2], [6, 5, 2], [5, 4, 2], [4, 4, 1]],
+      down:  [[9, 10, 2], [8, 11, 2], [7, 12, 2], [6, 13, 1]],
+      glide: [[7, 6, 2], [6, 6, 2], [5, 6, 1], [4, 6, 1]],
+    }[pose];
+    for (const [x, y, h] of FAR) P(g, x, y, 1, h, p.dark);
+    /* ---- LA QUEUE, longue et en éventail, puis le corps fuselé et le cou
+       tendu : la silhouette en vol est ÉTIRÉE, c'est ce qui la distingue de la
+       boule posée au sol. */
+    P(g, 0, 8, 6, 2, p.dark); P(g, 1, 8, 5, 1, p.back);
+    P(g, 0, 10, 4, 1, "#2f3844"); P(g, 1, 11, 2, 1, "#2f3844");
+    P(g, 4, 7, 9, 4, p.body);
+    P(g, 5, 7, 7, 1, p.lit);
+    P(g, 5, 10, 7, 1, p.dark);
+    P(g, 10, 8, 3, 2, p.breast);
+    P(g, 12, 5, 3, 2, p.head);                     // tête tendue vers l'avant
+    P(g, 12, 5, 3, 1, p.lit);
+    P(g, 12, 7, 1, 1, p.neck); P(g, 13, 7, 1, 1, p.neck2);
+    P(g, 13, 5, 1, 1, p.eye); P(g, 14, 5, 1, 1, p.iris);
+    P(g, 15, 5, 1, 1, p.cere); P(g, 15, 6, 2, 1, p.beak);
+    P(g, 7, 11, 3, 1, p.leg);                      // pattes repliées sous le ventre
+    /* ---- L'AILE PROCHE, par-dessus le corps : c'est elle qu'on lit. Dix
+       colonnes, effilées jusqu'à un pixel, rémiges évidées. */
+    feather({
+      up:    [[8, 4, 4], [7, 3, 4], [6, 2, 4], [5, 1, 3], [4, 0, 3], [3, 0, 2], [2, 1, 2], [1, 2, 1]],
+      mid:   [[8, 5, 4], [7, 5, 3], [6, 4, 3], [5, 4, 3], [4, 3, 2], [3, 3, 2], [2, 2, 2], [1, 3, 1], [0, 4, 1]],
+      down:  [[8, 10, 4], [7, 11, 4], [6, 12, 3], [5, 12, 3], [4, 13, 2], [3, 13, 2], [2, 14, 1], [1, 14, 1]],
+      glide: [[9, 5, 3], [8, 5, 3], [7, 5, 3], [6, 4, 3], [5, 4, 2], [4, 4, 2], [3, 4, 2], [2, 4, 1], [1, 5, 1], [0, 5, 1]],
+    }[pose]);
+    return padOutline(c, 11, "#2b2530");
+  }
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 432 — LES DEUX VUES DE TROIS QUARTS (le virage). REFAITES AU 433.
      ╚══════════════════════════════════════════════════════════════════════════
      ⚠️⚠️ QUATRE DIRECTIONS NE FONT PAS UN VIRAGE. Avec profil / face / dos
      seulement, une voiture qui tourne SAUTE d'un sprite à l'autre : elle est de
-     profil, puis d'un coup de face. C'est le défaut que Guillaume a vu. Il faut
-     les diagonales — et huit directions sont exactement ce que le jeu produit
-     déjà pour les personnages.
-     ⚠️ ON EN DESSINE DEUX, PAS QUATRE : nord-est et sud-est. Les deux autres
+     profil, puis d'un coup de face. Il faut les diagonales — et huit directions
+     sont exactement ce que le jeu produit déjà pour les personnages.
+     ⚠️ ON EN DESSINE DEUX, PAS QUATRE : sud-est et nord-est. Les deux autres
      sont leur miroir, comme l'ouest est le miroir de l'est. Une voiture est
      symétrique ; deux dessins du même trois-quarts finiraient par diverger (§8).
 
-     LA CONSTRUCTION : la caisse est décrite comme une SUITE DE TRANCHES
-     VERTICALES le long d'un axe incliné. C'est ce qui donne une fuite juste sans
-     jamais dessiner un trapèze à la main — et c'est la même caisse que le profil
-     (mêmes hauteurs de ceinture et de toit), simplement raccourcie par la
-     perspective et penchée. */
+     ⚠️⚠️ ZIP 433 — LES DEUX PREMIÈRES ÉTAIENT FAUSSES DE TROIS FAÇONS, et les
+     trois ne se voient QU'EN LES METTANT SUR LA MÊME LIGNE DE SOL que le profil
+     (ce que `render-taxi.mjs` ne faisait pas encore) :
+
+       1. ⚠️⚠️ **ELLES FLOTTAIENT.** Le dessin était construit sur un axe qui
+          descendait jusqu'à y = 18, roues comprises, mais annonçait `ground = 23`
+          comme le profil. Au rendu, `py = y·T − ground` : la voiture planait
+          donc CINQ pixels au-dessus de son ombre — à chaque virage, le taxi
+          décollait. Aucune erreur, aucun banc : les cinq vues étaient dessinées
+          côte à côte mais chacune sur sa propre ligne.
+       2. ⚠️⚠️ **LA VUE « NE » MONTRAIT UNE VOITURE QUI ROULE VERS LE NORD-OUEST.**
+          Le nez était en haut à GAUCHE et la poupe en bas à droite : le sens de
+          marche allait donc vers le haut-gauche. Miroir compris (`TAXI_MIRROR`),
+          le taxi partait en biais du mauvais côté une fois sur deux.
+          ⚠️ La règle qui l'évite : **le nez est TOUJOURS à droite** dans les deux
+          dessins, et c'est la HAUTEUR du nez qui distingue le cap — nez BAS pour
+          le sud-est (il vient vers nous), nez HAUT pour le nord-est (il s'en va).
+          Le miroir donne alors sud-ouest et nord-ouest sans y penser.
+       3. ⚠️ **ON DESSINAIT LA FACE DU BOUT LOINTAIN**, qui par construction est
+          tournée à l'opposé de la caméra : ça produisait un plastron crème au
+          bout du capot, qu'on lisait comme une lame de chasse-neige. En trois
+          quarts on voit UN flanc et UN bout, jamais les deux bouts.
+
+     LA CONSTRUCTION : mêmes lignes de ceinture, de toit et de sol que le profil
+     (SILL/BELT/ROOF), plus un FUYANT de trois pixels sur la longueur — le bout
+     lointain est plus haut à l'écran parce qu'il est plus au nord sur la carte.
+     Le flanc et le bout se partagent la largeur ; les roues portent sur la ligne
+     de sol fuyante, jamais sur une horizontale. */
   function taxiQuarterSprite(front) {
-    const Y0 = "#5a4817", Y1 = "#876b30", Y2 = "#b78f26", Y3 = "#d8ad32", Y4 = "#fbcb34", Y5 = "#ffd23a";
+    const Y1 = "#876b30", Y2 = "#b78f26", Y3 = "#d8ad32", Y4 = "#fbcb34", Y5 = "#ffd23a";
     const GLS = "#434f56", GLSL = "#5f7280", TYR = "#141414", TYRL = "#242424";
     const CHR = "#d5cdbe", CHRD = "#9a9488", BLK = "#1a1a18", RED = "#c0322a", LMP = "#ffe9a8";
-    const [c, g] = cv(40, 24);
-    const wheel = (cx, cy, r) => {
-      g.fillStyle = TYR; g.beginPath(); g.ellipse(cx, cy, r, r * 0.92, 0, 0, 7); g.fill();
+    /* ⚠️⚠️ LE CANEVAS EST EXACTEMENT PLUS HAUT DU FUYANT, ET C'EST DÉRIVÉ.
+       Le bout LOINTAIN est DROP pixels plus haut que le bout proche ; son
+       enseigne de toit sort donc du cadre d'autant. Un canevas DÉCOUPE en
+       silence ce qui dépasse (§4 de CLAUDE.md — le haut-de-forme décapité du
+       427) : mon premier jet perdait deux pixels d'enseigne sur les DEUX vues
+       sans que rien ne le dise. On ajoute donc DROP en haut et on décale les
+       trois lignes du profil d'autant — la ligne de sol, elle, ne bouge pas. */
+    const DROP = 2;                                   // le fuyant, en pixels
+    const W = 40, H = 24 + DROP;
+    const [c, g] = cv(W, H);
+    /* ⚠️ CES TROIS LIGNES SONT CELLES DU PROFIL (18 / 11 / 4), DÉCALÉES DU
+       FUYANT ET RIEN D'AUTRE : c'est le même véhicule vu d'ailleurs, et
+       `render-taxi.mjs` échoue si la hauteur de toit ou la ligne de sol
+       divergent. */
+    const SILL = 18 + DROP, BELT = 11 + DROP, ROOF = 4 + DROP;
+    const X0 = 2, X1 = 37;
+    /* Le fuyant. `front` (cap sud-est) : le nez, à droite, vient VERS la caméra,
+       donc il est en bas — le décalage vaut 0 à droite et −DROP à gauche. Cap
+       nord-est : le nez s'en va, il est en haut, et c'est la poupe qui est en
+       bas à gauche. Une seule expression, pas deux dessins. */
+    const sh = (x) => {
+      const t = Math.max(0, Math.min(1, (x - X0) / (X1 - X0)));
+      return Math.round(front ? -DROP * (1 - t) : -DROP * t);
+    };
+    /* Le BOUT VISIBLE est celui qui est en bas : le nez en sud-est, la poupe en
+       nord-est. Il occupe FACE px ; le flanc occupe le reste.
+       ⚠️ SIX PIXELS, PAS ONZE. Un bout large fait un MUSEAU DE CAMION : à
+       quarante pixels de long, ce qu'on lit d'un trois-quarts c'est le FLANC,
+       et le bout n'est qu'un liseré qui dit de quel côté est le nez. Onze
+       pixels sur trente-cinq, c'était un tiers de la voiture en aplat. */
+    const FACE = 6;
+    const faceAtRight = front;
+    const fx0 = faceAtRight ? X1 - FACE : X0;
+    const fx1 = faceAtRight ? X1 : X0 + FACE;
+    const sx0 = faceAtRight ? X0 : X0 + FACE;      // le flanc
+    const sx1 = faceAtRight ? X1 - FACE : X1;
+    // L'habitacle : au-dessus du flanc, en retrait des deux bouts. Il est plus
+    // en retrait du côté du bout LOINTAIN — c'est le capot (ou le coffre) qu'on
+    // voit fuir, et c'est lui qui donne la longueur.
+    const gx0 = sx0 + (faceAtRight ? 9 : 3), gx1 = sx1 - (faceAtRight ? 3 : 9);
+
+    /* ---- 1. LE FLANC, tranche par tranche le long du fuyant. La tranche la
+       plus proche de la caméra est la plus sombre : c'est elle qui tourne le
+       dos au soleil, et c'est ce dégradé qui donne le VOLUME sans une seule
+       diagonale dessinée à la main. */
+    for (let x = sx0; x <= sx1; x++) {
+      const d = sh(x);
+      P(g, x, BELT + d, 1, SILL - BELT, Y3);
+      P(g, x, BELT + d, 1, 1, Y4);                 // arête de ceinture, éclairée
+      P(g, x, SILL - 1 + d, 1, 1, Y1);             // bas de caisse, à l'ombre
+    }
+    /* ---- 2. LE BOUT VISIBLE : capot + calandre, ou coffre + feux. Il est plus
+       COURT que le flanc en hauteur de caisse ? Non : même ceinture, même bas de
+       caisse — c'est la même voiture. Ce qui change, c'est ce qu'on y pose. */
+    for (let x = fx0; x <= fx1; x++) {
+      const d = sh(x);
+      P(g, x, BELT + d, 1, SILL - BELT, Y2);
+      P(g, x, BELT + d, 1, 1, Y3);
+    }
+    /* ---- 3. L'HABITACLE. Toit, montants, vitres latérales, et la vitre de bout
+       (pare-brise ou lunette) qui DÉBORDE sur le bout visible : c'est ce
+       débordement qui vend le trois-quarts, bien plus que la pente du toit. */
+    for (let x = gx0; x <= gx1; x++) {
+      const d = sh(x);
+      P(g, x, ROOF + d, 1, BELT - ROOF, Y4);
+      P(g, x, ROOF + d, 1, 1, Y5);                 // arête de toit
+    }
+    for (let x = gx0 + 2; x <= gx1 - 1; x++) {
+      const d = sh(x);
+      P(g, x, ROOF + 1 + d, 1, BELT - ROOF - 2, GLS);
+      P(g, x, ROOF + 1 + d, 1, 1, GLSL);
+    }
+    { // montant central du flanc
+      const xm = Math.round((gx0 + gx1) / 2) + (faceAtRight ? -1 : 1);
+      P(g, xm, ROOF + 1 + sh(xm), 1, BELT - ROOF - 2, Y3);
+    }
+    { /* La vitre de bout : trois colonnes de plus, du côté du bout visible.
+         ⚠️ Elle est PLUS SOMBRE que les latérales : on la regarde de biais, et
+         une vitre vue de biais réfléchit le ciel au lieu de le laisser passer. */
+      const wx0 = faceAtRight ? gx1 + 1 : gx0 - 3, wx1 = faceAtRight ? gx1 + 3 : gx0 - 1;
+      for (let x = wx0; x <= wx1; x++) {
+        const d = sh(x);
+        P(g, x, ROOF + d, 1, BELT - ROOF, Y4);
+        P(g, x, ROOF + 1 + d, 1, BELT - ROOF - 2, GLSL);
+        P(g, x, ROOF + d, 1, 1, Y5);
+      }
+    }
+    /* ---- 4. LE DAMIER, qui suit le fuyant — et c'est LUI qui vend le
+       trois-quarts, bien plus que la pente du toit : une rangée de carreaux qui
+       monte est une rangée qu'on lit en perspective.
+       ⚠️ IL COURT SUR TOUT LE FLANC ET S'ARRÊTE AU BOUT, exactement comme dans
+       le profil (qui va de pare-chocs à pare-chocs). Un damier qui ne couvrirait
+       que les portières ferait RÉTRÉCIR la bande dès que la voiture tourne — et
+       ce genre d'écart entre deux vues du même objet est la divergence en
+       attente du §8. */
+    for (let x = sx0; x <= sx1; x++) {
+      const d = sh(x);
+      P(g, x, BELT + 1 + d, 1, 3, ((((x - sx0) / 3) | 0) % 2) ? BLK : CHR);
+    }
+    /* ---- 5. LES ACCESSOIRES DU BOUT. ⚠️ TROIS ÉLÉMENTS, PAS CINQ : à six
+       pixels de large, une calandre ET un phare ET une plaque ET un pare-chocs
+       de deux rangées se recouvrent l'un l'autre et ne font plus qu'un pavé
+       crème — c'est ce qu'on lisait comme une caisse à outils posée sur le nez.
+       Le pare-chocs tient sur UNE rangée, son ombre sur la suivante. */
+    if (front) {
+      const d = sh(fx0 + 3);
+      P(g, fx0 + 1, BELT + 3 + d, 4, 3, BLK);                       // calandre
+      P(g, fx0 + 2, BELT + 3 + d, 1, 3, CHRD); P(g, fx0 + 4, BELT + 3 + d, 1, 3, CHRD);
+      P(g, fx1 - 1, BELT + 3 + d, 2, 2, LMP);                       // le phare du coin
+      P(g, fx1 - 1, BELT + 3 + d, 2, 1, "#fff8dd");
+      P(g, fx0, SILL + d, FACE + 1, 1, CHR);                        // pare-chocs
+      P(g, fx0, SILL + 1 + d, FACE + 1, 1, CHRD);
+    } else {
+      const d = sh(fx0 + 3);
+      P(g, fx0, BELT + 3 + d, 2, 3, RED);                           // feu arrière
+      P(g, fx0, BELT + 3 + d, 2, 1, "#e8564a");
+      P(g, fx0 + 3, BELT + 4 + d, 4, 2, CHRD);                      // plaque
+      P(g, fx0 + 3, BELT + 4 + d, 4, 1, CHR);
+      P(g, fx0, SILL + d, FACE + 1, 1, CHR);
+      P(g, fx0, SILL + 1 + d, FACE + 1, 1, CHRD);
+    }
+    /* ---- 6. L'ENSEIGNE DE TOIT, penchée comme le reste. */
+    { const sxg = Math.round((gx0 + gx1) / 2) - 3, d = sh(sxg + 3);
+      P(g, sxg, ROOF - 4 + d, 7, 4, CHR);
+      P(g, sxg + 1, ROOF - 3 + d, 5, 2, BLK); }
+    /* ---- 7. LES ROUES, EN DERNIER ET SUR LA LIGNE DE SOL FUYANTE. La proche
+       (côté bout visible) est un demi-pixel plus grande : c'est tout ce qu'il
+       faut de perspective à cette taille. ⚠️ ELLES PORTENT SUR y = SILL + sh + r,
+       donc la plus basse touche exactement `ground` — c'est ce contrat-là qui
+       manquait et qui faisait planer la voiture. */
+    const wheel = (cx, r) => {
+      const cy = SILL + 1 + sh(cx);
+      g.fillStyle = TYR; g.beginPath(); g.ellipse(cx, cy, r, r * 0.94, 0, 0, 7); g.fill();
       g.fillStyle = TYRL; g.beginPath(); g.ellipse(cx, cy - 0.5, r - 0.9, r - 1.1, 0, 0, 7); g.fill();
       g.fillStyle = CHRD; g.beginPath(); g.ellipse(cx, cy, r - 2.1, r - 2.3, 0, 0, 7); g.fill();
+      P(g, Math.round(cx - r), Math.round(cy + r * 0.94), Math.max(2, Math.round(r * 2)), 1, "#0e0e0e");
     };
-    /* L'axe de la caisse. `front` = on voit l'AVANT (cap sud-est) : le nez est en
-       bas à droite, donc plus PRÈS de la caméra, donc plus bas à l'écran. Cap
-       nord-est : c'est l'arrière qui est en bas à droite. */
-    const X0 = 4, X1 = 35;                 // extrémités de la caisse, en x
-    const yAt = (x) => 8 + ((x - X0) / (X1 - X0)) * 5;   // la fuite : +5 px sur la longueur
-    const BODY = 5, ROOFH = 6;             // hauteur de flanc, hauteur d'habitacle
-    // ---- flanc, tranche par tranche
-    for (let x = X0; x <= X1; x++) {
-      const y = Math.round(yAt(x));
-      const near = (x - X0) / (X1 - X0);
-      P(g, x, y, 1, BODY, near > 0.72 ? Y2 : Y3);        // l'extrémité proche est à l'ombre
-      P(g, x, y, 1, 1, Y4);                              // arête de ceinture
-      P(g, x, y + BODY - 1, 1, 1, Y1);                   // bas de caisse
-    }
-    // ---- habitacle : plus court, centré, posé au-dessus
-    const GX0 = X0 + 8, GX1 = X1 - 10;
-    for (let x = GX0; x <= GX1; x++) {
-      const y = Math.round(yAt(x)) - ROOFH;
-      P(g, x, y, 1, ROOFH, Y4); P(g, x, y, 1, 1, Y5);
-    }
-    // ---- vitres du flanc + la vitre de bout (pare-brise ou lunette)
-    for (let x = GX0 + 2; x <= GX1 - 2; x++) {
-      const y = Math.round(yAt(x)) - ROOFH + 1;
-      P(g, x, y, 1, 4, GLS); P(g, x, y, 1, 1, GLSL);
-    }
-    { const xm = Math.round((GX0 + GX1) / 2);
-      P(g, xm, Math.round(yAt(xm)) - ROOFH + 1, 1, 4, Y3); }   // montant central
-    // ---- le bout proche : face avant ou face arrière, en biais
-    const NX = X1, NY = Math.round(yAt(NX));
-    if (front) {
-      P(g, NX - 1, NY - 4, 4, BODY + 3, Y3); P(g, NX - 1, NY - 4, 4, 1, Y4);   // capot + calandre
-      P(g, NX, NY + 1, 3, 3, BLK);
-      for (let i = 0; i < 3; i++) P(g, NX + i, NY + 1, 1, 3, CHRD);
-      P(g, NX - 2, NY - 2, 3, 3, LMP); P(g, NX - 2, NY - 2, 3, 1, "#fff8dd");  // phare visible
-      P(g, NX - 1, NY + BODY - 1, 4, 2, CHR);                                   // pare-chocs
-      // le pare-brise déborde sur la face
-      P(g, GX1 + 1, Math.round(yAt(GX1)) - ROOFH + 1, 2, 4, GLS);
-    } else {
-      P(g, NX - 1, NY - 3, 4, BODY + 2, Y3); P(g, NX - 1, NY - 3, 4, 1, Y4);   // coffre
-      P(g, NX - 2, NY - 1, 3, 3, RED); P(g, NX - 2, NY - 1, 3, 1, "#e8564a");  // feu arrière
-      P(g, NX, NY + 1, 3, 2, CHRD);                                             // plaque
-      P(g, NX - 1, NY + BODY - 1, 4, 2, CHR);
-      P(g, GX1 + 1, Math.round(yAt(GX1)) - ROOFH + 1, 2, 4, GLS);              // lunette
-    }
-    // ---- le bout lointain, plus petit (perspective)
-    { const FX = X0, FY = Math.round(yAt(FX));
-      P(g, FX - 2, FY, 3, BODY - 1, Y2); P(g, FX - 2, FY, 3, 1, Y3);
-      if (front) { P(g, FX - 2, FY + 1, 2, 2, RED); }
-      else { P(g, FX - 2, FY + 1, 2, 2, LMP); }
-      P(g, FX - 2, FY + BODY - 2, 3, 2, CHRD); }
-    // ---- le damier, qui suit la fuite : c'est lui qui vend le trois-quarts
-    for (let x = X0; x <= X1; x++) {
-      const y = Math.round(yAt(x)) + 1;
-      P(g, x, y, 1, 2, (((x - X0) / 3) | 0) % 2 ? BLK : CHR);
-    }
-    // ---- enseigne de toit, penchée elle aussi
-    { const sx = Math.round((GX0 + GX1) / 2) - 3, sy = Math.round(yAt(sx)) - ROOFH - 4;
-      P(g, sx, sy, 7, 4, CHR); P(g, sx + 1, sy + 1, 5, 2, BLK); }
-    // ---- roues : la proche est plus grande et plus basse
-    { const rx1 = X1 - 6, rx0 = X0 + 6;
-      wheel(rx0, Math.round(yAt(rx0)) + BODY, 3.2);
-      wheel(rx1, Math.round(yAt(rx1)) + BODY + 1, 3.8); }
-    outlineSprite(g, 40, 24, "#2a2110");
-    c.exhaust = front ? { x: X0 - 2, y: Math.round(yAt(X0)) + BODY } : { x: NX + 1, y: NY + BODY };
-    c.ground = 23;
+    if (faceAtRight) { wheel(sx0 + 5, 3.4); wheel(sx1 - 4, 3.9); }
+    else { wheel(sx1 - 5, 3.4); wheel(sx0 + 4, 3.9); }
+    outlineSprite(g, W, H, "#2a2110");
+    /* Le pot d'échappement fume TOUJOURS derrière : côté poupe, donc côté bout
+       visible en nord-est et côté bout lointain en sud-est. */
+    c.exhaust = front ? { x: X0, y: SILL + sh(X0) + 1 } : { x: fx0 + 1, y: SILL + sh(fx0) + 2 };
+    c.ground = 23 + DROP;
     return c;
   }
 
@@ -6753,6 +7309,22 @@ house: house(),
      les miroirs de leurs symétriques (voir taxiQuarterSprite). */
   S.taxi = { e: taxiSprite("e"), s: taxiSprite("s"), n: taxiSprite("n"),
              ne: taxiQuarterSprite(false), se: taxiQuarterSprite(true) };
+  /* Les pigeons et les colombes de la place (433). Même contrat que le taxi :
+     on dessine le profil DROIT, le rendu retourne pour la gauche. */
+  S.birds = {};
+  for (const kind of ["pigeon", "dove"]) {
+    S.birds[kind] = {
+      stand: birdGroundSprite(kind, "stand"),
+      peck: birdGroundSprite(kind, "peck"),
+      walk: birdGroundSprite(kind, "walk"),
+      puff: birdGroundSprite(kind, "puff"),
+      alert: birdGroundSprite(kind, "alert"),
+      down: birdFlySprite(kind, "down"),
+      mid: birdFlySprite(kind, "mid"),
+      up: birdFlySprite(kind, "up"),
+      glide: birdFlySprite(kind, "glide"),
+    };
+  }
   S.craftIcons = { honey: craftIcon("honey"), cheeseWheel: craftIcon("cheeseWheel"), cheesePortion: craftIcon("cheesePortion"), eclairChoco: craftIcon("eclairChoco"), eclairVanilla: craftIcon("eclairVanilla"), flanVanilla: craftIcon("flanVanilla"), gateauBasque: craftIcon("gateauBasque"), butter: craftIcon("butter"), bread: craftIcon("bread"), croissant: craftIcon("croissant"), chocolatine: craftIcon("chocolatine"), painSuisse: craftIcon("painSuisse"), yogurtNature: craftIcon("yogurtNature"), yogurtVanilla: craftIcon("yogurtVanilla") };
   // Zip 236: one sprite per pet id in the catalog (individual pets).
   // Zip 388 : DEUX entrées, et c'est délibéré.
