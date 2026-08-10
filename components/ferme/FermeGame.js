@@ -14774,7 +14774,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            atlas de sprites. */
         const gTiles = sprites.townGrass || sprites.grass;
         if (g === C.G_GRASS) ctx.drawImage(gTiles[(x * 37 + y * 17) % gTiles.length], px, py);
-        else if (g === C.G_PATH) ctx.drawImage(sprites.path, px, py);
+        // ZIP 434 — le revêtement vit dans fermeArt (§ drawTownRoadTile) pour
+        // qu'un banc puisse le REGARDER ; ici on ne garde que le repli.
+        else if (g === C.G_PATH) { if (!A.drawTownRoadTile(ctx, sprites, tw, x, y, px, py)) ctx.drawImage(sprites.path, px, py); }
         else if (g === C.G_PATH_STONE) {
           /* 425 : le dallage n'est plus un damier à deux gris. Un joint clair
              au nord et à l'ouest de chaque dalle suffit à donner du relief, et
@@ -17417,7 +17419,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const gr = tw.ground[i], o = tw.objects[i];
         let col = [92, 158, 78];                                   // herbe
         if (gr === C.G_TOWN_LAWN) col = [76, 140, 66];
-        else if (gr === C.G_PATH) col = [156, 122, 84];
+        /* ZIP 434 — LA CARTE MONTRE LE REVÊTEMENT. Ce n'est pas de la
+           coquetterie : avec toutes les rues de la même couleur de terre, la
+           carte ne disait pas par où l'on TRAVERSE la ville. Le ruban
+           anthracite de la grande artère est maintenant lisible d'un coup
+           d'œil, et c'est exactement ce qu'on demande à un plan. */
+        else if (gr === C.G_PATH) {
+          const rd = tw.road ? tw.road[i] : C.TR_NONE;
+          col = rd === C.TR_ASPHALT ? [66, 68, 74] : rd === C.TR_COBBLE ? [140, 139, 146] : rd === C.TR_BRICK ? [150, 84, 66] : [156, 122, 84];
+        }
         else if (gr === C.G_PATH_STONE) col = [176, 174, 168];
         else if (gr === C.G_TOWN_STAIR) col = [200, 196, 186];
         else if (gr === C.G_WATER) col = [58, 123, 200];

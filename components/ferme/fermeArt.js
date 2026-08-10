@@ -889,6 +889,72 @@ export function candySyrupColor(dp) {
 export const SPR_T = 16;
 const SPR_PUPIL = "#16161a", SPR_OUT = "#241f1c";
 
+/* ══════════════════════════════════════════════════════════════════════════
+   ZIP 434 — PEINDRE UNE CASE DE RUE DE VALLEY TOWN.
+   ──────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ CETTE FONCTION EST ICI, ET PAS DANS LA BOUCLE DE RENDU, POUR UNE SEULE
+   RAISON — LA MÊME QUE `drawCandyGroundTile` ET `drawSeated` : ce qui vit dans
+   la closure de `drawTownFrame` n'est REGARDABLE que par quelqu'un qui joue.
+   La pose assise a passé trois zips tronquée pour exactement ça (427), et le
+   §4 en a fait le piège n°1 du projet. Un revêtement de rue est du DESSIN : il
+   se juge en le regardant, donc il doit pouvoir être appelé par
+   `tools/render-rues.mjs`. Écrit dans la boucle, il aurait fallu le RECOPIER
+   dans le banc — c'est-à-dire mesurer une chose et en livrer une autre.
+
+   Elle rend `true` si elle a peint un revêtement, `false` s'il n'y en a pas
+   (l'appelant pose alors sa terre battue). Deux replis, tous deux voulus :
+   pas de couche `road` sur le monde, ou pas d'atlas `townRoad` sur les sprites.
+   ══════════════════════════════════════════════════════════════════════════ */
+export function drawTownRoadTile(ctx, S, tw, x, y, px, py) {
+  const RS = S && S.townRoad;
+  const rd = (RS && tw.road) ? tw.road[y * tw.w + x] : C.TR_NONE;
+  if (!rd) return false;
+  const T = SPR_T, sup = RS.sup, KW = RS.kerbW;
+  /* La case découpée dans le pavé de 4×4 tuiles : c'est `x % sup` qui fait que
+     les pierres TRAVERSENT les bords de case au lieu de s'arrêter dessus. Toute
+     la différence avec l'ancienne tuile unique est là. */
+  const atlas = rd === C.TR_ASPHALT ? RS.asphalt : rd === C.TR_BRICK ? RS.brick : RS.cobble;
+  const ax = (x % sup) * T, ay = (y % sup) * T;
+  ctx.drawImage(atlas, ax, ay, T, T, px, py, T, T);
+
+  // LA LIGNE BLANCHE, à cheval sur l'axe de la chaussée — un pixel au sud de la
+  // rangée du dessus, un pixel au nord de celle du dessous. L'axe est DÉRIVÉ,
+  // comme la chaussée : la ligne ne peut donc pas se décentrer.
+  const axis = C.TOWN_MAIN_ST_Y0 + C.TOWN_MAIN_ST_W / 2;
+  // ⚠️ ET ELLE S'INTERROMPT AUX CARREFOURS, comme une vraie. Une ligne continue
+  // à travers une intersection est le détail qui trahit tout de suite le décor.
+  const cut = C.TOWN_ST_COLS.some((cx) => x >= cx - 1 && x <= cx + 2);
+  if (rd === C.TR_ASPHALT && (y === axis - 1 || y === axis) && !cut) {
+    const ly = (y === axis) ? py : py + T - 1;
+    const ON = 14, PER = 32;                 // 14 px de trait, 18 de vide, sur deux cases
+    const base = Math.floor(px / PER) * PER;
+    ctx.fillStyle = "#d6d4c8";               // blanc sali : un blanc pur ferait néon
+    for (const s of [base, base + PER]) {
+      const a = Math.max(px, s), b = Math.min(px + T, s + ON);
+      if (b > a) ctx.fillRect(a, ly, b - a, 1);
+    }
+  }
+
+  /* LES REBORDS. ⚠️ ILS SE POSENT CONTRE CE QUI N'EST PAS DALLÉ, jamais contre
+     « un autre revêtement ». Testé sur le revêtement, un carrefour où le goudron
+     croise les pavés se serait retrouvé CEINT DE BORDURES — une rue barrée par
+     un trottoir à chaque intersection, avec le taxi passant au travers. On teste
+     donc le SOL : dallé (rue, allée, esplanade) → rien ; herbe, eau, marche →
+     bordure. La place n'est pas coupée, les allées débouchent, les carrefours
+     restent ouverts. */
+  const paved = (xx, yy) => {
+    if (xx < 0 || yy < 0 || xx >= tw.w || yy >= tw.h) return false;
+    const gg = tw.ground[yy * tw.w + xx];
+    return gg === C.G_PATH || gg === C.G_PATH_STONE;
+  };
+  const kb = rd === C.TR_BRICK ? RS.kerbBrick : RS.kerb;
+  if (!paved(x, y - 1)) ctx.drawImage(kb.n, ax, 0, T, KW, px, py, T, KW);
+  if (!paved(x, y + 1)) ctx.drawImage(kb.s, ax, 0, T, KW, px, py + T - KW, T, KW);
+  if (!paved(x - 1, y)) ctx.drawImage(kb.w, 0, ay, KW, T, px, py, KW, T);
+  if (!paved(x + 1, y)) ctx.drawImage(kb.e, 0, ay, KW, T, px + T - KW, py, KW, T);
+  return true;
+}
+
 function sprCv(w, h) {
   const c = document.createElement("canvas");
   c.width = w; c.height = h;
@@ -3893,6 +3959,347 @@ export function buildSprites() {
     for (let i = 0; i < 10; i++) { const x = (r() * 13) | 0, y = (r() * 13) | 0; P(g, x, y, 3, 2, "#a89878"); P(g, x, y, 2, 1, "#c8b898"); }
     return c;
   }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     ZIP 434 — LES REVÊTEMENTS DE VALLEY TOWN : GOUDRON, PAVÉS, BRIQUES.
+     ──────────────────────────────────────────────────────────────────────────
+     Demande de Guillaume, sur planche de référence : « des tuiles ou groupes de
+     tuiles ASSEMBLABLES qui ont des motifs bien plus complexes qu'à l'heure
+     actuelle ». Ce qu'il y avait, c'était `pathTile()` juste au-dessus : UNE
+     tuile de 16×16, dix taches, recopiée à l'identique sur les cinq mille cases
+     de rue de la ville. À l'écran, une moquette.
+
+     ⚠️⚠️ CE QUI CHANGE N'EST PAS LE NOMBRE DE DÉTAILS, C'EST LA PÉRIODE. Une
+     tuile seule se répète tous les 16 px et l'œil voit la grille avant de voir
+     le dessin — quelle que soit sa finesse. On dessine donc un PAVÉ DE QUATRE
+     TUILES SUR QUATRE (64×64), d'un seul tenant, et le rendu y découpe la case
+     dont il a besoin (`x % 4`, `y % 4`). Les pavés, les briques, les fissures
+     traversent les bords de case : la grille disparaît, et la période passe de
+     16 à 64 px.
+
+     ⚠️ LE MOTIF DOIT BOUCLER SUR LUI-MÊME, sinon on a juste déplacé la couture
+     de 16 à 64 px — et une couture tous les quatre carreaux est PIRE qu'un
+     motif régulier, parce qu'elle dessine une deuxième grille. Toute forme est
+     donc peinte par `wrap()`, qui la dessine aussi à −64 et +64 : un pavé à
+     cheval sur le bord droit réapparaît, exactement, sur le bord gauche.
+     Verticalement, les hauteurs de rang sont choisies pour tomber juste sur 64.
+
+     ⚠️ AUCUN `translate`, AUCUN `rotate`, AUCUN `fillText` (§4) : tout est en
+     `fillRect`, donc tout est rastérisable par `tools/lib-canvas.mjs` — c'est
+     ce qui rend `tools/render-rues.mjs` possible, et c'est la seule façon de
+     REGARDER ce dessin sans lancer le jeu.
+     ══════════════════════════════════════════════════════════════════════════ */
+  const ROAD_SUP = 4;                     // période du motif, en tuiles
+  const ROAD_N = ROAD_SUP * T;            // 64 px de côté
+
+  /* Le peintre à bouclage. Toute la propriété « assemblable » tient dans ces
+     trois lignes : on peint la même forme trois fois, décalée d'une période à
+     gauche et à droite. Le canevas découpe le reste tout seul — pour une fois,
+     c'est le piège du §4 qui rend service. */
+  function roadWrap(g, x, y, w, h, col) {
+    P(g, x - ROAD_N, y, w, h, col);
+    P(g, x, y, w, h, col);
+    P(g, x + ROAD_N, y, w, h, col);
+  }
+
+  /* Une répartition de `total` en `n` largeurs entières JAMAIS ÉGALES et dont
+     la somme fait exactement `total`. C'est ce qui garantit le bouclage : une
+     rangée de pavés dont la somme déborderait d'un pixel décalerait tout le
+     rang suivant, et la couture reviendrait. */
+  function roadSplit(total, n, r, jitter) {
+    const w = new Array(n).fill(Math.floor(total / n));
+    for (let k = 0; k < total - w[0] * n; k++) w[k]++;
+    // Le jitter est un TRANSFERT (on prend à l'un, on donne à l'autre) : la
+    // somme est invariante par construction, jamais recalculée.
+    for (let k = 0; k < n * 3; k++) {
+      const a = (r() * n) | 0, b = (r() * n) | 0;
+      if (a === b || w[a] <= jitter[0] + 1 || w[b] >= jitter[1]) continue;
+      w[a]--; w[b]++;
+    }
+    return w;
+  }
+
+  /* ------------------------------------------------------------- LES PAVÉS
+     Référence « bruine et pavés de rue » : des pierres grises irrégulières,
+     posées en rangs décalés, joint sombre, chacune biseautée. Ce sont les
+     TROIS choses qui font la différence avec un damier, et aucune n'est
+     coûteuse : le rang décalé (aucun joint vertical continu), le biseau
+     (lumière au nord-ouest, ombre au sud-est — le pavé est bombé), et la
+     teinte tirée par pierre (une rue n'est pas monochrome). */
+  function townCobbleSurface() {
+    const [c, g] = cv(ROAD_N, ROAD_N), r = makeRnd(0x5a17);
+    const MORTAR = "#403f47";
+    P(g, 0, 0, ROAD_N, ROAD_N, MORTAR);
+    for (let i = 0; i < 900; i++) P(g, (r() * ROAD_N) | 0, (r() * ROAD_N) | 0, 1, 1, r() < 0.5 ? "#4a4950" : "#37363c");
+    /* Les corps de pierre. Deux familles : le gris bleuté dominant, et une
+       minorité de pierres chaudes ou sombres — c'est cette minorité qui empêche
+       la rue de virer au béton. */
+    const BODY = ["#9b9aa2", "#a5a4ac", "#918f98", "#a9a8b0", "#97969e", "#8b8992", "#a0a0a8", "#8e8c93", "#9d9ba3", "#a7a6ad", "#8f8d94", "#93918a"];
+    const LIT = ["#b8b7bf", "#c0bfc6", "#adacb4", "#c4c3ca", "#b3b2ba", "#a7a5ae", "#bcbcc3", "#aaa8b0", "#b9b8c0", "#c2c1c8", "#aba9b1", "#afada6"];
+    const DRK = ["#6e6d75", "#76757d", "#66646d", "#7a7981", "#6a6971", "#605f67", "#727179", "#63616a", "#706f77", "#787780", "#646269", "#67655f"];
+    // 64 = 5×8 + 6×4 : douze rangs, pas un pixel de reste (voir l'en-tête).
+    const ROWH = [5, 6, 5, 5, 6, 5, 5, 6, 5, 5, 6, 5];
+    let y = 0;
+    for (let row = 0; row < ROWH.length; row++) {
+      const rh = ROWH[row];
+      const n = 7 + ((r() * 3) | 0);                 // 7 à 9 pierres par rang
+      const ws = roadSplit(ROAD_N, n, r, [5, 13]);
+      let x = (r() * ROAD_N) | 0;                    // décalage du rang : aucun joint vertical continu
+      for (let s = 0; s < n; s++) {
+        /* ⚠️ LE PREMIER JET DONNAIT DU PAPIER BULLE, et c'est le banc qui l'a
+           montré (six tuiles assemblées, pas une seule) : toutes les pierres
+           avaient la MÊME hauteur, le MÊME biseau complet et les MÊMES quatre
+           coins mangés, donc le pavage se lisait comme une grille de pastilles
+           identiques — exactement le défaut qu'on prétendait corriger, à une
+           échelle plus grosse. Trois irrégularités le cassent, et aucune ne
+           coûte : une pierre sur trois est plus BASSE d'un pixel (parfois
+           enfoncée d'un pixel, ce qui creuse le joint), le biseau clair ne
+           couvre qu'une PARTIE de l'arête, et les coins sont mangés au hasard. */
+        const shrink = r() < 0.34 ? 1 : 0, sink = shrink && r() < 0.5 ? 1 : 0;
+        const w = ws[s] - 1, h = rh - 1 - shrink, yy = y + sink;
+        const k = (r() * BODY.length) | 0;
+        roadWrap(g, x, yy, w, h, BODY[k]);
+        // Coins mangés : un pavé taillé n'a pas d'angle droit, et c'est ce
+        // détail-là qui le sépare d'un carrelage.
+        if (r() < 0.85) roadWrap(g, x, yy, 1, 1, MORTAR);
+        if (r() < 0.85) roadWrap(g, x + w - 1, yy, 1, 1, MORTAR);
+        if (r() < 0.65) roadWrap(g, x, yy + h - 1, 1, 1, MORTAR);
+        if (r() < 0.65) roadWrap(g, x + w - 1, yy + h - 1, 1, 1, MORTAR);
+        // Biseau PARTIEL : l'arête éclairée démarre où elle veut et s'arrête
+        // avant le bout. C'est cette seule ligne qui sort le pavé de la pastille.
+        const lo = 1 + ((r() * 2) | 0), hi = w - 1 - ((r() * 3) | 0);
+        if (hi > lo) roadWrap(g, x + lo, yy, hi - lo, 1, LIT[k]);
+        roadWrap(g, x, yy + 1, 1, Math.max(0, h - 2 - ((r() * 2) | 0)), LIT[k]);
+        const dlo = 1 + ((r() * 3) | 0);
+        if (w - 1 > dlo) roadWrap(g, x + dlo, yy + h - 1, w - 1 - dlo, 1, DRK[k]);
+        roadWrap(g, x + w - 1, yy + 1, 1, h - 2, DRK[k]);
+        // Grain de la pierre : deux ou trois pixels, jamais sur le biseau.
+        for (let q = 0; q < 2 + ((r() * 2) | 0); q++) {
+          const gx = x + 1 + ((r() * Math.max(1, w - 2)) | 0), gy = yy + 1 + ((r() * Math.max(1, h - 2)) | 0);
+          roadWrap(g, gx, gy, 1, 1, r() < 0.5 ? DRK[k] : LIT[k]);
+        }
+        // Une pierre sur douze est enfoncée : de l'eau y stagne, elle est plus
+        // sombre et plus terne. C'est ce qui donne la « bruine » sans peindre
+        // de flaque (la météo est du ressort du jeu, pas de la tuile).
+        if (r() < 0.085) { roadWrap(g, x + 1, yy + 1, w - 2, h - 2, "#75747c"); }
+        x += ws[s];
+      }
+      y += rh;
+    }
+    // Mousse et sable dans les joints, en tout dernier : ça passe PAR-DESSUS les
+    // pierres comme dans la vraie vie, et ça casse la régularité du joint.
+    for (let i = 0; i < 40; i++) {
+      const gx = (r() * ROAD_N) | 0, gy = (r() * ROAD_N) | 0;
+      roadWrap(g, gx, gy, 1 + ((r() * 2) | 0), 1, r() < 0.45 ? "#5b6a4e" : "#6b665a");
+    }
+    return c;
+  }
+
+  /* ------------------------------------------------------------ LE GOUDRON
+     Référence « nuit et pavé sombre », mais élargie et de jour : un gris
+     ANTHRACITE, jamais uniforme. Ce qui fait un bitume crédible tient en
+     quatre couches, dans cet ordre : le grain (des milliers de pixels de trois
+     gris voisins), les REPRISES (des rustines d'une autre teinte, aux bords
+     mous — c'est le détail qui dit « on a ouvert la chaussée ici »), les
+     FISSURES (des lignes brisées d'un pixel), et le gravillon clair qui
+     accroche la lumière. */
+  function townAsphaltSurface() {
+    const [c, g] = cv(ROAD_N, ROAD_N), r = makeRnd(0x2b93);
+    P(g, 0, 0, ROAD_N, ROAD_N, "#3c3d42");
+    /* ⚠️ LE PREMIER JET AVAIT UN ÉCART-TYPE DE 8,7 SUR TREIZE COULEURS, et
+       `render-rues.mjs` l'a refusé avant que Guillaume ne le voie : c'était un
+       aplat anthracite avec du bruit dessus, pas du bitume. Ce qui manquait est
+       ce qu'on voit vraiment en baissant les yeux sur une chaussée — LE
+       GRANULAT. Un enrobé n'est pas gris : c'est du gravier clair noyé dans du
+       noir, et à 16 px par case c'est le seul détail qui porte la matière.
+       Douze tons de liant, puis les cailloux par-dessus. */
+    const GRAIN = ["#36373c", "#42434a", "#3a3b40", "#45464d", "#333438", "#2e2f34",
+                   "#484951", "#3e3f45", "#313237", "#4b4c54", "#383940", "#414248"];
+    for (let i = 0; i < 3200; i++) {
+      P(g, (r() * ROAD_N) | 0, (r() * ROAD_N) | 0, 1, 1, GRAIN[(r() * GRAIN.length) | 0]);
+    }
+    // Le granulat : des cailloux d'un ou deux pixels, plus clairs que le liant,
+    // avec pour une part sur trois un pixel d'ombre au sud — c'est ce relief
+    // minuscule qui empêche la chaussée de se lire comme du feutre.
+    /* ⚠️ ET IL EN FAUT MOINS QU'ON NE CROIT. Premier réglage : 260 cailloux
+       jusqu'à #6f7079, et la planche assemblée montrait du POIVRE ET SEL — à
+       l'échelle du jeu (une case = 16 px), un granulat trop clair et trop dense
+       scintille au défilement au lieu de faire de la matière. On en pose 170,
+       plafonnés deux tons plus bas. La règle est celle du §8 : ce qui porte la
+       matière est l'écart de valeur, pas la quantité de points. */
+    const STONE = ["#55565e", "#5b5c64", "#4f5058", "#61626b", "#525359", "#585a62", "#5e5f68", "#646570"];
+    for (let i = 0; i < 170; i++) {
+      const sx = (r() * ROAD_N) | 0, sy = (r() * ROAD_N) | 0, sw = r() < 0.35 ? 2 : 1;
+      const k = (r() * STONE.length) | 0;
+      roadWrap(g, sx, sy, sw, 1, STONE[k]);
+      if (r() < 0.34) roadWrap(g, sx, sy + 1, sw, 1, "#2d2e33");
+    }
+    // Quelques granulats CHAUDS : un enrobé contient du silex et du grès, et
+    // deux ou trois taches ocres suffisent à sortir le gris du camaïeu bleuté.
+    for (let i = 0; i < 34; i++) P(g, (r() * ROAD_N) | 0, (r() * ROAD_N) | 0, 1, 1, r() < 0.5 ? "#585044" : "#63594a");
+    // Les traces d'huile : les plus sombres du dessin, mais discrètes — deux
+    // taches franches se répéteraient tous les quatre carreaux et dessineraient
+    // à elles seules la période du motif (vu sur la planche assemblée).
+    for (let i = 0; i < 2; i++) {
+      const ox = (r() * ROAD_N) | 0, oy = (r() * ROAD_N) | 0;
+      for (let k = 0; k < 3 + ((r() * 3) | 0); k++) roadWrap(g, ox + ((r() * 5) | 0), oy + k, 2 + ((r() * 3) | 0), 1, "#303137");
+    }
+    /* Les reprises d'enrobé. ⚠️ PREMIER JET REFUSÉ EN REGARDANT LA PLANCHE : des
+       RECTANGLES GRIS bien nets, qui se lisaient comme un bogue d'affichage et
+       pas comme une chaussée rapiécée. Deux corrections, et la seconde est la
+       vraie : un écart de teinte deux fois plus faible (une reprise est de
+       l'enrobé, pas du béton), et un bord qui DÉRIVE — l'inset de chaque ligne
+       suit une marche aléatoire au lieu d'être retiré au hasard, ce qui donne
+       un contour continu et mou plutôt qu'une frange en dents de scie.
+       ⚠️ Et on repose du granulat PAR-DESSUS (plus bas) : sans ça, la rustine
+       reste une zone lisse au milieu d'un sol grenu, ce qui la redessine. */
+    for (let p = 0; p < 4; p++) {
+      const px0 = (r() * ROAD_N) | 0, py0 = (r() * ROAD_N) | 0;
+      const pw = 11 + ((r() * 16) | 0), ph = 9 + ((r() * 13) | 0);
+      const col = r() < 0.5 ? "#37383d" : "#414248";
+      let a = 0, b = 0;
+      for (let k = 0; k < ph; k++) {
+        a += (r() < 0.5 ? 1 : -1) * (r() < 0.55 ? 1 : 0); b += (r() < 0.5 ? 1 : -1) * (r() < 0.55 ? 1 : 0);
+        a = Math.max(-2, Math.min(2, a)); b = Math.max(-2, Math.min(2, b));
+        roadWrap(g, px0 + a, py0 + k, pw + b - a, 1, col);
+        roadWrap(g, px0 + a, py0 + k, 1, 1, "#2f3035");        // joint d'émulsion, côté gauche
+        roadWrap(g, px0 + pw + b - 1, py0 + k, 1, 1, "#2f3035");
+      }
+      // Le granulat de la reprise, sinon elle reste une tache lisse.
+      for (let i = 0; i < pw * ph / 7; i++) {
+        roadWrap(g, px0 + ((r() * pw) | 0), py0 + ((r() * ph) | 0), 1, 1, r() < 0.3 ? "#575860" : "#33343a");
+      }
+    }
+    // Les fissures : une marche aléatoire, jamais une droite.
+    for (let f = 0; f < 7; f++) {
+      let fx = (r() * ROAD_N) | 0, fy = (r() * ROAD_N) | 0;
+      const horiz = r() < 0.55, len = 10 + ((r() * 26) | 0);
+      for (let k = 0; k < len; k++) {
+        roadWrap(g, fx, fy, 1, 1, "#2a2b2f");
+        if (r() < 0.25) roadWrap(g, fx, fy + 1, 1, 1, "#4a4b52");   // la lèvre éclairée de la fissure
+        if (horiz) { fx++; fy += r() < 0.22 ? (r() < 0.5 ? 1 : -1) : 0; }
+        else { fy++; fx += r() < 0.22 ? (r() < 0.5 ? 1 : -1) : 0; }
+        fx = ((fx % ROAD_N) + ROAD_N) % ROAD_N; fy = ((fy % ROAD_N) + ROAD_N) % ROAD_N;
+      }
+    }
+    // Gravillon : le seul endroit où le bitume est clair.
+    for (let i = 0; i < 90; i++) P(g, (r() * ROAD_N) | 0, (r() * ROAD_N) | 0, 1, 1, r() < 0.3 ? "#6a6b73" : "#55565d");
+    return c;
+  }
+
+  /* ------------------------------------------------------------ LES BRIQUES
+     Référence « vent et pavés en brique » : une allée en appareil à demi-brique
+     (running bond), chaude, très usée. La brique fait 8×4 avec son joint —
+     deux par case et quatre rangs par case, donc le motif tombe juste sur 64
+     dans les deux sens et le décalage d'un demi-module se répète tous les deux
+     rangs. Rien à faire boucler ici : la géométrie est déjà périodique. C'est
+     la COULEUR qui porte tout le travail (dix teintes, des briques cuites plus
+     que les autres, des éclats, de la mousse au joint). */
+  function townBrickSurface() {
+    const [c, g] = cv(ROAD_N, ROAD_N), r = makeRnd(0x7c41);
+    const JOINT = "#4d3a30";
+    P(g, 0, 0, ROAD_N, ROAD_N, JOINT);
+    for (let i = 0; i < 700; i++) P(g, (r() * ROAD_N) | 0, (r() * ROAD_N) | 0, 1, 1, r() < 0.5 ? "#584338" : "#443129");
+    /* Treize teintes de terre cuite, et c'est un minimum mesuré : à dix,
+       `render-rues.mjs` comptait 37 couleurs sur l'ensemble du pavé, soit
+       moins que les pavés gris — une allée de briques MOINS variée qu'une rue
+       en pierre est un contresens, la brique est le matériau qui varie le
+       plus d'une pièce à l'autre (four, argile, cuisson). */
+    /* ⚠️ ET ELLES SONT ROMPUES, PAS ÉCARLATES. Premier jet : treize rouges vifs,
+       et la planche donnait un MUR DE BRIQUE NEUF posé à plat — or c'est l'allée
+       d'un cimetière, à l'ombre, foulée depuis cent ans. Chaque teinte est
+       rabattue vers le brun-gris, et trois d'entre elles sont franchement
+       délavées : ce sont ces trois-là, à raison d'une brique sur quatre, qui
+       font la différence entre un pavage ancien et un échantillon de catalogue. */
+    const BODY = ["#8d5443", "#82493c", "#96604c", "#764438", "#8a5140", "#9b6952", "#7e4c3e", "#905946", "#6d4a3e", "#a07358", "#856049", "#944f3f", "#725045"];
+    const LIT = ["#a56b58", "#9a604f", "#ae7660", "#8e5a4b", "#a26855", "#b17e66", "#966253", "#a87059", "#835e50", "#b6886b", "#9c775d", "#aa6553", "#8a6659"];
+    const DRK = ["#653c2f", "#5c3428", "#6e4535", "#523026", "#63392c", "#714b38", "#59372b", "#673f31", "#4d372d", "#78543e", "#5f4433", "#6a3729", "#523b32"];
+    const BW = 8, BH = 4;                    // module brique + joint
+    for (let row = 0; row * BH < ROAD_N; row++) {
+      const y = row * BH;
+      const off = (row % 2) ? BW / 2 : 0;    // appareil à demi-brique
+      for (let col = -1; col * BW < ROAD_N; col++) {
+        const x = col * BW + off;
+        const k = (r() * BODY.length) | 0;
+        const w = BW - 1, h = BH - 1;
+        roadWrap(g, x, y, w, h, BODY[k]);
+        roadWrap(g, x, y, w, 1, LIT[k]);                 // arête supérieure, éclairée
+        roadWrap(g, x, y + h - 1, w, 1, DRK[k]);         // pied de brique, dans l'ombre du joint
+        roadWrap(g, x + w - 1, y, 1, h, DRK[k]);
+        // Usure : un éclat de coin, une brique fendue, une brique bien plus
+        // cuite. Une brique sur cinq porte l'un des trois.
+        const wear = r();
+        if (wear < 0.10) { roadWrap(g, x + w - 1, y, 1, 1, JOINT); roadWrap(g, x + w - 2, y, 1, 1, JOINT); }
+        else if (wear < 0.18) roadWrap(g, x + 2 + ((r() * 3) | 0), y + 1, 1, h - 1, DRK[k]);
+        else if (wear < 0.24) roadWrap(g, x + 1, y + 1, w - 2, h - 2, "#6a4033");
+        // Grain de terre cuite.
+        for (let q = 0; q < 2; q++) roadWrap(g, x + ((r() * w) | 0), y + 1 + ((r() * (h - 1)) | 0), 1, 1, r() < 0.5 ? LIT[k] : DRK[k]);
+      }
+    }
+    // Mousse dans les joints — une allée de cimetière est à l'ombre et peu
+    // passante. C'est le seul vert du dessin, il porte donc tout le « lieu ».
+    for (let i = 0; i < 70; i++) {
+      const gx = (r() * ROAD_N) | 0, gy = ((r() * (ROAD_N / BH)) | 0) * BH + BH - 1;
+      roadWrap(g, gx, gy, 1 + ((r() * 3) | 0), 1, r() < 0.6 ? "#57603f" : "#4a5236");
+    }
+    for (let i = 0; i < 30; i++) P(g, (r() * ROAD_N) | 0, (r() * ROAD_N) | 0, 1, 1, "#6d5a44");   // sable
+    return c;
+  }
+
+  /* --------------------------------------------------------- LES REBORDS
+     « N'oublie pas les rebords gris comme sur la ref. » Une bordure de trottoir,
+     et c'est elle qui transforme une bande de texture en RUE : sans elle, le
+     pavé se termine dans l'herbe comme une nappe posée, exactement le défaut
+     que le 425 avait déjà corrigé sur la place (§ « LA BORDURE »).
+
+     ⚠️ ELLE EST DESSINÉE DEHORS, PAS DEDANS. Le rebord occupe les 4 px de la
+     case CÔTÉ EXTÉRIEUR : sa face claire regarde l'herbe, son ombre tombe sur la
+     chaussée, et le caniveau (deux pixels plus sombres) est du côté route. Une
+     bordure symétrique n'aurait aucun relief.
+     ⚠️ ET ELLE EST DÉBITÉE EN PIERRES DE TAILLE, tous les 8 px, avec un joint :
+     une bordure d'un seul tenant sur trente cases se lit comme un trait de
+     crayon. Le débit est calé sur la période du motif, donc il s'assemble avec
+     lui.
+     Les quatre orientations sont BAKÉES séparément : le faux canevas des bancs
+     ignore `translate`/`rotate` (§4), donc une bordure obtenue par transformation
+     serait invisible là où on veut la regarder. */
+  function townKerbStrip(side, tone) {
+    const horiz = (side === "n" || side === "s");
+    const KW = 4;                                   // épaisseur de la bordure
+    const [c, g] = cv(horiz ? ROAD_N : KW, horiz ? KW : ROAD_N);
+    const r = makeRnd(side.charCodeAt(0) * 977 + tone.length);
+    /* `u` = le long de la bordure, `v` = en travers, 0 étant TOUJOURS le côté
+       extérieur. Une seule description géométrique pour les quatre côtés — deux
+       auraient divergé au premier réglage (§8). */
+    const put = (u, v, lu, lv, col) => {
+      const vv = (side === "s" || side === "e") ? KW - v - lv : v;   // sud/est : l'extérieur est de l'autre bord
+      if (horiz) P(g, u, vv, lu, lv, col); else P(g, vv, u, lv, lu, col);
+    };
+    const face = tone.face, top = tone.top, dark = tone.dark, gut = tone.gutter;
+    put(0, 0, ROAD_N, KW, face);
+    put(0, 0, ROAD_N, 1, top);                       // nez de bordure, éclairé
+    put(0, KW - 1, ROAD_N, 1, gut);                  // caniveau, côté chaussée
+    for (let u = 0; u < ROAD_N; u++) {               // grain de la pierre
+      if (r() < 0.30) put(u, 1 + ((r() * (KW - 2)) | 0), 1, 1, r() < 0.5 ? top : dark);
+    }
+    /* Le débit en pierres de taille : un joint plein, une ombre à sa droite.
+       ⚠️ LE JOINT PART DE `v = 1`, PAS DE `v = 0`, ET C'EST MESURÉ. Coupé sur
+       toute l'épaisseur, il hachait le nez de bordure tous les huit pixels :
+       `render-rues.mjs` ne trouvait plus que 7 px de gris clair d'affilée là où
+       il en attend seize, et — c'est ça le vrai problème — le contrôle « aucun
+       trottoir ne barre le carrefour » n'avait plus de quoi distinguer un nez
+       de bordure d'un simple biseau de pavé. Un nez continu est de toute façon
+       la bonne lecture en pixel art : c'est l'arête qui accroche la lumière,
+       le joint se lit en dessous. */
+    for (let u = 0; u < ROAD_N; u += 8) {
+      put(u, 1, 1, KW - 1, dark);
+      put(u + 1, 1, 1, KW - 2, tone.faceAlt);
+    }
+    return c;
+  }
+
+  const KERB_STONE = { face: "#a8a69e", top: "#c6c4bb", dark: "#6f6d67", faceAlt: "#b2b0a7", gutter: "#5d5b58" };
+  const KERB_BRICK = { face: "#8f5a44", top: "#b07a5e", dark: "#5f3a2c", faceAlt: "#9c6650", gutter: "#4d3a30" };
 
   /* ---------------- Objets ---------------- */
   function oakTree() {
@@ -7172,6 +7579,21 @@ export function buildSprites() {
     bridgeStoneSprite: bridgeStoneTile(),
     grassPatch: grassTile(0), // icône outil Construction/aperçu pour l'herbe (chantier 2026-07), simple réutilisation d'une tuile d'herbe existante
     path: pathTile(),
+    /* ZIP 434 — LES REVÊTEMENTS DE VALLEY TOWN. Un seul objet plutôt que six
+       entrées à la racine : le rendu en a besoin ENSEMBLE (la surface et son
+       rebord), et `sup` voyage avec eux — le jour où la période passe de 4 à 6,
+       le rendu n'a rien à savoir. C'est le même raisonnement que `S.birds`. */
+    townRoad: {
+      sup: ROAD_SUP,
+      kerbW: 4,
+      asphalt: townAsphaltSurface(),
+      cobble: townCobbleSurface(),
+      brick: townBrickSurface(),
+      // Bordure de pierre pour le goudron et les pavés, bordure de brique
+      // debout (« soldier course ») pour l'allée du cimetière.
+      kerb: { n: townKerbStrip("n", KERB_STONE), s: townKerbStrip("s", KERB_STONE), e: townKerbStrip("e", KERB_STONE), w: townKerbStrip("w", KERB_STONE) },
+      kerbBrick: { n: townKerbStrip("n", KERB_BRICK), s: townKerbStrip("s", KERB_BRICK), e: townKerbStrip("e", KERB_BRICK), w: townKerbStrip("w", KERB_BRICK) },
+    },
     oak: oakTree(),
     pine: pineTree(),
     deadTree: deadTree(),

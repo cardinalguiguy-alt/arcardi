@@ -4,7 +4,8 @@ Ce fichier est **l'autorité** sur les bancs du projet. Il a été extrait de `C
 zip 432, sur l'ordre laissé par son §14.2 : « le jour où la liste dépasse la moitié du
 chapitre, elle part dans un `tools/README.md` — en ne gardant là-bas QUE ce qui n'existe pas ».
 Le 432 a ajouté deux entrées (`render-ruche.mjs`, `fake-supabase.mjs`) et l'a fait basculer.
-Le 433 en ajoute trois (`verify-taxi`, `render-taxi`, `render-oiseaux`).
+Le 433 en ajoute trois (`verify-taxi`, `render-taxi`, `render-oiseaux`), le 434 une
+(`render-rues`).
 
 ⚠️ **`CLAUDE.md` ne garde que la liste des bancs ABSENTS**, et c'est délibéré : c'est elle qui
 protège du banc imaginaire (§14.6 — le 425 décrivait `verify-vallee.mjs` « 74 contrôles, 74/74 »
@@ -72,7 +73,20 @@ jamais recopié d'un zip précédent sans relance.
   tribunal, décalée de six pixels **depuis le 425**. ⚠️ Il ne teste QUE les façades censées
   être symétriques : l'hôtel de ville est asymétrique exprès (beffroi décalé) et l'église porte
   son clocher sur le flanc — les y inscrire reviendrait à demander un jour qu'on les corrige.
-- **`tools/verify-taxi.mjs` — 18 contrôles, 18/18 (433 ; 12 au 432).** Il rejoue les
+- **`tools/verify-taxi.mjs` — 15 contrôles, 15/15 (relancé au 434).**
+  ⚠️ **Il était écrit ici « 18 contrôles, 18/18 » : c'était FAUX.** Le fichier du 433 en compte
+  quinze — vérifié en le relançant tel quel depuis git. Le chiffre avait été estimé, pas
+  obtenu ; c'est exactement ce que la règle d'entrée en tête de ce fichier interdit, et ça
+  s'est glissé dans le zip qui a écrit la règle.
+  ⚠️⚠️ **ET SON CONTRÔLE D'AXE A CHANGÉ D'UNITÉ AU 434** — même famille de défaut de banc qu'au
+  433. Il exigeait un écart absolu de moins de **0,22 case**, seuil qui n'a de sens que dans
+  une ville faite de rues de deux cases (où 0,5 = « collé au trottoir »). L'artère élargie à
+  quatre cases l'a fait échouer sur une conduite **meilleure** : mesuré par largeur de rue,
+  **0,180 de demi-chaussée sur les rues de deux, 0,156 sur l'artère de quatre**. On mesure donc
+  la fraction de demi-chaussée (0 = sur l'axe, 1 = roue sur la bordure) : **0,177** aujourd'hui,
+  et l'écart en cases reste imprimé à côté. Ce n'est pas un seuil desserré, c'est une unité qui
+  a un sens à toutes les largeurs.
+  Il rejoue les
   **132 trajets** de la ville image par image avec la VRAIE conduite du moteur
   (`E.taxiStep`) : arrivée, chaussée, ralentissement en courbe, distance de
   freinage.
@@ -118,6 +132,24 @@ jamais recopié d'un zip précédent sans relance.
   une file indienne** (rapport des axes du nuage : ×1,13 ; une file donne 4).
   ⚠️ Ce dernier contrôle a été écrit APRÈS avoir vu le défaut en jouant : sur un
   point de pain unique, douze pigeons s'empilaient en chenille.
+- **`tools/render-rues.mjs` — 28 contrôles, 28/28 (434).** Le revêtement des rues de Valley
+  Town : les trois pavés de 4×4 tuiles assemblés sur six tuiles de côté, puis **quatre fenêtres
+  de la VRAIE carte** (l'artère, un carrefour, le cimetière, le bord de l'esplanade) peintes
+  par `A.drawTownRoadTile`, c'est-à-dire par la fonction que la boucle de rendu appelle.
+  ⚠️⚠️ **IL A REFUSÉ QUATRE DÉFAUTS AVANT QUE GUILLAUME LES VOIE**, et aucun ne se lisait dans
+  le code : le goudron était un aplat (écart-type **8,7** → **11,4** après granulat), les pavés
+  du papier bulle, les briques un mur neuf, et le nez de bordure était haché tous les 8 px par
+  le joint des pierres de taille.
+  ⚠️ **La grandeur qui manquait partout est le BOUCLAGE** : un motif de 4×4 qui ne se raccorde
+  pas à lui-même dessine une SECONDE grille, tous les 64 px — pire que la tuile unique qu'il
+  remplace, et invisible tant qu'on regarde une tuile. Deux mesures, et la seconde décide :
+  la couture ne doit pas être plus contrastée que la pire transition interne, **et les formes
+  doivent traverser le bord** (40/64 rangées concordantes sur les pavés, 31/64 sur les
+  briques ; sans `roadWrap`, ça tombe à zéro).
+  ⚠️ **ET LE BANC S'EST TROMPÉ AVANT LE DESSIN** : sa première mesure de couture comparait à la
+  MOYENNE des transitions et accusait à tort tout pavage correct (l'intérieur d'une pierre ne
+  change pas d'une colonne à l'autre, un joint change beaucoup — la moyenne est tirée vers le
+  bas). *Un banc de rendu se vérifie aussi.*
 - `verify-constants` · `verify-objects` · `verify-strings` · `verify-syntax` · `verify-gates` ·
   `verify-cycle` · `verify-orchards` · `verify-scope` · `verify-vergers` · `render-fruits`.
 

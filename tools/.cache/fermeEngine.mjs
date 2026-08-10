@@ -3864,6 +3864,17 @@ export function generateTownWorld() {
      tableau parallèle se lit en même temps que le sol, à l'index qu'on a déjà.
      C'est le même raisonnement que `solid`. */
   const hedge = new Uint8Array(W * H);
+  /* ⚠️ 434 — LES ALLÉES SE NOTENT QUAND ON LES TRACE, ELLES NE SE RETROUVENT PAS.
+     Le revêtement se pose en toute dernière passe (voir la fin de cette
+     fonction) et il doit couvrir les allées de maison et de parvis en plus des
+     rues, sinon chacune reste une tache de terre battue dans une chaussée
+     pavée — vu sur `tools/render-rues.mjs` dès la première planche, une trouée
+     beige au milieu du trottoir.
+     Les redécrire là-bas aurait été un SECOND jeu de coordonnées pour les mêmes
+     allées, c'est-à-dire la divergence en attente du §8 : on note simplement
+     les cases au moment où on les pave. Tableau plat (x, y, x, y…) : c'est du
+     jetable interne, il ne sort pas de la fonction. */
+  const alleys = [];
   const id = (x, y) => y * W + x;
   const inMap = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
   const rect = (r, fn) => {
@@ -3905,8 +3916,12 @@ export function generateTownWorld() {
      (colonne 150) montait tout droit sur la terrasse et l'on aurait vu une
      rue pavée grimper un à-pic de quatorze pixels. C'est le genre de défaut
      qu'aucune erreur ne signale et qu'on ne voit qu'en s'y promenant. */
-  const paveRow = (y0, x0, x1) => {
-    for (let x = x0; x <= x1; x++) for (let dy = 0; dy < 2; dy++) {
+  /* ⚠️ 434 — `h` PAR DÉFAUT À 2, ET C'EST LA SEULE RUE QUI EN DEMANDE PLUS.
+     L'artère de la gare est goudronnée et large de TOWN_MAIN_ST_W (4) ; toutes
+     les autres restent à deux cases. Le paramètre est optionnel pour que les
+     onze appels existants ne changent pas d'un caractère. */
+  const paveRow = (y0, x0, x1, h = 2) => {
+    for (let x = x0; x <= x1; x++) for (let dy = 0; dy < h; dy++) {
       if (inMap(x, y0 + dy) && elev[id(x, y0 + dy)] === 0) ground[id(x, y0 + dy)] = C.G_PATH;
     }
   };
@@ -3915,7 +3930,14 @@ export function generateTownWorld() {
       if (inMap(x0 + dx, y) && elev[id(x0 + dx, y)] === 0) ground[id(x0 + dx, y)] = C.G_PATH;
     }
   };
-  for (const ry of C.TOWN_ST_ROWS) paveRow(ry, ry === C.TOWN_MAIN_ST_Y ? C.TOWN_PLATFORM.x : 10, W - 3);
+  for (const ry of C.TOWN_ST_ROWS) {
+    const main = ry === C.TOWN_MAIN_ST_Y;
+    // ⚠️ L'ÉLARGISSEMENT PART DE `TOWN_MAIN_ST_Y0`, qui est DÉRIVÉ de l'axe :
+    // la chaussée grossit des deux côtés à la fois et son milieu ne bouge pas
+    // (voir la note de TOWN_MAIN_ST_W). Écrire « 69 » ici ferait pencher la rue
+    // au prochain réglage — c'est le défaut payé quatre fois en §4.
+    paveRow(main ? C.TOWN_MAIN_ST_Y0 : ry, main ? C.TOWN_PLATFORM.x : 10, W - 3, main ? C.TOWN_MAIN_ST_W : 2);
+  }
   /* ⚠️ 426 — UNE ARTÈRE NORD-SUD S'ARRÊTE À LA DERNIÈRE AVENUE, pas au bord de
      la carte. Elle allait jusqu'à H-11 ; avec le lac du sud, deux d'entre elles
      descendaient droit dans l'eau (le pavage refuse l'eau, mais s'arrêtait donc
@@ -3987,11 +4009,19 @@ export function generateTownWorld() {
      visible — donc pas un « mur invisible » — mais tout aussi infranchissable.
      ⚠️ LA LEÇON : un décor posé sur une trame régulière rencontrera un jour une
      AUTRE trame régulière. On teste donc le sol, qui sait déjà tout. */
+  /* ⚠️ 434 — LA RANGÉE DES LAMPADAIRES SE DÉDUIT DU BORD DE LA CHAUSSÉE, pas de
+     son axe. Elle valait `TOWN_MAIN_ST_Y - 1` ; avec le goudron élargi, cette
+     rangée-là EST de la chaussée — le test de sol ci-dessous aurait donc sauté
+     les vingt lampadaires d'un coup, en silence, et la plus grande rue de la
+     ville se serait retrouvée non éclairée sans qu'une seule erreur soit levée.
+     C'est la même famille que le perron du 433 : une position réglée par
+     rapport au mauvais repère. */
+  const lampRow = C.TOWN_MAIN_ST_Y0 - 1;
   for (let x = 12; x < W - 6; x += 8) {
     if (x >= pz.x - 1 && x < pz.x + pz.w + 1) continue;
-    const li = id(x, C.TOWN_MAIN_ST_Y - 1);
+    const li = id(x, lampRow);
     if (ground[li] === C.G_PATH || ground[li] === C.G_PATH_STONE || solid[li]) continue;
-    addProp(x, C.TOWN_MAIN_ST_Y - 1, "lamp", true);
+    addProp(x, lampRow, "lamp", true);
   }
 
   /* ------------------------------------------------- PARVIS DES MONUMENTS
@@ -4026,6 +4056,7 @@ export function generateTownWorld() {
       for (let y = y0; y <= street + 1; y++) {
         if (!inMap(doorX, y) || elev[id(doorX, y)] !== e0) break;
         ground[id(doorX, y)] = C.G_PATH; ground[id(doorX + 1, y)] = C.G_PATH;
+        alleys.push(doorX, y, doorX + 1, y);   // 434 : elles seront pavées comme les rues
       }
     }
   };
@@ -4074,6 +4105,7 @@ export function generateTownWorld() {
       for (const dx of [0, 1]) {
         const i = id(doorX + dx, y);
         ground[i] = C.G_PATH; hedge[i] = 0;      // l'allée perce la haie
+        alleys.push(doorX + dx, y);              // 434 : elles seront pavées comme les rues
       }
     }
   }
@@ -4304,8 +4336,19 @@ export function generateTownWorld() {
   {
     const cm = C.TOWN_CEMETERY;
     rect(cm, (x, y, i) => { if (ground[i] === C.G_GRASS) ground[i] = C.G_TOWN_LAWN; objects[i] = C.O_NONE; objHp.delete(i); });
-    const gateX = cm.x + (cm.w >> 1);
-    for (let y = cm.y + 1; y <= cm.y + cm.h; y++) for (const dx of [0, 1]) {
+    /* ⚠️⚠️ 434 — L'ALLÉE PENCHAIT D'UNE CASE VERS L'EST, DEPUIS LE 425, et c'est
+       encore Guillaume qui l'a vu en jouant (« elle est un peu trop à droite »).
+       `cm.x + (cm.w >> 1)` donne la case qui suit le milieu, pas le milieu d'une
+       allée LARGE DE DEUX : pour une bande de 2 dans un enclos de 14, le bord
+       gauche est à `(14 - 2) / 2 = 6`, pas à 7. L'axe réel de l'enclos est
+       x = 53,0 ; l'allée s'y recentre, et les quatre rangs de tombes (48/50 et
+       55/57) comme les deux arbres (47 et 58) deviennent EXACTEMENT symétriques
+       — ils l'étaient déjà par rapport au vrai centre, c'est l'allée qui était
+       fausse. §4 : « une position réglée à la main est une position qui
+       penchera ». Elle se déduit maintenant du centre et de sa largeur. */
+    const gateW = 2;
+    const gateX = cm.x + ((cm.w - gateW) >> 1);
+    for (let y = cm.y + 1; y <= cm.y + cm.h; y++) for (let dx = 0; dx < gateW; dx++) {
       const i = id(gateX + dx, y);
       if (inMap(gateX + dx, y) && !solid[i]) { ground[i] = C.G_PATH; hedge[i] = 0; }
     }
@@ -4462,7 +4505,14 @@ export function generateTownWorld() {
      retrait d'une case du bitume. C'est ce qui donne aux rues leur épaisseur —
      une chaussée nue au milieu d'un pré n'est pas une avenue. */
   for (const ry of C.TOWN_ST_ROWS) {
-    for (let x = 12; x < W - 8; x += 6) { plantTree(x, ry - 2); plantTree(x + 3, ry + 3); }
+    /* ⚠️ 434 — « DEUX CASES EN RETRAIT DU BITUME » SE MESURE DEPUIS LE BITUME.
+       `ry - 2` / `ry + 3` était la même chose écrite en dur pour une rue de deux
+       cases : sur l'artère élargie, la rangée sud serait tombée DANS la
+       chaussée. On dérive les deux bords, et l'alignement suit tout seul si la
+       largeur rebouge un jour. */
+    const top = ry === C.TOWN_MAIN_ST_Y ? C.TOWN_MAIN_ST_Y0 : ry;
+    const bot = top + (ry === C.TOWN_MAIN_ST_Y ? C.TOWN_MAIN_ST_W : 2) - 1;
+    for (let x = 12; x < W - 8; x += 6) { plantTree(x, top - 2); plantTree(x + 3, bot + 2); }
   }
 
   /* ------------------------------------------------------- LA GARE, LES RAILS
@@ -4535,7 +4585,64 @@ export function generateTownWorld() {
      avec le monde, même quand on croit n'en avoir besoin que « pour construire
      autre chose ». Le contrôle qui l'a trouvée est simple et vaut d'être
      gardé : « toute case bloquante doit être dessinée par quelqu'un ». */
-  return { w: W, h: H, ground, objects, objHp, elev, solid, props, hedge };
+  /* ═══════════════════════════════════════════════════════════════════════
+     ZIP 434 — LE REVÊTEMENT DES RUES, EN TOUTE DERNIÈRE PASSE.
+     ─────────────────────────────────────────────────────────────────────────
+     Voir la note de `TR_*` dans fermeConstants.js pour le POURQUOI d'une couche
+     plutôt que de nouveaux `G_*`. Ici, le POURQUOI DE LA PLACE DANS LE FICHIER :
+     cette passe est la DERNIÈRE, après le plan, les parvis, la place, le
+     marché, la gare et le lac — et c'est ce qui la rend juste sans un seul cas
+     particulier.
+
+     ⚠️⚠️ ELLE NE PEINT QUE CE QUI EST ENCORE `G_PATH`. Tout ce qui a été
+     recouvert entre-temps par une esplanade (`G_PATH_STONE`) n'est donc plus
+     une rue et ne reçoit rien : c'est LITTÉRALEMENT la réponse à la demande de
+     Guillaume « la rue nord-sud ne doit pas couper l'esplanade ». On ne teste
+     pas l'emprise de la place, on ne soustrait pas un rectangle, on n'écrit
+     aucune borne — la place a déjà mangé ces cases, elles ne sont plus du
+     bitume, la question ne se pose plus. Écrite AVANT la place, la même passe
+     aurait exigé un cas particulier par esplanade (place, parvis ×5, marché,
+     quai, quai de gare), et il en aurait manqué un.
+     ⚠️ Même mécanique pour les allées de maison et les parvis : ce sont des
+     `G_PATH` qui ne sont PAS des rues, donc on ne les balaye pas — on ne
+     parcourt que les bandes déclarées dans `TOWN_ST_ROWS` / `TOWN_ST_COLS`,
+     c'est-à-dire les mêmes constantes qui ont servi à les paver. Une rue
+     déplacée emmène son revêtement avec elle. */
+  const road = new Uint8Array(W * H);
+  const surface = (x, y, kind) => {
+    if (!inMap(x, y)) return;
+    const i = id(x, y);
+    if (ground[i] === C.G_PATH) road[i] = kind;
+  };
+  // 1. Les rues est-ouest et nord-sud : pavés gris. La bande est la MÊME que
+  //    celle du pavage (largeur dérivée pour l'artère), donc jamais décalée.
+  for (const ry of C.TOWN_ST_ROWS) {
+    const main = ry === C.TOWN_MAIN_ST_Y;
+    const top = main ? C.TOWN_MAIN_ST_Y0 : ry, hgt = main ? C.TOWN_MAIN_ST_W : 2;
+    for (let x = 0; x < W; x++) for (let dy = 0; dy < hgt; dy++) surface(x, top + dy, C.TR_COBBLE);
+  }
+  for (const cx of C.TOWN_ST_COLS) for (let y = 0; y < H; y++) for (let dx = 0; dx < 2; dx++) surface(cx + dx, y, C.TR_COBBLE);
+  // La promenade de la Haute-Ville est une rue, elle aussi.
+  for (let x = C.TOWN_UPPER.x + 1; x < C.TOWN_UPPER.x + C.TOWN_UPPER.w - 1; x++) {
+    for (let dy = 0; dy < 2; dy++) surface(x, C.TOWN_UPPER.y + C.TOWN_UPPER.h - 4 + dy, C.TR_COBBLE);
+  }
+  // 2. Les allées de maison et de parvis, pavées comme les rues qu'elles
+  //    rejoignent : une desserte n'est pas un chemin de terre au milieu d'un
+  //    quartier pavé. Le champ de foire, lui, garde sa terre battue — c'est un
+  //    pré qu'on dalle un jour par semaine, pas une voie.
+  for (let k = 0; k < alleys.length; k += 2) surface(alleys[k], alleys[k + 1], C.TR_COBBLE);
+  // 3. LE GOUDRON, par-dessus les pavés : la seule artère de la ville. Elle est
+  //    peinte APRÈS pour n'avoir à décrire sa bande qu'une fois.
+  for (let x = 0; x < W; x++) for (let dy = 0; dy < C.TOWN_MAIN_ST_W; dy++) surface(x, C.TOWN_MAIN_ST_Y0 + dy, C.TR_ASPHALT);
+  // 4. LES BRIQUES DE L'ALLÉE DU CIMETIÈRE. Même dérivation que le générateur
+  //    de l'allée ci-dessus (centre de l'enclos, largeur 2) : deux descriptions
+  //    du même axe finiraient par se contredire, et le décalage se verrait
+  //    exactement comme celui que ce zip corrige.
+  {
+    const cm = C.TOWN_CEMETERY, gateW = 2, gateX = cm.x + ((cm.w - gateW) >> 1);
+    for (let y = cm.y + 1; y <= cm.y + cm.h; y++) for (let dx = 0; dx < gateW; dx++) surface(gateX + dx, y, C.TR_BRICK);
+  }
+  return { w: W, h: H, ground, objects, objHp, elev, solid, props, hedge, road };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

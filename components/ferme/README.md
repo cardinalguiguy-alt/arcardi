@@ -1,4 +1,4 @@
-# Valley Town, le tribunal, et la vie qui s'y passe — état au 433
+# Valley Town, le tribunal, et la vie qui s'y passe — état au 434
 
 Ce fichier est **l'autorité** sur la seconde carte du jeu et sur ses habitants. Il a été
 extrait de `CLAUDE.md` §6 au zip 428, sur l'ordre laissé par le §14.2 du 427 et sur le modèle
@@ -954,3 +954,126 @@ RECADRÉES de deux pixels, PUIS cernées (`padOutline`) : cerné dans son cadre
 juste, le liseré d'un sprite qui touche le bord est lui-même découpé. Le banc
 refuse désormais toute pose qui touche son bord — ce piège a été payé **trois
 fois dans ce seul zip** (l'enseigne du taxi, le drapeau de la mairie, les ailes).
+
+---
+
+## 17. ZIP 434 — LE REVÊTEMENT DES RUES
+
+Demande de Guillaume, sur planche de référence (huit variantes, quatre retenues) : « des
+tuiles ou groupes de tuiles **assemblables** qui ont des motifs bien plus complexes qu'à
+l'heure actuelle », la grande artère **goudronnée et élargie** avec sa ligne blanche
+discontinue et ses **rebords gris**, l'allée du cimetière **en briques** et **recentrée**, et
+toutes les autres rues en **pavés gris**.
+
+Ce qu'il y avait : `pathTile()` — UNE tuile de 16×16, dix taches beiges, recopiée à
+l'identique sur les 2 327 cases de rue de la ville. À l'écran, une moquette.
+
+### Ce qui change, en une ligne chacun
+
+| | avant | après |
+|---|---|---|
+| grande artère (rue de la gare, `TOWN_MAIN_ST_Y`) | 2 cases de terre battue | **4 cases de goudron**, ligne blanche sur l'axe, bordures de pierre |
+| toutes les autres rues + les allées de maison et de parvis | terre battue | **pavés gris**, bordures de pierre |
+| allée du cimetière | terre battue, **décalée d'une case à l'est** | **briques**, **centrée** |
+| esplanade, parvis, champ de foire, quai | inchangés | inchangés — *voir le piège de la passe finale* |
+
+### ⚠️⚠️ UNE COUCHE, PAS DES IDENTIFIANTS DE SOL — le vrai sujet de ce zip
+
+La façon « évidente » était d'ajouter trois `G_*` (`G_TOWN_ASPHALT`, `G_TOWN_COBBLE`,
+`G_TOWN_BRICK`). Elle coûte **quarante tests à rouvrir** : `ground === C.G_PATH` apparaît
+quarante fois dans `fermeEngine.js` (marche, A* piéton, A* du taxi, arrêts de taxi, oiseaux,
+lampadaires, panneaux, haies, promenade du lac…) et deux fois dans les bancs. **En oublier un
+seul ne lève rien** : ça fait une rue qu'on ne peut plus traverser, un taxi qui refuse une
+course, ou un pigeon qui ne se pose plus — la famille de défauts muets du §15.
+
+La parade est celle des haies (425) : **un tableau parallèle**, `world.road[i]`, lu à l'index
+qu'on a déjà. Le sol reste `G_PATH`, donc **la circulation, la navigation et le taxi ne voient
+strictement aucun changement** ; la couche dit seulement avec quoi on PEINT. Les constantes
+sont `TR_NONE / TR_ASPHALT / TR_COBBLE / TR_BRICK` dans `fermeConstants.js`.
+
+### ⚠️ LA PASSE DE REVÊTEMENT EST LA DERNIÈRE DU GÉNÉRATEUR, ET C'EST TOUT LE TRUC
+
+Elle ne peint que ce qui est **encore** `G_PATH`. Tout ce qu'une esplanade a recouvert entre
+temps (`G_PATH_STONE`) n'est plus une rue et ne reçoit rien : c'est **littéralement** la
+réponse à « la rue nord-sud ne doit pas couper l'esplanade ». On ne teste pas l'emprise de la
+place, on ne soustrait aucun rectangle, on n'écrit aucune borne — la place a déjà mangé ces
+cases. Écrite avant la place, la même passe aurait exigé un cas particulier par esplanade
+(place, cinq parvis, marché, quai, quai de gare), et il en aurait manqué un.
+
+### L'élargissement ne déplace pas l'axe, et c'est une contrainte dure
+
+La chaussée passe de 2 à 4 cases **en gardant son milieu** : rangées 69..72 au lieu de 70..71,
+axe à y = 71,0 dans les deux cas (`TOWN_MAIN_ST_Y0` est **dérivé**, jamais réglé).
+C'est ce qui rend l'élargissement gratuit pour le taxi — `townRoadCenter` repose ses points au
+milieu de la bande roulable, donc il roule exactement où il roulait.
+⚠️ **`TOWN_MAIN_ST_W` doit rester PAIR.** Impair, le milieu tomberait au centre d'une case, la
+ligne blanche se dessinerait au milieu d'une tuile et la voiture se décalerait d'une demi-case.
+
+⚠️ **DEUX POSITIONS RÉGLÉES SUR L'AXE ONT DÛ SUIVRE, et aucune n'aurait levé d'erreur :**
+- les **lampadaires** de l'artère étaient sur `TOWN_MAIN_ST_Y - 1`. Cette rangée est devenue de
+  la chaussée : le test de sol de la boucle les aurait tous sautés **en silence**, et la plus
+  grande rue de la ville se serait retrouvée non éclairée. Ils se déduisent maintenant du BORD
+  de la chaussée, pas de son axe ;
+- les **alignements d'arbres** valaient `ry - 2` / `ry + 3`, c'est-à-dire « deux cases en
+  retrait » écrit en dur pour une rue de deux cases. La rangée sud serait tombée DANS la
+  chaussée. Les deux bords sont dérivés.
+
+### L'allée du cimetière penchait depuis le 425
+
+`cm.x + (cm.w >> 1)` donne la case qui SUIT le milieu, pas le bord gauche d'une allée large de
+deux : pour une bande de 2 dans un enclos de 14, le bord gauche est à `(14−2)/2 = 6`, pas à 7.
+L'axe réel de l'enclos est x = 53,0. Les quatre rangs de tombes (48/50 et 55/57) et les deux
+arbres (47 et 58) étaient **déjà** symétriques par rapport à lui — c'est l'allée qui était
+fausse, pendant neuf zips. §4 : *une position réglée à la main est une position qui penchera.*
+
+### Le dessin : la période, pas le nombre de détails
+
+⚠️⚠️ **CE QUI SÉPARE UN SOL TRAVAILLÉ D'UNE MOQUETTE EST LA PÉRIODE.** Une tuile seule se
+répète tous les 16 px et l'œil voit la grille avant de voir le dessin, **quelle que soit sa
+finesse**. Les trois revêtements sont donc des **pavés de 4×4 tuiles** (64×64) dessinés d'un
+seul tenant, dans lesquels le rendu découpe la case dont il a besoin (`x % 4`, `y % 4`) : les
+pierres, les briques et les fissures traversent les bords de case, et la grille disparaît.
+
+⚠️ **Le motif doit boucler sur lui-même**, sinon on a juste déplacé la couture de 16 à 64 px —
+et une couture tous les quatre carreaux est PIRE qu'un motif régulier, parce qu'elle dessine
+une deuxième grille. Toute forme passe par `roadWrap()`, qui la peint aussi à −64 et +64.
+
+⚠️ **Tout est en `fillRect`** : ni `translate`, ni `rotate`, ni `fillText`. C'est ce qui rend
+`tools/render-rues.mjs` possible — voir `tools/README.md`.
+
+Trois défauts de dessin ont été refusés par le banc **avant** que Guillaume les voie, et les
+trois valent d'être connus :
+- **le goudron était un aplat** (écart-type 8,7 sur 13 couleurs). Ce qui manquait n'est pas du
+  bruit, c'est le **granulat** : un enrobé est du gravier clair noyé dans du noir, et à 16 px
+  par case c'est le seul détail qui porte la matière. ⚠️ Mais il en faut MOINS qu'on ne croit —
+  260 cailloux trop clairs donnaient du poivre et sel qui scintille au défilement ; 170,
+  plafonnés deux tons plus bas, font de la matière ;
+- **les pavés étaient du papier bulle** : même hauteur, même biseau complet, mêmes quatre coins
+  mangés → une grille de pastilles identiques, le défaut qu'on prétendait corriger à une
+  échelle plus grosse. Trois irrégularités le cassent (une pierre sur trois plus basse d'un
+  pixel, biseau clair PARTIEL, coins mangés au hasard) ;
+- **les briques étaient un mur neuf** : treize rouges vifs posés à plat, alors que c'est une
+  allée de cimetière, à l'ombre, foulée depuis cent ans. Teintes rabattues vers le brun-gris,
+  trois d'entre elles franchement délavées, mousse dans les joints.
+
+### Le rebord se pose contre ce qui n'est PAS dallé
+
+⚠️ Testé sur le REVÊTEMENT, un carrefour où le goudron croise les pavés se serait retrouvé
+**ceint de bordures** — une rue barrée par un trottoir à chaque intersection, avec le taxi
+passant au travers. On teste donc le SOL : dallé (rue, allée, esplanade) → rien ; herbe, eau,
+marche → bordure. La place n'est pas coupée, les allées débouchent, les carrefours restent
+ouverts. ⚠️ Et le **nez de bordure est continu** : le joint des pierres de taille part de
+`v = 1`, sinon il hache l'arête claire tous les huit pixels et le banc ne peut plus distinguer
+un trottoir d'un simple biseau de pavé.
+
+### Ce que ça ne fait pas
+
+- **le champ de foire garde sa terre battue** : c'est un pré qu'on dalle un jour par semaine,
+  pas une voie ;
+- **la ferme n'est pas touchée** — `drawTownRoadTile` n'est appelée que par la boucle de la
+  ville, et la couche `road` n'existe que sur la carte de Valley Town ;
+- **pas de voies séparées.** Il y a une ligne blanche, mais le taxi roule sur l'axe comme
+  avant : il la chevauche. Rouler à droite demanderait un réseau orienté, ce qui est un autre
+  chantier ;
+- **le goudron s'arrête aux quatre bords de l'esplanade** et reprend de l'autre côté. C'est le
+  motif urbain voulu (une place n'est pas une chaussée), pas un oubli.

@@ -2852,6 +2852,43 @@ export const TOWN_ST_ROWS = [34, 70, 108, 128, 150];     // toutes les rues est-
 export const TOWN_CROSS_ST_X = 92;                  // artère centrale nord-sud, colonnes x..x+1
 export const TOWN_ST_COLS = [34, 92, 150, 196];     // toutes les rues nord-sud (426 : + celle des artisans)
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 434 — LE REVÊTEMENT DES RUES. UNE COUCHE, PAS DES IDENTIFIANTS DE SOL.
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume : l'artère de la gare goudronnée et élargie, l'allée du
+   cimetière en briques, toutes les autres rues en pavés gris.
+
+   ⚠️⚠️ LE PIÈGE ÉVITÉ, ET C'EST LE SUJET DE CE BLOC. La façon « évidente » de
+   faire est d'ajouter trois `G_*` de plus (G_TOWN_ASPHALT, G_TOWN_COBBLE,
+   G_TOWN_BRICK). Elle coûte QUARANTE tests à rouvrir : `ground === C.G_PATH`
+   apparaît quarante fois dans fermeEngine.js (marche, A* piéton, A* du taxi,
+   arrêts de taxi, oiseaux, lampadaires, panneaux, haies, promenade du lac…) et
+   deux fois dans les bancs. En oublier UN ne lève rien : ça fait une rue qu'on
+   ne peut plus traverser, ou un taxi qui refuse une course, ou un pigeon qui
+   ne se pose plus — c'est-à-dire exactement la famille de défauts muets du §4.
+   ⚠️ LA PARADE EST CELLE DES HAIES (425) : un TABLEAU PARALLÈLE, lu à l'index
+   qu'on a déjà. Le sol reste `G_PATH` — la circulation, la navigation et le
+   taxi ne voient donc STRICTEMENT aucun changement —, et `world.road[i]` dit
+   seulement avec quoi on le PEINT. Un client qui n'aurait pas la couche (ou un
+   banc qui construit un monde à la main) retombe sur l'ancienne tuile de terre
+   battue, jamais sur un trou.
+   ═══════════════════════════════════════════════════════════════════════════ */
+export const TR_NONE = 0;      // terre battue : allées de maison, parvis, champ de foire
+export const TR_ASPHALT = 1;   // la grande artère : goudron + ligne blanche discontinue
+export const TR_COBBLE = 2;    // pavés gris, toutes les autres rues
+export const TR_BRICK = 3;     // briques : l'allée du cimetière
+/* ⚠️ LA CHAUSSÉE S'ÉLARGIT SANS DÉPLACER SON AXE, et ce n'est pas un hasard :
+   la bande passe de 2 à 4 cases EN GARDANT SON MILIEU (rangées 69..72 au lieu
+   de 70..71, milieu à y = 71,0 dans les deux cas). C'est ce qui rend
+   l'élargissement gratuit pour le taxi : `townRoadCenter` repose ses points au
+   milieu de la bande roulable, donc il roule exactement là où il roulait, et
+   les 18 contrôles de verify-taxi.mjs mesurent la même trajectoire.
+   ⚠️ Corollaire : ce nombre doit rester PAIR. Impair, le milieu tomberait au
+   centre d'une case (y + 0,5), la ligne blanche se dessinerait au milieu d'une
+   tuile et le taxi se décalerait d'une demi-case — visible, et pour rien. */
+export const TOWN_MAIN_ST_W = 4;
+export const TOWN_MAIN_ST_Y0 = TOWN_MAIN_ST_Y - (TOWN_MAIN_ST_W - 2) / 2;  // première rangée de goudron (dérivée, jamais réglée)
+
 /* LA PLACE CENTRALE. Elle a triplé (12×12 → 30×26) et n'est plus un simple
    rectangle dallé : voir townPlazaDeco() dans fermeEngine.js. */
 export const TOWN_PLAZA = { x: 78, y: 58, w: 30, h: 26 };

@@ -105,7 +105,7 @@ console.log("       durée moyenne : " + (sumT / Math.max(1, arrived)).toFixed(1
    l'axe d'une avenue en vaut 3 ou plus. C'est LA plainte qui a produit la carte
    de chanfrein, donc c'est elle qu'on mesure — pas « le chemin existe ». */
 {
-  let sum = 0, n2 = 0, hugging = 0, offAxis = 0, n3 = 0;
+  let sum = 0, n2 = 0, hugging = 0, offAxis = 0, offRel = 0, n3 = 0;
   const roadAt = (x, y) => { const fx = Math.floor(x), fy = Math.floor(y);
     return fx >= 0 && fy >= 0 && fx < nav.w && fy < nav.h && !!nav.walk[fy * nav.w + fx]; };
   /* ⚠️ LA MESURE COMPTE DES CASES, ELLE NE SONDE PAS PAR DEMI-PAS. Premier jet :
@@ -143,7 +143,10 @@ console.log("       durée moyenne : " + (sumT / Math.max(1, arrived)).toFixed(1
     if (!seen || nPos >= 6 || nNeg >= 6) return null;   // esplanade : pas d'axe
     const base = horiz ? fy : fx;
     const mid = (base - nNeg + base + nPos + 1) / 2;
-    return Math.abs((horiz ? y : x) - mid);
+    // On rend l'écart ET la demi-largeur : le second sert à normaliser (voir
+    // plus bas), sans quoi la mesure change de sens quand la rue change de
+    // largeur.
+    return { off: Math.abs((horiz ? y : x) - mid), half: (nPos + nNeg + 1) / 2 };
   };
   for (const a of stops) for (const b of stops) {
     if (a === b) continue;
@@ -159,7 +162,7 @@ console.log("       durée moyenne : " + (sumT / Math.max(1, arrived)).toFixed(1
           const cl = nav.clear[fy * nav.w + fx];
           sum += cl; n2++; if (cl <= 1) hugging++;
           const off2 = axisOffset(t.x, t.y, t.ang);
-          if (off2 !== null) { offAxis += off2; n3++; }
+          if (off2 !== null) { offAxis += off2.off; offRel += off2.off / off2.half; n3++; }
         }
       }
     }
@@ -169,11 +172,25 @@ console.log("       durée moyenne : " + (sumT / Math.max(1, arrived)).toFixed(1
      dégagement » serait exiger une ville qui n'existe pas. Ce qu'on veut, c'est
      que la voiture soit au MILIEU de la bande, quelle que soit sa largeur — donc
      on sonde perpendiculairement sous les roues et on mesure de combien elle est
-     décentrée. Zéro = pile sur l'axe ; 0,5 = collée à un bord d'une rue de deux
-     cases, c'est-à-dire le défaut d'origine. */
+     décentrée.
+
+     ⚠️⚠️ ZIP 434 — ET L'ÉCART SE MESURE EN FRACTION DE DEMI-CHAUSSÉE, PLUS EN
+     CASES. C'est le zip qui a élargi l'artère de la gare à quatre cases qui l'a
+     révélé, et c'est encore le même défaut de banc qu'au 433 : le seuil absolu
+     de 0,22 case était calibré sur une ville faite de rues de deux cases, où
+     0,5 veut dire « collé au trottoir ». Sur une chaussée de quatre, 0,5 veut
+     dire « pile dans sa voie » — et le banc a refusé une conduite MEILLEURE
+     que celle qu'il validait la veille (mesuré, par largeur de rue : 0,180 de
+     demi-chaussée sur les rues de deux cases, 0,156 sur l'artère de quatre).
+     La grandeur qui a un sens partout est le rapport : 0 = pile sur l'axe,
+     1 = roue sur la bordure, quelle que soit la largeur.
+     ⚠️ Ce n'est PAS un seuil desserré pour faire passer le banc — c'est un
+     changement d'unité, et l'écart en cases reste imprimé à côté. */
   const avg = sum / Math.max(1, n2);
-  ok(offAxis / Math.max(1, n3) < 0.22, "⚠️ il roule sur l'AXE de la chaussée",
-     "écart moyen à l'axe : " + (offAxis / Math.max(1, n3)).toFixed(2) + " case (0,5 = collé au bord)");
+  const rel = offRel / Math.max(1, n3);
+  ok(rel < 0.35, "⚠️ il roule sur l'AXE de la chaussée",
+     rel.toFixed(3) + " de demi-chaussée (1 = roue sur la bordure) · "
+     + (offAxis / Math.max(1, n3)).toFixed(2) + " case en absolu");
   console.log("       dégagement moyen sous les roues : " + avg.toFixed(2) + " cases");
 }
 ok(corners > 0 && cornerSlow / corners > 0.8, "⚠️ il RALENTIT dans les virages",

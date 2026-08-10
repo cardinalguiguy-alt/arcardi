@@ -4,11 +4,12 @@
 Il remplace l'exploration du dépôt pour tout ce qui est global. Le README est un journal
 chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
-État à jour du **zip 433**. Chantier actif : **rendre Valley Town habitable au regard** — le
-taxi y roule droit, l'hôtel de ville tient debout, et la place a des pigeons. Tout ce qui
-concerne la ville, ses habitants ET **ses pièges** est dans **`components/ferme/README.md`**,
-qui fait autorité ; les bancs sont dans **`tools/README.md`**. **`candyluge` et `crystal` sont
-EN PAUSE.**
+État à jour du **zip 434**. Chantier actif : **rendre Valley Town habitable au regard** — le
+taxi y roule droit, l'hôtel de ville tient debout, la place a des pigeons, et **les rues ont
+enfin un revêtement** (goudron sur l'artère, pavés partout ailleurs, briques au cimetière).
+Tout ce qui concerne la ville, ses habitants ET **ses pièges** est dans
+**`components/ferme/README.md`**, qui fait autorité ; les bancs sont dans **`tools/README.md`**.
+**`candyluge` et `crystal` sont EN PAUSE.**
 
 ⚠️⚠️⚠️ **LA CLOSURE DE LA BOUCLE DE RENDU A COÛTÉ DEUX FONCTIONNALITÉS EN DEUX ZIPS. C'EST
 DÉSORMAIS LE PIÈGE N°1 DU PROJET (§4).** Au 430, `tryTownJump` : le saut de rebord mort partout
@@ -37,6 +38,15 @@ penchera.** ⚠️ **Payé DEUX FOIS DE PLUS au 433** : le perron de l'hôtel de
 sur le corps de logis alors que la porte est sous le beffroi (on montait trois marches devant
 un mur plein), et le taxi montait dans la bouche de chaque rue latérale parce que sa mesure de
 « milieu de chaussée » comptait l'amorce des rues transversales comme de la chaussée.
+
+⚠️⚠️ **ET UN BANC PEUT AUSSI ÉCHOUER SUR UNE CHOSE DEVENUE BONNE — MÊME CAUSE, SENS INVERSE.**
+Au 434, l'élargissement de l'artère a fait échouer le contrôle d'axe du taxi, qui exigeait un
+écart de moins de **0,22 case** : un seuil ABSOLU, calibré sur une ville faite de rues de deux
+cases. Mesuré par largeur, la conduite était pourtant meilleure qu'avant (0,156 de
+demi-chaussée sur l'artère de quatre, contre 0,180 sur les rues de deux). **Un seuil exprimé
+dans une unité qui dépend du décor devient faux le jour où le décor change** — et il est alors
+tentant de le desserrer, ce qui tue le banc. On change d'UNITÉ, pas de seuil, et on garde
+l'ancienne mesure imprimée à côté.
 
 ⚠️⚠️ **ET UN BANC QUI PASSE NE VEUT PAS DIRE QUE LA CHOSE EST BONNE — IL VEUT DIRE QU'ON
 MESURE AUTRE CHOSE.** Au 433, les douze contrôles du taxi disaient tous OK pendant que
@@ -157,6 +167,21 @@ coordonnées — et on teste la zone AVANT les distances.**
   ⚠️ **Corollaire de repli** : quand la carte d'une zone manque chez ce client, un test de
   collision doit ACCEPTER, pas refuser. Refuser épingle l'entité distante à sa dernière
   position connue — c'est-à-dire qu'on reproduit le bogue au lieu de le corriger.
+- ⚠️⚠️ **UNE VARIANTE DE DÉCOR EST UNE COUCHE, PAS UN NOUVEL IDENTIFIANT DE SOL** (434). Peindre
+  les rues de Valley Town en goudron/pavés/briques par trois `G_*` de plus aurait rouvert les
+  **quarante** tests `ground === G_PATH` du moteur (marche, A* piéton, A* du taxi, arrêts,
+  oiseaux, lampadaires, haies…) : en oublier un ne lève rien, ça fait juste une rue qu'on ne
+  traverse plus. Le sol garde son identifiant, un tableau parallèle (`world.road`, comme
+  `hedge` et `solid`) dit avec quoi on le PEINT. ⚠️ Et **la passe qui remplit cette couche est
+  la DERNIÈRE du générateur** : elle ne peint que ce qui est encore du chemin, donc tout ce
+  qu'une esplanade a recouvert entre-temps s'exclut tout seul — zéro cas particulier, alors
+  qu'écrite plus tôt elle en aurait exigé un par esplanade.
+- ⚠️⚠️ **UN MOTIF DE SOL SE JUGE ASSEMBLÉ, ET SA PÉRIODE COMPTE PLUS QUE SES DÉTAILS** (434).
+  Une tuile de 16 px se répète tous les 16 px : l'œil voit la grille avant le dessin, **quelle
+  que soit sa finesse**. On dessine un pavé de 4×4 tuiles d'un seul tenant et on y découpe la
+  case (`x % 4`, `y % 4`). ⚠️ Il doit **boucler sur lui-même** (toute forme peinte aussi à −N
+  et +N), sinon on a déplacé la couture de 16 à 64 px — et une couture tous les quatre
+  carreaux dessine une SECONDE grille, pire que la première.
 - ⚠️⚠️ **`chaîne.replace("X", …)` NE REMPLACE QUE LA PREMIÈRE OCCURRENCE.**
 - ⚠️⚠️ **UN `useProgram` QUI ÉCHOUE NE DÉLIE PAS LE PROGRAMME PRÉCÉDENT** : un shader qui ne
   compile pas fait dessiner l'objet SUIVANT avec les mauvais attributs. **Seul indice :
@@ -341,8 +366,10 @@ jamais — c'est elle, et elle seule, qui protège du banc imaginaire (§14.6) :
 - ⚠️ **`verify-luge`, `verify-boot`, `preview-luge`, `preview.mjs`, `verify-perf` et
   `preview-fps` N'EXISTENT PAS** dans `tools/`.
 - ⚠️ **AUCUN BANC NE REGARDE LA FERME EN IMAGE** : `render-echelle`, `render-foire`,
-  `render-tribunal`, `render-oiseaux` et `render-taxi` ne dessinent que Valley Town et ses
-  habitants. Un décor de la ferme mal proportionné n'a, à ce jour, aucun endroit où se voir.
+  `render-tribunal`, `render-oiseaux`, `render-taxi` et `render-rues` ne dessinent que Valley
+  Town et ses habitants. Un décor de la ferme mal proportionné n'a, à ce jour, aucun endroit
+  où se voir. ⚠️ **Et le SOL de la ferme non plus** : `render-rues` (434) peint les rues de la
+  ville, pas les chemins de la ferme, qui restent sur la tuile unique de 16 px du zip 232.
 - ⚠️ **Le faux canvas de `lib-canvas.mjs` IGNORE `translate`/`rotate` et ne connaît pas
   `fillText`** : les trois poses d'une feuille de personnage s'y superposent, et un sprite qui
   dépend d'une transformation s'y juge faux. Ce n'est pas un bogue du jeu — mais il faut le
