@@ -5946,19 +5946,46 @@ export function buildSprites() {
       // L'évasement du pied : sans lui, un tronc est un poteau planté.
       const flare = t > 0.80 ? Math.round((t - 0.80) * 5 * 3) : 0;
       const lean = sp.lean ? Math.round(sp.lean * (1 - t) * 3) : 0;
-      const ww = w + flare * 2;
-      P(g, x0 - flare + lean, y, ww, 1, bark);
-      P(g, x0 - flare + lean, y, Math.max(1, ww >> 2), 1, barkL);   // lumière du nord-ouest
-      P(g, x0 - flare + lean + ww - 1, y, 1, 1, barkD);
+      /* ⚠️ ZIP 439 — LE FÛT S'AMINCIT VERS LE HAUT. Sans ça c'est un CYLINDRE,
+         et un cylindre de largeur constante sur vingt-six pixels se lit comme
+         un tuyau : c'est la moitié de ce que Guillaume appelle « des troncs
+         peu travaillés ». Un pixel de moins de chaque côté au-dessus du tiers
+         supérieur suffit — au-delà, l'arbre a l'air de tenir sur un fil. */
+      const nar = (w >= 6 && t < 0.34) ? 1 : 0;
+      const ww = w + flare * 2 - nar * 2;
+      const xs = x0 - flare + lean + nar;
+      P(g, xs, y, ww, 1, bark);
+      P(g, xs, y, Math.max(1, ww >> 2), 1, barkL);   // lumière du nord-ouest
+      P(g, xs + ww - 1, y, 1, 1, barkD);
     }
-    // Deux contreforts de racine, taillés en escalier plutôt que tirés au sort.
-    P(g, x0 - 4, bot - 2, 4, 2, bark); P(g, x0 - 5, bot - 1, 5, 1, barkD);
-    P(g, x0 + w, bot - 2, 4, 2, barkD); P(g, x0 + w, bot - 1, 5, 1, barkD);
-    // L'écorce : des tirets VERTICAUX à pas régulier, jamais un semis.
-    for (let k = 0; k < 3; k++) {
-      const xx = x0 + 1 + k * Math.max(1, (w - 1) >> 1);
-      if (xx >= x0 + w) break;
-      for (let y = top + 3 + k; y < bot - 3; y += 5) P(g, xx, y, 1, 3, barkD);
+    /* ⚠️⚠️ ZIP 439 — LES CONTREFORTS DE RACINE ONT ÉTÉ REFAITS (retour de
+       Guillaume : « attention aux troncs qui sont parfois moches et peu
+       travaillés »). Le 438 en posait DEUX, symétriques, en deux rectangles
+       plats de part et d'autre du pied : vu à l'échelle du jeu, ça ne se lit
+       pas comme des racines mais comme une SEMELLE, c'est-à-dire comme un
+       poteau scellé dans du béton. Il en faut trois, de longueurs
+       DIFFÉRENTES, et chacun doit S'AMINCIR en s'éloignant du tronc — c'est ce
+       profil en coin, et lui seul, qui dit « ça sort de terre ». */
+    for (const [dir, len] of [[-1, 6], [1, 4], [-1, 3]]) {
+      const s = dir < 0 ? x0 - 1 : x0 + w;
+      const yb = bot - (len === 3 ? 5 : 1);
+      for (let k = 0; k < len; k++) {
+        const hh = Math.max(1, 3 - ((k * 3 / len) | 0));
+        const xx = dir < 0 ? s - k : s + k;
+        if (xx < 1 || xx >= TW_ - 1) break;
+        P(g, xx, yb - hh + 1, 1, hh, dir < 0 ? bark : barkD);
+        P(g, xx, yb - hh + 1, 1, 1, dir < 0 ? barkL : bark);
+      }
+    }
+    /* ⚠️ L'ÉCORCE EST FAITE DE CRÊTES QUI SE DÉCALENT, PAS DE TIRETS ALIGNÉS.
+       Le 438 empilait des tirets de 3 px sur des colonnes fixes tous les 5 px :
+       à trois colonnes de large, ça dessine une GRILLE, et une grille sur un
+       tronc se lit comme du grillage. Ici chaque crête glisse d'une colonne à
+       chaque étage — la texture monte en hélice, comme une vraie écorce. */
+    for (let y = top + 3, k = 0; y < bot - 4; y += 4, k++) {
+      const xx = x0 + 1 + ((k * 2) % Math.max(1, w - 1));
+      P(g, xx, y, 1, 3, barkD);
+      if (w > 4) P(g, x0 + w - 2 - ((k * 3) % Math.max(1, w - 2)), y + 2, 1, 2, barkD);
     }
     if (sp.birchBands) {                        // le bouleau et ses cicatrices noires
       for (let y = top + 4; y < bot - 3; y += 6) {
@@ -5993,28 +6020,136 @@ export function buildSprites() {
     }
     return out;
   }
+  /* ══════════════════════════════════════════════════════════════════════════
+     ZIP 439 — LES ARBRES À FLEURS, REFAITS. (« les arbres qui ont des fleurs,
+     ceux-là sont dégueu » — Guillaume, sur le magnolia, le cerisier et le
+     mimosa du 437.)
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️⚠️ CE QUI N'ALLAIT PAS N'ÉTAIT PAS LA COULEUR, C'ÉTAIT L'ÉCHELLE DE LA
+     FLEUR. Le 438 posait deux ou trois CROIX DE CINQ PIXELS par bouquet, sur la
+     coque du houppier. À trois pixels de large, une fleur n'est pas une fleur :
+     c'est un point. Un magnolia couvert de points roses ne se lit pas comme un
+     magnolia en fleurs, il se lit comme un arbre vert SALI de rose — et c'est
+     mot pour mot le verdict.
+     Sur la planche de référence, l'arbre en fleurs porte CINQ à SEPT corolles
+     de onze pixels, chacune faite de cinq pétales autour d'un cœur jaune. Une
+     corolle y occupe un sixième de la couronne. C'est un objet, pas un grain.
+
+     ⚠️⚠️ ET ELLES ENTRENT DANS LE MASQUE DE LA COURONNE, ce qui n'est pas un
+     détail d'implémentation mais la condition pour que le contrôle n°5 de
+     `render-arbres.mjs` reste vrai (« la saison change la couleur, pas la
+     forme »). Une corolle peinte PAR-DESSUS la silhouette la déformerait en
+     été et pas en automne, où `petal` vaut `null` : le même arbre changerait
+     de forme en changeant de mois. Ici la corolle est une MASSE de la couronne
+     au même titre qu'un bouquet de feuilles ; seule sa couleur dépend de la
+     saison, et en automne elle redevient simplement du feuillage.
+     ⚠️ Corollaire de dessin, et c'est ce qui fait la silhouette festonnée de la
+     planche : les corolles sont sur un anneau LÉGÈREMENT plus large que celui
+     des bouquets de feuilles. Elles débordent donc du vert, et c'est ce débord
+     qu'on voit de loin. */
+  function bloomAnchors(sp, frame) {
+    const b = sp.blossom, out = [];
+    for (let i = 0; i < b.n; i++) {
+      const a = (i / b.n) * Math.PI * 2 + b.phase;
+      out.push({ x: b.cx + Math.cos(a) * b.rx, y: b.cy + Math.sin(a) * b.ry,
+                 r: b.rad + ((i * 5) % 3) * 0.5, a: a * 1.7 });
+    }
+    for (const [ix, iy, ir] of (b.inner || [])) out.push({ x: b.cx + ix, y: b.cy + iy, r: ir, a: ix + iy });
+    if (frame) {
+      const top = Math.min(...out.map(o => o.y - o.r)), bot = Math.max(...out.map(o => o.y + o.r));
+      for (const o of out) {
+        const h = 1 - (o.y - top) / Math.max(1, bot - top);
+        o.x += frame * h * h * 1.9;
+      }
+    }
+    return out;
+  }
+  /* Une corolle. ⚠️ ELLE N'EST PAS DESSINÉE PÉTALE PAR PÉTALE MAIS PAR
+     PARTITION : pour chaque pixel du disque on cherche le pétale le plus
+     proche, on l'ombre d'après SA normale à lui, et on noircit la frontière
+     entre deux pétales voisins. C'est la même idée que les bouquets du 438 —
+     une seule grandeur seuillée, donc des bords lisses — et c'est ce qui évite
+     les cinq disques recollés en trèfle sale du premier jet.
+     ⚠️ ENTRE DEUX PÉTALES, ON NE PEINT RIEN : le feuillage déjà posé reste
+     visible dans les creux, ce qui est exactement ce que montre la planche et
+     ce qui empêche la corolle de se lire comme une pastille. */
+  function paintBloom(g, o, pal, mask, puff) {
+    const PN = 5, pr = o.r * 0.54;
+    const yA = Math.max(1, Math.floor(o.y - o.r)), yB = Math.min(TH_ - 2, Math.ceil(o.y + o.r));
+    const xA = Math.max(1, Math.floor(o.x - o.r)), xB = Math.min(TW_ - 2, Math.ceil(o.x + o.r));
+    for (let y = yA; y <= yB; y++) for (let x = xA; x <= xB; x++) {
+      if (!mask[y * TW_ + x]) continue;
+      const cdx = x + 0.5 - o.x, cdy = y + 0.5 - o.y;
+      if (puff) {
+        // Le mimosa : une boule duveteuse, pas une corolle. Cinq pétales sur un
+        // pompon de quatre pixels ne se lisent pas — un dégradé rond, si.
+        const d = Math.sqrt(cdx * cdx + cdy * cdy) / o.r;
+        if (d > 1) continue;
+        const lit = (-cdx * 0.62 - cdy * 0.78) / o.r;
+        P(g, x, y, 1, 1, d > 0.86 ? pal.petalD : lit > 0.28 ? pal.petalL : lit < -0.30 ? pal.petalD : pal.petal);
+        continue;
+      }
+      if (cdx * cdx + cdy * cdy <= o.r * o.r * 0.055) { P(g, x, y, 1, 1, pal.petalC); continue; }  // le cœur
+      let b1 = 1e9, b2 = 1e9, bdx = 0, bdy = 0;
+      for (let i = 0; i < PN; i++) {
+        const a = i * (Math.PI * 2 / PN) + o.a;
+        const dx = cdx - Math.cos(a) * o.r * 0.50, dy = cdy - Math.sin(a) * o.r * 0.50;
+        const d = dx * dx + dy * dy;
+        if (d < b1) { b2 = b1; b1 = d; bdx = dx; bdy = dy; } else if (d < b2) b2 = d;
+      }
+      if (b1 > pr * pr) continue;                       // le creux entre deux pétales
+      if (b2 - b1 < 1.6) { P(g, x, y, 1, 1, pal.petalD); continue; }   // la pliure
+      const lit = (-bdx * 0.62 - bdy * 0.78) / pr;
+      P(g, x, y, 1, 1, lit > 0.34 ? pal.petalL : lit < -0.28 ? pal.petalD : pal.petal);
+    }
+  }
+
   function townTreeSprite(sp, season, frame) {
     const [c, g] = cv(TW_, TH_);
     const pal = (season === "autumn" && sp.autumn) ? Object.assign({}, sp, sp.autumn)
               : (season === "spring" && sp.spring) ? Object.assign({}, sp, sp.spring) : sp;
     /* L'OMBRE PORTÉE AU SOL, cuite dans le sprite. Deux ellipses concentriques
        et pas un dégradé : à cette échelle un dégradé alpha se lit comme une
-       tache de gras. C'est le détail qui POSE l'arbre — sans lui il flotte. */
-    for (let y = TBASE_ - 3; y < TBASE_ + 4; y++) for (let x = 6; x < TW_ - 6; x++) {
-      const u = (x - 24) / 15, v = (y - (TBASE_ + 0.5)) / 3.4;
+       tache de gras. C'est le détail qui POSE l'arbre — sans lui il flotte.
+       ⚠️⚠️ ZIP 439 — ELLE A ÉTÉ REFAITE, ET LES DEUX ELLIPSES ANNONCÉES PAR CE
+       COMMENTAIRE N'EXISTAIENT PAS : le 438 n'en peignait qu'UNE, à 22 %
+       d'opacité, large de 15 px pour un houppier qui en fait 36. Le commentaire
+       décrivait une intention, le code faisait autre chose — et personne ne
+       pouvait le voir, puisque la planche des arbres est dessinée sur un fond
+       vert uni où une ombre à 22 % ne se distingue pas.
+       Demande de Guillaume : « ajoute des ombres pour plus de présence ». Le
+       cœur passe à 38 %, le halo reste à 18 %, et le grand axe suit la LARGEUR
+       DU HOUPPIER (17 px de demi-axe) au lieu d'être écrit en dur : une ombre
+       plus étroite que la couronne qu'elle porte fait flotter l'arbre, ce qui
+       est très exactement le défaut qu'elle est censée corriger.
+       ⚠️ ELLE EST DÉCENTRÉE VERS LE SUD-EST, parce que toute la lumière du jeu
+       vient du nord-ouest (cf. les arêtes claires du muret, du banc, de la
+       berge). Une ombre centrée sous l'objet est une ombre de midi pile, et
+       elle contredit tout le reste du décor. */
+    for (let y = TBASE_ - 4; y <= TBASE_ + 4; y++) for (let x = 4; x < TW_ - 4; x++) {
+      const u = (x - 25.5) / 17, v = (y - (TBASE_ + 1.0)) / 4.0;
       const d = u * u + v * v;
       if (d > 1) continue;
-      P(g, x, y, 1, 1, "rgba(24,42,20,0.22)");
+      P(g, x, y, 1, 1, d > 0.44 ? "rgba(18,34,14,0.18)" : "rgba(12,26,10,0.38)");
     }
     if (sp.conifer) { townConifer(g, sp, pal, frame); return c; }
     treeTrunk(g, sp);
     const clumps = crownClumps(sp, frame);
+    /* ZIP 439 — les corolles. Elles entrent dans le MASQUE avec les bouquets
+       (voir la note de `bloomAnchors`), donc la silhouette est celle de leur
+       union, et elle ne dépend pas de la saison. */
+    const blooms = sp.blossom ? bloomAnchors(sp, frame) : [];
     const [leaf, leafL, leafD] = pal.leaf;
     const mask = new Uint8Array(TW_ * TH_);
     const inClump = (o, x, y) => {
       const dx = x + 0.5 - o.x, dy = (y + 0.5 - o.y) * 1.06;
       return dx * dx + dy * dy <= o.r * o.r;
     };
+    for (const o of blooms) {
+      const yA = Math.max(1, Math.floor(o.y - o.r)), yB = Math.min(TH_ - 2, Math.ceil(o.y + o.r));
+      const xA = Math.max(1, Math.floor(o.x - o.r)), xB = Math.min(TW_ - 2, Math.ceil(o.x + o.r));
+      for (let y = yA; y <= yB; y++) for (let x = xA; x <= xB; x++) if (inClump(o, x, y)) mask[y * TW_ + x] = 1;
+    }
     for (const o of clumps) {
       const yA = Math.max(1, Math.floor(o.y - o.r)), yB = Math.min(TH_ - 2, Math.ceil(o.y + o.r));
       const xA = Math.max(1, Math.floor(o.x - o.r)), xB = Math.min(TW_ - 2, Math.ceil(o.x + o.r));
@@ -6076,6 +6211,14 @@ export function buildSprites() {
     for (let y = 1; y < TH_ - 1; y++) for (let x = 1; x < TW_ - 1; x++) {
       if (mask[y * TW_ + x] === 2) P(g, x, y, 1, 1, leaf);
     }
+    /* LES COROLLES, PAR-DESSUS LE FEUILLAGE ET DU HAUT VERS LE BAS — même
+       raison que les bouquets : ce qui est plus bas est plus près.
+       ⚠️ SI LA SAISON N'A PAS DE FLEUR (`petal: null`, le magnolia en automne),
+       ON NE PEINT RIEN : la masse reste, déjà couverte de feuillage par la
+       passe précédente, et la silhouette ne bouge pas d'un pixel. */
+    if (blooms.length && pal.petal) {
+      for (const o of blooms.slice().sort((a, b) => a.y - b.y)) paintBloom(g, o, pal, mask, !!sp.blossom.puff);
+    }
     /* LE CERNE EXTÉRIEUR. Un pixel tout autour de l'union — c'est la netteté
        que Guillaume demande (« net et bien détaillé ») : sans cerne, deux
        arbres qui se chevauchent fondent l'un dans l'autre. */
@@ -6107,7 +6250,7 @@ export function buildSprites() {
        taille, ça ne se lit pas comme une fleur, ça se lit comme une salissure.
        Elles se posent sur la COQUE (le bord du houppier) : une fleur pousse au
        bout d'une branche. */
-    if (pal.petal) {
+    if (pal.petal && !sp.blossom) {
       let k = 0;
       for (const o of order) {
         const nb = pal.petalPer || 2;
@@ -6262,27 +6405,44 @@ export function buildSprites() {
                inner: [[-3, 2, 6.6], [4, 3, 6.2], [1, -4, 6.0]] },
       trunk: ["#5d4837", "#7b6349", "#3a2a1e"],
       leaf: ["#3f8a45", "#5fb267", "#27612d"], edge: "#164321", out: "#0e2c16", vein: "#7ac783",
-      petal: "#f6f2ea", petalC: "#efce56", petalPer: 2, petalBig: true,
+      /* ⚠️ LE MAGNOLIA EST L'ARBRE ROSE DE LA PLANCHE DE RÉFÉRENCE, et il ne
+         l'était pas : le 437 lui donnait des fleurs blanc crème sur un
+         houppier vert plein. Six corolles roses de onze pixels, c'est ce que
+         montre la planche, et c'est la seule essence qu'on y reconnaît au
+         premier coup d'œil. */
+      blossom: { cx: 24, cy: 21, rx: 11.6, ry: 9.6, n: 6, rad: 5.6, phase: 0.5,
+                 inner: [[-1, -3, 5.2], [2, 5, 5.0]] },
+      petal: "#efa0c4", petalL: "#fbd6e6", petalD: "#b2537f", petalC: "#f2d45e",
       autumn: { leaf: ["#b98a35", "#dcb554", "#7c5514"], edge: "#4c3308", out: "#312105", vein: "#f0cf78", petal: null },
       spring: { leaf: ["#4a9450", "#6cbb74", "#2f6935"], edge: "#1c4c26", out: "#123219", vein: "#88d190",
-                petal: "#fbf7f2", petalC: "#efce56", petalPer: 3, petalBig: true } },
+                petal: "#f4b0d0", petalL: "#ffe4ef", petalD: "#bd6090", petalC: "#f6de78" } },
     { id: "cherry", tw: 7, trunkTop: 31,
       crown: { cx: 24, cy: 22, rx: 10.8, ry: 9.8, n: 9, rad: 7.2, radVar: 1.0, phase: 1.9,
                inner: [[-3, 3, 6.4], [4, 2, 6.4], [0, -4, 6.0]] },
       trunk: ["#59422f", "#775c46", "#372619"],
       leaf: ["#469049", "#68b96c", "#2b6631"], edge: "#194723", out: "#0f2f17", vein: "#82cd88",
-      petal: "#f2a9c6", petalC: "#fbe0ec", petalPer: 3, petalBig: true,
+      // Le cerisier est le rose PÂLE : c'est ce qui le distingue du magnolia,
+      // qui partage sa forme. Deux arbres roses identiques ne font qu'un arbre.
+      blossom: { cx: 24, cy: 22, rx: 11.4, ry: 9.4, n: 6, rad: 5.4, phase: 2.0,
+                 inner: [[0, -4, 5.0], [-2, 4, 5.0]] },
+      petal: "#f7bcd4", petalL: "#ffe8f2", petalD: "#c06a90", petalC: "#f8e59a",
       autumn: { leaf: ["#c06a3a", "#e29a5f", "#833d17"], edge: "#4d2409", out: "#331706", vein: "#f0b183", petal: null },
       spring: { leaf: ["#5aa055", "#7fc87c", "#3a763c"], edge: "#245328", out: "#17371a", vein: "#9bd897",
-                petal: "#f79ec2", petalC: "#ffe4f0", petalPer: 4, petalBig: true } },
+                petal: "#fbc8dd", petalL: "#fff2f7", petalD: "#c87698", petalC: "#fbeaa8" } },
     { id: "mimosa", tw: 6, trunkTop: 32,
       crown: { cx: 24, cy: 23, rx: 11.0, ry: 8.8, n: 9, rad: 7.0, radVar: 1.1, phase: 5.4,
                inner: [[-4, 1, 6.4], [4, 2, 6.2], [0, -4, 5.8]] },
       trunk: ["#67573a", "#847148", "#413425"],
       leaf: ["#4f8f52", "#72b876", "#2f6334"], edge: "#1c4622", out: "#122d16", vein: "#8ecd92",
-      petal: "#f3cd35", petalC: "#fff08a", petalPer: 4, petalBig: true,
-      autumn: { petal: "#dfbc32", petalC: "#f8dd6c", petalPer: 2 },
-      spring: { petal: "#f8db4a", petalC: "#fff6a4", petalPer: 5, petalBig: true } },
+      /* ⚠️ LE MIMOSA EST EN POMPONS, PAS EN COROLLES (`puff`). Cinq pétales sur
+         une fleur de neuf pixels ne se lisent pas : ce qui fait reconnaître un
+         mimosa est une BOULE duveteuse, et il en faut beaucoup. Sept boules
+         plus deux au cœur, plus petites que les corolles du magnolia. */
+      blossom: { cx: 24, cy: 23, rx: 11.2, ry: 8.6, n: 7, rad: 4.6, phase: 5.0, puff: true,
+                 inner: [[-2, -3, 4.4], [3, 3, 4.2]] },
+      petal: "#f0cb34", petalL: "#fff08a", petalD: "#a87c12", petalC: "#fff6b0",
+      autumn: { petal: "#dcb930", petalL: "#f4dd6c", petalD: "#96690c", petalC: "#f8e58a" },
+      spring: { petal: "#f8db4a", petalL: "#fffbc0", petalD: "#bb8c18", petalC: "#fffbd0" } },
     { id: "apple", tw: 7, trunkTop: 32,
       crown: { cx: 24, cy: 23, rx: 10.8, ry: 9.4, n: 9, rad: 7.2, radVar: 0.9, phase: 2.2,
                inner: [[-3, 2, 6.6], [4, 3, 6.2], [0, -4, 6.0]] },
@@ -9694,6 +9854,501 @@ export function buildSprites() {
     return c;
   }
 
+  /* ══════════════════════════════════════════════════════════════════════════
+     ZIP 439 — LE MOBILIER DE RIVE, TRANSCRIT DE LA PLANCHE DE RÉFÉRENCE.
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️⚠️ CES DESSINS SONT DES COPIES, PAS DES INTERPRÉTATIONS (demande de
+     Guillaume : « je veux une copie EXACTE, pas une approximation ; reprends la
+     shape mais aussi chaque détail qui donne une texture »). Ce qui est copié de
+     la planche, objet par objet, est écrit au-dessus de chaque fonction — c'est
+     la seule façon de savoir, dans six mois, ce qu'on a le droit de « nettoyer »
+     et ce qui EST le dessin.
+
+     ⚠️ L'ÉCHELLE DE LA PLANCHE EST DÉJÀ CELLE DU JEU, et c'est ce qui rend la
+     copie possible. Mesure : le personnage de la seconde planche fait 40×62 px
+     à l'écran pour 16×24 en natif, donc elle est affichée à ~2,5× ; à cette
+     échelle son banc fait 44 px natifs (le nôtre en fait 52), son saule 41×36
+     (le nôtre 48×64). Aucun gabarit à changer, aucun rendu à rezoomer.
+
+     ⚠️⚠️ ET ON N'A TIRÉ AUCUN PIXEL AU HASARD (la leçon du 438). Toutes les
+     variations — veinage, joints de moellons, semis de fleurs — viennent d'une
+     fonction de la position. Un `makeRnd` ici donnerait le grain que Guillaume
+     appelle « sale », et la planche n'en a pas un seul : ses textures sont des
+     RANGS et des MASSES, jamais du bruit.
+     ══════════════════════════════════════════════════════════════════════════ */
+
+  /* Les trois palettes de la planche, relevées à la pipette. Elles sont
+     partagées par tous les objets ci-dessous : c'est ce qui fait que le pont,
+     la clôture et la barrière se lisent comme le MÊME bois, et le muret, le
+     banc et le socle du lampadaire comme la MÊME pierre. Six valeurs chacune —
+     en dessous de cinq on colorie, on ne modèle pas (§8). */
+  const RW = { out: "#33210f", d2: "#4b3118", d1: "#6b4a28", bd: "#8a6238", lt: "#a87c4a", hl: "#c49a63" };
+  const RST = { out: "#4a4844", d2: "#66645e", d1: "#84827b", bd: "#a09e96", lt: "#c0beb5", hl: "#dbd9d0" };
+  const RG = { out: "#17330f", d: "#2c5f24", b: "#3f8a37", l: "#63bb52", h: "#86d46a" };
+
+  /* Un panneau de planches VERTICALES. C'est le motif le plus répété de la
+     planche (le tablier du pont, la barrière, la caisse, le plateau de table),
+     et il tient en trois tons alternés de période 4 : joint sombre, corps,
+     lumière, corps. ⚠️ LA PÉRIODE EST 4 ET PAS 3 : à 3, deux joints tombent à
+     trois pixels d'écart et la surface se lit comme un tissu rayé. */
+  function woodGrainV(g, x0, y0, w, h) {
+    for (let x = x0; x < x0 + w; x++) {
+      const p = ((x % 4) + 4) % 4;
+      P(g, x, y0, 1, h, p === 0 ? RW.d1 : p === 2 ? RW.lt : RW.bd);
+    }
+  }
+
+  /* ⚠️⚠️ LE PONT EN ARC — L'OBJET LE PLUS DÉTAILLÉ DE LA PLANCHE, ET LE SEUL
+     QUI SOIT UNE STRUCTURE PLUTÔT QU'UN MEUBLE. Ce qui le fait lire comme un
+     pont et non comme une passerelle plate tient à QUATRE choses, et il en
+     manquait trois à tous mes premiers jets :
+       1. la MAIN COURANTE suit l'arc, et le tablier aussi — mais avec un
+          décalage constant : c'est ce décalage qui donne l'épaisseur ;
+       2. les BALUSTRES sont verticaux et serrés (un tous les 4 px). Espacés,
+          on lit une clôture ; absents, on lit une planche posée ;
+       3. le tablier a un NEZ ÉCLAIRÉ en haut et une SOUS-FACE SOMBRE en bas.
+          Sans la sous-face, le pont est peint sur l'eau au lieu d'être dessus ;
+       4. les POTEAUX D'ABOUT dépassent la main courante et portent un chapeau.
+          Ce sont eux qui « posent » le pont sur ses deux rives — un arc qui
+          s'arrête net en l'air se lit comme un morceau de pont.
+     ⚠️ 68 px de large = 4 cases + 4 px de débord. Le débord est du DÉCOR, la
+     case bloquante n'a pas changé — même contrat que le banc du 429. */
+  function townArchBridgeSprite() {
+    const W = 68, H = 46, [c, g] = cv(W, H);
+    const arch = (x) => Math.max(0, 10 * (1 - Math.pow((x - (W - 1) / 2) / (W / 2 - 4), 2)));
+    /* ⚠️ LA LIGNE DE BASE EST À 30 ET PAS À 28, ET C'EST `render-rive.mjs` QUI
+       L'A DIT AU PREMIER JET : à 28, la main courante du SOMMET de l'arc
+       sortait du canevas par le haut et se faisait raboter en silence — le
+       piège n°1 des sprites (§4), payé une fois de plus. La hauteur du canevas
+       se DÉDUIT donc de la flèche de l'arc, elle n'est pas choisie. */
+    const deckY = (x) => Math.round(30 - arch(x));      // bord LOIN du tablier
+    const railY = (x) => deckY(x) - 18;                 // dessus de la main courante
+
+    // 1. LE TABLIER, colonne par colonne : 9 px de large plus 2 px de sous-face.
+    for (let x = 4; x < W - 4; x++) {
+      const yf = deckY(x);
+      woodGrainV(g, x, yf, 1, 9);
+      P(g, x, yf, 1, 1, RW.hl);                         // le nez, qui prend la lumière
+      P(g, x, yf + 9, 1, 2, RW.d2);                     // la sous-face, dans l'ombre
+    }
+    // 2. LES DEUX LISSES. La basse est plus sombre : elle est sous la haute.
+    for (let x = 4; x < W - 4; x++) {
+      const t = railY(x);
+      P(g, x, t, 1, 3, RW.bd); P(g, x, t, 1, 1, RW.hl); P(g, x, t + 2, 1, 1, RW.d1);
+      P(g, x, t + 10, 1, 2, RW.d1); P(g, x, t + 10, 1, 1, RW.bd);
+    }
+    // 3. LES BALUSTRES, tous les 4 px, du dessous de la main courante au tablier.
+    for (let x = 8; x < W - 8; x += 4) {
+      const t = railY(x) + 3, b = deckY(x);
+      P(g, x, t, 2, b - t, RW.d1);
+      P(g, x, t, 1, b - t, RW.bd);
+    }
+    // 4. LES POTEAUX D'ABOUT et leur chapeau.
+    for (const px0 of [3, W - 8]) {
+      const t = railY(px0 + 2), b = deckY(px0 + 2) + 11;
+      P(g, px0, t - 4, 5, b - t + 4, RW.bd);
+      P(g, px0, t - 4, 1, b - t + 4, RW.lt);
+      P(g, px0 + 4, t - 4, 1, b - t + 4, RW.d2);
+      P(g, px0 - 1, t - 7, 7, 3, RW.d1);
+      P(g, px0 - 1, t - 7, 7, 1, RW.lt);
+    }
+    outlineSprite(g, W, H, RW.out);
+    return c;
+  }
+
+  /* LA CLÔTURE À DEUX LISSES. ⚠️ LES POTEAUX SE PEIGNENT APRÈS LES LISSES :
+     dans la planche, la lisse passe DERRIÈRE le poteau, et l'ordre inverse
+     donne une grille au lieu d'une clôture. Chaque poteau porte un chapeau qui
+     déborde de part et d'autre — c'est ce débord, et lui seul, qui empêche le
+     poteau de se lire comme un simple trait vertical. */
+  function townFenceSprite() {
+    const W = 38, H = 30, [c, g] = cv(W, H);
+    for (const ry of [11, 19]) {
+      P(g, 2, ry, W - 4, 4, RW.bd);
+      P(g, 2, ry, W - 4, 1, RW.lt);
+      P(g, 2, ry + 3, W - 4, 1, RW.d2);
+      for (let x = 4; x < W - 3; x += 6) P(g, x, ry + 1, 1, 2, RW.d1);   // le veinage
+    }
+    for (const px0 of [3, 16, 29]) {
+      P(g, px0, 7, 6, 21, RW.bd);
+      P(g, px0, 7, 1, 21, RW.lt);
+      P(g, px0 + 5, 7, 1, 21, RW.d2);
+      for (let y = 10; y < 26; y += 5) P(g, px0 + 2, y, 1, 3, RW.d1);
+      P(g, px0 - 1, 5, 8, 3, RW.d1);
+      P(g, px0 - 1, 5, 8, 1, RW.lt);
+    }
+    outlineSprite(g, W, H, RW.out);
+    return c;
+  }
+
+  /* LE BAC EN PLANCHES (la « jardinière vide » de la planche). Rebord saillant
+     en haut, cerclage à mi-hauteur, pied dans l'ombre. */
+  function townWoodBoxSprite() {
+    const W = 28, H = 24, [c, g] = cv(W, H);
+    woodGrainV(g, 3, 7, W - 6, H - 10);
+    P(g, 2, 4, W - 4, 4, RW.lt); P(g, 2, 4, W - 4, 1, RW.hl); P(g, 2, 7, W - 4, 1, RW.d1);
+    P(g, 3, 13, W - 6, 2, RW.d1); P(g, 3, 13, W - 6, 1, RW.lt);
+    P(g, 3, H - 4, W - 6, 2, RW.d2);
+    outlineSprite(g, W, H, RW.out);
+    return c;
+  }
+
+  /* LE MURET DE PIERRE. ⚠️ SON COURONNEMENT DÉBORDE DES DEUX CÔTÉS, et c'est
+     tout ce qui distingue un muret d'un mur : la planche montre une dalle
+     claire posée en surplomb sur des moellons plus sombres. Les moellons sont à
+     rangs DÉCALÉS, largeur variable tirée de leur position — un appareil
+     régulier se lit comme du carrelage. */
+  function townLowWallSprite() {
+    const W = 36, H = 24, [c, g] = cv(W, H);
+    P(g, 3, 7, W - 6, 14, RST.bd);
+    let row = 0;
+    for (let y = 7; y < 21; y += 4) {
+      let x = 3 - (row % 2 ? 3 : 0);
+      while (x < W - 3) {
+        const bw = 6 + ((x * 5 + row * 7) % 3) * 2;
+        const x0 = Math.max(3, x), x1 = Math.min(W - 3, x + bw - 1);
+        if (x1 > x0) {
+          P(g, x0, y, x1 - x0, 3, [RST.bd, RST.d1, RST.lt][(x * 3 + row * 2) % 3]);
+          P(g, x0, y, x1 - x0, 1, RST.lt);
+        }
+        x += bw;
+      }
+      row++;
+    }
+    P(g, 3, 20, W - 6, 1, RST.d2);
+    /* ⚠️ LE COURONNEMENT NE FAIT QUE TROIS PIXELS, et il DÉBORDE d'un seul de
+       chaque côté. Au premier jet il en faisait quatre sur toute la largeur :
+       la dalle mangeait la moitié de la hauteur et le muret se lisait comme une
+       bordure de trottoir. Ce qui fait le muret, ce sont ses MOELLONS ; la
+       dalle ne fait que les couronner. */
+    P(g, 2, 4, W - 4, 3, RST.lt); P(g, 2, 4, W - 4, 1, RST.hl); P(g, 2, 6, W - 4, 1, RST.d1);
+    outlineSprite(g, W, H, RST.out);
+    return c;
+  }
+
+  /* LE BANC DE PIERRE de la planche — celui qui est adossé au muret. Il n'a pas
+     de montants de fonte comme le banc de bois (429) : son dossier est fait de
+     deux DALLES posées, et ses pieds sont deux blocs pleins. C'est un meuble
+     d'ouvrage, pas de menuiserie, et c'est ce qui justifie d'en avoir deux.
+     ⚠️ MÊME HAUTEUR PEINTE QUE LE BANC DE BOIS (20 px pour un personnage de
+     23) : la leçon du 429 vaut pour tous les sièges, pas pour un seul dessin. */
+  function townStoneBenchSprite() {
+    const W = 46, H = 24, [c, g] = cv(W, H);
+    P(g, 5, 14, 6, 7, RST.d1); P(g, 5, 14, 1, 7, RST.bd);
+    P(g, W - 11, 14, 6, 7, RST.d1); P(g, W - 11, 14, 1, 7, RST.bd);
+    P(g, 2, 11, W - 4, 4, RST.bd); P(g, 2, 11, W - 4, 1, RST.hl); P(g, 2, 14, W - 4, 1, RST.d2);
+    P(g, 4, 2, 3, 12, RST.d1); P(g, W - 7, 2, 3, 12, RST.d1);
+    for (const ry of [2, 7]) {
+      P(g, 6, ry, W - 12, 4, RST.bd);
+      P(g, 6, ry, W - 12, 1, RST.lt);
+      P(g, 6, ry + 3, W - 12, 1, RST.d2);
+    }
+    outlineSprite(g, W, H, RST.out);
+    return c;
+  }
+
+  /* LE LAMPADAIRE À SUSPENSIONS. C'est l'objet le plus « habité » de la planche :
+     un poteau de bois sur socle de pierre, une traverse, et DEUX charges
+     dissymétriques — une corbeille fleurie d'un côté, une lanterne allumée de
+     l'autre. ⚠️ LA DISSYMÉTRIE EST LE DESSIN : deux lanternes identiques
+     donnent un candélabre de rue, une seule donne un poteau bancal. */
+  function townHangLampSprite() {
+    const W = 30, H = 48, [c, g] = cv(W, H);
+    P(g, 10, 41, 11, 5, RST.bd); P(g, 10, 41, 11, 1, RST.hl); P(g, 10, 45, 11, 1, RST.d2);
+    P(g, 13, 11, 4, 31, RW.bd); P(g, 13, 11, 1, 31, RW.lt); P(g, 16, 11, 1, 31, RW.d2);
+    P(g, 3, 11, 24, 3, RW.bd); P(g, 3, 11, 24, 1, RW.lt); P(g, 3, 13, 24, 1, RW.d2);
+    P(g, 12, 8, 6, 3, RW.d1); P(g, 12, 8, 6, 1, RW.lt);
+    // La corbeille fleurie, à l'ouest.
+    P(g, 7, 14, 1, 4, RW.d2);
+    P(g, 3, 18, 10, 5, RW.d1); P(g, 3, 18, 10, 1, RW.bd); P(g, 4, 22, 8, 1, RW.out);
+    for (const [fx, fy, col] of [[3, 15, "#d8709c"], [6, 14, "#f0a8c8"], [9, 15, "#d8709c"], [5, 17, "#e88ab4"], [10, 17, "#f0a8c8"]]) {
+      P(g, fx, fy, 3, 3, col); P(g, fx + 1, fy + 1, 1, 1, "#fff0f6");
+      P(g, fx, fy + 3, 3, 1, RG.d);
+    }
+    // La lanterne, à l'est. Toit en pente, verre chaud, anneau de suspension.
+    P(g, 22, 14, 1, 4, "#2e2b26");
+    g.fillStyle = "#2e2b26"; g.beginPath(); g.moveTo(17, 22); g.lineTo(22, 17); g.lineTo(27, 22); g.closePath(); g.fill();
+    P(g, 18, 22, 9, 10, "#2e2b26");
+    P(g, 19, 23, 7, 8, "#ffdf96"); P(g, 20, 24, 5, 5, "#fff7d8");
+    P(g, 22, 23, 1, 8, "#e8c46a");
+    P(g, 18, 31, 9, 2, "#211f1c");
+    outlineSprite(g, W, H, RW.out);
+    return c;
+  }
+
+  /* LES PAS JAPONAIS. Trois galets plats, posés à plat sur l'eau ou la vase.
+     ⚠️ ILS N'ONT PAS D'OMBRE PORTÉE MAIS UNE LIGNE DE FLOTTAISON, exactement
+     comme le bloc erratique du 437 : une pierre au bord de l'eau est mouillée à
+     sa base, et c'est le seul indice qui dise si elle est DANS le lac ou à
+     côté. */
+  function townStepStonesSprite() {
+    const W = 28, H = 16, [c, g] = cv(W, H);
+    for (const [sx, sy, rx, ry] of [[7, 8, 5, 3.4], [16, 5, 4.4, 3], [21, 10, 4, 2.8]]) {
+      for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+        const dx = (x + 0.5 - sx) / rx, dy = (y + 0.5 - sy) / ry;
+        const d = dx * dx + dy * dy;
+        if (d > 1) continue;
+        const lit = -dx * 0.55 - dy * 0.84;
+        P(g, x, y, 1, 1, lit > 0.30 ? RST.lt : lit < -0.30 ? RST.d1 : RST.bd);
+      }
+      P(g, Math.round(sx - rx) + 1, Math.round(sy + ry) - 1, Math.round(rx * 2) - 1, 1, "#4e5a5e");
+    }
+    outlineSprite(g, W, H, RST.out);
+    return c;
+  }
+
+  /* LE COFFRE. Couvercle bombé, deux ferrures verticales, une serrure dorée.
+     ⚠️ LE COUVERCLE EST PLUS SOMBRE QUE LA CAISSE : il est vu par la tranche,
+     donc il prend moins de lumière que la face. Peint de la même valeur, le
+     coffre devient une boîte. */
+  function townChestSprite() {
+    const W = 22, H = 20, [c, g] = cv(W, H);
+    woodGrainV(g, 2, 9, W - 4, 8);
+    P(g, 2, 16, W - 4, 2, RW.d2);
+    for (let x = 2; x < W - 2; x++) {
+      const t = (x - (W - 1) / 2) / (W / 2 - 2);
+      const yTop = 4 + Math.round(t * t * 3);
+      P(g, x, yTop, 1, 9 - yTop + 1, ((x % 4) === 0) ? RW.d2 : RW.d1);
+      P(g, x, yTop, 1, 1, RW.bd);
+    }
+    for (const bx of [5, W - 7]) { P(g, bx, 4, 2, 13, "#6b6155"); P(g, bx, 4, 1, 13, "#8e8474"); }
+    P(g, (W >> 1) - 2, 8, 4, 5, "#c8a03c"); P(g, (W >> 1) - 2, 8, 4, 1, "#eccb70");
+    P(g, (W >> 1), 10, 1, 2, "#5a4818");
+    outlineSprite(g, W, H, RW.out);
+    return c;
+  }
+
+  /* LE SEAU DE FER-BLANC. Tronconique, deux cercles de renfort, une anse en
+     arc. ⚠️ L'ANSE EST DESSINÉE EN DEUX MONTANTS ET UN LINTEAU, pas en `arc()` :
+     à cette taille un arc antialiasé rend trois pixels gris qui se lisent comme
+     une salissure, et le faux canevas des bancs ne le rastérise pas pareil. */
+  function townBucketSprite() {
+    const W = 16, H = 21, [c, g] = cv(W, H);
+    for (let y = 8; y < H - 2; y++) {
+      const t = (y - 8) / (H - 10);
+      const half = Math.round(6 - t * 1.6);
+      P(g, 8 - half, y, half * 2, 1, RST.bd);
+      P(g, 8 - half, y, 2, 1, RST.lt);
+      P(g, 8 + half - 1, y, 1, 1, RST.d1);
+    }
+    P(g, 2, 7, 12, 2, RST.lt); P(g, 2, 7, 12, 1, RST.hl);
+    P(g, 3, 13, 10, 1, RST.d1);
+    P(g, 4, H - 3, 8, 1, RST.d2);
+    P(g, 3, 3, 1, 5, "#5f5d57"); P(g, 12, 3, 1, 5, "#5f5d57"); P(g, 4, 2, 8, 1, "#7c7a72");
+    outlineSprite(g, W, H, RST.out);
+    return c;
+  }
+
+  /* LA CANNE À PÊCHE POSÉE. Décor seul (décision de Guillaume) : elle est
+     appuyée, pas tenue. ⚠️ LE FIL EST LA MOITIÉ DU DESSIN et il ne peut pas
+     être un trait d'un pixel gris uni — il disparaît sur l'eau. On l'écrit en
+     pointillé clair d'un pixel sur deux, ce qui est aussi la façon dont la
+     planche le dessine, et le flotteur rouge et blanc lui donne son point
+     d'arrivée. */
+  function townRodSprite() {
+    const W = 28, H = 32, [c, g] = cv(W, H);
+    for (let i = 0; i <= 24; i++) {
+      const x = 4 + Math.round(i * 0.76), y = 29 - i;
+      P(g, x, y, 2, 1, i > 16 ? "#b08a56" : "#8a6438");
+      P(g, x, y, 1, 1, i > 16 ? "#d0aa74" : "#a87c4a");
+    }
+    P(g, 7, 22, 4, 4, "#4a4640"); P(g, 8, 23, 2, 2, "#8e8a80");   // le moulinet
+    P(g, 5, 26, 5, 2, "#6b4a28");                                  // la poignée liégée
+    for (let y = 6; y < 24; y += 2) P(g, 23, y, 1, 1, "#e8f0f4");  // le fil
+    P(g, 21, 24, 4, 3, "#d0342c"); P(g, 21, 27, 4, 2, "#f0ece0");  // le flotteur
+    P(g, 22, 24, 1, 1, "#f07a70");
+    outlineSprite(g, W, H, "#2c2318");
+    return c;
+  }
+
+  /* LES MASSETTES EN POT. Le pot est le même terre cuite que la planche (trois
+     tons + un col saillant) ; les hampes sont des lames qui partent TOUTES du
+     même point et s'écartent — un éventail, pas un buisson. Les épis bruns sont
+     en haut de trois lames sur huit seulement : à toutes, on obtient un balai. */
+  function townPotReedsSprite() {
+    const W = 28, H = 34, [c, g] = cv(W, H);
+    /* ⚠️ UNE LAME EST UN RUBAN DE DEUX PIXELS QUI S'AFFINE, PAS UN TRAIT D'UN
+       PIXEL. Premier jet : huit traits d'un pixel partant du pot — vu sur la
+       planche, ça donne une araignée, pas un touffe de massettes. La planche de
+       référence dessine des lames LARGES à la base, effilées au sommet, et
+       c'est cette variation d'épaisseur qui fait la plante.
+       ⚠️ ET LES LAMES PARTENT TOUTES DU MÊME POINT (le collet, dans le pot) :
+       une graminée pousse en éventail depuis une souche, pas en bouquet piqué. */
+    /* ⚠️ AUCUNE LAME NE MONTE PLUS HAUT QUE y = 5 : au-dessus, l'ÉPI qui la
+       coiffe (trois pixels de plus) sortait du canevas par le haut. Encore le
+       piège n°1, encore attrapé par le banc et par rien d'autre. */
+    const blades = [[-9, 9, 0], [-7, 5, 1], [-4, 3, 0], [-1, 3, 1], [2, 3, 0], [5, 5, 1], [8, 8, 0], [10, 12, 0]];
+    const heads = [];
+    let k = 0;
+    for (const [dxTip, yTip, hasHead] of blades) {
+      const x0 = 14, y0 = 24, x1 = 14 + dxTip, y1 = 3 + yTip;
+      const col = (k % 3 === 0) ? RG.d : (k % 3 === 1) ? RG.b : RG.l;
+      const steps = y0 - y1;
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;                      // 0 au collet, 1 à la pointe
+        // La lame s'incurve : elle part droite et se couche en s'éloignant.
+        const x = Math.round(x0 + (x1 - x0) * (t * t * 0.55 + t * 0.45));
+        const wdt = t > 0.78 ? 1 : t > 0.40 ? 2 : 3;
+        P(g, Math.min(x, W - 3), y0 - i, wdt, 1, col);
+        if (wdt === 2) P(g, x, y0 - i, 1, 1, RG.h);   // la nervure claire
+      }
+      heads.push([x1, y1, hasHead]);
+      k++;
+    }
+    /* ⚠️ LES ÉPIS SE PEIGNENT APRÈS TOUTES LES LAMES, et c'est le seul ordre
+       possible : peints au fil du bouquet, les trois derniers rubans passaient
+       DEVANT eux et la plante se lisait comme un palmier. Vu sur la planche —
+       en lisant le code, l'ordre semblait sans importance. */
+    for (const [hx, hy, hasHead] of heads) {
+      if (!hasHead) continue;
+      /* ⚠️ L'ÉPI FAIT QUATRE PIXELS DE LARGE ET NEUF DE HAUT — au premier jet
+         il en faisait trois sur sept, et il DISPARAISSAIT dans les lames : ce
+         qui fait reconnaître une massette est le contraste d'une masse brune
+         épaisse contre du vert, pas sa forme exacte. */
+      P(g, hx - 1, hy, 4, 9, "#8a5a30");
+      P(g, hx - 1, hy, 1, 9, "#ac7a44");
+      P(g, hx + 2, hy + 1, 1, 8, "#553719");
+      P(g, hx - 1, hy, 4, 1, "#c08f5e");
+      P(g, hx, hy - 4, 1, 4, "#5c3f26");
+    }
+    for (let y = 22; y < 32; y++) {
+      const t = (y - 22) / 10, half = Math.round(8 - t * 2.4);
+      P(g, 14 - half, y, half * 2, 1, "#b0603a");
+      P(g, 14 - half, y, 2, 1, "#d08258");
+      P(g, 14 + half - 1, y, 1, 1, "#82401f");
+    }
+    P(g, 5, 20, 18, 3, "#c07044"); P(g, 5, 20, 18, 1, "#dd9068"); P(g, 5, 22, 18, 1, "#8a4522");
+    outlineSprite(g, W, H, "#2a1a10");
+    return c;
+  }
+
+  /* ⚠️⚠️ LE BUISSON D'OR (le forsythia de la planche, en trois tailles). C'est
+     le seul objet de la planche qui soit DAVANTAGE fleur que feuille, et c'est
+     ce qui le rend difficile : un semis de points jaunes sur du vert donne du
+     bruit (la leçon du 438), pas une floraison. La parade est un RÉSEAU —
+     `(2x + 3y + variante) % 7` — qui pose des touffes de 2×2 côte à côte sans
+     jamais les aligner en rangs, et seulement à l'INTÉRIEUR de la masse : le
+     pourtour reste vert, donc la silhouette reste celle d'un buisson.
+     ⚠️ ET LE FEUILLAGE EST OMBRÉ SUR UNE SEULE GRANDEUR (la normale à la
+     lentille), comme les houppiers du 438 — deux conditions croisées donnent la
+     frontière dentelée que Guillaume appelle « sale ». */
+  function townGoldBushSprite(vr) {
+    const [W, H] = [[32, 27], [26, 23], [21, 19]][vr % 3];
+    const [c, g] = cv(W, H);
+    const cx = W / 2, cy = H * 0.60;
+    const lobes = [
+      [cx, cy, W * 0.44, H * 0.38], [cx - W * 0.25, cy - H * 0.10, W * 0.28, H * 0.30],
+      [cx + W * 0.25, cy - H * 0.08, W * 0.27, H * 0.30], [cx + W * 0.02, cy - H * 0.26, W * 0.30, H * 0.27],
+    ];
+    const m = new Uint8Array(W * H);
+    for (const [bx, by, rx, ry] of lobes) {
+      for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+        const dx = (x + 0.5 - bx) / rx, dy = (y + 0.5 - by) / ry;
+        if (dx * dx + dy * dy <= 1) m[y * W + x] = 1;
+      }
+    }
+    for (let y = 2; y < H - 2; y++) for (let x = 2; x < W - 2; x++) {
+      if (!m[y * W + x] && m[y * W + x + 1] && m[y * W + x - 1] && m[(y + 1) * W + x] && m[(y - 1) * W + x]) m[y * W + x] = 1;
+    }
+    for (const [bx, by, rx, ry] of lobes) {
+      for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+        const dx = (x + 0.5 - bx) / rx, dy = (y + 0.5 - by) / ry;
+        if (dx * dx + dy * dy > 1) continue;
+        const lit = -dx * 0.62 - dy * 0.78;
+        P(g, x, y, 1, 1, lit > 0.30 ? RG.l : lit < -0.28 ? RG.d : RG.b);
+      }
+    }
+    const on = (x, y) => (x < 0 || y < 0 || x >= W || y >= H) ? 0 : m[y * W + x];
+    /* ⚠️⚠️⚠️ LA FLORAISON A ÉTÉ ÉCRITE TROIS FOIS, ET LES DEUX PREMIÈRES SONT
+       DEUX PIÈGES DÉJÀ DOCUMENTÉS, PAYÉS DE NOUVEAU.
+         1er jet — un pixel sur deux fleuri (`(2x+3y+v) % 7 <= 3`, 57 %) : les
+           touffes de 2×2 se recouvraient et le buisson sortait en TACHE JAUNE
+           UNIE. Plus une feuille, donc plus de silhouette, donc plus de
+           buisson. Vu sur `rive-planche.png`, invisible en lisant le code.
+         2e jet — le même réseau à 36 % : il sortait RAYÉ EN DIAGONALE, parce
+           qu'une forme LINÉAIRE en (x, y) prise modulo un entier dessine des
+           droites, toujours. C'est mot pour mot le défaut de la pelouse du 438
+           (« deux suites à faible discrépance ne font pas une répartition dans
+           le plan »), retrouvé en semant des fleurs au lieu de touffes d'herbe.
+       3e et bonne version : on ne sème pas des PIXELS, on pose des GRAPPES —
+       la règle de dessin du 438 (« on n'texture pas une silhouette, on assemble
+       des formes »), et c'est ce que montre la planche de référence : des
+       paquets jaunes distincts, séparés par du vert.
+       ⚠️ LEURS CENTRES VIENNENT DE LA SUITE R2 (les constantes du nombre
+       plastique), qui est faite pour le PLAN. C'est le remède nommé au 438, et
+       c'est la seule raison pour laquelle ces deux constantes sont ici. */
+    const R2A = 0.7548776662466927, R2B = 0.5698402909980532;
+    const NC = [13, 9, 6][vr % 3];
+    for (let i = 1; i <= NC; i++) {
+      const u = (0.5 + R2A * i) % 1, v = (0.5 + R2B * i) % 1;
+      /* ⚠️ LA FLORAISON S'ARRÊTE AUX TROIS QUARTS DE LA HAUTEUR : un forsythia
+         fleurit sur ses pousses de l'année, donc en haut et sur les côtés.
+         Fleuri jusqu'au sol, il se lit comme un tas. */
+      const bx = 2 + u * (W - 4), by = 1 + v * (H * 0.72);
+      const rr = 2.1 + ((i * 7) % 3) * 0.45;
+      for (let y = Math.floor(by - rr); y <= Math.ceil(by + rr); y++) {
+        for (let x = Math.floor(bx - rr); x <= Math.ceil(bx + rr); x++) {
+          if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1 || !m[y * W + x]) continue;
+          const dx = (x + 0.5 - bx) / rr, dy = (y + 0.5 - by) / rr;
+          if (dx * dx + dy * dy > 1) continue;
+          const lit = -dx * 0.62 - dy * 0.78;
+          P(g, x, y, 1, 1, lit > 0.32 ? "#fbdf5c" : lit < -0.30 ? "#c08f12" : "#e3b626");
+        }
+      }
+    }
+    for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+      if (!m[y * W + x]) continue;
+      if (on(x + 1, y) && on(x - 1, y) && on(x, y + 1) && on(x, y - 1)) continue;
+      P(g, x, y, 1, 1, RG.out);
+    }
+    return c;
+  }
+
+  /* LA JARDINIÈRE FLEURIE de la planche (à ne pas confondre avec `townPlanter`
+     du 425, qui est une vasque de place). Bac de bois bas et LARGE, terre
+     visible, et cinq espèces mélangées — c'est le mélange, pas la quantité, qui
+     la distingue d'un massif. */
+  function townFlowerTroughSprite() {
+    const W = 32, H = 24, [c, g] = cv(W, H);
+    woodGrainV(g, 2, 13, W - 4, 8);
+    P(g, 2, 11, W - 4, 3, RW.lt); P(g, 2, 11, W - 4, 1, RW.hl); P(g, 3, 13, W - 6, 1, RW.d1);
+    P(g, 2, H - 4, W - 4, 2, RW.d2);
+    P(g, 4, 8, W - 8, 4, "#4d3a26");
+    const FL = ["#e2456b", "#f2c42e", "#7e8fd8", "#f0f0e6", "#e0489c", "#8a6ec8"];
+    for (let i = 0; i < 9; i++) {
+      const fx = 3 + i * 3, fy = 4 + ((i * 5) % 3) * 2, col = FL[i % FL.length];
+      P(g, fx, fy + 3, 2, 5, RG.d);
+      P(g, fx - 1, fy + 1, 4, 1, col); P(g, fx, fy, 2, 3, col);
+      P(g, fx, fy + 1, 1, 1, "#fff6e2");
+    }
+    outlineSprite(g, W, H, RW.out);
+    return c;
+  }
+
+  /* LA TABLE ET LE TABOURET de la planche. Plateau à planches, ceinture, quatre
+     pieds dont deux visibles seulement — un plateau posé sur quatre traits
+     symétriques se lit comme un tabouret géant. */
+  function townTableSprite() {
+    const W = 28, H = 26, [c, g] = cv(W, H);
+    P(g, 5, 14, 3, 9, RW.d1); P(g, W - 8, 14, 3, 9, RW.d1);
+    P(g, 5, 14, 1, 9, RW.bd); P(g, W - 8, 14, 1, 9, RW.bd);
+    P(g, 3, 12, W - 6, 3, RW.d1);
+    woodGrainV(g, 2, 6, W - 4, 6);
+    P(g, 2, 6, W - 4, 1, RW.hl);
+    P(g, 2, 11, W - 4, 1, RW.d2);
+    outlineSprite(g, W, H, RW.out);
+    return c;
+  }
+  function townStoolSprite() {
+    const W = 14, H = 20, [c, g] = cv(W, H);
+    P(g, 3, 11, 3, 6, RW.d1); P(g, W - 6, 11, 3, 6, RW.d1);
+    P(g, 3, 11, 1, 6, RW.bd); P(g, W - 6, 11, 1, 6, RW.bd);
+    woodGrainV(g, 2, 5, W - 4, 5);
+    P(g, 2, 5, W - 4, 1, RW.hl); P(g, 2, 9, W - 4, 2, RW.d2);
+    outlineSprite(g, W, H, RW.out);
+    return c;
+  }
+
   /* ---------------- Atlas ---------------- */
   const S = {
     grass: [grassTile(0), grassTile(1), grassTile(2)],
@@ -9742,6 +10397,26 @@ export function buildSprites() {
       Array.from({ length: 8 }, (__, v) => townBloomTile(k + 1, v))),
     townShrub: [0, 1, 2].map(v => townShrubSprite(v)),
     townBoulder: [0, 1, 2].map(v => townBoulderSprite(v)),
+    /* ZIP 439 — le mobilier de rive, copié sur la planche de référence. Ils
+       sont à plat plutôt que dans un objet (contrairement à `townRoad` ou
+       `townWater`) parce que le rendu les prend UN PAR UN, par `pr.kind` : ils
+       n'ont rien à se dire entre eux, et un objet n'apporterait qu'un niveau
+       d'indirection de plus dans la table du switch. */
+    townArchBridge: townArchBridgeSprite(),
+    townFence: townFenceSprite(),
+    townWoodBox: townWoodBoxSprite(),
+    townLowWall: townLowWallSprite(),
+    townStoneBench: townStoneBenchSprite(),
+    townHangLamp: townHangLampSprite(),
+    townStepStones: townStepStonesSprite(),
+    townChest: townChestSprite(),
+    townBucket: townBucketSprite(),
+    townRod: townRodSprite(),
+    townPotReeds: townPotReedsSprite(),
+    townGoldBush: [0, 1, 2].map(v => townGoldBushSprite(v)),
+    townFlowerTrough: townFlowerTroughSprite(),
+    townTable: townTableSprite(),
+    townStool: townStoolSprite(),
     /* ZIP 436 — LA PIERRE DE LA HAUTE-VILLE : marches, parement de falaise,
        limons. Même forme que `townRoad` (un objet, sa période voyage avec) et
        même raison d'être ici plutôt que dans la boucle de rendu — voir la note

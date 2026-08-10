@@ -15369,6 +15369,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                      changeraient de couleur à chaque image. */
                   : pr.kind === "shrub" ? (sprites.townShrub || [])[((pr.x * 7 + pr.y * 13) >>> 0) % Math.max(1, (sprites.townShrub || []).length)]
                   : pr.kind === "boulder" ? (sprites.townBoulder || [])[((pr.x * 11 + pr.y * 5) >>> 0) % Math.max(1, (sprites.townBoulder || []).length)]
+                  /* ZIP 439 — le mobilier de rive, copié sur la planche de
+                     référence de Guillaume. ⚠️ LE BUISSON D'OR PREND SA TAILLE
+                     DE SA POSITION et non d'un tirage, comme le buisson du 437 :
+                     trois tailles semées au hasard changeraient à chaque image. */
+                  : pr.kind === "archBridge" ? sprites.townArchBridge
+                  : pr.kind === "fence" ? sprites.townFence
+                  : pr.kind === "woodBox" ? sprites.townWoodBox
+                  : pr.kind === "lowWall" ? sprites.townLowWall
+                  : pr.kind === "stoneBench" ? sprites.townStoneBench
+                  : pr.kind === "hangLamp" ? sprites.townHangLamp
+                  : pr.kind === "stepStones" ? sprites.townStepStones
+                  : pr.kind === "chest" ? sprites.townChest
+                  : pr.kind === "bucket" ? sprites.townBucket
+                  : pr.kind === "rod" ? sprites.townRod
+                  : pr.kind === "potReeds" ? sprites.townPotReeds
+                  : pr.kind === "flowerTrough" ? sprites.townFlowerTrough
+                  : pr.kind === "table" ? sprites.townTable
+                  : pr.kind === "stool" ? sprites.townStool
+                  : pr.kind === "goldBush" ? (sprites.townGoldBush || [])[((pr.x * 5 + pr.y * 9) >>> 0) % Math.max(1, (sprites.townGoldBush || []).length)]
                   : pr.kind === "flowerCart" ? sprites.townFlowerCart      // zip 431
                   : pr.kind === "barrel" ? sprites.townBarrel              // zip 431
                   : pr.kind === "sacks" ? sprites.townSacks                // zip 431

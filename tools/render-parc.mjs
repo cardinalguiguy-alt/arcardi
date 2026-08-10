@@ -66,7 +66,28 @@ const PROP_IMG = (p) => (
   p.kind === "planter" ? S.townPlanter :
   p.kind === "kiosk" ? S.townKiosk :
   p.kind === "shrub" ? S.townShrub[((p.x * 7 + p.y * 13) >>> 0) % S.townShrub.length] :
-  p.kind === "boulder" ? S.townBoulder[((p.x * 11 + p.y * 5) >>> 0) % S.townBoulder.length] : null);
+  p.kind === "boulder" ? S.townBoulder[((p.x * 11 + p.y * 5) >>> 0) % S.townBoulder.length] :
+  /* ZIP 439 — le mobilier de rive. ⚠️ CETTE TABLE DOIT RESTER IDENTIQUE À
+     CELLE DE `drawTownFrame` : c'est une recopie, donc une divergence en
+     attente (§8). Elle est ici parce que l'alternative — ne pas dessiner les
+     nouveaux décors — donnerait une planche où la rive paraît vide alors
+     qu'elle est meublée, ce qui est un verdict FAUX, pas une approximation.
+     C'est exactement ce que la première passe de ce zip a produit. */
+  p.kind === "archBridge" ? S.townArchBridge :
+  p.kind === "fence" ? S.townFence :
+  p.kind === "woodBox" ? S.townWoodBox :
+  p.kind === "lowWall" ? S.townLowWall :
+  p.kind === "stoneBench" ? S.townStoneBench :
+  p.kind === "hangLamp" ? S.townHangLamp :
+  p.kind === "stepStones" ? S.townStepStones :
+  p.kind === "chest" ? S.townChest :
+  p.kind === "bucket" ? S.townBucket :
+  p.kind === "rod" ? S.townRod :
+  p.kind === "potReeds" ? S.townPotReeds :
+  p.kind === "flowerTrough" ? S.townFlowerTrough :
+  p.kind === "table" ? S.townTable :
+  p.kind === "stool" ? S.townStool :
+  p.kind === "goldBush" ? S.townGoldBush[((p.x * 5 + p.y * 9) >>> 0) % S.townGoldBush.length] : null);
 
 function paint(v, now) {
   const sh = makeCanvas(v.w * T, v.h * T);
@@ -202,7 +223,12 @@ console.log("\n=== 4. rien n'a les pieds dans l'eau, rien ne bouche une allée =
   let drowned = 0, onPath = 0;
   for (const q of tw.props) {
     const i = q.y * tw.w + q.x;
-    if (tw.ground[i] === C.G_WATER) drowned++;
+    /* ⚠️ ZIP 439 — LES PAS JAPONAIS SONT SUR L'EAU PAR DÉFINITION, et c'est la
+       même exception que celle entrée dans `verify-vallee.mjs` le même jour :
+       ce contrôle cherche des décors NOYÉS PAR ACCIDENT (le buisson que le
+       creusement de l'anse a rattrapé), pas des décors dont la place est l'eau.
+       Le reste de la règle est intact. */
+    if (q.kind !== "stepStones" && tw.ground[i] === C.G_WATER) drowned++;
     /* ⚠️ ON NE TESTE QUE LES DÉCORS DE JARDIN (`gard`), PAS TOUT CE QUI
        RESSEMBLE À UNE JARDINIÈRE. Le premier jet comptait les huit jardinières
        de la place centrale, posées sur du dallage depuis le 425 et parfaitement

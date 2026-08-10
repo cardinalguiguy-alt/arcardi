@@ -4917,9 +4917,19 @@ export function generateTownWorld() {
     for (let x = x0 + 4; x < x1 - 4; x += 8) {
       if (tops[x] === null) continue;
       if (quayMix(x) > 0.5) {
-        if (freeQuay(x, tops[x] - 1)) addProp(x, tops[x] - 1, "bench", true);
+        /* ⚠️ ZIP 439 — UN BANC SUR DEUX EST DE PIERRE, ET LE LAMPADAIRE ALTERNE
+           AVEC CELUI À SUSPENSIONS. Les positions n'ont PAS bougé — ce sont
+           celles que `verify-vallee.mjs` valide depuis le 437 (« deux places
+           d'un banc ne se marchent pas dessus ») — seul le dessin change. Poser
+           les objets de la planche à des places neuves aurait mêlé une question
+           de dessin à une question de circulation, et on n'aurait pas su
+           laquelle des deux a cassé quoi.
+           ⚠️ LA VARIANTE SE DÉDUIT DU RANG, pas d'un tirage : le même banc doit
+           être de la même matière chez les deux joueurs (§3). */
+        const rank = ((x - x0) / 8) | 0;
+        if (freeQuay(x, tops[x] - 1)) addProp(x, tops[x] - 1, rank % 2 ? "stoneBench" : "bench", true);
         const lx = x + 4;
-        if (tops[lx] !== null && ((x - x0) / 8) % 2 === 0 && freeQuay(lx, tops[lx] - 2)) addProp(lx, tops[lx] - 2, "lamp", true);
+        if (tops[lx] !== null && rank % 2 === 0 && freeQuay(lx, tops[lx] - 2)) addProp(lx, tops[lx] - 2, rank % 4 ? "lamp" : "hangLamp", true);
       }
     }
     /* La rive sauvage. Les blocs erratiques se posent AU RAS de l'eau (c'est là
@@ -4947,6 +4957,186 @@ export function generateTownWorld() {
     for (let x = x0; x < x1; x++) {
       if (quayMix(x) <= 0.5 || tops[x] === null) continue;
       beds.push({ x, y: AVE, w: 1, h: Math.max(1, tops[x] - C.TOWN_QUAY_H - AVE), kind: C.BL_WILD, dens: 0.34 });
+    }
+    /* ═══════════════════════════════════════════════════════════════════════
+       ZIP 439 — L'ANSE ET SON PONT DE BOIS, SUR LA RIVE SAUVAGE DE L'OUEST.
+       ─────────────────────────────────────────────────────────────────────
+       ⚠️⚠️ ON CREUSE L'ANSE, ON NE LA CHERCHE PAS. Premier réflexe : balayer
+       le rivage pour trouver une crique assez étroite et y poser le pont. Ça ne
+       tient pas, et pour une raison de fond : la forme du lac vient d'un CHAMP
+       (les harmoniques de `TOWN_LAKE_BAYS` plus deux passes de lissage), donc
+       le jour où l'on retouche une amplitude, le « goulet » trouvé n'existe
+       plus, le pont ne se pose pas — et rien ne le dit. Un décor absent ne lève
+       aucune erreur (c'est le défaut trouvé au 437 sur le belvédère du parc).
+       Ici, l'anse est CREUSÉE à une place choisie : elle existe toujours, elle
+       a toujours la bonne largeur, et le pont a toujours ses deux rives.
+
+       ⚠️ ET ELLE MONTE PLUS HAUT QUE LE SENTIER (`rb - 1`), ce qui est tout le
+       sujet. Une anse qui s'arrête au ras du chemin laisse le pont posé À CÔTÉ
+       de l'eau : on le contourne, donc il ne sert à rien, donc il se lit comme
+       un décor. En coupant le sentier, elle rend le pont OBLIGATOIRE — et un
+       ouvrage qu'on emprunte est un ouvrage qu'on regarde.
+
+       ⚠️ LE TABLIER FAIT CINQ CASES ET PAS QUATRE, et c'est de l'arithmétique,
+       pas du goût : un décor est centré sur `pr.x * 16 + 8`, donc une portée
+       PAIRE tomberait une demi-case à côté de son eau. Sur cinq cases, la case
+       du milieu est le centre — c'est la règle de symétrie du 432 (« une
+       position réglée à la main est une position qui penchera »). */
+    /* ⚠️⚠️ ON BALAYE LES DEUX RIVES SAUVAGES ET ON GARDE LA MEILLEURE PLACE, on
+       ne prend pas la première. Écrit « la première qui convient » sur les
+       quatorze premières colonnes, ce bloc n'a RIEN posé du tout : aucune
+       fenêtre n'y satisfaisait la contrainte de platitude, et le pont — l'objet
+       central de la livraison — a disparu de la carte SANS QUE RIEN NE LE DISE.
+       C'est le défaut nommé plus haut dans ce même commentaire (« un décor
+       absent ne lève aucune erreur ») commis dans le geste censé l'éviter, et
+       c'est un compte de props qui l'a montré, pas une lecture.
+       ⚠️ D'où le `console.warn` en sortie : si un jour la carte ne peut plus
+       porter de pont, on veut l'apprendre par un message, pas par une absence. */
+    const BSPAN = 5;
+    let ax = -1, rb = 0, axFlat = 99;
+    for (let x = x0 + 4; x < x1 - BSPAN - 6; x++) {
+      // On reste sur la rive sauvage, des deux côtés du tablier.
+      if (quayMix(x - 2) > 0.05 || quayMix(x + BSPAN + 3) > 0.05) continue;
+      const rs = [];
+      for (let k = -2; k <= BSPAN + 3; k++) {
+        const r = trailRow(x + k);
+        if (r === null || tops[x + k] === null) { rs.length = 0; break; }
+        rs.push(r);
+      }
+      if (!rs.length) continue;
+      const r = Math.min(...rs);
+      /* ⚠️⚠️ ON N'ACCEPTE QUE LES ENDROITS OÙ LE SENTIER EST DÉJÀ PLAT, ET
+         C'EST LE PIÈGE LE PLUS RÉPÉTITIF DU PROJET QUI REVIENT (« une allée
+         d'une case de large ne montre que ses marches », payé quatre fois au
+         437). Premier jet : on posait le tablier à la rangée la plus haute des
+         dix colonnes voisines, et on RACCORDAIT le sentier naturel jusqu'à lui.
+         Quand la houle du sentier faisait trois cases d'écart, le raccord
+         pavait une colonne de gravier de cinq cases de haut de chaque côté : la
+         planche montrait un escalier de gravier en pleine prairie, deux fois
+         plus large que le pont. La parade n'est pas de lisser le raccord — ce
+         serait le même défaut en plus long — c'est de CHOISIR une place où il
+         n'y en a pas besoin. Le rivage en offre plusieurs ; il suffit de les
+         demander. */
+      const flat = Math.max(...rs) - r;
+      if (flat >= axFlat) continue;
+      /* La rive doit être à deux ou six cases sous le tablier : moins, l'anse
+         n'est qu'une flaque ; plus, on creuse un canal jusqu'au large et le
+         pont devient une jetée. */
+      let deep = 0;
+      for (let k = 1; k <= BSPAN; k++) deep = Math.max(deep, tops[x + k] - r);
+      if (deep >= 2 && deep <= 6) { ax = x; rb = r; axFlat = flat; }
+    }
+    if (ax < 0) console.warn("[VILLE] aucune place pour le pont de la rive sud");
+    if (ax > 0) {
+      // 1. L'ANSE. Elle part d'une case AU-DESSUS du sentier et rejoint le lac.
+      for (let k = 1; k <= BSPAN; k++) {
+        const x = ax + k;
+        for (let y = rb - 1; y < tops[x]; y++) {
+          if (!inMap(x, y)) continue;
+          const i = id(x, y);
+          ground[i] = C.G_WATER; solid[i] = 0; objects[i] = C.O_NONE; objHp.delete(i);
+        }
+      }
+      /* ⚠️ ET ON RETIRE LES DÉCORS QUE L'ANSE VIENT DE NOYER. Le mobilier de
+         rive est posé plus haut dans ce même bloc : sans ce balayage, un
+         buisson ou un bloc erratique reste dans `props` au milieu de l'eau,
+         solide, et se dessine flottant. Même règle que le buisson enterré sous
+         le parvis du kiosque, trouvé au 437 : ce n'est pas le décor qui est
+         fautif, c'est la passe qui passe APRÈS lui sans le prévenir. */
+      for (let i = props.length - 1; i >= 0; i--) {
+        const pr = props[i];
+        if (pr.x > ax && pr.x <= ax + BSPAN && pr.y >= rb - 1 && pr.y < yBot) {
+          solid[id(pr.x, pr.y)] = 0;
+          props.splice(i, 1);
+        }
+      }
+      // 2. LE TABLIER : deux rangées de bois SUR l'eau, comme le ponton.
+      for (let k = 1; k <= BSPAN; k++) for (const y of [rb, rb + 1]) {
+        const i = id(ax + k, y);
+        ground[i] = C.G_BRIDGE; solid[i] = 0; objects[i] = C.O_NONE; objHp.delete(i);
+      }
+      /* 3. LES DEUX APPROCHES. ⚠️ LE SENTIER N'ARRIVE PAS TOUT SEUL AU TABLIER :
+         il ondule pour son compte (`TOWN_TRAIL_WAVE`), donc sa rangée diffère
+         d'une ou deux cases de part et d'autre de l'anse. Sans ce raccord, on
+         voit un pont dont les deux bouts ne touchent rien — et on ne peut pas
+         monter dessus. */
+      for (const side of [-2, -1, BSPAN + 1, BSPAN + 2]) {
+        const x = ax + side;
+        const nat = trailRow(x);
+        const yA = Math.min(rb, nat === null ? rb : nat), yB = Math.max(rb + 1, nat === null ? rb + 1 : nat + 1);
+        for (let y = yA; y <= yB; y++) paveTrail(x, y);
+      }
+      // 4. L'OUVRAGE lui-même, plus ses deux lanternes de tête.
+      addProp(ax + 1 + (BSPAN >> 1), rb + 1, "archBridge", false);
+      for (const hx of [ax - 1, ax + BSPAN + 2]) addGarden(hx, rb - 1, "hangLamp");
+      /* 5. ET IL EST FLEURI. Un pont de bois nu au milieu d'une prairie se lit
+         comme une planche ; ce qui en fait un ouvrage de jardin, ce sont ses
+         abords plantés. Deux buissons d'or à chaque tête, et un semis doré sur
+         les deux rives de l'anse. */
+      for (const hx of [ax, ax + BSPAN + 1]) {
+        addGarden(hx, rb - 1, "goldBush");
+        addGarden(hx, rb + 2, "goldBush");
+        beds.push({ x: hx - 1, y: rb - 3, w: 3, h: 2, kind: C.BL_GOLD, dens: 0.7 });
+      }
+      for (let k = 0; k <= BSPAN + 1; k++) beds.push({ x: ax + k, y: rb - 2, w: 1, h: 1, kind: C.BL_WILD, dens: 0.6 });
+    }
+    /* ═══ LE MOBILIER DE LA PLANCHE, SUR LA RIVE ═══
+       ⚠️ IL SE POSE PAR `addGarden`, JAMAIS PAR `addProp` : sur une rive, on ne
+       sait pas d'avance ce qu'il y a sous la case (eau, sentier, quai, décor
+       déjà posé), et `addProp` ne vérifie rien — c'est le mur invisible du 425
+       en version décor, dit en toutes lettres au-dessus d'`addGarden`. */
+    {
+      // Derrière la promenade maçonnée : la bande de prairie du 437, meublée.
+      const KIT = ["goldBush", "flowerTrough", "potReeds", "woodBox", "goldBush", "lowWall"];
+      let k = 0;
+      for (let x = x0 + 3; x < x1 - 3; x += 5) {
+        if (quayMix(x) <= 0.5 || tops[x] === null) continue;
+        const by = tops[x] - C.TOWN_QUAY_H - 1;
+        if (by <= AVE) continue;
+        /* ⚠️ LE MURET SE POSE PAR DEUX CASES ET JAMAIS PLUS. Une rangée
+           continue de muret le long du quai le fermerait à la circulation
+           venant de l'avenue : le joueur verrait une jolie rive et ne pourrait
+           plus y descendre. Deux cases se contournent ; dix, non. */
+        const kind = KIT[k++ % KIT.length];
+        if (addGarden(x, by, kind) && kind === "lowWall") addGarden(x + 1, by, "lowWall");
+      }
+      /* LE COIN DU PÊCHEUR, à la racine du ponton. Canne posée, seau, coffre :
+         c'est une SCÈNE, pas trois objets — ils ne veulent rien dire séparés.
+         ⚠️ Décor seul (décision de Guillaume) : rien ne se ramasse. */
+      const px0 = C.TOWN_PIER.x, pTop = (tops[px0] !== null ? tops[px0] : lk.y) - C.TOWN_QUAY_H;
+      if (freeQuay(px0 - 1, pTop)) addProp(px0 - 1, pTop, "rod", true);
+      if (freeQuay(px0 - 2, pTop + 1)) addProp(px0 - 2, pTop + 1, "bucket", true);
+      if (freeQuay(px0 + C.TOWN_PIER.w, pTop)) addProp(px0 + C.TOWN_PIER.w, pTop, "chest", true);
+      /* LES PAS JAPONAIS, dans le haut-fond à l'est du ponton. ⚠️ ILS SONT SUR
+         L'EAU, donc `addProp` est ici le bon outil et non `addGarden` : l'eau
+         est déjà infranchissable, marquer la case solide ne change rien, et
+         c'est le seul décor du zip dont la place EST l'eau. */
+      for (let n = 0; n < 3; n++) {
+        const sx = px0 + C.TOWN_PIER.w + 2 + n * 2;
+        if (tops[sx] === null || !inMap(sx, tops[sx] + 1)) continue;
+        addProp(sx, tops[sx] + 1 + (n & 1), "stepStones", false);
+      }
+      /* LA TABLE, sur la rive sauvage de l'est, dos aux saules. Deux tabourets
+         de part et d'autre — un seul se lirait comme un objet oublié. */
+      for (let x = x1 - 12; x > x1 - 26; x--) {
+        const r = trailRow(x);
+        if (r === null || quayMix(x) > 0.05) continue;
+        if (!addGarden(x, r - 2, "table")) continue;
+        addGarden(x - 1, r - 2, "stool"); addGarden(x + 1, r - 2, "stool");
+        addGarden(x + 2, r - 3, "hangLamp");
+        break;
+      }
+      /* LA CLÔTURE, seulement là où le sentier passe AU RAS de l'eau. C'est un
+         garde-corps : posée partout, elle transformerait la rive sauvage en
+         enclos, ce qui est exactement le contraire de ce que le 437 a cherché
+         (« on oppose une ligne construite à une ligne qui ne l'est pas »). */
+      for (let x = x0 + 2; x < x1 - 2; x++) {
+        if (tops[x] === null || quayMix(x) > 0.05) continue;
+        const r = trailRow(x);
+        if (r === null || tops[x] - r > 3) continue;      // le chemin n'est pas au bord
+        if ((x % 3) !== 0) continue;                      // une case sur trois : une clôture a des trous
+        addGarden(x, r + 2, "fence");
+      }
     }
   }
   // ---- LE QUARTIER DES ARTISANS, à l'est. Trois parcelles (TOWN_HOUSES) plus
