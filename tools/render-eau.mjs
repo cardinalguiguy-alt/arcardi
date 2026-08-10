@@ -76,7 +76,7 @@ function paint(sh, v, now) {
     const i = y * tw.w + x, g = tw.ground[i], px = (x - v.x) * T, py = (y - v.y) * T;
     const gt = S.townGrass;
     if (g === C.G_PATH) { if (!A.drawTownRoadTile(sh.ctx, S, tw, x, y, px, py)) sh.ctx.drawImage(S.path, px, py); }
-    else if (g === C.G_PATH_STONE) { sh.ctx.fillStyle = ((x + y) % 2) ? "#adacb2" : "#a5a4ab"; sh.ctx.fillRect(px, py, T, T); }
+    else if (g === C.G_PATH_STONE) { if (!A.drawTownFlagTile(sh.ctx, S, tw, x, y, px, py)) { sh.ctx.fillStyle = "#a5a4ab"; sh.ctx.fillRect(px, py, T, T); } }
     else if (g === C.G_BRIDGE) {
       sh.ctx.fillStyle = "#a9834f"; sh.ctx.fillRect(px, py, T, T);
       for (let k = 0; k < 4; k++) { sh.ctx.fillStyle = (k % 2) ? "#b78f58" : "#9c7746"; sh.ctx.fillRect(px, py + k * 4, T, 4); }
@@ -235,6 +235,60 @@ console.log("\n=== 4. le contraste de la nappe ===\n");
   // nappe d'eau calme n'a aucune raison de l'atteindre, et la viser ferait une
   // mer démontée. On demande le double de l'ancienne, pas le sextuple.
   ok(sd > 16, "la nappe n'est plus un aplat", `écart-type ${sd.toFixed(1)} (ancienne eau : 8,3)`);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ZIP 436 — LA GRANDEUR QUI MANQUAIT : EST-CE QU'ON VOIT LES CASES ?
+   ──────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ LES QUATRE CHAPITRES CI-DESSUS DISAIENT TOUS OK AU 435, PENDANT QUE
+   L'ÉTANG RENDAIT UNE MOSAÏQUE DE CARRÉS BLEUS DE 16 px. Ils mesuraient la
+   rectitude du RIVAGE, la continuité du TRAIT, l'écart bord/large et
+   l'écart-type de la nappe — quatre grandeurs justes, aucune ne parlant de la
+   grille INTÉRIEURE. C'est le §14.6 de CLAUDE.md dans sa forme la plus pure :
+   un banc qui passe ne dit pas que la chose est bonne, il dit qu'on mesure
+   autre chose. Et c'est le MÊME défaut que le banc corrigeait au rivage,
+   déplacé de deux mètres vers le large.
+
+   ⚠️ LA MESURE : on compare le saut de luminance À TRAVERS une arête de case
+   au saut moyen à l'INTÉRIEUR des cases, sur la seule pleine eau. Si le
+   dessin ignore la grille, les deux sont du même ordre (rapport ≈ 1). Si la
+   profondeur est quantifiée par case, l'arête saute et l'intérieur ne bouge
+   pas. Mesuré : **×3,05 au 435, ×1,27 aujourd’hui.**
+   ⚠️ On écarte les colonnes de bord de la fenêtre et les cases de rive : là,
+   un saut est LÉGITIME (c'est le trait d'eau), et l'inclure noierait le
+   signal qu'on cherche. */
+console.log("\n=== 4 bis. la grille intérieure se voit-elle encore ? ===\n");
+{
+  const W = VP.w * T;
+  const Lat = (gx, gy) => {
+    const j = (gy * W + gx) * 4;
+    return lum(etang.px[j], etang.px[j + 1], etang.px[j + 2]);
+  };
+  // Pleine eau : la case ET ses quatre voisines sont de l'eau, donc aucun trait
+  // d'eau ne traverse — tout saut mesuré ici est un saut de PROFONDEUR.
+  const full = (x, y) => {
+    for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const xx = x + dx, yy = y + dy;
+      if (xx < 0 || yy < 0 || xx >= tw.w || yy >= tw.h) return false;
+      if (tw.ground[yy * tw.w + xx] !== C.G_WATER) return false;
+    }
+    return true;
+  };
+  let seam = 0, seamN = 0, inner = 0, innerN = 0;
+  for (let y = VP.y + 1; y < VP.y + VP.h - 1; y++) for (let x = VP.x + 1; x < VP.x + VP.w - 1; x++) {
+    if (!full(x, y) || !full(x + 1, y)) continue;
+    const gx = (x - VP.x) * T, gy = (y - VP.y) * T;
+    for (let q = 2; q < T - 2; q++) {
+      // l'arête est-ouest de la case : la colonne T-1 contre la colonne 0 du voisin
+      seam += Math.abs(Lat(gx + T - 1, gy + q) - Lat(gx + T, gy + q)); seamN++;
+      // et six transitions internes de la même case, à la même distance
+      for (const u of [3, 5, 7, 9, 11, 13]) { inner += Math.abs(Lat(gx + u, gy + q) - Lat(gx + u + 1, gy + q)); innerN++; }
+    }
+  }
+  const s = seam / (seamN || 1), i2 = inner / (innerN || 1), ratio = s / (i2 || 1);
+  ok(seamN > 200, "assez d'arêtes de pleine eau pour conclure", `${seamN} colonne(s) d'arête`);
+  ok(ratio < 1.55, "une arête de case ne saute pas plus qu'un pixel voisin",
+     `×${ratio.toFixed(2)} (arête ${s.toFixed(1)}, intérieur ${i2.toFixed(1)}) — le 435 mesurait ×3,05`);
 }
 
 console.log("\n=== 5. l'étang n'a rien noyé ===\n");

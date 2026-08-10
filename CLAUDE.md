@@ -4,9 +4,10 @@
 Il remplace l'exploration du dépôt pour tout ce qui est global. Le README est un journal
 chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
-État à jour du **zip 434**. Chantier actif : **rendre Valley Town habitable au regard** — le
-taxi y roule droit, l'hôtel de ville tient debout, la place a des pigeons, et **les rues ont
-enfin un revêtement** (goudron sur l'artère, pavés partout ailleurs, briques au cimetière).
+État à jour du **zip 436**. Chantier actif : **rendre Valley Town habitable au regard** — le
+taxi y roule droit et est enfin dessiné comme une voiture, l'hôtel de ville tient debout, la
+place a des pigeons, les rues ont un revêtement (434), l'eau a une rive et un fond (435), et
+**toute la pierre de la Haute-Ville est refaite** (436 : marches, falaise, limon, dallage).
 Tout ce qui concerne la ville, ses habitants ET **ses pièges** est dans
 **`components/ferme/README.md`**, qui fait autorité ; les bancs sont dans **`tools/README.md`**.
 **`candyluge` et `crystal` sont EN PAUSE.**
@@ -21,6 +22,26 @@ clients réels : **97 % d'images figées, sauts de 116 px** → **3 % et 6 px** 
 **Une fonction déclarée dans la closure du rendu et appelée depuis le composant ne lève rien à
 la compilation, rien au banc, et casse une image sur deux en jeu. On EXPOSE par un ref
 (`townJumpApiRef`, `zoneCollideRef`), on ne recopie jamais.**
+
+⚠️⚠️⚠️ **ET LA MÊME CLOSURE A UNE SECONDE FAÇON DE COÛTER CHER, DÉCOUVERTE AU 436 : ELLE NE
+PLANTE PAS, ELLE FAIT VIEILLIR.** L'audit graphique de Valley Town a trouvé que **tout ce qui
+était mal dessiné dans la ville était mal dessiné au MÊME ENDROIT** — dans la closure du rendu.
+Les revêtements de rue (434) et l'eau (435) en étaient sortis pour qu'un banc puisse les
+regarder, et ce sont exactement les deux surfaces que personne ne trouve pauvres ; les marches,
+le parement de falaise, le limon et le dallage d'esplanade y sont restés depuis le 425, et ce
+sont exactement celles que Guillaume a nommées (« un écart flagrant de qualité de textures »).
+**Un dessin qu'aucun banc ne peut appeler ne se dégrade pas : il reste au niveau du jour où il a
+été écrit, pendant que tout ce qui est mesuré monte.** L'écart n'est donc pas un écart de soin,
+c'est un écart de DATE, et il se lit sur une carte du dépôt sans regarder une image. ⚠️ Corollaire
+opérationnel : **la question « ce dessin est-il regardable par un banc ? » est une question de
+QUALITÉ, pas d'outillage**, et elle se pose avant d'écrire le premier `fillRect`.
+
+⚠️⚠️ **ET ENRICHIR UNE TEXTURE REND VISIBLES LES ERREURS DE GÉOMÉTRIE QU'ELLE CACHAIT** (436).
+En passant les marches du gris uni à la pierre, on a découvert que **22 des 52 cases d'escalier
+de la ville étaient dessinées perpendiculairement à leur volée** — depuis le 425. Le défaut
+n'était pas nouveau, il était devenu visible. **Il faut donc s'attendre à en trouver après
+chaque montée en qualité, et avoir un banc pour les voir** : ici c'est `render-escaliers.mjs`,
+écrit le même jour, qui l'a montré.
 
 ⚠️⚠️ **ET LE MULTIJOUEUR DE LA VILLE N'AVAIT JAMAIS ÉTÉ JOUÉ À DEUX** — c'est ça, la vraie
 leçon. Deux autres défauts sont tombés dans la même passe, tous deux invisibles seul : les
@@ -366,10 +387,18 @@ jamais — c'est elle, et elle seule, qui protège du banc imaginaire (§14.6) :
 - ⚠️ **`verify-luge`, `verify-boot`, `preview-luge`, `preview.mjs`, `verify-perf` et
   `preview-fps` N'EXISTENT PAS** dans `tools/`.
 - ⚠️ **AUCUN BANC NE REGARDE LA FERME EN IMAGE** : `render-echelle`, `render-foire`,
-  `render-tribunal`, `render-oiseaux`, `render-taxi` et `render-rues` ne dessinent que Valley
-  Town et ses habitants. Un décor de la ferme mal proportionné n'a, à ce jour, aucun endroit
-  où se voir. ⚠️ **Et le SOL de la ferme non plus** : `render-rues` (434) peint les rues de la
-  ville, pas les chemins de la ferme, qui restent sur la tuile unique de 16 px du zip 232.
+  `render-tribunal`, `render-oiseaux`, `render-taxi`, `render-rues`, `render-eau` et
+  `render-escaliers` ne dessinent que Valley Town et ses habitants. Un décor de la ferme mal
+  proportionné n'a, à ce jour, aucun endroit où se voir. ⚠️ **Et le SOL de la ferme non plus** :
+  `render-rues` (434) peint les rues de la ville, pas les chemins de la ferme, qui restent sur
+  la tuile unique de 16 px du zip 232 — **c'est désormais le sol le plus pauvre du projet**,
+  puisque la ville a fini de refaire les siens au 436.
+- ⚠️ **AUCUN BANC NE REGARDE UNE FENÊTRE COMPLÈTE DE VALLEY TOWN.** Les six bancs de rendu de
+  la ville peignent chacun SA surface (les rues, l'eau, la pierre) et approximent le reste à sa
+  teinte moyenne, parce que les bâtiments, les props et les personnages se dessinent dans la
+  closure. Il n'existe donc aucun endroit où l'on voie la ville comme le joueur la voit —
+  seulement des morceaux, chacun mesuré chez lui. C'est le prochain angle mort, et il est
+  connu.
 - ⚠️ **Le faux canvas de `lib-canvas.mjs` IGNORE `translate`/`rotate` et ne connaît pas
   `fillText`** : les trois poses d'une feuille de personnage s'y superposent, et un sprite qui
   dépend d'une transformation s'y juge faux. Ce n'est pas un bogue du jeu — mais il faut le
@@ -533,6 +562,16 @@ erreur** en choisissant mal.
    Historique : 426 (insuffisant), 427 (profond : §7 → `public/candyluge/README.md`, §9 réduit
    à cinq pièges), 428 (§6 → `components/ferme/README.md`, 507 → 490), 431 (§4 scindé),
    **432 (§10 → `tools/README.md`, 524 → 483)**.
+   ⚠️⚠️ **LE 436 N'A PAS ÉLAGUÉ NON PLUS, ET LA DETTE EST MAINTENANT NOMMÉE.** Il ajoute deux
+   blocs en §4 (la closure qui fait vieillir ; enrichir une texture révèle la géométrie) et deux
+   entrées à la liste des bancs absents ; tout le reste part dans les deux fichiers qui font
+   autorité (`components/ferme/README.md` gagne son §19, `tools/README.md` un banc et deux
+   mises à jour). **L'ordre laissé au 433 — relire §13 ligne à ligne contre le dépôt — n'est
+   toujours pas exécuté, et il est maintenant DEUX FOIS reporté.** Deux de ses lignes sont déjà
+   fausses ou périmées telles qu'écrites : « un lac qui n'a ni reflet, ni vaguelettes de rive »
+   (livré au 435), et l'entrée sur les maisons, qui mélange une question de contenu (dix façades
+   pour vingt-sept parcelles) avec une question d'eau désormais réglée. **C'est exactement ce
+   que le 431 a trouvé en relisant §4 : la première ligne relue était périmée.**
    ⚠️ **LE 433 N'A PAS ÉLAGUÉ, ET IL LE DIT** : le fichier passe de 492 à ~525 lignes, tout
    l'apport partant dans les trois fichiers qui font autorité (`components/ferme/README.md` a
    gagné deux chapitres, `tools/README.md` trois bancs). Ce qui est remonté ici tient en deux

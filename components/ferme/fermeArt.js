@@ -956,6 +956,126 @@ export function drawTownRoadTile(ctx, S, tw, x, y, px, py) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
+   ZIP 436 — PEINDRE UNE MARCHE, UN PAREMENT DE FALAISE, UN LIMON.
+   ──────────────────────────────────────────────────────────────────────────
+   Ces trois fonctions étaient dans la closure de `drawTownFrame`. Elles n'y
+   sont plus, pour la raison de toujours (§4) : un dessin qu'aucun banc ne
+   peut appeler est un dessin que personne ne regarde, et ça se voit — c'est
+   très exactement le reproche de Guillaume sur l'écart de qualité entre le
+   sol pavé (qui a `render-rues.mjs`) et les marches (qui n'avaient rien).
+   ⚠️ ELLES RENDENT `true`/`false` COMME `drawTownRoadTile`, et l'appelant garde
+   son repli : un client dont l'atlas manquerait doit peindre du gris, pas un
+   trou noir.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Le SENS DE LA MONTÉE se déduit du gradient d'altitude, jamais de
+   `TOWN_STAIRS` : deux descriptions du même escalier finiraient par se
+   contredire (§7), et une volée retournée se redessine ici toute seule. */
+export function townStairVertical(tw, x, y) {
+  const idx = (xx, yy) => yy * tw.w + xx;
+  const inb = (xx, yy) => xx >= 0 && yy >= 0 && xx < tw.w && yy < tw.h;
+  const at = (xx, yy) => (inb(xx, yy) ? tw.elev[idx(xx, yy)] : 0);
+  const isS = (xx, yy) => inb(xx, yy) && tw.ground[idx(xx, yy)] === C.G_TOWN_STAIR;
+  /* ⚠️⚠️ ON MESURE LA PENTE ENTRE MARCHES, PAS LA PENTE DU TERRAIN — et c'est
+     un défaut trouvé par `tools/render-escaliers.mjs`, sur les TROIS volées de
+     la ville. Le 425 lisait le gradient d'altitude sur les quatre voisines
+     immédiates, terrain compris. Ça marche au MILIEU d'une volée et ça bascule
+     sur son BORD : à l'entrée d'un escalier, la case du dessus est de la
+     terrasse et celle du dessous du trottoir, donc le gradient transversal
+     cesse d'être nul et peut égaler celui de la montée. Résultat mesuré :
+     **22 cases sur 52 dessinées perpendiculairement à leur volée.** Avec les
+     quatre traits gris du 425 personne ne l'a jamais vu ; avec des marches en
+     pierre, c'est la première chose qu'on voit.
+     ⚠️ LA BONNE QUESTION N'EST PAS « DE QUEL CÔTÉ ÇA MONTE » MAIS « DANS QUEL
+     SENS LES MARCHES SE SUIVENT ». Deux cases d'escalier VOISINES ne diffèrent
+     d'altitude que le long de la montée : en travers, une volée est de niveau,
+     par construction. On ne regarde donc que les voisines qui sont elles-mêmes
+     des marches, et la réponse est exacte au lieu d'être statistique.
+     ⚠️ On n'interroge toujours PAS `TOWN_STAIRS` (§7) : ce qui est lu est la
+     carte, donc une volée retournée se redessine toute seule. */
+  const e = at(x, y);
+  let dx = 0, dy = 0;
+  for (const s of [-1, 1]) {
+    if (isS(x + s, y)) dx = Math.max(dx, Math.abs(at(x + s, y) - e));
+    if (isS(x, y + s)) dy = Math.max(dy, Math.abs(at(x, y + s) - e));
+  }
+  if (dx !== dy) return dy > dx;
+  // Repli : une volée d'une seule case n'a aucune voisine à interroger. On
+  // retombe alors sur le gradient du terrain, qui est ce que faisait le 425.
+  return Math.abs(at(x, y + 1) - at(x, y - 1)) >= Math.abs(at(x + 1, y) - at(x - 1, y));
+}
+
+/* LE DALLAGE D'ESPLANADE, plus sa PIERRE DE BORD. ⚠️ LE BORD SE DÉDUIT DU
+   VOISINAGE, jamais de la géométrie de `TOWN_PLAZA` : c'est ce qui le fait
+   servir AUSSI les cinq parvis, le champ de foire, le quai et la terrasse de la
+   Haute-Ville, sans une ligne de plus. Le principe est du 425 (« une esplanade
+   qui s'arrête net dans l'herbe a l'air découpée aux ciseaux ») ; seul le
+   dessin change au 436. */
+export function drawTownFlagTile(ctx, S, tw, x, y, px, py) {
+  const RS = S && S.townRoad;
+  if (!RS || !RS.flag) return false;
+  const T = SPR_T, sup = RS.sup;
+  ctx.drawImage(RS.flag, (x % sup) * T, (y % sup) * T, T, T, px, py, T, T);
+  const st4 = (xx, yy) => {
+    if (xx < 0 || yy < 0 || xx >= tw.w || yy >= tw.h) return false;
+    return tw.ground[yy * tw.w + xx] === C.G_PATH_STONE;
+  };
+  ctx.fillStyle = "#cfcabb";
+  if (!st4(x, y - 1)) ctx.fillRect(px, py, T, 3);
+  if (!st4(x, y + 1)) ctx.fillRect(px, py + T - 3, T, 3);
+  if (!st4(x - 1, y)) ctx.fillRect(px, py, 3, T);
+  if (!st4(x + 1, y)) ctx.fillRect(px + T - 3, py, 3, T);
+  /* ⚠️ LA PIERRE DE BORD REÇOIT SON PROPRE GRAIN, sinon on remplace un damier
+     par un ruban lisse tout autour de la place — le liseré d'autocollant que
+     l'écume de l'eau a coûté au 435. Deux pixels d'usure par case suffisent. */
+  const h = ((x * 2654435761) ^ (y * 40503)) >>> 0;
+  ctx.fillStyle = "rgba(120,116,108,0.35)";
+  if (!st4(x, y - 1)) ctx.fillRect(px + (h % 12), py + 1 + ((h >>> 4) % 2), 2, 1);
+  if (!st4(x, y + 1)) ctx.fillRect(px + ((h >>> 8) % 12), py + T - 2, 2, 1);
+  ctx.fillStyle = "rgba(70,66,60,0.22)";
+  if (!st4(x, y + 1)) ctx.fillRect(px, py + T - 1, T, 1);
+  return true;
+}
+
+export function drawTownStairTile(ctx, S, tw, x, y, px, py) {
+  const ST = S && S.townStone;
+  if (!ST) return false;
+  const T = SPR_T, sup = ST.sup;
+  const vertical = townStairVertical(tw, x, y);
+  /* ⚠️ LA DÉCOUPE SE FAIT DANS LE PAVÉ, PAS DANS LA CASE : c'est `x % sup` qui
+     fait que deux marches voisines ne sont pas le même dessin. Mais l'axe DE
+     LA MONTÉE doit rester aligné sur la case — une marche fait 4 px et la
+     grille d'altitude compte les cases, donc on ne peut décaler que l'axe
+     TRANSVERSAL. D'où le `% sup` sur un seul des deux, l'autre restant à 0. */
+  const ax = vertical ? (x % sup) * T : 0;
+  const ay = vertical ? 0 : (y % sup) * T;
+  ctx.drawImage(ST.stair[vertical ? "v" : "h"], ax, ay, T, T, px, py, T, T);
+  return true;
+}
+
+/* Le parement, sur `fh` pixels sous la case. On le découpe depuis le HAUT de
+   l'atlas : un mur d'une unité et un mur de deux partagent leur première
+   assise, ce qui est ce qu'une falaise fait dans la nature. */
+export function drawTownCliffFace(ctx, S, tw, x, y, px, py, fh) {
+  const ST = S && S.townStone;
+  if (!ST || fh <= 0) return false;
+  const T = SPR_T, sup = ST.sup;
+  const h = Math.min(fh, ST.cliffH);
+  ctx.drawImage(ST.cliff, (x % sup) * T, 0, T, h, px, py, T, h);
+  if (fh > h) ctx.drawImage(ST.cliff, (x % sup) * T, ST.cliffH - 1, T, 1, px, py + h, T, fh - h);
+  return true;
+}
+
+export function drawTownStairCheek(ctx, S, tw, x, y, px, py, bx, bw, drop) {
+  const ST = S && S.townStone;
+  if (!ST) return false;
+  const T = SPR_T, sup = ST.sup;
+  ctx.drawImage(ST.cheek, 0, (y % sup) * T, 4, T, bx, py, bw, T);
+  if (drop > 0) { ctx.fillStyle = "rgba(46,43,38,0.30)"; ctx.fillRect(bx, py + T, bw, drop); }
+  return true;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
    ZIP 435 — PEINDRE UNE CASE D'EAU DE VALLEY TOWN, ET SA BERGE.
    ──────────────────────────────────────────────────────────────────────────
    ⚠️⚠️ ICI, ET PAS DANS `drawTownFrame`, POUR LA RAISON DU §4 : ce qui vit
@@ -1030,39 +1150,27 @@ export function drawTownWaterTile(ctx, S, tw, x, y, px, py, now) {
      apparente est divisée par deux sans qu'on ait multiplié les tuiles.
      ⚠️ Réservé à la pleine eau : sur une case de rive, le contour occupe déjà
      moins d'une demi-case et la bande n'aurait rien à fondre. */
-  const T2 = SPR_T;
-  if (isW) {
-    /* ⚠️⚠️ ET LA PREMIÈRE PARADE ÉTAIT PIRE QUE LE DÉFAUT : quatre bandes
-       semi-transparentes, une par voisin, superposées aux angles — l'étang
-       rendait un TISSU ÉCOSSAIS de rayures horizontales. Deux enseignements,
-       tous deux généraux : un fondu posé sur les QUATRE côtés d'une case n'est
-       pas un dégradé, c'est un cadre ; et deux voiles alpha qui se croisent
-       fabriquent une troisième teinte que personne n'a choisie.
-       ⚠️ On ne fond donc que sur l'AXE DOMINANT du gradient — celui où la
-       profondeur varie le plus — et en OPACITÉ PLEINE, avec le niveau MOYEN
-       entre cette case et sa voisine. Trois bandes le long d'un seul axe font
-       une rampe ; le masque étant celui de la même tuile, rien ne déborde du
-       contour. La résolution apparente est triplée sans une tuile de plus. */
+  /* ⚠️⚠️ ZIP 436 — LE TRAMAGE REMPLACE LES DEUX BANDES DU 435. Le détail du
+     raisonnement est au-dessus de `townWaterFadeTile` ; ce qu'il faut savoir
+     ici : les QUATRE voisins sont servis (une bande ne servait que l'axe
+     dominant, donc une case en coin gardait une arête franche), la couverture
+     est un semis et non un rectangle, et on vise le cran MOYEN pour que les
+     deux moitiés d'une arête se rejoignent sur la même valeur.
+     ⚠️ Le tramage n'est posé que sur la PLEINE eau, et c'est la même raison
+     qu'au 435 : ses tuiles sont des carrés pleins, elles déborderaient du
+     contour sur une case de rive. */
+  if (isW && cfg === 15 && SW.fade) {
     const lvl = (xx, yy) => {
       if (xx < 0 || yy < 0 || xx >= tw.w || yy >= tw.h) return d;
       const j = yy * tw.w + xx;
       if (tw.ground[j] !== C.G_WATER) return d;
       return Math.min(SW.depths - 1, ((tw.depth[j] * SW.depths) / 256) | 0);
     };
-    const lW = lvl(x - 1, y), lE = lvl(x + 1, y), lN = lvl(x, y - 1), lS = lvl(x, y + 1);
-    const gh = Math.abs(lE - lW), gv = Math.abs(lS - lN);
-    if (gh || gv) {
-      const BW = 5;                     // largeur des bandes d'extrémité
-      const mid = (a) => Math.max(0, Math.min(SW.depths - 1, Math.round((d + a) / 2)));
-      if (gh >= gv) {
-        const a = mid(lW), b = mid(lE);
-        if (a !== d) ctx.drawImage(SW.tiles[cfg][vr][a], 0, 0, BW, T2, px, py, BW, T2);
-        if (b !== d) ctx.drawImage(SW.tiles[cfg][vr][b], T2 - BW, 0, BW, T2, px + T2 - BW, py, BW, T2);
-      } else {
-        const a = mid(lN), b = mid(lS);
-        if (a !== d) ctx.drawImage(SW.tiles[cfg][vr][a], 0, 0, T2, BW, px, py, T2, BW);
-        if (b !== d) ctx.drawImage(SW.tiles[cfg][vr][b], 0, T2 - BW, T2, BW, px, py + T2 - BW, T2, BW);
-      }
+    const mid = (a) => Math.max(0, Math.min(SW.depths - 1, Math.round((d + a) / 2)));
+    const nb = [lvl(x - 1, y), lvl(x + 1, y), lvl(x, y - 1), lvl(x, y + 1)];
+    for (let k = 0; k < 4; k++) {
+      const m = mid(nb[k]);
+      if (m !== d) ctx.drawImage(SW.fade[k][m], px, py);
     }
   }
 
@@ -1078,15 +1186,37 @@ export function drawTownWaterTile(ctx, S, tw, x, y, px, py, now) {
         qui dit « surface » plutôt que « trou bleu », et il ne coûte que deux
         rectangles. On regarde trois cases au nord : au-delà, un arbre ne se
         reflète plus dans ce qu'on voit de la mare. */
+  /* ⚠️⚠️ ZIP 436 — IL ÉTAIT DEUX RECTANGLES, ET ÇA SE VOYAIT. Le 435 posait
+     `fillRect(px + 3, py, 10, T)` : un bloc vert de 10 × 16 px à arêtes
+     franches, aligné sur la case, donc **la grille redessinée en vert** —
+     exactement le défaut que tout ce chapitre corrige, à trois lignes de la
+     note qui l'explique. Mesuré sur `eau-etang.png` du 435 : une plaque
+     `#7a9796` parfaitement rectangulaire au milieu de la nappe.
+     ⚠️ La parade est la même qu'ailleurs dans ce zip : une DENSITÉ, pas une
+     surface. Chaque rangée a sa largeur (l'ondulation), et un pixel sur deux
+     saute vers le bas de la case — un reflet d'arbre s'effiloche en s'éloignant
+     de la berge, il ne s'arrête pas net. Seize `fillRect` de 1 px de haut, et
+     seulement sur les cases qui ont un arbre au nord : c'est rare. */
   for (let k = 1; k <= 3; k++) {
     const o = (y - k) >= 0 ? tw.objects[(y - k) * tw.w + x] : 0;
     if (o !== C.O_TREE && o !== C.O_TREE2) continue;
-    const a = 0.34 - k * 0.07;
-    const sw = Math.round(Math.sin(now / 1300 + x * 0.7 + k) * 1.6);
-    ctx.fillStyle = `rgba(24, 58, 44, ${a})`;
-    ctx.fillRect(px + 3 + sw, py, 10, T);
-    ctx.fillStyle = `rgba(18, 44, 34, ${a * 0.6})`;
-    ctx.fillRect(px + 6 - sw, py + 4, 4, T - 4);
+    const a0 = 0.40 - k * 0.09;
+    for (let row = 0; row < T; row++) {
+      // L'ondulation : deux sinus de périodes différentes, sinon le bord du
+      // reflet est une sinusoïde parfaite, ce qui se lit comme un ressort.
+      const wob = Math.sin(now / 1300 + x * 0.7 + k + row * 0.55) * 1.7
+                + Math.sin(now / 640 + row * 0.31) * 0.9;
+      const half = 4.2 - row * 0.11;                      // il s'affine vers le sud
+      const a = a0 * (1 - row / (T * 1.35));              // et il s'estompe
+      const h = waterHash(x * 31 + row, y * 37 + k) & 255;
+      if (h < 62) continue;                               // le tramage : un pixel sur quatre saute
+      ctx.fillStyle = `rgba(24, 58, 44, ${a.toFixed(3)})`;
+      ctx.fillRect(px + Math.round(8 + wob - half), py + row, Math.max(1, Math.round(half * 2)), 1);
+      if ((h & 3) === 0) {                                 // le cœur sombre, discontinu
+        ctx.fillStyle = `rgba(18, 44, 34, ${(a * 0.7).toFixed(3)})`;
+        ctx.fillRect(px + Math.round(8 + wob) - 1, py + row, 2, 1);
+      }
+    }
     break;
   }
   /* 2. LA LAME DE LUMIÈRE. Une seule, qui glisse lentement : à 16 px, deux
@@ -1101,6 +1231,29 @@ export function drawTownWaterTile(ctx, S, tw, x, y, px, py, now) {
   const gl = 0.16 + Math.sin((now / 900) + ph * 6.28) * 0.07;
   ctx.fillStyle = `rgba(214, 238, 246, ${Math.max(0, gl)})`;
   ctx.fillRect(px + 2 + ((ph * 5) | 0), py + ly, 7, 1);
+
+  /* ---- ZIP 436 — LES NÉNUPHARS ET LES ROCHERS. Voir la note de
+     `townLilyTile`. Ils sont tirés du hachage de la case, donc identiques chez
+     les deux joueurs sans un octet de réseau, et rangés par PROFONDEUR :
+       — le rocher émerge là où c'est peu profond (d ≤ 2), sinon il flotterait ;
+       — le nénuphar s'installe dans le calme, un peu plus au large (d ≥ 2), et
+         jamais au ras de la rive où il se confondrait avec la berge.
+     ⚠️ LES SEUILS SE CHEVAUCHENT À d = 2 EXPRÈS : c'est la seule case où l'on
+     peut trouver les deux, et c'est ce qui empêche l'étang de se lire en
+     anneaux concentriques — le défaut qu'on vient de corriger sur les bleus
+     serait revenu sur les objets. */
+  const hh = waterHash(x * 11 + 3, y * 13 + 7);
+  /* ⚠️ LE SEUIL EST UNE FRACTION DE LA RAMPE, PAS UN CRAN. C'est la leçon du
+     seuil d'axe du taxi (434) : écrit « d ≤ 2 », il voulait dire « le tiers
+     clair » tant que la rampe avait huit crans, et il a voulu dire « le
+     huitième » le jour où elle en a eu seize. Une seule ligne, et les rochers
+     auraient disparu de l'étang sans que rien ne le signale. */
+  const WAT_SHOAL = Math.round((SW.depths - 1) * 0.30);
+  if (SW.wrock && d <= WAT_SHOAL && (hh % 100) < 7) {
+    ctx.drawImage(SW.wrock[(hh >>> 7) % SW.wrock.length], px, py);
+  } else if (SW.lily && d >= WAT_SHOAL && ((hh >>> 3) % 100) < 11) {
+    ctx.drawImage(SW.lily[(hh >>> 11) % SW.lily.length], px, py);
+  }
   return true;
 }
 
@@ -1130,6 +1283,15 @@ export function drawTownShoreTile(ctx, S, tw, x, y, px, py) {
   let dir = Math.round((ang + Math.PI / 2) / (Math.PI / 4)) % 8;
   if (dir < 0) dir += 8;
   ctx.drawImage(SW.shore[b - 1][dir][waterHash(x * 5, y * 11) & 1], px, py);
+  /* ⚠️ ZIP 436 — LES ROSEAUX, SUR LA VASE ET NULLE PART AILLEURS. Bande 1
+     seulement (la rive mouillée) : sur la bande sèche ils pousseraient dans la
+     pelouse du parc, et sur la bande 3 ils pousseraient au fond de l'eau.
+     C'est le seul décor de ce zip qui soit sur la TERRE, et c'est pour ça
+     qu'il est ici plutôt que dans `drawTownWaterTile`. */
+  if (b === 1 && SW.reed) {
+    const hh = waterHash(x * 17 + 5, y * 19 + 11);
+    if ((hh % 100) < 26) ctx.drawImage(SW.reed[(hh >>> 9) % SW.reed.length], px, py);
+  }
   return true;
 }
 
@@ -4476,6 +4638,278 @@ export function buildSprites() {
     return c;
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════
+     ZIP 436 — LES ESCALIERS ET LES FALAISES DE LA HAUTE-VILLE.
+     ─────────────────────────────────────────────────────────────────────────
+     Retour de Guillaume, mot pour mot : « corrige les écarts entre le détail
+     du sol pavé et les escaliers du courthouse/uppertown. Il y a un écart
+     flagrant de qualité de textures. »
+
+     ⚠️⚠️ ET LA CAUSE DE L'ÉCART N'EST PAS UN MANQUE DE SOIN, C'EST UN MANQUE
+     DE BANC — c'est-à-dire, encore, le piège n°1 du projet. Les revêtements du
+     434 vivent ici, dans `fermeArt`, donc `tools/render-rues.mjs` les REGARDE
+     à chaque lancement : ils ont eu droit à quatre refus avant livraison. Les
+     marches, elles, étaient écrites DANS LA BOUCLE DE RENDU de FermeGame —
+     `fillRect(px, py, T, T)` gris uni + quatre traits blancs et quatre traits
+     noirs, tous les 4 px, identiques sur toutes les cases de toutes les
+     volées. Personne ne pouvait les voir sans jouer, donc personne ne les a
+     vues. La falaise, juste en dessous, était un aplat `#8f8a80` avec une
+     ligne tous les 5 px et UN joint vertical par case : le « rondin » de
+     l'hôtel de ville du 433, exactement, mais en gris.
+     **On ne corrige donc pas seulement le dessin : on le SORT de la closure.**
+
+     ⚠️ MÊME MÉTHODE QU'AU 434, ET C'EST VOULU : un pavé de 4×4 tuiles qui
+     boucle sur lui-même (`roadWrap`), découpé par `x % 4`, `y % 4`. Une volée
+     de six cases cesse d'être six fois la même image. Tout est en `fillRect`,
+     donc `tools/render-escaliers.mjs` peut le rastériser (§4).
+     ⚠️ LES MARCHES GARDENT LEUR PÉRIODE DE 4 px, ET CE N'EST PAS NÉGOCIABLE :
+     c'est la seule chose qui dise au joueur « ça monte », et le pas de la
+     grille d'altitude en dépend. Ce qui change, c'est que deux marches ne sont
+     plus le même dessin. */
+  const STAIR_TREAD = 4;                 // hauteur d'une marche, en pixels
+  function townStairSurface(vertical) {
+    const [c, g] = cv(ROAD_N, ROAD_N), r = makeRnd(vertical ? 0x3f21 : 0x3f22);
+    /* `put` échange les deux axes pour la volée horizontale. Une seule
+       description géométrique — deux auraient divergé au premier réglage (§8),
+       et c'est précisément ce qui est arrivé aux deux dessins de voie ferrée
+       du 427. */
+    /* ⚠️ `u` COURT TOUJOURS DANS LE SENS DE LA MONTÉE, `v` EN TRAVERS. Pour une
+       volée qui monte vers le nord (`vertical`), `u` est donc l'axe Y et les
+       nez de marche sont des RANGÉES ; pour une volée est-ouest, l'inverse. Le
+       bouclage se fait sur `v` (le travers), parce que c'est le seul axe qu'on
+       ait le droit de décaler : le pas de 4 px des marches doit rester calé sur
+       la case, sinon la grille d'altitude et le dessin divergent.
+       ⚠️ La première écriture de ce zip avait les deux axes ÉCHANGÉS, et rien
+       ne l'a signalé — l'atlas bouclait, la matière était riche, les cases
+       différaient : trois contrôles verts sur un escalier dont les marches
+       étaient perpendiculaires à la montée. C'est le contrôle « seize nez de
+       marche » qui l'a attrapé, et lui seul. */
+    const put = (u, v, lu, lv, col) => {
+      if (vertical) { P(g, v - ROAD_N, u, lv, lu, col); P(g, v, u, lv, lu, col); P(g, v + ROAD_N, u, lv, lu, col); }
+      else { P(g, u, v - ROAD_N, lu, lv, col); P(g, u, v, lu, lv, col); P(g, u, v + ROAD_N, lu, lv, col); }
+    };
+    const BODY = ["#a6a49b", "#aeaca3", "#9e9c93", "#b2b0a6", "#a2a097", "#aaa89f", "#9a988f", "#b0aea4"];
+    const NOSE = ["#cfccc1", "#d6d3c8", "#c7c4b9", "#d2cfc4"];       // le nez, qui accroche la lumière
+    const RISE = ["#5f5c55", "#67645c", "#585550"];                  // la contremarche, dans l'ombre
+    const MOSS = ["#5a6b42", "#4d5c39"];
+    // Fond : de la pierre, pas un gris uni. C'est ce que le granulat du
+    // goudron a appris au 434 — à 16 px, la matière tient dans le grain.
+    for (let v = 0; v < ROAD_N; v++) for (let u = 0; u < ROAD_N; u++) {
+      if (r() < 0.5) put(u, v, 1, 1, BODY[(r() * BODY.length) | 0]);
+    }
+    for (let s = 0; s * STAIR_TREAD < ROAD_N; s++) {
+      const u = s * STAIR_TREAD;
+      /* ⚠️ LE DALLAGE DE LA MARCHE EST DÉCOUPÉ EN BLOCS DE LARGEUR INÉGALE, et
+         c'est ce qui distingue un escalier de pierre d'un escalier de béton.
+         Les coupes de deux marches consécutives ne tombent jamais au même
+         endroit : `roadSplit` s'en charge, et le décalage de départ aussi. */
+      const n = 3 + ((r() * 3) | 0);
+      const ws = roadSplit(ROAD_N, n, r, [9, 26]);
+      let v0 = (r() * ROAD_N) | 0;
+      for (let k = 0; k < n; k++) {
+        const w = ws[k], tone = BODY[(r() * BODY.length) | 0];
+        put(u + 1, v0, STAIR_TREAD - 1, w, tone);
+        // le joint de refend entre deux blocs de la même marche
+        put(u + 1, v0, STAIR_TREAD - 1, 1, "#6e6b64");
+        v0 = (v0 + w) % ROAD_N;
+      }
+      // LE NEZ ET LA CONTREMARCHE. Le nez est ÉBRÉCHÉ par endroits : une arête
+      // parfaitement continue sur six cases se lit comme une règle posée là.
+      const nose = NOSE[(r() * NOSE.length) | 0];
+      let v = 0;
+      while (v < ROAD_N) {
+        const len = 5 + ((r() * 14) | 0);
+        if (r() < 0.86) put(u, v, 1, Math.min(len, ROAD_N - v), nose);
+        else put(u, v, 1, Math.min(len, ROAD_N - v), BODY[(r() * BODY.length) | 0]);   // éclat
+        v += len;
+      }
+      put(u + STAIR_TREAD - 1, 0, 1, ROAD_N, RISE[(r() * RISE.length) | 0]);
+      // ⚠️ L'OMBRE PORTÉE DE LA MARCHE DU DESSUS, un pixel sous le nez. Sans
+      // elle les marches sont des rayures ; avec elle, elles ont une épaisseur.
+      put(u + 1, 0, 1, ROAD_N, "rgba(58,54,48,0.30)");
+    }
+    // La mousse dans les angles rentrants, et l'usure au milieu de la volée :
+    // une volée de cent ans est creusée là où l'on marche, pas au bord.
+    for (let k = 0; k < 90; k++) {
+      const u = (r() * ROAD_N) | 0, v = (r() * ROAD_N) | 0;
+      if ((u % STAIR_TREAD) !== STAIR_TREAD - 1) continue;
+      put(u, v, 1, 1 + ((r() * 2) | 0), MOSS[(r() * MOSS.length) | 0]);
+    }
+    for (let k = 0; k < 130; k++) {
+      const u = (r() * ROAD_N) | 0, v = 16 + ((r() * 32) | 0);
+      if ((u % STAIR_TREAD) === 0) continue;
+      put(u, v, 1, 1, r() < 0.5 ? "#98968e" : "#b6b4aa");
+    }
+    return c;
+  }
+
+  /* LE PAREMENT DE FALAISE — le mur qui bouche le décrochement d'altitude.
+     ⚠️ CE QUI FAIT LA PIERRE APPAREILLÉE N'EST PAS LA LIGNE D'ASSISE, C'EST
+     L'ALTERNANCE DES JOINTS VERTICAUX. C'est le mot pour mot de la leçon de
+     l'hôtel de ville au 433 (« la brique n'était pas de la brique, c'était du
+     rondin ») : le 425 dessinait ici une ligne sombre pleine largeur tous les
+     5 px et UN joint vertical par case, toujours au même endroit. Six cases de
+     falaise côte à côte donnaient six fois le même mur.
+     ⚠️ Il boucle horizontalement (`roadWrap`) mais PAS verticalement, et c'est
+     exprès : une falaise a un HAUT (le nez éclairé) et un BAS (l'ombre au
+     pied). On y découpe donc la hauteur qu'on a, depuis le haut. */
+  const CLIFF_H = 40;                    // deux unités d'altitude valent 32 px ; on garde de la marge
+  function townCliffFace() {
+    const [c, g] = cv(ROAD_N, CLIFF_H), r = makeRnd(0x77b3);
+    /* ⚠️ DOUZE CORPS, SIX ÉCLAIRÉS, SIX SOMBRES — et c'est le banc qui a fixé le
+       nombre. À six corps, `render-escaliers.mjs` comptait 15 teintes contre 42
+       aux pavés de rue : la falaise passait le contrôle de relief et échouait
+       celui de palette, ce qui est la définition d'un mur en carton peint. */
+    const BODY = ["#8d8880", "#948f86", "#847f78", "#9a958b", "#89847d", "#918c83",
+                  "#8f8a7c", "#96918a", "#807b74", "#9d988e", "#8b867f", "#959087"];
+    const LIT = ["#aaa59b", "#b1aca1", "#a19c93", "#b5b0a5", "#a6a197", "#ada89e", "#b8b3a8", "#a4a095"];
+    const DRK = ["#5d5952", "#655f58", "#56524c", "#615c55", "#59554f", "#6a645c", "#514d48", "#6e6860"];
+    const JOINT = "#3a3833";                     // ⚠️ assombri au 436 : c'est le joint qui porte l'écart de valeur du parement
+    P(g, 0, 0, ROAD_N, CLIFF_H, JOINT);
+    const ROWH = [6, 7, 6, 7, 7, 7];                 // 40 = 6+7+6+7+7+7, pas un pixel de reste
+    let y = 0;
+    for (let row = 0; row < ROWH.length; row++) {
+      const rh = ROWH[row];
+      const n = 4 + ((r() * 3) | 0);
+      const ws = roadSplit(ROAD_N, n, r, [8, 22]);
+      // ⚠️ LE DÉCALAGE DE DÉPART EST TIRÉ À CHAQUE ASSISE : c'est LUI qui fait
+      // que les joints verticaux ne s'alignent jamais d'une assise à l'autre.
+      let x = (r() * ROAD_N) | 0;
+      for (let s = 0; s < n; s++) {
+        const w = ws[s], k = (r() * BODY.length) | 0;
+        roadWrap(g, x, y, w - 1, rh - 1, BODY[k]);
+        roadWrap(g, x, y, w - 1, 1, LIT[(r() * LIT.length) | 0]);          // lit d'attente, éclairé
+        roadWrap(g, x, y + rh - 2, w - 1, 1, DRK[(r() * DRK.length) | 0]); // sous-face, dans l'ombre
+        // Bossage : une pierre sur cinq est légèrement saillante, une sur dix
+        // franchement plus sombre (la pierre de remploi).
+        if (r() < 0.20) roadWrap(g, x + 1, y + 1, w - 3, rh - 3, LIT[(r() * LIT.length) | 0]);
+        else if (r() < 0.16) roadWrap(g, x + 1, y + 1, w - 3, rh - 3, DRK[(r() * DRK.length) | 0]);
+        else if (r() < 0.10) roadWrap(g, x + 1, y + 1, w - 3, rh - 3, "#4b4740");   // la pierre en creux, mangée par l'humidité
+        for (let q = 0; q < 3; q++) roadWrap(g, x + ((r() * w) | 0), y + ((r() * rh) | 0), 1, 1, r() < 0.5 ? LIT[0] : DRK[0]);
+        x = (x + w) % ROAD_N;
+      }
+      y += rh;
+    }
+    // Suintement et mousse le long des joints — une falaise de parc n'est pas
+    // un mur de soutènement neuf.
+    for (let k = 0; k < 70; k++) {
+      const x = (r() * ROAD_N) | 0, y2 = (r() * (CLIFF_H - 4)) | 0;
+      roadWrap(g, x, y2, 1, 2 + ((r() * 3) | 0), r() < 0.55 ? "#4f5c3c" : "#6a6558");
+    }
+    return c;
+  }
+
+  /* LE LIMON — la joue de pierre qui borde une volée. Il existe depuis le 425
+     parce qu'il RÉSOUT UN MUR INVISIBLE (le flanc d'un escalier bloque sans
+     rien montrer) ; il n'avait jamais reçu de dessin, juste trois `fillRect`.
+     Une seule bande verticale de 64 px, bouclante, découpée par `y % 4`. */
+  function townStairCheek() {
+    const [c, g] = cv(4, ROAD_N), r = makeRnd(0x1c4e);
+    const wrapV = (x, y, w, h, col) => { P(g, x, y - ROAD_N, w, h, col); P(g, x, y, w, h, col); P(g, x, y + ROAD_N, w, h, col); };
+    /* ⚠️ LE JOINT SOMBRE ENTRE DEUX PIERRES EST OBLIGATOIRE, et ce n'est pas du
+       détail : c'est lui qui porte tout l'écart de valeur. Sans lui le limon
+       mesurait un écart-type de 29 contre 46 aux pavés de rue — un ruban gris
+       à côté d'un pavage, exactement l'écart que ce zip corrige ailleurs. */
+    wrapV(0, 0, 4, ROAD_N, "#43403a");               // le fond EST le joint
+    let y = 0;
+    while (y < ROAD_N) {
+      const h = 6 + ((r() * 4) | 0);
+      wrapV(0, y, 4, h - 1, ["#948f86", "#8a857e", "#9c978d", "#8f8a80", "#a09b91"][(r() * 5) | 0]);
+      wrapV(0, y, 3, 1, "#c8c3b7");                  // le dessus du limon prend la lumière
+      wrapV(3, y, 1, h - 1, "#57534d");              // et son flanc est dans l'ombre
+      y += h;
+    }
+    for (let k = 0; k < 30; k++) wrapV((r() * 4) | 0, (r() * ROAD_N) | 0, 1, 1, r() < 0.5 ? "#b0aba1" : "#615d57");
+    return c;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     ZIP 436 — LE DALLAGE DES ESPLANADES : LE DERNIER DAMIER DE LA VILLE.
+     ─────────────────────────────────────────────────────────────────────────
+     ⚠️⚠️ IL EST DANS LE MÊME SAC QUE LES MARCHES, ET POUR LA MÊME RAISON. Le
+     parvis du tribunal, la terrasse de la Haute-Ville, la place, les cinq
+     parvis, le champ de foire et le quai de gare sont tous du `G_PATH_STONE`,
+     et il était peint dans la closure du rendu depuis le 425 : `(x + y) % 2`
+     entre deux gris, plus un joint clair au nord-ouest. C'est-à-dire **un
+     damier de période 16 px**, exactement le défaut que le 434 a corrigé sur
+     les rues — et il occupe la surface qui ENTOURE les escaliers du tribunal.
+     Quand Guillaume écrit « il y a un écart flagrant de qualité de textures »
+     entre le sol pavé et les escaliers du courthouse, les deux tiers de ce
+     qu'il regarde sont ce damier-ci : la volée neuve arrivait sur lui.
+
+     ⚠️ MÊME MÉTHODE, TROISIÈME FOIS : un pavé de 4×4 tuiles qui boucle
+     (`roadWrap`), découpé par `x % 4`. Mais la MATIÈRE est délibérément autre
+     que celle des rues — de grandes dalles rectangulaires appareillées, pas des
+     pavés ronds. Une place n'est pas une chaussée (c'est déjà l'argument du 434
+     pour que le goudron s'arrête à ses quatre bords), et deux sols qui se
+     touchent doivent se DISTINGUER, sinon on a fait du travail pour rien. */
+  function townFlagSurface() {
+    const [c, g] = cv(ROAD_N, ROAD_N), r = makeRnd(0x2c8f);
+    /* ⚠️ LE JOINT EST SOMBRE, ET C'EST LUI QUI PORTE TOUT L'ÉCART DE VALEUR.
+       Premier jet à `#7d7b76` : `render-escaliers.mjs` mesurait un écart-type de
+       23,0 contre 45,8 aux pavés de rue — le dallage neuf était deux fois plus
+       plat que ce qu'il devait égaler, c'est-à-dire qu'on venait de refaire le
+       défaut qu'on corrigeait. Un joint de dalle est une RAINURE : à 16 px, une
+       rainure est sombre. */
+    const JOINT = "#5c5a56";
+    P(g, 0, 0, ROAD_N, ROAD_N, JOINT);
+    for (let i = 0; i < 700; i++) P(g, (r() * ROAD_N) | 0, (r() * ROAD_N) | 0, 1, 1, r() < 0.5 ? "#6a6863" : "#4e4c49");
+    /* ⚠️ LA PLAGE DE TEINTES DES DALLES EST LARGE, ET C'EST LA CORRECTION QUE
+       LE BANC A IMPOSÉE. Avec douze gris tous à ±5 de luminance, la place
+       mesurait un écart-type de 28,7 contre 45,8 aux pavés : chaque dalle était
+       jolie et l'ENSEMBLE était un aplat, parce qu'une place est faite de peu
+       de grandes pierres et que sa matière tient donc dans l'écart d'une pierre
+       À L'AUTRE, pas dans le grain de chacune. C'est l'inverse exact du
+       goudron du 434 (un seul matériau, la richesse dans le grain) — et c'est
+       pour ça qu'on ne peut pas recopier le réglage d'une surface sur une
+       autre. Seize teintes, de `#9a988f` à `#c8c6bd`. */
+    const BODY = ["#b0aea6", "#b7b5ad", "#a9a79f", "#c2c0b7", "#adaba3", "#b4b2aa", "#9e9c95", "#bcbab2",
+                  "#a3a199", "#c8c6bd", "#a7a59d", "#b8b6ac", "#9a988f", "#c5c3ba", "#aba9a1", "#bfbdb4"];
+    const LIT = ["#cfcdc4", "#d5d3ca", "#c9c7be", "#d2d0c7", "#dad8cf", "#cccac1"];
+    const DRK = ["#8d8b85", "#93918b", "#878580", "#908e88", "#82807b", "#98968f"];
+    /* ⚠️ TROIS RANGS DE 21 ou 22 px, pas quatre de 16 : une DALLE est plus
+       grande qu'une case, sinon on redessine la grille avec des joints. 64 =
+       21 + 21 + 22, pas un pixel de reste (c'est ce qui garantit le bouclage). */
+    const ROWH = [21, 21, 22];
+    let y = 0;
+    for (const rh of ROWH) {
+      const n = 3 + ((r() * 2) | 0);                 // 3 ou 4 dalles par rang
+      const ws = roadSplit(ROAD_N, n, r, [13, 28]);
+      let x = (r() * ROAD_N) | 0;                    // le rang est décalé : aucun joint continu
+      for (let s = 0; s < n; s++) {
+        const w = ws[s], k = (r() * BODY.length) | 0;
+        roadWrap(g, x, y, w - 1, rh - 1, BODY[k]);
+        roadWrap(g, x, y, w - 1, 1, LIT[(r() * LIT.length) | 0]);        // arête nord, éclairée
+        roadWrap(g, x, y, 1, rh - 1, LIT[(r() * LIT.length) | 0]);       // arête ouest
+        roadWrap(g, x, y + rh - 2, w - 1, 1, DRK[(r() * DRK.length) | 0]);
+        roadWrap(g, x + w - 2, y, 1, rh - 1, DRK[(r() * DRK.length) | 0]);
+        /* ⚠️ UNE DALLE SUR SIX EST FÊLÉE, ET C'EST CE QUI EMPÊCHE LA PLACE
+           D'AVOIR L'AIR IMPRIMÉE (le mot du 425). Une fêlure est une ligne
+           BRISÉE : droite, elle se lit comme un joint qu'on aurait oublié. */
+        if (r() < 0.17) {
+          let fx = x + 3 + ((r() * (w - 6)) | 0), fy = y + 1;
+          for (let q = 0; q < rh - 3; q++) {
+            roadWrap(g, fx, fy + q, 1, 1, "#8c8a84");
+            if (r() < 0.4) fx += r() < 0.5 ? -1 : 1;
+          }
+        }
+        for (let q = 0; q < 9; q++) roadWrap(g, x + 1 + ((r() * (w - 2)) | 0), y + 1 + ((r() * (rh - 2)) | 0), 1, 1 + ((r() * 2) | 0), r() < 0.5 ? LIT[(r() * LIT.length) | 0] : DRK[(r() * DRK.length) | 0]);
+        /* Une dalle sur huit est FRANCHEMENT plus sombre — celle qu'on a
+           remplacée, ou celle qui garde l'eau. Sans cette minorité, une place
+           est un aplat très détaillé, ce qui n'est pas la même chose qu'une
+           place. C'est le même argument que la minorité de pierres chaudes des
+           pavés de rue (434). */
+        if (r() < 0.13) roadWrap(g, x + 1, y + 1, w - 3, rh - 3, "#98968f");
+        else if (r() < 0.08) roadWrap(g, x + 1, y + 1, w - 3, rh - 3, "#c4c2b9");
+        // Mousse dans les joints, côté sud de la dalle — là où l'eau stagne.
+        if (r() < 0.4) roadWrap(g, x + 2 + ((r() * (w - 5)) | 0), y + rh - 2, 2 + ((r() * 3) | 0), 1, "#6b7355");
+        x = (x + w) % ROAD_N;
+      }
+      y += rh;
+    }
+    return c;
+  }
+
   const KERB_STONE = { face: "#a8a69e", top: "#c6c4bb", dark: "#6f6d67", faceAlt: "#b2b0a7", gutter: "#5d5b58" };
   const KERB_BRICK = { face: "#8f5a44", top: "#b07a5e", dark: "#5f3a2c", faceAlt: "#9c6650", gutter: "#4d3a30" };
 
@@ -4525,7 +4959,15 @@ export function buildSprites() {
      variante bombe, l'autre creuse. Déformer le seuil d'une constante aurait
      décollé le trait de celui du voisin — une fissure d'un pixel tout autour
      du lac, invisible à la relecture et hurlante en jeu. */
-  const WAT_CFG = 16, WAT_VAR = 2, WAT_DEPTH = 8;
+  /* ⚠️⚠️ ZIP 436 — HUIT CRANS NE SUFFISAIENT PAS, ET LE CALCUL LE DIT. Le
+     plateau fait 1,5 case (TOWN_WATER_SHELF) : à huit crans, deux cases
+     voisines sautent CINQ crans, et une interpolation entre deux valeurs
+     distantes de cinq n'a que trois teintes à offrir sur seize pixels. Le
+     tramage rendait donc encore des plaques. Seize crans ramènent le saut à
+     deux ou trois, ce qui est exactement ce qu'un tramage sait dissoudre.
+     C'est le coût qu'on paye : 16 × 2 × 16 = 512 tuiles de 16 px, cuites une
+     fois. */
+  const WAT_CFG = 16, WAT_VAR = 2, WAT_DEPTH = 16;
   /* La rampe de profondeur. ⚠️ ELLE CHANGE DE TEINTE, PAS SEULEMENT DE VALEUR :
      un haut-fond est vaseux et vert, le large est bleu et sourd. Une simple
      rampe de luminance sur un seul bleu aurait rendu un dégradé de peinture,
@@ -4538,9 +4980,162 @@ export function buildSprites() {
      surface, et sur une mare de quatre cases de rayon, c'est tout le bord. Un
      haut-fond se voit sur une case, pas sur trois : les deux premiers crans
      seuls sont pâles, le reste est du bleu. */
-  const WAT_RAMP = ["#8fb9bd", "#6a9fb4", "#5189ad", "#4174a0", "#356293", "#2b5384", "#234674", "#1c3b63"];
-  const WAT_FOAM = "#dbeef2";      // le liseré clair au ras de la rive, côté lumière
+  /* ⚠️⚠️ ZIP 436 — LA RAMPE EST DÉRIVÉE DE CINQ REPÈRES, PLUS ÉCRITE CRAN PAR
+     CRAN. Deux raisons, et la seconde est la vraie :
+       — à seize crans, une liste écrite à la main est seize chances de poser
+         une teinte qui ne suit pas la courbe, et c'est le §8 de CLAUDE.md (un
+         paramètre qui en double un autre doit être DÉRIVÉ) ;
+       — le nombre de crans peut désormais changer sans retoucher une couleur.
+     ⚠️ ET LES REPÈRES ONT ÉTÉ RABATTUS. Ceux du 435 partaient de `#8fb9bd`, un
+     turquoise presque blanc : sur `eau-etang.png`, le haut-fond formait un
+     ANNEAU LAITEUX qui se lisait comme de la glace, pas comme de l'eau peu
+     profonde. Une eau claire vue de dessus prend la couleur du FOND (vase
+     grise, galets), pas celle du ciel — c'est le bleu qui arrive avec la
+     profondeur, quand le fond disparaît. */
+  const WAT_STOPS = ["#93aeb0", "#6e94ac", "#4a7ba8", "#356293", "#234771", "#183355"];
+  const WAT_RAMP = (() => {
+    const hex = (s) => [parseInt(s.slice(1, 3), 16), parseInt(s.slice(3, 5), 16), parseInt(s.slice(5, 7), 16)];
+    const st = WAT_STOPS.map(hex), out = [];
+    for (let k = 0; k < WAT_DEPTH; k++) {
+      const t = (k / (WAT_DEPTH - 1)) * (st.length - 1);
+      const a = Math.min(st.length - 1, t | 0), b = Math.min(st.length - 1, a + 1), f = t - a;
+      const ch = (j) => Math.round(st[a][j] + (st[b][j] - st[a][j]) * f);
+      out.push(`rgb(${ch(0)},${ch(1)},${ch(2)})`);
+    }
+    return out;
+  })();
+  const WAT_FOAM = "#cfe4e8";      // le liseré clair au ras de la rive, côté lumière
   const WAT_SHADE = "#1b3d63";     // l'ombre portée de la berge, côté nord-ouest
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     ZIP 436 — LA PROFONDEUR CESSE D'ÊTRE UN ESCALIER DE CARRÉS.
+     ─────────────────────────────────────────────────────────────────────────
+     ⚠️⚠️ CE QUE LE 435 A LAISSÉ PASSER, ET SON BANC AVEC LUI. `render-eau.mjs`
+     mesurait la profondeur en comparant la LUMINANCE DU BORD À CELLE DU LARGE
+     (L 151 contre 54) : il disait donc « la profondeur se voit », ce qui était
+     vrai, pendant que l'étang rendait une MOSAÏQUE DE CARRÉS de 16 px de bleus
+     différents. C'est le §14.6 de CLAUDE.md pris en flagrant délit — un banc
+     qui passe ne dit pas que la chose est bonne, il dit qu'on mesure autre
+     chose. La grandeur qui manquait est le CONTRASTE D'UNE ARÊTE DE CASE
+     comparé au contraste à l'intérieur d'une case : si les cases se voient,
+     c'est que le premier est plus grand.
+     Le 435 fondait déjà, par deux bandes de 5 px sur l'axe dominant. Deux
+     raisons pour lesquelles ça ne suffisait pas :
+       — une bande est un RECTANGLE : trois marches au lieu d'une, mais toujours
+         des marches, et toujours alignées sur la grille ;
+       — un seul axe : une case qui a un voisin plus profond au nord ET à l'est
+         n'en fondait qu'un, l'autre gardait son arête franche.
+     ⚠️ LA PARADE EST UN TRAMAGE STOCHASTIQUE, PAS UN VOILE ALPHA. Chaque pixel
+     prend la couleur d'UN cran — le sien ou celui d'un voisin — avec une
+     probabilité qui décroît linéairement en s'éloignant de ce voisin. En
+     espérance, c'est exactement l'interpolation bilinéaire de la profondeur ;
+     en pixels, c'est du grain, c'est-à-dire la matière que l'eau a déjà. Et
+     comme chaque pixel est OPAQUE, les quatre côtés peuvent être servis d'un
+     coup : deux tramages qui se superposent ne fabriquent pas de troisième
+     teinte, contrairement à deux voiles alpha (le tissu écossais du 435).
+     ⚠️ On tramage vers le cran MOYEN (d + voisin)/2, pas vers le cran du
+     voisin : le voisin fera de même de son côté, et les deux moitiés se
+     rejoignent sur la même valeur au milieu de l'arête. Trame vers le voisin
+     lui-même, on doublerait la marche au lieu de la diviser.
+     ⚠️ RÉSERVÉ À LA PLEINE EAU (cfg 15). Sur une case de rive, le contour
+     occupe moins d'une demi-case et le tramage déborderait sur l'herbe — la
+     grille qu'on vient de casser, redessinée en bleu. */
+  const WAT_FADE_DIRS = [[-1, 0], [1, 0], [0, -1], [0, 1]];   // O, E, N, S
+  function townWaterFadeTile(dir, d) {
+    const [c, g] = cv(T, T);
+    const [dx, dy] = WAT_FADE_DIRS[dir];
+    /* ⚠️ LA GRAINE NE DÉPEND NI DE `d` NI DE `dir`. Les quatre tramages d'une
+       même case doivent viser les MÊMES pixels : sinon un pixel peut être
+       servi par l'ouest puis recouvert par l'est, et la densité effective ne
+       vaut plus la probabilité qu'on a calculée. Avec une graine commune, les
+       tirages sont corrélés et chaque pixel n'appartient qu'à un seul côté. */
+    const r = makeRnd(0x51c7);
+    for (let py = 0; py < T; py++) for (let px = 0; px < T; px++) {
+      const u = (px + 0.5) / T, v = (py + 0.5) / T;
+      // Position le long de l'axe du voisin : 1 collé à lui, 0 au centre.
+      const s = dx ? (dx < 0 ? 1 - 2 * u : 2 * u - 1) : (dy < 0 ? 1 - 2 * v : 2 * v - 1);
+      if (r() < s) P(g, px, py, 1, 1, WAT_RAMP[d]);
+      else r();                                  // on consomme quand même : la suite doit rester alignée
+    }
+    return c;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     ZIP 436 — CE QUI FLOTTE ET CE QUI ÉMERGE.
+     ─────────────────────────────────────────────────────────────────────────
+     Le 435 le disait lui-même en dernière ligne : « aucun roseau, aucun
+     nénuphar, aucun rocher émergé ». C'est ce qui séparait encore l'étang de
+     la référence de Guillaume — et ce n'est pas de la décoration : une nappe
+     d'eau vide n'a pas d'ÉCHELLE. Un nénuphar de six pixels dit « cette mare
+     fait quatre mètres » ; sans lui, le même dessin peut être une flaque ou un
+     lac, et c'est exactement le reproche « pas assez réaliste ».
+     ⚠️ AUCUN N'EST UN PROP, ET C'EST DÉLIBÉRÉ. L'eau bloque déjà : un rocher
+     posé dessus n'a aucune collision à porter, donc rien à faire dans
+     `tw.props` (qui coûterait une passe de générateur, une entrée dans le
+     contrôle « toute case solide est dessinée », et un tri de profondeur). Ils
+     sont TIRÉS D'UN HACHAGE DE LA CASE au rendu, comme les emplacements
+     d'oiseaux du 433 : même carte, mêmes nénuphars, chez les deux joueurs,
+     sans un octet de réseau.
+     ⚠️ Et ils ne se posent que sur de la PLEINE eau, pour la raison du 435 :
+     sur une case de rive, un `drawImage` pleine case redessinerait la grille. */
+  const WAT_DECOR_N = 4;                         // 4 variantes par espèce
+  function townLilyTile(vr) {
+    const [c, g] = cv(T, T), r = makeRnd(0x6a11 + vr * 97);
+    const PAD = ["#3f7a3a", "#4d8c44", "#356b32"], PADL = "#63a355", PADD = "#27502a";
+    const n = 1 + ((r() * 3) | 0);
+    for (let k = 0; k < n; k++) {
+      const cx = 3 + ((r() * 10) | 0), cy = 3 + ((r() * 10) | 0), rad = 2 + ((r() * 2) | 0);
+      const body = PAD[(r() * PAD.length) | 0];
+      /* ⚠️ LE DISQUE EST DESSINÉ EN RANGÉES DE `fillRect`, PAS AVEC `arc()`.
+         Le faux canevas des bancs ne rastérise pas les chemins (§4) : un
+         nénuphar en `arc` serait invisible dans `tools/render-eau.mjs`,
+         c'est-à-dire livré sans avoir jamais été regardé. */
+      for (let dy = -rad; dy <= rad; dy++) {
+        const w = Math.round(Math.sqrt(Math.max(0, rad * rad - dy * dy)) * 2);
+        if (w <= 0) continue;
+        P(g, cx - (w >> 1), cy + dy, w, 1, body);
+      }
+      P(g, cx - (rad >> 1), cy - rad, Math.max(1, rad), 1, PADL);        // le dessus, éclairé au nord-ouest
+      P(g, cx - (rad >> 1), cy + rad, Math.max(1, rad), 1, PADD);        // l'ourlet dans l'eau
+      // L'ENCOCHE : c'est elle, et rien d'autre, qui fait lire « nénuphar »
+      // plutôt que « tache verte ». Une feuille de nymphéa est fendue.
+      P(g, cx, cy, 1, rad + 1, "#2b5384");
+      if (r() < 0.35) { P(g, cx + 1, cy - 1, 2, 2, "#e8dfe8"); P(g, cx + 1, cy - 1, 1, 1, "#f6f1f6"); }  // la fleur
+    }
+    return c;
+  }
+  function townWaterRockTile(vr) {
+    const [c, g] = cv(T, T), r = makeRnd(0x4b73 + vr * 53);
+    const ROC = ["#7e7a72", "#8d8981", "#6c6862"], LIT = "#a5a099", WET_ = "#4b5a63";
+    const n = 1 + ((r() * 2) | 0);
+    for (let k = 0; k < n; k++) {
+      const cx = 3 + ((r() * 9) | 0), cy = 4 + ((r() * 8) | 0);
+      const w = 3 + ((r() * 4) | 0), h = 2 + ((r() * 3) | 0);
+      P(g, cx, cy, w, h, ROC[(r() * ROC.length) | 0]);
+      P(g, cx, cy, w - 1, 1, LIT);                       // le dessus prend la lumière du nord-ouest
+      P(g, cx, cy + h - 1, w, 1, WET_);                  // la ligne de flottaison, mouillée et sombre
+      P(g, cx - 1, cy + h, w + 2, 1, "rgba(219,238,242,0.55)");   // l'anneau d'écume au pied
+      if (r() < 0.5) P(g, cx + w - 1, cy + 1, 1, h - 1, "#5d5952");
+    }
+    return c;
+  }
+  /* Les roseaux se posent sur la BERGE MOUILLÉE (bande 1), pas sur l'eau : une
+     touffe de joncs pousse dans la vase, pas au large. Ils débordent vers le
+     haut de la case — c'est ce débord qui leur donne de la hauteur, exactement
+     comme la haie du 425 déborde de sept pixels vers le nord. */
+  function townReedTile(vr) {
+    const [c, g] = cv(T, T), r = makeRnd(0x2d90 + vr * 71);
+    const ST = ["#4a7a3c", "#5b8f46", "#3d6733"], SEED = "#6b5233";
+    const n = 3 + ((r() * 4) | 0);
+    for (let k = 0; k < n; k++) {
+      const x = 2 + ((r() * 12) | 0), h = 5 + ((r() * 7) | 0), base = 11 + ((r() * 4) | 0);
+      const col = ST[(r() * ST.length) | 0];
+      const lean = r() < 0.5 ? 0 : (r() < 0.5 ? -1 : 1);
+      for (let q = 0; q < h; q++) P(g, x + ((lean * q / 4) | 0), base - q, 1, 1, col);
+      if (r() < 0.45) P(g, x + ((lean * h / 4) | 0), base - h - 1, 1, 2, SEED);   // la massette
+    }
+    return c;
+  }
 
   function townWaterTile(cfg, vr, d) {
     /* ⚠️ LA GRAINE NE DÉPEND PAS DE `d`, ET C'EST OBLIGATOIRE. Le rendu
@@ -4620,7 +5215,7 @@ export function buildSprites() {
     for (let k = 0; k < lam; k++) {
       const ly = 2 + ((r() * (T - 4)) | 0), lx = 1 + ((r() * (T - 6)) | 0), lw = 3 + ((r() * 3) | 0);
       for (let q = 0; q < lw; q++) if (W_(lx + q, ly) && W_(lx + q, ly - 1) && W_(lx + q, ly + 1)) {
-        P(g, lx + q, ly, 1, 1, d <= 1 ? "#c7e4ea" : "#7fb5cf");
+        P(g, lx + q, ly, 1, 1, d <= 3 ? "#bfdae0" : "#6ea3c2");
       }
     }
     return c;
@@ -6129,105 +6724,251 @@ export function buildSprites() {
       g2.fillStyle = CHR; g2.beginPath(); g2.ellipse(cx - 0.4, cy - 0.4, r - 2.8, r - 2.8, 0, 0, 7); g2.fill();
     };
 
+    /* ⚠️ ZIP 436 — LA ROUE GAGNE SES RAYONS ET SON REFLET. Retour de Guillaume :
+       « le taxi peut être plus travaillé ». Une roue de huit pixels de diamètre
+       ne peut pas porter cinq bâtons de jante, mais elle peut porter DEUX
+       choses : un moyeu qui n'est pas au centre optique (la lumière vient du
+       nord-ouest, donc le chrome brille en haut à gauche) et un liseré de gomme
+       plus clair en haut — l'arête du pneu qui prend le jour. Sans ça, une roue
+       est un point noir. */
+    const wheelDetail = (g2, cx, cy, r) => {
+      wheel(g2, cx, cy, r);
+      P(g2, Math.round(cx - r + 1), Math.round(cy - r), Math.max(1, Math.round(r * 1.4)), 1, "#3a3a3a");
+      P(g2, Math.round(cx - 1), Math.round(cy - 1), 1, 1, "#f2ece0");     // l'éclat du moyeu
+    };
+    /* Une rampe verticale sur la caisse. ⚠️ C'EST LA SEULE CHOSE QUI DONNE DU
+       VOLUME À UN FLANC PLAT, et le dessin du 433 ne l'avait pas : une berline
+       vue de côté est un cylindre couché, donc son flanc s'assombrit vers le bas
+       de caisse ET vers l'épaule (le haut retourne vers le toit). Cinq valeurs
+       suffisent ; six feraient de la bande. */
+    const FLANK = [Y4, Y3, Y3, Y3, Y3, Y2, Y1];
+
     if (dir === "e") {
       /* PROFIL — LA VUE QU'ON VOIT LE PLUS (les avenues sont est-ouest).
          ⚠️⚠️ LES PROPORTIONS SONT CELLES DU MONDE RÉEL, RAMENÉES AU PERSONNAGE.
-         Premier jet : 34×20. À l'écran, à côté d'un fermier de 23 px peints et
-         de bancs de deux cases, ça donnait une voiturette — « augmente la taille
-         du véhicule pour qu'elle soit cohérente avec l'environnement ».
-         Le repère n'est pas une intuition, c'est une mesure : une berline fait
-         ~4,2 m pour 1,5 m de haut, un adulte 1,70 m. Donc, avec un fermier à
-         23 px : LONGUEUR ≈ 2,4 × 23 ≈ 54 px, HAUTEUR DE TOIT ≈ 0,88 × 23 ≈ 20 px.
-         D'où 48×24 hors-tout (l'enseigne de toit dépasse au-dessus). Et ça
-         retombe juste sur l'autre repère, celui des infrastructures : trois
-         cases de long, la largeur exacte d'une chaussée de la ville. */
+         Premier jet (432) : 34×20. À l'écran, à côté d'un fermier de 23 px
+         peints et de bancs de deux cases, ça donnait une voiturette. Le repère
+         n'est pas une intuition, c'est une mesure : une berline fait ~4,2 m pour
+         1,5 m de haut, un adulte 1,70 m. Donc, avec un fermier à 23 px :
+         LONGUEUR ≈ 2,4 × 23 ≈ 54 px, HAUTEUR DE TOIT ≈ 0,88 × 23 ≈ 20 px. D'où
+         48×24 hors-tout, ce qui retombe juste sur l'autre repère : trois cases
+         de long, la largeur exacte d'une chaussée de la ville.
+
+         ⚠️⚠️ ZIP 436 — CE QUI A CHANGÉ, ET POURQUOI CE N'EST PAS DU DÉTAIL.
+         Le dessin du 433 était juste de proportions et PLAT de matière : un
+         aplat `Y3` sur toute la caisse, un aplat `Y4` sur tout le pavillon,
+         deux vitres unies, deux disques noirs. À côté d'un sol qui a reçu son
+         granulat, ses éclats et ses joints décalés (434) et d'une eau qui a
+         reçu sa profondeur (435), le véhicule était l'élément le plus PAUVRE de
+         la ville — et c'est ce que Guillaume a vu.
+         Six ajouts, et chacun répond à une chose qu'un œil cherche sur une
+         voiture avant d'en chercher une autre :
+           1. le flanc est une RAMPE, pas un aplat (voir FLANK) ;
+           2. les PASSAGES DE ROUE sont creusés — c'est le trou d'ombre au-dessus
+              du pneu qui dit « la roue est dans la carrosserie », sans lui la
+              voiture est posée SUR ses roues ;
+           3. le REFLET DE VITRE en diagonale : une vitre unie est un trou, une
+              vitre avec sa diagonale est du verre ;
+           4. l'OMBRE DE CAISSE entre les roues (le dessous), qui ancre au sol ;
+           5. l'ENSEIGNE est ALLUMÉE (ambre, avec son halo sur le toit) : c'est
+              elle qui dit « taxi » de loin, et éteinte elle ne disait rien ;
+           6. les CLIGNOTANTS ambre à côté des optiques, et la trappe à essence.
+         ⚠️ Ce qui n'a PAS changé : les trois lignes (ROOF 4 / BELT 11 /
+         SILL 18), la ligne de sol à 23 et le gabarit. `render-taxi.mjs` échoue
+         si l'une d'elles bouge, et il a raison — cinq vues doivent décrire le
+         même véhicule (§8). */
       const [c, g] = cv(48, 24);
       const SILL = 18, BELT = 11, ROOF = 4, WY = 19, WR = 4.0;
-      // Caisse : capot bas devant (droite), coffre bas derrière (gauche).
-      P(g, 3, BELT, 42, SILL - BELT, Y3);
-      P(g, 28, BELT - 1, 17, 1, Y4); P(g, 44, BELT - 1, 3, SILL - BELT + 1, Y2);
-      P(g, 1, BELT, 9, SILL - BELT, Y3); P(g, 1, BELT, 1, 4, Y2);
-      // Habitacle : montants inclinés, arête de toit éclairée.
+      /* ---- 1. LA CAISSE. Un profil par rangée : la voiture est plus courte en
+         haut de caisse qu'en bas (les ailes débordent), et ses deux bouts sont
+         arrondis. Écrit en table, donc impossible à décentrer à la main. */
+      const EXT = [[4, 44], [2, 46], [1, 47], [1, 47], [1, 47], [2, 46], [3, 45]];
+      for (let k = 0; k < EXT.length; k++) {
+        const [xa, xb] = EXT[k];
+        P(g, xa, BELT + k, xb - xa, 1, FLANK[k]);
+      }
+      /* ---- 2. L'HABITACLE. Montants inclinés vers l'arrière (le pare-brise est
+         plus couché que la lunette), arête de toit éclairée. */
       P(g, 12, ROOF, 18, BELT - ROOF, Y4);
       P(g, 30, ROOF + 1, 1, 2, Y3); P(g, 31, ROOF + 3, 1, 2, Y3); P(g, 32, ROOF + 5, 1, 2, Y3);
       P(g, 11, ROOF + 2, 1, 2, Y3); P(g, 10, ROOF + 4, 1, 3, Y3);
       P(g, 12, ROOF, 18, 1, Y5);
-      // Vitres latérales, séparées par le montant central.
-      P(g, 13, ROOF + 1, 8, 5, GLS); P(g, 13, ROOF + 1, 8, 1, GLSL);
-      P(g, 23, ROOF + 1, 6, 5, GLS); P(g, 23, ROOF + 1, 6, 1, GLSL);
-      P(g, 21, ROOF + 1, 2, 5, Y3);
-      /* ⚠️ LE DAMIER SE PLACE JUSTE SOUS LES VITRES : c'est là qu'il est sur une
+      /* ---- 3. LES VITRES, ET LEUR REFLET. ⚠️ LA DIAGONALE EST LE SUJET : une
+         vitre d'un seul gris est un TROU dans la carrosserie. Deux pixels
+         clairs en escalier suffisent à la faire lire comme du verre — c'est le
+         même principe que l'arête éclairée d'un pavé (434), à ceci près qu'ici
+         la lumière traverse. */
+      const glass = (gx, gy, gw, gh) => {
+        P(g, gx, gy, gw, gh, GLS);
+        P(g, gx, gy, gw, 1, GLSL);
+        for (let k = 0; k < Math.min(gw - 1, gh + 1); k++) P(g, gx + 1 + k, gy + gh - 1 - k, 1, 1, "#7e94a2");
+        P(g, gx, gy + gh - 1, gw, 1, "#39434a");        // la lèvre basse, dans l'ombre du joint
+      };
+      glass(13, ROOF + 1, 8, 5);
+      glass(23, ROOF + 1, 6, 5);
+      P(g, 21, ROOF + 1, 2, 5, Y3);                     // montant central
+      P(g, 12, ROOF + 1, 1, 5, CHRD); P(g, 29, ROOF + 1, 1, 5, CHRD);   // encadrement chromé
+      P(g, 30, ROOF + 4, 3, 1, CHRD);                   // et son retour sur le pare-brise
+      /* ---- 4. LE DAMIER, juste sous les vitres — c'est là qu'il est sur une
          vraie voiture, et la seule hauteur où il ne se confond pas avec l'ombre
-         du châssis. */
+         du châssis. ⚠️ DEUX RANGÉES DÉCALÉES : un damier à une seule rangée
+         n'est pas un damier, c'est une frise. */
+      /* ⚠️ DEUX RANGÉES, PAS TROIS — mesuré au banc, pas décidé. La caisse ne
+         fait que SEPT rangées entre la ceinture et le bas de caisse ; un damier
+         de trois en mange 43 %, et il ne restait plus que deux rangées de jaune
+         en dessous : la voiture portait une jupe sombre. À deux rangées, le
+         jaune reste majoritaire et le damier reste lisible à trois cases. */
       P(g, 3, BELT, 42, 1, CHRD);
-      for (let i = 0; i < 14; i++) P(g, 3 + i * 3, BELT + 1, 3, 3, i % 2 ? BLK : CHR);
-      P(g, 21, BELT + 4, 1, SILL - BELT - 4, Y1);            // ligne de portière
-      P(g, 3, SILL - 1, 42, 1, Y1);                          // bas de caisse, à l'ombre
-      // Pare-chocs, phare, feu arrière, poignées, pot.
-      P(g, 44, SILL - 3, 4, 3, CHR); P(g, 0, SILL - 3, 4, 3, CHR);
-      P(g, 45, BELT + 1, 3, 3, LMP); P(g, 0, BELT + 1, 3, 3, RED);
-      P(g, 18, BELT + 1, 3, 1, CHR); P(g, 27, BELT + 1, 3, 1, CHR);
-      P(g, 17, ROOF - 4, 9, 4, CHR); P(g, 18, ROOF - 3, 7, 2, BLK);   // enseigne de toit
-      P(g, 1, SILL, 3, 2, BLK);                                       // pot d'échappement
-      /* ⚠️⚠️ LES ROUES SE DESSINENT EN DERNIER, ET L'ORDRE EST LE SUJET. Passées
+      for (let i = 0; i < 14; i++) P(g, 3 + i * 3, BELT + 1, 3, 2, i % 2 ? BLK : CHR);
+      P(g, 3, BELT + 3, 42, 1, "rgba(40,32,12,0.30)");   // l'ombre que la bande porte sur la caisse
+      /* ---- 5. LES PASSAGES DE ROUE. ⚠️ SANS EUX LA VOITURE EST POSÉE SUR SES
+         ROUES AU LIEU DE LES CONTENIR. On creuse un arc d'ombre au-dessus du
+         pneu, et on éclaire la lèvre d'aile juste au-dessus : l'un ne marche
+         pas sans l'autre — l'ombre seule fait une tache, la lèvre seule fait un
+         sourcil. */
+      /* ⚠️ ON DESSINE L'ARC, PAS LA ZONE SOUS L'ARC — premier jet de ce zip, et
+         il a fallu le regarder pour le voir : `fillRect` de la corde entière à
+         chaque rangée donnait un demi-cercle dont les quatre rangées faisaient
+         5 px de demi-largeur, c'est-à-dire un RECTANGLE brun en travers du bas
+         de caisse. Un passage de roue est un LISERÉ creux plus une lèvre
+         éclairée ; ce qu'il y a entre les deux, c'est la roue. */
+      /* ⚠️ L'ARC RESTE SOUS LA BANDE DAMIER, ET C'EST UNE CONTRAINTE DE PLACE,
+         pas un choix esthétique : entre la ceinture (11) et le sol de caisse
+         (18) il n'y a que sept rangées, et le pneu monte déjà jusqu'à 15. Un
+         passage de roue plus grand traverserait le damier — vu au banc, ça
+         faisait deux bosses jaunes au milieu des carreaux. On serre donc l'arc
+         contre la gomme : quatre rangées, rayon 4,6. */
+      const AR = 4.6;
+      for (const wx of [11, 35]) {
+        for (let dy = -4; dy <= -1; dy++) {
+          const hw = Math.round(Math.sqrt(Math.max(0, AR * AR - dy * dy)));
+          if (hw < 1) continue;
+          P(g, wx - hw, WY + dy, 1, 1, "#5a4818"); P(g, wx + hw, WY + dy, 1, 1, "#5a4818");
+        }
+        P(g, wx - 3, WY - 5, 7, 1, Y4);                 // la lèvre d'aile, éclairée
+      }
+      /* ---- 6. LES ACCESSOIRES. Portière, poignées, trappe à essence, pot. */
+      P(g, 21, BELT + 4, 1, SILL - BELT - 4, Y1);       // ligne de portière
+      P(g, 18, BELT + 4, 3, 1, CHRD); P(g, 26, BELT + 4, 3, 1, CHRD);   // poignées
+      P(g, 6, BELT + 5, 3, 2, Y2); P(g, 6, BELT + 5, 3, 1, Y4);         // trappe à essence
+      P(g, 3, SILL - 1, 42, 1, Y1);                     // bas de caisse
+      /* ---- 7. LES BOUTS. Pare-chocs à butoirs, phare et son halo, feu rouge,
+         clignotants ambre. ⚠️ LE CLIGNOTANT EST LE DÉTAIL QUI DATE LA VOITURE :
+         deux pixels ambre à côté du phare, et on lit une berline, pas un jouet. */
+      P(g, 44, SILL - 3, 4, 3, CHR); P(g, 44, SILL - 1, 4, 1, CHRD);
+      P(g, 0, SILL - 3, 4, 3, CHR); P(g, 0, SILL - 1, 4, 1, CHRD);
+      P(g, 45, BELT + 2, 3, 3, LMP); P(g, 46, BELT + 2, 2, 1, "#fffbe8");
+      P(g, 45, BELT + 5, 3, 1, "#e8912a");
+      P(g, 0, BELT + 2, 3, 3, RED); P(g, 0, BELT + 2, 3, 1, "#e8564a");
+      P(g, 0, BELT + 5, 3, 1, "#e8912a");
+      /* ---- 8. L'ENSEIGNE DE TOIT, ALLUMÉE. ⚠️ ET SON HALO EST PEINT SUR LE
+         TOIT, pas autour du sprite : une lampe qui n'éclaire rien n'est pas une
+         lampe allumée, c'est une boîte jaune. Le canevas fait 24 px et
+         l'enseigne commence à ROOF−4 = 0 : elle touche le bord haut, donc elle
+         serait DÉCAPITÉE par le liseré si on cernait sans marge (§4, payé trois
+         fois au 433). D'où le pied à ROOF−3 et le corps à ROOF−4, jamais plus
+         haut. */
+      P(g, 17, ROOF - 4, 9, 4, CHRD);
+      P(g, 18, ROOF - 3, 7, 2, "#ffca4e"); P(g, 18, ROOF - 3, 7, 1, "#fff0b0");
+      P(g, 17, ROOF - 1, 9, 1, CHR);                    // le pied chromé
+      P(g, 16, ROOF, 11, 1, "rgba(255,214,110,0.35)");  // le halo sur le pavillon
+      P(g, 1, SILL, 3, 2, BLK);                         // pot d'échappement
+      /* ---- 9. LES ROUES, EN DERNIER. ⚠️⚠️ L'ORDRE EST LE SUJET (432). Passées
          avant la caisse, le flanc les recouvrait aux trois quarts : il n'en
          restait qu'un croissant au ras du sol et la voiture avait l'air posée
          sur des patins. De profil, la roue est DEVANT le bas de caisse. */
       for (const wx of [11, 35]) {
-        wheel(g, wx, WY, WR);
+        wheelDetail(g, wx, WY, WR);
         P(g, Math.round(wx - WR), SILL, Math.round(WR * 2), 1, "#0e0e0e");
       }
+      // L'ombre de dessous, ENTRE les roues : c'est elle qui pose la voiture.
+      P(g, 15, SILL + 2, 17, 1, "rgba(14,14,14,0.38)");
       outlineSprite(g, 48, 24, "#2a2110");
       c.exhaust = { x: 0, y: SILL };
       c.ground = 23;
       return c;
     }
 
-    if (dir === "s") {
-      /* DE FACE (la voiture vient vers le joueur). Ce qui la fait reconnaître :
-         deux phares ronds, la calandre, le pare-brise large, l'enseigne.
-         ⚠️ MÊME HAUTEUR ET MÊME LIGNE DE SOL QUE LE PROFIL — c'est le même
-         véhicule vu d'ailleurs, et `render-taxi.mjs` échoue si ça diverge. */
+    /* ⚠️⚠️ ZIP 436 — FACE ET DOS PARTAGENT LEUR OSSATURE, ET C'EST NOUVEAU.
+       Le 433 les écrivait deux fois, ligne par ligne, avec les mêmes cotes
+       recopiées : c'est le doublon du §8 (« un paramètre qui double un autre est
+       une divergence en attente »), et il avait déjà commencé à diverger — la
+       face avait ses bas de caisse `Y2` aux deux angles, le dos non. On écrit
+       donc UNE carrosserie et on n'y pose que ce qui change : calandre et
+       phares devant, plaque et feux derrière. */
+    {
       const [c, g] = cv(28, 24);
       const SILL = 18, BELT = 11, ROOF = 4;
-      for (const wx of [4, 23]) wheel(g, wx, 19, 3.8);
-      P(g, 2, BELT, 24, SILL - BELT + 1, Y3);
-      P(g, 2, BELT, 24, 1, Y4);
-      P(g, 6, ROOF, 16, BELT - ROOF, Y4);
-      P(g, 6, ROOF, 16, 1, Y5);
-      P(g, 7, ROOF + 1, 14, 5, GLS); P(g, 7, ROOF + 1, 14, 1, GLSL);   // pare-brise
-      P(g, 13, ROOF + 1, 2, 5, Y3);                                     // rétroviseur
-      P(g, 9, BELT + 3, 10, 4, BLK);                                    // calandre
-      for (let i = 0; i < 5; i++) P(g, 10 + i * 2, BELT + 3, 1, 4, CHRD);
-      P(g, 2, BELT + 3, 4, 4, LMP); P(g, 22, BELT + 3, 4, 4, LMP);      // phares
-      P(g, 2, BELT + 3, 4, 1, "#fff8dd"); P(g, 22, BELT + 3, 4, 1, "#fff8dd");
-      P(g, 1, SILL + 1, 26, 3, CHR); P(g, 1, SILL + 3, 26, 1, CHRD);    // pare-chocs
-      P(g, 10, ROOF - 4, 8, 4, CHR); P(g, 11, ROOF - 3, 6, 2, BLK);     // enseigne
-      P(g, 2, BELT, 3, 1, Y2); P(g, 23, BELT, 3, 1, Y2);
+      const front = dir === "s";
+      for (const wx of [4, 23]) wheelDetail(g, wx, 19, 3.8);
+      /* ---- 1. LA CAISSE, en rampe verticale comme le profil, et rétrécie aux
+         épaules : vue de face, une voiture est plus étroite en haut qu'au ras
+         des ailes. Sans ce retrait, on dessine un fourgon. */
+      const EXT = [[3, 25], [2, 26], [1, 27], [1, 27], [1, 27], [2, 26], [2, 26]];
+      for (let k = 0; k < EXT.length; k++) {
+        const [xa, xb] = EXT[k];
+        P(g, xa, BELT + k, xb - xa, 1, FLANK[k]);
+      }
+      /* ---- 2. LE PAVILLON ET LA VITRE. Le pare-brise est plus large que la
+         lunette, donc la face a un pavillon d'un pixel plus large de chaque
+         côté — la seule différence de silhouette entre les deux vues, et elle
+         est DÉRIVÉE de `front`, pas écrite deux fois. */
+      const gw = front ? 17 : 15, gx = front ? 5 : 6;
+      P(g, gx, ROOF, gw, BELT - ROOF, Y4);
+      P(g, gx, ROOF, gw, 1, Y5);
+      P(g, gx + 1, ROOF + 1, gw - 2, 5, GLS);
+      P(g, gx + 1, ROOF + 1, gw - 2, 1, GLSL);
+      // Le reflet : une diagonale, comme sur le profil. Une vitre unie est un trou.
+      for (let k = 0; k < 5; k++) P(g, gx + 2 + k, ROOF + 5 - k, 1, 1, "#7e94a2");
+      P(g, gx + 1, ROOF + 5, gw - 2, 1, "#39434a");
+      P(g, gx, ROOF + 1, 1, 5, CHRD); P(g, gx + gw - 1, ROOF + 1, 1, 5, CHRD);
+      if (front) { P(g, 13, ROOF + 1, 2, 5, Y3); P(g, gx - 1, ROOF + 3, 1, 2, CHRD); P(g, gx + gw, ROOF + 3, 1, 2, CHRD); }  // rétroviseur + montants
+      /* ---- 3. LA BANDE DAMIER, sur la ceinture. ⚠️ ELLE EXISTE SUR LES CINQ
+         VUES OU SUR AUCUNE : le damier est ce qui identifie le véhicule, et une
+         voiture qui le perd en tournant se lit comme une autre voiture. Vue de
+         bout, on n'en voit que le retour sur les ailes — deux carreaux de
+         chaque côté, pas la bande entière, qui ferait une ceinture de smoking. */
+      for (let i = 0; i < 2; i++) {
+        P(g, 1 + i * 3, BELT + 1, 3, 2, i % 2 ? BLK : CHR);
+        P(g, 24 - i * 3, BELT + 1, 3, 2, i % 2 ? BLK : CHR);
+      }
+      /* ---- 4. CE QUI DIFFÈRE : le nez ou la poupe. */
+      if (front) {
+        P(g, 8, BELT + 3, 12, 4, BLK);                              // calandre
+        for (let i = 0; i < 6; i++) P(g, 9 + i * 2, BELT + 3, 1, 4, CHRD);
+        P(g, 8, BELT + 2, 12, 1, CHR);                              // son encadrement
+        P(g, 2, BELT + 3, 4, 4, LMP); P(g, 22, BELT + 3, 4, 4, LMP);
+        P(g, 2, BELT + 3, 4, 1, "#fff8dd"); P(g, 22, BELT + 3, 4, 1, "#fff8dd");
+        P(g, 2, BELT + 7, 4, 1, "#e8912a"); P(g, 22, BELT + 7, 4, 1, "#e8912a");   // clignotants
+      } else {
+        P(g, 9, BELT + 3, 10, 3, CHRD); P(g, 10, BELT + 3, 8, 1, CHR);   // plaque
+        P(g, 2, BELT + 3, 4, 4, RED); P(g, 22, BELT + 3, 4, 4, RED);
+        P(g, 2, BELT + 3, 4, 1, "#e8564a"); P(g, 22, BELT + 3, 4, 1, "#e8564a");
+        P(g, 2, BELT + 7, 4, 1, "#e8912a"); P(g, 22, BELT + 7, 4, 1, "#e8912a");
+        P(g, 21, SILL + 4, 4, 1, BLK);                              // pot d'échappement
+      }
+      /* ---- 5. LE PARE-CHOCS, LES PASSAGES DE ROUE, L'ENSEIGNE. Les trois
+         mêmes qu'au profil, aux mêmes hauteurs. */
+      P(g, 1, SILL + 1, 26, 3, CHR); P(g, 1, SILL + 3, 26, 1, CHRD);
+      P(g, 1, SILL + 1, 26, 1, "#ece5d6");
+      for (const wx of [4, 23]) {
+        for (let dy = -5; dy <= -2; dy++) {
+          const hw = Math.round(Math.sqrt(Math.max(0, 30 - dy * dy)));
+          if (hw < 1) continue;
+          P(g, wx - hw, 19 + dy, 1, 1, "#4a3b18"); P(g, wx + hw, 19 + dy, 1, 1, "#4a3b18");
+        }
+        P(g, wx - 3, 19 - 6, 7, 1, Y4);
+      }
+      P(g, 10, ROOF - 4, 8, 4, CHRD);
+      P(g, 11, ROOF - 3, 6, 2, "#ffca4e"); P(g, 11, ROOF - 3, 6, 1, "#fff0b0");
+      P(g, 10, ROOF - 1, 8, 1, CHR);
+      P(g, 9, ROOF, 10, 1, "rgba(255,214,110,0.35)");
+      P(g, 6, SILL + 2, 16, 1, "rgba(14,14,14,0.40)");              // l'ombre de dessous
       outlineSprite(g, 28, 24, "#2a2110");
-      c.exhaust = { x: 5, y: SILL + 3 };
+      c.exhaust = front ? { x: 5, y: SILL + 3 } : { x: 23, y: SILL + 4 };
       c.ground = 23;
       return c;
     }
-
-    /* DE DOS. Même gabarit, feux rouges, coffre, plaque — et le pot bien
-       visible : c'est de dos qu'on voit le plus longtemps la fumée. */
-    const [c, g] = cv(28, 24);
-    const SILL = 18, BELT = 11, ROOF = 4;
-    for (const wx of [4, 23]) wheel(g, wx, 19, 3.8);
-    P(g, 2, BELT, 24, SILL - BELT + 1, Y3); P(g, 2, BELT, 24, 1, Y4);
-    P(g, 6, ROOF, 16, BELT - ROOF, Y4); P(g, 6, ROOF, 16, 1, Y5);
-    P(g, 7, ROOF + 1, 14, 5, GLS); P(g, 7, ROOF + 1, 14, 1, GLSL);      // lunette
-    P(g, 9, BELT + 3, 10, 3, CHRD); P(g, 10, BELT + 3, 8, 1, CHR);      // plaque
-    P(g, 2, BELT + 3, 4, 4, RED); P(g, 22, BELT + 3, 4, 4, RED);        // feux
-    P(g, 2, BELT + 3, 4, 1, "#e8564a"); P(g, 22, BELT + 3, 4, 1, "#e8564a");
-    P(g, 1, SILL + 1, 26, 3, CHR); P(g, 1, SILL + 3, 26, 1, CHRD);
-    P(g, 10, ROOF - 4, 8, 4, CHR); P(g, 11, ROOF - 3, 6, 2, BLK);
-    P(g, 21, SILL + 4, 4, 1, BLK);                                      // pot d'échappement
-    outlineSprite(g, 28, 24, "#2a2110");
-    c.exhaust = { x: 23, y: SILL + 4 };
-    c.ground = 23;
-    return c;
   }
 
   /* ╔══════════════════════════════════════════════════════════════════════════
@@ -8019,6 +8760,19 @@ export function buildSprites() {
       // debout (« soldier course ») pour l'allée du cimetière.
       kerb: { n: townKerbStrip("n", KERB_STONE), s: townKerbStrip("s", KERB_STONE), e: townKerbStrip("e", KERB_STONE), w: townKerbStrip("w", KERB_STONE) },
       kerbBrick: { n: townKerbStrip("n", KERB_BRICK), s: townKerbStrip("s", KERB_BRICK), e: townKerbStrip("e", KERB_BRICK), w: townKerbStrip("w", KERB_BRICK) },
+      // ZIP 436 — le dallage des esplanades, dernier damier de 16 px de la ville.
+      flag: townFlagSurface(),
+    },
+    /* ZIP 436 — LA PIERRE DE LA HAUTE-VILLE : marches, parement de falaise,
+       limons. Même forme que `townRoad` (un objet, sa période voyage avec) et
+       même raison d'être ici plutôt que dans la boucle de rendu — voir la note
+       au-dessus de `townStairSurface`. */
+    townStone: {
+      sup: ROAD_SUP,
+      cliffH: CLIFF_H,
+      stair: { v: townStairSurface(true), h: townStairSurface(false) },
+      cliff: townCliffFace(),
+      cheek: townStairCheek(),
     },
     /* ZIP 435 — L'EAU ET SA BERGE. Un seul objet, comme `townRoad` : le rendu
        en a besoin ENSEMBLE, et `depths` voyage avec les tuiles — le jour où la
@@ -8033,6 +8787,14 @@ export function buildSprites() {
       shore: Array.from({ length: 3 }, (_, b) =>
         Array.from({ length: 8 }, (_, dir) =>
           Array.from({ length: 2 }, (_, vr) => townShoreTile(b + 1, dir, vr)))),
+      // ZIP 436 — le tramage de profondeur : [O·E·N·S][cran]. 32 tuiles, et
+      // c'est ce qui remplace la mosaïque de carrés bleus du 435.
+      fade: Array.from({ length: 4 }, (_, dir) =>
+        Array.from({ length: WAT_DEPTH }, (_, d) => townWaterFadeTile(dir, d))),
+      // ZIP 436 — ce qui flotte et ce qui émerge.
+      lily: Array.from({ length: WAT_DECOR_N }, (_, vr) => townLilyTile(vr)),
+      wrock: Array.from({ length: WAT_DECOR_N }, (_, vr) => townWaterRockTile(vr)),
+      reed: Array.from({ length: WAT_DECOR_N }, (_, vr) => townReedTile(vr)),
     },
     oak: oakTree(),
     pine: pineTree(),

@@ -2934,7 +2934,17 @@ export const TOWN_PARK = { x: 108, y: 74, w: 34, h: 26 };     // le parc et son 
    ⚠️ LES BORNES SONT CONTRAINTES : le parc porte une allée en croix (x = 125-126,
    y = 87-88) et une bordure d'arbres sur son pourtour. rx·(1+Σa) doit rester
    sous 7,5 sinon l'étang mord l'allée — `tools/render-eau.mjs` le contrôle. */
-export const TOWN_POND = { cx: 115.6, cy: 80.5, rx: 5.9, ry: 4.0 };
+/* ⚠️ ZIP 436 — RÉTRÉCI (5,9 × 4,0 → 4,3 × 3,1). Retour de Guillaume : « le lac
+   du parc est un peu trop grand, et pas assez réaliste ». Les deux moitiés de
+   la phrase ne se corrigent pas au même endroit — le DESSIN est dans fermeArt
+   (profondeur continue, nénuphars, rive) — mais la taille compte pour la
+   réalité : une mare de parc de quatorze cases de large est un LAC, et l'œil
+   attend d'un lac une berge, un horizon et des barques. À neuf cases sur sept,
+   on lit une mare, c'est-à-dire ce que le parc est censé contenir.
+   ⚠️ ET ÇA LIBÈRE LA PLACE QUI MANQUAIT : à 5,9 le contour venait à une case de
+   l'allée en croix, donc les quatre massifs et les deux bancs étaient serrés
+   contre l'eau. `tools/render-eau.mjs` les compte. */
+export const TOWN_POND = { cx: 115.6, cy: 80.5, rx: 4.3, ry: 3.1 };
 export const TOWN_POND_LOBES = [       // { k: harmonique, a: amplitude, p: phase }
   { k: 1, a: 0.190, p: 0.80 },         // décentre la masse : une rive plus longue que l'autre
   { k: 2, a: 0.130, p: 2.35 },         // le haricot
@@ -2955,7 +2965,19 @@ export const TOWN_SHORE_BAND = 2;
    l'étang du parc — 4 cases de rayon contre 12 pour le lac du sud — serait
    resté un haut-fond uniforme, et il aurait CHANGÉ DE COULEUR le jour où l'on
    creuse le lac d'une case. Une berge se lit en mètres, pas en pourcentage. */
-export const TOWN_WATER_SHELF = 2.6;
+/* ⚠️ ZIP 436 — RAMENÉ DE 2,6 À 1,5 CASE, ET C'EST LA CONSÉQUENCE DIRECTE DU
+   RÉTRÉCISSEMENT DE L'ÉTANG. Le principe du 435 est conservé (une berge se lit
+   en mètres, pas en pourcentage de la plus grande flaque) ; c'est la VALEUR qui
+   était calibrée sur une mare de six cases de rayon. À 2,6 cases de plateau, un
+   étang de 3,5 cases de rayon n'a plus de large du tout : `render-eau.mjs` l'a
+   refusé sur-le-champ — « 26 cases de haut-fond, 0 au large ». On aurait pu
+   desserrer le banc ; c'est le seuil du taxi au 434, en pire, parce qu'ici le
+   banc avait raison. 1,5 case, c'est 24 px de rampe : de quoi lire un bord sans
+   que la mare entière soit un bord.
+   ⚠️ Le lac du sud y gagne aussi. Sur `eau-lac-sud.png` du 435, son plateau
+   dessinait un ANNEAU PÂLE de deux cases et demie tout autour — un lac qui a
+   l'air peint au pochoir. Une berge se voit sur une case. */
+export const TOWN_WATER_SHELF = 1.5;
 export const TOWN_ORCHARD = { x: 12, y: 38, w: 18, h: 24 };   // le verger municipal
 export const TOWN_MARKET = { x: 38, y: 74, w: 26, h: 26 };    // le champ de foire, dallé et bordé d'arbres
 /* ═══════════════════════════════════════════════════════════════════════════

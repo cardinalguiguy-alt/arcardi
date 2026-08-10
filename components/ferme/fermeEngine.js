@@ -4016,12 +4016,29 @@ export function generateTownWorld() {
      ville se serait retrouvée non éclairée sans qu'une seule erreur soit levée.
      C'est la même famille que le perron du 433 : une position réglée par
      rapport au mauvais repère. */
-  const lampRow = C.TOWN_MAIN_ST_Y0 - 1;
-  for (let x = 12; x < W - 6; x += 8) {
+  /* ⚠️⚠️ 436 — ILS ALTERNENT MAINTENANT D'UN TROTTOIR À L'AUTRE, et c'est un
+     défaut trouvé pendant l'audit graphique : depuis l'élargissement du 434, la
+     plus grande rue de la ville fait QUATRE cases et n'était éclairée que sur
+     son bord NORD. Sur une rue de deux, une rangée unique passe pour de
+     l'éclairage central ; sur une rue de quatre, elle se lit pour ce qu'elle
+     est — une moitié d'avenue dans le noir, et une file de poteaux qui souligne
+     le trottoir nord comme une clôture. C'est le corollaire exact de la note du
+     434 juste au-dessus : les DEUX bords sont dérivés, pas seulement l'un.
+     ⚠️ ON ALTERNE, ON NE DOUBLE PAS. Deux rangées en vis-à-vis coûteraient
+     quarante props au lieu de vingt et donneraient une allée de cimetière
+     monumentale ; une alternance donne le pas de huit cases de chaque côté avec
+     le même nombre de poteaux, et c'est la disposition des vraies avenues.
+     ⚠️ Le test de sol est le même des deux côtés, et il reste ce qui protège du
+     lampadaire planté au milieu d'un carrefour (426). */
+  const lampRowN = C.TOWN_MAIN_ST_Y0 - 1;
+  const lampRowS = C.TOWN_MAIN_ST_Y0 + C.TOWN_MAIN_ST_W;
+  let lampK = 0;
+  for (let x = 12; x < W - 6; x += 8, lampK++) {
     if (x >= pz.x - 1 && x < pz.x + pz.w + 1) continue;
-    const li = id(x, lampRow);
+    const row = (lampK & 1) ? lampRowS : lampRowN;
+    const li = id(x, row);
     if (ground[li] === C.G_PATH || ground[li] === C.G_PATH_STONE || solid[li]) continue;
-    addProp(x, lampRow, "lamp", true);
+    addProp(x, row, "lamp", true);
   }
 
   /* ------------------------------------------------- PARVIS DES MONUMENTS

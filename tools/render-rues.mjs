@@ -186,7 +186,7 @@ for (const [name, v] of VIEWS) {
        du rendu. C'est assumé et c'est dit : ce banc juge le REVÊTEMENT, et il
        faut un fond honnête autour pour le juger, pas un décor complet. */
     if (g === C.G_PATH) { if (!A.drawTownRoadTile(sh.ctx, S, tw, x, y, px, py)) sh.ctx.drawImage(S.path, px, py); }
-    else if (g === C.G_PATH_STONE) { sh.ctx.fillStyle = ((x + y) % 2) ? "#adacb2" : "#a5a4ab"; sh.ctx.fillRect(px, py, T, T); }
+    else if (g === C.G_PATH_STONE) { if (!A.drawTownFlagTile(sh.ctx, S, tw, x, y, px, py)) { sh.ctx.fillStyle = "#a5a4ab"; sh.ctx.fillRect(px, py, T, T); } }
     else if (g === C.G_WATER) { sh.ctx.fillStyle = "#3f7fd0"; sh.ctx.fillRect(px, py, T, T); }
     else {
       const gt = S.townGrass;

@@ -5,7 +5,7 @@ zip 432, sur l'ordre laissé par son §14.2 : « le jour où la liste dépasse l
 chapitre, elle part dans un `tools/README.md` — en ne gardant là-bas QUE ce qui n'existe pas ».
 Le 432 a ajouté deux entrées (`render-ruche.mjs`, `fake-supabase.mjs`) et l'a fait basculer.
 Le 433 en ajoute trois (`verify-taxi`, `render-taxi`, `render-oiseaux`), le 434 une
-(`render-rues`), le 435 une (`render-eau`).
+(`render-rues`), le 435 une (`render-eau`), le 436 une (`render-escaliers`).
 
 ⚠️ **`CLAUDE.md` ne garde que la liste des bancs ABSENTS**, et c'est délibéré : c'est elle qui
 protège du banc imaginaire (§14.6 — le 425 décrivait `verify-vallee.mjs` « 74 contrôles, 74/74 »
@@ -132,6 +132,15 @@ jamais recopié d'un zip précédent sans relance.
   une file indienne** (rapport des axes du nuage : ×1,13 ; une file donne 4).
   ⚠️ Ce dernier contrôle a été écrit APRÈS avoir vu le défaut en jouant : sur un
   point de pain unique, douze pigeons s'empilaient en chenille.
+  ⚠️⚠️ **SA GRAINE EST FIXÉE DEPUIS LE 436, ET C'ÉTAIT UNE CORRECTION URGENTE.** Trouvé pendant
+  l'audit graphique : il échouait **une fois sur huit** sur « la population se renouvelle —
+  0 arrivées en 4 min », sans qu'un pixel du jeu ait changé. `flockStep` tire dans le
+  `Math.random` global, et le contrôle demande un événement rare sur quatre minutes simulées.
+  **Un banc qui échoue au hasard est pire qu'un banc absent** : il apprend à relancer jusqu'au
+  vert, et le jour où il attrape un vrai défaut, on relance. Le banc remplace donc `Math.random`
+  par un générateur semé le temps des deux chapitres de simulation — et **le remet en place
+  après**, un stub global laissé en vie contaminant tout ce qui suit. Résultat : 3 arrivées, le
+  même nombre à chaque lancement.
 - **`tools/render-rues.mjs` — 28 contrôles, 28/28 (434).** Le revêtement des rues de Valley
   Town : les trois pavés de 4×4 tuiles assemblés sur six tuiles de côté, puis **quatre fenêtres
   de la VRAIE carte** (l'artère, un carrefour, le cimetière, le bord de l'esplanade) peintes
@@ -150,7 +159,7 @@ jamais recopié d'un zip précédent sans relance.
   MOYENNE des transitions et accusait à tort tout pavage correct (l'intérieur d'une pierre ne
   change pas d'une colonne à l'autre, un joint change beaucoup — la moyenne est tirée vers le
   bas). *Un banc de rendu se vérifie aussi.*
-- **`tools/render-eau.mjs` — 14 contrôles, 14/14 (435).** L'eau de Valley Town et sa berge :
+- **`tools/render-eau.mjs` — 16 contrôles, 16/16 (435 ; 14 à l'origine, 2 ajoutés au 436).** L'eau de Valley Town et sa berge :
   l'étang du parc dans son décor, **la même scène quatre minutes plus tard**, le lac du sud, et
   les **seize configurations de coins** à toutes les profondeurs, hors décor. Il appelle
   `A.drawTownWaterTile` / `A.drawTownShoreTile`, c'est-à-dire les fonctions du jeu.
@@ -171,10 +180,63 @@ jamais recopié d'un zip précédent sans relance.
   font donc sur une scène nue — herbe, berge, eau — et la planche garde son décor, parce qu'une
   rive se JUGE dans son décor. *Un banc qui échoue peut se tromper de grandeur exactement comme
   un banc qui passe.*
+  ⚠️⚠️ **AJOUT DU 436 — LE CHAPITRE « 4 bis », ET IL EST L'ILLUSTRATION LA PLUS PURE DU §14.6
+  DE `CLAUDE.md`.** Les quatre chapitres du 435 disaient tous OK pendant que l'étang rendait une
+  **mosaïque de carrés bleus de 16 px** : ils mesuraient la rectitude du RIVAGE, la continuité
+  du TRAIT, l'écart bord/large et l'écart-type de la nappe — quatre grandeurs justes, aucune ne
+  parlant de la grille INTÉRIEURE. C'est le même défaut que le banc corrigeait au rivage,
+  déplacé de deux mètres vers le large. La grandeur qui manquait : **le saut de luminance à
+  travers une arête de case, rapporté au saut moyen à l'intérieur d'une case** — si les cases se
+  voient, le premier est plus grand. Mesuré en relançant le banc contre les deux moteurs :
+  **×3,05 au 435, ×1,27 aujourd'hui.**
   ⚠️ Son cinquième chapitre n'est pas du dessin mais de la RÈGLE, et il a été écrit après avoir
   perdu un décor : en poussant les harmoniques du contour d'un cran, l'étang a mangé la case du
   massif taillé (122, 83). Le générateur refuse poliment de poser un décor dans l'eau — donc
   rien n'a levé, il y avait juste **trois massifs au lieu de quatre**. Il les compte.
+- **`tools/render-escaliers.mjs` — 22 contrôles, 22/22 (436).** Les marches, le parement de
+  falaise, le limon et le **dallage d'esplanade** de la Haute-Ville : les quatre matières
+  assemblées sur six tuiles de côté **à côté des pavés de rue du 434**, puis les trois vraies
+  volées de `generateTownWorld()` dans leur décor.
+  ⚠️⚠️ **IL EXISTE PARCE QUE GUILLAUME A VU L'ÉCART QU'AUCUN BANC NE POUVAIT VOIR** : « il y a
+  un écart flagrant de qualité de textures » entre le sol pavé et les escaliers du courthouse.
+  Et la cause de l'écart n'était pas artistique, elle était structurelle : les revêtements du
+  434 vivent dans `fermeArt`, donc `render-rues` les regarde à chaque lancement et ils ont reçu
+  quatre refus avant livraison ; les marches, la falaise, le limon et le dallage vivaient dans
+  la **closure de `drawTownFrame`**, donc aucun outil ne pouvait les rastériser. Ils sont restés
+  au dessin du 425 pendant que tout le reste du sol de la ville passait au motif de 64 px.
+  **Un dessin qu'aucun banc ne peut appeler est un dessin qui vieillit tout seul.**
+  ⚠️ **LA GRANDEUR NEUVE EST LA PARITÉ DE MATIÈRE**, c'est-à-dire la phrase de Guillaume
+  traduite en nombre : on mesure l'écart-type et le nombre de teintes de chaque matière **et
+  des pavés de rue, dans la même passe**, et on exige un rapport ≥ 0,75. Un rapport, pas un
+  seuil absolu — leçon du seuil d'axe du taxi (434). Mesuré aujourd'hui : marches **×0,91**,
+  falaise **×0,90**, limon **×0,88**.
+  ⚠️ **LE DALLAGE EN EST EXEMPTÉ, AVEC SA RAISON ÉCRITE** (comme `render-rues` exempte le
+  goudron du contrôle de continuité) : une esplanade est faite de peu de grandes pierres, sa
+  matière tient dans l'écart d'une dalle à l'autre. On le mesure donc **contre ce qu'il
+  remplace** — écart-type **10,1 (425) → 32,4 (436)**, et **plus aucune période de 16 ni de
+  32 px** (r = −0,04 et −0,29 à l'autocorrélation).
+  ⚠️⚠️ **ET IL A TROUVÉ DEUX DÉFAUTS QUE PERSONNE NE CHERCHAIT :**
+  - **22 marches sur 52 étaient dessinées PERPENDICULAIREMENT à leur volée** — sur les trois
+    volées de la ville. Le sens de la montée se déduisait du gradient d'altitude lu sur les
+    quatre voisines, terrain compris : ça marche au milieu d'une volée et ça bascule sur son
+    bord, où la case du dessus est de la terrasse. Corrigé en ne regardant que les voisines qui
+    sont elles-mêmes des MARCHES (en travers, une volée est de niveau par construction). Avec
+    les quatre traits gris du 425 ça ne se voyait pas ; en pierre, c'est la première chose
+    qu'on voit ;
+  - **la période de la volée**, que le banc a d'abord mal mesurée deux fois (voir plus bas).
+  ⚠️⚠️ **CE BANC S'EST TROMPÉ DE GRANDEUR TROIS FOIS AVANT QUE LE DESSIN SOIT EN CAUSE**, et
+  c'est la troisième fois d'affilée (rues 434, eau 435). Ça vaut d'être su :
+  1. compter les « nez de marche » sur UNE colonne → 29 nez pour 16 marches (le granulat fait
+     sauter n'importe quelle colonne) ;
+  2. les compter sur la moyenne par rangée → 32, soit exactement deux fois trop : une marche a
+     DEUX montées de luminance (contremarche → dallage, puis ombre portée → nez). Il aurait
+     fallu un seuil réglé pour n'en garder qu'un sur deux, c'est-à-dire un seuil réglé sur le
+     résultat. On mesure donc la PÉRIODE par **autocorrélation** — aucun seuil de couleur, et
+     on prend le **fondamental** et non le pic (un signal de période 4 corrèle aussi bien à 8) ;
+  3. comparer le nombre de teintes du dallage neuf à celui du damier du 425 : **le damier en
+     comptait 49 contre 24**, et il aurait donc « gagné ». Ses deux gris étaient recouverts de
+     quatre voiles alpha, et chaque combinaison fabriquait une teinte de plus. **Compter les
+     couleurs d'une image composée en alpha, c'est compter des accidents de mélange.**
 - `verify-constants` · `verify-objects` · `verify-strings` · `verify-syntax` · `verify-gates` ·
   `verify-cycle` · `verify-orchards` · `verify-scope` · `verify-vergers` · `render-fruits`.
 

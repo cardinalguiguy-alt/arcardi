@@ -180,6 +180,21 @@ console.log("\n=== la vie du groupe, 4 minutes rejouées à 60 images/s ===\n");
      ferme ». Ce qui manquait n'était mesuré nulle part : la VARIÉTÉ des
      activités, l'IRRÉGULARITÉ de l'espacement, et le fait qu'ils accélèrent et
      ralentissent au lieu de se téléporter d'une case à l'autre. */
+  /* ⚠️⚠️ ZIP 436 — `Math.random` EST SEMÉ ICI, ET C'EST UNE CORRECTION DE BANC.
+     Trouvé pendant l'audit graphique : `render-oiseaux` échouait UNE FOIS SUR
+     HUIT sur « la population se renouvelle — 0 arrivées en 4 min », sans qu'un
+     seul pixel du jeu ait changé. `flockStep` tire ses décisions dans le
+     `Math.random` global ; le contrôle demande qu'au moins un oiseau reparte et
+     revienne pendant quatre minutes simulées, ce qui est un événement rare, et
+     rien ne fixait la graine. **Un banc qui échoue au hasard est pire qu'un
+     banc absent** : il apprend à relancer jusqu'au vert, et le jour où il
+     attrape un vrai défaut, on relance. On remplace donc `Math.random` par un
+     générateur semé le temps des chapitres de simulation — le comportement
+     mesuré reste exactement celui du moteur, il devient seulement reproductible.
+     ⚠️ Et on le REMET en place ensuite : un stub global laissé en vie
+     contaminerait tout ce qui suit dans le processus. */
+  const realRandom = Math.random;
+  { let seed = 0x5ee0 >>> 0; Math.random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; }; }
   for (const f of flocks) fill(f);
   const site = flocks[0];
   const acts = {}, spdHist = [];
@@ -232,7 +247,8 @@ console.log("\n=== la vie du groupe, 4 minutes rejouées à 60 images/s ===\n");
   const distinct = new Set(moving.map(v => Math.round(v * 5))).size;
   ok(distinct >= 6 && vmax > C.BIRD_WALK_SPD * 1.2, "⚠️ ils accélèrent et ralentissent",
      distinct + " paliers de vitesse observés, pointe à " + vmax.toFixed(2) + " tuile/s");
-  ok(landings > 0, "la population se renouvelle", landings + " arrivées en 4 min");
+  ok(landings > 0, "la population se renouvelle", landings + " arrivées en 4 min (graine fixe : ce nombre ne doit plus varier d'un lancement à l'autre)");
+  Math.random = realRandom;
 }
 
 console.log("\n=== le pain jeté depuis un banc ===\n");
@@ -242,6 +258,21 @@ console.log("\n=== le pain jeté depuis un banc ===\n");
      RASSEMBLE (ils convergent) et qu'il EXCITE (ils vont plus vite et se
      chamaillent) — deux effets distincts, et le second est celui que Guillaume
      décrit comme « le comportement plus excité des pigeons en groupe ». */
+  /* ⚠️⚠️ ZIP 436 — `Math.random` EST SEMÉ ICI, ET C'EST UNE CORRECTION DE BANC.
+     Trouvé pendant l'audit graphique : `render-oiseaux` échouait UNE FOIS SUR
+     HUIT sur « la population se renouvelle — 0 arrivées en 4 min », sans qu'un
+     seul pixel du jeu ait changé. `flockStep` tire ses décisions dans le
+     `Math.random` global ; le contrôle demande qu'au moins un oiseau reparte et
+     revienne pendant quatre minutes simulées, ce qui est un événement rare, et
+     rien ne fixait la graine. **Un banc qui échoue au hasard est pire qu'un
+     banc absent** : il apprend à relancer jusqu'au vert, et le jour où il
+     attrape un vrai défaut, on relance. On remplace donc `Math.random` par un
+     générateur semé le temps des chapitres de simulation — le comportement
+     mesuré reste exactement celui du moteur, il devient seulement reproductible.
+     ⚠️ Et on le REMET en place ensuite : un stub global laissé en vie
+     contaminerait tout ce qui suit dans le processus. */
+  const realRandom = Math.random;
+  { let seed = 0x5ee0 >>> 0; Math.random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; }; }
   for (const f of flocks) fill(f);
   const site = flocks[0];
   let now = 0;
@@ -290,6 +321,7 @@ console.log("\n=== le pain jeté depuis un banc ===\n");
     const ratio = Math.sqrt(l1 / Math.max(1e-6, l2));
     ok(ratio < 2.6, "⚠️ la mêlée est une ROSACE, pas une file indienne",
        "allongement du groupe : ×" + ratio.toFixed(2) + " (une file donne 4 ou plus)"); }
+  Math.random = realRandom;
 }
 
 console.log("\n=== l'envol ===\n");

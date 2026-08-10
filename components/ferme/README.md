@@ -1,4 +1,4 @@
-# Valley Town, le tribunal, et la vie qui s'y passe — état au 434
+# Valley Town, le tribunal, et la vie qui s'y passe — état au 436
 
 Ce fichier est **l'autorité** sur la seconde carte du jeu et sur ses habitants. Il a été
 extrait de `CLAUDE.md` §6 au zip 428, sur l'ordre laissé par le §14.2 du 427 et sur le modèle
@@ -16,11 +16,13 @@ qu'un paragraphe d'orientation, et les pièges qui valent pour tout le projet re
 - **les commissions et les rendez-vous datés ne sont toujours pas construits** (décidés au
   428). Le marché, lui, est livré au 430 — et il porte déjà la graine du troisième : le
   **jour de marché** hebdomadaire est un rendez-vous daté, dérivé du calendrier ;
-- **les MAISONS et le LAC n'ont pas été retouchés au 429** alors que Guillaume les a nommés
-  dans sa revue. Leurs échelles sont justes (×3,48 et sans objet), et les défauts qu'on leur
-  trouve sont de CONTENU, pas de dessin : dix façades pour vingt-sept parcelles (donc des
-  jumelles côte à côte), et un lac qui n'a ni reflet, ni vaguelettes de rive, ni rien à y
-  faire. Les corriger demande des décisions, pas des pixels.
+- **les MAISONS n'ont pas été retouchées** alors que Guillaume les a nommées dans sa revue du
+  429. Leur échelle est juste (×3,48) et le défaut est de CONTENU, pas de dessin : **dix façades
+  pour vingt-sept parcelles**, donc des jumelles côte à côte. Le corriger demande des décisions,
+  pas des pixels. *(Le lac, lui, a reçu son dessin au 435 et sa profondeur au 436 ; il lui
+  manque encore sa GÉOMÉTRIE — voir §18.)*
+- **rien à FAIRE au bord de l'eau.** L'étang et le lac sont beaux et vides : ni pêche, ni
+  barque, ni canard. C'est la même question ouverte que les vingt blocs de prairie.
 
 ---
 
@@ -1209,3 +1211,202 @@ toute dernière passe**, après le revêtement, donc sur le sol final.
   `depth`/`shore` n'existent que sur la carte de Valley Town ;
 - **aucun roseau, aucun nénuphar, aucun rocher émergé.** La référence en a ; on n'a livré que la
   rive et le fond.
+
+---
+
+## 19. ZIP 436 — L'AUDIT GRAPHIQUE : L'EAU, LA PIERRE, LE TAXI
+
+Demande de Guillaume, en deux temps. D'abord : « fais un audit graphique et visuel du jeu […]
+améliore la cohérence de Valley Town […] sois autonome et surprends-moi », avec trois pistes
+nommées — **le lac du parc trop grand et pas assez réaliste** (référence en image : une mare à
+rive rocheuse, fond dégradé, nénuphar), **le taxi peut être plus travaillé**, et **l'écart
+flagrant de qualité de textures entre le sol pavé et les escaliers du courthouse**. Puis :
+« les défauts peuvent être le placement d'un lampadaire comme la couleur de l'herbe, l'échelle
+d'un objet ou tout autre élément ».
+
+### ⚠️⚠️ CE QUE L'AUDIT A TROUVÉ EN PREMIER N'EST PAS UN DESSIN, C'EST UNE RÈGLE
+
+**Tout ce qui était mal dessiné dans Valley Town était mal dessiné AU MÊME ENDROIT : dans la
+closure de la boucle de rendu.** Les marches, le parement de falaise, le limon et le dallage
+d'esplanade y vivaient depuis le 425 ; les revêtements de rue (434) et l'eau (435) en étaient
+sortis pour être regardables par un banc, et ce sont exactement les deux surfaces que personne
+ne trouve pauvres. Ce n'est pas une coïncidence, c'est une **mécanique** :
+
+> **Un dessin qu'aucun banc ne peut appeler est un dessin qui vieillit tout seul.** Il ne se
+> dégrade pas — il reste au niveau du jour où il a été écrit, pendant que tout ce qui est
+> mesuré monte. L'écart que Guillaume a vu n'est pas un écart de soin, c'est un écart de DATE,
+> et il se lit sur une carte du dépôt : ce qui est dans `fermeArt` a été refait, ce qui est
+> dans la closure ne l'a pas été.
+
+C'est le piège n°1 de `CLAUDE.md` §4 sous sa forme lente. Les deux occurrences connues étaient
+des plantages (`tryTownJump`, `canStandTown`) ; celle-ci ne lève rien du tout et coûte plus
+cher, parce qu'elle se paie en qualité pendant douze zips.
+
+### 1. L'étang du parc
+
+| | 435 | 436 |
+|---|---|---|
+| rayons | 5,9 × 4,0 (≈ 14 cases de large) | **4,3 × 3,1** (≈ 9) |
+| plateau de profondeur | 2,6 cases | **1,5** |
+| crans de la rampe | 8 | **16**, dérivés de 5 repères |
+| arête de case / grain interne | **×3,05** | **×1,27** |
+| nénuphars · rochers · roseaux | aucun | oui, tirés d'un hachage de case |
+
+⚠️⚠️ **LA PROFONDEUR RENDAIT UNE MOSAÏQUE DE CARRÉS, ET LES QUATORZE CONTRÔLES DU 435 DISAIENT
+OK.** Ils mesuraient la rectitude du rivage, la continuité du trait, l'écart bord/large et
+l'écart-type de la nappe. Aucun ne parlait de la grille INTÉRIEURE — c'est-à-dire du défaut que
+le zip entier prétendait corriger, déplacé de deux mètres vers le large. Le 435 fondait déjà par
+deux bandes de 5 px sur l'axe dominant ; **une bande est un rectangle** (trois marches au lieu
+d'une, toujours alignées sur la case), et un seul axe laisse franche l'arête d'une case en coin.
+
+⚠️ **LA PARADE EST UN TRAMAGE STOCHASTIQUE, PAS UN VOILE ALPHA.** Chaque pixel prend la couleur
+d'un cran — le sien ou celui d'un voisin — avec une probabilité qui décroît linéairement en
+s'éloignant de ce voisin. En espérance c'est l'interpolation bilinéaire de la profondeur ; en
+pixels c'est du grain, la matière que l'eau a déjà. Et comme chaque pixel est OPAQUE, **les
+quatre côtés peuvent être servis d'un coup** : deux tramages superposés ne fabriquent pas de
+troisième teinte, contrairement à deux voiles alpha (le tissu écossais du 435). Coût : 4 × 16
+tuiles de 16 px, cuites une fois.
+⚠️ **Seize crans, et c'est un calcul, pas un goût** : à plateau de 1,5 case et huit crans, deux
+cases voisines sautent CINQ crans, et une interpolation entre deux valeurs distantes de cinq
+n'a que trois teintes à offrir sur seize pixels. Le tramage rendait encore des plaques.
+⚠️ **Rétrécir l'étang a rendu le plateau faux, et le banc l'a refusé sur-le-champ** (« 26 cases
+de haut-fond, 0 au large »). On aurait pu desserrer le contrôle ; c'est le seuil du taxi au 434
+en pire, parce qu'ici le banc avait raison. Le lac du sud y gagne aussi : son anneau pâle de
+deux cases et demie était un lac peint au pochoir.
+⚠️ **La rampe est DÉRIVÉE de cinq repères** au lieu d'être écrite cran par cran (§8), et les
+repères ont été **rabattus** : ceux du 435 partaient d'un turquoise presque blanc, et le
+haut-fond se lisait comme de la glace. *Une eau claire vue de dessus prend la couleur du FOND ;
+le bleu arrive avec la profondeur, quand le fond disparaît.*
+
+⚠️⚠️ **LE REFLET D'ARBRE ÉTAIT DEUX RECTANGLES**, à trois lignes de la note qui explique
+pourquoi il ne faut pas en poser : `fillRect(px + 3, py, 10, T)`, un bloc vert à arêtes franches
+aligné sur la case, c'est-à-dire **la grille redessinée en vert** au milieu de la nappe. Il est
+maintenant une densité — une largeur par rangée, un pixel sur quatre qui saute, et il s'effiloche
+vers le sud.
+
+⚠️ **CE QUI FLOTTE N'EST PAS UN PROP, ET C'EST DÉLIBÉRÉ.** L'eau bloque déjà : un nénuphar ou un
+rocher posé dessus n'a aucune collision à porter, donc rien à faire dans `tw.props` (qui
+coûterait une passe de générateur, une entrée au contrôle « toute case solide est dessinée » et
+un tri de profondeur). Ils sont tirés d'un **hachage de la case**, comme les emplacements
+d'oiseaux du 433 : mêmes nénuphars chez les deux joueurs, zéro octet de réseau. Le rocher
+n'émerge qu'en haut-fond, le nénuphar ne s'installe qu'au calme, **et leurs seuils se
+chevauchent exprès** — sinon l'étang se lirait en anneaux concentriques, le défaut qu'on vient
+de corriger sur les bleus, revenu sur les objets. Les roseaux sont sur la berge MOUILLÉE et
+nulle part ailleurs : sur la berge sèche ils pousseraient dans la pelouse, sur la rive immergée
+au fond de l'eau.
+⚠️ **Le seuil de haut-fond est une FRACTION de la rampe, pas un cran.** Écrit « d ≤ 2 », il
+voulait dire « le tiers clair » à huit crans et « le huitième » à seize : une ligne, et les
+rochers disparaissaient de l'étang sans que rien ne le signale.
+
+### 2. La pierre de la Haute-Ville — marches, falaise, limon, dallage
+
+Tout est sorti de la closure vers `fermeArt` (`drawTownStairTile`, `drawTownCliffFace`,
+`drawTownStairCheek`, `drawTownFlagTile`) et **`tools/render-escaliers.mjs` les regarde** — voir
+`tools/README.md` pour les vingt-deux contrôles et les trois fois où ce banc s'est trompé de
+grandeur.
+
+Ce qu'il y avait, et ce que c'était vraiment :
+
+| | avant (425) | après (436) |
+|---|---|---|
+| marches | `fillRect` gris uni + 4 traits blancs et 4 noirs, **identiques sur toutes les cases de toutes les volées** | pavé de 4×4 tuiles bouclant, blocs de largeur inégale, nez ébréché, ombre portée, mousse, usure au milieu de la volée |
+| parement de falaise | aplat `#8f8a80`, ligne pleine largeur tous les 5 px, **UN joint vertical par case toujours au même x** | six assises appareillées, joints décalés à chaque assise, bossage, pierres de remploi, suintement |
+| limon | trois `fillRect` | pierres empilées à joints sombres |
+| dallage d'esplanade | `(x + y) % 2` entre deux gris — **un damier de période 16 px** | grandes dalles de 21 px de rang, seize teintes, fêlures brisées, mousse dans les joints |
+
+⚠️⚠️ **LE DALLAGE EST LE PLUS IMPORTANT DES QUATRE, ET IL N'ÉTAIT PAS DANS LA DEMANDE.** Quand
+Guillaume écrit « un écart flagrant entre le sol pavé et les escaliers du courthouse », **les
+deux tiers de ce qu'il regarde sont le dallage** : le parvis du tribunal, la terrasse de la
+Haute-Ville, la place, les cinq parvis, le champ de foire et le quai en sont faits, et la volée
+neuve arrivait dessus. Un escalier ne se juge pas seul (leçon du 429).
+⚠️ **Sa matière est délibérément AUTRE que celle des rues** : de grandes dalles, pas des pavés
+ronds. Une place n'est pas une chaussée — c'est déjà l'argument du 434 pour que le goudron
+s'arrête à ses quatre bords — et deux sols qui se touchent doivent se distinguer, sinon on a
+travaillé pour rien.
+⚠️ **La plage de teintes est LARGE (seize gris, `#9a988f` → `#c8c6bd`), et c'est le banc qui l'a
+imposée.** À douze gris tous à ±5 de luminance, chaque dalle était jolie et l'ensemble était un
+aplat : une place est faite de PEU de grandes pierres, donc sa matière tient dans l'écart d'une
+pierre À L'AUTRE, pas dans le grain de chacune. **C'est l'inverse exact du goudron du 434** (un
+seul matériau, la richesse dans le grain) — et c'est pour ça qu'on ne peut pas recopier le
+réglage d'une surface sur une autre.
+
+⚠️⚠️ **ET LE BANC A TROUVÉ UN DÉFAUT QUE PERSONNE NE CHERCHAIT : 22 MARCHES SUR 52 ÉTAIENT
+DESSINÉES EN TRAVERS DE LEUR VOLÉE**, sur les trois volées de la ville. Le sens de la montée se
+déduit du gradient d'altitude (§7 : jamais de seconde description d'un même escalier), et il
+était lu sur les quatre voisines immédiates, **terrain compris** : ça marche au milieu d'une
+volée et ça bascule sur son BORD, où la case du dessus est de la terrasse et celle du dessous du
+trottoir, donc le gradient transversal cesse d'être nul.
+⚠️ **La bonne question n'est pas « de quel côté ça monte » mais « dans quel sens les marches se
+suivent ».** Deux cases d'escalier VOISINES ne diffèrent d'altitude que le long de la montée : en
+travers, une volée est de niveau par construction. On ne regarde donc que les voisines qui sont
+elles-mêmes des marches, et la réponse est exacte au lieu d'être statistique. On n'interroge
+toujours pas `TOWN_STAIRS`.
+⚠️ **Avec les quatre traits gris du 425, ce défaut était invisible ; en pierre, c'est la
+première chose qu'on voit.** *Enrichir une texture rend visibles les erreurs de géométrie qu'elle
+cachait — il faut donc s'attendre à en trouver, et un banc pour les voir.*
+
+### 3. Le taxi
+
+« Le taxi peut être plus travaillé. » Le dessin du 433 était juste de proportions et **plat de
+matière** : un aplat sur toute la caisse, un aplat sur tout le pavillon, deux vitres unies, deux
+disques noirs. À côté d'un sol qui a reçu son granulat (434) et d'une eau qui a reçu sa
+profondeur (435), le véhicule était devenu l'élément le plus pauvre de la ville.
+
+Six ajouts, chacun répondant à une chose que l'œil cherche sur une voiture avant d'en chercher
+une autre : le flanc est une **rampe** verticale et non un aplat · les **passages de roue** sont
+creusés (c'est le trou d'ombre au-dessus du pneu qui dit « la roue est dans la carrosserie » ;
+sans lui la voiture est posée SUR ses roues) · un **reflet de vitre** en diagonale (une vitre
+unie est un trou, une vitre avec sa diagonale est du verre) · l'**ombre de dessous** entre les
+roues, qui ancre au sol · l'**enseigne allumée**, ambre, **avec son halo peint sur le pavillon**
+(une lampe qui n'éclaire rien est une boîte jaune) · les **clignotants ambre** et la trappe à
+essence. Plus, sur la roue, un moyeu décentré vers la lumière et une arête de gomme éclairée.
+
+⚠️ **FACE ET DOS PARTAGENT MAINTENANT LEUR OSSATURE.** Le 433 les écrivait deux fois avec les
+mêmes cotes recopiées — le doublon du §8 — et **ils avaient déjà commencé à diverger** (la face
+avait ses bas de caisse `Y2` aux deux angles, le dos non). Une carrosserie, et on n'y pose que
+ce qui change.
+⚠️ **LE DAMIER EST PASSÉ DE TROIS RANGÉES À DEUX, ET C'EST MESURÉ, PAS DÉCIDÉ.** La caisse ne
+fait que sept rangées entre la ceinture et le bas de caisse ; à trois, il en mangeait 43 % et il
+ne restait plus que deux rangées de jaune en dessous — la voiture portait une jupe sombre.
+⚠️ **Le passage de roue reste SOUS le damier**, par contrainte de place : le pneu monte déjà
+jusqu'à la rangée 15. Plus grand, il traversait la bande — vu au banc, ça faisait deux bosses
+jaunes au milieu des carreaux.
+⚠️ **Rien n'a bougé des trois lignes** (toit 4 / ceinture 11 / bas de caisse 18) ni de la ligne
+de sol à 23 : `render-taxi.mjs` échoue si l'une d'elles diverge, et il a raison — cinq vues
+doivent décrire le même véhicule.
+
+### 4. Les deux trouvailles de l'audit
+
+- ⚠️⚠️ **LES LAMPADAIRES DE LA GRANDE ARTÈRE N'ÉCLAIRAIENT QU'UN TROTTOIR.** Depuis
+  l'élargissement du 434, la plus grande rue de la ville fait QUATRE cases et sa rangée de
+  poteaux était toute entière sur le bord nord. Sur une rue de deux, une rangée unique passe
+  pour de l'éclairage central ; sur une rue de quatre, elle se lit pour ce qu'elle est — une
+  moitié d'avenue dans le noir et une file de poteaux qui souligne le trottoir nord comme une
+  clôture. C'est le corollaire exact de la note du 434 : les DEUX bords sont dérivés, pas
+  seulement l'un. **Ils alternent maintenant d'un trottoir à l'autre — on alterne, on ne double
+  pas** : deux rangées en vis-à-vis coûteraient quarante props et donneraient une allée de
+  cimetière monumentale.
+- ⚠️ **LA PELOUSE DES PARTERRES ÉTAIT UN TISSU À RAYURES.** La tonte se dessinait `x % 2`,
+  c'est-à-dire une bande PAR CASE : période 32 px, bandes toutes de la même largeur, toutes
+  alignées sur la grille. Ce qui fait une pelouse tondue, c'est **la largeur de la tondeuse** et
+  le fait qu'elle passe en aller-retour : bandes de trois cases (≈ 1,2 m à l'échelle du jeu),
+  alternées, avec un liseré à la jointure des deux passages. La bande se calcule sur la
+  coordonnée MONDE, jamais sur la case du parterre — sinon chaque massif a sa propre rayure et
+  on lit un patchwork.
+
+### Ce que ça ne fait pas
+
+- **le lac du sud garde sa forme.** Il a le dessin (berge, profondeur, écume, reflets, et
+  maintenant le tramage et les nénuphars), pas la géométrie : son rivage nord reste `sin(x)` et
+  ses trois autres bords les coupes droites du rectangle. C'était déjà le prochain chantier au
+  435, et il l'est toujours — la promenade, le ponton, les bancs et les lampadaires sont tous
+  accrochés à `shore(x)` ;
+- **la ferme n'est touchée par rien de tout ça.** Ses chemins restent sur la tuile unique de
+  16 px du zip 232, et **aucun banc ne regarde le sol de la ferme** ;
+- **le taxi n'a toujours pas de conducteur visible, ni de passager.** Les vitres sont du verre,
+  pas une cabine ;
+- **aucun sprite n'est passé par Blender.** Proposé par Guillaume ; refusé pour la raison du §9
+  de `CLAUDE.md` — à 16 px ce qu'on achèterait est l'éclairage, ces surfaces sont des motifs
+  bouclants qu'un rendu ne sait pas fabriquer, et un PNG dans `fermeArt` ouvrirait un troisième
+  pipeline. **La contrainte « tout en `fillRect` » n'est pas de l'ascèse : c'est ce qui rend les
+  bancs possibles**, et ce zip vient de montrer ce que coûte un dessin qu'aucun banc ne voit.

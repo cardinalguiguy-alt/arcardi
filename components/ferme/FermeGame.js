@@ -14778,64 +14778,83 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // qu'un banc puisse le REGARDER ; ici on ne garde que le repli.
         else if (g === C.G_PATH) { if (!A.drawTownRoadTile(ctx, sprites, tw, x, y, px, py)) ctx.drawImage(sprites.path, px, py); }
         else if (g === C.G_PATH_STONE) {
-          /* 425 : le dallage n'est plus un damier à deux gris. Un joint clair
-             au nord et à l'ouest de chaque dalle suffit à donner du relief, et
-             une teinte qui varie très légèrement (hachage de la position) casse
-             la régularité de l'imprimante. Une place « soignée », c'est
-             d'abord une place qui n'a pas l'air imprimée. */
-          const v = ((x * 41 + y * 23) % 5);
-          ctx.fillStyle = ((x + y) % 2 === 0) ? ["#b3b2b8", "#b6b5bb", "#afaeb4", "#b1b0b6", "#b4b3b9"][v]
-                                              : ["#a5a4ab", "#a8a7ae", "#a2a1a8", "#a6a5ac", "#a3a2a9"][v];
-          ctx.fillRect(px, py, T, T);
-          ctx.fillStyle = "rgba(255,255,255,0.13)"; ctx.fillRect(px, py, T, 1); ctx.fillRect(px, py, 1, T);
-          ctx.fillStyle = "rgba(60,58,66,0.16)"; ctx.fillRect(px, py + T - 1, T, 1); ctx.fillRect(px + T - 1, py, 1, T);
-          /* ⚠️ LA BORDURE (425). Vue au vrai zoom du jeu, une esplanade dallée
-             qui s'arrête net dans l'herbe a l'air DÉCOUPÉE AUX CISEAUX — c'est
-             ce que montrait la première passe. Une place a un bord : une
-             pierre de taille, plus claire, posée tout autour. Elle se déduit du
-             voisinage plutôt que de la géométrie de TOWN_PLAZA, et sert donc
-             AUSSI les parvis et le champ de foire, sans une ligne de plus. */
-          const st4 = (xx, yy) => {
-            if (xx < 0 || yy < 0 || xx >= tw.w || yy >= tw.h) return false;
-            return tw.ground[yy * tw.w + xx] === C.G_PATH_STONE;
-          };
-          ctx.fillStyle = "#cfcabb";
-          if (!st4(x, y - 1)) ctx.fillRect(px, py, T, 3);
-          if (!st4(x, y + 1)) ctx.fillRect(px, py + T - 3, T, 3);
-          if (!st4(x - 1, y)) ctx.fillRect(px, py, 3, T);
-          if (!st4(x + 1, y)) ctx.fillRect(px + T - 3, py, 3, T);
-          ctx.fillStyle = "rgba(70,66,60,0.22)";
-          if (!st4(x, y + 1)) ctx.fillRect(px, py + T - 1, T, 1);
+          /* ⚠️⚠️ ZIP 436 — LE DERNIER DAMIER DE 16 px DE LA VILLE EST PARTI
+             DANS `fermeArt`. Ce qu'il y avait ici depuis le 425 : `(x + y) % 2`
+             entre deux gris, cinq variantes de teinte, un joint clair au
+             nord-ouest. C'était déjà mieux que l'aplat d'avant, et c'est resté
+             un DAMIER DE PÉRIODE 16 px — le défaut que le 434 a corrigé sur les
+             rues, sur la surface qui entoure justement les escaliers du
+             tribunal. Quand Guillaume écrit « un écart flagrant de qualité de
+             textures » entre le sol pavé et les escaliers du courthouse, les
+             deux tiers de ce qu'il regarde sont ce dallage-ci.
+             Voir `A.drawTownFlagTile` et `tools/render-escaliers.mjs`. Le repli
+             est celui du 425, conservé intact : un atlas manquant doit rendre
+             une place grise, pas un trou. */
+          if (!A.drawTownFlagTile(ctx, sprites, tw, x, y, px, py)) {
+            const v = ((x * 41 + y * 23) % 5);
+            ctx.fillStyle = ((x + y) % 2 === 0) ? ["#b3b2b8", "#b6b5bb", "#afaeb4", "#b1b0b6", "#b4b3b9"][v]
+                                                : ["#a5a4ab", "#a8a7ae", "#a2a1a8", "#a6a5ac", "#a3a2a9"][v];
+            ctx.fillRect(px, py, T, T);
+            const st4 = (xx, yy) => {
+              if (xx < 0 || yy < 0 || xx >= tw.w || yy >= tw.h) return false;
+              return tw.ground[yy * tw.w + xx] === C.G_PATH_STONE;
+            };
+            ctx.fillStyle = "#cfcabb";
+            if (!st4(x, y - 1)) ctx.fillRect(px, py, T, 3);
+            if (!st4(x, y + 1)) ctx.fillRect(px, py + T - 3, T, 3);
+            if (!st4(x - 1, y)) ctx.fillRect(px, py, 3, T);
+            if (!st4(x + 1, y)) ctx.fillRect(px + T - 3, py, 3, T);
+          }
         }
         else if (g === C.G_TOWN_LAWN) {
-          // 425 : gazon tondu des parterres — l'herbe de la ferme, assombrie et
-          // rayée dans un seul sens, comme une pelouse qui vient d'être passée.
+          /* 425 : gazon tondu des parterres — l'herbe de la ferme, assombrie et
+             rayée dans un seul sens, comme une pelouse qui vient d'être passée.
+             ⚠️⚠️ ZIP 436 — LA RAYURE ÉTAIT `x % 2`, C'EST-À-DIRE UNE BANDE PAR
+             CASE. Trouvé pendant l'audit graphique, et c'est la même famille que
+             la tuile unique du 434 : une alternance de période 32 px sur un
+             parterre de six cases donne trois bandes claires et trois sombres,
+             toutes de la même largeur, toutes alignées sur la grille. Ce n'est
+             pas une pelouse tondue, c'est un tissu à rayures.
+             ⚠️ CE QUI FAIT UNE PELOUSE TONDUE, C'EST LA LARGEUR DE LA TONDEUSE
+             ET LE FAIT QU'ELLE PASSE EN ALLER-RETOUR : des bandes de deux à
+             trois cases, alternées, avec un LISERÉ plus marqué à la jointure (là
+             où les deux passages se chevauchent). Trois cases valent 48 px, soit
+             ~1,2 m à l'échelle du jeu : la largeur d'une tondeuse autoportée.
+             ⚠️ Et la bande est calculée sur la coordonnée MONDE, jamais sur la
+             case du parterre : deux parterres voisins doivent avoir été tondus
+             par la même machine dans le même sens, sinon chaque massif a sa
+             propre rayure et on lit un patchwork. */
           ctx.drawImage(gTiles[(x * 13 + y * 7) % gTiles.length], px, py);
-          ctx.fillStyle = (x % 2 === 0) ? "rgba(24,70,30,0.20)" : "rgba(120,190,110,0.14)";
+          const MOW = 3;                                   // largeur de passe, en cases
+          const band = Math.floor(x / MOW) & 1;
+          ctx.fillStyle = band ? "rgba(24,70,30,0.17)" : "rgba(120,190,110,0.11)";
           ctx.fillRect(px, py, T, T);
+          // La jointure des deux passes : un liseré d'un pixel, du côté sombre.
+          if (((x % MOW) + MOW) % MOW === 0) {
+            ctx.fillStyle = band ? "rgba(18,54,24,0.22)" : "rgba(150,210,140,0.14)";
+            ctx.fillRect(px, py, 1, T);
+          }
         }
         else if (g === C.G_TOWN_STAIR) {
-          /* 425 : LES MARCHES. Quatre par case, dessinées perpendiculairement
-             au sens de la montée — qu'on DÉDUIT du gradient d'altitude plutôt
-             que de le rechercher dans TOWN_STAIRS. Deux descriptions du même
-             escalier finiraient par se contredire (§7 de CLAUDE.md) ; ici, une
-             volée retournée se redessine juste toute seule. */
-          const gx = elAt(x + 1, y) - elAt(x - 1, y), gy = elAt(x, y + 1) - elAt(x, y - 1);
-          const vertical = Math.abs(gy) >= Math.abs(gx);
-          ctx.fillStyle = "#b8b4ab"; ctx.fillRect(px, py, T, T);
-          for (let s = 0; s < 4; s++) {
-            if (vertical) {
-              ctx.fillStyle = "rgba(255,255,255,0.22)"; ctx.fillRect(px, py + s * 4, T, 1);
-              ctx.fillStyle = "rgba(58,54,48,0.30)"; ctx.fillRect(px, py + s * 4 + 3, T, 1);
-            } else {
-              ctx.fillStyle = "rgba(255,255,255,0.22)"; ctx.fillRect(px + s * 4, py, 1, T);
-              ctx.fillStyle = "rgba(58,54,48,0.30)"; ctx.fillRect(px + s * 4 + 3, py, 1, T);
+          /* ⚠️⚠️ ZIP 436 — LE DESSIN A DÉMÉNAGÉ DANS `fermeArt`, ET C'EST LE
+             SUJET DE LA CORRECTION. Ce qu'il y avait ici : un `fillRect` gris
+             uni plus quatre traits blancs et quatre traits noirs tous les
+             4 px, RIGOUREUSEMENT IDENTIQUES sur toutes les cases de toutes les
+             volées — à côté d'un revêtement de rue au motif de 64 px cuit avec
+             son granulat, ses éclats et ses joints décalés (434). Guillaume l'a
+             dit en une phrase : « un écart flagrant de qualité de textures ».
+             La cause n'est pas le soin, c'est que ce code-ci n'était REGARDABLE
+             par aucun banc (§4). Voir `A.drawTownStairTile` et
+             `tools/render-escaliers.mjs`. Le repli reste ici, comme pour les
+             revêtements : un atlas manquant doit rendre du gris, pas un trou. */
+          if (!A.drawTownStairTile(ctx, sprites, tw, x, y, px, py)) {
+            const vertical = A.townStairVertical(tw, x, y);
+            ctx.fillStyle = "#b8b4ab"; ctx.fillRect(px, py, T, T);
+            for (let s = 0; s < 4; s++) {
+              if (vertical) { ctx.fillStyle = "rgba(58,54,48,0.30)"; ctx.fillRect(px, py + s * 4 + 3, T, 1); }
+              else { ctx.fillStyle = "rgba(58,54,48,0.30)"; ctx.fillRect(px + s * 4 + 3, py, 1, T); }
             }
           }
-          // Limons latéraux : sans eux la volée se confond avec du dallage.
-          ctx.fillStyle = "#8d8981";
-          if (vertical) { ctx.fillRect(px, py, 1, T); ctx.fillRect(px + T - 1, py, 1, T); }
-          else { ctx.fillRect(px, py, T, 1); ctx.fillRect(px, py + T - 1, T, 1); }
         }
         else if (g === C.G_WATER) {
           /* ⚠️ 425 — LES DEUX CASES DE LA FONTAINE NE SE PEIGNENT PAS EN EAU.
@@ -14900,15 +14919,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const drop = e - elAt(x, y + 1);
         if (drop > 0.01) {
           const fh = drop * EP;
-          ctx.fillStyle = "#8f8a80"; ctx.fillRect(px, py + T, T, fh);
-          for (let b = 0; b < fh; b += 5) {
-            ctx.fillStyle = "rgba(46,43,38,0.28)"; ctx.fillRect(px, py + T + b, T, 1);
-            ctx.fillStyle = "rgba(255,255,255,0.10)"; ctx.fillRect(px, py + T + b + 1, T, 1);
+          /* ⚠️⚠️ ZIP 436 — LE PAREMENT AUSSI EST PARTI DANS `fermeArt`. Ce
+             qu'il y avait : un aplat `#8f8a80`, une ligne sombre PLEINE
+             LARGEUR tous les 5 px, et UN joint vertical par case, toujours au
+             même endroit (`x % 2`). C'est mot pour mot le défaut de brique de
+             l'hôtel de ville au 433 — « ce qui fait la brique n'est pas la
+             ligne d'assise, c'est l'alternance des joints verticaux » — resté
+             ici parce que personne ne pouvait le regarder. Six cases de
+             falaise donnaient six fois le même mur. */
+          if (!A.drawTownCliffFace(ctx, sprites, tw, x, y, px, py + T, fh)) {
+            ctx.fillStyle = "#8f8a80"; ctx.fillRect(px, py + T, T, fh);
           }
-          // Joints verticaux décalés d'une assise sur deux : c'est ce qui
-          // sépare un mur appareillé d'un aplat gris.
-          ctx.fillStyle = "rgba(46,43,38,0.22)";
-          ctx.fillRect(px + ((x % 2) ? 5 : 11), py + T, 1, fh);
           ctx.fillStyle = "#c6c1b6"; ctx.fillRect(px, py + T - 2, T, 2);          // nez du rebord
           ctx.fillStyle = "rgba(20,26,16,0.30)"; ctx.fillRect(px, py + T + fh, T, 3); // ombre au pied
         }
@@ -14928,9 +14949,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const bw = isStair ? 4 : 2;
           const bx2 = sd < 0 ? px : px + T - bw;
           if (isStair) {
-            ctx.fillStyle = "#8f8a80"; ctx.fillRect(bx2, py, bw, T);                       // parement du limon
-            ctx.fillStyle = "#cfcabe"; ctx.fillRect(bx2, py, bw, 2);                       // dessus, éclairé
-            ctx.fillStyle = "rgba(46,43,38,0.30)"; ctx.fillRect(bx2, py + T, bw, dside * EP); // il descend avec la volée
+            // ZIP 436 — même déménagement que les marches et la falaise.
+            if (!A.drawTownStairCheek(ctx, sprites, tw, x, y, px, py, bx2, bw, dside * EP)) {
+              ctx.fillStyle = "#8f8a80"; ctx.fillRect(bx2, py, bw, T);
+              ctx.fillStyle = "#cfcabe"; ctx.fillRect(bx2, py, bw, 2);
+              ctx.fillStyle = "rgba(46,43,38,0.30)"; ctx.fillRect(bx2, py + T, bw, dside * EP);
+            }
           } else {
             ctx.fillStyle = "rgba(46,43,38,0.35)"; ctx.fillRect(bx2, py, bw, T);
           }
