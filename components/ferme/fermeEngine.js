@@ -4190,11 +4190,69 @@ export function generateTownWorld() {
      `verify-vallee.mjs` l'a vu tout de suite : un arbre tombé sur un endroit de
      vie du champ de foire, donc un quartier bâti sans raison d'y aller. Le seul
      flux stable est celui qu'on ne touche pas. */
+  /* ═══════════════════════════════════════════════════════════════════════════
+     ZIP 440 — LA CASE D'UN DÉCOR ET LA SURFACE QU'IL COUVRE, ENFIN DISTINGUÉES.
+     ─────────────────────────────────────────────────────────────────────────
+     ⚠️⚠️ TOUT CE GÉNÉRATEUR RAISONNE EN CASES ; LE RENDU DESSINE DES SPRITES DE
+     CINQ CASES DE LARGE. Un pont de la planche fait 81 px, une clôture 67, une
+     rangée de haie 62 : ils occupent UNE case et en couvrent quatre ou cinq.
+     Tout ce qui se pose après tombe librement dans celles qu'ils couvrent sans
+     les occuper — et ça ne lève rien, ça ne bloque rien, ça ne casse aucun
+     trajet. Ça se VOIT, et c'est tout : c'est la famille du « houppier qui
+     flotte sur le lac » corrigée au 435 pour les arbres seuls, dont on fait
+     enfin la règle. `tools/verify-compo.mjs` la mesure sur toute la carte.
+     ⚠️ L'emprise vient de `C.townPropBox`, donc de la PLANCHE : elle n'est
+     recopiée nulle part, et un décor réimporté plus large repousse tout seul ce
+     qu'on plante à côté. Les décors procéduraux (étal, kiosque, statue…) n'ont
+     pas de taille lisible hors de `fermeArt` et comptent pour une case — le
+     banc imprime la liste de ce qu'il ne sait donc pas voir. */
+  const propCover = (x, y) => {
+    for (const pr of props) {
+      if (pr.y < y || pr.y - y > 4 || Math.abs(pr.x - x) > 4) continue;
+      if (C.townPropCovers(pr.kind, pr.x, pr.y, x, y)) return true;
+    }
+    return false;
+  };
+  /* ⚠️ ET LA RÉCIPROQUE, qui n'est pas la même question : un décor peut être
+     posé sur une case libre et RECOUVRIR l'ancre d'un voisin déjà là. Sans les
+     deux sens, on interdisait de planter une lavande derrière une clôture et on
+     laissait poser la clôture par-dessus la lavande. */
+  const compoFree = (kind, x, y) => {
+    if (propCover(x, y)) return false;
+    for (const pr of props) {
+      if (Math.abs(pr.x - x) > 6 || Math.abs(pr.y - y) > 5) continue;
+      if (pr.x === x && pr.y === y) return false;
+      if (C.townPropCovers(kind, x, y, pr.x, pr.y)) return false;
+    }
+    return true;
+  };
+  /* ⚠️⚠️⚠️ ZIP 440 — LA LISTE EST BLANCHE, ELLE N'EST PLUS NOIRE, ET C'EST LE
+     DÉFAUT QUE GUILLAUME A VU (« un arbre sur un pont », littéralement : un
+     chêne planté sur le tablier du pont de l'anse, en (63,153)). La garde
+     énumérait ce sur quoi on ne plante PAS — allée, dallage, eau, escalier — et
+     il y manquait `G_BRIDGE`. Une liste noire à laquelle il manque une valeur
+     ne lève rien : elle laisse passer, et c'est tout. C'est exactement le `% 4`
+     recopié des étals du 431, l'alignement d'arbres de l'avenue du sud tombant
+     pile sur les cinq cases du tablier (x = 12 + 6k, décalage +3 → 63).
+     ⚠️ On énumère donc ce sur quoi un arbre POUSSE — l'herbe et la pelouse — et
+     rien d'autre, comme `addGarden` juste en dessous le fait depuis le 437. Le
+     jour où un `G_*` s'ajoute, il n'est pas plantable tant que quelqu'un ne
+     l'écrit pas ici : c'est le sens d'une liste blanche, et c'est le seul sens
+     qui résiste à l'ajout.
+     ⚠️ EFFET DE BORD ASSUMÉ : refuser plus de cases, c'est consommer MOINS de
+     tirages (le refus n'en consomme aucun, note du 437), donc tout ce que
+     `rnd()` pose après se décale et la carte n'est plus au pixel celle du 439.
+     Elle est regénérée à chaque partie et n'est jamais persistée (§6 de
+     CLAUDE.md) : il n'y a rien à migrer. Compenser en consommant un tirage sur
+     les refus a été essayé au 437 et défait — ça décale exactement pareil. */
   const plantTree = (x, y, conif = 0.5) => {
     if (!inMap(x, y)) return;
     const i = id(x, y);
-    if (solid[i] || objects[i] !== C.O_NONE) return;
-    if (ground[i] === C.G_PATH || ground[i] === C.G_PATH_STONE || ground[i] === C.G_WATER || ground[i] === C.G_TOWN_STAIR) return;
+    if (solid[i] || hedge[i] || objects[i] !== C.O_NONE) return;
+    if (ground[i] !== C.G_GRASS && ground[i] !== C.G_TOWN_LAWN) return;
+    // ⚠️ Et pas dans le CORPS d'un décor déjà posé : un pont, une clôture ou une
+    // haie de la planche couvrent quatre à cinq cases pour une seule occupée.
+    if (propCover(x, y)) return;
     objects[i] = rnd() < conif ? C.O_TREE2 : C.O_TREE; objHp.set(i, C.TREE_HP);
   };
   /* ⚠️ 437 — UN DÉCOR DE JARDIN SE POSE SUR DE L'HERBE, ET IL FAUT LE DIRE.
@@ -4209,6 +4267,13 @@ export function generateTownWorld() {
     const i = id(x, y);
     if (solid[i] || hedge[i] || objects[i] !== C.O_NONE) return false;
     if (ground[i] !== C.G_GRASS && ground[i] !== C.G_TOWN_LAWN) return false;
+    /* ⚠️ ZIP 440 — ET PAS DANS LE CORPS D'UN VOISIN, NI PAR-DESSUS LUI. C'est
+       la moitié qui manquait à la note du 437 ci-dessus : elle a bien mis le
+       décor sur de l'herbe, et deux décors d'herbe voisins continuaient de se
+       traverser (un bac de roses dans le garde-corps, un buisson d'or dans la
+       canne à pêche du ponton — trouvés par `verify-compo`, invisibles à la
+       lecture parce que chacun est posé sur une case parfaitement libre). */
+    if (!compoFree(kind, x, y)) return false;
     // `gard` marque le décor comme posé PAR CETTE FONCTION : c'est lui, et lui
     // seul, que le balayage de fin de génération est autorisé à retirer.
     props.push({ x, y, kind, gard: 1 }); solid[i] = 1;
@@ -4219,12 +4284,26 @@ export function generateTownWorld() {
     const p = C.TOWN_PARK;
     rect(p, (x, y, i) => { if (ground[i] === C.G_GRASS) ground[i] = C.G_TOWN_LAWN; });
     const cx = p.x + (p.w >> 1), cy = p.y + (p.h >> 1);
+    /* ⚠️⚠️ ZIP 440 — UNE PASSE QUI PAVE DÉGAGE CE QU'ELLE PAVE, ET C'EST UNE
+       RÈGLE, PAS UN CORRECTIF LOCAL. Les trois allées du parc testaient `solid`
+       avant de peindre — or un ARBRE n'est pas solide dans cette couche (sa
+       collision vit dans `objects`), donc le gravier passait DESSOUS et laissait
+       un saule planté au beau milieu du tour de l'étang. Personne ne pouvait le
+       lire : les deux passes sont écrites à cent lignes l'une de l'autre et
+       chacune est juste isolément. C'est la famille de défauts la plus coûteuse
+       de ce générateur — « une passe qui recouvre une passe antérieure sans le
+       savoir » (le buisson enterré sous le parvis du kiosque au 437, les décors
+       noyés par l'anse au 439) — et elle se paie une fois de plus ici. Trouvé
+       par `verify-compo.mjs`, pas à la relecture. */
+    const pavePark = (i, x, y) => {
+      ground[i] = C.G_PATH; objects[i] = C.O_NONE; objHp.delete(i); gravel.push(x, y);
+    };
     /* ⚠️ 437 — L'ALLÉE EN CROIX PASSE AU GRAVIER (voir `gravel`). Elle était de
        la terre battue, c'est-à-dire la tuile de 16 px du zip 232 : à côté d'une
        rue pavée au motif de 64 px (434), un parc en terre nue avait l'air d'un
        terrain vague avec des arbres dessus. */
-    for (let x = p.x; x < p.x + p.w; x++) for (const dy of [0, 1]) { ground[id(x, cy + dy)] = C.G_PATH; gravel.push(x, cy + dy); }
-    for (let y = p.y; y < p.y + p.h; y++) for (const dx of [0, 1]) { ground[id(cx + dx, y)] = C.G_PATH; gravel.push(cx + dx, y); }
+    for (let x = p.x; x < p.x + p.w; x++) for (const dy of [0, 1]) pavePark(id(x, cy + dy), x, cy + dy);
+    for (let y = p.y; y < p.y + p.h; y++) for (const dx of [0, 1]) pavePark(id(cx + dx, y), cx + dx, y);
     /* ═══════════════════════════════════════════════════════════════════════
        ZIP 435 — L'ÉTANG. UN RAYON MODULÉ, PUIS DEUX PASSES DE LISSAGE.
        ─────────────────────────────────────────────────────────────────────
@@ -4403,14 +4482,14 @@ export function generateTownWorld() {
            l'étang finissait en mur de gravier. Une allée qui touche une clôture
            n'est plus une allée, c'est un trottoir. */
         if (x < p.x + 3 || x > p.x + p.w - 4) continue;
-        ground[i] = C.G_PATH; gravel.push(x, y);
+        pavePark(i, x, y);
         if (x > arcMaxX) { arcMaxX = x; arcMaxY = y; }
         if (x < arcMinX) { arcMinX = x; arcMinY = y; }
       }
       for (let x = arcMaxX + 1; x >= 0 && x < cx; x++) {       // le raccord à l'allée en croix
         const i = id(x, arcMaxY);
         if (solid[i] || ground[i] === C.G_WATER) break;
-        ground[i] = C.G_PATH; gravel.push(x, arcMaxY);
+        pavePark(i, x, arcMaxY);
       }
       /* ⚠️ ET LE BOUT OUEST DESCEND SUR L'ALLÉE EST-OUEST. Sans ce second
          raccord, la promenade s'arrêtait NET au milieu de la pelouse : un
@@ -4420,7 +4499,7 @@ export function generateTownWorld() {
         for (const dx of [0, 1]) {
           const i = id(arcMinX + dx, y);
           if (!inMap(arcMinX + dx, y) || solid[i] || ground[i] === C.G_WATER) continue;
-          ground[i] = C.G_PATH; gravel.push(arcMinX + dx, y);
+          pavePark(i, arcMinX + dx, y);
         }
       }
       /* ═══════════════════════════════════════════════════════════════════
@@ -4430,38 +4509,93 @@ export function generateTownWorld() {
          pont japonais de Monet ». Le pourquoi de la FORME de l'étang est sur
          `TOWN_POND` — ici, le pourquoi de sa PLACE.
 
-         ⚠️⚠️ LA RANGÉE DE FRANCHISSEMENT DOIT ÊTRE DE LARGEUR IMPAIRE, ET CE
-         N'EST PAS un détail d'arithmétique : un décor est centré sur
-         `pr.x × 16 + 8`, donc sur le MILIEU d'une case. Une nappe de largeur
-         paire a son milieu sur une COUTURE de cases : le pont s'y poserait une
-         demi-case à côté de l'eau qu'il enjambe, penché pour toujours. C'est
-         mot pour mot le défaut de symétrie du 432 (« une position réglée à la
-         main est une position qui penchera »), et la seule parade est de
-         CHOISIR une rangée impaire plutôt que de corriger après coup.
-         ⚠️ ON PREND AUSSI LA PLUS PROCHE DU CENTRE DE L'ÉTANG : franchi près
-         d'une pointe, un pont a de l'eau d'un seul côté et se lit comme une
-         passerelle de bord. Ce qui fait le pont de Monet, c'est l'eau qui
+         ⚠️ ON PREND LA RANGÉE LA PLUS PROCHE DU CENTRE DE L'ÉTANG : franchi
+         près d'une pointe, un pont a de l'eau d'un seul côté et se lit comme
+         une passerelle de bord. Ce qui fait le pont de Monet, c'est l'eau qui
          s'ouvre des DEUX côtés du tablier.
-         ⚠️ ET LE TABLIER COUVRE TOUTE LA NAPPE, D'UNE RIVE À L'AUTRE. Le
-         sprite, lui, fait 81 px pour une portée de 112 : il reste une case de
-         planches nues à chaque bout, et c'est juste — un garde-corps s'arrête
-         sur la culée, il ne la couvre pas. */
+
+         ⚠️⚠️⚠️ ZIP 440 — LE TABLIER NE COUVRE PLUS LA NAPPE : C'EST LA NAPPE
+         QUI SE RESSERRE SUR LE TABLIER. Le 439 pavait d'une rive à l'autre et
+         justifiait en commentaire la case de planches nues qui restait à chaque
+         bout (« un garde-corps s'arrête sur la culée »). C'est vrai d'une culée
+         MAÇONNÉE ; ici c'était une case de planches posée sur l'eau, sans
+         garde-corps et sans appui — vu tout de suite en jouant. La portée était
+         décrite à trois endroits (sprite, tablier, arc), deux disaient 5 et une
+         7 : voir `TOWN_BRIDGE_SPAN`, qui n'en laisse qu'un.
+         ⚠️ ET ON NE CHERCHE PAS UNE NAPPE DE LA BONNE LARGEUR : les seules
+         rangées de cinq cases d'eau de cet étang sont à ses DEUX POINTES, ce
+         que le paragraphe ci-dessus refuse. On RESSERRE l'eau, exactement comme
+         le 439 CREUSE l'anse du lac au lieu de la chercher — et pour la même
+         raison de fond : une forme qui vient d'un champ d'harmoniques n'a
+         aucune obligation d'offrir la fenêtre qu'on lui demande, donc on la
+         fabrique. Les deux culées avancent dans l'eau sur quatre rangées de
+         raccord : ce n'est pas une entaille, c'est un GOULET — et un goulet est
+         la raison qu'un pont soit là plutôt qu'ailleurs.
+         ⚠️ La parité de la nappe ne compte plus (le 439 exigeait une largeur
+         impaire pour que le décor ne penche pas) : le tablier fait `SPAN` cases,
+         SPAN est impair, donc son milieu est un milieu de case par construction.
+         Un contrôle qui devient inutile parce que la géométrie a changé se
+         SUPPRIME — gardé, il ferait croire qu'il protège encore quelque chose. */
       {
-        let br = -1, bA = 0, bB = 0, bestD = 1e9;
-        for (let y = p.y + 1; y < p.y + p.h - 1; y++) {
+        const SPAN = C.TOWN_BRIDGE_SPAN;
+        // La nappe contiguë d'une rangée, ou null : `null` = pas un franchissement.
+        const sheet = (y) => {
           let a = 1e9, b = -1, n = 0;
           for (let x = p.x; x < p.x + p.w; x++) if (ground[id(x, y)] === C.G_WATER) { n++; if (x < a) a = x; b = x; }
-          if (b < 0 || (b - a + 1) !== n) continue;          // nappe coupée : pas un franchissement
-          if (((b - a + 1) & 1) === 0) continue;             // largeur paire : le pont pencherait
-          // Les deux têtes doivent être sur de la terre libre.
-          const wa = id(a - 1, y), wb = id(b + 1, y);
-          if (!inMap(a - 1, y) || ground[wa] === C.G_WATER || solid[wa]) continue;
-          if (!inMap(b + 1, y) || ground[wb] === C.G_WATER || solid[wb]) continue;
-          const d = Math.abs(y + 0.5 - pond.cy);
-          if (d < bestD) { bestD = d; br = y; bA = a; bB = b; }
+          if (b < 0 || (b - a + 1) !== n) return null;       // nappe coupée : pas un franchissement
+          return [a, b];
+        };
+        let br = -1, bA = 0, bB = 0, bestD = 1e9;
+        for (let y = p.y + 1; y < p.y + p.h - 2; y++) {
+          const s0 = sheet(y), s1 = sheet(y + 1);
+          if (!s0 || !s1) continue;
+          const [a, b] = s0;
+          if (b - a + 1 < SPAN) continue;                    // trop étroit : on ne resserre pas au-delà
+          // Le tablier se centre sur la nappe, et il est ENTIER dans les deux rangées.
+          const d0 = Math.round((a + b) / 2) - (SPAN >> 1);
+          if (d0 < s1[0] || d0 + SPAN - 1 > s1[1]) continue;
+          // Les deux têtes doivent tomber sur de la terre libre — après resserrement
+          // elles sont dans l'ancienne nappe, donc il suffit qu'elles ne soient pas
+          // solides (une case d'eau ne l'est pas, une berge bâtie oui).
+          if (!inMap(d0 - 1, y) || !inMap(d0 + SPAN, y) || solid[id(d0 - 1, y)] || solid[id(d0 + SPAN, y)]) continue;
+          const dc = Math.abs(y + 0.5 - pond.cy);
+          if (dc < bestD) { bestD = dc; br = y; bA = d0; bB = d0 + SPAN - 1; }
         }
-        if (br < 0) console.warn("[VILLE] aucune rangée impaire pour le pont du parc");
+        if (br < 0) console.warn("[VILLE] aucune rangée franchissable pour le pont du parc");
         else {
+          /* ⚠️⚠️ LE GOULET, AVANT TOUT LE RESTE. Les deux culées avancent dans
+             l'eau jusqu'au tablier sur les deux rangées de franchissement, puis
+             se retirent sur `HEAD` rangées de part et d'autre. Le raccord est
+             CUBIQUE et non linéaire, pour la raison écrite sur `quayMix` : une
+             rampe droite laisse un angle à ses deux bouts, et un angle sur une
+             rive se lit comme une erreur de tracé.
+             ⚠️ ON REMPLIT AVEC LE SOL DE LA BERGE VOISINE, pas avec une valeur
+             écrite ici : selon le côté, l'étang touche la pelouse du parc ou son
+             allée de gravier, et une pelouse posée en travers d'une allée serait
+             le trou dans le chemin qu'on passe son temps à corriger. */
+          const HEAD = 4;
+          const ease = (k) => { const t = 1 - k / (HEAD + 1); return t <= 0 ? 0 : t * t * (3 - 2 * t); };
+          for (let k = 0; k <= HEAD; k++) {
+            for (const y of (k === 0 ? [br, br + 1] : [br - k, br + 1 + k])) {
+              const s = sheet(y);
+              if (!s) continue;
+              const [a, b] = s;
+              const f = ease(k);
+              // De combien la berge avance, à gauche et à droite de la portée.
+              const encL = Math.round(f * Math.max(0, bA - a));
+              const encR = Math.round(f * Math.max(0, b - bB));
+              const bank = (sx, dir) => {
+                for (let x = sx; inMap(x, y); x += dir) {
+                  const g = ground[id(x, y)];
+                  if (g !== C.G_WATER) return g;
+                }
+                return C.G_TOWN_LAWN;
+              };
+              const gL = bank(a - 1, -1), gR = bank(b + 1, 1);
+              for (let x = a; x < a + encL; x++) { const i = id(x, y); ground[i] = gL; objects[i] = C.O_NONE; objHp.delete(i); }
+              for (let x = b; x > b - encR; x--) { const i = id(x, y); ground[i] = gR; objects[i] = C.O_NONE; objHp.delete(i); }
+            }
+          }
           /* Le tablier fait DEUX rangées : à une seule, le pont se lit comme
              une ligne posée sur l'eau, et on le traverse sans le voir. Deux,
              c'est la largeur des allées du parc — le pont est un morceau
@@ -4489,7 +4623,13 @@ export function generateTownWorld() {
                 const i = id(x, y);
                 if (!inMap(x, y) || solid[i] || ground[i] === C.G_WATER) continue;
                 if (ground[i] === C.G_PATH || ground[i] === C.G_PATH_STONE) { hit = true; continue; }
-                ground[i] = C.G_PATH; gravel.push(x, y);
+                /* ⚠️ ZIP 440 — ELLE DÉGAGE CE QU'ELLE PAVE. Elle testait `solid`
+                   et pas `objects` : un arbre n'est pas solide dans cette
+                   couche, donc l'allée passait DESSOUS et on obtenait deux
+                   chênes plantés au milieu du gravier (trouvé par
+                   `verify-compo`). Une allée est un ouvrage : elle a le droit
+                   d'abattre, elle n'a pas le droit de contourner en silence. */
+                ground[i] = C.G_PATH; objects[i] = C.O_NONE; objHp.delete(i); gravel.push(x, y);
               }
               if (hit && k > 0) break;
             }
@@ -5117,7 +5257,11 @@ export function generateTownWorld() {
        pas du goût : un décor est centré sur `pr.x * 16 + 8`, donc une portée
        PAIRE tomberait une demi-case à côté de son eau. Sur cinq cases, la case
        du milieu est le centre — c'est la règle de symétrie du 432 (« une
-       position réglée à la main est une position qui penchera »). */
+       position réglée à la main est une position qui penchera »).
+       ⚠️⚠️ ZIP 440 — ET CE CINQ N'EST PLUS ÉCRIT ICI. Il valait la largeur de
+       l'ouvrage dessiné, par coïncidence heureuse : le pont du parc, lui, en
+       pavait sept et livrait deux cases de planches nues. `TOWN_BRIDGE_SPAN`
+       est désormais le seul endroit du projet où une portée de pont est dite. */
     /* ⚠️⚠️ ON BALAYE LES DEUX RIVES SAUVAGES ET ON GARDE LA MEILLEURE PLACE, on
        ne prend pas la première. Écrit « la première qui convient » sur les
        quatorze premières colonnes, ce bloc n'a RIEN posé du tout : aucune
@@ -5128,7 +5272,7 @@ export function generateTownWorld() {
        c'est un compte de props qui l'a montré, pas une lecture.
        ⚠️ D'où le `console.warn` en sortie : si un jour la carte ne peut plus
        porter de pont, on veut l'apprendre par un message, pas par une absence. */
-    const BSPAN = 5;
+    const BSPAN = C.TOWN_BRIDGE_SPAN;
     let ax = -1, rb = 0, axFlat = 99;
     for (let x = x0 + 4; x < x1 - BSPAN - 6; x++) {
       // On reste sur la rive sauvage, des deux côtés du tablier.
@@ -5222,6 +5366,24 @@ export function generateTownWorld() {
        déjà posé), et `addProp` ne vérifie rien — c'est le mur invisible du 425
        en version décor, dit en toutes lettres au-dessus d'`addGarden`. */
     {
+      /* ═══ 0. LE COIN DU PÊCHEUR, À LA RACINE DU PONTON — POSÉ EN PREMIER ═══
+         La quatrième scène de la planche (« Active Picnic Spot ») tient en trois
+         objets posés ensemble : canne, seau, coffre. C'est une SCÈNE — ils ne
+         veulent rien dire séparés, et c'est pour ça qu'ils sont placés par
+         rapport au ponton et non semés le long du quai.
+         ⚠️ Décor seul (décision de Guillaume) : rien ne se ramasse.
+         ⚠️⚠️ ZIP 440 — IL EST PASSÉ DEVANT LE SEMIS FLEURI, ET C'EST UNE RÈGLE
+         GÉNÉRALE : CE QUI EST COMPOSÉ SE POSE AVANT CE QUI EST SEMÉ. Le semis
+         du quai tombait tous les quatre pas et l'un de ses buissons d'or
+         atterrissait dans la canne à pêche (99,155 contre 99,156) — deux objets
+         posés chacun sur une case libre, et qui se traversent à l'écran. Tant
+         que le semis passait en premier, la scène perdait ; maintenant c'est le
+         semis qui saute un objet sur son tour de roue, ce qui ne se voit pas.
+         Un arbitrage d'ordre coûte zéro ligne de test. */
+      const px0 = C.TOWN_PIER.x, pTop = (tops[px0] !== null ? tops[px0] : lk.y) - C.TOWN_QUAY_H;
+      if (freeQuay(px0 - 1, pTop)) addProp(px0 - 1, pTop, "rod", true);
+      if (freeQuay(px0 - 2, pTop + 1)) addProp(px0 - 2, pTop + 1, "bucket", true);
+      if (freeQuay(px0 + C.TOWN_PIER.w, pTop)) addProp(px0 + C.TOWN_PIER.w, pTop, "chest", true);
       /* ═══ 1. LE QUAI MAÇONNÉ = « FLORAL HAVEN » ═══
          C'est la première des deux scènes que Guillaume a demandé de recopier.
          Ce qui la caractérise n'est pas la liste de ses objets, c'est leur
@@ -5233,23 +5395,55 @@ export function generateTownWorld() {
          se répéter visiblement. Deux périodes PREMIÈRES ENTRE ELLES ne le font
          qu'au bout de vingt-huit objets, c'est-à-dire jamais sur ce quai. */
       const FLORAL = ["flowerTrough", "goldBush", "roseBox", "lavender", "potPink", "goldBush", "bonsai"];
+      /* ⚠️⚠️ ZIP 440 — ON DÉCALE, ON NE RENONCE PAS. C'est la leçon du `place()`
+         des intérieurs (439) portée à la rive : depuis que `addGarden` refuse un
+         décor qui entrerait dans le corps d'un voisin, un objet du quai sautait
+         de temps en temps — et un TROU dans une cadence se voit, alors qu'un
+         objet décalé d'une case ne se voit pas. On essaie donc la case, puis sa
+         voisine de droite, puis celle de gauche. Le refus reste possible (près
+         du ponton, tout est pris) : ce qui compte est qu'il devienne rare. */
+      const sow = (x, y, kind) => addGarden(x, y, kind) || addGarden(x + 1, y, kind) || addGarden(x - 1, y, kind);
       let k = 0;
       for (let x = x0 + 3; x < x1 - 3; x += 4) {
         if (quayMix(x) <= 0.5 || tops[x] === null) continue;
         const by = tops[x] - C.TOWN_QUAY_H - 1;
         if (by <= AVE) continue;
-        addGarden(x, by, FLORAL[k++ % FLORAL.length]);
+        sow(x, by, FLORAL[k++ % FLORAL.length]);
       }
       /* La haie derrière, en fond — c'est elle qui ferme la scène de la planche
          et qui empêche la bande fleurie de flotter au milieu de la pelouse.
-         ⚠️ ELLE EST LACUNAIRE (une case sur trois) et POSÉE PLUS HAUT : continue,
-         elle couperait l'accès du quai depuis l'avenue du sud — le mur invisible
-         du 425, en version jardin. */
-      for (let x = x0 + 5; x < x1 - 5; x += 3) {
-        if (quayMix(x) <= 0.5 || tops[x] === null) continue;
-        const hy = tops[x] - C.TOWN_QUAY_H - 3;
-        if (hy <= AVE + 1 || ((x / 3 | 0) % 3) === 0) continue;
-        addGarden(x, hy, "hedgeRow");
+         ⚠️ ELLE EST LACUNAIRE et POSÉE PLUS HAUT : continue, elle couperait
+         l'accès du quai depuis l'avenue du sud — le mur invisible du 425, en
+         version jardin.
+         ⚠️⚠️⚠️ ZIP 440 — ELLE N'AVAIT JAMAIS ÉTÉ POSÉE. PAS UNE SEULE FOIS,
+         DEPUIS LE 439. Deux fautes indépendantes, et aucune ne lève quoi que ce
+         soit :
+           1. la garde `hy <= AVE + 1` — la rangée visée vaut `tops - 2 - 3`,
+              soit 153 sur tout le quai, et `AVE + 1` vaut 153. La condition
+              était donc VRAIE partout : la boucle tournait à vide, sur toute sa
+              longueur, à chaque génération ;
+           2. le pas de 3 pour un sprite de 62 px, c'est-à-dire 3,9 cases : les
+              tronçons se seraient chevauchés, exactement le défaut que le 439
+              avait corrigé sur la clôture en dérivant SON pas de SA largeur —
+              et la note du 439 dit de le faire, à quinze lignes d'ici.
+         C'est le « décor absent ne lève aucune erreur » du 437, sous sa forme la
+         plus pure : le README de la ferme DÉCRIT cette haie comme le fond de la
+         scène, et elle n'existait pas. Un compte de props l'aurait vue ; une
+         relecture, jamais. `verify-compo` imprime maintenant le compte de chaque
+         famille, et `render-parc` la montre.
+         ⚠️ Le pas se DÉDUIT du dessin (comme la clôture), et la lacune est une
+         section sur trois : deux tronçons qui se suivent, puis un passage de
+         quatre cases vers l'avenue. */
+      {
+        const hb = C.townPropBox("hedgeRow", 0, 0);
+        const step = Math.round(hb.x1 - hb.x0);
+        let n = 0;
+        for (let x = x0 + 5; x < x1 - 5; x += step) {
+          if (quayMix(x) <= 0.5 || tops[x] === null) continue;
+          const hy = tops[x] - C.TOWN_QUAY_H - 3;
+          if (hy <= AVE || (n++ % 3) === 2) continue;
+          addGarden(x, hy, "hedgeRow");
+        }
       }
       /* Et la lampe à huile, rare : sur la planche il y en a UNE. Un objet
          ponctuel semé partout cesse d'être ponctuel. */
@@ -5257,17 +5451,8 @@ export function generateTownWorld() {
         if (quayMix(x) <= 0.5 || tops[x] === null) continue;
         addGarden(x + 1, tops[x] - C.TOWN_QUAY_H - 1, "oilLamp");
       }
-      /* ═══ 2. LE COIN DU PÊCHEUR, à la racine du ponton ═══
-         La quatrième scène de la planche (« Active Picnic Spot ») tient en
-         trois objets posés ensemble : canne, seau, coffre. C'est une SCÈNE —
-         ils ne veulent rien dire séparés, et c'est pour ça qu'ils sont placés
-         par rapport au ponton et non semés le long du quai.
-         ⚠️ Décor seul (décision de Guillaume) : rien ne se ramasse. */
-      const px0 = C.TOWN_PIER.x, pTop = (tops[px0] !== null ? tops[px0] : lk.y) - C.TOWN_QUAY_H;
-      if (freeQuay(px0 - 1, pTop)) addProp(px0 - 1, pTop, "rod", true);
-      if (freeQuay(px0 - 2, pTop + 1)) addProp(px0 - 2, pTop + 1, "bucket", true);
-      if (freeQuay(px0 + C.TOWN_PIER.w, pTop)) addProp(px0 + C.TOWN_PIER.w, pTop, "chest", true);
-      /* LES PAS JAPONAIS, dans le haut-fond à l'est du ponton. ⚠️ ILS SONT SUR
+      /* ═══ 2. LES PAS JAPONAIS ═══ (le coin du pêcheur est passé en §0)
+         LES PAS JAPONAIS, dans le haut-fond à l'est du ponton. ⚠️ ILS SONT SUR
          L'EAU, donc `addProp` est ici le bon outil et non `addGarden` : l'eau
          est déjà infranchissable, marquer la case solide ne change rien, et
          c'est le seul décor du zip dont la place EST l'eau. */
@@ -5296,6 +5481,13 @@ export function generateTownWorld() {
         for (let n = 0; n < 3 + (h % 3); n++) {
           const lx = x + ((h >> (n * 2)) % 5), ly = tops[x] + 1 + ((h >> (n * 3 + 1)) % 4);
           if (!inMap(lx, ly) || ground[id(lx, ly)] !== C.G_WATER) continue;
+          /* ⚠️ ZIP 440 — DEUX NÉNUPHARS SUR LA MÊME CASE. Les cinq tirages d'un
+             herbier viennent du même hachage décalé : rien ne les empêchait de
+             retomber sur la même paire (lx, ly), et deux sprites superposés au
+             pixel près ne se voient PAS comme un doublon — ils se voient comme
+             un nénuphar un peu plus contrasté que les autres. Le pont du parc a
+             ce contrôle depuis le 439 ; la rive du lac ne l'avait pas. */
+          if (props.some(q => q.x === lx && q.y === ly)) continue;
           addProp(lx, ly, "lily", false);
         }
         // Et sa touffe de roseaux, à la racine de l'herbier, sur la vase.
@@ -5334,15 +5526,112 @@ export function generateTownWorld() {
       /* LA CLÔTURE, seulement là où le sentier passe AU RAS de l'eau. C'est un
          garde-corps : posée partout, elle transformerait la rive sauvage en
          enclos, ce qui est exactement le contraire de ce que le 437 a cherché.
-         ⚠️ ELLE EST LARGE DE DEUX CASES (le sprite en fait 67 px, soit quatre) :
-         posée toutes les trois cases, ses sections se CHEVAUCHAIENT au lieu de
-         se suivre, ce qui donnait un empilement de piquets. Le pas se déduit de
-         la largeur du dessin, il ne se choisit pas. */
-      for (let x = x0 + 2; x < x1 - 2; x += 4) {
-        if (tops[x] === null || quayMix(x) > 0.05) continue;
-        const r = trailRow(x);
-        if (r === null || tops[x] - r > 3) continue;      // le chemin n'est pas au bord
-        addGarden(x, r + 2, "fence");
+         ⚠️ Le pas se déduit de la largeur du dessin (67 px, soit quatre cases),
+         il ne se choisit pas : à trois, les sections se chevauchaient et on
+         obtenait un empilement de piquets.
+         ⚠️⚠️⚠️ ZIP 440 — ET UN GARDE-CORPS COURT, IL NE SE POSE PAS TOUT SEUL.
+         Sur la carte du 439, UNE seule section satisfaisait la condition, en
+         (74,158) : quatre cases de barrière en plein pré, qui ne longeaient
+         rien, ne protégeaient rien et ne menaient nulle part. Vue sur
+         `lac-rive-ouest.png`, elle se lisait comme un second pont. Le défaut
+         n'est pas géométrique — la case était libre, l'emprise était propre,
+         aucun banc ne pouvait le refuser — il est de SENS : ce qui fait un
+         garde-corps, c'est qu'il COURE. Un tronçon isolé est un accident de
+         semis, pas un ouvrage.
+         ⚠️ On collecte donc les places, on ne garde que celles qui ont une
+         voisine, et on pose. Zéro place possible reste un résultat acceptable
+         (la rive n'a alors pas de passage au ras de l'eau) ; UNE, non.
+         `verify-compo` tient la règle pour les quatre ouvrages linéaires. */
+      {
+        const fb = C.townPropBox("fence", 0, 0);
+        const step = Math.round(fb.x1 - fb.x0);
+        const spots = [];
+        for (let x = x0 + 2; x < x1 - 2; x += step) {
+          if (tops[x] === null || quayMix(x) > 0.05) continue;
+          const r = trailRow(x);
+          if (r === null || tops[x] - r > 3) continue;    // le chemin n'est pas au bord
+          spots.push([x, r + 2]);
+        }
+        for (const [x, y] of spots) {
+          if (!spots.some(([qx]) => qx !== x && Math.abs(qx - x) <= step)) continue;
+          addGarden(x, y, "fence");
+        }
+      }
+    }
+    /* ═════════════════════════════════════════════════════════════════════════
+       ZIP 440 — LE SENTIER DE LA RIVE EST, ET LE BOIS OÙ IL SE PERD.
+       ───────────────────────────────────────────────────────────────────────
+       Le POURQUOI est sur `TOWN_WOOD` / `TOWN_TRAIL_EAST_*` (fermeConstants) —
+       ici, l'ordre des trois passes, qui est la seule chose qui compte :
+         1. le CHAMP du bois, qui ne pose rien mais que les deux autres lisent ;
+         2. le SENTIER, tracé AVANT les arbres, donc jamais planté dessus ;
+         3. la FUTAIE, plantée APRÈS, donc elle contourne le sentier sans un
+            seul cas particulier — le sol y est déjà `G_PATH`.
+       ⚠️ C'est l'inverse de l'ordre naturel (« je plante ma forêt, puis j'y
+       trace un chemin ») et c'est ce qui évite d'écrire une exception. Même
+       raisonnement que la passe de revêtement du 434, dernière du générateur
+       parce qu'elle ne peint que ce qui est ENCORE du chemin. */
+    {
+      const wood = townWoodDepth;
+      /* 2. LE SENTIER. ⚠️ IL REPART DE LA DERNIÈRE RANGÉE DU SENTIER DE RIVE,
+         relue sur place — pas d'une rangée écrite ici. Une seconde description
+         du même départ, et le raccord se décalerait au premier réglage de
+         `TOWN_TRAIL_WAVE` : c'est le §8, et il a coûté le tablier du pont dans
+         ce zip même. */
+      const xJoin = x1 - 1;
+      const wave = (x) => {
+        let w = 0;
+        for (const s of C.TOWN_TRAIL_EAST_WAVE) w += s.a * (0.5 + 0.5 * Math.sin((x / s.p) * 2 * Math.PI + s.ph));
+        return w;
+      };
+      let r0 = trailRow(xJoin);
+      if (r0 === null) r0 = AVE + 3;
+      const w0 = wave(xJoin);
+      const eastRow = (x) =>
+        Math.round(r0 + (x - xJoin) * C.TOWN_TRAIL_EAST_DIVE + wave(x) - w0);
+      /* ⚠️ LA DISPARITION EST UNE PROBABILITÉ, PAS UNE LARGEUR (voir
+         `TOWN_TRAIL_FADE_*`) : un chemin qui rétrécit à une case redevient
+         l'escalier de gravier payé quatre fois au 437, et il le redevient
+         exactement au moment où on veut qu'il se fasse oublier. Un sentier
+         abandonné se TROUE. Le tirage est un hachage : les deux joueurs voient
+         les mêmes plaques, et elles ne bougent pas d'une image à l'autre. */
+      let prev = null, gone = 0;
+      for (let x = x1; x < W - 2 && gone < 5; x++) {
+        const r = eastRow(x);
+        if (r < AVE + 1 || r + 1 >= H - 1) break;
+        const t = (wood(x, r) - C.TOWN_TRAIL_FADE_FROM) / (C.TOWN_TRAIL_FADE_TO - C.TOWN_TRAIL_FADE_FROM);
+        if (t >= 1) { gone++; prev = null; continue; }
+        gone = 0;
+        if (t > 0 && townHash2(x * 17 + 3, 941) < t) { prev = null; continue; }  // la plaque manque ici
+        paveTrail(x, r); paveTrail(x, r + 1);
+        /* Le raccord vertical, obligatoire tant que le sentier est CONTINU :
+           deux colonnes voisines dont la rangée diffère de 1 ne se touchent que
+           par un coin, et ça se lit comme un pointillé. ⚠️ On ne le trace PAS
+           après un trou — sinon on reboucherait le trou qu'on vient de faire. */
+        if (prev !== null) for (let y = Math.min(prev, r); y <= Math.max(prev, r) + 1; y++) paveTrail(x, y);
+        prev = r;
+      }
+      /* 3. LA FUTAIE. La densité monte avec la profondeur : quelques arbres
+         isolés à la lisière, un taillis, puis le plein bois. ⚠️ C'est ce
+         GRADIENT qui rend lisible « le chemin s'arrête là où ça devient trop
+         dense » — une densité constante donnerait une frontière, et une
+         frontière ne s'explique pas, elle se subit. */
+      const wb = C.TOWN_WOOD;
+      for (let y = wb.y; y < Math.min(H - 1, wb.y + wb.h); y++) {
+        for (let x = wb.x; x < Math.min(W - 1, wb.x + wb.w); x++) {
+          const d = wood(x, y);
+          if (d <= 0) continue;
+          const dens = Math.min(1, d / C.TOWN_WOOD_DEPTH) * C.TOWN_WOOD_DENSITY;
+          if (townHash2(x * 31 + 5, y * 37 + 9) >= dens) continue;
+          const i = id(x, y);
+          if (solid[i] || hedge[i] || objects[i] !== C.O_NONE) continue;
+          if (ground[i] !== C.G_GRASS && ground[i] !== C.G_TOWN_LAWN) continue;
+          if (propCover(x, y)) continue;
+          // ⚠️ Un bois n'est pas une plantation : les deux essences alternent par
+          // hachage, jamais en damier — un damier se lit comme un verger.
+          objects[i] = townHash2(x * 13 + 7, y * 11 + 3) < 0.42 ? C.O_TREE2 : C.O_TREE;
+          objHp.set(i, C.TREE_HP);
+        }
       }
     }
   }
@@ -5479,6 +5768,13 @@ export function generateTownWorld() {
     for (const hsn of C.TOWN_HOUSES) {
       if (x >= hsn.x - 1 && x < hsn.x + C.TOWN_HOUSE_W + 1 && y >= hsn.y - 4 && y < hsn.y + C.TOWN_HOUSE_H + 2) return false;
     }
+    /* ⚠️ ZIP 440 — ET PAS DANS LE CORPS D'UN DÉCOR. Ce semis est le SECOND
+       chemin qui plante un arbre (l'autre est `plantTree`) : durcir l'un sans
+       l'autre laisse exactement la moitié du défaut en place, et c'est ce qui
+       est arrivé — le tablier du pont était nettoyé et il restait un arbre
+       planté dans la canne à pêche du ponton. Deux fonctions qui font la même
+       chose doivent recevoir la même garde, ou n'en faire qu'une. */
+    if (propCover(x, y)) return false;
     return true;
   };
   const put = (x, y) => {
@@ -7309,6 +7605,29 @@ export function mayorOf(day) {
     if (v > bestV) { bestV = v; best = i; }
   }
   return cands[best];
+}
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 440 — LA PROFONDEUR DANS LE BOIS DU SUD-EST, > 0 = sous les arbres.
+   ───────────────────────────────────────────────────────────────────────────
+   Le fond est une rampe vers le coin sud-est de la carte ; le bruit lui donne
+   ses golfes de prairie et ses caps de futaie (voir `TOWN_WOOD_*`).
+   ⚠️ Aucun `rnd()` : `generateTownWorld` partage UN seul générateur, y puiser
+   déplacerait tout le mobilier posé après le lac. C'est un hachage pur, donc
+   identique chez les deux joueurs et stable d'une image à l'autre (§3).
+   ⚠️⚠️ ET ELLE EST EXPORTÉE PLUTÔT QUE DÉCLARÉE DANS LE GÉNÉRATEUR, POUR UNE
+   RAISON QUI VIENT D'ÊTRE PAYÉE. Écrite dans la closure, elle n'était pas
+   appelable par un banc : `render-parc` s'en est donc REFAIT une copie pour
+   mesurer la lisière — avec un hachage réinventé, donc un champ différent, donc
+   des tranches de profondeur qui ne correspondaient à rien de ce que le jeu
+   plante. Il annonçait « taillis 12 % » pour une futaie réglée à 50 %, et on
+   serait allé régler un dessin qui n'avait rien. C'est mot pour mot le §3 du
+   439 (« un banc qui repeint ne juge pas le jeu, il juge sa propre maquette »),
+   commis cette fois sur une FONCTION plutôt que sur un dessin. */
+export function townWoodDepth(x, y) {
+  let d = (x - C.TOWN_WOOD_ORIGIN.x) * C.TOWN_WOOD_SLOPE_X
+        + (y - C.TOWN_WOOD_ORIGIN.y) * C.TOWN_WOOD_SLOPE_Y;
+  for (const o of C.TOWN_WOOD_NOISE) d += o.a * townNoise(x, y, o.p, 11);
+  return d;
 }
 export function townArchRise(tw) {
   if (!tw) return null;

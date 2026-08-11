@@ -4,13 +4,20 @@
 Il remplace l'exploration du dépôt pour tout ce qui est global. Le README est un journal
 chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
-État à jour du **zip 439**. Chantier actif : **rendre Valley Town habitable au regard ET
+État à jour du **zip 440**. Chantier actif : **rendre Valley Town habitable au regard ET
 crédible au jeu**. La ville est refaite depuis le 434 (rues, eau, pierre, rives, parc, arbres,
-herbe) ; le 438 a ouvert l'**hôtel de ville** ; le **439** l'a audité et corrigé — sortie,
-doublons de services, accueil qui parle, élections, pont franchissable, pigeons. Tout ce qui
-concerne la ville, ses habitants, ses bâtiments ET **ses pièges** est dans
-**`components/ferme/README.md`**, qui fait autorité ; les bancs sont dans **`tools/README.md`**.
-**`candyluge` et `crystal` sont EN PAUSE.**
+herbe) ; le 438 a ouvert l'**hôtel de ville** ; le 439 l'a audité ; le **440** a corrigé la
+portée des ponts, la COMPOSITION des décors (`verify-compo`) et prolongé le sentier de la rive est
+jusque dans un **bois** creusé au sud-est. Tout ce qui concerne la ville, ses habitants, ses
+bâtiments ET **ses pièges** est dans **`components/ferme/README.md`**, qui fait autorité ; les
+bancs sont dans **`tools/README.md`**. **`candyluge` et `crystal` sont EN PAUSE.**
+
+⚠️ **CHANTIER OUVERT, SECOND TEMPS DÉCIDÉ AVEC GUILLAUME AU 440 ET PAS ENCORE CONSTRUIT :**
+les **intérieurs** du tribunal et de la mairie sont difficiles à naviguer (« on ne sait pas où est
+la porte de chaque pièce ») — parade retenue : **chambranle dessiné + plaque lisible depuis le
+couloir + seuil au sol** ; et **l'église doit recevoir un intérieur soigné avec un ORGUE**, en
+décor de haute tenue *plus* ambiance jouable (s'asseoir, un cierge, jouer l'orgue), sans service.
+Le découpage en deux temps est sa décision (règle du 424).
 
 ⚠️⚠️⚠️ **LE PIÈGE N°1 DU PROJET, ET IL A TROIS VISAGES : CE QUI VIT DANS LA CLOSURE DE LA BOUCLE
 DE RENDU.** Il a coûté quelque chose à chacun des cinq derniers zips.
@@ -184,6 +191,21 @@ coordonnées — et on teste la zone AVANT les distances.**
   contrôle de connexité les trouve. Meubler à une case du mur laisse toujours un passage derrière.
 
 **Architecture**
+- ⚠️⚠️⚠️ **LA CASE D'UN DÉCOR N'EST PAS LA SURFACE QU'IL COUVRE** (435 pour un cas, **440 pour la
+  règle**). Le générateur raisonne en CASES ; le rendu dessine des sprites de 81, 67, 62 px — donc
+  **une case occupée, quatre ou cinq couvertes**. Tout ce qu'une passe ultérieure sème tombe
+  librement dans les cases couvertes : ça ne bloque rien, ça ne casse aucun trajet, **ça ne lève
+  rien**, ça se voit — et c'est ainsi qu'un chêne s'est planté sur le tablier d'un pont. L'emprise
+  se DÉRIVE du dessin (`townPropBox`, à partir de `planche.js`), jamais d'une largeur recopiée.
+- ⚠️⚠️ **UNE LISTE NOIRE À LAQUELLE IL MANQUE UNE VALEUR NE LÈVE RIEN, ELLE LAISSE PASSER** (440).
+  `plantTree` énumérait ce sur quoi on ne plante pas et avait oublié `G_BRIDGE`. **On énumère ce
+  qui est PERMIS** : le jour où un `G_*` s'ajoute, il n'est pas plantable tant que personne ne
+  l'écrit — c'est le seul sens qui résiste à l'ajout. Même famille que le `% 4` des étals (431).
+- ⚠️⚠️ **UNE PASSE QUI PAVE DÉGAGE CE QU'ELLE PAVE** (437, 439, **440 trois fois**). C'est la
+  famille de défauts la plus coûteuse du générateur : *une passe qui recouvre une passe antérieure
+  sans le savoir*. Trois allées testaient `solid` avant de peindre — or un arbre n'est pas solide
+  dans cette couche — et le gravier passait DESSOUS. Corollaire d'ordre : **ce qui est composé se
+  pose avant ce qui est semé**, sinon le semis gagne l'arbitrage.
 - ⚠️⚠️ **UN SECOND DE QUELQUE CHOSE SE PAIE EN NIVEAUX, PAS EN ZONES** (438). Une zone de plus
   aurait demandé de retrouver les **vingt-cinq** endroits qui testent `zone === "court"`, et en
   oublier un ne lève rien. Deux niveaux ne coûtent rien : tous les tests restent vrais, et deux
@@ -282,7 +304,8 @@ coordonnées — et on teste la zone AVANT les distances.**
 | `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** |
 | `components/ferme/README.md` | **Valley Town, le tribunal, l'HÔTEL DE VILLE, les habitants, la VENTE, les OISEAUX, les ÉLECTIONS et les PIÈGES de ces zones — autorité (428-439)** |
 | `tools/README.md` | **les bancs, ce qu'ils attrapent et leurs chiffres — autorité (432-439)** |
-| `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** |
+| `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** · depuis le 440 il **importe `planche.js`** : une portée de pont et une emprise de décor sont des grandeurs de DESSIN, on les dérive du sprite au lieu de les recopier |
+| `components/ferme/planche.js` | **GÉNÉRÉ** par `tools/import-planche.mjs` — les sprites de la planche de Guillaume, en données. Ne pas éditer à la main |
 | `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural. Aucun PNG · **`drawSeated()`** |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
 | `public/candyluge/README.md` | **la dette et les 18 règles de la luge — autorité (427)** |
@@ -409,11 +432,13 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 §14.2 du 431 : la liste occupait cinquante lignes et gagnait une entrée par zip. Ce qu'il faut
 savoir sans l'ouvrir : `verify-vallee.mjs` (**194/194**) rejoue le VRAI moteur — circulation,
 murs invisibles, tribunal, coupe de bois, et **des ventes complètes avec l'or compté** ;
-`verify-taxi.mjs` (**18/18**) rejoue les 132 courses image par image, **y compris la FORME du
-trajet** depuis le 433 ; onze bancs de RENDU dessinent ce qui n'est autrement regardable qu'en
-jouant (assise, échelle, foire, tribunal + **symétrie des façades**, ruche, taxi, **oiseaux —
-ce dernier rejoue aussi quatre minutes de vie de groupe**) ; **`fake-supabase.mjs` fait tourner
-deux clients en local**.
+`verify-taxi.mjs` (**15/15** — relancé au 440, le « 18/18 » écrit ici pendant sept zips était
+estimé, c'est-à-dire exactement ce que §14.6 interdit) rejoue les 132 courses image par image, **y
+compris la FORME du trajet** depuis le 433 ; **`verify-compo.mjs` (13/13, zip 440) compare la case
+d'un décor à la SURFACE qu'il couvre** — le seul banc qui voie un arbre poussé dans un pont ;
+douze bancs de RENDU dessinent ce qui n'est autrement regardable qu'en jouant (assise, échelle,
+foire, tribunal + **symétrie des façades**, ruche, taxi, **oiseaux — ce dernier rejoue aussi
+quatre minutes de vie de groupe**) ; **`fake-supabase.mjs` fait tourner deux clients en local**.
 
 ⚠️ **CE QUI RESTE ICI EST LA LISTE DES BANCS QUI N'EXISTENT PAS, et c'est le point.** Une liste
 de ce qui existe se vérifie en la lançant ; une liste de ce qui n'existe pas ne se vérifie
@@ -542,6 +567,12 @@ erreur** en choisissant mal.
   chiffre périmé). On n'y a délibérément posé AUCUN endroit de vie : des résidents qui vont
   contempler un champ vide, c'est du remplissage. La question n'est donc pas « comment les
   meubler » mais **« qu'est-ce qu'on construit là »**.
+  ⚠️⚠️ **LE 440 A RÉPONDU POUR LE COIN SUD-EST, ET LA RÉPONSE EST « RIEN, EXPRÈS »** : un bois y a
+  été creusé et le sentier de la rive est va s'y perdre — sans un seul endroit de vie, sur demande
+  de Guillaume (« pas une zone très fréquentée, un peu sauvage »). C'est le premier morceau de
+  carte assumé comme un **vide habité par le décor** plutôt que par des gens, et c'est une réponse
+  possible pour les blocs qui restent. `verify-vallee` a donc appris une troisième catégorie (bâti
+  / prairie / bois) : sans elle, il réclamait « une raison qu'on y aille » pour une forêt.
 - ⚠️ **DEUX DES TROIS CHANTIERS DE JOUABILITÉ RESTENT À CONSTRUIRE.** Le marché est livré au
   430 et **devenu le SEUL guichet au 431** : la ferme montre et transforme, la ville achète.
   L'économie existe donc vraiment, et le **jour de marché** hebdomadaire est déjà un
@@ -623,14 +654,15 @@ erreur** en choisissant mal.
    Historique : 426 (insuffisant), 427 (profond : §7 → `public/candyluge/README.md`), 428 (§6 →
    `components/ferme/README.md`, 507 → 490), 431 (§4 scindé, 534 → 482),
    **432 (§10 → `tools/README.md`, 524 → 483)**, 433 à 438 (aucun), **439 (en-tête + §13,
-   687 → 661)**.
-   ⚠️ **L'ORDRE DU PROCHAIN ZIP : §4.** Il fait maintenant cent-vingt lignes et il vient d'en
-   gagner cinquante. Le partage « dessin / architecture / JavaScript » qu'on vient d'y poser est
-   la bonne charnière pour le scinder : **le jour où il repasse cent-cinquante lignes, la partie
-   DESSIN part dans un fichier qui fait autorité sur le dessin** — comme §6 est parti au 428 et
-   §10 au 432. Et comme les deux fois : **relire chaque ligne contre le code avant de la
-   déplacer**, c'est là qu'on trouve les périmées (le 431 l'a fait pour §4, sa première ligne
-   relue ne correspondait à aucun symbole du dépôt).
+   687 → 661)**, 440 (aucun — trois leçons ajoutées en §4, seize lignes).
+   ⚠️⚠️ **L'ORDRE DU PROCHAIN ZIP, REPORTÉ UNE FOIS ET MAINTENANT DÛ : §4.** Il a passé les
+   **cent-cinquante lignes** au 440, c'est-à-dire le seuil que le 439 avait lui-même fixé pour le
+   scinder. Le partage « dessin / architecture / JavaScript » est la charnière : **la partie DESSIN
+   part dans un fichier qui fait autorité sur le dessin** — comme §6 est parti au 428 et §10 au
+   432. Et comme les deux fois : **relire chaque ligne contre le code avant de la déplacer**, c'est
+   là qu'on trouve les périmées (le 431 l'a fait pour §4, sa première ligne relue ne correspondait
+   à aucun symbole du dépôt). *Un ordre reporté deux fois cesse d'être un ordre* — voir §13, où
+   celui du 433 a mis quatre zips à être exécuté et où une ligne était devenue fausse entre-temps.
 3. **Critère d'inclusion** : « est-ce vrai à l'échelle du projet, et invérifiable en ouvrant
    un seul fichier ? » Sinon, ça va dans un commentaire de code. **L'histoire d'un défaut
    corrigé n'y a pas sa place — seule sa LEÇON, en §4.**

@@ -412,6 +412,140 @@ console.log("\n=== 5. le pont se franchit par-dessus ===\n");
   ok(steps === 0, "l'arc retombe à zéro à ses deux têtes", steps + " raccord(s) en marche");
 }
 
+/* ⚠️⚠️ ZIP 440 — LE SENTIER QUI SORT DU LAC ET LE BOIS QUI L'AVALE.
+   Demande de Guillaume : « le chemin à l'est de la jetée s'arrête sur rien du
+   tout », puis « le sentier entre dans le bois et s'y perd […] c'est pas une
+   zone très fréquentée, ça doit être un peu sauvage ».
+   ⚠️ CE CHAPITRE MESURE UNE FIN, ET UNE FIN EST DIFFICILE À MESURER : « le
+   chemin s'arrête » est vrai des deux versions, la mauvaise comme la bonne. Ce
+   qui les sépare tient en trois grandeurs, et aucune n'est « la longueur » :
+     1. il est CONTINU tant qu'il est dehors (une coupure avant le bois est le
+        défaut de départ, déplacé de cinquante cases) ;
+     2. il devient LACUNAIRE avant de cesser (sans quoi c'est une coupe nette,
+        c'est-à-dire exactement ce qu'on corrige) ;
+     3. il ne rétrécit JAMAIS à une case (le piège payé quatre fois au 437 :
+        une allée d'une case ne montre que ses marches, et elle le ferait ici
+        au moment précis où l'on veut qu'elle se fasse oublier). */
+console.log("\n=== 6. le sentier de la rive est se perd dans le bois ===\n");
+{
+  const rows = [];
+  for (let x = lk.x + lk.w; x < tw.w; x++) {
+    const ys = [];
+    for (let y = lk.y - 2; y < tw.h; y++) if (tw.ground[y * tw.w + x] === C.G_PATH) ys.push(y);
+    rows.push([x, ys]);
+  }
+  const paved = rows.filter(([, ys]) => ys.length);
+  const last = paved.length ? paved[paved.length - 1][0] : lk.x + lk.w - 1;
+  ok(paved.length > 0, "le sentier repart bien au-delà du rectangle du lac", paved.length + " colonne(s)");
+  ok(last >= 195, "il va chercher le coin bas-droit de la carte", `dernière plaque en x=${last} sur ${tw.w}`);
+  const thin = paved.filter(([, ys]) => ys.length < 2);
+  ok(thin.length === 0, "il ne rétrécit jamais à une seule case",
+    thin.length ? thin.slice(0, 6).map(([x]) => "x=" + x).join(" ") : "0 colonne");
+  /* ⚠️⚠️ ON APPELLE LE CHAMP DU JEU, ON NE LE REFAIT PAS. Premier jet : une
+     copie du bruit écrite ici, avec un hachage réinventé — donc un autre champ,
+     donc des tranches de profondeur qui ne correspondaient à aucune case que le
+     générateur plante. Le banc annonçait « taillis 12 % » pour une futaie réglée
+     à 50 %, et il passait au vert. C'est le §3 du 439 (« un banc qui repeint ne
+     juge pas le jeu, il juge sa propre maquette ») appliqué à une FONCTION :
+     `townWoodDepth` a été sortie de la closure du générateur exprès. */
+  const wood = E.townWoodDepth;
+  /* ⚠️ « CONTINU DEHORS » SE MESURE DEHORS, ET C'EST TOUT LE CONTRÔLE : on ne
+     compte les trous que sur les colonnes où le sentier n'est pas encore entré
+     sous les arbres. Compté partout, le contrôle accuserait la disparition
+     qu'on vient d'écrire ; compté nulle part, il ne verrait pas la coupure du
+     439 revenir cinquante cases plus loin. */
+  let holesOut = 0, gappy = 0, lastRow = null;
+  for (const [x, ys] of rows) {
+    if (x > last) break;
+    /* ⚠️ POUR UNE COLONNE MANQUANTE, ON REPREND LA RANGÉE DE LA DERNIÈRE
+       PLAQUE, pas une valeur écrite ici : le champ dépend de y autant que de x
+       (c'est tout l'intérêt d'un champ), donc une rangée devinée fait répondre
+       le test sur un point qui n'est pas sur le chemin. Premier jet à `y = 160` :
+       il accusait un trou parfaitement légitime, sous les arbres. */
+    if (ys.length) lastRow = ys[0];
+    const d = wood(x, lastRow === null ? C.TOWN_WOOD.y + 4 : lastRow);
+    if (d < C.TOWN_TRAIL_FADE_FROM) { if (!ys.length) holesOut++; }
+    else if (!ys.length) gappy++;
+  }
+  ok(holesOut === 0, "il est continu tant qu'il est à découvert", holesOut + " trou(s) hors du bois");
+  ok(gappy >= 2, "il se troue AVANT de cesser (il ne se coupe pas net)", gappy + " plaque(s) manquante(s) sous les arbres");
+
+  /* Le bois lui-même : ce qui le sépare d'un semis est le GRADIENT. Une densité
+     plate, si haute soit-elle, ne fait pas une lisière — elle fait un décor.
+     ⚠️ ON MESURE PAR TRANCHE DE PROFONDEUR, PAS PAR TRANCHE DE COLONNES. Premier
+     jet : trois bandes verticales de vingt cases, moyennées sur toute la hauteur
+     du rectangle. Elles diluaient le cœur avec les rangées du nord, où le champ
+     est négatif et où il n'y a par construction aucun arbre du bois : le banc
+     annonçait 23 % pour une futaie réglée à 44 %, et on serait allé « corriger »
+     un dessin qui n'avait rien. Une bande de colonnes n'est pas une tranche de
+     forêt — c'est un rectangle posé sur une forme qui n'est pas rectangulaire. */
+  const slab = (lo, hi) => {
+    let n = 0, t = 0;
+    for (let y = C.TOWN_WOOD.y; y < Math.min(tw.h - 1, C.TOWN_WOOD.y + C.TOWN_WOOD.h); y++) {
+      for (let x = C.TOWN_WOOD.x; x < Math.min(tw.w - 1, C.TOWN_WOOD.x + C.TOWN_WOOD.w); x++) {
+        const d = wood(x, y);
+        if (d < lo || d >= hi) continue;
+        t++;
+        const o = tw.objects[y * tw.w + x];
+        if (o === C.O_TREE || o === C.O_TREE2) n++;
+      }
+    }
+    return { r: n / (t || 1), t };
+  };
+  /* ⚠️ LES BORNES DES TRANCHES SONT CELLES DU MODÈLE, PAS DES NOMBRES RONDS :
+     « plein bois » est par DÉFINITION `d ≥ TOWN_WOOD_DEPTH` (c'est là que la
+     densité atteint son plafond). Un seuil écrit à la main ici serait un
+     paramètre qui double `TOWN_WOOD_DEPTH`, c'est-à-dire la divergence du §8
+     dans le banc censé la surveiller — et il l'a été : `6` sur une profondeur
+     réglée à 5 mesurait une tranche qui n'existe presque pas. */
+  const DEEP = C.TOWN_WOOD_DEPTH;
+  const edge = slab(0, 1.5), mid = slab(1.5, DEEP), heart = slab(DEEP, 1e9);
+  ok(heart.r > mid.r && mid.r > edge.r, "la densité MONTE de la lisière au cœur",
+    `lisière ${(edge.r * 100).toFixed(0)} % · taillis ${(mid.r * 100).toFixed(0)} % · futaie ${(heart.r * 100).toFixed(0)} %`);
+  ok(heart.t >= 60, "la futaie a une vraie surface", heart.t + " cases de plein bois");
+  ok(edge.t + mid.t + heart.t >= 300, "et le bois entier aussi", (edge.t + mid.t + heart.t) + " cases sous les arbres");
+  ok(heart.r >= 0.34, "le cœur du bois est vraiment un bois", `${(heart.r * 100).toFixed(0)} %`);
+  /* ⚠️⚠️ ET LA LISIÈRE N'EST PAS UNE COLONNE. Même grandeur que la rive du 437,
+     pour la même raison : une frontière écrite `x > 190` est un mur d'arbres
+     tiré à la règle, et c'est ce qu'on obtient sans champ 2-D.
+     ⚠️ PREMIER JET FAUX, ET IL PASSAIT AU VERT : « la première colonne portant
+     un arbre » trouvait les arbres ÉPARS du semis général, à soixante cases de
+     la forêt, et rendait un écart-type de 25 cases — un chiffre magnifique qui
+     ne parlait pas du bois. C'est le banc qui se trompe de grandeur, pour la
+     quatrième fois de la série (rues 434, eau 435, escaliers 436) : ici il
+     mesurait la PRAIRIE. Une lisière, c'est là où la forêt COMMENCE à être une
+     forêt — donc la première colonne dont la fenêtre de six est déjà dense. */
+  const firsts = [];
+  for (let y = C.TOWN_WOOD.y; y < tw.h - 1; y++) {
+    for (let x = C.TOWN_WOOD.x; x < tw.w - 7; x++) {
+      let n = 0;
+      for (let k = 0; k < 6; k++) {
+        const o = tw.objects[y * tw.w + x + k];
+        if (o === C.O_TREE || o === C.O_TREE2) n++;
+      }
+      if (n >= 2) { firsts.push(x); break; }
+    }
+  }
+  /* ⚠️⚠️ ON MESURE LE RÉSIDU, PAS L'ÉCART-TYPE BRUT — et c'est la deuxième fois
+     que ce contrôle se trompe de grandeur. La lisière de ce bois est DIAGONALE
+     par construction (le champ descend vers le coin), donc son écart-type brut
+     vaut vingt-quatre cases quelle que soit sa forme : une diagonale tirée à la
+     règle passerait haut la main. Ce qu'on veut savoir est si elle ondule
+     AUTOUR de sa tendance. On retire donc la droite des moindres carrés et on
+     mesure ce qui reste. Une lisière parfaitement droite rend zéro. */
+  const n = firsts.length || 1;
+  const ys = firsts.map((_, k) => C.TOWN_WOOD.y + k);
+  const my = ys.reduce((a, b) => a + b, 0) / n, mx = firsts.reduce((a, b) => a + b, 0) / n;
+  let sxy = 0, syy = 0;
+  for (let k = 0; k < firsts.length; k++) { sxy += (ys[k] - my) * (firsts[k] - mx); syy += (ys[k] - my) ** 2; }
+  const slope = syy ? sxy / syy : 0;
+  let res = 0;
+  for (let k = 0; k < firsts.length; k++) { const e = firsts[k] - (mx + slope * (ys[k] - my)); res += e * e; }
+  const sd = Math.sqrt(res / n);
+  ok(sd >= 1.5, "la lisière ondule autour de sa pente au lieu d'être un trait",
+    `résidu ${sd.toFixed(1)} case(s) sur ${firsts.length} rangées (pente ${slope.toFixed(1)} case/rangée)`);
+}
+
 /* ─────────────────────────── LES PLANCHES ─────────────────────────── */
 {
   const p = C.TOWN_PARK;
@@ -420,8 +554,13 @@ console.log("\n=== 5. le pont se franchit par-dessus ===\n");
   shot("lac-rive-ouest", { x: lk.x + 1, y: lk.y - 6, w: 34, h: 18 }, 3);
   shot("lac-rive-est", { x: lk.x + lk.w - 35, y: lk.y - 6, w: 34, h: 18 }, 3);
   shot("lac-quai", { x: C.TOWN_PIER.x - 15, y: lk.y - 6, w: 34, h: 18 }, 3);
+  // ⚠️ Deux fenêtres pour le sentier de l'est : celle où il quitte le lac, et
+  // celle où il se perd. Une seule, à cette échelle, ne montrerait ni l'une ni
+  // l'autre — c'est trente cases de chemin qu'on juge, pas un objet.
+  shot("sentier-est", { x: lk.x + lk.w - 6, y: lk.y - 2, w: 30, h: 14 }, 3);
+  shot("sentier-bois", { x: 186, y: 152, w: 36, h: 16 }, 3);
 }
 
-console.log("\nImages : tools/out/parc-ensemble.png, parc-etang.png, lac-rive-ouest.png, lac-rive-est.png, lac-quai.png\n");
+console.log("\nImages : tools/out/parc-ensemble.png, parc-etang.png, lac-rive-ouest.png, lac-rive-est.png, lac-quai.png, sentier-est.png, sentier-bois.png\n");
 console.log(fail ? fail + " CONTRÔLE(S) EN ÉCHEC\n" : "Tout est bon.\n");
 process.exit(fail ? 1 : 0);

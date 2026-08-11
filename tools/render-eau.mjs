@@ -310,18 +310,39 @@ console.log("\n=== 4 bis. la grille intérieure se voit-elle encore ? ===\n");
     return true;
   };
   let seam = 0, seamN = 0, inner = 0, innerN = 0;
+  /* ⚠️⚠️ ZIP 440 — ON MESURE LES DEUX ARÊTES, PLUS SEULEMENT L'EST-OUEST. Une
+     grille est une grille dans LES DEUX SENS : une profondeur quantifiée par
+     case saute autant d'une rangée à la suivante que d'une colonne à la
+     suivante, et n'en regarder qu'une revenait à mesurer la moitié du défaut
+     qu'on cherche. Ça double aussi l'échantillon, ce qui est le motif immédiat
+     du changement : le resserrement de l'étang au droit du pont (440) a fait
+     tomber le compte d'arêtes horizontales de 216 à 192, sous le seuil de
+     conclusion — le banc ne disait plus rien.
+     ⚠️ ET C'EST LA SEULE CORRECTION ACCEPTABLE ICI. Baisser le seuil de 200 à
+     190 aurait fait repasser le banc au vert sans rien mesurer de plus : un
+     seuil réglé sur le résultat est le défaut que ce fichier attrape ailleurs
+     (le « meublé » à `n < 6` du 439). On agrandit l'échantillon, on ne desserre
+     pas la mesure — et le rapport mesuré, lui, ne bouge pas. */
   for (let y = VP.y + 1; y < VP.y + VP.h - 1; y++) for (let x = VP.x + 1; x < VP.x + VP.w - 1; x++) {
-    if (!full(x, y) || !full(x + 1, y)) continue;
     const gx = (x - VP.x) * T, gy = (y - VP.y) * T;
-    for (let q = 2; q < T - 2; q++) {
-      // l'arête est-ouest de la case : la colonne T-1 contre la colonne 0 du voisin
-      seam += Math.abs(Lat(gx + T - 1, gy + q) - Lat(gx + T, gy + q)); seamN++;
-      // et six transitions internes de la même case, à la même distance
-      for (const u of [3, 5, 7, 9, 11, 13]) { inner += Math.abs(Lat(gx + u, gy + q) - Lat(gx + u + 1, gy + q)); innerN++; }
+    if (full(x, y) && full(x + 1, y)) {
+      for (let q = 2; q < T - 2; q++) {
+        // l'arête est-ouest de la case : la colonne T-1 contre la colonne 0 du voisin
+        seam += Math.abs(Lat(gx + T - 1, gy + q) - Lat(gx + T, gy + q)); seamN++;
+        // et six transitions internes de la même case, à la même distance
+        for (const u of [3, 5, 7, 9, 11, 13]) { inner += Math.abs(Lat(gx + u, gy + q) - Lat(gx + u + 1, gy + q)); innerN++; }
+      }
+    }
+    if (full(x, y) && full(x, y + 1)) {
+      for (let q = 2; q < T - 2; q++) {
+        // et l'arête nord-sud : la rangée T-1 contre la rangée 0 de la case du dessous
+        seam += Math.abs(Lat(gx + q, gy + T - 1) - Lat(gx + q, gy + T)); seamN++;
+        for (const u of [3, 5, 7, 9, 11, 13]) { inner += Math.abs(Lat(gx + q, gy + u) - Lat(gx + q, gy + u + 1)); innerN++; }
+      }
     }
   }
   const s = seam / (seamN || 1), i2 = inner / (innerN || 1), ratio = s / (i2 || 1);
-  ok(seamN > 200, "assez d'arêtes de pleine eau pour conclure", `${seamN} colonne(s) d'arête`);
+  ok(seamN > 200, "assez d'arêtes de pleine eau pour conclure", `${seamN} arête(s) mesurée(s), les deux sens`);
   ok(ratio < 1.55, "une arête de case ne saute pas plus qu'un pixel voisin",
      `×${ratio.toFixed(2)} (arête ${s.toFixed(1)}, intérieur ${i2.toFixed(1)}) — le 435 mesurait ×3,05`);
 }

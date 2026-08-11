@@ -5,7 +5,8 @@ zip 432, sur l'ordre laissé par son §14.2 : « le jour où la liste dépasse l
 chapitre, elle part dans un `tools/README.md` — en ne gardant là-bas QUE ce qui n'existe pas ».
 Le 432 a ajouté deux entrées (`render-ruche.mjs`, `fake-supabase.mjs`) et l'a fait basculer.
 Le 433 en ajoute trois (`verify-taxi`, `render-taxi`, `render-oiseaux`), le 434 une
-(`render-rues`), le 435 une (`render-eau`), le 436 une (`render-escaliers`).
+(`render-rues`), le 435 une (`render-eau`), le 436 une (`render-escaliers`), le 440 une
+(`verify-compo`).
 
 ⚠️ **`CLAUDE.md` ne garde que la liste des bancs ABSENTS**, et c'est délibéré : c'est elle qui
 protège du banc imaginaire (§14.6 — le 425 décrivait `verify-vallee.mjs` « 74 contrôles, 74/74 »
@@ -56,7 +57,66 @@ lanceur y est, les miettes tombent où `throwCrumbs` les met, et **le premier co
 arithmétique** — aucune miette ne doit tomber dans le rayon d'envol de celui qui les jette. Il
 aurait attrapé le défaut du 433 sans dessiner une image.
 
+## ⚠️⚠️ ZIP 440 — TROIS BANCS SE SONT TROMPÉS DE GRANDEUR DANS LA MÊME PASSE
+
+Et la série est maintenant longue (rues 434, eau 435, escaliers 436, mairie 439) : **c'est la
+règle, pas l'accident.** Les trois valent d'être nommés parce que les trois formes reviendront.
+
+1. **UN BANC QUI REFAIT UNE FONCTION AU LIEU DE L'APPELER MESURE UN AUTRE MONDE.**
+   `render-parc` s'est recopié le champ du bois — avec un hachage réinventé, donc un autre champ.
+   Il annonçait « taillis 12 % » pour une futaie réglée à 50 % **en passant au vert**, et on
+   serait allé corriger un dessin qui n'avait rien. C'est le §3 du 439 (« un banc qui repeint juge
+   sa propre maquette ») commis sur une FONCTION. `townWoodDepth` est sortie de la closure du
+   générateur pour ça, et le banc l'appelle.
+2. **UNE BANDE DE COLONNES N'EST PAS UNE TRANCHE DE FORÊT.** Le même banc mesurait la densité du
+   bois par trois bandes verticales moyennées sur toute la hauteur de son rectangle : elles
+   diluaient le cœur avec les rangées où le champ est négatif, c'est-à-dire où il n'y a par
+   construction aucun arbre. **On mesure par tranche de PROFONDEUR**, et les bornes sont celles du
+   modèle (`TOWN_WOOD_DEPTH`), pas des nombres ronds — un seuil écrit à la main ici est le
+   paramètre qui double un paramètre du §8, dans l'outil censé le surveiller.
+3. **UN ÉCART-TYPE BRUT SUR UNE FRONTIÈRE EN PENTE NE MESURE QUE LA PENTE.** La lisière de ce bois
+   est diagonale par construction : son écart-type vaut 24 cases **quelle que soit sa forme**, et
+   une diagonale tirée à la règle serait passée haut la main. On retire la droite des moindres
+   carrés et on mesure le RÉSIDU.
+
+⚠️ Et un quatrième, côté catégories : **`verify-vallee` ne connaissait que « bâti » et
+« prairie »**, donc un chemin qui traverse un bois faisait réclamer « une raison qu'on y aille »
+pour une forêt. Le seuil n'était pas faux, sa catégorie l'était. ⚠️ **Le mécanisme sous-jacent
+vaut d'être retenu** : le seuil mesure `pavé / praticable`, or les arbres retirent du praticable —
+**planter une forêt augmente le taux d'aménagement d'un bloc sans y construire quoi que ce soit.**
+C'est le « seuil absolu sur une grandeur qui dépend du décor » du 439, avec le DÉNOMINATEUR qui
+bouge.
+
+⚠️ **`render-eau` a eu droit à la correction inverse, et c'est la même règle vue de l'autre côté.**
+Son contrôle de grille intérieure est tombé sous son seuil d'échantillon (192 arêtes pour 200)
+parce que l'étang s'est resserré au droit du pont. Baisser le seuil aurait rendu le vert sans rien
+mesurer de plus ; il mesure désormais **les deux arêtes de case, pas seulement l'est-ouest** — une
+grille est une grille dans les deux sens, donc c'est une mesure plus complète ET deux fois plus
+d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
+
 ## Ce qui existe
+
+- **`tools/verify-compo.mjs` — 13 contrôles, 13/13 (440).** LA COMPOSITION DES DÉCORS, sur toute la carte.
+  ⚠️ Il existe parce que Guillaume a vu « un arbre sur un pont » et qu'aucun des quinze autres
+  bancs ne pouvait le voir. La grandeur qui manquait tient en une phrase : **le générateur raisonne
+  en CASES, le rendu dessine des sprites de CINQ cases de large, et rien ne comparait les deux.**
+  Un pont occupe une case et en couvre cinq ; une clôture en occupe une et en couvre quatre. Tout
+  ce qui est posé après tombe librement dans les cases COUVERTES sans être OCCUPÉES — ça ne bloque
+  rien, ne casse aucun trajet, ne lève rien. Ça se voit, et c'est tout.
+  Il mesure : rien de planté ni de posé sur un ouvrage (tablier, ponton, allée, dallage, eau) ·
+  **l'ouvrage dessiné couvre exactement son tablier** (le contrôle qui justifie `TOWN_BRIDGE_SPAN`)
+  · aucun arbre dans le corps d'un décor · aucun décor dans le corps d'un autre · **aucun ouvrage
+  linéaire en tronçon isolé** (une clôture de quatre cases seule au milieu d'un pré est légale,
+  propre, et ne veut rien dire : ce qui fait un garde-corps, c'est qu'il COURE).
+  ⚠️ **Il a trouvé six défauts à sa première exécution**, dont deux saules au milieu du tour de
+  l'étang (trois passes de pavage testaient `solid`, or un arbre n'est pas solide dans cette
+  couche) et deux nénuphars sur la même case.
+  ⚠️⚠️ **ET IL IMPRIME CE QU'IL NE SAIT PAS MESURER, À CHAQUE LANCEMENT** : les 137 décors
+  procéduraux (étal, kiosque, statue, puits, tombe) n'ont pas de taille lisible hors de
+  `fermeArt.js` et comptent pour une case. C'est la seule chose qui empêche de lire « verify-compo
+  passe » comme « la composition est bonne ». Recopier leur largeur dans les constantes serait le
+  doublon du §8 dans l'outil censé nous en protéger : **un trou déclaré vaut mieux qu'un doublon
+  silencieux.**
 
 - **`tools/render-mairie.mjs` — l'intérieur de l'hôtel de ville, 11 contrôles (438, refondu au 439).** Un intérieur
   ne se vérifie pas en le lisant : le tribunal du 426 a livré **six pièces inaccessibles sur
@@ -97,8 +157,17 @@ aurait attrapé le défaut du 433 sans dessiner une image.
   seul bord nord-ouest (l'arbre était détouré en vert vif), et le bouleau sortait **en beignet**
   — huit bouquets sur un anneau étroit ne couvrent pas le centre.
 
-- **`tools/render-parc.mjs` — le parc, les deux rives du lac du sud et LE PONT, 20 contrôles
-  (437, + le pont au 439).**
+- **`tools/render-parc.mjs` — le parc, les deux rives du lac du sud, LE PONT et LE SENTIER DE
+  L'EST, 31 contrôles, 31/31 (437, + le pont au 439, + le bois au 440).**
+  ⚠️ **440 — son chapitre 6 mesure une FIN, et une fin est difficile à mesurer** : « le chemin
+  s'arrête » est vrai de la mauvaise version comme de la bonne. Ce qui les sépare tient en trois
+  grandeurs, et aucune n'est la longueur — il est CONTINU tant qu'il est à découvert (une coupure
+  avant le bois, c'est le défaut de départ déplacé de cinquante cases), il devient LACUNAIRE avant
+  de cesser (sinon c'est une coupe nette, donc le défaut lui-même), et il ne rétrécit JAMAIS à une
+  case (le piège payé quatre fois au 437, qui frapperait ici au moment précis où l'on veut que le
+  chemin se fasse oublier). Plus le bois : gradient de densité mesuré par tranche de profondeur
+  (**lisière 10 % · taillis 40 % · futaie 62 %**) et lisière qui ondule AUTOUR de sa pente.
+  Deux planches neuves : `sentier-est.png`, `sentier-bois.png`.
   ⚠️ **439 — il dessine quelqu'un DEBOUT SUR LE PONT**, et c'est tout l'intérêt de sa nouvelle
   planche (`pont-praticable.png`) : à l'échelle du parc, un pont traversé et un pont franchi font
   la même tache brune. Il faut voir le passant dépasser du garde-corps du fond et être coupé aux
@@ -122,7 +191,7 @@ aurait attrapé le défaut du 433 sans dessiner une image.
   sentier de rive qui épousait chaque encoche de crique, et un buisson enterré sous le parvis
   du kiosque — posé sur de l'herbe, dallé par une passe ultérieure, resté SOLIDE.
 
-- **`tools/verify-vallee.mjs` — 194 contrôles, 194/194 (439 ; 182 au 438, 172 au 431, 113 au 427).** Il
+- **`tools/verify-vallee.mjs` — 194 contrôles, 194/194 (439-440 ; 182 au 438, 172 au 431, 113 au 427).** Il
   importe le VRAI moteur : circulation, murs invisibles ET décors traversables, géométrie des
   bâtiments, rebords sautables, le tribunal pièce par pièce, la coupe de bois, les familles,
   la garde-robe.
@@ -262,7 +331,7 @@ aurait attrapé le défaut du 433 sans dessiner une image.
   MOYENNE des transitions et accusait à tort tout pavage correct (l'intérieur d'une pierre ne
   change pas d'une colonne à l'autre, un joint change beaucoup — la moyenne est tirée vers le
   bas). *Un banc de rendu se vérifie aussi.*
-- **`tools/render-eau.mjs` — 16 contrôles, 16/16 (435 ; 14 à l'origine, 2 ajoutés au 436).** L'eau de Valley Town et sa berge :
+- **`tools/render-eau.mjs` — 16 contrôles, 16/16 (435 ; 14 à l'origine, 2 ajoutés au 436, chapitre 4 bis élargi aux deux axes au 440).** L'eau de Valley Town et sa berge :
   l'étang du parc dans son décor, **la même scène quatre minutes plus tard**, le lac du sud, et
   les **seize configurations de coins** à toutes les profondeurs, hors décor. Il appelle
   `A.drawTownWaterTile` / `A.drawTownShoreTile`, c'est-à-dire les fonctions du jeu.

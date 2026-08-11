@@ -35,9 +35,23 @@ import { fileURLToPath, pathToFileURL } from "url";
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = path.join(ROOT, "components", "ferme");
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "vallee-"));
-fs.writeFileSync(path.join(tmp, "fermeConstants.js"), fs.readFileSync(path.join(SRC, "fermeConstants.js")));
-fs.writeFileSync(path.join(tmp, "fermeEngine.js"),
-  fs.readFileSync(path.join(SRC, "fermeEngine.js"), "utf8").replace('from "./fermeConstants"', 'from "./fermeConstants.js"'));
+/* ⚠️⚠️ ZIP 440 — LES DÉPENDANCES SE SUIVENT, ELLES NE SE NOMMENT PLUS. Ce banc
+   recopiait les DEUX fichiers qu'il connaissait ; le jour où `fermeConstants.js`
+   a importé `planche.js` (les tailles de sprite, dont la portée d'un pont se
+   déduit), il a jeté un `ERR_MODULE_NOT_FOUND` pour un fichier dont il n'a rien
+   à savoir. `tools/lib-canvas.mjs` avait déjà rencontré exactement ça au 439 et
+   l'avait réglé de cette façon-là ; ce banc-ci n'en avait pas profité parce
+   qu'il ne passe pas par `loadFerme` (il n'a pas besoin de faux canevas). On
+   recopie donc de proche en proche, comme là-bas. */
+const copied = new Set();
+const copy = (n) => {
+  if (copied.has(n)) return;
+  copied.add(n);
+  const src = fs.readFileSync(path.join(SRC, n + ".js"), "utf8");
+  fs.writeFileSync(path.join(tmp, n + ".js"), src.replace(/from "\.\/([A-Za-z0-9_]+)"/g, 'from "./$1.js"'));
+  for (const m of src.matchAll(/from "\.\/([A-Za-z0-9_]+)"/g)) copy(m[1]);
+};
+copy("fermeEngine");
 
 const C = await import(pathToFileURL(path.join(tmp, "fermeConstants.js")).href);
 const E = await import(pathToFileURL(path.join(tmp, "fermeEngine.js")).href);
@@ -477,21 +491,42 @@ ok("la ville a des endroits où s'arrêter", spotList.length > 20, `${spotList.l
      de ses cases praticables ne sont pas de l'herbe (dallage, chemin, parvis).
      Ce que le contrôle dit alors est ce qu'on veut vraiment savoir : « tout
      endroit que quelqu'un a construit a-t-il une raison qu'on y aille ? » */
-  let built = 0, meadow = 0; const dead = [];
+  /* ⚠️⚠️ ZIP 440 — UNE TROISIÈME CATÉGORIE : LE BOIS, HORS COMPTE LUI AUSSI, ET
+     LA RAISON VAUT D'ÊTRE ÉCRITE. Le sentier de la rive est traverse le coin
+     sud-est ; il y apporte assez de gravier pour faire passer son bloc au-dessus
+     du seuil de 15 %, et le contrôle a réclamé « une raison qu'on y aille » —
+     alors que la raison de ce chemin-là est justement qu'il n'en a pas : « dans
+     le narratif c'est pas une zone très fréquentée, ça doit être un peu
+     sauvage » (Guillaume, 440). Le seuil n'était pas faux, sa CATÉGORIE l'était :
+     il ne connaît que « bâti » et « prairie », et une forêt n'est ni l'un ni
+     l'autre. Un chemin qui TRAVERSE n'est pas un quartier, et un bois traversé
+     encore moins.
+     ⚠️ Le défaut sous-jacent est plus général et vaut d'être nommé : le seuil
+     mesure `pavé / praticable`, or les arbres retirent du praticable. Planter
+     une forêt AUGMENTE donc le taux d'aménagement d'un bloc sans y construire
+     quoi que ce soit. C'est le « seuil absolu sur une grandeur qui dépend du
+     décor » du 439, en plus retors — ici c'est le DÉNOMINATEUR qui bouge.
+     ⚠️ Le critère appelle `E.townWoodDepth`, il ne la refait pas : le champ vit
+     dans le moteur exprès depuis ce zip (voir la note de `townWoodDepth`). */
+  let built = 0, meadow = 0, wild = 0; const dead = [];
   for (let by = 0; by * cell < H; by++) for (let bx = 0; bx * cell < W; bx++) {
-    let free = 0, paved = 0;
+    let free = 0, paved = 0, under = 0, tot = 0;
     for (let y = by * cell; y < Math.min(H, (by + 1) * cell); y++)
       for (let x = bx * cell; x < Math.min(W, (bx + 1) * cell); x++) {
+        tot++;
+        if (E.townWoodDepth(x, y) > 0) under++;
         if (!walkable(x, y)) continue;
         free++;
         if (tw.ground[idx(x, y)] !== C.G_GRASS) paved++;
       }
     if (free <= cell * cell / 4) continue;
+    if (under >= tot * 0.15) { wild++; continue; }
     if (paved < free * 0.15) { meadow++; continue; }
     built++; if (!grid.has(`${bx},${by}`)) dead.push(`${bx},${by}`);
   }
   ok(`chaque quartier bâti a une raison qu'on y aille (${built - dead.length}/${built})`,
-     dead.length === 0, (dead.length ? `blocs bâtis sans endroit : ${dead.join(" ")} · ` : "") + `${meadow} blocs de prairie non aménagée, hors compte`);
+     dead.length === 0, (dead.length ? `blocs bâtis sans endroit : ${dead.join(" ")} · ` : "")
+     + `${meadow} blocs de prairie non aménagée et ${wild} de bois, hors compte`);
   /* ⚠️ ET LA RÉPARTITION COMPTE AUTANT QUE LA COUVERTURE. Le tirage d'une
      destination est uniforme sur cette liste : une famille d'endroits
      sur-représentée devient l'endroit où tout le monde va. Au 427, seize des

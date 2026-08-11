@@ -3,7 +3,18 @@
    Portées telles quelles depuis la maquette validée (shared/constants.js du
    prototype autonome), en module ES pour ARCARDI. Aucune valeur de gameplay
    n'a été modifiée par rapport à la maquette.
+
+   ⚠️ ZIP 440 — CE FICHIER IMPORTE `planche.js`, ET C'EST DÉLIBÉRÉ. Certaines
+   grandeurs de CARTE sont en réalité des grandeurs de DESSIN : la portée d'un
+   pont est la largeur de son ouvrage, l'emprise d'une clôture est la largeur de
+   son sprite. Les écrire ici « à la valeur qu'on a mesurée sur la planche »
+   serait le paramètre qui double un autre paramètre du §8 de CLAUDE.md —
+   c'est-à-dire une divergence en attente, et on l'a payée (voir
+   TOWN_BRIDGE_SPAN). `planche.js` est de la DONNÉE pure, sans effet de bord et
+   sans dépendance : l'importer ne coûte rien à personne, et les bancs suivent
+   déjà les imports de proche en proche depuis le 439.
    ========================================================================== */
+import { PLANCHE } from "./planche";
 
 // --- Carte ---
 export const MAP_W = 180;   // largeur en tuiles
@@ -3208,6 +3219,77 @@ export const TOWN_TRAIL_MARGIN = 1;     // il ne s'approche jamais plus près qu
    Ce qui doit onduler vite, c'est la RIVE ; le chemin, lui, est tracé par des
    gens qui vont quelque part. */
 export const TOWN_TRAIL_WAVE = [{ p: 29, a: 1.8, ph: 1.9 }, { p: 13, a: 0.7, ph: 4.4 }];
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 440 — LE BOIS DU SUD-EST, ET LE SENTIER QUI S'Y PERD.
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume : « le chemin à l'est de la jetée s'arrête sur rien du
+   tout. Il devrait se poursuivre (serpentant toujours élégamment) jusqu'à aller
+   plus loin au coin bas droit de la map », puis, sur la question de la fin :
+   « le sentier entre dans le bois et s'y perd, mais fais ça de manière
+   élégante. dans le narratif c'est pas une zone très fréquentée. ça doit être
+   un peu sauvage ».
+
+   ⚠️⚠️ IL S'ARRÊTAIT SUR RIEN PARCE QU'IL S'ARRÊTAIT SUR UNE BORNE DE BOUCLE.
+   Le sentier de rive est tracé `for (x = x0; x < x1; x++)` avec x1 = bord EST
+   du rectangle `TOWN_LAKE`, soit 152 : à cette colonne, le lac finit, la boucle
+   finit, et le gravier finit — en pleine prairie, à soixante-douze colonnes du
+   bord de la carte. Ce n'est pas un oubli de dessin, c'est une frontière de
+   DONNÉE qui s'est vue à l'écran. Le lac n'a aucune raison de dire où s'arrête
+   un chemin.
+
+   ⚠️⚠️ ET « LE BOIS » N'EXISTAIT PAS. Mesuré avant d'écrire une ligne : le coin
+   sud-est portait 6 à 11 % d'arbres, c'est-à-dire le rideau de bord et le semis
+   général, la même densité que le reste de la ceinture. Faire « s'arrêter le
+   chemin là où la densité devient trop grande » n'avait donc aucun endroit où
+   se produire : on aurait posé une fin arbitraire en la racontant comme une
+   lisière. Le bois est CREUSÉ, comme l'anse du 439 et le goulet du pont — pour
+   la même raison de fond : on ne cherche pas dans une carte la forme qu'on veut
+   y trouver, on l'y met.
+
+   ⚠️ LA LISIÈRE EST UNE ISOLIGNE, PAS UNE COLONNE. C'est la leçon du 437 (la
+   rive du lac) appliquée à une forêt : une lisière écrite `x > 180` est un mur
+   d'arbres tiré à la règle. On prend la profondeur signée d'un champ, donc des
+   avancées de futaie, des clairières fermées et des bosquets détachés — que
+   deux sinus en x ne peuvent pas produire.
+   ⚠️ ET LA DENSITÉ MONTE, ELLE NE BASCULE PAS. Ce qui fait une lisière n'est
+   pas une frontière, c'est un GRADIENT : quelques arbres isolés, puis un
+   taillis, puis la futaie. C'est ce gradient, et lui seul, qui rend lisible
+   « le chemin s'arrête avant que ça devienne trop dense ». */
+export const TOWN_WOOD = { x: 156, y: 152, w: 68, h: 16 };  // l'emprise où le bois a le droit de pousser
+/* Le fond du champ : la profondeur croît vers le SUD-EST, donc vers le coin de
+   la carte. Les deux pentes sont en cases de profondeur par case parcourue. */
+export const TOWN_WOOD_SLOPE_X = 0.17;
+export const TOWN_WOOD_SLOPE_Y = 0.62;
+export const TOWN_WOOD_ORIGIN = { x: 190, y: 160 };   // le point où la profondeur du champ vaut zéro
+/* ⚠️ TROIS OCTAVES, COMME LA RIVE : la grande respiration de la lisière, les
+   avancées de futaie, et le grain qui décide arbre par arbre. Sans le troisième,
+   la lisière est nette au pixel près et se lit comme un bord de texture. */
+export const TOWN_WOOD_NOISE = [
+  { p: 21, a: 2.2 },                    // les golfes de prairie et les caps de futaie
+  { p: 9, a: 1.1 },                     // les bosquets détachés
+  { p: 3.5, a: 0.6 },                   // le grain : c'est lui qui empêche la lisière d'être un trait
+];
+/* ⚠️ CES DEUX NOMBRES SE LISENT ENSEMBLE, ET CONTRE LE FOND. La prairie porte
+   déjà 6 à 9 % d'arbres épars (le semis de ceinture) : une futaie qui monte
+   lentement vers 44 % ne se DÉTACHE qu'au bout de sept cases, c'est-à-dire que
+   sa lisière se confond avec le semis sur toute sa largeur — mesuré au banc,
+   9 % à la lisière contre 10 % au taillis. Une lisière qui ne se voit pas ne
+   peut pas expliquer pourquoi un chemin s'arrête. La rampe est donc plus
+   COURTE (le taillis est franc dès trois cases) et le cœur plus dense. */
+export const TOWN_WOOD_DEPTH = 5;       // profondeur (en cases de champ) où la futaie est pleine
+export const TOWN_WOOD_DENSITY = 0.50;  // part d'arbres au cœur de la futaie
+/* ⚠️ LE SENTIER NE RÉTRÉCIT PAS, IL SE TROUE. C'est la parade au piège payé
+   quatre fois au 437 (« une allée d'une case de large ne montre que ses
+   marches ») : un chemin qui s'efface en passant de deux cases à une redevient
+   un escalier de gravier au moment précis où on veut qu'il devienne discret. Un
+   sentier abandonné, lui, ne devient pas plus étroit — il devient LACUNAIRE :
+   des plaques de gravier de moins en moins fréquentes, séparées par de l'herbe,
+   jusqu'à plus rien. On garde donc les deux cases de large jusqu'au bout et on
+   fait tomber la PROBABILITÉ de poser la plaque. */
+export const TOWN_TRAIL_EAST_WAVE = [{ p: 37, a: 2.6, ph: 0.9 }, { p: 17, a: 1.1, ph: 3.3 }];
+export const TOWN_TRAIL_EAST_DIVE = 0.18;   // cases de descente vers le sud par case vers l'est
+export const TOWN_TRAIL_FADE_FROM = 0.9;    // profondeur de bois où le sentier commence à se trouer
+export const TOWN_TRAIL_FADE_TO = 4.2;      // ...et où il a définitivement disparu
 export const TOWN_KIOSK = { x: TOWN_PARK.x + 14, y: TOWN_PARK.y + 10 };  // kiosque à musique du parc (3×3, case nord-ouest) — DÉRIVÉ du parc depuis le 437
 export const TOWN_ARTISANS = { x: 190, y: 36, w: 32, h: 96 }; // le quartier de l'est, le long de l'artère x=196
 /* Le CŒUR URBAIN : au-dedans, on ne sème PAS d'arbres au hasard. C'est la
@@ -3773,7 +3855,36 @@ export const MAYOR_AUDIENCE_EVERY = 7;
    raccord avec le chemin, c'est-à-dire le défaut de grille qu'on passe son
    temps à corriger ailleurs. */
 export const TOWN_BRIDGE_ARCH_PX = 7;    // px : la flèche de l'arc, au sommet
-export const TOWN_BRIDGE_ARCH_SPAN = 3;  // cases de part et d'autre du sommet
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 440 — LA PORTÉE D'UN PONT EST UN SEUL NOMBRE, ET IL EST DÉRIVÉ DU SPRITE.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ CE QU'ON CORRIGE, ET C'EST LE §8 DE CLAUDE.md TEL QUEL : la même portée
+   était décrite à TROIS endroits qui ne se parlaient pas —
+     1. la largeur de l'ouvrage DESSINÉ (81 px de sprite, soit 5 cases) ;
+     2. la largeur du TABLIER posé par le générateur (5 cases au lac, mais 7 au
+        parc, parce que là-bas elle épousait la nappe d'eau) ;
+     3. la portée de l'ARC (`TOWN_BRIDGE_ARCH_SPAN = 3`, soit 5 cases montées).
+   Deux d'entre elles disaient 5, une disait 7, et personne ne les comparait :
+   au parc, il restait UNE CASE DE TABLIER NU À CHAQUE BOUT — des planches
+   posées sur l'eau, sans garde-corps, sans culée, sans rien. Le 439 l'avait vu
+   et l'a excusé en commentaire (« un garde-corps s'arrête sur la culée, il ne
+   la couvre pas ») : c'est vrai d'une culée MAÇONNÉE, ça ne l'est pas d'une
+   case de planches qui flotte. Guillaume l'a nommé au zip suivant.
+   ⚠️ LA PARADE N'EST PAS D'ÉLARGIR LE SPRITE (il vient de la planche, on ne le
+   redessine pas) NI DE CHERCHER UNE NAPPE DE LA BONNE LARGEUR (au parc, les
+   seules rangées de 5 cases d'eau sont aux DEUX POINTES de l'étang — le pont y
+   aurait de l'eau d'un seul côté, ce que le 439 refusait à juste titre). C'est
+   de RESSERRER l'eau à la portée de l'ouvrage, comme le 439 CREUSE l'anse du
+   lac au lieu de la chercher : un pont se bâtit là où la rive se rapproche, et
+   les deux culées qui avancent dans l'eau sont la RAISON qu'il soit là.
+   ⚠️ Il n'y a donc plus qu'un nombre, et il n'est pas écrit : la largeur du
+   sprite divisée par la case. Le jour où la planche change, la carte suit. */
+export const TOWN_BRIDGE_SPAN = Math.round(PLANCHE.archBridge.w / TILE);   // 5 cases
+/* ⚠️ Et l'arc se déduit de la portée, il ne se règle plus. Le profil couvre
+   `SPAN` cases montées plus une case à zéro de chaque côté (0 · ¼ · ¾ · 1 · ¾ ·
+   ¼ · 0 pour une portée de 5) : c'est `cos` qui s'annule à ±SP, donc SP est la
+   demi-portée PLUS UN. Écrit à la main, ce 3 était juste par coïncidence. */
+export const TOWN_BRIDGE_ARCH_SPAN = (TOWN_BRIDGE_SPAN + 1) / 2;  // cases de part et d'autre du sommet
 /* ⚠️⚠️ ET LE SPRITE SE COUPE EN DEUX. Le pont de la planche est déjà dessiné en
    trois-quarts — garde-corps NORD en haut, tablier au milieu, garde-corps SUD en
    bas — mais il était posé comme UN décor, donc entièrement devant ou
@@ -3800,6 +3911,72 @@ export const TOWN_BRIDGE_SPLIT_Y = 38;
    l'écran. Le personnage se retrouve alors DANS l'ouvrage, entre les deux
    garde-corps, ce qui est précisément ce qu'on cherchait. */
 export const TOWN_BRIDGE_DROP_PX = 16;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 440 — L'EMPRISE DESSINÉE D'UN DÉCOR, ET POURQUOI LE GÉNÉRATEUR EN A
+   BESOIN.
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume : « revoir la cohérence de la composition des éléments
+   posés (exemple un arbre sur un pont) ».
+
+   ⚠️⚠️ LE DÉFAUT DE FOND N'EST PAS UN OUBLI, C'EST UNE UNITÉ. Le générateur
+   raisonne en CASES : un décor occupe la sienne, on la marque solide, et c'est
+   tout. Le rendu, lui, dessine un sprite de 81, 67 ou 62 px CENTRÉ sur cette
+   case — donc quatre ou cinq cases de large. Tout ce qui est posé après tombe
+   librement dans les quatre cases que le premier COUVRE sans les OCCUPER. Le
+   435 avait déjà nommé exactement ça pour les arbres du lac (« ce qui manquait
+   n'était pas le test, c'était la distinction entre la case d'un décor et la
+   surface qu'il COUVRE ») et l'avait corrigé pour un cas ; c'est la règle
+   générale qui manquait.
+
+   ⚠️ CETTE TABLE EST DONC LA SEULE CHOSE QUI RELIE UN `kind` DE PROP À SA
+   TAILLE, et elle ne redit pas la taille : elle nomme le dessin, et la taille
+   se lit dans `PLANCHE`. Le jour où la planche est réimportée avec un pont plus
+   large, le générateur cesse tout seul de planter dessous.
+   ⚠️ CE QUI N'Y EST PAS Y EST DÉLIBÉRÉMENT ABSENT : les décors PROCÉDURAUX
+   (étal, kiosque, fontaine, statue, puits, tombe…) ne viennent pas de la
+   planche, donc leur taille n'est lisible nulle part hors de `fermeArt`. Ils
+   comptent pour une case, comme avant. Les inscrire ici en recopiant leur
+   largeur à la main serait exactement le paramètre qui double un paramètre du
+   §8 — on préfère un trou déclaré à un doublon silencieux, et `verify-compo`
+   imprime la liste de ce qu'il ne sait pas mesurer.
+   ⚠️ La boucle de rendu garde sa propre chaîne `kind → sprites.townXxx` : c'est
+   un doublon, il est connu, et `verify-compo` échoue si le générateur émet un
+   `kind` de la planche que cette table ignore. */
+export const TOWN_PROP_ART = {
+  archBridge: "archBridge", fence: "fence", woodBox: "woodBox", lowWall: "lowWall",
+  stoneBlock: "stoneBlock", stoneBench: "benchStone", bench: "benchWood",
+  benchWall: "benchWall", hangLamp: "hangLamp", stepStones: "stones",
+  chest: "chest", bucket: "bucket", rod: "rod", potReeds: "potReeds",
+  flowerTrough: "flowerTrough", bonsai: "bonsai", roseBox: "roseBox",
+  potPink: "potPink", oilLamp: "oilLamp", table: "tableSet",
+  goldBush: "goldBush1", lavender: "lavender1", clump: "flowersPurple",
+  lily: "lilyPads", reedTuft: "reeds", reedsWater: "reedsWater",
+  hedgeRow: "hedgeRow", grassTuft: "grassTuft", flatStone: "flatStone",
+};
+/* L'emprise d'un décor, en cases, dans le repère du monde : le sprite est
+   dessiné centré en x sur `pr.x` et POSÉ par le bas sur `pr.y + 1` (voir la
+   boucle de rendu). Rendue en flottant — c'est l'appelant qui décide de son
+   seuil de recouvrement, et il n'y en a qu'un dans le projet (voir
+   `townPropCovers`). */
+export function townPropBox(kind, x, y) {
+  const a = TOWN_PROP_ART[kind], s = a && PLANCHE[a];
+  if (!s) return { x0: x, x1: x + 1, y0: y, y1: y + 1 };
+  const hw = s.w / (2 * TILE);
+  return { x0: x + 0.5 - hw, x1: x + 0.5 + hw, y0: y + 1 - s.h / TILE, y1: y + 1 };
+}
+/* ⚠️ UNE CASE EST COUVERTE QUAND LE SPRITE EN PREND LA MOITIÉ, et ce seuil est
+   le seul du projet. Sans lui, un sprite de 81 px centré sur une case « touche »
+   sept cases (il déborde de 0,03 case de chaque côté) et on interdirait de
+   planter deux cases trop loin ; avec un seuil à zéro on retomberait sur la
+   case unique qu'on corrige. À la moitié, l'emprise mesurée d'un pont de 81 px
+   vaut exactement les cinq cases de son tablier — vérifié par le banc. */
+export function townPropCovers(kind, px, py, x, y) {
+  const b = townPropBox(kind, px, py);
+  const ox = Math.min(b.x1, x + 1) - Math.max(b.x0, x);
+  const oy = Math.min(b.y1, y + 1) - Math.max(b.y0, y);
+  return ox >= 0.5 && oy >= 0.5;
+}
 
 // --- Seasons (timing chosen by the model, per Guillaume's delegation) ---
 // One season lasts SEASON_DAYS in-game days; purely visual for now (tint +

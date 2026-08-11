@@ -1,4 +1,4 @@
-# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 439
+# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 440
 
 Ce fichier est **l'autorité** sur la seconde carte du jeu et sur ses habitants. Il a été
 extrait de `CLAUDE.md` §6 au zip 428, sur l'ordre laissé par le §14.2 du 427 et sur le modèle
@@ -22,7 +22,12 @@ qu'un paragraphe d'orientation, et les pièges qui valent pour tout le projet re
   pas des pixels. *(Le lac, lui, a reçu son dessin au 435 et sa profondeur au 436 ; il lui
   manque encore sa GÉOMÉTRIE — voir §18.)*
 - **rien à FAIRE au bord de l'eau.** L'étang et le lac sont beaux et vides : ni pêche, ni
-  barque, ni canard. C'est la même question ouverte que les vingt blocs de prairie.
+  barque, ni canard. C'est la même question ouverte que les vingt blocs de prairie ;
+- **le bois du sud-est (440) est vide lui aussi, et délibérément** : aucun endroit de vie, aucun
+  résident n'y va. Demande de Guillaume — « pas une zone très fréquentée, un peu sauvage » ;
+- **les intérieurs du tribunal et de la mairie sont difficiles à naviguer** (on ne voit pas où
+  sont les portes) et **l'église n'a pas d'intérieur** : c'est le SECOND TEMPS décidé au 440,
+  pas encore construit. Voir la fin du §23.
 
 ---
 
@@ -1873,3 +1878,137 @@ est un vrai ovale (isoligne d'ellipse, chaises posées sur le contour — leçon
 - **la ferme n'est toujours touchée par rien** : ses chemins et ses arbres restent ceux du 232 ;
 - **rien de tout ça n'a été joué à deux.** `tools/fake-supabase.mjs` existe depuis le 432 et la
   ferme peuplée n'a toujours pas été passée au même crible.
+
+---
+
+## 23. ZIP 440 — LES PONTS, LA COMPOSITION, ET LE SENTIER QUI SE PERD
+
+Trois demandes de Guillaume dans la même passe, et les deux premières sont la **même famille de
+défaut** : *quelque chose que le générateur décrit en CASES et que le rendu dessine en SPRITES de
+quatre ou cinq cases, sans que rien ne compare les deux.*
+
+### 🌉 « Les ponts sont à retester, pas encore parfait »
+
+⚠️⚠️ **LA PORTÉE D'UN PONT ÉTAIT DITE À TROIS ENDROITS, ET ILS NE DISAIENT PAS LA MÊME CHOSE.**
+L'ouvrage dessiné fait 81 px, soit **5 cases** ; l'arc (`TOWN_BRIDGE_ARCH_SPAN = 3`) en montait
+**5** ; le générateur en pavait **5 au lac** et **7 au parc**, parce que là-bas le tablier épousait
+la nappe d'eau. Résultat, visible sur `pont-praticable.png` : **une case de planches nues à chaque
+bout du pont du parc**, sans garde-corps, sans culée, posée sur l'eau. Le 439 l'avait vu et l'avait
+excusé en commentaire (« un garde-corps s'arrête sur la culée, il ne la couvre pas ») — c'est vrai
+d'une culée maçonnée, ça ne l'est pas d'une planche qui flotte. *Un défaut excusé dans son propre
+commentaire est un défaut qu'on ne regarde plus* (439, la leçon des bancs, appliquée à la doc).
+
+**`TOWN_BRIDGE_SPAN` est désormais le seul endroit du projet où une portée de pont est dite**, et
+il est **dérivé de la largeur du sprite** (`PLANCHE.archBridge.w / TILE`) ; `TOWN_BRIDGE_ARCH_SPAN`
+s'en déduit. Le jour où la planche est réimportée, la carte suit.
+
+⚠️ **ET ON RESSERRE L'EAU, ON NE CHERCHE PAS UNE NAPPE DE LA BONNE LARGEUR.** Les seules rangées de
+cinq cases d'eau de l'étang sont à ses **deux pointes** — le pont y aurait de l'eau d'un seul côté,
+ce que le 439 refusait à raison. On creuse donc un **goulet** : les deux culées avancent dans l'eau
+au droit du tablier et se retirent sur quatre rangées, en raccord cubique. C'est le geste du 439
+sur l'anse du lac (« on creuse l'anse, on ne la cherche pas »), et il dit quelque chose de juste :
+**un pont se bâtit là où la rive se rapproche, et le rétrécissement est la RAISON qu'il soit là.**
+
+⚠️ La contrainte de **largeur impaire** du 439 a été **supprimée** (pas neutralisée) : le tablier
+fait `SPAN` cases, `SPAN` est impair, son milieu est un milieu de case par construction. *Un
+contrôle devenu inutile parce que la géométrie a changé se supprime — gardé, il fait croire qu'il
+protège encore quelque chose.*
+
+### 🌲 « Un arbre sur un pont » — la composition des décors
+
+Littéralement : un chêne planté en **(63, 153)**, sur le tablier du pont de l'anse. Cause :
+`plantTree` énumérait ce sur quoi on ne plante PAS (allée, dallage, eau, escalier) et **il y
+manquait `G_BRIDGE`**. Une liste noire à laquelle il manque une valeur ne lève rien, elle laisse
+passer — le `% 4` recopié des étals du 431. L'alignement d'arbres de l'avenue du sud tombait pile
+dessus (`x = 12 + 6k`, décalage +3 → 63). **La liste est blanche maintenant** : herbe et pelouse,
+rien d'autre.
+
+⚠️⚠️ **MAIS LE DÉFAUT DE FOND EST UNE UNITÉ, PAS UN OUBLI.** Le générateur raisonne en cases ; le
+rendu dessine un pont de 81 px, une clôture de 67, une haie de 62 — **une case occupée, quatre ou
+cinq couvertes**. Tout ce qui est posé ensuite tombe librement dans les cases couvertes sans être
+occupées, et ça ne bloque rien, ne casse aucun trajet, ne lève rien. *Ça se voit, et c'est tout.*
+`C.townPropBox` / `C.townPropCovers` donnent l'emprise DESSINÉE, dérivée de `PLANCHE` via
+`TOWN_PROP_ART` ; `plantTree`, le semis de verdure et `addGarden` la respectent tous les trois.
+
+**Six défauts trouvés à la première exécution de `verify-compo`, aucun lisible dans le code :**
+
+| trouvé | cause |
+|---|---|
+| un chêne **sur le tablier** du pont du lac | liste noire sans `G_BRIDGE` |
+| deux saules **au milieu du tour de l'étang** | trois passes de pavage testaient `solid`, or un arbre n'est pas solide dans cette couche : le gravier passait dessous |
+| un chêne **dans la canne à pêche** du ponton | le semis de verdure est le SECOND chemin qui plante ; durcir `plantTree` seul en laissait la moitié |
+| un buisson d'or **dans la canne à pêche** | le semis fleuri passait avant la scène composée |
+| **deux nénuphars sur la même case** | cinq tirages d'un herbier issus du même hachage décalé ; le pont du parc avait ce contrôle depuis le 439, la rive du lac non |
+| une clôture de **quatre cases toute seule** en plein pré | rien n'exigeait qu'un ouvrage linéaire COURE |
+
+⚠️ **ET UN SEPTIÈME, QUI EST LE PLUS INSTRUCTIF : LA HAIE DE FOND DU QUAI N'AVAIT JAMAIS ÉTÉ
+POSÉE.** Pas une seule fois depuis le 439. Deux fautes indépendantes et muettes : la garde
+`hy <= AVE + 1` était **vraie sur tout le quai** (la boucle tournait à vide), et le pas de 3 pour
+un sprite de 3,9 cases aurait fait se chevaucher les tronçons. Ce README la DÉCRIT depuis le 439
+comme « ce qui ferme la scène et empêche la bande fleurie de flotter au milieu de la pelouse ».
+*Un décor absent ne lève aucune erreur ; un décor absent que la doc décrit ment deux fois.* Huit
+tronçons aujourd'hui.
+
+⚠️ **`addGarden` DÉCALE AU LIEU DE RENONCER** (`sow`, la leçon du `place()` des intérieurs du
+439) : depuis qu'il refuse le corps d'un voisin, un objet du quai sautait de temps en temps — et
+un TROU dans une cadence se voit, alors qu'un objet décalé d'une case ne se voit pas.
+
+⚠️ **CE QUE `verify-compo` NE SAIT PAS VOIR, IL L'IMPRIME** : les décors **procéduraux** (étal,
+kiosque, fontaine, statue, puits, tombe — 137 des 221 props) n'ont pas de taille lisible hors de
+`fermeArt.js` et comptent pour une case. Recopier leur largeur dans les constantes serait le
+paramètre qui double un paramètre du §8, dans l'outil censé nous en protéger. **Un trou déclaré
+vaut mieux qu'un doublon silencieux.**
+
+### 🥾 « Le chemin à l'est de la jetée s'arrête sur rien du tout »
+
+⚠️⚠️ **IL S'ARRÊTAIT SUR UNE BORNE DE BOUCLE.** Le sentier de rive est tracé
+`for (x = x0; x < x1; x++)` avec `x1` = bord est du rectangle `TOWN_LAKE`, soit **152** : le lac
+finit, la boucle finit, le gravier finit — en pleine prairie, à **soixante-douze colonnes** du bord
+de la carte. Ce n'est pas un oubli de dessin, c'est **une frontière de DONNÉE qui s'est vue à
+l'écran**. Le lac n'a aucune raison de dire où s'arrête un chemin.
+
+⚠️⚠️ **ET « LE BOIS » N'EXISTAIT PAS.** Mesuré avant d'écrire une ligne : le coin sud-est portait
+**6 à 11 %** d'arbres, c'est-à-dire le rideau de bord et le semis général — la même densité que le
+reste de la ceinture. « Le chemin s'arrête là où la densité devient trop grande » n'avait donc
+aucun endroit où se produire. Le bois est **creusé** (`TOWN_WOOD_*`), comme l'anse et comme le
+goulet : *on ne cherche pas dans une carte la forme qu'on veut y trouver, on l'y met.*
+
+- **la lisière est une isoligne, pas une colonne** — un champ signé `d(x,y)` : rampe vers le coin
+  sud-est plus trois octaves de bruit, donc des golfes de prairie, des caps de futaie et des
+  bosquets détachés, que deux sinus en x ne peuvent pas produire (leçon de la rive, 437) ;
+- **la densité MONTE, elle ne bascule pas** : mesuré **lisière 10 % · taillis 40 % · futaie 62 %**.
+  C'est ce gradient, et lui seul, qui rend lisible « ça devient trop dense » ;
+- ⚠️⚠️ **LE SENTIER NE RÉTRÉCIT PAS, IL SE TROUE.** Un chemin qui passe de deux cases à une
+  redevient l'escalier de gravier payé **quatre fois** au 437 — et il le redeviendrait exactement
+  au moment où l'on veut qu'il se fasse oublier. Un sentier abandonné ne devient pas plus étroit,
+  il devient **lacunaire** : on garde les deux cases et on fait tomber la PROBABILITÉ de la plaque.
+  Mesuré : continu jusqu'à la lisière, **4 plaques manquantes** sous les arbres, dernière plaque en
+  **x = 210 sur 224**.
+
+⚠️ **L'ORDRE DES TROIS PASSES EST TOUT** : le champ, puis le SENTIER, puis la FUTAIE. C'est
+l'inverse de l'ordre naturel (« je plante ma forêt, puis j'y trace un chemin ») et c'est ce qui
+évite d'écrire une exception : les arbres arrivent sur un sol qui est déjà `G_PATH`, donc ils le
+contournent sans un seul cas particulier. Même raisonnement que la passe de revêtement du 434.
+
+⚠️ **`townWoodDepth` EST EXPORTÉE, PAS DÉCLARÉE DANS LA CLOSURE**, et ça a été payé dans ce zip
+même : écrite dans le générateur, elle n'était pas appelable par un banc, donc `render-parc` s'en
+est **refait une copie** — avec un hachage réinventé, donc un autre champ. Il annonçait « taillis
+12 % » pour une futaie réglée à 50 % **en passant au vert**, et on serait allé régler un dessin qui
+n'avait rien. C'est le §3 du 439 (« un banc qui repeint juge sa propre maquette ») commis sur une
+FONCTION plutôt que sur un dessin.
+
+### Ce que ça ne fait pas
+
+- **le bois est vide** : ni sentier de traverse, ni clairière, ni raison d'y entrer. C'est la
+  demande (« pas une zone très fréquentée, un peu sauvage »), et c'est aussi une dette datée : le
+  jour où il faudra une raison, elle se posera comme un endroit de vie, pas comme un décor ;
+- **aucun `townSpot` n'y a été ajouté**, donc aucun résident n'y va jamais. `verify-vallee` a
+  d'ailleurs réclamé « une raison qu'on y aille » pour le bloc traversé : il connaissait deux
+  catégories (bâti / prairie) et une forêt n'est ni l'une ni l'autre. Il en a une troisième ;
+- **les décors procéduraux restent hors de portée de `verify-compo`** (voir ci-dessus) : un arbre
+  planté dans un étal ou dans le kiosque ne serait toujours pas vu ;
+- **les intérieurs et l'église ne sont pas dans cette livraison** — c'est le second temps décidé
+  avec Guillaume (chambranles + plaques lisibles de loin + seuils au sol pour le tribunal et la
+  mairie ; l'église en décor de haute tenue avec orgue jouable) ;
+- **rien de tout ça n'a été joué à deux**, et la ferme peuplée n'est toujours pas passée par
+  `tools/fake-supabase.mjs`.
