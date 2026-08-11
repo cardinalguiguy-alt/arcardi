@@ -3918,6 +3918,21 @@ export const HALL_TOPICS = [
   { key: "where",    emoji: "🧭", panel: "where" },
   { key: "wedding",  emoji: "💍", panel: "soon" },
   { key: "land",     emoji: "🗺️", panel: "soon" },
+  /* ⚠️⚠️ ZIP 442 — LE SECOND POINT D'ENTRÉE DE L'ENQUÊTE, ET C'EST EXACTEMENT
+     CE POUR QUOI CETTE TABLE A ÉTÉ ÉCRITE AU 439 : « une quête future = UNE
+     LIGNE ». Elle en aura coûté une, plus son texte.
+     Le premier point d'entrée est l'avis affiché au tableau des nouvelles de la
+     place. Un seul point d'entrée, c'est une histoire qui n'existe que pour qui
+     ouvre le bon panneau — et rien n'oblige un joueur à lire un tableau
+     d'affichage. L'hôtesse d'accueil de la mairie est le second endroit du jeu
+     où l'on vient DEMANDER quelque chose : elle y renvoie.
+     ⚠️ ET ELLE NE DONNE RIEN, comme tous les autres sujets : elle dit où est
+     l'avis, elle ne l'inscrit pas au carnet. C'est la règle dure du 439 — le
+     dialogue est la porte, jamais la caisse — et elle vaut ici plus qu'ailleurs,
+     puisque le carnet, lui, paie.
+     ⚠️ La garde `when` la fait disparaître une fois l'enquête close : une
+     hôtesse qui continue d'annoncer un avis retiré est le décor qui ment (429). */
+  { key: "fonds", emoji: "📜", panel: "fonds", when: (c) => !(c.shared && c.shared.enquete && c.shared.enquete.outcome) },
   /* Un sujet qui n'apparaît QUE le jour du scrutin : il ne sert à rien
      aujourd'hui, et c'est précisément la démonstration que la garde marche.
      Une quête datée s'écrira exactement comme cette ligne. */
@@ -4439,6 +4454,21 @@ export const DEV_TELEPORTS = [
   { key: "court",         zone: "court" }, // le hall, au rez-de-chaussée
   { key: "courtUpper",    zone: "court" }, // l'étage des bureaux
   { key: "courtBasement", zone: "court" }, // le sous-sol
+  /* ⚠️⚠️ ZIP 442 — QUATRE ARRÊTS QUI MANQUAIENT DEPUIS DEUX ET UN ZIPS, ET
+     C'EST LA MÊME LEÇON QU'AU 425, NON APPRISE : l'hôtel de ville est ouvert
+     depuis le 438 et l'église depuis le 441, et NI L'UN NI L'AUTRE n'avait de
+     téléport. Pour regarder le bureau du géomètre il fallait traverser la ville,
+     entrer, monter — à chaque rechargement. *Un outil de test dont le coût
+     dépasse ce qu'il fait gagner cesse d'être utilisé, et c'est comme ça qu'on
+     finit par livrer sans regarder.* Le code de destination, lui, savait déjà
+     traiter « hall » et « hallUpper » : seule l'entrée de menu manquait, donc
+     personne ne pouvait s'en servir. Un chemin de code sans porte n'existe pas.
+     ⚠️ L'ENQUÊTE DU 442 LES REND INDISPENSABLES : six de ses vingt-et-un lieux
+     sont dans la mairie et deux dans la tribune de l'église. */
+  { key: "hall",       zone: "court" }, // hôtel de ville, le grand hall (438)
+  { key: "hallUpper",  zone: "court" }, // hôtel de ville, l'étage (conseil, maire, archives, géomètre)
+  { key: "church",     zone: "court" }, // l'église, la nef (441)
+  { key: "churchLoft", zone: "court" }, // l'église, la tribune d'orgue
   { key: "world",   zone: "evil" },  // arrivée dans la terre en cours (EVIL_SPAWN)
   { key: "bridge",  zone: "evil" },  // pied du pont de la terre en cours
 ];

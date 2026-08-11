@@ -2419,8 +2419,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            dans la partie ; exiger sa signature ferait attendre quelqu'un qui ne
            reviendra peut-être pas avant une heure. Un salon à un seul fermier
            est un salon solo, et la ville fournit son témoin. */
-        const solo = Object.keys(farmersRef.current || {}).length <= 1;
-        r = Q.resolveEnqSign(e, f.id, solo);
+        r = Q.resolveEnqSign(e, f.id, enqSoloRoom());
       } else {
         r = Q.resolveEnqFile(e, String(req.outcome || ""), now);
       }
@@ -2463,6 +2462,34 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         broadcastChat("📖", L.enq.tDone + " " + L.enq.end.gold(r.gold | 0));
       }
       if ((r.crossed || []).length || r.gold) out.state = shareState();
+      persistFnRef.current && persistFnRef.current();
+      hostFlushOut(out, f, null);
+      return;
+    }
+    /* ⚠️⚠️ ZIP 442 — LE MENU DÉVELOPPEUR DE L'ENQUÊTE. Demande de Guillaume
+       (« lancer et relancer à l'envi »), et c'est le raisonnement du 427 pour
+       « peupler la ferme » : voir le huitième chapitre coûte une heure de jeu,
+       donc sans ces boutons la scène finale ne serait relue par personne.
+       ⚠️⚠️ IL NE CRÉDITE RIEN, ET C'EST LA CONTRAINTE DURE. Le menu s'ouvre à
+       tout joueur qui connaît le raccourci (398) : « avancer d'un chapitre » qui
+       paierait 900 or serait une planche à billets à un clic. On appelle donc
+       `Q.devEnquete`, qui utilise les mêmes résolveurs — la chaîne reste
+       cohérente, les prérequis d'information sont respectés — et on JETTE le
+       `gold`. On a sauté la lecture, pas gagné de l'argent.
+       ⚠️ Et c'est l'HÔTE qui exécute, comme `devWorld` et `devResidents` : la
+       requête ne fait que demander. Un invité qui remet l'enquête à zéro la
+       remet à zéro pour tout le monde, ce qui est le comportement attendu d'un
+       état PARTAGÉ — et le chat le dit, sinon l'autre joueur verrait son carnet
+       se vider sans explication. */
+    if (req.kind === "devEnq") {
+      const s2 = sharedRef.current;
+      const e = Q.migrateEnquete(s2.enquete);
+      const r = Q.devEnquete(e, String(req.op || ""));
+      if (!r.ok) { hostFlushOut(out, f, null); return; }
+      s2.enquete = r.enquete;
+      out.enquete = s2.enquete;
+      dirtyRef.current = true;
+      broadcastChat("🛠️", L.devEnqChat(f.name, L.devEnqOpName(String(req.op))));
       persistFnRef.current && persistFnRef.current();
       hostFlushOut(out, f, null);
       return;
@@ -11864,7 +11891,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              vingt pas à l'est. */
           else if (dk === "townBoutique") { m.x = C.TOWN_BOUTIQUE.x + C.TOWN_BOUTIQUE.w / 2; m.y = C.TOWN_BOUTIQUE.y + C.TOWN_BOUTIQUE.h + 1; }
           else { m.x = C.TOWN_SPAWN.x; m.y = C.TOWN_SPAWN.y; }
-        } else if (dk === "court" || dk === "courtUpper" || dk === "courtBasement" || dk === "hall" || dk === "hallUpper") {
+        } else if (dk === "court" || dk === "courtUpper" || dk === "courtBasement" || dk === "hall" || dk === "hallUpper" || dk === "church" || dk === "churchLoft") {
           /* Zip 426 — les trois arrêts du tribunal. ⚠️ ON N'ENTRE PAS AU
              TRIBUNAL SANS PASSER PAR LA VILLE : `townX/townY` est la position
              que la sortie restaure, et elle DOIT exister. Un dev-téléport
@@ -11874,14 +11901,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (wasFarm) { m.farmX = m.x; m.farmY = m.y; }
           if ((m.zone || "farm") === "town") { m.townX = m.x; m.townY = m.y; }
           else {
-            const bldg = (dk === "hall" || dk === "hallUpper") ? C.TOWN_HALL : C.TOWN_COURT;
+            /* ⚠️ 442 — LE BÂTIMENT DE SORTIE SE DÉDUIT DE L'ARRÊT, et il en
+               existe TROIS depuis le 441. Écrit en `hall ? … : COURT`, un
+               téléport vers l'église depuis la ferme aurait posé la position de
+               retour devant le TRIBUNAL : on serait ressorti de l'église à
+               l'autre bout de la Haute-Ville, sans qu'aucune erreur ne le dise. */
+            const bldg = (dk === "hall" || dk === "hallUpper") ? C.TOWN_HALL
+                       : (dk === "church" || dk === "churchLoft") ? C.TOWN_CHURCH : C.TOWN_COURT;
             m.townX = bldg.x + bldg.w / 2; m.townY = bldg.y + bldg.h + 2;
           }
           if (!townWorldRef.current) townWorldRef.current = getTownWorldCached(E);
           if (!courtWorldRef.current) courtWorldRef.current = getCourtWorldCached(E);
           m.zone = "court";
-          const cf = dk === "courtUpper" ? 1 : dk === "courtBasement" ? 2 : dk === "hall" ? 3 : dk === "hallUpper" ? 4 : 0;
-          const gr = (C.COURT_FLOORS[cf] || {}).bld === "hall" ? 3 : 0;
+          const cf = dk === "courtUpper" ? 1 : dk === "courtBasement" ? 2 : dk === "hall" ? 3
+                   : dk === "hallUpper" ? 4 : dk === "church" ? 5 : dk === "churchLoft" ? 6 : 0;
+          /* ⚠️ LE REZ-DE-CHAUSSÉE D'UN BÂTIMENT EST CELUI DE SON BÂTIMENT, et
+             il se DÉDUIT de `COURT_BUILDINGS` au lieu d'être énuméré : écrit
+             « hall ? 3 : 0 », l'église (niveau 5) se serait crue à l'étage et on
+             serait tombé huit rangées plus bas que le seuil, c'est-à-dire au
+             milieu de la nef ou dans un mur. C'est la faute du 439 sur
+             `nearCourtExit`, à l'identique. */
+          const bkey = (C.COURT_FLOORS[cf] || {}).bld || "court";
+          const gr = (C.COURT_BUILDINGS[bkey] || C.COURT_BUILDINGS.court).ground;
           m.x = C.COURT_SPAWN.x; m.y = E.courtFloorY0(cf) + (cf === gr ? C.COURT_SPAWN.y : 8);
           courtStairArmedRef.current = false;   // on atterrit peut-être sur une volée
         } else {
@@ -19560,6 +19601,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      `courtFloorOf`, un lutrin de la mairie serait « proche » d'un joueur du
      sous-sol du palais dès que leurs `x` coïncident — et il n'y aurait rien à
      l'écran pour l'expliquer. */
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 442 — « SUIS-JE SEUL CE SOIR ? », UNE SEULE DÉFINITION.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ ELLE COMPTE LES JOUEURS EN LIGNE, PAS LES FERMIERS ENREGISTRÉS, ET LE
+     PREMIER JET FAISAIT L'INVERSE — c'était un BLOCAGE de fin de partie, trouvé
+     en relisant sur la question de Guillaume « est-ce jouable seul ? ».
+     `farmersRef` contient tous les fermiers que la sauvegarde a jamais connus
+     (il est persisté dans l'instantané) : sur une ferme où un ami est passé une
+     fois, un joueur seul se voyait réclamer DEUX signatures pour déposer la
+     réclamation, et il n'avait aucun moyen de les obtenir. L'enquête devenait
+     impossible à finir, définitivement, et rien ne l'expliquait.
+     ⚠️ « Seul » veut dire « personne d'autre n'est connecté MAINTENANT » :
+     `playersRef` est la table des clients distants vivants, balayée par le TTL
+     du 364. Un camarade parti se déconnecte au bout de son TTL, et la ville
+     fournit alors son témoin — ce qui est exactement ce qu'on veut.
+     ⚠️ Le panneau ET l'hôte l'appellent tous les deux : un panneau qui promet
+     une signature de la ville pendant que l'hôte en exige deux serait le
+     « propose puis refuse » du 426, sur la dernière scène du chantier. */
+  function enqSoloRoom() { return (playersRef.current ? playersRef.current.size : 0) <= 0; }
+
   function nearEnqProp(kind, room, mark, r) {
     const m = meRef.current, cw = courtWorldRef.current;
     if (!m || !cw || m.zone !== "court") return null;
@@ -23681,6 +23742,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   {t.panel === "soon" && (
                     <div>{t.key === "wedding" ? L.hallSoonWedding : L.hallSoonLand}</div>
                   )}
+                  {/* ⚠️ ZIP 442 — LE SECOND POINT D'ENTRÉE. Elle DIT où lire
+                      l'avis, elle ne l'inscrit pas : un sujet de dialogue ne
+                      donne jamais rien (439). Le bouton qui suit ouvre le
+                      carnet quand l'enquête est déjà commencée — c'est un
+                      RENVOI, comme « les cours » et « où se trouve… ». */}
+                  {t.panel === "fonds" && (
+                    <div>
+                      <div>{L.hallFondsIntro}</div>
+                      <div className="ferme-hint" style={{ marginTop: 8 }}>{L.hallFondsWhere}</div>
+                      {Q.enqStarted(sharedRef.current.enquete) && (
+                        <div style={{ marginTop: 10 }}>
+                          <button className="ferme-btn" onClick={() => { setHallTalk(null); setEnqNoteOpen(true); }}>{L.enq.noteOpen}</button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
                     <button className="ferme-btn" onClick={() => setHallTalk({ topic: null })}>↩</button>
                     <button className="ferme-btn" onClick={close}>{L.hallClerkClose}</button>
@@ -23904,7 +23981,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const e = Q.migrateEnquete(sharedRef.current.enquete);
         const close = () => setEnqEndOpen(false);
         const can = Q.enqCanFile(e);
-        const solo = Object.keys(farmersRef.current || {}).length <= 1;
+        const solo = enqSoloRoom();
         const enough = e.signs.length >= 2 || (solo && e.signs.length >= 1);
         const mine = e.signs.includes(me.id);
         /* ⚠️ LE MAIRE DU JOUR EST UNE PURE FONCTION DU JOUR (439), donc cette
@@ -24170,6 +24247,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   </button>
                 ))}
               </div>
+              {/* Zip 442 — l'enquête. Même raison que « peupler la ferme » juste
+                  au-dessus : huit chapitres, et le dernier est à une heure de
+                  jeu. ⚠️ Aucun de ces boutons ne rapporte un or (voir le
+                  handler) — c'est ce qui permet de les laisser à portée de tout
+                  joueur qui connaît le raccourci. */}
+              <h3 style={{ margin: "14px 0 6px" }}>{L.devEnqSection}</h3>
+              <div className="ferme-hint">{L.devEnqHint}</div>
+              {(() => {
+                const e = Q.migrateEnquete(sharedRef.current.enquete);
+                const ch = Q.ENQ_CHAPTERS[Math.min(e.ch | 0, Q.ENQ_CH_DONE - 1)];
+                return (
+                  <div>
+                    <div className="ferme-hint" style={{ marginBottom: 6 }}>
+                      {Q.enqDone(e) ? L.enq.noteDone
+                        : Q.enqStarted(e) ? L.enq.noteChapterOf((e.ch | 0) + 1, Q.ENQ_CH_DONE) + " — " + L.enq.chapter[ch.key]
+                        : L.devEnqNotStarted}
+                      {" · " + L.enq.noteFound(Object.keys(e.clues).length, Q.ENQ_SITES.length)}
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {Q.ENQ_DEV_OPS.map(op => (
+                        <button key={"devenq-" + op} className="ferme-btn"
+                                onClick={() => { sendReq({ kind: "devEnq", op }); setDevMenuOpen(false); }}>
+                          {L.devEnqOpName(op)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
               <h3 style={{ margin: "14px 0 6px" }}>{L.devHealSection}</h3>
               {/* Zip 392 — soin instantané. Le bouton est TOUJOURS présent, et
                   seulement désactivé quand il n'y a rien à soigner : une entrée
@@ -24201,14 +24307,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   eux, restent toujours visibles au complet (deux arrêts
                   chacun, rien à replier). */}
               {(() => {
+                /* ⚠️⚠️ ZIP 442 — LE REPLI SE DÉDUIT DE LA ZONE, IL NE SE LIT PLUS
+                   DANS LE NOM DE LA CLÉ. Le 431 pliait « ce qui commence par
+                   court » ; les quatre arrêts d'intérieur ajoutés ici s'appellent
+                   `hall`, `hallUpper`, `church` et `churchLoft` — ils seraient
+                   restés dépliés en permanence, et le menu aurait grossi de
+                   quatre boutons visibles depuis la ferme. Un préfixe de nom
+                   n'est pas une catégorie : la catégorie, c'est la ZONE, et elle
+                   est déjà dans la table. */
+                const isInterior = (d) => d.zone === "court" && d.key !== "court";
                 const townExtraCount = C.DEV_TELEPORTS.filter(d => d.key.startsWith("town") && d.key !== "town").length;
-                const courtExtraCount = C.DEV_TELEPORTS.filter(d => d.key.startsWith("court") && d.key !== "court").length;
+                const courtExtraCount = C.DEV_TELEPORTS.filter(isInterior).length;
                 const townOpen = !!devTeleportExpanded.town, courtOpen = !!devTeleportExpanded.court;
                 return (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                     {C.DEV_TELEPORTS.map(d => {
                       if (d.key.startsWith("town") && d.key !== "town" && !townOpen) return null;
-                      if (d.key.startsWith("court") && d.key !== "court" && !courtOpen) return null;
+                      if (isInterior(d) && !courtOpen) return null;
                       return (
                         <Fragment key={"dev-t-" + d.key}>
                           <button onClick={() => devTeleport(d.key)}>{L.devTeleportName(d.key)}</button>

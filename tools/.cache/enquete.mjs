@@ -446,6 +446,54 @@ export function resolveEnqFile(e, outcome, now) {
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
+   8 bis. LE MENU DÉVELOPPEUR — LANCER, AVANCER, REJOUER.
+
+   ⚠️⚠️ IL EXISTE PARCE QU'UNE ENQUÊTE NE SE TESTE PAS COMME UN DÉCOR. Guillaume
+   l'a demandé en une phrase (« possible de l'ajouter au menu développeur pour
+   lancer et relancer à l'envi ? ») et la raison est exactement celle du 427 pour
+   « peupler la ferme » : ce chantier a HUIT chapitres, et voir le huitième coûte
+   une heure de jeu. *Un outil de test dont le coût dépasse ce qu'il fait gagner
+   cesse d'être utilisé, et c'est comme ça qu'on finit par livrer sans regarder*
+   (§9 de CLAUDE.md). Sans ces quatre boutons, la scène finale — celle qui porte
+   la décision et les deux plaques — ne serait relue par personne.
+
+   ⚠️⚠️ ET AUCUNE DE CES OPÉRATIONS NE PAIE. C'est la contrainte dure : le menu
+   s'ouvre à tout joueur qui connaît le raccourci, et « avancer d'un chapitre »
+   qui créditerait 900 or serait une planche à billets à un clic. Les résolveurs
+   normaux rendent un `gold` ; le chemin développeur le JETTE, et l'hôte ne
+   crédite rien. Le jeu reste jouable après — on a sauté la lecture, pas gagné
+   de l'argent.
+
+   ⚠️ `reset` REMET UN OBJET NEUF, il ne « défait » pas. Une remise à zéro qui
+   effacerait indice par indice finirait par laisser un état à moitié propre le
+   jour où l'on ajoute un champ ; `newEnquete()` ne peut pas mentir.
+   ⚠️ Et `all` s'arrête AVANT le dépôt : la décision finale est le seul moment du
+   chantier qui vaille d'être joué à la main, ce serait absurde de l'automatiser.
+   ─────────────────────────────────────────────────────────────────────────── */
+export const ENQ_DEV_OPS = ["reset", "start", "chapter", "all"];
+export function devEnquete(e, op) {
+  if (op === "reset") return { enquete: newEnquete(), ok: true };
+  if (op === "start") { resolveEnqClue(e, "avis", "🛠️", Date.now()); return { enquete: e, ok: true }; }
+  if (op === "chapter") {
+    /* On donne exactement ce qui manque au chapitre COURANT — pas un de plus.
+       `enqAdvance` fait le reste, et il peut en franchir deux d'un coup si le
+       suivant était déjà complet : c'est sa raison d'être (voir sa note). */
+    for (const id of enqMissing(e)) resolveEnqClue(e, id, "🛠️", Date.now());
+    return { enquete: e, ok: true };
+  }
+  if (op === "all") {
+    /* ⚠️ DEUX PASSES, PARCE QUE LES PRÉREQUIS D'INFORMATION SONT RÉELS : la
+       filiation ne se lit pas sans le nom ni le registre déchiffré, et une seule
+       boucle dans l'ordre de la table la sauterait. Deux passes suffisent — la
+       chaîne la plus longue en compte deux — et le banc le vérifie. */
+    for (let pass = 0; pass < 2; pass++)
+      for (const st of ENQ_SITES) resolveEnqClue(e, st.id, "🛠️", Date.now());
+    return { enquete: e, ok: true };
+  }
+  return { ok: false };
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
    9. LA GÉOGRAPHIE DE L'ENQUÊTE, DÉRIVÉE ET NON ÉCRITE.
 
    ⚠️⚠️ LES TROIS BORNES DE LA VILLE NE PORTENT PAS DE COORDONNÉES, ELLES

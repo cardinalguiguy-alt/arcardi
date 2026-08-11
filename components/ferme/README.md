@@ -2348,6 +2348,67 @@ la fois par l'invite et par la touche E, comme les gestes de l'église au 441) e
 leur placement est mesuré par `verify-enquete` — mais elles n'ont pas été vues à
 l'écran, et c'est une dette datée.
 
+### Les trois questions de Guillaume, et le défaut que la première a trouvé
+
+**« Est-ce jouable seul ? »** — Oui, et c'était une contrainte de conception : *un
+jeu qui exige un second joueur pour finir est un jeu qu'on ne finit pas.* Une
+seule porte demande vraiment deux personnes, le coffre à deux serrures, et elle
+est franchissable seul en courant (mesuré : 10,5 s pour 22 s). Le dépôt final
+exige deux témoins et **la ville en fournit un quand on est seul**.
+
+⚠️⚠️ **ET C'EST LA QUESTION QUI A TROUVÉ LE PIRE DÉFAUT DU CHANTIER.** « Seul » se
+mesurait sur `farmersRef`, qui contient **tous les fermiers que la sauvegarde a
+jamais connus** — il est persisté dans l'instantané. Sur une ferme où un ami est
+passé UNE FOIS, un joueur seul se voyait donc réclamer deux signatures qu'il ne
+pouvait pas obtenir : **l'enquête devenait impossible à finir, définitivement, et
+rien ne l'expliquait.** Elle se mesure désormais sur les joueurs EN LIGNE
+(`enqSoloRoom`, lue par le panneau ET par l'hôte — deux définitions auraient donné
+un panneau qui promet une signature de la ville pendant que l'hôte en exige deux,
+c'est-à-dire le « propose puis refuse » du 426 sur la dernière scène).
+*Une question posée à voix haute vaut un banc.*
+
+**« Où déclencher la mission ? »** — À l'**avis affiché au tableau des nouvelles**
+de la place (E → première ligne du panneau, marquée URGENT). ⚠️ **Et il y a
+maintenant un SECOND point d'entrée**, parce qu'un seul, c'est une histoire qui
+n'existe que pour qui ouvre le bon panneau : **Léonie Sarrazin**, à l'accueil de
+la mairie, a un sujet « c'est quoi, le fonds de la halle ? » qui y renvoie. Il a
+coûté **une ligne** dans `HALL_TOPICS` — c'est-à-dire exactement ce que le 439
+avait annoncé en écrivant cette table (« une quête future = une ligne »), et c'est
+la première fois qu'on le vérifie. ⚠️ Elle ne DONNE rien : elle dit où lire l'avis.
+La règle du 439 tient (« le dialogue est la porte, jamais la caisse »), et elle
+compte double ici puisque le carnet, lui, paie.
+
+**« Peut-on la relancer à l'envi ? »** — Oui : **menu développeur (⌘⇧X) → section
+🔍 Enquête**, quatre boutons — *repartir de zéro · lancer · boucler le chapitre ·
+tout jusqu'au dépôt*. Même raison que « peupler la ferme » au 427 : voir le
+huitième chapitre coûte une heure de jeu, donc sans ces boutons la scène finale ne
+serait relue par personne.
+⚠️⚠️ **AUCUN NE CRÉDITE UN OR**, et c'est la contrainte dure : le menu s'ouvre à
+tout joueur qui connaît le raccourci (398), donc « boucler le chapitre » qui
+paierait 900 or serait une planche à billets à un clic. Le chemin développeur
+appelle les mêmes résolveurs — la chaîne reste cohérente, les prérequis
+d'information sont respectés — et **jette le `gold`**. On saute la lecture, on ne
+gagne rien.
+⚠️ « Tout jusqu'au dépôt » s'arrête AVANT la décision : c'est le seul moment du
+chantier qui vaille d'être joué à la main. Et le banc vérifie qu'il **ne saute
+aucun indice** — une boucle unique aurait sauté la filiation (elle exige le nom et
+le registre déchiffré), le dossier serait sorti incomplet, et on aurait conclu que
+la scène finale était cassée alors que c'est le raccourci qui l'était.
+
+### ⚠️⚠️ ET QUATRE ARRÊTS DE TÉLÉPORT MANQUAIENT DEPUIS DEUX ZIPS
+
+En branchant le menu, on a vu que l'hôtel de ville (ouvert au **438**) et l'église
+(ouverte au **441**) **n'avaient aucun arrêt**. Pour regarder le bureau du
+géomètre il fallait traverser la ville, entrer, monter — à chaque rechargement.
+Pire : le code de destination savait DÉJÀ traiter « hall » et « hallUpper », seule
+l'entrée de menu manquait. **Un chemin de code sans porte n'existe pas**, et
+personne ne s'en est aperçu pendant deux zips parce qu'aucun banc ne comparait la
+liste des niveaux à la liste des arrêts. Il le fait maintenant, dans les deux sens.
+⚠️ Le repli du menu (431) se déduisait d'un PRÉFIXE de clé (« ce qui commence par
+court ») : `hall`, `church` et leurs étages seraient restés dépliés en permanence.
+Un préfixe de nom n'est pas une catégorie — **la catégorie, c'est la zone**, et
+elle était déjà dans la table.
+
 ### Ce que ça ne fait pas
 
 - **aucun résident n'entre dans les trois bâtiments**, et Ombeline est un PROP

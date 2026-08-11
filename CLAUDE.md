@@ -505,10 +505,19 @@ le composant se monte — `hiddenRef` n'est relu que sur `visibilitychange`.
    préfixé par `_` n'est PAS une route.** ⚠️ **La supprimer avant de livrer** : en production
    elle ouvre une ferme sans authentification.
 
-Puis ⌘⇧X → menu développeur → **10 arrêts** (ferme, passage, Valley Town ×6 dont la
-Haute-Ville, tribunal ×3) et **« Peupler la ferme »** (427), qui installe 6/12/20 résidents
-d'un coup, **artisans nommés d'abord** — sans lui, la vie sociale de la ville n'est
-observable qu'après une heure de jeu, donc jamais.
+Puis ⌘⇧X → menu développeur → **14 arrêts** (ferme, passage, Valley Town ×6 dont la
+Haute-Ville, et les **sept niveaux d'intérieur** : tribunal ×3, mairie ×2, église ×2),
+**« Peupler la ferme »** (427, qui installe 6/12/20 résidents d'un coup, artisans nommés
+d'abord) et **« 🔍 Enquête »** (442 : repartir de zéro · lancer · boucler le chapitre · tout
+jusqu'au dépôt). Sans eux, ni la vie sociale de la ville ni le huitième chapitre de l'enquête
+ne sont observables avant une heure de jeu — donc jamais.
+⚠️⚠️ **LES QUATRE ARRÊTS D'INTÉRIEUR MANQUAIENT DEPUIS LE 438 ET LE 441**, alors que le code de
+destination savait déjà traiter « hall » : seule l'entrée de menu manquait. **Un chemin de code
+sans porte n'existe pas**, et aucun banc ne comparait la liste des niveaux à celle des arrêts —
+`verify-enquete` le fait depuis le 442, dans les deux sens.
+⚠️ **ET AUCUN BOUTON D'ENQUÊTE NE CRÉDITE UN OR** : le menu s'ouvre à tout joueur qui connaît le
+raccourci (398), donc « boucler le chapitre » qui paierait serait une planche à billets à un
+clic. Le chemin développeur appelle les mêmes résolveurs et JETTE le gain.
 
 ⚠️ **Automatisation du navigateur, ce qui marche et ce qui ne marche pas :**
 `window.dispatchEvent(new KeyboardEvent("keydown", {code:"KeyE"}))` marche pour TOUTES les

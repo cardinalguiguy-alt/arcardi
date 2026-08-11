@@ -539,6 +539,49 @@ title("6. ce que l'enquête fait au marché");
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   6 bis. LE MENU DÉVELOPPEUR — IL DOIT AMENER À LA FIN, ET NE RIEN PAYER
+   ═══════════════════════════════════════════════════════════════════════════ */
+title("6 bis. le menu développeur de l'enquête");
+
+{
+  /* ⚠️⚠️ « TOUT JUSQU'AU DÉPÔT » DOIT VRAIMENT AMENER JUSQU'AU DÉPÔT, et c'est
+     le genre de bouton qu'on croit sur parole. Les prérequis d'INFORMATION sont
+     réels (la filiation ne se lit pas sans le nom ni le registre déchiffré) :
+     une boucle unique dans l'ordre de la table la sauterait, le dossier serait
+     incomplet, et le testeur conclurait que la scène finale est cassée alors que
+     c'est le raccourci qui l'est. C'est le stub menteur du §10, dans l'outil de
+     test lui-même. */
+  const e = Q.newEnquete();
+  const r = Q.devEnquete(e, "all");
+  ok(r.ok, "« tout jusqu'au dépôt » s'exécute");
+  const manquants = Q.ENQ_SITES.map(s2 => s2.id).filter(id => !Q.enqHas(r.enquete, id));
+  ok(manquants.length === 0, "⚠️ …et il ne saute AUCUN indice (les prérequis sont respectés)", manquants.join(" "));
+  ok(Q.enqCanFile(r.enquete), "⚠️ …et le dossier est déposable derrière");
+  ok(r.enquete.ch === Q.ENQ_CHAPTERS.length - 1, "…et on est au dernier chapitre, pas au-delà",
+     `chapitre ${r.enquete.ch + 1}/${Q.ENQ_CH_DONE}`);
+  ok(!r.enquete.outcome, "⚠️ …mais il ne DÉPOSE pas : la décision reste au joueur");
+
+  const e2 = Q.newEnquete();
+  ok(Q.devEnquete(e2, "start").ok && Q.enqStarted(e2) && Object.keys(e2.clues).length === 1,
+     "« lancer » ouvre l'enquête et ne donne qu'un indice");
+  /* Chapitre par chapitre : huit clics doivent suffire, et le compte est un
+     contrôle en soi — s'il en fallait douze, c'est qu'un chapitre ne se ferme
+     pas et personne ne s'en apercevrait en cliquant. */
+  const e3 = Q.newEnquete();
+  let clics = 0;
+  while (e3.ch < Q.ENQ_CHAPTERS.length - 1 && clics < 30) { Q.devEnquete(e3, "chapter"); clics++; }
+  ok(e3.ch === Q.ENQ_CHAPTERS.length - 1, "« boucler le chapitre » mène au dépôt", `${clics} clic(s)`);
+  ok(clics <= Q.ENQ_CHAPTERS.length, "…sans tourner en rond", `${clics} pour ${Q.ENQ_CHAPTERS.length} chapitres`);
+
+  const e4 = Q.devEnquete(Q.newEnquete(), "all").enquete;
+  const e5 = Q.devEnquete(e4, "reset").enquete;
+  ok(!Q.enqStarted(e5) && !Q.enqDone(e5) && Object.keys(e5.clues).length === 0,
+     "⚠️ « repartir de zéro » rend une enquête NEUVE (pas une enquête à moitié effacée)");
+  ok(!Q.devEnquete(Q.newEnquete(), "n'importe quoi").ok, "une opération inconnue est refusée");
+  ok(Q.ENQ_DEV_OPS.length === 4, "les quatre opérations sont exposées", Q.ENQ_DEV_OPS.join(" · "));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    7. L'HÉRITIER — ET POURQUOI IL NE PEUT PAS CHANGER
    ═══════════════════════════════════════════════════════════════════════════ */
 title("7. l'héritier");
@@ -557,6 +600,36 @@ title("7. l'héritier");
   for (let d = 1; d <= 3000; d += 30) if (E.mayorOf(d).key === Q.ENQ_HEIR_KEY) asMayor++;
   ok(asMayor > 0 && asMayor < 100, "⚠️ il est maire certains mandats et pas d'autres (deux fins possibles)",
      `${asMayor} mandat(s) sur 100`);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   8. LES ARRÊTS DU MENU DÉVELOPPEUR MÈNENT-ILS OÙ ILS DISENT ?
+   ═══════════════════════════════════════════════════════════════════════════ */
+title("8. les arrêts de téléport des intérieurs");
+
+{
+  /* ⚠️⚠️ UN CHEMIN DE CODE SANS PORTE N'EXISTE PAS. La résolution du téléport
+     savait traiter « hall » et « hallUpper » depuis le 438 — mais `DEV_TELEPORTS`
+     ne les listait pas, donc aucun bouton, donc personne n'a jamais pu s'en
+     servir. L'église (441) n'avait ni l'un ni l'autre. Trouvé en répondant à
+     « peut-on relancer à l'envi ? », pas par un banc : celui-ci le mesure
+     désormais, parce que la même chose se reproduira au quatrième bâtiment.
+     ⚠️ On vérifie les DEUX SENS : chaque niveau habitable a son arrêt, et chaque
+     arrêt tombe sur un niveau qui existe. */
+  const inhabited = C.COURT_FLOORS.map((f, i) => [i, f]);
+  const stops = C.DEV_TELEPORTS.filter(d => d.zone === "court").map(d => d.key);
+  const KEY_OF_FLOOR = { 0: "court", 1: "courtUpper", 2: "courtBasement", 3: "hall", 4: "hallUpper", 5: "church", 6: "churchLoft" };
+  const missing = inhabited.filter(([i]) => !stops.includes(KEY_OF_FLOOR[i])).map(([i, f]) => f.key);
+  ok(missing.length === 0, "⚠️ chacun des sept niveaux a son arrêt de téléport",
+     missing.length ? "sans arrêt : " + missing.join(" ") : stops.join(" · "));
+  const ghosts = stops.filter(k => !Object.values(KEY_OF_FLOOR).includes(k));
+  ok(ghosts.length === 0, "…et aucun arrêt ne pointe sur un niveau qui n'existe pas", ghosts.join(" "));
+  /* Les six lieux de l'enquête qui vivent dans la mairie ne sont atteignables
+     qu'avec ces arrêts-là : c'est ce qui rend le contrôle utile plutôt que
+     décoratif. */
+  const inHall = ["cardIndex", "registerStand", "docBox", "wallMap"].reduce((n, k) =>
+    n + (cw.props || []).filter(p => p.kind === k && ["cadastre", "civil", "surveyor", "cityarch"].includes((E.courtRoomAt(p.x, p.y) || {}).key)).length, 0);
+  ok(inHall >= 6, "⚠️ …et la mairie porte bien six meubles d'enquête ou plus", `${inHall} meubles`);
 }
 
 console.log(fails ? `\n❌ ${fails} ÉCHEC(S)\n` : `\n✅ Tous les contrôles passent.\n`);

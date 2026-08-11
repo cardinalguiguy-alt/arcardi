@@ -320,6 +320,7 @@ export const FERME_STR = {
       wedding: "Je voudrais me marier.",
       land: "Je voudrais acheter une parcelle.",
       ballot: "Je viens voter.",
+      fonds: "C'est quoi, le fonds de la halle ?",
     }[k] || k),
     hallTopicTitle: (k) => ({
       mayor: "🎩 Rencontrer le maire",
@@ -328,6 +329,7 @@ export const FERME_STR = {
       wedding: "💍 Les mariages",
       land: "🗺️ Le cadastre",
       ballot: "🗳️ Le scrutin",
+      fonds: "📜 Le fonds de la halle",
     }[k] || k),
     hallMayorNow: (e, n) => `Le maire en exercice est ${e} ${n}.`,
     hallMayorAudience: (d, k) => k === 0
@@ -348,6 +350,8 @@ export const FERME_STR = {
     hallRegistryEmpty: "Le registre est vide : personne ne s'est encore installé à votre ferme.",
     hallRegistryCount: (n) => `${n} habitant(s) inscrit(s).`,
     hallRegistryVote: (e, n) => `a voté ${e} ${n}`,
+    hallFondsIntro: "C'est lui qui garantit qu'on ne vend jamais en ville à moindre prix qu'à sa propre ferme. Personne ici ne sait ce qui l'alimente — les services n'ont jamais pu établir l'origine du revenu, et la ville s'apprête à le clore faute de titulaire connu.",
+    hallFondsWhere: "L'avis est affiché au tableau des nouvelles, sur la place. Allez le lire, vous en saurez autant que moi.",
     hallSoonWedding: "Les publications de bans sont prêtes et la salle est dressée — il manque l'officier d'état civil. Revenez à la prochaine mise à jour : la salle des mariages est la deuxième porte à gauche.",
     hallSoonLand: "Le plan est affiché au cadastre, première porte à gauche. La vente, elle, passera par le notaire du tribunal : on choisit ici, on signe là-bas.",
     candName: (k) => ({
@@ -1611,6 +1615,10 @@ export const FERME_STR = {
       court: "⚖️ Tribunal — le hall",
       courtUpper: "🗂️ Tribunal — l'étage",
       courtBasement: "🔒 Tribunal — le sous-sol",
+      hall: "🏛️ Mairie — le hall",                     // zip 442 (le bâtiment est ouvert depuis le 438)
+      hallUpper: "📜 Mairie — l'étage",
+      church: "⛪ Église — la nef",                      // zip 442 (ouverte au 441)
+      churchLoft: "🎹 Église — la tribune d'orgue",
       world: "🌀 La terre en cours",
       bridge: "🌉 Le pied du pont",
     }[k] || k),
@@ -1694,6 +1702,16 @@ export const FERME_STR = {
     // Zip 427 — les invites des nouveaux lieux de Valley Town.
     mapTownBoutique: "Maison Garfield",
     mapTownSalon: "Salon",
+    devEnqSection: "🔍 Enquête — la parcelle qui n'existe pas",
+    devEnqHint: "Lancer, avancer, ou tout reprendre à zéro. ⚠️ Aucun de ces boutons ne rapporte d'or : on saute la lecture, on ne gagne rien.",
+    devEnqNotStarted: "Pas commencée",
+    devEnqOpName: (op) => ({
+      reset: "↺ Repartir de zéro",
+      start: "▶ Lancer (lire l'avis)",
+      chapter: "⏭ Boucler le chapitre",
+      all: "⏩ Tout jusqu'au dépôt",
+    }[op] || op),
+    devEnqChat: (who, what) => `${who} a touché à l'enquête : ${what}.`,
     devResidentsSection: "Peupler la ferme",
     devResidentsHint: (max) => `Installe des résidents d'un coup (${max} au maximum). Sert à voir vivre Valley Town sans attendre.`,
     devResidentsBtn: (n) => `${n} résidents`,
@@ -2594,6 +2612,7 @@ export const FERME_STR = {
       wedding: "I would like to get married.",
       land: "I would like to buy a plot.",
       ballot: "I am here to vote.",
+      fonds: "What is the market hall fund?",
     }[k] || k),
     hallTopicTitle: (k) => ({
       mayor: "🎩 Meeting the mayor",
@@ -2602,6 +2621,7 @@ export const FERME_STR = {
       wedding: "💍 Weddings",
       land: "🗺️ Land registry",
       ballot: "🗳️ The ballot",
+      fonds: "📜 The market hall fund",
     }[k] || k),
     hallMayorNow: (e, n) => `The sitting mayor is ${e} ${n}.`,
     hallMayorAudience: (d, k) => k === 0
@@ -2622,6 +2642,8 @@ export const FERME_STR = {
     hallRegistryEmpty: "The register is empty: nobody has settled on your farm yet.",
     hallRegistryCount: (n) => `${n} inhabitant(s) on the roll.`,
     hallRegistryVote: (e, n) => `voted ${e} ${n}`,
+    hallFondsIntro: "It's what guarantees nobody ever sells in town for less than at their own farm. Nobody here knows what feeds it — the services were never able to establish where the revenue comes from, and the town is about to close it for want of a known holder.",
+    hallFondsWhere: "The notice is up on the news board, on the square. Go and read it; you'll know as much as I do.",
     hallSoonWedding: "The banns are ready and the room is set — the registrar is missing. Come back next update: the wedding room is the second door on the left.",
     hallSoonLand: "The plan is posted at the land registry, first door on the left. The sale itself goes through the courthouse notary: you choose here, you sign there.",
     candName: (k) => ({
@@ -3613,6 +3635,10 @@ export const FERME_STR = {
       court: "⚖️ Courthouse — the hall",
       courtUpper: "🗂️ Courthouse — first floor",
       courtBasement: "🔒 Courthouse — basement",
+      hall: "🏛️ Town hall — the hall",
+      hallUpper: "📜 Town hall — upper floor",
+      church: "⛪ Church — the nave",
+      churchLoft: "🎹 Church — the organ loft",
       world: "🌀 The current land",
       bridge: "🌉 Foot of the bridge",
     }[k] || k),
@@ -3693,6 +3719,16 @@ export const FERME_STR = {
     // Zip 427 — Valley Town prompts.
     mapTownBoutique: "Maison Garfield",
     mapTownSalon: "Salon",
+    devEnqSection: "🔍 Case — the parcel that does not exist",
+    devEnqHint: "Start it, push it forward, or wipe it. ⚠️ None of these buttons pays gold: you skip the reading, you don't earn anything.",
+    devEnqNotStarted: "Not started",
+    devEnqOpName: (op) => ({
+      reset: "↺ Start over",
+      start: "▶ Start (read the notice)",
+      chapter: "⏭ Close this chapter",
+      all: "⏩ Everything up to the filing",
+    }[op] || op),
+    devEnqChat: (who, what) => `${who} touched the case: ${what}.`,
     devResidentsSection: "Populate the farm",
     devResidentsHint: (max) => `Move residents in at once (${max} max). For seeing Valley Town come alive without the wait.`,
     devResidentsBtn: (n) => `${n} residents`,

@@ -472,7 +472,7 @@ donnait pas, d'une rangée.
 
 ## `verify-enquete.mjs` — la chaîne de l'enquête tient-elle debout ? (442)
 
-`node tools/verify-enquete.mjs` — **91 contrôles.**
+`node tools/verify-enquete.mjs` — **105 contrôles.**
 
 ⚠️⚠️ **IL EXISTE PARCE QUE LES DÉFAUTS D'UN CHANTIER NARRATIF NE SONT PAS DES
 DÉFAUTS DE DESSIN NI DE NAVIGATION.** Ce sont des défauts de CHAÎNE — un indice
@@ -525,6 +525,22 @@ minute d'une soirée, une fois le joueur engagé**. Six grandeurs, six chapitres
    Deux distributions linéaires tirées du même hachage se CROISENT forcément ; ce
    qu'on veut savoir est si le joueur sent la différence, et ça se mesure en écart
    moyen (**13,7 points**). *Vérifier le repère avant de corriger le dessin* (429).
+
+⚠️ **DEUX CHAPITRES DE PLUS, AJOUTÉS SUR TROIS QUESTIONS DE GUILLAUME** (« jouable
+seul ? où la déclencher ? peut-on la relancer ? »), et les deux mesurent des
+choses qu'on croit sur parole :
+- **le menu développeur amène VRAIMENT à la fin** — « tout jusqu'au dépôt » ne
+  doit sauter aucun indice (les prérequis d'information sont réels : une boucle
+  unique aurait sauté la filiation, le dossier serait sorti incomplet, et on aurait
+  conclu que la scène finale était cassée alors que c'est le raccourci qui l'est),
+  « boucler le chapitre » doit mener au dépôt en huit clics au plus, et « repartir
+  de zéro » doit rendre une enquête NEUVE et non à moitié effacée ;
+- ⚠️⚠️ **chaque niveau habitable a son arrêt de téléport, dans les DEUX SENS.**
+  Il existe parce que l'hôtel de ville (438) et l'église (441) n'en avaient
+  aucun : le code de destination savait déjà traiter « hall », seule l'entrée de
+  menu manquait. **Un chemin de code sans porte n'existe pas**, et rien ne
+  comparait la liste des niveaux à celle des arrêts. La même chose se reproduira
+  au quatrième bâtiment.
 
 ⚠️ **CE QU'IL NE MESURE PAS, ET IL LE DIT** : il ne joue pas. Les panneaux,
 l'ordre des invites, le carnet et la lisibilité des documents ne se voient qu'en
