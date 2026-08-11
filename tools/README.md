@@ -17,9 +17,48 @@ jamais recopié d'un zip précédent sans relance.
 
 ---
 
+## ⚠️⚠️ ZIP 439 — CE QUE CETTE PASSE A APPRIS SUR LES BANCS EUX-MÊMES
+
+Trois des défauts livrés ce zip-ci étaient **regardés par un banc qui passait au vert**. Ce n'est
+pas une coïncidence, ce sont trois formes distinctes de la même faute, et elles valent d'être
+nommées ensemble parce qu'on les refera :
+
+1. **UN BANC QUI SE DONNE UN PÉRIMÈTRE EXCLUT LES DÉGÂTS QU'IL CAUSE À CÔTÉ.**
+   `render-mairie` filtrait les refus de meubles sur les deux niveaux de la mairie, puis
+   imprimait « 0 refus (le tribunal en garde 10, **antérieurs**) ». Ils ne l'étaient pas : cinq
+   venaient d'être créés par l'escalier que le même zip ajoutait, dont la **statue de la Justice**
+   du tribunal, effacée en silence pendant un zip entier. *Un chiffre qu'on excuse dans son propre
+   rapport est un chiffre qu'on ne regarde plus.* Il échoue désormais sur tout le bâtiment.
+
+2. **UN BANC QUI MESURE LA CARTE NE MESURE PAS L'INTERACTION.**
+   « Le seuil de « hall » est bien une sortie — cases 9/9 » : vrai, et le joueur était enfermé,
+   parce que le prédicat de la touche E testait le niveau 0 avec le seuil du tribunal en dur. Le
+   banc **rejoue maintenant `nearCourtExit`** pour chaque bâtiment, position par position.
+
+3. **UN BANC QUI REPEINT NE JUGE PAS LE JEU, IL JUGE SA PROPRE MAQUETTE.**
+   `render-mairie` peignait les sols en aplats parce qu'ils vivaient dans la closure du rendu. Il
+   les **appelle** depuis que `drawCourtWoodTile` & co. sont dans `fermeArt.js` — et sa première
+   exécution a montré un tapis en tartan, parce qu'il passait un `y` local là où le jeu passe un
+   `y` absolu. *Un banc qui appelle peut encore se tromper d'unité ; un banc qui repeint ne peut
+   même pas s'en apercevoir.*
+
+Et un quatrième, côté seuils : **`render-mairie` déclarait « meublé » un bureau de 221 cases qui
+contenait huit meubles**, parce que le contrôle était `n < 6`. Il mesure une DENSITÉ depuis le 439
+(meubles pour cent cases, minimum 8) et il a immédiatement attrapé la salle des mariages à 6 %.
+*Un seuil absolu sur une grandeur qui dépend du décor est faux dès que le décor change* — c'est le
+seuil du taxi au 434, transposé au mobilier.
+
+⚠️ **`render-oiseaux` avait la même forme de trou** : sa section « le pain jeté depuis un banc »
+tournait avec `threats: []`, c'est-à-dire **sans personne sur le banc**. Elle mesurait un
+attroupement dans un monde où le joueur n'existe pas, et elle passait au vert pendant que
+Guillaume voyait les pigeons s'envoler. Une section « assis sur un banc » a été ajoutée : le
+lanceur y est, les miettes tombent où `throwCrumbs` les met, et **le premier contrôle est
+arithmétique** — aucune miette ne doit tomber dans le rayon d'envol de celui qui les jette. Il
+aurait attrapé le défaut du 433 sans dessiner une image.
+
 ## Ce qui existe
 
-- **`tools/render-mairie.mjs` — l'intérieur de l'hôtel de ville, 9 contrôles (438).** Un intérieur
+- **`tools/render-mairie.mjs` — l'intérieur de l'hôtel de ville, 11 contrôles (438, refondu au 439).** Un intérieur
   ne se vérifie pas en le lisant : le tribunal du 426 a livré **six pièces inaccessibles sur
   dix-sept** — une colonne posée devant une porte, écrites à cent lignes l'une de l'autre — et
   personne ne l'avait vu à la relecture. Celui-ci DESSINE le plan de chaque niveau et contrôle ce
@@ -58,7 +97,16 @@ jamais recopié d'un zip précédent sans relance.
   seul bord nord-ouest (l'arbre était détouré en vert vif), et le bouleau sortait **en beignet**
   — huit bouquets sur un anneau étroit ne couvrent pas le centre.
 
-- **`tools/render-parc.mjs` — le parc et les deux rives du lac du sud, 15 contrôles (437).**
+- **`tools/render-parc.mjs` — le parc, les deux rives du lac du sud et LE PONT, 20 contrôles
+  (437, + le pont au 439).**
+  ⚠️ **439 — il dessine quelqu'un DEBOUT SUR LE PONT**, et c'est tout l'intérêt de sa nouvelle
+  planche (`pont-praticable.png`) : à l'échelle du parc, un pont traversé et un pont franchi font
+  la même tache brune. Il faut voir le passant dépasser du garde-corps du fond et être coupé aux
+  mollets par celui du devant — c'est ça, et rien d'autre, la preuve qu'on marche dessus. Il
+  vérifie aussi que la flèche de l'arc atteint son sommet, retombe à zéro à ses deux têtes (sinon
+  le raccord avec le chemin est une marche), ne monte aucune case hors tablier, et **ne touche pas
+  `tw.elev`** — passée dans l'altitude de collision, elle aurait rendu les deux ponts
+  infranchissables.
   ⚠️⚠️ **C'EST LA PREMIÈRE PLANCHE DU PROJET OÙ L'ON VOIT UN MORCEAU DE VILLE À PEU PRÈS
   COMME LE JOUEUR LE VOIT**, et c'est une réponse partielle à l'angle mort nommé en §10 de
   `CLAUDE.md`. Les six bancs du 434-436 peignent chacun SA surface et approximent le reste ;
@@ -74,7 +122,7 @@ jamais recopié d'un zip précédent sans relance.
   sentier de rive qui épousait chaque encoche de crique, et un buisson enterré sous le parvis
   du kiosque — posé sur de l'herbe, dallé par une passe ultérieure, resté SOLIDE.
 
-- **`tools/verify-vallee.mjs` — 172 contrôles, 172/172 (431 ; 137 au 430, 113 au 427).** Il
+- **`tools/verify-vallee.mjs` — 194 contrôles, 194/194 (439 ; 182 au 438, 172 au 431, 113 au 427).** Il
   importe le VRAI moteur : circulation, murs invisibles ET décors traversables, géométrie des
   bâtiments, rebords sautables, le tribunal pièce par pièce, la coupe de bois, les familles,
   la garde-robe.

@@ -4,150 +4,49 @@
 Il remplace l'exploration du dépôt pour tout ce qui est global. Le README est un journal
 chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
-État à jour du **zip 438**. Chantier actif : **rendre Valley Town habitable au regard** — le
-taxi y roule droit et est enfin dessiné comme une voiture, l'hôtel de ville tient debout, la
-place a des pigeons, les rues ont un revêtement (434), l'eau a une rive et un fond (435), toute
-la pierre de la Haute-Ville est refaite (436), le lac du sud a enfin une vraie rive et le parc est
-fleuri (437), et **les arbres, l'herbe et les massifs sont refaits pendant que l'HÔTEL DE VILLE
-ouvre ses huit pièces** (438). Tout ce qui concerne la ville, ses habitants
-ET **ses pièges** est dans **`components/ferme/README.md`**, qui fait autorité ; les bancs sont
-dans **`tools/README.md`**.
+État à jour du **zip 439**. Chantier actif : **rendre Valley Town habitable au regard ET
+crédible au jeu**. La ville est refaite depuis le 434 (rues, eau, pierre, rives, parc, arbres,
+herbe) ; le 438 a ouvert l'**hôtel de ville** ; le **439** l'a audité et corrigé — sortie,
+doublons de services, accueil qui parle, élections, pont franchissable, pigeons. Tout ce qui
+concerne la ville, ses habitants, ses bâtiments ET **ses pièges** est dans
+**`components/ferme/README.md`**, qui fait autorité ; les bancs sont dans **`tools/README.md`**.
 **`candyluge` et `crystal` sont EN PAUSE.**
 
-⚠️⚠️⚠️ **LA CLOSURE DE LA BOUCLE DE RENDU A COÛTÉ DEUX FONCTIONNALITÉS EN DEUX ZIPS. C'EST
-DÉSORMAIS LE PIÈGE N°1 DU PROJET (§4).** Au 430, `tryTownJump` : le saut de rebord mort partout
-en ville, sans qu'un seul banc puisse le voir. Au 431, `canStandTown` appelée par
-`advanceRemote` : **Valley Town injouable à deux** — chaque image où un joueur distant se
-DÉPLAÇAIT levait un `ReferenceError` au milieu du dessin, donc l'image était amputée (en ville)
-ou perdue en entier (à la ferme, où `advanceRemote` tourne AVANT toute peinture). Mesuré à deux
-clients réels : **97 % d'images figées, sauts de 116 px** → **3 % et 6 px** après correction.
-**Une fonction déclarée dans la closure du rendu et appelée depuis le composant ne lève rien à
-la compilation, rien au banc, et casse une image sur deux en jeu. On EXPOSE par un ref
-(`townJumpApiRef`, `zoneCollideRef`), on ne recopie jamais.**
+⚠️⚠️⚠️ **LE PIÈGE N°1 DU PROJET, ET IL A TROIS VISAGES : CE QUI VIT DANS LA CLOSURE DE LA BOUCLE
+DE RENDU.** Il a coûté quelque chose à chacun des cinq derniers zips.
+1. **Il plante** (430, 431) : une fonction déclarée dans la closure et appelée depuis le
+   composant lève un `ReferenceError` **à l'exécution seulement** — ni le build, ni le lint, ni
+   aucun banc ne le voient — et l'exception **emporte tout ce que la frame devait encore
+   dessiner**. Mesuré à deux clients : 97 % d'images figées. On EXPOSE par un ref, on ne recopie
+   jamais.
+2. **Il fait vieillir** (436, 439) : un dessin qu'aucun banc ne peut appeler ne se dégrade pas,
+   **il reste au niveau du jour où il a été écrit** pendant que tout ce qui est mesuré monte. Les
+   sols des intérieurs sont restés au 426 pendant douze zips. *L'écart n'est pas un écart de
+   soin, c'est un écart de DATE, et il se lit sur une carte du dépôt sans regarder une image.*
+   ⚠️ Corollaire : **« ce dessin est-il regardable par un banc ? » est une question de QUALITÉ**,
+   et elle se pose avant le premier `fillRect`.
+3. **Il divise** (439) : une même grandeur décrite des deux côtés de la closure DIVERGE. Le seuil
+   de sortie de l'hôtel de ville était écrit dans le générateur *et* dans le composant ; seul le
+   premier a été corrigé, et **on ne pouvait plus ressortir du bâtiment**. Voir §8.
 
-⚠️⚠️⚠️ **ET LA MÊME CLOSURE A UNE SECONDE FAÇON DE COÛTER CHER, DÉCOUVERTE AU 436 : ELLE NE
-PLANTE PAS, ELLE FAIT VIEILLIR.** L'audit graphique de Valley Town a trouvé que **tout ce qui
-était mal dessiné dans la ville était mal dessiné au MÊME ENDROIT** — dans la closure du rendu.
-Les revêtements de rue (434) et l'eau (435) en étaient sortis pour qu'un banc puisse les
-regarder, et ce sont exactement les deux surfaces que personne ne trouve pauvres ; les marches,
-le parement de falaise, le limon et le dallage d'esplanade y sont restés depuis le 425, et ce
-sont exactement celles que Guillaume a nommées (« un écart flagrant de qualité de textures »).
-**Un dessin qu'aucun banc ne peut appeler ne se dégrade pas : il reste au niveau du jour où il a
-été écrit, pendant que tout ce qui est mesuré monte.** L'écart n'est donc pas un écart de soin,
-c'est un écart de DATE, et il se lit sur une carte du dépôt sans regarder une image. ⚠️ Corollaire
-opérationnel : **la question « ce dessin est-il regardable par un banc ? » est une question de
-QUALITÉ, pas d'outillage**, et elle se pose avant d'écrire le premier `fillRect`.
+⚠️⚠️⚠️ **UN BANC QUI PASSE NE VEUT PAS DIRE QUE LA CHOSE EST BONNE — IL VEUT DIRE QU'ON MESURE
+AUTRE CHOSE.** C'est la leçon la plus rentable du fichier, et elle a quatre formes connues,
+toutes payées :
+- **il mesure la carte, pas l'interaction** (439 : « le seuil est bien une sortie, 9/9 » pendant
+  que la touche E ne sortait pas) ;
+- **il se donne un périmètre et excuse ce qui déborde** (439 : « le tribunal en garde 10,
+  *antérieurs* » — cinq venaient d'être causés par le zip en cours) ;
+- **il repeint au lieu d'appeler**, donc il juge sa propre maquette (439) ;
+- **il mesure l'inverse de ce qu'on veut** (438 : le « grain » pris pour de la qualité — le grain
+  montait, la propreté baissait, et le banc applaudissait).
+⚠️ **Quand Guillaume voit un défaut qu'aucun banc ne voit, la première question n'est pas « où
+est le bogue » mais « quelle grandeur ne mesure-t-on pas ».** Les cinq dernières fois, la réponse
+tenait en deux ou trois nombres qu'il a suffi d'ajouter.
 
-⚠️⚠️⚠️ **UN BANC PEUT MESURER L'EXACT CONTRAIRE DE CE QU'ON VEUT, ET APPLAUDIR PENDANT QUE LE
-DESSIN SE DÉGRADE** (438). Le 437 a livré des arbres que Guillaume a jugés « dégueulasses […]
-vraiment sales » ; son banc, lui, mesurait le **grain** — le nombre de frontières de ton par
-pixel — et le prenait pour de la qualité. *Le grain montait, la propreté baissait, et le banc
-applaudissait.* ⚠️ **Le contrôle a dû être écrit QUATRE fois avant de mesurer la bonne chose** :
-« le pixel isolé » interdisait le pixel art (elle accusait la pointe d'un rameau et le cœur d'une
-fleur) ; « les îlots de moins de quatre pixels » accusait les éclats d'un dégradé ; la bonne
-grandeur est **l'îlot qui flotte dans un APLAT**, en connexité à **huit** voisins — à quatre, un
-cerne d'un pixel en diagonale n'est plus connexe et le banc accuse le contour lui-même.
-⚠️⚠️ **ET LA LEÇON DE DESSIN QUI VA AVEC, VRAIE PARTOUT : ON NE TEXTURE PAS UNE SILHOUETTE, ON
-ASSEMBLE DES FORMES.** Dessiner un contour puis le remplir de tirages donne du bruit à toutes les
-échelles ; dessiner dix masses pleines, cernées, chacune avec son arc d'ombre, donne une matière —
-et la silhouette sort toute seule, festonnée. Aucun pixel tiré au hasard nulle part. C'est aussi ce
-que contiennent les références de Guillaume, qu'il suffit de regarder de près : **pas un pixel
-isolé**.
-
-⚠️⚠️ **ET DEUX SUITES À FAIBLE DISCRÉPANCE NE FONT PAS UNE RÉPARTITION DANS LE PLAN** (438). Semer
-des touffes d'herbe avec `x = frac(k·φ)` et `y = frac(k·φ²·7)` aligne les points sur des DROITES
-dès que le rapport des deux constantes est presque rationnel : la pelouse est sortie rayée
-verticalement d'un bout à l'autre du parc, pire que la tuile de 16 px qu'on remplaçait. On emploie
-une suite faite pour le plan (R2, les constantes du nombre plastique). Même famille que la distance
-de Manhattan prise pour l'euclidienne au 435 : *une bonne propriété en dimension 1 ne se transporte
-pas gratuitement en dimension 2.*
-
-⚠️⚠️ **UN SECOND INTÉRIEUR NE SE PAIE PAS EN ZONES, IL SE PAIE EN NIVEAUX** (438). L'hôtel de ville
-partage la carte du tribunal : deux niveaux de plus dans la même grille. Une zone de plus aurait
-demandé de retrouver les **vingt-cinq** endroits de `FermeGame.js` qui testent `zone === "court"`,
-et en oublier un ne lève rien. Deux niveaux ne coûtent rien : la zone reste la même, tous les tests
-restent vrais, et **deux joueurs dans deux bâtiments différents ne peuvent pas se confondre
-puisque leurs `y` diffèrent** — donc rien de plus à diffuser. C'est la règle du 426 (« le niveau se
-lit dans y ») portée d'un cran. ⚠️ Corollaire de banc : un contrôle écrit « tous les niveaux sont
-reliés au rez-de-chaussée » devient FAUX le jour où la carte porte deux bâtiments, et il pousse
-alors à percer un couloir entre eux pour se taire. **Ce qu'on veut savoir est : peut-on ressortir
-de là où l'on est monté ?**
-
-⚠️⚠️⚠️ **ET UN DÉFAUT MESURÉ, DOCUMENTÉ, PUIS LAISSÉ EN PLACE REVIENT TOUJOURS — PAR LA BOUCHE
-DE GUILLAUME** (437). Il a demandé « vérifie ton biais » sur les rives droites : le biais était
-trouvable **sans regarder une seule image**. Le 435 avait corrigé l'étang du parc et NOMMÉ le
-défaut du lac du sud dans le même commentaire (« son rivage est `sin(x)`, donc une FONCTION DE x,
-donc incapable de revenir sur elle-même — 75 colonnes plates sur 95 ») ; le 436 avait écrit dans
-son « ce que ça ne fait pas » que le lac gardait sa forme. **Deux zips ont mesuré le défaut, l'ont
-écrit, et sont passés à côté.** ⚠️ La section « ce que ça ne fait pas » n'absout pas : c'est une
-**dette datée**, et la première chose à faire en ouvrant un chantier est de relire celle du zip
-précédent. ⚠️ Corollaire de dessin, vrai partout : **une courbe écrite `f(x)` ne peut pas se
-replier** — pas de crique, pas de presqu'île, pas d'îlot. Une rive, un contour, une côte se
-décrivent par un CHAMP `s(x,y)` dont on prend l'isoligne, jamais par une hauteur par colonne.
-
-⚠️⚠️ **ET LE NATUREL NE S'OBTIENT PAS EN METTANT DU DÉSORDRE PARTOUT** (437). Le lac du sud avait
-quatre-vingt-seize cases de quai maçonné : le défaut n'était pas que le quai soit droit — **un
-ouvrage EST droit, c'est ce qui le fait lire comme un ouvrage** — mais qu'il n'y ait plus une
-seule berge naturelle en face. La pierre a été réduite à l'abord du ponton, le reste rendu au
-sentier et aux roseaux. **On oppose une ligne construite à une ligne qui ne l'est pas ; tordre
-l'ouvrage aurait donné deux lignes molles.** ⚠️ Même piège côté banc : `render-eau.mjs` a crié sur
-la terrasse du belvédère, à juste titre selon sa règle et à tort dans les faits. **Un banc qui
-appelle « défaut » quelque chose de voulu pousse à casser du juste pour faire taire une mesure**
-— on exclut la zone bâtie de la mesure, on ne tord pas la terrasse.
-
-⚠️⚠️ **ET UNE ALLÉE D'UNE CASE DE LARGE NE MONTRE QUE SES MARCHES — PAYÉ QUATRE FOIS DANS LE SEUL
-ZIP 437.** Tour d'étang, sentier de rive, sentier rabattu sur chaque encoche de crique, massifs
-fleuris tous alignés sur la même base : quatre fois la grille de 16 px **redessinée par ce qui
-était censé la casser**. C'est la famille de défauts la plus répétitive du projet (le 435 l'a
-payée trois fois sur l'eau seule). ⚠️ **Et la parade n'est JAMAIS de lisser le tracé** — ce serait
-revenir à la ligne droite qu'on corrige. On l'ÉPAISSIT (deux cases, la marche devient un
-élargissement), ou on l'ÉCARTE de tout l'accident d'un coup (minimum glissant sur sept colonnes),
-ou on décale la phase par case.
-
-⚠️⚠️ **ET ENRICHIR UNE TEXTURE REND VISIBLES LES ERREURS DE GÉOMÉTRIE QU'ELLE CACHAIT** (436).
-En passant les marches du gris uni à la pierre, on a découvert que **22 des 52 cases d'escalier
-de la ville étaient dessinées perpendiculairement à leur volée** — depuis le 425. Le défaut
-n'était pas nouveau, il était devenu visible. **Il faut donc s'attendre à en trouver après
-chaque montée en qualité, et avoir un banc pour les voir** : ici c'est `render-escaliers.mjs`,
-écrit le même jour, qui l'a montré.
-
-⚠️⚠️ **ET LE MULTIJOUEUR DE LA VILLE N'AVAIT JAMAIS ÉTÉ JOUÉ À DEUX** — c'est ça, la vraie
-leçon. Deux autres défauts sont tombés dans la même passe, tous deux invisibles seul : les
-joueurs du **tribunal** n'étaient jamais avancés (`advanceRemote` sortait sur `null` pour cette
-zone), et le champ `sit` **voyageait depuis le 428 sans jamais être lu** — personne n'a jamais
-vu personne s'asseoir. **Un banc à deux clients est monté depuis** (§10).
-
-⚠️⚠️ **ET DEUX DÉCALAGES ONT ÉTÉ TROUVÉS PAR GUILLAUME, EN JEU, DEVANT TROIS BANCS DE RENDU
-QUI LES REGARDAIENT SANS LES VOIR** : la rangée d'étals penchait d'une case et demie, et la
-colonnade du tribunal de six pixels — **depuis le 425**. Un défaut de symétrie ne se voit pas
-en regardant l'élément fautif : la rangée est impeccable, c'est son RAPPORT À L'AXE qui est
-faux. Toute position se DÉDUIT désormais d'un centre, et un contrôle de symétrie est entré au
-banc de rendu. **Corollaire général : une position réglée à la main est une position qui
-penchera.** ⚠️ **Payé DEUX FOIS DE PLUS au 433** : le perron de l'hôtel de ville était centré
-sur le corps de logis alors que la porte est sous le beffroi (on montait trois marches devant
-un mur plein), et le taxi montait dans la bouche de chaque rue latérale parce que sa mesure de
-« milieu de chaussée » comptait l'amorce des rues transversales comme de la chaussée.
-
-⚠️⚠️ **ET UN BANC PEUT AUSSI ÉCHOUER SUR UNE CHOSE DEVENUE BONNE — MÊME CAUSE, SENS INVERSE.**
-Au 434, l'élargissement de l'artère a fait échouer le contrôle d'axe du taxi, qui exigeait un
-écart de moins de **0,22 case** : un seuil ABSOLU, calibré sur une ville faite de rues de deux
-cases. Mesuré par largeur, la conduite était pourtant meilleure qu'avant (0,156 de
-demi-chaussée sur l'artère de quatre, contre 0,180 sur les rues de deux). **Un seuil exprimé
-dans une unité qui dépend du décor devient faux le jour où le décor change** — et il est alors
-tentant de le desserrer, ce qui tue le banc. On change d'UNITÉ, pas de seuil, et on garde
-l'ancienne mesure imprimée à côté.
-
-⚠️⚠️ **ET UN BANC QUI PASSE NE VEUT PAS DIRE QUE LA CHOSE EST BONNE — IL VEUT DIRE QU'ON
-MESURE AUTRE CHOSE.** Au 433, les douze contrôles du taxi disaient tous OK pendant que
-Guillaume voyait « une trajectoire stupide » : ils mesuraient l'arrivée, la chaussée et la
-vitesse, **jamais la forme du trajet**. Idem pour les pigeons — ils arrivaient, se posaient, ne
-restaient pas en l'air, et se comportaient quand même « comme les animaux de la ferme ». **Quand
-Guillaume voit un défaut qu'aucun banc ne voit, la première question n'est pas « où est le
-bogue » mais « quelle grandeur ne mesure-t-on pas ».** Les deux fois, la réponse tenait en
-trois nombres qu'il a suffi d'ajouter (§10, `tools/README.md`).
-
-
----
+⚠️⚠️ **ET UN DÉFAUT MESURÉ, DOCUMENTÉ, PUIS LAISSÉ EN PLACE REVIENT TOUJOURS — PAR LA BOUCHE DE
+GUILLAUME** (437, 439). La section « ce que ça ne fait pas » n'absout pas : c'est une **dette
+datée**. **La première chose à faire en ouvrant un chantier est de relire celle du zip
+précédent.**
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
 
@@ -243,6 +142,67 @@ tombe aussi au milieu des champs de la FERME, donc le contrôle « je suis au ma
 depuis un pré. **La parade est UNE position taguée par sa zone, jamais deux jeux de
 coordonnées — et on teste la zone AVANT les distances.**
 
+**Dessin — vrai partout, et chacune a été payée**
+- ⚠️⚠️⚠️ **ON NE TEXTURE PAS UNE SILHOUETTE, ON ASSEMBLE DES FORMES** (438). Dessiner un contour
+  puis le remplir de tirages donne du BRUIT à toutes les échelles ; dessiner dix masses pleines,
+  cernées, chacune avec son arc d'ombre, donne une MATIÈRE — et la silhouette sort toute seule,
+  festonnée. **Aucun pixel tiré au hasard nulle part.** Corollaire mesuré au 439 : *ce qui fait la
+  matière n'est pas le contraste, c'est la forme* — six tons de parquet bien séparés donnent un
+  velours côtelé, six tons resserrés donnent du bois.
+  ⚠️ Le contrôle de propreté qui va avec a dû être écrit **quatre fois** : la bonne grandeur est
+  **l'îlot qui flotte dans un APLAT**, en connexité à **huit** voisins (à quatre, un cerne d'un
+  pixel en diagonale n'est plus connexe et le banc accuse le contour lui-même). « Le pixel isolé »
+  interdit le pixel art ; « les îlots de moins de quatre pixels » accuse les dégradés.
+- ⚠️⚠️ **UNE COURBE ÉCRITE `f(x)` NE PEUT PAS SE REPLIER** (437) — pas de crique, pas de
+  presqu'île, pas d'îlot, pas d'ovale. Une rive, un contour, une côte, une table de conseil se
+  décrivent par un **CHAMP `s(x,y)` dont on prend l'isoligne**, jamais par une hauteur par colonne
+  ni par des angles coupés à la main.
+- ⚠️⚠️ **LA PÉRIODE D'UN MOTIF COMPTE PLUS QUE SES DÉTAILS** (434, 439). Une tuile de 16 px se
+  répète tous les 16 px : l'œil voit la grille avant le dessin, **quelle que soit sa finesse**. On
+  dessine un pavé de 4×4 tuiles d'un seul tenant, il doit **boucler sur lui-même**, et ce qui a une
+  longueur propre (une lame de parquet) prend une longueur **première avec la case**.
+- ⚠️⚠️ **UNE ALLÉE D'UNE CASE DE LARGE NE MONTRE QUE SES MARCHES** — payé quatre fois dans le seul
+  437. **La parade n'est JAMAIS de lisser le tracé** (ce serait revenir à la ligne droite qu'on
+  corrige) : on l'ÉPAISSIT, ou on l'ÉCARTE de tout l'accident d'un coup, ou on décale la phase.
+- ⚠️⚠️ **LE NATUREL NE S'OBTIENT PAS EN METTANT DU DÉSORDRE PARTOUT** (437). Un ouvrage EST droit,
+  c'est ce qui le fait lire comme un ouvrage : **on oppose une ligne construite à une ligne qui ne
+  l'est pas**. Tordre les deux donne deux lignes molles.
+- ⚠️⚠️ **UNE POSITION RÉGLÉE À LA MAIN EST UNE POSITION QUI PENCHERA** (433, 439). Un défaut de
+  symétrie ne se voit pas en regardant l'élément fautif — la rangée est impeccable, c'est son
+  RAPPORT À L'AXE qui est faux. Toute position se DÉDUIT d'un centre. Payé au 439 encore : une
+  maquette posée deux fois de part et d'autre de l'axe sur lequel un commentaire la jurait centrée.
+- ⚠️⚠️ **ENRICHIR UNE TEXTURE REND VISIBLES LES ERREURS DE GÉOMÉTRIE QU'ELLE CACHAIT** (436) : 22
+  des 52 cases d'escalier de la ville étaient dessinées perpendiculairement à leur volée depuis le
+  425. **S'attendre à en trouver après chaque montée en qualité, et avoir un banc pour les voir.**
+- ⚠️⚠️ **DEUX SUITES À FAIBLE DISCRÉPANCE NE FONT PAS UNE RÉPARTITION DANS LE PLAN** (438) : deux
+  suites d'or dont le rapport est presque rationnel **alignent les points sur des droites**. On
+  emploie une suite faite pour le plan (R2). Même famille que la distance de Manhattan prise pour
+  l'euclidienne au 435 : *une bonne propriété en dimension 1 ne se transporte pas gratuitement en
+  dimension 2.*
+- ⚠️ **MEUBLER LE LONG D'UN MUR FABRIQUE DES CULS-DE-SAC D'UNE CASE** (439, trois fois dans le
+  même zip). Aucun ne se voit sur une planche, aucun ne se voit en jouant sans y tomber : seul un
+  contrôle de connexité les trouve. Meubler à une case du mur laisse toujours un passage derrière.
+
+**Architecture**
+- ⚠️⚠️ **UN SECOND DE QUELQUE CHOSE SE PAIE EN NIVEAUX, PAS EN ZONES** (438). Une zone de plus
+  aurait demandé de retrouver les **vingt-cinq** endroits qui testent `zone === "court"`, et en
+  oublier un ne lève rien. Deux niveaux ne coûtent rien : tous les tests restent vrais, et deux
+  joueurs dans deux bâtiments différents ne peuvent pas se confondre puisque leurs `y` diffèrent.
+- ⚠️⚠️ **UNE VARIANTE DE DÉCOR EST UNE COUCHE, PAS UN NOUVEL IDENTIFIANT DE SOL** (434, 439). Un
+  `G_*` de plus rouvre les quarante tests du moteur ; en oublier un ne lève rien, ça fait juste une
+  rue qu'on ne traverse plus. Le sol garde son identifiant, un tableau parallèle dit avec quoi on
+  le PEINT (`world.road`) ou de combien il MONTE (`tw._arch`, le dos d'âne des ponts).
+- ⚠️⚠️ **UNE GRANDEUR DE DESSIN NE DOIT PAS ENTRER DANS LA COLLISION** (439). L'arc du pont ajouté
+  à `playerElevTown` aurait été trois lignes plus court et aurait rendu les deux ponts
+  **infranchissables** (`canStandTown` refuse tout pas au-delà de `TOWN_STEP_MAX`) : on aurait
+  livré un mur en croyant dessiner une bosse, et le symptôme n'aurait ressemblé en rien à sa cause.
+  Deux fonctions qui se ressemblent assez pour qu'on les confonde doivent porter la différence
+  dans leur NOM, et un banc doit tenir les deux moitiés séparément.
+- ⚠️⚠️ **UN PANNEAU QUI S'OUVRE À VOLONTÉ NE DOIT RIEN DONNER** (439). Un dialogue, un tableau, une
+  plaque s'ouvrent avec E sans limite et sans arbitrage de l'hôte : tout ce qu'ils rendent doit
+  être de l'INFORMATION ou une valeur DÉRIVÉE (une date, un cours). Ce qui récompense passe par une
+  `req` arbitrée par l'hôte, comme la vente au marché. *La porte n'est jamais la caisse.*
+
 **JavaScript / three.js / canevas**
 - ⚠️⚠️⚠️ **UNE FONCTION DÉCLARÉE DANS LA CLOSURE DE LA BOUCLE DE RENDU N'EXISTE PAS POUR LE
   COMPOSANT** — payé au 430 (`tryTownJump`, saut de rebord mort) puis au 431
@@ -320,8 +280,8 @@ coordonnées — et on teste la zone AVANT les distances.**
 |---|---|
 | `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **~20 500 l.** |
 | `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** |
-| `components/ferme/README.md` | **Valley Town, le tribunal, les habitants, la VENTE, les OISEAUX et les PIÈGES de ces trois zones — autorité (428-433)** |
-| `tools/README.md` | **les bancs, ce qu'ils attrapent et leurs chiffres — autorité (432-433)** |
+| `components/ferme/README.md` | **Valley Town, le tribunal, l'HÔTEL DE VILLE, les habitants, la VENTE, les OISEAUX, les ÉLECTIONS et les PIÈGES de ces zones — autorité (428-439)** |
+| `tools/README.md` | **les bancs, ce qu'ils attrapent et leurs chiffres — autorité (432-439)** |
 | `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** |
 | `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural. Aucun PNG · **`drawSeated()`** |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
@@ -358,9 +318,15 @@ marché (§14 là-bas).
 - ⚠️⚠️ **LE 428 A INVERSÉ UNE DÉCISION DU 427** : les résidents ont un **vrai chemin**
   (`E.townFindPath`), pas un itinéraire d'escalier. Mesuré : **24 % → 100 %** d'arrivées, à
   coût réseau **strictement identique**. `townStairRoute` a été supprimée.
-- **Ce qui n'est pas fait** : aucun service du tribunal, pas de coiffeur au salon, aucun PNJ
-  n'habite la ville à demeure, pas d'intérieur de maison, vingt blocs de prairie nue, et le
-  **marché / les commissions / les rendez-vous datés sont décidés mais pas construits**.
+- ⚠️ **LA MAIRIE ET LE TRIBUNAL SE PARTAGENT UNE GRILLE ET NE SE PARTAGENT PLUS LEURS SERVICES**
+  (439) : la mairie est ce qu'on DEMANDE, le tribunal ce qui se TRANCHE. Avant, quatre services
+  étaient promis deux fois, mêmes emojis compris.
+- ⚠️ **LES ÉLECTIONS SONT UNE PURE FONCTION DU JOUR, ET LE VIVIER DE CANDIDATS EST FIXE** — pas
+  le roster, sinon accueillir un résident rerollerait le maire, y compris rétroactivement.
+- **Ce qui n'est pas fait** : deux guichets ouverts seulement (la salle des cours et l'accueil),
+  pas de coiffeur au salon, aucun résident n'ENTRE dans les deux bâtiments, pas d'intérieur de
+  maison, la prairie nue (chiffre compté par `verify-vallee`), et les **commissions / rendez-vous
+  datés sont décidés mais pas construits**.
 
 ---
 
@@ -441,10 +407,10 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 
 ⚠️⚠️ **LES BANCS ONT DÉMÉNAGÉ DANS `tools/README.md` AU 432**, sur l'ordre laissé par le
 §14.2 du 431 : la liste occupait cinquante lignes et gagnait une entrée par zip. Ce qu'il faut
-savoir sans l'ouvrir : `verify-vallee.mjs` (**172/172**) rejoue le VRAI moteur — circulation,
+savoir sans l'ouvrir : `verify-vallee.mjs` (**194/194**) rejoue le VRAI moteur — circulation,
 murs invisibles, tribunal, coupe de bois, et **des ventes complètes avec l'or compté** ;
 `verify-taxi.mjs` (**18/18**) rejoue les 132 courses image par image, **y compris la FORME du
-trajet** depuis le 433 ; sept bancs de RENDU dessinent ce qui n'est autrement regardable qu'en
+trajet** depuis le 433 ; onze bancs de RENDU dessinent ce qui n'est autrement regardable qu'en
 jouant (assise, échelle, foire, tribunal + **symétrie des façades**, ruche, taxi, **oiseaux —
 ce dernier rejoue aussi quatre minutes de vie de groupe**) ; **`fake-supabase.mjs` fait tourner
 deux clients en local**.
@@ -454,10 +420,9 @@ de ce qui existe se vérifie en la lançant ; une liste de ce qui n'existe pas n
 jamais — c'est elle, et elle seule, qui protège du banc imaginaire (§14.6) :
 - ⚠️ **`verify-luge`, `verify-boot`, `preview-luge`, `preview.mjs`, `verify-perf` et
   `preview-fps` N'EXISTENT PAS** dans `tools/`.
-- ⚠️ **AUCUN BANC NE REGARDE LA FERME EN IMAGE** : `render-echelle`, `render-foire`,
-  `render-tribunal`, `render-oiseaux`, `render-taxi`, `render-rues`, `render-eau`,
-  `render-escaliers`, `render-arbres`, `render-parc` et `render-mairie` ne dessinent que Valley Town et ses
-  habitants. Un décor de la ferme mal proportionné n'a, à ce jour, aucun endroit où se voir.
+- ⚠️ **AUCUN BANC NE REGARDE LA FERME EN IMAGE** : les onze bancs de rendu ne dessinent que
+  Valley Town, ses intérieurs et ses habitants. Un décor de la ferme mal proportionné n'a, à ce
+  jour, aucun endroit où se voir.
   ⚠️ **Et le SOL de la ferme non plus** : `render-rues` (434) peint les rues de la ville, pas les
   chemins de la ferme, qui restent sur la tuile unique de 16 px du zip 232.
   ⚠️⚠️ **AU 438 L'ÉCART EST DEVENU FRAPPANT, ET IL FAUT LE DIRE : la ferme garde les deux arbres
@@ -465,12 +430,15 @@ jamais — c'est elle, et elle seule, qui protège du banc imaginaire (§14.6) :
   la ville a onze essences animées de 48×64 et un gazon au pavé de 64 px. C'est délibéré (décision du 424 : ne pas mêler deux changements
   visuels dans la même livraison) et c'est **la dette la plus visible du projet** — un joueur qui
   prend le train voit maintenant deux niveaux de finition.
-- ⚠️ **AUCUN BANC NE REGARDE UNE FENÊTRE COMPLÈTE DE VALLEY TOWN — mais `render-parc.mjs` (437)
-  en approche, et `render-mairie.mjs` (438) fait le même travail pour les intérieurs.** Il assemble tout ce qui vit hors de la closure (herbe, revêtement, massifs,
-  berge, eau, arbres) et ne refait que la mise en FILE des props : c'est la première planche où
-  l'on voit un morceau de ville à peu près comme le joueur le voit. **Ce qui manque encore est
-  ce qui reste dans la closure : les BÂTIMENTS et les personnages.** Les cinq autres bancs de
-  rendu de la ville, eux, approximent toujours le décor autour de leur surface.
+- ⚠️ **AUCUN BANC NE REGARDE UNE FENÊTRE COMPLÈTE DE VALLEY TOWN.** `render-parc.mjs` (437) en
+  approche dehors, `render-mairie.mjs` (438, refondu au 439) dedans : depuis le 439 il **appelle**
+  les sols au lieu de les repeindre et il dessine les plaques de porte, donc c'est la première
+  planche d'intérieur qui juge ce que le jeu dessine vraiment. **Ce qui manque encore est ce qui
+  reste dans la closure : les BÂTIMENTS de la ville et les personnages.** Les autres bancs de
+  rendu approximent toujours le décor autour de leur surface.
+- ⚠️⚠️ **ET AUCUN BANC NE JOUE LA FERME PEUPLÉE À DEUX CLIENTS.** `fake-supabase.mjs` le permet
+  depuis le 432 et l'a fait pour la VILLE (trois défauts trouvés le premier jour) ; la ferme n'y
+  est jamais passée. C'est la passe la plus urgente du fichier (§13).
 - ⚠️ **Le faux canvas de `lib-canvas.mjs` IGNORE `translate`/`rotate` et ne connaît pas
   `fillText`** : les trois poses d'une feuille de personnage s'y superposent, et un sprite qui
   dépend d'une transformation s'y juge faux. Ce n'est pas un bogue du jeu — mais il faut le
@@ -554,17 +522,26 @@ erreur** en choisissant mal.
 
 ## 13. À compléter par Guillaume
 
-- **Le tribunal** (§6) : quel service ouvre EN PREMIER ? Le cadastre est le plus mûr (les
-  panneaux « à vendre » existent depuis le 234) ; le notaire est le plus utile à deux joueurs.
+- ⚠️ **TRANCHÉ AU 439, RELU LIGNE À LIGNE** : « à quel guichet achète-t-on une parcelle » n'est
+  plus une question ouverte. **La mairie est ce qu'on demande, le tribunal ce qui se tranche** —
+  on choisit sa parcelle au cadastre de la mairie, on signe l'acte chez le notaire du tribunal
+  (`components/ferme/README.md` §22). Ce qui reste ouvert est **lequel des deux se BRANCHE en
+  premier**, et la réponse dépend d'un arbitrage de conception, pas d'une préférence technique :
+  le cadastre est le plus mûr (les panneaux « à vendre » existent depuis le 234), le notaire est
+  le plus utile à deux joueurs, et le **mariage** est celui que Guillaume a nommé (« on pourra
+  bientôt se marier aussi »). La salle est dressée, les bans sont prêts ; il manque l'officier.
 - **Le salon de coiffure** (427) : **qui coiffe, et comment ça marche ?** Le bâtiment,
   l'enseigne et la banderole « ouverture prochaine » sont posés ; il manque la décision.
-- **Valley Town** : quels PNJ HABITENT la ville à demeure (les résidents ne font qu'y passer) ?
-  achète-t-on une parcelle, et à quel guichet ?
-  ⚠️ **Et la prairie : VINGT ET UN blocs de 28×28 de la carte sont de l'herbe nue** (compté par
-  `verify-vallee.mjs` à chaque exécution ; vingt au 428, le parc en a libéré un au 437).
-  Ce n'est plus une impression, c'est un chiffre. On n'y a délibérément posé AUCUN endroit de
-  vie : des résidents qui vont contempler un champ vide, c'est du remplissage. La question
-  n'est donc pas « comment les meubler » mais **« qu'est-ce qu'on construit là »**.
+- **Valley Town : qui HABITE la ville à demeure ?** Les résidents ne font qu'y passer. Le 439 y
+  pose **Léonie Sarrazin** à l'accueil de la mairie — mais c'est un décor qui parle, pas une
+  habitante : elle ne bouge pas, et `res.zone` ne connaît toujours que « farm » et « town ».
+  Faire ENTRER un résident dans un bâtiment est une décision, pas un réglage : il faudrait une
+  troisième valeur de zone, donc une position à réconcilier.
+  ⚠️ **Et la prairie : le nombre de blocs de 28×28 encore nus est compté par `verify-vallee.mjs`
+  à chaque exécution** — on le lit là, on ne le recopie pas ici (le 437 a perdu du temps sur un
+  chiffre périmé). On n'y a délibérément posé AUCUN endroit de vie : des résidents qui vont
+  contempler un champ vide, c'est du remplissage. La question n'est donc pas « comment les
+  meubler » mais **« qu'est-ce qu'on construit là »**.
 - ⚠️ **DEUX DES TROIS CHANTIERS DE JOUABILITÉ RESTENT À CONSTRUIRE.** Le marché est livré au
   430 et **devenu le SEUL guichet au 431** : la ferme montre et transforme, la ville achète.
   L'économie existe donc vraiment, et le **jour de marché** hebdomadaire est déjà un
@@ -573,9 +550,11 @@ erreur** en choisissant mal.
   remplit depuis la ferme, à deux, contre paiement. Elles s'appuient sur l'économie qui existe
   désormais ;
   **2. les rendez-vous datés** — concert au kiosque, foire : des événements au calendrier
-  partagé qui rassemblent résidents ET joueurs au même endroit à la même heure. ⚠️ Le patron
-  est déjà écrit deux fois (jour de marché, jour de service de Carla) : **une pure fonction du
-  numéro de jour, jamais un état**.
+  partagé qui rassemblent résidents ET joueurs au même endroit à la même heure. ⚠️ Le patron est
+  désormais écrit **cinq fois** (jour de marché, service de Carla, jour d'orage, cours du marché,
+  et au 439 les **élections municipales** + le jour d'audience du maire) : **une pure fonction du
+  numéro de jour, jamais un état**. Les élections sont le premier de ces rendez-vous qui ait un
+  RÉSULTAT visible dans le monde (le portrait officiel) — c'est le modèle à copier.
 - ⚠️⚠️ **LE TACTILE NE COUVRE QUE LA FERME, LA VILLE ET LE TRIBUNAL** (430). Les 21 autres jeux
   de la plateforme n'ont pas été audités au doigt. Certains ont déjà des `pointer*` (puzzle,
   naval, yahtzee), d'autres non — **personne ne sait lesquels**, et c'est exactement l'angle
@@ -586,11 +565,12 @@ erreur** en choisissant mal.
   élargir la portée du marché, ou raccourcir le trajet — et **aucun ne doit être touché avant
   d'avoir joué**. On a délibérément conservé la prime de cours (jusqu'à +35 %) comme
   contrepartie : le voyage doit PAYER, pas seulement coûter.
-- ⚠️ **LE PAIN DES PIGEONS EST GRATUIT (433) — ARBITRAGE À TRANCHER.** Assis sur un banc de la
-  ville, Espace éparpille des miettes et le vol se rassemble. Le gager sur un `bread` du stock
-  d'artisanat lierait la scène à l'économie qui vient d'être bouclée (joli), mais changerait un
-  geste d'ambiance en dépense — et un joueur assis qui appuie sans rien voir se passer croit
-  que la touche est cassée. **Question de conception, pas de technique.**
+- ⚠️ **LE PAIN DES PIGEONS EST GRATUIT (433) — ARBITRAGE TOUJOURS À TRANCHER**, mais la scène
+  MARCHE depuis le 439 (assis, treize pigeons viennent manger ; se lever en fait partir dix sur
+  quatorze). L'objection « un joueur qui appuie sans rien voir se passer croit que la touche est
+  cassée » ne tient donc plus : il se passe quelque chose. Reste la vraie question — gager le
+  geste sur un `bread` du stock lierait la scène à l'économie (joli) mais changerait une ambiance
+  en dépense. **Question de conception, pas de technique.**
 - ⚠️ **LES OISEAUX NE SONT PAS PARTAGÉS ENTRE LES DEUX JOUEURS** (433, décision de Guillaume :
   « leur comportement doit pas être exactement partagé »). Les emplacements se déduisent de la
   carte, mais le nombre et les activités sont tirés chez chaque client — deux joueurs sur la
@@ -624,58 +604,33 @@ erreur** en choisissant mal.
    se supprime, elle ne se date pas.
 2. **200 lignes = passe d'élagage obligatoire. Ne pas relever le seuil.** L'élagage se fait
    AVANT d'ajouter.
-   ⚠️ **LE 431 A EXÉCUTÉ L'ORDRE DU 430 : §4 EST SCINDÉ.** Les pièges de la ferme, de la ville
-   et du tribunal sont partis dans `components/ferme/README.md` §15 ; il ne reste ici que
-   JavaScript / three.js / canevas, plus le seul piège d'architecture (les deux cartes). Le
-   fichier est passé de **534 à 482 lignes** — deuxième rétrécissement de son histoire.
-   ⚠️⚠️ **ET LA VÉRIFICATION EXIGÉE PAR L'ORDRE A SERVI DÈS LA PREMIÈRE LIGNE** : « la boucle
-   de nuages tourne à vide (`SKY_CLOUD_COUNT: 0`) » ne correspondait à AUCUN symbole du dépôt.
-   Recopié ailleurs, il aurait survécu un zip de plus. **Relire chaque ligne contre le code
-   avant de la déplacer n'est pas une formalité : c'est là qu'on trouve les périmées.**
-   Historique : 426 (insuffisant), 427 (profond : §7 → `public/candyluge/README.md`, §9 réduit
-   à cinq pièges), 428 (§6 → `components/ferme/README.md`, 507 → 490), 431 (§4 scindé),
-   **432 (§10 → `tools/README.md`, 524 → 483)**.
-   ⚠️⚠️⚠️ **LE 437 N'A PAS ÉLAGUÉ NON PLUS, ET L'ORDRE DU 433 EST DÉSORMAIS TROIS FOIS REPORTÉ.**
-   Il ajoute trois blocs en §4 (le défaut mesuré-puis-laissé ; le naturel qui s'obtient par
-   opposition ; l'allée d'une case qui ne montre que ses marches) et corrige deux entrées de la
-   liste des bancs absents ; tout le reste part dans les deux fichiers qui font autorité
-   (`components/ferme/README.md` gagne son §20, `tools/README.md` deux bancs).
-   ⚠️ **MAIS LA RELECTURE DE §13 A ENFIN ÉTÉ FAITE, ET SON RÉSULTAT EST INSTRUCTIF** : les deux
-   lignes que le 436 annonçait périmées **n'existaient déjà plus** — elles avaient été corrigées
-   sans que la note qui les dénonçait le soit. Autrement dit, *l'avertissement avait survécu à
-   son objet*, et il a fait perdre du temps à qui le lisait. Une seule vraie correction restait :
-   « vingt blocs de prairie nue », que `verify-vallee.mjs` compte à **vingt et un** — et c'est le
-   genre de chiffre qui doit renvoyer au banc qui le mesure plutôt que d'être recopié.
-   **Leçon, et elle vaut pour ce chapitre entier : une note qui dénonce une ligne périmée est
-   elle-même une ligne à vérifier.**
-   ⚠️⚠️ **LE 436 N'A PAS ÉLAGUÉ NON PLUS, ET LA DETTE EST MAINTENANT NOMMÉE.** Il ajoute deux
-   blocs en §4 (la closure qui fait vieillir ; enrichir une texture révèle la géométrie) et deux
-   entrées à la liste des bancs absents ; tout le reste part dans les deux fichiers qui font
-   autorité (`components/ferme/README.md` gagne son §19, `tools/README.md` un banc et deux
-   mises à jour). **L'ordre laissé au 433 — relire §13 ligne à ligne contre le dépôt — n'est
-   toujours pas exécuté, et il est maintenant DEUX FOIS reporté.** Deux de ses lignes sont déjà
-   fausses ou périmées telles qu'écrites : « un lac qui n'a ni reflet, ni vaguelettes de rive »
-   (livré au 435), et l'entrée sur les maisons, qui mélange une question de contenu (dix façades
-   pour vingt-sept parcelles) avec une question d'eau désormais réglée. **C'est exactement ce
-   que le 431 a trouvé en relisant §4 : la première ligne relue était périmée.**
-   ⚠️ **LE 433 N'A PAS ÉLAGUÉ, ET IL LE DIT** : le fichier passe de 492 à ~525 lignes, tout
-   l'apport partant dans les trois fichiers qui font autorité (`components/ferme/README.md` a
-   gagné deux chapitres, `tools/README.md` trois bancs). Ce qui est remonté ici tient en deux
-   points, et les deux valent pour le projet entier : le canevas qui découpe, payé trois fois
-   dans le seul 433 ; et « un banc qui passe pendant que Guillaume voit un défaut ne dit pas
-   que la chose est bonne, il dit qu'on mesure autre chose ». **Le seuil de 200 lignes est
-   dépassé depuis longtemps ; la passe d'élagage réclamée par le point 2 reste DUE.**
-   ⚠️⚠️ **LE 432 A EXÉCUTÉ L'ORDRE DU 431, ET LE SEUIL A ÉTÉ FRANCHI EXACTEMENT COMME ANNONCÉ** :
-   deux entrées ajoutées (`render-ruche`, `fake-supabase`) ont porté la liste des bancs au-delà
-   de la moitié de §10. Elle est partie dans `tools/README.md` ; **il ne reste ici que la liste
-   des bancs ABSENTS**, qui est la vraie protection contre le banc imaginaire (§14.6) — une
-   liste de ce qui existe se vérifie en la lançant, une liste de ce qui n'existe pas ne se
-   vérifie jamais.
-   ⚠️ **L'ORDRE DU PROCHAIN ZIP : §13, ET IL A ENCORE GROSSI AU 433 (deux entrées de plus).** Il fait quarante lignes de
-   questions ouvertes et n'en perd jamais : chaque zip en ajoute et aucun n'en retire, parce
-   qu'une question à laquelle on a répondu se transforme en fonctionnalité et sort du fichier
-   par une autre porte. **Le jour où il dépasse §4, il faut le RELIRE ligne à ligne contre le
-   dépôt** — comme le 431 l'a fait pour §4, où la première ligne relue était périmée.
+   ⚠️⚠️⚠️ **LE 439 A ÉLAGUÉ, ET C'EST LE PLUS GROS RÉTRÉCISSEMENT DE L'HISTOIRE DU FICHIER :
+   687 → 661 lignes, dont un EN-TÊTE passé de 151 à 50.** Cet en-tête était devenu un mur de
+   cinquante lignes d'avertissements avant le premier chapitre — c'est-à-dire la partie qu'on lit
+   le moins bien, occupée par ce qu'on veut qu'on lise le mieux. Les leçons de DESSIN sont
+   descendues en §4 (elles y sont à côté des pièges de dessin), les leçons de BANC sont restées
+   en tête sous une seule forme (« un banc qui passe ne veut pas dire que la chose est bonne »)
+   avec ses quatre variantes connues, et **trois blocs qui redisaient la même chose que §4 ont
+   été supprimés, pas déplacés**.
+   ⚠️⚠️ **ET L'ORDRE LAISSÉ PAR LE 433, QUATRE FOIS REPORTÉ, A ÉTÉ EXÉCUTÉ : §13 EST RELU LIGNE
+   À LIGNE.** Résultat, et il vaut la peine : **une ligne était devenue FAUSSE** (« achète-t-on
+   une parcelle, et à quel guichet ? » — tranché au 439), **une était périmée** (« un joueur qui
+   appuie sans rien voir se passer croit que la touche est cassée » : il se passe quelque chose
+   depuis que les pigeons restent), **une recopiait un chiffre que le banc mesure** (les blocs de
+   prairie nue) — c'est la troisième fois que ce chiffre-là traîne un compte périmé, il renvoie
+   désormais au banc. *Une question à laquelle on a répondu ne sort pas du fichier toute seule :
+   elle y reste, et elle ment.*
+   Historique : 426 (insuffisant), 427 (profond : §7 → `public/candyluge/README.md`), 428 (§6 →
+   `components/ferme/README.md`, 507 → 490), 431 (§4 scindé, 534 → 482),
+   **432 (§10 → `tools/README.md`, 524 → 483)**, 433 à 438 (aucun), **439 (en-tête + §13,
+   687 → 661)**.
+   ⚠️ **L'ORDRE DU PROCHAIN ZIP : §4.** Il fait maintenant cent-vingt lignes et il vient d'en
+   gagner cinquante. Le partage « dessin / architecture / JavaScript » qu'on vient d'y poser est
+   la bonne charnière pour le scinder : **le jour où il repasse cent-cinquante lignes, la partie
+   DESSIN part dans un fichier qui fait autorité sur le dessin** — comme §6 est parti au 428 et
+   §10 au 432. Et comme les deux fois : **relire chaque ligne contre le code avant de la
+   déplacer**, c'est là qu'on trouve les périmées (le 431 l'a fait pour §4, sa première ligne
+   relue ne correspondait à aucun symbole du dépôt).
 3. **Critère d'inclusion** : « est-ce vrai à l'échelle du projet, et invérifiable en ouvrant
    un seul fichier ? » Sinon, ça va dans un commentaire de code. **L'histoire d'un défaut
    corrigé n'y a pas sa place — seule sa LEÇON, en §4.**

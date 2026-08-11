@@ -86,6 +86,7 @@ const PROP_IMG = (p) => (
           clump: S.townFlowerClump, lily: S.townLilyPads }[p.kind] || [])[((p.x * 11 + p.y * 17) >>> 0) % 4]
   ));
 
+const AR = E.townArchRise(tw);
 function paint(v, now) {
   const sh = makeCanvas(v.w * T, v.h * T);
   for (let y = v.y; y < v.y + v.h; y++) for (let x = v.x; x < v.x + v.w; x++) {
@@ -102,8 +103,18 @@ function paint(v, now) {
          Un banc qui approxime doit approximer par le VRAI sprite quand il
          existe (c'est déjà la règle écrite en tête de `PROP_IMG`). */
       sh.ctx.fillStyle = "#3f7fd0"; sh.ctx.fillRect(px, py, T, T);
-      if (S.townDeck) sh.ctx.drawImage(S.townDeck, px, py);
-      else { sh.ctx.fillStyle = "#a9834f"; sh.ctx.fillRect(px, py, T, T); }
+      /* ⚠️ ZIP 439 — LE TABLIER MONTE ICI AUSSI, et il le faut : c'est sur
+         cette planche qu'on vérifie que le dos d'âne du pont raccorde le
+         chemin sans laisser de marche. Un banc qui peindrait le tablier plat
+         montrerait un pont plat et déclarerait le chantier réussi. */
+      const rise = AR[i] || 0, dpy = py - rise;
+      if (rise > 0) {
+        sh.ctx.fillStyle = "#6b4a30"; sh.ctx.fillRect(px, dpy + T - 1, T, rise + 1);
+        sh.ctx.fillStyle = "rgba(30,20,12,0.35)"; sh.ctx.fillRect(px, dpy + T + rise - 1, T, 1);
+        sh.ctx.fillStyle = "rgba(255,225,180,0.10)"; sh.ctx.fillRect(px, dpy + T - 1, T, 1);
+      }
+      if (S.townDeck) sh.ctx.drawImage(S.townDeck, px, dpy);
+      else { sh.ctx.fillStyle = "#a9834f"; sh.ctx.fillRect(px, dpy, T, T); }
     }
     else if (!A.drawTownGrassTile(sh.ctx, S, tw, x, y, px, py)) sh.ctx.drawImage(S.townGrass[(x * 37 + y * 17) % S.townGrass.length], px, py);
     if (g === C.G_TOWN_LAWN) { sh.ctx.fillStyle = (Math.floor(x / 3) & 1) ? "rgba(24,70,30,0.10)" : "rgba(140,200,120,0.07)"; sh.ctx.fillRect(px, py, T, T); }
@@ -123,6 +134,29 @@ function paint(v, now) {
   for (const p of tw.props) {
     if (p.x < v.x - 2 || p.x > v.x + v.w + 2 || p.y < v.y - 3 || p.y > v.y + v.h + 3) continue;
     const img = PROP_IMG(p); if (!img) continue;
+    /* ⚠️⚠️ ZIP 439 — LE PONT EN DEUX MOITIÉS, COMME DANS LE JEU. C'est LE
+       contrôle de ce chantier : le garde-corps du fond derrière le passant, le
+       tablier sous ses pieds, la main courante du devant par-dessus. Dessiné
+       d'un seul tenant — l'état du 438 — le passant disparaissait dedans. */
+    if (p.kind === "archBridge") {
+      const bx = (p.x - v.x) * T + T / 2 - img.width / 2;
+      const bby = (p.y + 1 - v.y) * T - img.height + C.TOWN_BRIDGE_DROP_PX;
+      const rise = AR[p.y * tw.w + p.x] || 0, SP = C.TOWN_BRIDGE_SPLIT_Y, LO = img.height - SP;
+      queue.push({ by: p.y * T - 0.02, fn: (c2) => c2.drawImage(img, 0, 0, img.width, SP, bx, bby - rise, img.width, SP) });
+      queue.push({ by: (p.y + 1) * T + 0.02, fn: (c2) => c2.drawImage(img, 0, SP, img.width, LO, bx, bby - rise + SP, img.width, LO) });
+      /* LE TÉMOIN : une silhouette debout au sommet du pont, montée de la
+         flèche exactement comme le jeu monte le joueur. Sans elle, cette
+         planche montre un joli pont dont on ne sait toujours pas s'il se
+         franchit — et c'est précisément l'erreur du 438. */
+      const wy = (p.y + 1 - v.y) * T - rise;
+      queue.push({ by: (p.y + 1) * T - rise, fn: (c2) => {
+        const wx = (p.x - v.x) * T + T / 2;
+        c2.fillStyle = "#2b2f3a"; c2.fillRect(wx - 3, wy - 9, 6, 9);
+        c2.fillStyle = "#e8c9a0"; c2.fillRect(wx - 3, wy - 15, 6, 6);
+        c2.fillStyle = "#8a4b3a"; c2.fillRect(wx - 4, wy - 17, 8, 3);
+      } });
+      continue;
+    }
     queue.push({ by: (p.y + 1) * T, fn: (c2) => c2.drawImage(img, (p.x - v.x) * T + T / 2 - img.width / 2, (p.y + 1 - v.y) * T - img.height) });
   }
   queue.sort((a, b) => a.by - b.by);
@@ -145,6 +179,17 @@ for (let x = lk.x; x < lk.x + lk.w; x++) {
   tops.push(t);
 }
 
+/* ⚠️⚠️ ZIP 439 — LA PLANCHE DU PONT, EN GROS PLAN ET AVEC QUELQU'UN DESSUS.
+   Elle existe parce que « le pont est-il praticable ? » ne se lit pas sur une
+   vue d'ensemble : à l'échelle du parc, un pont traversé et un pont franchi
+   font la même tache brune. Il faut voir le passant DEPASSER du garde-corps du
+   fond et être coupé aux mollets par celui du devant — c'est ça, et rien
+   d'autre, la preuve qu'on marche dessus. */
+for (const q of tw.props) {
+  if (q.kind !== "archBridge") continue;
+  shot("pont-praticable", { x: q.x - 5, y: q.y - 5, w: 11, h: 9 }, 6);
+  break;
+}
 console.log("\n=== 1. la rive n'est plus tracée à la règle ===\n");
 {
   let run = 1, mx = 1, at = 0;
@@ -331,6 +376,40 @@ console.log("\n=== 4. rien n'a les pieds dans l'eau, rien ne bouche une allée =
     if (!has) holes++;
   }
   ok(holes === 0, "le sentier de rive ne s'interrompt pas", holes + " colonne(s) sans chemin");
+}
+
+/* ⚠️⚠️ ZIP 439 — LE DOS D'ÂNE MONTE À L'IMAGE ET RESTE PLAT POUR LA MARCHE.
+   Les deux moitiés de ce contrôle sont indissociables : une flèche qui ne monte
+   pas ne corrige rien, et une flèche qui entre dans `tw.elev` transforme le pont
+   en falaise (canStandTown refuse tout pas au-delà de TOWN_STEP_MAX). C'est le
+   piège qu'on a esquivé de trois lignes, donc c'est celui qu'un banc doit tenir. */
+console.log("\n=== 5. le pont se franchit par-dessus ===\n");
+{
+  let raised = 0, summit = 0, elevDirty = 0, offDeck = 0;
+  for (let i = 0; i < AR.length; i++) {
+    if (!AR[i]) continue;
+    raised++;
+    if (AR[i] > summit) summit = AR[i];
+    if (tw.ground[i] !== C.G_BRIDGE) offDeck++;
+    if (tw.elev[i] !== 0) elevDirty++;
+  }
+  ok(raised > 0, "le tablier a un profil d'arc", raised + " case(s) montées, flèche " + summit + " px");
+  ok(summit === C.TOWN_BRIDGE_ARCH_PX, "la flèche atteint bien son sommet", summit + " / " + C.TOWN_BRIDGE_ARCH_PX + " px");
+  ok(offDeck === 0, "aucune case hors tablier n'est montée", offDeck + " case(s) fautive(s)");
+  ok(elevDirty === 0, "⚠️ l'arc n'a PAS touché l'altitude de collision", elevDirty + " case(s) polluée(s)");
+  /* Les deux bouts du profil retombent à zéro : sans ça, le raccord avec le
+     chemin est une marche de deux ou trois pixels — le défaut de grille qu'on
+     passe son temps à corriger ailleurs (435, 437). */
+  let steps = 0;
+  for (const q of tw.props) {
+    if (q.kind !== "archBridge") continue;
+    for (const dy of [-1, 0]) for (const s2 of [-1, 1]) {
+      const x = q.x + s2 * (C.TOWN_BRIDGE_ARCH_SPAN + 1), y = q.y + dy;
+      if (x < 0 || y < 0 || x >= tw.w || y >= tw.h) continue;
+      if ((AR[y * tw.w + x] || 0) !== 0) steps++;
+    }
+  }
+  ok(steps === 0, "l'arc retombe à zéro à ses deux têtes", steps + " raccord(s) en marche");
 }
 
 /* ─────────────────────────── LES PLANCHES ─────────────────────────── */

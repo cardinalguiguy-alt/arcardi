@@ -565,9 +565,44 @@ export const BIRD_POP_MIN = 0.25, BIRD_POP_MAX = 1.0;   // fraction du vol maxim
    colombe sur sept : assez pour qu'elle surprenne, pas assez pour qu'on croie
    à un lâcher de mariage. */
 export const BIRD_DOVE_SHARE = 0.14;
-export const BIRD_CRUMB_AHEAD = 1.9;   // tuiles devant le banc où tombent les miettes
+export const BIRD_CRUMB_AHEAD = 2.2;   // tuiles devant le banc où tombent les miettes
 export const BIRD_CRUMB_N = 5;         // ⚠️ PLUSIEURS TAS, PAS UN : voir throwCrumbs
 export const BIRD_CRUMB_SPREAD = 1.4;  // tuiles : l'éparpillement d'une poignée
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 439 — UN JOUEUR ASSIS N'EST PLUS LA MÊME MENACE QU'UN JOUEUR DEBOUT.
+   ───────────────────────────────────────────────────────────────────────────
+   Retour de Guillaume : « quand on disperse des miettes de pain pour les
+   pigeons, ils sont trop proches et s'envolent direct ».
+   ⚠️⚠️ CE N'ÉTAIT PAS UN RÉGLAGE TROP NERVEUX, C'ÉTAIT UNE CONTRADICTION
+   GÉOMÉTRIQUE, et c'est ce qui la rend intéressante : les miettes tombaient à
+   1,9 case devant le banc, et le rayon d'envol valait 2,3 cases. **Le pain
+   atterrissait DANS le rayon d'envol.** On appelait donc les oiseaux à un
+   endroit d'où l'on garantissait qu'ils repartiraient, et le geste ne pouvait
+   pas marcher — quel que soit le réglage. Aucun banc ne pouvait le voir : les
+   deux nombres sont justes séparément, c'est leur ORDRE qui est faux, et il
+   n'existait aucun contrôle qui les compare. (Même famille que la rangée
+   d'étals du 433 : l'élément est impeccable, c'est son RAPPORT à un autre qui
+   ne l'est pas.)
+   ⚠️ D'où deux corrections, pas une : les miettes partent plus loin ET la
+   confiance monte quand on est assis. Une seule des deux aurait suffi à faire
+   « moins pire », les deux ensemble font une scène.
+   ⚠️⚠️ ET SE LEVER LES EFFRAIE, GRATUITEMENT. Il n'y a pas une ligne pour ça :
+   les rayons repassent de 0,7 / 1,2 à 2,3 / 4,2, et tous les pigeons qui
+   s'étaient approchés se retrouvent d'un coup dans le rayon d'envol. La
+   bouffée de départ tombe du modèle, elle n'est pas scriptée — exactement ce
+   que Guillaume demande (« si on se lève ça les effraie comme prévu »).
+   ⚠️ L'ALERTE ASSISE (1,2) EST PLUS COURTE QUE LA DISTANCE MINIMALE DES MIETTES
+   (1,5) : sans cet ordre-là, les oiseaux arriveraient au pain puis se
+   figeraient en « alerte » au lieu de picorer — ils ne s'envoleraient plus,
+   mais ils ne mangeraient pas non plus, ce qui est à peine mieux. Les trois
+   nombres se lisent ensemble, dans cet ordre : 0,7 < 1,2 < 1,5 < 2,2. */
+export const BIRD_SIT_FLUSH_R = 0.7;   // assis : il faut lui marcher dessus
+export const BIRD_SIT_ALERT_R = 1.2;
+export const BIRD_CRUMB_MIN = 1.5;     // tuiles : aucune miette plus près que ça
+// ⚠️ Anti-rafale : rejeter du pain ne fait que repousser l'échéance, donc rien
+// à gagner à marteler la touche — sauf trois toasts par seconde. Le geste
+// reste gratuit (l'arbitrage « le gager sur le stock » est toujours ouvert).
+export const BIRD_CRUMB_COOLDOWN_MS = 2500;
           // tuiles : distance pour monter (touche E)
 // Traversée de la rivière à cheval (chantier 2026-07, demande Guillaume :
 // "on doit pouvoir traverser la rivière à cheval, mais le cheval ralentit
@@ -3498,10 +3533,30 @@ export const COURT_ROOMS = [
   { floor: 1, key: "judge",     kind: "office",    x: 0, y: 0, w: 19, h: 11, doors: [{ x: 18, y: 5 }] },
   { floor: 1, key: "jury",      kind: "meeting",   x: 0, y: 10, w: 19, h: 10, doors: [{ x: 18, y: 14 }] },
   { floor: 1, key: "library",   kind: "library",   x: 0, y: 19, w: 19, h: 9,  doors: [{ x: 18, y: 23 }] },
-  { floor: 1, key: "landreg",   kind: "office",    x: 27, y: 0, w: 19, h: 9,  doors: [{ x: 27, y: 4 }] },
-  { floor: 1, key: "permits",   kind: "office",    x: 27, y: 8, w: 19, h: 8,  doors: [{ x: 27, y: 11 }] },
-  { floor: 1, key: "notary",    kind: "office",    x: 27, y: 15, w: 19, h: 7, doors: [{ x: 27, y: 18 }] },
-  { floor: 1, key: "registry",  kind: "office",    x: 27, y: 21, w: 19, h: 7, doors: [{ x: 27, y: 24 }] },
+  /* ⚠️⚠️⚠️ ZIP 439 — CES TROIS PIÈCES ONT CHANGÉ DE MÉTIER, ET C'EST LA
+     CORRECTION NARRATIVE DE CE ZIP. Jusqu'au 438, l'étage du tribunal portait un
+     « 🗺️ Cadastre », un « 📐 Bureau des permis » et un « 💍 État civil » —
+     c'est-à-dire les MÊMES trois services, avec les MÊMES emojis, que le
+     cadastre, le géomètre et la salle des mariages de l'hôtel de ville ouvert
+     dans le même zip. Deux bâtiments promettaient de vendre les mêmes parcelles
+     et de célébrer les mêmes unions ; le seul annuaire de la ville (le panneau
+     du tribunal) envoyait au palais de justice pour un guichet qui a sa pièce en
+     face. Une promesse tenue à un endroit devient un mensonge à l'autre.
+     ⚠️ LE PARTAGE EST DÉSORMAIS CELUI DU RÉEL, et il se dit en une ligne : LA
+     MAIRIE EST CE QU'ON DEMANDE, LE TRIBUNAL EST CE QUI SE TRANCHE. On choisit
+     sa parcelle au cadastre de la mairie ; on signe l'acte chez le notaire du
+     tribunal. Les deux bâtiments ne se doublent plus, ils s'ENCHAÎNENT — et cet
+     enchaînement est exactement la forme des « commissions » réclamées au §13 de
+     CLAUDE.md : une course à deux étapes, dans deux endroits, qui donne une
+     raison d'aller de l'un à l'autre.
+     ⚠️ Et `notary` RESTE au tribunal : un contrat entre joueurs se fait
+     authentifier, il ne se demande pas à un guichet. Sa description ne parle
+     plus de « vendre des parcelles » mais de signer ce que le cadastre a
+     réservé. */
+  { floor: 1, key: "prosecutor", kind: "office",   x: 27, y: 0, w: 19, h: 9,  doors: [{ x: 27, y: 4 }] },
+  { floor: 1, key: "mediation",  kind: "meeting",  x: 27, y: 8, w: 19, h: 8,  doors: [{ x: 27, y: 11 }] },
+  { floor: 1, key: "notary",     kind: "office",   x: 27, y: 15, w: 19, h: 7, doors: [{ x: 27, y: 18 }] },
+  { floor: 1, key: "bailiff",    kind: "counter",  x: 27, y: 21, w: 19, h: 7, doors: [{ x: 27, y: 24 }] },
   // ---------------- SOUS-SOL : ce qu'on garde, et ce qu'on enferme.
   { floor: 2, key: "archives",  kind: "archive",   x: 0, y: 0, w: 19, h: 14, doors: [{ x: 18, y: 7 }] },
   { floor: 2, key: "evidence",  kind: "storage",   x: 0, y: 13, w: 19, h: 15, doors: [{ x: 18, y: 20 }] },
@@ -3543,7 +3598,7 @@ export const COURT_ROOMS = [
   { floor: 4, key: "council",  kind: "council",  x: 0, y: 0, w: 19, h: 16, doors: [{ x: 18, y: 9 }] },
   { floor: 4, key: "mayor",    kind: "mayor",    x: 0, y: 15, w: 19, h: 13, doors: [{ x: 18, y: 24 }] },
   { floor: 4, key: "cityarch", kind: "archive",  x: 27, y: 0, w: 19, h: 14, doors: [{ x: 27, y: 5 }] },
-  { floor: 4, key: "surveyor", kind: "office",   x: 27, y: 13, w: 19, h: 15, doors: [{ x: 27, y: 19 }] },
+  { floor: 4, key: "surveyor", kind: "surveyor", x: 27, y: 13, w: 19, h: 15, doors: [{ x: 27, y: 19 }] },
 ];
 /* ═══════════════════════════════════════════════════════════════════════════
    LES CAGES D'ESCALIER. ⚠️ UNE CAGE EST UN LIEU, PAS UN TRAJET — et c'est la
@@ -3583,7 +3638,168 @@ export const COURT_ELEV_PX = 6;   // relief de l'estrade, en pixels d'écran
 // Les services annoncés, dans l'ordre du panneau d'affichage du hall. Le libellé
 // et le détail vivent dans fermeStrings (courtRoom*), jamais ici : ce tableau
 // dit QUOI et OÙ, pas comment ça se raconte.
-export const COURT_BOARD_ORDER = ["landreg", "permits", "notary", "registry", "courtroom", "clerk", "archives", "lostfound", "evidence", "cells"];
+export const COURT_BOARD_ORDER = ["courtroom", "prosecutor", "mediation", "notary", "bailiff", "clerk", "archives", "lostfound", "evidence", "cells"];
+/* ⚠️ ZIP 439 — LA MAIRIE A ENFIN SON ANNUAIRE. Au 438 elle n'en avait aucun :
+   ses huit portes ne se lisaient qu'une par une, pendant que le tribunal, lui,
+   affichait un récapitulatif — et ce récapitulatif était le SEUL de la ville,
+   donc il faisait autorité sur des guichets qui n'étaient pas chez lui.
+   L'accueil vient en tête parce que c'est le seul endroit où quelqu'un répond. */
+export const HALL_BOARD_ORDER = ["welcome", "prices", "cadastre", "civil", "mayor", "council", "surveyor", "cityarch"];
+/* ⚠️⚠️ ZIP 439 — LES GUICHETS QUI RÉPONDENT DÉJÀ. Sans cette liste, la plaque
+   de la salle des cours disait « bientôt opérationnel » suivi, dans la MÊME
+   bulle, de « c'est le seul guichet de la ville qui fonctionne déjà ». Le seul
+   service qui marchait était annoncé comme ne marchant pas.
+   ⚠️ C'est une LISTE et pas un test dérivé, et c'est assumé : « ce guichet
+   répond-il » ne se déduit d'aucune autre donnée du plan aujourd'hui. Le jour où
+   une pièce ouvre, on l'ajoute ICI et la plaque, le panneau et l'annuaire
+   changent ensemble — c'est précisément ce qu'on veut d'un doublon : qu'il n'y
+   en ait qu'un. */
+export const COURT_ROOMS_LIVE = ["prices", "welcome"];
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 439 — LES ÉLECTIONS MUNICIPALES, TOUS LES TRENTE JOURS.
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume : « Tous les trente jours, élections municipales. Les
+   résidents votent et élisent un maire. »
+   ⚠️⚠️ AUCUN ÉTAT, AUCUN SCHÉMA, AUCUN OCTET SUR LE RÉSEAU. Le mandat est une
+   PURE FONCTION DU NUMÉRO DE JOUR, comme le jour de marché, le jour de service
+   de Carla, le jour d'orage et les cours du marché — le patron est écrit quatre
+   fois dans ce dépôt, c'est le cinquième. Deux joueurs voient donc le même
+   maire par construction, sans qu'on ait rien à réconcilier ni à faire arbitrer
+   par l'hôte, et le résultat survit à une déconnexion parce qu'il n'a jamais
+   été stocké nulle part.
+   ⚠️⚠️⚠️ ET LE VIVIER DE CANDIDATS EST FIXE, PAS LE ROSTER — C'EST LA DÉCISION
+   ANTI-EXPLOIT DE CE BLOC. Tirer le maire dans la liste des résidents de la
+   ferme aurait paru plus riche et aurait été une faille : accueillir ou
+   renvoyer un résident aurait RETIRÉ le maire en cours de mandat, et un joueur
+   qui n'aime pas le résultat n'aurait eu qu'à faire tourner sa population
+   jusqu'à obtenir celui qu'il veut. Pire, l'histoire ne tiendrait pas : le
+   maire élu il y a vingt jours changerait rétroactivement le jour où l'on
+   accueille quelqu'un. Les candidats sont donc des figures de la VILLE, cinq,
+   écrites ici une fois pour toutes.
+   ⚠️⚠️ LES RÉSIDENTS VOTENT QUAND MÊME, ET LEURS VOIX SONT COMPTÉES — mais
+   l'écart entre le premier et le second est CONSTRUIT pour dépasser le nombre
+   maximal de résidents (voir `mayorBallot`). Autrement dit : on voit pour qui
+   ses gens ont voté, ça compte vraiment dans le dépouillement affiché, et ça ne
+   peut pas renverser l'élection. C'est le seul arrangement qui soit à la fois
+   honnête (rien n'est faux à l'écran) et infalsifiable. Le jour où l'on VEUT
+   qu'un joueur pèse — une quête de campagne électorale — il suffira de lui
+   donner de quoi franchir cet écart, et le mécanisme est déjà là.
+   ⚠️ Le maire ne « prend ses fonctions » nulle part : il est simplement celui
+   du mandat courant. Rien à initialiser, rien à migrer, et une partie ouverte
+   au jour 400 a un maire tout de suite. */
+export const MAYOR_TERM_DAYS = 30;
+export const MAYOR_VOTE_BASE = 40, MAYOR_VOTE_SPAN = 60;  // les voix de la ville
+export const TOWN_CANDIDATES = [
+  { key: "vasseur",  emoji: "🌾" },   // l'eau et les champs
+  { key: "lantier",  emoji: "🔨" },   // les travaux, les ponts, les chemins
+  { key: "bonnefoy", emoji: "⚖️" },   // l'ordre et les comptes
+  { key: "delaunay", emoji: "🌊" },   // le lac, le parc, les promenades
+  { key: "toussaint", emoji: "📚" },  // l'école et les archives
+];
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 439 — L'ACCUEIL DE L'HÔTEL DE VILLE, ET LA TABLE DES SUJETS.
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume : « poste un nouveau PNJ à l'accueil de l'hôtel de
+   ville. Elle dira bonjour, que puis-je faire pour vous ? et ça ouvre un
+   panneau de choix de réponses à lui envoyer. […] Je veux des éléments qui
+   permettent le développement d'une quête future. Il faut que les mécaniques
+   préexistent pour permettre une conception de quête intéressante. »
+   ⚠️⚠️ CE QUI PRÉEXISTE N'EST PAS LE DIALOGUE, C'EST CETTE TABLE. Un dialogue
+   écrit en `if` imbriqués dans le composant est un dialogue qu'on ne peut pas
+   étendre sans le relire en entier. Ici, UNE QUÊTE = UNE LIGNE : une clé, un
+   emoji, le panneau qu'elle ouvre, et éventuellement une garde `when` qui
+   décide si le sujet est proposé. Le reste — l'affichage, la fermeture, le
+   retour au menu, la traduction — est déjà écrit et ne bougera plus.
+   ⚠️⚠️⚠️ ET AUCUN SUJET NE DONNE QUOI QUE CE SOIT. C'est la règle dure de ce
+   bloc, et elle est là pour une raison précise : un panneau de dialogue
+   s'ouvre à volonté, avec E, sans limite et sans arbitrage de l'hôte. Le jour
+   où un sujet rendrait de l'or, une denrée ou un objet, il suffirait de
+   marteler E devant l'hôtesse. Tout ce qui est ici est donc de l'INFORMATION
+   (ce qu'on lit) ou une DATE DÉRIVÉE (un rendez-vous, qui est une pure
+   fonction du jour comme le reste). Une quête qui devra RÉCOMPENSER passera
+   par une requête arbitrée par l'hôte, comme la vente au marché — le dialogue
+   n'est que la porte, jamais la caisse.
+   ⚠️ `when` reçoit `{ day, mayor, residents, shared }` : de quoi ouvrir un
+   sujet un jour donné, sous un maire donné, ou quand la ferme a atteint tel
+   état. C'est exactement ce qu'il faut pour dater une quête sans inventer un
+   calendrier, et ça ne coûte rien tant que personne ne s'en sert. */
+export const HALL_CLERK_R = 2.4;      // tuiles : à quelle distance elle vous salue
+export const HALL_TOPICS = [
+  { key: "mayor",    emoji: "🎩", panel: "mayor" },
+  { key: "election", emoji: "🗳️", panel: "election" },
+  { key: "registry", emoji: "📇", panel: "registry" },
+  { key: "prices",   emoji: "📈", panel: "prices" },
+  { key: "where",    emoji: "🧭", panel: "where" },
+  { key: "wedding",  emoji: "💍", panel: "soon" },
+  { key: "land",     emoji: "🗺️", panel: "soon" },
+  /* Un sujet qui n'apparaît QUE le jour du scrutin : il ne sert à rien
+     aujourd'hui, et c'est précisément la démonstration que la garde marche.
+     Une quête datée s'écrira exactement comme cette ligne. */
+  { key: "ballot",   emoji: "🗳️", panel: "election", when: (c) => c.electionToday },
+];
+/* Le rendez-vous chez le maire : il reçoit un jour sur sept du mandat. ⚠️ PURE
+   FONCTION, encore : « quand puis-je le voir ? » a la même réponse chez les
+   deux joueurs sans qu'on diffuse un calendrier. */
+export const MAYOR_AUDIENCE_EVERY = 7;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 439 — LE PONT SE FRANCHIT PAR-DESSUS, PLUS AU TRAVERS.
+   ───────────────────────────────────────────────────────────────────────────
+   Retour de Guillaume : « LE PONT. Il doit être praticable, pour l'instant on
+   le traverse. » Le diagnostic tient en une phrase : les deux ponts de Valley
+   Town sont un SPRITE de 81×54 posé comme un décor à une case, et le tablier
+   praticable est une bande de planches plates dessinée à côté. Le sprite est
+   ancré deux rangées sous la rangée nord du tablier ; un joueur qui marche sur
+   cette rangée-là a donc une clé de tri INFÉRIEURE à celle du pont et se
+   dessine DERRIÈRE l'ouvrage — il disparaît dedans. Sur la rangée sud, les
+   deux clés sont égales et l'ordre dépend de l'ordre d'insertion (§4 : « un
+   ordre de dessin ne se fonde pas sur la stabilité du tri »).
+   ⚠️⚠️ LA CORRECTION N'EST PAS UN RÉGLAGE DE TRI, C'EST UNE ALTITUDE. Un pont
+   en dos d'âne se traverse en MONTANT : si le tablier ne monte pas, aucun ordre
+   de dessin ne fera croire qu'on est dessus plutôt que devant. On donne donc au
+   tablier un profil d'arc, en pixels d'écran, et le personnage le reçoit comme
+   il reçoit l'altitude d'une case — exactement le mécanisme du saut de rebord
+   (`TOWN_JUMP_ARC_PX`), qui exprime déjà sa cloche en altitude FRACTIONNAIRE.
+   ⚠️⚠️⚠️ ET ELLE NE TOUCHE PAS LA COLLISION, C'EST LA CONTRAINTE DURE. Passer
+   l'arc dans `playerElevTown` aurait été plus court de trois lignes — et aurait
+   rendu le pont INFRANCHISSABLE : cette fonction sert aussi à `canStandTown`,
+   qui refuse tout pas dont le dénivelé dépasse TOWN_STEP_MAX. On aurait
+   fabriqué un mur en voulant dessiner une bosse. L'arc est une grandeur de
+   DESSIN, il vit dans un chemin de dessin, et le banc vérifie les deux.
+   ⚠️ Le profil retombe à ZÉRO à ses deux bouts (7 cases : 0 · ¼ · ¾ · 1 · ¾ ·
+   ¼ · 0). Un arc qui s'arrête à mi-hauteur laisse une marche de trois pixels au
+   raccord avec le chemin, c'est-à-dire le défaut de grille qu'on passe son
+   temps à corriger ailleurs. */
+export const TOWN_BRIDGE_ARCH_PX = 7;    // px : la flèche de l'arc, au sommet
+export const TOWN_BRIDGE_ARCH_SPAN = 3;  // cases de part et d'autre du sommet
+/* ⚠️⚠️ ET LE SPRITE SE COUPE EN DEUX. Le pont de la planche est déjà dessiné en
+   trois-quarts — garde-corps NORD en haut, tablier au milieu, garde-corps SUD en
+   bas — mais il était posé comme UN décor, donc entièrement devant ou
+   entièrement derrière le passant. Or les deux moitiés n'ont pas la même
+   profondeur : le garde-corps du fond est derrière lui, celui du devant est
+   devant lui. On le dessine donc DEUX FOIS, avec deux découpes et deux clés de
+   tri, et le personnage passe entre les deux. C'est ce sandwich, et lui seul,
+   qui fait qu'on marche SUR un pont au lieu de marcher DANS.
+   ⚠️ 38 sur 54, c'est la ligne où la main courante du devant commence. Elle est
+   mesurée sur le sprite (voir la planche), pas devinée : deux pixels trop haut
+   et le tablier passe devant les pieds, deux pixels trop bas et la main courante
+   passe derrière la tête. */
+export const TOWN_BRIDGE_SPLIT_Y = 38;
+/* ⚠️⚠️⚠️ ET LE SPRITE DESCEND D'UNE CASE. C'est la mesure qui a débloqué tout le
+   reste, et elle ne se devine pas : elle se lit sur la planche de contrôle.
+   Le pont était ancré de façon que la bande de TABLIER du dessin (y = 14 à 38
+   sur 54) tombe UNE CASE AU-DESSUS des deux rangées praticables. Autrement dit
+   le joueur marchait sur les planches plates pendant que le tablier dessiné
+   flottait au-dessus de sa tête : d'où « on le traverse » — il n'y avait aucune
+   hauteur à laquelle se tenir qui soit à la fois praticable et dessinée.
+   ⚠️ En le descendant de 16 px, la bande de tablier recouvre exactement les deux
+   rangées, et le garde-corps du DEVANT tombe une rangée plus au sud — ce qui est
+   sa place en trois-quarts : ce qui est plus près du spectateur est plus bas à
+   l'écran. Le personnage se retrouve alors DANS l'ouvrage, entre les deux
+   garde-corps, ce qui est précisément ce qu'on cherchait. */
+export const TOWN_BRIDGE_DROP_PX = 16;
 
 // --- Seasons (timing chosen by the model, per Guillaume's delegation) ---
 // One season lasts SEASON_DAYS in-game days; purely visual for now (tint +

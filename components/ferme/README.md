@@ -1,4 +1,4 @@
-# Valley Town, le tribunal, et la vie qui s'y passe — état au 436
+# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 439
 
 Ce fichier est **l'autorité** sur la seconde carte du jeu et sur ses habitants. Il a été
 extrait de `CLAUDE.md` §6 au zip 428, sur l'ordre laissé par le §14.2 du 427 et sur le modèle
@@ -1643,3 +1643,233 @@ de le planifier. Quatre jours et pas dix — au-delà on ne lit plus un tableau,
   L'écart de finition entre les deux cartes est maintenant frappant, et c'est assumé (décision du
   424) — mais c'est la dette la plus visible du projet ;
 - **aucun résident n'entre dans les deux bâtiments.** Les intérieurs sont vides de monde.
+
+
+---
+
+## 22. ZIP 439 — L'AUDIT : LA SOURICIÈRE, LES DOUBLONS, L'ACCUEIL, LE PONT
+
+### ⚠️⚠️⚠️ ON NE POUVAIT PAS RESSORTIR DE L'HÔTEL DE VILLE
+
+`nearCourtExit()` testait `courtFloorOf(y) === 0` et le `COURT_ENTRY` du tribunal **en dur**.
+Le rez-de-chaussée de la mairie est le niveau **3**, son seuil est à `y = 120` : le prédicat
+était faux **partout dans le bâtiment**. Ni l'invite ni la touche E ne proposaient jamais de
+sortir. On entrait, on restait.
+
+⚠️ **Le seuil était décrit DEUX FOIS.** Le générateur avait été corrigé au 438 et son
+commentaire prévient mot pour mot : « écrit `f === 0`, le test aurait donné un bâtiment dont on
+ne peut plus ressortir, sans qu'aucune erreur ne le dise ». La seconde description, au niveau du
+composant, ne l'a pas été. Le seuil se DÉDUIT désormais (`E.courtExitPos`), une fois.
+
+⚠️ **Pourquoi personne ne l'a vu** : le menu développeur téléporte DANS le bâtiment. Qui teste
+par le menu entre et sort par téléport — il ne pose jamais le pied sur le seuil. *Un raccourci
+de test qui contourne la seule chose à tester ne teste rien.*
+
+### ⚠️⚠️ LE 438 AVAIT EFFACÉ LA STATUE DE LA JUSTICE
+
+L'escalier d'honneur de la mairie était ajouté au `doorGuard` **pour les cinq niveaux** au lieu
+des deux qu'il relie. Il interdisait donc (22,4)-(23,4) au rez-de-chaussée du **tribunal**, où
+la statue est posée depuis le 426. Mesuré en regénérant le monde avec et sans cette ligne :
+**10 refus contre 5**, `justice` et `justice2` dans le lot.
+
+⚠️ **Le refus parlait, personne n'écoutait.** `addProp` imprime chaque meuble refusé ;
+`render-mairie.mjs` les comptait et les qualifiait d'« antérieurs » pour ne mesurer que la
+mairie. *Un banc qui se donne un périmètre finit par exclure de sa mesure les dégâts qu'il cause
+à côté.* Il échoue maintenant sur tout le bâtiment — **zéro refus**.
+
+### LE PARTAGE DES DEUX BÂTIMENTS — la correction narrative
+
+Quatre services étaient promis **deux fois**, mêmes emojis, mêmes descriptions : cadastre, état
+civil, permis, archives. Et le seul annuaire de la ville était au tribunal, donc il envoyait
+acheter sa parcelle au palais de justice — en face de la pièce « 🗺️ Cadastre » de la mairie.
+
+**La mairie est ce qu'on DEMANDE, le tribunal ce qui se TRANCHE.**
+
+| | mairie | tribunal |
+|---|---|---|
+| parcelles | 🗺️ cadastre — on choisit, on réserve | ✒️ notaire — on signe l'acte |
+| unions | 💍 salle des mariages | — |
+| construire | 📐 géomètre — instruit les permis | — |
+| litiges | — | ⚖️ audience · 🤝 médiation · ⚖️ procureur · 📯 huissier |
+| archives | 🗄️ de la ville | 🗄️ des audiences |
+
+Les deux bâtiments ne se doublent plus, ils **s'enchaînent** — et cet enchaînement est la forme
+même des « commissions » réclamées au §13 de `CLAUDE.md` : une course à deux étapes qui donne
+une raison d'aller de l'un à l'autre. `landreg` / `permits` / `registry` sont devenus
+`prosecutor` / `mediation` / `bailiff`. **La mairie a son propre annuaire** (`HALL_BOARD_ORDER`)
+et `courtBoardOpen` porte désormais la clé du bâtiment, déduite du panneau qu'on lit.
+
+### 💁 LÉONIE SARRAZIN, ACCUEIL — et la table de sujets
+
+⚠️⚠️ **CE QUI EST LIVRÉ N'EST PAS UN DIALOGUE, C'EST `HALL_TOPICS`.** Une quête future = **une
+ligne** : clé, emoji, panneau, et une garde `when` qui reçoit `{ day, mayor, residents, shared,
+electionToday }`. Le panneau ne connaît aucun sujet : il parcourt la table. Un sujet à garde est
+déjà là pour prouver que le mécanisme marche — « je viens voter » n'apparaît que le jour du
+scrutin.
+
+⚠️⚠️⚠️ **AUCUN SUJET NE DONNE QUOI QUE CE SOIT, ET C'EST LA RÈGLE DURE.** Un panneau s'ouvre à
+volonté avec E, sans limite et sans arbitrage de l'hôte : le jour où un sujet rendrait de l'or,
+une denrée ou un objet, il suffirait de marteler la touche. Tout ce qui est là est de
+l'INFORMATION ou une DATE dérivée du numéro de jour. Une quête qui devra récompenser passera par
+une `req` arbitrée par l'hôte, comme la vente au marché. **Le dialogue est la porte, jamais la
+caisse.**
+
+⚠️ Deux sujets sont des RENVOIS et non des réponses : « les cours » ouvre le tableau, « où se
+trouve… » ouvre l'annuaire. Recopier leur contenu aurait fait deux affichages à tenir d'accord.
+
+⚠️ Elle est un **prop**, pas un personnage : elle ne se déplace jamais. Lui donner une feuille de
+poses, un état et une position à diffuser aurait été payer trois mécanismes pour quelqu'un qui
+reste debout derrière un comptoir — et `res.zone` ne connaît de toute façon que « farm » et
+« town ». Elle est posée **derrière** le guichet (`iy + 1`, le comptoir est en `iy + 2`) : un
+guichet où l'agent est du côté du public ne se lit plus comme un guichet.
+
+### 🗳️ LES ÉLECTIONS — pure fonction du jour, vivier FIXE
+
+Mandat de **30 jours**. `mayorOf(day)`, `mayorBallot(day, residents)`, `mayorAudienceDay(day)` :
+aucun état, aucun schéma, aucun octet sur le réseau — cinquième usage du patron (jour de marché,
+service de Carla, jour d'orage, cours du marché).
+
+⚠️⚠️⚠️ **LE VIVIER DE CANDIDATS EST FIXE, ET C'EST LA DÉCISION ANTI-EXPLOIT.** Tirer le maire dans
+les résidents de la ferme aurait paru plus riche et aurait été une faille : accueillir ou
+renvoyer quelqu'un aurait retiré le maire **en cours de mandat**, et un joueur mécontent n'aurait
+eu qu'à faire tourner sa population. Pire, une élection passée aurait changé rétroactivement.
+
+⚠️⚠️ **Les résidents votent quand même, et leurs voix comptent** — mais l'écart entre le premier
+et le second est **construit pour dépasser `MAX_RESIDENTS`**. On voit pour qui ses gens ont voté,
+c'est vrai à l'écran, et ça ne peut pas renverser le scrutin. Mesuré par `verify-vallee` sur
+2 145 bulletins × cinq compositions : **0 renversement**, écart minimal **14 voix**, 16 302
+bulletins de résidents dépouillés. Le jour où une quête de campagne devra donner du poids au
+joueur, il suffira de lui faire franchir cet écart : **le mécanisme est déjà là.**
+
+⚠️ Le bulletin d'un résident tient à son `rid`, pas à sa place dans la liste : trier la liste ne
+change pas le dépouillement (contrôlé). Et `mayorBallot` **appelle** `mayorOf` au lieu de
+recalculer le vainqueur — sinon un départage d'égalité différent aurait affiché un maire dans le
+panneau et un autre sous le portrait.
+
+⚠️ **Le maire élu est écrit vivant sous son portrait officiel**, dans son bureau (`fillText` au
+rendu, jamais cuit dans le sprite — §15). Un scrutin dont le résultat n'existe que dans un
+panneau de menu n'est pas un événement du monde, c'est une page de menu.
+
+### 🌉 LE PONT SE FRANCHIT PAR-DESSUS
+
+L'ouvrage est un sprite de 81×54 posé comme un décor à une case, **ancré deux rangées sous le
+tablier** : sur la rangée nord, la clé de tri du passant était plus petite que la sienne — il se
+dessinait derrière et disparaissait dedans ; sur la rangée sud les deux clés étaient égales et
+l'ordre dépendait de l'ordre d'insertion (§15).
+
+Trois corrections, et la première est la seule qui compte :
+
+1. **le tablier MONTE** — `E.townArchRise(tw)`, une COUCHE dérivée des props (règle du 434 : pas
+   un `G_BRIDGE_ARCH` de plus, qui aurait rouvert tous les tests `ground === G_BRIDGE`). Profil
+   `0 · ¼ · ¾ · 1 · ¾ · ¼ · 0`, flèche 7 px, retombant à zéro aux deux têtes ;
+2. **le sprite se coupe en deux** (`TOWN_BRIDGE_SPLIT_Y = 38`) : garde-corps du fond derrière le
+   passant, main courante du devant par-dessus. Le personnage passe **entre les deux** ;
+3. **il descend d'une case** (`TOWN_BRIDGE_DROP_PX = 16`) — mesure lue sur la planche, pas
+   devinée : la bande de tablier du dessin tombait une case au-dessus des rangées praticables.
+   *Il n'existait aucune hauteur qui soit à la fois praticable et dessinée* — d'où « on le
+   traverse ».
+
+⚠️⚠️ **ET L'ARC NE TOUCHE PAS LA COLLISION.** Passé dans `playerElevTown`, il aurait été trois
+lignes plus court et aurait rendu les deux ponts **infranchissables** : cette fonction sert aussi
+à `canStandTown`, qui refuse tout pas au-delà de `TOWN_STEP_MAX`. On aurait livré un mur en
+croyant dessiner une bosse, et le symptôme n'aurait ressemblé en rien à sa cause. `drawElevTown`
+porte « draw » dans son nom, et le banc tient les deux moitiés séparément.
+
+### 🕊️ LES PIGEONS — une contradiction géométrique, pas un réglage nerveux
+
+Les miettes tombaient à **1,9 case** devant le banc ; le rayon d'envol valait **2,3**. *Le pain
+atterrissait dans le rayon d'envol* : on appelait les oiseaux à un endroit d'où l'on garantissait
+qu'ils repartiraient, quel que soit le réglage. Les deux nombres sont justes séparément, c'est
+leur ORDRE qui était faux — et rien ne les comparait. (Même famille que la rangée d'étals du
+433 : l'élément est impeccable, c'est son rapport à un autre qui ne l'est pas.)
+
+Chaque menace porte maintenant **ses** rayons. Assis : **0,7 / 1,2**. Debout : 2,3 / 4,2. Les
+miettes partent à **2,2** et aucune ne tombe à moins de **1,5** (on borne la queue du tirage, on
+ne recentre pas). Les trois nombres se lisent ensemble : `0,7 < 1,2 < 1,5 < 2,2` — l'alerte assise
+doit être plus courte que la miette la plus proche, sinon ils arrivent au pain et se **figent**
+au lieu de picorer.
+
+⚠️ **Se lever ne coûte pas une ligne** : les rayons reprennent leur taille et tout ce qui s'était
+approché se retrouve dedans. La bouffée tombe du modèle. Mesuré : **13 pigeons au pain assis, 10
+départs sur 14 en deux secondes** en se levant.
+
+⚠️ L'assise d'un joueur DISTANT se lit dans `p.sit` — le champ qui voyage depuis le 428 et que
+personne ne lisait avant le 436. Sans lui, un camarade assis à côté ferait fuir vos pigeons.
+
+⚠️ Le banc du 433 jetait du pain avec `threats: []`, **sans personne sur le banc**. Il mesurait la
+moitié de la scène qui marche, et il passait au vert pendant que Guillaume voyait le défaut.
+
+### LES SOLS DES INTÉRIEURS SORTENT DE LA CLOSURE
+
+Parquet, marbre, tapis et dalle brute vivaient dans `drawCourtFrame` : aucun banc ne pouvait les
+appeler, donc ils sont restés au niveau du **426** pendant que les rues (434), l'eau (435), la
+pierre (436) et l'herbe (438) montaient toutes. *L'écart n'était pas un écart de soin, c'était un
+écart de date, et il se lisait sur une carte du dépôt.* Ils sont dans `fermeArt.js`
+(`drawCourtWoodTile` & co.) et `render-mairie` les **appelle**.
+
+- **le parquet** : lames de 44 px (premier avec 16) qui **traversent les cases**, abouts décalés
+  d'une rangée à l'autre. Avant : quatre lames dans chaque case, donc des abouts alignés tous les
+  16 px sur toute la pièce — l'œil voyait la grille avant le bois ;
+- **l'écart de ton entre deux lames est étroit**, délibérément : le premier jet, à six tons bien
+  séparés, donnait un velours côtelé. *Ce qui fait la matière n'est pas le contraste, c'est la
+  forme* (leçon des arbres du 438) ;
+- **le marbre** en dalles de deux cases, veines calculées dans le repère de la dalle et découpées
+  à la case — elles traversent les joints ;
+- **la dalle du sous-sol** a un calepinage irrégulier (une pierre sur trois est longue) : c'est
+  l'irrégularité qui dit « cave », un damier régulier dit « carrelage ».
+
+⚠️ Première exécution du banc : **un tapis en tartan**, parce qu'il passait un `y` LOCAL là où le
+jeu passe un `y` absolu — `isCarpet` répondait « non » partout et la bordure cernait chaque case.
+Le jeu était juste. *Un banc qui repeint ne juge pas le jeu, il juge sa propre maquette ; un banc
+qui appelle peut encore se tromper d'unité.*
+
+### LES DEUX COULOIRS ÉTAIENT LE MÊME COULOIR
+
+Le bloc de colonnade tournait pour les cinq niveaux **sans une seule condition** : la mairie et le
+tribunal avaient rigoureusement le même rythme de cinq et les mêmes bancs adossés — la seule chose
+que le joueur voit pendant vingt-huit cases de marche. ⚠️ *Ce qui sépare un hall d'un couloir n'est
+pas son mobilier, c'est son vide.* Le tribunal serre ses colonnes ; la mairie dégage son milieu et
+y pose un **tapis d'honneur** (4 cases au rez-de-chaussée, 2 à l'étage), colonnes espacées de
+sept, urnes au lieu de bancs. Trois lectures, un seul bloc de code.
+
+Et la **maquette de la ville** était posée **deux fois**, de part et d'autre d'un trou de deux
+cases — l'axe de la porte, sur lequel le commentaire jurait qu'elle était centrée, tombait dans le
+trou. Elle est unique et à l'ENTRÉE : son travail est de dire dans quel bâtiment on vient d'entrer
+avant qu'on ait lu une plaque, et à vingt cases de la porte elle ne pouvait pas le faire.
+
+### TROIS CULS-DE-SAC D'UNE CASE, TROUVÉS PAR LE BANC ET PAR LUI SEUL
+
+Deux dans le hall de la mairie, un dans la salle des mariages. Toujours la même cause : **meubler
+le long d'un mur fabrique des poches** (mur d'un côté, banc au nord, colonne au sud, maquette à
+l'est). Aucune ne se voit sur une planche, aucune ne se voit en jouant sans y tomber. Les bancs
+d'attente sont désormais à **une case du mur**, et les colonnes d'urnes s'arrêtent deux rangées
+avant l'angle.
+
+⚠️ Et `place()` remplace `addProp()` pour tout ce qui est décoratif : on **décale** d'une case au
+lieu de renoncer. Une colonne manquante dans une colonnade se voit (le rythme casse) ; une colonne
+décalée d'une case ne se voit pas. Le refus reste une ERREUR pour tout ce qui est structurel.
+
+### LE CONTRÔLE DE DENSITÉ REMPLACE LE COMPTAGE
+
+Le bureau du géomètre — dix-sept cases sur treize, la plus grande pièce des deux bâtiments —
+sortait avec **huit props** et passait « meublé » parce que le seuil était `n < 6`. À côté des
+quatre-vingts des archives : un rapport de dix à un, et un contrôle au vert. *Un seuil absolu sur
+une grandeur qui dépend de la taille de la pièce est faux dès que les pièces n'ont pas la même
+taille* — c'est le seuil du taxi au 434, transposé au mobilier. On mesure des **meubles pour cent
+cases**, minimum 8. Il a immédiatement attrapé la salle des mariages à 6 %.
+
+Le géomètre a son propre `kind` (planche à dessin inclinée, cartonniers, plan mural) ; le bureau
+du maire a enfin le **fauteuil** que sa description promettait depuis le 438 ; la table du conseil
+est un vrai ovale (isoligne d'ellipse, chaises posées sur le contour — leçon des rives du 437).
+
+### Ce que ça ne fait pas
+
+- **aucun résident n'entre encore dans les deux bâtiments** : `res.zone` ne connaît que « farm »
+  et « town ». Léonie est un décor qui parle, pas une habitante ;
+- **le cadastre, l'état civil, le conseil, le géomètre et les quatre métiers du tribunal restent
+  des PIÈCES, pas des services.** Les guichets ouverts sont la salle des cours et l'accueil ;
+- **on ne peut pas encore se marier ni acheter de parcelle** — les deux sujets répondent, et ils
+  disent où ça se passera ;
+- **la ferme n'est toujours touchée par rien** : ses chemins et ses arbres restent ceux du 232 ;
+- **rien de tout ça n'a été joué à deux.** `tools/fake-supabase.mjs` existe depuis le 432 et la
+  ferme peuplée n'a toujours pas été passée au même crible.

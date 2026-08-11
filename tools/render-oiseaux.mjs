@@ -324,6 +324,72 @@ console.log("\n=== le pain jeté depuis un banc ===\n");
   Math.random = realRandom;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 439 — ASSIS, ILS VIENNENT ; DEBOUT, ILS PARTENT.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ CE CONTRÔLE MANQUAIT, ET SON ABSENCE EST TOUTE L'HISTOIRE DU DÉFAUT.
+   La section « le pain jeté depuis un banc » ci-dessus jette du pain avec
+   `threats: []` — c'est-à-dire SANS PERSONNE SUR LE BANC. Elle mesurait donc un
+   attroupement dans un monde où le joueur n'existe pas, et elle passait au vert
+   pendant que Guillaume voyait les pigeons « s'envoler direct ». On ne mesurait
+   pas autre chose par négligence : on mesurait la moitié de la scène qui marche.
+   ⚠️ Ici le lanceur EST là, à sa place, et les miettes tombent où
+   `throwCrumbs` les met (distance, éparpillement et distance minimale
+   comprises). C'est la seule façon de voir la contradiction géométrique qui
+   causait tout : des miettes à l'intérieur du rayon d'envol.
+   ═══════════════════════════════════════════════════════════════════════════ */
+console.log("\n=== assis sur un banc, le pain fonctionne ===\n");
+{
+  const flocks = E.townFlocks(tw);
+  for (const f of flocks) fill(f);
+  const site = flocks[0];
+  // Le lanceur est au milieu du groupe, comme sur un banc de la place.
+  const me = { x: site.cx, y: site.cy };
+  const SIT = { x: me.x, y: me.y, flush: C.BIRD_SIT_FLUSH_R, alert: C.BIRD_SIT_ALERT_R };
+  const STAND = { x: me.x, y: me.y, flush: C.BIRD_FLUSH_R, alert: C.BIRD_ALERT_R };
+  /* Les miettes exactement comme `throwCrumbs` les pose — clamp compris. Une
+     recopie, oui, et signalée : c'est le prix à payer tant que le jet vit dans
+     le composant. Ce qu'elle ne doit JAMAIS faire, c'est simplifier — la
+     distance minimale est justement le nombre qu'on vérifie. */
+  const fx = me.x, fy = me.y + C.BIRD_CRUMB_AHEAD, pts = [];
+  for (let k = 0; k < C.BIRD_CRUMB_N; k++) {
+    const a = (k / C.BIRD_CRUMB_N) * 6.28, rr = C.BIRD_CRUMB_SPREAD * (0.35 + 0.65 * ((k * 7) % 5) / 5);
+    let qx = fx + Math.cos(a) * rr, qy = fy + Math.sin(a) * rr * 0.6;
+    const dx = qx - me.x, dy = qy - me.y, d = Math.hypot(dx, dy);
+    if (d < C.BIRD_CRUMB_MIN && d > 0.001) { qx = me.x + dx / d * C.BIRD_CRUMB_MIN; qy = me.y + dy / d * C.BIRD_CRUMB_MIN; }
+    pts.push({ x: qx, y: qy });
+  }
+  const food = { x: fx, y: fy, pts };
+  /* ⚠️ LE CONTRÔLE QUI AURAIT TOUT ATTRAPÉ, ET IL TIENT EN UNE LIGNE : aucune
+     miette ne doit tomber dans le rayon d'envol de celui qui les jette. Au 433
+     les miettes partaient à 1,9 case et le rayon valait 2,3 : les cinq tas
+     étaient dedans. Les deux nombres sont justes séparément — c'est leur ORDRE
+     qui était faux, et rien ne les comparait. */
+  const inside = pts.filter(q => Math.hypot(q.x - me.x, q.y - me.y) < C.BIRD_SIT_FLUSH_R).length;
+  ok(inside === 0, "⚠️ aucune miette dans le rayon d'envol du lanceur", inside + " miette(s) sur " + pts.length);
+  const nearest = Math.min(...pts.map(q => Math.hypot(q.x - me.x, q.y - me.y)));
+  ok(nearest > C.BIRD_SIT_ALERT_R, "…ni dans son rayon d'alerte (sinon ils se figent au lieu de picorer)",
+     "miette la plus proche : " + nearest.toFixed(2) + " case, alerte assise " + C.BIRD_SIT_ALERT_R);
+  let now = 0;
+  for (let i = 0; i < 60 * 20; i++) { now += DT * 1000; E.flockStep(site, DT, { threats: [SIT], food: null }, CFG, now); }
+  let fed = 0;
+  for (let i = 0; i < 60 * 25; i++) {
+    now += DT * 1000;
+    E.flockStep(site, DT, { threats: [SIT], food }, CFG, now);
+  }
+  for (const b of site.birds) if (b.st === "ground" && Math.hypot(b.x - fx, b.y - fy) < C.BIRD_FOOD_EAT_R) fed++;
+  ok(fed >= 4, "⚠️ assis, ils viennent manger à ses pieds", fed + " pigeon(s) au pain");
+  const grounded = site.birds.filter(b => b.st === "ground").length;
+  /* ⚠️ ET MAINTENANT ON SE LÈVE. Rien n'est scripté : on remplace la menace
+     assise par la menace debout, les rayons reprennent leur taille, et tout ce
+     qui s'était approché se retrouve dedans. Si cette bouffée n'arrive pas,
+     c'est que la confiance assise ne servait à rien. */
+  let flew = 0;
+  for (let i = 0; i < 60 * 2; i++) { now += DT * 1000; E.flockStep(site, DT, { threats: [STAND], food }, CFG, now); }
+  flew = grounded - site.birds.filter(b => b.st === "ground").length;
+  ok(flew >= 3, "⚠️ …et se lever les fait s'envoler", flew + " départ(s) en 2 s, sur " + grounded + " au sol");
+}
+
 console.log("\n=== l'envol ===\n");
 {
   for (const f of flocks) fill(f);

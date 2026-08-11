@@ -1072,6 +1072,86 @@ section("Valley Town — couper du bois");
   ok("sans énergie, rien ne se passe", r2.changed === false && r2.toast === "tired");
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 439 — LES ÉLECTIONS MUNICIPALES.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ CE QU'ON MESURE ICI N'EST PAS « le maire change tous les trente jours »
+   (ça, c'est une division), C'EST QU'UN JOUEUR NE PEUT PAS TRUQUER LE SCRUTIN.
+   Le maire est tiré dans un vivier FIXE et les résidents ne peuvent qu'effriter
+   l'écart, jamais le renverser : sans ce contrôle, il suffirait qu'un futur
+   réglage rapproche les scores pour que « accueillir un résident » devienne un
+   bouton pour changer de maire — et personne ne s'en apercevrait, parce que
+   rien ne planterait.
+   ═══════════════════════════════════════════════════════════════════════════ */
+console.log("\n=== Valley Town — les élections municipales ===\n");
+{
+  const mk = (n, seed) => Array.from({ length: n }, (_, k) => ({ rid: seed * 37 + k, name: "R" + k }));
+  ok("le mandat dure ce qu'il annonce",
+     E.mayorTermOf(0) === 0 && E.mayorTermOf(C.MAYOR_TERM_DAYS) === 1 && E.mayorTermOf(C.MAYOR_TERM_DAYS * 3 + 5) === 3,
+     `${C.MAYOR_TERM_DAYS} jours`);
+  ok("le scrutin tombe le jour du changement de mandat",
+     E.isElectionDay(C.MAYOR_TERM_DAYS) && !E.isElectionDay(C.MAYOR_TERM_DAYS + 1) && !E.isElectionDay(0));
+  // Le maire ne bouge pas D'UN JOUR à l'autre à l'intérieur d'un mandat.
+  let stable = true;
+  for (let t = 0; t < 40; t++) {
+    const a = E.mayorOf(t * C.MAYOR_TERM_DAYS).key;
+    for (let d = 1; d < C.MAYOR_TERM_DAYS; d++) if (E.mayorOf(t * C.MAYOR_TERM_DAYS + d).key !== a) stable = false;
+  }
+  ok("⚠️ le maire ne change pas EN COURS de mandat", stable, "40 mandats balayés");
+  // Il change quand même de temps en temps : un maire à vie serait une constante.
+  const seen = new Set();
+  for (let t = 0; t < 60; t++) seen.add(E.mayorOf(t * C.MAYOR_TERM_DAYS).key);
+  ok("…mais il change d'un mandat à l'autre", seen.size >= 3, `${seen.size} maires différents sur 60 mandats`);
+  /* ⚠️⚠️⚠️ L'EXPLOIT : FAIRE TOURNER SA POPULATION POUR CHANGER DE MAIRE.
+     On rejoue 3 000 jours × cinq compositions de ferme et on exige que le
+     vainqueur ne bouge JAMAIS. C'est le contrôle qui protège la conception, pas
+     le code : il échouera le jour où quelqu'un croira bien faire en donnant du
+     poids aux résidents. */
+  let flips = 0, minGap = Infinity, counted = 0;
+  for (let d = 1; d < 3000; d += 7) {
+    const ref = E.mayorOf(d).key;
+    for (const n of [0, 1, 5, 12, C.MAX_RESIDENTS]) {
+      const b = E.mayorBallot(d, mk(n, d));
+      if (b.winner.key !== ref || b.rows[0].key !== ref) flips++;
+      minGap = Math.min(minGap, b.rows[0].votes - b.rows[1].votes);
+      counted += b.rows.reduce((a2, r) => a2 + r.mine.length, 0);
+    }
+  }
+  ok("⚠️ la composition de la ferme ne renverse JAMAIS le scrutin", flips === 0,
+     `${flips} bulletin(s) retourné(s) sur 2145`);
+  ok("…et l'écart reste positif même à population maximale", minGap > 0, `écart minimal : ${minGap} voix`);
+  ok("…alors que les résidents votent VRAIMENT (leurs voix sont comptées)", counted > 0,
+     `${counted} bulletins de résidents dépouillés`);
+  // Un résident vote toujours pareil dans un mandat donné : son bulletin tient
+  // à SON identité, pas à sa place dans la liste ni à l'instant où on demande.
+  const rs = mk(6, 3);
+  const b1 = E.mayorBallot(100, rs), b2 = E.mayorBallot(100, rs.slice().reverse());
+  const key = (b) => b.rows.map(r => r.key + ":" + r.votes).sort().join("|");
+  ok("⚠️ trier la liste des résidents ne change pas le dépouillement", key(b1) === key(b2));
+  // Le rendez-vous chez le maire est dans le mandat, et jamais dans le passé.
+  let past = 0, far = 0;
+  for (let d = 1; d < 2000; d++) {
+    const a = E.mayorAudienceDay(d);
+    if (a < d) past++;
+    if (a - d > C.MAYOR_AUDIENCE_EVERY) far++;
+  }
+  ok("le maire ne reçoit jamais dans le passé", past === 0, `${past} rendez-vous périmé(s)`);
+  ok("…ni dans plus d'une semaine", far === 0, `${far} rendez-vous trop lointain(s)`);
+}
+
+/* ⚠️ ZIP 439 — LE PONT : L'ARC EST UNE GRANDEUR DE DESSIN. `render-parc.mjs` le
+   mesure en détail ; ici on ne garde que l'invariant qui casserait le JEU — si
+   la flèche entrait dans `tw.elev`, `canStandTown` refuserait le pas et les deux
+   ponts deviendraient infranchissables. Le contrôle de circulation ci-dessus ne
+   le verrait pas forcément (il y a d'autres chemins), donc on le dit ici. */
+{
+  const arch = E.townArchRise(tw);
+  let raised = 0, dirty = 0;
+  for (let i = 0; i < arch.length; i++) if (arch[i]) { raised++; if (tw.elev[i] !== 0) dirty++; }
+  ok("le dos d'âne des ponts existe", raised > 0, `${raised} cases de tablier montées`);
+  ok("⚠️ …et il ne touche PAS l'altitude de collision", dirty === 0, `${dirty} case(s) polluée(s)`);
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(`\n${fails === 0 ? "✅" : "❌"} ${total - fails}/${total} contrôles passés.\n`);
 process.exit(fails === 0 ? 0 : 1);

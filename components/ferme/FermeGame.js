@@ -569,6 +569,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [devMenuOpen, setDevMenuOpen] = useState(false); // zip 392 : menu développeur (Cmd/Ctrl+Shift+X, hôte seul)
   const [courtBoardOpen, setCourtBoardOpen] = useState(false); // zip 426 : le panneau d'affichage du tribunal
   const [priceBoardOpen, setPriceBoardOpen] = useState(false); // zip 438 : le tableau des cours, à la mairie
+  /* ⚠️ ZIP 439 — L'ACCUEIL DE LA MAIRIE. `null` = fermé ; sinon `{ topic }`,
+     où `topic` vaut `null` (elle attend qu'on parle) ou la clé du sujet en
+     cours. Un seul état pour les deux écrans du dialogue : le menu des
+     réponses et la réponse elle-même ne sont pas deux panneaux, c'est le
+     même panneau à deux profondeurs, et on revient toujours au menu. */
+  const [hallTalk, setHallTalk] = useState(null);
   const [forcedWorldUi, setForcedWorldUi] = useState(null); // zip 392 : miroir RENDABLE de sharedRef.current.forcedWorld (voir applyForcedWorld)
   // Menu du chaudron (chantier 2026-07, demande Guillaume : "le click sur E
   // doit ouvrir un menu chaudron que voulez-vous concocter ?") : remplace
@@ -709,6 +715,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const courtStairArmedRef = useRef(true);
   const courtBoardOpenRef = useRef(false);   // zip 426 : lu par la boucle (closure à deps vides), comme devMenuOpenRef
   const priceBoardOpenRef = useRef(false);   // zip 438 : idem pour le tableau des cours
+  const hallTalkOpenRef = useRef(false);     // zip 439 : idem pour le dialogue de l'accueil
   // Zip 426 : la carte de la ville, construite une fois (la ville ne change
   // jamais) — voir buildTownMinimapBase. Le tribunal, lui, se dessine en PLAN
   // et n'a donc aucune image à garder.
@@ -810,6 +817,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      jeu n'en vaut pas la chandelle. ⚠️ SI GUILLAUME VEUT QUE LE CAMARADE VOIE
      LE MÊME ATTROUPEMENT, c'est un `send` de trois nombres et rien d'autre. */
   const townFoodRef = useRef(null);
+  const crumbNextRef = useRef(0);   // zip 439 : anti-rafale du pain (voir throwCrumbs)
   const [taxiMenu, setTaxiMenu] = useState(false);   // le panneau « Où allez-vous ? »
   const taxiMenuRef = useRef(false);
   const [taxiPhase, setTaxiPhase] = useState(null);  // miroir React, pour le bouton
@@ -1048,6 +1056,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   useEffect(() => { mapOpenRef.current = mapOpen; }, [mapOpen]);
   useEffect(() => { courtBoardOpenRef.current = courtBoardOpen; }, [courtBoardOpen]); // zip 426
   useEffect(() => { priceBoardOpenRef.current = priceBoardOpen; }, [priceBoardOpen]); // zip 438
+  useEffect(() => { hallTalkOpenRef.current = !!hallTalk; }, [hallTalk]);            // zip 439
   useEffect(() => { devMenuOpenRef.current = devMenuOpen; }, [devMenuOpen]); // zip 392
   useEffect(() => { shopOpenRef.current = shopOpen; }, [shopOpen]);
   useEffect(() => { marketOpenRef.current = marketOpen; }, [marketOpen]);
@@ -11702,7 +11711,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         /* ⚠️ 438 — LE BÂTIMENT D'OÙ L'ON SORT SE LIT DANS `y`, comme l'étage.
            Il faut le lire AVANT de changer `m.y`, ce qui a l'air évident et ne
            l'est pas : la ligne qui suit écrase la seule information disponible. */
-        const wasHall = (C.COURT_FLOORS[E.courtFloorOf(m.y)] || {}).bld === "hall";
+        const wasHall = E.courtBuildingOf(m.y).key === "hall";
         m.zone = "town";
         // Repli sur le parvis si la position d'entrée manque (téléport
         // développeur d'un client rechargé) : jamais d'atterrissage à (0,0).
@@ -14526,6 +14535,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        +0,2 tombe au milieu, ce qui évite qu'il change de niveau un demi-pas
        avant ou après le reste de son corps. */
     function playerElevTown(tw, p) { return elevTown(tw, p.x, p.y + 0.2); }
+    /* ⚠️⚠️⚠️ ZIP 439 — L'ALTITUDE DE DESSIN N'EST PAS L'ALTITUDE DE COLLISION,
+       ET C'EST TOUTE LA PRUDENCE DE CE CHANTIER. Le dos d'âne des ponts est une
+       grandeur d'IMAGE : il doit monter le personnage sur le tablier, il ne doit
+       surtout pas entrer dans `canStandTown`, qui refuse tout pas dont le
+       dénivelé dépasse TOWN_STEP_MAX. Ajouté à `playerElevTown` — trois lignes
+       de moins — l'arc aurait rendu les deux ponts INFRANCHISSABLES : on aurait
+       livré un mur en croyant dessiner une bosse, et le symptôme (« le pont ne
+       se traverse plus ») n'aurait ressemblé en rien à sa cause.
+       ⚠️ Les deux fonctions se ressemblent assez pour qu'on les confonde : c'est
+       exactement pourquoi celle-ci porte « draw » dans son nom et pourquoi le
+       banc vérifie SÉPARÉMENT que le tablier monte à l'image et reste plat pour
+       la marche. */
+    function archPxTown(tw, x, y) {
+      const a = E.townArchRise(tw);
+      if (!a) return 0;
+      const fx = Math.floor(x), fy = Math.floor(y);
+      if (fx < 0 || fy < 0 || fx >= tw.w || fy >= tw.h) return 0;
+      return a[fy * tw.w + fx];
+    }
+    function drawElevTown(tw, x, y) { return elevTown(tw, x, y) + archPxTown(tw, x, y) / C.TOWN_ELEV_PX; }
+    function playerDrawElevTown(tw, p) { return drawElevTown(tw, p.x, p.y + 0.2); }
     /* ⚠️ 425 — `fromE` EST FACULTATIF, ET LE LAISSER DE CÔTÉ EST UN CHOIX.
        Passé, il interdit de franchir plus de TOWN_STEP_MAX de dénivelé : c'est
        ce qui fait tenir les falaises et ce qui rend les escaliers praticables,
@@ -14903,6 +14933,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              couvre), puis les planches et leur ombre portée. Sans l'eau
              dessous, le ponton flotterait sur du vert. */
           ctx.fillStyle = "#3f7fd0"; ctx.fillRect(px, py, T, T);
+          /* ⚠️⚠️ ZIP 439 — LE TABLIER MONTE. La flèche vient de `townArchRise`
+             (une couche, pas un identifiant de sol — règle du 434) et vaut zéro
+             partout ailleurs, donc ce bloc reste exactement l'ancien pour le
+             ponton du lac, qui est plat et doit le rester.
+             ⚠️ ET LE DÉCALAGE VERS LE HAUT OUVRE UN TROU VERS LE SUD — ce trou
+             EST le flanc du pont, exactement comme la joue d'une falaise (425)
+             ou celle de l'estrade du tribunal (426). Sans lui on verrait l'eau
+             sous ses propres pieds sur trois pixels de haut, ce qui est le
+             défaut le plus lisible qu'un dénivelé puisse produire. */
+          const bRise = archPxTown(tw, x, y);
+          const bpy = py - bRise;
+          if (bRise > 0) {
+            ctx.fillStyle = "#6b4a30"; ctx.fillRect(px, bpy + T - 1, T, bRise + 1);
+            ctx.fillStyle = "rgba(30,20,12,0.35)"; ctx.fillRect(px, bpy + T + bRise - 1, T, 1);
+            ctx.fillStyle = "rgba(255,225,180,0.10)"; ctx.fillRect(px, bpy + T - 1, T, 1);
+          }
           /* ⚠️⚠️ ZIP 439 — LA LAME EST CELLE DE LA PLANCHE DE RÉFÉRENCE, ET LE
              DESSIN QU'ELLE REMPLACE ÉTAIT QUATRE BANDES DE COULEUR. Écrit au
              426, jamais regardé depuis : `#b78f58` / `#9c7746` en alternance
@@ -14915,16 +14961,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              l'import : les lames d'un ponton sont perpendiculaires à la marche,
              et le ponton du lac court nord-sud quand le pont de la planche
              court est-ouest. Le raisonnement est sur `deckPlank`. */
-          if (sprites.townDeck) ctx.drawImage(sprites.townDeck, px, py);
+          if (sprites.townDeck) ctx.drawImage(sprites.townDeck, px, bpy);
           else {
-            ctx.fillStyle = "#a9834f"; ctx.fillRect(px, py, T, T);
+            ctx.fillStyle = "#a9834f"; ctx.fillRect(px, bpy, T, T);
             for (let k = 0; k < 4; k++) {
               ctx.fillStyle = (k % 2) ? "#b78f58" : "#9c7746";
-              ctx.fillRect(px, py + k * 4, T, 4);
-              ctx.fillStyle = "rgba(60,40,24,0.30)"; ctx.fillRect(px, py + k * 4 + 3, T, 1);
+              ctx.fillRect(px, bpy + k * 4, T, 4);
+              ctx.fillStyle = "rgba(60,40,24,0.30)"; ctx.fillRect(px, bpy + k * 4 + 3, T, 1);
             }
           }
-          ctx.fillStyle = "rgba(20,40,70,0.30)"; ctx.fillRect(px, py + T - 2, T, 2);
+          ctx.fillStyle = "rgba(20,40,70,0.30)"; ctx.fillRect(px, bpy + T - 2, T, 2);
         }
         else ctx.drawImage(sprites.grass[0], px, py);
 
@@ -15374,6 +15420,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       for (const pr of (tw.props || [])) {
         if (pr.x < x0 - 2 || pr.x > x1 + 2 || pr.y < y0 - 3 || pr.y > yBot + 2) continue;
         if (pr.kind === "marketArch") { drawMarketArch(pr); continue; }
+        /* ⚠️⚠️⚠️ ZIP 439 — LE PONT SE DESSINE EN DEUX MOITIÉS, ET LE JOUEUR
+           PASSE ENTRE ELLES. C'est la réponse à « il doit être praticable, pour
+           l'instant on le traverse ». Posé en un seul morceau, l'ouvrage était
+           ancré deux rangées sous la rangée nord du tablier : sur cette
+           rangée-là, la clé de tri du passant était plus petite que la sienne,
+           donc le passant se dessinait DERRIÈRE le pont et disparaissait dedans ;
+           sur la rangée sud les deux clés étaient égales, et l'ordre dépendait de
+           l'ordre d'insertion dans le tableau (§4).
+           ⚠️ Les deux clés sont posées à ±0,02 de celles des rangées du tablier,
+           et l'altitude passée reste celle de la CASE : la flèche de l'arc est
+           appliquée à la main dans le dessin, sinon elle entrerait dans la clé de
+           tri et le pont changerait de profondeur en montant. */
+        if (pr.kind === "archBridge") {
+          const bimg = sprites.townArchBridge;
+          if (bimg) {
+            const bx = pr.x * T + T / 2 - bimg.width / 2;
+            const bby = (pr.y + 1) * T - bimg.height + C.TOWN_BRIDGE_DROP_PX;
+            const rise = archPxTown(tw, pr.x, pr.y), be = elAt(pr.x, pr.y);
+            const SP = C.TOWN_BRIDGE_SPLIT_Y, LO = bimg.height - SP;
+            pushE(pr.y * T - 0.02, be, () =>
+              ctx.drawImage(bimg, 0, 0, bimg.width, SP, bx, bby - rise, bimg.width, SP));
+            pushE((pr.y + 1) * T + 0.02, be, () =>
+              ctx.drawImage(bimg, 0, SP, bimg.width, LO, bx, bby - rise + SP, bimg.width, LO));
+          }
+          continue;
+        }
         /* Zip 426 : le mobilier nouveau. ⚠️ LES ÉTALS SE CHOISISSENT PAR
            HACHAGE DE LEUR POSITION, jamais par tirage : un `Math.random()` ici
            changerait de bâche à chaque image et la foire clignoterait. C'est la
@@ -15735,8 +15807,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const food = townFoodRef.current && townFoodRef.current.until > nowB ? townFoodRef.current : null;
         if (!food) townFoodRef.current = null;
         const bdt = Math.min(dt, 0.05);
-        const threats = [{ x: m.x, y: m.y }];
-        for (const p of playersRef.current.values()) if (p.zone === "town" && !p.sleeping) threats.push({ x: p.x, y: p.y });
+        /* ⚠️⚠️ ZIP 439 — ASSIS, ON EST UNE MENACE PLUS PETITE. Le rayon voyage
+           avec la menace (voir BIRD_SIT_FLUSH_R) : c'est ce qui rend le pain
+           jetable depuis un banc, et c'est aussi ce qui fait que SE LEVER les
+           effraie sans qu'une seule ligne ne le scripte — les rayons reprennent
+           leur taille, et tout ce qui s'était approché se retrouve dedans.
+           ⚠️ L'assise d'un joueur DISTANT se lit dans `p.sit`, le champ qui
+           voyage depuis le 428 et que personne ne lisait avant le 436. Sans
+           lui, un camarade assis à côté de vous ferait fuir vos pigeons — le
+           genre de défaut qu'on ne voit jamais seul. */
+        const menace = (sitting) => sitting
+          ? { flush: C.BIRD_SIT_FLUSH_R, alert: C.BIRD_SIT_ALERT_R }
+          : { flush: C.BIRD_FLUSH_R, alert: C.BIRD_ALERT_R };
+        const threats = [{ x: m.x, y: m.y, ...menace(!!m.sitOn) }];
+        for (const p of playersRef.current.values()) {
+          if (p.zone !== "town" || p.sleeping) continue;
+          threats.push({ x: p.x, y: p.y, ...menace(!!p.sit) });
+        }
         const set0 = sprites.birds;
         /* LES MIETTES, quelques pixels au sol. Elles ne servent qu'à expliquer
            l'attroupement : sans elles, on voit vingt pigeons converger sur rien. */
@@ -15878,7 +15965,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            CLAUDE.md — seul le nombre de send() est facturé, mais un champ de
            plus, c'est surtout un champ à réconcilier). Un client d'avant ce zip
            voit donc les autres au bon endroit, simplement à plat. */
-        const pe = playerElevTown(tw, p);
+        const pe = playerDrawElevTown(tw, p);   // 439 : + le dos d'âne du pont
         if (!p.taxi) pushE((p.y + 0.9) * T, pe, () => drawRemotePets(p, dt));
         /* ⚠️ ZIP 432 — UN JOUEUR EN TAXI SE DESSINE COMME UN TAXI. Le drapeau
            tient dans le paquet `pos` (un caractère) et la position est déjà là :
@@ -15892,7 +15979,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          entièrement portée par ce décalage — le personnage lui-même n'a pas
          une image de plus à dessiner. */
       const jpv = townJumpRef.current;
-      let myE = playerElevTown(tw, m);
+      let myE = playerDrawElevTown(tw, m);      // 439 : + le dos d'âne du pont
       if (jpv.active) {
         const k = Math.min(1, (performance.now() - jpv.t0) / C.TOWN_JUMP_MS);
         myE = jpv.e0 + (jpv.e1 - jpv.e0) * k + (Math.sin(Math.PI * k) * C.TOWN_JUMP_ARC_PX) / C.TOWN_ELEV_PX;
@@ -15906,7 +15993,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          verrait juste un taxi avec une tête qui sort du capot. */
       if (!inCar) pushE((m.y + 1) * T, myE, () => drawSelf(m));
       if (myTaxi) {
-        const te = elevTown(tw, myTaxi.x, myTaxi.y);
+        const te = drawElevTown(tw, myTaxi.x, myTaxi.y);
         pushE((myTaxi.y + 0.5) * T, te, () => drawTaxiAt(myTaxi, myTaxi.dir, myTaxi.smoke));
         /* La bulle du chauffeur. Elle passe par la file des bulles, comme celles
            des résidents : peinte dans son `draw`, le premier bâtiment plus bas
@@ -15921,7 +16008,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (e.zone !== "town") continue;
         const dimg = sprites.decor && sprites.decor[e.deco]; if (!dimg) continue;
         const dex = e.x, dey = e.y;
-        pushE((dey + 0.5) * T, elevTown(tw, dex, dey), () => ctx.drawImage(dimg, Math.round(dex * T - dimg.width / 2), Math.round(dey * T - dimg.height + 6)));
+        pushE((dey + 0.5) * T, drawElevTown(tw, dex, dey), () => ctx.drawImage(dimg, Math.round(dex * T - dimg.width / 2), Math.round(dey * T - dimg.height + 6)));
       }
       /* Zip 426 — LES EFFETS (copeaux, « +6 bois »). Ils sont poussés dans le
          MÊME `fxRef` que la ferme : un joueur n'est jamais dans deux zones à la
@@ -16188,7 +16275,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function updateMeCourt(dt) {
       const m = meRef.current, cw = courtWorldRef.current, keys = keysRef.current;
       if (!cw) return;
-      const uiBlocked = mapOpenRef.current || courtBoardOpenRef.current || priceBoardOpenRef.current || document.activeElement === chatInputRef.current;
+      const uiBlocked = mapOpenRef.current || courtBoardOpenRef.current || priceBoardOpenRef.current || hallTalkOpenRef.current || document.activeElement === chatInputRef.current;
       let dx = 0, dy = 0;
       if (!uiBlocked) {
         if (keys["ArrowUp"] || keys["KeyW"] || keys["KeyZ"]) dy -= 1;
@@ -16245,48 +16332,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const t = tileAt(x, y);
         if (t === C.CT_VOID) continue;
         const px = x * T, py = y * T - (t === C.CT_DAIS ? EP : 0);
+        /* ⚠️⚠️ ZIP 439 — CES QUATRE MATIÈRES SONT DANS `fermeArt.js`, ET C'EST
+           LE POINT. Elles étaient peintes ici, dans la closure du rendu, donc
+           aucun banc ne pouvait les appeler — et elles sont restées au niveau du
+           426 pendant que les rues (434), l'eau (435), la pierre (436) et
+           l'herbe (438) montaient toutes d'un cran. Voir l'en-tête de
+           `drawCourtWoodTile` : l'écart n'était pas un écart de soin, c'était un
+           écart de date, et il se lisait sur une carte du dépôt. */
         if (t === C.CT_MARBLE) {
-          /* LE DALLAGE DU HALL. Damier clair/sombre + un joint blanc au nord et
-             à l'ouest : exactement la recette du dallage de la place (425), qui
-             a fait ses preuves. Une veine sur une dalle sur sept suffit à faire
-             lire du MARBRE plutôt que du carrelage. */
-          const dark = (x + y) % 2 === 0;
-          ctx.fillStyle = dark ? "#cdc9bd" : "#bdb9ae";
-          ctx.fillRect(px, py, T, T);
-          if ((x * 31 + y * 17) % 7 === 0) {
-            ctx.fillStyle = "rgba(120,116,110,0.25)";
-            ctx.fillRect(px + 3, py + 4 + ((x + y) % 5), 10, 1);
-          }
-          ctx.fillStyle = "rgba(255,255,255,0.16)"; ctx.fillRect(px, py, T, 1); ctx.fillRect(px, py, 1, T);
+          A.drawCourtMarbleTile(ctx, x, y, px, py, T);
         } else if (t === C.CT_WOOD || t === C.CT_DAIS) {
-          // PARQUET : lames de 4 px, décalées d'une rangée sur deux. C'est le
-          // décalage qui fait le parquet — des lames alignées font une grille.
-          ctx.fillStyle = "#8a6440"; ctx.fillRect(px, py, T, T);
-          for (let k = 0; k < 4; k++) {
-            ctx.fillStyle = ["#96704a", "#8a6440", "#7e5a38", "#906a44"][(x * 3 + y * 5 + k) % 4];
-            ctx.fillRect(px, py + k * 4, T, 4);
-            ctx.fillStyle = "rgba(60,40,24,0.35)"; ctx.fillRect(px, py + k * 4 + 3, T, 1);
-          }
-          ctx.fillStyle = "rgba(60,40,24,0.30)";
-          ctx.fillRect(px + ((y % 2) ? 4 : 11), py, 1, T);
+          A.drawCourtWoodTile(ctx, x, y, px, py, T);
         } else if (t === C.CT_CARPET) {
-          // Le tapis de la salle d'audience : bordure déduite du VOISINAGE, pas
-          // de la géométrie de la pièce (même principe que la bordure du
-          // dallage de la place — elle sert donc aussi si la salle change).
-          ctx.fillStyle = ((x + y) % 2) ? "#7a2530" : "#742330";
-          ctx.fillRect(px, py, T, T);
-          ctx.fillStyle = "rgba(255,230,200,0.05)"; ctx.fillRect(px, py, T, 1);
           const car = (xx, yy) => tileAt(xx, yy) === C.CT_CARPET || tileAt(xx, yy) === C.CT_DAIS;
-          ctx.fillStyle = "#c8a45a";
-          if (!car(x, y - 1)) ctx.fillRect(px, py + 1, T, 2);
-          if (!car(x, y + 1)) ctx.fillRect(px, py + T - 3, T, 2);
-          if (!car(x - 1, y)) ctx.fillRect(px + 1, py, 2, T);
-          if (!car(x + 1, y)) ctx.fillRect(px + T - 3, py, 2, T);
+          A.drawCourtCarpetTile(ctx, x, y, px, py, T, car);
         } else if (t === C.CT_STONE) {
-          ctx.fillStyle = ((x * 7 + y * 13) % 5 < 2) ? "#6e6f74" : "#76777c";
-          ctx.fillRect(px, py, T, T);
-          ctx.fillStyle = "rgba(30,30,34,0.35)"; ctx.fillRect(px, py + T - 1, T, 1); ctx.fillRect(px + T - 1, py, 1, T);
-          if ((x * 5 + y * 11) % 9 === 0) { ctx.fillStyle = "rgba(20,20,24,0.30)"; ctx.fillRect(px + 4, py + 6, 7, 1); }
+          A.drawCourtStoneTile(ctx, x, y, px, py, T);
         } else if (t === C.CT_STAIR_UP || t === C.CT_STAIR_DOWN) {
           // Les marches, dessinées comme celles de la ville (le joueur les a
           // apprises dehors : il ne doit pas avoir à les réapprendre dedans).
@@ -16393,6 +16454,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.fillStyle = "rgba(20,16,12,0.22)";
           ctx.beginPath(); ctx.ellipse(cxp, by - 1, img.width * 0.30, 2.5, 0, 0, 7); ctx.fill();
           ctx.drawImage(img, Math.round(cxp - img.width / 2), by - img.height);
+          /* ⚠️⚠️ ZIP 439 — LE PORTRAIT OFFICIEL PORTE LE NOM DU MAIRE ÉLU, et il
+             l'écrit VIVANT. Cuire le nom dans le sprite serait deux fautes en
+             une : `fillText` n'est pas rastérisable hors navigateur (§4 — on
+             perdrait tout banc de rendu sur ce bâtiment), et un nom baké ne peut
+             pas être bilingue ni changer de mandat. C'est la même règle que les
+             enseignes des bâtiments de la ville depuis le 427.
+             ⚠️ ET C'EST LE SEUL ENDROIT OÙ L'ÉLECTION SE VOIT SANS PARLER À
+             PERSONNE. Un scrutin dont le résultat n'existe que dans un panneau
+             de dialogue n'est pas un événement du monde, c'est une page de
+             menu : il fallait qu'en poussant la porte du bureau, on voie au mur
+             qui a gagné. */
+          if (pr.of === "mayor") {
+            const mr = E.mayorOf(sharedRef.current.day || 1);
+            const nm = mr.emoji + " " + L.candName(mr.key);
+            ctx.font = "7px monospace"; ctx.textAlign = "center";
+            const wpx = ctx.measureText(nm).width + 6, ty = by - img.height - 3;
+            ctx.fillStyle = "rgba(28,22,16,0.72)"; ctx.fillRect(cxp - wpx / 2, ty - 7, wpx, 9);
+            ctx.fillStyle = "#efe2c2"; ctx.fillText(nm, cxp, ty);
+            ctx.textAlign = "left";
+          }
         } });
       }
 
@@ -16453,7 +16534,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // d'abord (ici il n'y en a pas), puis ce qui est devant soi.
       let cpk = null;
       if (nearCourtExit()) cpk = "courtExit";
-      else if (nearCourtBoard()) cpk = "courtBoard";
+      else if (nearHallClerk()) cpk = "hallClerk";
+      else if (nearestCourtBoard()) cpk = "courtBoard";
       else if (nearPriceBoard()) cpk = "priceBoard";
       else {
         const d = nearestCourtDoor();
@@ -18548,13 +18630,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        de la FORME de l'attroupement : sur un point unique, les pigeons
        s'empilent en file indienne ; sur cinq miettes éparpillées, ils forment
        la rosace qu'on voit sur une vraie place. Vu en jeu, corrigé ici. */
+    /* ⚠️ 439 — ANTI-RAFALE. Rejeter du pain ne fait que repousser l'échéance :
+       il n'y a rien à gagner à marteler la touche, sauf trois toasts par
+       seconde. On sort en silence, sans toast — un refus bavard sur un geste
+       d'ambiance est pire que pas de refus. */
+    const nowC = performance.now();
+    if (nowC < (crumbNextRef.current || 0)) return;
+    crumbNextRef.current = nowC + C.BIRD_CRUMB_COOLDOWN_MS;
     const cx = m.x + (Math.random() - 0.5) * 1.2, cy = m.y + C.BIRD_CRUMB_AHEAD;
     const pts = [];
     for (let k = 0; k < C.BIRD_CRUMB_N; k++) {
       const a = Math.random() * Math.PI * 2, r = Math.random() * C.BIRD_CRUMB_SPREAD;
-      pts.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r * 0.6 });
+      let qx = cx + Math.cos(a) * r, qy = cy + Math.sin(a) * r * 0.6;
+      /* ⚠️⚠️ AUCUNE MIETTE SOUS SES PROPRES CHAUSSURES, ET C'EST LA MOITIÉ DU
+         CORRECTIF. L'éparpillement (1,4 case) était plus grand que la moitié de
+         la distance de jet : une poignée sur deux déposait un tas à moins d'une
+         case du banc, c'est-à-dire dans le rayon d'envol — l'oiseau qui visait
+         CE tas-là repartait aussitôt, et c'est lui qu'on voyait. Repousser le
+         centre du jet ne suffisait pas, il fallait borner la QUEUE de la
+         distribution. Un tirage se borne, il ne se recentre pas. */
+      const dx = qx - m.x, dy = qy - m.y, d = Math.hypot(dx, dy);
+      if (d < C.BIRD_CRUMB_MIN && d > 0.001) {
+        qx = m.x + (dx / d) * C.BIRD_CRUMB_MIN;
+        qy = m.y + (dy / d) * C.BIRD_CRUMB_MIN;
+      }
+      pts.push({ x: qx, y: qy });
     }
-    townFoodRef.current = { x: cx, y: cy, pts, until: performance.now() + C.BIRD_FOOD_MS, seed: (Math.random() * 1e6) | 0 };
+    townFoodRef.current = { x: cx, y: cy, pts, until: nowC + C.BIRD_FOOD_MS, seed: (Math.random() * 1e6) | 0 };
     pushToast(L.birdCrumbsToast);
   }
   function sitOnBench(pr) {
@@ -18671,11 +18773,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     return best;
   }
-  function nearCourtBoard() {
+  /* ⚠️⚠️ ZIP 439 — LE PLUS PROCHE, PLUS « LE » PANNEAU. Il n'y en avait qu'un
+     (celui du tribunal) et `find` suffisait ; la mairie a désormais le sien,
+     plus un dans chaque salle de guichet, et `find` aurait rendu le premier du
+     tableau — c'est-à-dire qu'on aurait lu l'annuaire du tribunal depuis le
+     hall de la mairie, ou rien du tout. Même correction que `nearPriceBoard` au
+     438, et pour la même raison : un décor qui ressemble à un service sans en
+     être un est pire que pas de décor. */
+  function nearestCourtBoard() {
+    const m = meRef.current, cw = courtWorldRef.current;
+    if (!m || !cw) return null;
+    let best = null, bd = 1.7;
+    for (const p of (cw.props || [])) {
+      if (p.kind !== "board") continue;
+      const d = Math.max(Math.abs(m.x - p.x), Math.abs(m.y - p.y));
+      if (d < bd) { bd = d; best = p; }
+    }
+    return best;
+  }
+  /* L'hôtesse d'accueil. ⚠️ Elle est DERRIÈRE son comptoir : on la trouve donc
+     à deux cases, pas à une — on lui parle par-dessus le guichet, on ne la
+     touche pas. */
+  function nearHallClerk() {
     const m = meRef.current, cw = courtWorldRef.current;
     if (!m || !cw) return false;
-    const b = (cw.props || []).find(p => p.kind === "board");
-    return !!b && Math.abs(m.x - b.x) <= 1.6 && Math.abs(m.y - b.y) <= 1.6;
+    for (const p of (cw.props || [])) {
+      if (p.kind !== "clerkNPC") continue;
+      if (Math.abs(m.x - p.x) <= C.HALL_CLERK_R && Math.abs(m.y - p.y) <= C.HALL_CLERK_R) return true;
+    }
+    return false;
   }
   /* ⚠️ ZIP 438 — LE TABLEAU DES COURS. Il y en a QUATRE dans la mairie (un dans
      le hall, trois dans la salle des cours) : on cherche donc le plus proche
@@ -18687,11 +18813,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!m || !cw) return false;
     return (cw.props || []).some(p => p.kind === "priceBoard" && Math.abs(m.x - p.x) <= 1.6 && Math.abs(m.y - p.y) <= 1.6);
   }
+  /* ⚠️⚠️⚠️ ZIP 439 — LE SEUIL SE DÉDUIT, IL NE S'ÉCRIT PLUS ICI. Cette fonction
+     testait `courtFloorOf(y) === 0` et le `COURT_ENTRY` du tribunal en dur :
+     dans l'hôtel de ville (rez-de-chaussée = niveau 3, seuil à y = 120) elle
+     était FAUSSE partout, donc ni l'invite ni la touche E ne proposaient jamais
+     de sortir. On entrait dans la mairie et on y restait. Voir le long
+     commentaire de `E.courtExitPos` : le seuil était décrit à deux endroits, et
+     seul celui du générateur avait été corrigé au 438. */
   function nearCourtExit() {
     const m = meRef.current;
     if (!m) return false;
-    return E.courtFloorOf(m.y + 0.2) === 0
-      && Math.abs(m.x - (C.COURT_ENTRY.x + 0.5)) <= 1.8 && Math.abs(m.y - C.COURT_ENTRY.y) <= 2.2;
+    const ex = E.courtExitPos(m.y + 0.2);
+    return E.courtFloorOf(m.y + 0.2) === ex.floor
+      && Math.abs(m.x - (ex.x + 0.5)) <= 1.8 && Math.abs(m.y - ex.y) <= 2.2;
   }
   // Zip 426 : voir la note de drawTownFrame — une seule définition de « je suis
   // devant la porte de ce monument », partagée par l'invite et par la touche E.
@@ -18725,10 +18859,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        coïncidence de coordonnées ouvrirait la boutique depuis les archives. */
     if (m0 && m0.zone === "court") {
       if (nearCourtExit()) { leaveCourt(); return; }
-      if (nearCourtBoard()) { setCourtBoardOpen(true); return; }
+      // ⚠️ 439 — l'hôtesse passe AVANT les panneaux : elle est à deux cases, un
+      // panneau à une et demie, et il y a un annuaire dans sa salle. Sans cette
+      // priorité, parler à quelqu'un ouvrirait un tableau.
+      if (nearHallClerk()) { setHallTalk({ topic: null }); return; }
+      const bd = nearestCourtBoard();
+      if (bd) { setCourtBoardOpen(E.courtBuildingOf(bd.y).key); return; }
       if (nearPriceBoard()) { setPriceBoardOpen(true); return; }
       const d = nearestCourtDoor();
-      if (d) pushToast(L.courtRoomToast(L.courtRoomName(d.room)) + " " + L.courtRoomDesc(d.room));
+      if (d) {
+        // ⚠️ 439 — un guichet OUVERT ne s'annonce plus « bientôt » (§ COURT_ROOMS_LIVE).
+        const live = C.COURT_ROOMS_LIVE.includes(d.room);
+        const nm = L.courtRoomName(d.room);
+        pushToast((live ? L.courtRoomToastLive(nm) : L.courtRoomToast(nm)) + " " + L.courtRoomDesc(d.room));
+      }
       return;
     }
     // Carte maléfique (chantier 2026-07, demande Guillaume) : seule
@@ -19603,7 +19747,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           expression que le bandeau, et pas ailleurs. Deux traductions du même
           `promptKey` finiraient par diverger d'un libellé, et la divergence
           tomberait sur l'appareil du joueur qui n'a QUE ce bouton. */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (
@@ -22409,15 +22553,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           </div>
         </div>
       )}
-      {courtBoardOpen && (
+      {/* ⚠️⚠️ ZIP 439 — UN ANNUAIRE PAR BÂTIMENT, ET C'ÉTAIT LA MOITIÉ DU
+          PROBLÈME NARRATIF. Jusqu'ici ce panneau était le SEUL récapitulatif de
+          Valley Town : il vivait au tribunal et annonçait, entre autres, un
+          cadastre et un état civil — alors que l'hôtel de ville ouvert au même
+          zip a une pièce « Cadastre » et une « Salle des mariages ». Le seul
+          endroit qui disait au joueur où aller l'envoyait au mauvais bâtiment.
+          `courtBoardOpen` porte donc maintenant la CLÉ DU BÂTIMENT (« court » ou
+          « hall »), déduite de la position du panneau qu'on lit — jamais choisie
+          à la main, sinon les deux divergeraient au premier déménagement. */}
+      {courtBoardOpen && (() => {
+        const isHall = courtBoardOpen === "hall";
+        const order = isHall ? C.HALL_BOARD_ORDER : C.COURT_BOARD_ORDER;
+        return (
         <div className="ferme-modal open" onClick={() => setCourtBoardOpen(false)}>
           <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
             <button className="ferme-close-x" onClick={() => setCourtBoardOpen(false)}>✕</button>
-            <h2>{L.courtBoardTitle}</h2>
-            <div className="ferme-hint">{L.courtBoardIntro}</div>
-            {C.COURT_BOARD_ORDER.map(k => {
+            <h2>{isHall ? L.hallBoardTitle : L.courtBoardTitle}</h2>
+            <div className="ferme-hint">{isHall ? L.hallBoardIntro : L.courtBoardIntro}</div>
+            {order.map(k => {
               const r = C.COURT_ROOMS.find(rr => rr.key === k);
               if (!r) return null;
+              const live = C.COURT_ROOMS_LIVE.includes(k);
               return (
                 <div className="ferme-shop-row" key={"court-" + k}>
                   <div className="info">
@@ -22426,14 +22583,131 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                       {L.courtFloorName(C.COURT_FLOORS[r.floor].key)} — {L.courtRoomDesc(k)}
                     </span>
                   </div>
-                  <span className="ferme-usage">{L.courtSoon}</span>
+                  <span className="ferme-usage" style={live ? { color: "#8ce09a" } : null}>
+                    {live ? L.courtOpenNow : L.courtSoon}
+                  </span>
                 </div>
               );
             })}
-            <div className="ferme-hint" style={{ marginTop: 10 }}>{L.courtBoardFooter}</div>
+            <div className="ferme-hint" style={{ marginTop: 10 }}>{isHall ? L.hallBoardFooter : L.courtBoardFooter}</div>
           </div>
         </div>
-      )}
+        );
+      })()}
+      {/* ═══════════════════════════════════════════════════════════════════
+          ZIP 439 — L'ACCUEIL DE L'HÔTEL DE VILLE : LE DIALOGUE À CHOIX.
+          ───────────────────────────────────────────────────────────────────
+          ⚠️⚠️ CE PANNEAU EST GÉNÉRIQUE, ET C'EST TOUT L'INTÉRÊT. Il ne connaît
+          aucun sujet : il parcourt `C.HALL_TOPICS`, filtre par la garde `when`,
+          affiche ce que le joueur DIT, puis affiche la réponse. Une quête
+          future = une ligne dans cette table, pas une ligne ici.
+          ⚠️⚠️⚠️ ET AUCUN SUJET NE DONNE RIEN. Un panneau s'ouvre à volonté avec
+          E, sans limite et sans arbitrage de l'hôte : le jour où un sujet
+          rendrait de l'or ou une denrée, il suffirait de marteler la touche.
+          Tout ce qui est ici est de l'information, ou une DATE dérivée du
+          numéro de jour. Une quête qui devra récompenser passera par une `req`
+          arbitrée par l'hôte, comme la vente au marché. Le dialogue est la
+          porte, jamais la caisse.
+          ⚠️ Deux sujets ne sont pas des réponses mais des RENVOIS : « les cours »
+          ouvre le tableau, « où se trouve… » ouvre l'annuaire. Recopier leur
+          contenu ici en aurait fait deux affichages à tenir d'accord (§8). */}
+      {hallTalk && (() => {
+        const day = sharedRef.current.day || 1;
+        /* ⚠️ LES RÉSIDENTS VIVENT DANS `station.residents`, et leur NOM vient de
+           `rosterOf` — jamais de l'entrée elle-même, qui n'en porte pas et qui
+           ignore l'identité de couverture d'un banni (zip 278). */
+        const residents = (((sharedRef.current.station || {}).residents) || [])
+          .map(r => ({ rid: r.rid, name: rosterOf(r.rid).name }));
+        const ballot = E.mayorBallot(day, residents);
+        const ctx = { day, mayor: ballot.winner, residents, shared: sharedRef.current, electionToday: ballot.today };
+        const topics = C.HALL_TOPICS.filter(t => !t.when || t.when(ctx));
+        const t = hallTalk.topic ? C.HALL_TOPICS.find(x => x.key === hallTalk.topic) : null;
+        const close = () => setHallTalk(null);
+        const pick = (tp) => {
+          if (tp.panel === "prices") { setHallTalk(null); setPriceBoardOpen(true); return; }
+          if (tp.panel === "where") { setHallTalk(null); setCourtBoardOpen("hall"); return; }
+          setHallTalk({ topic: tp.key });
+        };
+        const days = (d) => Math.max(0, d - day);
+        return (
+          <div className="ferme-modal open" onClick={close}>
+            <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
+              <button className="ferme-close-x" onClick={close}>✕</button>
+              <h2>💁 {L.hallClerkName}</h2>
+              <div className="ferme-hint" style={{ opacity: 0.75 }}>{L.hallClerkRole} — {L.courtFloorName("hall")}</div>
+              <div style={{ margin: "10px 0", fontStyle: "italic" }}>
+                « {t ? L.hallClerkAgain : L.hallClerkHello} »
+              </div>
+              {!t && topics.map(tp => (
+                <div className="ferme-shop-row" key={"ht-" + tp.key}>
+                  <div className="info"><b>{tp.emoji} {L.hallTopicAsk(tp.key)}</b></div>
+                  <button className="ferme-btn" onClick={() => pick(tp)}>→</button>
+                </div>
+              ))}
+              {t && (
+                <div>
+                  <h3 style={{ marginBottom: 6 }}>{L.hallTopicTitle(t.key)}</h3>
+                  {t.panel === "mayor" && (
+                    <div>
+                      <div>{L.hallMayorNow(ballot.winner.emoji, L.candName(ballot.winner.key))}</div>
+                      <div className="ferme-hint" style={{ marginTop: 4 }}>{L.candPlatform(ballot.winner.key)}</div>
+                      <div style={{ marginTop: 8 }}>{L.hallMayorAudience(ballot.audienceDay, days(ballot.audienceDay))}</div>
+                      <div className="ferme-hint" style={{ marginTop: 8 }}>{L.hallMayorHint}</div>
+                    </div>
+                  )}
+                  {t.panel === "election" && (
+                    <div>
+                      <div className="ferme-hint">{L.hallElecTerm(ballot.term)}</div>
+                      <div style={{ margin: "6px 0" }}>{L.hallElecNext(ballot.nextDay, days(ballot.nextDay))}</div>
+                      {ballot.rows.map((r, i) => (
+                        <div className="ferme-shop-row" key={"cd-" + r.key}>
+                          <div className="info">
+                            <b style={i === 0 ? { color: "#8ce09a" } : null}>{r.emoji} {L.candName(r.key)}</b>
+                            <span className="ferme-usage">{L.candPlatform(r.key)}</span>
+                          </div>
+                          <span className="ferme-usage" style={{ whiteSpace: "nowrap" }}>
+                            <b>{r.votes}</b> {L.hallElecVotes}{r.mine.length ? " · " + L.hallElecMine(r.mine.length) : ""}
+                          </span>
+                        </div>
+                      ))}
+                      <div className="ferme-hint" style={{ marginTop: 8 }}>
+                        {residents.length ? L.hallElecFooter : L.hallElecNoResidents}
+                      </div>
+                    </div>
+                  )}
+                  {t.panel === "registry" && (
+                    <div>
+                      <div className="ferme-hint">{L.hallRegistryIntro}</div>
+                      {!residents.length && <div style={{ marginTop: 8 }}>{L.hallRegistryEmpty}</div>}
+                      {ballot.rows.map(r => r.mine.map(nm => (
+                        <div className="ferme-shop-row" key={"rg-" + r.key + "-" + nm}>
+                          <div className="info"><b>{nm}</b></div>
+                          <span className="ferme-usage">{L.hallRegistryVote(r.emoji, L.candName(r.key))}</span>
+                        </div>
+                      )))}
+                      {!!residents.length && (
+                        <div className="ferme-hint" style={{ marginTop: 8 }}>{L.hallRegistryCount(residents.length)}</div>
+                      )}
+                    </div>
+                  )}
+                  {t.panel === "soon" && (
+                    <div>{t.key === "wedding" ? L.hallSoonWedding : L.hallSoonLand}</div>
+                  )}
+                  <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+                    <button className="ferme-btn" onClick={() => setHallTalk({ topic: null })}>↩</button>
+                    <button className="ferme-btn" onClick={close}>{L.hallClerkClose}</button>
+                  </div>
+                </div>
+              )}
+              {!t && (
+                <div style={{ marginTop: 12 }}>
+                  <button className="ferme-btn" onClick={close}>{L.hallClerkClose}</button>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
       {/* ═══════════════════════════════════════════════════════════════════
           ZIP 427 — LA MAISON GARFIELD.
           ───────────────────────────────────────────────────────────────────

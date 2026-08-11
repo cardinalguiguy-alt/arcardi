@@ -6875,14 +6875,23 @@ export function flockStep(site, dt, ctx, cfg, now) {
     const b = birds[i];
     b.t += dt;
     // La menace la plus proche, tous joueurs confondus.
-    let td = Infinity, tx = 0, ty = 0;
+    /* ⚠️⚠️ ZIP 439 — CHAQUE MENACE PORTE SES PROPRES RAYONS, et c'est ce qui
+       permet à un joueur ASSIS d'être une menace différente d'un joueur debout
+       (voir BIRD_SIT_FLUSH_R). On ne cherche donc plus « la plus proche » mais
+       LA PLUS MENAÇANTE — celle dont la distance rapportée à SON rayon est la
+       plus faible. Prendre la plus proche redeviendrait faux dès que deux
+       joueurs sont là : un camarade assis à une case masquerait un intrus
+       debout à deux, et les pigeons ne verraient pas arriver le vrai danger. */
+    let td = Infinity, tx = 0, ty = 0, tFlush = cfg.FLUSH_R, tAlert = cfg.ALERT_R, worst = Infinity;
     for (const q of threats) {
       const d = Math.hypot(q.x - b.x, q.y - b.y);
-      if (d < td) { td = d; tx = q.x; ty = q.y; }
+      const fr = q.flush || cfg.FLUSH_R, ar = q.alert || cfg.ALERT_R;
+      const ratio = d / fr;
+      if (ratio < worst) { worst = ratio; td = d; tx = q.x; ty = q.y; tFlush = fr; tAlert = ar; }
     }
     if (b.st === "ground") {
       b.alt = 0; b.a = 1;
-      if (td < cfg.FLUSH_R) {
+      if (td < tFlush) {
         /* ⚠️ IL FUIT DANS LA DIRECTION OPPOSÉE À LA MENACE. Un oiseau qui
            décolle vers le joueur a l'air d'attaquer. Le `bank` propre à chaque
            oiseau écarte ensuite les trajectoires en éventail. */
@@ -6890,7 +6899,7 @@ export function flockStep(site, dt, ctx, cfg, now) {
         b.st = "fly"; b.t = 0; b.spd = cfg.TAKEOFF; b.vz = cfg.CLIMB; b.act = "idle";
         continue;
       }
-      if (td < cfg.ALERT_R) { b.act = "alert"; b.vx = b.vy = 0; continue; }
+      if (td < tAlert) { b.act = "alert"; b.vx = b.vy = 0; continue; }
       if (b.act === "alert") { b.act = "idle"; b.actT = 0; }
       /* ---- L'EXCITATION : elle monte près du pain et dans la foule, elle
          retombe seule. Elle pilote la vitesse, le rythme des coups de bec et
@@ -7201,11 +7210,169 @@ export function townElevTile(tw, x, y) {
    remplis ici, y compris ce dont le rendu seul a besoin. Rien n'est ajouté
    plus tard par un chemin d'appel particulier.
    ═══════════════════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 439 — LE DOS D'ÂNE DES PONTS, EN PIXELS D'ÉCRAN.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️ C'EST UNE COUCHE, PAS UN IDENTIFIANT DE SOL — la règle du 434, mot pour
+   mot. Un `G_BRIDGE_ARCH` de plus aurait rouvert tous les tests `ground ===
+   G_BRIDGE` du moteur (le dessin du tablier, l'A* piéton, l'A* du taxi, les
+   oiseaux) : en oublier un ne lève rien, ça fait juste un pont qu'on ne
+   traverse plus. Le sol garde son identifiant, un tableau parallèle dit de
+   combien la case MONTE.
+   ⚠️ ET IL SE DÉDUIT DES PROPS, DONC IL NE PEUT PAS DIVERGER. La flèche n'est
+   écrite nulle part à côté d'une position de pont : elle est calculée autour de
+   chaque `archBridge` posé par le générateur. Déplacer un pont déplace son arc,
+   en supprimer un supprime le sien, et le jour où il y en a un troisième il
+   monte tout seul. C'est le §8 (« ce qui double un autre paramètre doit être
+   dérivé ») appliqué à une altitude.
+   ⚠️ La carte de la ville est un singleton de module qu'on ne mute jamais : on
+   mémorise donc le calcul SUR le monde, une fois, et la fonction est pure du
+   point de vue de l'appelant. */
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 439 — LES ÉLECTIONS MUNICIPALES. Voir le long en-tête des constantes
+   MAYOR_* : pure fonction du numéro de jour, vivier de candidats FIXE, et un
+   écart construit pour que les voix des résidents comptent sans pouvoir
+   renverser le scrutin.
+   ═══════════════════════════════════════════════════════════════════════════ */
+export function mayorTermOf(day) { return Math.floor(Math.max(0, day | 0) / C.MAYOR_TERM_DAYS); }
+export function mayorNextElection(day) { return (mayorTermOf(day) + 1) * C.MAYOR_TERM_DAYS; }
+export function isElectionDay(day) { return C.MAYOR_TERM_DAYS > 0 && (day | 0) > 0 && (day | 0) % C.MAYOR_TERM_DAYS === 0; }
+/* Le jour d'audience du maire, dans le mandat courant. ⚠️ DÉRIVÉ DU MANDAT et
+   non du jour : « il reçoit tous les sept jours » doit tomber sur les mêmes
+   dates pour les deux joueurs, et ne pas se décaler quand on demande. */
+export function mayorAudienceDay(day) {
+  const t = mayorTermOf(day), start = t * C.MAYOR_TERM_DAYS;
+  const off = marketHash(t, 77) % C.MAYOR_AUDIENCE_EVERY;
+  let d = start + off;
+  while (d < (day | 0)) d += C.MAYOR_AUDIENCE_EVERY;
+  return d;
+}
+/* LE DÉPOUILLEMENT. `residents` est la liste des résidents de la ferme (on ne
+   lit que leur identité stable et leur nom) ; ils votent, leurs voix sont
+   comptées et affichées, et elles ne peuvent PAS changer le vainqueur.
+   ⚠️ L'écart entre le premier et le second est forcé à dépasser le nombre
+   maximal de résidents. Sans ça, accueillir quelqu'un renverserait une élection
+   passée — et un joueur mécontent n'aurait qu'à faire tourner sa population. */
+export function mayorBallot(day, residents) {
+  const term = mayorTermOf(day);
+  const cands = C.TOWN_CANDIDATES;
+  const rows = cands.map((c, i) => ({
+    key: c.key, emoji: c.emoji,
+    town: C.MAYOR_VOTE_BASE + (marketHash(term * 31 + i, 991) % C.MAYOR_VOTE_SPAN),
+    mine: [],
+  }));
+  /* ⚠️⚠️ LE VAINQUEUR VIENT DE `mayorOf`, IL N'EST PAS RECALCULÉ ICI. Premier
+     jet : ce bloc triait les scores et prenait le premier, pendant que
+     `mayorOf` refaisait le même tri de son côté pour le portrait officiel.
+     Deux calculs du même vainqueur, c'est-à-dire la divergence en attente du
+     §8 — il aurait suffi d'un départage d'égalité différent pour que le
+     dépouillement affiche un maire et que son portrait en montre un autre. */
+  const win = mayorOf(day);
+  const first = cands.findIndex(c => c.key === win.key);
+  let second = -1;
+  for (let i = 0; i < rows.length; i++) if (i !== first && (second < 0 || rows[i].town > rows[second].town)) second = i;
+  // ⚠️ Le premier est DÉTACHÉ avant que les résidents ne votent : c'est ce qui
+  // rend le résultat insensible à la composition de la ferme.
+  const gap = C.MAX_RESIDENTS + 1 + (marketHash(term, 613) % 12);
+  rows[first].town = rows[second].town + gap;
+  /* Chaque résident vote, et son bulletin est stable : il dépend de SON
+     identité et du mandat, pas de l'ordre de la liste ni de l'instant. Deux
+     clients affichent donc le même dépouillement sans rien s'échanger. */
+  /* ⚠️ L'IDENTITÉ STABLE D'UN RÉSIDENT EST SON `rid` (son entrée au roster), pas
+     sa place dans la liste : trier la liste, en retirer un, en accueillir un
+     autre ne doit RIEN changer aux bulletins des autres. Un vote indexé sur la
+     position aurait fait changer d'avis toute la ferme à chaque arrivée. */
+  for (const r of residents || []) {
+    const id = (r && (r.rid !== undefined ? r.rid : r.did)) | 0;
+    const k = marketHash(term * 7 + 3, id + 1) % cands.length;
+    rows[k].mine.push((r && r.name) || "?");
+  }
+  for (const r of rows) r.votes = r.town + r.mine.length;
+  const sorted = rows.slice().sort((a, b) => b.votes - a.votes);
+  return {
+    term, rows: sorted, winner: rows[first],
+    total: rows.reduce((a, r) => a + r.votes, 0),
+    nextDay: mayorNextElection(day),
+    audienceDay: mayorAudienceDay(day),
+    today: isElectionDay(day),
+  };
+}
+/* Le maire du jour, seul, pour tout ce qui n'a pas besoin du dépouillement (le
+   portrait officiel, la plaque du bureau, une future quête). ⚠️ IL NE DÉPEND
+   PAS DES RÉSIDENTS — c'est toute la garantie du bloc ci-dessus, et l'écrire
+   comme une fonction séparée le rend impossible à oublier. */
+export function mayorOf(day) {
+  const term = mayorTermOf(day), cands = C.TOWN_CANDIDATES;
+  let best = 0, bestV = -1;
+  for (let i = 0; i < cands.length; i++) {
+    const v = C.MAYOR_VOTE_BASE + (marketHash(term * 31 + i, 991) % C.MAYOR_VOTE_SPAN);
+    if (v > bestV) { bestV = v; best = i; }
+  }
+  return cands[best];
+}
+export function townArchRise(tw) {
+  if (!tw) return null;
+  if (tw._arch) return tw._arch;
+  const a = new Uint8Array(tw.w * tw.h);
+  const SP = C.TOWN_BRIDGE_ARCH_SPAN;
+  for (const p of tw.props || []) {
+    if (p.kind !== "archBridge") continue;
+    /* Le tablier fait DEUX rangées (voir la pose du pont : `rb` et `rb+1`), et
+       le prop est ancré sur la rangée SUD. On monte donc `p.y` et `p.y - 1`. */
+    for (let k = -SP; k <= SP; k++) {
+      const rise = Math.round(C.TOWN_BRIDGE_ARCH_PX * (Math.cos((Math.PI * k) / SP) + 1) / 2);
+      if (rise <= 0) continue;
+      for (const dy of [-1, 0]) {
+        const x = p.x + k, y = p.y + dy;
+        if (x < 0 || y < 0 || x >= tw.w || y >= tw.h) continue;
+        if (tw.ground[y * tw.w + x] !== C.G_BRIDGE) continue;   // jamais hors tablier
+        a[y * tw.w + x] = rise;
+      }
+    }
+  }
+  tw._arch = a;
+  return a;
+}
 export function courtFloorY0(f) { return f * (C.COURT_FLOOR_H + C.COURT_FLOOR_GAP); }
 export function courtFloorOf(y) {
   const step = C.COURT_FLOOR_H + C.COURT_FLOOR_GAP;
   const f = Math.floor(y / step);
   return Math.max(0, Math.min(C.COURT_FLOORS.length - 1, f));
+}
+/* ⚠️⚠️⚠️ ZIP 439 — DANS QUEL BÂTIMENT SUIS-JE, ET OÙ EST SA PORTE. CES DEUX
+   FONCTIONS N'EXISTAIENT PAS, ET LEUR ABSENCE A ENFERMÉ LE JOUEUR DANS L'HÔTEL
+   DE VILLE PENDANT TOUT LE ZIP 438.
+   ───────────────────────────────────────────────────────────────────────────
+   Le 438 a ajouté un second bâtiment dans la grille du tribunal. Le générateur
+   a été corrigé pour ça — il calcule `groundFloor = bld.ground === f` et son
+   commentaire prévient noir sur blanc qu'un test écrit `f === 0` donnerait « un
+   bâtiment dont on ne peut plus ressortir ». Mais le SEUIL EST DÉCRIT DEUX
+   FOIS : une fois ici, à la génération, et une fois dans `nearCourtExit()` au
+   niveau du composant, qui décide si la touche E propose de sortir. Et
+   celle-là est restée écrite `courtFloorOf(y) === 0` avec le `COURT_ENTRY` du
+   tribunal en dur.
+   Mesuré en rejouant le moteur : dans la mairie, `nearCourtExit()` est FAUX
+   partout — pas seulement au spawn, mais sur toutes les positions du niveau.
+   On entrait, et on ne ressortait plus que par le menu développeur.
+   ⚠️ C'est le §8 de CLAUDE.md dans sa forme la plus pure : *un paramètre qui
+   DOUBLE un autre paramètre est une divergence en attente.* Le seuil se DÉDUIT
+   désormais, ici, une seule fois, et le composant appelle. Il n'y a plus de
+   seconde description à tenir d'accord.
+   ⚠️ ET C'EST AUSSI POURQUOI PERSONNE NE L'A VU : le menu développeur a un
+   arrêt « hôtel de ville » qui téléporte DEDANS. Qui teste par le menu entre
+   par téléport et sort par téléport — il ne pose jamais le pied sur le seuil.
+   Un raccourci de test qui contourne la seule chose à tester ne teste rien. */
+export function courtBuildingOf(y) {
+  const fl = C.COURT_FLOORS[courtFloorOf(y)];
+  const key = (fl && fl.bld) || "court";
+  return { key, ...(C.COURT_BUILDINGS[key] || C.COURT_BUILDINGS.court) };
+}
+/* Le seuil du bâtiment où l'on se trouve, en coordonnées ABSOLUES de la carte.
+   `floor` est le niveau où il se trouve : c'est lui qu'il faut comparer à
+   l'étage du joueur, et surtout pas `0`. */
+export function courtExitPos(y) {
+  const b = courtBuildingOf(y);
+  return { x: b.entry.x, y: courtFloorY0(b.ground) + b.entry.y, floor: b.ground, bld: b.key };
 }
 export function generateCourtWorld() {
   const W = C.COURT_MAP_W, H = C.COURT_MAP_H;
@@ -7243,9 +7410,29 @@ export function generateCourtWorld() {
       for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) doorGuard.add(`${d.x + dx},${fy + d.y + dy}`);
     }
   }
+  /* ⚠️⚠️⚠️ ZIP 439 — UNE CAGE NE PROTÈGE QUE LES DEUX NIVEAUX QU'ELLE RELIE, et
+     l'oubli de ce test a EFFACÉ LA STATUE DE LA JUSTICE du hall du tribunal
+     pendant tout le zip 438.
+     Écrite sans le `sw.a === f || sw.b === f`, cette boucle réservait l'emprise
+     de CHAQUE cage à CHAQUE étage. La mairie a reçu au 438 son escalier
+     d'honneur en (22,2)-(23,5) ; il a donc interdit x = 22-23, y = 2-6 aux cinq
+     niveaux, dont le rez-de-chaussée du TRIBUNAL, où la statue est posée en
+     (22,4)-(23,4) depuis le 426. Mesuré en regénérant le monde avec et sans
+     cette ligne : 10 refus contre 5, et `justice` / `justice2` dans le lot.
+     Le commentaire qui pose la statue dit « Sans elle, on entre face à un mur
+     nu » — c'était devenu la description exacte du bâtiment.
+     ⚠️ LA LEÇON N'EST PAS « ON A OUBLIÉ UN TEST », C'EST QUE LE REFUS PARLAIT ET
+     QUE PERSONNE N'ÉCOUTAIT. `addProp` imprime chaque meuble refusé — les dix
+     lignes défilaient à chaque exécution de banc. `render-mairie.mjs` les a même
+     COMPTÉES, puis les a qualifiées d'« antérieures » pour ne mesurer que la
+     mairie : le banc a exclu de sa mesure la régression qu'il venait de causer.
+     Un avertissement qu'aucun contrôle ne transforme en échec est un
+     avertissement qu'on apprend à ne plus lire. Le banc échoue désormais dessus,
+     pour tout le bâtiment. */
   for (let f = 0; f < C.COURT_FLOORS.length; f++) {
     const fy = courtFloorY0(f);
     for (const sw of C.COURT_STAIRWELLS) {
+      if (sw.a !== f && sw.b !== f) continue;
       for (let y = sw.y; y < sw.y + sw.h + 1; y++) for (let x = sw.x; x < sw.x + sw.w; x++) doorGuard.add(`${x},${fy + y}`);
     }
   }
@@ -7261,6 +7448,33 @@ export function generateCourtWorld() {
     }
     props.push({ x, y, kind, ...(extra || {}) });
     if (blocks) solid[id(x, y)] = 1;
+  };
+  /* ⚠️⚠️ ZIP 439 — POUR UN MEUBLE DÉCORATIF, ON DÉCALE AU LIEU DE RENONCER.
+     Le garde-fou d'`addProp` était binaire : ou le meuble tombe juste, ou il
+     disparaît en laissant un avertissement que personne ne lit (c'est comme ça
+     qu'on a perdu la statue de la Justice pendant un zip entier). Or les cinq
+     refus qui restaient après ce correctif n'étaient pas des erreurs de plan :
+     une plante d'angle, une étagère de bout de rangée, une caisse, et DEUX
+     COLONNES DU COULOIR tombées devant les portes du sous-sol — exactement le
+     défaut que le 438 avait pris soin d'éviter à l'étage de la mairie en
+     choisissant ses portes, et qu'il a laissé tel quel au tribunal.
+     ⚠️ Une colonne manquante dans une colonnade se VOIT (le rythme casse) ;
+     une colonne décalée d'une case ne se voit pas. On tente donc la case
+     voulue, puis ses voisines immédiates, et on ne renonce qu'après. Le refus
+     reste une ERREUR pour tout ce qui est structurel (l'estrade, le comptoir,
+     la barre) : ceux-là passent toujours par `addProp`, qui crie.
+     ⚠️ Et le décalage est SILENCIEUX à dessein — il ne l'est que parce qu'il
+     est sans conséquence. La règle est : on ne se tait que sur ce qui ne change
+     rien, et le banc compte les deux séparément. */
+  const place = (x, y, kind, blocks, extra) => {
+    const free = (px, py) => inMap(px, py) && !(blocks && doorGuard.has(`${px},${py}`)) && !solid[id(px, py)];
+    for (const [dx, dy] of [[0, 0], [0, -1], [0, 1], [-1, 0], [1, 0]]) {
+      if (!free(x + dx, y + dy)) continue;
+      props.push({ x: x + dx, y: y + dy, kind, ...(extra || {}) });
+      if (blocks) solid[id(x + dx, y + dy)] = 1;
+      return true;
+    }
+    return false;
   };
 
   for (let f = 0; f < C.COURT_FLOORS.length; f++) {
@@ -7301,7 +7515,7 @@ export function generateCourtWorld() {
         set(d.x, y0 + d.y, C.CT_DOOR);
         doors.push({ x: d.x, y: y0 + d.y, floor: f, room: r.key });
       }
-      courtFurnish(r, rx, ry, addProp, set, fill);
+      courtFurnish(r, rx, ry, addProp, set, fill, place);
     }
 
     /* ---- LE COULOIR CENTRAL (la « salle des pas perdus »). Colonnes le long
@@ -7309,11 +7523,62 @@ export function generateCourtWorld() {
        colonne qu'on traverse est pire que pas de colonne, parce qu'elle promet
        une architecture qu'on démentira au premier pas. */
     const cx0 = C.COURT_CORRIDOR.x + 1, cx1 = C.COURT_CORRIDOR.x + C.COURT_CORRIDOR.w - 2;
-    for (let y = y0 + 7; y < y0 + C.COURT_FLOOR_H - 2; y += 5) {
-      addProp(cx0, y, "pillar", true);
-      addProp(cx1, y, "pillar", true);
-      addProp(cx0 + 1, y + 2, "bench", true);
-      addProp(cx1 - 1, y + 2, "bench", true);
+    const axis = C.COURT_CORRIDOR.x + (C.COURT_CORRIDOR.w >> 1);   // 23 : l'axe du couloir
+    /* ⚠️⚠️ ZIP 439 — LES DEUX COULOIRS ÉTAIENT LE MÊME COULOIR, AU PIXEL PRÈS.
+       Le 438 annonce « un palais de justice est un couloir bordé de portes
+       closes ; une mairie est un grand hall public » — et c'est vrai du PLAN
+       DES PIÈCES (deux portes chacune contre une), mais ce bloc-ci tournait
+       pour les cinq niveaux sans une seule condition. Les deux bâtiments
+       avaient donc rigoureusement la même colonnade, le même rythme de cinq,
+       les mêmes bancs adossés : la seule chose que le joueur voit pendant les
+       vingt-huit cases où il marche était identique.
+       ⚠️ CE QUI SÉPARE UN HALL D'UN COULOIR N'EST PAS SON MOBILIER, C'EST SON
+       VIDE. Un palais de justice serre ses colonnes (on longe, on attend, on
+       n'occupe pas) ; une mairie dégage son milieu et pose un TAPIS dedans (on
+       traverse, on est reçu). Le tapis n'est pas une décoration : c'est la seule
+       chose qui dise, avant toute plaque, que ce couloir-ci mène quelque part.
+       ⚠️ Et l'étage de la mairie est encore un troisième traitement — tapis plus
+       étroit, pas un seul banc : on ne fait pas la queue devant le bureau du
+       maire, on y est attendu. Trois lectures, un seul bloc de code. */
+    if (isHall) {
+      // LE TAPIS D'HONNEUR, de la porte au pied de l'escalier. Plus large en
+      // bas (le public) qu'en haut (le passage), ce qui creuse la perspective.
+      const runW = groundFloor ? 2 : 1;
+      for (let y = y0 + 6; y < y0 + C.COURT_FLOOR_H - 1; y++)
+        for (let x = axis - runW; x <= axis + runW - 1; x++)
+          if (tile[id(x, y)] === C.CT_MARBLE) set(x, y, C.CT_CARPET);
+      // Des colonnes ESPACÉES (une sur deux) : le hall respire, et le regard
+      // porte jusqu'au fond au lieu d'être haché tous les cinq pas.
+      for (let y = y0 + 8; y < y0 + C.COURT_FLOOR_H - 3; y += 7) {
+        place(cx0, y, "pillar", true);
+        place(cx1, y, "pillar", true);
+      }
+      // Les urnes fleuries remplacent les bancs adossés : on ne s'assoit pas
+      // dans le hall d'une mairie, on y passe. Sauf au rez-de-chaussée, près
+      // de la porte, où l'on attend d'être reçu.
+      for (let y = y0 + 11; y < y0 + C.COURT_FLOOR_H - 4; y += 7) {
+        place(cx0, y, "urn", true);
+        place(cx1, y, "urn", true);
+      }
+      /* ⚠️⚠️ ZIP 439 — LES BANCS D'ATTENTE SE POSENT À UNE CASE DU MUR, ET LE
+         BANC DE CONTRÔLE A EXPLIQUÉ POURQUOI. Premier jet : deux bancs adossés
+         en (19,20) et (19,23), avec une colonne en (19,22) et la maquette en
+         (20,21). Résultat, trouvé par `verify-vallee` et par lui seul : la case
+         (19,21) était CERNÉE — mur à l'ouest, banc au nord, colonne au sud,
+         maquette à l'est. Deux culs-de-sac d'une case, un de chaque côté du
+         hall, invisibles sur une planche et impossibles à voir en jouant sans y
+         tomber. *Meubler le long d'un mur fabrique des poches ; meubler à une
+         case du mur laisse toujours un passage derrière.* */
+      if (groundFloor) {
+        for (const y of [y0 + 20, y0 + 23]) { place(cx0 + 1, y, "bench", true); place(cx1 - 1, y, "bench", true); }
+      }
+    } else {
+      for (let y = y0 + 7; y < y0 + C.COURT_FLOOR_H - 2; y += 5) {
+        place(cx0, y, "pillar", true);
+        place(cx1, y, "pillar", true);
+        place(cx0 + 1, y + 2, "bench", true);
+        place(cx1 - 1, y + 2, "bench", true);
+      }
     }
     /* ---- LES ESCALIERS. Une cage n'apparaît qu'aux DEUX niveaux qu'elle relie,
        et son sens se DÉDUIT des altitudes (voir COURT_FLOORS.alt) : la même
@@ -7331,20 +7596,33 @@ export function generateCourtWorld() {
       set(bld.entry.x, y0 + bld.entry.y, C.CT_EXIT);
       set(bld.entry.x + 1, y0 + bld.entry.y, C.CT_EXIT);
       if (isHall) {
-        /* LA MAQUETTE DE LA VILLE, au fond du hall, dans l'axe de la porte.
-           ⚠️ C'EST LE POINT DE FUITE DE LA MAIRIE, et il fallait qu'il ne
-           ressemble en rien à la statue de la Justice du tribunal : un visiteur
-           qui entre doit savoir dans quel bâtiment il est AVANT de lire la
-           moindre plaque. Une maquette dit « ici on s'occupe de la ville ». */
-        addProp(20, y0 + 7, "cityModel", true);
-        addProp(21, y0 + 7, "cityModel2", true);
-        addProp(24, y0 + 7, "cityModel", true);
-        addProp(25, y0 + 7, "cityModel2", true);
-        // Le tableau des cours, à droite en entrant : c'est LUI le service qui
-        // marche (voir hallRates). Deux cases, comme le panneau du tribunal.
-        addProp(26, y0 + 21, "priceBoard", true);
-        addProp(19, y0 + 21, "urn", true);
-        addProp(19, y0 + 13, "bench", true); addProp(26, y0 + 13, "bench", true);
+        /* ⚠️⚠️ ZIP 439 — IL Y AVAIT DEUX MAQUETTES, ET L'AXE DE LA PORTE TOMBAIT
+           DANS LE TROU ENTRE LES DEUX. Le 438 les posait en (20,7)-(21,7) et
+           (24,7)-(25,7) : le sprite fait deux cases, il était donc dessiné deux
+           fois, de part et d'autre d'un vide de deux cases — et ce vide est
+           exactement l'axe (x = 22,5) sur lequel le commentaire jurait qu'elle
+           était centrée. Le « point de fuite » du hall était un trou.
+           ⚠️ ET ELLE ÉTAIT AU MAUVAIS BOUT. Posée au fond, à vingt cases de la
+           porte, elle ne peut pas faire son travail — qui est de dire dans quel
+           bâtiment on vient d'entrer AVANT qu'on ait lu une plaque. Elle passe
+           donc à l'ENTRÉE, à gauche en arrivant, et le tableau des cours lui fait
+           face à droite. Le fond de la perspective, lui, revient à ce qui doit
+           l'occuper dans une mairie : l'escalier d'honneur, déjà dans l'axe.
+           C'est le §4 de CLAUDE.md (« une position réglée à la main est une
+           position qui penchera ») : tout se déduit maintenant de `axis`. */
+        place(cx0, y0 + 21, "cityModel", true);
+        place(cx0 + 1, y0 + 21, "cityModel2", true);
+        // Le tableau des cours lui fait FACE, de l'autre côté du tapis : c'est
+        // LUI le service qui marche (voir hallRates), il ne se mérite pas.
+        place(cx1, y0 + 21, "priceBoard", true);
+        // L'ANNUAIRE. ⚠️ 439 — la mairie n'en avait aucun : ses huit portes ne
+        // se lisaient qu'une par une, pendant que le SEUL récapitulatif de la
+        // ville était au tribunal et annonçait des guichets qui n'y sont pas.
+        place(cx1, y0 + 25, "board", true);
+        // Le pied de l'escalier d'honneur : deux urnes et deux drapeaux, qui
+        // disent « on monte ici » sans qu'aucune flèche ne soit dessinée.
+        place(axis - 2, y0 + 6, "urn", true); place(axis + 1, y0 + 6, "urn", true);
+        place(axis - 3, y0 + 6, "flag", true); place(axis + 2, y0 + 6, "flag", true);
       } else {
         // La statue de la Justice entre les deux volées, au fond du hall : le
         // point de fuite du couloir. Sans elle, on entre face à un mur nu.
@@ -7368,7 +7646,7 @@ export function generateCourtWorld() {
    plan, et pas une position de bureau n'a eu à être retouchée. C'est la même
    règle que les téléporteurs du 425 (§7 : ce qui double un autre paramètre doit
    être DÉRIVÉ). `ix/iy/iw/ih` = l'intérieur, murs exclus. */
-function courtFurnish(r, rx, ry, addProp, set, fill) {
+function courtFurnish(r, rx, ry, addProp, set, fill, place) {
   const ix = rx + 1, iy = ry + 1, iw = r.w - 2, ih = r.h - 2;
   const cx = ix + (iw >> 1), cy = iy + (ih >> 1);
   switch (r.kind) {
@@ -7437,11 +7715,40 @@ function courtFurnish(r, rx, ry, addProp, set, fill) {
       addProp(cx, iy + 2, "lectern", true);
       addProp(cx - 3, iy + 2, "urn", true); addProp(cx + 3, iy + 2, "urn", true);
       addProp(cx - 4, iy + 1, "flag", true); addProp(cx + 4, iy + 1, "flag", true);
+      /* ⚠️⚠️ ZIP 439 — DEUX BANCS PAR RANGÉE NE FONT PAS UNE ASSEMBLÉE, et c'est
+         le contrôle de densité de `render-mairie` qui l'a dit : 13 meubles pour
+         204 cases, soit 6 % — la pièce la plus vide des deux bâtiments, et
+         justement celle que Guillaume annonce (« on pourra bientôt se marier
+         aussi »). Le banc du 438 la déclarait « meublée » parce qu'il comptait
+         `n >= 6` sans regarder la surface.
+         ⚠️ Les rangées sont maintenant DÉRIVÉES de la largeur, avec une allée
+         centrale de deux cases — celle par laquelle on entre, qui est le seul
+         détail qui fasse lire « mariage » plutôt que « salle de réunion ». */
       for (let k = 0; iy + 6 + k * 2 < iy + ih - 1; k++) {
-        addProp(cx - 4, iy + 6 + k * 2, "pew", true);
-        addProp(cx + 2, iy + 6 + k * 2, "pew", true);
+        const ry = iy + 6 + k * 2;
+        for (let bx = ix + 1; bx < ix + iw - 1; bx += 2) {
+          if (bx >= cx - 1 && bx <= cx + 1) continue;      // l'allée centrale
+          place(bx, ry, "pew", true);
+        }
       }
-      addProp(ix, iy + ih - 1, "plant", true); addProp(ix + iw - 1, iy + ih - 1, "plant", true);
+      // La table du registre et les deux chaises des témoins, au pied de
+      // l'estrade : c'est là qu'on signe, et sans elle la cérémonie n'a pas
+      // d'objet. Elle attend l'officier d'état civil (voir hallSoonWedding).
+      addProp(cx - 3, iy + 4, "table", true); addProp(cx + 3, iy + 4, "table", true);
+      addProp(cx - 3, iy + 5, "chair", true); addProp(cx + 3, iy + 5, "chair", true);
+      /* ⚠️⚠️ LA COLONNE D'URNES S'ARRÊTE DEUX RANGÉES AVANT LE FOND, et c'est
+         encore le banc qui l'a exigé : posée jusqu'en bas, la dernière urne
+         coiffait la plante d'angle et enfermait la case entre les deux — mur à
+         l'ouest, urne au nord, plante au sud, banc à l'est. Troisième poche
+         d'une case de ce zip, toujours pour la même raison : *meubler le long
+         d'un mur fabrique des culs-de-sac, et aucun ne se voit sur une planche.*
+         C'est `verify-vallee` qui les trouve, une par une, et c'est exactement
+         ce qu'on lui demande. */
+      for (let k = 0; iy + 5 + k * 4 < iy + ih - 3; k++) {
+        place(ix, iy + 5 + k * 4, "urn", true);
+        place(ix + iw - 1, iy + 5 + k * 4, "urn", true);
+      }
+      place(ix, iy + ih - 1, "plant", true); place(ix + iw - 1, iy + ih - 1, "plant", true);
       break;
     }
     case "prices": {
@@ -7466,15 +7773,33 @@ function courtFurnish(r, rx, ry, addProp, set, fill) {
          « on délibère » plutôt que « on juge ». Elle est faite de deux sprites
          (le tour et le centre) assemblés par le générateur, comme le siège du
          juge — le rendu n'a rien à savoir d'un meuble à cheval sur douze cases. */
+      /* ⚠️⚠️ ZIP 439 — ELLE N'ÉTAIT PAS OVALE. Le premier jet cochait les quatre
+         angles d'un rectangle et appelait ça un ovale : sur la planche de
+         `render-mairie`, ça donne trois planches droites. Deux cases coupées sur
+         trente-cinq ne courbent rien.
+         ⚠️ UN OVALE SE DÉCRIT PAR UNE ISOLIGNE, PAS PAR DES CAS PARTICULIERS —
+         c'est mot pour mot la leçon des rives du 437 (« une courbe écrite f(x)
+         ne peut pas se replier ; on prend l'isoligne d'un CHAMP »). On teste
+         donc chaque case contre l'équation de l'ellipse, et le BORD est la case
+         dont un voisin est dehors. Le contour se dessine tout seul, le tour de
+         table aussi, et la forme reste juste si la salle change de taille. */
       const tw2 = iw - 6, th2 = 5, tx = ix + 3, ty = iy + 4;
-      for (let y = ty; y < ty + th2; y++) for (let x = tx; x < tx + tw2; x++) {
-        const edge = (y === ty || y === ty + th2 - 1 || x === tx || x === tx + tw2 - 1);
-        const corner = (y === ty || y === ty + th2 - 1) && (x <= tx + 1 || x >= tx + tw2 - 2);
-        if (corner) continue;                      // les angles coupés font l'ovale
+      const ecx = tx + (tw2 - 1) / 2, ecy = ty + (th2 - 1) / 2;
+      const ea = tw2 / 2, eb = th2 / 2;
+      const inTable = (x, y) => ((x - ecx) / ea) ** 2 + ((y - ecy) / eb) ** 2 <= 1;
+      for (let y = ty - 1; y < ty + th2 + 1; y++) for (let x = tx - 1; x < tx + tw2 + 1; x++) {
+        if (!inTable(x, y)) continue;
+        const edge = !inTable(x - 1, y) || !inTable(x + 1, y) || !inTable(x, y - 1) || !inTable(x, y + 1);
         addProp(x, y, edge ? "ovalTable" : "ovalTable2", true);
       }
-      for (let x = tx + 2; x < tx + tw2 - 2; x += 3) {
-        addProp(x, ty - 1, "chair", true); addProp(x, ty + th2, "chair", true);
+      /* Les chaises suivent le CONTOUR : on ne les aligne pas sur deux rangées,
+         on pose une chaise partout où la case est dehors mais touche la table.
+         C'est ce qui donne la ronde d'un conseil plutôt que deux bancs d'école. */
+      for (let y = ty - 2; y < ty + th2 + 2; y++) for (let x = tx - 2; x < tx + tw2 + 2; x++) {
+        if (inTable(x, y)) continue;
+        if (!inTable(x, y - 1) && !inTable(x, y + 1) && !inTable(x - 1, y) && !inTable(x + 1, y)) continue;
+        if ((x + y) % 2) continue;                 // une chaise sur deux : on ne serre pas les élus
+        place(x, y, "chair", true);
       }
       addProp(cx - 5, iy + 1, "flag", true); addProp(cx + 4, iy + 1, "flag", true);
       addProp(cx, iy + 1, "portrait", true);
@@ -7486,25 +7811,79 @@ function courtFurnish(r, rx, ry, addProp, set, fill) {
          fauteuil, deux chaises), mais en GRAND et avec ce qui distingue un élu
          d'un fonctionnaire : le globe, le portrait, la bibliothèque pleine. */
       addProp(cx, iy + 3, "desk", true); addProp(cx + 1, iy + 3, "desk", true);
-      addProp(cx, iy + 2, "chair", true);
+      /* ⚠️ ZIP 439 — LE FAUTEUIL EXISTE ENFIN. La description de la pièce promet
+         depuis le 438 que « le fauteuil est tourné vers la fenêtre, comme s'il
+         venait de sortir » — et il n'y avait dans la pièce qu'une `chair`, le
+         même tabouret à dossier que dans les salles d'attente. Une description
+         qui décrit un meuble absent est pire qu'une pièce muette : elle apprend
+         au joueur à ne plus lire les descriptions. */
+      addProp(cx, iy + 2, "armchair", true, { face: "window" });
       addProp(cx - 2, iy + 6, "chair", true); addProp(cx + 3, iy + 6, "chair", true);
       addProp(cx + 3, iy + 2, "globe", true);
-      addProp(cx, iy, "portrait", true);
+      // Le portrait officiel : c'est LUI qui porte le nom du maire élu, écrit
+      // vivant au rendu (jamais cuit dans le sprite — §4, `fillText` n'est pas
+      // rastérisable hors navigateur, et un nom baké ne serait pas bilingue).
+      addProp(cx, iy, "portrait", true, { of: "mayor" });
       for (let k = 0; k < 5; k++) addProp(ix + k, iy, "shelf", true);
-      addProp(ix, iy + ih - 1, "plant", true);
+      // Le coin de réception : une mairie reçoit dans le bureau du maire, elle
+      // ne fait pas asseoir sur deux chaises au milieu d'un tapis.
+      addProp(ix + 1, iy + ih - 4, "table", true); addProp(ix + 2, iy + ih - 4, "table", true);
+      addProp(ix + 1, iy + ih - 5, "chair", true); addProp(ix + 2, iy + ih - 3, "chair", true);
+      place(ix, iy + ih - 1, "plant", true);
       addProp(ix + iw - 1, iy + 1, "cabinet", true);
-      addProp(ix + iw - 2, iy + ih - 1, "planChest", true);
+      place(ix + iw - 2, iy + ih - 1, "planChest", true);
+      place(ix + iw - 1, iy + ih - 4, "cabinet", true);
       break;
     }
     case "office": {
       // Bureau, fauteuil derrière, deux chaises de visiteur devant : c'est ce
       // triangle qui dit « on vient y demander quelque chose ».
       addProp(cx, iy + 2, "desk", true);
-      addProp(cx, iy + 1, "chair", true);
+      addProp(cx, iy + 1, "armchair", true);
       addProp(cx - 1, iy + 4, "chair", true); addProp(cx + 1, iy + 4, "chair", true);
-      addProp(ix, iy, "shelf", true); addProp(ix + 1, iy, "shelf", true);
-      addProp(ix + iw - 1, iy, "cabinet", true);
-      addProp(ix + iw - 1, iy + ih - 1, "plant", true);
+      /* ⚠️⚠️ ZIP 439 — LE GARNISSAGE SE DÉDUIT DE LA TAILLE DE LA PIÈCE, ET C'EST
+         TOUT LE SUJET DE CE CAS. Écrit en positions fixes, ce bloc posait SEPT
+         meubles, que la pièce fasse cinq cases de haut ou treize : le bureau du
+         géomètre (dix-sept sur treize, la plus grande pièce des deux bâtiments)
+         sortait avec HUIT props — un bureau, deux chaises, deux étagères, une
+         armoire, une plante — et lisait comme une grange.
+         ⚠️ ET LE BANC DISAIT OK : `render-mairie.mjs` vérifiait « aucune pièce
+         n'est nue » avec pour seuil `n < 6`. Huit props passaient donc avec deux
+         de marge, à côté des quatre-vingts des archives. Un rapport de dix à un
+         entre la pièce la plus dense et la plus vide, et un contrôle vert.
+         *Un seuil absolu sur une grandeur qui dépend du décor est faux dès que
+         le décor change* — c'est le piège du taxi au 434, appliqué au mobilier :
+         on mesure désormais une DENSITÉ, et on garnit au prorata. */
+      for (let k = 0; ix + k * 2 < ix + iw - 3; k++) addProp(ix + k * 2, iy, "shelf", true);
+      for (let k = 0; iy + 2 + k * 3 < iy + ih - 1; k++) place(ix + iw - 1, iy + 2 + k * 3, k % 2 ? "planChest" : "cabinet", true);
+      /* La table de travail du bas : dans une grande pièce, la moitié sud reste
+         sinon un parquet nu. C'est là qu'on étale ce qu'on est venu montrer. */
+      if (ih >= 9) {
+        for (let k = 0; k < Math.max(1, (iw - 6) / 6 | 0); k++) {
+          const tx = ix + 2 + k * 6;
+          addProp(tx, iy + ih - 4, "table", true); addProp(tx + 1, iy + ih - 4, "table", true);
+          addProp(tx, iy + ih - 5, "chair", true); addProp(tx + 1, iy + ih - 3, "chair", true);
+        }
+      }
+      place(ix, iy + ih - 1, "plant", true);
+      place(ix + iw - 1, iy + ih - 1, "plant", true);
+      break;
+    }
+    case "surveyor": {
+      /* ⚠️ ZIP 439 — LE BUREAU DU GÉOMÈTRE A SON PROPRE PLAN. Il instruit les
+         permis de construire, c'est-à-dire qu'il travaille sur des DESSINS : une
+         grande planche à dessin inclinée au centre, les cartonniers à plans le
+         long du mur, et le plan de la ville affiché en grand. Un « office »
+         générique lui allait, mais alors rien ne le distinguait du bureau du
+         procureur — et c'est justement ce que ce zip corrige partout. */
+      for (let k = 0; k < 3; k++) { addProp(cx - 1 + k, iy + 3, "draftTable", true); addProp(cx - 1 + k, iy + 4, "draftTable2", true); }
+      addProp(cx - 2, iy + 3, "stoolC", true); addProp(cx + 2, iy + 4, "stoolC", true);
+      for (let k = 0; k < 4; k++) addProp(ix + 1 + k * 3, iy, "wallMap", true);
+      for (let k = 0; iy + 2 + k * 2 < iy + ih - 1; k++) place(ix + iw - 1, iy + 2 + k * 2, "planChest", true);
+      for (let k = 0; iy + 3 + k * 3 < iy + ih - 1; k++) place(ix, iy + 3 + k * 3, "planChest", true);
+      addProp(cx, iy + ih - 3, "desk", true); addProp(cx, iy + ih - 4, "armchair", true);
+      addProp(cx - 3, iy + ih - 2, "table", true); addProp(cx + 3, iy + ih - 2, "globe", true);
+      place(ix + 1, iy + ih - 1, "plant", true); place(ix + iw - 2, iy + ih - 1, "plant", true);
       break;
     }
     case "counter": {
@@ -7526,6 +7905,20 @@ function courtFurnish(r, rx, ry, addProp, set, fill) {
       }
       addProp(ix + iw - 1, iy + ih - 1, "plant", true);
       addProp(cx, iy + ih - 1, "board", true);
+      /* ⚠️⚠️ ZIP 439 — L'HÔTESSE D'ACCUEIL, DERRIÈRE SON COMPTOIR. Elle est
+         posée par le GÉNÉRATEUR et non écrite en coordonnées absolues, pour la
+         même raison que tout le reste de ce fichier : la pièce a déjà changé
+         trois fois de taille, et une position à la main serait la seule chose
+         qui aurait à être retouchée.
+         ⚠️ ELLE EST DU BON CÔTÉ DU COMPTOIR. `iy + 1` est la rangée derrière
+         (le comptoir est en `iy + 2`) : le joueur ne peut pas la contourner, il
+         lui parle par-dessus le guichet. Posée devant, elle serait un obstacle
+         planté au milieu du hall d'attente — et surtout, un guichet où l'agent
+         est du côté du public ne se lit plus comme un guichet.
+         ⚠️ Elle ne bouge jamais et ne circule pas : ce n'est pas un résident
+         (`res.zone` ne connaît que « farm » et « town »), c'est un décor qui
+         PARLE. Aucune position à diffuser, aucune trajectoire à réconcilier. */
+      if (r.key === "welcome") addProp(cx, iy + 1, "clerkNPC", true);
       break;
     }
     case "robing": {
@@ -7537,25 +7930,42 @@ function courtFurnish(r, rx, ry, addProp, set, fill) {
     }
     case "waiting": {
       for (let k = 0; k < 4; k++) { addProp(ix + 1 + k * 4, iy + 1, "bench", true); addProp(ix + 1 + k * 4, iy + ih - 2, "bench", true); }
-      addProp(ix, cy, "plant", true); addProp(ix + iw - 1, cy, "plant", true);
+      // ⚠️ 439 — `place` et non `addProp` : la plante d'angle est de l'autre côté
+      // de la porte de la salle des témoins, elle était refusée en silence
+      // depuis le 426. Une plante décalée d'une case ne se voit pas ; une plante
+      // absente laisse un angle nu, et c'est le seul angle que le joueur longe.
+      place(ix, cy, "plant", true); place(ix + iw - 1, cy, "plant", true);
       addProp(cx, iy + 1, "table", true);
+      place(ix + 1, iy + ih - 1, "plant", true);
       break;
     }
     case "meeting": {
       // La table de délibération, au centre, entourée de chaises : la pièce EST
       // la table. Une salle du jury sans table est un placard.
-      for (let x = cx - 3; x <= cx + 3; x++) addProp(x, cy, "table", true);
-      for (let x = cx - 3; x <= cx + 3; x += 2) { addProp(x, cy - 1, "chair", true); addProp(x, cy + 1, "chair", true); }
-      addProp(ix, iy, "shelf", true);
-      addProp(ix + iw - 1, iy + ih - 1, "plant", true);
+      // ⚠️ 439 — sa LONGUEUR se déduit de la pièce, comme tout le reste : écrite
+      // à sept cases en dur, elle flottait au milieu d'une salle de médiation
+      // deux fois plus large qu'une salle de jury.
+      const half = Math.max(2, Math.min(5, (iw - 6) >> 1));
+      for (let x = cx - half; x <= cx + half; x++) addProp(x, cy, "table", true);
+      for (let x = cx - half; x <= cx + half; x += 2) { addProp(x, cy - 1, "chair", true); addProp(x, cy + 1, "chair", true); }
+      for (let k = 0; ix + k * 3 < ix + iw - 2; k++) place(ix + k * 3, iy, "shelf", true);
+      place(ix, iy + ih - 1, "plant", true);
+      place(ix + iw - 1, iy + ih - 1, "plant", true);
+      place(ix + iw - 1, iy, "cabinet", true);
       break;
     }
+    /* ⚠️ ZIP 439 — CES TROIS-LÀ REMPLISSENT AU MÈTRE, DONC ELLES PASSENT PAR
+       `place` : une étagère de bout de rangée ou une caisse d'angle qui tombe
+       devant une porte doit se DÉCALER, pas disparaître. C'est exactement ce
+       qui manquait (une étagère de la bibliothèque et une caisse des objets
+       trouvés étaient refusées en silence depuis le 426). */
     case "library": {
       for (let y = iy; y < iy + ih - 1; y += 3) for (let x = ix; x < ix + iw; x++) {
         if (x === cx || x === cx + 1) continue;      // l'allée centrale
-        addProp(x, y, "shelf", true);
+        place(x, y, "shelf", true);
       }
       addProp(cx, iy + ih - 1, "table", true);
+      addProp(cx + 1, iy + ih - 1, "chair", true);
       break;
     }
     case "archive": {
@@ -7563,16 +7973,19 @@ function courtFurnish(r, rx, ry, addProp, set, fill) {
       // qui dit « archives » — trois étagères espacées disent « bureau ».
       for (let y = iy + 1; y < iy + ih - 1; y += 2) for (let x = ix; x < ix + iw; x++) {
         if (x === cx) continue;
-        addProp(x, y, "shelf", true);
+        place(x, y, "shelf", true);
       }
+      // Le pupitre de consultation au bout de l'allée : sans lui, des archives
+      // sont un mur de dos de livres qu'on ne peut rien faire de.
+      addProp(cx, iy + ih - 1, "lectern", true);
       break;
     }
     case "storage": {
       for (let y = iy; y < iy + ih; y += 3) for (let x = ix; x < ix + iw; x += 3) {
         if (x === cx) continue;
-        addProp(x, y, "crate", true);
+        place(x, y, "crate", true);
       }
-      addProp(ix + iw - 1, iy, "shelf", true);
+      place(ix + iw - 1, iy, "shelf", true);
       break;
     }
     case "cells": {

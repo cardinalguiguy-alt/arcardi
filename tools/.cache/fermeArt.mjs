@@ -2222,6 +2222,158 @@ export function decorSprite(id) {
    AU NIVEAU DE L'ASSISE et les pieds dix pixels sous le banc — le personnage
    n'était pas assis dessus, il était assis PAR TERRE DEVANT. Vu au banc de
    rendu, invisible à la relecture, et c'est exactement pourquoi ce banc existe. */
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 439 — LES SOLS DE L'INTÉRIEUR, SORTIS DE LA CLOSURE DU RENDU.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️⚠️ CE DÉPLACEMENT EST LA MOITIÉ DU TRAVAIL, ET IL EST PLUS IMPORTANT QUE
+   LE DESSIN LUI-MÊME. Les quatre matières du tribunal et de la mairie étaient
+   peintes à l'intérieur de `drawCourtFrame`, dans `FermeGame.js` — c'est-à-dire
+   à un endroit qu'aucun banc ne peut appeler. C'est exactement le piège nommé au
+   §4 de CLAUDE.md : *un dessin qu'aucun banc ne peut regarder ne se dégrade pas,
+   il reste au niveau du jour où il a été écrit pendant que tout ce qui est
+   mesuré monte.* Le parquet datait du 426 ; les rues de la ville sont passées au
+   pavé de 64 px au 434, l'herbe au 438, et l'intérieur est resté sur ses tuiles
+   de 16 px pendant douze zips. L'écart n'était pas un écart de soin, c'était un
+   écart de DATE — et il se lisait sur une carte du dépôt, sans ouvrir une image.
+   ⚠️⚠️ ET LA PÉRIODE COMPTE PLUS QUE LES DÉTAILS (leçon du 434). Le parquet du
+   426 dessinait quatre lames de 4 px DANS chaque case : les abouts tombaient
+   donc tous les 16 px, alignés, sur toute la pièce — l'œil voyait la grille
+   avant le bois. Les lames sont désormais ABSOLUES : elles traversent les cases,
+   leur longueur (44 px) n'est pas un multiple de la case, et leurs abouts se
+   décalent d'une rangée à l'autre. Une lame qui s'arrête au bord d'une case
+   n'est pas une lame, c'est un carreau.
+   ═══════════════════════════════════════════════════════════════════════════ */
+// Bruit déterministe, sans état : deux entiers → [0,1[. Même famille que les
+// hachages de case du reste du fichier ; il ne sert qu'à CHOISIR dans une
+// palette, jamais à tirer un pixel au hasard (leçon des arbres du 438).
+function ctH(a, b) {
+  let h = (a * 374761393 + b * 668265263) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+const CT_PLANK_L = 44;   // px : la longueur d'une lame. ⚠️ PREMIER AVEC 16.
+/* ⚠️ L'ÉCART DE TON ENTRE DEUX LAMES EST ÉTROIT, ET C'EST DÉLIBÉRÉ. Premier jet
+   avec six tons bien séparés : sur une pièce de dix-sept cases, vu au banc, le
+   sol lisait comme un velours côtelé — chaque lame criait sa couleur et la
+   pièce devenait un code-barres. Un parquet n'est pas un damier de planches :
+   c'est une matière presque unie où la lame se devine. On resserre donc les
+   tons et on laisse le JOINT faire le dessin. Même leçon que les arbres du
+   438 : ce qui fait la matière n'est pas le contraste, c'est la forme. */
+const CT_WOOD_TONES = ["#8e6a45", "#8a6642", "#916e49", "#876340", "#8c6844", "#946f4b"];
+/* LE PARQUET. Des lames longues, en rangées de 4 px, dont les abouts se
+   décalent. On ne peint QUE la part de chaque lame qui tombe dans la case
+   demandée : le dessin est donc identique qu'on l'appelle case par case (le jeu)
+   ou d'un bloc (le banc), ce qui est la condition pour qu'un banc serve. */
+export function drawCourtWoodTile(ctx, x, y, px, py, T) {
+  const PH = 4, rows = T / PH;
+  for (let k = 0; k < rows; k++) {
+    const row = y * rows + k;                       // ⚠️ rangée ABSOLUE
+    const shift = (row * 23) % CT_PLANK_L;          // le décalage des abouts
+    const gy = py + k * PH;
+    const xa = x * T, xb = xa + T;
+    let p = Math.floor((xa + shift) / CT_PLANK_L);
+    for (;;) {
+      const s = p * CT_PLANK_L - shift, e = s + CT_PLANK_L;
+      if (s >= xb) break;
+      const a = Math.max(s, xa), b = Math.min(e, xb);
+      if (b > a) {
+        ctx.fillStyle = CT_WOOD_TONES[(ctH(p, row) * CT_WOOD_TONES.length) | 0];
+        ctx.fillRect(px + (a - xa), gy, b - a, PH);
+        // Le fil du bois : une veine claire par lame, jamais au même endroit.
+        ctx.fillStyle = "rgba(255,236,205,0.07)";
+        ctx.fillRect(px + (a - xa), gy + (ctH(row, p) < 0.5 ? 1 : 2), b - a, 1);
+        // L'ABOUT, seulement s'il tombe dans la case : c'est ce trait-là qui
+        // dit « une autre lame commence », et il ne doit jamais s'aligner.
+        if (s >= xa && s < xb) { ctx.fillStyle = "rgba(48,32,18,0.55)"; ctx.fillRect(px + (s - xa), gy, 1, PH); }
+      }
+      p++;
+    }
+    // Le joint entre deux lames : léger, sinon quatre traits noirs par case
+    // redessinent la grille qu'on vient de casser.
+    ctx.fillStyle = "rgba(58,38,22,0.17)"; ctx.fillRect(px, gy + PH - 1, T, 1);
+  }
+}
+/* LE DALLAGE DE MARBRE. Des dalles de DEUX cases sur deux (32 px), pas d'une :
+   un hall public se dalle en grand format, et c'est la taille de la dalle qui
+   fait la différence entre un vestibule et une salle de bains. Les veines sont
+   calculées dans le repère de la DALLE et découpées à la case, donc elles
+   traversent les joints — c'est tout ce qu'on demande à une veine. */
+export function drawCourtMarbleTile(ctx, x, y, px, py, T) {
+  const sx = x >> 1, sy = y >> 1;                  // la dalle
+  const lx = (x & 1) * T, ly = (y & 1) * T;        // où l'on est DANS la dalle
+  const h = ctH(sx, sy);
+  ctx.fillStyle = h < 0.34 ? "#cfcbc0" : h < 0.68 ? "#c6c2b7" : "#bcb8ad";
+  ctx.fillRect(px, py, T, T);
+  // Deux veines par dalle, en diagonale, tracées en escalier d'un pixel.
+  for (let v = 0; v < 2; v++) {
+    const hv = ctH(sx * 3 + v, sy * 7 - v);
+    const y0v = 4 + ((hv * (T * 2 - 8)) | 0), dir = hv < 0.5 ? 1 : -1;
+    ctx.fillStyle = v ? "rgba(150,146,140,0.20)" : "rgba(255,255,255,0.22)";
+    for (let i = 0; i < T * 2; i++) {
+      const vy = y0v + ((i * dir) >> 2);
+      if (i < lx || i >= lx + T || vy < ly || vy >= ly + T) continue;
+      ctx.fillRect(px + (i - lx), py + (vy - ly), 1, 1);
+    }
+  }
+  // Le joint : au nord et à l'ouest de chaque DALLE, jamais de chaque case.
+  ctx.fillStyle = "rgba(255,255,255,0.18)";
+  if (!ly) ctx.fillRect(px, py, T, 1);
+  if (!lx) ctx.fillRect(px, py, 1, T);
+  ctx.fillStyle = "rgba(120,116,110,0.22)";
+  if (ly === T) ctx.fillRect(px, py + T - 1, T, 1);
+  if (lx === T) ctx.fillRect(px + T - 1, py, 1, T);
+}
+/* LE TAPIS. Sa bordure se déduit du VOISINAGE (`isCarpet`), donc elle reste
+   juste si la salle change de forme — mais son CHAMP est désormais tissé : une
+   trame de deux pixels et un semis de losanges sur un pavé de quatre cases.
+   Un aplat rouge de vingt cases sur douze est une flaque, pas un tapis. */
+export function drawCourtCarpetTile(ctx, x, y, px, py, T, isCarpet) {
+  ctx.fillStyle = ((x + y) % 2) ? "#7a2530" : "#742330";
+  ctx.fillRect(px, py, T, T);
+  for (let gy = 0; gy < T; gy += 2) {
+    ctx.fillStyle = "rgba(255,225,200,0.045)";
+    ctx.fillRect(px, py + gy, T, 1);
+  }
+  // Le motif : un losange par pavé de 4×4 cases, centré sur la case (1,1) du
+  // pavé — il boucle donc sur lui-même et ne fabrique pas de seconde grille.
+  const mx = ((x % 4) + 4) % 4, my = ((y % 4) + 4) % 4;
+  if (mx === 1 && my === 1) {
+    ctx.fillStyle = "rgba(200,164,90,0.30)";
+    for (let i = 0; i < 5; i++) { ctx.fillRect(px + 8 - i, py + 3 + i, 1, 1); ctx.fillRect(px + 8 + i, py + 3 + i, 1, 1); ctx.fillRect(px + 8 - i, py + 13 - i, 1, 1); ctx.fillRect(px + 8 + i, py + 13 - i, 1, 1); }
+  }
+  ctx.fillStyle = "#c8a45a";
+  if (!isCarpet(x, y - 1)) ctx.fillRect(px, py + 1, T, 2);
+  if (!isCarpet(x, y + 1)) ctx.fillRect(px, py + T - 3, T, 2);
+  if (!isCarpet(x - 1, y)) ctx.fillRect(px + 1, py, 2, T);
+  if (!isCarpet(x + 1, y)) ctx.fillRect(px + T - 3, py, 2, T);
+}
+/* LA DALLE BRUTE DU SOUS-SOL. Des pierres IRRÉGULIÈRES : une case sur trois
+   s'accouple à sa voisine de droite pour faire une pierre longue, et le joint
+   ne se dessine qu'entre deux pierres différentes. C'est l'irrégularité du
+   calepinage qui dit « cave » — un damier régulier dirait « carrelage ». */
+export function drawCourtStoneTile(ctx, x, y, px, py, T) {
+  // À quelle pierre appartient la case : soi-même, ou sa voisine de gauche.
+  const pairs = (px2, py2) => ctH(px2 * 5 + 11, py2 * 3 + 7) < 0.34;
+  const joined = pairs(x - 1, y);
+  const ox = joined ? x - 1 : x, w2 = pairs(ox, y) ? 2 : 1;
+  const h = ctH(ox, y);
+  ctx.fillStyle = h < 0.3 ? "#717277" : h < 0.6 ? "#787980" : h < 0.85 ? "#6b6c71" : "#7e7f86";
+  ctx.fillRect(px, py, T, T);
+  // Le grain : trois éclats fixes par pierre, jamais un semis par pixel.
+  for (let k = 0; k < 3; k++) {
+    const hk = ctH(ox * 13 + k, y * 17 - k);
+    const gx = ((hk * (T * w2 - 4)) | 0) + 2, gy = ((ctH(y + k, ox) * (T - 4)) | 0) + 2;
+    const lx = gx - (joined ? T : 0);
+    if (lx < 1 || lx >= T - 1) continue;
+    ctx.fillStyle = hk < 0.5 ? "rgba(30,30,34,0.30)" : "rgba(200,200,208,0.14)";
+    ctx.fillRect(px + lx, py + gy, 2, 1);
+  }
+  // Le MORTIER, seulement là où deux pierres se touchent.
+  ctx.fillStyle = "rgba(38,38,42,0.45)";
+  ctx.fillRect(px, py + T - 1, T, 1);
+  if (!joined) ctx.fillRect(px, py, 1, T);
+  ctx.fillStyle = "rgba(150,150,158,0.10)"; ctx.fillRect(px, py, T, 1);
+}
 export const SEAT_POSE = {
   headH: 16,      // hauteur de la tranche buste + tête
   topY: -11,      // le haut du crâne, relativement à l'ancre du personnage
@@ -4271,6 +4423,15 @@ export function buildSprites() {
     // été MEUBLÉS PAR LA MÊME VILLE, sinon on lit deux jeux différents.
     "cityModel", "cityModel2", "wallMap", "planChest", "priceBoard",
     "portrait", "globe", "lectern", "urn", "ovalTable", "ovalTable2",
+    // ZIP 439 — le fauteuil (promis par une description depuis le 438 et absent
+    // de la pièce) et la planche à dessin du géomètre, en deux moitiés.
+    "armchair", "draftTable", "draftTable2",
+    // ZIP 439 — l'hôtesse d'accueil. ⚠️ ELLE EST UN PROP ET PAS UN PERSONNAGE :
+    // elle ne se déplace jamais, donc lui donner une feuille de poses, un état
+    // et une position à diffuser serait payer trois mécanismes pour une chose
+    // qui reste debout derrière un comptoir. Ce qu'elle a à faire — parler —
+    // ne demande aucun des trois.
+    "clerkNPC",
   ];
   function courtPropSprite(kind) {
     const W1 = "#7a5232", W2 = "#9c6b42", W3 = "#5a3b26", W4 = "#b98a58";  // bois : mat, clair, ombre, éclairé
@@ -4625,6 +4786,72 @@ export function buildSprites() {
         P(g, 0, 4, 16, 12, W2); P(g, 0, 4, 16, 1, W4);
         P(g, 3, 7, 4, 3, "#e6dfc8"); P(g, 10, 9, 4, 2, "#e6dfc8");
         P(g, 7, 6, 2, 2, "#7f9f8a");
+        return c;
+      }
+      /* ═══ ZIP 439 — TROIS MEUBLES NEUFS, ET AUCUN N'EST DÉCORATIF. ═══
+         ⚠️ Le FAUTEUIL a été ajouté parce qu'une description le promettait
+         depuis le 438 (« le fauteuil est tourné vers la fenêtre ») pendant que
+         la pièce ne contenait qu'une `chair` — le même tabouret que dans les
+         salles d'attente. Une description qui décrit un meuble absent apprend au
+         joueur à ne plus lire les descriptions, et c'est très cher.
+         ⚠️ Et il sert AUSSI dans tous les bureaux : c'est ce qui distingue enfin
+         le côté de l'agent du côté du visiteur. Un bureau où les trois sièges
+         sont identiques ne dit pas qui reçoit qui. */
+      case "armchair": {
+        const [c, g] = cv(16, 22);
+        P(g, 3, 17, 2, 4, W3); P(g, 11, 17, 2, 4, W3);
+        P(g, 1, 4, 14, 14, W1); P(g, 1, 4, 14, 1, W4);                   // la carcasse
+        P(g, 3, 2, 10, 11, CL); P(g, 3, 2, 10, 1, "#a8434d");            // le dossier haut, capitonné
+        P(g, 5, 5, 2, 1, "#6d222a"); P(g, 9, 5, 2, 1, "#6d222a");        // deux boutons du capiton
+        P(g, 5, 8, 2, 1, "#6d222a"); P(g, 9, 8, 2, 1, "#6d222a");
+        P(g, 0, 8, 3, 8, W2); P(g, 13, 8, 3, 8, W2);                     // les ACCOUDOIRS : c'est eux qui font le fauteuil
+        P(g, 0, 8, 3, 1, W4); P(g, 13, 8, 3, 1, W4);
+        P(g, 2, 13, 12, 4, CL); P(g, 2, 13, 12, 1, "#a8434d");           // l'assise
+        return c;
+      }
+      /* LA PLANCHE À DESSIN du géomètre, en deux moitiés empilées (la rangée du
+         fond, puis celle du devant) — même procédé que le siège du juge, à la
+         verticale. ⚠️ ELLE EST INCLINÉE, et c'est tout ce qui la distingue d'une
+         table : une planche à plat est une table, et le bureau du géomètre
+         redevient un bureau quelconque. */
+      case "draftTable": {
+        const [c, g] = cv(16, 26);
+        P(g, 0, 6, 16, 14, "#e8e2d0"); P(g, 0, 6, 16, 2, "#f6f2e6");     // le papier, vu de haut
+        P(g, 0, 4, 16, 2, W2); P(g, 0, 4, 16, 1, W4);                    // le tasseau du haut
+        P(g, 2, 9, 12, 1, "#9fb4c6"); P(g, 2, 13, 9, 1, "#9fb4c6");      // le tracé
+        P(g, 2, 17, 11, 1, "#9fb4c6"); P(g, 5, 9, 1, 9, "#c2707a");
+        return c;
+      }
+      case "draftTable2": {
+        const [c, g] = cv(16, 22);
+        P(g, 0, 0, 16, 9, "#dcd6c4"); P(g, 0, 8, 16, 2, W3);             // le bas de la planche
+        P(g, 0, 10, 16, 3, W2); P(g, 0, 10, 16, 1, W4);                  // la traverse
+        P(g, 2, 13, 2, 8, W1); P(g, 12, 13, 2, 8, W1);                   // les pieds
+        P(g, 2, 16, 12, 1, W3);                                          // l'entretoise
+        P(g, 6, 2, 6, 1, "#9fb4c6"); P(g, 6, 5, 4, 1, "#c2707a");
+        return c;
+      }
+      case "clerkNPC": {
+        /* L'HÔTESSE D'ACCUEIL. ⚠️ ELLE EST DESSINÉE COMME LES HABITANTS DE LA
+           VILLE, pas comme un meuble : même gabarit de 16 de large, mêmes
+           proportions de tête, même palette de peau. Un guichet tenu par une
+           silhouette d'un autre style dirait « objet interactif » au lieu de
+           « quelqu'un », et c'est tout ce qu'on ne veut pas ici.
+           ⚠️ ON NE VOIT QU'ELLE À MI-CORPS : le comptoir est devant, en case
+           `iy + 2`, et il coupe la case du dessous. Dessiner des jambes qui
+           seraient toujours cachées, c'est dessiner pour personne. */
+        const SK = "#e8c39a", SK2 = "#d3a87f", HAIR = "#4a3326", BL = "#3b4a6b", BL2 = "#2c3a55";
+        const [c, g] = cv(16, 26);
+        P(g, 4, 12, 8, 13, BL); P(g, 4, 12, 8, 1, "#4c5f85");        // le buste, veste bleue
+        P(g, 3, 14, 2, 8, BL2); P(g, 11, 14, 2, 8, BL2);             // les bras, un ton plus bas
+        P(g, 6, 12, 4, 6, "#f2efe6");                                 // le col ouvert, chemise claire
+        P(g, 7, 15, 2, 2, "#c8a45a");                                 // le badge de la commune
+        P(g, 5, 3, 6, 8, SK); P(g, 5, 3, 3, 8, "#f0cfa8");            // le visage, éclairé à gauche
+        P(g, 10, 5, 1, 6, SK2);                                       // l'ombre du côté droit
+        P(g, 4, 1, 8, 4, HAIR); P(g, 3, 3, 2, 7, HAIR); P(g, 11, 3, 2, 7, HAIR);
+        P(g, 4, 1, 5, 1, "#5d4232");                                  // le reflet des cheveux
+        P(g, 6, 6, 1, 1, "#2a2018"); P(g, 9, 6, 1, 1, "#2a2018");     // les yeux
+        P(g, 7, 9, 2, 1, "#b4705f");                                  // la bouche
         return c;
       }
       case "justice": case "justice2": {

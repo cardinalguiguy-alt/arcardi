@@ -211,7 +211,6 @@ export const FERME_STR = {
     priceBoardToday: "Aujourd'hui",
     priceBoardInDays: (k) => k === 1 ? "Demain" : `Dans ${k} jours`,
     priceBoardFooter: "🎪 marque les jours de marché, où les cours sont relevés.",
-    courtFloorNameHall: "Hôtel de ville",
     courtRoomName: (k) => ({
       cadastre: "🗺️ Cadastre",
       civil: "💍 Salle des mariages",
@@ -277,6 +276,73 @@ export const FERME_STR = {
     courtEnterToast: "⚖️ Tribunal de Valley Town — visite libre, services à venir.",
     courtExitToast: "⚖️ Vous ressortez du tribunal.",
     courtRoomToast: (n) => `${n} — bientôt opérationnel.`,
+    // ⚠️ ZIP 439 — la plaque d'un guichet OUVERT ne dit plus « bientôt ». La
+    // salle des cours annonçait « bientôt opérationnel » suivi, dans la même
+    // bulle, de « c'est le seul guichet de la ville qui fonctionne déjà ».
+    courtRoomToastLive: (n) => `${n} — ouvert.`,
+    /* ═══ ZIP 439 — L'ACCUEIL, LES ÉLECTIONS, LES REGISTRES ═══════════════ */
+    hallClerkName: "Léonie Sarrazin",
+    hallClerkRole: "hôtesse d'accueil",
+    promptHallClerk: "Parler à l'accueil",
+    hallClerkHello: "Bonjour ! Que puis-je faire pour vous ?",
+    hallClerkAgain: "Autre chose ?",
+    hallClerkClose: "Merci, au revoir",
+    // Ce que le JOUEUR dit. ⚠️ Écrit à la première personne : c'est une réponse
+    // qu'on lui envoie, pas un bouton de menu.
+    hallTopicAsk: (k) => ({
+      mayor: "J'aimerais rencontrer le maire.",
+      election: "Où en sont les élections ?",
+      registry: "Puis-je consulter les registres ?",
+      prices: "Je viens pour les cours du marché.",
+      where: "Où se trouve tel ou tel service ?",
+      wedding: "Je voudrais me marier.",
+      land: "Je voudrais acheter une parcelle.",
+      ballot: "Je viens voter.",
+    }[k] || k),
+    hallTopicTitle: (k) => ({
+      mayor: "🎩 Rencontrer le maire",
+      election: "🗳️ Les élections municipales",
+      registry: "📇 Les registres de la ville",
+      wedding: "💍 Les mariages",
+      land: "🗺️ Le cadastre",
+      ballot: "🗳️ Le scrutin",
+    }[k] || k),
+    hallMayorNow: (e, n) => `Le maire en exercice est ${e} ${n}.`,
+    hallMayorAudience: (d, k) => k === 0
+      ? "Il reçoit AUJOURD'HUI, à son bureau, à l'étage."
+      : k === 1 ? `Il reçoit demain (jour ${d}), à son bureau, à l'étage.`
+      : `Il reçoit dans ${k} jours (jour ${d}), à son bureau, à l'étage.`,
+    hallMayorHint: "Montez l'escalier d'honneur : son bureau est au fond, à gauche. Frappez avant d'entrer.",
+    hallElecNext: (d, k) => k === 0
+      ? "Le scrutin a lieu AUJOURD'HUI. Le dépouillement est affiché ci-dessous."
+      : `Prochain scrutin dans ${k} jour(s), au jour ${d}.`,
+    hallElecTerm: (t) => `Mandat n° ${t}`,
+    hallElecVotes: "voix",
+    hallElecMine: (n) => `dont ${n} de vos résidents`,
+    hallElecNoResidents: "Aucun de vos résidents n'a encore pris part au scrutin — ils votent dès qu'ils s'installent à la ferme.",
+    hallElecFooter: "Les cinq candidats se représentent à chaque mandat. La ville compte plusieurs centaines d'électeurs : vos résidents pèsent, ils ne décident pas.",
+    hallRegistryTitle: "📇 Registre des habitants",
+    hallRegistryIntro: "L'état civil tient la liste de celles et ceux qui vivent à la ferme. Elle sert aux convocations, aux publications de bans et aux listes électorales.",
+    hallRegistryEmpty: "Le registre est vide : personne ne s'est encore installé à votre ferme.",
+    hallRegistryCount: (n) => `${n} habitant(s) inscrit(s).`,
+    hallRegistryVote: (e, n) => `a voté ${e} ${n}`,
+    hallSoonWedding: "Les publications de bans sont prêtes et la salle est dressée — il manque l'officier d'état civil. Revenez à la prochaine mise à jour : la salle des mariages est la deuxième porte à gauche.",
+    hallSoonLand: "Le plan est affiché au cadastre, première porte à gauche. La vente, elle, passera par le notaire du tribunal : on choisit ici, on signe là-bas.",
+    candName: (k) => ({
+      vasseur: "Odile Vasseur", lantier: "Marceau Lantier", bonnefoy: "Séverine Bonnefoy",
+      delaunay: "Ninon Delaunay", toussaint: "Basile Toussaint",
+    }[k] || k),
+    candPlatform: (k) => ({
+      vasseur: "l'eau et les champs",
+      lantier: "les ponts et les chemins",
+      bonnefoy: "l'ordre et les comptes",
+      delaunay: "le lac et le parc",
+      toussaint: "l'école et les archives",
+    }[k] || ""),
+    hallBoardTitle: "🏛️ Hôtel de ville de Valley Town",
+    hallBoardIntro: "Les services de la commune, étage par étage. L'accueil répond au rez-de-chaussée, à droite en entrant.",
+    hallBoardFooter: "La salle des cours et l'accueil sont ouverts. Les autres guichets s'installent d'une mise à jour à l'autre.",
+    courtOpenNow: "✅ Guichet ouvert",
     cropTipReady: "mûr !",
     cropTipWater: "à arroser",
     adsGiftsTitle: "🎁 Cadeaux promis",
@@ -2004,7 +2070,6 @@ export const FERME_STR = {
     priceBoardToday: "Today",
     priceBoardInDays: (k) => k === 1 ? "Tomorrow" : `In ${k} days`,
     priceBoardFooter: "🎪 marks market days, when rates are raised.",
-    courtFloorNameHall: "Town hall",
     courtRoomName: (k) => ({
       cadastre: "🗺️ Land registry",
       civil: "💍 Wedding hall",
@@ -2066,6 +2131,68 @@ export const FERME_STR = {
     courtEnterToast: "⚖️ Valley Town courthouse — free to visit, services coming soon.",
     courtExitToast: "⚖️ You step back outside.",
     courtRoomToast: (n) => `${n} — opening soon.`,
+    courtRoomToastLive: (n) => `${n} — open.`,
+    /* ═══ ZIP 439 — front desk, elections, registers ═════════════════════ */
+    hallClerkName: "Léonie Sarrazin",
+    hallClerkRole: "front desk",
+    promptHallClerk: "Talk to the front desk",
+    hallClerkHello: "Good morning! What can I do for you?",
+    hallClerkAgain: "Anything else?",
+    hallClerkClose: "Thank you, goodbye",
+    hallTopicAsk: (k) => ({
+      mayor: "I would like to meet the mayor.",
+      election: "How are the elections going?",
+      registry: "May I see the registers?",
+      prices: "I am here about the market rates.",
+      where: "Where do I find a given service?",
+      wedding: "I would like to get married.",
+      land: "I would like to buy a plot.",
+      ballot: "I am here to vote.",
+    }[k] || k),
+    hallTopicTitle: (k) => ({
+      mayor: "🎩 Meeting the mayor",
+      election: "🗳️ Town elections",
+      registry: "📇 Town registers",
+      wedding: "💍 Weddings",
+      land: "🗺️ Land registry",
+      ballot: "🗳️ The ballot",
+    }[k] || k),
+    hallMayorNow: (e, n) => `The sitting mayor is ${e} ${n}.`,
+    hallMayorAudience: (d, k) => k === 0
+      ? "He receives TODAY, in his office upstairs."
+      : k === 1 ? `He receives tomorrow (day ${d}), in his office upstairs.`
+      : `He receives in ${k} days (day ${d}), in his office upstairs.`,
+    hallMayorHint: "Take the main staircase: his office is at the far end, on the left. Knock before you enter.",
+    hallElecNext: (d, k) => k === 0
+      ? "The ballot is held TODAY. The count is shown below."
+      : `Next ballot in ${k} day(s), on day ${d}.`,
+    hallElecTerm: (t) => `Term no. ${t}`,
+    hallElecVotes: "votes",
+    hallElecMine: (n) => `including ${n} from your residents`,
+    hallElecNoResidents: "None of your residents has taken part yet — they vote as soon as they settle on the farm.",
+    hallElecFooter: "The five candidates stand again at every term. The town has several hundred voters: your residents count, they do not decide.",
+    hallRegistryTitle: "📇 Register of inhabitants",
+    hallRegistryIntro: "The civil registry keeps the list of those living on the farm. It is used for summons, banns and electoral rolls.",
+    hallRegistryEmpty: "The register is empty: nobody has settled on your farm yet.",
+    hallRegistryCount: (n) => `${n} inhabitant(s) on the roll.`,
+    hallRegistryVote: (e, n) => `voted ${e} ${n}`,
+    hallSoonWedding: "The banns are ready and the room is set — the registrar is missing. Come back next update: the wedding room is the second door on the left.",
+    hallSoonLand: "The plan is posted at the land registry, first door on the left. The sale itself goes through the courthouse notary: you choose here, you sign there.",
+    candName: (k) => ({
+      vasseur: "Odile Vasseur", lantier: "Marceau Lantier", bonnefoy: "Séverine Bonnefoy",
+      delaunay: "Ninon Delaunay", toussaint: "Basile Toussaint",
+    }[k] || k),
+    candPlatform: (k) => ({
+      vasseur: "water and fields",
+      lantier: "bridges and paths",
+      bonnefoy: "order and accounts",
+      delaunay: "the lake and the park",
+      toussaint: "schools and archives",
+    }[k] || ""),
+    hallBoardTitle: "🏛️ Valley Town hall",
+    hallBoardIntro: "The town services, floor by floor. The front desk answers on the ground floor, to your right as you come in.",
+    hallBoardFooter: "The rates room and the front desk are open. The other counters are being fitted out from one update to the next.",
+    courtOpenNow: "✅ Desk open",
     cropTipReady: "ready!",
     cropTipWater: "needs water",
     adsGiftsTitle: "🎁 Promised gifts",
