@@ -425,11 +425,11 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 
 ⚠️⚠️ **LES BANCS ONT DÉMÉNAGÉ DANS `tools/README.md` AU 432**, sur l'ordre laissé par le
 §14.2 du 431 : la liste occupait cinquante lignes et gagnait une entrée par zip. **Ce fichier ne
-la recopie plus** — il en garde seulement ce qu'il faut savoir sans ouvrir l'autre : **14 bancs
-de contrôle et 17 bancs de rendu** (comptés en listant `tools/`, pas de mémoire), et **trois
+la recopie plus** — il en garde seulement ce qu'il faut savoir sans ouvrir l'autre : **15 bancs
+de contrôle et 17 bancs de rendu** (comptés en listant `tools/`, pas de mémoire), et **quatre
 d'entre eux existent parce qu'un défaut vu par Guillaume
 n'était mesuré nulle part** (`verify-compo` au 440, `verify-pont` au 441, `verify-enquete` au
-442). ⚠️ Les deux qui touchent à de l'ARGENT sont `verify-vallee` (il joue des ventes complètes
+442, `verify-portee` au 443). ⚠️ Les deux qui touchent à de l'ARGENT sont `verify-vallee` (il joue des ventes complètes
 et compte les pièces) et `verify-enquete` (il vérifie que le cours SANS enquête est bit à bit
 celui du 430). **Tout chiffre écrit là-bas a été obtenu en lançant le banc**, c'est sa règle
 d'entrée.

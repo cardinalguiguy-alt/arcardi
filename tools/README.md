@@ -588,6 +588,62 @@ d'épaules, 12 % de pixels communs).
 
 ---
 
+## `verify-portee.mjs` — une référence qui ne se résout nulle part (443)
+
+`node tools/verify-portee.mjs` — **6 contrôles**, dont **3 sur le banc lui-même**.
+Lu à cette exécution : **91 fichiers, 106 524 références d'identifiant** sous
+`components/` · `lib/` · `app/`.
+
+⚠️⚠️ **IL EXISTE PARCE QUE LE TABLEAU DES COURS DE LA MAIRIE N'A JAMAIS PU S'OUVRIR,
+DU 438 AU 443.** Ses quatre colonnes lisaient un `day` **nu** : aucune déclaration de ce
+nom au niveau du composant, et les quatre autres `const day` du fichier vivent dans des
+fonctions voisines. Le premier rendu levait `ReferenceError: day is not defined`, le
+`GameErrorBoundary` avalait le jeu entier, et le joueur voyait l'écran 🧯.
+
+⚠️ **Et absolument rien ne pouvait le dire.** `npx next build` compile la référence sans
+broncher — elle est légale, elle se résout **à l'exécution**. Il n'y a pas d'ESLint dans le
+dépôt, et `no-undef` n'aurait pas suffi de toute façon : `day` **est** déclaré dans le
+fichier, ailleurs — donc un `grep` le trouve et conclut à tort. Les trente-et-un autres
+bancs mesurent des données et des dessins ; **aucun ne rend un panneau React**. Et le seul
+chemin qui l'exerce — E devant le tableau, à la mairie — n'était joué par personne, jusqu'à
+ce que l'enquête du 442 y envoie le joueur chercher son **deuxième indice**. Un chantier
+narratif fait passer le joueur dans des pièces où personne n'était allé : c'est ce qui a
+sorti le défaut, pas un banc.
+
+**La grandeur qui manquait, et elle tient en une phrase : le nombre de références qui ne se
+résolvent nulle part.** Le banc parse chaque module avec le parseur de Babel et son greffon
+JSX — **tous deux livrés par Next** (`next/dist/compiled/babel`), donc **zéro dépendance à
+installer**, ce qui est la condition pour qu'il tourne encore dans six mois — puis demande à
+`@babel/traverse` la table des portées et relève les références libres du programme.
+
+⚠️⚠️ **IL SE PROUVE AVANT DE JUGER QUOI QUE CE SOIT, et c'est la leçon du 441 câblée dans le
+banc.** Le chapitre 0 lui donne à lire du code **fautif** (le cas exact du 443, réduit à
+cinq lignes) et exige qu'il le refuse, puis le même code réparé et exige qu'il l'accepte. Si
+la première échoue, **il s'arrête et ne rend aucun verdict sur le dépôt** — un banc qui n'a
+jamais pu échouer applaudit d'autant plus fort. Vérifié en plus **sur le dépôt réel tel
+qu'il était avant le correctif** : il sort `day — components/ferme/FermeGame.js:23590`.
+
+⚠️ **La liste des globaux autorisés est BLANCHE, pas noire** (leçon du `plantTree` du 440) :
+le jour où quelqu'un tape `windwo`, il est refusé sans que personne ne l'ait prévu.
+
+**Ce qu'il ne fait pas, et il faut le lire avant de lui faire confiance :**
+- il ne couvre **pas `public/`** — templerun, labyrinth, candyluge, crystal sont des
+  `<script>` qui se parlent par le global (`THREE`, `Slope`, `Pix`, `dirForward`…) : chez
+  eux un nom libre est la **norme**. Les y passer demanderait de construire la liste de ce
+  que chaque fichier publie — un autre banc, pour des jeux en pause ;
+- il ne dit **rien de ce qu'un panneau affiche**. Un panneau qui s'ouvre sur un tableau vide
+  ou faux lui paraît parfait. Il dit seulement qu'aucun rendu ne peut plus **mourir** sur un
+  nom qui n'existe pas ;
+- il ne voit pas les **propriétés** : `obj.jour` mal orthographié reste invisible. Une
+  portée n'est pas un typage.
+
+⚠️⚠️ **CE QUI RESTE DONC À DÉCOUVERT, ET C'EST LA VRAIE DETTE DU 443 : aucun banc n'OUVRE un
+panneau.** Ce banc ferme la porte par laquelle le défaut est entré, pas la pièce. Les
+**55 panneaux conditionnels** de `FermeGame.js` (comptés en listant les `{… && (` de son
+`return`, pas de mémoire) ne sont exercés que par une main sur un clavier.
+
+---
+
 ## Jouer à deux en local
 
 **`tools/fake-supabase.mjs`** (432) — REST bidon **+ relais Realtime**, donc deux onglets =

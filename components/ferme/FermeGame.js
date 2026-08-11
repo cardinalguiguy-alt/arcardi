@@ -23546,7 +23546,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ⚠️ QUATRE JOURS ET PAS DIX : au-delà, on ne lit plus un tableau, on lit
           un tableur — et il n'y aurait plus aucune raison de revenir le
           consulter. */}
-      {priceBoardOpen && (
+      {/* ⚠️⚠️ ZIP 443 — CE PANNEAU N'AVAIT PAS SON JOUR, ET IL N'A JAMAIS PU
+          S'OUVRIR DEPUIS LE 438. Les quatre colonnes lisaient un `day` NU :
+          aucune déclaration de ce nom n'existe au niveau du composant, donc le
+          premier rendu levait `ReferenceError: day is not defined` et le
+          GameErrorBoundary avalait le jeu entier. C'est la troisième forme du
+          piège n°1 de CLAUDE.md — un symbole qui n'existe qu'à l'exécution :
+          ni le build, ni le lint, ni les trente-et-un bancs ne voient un nom
+          libre dans du JSX, et le seul chemin qui l'exerce (E devant le
+          tableau, à la mairie) n'était joué par personne. Le 442 y a envoyé le
+          joueur pour le deuxième indice de l'enquête, et le défaut est sorti.
+          ⚠️ LE JOUR VIENT DE `marketDay()`, PAS D'UNE LECTURE LOCALE : le
+          panneau du marché cote avec elle, et deux lectures du même jour
+          finiraient par annoncer deux tableaux différents (§8 de CLAUDE.md).
+          Les autres panneaux à données sont déjà des fermetures pour cette
+          raison exacte — celui-ci ne l'était pas, et c'est tout l'écart. */}
+      {priceBoardOpen && (() => {
+        const day = marketDay();
+        return (
         <div className="ferme-modal open" onClick={() => setPriceBoardOpen(false)}>
           <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
             <button className="ferme-close-x" onClick={() => setPriceBoardOpen(false)}>✕</button>
@@ -23607,7 +23624,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             <div style={{ marginTop: 12 }}><button className="ferme-btn" onClick={() => setPriceBoardOpen(false)}>{L.newsBoardClose}</button></div>
           </div>
         </div>
-      )}
+        );
+      })()}
       {/* ⚠️⚠️ ZIP 439 — UN ANNUAIRE PAR BÂTIMENT, ET C'ÉTAIT LA MOITIÉ DU
           PROBLÈME NARRATIF. Jusqu'ici ce panneau était le SEUL récapitulatif de
           Valley Town : il vivait au tribunal et annonçait, entre autres, un
