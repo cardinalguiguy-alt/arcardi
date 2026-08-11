@@ -20,6 +20,17 @@
    ========================================================================== */
 
 import * as C from "./fermeConstants.mjs";
+/* ⚠️ ZIP 442 — L'ENQUÊTE. Le moteur ne lui emprunte QU'UNE chose, et c'est
+   volontairement la plus petite possible : `enqMarketMod`, qui traduit l'issue
+   de l'enquête en modificateur de cote. Le sens de la flèche compte —
+   `enquete.js` n'importe que `fermeConstants`, donc il n'y a pas de cycle, et le
+   jour où l'on voudra retirer l'enquête il y a exactement deux appels à couper.
+   ⚠️ ON NE RECOPIE PAS LA RÈGLE ICI. Deux endroits qui décideraient « ce que
+   l'enquête fait au marché » finiraient par ne pas dire la même chose, et le
+   symptôme serait deux joueurs qui se disputent sur le prix du blé (§11 du
+   README de la ferme) — le défaut le plus cher et le moins visible d'un jeu à
+   deux. */
+import * as Q from "./enquete.mjs";
 
 const idx = (x, y) => y * C.MAP_W + x;
 export const xOf = (i) => i % C.MAP_W;
@@ -2603,7 +2614,7 @@ export function resolveTownSell(f, m, day, s) {
     n = take(f.inv.products[pt], m.n); f.inv.products[pt] -= n; unit = C.ANIMALS[pt].sell;
   } else return resolveTownSellShared(f, m, day, s, res);
   if (n <= 0) return res;
-  const priced = marketPrice(day, m.item, unit);
+  const priced = marketPrice(day, m.item, unit, Q.enqMarketMod(s));
   res.gain = res.moneyDelta = res.earnedDelta = n * priced;
   res.base = n * unit;
   res.n = n;
@@ -2617,12 +2628,13 @@ export function resolveTownSell(f, m, day, s) {
 function resolveTownSellShared(f, m, day, s, res) {
   if (!s) return res;
   const it = m.item;
-  const rate = marketRate(day, marketFamilyOf(it) || "__none__");
+  const mod = Q.enqMarketMod(s);
+  const rate = marketRate(day, marketFamilyOf(it) || "__none__", mod);
   /* `paid` = le résolveur a DÉJÀ crédité shared.money (voir l'avertissement de
      l'en-tête). `base` = ce qu'il a rapporté au prix de la ferme. */
   const finish = (base, paid, flag, n) => {
     if (base <= 0) return res;
-    const total = Math.max(base, Math.ceil(base * rate));
+    const total = marketApply(base, rate, mod);
     res.base = base; res.gain = total; res.n = n || 1;
     res.moneyDelta = res.earnedDelta = paid ? total - base : total;
     if (flag) res[flag] = true;
@@ -3113,7 +3125,26 @@ export const CRAFT_SELL_ITEMS = ["honey", "cheeseWheel", "cheesePortion", "butte
 export function isMarketDay(day) {
   return C.MARKET_DAY_EVERY > 0 && (day | 0) % C.MARKET_DAY_EVERY === 0;
 }
-export function marketRate(day, family) {
+/* ⚠️⚠️ ZIP 442 — LE TROISIÈME ARGUMENT EST L'ISSUE DE L'ENQUÊTE, ET IL FAUT
+   DIRE POURQUOI CE N'EST PAS UNE VIOLATION DE LA RÈGLE DU 430.
+   La règle dit : « le cours ne doit dépendre QUE du jour », et son corollaire
+   dit pourquoi — le jour où il dépendra du stock d'un joueur, de son or ou de
+   sa saison locale, **les deux écrans afficheront des prix différents et chacun
+   aura l'air cohérent avec lui-même**. Ce qui est interdit, c'est donc une
+   dépendance à un état PROPRE À UN CLIENT. `mod` vient de `shared.enquete`,
+   c'est-à-dire d'un état arbitré par l'hôte, diffusé et persisté comme l'or :
+   les deux clients lisent le même octet, donc la même cote, et le contrôle de
+   déterminisme du banc reste vrai.
+   ⚠️ SANS `mod`, LA FONCTION EST BIT À BIT CELLE D'AVANT — c'est la seule forme
+   qui garantisse qu'on n'a rien cassé pour une ferme qui n'a jamais ouvert le
+   carnet d'enquête, et le banc le vérifie explicitement (`verify-enquete`,
+   chapitre « le marché sans enquête est le marché d'avant »).
+   ⚠️ LE JOUR DE MARCHÉ EST RELEVÉ AVANT LE REMAPPAGE, sur l'échelle 0..span :
+   appliqué après, il aurait écrasé la borne basse de l'issue « restitution » et
+   le marché libre n'aurait plus jamais pu descendre un jour de marché — un
+   effet de bord de trois caractères, invisible, et exactement le contraire de
+   ce que la restitution promet. */
+export function marketRate(day, family, mod) {
   const fi = MARKET_FAMILIES.indexOf(family);
   if (fi < 0) return 1;
   const h = marketHash(day, fi);
@@ -3127,7 +3158,29 @@ export function marketRate(day, family) {
      du décor. En relevant le plancher, un jour de marché reste variable :
      il vaut la peine, sans être une évidence. */
   if (isMarketDay(day)) pct = Math.max(pct, span - (h % Math.max(1, Math.round(span / 3))));
+  if (mod) {
+    const lo = Math.round((mod.lo || 0) * 100);
+    const hi = Math.round(C.MARKET_SPREAD * 100 * (mod.mult || 1));
+    pct = lo + Math.round(pct * (hi - lo) / span);
+  }
   return 1 + pct / 100;
+}
+/* ⚠️⚠️ LE PLANCHER « JAMAIS MOINS CHER QU'AU BAC » ÉTAIT ÉCRIT DEUX FOIS, ET
+   C'EST LE §8 DE `CLAUDE.md` QU'ON RÉPARE EN PASSANT. `marketPrice` faisait
+   `Math.max(basePrice, …)` et `resolveTownSellShared` faisait `Math.max(base, …)`
+   à cinq cents lignes de là : deux descriptions de la même promesse, qui n'ont
+   tenu que tant que personne n'avait de raison d'en lever une. L'enquête en a
+   une, et lever la première seulement aurait donné un marché libre au bac et
+   plancher chez les artisans — deux guichets qui ne racontent pas la même ville,
+   sans qu'aucune erreur ne soit levée.
+   ⚠️ Le plancher tombe UNIQUEMENT quand `mod.lo < 0`, c'est-à-dire quand une
+   issue a explicitement dit qu'il n'y en a plus. Un `mod` qui ne parle pas du
+   plancher (l'issue « maintien ») le garde, et c'est ce qui rend la fonction
+   sûre à l'ajout d'une troisième issue. */
+export function marketApply(base, rate, mod) {
+  const total = Math.ceil(base * rate);
+  if (mod && (mod.lo || 0) < 0) return Math.max(1, total);
+  return Math.max(base, total);
 }
 /* ⚠️ ZIP 430 — LE JOUR DE SERVICE D'UN RÉSIDENT « À LA SEMAINE ». Dérivé du
    numéro de jour, donc identique chez tous les clients sans qu'un octet ne
@@ -3138,13 +3191,13 @@ export function isShopDay(ro, day) {
   if (!ro || ro.weeklyShift === undefined || ro.weeklyShift === null) return true;
   return ((day | 0) % 7) === (ro.weeklyShift | 0);
 }
-export function marketPrice(day, item, basePrice) {
+export function marketPrice(day, item, basePrice, mod) {
   const fam = marketFamilyOf(item);
   if (!fam) return basePrice;
   // ⚠️ Arrondi au SUPÉRIEUR : à petits prix (une baie vaut 3), un arrondi au
   // plus proche mangerait toute la prime et le marché n'existerait que pour
   // les articles chers. Une baie à +20 % doit rapporter 4, pas 3.
-  return Math.max(basePrice, Math.ceil(basePrice * marketRate(day, fam)));
+  return marketApply(basePrice, marketRate(day, fam, mod), mod);
 }
 
 
@@ -5915,6 +5968,66 @@ export function generateTownWorld() {
       props.splice(k, 1); solid[i] = 0;
     }
   }
+  /* ═══════════════════════════════════════════════════════════════════════
+     ZIP 442 — LES TROIS BORNES DE SECTION DE L'ARPENTEUR.
+     ─────────────────────────────────────────────────────────────────────────
+     Elles portent le premier code de l'enquête (voir `enquete.js` §3) : deux
+     cotes lisibles au quai et au verger, une cote MARTELÉE au bois. La
+     déduction du joueur — « on numérote d'ouest en est, le plan s'arrête au
+     verger, et voilà une borne plus à l'est » — n'existe que si les trois
+     pierres sont réellement dans cet ordre-là sur la carte, ce que le banc
+     vérifie plutôt que de le croire.
+
+     ⚠️⚠️ ELLES NE BLOQUENT PAS, ET C'EST UNE DÉCISION, PAS UN OUBLI. Une borne
+     fait la hauteur d'un genou : on l'enjambe. Trois cases solides de plus sur
+     une carte dont la connexité est contrôlée à 100 % (`verify-vallee`), c'est
+     trois occasions de fermer un passage d'une case au bord d'un verger ou dans
+     une futaie — et le symptôme serait un trajet de résident qui n'aboutit
+     plus, pas une erreur. Non solides, elles ne peuvent RIEN casser : on ne fait
+     que les lire.
+
+     ⚠️⚠️ LA PASSE EST LA DERNIÈRE QUI POSE UN DÉCOR, ET C'EST OBLIGATOIRE.
+     Posées plus tôt, elles auraient été balayées par le nettoyage de
+     `q.gard` ci-dessus, ou recouvertes par une esplanade, ou plantées dessus.
+     Posées ici, elles voient le sol FINAL et l'emprise de tout ce qui existe —
+     c'est le raisonnement du revêtement (434) et de la berge (435), appliqué à
+     trois cailloux.
+     ⚠️ Le balayage est une SPIRALE DÉTERMINISTE autour de l'ancre, jamais un
+     tirage : `generateTownWorld` partage UN générateur, y puiser déplacerait
+     tout le mobilier posé avant (leçon de l'étang, 435). Et l'ancre elle-même se
+     dérive d'un lieu (`ENQ_STONE_ANCHORS`) : le parc a reculé de huit cases au
+     437 et le bois a été creusé au 440 — une coordonnée écrite ici aurait déjà
+     menti deux fois. */
+  for (const a of Q.ENQ_STONE_ANCHORS) {
+    const ax = a.x() | 0, ay = a.y() | 0;
+    let put = null;
+    for (let r = 0; r <= 12 && !put; r++) {
+      for (let dy = -r; dy <= r && !put; dy++) for (let dx = -r; dx <= r && !put; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;   // l'anneau, pas le disque
+        const x = ax + dx, y = ay + dy;
+        if (!inMap(x, y)) continue;
+        const i = id(x, y), g = ground[i];
+        if (g !== C.G_GRASS && g !== C.G_TOWN_LAWN) continue;
+        if (solid[i] || objects[i] !== C.O_NONE || hedge[i]) continue;
+        if (!compoFree("boundStone", x, y)) continue;
+        put = { x, y };
+      }
+    }
+    /* ⚠️ ON NE POSE PAS « QUELQUE PART » SI L'ANNEAU DE DOUZE NE DONNE RIEN.
+       Un décor rabattu au hasard serait une borne de section posée à l'autre
+       bout d'une section, c'est-à-dire un code A dont la déduction devient
+       fausse. Le banc échoue sur une borne manquante : il vaut mieux une
+       enquête qui refuse de se lancer qu'une enquête qui ment. */
+    /* ⚠️⚠️ ELLES BLOQUENT, ET C'EST LE BANC QUI L'A IMPOSÉ. Premier jet :
+       non solides, au motif qu'une borne fait la hauteur d'un genou et qu'on
+       l'enjambe. `verify-vallee` a refusé sur-le-champ — « aucun décor n'est
+       traversable » — et il a raison : un décor dessiné qu'on traverse est le
+       mur invisible du 425 EN NÉGATIF, et la règle du projet est qu'on ne
+       desserre pas un contrôle, on corrige ce qu'il montre (§10). La connexité
+       de la ville est mesurée à 100 % dans le même banc : si l'une de ces trois
+       pierres fermait un passage, il le dirait à la ligne suivante. */
+    if (put) { props.push({ x: put.x, y: put.y, kind: "boundStone", mark: a.mark }); solid[id(put.x, put.y)] = 1; }
+  }
   const bloom = new Uint8Array(W * H);
   for (const b of beds) {
     for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) {
@@ -7653,6 +7766,57 @@ export function townArchRise(tw) {
   return a;
 }
 export function courtFloorY0(f) { return f * (C.COURT_FLOOR_H + C.COURT_FLOOR_GAP); }
+/* ⚠️⚠️ ZIP 442 — DANS QUELLE PIÈCE EST CETTE CASE ? Une seule définition, ici,
+   DÉRIVÉE de `COURT_ROOMS`. Elle existe parce que l'enquête pose trois lutrins
+   à registre identiques (état civil, géomètre, notaire) et deux commandes de
+   verrou (greffe, huissier) : sans elle, `FermeGame` aurait dû retrouver la
+   pièce en recopiant le découpage dans le composant — deux descriptions d'un
+   même plan, qui divergent au premier déplacement de cloison (§8).
+   ⚠️ ON TESTE L'INTÉRIEUR STRICT, murs exclus. Les rectangles de `COURT_ROOMS`
+   sont donnés MURS COMPRIS et deux pièces mitoyennes PARTAGENT leur cloison :
+   testé bords compris, une case de mur appartiendrait à deux pièces, et la
+   réponse dépendrait de l'ordre de la table. */
+/* ⚠️⚠️ ZIP 442 — LA COLLISION DU TRIBUNAL SORT DE LA CLOSURE DU RENDU, et c'est
+   le piège n°1 de `CLAUDE.md` sous sa forme lente (436) : `canStandCourt` vivait
+   dans l'effet de rendu de `FermeGame`, donc AUCUN BANC NE POUVAIT L'APPELER —
+   et le premier qui en a eu besoin (celui du coffre à deux serrures, qui doit
+   chronométrer un trajet réel) n'avait le choix qu'entre s'en refaire une copie
+   et mesurer un autre monde. C'est exactement ce que `render-parc` a fait au 440
+   avec le champ du bois : il annonçait « taillis 12 % » pour une futaie réglée à
+   50 %, en passant au vert.
+   ⚠️ LA BOÎTE EST DÉCRITE UNE FOIS, ICI. Elle vaut 0,56 × 0,35 case, comme
+   depuis le 426 ; `FermeGame` l'APPELLE au lieu de la redécrire, exactement
+   comme la ville partage sa boîte entre `townCanStand` (exécution) et
+   `townBoxFree` (navigation) depuis le 428. Le jour où l'on élargit un
+   personnage, il n'y a qu'un nombre à changer. */
+export const COURT_BOX = { r: 0.28, d: 0.35 };
+export function courtBoxFree(cw, x, y) {
+  if (!cw) return true;
+  const { r, d } = COURT_BOX;
+  for (const [px, py] of [[x - r, y], [x + r, y], [x - r, y + d], [x + r, y + d]]) {
+    const fx = Math.floor(px), fy = Math.floor(py);
+    if (fx < 0 || fy < 0 || fx >= cw.w || fy >= cw.h) return false;
+    if (cw.solid[fy * cw.w + fx]) return false;
+  }
+  return true;
+}
+/* La cage d'escalier qui contient cette case, ou `null`. ⚠️ MÊME RAISON : le
+   jeu la retrouvait dans sa closure (`checkCourtStairs`), donc un banc qui veut
+   rejouer un trajet à travers deux niveaux devait réinventer la recherche. Une
+   cage est un LIEU (426) : elle se demande, elle ne se recalcule pas. */
+export function courtStairwellAt(x, y) {
+  const f = courtFloorOf(y), fx = Math.floor(x), fy = Math.floor(y) - courtFloorY0(f);
+  return C.COURT_STAIRWELLS.find(w => (w.a === f || w.b === f)
+    && fx >= w.x && fx < w.x + w.w && fy >= w.y && fy < w.y + w.h) || null;
+}
+export function courtRoomAt(x, y) {
+  const f = courtFloorOf(y), ly = (y | 0) - courtFloorY0(f);
+  for (const r of C.COURT_ROOMS) {
+    if (r.floor !== f) continue;
+    if (x > r.x && x < r.x + r.w - 1 && ly > r.y && ly < r.y + r.h - 1) return r;
+  }
+  return null;
+}
 export function courtFloorOf(y) {
   const step = C.COURT_FLOOR_H + C.COURT_FLOOR_GAP;
   const f = Math.floor(y / step);
@@ -8553,8 +8717,121 @@ function courtFurnish(r, rx, ry, addProp, set, fill, place) {
     }
     default: break;
   }
+  /* ═══════════════════════════════════════════════════════════════════════
+     ZIP 442 — LE MOBILIER DE L'ENQUÊTE, PIÈCE PAR PIÈCE.
+     ─────────────────────────────────────────────────────────────────────────
+     ⚠️⚠️ IL EST EN DEHORS DU `switch`, ET C'EST DÉLIBÉRÉ. Le `switch` classe
+     par `kind` — « ce genre de pièce se meuble comme ça » — et c'est ce qui
+     évite d'écrire quatre cents positions à la main. L'enquête, elle, pose des
+     objets dans DES PIÈCES NOMMÉES : le fichier du cadastre n'est pas « ce
+     qu'on met dans une pièce de type cadastre », c'est ce qu'on met dans LE
+     cadastre. Mélanger les deux aurait donné un fichier du cadastre dans toute
+     pièce qui partagerait ce `kind`, et un jour deux répertoires du notaire.
+     ⚠️⚠️ TOUT PASSE PAR `place`, JAMAIS PAR `addProp`, ET C'EST LE POINT QUI
+     REND CE BLOC SÛR. `place` DÉCALE d'une case au lieu de refuser (leçon du
+     439) : aucun de ces meubles ne peut donc être avalé en silence par le
+     garde-fou des portes — ce qui a coûté la statue de la Justice pendant un
+     zip entier — et `render-mairie` peut continuer d'exiger ZÉRO refus.
+     ⚠️ Et rien ici ne dépend de la case exacte : les proximités de
+     `FermeGame.js` cherchent le prop PAR SON `kind` et par la pièce où il est
+     tombé, jamais par une coordonnée recopiée. Un décalage d'une case est donc
+     littéralement sans conséquence — c'est ce qui autorise `place`. */
+  /* ⚠️ ON NE MARQUE PAS LA PIÈCE SUR LE MEUBLE, ON LA DÉDUIT DE SA CASE
+     (`E.courtRoomAt`). Premier jet : chaque meuble portait `room: r.key`, ce qui
+     marche — et ne marche QUE pour les meubles que ce bloc pose. Le plan mural
+     du cadastre, lui, est posé par le `switch` d'au-dessus, sans étiquette, et
+     il en existe aussi un chez le géomètre : il aurait fallu un second
+     mécanisme pour lui. Deux façons de répondre à « dans quelle pièce est ce
+     meuble ? », c'est le §8, et la seconde aurait été écrite dans le composant.
+     Une seule fonction, dérivée de `COURT_ROOMS`, répond pour tous. */
+  const enqPut = (x, y, kind, extra) => place(x, y, kind, true, extra);
+  switch (r.key) {
+    // ── L'HÔTEL DE VILLE.
+    case "cadastre":
+      // Le fichier à tiroirs, contre le mur nord, à côté du plan mural : on
+      // consulte le plan, puis on tire la fiche. Les deux au même endroit,
+      // parce que c'est le geste.
+      enqPut(ix + iw - 3, iy + 1, "cardIndex");
+      break;
+    case "civil":
+      // Le registre d'état civil, sur son lutrin, au milieu de la salle des
+      // mariages : c'est le meuble autour duquel la pièce est faite.
+      enqPut(ix + 2, iy + 2, "registerStand");
+      break;
+    case "surveyor":
+      // Le registre des cotes, chez le géomètre, à côté de sa planche à dessin.
+      enqPut(ix + 1, iy + ih - 3, "registerStand");
+      break;
+    case "cityarch":
+      /* LES DEUX CARTONS DES ARCHIVES MUNICIPALES — la note de service et le
+         procès-verbal du conseil. ⚠️ ILS SONT AUX DEUX BOUTS DE LA PIÈCE, pas
+         côte à côte : ce sont deux découvertes séparées par quatre chapitres, et
+         deux cartons voisins auraient été lus l'un après l'autre dans la même
+         seconde, ce qui écrase le rythme de l'enquête sans rien apporter.
+         ⚠️ Le `mark` voyage avec le prop (`place` accepte un `extra` depuis le
+         439) : c'est LUI, et non la position, qui dit lequel des deux on ouvre.
+         Une position recopiée dans `enquete.js` aurait été le doublon du §8 —
+         et elle aurait menti dès le premier décalage de `place`. */
+      /* ⚠️⚠️ LES DEUX CARTONS SONT AUX COLONNES EXTRÊMES, ET C'EST UNE
+         CONTRAINTE DE CONNEXITÉ, PAS UN GOÛT. Une salle d'archives est un
+         PEIGNE : des rangées d'étagères pleines, percées d'une seule allée
+         centrale. Une case bloquée AU MILIEU d'une rangée libre coupe cette
+         rangée en deux, et la moitié qui ne contient pas l'allée n'a plus
+         aucune sortie — deux cases inaccessibles, invisibles sur une planche,
+         impossibles à voir en jouant sans y tomber. Aux colonnes extrêmes, il
+         n'y a rien derrière : rien à couper. C'est le cul-de-sac d'une case du
+         439, retrouvé par `verify-vallee` avant Guillaume. */
+      enqPut(ix, iy + 2, "docBox", { mark: "note" });
+      enqPut(ix + iw - 1, iy + ih - 2, "docBox", { mark: "pv" });
+      break;
+    // ── LE PALAIS.
+    case "archives":
+      /* OMBELINE REBOUL. ⚠️ ELLE EST DEVANT SON BUREAU ET DOS AUX RAYONNAGES,
+         près de la porte : une archiviste qu'il faut aller chercher au fond
+         d'une allée d'étagères est une archiviste qu'on ne trouve pas, et le
+         chapitre 3 s'arrête là. Comme Léonie (439), elle est un PROP et pas un
+         personnage — elle ne se déplace jamais, donc lui donner une feuille de
+         poses, un état et une position à diffuser serait payer trois mécanismes
+         pour quelqu'un qui reste debout à son bureau. */
+      /* ⚠️ ELLE EST À L'EXTRÊME EST DE LA DERNIÈRE TRAVÉE, et pour la même
+         raison de peigne que les cartons ci-dessus : posée au milieu de la
+         bande libre du fond, elle en isolait SIX CASES. Et c'est le bon endroit
+         de toute façon — la porte est sur le mur est, on la voit en entrant.
+         ⚠️ PAS DE BUREAU DEVANT ELLE : deux meubles empilés dans cette bande la
+         recoupaient, et elle tient déjà son carton contre elle. Le pupitre de
+         consultation posé par le `kind` « archive » est à deux pas ; c'est LUI,
+         le meuble de la pièce. */
+      enqPut(ix + iw - 1, iy + ih - 2, "archivistNPC");
+      break;
+    case "notary":
+      // Le répertoire (on y entre l'année) et le règlement affiché au mur, à
+      // côté du guichet : la règle qui permet de trouver l'année est à deux pas
+      // de l'endroit où on la saisit. C'est voulu — l'énigme est de LIRE, pas
+      // de faire l'aller-retour.
+      enqPut(ix, iy + 2, "registerStand");
+      enqPut(ix + iw - 1, iy + 2, "bylaw");
+      break;
+    case "clerk":
+      enqPut(ix + iw - 2, iy + 2, "keyPost");        // la commande de verrou du greffe
+      break;
+    case "bailiff":
+      enqPut(ix + iw - 2, iy + 2, "keyPost");        // ... et celle de l'huissier
+      break;
+    case "evidence":
+      /* L'ARMOIRE SCELLÉE, deux cases, contre le mur nord de la salle des
+         scellés. ⚠️ LES DEUX MOITIÉS SONT POSÉES CÔTE À CÔTE PAR LE GÉNÉRATEUR,
+         comme la statue de la Justice et le siège du juge : rien dans le rendu
+         n'a besoin de connaître un meuble à cheval sur deux cases. */
+      /* ⚠️ UNE CASE EN RETRAIT DU MUR DU FOND, PAS CONTRE LUI. Adossée, la
+         double armoire enfermait les deux cases restées entre elle et le mur
+         (439 : « meubler le long d'un mur fabrique des poches »). Une case plus
+         bas, la rangée du fond redevient un passage. */
+      enqPut(cx - 1, iy + 2, "strongbox");
+      enqPut(cx, iy + 2, "strongbox2");
+      break;
+    default: break;
+  }
 }
-
 // Schedule the next visit on the host clock: random base window, shortened
 // by posted ads and popularity (both capped). Never below 45s.
 export function scheduleNextVisit(station, popularity, rnd) {

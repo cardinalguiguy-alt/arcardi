@@ -2137,3 +2137,231 @@ par vouloir dire « vide d'un côté ».
   deux changements visuels) ;
 - **rien de tout ça n'a été joué à deux**, et la ferme peuplée n'est toujours pas passée par
   `tools/fake-supabase.mjs`.
+
+---
+
+## 25. ZIP 442 — L'ENQUÊTE : « LA PARCELLE QUI N'EXISTE PAS »
+
+Demande de Guillaume : **une enquête complète, jouable dans le monde partagé, à
+l'ambition d'un contenu Stardew Valley** — de vrais personnages, beaucoup
+d'interaction concrète (parler, lire des documents, trouver des indices aux
+quatre coins de la carte, les recouper, résoudre des codes), **conçue pour deux
+joueurs dès le départ**, et « une histoire claire, pas cliché, qui ne joue pas
+en permanence la carte du mystère pour le mystère ».
+
+### L'histoire, et pourquoi elle n'est pas un habillage
+
+Valley Town compte **27 parcelles ; le terrain en porte 28**. La vingt-huitième
+n'a pas été volée : elle a été **dissoute administrativement**, et le loyer
+qu'elle produit toujours paie, depuis, **le plancher du marché** — celui qui
+garantit qu'on ne vend jamais moins cher en ville qu'au bac de la ferme (§11).
+L'enquête part donc de la mécanique la plus utilisée du jeu et remonte jusqu'à
+son origine ; elle ne se pose pas à côté de l'économie, elle l'explique.
+
+⚠️⚠️ **LE COUPABLE A TOUT ÉCRIT, ET IL A DÉPOSÉ SES AVEUX AU PREMIER ENDROIT
+QU'ON REGARDE.** Aurèle Chaband, géomètre-voyer, a dissous la parcelle l'année de
+la crue pour sauver la halle, l'a consigné honnêtement, et a déposé le registre
+aux scellés « à ouvrir à la première réclamation ». Personne n'a jamais réclamé.
+**Le secret n'a jamais été gardé : il a été RANGÉ.** C'est la construction que ce
+chantier cherchait — la question n'est pas « qui », elle est « pourquoi personne
+n'a ouvert la boîte » — et elle évite le seul cliché que Guillaume a nommé : le
+PNJ qui fait durer. Ombeline Reboul, l'archiviste, dit tout ce qu'elle sait dès
+sa première phrase, à chaque fois. Ce qui bloque n'est jamais elle, c'est un
+document qui manque.
+
+⚠️ **ET LE SECOND RENVERSEMENT EST DANS UNE MARGE.** Le procès-verbal du conseil
+est public, relié à sa date, sur l'étagère qu'on ouvre en entrant — et il porte
+en marge quatre mots que personne n'a lus : « sous réserve de l'héritier ».
+
+**Vingt-et-un lieux, huit chapitres, trois codes, deux issues.** Le détail est
+dans `components/ferme/enquete.js`, qui est la table ; les textes sont dans
+`fermeStrings.js` (convention du 439 : la table d'un côté, le texte de l'autre,
+parce que c'est le seul endroit que `verify-strings` sait apparier).
+
+### Ce qui la rend jouable À DEUX, et pas seulement jouable à deux
+
+- ⚠️ **L'ENQUÊTE EST PARTAGÉE, PAS PERSONNELLE.** Les quêtes de découverte
+  (`C.QUESTS`) vivent dans `f.quests`, par fermier, parce qu'elles apprennent à
+  jouer. Celle-ci est une histoire DU MONDE : elle vit dans `shared.enquete`, les
+  deux joueurs la mènent ensemble, et **le carnet dit qui a trouvé quoi**. Un
+  second joueur qui regarde l'autre cocher sa propre liste ne joue pas, il
+  assiste.
+- **Chaque trouvaille est annoncée dans le chat**, à tout le monde. C'est la
+  moitié du plaisir : on part chacun de son côté et l'autre voit ce qu'on
+  déterre. Coût réseau : zéro message dédié — l'enquête voyage dans un `apply`
+  qui partait déjà.
+- **Le chapitre 2 impose les deux cartes** : quatre bornes d'arpenteur, trois en
+  ville et **l'origine du cadastre à la ferme, au pied de la gare**. À deux, l'un
+  prend le train, l'autre reste, et on recoupe au retour.
+- ⚠️⚠️ **ET UNE SEULE PORTE EXIGE VRAIMENT DEUX PERSONNES : LE COFFRE À DEUX
+  SERRURES.** Un coffre municipal a deux clés confiées à deux agents pour qu'un
+  seul homme ne puisse pas l'ouvrir — Chaband a contourné cette règle en
+  DÉPOSANT le registre, et les joueurs doivent la respecter pour l'en sortir. La
+  mécanique dit le thème sans une ligne de dialogue. Une commande au **greffe**
+  (rez-de-chaussée), une chez l'**huissier** (étage), le coffre aux **scellés**
+  (sous-sol) : les deux doivent être tournées dans la même fenêtre.
+  ⚠️ **LA FENÊTRE EST MESURÉE, PAS CHOISIE.** `verify-enquete` rejoue le trajet
+  d'un joueur SEUL sur la vraie grille, avec la vraie collision et la vraie
+  course : **68 cases, 10,5 s pour une fenêtre de 22 s.** À deux c'est un « prêt ?
+  maintenant ! » ; seul c'est un sprint qu'on rate une fois ou deux. **Un jeu qui
+  exige un second joueur pour finir est un jeu qu'on ne finit pas** — c'est aussi
+  pourquoi le dépôt final accepte un témoin de la ville quand on est seul.
+
+### Les trois codes, et pourquoi ils ne sont pas des devinettes
+
+| | ce qu'on cherche | comment on le trouve |
+|---|---|---|
+| **A** | la cote `VT-3-28` | la règle de numérotation (registre du géomètre) + deux bornes lisibles + **une borne martelée plus à l'est que la dernière du plan** |
+| **B** | l'année de décision, **40** | trois inscriptions qui datent la même personne (cloche 41, orgue 39, tombe 42) + le règlement affiché (« un dépôt suit la décision d'un an franc ») |
+| **C** | le mot-clé **MATHILDE** | « la clé est là où j'ai mis mon nom pour la dernière fois » — sa dernière borne est celle de la ferme, et ce n'est pas son nom à lui qui y est gravé |
+
+⚠️⚠️ **LE CODE C EST LA MEILLEURE PIÈCE DU DISPOSITIF ET IL NE COÛTE RIEN** : le
+joueur a gratté ce prénom sous la mousse **au chapitre 2**, où il ne voulait rien
+dire. Quatre chapitres plus tard il devient la clé. Celui qui l'a noté n'a rien à
+refaire ; celui qui ne l'a pas noté retraverse les deux cartes — et découvre
+qu'il connaît le chemin par cœur.
+
+⚠️ **ET LE CODE B NE REND PAS UN NOMBRE, IL REND UN CHOC** : la parcelle est
+déclarée « sans titulaire connu » en l'an 40, et la femme dont on a gratté le
+prénom meurt en 42. **Elle était vivante.** Une déduction dont le résultat est
+une révélation vaut mieux qu'une déduction dont le résultat est un chiffre.
+
+### ⚠️⚠️ LA DÉDUCTION DU CODE A EST VRAIE SUR LE TERRAIN, ET C'EST MESURÉ
+
+Le raisonnement du joueur — « on numérote d'ouest en est ; le verger est à 25, la
+promenade à 27, et le plan dit que la promenade est la dernière ; or il y a une
+borne PLUS À L'EST que la promenade » — n'est vrai que si les trois pierres sont
+réellement dans cet ordre sur la carte. Le générateur, lui, est parfaitement
+content de les poser dans n'importe quel ordre. Le parc a reculé de huit cases au
+437, le bois a été creusé au 440 : **ce genre de chose bouge, et le jour où ça
+bougera l'énigme deviendra fausse sans qu'une ligne de code ne change.**
+`verify-enquete` compare les abscisses des trois bornes. Premier jet : le verger
+était annoncé « dernière parcelle » alors qu'il est **tout à l'ouest** — l'énigme
+était fausse à l'écriture, et c'est le banc qui l'a dit.
+
+### Ce que l'enquête laisse dans le monde — et le seul vrai choix
+
+Le dépôt de la réclamation, chez le notaire, à **deux témoins**, se termine par un
+arbitrage dont **aucune branche n'est la bonne** :
+
+| | ce que ça change | ce que ça coûte |
+|---|---|---|
+| 🌾 **restituer** | la parcelle revient au cadastre au nom de l'héritier ; **le marché n'a plus de plancher — ni de plafond** (cote de −22 % à +56 %) ; une plaque à la lisière du bois, un nom sur la pierre, et la cloche annoncée chaque aube | +3 000 or, et il faut désormais savoir lire le tableau des cours quatre jours à l'avance (438) |
+| ⚖️ **maintenir** | le fonds est régularisé au nom de la ville ; **le plancher demeure et il est RELEVÉ** (+8 % garantis) | +5 000 or, et la pierre reste sans nom — Ombeline le dit une fois |
+
+⚠️⚠️ **CELA TOUCHE `marketRate`, DONC LA RÈGLE LA PLUS DANGEREUSE DU PROJET**
+(§11 : « le cours ne doit dépendre QUE du jour »), et il faut dire exactement
+pourquoi ce n'est pas une entorse. Ce que la règle interdit, c'est une dépendance
+à un état **propre à un joueur** — son stock, son or, sa saison locale — parce
+que les deux écrans afficheraient alors des prix différents en ayant chacun l'air
+cohérent. `enquete.outcome` est un état **partagé**, arbitré par l'hôte et
+persisté comme l'or : les deux clients lisent le même octet. Le contrôle de
+déterminisme reste vrai, et `verify-enquete` vérifie en plus que **le cours SANS
+enquête est bit à bit celui du 430** (5 000 couples jour × famille comparés à une
+réimplémentation de la formule d'origine, écrite dans le banc — *on ne mesure pas
+un trajet avec l'outil qui l'a produit*).
+
+⚠️ **ET LE PLANCHER ÉTAIT ÉCRIT DEUX FOIS**, dans `marketPrice` et dans
+`resolveTownSellShared`, à cinq cents lignes l'un de l'autre : deux descriptions
+de la même promesse, qui n'ont tenu que tant que personne n'avait de raison d'en
+lever une. Le lever d'un seul côté aurait donné un marché libre au bac et un
+plancher chez les artisans — **deux guichets qui ne racontent pas la même ville**,
+sans qu'aucune erreur ne soit levée. Il est dans `E.marketApply`, une fois.
+
+### L'héritier — le vivier fixe du 439, réutilisé tel quel
+
+⚠️⚠️ **IL EST UN DES CINQ CANDIDATS DU VIVIER FIXE** (`bonnefoy`, « l'ordre et
+les comptes »), et pour exactement la raison qui a fait ce vivier au 439 : tiré
+dans les résidents de la ferme, il aurait changé EN COURS D'ENQUÊTE quand on
+accueille ou renvoie quelqu'un, et une réclamation déposée hier aurait désigné
+quelqu'un d'autre aujourd'hui. **Et comme `mayorOf(day)` est une pure fonction du
+jour, il est maire environ un mandat sur cinq** : ce jour-là l'héritier est juge
+et partie, le notaire le dit, le dossier le mentionne — deux dernières scènes
+différentes pour **zéro octet de plus**. C'est le « le mécanisme est déjà là » que
+le 439 avait laissé écrit.
+
+### Les onze dessins, et le banc qui les regarde
+
+Sept meubles (l'archiviste, l'armoire scellée en deux moitiés, la commande de
+verrou, le lutrin à registre, le fichier du cadastre, le carton d'archives, le
+règlement sous verre) et quatre décors de plein air (la borne de section, la même
+martelée, la borne d'origine, la plaque de la fin). ⚠️ **`render-enquete.mjs` a
+été écrit AVANT le premier `fillRect`** — corollaire du §4.2 de `CLAUDE.md` — et
+il a immédiatement trouvé ce qu'aucune lecture n'aurait trouvé :
+
+- **les bornes étaient à hauteur de POITRINE** (×0,83 d'un fermier au lieu de
+  ×0,61) : une borne de section fait un demi-mètre, on l'enjambe. Rétrécies à
+  ×0,70. *Un décor ne se juge pas contre d'autres décors* (429) ;
+- **la mousse était du poivre** : cinq pixels isolés sur la pierre, c'est-à-dire
+  très exactement « l'îlot qui flotte dans un aplat » que le 438 a mis quatre
+  rédactions à nommer. Elle pousse maintenant en plaques — meilleur au fond, pas
+  seulement au chiffre ;
+- **deux dessins étaient rognés par le haut** (les tringles de verrou de
+  l'armoire, la corniche du fichier) : le piège n°1 des sprites, payé trois fois
+  au 433 ;
+- ⚠️ **et le banc lui-même s'est trompé de grandeur d'abord**, ce qui est la
+  septième fois d'affilée dans ce dépôt : il interdisait tout pixel sur les
+  QUATRE bords et refusait cinq dessins corrects — le mobilier d'intérieur fait
+  seize de large PAR CONVENTION depuis le 426, et les deux moitiés de l'armoire
+  DOIVENT se toucher. Ce qui est dangereux est le HAUT, et lui seul.
+
+⚠️ **Ombeline est calquée sur Léonie au pixel près pour l'ossature** (même
+gabarit, même ligne d'épaules, même palette de peau) et n'en partage que 12 % des
+pixels : deux PNJ de la même ville doivent avoir été dessinés par la même main
+sans être la même personne recolorée. Le banc mesure les deux.
+
+### Ce que le chantier a réparé en passant
+
+- ⚠️⚠️ **LA COLLISION DU TRIBUNAL EST SORTIE DE LA CLOSURE DU RENDU**
+  (`E.courtBoxFree`, `E.courtStairwellAt`). `canStandCourt` vivait dans l'effet de
+  rendu : aucun banc ne pouvait l'appeler, et le premier qui en a eu besoin —
+  celui qui doit CHRONOMÉTRER le trajet entre les deux serrures — n'avait le
+  choix qu'entre s'en refaire une copie et mesurer un autre monde. C'est le §1 du
+  440, payé sur `render-parc` et son champ de bois réinventé ;
+- ⚠️ **`E.courtRoomAt`** : « dans quelle pièce est cette case », une fois,
+  dérivée de `COURT_ROOMS`. Trois lutrins identiques et deux commandes de verrou
+  l'exigeaient ; sans elle, `FermeGame` aurait recopié le découpage du plan ;
+- ⚠️ **quatre panneaux de plus dans `uiBlocked`** : le carnet ouvert laissait le
+  fermier marcher, et pendant une saisie de code **chaque lettre tapée partait
+  aussi dans le jeu**. Trouvé en jouant.
+
+### ⚠️ CE QUI A ÉTÉ JOUÉ À DEUX CLIENTS, ET CE QUI NE L'A PAS ÉTÉ
+
+Séance réelle avec `tools/fake-supabase.mjs`, deux onglets, deux joueurs.
+**Vérifié en jouant :** l'avis lu sur la place par Joueur1 ; l'arbitrage de
+l'hôte ; l'`apply` reçu par Joueur2 ; le chat « Joueur1 a trouvé : … » chez lui ;
+le bouton « 🔍 Carnet » qui apparaît **chez les deux** ; et le carnet de Joueur2
+affichant l'indice avec **« trouvé par Joueur1 »**. C'est la première fois que
+l'état partagé de ce chantier traverse le réseau, et c'est le morceau que
+`CLAUDE.md` §13 réclame depuis le 419.
+
+⚠️ **Deux défauts ont été trouvés là, et nulle part ailleurs** : le chat affichait
+« 🔍 🔍 Joueur1 a trouvé… » (six libellés portaient un emoji que `broadcastChat`
+écrit déjà), et les quatre panneaux ne bloquaient pas le déplacement.
+
+**Ce qui n'a PAS été joué :** les interactions de l'INTÉRIEUR (Ombeline, les deux
+commandes de verrou, le coffre, le notaire) et le dépôt final. Le banc du navigateur
+ne compose une image que pendant une capture d'écran, donc la boucle de rendu
+n'avance que par à-coups et le personnage ne peut pas traverser un bâtiment. Ces
+interactions passent par le MÊME chemin que celles de la ville (`enqNearby`, lue à
+la fois par l'invite et par la touche E, comme les gestes de l'église au 441) et
+leur placement est mesuré par `verify-enquete` — mais elles n'ont pas été vues à
+l'écran, et c'est une dette datée.
+
+### Ce que ça ne fait pas
+
+- **aucun résident n'entre dans les trois bâtiments**, et Ombeline est un PROP
+  comme Léonie : elle ne se déplace jamais. C'est la même dette qu'aux 439 et 441,
+  et l'enquête ne l'a pas réglée ;
+- **l'enquête ne se rejoue pas.** Une fois déposée, la décision est définitive —
+  une fin qu'on peut refaire n'est pas une décision, c'est un menu ;
+- **elle ne récompense rien d'autre que de l'or** (5 700 or de chapitres, plus
+  3 000 ou 5 000 selon l'issue) : pas d'objet, pas de graine, pas de familier ;
+- **la ferme n'y gagne aucun décor** en dehors de la borne d'origine : ses
+  chemins et ses arbres restent ceux du zip 232, et c'est toujours la dette la
+  plus visible du projet ;
+- **rien n'est persisté par `tools/fake-supabase.mjs`** (il répond `[]` sur
+  `/rest/v1/*`) : le chemin de sauvegarde n'a donc pas été éprouvé en séance. Il
+  est celui de `townChop` et de `wardrobe`, et `verify-enquete` éprouve la
+  reprise (`migrateEnquete`) sur une sauvegarde absente et sur une sauvegarde
+  abîmée.

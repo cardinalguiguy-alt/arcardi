@@ -4544,6 +4544,27 @@ export function buildSprites() {
     "altar", "altar2", "candlestick", "paschal", "choirStall", "candleRack",
     "prieDieu", "confessional", "confessional2", "font", "pulpit", "saintNiche",
     "stoup", "organ", "organWing", "organBench", "bellRope", "pewL", "pewR",
+    /* ⚠️⚠️ ZIP 442 — L'ENQUÊTE. Sept dessins, et ils ont TOUS une mécanique
+       derrière eux : on ne pose pas un meuble neuf dans un bâtiment déjà meublé
+       pour faire joli, on en pose un parce qu'il y a quelque chose à y lire.
+       C'est la règle du 426 (« un décor qui existe POUR une mécanique absente
+       est plus trompeur qu'un décor manquant ») prise par l'autre bout : ici la
+       mécanique existe d'abord, et chaque dessin doit se laisser reconnaître de
+       loin comme « il y a quelque chose là ».
+       ⚠️ Ils gardent le gabarit et la PALETTE du tribunal (bois mat, pierre,
+       fonte, bronze) : la ville qui a meublé le palais a acheté ces meubles-là
+       aussi. Deux vocabulaires de dessin dans le même couloir se lisent comme
+       deux jeux — c'est ce que disait déjà le 438 en donnant à la mairie le
+       gabarit du tribunal, et le 441 en reprenant `pew` et `railing` tels quels
+       pour l'église.
+       ⚠️ ET AUCUN TEXTE N'EST CUIT DEDANS. Les registres, les fiches et les
+       affiches portent des LIGNES, pas des mots : `fillText` n'est pas
+       rastérisable hors navigateur (§4), donc un sprite qui en contient n'est
+       plus regardable par un banc — et un texte cuit ne peut pas être bilingue,
+       ce qui est rédhibitoire pour un chantier qui est presque entièrement du
+       texte. Ce qu'on lit est écrit VIVANT dans le panneau. */
+    "archivistNPC", "strongbox", "strongbox2", "keyPost", "registerStand",
+    "cardIndex", "docBox", "bylaw",
   ];
   function courtPropSprite(kind) {
     const W1 = "#7a5232", W2 = "#9c6b42", W3 = "#5a3b26", W4 = "#b98a58";  // bois : mat, clair, ombre, éclairé
@@ -5251,12 +5272,342 @@ export function buildSprites() {
         P(g, 7, 33, 2, 1, "#8a7a5c");
         return c;
       }
+      /* ═══════════════════════════════════════════════════════════════════
+         ZIP 442 — LES SEPT MEUBLES DE L'ENQUÊTE.
+         ═══════════════════════════════════════════════════════════════════ */
+      case "archivistNPC": {
+        /* OMBELINE REBOUL, ARCHIVISTE DES AUDIENCES. ⚠️ ELLE EST CALQUÉE SUR
+           `clerkNPC` AU PIXEL PRÈS POUR TOUT CE QUI EST L'OSSATURE — même
+           gabarit, mêmes proportions de tête, même palette de peau, même
+           mi-corps derrière son meuble. Deux PNJ debout dans la même ville qui
+           n'auraient pas la même anatomie se liraient comme deux jeux (438).
+           Ce qui la distingue est ce qui la CARACTÉRISE, et rien d'autre :
+           - le vert sourd des archives au lieu du bleu de l'accueil (une
+             hôtesse reçoit, une archiviste conserve) ;
+           - les cheveux relevés, striés de gris — elle est là depuis onze ans
+             et elle le dit dans sa première réplique ;
+           - des LUNETTES, qui sont ici plus qu'un détail : à seize pixels, une
+             barre claire en travers des yeux est la seule chose qui fasse lire
+             « quelqu'un qui lit toute la journée » ;
+           - le carton qu'elle tient CONTRE ELLE, pas posé. C'est la pose de
+             quelqu'un qui ne vous le donnera pas, et c'est exactement la scène
+             que le chapitre 3 joue. */
+        const SK = "#e8c39a", SK2 = "#d3a87f", HAIR = "#3a3028", GRAY = "#8a8278";
+        const GN = "#3d5a46", GN2 = "#2e4535", CARD = "#c8b48a", CARD2 = "#a8946a";
+        const [c, g] = cv(16, 26);
+        P(g, 4, 12, 8, 13, GN); P(g, 4, 12, 8, 1, "#4d6d56");         // le buste, laine verte
+        P(g, 3, 14, 2, 8, GN2); P(g, 12, 14, 2, 8, GN2);              // les bras, un ton plus bas
+        P(g, 6, 12, 4, 4, "#efe9dc");                                  // le col de chemise
+        // Le carton d'archives, tenu à deux mains contre la poitrine.
+        P(g, 4, 17, 8, 7, CARD); P(g, 4, 17, 8, 1, "#dcc9a2"); P(g, 4, 23, 8, 1, CARD2);
+        P(g, 7, 17, 2, 7, CARD2);                                      // la sangle du carton
+        P(g, 3, 19, 2, 3, SK2); P(g, 11, 19, 2, 3, SK2);               // les mains par-dessus
+        P(g, 5, 3, 6, 8, SK); P(g, 5, 3, 3, 8, "#f0cfa8");             // le visage
+        P(g, 10, 5, 1, 6, SK2);
+        P(g, 4, 1, 8, 4, HAIR); P(g, 3, 3, 2, 5, HAIR); P(g, 11, 3, 2, 4, HAIR);
+        /* ⚠️ LE CHIGNON EST LA MOITIÉ DE LA SILHOUETTE, ET IL DOIT DÉBORDER.
+           Premier jet : trois pixels collés au crâne — à seize pixels, ça ne se
+           distingue pas d'une mèche, et elle se lisait comme n'importe qui. Un
+           chignon se voit parce qu'il SORT du contour de la tête : quatre pixels
+           en arrière, cernés, plus l'épingle. C'est la même règle que la tête du
+           pigeon au 433 (« sans le creux de nuque, c'est un galet gris »). */
+        P(g, 11, 1, 4, 4, HAIR); P(g, 12, 2, 2, 2, "#4a3a2c");
+        P(g, 13, 1, 1, 1, "#c8a45a");                                  // l'épingle
+        P(g, 4, 2, 4, 1, GRAY); P(g, 11, 4, 2, 1, GRAY);               // les mèches grises
+        P(g, 4, 6, 8, 1, "#d8d4cc");                                   // les lunettes : la barre claire
+        P(g, 5, 6, 2, 1, "#f4f2ee"); P(g, 9, 6, 2, 1, "#f4f2ee");      // ... et ses deux verres
+        P(g, 5, 6, 1, 1, "#2a2018"); P(g, 10, 6, 1, 1, "#2a2018");     // les yeux, derrière
+        P(g, 7, 9, 2, 1, "#a86a5c");
+        return c;
+      }
+      case "strongbox": case "strongbox2": {
+        /* L'ARMOIRE SCELLÉE DES SCELLÉS. Deux cases, comme le siège du juge et
+           la statue de la Justice : c'est le meuble le plus imposant du
+           sous-sol, et il doit l'être — c'est le but de cinq chapitres.
+           ⚠️ CE QUI FAIT LIRE « ON NE L'OUVRE PAS SEUL », C'EST LA SYMÉTRIE.
+           Deux entrées de serrure, une par vantail, au même niveau, aussi loin
+           l'une de l'autre que le meuble le permet. Une seule serrure centrale
+           aurait dessiné un coffre ordinaire, et toute la mécanique du chapitre
+           5 serait devenue une surprise au lieu d'une promesse.
+           ⚠️ ET LES DEUX MOITIÉS PARTAGENT LEUR OSSATURE (la leçon du taxi au
+           436, où la face et le dos avaient commencé à diverger) : on écrit le
+           corps une fois, et on ne pose que ce qui change de côté. */
+        const right = kind === "strongbox2";
+        const IR2 = "#4a4a52", IRL = "#6a6a74", IRD = "#2c2c33";
+        const [c, g] = cv(16, 30);
+        P(g, 0, 26, 16, 4, IRD);                                       // le socle de fonte
+        P(g, right ? 0 : 1, 27, 15, 1, "#1e1e24");
+        P(g, 0, 3, 16, 24, IR2); P(g, 0, 3, 16, 1, IRL);               // le corps
+        P(g, 0, 24, 16, 2, IRD);
+        // Les bandes rivetées : trois horizontales, une verticale par vantail.
+        for (const by of [6, 14, 22]) {
+          P(g, 0, by, 16, 2, IRL); P(g, 0, by + 2, 16, 1, IRD);
+          for (let rx = right ? 1 : 2; rx < 15; rx += 4) P(g, rx, by, 1, 1, "#9a9aa4");
+        }
+        // Le montant central : il n'existe que sur le bord MITOYEN, donc à
+        // droite de la moitié gauche et à gauche de la moitié droite.
+        P(g, right ? 0 : 14, 3, 2, 23, IRD);
+        P(g, right ? 1 : 14, 3, 1, 23, "#3a3a42");
+        // L'entrée de serrure, en laiton, sur le vantail — et les deux tringles
+        // de verrou qui montent dans le mur : c'est ce qui dit que la commande
+        // est ailleurs.
+        const kx = right ? 9 : 4;
+        P(g, kx, 16, 4, 6, GO); P(g, kx, 16, 4, 1, GOL); P(g, kx, 21, 4, 1, GOD);
+        P(g, kx + 1, 18, 2, 2, "#241c10");                             // le trou de serrure
+        /* ⚠️ LA TRINGLE DE VERROU S'ARRÊTE UNE RANGÉE SOUS LE BORD, ET C'EST LE
+           BANC QUI L'A EXIGÉ. Peinte jusqu'à y = 0, elle était RASÉE par le
+           canevas — le piège n°1 des sprites (§4), payé trois fois au 433. Une
+           tringle rognée ne « monte pas dans le mur », elle s'arrête net : le
+           dessin est joli et il lui manque deux rangées que personne ne cherche.
+           Elle se termine donc sur son EMBASE, ce qui est plus juste de toute
+           façon — un verrou entre dans une gâche, pas dans le vide. */
+        P(g, right ? 12 : 2, 1, 2, 3, "#7a7a84"); P(g, right ? 12 : 2, 1, 1, 3, "#9a9aa4");
+        P(g, right ? 11 : 1, 1, 4, 1, "#5a5a62");
+        // Le cachet de cire et son ruban : un scellé se VOIT, sinon la pièce
+        // s'appelle « salle des scellés » sans qu'on sache pourquoi.
+        if (!right) { P(g, 5, 10, 5, 4, "#8a2a2a"); P(g, 5, 10, 5, 1, "#b04040"); P(g, 6, 13, 3, 3, "#a03434"); }
+        return c;
+      }
+      case "keyPost": {
+        /* LA COMMANDE DE VERROU, au greffe et chez l'huissier. Une colonnette
+           de fonte, une plaque de laiton, et LA CLÉ DÉJÀ EN PLACE, retenue par
+           sa chaîne.
+           ⚠️ LA CLÉ EST DESSINÉE DANS SA SERRURE, ET C'EST TOUT LE DESSIN. Une
+           borne nue serait un poteau ; une clé qu'on voit de trois cases dit
+           « on tourne ça » sans une plaque à lire, et c'est ce qu'il faut pour
+           un objet que deux joueurs doivent trouver chacun de son côté et
+           déclencher en même temps. */
+        const [c, g] = cv(16, 24);
+        P(g, 4, 20, 8, 3, IR); P(g, 4, 20, 8, 1, "#5a5a62");           // l'embase
+        P(g, 6, 8, 4, 13, "#4a4a52"); P(g, 6, 8, 1, 13, "#6a6a74");    // le fût
+        P(g, 3, 4, 10, 6, "#4a4a52"); P(g, 3, 4, 10, 1, "#6a6a74");    // la tête
+        P(g, 4, 5, 8, 4, BR); P(g, 4, 5, 8, 1, "#c8a44c");             // la plaque de laiton
+        P(g, 5, 6, 6, 1, "#8a6c28"); P(g, 5, 8, 4, 1, "#8a6c28");      // deux lignes gravées
+        // La clé : anneau, tige, panneton — et la chaîne qui la retient au fût.
+        P(g, 11, 11, 4, 1, GO); P(g, 13, 9, 1, 4, GO); P(g, 14, 9, 1, 4, GOD);
+        P(g, 14, 12, 1, 2, GO);
+        P(g, 9, 11, 2, 1, GOL);
+        for (let k = 0; k < 4; k++) P(g, 10 + (k & 1), 13 + k, 1, 1, "#8a8a92");
+        return c;
+      }
+      case "registerStand": {
+        /* LE LUTRIN À REGISTRE : état civil, répertoire du notaire, registre des
+           cotes. Le même meuble aux trois endroits, et c'est voulu — c'est le
+           meuble de la ville, celui qu'on trouve partout où l'on consulte
+           debout.
+           ⚠️ LE REGISTRE EST OUVERT ET IL PENCHE. Fermé, c'est un livre posé sur
+           une table ; ouvert sur un plan incliné, avec la tranche épaisse et le
+           signet qui pend, c'est « on vient d'y lire quelque chose ». La
+           différence tient en six pixels et elle décide de tout. */
+        const [c, g] = cv(16, 28);
+        P(g, 6, 22, 4, 5, W1); P(g, 3, 26, 10, 2, W3);                 // le pied et son patin
+        P(g, 4, 20, 8, 3, W2); P(g, 4, 20, 8, 1, W4);
+        // Le pupitre incliné : deux marches suffisent à dire la pente à 16 px.
+        P(g, 1, 15, 14, 4, W1); P(g, 2, 13, 12, 3, W2); P(g, 2, 13, 12, 1, W4);
+        // Le registre ouvert : deux pages, la reliure au milieu, la tranche.
+        P(g, 1, 9, 14, 6, "#efe8d4"); P(g, 1, 9, 14, 1, "#fbf7ea");
+        P(g, 7, 8, 2, 8, DK2);                                          // le dos, en cuir sombre
+        P(g, 0, 14, 16, 2, "#d8cfb4"); P(g, 0, 15, 16, 1, "#b8ae94");   // la tranche, épaisse
+        for (let k = 0; k < 4; k++) { P(g, 2, 10 + k, 4, 1, "#a49a80"); P(g, 10, 10 + k, 4, 1, "#a49a80"); }
+        P(g, 9, 14, 1, 7, CL); P(g, 9, 20, 2, 1, CL);                   // le signet qui pend
+        return c;
+      }
+      case "cardIndex": {
+        /* LE FICHIER DU CADASTRE : le meuble où l'on tape la cote. Douze
+           tiroirs étroits, poignées de laiton, porte-étiquettes.
+           ⚠️ CE QUI LE DISTINGUE DU CARTONNIER À PLANS (`planChest`, 438) EST
+           LA PROPORTION DES TIROIRS, et rien d'autre : un cartonnier a des
+           tiroirs LARGES et PLATS (on y couche des cartes), un fichier a des
+           tiroirs ÉTROITS et PROFONDS (on y range des fiches sur la tranche).
+           Deux meubles à tiroirs dans deux pièces voisines de la même mairie
+           doivent se distinguer, sinon on a dessiné deux fois le même (439). */
+        const [c, g] = cv(16, 26);
+        P(g, 0, 22, 16, 4, W3);
+        P(g, 0, 3, 16, 20, W1); P(g, 0, 3, 16, 1, W4);
+        // ⚠️ La corniche descend d'une rangée : peinte à y = 0, elle était
+        // rognée par le canevas (même piège que les tringles de l'armoire).
+        P(g, 1, 2, 14, 2, W2); P(g, 2, 1, 12, 1, W4);                  // la corniche
+        for (let col = 0; col < 3; col++) for (let row = 0; row < 4; row++) {
+          const x = 1 + col * 5, y = 5 + row * 4;
+          P(g, x, y, 4, 3, W2); P(g, x, y, 4, 1, W4); P(g, x, y + 2, 4, 1, W3);
+          P(g, x + 1, y + 1, 2, 1, "#e6dfc8");                          // le porte-étiquette
+          P(g, x + 2, y + 1, 1, 1, BR);                                 // la poignée
+        }
+        // Un tiroir laissé entrouvert, avec ses fiches qui dépassent : c'est le
+        // seul détail qui dit « on y cherche quelque chose ».
+        P(g, 11, 9, 4, 4, DK3); P(g, 11, 8, 4, 2, "#efe8d4"); P(g, 11, 8, 4, 1, "#fbf7ea");
+        return c;
+      }
+      case "docBox": {
+        /* LES CARTONS D'ARCHIVES, empilés et sanglés. Les archives municipales
+           en portent deux (la note de service, puis le procès-verbal) et c'est
+           le MÊME dessin : ce qui les distingue est ce qu'on lit dedans, pas
+           leur couvercle. Un carton d'archives qui se distinguerait d'un autre
+           carton d'archives ne serait pas un carton d'archives. */
+        const [c, g] = cv(16, 22);
+        const CB = "#c0aa82", CBL = "#d6c39c", CBD = "#9c8760";
+        P(g, 1, 12, 14, 9, CB); P(g, 1, 12, 14, 1, CBL); P(g, 1, 20, 14, 1, CBD);
+        P(g, 2, 4, 12, 8, CB); P(g, 2, 4, 12, 1, CBL); P(g, 2, 11, 12, 1, CBD);
+        P(g, 3, 2, 10, 2, CBD); P(g, 3, 2, 10, 1, CB);                 // le couvercle du dessus
+        P(g, 6, 12, 2, 9, "#8a7a5a"); P(g, 6, 4, 2, 8, "#8a7a5a");     // la sangle, sur les deux
+        P(g, 6, 15, 2, 2, BR);                                          // la boucle
+        P(g, 9, 6, 4, 3, "#efe8d4"); P(g, 9, 6, 4, 1, "#fbf7ea");      // l'étiquette
+        P(g, 10, 7, 2, 1, "#a49a80");
+        P(g, 3, 14, 2, 4, "#efe8d4");                                   // une chemise qui dépasse
+        return c;
+      }
+      case "bylaw": {
+        /* LE RÈGLEMENT AFFICHÉ, sous verre, à côté du guichet du notaire.
+           ⚠️ IL DOIT SE DISTINGUER DU PORTRAIT ET DU PLAN MURAL, qui pendent
+           tous les deux au même endroit de la même façon. Ce qui le fait, ce
+           n'est pas le cadre : c'est le REFLET du verre — une diagonale claire
+           en travers — et le papier jauni au lieu d'une toile sombre. Un cadre
+           sans reflet est un tableau ; un cadre avec reflet est une vitrine, et
+           on lit une vitrine. */
+        const [c, g] = cv(16, 22);
+        P(g, 0, 1, 16, 20, IR); P(g, 0, 1, 16, 1, "#5a5a62");
+        P(g, 1, 2, 14, 18, "#e4d9b8"); P(g, 1, 2, 14, 1, "#f2e9cd");
+        P(g, 3, 4, 10, 1, "#8a7c58");                                   // le titre, en gras
+        for (let k = 0; k < 6; k++) P(g, 2, 7 + k * 2, k % 3 === 2 ? 8 : 12, 1, "#a89a76");
+        P(g, 2, 17, 5, 1, "#8a7c58");                                   // la signature
+        // Le reflet du verre : une diagonale, en deux marches, pas un dégradé.
+        g.globalAlpha = 0.35;
+        P(g, 2, 3, 4, 8, "#ffffff"); P(g, 6, 3, 3, 5, "#ffffff");
+        g.globalAlpha = 1;
+        return c;
+      }
       default: {
         const [c, g] = cv(16, 16);
         P(g, 2, 2, 12, 12, "#c83c9c");   // rose criard : un `kind` inconnu doit SE VOIR
         return c;
       }
     }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     ZIP 442 — LES BORNES DE L'ARPENTEUR, ET LA PLAQUE DE LA FIN.
+     ───────────────────────────────────────────────────────────────────────────
+     ⚠️⚠️ CES TROIS-LÀ NE SONT PAS DES MEUBLES DE TRIBUNAL, ILS SONT DEHORS —
+     donc ils sortent de `courtPropSprite` et ils obéissent aux règles du
+     DEHORS : ils se voient de loin, ils portent leur ombre, et ils vivent dans
+     une herbe qui n'est pas peinte ici. La borne de section fait la taille d'un
+     genou (une quinzaine de pixels pour un adulte de 23, mesuré contre le repère
+     de `render-echelle`) : une borne à hauteur de ceinture serait une stèle, et
+     personne ne l'enjamberait sans la voir.
+     ⚠️ AUCUN CHIFFRE N'EST DESSINÉ. Une cote gravée serait du texte cuit dans un
+     sprite (§4 : ni bilingue, ni rastérisable), et surtout elle FIGERAIT la
+     réponse du code A dans une image que le joueur pourrait lire sans avoir rien
+     compris. Ce qu'on voit est une face polie et des ENTAILLES ; ce qu'on lit est
+     dans le panneau, vivant, traduit. La borne martelée, elle, porte ses
+     entailles BROUILLÉES — c'est la seule des trois qu'on distingue à l'écran, et
+     c'est justement celle qu'il faut remarquer. */
+  function townBoundStoneSprite(hammered) {
+    /* ⚠️⚠️ ELLE A ÉTÉ RÉTRÉCIE APRÈS LA PREMIÈRE PLANCHE, ET C'EST LE §10 DU 429
+       QUI L'A DIT : *un décor ne se juge pas contre d'autres décors, il se juge
+       contre le personnage qui s'en sert.* Premier jet à dix-neuf pixels — soit
+       ×0,83 d'un fermier, c'est-à-dire une stèle à hauteur de POITRINE. Une
+       borne de section fait un demi-mètre : on l'enjambe, on ne la contourne
+       pas, et une pierre à hauteur de poitrine plantée au bord d'un verger se
+       lit comme un monument. Treize pixels, ×0,57 : le genou. */
+    const [c, g] = cv(12, 18);
+    const G1 = "#9a968c", G2 = "#b4b0a4", G3 = "#7a766e", G4 = "#c8c4b8";
+    P(g, 1, 15, 10, 2, "rgba(30,38,24,0.28)");                       // l'ombre portée
+    P(g, 2, 4, 8, 12, G1);                                            // le fût
+    P(g, 2, 4, 3, 12, G2);                                            // le côté éclairé (nord-ouest)
+    P(g, 9, 5, 1, 11, G3);
+    P(g, 2, 2, 8, 2, G4); P(g, 3, 1, 6, 1, G4);                       // le chanfrein du sommet
+    P(g, 2, 4, 8, 1, G3);
+    // La face polie où la cote est gravée, et ses entailles.
+    P(g, 3, 7, 6, 6, "#8e8a80"); P(g, 3, 7, 6, 1, "#a6a298");
+    if (hammered) {
+      /* La cote martelée : des coups de burin, pas une usure. On BRISE les
+         entailles au lieu de les effacer — une face lisse se lirait comme une
+         borne neuve, et c'est le contraire de ce qu'il faut comprendre. */
+      for (const [bx, by, bw] of [[3, 8, 3], [7, 8, 2], [4, 10, 2], [3, 11, 5]]) P(g, bx, by, bw, 1, "#6e6a62");
+      for (const [bx, by] of [[4, 9], [6, 11], [7, 9]]) P(g, bx, by, 2, 2, "#a29e94");
+    } else {
+      for (const [bx, by, bw] of [[3, 8, 5], [3, 10, 4], [3, 12, 5]]) P(g, bx, by, bw, 1, "#63605a");
+      P(g, 6, 10, 1, 1, "#63605a");
+    }
+    /* La mousse du pied : elle dit que la pierre est là depuis longtemps, ce
+       qu'aucune forme ne peut dire.
+       ⚠️⚠️ ELLE POUSSE EN PLAQUES DE TROIS PIXELS, PAS EN GRAINS D'UN PIXEL, ET
+       C'EST LE BANC QUI L'A EXIGÉ. Premier jet : cinq pixels isolés semés sur la
+       pierre — c'est-à-dire EXACTEMENT la grandeur que le 438 a mis quatre
+       rédactions à nommer, « l'îlot qui flotte dans un aplat », celle qui traduit
+       ce que Guillaume appelle « sale ». `render-enquete` l'a refusé à 1,33 %
+       pour un seuil de 1 %. Et la correction est meilleure au fond, pas
+       seulement au chiffre : de la mousse pousse par PLAQUES, jamais en poivre. */
+    for (const [mx, my] of [[2, 13], [8, 14]]) {
+      P(g, mx, my, 2, 1, "#5d7a4a"); P(g, mx, my + 1, 1, 2, "#4e6a3e");
+    }
+    return c;
+  }
+  /* LA BORNE D'ORIGINE, à la ferme. Même famille, mais elle est PLUS HAUTE et
+     elle porte un chapiteau : c'est le point zéro de tout le cadastre de la
+     vallée, et une borne d'origine se distingue d'une borne de section — sinon
+     l'article trois du registre (« toute cote se compte depuis la borne
+     d'origine ») ne désigne rien de reconnaissable.
+     ⚠️ ELLE EST PLANTÉE DE TRAVERS. Deux degrés suffisent : une pierre bien
+     droite au milieu d'un pré a l'air posée par le jeu, une pierre penchée a
+     l'air posée par quelqu'un, il y a longtemps. C'est l'inverse exact de la
+     règle des positions (« ce qui doit être aligné doit l'être ») et c'est
+     pourquoi c'est écrit ici : la faire pencher est une DÉCISION. */
+  function townDatumStoneSprite() {
+    /* ⚠️ ELLE EST PLUS HAUTE QUE LES BORNES DE SECTION — de moitié, pas du
+       double : elle doit se distinguer sans devenir une stèle. Vingt pixels,
+       ×0,87 d'un fermier : la hanche. */
+    const [c, g] = cv(14, 24);
+    const G1 = "#94908a", G2 = "#aeaaa2", G3 = "#74706a", G4 = "#c4c0b6";
+    P(g, 2, 21, 10, 2, "rgba(30,38,24,0.3)");
+    // Le fût, en trois tranches décalées d'un pixel : c'est ça, « de travers ».
+    P(g, 3, 16, 8, 6, G1); P(g, 3, 16, 3, 6, G2);
+    P(g, 4, 10, 8, 6, G1); P(g, 4, 10, 3, 6, G2);
+    P(g, 4, 6, 8, 4, G1); P(g, 4, 6, 3, 4, G2);
+    P(g, 11, 7, 1, 14, G3);
+    // Le chapiteau : une tablette débordante, comme sur une borne de repère.
+    P(g, 2, 3, 11, 3, G4); P(g, 3, 2, 9, 1, G4); P(g, 2, 5, 11, 1, G3);
+    // La face gravée, et la croix de repère de l'arpenteur en son centre : c'est
+    // la marque qui dit « le zéro est ICI », et elle est universelle.
+    P(g, 5, 9, 6, 8, "#88847c"); P(g, 5, 9, 6, 1, "#a09c94");
+    P(g, 7, 11, 2, 4, "#5e5a54"); P(g, 6, 12, 4, 1, "#5e5a54");
+    // ⚠️ Même correction qu'à la borne de section, pour la même raison mesurée :
+    // en plaques, jamais en grains (voir la note là-haut).
+    for (const [mx, my] of [[3, 18], [10, 19]]) {
+      P(g, mx, my, 2, 1, "#5d7a4a"); P(g, mx, my + 1, 1, 2, "#4e6a3e");
+    }
+    return c;
+  }
+  /* LA PLAQUE DE LA FIN. ⚠️ ELLE N'EXISTE QUE SI L'ENQUÊTE S'EST TERMINÉE PAR
+     UNE RESTITUTION, et elle est peinte par le rendu à partir de l'état partagé
+     — jamais posée dans `tw.props`, qui est un singleton de module qu'on ne mute
+     JAMAIS (§15 du README : y écrire ferait fuiter l'état d'une ferme à
+     l'autre). C'est le même raisonnement que les cierges de l'église au 441 et
+     que le nom du maire sous son portrait au 439 : ce qui change se peint
+     vivant, ce qui ne change pas se cuit dans un sprite.
+     ⚠️ Le NOM n'est pas dedans, pour la même raison qu'ailleurs : il s'écrit au
+     rendu. Ce qu'on cuit ici est le support — pierre, laiton, quatre vis. */
+  function townPlaqueSprite() {
+    /* ⚠️ LE LAITON EST REDÉCLARÉ ICI, ET C'EST LE PIÈGE N°1 QUI A FRAPPÉ EN
+       TROIS LIGNES. Premier jet : cette fonction lisait `BR`, la couleur de
+       bronze — qui est une constante LOCALE à `courtPropSprite`. Ni le build ni
+       le lint ne le voient ; `render-mairie` a levé un `ReferenceError` à la
+       première exécution, et en jeu la même faute aurait emporté toute la frame
+       (§4 de CLAUDE.md : l'exception n'emporte pas que sa ligne). La plaque est
+       DEHORS, donc elle porte ses couleurs. */
+    const BR = "#a8863c";
+    const [c, g] = cv(20, 26);
+    P(g, 3, 23, 14, 2, "rgba(30,38,24,0.28)");
+    P(g, 3, 8, 14, 16, "#8e8a80"); P(g, 3, 8, 4, 16, "#a6a298");      // la stèle
+    P(g, 15, 9, 1, 15, "#6e6a62");
+    P(g, 2, 6, 16, 3, "#b4b0a4"); P(g, 3, 5, 14, 1, "#c8c4b8");        // le larmier
+    P(g, 4, 10, 12, 9, BR); P(g, 4, 10, 12, 1, "#d8b45c"); P(g, 4, 18, 12, 1, "#7a5c1c");
+    for (const [vx, vy] of [[5, 11], [14, 11], [5, 17], [14, 17]]) P(g, vx, vy, 1, 1, "#6a5218");
+    P(g, 6, 13, 8, 1, "#8a6c28"); P(g, 6, 15, 6, 1, "#8a6c28");
+    for (const [mx, my] of [[3, 20], [15, 21]]) {
+      P(g, mx, my, 2, 1, "#5d7a4a"); P(g, mx, my + 1, 1, 2, "#4e6a3e");
+    }
+    return c;
   }
 
   // ----- 10 façades de maison basiques pour Valley Town (zip 235). Toutes
@@ -11080,6 +11431,12 @@ house: house(),
     townBoutique: townBoutiqueSprite(),
     townSalon: townSalonSprite(),
     townNewsBoard: townNewsBoardSprite(),
+    /* Zip 442 — les bornes de l'arpenteur. `townBoundStone[0]` est intacte,
+       `[1]` est martelée : le générateur ne pose que la seconde au bois, et
+       c'est cette différence-là, et elle seule, que le joueur doit voir. */
+    townBoundStone: [townBoundStoneSprite(false), townBoundStoneSprite(true)],
+    townDatumStone: townDatumStoneSprite(),
+    townPlaque: townPlaqueSprite(),
     /* Zip 426 — l'intérieur du tribunal, indexé par `kind` (jamais par
        position dans un tableau : ajouter un meuble ne doit rien décaler). */
     courtProps: Object.fromEntries(COURT_PROP_KINDS.map(k => [k, courtPropSprite(k)])),

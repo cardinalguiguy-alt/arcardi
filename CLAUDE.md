@@ -4,26 +4,35 @@
 Il remplace l'exploration du dépôt pour tout ce qui est global. Le README est un journal
 chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
-État à jour du **zip 441**. Chantier actif : **rendre Valley Town habitable au regard ET
-crédible au jeu**. La ville est refaite depuis le 434 ; le 438 a ouvert l'hôtel de ville, le 439
-l'a audité, le 440 a corrigé la portée des ponts et la COMPOSITION des décors, et le **441 a
-réparé leur TRAVERSÉE** (mesurée en jouant : le passant disparaissait derrière le garde-corps du
-fond, sur les deux ponts) **puis ouvert l'ÉGLISE** — nef, chœur, chapelle des cierges, tribune
-d'orgue. Tout ce qui concerne la ville, ses habitants, ses bâtiments ET **ses pièges** est dans
+État à jour du **zip 442**. Chantier actif : **rendre Valley Town habitable au regard ET
+crédible au jeu**, et depuis le 442 **lui donner une histoire**. La ville est refaite depuis le
+434 ; le 438 a ouvert l'hôtel de ville, le 439 l'a audité, le 440 a corrigé la portée des ponts
+et la COMPOSITION des décors, le 441 a réparé leur TRAVERSÉE puis ouvert l'**ÉGLISE**, et le
+**442 y a posé une ENQUÊTE COMPLÈTE** — « la parcelle qui n'existe pas », vingt-et-un lieux sur
+les trois cartes, huit chapitres, trois codes, deux issues, conçue pour deux joueurs. Tout ce qui
+concerne la ville, ses habitants, ses bâtiments, **son enquête** ET **ses pièges** est dans
 **`components/ferme/README.md`**, qui fait autorité ; les règles de DESSIN sont dans
 **`components/ferme/DESSIN.md`** (sorties du §4 au 441) ; les bancs sont dans **`tools/README.md`**.
 **`candyluge` et `crystal` sont EN PAUSE.**
 
-⚠️ **CHANTIER OUVERT — LA MOITIÉ QUI RESTE DU SECOND TEMPS DÉCIDÉ AU 440.** L'église est
-livrée au 441 (`components/ferme/README.md` §24). Reste l'autre moitié, et elle n'a pas bougé :
-les **intérieurs du tribunal et de la mairie** sont difficiles à naviguer (« on ne sait pas où est
-la porte de chaque pièce ») — parade retenue : **chambranle dessiné + plaque lisible depuis le
-couloir + seuil au sol**. Elle n'est PAS partie avec l'église, et c'est la règle du 424 : on ne
-mêle pas deux changements visuels dans la même livraison.
+⚠️ **CHANTIER OUVERT — LA MOITIÉ QUI RESTE DU SECOND TEMPS DÉCIDÉ AU 440, ET ELLE N'A TOUJOURS
+PAS BOUGÉ.** L'église est livrée au 441. Les **intérieurs du tribunal et de la mairie** restent
+difficiles à naviguer (« on ne sait pas où est la porte de chaque pièce ») — parade retenue :
+**chambranle dessiné + plaque lisible depuis le couloir + seuil au sol**. C'est une dette datée de
+deux zips, et l'enquête du 442 vient de faire passer le joueur dans SIX de ces pièces : elle la
+rend plus visible, pas moins.
 
 ⚠️ **ET IL MANQUE UN FICHIER, PAS UNE LIGNE DE CODE :** le morceau d'orgue, à déposer dans
 **`public/sounds/church-organ.mp3`** (décision de Guillaume au 441 : un vrai morceau, pas une
 synthèse). Sans lui la scène se joue en entier et le jeu DIT que la soufflerie est muette.
+
+⚠️⚠️ **CE QUI N'A PAS ÉTÉ JOUÉ DANS LE 442, ET IL FAUT LE LIRE AVANT DE CROIRE L'ENQUÊTE
+FINIE :** la séance à deux clients a validé la chaîne réseau de bout en bout (un indice trouvé
+par l'un tombe dans le carnet de l'autre, avec son nom), **mais aucune interaction d'INTÉRIEUR
+n'a été vue à l'écran** — l'archiviste, les deux commandes de verrou, le coffre et le guichet du
+notaire. Le banc du navigateur ne compose une image que pendant une capture, donc le personnage
+ne peut pas traverser un bâtiment. `verify-enquete` mesure leur placement et leur accessibilité ;
+personne ne les a encore VUES. Voir `components/ferme/README.md` §25, dernier chapitre.
 
 ⚠️⚠️⚠️ **LE PIÈGE N°1 DU PROJET, ET IL A TROIS VISAGES : CE QUI VIT DANS LA CLOSURE DE LA BOUCLE
 DE RENDU.** Il a coûté quelque chose à chacun des cinq derniers zips.
@@ -286,7 +295,8 @@ couvre » est une règle du GÉNÉRATEUR, pas du dessin, et c'est pour ça qu'el
 |---|---|
 | `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **~20 500 l.** |
 | `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** |
-| `components/ferme/README.md` | **Valley Town, le tribunal, l'HÔTEL DE VILLE, l'ÉGLISE, les habitants, la VENTE, les OISEAUX, les ÉLECTIONS et les PIÈGES de ces zones — autorité (428-441)** |
+| `components/ferme/enquete.js` | **l'ENQUÊTE (442) : la table des 21 lieux, les 8 chapitres, les 3 codes, le chiffre et les résolveurs purs.** Aucun React, aucun dessin — `verify-enquete.mjs` l'importe |
+| `components/ferme/README.md` | **Valley Town, le tribunal, l'HÔTEL DE VILLE, l'ÉGLISE, l'ENQUÊTE, les habitants, la VENTE, les OISEAUX, les ÉLECTIONS et les PIÈGES de ces zones — autorité (428-442)** |
 | `components/ferme/DESSIN.md` | **les règles de DESSIN, vraies partout — autorité (441, sorties du §4)** |
 | `tools/README.md` | **les bancs, ce qu'ils attrapent et leurs chiffres — autorité (432-439)** |
 | `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** · depuis le 440 il **importe `planche.js`** : une portée de pont et une emprise de décor sont des grandeurs de DESSIN, on les dérive du sprite au lieu de les recopier |
@@ -414,18 +424,15 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 `✓ Compiled successfully` juste avant.**
 
 ⚠️⚠️ **LES BANCS ONT DÉMÉNAGÉ DANS `tools/README.md` AU 432**, sur l'ordre laissé par le
-§14.2 du 431 : la liste occupait cinquante lignes et gagnait une entrée par zip. Ce qu'il faut
-savoir sans l'ouvrir : `verify-vallee.mjs` (**194/194**) rejoue le VRAI moteur — circulation,
-murs invisibles, tribunal, coupe de bois, et **des ventes complètes avec l'or compté** ;
-`verify-taxi.mjs` (**15/15**) rejoue les 132 courses image par image, **y compris la FORME du
-trajet** depuis le 433 ; **`verify-compo.mjs` (13/13, zip 440) compare la case d'un décor à la
-SURFACE qu'il couvre** — le seul banc qui voie un arbre poussé dans un pont ; **`verify-pont.mjs`
-(12/12, zip 441) compare la clé de tri du PASSANT à celles des deux moitiés du pont** — le seul
-qui voie un fermier disparaître derrière un garde-corps, et il **rejoue la faute** pour en
-mesurer le coût (10 cases de tablier sur 20) ; treize bancs de RENDU dessinent ce qui n'est
-autrement regardable qu'en jouant (assise, échelle, foire, tribunal + **symétrie des façades**,
-mairie, **église**, ruche, taxi, **oiseaux — ce dernier rejoue aussi quatre minutes de vie de
-groupe**) ; **`fake-supabase.mjs` fait tourner deux clients en local**.
+§14.2 du 431 : la liste occupait cinquante lignes et gagnait une entrée par zip. **Ce fichier ne
+la recopie plus** — il en garde seulement ce qu'il faut savoir sans ouvrir l'autre : **14 bancs
+de contrôle et 17 bancs de rendu** (comptés en listant `tools/`, pas de mémoire), et **trois
+d'entre eux existent parce qu'un défaut vu par Guillaume
+n'était mesuré nulle part** (`verify-compo` au 440, `verify-pont` au 441, `verify-enquete` au
+442). ⚠️ Les deux qui touchent à de l'ARGENT sont `verify-vallee` (il joue des ventes complètes
+et compte les pièces) et `verify-enquete` (il vérifie que le cours SANS enquête est bit à bit
+celui du 430). **Tout chiffre écrit là-bas a été obtenu en lançant le banc**, c'est sa règle
+d'entrée.
 
 ⚠️⚠️ **ET LE 441 A RAPPELÉ CE QUE VAUT UN BANC QUI N'A JAMAIS PU ÉCHOUER.** Le garde-fou de
 source de `verify-pont` annonçait « 0 appel fautif » alors que son motif, ancré sur la fin de
@@ -438,8 +445,8 @@ de ce qui existe se vérifie en la lançant ; une liste de ce qui n'existe pas n
 jamais — c'est elle, et elle seule, qui protège du banc imaginaire (§14.6) :
 - ⚠️ **`verify-luge`, `verify-boot`, `preview-luge`, `preview.mjs`, `verify-perf` et
   `preview-fps` N'EXISTENT PAS** dans `tools/`.
-- ⚠️ **AUCUN BANC NE REGARDE LA FERME EN IMAGE** : les onze bancs de rendu ne dessinent que
-  Valley Town, ses intérieurs et ses habitants. Un décor de la ferme mal proportionné n'a, à ce
+- ⚠️ **AUCUN BANC NE REGARDE LA FERME EN IMAGE** : les dix-sept bancs de rendu ne dessinent que
+  Valley Town, ses intérieurs, ses habitants et son enquête. Un décor de la ferme mal proportionné n'a, à ce
   jour, aucun endroit où se voir.
   ⚠️ **Et le SOL de la ferme non plus** : `render-rues` (434) peint les rues de la ville, pas les
   chemins de la ferme, qui restent sur la tuile unique de 16 px du zip 232.
@@ -455,8 +462,17 @@ jamais — c'est elle, et elle seule, qui protège du banc imaginaire (§14.6) :
   reste dans la closure : les BÂTIMENTS de la ville et les personnages.** Les autres bancs de
   rendu approximent toujours le décor autour de leur surface.
 - ⚠️⚠️ **ET AUCUN BANC NE JOUE LA FERME PEUPLÉE À DEUX CLIENTS.** `fake-supabase.mjs` le permet
-  depuis le 432 et l'a fait pour la VILLE (trois défauts trouvés le premier jour) ; la ferme n'y
-  est jamais passée. C'est la passe la plus urgente du fichier (§13).
+  depuis le 432 et l'a fait pour la VILLE (trois défauts trouvés le premier jour), puis pour
+  l'ENQUÊTE au 442 (deux défauts, dont un que rien d'autre ne pouvait voir) ; **la ferme PEUPLÉE
+  n'y est jamais passée**. C'est la passe la plus urgente du fichier (§13).
+  ⚠️ **Et il faut savoir ceci avant d'essayer** (442, une demi-heure perdue) : le banc du
+  navigateur ne compose une image QUE pendant une capture d'écran. `requestAnimationFrame` ne
+  tourne donc que par à-coups, la boucle de rendu s'arrête entre deux appels, et le personnage ne
+  se déplace pas. Le remède du §10 (remplacer `rAF` par un `MessageChannel`) MARCHE, mais il faut
+  le poser PENDANT que des images tournent — c'est-à-dire juste avant une capture — sinon la
+  chaîne d'appels est déjà morte et personne ne rappelle le remplaçant. ⚠️ Et un canevas mesuré
+  pendant que le panneau est masqué sort à **0×0** : le jeu ne dessine plus rien et ça ressemble
+  trait pour trait à un rendu cassé.
 - ⚠️ **Le faux canvas de `lib-canvas.mjs` IGNORE `translate`/`rotate` et ne connaît pas
   `fillText`** : les trois poses d'une feuille de personnage s'y superposent, et un sprite qui
   dépend d'une transformation s'y juge faux. Ce n'est pas un bogue du jeu — mais il faut le
@@ -540,14 +556,17 @@ erreur** en choisissant mal.
 
 ## 13. À compléter par Guillaume
 
-- ⚠️ **TRANCHÉ AU 439, RELU LIGNE À LIGNE** : « à quel guichet achète-t-on une parcelle » n'est
-  plus une question ouverte. **La mairie est ce qu'on demande, le tribunal ce qui se tranche** —
-  on choisit sa parcelle au cadastre de la mairie, on signe l'acte chez le notaire du tribunal
-  (`components/ferme/README.md` §22). Ce qui reste ouvert est **lequel des deux se BRANCHE en
-  premier**, et la réponse dépend d'un arbitrage de conception, pas d'une préférence technique :
-  le cadastre est le plus mûr (les panneaux « à vendre » existent depuis le 234), le notaire est
-  le plus utile à deux joueurs, et le **mariage** est celui que Guillaume a nommé (« on pourra
-  bientôt se marier aussi »). La salle est dressée, les bans sont prêts ; il manque l'officier.
+- ⚠️⚠️ **LE 442 A RÉPONDU À « LEQUEL SE BRANCHE EN PREMIER », ET LA RÉPONSE EST « LES DEUX, PAR
+  UNE HISTOIRE »** — ce qui n'était pas prévu et qui vaut d'être noté. L'enquête fait consulter le
+  **cadastre** de la mairie (on y tape une cote, un tiroir s'ouvre) et déposer un acte chez le
+  **notaire** du tribunal : les deux guichets fonctionnent, mais pour UNE parcelle, celle de
+  l'histoire. Ce qui reste ouvert est donc plus étroit qu'avant : **acheter une parcelle
+  QUELCONQUE**, avec un prix, un titre et une conséquence sur la carte. Le chemin est tracé, la
+  mécanique de saisie et d'arbitrage existe.
+  ⚠️ **Le MARIAGE, lui, n'a pas bougé** — la salle est dressée, les bans sont prêts, il manque
+  l'officier depuis le 439. C'est le seul endroit du jeu où deux joueurs feraient quelque chose
+  ENSEMBLE qui ne soit pas du commerce, et l'enquête du 442 ne l'a pas remplacé : elle se MÈNE à
+  deux, elle ne se CÉLÈBRE pas.
 - **Le salon de coiffure** (427) : **qui coiffe, et comment ça marche ?** Le bâtiment,
   l'enseigne et la banderole « ouverture prochaine » sont posés ; il manque la décision.
 - ⚠️ **LE MORCEAU D'ORGUE (441) : UN FICHIER, PAS UNE DÉCISION.** Tu as choisi un vrai morceau
@@ -555,11 +574,10 @@ erreur** en choisissant mal.
   n'est à faire — la scène, le banc, le toast et la coupure au lever sont branchés. En attendant,
   le jeu dit que la soufflerie est muette, une seule fois, plutôt que de laisser croire à une
   touche cassée.
-- ⚠️ **L'ÉGLISE EST OUVERTE ET NE REND AUCUN SERVICE** (441, ta décision). Elle donne trois
-  gestes — s'asseoir, allumer un cierge, jouer l'orgue — et aucun ne rapporte un or. La question
-  qui reste est celle du **mariage** : la salle des mariages est à la MAIRIE, l'église est à côté,
-  et « il manque l'officier » depuis le 439. Le jour où on le branche, c'est le premier endroit
-  du jeu où deux joueurs feront quelque chose ENSEMBLE qui ne soit pas du commerce.
+- ⚠️ **L'ÉGLISE EST OUVERTE ET NE REND AUCUN SERVICE** (441, ta décision) : trois gestes, aucun
+  or. Le 442 lui a donné **deux inscriptions à lire** dans la tribune (la cloche et la plaque du
+  facteur d'orgues) : c'est la première fois qu'on y monte pour autre chose que la vue, et ça n'a
+  rien coûté — les deux se lisent sur des décors qui étaient déjà là.
 - **Valley Town : qui HABITE la ville à demeure ?** Les résidents ne font qu'y passer. Le 439 y
   pose **Léonie Sarrazin** à l'accueil de la mairie — mais c'est un décor qui parle, pas une
   habitante : elle ne bouge pas, et `res.zone` ne connaît toujours que « farm » et « town ».
@@ -582,7 +600,10 @@ erreur** en choisissant mal.
   rendez-vous daté. Restent :
   **1. les commissions** — le tableau des nouvelles distribue des demandes de la ville, qu'on
   remplit depuis la ferme, à deux, contre paiement. Elles s'appuient sur l'économie qui existe
-  désormais ;
+  désormais. ⚠️ **LE 442 EN A LIVRÉ LA FORME SANS LA MÉCANIQUE** : l'enquête est une course à
+  vingt-et-une étapes réparties sur les trois cartes, avec un carnet qui dit toujours ce qu'on
+  cherche, un état partagé arbitré par l'hôte et une récompense par palier. Une commission, c'est
+  la même chose en plus court — la table de `enquete.js` est le patron, et il est mesuré ;
   **2. les rendez-vous datés** — concert au kiosque, foire : des événements au calendrier
   partagé qui rassemblent résidents ET joueurs au même endroit à la même heure. ⚠️ Le patron est
   désormais écrit **cinq fois** (jour de marché, service de Carla, jour d'orage, cours du marché,
@@ -599,6 +620,11 @@ erreur** en choisissant mal.
   élargir la portée du marché, ou raccourcir le trajet — et **aucun ne doit être touché avant
   d'avoir joué**. On a délibérément conservé la prime de cours (jusqu'à +35 %) comme
   contrepartie : le voyage doit PAYER, pas seulement coûter.
+  ⚠️ **ET LE 442 A AJOUTÉ UNE SECONDE RAISON D'Y ALLER, QUI N'EST PAS DE L'ARGENT** : l'enquête
+  fait faire l'aller-retour au moins deux fois (la borne d'origine est à la ferme, tout le reste
+  est en ville), et elle le fait en donnant à chaque trajet quelque chose à rapporter. Si le
+  voyage cesse d'être une corvée, ce sera peut-être pour cette raison-là plutôt que par un
+  réglage — à juger en jouant, comme prévu.
 - ⚠️ **LE PAIN DES PIGEONS EST GRATUIT (433) — ARBITRAGE TOUJOURS À TRANCHER**, mais la scène
   MARCHE depuis le 439 (assis, treize pigeons viennent manger ; se lever en fait partir dix sur
   quatorze). L'objection « un joueur qui appuie sans rien voir se passer croit que la touche est
@@ -610,13 +636,27 @@ erreur** en choisissant mal.
   carte, mais le nombre et les activités sont tirés chez chaque client — deux joueurs sur la
   même place ne comptent pas les mêmes pigeons. **À JOUER À DEUX** pour dire si ça se remarque ;
   si oui, le pain seul mérite d'être diffusé (un `send` de trois nombres), pas les oiseaux.
+- ⚠️⚠️ **L'ENQUÊTE DU 442 — TROIS CHOSES À TRANCHER, ET AUCUNE N'EST TECHNIQUE.**
+  **1. Le prix des deux issues.** Restituer la parcelle libère le marché (la cote peut descendre
+  à −22 % et monter à +56 %) ; maintenir le fonds relève le plancher à +8 %. Les deux paient
+  (3 000 et 5 000 or). C'est un arbitrage entre LIBERTÉ et GARANTIE, et personne ne l'a encore
+  vécu sur une soirée : si « maintenir » est toujours le bon choix, le choix n'en est pas un.
+  **2. Faut-il qu'elle donne autre chose que de l'or ?** Elle ne rend ni objet, ni graine, ni
+  familier — délibérément, pour ne pas ouvrir un guichet de plus. Mais la parcelle restituée est
+  une TERRE, et le jeu sait déjà vendre des parcelles au cadastre : la relier serait la suite
+  évidente, et c'est une décision de conception.
+  **3. Une deuxième enquête ?** La table de `enquete.js` en accepte une autre sans une ligne de
+  moteur ; ce qui coûte, c'est l'écriture. À décider seulement après avoir joué celle-là.
 - **La garde-robe** (427) : les prix sont volontairement très hauts. À jouer pour savoir si
   « très cher » veut dire « on économise pour » ou « on n'y va jamais ».
 - **`candyluge`** : voir `public/candyluge/README.md`, qui fait autorité. La décision qui
   manque est de CONCEPTION (le bonbon empoisonné), pas de technique.
 - **Gels de PNJ chez l'invité** (359-365) : encore observés ? Vérification demandée depuis le
-  419 — session réelle à 2, ferme peuplée, console de l'hôte ouverte. ⚠️⚠️ **C'EST LA PASSE LA
-  PLUS URGENTE DE CE FICHIER.** Le 427 a doublé la population et ajouté une seconde carte
+  419 — session réelle à 2, **ferme PEUPLÉE**, console de l'hôte ouverte. ⚠️⚠️ **C'EST TOUJOURS
+  LA PASSE LA PLUS URGENTE DE CE FICHIER**, et le 442 ne l'a pas faite : sa séance à deux clients
+  a validé la chaîne réseau de l'enquête sur une ferme VIDE, ce qui ne dit rien des vingt
+  résidents. Elle a en revanche montré que la recette du §10 marche (deux onglets, deux joueurs,
+  un état partagé qui traverse) — l'excuse technique est tombée pour de bon. Le 427 a doublé la population et ajouté une seconde carte
   peuplée ; le 428 fait circuler ces vingt résidents pour de bon (79 % de leurs trajets
   n'aboutissaient pas) et fait diffuser un champ de plus dans le paquet de position (l'assise).
   **Rien de tout ça n'a été vu à deux joueurs** — les bancs mesurent la simulation de l'hôte,
@@ -665,10 +705,17 @@ erreur** en choisissant mal.
    et §10 au 432. Chaque ligne a été relue avant de bouger, et **ce qui est resté est resté
    exprès** : « la case d'un décor n'est pas la surface qu'il couvre » est une règle du
    GÉNÉRATEUR, pas du dessin.
-   ⚠️ **L'ORDRE DU PROCHAIN ZIP : §13.** Il a été relu ligne à ligne au 439, il ne l'a pas été
-   depuis, et le 441 vient d'y ajouter trois entrées — dont une (« le morceau d'orgue ») qui
-   sortira du fichier le jour où le fichier sera déposé. *Une question à laquelle on a répondu ne
-   sort pas du fichier toute seule : elle y reste, et elle ment.*
+   ⚠️⚠️ **L'ORDRE DU 441 A ÉTÉ EXÉCUTÉ AU 442 : §13 EST RELU LIGNE À LIGNE, ET DEUX ENTRÉES
+   ÉTAIENT DEVENUES FAUSSES.** « Lequel des deux guichets se branche en premier » n'était plus
+   une question ouverte — l'enquête a branché les DEUX, pour une parcelle ; et « aucune session à
+   deux clients » ne l'était plus non plus, la séance du 442 ayant eu lieu (sur une ferme vide, ce
+   qui est dit). Une question à laquelle on a répondu ne sort pas du fichier toute seule : elle y
+   reste, et elle ment. Trois entrées ont été RESSERRÉES au lieu d'être ajoutées (l'église, les
+   commissions, le voyage), et le 442 n'en ajoute qu'une : les trois arbitrages de l'enquête.
+   ⚠️ **L'ORDRE DU PROCHAIN ZIP : §10.** Il a grossi de dix lignes au 442 (la recette du banc de
+   navigateur, la liste des bancs) et il redit maintenant des choses que `tools/README.md` dit
+   mieux. Le §14.2 est clair sur ce que devient une liste qui gagne une entrée par zip : elle
+   part, en ne gardant ici que **ce qui n'existe pas**.
 
 3. **Critère d'inclusion** : « est-ce vrai à l'échelle du projet, et invérifiable en ouvrant
    un seul fichier ? » Sinon, ça va dans un commentaire de code. **L'histoire d'un défaut

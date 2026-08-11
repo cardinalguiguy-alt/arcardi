@@ -32,6 +32,13 @@ import { noteSend } from "@/lib/realtimeQuota";
 import * as C from "./fermeConstants";
 import * as E from "./fermeEngine";
 import * as A from "./fermeArt";
+/* ⚠️ ZIP 442 — L'ENQUÊTE. Sa table, ses textes-clés et ses résolveurs vivent
+   dans `enquete.js` : voir l'en-tête de ce fichier-là pour la raison, qui est
+   celle du 439 (une quête = une ligne, pas un `if` de plus dans un composant de
+   vingt-quatre mille lignes) doublée de celle du 436 (une règle qu'aucun banc ne
+   peut appeler vieillit toute seule). Ici on ne trouvera que ce qui touche au
+   RÉSEAU, à l'ENTRÉE et au DESSIN. */
+import * as Q from "./enquete";
 import { buildSprites, charPalette, drawBridgeTile, drawBridgeOverlay, drawCandyGroundTile, candySyrupColor } from "./fermeArt";
 import { fstr } from "./fermeStrings";
 // ZIP 441 — l'orgue de l'église. Le lecteur de fichiers existe depuis longtemps
@@ -579,6 +586,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      réponses et la réponse elle-même ne sont pas deux panneaux, c'est le
      même panneau à deux profondeurs, et on revient toujours au menu. */
   const [hallTalk, setHallTalk] = useState(null);
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 442 — LES QUATRE ÉTATS D'INTERFACE DE L'ENQUÊTE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ AUCUN D'EUX NE PORTE DE DONNÉE D'ENQUÊTE, ET C'EST LA RÈGLE DU 427
+     (« la vitrine ne débite rien ») : ils portent seulement CE QUI EST OUVERT.
+     Tout ce qui s'affiche est relu dans `sharedRef.current.enquete` au moment du
+     rendu. Un carnet React qui doublerait l'état partagé finirait par montrer un
+     indice qu'on n'a pas, ou par ne pas montrer celui que le camarade vient de
+     trouver — c'est-à-dire le pire défaut possible pour une enquête à deux.
+     ⚠️ `enqTick` NE PORTE RIEN NON PLUS : il ne sert qu'à redemander un rendu
+     quand un `apply` a changé l'enquête, exactement comme `wardrobeTick` (427).
+     `sharedRef` est un ref, donc React ne le regarde pas. */
+  const [enqNoteOpen, setEnqNoteOpen] = useState(false);   // le carnet
+  const [enqDocOpen, setEnqDocOpen] = useState(null);      // { id } — un document ouvert
+  const [enqCodeOpen, setEnqCodeOpen] = useState(null);    // { code, value } — une saisie
+  const [enqEndOpen, setEnqEndOpen] = useState(false);     // le guichet de la réclamation
+  const [enqTick, setEnqTick] = useState(0);
   const [forcedWorldUi, setForcedWorldUi] = useState(null); // zip 392 : miroir RENDABLE de sharedRef.current.forcedWorld (voir applyForcedWorld)
   // Menu du chaudron (chantier 2026-07, demande Guillaume : "le click sur E
   // doit ouvrir un menu chaudron que voulez-vous concocter ?") : remplace
@@ -720,6 +744,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const courtBoardOpenRef = useRef(false);   // zip 426 : lu par la boucle (closure à deps vides), comme devMenuOpenRef
   const priceBoardOpenRef = useRef(false);   // zip 438 : idem pour le tableau des cours
   const hallTalkOpenRef = useRef(false);     // zip 439 : idem pour le dialogue de l'accueil
+  /* ⚠️⚠️ ZIP 442 — UN PANNEAU D'ENQUÊTE OUVERT DOIT ARRÊTER LE FERMIER, ET C'EST
+     UN OUBLI TROUVÉ EN JOUANT. Les quatre panneaux (carnet, document, saisie,
+     dépôt) sont des `useState` du composant ; les trois boucles de déplacement
+     vivent dans la closure du rendu et ne lisent que des REFS (§4). Sans ce
+     miroir, on lisait un document en marchant — et pire, on tapait un code
+     pendant que les touches du champ de saisie faisaient AUSSI marcher le
+     personnage, ce qui est le défaut le plus déroutant qu'un champ de texte
+     puisse produire. Un seul ref pour les quatre : ils ne s'ouvrent jamais
+     ensemble, et une garde par panneau serait quatre occasions d'en oublier un
+     le jour où l'on en ajoute un cinquième. */
+  const enqUiOpenRef = useRef(false);
   // Zip 426 : la carte de la ville, construite une fois (la ville ne change
   // jamais) — voir buildTownMinimapBase. Le tribunal, lui, se dessine en PLAN
   // et n'a donc aucune image à garder.
@@ -829,6 +864,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const organRef = useRef({ until: 0, src: null });  // la registration en cours
   const organMuteRef = useRef(false);                // le morceau n'est pas déposé
   const candleNextRef = useRef(0);                   // anti-rafale du râtelier
+  const enqKeyNextRef = useRef(0);                   // zip 442 : anti-rafale des deux commandes de verrou
+  const enqBellDayRef = useRef(0);                   // zip 442 : le jour où la cloche a déjà sonné (voir le lever du jour)
   const [taxiMenu, setTaxiMenu] = useState(false);   // le panneau « Où allez-vous ? »
   const taxiMenuRef = useRef(false);
   const [taxiPhase, setTaxiPhase] = useState(null);  // miroir React, pour le bouton
@@ -840,7 +877,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const meRef = useRef(null);
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
-  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, sugar: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], greg: null, soan: null, harald: null, station: E.newStationState(), decor: [], crafts: E.newCrafts(), craftStock: E.newCraftStock(), townChop: {}, wardrobe: {} });
+  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, sugar: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], greg: null, soan: null, harald: null, station: E.newStationState(), decor: [], crafts: E.newCrafts(), craftStock: E.newCraftStock(), townChop: {}, wardrobe: {}, enquete: Q.newEnquete() });
   const invRef = useRef(null);
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
@@ -1068,6 +1105,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   useEffect(() => { courtBoardOpenRef.current = courtBoardOpen; }, [courtBoardOpen]); // zip 426
   useEffect(() => { priceBoardOpenRef.current = priceBoardOpen; }, [priceBoardOpen]); // zip 438
   useEffect(() => { hallTalkOpenRef.current = !!hallTalk; }, [hallTalk]);            // zip 439
+  useEffect(() => { enqUiOpenRef.current = !!(enqNoteOpen || enqDocOpen || enqCodeOpen || enqEndOpen); },
+            [enqNoteOpen, enqDocOpen, enqCodeOpen, enqEndOpen]);                      // zip 442
   useEffect(() => { devMenuOpenRef.current = devMenuOpen; }, [devMenuOpen]); // zip 392
   useEffect(() => { shopOpenRef.current = shopOpen; }, [shopOpen]);
   useEffect(() => { marketOpenRef.current = marketOpen; }, [marketOpen]);
@@ -1272,6 +1311,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                                    worn: { hat, scarf, outfit, tint } } }, indices
            décalés de 1 (0 = rien porté, voir wardrobeLook). */
         wardrobe: (saved && saved.wardrobe) || {},
+        /* ⚠️ ZIP 442 — L'ENQUÊTE. Même chemin, même raison, AUCUNE MIGRATION
+           SQL : un champ de plus dans le JSON de `ferme_saves`, comme
+           `townChop` (426), `wardrobe` (427) et `forcedWorld` (392). Absente
+           d'une sauvegarde antérieure = enquête pas commencée, ce qui est le bon
+           comportement. `migrateEnquete` reconstruit chaque sous-objet plutôt
+           que de faire confiance à sa forme : une sauvegarde abîmée ne doit pas
+           empêcher de charger une ferme entière pour une histoire secondaire
+           (leçon de `migrateStation`). */
+        enquete: Q.migrateEnquete(saved && saved.enquete),
         crafts: E.migrateCrafts(saved.crafts), craftStock: E.migrateCraftStock(saved.craftStock), // zip 252
         greg: (saved.greg && saved.greg.expiresAt > Date.now())
           // Chantier 2 (feuille de route) : `orderQueue` est un ajout — les
@@ -1496,6 +1544,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       crafts: E.migrateCrafts(payload.crafts), craftStock: E.migrateCraftStock(payload.craftStock), // zip 252
       townChop: payload.townChop || {}, // zip 426
       wardrobe: payload.wardrobe || {},  // zip 427
+      enquete: Q.migrateEnquete(payload.enquete), // zip 442
     };
     // Zip 392 : la terre forcée arrive AVEC l'instantané, donc avant toute
     // évaluation de passageWorldIndex par ce client. Posée ici et pas dans le
@@ -2000,6 +2049,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       townChop: s.townChop || {},
       // Zip 427 : la garde-robe suit le même chemin, pour la même raison.
       wardrobe: s.wardrobe || {},
+      // Zip 442 : l'enquête aussi. Un état partagé qui prendrait un chemin à
+      // lui finirait par ne pas être sauvegardé le jour où l'on touche à
+      // l'autre (leçon des vergers, 398).
+      enquete: s.enquete || Q.newEnquete(),
       // Zip 392 : terre forcée par le menu développeur. Persistée à la demande
       // de Guillaume ("tout le monde + persisté") pour qu'une démonstration
       // survive à un rechargement. Champ du seul instantané JSON déjà en base :
@@ -2315,6 +2368,102 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       s2.churchCandles = lit;
       dirtyRef.current = true;
       out.state = shareState();
+      hostFlushOut(out, f, null);
+      return;
+    }
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ ZIP 442 — L'ENQUÊTE, CÔTÉ HÔTE. CINQ REQUÊTES, UNE SEULE SORTIE.
+       ╚══════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ POURQUOI L'HÔTE ARBITRE ALORS QUE « LA PORTE N'EST JAMAIS LA
+       CAISSE » (439). Justement parce qu'ici il y a une caisse : boucler un
+       chapitre paie. Le panneau, lui, ne donne rien — il montre un document, et
+       on peut l'ouvrir cent fois. Ce qui paie est l'INSCRIPTION de l'indice au
+       carnet, et elle est idempotente par construction (`clues` est un
+       dictionnaire, pas un compteur) : marteler E devant un registre rapporte
+       exactement zéro or au deuxième appui, sans qu'aucun garde-fou n'ait à le
+       vérifier. C'est la forme que le 439 réclamait : *une quête qui devra
+       récompenser passera par une `req` arbitrée par l'hôte, comme la vente au
+       marché.*
+       ⚠️⚠️ ET LA ZONE EST TESTÉE AVANT LES DISTANCES, TOUJOURS. C'est le piège
+       des deux cartes (§4 de CLAUDE.md) et il est ici aussi cher qu'au marché :
+       la borne d'origine est à la ferme, les trois autres sont en ville, et les
+       coordonnées de l'une existent chez l'autre. On compare donc la zone
+       DÉCLARÉE PAR LA TABLE (`site.zone`) à celle que la requête transporte
+       (`req.pz`), et on échoue FERMÉ — pas de zone = pas d'indice — exactement
+       comme `atMarket` depuis le 431.
+       ⚠️ Le nom du trouveur est celui que la requête PORTE (`req.name`), et il
+       est tronqué par le résolveur : il s'affichera dans le carnet de l'autre
+       joueur, donc il vient du réseau, donc il n'est pas de confiance. */
+    if (req.kind === "enqClue" || req.kind === "enqCode" || req.kind === "enqLock"
+     || req.kind === "enqSign" || req.kind === "enqFile") {
+      const s2 = sharedRef.current;
+      const e = (s2.enquete = Q.migrateEnquete(s2.enquete));
+      const now = Date.now();
+      const who = String(req.name || f.name || "?");
+      const wasStarted = Q.enqStarted(e);
+      let r = { ok: false };
+      if (req.kind === "enqClue") {
+        const site = Q.ENQ_SITE[req.site];
+        /* ⚠️ LA ZONE DU SITE, PAS CELLE DU JOUEUR SEULE : on compare les deux.
+           Un `enqClue` de la borne du bois envoyé depuis la ferme est refusé,
+           et il l'est parce que la table dit que ce site est en ville — pas
+           parce qu'un `if` l'a prévu. */
+        if (site && !site.code && site.zone && site.zone === (req.pz || "")) r = Q.resolveEnqClue(e, req.site, who, now);
+      } else if (req.kind === "enqCode") {
+        r = Q.resolveEnqCode(e, String(req.code || ""), String(req.value || ""), who, now);
+      } else if (req.kind === "enqLock") {
+        if (req.pz === "court") r = Q.resolveEnqLock(e, String(req.side || ""), who, now);
+      } else if (req.kind === "enqSign") {
+        /* ⚠️ « SEUL » SE MESURE SUR LES FERMIERS CONNUS DE L'HÔTE, pas sur les
+           joueurs présents à l'écran. Un camarade parti aux toilettes est encore
+           dans la partie ; exiger sa signature ferait attendre quelqu'un qui ne
+           reviendra peut-être pas avant une heure. Un salon à un seul fermier
+           est un salon solo, et la ville fournit son témoin. */
+        const solo = Object.keys(farmersRef.current || {}).length <= 1;
+        r = Q.resolveEnqSign(e, f.id, solo);
+      } else {
+        r = Q.resolveEnqFile(e, String(req.outcome || ""), now);
+      }
+      if (!r.ok) {
+        /* Un refus est SILENCIEUX sauf s'il apprend quelque chose. Un code faux
+           le dit (c'est une réponse), un site verrouillé le dit (c'est une
+           information : « tu ne saurais pas quoi y chercher »), un doublon non
+           (il n'y a rien à annoncer). */
+        if (r.wrong) out.toast = { id: f.id, key: "enqCodeNo" };
+        else if (r.locked) out.toast = { id: f.id, key: "enqLocked" };
+        hostFlushOut(out, f, null);
+        return;
+      }
+      /* ⚠️ ON DIFFUSE L'ENQUÊTE ENTIÈRE, PAS UN DELTA, ET C'EST UN CALCUL DE
+         TAILLE CONTRE UN CALCUL DE RISQUE. Elle pèse une vingtaine de clés
+         courtes ; le §3 est formel — seul le NOMBRE de `send()` est facturé,
+         jamais la taille. Un delta aurait coûté une réconciliation (« quel
+         indice manque à qui »), c'est-à-dire exactement le genre d'état qu'on
+         passe son temps à ne pas créer. Et elle part dans un `apply` qui
+         partait déjà : zéro message de plus. */
+      out.enquete = e;
+      dirtyRef.current = true;
+      if (!wasStarted && Q.enqStarted(e)) broadcastChat("🔍", L.enq.tStart);
+      if (req.kind === "enqLock" && r.armed) out.toast = { id: f.id, key: "enqArmed" };
+      if (r.opened) broadcastChat("🔒", L.enq.tOpen);
+      /* Une trouvaille se dit à TOUT LE MONDE, et c'est la moitié du plaisir à
+         deux : on part chacun de son côté, et le chat annonce ce que l'autre
+         vient de déterrer. Une découverte silencieuse serait une enquête que
+         chacun mène seul dans le même salon. */
+      if (!r.already && req.kind !== "enqSign" && req.kind !== "enqFile") {
+        const gained = Object.keys(e.clues).filter(k => e.clues[k].at === now);
+        for (const id2 of gained) broadcastChat("🔍", L.enq.tFoundBy(who, (L.enq.doc[id2] || {}).t || id2));
+      }
+      for (const ch of (r.crossed || [])) {
+        s2.money += ch.reward | 0;
+        broadcastChat("📖", L.enq.tChapter(L.enq.chapter[ch.key] || ch.key, ch.reward | 0));
+      }
+      if (req.kind === "enqFile" && r.gold) {
+        s2.money += r.gold | 0;
+        broadcastChat("📖", L.enq.tDone + " " + L.enq.end.gold(r.gold | 0));
+      }
+      if ((r.crossed || []).length || r.gold) out.state = shareState();
+      persistFnRef.current && persistFnRef.current();
       hostFlushOut(out, f, null);
       return;
     }
@@ -5326,6 +5475,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       sharedRef.current.wardrobe = p.wardrobe;
       if (wardrobeLookOf(me.id) !== before) { setWardrobeTick(t => t + 1); sendPos(); }
     }
+    /* ⚠️ ZIP 442 — L'ENQUÊTE ARRIVE ENTIÈRE, ET ON LA REMPLACE. Contrairement à
+       `townChop` juste en dessous (un DELTA de cases coupées, qu'il faut
+       fusionner), l'enquête est un petit objet dont l'hôte fait autorité en
+       totalité : la fusionner aurait voulu dire décider quoi faire d'un indice
+       présent chez l'un et absent chez l'autre, c'est-à-dire inventer une
+       réconciliation pour un état qui n'en a pas besoin (§3). */
+    if (p.enquete) { sharedRef.current.enquete = Q.migrateEnquete(p.enquete); setEnqTick(t => t + 1); }
     if (p.townChop) {
       const s3 = sharedRef.current;
       if (!s3.townChop) s3.townChop = {};
@@ -5650,6 +5806,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        c'est un COMPTE qui voyage, jamais une phrase formatée — elle serait
        figée dans la langue de l'hôte. */
     if (key === "gregChopDone") return L.toastGregChopDone(n | 0);
+    /* Zip 442 — l'enquête. ⚠️ « enqArmed » PORTE UNE DURÉE, et elle est
+       CALCULÉE ici à partir de la constante plutôt que transportée : un nombre
+       de secondes qui voyagerait serait un second endroit où la fenêtre des
+       deux serrures est écrite, c'est-à-dire le §8 sur la seule valeur que le
+       joueur chronomètre vraiment. */
+    if (key === "enqCodeNo") return L.enq.tCodeNo;
+    if (key === "enqLocked") return L.enq.tLocked;
+    if (key === "enqArmed")  return L.enq.tArmed(Math.round(Q.ENQ_LOCK_WINDOW_MS / 1000));
     return { tired: L.toastTired, farShop: L.toastFarShop, farMarket: L.toastFarMarket, marketNothing: L.toastMarketNothing, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, millPlaced: L.toastMillPlaced, millTaken: L.toastMillTaken, millGround: L.toastMillGround, millOccupied: L.toastMillOccupied, millOnCrop: L.toastMillOnCrop, noMillBuilt: L.toastNoMillBuilt, millBuilding: L.toastMillBuilding, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, noSucrerieStock: L.toastNoSucrerieStock, sucrerieNotEmpty: L.toastSucrerieNotEmpty, noCaneToDeposit: L.toastNoCaneToDeposit, sucrerieFull: L.toastSucrerieFull, actionFailed: L.toastActionFailed, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, reneCoffeeCooldown: L.toastReneCoffeeCooldown, tristanNotHere: L.toastTristanNotHere, tristanCoffeeCooldown: L.toastTristanCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, kickRefused: L.kickRefused, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy, balloonNotBoarding: L.toastBalloonNotBoarding, balloonFull: L.toastBalloonFull,
       /* zip 398 — vergers et produits */
       orchardBusy: L.toastOrchardBusy, orchardGround: L.toastOrchardGround, orchardMax: L.toastOrchardMax,
@@ -5869,6 +6033,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            à Guillaume avant de livrer (règle dure du §2). C'est le raisonnement
            de la carte de Valley Town, jamais persistée elle non plus. */
         s.churchCandles = 0;
+        /* ⚠️⚠️ ZIP 442 — LA CLOCHE DE MATHILDE FERRAND SONNE À L'AUBE, et c'est
+           tout ce qui reste d'elle dans la vie quotidienne du jeu. Une fin qui
+           ne se reverrait jamais serait une page de menu (439) : la plaque et la
+           pierre sont là pour qui va les voir, ce message est là pour tout le
+           monde, tous les jours, sans qu'on ait rien à faire.
+           ⚠️ IL NE PART QUE SI L'ISSUE EST LA RESTITUTION. Après un maintien du
+           fonds, la cloche sonne aussi — elle sonne tous les jours depuis l'an
+           41 — mais personne ne sait qui l'a payée, et le jeu n'a rien à en
+           dire. C'est la moitié du prix de ce choix-là.
+           ⚠️ Et il passe par `broadcastChat`, donc par un message que l'hôte
+           émet DÉJÀ à ce moment de la journée : zéro `send()` de plus (§3). */
+        if (s.enquete && s.enquete.outcome === "restore") broadcastChat("🔔", L.enq.tBell);
         // Réapparition de l'engrais en boutique (chantier 2026-07, suite plan
         // validé) : tous les FERTILIZER_RESTOCK_EVERY_N_DAYS jours, le stock
         // shop remonte à FERTILIZER_SHOP_STOCK (épuisable entre-temps, jamais
@@ -11982,7 +12158,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Correctif audit 2026-07 : Espace/E n'agissent plus "à travers" un
       // menu ouvert (le clic était déjà bloqué, voir onDown ; Échap/T/M
       // restent actifs pour fermer/naviguer).
-      const uiOpen = mapOpenRef.current || shopOpenRef.current || binOpenRef.current || bagOpenRef.current || cauldronMenuOpenRef.current || adsOpenRef.current || visitorOpenRef.current || gregCardOpenRef.current || marketOpenRef.current;
+      /* ⚠️ ZIP 442 — LES QUATRE PANNEAUX DE L'ENQUÊTE ENTRENT ICI AUSSI. Sans
+         eux, E « traversait » un document ouvert : on lisait la note de service
+         et la même touche rouvrait aussitôt le carton derrière. Et pendant une
+         SAISIE de code, chaque lettre tapée partait aussi dans le jeu. */
+      const uiOpen = mapOpenRef.current || shopOpenRef.current || binOpenRef.current || bagOpenRef.current || cauldronMenuOpenRef.current || adsOpenRef.current || visitorOpenRef.current || gregCardOpenRef.current || marketOpenRef.current || enqUiOpenRef.current;
       /* ⚠️ 425 — ESPACE SAUTE EN VILLE, ET AGIT PARTOUT AILLEURS. Ce n'est pas
          une surcharge risquée : `doAction()` sort déjà immédiatement quand la
          zone est "town" (aucun outil de ferme n'y sert), donc la touche ne
@@ -13038,6 +13218,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           drawBuildingFooting(ctx, cx, gy, sprites.station.width / 2);
         } });
         draws.push({ y: (C.STATION_SIGN.y + 1) * T, fn: () => ctx.drawImage(sprites.signBoard, C.STATION_SIGN.x * T - 1, C.STATION_SIGN.y * T - 6) });
+        /* ⚠️⚠️ ZIP 442 — LA BORNE D'ORIGINE DU CADASTRE, AU PIED DE LA GARE.
+           C'est le seul objet de l'enquête qui vive à la ferme, et le seul
+           décor de ce chantier qui ne soit pas un prop : la ferme n'a pas de
+           couche `props` (son mobilier est dans `objects`, donc dans la
+           sauvegarde), et y ajouter un `O_*` pour une pierre qu'on ne peut ni
+           poser ni ramasser aurait rouvert tous les tests d'objet du moteur
+           pour rien — c'est la règle du 434 (« une variante est une couche, pas
+           un identifiant »), appliquée à un décor unique.
+           ⚠️ ELLE NE BLOQUE PAS et elle est dessinée depuis `fermeArt` : un
+           décor qui vivrait dans cette closure serait un décor qu'aucun banc ne
+           peut regarder, c'est-à-dire un décor qui vieillit tout seul (436).
+           ⚠️ ET ELLE EST MISE EN FILE, PAS PEINTE À LA VOLÉE : la file trie par
+           ancrage au sol, donc un fermier qui passe devant la borne la cache et
+           un fermier qui passe derrière est caché par elle. Peinte hors file,
+           elle aurait été soit toujours devant, soit toujours derrière — le
+           défaut des ponts au 439/441, dans un décor de trois pixels. */
+        if (sprites.townDatumStone) {
+          const ds0 = Q.ENQ_FARM_STONE, dsi = sprites.townDatumStone;
+          draws.push({ y: (ds0.y + 1) * T, fn: () => ctx.drawImage(dsi, ds0.x * T + (T - dsi.width) / 2, (ds0.y + 1) * T - dsi.height) });
+        }
         // Decorative ducks: purely cosmetic, client-side, seeded from the
         // farm seed, drifting up and down the river with a 2-frame bob.
         if (!ducksRef.current && w.riverCenter && w.riverCenter.length) {
@@ -13797,6 +13997,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else if (nearTile(C.TRAIN_BOARD)) pk = "trainRide"; // Valley Town (zip 234)
       // Zip 233: sleep prompt removed with the townhall sleep option; the
       // visitor prompt carries the nearest rid so the label can name them.
+      else if (enqNearby()) pk = "enq:" + enqNearby().p;   // zip 442 — la borne d'origine, au pied de la gare
       else { const vp = visitorPromptNearby(); if (vp) pk = "visitor:" + vp.rid; }
       // Zip 368 : le prompt du chantier de mission d'équipe était en tête de
       // cette chaîne ; la grange prend simplement sa place.
@@ -14775,7 +14976,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         maybeSendPos();
         return;
       }
-      const uiBlocked = mapOpenRef.current || marketOpenRef.current || document.activeElement === chatInputRef.current;
+      const uiBlocked = mapOpenRef.current || marketOpenRef.current || enqUiOpenRef.current || document.activeElement === chatInputRef.current;
       let dx = 0, dy = 0;
       if (!uiBlocked) {
         if (keys["ArrowUp"] || keys["KeyW"] || keys["KeyZ"]) dy -= 1;
@@ -15621,6 +15822,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   : pr.kind === "flowerCart" ? sprites.townFlowerCart      // zip 431
                   : pr.kind === "barrel" ? sprites.townBarrel              // zip 431
                   : pr.kind === "sacks" ? sprites.townSacks                // zip 431
+                  /* ZIP 442 — la borne de section. ⚠️ LA VARIANTE VIENT DU
+                     `mark` POSÉ PAR LE GÉNÉRATEUR, jamais d'un hachage de
+                     position : celle du bois est martelée parce que quelqu'un
+                     l'a martelée, pas parce que sa case tombe sur un nombre
+                     pair. C'est la seule des trois qui se distingue à l'œil, et
+                     c'est justement celle qu'il faut remarquer. */
+                  : pr.kind === "boundStone" ? (sprites.townBoundStone || [])[pr.mark === "bois" ? 1 : 0]
                   : pr.kind === "newsBoard" ? sprites.townNewsBoard : null;   // zip 427
         if (!img) continue;
         const by = (pr.y + 1) * T, cxp = pr.x * T + T / 2;
@@ -15636,6 +15844,55 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
           ctx.drawImage(img, cxp - img.width / 2, by - img.height);
         });
+      }
+      /* ══════════════════════════════════════════════════════════════════════
+         ZIP 442 — CE QUE LA RESTITUTION LAISSE DANS LE MONDE.
+         ──────────────────────────────────────────────────────────────────────
+         ⚠️⚠️ UNE FIN QUI N'EXISTE QUE DANS UN PANNEAU DE MENU N'EST PAS UN
+         ÉVÉNEMENT DU MONDE, C'EST UNE PAGE DE MENU. C'est mot pour mot ce que le
+         439 a écrit en peignant le nom du maire élu sous son portrait officiel,
+         et c'est la raison d'être de ces vingt lignes : après une restitution,
+         la ville PORTE le nom de Mathilde Ferrand à deux endroits — une plaque à
+         la lisière du bois, là où sa borne était couchée, et la pierre du
+         cimetière qui n'en avait pas.
+         ⚠️⚠️ ET RIEN N'EST AJOUTÉ À `tw.props`. La carte de la ville est un
+         SINGLETON DE MODULE qu'on ne mute jamais (§15 du README : y écrire ferait
+         fuiter l'état d'une ferme à l'autre — deux salons ouverts dans le même
+         onglet partagent cet objet). Tout ce qui change vit dans l'état PARTAGÉ
+         et se peint à partir de lui, exactement comme les cierges de l'église
+         (441) et comme la coupe de bois (426).
+         ⚠️ LE NOM S'ÉCRIT VIVANT (`fillText`), il n'est pas cuit dans le sprite :
+         un texte cuit ne peut pas être bilingue, et il rendrait le sprite
+         irrastérisable hors navigateur (§4). Le support — pierre, laiton, quatre
+         vis — est cuit ; ce qu'on lit dessus ne l'est pas. */
+      {
+        const enq = sharedRef.current.enquete;
+        if (enq && enq.outcome === "restore") {
+          const stone = (tw.props || []).find(p2 => p2.kind === "boundStone" && p2.mark === "bois");
+          const pim = sprites.townPlaque;
+          if (stone && pim && stone.x >= x0 - 3 && stone.x <= x1 + 3 && stone.y >= y0 - 4 && stone.y <= yBot + 3) {
+            const py2 = stone.y - 1;
+            pushE((py2 + 1) * T, elAt(stone.x, py2), () => {
+              ctx.drawImage(pim, stone.x * T + (T - pim.width) / 2, (py2 + 1) * T - pim.height);
+              ctx.font = "bold 7px monospace"; ctx.textAlign = "center"; ctx.fillStyle = "#4a3a12";
+              ctx.fillText(L.enq.plaque, stone.x * T + T / 2, (py2 + 1) * T - pim.height + 16);
+              ctx.textAlign = "left";
+            });
+          }
+          /* La pierre du cimetière. ⚠️ ON N'AJOUTE PAS UNE SECONDE TOMBE, ON
+             ÉCRIT SUR CELLE QUI EST DÉJÀ LÀ — et on la retrouve par son RANG
+             (`Q.enqGraveOf`), le même que celui qui décide où l'on gratte la
+             mousse. Deux façons de désigner « la septième tombe », c'est deux
+             tombes le jour où le cimetière bouge. */
+          const gv = Q.enqGraveOf(tw);
+          if (gv && gv.x >= x0 - 2 && gv.x <= x1 + 2 && gv.y >= y0 - 3 && gv.y <= yBot + 2) {
+            pushE((gv.y + 1) * T + 0.02, elAt(gv.x, gv.y), () => {
+              ctx.font = "bold 6px monospace"; ctx.textAlign = "center"; ctx.fillStyle = "#4a4640";
+              ctx.fillText(L.enq.graveName, gv.x * T + T / 2, (gv.y + 1) * T - 18);
+              ctx.textAlign = "left";
+            });
+          }
+        }
       }
       /* ══════════════════════════════════════════════════════════════════════
          ZIP 431 — LES GUIRLANDES DE FANIONS, TENDUES D'UN ÉTAL À L'AUTRE.
@@ -16287,6 +16544,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else if (nearMarket()) tpk = "townMarket";
       else if (nearTownProp("newsBoard", 1.7)) tpk = "townNews";
       else if (nearTownProp("bench", 1.2)) tpk = "townBench";
+      else if (enqNearby()) tpk = "enq:" + enqNearby().p;   // zip 442 — même ordre que la touche E
       else if (nearTownRect(C.TOWN_FOUNTAIN.x - 1, C.TOWN_FOUNTAIN.y - 1, 4, 4)) tpk = "townWish";
       else if (nearTownProp("kiosk", 2.6)) tpk = "townKiosk";
       else if (nearTownRect(C.TOWN_PIER.x, C.TOWN_PIER.y, C.TOWN_PIER.w, C.TOWN_PIER.h + 2)) tpk = "townPier";
@@ -16358,13 +16616,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (fx < 0 || fy < 0 || fx >= cw.w || fy >= cw.h) return true;
       return !!cw.solid[fy * cw.w + fx];
     }
-    function canStandCourt(cw, x, y) {
-      const r = 0.28;
-      for (const [px, py] of [[x - r, y], [x + r, y], [x - r, y + 0.35], [x + r, y + 0.35]]) {
-        if (blockedCourt(cw, px, py)) return false;
-      }
-      return true;
-    }
+    /* ⚠️⚠️ ZIP 442 — ELLE DÉLÈGUE, ELLE NE DÉCRIT PLUS. La boîte de collision
+       du tribunal vivait ici, dans la closure du rendu : aucun banc ne pouvait
+       l'appeler, donc le banc du coffre à deux serrures (`verify-enquete`) —
+       qui doit CHRONOMÉTRER un trajet réel entre deux étages — n'avait le choix
+       qu'entre s'en refaire une copie et mesurer un autre monde. C'est le §3 du
+       439 et le §1 du 440 : *un banc qui refait une fonction au lieu de
+       l'appeler mesure un autre monde.* La boîte est dans `fermeEngine`
+       (`E.courtBoxFree`), le jeu l'appelle, le banc l'appelle. */
+    function canStandCourt(cw, x, y) { return E.courtBoxFree(cw, x, y); }
     // La case sous les pieds (même règle que Valley Town : +0,2, le milieu de
     // la boîte de collision) — c'est elle qui décide de l'étage et des
     // déclenchements au passage.
@@ -16400,7 +16660,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function updateMeCourt(dt) {
       const m = meRef.current, cw = courtWorldRef.current, keys = keysRef.current;
       if (!cw) return;
-      const uiBlocked = mapOpenRef.current || courtBoardOpenRef.current || priceBoardOpenRef.current || hallTalkOpenRef.current || document.activeElement === chatInputRef.current;
+      const uiBlocked = mapOpenRef.current || courtBoardOpenRef.current || priceBoardOpenRef.current || hallTalkOpenRef.current || enqUiOpenRef.current || document.activeElement === chatInputRef.current;
       let dx = 0, dy = 0;
       if (!uiBlocked) {
         if (keys["ArrowUp"] || keys["KeyW"] || keys["KeyZ"]) dy -= 1;
@@ -16889,6 +17149,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else if (nearChurchProp("organBench", 1.1)) cpk = "churchOrgan";
       else if (nearChurchProp("candleRack", 1.6)) cpk = "churchCandle";
       else if (nearChurchProp("pew", 1.1)) cpk = "churchPew";
+      /* ⚠️ ZIP 442 — MÊME PLACE QUE DANS `tryOpenNearby`, ET POUR LA MÊME
+         RAISON : c'est la MÊME fonction qui répond aux deux. Une invite et une
+         action qui lisent deux listes finissent par ne pas dire la même chose,
+         et le symptôme — « ça annonce lire un registre et ça ouvre l'annuaire »
+         — est le plus déroutant qu'une touche unique puisse produire. */
+      else if (enqNearby()) cpk = "enq:" + enqNearby().p;
       else if (nearHallClerk()) cpk = "hallClerk";
       else if (nearestCourtBoard()) cpk = "courtBoard";
       else if (nearPriceBoard()) cpk = "priceBoard";
@@ -17008,7 +17274,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         maybeSendPos();
         return;
       }
-      const uiBlocked = shopOpenRef.current || binOpenRef.current || mapOpenRef.current || cauldronMenuOpenRef.current || fishMiniRef.current || adsOpenRef.current || visitorOpenRef.current || gregCardOpenRef.current || document.activeElement === chatInputRef.current || m.sleeping || isInjured();
+      const uiBlocked = shopOpenRef.current || binOpenRef.current || mapOpenRef.current || cauldronMenuOpenRef.current || fishMiniRef.current || adsOpenRef.current || visitorOpenRef.current || gregCardOpenRef.current || enqUiOpenRef.current || document.activeElement === chatInputRef.current || m.sleeping || isInjured();
       let dx = 0, dy = 0;
       if (!uiBlocked) {
         if (keys["ArrowUp"] || keys["KeyW"] || keys["KeyZ"]) dy -= 1;
@@ -19283,6 +19549,186 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     sendReq({ kind: "churchCandle" });
     pushToast(L.churchCandleToast);
   }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 442 — LES PROXIMITÉS DE L'ENQUÊTE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️ MÊME DISCIPLINE QUE `nearCivicDoor` (426) ET `nearTownProp` (427) : UNE
+     définition par question, lue par l'invite ET par la touche E. Deux copies
+     d'un seuil de proximité, c'est un jeu qui propose puis refuse.
+     ⚠️⚠️ ET ELLES NE REGARDENT QUE LE NIVEAU COURANT. Les sept niveaux des trois
+     bâtiments sont empilés dans une seule grille (438, 441) : sans le filtre de
+     `courtFloorOf`, un lutrin de la mairie serait « proche » d'un joueur du
+     sous-sol du palais dès que leurs `x` coïncident — et il n'y aurait rien à
+     l'écran pour l'expliquer. */
+  function nearEnqProp(kind, room, mark, r) {
+    const m = meRef.current, cw = courtWorldRef.current;
+    if (!m || !cw || m.zone !== "court") return null;
+    const f = E.courtFloorOf(m.y + 0.2);
+    let best = null, bd = Infinity;
+    for (const pr of (cw.props || [])) {
+      if (pr.kind !== kind) continue;
+      if (mark && pr.mark !== mark) continue;
+      if (E.courtFloorOf(pr.y) !== f) continue;
+      if (room) { const rm = E.courtRoomAt(pr.x, pr.y); if (!rm || rm.key !== room) continue; }
+      const d = Math.hypot(pr.x + 0.5 - (m.x + 0.5), pr.y - m.y);
+      if (d <= r && d < bd) { bd = d; best = pr; }
+    }
+    return best;
+  }
+  /* La borne de section, en ville. ⚠️ ELLE NE BLOQUE PAS (voir le générateur) :
+     on peut donc lui marcher dessus, et le rayon doit être un peu plus large que
+     pour un meuble — sinon on la traverse sans que l'invite ait le temps de
+     s'afficher, ce qui est la définition d'un décor qu'on ne trouve jamais. */
+  function nearBoundStone() {
+    const m = meRef.current, tw = townWorldNow();
+    if (!m || !tw || m.zone !== "town") return null;
+    for (const pr of tw.props || []) {
+      if (pr.kind !== "boundStone") continue;
+      if (Math.abs(m.x - pr.x) <= 1.4 && Math.abs(m.y - pr.y) <= 1.4) return pr;
+    }
+    return null;
+  }
+  /* La borne d'ORIGINE, à la ferme. ⚠️ SA POSITION EST LA SEULE DE L'ENQUÊTE
+     QUI SOIT ÉCRITE EN DUR, et `verify-enquete` la contrôle contre le monde
+     regénéré (case libre, praticable, distincte de la boutique, du bac, du
+     panneau de gare et du seuil de la maison). Une constante de position se
+     contrôle, elle ne se relit pas. */
+  function nearDatumStone() {
+    const m = meRef.current;
+    if (!m || m.zone !== "farm") return false;
+    const s = Q.ENQ_FARM_STONE;
+    return Math.abs(m.x - s.x) <= 1.4 && Math.abs(m.y - s.y) <= 1.4;
+  }
+  /* LA TOMBE SANS NOM. ⚠️ ELLE SE DÉSIGNE PAR SON RANG, pas par sa case (voir
+     `Q.enqGraveOf`) : le cimetière a bougé au 434 quand son allée a été
+     recentrée, et une coordonnée écrite ici aurait déjà menti une fois. */
+  function nearEnqGrave() {
+    const m = meRef.current, tw = townWorldNow();
+    if (!m || !tw || m.zone !== "town") return null;
+    const g = Q.enqGraveOf(tw);
+    if (!g) return null;
+    return (Math.abs(m.x - g.x) <= 1.3 && Math.abs(m.y - g.y) <= 1.5) ? g : null;
+  }
+  /* ⚠️⚠️ L'INVITE ET LA TOUCHE PARTAGENT CETTE FONCTION, ET C'EST TOUT SON
+     OBJET. Elle rend `{ p, act }` : `p` est la clé d'invite (`enq:…`), `act` est
+     ce que E fera. Deux listes séparées — une pour l'affichage, une pour
+     l'action — c'est le défaut que le 441 a nommé sur l'église (« l'invite
+     promet ce que la touche fera ») et que le 426 s'était juré de ne plus
+     commettre. Ici il ne peut pas se produire : il n'y a qu'une liste.
+     ⚠️ L'ORDRE VA DU PLUS PRÉCIS AU PLUS LARGE, comme partout depuis le 427. */
+  function enqNearby() {
+    const m = meRef.current;
+    if (!m) return null;
+    const e = sharedRef.current.enquete;
+    if (m.zone === "farm") {
+      if (nearDatumStone()) return { p: Q.enqHas(e, "borneOrigine") ? "stone" : "scrub", act: () => enqRead("borneOrigine") };
+      return null;
+    }
+    if (m.zone === "town") {
+      const bs = nearBoundStone();
+      if (bs) {
+        const id = bs.mark === "quai" ? "borneQuai" : bs.mark === "verger" ? "borneVerger" : "borneBois";
+        return { p: "stone", act: () => enqRead(id) };
+      }
+      const gr = nearEnqGrave();
+      if (gr) return { p: Q.enqHas(e, "tombe") ? "doc" : "scrub", act: () => enqRead("tombe") };
+      /* La plaque de la fin : elle n'existe que si l'enquête s'est terminée par
+         une restitution, et elle se lit là où la borne du bois est couchée. */
+      /* ⚠️ `townWorldNow()` PEUT RENDRE `null` (la carte de la ville n'est
+         construite qu'à la première visite) : sans ce garde-fou, lire `.props`
+         dessus lèverait un `TypeError` DANS LA BOUCLE DE RENDU, c'est-à-dire
+         emporterait tout ce que la frame devait encore dessiner (§4). */
+      if (Q.enqDone(e) && e.outcome === "restore" && townWorldNow()) {
+        const st = (townWorldNow().props || []).find(p2 => p2.kind === "boundStone" && p2.mark === "bois");
+        if (st && Math.abs(m.x - st.x) <= 2 && Math.abs(m.y - (st.y - 1)) <= 2) return { p: "plaque", act: () => setEnqNoteOpen(true) };
+      }
+      return null;
+    }
+    if (m.zone !== "court") return null;
+    // ── L'ARCHIVISTE. Elle passe avant tout : elle est à deux cases, tout le
+    // reste à une et demie, et c'est quelqu'un — parler passe avant lire.
+    if (nearEnqProp("archivistNPC", null, null, C.HALL_CLERK_R)) return { p: "omb", act: () => setEnqNoteOpen(true) };
+    if (nearEnqProp("cardIndex", "cadastre", null, 1.6)) return { p: "code", act: () => setEnqCodeOpen({ code: "A", value: "" }) };
+    if (nearEnqProp("registerStand", "notary", null, 1.6)) return { p: "codeB", act: () => setEnqCodeOpen({ code: "B", value: "" }) };
+    if (nearEnqProp("registerStand", "civil", null, 1.6)) {
+      /* ⚠️ LE MÊME MEUBLE REND DEUX INDICES DIFFÉRENTS, ET C'EST LE CŒUR DU
+         CHAPITRE 7 : on relit le registre des mariages, et cette fois on sait
+         quoi y chercher. La condition n'est pas un numéro de chapitre mais une
+         CONNAISSANCE (`req` du site : il faut le nom et le registre déchiffré)
+         — c'est ce qui rend le désordre jouable. */
+      /* ⚠️ ON LIT LE REGISTRE AVANT DE LE RELIRE, ET L'ORDRE COMPTE. Écrit dans
+         l'autre sens, un joueur qui arrive ici en ayant déjà le nom ET le
+         registre déchiffré aurait obtenu la FILIATION en premier — c'est-à-dire
+         la réponse avant la question — puis le folio manquant au coup suivant.
+         Rien n'était bloqué, mais on racontait l'histoire à l'envers, et c'est
+         exactement ce qu'un chantier narratif ne peut pas se permettre. */
+      const site = Q.ENQ_SITE.filiation;
+      const can = site.req.every(k => Q.enqHas(e, k));
+      return { p: "doc", act: () => enqRead(!Q.enqHas(e, "mariages") ? "mariages" : (can ? "filiation" : "mariages")) };
+    }
+    if (nearEnqProp("registerStand", "surveyor", null, 1.6)) return { p: "doc", act: () => enqRead("cotes") };
+    /* ⚠️ LE GUICHET DE LA RÉCLAMATION EST LE BUREAU DU NOTAIRE, ET IL N'A PAS
+       DE MEUBLE À LUI. C'est délibéré : on ne pose pas un huitième dessin pour
+       un geste qui se fait « au bureau ». Le `desk` de la pièce `office` existe
+       depuis le 426, il est déjà le point de fuite de la salle, et la scène
+       finale s'y joue sans qu'un décor neuf annonce d'avance qu'il va se passer
+       quelque chose là.
+       ⚠️ Il ne s'ouvre que quand les quatre pièces sont réunies — sinon le
+       clerc les compte à voix haute et rend le dossier, ce qui est la seule
+       façon HONNÊTE de dire « pas encore » : un guichet muet passe pour cassé
+       (426), et un guichet qui accepte un dossier incomplet ment. */
+    if (nearEnqProp("desk", "notary", null, 1.5) && Q.enqStarted(e)) return { p: "file", act: () => setEnqEndOpen(true) };
+    if (nearEnqProp("bylaw", "notary", null, 1.6)) return { p: "doc", act: () => enqRead("reglement") };
+    if (nearEnqProp("wallMap", "cadastre", null, 1.6)) return { p: "doc", act: () => enqRead("plan") };
+    for (const mk of ["note", "pv"]) {
+      if (nearEnqProp("docBox", "cityarch", mk, 1.5)) return { p: "doc", act: () => enqRead(mk) };
+    }
+    const kp = nearEnqProp("keyPost", null, null, 1.4);
+    if (kp) {
+      const rm = E.courtRoomAt(kp.x, kp.y);
+      return { p: "lock", act: () => enqTurnKey(rm && rm.key === "bailiff" ? "huissier" : "greffe") };
+    }
+    if (nearEnqProp("strongbox", "evidence", null, 1.8) || nearEnqProp("strongbox2", "evidence", null, 1.8)) {
+      return { p: "box", act: () => enqOpenBox() };
+    }
+    return null;
+  }
+  /* Ouvrir un document. ⚠️ LE PANNEAU S'OUVRE TOUJOURS, MÊME QUAND L'INDICE EST
+     DÉJÀ CONNU : un document déjà lu reste lisible, c'est un document. Ce qui
+     est idempotent, c'est l'INSCRIPTION au carnet, et elle est arbitrée par
+     l'hôte (voir `hostHandleReq`). Le client, lui, n'accorde rien. */
+  function enqRead(id) {
+    const site = Q.ENQ_SITE[id];
+    if (!site) return;
+    const e = sharedRef.current.enquete;
+    if (site.req && !site.req.every(k => Q.enqHas(e, k))) { pushToast(L.enq.tLocked); return; }
+    if (!Q.enqHas(e, id)) {
+      if (id === "tombe" || id === "borneOrigine") { actAnimRef.current = 0.28; pushToast(L.enq.tScrub); }
+      sendReq({ kind: "enqClue", site: id });
+    }
+    setEnqDocOpen({ id });
+  }
+  /* Tourner une clé. ⚠️ L'ANTI-RAFALE EST LOCAL ET SILENCIEUX (leçon du pain aux
+     pigeons, 439) : marteler la commande enverrait dix `req` par seconde à
+     l'hôte, c'est-à-dire le plafond du §3 atteint pour un geste. Et il est court
+     — une seconde — parce qu'ici, contrairement au pain, on peut avoir une
+     bonne raison de retourner tourner la clé tout de suite : on vient de rater
+     la fenêtre. */
+  function enqTurnKey(side) {
+    const nowC = performance.now();
+    if (nowC < (enqKeyNextRef.current || 0)) return;
+    enqKeyNextRef.current = nowC + 1000;
+    const e = sharedRef.current.enquete;
+    if (Q.enqHas(e, "coffre")) { enqOpenBox(); return; }
+    if (!Q.enqHas(e, "acte")) { pushToast(L.enq.tLocked); return; }
+    sendReq({ kind: "enqLock", side });
+  }
+  function enqOpenBox() {
+    const e = sharedRef.current.enquete;
+    if (!Q.enqHas(e, "acte")) { pushToast(L.enq.tLocked); return; }
+    if (!Q.enqHas(e, "coffre")) { pushToast(L.enq.tBoxWait); return; }
+    setEnqDocOpen({ id: "coffre" });
+  }
   // Zip 426 : voir la note de drawTownFrame — une seule définition de « je suis
   // devant la porte de ce monument », partagée par l'invite et par la touche E.
   function nearCivicDoor(b) {
@@ -19332,6 +19778,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const pw = nearChurchProp("pew", 1.1);
         if (pw) { sitChurch(pw); return; }
       }
+      /* ⚠️⚠️ ZIP 442 — L'ENQUÊTE PASSE AVANT LES PANNEAUX, ET APRÈS L'ÉGLISE.
+         Après, parce que s'asseoir et allumer un cierge sont à une case et que
+         rien de l'enquête n'est dans la nef. Avant, parce que ses meubles sont
+         À L'INTÉRIEUR des pièces, donc plus près que la plaque de porte et que
+         l'annuaire du couloir : testés après, on ouvrirait l'annuaire en
+         voulant lire un registre posé à une case de soi. C'est la règle du 427
+         — du plus PRÉCIS au plus large — et c'est elle qui rend une touche
+         unique lisible.
+         ⚠️ ET C'EST LA MÊME FONCTION QUE L'INVITE (`enqNearby`) : l'invite
+         promet ce que la touche fait, parce que c'est la même liste. */
+      { const en = enqNearby(); if (en) { en.act(); return; } }
       // ⚠️ 439 — l'hôtesse passe AVANT les panneaux : elle est à deux cases, un
       // panneau à une et demie, et il y a un annuaire dans sa salle. Sans cette
       // priorité, parler à quelqu'un ouvrirait un tableau.
@@ -19453,6 +19910,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          celle-ci était la plus frustrante — un banc est la seule chose au monde
          dont l'usage est évident. */
       { const bn = nearTownProp("bench", 1.2); if (bn) { sitOnBench(bn); return; } }
+      /* ZIP 442 — les bornes de l'arpenteur et la tombe sans nom. Placées ici :
+         après le mobilier à rayon étroit, avant les LIEUX (fontaine, kiosque,
+         ponton, belvédère) qui couvrent des rectangles entiers et avaleraient
+         tout ce qui s'y trouve. */
+      { const en = enqNearby(); if (en) { en.act(); return; } }
       if (nearTownRect(C.TOWN_FOUNTAIN.x - 1, C.TOWN_FOUNTAIN.y - 1, 4, 4)) { sendReq({ kind: "townWish" }); return; }
       if (nearTownProp("kiosk", 2.6)) {
         // Le kiosque joue quand quelqu'un est là pour l'entendre — c'est-à-dire
@@ -19489,6 +19951,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // Zip 235: berry bush / fruit tree pick (spring). Checked BEFORE the
     // heavy shop/bin/nearest logic so it stays cheap when nothing is near.
     if (m0 && m0.zone === "farm") {
+      /* ZIP 442 — LA BORNE D'ORIGINE DU CADASTRE, au pied de la gare. C'est le
+         seul morceau de l'enquête qui vive à la ferme, et c'est délibéré : le
+         chapitre 2 oblige à reprendre le train, donc à traverser les deux
+         cartes, donc — à deux — à se répartir le travail. */
+      { const en = enqNearby(); if (en) { en.act(); return; } }
       const tx = Math.floor(m0.x + 0.5), ty = Math.floor(m0.y + 0.5);
       const w2 = worldRef.current;
       if (w2) {
@@ -20224,7 +20691,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           expression que le bandeau, et pas ailleurs. Deux traductions du même
           `promptKey` finiraient par diverger d'un libellé, et la divergence
           tomberait sur l'appareil du joueur qui n'a QUE ce bouton. */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("enq:") ? L.enqPrompt(promptKey.slice(4)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (
@@ -21073,6 +21540,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         </div>
       )}
       {!questOpen && !questsHidden && <button className="ferme-btn ferme-quests-fab" onClick={() => setQuestOpen(true)}>{L.questBtn}</button>}
+      {/* ⚠️⚠️ ZIP 442 — LE CARNET S'OUVRE DE PARTOUT, ET C'EST LA CONDITION POUR
+          QU'ON SACHE TOUJOURS CE QU'ON CHERCHE. C'est la consigne de ce chantier,
+          mot pour mot : *le joueur doit toujours savoir ce qu'il cherche à ce
+          stade, même s'il ne sait pas encore où le trouver.* Un objectif qu'on ne
+          peut relire qu'en redescendant au sous-sol du palais parler à
+          l'archiviste, c'est un objectif qu'on oublie entre deux soirées — et
+          cette enquête se joue sur plusieurs soirées.
+          ⚠️ LE BOUTON N'APPARAÎT QU'UNE FOIS L'ENQUÊTE COMMENCÉE. Une ferme qui
+          n'a jamais lu l'avis de la mairie n'a rien à ouvrir, et un bouton qui
+          ouvre « rien encore » est un bouton qui ment sur ce qu'il y a à faire.
+          ⚠️ Il se place sous celui des quêtes et emprunte sa classe : deux
+          pastilles flottantes de styles différents dans le même coin se lisent
+          comme deux jeux (438). */}
+      {!enqNoteOpen && Q.enqStarted(sharedRef.current.enquete) && (
+        <button className="ferme-btn ferme-quests-fab" style={{ bottom: 300 }}
+                data-tick={enqTick} onClick={() => setEnqNoteOpen(true)}>{L.enq.noteOpen}</button>
+      )}
 
       {/* Zip 368 : le panneau HUD de la mission d'équipe (nom du chantier +
           une ligne par ressource) était ici, en haut à droite sous les quêtes.
@@ -22150,7 +22634,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (!stock) return;
           const fam = E.marketFamilyOf(item);
           rows.push({ key, img, label, stock, item, unit, extra: extra || {}, note, fam,
-                      priced: E.marketPrice(day, item, unit) });
+                      // ⚠️ Zip 442 — le panneau AFFICHE ce que l'hôte PAIERA.
+                      // Sans le modificateur ici, la ligne aurait annoncé le
+                      // prix d'avant l'enquête et la caisse en aurait rendu un
+                      // autre : le joueur aurait cru à un vol, pas à un bogue.
+                      priced: E.marketPrice(day, item, unit, Q.enqMarketMod(sharedRef.current)) });
         };
         // --- ce que je porte
         C.CROPS.forEach(cr => push("c" + cr.id, S && S.crops[cr.id][C.CROP_STAGES - 1], cropName(cr.id),
@@ -22236,14 +22724,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   border: marketFam === "all" ? "2px solid #ffeec8" : "2px solid transparent",
                   background: "#3a3226", color: "#ffeec8" }}>{L.marketFamAll}</button>
               {E.MARKET_FAMILIES.map(fam => {
-                const pct = Math.round((E.marketRate(day, fam) - 1) * 100);
+                // ⚠️ Zip 442 — même source que la cote payée (voir le tableau des cours).
+                const pct = Math.round((E.marketRate(day, fam, Q.enqMarketMod(sharedRef.current)) - 1) * 100);
                 const on = marketFam === fam;
                 return (
                   <button key={fam} onClick={() => setMarketFam(on ? "all" : fam)}
                     style={{ padding: "3px 10px", borderRadius: 6, fontWeight: "bold", cursor: "pointer",
                       border: on ? "2px solid #ffeec8" : "2px solid transparent",
-                      background: pct >= 20 ? "#2f6b34" : pct >= 8 ? "#5a5a2e" : "#4a3a2e", color: "#ffeec8" }}>
-                    {L.marketFamily(fam)} +{pct} %
+                      background: pct >= 20 ? "#2f6b34" : pct >= 8 ? "#5a5a2e" : pct < 0 ? "#6b2f2f" : "#4a3a2e", color: "#ffeec8" }}>
+                    {L.marketFamily(fam)} {pct >= 0 ? "+" : ""}{pct} %
                   </button>
                 );
               })}
@@ -23014,10 +23503,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     <tr key={"pb" + fam}>
                       <td style={{ padding: "4px 8px", fontWeight: "bold" }}>{L.marketFamily(fam)}</td>
                       {[0, 1, 2, 3].map(k => {
-                        const pct = Math.round((E.marketRate(day + k, fam) - 1) * 100);
+                        /* ⚠️ ZIP 442 — LA COTE AFFICHÉE PASSE PAR LE MÊME
+                           MODIFICATEUR QUE LA COTE PAYÉE. Deux calculs du même
+                           prix, c'est le §8 sur la seule valeur qu'un joueur
+                           compare avec l'autre : le tableau annoncerait +18 et la
+                           caisse rendrait −4, chacun parfaitement cohérent avec
+                           lui-même. Une seule source, ici comme chez l'hôte. */
+                        const pct = Math.round((E.marketRate(day + k, fam, Q.enqMarketMod(sharedRef.current)) - 1) * 100);
                         return (
                           <td key={"pb" + fam + k} style={{ padding: "4px 8px", textAlign: "center", fontWeight: "bold",
-                            color: pct >= 20 ? "#8ce09a" : pct >= 8 ? "#e8d67a" : "#cfc8b8" }}>+{pct} %</td>
+                            color: pct >= 20 ? "#8ce09a" : pct >= 8 ? "#e8d67a" : pct < 0 ? "#e08a7a" : "#cfc8b8" }}>{pct >= 0 ? "+" : ""}{pct} %</td>
                         );
                       })}
                     </tr>
@@ -23026,6 +23521,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               </table>
             </div>
             <div className="ferme-hint" style={{ marginTop: 10 }}>{E.isMarketDay(day) ? L.marketDayHint : L.priceBoardFooter}</div>
+            {/* ⚠️⚠️ ZIP 442 — LA MENTION EN PIED DE TABLEAU, ET C'EST LE
+                DEUXIÈME INDICE DE L'ENQUÊTE. Elle est posée ici plutôt que sur
+                un meuble neuf parce que c'est LÀ qu'elle est vraie : le fonds
+                de la halle abonde les cours, la ligne est sur le tableau des
+                cours, et elle y est depuis toujours dans une écriture plus
+                ancienne que le reste. Un panneau que le joueur ouvre déjà pour
+                d'autres raisons est le meilleur endroit où cacher quelque
+                chose — parce qu'il n'est pas caché.
+                ⚠️ ELLE NE DONNE RIEN : cliquer ouvre un document. C'est la
+                `req` qui inscrit, et l'hôte qui arbitre. */}
+            {!Q.enqDone(sharedRef.current.enquete) && (
+              <div className="ferme-shop-row" style={{ marginTop: 6, opacity: 0.85 }}>
+                <div className="info"><b>📜 {(L.enq.doc.cours || {}).t}</b></div>
+                <button className="ferme-btn" onClick={() => { setPriceBoardOpen(false); enqRead("cours"); }}>👁</button>
+              </div>
+            )}
             <div style={{ marginTop: 12 }}><button className="ferme-btn" onClick={() => setPriceBoardOpen(false)}>{L.newsBoardClose}</button></div>
           </div>
         </div>
@@ -23185,6 +23696,270 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           </div>
         );
       })()}
+      {/* ╔════════════════════════════════════════════════════════════════════
+          ║ ZIP 442 — LES QUATRE PANNEAUX DE L'ENQUÊTE.
+          ╚════════════════════════════════════════════════════════════════════
+          ⚠️⚠️ AUCUN DES QUATRE NE LIT UN ÉTAT REACT DE L'ENQUÊTE : tout vient de
+          `sharedRef.current.enquete`, relu à chaque rendu. Un carnet React qui
+          doublerait l'état partagé montrerait un indice qu'on n'a pas — ou, bien
+          pire à deux, ne montrerait pas celui que le camarade vient de trouver.
+          `enqTick` ne sert qu'à redemander un rendu quand un `apply` est arrivé,
+          exactement comme `wardrobeTick` au 427.
+          ⚠️⚠️⚠️ ET AUCUN NE DONNE QUOI QUE CE SOIT. Un panneau s'ouvre à volonté
+          avec E : tout ce qui est ici est de la LECTURE. Ce qui paie est
+          l'inscription au carnet, qui part en `req` et que l'hôte arbitre — et
+          qui est idempotente, donc marteler la touche devant un registre
+          rapporte zéro. C'est la règle dure du 439, tenue à la lettre. */}
+      {enqNoteOpen && (() => {
+        const e = Q.migrateEnquete(sharedRef.current.enquete);
+        const started = Q.enqStarted(e);
+        const chIdx = Math.min(e.ch | 0, Q.ENQ_CH_DONE - 1);
+        const ch = Q.ENQ_CHAPTERS[chIdx];
+        const done = Q.enqDone(e);
+        const missing = Q.enqMissing(e);
+        const found = Object.keys(e.clues);
+        const nearOmb = !!nearEnqProp("archivistNPC", null, null, C.HALL_CLERK_R);
+        const close = () => setEnqNoteOpen(false);
+        const docT = (id) => (L.enq.doc[id] || {}).t || id;
+        return (
+          <div className="ferme-modal open" onClick={close} data-tick={enqTick}>
+            <div className="panel ferme-modal-panel" onClick={ev => ev.stopPropagation()}>
+              <button className="ferme-close-x" onClick={close}>✕</button>
+              <h2>{L.enq.noteTitle}</h2>
+              <div className="ferme-hint">{L.enq.title} — {L.enq.noteSub}</div>
+              {/* ⚠️ ELLE PARLE EN TÊTE, ET ELLE DIT TOUT CE QU'ELLE SAIT. Ce qui
+                  bloque dans cette enquête n'est jamais le silence de quelqu'un,
+                  c'est un document qui manque : une archiviste qui ferait durer
+                  serait exactement le cliché que ce chantier évite. */}
+              {nearOmb && (
+                <div className="ferme-shop-row" style={{ alignItems: "flex-start" }}>
+                  <div className="info">
+                    <b>💁 {L.enq.omb.name}</b>
+                    <span className="ferme-usage">{L.enq.omb.role}</span>
+                    <span style={{ fontStyle: "italic", marginTop: 4 }}>
+                      « {done ? L.enq.omb.done[e.outcome] : started ? (L.enq.omb.line[ch.key] || L.enq.omb.hello) : L.enq.omb.hello} »
+                    </span>
+                  </div>
+                </div>
+              )}
+              {!started && <div style={{ margin: "12px 0" }}>{L.enq.noteNothing}</div>}
+              {started && (
+                <div>
+                  <div className="ferme-hint" style={{ marginTop: 10 }}>
+                    {done ? L.enq.noteDone : L.enq.noteChapterOf(chIdx + 1, Q.ENQ_CH_DONE)} · {L.enq.noteFound(found.length, Q.ENQ_SITES.length)}
+                  </div>
+                  {!done && (
+                    <div style={{ margin: "8px 0" }}>
+                      <h3 style={{ marginBottom: 4 }}>{L.enq.chapter[ch.key]}</h3>
+                      <div><b>{L.enq.noteGoal} :</b> {L.enq.goal[ch.key]}</div>
+                      <div className="ferme-hint" style={{ marginTop: 6 }}><b>{L.enq.noteHint} :</b> {L.enq.hint[ch.key]}</div>
+                      {L.enq.coop[ch.key] && (
+                        <div className="ferme-hint" style={{ marginTop: 6, color: "#8ce09a" }}>
+                          <b>👥 {L.enq.noteCoop} :</b> {L.enq.coop[ch.key]}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {!done && !!missing.length && (
+                    <div style={{ marginTop: 10 }}>
+                      <div className="ferme-hint">{L.enq.noteMissing}</div>
+                      {missing.map(id => (
+                        <div className="ferme-shop-row" key={"em-" + id}>
+                          <div className="info"><b style={{ opacity: 0.65 }}>◻ {docT(id)}</b>
+                            <span className="ferme-usage">{(L.enq.doc[id] || {}).w || ""}</span></div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* Ce qu'on sait, dans l'ordre où on l'a appris, avec QUI l'a
+                      trouvé : c'est la surface de RECOUPEMENT du jeu, et à deux
+                      c'est aussi le seul endroit où l'on voit ce que l'autre a
+                      fait pendant qu'on était à l'autre bout de la carte. */}
+                  {!!found.length && (
+                    <div style={{ marginTop: 12 }}>
+                      <div className="ferme-hint">{L.enq.noteHave}</div>
+                      {found.sort((a2, b2) => e.clues[a2].at - e.clues[b2].at).map(id => (
+                        <div className="ferme-shop-row" key={"ef-" + id}>
+                          <div className="info">
+                            <b>✔ {docT(id)}</b>
+                            <span className="ferme-usage">{(L.enq.doc[id] || {}).n || ""}</span>
+                            <span className="ferme-usage" style={{ opacity: 0.6 }}>
+                              {(L.enq.doc[id] || {}).w || ""} · {L.enq.noteBy(e.clues[id].by)}
+                            </span>
+                          </div>
+                          <button className="ferme-btn" onClick={() => setEnqDocOpen({ id })}>👁</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* ⚠️ LE DÉCHIFFREMENT SE FAIT DEPUIS LE CARNET, PAS DEPUIS UN
+                      MEUBLE : une fois le carton ouvert, on EMPORTE le registre.
+                      Obliger à redescendre au sous-sol pour taper un mot aurait
+                      été un aller-retour sans contenu — et le mot-clé, lui, se
+                      cherche à l'autre bout du monde. */}
+                  {Q.enqHas(e, "coffre") && !Q.enqHas(e, "registre") && (
+                    <div style={{ marginTop: 12 }}>
+                      <button className="ferme-btn" onClick={() => { setEnqNoteOpen(false); setEnqCodeOpen({ code: "C", value: "" }); }}>
+                        🔐 {L.enq.code.C.t}
+                      </button>
+                    </div>
+                  )}
+                  {done && (
+                    <div style={{ marginTop: 12 }}>
+                      {(e.outcome === "restore" ? L.enq.end.outRestore : L.enq.end.outKeep).map((ln, i) => (
+                        <div key={"eo-" + i} style={{ marginBottom: 6 }}>{ln}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div style={{ marginTop: 12 }}><button className="ferme-btn" onClick={close}>{L.enq.omb.close}</button></div>
+            </div>
+          </div>
+        );
+      })()}
+      {/* ---- UN DOCUMENT. ⚠️ IL S'OUVRE MÊME QUAND IL EST DÉJÀ LU : un document
+           reste lisible, c'est un document. Ce qui est unique, c'est son
+           inscription au carnet. */}
+      {enqDocOpen && (() => {
+        const d = L.enq.doc[enqDocOpen.id] || {};
+        const e = Q.migrateEnquete(sharedRef.current.enquete);
+        const close = () => setEnqDocOpen(null);
+        return (
+          <div className="ferme-modal open" onClick={close} data-tick={enqTick}>
+            <div className="panel ferme-modal-panel" onClick={ev => ev.stopPropagation()}>
+              <button className="ferme-close-x" onClick={close}>✕</button>
+              <h2>📜 {d.t}</h2>
+              <div className="ferme-hint">{d.w}</div>
+              <div style={{ margin: "12px 0", lineHeight: 1.5 }}>
+                {(d.b || []).map((ln, i) => <div key={"db-" + i} style={{ marginBottom: 8 }}>{ln}</div>)}
+              </div>
+              {d.n && <div className="ferme-hint" style={{ borderTop: "1px solid rgba(230,214,170,0.25)", paddingTop: 8 }}>🔍 {d.n}</div>}
+              <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {enqDocOpen.id === "coffre" && !Q.enqHas(e, "registre") && (
+                  <button className="ferme-btn" onClick={() => { setEnqDocOpen(null); setEnqCodeOpen({ code: "C", value: "" }); }}>🔐 {L.enq.code.C.t}</button>
+                )}
+                <button className="ferme-btn" onClick={() => { setEnqDocOpen(null); setEnqNoteOpen(true); }}>{L.enq.noteOpen}</button>
+                <button className="ferme-btn" onClick={close}>{L.enq.omb.close}</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+      {/* ---- UNE SAISIE. ⚠️ LA VALIDATION EST CHEZ L'HÔTE, et pas parce qu'on
+           se méfie de quelqu'un — un salon, c'est deux amis. C'est parce que le
+           résultat CHANGE L'ÉTAT PARTAGÉ : deux clients qui valideraient chacun
+           de leur côté finiraient par ne pas avoir le même carnet, et le §3 est
+           formel (l'hôte est l'autorité, toujours). L'indice tombe donc chez les
+           deux joueurs à la même seconde, ce qui est aussi ce qu'on veut voir.
+           ⚠️ L'INDICE DE L'ÉNIGME EST AFFICHÉ SOUS LE CHAMP, TOUJOURS. Un joueur
+           qui a la réponse ne le lit pas ; un joueur bloqué ne repart pas
+           bredouille. Un mystère entretenu par un indice qu'on cache est un
+           mystère qui n'a rien à raconter. */}
+      {enqCodeOpen && (() => {
+        const cd = L.enq.code[enqCodeOpen.code] || {};
+        const close = () => setEnqCodeOpen(null);
+        const send = () => {
+          if (!enqCodeOpen.value.trim()) return;
+          sendReq({ kind: "enqCode", code: enqCodeOpen.code, value: enqCodeOpen.value });
+          setEnqCodeOpen(null);
+        };
+        /* Le texte chiffré est CALCULÉ à partir du texte clair (voir la note de
+           `enqCipher`) : il n'existe qu'un texte, l'autre en découle. Un
+           charabia écrit à la main aurait été un second texte à tenir d'accord
+           avec le premier, et personne ne l'aurait relu. */
+        const cipher = enqCodeOpen.code === "C"
+          ? Q.enqCipher(((L.enq.doc.registre || {}).b || []).join(" "), Q.ENQ_CIPHER_KEY)
+          : null;
+        return (
+          <div className="ferme-modal open" onClick={close}>
+            <div className="panel ferme-modal-panel" onClick={ev => ev.stopPropagation()}>
+              <button className="ferme-close-x" onClick={close}>✕</button>
+              <h2>🔐 {cd.t}</h2>
+              {cipher && (
+                <div>
+                  <div className="ferme-hint">{L.enq.cipherLead}</div>
+                  <div style={{ margin: "8px 0", fontFamily: "monospace", fontSize: 11, lineHeight: 1.4,
+                                opacity: 0.75, maxHeight: 120, overflow: "hidden", wordBreak: "break-all" }}>
+                    {cipher.slice(0, 420)}…
+                  </div>
+                </div>
+              )}
+              <div style={{ margin: "10px 0" }}>{cd.ask}</div>
+              <input className="ferme-input" autoFocus value={enqCodeOpen.value} placeholder={cd.ph}
+                     onChange={ev => setEnqCodeOpen({ ...enqCodeOpen, value: ev.target.value })}
+                     onKeyDown={ev => { if (ev.key === "Enter") send(); ev.stopPropagation(); }}
+                     style={{ width: "100%", padding: 8, fontSize: 16 }} />
+              <div className="ferme-hint" style={{ marginTop: 10 }}>💡 {cd.hint}</div>
+              <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+                <button className="ferme-btn" onClick={send}>→</button>
+                <button className="ferme-btn" onClick={close}>{L.enq.omb.close}</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+      {/* ---- LE DÉPÔT DE LA RÉCLAMATION, ET LA DÉCISION. */}
+      {enqEndOpen && (() => {
+        const e = Q.migrateEnquete(sharedRef.current.enquete);
+        const close = () => setEnqEndOpen(false);
+        const can = Q.enqCanFile(e);
+        const solo = Object.keys(farmersRef.current || {}).length <= 1;
+        const enough = e.signs.length >= 2 || (solo && e.signs.length >= 1);
+        const mine = e.signs.includes(me.id);
+        /* ⚠️ LE MAIRE DU JOUR EST UNE PURE FONCTION DU JOUR (439), donc cette
+           ligne ne coûte RIEN : ni champ, ni message, ni état. Et elle change la
+           dernière scène environ un jour sur cinq — l'héritier est un des cinq
+           candidats du vivier fixe, et quand c'est lui qui siège, il est juge et
+           partie. Le notaire le dit, et le dossier le mentionne. */
+        const mayor = E.mayorOf((sharedRef.current.day | 0) || 1);
+        const heirIsMayor = mayor && mayor.key === Q.ENQ_HEIR_KEY;
+        return (
+          <div className="ferme-modal open" onClick={close} data-tick={enqTick}>
+            <div className="panel ferme-modal-panel" onClick={ev => ev.stopPropagation()}>
+              <button className="ferme-close-x" onClick={close}>✕</button>
+              <h2>✒️ {L.enq.end.t}</h2>
+              {!can && <div style={{ margin: "12px 0" }}>{L.enq.end.missing}</div>}
+              {can && !e.outcome && (
+                <div>
+                  <div style={{ margin: "10px 0" }}>{L.enq.end.intro}</div>
+                  <div style={{ fontStyle: "italic", margin: "10px 0" }}>
+                    « {heirIsMayor ? L.enq.end.mayorHeir : L.enq.end.mayorNot} »
+                  </div>
+                  <h3 style={{ marginBottom: 4 }}>{L.enq.end.signTitle}</h3>
+                  <div className="ferme-hint">{L.enq.end.signNeed}{solo ? " " + L.enq.end.solo : ""}</div>
+                  <div className="ferme-shop-row">
+                    <div className="info"><b>{L.enq.end.signed(e.signs.length)}</b></div>
+                    {mine ? <span className="ferme-usage">{L.enq.end.signedAlready}</span>
+                          : <button className="ferme-btn" onClick={() => sendReq({ kind: "enqSign" })}>{L.enq.end.signMe}</button>}
+                  </div>
+                  {enough && (
+                    <div style={{ marginTop: 14 }}>
+                      <div className="ferme-hint">{L.enq.end.choose} — {L.enq.end.confirm}</div>
+                      <div className="ferme-shop-row" style={{ alignItems: "flex-start", marginTop: 8 }}>
+                        <div className="info"><b>{L.enq.end.restoreT}</b><span className="ferme-usage">{L.enq.end.restoreD}</span></div>
+                        <button className="ferme-btn" onClick={() => { sendReq({ kind: "enqFile", outcome: "restore" }); setEnqEndOpen(false); setEnqNoteOpen(true); }}>→</button>
+                      </div>
+                      <div className="ferme-shop-row" style={{ alignItems: "flex-start" }}>
+                        <div className="info"><b>{L.enq.end.keepT}</b><span className="ferme-usage">{L.enq.end.keepD}</span></div>
+                        <button className="ferme-btn" onClick={() => { sendReq({ kind: "enqFile", outcome: "keep" }); setEnqEndOpen(false); setEnqNoteOpen(true); }}>→</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {e.outcome && (
+                <div style={{ margin: "12px 0" }}>
+                  {(e.outcome === "restore" ? L.enq.end.outRestore : L.enq.end.outKeep).map((ln, i) => (
+                    <div key={"eof-" + i} style={{ marginBottom: 6 }}>{ln}</div>
+                  ))}
+                </div>
+              )}
+              <div style={{ marginTop: 12 }}><button className="ferme-btn" onClick={close}>{L.enq.omb.close}</button></div>
+            </div>
+          </div>
+        );
+      })()}
       {/* ═══════════════════════════════════════════════════════════════════
           ZIP 427 — LA MAISON GARFIELD.
           ───────────────────────────────────────────────────────────────────
@@ -23292,6 +24067,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <button className="ferme-close-x" onClick={() => setNewsBoardOpen(false)}>✕</button>
               <h2>{L.newsBoardTitle}</h2>
               <div className="ferme-hint">{L.newsBoardSub}</div>
+              {/* ⚠️⚠️ ZIP 442 — L'AVIS DE LA MAIRIE OUVRE L'ENQUÊTE, ET IL EST
+                  EN TÊTE DU PANNEAU. C'est le premier fil, et il est posé au seul
+                  endroit que TOUS les joueurs finissent par ouvrir : le tableau
+                  des nouvelles de la place existe depuis le 427 et sert déjà à
+                  autre chose. Une accroche posée sur un décor neuf aurait dit
+                  « voici une quête » avant d'avoir rien raconté ; celle-ci dit
+                  d'abord « la ville ferme un compte », et c'est en le lisant
+                  qu'on trouve la question.
+                  ⚠️ Il DISPARAÎT une fois l'enquête close : un avis de clôture
+                  affiché après la clôture serait le décor qui ment (429). */}
+              {!Q.enqDone(sharedRef.current.enquete) && (
+                <div className="ferme-shop-row" style={{ marginTop: 8, borderLeft: "3px solid #c8a45a", paddingLeft: 8 }}>
+                  <div className="info">
+                    <b>📜 {(L.enq.doc.avis || {}).t}</b>
+                    <span className="ferme-usage">{L.visitorUrgent}</span>
+                  </div>
+                  <button className="ferme-btn" onClick={() => { setNewsBoardOpen(false); enqRead("avis"); }}>👁</button>
+                </div>
+              )}
               <h3 style={{ margin: "14px 0 6px" }}>{L.newsBoardInTown}</h3>
               {!list.length && <div className="ferme-hint">{L.newsBoardNobody}</div>}
               {list.map(res => {

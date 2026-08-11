@@ -470,6 +470,108 @@ donnait pas, d'une rangée.
 
 ---
 
+## `verify-enquete.mjs` — la chaîne de l'enquête tient-elle debout ? (442)
+
+`node tools/verify-enquete.mjs` — **91 contrôles.**
+
+⚠️⚠️ **IL EXISTE PARCE QUE LES DÉFAUTS D'UN CHANTIER NARRATIF NE SONT PAS DES
+DÉFAUTS DE DESSIN NI DE NAVIGATION.** Ce sont des défauts de CHAÎNE — un indice
+qu'aucun chapitre ne réclame, une déduction fausse sur le terrain, une porte à
+deux joueurs infranchissable seul, un texte anglais qui manque. Aucun ne lève
+d'erreur, aucun ne se voit sur une planche, et **tous se voient à la vingtième
+minute d'une soirée, une fois le joueur engagé**. Six grandeurs, six chapitres :
+
+1. **la table se referme sur elle-même** — aucun indice orphelin, aucune
+   dépendance circulaire entre prérequis, et ⚠️ **la parité FR/EN PROFONDE** :
+   tout le chantier vit sous UNE clé (`enq`), donc `verify-strings` en compte une
+   de chaque côté et s'arrête là. 157 entrées appariées ici, **et le compte des
+   entrées LUES est imprimé** — la seule façon de s'apercevoir qu'un contrôle ne
+   contrôle rien (leçon du garde-fou de `verify-pont`, 441) ;
+2. ⚠️⚠️ **elle se boucle DANS LE DÉSORDRE** — 400 permutations des vingt-et-un
+   indices, toutes menées à terme, **et l'or total ne dépend pas de l'ordre**.
+   C'est le contrôle qui compte : deux joueurs qui se répartissent la carte ne
+   trouvent RIEN dans l'ordre écrit. Il vérifie aussi qu'une découverte répétée
+   ne paie pas, qu'on ne dépose qu'une fois, et qu'une sauvegarde abîmée se
+   recharge sans planter ni tricher ;
+3. ⚠️⚠️ **la déduction du code A est vraie SUR LA CARTE.** Le joueur raisonne
+   « le verger est à 25, la promenade à 27, la promenade est la dernière du plan,
+   or il y a une borne plus à l'est » : c'est faux si les trois pierres ne sont
+   pas dans cet ordre, et le générateur est parfaitement content de les poser
+   autrement. **Il a attrapé l'énigme fausse à l'écriture** — le premier jet
+   annonçait le verger comme dernière parcelle alors qu'il est tout à l'ouest.
+   Plus l'aller-retour du chiffre de Chaband **et l'absence de fuite** : aucun mot
+   de plus de cinq lettres du texte clair ne survit dans le texte chiffré (43
+   mots testés) — un Vigenère mal branché rendrait la page en clair sans que
+   personne ne s'en aperçoive ;
+4. **la géographie** : les quatorze meubles sont dans les pièces que la table leur
+   donne (via `E.courtRoomAt`), les deux commandes de verrou sont à **deux niveaux
+   différents**, la borne de la ferme est sur une case libre, praticable, à
+   l'écart de la boutique, du bac, du panneau de gare et du seuil ;
+5. ⚠️⚠️ **LA PORTE À DEUX SE FRANCHIT SEUL, ET ON LA MESURE.** Parcours en
+   largeur sur la vraie grille du tribunal, avec la vraie collision
+   (`E.courtBoxFree`, sortie de la closure du rendu POUR CE BANC) et les cages
+   d'escalier comme arêtes : **68 cases, 10,5 s en courant pour une fenêtre de
+   22 s**, plancher à un tiers de la fenêtre pour qu'elle demande encore quelque
+   chose. Une fenêtre réglée à l'œil ici, c'est le seuil d'axe du taxi du 434 —
+   défendable et faux dès que la géométrie bouge. ⚠️ Il DIT ce qu'il approxime :
+   une distance n'est pas un trajet joué, d'où la marge humaine de 3 s, écrite ;
+6. **le marché** : ⚠️ **sans enquête, la cote est BIT À BIT celle du 430** (5 000
+   couples jour × famille contre une réimplémentation de la formule d'origine
+   écrite DANS le banc — *on ne mesure pas un trajet avec l'outil qui l'a
+   produit*), les deux issues restent déterministes, et elles ne donnent pas le
+   même marché.
+   ⚠️ **CE DERNIER CONTRÔLE A MESURÉ LA MAUVAISE GRANDEUR D'ABORD** : il comptait
+   les cotes IDENTIQUES et échouait à 10,8 % pour un seuil de 10 % choisi à l'œil.
+   Deux distributions linéaires tirées du même hachage se CROISENT forcément ; ce
+   qu'on veut savoir est si le joueur sent la différence, et ça se mesure en écart
+   moyen (**13,7 points**). *Vérifier le repère avant de corriger le dessin* (429).
+
+⚠️ **CE QU'IL NE MESURE PAS, ET IL LE DIT** : il ne joue pas. Les panneaux,
+l'ordre des invites, le carnet et la lisibilité des documents ne se voient qu'en
+jouant — et il ne dit rien de la QUALITÉ des textes, seulement qu'aucun ne manque.
+
+---
+
+## `render-enquete.mjs` — les onze dessins de l'enquête (442)
+
+`node tools/render-enquete.mjs` → `enquete-meubles.png` · `enquete-dehors.png`.
+**36 contrôles.**
+
+Écrit **avant le premier `fillRect`**, comme `render-eglise` au 441 : onze dessins
+neufs sans banc, c'est onze dessins qui auront douze zips de retard le jour où
+quelqu'un les regardera (436).
+
+**Il a trouvé quatre choses à sa première exécution**, dont deux que la lecture ne
+pouvait pas voir : les bornes de section étaient à hauteur de **poitrine** (×0,83
+d'un fermier pour un repère à ×0,61 — on enjambe une borne, on ne la contourne
+pas), la mousse était **du poivre** (des pixels isolés dans un aplat, la grandeur
+du 438), et **deux dessins étaient rognés par le haut** — les tringles de verrou
+de l'armoire et la corniche du fichier, c'est-à-dire le piège n°1 des sprites,
+payé trois fois au seul zip 433.
+
+⚠️⚠️ **ET IL S'EST TROMPÉ DE GRANDEUR AVANT LE DESSIN, POUR LA SEPTIÈME FOIS
+D'AFFILÉE DANS CE DÉPÔT** (rues 434, eau 435, escaliers 436, mairie 439, parc 440,
+pont 441). Il interdisait tout pixel sur les QUATRE bords et refusait **cinq
+dessins sur douze, tous corrects** : le mobilier d'intérieur fait seize de large
+PAR CONVENTION depuis le 426, et les deux moitiés de l'armoire scellée DOIVENT se
+toucher sous peine de fendre le meuble. Ce qui est réellement dangereux est le
+HAUT — un sprite est ancré par le bas et grandit vers le haut. Le contrôle mesure
+donc le haut pour les meubles, les trois côtés pour les décors de plein air (qui
+sont cernés, cf. `padOutline`), **et l'INVERSE pour l'armoire** : ses deux moitiés
+doivent se rejoindre.
+
+Il mesure aussi : la propreté (0 % de points perdus partout, seuil du 438 à 1 %),
+l'échelle contre un personnage de 23 px, ⚠️ **que la borne martelée SE VOIT**
+(20 % de pixels différents de l'intacte, à silhouette identique — c'est sur elle
+que repose la déduction du code A, et deux dessins qui ne diffèrent que dans les
+données seraient une énigme invisible), que les deux moitiés de l'armoire ont
+**exactement les mêmes rangées peintes** (le taxi a payé la divergence au 436) et
+que leurs entrées de serrure sont de part et d'autre, et enfin qu'**Ombeline a
+l'anatomie de Léonie sans être Léonie recolorée** (même gabarit, même ligne
+d'épaules, 12 % de pixels communs).
+
+---
+
 ## Jouer à deux en local
 
 **`tools/fake-supabase.mjs`** (432) — REST bidon **+ relais Realtime**, donc deux onglets =
