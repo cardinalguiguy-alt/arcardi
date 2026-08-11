@@ -6717,6 +6717,23 @@ body.ferme-active .wrap-room > .brand{ display:none !important; }
 .ferme-quest-alldone{ margin-top:6px; font-weight:bold; text-align:center; color:#2f7a2f; }
 .ferme-quests-fab{ position:fixed; bottom:270px; left:12px; z-index:11; padding:5px 10px; font-size:12px; }
 
+/* Zip 443 : le bouton du carnet d'enquête (ex-bottom:300 en `ferme-quests-fab`,
+   colonne gauche) coïncidait avec `.ferme-torch-btn` (left:10, top:calc(50% + 64px))
+   autour de H≈828px de hauteur de viewport — une hauteur d'écran ordinaire, pas
+   un cas limite. Colonne DROITE à la place : sous `.ferme-rabbit-challenge`
+   (top:320px, occasionnel) et au-dessus de `.ferme-energy-wrap` (bottom:78 à
+   218px) — la seule bande verticale du HUD encore libre à toute hauteur d'écran
+   usuelle. Pastille dorée pour rester lisible comme un bouton d'action, pas
+   comme une notification. */
+.ferme-notebook-fab{
+  position:fixed; bottom:232px; right:12px; z-index:41;
+  padding:6px 12px; font-size:12px; border-radius:999px;
+  border:2px solid var(--f-wood); background:var(--f-gold);
+  box-shadow:0 3px 0 var(--f-wood-d);
+}
+.ferme-notebook-fab:hover{ filter:brightness(1.08); }
+.ferme-notebook-fab:active{ transform:translateY(2px); box-shadow:0 1px 0 var(--f-wood-d); }
+
 /* Panneau de la mission d'équipe (chantier collaboratif, v1 2026-07) : côté
    droit, indépendant de la checklist des quêtes (désormais en bas à gauche). */
 /* Zip 368 : .ferme-coop / .ferme-coop-name (panneau HUD de la mission

@@ -21611,11 +21611,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ⚠️ LE BOUTON N'APPARAÎT QU'UNE FOIS L'ENQUÊTE COMMENCÉE. Une ferme qui
           n'a jamais lu l'avis de la mairie n'a rien à ouvrir, et un bouton qui
           ouvre « rien encore » est un bouton qui ment sur ce qu'il y a à faire.
-          ⚠️ Il se place sous celui des quêtes et emprunte sa classe : deux
-          pastilles flottantes de styles différents dans le même coin se lisent
-          comme deux jeux (438). */}
+          ⚠️⚠️ ZIP 443 — RETIRÉ DE LA PILE GAUCHE (`ferme-quests-fab`, bottom:300).
+          `ferme-quests-fab` est ancré à bottom:270 et le carnet à bottom:300 : à
+          H≈828px de hauteur de viewport (un format très courant), ce bottom:300
+          tombe exactement sur `.ferme-torch-btn` (left:10, top:calc(50% + 64px))
+          — les deux étaient l'un sur l'autre. Sa propre classe
+          `ferme-notebook-fab` le place maintenant à DROITE, dans la seule bande
+          verticale du HUD qui reste libre à toutes les hauteurs d'écran usuelles :
+          sous `.ferme-rabbit-challenge` (top:320, occasionnel) et au-dessus de
+          `.ferme-energy-wrap` (bottom:78 à 218) — voir globals.css. */}
       {!enqNoteOpen && Q.enqStarted(sharedRef.current.enquete) && (
-        <button className="ferme-btn ferme-quests-fab" style={{ bottom: 300 }}
+        <button className="ferme-btn ferme-notebook-fab"
                 data-tick={enqTick} onClick={() => setEnqNoteOpen(true)}>{L.enq.noteOpen}</button>
       )}
 
