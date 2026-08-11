@@ -3567,12 +3567,28 @@ export const COURT_MAP_W = COURT_FLOOR_W;
    ⚠️ `bld` DIT À QUEL BÂTIMENT APPARTIENT LE NIVEAU. C'est la seule donnée
    nouvelle, et elle sert à trois choses : la matière du sol, l'emplacement du
    seuil, et la porte de ville par laquelle on ressort. */
+/* ⚠️⚠️ ZIP 441 — L'ÉGLISE PREND DEUX NIVEAUX DE PLUS, ET C'EST LA MÊME
+   DÉCISION QU'AU 438, PRISE POUR LA MÊME RAISON. Une zone « church » aurait
+   demandé de retrouver les vingt-cinq tests `zone === "court"` ; deux niveaux
+   ne coûtent rien, `courtFloorOf(y)` continue de dire où l'on est, et trois
+   joueurs répartis dans trois bâtiments ne peuvent pas se confondre puisque
+   leurs `y` diffèrent. Le troisième bâtiment a donc coûté DEUX LIGNES ici —
+   c'est la mesure de ce que la décision du 438 a fait économiser.
+   ⚠️ ET AUCUN `CT_*` DE PLUS. Une église n'a pas la matière d'un tribunal : ses
+   dalles sont grandes et régulières, ses fenêtres sont des vitraux, son chœur
+   est une estrade. Trois différences, et toutes les trois sont une COUCHE —
+   `bld === "church"` change le DESSIN des matières existantes (règle du 434 :
+   une variante est une couche, pas un identifiant de sol). Un `CT_FLAG` de plus
+   aurait rouvert le test de solidité, les deux passes de sol et la passe de
+   murs, et en oublier un ne lève rien : ça fait juste une dalle qu'on traverse. */
 export const COURT_FLOORS = [
   { key: "ground",   emoji: "⚖️", alt: 0,  bld: "court" },
   { key: "upper",    emoji: "🗂️", alt: 1,  bld: "court" },
   { key: "basement", emoji: "🔒", alt: -1, bld: "court" },
   { key: "hall",     emoji: "🏛️", alt: 0,  bld: "hall" },
   { key: "hallUp",   emoji: "📜", alt: 1,  bld: "hall" },
+  { key: "church",   emoji: "⛪", alt: 0,  bld: "church" },
+  { key: "churchLoft", emoji: "🎹", alt: 1, bld: "church" },
 ];
 export const COURT_MAP_H = COURT_FLOORS.length * (COURT_FLOOR_H + COURT_FLOOR_GAP);
 // Sol / structure. ⚠️ ENUM PROPRE À L'INTÉRIEUR, jamais les G_* de la ferme :
@@ -3703,6 +3719,13 @@ export const COURT_STAIRWELLS = [
   { x: 24, y: 2, w: 2, h: 3, a: 0, b: 2 },   // la cage est : rez-de-chaussée ↔ sous-sol
   // 438 — la mairie : un seul escalier d'honneur, dans l'axe du hall.
   { x: 22, y: 2, w: 2, h: 4, a: 3, b: 4 },
+  /* 441 — l'église : la vis du CLOCHER, et elle n'est pas dans l'axe.
+     ⚠️ ELLE EST À L'OUEST PARCE QUE LE CLOCHER EST À L'OUEST SUR LE DESSIN du
+     bâtiment (`TOWER_X = 8` dans fermeArt) : un escalier de tribune posé dans
+     l'axe de la nef aurait contredit la façade qu'on vient de regarder en
+     entrant. C'est la règle des positions dérivées (§4) appliquée entre le
+     DEHORS et le DEDANS — les deux doivent raconter le même bâtiment. */
+  { x: 8, y: 22, w: 2, h: 4, a: 5, b: 6 },
 ];
 export const COURT_ENTRY = { x: 22, y: 27 };  // le seuil, deux cases (x et x+1) au mur sud du RDC
 export const COURT_SPAWN = { x: 22.5, y: 25 }; // où l'on se retrouve en entrant
@@ -3715,7 +3738,86 @@ export const COURT_SPAWN = { x: 22.5, y: 25 }; // où l'on se retrouve en entran
 export const COURT_BUILDINGS = {
   court: { ground: 0, floors: [0, 1, 2], entry: { x: 22, y: 27 }, spawn: { x: 22.5, y: 25 } },
   hall:  { ground: 3, floors: [3, 4],    entry: { x: 22, y: 27 }, spawn: { x: 22.5, y: 25 } },
+  church: { ground: 5, floors: [5, 6],   entry: { x: 22, y: 27 }, spawn: { x: 22.5, y: 25 } },
 };
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 441 — L'ÉGLISE : UNE NEF, UN CHŒUR, UNE TRIBUNE D'ORGUE.
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume, laissée en chantier ouvert au 440 : « l'église doit
+   recevoir un intérieur soigné avec un ORGUE, en décor de haute tenue plus
+   ambiance jouable (s'asseoir, un cierge, jouer l'orgue), SANS SERVICE. »
+   Plan arrêté avec lui au 441 : deux niveaux (nef + tribune), l'orgue en
+   tribune, les cierges PARTAGÉS et arbitrés par l'hôte.
+
+   ⚠️⚠️ CE PLAN N'EST PAS FAIT DE `COURT_ROOMS`, ET C'EST TOUT LE SUJET. Le
+   tribunal et la mairie sont des COULOIRS BORDÉS DE PIÈCES : leur générateur
+   découpe des rectangles, pose des portes, meuble par `kind`. Une église est
+   l'inverse exact — UN SEUL VOLUME, dont tout le sens tient dans la façon dont
+   on le TRAVERSE : on entre au sud, on remonte une allée entre deux rangs de
+   bancs, on arrive au chœur. Lui appliquer le moule des pièces aurait donné une
+   nef coupée en bureaux, c'est-à-dire le contraire d'une église. C'est la leçon
+   du 439 poussée d'un cran : *ce qui sépare un hall d'un couloir n'est pas son
+   mobilier, c'est son vide* — ce qui fait une nef, c'est sa PERSPECTIVE.
+
+   ⚠️ ELLE EST DONC PLUS ÉTROITE QUE LES DEUX AUTRES, et c'est délibéré. Les
+   niveaux existants remplissent les 46 cases ; l'église en occupe 34 (x = 6 à
+   39) et laisse le reste en `CT_VOID` — qui n'est jamais dessiné et toujours
+   bloquant, donc il n'y a rien à ajouter pour ça. Une église est étroite et
+   HAUTE ; la hauteur ne se montre pas d'en haut, l'étroitesse si. Un vaisseau
+   de 46 cases de large aurait été une halle.
+
+   ⚠️ TOUTES LES POSITIONS SE DÉRIVENT DE `CHURCH.axis` ET DES BANDES ci-dessous
+   (règle du 433/439 : une position réglée à la main est une position qui
+   penchera). Les bandes se lisent d'ouest en est et FONT la largeur :
+     mur · bas-côté · colonnade · bancs · ALLÉE · bancs · colonnade · bas-côté · mur
+   ═══════════════════════════════════════════════════════════════════════════ */
+export const CHURCH = {
+  x0: 6, x1: 39,                 // murs ouest et est (compris)
+  aisleW: 4,                     // largeur de l'allée centrale, en cases
+  pewW: 8,                       // largeur d'un bloc de bancs
+  sideW: 5,                      // largeur d'un bas-côté
+  chancelY: 6,                   // dernière rangée du chœur (l'estrade va de 2 à 6)
+  naveY0: 9, naveY1: 24,         // première et dernière rangée de bancs
+  pewStep: 2,                    // une rangée de bancs sur deux — l'autre est le passage
+  colStep: 4,                    // une colonne toutes les quatre rangées
+  loftY0: 22, loftY1: 26,        // la tribune, au-dessus du narthex
+};
+/* ⚠️ LES BANDES SE DÉDUISENT, ELLES NE SE RECOPIENT PAS. `axis` est le milieu
+   du bâtiment ; tout le reste s'en écarte symétriquement. Le jour où l'on
+   élargit l'allée, les bancs, les colonnes, l'autel, le tapis et la tribune
+   suivent — c'est exactement le défaut de symétrie payé au 433 et au 439. */
+export function churchBands() {
+  const inner0 = CHURCH.x0 + 1, inner1 = CHURCH.x1 - 1;
+  const axis = (CHURCH.x0 + CHURCH.x1 + 1) / 2;          // 23 : le milieu, entre deux cases
+  const aisle0 = Math.round(axis - CHURCH.aisleW / 2), aisle1 = aisle0 + CHURCH.aisleW - 1;
+  return {
+    axis,
+    inner0, inner1,
+    aisle0, aisle1,
+    pewW0: aisle0 - CHURCH.pewW, pewW1: aisle0 - 1,      // bloc de bancs ouest
+    pewE0: aisle1 + 1, pewE1: aisle1 + CHURCH.pewW,      // bloc de bancs est
+    colW: aisle0 - CHURCH.pewW - 1,                      // colonnade ouest
+    colE: aisle1 + CHURCH.pewW + 1,                      // colonnade est
+    sideW0: inner0, sideW1: aisle0 - CHURCH.pewW - 2,    // bas-côté ouest
+    sideE0: aisle1 + CHURCH.pewW + 2, sideE1: inner1,    // bas-côté est
+  };
+}
+/* Les cierges du bas-côté ouest. ⚠️ LEUR NOMBRE EST LA SEULE CHOSE QUI CIRCULE
+   SUR LE RÉSEAU pour cette scène (voir `churchCandles` côté partagé) : on
+   diffuse un COMPTE, jamais une liste de positions — les emplacements se
+   déduisent du plan, comme l'altitude d'un joueur en ville se lit sous ses
+   pieds (§3 de CLAUDE.md : ce qui peut se déduire ne se diffuse pas). */
+export const CHURCH_CANDLE_MAX = 12;
+/* ⚠️ LE MORCEAU D'ORGUE EST UN FICHIER À FOURNIR, ET SON ABSENCE SE DIT. Décision
+   de Guillaume au 441 : un vrai morceau, pas une synthèse. Tant que le fichier
+   n'est pas là, la scène se joue EN ENTIER (on s'assoit, les mains bougent, les
+   notes montent) et le jeu annonce que la registration est muette — plutôt que
+   de laisser croire à une touche cassée, qui est le défaut nommé au 426 et
+   repris au 438. `playFile` avale déjà un 404 sans lever : c'est précisément ce
+   silence-là qu'il ne faut pas laisser passer pour un fonctionnement normal. */
+export const CHURCH_ORGAN_SRC = "/sounds/church-organ.mp3";
+export const CHURCH_ORGAN_MS = 26000;   // durée jouée avant de se relever tout seul
 export const COURT_ELEV_PX = 6;   // relief de l'estrade, en pixels d'écran
 // Les services annoncés, dans l'ordre du panneau d'affichage du hall. Le libellé
 // et le détail vivent dans fermeStrings (courtRoom*), jamais ici : ce tableau
@@ -3911,6 +4013,50 @@ export const TOWN_BRIDGE_SPLIT_Y = 38;
    l'écran. Le personnage se retrouve alors DANS l'ouvrage, entre les deux
    garde-corps, ce qui est précisément ce qu'on cherchait. */
 export const TOWN_BRIDGE_DROP_PX = 16;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 441 — LA PROFONDEUR SORT DE LA CLOSURE, PARCE QU'ELLE ÉTAIT FAUSSE ET
+   QU'AUCUN BANC NE POUVAIT LA REGARDER.
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume : « répare les bugs de traversée des ponts ». Mesuré en
+   jouant : sur la rangée NORD du tablier, des DEUX ponts, le fermier était
+   intégralement caché par le garde-corps du fond — seule son étiquette de nom
+   flottait au-dessus de l'eau. Le 439 avait nommé ce défaut et l'avait corrigé ;
+   il est revenu par la porte qu'on venait d'ouvrir pour le corriger.
+
+   ⚠️⚠️ LA CAUSE EST LE §8 DE CLAUDE.md : DEUX GRANDEURS DIFFÉRENTES ÉCRITES
+   DANS LE MÊME PARAMÈTRE. `pushE` classe par `wy − altitude × TOWN_ELEV_PX` :
+   une altitude monte le dessin ET recule le rang (une terrasse est plus haute
+   ET plus loin — c'est juste). Le 439 a versé la FLÈCHE DE L'ARC dans cette
+   altitude, alors qu'un dos d'âne monte sans éloigner. Sur la rangée nord, la
+   clé du passant valait `pr.y·T − flèche` contre `pr.y·T − 0,02` pour le
+   garde-corps du fond : les ±0,02 étaient toute la marge, la flèche vaut
+   jusqu'à 7 px, elle la mangeait sur TOUTE la portée.
+
+   ⚠️ ET LES TROIS CLÉS ÉTAIENT ÉCRITES DANS LA CLOSURE DE LA BOUCLE DE RENDU,
+   donc invisibles à tout banc (§4.2 : « ce dessin est-il regardable par un
+   banc ? » est une question de qualité). Elles sont ici, dérivées les unes des
+   autres, et `tools/verify-pont.mjs` les APPELLE au lieu de les recopier.
+   Le pixel de décalage, lui, ne passe plus par l'altitude : `pushE` prend un
+   `liftPx` qui décale le dessin sans toucher au rang. */
+export const TOWN_SORT_EPS = 0.02;
+/* La clé de tri commune : profondeur au sol, moins ce que l'altitude remonte à
+   l'écran. UNE seule écriture, et les trois fonctions ci-dessous en dérivent. */
+export function townDepthKey(worldY, elev) { return worldY - (elev || 0) * TOWN_ELEV_PX; }
+/* Les deux moitiés de l'ouvrage. ⚠️ ELLES N'ONT PAS D'ARC DANS LEUR CLÉ et
+   c'est délibéré (le sprite porte sa flèche dans son dessin, pas dans son
+   rang) : c'est précisément pour ça que le passant ne doit pas en avoir non
+   plus, sans quoi les deux côtés de la comparaison ne parlent plus de la même
+   chose — le troisième visage du piège n°1 de CLAUDE.md. */
+export function townBridgeDepthKeys(propY, elev) {
+  return {
+    far: townDepthKey(propY * TILE - TOWN_SORT_EPS, elev),
+    near: townDepthKey((propY + 1) * TILE + TOWN_SORT_EPS, elev),
+  };
+}
+/* Celle d'un passant (joueur, résident, familier, taxi) ancré au bas de sa
+   case. `elev` est l'altitude DE LA CASE, jamais une hauteur d'image. */
+export function townWalkerDepthKey(y, elev) { return townDepthKey((y + 1) * TILE, elev); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    ZIP 440 — L'EMPRISE DESSINÉE D'UN DÉCOR, ET POURQUOI LE GÉNÉRATEUR EN A

@@ -2374,6 +2374,103 @@ export function drawCourtStoneTile(ctx, x, y, px, py, T) {
   if (!joined) ctx.fillRect(px, py, 1, T);
   ctx.fillStyle = "rgba(150,150,158,0.10)"; ctx.fillRect(px, py, T, 1);
 }
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 441 — LES DEUX MATIÈRES DE L'ÉGLISE, ET POURQUOI CE SONT DES COUCHES.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ AUCUN `CT_*` DE PLUS N'A ÉTÉ AJOUTÉ POUR L'ÉGLISE. Le sol reste
+   `CT_STONE` et les baies restent `CT_WINDOW` ; c'est le BÂTIMENT du niveau
+   (`COURT_FLOORS[f].bld`) qui décide du dessin. Un identifiant de sol de plus
+   aurait rouvert le test de solidité du générateur, les deux passes de sol et
+   la passe de murs — et en oublier un ne lève rien, ça fait juste une dalle
+   qu'on traverse ou une fenêtre qui ne bloque plus. C'est mot pour mot la règle
+   du 434 sur les revêtements de rue, appliquée à un intérieur.
+
+   ⚠️ ET ELLES SONT ICI, PAS DANS LA CLOSURE DU RENDU. Les sols du tribunal y
+   sont restés au niveau du 426 pendant douze zips faute de banc capable de les
+   appeler (439) ; on ne recommence pas. `render-eglise.mjs` les APPELLE.
+   ═══════════════════════════════════════════════════════════════════════════ */
+/* LA DALLE D'ÉGLISE. ⚠️ ELLE EST L'INVERSE EXACT DE LA DALLE DE CAVE : celle-ci
+   est irrégulière parce que l'irrégularité dit « cave » ; une nef est dallée
+   par un maître d'œuvre, en GRANDES dalles régulières de deux cases, appareil à
+   joints croisés. Ce qui l'empêche d'être un damier n'est donc pas du désordre
+   (leçon du 437 : on n'obtient pas le naturel en mettant du désordre partout),
+   c'est l'USURE — l'allée centrale est passée, les bas-côtés le sont moins. */
+export function drawChurchFlagTile(ctx, x, y, px, py, T, wear) {
+  /* ⚠️⚠️ `wear` EST UNE RAMPE, PLUS UN PALIER, ET C'EST UNE CORRECTION VUE SUR
+     LA PLANCHE. Premier jet : 1 dans les deux travées bordant l'allée, 0
+     ailleurs. Résultat, parfaitement visible sur `eglise-nef.png` : deux BANDES
+     verticales plus claires, à bords francs, en travers du dallage — l'œil y
+     lisait une couture, pas un passage. Une usure a un bord flou par
+     définition ; un pavement qui change de ton d'une case à l'autre dessine une
+     seconde grille, exactement ce que la dalle de deux cases vient d'effacer
+     (leçon du 434 sur la période des motifs). On reçoit donc une DISTANCE et on
+     l'amortit. */
+  /* Une dalle fait 2×2 cases et une rangée sur deux est décalée d'une dalle :
+     le calepinage boucle donc sur 4 cases en x et 2 en y — il ne fabrique pas
+     de seconde grille, contrairement à un motif à période libre (434). */
+  const row = ((y >> 1) % 2 + 2) % 2;
+  const sx = ((x + row * 2) % 4 + 4) % 4;      // 0..3 : la colonne dans le pavé
+  const inX = sx % 2, inY = ((y % 2) + 2) % 2; // la position DANS la dalle
+  const h = ctH((x + row * 2 - inX) * 7 + 3, (y - inY) * 11 + 5);
+  // `wear` = distance à l'axe, en cases. Le passage s'éteint sur six cases,
+  // et le bruit de la dalle (h) le module — sinon la rampe elle-même se voit.
+  const w = Math.max(0, 1 - (wear == null ? 99 : Math.abs(wear)) / 6) * (0.7 + h * 0.6);
+  const base = h < 0.33 ? [0x8b, 0x88, 0x80] : h < 0.66 ? [0x93, 0x90, 0x87] : [0x86, 0x83, 0x7b];
+  const k = 1 + w * 0.10;                      // l'usure ÉCLAIRCIT et lisse
+  ctx.fillStyle = `rgb(${Math.min(255, base[0] * k) | 0},${Math.min(255, base[1] * k) | 0},${Math.min(255, base[2] * k) | 0})`;
+  ctx.fillRect(px, py, T, T);
+  // Le bombé de la dalle : une arête claire au nord-ouest, une ombre au sud-est.
+  if (!inX) { ctx.fillStyle = "rgba(228,226,218,0.16)"; ctx.fillRect(px, py, 1, T); }
+  if (!inY) { ctx.fillStyle = "rgba(228,226,218,0.16)"; ctx.fillRect(px, py, T, 1); }
+  if (inX) { ctx.fillStyle = "rgba(40,38,34,0.10)"; ctx.fillRect(px + T - 1, py, 1, T); }
+  if (inY) { ctx.fillStyle = "rgba(40,38,34,0.10)"; ctx.fillRect(px, py + T - 1, T, 1); }
+  // LE JOINT : seulement sur le pourtour de la dalle, jamais entre ses quatre
+  // cases — c'est ce qui fait qu'on lit des dalles de 32 px et pas de 16.
+  ctx.fillStyle = "rgba(52,50,46,0.42)";
+  if (!inX) ctx.fillRect(px, py, 1, T); else ctx.fillRect(px + T - 1, py, 1, T);
+  if (!inY) ctx.fillRect(px, py, T, 1); else ctx.fillRect(px, py + T - 1, T, 1);
+  /* Deux éclats fixes par DALLE (pas par case) : la pierre a un grain, mais un
+     semis par case redessinerait la grille de 16 px qu'on vient d'effacer. */
+  if (!inX && !inY) {
+    for (let i = 0; i < 2; i++) {
+      const hk = ctH(x * 13 + i, y * 17 - i);
+      ctx.fillStyle = hk < 0.5 ? "rgba(34,32,30,0.22)" : "rgba(214,212,206,0.14)";
+      ctx.fillRect(px + 3 + ((hk * 20) | 0), py + 4 + ((ctH(y + i, x) * 20) | 0), 2, 1);
+    }
+  }
+}
+/* LE VITRAIL. ⚠️ CE QUI FAIT UN VITRAIL N'EST PAS LA COULEUR, C'EST LE PLOMB :
+   des aplats colorés sans réseau donnent une gomme de fruit ; les mêmes aplats
+   cernés d'un trait sombre donnent du verre. Même leçon que les décors du 438
+   (on assemble des masses cernées, on ne texture pas une silhouette).
+   ⚠️ Et la baie porte une TACHE DE LUMIÈRE au sol, peinte par l'appelant : une
+   fenêtre qui n'éclaire rien est un autocollant sur un mur. */
+export function drawChurchGlass(ctx, px, py, wallH, T, seed) {
+  const x0 = px + 2, y0 = py - wallH + 2, w = T - 4, h = wallH + 2;
+  ctx.fillStyle = "#2a2118"; ctx.fillRect(x0 - 1, y0 - 1, w + 2, h + 2);   // la feuillure
+  // Trois registres, et la couleur du registre vient de la baie (`seed`) : deux
+  // baies voisines ne se ressemblent pas, et une baie donnée ne change jamais.
+  const PAL = [["#3f6fa8", "#7fa8cf"], ["#a33c46", "#d4747c"], ["#3f7d4c", "#7fb489"], ["#a8842c", "#e0c072"]];
+  for (let r = 0; r < 3; r++) {
+    const p = PAL[(seed + r) % PAL.length];
+    ctx.fillStyle = p[0]; ctx.fillRect(x0, y0 + r * ((h / 3) | 0), w, (h / 3) | 0);
+    ctx.fillStyle = p[1]; ctx.fillRect(x0, y0 + r * ((h / 3) | 0), w, 2);
+  }
+  // Le réseau de plomb : deux meneaux, trois traverses. Traits pleins.
+  ctx.fillStyle = "#2a2118";
+  ctx.fillRect(x0 + ((w / 3) | 0), y0, 1, h);
+  ctx.fillRect(x0 + ((2 * w / 3) | 0), y0, 1, h);
+  for (let r = 1; r < 3; r++) ctx.fillRect(x0, y0 + r * ((h / 3) | 0), w, 1);
+  // L'arc brisé, en haut : deux pans, pas une courbe — à douze pixels de large,
+  // une ogive tracée à l'arc rend un escalier (leçon des allées du 437).
+  ctx.fillStyle = "#6a6458";
+  for (let i = 0; i < (w >> 1); i++) {
+    ctx.fillRect(x0 + i, y0 - 1 + ((w >> 1) - i) - 1, 1, 2);
+    ctx.fillRect(x0 + w - 1 - i, y0 - 1 + ((w >> 1) - i) - 1, 1, 2);
+  }
+  ctx.fillStyle = "#c6c2b6"; ctx.fillRect(px + 1, py - 1, T - 2, 2);        // l'appui
+}
+
 export const SEAT_POSE = {
   headH: 16,      // hauteur de la tranche buste + tête
   topY: -11,      // le haut du crâne, relativement à l'ancre du personnage
@@ -4432,12 +4529,38 @@ export function buildSprites() {
     // qui reste debout derrière un comptoir. Ce qu'elle a à faire — parler —
     // ne demande aucun des trois.
     "clerkNPC",
+    /* ⚠️⚠️ ZIP 441 — L'ÉGLISE. Dix-sept dessins, et TROIS SEULEMENT SONT NEUFS
+       EN NATURE : le buffet d'orgue, le râtelier à cierges et le confessionnal.
+       Le banc de nef (`pew`), le garde-corps (`railing`), l'ambon (`lectern`) et
+       l'urne existaient déjà et sont REPRIS TELS QUELS — pas parce que c'est
+       économique, mais parce que la ville qui a meublé le tribunal a meublé
+       l'église : deux vocabulaires de dessin dans la même ville se lisent comme
+       deux jeux (c'est ce que le 438 disait déjà en donnant à la mairie le
+       gabarit du tribunal).
+       ⚠️ ET AUCUN CIERGE ALLUMÉ N'EST CUIT DANS UN SPRITE. Leur nombre change
+       (il est partagé et arbitré par l'hôte) : cuire des flammes obligerait à
+       treize sprites, ou à en dessiner un mensonger. Les flammes sont peintes
+       VIVANTES au rendu, comme le nom du maire sous son portrait (439). */
+    "altar", "altar2", "candlestick", "paschal", "choirStall", "candleRack",
+    "prieDieu", "confessional", "confessional2", "font", "pulpit", "saintNiche",
+    "stoup", "organ", "organWing", "organBench", "bellRope", "pewL", "pewR",
   ];
   function courtPropSprite(kind) {
     const W1 = "#7a5232", W2 = "#9c6b42", W3 = "#5a3b26", W4 = "#b98a58";  // bois : mat, clair, ombre, éclairé
     const S = "#c2beb2", SL = "#e0dcd0", SD = "#96928a";                    // pierre
     const IR = "#3c3c44", BR = "#a8863c", GR = "#2f6b34";                   // fonte, bronze, feuillage
     const CL = "#8a2f38";                                                    // le drap rouge des sièges
+    /* ZIP 441 — la palette de l'église, en plus de celle du tribunal.
+       ⚠️ LE BOIS DE L'ÉGLISE EST PLUS SOMBRE QUE CELUI DES BUREAUX (DK*) : c'est
+       la seule chose qui distingue un confessionnal d'une armoire à dossiers une
+       fois le sprite réduit à seize pixels. La matière se dit par la VALEUR,
+       jamais par le détail (leçon du parquet, 439). */
+    const DK1 = "#4a2f1e", DK2 = "#63402a", DK3 = "#332014", DK4 = "#7d5334";
+    const GO = "#d0a441", GOL = "#f0d78a", GOD = "#96702a";                  // l'or des objets du culte
+    const WX = "#f2ead6", WXD = "#d6ccb2";                                   // la cire
+    const FL = "#ffcf55", FLC = "#fff6cc";                                   // la flamme
+    const PI = "#b9bcc4", PIL = "#e4e7ec", PID = "#868a92";                  // l'étain des tuyaux
+    const LN = "#f4efe0", LND = "#dcd5c0";                                   // le linge d'autel
     switch (kind) {
       case "pillar": {
         const [c, g] = cv(16, 44);
@@ -4578,11 +4701,29 @@ export function buildSprites() {
         P(g, 0, 15, 16, 2, W3);
         return c;
       }
-      case "pew": {
+      case "pew": case "pewL": case "pewR": {
+        /* ⚠️⚠️ ZIP 441 — TROIS DESSINS POUR UN SEUL BANC, ET C'EST LA PÉRIODE
+           QUI L'EXIGE. Un banc de nef fait HUIT cases ; avec un seul sprite,
+           l'œil voit huit paires de pieds tous les seize pixels — c'est-à-dire
+           la grille avant le meuble, le défaut nommé au 434 et payé quatre fois
+           depuis. Les pieds ne se dessinent donc qu'aux DEUX BOUTS, qui portent
+           en plus une joue pleine : le corps du banc devient une masse continue
+           de huit cases, et la travée se lit d'un coup.
+           ⚠️ La variante vient du GÉNÉRATEUR (`pr.kind`), jamais d'un hachage de
+           position : le hachage donnerait des pieds au milieu d'une travée et
+           pas au bout, ce qui est pire que pas de pieds du tout. Même raison
+           que la bâche des étals, qui vient de `pr.v` depuis le 426. */
+        const end = kind !== "pew", right = kind === "pewR";
         const [c, g] = cv(16, 22);
-        P(g, 0, 12, 16, 5, W2); P(g, 0, 12, 16, 1, W4);
-        P(g, 0, 4, 16, 8, W1); P(g, 0, 4, 16, 1, W4);
-        P(g, 1, 17, 2, 4, W3); P(g, 13, 17, 2, 4, W3);
+        P(g, 0, 12, 16, 5, W2); P(g, 0, 12, 16, 1, W4);       // l'assise, continue
+        P(g, 0, 4, 16, 8, W1); P(g, 0, 4, 16, 1, W4);         // le dossier, continu
+        P(g, 0, 16, 16, 1, W3);                                // l'ombre sous l'assise
+        if (end) {
+          // La joue : pleine, du dossier au sol, du côté de l'allée.
+          const jx = right ? 13 : 0;
+          P(g, jx, 3, 3, 18, W1); P(g, jx, 3, 3, 1, W4); P(g, jx, 19, 3, 2, W3);
+          P(g, right ? 12 : 3, 4, 1, 16, W3);                  // l'arête de la joue
+        }
         return c;
       }
       case "bunk": {
@@ -4873,6 +5014,241 @@ export function buildSprites() {
           P(g, 3, 5, 1, 4, BR); P(g, 14, 5, 1, 4, BR);
           P(g, 1, 9, 5, 1, BR); P(g, 12, 9, 5, 1, BR);                     // les deux plateaux
         }
+        return c;
+      }
+      /* ══════════════════════════════════════════════════════════════════════
+         ZIP 441 — L'ÉGLISE.
+         ⚠️ TOUS ces dessins suivent la règle du 438 : ON N'APPLIQUE PAS UNE
+         TEXTURE À UNE SILHOUETTE, on empile des MASSES PLEINES, chacune avec sa
+         ligne éclairée en haut et son ombre en bas. Aucun pixel n'est tiré au
+         hasard, et le contour sort tout seul de l'empilement.
+         ⚠️ ET LA LUMIÈRE VIENT DE LA GAUCHE PARTOUT, comme dans tout le reste du
+         fichier : un seul meuble éclairé de l'autre côté et la pièce entière a
+         l'air fausse sans qu'on sache dire lequel. */
+      case "altar": case "altar2": {
+        /* L'AUTEL, deux cases — comme la statue de la Justice et la maquette de
+           la ville. ⚠️ LA CROIX EST À CHEVAL SUR LA COUTURE : elle est centrée
+           sur l'axe de la nef, qui tombe ENTRE les deux cases. Chaque moitié en
+           dessine la sienne ; dessinée en entier d'un seul côté, elle serait
+           décalée d'une demi-case, et c'est exactement le défaut de la maquette
+           de la mairie au 439 — invisible sur l'objet, flagrant sur la nef. */
+        const right = kind === "altar2";
+        const [c, g] = cv(16, 34);
+        P(g, right ? 0 : 1, 24, 15, 8, S); P(g, right ? 0 : 1, 24, 15, 1, SL);   // le massif de pierre
+        P(g, right ? 0 : 1, 31, 15, 2, SD);
+        P(g, right ? 0 : 1, 20, 15, 5, LN); P(g, right ? 0 : 1, 20, 15, 1, "#fffaf0"); // la nappe
+        P(g, right ? 0 : 1, 24, 15, 1, LND);
+        // Le parement brodé qui tombe devant : trois plis, du même or que les
+        // objets du culte — c'est lui qui dit « autel » et pas « table ».
+        for (let k = 0; k < 3; k++) P(g, (right ? 1 : 3) + k * 4, 25, 2, 6, GO);
+        /* ⚠️ LA CROIX MONTE PLUS HAUT QUE LE SPRITE NE SEMBLE LE DEMANDER, et
+           c'est mesuré sur la planche : posée à mi-hauteur, elle se noyait dans
+           le fond du chœur et l'autel se lisait comme une caisse blanche. Le
+           point de fuite d'une nef doit être visible depuis la porte, à vingt
+           cases — donc la seule question est « la voit-on de loin », pas « fait-
+           elle la bonne taille de près ». */
+        if (!right) {
+          P(g, 13, 2, 3, 20, GO); P(g, 13, 2, 1, 20, GOL);        // le montant, moitié gauche
+          P(g, 9, 7, 7, 3, GO); P(g, 9, 7, 7, 1, GOL);            // la traverse
+          P(g, 9, 9, 7, 1, GOD);
+          P(g, 6, 15, 3, 5, WX); P(g, 7, 12, 1, 3, FL);            // un cierge d'autel
+        } else {
+          P(g, 0, 2, 3, 20, GOD); P(g, 0, 2, 1, 20, GO);
+          P(g, 0, 7, 7, 3, GOD); P(g, 0, 7, 7, 1, GO);
+          P(g, 0, 0, 3, 2, GOL);                                   // le sommet de la croix
+          P(g, 7, 15, 3, 5, WX); P(g, 8, 12, 1, 3, FL);
+        }
+        return c;
+      }
+      case "candlestick": {
+        // Le grand chandelier de chœur : un fût de bronze, une bobèche, une
+        // flamme. Trois masses, pas une de plus — à seize pixels, un chandelier
+        // détaillé devient une tache.
+        const [c, g] = cv(16, 30);
+        P(g, 5, 26, 6, 3, GOD); P(g, 5, 26, 6, 1, GO);            // le pied
+        P(g, 7, 12, 2, 14, GO); P(g, 7, 12, 1, 14, GOL);           // le fût
+        P(g, 5, 11, 6, 2, GO); P(g, 5, 11, 6, 1, GOL);             // la bobèche
+        /* ⚠️ LA CIRE EST CERNÉE, ET C'EST UNE CORRECTION VUE EN JEU. Un cierge
+           blanc sur le marbre PÂLE du chœur disparaissait : les deux chandeliers
+           du chœur, pourtant rigoureusement symétriques dans les données, n'en
+           avaient l'air que d'un côté — selon la dalle qui passait derrière. Ce
+           qui manquait n'était pas du contraste, c'était un CERNE : la règle du
+           438 (on assemble des masses CERNÉES) vaut aussi contre un fond clair,
+           pas seulement contre un fond sombre. */
+        P(g, 6, 4, 4, 8, "#8f8878");                               // le cerne
+        P(g, 7, 5, 2, 6, WX); P(g, 7, 5, 1, 6, "#fffaf0");         // la cire
+        P(g, 7, 2, 2, 3, FL); P(g, 7, 2, 1, 2, FLC);               // la flamme
+        return c;
+      }
+      case "paschal": {
+        // Le cierge pascal : plus haut, plus gros, sur son trépied. Il RÉPOND à
+        // l'ambon de l'autre côté de l'allée (voir churchBuild) — c'est sa
+        // raison d'être, une paire qui tient l'axe.
+        const [c, g] = cv(16, 34);
+        P(g, 4, 30, 8, 3, GOD); P(g, 4, 30, 8, 1, GO);
+        P(g, 6, 18, 4, 12, GOD); P(g, 6, 18, 1, 12, GO);
+        P(g, 4, 16, 8, 3, GO); P(g, 4, 16, 8, 1, GOL);
+        P(g, 5, 4, 6, 13, "#8f8878");                              // le cerne (voir `candlestick`)
+        P(g, 6, 5, 4, 11, WX); P(g, 6, 5, 1, 11, "#fffaf0"); P(g, 9, 5, 1, 11, WXD);
+        P(g, 7, 8, 2, 1, GO); P(g, 7, 11, 2, 1, GO);               // les cinq grains d'encens
+        P(g, 7, 1, 2, 4, FL); P(g, 7, 1, 1, 3, FLC);
+        return c;
+      }
+      case "choirStall": {
+        // La stalle : un banc à haut dossier et à joue pleine. C'est la JOUE
+        // qui la distingue d'un banc de nef, pas le dossier.
+        const [c, g] = cv(16, 30);
+        P(g, 1, 22, 14, 5, DK2); P(g, 1, 22, 14, 1, DK4);          // l'assise
+        P(g, 0, 4, 16, 18, DK1); P(g, 0, 4, 16, 1, DK4);           // le dossier
+        P(g, 2, 8, 12, 10, DK3);                                    // le panneau creusé
+        P(g, 0, 16, 3, 11, DK2); P(g, 0, 16, 1, 11, DK4);          // la joue
+        P(g, 1, 27, 14, 2, DK3);
+        return c;
+      }
+      case "candleRack": {
+        /* LE RÂTELIER À CIERGES. ⚠️ IL EST DESSINÉ ÉTEINT, ET C'EST VOULU : le
+           nombre de cierges allumés est PARTAGÉ entre les joueurs (décision de
+           Guillaume au 441), donc il change. Cuire des flammes dans le sprite
+           voudrait dire treize sprites, ou un sprite qui ment. Le rendu peint
+           les flammes par-dessus, vivantes — c'est la règle du nom du maire
+           (439) et des enseignes de la ville (427). */
+        const [c, g] = cv(16, 28);
+        P(g, 2, 24, 12, 3, IR); P(g, 2, 24, 12, 1, "#55555e");     // le socle
+        P(g, 7, 16, 2, 8, IR);                                      // le pied
+        P(g, 1, 13, 14, 3, IR); P(g, 1, 13, 14, 1, "#55555e");     // le plateau haut
+        P(g, 3, 19, 10, 2, IR); P(g, 3, 19, 10, 1, "#55555e");     // le plateau bas
+        // Les godets, vides : deux rangs de six, qui donnent au rendu où poser
+        // les flammes sans qu'il ait à deviner (voir CHURCH_CANDLE_MAX = 12).
+        for (let k = 0; k < 6; k++) {
+          P(g, 2 + k * 2, 10, 1, 3, WXD);
+          P(g, 2 + k * 2, 17, 1, 2, WXD);
+        }
+        return c;
+      }
+      case "prieDieu": {
+        const [c, g] = cv(16, 22);
+        P(g, 3, 17, 10, 4, DK2); P(g, 3, 17, 10, 1, DK4);          // l'agenouilloir
+        P(g, 4, 6, 8, 11, DK1); P(g, 4, 6, 8, 1, DK4);             // le pupitre
+        P(g, 5, 8, 6, 3, LN);                                       // le livre ouvert
+        P(g, 3, 20, 10, 1, DK3);
+        return c;
+      }
+      case "confessional": case "confessional2": {
+        /* LE CONFESSIONNAL, deux cases EN HAUTEUR (une au nord, une au sud) et
+           non en largeur : c'est une armoire, elle est plus haute que large, et
+           le seul moyen de le montrer d'en haut est de lui donner deux cases de
+           profondeur. Le nord porte le fronton, le sud la porte et le rideau. */
+        const top = kind === "confessional";
+        const [c, g] = cv(16, top ? 30 : 24);
+        if (top) {
+          P(g, 1, 6, 14, 24, DK1); P(g, 1, 6, 14, 1, DK4);
+          P(g, 0, 2, 16, 5, DK2); P(g, 0, 2, 16, 1, DK4);          // la corniche
+          P(g, 6, 0, 4, 3, GO); P(g, 7, 0, 2, 1, GOL);              // la petite croix du fronton
+          P(g, 3, 10, 10, 12, DK3);                                 // le panneau du fond
+        } else {
+          P(g, 1, 0, 14, 22, DK1);
+          P(g, 2, 1, 5, 18, DK3); P(g, 9, 1, 5, 18, DK3);          // les deux battants
+          P(g, 3, 3, 3, 8, CL);                                     // le rideau du pénitent
+          // La grille, en croisillons pleins : quatre traits, pas une trame.
+          for (let k = 0; k < 3; k++) P(g, 10, 3 + k * 3, 3, 1, "#241608");
+          P(g, 11, 3, 1, 8, "#241608");
+          P(g, 1, 21, 14, 2, DK3);
+        }
+        return c;
+      }
+      case "font": {
+        // Les fonts baptismaux : une vasque octogonale sur son pied. L'eau est
+        // la seule tache froide de tout le mobilier — c'est ce qui l'isole.
+        const [c, g] = cv(16, 26);
+        P(g, 4, 21, 8, 4, SD); P(g, 4, 21, 8, 1, S);               // le socle
+        P(g, 6, 13, 4, 8, S); P(g, 6, 13, 1, 8, SL);               // le pied
+        P(g, 2, 7, 12, 7, S); P(g, 2, 7, 12, 1, SL); P(g, 2, 13, 12, 1, SD);
+        P(g, 3, 6, 10, 2, SL);                                      // la lèvre
+        P(g, 4, 8, 8, 3, "#5c86a8"); P(g, 4, 8, 8, 1, "#8fb6cc");  // l'eau
+        return c;
+      }
+      case "pulpit": {
+        // La chaire : une cuve en encorbellement, un abat-voix au-dessus, un
+        // départ d'escalier. Trois masses, et l'abat-voix est ce qui la rend
+        // reconnaissable d'un coup d'œil.
+        const [c, g] = cv(16, 40);
+        P(g, 3, 24, 10, 13, DK1); P(g, 3, 24, 10, 1, DK4);         // la cuve
+        P(g, 4, 27, 8, 7, DK3);
+        P(g, 5, 28, 6, 5, GO); P(g, 5, 28, 6, 1, GOL);             // le panneau doré
+        P(g, 1, 33, 3, 6, DK2); P(g, 1, 33, 3, 1, DK4);            // la volée
+        P(g, 2, 20, 12, 4, DK2); P(g, 2, 20, 12, 1, DK4);          // l'abat-voix
+        P(g, 6, 16, 4, 4, DK1);
+        P(g, 3, 37, 10, 2, DK3);
+        return c;
+      }
+      case "saintNiche": {
+        // La niche : un enfoncement de pierre et une petite statue peinte.
+        const [c, g] = cv(16, 34);
+        P(g, 1, 4, 14, 29, SD); P(g, 1, 4, 14, 1, S);
+        P(g, 3, 7, 10, 24, "#6e6a60");                              // le fond, dans l'ombre
+        P(g, 2, 2, 12, 3, S); P(g, 2, 2, 12, 1, SL);               // le larmier
+        P(g, 6, 16, 4, 13, "#4a6fa0"); P(g, 6, 16, 1, 13, "#6f92c0"); // le manteau
+        g.fillStyle = "#e8c39a"; g.beginPath(); g.arc(8, 14, 2, 0, 7); g.fill();
+        P(g, 5, 11, 6, 2, GOL);                                     // l'auréole
+        return c;
+      }
+      case "stoup": {
+        const [c, g] = cv(16, 16);
+        P(g, 5, 10, 6, 5, S); P(g, 5, 10, 6, 1, SL); P(g, 5, 14, 6, 1, SD);
+        P(g, 6, 7, 4, 4, S); P(g, 6, 7, 1, 4, SL);
+        P(g, 6, 8, 4, 2, "#5c86a8"); P(g, 6, 8, 4, 1, "#8fb6cc");
+        return c;
+      }
+      case "organ": case "organWing": {
+        /* LE BUFFET D'ORGUE. ⚠️ CE SONT DEUX DESSINS ET UN SEUL OUVRAGE : les
+           TOURELLES (`organWing`) portent les tuyaux graves, hauts ; les
+           PLATES-FACES (`organ`) portent les aigus, plus courts. C'est cette
+           alternance haut/bas/bas/haut, et elle seule, qui fait qu'on reconnaît
+           un orgue et pas une bibliothèque — un buffet à tuyaux tous égaux se
+           lit comme une clôture. Quatre cases : tourelle, plate-face,
+           plate-face, tourelle, symétriques sur l'axe de la nef. */
+        /* ⚠️ IL EST HAUT, ET C'EST MESURÉ SUR LA PLANCHE, PAS CHOISI. À 56/44 px
+           il sortait de `eglise-tribune.png` comme un harmonium posé au fond
+           d'un couloir : quatre cases de large pour une tribune de vingt, ça ne
+           dit rien. Un buffet d'orgue EST le fond de sa tribune — il monte
+           jusqu'à la voûte, et c'est la seule chose qui fasse comprendre à quoi
+           sert cet étage quand on y débouche. */
+        const wing = kind === "organWing";
+        const H = wing ? 84 : 66;
+        const [c, g] = cv(16, H);
+        P(g, 0, H - 10, 16, 9, DK1); P(g, 0, H - 10, 16, 1, DK4);  // le soubassement
+        P(g, 0, H - 2, 16, 2, DK3);
+        P(g, 0, 8, 16, H - 18, DK2); P(g, 0, 8, 16, 1, DK4);       // la caisse
+        P(g, 1, 10, 14, H - 22, DK3);                               // l'ombre du dedans
+        // Les tuyaux : des masses pleines à liseré clair, en montant vers le
+        // milieu de la tourelle et en descendant sur la plate-face.
+        for (let k = 0; k < 5; k++) {
+          const d = wing ? Math.abs(k - 2) : k % 2;
+          const ph = (wing ? H - 26 : H - 28) - d * 5;
+          const px = 1 + k * 3, py = 10 + ((wing ? H - 26 : H - 28) - ph);
+          P(g, px, py, 2, ph, PI);
+          P(g, px, py, 1, ph, PIL);
+          P(g, px, py, 2, 2, PID);                                  // la bouche du tuyau
+        }
+        P(g, 0, 4, 16, 5, DK2); P(g, 0, 4, 16, 1, DK4);            // la corniche
+        if (wing) { P(g, 5, 0, 6, 4, GO); P(g, 6, 0, 4, 1, GOL); } // l'ornement de tourelle
+        return c;
+      }
+      case "organBench": {
+        const [c, g] = cv(16, 16);
+        P(g, 2, 8, 12, 4, DK2); P(g, 2, 8, 12, 1, DK4);
+        P(g, 3, 12, 2, 3, DK3); P(g, 11, 12, 2, 3, DK3);
+        return c;
+      }
+      case "bellRope": {
+        // La corde de cloche : elle descend du haut du canevas — donc du hors-
+        // champ — et se termine par la « sally » de laine rouge et blanche. Une
+        // corde qui commence dans le vide dit qu'il y a quelque chose au-dessus,
+        // ce qu'aucun plafond dessiné ne peut faire vu de dessus.
+        const [c, g] = cv(16, 34);
+        P(g, 7, 0, 2, 22, "#b8a684"); P(g, 7, 0, 1, 22, "#d6c8a8");
+        for (let k = 0; k < 4; k++) { P(g, 6, 22 + k * 3, 4, 2, "#e8e2d0"); P(g, 6, 23 + k * 3, 4, 1, CL); }
+        P(g, 7, 33, 2, 1, "#8a7a5c");
         return c;
       }
       default: {

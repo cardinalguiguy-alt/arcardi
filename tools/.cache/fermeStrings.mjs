@@ -199,7 +199,29 @@ export const FERME_STR = {
     promptCourtDoor: (n) => `${n} — E : lire la plaque`,
     promptCourtStairsUp: "Monter à l'étage",
     promptCourtStairsDown: "Descendre au sous-sol",
-    courtFloorName: (k) => ({ ground: "Rez-de-chaussée", upper: "Étage", basement: "Sous-sol", hall: "Hôtel de ville", hallUp: "Hôtel de ville — étage" }[k] || k),
+    courtFloorName: (k) => ({ ground: "Rez-de-chaussée", upper: "Étage", basement: "Sous-sol", hall: "Hôtel de ville", hallUp: "Hôtel de ville — étage", church: "Église", churchLoft: "Tribune d'orgue" }[k] || k),
+    /* ═══ ZIP 441 — L'ÉGLISE. ════════════════════════════════════════════════
+       ⚠️ AUCUNE DE CES PHRASES NE PROMET UN SERVICE, et c'est la décision de
+       Guillaume : « décor de haute tenue plus ambiance jouable, SANS service ».
+       Une église qui dirait « bientôt » relancerait l'attente que le 439 vient
+       justement d'éteindre pour la mairie et le tribunal. Elle ne promet rien,
+       elle donne trois gestes, et les trois marchent. */
+    churchEnterToast: "⛪ Église de Valley Town. Le silence, la pierre fraîche, et l'orgue là-haut.",
+    churchExitToast: "⛪ Vous ressortez sur le parvis.",
+    churchSitToast: "🪑 Vous vous asseyez. Une touche de direction pour repartir.",
+    churchCandleToast: "🕯️ Vous allumez un cierge.",
+    churchCandleFull: "🕯️ Le râtelier est plein — les cierges se consumeront d'ici demain.",
+    churchOrganToast: "🎹 Vous posez les mains sur les claviers.",
+    /* ⚠️ ET CELLE-CI DIT LA VÉRITÉ SUR UNE ABSENCE. Le morceau est un fichier à
+       déposer dans `public/sounds/` (voir CHURCH_ORGAN_SRC) ; tant qu'il n'y est
+       pas, `playFile` avale le 404 sans un mot. Un silence non expliqué se lit
+       comme une touche cassée — c'est la leçon des portes du 426, appliquée à
+       du son. */
+    churchOrganMute: "🎹 Vous jouez, mais la soufflerie est muette (le morceau n'est pas encore installé).",
+    promptChurchStand: "Se lever",
+    promptChurchOrgan: "S'asseoir à l'orgue",
+    promptChurchCandle: "Allumer un cierge",
+    promptChurchPew: "S'asseoir",
     // ZIP 438 — l'hôtel de ville.
     promptTownHallEnter: "Entrer à l'hôtel de ville",
     promptPriceBoard: "Lire le tableau des cours",
@@ -2059,7 +2081,19 @@ export const FERME_STR = {
     promptCourtDoor: (n) => `${n} — E: read the plate`,
     promptCourtStairsUp: "Up to the first floor",
     promptCourtStairsDown: "Down to the basement",
-    courtFloorName: (k) => ({ ground: "Ground floor", upper: "First floor", basement: "Basement", hall: "Town hall", hallUp: "Town hall — first floor" }[k] || k),
+    courtFloorName: (k) => ({ ground: "Ground floor", upper: "First floor", basement: "Basement", hall: "Town hall", hallUp: "Town hall — first floor", church: "Church", churchLoft: "Organ loft" }[k] || k),
+    // ZIP 441 — the church. See the French block for why none of these promises a service.
+    churchEnterToast: "⛪ Valley Town church. Silence, cool stone, and the organ up there.",
+    churchExitToast: "⛪ You step back out onto the forecourt.",
+    churchSitToast: "🪑 You sit down. Any direction key to get going again.",
+    churchCandleToast: "🕯️ You light a candle.",
+    churchCandleFull: "🕯️ The rack is full — they will have burned down by tomorrow.",
+    churchOrganToast: "🎹 You rest your hands on the keyboards.",
+    churchOrganMute: "🎹 You play, but the bellows are silent (the piece is not installed yet).",
+    promptChurchStand: "Stand up",
+    promptChurchOrgan: "Sit at the organ",
+    promptChurchCandle: "Light a candle",
+    promptChurchPew: "Sit down",
     promptTownHallEnter: "Enter the town hall",
     promptPriceBoard: "Read the price board",
     hallEnterToast: "🏛️ Valley Town hall.",

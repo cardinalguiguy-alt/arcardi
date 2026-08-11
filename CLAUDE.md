@@ -4,20 +4,26 @@
 Il remplace l'exploration du dépôt pour tout ce qui est global. Le README est un journal
 chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
-État à jour du **zip 440**. Chantier actif : **rendre Valley Town habitable au regard ET
-crédible au jeu**. La ville est refaite depuis le 434 (rues, eau, pierre, rives, parc, arbres,
-herbe) ; le 438 a ouvert l'**hôtel de ville** ; le 439 l'a audité ; le **440** a corrigé la
-portée des ponts, la COMPOSITION des décors (`verify-compo`) et prolongé le sentier de la rive est
-jusque dans un **bois** creusé au sud-est. Tout ce qui concerne la ville, ses habitants, ses
-bâtiments ET **ses pièges** est dans **`components/ferme/README.md`**, qui fait autorité ; les
-bancs sont dans **`tools/README.md`**. **`candyluge` et `crystal` sont EN PAUSE.**
+État à jour du **zip 441**. Chantier actif : **rendre Valley Town habitable au regard ET
+crédible au jeu**. La ville est refaite depuis le 434 ; le 438 a ouvert l'hôtel de ville, le 439
+l'a audité, le 440 a corrigé la portée des ponts et la COMPOSITION des décors, et le **441 a
+réparé leur TRAVERSÉE** (mesurée en jouant : le passant disparaissait derrière le garde-corps du
+fond, sur les deux ponts) **puis ouvert l'ÉGLISE** — nef, chœur, chapelle des cierges, tribune
+d'orgue. Tout ce qui concerne la ville, ses habitants, ses bâtiments ET **ses pièges** est dans
+**`components/ferme/README.md`**, qui fait autorité ; les règles de DESSIN sont dans
+**`components/ferme/DESSIN.md`** (sorties du §4 au 441) ; les bancs sont dans **`tools/README.md`**.
+**`candyluge` et `crystal` sont EN PAUSE.**
 
-⚠️ **CHANTIER OUVERT, SECOND TEMPS DÉCIDÉ AVEC GUILLAUME AU 440 ET PAS ENCORE CONSTRUIT :**
-les **intérieurs** du tribunal et de la mairie sont difficiles à naviguer (« on ne sait pas où est
+⚠️ **CHANTIER OUVERT — LA MOITIÉ QUI RESTE DU SECOND TEMPS DÉCIDÉ AU 440.** L'église est
+livrée au 441 (`components/ferme/README.md` §24). Reste l'autre moitié, et elle n'a pas bougé :
+les **intérieurs du tribunal et de la mairie** sont difficiles à naviguer (« on ne sait pas où est
 la porte de chaque pièce ») — parade retenue : **chambranle dessiné + plaque lisible depuis le
-couloir + seuil au sol** ; et **l'église doit recevoir un intérieur soigné avec un ORGUE**, en
-décor de haute tenue *plus* ambiance jouable (s'asseoir, un cierge, jouer l'orgue), sans service.
-Le découpage en deux temps est sa décision (règle du 424).
+couloir + seuil au sol**. Elle n'est PAS partie avec l'église, et c'est la règle du 424 : on ne
+mêle pas deux changements visuels dans la même livraison.
+
+⚠️ **ET IL MANQUE UN FICHIER, PAS UNE LIGNE DE CODE :** le morceau d'orgue, à déposer dans
+**`public/sounds/church-organ.mp3`** (décision de Guillaume au 441 : un vrai morceau, pas une
+synthèse). Sans lui la scène se joue en entier et le jeu DIT que la soufflerie est muette.
 
 ⚠️⚠️⚠️ **LE PIÈGE N°1 DU PROJET, ET IL A TROIS VISAGES : CE QUI VIT DANS LA CLOSURE DE LA BOUCLE
 DE RENDU.** Il a coûté quelque chose à chacun des cinq derniers zips.
@@ -35,6 +41,14 @@ DE RENDU.** Il a coûté quelque chose à chacun des cinq derniers zips.
 3. **Il divise** (439) : une même grandeur décrite des deux côtés de la closure DIVERGE. Le seuil
    de sortie de l'hôtel de ville était écrit dans le générateur *et* dans le composant ; seul le
    premier a été corrigé, et **on ne pouvait plus ressortir du bâtiment**. Voir §8.
+4. ⚠️⚠️ **Il fait porter DEUX SENS au même nombre** (441, et c'est le visage que le 439 n'avait
+   pas vu alors qu'il en avait nommé deux). `pushE` classe par `wy − altitude × TOWN_ELEV_PX` :
+   une ALTITUDE monte le dessin **et** recule le rang, ce qui est juste pour une terrasse. Le 439
+   y a versé la flèche du dos d'âne des ponts — or *un dos d'âne monte sans éloigner*. Sept pixels
+   ont mangé la marge de 0,02 qui mettait le passant devant le garde-corps du fond, et **le
+   fermier a disparu sur toute la rangée nord des deux ponts pendant un zip entier**, sans qu'un
+   seul banc puisse le voir. **Une grandeur de DESSIN, une grandeur de RANG, une grandeur de
+   COLLISION : trois choses, trois paramètres.** Voir `tools/verify-pont.mjs`.
 
 ⚠️⚠️⚠️ **UN BANC QUI PASSE NE VEUT PAS DIRE QUE LA CHOSE EST BONNE — IL VEUT DIRE QU'ON MESURE
 AUTRE CHOSE.** C'est la leçon la plus rentable du fichier, et elle a quatre formes connues,
@@ -149,46 +163,16 @@ tombe aussi au milieu des champs de la FERME, donc le contrôle « je suis au ma
 depuis un pré. **La parade est UNE position taguée par sa zone, jamais deux jeux de
 coordonnées — et on teste la zone AVANT les distances.**
 
-**Dessin — vrai partout, et chacune a été payée**
-- ⚠️⚠️⚠️ **ON NE TEXTURE PAS UNE SILHOUETTE, ON ASSEMBLE DES FORMES** (438). Dessiner un contour
-  puis le remplir de tirages donne du BRUIT à toutes les échelles ; dessiner dix masses pleines,
-  cernées, chacune avec son arc d'ombre, donne une MATIÈRE — et la silhouette sort toute seule,
-  festonnée. **Aucun pixel tiré au hasard nulle part.** Corollaire mesuré au 439 : *ce qui fait la
-  matière n'est pas le contraste, c'est la forme* — six tons de parquet bien séparés donnent un
-  velours côtelé, six tons resserrés donnent du bois.
-  ⚠️ Le contrôle de propreté qui va avec a dû être écrit **quatre fois** : la bonne grandeur est
-  **l'îlot qui flotte dans un APLAT**, en connexité à **huit** voisins (à quatre, un cerne d'un
-  pixel en diagonale n'est plus connexe et le banc accuse le contour lui-même). « Le pixel isolé »
-  interdit le pixel art ; « les îlots de moins de quatre pixels » accuse les dégradés.
-- ⚠️⚠️ **UNE COURBE ÉCRITE `f(x)` NE PEUT PAS SE REPLIER** (437) — pas de crique, pas de
-  presqu'île, pas d'îlot, pas d'ovale. Une rive, un contour, une côte, une table de conseil se
-  décrivent par un **CHAMP `s(x,y)` dont on prend l'isoligne**, jamais par une hauteur par colonne
-  ni par des angles coupés à la main.
-- ⚠️⚠️ **LA PÉRIODE D'UN MOTIF COMPTE PLUS QUE SES DÉTAILS** (434, 439). Une tuile de 16 px se
-  répète tous les 16 px : l'œil voit la grille avant le dessin, **quelle que soit sa finesse**. On
-  dessine un pavé de 4×4 tuiles d'un seul tenant, il doit **boucler sur lui-même**, et ce qui a une
-  longueur propre (une lame de parquet) prend une longueur **première avec la case**.
-- ⚠️⚠️ **UNE ALLÉE D'UNE CASE DE LARGE NE MONTRE QUE SES MARCHES** — payé quatre fois dans le seul
-  437. **La parade n'est JAMAIS de lisser le tracé** (ce serait revenir à la ligne droite qu'on
-  corrige) : on l'ÉPAISSIT, ou on l'ÉCARTE de tout l'accident d'un coup, ou on décale la phase.
-- ⚠️⚠️ **LE NATUREL NE S'OBTIENT PAS EN METTANT DU DÉSORDRE PARTOUT** (437). Un ouvrage EST droit,
-  c'est ce qui le fait lire comme un ouvrage : **on oppose une ligne construite à une ligne qui ne
-  l'est pas**. Tordre les deux donne deux lignes molles.
-- ⚠️⚠️ **UNE POSITION RÉGLÉE À LA MAIN EST UNE POSITION QUI PENCHERA** (433, 439). Un défaut de
-  symétrie ne se voit pas en regardant l'élément fautif — la rangée est impeccable, c'est son
-  RAPPORT À L'AXE qui est faux. Toute position se DÉDUIT d'un centre. Payé au 439 encore : une
-  maquette posée deux fois de part et d'autre de l'axe sur lequel un commentaire la jurait centrée.
-- ⚠️⚠️ **ENRICHIR UNE TEXTURE REND VISIBLES LES ERREURS DE GÉOMÉTRIE QU'ELLE CACHAIT** (436) : 22
-  des 52 cases d'escalier de la ville étaient dessinées perpendiculairement à leur volée depuis le
-  425. **S'attendre à en trouver après chaque montée en qualité, et avoir un banc pour les voir.**
-- ⚠️⚠️ **DEUX SUITES À FAIBLE DISCRÉPANCE NE FONT PAS UNE RÉPARTITION DANS LE PLAN** (438) : deux
-  suites d'or dont le rapport est presque rationnel **alignent les points sur des droites**. On
-  emploie une suite faite pour le plan (R2). Même famille que la distance de Manhattan prise pour
-  l'euclidienne au 435 : *une bonne propriété en dimension 1 ne se transporte pas gratuitement en
-  dimension 2.*
-- ⚠️ **MEUBLER LE LONG D'UN MUR FABRIQUE DES CULS-DE-SAC D'UNE CASE** (439, trois fois dans le
-  même zip). Aucun ne se voit sur une planche, aucun ne se voit en jouant sans y tomber : seul un
-  contrôle de connexité les trouve. Meubler à une case du mur laisse toujours un passage derrière.
+**Dessin — voir `components/ferme/DESSIN.md`**
+
+⚠️⚠️ **CE BLOC EST PARTI AU 441, SUR L'ORDRE DU §14.2 DU 440 (reporté deux fois).** Les treize
+règles de dessin — on assemble des masses et on ne texture pas une silhouette, une courbe `f(x)`
+ne se replie pas, la période prime sur les détails, une position réglée à la main penchera, un
+cerne sert aussi sur fond clair, un sprite haut contre le mur du fond avale ce qui passe
+devant… — vivent désormais **à côté des dessins qu'elles gouvernent**. Rien n'a été recopié.
+⚠️ **Ce qui est resté ici est resté exprès** : « la case d'un décor n'est pas la surface qu'il
+couvre » est une règle du GÉNÉRATEUR, pas du dessin, et c'est pour ça qu'elle est en Architecture.
+
 
 **Architecture**
 - ⚠️⚠️⚠️ **LA CASE D'UN DÉCOR N'EST PAS LA SURFACE QU'IL COUVRE** (435 pour un cas, **440 pour la
@@ -302,7 +286,8 @@ coordonnées — et on teste la zone AVANT les distances.**
 |---|---|
 | `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **~20 500 l.** |
 | `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** |
-| `components/ferme/README.md` | **Valley Town, le tribunal, l'HÔTEL DE VILLE, les habitants, la VENTE, les OISEAUX, les ÉLECTIONS et les PIÈGES de ces zones — autorité (428-439)** |
+| `components/ferme/README.md` | **Valley Town, le tribunal, l'HÔTEL DE VILLE, l'ÉGLISE, les habitants, la VENTE, les OISEAUX, les ÉLECTIONS et les PIÈGES de ces zones — autorité (428-441)** |
+| `components/ferme/DESSIN.md` | **les règles de DESSIN, vraies partout — autorité (441, sorties du §4)** |
 | `tools/README.md` | **les bancs, ce qu'ils attrapent et leurs chiffres — autorité (432-439)** |
 | `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** · depuis le 440 il **importe `planche.js`** : une portée de pont et une emprise de décor sont des grandeurs de DESSIN, on les dérive du sprite au lieu de les recopier |
 | `components/ferme/planche.js` | **GÉNÉRÉ** par `tools/import-planche.mjs` — les sprites de la planche de Guillaume, en données. Ne pas éditer à la main |
@@ -432,13 +417,21 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 §14.2 du 431 : la liste occupait cinquante lignes et gagnait une entrée par zip. Ce qu'il faut
 savoir sans l'ouvrir : `verify-vallee.mjs` (**194/194**) rejoue le VRAI moteur — circulation,
 murs invisibles, tribunal, coupe de bois, et **des ventes complètes avec l'or compté** ;
-`verify-taxi.mjs` (**15/15** — relancé au 440, le « 18/18 » écrit ici pendant sept zips était
-estimé, c'est-à-dire exactement ce que §14.6 interdit) rejoue les 132 courses image par image, **y
-compris la FORME du trajet** depuis le 433 ; **`verify-compo.mjs` (13/13, zip 440) compare la case
-d'un décor à la SURFACE qu'il couvre** — le seul banc qui voie un arbre poussé dans un pont ;
-douze bancs de RENDU dessinent ce qui n'est autrement regardable qu'en jouant (assise, échelle,
-foire, tribunal + **symétrie des façades**, ruche, taxi, **oiseaux — ce dernier rejoue aussi
-quatre minutes de vie de groupe**) ; **`fake-supabase.mjs` fait tourner deux clients en local**.
+`verify-taxi.mjs` (**15/15**) rejoue les 132 courses image par image, **y compris la FORME du
+trajet** depuis le 433 ; **`verify-compo.mjs` (13/13, zip 440) compare la case d'un décor à la
+SURFACE qu'il couvre** — le seul banc qui voie un arbre poussé dans un pont ; **`verify-pont.mjs`
+(12/12, zip 441) compare la clé de tri du PASSANT à celles des deux moitiés du pont** — le seul
+qui voie un fermier disparaître derrière un garde-corps, et il **rejoue la faute** pour en
+mesurer le coût (10 cases de tablier sur 20) ; treize bancs de RENDU dessinent ce qui n'est
+autrement regardable qu'en jouant (assise, échelle, foire, tribunal + **symétrie des façades**,
+mairie, **église**, ruche, taxi, **oiseaux — ce dernier rejoue aussi quatre minutes de vie de
+groupe**) ; **`fake-supabase.mjs` fait tourner deux clients en local**.
+
+⚠️⚠️ **ET LE 441 A RAPPELÉ CE QUE VAUT UN BANC QUI N'A JAMAIS PU ÉCHOUER.** Le garde-fou de
+source de `verify-pont` annonçait « 0 appel fautif » alors que son motif, ancré sur la fin de
+ligne, ne pouvait matcher **aucun** appel terminé par `;` — c'est-à-dire presque tous. Il est
+passé au vert sur une faute injectée exprès. **Tout banc qui compte des occurrences doit publier
+combien il en a LUES** : c'est la seule façon de s'apercevoir qu'un scanner ne scanne rien.
 
 ⚠️ **CE QUI RESTE ICI EST LA LISTE DES BANCS QUI N'EXISTENT PAS, et c'est le point.** Une liste
 de ce qui existe se vérifie en la lançant ; une liste de ce qui n'existe pas ne se vérifie
@@ -557,6 +550,16 @@ erreur** en choisissant mal.
   bientôt se marier aussi »). La salle est dressée, les bans sont prêts ; il manque l'officier.
 - **Le salon de coiffure** (427) : **qui coiffe, et comment ça marche ?** Le bâtiment,
   l'enseigne et la banderole « ouverture prochaine » sont posés ; il manque la décision.
+- ⚠️ **LE MORCEAU D'ORGUE (441) : UN FICHIER, PAS UNE DÉCISION.** Tu as choisi un vrai morceau
+  plutôt qu'une synthèse ; il se dépose dans **`public/sounds/church-organ.mp3`** et rien d'autre
+  n'est à faire — la scène, le banc, le toast et la coupure au lever sont branchés. En attendant,
+  le jeu dit que la soufflerie est muette, une seule fois, plutôt que de laisser croire à une
+  touche cassée.
+- ⚠️ **L'ÉGLISE EST OUVERTE ET NE REND AUCUN SERVICE** (441, ta décision). Elle donne trois
+  gestes — s'asseoir, allumer un cierge, jouer l'orgue — et aucun ne rapporte un or. La question
+  qui reste est celle du **mariage** : la salle des mariages est à la MAIRIE, l'église est à côté,
+  et « il manque l'officier » depuis le 439. Le jour où on le branche, c'est le premier endroit
+  du jeu où deux joueurs feront quelque chose ENSEMBLE qui ne soit pas du commerce.
 - **Valley Town : qui HABITE la ville à demeure ?** Les résidents ne font qu'y passer. Le 439 y
   pose **Léonie Sarrazin** à l'accueil de la mairie — mais c'est un décor qui parle, pas une
   habitante : elle ne bouge pas, et `res.zone` ne connaît toujours que « farm » et « town ».
@@ -654,15 +657,19 @@ erreur** en choisissant mal.
    Historique : 426 (insuffisant), 427 (profond : §7 → `public/candyluge/README.md`), 428 (§6 →
    `components/ferme/README.md`, 507 → 490), 431 (§4 scindé, 534 → 482),
    **432 (§10 → `tools/README.md`, 524 → 483)**, 433 à 438 (aucun), **439 (en-tête + §13,
-   687 → 661)**, 440 (aucun — trois leçons ajoutées en §4, seize lignes).
-   ⚠️⚠️ **L'ORDRE DU PROCHAIN ZIP, REPORTÉ UNE FOIS ET MAINTENANT DÛ : §4.** Il a passé les
-   **cent-cinquante lignes** au 440, c'est-à-dire le seuil que le 439 avait lui-même fixé pour le
-   scinder. Le partage « dessin / architecture / JavaScript » est la charnière : **la partie DESSIN
-   part dans un fichier qui fait autorité sur le dessin** — comme §6 est parti au 428 et §10 au
-   432. Et comme les deux fois : **relire chaque ligne contre le code avant de la déplacer**, c'est
-   là qu'on trouve les périmées (le 431 l'a fait pour §4, sa première ligne relue ne correspondait
-   à aucun symbole du dépôt). *Un ordre reporté deux fois cesse d'être un ordre* — voir §13, où
-   celui du 433 a mis quatre zips à être exécuté et où une ligne était devenue fausse entre-temps.
+   687 → 661)**, 440 (aucun — trois leçons ajoutées en §4, seize lignes),
+   **441 (§4 scindé une seconde fois : le DESSIN part dans `components/ferme/DESSIN.md`)**.
+   ⚠️⚠️ **L'ORDRE DU 440 A ÉTÉ EXÉCUTÉ AU 441, APRÈS DEUX REPORTS.** Le §4 avait passé les
+   cent-cinquante lignes en mélangeant trois sujets ; sa partie DESSIN est partie dans
+   `components/ferme/DESSIN.md`, à côté des dessins qu'elle gouverne, exactement comme §6 au 428
+   et §10 au 432. Chaque ligne a été relue avant de bouger, et **ce qui est resté est resté
+   exprès** : « la case d'un décor n'est pas la surface qu'il couvre » est une règle du
+   GÉNÉRATEUR, pas du dessin.
+   ⚠️ **L'ORDRE DU PROCHAIN ZIP : §13.** Il a été relu ligne à ligne au 439, il ne l'a pas été
+   depuis, et le 441 vient d'y ajouter trois entrées — dont une (« le morceau d'orgue ») qui
+   sortira du fichier le jour où le fichier sera déposé. *Une question à laquelle on a répondu ne
+   sort pas du fichier toute seule : elle y reste, et elle ment.*
+
 3. **Critère d'inclusion** : « est-ce vrai à l'échelle du projet, et invérifiable en ouvrant
    un seul fichier ? » Sinon, ça va dans un commentaire de code. **L'histoire d'un défaut
    corrigé n'y a pas sa place — seule sa LEÇON, en §4.**

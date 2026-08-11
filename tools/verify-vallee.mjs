@@ -318,15 +318,30 @@ function floodCourt(sx, sy) {
 }
 for (let f = 0; f < C.COURT_FLOORS.length; f++) {
   const y0 = E.courtFloorY0(f);
-  // On part du couloir, au milieu du niveau : c'est là qu'arrivent l'escalier
-  // et le seuil.
-  const vis = floodCourt(Math.floor(C.COURT_CORRIDOR.x + C.COURT_CORRIDOR.w / 2), y0 + Math.floor(C.COURT_FLOOR_H / 2));
+  /* ⚠️⚠️ ZIP 441 — ON PART D'OÙ L'ON ARRIVE VRAIMENT, ET C'EST DÉRIVÉ. Jusqu'ici
+     ce banc partait du milieu du couloir central, ce qui marchait parce que les
+     cinq niveaux du tribunal et de la mairie remplissent tous la grille. La nef
+     de l'église est plus étroite et sa TRIBUNE n'est qu'une bande au-dessus du
+     narthex : le point de départ y tombait dans le vide, et le banc annonçait
+     « 0,0 % (0/103) » — un échec, donc lisible, mais pour la mauvaise raison.
+     Le départ juste est celui du JEU : le seuil pour un rez-de-chaussée, le
+     palier de la cage pour tout autre niveau. Rien à écrire, tout se déduit de
+     COURT_BUILDINGS et COURT_STAIRWELLS. */
+  const fl = C.COURT_FLOORS[f];
+  const bl = C.COURT_BUILDINGS[fl.bld] || C.COURT_BUILDINGS.court;
+  let sx, sy;
+  if (bl.ground === f) { sx = Math.floor(bl.spawn.x); sy = y0 + Math.floor(bl.spawn.y); }
+  else {
+    const sw = C.COURT_STAIRWELLS.find((s) => s.a === f || s.b === f);
+    sx = sw.x; sy = y0 + sw.y;
+  }
+  const vis = floodCourt(sx, sy);
   let free = 0, seenN = 0;
   for (let y = y0; y < y0 + C.COURT_FLOOR_H; y++) for (let x = 0; x < cw.w; x++) {
     if (cWalk(x, y)) { free++; if (vis[cidx(x, y)]) seenN++; }
   }
   const p = 100 * seenN / free;
-  ok(`niveau « ${C.COURT_FLOORS[f].key} » : tout est atteignable depuis le couloir`, p >= 99.9, `${p.toFixed(1)} % (${seenN}/${free})`);
+  ok(`niveau « ${C.COURT_FLOORS[f].key} » : tout est atteignable depuis l'arrivée`, p >= 99.9, `${p.toFixed(1)} % (${seenN}/${free}), départ (${sx},${sy - y0})`);
   for (const r of C.COURT_ROOMS) {
     if (r.floor !== f) continue;
     // L'intérieur de la pièce, au coin le plus éloigné de la porte : si LUI est

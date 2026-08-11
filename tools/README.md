@@ -414,6 +414,62 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
 
 ---
 
+## `verify-pont.mjs` — le passant reste-t-il entre les deux garde-corps ? (441)
+
+`node tools/verify-pont.mjs` — **12/12.**
+
+⚠️⚠️ **IL EXISTE PARCE QUE DEUX CONTRÔLES JUSTES ÉTAIENT AU VERT PENDANT QUE LE PONT ÉTAIT
+INTRAVERSABLE AU REGARD.** `verify-vallee` mesurait « le dos d'âne existe » (20 cases) et « il ne
+touche pas la collision » (0 case polluée). Personne ne comparait **la clé de tri du passant à
+celles des deux moitiés du pont** — et c'est là qu'était le défaut : sur la rangée nord des DEUX
+ponts, le fermier disparaissait entièrement derrière le garde-corps du fond. La question utile
+n'était pas « où est le bogue » mais, comme les six fois d'avant, *quelle grandeur ne mesure-t-on
+pas*.
+
+- **il APPELLE les trois clés, il ne les recopie pas.** Elles vivaient dans la closure de la
+  boucle de rendu ; elles sont dans `fermeConstants.js` (`townDepthKey`, `townBridgeDepthKeys`,
+  `townWalkerDepthKey`), le jeu les appelle, le banc les appelle. *Une formule réécrite ne diverge
+  jamais d'elle-même* (§3 du 439) ;
+- **il rejoue la faute pour en mesurer le coût** : 10 cases de tablier sur 20. Un banc qui passe
+  au vert sans jamais avoir pu passer au rouge ne prouve rien ;
+- **un garde-fou de SOURCE** interdit qu'une hauteur d'image (`archPxTown`, `TOWN_JUMP_ARC_PX`)
+  reparte dans l'argument d'ALTITUDE de `pushE` — ce que les chapitres de données ne peuvent pas
+  voir, puisqu'ils ne lisent pas la closure.
+  ⚠️⚠️ **ET SA PREMIÈRE ÉCRITURE NE SCANNAIT RIEN.** `/pushE\(([^;]*)$/` est ancré sur la fin de
+  ligne : il ne peut pas matcher une ligne qui se termine par `;`, c'est-à-dire la quasi-totalité
+  des appels. Il annonçait « 0 appel fautif » après n'avoir lu que les appels coupés en deux
+  lignes, et il est **passé au vert sur une faute injectée exprès**. D'où le compte d'appels VUS
+  (26) : la seule façon de s'apercevoir qu'un scanner ne scanne pas.
+
+---
+
+## `render-eglise.mjs` — la nef et la tribune, en plan (441)
+
+`node tools/render-eglise.mjs` → `eglise-nef.png` · `eglise-tribune.png`. **13/13.**
+
+Écrit **avant le premier `fillRect`**, pas après : c'est le corollaire du §4.2 de `CLAUDE.md`.
+Il APPELLE `drawChurchFlagTile` et `drawChurchGlass` (nées dans `fermeArt.js` pour cette raison),
+donc il juge le jeu et pas sa maquette.
+
+Il a trouvé, à l'exécution, ce qu'aucune lecture n'aurait trouvé : le chœur en parquet, une
+couture d'usure à bord franc, la période des bancs, une poche murée et vide à l'étage, et — dès
+la première exécution des variantes de bout — que **le miroir d'un `pewL` est un `pewR`**.
+
+⚠️ **SON CONTRÔLE DE SYMÉTRIE A DÛ ÊTRE RÉÉCRIT.** Comparer toute la largeur échouait *à raison
+de son point de vue et à tort sur le fond* : une église a UN clocher, UNE chaire, UN
+confessionnal. Il compare donc le VAISSEAU entre les colonnades, **annonce** le périmètre exclu,
+et vérifie séparément que les deux bas-côtés sont meublés — sinon « asymétrique » finirait par
+vouloir dire « vide d'un côté ». *Restreindre un périmètre sans le dire, c'est le défaut du 439.*
+
+⚠️ **CE QU'IL NE MESURE PAS, ET IL LE DIT :** il ne joue pas (l'orgue, les cierges et l'assise
+passent par la touche E), et **il ne dessine pas la vue plongeante** — elle est peinte dans la
+closure du rendu, la redessiner serait juger sa propre maquette. Le contrôle 4 mesure donc ce qui
+est mesurable (le vide existe, aucun mur ne le bouche), et la planche montre un plancher nu.
+**C'est en jouant, et là seulement, qu'on voit si la tribune donne sur quelque chose** — elle n'y
+donnait pas, d'une rangée.
+
+---
+
 ## Jouer à deux en local
 
 **`tools/fake-supabase.mjs`** (432) — REST bidon **+ relais Realtime**, donc deux onglets =

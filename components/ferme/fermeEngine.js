@@ -7804,7 +7804,25 @@ export function generateCourtWorld() {
        dont on ne peut plus ressortir, sans qu'aucune erreur ne le dise. */
     const fl = C.COURT_FLOORS[f], bld = C.COURT_BUILDINGS[fl.bld] || C.COURT_BUILDINGS.court;
     const isHall = fl.bld === "hall";
+    /* ⚠️ ZIP 441 — L'ÉGLISE SORT DE LA BOUCLE DES PIÈCES, PAS DE LA GRILLE.
+       Elle partage tout ce qui est commun (les cages d'escalier, le seuil, le
+       garde-fou des portes, la file de props) et rien de ce qui est un COULOIR
+       BORDÉ DE PIÈCES : une nef n'a ni pièces, ni portes intérieures, ni
+       colonnade de couloir. Son enveloppe est plus étroite, ses fenêtres sont
+       des vitraux, et son mobilier vient de `churchBuild`. */
+    const isChurch = fl.bld === "church";
     const groundFloor = bld.ground === f, basement = f === 2;
+    /* ⚠️ ZIP 441 — CES TROIS-LÀ SONT DÉCLARÉS AVANT LA BIFURCATION, PAS DEDANS.
+       Premier jet : ils restaient dans la branche « couloir », et le bloc
+       `groundFloor` plus bas — commun aux trois bâtiments — les lisait quand
+       même. Un `const` de bloc invisible depuis l'extérieur, c'est un
+       `ReferenceError` à l'exécution seulement, que ni le build ni le lint ne
+       voient : le piège n°1 de CLAUDE.md, en trois lignes de refactor. */
+    const cx0 = C.COURT_CORRIDOR.x + 1, cx1 = C.COURT_CORRIDOR.x + C.COURT_CORRIDOR.w - 2;
+    const axis = C.COURT_CORRIDOR.x + (C.COURT_CORRIDOR.w >> 1);   // 23 : l'axe du couloir
+    if (isChurch) {
+      churchBuild(y0, groundFloor, set, fill, border, addProp, place);
+    } else {
     // ---- L'ENVELOPPE : le couloir occupe tout le niveau, les pièces viennent
     // le découper. On pose donc le sol partout puis le mur d'enceinte.
     fill(0, y0, C.COURT_FLOOR_W, C.COURT_FLOOR_H, basement ? C.CT_STONE : C.CT_MARBLE);
@@ -7841,8 +7859,6 @@ export function generateCourtWorld() {
        des deux cloisons, bancs entre elles. ⚠️ LES COLONNES BLOQUENT : une
        colonne qu'on traverse est pire que pas de colonne, parce qu'elle promet
        une architecture qu'on démentira au premier pas. */
-    const cx0 = C.COURT_CORRIDOR.x + 1, cx1 = C.COURT_CORRIDOR.x + C.COURT_CORRIDOR.w - 2;
-    const axis = C.COURT_CORRIDOR.x + (C.COURT_CORRIDOR.w >> 1);   // 23 : l'axe du couloir
     /* ⚠️⚠️ ZIP 439 — LES DEUX COULOIRS ÉTAIENT LE MÊME COULOIR, AU PIXEL PRÈS.
        Le 438 annonce « un palais de justice est un couloir bordé de portes
        closes ; une mairie est un grand hall public » — et c'est vrai du PLAN
@@ -7899,6 +7915,7 @@ export function generateCourtWorld() {
         place(cx1 - 1, y + 2, "bench", true);
       }
     }
+    }   // fin du « sinon » de l'église (441)
     /* ---- LES ESCALIERS. Une cage n'apparaît qu'aux DEUX niveaux qu'elle relie,
        et son sens se DÉDUIT des altitudes (voir COURT_FLOORS.alt) : la même
        cage est « qui monte » d'un côté et « qui descend » de l'autre, sans
@@ -7914,7 +7931,16 @@ export function generateCourtWorld() {
       // ressort, et c'est la seule ouverture du bâtiment.
       set(bld.entry.x, y0 + bld.entry.y, C.CT_EXIT);
       set(bld.entry.x + 1, y0 + bld.entry.y, C.CT_EXIT);
-      if (isHall) {
+      if (isChurch) {
+        /* ⚠️ ZIP 441 — LE NARTHEX. Deux bénitiers encadrent le seuil, un tronc
+           au mur, et RIEN d'autre : ce qu'on voit en poussant la porte d'une
+           église, c'est la nef, et tout ce qu'on pose devant la lui vole.
+           Le tronc ne DONNE rien et ne PREND rien — voir §4 de CLAUDE.md :
+           « un panneau qui s'ouvre à volonté ne doit rien donner ». */
+        const b = C.churchBands();
+        place(b.aisle0 - 1, y0 + 26, "stoup", true);
+        place(b.aisle1 + 1, y0 + 26, "stoup", true);
+      } else if (isHall) {
         /* ⚠️⚠️ ZIP 439 — IL Y AVAIT DEUX MAQUETTES, ET L'AXE DE LA PORTE TOMBAIT
            DANS LE TROU ENTRE LES DEUX. Le 438 les posait en (20,7)-(21,7) et
            (24,7)-(25,7) : le sprite fait deux cases, il était donc dessiné deux
@@ -7958,6 +7984,184 @@ export function generateCourtWorld() {
     if (basement) { addProp(22, y0 + 4, "crate", true); addProp(23, y0 + 5, "crate", true); }
   }
   return { w: W, h: H, tile, solid, props, doors, rooms: C.COURT_ROOMS };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 441 — L'ÉGLISE. UNE NEF NE SE MEUBLE PAS, ELLE SE TRAVERSE.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ TOUT EST DÉRIVÉ DE `churchBands()`, PAS UNE POSITION N'EST ÉCRITE À LA
+   MAIN. C'est la règle du 433/439 (« une position réglée à la main est une
+   position qui penchera ») portée à son terme : l'autel, le tapis, les
+   colonnes, les bancs, les vitraux et la tribune se déduisent tous de l'axe et
+   des cinq bandes. Un défaut de symétrie dans une nef ne se voit pas sur
+   l'élément fautif — la rangée est impeccable — il se voit sur son RAPPORT à
+   l'axe, et c'est la seule chose qu'on regarde en remontant une allée.
+
+   ⚠️⚠️ ET LES BANCS LAISSENT UNE RANGÉE SUR DEUX (CHURCH.pewStep). Ce n'est pas
+   une coquetterie de dessin, c'est la connexité : un bloc de bancs plein sur
+   huit cases de large enferme le bas-côté derrière lui. C'est le cul-de-sac
+   d'une case du 439, à l'échelle d'une nef — et la parade est la même, on ne
+   meuble pas jusqu'au mur.
+
+   ⚠️ `CT_VOID` FAIT LES DEUX MURS GOUTTEREAUX SANS UNE LIGNE DE PLUS : hors du
+   rectangle de l'église, on ne pose rien, et `CT_VOID` est déjà « jamais
+   dessiné, toujours bloquant ». C'est ce qui permet à une église étroite de
+   vivre dans la grille large des deux autres bâtiments sans cas particulier.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function churchBuild(y0, groundFloor, set, fill, border, addProp, place) {
+  const K = C.CHURCH, b = C.churchBands();
+  const w = K.x1 - K.x0 + 1;
+  if (groundFloor) {
+    // ---- LA NEF. Dallage partout, mur d'enceinte, et rien d'autre de plein.
+    fill(K.x0, y0, w, C.COURT_FLOOR_H, C.CT_STONE);
+    border(K.x0, y0, w, C.COURT_FLOOR_H, C.CT_WALL);
+    /* LES VITRAUX. ⚠️ ILS SONT SUR LES DEUX GOUTTEREAUX ET DANS L'ABSIDE, et
+       leur pas est celui des colonnes (CHURCH.colStep) : une travée = une
+       colonne + une fenêtre. Deux rythmes différents sur le même mur, c'est ce
+       qui fait qu'un bâtiment a l'air bricolé sans qu'on sache dire pourquoi. */
+    for (let y = y0 + 4; y < y0 + C.COURT_FLOOR_H - 3; y += K.colStep) {
+      set(K.x0, y, C.CT_WINDOW); set(K.x1, y, C.CT_WINDOW);
+    }
+    /* La verrière de l'abside : c'est elle qu'on voit depuis la porte, au bout
+       de l'allée, et c'est le point de fuite du bâtiment.
+       ⚠️ QUATRE BAIES ET PAS TROIS, parce que l'axe tombe ENTRE deux cases : à
+       trois baies, la centrale se pose forcément d'un côté et toute la verrière
+       penche d'une demi-case — le défaut de la maquette de la mairie (439). Une
+       paire centrale plus deux baies d'accompagnement est symétrique par
+       construction (20↔25, 22↔23 pour un axe à 22,5). */
+    for (const dx of [-3, -1, 0, 2]) set(b.axis + dx, y0, C.CT_WINDOW);
+
+    // ---- LE CHŒUR : une estrade, comme le prétoire du tribunal (CT_DAIS).
+    const ch0 = b.pewW0, ch1 = b.pewE1;
+    fill(ch0, y0 + 2, ch1 - ch0 + 1, K.chancelY - 1, C.CT_DAIS);
+    // ---- L'ALLÉE CENTRALE : le tapis va de la porte au pied de l'estrade, et
+    // il ne monte PAS dessus — la marche doit rester lisible.
+    for (let y = y0 + K.chancelY + 1; y < y0 + C.COURT_FLOOR_H - 1; y++)
+      for (let x = b.aisle0; x <= b.aisle1; x++) set(x, y, C.CT_CARPET);
+
+    // ---- LE MOBILIER DU CHŒUR. L'autel fait deux cases (comme la statue de la
+    // Justice) et il est CENTRÉ sur l'axe : b.axis est une frontière de case,
+    // donc les deux moitiés tombent de part et d'autre — pas de trou au milieu,
+    // le défaut de la maquette de la mairie au 439.
+    addProp(b.axis - 1, y0 + 3, "altar", true);
+    addProp(b.axis, y0 + 3, "altar2", true);
+    addProp(b.axis - 3, y0 + 3, "candlestick", true);
+    addProp(b.axis + 2, y0 + 3, "candlestick", true);
+    /* ⚠️ L'AMBON N'EST PAS DANS L'AXE, ET LE CIERGE PASCAL LUI RÉPOND. Un
+       meuble d'une case posé « au milieu » d'un axe qui tombe entre deux cases
+       est décentré d'une demi-case, toujours du même côté — on ne le voit pas
+       sur le meuble, on le voit sur la nef entière. Les deux se posent donc en
+       PAIRE de part et d'autre de l'allée : l'axe reste vide, ce qui est aussi
+       ce qu'il doit être, puisqu'on y marche. */
+    place(b.aisle0 - 1, y0 + K.chancelY, "lectern", true);
+    place(b.aisle1 + 1, y0 + K.chancelY, "paschal", true);
+    // Les stalles du clergé, adossées aux deux bouts de l'estrade.
+    for (const dy of [0, 1]) {
+      place(ch0 + 1, y0 + 3 + dy, "choirStall", true);
+      place(ch1 - 1, y0 + 3 + dy, "choirStall", true);
+    }
+
+    // ---- LES COLONNADES ET LES BANCS.
+    for (let y = y0 + K.naveY0; y <= y0 + K.naveY1; y++) {
+      const row = y - y0;
+      if ((row - K.naveY0) % K.colStep === 0) {
+        addProp(b.colW, y, "pillar", true);
+        addProp(b.colE, y, "pillar", true);
+      }
+      /* ⚠️ UNE RANGÉE SUR DEUX EST UN PASSAGE. Sans elle, les deux blocs de
+         bancs murent le bas-côté : on n'atteindrait plus ni la chapelle des
+         cierges, ni le confessionnal, ni la vis du clocher. */
+      if ((row - K.naveY0) % K.pewStep !== 0) continue;
+      /* ⚠️ LES DEUX BOUTS DE CHAQUE TRAVÉE PORTENT UN AUTRE DESSIN (`pewL` /
+         `pewR`), et c'est le générateur qui le dit — pas un hachage de position.
+         Voir le sprite : avec un seul dessin, huit paires de pieds se répètent
+         tous les seize pixels et l'œil voit la grille avant le banc (434). Un
+         hachage mettrait les joues au milieu de la travée, ce qui est pire. */
+      const pewKind = (x, x0, x1) => (x === x0 ? "pewL" : x === x1 ? "pewR" : "pew");
+      for (let x = b.pewW0; x <= b.pewW1; x++) addProp(x, y, pewKind(x, b.pewW0, b.pewW1), true);
+      for (let x = b.pewE0; x <= b.pewE1; x++) addProp(x, y, pewKind(x, b.pewE0, b.pewE1), true);
+    }
+
+    /* ---- LA CHAPELLE DES CIERGES, bas-côté ouest, juste après le chœur.
+       ⚠️ C'EST LE SEUL ENDROIT INTERACTIF DE LA NEF, et il est placé là exprès :
+       on le croise en remontant vers le chœur, pas en le cherchant. Une
+       mécanique qu'on ne peut découvrir que si on nous l'a dite n'existe pas
+       (leçon des plaques du tribunal, 426). */
+    addProp(b.sideW0 + 1, y0 + K.chancelY + 3, "candleRack", true);
+    place(b.sideW0, y0 + K.chancelY + 2, "prieDieu", true);
+    // Le confessionnal, plus bas dans le même bas-côté (deux cases).
+    addProp(b.sideW0 + 1, y0 + 16, "confessional", true);
+    addProp(b.sideW0 + 1, y0 + 17, "confessional2", true);
+    /* Les fonts baptismaux, près de l'entrée : on baptise en entrant dans
+       l'église, au sens propre comme au figuré.
+       ⚠️ ILS SONT DU CÔTÉ EST parce que le bas-côté ouest est déjà pris par la
+       vis du clocher sur ces rangées-là. Posés à l'ouest, `place` les décalait
+       contre le mur gouttereau — c'est-à-dire à l'endroit exact que le 439
+       interdit (meubler le long d'un mur fabrique des poches), et en silence,
+       puisque le décalage est muet par construction. */
+    place(b.sideE1 - 2, y0 + 24, "font", true);
+    /* ---- LE BAS-CÔTÉ EST : la chaire adossée à la colonnade, une niche de
+       saint au fond, un lutrin. On ne meuble pas contre le mur (439). */
+    place(b.sideE1 - 1, y0 + 12, "pulpit", true);
+    place(b.sideE1 - 1, y0 + 8, "saintNiche", true);
+    place(b.sideE1 - 1, y0 + 20, "urn", true);
+  } else {
+    /* ---- LA TRIBUNE D'ORGUE. Elle n'occupe QUE sa bande : tout le reste du
+       niveau reste `CT_VOID`, et c'est ce vide-là qu'on regarde par-dessus la
+       balustrade (voir le rendu, qui y peint la nef d'en dessous).
+       ⚠️ LE PLANCHER EST EN BOIS, PAS EN DALLE : une tribune est une charpente
+       posée dans le vaisseau, pas une pièce maçonnée. La matière le dit avant
+       n'importe quelle plaque. */
+    const ly0 = y0 + K.loftY0, lh = K.loftY1 - K.loftY0 + 1;
+    fill(K.x0, ly0 - 1, w, lh + 2, C.CT_VOID);
+    // Le plancher de la tribune : exactement la largeur des deux blocs de bancs
+    // et de l'allée, donc CALÉ SUR LA NEF D'EN DESSOUS — c'est ce qui fait qu'on
+    // la reconnaît en levant les yeux depuis l'allée.
+    fill(b.pewW0, ly0, b.pewE1 - b.pewW0 + 1, lh, C.CT_WOOD);
+    /* Le palier de la vis, dans le clocher. ⚠️ IL COUVRE LES MÊMES RANGÉES QUE
+       LA TRIBUNE, pas moins : la cage d'escalier est posée par le bloc commun
+       sur `sw.h` rangées, et un palier plus court laissait la première marche
+       entourée de vide — praticable, mais visiblement en l'air. */
+    fill(b.sideW0, ly0, b.pewW0 - b.sideW0, lh, C.CT_WOOD);
+    // Les murs : le fond (sud), les deux gouttereaux, les deux joues de la
+    // tribune, et le nord partout SAUF au droit de la tribune.
+    /* ⚠️⚠️ LES MURS NE COURENT QUE LÀ OÙ IL Y A UN PLANCHER, ET C'EST UNE
+       CORRECTION VUE SUR LA PLANCHE. Premier jet : les deux gouttereaux étaient
+       posés d'un bout à l'autre comme au rez-de-chaussée. Résultat sur
+       `eglise-tribune.png` : une POCHE MURÉE ET VIDE de six cases à l'est,
+       fermée de quatre murs, où l'on ne peut ni aller ni rien voir — un trou
+       noir encadré de pierre. Un mur promet une pièce ; là il n'y en avait pas.
+       À l'étage d'une église, il n'y a QUE la tribune et la cage du clocher :
+       tout le reste est le vide du vaisseau, et `CT_VOID` le dit déjà mieux
+       qu'un mur. */
+    for (let x = K.x0; x <= b.pewE1 + 1; x++) set(x, ly0 + lh, C.CT_WALL);
+    for (let y = ly0 - 1; y <= ly0 + lh; y++) {
+      set(K.x0, y, C.CT_WALL);                       // le mur du clocher
+      set(b.pewW0 - 1, y, C.CT_WALL);                // la joue ouest de la tribune
+      set(b.pewE1 + 1, y, C.CT_WALL);                // la joue est
+    }
+    for (let x = K.x0; x < b.pewW0; x++) set(x, ly0 - 1, C.CT_WALL);   // le clocher se ferme au nord
+    // La passerelle du clocher vers la tribune : UNE case percée dans la joue
+    // ouest. Une vis débouche sur une porte, pas sur un mur ouvert de six cases.
+    set(b.pewW0 - 1, ly0 + 2, C.CT_WOOD);
+    /* ⚠️ LE GARDE-CORPS EST UN PROP, PAS UN MUR, ET C'EST TOUTE LA TRIBUNE. Un
+       `CT_WALL` au nord fermerait la vue — or c'est POUR la vue qu'on a mis
+       cette tribune dans le plan. Le prop bloque le pas et ne bouche pas le
+       regard : au nord de lui, on laisse `CT_VOID`, et le rendu y peint la nef
+       d'en dessous, assombrie (voir drawCourtFrame). */
+    for (let x = b.pewW0; x <= b.pewE1; x++) addProp(x, ly0, "railing", true);
+    /* ---- L'ORGUE, au fond de la tribune, CENTRÉ SUR L'AXE. Le buffet fait
+       quatre cases : deux tourelles et deux plates-faces, symétriques autour de
+       l'axe qui tombe entre `axis - 1` et `axis`. */
+    for (let k = -2; k <= 1; k++) addProp(b.axis + k, ly0 + lh - 1, (k === -2 || k === 1) ? "organWing" : "organ", true);
+    /* ⚠️ LE BANC NE BLOQUE PAS : on doit pouvoir monter dessus pour s'y asseoir,
+       exactement comme les bancs de la ville depuis le 428. Un banc solide
+       serait un banc qu'on regarde. */
+    addProp(b.axis - 1, ly0 + lh - 2, "organBench", false);
+    // La corde de cloche, dans la cage : elle pend du clocher, elle ne fait
+    // rien, et elle dit à quoi sert cette vis.
+    place(b.sideW0 + 1, ly0 + 2, "bellRope", true);
+  }
 }
 
 /* LE MOBILIER, PIÈCE PAR TYPE. ⚠️ IL EST DÉRIVÉ DU RECTANGLE, jamais écrit en

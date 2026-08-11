@@ -34,6 +34,10 @@ import * as E from "./fermeEngine";
 import * as A from "./fermeArt";
 import { buildSprites, charPalette, drawBridgeTile, drawBridgeOverlay, drawCandyGroundTile, candySyrupColor } from "./fermeArt";
 import { fstr } from "./fermeStrings";
+// ZIP 441 — l'orgue de l'église. Le lecteur de fichiers existe depuis longtemps
+// (bruit de caisse, de porte, de pioche) : on ne monte pas un second pipeline
+// audio pour un morceau, on appelle celui-là.
+import { playFile as sfxPlayFile, stopSound as sfxStopSound } from "@/lib/sfx";
 
 const GAME_ID = "ferme";
 const ZOOM = 3;
@@ -818,6 +822,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      LE MÊME ATTROUPEMENT, c'est un `send` de trois nombres et rien d'autre. */
   const townFoodRef = useRef(null);
   const crumbNextRef = useRef(0);   // zip 439 : anti-rafale du pain (voir throwCrumbs)
+  /* ZIP 441 — L'ÉGLISE. ⚠️ CES TROIS-LÀ SONT DES REFS ET PAS DES ÉTATS : ils
+     sont lus par la BOUCLE DE RENDU, qui vit dans une closure à dépendances
+     vides (§4). Un `useState` y serait figé à sa valeur du montage — c'est le
+     piège n°1 du projet, dans sa version silencieuse. */
+  const organRef = useRef({ until: 0, src: null });  // la registration en cours
+  const organMuteRef = useRef(false);                // le morceau n'est pas déposé
+  const candleNextRef = useRef(0);                   // anti-rafale du râtelier
   const [taxiMenu, setTaxiMenu] = useState(false);   // le panneau « Où allez-vous ? »
   const taxiMenuRef = useRef(false);
   const [taxiPhase, setTaxiPhase] = useState(null);  // miroir React, pour le bouton
@@ -2282,6 +2293,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // voit la terre basculer sans explication croit à un bug de rotation.
       broadcastChat("🛠️", spec ? L.devWorldChat(f.name, lang === "en" ? spec.nameEn : spec.name)
                                 : L.devRotationChat(f.name));
+      hostFlushOut(out, f, null);
+      return;
+    }
+    /* ═══ ZIP 441 — UN CIERGE DE PLUS À L'ÉGLISE. ═══════════════════════════
+       ⚠️ POURQUOI L'HÔTE ARBITRE UN GESTE QUI NE RAPPORTE RIEN : parce que
+       Guillaume a choisi que les cierges soient PARTAGÉS (« un cierge allumé
+       par l'un est un signe laissé à l'autre »). Deux clients qui compteraient
+       chacun de leur côté divergeraient au premier rechargement, et le §3 est
+       formel — l'hôte est l'autorité, toujours. Ce n'est donc PAS une entorse à
+       « la porte n'est jamais la caisse » (439) : ça ne récompense rien, ça
+       synchronise un décor.
+       ⚠️ ET ON BORNE ICI, PAS SEULEMENT CHEZ L'APPELANT. Le client refuse déjà
+       au-delà de CHURCH_CANDLE_MAX, mais un client est ce qu'on ne contrôle
+       pas : sans cette borne, le râtelier finirait à trois cents cierges dont
+       douze seraient dessinés. */
+    if (req.kind === "churchCandle") {
+      const s2 = sharedRef.current;
+      const lit = Math.max(0, Math.min(C.CHURCH_CANDLE_MAX, (s2.churchCandles | 0) + 1));
+      if (lit === (s2.churchCandles | 0)) { hostFlushOut(out, f, null); return; }
+      s2.churchCandles = lit;
+      dirtyRef.current = true;
+      out.state = shareState();
       hostFlushOut(out, f, null);
       return;
     }
@@ -5251,7 +5284,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setForcedWorldUi(k);
     return k;
   }
-  function shareState() { const s = sharedRef.current; return { money: s.money, day: s.day, dayStartAt: s.dayStartAt, totalEarned: s.totalEarned, forcedWorld: s.forcedWorld || null }; }
+  /* ⚠️ ZIP 441 — `churchCandles` VOYAGE DANS LE MÊME `p.state` QUE L'OR ET LE
+     JOUR, exactement comme `forcedWorld` au 392, et pour la même raison : c'est
+     un scalaire partagé qui change rarement. Un canal à lui coûterait un
+     `send` de plus par changement (§3 : seul le NOMBRE de send est facturé),
+     un champ de plus à réconcilier, et un point de divergence de plus. */
+  function shareState() { const s = sharedRef.current; return { money: s.money, day: s.day, dayStartAt: s.dayStartAt, totalEarned: s.totalEarned, forcedWorld: s.forcedWorld || null, churchCandles: s.churchCandles | 0 }; }
   function toolName(k) { return (lang === "en" ? C.TOOL_NAMES_EN : C.TOOL_NAMES)[k]; }
 
   // -------- Tous : application des deltas reçus --------
@@ -5314,7 +5352,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // le moteur à jour ; le changement d'index qui en découle est ensuite
     // ramassé par la détection de rotation déjà en place (passageAppliedIdxRef),
     // qui purge les breloques, les monstres et le cache de carte toute seule.
-    if (p.state) { const s = sharedRef.current; s.money = p.state.money; s.day = p.state.day; s.dayStartAt = p.state.dayStartAt; s.totalEarned = p.state.totalEarned; applyForcedWorld(p.state.forcedWorld); setHud(h => ({ ...h, money: s.money, day: s.day })); }
+    if (p.state) { const s = sharedRef.current; s.money = p.state.money; s.day = p.state.day; s.dayStartAt = p.state.dayStartAt; s.totalEarned = p.state.totalEarned; applyForcedWorld(p.state.forcedWorld); if (typeof p.state.churchCandles === "number") s.churchCandles = p.state.churchCandles; setHud(h => ({ ...h, money: s.money, day: s.day })); }
     if (p.farmer && p.farmer.id !== me.id && Array.isArray(p.farmer.pets)) {
       const r = playersRef.current.get(p.farmer.id);
       if (r) r.pets = p.farmer.pets; // zip 247: everyone sees everyone's pets, not just the owner
@@ -5822,6 +5860,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (Date.now() - s.dayStartAt >= C.DAY_REAL_MS) {
         const { tiles } = E.newDay(w, farmersRef.current, s.day, s.seed);
         s.day += 1; s.dayStartAt = Date.now();
+        /* ⚠️⚠️ ZIP 441 — LES CIERGES BRÛLENT PENDANT LA NUIT, ET C'EST CE QUI
+           LEUR ÉVITE D'ÊTRE PERSISTÉS. Un compte qui ne se remet jamais à zéro
+           finit à douze le troisième soir et n'y bouge plus : le geste cesse
+           d'exister. Le remettre à zéro chaque jour donne à la fois la vérité
+           (un cierge se consume) et l'absence de sauvegarde — rien à écrire
+           dans `ferme_saves`, donc rien à migrer, donc aucune question à poser
+           à Guillaume avant de livrer (règle dure du §2). C'est le raisonnement
+           de la carte de Valley Town, jamais persistée elle non plus. */
+        s.churchCandles = 0;
         // Réapparition de l'engrais en boutique (chantier 2026-07, suite plan
         // validé) : tous les FERTILIZER_RESTOCK_EVERY_N_DAYS jours, le stock
         // shop remonte à FERTILIZER_SHOP_STOCK (épuisable entre-temps, jamais
@@ -11706,12 +11753,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         m.x = bd.spawn.x; m.y = E.courtFloorY0(bd.ground) + bd.spawn.y; m.moving = false;
         courtStairArmedRef.current = true;
         sendPos();
-        pushToast(zt.bld === "hall" ? L.hallEnterToast : L.courtEnterToast);
+        pushToast(zt.bld === "hall" ? L.hallEnterToast : zt.bld === "church" ? L.churchEnterToast : L.courtEnterToast);
       } else if (zt.dest === "townFromCourt") {
         /* ⚠️ 438 — LE BÂTIMENT D'OÙ L'ON SORT SE LIT DANS `y`, comme l'étage.
            Il faut le lire AVANT de changer `m.y`, ce qui a l'air évident et ne
            l'est pas : la ligne qui suit écrase la seule information disponible. */
-        const wasHall = E.courtBuildingOf(m.y).key === "hall";
+        const wasBld = E.courtBuildingOf(m.y).key;   // 441 : trois bâtiments, plus deux
         m.zone = "town";
         // Repli sur le parvis si la position d'entrée manque (téléport
         // développeur d'un client rechargé) : jamais d'atterrissage à (0,0).
@@ -11719,7 +11766,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         m.y = (typeof m.townY === "number" ? m.townY : C.TOWN_COURT.y + C.TOWN_COURT.h + 2);
         m.moving = false;
         sendPos();
-        pushToast(wasHall ? L.hallExitToast : L.courtExitToast);
+        pushToast(wasBld === "hall" ? L.hallExitToast : wasBld === "church" ? L.churchExitToast : L.courtExitToast);
       } else if (zt.dest === "farmFromTown") {
         m.zone = "farm";
         m.x = C.TRAIN_BOARD.x; m.y = C.TRAIN_BOARD.y - 0.5; m.moving = false;
@@ -14554,8 +14601,40 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (fx < 0 || fy < 0 || fx >= tw.w || fy >= tw.h) return 0;
       return a[fy * tw.w + fx];
     }
-    function drawElevTown(tw, x, y) { return elevTown(tw, x, y) + archPxTown(tw, x, y) / C.TOWN_ELEV_PX; }
-    function playerDrawElevTown(tw, p) { return drawElevTown(tw, p.x, p.y + 0.2); }
+    /* ⚠️⚠️⚠️ ZIP 441 — ET L'ARC N'EST PAS NON PLUS UNE PROFONDEUR. C'est le
+       TROISIÈME visage de la même grandeur, et le 439 n'en avait vu que deux.
+       Il avait bien séparé la COLLISION (plate) du DESSIN (bombé) ; il a versé
+       la flèche dans une ALTITUDE, et une altitude fait deux choses à la fois
+       dans ce moteur — elle monte le dessin ET elle recule la clé de tri
+       (`pushE` : `y = wy - ey * EP`). Le second effet n'était voulu par
+       personne, et il a coûté exactement ce que le 439 croyait avoir réparé :
+
+         rangée NORD du tablier, clé du passant = pr.y·T − flèche
+                                 clé du garde-corps du fond = pr.y·T − 0,02
+
+       Les ±0,02 du 439 étaient la marge qui mettait le passant DEVANT le
+       garde-corps du fond sur cette rangée-là. La flèche vaut jusqu'à 7 px :
+       elle mange cette marge trois cent cinquante fois, sur TOUTES les cases du
+       tablier. Résultat mesuré en jouant, sur les deux ponts : à y = 80 (parc)
+       et y = 152 (lac), le fermier est INTÉGRALEMENT caché par le garde-corps du
+       fond — seule son étiquette de nom flotte au-dessus de l'eau. Le défaut
+       que le 439 nommait (« il se dessinait derrière et disparaissait dedans »)
+       était revenu par la porte qu'on venait d'ouvrir pour le corriger.
+
+       ⚠️ LA PARADE N'EST PAS UN AUTRE EPSILON. Un epsilon plus grand que 7
+       remettrait le passant devant le garde-corps du DEVANT sur la rangée sud :
+       on déplacerait le défaut d'une rangée. La flèche doit sortir de la clé de
+       tri, point — elle est un DÉCALAGE D'IMAGE et rien d'autre. `pushE` prend
+       donc un quatrième argument, `liftPx`, qui décale le dessin sans toucher
+       au tri, et ces deux fonctions-ci disparaissent : leur nom promettait « une
+       altitude de dessin », c'est-à-dire précisément la confusion qu'on paie.
+       Ce qui monte sur le tablier passe désormais son altitude de CASE au tri
+       et sa flèche en `liftPx` — le joueur, ses familiers, les résidents (qui
+       n'avaient pas la flèche du tout et s'enfonçaient de 7 px dans les
+       planches), le taxi, les décors posés.
+       ⚠️ Et la cloche du SAUT de rebord suit la même règle, pour la même raison
+       (voir `townJumpRef` plus bas) : c'est une hauteur d'image, pas un rang. */
+    function playerArchPxTown(tw, p) { return archPxTown(tw, p.x, p.y + 0.2); }
     /* ⚠️ 425 — `fromE` EST FACULTATIF, ET LE LAISSER DE CÔTÉ EST UN CHOIX.
        Passé, il interdit de franchir plus de TOWN_STEP_MAX de dénivelé : c'est
        ce qui fait tenir les falaises et ce qui rend les escaliers praticables,
@@ -14791,10 +14870,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const draws = [];
       /* Pose un dessin en tenant compte de l'altitude : `wy` est sa profondeur
          de tri AU SOL, `ey` son altitude. Une seule porte d'entrée pour les
-         deux corrections — on ne peut pas décaler l'un en oubliant l'autre. */
-      const pushE = (wy, ey, fn) => draws.push({
-        y: wy - ey * EP,
-        fn: () => { ctx.save(); ctx.translate(0, -ey * EP); fn(); ctx.restore(); },
+         deux corrections — on ne peut pas décaler l'un en oubliant l'autre.
+
+         ⚠️⚠️ ZIP 441 — ET `liftPx` EST LA TROISIÈME CHOSE, CELLE QUI NE TRIE
+         PAS. Une ALTITUDE fait deux choses ici, et c'est voulu : elle monte le
+         dessin ET elle recule la clé de tri (une terrasse est plus haute ET
+         plus loin). Mais tout ce qui monte n'est pas plus loin — le dos d'âne
+         d'un pont et la cloche d'un saut sont des hauteurs d'IMAGE, elles ne
+         changent pas qui passe devant qui. Versées dans `ey`, elles mangeaient
+         la marge de tri du pont et faisaient disparaître le passant derrière le
+         garde-corps du fond (voir la note de `playerArchPxTown`, et le contrôle
+         « le passant reste entre les deux moitiés » de tools/verify-pont.mjs).
+         ⚠️ C'est le §8 de CLAUDE.md pris à l'envers : deux grandeurs DIFFÉRENTES
+         écrites dans le même paramètre finissent par diverger de leur intention.
+         Le pixel de décalage se dit ici, le rang se dit dans `wy`/`ey`. */
+      const pushE = (wy, ey, fn, liftPx) => draws.push({
+        y: C.townDepthKey(wy, ey),
+        fn: () => { ctx.save(); ctx.translate(0, -(ey * EP + (liftPx || 0))); fn(); ctx.restore(); },
       });
       /* ZIP 427 — LES BULLES DE LA VILLE, EN PASSE FINALE. Même raison qu'à la
          ferme (le tri se fait par ancrage AU SOL, pas par étendue visuelle) :
@@ -15428,10 +15520,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            donc le passant se dessinait DERRIÈRE le pont et disparaissait dedans ;
            sur la rangée sud les deux clés étaient égales, et l'ordre dépendait de
            l'ordre d'insertion dans le tableau (§4).
-           ⚠️ Les deux clés sont posées à ±0,02 de celles des rangées du tablier,
-           et l'altitude passée reste celle de la CASE : la flèche de l'arc est
-           appliquée à la main dans le dessin, sinon elle entrerait dans la clé de
-           tri et le pont changerait de profondeur en montant. */
+           ⚠️ Les deux clés sont posées à ±TOWN_SORT_EPS de celles des rangées du
+           tablier, et l'altitude passée reste celle de la CASE : la flèche de
+           l'arc est appliquée à la main dans le dessin, sinon elle entrerait dans
+           la clé de tri et le pont changerait de profondeur en montant.
+           ⚠️⚠️ ZIP 441 — ET CETTE MARGE DE 0,02 A ÉTÉ MANGÉE PENDANT UN ZIP
+           ENTIER, par la flèche que le 439 venait de verser dans l'altitude du
+           PASSANT. Le pont était juste, le passant ne l'était plus, et rien ne
+           comparait les deux : sur la rangée nord des deux ponts, le fermier
+           disparaissait entièrement derrière le garde-corps du fond. Voir
+           TOWN_SORT_EPS, et le banc qui compare enfin les trois clés
+           (`tools/verify-pont.mjs`). */
         if (pr.kind === "archBridge") {
           const bimg = sprites.townArchBridge;
           if (bimg) {
@@ -15439,9 +15538,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const bby = (pr.y + 1) * T - bimg.height + C.TOWN_BRIDGE_DROP_PX;
             const rise = archPxTown(tw, pr.x, pr.y), be = elAt(pr.x, pr.y);
             const SP = C.TOWN_BRIDGE_SPLIT_Y, LO = bimg.height - SP;
-            pushE(pr.y * T - 0.02, be, () =>
+            /* ⚠️ ZIP 441 — LES DEUX CLÉS VIENNENT DES CONSTANTES, elles ne sont
+               plus écrites ici. Elles doivent se comparer à celle du passant
+               (`C.townWalkerDepthKey`), et deux formules écrites à deux endroits
+               ne se comparent pas : c'est exactement comme ça que la flèche de
+               l'arc s'est glissée dans l'une des deux (voir TOWN_SORT_EPS).
+               ⚠️ On les demande à altitude nulle parce que `pushE` applique
+               ensuite `be` lui-même — la clé finale est identique, et l'altitude
+               reste dite en un seul endroit. */
+            const bk = C.townBridgeDepthKeys(pr.y, 0);
+            pushE(bk.far, be, () =>
               ctx.drawImage(bimg, 0, 0, bimg.width, SP, bx, bby - rise, bimg.width, SP));
-            pushE((pr.y + 1) * T + 0.02, be, () =>
+            pushE(bk.near, be, () =>
               ctx.drawImage(bimg, 0, SP, bimg.width, LO, bx, bby - rise + SP, bimg.width, LO));
           }
           continue;
@@ -15768,13 +15876,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               moving: rMoving, animT: gAnim, gender: guest.gender, outfit: guest.outfit,
               overalls: !!guest.overalls, cap: !!guest.cap, look: guest.look || null,
               scale: guest.small ? C.TOWN_GUEST_CHILD_SCALE : 1,
-            }, false));
+            }, false), archPxTown(tw, gp.x, gp.y + 0.2));
           }
+          /* ⚠️ ZIP 441 — LES RÉSIDENTS N'AVAIENT PAS LE DOS D'ÂNE DU TOUT. Le
+             439 l'a donné au joueur et l'a oublié ici :
+             un résident qui traverse un pont marchait donc SEPT PIXELS SOUS les
+             planches, à plat, pendant que le tablier bombait autour de lui.
+             Personne ne l'a vu parce que personne n'a regardé un pont pendant
+             qu'un résident le franchissait — c'est le genre de chose qu'un banc
+             qui ne joue pas ne peut pas voir, et que jouer trois minutes montre.
+             ⚠️ Et il arrive ici en `liftPx`, pas en altitude : mis dans `pe`, il
+             ferait au résident exactement ce qu'il faisait au joueur. */
+          const pLift = archPxTown(tw, dx2, dy2 + 0.2);
           pushE((dy2 + 1) * T, pe, () => {
             drawCharacter(charOf({ x: dx2, y: dy2, dir: rDir, moving: rMoving, animT: rAnim, sit: sitting, injuredUntil: res.injuredUntil }), false);
             const line = townActLine(res);
-            if (line) queueTownBubble(Math.round(dx2 * T) + 8, Math.round(dy2 * T) - 18 - pe * C.TOWN_ELEV_PX, line, res.act === "talk");
-          });
+            if (line) queueTownBubble(Math.round(dx2 * T) + 8, Math.round(dy2 * T) - 18 - pe * C.TOWN_ELEV_PX - pLift, line, res.act === "talk");
+          }, pLift);
         }
       }
       /* ╔══════════════════════════════════════════════════════════════════════
@@ -15965,41 +16083,48 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            CLAUDE.md — seul le nombre de send() est facturé, mais un champ de
            plus, c'est surtout un champ à réconcilier). Un client d'avant ce zip
            voit donc les autres au bon endroit, simplement à plat. */
-        const pe = playerDrawElevTown(tw, p);   // 439 : + le dos d'âne du pont
-        if (!p.taxi) pushE((p.y + 0.9) * T, pe, () => drawRemotePets(p, dt));
+        /* ZIP 441 : l'altitude de CASE au tri, la flèche du tablier en décalage
+           d'image. Un camarade qui traverse un pont était caché par le
+           garde-corps du fond exactement comme soi (voir playerArchPxTown). */
+        const pe = playerElevTown(tw, p), pl = playerArchPxTown(tw, p);
+        if (!p.taxi) pushE((p.y + 0.9) * T, pe, () => drawRemotePets(p, dt), pl);
         /* ⚠️ ZIP 432 — UN JOUEUR EN TAXI SE DESSINE COMME UN TAXI. Le drapeau
            tient dans le paquet `pos` (un caractère) et la position est déjà là :
            aucune donnée de véhicule ne circule, et personne ne voit un camarade
            traverser la ville debout à vitesse de cheval. */
-        if (p.taxi) pushE((p.y + 0.5) * T, pe, () => drawTaxiAt(p, p.taxi, null));
-        else pushE((p.y + 1) * T, pe, () => drawCharacter(p, false));
+        if (p.taxi) pushE((p.y + 0.5) * T, pe, () => drawTaxiAt(p, p.taxi, null), pl);
+        else pushE((p.y + 1) * T, pe, () => drawCharacter(p, false), pl);
       }
-      /* MON altitude. Pendant un saut, elle s'interpole du rebord au sol ET
-         reçoit la cloche : c'est la seule animation du saut, et elle est
-         entièrement portée par ce décalage — le personnage lui-même n'a pas
-         une image de plus à dessiner. */
+      /* MON altitude. Pendant un saut, elle s'interpole du rebord au sol ; la
+         cloche, elle, est une hauteur d'IMAGE et part dans `myLift` — c'est la
+         seule animation du saut, et elle est entièrement portée par ce décalage.
+         ⚠️ ZIP 441 : la cloche était dans l'altitude, donc dans la clé de tri.
+         Un fermier au sommet de son saut reculait de TOWN_JUMP_ARC_PX pixels
+         dans la file de dessin et pouvait passer derrière ce qu'il venait de
+         franchir. Même faute que le dos d'âne des ponts, même correction. */
       const jpv = townJumpRef.current;
-      let myE = playerDrawElevTown(tw, m);      // 439 : + le dos d'âne du pont
+      let myE = playerElevTown(tw, m), myLift = playerArchPxTown(tw, m);
       if (jpv.active) {
         const k = Math.min(1, (performance.now() - jpv.t0) / C.TOWN_JUMP_MS);
-        myE = jpv.e0 + (jpv.e1 - jpv.e0) * k + (Math.sin(Math.PI * k) * C.TOWN_JUMP_ARC_PX) / C.TOWN_ELEV_PX;
+        myE = jpv.e0 + (jpv.e1 - jpv.e0) * k;
+        myLift = Math.sin(Math.PI * k) * C.TOWN_JUMP_ARC_PX;
       }
       const myTaxi = taxiRef.current;
       const inCar = !!(myTaxi && (myTaxi.phase === "riding" || myTaxi.phase === "asking"));
-      if (!m.sleeping && !inCar) pushE((m.y + 0.9) * T, myE, () => drawMyPets(m, dt));
+      if (!m.sleeping && !inCar) pushE((m.y + 0.9) * T, myE, () => drawMyPets(m, dt), myLift);
       /* ⚠️ ON NE DESSINE PAS LE PASSAGER : il est DANS la voiture. Le laisser
          donnerait un fermier debout sur le toit — et comme sa position est
          exactement celle du véhicule, on ne le verrait même pas dépasser, on
          verrait juste un taxi avec une tête qui sort du capot. */
-      if (!inCar) pushE((m.y + 1) * T, myE, () => drawSelf(m));
+      if (!inCar) pushE((m.y + 1) * T, myE, () => drawSelf(m), myLift);
       if (myTaxi) {
-        const te = drawElevTown(tw, myTaxi.x, myTaxi.y);
-        pushE((myTaxi.y + 0.5) * T, te, () => drawTaxiAt(myTaxi, myTaxi.dir, myTaxi.smoke));
+        const te = elevTown(tw, myTaxi.x, myTaxi.y), tl = archPxTown(tw, myTaxi.x, myTaxi.y);
+        pushE((myTaxi.y + 0.5) * T, te, () => drawTaxiAt(myTaxi, myTaxi.dir, myTaxi.smoke), tl);
         /* La bulle du chauffeur. Elle passe par la file des bulles, comme celles
            des résidents : peinte dans son `draw`, le premier bâtiment plus bas
            la recouvrirait (voir queueTownBubble). */
         if (myTaxi.phase === "asking") {
-          queueTownBubble(Math.round(myTaxi.x * T), Math.round(myTaxi.y * T) - 26 - te * C.TOWN_ELEV_PX, L.taxiAsk, true);
+          queueTownBubble(Math.round(myTaxi.x * T), Math.round(myTaxi.y * T) - 26 - te * C.TOWN_ELEV_PX - tl, L.taxiAsk, true);
         }
       }
       // Zip 251 : décorations posées en Valley Town (même liste partagée,
@@ -16008,7 +16133,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (e.zone !== "town") continue;
         const dimg = sprites.decor && sprites.decor[e.deco]; if (!dimg) continue;
         const dex = e.x, dey = e.y;
-        pushE((dey + 0.5) * T, drawElevTown(tw, dex, dey), () => ctx.drawImage(dimg, Math.round(dex * T - dimg.width / 2), Math.round(dey * T - dimg.height + 6)));
+        pushE((dey + 0.5) * T, elevTown(tw, dex, dey), () => ctx.drawImage(dimg, Math.round(dex * T - dimg.width / 2), Math.round(dey * T - dimg.height + 6)), archPxTown(tw, dex, dey));
       }
       /* Zip 426 — LES EFFETS (copeaux, « +6 bois »). Ils sont poussés dans le
          MÊME `fxRef` que la ferme : un joueur n'est jamais dans deux zones à la
@@ -16283,6 +16408,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (keys["ArrowLeft"] || keys["KeyA"] || keys["KeyQ"]) dx -= 1;
         if (keys["ArrowRight"] || keys["KeyD"]) dx += 1;
       }
+      /* ⚠️⚠️ ZIP 441 — ON S'ASSOIT AUSSI DEDANS, ET ON SE RELÈVE EN MARCHANT.
+         C'est mot pour mot la convention du 428 en ville, et c'est POUR ÇA
+         qu'elle est reprise ici plutôt qu'inventée : une seconde touche pour se
+         relever serait une touche à apprendre pour défaire ce qu'on vient de
+         faire, et un joueur qui s'assoit sur un banc d'église n'a aucune raison
+         de découvrir que les règles ont changé en passant une porte.
+         ⚠️ ET ON SE LÈVE AVANT DE BOUGER, PAS PENDANT (même note qu'en ville) :
+         sinon effleurer une flèche lève ET avance d'un pas. */
+      if (m.sitOn && (dx || dy)) { standUpChurch(); return; }
+      if (m.sitOn) { m.moving = false; m.animT = 0; m.vx = 0; m.vy = 0; maybeSendPos(); return; }
       const moving = (dx || dy) && actAnimRef.current <= 0;
       if (moving) {
         const len = Math.hypot(dx, dy); dx /= len; dy /= len;
@@ -16326,6 +16461,71 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const draws = [];
       const tileAt = (x, y) => (x < fr.x0 || y < fr.y0 || x >= fr.x1 || y >= fr.y1 ? C.CT_VOID : cw.tile[y * cw.w + x]);
       const isDais = (x, y) => tileAt(x, y) === C.CT_DAIS;
+      /* ⚠️ ZIP 441 — LE BÂTIMENT DU NIVEAU DÉCIDE DE LA MATIÈRE, PAS UN `CT_*`
+         DE PLUS. Voir `drawChurchFlagTile` : dalle d'église contre dalle de
+         cave, vitrail contre fenêtre, et zéro identifiant de sol ajouté. */
+      const bldHere = (C.COURT_FLOORS[myFloor] || {}).bld;
+      const churchHere = bldHere === "church";
+      const CB = churchHere ? C.churchBands() : null;
+
+      /* ══════════════════════════════════════════════════════════════════════
+         ZIP 441 — LA NEF VUE DE LA TRIBUNE.
+         ⚠️ C'EST LA RAISON D'ÊTRE DU SECOND NIVEAU, et sans elle il n'en a
+         aucune. Une tribune dont on ne voit rien est un couloir en bois : le
+         garde-corps promet un vide, et si ce vide est le gris du dehors, la
+         promesse est démentie au premier pas. On peint donc, dans le `CT_VOID`
+         au nord de la balustrade, LES CASES DE LA NEF D'EN DESSOUS — les vraies,
+         lues dans la même grille, décalées d'un niveau — puis on les noie sous
+         un voile sombre.
+         ⚠️⚠️ ET ON NE PEINT QUE LES SOLS ET LES DÉCORS BAS. Les murs de la nef
+         débordent vers le nord de dix pixels (voir WALL_H) : dessinés ici, ils
+         mordraient sur la tribune. Ce n'est pas une simplification, c'est ce
+         qu'on voit vraiment d'une tribune — le pavement et les bancs, pas les
+         gouttereaux qu'on a dans le dos.
+         ⚠️ Le décalage est DÉRIVÉ (`courtFloorY0`), jamais écrit : le jour où
+         l'on insère un niveau, la vue suit au lieu de montrer une cave. */
+      if (churchHere && (C.COURT_FLOORS[myFloor] || {}).key === "churchLoft") {
+        const gy0 = E.courtFloorY0(C.COURT_BUILDINGS.church.ground);
+        /* ⚠️⚠️ LA RANGÉE VUE EST LA MÊME RANGÉE, UN NIVEAU PLUS BAS. Premier
+           jet : un décalage calculé à partir de la hauteur du niveau et de la
+           profondeur de la tribune, avec deux constantes d'ajustement. Il était
+           faux d'UNE rangée — précisément celle qui borde le garde-corps, donc
+           la seule qu'on regarde — et la tribune donnait sur du gris. Une
+           formule qu'on n'arrive pas à relire est une formule qu'on n'arrive
+           pas à corriger : la tribune est posée au-dessus du narthex, dans la
+           même grille, donc la rangée locale 12 de la tribune donne sur la
+           rangée locale 12 de la nef. Il n'y a rien à décaler. */
+        const seen = C.CHURCH.loftY0;                  // les rangées de vide, au nord de la tribune
+        ctx.save();
+        for (let ly = fr.y0; ly < fr.y0 + seen; ly++) {
+          const ny = gy0 + (ly - fr.y0);               // la même rangée, dans la nef
+          if (ny < gy0 || ny >= gy0 + C.COURT_FLOOR_H) continue;
+          for (let x = C.CHURCH.x0; x <= C.CHURCH.x1; x++) {
+            const nt = cw.tile[ny * cw.w + x];
+            if (nt === C.CT_VOID) continue;
+            const px = x * T, py = ly * T;
+            if (nt === C.CT_CARPET) A.drawCourtCarpetTile(ctx, x, ny, px, py, T, (xx, yy) => {
+              const q = cw.tile[yy * cw.w + xx]; return q === C.CT_CARPET || q === C.CT_DAIS;
+            });
+            else if (nt === C.CT_DAIS) A.drawCourtMarbleTile(ctx, x, ny, px, py, T);
+            else if (nt === C.CT_STONE) A.drawChurchFlagTile(ctx, x, ny, px, py, T, x + 0.5 - CB.axis);
+            else { ctx.fillStyle = "#6a655c"; ctx.fillRect(px, py, T, T); }
+          }
+        }
+        for (const pr of (cw.props || [])) {
+          if (pr.y < gy0 || pr.y >= gy0 + C.COURT_FLOOR_H) continue;
+          const img = sprites.courtProps && sprites.courtProps[pr.kind];
+          if (!img) continue;
+          const ly = fr.y0 + (pr.y - gy0);
+          if (ly < fr.y0 || ly >= fr.y0 + seen) continue;
+          ctx.drawImage(img, Math.round(pr.x * T + T / 2 - img.width / 2), (ly + 1) * T - img.height);
+        }
+        // Le voile : c'est lui qui dit « en dessous ». Sans lui, la nef peinte
+        // dans le vide se lit comme un second sol au même niveau.
+        ctx.fillStyle = "rgba(16,17,22,0.52)";
+        ctx.fillRect(C.CHURCH.x0 * T, fr.y0 * T, (C.CHURCH.x1 - C.CHURCH.x0 + 1) * T, seen * T);
+        ctx.restore();
+      }
 
       // ---------------------------------------------------------------- SOLS
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
@@ -16342,12 +16542,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (t === C.CT_MARBLE) {
           A.drawCourtMarbleTile(ctx, x, y, px, py, T);
         } else if (t === C.CT_WOOD || t === C.CT_DAIS) {
-          A.drawCourtWoodTile(ctx, x, y, px, py, T);
+          /* ⚠️⚠️ ZIP 441 — LE CHŒUR EST EN PIERRE, PAS EN PARQUET. Un prétoire
+             est une estrade de BOIS posée dans une salle ; un chœur est la
+             continuation maçonnée de la nef, deux marches plus haut. Vu sur
+             `eglise-nef.png` : le parquet donnait un grand rectangle brun qui
+             flottait au fond du vaisseau, et c'était le défaut le plus voyant
+             de la première planche. `CT_DAIS` reste `CT_DAIS` — c'est lui qui
+             porte la surélévation et sa joue — seul le DESSIN change, comme
+             pour la dalle et les vitraux (règle du 434). */
+          if (churchHere && t === C.CT_DAIS) A.drawCourtMarbleTile(ctx, x, y, px, py, T);
+          else A.drawCourtWoodTile(ctx, x, y, px, py, T);
         } else if (t === C.CT_CARPET) {
           const car = (xx, yy) => tileAt(xx, yy) === C.CT_CARPET || tileAt(xx, yy) === C.CT_DAIS;
           A.drawCourtCarpetTile(ctx, x, y, px, py, T, car);
         } else if (t === C.CT_STONE) {
-          A.drawCourtStoneTile(ctx, x, y, px, py, T);
+          /* ⚠️ L'USURE SUIT LE PASSAGE, ELLE N'EST PAS UN BRUIT. Les deux
+             travées qui bordent l'allée centrale sont celles qu'on emprunte
+             pour gagner sa place : leur dallage est plus clair et plus lisse.
+             Un éclaircissement tiré au hasard aurait donné une nef sale ;
+             celui-ci raconte où les gens marchent. */
+          if (churchHere) A.drawChurchFlagTile(ctx, x, y, px, py, T, x + 0.5 - CB.axis);
+          else A.drawCourtStoneTile(ctx, x, y, px, py, T);
         } else if (t === C.CT_STAIR_UP || t === C.CT_STAIR_DOWN) {
           // Les marches, dessinées comme celles de la ville (le joueur les a
           // apprises dehors : il ne doit pas avoir à les réapprendre dedans).
@@ -16373,8 +16588,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            le décalage vers le haut OUVRE un trou vers le sud, et ce trou EST la
            marche. Elle n'est donc jamais dessinée à côté de sa position. */
         if (t === C.CT_DAIS && !isDais(x, y + 1)) {
-          ctx.fillStyle = "#6d4c2e"; ctx.fillRect(px, py + T, T, EP);
-          ctx.fillStyle = "#a3794c"; ctx.fillRect(px, py + T - 2, T, 2);
+          /* ⚠️ ZIP 441 — LA MARCHE SUIT LA MATIÈRE DE L'ESTRADE. Vue en jeu :
+             un chœur de marbre posé sur une marche en BOIS, ce qui donnait
+             l'estrade démontable d'un prétoire au fond d'une nef maçonnée. La
+             joue EST le flanc de ce qu'elle porte — c'est déjà tout l'argument
+             des falaises du 425 (« la falaise n'est pas dessinée en plus, elle
+             est littéralement le trou ») : elle ne peut pas être d'une autre
+             pierre que sa terrasse. */
+          const ch = churchHere;
+          ctx.fillStyle = ch ? "#8d8a82" : "#6d4c2e"; ctx.fillRect(px, py + T, T, EP);
+          ctx.fillStyle = ch ? "#b6b3aa" : "#a3794c"; ctx.fillRect(px, py + T - 2, T, 2);
           ctx.fillStyle = "rgba(30,20,12,0.30)"; ctx.fillRect(px, py + T + EP, T, 2);
         }
       }
@@ -16409,11 +16632,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         ctx.fillStyle = "#7a6a4e"; ctx.fillRect(px, py + 2, T, 2);
         if (!wallAt(x + 1, y)) { ctx.fillStyle = "rgba(46,43,38,0.22)"; ctx.fillRect(px + T - 2, py - WALL_H, 2, T + WALL_H); }
         if (t === C.CT_WINDOW) {
-          ctx.fillStyle = "#3d5a70"; ctx.fillRect(px + 2, py - WALL_H + 3, T - 4, 11);
-          ctx.fillStyle = "#8fb6cc"; ctx.fillRect(px + 3, py - WALL_H + 4, T - 6, 5);
-          ctx.fillStyle = "#c8dae6"; ctx.fillRect(px + 3, py - WALL_H + 4, 4, 3);
-          ctx.fillStyle = "#6a6458"; ctx.fillRect(px + 7, py - WALL_H + 3, 1, 11);
-          ctx.fillStyle = "#c6c2b6"; ctx.fillRect(px + 1, py - WALL_H + 13, T - 2, 2);
+          if (churchHere) {
+            /* ⚠️ ZIP 441 — LE VITRAIL, ET LA TACHE QU'IL POSE AU SOL. Une baie
+               qui n'éclaire rien est un autocollant sur un mur : c'est le même
+               défaut que le lampadaire sans halo, et il se voit d'autant plus
+               qu'une nef est sombre. La tache est peinte ICI, après les sols et
+               avant le mobilier, donc elle passe sous les bancs — ce qui est sa
+               place : la lumière tombe sur la dalle, pas sur les gens. */
+            A.drawChurchGlass(ctx, px, py, WALL_H, T, (x * 3 + y) & 3);
+            /* ⚠️ LE SENS DE LA TACHE SE DÉDUIT DU VOISINAGE, il n'est pas écrit.
+               Les baies sont sur les DEUX gouttereaux et dans l'abside : une
+               direction en dur aurait éclairé l'abside vers l'ouest et le mur
+               est vers l'extérieur. On cherche donc de quel côté est le dedans —
+               une seule règle, trois murs, aucun cas particulier. */
+            const open = (dx, dy) => { const q = tileAt(x + dx, y + dy); return q !== C.CT_VOID && q !== C.CT_WALL && q !== C.CT_WINDOW; };
+            const dx = open(1, 0) ? 1 : open(-1, 0) ? -1 : 0;
+            const dy = dx ? 0 : (open(0, 1) ? 1 : -1);
+            const lit = 0.16 + Math.sin(now / 2600 + x) * 0.03;
+            ctx.fillStyle = `rgba(255,236,190,${lit})`;
+            for (let k = 1; k <= 3; k++) {
+              // Le faisceau s'élargit en s'éloignant : une tache de largeur
+              // constante se lit comme un tapis, pas comme de la lumière.
+              const sp = k - 1;
+              ctx.fillRect(px + dx * k * T - (dx ? 0 : sp * 2), py + dy * k * T - (dy ? 0 : sp * 2),
+                T + (dx ? 0 : sp * 4), T + (dy ? 0 : sp * 4));
+            }
+          } else {
+            ctx.fillStyle = "#3d5a70"; ctx.fillRect(px + 2, py - WALL_H + 3, T - 4, 11);
+            ctx.fillStyle = "#8fb6cc"; ctx.fillRect(px + 3, py - WALL_H + 4, T - 6, 5);
+            ctx.fillStyle = "#c8dae6"; ctx.fillRect(px + 3, py - WALL_H + 4, 4, 3);
+            ctx.fillStyle = "#6a6458"; ctx.fillRect(px + 7, py - WALL_H + 3, 1, 11);
+            ctx.fillStyle = "#c6c2b6"; ctx.fillRect(px + 1, py - WALL_H + 13, T - 2, 2);
+          }
         }
       }
 
@@ -16442,17 +16692,57 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         } });
       }
 
+      /* ══════════════════════════════════════════════════════════════════════
+         ZIP 441 — LE BUFFET D'ORGUE EST DE L'ARCHITECTURE, PAS DU MOBILIER.
+         ⚠️⚠️ VU EN JEU, ET C'EST LE MÊME DÉFAUT QUE LES PONTS DE CE ZIP, DANS UN
+         AUTRE DÉCOR : un sprite HAUT posé contre le mur SUD est, dans une vue de
+         dessus, plus PRÈS du spectateur que tout ce qui est au nord de lui. Sa
+         clé de tri est donc plus grande, il se dessine en dernier — et il
+         recouvre entièrement l'organiste, qui se tient pourtant devant. Le
+         fermier disparaissait derrière l'orgue exactement comme il disparaissait
+         derrière le garde-corps du pont.
+         ⚠️ ET LA PARADE N'EST PAS DE RABAISSER LE SPRITE. Un buffet court se
+         relit comme un harmonium — c'est le premier jet, et il ne disait rien de
+         ce à quoi sert cette tribune. Un buffet d'orgue EST le mur du fond : on
+         le dessine donc AVEC LES MURS, avant tout ce qui bouge, et la question
+         de son rang ne se pose plus. C'est la même réponse que le §4 donne pour
+         les décors qui débordent : on ne règle pas un tri, on change de passe. */
+      for (const pr of (cw.props || [])) {
+        if (pr.kind !== "organ" && pr.kind !== "organWing") continue;
+        if (E.courtFloorOf(pr.y) !== myFloor) continue;
+        if (pr.x < x0 - 2 || pr.x > x1 + 2 || pr.y < y0 - 6 || pr.y > y1 + 3) continue;
+        const img = sprites.courtProps && sprites.courtProps[pr.kind];
+        if (!img) continue;
+        ctx.drawImage(img, Math.round(pr.x * T + T / 2 - img.width / 2), (pr.y + 1) * T - img.height);
+      }
+
       // ------------------------------------------------------------ MOBILIER
       for (const pr of (cw.props || [])) {
+        if (pr.kind === "organ" || pr.kind === "organWing") continue;   // 441 : déjà peint avec les murs
         if (E.courtFloorOf(pr.y) !== myFloor) continue;
         if (pr.x < x0 - 2 || pr.x > x1 + 2 || pr.y < y0 - 3 || pr.y > y1 + 3) continue;
         const img = sprites.courtProps && sprites.courtProps[pr.kind];
         if (!img) continue;
         const raised = isDais(pr.x, pr.y) ? EP : 0;
         const by = (pr.y + 1) * T - raised, cxp = pr.x * T + T / 2;
+        /* ⚠️⚠️ ZIP 441 — UN OUVRAGE CONTINU NE PORTE PAS UNE OMBRE PAR CASE.
+           L'ombre ovale est juste pour un meuble isolé — une plante, une urne,
+           un pupitre. Un banc de nef fait HUIT cases : vu en jeu, il traînait
+           huit taches grises alignées sous une masse de bois continue, et
+           c'était le défaut le plus voyant de la première visite. Même chose
+           pour le garde-corps de la tribune (vingt cases) et le buffet d'orgue
+           (quatre). Ces dessins-là portent leur propre ombre, en trait, dans le
+           sprite — ce qui est la seule façon qu'elle SUIVE la forme.
+           ⚠️ La liste est écrite ici plutôt que déduite pour la même raison que
+           `PLANCHE_PROPS` en ville : un canevas ne sait pas dire s'il se répète.
+           Le jour où un champ le dira, ce test s'inverse. */
+        const TILED = pr.kind === "pew" || pr.kind === "pewL" || pr.kind === "pewR"
+          || pr.kind === "railing";
         draws.push({ y: by, fn: () => {
-          ctx.fillStyle = "rgba(20,16,12,0.22)";
-          ctx.beginPath(); ctx.ellipse(cxp, by - 1, img.width * 0.30, 2.5, 0, 0, 7); ctx.fill();
+          if (!TILED) {
+            ctx.fillStyle = "rgba(20,16,12,0.22)";
+            ctx.beginPath(); ctx.ellipse(cxp, by - 1, img.width * 0.30, 2.5, 0, 0, 7); ctx.fill();
+          }
           ctx.drawImage(img, Math.round(cxp - img.width / 2), by - img.height);
           /* ⚠️⚠️ ZIP 439 — LE PORTRAIT OFFICIEL PORTE LE NOM DU MAIRE ÉLU, et il
              l'écrit VIVANT. Cuire le nom dans le sprite serait deux fautes en
@@ -16465,6 +16755,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              de dialogue n'est pas un événement du monde, c'est une page de
              menu : il fallait qu'en poussant la porte du bureau, on voie au mur
              qui a gagné. */
+          /* ⚠️⚠️ ZIP 441 — LES CIERGES SONT PEINTS VIVANTS, PAS CUITS. Leur
+             nombre est PARTAGÉ et arbitré par l'hôte (décision de Guillaume) :
+             il change en cours de partie, et il n'est pas le même d'une soirée
+             à l'autre. Cuire des flammes dans le sprite demanderait treize
+             sprites, ou un sprite qui ment — c'est la règle du nom du maire
+             juste en dessous, et celle des enseignes de la ville (427).
+             ⚠️ Le râtelier est DESSINÉ à douze godets (voir `candleRack`), et
+             c'est la même douzaine que `CHURCH_CANDLE_MAX` : les positions se
+             déduisent du dessin, on ne les recopie pas. */
+          if (pr.kind === "candleRack") {
+            const lit = Math.max(0, Math.min(C.CHURCH_CANDLE_MAX, sharedRef.current.churchCandles | 0));
+            for (let k = 0; k < lit; k++) {
+              const row = k < 6 ? 0 : 1;
+              const col = k % 6;
+              const fx = Math.round(cxp - img.width / 2) + 2 + col * 2;
+              const fy = by - img.height + (row ? 17 : 10);
+              const fl = Math.sin(now / 180 + k * 1.7) * 0.5;
+              ctx.fillStyle = "#f2ead6"; ctx.fillRect(fx, fy, 1, row ? 2 : 3);
+              ctx.fillStyle = "#ffcf55"; ctx.fillRect(fx, fy - 3 + fl, 1, 3);
+              ctx.fillStyle = "rgba(255,214,120,0.16)"; ctx.fillRect(fx - 2, fy - 5, 5, 7);
+            }
+          }
           if (pr.of === "mayor") {
             const mr = E.mayorOf(sharedRef.current.day || 1);
             const nm = mr.emoji + " " + L.candName(mr.key);
@@ -16493,6 +16805,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const myRz = isDais(Math.floor(m.x), Math.floor(m.y + 0.2)) ? EP : 0;
       draws.push({ y: (m.y + 0.9) * T - myRz, fn: () => { ctx.save(); ctx.translate(0, -myRz); drawMyPets(m, dt); ctx.restore(); } });
       draws.push({ y: (m.y + 1) * T - myRz, fn: () => { ctx.save(); ctx.translate(0, -myRz); drawSelf(m); ctx.restore(); } });
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ ZIP 441 — LES NOTES QUI MONTENT DE L'ORGUE.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️ ELLES SONT LA MOITIÉ VISIBLE D'UN GESTE DONT L'AUTRE MOITIÉ EST UN
+         FICHIER QUE PERSONNE N'A ENCORE DÉPOSÉ. Guillaume a choisi un vrai
+         morceau ; tant qu'il n'est pas là, ce sont ces notes — et elles seules —
+         qui disent que la touche a fait quelque chose. C'est exactement le
+         raisonnement des pigeons du 439 : « un joueur qui appuie sans rien voir
+         se passer croit que la touche est cassée », et l'objection tombe dès
+         qu'il se passe quelque chose.
+         ⚠️ ELLES SORTENT DU BUFFET, PAS DU JOUEUR. Un orgue sonne au-dessus de
+         l'organiste, pas dans ses mains : les notes partent des tuyaux, deux
+         cases plus haut, sinon on croit voir une bulle de dialogue. */
+      if (organRef.current && organRef.current.until > now && m.sitOn) {
+        const t0 = organRef.current.until - C.CHURCH_ORGAN_MS;
+        for (let k = 0; k < 7; k++) {
+          const ph = ((now - t0) / 1500 + k * 0.63) % 1;
+          const nx = m.x * T + 8 + Math.sin((now / 620) + k * 2.1) * 13;
+          const ny = (m.y - 0.6) * T - ph * 40;
+          const a = Math.sin(Math.PI * ph) * 0.85;
+          draws.push({ y: 1e9 + k, fn: () => {
+            ctx.fillStyle = `rgba(236,222,180,${a.toFixed(3)})`;
+            // Une croche : une tête pleine, une hampe, un crochet. Trois masses.
+            ctx.fillRect(nx - 2, ny, 3, 2);
+            ctx.fillRect(nx + 1, ny - 5, 1, 5);
+            if (k % 2) ctx.fillRect(nx + 2, ny - 5, 2, 1);
+          } });
+        }
+      }
       draws.sort((a, b) => a.y - b.y);
       // Même isolation qu'en ville (zip 250) : un draw qui lève n'ampute plus
       // toute la fin de l'image.
@@ -16503,7 +16844,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          fait dehors. ⚠️ AUCUN VOILE DE NUIT ICI : il fait le même temps dans un
          couloir à 3 h qu'à midi, et un intérieur qui s'assombrit la nuit
          donnerait surtout l'impression d'un bug d'éclairage. */
-      const vig = myFloor === 2 ? 0.42 : 0.20;
+      /* ⚠️ ZIP 441 — LA NEF EST PLUS SOMBRE QUE LES BUREAUX, ET C'EST LA MOITIÉ
+         DE CE QUI LA FAIT LIRE COMME UNE ÉGLISE. L'autre moitié est la tache de
+         lumière sous chaque vitrail : une pénombre sans taches est une cave, des
+         taches sans pénombre sont des flaques jaunes. Les deux ensemble, et
+         seulement ensemble, font le contre-jour d'un vaisseau. */
+      const vig = myFloor === 2 ? 0.42 : churchHere ? 0.38 : 0.20;
       const gvig = ctx.createRadialGradient(cam.x + cam.vw / 2, cam.y + cam.vh / 2, Math.min(cam.vw, cam.vh) * 0.25,
                                             cam.x + cam.vw / 2, cam.y + cam.vh / 2, Math.max(cam.vw, cam.vh) * 0.72);
       gvig.addColorStop(0, "rgba(0,0,0,0)");
@@ -16533,7 +16879,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // ---- Les invites. Même hiérarchie qu'en ville : l'action éphémère
       // d'abord (ici il n'y en a pas), puis ce qui est devant soi.
       let cpk = null;
-      if (nearCourtExit()) cpk = "courtExit";
+      /* ⚠️ ZIP 441 — MÊME ORDRE QUE `tryOpenNearby`, ET C'EST UNE OBLIGATION,
+         pas une élégance : l'invite promet ce que la touche fera. Deux ordres
+         différents donnent une invite qui annonce « s'asseoir » pendant que E
+         allume un cierge — le défaut le plus déroutant qu'une touche unique
+         puisse produire. */
+      if (m.sitOn) cpk = "churchStand";
+      else if (nearCourtExit()) cpk = "courtExit";
+      else if (nearChurchProp("organBench", 1.1)) cpk = "churchOrgan";
+      else if (nearChurchProp("candleRack", 1.6)) cpk = "churchCandle";
+      else if (nearChurchProp("pew", 1.1)) cpk = "churchPew";
       else if (nearHallClerk()) cpk = "hallClerk";
       else if (nearestCourtBoard()) cpk = "courtBoard";
       else if (nearPriceBoard()) cpk = "priceBoard";
@@ -18827,6 +19182,107 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     return E.courtFloorOf(m.y + 0.2) === ex.floor
       && Math.abs(m.x - (ex.x + 0.5)) <= 1.8 && Math.abs(m.y - ex.y) <= 2.2;
   }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 441 — L'ÉGLISE : S'ASSEOIR, ALLUMER UN CIERGE, JOUER L'ORGUE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     Chantier laissé ouvert au 440, plan arrêté avec Guillaume au 441 : décor de
+     haute tenue PLUS ambiance jouable, et AUCUN SERVICE. Ces trois gestes sont
+     donc tout ce que l'église fait — et le §4 de CLAUDE.md dit pourquoi c'est
+     assez : *un panneau qui s'ouvre à volonté ne doit rien donner.* On peut
+     s'asseoir, allumer et jouer autant qu'on veut ; rien de tout ça ne rapporte
+     un or, et c'est ce qui permet de ne rien faire arbitrer... sauf les cierges.
+
+     ⚠️⚠️ LES CIERGES SONT LA SEULE EXCEPTION, ET ELLE EST DEMANDÉE. Guillaume a
+     choisi qu'ils soient PARTAGÉS : un cierge allumé par l'un est un signe laissé
+     à l'autre, ce qui est précisément ce qu'on cherche à deux. Ils passent donc
+     par une `req` arbitrée par l'hôte, comme la vente au marché — pas parce
+     qu'ils récompensent, mais parce que deux clients qui compteraient chacun
+     leurs cierges divergeraient au premier rechargement (§3).
+     ⚠️ ET ON NE DIFFUSE QU'UN NOMBRE. Les emplacements se déduisent du dessin du
+     râtelier (voir CHURCH_CANDLE_MAX) : ce qui peut se déduire ne se diffuse pas. */
+  function nearChurchProp(kind, r) {
+    const m = meRef.current, cw = courtWorldRef.current;
+    if (!m || !cw || m.zone !== "court") return null;
+    if (E.courtBuildingOf(m.y + 0.2).key !== "church") return null;
+    const f = E.courtFloorOf(m.y + 0.2);
+    let best = null, bd = Infinity;
+    for (const pr of (cw.props || [])) {
+      if (pr.kind !== kind || E.courtFloorOf(pr.y) !== f) continue;
+      const d = Math.hypot(pr.x + 0.5 - (m.x + 0.5), pr.y - m.y);
+      if (d <= r && d < bd) { bd = d; best = pr; }
+    }
+    return best;
+  }
+  /* S'asseoir sur un banc de nef ou au banc d'orgue. ⚠️ PAS DE `freeSeatOn` ICI,
+     et c'est délibéré : les bancs de la VILLE ont trois places parce que des
+     résidents s'y assoient et qu'on ne doit pas leur passer dessus. Aucun
+     résident n'entre encore dans les bâtiments (`res.zone` ne connaît que
+     « farm » et « town »), et un banc d'église fait toute une travée. Le jour où
+     un résident y entrera, c'est `freeSeatOn` qu'il faudra appeler — pas un
+     second calcul de place. */
+  function sitChurch(pr) {
+    const m = meRef.current;
+    m.sitFrom = { x: m.x, y: m.y };
+    m.sitOn = { x: pr.x, y: pr.y }; m.seat = 0;
+    m.x = pr.x + 0.5; m.y = pr.y + C.TOWN_SEAT_OFFSET;
+    m.dir = 1; m.moving = false; m.animT = 0; m.vx = 0; m.vy = 0;
+    maybeSendPos();
+    pushToast(L.churchSitToast);
+  }
+  function standUpChurch() {
+    const m = meRef.current;
+    if (!m.sitOn) return;
+    const back = m.sitFrom;
+    sfxStopSound(organRef.current && organRef.current.src);
+    organRef.current = { until: 0, src: null };
+    m.sitOn = null; m.sitFrom = null; m.seat = 0;
+    if (back) { m.x = back.x; m.y = back.y; }
+    m.moving = false; m.animT = 0;
+    maybeSendPos();
+  }
+  /* ⚠️⚠️ JOUER L'ORGUE — ET CE QUI SE PASSE QUAND LE MORCEAU N'EST PAS LÀ.
+     Décision de Guillaume au 441 : un VRAI morceau, pas une synthèse. Le fichier
+     (`CHURCH_ORGAN_SRC`) est à déposer dans `public/sounds/` ; tant qu'il n'y est
+     pas, `playFile` avale le 404 sans lever un mot — et c'est exactement le
+     « stub qui retombe sur une valeur raisonnable » que §10 de CLAUDE.md
+     proscrit : on croirait la touche cassée. On teste donc la présence du
+     fichier, la scène se joue EN ENTIER dans les deux cas (on s'assoit, les
+     mains bougent, les notes montent), et le toast DIT laquelle des deux
+     situations on est en train de voir. */
+  function sitAtOrgan(pr) {
+    const m = meRef.current;
+    m.sitFrom = { x: m.x, y: m.y };
+    m.sitOn = { x: pr.x, y: pr.y }; m.seat = 0;
+    m.x = pr.x + 0.5; m.y = pr.y + C.TOWN_SEAT_OFFSET;
+    m.dir = 1; m.moving = false; m.animT = 0; m.vx = 0; m.vy = 0;
+    maybeSendPos();
+    const node = sfxPlayFile(C.CHURCH_ORGAN_SRC, { volume: 0.6 });
+    organRef.current = { until: performance.now() + C.CHURCH_ORGAN_MS, src: node };
+    /* ⚠️ `Audio.play()` REJETTE EN SILENCE SUR UN 404 : l'évènement `error` du
+       nœud est le seul endroit où l'absence du fichier se manifeste, et on la
+       transforme en phrase. ⚠️ ET ON NE L'ANNONCE QU'UNE FOIS : au premier essai
+       les deux messages se suivent (« vous posez les mains » puis « c'est
+       muet »), ce qui est juste — il s'est passé quelque chose, ET on explique
+       le silence. Aux essais suivants on sait déjà, et répéter l'optimiste
+       serait un message qui se dément lui-même à chaque fois. */
+    if (node && !organMuteRef.current) {
+      node.addEventListener("error", () => { organMuteRef.current = true; pushToast(L.churchOrganMute); }, { once: true });
+      pushToast(L.churchOrganToast);
+    } else pushToast(L.churchOrganMute);
+  }
+  function lightCandle() {
+    /* ⚠️ ANTI-RAFALE, ET IL EST LOCAL. Marteler E sur le râtelier enverrait dix
+       `req` par seconde à l'hôte, c'est-à-dire le plafond du §3 atteint pour un
+       geste d'ambiance. Le refus est SILENCIEUX (leçon du pain aux pigeons,
+       439) : un refus bavard sur une ambiance est pire que pas de refus. */
+    const nowC = performance.now();
+    if (nowC < (candleNextRef.current || 0)) return;
+    candleNextRef.current = nowC + 700;
+    const lit = sharedRef.current.churchCandles | 0;
+    if (lit >= C.CHURCH_CANDLE_MAX) { pushToast(L.churchCandleFull); return; }
+    sendReq({ kind: "churchCandle" });
+    pushToast(L.churchCandleToast);
+  }
   // Zip 426 : voir la note de drawTownFrame — une seule définition de « je suis
   // devant la porte de ce monument », partagée par l'invite et par la touche E.
   function nearCivicDoor(b) {
@@ -18858,7 +19314,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        maléfique : les coordonnées de la ferme n'ont aucun sens ici, et une
        coïncidence de coordonnées ouvrirait la boutique depuis les archives. */
     if (m0 && m0.zone === "court") {
+      /* ⚠️⚠️ ZIP 441 — SE LEVER PASSE AVANT TOUT LE RESTE, et c'est la leçon du
+         439 sur les bancs de la ville, recopiée pour la même raison : assis à
+         l'orgue ou sur un banc de nef, E est la touche avec laquelle on vient de
+         s'asseoir. La laisser tomber dans la suite ferait allumer un cierge
+         depuis un banc, c'est-à-dire agir sans s'être levé. */
+      if (m0.sitOn) { standUpChurch(); return; }
       if (nearCourtExit()) { leaveCourt(); return; }
+      // ⚠️ 441 — l'orgue et les cierges passent avant tout ce qui est panneau :
+      // ils sont à une case, les autres à deux, et c'est la règle du 427 (du
+      // plus PRÉCIS au plus large) qui rend une touche unique lisible.
+      {
+        const org = nearChurchProp("organBench", 1.1);
+        if (org) { sitAtOrgan(org); return; }
+        const rack = nearChurchProp("candleRack", 1.6);
+        if (rack) { lightCandle(); return; }
+        const pw = nearChurchProp("pew", 1.1);
+        if (pw) { sitChurch(pw); return; }
+      }
       // ⚠️ 439 — l'hôtesse passe AVANT les panneaux : elle est à deux cases, un
       // panneau à une et demie, et il y a un annuaire dans sa salle. Sans cette
       // priorité, parler à quelqu'un ouvrirait un tableau.
@@ -18936,10 +19409,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // simple message — ils n'ont pas d'intérieur, et le dire vaut mieux que
       // de laisser croire à une porte cassée.
       if (nearCivicDoor(C.TOWN_COURT)) { enterCourt("court"); return; }
-      // ZIP 438 : l'hôtel de ville s'ouvre à son tour. Reste l'église, qui n'a
-      // toujours pas d'intérieur — et qui le DIT, plutôt que de laisser croire
-      // à une porte cassée (leçon du 426).
+      // ZIP 438 : l'hôtel de ville s'ouvre à son tour.
       if (nearCivicDoor(C.TOWN_HALL)) { enterCourt("hall"); return; }
+      /* ⚠️ ZIP 441 — ET L'ÉGLISE OUVRE À SON TOUR, dernier des trois monuments.
+         Elle n'a rien à ouvrir en `else` : sa porte marche, et la ligne qui
+         disait « pas d'intérieur, mais on le DIT plutôt que de laisser croire à
+         une porte cassée » (426, puis 438) a fait son temps. Un message qui
+         s'excuse d'une absence comblée est un message qui ment. */
+      if (nearCivicDoor(C.TOWN_CHURCH)) { enterCourt("church"); return; }
       /* ═══ ZIP 427 — CE QU'ON PEUT FAIRE EN VILLE ═══
          ⚠️ L'ORDRE COMPTE, et il va du PLUS PRÉCIS au plus large : les deux
          portes de commerce d'abord (elles sont dans un rayon étroit), puis le
@@ -19747,7 +20224,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           expression que le bandeau, et pas ailleurs. Deux traductions du même
           `promptKey` finiraient par diverger d'un libellé, et la divergence
           tomberait sur l'appareil du joueur qui n'a QUE ce bouton. */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (

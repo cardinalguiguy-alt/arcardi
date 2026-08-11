@@ -2012,3 +2012,128 @@ FONCTION plutôt que sur un dessin.
   mairie ; l'église en décor de haute tenue avec orgue jouable) ;
 - **rien de tout ça n'a été joué à deux**, et la ferme peuplée n'est toujours pas passée par
   `tools/fake-supabase.mjs`.
+
+---
+
+## 24. ZIP 441 — LES PONTS SE TRAVERSENT, ET L'ÉGLISE OUVRE
+
+Deux demandes de Guillaume : **« va jouer toi-même pour constater le rendu en direct et répare
+les bugs de traversée des ponts »**, puis **l'intérieur détaillé de l'église**. Elles n'ont rien
+à voir l'une avec l'autre, et elles ont fini par dire la même chose.
+
+### 🌉 LE PASSANT DISPARAISSAIT DERRIÈRE LE PONT — LE 439 L'AVAIT RÉPARÉ, LE 439 L'A RECASSÉ
+
+⚠️⚠️ **MESURÉ EN JOUANT, PAS DÉDUIT : sur la rangée NORD du tablier, des DEUX ponts, le fermier
+était INTÉGRALEMENT invisible.** Seule son étiquette de nom flottait au-dessus de l'eau. On
+traversait à l'aveugle, sans que rien ne bloque — la collision, elle, était parfaite.
+
+Le 439 a coupé le sprite en deux et posé leurs clés de tri à **±0,02** de part et d'autre des
+rangées du tablier : c'est cette marge, et rien d'autre, qui mettait le passant DEVANT le
+garde-corps du fond. Puis, dix lignes plus loin, il a versé **la flèche de l'arc dans l'ALTITUDE
+du passant**. Or `pushE` classe par `wy − altitude × TOWN_ELEV_PX` : *une altitude fait deux
+choses ici*, elle monte le dessin ET elle recule le rang. Sept pixels contre deux centièmes :
+la flèche mangeait la marge sur **toute la portée**.
+
+⚠️⚠️⚠️ **C'EST LE TROISIÈME VISAGE DU PIÈGE N°1, ET LE 439 N'EN AVAIT VU QUE DEUX.** Il a
+séparé la COLLISION du DESSIN, et il a écrit noir sur blanc pourquoi (« on aurait livré un mur
+en croyant dessiner une bosse »). Il n'a pas vu que le dessin lui-même se dédouble : *un dos
+d'âne monte sans éloigner*. La parade n'est pas un autre epsilon — un epsilon plus grand que 7
+remettrait le passant devant le garde-corps du DEVANT sur la rangée sud, on déplacerait le
+défaut d'une rangée. `pushE` prend un **quatrième argument, `liftPx`**, qui décale le dessin
+sans toucher au rang ; `drawElevTown`/`playerDrawElevTown` ont disparu, leur nom promettait
+« une altitude de dessin », c'est-à-dire exactement la confusion qu'on paie.
+
+⚠️ **ET DEUX AUTRES CHOSES SONT TOMBÉES AVEC :**
+- **les RÉSIDENTS n'avaient pas le dos d'âne du tout.** Le 439 l'a donné au joueur et l'a oublié
+  pour eux : un résident qui traverse un pont marchait **sept pixels sous les planches**. Personne
+  ne l'avait vu parce que personne n'a regardé un pont pendant qu'un résident le franchissait ;
+- **la cloche du SAUT de rebord** était dans la clé de tri elle aussi. Même faute, même ligne de
+  correction.
+
+⚠️⚠️ **LA VRAIE LEÇON EST CELLE DU BANC.** `verify-vallee` mesurait « le dos d'âne existe »
+(20 cases) et « il ne touche pas la collision » (0 case polluée) — deux contrôles justes, au
+vert, pendant que le pont était intraversable au regard. **Personne ne comparait la clé du
+passant à celles des deux moitiés du pont.** `tools/verify-pont.mjs` le fait, et il mesure aussi
+le COÛT de la faute en la rejouant : **10 cases de tablier sur 20**, c'est-à-dire les deux
+rangées nord au complet. Les trois clés sont sorties de la closure dans `fermeConstants.js`
+(`townDepthKey`, `townBridgeDepthKeys`, `townWalkerDepthKey`) : le jeu les APPELLE, le banc les
+APPELLE, et c'est ce partage qui fait la mesure. Un quatrième contrôle scanne la source pour
+qu'aucune hauteur d'image ne reparte en altitude — ⚠️ **et sa première écriture ne scannait
+rien** (`/pushE\(([^;]*)$/` ne peut pas matcher une ligne finie par `;`, donc tous les appels
+d'une seule ligne) : il annonçait « 0 appel fautif » en n'ayant lu que les appels coupés en
+deux. D'où le compte d'appels VUS, qui est la seule façon de s'apercevoir qu'un scanner ne
+scanne pas. *Le stub menteur du §10, dans le garde-fou lui-même.*
+
+### ⛪ L'ÉGLISE — DEUX NIVEAUX, ET AUCUN `CT_*` DE PLUS
+
+Plan arrêté avec Guillaume : **nef + tribune d'orgue**, un **vrai morceau** pour l'orgue (fichier
+à fournir), des **cierges partagés** arbitrés par l'hôte. Décor de haute tenue **sans service** —
+elle ne promet rien et ses trois gestes marchent.
+
+⚠️⚠️ **ELLE N'EST PAS FAITE DE `COURT_ROOMS`, ET C'EST TOUT LE SUJET.** Le tribunal et la mairie
+sont des couloirs bordés de pièces ; une église est UN SEUL VOLUME dont le sens tient dans la
+façon dont on le TRAVERSE. Lui appliquer le moule des pièces aurait donné une nef coupée en
+bureaux. Elle est aussi **plus étroite** (34 cases sur 46, le reste en `CT_VOID` — jamais dessiné,
+toujours bloquant, donc rien à écrire) : une église est étroite et HAUTE, la hauteur ne se montre
+pas d'en haut, l'étroitesse si.
+
+⚠️ **DEUX LIGNES DANS `COURT_FLOORS`, ET C'EST TOUT CE QU'A COÛTÉ LE TROISIÈME BÂTIMENT** —
+la mesure de ce que la décision du 438 (des niveaux, pas des zones) a fait économiser.
+
+⚠️⚠️ **ET AUCUN IDENTIFIANT DE SOL N'A ÉTÉ AJOUTÉ.** Dalle d'église, vitrail, chœur de pierre :
+trois différences, trois COUCHES pilotées par `bld === "church"` (règle du 434). Un `CT_FLAG` de
+plus aurait rouvert le test de solidité, les deux passes de sol et la passe de murs.
+
+**Ce que la planche a trouvé, et que la lecture n'aurait pas trouvé** (`render-eglise.mjs`) :
+le chœur en **parquet** (une estrade de prétoire au fond d'une nef maçonnée) ; une **couture**
+d'usure à bord franc en travers du dallage, qui redessinait la grille de 16 px que la dalle de
+deux cases venait d'effacer ; **huit paires de pieds** sous chaque banc de huit cases, donc la
+grille avant le meuble — d'où `pewL`/`pewR`, deux dessins de bout ; une **poche murée et vide**
+de six cases à l'étage, quatre murs autour de rien.
+
+**Ce que JOUER a trouvé, et qu'aucune planche n'aurait trouvé :**
+- ⚠️ **une ombre ovale PAR CASE** sous les bancs — huit taches grises alignées sous une masse de
+  bois continue ;
+- ⚠️ **la cire blanche invisible sur le marbre pâle** : les deux chandeliers du chœur, identiques
+  dans les données, n'en avaient l'air que d'un côté. Ce qui manquait n'était pas du contraste,
+  c'était un **cerne** — la règle du 438 vaut aussi contre un fond CLAIR ;
+- ⚠️⚠️ **l'orgue avalait l'organiste.** Un sprite haut contre le mur SUD est, vu de dessus, plus
+  PRÈS du spectateur que tout ce qui est au nord de lui : sa clé de tri est plus grande, il se
+  dessine en dernier, et il recouvre celui qui est assis devant. *Le même défaut que les ponts,
+  dans un autre décor.* La parade n'est pas de rabaisser le buffet (il redevient un harmonium) :
+  **un buffet d'orgue EST le mur du fond**, on le dessine avec les MURS, et la question du rang ne
+  se pose plus ;
+- ⚠️ **la vue plongeante ne s'affichait pas**, d'une rangée — précisément celle qui borde le
+  garde-corps, donc la seule qu'on regarde. La formule d'origine mêlait hauteur de niveau et
+  profondeur de tribune ; *la rangée vue est la même rangée, un niveau plus bas*, il n'y avait
+  rien à décaler.
+
+⚠️ **LA VUE PLONGEANTE EST LA RAISON D'ÊTRE DU SECOND NIVEAU**, et sans elle il n'en a aucune :
+une tribune fermée par un mur reste parfaitement praticable, parfaitement connexe, et
+parfaitement vide de sens. C'est la forme la plus pure de « un banc qui passe mesure autre
+chose » — d'où le contrôle 4 de `render-eglise`.
+
+⚠️ **LE CONTRÔLE DE SYMÉTRIE A DÛ ÊTRE RÉÉCRIT, ET LA RÉÉCRITURE EST LA LEÇON.** Premier jet :
+toute la largeur en miroir — il échouait, **à raison de son point de vue et à tort sur le fond**.
+*Une église a UN clocher, UNE chaire, UN confessionnal.* Ce qui doit être symétrique est le
+VAISSEAU, entre les deux colonnades. Mais restreindre un périmètre, c'est le défaut nommé au 439
+(« il se donne un périmètre et excuse ce qui déborde ») : le banc **annonce** ce qu'il exclut et
+vérifie séparément que **les deux bas-côtés sont meublés**, sans quoi « asymétrique » finirait
+par vouloir dire « vide d'un côté ».
+
+### Ce que ça ne fait pas
+
+- ⚠️ **LE MORCEAU D'ORGUE N'EXISTE PAS ENCORE.** À déposer dans `public/sounds/church-organ.mp3`
+  (voir `CHURCH_ORGAN_SRC`). En attendant, la scène se joue EN ENTIER — on s'assoit, les notes
+  montent — et le jeu **dit** que la soufflerie est muette, une seule fois. `playFile` avale un
+  404 sans un mot : c'est ce silence-là qu'il ne fallait pas laisser passer pour un
+  fonctionnement normal ;
+- **les cierges ne sont pas persistés** : ils se consument pendant la nuit (remise à zéro au
+  passage du jour). Rien dans `ferme_saves`, donc rien à migrer ;
+- **aucun résident n'entre dans l'église** non plus — `res.zone` ne connaît toujours que « farm »
+  et « town », et c'est la même dette que pour les deux autres bâtiments ;
+- **les chambranles, plaques et seuils du tribunal et de la mairie** — l'autre moitié du second
+  temps décidé au 440 — ne sont **pas** dans cette livraison (décision du 424 : on ne mêle pas
+  deux changements visuels) ;
+- **rien de tout ça n'a été joué à deux**, et la ferme peuplée n'est toujours pas passée par
+  `tools/fake-supabase.mjs`.
