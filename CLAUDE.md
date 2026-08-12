@@ -301,7 +301,7 @@ couvre » est une règle du GÉNÉRATEUR, pas du dessin, et c'est pour ça qu'el
 | `tools/README.md` | **les bancs, ce qu'ils attrapent et leurs chiffres — autorité (432-439)** |
 | `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** · depuis le 440 il **importe `planche.js`** : une portée de pont et une emprise de décor sont des grandeurs de DESSIN, on les dérive du sprite au lieu de les recopier |
 | `components/ferme/planche.js` | **GÉNÉRÉ** par `tools/import-planche.mjs` — les sprites de la planche de Guillaume, en données. Ne pas éditer à la main |
-| `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural. Aucun PNG · **`drawSeated()`** |
+| `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural (aucun bitmap **à ce jour** — voir §9, le principe est tombé au 443) · **`drawSeated()`** |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
 | `public/candyluge/README.md` | **la dette et les 18 règles de la luge — autorité (427)** |
 | `public/candyluge/js/` | `config.js` (tous les nombres) · `slope.js` (la piste) · `sled.js` · `world.js` |
@@ -385,11 +385,33 @@ et `pont` sont **bit à bit identiques** au 419.
 
 ## 9. Blender — cinq pièges, et un endroit où il ne paie pas
 
-BlenderMCP est installé (Blender 5.2 LTS) et **répond**. Deux pipelines : **A** vers `crystal`
-(on modélise, on rend, on **transcrit en table de données** — jamais de PNG dans le jeu ;
-ombrage plat pur, **aucun** anticrénelage, quantification LINÉAIRE, courbe `Standard`, lampes
-Soleil) ; **B** vers les jeux three.js en glTF (`candyluge_props.py`, hors dépôt, export sans
-matériaux, maillages `part_<clé>`, 200-900 triangles).
+⚠️⚠️⚠️ **LE 443 A LEVÉ UN INTERDIT DE PRINCIPE : UN ASSET BITMAP EST DÉSORMAIS AUTORISÉ**
+(décision de Guillaume). Jusqu'ici « aucune image dans le jeu » était une **règle** ; c'est
+maintenant un **défaut**. Un décor complexe — typiquement un intérieur isométrique — peut être
+modélisé sous Blender et intégré en **PNG / feuille de sprites** quand c'est le moyen le plus
+pertinent d'obtenir le résultat visé.
+⚠️ **Ce n'est ni une norme ni un passage obligé.** Le canevas procédural de `fermeArt.js` reste
+la voie par défaut partout ailleurs et n'est pas en sursis : les deux approches **coexistent**,
+l'arbitrage se fait **au cas par cas**, module par module, contre le §0 (est-ce que ça rend le
+jeu plus fini ?) et non contre une doctrine.
+⚠️ **Ce que le basculement ne change PAS, et qu'il faut lire avant d'ouvrir Blender :** les
+raisons TECHNIQUES du choix procédural restent vraies et se paient toujours — un bitmap apporte
+un chargement, un cache, une palette hors-fichier, une échelle à tenir, et **il sort du champ
+des bancs de rendu** (`tools/render-*.mjs` appellent du code, ils ne relisent pas un PNG : un
+asset importé ne se dégrade pas, il **vieillit**, exactement comme le §« il fait vieillir » de
+l'en-tête). ⚠️ Et il reste **irrecevable là où le dessin doit être bilingue ou vivant** (§4 :
+un texte cuit dans une image ne peut pas être traduit au rendu). Le prix n'a pas disparu ; il
+est simplement devenu **payable** quand le résultat le vaut.
+
+BlenderMCP est installé (Blender 5.2 LTS) et **répond**. Trois pipelines : **A** vers `crystal`
+(on modélise, on rend, on **transcrit en table de données** — pas d'image dans `crystal`, dont
+le tampon 480×270 n'en affiche aucune ; ombrage plat pur, **aucun** anticrénelage, quantification
+LINÉAIRE, courbe `Standard`, lampes Soleil) ; **B** vers les jeux three.js en glTF
+(`candyluge_props.py`, hors dépôt, export sans matériaux, maillages `part_<clé>`, 200-900
+triangles) ; **C, ouvert au 443** — rendu Blender → **PNG / feuille de sprites** chargé par le
+jeu. ⚠️ **C n'existe encore nulle part dans le dépôt** : il est autorisé, il n'est pas construit
+(ni chargeur, ni cache, ni convention de nommage, ni banc). Le premier usage devra les poser —
+c'est un chantier, pas un import.
 
 ⚠️ **BLENDER EST Z-UP, THREE.JS Y-UP, ET L'EXPORTEUR CONVERTIT FIDÈLEMENT UNE ORIENTATION
 FAUSSE** (`yup_authoring()`).
@@ -401,9 +423,11 @@ désélectionner** — sinon échec au **deuxième** accessoire seulement.
 le pipeline fonctionne, mais après deux passes le rendu restait à **écart-type 24,6** contre
 47,7 en référence. Le sprite dessiné à la main était meilleur. Compter plusieurs itérations, ou
 dessiner à la main.
-⚠️ **Tous les sprites de la ferme, de Valley Town et du tribunal sont des canevas procéduraux**
-dans `fermeArt.js`. Y introduire un PNG créerait un troisième pipeline (chargement, cache,
-palette hors-fichier) pour un seul bâtiment.
+⚠️ **Tous les sprites de la ferme, de Valley Town et du tribunal sont, à ce jour, des canevas
+procéduraux** dans `fermeArt.js` — c'est un **état**, plus une règle depuis le 443. Le coût d'y
+introduire un bitmap est celui décrit en tête de chapitre ; il se juge contre le gain visuel du
+décor visé, et **le mesurer d'abord reste la méthode** (§8) : un rendu Blender non calibré perd
+encore contre un sprite dessiné à la main.
 
 ---
 
