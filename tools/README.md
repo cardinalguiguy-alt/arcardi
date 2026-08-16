@@ -521,7 +521,7 @@ huitième fois d'affilée dans ce dépôt qu'un banc neuf se trompe d'abord de g
 ⚠️ **CE QU'IL NE MESURE PAS, ET IL LE DIT** : il ne joue pas, et il ne juge pas le cratère dans sa
 vraie herbe (il le peint sur un fond approximé). Trou déclaré.
 
-## `verify-quete.mjs` — 177 contrôles, 177/177 (444)
+## `verify-quete.mjs` — 207 contrôles, 207/207 (444, étendu au 445)
 
 `node tools/verify-quete.mjs`. Il remplace `verify-enquete.mjs`, supprimé avec l'enquête du 442 :
 il en reprend la MÉTHODE (appeler le vrai code, jouer la vraie chaîne) et aucun de ses contrôles.
@@ -532,6 +532,18 @@ abîmée, d'une version d'après, et une du 442) · le placement dérivé des si
 A\* piéton depuis la descente du train · **les fenêtres solo rejouées image par image** · le
 beffroi · les deux listes de niveaux et d'arrêts **dans les deux sens** · et un scan de source qui
 publie combien de lignes il a LUES.
+
+⚠️ **LE 445 LUI A AJOUTÉ TRENTE CONTRÔLES, ET TOUS PORTENT SUR L'ARRIVÉE** — c'est-à-dire sur la
+grandeur que le §25 du README de la ferme reproche à tous les bancs du 444 de n'avoir jamais
+mesurée. Deux objets neufs : la **chute est-elle jouable là où elle se joue** (la liste des mondes
+d'impact est une liste de ce qui est PERMIS, l'intérieur n'en est pas, la caméra est posée avant le
+flash et revenue avant la fin — quatre inégalités, aucun réglage à l'œil), et le **chevron
+désigne-t-il quelque chose** (la quête entière est rejouée et l'on regarde à chaque étape ce qu'il
+pointerait ; il doit pointer le bon lieu à sept moments, et **RIEN pendant l'écoute des ombres**,
+où il n'y a délibérément nulle part où aller). ⚠️ Plus un scan de source qui joint les
+identifiants de lieux à leurs branches de position dans `FermeGame.js` : « une porte sans chemin de
+code ment » (444) appliqué à un repère — un chevron sans branche ne planterait pas, il ne
+s'afficherait simplement jamais.
 
 ⚠️⚠️ **IL ÉCHOUE DANS LES DEUX SENS, ET C'EST TOUT SON INTÉRÊT.** Une fenêtre trop courte rend le
 geste impossible ; une fenêtre si large qu'elle ne demande plus rien est une **mécanique morte**,

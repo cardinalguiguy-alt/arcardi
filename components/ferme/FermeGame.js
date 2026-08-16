@@ -887,6 +887,40 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      secondes est exactement le genre de chose où trois secondes de dérive se
      verraient. */
   const starSceneRef = useRef(null);                 // { key, t0 } — chute, retournement, finale
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 445 — LA SCÈNE QUI ATTEND, ET LA CAMÉRA QUI VA VOIR.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ LA CHUTE N'EST PLUS JOUÉE À LA RÉCEPTION, ELLE EST MISE EN FILE. C'est
+     le seul changement qui fait qu'elle est vue : à la réception, un joueur peut
+     être au troisième étage du tribunal (pas de ciel), dans un mini-jeu, dans la
+     carte, en plein fondu de zone — ou simplement pas encore connecté. La file
+     la garde et la boucle la joue à la première image où elle a un sens.
+     ⚠️ ELLE NE CONCERNE QUE LA CHUTE. Le retournement et la finale se déclenchent
+     par un GESTE du joueur : il est présent par construction, et la finale se
+     joue justement dans un intérieur (le beffroi). Les différer serait ajouter
+     un mécanisme pour un problème qui n'existe pas — et le casser au passage.
+     ⚠️ `seenKey` EST UNE MÉMOIRE LOCALE (localStorage), PAS UN ÉTAT PARTAGÉ.
+     « Ce client a-t-il vu la chute » n'intéresse que ce client : le diffuser
+     serait un champ à réconcilier (§3), et le persister côté ferme voudrait dire
+     qu'un joueur qui arrive après la chute ne la verrait JAMAIS parce qu'un
+     autre l'a vue pour lui. */
+  const starScenePendRef = useRef(null);             // { key, ch, at } — la scène en attente d'être VISIBLE
+  /* ⚠️ LA CAMÉRA DE SCÈNE EST UN REF LU PAR `getCam` ET `getCamTown` — UNE
+     JOINTURE, JAMAIS DEUX COPIES (le défaut n°1 du 444). Deux calculs de
+     « où regarde la caméra » divergeraient au premier réglage, et le symptôme
+     serait le pire du genre : « la scène est juste à la ferme et fausse en
+     ville ». Elle porte sa ZONE : une caméra de ville appliquée à la ferme
+     cadrerait un point au hasard d'un champ de blé (§4, le piège des deux
+     cartes). */
+  const starCamRef = useRef(null);                   // { zone, x, y } en CASES — le point d'impact à cadrer
+  /* ⚠️ LA DERNIÈRE CAMÉRA PEINTE, POUR QUE LA SCÈNE SACHE OÙ EST L'IMPACT À
+     L'ÉCRAN. Un ref et pas une variable de closure : `getCam` la remplit et
+     `drawStarOverlay` la lit, les deux vivent dans la même closure — mais une
+     `let` de closure lue par une fonction hissée est très exactement la zone
+     morte temporelle qui a noirci la moitié de la ferme au 240. Un ref n'a pas
+     de TDZ. Rempli par les caméras des DEUX mondes d'impact, et par elles
+     seules : ailleurs il reste `null`, donc la scène retombe sur son repli. */
+  const starViewRef = useRef({ cam: null, zoom: 1 });
   const starHoldRef = useRef(0);                     // depuis quand on tient un geste continu (le calme du cratère)
   /* ⚠️ LA TRAÎNE DU COMPAGNON — LA MÊME QUE CELLE DE LEO (427), ET C'EST TOUT CE
      QUE COÛTE L'ÉTOILE QUI SUIT LE JOUEUR : sa position se DÉRIVE de la mienne,
@@ -5636,17 +5670,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.starScene) {
       const sc = p.starScene;
       if (sc.key === "card") setStarCard({ key: sc.ch });
+      /* ⚠️⚠️ ZIP 445 — LA CHUTE PASSE PAR LA FILE, LES DEUX AUTRES NON. Voir la
+         note de `starScenePendRef` : le retournement et la finale sont la suite
+         immédiate d'un geste du joueur, la chute est la seule qui ARRIVE. */
+      else if (sc.key === "fall") starQueueScene("fall");
       else {
-        starSceneRef.current = { key: sc.key, t0: performance.now() };
-        setStarTick(t => t + 1);
-        /* ⚠️ LA CARTE DE CHAPITRE EST LA DERNIÈRE IMAGE DE LA SCÈNE, PAS UN
-           MESSAGE À PART. La chute finit sur « Chapter One », le retournement
-           sur « Chapter Five » : c'est la mise en scène JRPG qui découpe l'heure
-           en cinq soirées possibles (§6 de QUETE.md).
-           ⚠️ ET LE DÉLAI EST COMPTÉ SUR L'HORLOGE LOCALE, comme la scène
-           elle-même : on ne compare jamais deux horloges (§3). */
-        if (sc.key === "fall") setTimeout(() => setStarCard({ key: "field" }), Q.STAR_FALL_MS - 3000);
-        else if (sc.key === "turn" && sc.ch) setTimeout(() => setStarCard({ key: sc.ch }), Q.STAR_TURN_MS - 1500);
+        starPlayScene(sc.key, sc.ch);
       }
     }
     if (p.townChop) {
@@ -12605,6 +12634,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          FERME de la boucle n'existe pas en ville — or le seul geste continu de
          cette quête (se tenir immobile dans le cratère) est en ville. */
       starFrame(now);
+      /* ⚠️⚠️ ZIP 445 — ET LA FILE DE SCÈNES BAT AU MÊME ENDROIT, POUR LA MÊME
+         RAISON QU'AU-DESSUS : elle doit tourner dans TOUTES les zones et AVANT
+         toute sortie anticipée. C'est elle qui joue la chute à la seconde où
+         elle redevient visible — sortie d'un bâtiment, fermeture d'un menu, fin
+         d'un fondu de zone — et c'est elle qui la rattrape pour un joueur qui
+         rejoint le salon après coup. */
+      starScenePump();
       /* ⚠️⚠️ ZIP SUIVANT — L'INTERPOLATION D'ÉNERGIE DU SOMMEIL EST REMONTÉE ICI,
          ET C'EST EXACTEMENT LE DÉFAUT DÉCRIT JUSTE AU-DESSUS, UNE TROISIÈME FOIS.
          Dormir chez soi à Valley Town existe depuis le 235 (branche E à sa propre
@@ -14238,6 +14274,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       drawNightVeil(cam, ZOOM, lampsInView, balloonGlowRef.current);
       drawWeatherVeil(dt);
       drawGpsMarker(cam, ZOOM);   // zip 429 — après le voile : une boussole ne s'assombrit pas
+      drawStarChevron(cam, ZOOM); // zip 445 — et le chevron de la quête, même règle
       gpsCheckArrival();
 
       // Invite boutique/bac
@@ -14285,9 +14322,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function getCam() {
       const w = worldRef.current, m = meRef.current;
       const vw = canvas.width / ZOOM, vh = canvas.height / ZOOM;
-      let cx = (m.x + 0.5) * T - vw / 2, cy = (m.y + 0.5) * T - vh / 2;
+      /* ⚠️ ZIP 445 — LE SEUL ENDROIT DE LA FERME OÙ LA CAMÉRA QUITTE LE JOUEUR :
+         la chute. `starCamNow` vit au niveau du COMPOSANT (voir sa note) ; on
+         l'appelle vers l'extérieur, on n'en recopie pas une seconde version ici. */
+      const sc0 = starCamNow("farm");
+      const fx = sc0 ? m.x + (sc0.x - m.x) * sc0.k : m.x;
+      const fy = sc0 ? m.y + (sc0.y - m.y) * sc0.k : m.y;
+      let cx = (fx + 0.5) * T - vw / 2, cy = (fy + 0.5) * T - vh / 2;
       cx = Math.max(0, Math.min(w.w * T - vw, cx)); cy = Math.max(0, Math.min(w.h * T - vh, cy));
-      return { x: cx, y: cy, vw, vh };
+      const out = { x: cx, y: cy, vw, vh };
+      starViewRef.current = { cam: out, zoom: ZOOM };   // zip 445 : la scène en a besoin pour situer l'impact
+      return out;
     }
     // Récolte automatique en marchant sur une culture mûre (en plus du
     // clic/Espace, qui reste actif). Une tuile déjà demandée n'est pas
@@ -14966,14 +15011,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const tw = townWorldRef.current, m = meRef.current;
       const zm = townZoomRef.current.v || ZOOM;
       const vw = canvas.width / zm, vh = canvas.height / zm;
-      let cx = (m.x + 0.5) * T - vw / 2, cy = (m.y + 0.5) * T - vh / 2;
+      /* ⚠️ ZIP 445 — MÊME JOINTURE QU'À LA FERME, ET C'EST TOUT L'INTÉRÊT : une
+         seule description du « où regarde la caméra pendant la chute », lue par
+         les deux cartes. Deux écritures auraient donné la pire des ambiguïtés —
+         « la scène est juste à la ferme et fausse en ville ». */
+      const sc0 = starCamNow("town");
+      const fx = sc0 ? m.x + (sc0.x - m.x) * sc0.k : m.x;
+      const fy = sc0 ? m.y + (sc0.y - m.y) * sc0.k : m.y;
+      let cx = (fx + 0.5) * T - vw / 2, cy = (fy + 0.5) * T - vh / 2;
       /* ⚠️ LE RECADRAGE SUR LES BORDS N'EST PLUS INCONDITIONNEL. Dézoomé, la
          vue peut devenir plus LARGE que la carte ; `Math.min(tw.w*T - vw, …)`
          rendrait alors une borne négative et collerait la caméra hors du monde,
          côté opposé. On centre dans ce cas, ce qui est la seule chose sensée. */
       cx = tw.w * T <= vw ? (tw.w * T - vw) / 2 : Math.max(0, Math.min(tw.w * T - vw, cx));
       cy = tw.h * T <= vh ? (tw.h * T - vh) / 2 : Math.max(0, Math.min(tw.h * T - vh, cy));
-      return { x: cx, y: cy, vw, vh, z: zm };
+      const out = { x: cx, y: cy, vw, vh, z: zm };
+      starViewRef.current = { cam: out, zoom: zm };     // zip 445 : idem, et avec le zoom RÉEL (le dézoom du 428)
+      return out;
     }
     // Deterministic house assignment: every KNOWN farmer (farmersRef, i.e.
     // anyone who ever joined this world) sorted by id -> plots in order.
@@ -16753,6 +16807,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         drawNightVeil(cam, zm, lights, null);
         drawWeatherVeil(dt);
         drawGpsMarker(cam, zm);   // zip 429
+        drawStarChevron(cam, zm); // zip 445
         gpsCheckArrival();
       }
       // Prompts: E at the sign to ride home; near a house door, name it.
@@ -17390,6 +17445,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          affichée reste juste. Une boussole qui aurait dû connaître les étages
          aurait été le signe que l'empilement était une mauvaise idée. */
       drawGpsMarker(cam, ZOOM);
+      drawStarChevron(cam, ZOOM); // zip 445 — dans le tribunal aussi : il filtre sur l'ÉTAGE
       gpsCheckArrival();
 
       // ---- Le bandeau d'étage, en espace ÉCRAN (il ne suit pas la caméra).
@@ -18095,6 +18151,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!e || !Q.starFallen(e)) return;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       const W = canvas.width, H = canvas.height;
+      const vw0 = starViewRef.current, cam = vw0 && vw0.cam, zoom = (vw0 && vw0.zoom) || 1;
+      /* ⚠️⚠️ ZIP 445 — OÙ TOMBE LA COMÈTE, EN PIXELS D'ÉCRAN. C'est le vrai
+         défaut du 444 : le trait de lumière traversait le ciel à des coordonnées
+         d'écran ARBITRAIRES et la colonne montait à `W × 0,86`, c'est-à-dire à
+         un endroit qui n'avait aucun rapport avec le lieu de la chute. La scène
+         était jolie et ne disait rien — on ne savait pas où aller, et c'est
+         exactement ce qu'une ouverture doit dire.
+         ⚠️ ON RECALCULE À CHAQUE IMAGE À PARTIR DE LA CAMÉRA, on ne fige pas :
+         la caméra vole vers l'impact puis revient, donc le point bouge à
+         l'écran, et une position figée décollerait du décor au retour. */
+      const tgt0 = starCamRef.current;
+      const impact = (tgt0 && cam && (meRef.current && (meRef.current.zone || "farm") === tgt0.zone))
+        ? { x: ((tgt0.x + 0.5) * T - cam.x) * (zoom || 1), y: ((tgt0.y + 0.5) * T - cam.y) * (zoom || 1) }
+        : null;
       /* ── LA LYRE. ⚠️ LE CIEL EST LE COMPTEUR, et c'est l'idée d'interface la
          moins chère du chantier : dès la chute, la constellation est visible la
          nuit avec son TROU. On n'affiche pas un pourcentage, on montre un ciel
@@ -18153,18 +18223,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            montrer une vidéo ». */
         const veil = Math.min(0.55, t * 0.5) * (t > 7 ? Math.max(0, (dur / 1000 - t) / 2) : 1);
         ctx.fillStyle = `rgba(8,10,26,${veil.toFixed(3)})`; ctx.fillRect(0, 0, W, H);
+        /* ⚠️⚠️ ZIP 445 — LA COMÈTE VISE LE POINT D'IMPACT, elle ne traverse plus
+           l'écran pour rien. Elle part du bord ouest, en haut, et son point
+           d'arrivée EST le sillon (ferme) ou le cratère (ville) : à 3,0 s la tête
+           touche le sol exactement là où le décor est dessiné. Sans repère de
+           caméra (cas de repli), on retombe sur l'ancienne trajectoire plutôt
+           que de ne rien dessiner. */
         if (t > 1.2 && t < 3.1) {                       // le trait de lumière, ouest → est
-          const k = (t - 1.2) / 1.9;
-          const y0 = H * 0.16, y1 = H * 0.30;
-          const hx = -60 + (W + 120) * k, hy = y0 + (y1 - y0) * k;
-          const grd = ctx.createLinearGradient(hx - 190, hy - 20, hx, hy);
+          const k = (t - 1.2) / 1.8;
+          const ex = impact ? impact.x : W * 1.05, ey = impact ? impact.y : H * 0.30;
+          const hx = -60 + (ex + 60) * k, hy = H * 0.08 + (ey - H * 0.08) * (k * k);
+          const grd = ctx.createLinearGradient(hx - 190, hy - 60, hx, hy);
           grd.addColorStop(0, "rgba(255,240,200,0)"); grd.addColorStop(1, "rgba(255,250,225,0.95)");
           ctx.strokeStyle = grd; ctx.lineWidth = 3;
-          ctx.beginPath(); ctx.moveTo(hx - 190, hy - 20); ctx.lineTo(hx, hy); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(hx - 190, hy - 60); ctx.lineTo(hx, hy); ctx.stroke();
           ctx.fillStyle = "rgba(255,255,245,0.95)";
-          ctx.beginPath(); ctx.arc(hx, hy, 4, 0, 7); ctx.fill();
+          ctx.beginPath(); ctx.arc(hx, hy, 4 + k * 3, 0, 7); ctx.fill();
         }
         if (t > 3.0 && t < 3.16) { ctx.fillStyle = "rgba(255,255,255,0.92)"; ctx.fillRect(0, 0, W, H); }
+        /* L'ONDE DE CHOC, au sol, depuis le point d'impact. ⚠️ Elle est PLATE
+           (une ellipse écrasée) parce que la vue est en trois quarts : un cercle
+           parfait se lirait comme un anneau vertical planté dans le décor. */
+        if (impact && t > 3.05 && t < 4.6) {
+          const k = (t - 3.05) / 1.55;
+          ctx.strokeStyle = `rgba(255,246,214,${(0.85 * (1 - k)).toFixed(3)})`;
+          ctx.lineWidth = 3 * (1 - k) + 1;
+          ctx.beginPath(); ctx.ellipse(impact.x, impact.y, 30 + k * 260, (30 + k * 260) * 0.42, 0, 0, 7); ctx.stroke();
+        }
         /* ⚠️ LA SECOUSSE PASSE PAR LE CANEVAS, PAS PAR LA POSITION DU JOUEUR.
            Déplacer le fermier pour secouer l'image, c'est le faire traverser un
            mur en douce — et la caméra du jeu est calculée dans trois fonctions
@@ -18183,13 +18268,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             ctx.beginPath(); ctx.moveTo(bx - 5, by + fl); ctx.lineTo(bx, by); ctx.lineTo(bx + 5, by + fl); ctx.stroke();
           }
         }
-        if (t > 4.5) {                                   // la colonne de lumière, à l'est
+        /* ⚠️ ZIP 445 — LA COLONNE MONTE DU POINT D'IMPACT, PLUS DE `W × 0,86`.
+           Elle part du sol (le point lui-même) et pas du bas de l'écran : c'est
+           ce qui la rattache au décor au lieu d'en faire un ruban d'interface. */
+        if (t > 4.5) {
           const k = Math.min(1, (t - 4.5) / 1.4);
-          const cx2 = W * 0.86;
-          const grd = ctx.createLinearGradient(cx2, H, cx2, 0);
-          grd.addColorStop(0, `rgba(180,240,210,${(0.30 * k).toFixed(3)})`);
+          const cx2 = impact ? impact.x : W * 0.86, cy2 = impact ? impact.y : H;
+          const grd = ctx.createLinearGradient(cx2, cy2, cx2, 0);
+          grd.addColorStop(0, `rgba(180,240,210,${(0.34 * k).toFixed(3)})`);
           grd.addColorStop(1, "rgba(180,240,210,0)");
-          ctx.fillStyle = grd; ctx.fillRect(cx2 - 26, 0, 52, H);
+          ctx.fillStyle = grd; ctx.fillRect(cx2 - 26, 0, 52, Math.max(0, cy2));
         }
         line(L.star.fall.line1, t > 1.4 && t < 3.4 ? 1 : 0, H * 0.78);
         line(L.star.fall.line2, t > 3.5 && t < 5.4 ? 1 : 0, H * 0.78);
@@ -18674,6 +18762,104 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       ctx.font = "bold 11px monospace"; ctx.textAlign = "center";
       ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.strokeText(label, lx, ly + 12);
       ctx.fillStyle = "#fff4d0"; ctx.fillText(label, lx, ly + 12);
+      ctx.textAlign = "left";
+    }
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ ZIP 445 — LE CHEVRON DE LA QUÊTE. (demande de Guillaume : « un
+       ║ indicateur style gps, forme spéciale, pour nous diriger vers l'impact
+       ║ ou le cratère ».)
+       ╚══════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ IL EST LE FRÈRE DE `drawGpsMarker`, PAS SA COPIE. Deux états, la même
+       géométrie d'orbite, la même règle « en espace écran, après le voile de
+       nuit » — mais **jamais la même forme ni la même couleur** : le triangle
+       ambre est une destination que le JOUEUR a posée, le chevron blanc est ce
+       que l'HISTOIRE demande. Deux repères qui se ressembleraient seraient pires
+       qu'un seul : on ne saurait plus lequel on suit.
+       ⚠️ LE CHEVRON N'EST PAS UNE FLÈCHE PLEINE, ET C'EST CE QUI LE REND
+       LISIBLE : trois traits ouverts (un accent circonflexe et sa doublure) se
+       distinguent d'un triangle plein à la même taille, y compris en vision
+       périphérique — c'est-à-dire au moment où l'on ne le REGARDE pas, qui est
+       le moment où il sert.
+       ⚠️⚠️ ET IL LUIT VRAIMENT : un halo peint AUTOUR, jamais par-dessus (règle
+       de famille de DESSIN.md — un halo qui mange sa propre source donne une
+       tache et pas une lumière), plus un cerne sombre. Le cerne n'est pas une
+       finition : sans lui, un chevron blanc disparaît sur le dallage clair de la
+       Haute-Ville et sur le blé mûr, qui sont exactement les deux endroits où
+       l'on se perd (leçon du 441, reprise du 429).
+       ⚠️⚠️⚠️ ET IL NE S'AFFICHE QUE SI LA CIBLE EST DANS MA ZONE (décision de
+       Guillaume au 445). Pas de relais, pas de flèche vers la gare : hors du
+       monde de la cible, rien. C'est la discipline stricte de la boussole
+       (`gps.zone === m.zone`) et la seule qui résiste au piège des deux cartes —
+       le ponton de la ville tombe aussi au milieu des champs de la ferme, donc
+       un chevron « à vol d'oiseau » pointerait vers un pré en ayant l'air de
+       marcher. ⚠️ Dans le tribunal, la zone ne suffit pas : dix-sept pièces sur
+       trois niveaux empilés dans une seule grille, donc on filtre aussi sur
+       l'ÉTAGE, qui se déduit de `y` (§6) — même filtre que la cible du plan. */
+    function drawStarChevron(cam, zoom) {
+      const g = starGuideTarget(), m = meRef.current;
+      if (!g || !m) return;
+      const zone = m.zone || "farm";
+      if (g.zone !== zone) return;
+      if (zone === "court" && E.courtFloorOf(g.y) !== E.courtFloorOf(m.y + 0.2)) return;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalCompositeOperation = "source-over";
+      const sx = (g.x * T - cam.x) * zoom, sy = (g.y * T - cam.y) * zoom;
+      const dist = Math.hypot(g.x - m.x, g.y - m.y);
+      const onScreen = sx > 10 && sy > 10 && sx < canvas.width - 10 && sy < canvas.height - 10;
+      const now2 = performance.now();
+      const beat = 1 + Math.sin(now2 / 300) * 0.12;
+      /* ⚠️ LE HALO RESPIRE PLUS LENTEMENT QUE LA FORME. Deux pulsations à la
+         même période font un clignotant ; deux périodes différentes font
+         quelque chose de vivant. */
+      const glow = 0.5 + 0.5 * Math.sin(now2 / 620);
+      const chevron = (cx, cy, ang, size) => {
+        ctx.save();
+        ctx.translate(cx, cy); ctx.rotate(ang);
+        // Le halo, deux couronnes, AUTOUR.
+        ctx.fillStyle = `rgba(214,236,255,${(0.07 + 0.05 * glow).toFixed(3)})`;
+        ctx.beginPath(); ctx.arc(0, 0, size * 2.1, 0, 7); ctx.fill();
+        ctx.fillStyle = `rgba(236,246,255,${(0.10 + 0.06 * glow).toFixed(3)})`;
+        ctx.beginPath(); ctx.arc(0, 0, size * 1.25, 0, 7); ctx.fill();
+        // Les deux chevrons : le grand devant, le petit derrière, décalés — c'est
+        // le décalage qui donne le SENS de la marche, pas la pointe toute seule.
+        ctx.lineCap = "round"; ctx.lineJoin = "round";
+        for (const [off, w, a] of [[0, 3.4, 1], [size * 0.78, 2.2, 0.55]]) {
+          ctx.beginPath();
+          ctx.moveTo(-size * 0.78, off + size * 0.46);
+          ctx.lineTo(0, off - size * 0.52);
+          ctx.lineTo(size * 0.78, off + size * 0.46);
+          ctx.strokeStyle = `rgba(12,18,32,${(0.72 * a).toFixed(3)})`; ctx.lineWidth = w + 3.2; ctx.stroke();
+          ctx.strokeStyle = `rgba(255,255,255,${a.toFixed(2)})`; ctx.lineWidth = w; ctx.stroke();
+        }
+        ctx.restore();
+      };
+      let lx, ly;
+      if (onScreen) {
+        const size = C.STAR_CHEVRON_PX * 0.9 * beat;
+        // Posé AU-DESSUS du point, pointe en bas : le sommet touche la cible.
+        chevron(sx, sy - size * 1.7, Math.PI, size);
+        lx = sx; ly = sy - size * 2.8;
+      } else {
+        /* Il orbite autour de MOI, pas au bord de l'écran — même raison qu'au
+           429 : un repère de bord se confond avec l'interface et oblige à
+           balayer tout le pourtour. ⚠️ SON ORBITE EST PLUS LARGE QUE CELLE DE LA
+           BOUSSOLE : les deux peuvent être à l'écran en même temps, et deux
+           repères sur le même cercle se recouvriraient dès qu'ils pointent dans
+           la même direction — ce qui est le cas normal quand on a posé sa
+           boussole sur l'objectif de la quête. */
+        const mx = (m.x + 0.5) * T, my = (m.y + 0.5) * T;
+        const ang = Math.atan2(g.y - m.y, g.x - m.x);
+        const px = (mx - cam.x) * zoom, py = (my - cam.y) * zoom;
+        const size = C.STAR_CHEVRON_PX * beat;
+        lx = px + Math.cos(ang) * C.STAR_CHEVRON_ORBIT_PX;
+        ly = py + Math.sin(ang) * C.STAR_CHEVRON_ORBIT_PX;
+        chevron(lx, ly, ang + Math.PI / 2, size);
+        ly += size * 1.6;
+      }
+      ctx.font = "bold 11px monospace"; ctx.textAlign = "center";
+      const label = L.gpsDistance(Math.round(dist));
+      ctx.lineWidth = 3; ctx.strokeStyle = "rgba(12,18,32,0.72)"; ctx.strokeText(label, lx, ly + 12);
+      ctx.fillStyle = "#eaf4ff"; ctx.fillText(label, lx, ly + 12);
       ctx.textAlign = "left";
     }
     function nightAlpha() {
@@ -20094,6 +20280,195 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      joueurs labourent depuis des mois est un piège, et un sillon qu'on traverse
      ne casse rien puisqu'on ne fait que s'y agenouiller. */
   function starFurrowPos() { return { x: C.STAR_FURROW_X, y: C.STAR_FURROW_Y }; }
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 445 — LA CHUTE EST VUE : LA FILE, LA MÉMOIRE LOCALE, ET LA CAMÉRA.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ TOUT CE BLOC EST AU NIVEAU DU COMPOSANT ET PAS DANS LA BOUCLE DE RENDU,
+     et ce n'est pas un choix de rangement : `getCam` et `getCamTown` vivent dans
+     la closure, `applyPayload` vit dehors, et les deux doivent lire la MÊME
+     chose. Une fonction déclarée dans la closure et appelée depuis le composant
+     lève un `ReferenceError` à l'exécution seulement (§4 de CLAUDE.md, payé au
+     430 et au 431) ; une seconde copie écrite au niveau du composant divergerait
+     au premier réglage (§4, troisième visage). On écrit UNE fois, ici, et la
+     closure appelle vers l'extérieur — ce sens-là marche toujours. */
+
+  /* Le point d'impact de MA carte. ⚠️ CHAQUE MONDE A LE SIEN, et c'est
+     l'histoire elle-même : le gros du morceau tombe dans le pré à l'est de la
+     ville, un éclat dépasse la ville et se plante dans le champ de la ferme.
+     Deux joueurs sur deux cartes voient donc chacun un vrai impact, au même
+     instant, sans qu'aucun message de plus ne parte. */
+  function starImpactSpot() {
+    const m = meRef.current; if (!m) return null;
+    const zone = m.zone || "farm";
+    if (zone === "farm") { const f = starFurrowPos(); return f ? { zone, x: f.x, y: f.y } : null; }
+    if (zone === "town") { const c = starCraterPos(); return c ? { zone, x: c.x, y: c.y } : null; }
+    return null;
+  }
+
+  /* ⚠️ LA MÉMOIRE DE « J'AI VU LA CHUTE » EST LOCALE ET DATÉE PAR L'HORODATAGE
+     DE LA CHUTE ELLE-MÊME. Un booléen aurait suffi jusqu'au jour où l'on remet
+     la quête à zéro depuis le menu dev : `e.fall` change, la marque ne
+     correspond plus, la scène se rejoue. Rien à invalider à la main.
+     ⚠️ La clé porte la GRAINE de la ferme : deux salons différents sur la même
+     machine sont deux histoires différentes. */
+  function starFallSeenKey() { return "ferme_star_fall:" + ((sharedRef.current.seed | 0) >>> 0); }
+  function starFallSeen() {
+    try { return +window.localStorage.getItem(starFallSeenKey()) || 0; } catch (e) { return 0; }
+  }
+  function starMarkFallSeen() {
+    const e = sharedRef.current.star;
+    try { window.localStorage.setItem(starFallSeenKey(), String((e && e.fall) || 0)); } catch (err) { /* localStorage indispo */ }
+  }
+
+  /* Est-ce que la scène a un sens MAINTENANT ? ⚠️ LA LISTE EST CELLE DE CE QUI
+     EST PERMIS (la zone), suivie de ce qui MASQUE (les panneaux). L'inverse — une
+     liste noire de zones — laisserait passer la prochaine carte ajoutée sans
+     lever quoi que ce soit (leçon de `plantTree`, 440). */
+  function starSceneCanPlay() {
+    const m = meRef.current;
+    if (!m || m.sleeping) return false;
+    if (!Q.starImpactZone(m.zone || "farm")) return false;
+    if (starUiOpenRef.current) return false;                 // mini-jeu, carte de chapitre, rappel
+    if (zoneTransRef.current && zoneTransRef.current.active) return false;
+    if (mapOpenRef.current || shopOpenRef.current || binOpenRef.current || bagOpenRef.current
+      || cauldronMenuOpenRef.current || adsOpenRef.current || visitorOpenRef.current
+      || gregCardOpenRef.current || marketOpenRef.current) return false;
+    /* ⚠️⚠️ ET LE MENU DÉVELOPPEUR EN FAIT PARTIE — trouvé À L'ÉCRAN, à la
+       première tentative, et il aurait échappé à tous les bancs. C'est le seul
+       panneau depuis lequel on DÉCLENCHE la chute : sans lui dans cette liste,
+       le bouton « ▶ Start » jouait les neuf secondes derrière le menu qu'on
+       venait d'utiliser pour appuyer dessus, et on ne voyait rien. Le défaut
+       exact que ce chantier corrige, reproduit par le chantier lui-même.
+       (Il n'est pas dans `starUiOpenRef`, qui ne compte que les panneaux de la
+       QUÊTE — mini-jeu, carte de chapitre, rappel.) */
+    if (devMenuOpenRef.current) return false;
+    return true;
+  }
+
+  function starQueueScene(key) {
+    starScenePendRef.current = { key, at: performance.now() };
+    setStarTick(t => t + 1);
+  }
+
+  /* ⚠️ LA CARTE DE CHAPITRE EST LA DERNIÈRE IMAGE DE LA SCÈNE, PAS UN MESSAGE À
+     PART, et son titre se DÉRIVE du chapitre courant au lieu d'être écrit
+     « field » en dur. C'est ce qui rend le rattrapage honnête : un joueur qui
+     rejoint au chapitre 3 voit la chute et lit « Chapter Three », pas un
+     « Chapter One » qui le renverrait dans un champ déjà fouillé.
+     ⚠️ ET LE DÉLAI EST COMPTÉ SUR L'HORLOGE LOCALE, comme la scène elle-même :
+     on ne compare jamais deux horloges (§3). */
+  function starPlayScene(key, ch) {
+    starScenePendRef.current = null;
+    starSceneRef.current = { key, t0: performance.now() };
+    setStarTick(t => t + 1);
+    if (key === "fall") {
+      starCamRef.current = starImpactSpot();
+      starMarkFallSeen();
+      setTimeout(() => setStarCard({ key: Q.starChapterKey(sharedRef.current.star) }), Q.STAR_FALL_MS - 3000);
+    } else {
+      starCamRef.current = null;
+      if (key === "turn" && ch) setTimeout(() => setStarCard({ key: ch }), Q.STAR_TURN_MS - 1500);
+    }
+  }
+
+  /* Le battement de la file. ⚠️ IL PORTE AUSSI LE RATTRAPAGE, et c'est pour ça
+     qu'il est écrit ici plutôt que branché sur l'arrivée du salon : un joueur
+     qui se connecte le lendemain de la chute n'a jamais reçu le `starScene` qui
+     l'annonçait — il ne reçoit que l'ÉTAT. En comparant l'horodatage de la chute
+     à la marque locale, le même code sert les deux cas et il ne peut pas y en
+     avoir un troisième qu'on aurait oublié de brancher. */
+  function starScenePump() {
+    const e = sharedRef.current.star;
+    if (!e || !Q.starFallen(e)) return;
+    if (!starScenePendRef.current && !starSceneRef.current && !Q.starDone(e) && starFallSeen() !== e.fall)
+      starQueueScene("fall");
+    const pend = starScenePendRef.current;
+    if (!pend || starSceneRef.current) return;
+    if (!starSceneCanPlay()) return;
+    starPlayScene(pend.key, pend.ch);
+  }
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ LA CAMÉRA DE LA CHUTE. Rend `{ x, y, k }` en CASES, ou `null`.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ ELLE NE DÉPLACE PAS LE JOUEUR, ELLE DÉPLACE LE REGARD — même discipline
+     que la secousse du 444, qui passe par un `transform` du canevas et jamais
+     par `m.x` : bouger le fermier pour cadrer, c'est le faire traverser un mur
+     en douce, et c'est irrattrapable côté hôte.
+     ⚠️ SA DURÉE EST CONSTANTE, PAS FONCTION DE LA DISTANCE. Cent trente cases ou
+     dix, le vol dure `STAR_CAM_GO_MS` : le flash doit tomber à 3,0 s chez tout
+     le monde, sinon deux joueurs à deux bouts de la ville ne voient pas la même
+     scène — et deux chronologies qui divergent, c'est exactement ce qu'on ne
+     peut plus rattraper une fois la scène commencée (§3).
+     ⚠️ ET LE FONDU EST UN `smoothstep`, PAS UNE RAMPE : une rampe démarre et
+     s'arrête net, ce qui se lit comme un défaut d'affichage. Le vol part doux et
+     se pose doux, donc l'œil suit au lieu de sursauter. */
+  function starCamNow(zone) {
+    const sc = starSceneRef.current, tgt = starCamRef.current;
+    if (!sc || sc.key !== "fall" || !tgt || tgt.zone !== zone) return null;
+    const t = performance.now() - sc.t0;
+    let k;
+    if (t <= 0) return null;
+    else if (t < Q.STAR_CAM_GO_MS) k = t / Q.STAR_CAM_GO_MS;
+    else if (t < Q.STAR_CAM_HOLD_MS) k = 1;
+    else if (t < Q.STAR_CAM_HOLD_MS + Q.STAR_CAM_BACK_MS) k = 1 - (t - Q.STAR_CAM_HOLD_MS) / Q.STAR_CAM_BACK_MS;
+    else return null;
+    k = k * k * (3 - 2 * k);
+    return { x: tgt.x, y: tgt.y, k };
+  }
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 445 — CE QUE LE CHEVRON DÉSIGNE. UNE JOINTURE, JAMAIS DEUX LISTES.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ `Q.starTargetSite` DIT QUEL LIEU, CETTE FONCTION DIT OÙ IL EST. La
+     séparation n'est pas cosmétique : le QUEL est une pure fonction de la table,
+     donc le banc l'appelle ; le OÙ dépend du monde généré, donc il vit ici. Une
+     seule liste `id → position`, lue par le chevron et par personne d'autre — et
+     un `id` qui n'y figure pas ne rend rien plutôt que de rendre un repli poli
+     (le `|| clé` du 444, qui n'échoue pas : il affiche la clé).
+     ⚠️ ELLE REND SA ZONE, TOUJOURS. Le chevron ne s'affiche que si la zone est
+     la mienne (décision de Guillaume au 445) : c'est la discipline stricte de la
+     boussole du 429 (`gps.zone === m.zone`), et la seule qui résiste au piège des
+     deux cartes — le ponton de la ville tombe aussi au milieu des champs. */
+  function starTargetPos(id) {
+    const site = Q.STAR_SITE[id];
+    if (!site) return null;
+    if (id === "furrow") { const f = starFurrowPos(); return { zone: "farm", x: f.x, y: f.y }; }
+    if (id === "crater") { const c = starCraterPos(); return c ? { zone: "town", x: c.x, y: c.y } : null; }
+    if (id === "lakeShard") return { zone: "town", x: C.STAR_PIER_X, y: C.STAR_PIER_Y };
+    /* ⚠️ LA VERRERIE ET L'ARBRE DE LA PIE SE CHERCHENT PAR `kind`, JAMAIS PAR
+       COORDONNÉES — même raison que `nearStarTownProp` : le générateur les pose
+       par balayage en spirale, ils glissent de trois cases, et une coordonnée
+       recopiée ici mentirait au premier déplacement du quartier des artisans. */
+    if (id === "beadShard") return starTownPropPos("starRack", "town");
+    if (id === "nestShard") return starTownPropPos("starNestTree", "town");
+    if (id === "belfry" || id === "song") {
+      const cw = courtWorldRef.current;
+      if (!cw) return null;
+      const want = id === "song" ? ["organBench"] : ["greatBell", "greatBell2"];
+      for (const p of (cw.props || [])) if (want.includes(p.kind)) return { zone: "court", x: p.x, y: p.y };
+      return null;
+    }
+    return null;
+  }
+  function starTownPropPos(kind, zone) {
+    const tw = townWorldNow(); if (!tw) return null;
+    for (const p of (tw.props || [])) if (p.kind === kind) return { zone, x: p.x, y: p.y };
+    return null;
+  }
+  /* La cible courante, prête à dessiner — ou `null`, ce qui est un cas NORMAL et
+     non un échec : pendant l'écoute des ombres, il n'y a délibérément nulle part
+     où aller (§ `starTargetSite` dans `quete.js`). */
+  function starGuideTarget() {
+    const e = sharedRef.current.star;
+    if (!e || !Q.starFallen(e) || Q.starDone(e)) return null;
+    if (starUiOpenRef.current || starSceneRef.current) return null;
+    const id = Q.starTargetSite(e);
+    if (!id) return null;
+    const pos = starTargetPos(id);
+    return pos ? { ...pos, id } : null;
+  }
 
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ZIP 444 — LE COMPAGNON. C'EST LUI, LE PISTEUR ; LE BANDEAU N'EST QU'UN

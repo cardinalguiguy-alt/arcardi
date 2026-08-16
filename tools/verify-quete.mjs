@@ -679,6 +679,139 @@ section("Les grandeurs partagées");
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   8 bis. ⚠️⚠️ ZIP 445 — LA CHUTE EST-ELLE VUE, ET LE CHEVRON POINTE-T-IL
+   QUELQUE PART ?
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️ CE BLOC EXISTE PARCE QUE LE 444 A APPRIS QUE LES BANCS NE MESURAIENT PAS
+   L'ARRIVÉE. Ici l'objet mesuré est exactement ça, deux fois :
+     • une SCÈNE qui peut ne pas avoir lieu (elle se jouait dans un intérieur,
+       derrière un menu, ou jamais pour qui rejoignait le lendemain) ;
+     • un REPÈRE qui pourrait pointer vers rien (une cible sans position, ou
+       une position sans branche de code — « une porte sans chemin de code
+       ment », le défaut n°1 du 444).
+   Aucun de ces deux-là n'est visible en lisant le code : les deux se voient à
+   l'écran, ou se mesurent ici.
+   ═══════════════════════════════════════════════════════════════════════════ */
+section("La chute est vue, et le chevron désigne (445)");
+{
+  /* ── LES MONDES D'IMPACT. ⚠️ UNE LISTE DE CE QUI EST PERMIS, jamais de ce qui
+     est interdit : le jour où une carte s'ajoute, elle n'a pas de chute tant
+     que personne ne l'écrit (leçon de `plantTree`, 440). */
+  ok("la liste des mondes d'impact existe et n'est pas vide",
+     Array.isArray(Q.STAR_FALL_WORLDS) && Q.STAR_FALL_WORLDS.length > 0, Q.STAR_FALL_WORLDS.join(","));
+  ok("…et ne nomme que des zones connues",
+     Q.STAR_FALL_WORLDS.every(z => ["farm", "town", "court"].includes(z)));
+  /* ⚠️ ET LES DEUX MONDES OÙ QUELQUE CHOSE TOMBE VRAIMENT Y SONT, LES DEUX. Le
+     gros du morceau dans le pré de la ville, un éclat dans le champ de la ferme :
+     si l'un manquait, la moitié des joueurs verrait une scène sans impact. */
+  ok("⚠️ la ferme ET la ville ont leur impact",
+     Q.starImpactZone("farm") && Q.starImpactZone("town"));
+  /* ⚠️⚠️ ET L'INTÉRIEUR N'EN EST PAS UN. C'est tout le correctif : au 444 la
+     scène se jouait au troisième étage du tribunal, où il n'y a ni ciel, ni
+     cratère, ni rien à montrer — une cinématique jouée dans le vide. */
+  ok("⚠️ un intérieur n'est PAS un monde d'impact", !Q.starImpactZone("court"));
+  ok("…ni le passage sombre", !Q.starImpactZone("evil"));
+
+  /* ── LA CAMÉRA. Trois inégalités, pas un réglage à l'œil. */
+  ok("⚠️ la caméra est POSÉE quand le flash tombe",
+     Q.STAR_CAM_GO_MS < Q.STAR_CAM_FLASH_MS,
+     `vol ${Q.STAR_CAM_GO_MS} ms, flash à ${Q.STAR_CAM_FLASH_MS} ms`);
+  ok("…et elle y reste APRÈS le flash (sinon on ne voit pas ce qu'on est venu voir)",
+     Q.STAR_CAM_HOLD_MS > Q.STAR_CAM_FLASH_MS,
+     `tenue jusqu'à ${Q.STAR_CAM_HOLD_MS} ms`);
+  ok("⚠️ …et elle est revenue au joueur AVANT la fin de la scène",
+     Q.STAR_CAM_HOLD_MS + Q.STAR_CAM_BACK_MS <= Q.STAR_FALL_MS,
+     `${Q.STAR_CAM_HOLD_MS + Q.STAR_CAM_BACK_MS} ms sur ${Q.STAR_FALL_MS} ms`);
+  /* ⚠️ ET LE RETOUR DURE PLUS LONGTEMPS QUE L'ALLER. On part vite (« regarde
+     là-bas ») et on revient posément ; l'inverse donne un plan qui fuit. */
+  ok("le retour est plus lent que le vol", Q.STAR_CAM_BACK_MS > Q.STAR_CAM_GO_MS,
+     `${Q.STAR_CAM_GO_MS} ms → ${Q.STAR_CAM_BACK_MS} ms`);
+  /* La carte de chapitre tombe à `STAR_FALL_MS - 3000` : elle ne doit pas
+     recouvrir le plan sur l'impact qu'on vient de payer. */
+  ok("⚠️ la carte de chapitre n'arrive pas avant que la caméra ait fini de tenir",
+     Q.STAR_FALL_MS - 3000 >= Q.STAR_CAM_FLASH_MS,
+     `carte à ${Q.STAR_FALL_MS - 3000} ms`);
+
+  /* ── LA CIBLE DU CHEVRON, SUR TOUTE LA QUÊTE. ⚠️ ON REJOUE LA QUÊTE ENTIÈRE
+     et on regarde ce que le chevron désignerait à chaque étape : c'est le seul
+     moyen de s'apercevoir qu'il pointerait vers un lieu qu'on a déjà trouvé, ou
+     vers rien alors qu'il reste quelque chose à faire. */
+  {
+    const e = Q.newStar();
+    Q.resolveStarFall(e, Q.STAR_FALL_MIN_DAY, 1000);
+    ok("⚠️ au premier chapitre, le chevron pointe le sillon", Q.starTargetSite(e) === "furrow");
+    Q.resolveStarFound(e, "furrow", "banc", 2000);
+    ok("…puis le cratère", Q.starTargetSite(e) === "crater");
+    Q.resolveStarFound(e, "crater", "banc", 3000);
+    /* ⚠️⚠️ ET LÀ, RIEN — C'EST VOULU ET C'EST LE CONTRÔLE LE PLUS UTILE DU BLOC.
+       Pendant l'écoute des ombres, il n'y a nulle part où aller : la mécanique
+       demande d'aller écouter AILLEURS, deux fois, à trente cases d'écart. Un
+       chevron qui désignerait quoi que ce soit à cet instant serait un mensonge
+       poli — la famille du `|| clé` du 444, qui n'échoue pas : il affiche. */
+    ok("⚠️ pendant l'écoute des ombres, le chevron ne désigne RIEN",
+       Q.starTargetSite(e) === null, "les deux lieux sont encore inconnus");
+    Q.resolveStarFound(e, "leanLake", "banc", 4000);
+    Q.resolveStarFound(e, "leanGlass", "banc", 4100);
+    ok("…et il repart dès que les ombres ont parlé", Q.starTargetSite(e) === "lakeShard");
+    Q.resolveStarFound(e, "lakeShard", "banc", 5000);
+    ok("…puis la verrerie", Q.starTargetSite(e) === "beadShard");
+    Q.resolveStarFound(e, "beadShard", "banc", 6000);
+    ok("…puis le nid", Q.starTargetSite(e) === "nestShard");
+    Q.resolveStarFound(e, "nestShard", "banc", 7000);
+    ok("…puis le beffroi", Q.starTargetSite(e) === "belfry");
+    Q.resolveStarFound(e, "belfry", "banc", 8000);
+    ok("…et enfin le chant", Q.starTargetSite(e) === "song");
+    /* ⚠️ TOUTE CIBLE RENDUE A UN `spot` NOMMÉ. Un lieu sans `spot` ne se
+       dessine nulle part ; le rendre serait pointer vers `undefined`. */
+    ok("⚠️ toute cible désignable porte un `spot` réel",
+       Q.STAR_SITES.filter(s => s.spot && s.spot[0] !== "*").every(s => typeof s.spot === "string" && s.spot.length > 2));
+  }
+
+  /* ── LA JOINTURE, EN SCAN DE SOURCE, AVEC LE COMPTE DE LIGNES LUES.
+     ⚠️⚠️ C'EST LE DÉFAUT N°1 DU 444 PRIS À LA RACINE : « une porte sans chemin
+     de code ment ». Chaque identifiant de lieu que `starTargetSite` peut rendre
+     doit avoir une branche dans `starTargetPos` — sinon le chevron ne s'affiche
+     tout simplement pas, sans une erreur, et le joueur croit qu'il n'y a rien à
+     chercher. ⚠️ ET ON PUBLIE COMBIEN DE LIGNES ON A LUES (leçon du 441) : un
+     scanner dont le motif ne matche rien passe toujours au vert. */
+  {
+    const src = fs.readFileSync(path.join(SRC, "FermeGame.js"), "utf8");
+    const read = src.split("\n").length;
+    ok("le scanner a bien lu `FermeGame.js`", read > 20000, `${read} lignes lues`);
+    const body = (src.split("function starTargetPos(")[1] || "").split("\n  function ")[0];
+    ok("⚠️ `starTargetPos` existe", body.length > 100, `${body.split("\n").length} lignes de corps`);
+    const targetable = Q.STAR_SITES.filter(s => s.spot && s.spot[0] !== "*").map(s => s.id);
+    const orphans = targetable.filter(id => !body.includes(`"${id}"`));
+    ok("⚠️⚠️ chaque lieu désignable a sa branche de position",
+       orphans.length === 0, orphans.join(",") || `${targetable.length} lieux joints`);
+    /* ⚠️ ET LA CAMÉRA EST DÉCRITE UNE SEULE FOIS, LUE PAR LES DEUX MONDES. Deux
+       calculs de « où regarde la caméra pendant la chute » divergeraient au
+       premier réglage, et le symptôme serait le pire du genre : juste à la
+       ferme, faux en ville (§4, troisième visage du piège n°1). */
+    const camCalls = (src.match(/starCamNow\(/g) || []).length;
+    ok("⚠️ les deux caméras appellent la MÊME fonction de scène",
+       camCalls === 3, `${camCalls} occurrences (1 déclaration + 2 appels)`);
+    ok("…la ferme la lit", /starCamNow\("farm"\)/.test(src));
+    ok("…la ville aussi", /starCamNow\("town"\)/.test(src));
+    /* ⚠️ LE CHEVRON REFUSE LES AUTRES ZONES. Sans ce garde, il pointerait « à
+       vol d'oiseau » vers une case de la ville depuis un pré de la ferme, et il
+       aurait parfaitement l'air de marcher (§4, le piège des deux cartes). */
+    const chev = (src.split("function drawStarChevron(")[1] || "").split("\n    function ")[0];
+    ok("⚠️ le chevron refuse une cible d'une autre zone", /g\.zone !== zone/.test(chev));
+    ok("⚠️ …et un autre ÉTAGE dans le tribunal", /courtFloorOf/.test(chev));
+    /* Les deux repères ne se recouvrent pas : orbites distinctes. */
+    ok("⚠️ le chevron n'orbite pas sur le même cercle que la boussole",
+       C.STAR_CHEVRON_ORBIT_PX !== C.GPS_ORBIT_PX,
+       `chevron ${C.STAR_CHEVRON_ORBIT_PX} px, boussole ${C.GPS_ORBIT_PX} px`);
+    /* ⚠️⚠️ ET LA CHUTE PASSE PAR LA FILE, PAS PAR LA RÉCEPTION. Si quelqu'un
+       remettait un jour `starSceneRef.current = …` directement à l'arrivée du
+       message, tout ce chantier redeviendrait sans effet — silencieusement. */
+    ok("⚠️ la chute est mise en FILE à la réception", /starQueueScene\("fall"\)/.test(src));
+    ok("…et la file bat dans la boucle, toutes zones", /starScenePump\(\);/.test(src));
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    9. LES TEXTES. Chaque clé lue par le jeu doit exister — une phrase manquante
    rend `undefined`, qui s'affiche tel quel dans une bulle.
    ═══════════════════════════════════════════════════════════════════════════ */

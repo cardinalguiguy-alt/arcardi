@@ -5104,6 +5104,14 @@ export const GPS_MARK_PX = 11;        // demi-hauteur du triangle
 export const GPS_ORBIT_PX = 46;       // rayon de l'orbite autour du joueur
 export const GPS_ARRIVE_TILES = 2.2;  // en deçà, on est arrivé et la boussole s'éteint
 export const GPS_CLEAR_TILES = 3;     // recliquer à moins de ça sur le plan efface la destination
+/* ⚠️ ZIP 445 — LE CHEVRON DE LA QUÊTE (voir `drawStarChevron`). Il est un peu
+   plus petit que le triangle de la boussole et il orbite PLUS LOIN : les deux
+   peuvent être à l'écran en même temps, et sur le même cercle ils se
+   recouvriraient très exactement dans le cas le plus fréquent — celui où l'on a
+   posé sa boussole sur l'objectif de la quête. Deux repères superposés, c'est
+   un repère de perdu et un repère illisible. */
+export const STAR_CHEVRON_PX = 10;
+export const STAR_CHEVRON_ORBIT_PX = 64;
 /* ═══════════════════════════════════════════════════════════════════════════
    ZIP 430 — LE MARCHÉ DU CHAMP DE FOIRE.
    ⚠️ AUCUNE DE CES VALEURS N'EST UN ÉTAT : le cours du jour est une pure

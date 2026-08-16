@@ -309,6 +309,67 @@ export const STAR_END_MS = 14000;      // durée de la résolution
    vérifier qu'elle ne dépasse pas la scène qui la précède. Une carte qui reste
    à l'écran pendant qu'on rejoue est un panneau, pas une transition. */
 export const STAR_CARD_MS = 3800;
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 445 — LA CHUTE DOIT ÊTRE VUE. (demande de Guillaume : « quand la comète
+   ║ s'écrase, la scène doit être vue ».)
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ CE QU'ON CORRIGE N'EST PAS UN DÉFAUT DE DESSIN, C'EST UN DÉFAUT DE
+   GARANTIE. Le 444 jouait la scène « là où le joueur est », ce qui voulait dire
+   en pratique : parfois derrière un menu, parfois au troisième étage du
+   tribunal où il n'y a pas de ciel, parfois jamais — un joueur qui rejoint le
+   salon le lendemain ne l'a tout simplement pas vue. Une ouverture qui peut ne
+   pas avoir lieu n'est pas une ouverture.
+
+   Trois grandeurs, et elles sont ici parce que le banc les lit :
+   1. LES MONDES D'IMPACT. La scène ne se joue QUE là où quelque chose tombe
+      vraiment — le sillon à la ferme, le cratère en ville. ⚠️ C'est une liste
+      de ce qui est PERMIS et non de ce qui est interdit (leçon de `plantTree`,
+      440) : le jour où une carte s'ajoute, elle n'a pas de chute tant que
+      personne ne l'écrit ici. Ailleurs, la scène ATTEND.
+   2. LA FENÊTRE DE CAMÉRA. Elle part vers l'impact, s'y tient pendant le flash
+      et la secousse, revient. ⚠️ SA DURÉE EST CONSTANTE, JAMAIS FONCTION DE LA
+      DISTANCE : le flash doit tomber à 3,0 s chez tout le monde, sinon deux
+      joueurs à deux bouts de la ville ne voient pas la même scène — et c'est
+      exactement ce qu'on ne peut pas rattraper (§3 : jamais deux horloges).
+   ⚠️ ET IL N'Y A PAS DE DÉLAI D'ABANDON. La tentation était d'écrire « au bout
+   de N minutes, on la joue quand même » : ça n'a pas de sens ici, puisque la
+   seule chose qu'on pourrait faire à l'expiration serait de la jouer dans un
+   endroit où elle n'a rien à montrer. Elle attend, et elle attend bien — un
+   paramètre qu'aucun code n'utilise vraiment est un paramètre qui mentira.
+   ───────────────────────────────────────────────────────────────────────────── */
+export const STAR_FALL_WORLDS = ["farm", "town"];
+export function starImpactZone(zone) { return STAR_FALL_WORLDS.includes(zone || "farm"); }
+/* La caméra, en millisecondes depuis le début de la scène. ⚠️ ELLE EST POSÉE
+   AVANT LE TRAIT DE LUMIÈRE (1,2 s) et elle ne repart qu'APRÈS la colonne
+   (4,5 s) : une caméra qui bouge pendant le flash rend le flash illisible. */
+export const STAR_CAM_GO_MS = 1100;     // le vol vers l'impact
+export const STAR_CAM_HOLD_MS = 6200;   // ce qu'elle y reste (depuis t=0)
+export const STAR_CAM_BACK_MS = 1900;   // le retour vers le joueur
+/* ⚠️ CONTRÔLÉ PAR LE BANC : la caméra doit être POSÉE quand le flash tombe
+   (3,0 s) et être revenue avant la fin de la scène. Deux inégalités, pas un
+   réglage à l'œil. */
+export const STAR_CAM_FLASH_MS = 3000;
+
+/* ⚠️⚠️ CE QUE LE CHEVRON DÉSIGNE — UNE JOINTURE, JAMAIS UNE SECONDE LISTE.
+   C'est le défaut n°1 du 444 pris à la racine (« une porte sans chemin de code
+   ment ») : le pisteur affichait une PHRASE tirée du chapitre, et rien au monde
+   ne garantissait qu'elle parlait du même endroit que celui vers lequel on
+   aurait pointé. Ici la cible se DÉRIVE de `starMissing`, donc de la table, donc
+   du même endroit que la phrase — le jour où l'on déplace une note, les deux
+   suivent ensemble ou aucune ne suit.
+   ⚠️ `spot: "*lean"` NE REND RIEN, ET C'EST JUSTE : l'écoute des ombres se fait
+   n'importe où en ville. Un chevron qui pointerait quelque part pendant qu'on
+   demande au joueur d'aller AILLEURS écouter serait un mensonge poli — la même
+   famille que le `|| clé` du 444. Pas de cible : pas de chevron. */
+export function starTargetSite(e) {
+  for (const id of starMissing(e)) {
+    const s = STAR_SITE[id];
+    if (s && s.spot && s.spot[0] !== "*") return id;
+  }
+  return null;
+}
+
 /* ⚠️⚠️ ELLE SE CACHE QUAND QUELQU'UN APPROCHE, ET C'EST LE THÈME RENDU VISIBLE
    (§3 de QUETE.md) : personne d'autre ne voit l'étoile. Le rayon est en cases,
    la durée dit combien de temps elle reste dans le col après le passage — sans

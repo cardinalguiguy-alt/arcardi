@@ -672,6 +672,8 @@ minutes, donc personne ne la reverrait.
 | **Interface** (pisteur, compagnon, ciel, reprise) | ✅ | ✅ | ✅ (sauf la Lyre, jamais vue de nuit) | — |
 | **Bancs** (`verify-quete`, `render-etoile`, `render-beffroi`) | ✅ | ✅ | ✅ | ✅ |
 | **Docs** (`README.md` §25, `CLAUDE.md`, `tools/README.md`) | ✅ | ✅ | — | — |
+| **445 — la chute VUE** (file d'attente, rattrapage, caméra sur l'impact) | ✅ | ✅ | ✅ | ✅ |
+| **445 — le CHEVRON** (repère directionnel de quête) | ✅ | ✅ | ✅ | ✅ |
 | ⚠️ **La quête à DEUX CLIENTS** | ✅ | ✅ | ❌ **RIEN** | ❌ |
 
 ### Ce qui est vérifié à ce stade
@@ -820,3 +822,72 @@ beffroi, sur du bois foncé, et un gris cerné de gris disparaît.
   affichaient « churchTower » en toutes lettres. `verify-quete` refuse maintenant les deux.
 - ⚠️ **Le menu dev est la bonne porte d'entrée** : ⌘⇧X → « ⭐ Star ». Il appelle les vrais
   résolveurs et jette ce qu'ils rendent.
+
+---
+
+## 13. ZIP 445 — LA CHUTE EST VUE, ET LE CHEVRON MÈNE
+
+**Demande de Guillaume :** *« quand la comète s'écrase, la scène doit être vue. Il doit y avoir un
+indicateur style gps (forme spéciale) pour nous diriger vers l'impact ou le cratère. »*
+
+### 13.1 Les quatre décisions
+
+| | tranché |
+|---|---|
+| ce qu'on construit | **les deux** : la garantie que la scène a lieu **et** la caméra qui va voir l'impact |
+| intérieur / menu / mini-jeu au moment de la chute | **on diffère** — elle attend et se joue à la première image où elle a un sens |
+| la forme du repère | **un chevron blanc luisant** (le triangle ambre reste la boussole du joueur, 429) |
+| l'autre carte | **rien ne s'affiche hors du monde de la cible — la comète comprise** |
+
+### 13.2 ⚠️ CE QUE LE 444 FAISAIT VRAIMENT, ET POURQUOI C'ÉTAIT DEUX DÉFAUTS ET NON UN
+
+1. **La scène pouvait ne pas avoir lieu.** Elle se jouait « là où le joueur est », donc parfois au
+   troisième étage du tribunal (pas de ciel), derrière un menu, ou **jamais** — un joueur qui
+   rejoint le salon le lendemain ne reçoit que l'ÉTAT, pas le `starScene` qui l'annonçait.
+   *Une ouverture qui peut ne pas avoir lieu n'est pas une ouverture.*
+2. ⚠️⚠️ **Et quand elle avait lieu, elle ne disait rien.** Le trait de lumière traversait l'écran à
+   des coordonnées ARBITRAIRES et la colonne montait à `W × 0,86` : **aucun rapport avec le lieu de
+   la chute**. C'était joli et muet. *Une cinématique d'ouverture doit répondre à « où ça ? ».*
+
+### 13.3 Ce qui est construit
+
+- **Une file** (`starScenePendRef`) : la chute est mise en attente à la réception, jamais jouée.
+  `starScenePump()` bat dans la boucle, **toutes zones, avant toute sortie anticipée** — c'est le
+  défaut d'`actAnimRef` du 426, connu d'avance.
+- ⚠️ **Elle ne concerne QUE la chute.** Le retournement et la finale suivent un geste du joueur :
+  il est présent par construction, et la finale se joue justement dans un intérieur (le beffroi).
+- **Un rattrapage**, par le même code : une marque locale (`localStorage`, datée par `e.fall`)
+  comparée à l'état partagé. Un joueur qui rejoint après voit la chute ; **la carte de chapitre
+  affiche son chapitre COURANT**, plus « Chapter One » en dur.
+- **Une caméra de scène** (`starCamNow`), **une seule écriture lue par `getCam` ET `getCamTown`**.
+  Elle vole vers l'impact, s'y tient pendant le flash, revient. ⚠️ **Durée constante, jamais
+  fonction de la distance** : le flash doit tomber à 3,0 s chez tout le monde.
+- **La comète vise.** Trait, flash, **onde de choc au sol** (neuve) et colonne de lumière sont
+  ancrés sur le point d'impact réel, recalculé à chaque image depuis la caméra.
+- **Deux impacts, un par carte** : le sillon à la ferme, le cratère en ville — c'est l'histoire
+  elle-même, et ça ne coûte pas un message de plus.
+- **Le chevron** (`drawStarChevron`), frère de `drawGpsMarker` et jamais sa copie : deux chevrons
+  ouverts, blancs, cerne sombre, halo autour ; orbite autour du joueur hors champ, se pose sur la
+  cible à l'écran ; **orbite plus large que la boussole** pour qu'ils ne se recouvrent pas.
+
+### 13.4 ⚠️ CE QUE LA SÉANCE A TROUVÉ, ET QU'AUCUN BANC N'AURAIT VU
+
+**Le menu développeur n'était pas dans la garde de visibilité.** C'est le SEUL panneau depuis
+lequel on déclenche la chute : elle se jouait donc derrière le menu qu'on venait d'utiliser pour
+appuyer dessus. *Le chantier a reproduit, dans son premier jet, très exactement le défaut qu'il
+corrigeait* — et il a fallu deux minutes à l'écran pour le voir, contre jamais pour un banc.
+⚠️ Seconde leçon, moins grave et plus utile : **j'ai cru deux fois voir un défaut qui n'existait
+pas** (le voile absent, le chevron gris). Les deux fois, la mesure a tranché contre l'œil — voile
+L 72 contre 146, chevron 232 pixels à L > 215, max 255. *§8 de `CLAUDE.md` : on ne juge pas au
+ressenti, y compris quand on croit voir un bogue.*
+
+### 13.5 Vérifié
+
+`verify-quete` **207/207** (177 + 30 neufs, tous sur l'ARRIVÉE) · `verify-syntax` ·
+`npx next build` **✓ Compiled successfully** · les 14 autres bancs de contrôle · et **une séance
+réelle** : chute différée dans le tribunal (rien ne se joue), jouée à la sortie sur la ferme,
+comète ancrée sur le sillon, caméra revenue, chevron à 33 m puis 38 m à la ferme et 131 m vers le
+cratère en ville, **et rien à la ferme quand la cible est en ville**.
+
+⚠️ **Ce qui n'a PAS été vu, et qui reste au §12.2 :** la chute à DEUX clients (chacun sur sa carte,
+chacun sa caméra, chacun son impact) — c'est la même séance qui manque depuis le 444.
