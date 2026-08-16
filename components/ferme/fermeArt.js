@@ -5787,90 +5787,458 @@ export function buildSprites() {
   }
 
   /* ═══════════════════════════════════════════════════════════════════════════
-     LE CRATÈRE — UNE FONCTION, PAS UN SPRITE, ET IL FAUT DIRE POURQUOI.
+     LE CRATÈRE — REFAIT AU 446, SUR MODÈLE, ET C'EST LE PREMIER DÉCOR DU JEU
+     QUI AIT UNE PROFONDEUR.
      ───────────────────────────────────────────────────────────────────────────
-     ⚠️⚠️ IL FAIT NEUF CASES DE LARGE ET IL SE FOND DANS L'HERBE. Cuit en sprite,
-     il aurait fallu y peindre l'herbe qui l'entoure — donc figer une saison, un
-     voile de nuit et une météo, ou en cuire quatre. Dessiné à la volée sur le
-     fond déjà peint, il hérite de tout ça gratuitement.
-     ⚠️ ET IL EST DANS `fermeArt.js`, PAS DANS LA BOUCLE DE RENDU. C'est le §2 du
-     piège n°1 (« un dessin qu'aucun banc ne peut appeler ne se dégrade pas, il
-     reste au niveau du jour où il a été écrit ») : les sols des intérieurs sont
-     restés au 426 pendant douze zips pour exactement cette raison. Le jeu
-     l'APPELLE, `render-etoile` l'APPELLE.
-     ⚠️⚠️ SA FORME EST UNE ISOLIGNE, PAS UNE HAUTEUR PAR COLONNE. La règle du 437
-     interdit `f(x)` pour une côte parce qu'une côte se replie ; un cratère, lui,
-     est étoilé par nature (il n'a pas de crique), donc un rayon modulé par
-     l'angle EST un champ légitime — et c'est dit ici pour qu'on ne prenne pas
-     cette exception pour un oubli. Deux harmoniques premières entre elles (3 et
-     5), sinon le contour se referme sur une symétrie visible.
-     ⚠️ `phase` : 0 = frais (au chapitre 2), 1 = refroidi en bassin de verre (la
-     trace, après la fin). Le second se DÉDUIT de l'état partagé, il n'est stocké
-     nulle part — règle des cierges de l'église (441). */
-  function drawStarCrater(g2, cx, cy, T2, phase, tMs) {
-    /* ⚠️⚠️ LA CUVETTE NE FAIT PAS L'EMPRISE, ET C'EST UN DÉFAUT TROUVÉ PAR LE
-       BANC. Premier jet : la cuvette prenait tout `STAR_CRATER_DRAW_R`, et les
-       traînées d'herbe couchée partaient JUSQU'À 1,6 FOIS PLUS LOIN — donc le
-       dessin peignait un rayon de 94 px là où le générateur ne garantit un
-       disque libre que sur 72. Les traînées seraient tombées sur ce qui traîne
-       autour : un arbre, un buisson, le sentier. C'est très exactement « la case
-       d'un décor n'est pas la surface qu'il couvre » (§4 de CLAUDE.md, la règle
-       du 440), et personne ne l'aurait vu avant de tomber sur la bonne carte.
-       ⚠️ La parade n'est pas de raccourcir les traînées jusqu'à les perdre — ce
-       sont ELLES qui disent « quelque chose est TOMBÉ ici » plutôt que
-       « quelqu'un a creusé ». On rétrécit la CUVETTE et on garde la portée : le
-       dessin total tient désormais dans l'emprise annoncée, et le cratère a
-       gagné en lecture au passage (une cuvette plus serrée fait un impact plus
-       violent). */
-    const FULL = C.STAR_CRATER_DRAW_R * T2;   // l'emprise ANNONCÉE, traînées comprises
-    const R = FULL * 0.62;                    // la cuvette, qui n'en est qu'une part
-    const rAt = (a) => R * (1 + 0.17 * Math.sin(3 * a + 0.7) + 0.10 * Math.sin(5 * a - 1.3));
-    const ring = (k, col) => {
-      g2.fillStyle = col;
-      g2.beginPath();
-      for (let i = 0; i <= 48; i++) {
-        const a = i / 48 * Math.PI * 2, r = rAt(a) * k;
-        const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r * 0.78;   // vu de dessus, écrasé
-        i ? g2.lineTo(x, y) : g2.moveTo(x, y);
-      }
-      g2.closePath(); g2.fill();
-    };
-    /* 1. LE BOURRELET DE TERRE PROJETÉE, d'abord — il déborde du trou, donc il se
-       peint dessous. Un anneau peint après aurait un bord franc côté intérieur. */
-    ring(1.00, phase ? "#5c6a3c" : "#4a3a26");
-    ring(0.93, phase ? "#6e7e48" : "#5a4632");
-    /* 2. L'HERBE COUCHÉE EN ÉTOILE, sur vingt cases. ⚠️ C'EST CE QUI DIT
-       « quelque chose est TOMBÉ ici » plutôt que « quelqu'un a creusé ». Sans
-       elle, un cratère est un trou. Les traînées sont RADIALES et de longueurs
-       inégales : régulières, elles feraient une rosace. */
-    for (let k = 0; k < 26; k++) {
-      const a = k / 26 * Math.PI * 2 + 0.11;
-      const len = R * 1.02 + (FULL - R * 1.02) * Math.abs(Math.sin(k * 2.399));
-      const x0 = cx + Math.cos(a) * rAt(a) * 0.98, y0 = cy + Math.sin(a) * rAt(a) * 0.78;
-      const x1 = cx + Math.cos(a) * len, y1 = cy + Math.sin(a) * len * 0.78;
-      g2.strokeStyle = phase ? "rgba(120,150,86,0.34)" : "rgba(122,116,74,0.44)";
-      g2.lineWidth = 2; g2.beginPath(); g2.moveTo(x0, y0); g2.lineTo(x1, y1); g2.stroke();
+     ⚠️⚠️ IL EST REFAIT PARCE QUE GUILLAUME A FOURNI DEUX IMAGES ET A DEMANDÉ
+     « EXACTEMENT CE SPRITE », pas une interprétation. Ce que le 444 dessinait :
+     six anneaux concentriques et vingt-six traits. Lisible, et PLAT — c'est-à-dire
+     très exactement ce qu'un cratère ne doit pas être. Ce que les deux images
+     montrent, et qui manquait :
+       1. un TROU, rond, sombre, dont la paroi OUEST est dans l'ombre — sans
+          cette ombre, un cratère vu de dessus est un disque brun ;
+       2. une couronne de terre projetée en LANGUES inégales (le contour du
+          modèle est une étoile, pas un cercle) ;
+       3. de longues FISSURES ramifiées qui courent dans l'herbe BIEN au-delà de
+          la couronne, et qui disent à elles seules « c'est tombé » ;
+       4. des BRAISES au fond, nombreuses puis rares ;
+       5. une colonne de FUMÉE, épaisse puis maigre — c'est la différence entre
+          les deux images fournies, et c'est devenu une mécanique (voir §heat) ;
+       6. l'ÉTOILE, posée au centre, tant qu'on ne l'a pas fait sortir.
+     ⚠️⚠️ DEUX RAYONS, ET ILS NE MESURENT PAS LA MÊME CHOSE (règle du 441,
+     « une grandeur de dessin, une grandeur de rang, une grandeur de collision ») :
+       · `STAR_CRATER_DRAW_R` = LA MASSE DE TERRE. Le générateur garantit un
+         disque d'herbe libre de ce rayon : rien de solide ne peut s'y trouver,
+         donc la couronne ne recouvre jamais un décor. Elle n'en sort JAMAIS,
+         et `render-etoile` le mesure sur le pixel.
+       · `STAR_CRATER_CRACK_R` = LES FISSURES, ET ELLES SEULES. Elles débordent
+         de l'emprise garantie, ce qui serait interdit pour une masse (« la case
+         d'un décor n'est pas la surface qu'il couvre », 440) et ne l'est pas
+         pour un trait d'un pixel : le cratère est un DÉCAL DE SOL peint avant
+         tout le reste, donc une fissure passe SOUS l'arbre ou le banc qu'elle
+         croise, ne cache rien et ne bloque rien. C'est la seule dérogation, elle
+         est nommée, et elle a son propre nombre.
+     ⚠️ TOUT EST SNAPPÉ À L'ENTIER, `arc()` COMPRIS (voir `craterDisc`). La ville
+     se dessine à ZOOM = 3 : un `arc()` de rayon fractionnaire y sort
+     ANTICRÉNELÉ, c'est-à-dire une tache lisse au milieu d'un monde en gros
+     pixels. Le modèle est en pixels francs ; tout passe donc par `fillRect`.
+     ⚠️⚠️ ET LA MASSE EST CUITE UNE FOIS (`craterBake`), PAS REDESSINÉE PAR
+     IMAGE. Elle fait 250×220 et se peint pixel par pixel : la calculer soixante
+     fois par seconde était hors de question, et la cuire dans un canevas
+     TRANSPARENT ne coûte rien — le fond d'herbe reste dessous, donc la saison,
+     le voile de nuit et la météo continuent d'être hérités gratuitement (c'était
+     la raison invoquée au 444 pour NE PAS cuire, et elle était fausse : ce
+     qu'il ne fallait pas cuire, c'est l'herbe, pas le cratère).
+     ⚠️ LE DESSIN EST EN DEUX MOITIÉS, ET C'EST UNE QUESTION DE TRI :
+     `drawStarCrater` est le SOL (couronne, trou, braises, étoile) et se peint
+     avec les tuiles ; `drawStarCraterAir` est la FUMÉE, qui monte, et qui part
+     dans la file de tri à la rangée du cratère — sinon un joueur passant au nord
+     du trou serait dessiné DEVANT une colonne qui est derrière lui.
+     ⚠️ `phase` : 0 = le cratère (chapitre 2), 1 = refroidi en bassin de verre (la
+     trace, après la fin) — DÉDUIT de l'état partagé, stocké nulle part (règle
+     des cierges, 441). `opt.heat` (0..1) est la chaleur, elle aussi dérivée :
+     voir `starCraterHeat` dans `quete.js`. */
+  const CRATER_SQUASH = 0.86;          // vu de haut, à peine écrasé (le modèle est presque rond)
+  /* ⚠️⚠️ LE MODÈLE N'EST PAS UNE CUVETTE, C'EST UNE GERBE. Premier jet du 446 :
+     une cuvette ronde bordée de trente langues régulières — regardé à l'écran, ça
+     fait un TOURNESOL, une collerette de pétales tous pareils autour d'un disque
+     brun. Le modèle de Guillaume est fait de FIBRES : une soixantaine de traînées
+     radiales de longueurs et de tons très inégaux, qui partent du centre, se
+     terminent en pointes, et se prolongent en fissures. La même chose donc décrit
+     le fond, la paroi, le bord ET la silhouette — un seul champ, pas trois
+     couches. C'est ce qui donne la lecture « ça a GICLÉ » au lieu de « on a
+     creusé ».
+     ⚠️ LA QUEUE DE LA DISTRIBUTION EST LOURDE (`pow(rnd, 1.7)`) : la plupart des
+     fibres sont courtes, quelques-unes très longues. Tirées uniformément, elles
+     redonnent une collerette — c'est très exactement ce que le premier jet
+     faisait, et aucune formule de forme ne le rattrape. */
+  const CRATER_RAY_N = 56;
+  const CRATER_RAY = (() => {
+    const r = makeRnd(4463), raw = [];
+    for (let k = 0; k < CRATER_RAY_N; k++)
+      raw.push({ len: 0.66 + Math.pow(r(), 1.5) * 0.34, tone: 0.85 + r() * 0.32, hj: 0.86 + r() * 0.26 });
+    /* Un lissage LÉGER des longueurs, et de rien d'autre : deux fibres voisines
+       de longueurs opposées font du bruit, pas une gerbe. Les TONS, eux, restent
+       bruts — c'est leur alternance serrée qui fait les stries. */
+    return raw.map((v, k) => ({
+      len: Math.min(1, v.len * 0.80 + (raw[(k + 1) % CRATER_RAY_N].len + raw[(k + CRATER_RAY_N - 1) % CRATER_RAY_N].len) * 0.10),
+      tone: v.tone, hj: v.hj,
+    }));
+  })();
+  function craterRayAt(a) {
+    const TAU = Math.PI * 2;
+    let u = a % TAU; if (u < 0) u += TAU;
+    const f = u / TAU * CRATER_RAY_N, k = f | 0, s = f - k;
+    const ray = CRATER_RAY[k % CRATER_RAY_N], nxt = CRATER_RAY[(k + 1) % CRATER_RAY_N];
+    /* ⚠️⚠️ LE BORD EST UNE LIGNE BRISÉE ENTRE FIBRES VOISINES, PAS UN PÉTALE PAR
+       FIBRE. Vu sur la planche : avec un lobe (`sin(πs)`) par secteur, chaque
+       fibre devient un pétale identique et le cratère porte une COLLERETTE de
+       tournesol — d'autant plus visible qu'on réduit leur nombre. Interpolées,
+       deux fibres voisines de longueurs très différentes font une dent ; deux
+       fibres proches n'en font aucune. La gerbe devient irrégulière PARCE QUE les
+       longueurs le sont, et pas parce qu'une formule de forme le décore. */
+    return { len: ray.len + (nxt.len - ray.len) * (s * s * (3 - 2 * s)), tone: ray.tone, hj: ray.hj };
+  }
+  /* ⚠️⚠️ ET LE TROU EST UN SECOND CHAMP, LISSE, QUI N'EST PAS CELUI-LÀ. On
+     marche DANS celui-ci (c'est lui que `starCraterSink` interroge, donc il doit
+     être doux : une gerbe sous les pieds ferait tressauter le fermier d'une fibre
+     à l'autre), on REGARDE l'autre. Un rayon unique aurait porté deux sens —
+     la faute du dos d'âne des ponts (441). */
+  function craterHoleK(a) {
+    return 0.640 + 0.040 * Math.sin(3 * a + 0.7) + 0.026 * Math.sin(5 * a - 1.3);
+  }
+  /* Le grain fin, PAR-DESSUS les fibres. ⚠️ IL NE DÉPEND QUE DE L'ANGLE — un
+     grain qui varierait aussi avec le rayon ferait du bruit, pas des stries. */
+  function craterNoise(a) {
+    return 0.55 * Math.sin(a * 13.7 + 1.2) + 0.30 * Math.sin(a * 29.3 + 4.1) + 0.15 * Math.sin(a * 7.1 + 2.2);
+  }
+  /* Les deux palettes, en RVB parce qu'on les MODULE (l'ombre de la paroi est un
+     facteur, pas une seconde couleur choisie à la main). Cinq bandes du centre
+     vers la lèvre. ⚠️ LA 1 GARDE LA SILHOUETTE DE LA 0 : c'est la règle des deux
+     états (banc §5), seule la couleur change. */
+  /* ⚠️ DEUX COULEURS DE BASE PAR ÉTAT, PAS CINQ BANDES — C'EST LA VALEUR QUI
+     PORTE LA FORME (§8 de CLAUDE.md : ce qui manque à une image, c'est un ÉCART,
+     pas un décalage). Cinq bandes concentriques peintes à la main donnaient une
+     cible de tir à l'arc ; ici, la terre du trou et la terre du bourrelet sont
+     deux tons proches, et tout le reste est de l'ombre calculée. */
+  const CRATER_PAL = [
+    { pit: [96, 64, 40], earth: [150, 108, 68], tip: [58, 39, 25],
+      clod: [[124, 94, 64], [148, 116, 82]], clodDark: [40, 27, 17], crack: "30,20,13" },
+    { pit: [96, 196, 152], earth: [132, 158, 92], tip: [66, 82, 48],
+      clod: [[110, 136, 76], [132, 160, 92]], clodDark: [42, 56, 32], crack: "42,54,32" },
+  ];
+
+  /* Un disque en PIXELS FRANCS. Voir le chapeau : `arc()` anticrénelle. */
+  function craterDisc(g, cx, cy, r, col, sq) {
+    const q = sq === undefined ? 1 : sq, ri = Math.max(1, Math.round(r));
+    g.fillStyle = col;
+    for (let dy = -ri; dy <= ri; dy++) {
+      const w = Math.round(Math.sqrt(Math.max(0, ri * ri - dy * dy)));
+      if (w < 1) continue;
+      g.fillRect(Math.round(cx) - w, Math.round(cy + dy * q), w * 2 + 1, 1);
     }
-    g2.lineWidth = 1;
-    // 3. La cuvette, en trois marches — une pente lisse n'a pas de lecture.
-    ring(0.86, phase ? "#3e6a4e" : "#3a2c1e");
-    ring(0.66, phase ? "#2f5c46" : "#2a2016");
-    /* 4. LE FOND : du sable fondu en verre. ⚠️ IL EST LA PARTIE LA PLUS CLAIRE ET
-       LA PLUS PETITE — c'est la règle de cette famille : une source qui s'élargit
-       sans monter en valeur se lit comme du brouillard. */
-    ring(0.44, phase ? "#3f8a6a" : "#6a5c3e");
-    ring(0.30, phase ? "#63b48e" : "#8a7a52");
-    ring(0.17, phase ? "#a8e8c6" : "#b8a874");
+  }
+
+  /* LES FISSURES. Elles partent de la POINTE des langues (la terre se déchire
+     dans le prolongement de ce qui a été projeté), marchent en zigzag, se
+     divisent une ou deux fois, et s'amincissent. ⚠️ ELLES S'ARRÊTENT NET À
+     `STAR_CRATER_CRACK_R` : sans cette borne, la marche aléatoire sortait du
+     canevas cuit et se faisait raboter en silence — le piège n°1 des sprites
+     (433), qui ne coûte rien sur le moment. */
+  function craterCracks(g, ox, oy, R, RC, pal) {
+    const rnd = makeRnd(4477);
+    const walk = (x0, y0, a0, len, wid, al0, depth) => {
+      let x = x0, y = y0, a = a0, run = 0;
+      while (run < len) {
+        const step = 2.0 + rnd() * 1.4;
+        a += (rnd() - 0.5) * 0.30;
+        x += Math.cos(a) * step; y += Math.sin(a) * step * CRATER_SQUASH;
+        run += step;
+        const dx = x - ox, dy = (y - oy) / CRATER_SQUASH;
+        if (Math.sqrt(dx * dx + dy * dy) > RC) return;      // la borne, voir ci-dessus
+        const k = run / len;
+        const w = Math.max(1, Math.round(wid * (1 - k * 0.72)));
+        const al = al0 * (1 - 0.42 * k);
+        P(g, Math.round(x) - (w >> 1), Math.round(y) - (w >> 1), w, w, `rgba(${pal.crack},${al.toFixed(2)})`);
+        if (depth < 2 && k > 0.16 && k < 0.74 && rnd() < 0.11)
+          walk(x, y, a + (rnd() < 0.5 ? -1 : 1) * (0.35 + rnd() * 0.45),
+               (len - run) * (0.35 + rnd() * 0.30), Math.max(1, wid - 1), al * 0.92, depth + 1);
+      }
+    };
+    /* ⚠️ ELLES PARTENT DES FIBRES LES PLUS LONGUES, PAS D'UN ANGLE SUR DEUX. Une
+       fissure au bout d'une fibre courte se détache du dessin ; au bout d'une
+       longue, elle en est la continuation — c'est ce que montre le modèle. */
+    for (let k = 0; k < CRATER_RAY_N; k += 2) {
+      const a = (k + 0.5) / CRATER_RAY_N * Math.PI * 2;
+      const ray = craterRayAt(a);
+      if (ray.len < 0.70 && rnd() > 0.30) { rnd(); continue; }
+      const r0 = ray.len * R * 0.96;
+      walk(ox + Math.cos(a) * r0, oy + Math.sin(a) * r0 * CRATER_SQUASH,
+           a + (rnd() - 0.5) * 0.34, (RC - r0) * (0.45 + rnd() * 0.55), rnd() < 0.45 ? 3 : 2, 0.80, 0);
+    }
+  }
+
+  /* LES MOTTES du fond : le modèle en montre des blocs francs, pas du grain.
+     Toutes DANS le trou (`craterHoleK`), sinon elles poivrent la couronne. */
+  function craterClods(g, ox, oy, R, pal) {
+    const rnd = makeRnd(4471);
+    for (let k = 0; k < 52; k++) {
+      const a = rnd() * Math.PI * 2;
+      const rr = (0.08 + Math.pow(rnd(), 0.7) * 0.58) * craterHoleK(a) * R;
+      const x = Math.round(ox + Math.cos(a) * rr), y = Math.round(oy + Math.sin(a) * rr * CRATER_SQUASH);
+      const w = 2 + ((rnd() * 3) | 0), h = 1 + ((rnd() * 2) | 0);
+      const c1 = pal.clod[rnd() < 0.5 ? 0 : 1];
+      P(g, x, y, w, h, `rgb(${c1[0]},${c1[1]},${c1[2]})`);
+      P(g, x, y + h, w, 1, `rgba(${pal.clodDark[0]},${pal.clodDark[1]},${pal.clodDark[2]},0.75)`);
+    }
+  }
+
+  const craterCache = new Map();
+  function craterBake(T2, phase) {
+    const key = (T2 | 0) + ":" + (phase ? 1 : 0);
+    const hit = craterCache.get(key);
+    if (hit) return hit;
+    const pal = CRATER_PAL[phase ? 1 : 0];
+    const R = C.STAR_CRATER_DRAW_R * T2, RC = C.STAR_CRATER_CRACK_R * T2;
+    const W = ((RC + 3) * 2) | 0, H = ((RC * CRATER_SQUASH + 3) * 2) | 0;
+    const ox = W >> 1, oy = H >> 1;
+    const [c, g] = cv(W, H);
+    /* Les fissures D'ABORD : une langue de terre projetée est retombée DESSUS,
+       donc la couronne les recouvre. L'inverse donnerait un trait qui court sur
+       la terre au lieu de sortir de dessous. */
+    craterCracks(g, ox, oy, R, RC, pal);
+    /* LA COURONNE ET LE TROU, PIXEL PAR PIXEL. ⚠️ EN `ImageData` ET NON EN
+       `fillRect` : cinquante mille appels à la cuisson passeraient, mais la
+       lecture de ce code deviendrait « quel anneau va par-dessus quel anneau »,
+       alors que ce qu'on décrit ici est un CHAMP (une couleur par (rayon,
+       angle)). C'est la même raison qui a fait choisir une isoligne au 444. */
+    const img = g.getImageData(0, 0, W, H), d = img.data;
+    /* ⚠️ LA POINTE DES LANGUES S'EFFILOCHE EN TRAME DE BAYER, PAS EN ALPHA. Une
+       pointe semi-transparente sur de l'herbe donne un brun verdâtre translucide
+       — du brouillard, pas de la terre. La trame garde chaque pixel OPAQUE et
+       laisse l'herbe passer entre : c'est ce que fait le modèle. */
+    const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+    /* ╔══════════════════════════════════════════════════════════════════════════
+       ║ LE RELIEF. C'EST LA PARTIE QUI COMPTE, ET ELLE EST ÉCLAIRÉE POUR DE BON.
+       ╚══════════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ DEMANDE DE GUILLAUME, MOT POUR MOT : « attention de bien reproduire
+       l'effet 3D de la référence ». Un dégradé du centre vers le bord ne le donne
+       pas — il donne une cible. Ce qui creuse une image vue de dessus est
+       l'ÉCLAIRAGE D'UNE PENTE : on décrit donc une HAUTEUR le long du rayon (le
+       trou descend, le bourrelet remonte, la fibre redescend), on en prend la
+       PENTE, et on l'éclaire. Une seule formule rend alors les quatre lectures
+       que montre le modèle, et aucune n'a été peinte à la main :
+         · paroi OUEST du trou      → sombre (elle tourne le dos à la lumière)
+         · paroi EST du trou        → claire (elle la reçoit de plein fouet)
+         · dos OUEST du bourrelet   → clair  (pente inverse, même lumière)
+         · dos EST du bourrelet     → sombre
+       ⚠️ LA LUMIÈRE VIENT DE L'OUEST-HAUT, ET CE N'EST PAS UN CHOIX LIBRE : tous
+       les sprites du jeu sont éclairés en haut à gauche (le four, les moellons,
+       les toits — voir `bStones`). Un cratère éclairé de l'autre côté aurait
+       l'air d'un trou découpé et collé.
+       ⚠️ ET LA VALEUR EST QUANTIFIÉE EN PALIERS : le monde est en gros pixels, un
+       dégradé continu y fait une tache lisse. Les paliers dessinent des courbes de
+       niveau — c'est ce que fait le modèle, et c'est ce qui rend la pente LISIBLE
+       plutôt que douce. */
+    const LIGHT = Math.PI;                 // ouest
+    const PIT = 0.62, LIP = 0.30;          // profondeur du trou, hauteur du bourrelet (relatives)
+    for (let py = 0; py < H; py++) {
+      const dy = (py + 0.5 - oy) / CRATER_SQUASH;
+      for (let px = 0; px < W; px++) {
+        const dx = px + 0.5 - ox;
+        const rr = Math.sqrt(dx * dx + dy * dy);
+        if (rr > R) continue;                       // l'emprise annoncée, jamais franchie
+        const a = Math.atan2(dy, dx);
+        const ray = craterRayAt(a), n = craterNoise(a);
+        const rt = ray.len * R;
+        if (rr > rt) continue;
+        const rb = craterHoleK(a) * R;
+        /* ⚠️ LE BORD DU TROU EST DÉHANCHÉ FIBRE PAR FIBRE (`hj`), ET SEULEMENT
+           POUR L'ŒIL : `craterHoleK` reste lisse, c'est lui que les pieds lisent.
+           Sans ce déhanchement, l'anneau clair a un bord intérieur parfaitement
+           elliptique — une soucoupe posée sur le dessin. */
+        const uH = Math.max(0.30, Math.min(0.93, rb * ray.hj / rt));
+        const u = rr / rt;
+        let slope, depth;
+        if (u < uH) {
+          // LE TROU : un paraboloïde. La pente monte vers l'extérieur.
+          const v = u / uH;
+          depth = -PIT * (1 - v * v);
+          slope = 2 * PIT * v / uH;
+        } else {
+          // LE BOURRELET PUIS LA FIBRE : ça monte, ça culmine, ça retombe à plat.
+          const w = (u - uH) / Math.max(0.001, 1 - uH);
+          depth = LIP * Math.pow(Math.sin(w * Math.PI), 0.70);
+          slope = LIP * 2.6 * Math.cos(w * Math.PI);
+        }
+        const sh = slope / Math.sqrt(1 + slope * slope);       // la pente, normalisée
+        /* Lambert d'un relief radial + une occlusion : au fond d'un trou, la
+           lumière du ciel elle-même n'entre plus. */
+        let shade = 1 - 0.78 * sh * Math.cos(a - LIGHT);
+        const occl = Math.max(0, Math.min(1, (depth + PIT) / (PIT + LIP)));
+        shade *= 0.40 + 0.60 * Math.pow(occl, 1.25);
+        // Le bourrelet porte son ombre DANS la cuvette, juste sous sa lèvre.
+        if (u < uH && u > uH * 0.74) shade *= 1 - 0.16 * (u - uH * 0.74) / (uH * 0.26);
+        /* ⚠️ LA FIBRE S'ÉTEINT EN APPROCHANT DU CENTRE, ET C'EST UN DÉFAUT VU SUR
+           LA PLANCHE : appliquée pleine partout, la variation de ton faisait des
+           PARTS DE TARTE qui se rejoignaient au milieu — une roue, pas un trou.
+           Une traînée d'éjecta est une chose du BORD ; au fond, il n'y a que de
+           la terre. */
+        shade *= (1 + (ray.tone - 1) * (0.32 + 0.68 * u)) * (1 + 0.07 * n);
+        /* ⚠️ ET LE HAUT EST BORNÉ. Sans cette ligne, une pente qui fait face à la
+           lumière atteint 2,0 : la lèvre ouest partait au BLANC, ce qui n'est pas
+           une terre éclairée mais un trou dans le dessin — et le banc, lui, la
+           comptait comme du feu (elle en avait la couleur). Une pente ne rend
+           jamais plus de lumière qu'elle n'en reçoit. */
+        shade = Math.max(0.16, Math.min(1.22, shade));
+        shade = Math.round(shade * 14) / 14;                   // les paliers, voir le chapeau
+        /* ⚠️⚠️ LA POINTE DE LA FIBRE VA AU BRUN SOMBRE, ET C'EST CE QUI SÉPARE
+           UNE GERBE D'UNE FOURRURE. Peintes du même ton clair que la lèvre, les
+           fibres faisaient un HALO poilu tout autour du trou — vu sur la planche,
+           et c'était la dernière chose qui éloignait du modèle. Dans le modèle, le
+           tan est l'anneau SOULEVÉ, et ce qui en sort est sombre : ce sont les
+           mêmes traînées que les fissures, en plus large. La couleur relie donc
+           les deux, et l'œil lit une seule chose qui part du trou. */
+        const base = u < uH ? pal.pit : pal.earth;
+        let cr = base[0], cg = base[1], cb = base[2];
+        if (u > 0.78) {
+          const q = Math.min(1, (u - 0.78) / 0.22);
+          cr += (pal.tip[0] - cr) * q; cg += (pal.tip[1] - cg) * q; cb += (pal.tip[2] - cb) * q;
+        }
+        /* ⚠️⚠️ LE TRAMAGE NE SERT QUE LA POINTE, ET C'EST LE DÉFAUT LE PLUS VISIBLE
+           DU PREMIER JET : écrit `keep *= 0.82 + 0.18·n`, il s'appliquait à TOUTE
+           la surface, donc le cratère entier partait en damier — flou de loin,
+           sale de près. Une pointe d'éjecta s'effiloche ; une paroi, non. */
+        const frayed = 0.90 + 0.07 * n;
+        if (u > frayed) {
+          const keep = 1 - (u - frayed) / Math.max(0.02, 1 - frayed) * 0.88;
+          if (keep <= BAYER[(py & 3) * 4 + (px & 3)] / 16) continue;
+        }
+        const i = (py * W + px) * 4;
+        d[i] = Math.max(0, Math.min(255, cr * shade));
+        d[i + 1] = Math.max(0, Math.min(255, cg * shade));
+        d[i + 2] = Math.max(0, Math.min(255, cb * shade));
+        d[i + 3] = 255;
+      }
+    }
+    g.putImageData(img, 0, 0);
+    craterClods(g, ox, oy, R, pal);
+    const out = { c, ox, oy, w: W, h: H };
+    craterCache.set(key, out);
+    return out;
+  }
+
+  /* ⚠️⚠️ L'ENFONCEMENT — UNE GRANDEUR DE DESSIN, ET RIEN D'AUTRE.
+     Demande de Guillaume : « quand on se déplace à l'intérieur, prévoir un
+     déplacement qui suggère une profondeur ; pas plat. » Ce que rend cette
+     fonction est un DÉCALAGE D'IMAGE en pixels : positif = le fermier descend
+     dans le trou, négatif = il enjambe le bourrelet. Il ne touche NI au rang de
+     tri, NI à la collision, NI au réseau — et c'est la leçon du 439 prise à
+     l'endroit : « une grandeur de dessin ne doit pas entrer dans la collision »,
+     l'arc du pont ajouté à `playerElevTown` aurait rendu les ponts
+     infranchissables. Ici, rien à réconcilier non plus : chacun calcule le
+     décalage de chacun à partir des x/y qui circulent déjà (§3 de CLAUDE.md).
+     ⚠️ ET IL LIT `craterHoleK`, LE MÊME CHAMP QUE LE DESSIN : la cuvette où l'on
+     s'enfonce est au pixel près celle qu'on voit. Deux formules auraient donné
+     « il s'enfonce à côté du trou », défaut invisible en relecture et criant à
+     l'écran. */
+  function starCraterSink(dxTiles, dyTiles, T2) {
+    const R = C.STAR_CRATER_DRAW_R * T2;
+    const x = dxTiles * T2, y = (dyTiles * T2) / CRATER_SQUASH;
+    const r = Math.sqrt(x * x + y * y);
+    if (r >= R) return 0;
+    const rb = craterHoleK(Math.atan2(y, x)) * R, sc = T2 / 16;
+    if (r < rb) {
+      const u = r / rb;
+      return C.STAR_CRATER_SINK_PX * (1 - u * u) * sc;
+    }
+    // Le bourrelet : on monte de deux ou trois pixels en l'enjambant.
+    const band = rb * 0.20;
+    if (r > rb + band) return 0;
+    return -C.STAR_CRATER_LIP_PX * Math.sin(Math.PI * (r - rb) / band) * sc;
+  }
+
+  /* LE SOL DU CRATÈRE. ⚠️ `opt` : { heat 0..1, star:false } — deux valeurs
+     DÉRIVÉES par l'appelant, aucune stockée. */
+  function drawStarCrater(g2, cx, cy, T2, phase, tMs, opt) {
+    const o = opt || {};
+    const heat = phase ? 0 : Math.max(0, Math.min(1, o.heat === undefined ? 1 : o.heat));
+    const withStar = phase ? false : o.star !== false;
+    const R = C.STAR_CRATER_DRAW_R * T2, t = tMs || 0;
+    const bk = craterBake(T2, phase ? 1 : 0);
+    g2.drawImage(bk.c, Math.round(cx) - bk.ox, Math.round(cy) - bk.oy);
     if (phase) {
       // Le bassin : quelques reflets FIXES (dérivés de l'angle, pas tirés), et
-      // une lueur qui respire lentement.
+      // une lueur qui respire lentement. Inchangé depuis le 444.
       for (let k = 0; k < 5; k++) {
-        const a = k * 1.2566 + 0.4, r = R * (0.2 + 0.09 * k);
-        P(g2, (cx + Math.cos(a) * r) | 0, (cy + Math.sin(a) * r * 0.78) | 0, 3, 1, "rgba(226,255,240,0.55)");
+        const a = k * 1.2566 + 0.4, r = R * (0.14 + 0.07 * k);
+        P(g2, (cx + Math.cos(a) * r) | 0, (cy + Math.sin(a) * r * CRATER_SQUASH) | 0, 3, 1, "rgba(226,255,240,0.55)");
       }
-      const pulse = 0.10 + 0.05 * Math.sin((tMs || 0) / 1400);
-      g2.fillStyle = `rgba(140,240,190,${pulse.toFixed(3)})`;
-      ring(0.52, g2.fillStyle);
+      const pulse = 0.10 + 0.05 * Math.sin(t / 1400);
+      craterDisc(g2, cx, cy, R * 0.42, `rgba(140,240,190,${pulse.toFixed(3)})`, CRATER_SQUASH);
+      return;
+    }
+    /* LA CHALEUR DU FOND. ⚠️ ELLE EST LARGE ET FAIBLE, JAMAIS VIVE ET PETITE :
+       une lueur qui monte en valeur sans s'élargir se lit comme une lampe. */
+    if (heat > 0.02) {
+      const br = 0.5 + 0.5 * Math.sin(t / 760);
+      craterDisc(g2, cx, cy, R * 0.46, `rgba(255,110,40,${(0.05 * heat).toFixed(3)})`, CRATER_SQUASH);
+      craterDisc(g2, cx, cy, R * 0.28, `rgba(255,140,50,${((0.06 + 0.02 * br) * heat).toFixed(3)})`, CRATER_SQUASH);
+    }
+    /* LES BRAISES. ⚠️ ELLES S'ÉTEIGNENT UNE PAR UNE, ELLES NE PÂLISSENT PAS
+       TOUTES ENSEMBLE : c'est la différence entre les deux images de Guillaume
+       (la seconde en garde une dizaine, aussi vives). Un fondu global aurait
+       donné un cratère qui baisse la lumière, pas un cratère qui refroidit.
+       ⚠️ Le tirage est RE-FAIT à chaque image et il est DÉTERMINISTE : même
+       graine, mêmes positions, donc aucune braise ne saute d'un pixel. */
+    const rnd = makeRnd(4483);
+    for (let k = 0; k < 42; k++) {
+      const a = rnd() * Math.PI * 2;
+      /* ⚠️ ELLES SE SERRENT VERS LE FOND. Étalées sur toute la cuvette (premier
+         réglage : 0,72), elles font des CONFETTIS oranges — vu à l'écran, pas sur
+         la planche : c'est du poivre (438), et ça casse la lecture « un foyer au
+         fond d'un trou ». Le modèle les groupe dans la moitié intérieure. */
+      const rr = (0.06 + Math.pow(rnd(), 1.35) * 0.52) * craterHoleK(a) * R;
+      const ph = rnd() * 6.283, big = rnd() < 0.34;
+      /* ⚠️ LE NOMBRE DE BRAISES EST PROPORTIONNEL À LA CHALEUR, ET SEULEMENT LUI :
+         à chaleur nulle il n'en reste AUCUNE (le cratère de la fin ne rougeoie
+         pas), au plancher de `STAR_CRATER_EMBER` il en reste la dizaine de la
+         seconde image. Leur ÉCLAT, lui, bouge peu — c'est ce qui fait qu'elles
+         s'éteignent au lieu de pâlir toutes ensemble. */
+      if (k / 42 >= heat * 1.35) continue;
+      const b = (0.45 + 0.55 * (0.5 + 0.5 * Math.sin(t / 420 + ph))) * (0.60 + 0.40 * heat);
+      const x = Math.round(cx + Math.cos(a) * rr), y = Math.round(cy + Math.sin(a) * rr * CRATER_SQUASH);
+      if (b > 0.62) craterDisc(g2, x, y, 3 + b * 2, `rgba(255,120,40,${(0.05 + 0.05 * b).toFixed(3)})`, CRATER_SQUASH);
+      const col = b > 0.78 ? "#ffdc8c" : b > 0.52 ? "#ff8a2a" : "#c03a10";
+      /* ⚠️ UNE BRAISE EST UN TIRET COUCHÉ SUR LA STRIE, PAS UN POINT. Le modèle
+         montre du verre fondu au fond des rainures : des points auraient donné du
+         poivre orange (l'îlot qui flotte, 438), le tiret suit la fibre. */
+      const ex = Math.abs(Math.cos(a)) > 0.5 ? (big ? 3 : 2) : 1;
+      const ey = Math.abs(Math.cos(a)) > 0.5 ? 1 : (big ? 2 : 1);
+      P(g2, x, y, ex, ey, col);
+      if (big) P(g2, x, y + ey, ex, 1, "rgba(150,40,10,0.65)");
+    }
+    /* L'ÉTOILE, AU FOND, TANT QU'ELLE N'EST PAS SORTIE. ⚠️ C'est le seul point
+       froid du dessin, et c'est voulu : dans le modèle, le bleu au milieu de
+       l'orange est ce qui accroche l'œil à trois écrans de distance. */
+    if (withStar) {
+      const p = 0.5 + 0.5 * Math.sin(t / 900);
+      craterDisc(g2, cx, cy, 10 + p * 1.5, `rgba(120,226,255,${(0.09 + 0.03 * p).toFixed(3)})`, CRATER_SQUASH);
+      craterDisc(g2, cx, cy, 6 + p, `rgba(150,238,255,${(0.20 + 0.06 * p).toFixed(3)})`, CRATER_SQUASH);
+      craterDisc(g2, cx, cy, 3.4, "rgba(198,244,255,0.90)", 1);
+      craterDisc(g2, cx, cy, 1.8, "#ffffff", 1);
+    }
+  }
+
+  /* LA FUMÉE — L'AUTRE MOITIÉ, ET ELLE PART DANS LA FILE DE TRI (voir le
+     chapeau). ⚠️ ELLE NE S'ARRÊTE JAMAIS TOUT À FAIT TANT QUE L'ÉTOILE EST AU
+     FOND : la seconde image de Guillaume, cratère refroidi, garde une volute.
+     C'est `starCraterHeat` qui tient ce plancher, pas ce dessin. */
+  function drawStarCraterAir(g2, cx, cy, T2, tMs, opt) {
+    const o = opt || {};
+    const heat = Math.max(0, Math.min(1, o.heat === undefined ? 1 : o.heat));
+    if (heat <= 0.01) return;
+    const R = C.STAR_CRATER_DRAW_R * T2, t = tMs || 0;
+    const cols = 1 + Math.round(4 * heat);
+    for (let k = 0; k < cols; k++) {
+      const bx = cx + Math.sin(k * 2.39) * R * 0.34, by = cy + Math.cos(k * 1.71) * R * 0.20;
+      const per = 4600 + k * 730;
+      for (let j = 3; j >= 0; j--) {
+        const age = ((t / per) + j / 4 + k * 0.37) % 1;
+        const x = bx + age * age * 15 + Math.sin(age * 3.1 + k) * 4;
+        const y = by - age * R * (1.45 + 0.30 * (k % 3));
+        const rad = 2.6 + age * (8.5 + (k % 3) * 1.4);
+        const al = heat * 0.50 * Math.sin(Math.pow(age, 0.80) * Math.PI);
+        if (al < 0.02) continue;
+        /* ⚠️ UNE BOUFFÉE EST UN CHOU-FLEUR, PAS UNE BILLE : trois disques décalés
+           par bouffée. Un seul cercle par bouffée donnait un chapelet de perles —
+           le modèle montre des masses bosselées. */
+        const col = `rgba(196,194,184,${al.toFixed(3)})`;
+        craterDisc(g2, x, y, rad, col, 1);
+        craterDisc(g2, x + rad * 0.62, y + rad * 0.20, rad * 0.66, col, 1);
+        craterDisc(g2, x - rad * 0.55, y + rad * 0.30, rad * 0.58, col, 1);
+        if (rad > 4) craterDisc(g2, x - rad * 0.30, y - rad * 0.45, rad * 0.55, `rgba(230,228,218,${(al * 0.9).toFixed(3)})`, 1);
+      }
     }
   }
 
@@ -11712,6 +12080,8 @@ house: house(),
     starNestTree: starNestTreeSprite(),
     magpie: [magpieSprite(0), magpieSprite(1), magpieSprite(2)],
     drawStarCrater,
+    drawStarCraterAir,
+    starCraterSink,
     townHouses: Array.from({ length: C.TOWN_HOUSE_STYLES }, (_, i) => townHouseVariant(i)),
     rabbit: [rabbitSprite(0), rabbitSprite(1), rabbitSprite(2)],
     torch: torchSprite(),

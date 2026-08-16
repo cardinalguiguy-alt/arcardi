@@ -2296,3 +2296,117 @@ pas jouée à deux**.
 ⚠️ **Un point de conception attend Guillaume** : le dessin de la compagne (cinq écritures, pas
 encore juste — deux directions chiffrées dans `QUETE.md` §12.3), et le contenu de la récompense
 cosmétique, dont l'arbitrage est posé et vide (`resolveStarGift`).
+
+---
+
+## 26. ZIP 446 — LE CRATÈRE REFAIT SUR MODÈLE : DU RELIEF, DE LA CHALEUR, ET UN TROU OÙ L'ON DESCEND
+
+**Demande de Guillaume, deux images à l'appui :** « redesign du cratère. très rigoureux avec
+profondeur : quand on se déplace à l'intérieur, prévoir un déplacement qui suggère une profondeur ;
+pas plat. il doit fumer pendant un moment, avant de se refroidir, et nous permettre de récupérer
+l'étoile. » Puis, en cours de route : « attention de bien reproduire l'effet 3D de la référence ».
+Les deux images sont le MÊME cratère à deux instants — l'un fumant, l'autre refroidi — et c'est
+cette paire, plus que chaque image, qui a dicté le chantier.
+
+### Ce qui n'allait pas, et ça tient en un mot
+
+Le cratère du 444 était **six anneaux concentriques et vingt-six traits**. Il passait tous les
+contrôles du banc, il était lisible, et il était **plat**. ⚠️ **Aucune grandeur ne mesurait la
+profondeur** — c'est, une fois de plus, la question du §25 : *« quelle grandeur ne mesure-t-on
+pas ? »*, pas *« où est le bogue »*. `render-etoile` mesurait l'emprise, l'ondulation du contour,
+la propreté : trois bonnes choses, et pas celle-là.
+
+### Les cinq pièces, et pourquoi chacune est là
+
+| pièce | où | ce qu'elle apporte |
+|---|---|---|
+| **le relief éclairé** | `fermeArt.js` · `craterBake` | une hauteur le long du rayon → une pente → `1 − k·pente·cos(a − lumière)`. Une formule, quatre lectures (paroi ouest sombre, est claire, dos du bourrelet clair à l'ouest, sombre à l'est) |
+| **la gerbe de fibres** | `CRATER_RAY`, `craterRayAt` | 56 traînées radiales de longueurs très inégales (queue lourde), bord en ligne brisée : la silhouette de splash du modèle |
+| **les fissures** | `craterCracks` | marche aléatoire ramifiée depuis la pointe des fibres, jusqu'à `STAR_CRATER_CRACK_R` |
+| **la chaleur** | `quete.js` · `starCraterHeat` | braises et fumée décroissantes, plancher tant que l'étoile est au fond |
+| **l'enfoncement** | `starCraterSink` + `drawCharacter` | on descend DANS le trou, on enjambe le bourrelet |
+
+### ⚠️⚠️ DEUX RAYONS, ET LA SEULE DÉROGATION ASSUMÉE DU DÉPÔT À LA RÈGLE DU 440
+
+`STAR_CRATER_DRAW_R` (4,5 cases) est **la masse de terre** : le générateur garantit un disque
+d'herbe libre de ce rayon, donc elle ne recouvre jamais rien, et le banc le mesure **sur le
+pixel**. `STAR_CRATER_CRACK_R` (7,6 cases) est **les fissures, et elles seules** — elles sortent
+de l'emprise garantie, ce qui serait interdit pour une masse (« la case d'un décor n'est pas la
+surface qu'il couvre ») et ne l'est pas pour un trait d'un à trois pixels dans un **décal de sol
+peint avant tout le reste** : une fissure passe SOUS l'arbre qu'elle croise, ne cache rien, ne
+bloque rien. ⚠️ **La dérogation est nommée, elle a son propre nombre, et le banc mesure les deux
+rayons séparément** pour que personne ne confonde les deux cas.
+
+### ⚠️ L'ENFONCEMENT EST UNE GRANDEUR DE DESSIN, ET RIEN D'AUTRE
+
+`starCraterSink(dx, dy, T)` rend un **décalage d'image** en pixels : +11 au fond, −3 sur le
+bourrelet, 0 dehors. Il est appliqué à `py` dans **`drawCharacter`**, c'est-à-dire dans le seul
+entonnoir par lequel passent moi, les joueurs distants, les résidents et les visiteurs — écrit
+dans la branche « moi », j'aurais été le seul à m'enfoncer et, à deux clients, chacun aurait vu
+l'autre marcher à plat sur le trou. ⚠️ **Il ne touche ni la position diffusée, ni la clé de tri,
+ni la collision** : en altitude de case (`TOWN_ELEV_PX`), le trou serait devenu une falaise que
+`canStandTown` refuse de franchir (`TOWN_STEP_MAX`) — **un cratère où l'on ne peut pas entrer**,
+très exactement l'arc du pont que le 439 a évité de justesse. ⚠️ Et il lit `craterHoleK`, **le
+même champ que le dessin** : la cuvette où l'on s'enfonce est au pixel près celle qu'on voit.
+
+### ⚠️ LA CHALEUR EST DÉRIVÉE, ET C'EST UNE PORTE
+
+`starCraterHeat(e, elapsed)` : plein feu à la chute, chute rapide, **plancher à
+`STAR_CRATER_EMBER` tant que l'étoile est au fond** (la seconde image du modèle fume encore), zéro
+le jour où on la sort. Rien n'est stocké, rien ne circule — `e.fall` partait déjà dans l'`apply`.
+Tant que ça fume, `resolveStarCalm` **refuse silencieusement** et l'invite dit « E: wait for it to
+cool » : on ne sort pas une étoile d'un trou brûlant, et le chapitre 2 commence donc par une
+minute où l'on n'a rien à faire que regarder — ce qui est le sujet de ce chapitre.
+
+⚠️⚠️ **`elapsed` EST UNE DURÉE, PAS UNE DATE, et c'est tout le soin réseau** : l'hôte passe
+`now − e.fall` (deux dates de SON horloge), le client passe le temps écoulé depuis SA propre
+réception de la chute, ancrée en `localStorage` (même forme que `starFallSeenKey`). On ne compare
+jamais deux horloges (§3 de `CLAUDE.md`). ⚠️ **Et l'ancre du client est toujours PLUS TARDIVE que
+celle de l'hôte** — on ne reçoit pas avant qu'il émette : le client ne demande donc que
+lorsqu'il se croit refroidi, c'est-à-dire toujours après que l'hôte l'ait accordé. **L'hôte n'a
+jamais à refuser**, et le jeu ne peut pas « proposer puis refuser » (défaut du 426).
+
+### Trois défauts de BANC trouvés en le lançant, et ils valent leur place ici
+
+1. **Il mesurait la profondeur sur le cratère CHAUD** : les braises éclairent le fond (L 72 contre
+   70 pour la lèvre), donc le banc jugeait « pas de profondeur » un dessin qui en a. On mesure la
+   TERRE ; le feu se mesure ailleurs.
+2. **Il séparait terre et fissure par la LUMINANCE** — ça marchait tant que le cratère était
+   éclairé mollement, et c'est devenu faux dès que la paroi ouest est passée dans l'ombre : « 72 %
+   d'irrégularité » annoncés sur un contour parfaitement régulier, parce que le banc ne VOYAIT pas
+   le côté sombre. La terre est peinte **opaque**, les fissures ne le sont jamais : la mesure passe
+   par l'**alpha**, qui ne dépend pas de l'éclairage.
+3. **Il comptait « du feu » par la couleur** (`R > 150 && R > 2·B`, puis un écart rouge-bleu) : la
+   lèvre de terre éclairée passait le test, donc soixante-quinze braises comptées là où il y en
+   avait neuf. Ce qu'on veut savoir n'est pas « quels pixels sont orange » mais **« qu'est-ce que
+   la chaleur AJOUTE »** — une différence entre deux images, exacte par construction.
+
+*Trois rédactions, trois fois la même faute : le banc mesurait une PROPRIÉTÉ VISIBLE là où il
+fallait mesurer une DIFFÉRENCE.*
+
+### ⚠️ ET LE PIÈGE DU BANC DE NAVIGATEUR A UNE PARADE QUI MARCHE, ENFIN
+
+Le §25 racontait qu'il avait mordu au 444 et que le remède connu (`MessageChannel`) figeait
+l'onglet. Il a mordu encore : `document.visibilityState === "hidden"`, **`requestAnimationFrame`
+ne se déclenche jamais**, le fermier ne bouge pas d'un pixel et on croit à un bogue de commandes.
+**La parade tient en une ligne, et son frein est dans sa forme :**
+
+```js
+window.requestAnimationFrame = (cb) => setTimeout(() => cb(performance.now()), 16);
+```
+
+Mesuré : **31 à 36 images par 500 ms** dans un onglet masqué, le monde tourne, le personnage
+marche, les positions se lisent. Le `MessageChannel` du 444 n'avait pas de frein ; `setTimeout(…,
+16)` en est un par construction. ⚠️ **Corollaire** : tant que le patch n'est pas posé,
+`getImageData` relit la **dernière image composée**, c'est-à-dire un état périmé — deux mesures de
+suite y donnent le même nombre, et on accuse le code qu'on vient d'écrire.
+
+### Ce que ça ne fait pas
+
+- ⚠️ **Les familiers ne s'enfoncent pas** (`drawPetsFor` a son propre chemin de dessin) : un chien
+  qui suit son maître au fond du trou marche sur le rebord. Vu, laissé, daté.
+- ⚠️ **La fumée est dans la file de tri à la rangée du cratère**, donc un joueur au nord du trou
+  passe correctement derrière, mais la colonne ne se coupe pas sur un bâtiment proche — il n'y en
+  a aucun dans le pré, et c'est la raison pour laquelle on n'a rien fait de plus.
+- **Le bassin de verre vert de la fin** (phase 1) reprend la même géométrie et n'a jamais été vu
+  en jeu — il demande une quête terminée. Il est sur la planche `etoile-cratere.png`, troisième.

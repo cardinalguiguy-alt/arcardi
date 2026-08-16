@@ -94,6 +94,10 @@ const STAR_EN = {
   /* ── ÉTAPE 2 : LE CRATÈRE. */
   s2: {
     promptCalm: "Stand still and look away",
+    /* ⚠️ ZIP 446 — LE CRATÈRE FUME AVANT DE RENDRE QUOI QUE CE SOIT. La phrase
+       doit dire les DEUX choses en une ligne : rien à faire, et ça va passer.
+       Une phrase qui ne dirait que « trop chaud » enverrait chercher un seau. */
+    tooHot: "The hole is still smoking. Whatever is down there won't come up yet.",
     empty: "The crater is empty. Warm sand, turned to green glass.",
     peek: "Something moves at the edge of your eye. You look. It's gone.",
     calmHint: "It won't come out while it's being watched.",
@@ -234,6 +238,7 @@ const STAR_EN = {
   prompt: (k) => ({
     furrow: "E: look at it",
     crater: "E: stand still",
+    craterHot: "E: wait for it to cool",
     lean: "E: let it sing",
     dive: "E: dive",
     sweep: "E: hold the star up",
@@ -1847,6 +1852,7 @@ export const FERME_STR = {
       townBoutique: "👗 Valley Town — la Haute-Ville",   // zip 427
       townMarket: "🎪 Valley Town — le champ de foire",   // zip 426
       townLake: "🏞️ Valley Town — le lac",
+      townCrater: "☄️ Valley Town — le cratère",   // 446 : on ne refait pas un décor qu'on met une minute à atteindre
       court: "⚖️ Tribunal — le hall",
       courtUpper: "🗂️ Tribunal — l'étage",
       courtBasement: "🔒 Tribunal — le sous-sol",
@@ -3452,6 +3458,7 @@ export const FERME_STR = {
       townBoutique: "👗 Valley Town — Upper Town",
       townMarket: "🎪 Valley Town — the fairground",      // zip 426
       townLake: "🏞️ Valley Town — the lake",
+      townCrater: "☄️ Valley Town — the crater",
       court: "⚖️ Courthouse — the hall",
       courtUpper: "🗂️ Courthouse — first floor",
       courtBasement: "🔒 Courthouse — basement",

@@ -201,10 +201,14 @@ function board() {
   return sur;
 }
 
-/* La planche du CRATÈRE, seule : il fait neuf cases, il ne tient pas avec le
-   reste, et il se peint sur un fond d'herbe. */
+/* La planche du CRATÈRE, seule : il fait quinze cases fissures comprises, il ne
+   tient pas avec le reste, et il se peint sur un fond d'herbe.
+   ⚠️ ZIP 446 — TROIS ÉTATS SUR LA MÊME PLANCHE, parce que c'est CE QUI A CHANGÉ :
+   le modèle de Guillaume est fourni en deux images (fumant / refroidi) et le
+   bassin de verre est le troisième. Les regarder côte à côte est la seule façon
+   de voir qu'ils gardent la même silhouette. */
 function craterBoard() {
-  const T = 16, W = 380, H = 190;
+  const T = 16, W = 780, H = 300;
   const sur = makeCanvas(W, H), g = sur.ctx;
   /* Un fond d'herbe APPROXIMÉ, et le banc le déclare : le vrai gazon de la ville
      est un pavé de 64 px (438) que seule la boucle de rendu assemble. Ici on
@@ -214,9 +218,53 @@ function craterBoard() {
     g.fillStyle = `rgb(${(74 + v * 12) | 0},${(112 + v * 16) | 0},${(58 + v * 10) | 0})`;
     g.fillRect(x, y, 4, 4);
   }
-  S.drawStarCrater(g, 100, 95, T, 0, 0);
-  S.drawStarCrater(g, 280, 95, T, 1, 0);
+  const at = [130, 390, 650];
+  S.drawStarCrater(g, at[0], 170, T, 0, 2200, { heat: 1 });
+  S.drawStarCraterAir(g, at[0], 170, T, 2200, { heat: 1 });
+  S.drawStarCrater(g, at[1], 170, T, 0, 2200, { heat: 0.20 });
+  S.drawStarCraterAir(g, at[1], 170, T, 2200, { heat: 0.20 });
+  S.drawStarCrater(g, at[2], 170, T, 1, 2200, {});
   return sur;
+}
+
+/* ⚠️⚠️ ET UNE PLANCHE DE MESURE, SUR FOND NOIR, QUI N'EST PAS LA PLANCHE QU'ON
+   REGARDE. Sur l'herbe, la terre et une fissure ont la même teinte dominante
+   (rouge > vert dans les deux cas) et rien ne les sépare ; sur du noir, la
+   MASSE reste claire (L ≥ 34) et la fissure reste sombre. Les deux rayons du
+   446 ne se mesurent qu'à cette condition. */
+function craterProbe(phase, heat) {
+  const T = 16, S2 = 320;
+  const sur = makeCanvas(S2, S2), gg = sur.ctx;
+  S.drawStarCrater(gg, S2 / 2, S2 / 2, T, phase, 0, { heat, star: false });
+  const d = sur.px;
+  const lum = (x, y) => {
+    if (x < 0 || y < 0 || x >= S2 || y >= S2) return 0;
+    const i = (y * S2 + x) * 4;
+    return 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+  };
+  const al = (x, y) => (x < 0 || y < 0 || x >= S2 || y >= S2) ? 0 : d[(y * S2 + x) * 4 + 3];
+  /* ⚠️⚠️ LA TERRE ET LA FISSURE SE SÉPARENT PAR L'ALPHA, PAS PAR LA COULEUR — et
+     c'est la SECONDE rédaction de ce contrôle. La première lisait la luminance :
+     elle marchait tant que le cratère était éclairé mollement, et elle est
+     devenue fausse dès que la paroi ouest est passée dans l'ombre (L 27 contre un
+     seuil de 34) — le banc a annoncé « 72 % d'irrégularité » sur un cratère
+     parfaitement rond, parce qu'il ne VOYAIT pas son côté sombre. C'est le
+     quatrième visage du défaut de banc de CLAUDE.md : *il mesure autre chose.*
+     La terre est peinte OPAQUE (alpha 255, `putImageData`), les fissures ne le
+     sont jamais (alpha ≤ 204) : la mesure ne dépend donc plus de l'éclairage. */
+  const mass = [], any = [];
+  for (let k = 0; k < 96; k++) {
+    const a = k / 96 * Math.PI * 2;
+    let rm = 0, ra = 0;
+    for (let t = 3; t < 150; t++) {
+      const x = Math.round(S2 / 2 + Math.cos(a) * t), y = Math.round(S2 / 2 + Math.sin(a) * t * 0.86);
+      const v = al(x, y);
+      if (v >= 250) rm = t;
+      if (v >= 8) ra = t;
+    }
+    mass.push(rm); any.push(ra);
+  }
+  return { px: d, S: S2, lum, mass, any };
 }
 
 console.log("\n=== ZIP 444 — LES DESSINS DE LA QUÊTE DE L'ÉTOILE ===\n");
@@ -333,28 +381,151 @@ console.log("\n6. L'ÉTOILE RESPIRE — quatre poses réellement différentes\n"
   ok(h1 < h0, "l'étoile apeurée est plus petite que l'étoile calme", `${h1} px contre ${h0}`);
 }
 
-console.log("\n7. LE CRATÈRE — sa forme est une isoligne, pas un cercle\n");
+console.log("\n7. LE CRATÈRE — deux rayons, une profondeur, et un refroidissement\n");
 {
-  /* On remesure la forme SUR LE PIXEL, pas sur la formule : un cratère
+  /* ⚠️ ON REMESURE LA FORME SUR LE PIXEL, PAS SUR LA FORMULE : un cratère
      parfaitement rond se lit comme un trou de golf, et c'est le genre de chose
-     qu'on ne voit qu'en regardant. */
-  const T = 16, sur = makeCanvas(200, 200), gg = sur.ctx;
-  gg.fillStyle = "#000"; gg.fillRect(0, 0, 200, 200);
-  S.drawStarCrater(gg, 100, 100, T, 0, 0);
-  const d = sur.px;
-  const lit = (x, y) => { const i = ((y * 200 + x) * 4); return d[i] + d[i + 1] + d[i + 2] > 30; };
-  let rmin = 999, rmax = 0;
-  for (let k = 0; k < 72; k++) {
-    const a = k / 72 * Math.PI * 2;
-    let r = 0;
-    for (let t = 4; t < 95; t++) { const x = (100 + Math.cos(a) * t) | 0, y = (100 + Math.sin(a) * t * 0.78) | 0; if (lit(x, y)) r = t; }
-    rmin = Math.min(rmin, r); rmax = Math.max(rmax, r);
+     qu'on ne voit qu'en regardant.
+     ⚠️⚠️ ET LE 446 MESURE CE QUE LE 444 NE MESURAIT PAS : la PROFONDEUR. Six
+     bancs au vert n'avaient pas vu que le cratère était plat — il n'y avait
+     aucune grandeur pour le dire (« quand Guillaume voit un défaut qu'aucun banc
+     ne voit, la première question est : quelle grandeur ne mesure-t-on pas »). */
+  const T = 16, P0 = craterProbe(0, 1), PC = craterProbe(0, 0);
+  const rmMax = Math.max(...P0.mass), rmMin = Math.min(...P0.mass);
+  const raMax = Math.max(...P0.any);
+  const irr = (rmMax - rmMin) / rmMax;
+  ok(irr > 0.12, "⚠️ le contour de la terre ONDULE (ce n'est pas un cercle)", `irrégularité ${(irr * 100).toFixed(0)} %`);
+  ok(irr < 0.60, "…sans que le cratère cesse d'être un cratère", `${(irr * 100).toFixed(0)} %`);
+  /* LA MASSE TIENT DANS L'EMPRISE GARANTIE — c'est le disque d'herbe libre que
+     le générateur promet, et le seul endroit où l'on est sûr de ne rien
+     recouvrir (règle du 440). */
+  ok(rmMax <= C.STAR_CRATER_DRAW_R * T + 2, "⚠️ la TERRE tient dans l'emprise annoncée",
+     `masse ${rmMax} px, emprise ${(C.STAR_CRATER_DRAW_R * T) | 0} px`);
+  ok(rmMax >= C.STAR_CRATER_DRAW_R * T * 0.82, "…et elle la remplit (un cratère plus petit que sa case ment aussi)",
+     `${(rmMax / (C.STAR_CRATER_DRAW_R * T) * 100).toFixed(0)} %`);
+  /* LES FISSURES SORTENT DE LA MASSE ET S'ARRÊTENT À LEUR PROPRE RAYON. Les deux
+     moitiés comptent : sans le premier, le modèle n'est pas tenu (ce sont elles
+     qui disent « c'est TOMBÉ ») ; sans le second, on peint hors de tout ce qui
+     est mesuré. */
+  ok(raMax > rmMax * 1.25, "⚠️ les FISSURES sortent largement de la terre",
+     `fissures ${raMax} px contre ${rmMax} px de terre`);
+  ok(raMax <= C.STAR_CRATER_CRACK_R * T + 3, "…et elles s'arrêtent à leur propre rayon",
+     `${raMax} px, annoncé ${(C.STAR_CRATER_CRACK_R * T) | 0} px`);
+
+  /* ── LA PROFONDEUR, EN DEUX NOMBRES. Un cratère vu de dessus ne se lit creux
+     qu'à deux conditions : le fond est plus sombre que la lèvre, et UNE des deux
+     parois est dans l'ombre. Le dessin du 444 tenait la première et pas la
+     seconde — d'où « c'est plat ». */
+  /* ⚠️ MESURÉE SUR LE CRATÈRE ÉTEINT, ET C'EST UN DÉFAUT DE BANC TROUVÉ EN LE
+     LANÇANT : sur le cratère chaud, les braises et leur lueur ÉCLAIRENT le fond
+     (L 72 contre 70 pour la lèvre), donc le banc jugeait « pas de profondeur »
+     un dessin qui en a. On mesure la TERRE, le feu se mesure ailleurs. */
+  const ringL = (frac) => {
+    let s = 0, n = 0;
+    for (let k = 0; k < 96; k++) {
+      const a = k / 96 * Math.PI * 2, r = PC.mass[k] * frac;
+      s += PC.lum(Math.round(PC.S / 2 + Math.cos(a) * r), Math.round(PC.S / 2 + Math.sin(a) * r * 0.86));
+      n++;
+    }
+    return s / n;
+  };
+  const lDeep = ringL(0.18), lRim = ringL(0.80);
+  ok(lDeep < lRim * 0.72, "⚠️ le FOND est nettement plus sombre que la lèvre",
+     `L ${lDeep.toFixed(0)} contre ${lRim.toFixed(0)}`);
+  const sideL = (a0) => {
+    let s = 0, n = 0;
+    for (let k = 0; k < 96; k++) {
+      const a = k / 96 * Math.PI * 2;
+      if (Math.cos(a - a0) < 0.55) continue;
+      for (const f of [0.30, 0.45, 0.60]) {
+        const r = PC.mass[k] * f;
+        s += PC.lum(Math.round(PC.S / 2 + Math.cos(a) * r), Math.round(PC.S / 2 + Math.sin(a) * r * 0.86));
+        n++;
+      }
+    }
+    return s / Math.max(1, n);
+  };
+  const west = sideL(Math.PI), east = sideL(0);
+  ok(west < east * 0.80, "⚠️⚠️ UNE PAROI EST DANS L'OMBRE (c'est ÇA, le creux)",
+     `ouest L ${west.toFixed(0)}, est L ${east.toFixed(0)}`);
+
+  /* ── LE REFROIDISSEMENT. Les deux images de Guillaume sont le MÊME cratère :
+     même terre, moins de feu. Un cratère qui changerait de forme en refroidissant
+     se lirait comme un autre cratère (règle du sillon, banc §5). */
+  const P1 = craterProbe(0, 0.20);
+  let same = 0;
+  for (let k = 0; k < 96; k++) if (Math.abs(P0.mass[k] - P1.mass[k]) <= 1) same++;
+  ok(same >= 90, "⚠️ le cratère chaud et le cratère froid sont le MÊME cratère",
+     `${same}/96 rayons identiques`);
+  /* ⚠️⚠️ « DU FEU » SE MESURE PAR DIFFÉRENCE AVEC LE CRATÈRE ÉTEINT, ET C'EST LA
+     TROISIÈME RÉDACTION DE CE CONTRÔLE. Les deux premières cherchaient une
+     couleur — `R > 150 && R > 2·B`, puis un écart rouge-bleu — et les deux
+     attrapaient la TERRE, qui est rouge elle aussi : le banc comptait
+     soixante-quinze braises là où il y en avait neuf. Ce qu'on veut savoir n'est
+     pas « quels pixels sont orange » mais « qu'est-ce que la chaleur AJOUTE » :
+     c'est une différence entre deux images, et c'est exact par construction. */
+  const fireVs = (P, PZ) => {
+    let n = 0;
+    for (let i = 0; i < P.px.length; i += 4) {
+      const dr = P.px[i] - PZ.px[i], db = P.px[i + 2] - PZ.px[i + 2];
+      if (dr > 25 && dr > db + 15) n++;
+    }
+    return n;
+  };
+  const fire = (P) => fireVs(P, PC);
+  const f1 = fire(P0), f2 = fire(P1);
+  ok(f2 < f1 * 0.62, "…mais il a beaucoup moins de braises", `${f1} px de feu → ${f2}`);
+  ok(f2 > 0, "⚠️ …et il lui en reste (la seconde image en garde une dizaine)", `${f2} px`);
+
+  /* ── LA FUMÉE, QUI EST L'AUTRE MOITIÉ DE LA DEMANDE. Elle doit MONTER : une
+     fumée qui reste dans la cuvette est une tache. */
+  {
+    const S2 = 320, sur2 = makeCanvas(S2, S2), g2 = sur2.ctx;
+    g2.fillStyle = "#000"; g2.fillRect(0, 0, S2, S2);
+    let top = S2, bot = 0, hits = 0;
+    for (const t of [0, 900, 1800, 2700, 3600]) S.drawStarCraterAir(g2, S2 / 2, S2 / 2, 16, t, { heat: 1 });
+    const d2 = sur2.px;
+    for (let y = 0; y < S2; y++) for (let x = 0; x < S2; x++) {
+      const i = (y * S2 + x) * 4;
+      if (d2[i] < 20) continue;
+      hits++; if (y < top) top = y; if (y > bot) bot = y;
+    }
+    ok(hits > 0, "la fumée existe", `${hits} px`);
+    ok(top < S2 / 2 - C.STAR_CRATER_DRAW_R * 16 * 0.9, "⚠️ elle MONTE au-dessus du trou",
+       `plus haut point à ${(S2 / 2 - top)} px du centre`);
+    ok(bot < S2 / 2 + 20, "…et elle ne descend pas sous la cuvette", `bas à ${bot - S2 / 2} px`);
+    const sur3 = makeCanvas(S2, S2), g3 = sur3.ctx;
+    g3.fillStyle = "#000"; g3.fillRect(0, 0, S2, S2);
+    S.drawStarCraterAir(g3, S2 / 2, S2 / 2, 16, 0, { heat: 0 });
+    let n3 = 0; for (let i = 0; i < sur3.px.length; i += 4) if (sur3.px[i] > 20) n3++;
+    ok(n3 === 0, "⚠️ chaleur nulle = aucune fumée (le cratère de la fin ne fume pas)", `${n3} px`);
   }
-  const irr = (rmax - rmin) / rmax;
-  ok(irr > 0.12, "⚠️ le contour ONDULE (ce n'est pas un cercle)", `irrégularité ${(irr * 100).toFixed(0)} %`);
-  ok(irr < 0.55, "…sans que le cratère cesse d'être un cratère", `${(irr * 100).toFixed(0)} %`);
-  ok(rmax * 1.0 <= 4.5 * T + 6, "il tient dans son emprise annoncée",
-     `rayon peint ${rmax} px, annoncé ${(C.STAR_CRATER_DRAW_R * T) | 0}`);
+
+  /* ── L'ENFONCEMENT. ⚠️ C'EST LA GRANDEUR QUE PERSONNE NE MESURAIT, ET C'EST
+     LA DEMANDE MÊME DE CE ZIP. Trois propriétés, et la troisième est la seule
+     qui protège de ce qui se verrait vraiment à l'écran : la CONTINUITÉ. Un
+     décalage qui saute de onze pixels au bord du trou, c'est un fermier qui
+     tressaute en entrant — un défaut qu'aucune capture fixe ne montre. */
+  {
+    const s0 = S.starCraterSink(0, 0, 16);
+    ok(Math.abs(s0 - C.STAR_CRATER_SINK_PX) < 0.6, "au centre, on est au fond",
+       `${s0.toFixed(1)} px sur ${C.STAR_CRATER_SINK_PX}`);
+    ok(S.starCraterSink(C.STAR_CRATER_DRAW_R + 0.5, 0, 16) === 0, "hors de l'emprise, plus rien");
+    let lip = 0, jump = 0, prev = null;
+    for (let r = 0; r <= C.STAR_CRATER_DRAW_R + 0.4; r += 0.02) {
+      for (const a of [0, 1.1, 2.3, 3.4, 4.6, 5.7]) {
+        const v = S.starCraterSink(Math.cos(a) * r, Math.sin(a) * r * 0.86, 16);
+        if (a === 0) {
+          if (prev !== null) jump = Math.max(jump, Math.abs(v - prev));
+          prev = v;
+        }
+        lip = Math.min(lip, v);
+      }
+    }
+    ok(lip <= -1, "⚠️ on ENJAMBE le bourrelet (on monte avant de descendre)", `${lip.toFixed(1)} px`);
+    ok(jump < 0.5, "⚠️⚠️ et le décalage est CONTINU (aucun tressautement au bord)",
+       `plus grand saut ${jump.toFixed(2)} px pour 0,02 case`);
+  }
 }
 
 console.log(`\nPlanches : tools/out/etoile-planche.png · tools/out/etoile-cratere.png`);

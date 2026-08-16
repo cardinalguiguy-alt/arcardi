@@ -172,6 +172,48 @@ export const STAR_CALM_MS = 4000;          // à deux : quatre secondes de dos t
 export const STAR_CALM_SOLO_MS = 9000;     // seul : beaucoup plus long, jamais bloqué
 export const STAR_CALM_FACE_DOT = -0.15;   // « dos tourné » = produit scalaire négatif
 
+/* ── LE REFROIDISSEMENT DU CRATÈRE (chapitre 2, zip 446). ⚠️⚠️ DEMANDE DE
+   GUILLAUME : « il doit fumer pendant un moment, avant de se refroidir, et nous
+   permettre de récupérer l'étoile. » C'est donc une MÉCANIQUE et pas un effet :
+   tant que le trou est brûlant, on ne fait pas sortir l'étoile, et la seule
+   chose à faire est de regarder la fumée tomber.
+   ⚠️ TROIS MINUTES, ET LE NOMBRE EST CHOISI CONTRE LE TRAJET, PAS AU JUGÉ : la
+   chute se voit d'où l'on est, le cratère est en ville, et il faut prendre le
+   train. Un joueur qui part tout de suite arrive dans la fumée et attend un peu ;
+   un joueur qui traîne trouve un cratère déjà tiède. Aucun des deux n'attend
+   devant un écran vide, et personne ne rate la fumée par malchance.
+   ⚠️⚠️ ET LA CHALEUR NE TOMBE PAS À ZÉRO : la seconde image du modèle est un
+   cratère refroidi qui fume ENCORE, une volute, une dizaine de braises. Le
+   plancher tient tant que l'étoile est au fond ; il tombe le jour où on la sort.
+   C'est ce qui fait que le lieu reste vivant pendant tout le chapitre 2, au lieu
+   de s'éteindre trois minutes après la chute. */
+export const STAR_CRATER_COOL_MS = 180000;
+export const STAR_CRATER_EMBER = 0.20;     // ce qui reste quand c'est « froid », l'étoile encore dedans
+
+/* ⚠️⚠️ LA CHALEUR EST DÉRIVÉE, JAMAIS STOCKÉE — règle des cierges (441) et du
+   jour de marché (431 : « une pure fonction du numéro de jour, jamais un état »).
+   Elle ne circule donc pas sur le réseau : `e.fall` part déjà dans l'`apply`, et
+   chacun en déduit la même courbe.
+   ⚠️ `elapsed` EST UNE DURÉE, PAS UNE DATE, et c'est tout le soin : l'hôte lui
+   passe `now - e.fall` (deux dates de SON horloge), le client lui passe le temps
+   écoulé depuis SA propre réception de la chute. On ne compare jamais une
+   horloge hôte à une horloge invité (§3 de CLAUDE.md) ; la fonction, elle, ne
+   voit qu'un nombre de millisecondes et rend la même chose aux deux. */
+export function starCraterHeat(e, elapsedMs) {
+  if (!e || !starFallen(e)) return 0;
+  if (starHas(e, "crater")) return 0;                      // elle est sortie : le trou s'éteint
+  const k = Math.max(0, Math.min(1, (+elapsedMs || 0) / STAR_CRATER_COOL_MS));
+  // Une décroissance en cloche : ça fume fort, puis ça retombe vite, puis ça traîne.
+  return STAR_CRATER_EMBER + (1 - STAR_CRATER_EMBER) * Math.pow(1 - k, 1.7);
+}
+/* « Assez froid pour qu'elle ose sortir ». ⚠️ UNE SEULE ÉCRITURE POUR LES DEUX
+   CÔTÉS : le client s'en sert pour ne pas demander, l'hôte pour ne pas accorder.
+   Deux seuils auraient donné « le jeu propose et refuse » (défaut du 426). */
+export function starCraterCool(e, elapsedMs) {
+  if (!e || !starFallen(e)) return false;
+  return (+elapsedMs || 0) >= STAR_CRATER_COOL_MS;
+}
+
 /* ── LES OMBRES QUI PENCHENT (chapitre 2). Une direction n'est pas un lieu ; il
    en faut deux, et de deux endroits assez éloignés pour que le croisement veuille
    dire quelque chose. */
@@ -581,6 +623,19 @@ export function resolveStarFound(e, id, who, now) {
    second joueur pour avancer est un jeu qu'on ne finit pas. */
 export function resolveStarCalm(e, who, now, soloAllowed) {
   if (starHas(e, "crater")) return { ok: true, already: true, crossed: [] };
+  /* ⚠️⚠️ ZIP 446 — ON NE SORT PAS UNE ÉTOILE D'UN TROU BRÛLANT. L'hôte compare
+     deux dates de SA propre horloge (`now` et `e.fall`), donc la règle du §3
+     tient par construction, exactement comme les deux serrures du 442.
+     ⚠️ IL NE PUNIT PAS, IL ATTEND : la tenue n'est même pas comptée, et le
+     client ne demande pas (`starCalmSelf`). Un refus qui consommerait la tenue
+     ferait « je me suis tenu tranquille dix secondes pour rien ». */
+  /* ⚠️ LE REFUS EST `ok: false`, DONC SILENCIEUX ET SANS DIFFUSION : `FermeGame`
+     rend la main sans toucher à `out.star` (même chemin qu'un lieu verrouillé).
+     À `ok: true`, l'hôte aurait rediffusé la quête entière deux fois par seconde
+     pendant qu'un joueur patiente devant un trou qui fume — du trafic pur, et le
+     §3 est formel sur ce qui compte : le NOMBRE de `send()`. */
+  if (!starCraterCool(e, now - (e.fall || 0)))
+    return { ok: false, tooHot: true, cool: Math.max(0, STAR_CRATER_COOL_MS - (now - (e.fall || 0))) };
   const prev = +e.calm[who] || 0;
   const held = prev && now - prev < 1500 ? now - (e.calm[who + ":t0"] || prev) : 0;
   /* On garde deux marques par joueur : le début de la tenue (`:t0`) et la

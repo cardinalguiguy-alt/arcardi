@@ -78,3 +78,44 @@ eux-mêmes ; `tools/README.md` pour les bancs qui les regardent.
   une couture, pas un passage — et cette couture redessine exactement la grille de 16 px que la
   dalle de deux cases venait d'effacer. Ce qui varie avec la distance se calcule AVEC la distance,
   pas avec un test.
+- ⚠️⚠️⚠️ **CE QUI CREUSE UNE IMAGE VUE DE DESSUS EST L'ÉCLAIRAGE D'UNE PENTE, PAS UN DÉGRADÉ**
+  (446, le cratère refait sur modèle). Le premier cratère (444) était six anneaux concentriques
+  du sombre au clair : lisible, et **plat** — Guillaume l'a dit en une phrase. Un dégradé du
+  centre vers le bord dessine une CIBLE ; ce qui dessine un TROU, c'est qu'une paroi soit dans
+  l'ombre et l'autre au soleil. La recette tient en quatre lignes et elle se réemploie pour toute
+  cuvette, tout monticule, tout bourrelet : on décrit une **hauteur le long du rayon** (le trou
+  descend, le bourrelet remonte, l'éjecta retombe), on en prend la **pente**, et
+  `1 − k · pente · cos(angle − lumière)` donne d'un seul coup les quatre lectures — paroi proche
+  sombre, paroi opposée claire, dos du bourrelet clair du côté de la lumière, sombre de l'autre.
+  ⚠️ **Et la lumière n'est pas un choix libre : tout le projet éclaire en HAUT À GAUCHE** (le
+  four, les moellons, les toits). Un relief éclairé de l'autre côté a l'air découpé et collé.
+  ⚠️ **La valeur se QUANTIFIE en paliers** (une douzaine) : dans un monde en gros pixels, un
+  dégradé continu fait une tache lisse, les paliers font des courbes de niveau.
+- ⚠️⚠️ **UNE GERBE SE DÉCRIT PAR SES FIBRES, ET LEURS LONGUEURS DOIVENT AVOIR UNE QUEUE LOURDE**
+  (446). Deux jets ratés avant le bon, et les deux sont instructifs : *(a)* un lobe `sin(πs)` par
+  secteur donne un PÉTALE par fibre, donc une **collerette de tournesol** — d'autant plus visible
+  qu'on réduit le nombre de fibres ; *(b)* des longueurs tirées uniformément donnent la même
+  collerette en plus fin. La forme juste vient de deux choses : une **ligne brisée interpolée**
+  entre fibres voisines (deux voisines très inégales font une dent, deux proches n'en font
+  aucune), et une distribution **`pow(rnd, 1.5)`** — la plupart courtes, quelques-unes très
+  longues. *L'irrégularité doit venir des LONGUEURS, jamais d'une formule de forme qui décore.*
+- ⚠️⚠️ **UN TRAMAGE SERT UNE POINTE, JAMAIS UNE SURFACE** (446). Écrit `keep *= 0,82 + 0,18·bruit`,
+  il s'appliquait à tout le cratère : de loin ça fait flou, de près ça fait sale, et le dessin
+  entier ressemble à de la fourrure. Une pointe d'éjecta s'effiloche ; une paroi, non. ⚠️ Et le
+  tramage se fait en **trame de Bayer sur des pixels OPAQUES**, pas en alpha : une pointe
+  semi-transparente sur de l'herbe donne un brun verdâtre translucide — du brouillard, pas de la
+  terre.
+- ⚠️⚠️ **CE QUI SORT D'UNE MASSE DOIT EN PRENDRE LA COULEUR DE SORTIE** (446). Les fibres du
+  cratère, peintes du même tan que la lèvre soulevée, faisaient un **halo poilu** autour du trou.
+  Dans le modèle, le tan est l'anneau SOULEVÉ et ce qui en sort va au brun sombre — la même
+  couleur que les fissures qui les prolongent. La couleur relie les deux, et l'œil lit **une seule
+  chose qui part du trou** au lieu de deux décors superposés.
+- ⚠️ **UNE BRAISE EST UN TIRET COUCHÉ SUR LA STRIE, ET IL Y EN A PEU** (446). Des points, ou des
+  points étalés sur toute la cuvette, font des confettis oranges — c'est le « poivre » du 438,
+  repayé. Le foyer se groupe dans la moitié intérieure, et chaque braise suit la fibre sur
+  laquelle elle brûle.
+- ⚠️ **UN DÉCOR QUI DOIT SE FONDRE DANS UN SOL PEUT ÊTRE CUIT QUAND MÊME** (446). Le 444 refusait
+  de cuire le cratère « parce qu'il faudrait y peindre l'herbe » — c'était faux : on cuit dans un
+  canevas TRANSPARENT, le sol reste dessous, la saison, la nuit et la météo continuent d'être
+  héritées gratuitement, et on gagne le droit de peindre pixel par pixel. Ce qu'il ne faut pas
+  cuire, c'est le FOND, jamais la forme.

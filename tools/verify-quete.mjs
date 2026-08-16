@@ -401,6 +401,48 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
      Q.STAR_CALM_SOLO_MS > Q.STAR_CALM_MS, `${Q.STAR_CALM_SOLO_MS} ms contre ${Q.STAR_CALM_MS} ms`);
   ok("…sans dépasser le double et demi (au-delà, c'est une punition)",
      Q.STAR_CALM_SOLO_MS <= Q.STAR_CALM_MS * 2.5, `×${(Q.STAR_CALM_SOLO_MS / Q.STAR_CALM_MS).toFixed(2)}`);
+  /* ── ZIP 446 — LE REFROIDISSEMENT, ET C'EST UNE PORTE, PAS UN EFFET.
+     ⚠️⚠️ CE BLOC EXISTE PARCE QU'AUCUN BANC NE JOUAIT `resolveStarCalm` : la
+     mécanique centrale du chapitre 2 n'était vérifiée nulle part, on ne mesurait
+     que ses CONSTANTES. C'est le premier visage du défaut de CLAUDE.md — *il
+     mesure la carte, pas l'interaction* — et il aura tenu deux zips. */
+  {
+    const e = Q.devStar(Q.newStar(), "start", 1).star;
+    const t0 = e.fall;
+    ok("⚠️ tant que ça fume, la tenue ne donne RIEN",
+       !Q.resolveStarCalm(e, "j1", t0 + 1000, true).ok && !Q.starHas(e, "crater"));
+    ok("…et le refus n'a rien consommé (on ne se tient pas tranquille pour rien)",
+       Object.keys(e.calm).length === 0);
+    ok("…une seconde avant la fin, toujours rien",
+       !Q.resolveStarCalm(e, "j1", t0 + Q.STAR_CRATER_COOL_MS - 1000, true).ok);
+    /* Refroidi : la tenue redevient possible, et elle demande VRAIMENT la durée. */
+    const t1 = t0 + Q.STAR_CRATER_COOL_MS + 500;
+    ok("⚠️ une fois froid, la tenue recommence à compter", !!Q.resolveStarCalm(e, "j1", t1, true).ok);
+    ok("…mais pas d'un coup", !Q.starHas(e, "crater"));
+    Q.resolveStarCalm(e, "j1", t1 + Q.STAR_CALM_SOLO_MS * 0.5, true);
+    ok("…ni à la moitié", !Q.starHas(e, "crater"));
+    /* ⚠️ ET LA TENUE INTERROMPUE NE COMPTE PAS : marteler ne doit pas suffire. */
+    Q.resolveStarCalm(e, "j1", t1 + Q.STAR_CALM_SOLO_MS * 0.5 + 4000, true);
+    Q.resolveStarCalm(e, "j1", t1 + Q.STAR_CALM_SOLO_MS * 0.5 + 4200, true);
+    ok("⚠️ une tenue lâchée puis reprise repart de zéro", !Q.starHas(e, "crater"));
+    let t = t1 + Q.STAR_CALM_SOLO_MS * 0.5 + 4200;
+    for (let k = 0; k < 30 && !Q.starHas(e, "crater"); k++) { t += 500; Q.resolveStarCalm(e, "j1", t, true); }
+    ok("⚠️ et en se tenant vraiment tranquille, elle sort", Q.starHas(e, "crater"),
+       `${((t - (t1 + Q.STAR_CALM_SOLO_MS * 0.5 + 4200)) / 1000).toFixed(1)} s de tenue`);
+    /* ── LA CHALEUR, LA COURBE QU'ON VOIT. Trois bornes, et la troisième est
+       celle du modèle : le cratère refroidi FUME ENCORE tant que l'étoile est
+       dedans, et il s'éteint quand elle en sort. */
+    const e2 = Q.devStar(Q.newStar(), "start", 1).star;
+    const h0 = Q.starCraterHeat(e2, 0), hM = Q.starCraterHeat(e2, Q.STAR_CRATER_COOL_MS / 2);
+    const hE = Q.starCraterHeat(e2, Q.STAR_CRATER_COOL_MS * 3);
+    ok("à l'instant de la chute, la chaleur est pleine", Math.abs(h0 - 1) < 0.001, h0.toFixed(2));
+    ok("⚠️ elle retombe VITE au début (ça fume fort, puis ça traîne)", hM < 0.55, `${hM.toFixed(2)} à mi-course`);
+    ok("⚠️ mais elle ne tombe jamais à zéro tant que l'étoile est au fond",
+       hE > 0.05 && Math.abs(hE - Q.STAR_CRATER_EMBER) < 0.001, hE.toFixed(2));
+    Q.resolveStarFound(e2, "crater", "banc", 9);
+    ok("⚠️⚠️ …et elle s'éteint le jour où on la sort", Q.starCraterHeat(e2, 10) === 0);
+    ok("une quête pas encore tombée n'a pas de cratère chaud", Q.starCraterHeat(Q.newStar(), 10) === 0);
+  }
   /* Et « tourner le dos » doit vouloir dire quelque chose : le contrôle porte
      sur la FONCTION PURE que le jeu et le banc partagent. */
   {

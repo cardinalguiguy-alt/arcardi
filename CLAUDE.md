@@ -4,7 +4,7 @@
 Il remplace l'exploration du dépôt pour tout ce qui est global. Le README est un journal
 chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
-État à jour du **zip 444**. Chantier actif : **rendre Valley Town habitable au regard ET
+État à jour du **zip 446**. Chantier actif : **rendre Valley Town habitable au regard ET
 crédible au jeu**, et **lui donner une histoire**. La ville est refaite depuis le 434 ; le 438 a
 ouvert l'hôtel de ville, le 439 l'a audité, le 440 a corrigé la portée des ponts et la COMPOSITION
 des décors, le 441 a réparé leur TRAVERSÉE puis ouvert l'**ÉGLISE**, le 442 y a posé une enquête
@@ -63,6 +63,17 @@ position distante à lire**. Restent aussi : les cinq mini-jeux joués jusqu'à 
 réelle, les scènes *turn* et *end*, et la Lyre (elle ne se dessine que la nuit). Le tableau
 d'avancement de `components/ferme/QUETE.md` §10 distingue **codé** et **regardé à l'écran**,
 colonne par colonne — c'est lui qui fait autorité, pas cette page.
+
+⚠️⚠️ **LE 446 A REFAIT LE CRATÈRE SUR DEUX IMAGES DE GUILLAUME, ET IL EN SORT UNE RÈGLE DE DESSIN
+QUI VAUT PARTOUT : CE QUI CREUSE UNE IMAGE VUE DE DESSUS EST L'ÉCLAIRAGE D'UNE PENTE, PAS UN
+DÉGRADÉ.** Le cratère du 444 était six anneaux du sombre au clair : tous les bancs au vert, et
+**plat** — un dégradé du centre vers le bord dessine une CIBLE. On décrit désormais une hauteur le
+long du rayon, on en prend la pente, et `1 − k·pente·cos(a − lumière)` rend d'un coup les quatre
+lectures d'un trou. Le détail est au **§26 de `components/ferme/README.md`**, les règles de dessin
+dans **`DESSIN.md`** ; ce qui est nouveau côté JEU : le cratère **fume trois minutes puis
+refroidit** (et l'étoile ne sort pas avant), et **on s'y enfonce en marchant** — ⚠️ par un
+DÉCALAGE D'IMAGE dans `drawCharacter`, jamais par une altitude de case, qui aurait fait du trou
+une falaise infranchissable (`TOWN_STEP_MAX`).
 
 ⚠️⚠️⚠️ **LE PIÈGE N°1 DU PROJET, ET IL A TROIS VISAGES : CE QUI VIT DANS LA CLOSURE DE LA BOUCLE
 DE RENDU.** Il a coûté quelque chose à chacun des cinq derniers zips.
@@ -542,27 +553,33 @@ texte voit tout se connecter et rien passer.
    préfixé par `_` n'est PAS une route.** ⚠️ **La supprimer avant de livrer** : en production
    elle ouvre une ferme sans authentification.
 
-Puis ⌘⇧X → menu développeur → **15 arrêts** (ferme, passage, Valley Town ×6, et les **huit
-niveaux d'intérieur** : tribunal ×3, mairie ×2, église ×3 dont le beffroi), **« Peupler la
-ferme »** et **« ⭐ Star »** (444 : effacer · lancer la chute · boucler le chapitre · sauter d'un
+Puis ⌘⇧X → menu développeur → **20 arrêts** (ferme, passage, Valley Town ×7 dont **le cratère**
+depuis le 446, et les **huit niveaux d'intérieur** : tribunal ×3, mairie ×2, église ×3 dont le
+beffroi), **« Peupler la ferme »** et **« ⭐ Star »** (444 : effacer · lancer la chute · boucler le chapitre · sauter d'un
 cran · marquer le lieu suivant · tout sauf le duo · **et REJOUER UNE SCÈNE isolée**).
 ⚠️ « Rejouer une scène » est le bouton qui change tout : sans lui, revoir une cinématique oblige à
 remettre la quête à zéro, donc on ne la revoit qu'une fois, donc on ne la juge qu'une fois.
 ⚠️ **AUCUN BOUTON DE QUÊTE NE DONNE QUOI QUE CE SOIT** : le menu s'ouvre à tout joueur qui connaît
 le raccourci (398). Le chemin développeur appelle les mêmes résolveurs et JETTE ce qu'ils rendent.
 
-⚠️⚠️ **AUTOMATISATION DU NAVIGATEUR — CE QUI MARCHE, ET LE PIÈGE QUI A ENCORE MORDU AU 444.**
+⚠️⚠️ **AUTOMATISATION DU NAVIGATEUR — LA RECETTE COMPLÈTE, ET ELLE MARCHE DEPUIS LE 446.**
 `window.dispatchEvent(new KeyboardEvent("keydown", {code:"KeyE"}))` marche pour TOUTES les touches
-(les frappes envoyées par l'outil, non). Le menu ouvert bloque les déplacements. La capture
-d'écran fonctionne.
-⚠️⚠️ **UN PANNEAU MASQUÉ NE COMPOSE UNE IMAGE QUE PENDANT UNE CAPTURE**, donc `rAF` ne tourne que
-par à-coups : le personnage n'avance quasiment pas entre deux clichés, et **un mini-jeu saute des
-manches entières**. ⚠️⚠️ **ET LE REMÈDE CONNU — REMPLACER `rAF` PAR UN `MessageChannel` — FIGE
-L'ONGLET s'il n'a pas de frein** (un relais qui se repose un message à chaque image tourne en
-boucle serrée et sature le moteur de rendu) : c'est ce qui est arrivé au 444, et il a fallu
-recharger. **La parade qui marche est ailleurs : monter le composant ISOLÉMENT** sur une page
-jetable, où il n'y a ni monde ni caméra à faire tourner. Un canevas mesuré pendant que le panneau
-est masqué sort d'ailleurs à **0×0**, ce qui ressemble trait pour trait à un rendu cassé.
+(les frappes envoyées par l'outil, non). Le menu dev ouvert BLOQUE les déplacements (`if
+(devMenuOpenRef.current …) return`) — il faut `Escape` avant de marcher. La capture d'écran
+fonctionne.
+⚠️⚠️⚠️ **DANS UN ONGLET MASQUÉ, `requestAnimationFrame` NE SE DÉCLENCHE JAMAIS**
+(`document.visibilityState === "hidden"`) : le monde ne tourne pas, le fermier ne bouge pas d'un
+pixel, et **`getImageData` relit la dernière image composée** — deux mesures de suite rendent le
+même nombre et on accuse le code qu'on vient d'écrire. **UNE LIGNE SUFFIT, ET SON FREIN EST DANS
+SA FORME :**
+`window.requestAnimationFrame = (cb) => setTimeout(() => cb(performance.now()), 16);`
+Mesuré au 446 : **31 à 36 images par 500 ms**, onglet masqué, monde qui tourne, marche, mesures.
+⚠️ Le `MessageChannel` du 444 figeait l'onglet parce qu'un relais qui se repose un message à
+chaque image n'a **pas** de frein ; `setTimeout(…, 16)` en est un par construction. **On pose le
+patch AVANT de mesurer quoi que ce soit**, et on peut ensuite lire les pixels du canevas
+(`getImageData`) pour mesurer ce qu'aucune capture ne montre — un décalage de sprite, par exemple.
+⚠️ Un canevas mesuré pendant qu'un panneau est masqué sort à **0×0**, ce qui ressemble trait pour
+trait à un rendu cassé.
 
 ⚠️ **Le faux canvas de `lib-canvas.mjs` IGNORE `translate`/`rotate` et ne connaît pas `fillText`**
 — un sprite qui en dépend s'y juge faux. Ce n'est pas un bogue du jeu. ⚠️⚠️ **Et il
@@ -757,7 +774,10 @@ erreur** en choisissant mal.
    **432 (§10 → `tools/README.md`, 524 → 483)**, 433 à 438 (aucun), **439 (en-tête + §13,
    687 → 661)**, 440 (aucun — trois leçons ajoutées en §4, seize lignes),
    **441 (§4 scindé une seconde fois : le DESSIN part dans `components/ferme/DESSIN.md`)**,
-   442 (§13 relu ligne à ligne), **444 (§10 élagué — l'ordre du 442, deux fois reporté)**.
+   442 (§13 relu ligne à ligne), **444 (§10 élagué — l'ordre du 442, deux fois reporté)**,
+   446 (aucun — quatre blocs ajoutés : le cratère en tête, la recette du banc de navigateur en
+   §10, et deux chiffres remis à jour ; ⚠️ **l'ordre du 444 sur le §4 reste dû, et il est
+   maintenant reporté une fois**).
    ⚠️⚠️ **L'ORDRE DU 440 A ÉTÉ EXÉCUTÉ AU 441, APRÈS DEUX REPORTS.** Le §4 avait passé les
    cent-cinquante lignes en mélangeant trois sujets ; sa partie DESSIN est partie dans
    `components/ferme/DESSIN.md`, à côté des dessins qu'elle gouverne, exactement comme §6 au 428

@@ -228,9 +228,14 @@ personne.
 **Dérivé** d'une ancre, recherche déterministe de la première zone dégagée. Le sentier de l'est
 (440) passe à côté et cesse enfin de ne mener nulle part.
 
-**Le décor est neuf et il doit être beau** : anneau de terre soulevée, herbe couchée **en étoile**
-sur vingt cases, **sable fondu en verre vert** au fond, tiède, qui prend la lumière du ciel. La
-nuit il luit ; au matin il fume. Voir §7.
+**Le décor est neuf et il doit être beau** — ⚠️ **REFAIT AU 446 SUR DEUX IMAGES DE GUILLAUME, et
+c'est devenu une mécanique** : un TROU (paroi ouest dans l'ombre, éclairage calculé), une gerbe de
+fibres de terre projetée, de longues fissures ramifiées dans l'herbe, des braises au fond, une
+colonne de fumée, et l'étoile posée au milieu. **Il fume trois minutes puis refroidit**, et tant
+qu'il fume l'étoile ne sort pas (`starCraterHeat` / `STAR_CRATER_COOL_MS`). **On s'y enfonce en
+marchant** (`starCraterSink`, un décalage d'image, jamais une altitude de case). Le détail est au
+**§26 de `components/ferme/README.md`** ; les règles de dessin qui en sortent sont dans
+`DESSIN.md`. Le bassin de verre vert reste la trace d'après-quête.
 
 **Ce qu'on voit d'abord.** Rien. Puis, **au bord de l'écran**, une lueur qui n'y est plus quand on
 tourne la tête.
@@ -674,6 +679,7 @@ minutes, donc personne ne la reverrait.
 | **Docs** (`README.md` §25, `CLAUDE.md`, `tools/README.md`) | ✅ | ✅ | — | — |
 | **445 — la chute VUE** (file d'attente, rattrapage, caméra sur l'impact) | ✅ | ✅ | ✅ | ✅ |
 | **445 — le CHEVRON** (repère directionnel de quête) | ✅ | ✅ | ✅ | ✅ |
+| **446 — le cratère refait sur modèle** (relief éclairé, fissures, chaleur, enfoncement) | ✅ | ✅ | ✅ **planche + en jeu** | ✅ |
 | ⚠️ **La quête à DEUX CLIENTS** | ✅ | ✅ | ❌ **RIEN** | ❌ |
 
 ### Ce qui est vérifié à ce stade
@@ -683,7 +689,7 @@ minutes, donc personne ne la reverrait.
 | `npx next build` | **✓ Compiled successfully**, plus aucun avertissement nouveau (seul `G_SOIL` reste, préexistant §10 de CLAUDE.md) |
 | `verify-syntax` | tout se parse, JSX compris |
 | `verify-strings` | **1081 clés appariées** |
-| **`verify-quete`** | **177/177** |
+| **`verify-quete`** | **220/220** (446 : +43, dont la porte de refroidissement et la tenue du calme, que rien ne jouait) |
 | `verify-vallee` | **200/200** |
 | **`render-beffroi`** | **28/28**, planche `beffroi-plan.png` |
 | `render-etoile` | tous contrôles verts, 3 planches |
@@ -770,6 +776,15 @@ séance s'est faite de jour. Elle porte le compteur d'éclats et son trou ; à r
 
 **E. LE MORCEAU D'ORGUE** — `public/sounds/church-organ.mp3`, toujours absent (décision du 441).
 Rien à coder.
+
+**F. ⚠️ LE BANC DE NAVIGATEUR A UNE PARADE, ET ELLE CHANGE LA SUITE** (446). Dans un onglet
+masqué, `requestAnimationFrame` ne se déclenche **jamais** (`visibilityState: "hidden"`) : le
+monde ne tourne pas, le fermier ne bouge pas, et `getImageData` relit une image périmée. Une ligne
+suffit, et son frein est dans sa forme —
+`window.requestAnimationFrame = (cb) => setTimeout(() => cb(performance.now()), 16);` — mesuré à
+**31-36 images par 500 ms**. C'est ce qui a permis de marcher jusqu'au cratère, d'y entrer et d'en
+mesurer l'enfoncement. ⚠️ **Les points A et B ci-dessus deviennent donc faisables au banc** : le
+`MessageChannel` du 444 n'était pas la seule voie.
 
 ### 12.3 ⚠️ LE POINT QUI N'A PAS CONVERGÉ, ET LES DEUX DIRECTIONS
 

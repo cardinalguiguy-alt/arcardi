@@ -481,9 +481,11 @@ donnait pas, d'une rangée.
 
 ---
 
-## `render-etoile.mjs` — les dessins de la quête de l'étoile (444)
+## `render-etoile.mjs` — les dessins de la quête de l'étoile (444, cratère refait au 446)
 
-`node tools/render-etoile.mjs` → `etoile-planche.png` · `etoile-cratere.png`.
+`node tools/render-etoile.mjs` → `etoile-planche.png` · `etoile-cratere.png` (446 : **trois
+états du cratère côte à côte** — fumant, refroidi, bassin de verre — parce que ce qui a changé
+est la PAIRE, pas l'image).
 
 ⚠️⚠️ **IL REMPLACE `verify-enquete.mjs` ET `render-enquete.mjs`, SUPPRIMÉS AU 444 AVEC L'ENQUÊTE
 QU'ILS MESURAIENT.** Un banc qui mesure du contenu disparu est pire qu'un banc absent : il passe
@@ -511,6 +513,31 @@ le générateur lui garantit**.
   d'échancrure d'au moins trois pixels**, sinon le contour rebouche la forme qu'il souligne. Vrai
   de toute dentelure à cette échelle.
 
+### ⚠️⚠️ ZIP 446 — IL MESURE ENFIN LA PROFONDEUR, ET IL S'EST TROMPÉ TROIS FOIS DE PLUS EN L'APPRENANT
+
+Le cratère du 444 était **plat**, et le banc était **vert** : il mesurait l'emprise, l'ondulation
+du contour et la propreté — trois bonnes choses, et pas celle-là. Ce qu'il mesure depuis le 446 :
+la **masse de terre** tient dans `STAR_CRATER_DRAW_R` **et la remplit** · les **fissures** sortent
+largement de la terre (sinon le modèle n'est pas tenu) **et** s'arrêtent à
+`STAR_CRATER_CRACK_R` · le **fond est plus sombre que la lèvre** · ⚠️ **une paroi est dans
+l'ombre** (c'est ÇA, le creux) · chaud et froid sont le **même** cratère avec **beaucoup moins de
+braises** mais **pas zéro** · la fumée **monte** au-dessus du trou et ne descend pas dedans ·
+chaleur nulle = **aucune** fumée · et l'**enfoncement** : au fond, hors emprise, sur le bourrelet,
+⚠️ et surtout **continu** (aucun saut au bord — un fermier qui tressaute en entrant ne se voit sur
+aucune capture fixe).
+
+⚠️⚠️ **ET LES TROIS ERREURS DE MESURE VALENT LA PEINE D'ÊTRE LUES, PARCE QUE C'EST TROIS FOIS LA
+MÊME :** *il mesurait une propriété visible là où il fallait mesurer une différence.*
+1. la **profondeur mesurée sur le cratère chaud** — les braises éclairent le fond (L 72 contre 70
+   pour la lèvre), donc « pas de profondeur » sur un dessin qui en a ;
+2. la **terre séparée des fissures par la luminance** — vrai tant que l'éclairage est mou, faux
+   dès que la paroi ouest passe dans l'ombre : « 72 % d'irrégularité » sur un contour régulier,
+   parce que le banc ne VOYAIT pas le côté sombre. Passé à l'**alpha** (la terre est opaque, une
+   fissure ne l'est jamais), la mesure ne dépend plus de l'éclairage ;
+3. le **feu compté par la couleur** — la lèvre de terre éclairée est rouge elle aussi, d'où
+   soixante-quinze braises comptées là où il y en avait neuf. Passé à la **différence entre
+   l'image chaude et l'image éteinte**, exact par construction.
+
 ⚠️ **ET LE BANC S'EST TROMPÉ DE GRANDEUR DEUX FOIS, SUR LA MÊME CHOSE** : le SEUIL D'OPACITÉ. À 40
 il attrapait le halo (qui est identique d'une pose à l'autre) et voyait « 0 pixel d'écart » sur
 quatre dessins différents ; puis il mesurait le cerne sur le bord du halo, où aucun pixel n'est
@@ -521,7 +548,7 @@ huitième fois d'affilée dans ce dépôt qu'un banc neuf se trompe d'abord de g
 ⚠️ **CE QU'IL NE MESURE PAS, ET IL LE DIT** : il ne joue pas, et il ne juge pas le cratère dans sa
 vraie herbe (il le peint sur un fond approximé). Trou déclaré.
 
-## `verify-quete.mjs` — 207 contrôles, 207/207 (444, étendu au 445)
+## `verify-quete.mjs` — 220 contrôles, 220/220 (444, étendu au 445 et au 446)
 
 `node tools/verify-quete.mjs`. Il remplace `verify-enquete.mjs`, supprimé avec l'enquête du 442 :
 il en reprend la MÉTHODE (appeler le vrai code, jouer la vraie chaîne) et aucun de ses contrôles.
@@ -575,6 +602,15 @@ arrêt de téléport pose le joueur sur une case praticable de son niveau, hors 
 arrêt et chaque niveau ont un libellé lisible* (un repli en `|| clé` n'échoue pas, il affiche la
 clé) · *un titre de mini-jeu tient dans le cadre* · *le refroidissement laisse plus d'une seconde
 avant de repartir au blanc*.
+
+⚠️⚠️ **ET AU 446 IL A GAGNÉ TREIZE CONTRÔLES PARCE QU'IL NE JOUAIT PAS `resolveStarCalm` DU TOUT** :
+la mécanique centrale du chapitre 2 — se tenir tranquille, dos tourné — n'était vérifiée nulle
+part, on n'en mesurait que les CONSTANTES. *C'est le premier visage du défaut de `CLAUDE.md` — il
+mesure la carte, pas l'interaction* — et il aura tenu deux zips dans le banc écrit pour s'en
+protéger. Il joue maintenant la porte de refroidissement (rien tant que ça fume, rien de consommé
+par le refus), la tenue (pas d'un coup, pas à la moitié, **une tenue lâchée puis reprise repart de
+zéro**), et la courbe de chaleur (pleine à la chute, retombée vite, **jamais nulle tant que
+l'étoile est au fond**, nulle dès qu'on la sort).
 
 ⚠️ **CE QU'IL NE MESURE PAS, ET IL LE DIT** : il ne joue aucun mini-jeu (ils vivent dans le DOM et
 demandent un vrai canevas), et il ne voit rien de la coopération à deux clients.

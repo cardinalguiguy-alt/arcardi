@@ -3417,6 +3417,29 @@ export const STAR_CRATER_Y = TOWN_PARK.y + TOWN_PARK.h + 17;
    pour que l'étoile sorte. Ils sont proches et ils ne sont pas la même chose ;
    le jour où l'on agrandira le dessin, le jeu ne bougera pas d'un pouce. */
 export const STAR_CRATER_DRAW_R = 4.5;
+/* ⚠️⚠️ ET UN TROISIÈME AU 446, POUR LES FISSURES SEULES — LA SEULE CHOSE DU JEU
+   QUI DÉBORDE DE SON EMPRISE GARANTIE, ET C'EST NOMMÉ PLUTÔT QUE SUBI. Le modèle
+   fourni par Guillaume montre de longues fissures qui courent dans l'herbe bien
+   au-delà de la terre projetée : elles font la moitié de la lecture (« c'est
+   TOMBÉ » plutôt que « on a creusé »). Les raccourcir pour tenir dans le disque
+   libre aurait été raccourcir le dessin pour arranger le générateur.
+   ⚠️ La dérogation ne vaut QUE parce qu'une fissure est un trait d'un à trois
+   pixels dans un DÉCAL DE SOL peint avant tout le reste : elle passe SOUS
+   l'arbre ou le banc qu'elle croise, ne cache rien, ne bloque rien. Une MASSE
+   qui déborderait serait le défaut du 440 (« la case d'un décor n'est pas la
+   surface qu'il couvre ») ; `render-etoile` mesure les deux rayons séparément
+   pour que personne ne confonde les deux cas. */
+export const STAR_CRATER_CRACK_R = 7.6;
+/* ⚠️⚠️ LA PROFONDEUR, EN PIXELS D'IMAGE, ET ELLE N'EST QUE ÇA (446, demande de
+   Guillaume : « quand on se déplace à l'intérieur, prévoir un déplacement qui
+   suggère une profondeur ; pas plat »). C'est un DÉCALAGE DE DESSIN appliqué au
+   sprite de qui se tient dans le trou — jamais une altitude de case, jamais une
+   collision. `TOWN_ELEV_PX` aurait été le réflexe : il aurait fait du cratère
+   une falaise que `canStandTown` refuse de franchir (`TOWN_STEP_MAX`), donc un
+   trou où l'on ne peut pas entrer. C'est très exactement l'arc du pont ajouté à
+   `playerElevTown` que le 439 a évité de justesse. */
+export const STAR_CRATER_SINK_PX = 11;     // au fond du trou
+export const STAR_CRATER_LIP_PX = 3;       // sur le bourrelet, on monte
 /* LE SILLON, à la ferme, dans les champs de l'ouest. ⚠️ COMME LA BORNE
    D'ORIGINE DU 442, IL NE BLOQUE PAS : une case qui change de sens sur une
    carte que les joueurs labourent depuis des mois est un piège, et un sillon
@@ -4558,6 +4581,14 @@ export const DEV_TELEPORTS = [
   { key: "townBelvedere", zone: "town" },  // le second palier
   { key: "townMarket",    zone: "town" },  // zip 426 : le champ de foire, enfin occupé
   { key: "townLake",      zone: "town" },  // zip 426 : la promenade du lac, au sud
+  /* ⚠️ ZIP 446 — LE CRATÈRE A SON ARRÊT, ET C'EST LA LEÇON DU 425 APPLIQUÉE
+     AVANT D'ÊTRE REPAYÉE : il est dans un pré, à l'écart, et y aller à pied
+     coûte une bonne minute — donc on ne serait pas allé le regarder à chaque
+     retouche, donc on l'aurait refait en aveugle. Sa position est DÉRIVÉE de
+     `starCraterPos` (le vrai balayage en spirale), pas de la constante d'ancrage :
+     un arrêt qui pose le joueur là où le cratère AURAIT dû être est le défaut
+     n°1 du 444 (« un arrêt de téléport qui posait le joueur dans le vide »). */
+  { key: "townCrater",    zone: "town" },
   /* ⚠️ 426 — LES TROIS NIVEAUX DU TRIBUNAL, ET C'EST LE MÊME RAISONNEMENT QU'AU
      425 : traverser la ville, entrer, puis monter deux volées à chaque
      rechargement pour regarder un bureau finit par ne plus se faire du tout.

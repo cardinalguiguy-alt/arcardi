@@ -12065,7 +12065,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           m.zone = "evil";
           if (dk === "world") { m.x = C.EVIL_SPAWN.x; m.y = C.EVIL_SPAWN.y; }
           else { m.x = C.RUN_GATE.x - C.DEV_BRIDGE_OFFSET; m.y = C.RUN_GATE.y; }
-        } else if (dk === "town" || dk === "townPlaza" || dk === "townCourt" || dk === "townBelvedere" || dk === "townMarket" || dk === "townLake" || dk === "townBoutique") {
+        } else if (((C.DEV_TELEPORTS.find(d => d.key === dk) || {}).zone) === "town") {
+          /* ⚠️⚠️ ZIP 446 — UNE JOINTURE, PLUS UNE LISTE. Cette ligne énumérait
+             sept clés à la main, et c'est exactement le défaut n°1 du 444 :
+             **une porte sans chemin de code MENT**. Le beffroi avait son bouton
+             et tombait dans la branche « ferme », qui téléportait devant la
+             maison ; ajouter le cratère ici en recopiant une huitième clé aurait
+             remis la même bombe à retardement en place. La table `DEV_TELEPORTS`
+             dit déjà de quelle zone est chaque arrêt : on la LIT, comme
+             `DEV_FLOOR_OF` le fait pour les intérieurs depuis le 444. */
           if (wasFarm) { m.farmX = m.x; m.farmY = m.y; }
           if (!townWorldRef.current) townWorldRef.current = getTownWorldCached(E);
           m.zone = "town";
@@ -12089,6 +12097,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              vérifier. On se pose devant la porte de la boutique, le salon est à
              vingt pas à l'est. */
           else if (dk === "townBoutique") { m.x = C.TOWN_BOUTIQUE.x + C.TOWN_BOUTIQUE.w / 2; m.y = C.TOWN_BOUTIQUE.y + C.TOWN_BOUTIQUE.h + 1; }
+          /* ⚠️ ZIP 446 — LE CRATÈRE, ET ON SE POSE SUR SON BORD, PAS DEDANS. Sa
+             position vient de `starCraterPos` (le vrai balayage), et on recule de
+             trois cases au sud : arriver au centre du trou aurait montré le
+             dessin de trop près, et c'est de l'extérieur qu'on juge une gerbe. */
+          else if (dk === "townCrater") { const cc = starCraterPos(); if (cc) { m.x = cc.x; m.y = cc.y + 3; } else { m.x = C.STAR_CRATER_X; m.y = C.STAR_CRATER_Y + 3; } }
           else { m.x = C.TOWN_SPAWN.x; m.y = C.TOWN_SPAWN.y; }
         } else if (DEV_FLOOR_OF[dk] !== undefined) {
           /* Zip 426 — les trois arrêts du tribunal. ⚠️ ON N'ENTRE PAS AU
@@ -15802,13 +15815,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {
         const cpos = starCraterPos();
         const st1 = sharedRef.current.star;
+        /* ⚠️ ZIP 446 — LA MARGE DE FENÊTRE SUIT LES FISSURES, PAS LA TERRE. Elles
+           courent jusqu'à `STAR_CRATER_CRACK_R` : la marge de 10 cases du 444 les
+           aurait fait apparaître d'un coup en bord d'écran. */
+        const cmar = C.STAR_CRATER_CRACK_R + 2;
         if (cpos && st1 && Q.starFallen(st1) && sprites.drawStarCrater
-            && cpos.x >= x0 - 10 && cpos.x <= x1 + 10 && cpos.y >= y0 - 10 && cpos.y <= yBot + 10) {
+            && cpos.x >= x0 - cmar && cpos.x <= x1 + cmar && cpos.y >= y0 - cmar && cpos.y <= yBot + cmar) {
           const ce = elAt(cpos.x, cpos.y);
+          const cph = Q.starDone(st1) ? 1 : 0;
+          const ccx = (cpos.x + 0.5) * T, ccy = (cpos.y + 0.5) * T;
+          /* ⚠️ DEUX VALEURS DÉRIVÉES, ZÉRO STOCKÉE (446) : la chaleur se déduit du
+             temps écoulé depuis la chute, l'étoile est au fond tant que personne
+             ne l'en a fait sortir. Même règle que les cierges de l'église (441). */
+          const copt = { heat: starCraterHeatNow(), star: !Q.starHas(st1, "crater") };
           ctx.save();
           ctx.translate(0, -ce * EP);
-          sprites.drawStarCrater(ctx, (cpos.x + 0.5) * T, (cpos.y + 0.5) * T, T, Q.starDone(st1) ? 1 : 0, now);
+          sprites.drawStarCrater(ctx, ccx, ccy, T, cph, now, copt);
           ctx.restore();
+          /* ⚠️⚠️ LA FUMÉE N'EST PAS UN DÉCAL DE SOL, DONC ELLE NE SE PEINT PAS
+             ICI : elle MONTE, jusqu'à une case et demie au-dessus du trou. Peinte
+             avec les tuiles, un joueur passant au NORD du cratère se dessinerait
+             par-dessus une colonne qui est devant lui. Mise en file à la rangée du
+             cratère, elle se range comme n'importe quel décor haut. */
+          if (!cph && sprites.drawStarCraterAir && copt.heat > 0.01)
+            pushE((cpos.y + 1) * T, ce, () => sprites.drawStarCraterAir(ctx, ccx, ccy, T, now, copt));
         }
       }
       /* ══════════════════════════════════════════════════════════════════════
@@ -18352,7 +18382,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const flip = p.dir === 2;
       // Le passager est assis juste derrière le cavalier principal sur la
       // selle, décalé du côté opposé au sens de la marche.
-      const basePx = Math.round(p.x * T), py = Math.round(p.y * T);
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ ZIP 446 — ON S'ENFONCE DANS LE CRATÈRE (demande de Guillaume : « quand
+         ║ on se déplace à l'intérieur, prévoir un déplacement qui suggère une
+         ║ profondeur ; pas plat »).
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️⚠️ C'EST UN DÉCALAGE D'IMAGE, ET IL EST APPLIQUÉ À `py` — donc à
+         l'ombre portée, au sprite, à la torche, à tout ce qui suit. Il ne touche
+         NI `p.y` (la position, qui circule), NI la clé de tri, NI la collision :
+         la leçon du 439 et du 441 réunies — une grandeur de dessin, une grandeur
+         de rang, une grandeur de collision, trois choses, trois paramètres. En
+         altitude de case (`TOWN_ELEV_PX`), le trou serait devenu une falaise que
+         `canStandTown` refuse de franchir : un cratère où l'on ne peut pas
+         entrer.
+         ⚠️ IL PASSE PAR `drawCharacter`, QUI EST LE SEUL ENTONNOIR : moi, les
+         joueurs distants, les résidents et les visiteurs y passent tous. Écrit
+         dans la seule branche « moi », j'aurais été le seul à m'enfoncer, et à
+         deux clients chacun aurait vu l'autre marcher à plat sur le trou.
+         ⚠️ ET LA ZONE SE LIT SUR MOI, PAS SUR `p` : on ne dessine la ville que
+         quand on y est, et `charOf` ne remplit pas `zone` pour les résidents —
+         un test sur `p.zone` aurait laissé les habitants marcher à plat. */
+      let sinkPx = 0;
+      if ((meRef.current && (meRef.current.zone || "farm")) === "town" && sprites.starCraterSink) {
+        const cp0 = starCraterPos();
+        if (cp0) sinkPx = sprites.starCraterSink(p.x - cp0.x, p.y - cp0.y, T);
+      }
+      const basePx = Math.round(p.x * T), py = Math.round(p.y * T + sinkPx);
       const px = isPassenger ? basePx + (flip ? 9 : -9) : basePx;
       // Correctif retour Guillaume 2026-07 ("assis trop haut, effet
       // flottement") : lift réduit pour que le bas du buste repose
@@ -20274,6 +20329,51 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     starCraterRef.current = { w: tw, pos };
     return pos;
   }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 446 — LA CHALEUR DU CRATÈRE, SUR UNE HORLOGE LOCALE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ `e.fall` EST UNE DATE DE L'HÔTE, ON NE LA SOUSTRAIT PAS DE LA NÔTRE. Le
+     §3 de CLAUDE.md est formel et c'est la faute la plus facile à commettre ici :
+     `Date.now() - e.fall` aurait « marché » sur la machine de l'hôte et donné
+     n'importe quoi ailleurs. On ancre donc sur la PREMIÈRE FOIS OÙ CE CLIENT A VU
+     la chute, exactement comme la scène du 445 déroule sa chronologie depuis sa
+     propre réception.
+     ⚠️ ET L'ANCRE EST PERSISTÉE, CLÉ PORTANT LA GRAINE ET LA DATE DE CHUTE (même
+     forme que `starFallSeenKey`) : sans ça, un rechargement de page pendant les
+     trois minutes redémarrait la fumée à zéro. Une remise à zéro depuis le menu
+     dev change `e.fall`, donc l'ancre ne correspond plus et se refait — rien à
+     invalider à la main.
+     ⚠️⚠️ CETTE ANCRE EST TOUJOURS PLUS TARDIVE QUE CELLE DE L'HÔTE (on ne peut
+     pas recevoir avant qu'il n'émette), et c'est ce qui rend la porte cohérente :
+     le client ne DEMANDE que quand il se croit refroidi, donc toujours après que
+     l'hôte l'ait accordé. L'hôte n'a jamais à refuser, et le jeu ne peut pas
+     « proposer puis refuser » (défaut du 426).
+     ⚠️ Un joueur qui rejoint le lendemain rejoue la scène de chute (445,
+     `starScenePump`) : son cratère fume donc à partir de CE moment-là, ce qui est
+     exactement ce que sa cinématique vient de lui montrer. */
+  const starHeatRef = useRef({ fall: 0, at: 0 });
+  function starHeatKey() { return "ferme_star_heat:" + ((sharedRef.current.seed | 0) >>> 0); }
+  function starCraterElapsed() {
+    const e = sharedRef.current.star;
+    if (!e || !e.fall) return 0;
+    const a = starHeatRef.current;
+    if (a.fall !== e.fall) {
+      let at = 0;
+      try {
+        const bits = String(window.localStorage.getItem(starHeatKey()) || "").split(":");
+        if (+bits[0] === e.fall) at = +bits[1] || 0;
+      } catch (err) { /* localStorage indisponible : on repart de maintenant */ }
+      if (!at) {
+        at = Date.now();
+        try { window.localStorage.setItem(starHeatKey(), e.fall + ":" + at); } catch (err) { /* idem */ }
+      }
+      a.fall = e.fall; a.at = at;
+    }
+    return Math.max(0, Date.now() - a.at);
+  }
+  function starCraterHeatNow() { return Q.starCraterHeat(sharedRef.current.star, starCraterElapsed()); }
+  function starCraterCoolNow() { return Q.starCraterCool(sharedRef.current.star, starCraterElapsed()); }
+
   /* Le SILLON, à la ferme. ⚠️ IL NE BLOQUE PAS et il n'est posé dans aucun
      tableau du monde : c'est un décor de RENDU à une position dérivée, comme la
      borne d'origine du 442. Une case qui change de sens sur une carte que les
@@ -20553,7 +20653,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const c = starCraterPos();
       if (c) {
         const near = Math.hypot(m.x - c.x, m.y - c.y) <= Q.STAR_CRATER_R + 1;
-        if (near && starCalmSelf()) {
+        /* ⚠️ ZIP 446 — LA PREMIÈRE PHRASE DIT LA FUMÉE, PAS L'ÉNIGME. Un joueur
+           qui arrive dans les trois premières minutes doit comprendre qu'il n'y a
+           rien à faire d'autre qu'attendre ; lui souffler « quelque chose bouge
+           du coin de l'œil » à ce moment-là l'enverrait tourner en rond. */
+        if (near && !starCraterCoolNow()) { starSay("hot", L.star.s2.tooHot, 4200); starHoldRef.current = 0; }
+        else if (near && starCalmSelf()) {
           if (nowMs >= (starHoldRef.current || 0)) {
             starHoldRef.current = nowMs + 500;
             sendReq({ kind: "starCalm" });
@@ -20595,6 +20700,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function starCalmSelf() {
     const m = meRef.current, c = starCraterPos();
     if (!m || !c || (m.zone || "farm") !== "town" || m.moving) return false;
+    /* ⚠️ ZIP 446 — TANT QUE ÇA FUME, ON NE DEMANDE MÊME PAS. Voir la note de
+       `starCraterElapsed` : notre ancre est toujours plus tardive que celle de
+       l'hôte, donc quand nous demandons, il a déjà dit oui. */
+    if (!starCraterCoolNow()) return false;
     if (Math.hypot(m.x - c.x, m.y - c.y) > Q.STAR_CRATER_R) return false;
     return Q.starFacingAway(m.x, m.y, m.dir | 0, c.x, c.y);
   }
@@ -20669,8 +20778,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          n'est pas la solution. ⚠️ C'est délibérément le seul endroit du jeu où
          une invite décrit une posture au lieu d'une touche. */
       const c = starCraterPos();
-      if (c && !Q.starHas(e, "crater") && Math.hypot(m.x - c.x, m.y - c.y) <= Q.STAR_CRATER_R + 1)
+      if (c && !Q.starHas(e, "crater") && Math.hypot(m.x - c.x, m.y - c.y) <= Q.STAR_CRATER_R + 1) {
+        /* ⚠️ ZIP 446 — L'INVITE DIT CE QUI EST VRAI MAINTENANT. Tant que le trou
+           fume, « tiens-toi tranquille » serait un conseil qui ne marche pas :
+           c'est le défaut du 426 (« le jeu propose et refuse »), et il coûte
+           d'autant plus cher ici que la mécanique du chapitre est déjà une
+           posture et pas une touche. */
+        if (!starCraterCoolNow())
+          return { p: "craterHot", act: () => pushToast(L.star.s2.tooHot) };
         return { p: "crater", act: () => pushToast(starSoloRoom() ? L.star.s2.calmSolo : L.star.s2.calmBoth) };
+      }
       /* Le ponton — on ne plonge que si l'on sait où plonger. */
       if (Q.starHas(e, "leanLake") && !Q.starHas(e, "lakeShard")
           && Math.abs(m.x - C.STAR_PIER_X) <= 2 && Math.abs(m.y - C.STAR_PIER_Y) <= 2)
