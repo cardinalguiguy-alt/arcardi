@@ -577,6 +577,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [binOpen, setBinOpen] = useState(false);
   const [bagOpen, setBagOpen] = useState(false); // zip 236: personal bag modal
   const [mapOpen, setMapOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false); // zip 2026-08 : roue "paramètres" (maison/puits/carte/personnel/perso/quitter)
   const [devMenuOpen, setDevMenuOpen] = useState(false); // zip 392 : menu développeur (Cmd/Ctrl+Shift+X, hôte seul)
   const [courtBoardOpen, setCourtBoardOpen] = useState(false); // zip 426 : le panneau d'affichage du tribunal
   const [priceBoardOpen, setPriceBoardOpen] = useState(false); // zip 438 : le tableau des cours, à la mairie
@@ -16313,14 +16314,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 ctx.beginPath(); ctx.ellipse(gx, gy, 4.5 * k2, 1.8 * k2, 0, 0, 7); ctx.fill();
                 ctx.globalAlpha = 1;
               }
-              const py = Math.round(gy - bb.alt * T) - im.ground;
-              const px3 = Math.round(gx - im.width / 2);
+              // Guillaume 2026-08 : les pigeons et colombes mangeaient trop de
+              // place sur la place de Valley Town — réduits d'1,5 au dessin,
+              // uniquement ici (une seule échelle, pas une seconde géométrie).
+              const BIRD_DRAW_SCALE = 1 / 1.5;
+              const dw = im.width * BIRD_DRAW_SCALE, dh = im.height * BIRD_DRAW_SCALE;
+              const py = Math.round(gy - bb.alt * T) - im.ground * BIRD_DRAW_SCALE;
+              const px3 = Math.round(gx - dw / 2);
               ctx.globalAlpha = bb.a;
               // Le dessin regarde à DROITE ; on retourne au rendu, comme le taxi.
               if (bb.face < 0) {
-                ctx.save(); ctx.translate(px3 + im.width, py); ctx.scale(-1, 1);
-                ctx.drawImage(im, 0, 0); ctx.restore();
-              } else ctx.drawImage(im, px3, py);
+                ctx.save(); ctx.translate(px3 + dw, py); ctx.scale(-1, 1);
+                ctx.drawImage(im, 0, 0, dw, dh); ctx.restore();
+              } else ctx.drawImage(im, px3, py, dw, dh);
               ctx.globalAlpha = 1;
             });
           }
@@ -20735,16 +20741,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         </div>
       )}
 
-      {/* Boutons flottants (nouveautés incluses) */}
-      <div className="ferme-actions">
-        <button className="ferme-btn" onClick={teleportHome}>{L.btnHome}</button>
-        {buildings.wellBuilt && <button className="ferme-btn" onClick={teleportWell}>{L.btnWell}</button>}
-        <button className="ferme-btn" onClick={() => setMapOpen(true)}>{L.btnMap}</button>
+      {/* Roue "paramètres" : maison/puits/carte/employés/perso/quitter étaient
+          six boutons en permanence visibles en haut à droite. Repliés ici,
+          dépliés au clic sur la roue (⚙️, qui tourne au survol). Chaque
+          bouton referme le menu en plus de son action normale — sinon il
+          resterait ouvert par-dessus le panneau qu'on vient d'ouvrir. */}
+      <button className={"ferme-settings-fab" + (settingsOpen ? " open" : "")}
+              title={L.btnSettings} onClick={() => setSettingsOpen(o => !o)}>⚙️</button>
+      <div className={"ferme-actions" + (settingsOpen ? " open" : "")}>
+        <button className="ferme-btn" onClick={() => { setSettingsOpen(false); teleportHome(); }}>{L.btnHome}</button>
+        {buildings.wellBuilt && <button className="ferme-btn" onClick={() => { setSettingsOpen(false); teleportWell(); }}>{L.btnWell}</button>}
+        <button className="ferme-btn" onClick={() => { setSettingsOpen(false); setMapOpen(true); }}>{L.btnMap}</button>
         {(sharedRef.current.greg || sharedRef.current.soan || skilledResidents().length > 0 || ((sharedRef.current.station && sharedRef.current.station.residents) || []).length > 0) && (
-          <button className="ferme-btn" onClick={() => setEmployeesOpen(true)}>{L.btnEmployees}</button>
+          <button className="ferme-btn" onClick={() => { setSettingsOpen(false); setEmployeesOpen(true); }}>{L.btnEmployees}</button>
         )}
-        <button className="ferme-btn ferme-btn-ghost" onClick={changeCharacter}>{L.btnChangeChar}</button>
-        <button className="ferme-btn ferme-btn-ghost" onClick={leaveGame}>{L.btnLeave}</button>
+        <button className="ferme-btn ferme-btn-ghost" onClick={() => { setSettingsOpen(false); changeCharacter(); }}>{L.btnChangeChar}</button>
+        <button className="ferme-btn ferme-btn-ghost" onClick={() => { setSettingsOpen(false); leaveGame(); }}>{L.btnLeave}</button>
       </div>
 
       {/* Invite proximité */}

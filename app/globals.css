@@ -6578,11 +6578,42 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .ferme-hud-res{ font-size:12px; cursor:pointer; border-radius:5px; padding:1px 3px; margin:0 -3px; }
 .ferme-hud-res:hover{ background:var(--f-paper-d); }
 .ferme-hud-res canvas{ image-rendering:pixelated; }
-.ferme-energy-wrap{ position:fixed; bottom:78px; right:14px; width:26px; height:140px; z-index:10; padding:3px; }
-.ferme-energy-bar{ position:absolute; bottom:3px; left:3px; right:3px; background:linear-gradient(#f4d442, #e8a83a); border-radius:3px; }
+/* Guillaume 2026-08 : la barre de fatigue prenait inutilement de la place —
+   réduite (26×140 → 16×90), même ancrage bas-droite donc aucun autre repère
+   du HUD (.ferme-notebook-fab, bottom:232, en dépend) n'a besoin de bouger. */
+.ferme-energy-wrap{ position:fixed; bottom:78px; right:14px; width:16px; height:90px; z-index:10; padding:2px; }
+.ferme-energy-bar{ position:absolute; bottom:2px; left:2px; right:2px; background:linear-gradient(#f4d442, #e8a83a); border-radius:2px; }
 
-/* Boutons flottants (téléport, carte, changer de perso, quitter) */
-.ferme-actions{ position:fixed; top:10px; right:10px; z-index:41; display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; max-width:min(66vw, 520px); }
+/* Boutons flottants (téléport, carte, changer de perso, quitter) — repliés
+   depuis 2026-08 sous une roue "paramètres" (⚙️, en haut à droite) : six
+   boutons alignés en permanence mangeaient la place et brouillaient le HUD.
+   La roue tourne au survol (retour visuel gratuit, pas d'état) et le menu se
+   déplie/replie au CLIC (`settingsOpen` en JS) — même motif d'ouverture que
+   `.ferme-hud-extra` (max-height/opacity/transform), pour rester cohérent. */
+.ferme-settings-fab{
+  position:fixed; top:10px; right:10px; z-index:42; width:38px; height:38px;
+  border-radius:50%; display:flex; align-items:center; justify-content:center;
+  font-size:19px; border:3px solid var(--f-wood); background:var(--f-gold);
+  box-shadow:0 3px 0 var(--f-wood-d); cursor:pointer; padding:0;
+  transition: transform .5s cubic-bezier(.22,.61,.36,1);
+}
+.ferme-settings-fab:hover{ transform:rotate(180deg); filter:brightness(1.08); }
+.ferme-settings-fab.open{ background:var(--f-paper-d); }
+.ferme-actions{
+  position:fixed; top:54px; right:10px; z-index:41; display:flex; flex-direction:column;
+  align-items:flex-end; gap:8px; max-width:min(66vw, 260px);
+  max-height:0; opacity:0; overflow:hidden; transform:translateY(-6px); pointer-events:none;
+  transition: max-height .3s cubic-bezier(.22,.61,.36,1),
+              opacity .22s ease-out,
+              transform .28s cubic-bezier(.22,.61,.36,1);
+}
+.ferme-actions.open{
+  max-height:320px; opacity:1; transform:translateY(0); pointer-events:auto;
+  transition: max-height .32s cubic-bezier(.22,.61,.36,1) .03s,
+              opacity .28s ease-in .05s,
+              transform .3s cubic-bezier(.22,.61,.36,1) .03s;
+}
+.ferme-actions .ferme-btn{ width:100%; text-align:left; }
 .ferme-whistle-btn{ position:fixed; left:10px; top:50%; transform:translateY(-50%); z-index:41; width:52px; height:52px; display:flex; align-items:center; justify-content:center; border-radius:50%; border:3px solid var(--f-wood); background:var(--f-gold); box-shadow:0 3px 0 var(--f-wood-d); cursor:pointer; padding:0; }
 .ferme-whistle-btn:hover{ filter:brightness(1.08); }
 .ferme-whistle-btn:active{ transform:translateY(calc(-50% + 2px)); box-shadow:0 1px 0 var(--f-wood-d); }

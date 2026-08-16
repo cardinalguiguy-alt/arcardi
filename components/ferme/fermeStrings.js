@@ -1183,6 +1183,7 @@ export const FERME_STR = {
     mapClose: "Clique n'importe où ou appuie sur Échap ou M pour fermer",
     mapYou: "toi",
     // Boutons flottants
+    btnSettings: "Paramètres",
     btnHome: "🏠 Maison",
     btnMap: "🗺️ Carte",
     btnEmployees: "👥 Employés",
@@ -3261,6 +3262,7 @@ export const FERME_STR = {
     mapTitle: "🗺️ Valley map",
     mapClose: "Click anywhere or press Esc or M to close",
     mapYou: "you",
+    btnSettings: "Settings",
     btnHome: "🏠 House",
     btnMap: "🗺️ Map",
     btnEmployees: "👥 Staff",
