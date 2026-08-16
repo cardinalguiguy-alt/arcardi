@@ -32,13 +32,18 @@ import { noteSend } from "@/lib/realtimeQuota";
 import * as C from "./fermeConstants";
 import * as E from "./fermeEngine";
 import * as A from "./fermeArt";
-/* ⚠️ ZIP 442 — L'ENQUÊTE. Sa table, ses textes-clés et ses résolveurs vivent
-   dans `enquete.js` : voir l'en-tête de ce fichier-là pour la raison, qui est
-   celle du 439 (une quête = une ligne, pas un `if` de plus dans un composant de
-   vingt-quatre mille lignes) doublée de celle du 436 (une règle qu'aucun banc ne
-   peut appeler vieillit toute seule). Ici on ne trouvera que ce qui touche au
-   RÉSEAU, à l'ENTRÉE et au DESSIN. */
-import * as Q from "./enquete";
+/* ⚠️ ZIP 444 — LA QUÊTE DE L'ÉTOILE. Sa table, ses grandeurs et ses résolveurs
+   vivent dans `quete.js` : voir l'en-tête de ce fichier-là pour la raison, qui
+   est celle du 439 (une quête = une ligne, pas un `if` de plus dans un composant
+   de vingt-quatre mille lignes) doublée de celle du 436 (une règle qu'aucun banc
+   ne peut appeler vieillit toute seule). Ici on ne trouvera que ce qui touche au
+   RÉSEAU, à l'ENTRÉE, à la MISE EN SCÈNE et au DESSIN.
+   ⚠️ Elle remplace `enquete.js` (442), retiré en entier au 444. L'emplacement
+   d'intégration est le même — c'est délibéré : les endroits fragiles de ce
+   fichier (les listes `uiBlocked`, l'ordre des invites, la fusion de l'`apply`,
+   le crochet de persistance) avaient été trouvés un par un, souvent en jouant.
+   On les REMPLIT autrement, on ne les redécouvre pas. */
+import * as Q from "./quete";
 import { buildSprites, charPalette, drawBridgeTile, drawBridgeOverlay, drawCandyGroundTile, candySyrupColor } from "./fermeArt";
 import { fstr } from "./fermeStrings";
 // ZIP 441 — l'orgue de l'église. Le lecteur de fichiers existe depuis longtemps
@@ -48,6 +53,12 @@ import { playFile as sfxPlayFile, stopSound as sfxStopSound } from "@/lib/sfx";
 
 const GAME_ID = "ferme";
 const ZOOM = 3;
+
+/* ⚠️ ZIP 444 — L'ARRÊT DE TÉLÉPORT ↔ LE NIVEAU : la jointure vit dans
+   `fermeConstants.js` (`C.DEV_FLOOR_OF`), pas ici, pour que `verify-quete.mjs`
+   lise la MÊME table que le jeu. Voir sa note là-bas : c'est une réparation, et
+   c'est le beffroi qui l'a révélée. */
+const DEV_FLOOR_OF = C.DEV_FLOOR_OF;
 
 // Cache mémoire du dernier état sauvegardé par L'HÔTE de CET onglet
 // (correctif audit lancement 2026-07, module-level : survit aux montages/
@@ -588,22 +599,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      même panneau à deux profondeurs, et on revient toujours au menu. */
   const [hallTalk, setHallTalk] = useState(null);
   /* ╔══════════════════════════════════════════════════════════════════════════
-     ║ ZIP 442 — LES QUATRE ÉTATS D'INTERFACE DE L'ENQUÊTE.
+     ║ ZIP 444 — LES ÉTATS D'INTERFACE DE LA QUÊTE DE L'ÉTOILE.
      ╚══════════════════════════════════════════════════════════════════════════
-     ⚠️⚠️ AUCUN D'EUX NE PORTE DE DONNÉE D'ENQUÊTE, ET C'EST LA RÈGLE DU 427
-     (« la vitrine ne débite rien ») : ils portent seulement CE QUI EST OUVERT.
-     Tout ce qui s'affiche est relu dans `sharedRef.current.enquete` au moment du
-     rendu. Un carnet React qui doublerait l'état partagé finirait par montrer un
-     indice qu'on n'a pas, ou par ne pas montrer celui que le camarade vient de
-     trouver — c'est-à-dire le pire défaut possible pour une enquête à deux.
-     ⚠️ `enqTick` NE PORTE RIEN NON PLUS : il ne sert qu'à redemander un rendu
-     quand un `apply` a changé l'enquête, exactement comme `wardrobeTick` (427).
-     `sharedRef` est un ref, donc React ne le regarde pas. */
-  const [enqNoteOpen, setEnqNoteOpen] = useState(false);   // le carnet
-  const [enqDocOpen, setEnqDocOpen] = useState(null);      // { id } — un document ouvert
-  const [enqCodeOpen, setEnqCodeOpen] = useState(null);    // { code, value } — une saisie
-  const [enqEndOpen, setEnqEndOpen] = useState(false);     // le guichet de la réclamation
-  const [enqTick, setEnqTick] = useState(0);
+     ⚠️⚠️ AUCUN NE PORTE DE DONNÉE DE QUÊTE, ET C'EST LA RÈGLE DU 427 (« la
+     vitrine ne débite rien ») reprise du 442 : ils portent seulement CE QUI EST
+     OUVERT. Tout ce qui s'affiche est relu dans `sharedRef.current.star` au
+     moment du rendu. Un état React qui doublerait l'état partagé finirait par
+     montrer un éclat qu'on n'a pas, ou par ne pas montrer celui que le camarade
+     vient de trouver — le pire défaut possible pour une quête à deux.
+     ⚠️ `starTick` NE PORTE RIEN NON PLUS : il ne sert qu'à redemander un rendu
+     quand un `apply` a changé la quête, exactement comme `wardrobeTick` (427).
+     `sharedRef` est un ref, donc React ne le regarde pas.
+     ⚠️⚠️ ET IL Y EN A MOINS QU'AU 442, PARCE QUE LA QUÊTE OUVRE MOINS DE
+     PANNEAUX. L'enquête en avait quatre (carnet, document, saisie de code,
+     guichet) : c'était une histoire qu'on LISAIT. Celle-ci se joue dans le
+     monde — un mini-jeu plein écran, une carte de chapitre, et des bulles
+     au-dessus de l'étoile. Le seul panneau qui reste est le rappel de reprise. */
+  const [starMini, setStarMini] = useState(null);   // { kind, round, … } — un mini-jeu plein écran
+  const [starCard, setStarCard] = useState(null);   // { key } — une carte de chapitre
+  const [starRecap, setStarRecap] = useState(false);// le rappel « où on en était »
+  const [starTick, setStarTick] = useState(0);
   const [forcedWorldUi, setForcedWorldUi] = useState(null); // zip 392 : miroir RENDABLE de sharedRef.current.forcedWorld (voir applyForcedWorld)
   // Menu du chaudron (chantier 2026-07, demande Guillaume : "le click sur E
   // doit ouvrir un menu chaudron que voulez-vous concocter ?") : remplace
@@ -745,17 +760,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const courtBoardOpenRef = useRef(false);   // zip 426 : lu par la boucle (closure à deps vides), comme devMenuOpenRef
   const priceBoardOpenRef = useRef(false);   // zip 438 : idem pour le tableau des cours
   const hallTalkOpenRef = useRef(false);     // zip 439 : idem pour le dialogue de l'accueil
-  /* ⚠️⚠️ ZIP 442 — UN PANNEAU D'ENQUÊTE OUVERT DOIT ARRÊTER LE FERMIER, ET C'EST
-     UN OUBLI TROUVÉ EN JOUANT. Les quatre panneaux (carnet, document, saisie,
-     dépôt) sont des `useState` du composant ; les trois boucles de déplacement
-     vivent dans la closure du rendu et ne lisent que des REFS (§4). Sans ce
-     miroir, on lisait un document en marchant — et pire, on tapait un code
-     pendant que les touches du champ de saisie faisaient AUSSI marcher le
-     personnage, ce qui est le défaut le plus déroutant qu'un champ de texte
-     puisse produire. Un seul ref pour les quatre : ils ne s'ouvrent jamais
-     ensemble, et une garde par panneau serait quatre occasions d'en oublier un
-     le jour où l'on en ajoute un cinquième. */
-  const enqUiOpenRef = useRef(false);
+  /* ⚠️⚠️ ZIP 442, GARDÉ TEL QUEL AU 444 — UN ÉCRAN DE QUÊTE OUVERT DOIT ARRÊTER
+     LE FERMIER, ET C'EST UN OUBLI QUI AVAIT ÉTÉ TROUVÉ EN JOUANT. Les états sont
+     des `useState` du composant ; les trois boucles de déplacement vivent dans
+     la closure du rendu et ne lisent que des REFS (§4). Sans ce miroir, on lisait
+     en marchant — et pire, pendant un mini-jeu, chaque touche partait AUSSI dans
+     le jeu, ce qui est le défaut le plus déroutant qu'un écran modal puisse
+     produire. Un seul ref pour tous : ils ne s'ouvrent jamais ensemble, et une
+     garde par écran serait autant d'occasions d'en oublier un. */
+  const starUiOpenRef = useRef(false);
   // Zip 426 : la carte de la ville, construite une fois (la ville ne change
   // jamais) — voir buildTownMinimapBase. Le tribunal, lui, se dessine en PLAN
   // et n'a donc aucune image à garder.
@@ -865,8 +878,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const organRef = useRef({ until: 0, src: null });  // la registration en cours
   const organMuteRef = useRef(false);                // le morceau n'est pas déposé
   const candleNextRef = useRef(0);                   // anti-rafale du râtelier
-  const enqKeyNextRef = useRef(0);                   // zip 442 : anti-rafale des deux commandes de verrou
-  const enqBellDayRef = useRef(0);                   // zip 442 : le jour où la cloche a déjà sonné (voir le lever du jour)
+  const starKeyNextRef = useRef(0);                  // zip 444 : anti-rafale des gestes de quête (E maintenu)
+  const starBellDayRef = useRef(0);                  // zip 444 : le jour où la cloche a déjà sonné toute seule (lever du jour)
+  /* ⚠️ LA SCÈNE EN COURS. Elle vit dans un REF et pas dans un état React, pour
+     la raison de toujours : la boucle de rendu la lit à chaque image, et elle
+     est dans une closure à deps vides. `t0` est daté à LA RÉCEPTION chez chaque
+     client — jamais l'horloge de l'hôte (§3 de CLAUDE.md) : une scène de neuf
+     secondes est exactement le genre de chose où trois secondes de dérive se
+     verraient. */
+  const starSceneRef = useRef(null);                 // { key, t0 } — chute, retournement, finale
+  const starHoldRef = useRef(0);                     // depuis quand on tient un geste continu (le calme du cratère)
+  /* ⚠️ LA TRAÎNE DU COMPAGNON — LA MÊME QUE CELLE DE LEO (427), ET C'EST TOUT CE
+     QUE COÛTE L'ÉTOILE QUI SUIT LE JOUEUR : sa position se DÉRIVE de la mienne,
+     donc zéro message, aucune collision propre, et l'impossibilité de traverser
+     un mur (elle rejoue un chemin déjà validé). Une par zone : les traînées ne
+     se mélangent pas d'une carte à l'autre, sinon le saut de zone ferait
+     traverser la ville en ligne droite (voir LEO_TELEPORT_TILES). */
+  const starTrailRef = useRef({ farm: [], town: [], court: [] });
+  const starBubbleRef = useRef({ text: "", until: 0, key: "" });  // ce que l'étoile dit, au-dessus d'elle
+  const starHideRef = useRef(0);                     // elle se cache : horodatage de fin (§3 — le secret se MONTRE)
+  const starSeenRef = useRef({});                    // scènes/bulles déjà vues DANS CETTE SESSION (le rappel, une fois)
   const [taxiMenu, setTaxiMenu] = useState(false);   // le panneau « Où allez-vous ? »
   const taxiMenuRef = useRef(false);
   const [taxiPhase, setTaxiPhase] = useState(null);  // miroir React, pour le bouton
@@ -878,7 +909,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const meRef = useRef(null);
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
-  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, sugar: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], greg: null, soan: null, harald: null, station: E.newStationState(), decor: [], crafts: E.newCrafts(), craftStock: E.newCraftStock(), townChop: {}, wardrobe: {}, enquete: Q.newEnquete() });
+  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, sugar: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], greg: null, soan: null, harald: null, station: E.newStationState(), decor: [], crafts: E.newCrafts(), craftStock: E.newCraftStock(), townChop: {}, wardrobe: {}, star: Q.newStar() });
   const invRef = useRef(null);
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
@@ -1106,8 +1137,34 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   useEffect(() => { courtBoardOpenRef.current = courtBoardOpen; }, [courtBoardOpen]); // zip 426
   useEffect(() => { priceBoardOpenRef.current = priceBoardOpen; }, [priceBoardOpen]); // zip 438
   useEffect(() => { hallTalkOpenRef.current = !!hallTalk; }, [hallTalk]);            // zip 439
-  useEffect(() => { enqUiOpenRef.current = !!(enqNoteOpen || enqDocOpen || enqCodeOpen || enqEndOpen); },
-            [enqNoteOpen, enqDocOpen, enqCodeOpen, enqEndOpen]);                      // zip 442
+  useEffect(() => { starUiOpenRef.current = !!(starMini || starCard || starRecap); },
+            [starMini, starCard, starRecap]);                                          // zip 444
+  /* ⚠️⚠️ ZIP 444 — LA CARTE DE CHAPITRE SE FERME TOUTE SEULE, ET C'EST LA
+     DIFFÉRENCE ENTRE UNE TRANSITION ET UN DIALOGUE. Une carte qu'il faut
+     congédier oblige le joueur à agir pour continuer une phrase qui n'attend
+     rien de lui : c'est la définition d'un panneau, et le chantier en retire
+     plutôt qu'il n'en ajoute (§6 de QUETE.md).
+     ⚠️ ELLE NE BLOQUE PAS LE JEU NON PLUS : `starUiOpenRef` la compte parce
+     qu'elle mange les touches, mais la simulation continue derrière — on ne
+     coupe jamais le monde pour une mise en scène (règle de la chute). */
+  useEffect(() => {
+    if (!starCard) return;
+    const t = setTimeout(() => setStarCard(null), Q.STAR_CARD_MS);
+    return () => clearTimeout(t);
+  }, [starCard]);
+  /* ⚠️ LE RAPPEL « PREVIOUSLY », UNE FOIS PAR SESSION ET JAMAIS DEUX. Il ne
+     s'ouvre que si la quête est COMMENCÉE et pas finie : sur une ferme neuve il
+     n'a rien à dire, et après la fin il redirait une histoire close. La marque
+     vit dans un ref de SESSION (`starSeenRef`), pas dans l'état partagé — le
+     partager voudrait dire que le rappel de l'un consomme celui de l'autre. */
+  useEffect(() => {
+    if (phase !== "playing" || starSeenRef.current.recap) return;
+    const e = sharedRef.current.star;
+    if (!e || !Q.starStarted(e) || Q.starDone(e)) return;
+    starSeenRef.current.recap = true;
+    const t = setTimeout(() => setStarRecap(true), 1200);
+    return () => clearTimeout(t);
+  }, [phase, starTick]);
   useEffect(() => { devMenuOpenRef.current = devMenuOpen; }, [devMenuOpen]); // zip 392
   useEffect(() => { shopOpenRef.current = shopOpen; }, [shopOpen]);
   useEffect(() => { marketOpenRef.current = marketOpen; }, [marketOpen]);
@@ -1312,15 +1369,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                                    worn: { hat, scarf, outfit, tint } } }, indices
            décalés de 1 (0 = rien porté, voir wardrobeLook). */
         wardrobe: (saved && saved.wardrobe) || {},
-        /* ⚠️ ZIP 442 — L'ENQUÊTE. Même chemin, même raison, AUCUNE MIGRATION
-           SQL : un champ de plus dans le JSON de `ferme_saves`, comme
-           `townChop` (426), `wardrobe` (427) et `forcedWorld` (392). Absente
-           d'une sauvegarde antérieure = enquête pas commencée, ce qui est le bon
-           comportement. `migrateEnquete` reconstruit chaque sous-objet plutôt
-           que de faire confiance à sa forme : une sauvegarde abîmée ne doit pas
-           empêcher de charger une ferme entière pour une histoire secondaire
-           (leçon de `migrateStation`). */
-        enquete: Q.migrateEnquete(saved && saved.enquete),
+        /* ⚠️⚠️ ZIP 444 — LA QUÊTE DE L'ÉTOILE, ET C'EST ICI QUE VIT LA
+           PERSISTANCE PAR CHECKPOINT DEMANDÉE PAR LE CHANTIER. Même chemin,
+           même raison, AUCUNE MIGRATION SQL, AUCUNE MANIPULATION SUPABASE : un
+           champ de plus dans le JSON de `ferme_saves`, comme `townChop` (426),
+           `wardrobe` (427) et `forcedWorld` (392). Absent d'une sauvegarde
+           antérieure = quête pas commencée, ce qui est le bon comportement.
+           ⚠️ C'EST BIEN « LE MÉCANISME DÉJÀ EN PLACE », et il fallait choisir
+           lequel : `saveGameState`/`readGameState` (lib/gameSync) écrit l'état
+           du JEU COURANT DU SALON — c'est ce dont Puissance 4 se sert — et il se
+           PERD quand le salon lance un autre jeu. La ferme, elle, est un monde
+           persistant indexé par son code, où vivent déjà l'or, le jour, les
+           animaux et les bâtiments. Y mettre la quête, c'est la mettre là où est
+           le reste du monde ; la mettre dans `saveGameState`, c'est couper
+           l'état du monde en deux magasins qu'on ne peut pas réconcilier.
+           ⚠️ `migrateStar` reconstruit chaque sous-objet plutôt que de faire
+           confiance à sa forme : une sauvegarde abîmée ne doit pas empêcher de
+           charger une ferme entière pour une histoire secondaire (leçon de
+           `migrateStation`). Une sauvegarde du 442 porte un champ `enquete` :
+           il est simplement ignoré et disparaît à la première écriture — ce sont
+           deux histoires différentes, pas deux versions de la même. */
+        star: Q.migrateStar(saved && saved.star),
         crafts: E.migrateCrafts(saved.crafts), craftStock: E.migrateCraftStock(saved.craftStock), // zip 252
         greg: (saved.greg && saved.greg.expiresAt > Date.now())
           // Chantier 2 (feuille de route) : `orderQueue` est un ajout — les
@@ -1545,7 +1614,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       crafts: E.migrateCrafts(payload.crafts), craftStock: E.migrateCraftStock(payload.craftStock), // zip 252
       townChop: payload.townChop || {}, // zip 426
       wardrobe: payload.wardrobe || {},  // zip 427
-      enquete: Q.migrateEnquete(payload.enquete), // zip 442
+      star: Q.migrateStar(payload.star), // zip 444
     };
     // Zip 392 : la terre forcée arrive AVEC l'instantané, donc avant toute
     // évaluation de passageWorldIndex par ce client. Posée ici et pas dans le
@@ -2050,10 +2119,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       townChop: s.townChop || {},
       // Zip 427 : la garde-robe suit le même chemin, pour la même raison.
       wardrobe: s.wardrobe || {},
-      // Zip 442 : l'enquête aussi. Un état partagé qui prendrait un chemin à
-      // lui finirait par ne pas être sauvegardé le jour où l'on touche à
-      // l'autre (leçon des vergers, 398).
-      enquete: s.enquete || Q.newEnquete(),
+      // Zip 444 : la quête de l'étoile aussi. Un état partagé qui prendrait un
+      // chemin à lui finirait par ne pas être sauvegardé le jour où l'on touche
+      // à l'autre (leçon des vergers, 398).
+      star: s.star || Q.newStar(),
       // Zip 392 : terre forcée par le menu développeur. Persistée à la demande
       // de Guillaume ("tout le monde + persisté") pour qu'une démonstration
       // survive à un rechargement. Champ du seul instantané JSON déjà en base :
@@ -2373,124 +2442,171 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       return;
     }
     /* ╔══════════════════════════════════════════════════════════════════════
-       ║ ZIP 442 — L'ENQUÊTE, CÔTÉ HÔTE. CINQ REQUÊTES, UNE SEULE SORTIE.
+       ║ ZIP 444 — LA QUÊTE DE L'ÉTOILE, CÔTÉ HÔTE. CINQ REQUÊTES, UNE SORTIE.
        ╚══════════════════════════════════════════════════════════════════════
-       ⚠️⚠️ POURQUOI L'HÔTE ARBITRE ALORS QUE « LA PORTE N'EST JAMAIS LA
-       CAISSE » (439). Justement parce qu'ici il y a une caisse : boucler un
-       chapitre paie. Le panneau, lui, ne donne rien — il montre un document, et
-       on peut l'ouvrir cent fois. Ce qui paie est l'INSCRIPTION de l'indice au
-       carnet, et elle est idempotente par construction (`clues` est un
-       dictionnaire, pas un compteur) : marteler E devant un registre rapporte
-       exactement zéro or au deuxième appui, sans qu'aucun garde-fou n'ait à le
-       vérifier. C'est la forme que le 439 réclamait : *une quête qui devra
-       récompenser passera par une `req` arbitrée par l'hôte, comme la vente au
-       marché.*
+       ⚠️⚠️ POURQUOI L'HÔTE ARBITRE ALORS QUE CETTE QUÊTE NE PAIE RIEN. Deux
+       raisons, et la seconde est la vraie.
+       1. Elle porte un ÉTAT PARTAGÉ : deux joueurs doivent voir tomber le même
+          éclat, dans le même ordre, une seule fois. Sans arbitre, deux clients
+          qui trouvent en même temps écrivent deux vérités.
+       2. ⚠️ ET LE CROCHET DE RÉCOMPENSE EST POSÉ DÈS MAINTENANT, VIDE. La
+          consigne du chantier est explicite : la récompense cosmétique viendra
+          plus tard, mais **l'arbitrage se pose aujourd'hui, pas le contenu**.
+          C'est la règle du 439 (« un panneau qui s'ouvre à volonté ne doit rien
+          donner ») appliquée à un cadeau qui ne contient encore rien : le jour
+          où la garde-robe cosmétique existera, elle lira `star.gift`, et elle
+          n'aura pas à inventer un chemin d'attribution — c'est au moment où l'on
+          invente un chemin d'attribution qu'on se trompe.
        ⚠️⚠️ ET LA ZONE EST TESTÉE AVANT LES DISTANCES, TOUJOURS. C'est le piège
-       des deux cartes (§4 de CLAUDE.md) et il est ici aussi cher qu'au marché :
-       la borne d'origine est à la ferme, les trois autres sont en ville, et les
-       coordonnées de l'une existent chez l'autre. On compare donc la zone
-       DÉCLARÉE PAR LA TABLE (`site.zone`) à celle que la requête transporte
-       (`req.pz`), et on échoue FERMÉ — pas de zone = pas d'indice — exactement
-       comme `atMarket` depuis le 431.
-       ⚠️ Le nom du trouveur est celui que la requête PORTE (`req.name`), et il
-       est tronqué par le résolveur : il s'affichera dans le carnet de l'autre
-       joueur, donc il vient du réseau, donc il n'est pas de confiance. */
-    if (req.kind === "enqClue" || req.kind === "enqCode" || req.kind === "enqLock"
-     || req.kind === "enqSign" || req.kind === "enqFile") {
+       des deux cartes (§4 de CLAUDE.md), et il est ici aussi cher qu'au marché :
+       le sillon est à la ferme, tout le reste est en ville ou dans l'église, et
+       les coordonnées de l'un existent chez l'autre. On compare la zone DÉCLARÉE
+       PAR LA TABLE (`site.zone`) à celle que la requête transporte (`req.pz`), et
+       on échoue FERMÉ — pas de zone, pas de trouvaille — exactement comme
+       `atMarket` depuis le 431.
+       ⚠️ LES DEUX GESTES COOPÉRATIFS SONT DATÉS PAR L'HÔTE, JAMAIS PAR LE
+       CLIENT (§3 : ne jamais comparer une horloge hôte à une horloge invité).
+       `starCalm` et `starLean` reçoivent tous les deux `Date.now()` de CETTE
+       machine : les deux côtés d'une fenêtre viennent donc de la même horloge, et
+       deux clients dont les montres diffèrent de trois secondes obtiennent
+       exactement le même verdict. C'est la mécanique des deux serrures du 442,
+       généralisée — la seule chose de l'enquête qui méritait de survivre.
+       ⚠️ Le nom du trouveur est celui que la requête PORTE (`req.name`) : il
+       s'affichera chez l'autre joueur, donc il vient du réseau, donc il n'est pas
+       de confiance — le résolveur le tronque. */
+    if (req.kind === "starFound" || req.kind === "starCalm" || req.kind === "starLean"
+     || req.kind === "starDuet" || req.kind === "starGift") {
       const s2 = sharedRef.current;
-      const e = (s2.enquete = Q.migrateEnquete(s2.enquete));
+      const e = (s2.star = Q.migrateStar(s2.star));
       const now = Date.now();
       const who = String(req.name || f.name || "?");
-      const wasStarted = Q.enqStarted(e);
+      const wasStarted = Q.starStarted(e);
+      const before = Q.starShards(e);
       let r = { ok: false };
-      if (req.kind === "enqClue") {
-        const site = Q.ENQ_SITE[req.site];
+      if (req.kind === "starFound") {
+        const site = Q.STAR_SITE[req.site];
         /* ⚠️ LA ZONE DU SITE, PAS CELLE DU JOUEUR SEULE : on compare les deux.
-           Un `enqClue` de la borne du bois envoyé depuis la ferme est refusé,
-           et il l'est parce que la table dit que ce site est en ville — pas
-           parce qu'un `if` l'a prévu. */
-        if (site && !site.code && site.zone && site.zone === (req.pz || "")) r = Q.resolveEnqClue(e, req.site, who, now);
-      } else if (req.kind === "enqCode") {
-        r = Q.resolveEnqCode(e, String(req.code || ""), String(req.value || ""), who, now);
-      } else if (req.kind === "enqLock") {
-        if (req.pz === "court") r = Q.resolveEnqLock(e, String(req.side || ""), who, now);
-      } else if (req.kind === "enqSign") {
-        /* ⚠️ « SEUL » SE MESURE SUR LES FERMIERS CONNUS DE L'HÔTE, pas sur les
-           joueurs présents à l'écran. Un camarade parti aux toilettes est encore
-           dans la partie ; exiger sa signature ferait attendre quelqu'un qui ne
-           reviendra peut-être pas avant une heure. Un salon à un seul fermier
-           est un salon solo, et la ville fournit son témoin. */
-        r = Q.resolveEnqSign(e, f.id, enqSoloRoom());
+           Un `starFound` du ponton envoyé depuis la ferme est refusé, et il l'est
+           parce que la TABLE dit que ce lieu est en ville — pas parce qu'un `if`
+           l'a prévu. Le jour où un lieu déménage, rien à retoucher ici. */
+        if (site && site.zone && site.zone === (req.pz || "")) r = Q.resolveStarFound(e, req.site, who, now);
+      } else if (req.kind === "starCalm") {
+        /* ⚠️⚠️ L'HÔTE REVÉRIFIE LA CONDITION, IL NE CROIT PAS LE CLIENT. Le
+           client demande quand SA condition locale tient (dans l'anneau,
+           immobile, dos tourné) ; l'hôte relit les positions qu'il a déjà — elles
+           circulent depuis toujours — et refuse si elles ne disent pas la même
+           chose. Sans ça, la mécanique la plus jolie du chantier serait aussi la
+           plus facile à contourner, et le contournement serait invisible. */
+        if (req.pz === "town" && starCalmOk(f.id)) r = Q.resolveStarCalm(e, f.id, now, starSoloRoom());
+      } else if (req.kind === "starLean") {
+        if (req.pz === "town") r = Q.resolveStarLean(e, f.id, +req.tx || 0, +req.ty || 0, now, starSoloRoom());
+      } else if (req.kind === "starDuet") {
+        if (req.pz === "court") r = Q.resolveStarDuet(e, req.phrase | 0, who, now);
       } else {
-        r = Q.resolveEnqFile(e, String(req.outcome || ""), now);
+        /* ⚠️ LE DON : LA LISTE DES JOUEURS EN LIGNE, PAS CELLE DES FERMIERS
+           CONNUS. C'est le pire défaut du 442, trouvé par une question de
+           Guillaume : `farmersRef` contient TOUS les fermiers que la sauvegarde a
+           jamais vus, parce qu'il est persisté dans l'instantané. Sur une ferme
+           où un ami est passé une fois, l'enquête devenait infinissable sans que
+           rien ne l'explique. Ici, ceux qui étaient là reçoivent. */
+        r = Q.resolveStarGift(e, starRoomPlayerIds(), now);
       }
       if (!r.ok) {
-        /* Un refus est SILENCIEUX sauf s'il apprend quelque chose. Un code faux
-           le dit (c'est une réponse), un site verrouillé le dit (c'est une
-           information : « tu ne saurais pas quoi y chercher »), un doublon non
-           (il n'y a rien à annoncer). */
-        if (r.wrong) out.toast = { id: f.id, key: "enqCodeNo" };
-        else if (r.locked) out.toast = { id: f.id, key: "enqLocked" };
+        /* Un refus est SILENCIEUX sauf s'il apprend quelque chose : un lieu
+           verrouillé le dit (« tu ne saurais pas quoi y chercher »), un doublon
+           non (il n'y a rien à annoncer). */
+        if (r.locked) out.toast = { id: f.id, key: "starLocked" };
         hostFlushOut(out, f, null);
         return;
       }
-      /* ⚠️ ON DIFFUSE L'ENQUÊTE ENTIÈRE, PAS UN DELTA, ET C'EST UN CALCUL DE
-         TAILLE CONTRE UN CALCUL DE RISQUE. Elle pèse une vingtaine de clés
+      /* ⚠️ ON DIFFUSE LA QUÊTE ENTIÈRE, PAS UN DELTA, ET C'EST UN CALCUL DE
+         TAILLE CONTRE UN CALCUL DE RISQUE. Elle pèse une quinzaine de clés
          courtes ; le §3 est formel — seul le NOMBRE de `send()` est facturé,
-         jamais la taille. Un delta aurait coûté une réconciliation (« quel
-         indice manque à qui »), c'est-à-dire exactement le genre d'état qu'on
-         passe son temps à ne pas créer. Et elle part dans un `apply` qui
-         partait déjà : zéro message de plus. */
-      out.enquete = e;
+         jamais la taille. Un delta aurait coûté une réconciliation (« quel éclat
+         manque à qui »), c'est-à-dire exactement le genre d'état qu'on passe son
+         temps à ne pas créer. Et elle part dans un `apply` qui partait déjà :
+         zéro message de plus. */
+      out.star = e;
       dirtyRef.current = true;
-      if (!wasStarted && Q.enqStarted(e)) broadcastChat("🔍", L.enq.tStart);
-      if (req.kind === "enqLock" && r.armed) out.toast = { id: f.id, key: "enqArmed" };
-      if (r.opened) broadcastChat("🔒", L.enq.tOpen);
+      if (!wasStarted && Q.starStarted(e)) broadcastChat("⭐", L.star.chat.start);
       /* Une trouvaille se dit à TOUT LE MONDE, et c'est la moitié du plaisir à
          deux : on part chacun de son côté, et le chat annonce ce que l'autre
-         vient de déterrer. Une découverte silencieuse serait une enquête que
-         chacun mène seul dans le même salon. */
-      if (!r.already && req.kind !== "enqSign" && req.kind !== "enqFile") {
-        const gained = Object.keys(e.clues).filter(k => e.clues[k].at === now);
-        for (const id2 of gained) broadcastChat("🔍", L.enq.tFoundBy(who, (L.enq.doc[id2] || {}).t || id2));
+         vient de déterrer. ⚠️ SANS EMOJI DANS LE LIBELLÉ — `broadcastChat` en
+         écrit déjà un, et le 442 a livré six libellés en double avant qu'une
+         séance à deux clients ne le montre. */
+      const after = Q.starShards(e);
+      if (after > before) broadcastChat("⭐", L.star.chat.found(who, after, Q.STAR_SHARD_TOTAL));
+      if (req.kind === "starCalm" && r.opened) broadcastChat("⭐", L.star.chat.crater(who));
+      if (req.kind === "starLean" && r.mark) broadcastChat("⭐", L.star.chat.lean(who));
+      if (req.kind === "starDuet" && r.phrase) broadcastChat("🎹", L.star.chat.duet(r.phrase, Q.STAR_DUET_PHRASES));
+      /* ⚠️⚠️ LE FRANCHISSEMENT D'UN CHAPITRE EST UN CHECKPOINT, ET IL S'ÉCRIT
+         TOUT DE SUITE. La consigne du chantier : la partie doit se reprendre dans
+         plusieurs jours sans rien reperdre. Le minuteur de sauvegarde de trois
+         secondes ne suffit pas — un joueur qui ferme l'onglet en franchissant un
+         chapitre perdrait l'étape qu'il vient de finir, ce qui est très
+         exactement le moment où il ne faut rien perdre. On force l'écriture. */
+      /* ⚠️⚠️ LA CARTE ANNONCE LE CHAPITRE QU'ON OUVRE, PAS CELUI QU'ON FERME, ET
+         C'EST UNE CORRECTION. Le premier jet diffusait `ch.key` — la clé du
+         chapitre FRANCHI — donc en terminant l'étape du champ on lisait
+         « Chapter One — What Landed in the Field » à l'écran, c'est-à-dire le
+         titre de ce qu'on venait de finir, au moment précis où le jeu voulait
+         dire où l'on va. Rien ne lève, la chaîne reste juste, et la mise en
+         scène dit l'inverse de ce qu'elle doit dire. C'est le même genre de
+         faute que « le banc mesure la carte, pas l'interaction ».
+         ⚠️ ET UNE SEULE CARTE, MÊME SI DEUX CHAPITRES TOMBENT D'UN COUP
+         (`starAdvance` est une boucle, exprès) : deux cartes plein écran
+         enchaînées sont une coupure, pas une transition. On annonce celui où
+         l'on se trouve maintenant. */
+      if ((r.crossed || []).length) {
+        const nowCh = Q.STAR_CHAPTERS[Math.min(e.ch, Q.STAR_CH_DONE - 1)];
+        broadcastChat("📖", L.star.chat.chapter(L.star.chapter[nowCh.key] || nowCh.key));
+        /* ⚠️ LE RETOURNEMENT N'EST PAS UNE CARTE, C'EST UNE SCÈNE. Entrer dans
+           le dernier chapitre, c'est apprendre qu'il n'y a pas de cinquième
+           note — le seul moment de la quête où le jeu doit s'arrêter de parler.
+           La carte suit la scène, chez le client (voir l'`apply`). */
+        out.starScene = nowCh.key === "note" ? { key: "turn", ch: nowCh.key } : { key: "card", ch: nowCh.key };
       }
-      for (const ch of (r.crossed || [])) {
-        s2.money += ch.reward | 0;
-        broadcastChat("📖", L.enq.tChapter(L.enq.chapter[ch.key] || ch.key, ch.reward | 0));
-      }
-      if (req.kind === "enqFile" && r.gold) {
-        s2.money += r.gold | 0;
-        broadcastChat("📖", L.enq.tDone + " " + L.enq.end.gold(r.gold | 0));
-      }
-      if ((r.crossed || []).length || r.gold) out.state = shareState();
+      if (r.scene === "end") { out.starScene = { key: "end" }; broadcastChat("⭐", L.star.chat.done); }
       persistFnRef.current && persistFnRef.current();
       hostFlushOut(out, f, null);
       return;
     }
-    /* ⚠️⚠️ ZIP 442 — LE MENU DÉVELOPPEUR DE L'ENQUÊTE. Demande de Guillaume
-       (« lancer et relancer à l'envi »), et c'est le raisonnement du 427 pour
-       « peupler la ferme » : voir le huitième chapitre coûte une heure de jeu,
-       donc sans ces boutons la scène finale ne serait relue par personne.
-       ⚠️⚠️ IL NE CRÉDITE RIEN, ET C'EST LA CONTRAINTE DURE. Le menu s'ouvre à
-       tout joueur qui connaît le raccourci (398) : « avancer d'un chapitre » qui
-       paierait 900 or serait une planche à billets à un clic. On appelle donc
-       `Q.devEnquete`, qui utilise les mêmes résolveurs — la chaîne reste
-       cohérente, les prérequis d'information sont respectés — et on JETTE le
-       `gold`. On a sauté la lecture, pas gagné de l'argent.
+    /* ⚠️⚠️ ZIP 444 — LE MENU DÉVELOPPEUR DE LA QUÊTE. Repris du 442, et pour la
+       raison qui y était écrite : ce chantier a cinq chapitres et trois
+       cinématiques, et voir la finale coûte cinquante minutes de jeu. *Un outil
+       de test dont le coût dépasse ce qu'il fait gagner cesse d'être utilisé, et
+       c'est comme ça qu'on finit par livrer sans regarder.* Il est donc construit
+       AVANT la première scène, pas après : la boucle « faire → regarder → juger →
+       refaire » exigée par le chantier en dépend entièrement.
+       ⚠️⚠️ IL NE DONNE RIEN, ET C'EST LA CONTRAINTE DURE. Le menu s'ouvre à tout
+       joueur qui connaît le raccourci (398). On appelle `Q.devStar`, qui utilise
+       les MÊMES résolveurs — la chaîne reste cohérente, les prérequis
+       d'information sont respectés — et le `gift` éventuel est JETÉ. On a sauté
+       le jeu, on n'a rien gagné.
        ⚠️ Et c'est l'HÔTE qui exécute, comme `devWorld` et `devResidents` : la
-       requête ne fait que demander. Un invité qui remet l'enquête à zéro la
-       remet à zéro pour tout le monde, ce qui est le comportement attendu d'un
-       état PARTAGÉ — et le chat le dit, sinon l'autre joueur verrait son carnet
-       se vider sans explication. */
-    if (req.kind === "devEnq") {
+       requête ne fait que demander. Un invité qui remet la quête à zéro la remet
+       à zéro pour tout le monde — comportement attendu d'un état PARTAGÉ — et le
+       chat le dit, sinon l'autre joueur verrait son pisteur se vider sans
+       explication. */
+    if (req.kind === "devStar") {
       const s2 = sharedRef.current;
-      const e = Q.migrateEnquete(s2.enquete);
-      const r = Q.devEnquete(e, String(req.op || ""));
+      const op = String(req.op || "");
+      /* ⚠️ REJOUER UNE SCÈNE NE TOUCHE PAS À L'ÉTAT. C'est le bouton qui rend la
+         boucle de qualité tenable — on regarde la chute vingt fois sans repartir
+         de zéro — donc il ne doit surtout pas avancer la quête. */
+      if (op.startsWith("scene:")) {
+        out.starScene = { key: op.slice(6) };
+        hostFlushOut(out, f, null);
+        return;
+      }
+      const e = Q.migrateStar(s2.star);
+      const r = Q.devStar(e, op, Date.now());
       if (!r.ok) { hostFlushOut(out, f, null); return; }
-      s2.enquete = r.enquete;
-      out.enquete = s2.enquete;
+      s2.star = r.star;
+      out.star = s2.star;
+      if (r.scene) out.starScene = { key: r.scene };
       dirtyRef.current = true;
-      broadcastChat("🛠️", L.devEnqChat(f.name, L.devEnqOpName(String(req.op))));
+      broadcastChat("🛠️", L.star.dev.chat(f.name, L.star.dev.op(op)));
       persistFnRef.current && persistFnRef.current();
       hostFlushOut(out, f, null);
       return;
@@ -5503,13 +5619,36 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       sharedRef.current.wardrobe = p.wardrobe;
       if (wardrobeLookOf(me.id) !== before) { setWardrobeTick(t => t + 1); sendPos(); }
     }
-    /* ⚠️ ZIP 442 — L'ENQUÊTE ARRIVE ENTIÈRE, ET ON LA REMPLACE. Contrairement à
+    /* ⚠️ ZIP 444 — LA QUÊTE ARRIVE ENTIÈRE, ET ON LA REMPLACE. Contrairement à
        `townChop` juste en dessous (un DELTA de cases coupées, qu'il faut
-       fusionner), l'enquête est un petit objet dont l'hôte fait autorité en
-       totalité : la fusionner aurait voulu dire décider quoi faire d'un indice
+       fusionner), la quête est un petit objet dont l'hôte fait autorité en
+       totalité : la fusionner aurait voulu dire décider quoi faire d'un éclat
        présent chez l'un et absent chez l'autre, c'est-à-dire inventer une
        réconciliation pour un état qui n'en a pas besoin (§3). */
-    if (p.enquete) { sharedRef.current.enquete = Q.migrateEnquete(p.enquete); setEnqTick(t => t + 1); }
+    if (p.star) { sharedRef.current.star = Q.migrateStar(p.star); setStarTick(t => t + 1); }
+    /* ⚠️⚠️ LA SCÈNE EST DATÉE À LA RÉCEPTION, PAS À L'ÉMISSION, ET C'EST LE §3
+       MOT POUR MOT. L'hôte dit « la chute a lieu » ; chaque client démarre SA
+       chronologie à SA propre horloge, au moment où il l'apprend. Transporter
+       l'instant de l'hôte aurait obligé à comparer deux horloges — et sur une
+       scène de neuf secondes, trois secondes de dérive se voient à l'œil nu.
+       C'est aussi ce qui rend la scène gratuite : un seul `send()`, et chacun
+       joue les mêmes neuf secondes. */
+    if (p.starScene) {
+      const sc = p.starScene;
+      if (sc.key === "card") setStarCard({ key: sc.ch });
+      else {
+        starSceneRef.current = { key: sc.key, t0: performance.now() };
+        setStarTick(t => t + 1);
+        /* ⚠️ LA CARTE DE CHAPITRE EST LA DERNIÈRE IMAGE DE LA SCÈNE, PAS UN
+           MESSAGE À PART. La chute finit sur « Chapter One », le retournement
+           sur « Chapter Five » : c'est la mise en scène JRPG qui découpe l'heure
+           en cinq soirées possibles (§6 de QUETE.md).
+           ⚠️ ET LE DÉLAI EST COMPTÉ SUR L'HORLOGE LOCALE, comme la scène
+           elle-même : on ne compare jamais deux horloges (§3). */
+        if (sc.key === "fall") setTimeout(() => setStarCard({ key: "field" }), Q.STAR_FALL_MS - 3000);
+        else if (sc.key === "turn" && sc.ch) setTimeout(() => setStarCard({ key: sc.ch }), Q.STAR_TURN_MS - 1500);
+      }
+    }
     if (p.townChop) {
       const s3 = sharedRef.current;
       if (!s3.townChop) s3.townChop = {};
@@ -5834,14 +5973,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        c'est un COMPTE qui voyage, jamais une phrase formatée — elle serait
        figée dans la langue de l'hôte. */
     if (key === "gregChopDone") return L.toastGregChopDone(n | 0);
-    /* Zip 442 — l'enquête. ⚠️ « enqArmed » PORTE UNE DURÉE, et elle est
-       CALCULÉE ici à partir de la constante plutôt que transportée : un nombre
-       de secondes qui voyagerait serait un second endroit où la fenêtre des
-       deux serrures est écrite, c'est-à-dire le §8 sur la seule valeur que le
-       joueur chronomètre vraiment. */
-    if (key === "enqCodeNo") return L.enq.tCodeNo;
-    if (key === "enqLocked") return L.enq.tLocked;
-    if (key === "enqArmed")  return L.enq.tArmed(Math.round(Q.ENQ_LOCK_WINDOW_MS / 1000));
+    /* Zip 444 — la quête de l'étoile. Un seul toast : le lieu qui n'a encore
+       rien à donner. Tout le reste se dit en bulles au-dessus de l'étoile ou
+       dans le chat — un toast est une notification, et cette quête raconte. */
+    if (key === "starLocked") return L.star.s2.leanTooClose;
     return { tired: L.toastTired, farShop: L.toastFarShop, farMarket: L.toastFarMarket, marketNothing: L.toastMarketNothing, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, millPlaced: L.toastMillPlaced, millTaken: L.toastMillTaken, millGround: L.toastMillGround, millOccupied: L.toastMillOccupied, millOnCrop: L.toastMillOnCrop, noMillBuilt: L.toastNoMillBuilt, millBuilding: L.toastMillBuilding, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, noSucrerieStock: L.toastNoSucrerieStock, sucrerieNotEmpty: L.toastSucrerieNotEmpty, noCaneToDeposit: L.toastNoCaneToDeposit, sucrerieFull: L.toastSucrerieFull, actionFailed: L.toastActionFailed, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, reneCoffeeCooldown: L.toastReneCoffeeCooldown, tristanNotHere: L.toastTristanNotHere, tristanCoffeeCooldown: L.toastTristanCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, kickRefused: L.kickRefused, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy, balloonNotBoarding: L.toastBalloonNotBoarding, balloonFull: L.toastBalloonFull,
       /* zip 398 — vergers et produits */
       orchardBusy: L.toastOrchardBusy, orchardGround: L.toastOrchardGround, orchardMax: L.toastOrchardMax,
@@ -6049,6 +6184,36 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
         }
       }
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ ZIP 444 — L'ARMEMENT DE LA CHUTE. LA QUÊTE NE COMMENCE PAS : ELLE ARRIVE.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️⚠️ C'EST TOUT CE QUI SÉPARE CETTE QUÊTE DE L'ENQUÊTE DU 442, ET C'EST
+         DÉLIBÉRÉ. Là-bas, l'histoire n'existait que pour qui ouvrait le bon
+         panneau — le reproche que ce chantier s'est fait à lui-même. Ici,
+         personne n'a rien à trouver pour commencer : l'hôte arme, un `send()`
+         part, et la scène se joue là où chacun se trouve.
+         ⚠️ LA CONDITION EST UNE PURE FONCTION DU JOUR ET DE L'HEURE, comme le
+         jour de marché, les élections et le service de Carla (§13 de CLAUDE.md :
+         « jamais un état »). Pas de minuteur à persister, rien à réconcilier.
+         ⚠️ ET PAS AVANT LE TROISIÈME JOUR (`STAR_FALL_MIN_DAY`) : une ferme
+         neuve a assez à apprendre, et une cinématique de neuf secondes sur
+         l'écran d'un joueur qui découvre les commandes n'est pas une entrée en
+         matière, c'est une interruption.
+         ⚠️ L'ÉCHEC EST SILENCIEUX ET IDEMPOTENT : `resolveStarFall` refuse si
+         `fall` est déjà écrit, donc ce test peut tourner toutes les secondes
+         pendant toute la nuit sans jamais rejouer la scène. */
+      {
+        const e0 = (s.star = Q.migrateStar(s.star));
+        if (!Q.starFallen(e0) && s.day >= Q.STAR_FALL_MIN_DAY
+            && E.isNightTime(E.gameTimeMin(s.dayStartAt, Date.now()))) {
+          const r0 = Q.resolveStarFall(e0, s.day, Date.now());
+          if (r0.ok) {
+            dirtyRef.current = true;
+            hostSend({ type: "broadcast", event: "apply", payload: { star: e0, starScene: { key: "fall" } } });
+            persistFnRef.current && persistFnRef.current();
+          }
+        }
+      }
       if (Date.now() - s.dayStartAt >= C.DAY_REAL_MS) {
         const { tiles } = E.newDay(w, farmersRef.current, s.day, s.seed);
         s.day += 1; s.dayStartAt = Date.now();
@@ -6072,7 +6237,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            dire. C'est la moitié du prix de ce choix-là.
            ⚠️ Et il passe par `broadcastChat`, donc par un message que l'hôte
            émet DÉJÀ à ce moment de la journée : zéro `send()` de plus (§3). */
-        if (s.enquete && s.enquete.outcome === "restore") broadcastChat("🔔", L.enq.tBell);
+        /* ⚠️ ZIP 444 — LA CLOCHE DE L'AUBE EST LA TRACE QUE LA QUÊTE LAISSE
+           DANS LE MONDE, et c'est celle qui a le plus de sens : toute la ville
+           l'entend, et deux joueurs seulement savent pourquoi. Elle ne sonne
+           qu'une fois la quête finie, et pas avant. */
+        if (s.star && s.star.doneAt) broadcastChat("🔔", L.star.trace.dawnBell);
         // Réapparition de l'engrais en boutique (chantier 2026-07, suite plan
         // validé) : tous les FERTILIZER_RESTOCK_EVERY_N_DAYS jours, le stock
         // shop remonte à FERTILIZER_SHOP_STOCK (épuisable entre-temps, jamais
@@ -11892,7 +12061,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              vingt pas à l'est. */
           else if (dk === "townBoutique") { m.x = C.TOWN_BOUTIQUE.x + C.TOWN_BOUTIQUE.w / 2; m.y = C.TOWN_BOUTIQUE.y + C.TOWN_BOUTIQUE.h + 1; }
           else { m.x = C.TOWN_SPAWN.x; m.y = C.TOWN_SPAWN.y; }
-        } else if (dk === "court" || dk === "courtUpper" || dk === "courtBasement" || dk === "hall" || dk === "hallUpper" || dk === "church" || dk === "churchLoft") {
+        } else if (DEV_FLOOR_OF[dk] !== undefined) {
           /* Zip 426 — les trois arrêts du tribunal. ⚠️ ON N'ENTRE PAS AU
              TRIBUNAL SANS PASSER PAR LA VILLE : `townX/townY` est la position
              que la sortie restaure, et elle DOIT exister. Un dev-téléport
@@ -11907,15 +12076,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                téléport vers l'église depuis la ferme aurait posé la position de
                retour devant le TRIBUNAL : on serait ressorti de l'église à
                l'autre bout de la Haute-Ville, sans qu'aucune erreur ne le dise. */
-            const bldg = (dk === "hall" || dk === "hallUpper") ? C.TOWN_HALL
-                       : (dk === "church" || dk === "churchLoft") ? C.TOWN_CHURCH : C.TOWN_COURT;
+            /* ⚠️⚠️ ZIP 444 — LE BÂTIMENT DE SORTIE SE DÉDUIT DU NIVEAU, PAS DE
+               LA CLÉ D'ARRÊT. Écrit en énumérant les clés (442), il a suffi
+               d'ajouter le BEFFROI pour qu'un joueur téléporté là-haut depuis la
+               ferme ressorte devant le TRIBUNAL, à l'autre bout de la
+               Haute-Ville, sans qu'aucune erreur ne le dise. `COURT_FLOORS`
+               porte déjà `bld` : on le lit. */
+            const bkey0 = (C.COURT_FLOORS[DEV_FLOOR_OF[dk]] || {}).bld || "court";
+            const bldg = bkey0 === "hall" ? C.TOWN_HALL : bkey0 === "church" ? C.TOWN_CHURCH : C.TOWN_COURT;
             m.townX = bldg.x + bldg.w / 2; m.townY = bldg.y + bldg.h + 2;
           }
           if (!townWorldRef.current) townWorldRef.current = getTownWorldCached(E);
           if (!courtWorldRef.current) courtWorldRef.current = getCourtWorldCached(E);
           m.zone = "court";
-          const cf = dk === "courtUpper" ? 1 : dk === "courtBasement" ? 2 : dk === "hall" ? 3
-                   : dk === "hallUpper" ? 4 : dk === "church" ? 5 : dk === "churchLoft" ? 6 : 0;
+          const cf = DEV_FLOOR_OF[dk];
           /* ⚠️ LE REZ-DE-CHAUSSÉE D'UN BÂTIMENT EST CELUI DE SON BÂTIMENT, et
              il se DÉDUIT de `COURT_BUILDINGS` au lieu d'être énuméré : écrit
              « hall ? 3 : 0 », l'église (niveau 5) se serait crue à l'étage et on
@@ -11924,7 +12098,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              `nearCourtExit`, à l'identique. */
           const bkey = (C.COURT_FLOORS[cf] || {}).bld || "court";
           const gr = (C.COURT_BUILDINGS[bkey] || C.COURT_BUILDINGS.court).ground;
-          m.x = C.COURT_SPAWN.x; m.y = E.courtFloorY0(cf) + (cf === gr ? C.COURT_SPAWN.y : 8);
+          /* ⚠️⚠️ ZIP 444 — L'ARRIVÉE SUR UN ÉTAGE EST DÉRIVÉE DU NIVEAU, elle
+             n'est plus recopiée (`COURT_SPAWN` + 8 rangées). Le beffroi tient
+             dans sa tourelle : la position fixe tombait dix cases à l'est, en
+             plein vide, écran noir. Voir la note de `E.courtFloorSpawn`. Le
+             SEUIL, lui, reste le seuil : au rez-de-chaussée d'un bâtiment on
+             entre par la porte, et c'est ce qu'on veut montrer. */
+          if (cf === gr) { m.x = C.COURT_SPAWN.x; m.y = E.courtFloorY0(cf) + C.COURT_SPAWN.y; }
+          else { const sp = E.courtFloorSpawn(courtWorldRef.current, cf); m.x = sp.x; m.y = sp.y; }
           courtStairArmedRef.current = false;   // on atterrit peut-être sur une volée
         } else {
           // "farm" (devant la maison) et "passage" (devant le passage sombre,
@@ -12204,7 +12385,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          eux, E « traversait » un document ouvert : on lisait la note de service
          et la même touche rouvrait aussitôt le carton derrière. Et pendant une
          SAISIE de code, chaque lettre tapée partait aussi dans le jeu. */
-      const uiOpen = mapOpenRef.current || shopOpenRef.current || binOpenRef.current || bagOpenRef.current || cauldronMenuOpenRef.current || adsOpenRef.current || visitorOpenRef.current || gregCardOpenRef.current || marketOpenRef.current || enqUiOpenRef.current;
+      const uiOpen = mapOpenRef.current || shopOpenRef.current || binOpenRef.current || bagOpenRef.current || cauldronMenuOpenRef.current || adsOpenRef.current || visitorOpenRef.current || gregCardOpenRef.current || marketOpenRef.current || starUiOpenRef.current;
       /* ⚠️ 425 — ESPACE SAUTE EN VILLE, ET AGIT PARTOUT AILLEURS. Ce n'est pas
          une surcharge risquée : `doAction()` sort déjà immédiatement quand la
          zone est "town" (aucun outil de ferme n'y sert), donc la touche ne
@@ -12404,6 +12585,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // relire. On garde simplement le plus opaque des trois.
         const fa = Math.max(zoneFadeAlpha(), runAmbushFadeAlpha(), runReturnFadeAlpha());
         if (fa > 0) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = "black"; ctx.globalAlpha = fa; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.globalAlpha = 1; }
+        drawStarOverlay(now);   // zip 444 — la Lyre et les scènes passent PAR-DESSUS le voile de zone
         return;
       }
       /* ⚠️⚠️ ZIP 426 — LE MINUTEUR D'ANIMATION D'ACTION SE DÉCRÉMENTE DANS
@@ -12417,6 +12599,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          restée noire (§4) : une zone qui gagne sa boucle hérite de tout ce que
          la boucle commune faisait pour elle. */
       if (actAnimRef.current > 0 && (m.zone === "town" || m.zone === "court" || m.zone === "evil")) actAnimRef.current -= dt;
+      /* ⚠️ ZIP 444 — LE BATTEMENT DE LA QUÊTE, DANS TOUTES LES ZONES ET AVANT
+         TOUTE SORTIE ANTICIPÉE. C'est très exactement le défaut décrit
+         ci-dessus, quatre fois payé : un geste qui ne vit que dans la partie
+         FERME de la boucle n'existe pas en ville — or le seul geste continu de
+         cette quête (se tenir immobile dans le cratère) est en ville. */
+      starFrame(now);
       /* ⚠️⚠️ ZIP SUIVANT — L'INTERPOLATION D'ÉNERGIE DU SOMMEIL EST REMONTÉE ICI,
          ET C'EST EXACTEMENT LE DÉFAUT DÉCRIT JUSTE AU-DESSUS, UNE TROISIÈME FOIS.
          Dormir chez soi à Valley Town existe depuis le 235 (branche E à sa propre
@@ -12443,6 +12631,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (mapOpenRef.current) drawFullMap();   // zip 426 : la carte marche enfin en ville
         const fa = zoneFadeAlpha();
         if (fa > 0) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = "black"; ctx.globalAlpha = fa; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.globalAlpha = 1; }
+        drawStarOverlay(now);   // zip 444 — la Lyre et les scènes passent PAR-DESSUS le voile de zone
         return;
       }
       // Intérieur du tribunal (zip 426) : même sortie anticipée que les deux
@@ -12454,6 +12643,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (mapOpenRef.current) drawFullMap();   // ici : le PLAN du bâtiment
         const fa = zoneFadeAlpha();
         if (fa > 0) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = "black"; ctx.globalAlpha = fa; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.globalAlpha = 1; }
+        drawStarOverlay(now);   // zip 444 — la Lyre et les scènes passent PAR-DESSUS le voile de zone
         return;
       }
       checkWalkOverHarvest();
@@ -13268,17 +13458,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            poser ni ramasser aurait rouvert tous les tests d'objet du moteur
            pour rien — c'est la règle du 434 (« une variante est une couche, pas
            un identifiant »), appliquée à un décor unique.
-           ⚠️ ELLE NE BLOQUE PAS et elle est dessinée depuis `fermeArt` : un
-           décor qui vivrait dans cette closure serait un décor qu'aucun banc ne
-           peut regarder, c'est-à-dire un décor qui vieillit tout seul (436).
-           ⚠️ ET ELLE EST MISE EN FILE, PAS PEINTE À LA VOLÉE : la file trie par
-           ancrage au sol, donc un fermier qui passe devant la borne la cache et
-           un fermier qui passe derrière est caché par elle. Peinte hors file,
-           elle aurait été soit toujours devant, soit toujours derrière — le
-           défaut des ponts au 439/441, dans un décor de trois pixels. */
-        if (sprites.townDatumStone) {
-          const ds0 = Q.ENQ_FARM_STONE, dsi = sprites.townDatumStone;
-          draws.push({ y: (ds0.y + 1) * T, fn: () => ctx.drawImage(dsi, ds0.x * T + (T - dsi.width) / 2, (ds0.y + 1) * T - dsi.height) });
+           ⚠️ IL NE BLOQUE PAS et il est dessiné depuis `fermeArt` : un décor
+           qui vivrait dans cette closure serait un décor qu'aucun banc ne peut
+           regarder, c'est-à-dire un décor qui vieillit tout seul (436).
+           ⚠️ ET IL EST MIS EN FILE, PAS PEINT À LA VOLÉE : la file trie par
+           ancrage au sol, donc un fermier qui passe devant le sillon le cache et
+           un fermier qui passe derrière est caché par lui. Peint hors file, il
+           aurait été soit toujours devant, soit toujours derrière — le défaut
+           des ponts au 439/441, dans un décor de trois pixels.
+           ⚠️⚠️ ET IL A DEUX ÉTATS, PAS UN : chaud tant que l'éclat y est, refermé
+           en herbe rase une fois la quête finie. C'est la trace que la ferme
+           garde de toute l'histoire, et le 442 se reprochait justement de ne rien
+           lui laisser. Le second état se DÉDUIT de l'état partagé, il n'est
+           stocké nulle part (règle des cierges de l'église, 441). */
+        if (sprites.starFurrow) {
+          const st0 = sharedRef.current.star;
+          const cold = !!(st0 && (Q.starHas(st0, "furrow") || st0.doneAt));
+          const fp0 = { x: C.STAR_FURROW_X, y: C.STAR_FURROW_Y };
+          const fim = sprites.starFurrow[cold ? 1 : 0];
+          if (fim) draws.push({ y: (fp0.y + 1) * T, fn: () => ctx.drawImage(fim, fp0.x * T + (T - fim.width) / 2, (fp0.y + 1) * T - fim.height) });
         }
         // Decorative ducks: purely cosmetic, client-side, seeded from the
         // farm seed, drifting up and down the river with a 2-frame bob.
@@ -13519,6 +13717,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
       if (!m.sleeping) { draws.push({ y: (m.y + 0.9) * T, fn: () => drawMyPets(m, dt) }); draws.push({ y: (m.y + 1) * T, fn: () => drawSelf(m) }); }
+      /* ZIP 444 — l'étoile qui suit, à la ferme. ⚠️ Elle est mise en FILE, un
+         demi-pixel derrière moi : elle me suit, donc elle passe derrière moi
+         quand je descends et devant quand je monte, comme n'importe quel
+         suiveur (le principe de Leo). */
+      {
+        const cp = starCompanionAt("farm", m.x, m.y, !!m.moving, performance.now());
+        if (cp) {
+          draws.push({ y: (cp.y + 1) * T - 0.01, fn: () => drawStarWisp(cp) });
+          const sb = starBubbleNow();
+          if (sb) queueBubble(Math.round(cp.x * T) + 8, Math.round(cp.y * T) - 22, sb, false);
+        }
+      }
       // Zip 234 (Guillaume: "when we walk over a certain crop, we can see
       // what they are"): standing on a planted tile floats a small paper tag
       // above the farmer — crop name + growth % (or "ready!" / "needs
@@ -14039,7 +14249,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else if (nearTile(C.TRAIN_BOARD)) pk = "trainRide"; // Valley Town (zip 234)
       // Zip 233: sleep prompt removed with the townhall sleep option; the
       // visitor prompt carries the nearest rid so the label can name them.
-      else if (enqNearby()) pk = "enq:" + enqNearby().p;   // zip 442 — la borne d'origine, au pied de la gare
+      else if (starNearby()) pk = "star:" + starNearby().p;   // zip 444 — le sillon, dans les champs de l'ouest
       else { const vp = visitorPromptNearby(); if (vp) pk = "visitor:" + vp.rid; }
       // Zip 368 : le prompt du chantier de mission d'équipe était en tête de
       // cette chaîne ; la grange prend simplement sa place.
@@ -14066,6 +14276,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (mapOpenRef.current) drawFullMap();
       const fa = zoneFadeAlpha();
       if (fa > 0) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = "black"; ctx.globalAlpha = fa; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.globalAlpha = 1; }
+        drawStarOverlay(now);   // zip 444 — la Lyre et les scènes passent PAR-DESSUS le voile de zone
     }
     raf = requestAnimationFrame(loop);
 
@@ -15018,7 +15229,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         maybeSendPos();
         return;
       }
-      const uiBlocked = mapOpenRef.current || marketOpenRef.current || enqUiOpenRef.current || document.activeElement === chatInputRef.current;
+      const uiBlocked = mapOpenRef.current || marketOpenRef.current || starUiOpenRef.current || document.activeElement === chatInputRef.current;
       let dx = 0, dy = 0;
       if (!uiBlocked) {
         if (keys["ArrowUp"] || keys["KeyW"] || keys["KeyZ"]) dy -= 1;
@@ -15520,6 +15731,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
       /* ══════════════════════════════════════════════════════════════════════
+         ZIP 444 — LE CRATÈRE, DANS LE PRÉ DE L'EST.
+         ──────────────────────────────────────────────────────────────────────
+         ⚠️ IL SE PEINT ICI, JUSTE APRÈS LES TUILES ET AVANT TOUT CE QUI SE POSE
+         DESSUS : c'est un DÉCAL DE SOL, pas un objet. Le mettre dans la file de
+         tri l'aurait fait passer devant ou derrière le fermier selon sa rangée,
+         alors qu'on doit toujours marcher DEDANS.
+         ⚠️ ET LE DESSIN LUI-MÊME EST DANS `fermeArt.js` (`drawStarCrater`), pas
+         ici : un décor de neuf cases écrit dans cette closure serait un décor
+         qu'aucun banc ne peut regarder, donc un décor qui vieillit (le §2 du
+         piège n°1, payé douze zips sur les sols d'intérieur).
+         ⚠️ SA PHASE SE DÉDUIT DE L'ÉTAT PARTAGÉ : frais tant que la quête court,
+         refroidi en bassin de verre vert une fois finie. Rien n'est stocké —
+         c'est la règle des cierges de l'église (441), et c'est la trace que la
+         ville garde de toute l'histoire. */
+      {
+        const cpos = starCraterPos();
+        const st1 = sharedRef.current.star;
+        if (cpos && st1 && Q.starFallen(st1) && sprites.drawStarCrater
+            && cpos.x >= x0 - 10 && cpos.x <= x1 + 10 && cpos.y >= y0 - 10 && cpos.y <= yBot + 10) {
+          const ce = elAt(cpos.x, cpos.y);
+          ctx.save();
+          ctx.translate(0, -ce * EP);
+          sprites.drawStarCrater(ctx, (cpos.x + 0.5) * T, (cpos.y + 0.5) * T, T, Q.starDone(st1) ? 1 : 0, now);
+          ctx.restore();
+        }
+      }
+      /* ══════════════════════════════════════════════════════════════════════
          LA FONTAINE (425). Le bassin de pierre est un SPRITE (voir
          plazaFountainSprite), le jet et les gouttes restent dessinés ici.
          ⚠️ LE PARTAGE N'EST PAS ARBITRAIRE : ce qui ne bouge pas va dans le
@@ -15864,13 +16102,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   : pr.kind === "flowerCart" ? sprites.townFlowerCart      // zip 431
                   : pr.kind === "barrel" ? sprites.townBarrel              // zip 431
                   : pr.kind === "sacks" ? sprites.townSacks                // zip 431
-                  /* ZIP 442 — la borne de section. ⚠️ LA VARIANTE VIENT DU
-                     `mark` POSÉ PAR LE GÉNÉRATEUR, jamais d'un hachage de
-                     position : celle du bois est martelée parce que quelqu'un
-                     l'a martelée, pas parce que sa case tombe sur un nombre
-                     pair. C'est la seule des trois qui se distingue à l'œil, et
-                     c'est justement celle qu'il faut remarquer. */
-                  : pr.kind === "boundStone" ? (sprites.townBoundStone || [])[pr.mark === "bois" ? 1 : 0]
+                  /* ZIP 444 — les décors de la quête de l'étoile. ⚠️ ILS SONT
+                     DANS CETTE LISTE ET PAS DANS UNE PASSE À PART : un décor
+                     peint hors de la file de tri serait soit toujours devant,
+                     soit toujours derrière le fermier — le défaut des ponts au
+                     439/441, dans un décor de trois pixels. */
+                  : pr.kind === "starKiln" ? sprites.starKiln
+                  : pr.kind === "starRack" ? sprites.starRack
+                  : pr.kind === "starShutter" ? sprites.starShutter
+                  : pr.kind === "starNestTree" ? sprites.starNestTree
                   : pr.kind === "newsBoard" ? sprites.townNewsBoard : null;   // zip 427
         if (!img) continue;
         const by = (pr.y + 1) * T, cxp = pr.x * T + T / 2;
@@ -15886,55 +16126,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
           ctx.drawImage(img, cxp - img.width / 2, by - img.height);
         });
-      }
-      /* ══════════════════════════════════════════════════════════════════════
-         ZIP 442 — CE QUE LA RESTITUTION LAISSE DANS LE MONDE.
-         ──────────────────────────────────────────────────────────────────────
-         ⚠️⚠️ UNE FIN QUI N'EXISTE QUE DANS UN PANNEAU DE MENU N'EST PAS UN
-         ÉVÉNEMENT DU MONDE, C'EST UNE PAGE DE MENU. C'est mot pour mot ce que le
-         439 a écrit en peignant le nom du maire élu sous son portrait officiel,
-         et c'est la raison d'être de ces vingt lignes : après une restitution,
-         la ville PORTE le nom de Mathilde Ferrand à deux endroits — une plaque à
-         la lisière du bois, là où sa borne était couchée, et la pierre du
-         cimetière qui n'en avait pas.
-         ⚠️⚠️ ET RIEN N'EST AJOUTÉ À `tw.props`. La carte de la ville est un
-         SINGLETON DE MODULE qu'on ne mute jamais (§15 du README : y écrire ferait
-         fuiter l'état d'une ferme à l'autre — deux salons ouverts dans le même
-         onglet partagent cet objet). Tout ce qui change vit dans l'état PARTAGÉ
-         et se peint à partir de lui, exactement comme les cierges de l'église
-         (441) et comme la coupe de bois (426).
-         ⚠️ LE NOM S'ÉCRIT VIVANT (`fillText`), il n'est pas cuit dans le sprite :
-         un texte cuit ne peut pas être bilingue, et il rendrait le sprite
-         irrastérisable hors navigateur (§4). Le support — pierre, laiton, quatre
-         vis — est cuit ; ce qu'on lit dessus ne l'est pas. */
-      {
-        const enq = sharedRef.current.enquete;
-        if (enq && enq.outcome === "restore") {
-          const stone = (tw.props || []).find(p2 => p2.kind === "boundStone" && p2.mark === "bois");
-          const pim = sprites.townPlaque;
-          if (stone && pim && stone.x >= x0 - 3 && stone.x <= x1 + 3 && stone.y >= y0 - 4 && stone.y <= yBot + 3) {
-            const py2 = stone.y - 1;
-            pushE((py2 + 1) * T, elAt(stone.x, py2), () => {
-              ctx.drawImage(pim, stone.x * T + (T - pim.width) / 2, (py2 + 1) * T - pim.height);
-              ctx.font = "bold 7px monospace"; ctx.textAlign = "center"; ctx.fillStyle = "#4a3a12";
-              ctx.fillText(L.enq.plaque, stone.x * T + T / 2, (py2 + 1) * T - pim.height + 16);
-              ctx.textAlign = "left";
-            });
-          }
-          /* La pierre du cimetière. ⚠️ ON N'AJOUTE PAS UNE SECONDE TOMBE, ON
-             ÉCRIT SUR CELLE QUI EST DÉJÀ LÀ — et on la retrouve par son RANG
-             (`Q.enqGraveOf`), le même que celui qui décide où l'on gratte la
-             mousse. Deux façons de désigner « la septième tombe », c'est deux
-             tombes le jour où le cimetière bouge. */
-          const gv = Q.enqGraveOf(tw);
-          if (gv && gv.x >= x0 - 2 && gv.x <= x1 + 2 && gv.y >= y0 - 3 && gv.y <= yBot + 2) {
-            pushE((gv.y + 1) * T + 0.02, elAt(gv.x, gv.y), () => {
-              ctx.font = "bold 6px monospace"; ctx.textAlign = "center"; ctx.fillStyle = "#4a4640";
-              ctx.fillText(L.enq.graveName, gv.x * T + T / 2, (gv.y + 1) * T - 18);
-              ctx.textAlign = "left";
-            });
-          }
-        }
       }
       /* ══════════════════════════════════════════════════════════════════════
          ZIP 431 — LES GUIRLANDES DE FANIONS, TENDUES D'UN ÉTAL À L'AUTRE.
@@ -16421,6 +16612,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          exactement celle du véhicule, on ne le verrait même pas dépasser, on
          verrait juste un taxi avec une tête qui sort du capot. */
       if (!inCar) pushE((m.y + 1) * T, myE, () => drawSelf(m), myLift);
+      /* ZIP 444 — l'étoile qui suit, en ville. ⚠️ ELLE PORTE L'ALTITUDE DE SA
+         PROPRE CASE, pas la mienne : sur les marches de la Haute-Ville elle est
+         une case derrière moi, donc un demi-niveau plus bas, et lui donner mon
+         élévation la ferait flotter dans le vide. */
+      if (!inCar) {
+        const cp = starCompanionAt("town", m.x, m.y, !!m.moving, performance.now());
+        if (cp) {
+          const ce2 = elevTown(tw, cp.x, cp.y), cl2 = archPxTown(tw, cp.x, cp.y);
+          pushE((cp.y + 1) * T - 0.01, ce2, () => drawStarWisp(cp), cl2);
+          const sb = starBubbleNow();
+          if (sb) queueTownBubble(Math.round(cp.x * T) + 8, Math.round(cp.y * T) - 22 - ce2 * C.TOWN_ELEV_PX - cl2, sb, false);
+        }
+      }
       if (myTaxi) {
         const te = elevTown(tw, myTaxi.x, myTaxi.y), tl = archPxTown(tw, myTaxi.x, myTaxi.y);
         pushE((myTaxi.y + 0.5) * T, te, () => drawTaxiAt(myTaxi, myTaxi.dir, myTaxi.smoke), tl);
@@ -16591,7 +16795,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else if (nearMarket()) tpk = "townMarket";
       else if (nearTownProp("newsBoard", 1.7)) tpk = "townNews";
       else if (nearTownProp("bench", 1.2)) tpk = "townBench";
-      else if (enqNearby()) tpk = "enq:" + enqNearby().p;   // zip 442 — même ordre que la touche E
+      else if (starNearby()) tpk = "star:" + starNearby().p;   // zip 444 — même ordre que la touche E
       else if (nearTownRect(C.TOWN_FOUNTAIN.x - 1, C.TOWN_FOUNTAIN.y - 1, 4, 4)) tpk = "townWish";
       else if (nearTownProp("kiosk", 2.6)) tpk = "townKiosk";
       else if (nearTownRect(C.TOWN_PIER.x, C.TOWN_PIER.y, C.TOWN_PIER.w, C.TOWN_PIER.h + 2)) tpk = "townPier";
@@ -16707,7 +16911,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function updateMeCourt(dt) {
       const m = meRef.current, cw = courtWorldRef.current, keys = keysRef.current;
       if (!cw) return;
-      const uiBlocked = mapOpenRef.current || courtBoardOpenRef.current || priceBoardOpenRef.current || hallTalkOpenRef.current || enqUiOpenRef.current || document.activeElement === chatInputRef.current;
+      const uiBlocked = mapOpenRef.current || courtBoardOpenRef.current || priceBoardOpenRef.current || hallTalkOpenRef.current || starUiOpenRef.current || document.activeElement === chatInputRef.current;
       let dx = 0, dy = 0;
       if (!uiBlocked) {
         if (keys["ArrowUp"] || keys["KeyW"] || keys["KeyZ"]) dy -= 1;
@@ -17112,6 +17316,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const myRz = isDais(Math.floor(m.x), Math.floor(m.y + 0.2)) ? EP : 0;
       draws.push({ y: (m.y + 0.9) * T - myRz, fn: () => { ctx.save(); ctx.translate(0, -myRz); drawMyPets(m, dt); ctx.restore(); } });
       draws.push({ y: (m.y + 1) * T - myRz, fn: () => { ctx.save(); ctx.translate(0, -myRz); drawSelf(m); ctx.restore(); } });
+      /* ZIP 444 — l'étoile qui suit, à l'intérieur. ⚠️ ELLE ÉCLAIRE : c'est ici
+         qu'elle sert, dans la vis de l'escalier et dans le beffroi, où le décor
+         est noir. Sa bulle est peinte hors file (clé de tri énorme), comme
+         l'étiquette de culture de la ferme : l'intérieur n'a pas de passe de
+         bulles, et une bulle prise dans le tri se ferait manger par le premier
+         meuble plus bas. */
+      {
+        const cp = starCompanionAt("court", m.x, m.y, !!m.moving, performance.now());
+        if (cp) {
+          draws.push({ y: (cp.y + 1) * T - myRz - 0.01, fn: () => { ctx.save(); ctx.translate(0, -myRz); drawStarWisp(cp); ctx.restore(); } });
+          const sb = starBubbleNow();
+          if (sb) draws.push({ y: 1e9, fn: () => drawSpeechBubble(ctx, Math.round(cp.x * T) + 8, Math.round(cp.y * T) - 22 - myRz, sb, false) });
+        }
+      }
       /* ╔══════════════════════════════════════════════════════════════════════
          ║ ZIP 441 — LES NOTES QUI MONTENT DE L'ORGUE.
          ╚══════════════════════════════════════════════════════════════════════
@@ -17201,7 +17419,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          action qui lisent deux listes finissent par ne pas dire la même chose,
          et le symptôme — « ça annonce lire un registre et ça ouvre l'annuaire »
          — est le plus déroutant qu'une touche unique puisse produire. */
-      else if (enqNearby()) cpk = "enq:" + enqNearby().p;
+      else if (starNearby()) cpk = "star:" + starNearby().p;   // zip 444
       else if (nearHallClerk()) cpk = "hallClerk";
       else if (nearestCourtBoard()) cpk = "courtBoard";
       else if (nearPriceBoard()) cpk = "priceBoard";
@@ -17321,7 +17539,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         maybeSendPos();
         return;
       }
-      const uiBlocked = shopOpenRef.current || binOpenRef.current || mapOpenRef.current || cauldronMenuOpenRef.current || fishMiniRef.current || adsOpenRef.current || visitorOpenRef.current || gregCardOpenRef.current || enqUiOpenRef.current || document.activeElement === chatInputRef.current || m.sleeping || isInjured();
+      const uiBlocked = shopOpenRef.current || binOpenRef.current || mapOpenRef.current || cauldronMenuOpenRef.current || fishMiniRef.current || adsOpenRef.current || visitorOpenRef.current || gregCardOpenRef.current || starUiOpenRef.current || document.activeElement === chatInputRef.current || m.sleeping || isInjured();
       let dx = 0, dy = 0;
       if (!uiBlocked) {
         if (keys["ArrowUp"] || keys["KeyW"] || keys["KeyZ"]) dy -= 1;
@@ -17812,6 +18030,218 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         ctx.beginPath(); ctx.moveTo(cx - 2, byTop + bh - 0.5); ctx.lineTo(cx + 2, byTop + bh - 0.5); ctx.lineTo(cx, byTop + bh + 3); ctx.closePath(); ctx.fill();
         ctx.fillStyle = "#3a3a3a";
         lines.forEach((l, i) => ctx.fillText(l, bx + padX, byTop + 5 + i * lineH));
+      }
+      ctx.restore();
+    }
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ ZIP 444 — L'ÉTOILE COMPAGNON, DESSINÉE. Une seule écriture pour les
+       ║ trois cartes.
+       ╚══════════════════════════════════════════════════════════════════════
+       ⚠️ ELLE FLOTTE : pas d'ombre au sol, un léger balancement, et un halo peint
+       AUTOUR d'elle — jamais par-dessus. Un halo qui mange sa propre source
+       donne une tache et pas une lumière (règle de la famille, DESSIN.md).
+       ⚠️ QUAND ELLE SE CACHE, ELLE NE DISPARAÎT PAS D'UN COUP : elle glisse dans
+       le col du joueur, donc elle rentre vers lui en s'effaçant. Une chose qui
+       s'éteint en une image se lit comme un défaut d'affichage ; une chose qui
+       se range se lit comme une intention.
+       ⚠️ LE SPRITE VIENT DE `fermeArt` (`starWisp`), donc `render-etoile` le
+       regarde. Rien de la créature n'est dessiné dans cette closure — ce qui y
+       vivrait vieillirait (§2 du piège n°1). */
+    function drawStarWisp(cp) {
+      const sprites = spritesRef.current;
+      const fam = sprites && sprites.starWisp;
+      if (!cp || !fam || !fam[cp.state]) return;
+      const im = fam[cp.state][cp.pose & 3];
+      if (!im) return;
+      const nowB = performance.now();
+      const bob = Math.sin(nowB / 430) * 1.8;
+      const cx = cp.x * T + T / 2, cy = (cp.y + 1) * T - 16 + bob;
+      ctx.save();
+      if (cp.hiding) ctx.globalAlpha = 0.22;
+      // Le halo, deux couronnes, AUTOUR : la source reste la partie la plus claire.
+      const puls = 0.5 + 0.5 * Math.sin(nowB / 700);
+      ctx.fillStyle = `rgba(255,226,148,${(0.10 + 0.05 * puls).toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(cx, cy, 15, 0, 7); ctx.fill();
+      ctx.fillStyle = `rgba(255,240,190,${(0.14 + 0.06 * puls).toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(cx, cy, 8.5, 0, 7); ctx.fill();
+      ctx.drawImage(im, Math.round(cx - im.width / 2), Math.round(cy - im.height / 2));
+      ctx.restore();
+    }
+    /* La bulle de l'étoile : le texte courant, s'il n'a pas expiré. Rendue par
+       l'appelant (chaque carte a sa passe de bulles) pour qu'elle passe par-dessus
+       le décor comme celles des résidents. */
+    function starBubbleNow() {
+      const b = starBubbleRef.current;
+      return (b && b.text && performance.now() < b.until) ? b.text : null;
+    }
+
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ ZIP 444 — LA COUCHE DE CIEL DE LA QUÊTE : LA LYRE, ET LES TROIS SCÈNES.
+       ╚══════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ TOUT EST EN ESPACE ÉCRAN, ET C'EST CE QUI REND CETTE PASSE GRATUITE.
+       Une scène de neuf secondes qui se jouerait dans le monde demanderait de
+       savoir où est chaque joueur, quelle carte il regarde et à quelle échelle ;
+       en espace écran, la MÊME fonction sert à la ferme, en ville, dans le
+       tribunal et dans l'église, et il n'y a qu'une écriture à relire.
+       ⚠️ ELLE EST APPELÉE DEPUIS LES QUATRE SORTIES DE LA BOUCLE, après le
+       voile de zone : une cinématique passe par-dessus un fondu, jamais
+       dessous — sinon la moitié de la chute se joue derrière un rideau noir.
+       ⚠️⚠️ ET LA CHRONOLOGIE PART DE `t0`, DATÉ À LA RÉCEPTION CHEZ CHAQUE
+       CLIENT. On ne compare jamais une horloge hôte à une horloge invité (§3) :
+       l'hôte dit « ça tombe », chacun joue SES neuf secondes. C'est aussi ce qui
+       rend la scène gratuite — un seul `send()` pour tout le monde. */
+    function drawStarOverlay(now) {
+      const e = sharedRef.current.star;
+      if (!e || !Q.starFallen(e)) return;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      const W = canvas.width, H = canvas.height;
+      /* ── LA LYRE. ⚠️ LE CIEL EST LE COMPTEUR, et c'est l'idée d'interface la
+         moins chère du chantier : dès la chute, la constellation est visible la
+         nuit avec son TROU. On n'affiche pas un pourcentage, on montre un ciel
+         incomplet — et à la fin, il ne l'est plus. Rien n'est stocké : le
+         nombre d'éclats se dérive de la table. */
+      const tmin = E.gameTimeMin(sharedRef.current.dayStartAt, Date.now());
+      if (E.isNightTime(tmin)) {
+        const sx = W - 116, sy = 72, sc = 1;
+        const LYRA = [[0, 0], [-16, 22], [14, 26], [-10, 50], [18, 54]];   // la corde manquante est la 5e
+        const have = Q.starDone(e) ? 5 : 1 + Q.starShards(e);
+        ctx.save();
+        for (let i = 0; i < LYRA.length; i++) {
+          const px = sx + LYRA[i][0] * sc, py = sy + LYRA[i][1] * sc;
+          if (i < have) {
+            ctx.fillStyle = "rgba(255,246,214,0.92)";
+            ctx.fillRect(px - 1, py - 1, 2.5, 2.5);
+            ctx.fillStyle = "rgba(255,236,180,0.20)";
+            ctx.beginPath(); ctx.arc(px, py, 5 + Math.sin(now / 700 + i) * 1.2, 0, 7); ctx.fill();
+          } else {
+            /* Le trou. ⚠️ IL SE VOIT, il n'est pas juste absent : un manque
+               qu'on ne dessine pas ne se remarque pas. Deux traits croisés très
+               faibles disent « il devrait y avoir quelque chose ici ». */
+            ctx.strokeStyle = "rgba(190,210,255,0.20)"; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.arc(px, py, 4, 0, 7); ctx.stroke();
+          }
+        }
+        ctx.strokeStyle = "rgba(200,220,255,0.16)"; ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = 0; i < Math.min(have, LYRA.length); i++) {
+          const px = sx + LYRA[i][0], py = sy + LYRA[i][1];
+          i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+      /* ── LES TROIS SCÈNES. */
+      const sc0 = starSceneRef.current;
+      if (!sc0) { if (canvas.style.transform) canvas.style.transform = ""; return; }
+      const t = (now - sc0.t0) / 1000;
+      const dur = sc0.key === "fall" ? Q.STAR_FALL_MS : sc0.key === "turn" ? Q.STAR_TURN_MS : Q.STAR_END_MS;
+      if (t * 1000 > dur) { starSceneRef.current = null; canvas.style.transform = ""; return; }
+      ctx.save();
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      const line = (txt, a, y) => {
+        if (a <= 0) return;
+        ctx.font = "bold 15px monospace";
+        ctx.fillStyle = `rgba(10,12,22,${(a * 0.5).toFixed(3)})`;
+        ctx.fillRect(0, y - 16, W, 32);
+        ctx.fillStyle = `rgba(255,240,206,${a.toFixed(3)})`;
+        ctx.fillText(txt, W / 2, y);
+      };
+      if (sc0.key === "fall") {
+        /* ⚠️ LE JEU TOURNE DERRIÈRE. On ne coupe pas la simulation pour une
+           cinématique : c'est ce qui fait la différence entre « il se passe
+           quelque chose dans le monde » et « le jeu s'est arrêté pour me
+           montrer une vidéo ». */
+        const veil = Math.min(0.55, t * 0.5) * (t > 7 ? Math.max(0, (dur / 1000 - t) / 2) : 1);
+        ctx.fillStyle = `rgba(8,10,26,${veil.toFixed(3)})`; ctx.fillRect(0, 0, W, H);
+        if (t > 1.2 && t < 3.1) {                       // le trait de lumière, ouest → est
+          const k = (t - 1.2) / 1.9;
+          const y0 = H * 0.16, y1 = H * 0.30;
+          const hx = -60 + (W + 120) * k, hy = y0 + (y1 - y0) * k;
+          const grd = ctx.createLinearGradient(hx - 190, hy - 20, hx, hy);
+          grd.addColorStop(0, "rgba(255,240,200,0)"); grd.addColorStop(1, "rgba(255,250,225,0.95)");
+          ctx.strokeStyle = grd; ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.moveTo(hx - 190, hy - 20); ctx.lineTo(hx, hy); ctx.stroke();
+          ctx.fillStyle = "rgba(255,255,245,0.95)";
+          ctx.beginPath(); ctx.arc(hx, hy, 4, 0, 7); ctx.fill();
+        }
+        if (t > 3.0 && t < 3.16) { ctx.fillStyle = "rgba(255,255,255,0.92)"; ctx.fillRect(0, 0, W, H); }
+        /* ⚠️ LA SECOUSSE PASSE PAR LE CANEVAS, PAS PAR LA POSITION DU JOUEUR.
+           Déplacer le fermier pour secouer l'image, c'est le faire traverser un
+           mur en douce — et la caméra du jeu est calculée dans trois fonctions
+           différentes. Un `transform` CSS sur l'élément secoue exactement ce
+           qu'il faut (le monde), et rien de ce qu'il ne faut pas (le HUD). */
+        if (t > 3.2 && t < 4.4) {
+          const a = (1 - (t - 3.2) / 1.2) * 7;
+          canvas.style.transform = `translate(${(Math.sin(t * 47) * a).toFixed(2)}px, ${(Math.cos(t * 39) * a).toFixed(2)}px)`;
+        } else if (canvas.style.transform) canvas.style.transform = "";
+        if (t > 3.4 && t < 6.2) {                       // tous les oiseaux décollent
+          const k = (t - 3.4) / 2.8;
+          ctx.strokeStyle = `rgba(20,24,30,${(0.75 * (1 - k)).toFixed(3)})`; ctx.lineWidth = 2;
+          for (let b = 0; b < 22; b++) {
+            const bx = ((b * 89) % W), by = H * 0.9 - k * H * (0.5 + (b % 5) * 0.09);
+            const fl = Math.sin(now / 90 + b) * 4;
+            ctx.beginPath(); ctx.moveTo(bx - 5, by + fl); ctx.lineTo(bx, by); ctx.lineTo(bx + 5, by + fl); ctx.stroke();
+          }
+        }
+        if (t > 4.5) {                                   // la colonne de lumière, à l'est
+          const k = Math.min(1, (t - 4.5) / 1.4);
+          const cx2 = W * 0.86;
+          const grd = ctx.createLinearGradient(cx2, H, cx2, 0);
+          grd.addColorStop(0, `rgba(180,240,210,${(0.30 * k).toFixed(3)})`);
+          grd.addColorStop(1, "rgba(180,240,210,0)");
+          ctx.fillStyle = grd; ctx.fillRect(cx2 - 26, 0, 52, H);
+        }
+        line(L.star.fall.line1, t > 1.4 && t < 3.4 ? 1 : 0, H * 0.78);
+        line(L.star.fall.line2, t > 3.5 && t < 5.4 ? 1 : 0, H * 0.78);
+        line(L.star.fall.line3, t > 5.5 && t < 7.2 ? 1 : 0, H * 0.78);
+      } else if (sc0.key === "turn") {
+        /* ⚠️ LE RETOURNEMENT EST LE SEUL MOMENT OÙ LE JEU DOIT SE TAIRE. Quatre
+           notes montent, ça s'arrête net, et le décor se tait avec. Le blanc
+           n'est pas un effet : c'est le silence, rendu visible. */
+        if (t < 0.35) { ctx.fillStyle = `rgba(255,255,255,${(1 - t / 0.35).toFixed(3)})`; ctx.fillRect(0, 0, W, H); }
+        const veil = Math.min(0.62, t * 0.9) * (t > 5.6 ? Math.max(0, (dur / 1000 - t) / 1.4) : 1);
+        ctx.fillStyle = `rgba(6,8,18,${veil.toFixed(3)})`; ctx.fillRect(0, 0, W, H);
+        line(L.star.s4.turn1, t > 0.6 && t < 2.2 ? 1 : 0, H * 0.44);
+        line(L.star.s4.turn2, t > 2.2 && t < 3.8 ? 1 : 0, H * 0.44);
+        line(L.star.s4.turn3, t > 3.8 && t < 5.2 ? 1 : 0, H * 0.44);
+        line(L.star.s4.turn4, t > 5.2 ? 1 : 0, H * 0.44);
+        if (t > 5.2) {                                   // la cloche, une fois, toute seule
+          const k = (t - 5.2) / 1.8;
+          ctx.strokeStyle = `rgba(255,232,170,${(0.5 * (1 - k)).toFixed(3)})`; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(W / 2, H * 0.30, 20 + k * 150, 0, 7); ctx.stroke();
+        }
+      } else {
+        /* ── LA RÉSOLUTION. Cinq notes, la cloche donne la sienne, l'étoile
+           monte comme un ballon qu'on lâche — pas comme une fusée. */
+        const veil = Math.min(0.7, t * 0.6);
+        ctx.fillStyle = `rgba(6,8,20,${veil.toFixed(3)})`; ctx.fillRect(0, 0, W, H);
+        const cx2 = W / 2, cy2 = H * 0.55;
+        if (t < 5) {                                     // les quatre éclats tournent autour de la cloche
+          for (let i = 0; i < 4; i++) {
+            const a = now / 900 + i * Math.PI / 2, r = 44 + Math.sin(now / 700 + i) * 6;
+            ctx.fillStyle = ["#ffd868", "#96ccf0", "#f0a8c8", "#a8e8a0"][i];
+            ctx.beginPath(); ctx.arc(cx2 + Math.cos(a) * r, cy2 + Math.sin(a) * r * 0.55, 4, 0, 7); ctx.fill();
+          }
+        }
+        if (t > 2.2 && t < 8) {                          // la lumière sort par les quatre côtés
+          const k = Math.min(1, (t - 2.2) / 2.2);
+          ctx.fillStyle = `rgba(255,244,206,${(0.16 * k).toFixed(3)})`;
+          ctx.fillRect(0, cy2 - 26 * k, W, 52 * k);
+          ctx.fillRect(cx2 - 26 * k, 0, 52 * k, H);
+        }
+        if (t > 4) {                                     // elle monte, lentement
+          const k = Math.min(1, (t - 4) / 6);
+          const sy2 = cy2 - k * (cy2 + 60);
+          ctx.fillStyle = "rgba(255,250,226,0.95)";
+          ctx.beginPath(); ctx.arc(cx2, sy2, 6 - k * 3, 0, 7); ctx.fill();
+          ctx.fillStyle = `rgba(255,236,180,${(0.22 * (1 - k)).toFixed(3)})`;
+          ctx.beginPath(); ctx.arc(cx2, sy2, 26 - k * 12, 0, 7); ctx.fill();
+        }
+        if (t > 10) { ctx.fillStyle = `rgba(255,255,255,${Math.min(1, (t - 10) / 1.6).toFixed(3)})`; ctx.fillRect(0, 0, W, H); }
+        if (t > 12) { ctx.fillStyle = `rgba(255,244,224,${Math.max(0, 1 - (t - 12) / 1.6).toFixed(3)})`; ctx.fillRect(0, 0, W, H); }
+        line(L.star.s5.end1, t > 4.2 && t < 6.6 ? 1 : 0, H * 0.82);
+        line(L.star.s5.end2, t > 6.8 && t < 9.2 ? 1 : 0, H * 0.82);
+        line(L.star.s5.end3, t > 9.4 && t < 10.6 ? 1 : 0, H * 0.82);
       }
       ctx.restore();
     }
@@ -19597,204 +20027,393 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     pushToast(L.churchCandleToast);
   }
   /* ╔══════════════════════════════════════════════════════════════════════════
-     ║ ZIP 442 — LES PROXIMITÉS DE L'ENQUÊTE.
+     ║ ZIP 444 — LES PROXIMITÉS DE LA QUÊTE DE L'ÉTOILE.
      ╚══════════════════════════════════════════════════════════════════════════
      ⚠️ MÊME DISCIPLINE QUE `nearCivicDoor` (426) ET `nearTownProp` (427) : UNE
      définition par question, lue par l'invite ET par la touche E. Deux copies
-     d'un seuil de proximité, c'est un jeu qui propose puis refuse.
-     ⚠️⚠️ ET ELLES NE REGARDENT QUE LE NIVEAU COURANT. Les sept niveaux des trois
-     bâtiments sont empilés dans une seule grille (438, 441) : sans le filtre de
-     `courtFloorOf`, un lutrin de la mairie serait « proche » d'un joueur du
-     sous-sol du palais dès que leurs `x` coïncident — et il n'y aurait rien à
-     l'écran pour l'expliquer. */
-  /* ╔══════════════════════════════════════════════════════════════════════════
-     ║ ZIP 442 — « SUIS-JE SEUL CE SOIR ? », UNE SEULE DÉFINITION.
-     ╚══════════════════════════════════════════════════════════════════════════
-     ⚠️⚠️ ELLE COMPTE LES JOUEURS EN LIGNE, PAS LES FERMIERS ENREGISTRÉS, ET LE
-     PREMIER JET FAISAIT L'INVERSE — c'était un BLOCAGE de fin de partie, trouvé
-     en relisant sur la question de Guillaume « est-ce jouable seul ? ».
-     `farmersRef` contient tous les fermiers que la sauvegarde a jamais connus
-     (il est persisté dans l'instantané) : sur une ferme où un ami est passé une
-     fois, un joueur seul se voyait réclamer DEUX signatures pour déposer la
-     réclamation, et il n'avait aucun moyen de les obtenir. L'enquête devenait
-     impossible à finir, définitivement, et rien ne l'expliquait.
+     d'un seuil de proximité, c'est un jeu qui propose puis refuse (426).
+     ⚠️⚠️ ET ELLES NE REGARDENT QUE LE NIVEAU COURANT à l'intérieur. Les HUIT
+     niveaux des trois bâtiments sont empilés dans une seule grille (438, 441,
+     444) : sans le filtre de `courtFloorOf`, la cloche du beffroi serait
+     « proche » d'un joueur du sous-sol du palais dès que leurs `x` coïncident —
+     et il n'y aurait rien à l'écran pour l'expliquer. */
+
+  /* ⚠️⚠️ « SUIS-JE SEUL CE SOIR ? », UNE SEULE DÉFINITION — ET C'EST LE PIRE
+     DÉFAUT DU 442, REPRIS AVEC SA LEÇON. Le premier jet de l'enquête comptait
+     les FERMIERS ENREGISTRÉS et pas les joueurs en ligne : `farmersRef` contient
+     tous les fermiers que la sauvegarde a jamais connus (il est persisté dans
+     l'instantané), donc sur une ferme où un ami est passé UNE FOIS, un joueur
+     seul se voyait réclamer une présence qu'il ne pouvait pas obtenir — la quête
+     devenait infinissable, définitivement, et rien ne l'expliquait.
      ⚠️ « Seul » veut dire « personne d'autre n'est connecté MAINTENANT » :
      `playersRef` est la table des clients distants vivants, balayée par le TTL
-     du 364. Un camarade parti se déconnecte au bout de son TTL, et la ville
-     fournit alors son témoin — ce qui est exactement ce qu'on veut.
-     ⚠️ Le panneau ET l'hôte l'appellent tous les deux : un panneau qui promet
-     une signature de la ville pendant que l'hôte en exige deux serait le
-     « propose puis refuse » du 426, sur la dernière scène du chantier. */
-  function enqSoloRoom() { return (playersRef.current ? playersRef.current.size : 0) <= 0; }
+     du 364. Un camarade parti se déconnecte au bout de son TTL, et le jeu
+     bascule sur les fenêtres solo — ce qui est exactement ce qu'on veut.
+     ⚠️ L'INVITE ET L'HÔTE L'APPELLENT TOUS LES DEUX. Une invite qui promet un
+     geste solo pendant que l'hôte en exige deux, c'est le « propose puis
+     refuse » du 426 sur la mécanique centrale du chantier. */
+  function starSoloRoom() { return (playersRef.current ? playersRef.current.size : 0) <= 0; }
+  /* Qui reçoit le cadeau de fin : les joueurs PRÉSENTS, moi compris. Même
+     raison que ci-dessus — on ne récompense pas un fantôme de sauvegarde. */
+  function starRoomPlayerIds() {
+    const ids = [meRef.current && meRef.current.id];
+    if (playersRef.current) for (const k of playersRef.current.keys()) ids.push(k);
+    return ids.filter(Boolean);
+  }
 
-  function nearEnqProp(kind, room, mark, r) {
+  /* ── LA GÉOMÉTRIE, DÉRIVÉE ET MISE EN CACHE À CÔTÉ DE LA CARTE.
+     ⚠️ JAMAIS DESSUS : `getTownWorldCached` rend un SINGLETON de module partagé
+     par tous les remontages de l'onglet, et y écrire ferait fuiter l'état d'une
+     ferme à l'autre (§15 du README). `townSpots` a son propre cache depuis le
+     427, pour exactement cette raison ; celui-ci aussi. */
+  const starCraterRef = useRef({ w: null, pos: null });
+  function starCraterPos() {
+    const tw = townWorldNow(); if (!tw) return null;
+    if (starCraterRef.current.w === tw) return starCraterRef.current.pos;
+    const W = C.TOWN_MAP_W;
+    const open = (x, y) => {
+      if (x < 1 || y < 1 || x >= W - 1 || y >= C.TOWN_MAP_H - 1) return false;
+      const i = y * W + x, g = tw.ground[i];
+      return (g === C.G_GRASS || g === C.G_TOWN_LAWN) && !tw.solid[i] && !tw.hedge[i];
+    };
+    const r = Math.ceil(C.STAR_CRATER_DRAW_R);
+    const discFree = (x, y) => {
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+        if (dx * dx + dy * dy > C.STAR_CRATER_DRAW_R * C.STAR_CRATER_DRAW_R) continue;
+        if (!open(x + dx, y + dy)) return false;
+      }
+      return true;
+    };
+    const pos = Q.starSpiralFree(C.STAR_CRATER_X, C.STAR_CRATER_Y, discFree, 20);
+    starCraterRef.current = { w: tw, pos };
+    return pos;
+  }
+  /* Le SILLON, à la ferme. ⚠️ IL NE BLOQUE PAS et il n'est posé dans aucun
+     tableau du monde : c'est un décor de RENDU à une position dérivée, comme la
+     borne d'origine du 442. Une case qui change de sens sur une carte que les
+     joueurs labourent depuis des mois est un piège, et un sillon qu'on traverse
+     ne casse rien puisqu'on ne fait que s'y agenouiller. */
+  function starFurrowPos() { return { x: C.STAR_FURROW_X, y: C.STAR_FURROW_Y }; }
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 444 — LE COMPAGNON. C'EST LUI, LE PISTEUR ; LE BANDEAU N'EST QU'UN
+     ║ RAPPEL.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ SA POSITION EST DÉRIVÉE, PAS DIFFUSÉE — `trailFollow`, exactement le
+     mécanisme de Leo (427) et des invités de famille (428). Trois propriétés
+     viennent gratuitement avec ce choix, et ce sont les trois qui auraient coûté
+     du code autrement : **zéro message**, **aucune collision propre** (elle
+     rejoue un chemin déjà validé par la mienne), et **l'impossibilité de
+     traverser un mur**. Le §3 de CLAUDE.md dans sa forme la plus rentable.
+     ⚠️ UNE TRAÎNE PAR ZONE. Une seule ferait traverser la ville en ligne droite
+     au premier train — c'est le cas que `LEO_TELEPORT_TILES` couvre à l'intérieur
+     d'une carte, et qu'il ne peut pas couvrir entre deux.
+     ⚠️⚠️ ET ELLE SE CACHE QUAND UN RÉSIDENT APPROCHE. C'est le thème rendu
+     visible (§3 de QUETE.md) : personne d'autre ne voit l'étoile. Ça ne coûte
+     rien — les positions des résidents sont déjà là —, ça se voit tout de suite,
+     et ça MONTRE le secret au lieu de l'expliquer. Le délai de sortie
+     (`STAR_HIDE_MS`) évite qu'elle clignote quand quelqu'un longe la place. */
+  function starWithMe(e) {
+    return !!(e && Q.starFallen(e) && Q.starHas(e, "crater") && !Q.starDone(e));
+  }
+  function starResidentNear(zone, cx, cy) {
+    const st = sharedRef.current.station;
+    for (const r of (st && st.residents) || []) {
+      if (!r || (r.zone || "farm") !== zone) continue;
+      if (Math.hypot((r.x || 0) - cx, (r.y || 0) - cy) <= Q.STAR_HIDE_R) return true;
+    }
+    return false;
+  }
+  /* Rend `{ x, y, state, pose }` ou `null`. ⚠️ APPELÉE DEPUIS LES TROIS BOUCLES
+     DE RENDU, donc écrite ICI et pas dans l'une d'elles : trois copies auraient
+     divergé au premier réglage, et le symptôme aurait été « elle me suit à la
+     ferme et pas en ville » (le §3 du piège n°1). */
+  function starCompanionAt(zone, cx, cy, moving, nowMs) {
+    const e = sharedRef.current.star;
+    if (!starWithMe(e)) return null;
+    const trails = starTrailRef.current;
+    if (!trails[zone]) trails[zone] = [];
+    const p = trailFollow(trails[zone], cx, cy, moving, C.LEO_FOLLOW_DIST * 0.7);
+    if (starResidentNear(zone, cx, cy)) starHideRef.current = nowMs + Q.STAR_HIDE_MS;
+    const hiding = nowMs < starHideRef.current;
+    /* ⚠️ LES TROIS ÉTATS SE DÉDUISENT DE L'HISTOIRE, ILS NE SONT STOCKÉS NULLE
+       PART. Éteinte pendant le dernier chapitre (elle vient d'apprendre qu'elle
+       n'a pas de nom), apeurée quand elle se cache, calme le reste du temps. */
+    const state = hiding ? 1 : (Q.starChapterKey(e) === "note" && !Q.starHas(e, "song")) ? 2 : 0;
+    return { x: p.x, y: p.y, state, pose: Math.floor(nowMs / 260) & 3, hiding };
+  }
+  /* Ce qu'elle dit. ⚠️ UNE BULLE, JAMAIS UN PANNEAU : elle parle au-dessus
+     d'elle comme les résidents, et une phrase qu'on n'a pas à fermer est une
+     phrase qu'on lit. `key` évite qu'une même réplique se répète en boucle. */
+  function starSay(key, text, ms) {
+    const b = starBubbleRef.current;
+    if (b.key === key && performance.now() < b.until) return;
+    starBubbleRef.current = { key, text: String(text || ""), until: performance.now() + (ms || 4200) };
+  }
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 444 — LE BATTEMENT CLIENT DE LA QUÊTE. UNE SEULE FONCTION, TOUTES LES
+     ║ ZONES, ET ELLE N'ACCORDE RIEN.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ LE SEUL GESTE CONTINU DU CHANTIER EST ICI : « se tenir immobile, dos
+     tourné, dans le cratère ». Il n'y a pas de touche — c'est délibérément le
+     seul endroit du jeu où l'invite décrit une POSTURE — donc c'est la boucle
+     qui doit s'en apercevoir, image après image.
+     ⚠️⚠️ ET IL EST CADENCÉ, PAS ÉMIS À CHAQUE IMAGE. Une `req` par image, ce
+     sont soixante messages par seconde, c'est-à-dire six fois le plafond dur du
+     §3 — dépassé SILENCIEUSEMENT, donc invisible jusqu'à ce que la moitié des
+     paquets de tout le monde disparaisse. `resolveStarCalm` est écrit pour une
+     cadence lâche (il tolère 1,5 s entre deux marques) : on envoie DEUX fois par
+     seconde, et la tenue se mesure chez l'hôte, à sa propre horloge.
+     ⚠️ IL NE DÉCIDE RIEN. Tout ce qu'il fait est demander et parler ; l'hôte
+     tranche, comme partout ailleurs. */
+  function starFrame(nowMs) {
+    const m = meRef.current; if (!m) return;
+    const e = sharedRef.current.star;
+    if (!e || !Q.starFallen(e) || Q.starDone(e)) return;
+    const zone = m.zone || "farm";
+    if (starUiOpenRef.current) return;         // un mini-jeu ouvert : le monde attend
+    /* ── LE CALME DU CRATÈRE. */
+    if (zone === "town" && !Q.starHas(e, "crater")) {
+      const c = starCraterPos();
+      if (c) {
+        const near = Math.hypot(m.x - c.x, m.y - c.y) <= Q.STAR_CRATER_R + 1;
+        if (near && starCalmSelf()) {
+          if (nowMs >= (starHoldRef.current || 0)) {
+            starHoldRef.current = nowMs + 500;
+            sendReq({ kind: "starCalm" });
+          }
+        } else if (near) {
+          /* ⚠️ LA LUEUR EN COIN D'ŒIL. Elle ne dit pas la solution, elle dit
+             qu'il y a quelque chose — c'est la différence entre un indice et une
+             notice. Le texte, lui, est dans `fermeStrings`, comme tout ce que le
+             joueur lit. */
+          starSay("peek", L.star.s2.peek, 3400);
+          starHoldRef.current = 0;
+        }
+      }
+    }
+    /* ── CE QU'ELLE DIT QUAND ELLE EST LÀ. ⚠️ UNE SEULE PHRASE PAR SITUATION,
+       et elle est DÉRIVÉE de l'état partagé : rien n'est mis en file, rien n'est
+       à consommer, donc rien ne peut se perdre à la reprise (§6 de QUETE.md). */
+    if (starWithMe(e)) {
+      const chk = Q.starChapterKey(e);
+      if (chk === "note" && !Q.starHas(e, "song")) starSay("noName", L.star.s4.turn3, 6000);
+      else if (chk === "water" && zone === "town" && Q.starHas(e, "leanLake")) starSay("markLake", L.star.s2.markLake, 5200);
+      else if (chk === "thief" && zone === "town" && Q.starHas(e, "leanGlass") && !Q.starHas(e, "beadShard")) starSay("markGlass", L.star.s2.markGlass, 5200);
+      else if (chk === "crater" && Q.STAR_LEAN_MARKS.some(k => !Q.starHas(e, k))) starSay("lean", L.star.s2.leanHint, 6000);
+    }
+  }
+
+  /* ⚠️⚠️⚠️ LE CALME DU CRATÈRE — LA MÉCANIQUE CENTRALE DU CHANTIER, ET ELLE NE
+     COÛTE PAS UN OCTET DE RÉSEAU.
+     « L'étoile ne sort pas tant qu'on la regarde. » Pour le savoir, il faut
+     trois choses de chaque joueur : où il est, s'il bouge, et OÙ IL REGARDE. Les
+     trois sont dans le paquet de position depuis toujours (`x`, `y`, `moving`,
+     `dir` — voir `pubMe`). On n'ajoute donc AUCUN champ : le §3 de `CLAUDE.md`
+     est formel, ce qui peut se déduire ne se diffuse pas, et le 432 a trouvé un
+     champ (`sit`) qui circulait sans être lu, c'est-à-dire des octets pour rien.
+     ⚠️ `starFacingAway` VIT DANS `quete.js`, appelée ici ET par le banc. Deux
+     écritures de « tourner le dos » donneraient l'ambiguïté la plus détestable
+     qui soit : « chez moi elle sort, chez toi non ».
+     ⚠️ L'HÔTE REVÉRIFIE (`starCalmOk`), il ne croit pas le client. */
+  function starCalmSelf() {
+    const m = meRef.current, c = starCraterPos();
+    if (!m || !c || (m.zone || "farm") !== "town" || m.moving) return false;
+    if (Math.hypot(m.x - c.x, m.y - c.y) > Q.STAR_CRATER_R) return false;
+    return Q.starFacingAway(m.x, m.y, m.dir | 0, c.x, c.y);
+  }
+  function starCalmOk(id) {
+    const c = starCraterPos(); if (!c) return false;
+    const me0 = meRef.current;
+    if (me0 && me0.id === id) return starCalmSelf();
+    const p = playersRef.current && playersRef.current.get(id);
+    if (!p || (p.zone || "farm") !== "town" || p.moving) return false;
+    if (Math.hypot(p.x - c.x, p.y - c.y) > Q.STAR_CRATER_R) return false;
+    return Q.starFacingAway(p.x, p.y, p.dir | 0, c.x, c.y);
+  }
+
+  /* Un prop de quête à portée, dans la ville. ⚠️ ON CHERCHE PAR `kind`, JAMAIS
+     PAR COORDONNÉES : le générateur pose ces décors par balayage en spirale, ils
+     peuvent glisser de trois cases, et une coordonnée recopiée ici mentirait au
+     premier déplacement du quartier des artisans. */
+  function nearStarTownProp(kind, r) {
+    const m = meRef.current, tw = townWorldNow();
+    if (!m || !tw || (m.zone || "farm") !== "town") return null;
+    for (const p of (tw.props || [])) {
+      if (p.kind !== kind) continue;
+      if (Math.abs(m.x - p.x) <= r && Math.abs(m.y - p.y) <= r) return p;
+    }
+    return null;
+  }
+  /* Idem à l'intérieur, avec le filtre de NIVEAU (voir la note du chapeau). */
+  function nearStarCourtProp(kind, r) {
     const m = meRef.current, cw = courtWorldRef.current;
-    if (!m || !cw || m.zone !== "court") return null;
-    const f = E.courtFloorOf(m.y + 0.2);
-    let best = null, bd = Infinity;
-    for (const pr of (cw.props || [])) {
-      if (pr.kind !== kind) continue;
-      if (mark && pr.mark !== mark) continue;
-      if (E.courtFloorOf(pr.y) !== f) continue;
-      if (room) { const rm = E.courtRoomAt(pr.x, pr.y); if (!rm || rm.key !== room) continue; }
-      const d = Math.hypot(pr.x + 0.5 - (m.x + 0.5), pr.y - m.y);
-      if (d <= r && d < bd) { bd = d; best = pr; }
-    }
-    return best;
-  }
-  /* La borne de section, en ville. ⚠️ ELLE NE BLOQUE PAS (voir le générateur) :
-     on peut donc lui marcher dessus, et le rayon doit être un peu plus large que
-     pour un meuble — sinon on la traverse sans que l'invite ait le temps de
-     s'afficher, ce qui est la définition d'un décor qu'on ne trouve jamais. */
-  function nearBoundStone() {
-    const m = meRef.current, tw = townWorldNow();
-    if (!m || !tw || m.zone !== "town") return null;
-    for (const pr of tw.props || []) {
-      if (pr.kind !== "boundStone") continue;
-      if (Math.abs(m.x - pr.x) <= 1.4 && Math.abs(m.y - pr.y) <= 1.4) return pr;
+    if (!m || !cw || (m.zone || "farm") !== "court") return null;
+    const fl = E.courtFloorOf(m.y);
+    for (const p of (cw.props || [])) {
+      if (p.kind !== kind) continue;
+      if (E.courtFloorOf(p.y) !== fl) continue;
+      if (Math.abs(m.x - p.x) <= r && Math.abs(m.y - p.y) <= r) return p;
     }
     return null;
   }
-  /* La borne d'ORIGINE, à la ferme. ⚠️ SA POSITION EST LA SEULE DE L'ENQUÊTE
-     QUI SOIT ÉCRITE EN DUR, et `verify-enquete` la contrôle contre le monde
-     regénéré (case libre, praticable, distincte de la boutique, du bac, du
-     panneau de gare et du seuil de la maison). Une constante de position se
-     contrôle, elle ne se relit pas. */
-  function nearDatumStone() {
-    const m = meRef.current;
-    if (!m || m.zone !== "farm") return false;
-    const s = Q.ENQ_FARM_STONE;
-    return Math.abs(m.x - s.x) <= 1.4 && Math.abs(m.y - s.y) <= 1.4;
-  }
-  /* LA TOMBE SANS NOM. ⚠️ ELLE SE DÉSIGNE PAR SON RANG, pas par sa case (voir
-     `Q.enqGraveOf`) : le cimetière a bougé au 434 quand son allée a été
-     recentrée, et une coordonnée écrite ici aurait déjà menti une fois. */
-  function nearEnqGrave() {
-    const m = meRef.current, tw = townWorldNow();
-    if (!m || !tw || m.zone !== "town") return null;
-    const g = Q.enqGraveOf(tw);
-    if (!g) return null;
-    return (Math.abs(m.x - g.x) <= 1.3 && Math.abs(m.y - g.y) <= 1.5) ? g : null;
-  }
-  /* ⚠️⚠️ L'INVITE ET LA TOUCHE PARTAGENT CETTE FONCTION, ET C'EST TOUT SON
-     OBJET. Elle rend `{ p, act }` : `p` est la clé d'invite (`enq:…`), `act` est
-     ce que E fera. Deux listes séparées — une pour l'affichage, une pour
-     l'action — c'est le défaut que le 441 a nommé sur l'église (« l'invite
-     promet ce que la touche fera ») et que le 426 s'était juré de ne plus
-     commettre. Ici il ne peut pas se produire : il n'y a qu'une liste.
-     ⚠️ L'ORDRE VA DU PLUS PRÉCIS AU PLUS LARGE, comme partout depuis le 427. */
-  function enqNearby() {
-    const m = meRef.current;
-    if (!m) return null;
-    const e = sharedRef.current.enquete;
-    if (m.zone === "farm") {
-      if (nearDatumStone()) return { p: Q.enqHas(e, "borneOrigine") ? "stone" : "scrub", act: () => enqRead("borneOrigine") };
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ CE QUI EST À PORTÉE, EN UN SEUL ENDROIT.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️ UNE SEULE FONCTION REND À LA FOIS L'INVITE ET L'ACTION — c'est la forme
+     inventée au 442 et elle est la bonne : `{ p, act }`, où `p` est la clé
+     d'invite et `act` ce que fait E. Deux listes (une pour l'affichage, une pour
+     la touche) finiraient par ne pas dire la même chose, et le symptôme serait
+     « le jeu propose et refuse ».
+     ⚠️⚠️ ET L'ORDRE VA DU PLUS PRÉCIS AU PLUS LARGE (règle du 427). L'écoute des
+     ombres est EN DERNIER, exprès : elle se fait n'importe où en ville, donc
+     testée en premier elle avalerait tout le reste — on écouterait les ombres au
+     lieu de plonger, debout sur le ponton. En dernier, elle occupe la seule
+     place qui était libre : « E dans une rue vide ». */
+  function starNearby() {
+    const m = meRef.current; if (!m) return null;
+    const e = sharedRef.current.star;
+    if (!e || !Q.starFallen(e) || Q.starDone(e)) return null;
+    const zone = m.zone || "farm";
+
+    if (zone === "farm") {
+      /* Le sillon. ⚠️ IL RESTE VISIBLE ET LISIBLE APRÈS COUP : un décor qui
+         disparaît une fois utilisé se lit comme un bogue, et celui-ci est la
+         seule trace que la ferme garde de toute l'histoire. */
+      const fp = starFurrowPos();
+      if (Math.abs(m.x - fp.x) <= 1.6 && Math.abs(m.y - fp.y) <= 1.6)
+        return { p: "furrow", act: () => starTouchFurrow() };
       return null;
     }
-    if (m.zone === "town") {
-      const bs = nearBoundStone();
-      if (bs) {
-        const id = bs.mark === "quai" ? "borneQuai" : bs.mark === "verger" ? "borneVerger" : "borneBois";
-        return { p: "stone", act: () => enqRead(id) };
-      }
-      const gr = nearEnqGrave();
-      if (gr) return { p: Q.enqHas(e, "tombe") ? "doc" : "scrub", act: () => enqRead("tombe") };
-      /* La plaque de la fin : elle n'existe que si l'enquête s'est terminée par
-         une restitution, et elle se lit là où la borne du bois est couchée. */
-      /* ⚠️ `townWorldNow()` PEUT RENDRE `null` (la carte de la ville n'est
-         construite qu'à la première visite) : sans ce garde-fou, lire `.props`
-         dessus lèverait un `TypeError` DANS LA BOUCLE DE RENDU, c'est-à-dire
-         emporterait tout ce que la frame devait encore dessiner (§4). */
-      if (Q.enqDone(e) && e.outcome === "restore" && townWorldNow()) {
-        const st = (townWorldNow().props || []).find(p2 => p2.kind === "boundStone" && p2.mark === "bois");
-        if (st && Math.abs(m.x - st.x) <= 2 && Math.abs(m.y - (st.y - 1)) <= 2) return { p: "plaque", act: () => setEnqNoteOpen(true) };
-      }
+
+    if (zone === "town") {
+      /* Le cratère : E n'y sert à RIEN tant qu'elle n'est pas sortie, et c'est
+         le sujet. L'invite dit quoi faire (se tenir tranquille) ; la touche, elle,
+         n'est pas la solution. ⚠️ C'est délibérément le seul endroit du jeu où
+         une invite décrit une posture au lieu d'une touche. */
+      const c = starCraterPos();
+      if (c && !Q.starHas(e, "crater") && Math.hypot(m.x - c.x, m.y - c.y) <= Q.STAR_CRATER_R + 1)
+        return { p: "crater", act: () => pushToast(starSoloRoom() ? L.star.s2.calmSolo : L.star.s2.calmBoth) };
+      /* Le ponton — on ne plonge que si l'on sait où plonger. */
+      if (Q.starHas(e, "leanLake") && !Q.starHas(e, "lakeShard")
+          && Math.abs(m.x - C.STAR_PIER_X) <= 2 && Math.abs(m.y - C.STAR_PIER_Y) <= 2)
+        return { p: "dive", act: () => setStarMini({ kind: "dive", round: 0 }) };
+      /* La verrerie, puis l'arbre de la pie. L'ordre EST l'histoire : la perle
+         d'abord (c'est elle qui explique le nid), le nid ensuite. */
+      if (Q.starHas(e, "leanGlass") && !Q.starHas(e, "beadShard") && nearStarTownProp("starRack", 1.8))
+        return { p: "sweep", act: () => setStarMini({ kind: "rack", round: 0 }) };
+      if (Q.starHas(e, "beadShard") && !Q.starHas(e, "nestShard") && nearStarTownProp("starNestTree", 1.8))
+        return { p: "lure", act: () => setStarMini({ kind: "lure", round: 0 }) };
+      /* ⚠️ EN DERNIER : l'écoute des ombres. Voir la note du chapeau. */
+      if (Q.starHas(e, "crater") && Q.STAR_LEAN_MARKS.some(k => !Q.starHas(e, k)))
+        return { p: "lean", act: () => starListen() };
       return null;
     }
-    if (m.zone !== "court") return null;
-    // ── L'ARCHIVISTE. Elle passe avant tout : elle est à deux cases, tout le
-    // reste à une et demie, et c'est quelqu'un — parler passe avant lire.
-    if (nearEnqProp("archivistNPC", null, null, C.HALL_CLERK_R)) return { p: "omb", act: () => setEnqNoteOpen(true) };
-    if (nearEnqProp("cardIndex", "cadastre", null, 1.6)) return { p: "code", act: () => setEnqCodeOpen({ code: "A", value: "" }) };
-    if (nearEnqProp("registerStand", "notary", null, 1.6)) return { p: "codeB", act: () => setEnqCodeOpen({ code: "B", value: "" }) };
-    if (nearEnqProp("registerStand", "civil", null, 1.6)) {
-      /* ⚠️ LE MÊME MEUBLE REND DEUX INDICES DIFFÉRENTS, ET C'EST LE CŒUR DU
-         CHAPITRE 7 : on relit le registre des mariages, et cette fois on sait
-         quoi y chercher. La condition n'est pas un numéro de chapitre mais une
-         CONNAISSANCE (`req` du site : il faut le nom et le registre déchiffré)
-         — c'est ce qui rend le désordre jouable. */
-      /* ⚠️ ON LIT LE REGISTRE AVANT DE LE RELIRE, ET L'ORDRE COMPTE. Écrit dans
-         l'autre sens, un joueur qui arrive ici en ayant déjà le nom ET le
-         registre déchiffré aurait obtenu la FILIATION en premier — c'est-à-dire
-         la réponse avant la question — puis le folio manquant au coup suivant.
-         Rien n'était bloqué, mais on racontait l'histoire à l'envers, et c'est
-         exactement ce qu'un chantier narratif ne peut pas se permettre. */
-      const site = Q.ENQ_SITE.filiation;
-      const can = site.req.every(k => Q.enqHas(e, k));
-      return { p: "doc", act: () => enqRead(!Q.enqHas(e, "mariages") ? "mariages" : (can ? "filiation" : "mariages")) };
-    }
-    if (nearEnqProp("registerStand", "surveyor", null, 1.6)) return { p: "doc", act: () => enqRead("cotes") };
-    /* ⚠️ LE GUICHET DE LA RÉCLAMATION EST LE BUREAU DU NOTAIRE, ET IL N'A PAS
-       DE MEUBLE À LUI. C'est délibéré : on ne pose pas un huitième dessin pour
-       un geste qui se fait « au bureau ». Le `desk` de la pièce `office` existe
-       depuis le 426, il est déjà le point de fuite de la salle, et la scène
-       finale s'y joue sans qu'un décor neuf annonce d'avance qu'il va se passer
-       quelque chose là.
-       ⚠️ Il ne s'ouvre que quand les quatre pièces sont réunies — sinon le
-       clerc les compte à voix haute et rend le dossier, ce qui est la seule
-       façon HONNÊTE de dire « pas encore » : un guichet muet passe pour cassé
-       (426), et un guichet qui accepte un dossier incomplet ment. */
-    if (nearEnqProp("desk", "notary", null, 1.5) && Q.enqStarted(e)) return { p: "file", act: () => setEnqEndOpen(true) };
-    if (nearEnqProp("bylaw", "notary", null, 1.6)) return { p: "doc", act: () => enqRead("reglement") };
-    if (nearEnqProp("wallMap", "cadastre", null, 1.6)) return { p: "doc", act: () => enqRead("plan") };
-    for (const mk of ["note", "pv"]) {
-      if (nearEnqProp("docBox", "cityarch", mk, 1.5)) return { p: "doc", act: () => enqRead(mk) };
-    }
-    const kp = nearEnqProp("keyPost", null, null, 1.4);
-    if (kp) {
-      const rm = E.courtRoomAt(kp.x, kp.y);
-      return { p: "lock", act: () => enqTurnKey(rm && rm.key === "bailiff" ? "huissier" : "greffe") };
-    }
-    if (nearEnqProp("strongbox", "evidence", null, 1.8) || nearEnqProp("strongbox2", "evidence", null, 1.8)) {
-      return { p: "box", act: () => enqOpenBox() };
+
+    if (zone === "court") {
+      if (nearStarCourtProp("greatBell", 1.8) || nearStarCourtProp("greatBell2", 1.8))
+        return { p: "bell", act: () => starTouchBell() };
+      /* ⚠️ LE BANC D'ORGUE EST LE SECOND POSTE DU DUO, ET IL EXISTE DEPUIS LE
+         441 : on ne pose rien, on branche. Il ne s'ouvre qu'une fois la cloche
+         entendue — avant, il n'y a rien à jouer, et une invite qui propose puis
+         refuse est le défaut du 426. */
+      if (Q.starHas(e, "belfry") && !Q.starHas(e, "song") && nearStarCourtProp("organBench", 1.4))
+        return { p: "organ", act: () => setStarMini({ kind: "duet", round: e.duet | 0, role: "organ" }) };
     }
     return null;
   }
-  /* Ouvrir un document. ⚠️ LE PANNEAU S'OUVRE TOUJOURS, MÊME QUAND L'INDICE EST
-     DÉJÀ CONNU : un document déjà lu reste lisible, c'est un document. Ce qui
-     est idempotent, c'est l'INSCRIPTION au carnet, et elle est arbitrée par
-     l'hôte (voir `hostHandleReq`). Le client, lui, n'accorde rien. */
-  function enqRead(id) {
-    const site = Q.ENQ_SITE[id];
-    if (!site) return;
-    const e = sharedRef.current.enquete;
-    if (site.req && !site.req.every(k => Q.enqHas(e, k))) { pushToast(L.enq.tLocked); return; }
-    if (!Q.enqHas(e, id)) {
-      if (id === "tombe" || id === "borneOrigine") { actAnimRef.current = 0.28; pushToast(L.enq.tScrub); }
-      sendReq({ kind: "enqClue", site: id });
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 444 — CE QUE LES MINI-JEUX RENDENT, ET CE QU'ILS LISENT DE L'AUTRE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ UN MINI-JEU GAGNÉ N'ACCORDE RIEN : il envoie une `req`, l'hôte tranche.
+     C'est la règle du 439 (« un panneau qui s'ouvre à volonté ne doit rien
+     donner ») portée jusqu'au bout — ici l'écran s'ouvre à la touche E, autant
+     de fois qu'on veut, et ce qu'il rend passe par l'arbitre. */
+  function starMiniWon() {
+    const k = starMini && starMini.kind;
+    setStarMini(null);
+    if (k === "cool") { sendReq({ kind: "starFound", site: "furrow" }); starSay("shadow", L.star.s1.shadow, 7000); pushToast(L.star.s1.got); }
+    else if (k === "dive") { sendReq({ kind: "starFound", site: "lakeShard" }); starSay("wings", L.star.s3.wings, 7000); }
+    else if (k === "rack") { sendReq({ kind: "starFound", site: "beadShard" }); }
+    else if (k === "lure") { sendReq({ kind: "starFound", site: "nestShard" }); }
+    else if (k === "duet") {
+      /* ⚠️ LE DON EST DEMANDÉ APRÈS LA DERNIÈRE PHRASE, PAS AVEC ELLE. Les deux
+         requêtes partent à la suite ; l'hôte les traite dans l'ordre, donc
+         `song` existe quand `starGift` arrive. Le délai n'est pas une sécurité
+         (`resolveStarGift` refuse si `song` manque, et il est idempotent) —
+         c'est du RYTHME : la cloche a le temps de donner sa note avant que le
+         ciel ne se referme. */
+      pushToast(L.star.s5.duetWin);
+      setTimeout(() => sendReq({ kind: "starGift" }), 900);
     }
-    setEnqDocOpen({ id });
   }
-  /* Tourner une clé. ⚠️ L'ANTI-RAFALE EST LOCAL ET SILENCIEUX (leçon du pain aux
-     pigeons, 439) : marteler la commande enverrait dix `req` par seconde à
-     l'hôte, c'est-à-dire le plafond du §3 atteint pour un geste. Et il est court
-     — une seconde — parce qu'ici, contrairement au pain, on peut avoir une
-     bonne raison de retourner tourner la clé tout de suite : on vient de rater
-     la fenêtre. */
-  function enqTurnKey(side) {
+  /* ⚠️⚠️ LA FLAQUE DE LUMIÈRE SUIT L'AUTRE JOUEUR, ET ELLE NE COÛTE RIEN. Sa
+     position est celle qu'il diffuse déjà : celui qui tient l'étoile marche sur
+     le ponton, la flaque suit ses pas, et le plongeur ne voit QUE l'intérieur de
+     la flaque. « A éclaire le chemin de B », littéralement, pour zéro message.
+     ⚠️ RENDRE `null` VEUT DIRE « LA LUMIÈRE EST POSÉE » : seul, on la cale sur
+     la bitte d'amarrage et la flaque ne bouge plus. Le mini-jeu élargit alors
+     son rayon (`STAR_POOL_SOLO_R`) — la parade solo change la DURÉE et la
+     GÉOMÉTRIE, jamais la règle. */
+  function starMiniLead() {
+    if (starSoloRoom()) return null;
+    const span = 9;    // les cases de ponton sur lesquelles on peut marcher
+    for (const p of playersRef.current.values()) {
+      if (!p || (p.zone || "farm") !== "town") continue;
+      if (Math.abs(p.y - C.STAR_PIER_Y) > 4) continue;
+      return Math.max(0.08, Math.min(0.92, 0.5 + (p.x - C.STAR_PIER_X) / span));
+    }
+    return null;
+  }
+  /* Le partenaire du duo est-il à son poste ? ⚠️ C'EST UNE QUESTION DE PRÉSENCE,
+     PAS DE RÉUSSITE (voir `STAR_DUET_ALONE_MUL` dans quete.js) : sa position
+     circule déjà, sa performance non — et la faire circuler coûterait un message
+     par image, c'est-à-dire le plafond du §3 crevé par un seul joueur. */
+  function starMiniPartner() {
+    const m = meRef.current; if (!m) return false;
+    const myFloor = E.courtFloorOf(m.y);
+    for (const p of playersRef.current.values()) {
+      if (!p || (p.zone || "farm") !== "court") continue;
+      if (E.courtFloorOf(p.y) !== myFloor) return true;   // il est à l'AUTRE étage : c'est le poste d'en face
+    }
+    return false;
+  }
+
+  /* ── LES GESTES. ⚠️ AUCUN N'ACCORDE QUOI QUE CE SOIT : ils demandent, l'hôte
+     tranche. Le client n'a pas le droit de décider qu'un éclat est trouvé — deux
+     clients qui décideraient chacun de leur côté écriraient deux vérités. */
+  function starTouchFurrow() {
+    const e = sharedRef.current.star;
+    if (Q.starHas(e, "furrow")) { pushToast(L.star.s1.east); return; }
+    setStarMini({ kind: "cool", round: 0 });
+  }
+  /* ⚠️ L'ANTI-RAFALE EST LOCAL ET SILENCIEUX (leçon du pain aux pigeons, 439) :
+     marteler E enverrait dix `req` par seconde à l'hôte, c'est-à-dire le plafond
+     du §3 crevé par un seul joueur. Il est court — une seconde — parce qu'on
+     peut avoir une bonne raison de réécouter tout de suite : on vient de bouger. */
+  function starListen() {
     const nowC = performance.now();
-    if (nowC < (enqKeyNextRef.current || 0)) return;
-    enqKeyNextRef.current = nowC + 1000;
-    const e = sharedRef.current.enquete;
-    if (Q.enqHas(e, "coffre")) { enqOpenBox(); return; }
-    if (!Q.enqHas(e, "acte")) { pushToast(L.enq.tLocked); return; }
-    sendReq({ kind: "enqLock", side });
+    if (nowC < (starKeyNextRef.current || 0)) return;
+    starKeyNextRef.current = nowC + 1000;
+    const m = meRef.current;
+    sendReq({ kind: "starLean", tx: Math.round(m.x), ty: Math.round(m.y) });
+    pushToast(starSoloRoom() ? L.star.s2.leanSoloArmed : L.star.s2.leanArmed);
   }
-  function enqOpenBox() {
-    const e = sharedRef.current.enquete;
-    if (!Q.enqHas(e, "acte")) { pushToast(L.enq.tLocked); return; }
-    if (!Q.enqHas(e, "coffre")) { pushToast(L.enq.tBoxWait); return; }
-    setEnqDocOpen({ id: "coffre" });
+  function starTouchBell() {
+    const e = sharedRef.current.star;
+    if (!Q.starHas(e, "belfry")) { sendReq({ kind: "starFound", site: "belfry" }); return; }
+    if (Q.starHas(e, "song")) { pushToast(L.star.s5.end3); return; }
+    /* ⚠️ LE RÔLE SE DÉDUIT DE L'ENDROIT OÙ L'ON SE TIENT, IL N'EST PAS CHOISI.
+       Au beffroi on VISE, au banc d'orgue on TIENT les touches. Un menu « quel
+       poste veux-tu ? » aurait demandé aux deux joueurs de se mettre d'accord
+       avant de jouer, alors que la géographie le dit déjà — et c'est toute la
+       différence entre une coopération et une case à cocher (§4 de QUETE.md).
+       ⚠️ SEUL, ON A LES DEUX : les cales du sonneur tiennent les touches, on
+       court dans la vis, la note faiblit pendant la montée. */
+    setStarMini({ kind: "duet", round: e.duet | 0, role: starSoloRoom() ? "both" : "aim" });
   }
   // Zip 426 : voir la note de drawTownFrame — une seule définition de « je suis
   // devant la porte de ce monument », partagée par l'invite et par la touche E.
@@ -19845,17 +20464,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const pw = nearChurchProp("pew", 1.1);
         if (pw) { sitChurch(pw); return; }
       }
-      /* ⚠️⚠️ ZIP 442 — L'ENQUÊTE PASSE AVANT LES PANNEAUX, ET APRÈS L'ÉGLISE.
+      /* ⚠️⚠️ ZIP 444 — LA QUÊTE PASSE AVANT LES PANNEAUX, ET APRÈS L'ÉGLISE.
          Après, parce que s'asseoir et allumer un cierge sont à une case et que
-         rien de l'enquête n'est dans la nef. Avant, parce que ses meubles sont
-         À L'INTÉRIEUR des pièces, donc plus près que la plaque de porte et que
-         l'annuaire du couloir : testés après, on ouvrirait l'annuaire en
-         voulant lire un registre posé à une case de soi. C'est la règle du 427
-         — du plus PRÉCIS au plus large — et c'est elle qui rend une touche
-         unique lisible.
-         ⚠️ ET C'EST LA MÊME FONCTION QUE L'INVITE (`enqNearby`) : l'invite
+         rien de la quête n'est dans la nef. Avant, parce que la cloche du
+         beffroi est à deux cases dans une pièce de dix, donc plus près que
+         l'annuaire du couloir : testée après, on ouvrirait un tableau en
+         voulant écouter une cloche. C'est la règle du 427 — du plus PRÉCIS au
+         plus large — et c'est elle qui rend une touche unique lisible.
+         ⚠️ ET C'EST LA MÊME FONCTION QUE L'INVITE (`starNearby`) : l'invite
          promet ce que la touche fait, parce que c'est la même liste. */
-      { const en = enqNearby(); if (en) { en.act(); return; } }
+      { const st = starNearby(); if (st) { st.act(); return; } }
       // ⚠️ 439 — l'hôtesse passe AVANT les panneaux : elle est à deux cases, un
       // panneau à une et demie, et il y a un annuaire dans sa salle. Sans cette
       // priorité, parler à quelqu'un ouvrirait un tableau.
@@ -19981,7 +20599,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          après le mobilier à rayon étroit, avant les LIEUX (fontaine, kiosque,
          ponton, belvédère) qui couvrent des rectangles entiers et avaleraient
          tout ce qui s'y trouve. */
-      { const en = enqNearby(); if (en) { en.act(); return; } }
+      { const st = starNearby(); if (st) { st.act(); return; } }
       if (nearTownRect(C.TOWN_FOUNTAIN.x - 1, C.TOWN_FOUNTAIN.y - 1, 4, 4)) { sendReq({ kind: "townWish" }); return; }
       if (nearTownProp("kiosk", 2.6)) {
         // Le kiosque joue quand quelqu'un est là pour l'entendre — c'est-à-dire
@@ -20022,7 +20640,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          seul morceau de l'enquête qui vive à la ferme, et c'est délibéré : le
          chapitre 2 oblige à reprendre le train, donc à traverser les deux
          cartes, donc — à deux — à se répartir le travail. */
-      { const en = enqNearby(); if (en) { en.act(); return; } }
+      { const st = starNearby(); if (st) { st.act(); return; } }
       const tx = Math.floor(m0.x + 0.5), ty = Math.floor(m0.y + 0.5);
       const w2 = worldRef.current;
       if (w2) {
@@ -20640,6 +21258,36 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     <div className="ferme-root">
       <canvas id="ferme-game" ref={canvasRef} className="ferme-canvas" />
 
+      {/* ╔══════════════════════════════════════════════════════════════════════
+          ║ ZIP 444 — LE PISTEUR. Une icône, quatre pastilles, UNE phrase.
+          ╚══════════════════════════════════════════════════════════════════════
+          ⚠️⚠️ IL NE DIT JAMAIS DEUX CHOSES. C'est ce qui le sépare d'un journal
+          de quête — et un journal de quête est exactement ce que ce chantier ne
+          veut pas : l'histoire se joue dans le monde, pas dans un panneau qu'on
+          ouvre. Ce qu'il affiche est ce qui MANQUE au chapitre courant, dérivé
+          de la table (`starMissing` / `starShards`), jamais d'un compteur écrit
+          à côté qui finirait par ne plus correspondre.
+          ⚠️ IL CHANGE DE SUJET AU RETOURNEMENT : au dernier chapitre les quatre
+          pastilles sont pleines et ne veulent plus rien dire — c'est une seule
+          pastille VIDE qu'on montre, celle qui manque et qu'on ne trouvera
+          jamais. La mise en scène est dans la donnée, il n'y a rien à écrire.
+          ⚠️ ET IL NE S'AFFICHE PAS AVANT LA CHUTE : une interface qui annonce une
+          histoire secrète n'est plus une histoire secrète (§3 de QUETE.md). */}
+      {(() => {
+        const e = sharedRef.current.star;
+        if (!e || !Q.starFallen(e) || Q.starDone(e) || starMini || starCard) return null;
+        const last = Q.starChapterKey(e) === "note";
+        const n = Q.starShards(e);
+        const pips = last ? [false] : Array.from({ length: Q.STAR_SHARD_TOTAL }, (_, i) => i < n);
+        return (
+          <div className="ferme-star-hud" data-tick={starTick}>
+            <span className="ico">✦</span>
+            <span className="pips">{pips.map((on, i) => <span key={"sp" + i} className={"pip" + (on ? " on" : "")} />)}</span>
+            <span className="goal">{L.star.hud.goal[Q.starChapterKey(e)] || L.star.title}</span>
+          </div>
+        );
+      })()}
+
       {/* HUD (chantier notif/HUD, demande utilisateur) : minimisé par défaut
           (or partagé, jour/saison/heure, joueurs connectés seulement) ; le
           reste (grange, ressources de construction) ne s'affiche qu'au
@@ -20764,7 +21412,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           expression que le bandeau, et pas ailleurs. Deux traductions du même
           `promptKey` finiraient par diverger d'un libellé, et la divergence
           tomberait sur l'appareil du joueur qui n'a QUE ce bouton. */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("enq:") ? L.enqPrompt(promptKey.slice(4)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (
@@ -21613,29 +22261,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         </div>
       )}
       {!questOpen && !questsHidden && <button className="ferme-btn ferme-quests-fab" onClick={() => setQuestOpen(true)}>{L.questBtn}</button>}
-      {/* ⚠️⚠️ ZIP 442 — LE CARNET S'OUVRE DE PARTOUT, ET C'EST LA CONDITION POUR
-          QU'ON SACHE TOUJOURS CE QU'ON CHERCHE. C'est la consigne de ce chantier,
-          mot pour mot : *le joueur doit toujours savoir ce qu'il cherche à ce
-          stade, même s'il ne sait pas encore où le trouver.* Un objectif qu'on ne
-          peut relire qu'en redescendant au sous-sol du palais parler à
-          l'archiviste, c'est un objectif qu'on oublie entre deux soirées — et
-          cette enquête se joue sur plusieurs soirées.
-          ⚠️ LE BOUTON N'APPARAÎT QU'UNE FOIS L'ENQUÊTE COMMENCÉE. Une ferme qui
-          n'a jamais lu l'avis de la mairie n'a rien à ouvrir, et un bouton qui
-          ouvre « rien encore » est un bouton qui ment sur ce qu'il y a à faire.
-          ⚠️⚠️ ZIP 443 — RETIRÉ DE LA PILE GAUCHE (`ferme-quests-fab`, bottom:300).
-          `ferme-quests-fab` est ancré à bottom:270 et le carnet à bottom:300 : à
-          H≈828px de hauteur de viewport (un format très courant), ce bottom:300
-          tombe exactement sur `.ferme-torch-btn` (left:10, top:calc(50% + 64px))
-          — les deux étaient l'un sur l'autre. Sa propre classe
-          `ferme-notebook-fab` le place maintenant à DROITE, dans la seule bande
-          verticale du HUD qui reste libre à toutes les hauteurs d'écran usuelles :
-          sous `.ferme-rabbit-challenge` (top:320, occasionnel) et au-dessus de
-          `.ferme-energy-wrap` (bottom:78 à 218) — voir globals.css. */}
-      {!enqNoteOpen && Q.enqStarted(sharedRef.current.enquete) && (
-        <button className="ferme-btn ferme-notebook-fab"
-                data-tick={enqTick} onClick={() => setEnqNoteOpen(true)}>{L.enq.noteOpen}</button>
-      )}
 
       {/* Zip 368 : le panneau HUD de la mission d'équipe (nom du chantier +
           une ligne par ressource) était ici, en haut à droite sous les quêtes.
@@ -22717,7 +23342,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                       // Sans le modificateur ici, la ligne aurait annoncé le
                       // prix d'avant l'enquête et la caisse en aurait rendu un
                       // autre : le joueur aurait cru à un vol, pas à un bogue.
-                      priced: E.marketPrice(day, item, unit, Q.enqMarketMod(sharedRef.current)) });
+                      priced: E.marketPrice(day, item, unit) });
         };
         // --- ce que je porte
         C.CROPS.forEach(cr => push("c" + cr.id, S && S.crops[cr.id][C.CROP_STAGES - 1], cropName(cr.id),
@@ -22804,7 +23429,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   background: "#3a3226", color: "#ffeec8" }}>{L.marketFamAll}</button>
               {E.MARKET_FAMILIES.map(fam => {
                 // ⚠️ Zip 442 — même source que la cote payée (voir le tableau des cours).
-                const pct = Math.round((E.marketRate(day, fam, Q.enqMarketMod(sharedRef.current)) - 1) * 100);
+                const pct = Math.round((E.marketRate(day, fam) - 1) * 100);
                 const on = marketFam === fam;
                 return (
                   <button key={fam} onClick={() => setMarketFam(on ? "all" : fam)}
@@ -23605,7 +24230,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                            compare avec l'autre : le tableau annoncerait +18 et la
                            caisse rendrait −4, chacun parfaitement cohérent avec
                            lui-même. Une seule source, ici comme chez l'hôte. */
-                        const pct = Math.round((E.marketRate(day + k, fam, Q.enqMarketMod(sharedRef.current)) - 1) * 100);
+                        const pct = Math.round((E.marketRate(day + k, fam) - 1) * 100);
                         return (
                           <td key={"pb" + fam + k} style={{ padding: "4px 8px", textAlign: "center", fontWeight: "bold",
                             color: pct >= 20 ? "#8ce09a" : pct >= 8 ? "#e8d67a" : pct < 0 ? "#e08a7a" : "#cfc8b8" }}>{pct >= 0 ? "+" : ""}{pct} %</td>
@@ -23617,22 +24242,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               </table>
             </div>
             <div className="ferme-hint" style={{ marginTop: 10 }}>{E.isMarketDay(day) ? L.marketDayHint : L.priceBoardFooter}</div>
-            {/* ⚠️⚠️ ZIP 442 — LA MENTION EN PIED DE TABLEAU, ET C'EST LE
-                DEUXIÈME INDICE DE L'ENQUÊTE. Elle est posée ici plutôt que sur
-                un meuble neuf parce que c'est LÀ qu'elle est vraie : le fonds
-                de la halle abonde les cours, la ligne est sur le tableau des
-                cours, et elle y est depuis toujours dans une écriture plus
-                ancienne que le reste. Un panneau que le joueur ouvre déjà pour
-                d'autres raisons est le meilleur endroit où cacher quelque
-                chose — parce qu'il n'est pas caché.
-                ⚠️ ELLE NE DONNE RIEN : cliquer ouvre un document. C'est la
-                `req` qui inscrit, et l'hôte qui arbitre. */}
-            {!Q.enqDone(sharedRef.current.enquete) && (
-              <div className="ferme-shop-row" style={{ marginTop: 6, opacity: 0.85 }}>
-                <div className="info"><b>📜 {(L.enq.doc.cours || {}).t}</b></div>
-                <button className="ferme-btn" onClick={() => { setPriceBoardOpen(false); enqRead("cours"); }}>👁</button>
-              </div>
-            )}
             <div style={{ marginTop: 12 }}><button className="ferme-btn" onClick={() => setPriceBoardOpen(false)}>{L.newsBoardClose}</button></div>
           </div>
         </div>
@@ -23783,17 +24392,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                       donne jamais rien (439). Le bouton qui suit ouvre le
                       carnet quand l'enquête est déjà commencée — c'est un
                       RENVOI, comme « les cours » et « où se trouve… ». */}
-                  {t.panel === "fonds" && (
-                    <div>
-                      <div>{L.hallFondsIntro}</div>
-                      <div className="ferme-hint" style={{ marginTop: 8 }}>{L.hallFondsWhere}</div>
-                      {Q.enqStarted(sharedRef.current.enquete) && (
-                        <div style={{ marginTop: 10 }}>
-                          <button className="ferme-btn" onClick={() => { setHallTalk(null); setEnqNoteOpen(true); }}>{L.enq.noteOpen}</button>
-                        </div>
-                      )}
-                    </div>
-                  )}
                   <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
                     <button className="ferme-btn" onClick={() => setHallTalk({ topic: null })}>↩</button>
                     <button className="ferme-btn" onClick={close}>{L.hallClerkClose}</button>
@@ -23810,265 +24408,77 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         );
       })()}
       {/* ╔════════════════════════════════════════════════════════════════════
-          ║ ZIP 442 — LES QUATRE PANNEAUX DE L'ENQUÊTE.
+          ║ ZIP 444 — LES ÉCRANS DE LA QUÊTE DE L'ÉTOILE.
           ╚════════════════════════════════════════════════════════════════════
-          ⚠️⚠️ AUCUN DES QUATRE NE LIT UN ÉTAT REACT DE L'ENQUÊTE : tout vient de
-          `sharedRef.current.enquete`, relu à chaque rendu. Un carnet React qui
-          doublerait l'état partagé montrerait un indice qu'on n'a pas — ou, bien
+          ⚠️⚠️ AUCUN NE LIT UN ÉTAT REACT DE LA QUÊTE : tout vient de
+          `sharedRef.current.star`, relu à chaque rendu. Un état React qui
+          doublerait l'état partagé montrerait un éclat qu'on n'a pas — ou, bien
           pire à deux, ne montrerait pas celui que le camarade vient de trouver.
-          `enqTick` ne sert qu'à redemander un rendu quand un `apply` est arrivé,
-          exactement comme `wardrobeTick` au 427.
-          ⚠️⚠️⚠️ ET AUCUN NE DONNE QUOI QUE CE SOIT. Un panneau s'ouvre à volonté
-          avec E : tout ce qui est ici est de la LECTURE. Ce qui paie est
-          l'inscription au carnet, qui part en `req` et que l'hôte arbitre — et
-          qui est idempotente, donc marteler la touche devant un registre
-          rapporte zéro. C'est la règle dure du 439, tenue à la lettre. */}
-      {enqNoteOpen && (() => {
-        const e = Q.migrateEnquete(sharedRef.current.enquete);
-        const started = Q.enqStarted(e);
-        const chIdx = Math.min(e.ch | 0, Q.ENQ_CH_DONE - 1);
-        const ch = Q.ENQ_CHAPTERS[chIdx];
-        const done = Q.enqDone(e);
-        const missing = Q.enqMissing(e);
-        const found = Object.keys(e.clues);
-        const nearOmb = !!nearEnqProp("archivistNPC", null, null, C.HALL_CLERK_R);
-        const close = () => setEnqNoteOpen(false);
-        const docT = (id) => (L.enq.doc[id] || {}).t || id;
+          `starTick` ne sert qu'à redemander un rendu quand un `apply` est
+          arrivé, exactement comme `wardrobeTick` au 427.
+          ⚠️⚠️ ET IL Y EN A TROIS, LÀ OÙ L'ENQUÊTE EN AVAIT QUATRE — la carte de
+          chapitre, le rappel de reprise, et le mini-jeu. C'est la différence de
+          NATURE entre les deux chantiers : l'enquête était une histoire qu'on
+          LISAIT dans des panneaux, celle-ci se joue dans le monde. Tout le reste
+          de son texte passe par des bulles au-dessus de l'étoile et par le
+          pisteur, c'est-à-dire par des choses qu'on n'a pas à fermer.
+          ⚠️⚠️⚠️ ET AUCUN NE DONNE QUOI QUE CE SOIT. Un écran s'ouvre à volonté :
+          tout ce qui est ici est de l'AFFICHAGE. Ce qui compte part en `req` et
+          l'hôte arbitre — règle dure du 439, tenue à la lettre. */}
+
+      {/* ── LE MINI-JEU. ⚠️ UN SEUL COMPOSANT POUR LES CINQ, et il ne connaît
+          rien du réseau : il rend `onWin`, et c'est `starMiniWon` qui demande.
+          ⚠️ `solo` VIENT DE LA MÊME FONCTION QUE L'HÔTE (`starSoloRoom`) : une
+          fenêtre solo à l'écran pendant que l'arbitre en exige deux, c'est le
+          « propose puis refuse » du 426 sur la mécanique centrale du chantier. */}
+      {starMini && (
+        <StarMinigame
+          kind={starMini.kind}
+          round={starMini.round | 0}
+          role={starMini.role || "both"}
+          phrase0={starMini.round | 0}
+          solo={starSoloRoom()}
+          L={L}
+          lead={starMiniLead}
+          partner={starMiniPartner}
+          onPhrase={(i) => sendReq({ kind: "starDuet", phrase: i })}
+          onWin={starMiniWon}
+          onQuit={() => setStarMini(null)}
+        />
+      )}
+
+      {/* ── LA CARTE DE CHAPITRE. Le seul moment où le jeu prend l'écran entier
+          pour dire un titre, et c'est la mise en scène qui découpe l'heure de
+          jeu en cinq soirées possibles. ⚠️ ELLE SE FERME TOUTE SEULE : une carte
+          de chapitre qu'il faut congédier est un dialogue, pas une transition. */}
+      {starCard && (() => {
+        const key = starCard.key;
         return (
-          <div className="ferme-modal open" onClick={close} data-tick={enqTick}>
-            <div className="panel ferme-modal-panel" onClick={ev => ev.stopPropagation()}>
-              <button className="ferme-close-x" onClick={close}>✕</button>
-              <h2>{L.enq.noteTitle}</h2>
-              <div className="ferme-hint">{L.enq.title} — {L.enq.noteSub}</div>
-              {/* ⚠️ ELLE PARLE EN TÊTE, ET ELLE DIT TOUT CE QU'ELLE SAIT. Ce qui
-                  bloque dans cette enquête n'est jamais le silence de quelqu'un,
-                  c'est un document qui manque : une archiviste qui ferait durer
-                  serait exactement le cliché que ce chantier évite. */}
-              {nearOmb && (
-                <div className="ferme-shop-row" style={{ alignItems: "flex-start" }}>
-                  <div className="info">
-                    <b>💁 {L.enq.omb.name}</b>
-                    <span className="ferme-usage">{L.enq.omb.role}</span>
-                    <span style={{ fontStyle: "italic", marginTop: 4 }}>
-                      « {done ? L.enq.omb.done[e.outcome] : started ? (L.enq.omb.line[ch.key] || L.enq.omb.hello) : L.enq.omb.hello} »
-                    </span>
-                  </div>
-                </div>
-              )}
-              {!started && <div style={{ margin: "12px 0" }}>{L.enq.noteNothing}</div>}
-              {started && (
-                <div>
-                  <div className="ferme-hint" style={{ marginTop: 10 }}>
-                    {done ? L.enq.noteDone : L.enq.noteChapterOf(chIdx + 1, Q.ENQ_CH_DONE)} · {L.enq.noteFound(found.length, Q.ENQ_SITES.length)}
-                  </div>
-                  {!done && (
-                    <div style={{ margin: "8px 0" }}>
-                      <h3 style={{ marginBottom: 4 }}>{L.enq.chapter[ch.key]}</h3>
-                      <div><b>{L.enq.noteGoal} :</b> {L.enq.goal[ch.key]}</div>
-                      <div className="ferme-hint" style={{ marginTop: 6 }}><b>{L.enq.noteHint} :</b> {L.enq.hint[ch.key]}</div>
-                      {L.enq.coop[ch.key] && (
-                        <div className="ferme-hint" style={{ marginTop: 6, color: "#8ce09a" }}>
-                          <b>👥 {L.enq.noteCoop} :</b> {L.enq.coop[ch.key]}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {!done && !!missing.length && (
-                    <div style={{ marginTop: 10 }}>
-                      <div className="ferme-hint">{L.enq.noteMissing}</div>
-                      {missing.map(id => (
-                        <div className="ferme-shop-row" key={"em-" + id}>
-                          <div className="info"><b style={{ opacity: 0.65 }}>◻ {docT(id)}</b>
-                            <span className="ferme-usage">{(L.enq.doc[id] || {}).w || ""}</span></div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {/* Ce qu'on sait, dans l'ordre où on l'a appris, avec QUI l'a
-                      trouvé : c'est la surface de RECOUPEMENT du jeu, et à deux
-                      c'est aussi le seul endroit où l'on voit ce que l'autre a
-                      fait pendant qu'on était à l'autre bout de la carte. */}
-                  {!!found.length && (
-                    <div style={{ marginTop: 12 }}>
-                      <div className="ferme-hint">{L.enq.noteHave}</div>
-                      {found.sort((a2, b2) => e.clues[a2].at - e.clues[b2].at).map(id => (
-                        <div className="ferme-shop-row" key={"ef-" + id}>
-                          <div className="info">
-                            <b>✔ {docT(id)}</b>
-                            <span className="ferme-usage">{(L.enq.doc[id] || {}).n || ""}</span>
-                            <span className="ferme-usage" style={{ opacity: 0.6 }}>
-                              {(L.enq.doc[id] || {}).w || ""} · {L.enq.noteBy(e.clues[id].by)}
-                            </span>
-                          </div>
-                          <button className="ferme-btn" onClick={() => setEnqDocOpen({ id })}>👁</button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {/* ⚠️ LE DÉCHIFFREMENT SE FAIT DEPUIS LE CARNET, PAS DEPUIS UN
-                      MEUBLE : une fois le carton ouvert, on EMPORTE le registre.
-                      Obliger à redescendre au sous-sol pour taper un mot aurait
-                      été un aller-retour sans contenu — et le mot-clé, lui, se
-                      cherche à l'autre bout du monde. */}
-                  {Q.enqHas(e, "coffre") && !Q.enqHas(e, "registre") && (
-                    <div style={{ marginTop: 12 }}>
-                      <button className="ferme-btn" onClick={() => { setEnqNoteOpen(false); setEnqCodeOpen({ code: "C", value: "" }); }}>
-                        🔐 {L.enq.code.C.t}
-                      </button>
-                    </div>
-                  )}
-                  {done && (
-                    <div style={{ marginTop: 12 }}>
-                      {(e.outcome === "restore" ? L.enq.end.outRestore : L.enq.end.outKeep).map((ln, i) => (
-                        <div key={"eo-" + i} style={{ marginBottom: 6 }}>{ln}</div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-              <div style={{ marginTop: 12 }}><button className="ferme-btn" onClick={close}>{L.enq.omb.close}</button></div>
+          <div className="ferme-star-card" data-tick={starTick}>
+            <div className="ferme-star-card-in">
+              <div className="ferme-star-card-mark">✦</div>
+              <div className="ferme-star-card-title">{L.star.chapter[key] || L.star.title}</div>
             </div>
           </div>
         );
       })()}
-      {/* ---- UN DOCUMENT. ⚠️ IL S'OUVRE MÊME QUAND IL EST DÉJÀ LU : un document
-           reste lisible, c'est un document. Ce qui est unique, c'est son
-           inscription au carnet. */}
-      {enqDocOpen && (() => {
-        const d = L.enq.doc[enqDocOpen.id] || {};
-        const e = Q.migrateEnquete(sharedRef.current.enquete);
-        const close = () => setEnqDocOpen(null);
+
+      {/* ── LE RAPPEL DE REPRISE. ⚠️ UNE FOIS PAR SESSION, JAMAIS DEUX : un
+          « où en étions-nous » qui revient à chaque écran est une notification.
+          Il répond à la consigne de persistance du chantier — on revient trois
+          jours plus tard, et le jeu redit où l'on allait sans rien rejouer. */}
+      {starRecap && (() => {
+        const e = Q.migrateStar(sharedRef.current.star);
+        const close = () => setStarRecap(false);
         return (
-          <div className="ferme-modal open" onClick={close} data-tick={enqTick}>
-            <div className="panel ferme-modal-panel" onClick={ev => ev.stopPropagation()}>
+          <div className="ferme-modal open" onClick={close} data-tick={starTick}>
+            <div className="panel ferme-modal-panel ferme-star-panel" onClick={ev => ev.stopPropagation()}>
               <button className="ferme-close-x" onClick={close}>✕</button>
-              <h2>📜 {d.t}</h2>
-              <div className="ferme-hint">{d.w}</div>
-              <div style={{ margin: "12px 0", lineHeight: 1.5 }}>
-                {(d.b || []).map((ln, i) => <div key={"db-" + i} style={{ marginBottom: 8 }}>{ln}</div>)}
-              </div>
-              {d.n && <div className="ferme-hint" style={{ borderTop: "1px solid rgba(230,214,170,0.25)", paddingTop: 8 }}>🔍 {d.n}</div>}
-              <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {enqDocOpen.id === "coffre" && !Q.enqHas(e, "registre") && (
-                  <button className="ferme-btn" onClick={() => { setEnqDocOpen(null); setEnqCodeOpen({ code: "C", value: "" }); }}>🔐 {L.enq.code.C.t}</button>
-                )}
-                <button className="ferme-btn" onClick={() => { setEnqDocOpen(null); setEnqNoteOpen(true); }}>{L.enq.noteOpen}</button>
-                <button className="ferme-btn" onClick={close}>{L.enq.omb.close}</button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-      {/* ---- UNE SAISIE. ⚠️ LA VALIDATION EST CHEZ L'HÔTE, et pas parce qu'on
-           se méfie de quelqu'un — un salon, c'est deux amis. C'est parce que le
-           résultat CHANGE L'ÉTAT PARTAGÉ : deux clients qui valideraient chacun
-           de leur côté finiraient par ne pas avoir le même carnet, et le §3 est
-           formel (l'hôte est l'autorité, toujours). L'indice tombe donc chez les
-           deux joueurs à la même seconde, ce qui est aussi ce qu'on veut voir.
-           ⚠️ L'INDICE DE L'ÉNIGME EST AFFICHÉ SOUS LE CHAMP, TOUJOURS. Un joueur
-           qui a la réponse ne le lit pas ; un joueur bloqué ne repart pas
-           bredouille. Un mystère entretenu par un indice qu'on cache est un
-           mystère qui n'a rien à raconter. */}
-      {enqCodeOpen && (() => {
-        const cd = L.enq.code[enqCodeOpen.code] || {};
-        const close = () => setEnqCodeOpen(null);
-        const send = () => {
-          if (!enqCodeOpen.value.trim()) return;
-          sendReq({ kind: "enqCode", code: enqCodeOpen.code, value: enqCodeOpen.value });
-          setEnqCodeOpen(null);
-        };
-        /* Le texte chiffré est CALCULÉ à partir du texte clair (voir la note de
-           `enqCipher`) : il n'existe qu'un texte, l'autre en découle. Un
-           charabia écrit à la main aurait été un second texte à tenir d'accord
-           avec le premier, et personne ne l'aurait relu. */
-        const cipher = enqCodeOpen.code === "C"
-          ? Q.enqCipher(((L.enq.doc.registre || {}).b || []).join(" "), Q.ENQ_CIPHER_KEY)
-          : null;
-        return (
-          <div className="ferme-modal open" onClick={close}>
-            <div className="panel ferme-modal-panel" onClick={ev => ev.stopPropagation()}>
-              <button className="ferme-close-x" onClick={close}>✕</button>
-              <h2>🔐 {cd.t}</h2>
-              {cipher && (
-                <div>
-                  <div className="ferme-hint">{L.enq.cipherLead}</div>
-                  <div style={{ margin: "8px 0", fontFamily: "monospace", fontSize: 11, lineHeight: 1.4,
-                                opacity: 0.75, maxHeight: 120, overflow: "hidden", wordBreak: "break-all" }}>
-                    {cipher.slice(0, 420)}…
-                  </div>
-                </div>
-              )}
-              <div style={{ margin: "10px 0" }}>{cd.ask}</div>
-              <input className="ferme-input" autoFocus value={enqCodeOpen.value} placeholder={cd.ph}
-                     onChange={ev => setEnqCodeOpen({ ...enqCodeOpen, value: ev.target.value })}
-                     onKeyDown={ev => { if (ev.key === "Enter") send(); ev.stopPropagation(); }}
-                     style={{ width: "100%", padding: 8, fontSize: 16 }} />
-              <div className="ferme-hint" style={{ marginTop: 10 }}>💡 {cd.hint}</div>
-              <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
-                <button className="ferme-btn" onClick={send}>→</button>
-                <button className="ferme-btn" onClick={close}>{L.enq.omb.close}</button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-      {/* ---- LE DÉPÔT DE LA RÉCLAMATION, ET LA DÉCISION. */}
-      {enqEndOpen && (() => {
-        const e = Q.migrateEnquete(sharedRef.current.enquete);
-        const close = () => setEnqEndOpen(false);
-        const can = Q.enqCanFile(e);
-        const solo = enqSoloRoom();
-        const enough = e.signs.length >= 2 || (solo && e.signs.length >= 1);
-        const mine = e.signs.includes(me.id);
-        /* ⚠️ LE MAIRE DU JOUR EST UNE PURE FONCTION DU JOUR (439), donc cette
-           ligne ne coûte RIEN : ni champ, ni message, ni état. Et elle change la
-           dernière scène environ un jour sur cinq — l'héritier est un des cinq
-           candidats du vivier fixe, et quand c'est lui qui siège, il est juge et
-           partie. Le notaire le dit, et le dossier le mentionne. */
-        const mayor = E.mayorOf((sharedRef.current.day | 0) || 1);
-        const heirIsMayor = mayor && mayor.key === Q.ENQ_HEIR_KEY;
-        return (
-          <div className="ferme-modal open" onClick={close} data-tick={enqTick}>
-            <div className="panel ferme-modal-panel" onClick={ev => ev.stopPropagation()}>
-              <button className="ferme-close-x" onClick={close}>✕</button>
-              <h2>✒️ {L.enq.end.t}</h2>
-              {!can && <div style={{ margin: "12px 0" }}>{L.enq.end.missing}</div>}
-              {can && !e.outcome && (
-                <div>
-                  <div style={{ margin: "10px 0" }}>{L.enq.end.intro}</div>
-                  <div style={{ fontStyle: "italic", margin: "10px 0" }}>
-                    « {heirIsMayor ? L.enq.end.mayorHeir : L.enq.end.mayorNot} »
-                  </div>
-                  <h3 style={{ marginBottom: 4 }}>{L.enq.end.signTitle}</h3>
-                  <div className="ferme-hint">{L.enq.end.signNeed}{solo ? " " + L.enq.end.solo : ""}</div>
-                  <div className="ferme-shop-row">
-                    <div className="info"><b>{L.enq.end.signed(e.signs.length)}</b></div>
-                    {mine ? <span className="ferme-usage">{L.enq.end.signedAlready}</span>
-                          : <button className="ferme-btn" onClick={() => sendReq({ kind: "enqSign" })}>{L.enq.end.signMe}</button>}
-                  </div>
-                  {enough && (
-                    <div style={{ marginTop: 14 }}>
-                      <div className="ferme-hint">{L.enq.end.choose} — {L.enq.end.confirm}</div>
-                      <div className="ferme-shop-row" style={{ alignItems: "flex-start", marginTop: 8 }}>
-                        <div className="info"><b>{L.enq.end.restoreT}</b><span className="ferme-usage">{L.enq.end.restoreD}</span></div>
-                        <button className="ferme-btn" onClick={() => { sendReq({ kind: "enqFile", outcome: "restore" }); setEnqEndOpen(false); setEnqNoteOpen(true); }}>→</button>
-                      </div>
-                      <div className="ferme-shop-row" style={{ alignItems: "flex-start" }}>
-                        <div className="info"><b>{L.enq.end.keepT}</b><span className="ferme-usage">{L.enq.end.keepD}</span></div>
-                        <button className="ferme-btn" onClick={() => { sendReq({ kind: "enqFile", outcome: "keep" }); setEnqEndOpen(false); setEnqNoteOpen(true); }}>→</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-              {e.outcome && (
-                <div style={{ margin: "12px 0" }}>
-                  {(e.outcome === "restore" ? L.enq.end.outRestore : L.enq.end.outKeep).map((ln, i) => (
-                    <div key={"eof-" + i} style={{ marginBottom: 6 }}>{ln}</div>
-                  ))}
-                </div>
-              )}
-              <div style={{ marginTop: 12 }}><button className="ferme-btn" onClick={close}>{L.enq.omb.close}</button></div>
+              <h2>✦ {L.star.hud.againTitle}</h2>
+              <div className="ferme-hint">{L.star.title}</div>
+              <div style={{ marginTop: 10 }}>{L.star.hud.again(Q.starShards(e), Q.STAR_SHARD_TOTAL)}</div>
+              <div style={{ marginTop: 8, opacity: 0.85 }}>{L.star.hud.goal[Q.starChapterKey(e)]}</div>
+              <div style={{ marginTop: 12 }}><button className="ferme-btn" onClick={close}>✦</button></div>
             </div>
           </div>
         );
@@ -24180,25 +24590,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <button className="ferme-close-x" onClick={() => setNewsBoardOpen(false)}>✕</button>
               <h2>{L.newsBoardTitle}</h2>
               <div className="ferme-hint">{L.newsBoardSub}</div>
-              {/* ⚠️⚠️ ZIP 442 — L'AVIS DE LA MAIRIE OUVRE L'ENQUÊTE, ET IL EST
-                  EN TÊTE DU PANNEAU. C'est le premier fil, et il est posé au seul
-                  endroit que TOUS les joueurs finissent par ouvrir : le tableau
-                  des nouvelles de la place existe depuis le 427 et sert déjà à
-                  autre chose. Une accroche posée sur un décor neuf aurait dit
-                  « voici une quête » avant d'avoir rien raconté ; celle-ci dit
-                  d'abord « la ville ferme un compte », et c'est en le lisant
-                  qu'on trouve la question.
-                  ⚠️ Il DISPARAÎT une fois l'enquête close : un avis de clôture
-                  affiché après la clôture serait le décor qui ment (429). */}
-              {!Q.enqDone(sharedRef.current.enquete) && (
-                <div className="ferme-shop-row" style={{ marginTop: 8, borderLeft: "3px solid #c8a45a", paddingLeft: 8 }}>
-                  <div className="info">
-                    <b>📜 {(L.enq.doc.avis || {}).t}</b>
-                    <span className="ferme-usage">{L.visitorUrgent}</span>
-                  </div>
-                  <button className="ferme-btn" onClick={() => { setNewsBoardOpen(false); enqRead("avis"); }}>👁</button>
-                </div>
-              )}
+              {/* ⚠️⚠️ ZIP 444 — LE TABLEAU DES NOUVELLES NE DIT RIEN DE LA
+                  QUÊTE DE L'ÉTOILE, ET C'EST LE THÈME. Le 442 posait ici son
+                  premier fil, parce qu'il craignait qu'une histoire n'existe que
+                  pour qui ouvre le bon panneau — crainte juste. La quête de 444
+                  la règle autrement : elle TOMBE DU CIEL, personne n'a rien à
+                  trouver pour la commencer, donc elle n'a besoin d'aucune
+                  accroche. Et elle est SECRÈTE : un avis municipal la ferait
+                  exister pour la ville, alors que le sujet est précisément que
+                  personne d'autre ne la voit. */}
               <h3 style={{ margin: "14px 0 6px" }}>{L.newsBoardInTown}</h3>
               {!list.length && <div className="ferme-hint">{L.newsBoardNobody}</div>}
               {list.map(res => {
@@ -24283,29 +24683,49 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   </button>
                 ))}
               </div>
-              {/* Zip 442 — l'enquête. Même raison que « peupler la ferme » juste
-                  au-dessus : huit chapitres, et le dernier est à une heure de
-                  jeu. ⚠️ Aucun de ces boutons ne rapporte un or (voir le
-                  handler) — c'est ce qui permet de les laisser à portée de tout
-                  joueur qui connaît le raccourci. */}
-              <h3 style={{ margin: "14px 0 6px" }}>{L.devEnqSection}</h3>
-              <div className="ferme-hint">{L.devEnqHint}</div>
+              {/* ╔══════════════════════════════════════════════════════════════
+                  ║ ZIP 444 — LA QUÊTE DE L'ÉTOILE.
+                  ╚══════════════════════════════════════════════════════════════
+                  Même raison que « peupler la ferme » juste au-dessus, et elle
+                  est plus forte encore ici : cinq chapitres, trois cinématiques,
+                  et la finale est à cinquante minutes de jeu. *Un outil de test
+                  dont le coût dépasse ce qu'il fait gagner cesse d'être utilisé,
+                  et c'est comme ça qu'on finit par livrer sans regarder.*
+                  ⚠️⚠️ « REJOUER UNE SCÈNE » N'EXISTAIT PAS AU 442, ET C'EST LE
+                  BOUTON QUI CHANGE TOUT. Sans lui, revoir la chute demande de
+                  remettre la quête à zéro, donc de reperdre l'avancement en
+                  cours : on ne la revoit qu'une fois, on la juge une fois, et
+                  une mise en scène qu'on ne juge qu'une fois n'est jamais
+                  reprise. Il ne touche à AUCUN état — c'est un projecteur.
+                  ⚠️ Aucun de ces boutons ne donne quoi que ce soit (voir le
+                  handler) : c'est ce qui permet de les laisser à portée de tout
+                  joueur qui connaît le raccourci (398). */}
+              <h3 style={{ margin: "14px 0 6px" }}>{L.star.dev.section}</h3>
+              <div className="ferme-hint">{L.star.dev.hint}</div>
               {(() => {
-                const e = Q.migrateEnquete(sharedRef.current.enquete);
-                const ch = Q.ENQ_CHAPTERS[Math.min(e.ch | 0, Q.ENQ_CH_DONE - 1)];
+                const e = Q.migrateStar(sharedRef.current.star);
+                const chKey = Q.starChapterKey(e);
                 return (
                   <div>
                     <div className="ferme-hint" style={{ marginBottom: 6 }}>
-                      {Q.enqDone(e) ? L.enq.noteDone
-                        : Q.enqStarted(e) ? L.enq.noteChapterOf((e.ch | 0) + 1, Q.ENQ_CH_DONE) + " — " + L.enq.chapter[ch.key]
-                        : L.devEnqNotStarted}
-                      {" · " + L.enq.noteFound(Object.keys(e.clues).length, Q.ENQ_SITES.length)}
+                      {Q.starStarted(e)
+                        ? L.star.dev.chapterAt(L.star.chapter[chKey] || chKey, Q.starShards(e), Q.STAR_SHARD_TOTAL)
+                        : L.star.dev.notStarted}
                     </div>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {Q.ENQ_DEV_OPS.map(op => (
-                        <button key={"devenq-" + op} className="ferme-btn"
-                                onClick={() => { sendReq({ kind: "devEnq", op }); setDevMenuOpen(false); }}>
-                          {L.devEnqOpName(op)}
+                      {Q.STAR_DEV_OPS.map(op => (
+                        <button key={"devstar-" + op} className="ferme-btn"
+                                onClick={() => { sendReq({ kind: "devStar", op }); setDevMenuOpen(false); }}>
+                          {L.star.dev.op(op)}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="ferme-hint" style={{ margin: "8px 0 4px" }}>{L.star.dev.sceneLabel}</div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {Q.STAR_DEV_SCENES.map(sc => (
+                        <button key={"devscene-" + sc} className="ferme-btn"
+                                onClick={() => { sendReq({ kind: "devStar", op: "scene:" + sc }); setDevMenuOpen(false); }}>
+                          {L.star.dev.scene(sc)}
                         </button>
                       ))}
                     </div>
@@ -24529,6 +24949,657 @@ function PixBtn({ icon, label, tone = "plain", disabled, onClick, small, sprites
       <span className="ferme-pixbtn-label">{label}</span>
     </button>
   );
+}
+
+/* ╔══════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 444 — LES MINI-JEUX DE LA QUÊTE DE L'ÉTOILE. CINQ JEUX, UN COMPOSANT.
+   ╚══════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ TOUT EST EN CANEVAS, PAS EN BARRES CSS, ET C'EST LA DEMANDE EXPLICITE DU
+   CHANTIER (« du dynamisme »). Les mini-jeux existants du dépôt (pêche, grange,
+   morsure) sont des `div` stylés : un curseur qui glisse dans une gouttière. Ça
+   marche, ça ne raconte rien. Ici on voit l'éclat rougir, la vapeur monter et
+   masquer la jauge, l'eau noircir, l'ombre d'une étoile passer sur un mur. **La
+   difficulté est DIÉGÉTIQUE** : ce n'est pas une barre qui est dure à viser,
+   c'est de la vapeur qui cache ce qu'on regarde.
+
+   ⚠️⚠️ ET AUCUN NE DONNE RIEN. Ils rendent `onWin()`, et c'est l'appelant qui
+   envoie une `req` que l'HÔTE arbitre. Un mini-jeu qui créditerait lui-même
+   serait le double crédit du 431, dans un composant que personne ne relit.
+
+   ⚠️ RATER NE COÛTE JAMAIS L'ÉTAPE. Aucun minuteur d'échec nulle part : on
+   recommence la MANCHE, on ne reperd pas le chapitre (§5 de QUETE.md). C'est ce
+   qui autorise à monter la difficulté sans rendre la quête décourageante — et
+   c'est la seule raison pour laquelle un public de 7 ans et un public de 27 ans
+   peuvent jouer la même chose.
+
+   ⚠️⚠️ LE SOLO N'EST JAMAIS BLOQUÉ, ET C'EST UNE CONTRAINTE DURE HÉRITÉE DU 442 :
+   *un jeu qui exige un second joueur pour finir est un jeu qu'on ne finit pas.*
+   Partout, la parade solo est de POSER la lumière : elle ne bouge plus, et il
+   faut faire avec un faisceau fixe. Plus long, plus tendu, jamais impossible.
+   Toutes les fenêtres sont dans `quete.js`, lues ici ET par le banc — jamais
+   recopiées (§8 de CLAUDE.md).
+
+   ⚠️ LES ENTRÉES SONT DOUBLES PARTOUT (clavier ET pointeur). Le tactile ne
+   couvre que la ferme, la ville et le tribunal (430) : ce chantier se joue dans
+   les trois, il n'a pas le droit d'être le premier morceau injouable au doigt.
+   ══════════════════════════════════════════════════════════════════════════════ */
+const SM_W = 640, SM_H = 380;   // le canevas logique ; le CSS le met à l'échelle
+
+/* La couleur d'un verre qui refroidit : blanc → orange → rouge sombre → bleu.
+   ⚠️ ELLE EST LA JAUGE. Le thermomètre de côté n'est qu'un rappel — ce qu'on
+   regarde vraiment, c'est l'éclat, et c'est pour ça que la vapeur qui le masque
+   est une vraie difficulté et pas une gêne d'affichage. */
+function smHeatColor(h) {
+  const stops = [[0.00, [110, 170, 255]], [0.28, [190, 60, 40]], [0.58, [245, 150, 40]], [0.82, [255, 236, 190]], [1.00, [255, 255, 255]]];
+  let a = stops[0], b = stops[stops.length - 1];
+  for (let i = 0; i + 1 < stops.length; i++) if (h >= stops[i][0] && h <= stops[i + 1][0]) { a = stops[i]; b = stops[i + 1]; break; }
+  const k = b[0] === a[0] ? 0 : (h - a[0]) / (b[0] - a[0]);
+  const c = [0, 1, 2].map(i => Math.round(a[1][i] + (b[1][i] - a[1][i]) * k));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+/* Un éclat, dessiné gros, pour les mini-jeux. ⚠️ CE N'EST PAS LE SPRITE DU
+   MONDE : à 14 px il est illisible en plein écran, et l'agrandir donnerait des
+   pixels de 8 px de côté au milieu d'un dessin lisse. Même silhouette, même
+   penchant — c'est le même objet, à une autre distance. */
+function smShard(g, cx, cy, s, col, rim) {
+  g.save(); g.translate(cx, cy); g.rotate(0.22);
+  g.beginPath();
+  g.moveTo(0, -s); g.lineTo(s * 0.42, -s * 0.18); g.lineTo(s * 0.30, s * 0.72);
+  g.lineTo(0, s); g.lineTo(-s * 0.34, s * 0.55); g.lineTo(-s * 0.44, -s * 0.30);
+  g.closePath();
+  g.fillStyle = col; g.fill();
+  g.strokeStyle = rim || "rgba(30,20,8,0.65)"; g.lineWidth = 2; g.stroke();
+  g.restore();
+}
+/* Le cadre commun : un fond de nuit, un titre, une consigne. ⚠️ LE MÊME POUR
+   LES CINQ — un habillage par mini-jeu aurait fait cinq écrans qui ne se
+   ressemblent pas, alors qu'ils appartiennent tous à la même histoire (§6). */
+function smFrame(g, title, sub) {
+  g.fillStyle = "#0b1020"; g.fillRect(0, 0, SM_W, SM_H);
+  g.fillStyle = "rgba(120,150,220,0.05)";
+  for (let y = 0; y < SM_H; y += 4) g.fillRect(0, y, SM_W, 1);
+  g.textAlign = "left"; g.textBaseline = "alphabetic";
+  g.font = "bold 15px monospace"; g.fillStyle = "#ffe9a8";
+  g.fillText(title || "", 16, 26);
+  if (sub) { g.font = "11px monospace"; g.fillStyle = "rgba(255,255,255,0.62)"; g.fillText(sub, 16, 44); }
+}
+
+/* ⚠️ EXPORTÉ POUR LE BANC, ET SEULEMENT POUR LUI. Les cinq mini-jeux sont les
+   seules pièces du chantier qu'aucun banc de rendu ne peut regarder : ils vivent
+   dans le DOM, ils ont besoin d'un vrai canevas et d'un vrai `rAF`. Les monter
+   isolément sur une page jetable est le seul moyen de les VOIR sans jouer une
+   heure — c'est le même raisonnement que le menu développeur (§9 de QUETE.md),
+   appliqué au dessin. L'export ne coûte rien et ne change rien au jeu. */
+export function StarMinigame({ kind, round, role, phrase0, solo, L, lead, partner, onPhrase, onWin, onQuit }) {
+  const cvRef = useRef(null);
+  const stRef = useRef(null);
+  const doneRef = useRef(false);
+  const keyRef = useRef({});
+  const ptrRef = useRef(null);          // { x, y } normalisés, ou null
+  const [msg, setMsg] = useState("");
+  const msgRef = useRef({ text: "", until: 0 });
+
+  const say = (t, ms) => { msgRef.current = { text: t, until: performance.now() + (ms || 2200) }; setMsg(t); };
+  const finish = () => { if (doneRef.current) return; doneRef.current = true; onWin(); };
+
+  /* ⚠️ UN SEUL POINT D'ENTRÉE POUR « J'APPUIE » : la barre d'espace, le clic et
+     le doigt passent tous par ici. Trois chemins séparés finiraient par ne pas
+     faire la même chose — c'est le défaut « le jeu propose et refuse » du 426,
+     appliqué aux entrées. */
+  const press = () => {
+    const st = stRef.current; if (!st || doneRef.current) return;
+    if (kind === "cool") {
+      st.heat = Math.max(0, st.heat - Q.STAR_COOL_POUR);
+      st.steam.push({ t: performance.now(), x: 0.5 + (Math.random() - 0.5) * 0.5, r: 10 + Math.random() * 14 });
+    } else if (kind === "dive") {
+      if (!st.atBottom) return;
+      const ph = ((performance.now() - st.pulse0) % Q.STAR_DIVE_PULSE_MS) / Q.STAR_DIVE_PULSE_MS;
+      const onBeat = ph > 0.40 && ph < 0.64;
+      if (Math.abs(st.x - st.shardX) < 0.07 && onBeat) st.grabbed = true;
+      else say(onBeat ? L.star.s3.diveUp : L.star.s3.diveHint, 1400);
+    } else if (kind === "rack") {
+      if (st.trueUntil && performance.now() < st.trueUntil) st.hit = true;
+      else say(L.star.s4.rackWrong, 1600);
+    }
+  };
+
+  useEffect(() => {
+    const cv = cvRef.current; if (!cv) return;
+    const g = cv.getContext("2d");
+    const now0 = performance.now();
+    const r0 = Math.max(0, round | 0);
+    /* ── L'ÉTAT INITIAL DE CHAQUE JEU. ⚠️ IL EST DÉRIVÉ DES CONSTANTES DE
+       `quete.js`, jamais réécrit ici : une manche réglée dans le composant et
+       re-décrite dans le banc est la divergence en attente du §8, et son
+       symptôme serait le pire possible (« le banc dit que c'est faisable »
+       pendant que ça ne l'est pas). */
+    const st = { t0: now0, roundT0: now0, round: r0, msgT: 0 };
+    keyRef.current = { note: -1 };   // ⚠️ `note` À −1 ET PAS À `undefined` : `held === want` serait faux pour la touche 0 sans ça
+    /* ⚠️ LA MANCHE COMMENCE SUR LA CONSIGNE, pas au-dessus : voir la note de
+       `STAR_COOL_BURN` dans quete.js — démarrer à 1,0 faisait repartir la manche
+       avant le premier appui, en boucle, et ça ne se voit qu'à l'écran. */
+    if (kind === "cool") { st.goal = 0.86; st.heat = st.goal; st.steam = []; }
+    else if (kind === "dive") {
+      st.depth = 0; st.x = 0.5; st.breath = Q.STAR_DIVE_BREATH_MS[Math.min(r0, 2)];
+      st.pulse0 = now0; st.atBottom = false; st.grabbed = false; st.shardX = 0.5; st.hitFlash = 0;
+      st.obs = smDiveObstacles(r0);
+    } else if (kind === "rack") {
+      st.s = 0.08; st.prevS = 0.08; st.speed = 0; st.warm = 0; st.trueUntil = 0; st.hit = false;
+      st.p = smTrueBead(r0); st.notchAt = 0;
+    } else if (kind === "lure") {
+      st.lx = 0.5; st.ly = 0.72; st.mx = 0.5; st.my = 0.14; st.engaged = true;
+      st.lastMove = now0; st.hold = 0; st.back = 0;
+    } else {
+      st.phrase = Math.max(0, phrase0 | 0);
+      st.mode = role === "aim" ? "aim" : "organ";
+      st.seq = smPhraseSeq(st.phrase); st.idx = 0; st.noteT0 = now0; st.good = 0;
+      st.aim = 0; st.rx = 0.5; st.ry = 0.5; st.fade = 0;
+    }
+    stRef.current = st;
+
+    let raf = 0, last = now0;
+    const loop = () => {
+      raf = requestAnimationFrame(loop);
+      const now = performance.now(), dt = Math.min(0.05, (now - last) / 1000); last = now;
+      const s2 = stRef.current; if (!s2 || doneRef.current) return;
+      if (msgRef.current.text && now > msgRef.current.until) { msgRef.current = { text: "", until: 0 }; setMsg(""); }
+      try { smStep(kind, s2, dt, now); smDraw(g, kind, s2, now); }
+      catch (e) { console.error("[FERME] mini-jeu de quête : image ignorée", e); }
+    };
+
+    /* ── LE PAS DE SIMULATION, PAR JEU. ⚠️ SÉPARÉ DU DESSIN, et pas par goût :
+       c'est ce qui rend chaque règle lisible en une fois. Un pas mêlé au dessin
+       est un pas qu'on ne relit plus. */
+    function smStep(k, s, dt, now) {
+      if (k === "cool") {
+        const band = Q.STAR_COOL_BAND[Math.min(s.round, Q.STAR_COOL_BAND.length - 1)] * (solo ? 1 : Q.STAR_COOL_DUO_WIDEN);
+        const kk = Math.min(1, (now - s.roundT0) / Q.STAR_COOL_MS);
+        s.goal = 0.86 - 0.72 * kk;
+        s.band = band;
+        s.heat += Q.STAR_COOL_RISE * dt;
+        s.steam = s.steam.filter(p => now - p.t < 1100);
+        if (s.heat < s.goal - band / 2 - Q.STAR_COOL_CRACK) return smRestart(s, L.star.s1.coolCrack);
+        /* ⚠️ LE PLAFOND EST RELATIF À LA CONSIGNE, comme le plancher. Absolu, il
+           déclenchait avant le premier appui (voir `STAR_COOL_BURN`). */
+        if (s.heat > s.goal + band / 2 + Q.STAR_COOL_BURN) return smRestart(s, L.star.s1.coolHint);
+        if (kk >= 1) {
+          if (Math.abs(s.heat - s.goal) <= band / 2) return smNextRound(s, Q.STAR_COOL_ROUNDS, L.star.s1.coolWin);
+          return smRestart(s, L.star.s1.coolHint);
+        }
+      } else if (k === "dive") {
+        const D = Q.STAR_DIVE_DEPTH[Math.min(s.round, 2)], cur = Q.STAR_DIVE_CURRENT[Math.min(s.round, 2)];
+        s.breath -= dt * 1000;
+        if (s.hitFlash > 0) s.hitFlash -= dt;
+        if (!s.atBottom) {
+          s.depth += Q.STAR_DIVE_SINK * dt;
+          if (s.depth >= D) { s.depth = D; s.atBottom = true; s.pulse0 = now; }
+        }
+        /* Le courant : des veines sombres qui poussent de côté, plus fort en
+           descendant. ⚠️ IL EST DÉTERMINISTE (une somme de deux sinus), donc il
+           se sent au lieu de se subir — un courant tiré au sort à chaque image
+           n'est pas un courant, c'est du bruit. */
+        const drift = Math.sin(s.depth * 0.42) * 0.6 + Math.sin(s.depth * 0.17 + 1.3) * 0.4;
+        s.x += drift * cur * dt * 0.30;
+        const steer = (keyRef.current.left ? -1 : 0) + (keyRef.current.right ? 1 : 0);
+        s.x += steer * dt * 0.42;
+        if (ptrRef.current) s.x += Math.max(-1, Math.min(1, (ptrRef.current.x - s.x) * 6)) * dt * 0.42;
+        s.x = Math.max(0.05, Math.min(0.95, s.x));
+        for (const o of s.obs) {
+          if (o.hit || Math.abs(o.d - s.depth) > 0.9) continue;
+          if (Math.abs(o.x - s.x) < o.w * 0.5 + 0.03) { o.hit = true; s.breath -= Q.STAR_DIVE_HIT_COST_MS; s.hitFlash = 0.35; }
+        }
+        /* ⚠️ AU TROISIÈME PALIER L'ÉCLAT GLISSE QUAND ON APPROCHE. Il ne fuit
+           pas (ce serait une course), il DÉRIVE de deux cases : on doit corriger
+           sa visée au dernier moment, ce qui est le geste qu'on veut. */
+        if (s.atBottom && s.round >= 2 && Math.abs(s.x - s.shardX) < 0.12) s.shardX = Math.max(0.1, Math.min(0.9, s.shardX + (s.shardX < s.x ? -1 : 1) * dt * 0.10));
+        if (s.grabbed) return smNextRound(s, Q.STAR_DIVE_ROUNDS, L.star.s3.got);
+        if (s.breath <= 0) return smRestart(s, L.star.s3.diveUp);
+      } else if (k === "rack") {
+        const nb = Q.STAR_RACK_BEADS[Math.min(s.round, 2)];
+        /* ⚠️ LA VITESSE EST EN CASES PAR SECONDE, comme les deux bornes de
+           `quete.js` : le râtelier fait huit cases de long. Sans cette échelle,
+           les deux bornes ne voudraient rien dire et se seraient réglées à
+           l'œil — le seuil d'axe du taxi (434), une fois de plus. */
+        if (solo) {
+          /* Seul, la lumière est calée dans le châssis : c'est le RÂTELIER qu'on
+             tourne, d'un cran à la fois, à la manivelle. Plus long, jouable. */
+          const dir = (keyRef.current.left ? -1 : 0) + (keyRef.current.right ? 1 : 0);
+          if (dir && now >= s.notchAt) { s.s = Math.max(0, Math.min(1, s.s + dir / nb * 3)); s.notchAt = now + Q.STAR_RACK_SOLO_NOTCH_MS; s.speed = 0.6; }
+          else if (now >= s.notchAt) s.speed = 0.6;
+        } else {
+          const steer = (keyRef.current.left ? -1 : 0) + (keyRef.current.right ? 1 : 0);
+          const target = ptrRef.current ? ptrRef.current.x : null;
+          let ds = steer * dt * 0.36;
+          if (target != null) ds = Math.max(-0.36 * dt, Math.min(0.36 * dt, (target - s.s)));
+          s.s = Math.max(0, Math.min(1, s.s + ds));
+          s.speed = Math.abs(ds) * 8 / Math.max(0.001, dt);
+        }
+        if (s.speed < Q.STAR_SWEEP_MIN) s.warm = Math.min(1.4, s.warm + dt * 0.55);
+        else if (s.speed > Q.STAR_SWEEP_MAX) s.warm = Math.max(0, s.warm - dt * 0.3);
+        else s.warm = Math.max(0, s.warm - dt * 0.95);
+        const tooFast = s.speed > Q.STAR_SWEEP_MAX, tooSlow = s.warm >= 1;
+        if (tooFast) s.blurT = now; else if (tooSlow) s.softT = now;
+        const onBead = Math.abs(s.s - s.p) < 0.035;
+        if (onBead && !tooFast && !tooSlow) { if (!s.trueUntil || now > s.trueUntil + 400) s.trueUntil = now + Q.STAR_RACK_TRUE_MS[Math.min(s.round, 2)]; }
+        if (s.hit) return smNextRound(s, Q.STAR_RACK_ROUNDS, L.star.s4.rackWin);
+      } else if (k === "lure") {
+        const NEST = { x: 0.5, y: 0.14 };
+        const sp = 0.55;
+        let dx = (keyRef.current.right ? 1 : 0) - (keyRef.current.left ? 1 : 0);
+        let dy = (keyRef.current.down ? 1 : 0) - (keyRef.current.up ? 1 : 0);
+        if (ptrRef.current) { dx = (ptrRef.current.x - s.lx) * 5; dy = (ptrRef.current.y - s.ly) * 5; }
+        const step = Math.hypot(dx, dy) * sp * dt;
+        if (step > 0.0015) { s.lx = Math.max(0.05, Math.min(0.95, s.lx + dx * sp * dt)); s.ly = Math.max(0.08, Math.min(0.92, s.ly + dy * sp * dt)); s.lastMove = now; }
+        /* ⚠️⚠️ IL FAUT MENER, PAS TIRER. La pie a du RETARD et de la PATIENCE :
+           elle décroche si la lumière s'arrête (elle s'ennuie) ou si elle saute
+           (elle la perd des yeux). Les deux bornes viennent de `quete.js`, et
+           c'est tout le mini-jeu — un vrai petit geste d'adresse, sans une seule
+           serrure. */
+        if (s.engaged) {
+          if (now - s.lastMove > Q.STAR_MAGPIE_PATIENCE_MS) { s.engaged = false; s.back = now; say(L.star.s4.lureLost, 2000); }
+          if (step > Q.STAR_MAGPIE_JUMP_TILES / Q.STAR_LURE_VIEW_TILES) { s.engaged = false; s.back = now; say(L.star.s4.lureLost, 2000); }
+          if (solo && now - s.t0 > Q.STAR_MAGPIE_SOLO_MS) { s.engaged = false; s.back = now; say(L.star.s4.lureSolo, 2000); }
+        }
+        const tx = s.engaged ? s.lx : NEST.x, ty = s.engaged ? s.ly : NEST.y;
+        const kLag = 1 - Math.pow(1 - Q.STAR_MAGPIE_LAG, dt);
+        s.mx += (tx - s.mx) * kLag * 3.2; s.my += (ty - s.my) * kLag * 3.2;
+        if (!s.engaged && now - s.back > 1500) { s.engaged = true; s.hold = 0; s.lastMove = now; s.t0 = now; }
+        const far = Math.hypot(s.mx - NEST.x, s.my - NEST.y) > Q.STAR_MAGPIE_NEST_R / Q.STAR_LURE_VIEW_TILES;
+        s.hold = s.engaged && far ? s.hold + dt * 1000 : Math.max(0, s.hold - dt * 600);
+        if (s.hold >= Q.STAR_MAGPIE_HOLD_MS) return finish();
+      } else {
+        /* ── LE DUO. ⚠️ DEUX PIÈCES, DEUX JEUX, UN SEUL ÉCHEC. Le rôle vient de
+           l'endroit où l'on se tient, jamais d'un menu (voir `starTouchBell`). */
+        const near = partner ? partner() : false;
+        s.near = near;
+        if (s.mode === "organ") {
+          const want = s.seq[s.idx];
+          const held = keyRef.current.note;
+          const el = now - s.noteT0;
+          if (el >= Q.STAR_DUET_NOTE_MS) {
+            if (held === want) s.good++;
+            s.idx++; s.noteT0 = now;
+            if (s.idx >= s.seq.length) {
+              if (s.good >= s.seq.length) {
+                if (role === "both") { s.mode = "aim"; s.fade = now + Q.STAR_DUET_SOLO_FADE_MS; s.aim = 0; say(L.star.s5.duetSolo, 2600); }
+                else return smPhraseDone(s);
+              } else { s.idx = 0; s.good = 0; s.noteT0 = now; say(L.star.s5.duetDropped, 2000); }
+            }
+          }
+        } else {
+          const dr = Q.STAR_DUET_AIM_DRIFT[Math.min(s.phrase, Q.STAR_DUET_AIM_DRIFT.length - 1)];
+          s.tx = 0.5 + Math.sin(now / 1500) * 0.30 * dr / 0.34 * 0.9;
+          s.ty = 0.42 + Math.cos(now / 1100 + 0.7) * 0.20 * dr / 0.34 * 0.9;
+          let dx = (keyRef.current.right ? 1 : 0) - (keyRef.current.left ? 1 : 0);
+          let dy = (keyRef.current.down ? 1 : 0) - (keyRef.current.up ? 1 : 0);
+          if (ptrRef.current) { dx = (ptrRef.current.x - s.rx) * 5; dy = (ptrRef.current.y - s.ry) * 5; }
+          s.rx = Math.max(0.05, Math.min(0.95, s.rx + dx * dt * 0.55));
+          s.ry = Math.max(0.05, Math.min(0.95, s.ry + dy * dt * 0.55));
+          const on = Math.hypot(s.rx - s.tx, s.ry - s.ty) < 0.09;
+          /* ⚠️ CE QUI TRAVERSE LE RÉSEAU EST LA PRÉSENCE, PAS LA PERFORMANCE
+             (voir `STAR_DUET_ALONE_MUL` dans quete.js) : le faisceau faiblit
+             quand l'autre a quitté son poste, parce que sa POSITION circule
+             déjà. Sa réussite à lui, non — elle coûterait un message par image. */
+          const mul = (role === "both" || near) ? 1 : Q.STAR_DUET_ALONE_MUL;
+          if (on) s.aim += dt * 1000 * mul; else s.aim = Math.max(0, s.aim - dt * 700);
+          if (role === "both" && now > s.fade) { s.mode = "organ"; s.idx = 0; s.good = 0; s.noteT0 = now; say(L.star.s5.duetDropped, 2000); }
+          if (s.aim >= Q.STAR_DUET_AIM_MS) return smPhraseDone(s);
+        }
+      }
+    }
+    /* ⚠️ RECOMMENCER LA MANCHE, JAMAIS L'ÉTAPE. C'est écrit une seule fois pour
+       les cinq jeux : quatre écritures auraient fini par en avoir une qui punit
+       plus que les autres, sans que rien ne le dise. */
+    function smRestart(s, why) {
+      say(why, 2200);
+      const k = kind, r = s.round, now = performance.now();
+      s.roundT0 = now; s.t0 = now;
+      if (k === "cool") { s.goal = 0.86; s.heat = s.goal; s.steam = []; }
+      else if (k === "dive") { s.depth = 0; s.x = 0.5; s.breath = Q.STAR_DIVE_BREATH_MS[Math.min(r, 2)]; s.atBottom = false; s.grabbed = false; s.shardX = 0.5; s.obs = smDiveObstacles(r); }
+      else if (k === "rack") { s.s = 0.08; s.warm = 0; s.trueUntil = 0; s.hit = false; }
+    }
+    function smNextRound(s, total, why) {
+      say(why, 2000);
+      if (s.round + 1 >= total) return finish();
+      s.round++; smRestart(s, why);
+    }
+    function smPhraseDone(s) {
+      onPhrase && onPhrase(s.phrase);
+      if (s.phrase + 1 >= Q.STAR_DUET_PHRASES) return finish();
+      s.phrase++;
+      s.seq = smPhraseSeq(s.phrase); s.idx = 0; s.good = 0; s.aim = 0;
+      s.noteT0 = performance.now();
+      s.mode = role === "aim" ? "aim" : "organ";
+      say(L.star.s5.duetPhrase(s.phrase + 1, Q.STAR_DUET_PHRASES), 1800);
+    }
+
+    /* ── LE DESSIN. Un jeu, un bloc, et rien de partagé au-delà du cadre. */
+    function smDraw(g, k, s, now) {
+      if (k === "cool") {
+        smFrame(g, L.star.s1.coolTitle, L.star.s1.coolHint);
+        const cx = SM_W * 0.42, cy = SM_H * 0.58;
+        // La terre du sillon, en creux, pour que l'éclat soit POSÉ quelque part.
+        g.fillStyle = "#2a2016"; g.beginPath(); g.ellipse(cx, cy + 62, 150, 26, 0, 0, 7); g.fill();
+        g.fillStyle = "#1d1610"; g.beginPath(); g.ellipse(cx, cy + 62, 108, 17, 0, 0, 7); g.fill();
+        // Le halo de l'éclat : il RÉTRÉCIT en refroidissant. C'est la vraie jauge.
+        const gl = 40 + s.heat * 120;
+        g.fillStyle = `rgba(255,220,150,${(0.05 + s.heat * 0.13).toFixed(3)})`;
+        g.beginPath(); g.arc(cx, cy, gl, 0, 7); g.fill();
+        smShard(g, cx, cy, 54, smHeatColor(s.heat), "rgba(40,26,10,0.7)");
+        // La jauge, à droite : la bande visée descend, le curseur est la chaleur.
+        const bx = SM_W - 92, by = 66, bw = 30, bh = SM_H - 130;
+        g.fillStyle = "rgba(0,0,0,0.5)"; g.fillRect(bx - 3, by - 3, bw + 6, bh + 6);
+        for (let i = 0; i < bh; i++) { g.fillStyle = smHeatColor(1 - i / bh); g.fillRect(bx, by + i, bw, 1); }
+        const bandPx = (s.band || 0.2) * bh;
+        const gy = by + (1 - s.goal) * bh;
+        g.strokeStyle = "#fff"; g.lineWidth = 2;
+        g.strokeRect(bx - 5, gy - bandPx / 2, bw + 10, bandPx);
+        const hy = by + (1 - Math.max(0, Math.min(1, s.heat))) * bh;
+        g.fillStyle = "#0b1020"; g.fillRect(bx - 12, hy - 3, bw + 24, 6);
+        g.fillStyle = "#ffe9a8"; g.fillRect(bx - 10, hy - 2, bw + 20, 4);
+        /* ⚠️⚠️ ET LA VAPEUR PASSE PAR-DESSUS LA JAUGE, C'EST ÇA LA DIFFICULTÉ.
+           Chaque giclée fait un panache qui masque ce qu'on regarde pendant une
+           seconde : on doit donc arroser AU JUGÉ, puis vérifier. Une barre de
+           progression qu'on voit toujours ne demande que de la précision ; une
+           barre qu'on cache une seconde demande de la MÉMOIRE, et c'est
+           beaucoup plus intéressant à jouer. */
+        for (const p of s.steam) {
+          const a = 1 - (now - p.t) / 1100;
+          const py = cy - 20 - (1 - a) * 150;
+          g.fillStyle = `rgba(236,244,255,${(a * 0.55).toFixed(3)})`;
+          g.beginPath(); g.arc(cx + (p.x - 0.5) * 90, py, p.r * (1.6 - a), 0, 7); g.fill();
+          g.beginPath(); g.arc(bx + bw / 2 + (p.x - 0.5) * 40, py + 40, p.r * (1.9 - a), 0, 7); g.fill();
+        }
+        g.textAlign = "left"; g.font = "11px monospace"; g.fillStyle = "rgba(255,255,255,0.75)";
+        g.fillText(`${s.round + 1} / ${Q.STAR_COOL_ROUNDS}`, 16, SM_H - 16);
+      } else if (k === "dive") {
+        const D = Q.STAR_DIVE_DEPTH[Math.min(s.round, 2)];
+        g.fillStyle = "#02060e"; g.fillRect(0, 0, SM_W, SM_H);
+        /* ⚠️ L'ÉCRAN DU PLONGEUR EST NOIR HORS DE LA FLAQUE, ET C'EST LA
+           COOPÉRATION ELLE-MÊME : celui qui tient la lumière voit la surface et
+           DEVINE, celui qui plonge voit le fond et CHERCHE. Aucun des deux ne
+           peut faire les deux. La flaque suit la position de l'autre — qui
+           circule déjà (§3), donc zéro message. */
+        const px = (lead && lead()) != null ? lead() : 0.5;
+        const pw = (solo ? Q.STAR_POOL_SOLO_R : Q.STAR_POOL_R) / Q.STAR_POOL_VIEW_TILES;
+        const pcx = px * SM_W, pcy = SM_H * 0.52, prx = pw * SM_W;
+        g.save();
+        g.beginPath(); g.ellipse(pcx, pcy, prx, prx * 0.92, 0, 0, 7); g.clip();
+        g.fillStyle = "#0d2436"; g.fillRect(0, 0, SM_W, SM_H);
+        // Le fond : des herbiers et de la vase, qui défilent avec la profondeur.
+        for (let i = 0; i < 26; i++) {
+          const dd = (i * 3.1 + 1) - (s.depth % 3.1);
+          const yy = SM_H - (dd * 14) % SM_H;
+          g.fillStyle = "rgba(24,60,52,0.55)";
+          g.fillRect(((i * 97) % SM_W), yy, 3, 22);
+        }
+        for (const o of s.obs) {
+          const oy = pcy + (o.d - s.depth) * 34;
+          if (oy < -60 || oy > SM_H + 60) continue;
+          g.fillStyle = o.hit ? "rgba(90,70,50,0.5)" : "#4a3a26";
+          g.fillRect(o.x * SM_W - o.w * SM_W / 2, oy - 8, o.w * SM_W, 16);
+          g.fillStyle = "rgba(20,14,8,0.6)"; g.fillRect(o.x * SM_W - o.w * SM_W / 2, oy + 5, o.w * SM_W, 3);
+        }
+        if (s.atBottom) {
+          const ph = ((now - s.pulse0) % Q.STAR_DIVE_PULSE_MS) / Q.STAR_DIVE_PULSE_MS;
+          const beat = Math.max(0, Math.sin(ph * Math.PI));
+          g.fillStyle = `rgba(150,210,255,${(0.10 + beat * 0.35).toFixed(3)})`;
+          g.beginPath(); g.arc(s.shardX * SM_W, pcy + 90, 16 + beat * 22, 0, 7); g.fill();
+          smShard(g, s.shardX * SM_W, pcy + 90, 16 + beat * 4, "#eaf6ff", "rgba(10,30,50,0.8)");
+        }
+        // Le plongeur : une silhouette, des bulles.
+        g.fillStyle = "#e8dfc4";
+        g.beginPath(); g.ellipse(s.x * SM_W, pcy, 7, 11, 0, 0, 7); g.fill();
+        g.fillStyle = "rgba(220,240,255,0.5)";
+        for (let b = 0; b < 4; b++) g.fillRect(s.x * SM_W - 2 + b, pcy - 14 - ((now / 90 + b * 13) % 40), 2, 2);
+        g.restore();
+        // Le halo de celui qui tient la lumière, en surface.
+        g.fillStyle = "rgba(255,232,160,0.10)";
+        g.beginPath(); g.ellipse(pcx, pcy, prx * 1.15, prx * 1.05, 0, 0, 7); g.fill();
+        if (s.hitFlash > 0) { g.fillStyle = `rgba(180,40,30,${(s.hitFlash * 0.5).toFixed(3)})`; g.fillRect(0, 0, SM_W, SM_H); }
+        /* L'ANNEAU DE SOUFFLE : il se referme depuis le BORD de l'écran. C'est la
+           seule limite du jeu, et elle est peinte là où on ne peut pas ne pas la
+           voir sans qu'elle occupe le centre. */
+        const bf = Math.max(0, s.breath / Q.STAR_DIVE_BREATH_MS[Math.min(s.round, 2)]);
+        const inset = (1 - bf) * 46;
+        g.strokeStyle = bf < 0.25 ? `rgba(255,120,100,${(0.6 + 0.4 * Math.sin(now / 120)).toFixed(2)})` : "rgba(190,230,255,0.65)";
+        g.lineWidth = 8; g.strokeRect(inset + 4, inset + 4, SM_W - (inset + 4) * 2, SM_H - (inset + 4) * 2);
+        smFrame2(g, L.star.s3.diveTitle(s.round + 1), `${Math.round(s.depth)} / ${D} m`);
+      } else if (k === "rack") {
+        smFrame(g, L.star.s4.rackTitle, solo ? L.star.s4.rackSolo : L.star.s4.sweepHint);
+        const nb = Q.STAR_RACK_BEADS[Math.min(s.round, 2)];
+        const rx0 = 40, rx1 = SM_W - 40, ry = 120, wallY = 250;
+        // LE RÂTELIER, en haut : cent perles identiques, et c'est le sujet.
+        g.fillStyle = "#5a4632"; g.fillRect(rx0 - 8, ry - 4, rx1 - rx0 + 16, 8);
+        for (let i = 0; i < nb; i++) {
+          const bxp = rx0 + (rx1 - rx0) * (i + 0.5) / nb;
+          g.fillStyle = "#9fb6c8"; g.beginPath(); g.arc(bxp, ry + 10, Math.max(1.6, 120 / nb), 0, 7); g.fill();
+        }
+        // LA LUMIÈRE qu'on promène, et son cône.
+        const lx = rx0 + (rx1 - rx0) * s.s;
+        const grd = g.createLinearGradient(lx, ry, lx, wallY + 90);
+        grd.addColorStop(0, "rgba(255,236,180,0.35)"); grd.addColorStop(1, "rgba(255,236,180,0.02)");
+        g.fillStyle = grd;
+        g.beginPath(); g.moveTo(lx - 14, ry); g.lineTo(lx + 14, ry); g.lineTo(lx + 70, wallY + 90); g.lineTo(lx - 70, wallY + 90); g.closePath(); g.fill();
+        g.fillStyle = "#fff6d0"; g.beginPath(); g.arc(lx, ry - 16, 7, 0, 7); g.fill();
+        // LE MUR DU FOND, en bas : c'est là que ça se passe.
+        g.fillStyle = "#2a2f3e"; g.fillRect(20, wallY, SM_W - 40, SM_H - wallY - 34);
+        const tooFast = s.speed > Q.STAR_SWEEP_MAX, tooSlow = s.warm >= 1;
+        const shown = s.trueUntil && now < s.trueUntil;
+        for (let i = 0; i < Math.min(nb, 40); i++) {
+          const bxp = rx0 + (rx1 - rx0) * (i + 0.5) / Math.min(nb, 40);
+          const off = (bxp - lx) * 0.55;
+          const sx = bxp + off;
+          if (sx < 26 || sx > SM_W - 26) continue;
+          g.fillStyle = tooFast ? "rgba(10,14,22,0.25)" : tooSlow ? "rgba(10,14,22,0.32)" : "rgba(10,14,22,0.62)";
+          g.beginPath(); g.arc(sx, wallY + 46, tooSlow ? 16 : 11, 0, 7); g.fill();
+        }
+        if (shown) {
+          /* ⚠️⚠️ L'OMBRE QUI MENT — LA GRAMMAIRE À L'ÉTAT PUR. Sur cent perles
+             identiques, une seule projette l'ombre d'une ÉTOILE : la lumière ne
+             montre pas ce que la perle EST, elle montre ce qu'elle SE RAPPELLE. */
+          const sx = rx0 + (rx1 - rx0) * s.p + (rx0 + (rx1 - rx0) * s.p - lx) * 0.55;
+          g.save(); g.translate(sx, wallY + 46); g.rotate(now / 900);
+          g.fillStyle = "rgba(6,10,18,0.85)"; g.beginPath();
+          for (let a = 0; a < 10; a++) { const rr = a % 2 ? 7 : 19, an = a * Math.PI / 5 - Math.PI / 2; const X = Math.cos(an) * rr, Y = Math.sin(an) * rr; a ? g.lineTo(X, Y) : g.moveTo(X, Y); }
+          g.closePath(); g.fill(); g.restore();
+        }
+        g.textAlign = "center"; g.font = "12px monospace";
+        g.fillStyle = tooFast ? "#ff9a8a" : tooSlow ? "#ffcf7a" : "rgba(255,255,255,0.55)";
+        g.fillText(tooFast ? L.star.s4.sweepTooFast : tooSlow ? L.star.s4.sweepTooSlow : L.star.s4.watchHint, SM_W / 2, SM_H - 14);
+        g.textAlign = "left"; g.font = "11px monospace"; g.fillStyle = "rgba(255,255,255,0.75)";
+        g.fillText(`${s.round + 1} / ${Q.STAR_RACK_ROUNDS} · ${nb}`, 16, SM_H - 14);
+      } else if (k === "lure") {
+        /* ⚠️ LE DÉCOR SE PEINT AVANT LE BANDEAU, PAS APRÈS — vu à l'écran : le
+           ciel de nuit couvrait la ligne de consigne, qui se lisait à moitié.
+           Un cadre commun n'est commun que si chaque jeu le laisse par-dessus. */
+        g.fillStyle = "#0b1020"; g.fillRect(0, 0, SM_W, SM_H);
+        g.fillStyle = "#1a2130"; g.fillRect(0, 52, SM_W, SM_H - 52);
+        g.fillStyle = "#3a2f26"; g.beginPath(); g.moveTo(0, 130); g.lineTo(SM_W / 2, 62); g.lineTo(SM_W, 130); g.lineTo(SM_W, 190); g.lineTo(0, 190); g.closePath(); g.fill();
+        g.fillStyle = "#4a3a2c"; g.fillRect(0, 186, SM_W, 6);
+        smFrame2(g, L.star.s4.lureTitle, solo ? L.star.s4.lureSolo : L.star.s4.climbHint);
+        const nx = 0.5 * SM_W, ny = 0.14 * SM_H + 40;
+        g.fillStyle = "#6a5636"; g.beginPath(); g.ellipse(nx, ny, 26, 12, 0, 0, 7); g.fill();
+        g.fillStyle = "rgba(255,236,180,0.18)"; g.beginPath(); g.arc(s.lx * SM_W, s.ly * SM_H, 46, 0, 7); g.fill();
+        g.fillStyle = "#fff6d0"; g.beginPath(); g.arc(s.lx * SM_W, s.ly * SM_H, 9, 0, 7); g.fill();
+        // La pie : un corps sombre, une bavette blanche, une queue.
+        const mx = s.mx * SM_W, my = s.my * SM_H;
+        g.fillStyle = "#14161c"; g.beginPath(); g.ellipse(mx, my, 12, 8, 0, 0, 7); g.fill();
+        g.fillStyle = "#e8ecf2"; g.beginPath(); g.ellipse(mx + 3, my + 2, 5, 4, 0, 0, 7); g.fill();
+        g.fillStyle = "#14161c"; g.fillRect(mx - 22, my - 2, 12, 4);
+        // La montée, et c'est le seul compteur : il monte quand la pie est loin.
+        const hk = Math.min(1, s.hold / Q.STAR_MAGPIE_HOLD_MS);
+        g.fillStyle = "rgba(0,0,0,0.5)"; g.fillRect(SM_W - 40, 70, 16, SM_H - 130);
+        g.fillStyle = "#a8e8a0"; g.fillRect(SM_W - 40, 70 + (SM_H - 130) * (1 - hk), 16, (SM_H - 130) * hk);
+        if (!s.engaged) { g.textAlign = "center"; g.font = "12px monospace"; g.fillStyle = "#ff9a8a"; g.fillText(L.star.s4.climbSeen, SM_W / 2, SM_H - 14); }
+      } else {
+        const near = s.near;
+        if (s.mode === "organ") {
+          smFrame(g, L.star.s5.duetTitle, L.star.s5.duetOrgan);
+          const want = s.seq[s.idx], held = keyRef.current.note;
+          const el = Math.min(1, (now - s.noteT0) / Q.STAR_DUET_NOTE_MS);
+          // Les cinq touches, et les rais qui montent : or = juste, gris = fausse.
+          for (let i = 0; i < 5; i++) {
+            const kx = 70 + i * 100, ky = SM_H - 120;
+            const isWant = i === want, isHeld = held === i;
+            g.fillStyle = isHeld ? (isWant ? "#ffe9a8" : "#8a8a92") : "#d8d2c2";
+            g.fillRect(kx, ky, 74, 96);
+            g.strokeStyle = "#3a2a1e"; g.lineWidth = 2; g.strokeRect(kx, ky, 74, 96);
+            if (isWant) {
+              const grd = g.createLinearGradient(kx + 37, ky, kx + 37, 40);
+              const col = isHeld ? "255,220,120" : "150,160,180";
+              grd.addColorStop(0, `rgba(${col},0.55)`); grd.addColorStop(1, `rgba(${col},0.02)`);
+              g.fillStyle = grd; g.fillRect(kx + 20, 40, 34, ky - 40);
+            }
+            g.fillStyle = "#1d1d1d"; g.font = "12px monospace"; g.textAlign = "center";
+            g.fillText(String(i + 1), kx + 37, ky + 88);
+          }
+          // La phrase que l'étoile chante, en pastilles.
+          for (let i = 0; i < s.seq.length; i++) {
+            g.fillStyle = i < s.idx ? "#a8e8a0" : i === s.idx ? "#ffe9a8" : "rgba(255,255,255,0.25)";
+            g.beginPath(); g.arc(SM_W / 2 - (s.seq.length - 1) * 11 + i * 22, 74, 7, 0, 7); g.fill();
+          }
+          g.fillStyle = "rgba(255,255,255,0.35)"; g.fillRect(SM_W / 2 - 70, 92, 140, 4);
+          g.fillStyle = "#ffe9a8"; g.fillRect(SM_W / 2 - 70, 92, 140 * el, 4);
+        } else {
+          smFrame(g, L.star.s5.duetTitle, L.star.s5.duetAim);
+          // Le beffroi : quatre abat-son, et la Lyre qui dérive au-dehors.
+          g.fillStyle = "#141a26"; g.fillRect(0, 52, SM_W, SM_H - 52);
+          g.fillStyle = "#0a1a2e"; g.fillRect(SM_W * 0.12, 90, SM_W * 0.76, SM_H - 170);
+          const tx = s.tx * SM_W, ty = s.ty * SM_H;
+          g.strokeStyle = "rgba(180,200,255,0.5)"; g.lineWidth = 1;
+          for (let i = 0; i < 5; i++) { const a = i * 1.257; g.beginPath(); g.arc(tx + Math.cos(a) * 22, ty + Math.sin(a) * 18, 2.5, 0, 7); g.stroke(); }
+          g.fillStyle = "rgba(200,220,255,0.85)";
+          for (let i = 0; i < 5; i++) { const a = i * 1.257; g.fillRect(tx + Math.cos(a) * 22 - 1.5, ty + Math.sin(a) * 18 - 1.5, 3, 3); }
+          const rx = s.rx * SM_W, ry = s.ry * SM_H;
+          const on = Math.hypot(s.rx - s.tx, s.ry - s.ty) < 0.09;
+          g.strokeStyle = on ? "#ffe9a8" : "rgba(255,255,255,0.45)"; g.lineWidth = 2;
+          g.beginPath(); g.arc(rx, ry, 18, 0, 7); g.stroke();
+          g.beginPath(); g.moveTo(rx - 26, ry); g.lineTo(rx - 8, ry); g.moveTo(rx + 8, ry); g.lineTo(rx + 26, ry); g.stroke();
+          if (on) { g.fillStyle = "rgba(255,236,180,0.16)"; g.beginPath(); g.moveTo(rx - 14, SM_H); g.lineTo(rx + 14, SM_H); g.lineTo(tx + 8, ty); g.lineTo(tx - 8, ty); g.closePath(); g.fill(); }
+          const ak = Math.min(1, s.aim / Q.STAR_DUET_AIM_MS);
+          g.fillStyle = "rgba(0,0,0,0.5)"; g.fillRect(40, SM_H - 40, SM_W - 80, 10);
+          g.fillStyle = "#ffe9a8"; g.fillRect(40, SM_H - 40, (SM_W - 80) * ak, 10);
+          if (role === "both") {
+            const left = Math.max(0, s.fade - now) / 1000;
+            g.textAlign = "right"; g.font = "12px monospace"; g.fillStyle = left < 3 ? "#ff9a8a" : "rgba(255,255,255,0.7)";
+            g.fillText(left.toFixed(1) + "s", SM_W - 16, 74);
+          } else if (!near) {
+            g.textAlign = "center"; g.font = "12px monospace"; g.fillStyle = "#ff9a8a";
+            g.fillText(L.star.s5.duetDropped, SM_W / 2, 74);
+          }
+        }
+        g.textAlign = "left"; g.font = "11px monospace"; g.fillStyle = "rgba(255,255,255,0.75)";
+        g.fillText(L.star.s5.duetPhrase(s.phrase + 1, Q.STAR_DUET_PHRASES), 16, SM_H - 14);
+      }
+      const mm = msgRef.current;
+      if (mm.text && now < mm.until) {
+        g.textAlign = "center"; g.font = "bold 14px monospace";
+        g.fillStyle = "rgba(0,0,0,0.55)"; g.fillRect(0, SM_H / 2 - 18, SM_W, 34);
+        g.fillStyle = "#ffe9a8"; g.fillText(mm.text, SM_W / 2, SM_H / 2 + 5);
+      }
+    }
+    /* Le bandeau de la plongée est peint EN DERNIER (l'anneau de souffle passe
+       par-dessus le reste), donc il lui faut sa propre entrée. */
+    function smFrame2(g, title, sub) {
+      g.textAlign = "left"; g.font = "bold 15px monospace"; g.fillStyle = "#ffe9a8"; g.fillText(title, 16, 26);
+      g.font = "11px monospace"; g.fillStyle = "rgba(255,255,255,0.62)"; g.fillText(sub, 16, 44);
+    }
+
+    raf = requestAnimationFrame(loop);
+    /* ⚠️ LES TOUCHES SONT CAPTURÉES ICI ET NULLE PART AILLEURS. Le jeu bloque
+       déjà ses propres entrées quand un écran de quête est ouvert
+       (`starUiOpenRef`) : sans ça, on refroidirait un éclat en marchant. */
+    const code2key = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down", KeyA: "left", KeyD: "right", KeyW: "up", KeyS: "down" };
+    const noteOf = (code) => {
+      const d = /^Digit([1-5])$/.exec(code); if (d) return +d[1] - 1;
+      const i = ["KeyQ", "KeyS", "KeyD", "KeyF", "KeyG"].indexOf(code);
+      return i >= 0 ? i : -1;
+    };
+    const onKey = (ev) => {
+      if (ev.code === "Escape") { ev.preventDefault(); onQuit && onQuit(); return; }
+      const n = noteOf(ev.code);
+      if (kind === "duet" && n >= 0) { ev.preventDefault(); keyRef.current.note = n; return; }
+      const k2 = code2key[ev.code];
+      if (k2) { ev.preventDefault(); keyRef.current[k2] = true; return; }
+      if (ev.code === "Space") { ev.preventDefault(); if (!ev.repeat) press(); }
+    };
+    const onKeyUp = (ev) => {
+      const n = noteOf(ev.code);
+      if (kind === "duet" && n >= 0 && keyRef.current.note === n) { keyRef.current.note = -1; return; }
+      const k2 = code2key[ev.code];
+      if (k2) keyRef.current[k2] = false;
+    };
+    /* Le pointeur : il DÉSIGNE (la lumière va là, le plongeur va là), il ne
+       clique pas des boutons. C'est ce qui rend ces cinq jeux jouables au doigt
+       sans une seule commande à l'écran. */
+    const norm = (ev) => {
+      const r = cv.getBoundingClientRect();
+      return { x: Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)), y: Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height)) };
+    };
+    const onDown = (ev) => {
+      ev.preventDefault();
+      const p = norm(ev); ptrRef.current = p;
+      if (kind === "duet" && stRef.current && stRef.current.mode === "organ") {
+        const i = Math.floor((p.x * SM_W - 70) / 100);
+        if (i >= 0 && i < 5 && p.y > 0.6) keyRef.current.note = i;
+        return;
+      }
+      press();
+    };
+    const onMove = (ev) => { if (ptrRef.current) ptrRef.current = norm(ev); };
+    const onUp = () => { ptrRef.current = null; if (kind === "duet") keyRef.current.note = -1; };
+    window.addEventListener("keydown", onKey); window.addEventListener("keyup", onKeyUp);
+    cv.addEventListener("pointerdown", onDown); window.addEventListener("pointermove", onMove); window.addEventListener("pointerup", onUp);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("keydown", onKey); window.removeEventListener("keyup", onKeyUp);
+      cv.removeEventListener("pointerdown", onDown); window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, role]);
+
+  const help = kind === "cool" ? L.star.s1.coolHint
+    : kind === "dive" ? L.star.s3.diveHint
+    : kind === "rack" ? L.star.s4.sweepHint
+    : kind === "lure" ? L.star.s4.lureHint
+    : L.star.s5.duetOrgan;
+  return (
+    <div className="ferme-star-mini">
+      <div className="ferme-star-mini-box">
+        <canvas ref={cvRef} width={SM_W} height={SM_H} className="ferme-star-mini-cv" />
+        <div className="ferme-star-mini-foot">
+          <span>{msg || help}</span>
+          <button className="ferme-btn" onClick={onQuit}>✕</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+/* Les obstacles d'une descente. ⚠️ DÉTERMINISTES, PAS TIRÉS : une plongée qu'on
+   recommence doit être LA MÊME, sinon rater n'apprend rien et le joueur attend
+   simplement une descente facile. C'est la règle des étals (426) et des buissons
+   (437), appliquée à un obstacle. */
+function smDiveObstacles(round) {
+  const D = Q.STAR_DIVE_DEPTH[Math.min(round, 2)];
+  const n = 4 + round * 3;
+  return Array.from({ length: n }, (_, i) => ({
+    d: 4 + (D - 8) * (i + 0.5) / n,
+    x: 0.5 + Math.sin(i * 2.399 + round * 1.7) * 0.34,
+    w: 0.10 + ((i * 7 + round * 3) % 5) * 0.02,
+    hit: false,
+  }));
+}
+/* La perle qui ment. ⚠️ SA POSITION EST DÉRIVÉE DE LA MANCHE : recommencer un
+   râtelier ne doit pas la déplacer, sinon on ne cherche plus, on attend. */
+function smTrueBead(round) { return 0.20 + ((round * 0.37 + 0.13) % 0.62); }
+/* La phrase que l'étoile chante. ⚠️ DÉRIVÉE DU NUMÉRO DE PHRASE, donc IDENTIQUE
+   CHEZ LES DEUX JOUEURS sans qu'un seul octet ne circule (§3). Deux tirages
+   locaux auraient donné deux phrases différentes aux deux postes d'un même duo —
+   le genre de défaut qu'on ne comprend qu'après une demi-heure. */
+function smPhraseSeq(phrase) {
+  const len = Q.STAR_DUET_LEN[Math.min(phrase, Q.STAR_DUET_LEN.length - 1)];
+  return Array.from({ length: len }, (_, i) => (phrase * 3 + i * 2 + (i % 2 ? 1 : 0)) % 5);
 }
 
 /* ============================================================================

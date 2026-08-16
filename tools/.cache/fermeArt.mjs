@@ -4544,27 +4544,13 @@ export function buildSprites() {
     "altar", "altar2", "candlestick", "paschal", "choirStall", "candleRack",
     "prieDieu", "confessional", "confessional2", "font", "pulpit", "saintNiche",
     "stoup", "organ", "organWing", "organBench", "bellRope", "pewL", "pewR",
-    /* ⚠️⚠️ ZIP 442 — L'ENQUÊTE. Sept dessins, et ils ont TOUS une mécanique
-       derrière eux : on ne pose pas un meuble neuf dans un bâtiment déjà meublé
-       pour faire joli, on en pose un parce qu'il y a quelque chose à y lire.
-       C'est la règle du 426 (« un décor qui existe POUR une mécanique absente
-       est plus trompeur qu'un décor manquant ») prise par l'autre bout : ici la
-       mécanique existe d'abord, et chaque dessin doit se laisser reconnaître de
-       loin comme « il y a quelque chose là ».
-       ⚠️ Ils gardent le gabarit et la PALETTE du tribunal (bois mat, pierre,
-       fonte, bronze) : la ville qui a meublé le palais a acheté ces meubles-là
-       aussi. Deux vocabulaires de dessin dans le même couloir se lisent comme
-       deux jeux — c'est ce que disait déjà le 438 en donnant à la mairie le
-       gabarit du tribunal, et le 441 en reprenant `pew` et `railing` tels quels
-       pour l'église.
-       ⚠️ ET AUCUN TEXTE N'EST CUIT DEDANS. Les registres, les fiches et les
-       affiches portent des LIGNES, pas des mots : `fillText` n'est pas
-       rastérisable hors navigateur (§4), donc un sprite qui en contient n'est
-       plus regardable par un banc — et un texte cuit ne peut pas être bilingue,
-       ce qui est rédhibitoire pour un chantier qui est presque entièrement du
-       texte. Ce qu'on lit est écrit VIVANT dans le panneau. */
-    "archivistNPC", "strongbox", "strongbox2", "keyPost", "registerStand",
-    "cardIndex", "docBox", "bylaw",
+    /* ⚠️⚠️ ZIP 444 — LE BEFFROI. Quatre dessins, et la cloche est le seul décor
+       de tout le projet qui soit AUSSI HAUT QU'UN MUR : elle est dessinée avec
+       les MURS et pas dans la file des props (voir `drawCourtFrame`). On le sait
+       d'avance parce que le 441 l'a payé sur le buffet d'orgue — un sprite haut
+       contre le mur du fond avale ce qui passe devant. *On ne règle pas un tri,
+       on change de passe.* Le prop existe pour la COLLISION et pour l'invite. */
+    "greatBell", "greatBell2", "bellFrame", "ringerBoard",
   ];
   function courtPropSprite(kind) {
     const W1 = "#7a5232", W2 = "#9c6b42", W3 = "#5a3b26", W4 = "#b98a58";  // bois : mat, clair, ombre, éclairé
@@ -5273,207 +5259,125 @@ export function buildSprites() {
         return c;
       }
       /* ═══════════════════════════════════════════════════════════════════
-         ZIP 442 — LES SEPT MEUBLES DE L'ENQUÊTE.
-         ═══════════════════════════════════════════════════════════════════ */
-      case "archivistNPC": {
-        /* OMBELINE REBOUL, ARCHIVISTE DES AUDIENCES. ⚠️ ELLE EST CALQUÉE SUR
-           `clerkNPC` AU PIXEL PRÈS POUR TOUT CE QUI EST L'OSSATURE — même
-           gabarit, mêmes proportions de tête, même palette de peau, même
-           mi-corps derrière son meuble. Deux PNJ debout dans la même ville qui
-           n'auraient pas la même anatomie se liraient comme deux jeux (438).
-           Ce qui la distingue est ce qui la CARACTÉRISE, et rien d'autre :
-           - le vert sourd des archives au lieu du bleu de l'accueil (une
-             hôtesse reçoit, une archiviste conserve) ;
-           - les cheveux relevés, striés de gris — elle est là depuis onze ans
-             et elle le dit dans sa première réplique ;
-           - des LUNETTES, qui sont ici plus qu'un détail : à seize pixels, une
-             barre claire en travers des yeux est la seule chose qui fasse lire
-             « quelqu'un qui lit toute la journée » ;
-           - le carton qu'elle tient CONTRE ELLE, pas posé. C'est la pose de
-             quelqu'un qui ne vous le donnera pas, et c'est exactement la scène
-             que le chapitre 3 joue. */
-        const SK = "#e8c39a", SK2 = "#d3a87f", HAIR = "#3a3028", GRAY = "#8a8278";
-        const GN = "#3d5a46", GN2 = "#2e4535", CARD = "#c8b48a", CARD2 = "#a8946a";
-        const [c, g] = cv(16, 26);
-        P(g, 4, 12, 8, 13, GN); P(g, 4, 12, 8, 1, "#4d6d56");         // le buste, laine verte
-        P(g, 3, 14, 2, 8, GN2); P(g, 12, 14, 2, 8, GN2);              // les bras, un ton plus bas
-        P(g, 6, 12, 4, 4, "#efe9dc");                                  // le col de chemise
-        // Le carton d'archives, tenu à deux mains contre la poitrine.
-        P(g, 4, 17, 8, 7, CARD); P(g, 4, 17, 8, 1, "#dcc9a2"); P(g, 4, 23, 8, 1, CARD2);
-        P(g, 7, 17, 2, 7, CARD2);                                      // la sangle du carton
-        P(g, 3, 19, 2, 3, SK2); P(g, 11, 19, 2, 3, SK2);               // les mains par-dessus
-        P(g, 5, 3, 6, 8, SK); P(g, 5, 3, 3, 8, "#f0cfa8");             // le visage
-        P(g, 10, 5, 1, 6, SK2);
-        P(g, 4, 1, 8, 4, HAIR); P(g, 3, 3, 2, 5, HAIR); P(g, 11, 3, 2, 4, HAIR);
-        /* ⚠️ LE CHIGNON EST LA MOITIÉ DE LA SILHOUETTE, ET IL DOIT DÉBORDER.
-           Premier jet : trois pixels collés au crâne — à seize pixels, ça ne se
-           distingue pas d'une mèche, et elle se lisait comme n'importe qui. Un
-           chignon se voit parce qu'il SORT du contour de la tête : quatre pixels
-           en arrière, cernés, plus l'épingle. C'est la même règle que la tête du
-           pigeon au 433 (« sans le creux de nuque, c'est un galet gris »). */
-        P(g, 11, 1, 4, 4, HAIR); P(g, 12, 2, 2, 2, "#4a3a2c");
-        P(g, 13, 1, 1, 1, "#c8a45a");                                  // l'épingle
-        P(g, 4, 2, 4, 1, GRAY); P(g, 11, 4, 2, 1, GRAY);               // les mèches grises
-        P(g, 4, 6, 8, 1, "#d8d4cc");                                   // les lunettes : la barre claire
-        P(g, 5, 6, 2, 1, "#f4f2ee"); P(g, 9, 6, 2, 1, "#f4f2ee");      // ... et ses deux verres
-        P(g, 5, 6, 1, 1, "#2a2018"); P(g, 10, 6, 1, 1, "#2a2018");     // les yeux, derrière
-        P(g, 7, 9, 2, 1, "#a86a5c");
-        return c;
-      }
-      case "strongbox": case "strongbox2": {
-        /* L'ARMOIRE SCELLÉE DES SCELLÉS. Deux cases, comme le siège du juge et
-           la statue de la Justice : c'est le meuble le plus imposant du
-           sous-sol, et il doit l'être — c'est le but de cinq chapitres.
-           ⚠️ CE QUI FAIT LIRE « ON NE L'OUVRE PAS SEUL », C'EST LA SYMÉTRIE.
-           Deux entrées de serrure, une par vantail, au même niveau, aussi loin
-           l'une de l'autre que le meuble le permet. Une seule serrure centrale
-           aurait dessiné un coffre ordinaire, et toute la mécanique du chapitre
-           5 serait devenue une surprise au lieu d'une promesse.
-           ⚠️ ET LES DEUX MOITIÉS PARTAGENT LEUR OSSATURE (la leçon du taxi au
-           436, où la face et le dos avaient commencé à diverger) : on écrit le
-           corps une fois, et on ne pose que ce qui change de côté. */
-        const right = kind === "strongbox2";
-        const IR2 = "#4a4a52", IRL = "#6a6a74", IRD = "#2c2c33";
-        const [c, g] = cv(16, 30);
-        P(g, 0, 26, 16, 4, IRD);                                       // le socle de fonte
-        P(g, right ? 0 : 1, 27, 15, 1, "#1e1e24");
-        P(g, 0, 3, 16, 24, IR2); P(g, 0, 3, 16, 1, IRL);               // le corps
-        P(g, 0, 24, 16, 2, IRD);
-        // Les bandes rivetées : trois horizontales, une verticale par vantail.
-        for (const by of [6, 14, 22]) {
-          P(g, 0, by, 16, 2, IRL); P(g, 0, by + 2, 16, 1, IRD);
-          for (let rx = right ? 1 : 2; rx < 15; rx += 4) P(g, rx, by, 1, 1, "#9a9aa4");
+         ZIP 444 — LE BEFFROI. Quatre dessins.
+         ───────────────────────────────────────────────────────────────────
+         ⚠️ MÊME PALETTE QUE LE TRIBUNAL ET L'ÉGLISE (bois mat, pierre, bronze) :
+         la ville qui a meublé le palais a coulé cette cloche aussi. Deux
+         vocabulaires de dessin dans le même bâtiment se lisent comme deux jeux
+         — c'est ce que disait déjà le 438 en donnant à la mairie le gabarit du
+         tribunal, et le 441 en reprenant `pew` et `railing` tels quels. */
+      case "greatBell": case "greatBell2": {
+        /* LA CLOCHE, en DEUX MOITIÉS posées côte à côte par le générateur —
+           comme la statue de la Justice et l'armoire des scellés. Rien dans le
+           rendu n'a besoin de connaître un meuble à cheval sur deux cases.
+
+           ⚠️⚠️ DEUXIÈME ÉCRITURE : LE PREMIER JET NE LISAIT PAS COMME UNE CLOCHE.
+           Il empilait des bandes dont la largeur décroissait par PALIERS (4, 3,
+           2, 2, 1, 1, 0, 0) — sur la planche, ça donnait un rectangle vert à
+           épaulement, quelque part entre une lanterne et une borne. Tous les
+           contrôles passaient. Ce qui manquait est une grandeur qu'aucun banc de
+           ce dépôt ne mesure : **le PROFIL**. Une cloche n'a pas une silhouette
+           qui rétrécit, elle a une silhouette qui S'ÉVASE en accélérant — le
+           cerveau étroit, la robe qui gonfle, la faussure qui repart vers le
+           bas, et une lèvre franchement plus large que tout le reste. C'est une
+           COURBE, et une courbe ne s'écrit pas en paliers choisis à la main.
+           ⚠️ La demi-largeur est donc calculée : `hw(t) = 2,2 + 5,8·t^1,9`, une
+           puissance supérieure à 1 pour que l'évasement s'accélère vers le bas.
+           À exposant 1, on retombe sur un cône — c'est-à-dire un abat-jour.
+
+           ⚠️ ELLE FAIT ~40 PIXELS DE HAUT, soit ×1,7 un fermier : une cloche de
+           volée, pas une clochette. Le canevas est dimensionné sur ce qui
+           DÉPASSE (piège n°1 des sprites, 433).
+           ⚠️ LE BRONZE EST VERT-DE-GRIS, PAS DORÉ. Une cloche de cent ans est
+           verte ; dorée, elle aurait l'air neuve, et toute la scène finale
+           repose sur le fait qu'elle est là depuis longtemps. */
+        const right = kind === "greatBell";
+        const [c, g] = cv(16, 40);
+        const BZ = "#5f7a5a", BZL = "#8aa87d", BZD = "#3c5239", BZE = "#243325";
+        /* ⚠️⚠️ TROISIÈME RÉGLAGE : LE PROFIL ÉTAIT BON, LES PROPORTIONS ÉTAIENT
+           FAUSSES. Le jet 2 s'évasait bien, mais sur 28 rangées pour 8 pixels de
+           demi-largeur — 40 de haut pour 16 de large, soit 2,5:1. À l'écran :
+           un sapin sur un pied, ou une fontaine. **Une cloche est à peu près
+           aussi large que haute** (32 × 34 ici, les deux moitiés réunies), et
+           c'est la première chose qu'on lit ; le profil ne vient qu'après.
+           ⚠️ ET LE MOUTON EST POSÉ SUR L'ÉPAULE, PAS AU-DESSUS. Le jet 2 laissait
+           trois rangées de vide entre la pièce de bois et le cerveau : ça
+           dessinait un COU, et une cloche à cou est une lampe. */
+        const Y0 = 9, Y1 = 33;                       // du cerveau à la faussure
+        const hwAt = (y) => {
+          const t = Math.max(0, Math.min(1, (y - Y0) / (Y1 - Y0)));
+          return 4.5 + 11.0 * Math.pow(t, 1.7);
+        };
+        // Le mouton (la pièce de bois) et les anses, directement sur l'épaule.
+        P(g, right ? 0 : 6, 2, 10, 4, "#6f4a24"); P(g, right ? 0 : 6, 2, 10, 1, "#8f6a3c");
+        P(g, right ? 1 : 12, 6, 3, 3, BZD); P(g, right ? 1 : 12, 6, 3, 1, BZ);
+        /* La robe. ⚠️ ON PEINT DES RANGÉES PLEINES ET ON CERNE — on ne trace pas
+           un contour qu'on remplit (438). Le jour vient de l'ouest : la moitié
+           gauche porte la lumière, la droite l'ombre. */
+        for (let y = Y0; y <= Y1; y++) {
+          const hw = Math.round(hwAt(y));
+          const x0 = right ? 0 : 16 - hw, w = hw;
+          P(g, x0, y, w, 1, BZ);
+          if (right) { P(g, 0, y, 1, 1, BZL); P(g, w - 1, y, 1, 1, BZD); }
+          else { P(g, 16 - hw, y, 2, 1, BZL); P(g, 15, y, 1, 1, BZ); }
         }
-        // Le montant central : il n'existe que sur le bord MITOYEN, donc à
-        // droite de la moitié gauche et à gauche de la moitié droite.
-        P(g, right ? 0 : 14, 3, 2, 23, IRD);
-        P(g, right ? 1 : 14, 3, 1, 23, "#3a3a42");
-        // L'entrée de serrure, en laiton, sur le vantail — et les deux tringles
-        // de verrou qui montent dans le mur : c'est ce qui dit que la commande
-        // est ailleurs.
-        const kx = right ? 9 : 4;
-        P(g, kx, 16, 4, 6, GO); P(g, kx, 16, 4, 1, GOL); P(g, kx, 21, 4, 1, GOD);
-        P(g, kx + 1, 18, 2, 2, "#241c10");                             // le trou de serrure
-        /* ⚠️ LA TRINGLE DE VERROU S'ARRÊTE UNE RANGÉE SOUS LE BORD, ET C'EST LE
-           BANC QUI L'A EXIGÉ. Peinte jusqu'à y = 0, elle était RASÉE par le
-           canevas — le piège n°1 des sprites (§4), payé trois fois au 433. Une
-           tringle rognée ne « monte pas dans le mur », elle s'arrête net : le
-           dessin est joli et il lui manque deux rangées que personne ne cherche.
-           Elle se termine donc sur son EMBASE, ce qui est plus juste de toute
-           façon — un verrou entre dans une gâche, pas dans le vide. */
-        P(g, right ? 12 : 2, 1, 2, 3, "#7a7a84"); P(g, right ? 12 : 2, 1, 1, 3, "#9a9aa4");
-        P(g, right ? 11 : 1, 1, 4, 1, "#5a5a62");
-        // Le cachet de cire et son ruban : un scellé se VOIT, sinon la pièce
-        // s'appelle « salle des scellés » sans qu'on sache pourquoi.
-        if (!right) { P(g, 5, 10, 5, 4, "#8a2a2a"); P(g, 5, 10, 5, 1, "#b04040"); P(g, 6, 13, 3, 3, "#a03434"); }
-        return c;
-      }
-      case "keyPost": {
-        /* LA COMMANDE DE VERROU, au greffe et chez l'huissier. Une colonnette
-           de fonte, une plaque de laiton, et LA CLÉ DÉJÀ EN PLACE, retenue par
-           sa chaîne.
-           ⚠️ LA CLÉ EST DESSINÉE DANS SA SERRURE, ET C'EST TOUT LE DESSIN. Une
-           borne nue serait un poteau ; une clé qu'on voit de trois cases dit
-           « on tourne ça » sans une plaque à lire, et c'est ce qu'il faut pour
-           un objet que deux joueurs doivent trouver chacun de son côté et
-           déclencher en même temps. */
-        const [c, g] = cv(16, 24);
-        P(g, 4, 20, 8, 3, IR); P(g, 4, 20, 8, 1, "#5a5a62");           // l'embase
-        P(g, 6, 8, 4, 13, "#4a4a52"); P(g, 6, 8, 1, 13, "#6a6a74");    // le fût
-        P(g, 3, 4, 10, 6, "#4a4a52"); P(g, 3, 4, 10, 1, "#6a6a74");    // la tête
-        P(g, 4, 5, 8, 4, BR); P(g, 4, 5, 8, 1, "#c8a44c");             // la plaque de laiton
-        P(g, 5, 6, 6, 1, "#8a6c28"); P(g, 5, 8, 4, 1, "#8a6c28");      // deux lignes gravées
-        // La clé : anneau, tige, panneton — et la chaîne qui la retient au fût.
-        P(g, 11, 11, 4, 1, GO); P(g, 13, 9, 1, 4, GO); P(g, 14, 9, 1, 4, GOD);
-        P(g, 14, 12, 1, 2, GO);
-        P(g, 9, 11, 2, 1, GOL);
-        for (let k = 0; k < 4; k++) P(g, 10 + (k & 1), 13 + k, 1, 1, "#8a8a92");
-        return c;
-      }
-      case "registerStand": {
-        /* LE LUTRIN À REGISTRE : état civil, répertoire du notaire, registre des
-           cotes. Le même meuble aux trois endroits, et c'est voulu — c'est le
-           meuble de la ville, celui qu'on trouve partout où l'on consulte
-           debout.
-           ⚠️ LE REGISTRE EST OUVERT ET IL PENCHE. Fermé, c'est un livre posé sur
-           une table ; ouvert sur un plan incliné, avec la tranche épaisse et le
-           signet qui pend, c'est « on vient d'y lire quelque chose ». La
-           différence tient en six pixels et elle décide de tout. */
-        const [c, g] = cv(16, 28);
-        P(g, 6, 22, 4, 5, W1); P(g, 3, 26, 10, 2, W3);                 // le pied et son patin
-        P(g, 4, 20, 8, 3, W2); P(g, 4, 20, 8, 1, W4);
-        // Le pupitre incliné : deux marches suffisent à dire la pente à 16 px.
-        P(g, 1, 15, 14, 4, W1); P(g, 2, 13, 12, 3, W2); P(g, 2, 13, 12, 1, W4);
-        // Le registre ouvert : deux pages, la reliure au milieu, la tranche.
-        P(g, 1, 9, 14, 6, "#efe8d4"); P(g, 1, 9, 14, 1, "#fbf7ea");
-        P(g, 7, 8, 2, 8, DK2);                                          // le dos, en cuir sombre
-        P(g, 0, 14, 16, 2, "#d8cfb4"); P(g, 0, 15, 16, 1, "#b8ae94");   // la tranche, épaisse
-        for (let k = 0; k < 4; k++) { P(g, 2, 10 + k, 4, 1, "#a49a80"); P(g, 10, 10 + k, 4, 1, "#a49a80"); }
-        P(g, 9, 14, 1, 7, CL); P(g, 9, 20, 2, 1, CL);                   // le signet qui pend
-        return c;
-      }
-      case "cardIndex": {
-        /* LE FICHIER DU CADASTRE : le meuble où l'on tape la cote. Douze
-           tiroirs étroits, poignées de laiton, porte-étiquettes.
-           ⚠️ CE QUI LE DISTINGUE DU CARTONNIER À PLANS (`planChest`, 438) EST
-           LA PROPORTION DES TIROIRS, et rien d'autre : un cartonnier a des
-           tiroirs LARGES et PLATS (on y couche des cartes), un fichier a des
-           tiroirs ÉTROITS et PROFONDS (on y range des fiches sur la tranche).
-           Deux meubles à tiroirs dans deux pièces voisines de la même mairie
-           doivent se distinguer, sinon on a dessiné deux fois le même (439). */
-        const [c, g] = cv(16, 26);
-        P(g, 0, 22, 16, 4, W3);
-        P(g, 0, 3, 16, 20, W1); P(g, 0, 3, 16, 1, W4);
-        // ⚠️ La corniche descend d'une rangée : peinte à y = 0, elle était
-        // rognée par le canevas (même piège que les tringles de l'armoire).
-        P(g, 1, 2, 14, 2, W2); P(g, 2, 1, 12, 1, W4);                  // la corniche
-        for (let col = 0; col < 3; col++) for (let row = 0; row < 4; row++) {
-          const x = 1 + col * 5, y = 5 + row * 4;
-          P(g, x, y, 4, 3, W2); P(g, x, y, 4, 1, W4); P(g, x, y + 2, 4, 1, W3);
-          P(g, x + 1, y + 1, 2, 1, "#e6dfc8");                          // le porte-étiquette
-          P(g, x + 2, y + 1, 1, 1, BR);                                 // la poignée
+        /* La LÈVRE : plus large que la robe, et plus sombre. C'est le trait qui
+           fait lire « cloche » avant tout le reste — sans lui, la robe se
+           termine en cône. */
+        const lipHw = Math.min(16, Math.round(hwAt(Y1)) + 1);
+        for (let y = Y1 + 1; y <= Y1 + 3; y++) {
+          const x0 = right ? 0 : 16 - lipHw;
+          P(g, x0, y, lipHw, 1, y === Y1 + 1 ? BZD : BZE);
         }
-        // Un tiroir laissé entrouvert, avec ses fiches qui dépassent : c'est le
-        // seul détail qui dit « on y cherche quelque chose ».
-        P(g, 11, 9, 4, 4, DK3); P(g, 11, 8, 4, 2, "#efe8d4"); P(g, 11, 8, 4, 1, "#fbf7ea");
+        // Deux filets de moulure et l'inscription, réduite à des ENTAILLES : pas
+        // un caractère cuit dans un sprite (§4 — ni bilingue, ni rastérisable).
+        for (const my of [Y0 + 12, Y0 + 14]) {
+          const hw = Math.round(hwAt(my));
+          P(g, right ? 0 : 16 - hw, my, hw, 1, BZE);
+        }
+        for (let k = 0; k < 3; k++) {
+          const my = Y0 + 17, hw = Math.round(hwAt(my));
+          P(g, (right ? 1 : 16 - hw + 1) + k * 3, my, 2, 2, BZE);
+        }
+        /* ⚠️ LE CERNE FAIT LE FLANC, ET IL SERT AUSSI CONTRE UN FOND CLAIR (441) :
+           le beffroi a un plancher de bois clair, et une cloche sans cerne s'y
+           fond exactement comme les cierges du chœur sur leur marbre. */
+        for (let y = Y0; y <= Y1; y++) {
+          const hw = Math.round(hwAt(y));
+          P(g, right ? hw - 1 : 16 - hw, y, 1, 1, BZE);
+        }
+        // Le battant, sous la lèvre, une seule fois (moitié gauche).
+        if (!right) { P(g, 13, Y1 + 4, 3, 3, "#3a3a42"); P(g, 14, Y1 + 5, 2, 2, "#55555f"); }
         return c;
       }
-      case "docBox": {
-        /* LES CARTONS D'ARCHIVES, empilés et sanglés. Les archives municipales
-           en portent deux (la note de service, puis le procès-verbal) et c'est
-           le MÊME dessin : ce qui les distingue est ce qu'on lit dedans, pas
-           leur couvercle. Un carton d'archives qui se distinguerait d'un autre
-           carton d'archives ne serait pas un carton d'archives. */
-        const [c, g] = cv(16, 22);
-        const CB = "#c0aa82", CBL = "#d6c39c", CBD = "#9c8760";
-        P(g, 1, 12, 14, 9, CB); P(g, 1, 12, 14, 1, CBL); P(g, 1, 20, 14, 1, CBD);
-        P(g, 2, 4, 12, 8, CB); P(g, 2, 4, 12, 1, CBL); P(g, 2, 11, 12, 1, CBD);
-        P(g, 3, 2, 10, 2, CBD); P(g, 3, 2, 10, 1, CB);                 // le couvercle du dessus
-        P(g, 6, 12, 2, 9, "#8a7a5a"); P(g, 6, 4, 2, 8, "#8a7a5a");     // la sangle, sur les deux
-        P(g, 6, 15, 2, 2, BR);                                          // la boucle
-        P(g, 9, 6, 4, 3, "#efe8d4"); P(g, 9, 6, 4, 1, "#fbf7ea");      // l'étiquette
-        P(g, 10, 7, 2, 1, "#a49a80");
-        P(g, 3, 14, 2, 4, "#efe8d4");                                   // une chemise qui dépasse
+      case "bellFrame": {
+        /* UNE JAMBE DE FORCE du beffroi de bois. ⚠️ ELLE MONTE JUSQU'AU HAUT DU
+           CANEVAS parce qu'elle porte la poutre : un montant qui s'arrête à
+           mi-hauteur ne porte rien, et vu de dessus c'est exactement ce qui fait
+           qu'une charpente a l'air posée au lieu d'être construite. */
+        const [c, g] = cv(16, 38);
+        P(g, 4, 1, 8, 33, W1); P(g, 4, 1, 3, 33, W2); P(g, 11, 1, 1, 33, W3);
+        // L'écharpe en diagonale, en marches : c'est ce qui dit « charpente ».
+        for (let k = 0; k < 9; k++) P(g, 12 - k, 8 + k * 3, 3, 3, W1);
+        for (let k = 0; k < 9; k++) P(g, 12 - k, 8 + k * 3, 1, 3, W2);
+        // Les chevilles de bois, et le pied qui s'élargit.
+        for (const cy2 of [6, 16, 26]) P(g, 6, cy2, 2, 2, "#4a3018");
+        P(g, 2, 34, 12, 3, W3); P(g, 2, 34, 12, 1, W1);
+        P(g, 1, 37, 14, 1, "rgba(20,26,16,0.30)");
         return c;
       }
-      case "bylaw": {
-        /* LE RÈGLEMENT AFFICHÉ, sous verre, à côté du guichet du notaire.
-           ⚠️ IL DOIT SE DISTINGUER DU PORTRAIT ET DU PLAN MURAL, qui pendent
-           tous les deux au même endroit de la même façon. Ce qui le fait, ce
-           n'est pas le cadre : c'est le REFLET du verre — une diagonale claire
-           en travers — et le papier jauni au lieu d'une toile sombre. Un cadre
-           sans reflet est un tableau ; un cadre avec reflet est une vitrine, et
-           on lit une vitrine. */
+      case "ringerBoard": {
+        /* LE TABLEAU DU SONNEUR : une planche clouée au mur avec les tirages de
+           volée. ⚠️ DES LIGNES, PAS DES MOTS (§4). Ce qu'on lit est écrit vivant
+           au rendu, jamais cuit — sinon le sprite n'est plus rastérisable hors
+           navigateur et il ne peut pas être bilingue. */
         const [c, g] = cv(16, 22);
-        P(g, 0, 1, 16, 20, IR); P(g, 0, 1, 16, 1, "#5a5a62");
-        P(g, 1, 2, 14, 18, "#e4d9b8"); P(g, 1, 2, 14, 1, "#f2e9cd");
-        P(g, 3, 4, 10, 1, "#8a7c58");                                   // le titre, en gras
-        for (let k = 0; k < 6; k++) P(g, 2, 7 + k * 2, k % 3 === 2 ? 8 : 12, 1, "#a89a76");
-        P(g, 2, 17, 5, 1, "#8a7c58");                                   // la signature
-        // Le reflet du verre : une diagonale, en deux marches, pas un dégradé.
-        g.globalAlpha = 0.35;
-        P(g, 2, 3, 4, 8, "#ffffff"); P(g, 6, 3, 3, 5, "#ffffff");
-        g.globalAlpha = 1;
+        P(g, 1, 2, 14, 16, W1); P(g, 1, 2, 14, 1, W2); P(g, 1, 17, 14, 1, W3);
+        P(g, 0, 1, 16, 1, W3); P(g, 0, 18, 16, 1, W3);      // le cerne
+        P(g, 3, 5, 10, 9, "#e6dfc8"); P(g, 3, 5, 10, 1, "#f4efe0");
+        for (let k = 0; k < 4; k++) P(g, 4, 7 + k * 2, 6 + (k % 2) * 2, 1, "#7a7466");
+        for (const [nx, ny] of [[2, 3], [13, 3], [2, 16], [13, 16]]) P(g, nx, ny, 1, 1, "#3c3c44");
+        P(g, 1, 19, 14, 2, "rgba(20,26,16,0.26)");
         return c;
       }
       default: {
@@ -5485,129 +5389,489 @@ export function buildSprites() {
   }
 
   /* ═══════════════════════════════════════════════════════════════════════════
-     ZIP 442 — LES BORNES DE L'ARPENTEUR, ET LA PLAQUE DE LA FIN.
+     ZIP 444 — LA QUÊTE DE L'ÉTOILE : LES DESSINS DE PLEIN AIR.
      ───────────────────────────────────────────────────────────────────────────
-     ⚠️⚠️ CES TROIS-LÀ NE SONT PAS DES MEUBLES DE TRIBUNAL, ILS SONT DEHORS —
-     donc ils sortent de `courtPropSprite` et ils obéissent aux règles du
-     DEHORS : ils se voient de loin, ils portent leur ombre, et ils vivent dans
-     une herbe qui n'est pas peinte ici. La borne de section fait la taille d'un
-     genou (une quinzaine de pixels pour un adulte de 23, mesuré contre le repère
-     de `render-echelle`) : une borne à hauteur de ceinture serait une stèle, et
-     personne ne l'enjamberait sans la voir.
-     ⚠️ AUCUN CHIFFRE N'EST DESSINÉ. Une cote gravée serait du texte cuit dans un
-     sprite (§4 : ni bilingue, ni rastérisable), et surtout elle FIGERAIT la
-     réponse du code A dans une image que le joueur pourrait lire sans avoir rien
-     compris. Ce qu'on voit est une face polie et des ENTAILLES ; ce qu'on lit est
-     dans le panneau, vivant, traduit. La borne martelée, elle, porte ses
-     entailles BROUILLÉES — c'est la seule des trois qu'on distingue à l'écran, et
-     c'est justement celle qu'il faut remarquer. */
-  function townBoundStoneSprite(hammered) {
-    /* ⚠️⚠️ ELLE A ÉTÉ RÉTRÉCIE APRÈS LA PREMIÈRE PLANCHE, ET C'EST LE §10 DU 429
-       QUI L'A DIT : *un décor ne se juge pas contre d'autres décors, il se juge
-       contre le personnage qui s'en sert.* Premier jet à dix-neuf pixels — soit
-       ×0,83 d'un fermier, c'est-à-dire une stèle à hauteur de POITRINE. Une
-       borne de section fait un demi-mètre : on l'enjambe, on ne la contourne
-       pas, et une pierre à hauteur de poitrine plantée au bord d'un verger se
-       lit comme un monument. Treize pixels, ×0,57 : le genou. */
-    const [c, g] = cv(12, 18);
-    const G1 = "#9a968c", G2 = "#b4b0a4", G3 = "#7a766e", G4 = "#c8c4b8";
-    P(g, 1, 15, 10, 2, "rgba(30,38,24,0.28)");                       // l'ombre portée
-    P(g, 2, 4, 8, 12, G1);                                            // le fût
-    P(g, 2, 4, 3, 12, G2);                                            // le côté éclairé (nord-ouest)
-    P(g, 9, 5, 1, 11, G3);
-    P(g, 2, 2, 8, 2, G4); P(g, 3, 1, 6, 1, G4);                       // le chanfrein du sommet
-    P(g, 2, 4, 8, 1, G3);
-    // La face polie où la cote est gravée, et ses entailles.
-    P(g, 3, 7, 6, 6, "#8e8a80"); P(g, 3, 7, 6, 1, "#a6a298");
-    if (hammered) {
-      /* La cote martelée : des coups de burin, pas une usure. On BRISE les
-         entailles au lieu de les effacer — une face lisse se lirait comme une
-         borne neuve, et c'est le contraire de ce qu'il faut comprendre. */
-      for (const [bx, by, bw] of [[3, 8, 3], [7, 8, 2], [4, 10, 2], [3, 11, 5]]) P(g, bx, by, bw, 1, "#6e6a62");
-      for (const [bx, by] of [[4, 9], [6, 11], [7, 9]]) P(g, bx, by, 2, 2, "#a29e94");
+     ⚠️⚠️ `tools/render-etoile.mjs` A ÉTÉ ÉCRIT AVANT LE PREMIER `fillRect`, et
+     c'est le corollaire du §4.2 de `CLAUDE.md` : *« ce dessin est-il regardable
+     par un banc ? » est une question de QUALITÉ, et elle se pose avant de
+     dessiner.* Les sols du tribunal ont vécu douze zips au niveau du 426
+     uniquement parce qu'aucun banc ne pouvait les appeler.
+
+     ⚠️ CE QUI GOUVERNE CETTE FAMILLE, C'EST QU'ELLE ÉMET DE LA LUMIÈRE, et rien
+     dans ce dépôt n'en émettait encore. Trois conséquences :
+       1. **le CERNE est obligatoire et il est SOMBRE** — une étoile blanche sur
+          un mur de pierre pâle disparaît, et le 441 l'a payé sur les cierges du
+          chœur (« ce qui manquait n'était pas du contraste, c'était un cerne ») ;
+       2. **le halo est peint AUTOUR, jamais par-dessus** : un `fillRect` teinté
+          sur un sprite dessine une boîte (§4), et un halo qui mange sa propre
+          source donne une tache, pas une lumière ;
+       3. **la source reste la partie la plus CLAIRE et la plus PETITE.** Un
+          dégradé qui s'élargit sans monter en valeur se lit comme du brouillard.
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* ── L'ÉTOILE COMPAGNON. Quatre poses (la respiration) × trois états.
+     ⚠️ ELLE EST PETITE — 13 px, soit ×0,54 un fermier de 24. Un décor ne se juge
+     pas contre d'autres décors, il se juge contre le personnage qui s'en sert
+     (429) : à la taille d'une tête elle devient un familier, à la taille d'un
+     poing elle reste quelque chose qu'on protège. Le texte le dit d'ailleurs
+     (« smaller than a hen »), et un dessin qui contredit son texte ment deux
+     fois.
+     ⚠️ ELLE N'A PAS DE BRANCHES GÉOMÉTRIQUES. Une étoile à cinq pointes tracée
+     au compas est un pictogramme, pas une créature : on assemble un corps rond
+     et QUATRE pointes molles de longueurs différentes, et la silhouette sort
+     toute seule, festonnée (438). */
+  function starWispSprite(pose, state) {
+    /* ⚠️⚠️⚠️ QUATRIÈME ÉCRITURE, ET C'EST UN CHANGEMENT DE CONSTRUCTION, PAS UN
+       RÉGLAGE DE PLUS. Les trois premières tentatives ont produit, dans l'ordre :
+       une ICÔNE de scintillement (quatre branches sur les axes), un BISCUIT À
+       VISAGE (corps trop gros, rayons en bosses), puis une AMIBE (rayons décrits
+       par un champ de distance qui les fait fondre dans le corps). Chaque fois,
+       tous les contrôles du banc passaient.
+
+       ⚠️ LA LEÇON EST DANS L'OUTIL, PAS DANS LES NOMBRES : **un champ de
+       distance ne sait pas faire une pointe à quatorze pixels.** Il fait des
+       masses molles — ce qui est exactement ce qu'on veut pour le cratère, neuf
+       cases de large et organique, et exactement ce qu'on ne veut pas pour un
+       personnage de la taille d'une main. Une pointe, c'est deux ARÊTES DROITES
+       qui se rencontrent ; ça se décrit par un POLYGONE, et on le rastérise.
+       C'est la même famille de leçon que « une courbe f(x) ne peut pas se
+       replier » (437) : l'outil décide de ce qu'on peut dessiner.
+
+       Ici : un polygone à cinq branches (dix sommets, rayon extérieur et rayon
+       intérieur), donc des arêtes franches et des pointes qui finissent sur un
+       pixel. Cinq est premier : la silhouette ne peut pas se replier sur une
+       symétrie et redevenir un pictogramme. Les cinq rayons ont des longueurs
+       INÉGALES qui changent avec la pose — c'est la respiration. */
+    const [c, g] = cv(18, 18);
+    const CORE = ["#fffdf2", "#fff8e4", "#dedad0"][state];
+    const BODY = ["#ffe08a", "#f2ce7e", "#a8a49a"][state];
+    const EDGE = ["#eda43a", "#c98a34", "#6e6a62"][state];
+    const RIM  = ["#7a4a0e", "#66400c", "#33302a"][state];
+    const HALO = ["rgba(255,222,132,0.20)", "rgba(255,210,116,0.11)", "rgba(200,196,186,0.05)"][state];
+    const cx = 9, cy = 9.5;   // ⚠️ décalé d'un demi-pixel vers le bas : à cy = 9 la pointe haute touchait le bord du canevas, donc elle était rabotée en silence (piège n°1, 433)
+    /* ⚠️ LE RAYON INTÉRIEUR EST CE QUI DÉCIDE DE TOUT. Trop petit, l'étoile est
+       une croix maigre et il n'y a plus de place pour un visage ; trop grand,
+       les pointes disparaissent et on retombe sur le biscuit. À 0,44 du rayon
+       extérieur, le cœur fait six pixels de large — juste assez pour deux yeux —
+       et les branches restent des branches. */
+    /* ⚠️⚠️⚠️ ET VOICI LE VRAI COUPABLE DES QUATRE JETS PRÉCÉDENTS : **LE CERNE
+       PAR DILATATION REBOUCHE LES ÉCHANCRURES.** À rayon intérieur 0,44, les
+       creux entre deux branches faisaient deux pixels de profondeur ; le cerne
+       ajoute un pixel DE CHAQUE CÔTÉ, donc il les comblait entièrement, et la
+       silhouette rendue était un BLOB — quelles que soient les longueurs de
+       branches, ce qui explique aussi pourquoi deux poses sortaient identiques
+       au pixel près. Le dessin était juste, son contour le mangeait.
+       ⚠️⚠️ ET LA PARADE ESSAYÉE — creuser plus fort (rayon intérieur 0,32) — A
+       ÉCHOUÉ AUTREMENT : les échancrures apparaissent, mais le cœur tombe à
+       quatre pixels de large, le visage n'y tient plus, et le banc voit des
+       ÎLOTS FLOTTANTS à 4,6 % (les pointes se détachent du corps). C'est la
+       cinquième tentative sur ce seul dessin, et la règle du chantier
+       s'applique : **on s'arrête et on documente au lieu de boucler seul.**
+       ⚠️ ÉTAT LIVRÉ : le rayon intérieur reste à 0,44. La silhouette est une
+       masse ronde à cinq bosses molles avec un visage — une petite créature de
+       lumière, lisible et attachante, mais qui ne lit PAS « étoile » d'emblée.
+       Tous les contrôles passent. Ce qui reste à trancher est décrit dans
+       `components/ferme/QUETE.md` §12, avec deux directions chiffrées.
+       ⚠️ LA CONTRAINTE DE FOND, ET ELLE EST GÉNÉRALE : *un cerne d'un pixel
+       impose une profondeur d'échancrure d'au moins trois pixels.* En dessous,
+       le contour rebouche la forme qu'il est censé souligner. C'est vrai de
+       toute dentelure à cette échelle, pas seulement d'une étoile. */
+    const rot = -Math.PI / 2 + 0.22;                  // une pointe en haut, légèrement penchée
+    /* ⚠️⚠️ LE SOUFFLE PORTE SUR LE RAYON D'ENSEMBLE, ET C'EST LA CONSÉQUENCE
+       DIRECTE DU DÉFAUT CI-DESSUS : puisque le cerne rebouche les échancrures,
+       faire varier les longueurs de branche NE CHANGE PAS la silhouette rendue —
+       deux poses sortaient identiques au pixel près, et le banc l'a dit. La
+       seule grandeur qui traverse encore la dilatation est la TAILLE. Elle
+       respire donc de ±12 %, ce qui est de toute façon la bonne animation :
+       une bestiole qui respire enfle et se creuse. */
+    const BREATH = [1.00, 0.88, 1.12, 0.82][pose & 3];
+    const R = (state === 1 ? 4.4 : 5.6) * BREATH, r = R * 0.44;
+    /* Les cinq longueurs, par pose : quatre lignes réellement distinctes (le
+       piège du jet 1, où deux poses sortaient identiques au pixel près). */
+    /* ⚠️ L'ÉCART ENTRE DEUX POSES DOIT SURVIVRE À LA RASTÉRISATION. Premier jet
+       à ±13 % : à ce rayon-là, deux poses tombaient sur les MÊMES pixels et le
+       banc annonçait « 0 pixel d'écart ». Une différence qui ne franchit pas
+       l'arrondi n'existe pas — c'est vrai d'une animation comme d'un seuil. */
+    const PUFF = [[1.00, 0.70, 0.92, 0.62, 0.84], [0.66, 1.00, 0.64, 0.90, 0.68],
+                  [0.88, 0.62, 1.00, 0.70, 0.98], [0.62, 0.86, 0.72, 1.00, 0.64]][pose & 3];
+    /* ⚠️⚠️ ET UN SOUFFLE D'ENSEMBLE PAR-DESSUS, PARCE QUE LES LONGUEURS SEULES NE
+       SUFFISENT PAS. Le banc a trouvé que les poses 0 et 2 sortaient IDENTIQUES
+       au pixel près : leurs cinq longueurs étaient différentes mais leur somme
+       ne l'était presque pas, et à ce rayon-là la rastérisation avalait l'écart.
+       Un facteur global assure que les quatre images ont des TAILLES distinctes,
+       ce qui est de toute façon la bonne animation : une bestiole qui respire
+       enfle et se creuse, elle ne fait pas seulement remuer ses branches. */
+    const pts = [];
+    for (let k = 0; k < 5; k++) {
+      const a1 = rot + k * (Math.PI * 2 / 5);
+      const a2 = a1 + Math.PI / 5;
+      const rr = R * (state === 2 ? 0.72 : 1) * PUFF[k];
+      pts.push([cx + Math.cos(a1) * rr, cy + Math.sin(a1) * rr]);
+      pts.push([cx + Math.cos(a2) * r, cy + Math.sin(a2) * r]);
+    }
+    const inside = (x, y) => {
+      let hit = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const [xi, yi] = pts[i], [xj, yj] = pts[j];
+        if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) hit = !hit;
+      }
+      return hit;
+    };
+    // 1. Le halo, AUTOUR, en deux couronnes — jamais par-dessus la source.
+    g.fillStyle = HALO;
+    g.beginPath(); g.arc(cx, cy, R + 2.2, 0, 7); g.fill();
+    g.beginPath(); g.arc(cx, cy, R * 0.75, 0, 7); g.fill();
+    // 2. Le cerne, par DILATATION du masque : impossible d'oublier une branche.
+    for (let y = 0; y < 18; y++) for (let x = 0; x < 18; x++) {
+      if (inside(x + 0.5, y + 0.5)) continue;
+      let touch = false;
+      for (let dy = -1; dy <= 1 && !touch; dy++) for (let dx = -1; dx <= 1; dx++)
+        if (inside(x + dx + 0.5, y + dy + 0.5)) { touch = true; break; }
+      if (touch) P(g, x, y, 1, 1, RIM);
+    }
+    /* 3. La matière. ⚠️ LE TON SUIT LA DISTANCE AU CENTRE, PAS LA FORME : c'est
+       ce qui fait que les branches sont plus chaudes que le cœur, donc qu'elles
+       se détachent, donc qu'on les lit comme des branches et pas comme un
+       contour. Une étoile peinte d'un seul ton est un autocollant. */
+    for (let y = 0; y < 18; y++) for (let x = 0; x < 18; x++) {
+      if (!inside(x + 0.5, y + 0.5)) continue;
+      const d = Math.hypot(x + 0.5 - (cx - 0.9), y + 0.5 - (cy - 1.0));
+      P(g, x, y, 1, 1, d > r + 1.4 ? EDGE : d > r * 0.55 ? BODY : CORE);
+    }
+    /* 4. LE VISAGE, DANS LE CŒUR. ⚠️ DES YEUX D'UN PIXEL DE LARGE : à 2×2 sur un
+       cœur de six pixels ils mangeaient la face et la bestiole devenait un
+       animal (jet 2). Un pixel de large, deux de haut, dans la moitié HAUTE — un
+       œil au milieu d'une masse donne un ballon, un œil haut donne un front, et
+       un front donne un être. */
+    if (state === 2) {
+      P(g, cx - 2, cy, 2, 1, RIM); P(g, cx + 1, cy, 2, 1, RIM);        // fermés
     } else {
-      for (const [bx, by, bw] of [[3, 8, 5], [3, 10, 4], [3, 12, 5]]) P(g, bx, by, bw, 1, "#63605a");
-      P(g, 6, 10, 1, 1, "#63605a");
-    }
-    /* La mousse du pied : elle dit que la pierre est là depuis longtemps, ce
-       qu'aucune forme ne peut dire.
-       ⚠️⚠️ ELLE POUSSE EN PLAQUES DE TROIS PIXELS, PAS EN GRAINS D'UN PIXEL, ET
-       C'EST LE BANC QUI L'A EXIGÉ. Premier jet : cinq pixels isolés semés sur la
-       pierre — c'est-à-dire EXACTEMENT la grandeur que le 438 a mis quatre
-       rédactions à nommer, « l'îlot qui flotte dans un aplat », celle qui traduit
-       ce que Guillaume appelle « sale ». `render-enquete` l'a refusé à 1,33 %
-       pour un seuil de 1 %. Et la correction est meilleure au fond, pas
-       seulement au chiffre : de la mousse pousse par PLAQUES, jamais en poivre. */
-    for (const [mx, my] of [[2, 13], [8, 14]]) {
-      P(g, mx, my, 2, 1, "#5d7a4a"); P(g, mx, my + 1, 1, 2, "#4e6a3e");
+      P(g, cx - 2, cy - 2, 1, 2, RIM); P(g, cx + 1, cy - 2, 1, 2, RIM);
+      if (state === 0) P(g, cx - 1, cy + 1, 2, 1, EDGE);               // une bouche, calme seulement
     }
     return c;
   }
-  /* LA BORNE D'ORIGINE, à la ferme. Même famille, mais elle est PLUS HAUTE et
-     elle porte un chapiteau : c'est le point zéro de tout le cadastre de la
-     vallée, et une borne d'origine se distingue d'une borne de section — sinon
-     l'article trois du registre (« toute cote se compte depuis la borne
-     d'origine ») ne désigne rien de reconnaissable.
-     ⚠️ ELLE EST PLANTÉE DE TRAVERS. Deux degrés suffisent : une pierre bien
-     droite au milieu d'un pré a l'air posée par le jeu, une pierre penchée a
-     l'air posée par quelqu'un, il y a longtemps. C'est l'inverse exact de la
-     règle des positions (« ce qui doit être aligné doit l'être ») et c'est
-     pourquoi c'est écrit ici : la faire pencher est une DÉCISION. */
-  function townDatumStoneSprite() {
-    /* ⚠️ ELLE EST PLUS HAUTE QUE LES BORNES DE SECTION — de moitié, pas du
-       double : elle doit se distinguer sans devenir une stèle. Vingt pixels,
-       ×0,87 d'un fermier : la hanche. */
-    const [c, g] = cv(14, 24);
-    const G1 = "#94908a", G2 = "#aeaaa2", G3 = "#74706a", G4 = "#c4c0b6";
-    P(g, 2, 21, 10, 2, "rgba(30,38,24,0.3)");
-    // Le fût, en trois tranches décalées d'un pixel : c'est ça, « de travers ».
-    P(g, 3, 16, 8, 6, G1); P(g, 3, 16, 3, 6, G2);
-    P(g, 4, 10, 8, 6, G1); P(g, 4, 10, 3, 6, G2);
-    P(g, 4, 6, 8, 4, G1); P(g, 4, 6, 3, 4, G2);
-    P(g, 11, 7, 1, 14, G3);
-    // Le chapiteau : une tablette débordante, comme sur une borne de repère.
-    P(g, 2, 3, 11, 3, G4); P(g, 3, 2, 9, 1, G4); P(g, 2, 5, 11, 1, G3);
-    // La face gravée, et la croix de repère de l'arpenteur en son centre : c'est
-    // la marque qui dit « le zéro est ICI », et elle est universelle.
-    P(g, 5, 9, 6, 8, "#88847c"); P(g, 5, 9, 6, 1, "#a09c94");
-    P(g, 7, 11, 2, 4, "#5e5a54"); P(g, 6, 12, 4, 1, "#5e5a54");
-    // ⚠️ Même correction qu'à la borne de section, pour la même raison mesurée :
-    // en plaques, jamais en grains (voir la note là-haut).
-    for (const [mx, my] of [[3, 18], [10, 19]]) {
-      P(g, mx, my, 2, 1, "#5d7a4a"); P(g, mx, my + 1, 1, 2, "#4e6a3e");
+
+  /* ── UN ÉCLAT. Quatre couleurs, une par note.
+     ⚠️ IL EST ANGULEUX LÀ OÙ L'ÉTOILE EST RONDE, et c'est le sujet : un éclat
+     est un MORCEAU, il a des arêtes. Les deux se lisent d'un coup d'œil comme
+     appartenant à la même chose sans se confondre. */
+  function starShardSprite(note) {
+    const [c, g] = cv(14, 16);
+    const HUE = [
+      ["#fff4d0", "#ffd868", "#c08a1c", "#6a4a08"],   // 1 — or
+      ["#eaf6ff", "#96ccf0", "#3a7ab0", "#173a58"],   // 2 — bleu d'eau
+      ["#fff0f6", "#f0a8c8", "#b0507c", "#5a2038"],   // 3 — rose de verre
+      ["#f2fff0", "#a8e8a0", "#4e9a52", "#204a24"],   // 4 — vert de cratère
+    ][note & 3];
+    const [CORE, BODY, EDGE, RIM] = HUE;
+    g.fillStyle = "rgba(255,246,210,0.16)";
+    g.beginPath(); g.arc(7, 8, 6.5, 0, 7); g.fill();
+    // La silhouette : un éclat penché, décrit par ses RANGÉES (une masse, pas un
+    // contour rempli — règle du 438).
+    const rows = [[6, 2, 2], [5, 3, 3], [4, 4, 4], [3, 5, 5], [3, 6, 5], [2, 7, 6],
+                  [2, 8, 5], [3, 9, 4], [3, 10, 3], [4, 11, 2], [5, 12, 1]];
+    for (const [x, y, w] of rows) {
+      P(g, x, y, w, 1, BODY);
+      P(g, x, y, 1, 1, CORE);
+      P(g, x + w - 1, y, 1, 1, EDGE);
     }
+    // ⚠️ LE CERNE FAIT LE TOUR, PARCE QU'UN ÉCLAT SE POSE AUSSI BIEN SUR DU
+    // SABLE CLAIR QUE DANS L'EAU NOIRE (441).
+    for (const [x, y, w] of rows) { P(g, x - 1, y, 1, 1, RIM); P(g, x + w, y, 1, 1, RIM); }
+    P(g, 6, 1, 2, 1, RIM); P(g, 4, 13, 2, 1, RIM);
+    P(g, 3, 14, 8, 2, "rgba(20,26,16,0.22)");     // l'ombre portée, une seule
     return c;
   }
-  /* LA PLAQUE DE LA FIN. ⚠️ ELLE N'EXISTE QUE SI L'ENQUÊTE S'EST TERMINÉE PAR
-     UNE RESTITUTION, et elle est peinte par le rendu à partir de l'état partagé
-     — jamais posée dans `tw.props`, qui est un singleton de module qu'on ne mute
-     JAMAIS (§15 du README : y écrire ferait fuiter l'état d'une ferme à
-     l'autre). C'est le même raisonnement que les cierges de l'église au 441 et
-     que le nom du maire sous son portrait au 439 : ce qui change se peint
-     vivant, ce qui ne change pas se cuit dans un sprite.
-     ⚠️ Le NOM n'est pas dedans, pour la même raison qu'ailleurs : il s'écrit au
-     rendu. Ce qu'on cuit ici est le support — pierre, laiton, quatre vis. */
-  function townPlaqueSprite() {
-    /* ⚠️ LE LAITON EST REDÉCLARÉ ICI, ET C'EST LE PIÈGE N°1 QUI A FRAPPÉ EN
-       TROIS LIGNES. Premier jet : cette fonction lisait `BR`, la couleur de
-       bronze — qui est une constante LOCALE à `courtPropSprite`. Ni le build ni
-       le lint ne le voient ; `render-mairie` a levé un `ReferenceError` à la
-       première exécution, et en jeu la même faute aurait emporté toute la frame
-       (§4 de CLAUDE.md : l'exception n'emporte pas que sa ligne). La plaque est
-       DEHORS, donc elle porte ses couleurs. */
-    const BR = "#a8863c";
-    const [c, g] = cv(20, 26);
-    P(g, 3, 23, 14, 2, "rgba(30,38,24,0.28)");
-    P(g, 3, 8, 14, 16, "#8e8a80"); P(g, 3, 8, 4, 16, "#a6a298");      // la stèle
-    P(g, 15, 9, 1, 15, "#6e6a62");
-    P(g, 2, 6, 16, 3, "#b4b0a4"); P(g, 3, 5, 14, 1, "#c8c4b8");        // le larmier
-    P(g, 4, 10, 12, 9, BR); P(g, 4, 10, 12, 1, "#d8b45c"); P(g, 4, 18, 12, 1, "#7a5c1c");
-    for (const [vx, vy] of [[5, 11], [14, 11], [5, 17], [14, 17]]) P(g, vx, vy, 1, 1, "#6a5218");
-    P(g, 6, 13, 8, 1, "#8a6c28"); P(g, 6, 15, 6, 1, "#8a6c28");
-    for (const [mx, my] of [[3, 20], [15, 21]]) {
-      P(g, mx, my, 2, 1, "#5d7a4a"); P(g, mx, my + 1, 1, 2, "#4e6a3e");
+
+  /* ── LE SILLON DE LA FERME. Deux états : chaud (l'éclat y est), refermé.
+     ⚠️ IL FAIT SIX CASES DE LARGE, donc 96 px, et c'est le seul dessin de cette
+     famille qui soit plus large que haut : un impact rasant laboure, il ne perce
+     pas. Un cratère rond à la ferme aurait dit « c'est ici que ça s'est écrasé »,
+     alors que le gros est tombé en ville — le dessin doit dire « ça a RICOCHÉ ».
+     ⚠️ AUCUN PIXEL SUR LE BORD HAUT du canevas (piège n°1 des sprites, 433). */
+  function starFurrowSprite(cold) {
+    const W = 96, H = 34;
+    const [c, g] = cv(W, H);
+    const rnd = makeRnd(4441);
+    /* La terre retournée. ⚠️ ELLE EST DÉCRITE PAR UN CHAMP, pas par une bande :
+       la profondeur décroît d'est en ouest (le sens de la course) et le bord
+       ondule. Une bande à bords francs se lit comme une couture (441). */
+    for (let x = 2; x < W - 2; x++) {
+      const t = x / W;                                  // 0 à l'ouest, 1 à l'est
+      const depth = (1 - t) * 5 + 3 + Math.sin(x * 0.31) * 1.4 + Math.sin(x * 0.13) * 1.1;
+      const y0 = 20 - depth * 0.55, h = depth;
+      const dark = cold ? "#4c5c34" : "#241a12";
+      const mid = cold ? "#5e7040" : "#3a2a1c";
+      P(g, x, y0 | 0, 1, h | 0, dark);
+      P(g, x, (y0 + h * 0.55) | 0, 1, Math.max(1, (h * 0.45) | 0), mid);
+      // Le bourrelet de terre projetée, au nord — plus haut là où c'est profond.
+      const lip = Math.max(0, (depth - 4) | 0);
+      if (lip) P(g, x, (y0 - lip) | 0, 1, lip, cold ? "#6a7c48" : "#4a3826");
     }
+    if (!cold) {
+      /* Le SEL DE VERRE : le sable fondu par le passage, en PLAQUES et jamais en
+         grains. ⚠️ Cinq pixels isolés sur de la terre, c'est « du poivre » —
+         l'îlot qui flotte dans un aplat, que le 438 a mis quatre rédactions à
+         nommer et que le 442 a repayé sur la mousse des bornes. */
+      for (let k = 0; k < 9; k++) {
+        const gx = 8 + ((k * 11 + (rnd() * 4 | 0)) % (W - 18));
+        const gy = 15 + (rnd() * 6 | 0);
+        P(g, gx, gy, 3, 2, "#cfe6d8"); P(g, gx + 1, gy, 2, 1, "#eef8f0");
+        P(g, gx - 1, gy + 1, 2, 1, "#a8c4b6");
+      }
+      // La chaleur : un halo bas, très étalé, jamais par-dessus la terre claire.
+      g.fillStyle = "rgba(255,190,110,0.10)";
+      g.beginPath(); g.ellipse(W - 22, 20, 22, 8, 0, 0, 7); g.fill();
+      g.fillStyle = "rgba(255,150,70,0.13)";
+      g.beginPath(); g.ellipse(W - 22, 20, 11, 4.5, 0, 0, 7); g.fill();
+      // La vapeur : trois volutes, chacune une masse et pas un semis.
+      for (let k = 0; k < 3; k++) {
+        /* ⚠️ MÊME CORRECTION, TROISIÈME FOIS DANS LE MÊME ZIP : la volute la
+           plus haute partait de `vy - 6` avec `vy = 6`, donc de la rangée 0. */
+        const vx = W - 34 + k * 10, vy = 11 - k;
+        P(g, vx, vy, 4, 2, "rgba(232,238,236,0.34)");
+        P(g, vx + 1, vy - 3, 3, 3, "rgba(232,238,236,0.22)");
+        P(g, vx + 2, vy - 6, 2, 3, "rgba(232,238,236,0.12)");
+      }
+    } else {
+      /* Refermé : de l'herbe rase a repris, plus claire que l'herbe d'à côté (une
+         terre remuée pousse mieux), et UN éclat de verre est resté dedans. C'est
+         la trace que la ferme garde de toute l'histoire. */
+      for (let k = 0; k < 14; k++) {
+        const gx = 5 + k * 6 + (rnd() * 3 | 0), gy = 17 + (rnd() * 4 | 0);
+        P(g, gx, gy, 1, 3, "#7ea45c"); P(g, gx + 1, gy + 1, 1, 2, "#96bc70");
+      }
+      P(g, 52, 18, 3, 4, "#cfe6d8"); P(g, 53, 18, 1, 3, "#f2fbf4"); P(g, 52, 22, 3, 1, "#7c9a8c");
+      g.fillStyle = "rgba(180,230,210,0.13)";
+      g.beginPath(); g.arc(53, 20, 7, 0, 7); g.fill();
+    }
+    P(g, 4, H - 3, W - 8, 2, "rgba(20,26,16,0.16)");
     return c;
+  }
+
+  /* ── LA VERRERIE : le four, un râtelier de perles, le volet à contrepoids, et
+     l'arbre de la pie. ⚠️ ILS PARTAGENT LA PALETTE DU QUARTIER DES ARTISANS
+     (bois, brique, fonte) : un atelier qui aurait ses propres couleurs se lirait
+     comme un décor rapporté. */
+  function starKilnSprite() {
+    const [c, g] = cv(34, 40);
+    const BR1 = "#8e5442", BR2 = "#a86a52", BR3 = "#6a3c2e";
+    // Le fût, en assises de brique décalées d'une rangée sur deux (la période
+    // compte plus que les détails, 434 — et une brique alignée fait une grille).
+    for (let y = 10; y < 34; y += 3) {
+      P(g, 5, y, 24, 3, BR1); P(g, 5, y, 24, 1, BR2);
+      for (let x = 5 + ((y / 3 | 0) % 2 ? 0 : 3); x < 29; x += 6) P(g, x, y, 1, 3, BR3);
+    }
+    P(g, 3, 34, 28, 4, "#7a7268"); P(g, 3, 34, 28, 1, "#98908a");   // le socle de pierre
+    P(g, 4, 8, 26, 3, BR3); P(g, 4, 8, 26, 1, "#c08468");            // la corniche
+    // La gueule : elle est ÉTEINTE (l'atelier est fermé la nuit — c'est le
+    // thème du secret). Un four allumé promettrait quelqu'un à l'intérieur.
+    P(g, 12, 22, 10, 9, "#241c18"); P(g, 12, 22, 10, 1, "#12100e");
+    P(g, 13, 28, 8, 3, "#3a2a22"); P(g, 14, 29, 3, 1, "#5a4032");    // des cendres froides
+    // La cheminée, décalée : une cheminée centrée sur un four rond sonne faux.
+    /* ⚠️ LA MITRE DESCEND D'UNE RANGÉE, ET CE N'EST PAS DE LA COQUETTERIE : à
+       y = 0 elle touchait le bord du canevas, donc elle était RABOTÉE en
+       silence. Le piège n°1 des sprites (§4), payé trois fois au seul zip 433 —
+       il ne coûte rien sur le moment, le dessin est joli, il manque juste deux
+       rangées que personne ne cherche. Ici c'est le banc qui l'a dit. */
+    P(g, 20, 2, 7, 7, BR1); P(g, 20, 2, 7, 1, BR2); P(g, 26, 2, 1, 7, BR3);
+    P(g, 19, 1, 9, 2, "#5e5048");
+    P(g, 2, 37, 30, 3, "rgba(20,26,16,0.24)");
+    return c;
+  }
+  function starRackSprite() {
+    /* UN RÂTELIER DE PERLES. ⚠️ LES PERLES SONT TOUTES IDENTIQUES, ET C'EST LE
+       MINI-JEU : « en plein jour elles se ressemblent toutes ». Un râtelier où
+       l'une brillerait déjà aurait donné la réponse dans le décor. Ce qui la
+       distingue n'est pas peint ici — c'est son OMBRE, dessinée au rendu. */
+    const [c, g] = cv(30, 30);
+    P(g, 1, 6, 28, 2, "#7a5232"); P(g, 1, 6, 28, 1, "#9c6b42");     // la tringle haute
+    P(g, 1, 20, 28, 2, "#7a5232"); P(g, 1, 20, 28, 1, "#9c6b42");
+    P(g, 2, 8, 2, 20, "#6a4426"); P(g, 26, 8, 2, 20, "#6a4426");    // les montants
+    const BEAD = ["#7fb8d8", "#b8d8e8", "#4a7a96"];
+    for (let r = 0; r < 2; r++) for (let k = 0; k < 6; k++) {
+      const bx = 4 + k * 4, by = 9 + r * 14;
+      P(g, bx, by, 3, 3, BEAD[0]); P(g, bx, by, 2, 1, BEAD[1]); P(g, bx + 2, by + 2, 1, 1, BEAD[2]);
+      P(g, bx - 1, by + 1, 1, 1, "#2e4a5c"); P(g, bx + 3, by + 1, 1, 1, "#2e4a5c");  // cerne
+      P(g, bx + 1, by + 3, 1, 3, "#8a7a5c");   // le fil
+    }
+    P(g, 1, 27, 28, 2, "rgba(20,26,16,0.22)");
+    return c;
+  }
+  function starShutterSprite() {
+    /* LE VOLET À CONTREPOIDS, relevé. ⚠️ LA PIERRE DU CONTREPOIDS EST AU SOL,
+       DEVANT : c'est elle qu'on doit voir, parce que c'est dessus qu'on se tient.
+       Une mécanique qu'on ne peut découvrir que si on nous l'a dite n'existe pas
+       (leçon des plaques du tribunal, 426). */
+    const [c, g] = cv(30, 38);
+    P(g, 3, 2, 24, 14, "#8a6440"); P(g, 3, 2, 24, 2, "#a87c50");
+    for (let x = 5; x < 26; x += 4) P(g, x, 4, 1, 12, "#6a4a2c");
+    P(g, 2, 1, 26, 1, "#5a3c22"); P(g, 2, 16, 26, 1, "#5a3c22");     // le cerne
+    P(g, 14, 17, 2, 12, "#5a5048");                                   // la chaîne
+    for (let y = 18; y < 29; y += 3) P(g, 13, y, 4, 1, "#7e746a");
+    // La pierre : ronde, lisse, usée par les pieds — donc plus claire au sommet.
+    g.fillStyle = "#4e4a44"; g.beginPath(); g.ellipse(15, 32, 8, 4.5, 0, 0, 7); g.fill();
+    g.fillStyle = "#6e6a62"; g.beginPath(); g.ellipse(15, 31, 7, 3.6, 0, 0, 7); g.fill();
+    g.fillStyle = "#8a867c"; g.beginPath(); g.ellipse(14, 30, 4.5, 2.2, 0, 0, 7); g.fill();
+    P(g, 6, 35, 18, 2, "rgba(20,26,16,0.24)");
+    return c;
+  }
+  function starNestTreeSprite() {
+    /* L'ARBRE DE LA PIE. ⚠️ IL NE REPREND PAS LE MOULE DES ONZE ESSENCES (437) :
+       celui-là est un arbre de rue, celui-ci est un arbre à NID, et ce qu'on
+       doit lire de loin est la boule de brindilles dans la fourche. Il est donc
+       plus dégagé — un houppier plein cacherait le seul détail qui compte. */
+    const [c, g] = cv(48, 60);
+    const BK = "#6a4a30", BK2 = "#86603e", BK3 = "#4a3220";
+    P(g, 21, 26, 6, 32, BK); P(g, 21, 26, 2, 32, BK2); P(g, 26, 26, 1, 32, BK3);
+    for (const [bx, by, bw, dir] of [[14, 30, 8, -1], [27, 34, 8, 1], [16, 22, 6, -1], [27, 20, 6, 1]]) {
+      for (let k = 0; k < bw; k++) P(g, bx + (dir < 0 ? bw - k : k), by - k, 2, 2, BK);
+    }
+    // Le feuillage : quatre masses pleines et cernées, jamais un semis (438).
+    const LF = "#3d7a42", LF2 = "#57a05c", LFD = "#255028";
+    /* ⚠️ LA MASSE HAUTE EST DESCENDUE DE TROIS RANGÉES : à `ly = 9` avec un
+       rayon de 10 (plus 1 de cerne), le houppier sortait par le haut et se
+       faisait raboter sans un mot. Même piège que la mitre du four, trouvé par
+       le même contrôle. */
+    for (const [lx, ly, lr] of [[13, 16, 9], [33, 14, 8], [24, 12, 10], [17, 26, 7], [32, 26, 6]]) {
+      g.fillStyle = LFD; g.beginPath(); g.arc(lx, ly, lr + 1, 0, 7); g.fill();
+      g.fillStyle = LF; g.beginPath(); g.arc(lx, ly, lr, 0, 7); g.fill();
+      g.fillStyle = LF2; g.beginPath(); g.arc(lx - lr * 0.3, ly - lr * 0.35, lr * 0.55, 0, 7); g.fill();
+    }
+    /* LE NID, dans la fourche, et il DÉPASSE du feuillage : c'est le seul
+       endroit du dessin qu'on doit repérer d'en bas. */
+    const NX = 22, NY = 18;
+    g.fillStyle = "#3a2a18"; g.beginPath(); g.ellipse(NX + 4, NY + 3, 8, 5, 0, 0, 7); g.fill();
+    g.fillStyle = "#6a4e2c"; g.beginPath(); g.ellipse(NX + 4, NY + 2, 7.5, 4.2, 0, 0, 7); g.fill();
+    g.fillStyle = "#8a6a3c"; g.beginPath(); g.ellipse(NX + 4, NY + 1, 6, 3, 0, 0, 7); g.fill();
+    for (let k = 0; k < 7; k++) P(g, NX - 3 + k * 2, NY - 1 + (k % 3), 3, 1, "#4e3a20");
+    // Un reflet DANS le nid : c'est l'éclat qu'elle garde, et il se voit à peine.
+    P(g, NX + 4, NY, 2, 2, "#ffe89a"); P(g, NX + 4, NY, 1, 1, "#fffdf0");
+    P(g, 16, 57, 16, 3, "rgba(20,26,16,0.26)");
+    return c;
+  }
+
+  /* ── LA PIE. Trois poses : de dos, tête tournée, en vol.
+     ⚠️ ELLE EST NOIRE ET BLANCHE, DONC ELLE A BESOIN D'UN TROISIÈME TON. Deux
+     valeurs extrêmes côte à côte vibrent ; le bleu-vert irisé de la queue est ce
+     qui fait une pie plutôt qu'un pigeon peint en deux couleurs. */
+  function magpieSprite(pose) {
+    const [c, g] = cv(26, 24);
+    const BK = "#1c1c22", BK2 = "#33333e", WH = "#eef0f2", IR = "#2a4a52";
+    if (pose === 2) {
+      // EN VOL, ailes hautes : la silhouette d'une pie qui décolle est une CROIX.
+      P(g, 11, 9, 5, 7, BK); P(g, 11, 9, 5, 1, BK2);
+      P(g, 12, 6, 3, 3, BK); P(g, 15, 7, 3, 1, "#c8a33c");            // tête + bec
+      for (let k = 0; k < 7; k++) { P(g, 10 - k, 8 - k, 2, 2, k > 3 ? IR : BK); P(g, 15 + k, 8 - k, 2, 2, k > 3 ? IR : BK); }
+      P(g, 12, 15, 3, 7, IR); P(g, 12, 15, 1, 7, BK);                 // la queue
+      P(g, 12, 11, 3, 4, WH);
+      P(g, 8, 21, 12, 2, "rgba(20,26,16,0.14)");
+      return c;
+    }
+    // AU SOL. `pose 0` = de dos (c'est celle qu'on voit pendant qu'on monte),
+    // `pose 1` = la tête tournée — et c'est le seul instant qui compte.
+    P(g, 9, 8, 8, 9, BK); P(g, 9, 8, 8, 2, BK2);                      // le corps
+    P(g, 10, 12, 6, 5, WH);                                           // le plastron
+    P(g, 16, 10, 2, 6, IR);                                           // l'aile irisée
+    P(g, 8, 16, 2, 5, IR); P(g, 8, 16, 1, 5, BK);                     // la queue, longue
+    if (pose === 0) { P(g, 11, 4, 5, 5, BK); P(g, 11, 4, 5, 1, BK2); }
+    else {
+      P(g, 11, 4, 5, 5, BK); P(g, 11, 4, 5, 1, BK2);
+      P(g, 16, 6, 3, 2, "#c8a33c");                                   // le bec, de profil
+      P(g, 15, 5, 2, 2, WH); P(g, 15, 5, 1, 1, "#1c1c22");            // ⚠️ L'ŒIL
+    }
+    P(g, 11, 17, 2, 4, "#c8a33c"); P(g, 14, 17, 2, 4, "#c8a33c");     // les pattes
+    P(g, 8, 21, 12, 2, "rgba(20,26,16,0.20)");
+    return c;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     LE CRATÈRE — UNE FONCTION, PAS UN SPRITE, ET IL FAUT DIRE POURQUOI.
+     ───────────────────────────────────────────────────────────────────────────
+     ⚠️⚠️ IL FAIT NEUF CASES DE LARGE ET IL SE FOND DANS L'HERBE. Cuit en sprite,
+     il aurait fallu y peindre l'herbe qui l'entoure — donc figer une saison, un
+     voile de nuit et une météo, ou en cuire quatre. Dessiné à la volée sur le
+     fond déjà peint, il hérite de tout ça gratuitement.
+     ⚠️ ET IL EST DANS `fermeArt.js`, PAS DANS LA BOUCLE DE RENDU. C'est le §2 du
+     piège n°1 (« un dessin qu'aucun banc ne peut appeler ne se dégrade pas, il
+     reste au niveau du jour où il a été écrit ») : les sols des intérieurs sont
+     restés au 426 pendant douze zips pour exactement cette raison. Le jeu
+     l'APPELLE, `render-etoile` l'APPELLE.
+     ⚠️⚠️ SA FORME EST UNE ISOLIGNE, PAS UNE HAUTEUR PAR COLONNE. La règle du 437
+     interdit `f(x)` pour une côte parce qu'une côte se replie ; un cratère, lui,
+     est étoilé par nature (il n'a pas de crique), donc un rayon modulé par
+     l'angle EST un champ légitime — et c'est dit ici pour qu'on ne prenne pas
+     cette exception pour un oubli. Deux harmoniques premières entre elles (3 et
+     5), sinon le contour se referme sur une symétrie visible.
+     ⚠️ `phase` : 0 = frais (au chapitre 2), 1 = refroidi en bassin de verre (la
+     trace, après la fin). Le second se DÉDUIT de l'état partagé, il n'est stocké
+     nulle part — règle des cierges de l'église (441). */
+  function drawStarCrater(g2, cx, cy, T2, phase, tMs) {
+    /* ⚠️⚠️ LA CUVETTE NE FAIT PAS L'EMPRISE, ET C'EST UN DÉFAUT TROUVÉ PAR LE
+       BANC. Premier jet : la cuvette prenait tout `STAR_CRATER_DRAW_R`, et les
+       traînées d'herbe couchée partaient JUSQU'À 1,6 FOIS PLUS LOIN — donc le
+       dessin peignait un rayon de 94 px là où le générateur ne garantit un
+       disque libre que sur 72. Les traînées seraient tombées sur ce qui traîne
+       autour : un arbre, un buisson, le sentier. C'est très exactement « la case
+       d'un décor n'est pas la surface qu'il couvre » (§4 de CLAUDE.md, la règle
+       du 440), et personne ne l'aurait vu avant de tomber sur la bonne carte.
+       ⚠️ La parade n'est pas de raccourcir les traînées jusqu'à les perdre — ce
+       sont ELLES qui disent « quelque chose est TOMBÉ ici » plutôt que
+       « quelqu'un a creusé ». On rétrécit la CUVETTE et on garde la portée : le
+       dessin total tient désormais dans l'emprise annoncée, et le cratère a
+       gagné en lecture au passage (une cuvette plus serrée fait un impact plus
+       violent). */
+    const FULL = C.STAR_CRATER_DRAW_R * T2;   // l'emprise ANNONCÉE, traînées comprises
+    const R = FULL * 0.62;                    // la cuvette, qui n'en est qu'une part
+    const rAt = (a) => R * (1 + 0.17 * Math.sin(3 * a + 0.7) + 0.10 * Math.sin(5 * a - 1.3));
+    const ring = (k, col) => {
+      g2.fillStyle = col;
+      g2.beginPath();
+      for (let i = 0; i <= 48; i++) {
+        const a = i / 48 * Math.PI * 2, r = rAt(a) * k;
+        const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r * 0.78;   // vu de dessus, écrasé
+        i ? g2.lineTo(x, y) : g2.moveTo(x, y);
+      }
+      g2.closePath(); g2.fill();
+    };
+    /* 1. LE BOURRELET DE TERRE PROJETÉE, d'abord — il déborde du trou, donc il se
+       peint dessous. Un anneau peint après aurait un bord franc côté intérieur. */
+    ring(1.00, phase ? "#5c6a3c" : "#4a3a26");
+    ring(0.93, phase ? "#6e7e48" : "#5a4632");
+    /* 2. L'HERBE COUCHÉE EN ÉTOILE, sur vingt cases. ⚠️ C'EST CE QUI DIT
+       « quelque chose est TOMBÉ ici » plutôt que « quelqu'un a creusé ». Sans
+       elle, un cratère est un trou. Les traînées sont RADIALES et de longueurs
+       inégales : régulières, elles feraient une rosace. */
+    for (let k = 0; k < 26; k++) {
+      const a = k / 26 * Math.PI * 2 + 0.11;
+      const len = R * 1.02 + (FULL - R * 1.02) * Math.abs(Math.sin(k * 2.399));
+      const x0 = cx + Math.cos(a) * rAt(a) * 0.98, y0 = cy + Math.sin(a) * rAt(a) * 0.78;
+      const x1 = cx + Math.cos(a) * len, y1 = cy + Math.sin(a) * len * 0.78;
+      g2.strokeStyle = phase ? "rgba(120,150,86,0.34)" : "rgba(122,116,74,0.44)";
+      g2.lineWidth = 2; g2.beginPath(); g2.moveTo(x0, y0); g2.lineTo(x1, y1); g2.stroke();
+    }
+    g2.lineWidth = 1;
+    // 3. La cuvette, en trois marches — une pente lisse n'a pas de lecture.
+    ring(0.86, phase ? "#3e6a4e" : "#3a2c1e");
+    ring(0.66, phase ? "#2f5c46" : "#2a2016");
+    /* 4. LE FOND : du sable fondu en verre. ⚠️ IL EST LA PARTIE LA PLUS CLAIRE ET
+       LA PLUS PETITE — c'est la règle de cette famille : une source qui s'élargit
+       sans monter en valeur se lit comme du brouillard. */
+    ring(0.44, phase ? "#3f8a6a" : "#6a5c3e");
+    ring(0.30, phase ? "#63b48e" : "#8a7a52");
+    ring(0.17, phase ? "#a8e8c6" : "#b8a874");
+    if (phase) {
+      // Le bassin : quelques reflets FIXES (dérivés de l'angle, pas tirés), et
+      // une lueur qui respire lentement.
+      for (let k = 0; k < 5; k++) {
+        const a = k * 1.2566 + 0.4, r = R * (0.2 + 0.09 * k);
+        P(g2, (cx + Math.cos(a) * r) | 0, (cy + Math.sin(a) * r * 0.78) | 0, 3, 1, "rgba(226,255,240,0.55)");
+      }
+      const pulse = 0.10 + 0.05 * Math.sin((tMs || 0) / 1400);
+      g2.fillStyle = `rgba(140,240,190,${pulse.toFixed(3)})`;
+      ring(0.52, g2.fillStyle);
+    }
   }
 
   // ----- 10 façades de maison basiques pour Valley Town (zip 235). Toutes
@@ -11431,15 +11695,23 @@ house: house(),
     townBoutique: townBoutiqueSprite(),
     townSalon: townSalonSprite(),
     townNewsBoard: townNewsBoardSprite(),
-    /* Zip 442 — les bornes de l'arpenteur. `townBoundStone[0]` est intacte,
-       `[1]` est martelée : le générateur ne pose que la seconde au bois, et
-       c'est cette différence-là, et elle seule, que le joueur doit voir. */
-    townBoundStone: [townBoundStoneSprite(false), townBoundStoneSprite(true)],
-    townDatumStone: townDatumStoneSprite(),
-    townPlaque: townPlaqueSprite(),
     /* Zip 426 — l'intérieur du tribunal, indexé par `kind` (jamais par
        position dans un tableau : ajouter un meuble ne doit rien décaler). */
     courtProps: Object.fromEntries(COURT_PROP_KINDS.map(k => [k, courtPropSprite(k)])),
+    /* ⚠️ ZIP 444 — LA QUÊTE DE L'ÉTOILE. Quatre poses × trois états pour la
+       compagne (la respiration et l'humeur), quatre éclats (une couleur par
+       note), deux états de sillon, quatre décors de la verrerie, trois poses de
+       pie. Le cratère et la Lyre ne sont PAS ici : ce sont des fonctions, parce
+       qu'ils se peignent sur un fond déjà là (voir leur note). */
+    starWisp: Array.from({ length: 3 }, (_, st) => Array.from({ length: 4 }, (_, po) => starWispSprite(po, st))),
+    starShard: Array.from({ length: 4 }, (_, n) => starShardSprite(n)),
+    starFurrow: [starFurrowSprite(false), starFurrowSprite(true)],
+    starKiln: starKilnSprite(),
+    starRack: starRackSprite(),
+    starShutter: starShutterSprite(),
+    starNestTree: starNestTreeSprite(),
+    magpie: [magpieSprite(0), magpieSprite(1), magpieSprite(2)],
+    drawStarCrater,
     townHouses: Array.from({ length: C.TOWN_HOUSE_STYLES }, (_, i) => townHouseVariant(i)),
     rabbit: [rabbitSprite(0), rabbitSprite(1), rabbitSprite(2)],
     torch: torchSprite(),

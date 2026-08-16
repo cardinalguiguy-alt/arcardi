@@ -12,8 +12,242 @@
    paramètres (niveau d'outil, gain, etc.).
    ========================================================================== */
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 444 — LES TEXTES DE LA QUÊTE DE L'ÉTOILE, EN ANGLAIS, UNE SEULE FOIS.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ CE BLOC EST DÉFINI DEHORS ET RÉFÉRENCÉ PAR LES DEUX LANGUES, ET C'EST LA
+   FAÇON LA MOINS DANGEREUSE DE LIVRER UNE PASSE « ANGLAIS SEULEMENT ».
+   Consigne du chantier : cette passe est en anglais, la traduction française
+   viendra dans une session à part. Trois façons de le faire, deux mauvaises :
+     • n'écrire la clé que côté `en` → `L.star` vaut `undefined` en français, et
+       le jeu plante à la première bulle. Non ;
+     • RECOPIER le texte anglais dans le bloc `fr` → deux textes identiques à
+       tenir d'accord, c'est-à-dire la divergence en attente du §8 de
+       `CLAUDE.md` : le jour où l'on corrige une réplique, on en corrige une
+       seule, et personne ne s'en aperçoit puisque personne ne relit l'autre ;
+     • UNE SEULE table, référencée deux fois. Il n'existe qu'un texte, donc il
+       ne peut pas diverger, `verify-strings` voit bien la clé `star` des deux
+       côtés, et **l'état « pas encore traduit » est visible d'un coup d'œil**
+       au lieu de se cacher dans quatre cents lignes qui se ressemblent.
+   ⚠️ LA TRADUCTION FUTURE EST DONC : dupliquer cette table, la traduire, et
+   remplacer `star: STAR_EN` par `star: STAR_FR` dans le bloc `fr`. Une ligne de
+   branchement, pas un refactor — ce que la consigne demande.
+
+   ⚠️⚠️ ET RIEN DE CE QUE LE JOUEUR LIT N'EST ÉCRIT AILLEURS QUE DANS CETTE
+   TABLE. C'est la règle du 439 (`HALL_TOPICS` : la table d'un côté, le texte de
+   l'autre), et elle est mesurable : `verify-strings.mjs` apparie les deux
+   langues clé par clé, et il ne sait le faire que sur ce fichier.
+
+   ⚠️ LE REGISTRE D'ÉCRITURE EST UNE CONTRAINTE DE CONCEPTION, PAS UN GOÛT :
+   public de 7 à 27 ans. Phrases courtes, mots simples, présent. Pas de tournure
+   alambiquée même bien tournée, et surtout **pas un mot d'administration** —
+   c'est très exactement ce que l'enquête du 442 avait de trop. Ce qui doit être
+   beau, c'est ce qui se passe, pas la façon de le dire.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const STAR_EN = {
+  title: "The Fallen String",
+  /* ── LE PISTEUR. Une icône, des pastilles, UNE phrase. Jamais deux. */
+  hud: {
+    shards: (n, total) => `${n} of ${total}`,
+    goal: {
+      field:  "Something landed in the west field.",
+      crater: "Find where the rest of it fell.",
+      water:  "A piece sank under the pier.",
+      thief:  "A magpie took two of them.",
+      note:   "Take it up the bell tower.",
+    },
+    /* Le rappel de reprise. ⚠️ UNE FOIS PAR SESSION, jamais deux — un « où en
+       étions-nous » qui revient à chaque écran est une notification. */
+    againTitle: "Where you were",
+    again: (n, total) => `You have ${n} of ${total} pieces. The little star is still with you.`,
+  },
+  /* ── LES CARTES DE CHAPITRE. Le seul endroit du chantier où le jeu prend
+     l'écran entier pour dire un titre. */
+  chapter: {
+    field:  "Chapter One — What Landed in the Field",
+    crater: "Chapter Two — The Crater",
+    water:  "Chapter Three — What the Water Kept",
+    thief:  "Chapter Four — The Thief's Two Prizes",
+    note:   "Chapter Five — The Fifth Note",
+    end:    "The Fallen String",
+  },
+  /* ── LA CHUTE. Personne d'autre ne la commente : c'est le thème (§3 de
+     QUETE.md). Le silence de la ville EST la première chose étrange. */
+  fall: {
+    line1: "The sky tears open, west to east.",
+    line2: "Something hits the ground far away. The windows rattle.",
+    line3: "Every bird in the valley goes up at once.",
+    quiet: "Nobody comes out to look. Nobody says anything about it. Not one person.",
+  },
+  /* ── ÉTAPE 1 : LE CHAMP. */
+  s1: {
+    prompt: "E: look at it",
+    tooHot: "It's too hot to look at. It hisses when the rain touches it.",
+    coolTitle: "Cool it down",
+    coolHint: "Tap to pour. A little at a time — too much at once and the glass cracks.",
+    coolCrack: "Crack. Start again, gentler.",
+    coolWin: "The white goes orange, then red, then blue. It stops hissing.",
+    shadow: "Your shadow has someone small sitting on its shoulder. You turn around. Nothing there.",
+    got: "One note. Just one. Like a question.",
+    east: "It leans east. Always east.",
+  },
+  /* ── ÉTAPE 2 : LE CRATÈRE. */
+  s2: {
+    promptCalm: "Stand still and look away",
+    empty: "The crater is empty. Warm sand, turned to green glass.",
+    peek: "Something moves at the edge of your eye. You look. It's gone.",
+    calmHint: "It won't come out while it's being watched.",
+    calmBoth: "Both of you. Backs turned. Don't move.",
+    calmSolo: "Alone, this takes a while. Stay turned around.",
+    meet1: "It is smaller than a hen. It is shaking.",
+    meet2: "You hold out the piece from your field. It takes it back.",
+    meet3: "Two notes, together. It stops shaking.",
+    name: "It has no name yet. A star's name is five notes long, and it only has two.",
+    promptLean: "E: let it sing",
+    leanTitle: "Listen to the shadows",
+    leanHint: "Every shadow in town leans toward a lost piece. One shadow is a direction. Two are a place.",
+    leanArmed: "The shadows lean. From here, that's all you can tell.",
+    leanSoloArmed: "Remember which way. Now go somewhere far and listen again.",
+    leanTooClose: "Too close together. The two directions are the same direction.",
+    leanFound: "Two lines cross. You know where to look now.",
+    markLake: "Under the pier, in the lake.",
+    markGlass: "The glassworks, east of town.",
+  },
+  /* ── ÉTAPE 3 : LE LAC. */
+  s3: {
+    promptDive: "E: dive",
+    promptHold: "Hold the star over the water",
+    dark: "The water is black. You can't see your own hands.",
+    poolHint: "Its light goes through the water and makes a bright pool on the bottom.",
+    poolLead: "Whoever holds the star walks the pier. The pool follows. The diver can only see inside it.",
+    poolSolo: "You wedge the star on the bollard. The pool stops moving. You'll have to dive at an angle.",
+    diveTitle: (n) => `Dive ${n}`,
+    diveHint: "Arrows to steer. The ring is your breath.",
+    diveDeeper: "It slid deeper.",
+    diveUp: "You come up empty. Breathe. Go again.",
+    got: "Three notes.",
+    wings: "A shadow crosses the water. Wings. Something small and bright goes east with it.",
+  },
+  /* ── ÉTAPE 4 : LA VERRERIE ET LA PIE. */
+  s4: {
+    promptSweep: "E: hold the star up",
+    promptWatch: "Watch the back wall",
+    promptLure: "E: lead it away",
+    promptClimb: "E: climb",
+    shut: "The glassworks is shut for the night. The furnace is cold. Nobody's here.",
+    /* ⚠️ DEUX TITRES COURTS, ET ILS ONT ÉTÉ AJOUTÉS EN REGARDANT L'ÉCRAN. Le
+       premier jet prenait `rackHint` et `lureHint` comme titres de mini-jeu :
+       ce sont des PHRASES, elles débordaient du canevas et se faisaient couper
+       en plein mot. Un titre est un nom, une consigne est une phrase — les
+       confondre ne lève rien et se voit tout de suite. */
+    rackTitle: "A shadow that lies",
+    lureTitle: "The lure",
+    sand: "There's a bird's nest on the roof. And a bright pebble melted into somebody's beads.",
+    rackHint: "One of these beads used to be a star. In this light they all look the same.",
+    sweepHint: "Sweep the light along the rack. Not too fast, not too slow.",
+    sweepTooFast: "Too fast. The shadows blur past.",
+    sweepTooSlow: "Too slow. The glass warms up and the shadow goes soft.",
+    watchHint: "Watch the wall. One shadow won't be a bead.",
+    rackWrong: "Just a bead. Try the next rack.",
+    rackWin: "There. A shadow with points on it.",
+    rackSolo: "You wedge the star in the window frame and turn the rack instead. One notch at a time.",
+    lureHint: "It follows light. Lead it — don't yank it.",
+    lureLost: "It lost interest and went back up.",
+    lureSolo: "You set the star down. The magpie comes. It won't stay long.",
+    climbHint: "Up while it's down.",
+    climbSeen: "It looked up. Down you go.",
+    got: "Four notes.",
+    /* Le retournement. */
+    turn1: "Four notes. It waits for the fifth.",
+    turn2: "There is no fifth. It fell before anyone gave it one.",
+    turn3: "A name it cannot say. A sky that cannot find it.",
+    turn4: "Then, across the town, the church bell rings. Once. Nobody pulled it.",
+  },
+  /* ── ÉTAPE 5 : LE BEFFROI. */
+  s5: {
+    promptUp: "E: go up",
+    promptBell: "E: listen to the bell",
+    promptOrgan: "E: sit at the organ",
+    stair1: "Scratched in the stone: \"J.M. rang for the flood. 1889.\"",
+    stair2: "Lower down, smaller: \"and for nothing at all, some days.\"",
+    bell1: "I fell too. A long time ago. Before the town had a name.",
+    bell2: "They found me warm in a field and they poured me into this shape.",
+    bell3: "I am too heavy to go home now. But I kept my note.",
+    bell4: "Small one. Take it. I have rung four thousand times and I am not tired of staying.",
+    duetTitle: "The duet",
+    duetOrgan: "Hold the notes it sings. The pipes light up when you're right.",
+    duetAim: "Keep the pieces in the light. The Lyre is drifting.",
+    duetDropped: "The light died. Again, together.",
+    duetPhrase: (n, total) => `Phrase ${n} of ${total}`,
+    duetSolo: "You wedge the keys down and run for the stairs. The note is already fading.",
+    duetWin: "Five notes. Its whole name, out loud, for the first time.",
+    /* La résolution. */
+    end1: "It goes up the way a balloon goes up. Slowly. Like it has all night.",
+    end2: "The gap in the Lyre closes.",
+    end3: "The bell doesn't say anything else.",
+    /* ⚠️ LE CROCHET COSMÉTIQUE. Il ne donne encore RIEN — l'arbitrage est posé,
+       le contenu viendra (voir `resolveStarGift`). La phrase est donc vraie
+       aujourd'hui et le restera quand l'objet existera. */
+    gift: "Something of it stayed with you.",
+  },
+  /* ── CE QUE LA VILLE GARDE. */
+  trace: {
+    dawnBell: "The old bell rings once at dawn. It always has, people say.",
+    newStar: "There's a new star over the valley. Bright one.",
+    craterPool: "The crater cooled into a pool of green glass. It glows a little at night.",
+  },
+  /* ── LE MENU DÉVELOPPEUR. ⚠️ Il est en anglais lui aussi : c'est un outil, il
+     ne se traduit pas, et le 442 le laissait déjà bilingue pour rien. */
+  dev: {
+    section: "⭐ Star — The Fallen String",
+    hint: "Start it, push it, replay a scene. ⚠️ None of these gives anything: you skip the playing, you don't earn a thing.",
+    notStarted: "Not started",
+    chapterAt: (k, n, total) => `Chapter ${k} · ${n}/${total} pieces`,
+    op: (op) => ({
+      reset: "↺ Wipe it",
+      start: "▶ Start (the fall)",
+      chapter: "⏭ Finish this chapter",
+      skip: "⏩ Skip ahead one",
+      hint: "💡 Mark the next place",
+      all: "⏭⏭ All but the duet",
+    }[op] || op),
+    scene: (s) => ({ fall: "🎬 The fall", turn: "🎬 The turn", end: "🎬 The ending" }[s] || s),
+    sceneLabel: "Replay a scene",
+    chat: (who, what) => `${who} touched the star quest: ${what}.`,
+  },
+  /* ── LES ANNONCES DE CHAT. ⚠️ SANS EMOJI EN TÊTE : `broadcastChat` en écrit
+     déjà un, et le 442 a livré « 🔍 🔍 Joueur1 a trouvé… » sur six libellés
+     avant qu'une séance à deux clients ne le montre. */
+  chat: {
+    start: "Something fell out of the sky.",
+    found: (who, n, total) => `${who} found a piece. ${n} of ${total}.`,
+    chapter: (t) => `${t}`,
+    crater: (who) => `${who} coaxed the little star out of the crater.`,
+    lean: (who) => `${who} crossed the shadows. A new place is marked.`,
+    duet: (n, total) => `Phrase ${n} of ${total}.`,
+    done: "The star went home.",
+  },
+  /* ── LES INVITES, UNE SEULE CLÉ-FONCTION. ⚠️ Le préfixe `star:` est lu une
+     fois, ici — six `if` répartis dans trois boucles de rendu finiraient par ne
+     pas dire la même chose (c'est la convention posée par `enqPrompt` au 442,
+     et c'est la seule chose de l'enquête qui survit telle quelle). */
+  prompt: (k) => ({
+    furrow: "E: look at it",
+    crater: "E: stand still",
+    lean: "E: let it sing",
+    dive: "E: dive",
+    sweep: "E: hold the star up",
+    lure: "E: lead it away",
+    climb: "E: climb",
+    bell: "E: listen",
+    organ: "E: sit at the organ",
+  })[k] || "E",
+};
+
 export const FERME_STR = {
   fr: {
+    /* ⚠️ ANGLAIS DES DEUX CÔTÉS, DÉLIBÉRÉMENT (voir la note de `STAR_EN`). */
+    star: STAR_EN,
     // --- Mise à jour gare 2026-07 (créatures marines, canards, gare, visiteurs, saisons) ---
     seaCaught: (n) => `Prise rare : ${n} !`,
     seaBite: (n) => `Quelque chose d'inhabituel mord... ${n} ?!`,
@@ -199,7 +433,7 @@ export const FERME_STR = {
     promptCourtDoor: (n) => `${n} — E : lire la plaque`,
     promptCourtStairsUp: "Monter à l'étage",
     promptCourtStairsDown: "Descendre au sous-sol",
-    courtFloorName: (k) => ({ ground: "Rez-de-chaussée", upper: "Étage", basement: "Sous-sol", hall: "Hôtel de ville", hallUp: "Hôtel de ville — étage", church: "Église", churchLoft: "Tribune d'orgue" }[k] || k),
+    courtFloorName: (k) => ({ ground: "Rez-de-chaussée", upper: "Étage", basement: "Sous-sol", hall: "Hôtel de ville", hallUp: "Hôtel de ville — étage", church: "Église", churchLoft: "Tribune d'orgue", churchTower: "Beffroi" }[k] || k),   // 444 — sans lui le bandeau affiche la clé brute
     /* ═══ ZIP 441 — L'ÉGLISE. ════════════════════════════════════════════════
        ⚠️ AUCUNE DE CES PHRASES NE PROMET UN SERVICE, et c'est la décision de
        Guillaume : « décor de haute tenue plus ambiance jouable, SANS service ».
@@ -1183,6 +1417,7 @@ export const FERME_STR = {
     mapClose: "Clique n'importe où ou appuie sur Échap ou M pour fermer",
     mapYou: "toi",
     // Boutons flottants
+    btnSettings: "Paramètres",
     btnHome: "🏠 Maison",
     btnMap: "🗺️ Carte",
     btnEmployees: "👥 Employés",
@@ -1619,6 +1854,11 @@ export const FERME_STR = {
       hallUpper: "📜 Mairie — l'étage",
       church: "⛪ Église — la nef",                      // zip 442 (ouverte au 441)
       churchLoft: "🎹 Église — la tribune d'orgue",
+      /* ⚠️ ZIP 444 — LE BEFFROI. Sans cette ligne, le bouton s'affichait
+         « churchTower » : le `|| k` de repli ne PLANTE pas, il montre la clé. Un
+         libellé manquant est donc invisible à la relecture et parfaitement
+         visible à l'écran — vu en jouant, comme il se doit. */
+      churchTower: "🔔 Église — le beffroi",
       world: "🌀 La terre en cours",
       bridge: "🌉 Le pied du pont",
     }[k] || k),
@@ -1702,16 +1942,6 @@ export const FERME_STR = {
     // Zip 427 — les invites des nouveaux lieux de Valley Town.
     mapTownBoutique: "Maison Garfield",
     mapTownSalon: "Salon",
-    devEnqSection: "🔍 Enquête — la parcelle qui n'existe pas",
-    devEnqHint: "Lancer, avancer, ou tout reprendre à zéro. ⚠️ Aucun de ces boutons ne rapporte d'or : on saute la lecture, on ne gagne rien.",
-    devEnqNotStarted: "Pas commencée",
-    devEnqOpName: (op) => ({
-      reset: "↺ Repartir de zéro",
-      start: "▶ Lancer (lire l'avis)",
-      chapter: "⏭ Boucler le chapitre",
-      all: "⏩ Tout jusqu'au dépôt",
-    }[op] || op),
-    devEnqChat: (who, what) => `${who} a touché à l'enquête : ${what}.`,
     devResidentsSection: "Peupler la ferme",
     devResidentsHint: (max) => `Installe des résidents d'un coup (${max} au maximum). Sert à voir vivre Valley Town sans attendre.`,
     devResidentsBtn: (n) => `${n} résidents`,
@@ -1940,420 +2170,9 @@ export const FERME_STR = {
     toastMarketNothing: "🎪 Votre panier est vide.",
     promptTownStand: "↑ ↓ ← → : se lever  ·  Espace : jeter du pain",
     birdCrumbsToast: "Vous émiettez un quignon. Les pigeons arrivent…",
-    /* ═══════════════════════════════════════════════════════════════════════
-       ZIP 442 — L'ENQUÊTE. TOUT LE TEXTE DE « LA PARCELLE QUI N'EXISTE PAS ».
-       ───────────────────────────────────────────────────────────────────────
-       ⚠️ IL EST ICI ET PAS DANS `enquete.js`, ET C'EST LA CONVENTION DU PROJET,
-       pas une préférence : `HALL_TOPICS` (439) sépare déjà la TABLE (constantes)
-       du TEXTE (ici), et la raison est mesurable — `tools/verify-strings.mjs`
-       apparie les deux langues clé par clé, et il ne sait le faire que sur ce
-       fichier. Un texte joueur écrit ailleurs est un texte que rien n'apparie.
-       ⚠️⚠️ MAIS CE BLOC EST IMBRIQUÉ, DONC `verify-strings` NE VOIT QU'UNE CLÉ
-       (`enq`) ET NE CONTRÔLE RIEN DE SON CONTENU. C'est un trou, il est réel, et
-       on ne l'excuse pas dans son propre commentaire (la leçon du 440 sur le
-       garde-corps du pont) : `tools/verify-enquete.mjs` apparie les deux `enq`
-       en profondeur — chaque lieu, chaque chapitre, chaque code — et échoue sur
-       la moindre absence. La parité est mesurée, ailleurs, mais elle est
-       mesurée. */
-    enq: {
-      title: "La parcelle qui n'existe pas",
-      // ---- LE CARNET
-      noteTitle: "🔍 Carnet d'enquête",
-      noteSub: "Ce que la vallée n'a pas rangé au bon endroit.",
-      noteGoal: "Ce que tu cherches maintenant",
-      noteHint: "Où regarder",
-      noteCoop: "À deux",
-      noteFound: (n, t) => `Indices : ${n} / ${t}`,
-      noteBy: (who) => `trouvé par ${who}`,
-      noteNothing: "Rien encore. Tout commence au tableau des nouvelles de la place, à Valley Town.",
-      noteMissing: "Il te manque encore :",
-      noteHave: "Ce que tu sais déjà :",
-      noteChapterOf: (i, n) => `Chapitre ${i} sur ${n}`,
-      noteDone: "Enquête close.",
-      noteOpen: "🔍 Carnet",
-      // ---- LES CHAPITRES : titre, objectif (une phrase, toujours), et où regarder.
-      chapter: {
-        halle: "Le fonds de la halle",
-        cote: "Une parcelle que le plan ne porte pas",
-        nom: "Un nom sur la parcelle",
-        date: "Trois inscriptions, trois dates",
-        scelles: "Le carton 88",
-        chiffre: "La seconde moitié du registre",
-        heritier: "L'héritier",
-        depot: "La réclamation",
-      },
-      goal: {
-        halle: "Comprendre qui paie le plancher du marché.",
-        cote: "Retrouver sur le terrain la parcelle que le plan ne porte pas, et la nommer par sa cote.",
-        nom: "Mettre un nom sur la parcelle VT-3-28.",
-        date: "Dater vraiment la dissolution : trois inscriptions ne disent pas la même chose.",
-        scelles: "Ouvrir le carton que Chaband a déposé aux scellés.",
-        chiffre: "Déchiffrer la seconde moitié du registre.",
-        heritier: "Retrouver l'héritier de Mathilde Ferrand.",
-        depot: "Déposer la réclamation chez le notaire, et décider.",
-      },
-      hint: {
-        halle: "L'avis est affiché sur la place. Le tableau des cours, à l'hôtel de ville, porte une mention en pied de page qu'on ne lit jamais.",
-        cote: "Le plan mural et le fichier sont au cadastre (hôtel de ville) ; la règle de numérotation est au bureau du géomètre, à l'étage. Le reste est dehors : trois bornes en ville, et l'origine du cadastre est plantée à la ferme, près de la gare.",
-        nom: "L'état civil est à la salle des mariages de l'hôtel de ville. L'archiviste des audiences est au sous-sol du palais. Les archives municipales sont à l'étage de la mairie.",
-        date: "Deux inscriptions sont dans la tribune de l'église (la cloche, et la plaque du facteur d'orgues) ; la troisième est au cimetière, sous la mousse. Le règlement est affiché chez le notaire.",
-        scelles: "Le coffre est aux scellés, au sous-sol. Il a deux serrures, et elles ne sont pas dans la même pièce : une au greffe, une chez l'huissier.",
-        chiffre: "Chaband a écrit où était la clé sur la garde du registre. Il ne parlait pas de son nom à lui.",
-        heritier: "Le procès-verbal du conseil est aux archives municipales, en accès libre depuis toujours. Puis retourne au registre des mariages : cette fois tu sais quoi y chercher.",
-        depot: "Chez le notaire, à l'étage du palais. Il faut deux signatures.",
-      },
-      coop: {
-        cote: "Quatre bornes, deux cartes : l'un prend le train, l'autre reste. Vous recouperez au retour.",
-        date: "Trois inscriptions dans trois endroits. Séparez-vous, ça se lit en deux minutes à deux.",
-        scelles: "Les deux serrures doivent être tournées dans la même minute, à deux étages d'écart. Seul, c'est un sprint. À deux, c'est un « prêt ? maintenant ! ».",
-        depot: "Le formulaire demande deux témoins. Si tu es seul, la ville en fournit un.",
-      },
-      // ---- LES DOCUMENTS. `w` = où on l'a lu (affiché dans le carnet),
-      // `b` = le corps, `n` = la ligne que le carnet retient.
-      doc: {
-        avis: {
-          t: "Avis de la mairie — clôture du fonds de la halle",
-          w: "Tableau des nouvelles, place centrale",
-          b: [
-            "La ville informe le public que le FONDS DE GARANTIE DE LA HALLE, qui assure depuis l'an 41 que nul ne vend en ville à moindre prix qu'à sa propre ferme, sera CLOS faute de titulaire connu.",
-            "Toute réclamation est reçue chez le notaire, au palais, jusqu'au terme du présent mandat.",
-            "Le fonds est abondé par un revenu foncier dont l'origine n'a pu être établie par les services.",
-            "— Le secrétaire de mairie, par ordre.",
-          ],
-          n: "Un fonds paie le plancher du marché. La ville ne sait pas d'où vient l'argent.",
-        },
-        cours: {
-          t: "Le tableau des cours — pied de page",
-          w: "Salle des cours, hôtel de ville",
-          b: [
-            "Sous les cinq familles, d'une écriture bien plus ancienne que le reste du tableau, une ligne que personne ne recopie jamais quand on le refait :",
-            "« Abondement du fonds de la halle : revenu de la parcelle VT-3-28, section rurale. »",
-          ],
-          n: "La parcelle VT-3-28 paie le plancher du marché.",
-        },
-        plan: {
-          t: "Le plan mural du cadastre",
-          w: "Cadastre, hôtel de ville",
-          b: [
-            "Le plan de Valley Town, verni, punaisé, retouché à l'encre depuis des années.",
-            "Section 1 — la Haute-Ville et les coteaux. Section 2 — le centre bâti et la halle. Section 3 — les terres rurales : le verger, la promenade du lac, la lisière.",
-            "La section 3 s'arrête au numéro 27. Une main a écrit dessous, au crayon : « dernière parcelle : la promenade du lac ».",
-            "Vingt-sept parcelles en tout. On a beau chercher, il n'y a pas de vingt-huitième.",
-          ],
-          n: "Le plan s'arrête à 27, et la dernière est le verger.",
-        },
-        cotes: {
-          t: "Registre des cotes de la vallée",
-          w: "Bureau du géomètre, hôtel de ville",
-          b: [
-            "Tenu par A. CHABAND, géomètre-voyer.",
-            "« Article premier. — Une cote s'écrit VT–section–numéro. »",
-            "« Article deux. — Dans une section, les parcelles sont numérotées D'OUEST EN EST, sans trou ni saut. »",
-            "« Article trois. — Toute cote se compte depuis la BORNE D'ORIGINE, plantée au pied de la gare de la ferme. »",
-            "Les pages suivantes ont été arrachées. Proprement, au canif, pas dans la colère.",
-          ],
-          n: "On numérote d'ouest en est, sans trou. L'origine du cadastre est une borne, à la ferme.",
-        },
-        borneOrigine: {
-          t: "La borne d'origine",
-          w: "À la ferme, au pied de la gare",
-          b: [
-            "Une borne de granit plantée de travers, que personne ne regarde plus depuis longtemps.",
-            "Face nord : ORIGINE DU CADASTRE DE LA VALLÉE — A. CHABAND, ARPENTEUR JURÉ.",
-            "Tu grattes la mousse de la face sud. Il y a un mot dessous, un seul, gravé bien plus profond que le reste, comme si la main y était revenue plusieurs fois :",
-            "MATHILDE",
-          ],
-          n: "Sur la borne d'origine, un prénom gravé profond : MATHILDE.",
-        },
-        borneQuai: {
-          t: "Borne de section — la promenade",
-          w: "Promenade du lac, Valley Town",
-          b: ["Une borne de section au bord de l'eau, à moitié dans l'herbe.", "VT-3-27. Les chiffres sont nets."],
-          n: "Borne de la promenade : VT-3-27.",
-        },
-        borneVerger: {
-          t: "Borne de section — le verger",
-          w: "Verger municipal, Valley Town",
-          b: ["Une borne de section au coin du verger municipal, tout à l'ouest de la commune.", "VT-3-25."],
-          n: "Borne du verger : VT-3-25.",
-        },
-        borneBois: {
-          t: "Borne de section — le bois",
-          w: "Bois du sud-est, Valley Town",
-          b: [
-            "Une borne à demi couchée sous les fougères, dans la futaie. Tu vérifies deux fois sur le plan : elle est plus à l'EST que celle de la promenade, qui est pourtant la dernière du registre.",
-            "Sa cote a été MARTELÉE. Pas effacée par le temps : frappée au burin, méthodiquement, chiffre après chiffre.",
-            "Seule la mention du bas a survécu : LIMITE EST — SECTION 3.",
-          ],
-          n: "Une borne à l'est de la promenade, cote martelée au burin.",
-        },
-        fiche: {
-          t: "Fiche VT-3-28",
-          w: "Fichier du cadastre, hôtel de ville",
-          b: [
-            "Le tiroir résiste, puis cède. La fiche est là, retournée, glissée derrière la 27.",
-            "PARCELLE VT-3-28 — rive est, lisière — quatre arpents — DISSOUTE.",
-            "Titulaire : M. FERRAND. (Le prénom a été gratté à la lame. Il reste la boucle d'un M et une hampe.)",
-            "Mention : « Revenu affecté au fonds de la halle, à titre provisoire. »",
-            "Renvoi : état civil, hôtel de ville.",
-          ],
-          n: "VT-3-28 est dissoute. Titulaire : M. FERRAND, prénom gratté.",
-        },
-        mariages: {
-          t: "Le registre d'état civil",
-          w: "Salle des mariages, hôtel de ville",
-          b: [
-            "Le grand registre relié, sur son lutrin, ouvert au hasard comme tous les jours depuis toujours.",
-            "À la lettre F, entre FERRAT et FERRIÈRE, il manque un FOLIO. La reliure ne ment pas : les fils sont coupés net. Il y avait une page.",
-            "Le talon dit : « Folio 214, communiqué au notaire du palais. Retour non constaté. »",
-          ],
-          n: "La page des FERRAND a été retirée et prêtée au palais. Elle n'est jamais revenue.",
-        },
-        ombeline: {
-          t: "Ombeline Reboul, archiviste des audiences",
-          w: "Archives, sous-sol du palais",
-          b: [
-            "— Vous cherchez le folio 214. Il est ici, dans le carton 88, et je ne vous le sortirai pas.",
-            "Elle le dit sans agressivité, comme on annonce la pluie.",
-            "— Ce n'est pas moi. C'est une note de service. Elle est punaisée là depuis avant moi, avant ma prédécesseure, et probablement avant la sienne. Elle interdit la communication du carton 88, et elle est signée d'un géomètre-voyer — ce qui n'a aucun sens : un géomètre ne donne pas d'ordres à des archives judiciaires.",
-            "— Je ne peux pas lever une note. Mais toute note de service a un double aux archives municipales, à l'hôtel de ville, et le double n'est sous le scellé de personne. Allez le lire. Vous saurez au moins ce qu'elle protège.",
-          ],
-          n: "Ombeline Reboul ne peut pas lever la note. Son double est aux archives municipales.",
-        },
-        note: {
-          t: "Note de service n° 3",
-          w: "Archives municipales, hôtel de ville",
-          b: [
-            "An 41 de la vallée, premier jour du mois de vendange.",
-            "« Le carton 88 — folio d'état civil, acte de dissolution, registre annexe — n'est pas communicable. »",
-            "« Motif : parcelle sans titulaire connu ; toute communication ferait naître une réclamation que la ville ne pourrait honorer. »",
-            "« À rouvrir à la première réclamation. »",
-            "Signé : A. CHABAND, géomètre-voyer.",
-            "En marge, la même main, plus tard, plus petite : « Je n'ai rien caché. J'ai rangé. Ce n'est pas la même chose, et je le sais. »",
-          ],
-          n: "Note n° 3 déposée l'an 41, 1er du mois de vendange. Le carton 88 est aux scellés, à rouvrir à la première réclamation.",
-        },
-        cloche: {
-          t: "L'inscription de la cloche",
-          w: "Tribune de l'église, au pied de la vis",
-          b: [
-            "De la trappe, on lit le bord de la cloche à l'envers, en lettres coulées dans le bronze :",
-            "J'APPELLE LES VIVANTS — REFONDUE L'AN 41 — AUX FRAIS DE M. F.",
-          ],
-          n: "Cloche refondue l'an 41, aux frais de M. F.",
-        },
-        orgue: {
-          t: "La plaque du facteur d'orgues",
-          w: "Tribune de l'église, joue du buffet",
-          b: [
-            "Une plaque de laiton vissée sur la joue du buffet, à hauteur de main :",
-            "ORGUE POSÉ L'AN 39 — MARRAINE : MADEMOISELLE MATHILDE FERRAND, DE LA RIVE EST.",
-            "Quelqu'un a essayé de la dévisser. Les têtes de vis sont mâchées. Il a renoncé.",
-          ],
-          n: "Orgue posé l'an 39. Marraine : Mathilde Ferrand, de la rive est.",
-        },
-        tombe: {
-          t: "La tombe sans nom",
-          w: "Cimetière, deuxième rangée",
-          b: [
-            "Septième pierre de la deuxième rangée. Pas de nom, pas de croix, pas de fleurs — mais la pierre est bonne, taillée, chère.",
-            "Tu grattes la mousse. Il y a deux lignes dessous.",
-            "ICI REPOSE CELLE QUI N'EST PLUS SUR LES REGISTRES",
-            "AN 42",
-          ],
-          n: "La tombe sans nom porte l'an 42.",
-        },
-        reglement: {
-          t: "Règlement des actes — extrait affiché",
-          w: "Étude du notaire, palais",
-          b: [
-            "Affiche jaunie sous verre, à côté du guichet.",
-            "« Art. 12. — Un acte de dissolution est daté du jour de son DÉPÔT, et non du jour de la décision. »",
-            "« Art. 13. — Lorsque la parcelle est déclarée sans titulaire connu, le dépôt ne peut être fait qu'après UN AN FRANC, afin qu'une réclamation puisse se produire. »",
-          ],
-          n: "Une dissolution est datée du dépôt, et le dépôt suit la décision d'un an franc.",
-        },
-        acte: {
-          t: "Acte de dissolution — parcelle VT-3-28",
-          w: "Répertoire du notaire, palais",
-          b: [
-            "Registre de l'an 40. Il s'ouvre tout seul à la bonne page : quelqu'un l'a beaucoup consulté, puis plus jamais.",
-            "« Décision du conseil, an 40. Déposé l'an 41. La parcelle est déclarée sans titulaire connu. »",
-            "Signé, contresigné, publié. Il est parfaitement régulier.",
-            "En bas, à la main : « Registre annexe déposé aux scellés, carton 88, à ouvrir à la PREMIÈRE RÉCLAMATION. — A.C. »",
-            "Et tu comptes, parce que tu viens de gratter une pierre : la parcelle a été déclarée sans titulaire l'an 40. La femme dont on a gratté le prénom est morte l'an 42.",
-            "Elle était vivante.",
-          ],
-          n: "Décision an 40 : « sans titulaire connu ». Mathilde Ferrand est morte en 42. Elle était vivante.",
-        },
-        coffre: {
-          t: "Le carton 88",
-          w: "Salle des scellés, sous-sol du palais",
-          b: [
-            "Le coffre s'ouvre sur deux tiroirs. Le folio 214, arraché proprement, rangé à plat. Et un registre de toile noire, sans titre.",
-            "Première moitié, en clair, l'écriture d'un homme qui prend son temps :",
-            "« An 40. La crue a emporté le pont de la rive est et la moitié des étals. La halle ne peut plus garantir ses prix ; sans garantie, les fermes ne descendent plus vendre ; sans les fermes, il n'y a plus de halle. Le conseil m'a demandé de trouver un revenu. Il n'y en avait qu'un de disponible : celui d'une parcelle dont la titulaire n'a pas d'héritier connu et ne réclame rien. J'ai proposé de la dissoudre à titre provisoire. Le conseil a voté. »",
-            "Seconde moitié : la même écriture, chiffrée, page après page, jusqu'à la fin du cahier.",
-            "Sur la garde, en clair : « Qui voudra lire la suite trouvera la clé là où j'ai mis mon nom pour la dernière fois. »",
-          ],
-          n: "Carton 88 ouvert. Registre de Chaband : moitié en clair, moitié chiffrée.",
-        },
-        registre: {
-          t: "Le registre de Chaband, déchiffré",
-          w: "Carton 88",
-          b: [
-            "« An 41. Je n'ai pas dit au conseil que j'étais allé la voir. Elle vit à la lisière, elle ne lit pas les avis, elle n'est jamais venue à la mairie de sa vie. Je lui ai dit que sa terre serait inscrite au nom de la ville pour un temps et qu'elle y resterait. Elle a dit : d'accord, si vous me laissez la cloche. Nous avons refondu la cloche. Elle a payé. »",
-            "« Elle est morte l'an 42 sans avoir jamais rien réclamé, et le provisoire est devenu ce qu'est le provisoire. »",
-            "« Je consigne ici, pour qui viendra : la dissolution n'est pas irrégulière, elle est FAUSSE. Il y avait une titulaire, elle avait un nom, et le conseil le savait — le procès-verbal en fait mention, en marge, et personne ne lit les marges. »",
-            "« Je n'ai pas eu le courage de la rouvrir de mon vivant. J'ai fait mieux que la cacher et moins bien que la dire : je l'ai rangée. »",
-          ],
-          n: "Chaband savait, et le conseil savait. Le procès-verbal en fait mention en marge.",
-        },
-        pv: {
-          t: "Procès-verbal du conseil, an 40",
-          w: "Archives municipales, hôtel de ville",
-          b: [
-            "Il n'a jamais été secret : il est relié avec les autres, à sa date, sur l'étagère qu'on ouvre en entrant.",
-            "« Article 4. — Dissolution de la parcelle VT-3-28 au profit du fonds de la halle. Adopté à l'unanimité. »",
-            "Et dans la marge, à l'encre pâle, dans le blanc où l'on ne regarde jamais :",
-            "« sous réserve de l'héritier ».",
-          ],
-          n: "Le PV dit « sous réserve de l'héritier ». Il y a donc un héritier.",
-        },
-        filiation: {
-          t: "Le registre, relu",
-          w: "Salle des mariages, hôtel de ville",
-          b: [
-            "Tu redemandes le registre. Cette fois tu sais quoi chercher, et ce n'est pas le folio manquant : c'est ce qui l'entoure.",
-            "Folio 213 : mariage de la sœur aînée de Mathilde Ferrand, l'an 28, avec un BONNEFOY de la Haute-Ville.",
-            "Folio 215 : naissance d'un fils, l'an 30.",
-            "On a retiré la page de Mathilde. On a laissé celle de sa sœur, qui ne disait rien à personne — et qui dit tout à qui a le nom.",
-            "Cette descendance est en vie, elle habite la Haute-Ville, et elle se présente aux municipales tous les trente jours sur le programme de « l'ordre et les comptes ».",
-          ],
-          n: "L'héritier de Mathilde Ferrand est un Bonnefoy, de la Haute-Ville.",
-        },
-      },
-      // ---- LES TROIS CODES.
-      code: {
-        A: {
-          t: "Fichier du cadastre",
-          ask: "Quelle cote veux-tu consulter ?",
-          ph: "VT-3-…",
-          hint: "On numérote d'ouest en est, sans trou. Le verger est à 25, la promenade à 27, et le plan dit que la promenade est la dernière. Or il y a une borne plus à l'est que la promenade.",
-          no: "Ce tiroir n'existe pas. Le fichier ne dit rien.",
-        },
-        B: {
-          t: "Répertoire du notaire",
-          ask: "Le répertoire classe par ANNÉE DE DÉCISION. Laquelle ?",
-          ph: "an …",
-          hint: "La note est déposée l'an 41. Le règlement dit qu'un dépôt suit la décision d'un an franc.",
-          no: "Le clerc feuillette, hausse les épaules : rien à cette année-là.",
-        },
-        C: {
-          t: "Le chiffre de Chaband",
-          ask: "La clé du chiffre.",
-          ph: "un mot",
-          hint: "« Là où j'ai mis mon nom pour la dernière fois. » Sa dernière borne est celle de l'origine, à la ferme — et ce n'est pas son nom à lui qui y est gravé.",
-          no: "Les lettres restent des lettres. Ce n'est pas la clé.",
-        },
-      },
-      cipherLead: "Seconde moitié du registre, chiffrée :",
-      cipherKeyLabel: "Clé",
-      // ---- OMBELINE. ⚠️ Elle dit TOUT ce qu'elle sait à chaque fois : ce qui
-      // bloque n'est jamais elle, c'est un document qui manque.
-      omb: {
-        name: "Ombeline Reboul",
-        role: "Archiviste des audiences",
-        hello: "Vous êtes descendus jusqu'ici. C'est déjà rare.",
-        again: "Autre chose ?",
-        close: "Merci.",
-        ask: "Où en sommes-nous ?",
-        line: {
-          halle: "Le fonds de la halle ? Je le vois passer dans les comptes depuis que je suis là. Personne ne sait ce qui l'alimente, et personne n'a jamais eu de raison de demander. Vous, apparemment, si.",
-          cote: "Une parcelle qui n'est pas au plan et qui est sur le terrain, ça n'arrive pas par accident. Les bornes ne mentent pas : elles sont trop lourdes pour ça.",
-          nom: "M. FERRAND, avec le prénom gratté. Gratté à la lame, pas effacé. Quelqu'un a pris le temps.",
-          date: "Si trois inscriptions donnent trois dates, ce n'est pas qu'elles se trompent : c'est qu'elles ne datent pas la même chose. Lisez le règlement avant de conclure.",
-          scelles: "Le carton 88 est là, derrière moi, à trois mètres. Il me nargue depuis onze ans. Deux serrures, deux clés, et pas dans la même pièce — c'est fait exprès : un seul homme ne doit pas pouvoir l'ouvrir.",
-          chiffre: "Il a chiffré la moitié qui accuse et laissé en clair la moitié qui explique. Un homme qui voulait se taire n'aurait rien écrit du tout.",
-          heritier: "« Sous réserve de l'héritier. » Quatre mots dans une marge. J'ai relu ce PV je ne sais combien de fois pour d'autres affaires ; je ne les avais jamais vus.",
-          depot: "Allez chez le notaire. Et réfléchissez avant de signer : je classe les deux issues au même endroit, mais elles ne rangent pas la même ville.",
-        },
-        done: {
-          restore: "Vous avez rendu son nom à quelqu'un. Ça ne se voit pas dans mes cartons, mais ça se voit sur la pierre.",
-          keep: "La pierre est toujours sans nom. Je le note, c'est mon métier.",
-        },
-      },
-      // ---- LE DÉPÔT ET LA DÉCISION.
-      end: {
-        t: "Dépôt de la réclamation",
-        intro: "Le clerc pose le formulaire, les quatre pièces, et le tampon à côté. Il n'a pas l'air pressé.",
-        missing: "Il manque des pièces. Le clerc les compte à voix haute et vous rend le dossier.",
-        signTitle: "Signatures",
-        signNeed: "Une réclamation se dépose devant DEUX témoins.",
-        signMe: "Signer",
-        signed: (n) => `${n} signature(s) au dossier.`,
-        signedAlready: "Tu as déjà signé.",
-        solo: "Tu es seul aujourd'hui : l'archiviste contresignera. Le formulaire le prévoit.",
-        mayorHeir: "Le notaire lève les yeux : « Vous savez que l'héritier est le maire en exercice ? Il sera juge et partie. Je le mentionne au dossier. »",
-        mayorNot: "Le notaire note le nom de l'héritier sans commentaire. Il n'est pas maire cette saison ; ce sera plus simple.",
-        choose: "Deux issues. Le notaire vous laisse choisir, et il ne conseille rien.",
-        restoreT: "🌾 Restituer la parcelle",
-        restoreD: "VT-3-28 réintègre le cadastre au nom de l'héritier. Le fonds de la halle est éteint : le marché n'aura plus de plancher — et plus de plafond non plus. Les cours pourront descendre sous le prix du bac, et monter bien plus haut.",
-        keepT: "⚖️ Maintenir le fonds",
-        keepD: "La réclamation est retirée. Le fonds est régularisé au nom de la ville : le plancher demeure, et il est relevé. La parcelle reste dissoute, et la pierre reste sans nom.",
-        confirm: "C'est définitif.",
-        outRestore: [
-          "Le notaire écrit trois lignes, tamponne, et c'est fini. Ça n'a l'air de rien.",
-          "Le lendemain, un ouvrier de la voirie plante une plaque à la lisière du bois, là où la borne était couchée. Le nom de Mathilde Ferrand est dessus. Le fossoyeur grave la pierre.",
-          "À l'aube, la cloche sonne. Elle sonne tous les jours — mais aujourd'hui on sait qui l'a payée.",
-          "Au marché, le tableau des cours a une ligne de moins.",
-        ],
-        outKeep: [
-          "Le notaire écrit trois lignes, tamponne, et c'est fini. La ville verse une indemnité de découverte, généreuse, parfaitement légale.",
-          "Le fonds porte désormais un nom : celui de la ville. Une plaque de laiton est vissée sous la halle, sans nom dessus.",
-          "Ombeline range le carton 88. Elle ne dit rien. Puis, en refermant la porte : « La pierre est toujours sans nom. »",
-        ],
-        gold: (g) => `+${g} or dans la caisse commune.`,
-      },
-      // ---- TOASTS ET MESSAGES COURTS.
-      /* ⚠️ CES SIX-LÀ N'ONT PAS D'EMOJI, ET C'EST VOULU : elles partent par
-         `broadcastChat`, qui porte DÉJÀ son emoji dans le champ « de qui ». Vu en
-         jouant à deux clients — le chat affichait « 🔍 🔍 Joueur1 a trouvé… ».
-         Les toasts, eux, gardent le leur : ils n'ont personne pour l'écrire. */
-      tStart: "Tu ouvres un carnet d'enquête.",
-      tFound: (t) => `🔍 Noté au carnet : ${t}`,
-      tFoundBy: (who, t) => `${who} a trouvé : ${t}`,
-      tChapter: (t, g) => `${t} — chapitre bouclé. +${g} or.`,
-      tLocked: "Tu ne saurais pas quoi y chercher. Pas encore.",
-      tScrub: "Tu grattes la mousse…",
-      tArmed: (s) => `🔑 Serrure tournée. L'autre doit l'être dans les ${s} secondes.`,
-      tLate: "🔑 Trop tard : la première serrure s'est refermée. On recommence.",
-      tOpen: "Les deux serrures ont cédé. Le coffre des scellés est ouvert.",
-      tBoxWait: "🔒 Deux serrures, et aucune n'est ici. Greffe et huissier.",
-      tCodeNo: "Ce n'est pas la bonne réponse.",
-      tDone: "L'enquête est close.",
-      tBell: "À l'aube, la cloche de Mathilde Ferrand sonne sur la vallée.",
-      plaque: "MATHILDE FERRAND — VT-3-28",
-      graveName: "MATHILDE FERRAND",
-    },
-    /* Les invites de l'enquête. ⚠️ UNE SEULE CLÉ-FONCTION pour tout le
-       chantier : la chaîne de ternaires de `promptKey` fait déjà cent
-       conditions, et y ajouter dix lignes aurait été dix occasions de se
-       tromper de libellé. Le préfixe `enq:` est lu une fois, ici. */
-    enqPrompt: (k) => ({
-      doc: "E : lire",
-      omb: "E : parler à l'archiviste",
-      stone: "E : lire la borne",
-      scrub: "E : gratter la mousse",
-      code: "E : consulter le fichier",
-      codeB: "E : consulter le répertoire",
-      lock: "E : tourner la clé",
-      box: "E : le coffre des scellés",
-      file: "E : déposer la réclamation",
-      plaque: "E : lire la plaque",
-    })[k] || "E",
   },
   en: {
+    star: STAR_EN,
     // --- 2026-07 station update (sea creatures, ducks, station, visitors, seasons) ---
     seaCaught: (n) => `Rare catch: ${n}!`,
     seaBite: (n) => `Something unusual bites... ${n}?!`,
@@ -2511,7 +2330,7 @@ export const FERME_STR = {
     promptCourtDoor: (n) => `${n} — E: read the plate`,
     promptCourtStairsUp: "Up to the first floor",
     promptCourtStairsDown: "Down to the basement",
-    courtFloorName: (k) => ({ ground: "Ground floor", upper: "First floor", basement: "Basement", hall: "Town hall", hallUp: "Town hall — first floor", church: "Church", churchLoft: "Organ loft" }[k] || k),
+    courtFloorName: (k) => ({ ground: "Ground floor", upper: "First floor", basement: "Basement", hall: "Town hall", hallUp: "Town hall — first floor", church: "Church", churchLoft: "Organ loft", churchTower: "Belfry" }[k] || k),   // 444
     // ZIP 441 — the church. See the French block for why none of these promises a service.
     churchEnterToast: "⛪ Valley Town church. Silence, cool stone, and the organ up there.",
     churchExitToast: "⛪ You step back out onto the forecourt.",
@@ -3261,6 +3080,7 @@ export const FERME_STR = {
     mapTitle: "🗺️ Valley map",
     mapClose: "Click anywhere or press Esc or M to close",
     mapYou: "you",
+    btnSettings: "Settings",
     btnHome: "🏠 House",
     btnMap: "🗺️ Map",
     btnEmployees: "👥 Staff",
@@ -3639,6 +3459,7 @@ export const FERME_STR = {
       hallUpper: "📜 Town hall — upper floor",
       church: "⛪ Church — the nave",
       churchLoft: "🎹 Church — the organ loft",
+      churchTower: "🔔 Church — the belfry",            // zip 444
       world: "🌀 The current land",
       bridge: "🌉 Foot of the bridge",
     }[k] || k),
@@ -3719,16 +3540,6 @@ export const FERME_STR = {
     // Zip 427 — Valley Town prompts.
     mapTownBoutique: "Maison Garfield",
     mapTownSalon: "Salon",
-    devEnqSection: "🔍 Case — the parcel that does not exist",
-    devEnqHint: "Start it, push it forward, or wipe it. ⚠️ None of these buttons pays gold: you skip the reading, you don't earn anything.",
-    devEnqNotStarted: "Not started",
-    devEnqOpName: (op) => ({
-      reset: "↺ Start over",
-      start: "▶ Start (read the notice)",
-      chapter: "⏭ Close this chapter",
-      all: "⏩ Everything up to the filing",
-    }[op] || op),
-    devEnqChat: (who, what) => `${who} touched the case: ${what}.`,
     devResidentsSection: "Populate the farm",
     devResidentsHint: (max) => `Move residents in at once (${max} max). For seeing Valley Town come alive without the wait.`,
     devResidentsBtn: (n) => `${n} residents`,
@@ -3920,388 +3731,6 @@ export const FERME_STR = {
     toastMarketNothing: "🎪 Your basket is empty.",
     promptTownStand: "↑ ↓ ← → : stand up  ·  Space: throw bread",
     birdCrumbsToast: "You crumble a crust. The pigeons are coming…",
-    // ZIP 442 — the investigation. See the long note on the French side.
-    enq: {
-      title: "The parcel that does not exist",
-      noteTitle: "🔍 Case notebook",
-      noteSub: "What the valley filed in the wrong place.",
-      noteGoal: "What you are looking for now",
-      noteHint: "Where to look",
-      noteCoop: "With two",
-      noteFound: (n, t) => `Clues: ${n} / ${t}`,
-      noteBy: (who) => `found by ${who}`,
-      noteNothing: "Nothing yet. It all starts at the news board on the main square, in Valley Town.",
-      noteMissing: "Still missing:",
-      noteHave: "What you already know:",
-      noteChapterOf: (i, n) => `Chapter ${i} of ${n}`,
-      noteDone: "Case closed.",
-      noteOpen: "🔍 Notebook",
-      chapter: {
-        halle: "The market hall fund",
-        cote: "A parcel the map does not carry",
-        nom: "A name on the parcel",
-        date: "Three inscriptions, three dates",
-        scelles: "Box 88",
-        chiffre: "The second half of the ledger",
-        heritier: "The heir",
-        depot: "The claim",
-      },
-      goal: {
-        halle: "Find out who pays for the market's price floor.",
-        cote: "Find on the ground the parcel the map does not carry, and name it by its reference.",
-        nom: "Put a name on parcel VT-3-28.",
-        date: "Date the dissolution for real: three inscriptions disagree.",
-        scelles: "Open the box Chaband left with the sealed evidence.",
-        chiffre: "Decipher the second half of the ledger.",
-        heritier: "Find Mathilde Ferrand's heir.",
-        depot: "File the claim with the notary, and decide.",
-      },
-      hint: {
-        halle: "The notice is up on the square. The price board at the town hall carries a footer line nobody ever reads.",
-        cote: "The wall map and the card index are at the land registry (town hall); the numbering rule is in the surveyor's office upstairs. The rest is outdoors: three boundary stones in town, and the datum stone of the whole survey is planted at the farm, by the station.",
-        nom: "Civil records are in the town hall's marriage room. The hearings archivist is in the courthouse basement. The municipal archives are upstairs at the town hall.",
-        date: "Two inscriptions are up in the church loft (the bell, and the organ builder's plate); the third is in the cemetery, under the moss. The bylaw is posted at the notary's.",
-        scelles: "The strongbox is in the sealed evidence room, in the basement. It has two locks, and they are not in the same room: one at the clerk's office, one at the bailiff's.",
-        chiffre: "Chaband wrote where the key was, on the ledger's flyleaf. He was not talking about his own name.",
-        heritier: "The council minutes are in the municipal archives, and always have been, in plain sight. Then go back to the civil register: this time you know what to look for.",
-        depot: "At the notary's, upstairs in the courthouse. It takes two signatures.",
-      },
-      coop: {
-        cote: "Four stones, two maps: one takes the train, the other stays. You compare notes when they get back.",
-        date: "Three inscriptions in three places. Split up — two minutes each with two of you.",
-        scelles: "Both locks must be turned within the same minute, two floors apart. Alone it's a sprint. With two it's a « ready? now! ».",
-        depot: "The form asks for two witnesses. If you're alone, the town provides one.",
-      },
-      doc: {
-        avis: {
-          t: "Town notice — closing of the market hall fund",
-          w: "News board, main square",
-          b: [
-            "The town informs the public that the MARKET HALL GUARANTEE FUND, which has ensured since year 41 that nobody sells in town for less than at their own farm, will be CLOSED for want of a known holder.",
-            "Any claim is received at the notary's office, in the courthouse, until the end of the present term.",
-            "The fund is financed by a land revenue whose origin the services have been unable to establish.",
-            "— The town clerk, by order.",
-          ],
-          n: "A fund pays for the market floor. The town does not know where the money comes from.",
-        },
-        cours: {
-          t: "The price board — footer",
-          w: "Price room, town hall",
-          b: [
-            "Below the five families, in a hand far older than the rest of the board, a line nobody ever copies over when it is redone:",
-            "« Market hall fund financed by: revenue of parcel VT-3-28, rural section. »",
-          ],
-          n: "Parcel VT-3-28 pays for the market floor.",
-        },
-        plan: {
-          t: "The land registry wall map",
-          w: "Land registry, town hall",
-          b: [
-            "The map of Valley Town, varnished, pinned, touched up in ink for years.",
-            "Section 1 — the Upper Town and the slopes. Section 2 — the built centre and the hall. Section 3 — the rural land: the orchard, the lake promenade, the wood edge.",
-            "Section 3 stops at number 27. A hand has written underneath, in pencil: « last parcel: the lake promenade ».",
-            "Twenty-seven parcels in all. Look as you like, there is no twenty-eighth.",
-          ],
-          n: "The map stops at 27, and the last one is the orchard.",
-        },
-        cotes: {
-          t: "Register of valley references",
-          w: "Surveyor's office, town hall",
-          b: [
-            "Kept by A. CHABAND, town surveyor.",
-            "« Article one. — A reference is written VT–section–number. »",
-            "« Article two. — Within a section, parcels are numbered WEST TO EAST, with no gap and no skip. »",
-            "« Article three. — Every reference is counted from the DATUM STONE, planted at the foot of the farm station. »",
-            "The following pages have been torn out. Cleanly, with a knife, not in anger.",
-          ],
-          n: "Numbering runs west to east, with no gap. The survey datum is a stone, at the farm.",
-        },
-        borneOrigine: {
-          t: "The datum stone",
-          w: "At the farm, by the station",
-          b: [
-            "A granite marker planted crooked, that nobody has looked at in a very long time.",
-            "North face: DATUM OF THE VALLEY SURVEY — A. CHABAND, SWORN SURVEYOR.",
-            "You scrape the moss off the south face. There is a word underneath, one word, cut far deeper than the rest, as if the hand had gone back over it several times:",
-            "MATHILDE",
-          ],
-          n: "On the datum stone, one first name cut deep: MATHILDE.",
-        },
-        borneQuai: {
-          t: "Section stone — the promenade",
-          w: "Lake promenade, Valley Town",
-          b: ["A section stone at the water's edge, half in the grass.", "VT-3-27. The figures are crisp."],
-          n: "Promenade stone: VT-3-27.",
-        },
-        borneVerger: {
-          t: "Section stone — the orchard",
-          w: "Municipal orchard, Valley Town",
-          b: ["A section stone at the corner of the municipal orchard, at the western end of the commune.", "VT-3-25."],
-          n: "Orchard stone: VT-3-25.",
-        },
-        borneBois: {
-          t: "Section stone — the wood",
-          w: "South-east wood, Valley Town",
-          b: [
-            "A stone half fallen under the ferns, in the high timber. You check twice against the map: it is further EAST than the promenade one — which the register calls the last.",
-            "Its reference has been HAMMERED OUT. Not worn away by time: struck with a chisel, methodically, figure after figure.",
-            "Only the bottom line survived: EAST LIMIT — SECTION 3.",
-          ],
-          n: "A stone east of the promenade, its reference chiselled out.",
-        },
-        fiche: {
-          t: "Card VT-3-28",
-          w: "Land registry card index, town hall",
-          b: [
-            "The drawer sticks, then gives. The card is there, face down, slipped behind number 27.",
-            "PARCEL VT-3-28 — east bank, wood edge — four acres — DISSOLVED.",
-            "Holder: M. FERRAND. (The first name has been scraped off with a blade. The loop of an M and one stem remain.)",
-            "Note: « Revenue assigned to the market hall fund, provisionally. »",
-            "See: civil records, town hall.",
-          ],
-          n: "VT-3-28 is dissolved. Holder: M. FERRAND, first name scraped off.",
-        },
-        mariages: {
-          t: "The civil register",
-          w: "Marriage room, town hall",
-          b: [
-            "The great bound register, on its lectern, lying open at random as it has every day forever.",
-            "Under F, between FERRAT and FERRIÈRE, a FOLIO is missing. The binding does not lie: the threads are cut clean. There was a page.",
-            "The stub reads: « Folio 214, sent to the courthouse notary. Return not recorded. »",
-          ],
-          n: "The FERRAND page was removed and lent to the courthouse. It never came back.",
-        },
-        ombeline: {
-          t: "Ombeline Reboul, hearings archivist",
-          w: "Archives, courthouse basement",
-          b: [
-            "— You're after folio 214. It's here, in box 88, and I will not get it out for you.",
-            "She says it without any edge, the way one announces rain.",
-            "— It isn't me. It's a standing order. It has been pinned there since before me, before my predecessor, and probably before hers. It forbids releasing box 88, and it is signed by a town surveyor — which makes no sense at all: a surveyor does not give orders to judicial archives.",
-            "— I cannot lift a standing order. But every standing order has a duplicate in the municipal archives, at the town hall, and the duplicate is under nobody's seal. Go and read it. At least you will know what it is protecting.",
-          ],
-          n: "Ombeline Reboul cannot lift the order. Its duplicate is in the municipal archives.",
-        },
-        note: {
-          t: "Standing order no. 3",
-          w: "Municipal archives, town hall",
-          b: [
-            "Year 41 of the valley, first day of the vintage month.",
-            "« Box 88 — civil folio, deed of dissolution, annex ledger — is not to be released. »",
-            "« Grounds: parcel with no known holder; any release would give rise to a claim the town could not honour. »",
-            "« To be reopened on the first claim. »",
-            "Signed: A. CHABAND, town surveyor.",
-            "In the margin, the same hand, later, smaller: « I hid nothing. I filed it away. That is not the same thing, and I know it. »",
-          ],
-          n: "Order no. 3 filed year 41, 1st of the vintage month. Box 88 is under seal, to be reopened on the first claim.",
-        },
-        cloche: {
-          t: "The bell inscription",
-          w: "Church loft, at the foot of the stair",
-          b: [
-            "Through the hatch you can read the rim of the bell upside down, in letters cast in the bronze:",
-            "I CALL THE LIVING — RECAST IN YEAR 41 — AT THE EXPENSE OF M. F.",
-          ],
-          n: "Bell recast in year 41, at the expense of M. F.",
-        },
-        orgue: {
-          t: "The organ builder's plate",
-          w: "Church loft, cheek of the organ case",
-          b: [
-            "A brass plate screwed onto the cheek of the case, at hand height:",
-            "ORGAN INSTALLED YEAR 39 — SPONSOR: MISS MATHILDE FERRAND, OF THE EAST BANK.",
-            "Someone tried to unscrew it. The screw heads are chewed up. They gave up.",
-          ],
-          n: "Organ installed year 39. Sponsor: Mathilde Ferrand, of the east bank.",
-        },
-        tombe: {
-          t: "The nameless grave",
-          w: "Cemetery, second row",
-          b: [
-            "Seventh stone of the second row. No name, no cross, no flowers — but the stone is good, cut, expensive.",
-            "You scrape the moss away. There are two lines underneath.",
-            "HERE LIES THE ONE WHO IS NO LONGER ON THE REGISTERS",
-            "YEAR 42",
-          ],
-          n: "The nameless grave is dated year 42.",
-        },
-        reglement: {
-          t: "Bylaw on deeds — posted extract",
-          w: "Notary's office, courthouse",
-          b: [
-            "A yellowed notice under glass, beside the counter.",
-            "« Art. 12. — A deed of dissolution is dated from the day of its FILING, and not from the day of the decision. »",
-            "« Art. 13. — Where a parcel is declared to have no known holder, filing may only occur after ONE FULL YEAR, so that a claim may arise. »",
-          ],
-          n: "A dissolution is dated from the filing, and filing follows the decision by one full year.",
-        },
-        acte: {
-          t: "Deed of dissolution — parcel VT-3-28",
-          w: "Notary's index, courthouse",
-          b: [
-            "The register for year 40. It falls open at the right page on its own: someone consulted it a great deal, then never again.",
-            "« Council decision, year 40. Filed year 41. The parcel is declared to have no known holder. »",
-            "Signed, countersigned, published. It is perfectly regular.",
-            "At the foot, by hand: « Annex ledger deposited with the sealed evidence, box 88, to be opened on the FIRST CLAIM. — A.C. »",
-            "And you do the arithmetic, because you have just scraped a stone clean: the parcel was declared holderless in year 40. The woman whose first name was scraped off died in year 42.",
-            "She was alive.",
-          ],
-          n: "Decision year 40: « no known holder ». Mathilde Ferrand died in 42. She was alive.",
-        },
-        coffre: {
-          t: "Box 88",
-          w: "Sealed evidence room, courthouse basement",
-          b: [
-            "The strongbox opens on two drawers. Folio 214, torn out cleanly, laid flat. And a black cloth ledger with no title.",
-            "First half, in plain hand, the writing of a man taking his time:",
-            "« Year 40. The flood took the east bank bridge and half the stalls. The hall can no longer guarantee its prices; without a guarantee the farms stop coming down to sell; without the farms there is no hall. The council asked me to find a revenue. There was only one available: that of a parcel whose holder has no known heir and claims nothing. I proposed dissolving it provisionally. The council voted. »",
-            "Second half: the same hand, enciphered, page after page, to the end of the book.",
-            "On the flyleaf, in plain hand: « Whoever wishes to read on will find the key where I put my name for the last time. »",
-          ],
-          n: "Box 88 open. Chaband's ledger: half plain, half enciphered.",
-        },
-        registre: {
-          t: "Chaband's ledger, deciphered",
-          w: "Box 88",
-          b: [
-            "« Year 41. I did not tell the council that I had been to see her. She lives at the wood edge, she does not read notices, she has never once been to the town hall in her life. I told her that her land would be entered in the town's name for a time and that she would stay on it. She said: very well, if you leave me the bell. We recast the bell. She paid for it. »",
-            "« She died in year 42 without ever having claimed a thing, and the provisional became what the provisional becomes. »",
-            "« I record here, for whoever comes: the dissolution is not irregular, it is FALSE. There was a holder, she had a name, and the council knew it — the minutes say so, in the margin, and nobody reads margins. »",
-            "« I did not have the courage to reopen it in my lifetime. I did better than hide it and worse than say it: I filed it away. »",
-          ],
-          n: "Chaband knew, and the council knew. The minutes say so in the margin.",
-        },
-        pv: {
-          t: "Council minutes, year 40",
-          w: "Municipal archives, town hall",
-          b: [
-            "They were never secret: they are bound with the others, in date order, on the shelf you open as you walk in.",
-            "« Article 4. — Dissolution of parcel VT-3-28 in favour of the market hall fund. Carried unanimously. »",
-            "And in the margin, in pale ink, in the white space nobody ever looks at:",
-            "« subject to the heir ».",
-          ],
-          n: "The minutes say « subject to the heir ». So there is an heir.",
-        },
-        filiation: {
-          t: "The register, read again",
-          w: "Marriage room, town hall",
-          b: [
-            "You ask for the register again. This time you know what to look for, and it is not the missing folio: it is what surrounds it.",
-            "Folio 213: marriage of Mathilde Ferrand's elder sister, year 28, to a BONNEFOY of the Upper Town.",
-            "Folio 215: birth of a son, year 30.",
-            "They removed Mathilde's page. They left her sister's, which told nobody anything — and which tells everything to whoever has the name.",
-            "That line is alive, it lives in the Upper Town, and it stands in the municipal elections every thirty days on a platform of « order and accounts ».",
-          ],
-          n: "Mathilde Ferrand's heir is a Bonnefoy, of the Upper Town.",
-        },
-      },
-      code: {
-        A: {
-          t: "Land registry card index",
-          ask: "Which reference do you want to pull?",
-          ph: "VT-3-…",
-          hint: "Numbering runs west to east, with no gap. The orchard is 25, the promenade 27, and the map says the promenade is the last. Yet there is a stone further east than the promenade.",
-          no: "That drawer does not exist. The index says nothing.",
-        },
-        B: {
-          t: "The notary's index",
-          ask: "The index is ordered by YEAR OF DECISION. Which one?",
-          ph: "year …",
-          hint: "The order was filed in year 41. The bylaw says filing follows the decision by one full year.",
-          no: "The clerk leafs through and shrugs: nothing for that year.",
-        },
-        C: {
-          t: "Chaband's cipher",
-          ask: "The cipher key.",
-          ph: "one word",
-          hint: "« Where I put my name for the last time. » His last stone is the datum, at the farm — and it is not his own name that is cut into it.",
-          no: "The letters stay letters. That is not the key.",
-        },
-      },
-      cipherLead: "Second half of the ledger, enciphered:",
-      cipherKeyLabel: "Key",
-      omb: {
-        name: "Ombeline Reboul",
-        role: "Hearings archivist",
-        hello: "You came all the way down here. That in itself is rare.",
-        again: "Anything else?",
-        close: "Thank you.",
-        ask: "Where do we stand?",
-        line: {
-          halle: "The hall fund? I've watched it go through the accounts since I got here. Nobody knows what feeds it, and nobody has ever had a reason to ask. You, apparently, do.",
-          cote: "A parcel that isn't on the map and is on the ground doesn't happen by accident. Boundary stones don't lie: they're too heavy for that.",
-          nom: "M. FERRAND, first name scraped off. Scraped with a blade, not faded. Somebody took the time.",
-          date: "If three inscriptions give three dates, it isn't that they're wrong: it's that they aren't dating the same thing. Read the bylaw before you conclude.",
-          scelles: "Box 88 is right there, behind me, three metres away. It has been taunting me for eleven years. Two locks, two keys, and not in the same room — that is deliberate: one man alone must not be able to open it.",
-          chiffre: "He enciphered the half that accuses and left in plain hand the half that explains. A man who wanted to keep quiet would have written nothing at all.",
-          heritier: "« Subject to the heir. » Four words in a margin. I have reread those minutes goodness knows how many times for other cases; I had never seen them.",
-          depot: "Go to the notary. And think before you sign: I file both outcomes in the same place, but they don't put away the same town.",
-        },
-        done: {
-          restore: "You gave someone their name back. It doesn't show in my boxes, but it shows on the stone.",
-          keep: "The stone is still nameless. I'm noting it down; that's my job.",
-        },
-      },
-      end: {
-        t: "Filing the claim",
-        intro: "The clerk lays out the form, the four documents and the stamp beside them. He is in no hurry.",
-        missing: "Documents are missing. The clerk counts them aloud and hands the file back.",
-        signTitle: "Signatures",
-        signNeed: "A claim is filed before TWO witnesses.",
-        signMe: "Sign",
-        signed: (n) => `${n} signature(s) on file.`,
-        signedAlready: "You have already signed.",
-        solo: "You are alone today: the archivist will countersign. The form allows for it.",
-        mayorHeir: "The notary looks up: « You do know the heir is the sitting mayor? He will be judge and party. I am noting it on the file. »",
-        mayorNot: "The notary writes down the heir's name without comment. He is not mayor this season; that will be simpler.",
-        choose: "Two outcomes. The notary lets you choose, and advises nothing.",
-        restoreT: "🌾 Restore the parcel",
-        restoreD: "VT-3-28 returns to the register in the heir's name. The hall fund is wound up: the market will have no floor — and no ceiling either. Prices may fall below the farm bin, and climb far higher.",
-        keepT: "⚖️ Keep the fund",
-        keepD: "The claim is withdrawn. The fund is regularised in the town's name: the floor stays, and it is raised. The parcel stays dissolved, and the stone stays nameless.",
-        confirm: "This is final.",
-        outRestore: [
-          "The notary writes three lines, stamps them, and that is that. It looks like nothing at all.",
-          "The next day a roads worker plants a plaque at the wood edge, where the stone lay fallen. Mathilde Ferrand's name is on it. The gravedigger cuts the stone.",
-          "At dawn the bell rings. It rings every day — but today we know who paid for it.",
-          "At the market, the price board has one line fewer.",
-        ],
-        outKeep: [
-          "The notary writes three lines, stamps them, and that is that. The town pays a discovery indemnity, generous, perfectly legal.",
-          "The fund now has a name: the town's. A brass plate is screwed up under the hall, with no name on it.",
-          "Ombeline puts box 88 away. She says nothing. Then, closing the door: « The stone is still nameless. »",
-        ],
-        gold: (g) => `+${g} gold in the common till.`,
-      },
-      // See the French note: these six travel through broadcastChat, which already carries its own emoji.
-      tStart: "You open a case notebook.",
-      tFound: (t) => `🔍 Noted: ${t}`,
-      tFoundBy: (who, t) => `${who} found: ${t}`,
-      tChapter: (t, g) => `${t} — chapter closed. +${g} gold.`,
-      tLocked: "You wouldn't know what to look for. Not yet.",
-      tScrub: "You scrape the moss away…",
-      tArmed: (s) => `🔑 Lock turned. The other one has ${s} seconds.`,
-      tLate: "🔑 Too late: the first lock has closed again. Start over.",
-      tOpen: "Both locks gave. The evidence strongbox is open.",
-      tBoxWait: "🔒 Two locks, and neither is here. Clerk's office and bailiff's.",
-      tCodeNo: "That is not the right answer.",
-      tDone: "The case is closed.",
-      tBell: "At dawn, Mathilde Ferrand's bell rings out over the valley.",
-      plaque: "MATHILDE FERRAND — VT-3-28",
-      graveName: "MATHILDE FERRAND",
-    },
-    enqPrompt: (k) => ({
-      doc: "E: read",
-      omb: "E: talk to the archivist",
-      stone: "E: read the stone",
-      scrub: "E: scrape the moss",
-      code: "E: search the index",
-      codeB: "E: search the register index",
-      lock: "E: turn the key",
-      box: "E: the evidence strongbox",
-      file: "E: file the claim",
-      plaque: "E: read the plaque",
-    })[k] || "E",
   },
 };
 

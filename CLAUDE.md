@@ -4,35 +4,65 @@
 Il remplace l'exploration du dépôt pour tout ce qui est global. Le README est un journal
 chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
-État à jour du **zip 442**. Chantier actif : **rendre Valley Town habitable au regard ET
-crédible au jeu**, et depuis le 442 **lui donner une histoire**. La ville est refaite depuis le
-434 ; le 438 a ouvert l'hôtel de ville, le 439 l'a audité, le 440 a corrigé la portée des ponts
-et la COMPOSITION des décors, le 441 a réparé leur TRAVERSÉE puis ouvert l'**ÉGLISE**, et le
-**442 y a posé une ENQUÊTE COMPLÈTE** — « la parcelle qui n'existe pas », vingt-et-un lieux sur
-les trois cartes, huit chapitres, trois codes, deux issues, conçue pour deux joueurs. Tout ce qui
-concerne la ville, ses habitants, ses bâtiments, **son enquête** ET **ses pièges** est dans
+État à jour du **zip 444**. Chantier actif : **rendre Valley Town habitable au regard ET
+crédible au jeu**, et **lui donner une histoire**. La ville est refaite depuis le 434 ; le 438 a
+ouvert l'hôtel de ville, le 439 l'a audité, le 440 a corrigé la portée des ponts et la COMPOSITION
+des décors, le 441 a réparé leur TRAVERSÉE puis ouvert l'**ÉGLISE**, le 442 y a posé une enquête
+cadastrale, et le **444 l'a RETIRÉE pour la remplacer par une QUÊTE MAGIQUE** — « The Fallen
+String », une étoile tombée, cinq étapes, conçue pour un public de 7 à 27 ans et pour deux joueurs.
+Tout ce qui concerne la ville, ses habitants, ses bâtiments et **ses pièges** est dans
 **`components/ferme/README.md`**, qui fait autorité ; les règles de DESSIN sont dans
 **`components/ferme/DESSIN.md`** (sorties du §4 au 441) ; les bancs sont dans **`tools/README.md`**.
 **`candyluge` et `crystal` sont EN PAUSE.**
+
+⚠️⚠️⚠️ **LE 444 EST JOUABLE DE BOUT EN BOUT PAR UN JOUEUR SEUL, ET SON DOCUMENT DE REPRISE EST
+`components/ferme/QUETE.md`. LIS-LE AVANT DE TOUCHER À LA QUÊTE.** Il porte le déroulé des cinq
+étapes, la grammaire magique dont TOUT découle (« la lumière de l'étoile ne montre pas ce qu'une
+chose EST, elle montre ce qu'une chose SE RAPPELLE »), le tableau d'avancement §10 et le **§12 —
+ce qui reste, dans l'ordre.**
+**Codé, mesuré ET regardé à l'écran :** le retrait de l'enquête, `quete.js`, les textes, le
+**beffroi**, le placement dérivé, l'arbitrage hôte, le menu dev **⭐ Star**, les huit familles de
+dessins, **les cinq mini-jeux en canevas**, la **chute** et sa carte de chapitre, le **pisteur**,
+la **compagne** qui suit et se cache, le rappel « Previously », et trois bancs
+(`verify-quete` **177/177**, `render-beffroi` **28/28**, `render-etoile`).
+**Ce qui reste, et c'est court :** ⚠️ **la séance à DEUX CLIENTS** — c'est-à-dire toute la moitié
+coopérative, jamais jouée une seule fois ; les cinq mini-jeux joués jusqu'à la victoire à cadence
+réelle (« est-ce que c'est agréable ? », qu'aucun banc ne verra) ; les scènes **turn** et **end** ;
+la **Lyre** (elle ne se dessine que la nuit) ; le dessin de la compagne (§12.3, deux directions).
+
+⚠️⚠️⚠️ **ET LA LEÇON DU 444 EST CELLE-CI, ELLE VAUT PLUS QUE LA QUÊTE : SIX BANCS AU VERT N'ONT PAS
+VU DIX DÉFAUTS QU'UNE SÉANCE DE JEU DE VINGT MINUTES A TROUVÉS**, dont **cinq qui rendaient un
+lieu inatteignable** — un arrêt de téléport qui posait le joueur dans le vide, un autre qui le
+posait sur une marche, un mini-jeu qui recommençait avant le premier appui. Les bancs mesuraient
+tous la bonne chose ; **aucun ne mesurait l'ARRIVÉE**. Deux formes neuves à retenir :
+1. ⚠️ **UNE PORTE SANS CHEMIN DE CODE MENT** — c'est le pendant exact de « un chemin de code sans
+   porte n'existe pas » (438, 441), et il est plus sournois : le bouton est là, on clique, il fait
+   autre chose. Parade : **une jointure, jamais deux listes** (`C.DEV_FLOOR_OF`).
+2. ⚠️ **UN REPLI POLI (`|| clé`) N'ÉCHOUE PAS, IL AFFICHE LA CLÉ.** « churchTower » s'écrivait en
+   toutes lettres dans deux endroits de l'interface. Invisible à la relecture, criant à l'écran.
+Le détail défaut par défaut est au **§25 de `components/ferme/README.md`** — c'est la meilleure
+page du dépôt sur ce que les bancs ne savent pas faire. *Un banc protège de ce qu'on a déjà
+compris ; regarder l'écran est la seule chose qui trouve ce qu'on n'a pas encore compris.*
 
 ⚠️ **CHANTIER OUVERT — LA MOITIÉ QUI RESTE DU SECOND TEMPS DÉCIDÉ AU 440, ET ELLE N'A TOUJOURS
 PAS BOUGÉ.** L'église est livrée au 441. Les **intérieurs du tribunal et de la mairie** restent
 difficiles à naviguer (« on ne sait pas où est la porte de chaque pièce ») — parade retenue :
 **chambranle dessiné + plaque lisible depuis le couloir + seuil au sol**. C'est une dette datée de
-deux zips, et l'enquête du 442 vient de faire passer le joueur dans SIX de ces pièces : elle la
-rend plus visible, pas moins.
+quatre zips. ⚠️ La quête du 444 la rend MOINS urgente que l'enquête ne la rendait : elle est
+secrète, elle ne passe par aucun guichet, et son seul intérieur est le beffroi.
 
 ⚠️ **ET IL MANQUE UN FICHIER, PAS UNE LIGNE DE CODE :** le morceau d'orgue, à déposer dans
 **`public/sounds/church-organ.mp3`** (décision de Guillaume au 441 : un vrai morceau, pas une
 synthèse). Sans lui la scène se joue en entier et le jeu DIT que la soufflerie est muette.
 
-⚠️⚠️ **CE QUI N'A PAS ÉTÉ JOUÉ DANS LE 442, ET IL FAUT LE LIRE AVANT DE CROIRE L'ENQUÊTE
-FINIE :** la séance à deux clients a validé la chaîne réseau de bout en bout (un indice trouvé
-par l'un tombe dans le carnet de l'autre, avec son nom), **mais aucune interaction d'INTÉRIEUR
-n'a été vue à l'écran** — l'archiviste, les deux commandes de verrou, le coffre et le guichet du
-notaire. Le banc du navigateur ne compose une image que pendant une capture, donc le personnage
-ne peut pas traverser un bâtiment. `verify-enquete` mesure leur placement et leur accessibilité ;
-personne ne les a encore VUES. Voir `components/ferme/README.md` §25, dernier chapitre.
+⚠️⚠️ **CE QUI N'A PAS ENCORE ÉTÉ JOUÉ DU 444, ET IL FAUT LE LIRE AVANT DE CROIRE LA QUÊTE
+FINIE : LA MOITIÉ COOPÉRATIVE, C'EST-À-DIRE TOUT CE QUI SE FAIT À DEUX.** L'étoile timide du
+cratère, le croisement d'ombres, la flaque de lumière qu'un joueur promène pour l'autre, le duo
+orgue/beffroi : le code est là, les positions distantes sont lues, **elles n'ont jamais eu de
+position distante à lire**. Restent aussi : les cinq mini-jeux joués jusqu'à la VICTOIRE à cadence
+réelle, les scènes *turn* et *end*, et la Lyre (elle ne se dessine que la nuit). Le tableau
+d'avancement de `components/ferme/QUETE.md` §10 distingue **codé** et **regardé à l'écran**,
+colonne par colonne — c'est lui qui fait autorité, pas cette page.
 
 ⚠️⚠️⚠️ **LE PIÈGE N°1 DU PROJET, ET IL A TROIS VISAGES : CE QUI VIT DANS LA CLOSURE DE LA BOUCLE
 DE RENDU.** Il a coûté quelque chose à chacun des cinq derniers zips.
@@ -295,8 +325,9 @@ couvre » est une règle du GÉNÉRATEUR, pas du dessin, et c'est pour ça qu'el
 |---|---|
 | `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **~20 500 l.** |
 | `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** |
-| `components/ferme/enquete.js` | **l'ENQUÊTE (442) : la table des 21 lieux, les 8 chapitres, les 3 codes, le chiffre et les résolveurs purs.** Aucun React, aucun dessin — `verify-enquete.mjs` l'importe |
-| `components/ferme/README.md` | **Valley Town, le tribunal, l'HÔTEL DE VILLE, l'ÉGLISE, l'ENQUÊTE, les habitants, la VENTE, les OISEAUX, les ÉLECTIONS et les PIÈGES de ces zones — autorité (428-442)** |
+| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE (444) : la table des lieux, les 5 chapitres, les grandeurs de coopération et les résolveurs purs.** Aucun React, aucun dessin — `verify-quete.mjs` l'importera. ⚠️ Remplace `enquete.js`, supprimé au 444 |
+| `components/ferme/QUETE.md` | **le chantier 444 : déroulé, grammaire magique, avancement, ET CE QUI RESTE À FAIRE (§12) — autorité tant que la quête n'est pas finie** |
+| `components/ferme/README.md` | **Valley Town, le tribunal, l'HÔTEL DE VILLE, l'ÉGLISE, le BEFFROI, les habitants, la VENTE, les OISEAUX, les ÉLECTIONS et les PIÈGES de ces zones — autorité (428-444)** |
 | `components/ferme/DESSIN.md` | **les règles de DESSIN, vraies partout — autorité (441, sorties du §4)** |
 | `tools/README.md` | **les bancs, ce qu'ils attrapent et leurs chiffres — autorité (432-439)** |
 | `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** · depuis le 440 il **importe `planche.js`** : une portée de pont et une emprise de décor sont des grandeurs de DESSIN, on les dérive du sprite au lieu de les recopier |
@@ -441,123 +472,107 @@ HUD s'affiche, et le canevas reste vide — exactement comme si le rendu était 
 demi-session perdue au 426 sur un bogue qui n'existait pas. **Remède** : arrêter le serveur,
 `rm -rf .next`, redémarrer.
 
-**`npx next build`** compile tout : le contrôle le moins cher sur 19 000 lignes.
+**`npx next build`** compile tout : le contrôle le moins cher sur 25 000 lignes.
 ⚠️ L'avertissement `'G_SOIL' is not exported` est **PRÉEXISTANT**. ⚠️ **SANS `.env.local`, LE
 BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pré-rendu de
 `/login` et `/signup`) — ce n'est PAS une régression. **Ce qui compte est
 `✓ Compiled successfully` juste avant.**
 
-⚠️⚠️ **LES BANCS ONT DÉMÉNAGÉ DANS `tools/README.md` AU 432**, sur l'ordre laissé par le
-§14.2 du 431 : la liste occupait cinquante lignes et gagnait une entrée par zip. **Ce fichier ne
-la recopie plus** — il en garde seulement ce qu'il faut savoir sans ouvrir l'autre : **15 bancs
-de contrôle et 17 bancs de rendu** (comptés en listant `tools/`, pas de mémoire), et **quatre
-d'entre eux existent parce qu'un défaut vu par Guillaume
-n'était mesuré nulle part** (`verify-compo` au 440, `verify-pont` au 441, `verify-enquete` au
-442, `verify-portee` au 443). ⚠️ Les deux qui touchent à de l'ARGENT sont `verify-vallee` (il joue des ventes complètes
-et compte les pièces) et `verify-enquete` (il vérifie que le cours SANS enquête est bit à bit
-celui du 430). **Tout chiffre écrit là-bas a été obtenu en lançant le banc**, c'est sa règle
-d'entrée.
+⚠️⚠️ **LES BANCS SONT DANS `tools/README.md` DEPUIS LE 432, ET CE CHAPITRE A ÉTÉ ÉLAGUÉ AU 444
+SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 442** (reporté deux fois). **15 bancs de contrôle et 18 bancs
+de rendu**, comptés en listant `tools/`. ⚠️ **Six d'entre eux existent parce qu'un défaut vu par
+Guillaume — ou vu à l'écran — n'était mesuré nulle part** : `verify-compo` (440), `verify-pont`
+(441), `verify-portee` (443), et au 444 `render-etoile`, `verify-quete`, `render-beffroi`.
+⚠️ **Le seul qui touche à de l'ARGENT est `verify-vallee`** (200/200) : il joue des ventes,
+compte les pièces, et vérifie que **le cours est bit à bit celui du 430** — contrôle hérité de
+`verify-enquete`, sauvé de sa suppression parce qu'il protégeait le marché, pas l'enquête.
+**Tout chiffre écrit là-bas a été obtenu en lançant le banc**, c'est sa règle d'entrée.
 
-⚠️⚠️ **ET LE 441 A RAPPELÉ CE QUE VAUT UN BANC QUI N'A JAMAIS PU ÉCHOUER.** Le garde-fou de
-source de `verify-pont` annonçait « 0 appel fautif » alors que son motif, ancré sur la fin de
-ligne, ne pouvait matcher **aucun** appel terminé par `;` — c'est-à-dire presque tous. Il est
-passé au vert sur une faute injectée exprès. **Tout banc qui compte des occurrences doit publier
-combien il en a LUES** : c'est la seule façon de s'apercevoir qu'un scanner ne scanne rien.
+⚠️⚠️ **ET UN BANC QUI N'A JAMAIS PU ÉCHOUER NE VAUT RIEN** (441). Le garde-fou de source de
+`verify-pont` annonçait « 0 appel fautif » alors que son motif ne pouvait matcher **aucun** appel
+réel. **Tout banc qui compte des occurrences doit publier combien il en a LUES.**
 
-⚠️ **CE QUI RESTE ICI EST LA LISTE DES BANCS QUI N'EXISTENT PAS, et c'est le point.** Une liste
-de ce qui existe se vérifie en la lançant ; une liste de ce qui n'existe pas ne se vérifie
-jamais — c'est elle, et elle seule, qui protège du banc imaginaire (§14.6) :
+⚠️⚠️⚠️ **ET LE 444 A AJOUTÉ LA LIMITE DE FOND, CELLE QUI VAUT POUR TOUS : SIX BANCS AU VERT N'ONT
+PAS VU DIX DÉFAUTS QU'UNE SÉANCE DE JEU DE VINGT MINUTES A TROUVÉS**, dont cinq qui rendaient un
+lieu **inatteignable**. Ils mesuraient tous la bonne chose ; **aucun ne mesurait l'ARRIVÉE**.
+Détail au §25 de `components/ferme/README.md`. *Un banc protège de ce qu'on a déjà compris ;
+regarder l'écran est la seule chose qui trouve ce qu'on n'a pas encore compris.*
+
+### ⚠️ CE QUI N'EXISTE PAS — ET C'EST LE POINT DE CE CHAPITRE
+
+Une liste de ce qui existe se vérifie en la lançant ; une liste de ce qui n'existe pas ne se
+vérifie jamais — c'est elle, et elle seule, qui protège du banc imaginaire (§14.6).
+
 - ⚠️ **`verify-luge`, `verify-boot`, `preview-luge`, `preview.mjs`, `verify-perf` et
   `preview-fps` N'EXISTENT PAS** dans `tools/`.
-- ⚠️ **AUCUN BANC NE REGARDE LA FERME EN IMAGE** : les dix-sept bancs de rendu ne dessinent que
-  Valley Town, ses intérieurs, ses habitants et son enquête. Un décor de la ferme mal proportionné n'a, à ce
-  jour, aucun endroit où se voir.
-  ⚠️ **Et le SOL de la ferme non plus** : `render-rues` (434) peint les rues de la ville, pas les
-  chemins de la ferme, qui restent sur la tuile unique de 16 px du zip 232.
-  ⚠️⚠️ **AU 438 L'ÉCART EST DEVENU FRAPPANT, ET IL FAUT LE DIRE : la ferme garde les deux arbres
-  du zip 232** (trois `arc()` et quatre triangles) **et son herbe en tuile de 16 px**, pendant que
-  la ville a onze essences animées de 48×64 et un gazon au pavé de 64 px. C'est délibéré (décision du 424 : ne pas mêler deux changements
-  visuels dans la même livraison) et c'est **la dette la plus visible du projet** — un joueur qui
-  prend le train voit maintenant deux niveaux de finition.
-- ⚠️ **AUCUN BANC NE REGARDE UNE FENÊTRE COMPLÈTE DE VALLEY TOWN.** `render-parc.mjs` (437) en
-  approche dehors, `render-mairie.mjs` (438, refondu au 439) dedans : depuis le 439 il **appelle**
-  les sols au lieu de les repeindre et il dessine les plaques de porte, donc c'est la première
-  planche d'intérieur qui juge ce que le jeu dessine vraiment. **Ce qui manque encore est ce qui
-  reste dans la closure : les BÂTIMENTS de la ville et les personnages.** Les autres bancs de
-  rendu approximent toujours le décor autour de leur surface.
-- ⚠️⚠️ **ET AUCUN BANC NE JOUE LA FERME PEUPLÉE À DEUX CLIENTS.** `fake-supabase.mjs` le permet
-  depuis le 432 et l'a fait pour la VILLE (trois défauts trouvés le premier jour), puis pour
-  l'ENQUÊTE au 442 (deux défauts, dont un que rien d'autre ne pouvait voir) ; **la ferme PEUPLÉE
-  n'y est jamais passée**. C'est la passe la plus urgente du fichier (§13).
-  ⚠️ **Et il faut savoir ceci avant d'essayer** (442, une demi-heure perdue) : le banc du
-  navigateur ne compose une image QUE pendant une capture d'écran. `requestAnimationFrame` ne
-  tourne donc que par à-coups, la boucle de rendu s'arrête entre deux appels, et le personnage ne
-  se déplace pas. Le remède du §10 (remplacer `rAF` par un `MessageChannel`) MARCHE, mais il faut
-  le poser PENDANT que des images tournent — c'est-à-dire juste avant une capture — sinon la
-  chaîne d'appels est déjà morte et personne ne rappelle le remplaçant. ⚠️ Et un canevas mesuré
-  pendant que le panneau est masqué sort à **0×0** : le jeu ne dessine plus rien et ça ressemble
-  trait pour trait à un rendu cassé.
-- ⚠️ **Le faux canvas de `lib-canvas.mjs` IGNORE `translate`/`rotate` et ne connaît pas
-  `fillText`** : les trois poses d'une feuille de personnage s'y superposent, et un sprite qui
-  dépend d'une transformation s'y juge faux. Ce n'est pas un bogue du jeu — mais il faut le
-  savoir avant d'aller corriger un dessin qui n'a rien.
-  ⚠️⚠️ **ET IL N'IMPLÉMENTAIT `drawImage` QU'À TROIS ARGUMENTS jusqu'au 428**, en ignorant
-  silencieusement le reste : toute découpe dans une feuille de sprite y dessinait la feuille
-  ENTIÈRE. Pas d'erreur, une image plausible, un verdict faux — le stub menteur, **dans l'outil
-  censé nous en protéger**. Corrigé (3, 5 et 9 arguments, plus proche voisin). **Un banc de
-  rendu se vérifie aussi.**
+- ⚠️ **AUCUN BANC NE REGARDE LA FERME EN IMAGE** : les dix-huit bancs de rendu ne dessinent que
+  Valley Town, ses intérieurs, ses habitants et sa quête. Un décor de la ferme mal proportionné
+  n'a, à ce jour, aucun endroit où se voir. ⚠️ **Et le SOL de la ferme non plus** : `render-rues`
+  peint les rues de la ville, pas les chemins de la ferme, restés sur la tuile unique de 16 px du
+  zip 232.
+  ⚠️⚠️ **L'ÉCART EST DEVENU FRAPPANT : la ferme garde les deux arbres du zip 232** (trois `arc()`
+  et quatre triangles) **et son herbe en tuile de 16 px**, pendant que la ville a onze essences
+  animées de 48×64 et un gazon au pavé de 64 px. C'est délibéré (décision du 424 : ne pas mêler
+  deux changements visuels) et c'est **la dette la plus visible du projet** — un joueur qui prend
+  le train voit deux niveaux de finition.
+- ⚠️ **AUCUN BANC NE REGARDE UNE FENÊTRE COMPLÈTE DE VALLEY TOWN.** `render-mairie` (439) et
+  `render-beffroi` (444) **appellent** les sols au lieu de les repeindre, donc ils jugent ce que
+  le jeu dessine vraiment ; **ce qui manque est ce qui reste dans la closure : les BÂTIMENTS de la
+  ville et les PERSONNAGES.** Les autres bancs approximent le décor autour de leur surface.
+- ⚠️⚠️ **ET AUCUN BANC NE JOUE À DEUX CLIENTS.** `fake-supabase.mjs` le permet depuis le 432 et
+  l'a fait pour la VILLE (trois défauts le premier jour) puis pour l'enquête au 442 (deux
+  défauts) ; **la ferme PEUPLÉE n'y est jamais passée**, et **toute la moitié coopérative de la
+  quête du 444 non plus** — l'étoile timide, le croisement d'ombres, la flaque de lumière, le duo.
+  C'est la passe la plus urgente du fichier (§13), et **une seule séance peut faire les deux**.
+- ⚠️ **AUCUN BANC NE JOUE UN MINI-JEU.** Ils vivent dans le DOM et demandent un vrai canevas et un
+  vrai `rAF`. Ce qui se juge là — *est-ce que c'est agréable ?* — ne se mesure nulle part.
 
-⚠️⚠️ **JOUER À DEUX EN LOCAL EST DEVENU POSSIBLE AU 432 : `node tools/fake-supabase.mjs`.**
-REST bidon **+ relais Realtime**, donc deux onglets = deux joueurs, sans compte et sans
-consommer un message du quota. `LAT=90 JIT=60` simule une vraie liaison ; il imprime le débit
-réel PAR TYPE de message toutes les 5 s. **C'est lui qui a trouvé le défaut du 431**, et c'est
-lui qu'il faut lancer pour la passe « gels de PNJ » réclamée en §13 depuis le 419.
-⚠️ **Le piège si on le réécrit : le broadcast de supabase-js est BINAIRE**, pas JSON — un
-relais qui ne lit que les trames texte voit tout se connecter et rien passer.
-⚠️ **Et un onglet d'arrière-plan fausse TOUT** : `document.hidden` coupe `netCanBroadcast()`
-(zéro position émise) et `requestAnimationFrame` est suspendu. Pour observer deux clients dont
-un seul est au premier plan, il faut remplacer `rAF` par un **`MessageChannel`** (un
-`setTimeout` est plafonné à 1 Hz en arrière-plan) ET redéfinir `document.hidden` **avant** que
-le composant se monte — `hiddenRef` n'est relu que sur `visibilitychange`.
+⚠️⚠️ **JOUER À DEUX EN LOCAL : `node tools/fake-supabase.mjs`.** REST bidon **+ relais Realtime**,
+donc deux onglets = deux joueurs, sans compte et sans consommer un message du quota. `LAT=90
+JIT=60` simule une vraie liaison ; il imprime le débit réel PAR TYPE toutes les 5 s.
+⚠️ **Le broadcast de supabase-js est BINAIRE**, pas JSON — un relais qui ne lit que les trames
+texte voit tout se connecter et rien passer.
 
 **Jouer en local** — deux échafaudages TEMPORAIRES, **à supprimer après** :
-1. un `.env.local` pointant sur `http://127.0.0.1:54321` (voir `tools/fake-supabase.mjs`
-   ci-dessus) ; sans lui on reste bloqué à l'écran « code de ferme » ;
+1. un `.env.local` pointant sur `http://127.0.0.1:54321` ; sans lui on reste bloqué à l'écran
+   « code de ferme » ;
 2. une page jetable `app/<nom>/page.js` montant `<FermeGame room={{id}} me={{id,username}}
    players={[{profile_id, username, joined_at}]} isHost savedCode="XXXX" />`.
    ⚠️ **`players` EST OBLIGATOIRE** (`[...players]` plante sans lui). ⚠️ **Un dossier `app/`
    préfixé par `_` n'est PAS une route.** ⚠️ **La supprimer avant de livrer** : en production
    elle ouvre une ferme sans authentification.
 
-Puis ⌘⇧X → menu développeur → **14 arrêts** (ferme, passage, Valley Town ×6 dont la
-Haute-Ville, et les **sept niveaux d'intérieur** : tribunal ×3, mairie ×2, église ×2),
-**« Peupler la ferme »** (427, qui installe 6/12/20 résidents d'un coup, artisans nommés
-d'abord) et **« 🔍 Enquête »** (442 : repartir de zéro · lancer · boucler le chapitre · tout
-jusqu'au dépôt). Sans eux, ni la vie sociale de la ville ni le huitième chapitre de l'enquête
-ne sont observables avant une heure de jeu — donc jamais.
-⚠️⚠️ **LES QUATRE ARRÊTS D'INTÉRIEUR MANQUAIENT DEPUIS LE 438 ET LE 441**, alors que le code de
-destination savait déjà traiter « hall » : seule l'entrée de menu manquait. **Un chemin de code
-sans porte n'existe pas**, et aucun banc ne comparait la liste des niveaux à celle des arrêts —
-`verify-enquete` le fait depuis le 442, dans les deux sens.
-⚠️ **ET AUCUN BOUTON D'ENQUÊTE NE CRÉDITE UN OR** : le menu s'ouvre à tout joueur qui connaît le
-raccourci (398), donc « boucler le chapitre » qui paierait serait une planche à billets à un
-clic. Le chemin développeur appelle les mêmes résolveurs et JETTE le gain.
+Puis ⌘⇧X → menu développeur → **15 arrêts** (ferme, passage, Valley Town ×6, et les **huit
+niveaux d'intérieur** : tribunal ×3, mairie ×2, église ×3 dont le beffroi), **« Peupler la
+ferme »** et **« ⭐ Star »** (444 : effacer · lancer la chute · boucler le chapitre · sauter d'un
+cran · marquer le lieu suivant · tout sauf le duo · **et REJOUER UNE SCÈNE isolée**).
+⚠️ « Rejouer une scène » est le bouton qui change tout : sans lui, revoir une cinématique oblige à
+remettre la quête à zéro, donc on ne la revoit qu'une fois, donc on ne la juge qu'une fois.
+⚠️ **AUCUN BOUTON DE QUÊTE NE DONNE QUOI QUE CE SOIT** : le menu s'ouvre à tout joueur qui connaît
+le raccourci (398). Le chemin développeur appelle les mêmes résolveurs et JETTE ce qu'ils rendent.
 
-⚠️ **Automatisation du navigateur, ce qui marche et ce qui ne marche pas :**
-`window.dispatchEvent(new KeyboardEvent("keydown", {code:"KeyE"}))` marche pour TOUTES les
-touches ; les frappes envoyées par l'outil navigateur, elles, n'atteignent pas le jeu. Le menu
-ouvert bloque les déplacements. La capture d'écran de l'outil **fonctionne** (au 426 elle
-échouait) ; `canvas.toDataURL()` POSTé à un puits sur disque reste le repli.
-⚠️⚠️ **UN ONGLET CACHÉ SUSPEND `requestAnimationFrame`, DONC TOUTE LA SIMULATION DE L'HÔTE.**
-Rien ne bouge entre deux captures, et on conclut à tort que les PNJ sont bloqués. Repli pour
-observer : remplacer `requestAnimationFrame` par un `setTimeout` quand `document.hidden`,
-**puis fronter la fenêtre une fois** pour amorcer la première image.
+⚠️⚠️ **AUTOMATISATION DU NAVIGATEUR — CE QUI MARCHE, ET LE PIÈGE QUI A ENCORE MORDU AU 444.**
+`window.dispatchEvent(new KeyboardEvent("keydown", {code:"KeyE"}))` marche pour TOUTES les touches
+(les frappes envoyées par l'outil, non). Le menu ouvert bloque les déplacements. La capture
+d'écran fonctionne.
+⚠️⚠️ **UN PANNEAU MASQUÉ NE COMPOSE UNE IMAGE QUE PENDANT UNE CAPTURE**, donc `rAF` ne tourne que
+par à-coups : le personnage n'avance quasiment pas entre deux clichés, et **un mini-jeu saute des
+manches entières**. ⚠️⚠️ **ET LE REMÈDE CONNU — REMPLACER `rAF` PAR UN `MessageChannel` — FIGE
+L'ONGLET s'il n'a pas de frein** (un relais qui se repose un message à chaque image tourne en
+boucle serrée et sature le moteur de rendu) : c'est ce qui est arrivé au 444, et il a fallu
+recharger. **La parade qui marche est ailleurs : monter le composant ISOLÉMENT** sur une page
+jetable, où il n'y a ni monde ni caméra à faire tourner. Un canevas mesuré pendant que le panneau
+est masqué sort d'ailleurs à **0×0**, ce qui ressemble trait pour trait à un rendu cassé.
+
+⚠️ **Le faux canvas de `lib-canvas.mjs` IGNORE `translate`/`rotate` et ne connaît pas `fillText`**
+— un sprite qui en dépend s'y juge faux. Ce n'est pas un bogue du jeu. ⚠️⚠️ **Et il
+n'implémentait `drawImage` qu'à TROIS arguments jusqu'au 428** : toute découpe y dessinait la
+feuille ENTIÈRE. Pas d'erreur, une image plausible, un verdict faux — le stub menteur, **dans
+l'outil censé nous en protéger**. **Un banc de rendu se vérifie aussi.**
 
 **Session manuelle à 2 joueurs — seule vraie validation du multijoueur.**
 ⚠️ **Un stub qui « retombe sur une valeur raisonnable » ment mieux qu'un stub qui plante.**
 **Quand un outil et le jeu divergent, croire le jeu.**
-
----
 
 ## 11. Modes 3D autonomes
 
@@ -589,17 +604,17 @@ erreur** en choisissant mal.
 
 ## 13. À compléter par Guillaume
 
-- ⚠️⚠️ **LE 442 A RÉPONDU À « LEQUEL SE BRANCHE EN PREMIER », ET LA RÉPONSE EST « LES DEUX, PAR
-  UNE HISTOIRE »** — ce qui n'était pas prévu et qui vaut d'être noté. L'enquête fait consulter le
-  **cadastre** de la mairie (on y tape une cote, un tiroir s'ouvre) et déposer un acte chez le
-  **notaire** du tribunal : les deux guichets fonctionnent, mais pour UNE parcelle, celle de
-  l'histoire. Ce qui reste ouvert est donc plus étroit qu'avant : **acheter une parcelle
-  QUELCONQUE**, avec un prix, un titre et une conséquence sur la carte. Le chemin est tracé, la
-  mécanique de saisie et d'arbitrage existe.
-  ⚠️ **Le MARIAGE, lui, n'a pas bougé** — la salle est dressée, les bans sont prêts, il manque
+- ⚠️⚠️ **LE CADASTRE ET LE NOTAIRE SONT REDEVENUS DES GUICHETS FERMÉS, ET C'EST UNE RÉGRESSION
+  ASSUMÉE.** Le 442 les avait ouverts — mais pour UNE parcelle, celle de son histoire — et le 444
+  a retiré cette histoire : les deux pièces existent, meublées, et ne rendent plus de service. La
+  question redevient donc entière : **acheter une parcelle, avec un prix, un titre et une
+  conséquence sur la carte.** ⚠️ Ce qui reste acquis du 442 est la FORME (une `req` arbitrée par
+  l'hôte, un état partagé dans `ferme_saves`, aucune migration SQL) ; ce qui est parti est le
+  contenu. La quête de l'étoile, elle, est SECRÈTE et ne passe par aucun guichet — délibérément.
+  ⚠️ **Le MARIAGE n'a toujours pas bougé** — la salle est dressée, les bans sont prêts, il manque
   l'officier depuis le 439. C'est le seul endroit du jeu où deux joueurs feraient quelque chose
-  ENSEMBLE qui ne soit pas du commerce, et l'enquête du 442 ne l'a pas remplacé : elle se MÈNE à
-  deux, elle ne se CÉLÈBRE pas.
+  ENSEMBLE qui ne soit pas du commerce, et aucune des deux quêtes ne l'a remplacé : elles se
+  MÈNENT à deux, elles ne se CÉLÈBRENT pas.
 - **Le salon de coiffure** (427) : **qui coiffe, et comment ça marche ?** Le bâtiment,
   l'enseigne et la banderole « ouverture prochaine » sont posés ; il manque la décision.
 - ⚠️ **LE MORCEAU D'ORGUE (441) : UN FICHIER, PAS UNE DÉCISION.** Tu as choisi un vrai morceau
@@ -633,10 +648,10 @@ erreur** en choisissant mal.
   rendez-vous daté. Restent :
   **1. les commissions** — le tableau des nouvelles distribue des demandes de la ville, qu'on
   remplit depuis la ferme, à deux, contre paiement. Elles s'appuient sur l'économie qui existe
-  désormais. ⚠️ **LE 442 EN A LIVRÉ LA FORME SANS LA MÉCANIQUE** : l'enquête est une course à
-  vingt-et-une étapes réparties sur les trois cartes, avec un carnet qui dit toujours ce qu'on
-  cherche, un état partagé arbitré par l'hôte et une récompense par palier. Une commission, c'est
-  la même chose en plus court — la table de `enquete.js` est le patron, et il est mesuré ;
+  désormais. ⚠️ **LE PATRON EXISTE ET IL EST MESURÉ** : `components/ferme/quete.js` est une table
+  de lieux, une table de chapitres, des résolveurs purs qu'un banc peut appeler, et un état
+  partagé qui voyage dans un `apply` qui partait déjà — zéro message dédié. Une commission, c'est
+  la même chose en beaucoup plus court ;
   **2. les rendez-vous datés** — concert au kiosque, foire : des événements au calendrier
   partagé qui rassemblent résidents ET joueurs au même endroit à la même heure. ⚠️ Le patron est
   désormais écrit **cinq fois** (jour de marché, service de Carla, jour d'orage, cours du marché,
@@ -669,17 +684,27 @@ erreur** en choisissant mal.
   carte, mais le nombre et les activités sont tirés chez chaque client — deux joueurs sur la
   même place ne comptent pas les mêmes pigeons. **À JOUER À DEUX** pour dire si ça se remarque ;
   si oui, le pain seul mérite d'être diffusé (un `send` de trois nombres), pas les oiseaux.
-- ⚠️⚠️ **L'ENQUÊTE DU 442 — TROIS CHOSES À TRANCHER, ET AUCUNE N'EST TECHNIQUE.**
-  **1. Le prix des deux issues.** Restituer la parcelle libère le marché (la cote peut descendre
-  à −22 % et monter à +56 %) ; maintenir le fonds relève le plancher à +8 %. Les deux paient
-  (3 000 et 5 000 or). C'est un arbitrage entre LIBERTÉ et GARANTIE, et personne ne l'a encore
-  vécu sur une soirée : si « maintenir » est toujours le bon choix, le choix n'en est pas un.
-  **2. Faut-il qu'elle donne autre chose que de l'or ?** Elle ne rend ni objet, ni graine, ni
-  familier — délibérément, pour ne pas ouvrir un guichet de plus. Mais la parcelle restituée est
-  une TERRE, et le jeu sait déjà vendre des parcelles au cadastre : la relier serait la suite
-  évidente, et c'est une décision de conception.
-  **3. Une deuxième enquête ?** La table de `enquete.js` en accepte une autre sans une ligne de
-  moteur ; ce qui coûte, c'est l'écriture. À décider seulement après avoir joué celle-là.
+- ⚠️⚠️⚠️ **LA QUÊTE DE L'ÉTOILE (444) — LA SÉANCE À DEUX CLIENTS EST CE QU'ELLE ATTEND, ET C'EST
+  TOUTE SA MOITIÉ COOPÉRATIVE.** Elle est jouable de bout en bout par un joueur seul et regardée à
+  l'écran ; **rien de ce qui se fait à DEUX n'a jamais été joué une seule fois** : l'étoile timide
+  du cratère (dos à dos, immobiles), le croisement d'ombres, la flaque de lumière que l'un promène
+  pour l'autre, le duo orgue/beffroi. Le code est là, les positions distantes sont lues
+  (`starMiniLead`, `starMiniPartner`) — elles n'ont jamais eu de position distante à lire. ⚠️ **Et
+  la même séance peut faire la ferme PEUPLÉE**, réclamée depuis le 419. Voir
+  `components/ferme/QUETE.md` §12.2.
+  **Ce qui attend une DÉCISION de ta part, et rien d'autre :**
+  **1. Le dessin de la compagne.** Cinq écritures, vue en jeu, pas encore juste : deux directions
+  chiffrées dans `QUETE.md` §12.3 (l'agrandir, ou quatre masques de pixels à la main).
+  **2. La récompense cosmétique.** L'arbitrage est POSÉ et VIDE (`resolveStarGift` écrit
+  `star.gift[joueur]`, une fois, côté hôte, persisté). Reste à décider CE QU'ON DÉBLOQUE — le jour
+  où la garde-robe cosmétique lira ce champ, elle n'aura pas à inventer un chemin d'attribution,
+  et c'est au moment où l'on en invente un qu'on se trompe.
+  **3. Le réglage des cinq mini-jeux.** Ils sont dessinés et vérifiés, jamais joués jusqu'à la
+  victoire à cadence réelle. Ce qui s'y juge — *est-ce que c'est agréable ?* — n'est mesuré nulle
+  part et ne le sera jamais.
+  **4. Une deuxième quête ?** La table de `quete.js` en accepte une autre sans une ligne de
+  moteur ; ce qui coûte, c'est l'écriture. À décider seulement après avoir joué celle-là **à
+  deux**.
 - **La garde-robe** (427) : les prix sont volontairement très hauts. À jouer pour savoir si
   « très cher » veut dire « on économise pour » ou « on n'y va jamais ».
 - **`candyluge`** : voir `public/candyluge/README.md`, qui fait autorité. La décision qui
@@ -731,7 +756,8 @@ erreur** en choisissant mal.
    `components/ferme/README.md`, 507 → 490), 431 (§4 scindé, 534 → 482),
    **432 (§10 → `tools/README.md`, 524 → 483)**, 433 à 438 (aucun), **439 (en-tête + §13,
    687 → 661)**, 440 (aucun — trois leçons ajoutées en §4, seize lignes),
-   **441 (§4 scindé une seconde fois : le DESSIN part dans `components/ferme/DESSIN.md`)**.
+   **441 (§4 scindé une seconde fois : le DESSIN part dans `components/ferme/DESSIN.md`)**,
+   442 (§13 relu ligne à ligne), **444 (§10 élagué — l'ordre du 442, deux fois reporté)**.
    ⚠️⚠️ **L'ORDRE DU 440 A ÉTÉ EXÉCUTÉ AU 441, APRÈS DEUX REPORTS.** Le §4 avait passé les
    cent-cinquante lignes en mélangeant trois sujets ; sa partie DESSIN est partie dans
    `components/ferme/DESSIN.md`, à côté des dessins qu'elle gouverne, exactement comme §6 au 428
@@ -745,10 +771,18 @@ erreur** en choisissant mal.
    qui est dit). Une question à laquelle on a répondu ne sort pas du fichier toute seule : elle y
    reste, et elle ment. Trois entrées ont été RESSERRÉES au lieu d'être ajoutées (l'église, les
    commissions, le voyage), et le 442 n'en ajoute qu'une : les trois arbitrages de l'enquête.
-   ⚠️ **L'ORDRE DU PROCHAIN ZIP : §10.** Il a grossi de dix lignes au 442 (la recette du banc de
-   navigateur, la liste des bancs) et il redit maintenant des choses que `tools/README.md` dit
-   mieux. Le §14.2 est clair sur ce que devient une liste qui gagne une entrée par zip : elle
-   part, en ne gardant ici que **ce qui n'existe pas**.
+   ⚠️⚠️ **L'ORDRE DU 442 A ÉTÉ EXÉCUTÉ AU 444, APRÈS DEUX REPORTS : §10 EST ÉLAGUÉ.** Il redisait
+   ce que `tools/README.md` dit mieux (les chiffres de chaque banc, ses trouvailles) et il gardait
+   des recettes devenues fausses. Ce qui est resté est resté exprès : **ce qui n'existe pas**, la
+   recette « jouer en local », et le piège du banc de navigateur — qui a MORDU une fois de plus au
+   444 malgré sa relecture, et dont le remède connu (`MessageChannel`) s'est révélé capable de
+   figer l'onglet. *Un piège qu'on relit et qui mord quand même n'est pas écrit assez court.*
+   ⚠️ **L'ORDRE DU PROCHAIN ZIP : §4.** Il a repassé les cent lignes après deux scissions (440 →
+   `DESSIN.md`, 441), et il mélange à nouveau deux sujets : les pièges d'ARCHITECTURE (générateur,
+   couches, dérivation) et ceux du LANGAGE (JavaScript, three.js, canevas). Les premiers ont leur
+   place à côté du code qu'ils décrivent ; les seconds sont vrais partout et restent ici. Relire
+   chaque ligne avant de la bouger, comme au 441 — et se souvenir qu'un piège périmé recopié
+   ailleurs est pire qu'un piège supprimé.
 
 3. **Critère d'inclusion** : « est-ce vrai à l'échelle du projet, et invérifiable en ouvrant
    un seul fichier ? » Sinon, ça va dans un commentaire de code. **L'histoire d'un défaut

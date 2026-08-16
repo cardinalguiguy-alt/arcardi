@@ -6,7 +6,18 @@ chapitre, elle part dans un `tools/README.md` — en ne gardant là-bas QUE ce q
 Le 432 a ajouté deux entrées (`render-ruche.mjs`, `fake-supabase.mjs`) et l'a fait basculer.
 Le 433 en ajoute trois (`verify-taxi`, `render-taxi`, `render-oiseaux`), le 434 une
 (`render-rues`), le 435 une (`render-eau`), le 436 une (`render-escaliers`), le 440 une
-(`verify-compo`).
+(`verify-compo`), le 441 une (`verify-pont`), le 443 une (`verify-portee`), et le **444 trois**
+(`render-etoile`, `verify-quete`, `render-beffroi`) contre deux supprimés (`verify-enquete`,
+`render-enquete`, partis avec l'enquête qu'ils mesuraient).
+
+⚠️⚠️ **ET LE 444 A APPRIS QUELQUE CHOSE QUI VAUT POUR TOUS LES BANCS DE CE DOSSIER : SIX BANCS AU
+VERT N'ONT PAS VU DIX DÉFAUTS QU'UNE SEULE SÉANCE DE JEU A TROUVÉS EN VINGT MINUTES**, dont cinq
+qui rendaient un lieu **inatteignable** (un arrêt de téléport qui posait le joueur dans le vide, un
+autre qui le posait sur une marche, un mini-jeu qui recommençait avant le premier appui). Les
+bancs mesuraient tous la bonne chose ; aucun ne mesurait **l'arrivée**. Le détail, défaut par
+défaut, est au §25 de `components/ferme/README.md` — c'est la meilleure page de ce dépôt sur ce
+que les bancs ne savent pas faire. *Un banc protège de ce qu'on a déjà compris ; regarder l'écran
+est la seule chose qui trouve ce qu'on n'a pas encore compris.*
 
 ⚠️ **`CLAUDE.md` ne garde que la liste des bancs ABSENTS**, et c'est délibéré : c'est elle qui
 protège du banc imaginaire (§14.6 — le 425 décrivait `verify-vallee.mjs` « 74 contrôles, 74/74 »
@@ -191,7 +202,7 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   sentier de rive qui épousait chaque encoche de crique, et un buisson enterré sous le parvis
   du kiosque — posé sur de l'herbe, dallé par une passe ultérieure, resté SOLIDE.
 
-- **`tools/verify-vallee.mjs` — 194 contrôles, 194/194 (439-440 ; 182 au 438, 172 au 431, 113 au 427).** Il
+- **`tools/verify-vallee.mjs` — 200 contrôles, 200/200 (444 ; 194 au 440, 182 au 438, 172 au 431, 113 au 427).** Il
   importe le VRAI moteur : circulation, murs invisibles ET décors traversables, géométrie des
   bâtiments, rebords sautables, le tribunal pièce par pièce, la coupe de bois, les familles,
   la garde-robe.
@@ -470,123 +481,110 @@ donnait pas, d'une rangée.
 
 ---
 
-## `verify-enquete.mjs` — la chaîne de l'enquête tient-elle debout ? (442)
+## `render-etoile.mjs` — les dessins de la quête de l'étoile (444)
 
-`node tools/verify-enquete.mjs` — **105 contrôles.**
+`node tools/render-etoile.mjs` → `etoile-planche.png` · `etoile-cratere.png`.
 
-⚠️⚠️ **IL EXISTE PARCE QUE LES DÉFAUTS D'UN CHANTIER NARRATIF NE SONT PAS DES
-DÉFAUTS DE DESSIN NI DE NAVIGATION.** Ce sont des défauts de CHAÎNE — un indice
-qu'aucun chapitre ne réclame, une déduction fausse sur le terrain, une porte à
-deux joueurs infranchissable seul, un texte anglais qui manque. Aucun ne lève
-d'erreur, aucun ne se voit sur une planche, et **tous se voient à la vingtième
-minute d'une soirée, une fois le joueur engagé**. Six grandeurs, six chapitres :
+⚠️⚠️ **IL REMPLACE `verify-enquete.mjs` ET `render-enquete.mjs`, SUPPRIMÉS AU 444 AVEC L'ENQUÊTE
+QU'ILS MESURAIENT.** Un banc qui mesure du contenu disparu est pire qu'un banc absent : il passe
+au vert sur rien. ⚠️ **Mais un de leurs contrôles a été SAUVÉ et déplacé dans `verify-vallee` :**
+« sans quête, le cours est bit à bit celui du 430 ». Il protégeait LE MARCHÉ, pas l'enquête, et le
+444 retirait justement le paramètre qu'il surveillait — le laisser mourir avec son banc aurait
+retiré la mesure au moment précis où elle servait.
 
-1. **la table se referme sur elle-même** — aucun indice orphelin, aucune
-   dépendance circulaire entre prérequis, et ⚠️ **la parité FR/EN PROFONDE** :
-   tout le chantier vit sous UNE clé (`enq`), donc `verify-strings` en compte une
-   de chaque côté et s'arrête là. 157 entrées appariées ici, **et le compte des
-   entrées LUES est imprimé** — la seule façon de s'apercevoir qu'un contrôle ne
-   contrôle rien (leçon du garde-fou de `verify-pont`, 441) ;
-2. ⚠️⚠️ **elle se boucle DANS LE DÉSORDRE** — 400 permutations des vingt-et-un
-   indices, toutes menées à terme, **et l'or total ne dépend pas de l'ordre**.
-   C'est le contrôle qui compte : deux joueurs qui se répartissent la carte ne
-   trouvent RIEN dans l'ordre écrit. Il vérifie aussi qu'une découverte répétée
-   ne paie pas, qu'on ne dépose qu'une fois, et qu'une sauvegarde abîmée se
-   recharge sans planter ni tricher ;
-3. ⚠️⚠️ **la déduction du code A est vraie SUR LA CARTE.** Le joueur raisonne
-   « le verger est à 25, la promenade à 27, la promenade est la dernière du plan,
-   or il y a une borne plus à l'est » : c'est faux si les trois pierres ne sont
-   pas dans cet ordre, et le générateur est parfaitement content de les poser
-   autrement. **Il a attrapé l'énigme fausse à l'écriture** — le premier jet
-   annonçait le verger comme dernière parcelle alors qu'il est tout à l'ouest.
-   Plus l'aller-retour du chiffre de Chaband **et l'absence de fuite** : aucun mot
-   de plus de cinq lettres du texte clair ne survit dans le texte chiffré (43
-   mots testés) — un Vigenère mal branché rendrait la page en clair sans que
-   personne ne s'en aperçoive ;
-4. **la géographie** : les quatorze meubles sont dans les pièces que la table leur
-   donne (via `E.courtRoomAt`), les deux commandes de verrou sont à **deux niveaux
-   différents**, la borne de la ferme est sur une case libre, praticable, à
-   l'écart de la boutique, du bac, du panneau de gare et du seuil ;
-5. ⚠️⚠️ **LA PORTE À DEUX SE FRANCHIT SEUL, ET ON LA MESURE.** Parcours en
-   largeur sur la vraie grille du tribunal, avec la vraie collision
-   (`E.courtBoxFree`, sortie de la closure du rendu POUR CE BANC) et les cages
-   d'escalier comme arêtes : **68 cases, 10,5 s en courant pour une fenêtre de
-   22 s**, plancher à un tiers de la fenêtre pour qu'elle demande encore quelque
-   chose. Une fenêtre réglée à l'œil ici, c'est le seuil d'axe du taxi du 434 —
-   défendable et faux dès que la géométrie bouge. ⚠️ Il DIT ce qu'il approxime :
-   une distance n'est pas un trajet joué, d'où la marge humaine de 3 s, écrite ;
-6. **le marché** : ⚠️ **sans enquête, la cote est BIT À BIT celle du 430** (5 000
-   couples jour × famille contre une réimplémentation de la formule d'origine
-   écrite DANS le banc — *on ne mesure pas un trajet avec l'outil qui l'a
-   produit*), les deux issues restent déterministes, et elles ne donnent pas le
-   même marché.
-   ⚠️ **CE DERNIER CONTRÔLE A MESURÉ LA MAUVAISE GRANDEUR D'ABORD** : il comptait
-   les cotes IDENTIQUES et échouait à 10,8 % pour un seuil de 10 % choisi à l'œil.
-   Deux distributions linéaires tirées du même hachage se CROISENT forcément ; ce
-   qu'on veut savoir est si le joueur sent la différence, et ça se mesure en écart
-   moyen (**13,7 points**). *Vérifier le repère avant de corriger le dessin* (429).
+⚠️ **IL A ÉTÉ ÉCRIT AVANT LE PREMIER `fillRect`** (corollaire du §4.2 de `CLAUDE.md`). Ce qu'il
+mesure : aucun pixel sur le bord HAUT du canevas (29 dessins LUS) · les îlots qui flottent dans un
+aplat, en connexité à 8 · **l'échelle contre le FERMIER** et pas contre d'autres décors (429) · le
+cerne, mesuré sur la MATIÈRE et non sur le halo · deux états d'un même objet gardent la même
+silhouette · quatre poses ne sont jamais le même dessin · et le cratère **tient dans l'emprise que
+le générateur lui garantit**.
 
-⚠️ **DEUX CHAPITRES DE PLUS, AJOUTÉS SUR TROIS QUESTIONS DE GUILLAUME** (« jouable
-seul ? où la déclencher ? peut-on la relancer ? »), et les deux mesurent des
-choses qu'on croit sur parole :
-- **le menu développeur amène VRAIMENT à la fin** — « tout jusqu'au dépôt » ne
-  doit sauter aucun indice (les prérequis d'information sont réels : une boucle
-  unique aurait sauté la filiation, le dossier serait sorti incomplet, et on aurait
-  conclu que la scène finale était cassée alors que c'est le raccourci qui l'est),
-  « boucler le chapitre » doit mener au dépôt en huit clics au plus, et « repartir
-  de zéro » doit rendre une enquête NEUVE et non à moitié effacée ;
-- ⚠️⚠️ **chaque niveau habitable a son arrêt de téléport, dans les DEUX SENS.**
-  Il existe parce que l'hôtel de ville (438) et l'église (441) n'en avaient
-  aucun : le code de destination savait déjà traiter « hall », seule l'entrée de
-  menu manquait. **Un chemin de code sans porte n'existe pas**, et rien ne
-  comparait la liste des niveaux à celle des arrêts. La même chose se reproduira
-  au quatrième bâtiment.
+⚠️⚠️ **CE QU'IL A TROUVÉ, ET QU'AUCUNE RELECTURE N'AURAIT TROUVÉ :**
+- **trois dessins rabotés par le haut** (la mitre du four, le houppier de l'arbre au nid, la
+  volute de vapeur du sillon) — le piège n°1 des sprites, payé trois fois au 433 et trois fois de
+  plus ici ;
+- **le cratère peignait 94 px de rayon là où le générateur n'en garantit que 72** : ses traînées
+  d'herbe couchée seraient tombées sur un arbre ou sur le sentier. C'est « la case d'un décor
+  n'est pas la surface qu'il couvre » (440), appliqué à un décor de neuf cases ;
+- **deux poses de la compagne sortaient identiques au pixel près** — et c'est ce qui a mené au
+  diagnostic le plus utile de la passe : ⚠️⚠️ **un cerne d'un pixel impose une profondeur
+  d'échancrure d'au moins trois pixels**, sinon le contour rebouche la forme qu'il souligne. Vrai
+  de toute dentelure à cette échelle.
 
-⚠️ **CE QU'IL NE MESURE PAS, ET IL LE DIT** : il ne joue pas. Les panneaux,
-l'ordre des invites, le carnet et la lisibilité des documents ne se voient qu'en
-jouant — et il ne dit rien de la QUALITÉ des textes, seulement qu'aucun ne manque.
+⚠️ **ET LE BANC S'EST TROMPÉ DE GRANDEUR DEUX FOIS, SUR LA MÊME CHOSE** : le SEUIL D'OPACITÉ. À 40
+il attrapait le halo (qui est identique d'une pose à l'autre) et voyait « 0 pixel d'écart » sur
+quatre dessins différents ; puis il mesurait le cerne sur le bord du halo, où aucun pixel n'est
+assez opaque, et refusait un dessin correct. Il porte donc deux fonctions nommées — `silhouette`
+(40, la surface occupée) et `matter` (150, la matière) — et chacune a sa question. *C'est la
+huitième fois d'affilée dans ce dépôt qu'un banc neuf se trompe d'abord de grandeur.*
 
----
+⚠️ **CE QU'IL NE MESURE PAS, ET IL LE DIT** : il ne joue pas, et il ne juge pas le cratère dans sa
+vraie herbe (il le peint sur un fond approximé). Trou déclaré.
 
-## `render-enquete.mjs` — les onze dessins de l'enquête (442)
+## `verify-quete.mjs` — 177 contrôles, 177/177 (444)
 
-`node tools/render-enquete.mjs` → `enquete-meubles.png` · `enquete-dehors.png`.
-**36 contrôles.**
+`node tools/verify-quete.mjs`. Il remplace `verify-enquete.mjs`, supprimé avec l'enquête du 442 :
+il en reprend la MÉTHODE (appeler le vrai code, jouer la vraie chaîne) et aucun de ses contrôles.
 
-Écrit **avant le premier `fillRect`**, comme `render-eglise` au 441 : onze dessins
-neufs sans banc, c'est onze dessins qui auront douze zips de retard le jour où
-quelqu'un les regardera (436).
+Ce qu'il mesure : la chaîne des cinq chapitres jouée par les vrais résolveurs, dans le DÉSORDRE ·
+`migrateStar` sur huit sauvegardes tordues (absente, nulle, une chaîne, un nombre, un tableau,
+abîmée, d'une version d'après, et une du 442) · le placement dérivé des six lieux, avec le VRAI
+A\* piéton depuis la descente du train · **les fenêtres solo rejouées image par image** · le
+beffroi · les deux listes de niveaux et d'arrêts **dans les deux sens** · et un scan de source qui
+publie combien de lignes il a LUES.
 
-**Il a trouvé quatre choses à sa première exécution**, dont deux que la lecture ne
-pouvait pas voir : les bornes de section étaient à hauteur de **poitrine** (×0,83
-d'un fermier pour un repère à ×0,61 — on enjambe une borne, on ne la contourne
-pas), la mousse était **du poivre** (des pixels isolés dans un aplat, la grandeur
-du 438), et **deux dessins étaient rognés par le haut** — les tringles de verrou
-de l'armoire et la corniche du fichier, c'est-à-dire le piège n°1 des sprites,
-payé trois fois au seul zip 433.
+⚠️⚠️ **IL ÉCHOUE DANS LES DEUX SENS, ET C'EST TOUT SON INTÉRÊT.** Une fenêtre trop courte rend le
+geste impossible ; une fenêtre si large qu'elle ne demande plus rien est une **mécanique morte**,
+et rien ne la signale jamais. Les deux sont des échecs. ⚠️ Les deux bornes se mesurent à deux
+VITESSES différentes, et c'est ce qui les rend honnêtes : « est-ce tenable ? » se demande à celui
+qui COURT (un joueur pressé doit réussir, toujours), « est-ce que ça demande quelque chose ? » se
+demande à celui qui MARCHE (la course est un bonus, pas une exigence).
 
-⚠️⚠️ **ET IL S'EST TROMPÉ DE GRANDEUR AVANT LE DESSIN, POUR LA SEPTIÈME FOIS
-D'AFFILÉE DANS CE DÉPÔT** (rues 434, eau 435, escaliers 436, mairie 439, parc 440,
-pont 441). Il interdisait tout pixel sur les QUATRE bords et refusait **cinq
-dessins sur douze, tous corrects** : le mobilier d'intérieur fait seize de large
-PAR CONVENTION depuis le 426, et les deux moitiés de l'armoire scellée DOIVENT se
-toucher sous peine de fendre le meuble. Ce qui est réellement dangereux est le
-HAUT — un sprite est ancré par le bas et grandit vers le haut. Le contrôle mesure
-donc le haut pour les meubles, les trois côtés pour les décors de plein air (qui
-sont cernés, cf. `padOutline`), **et l'INVERSE pour l'armoire** : ses deux moitiés
-doivent se rejoindre.
+⚠️ **CE QU'IL A TROUVÉ À SA PREMIÈRE EXÉCUTION** : la fenêtre solo de lecture d'ombres valait
+**70 s pour un trajet de 3,5 s en courant et 6,0 s en marchant** — 5 % de la fenêtre consommée,
+c'est-à-dire qu'elle ne demandait rien. Ramenée à **26 s**, mesurée, pas devinée. Le chiffre de
+70 s venait du document de conception et était parfaitement défendable sur le papier.
 
-Il mesure aussi : la propreté (0 % de points perdus partout, seuil du 438 à 1 %),
-l'échelle contre un personnage de 23 px, ⚠️ **que la borne martelée SE VOIT**
-(20 % de pixels différents de l'intacte, à silhouette identique — c'est sur elle
-que repose la déduction du code A, et deux dessins qui ne diffèrent que dans les
-données seraient une énigme invisible), que les deux moitiés de l'armoire ont
-**exactement les mêmes rangées peintes** (le taxi a payé la divergence au 436) et
-que leurs entrées de serrure sont de part et d'autre, et enfin qu'**Ombeline a
-l'anatomie de Léonie sans être Léonie recolorée** (même gabarit, même ligne
-d'épaules, 12 % de pixels communs).
+⚠️⚠️ **ET LE BANC S'EST TROMPÉ DE GRANDEUR DEUX FOIS, comme les huit précédents** :
+- il comptait « le plancher » en MATIÈRES (bois, dalle) puis inondait tout ce qui n'est ni mur ni
+  vide — marches comprises. Verdict : « 64 cases atteintes sur 56 » sur un beffroi parfaitement
+  sain. **Un banc qui compte deux choses différentes des deux côtés d'une comparaison échoue sur du
+  bon travail**, ce qui est pire qu'un banc qui passe sur du mauvais : on va corriger ce qui n'a
+  rien ;
+- il cherchait un chemin du banc d'orgue au beffroi par un parcours à quatre voisins, et annonçait
+  **« AUCUN CHEMIN »** sur une église praticable. La carte d'intérieur EMPILE ses niveaux avec un
+  vide entre eux : ce qui les relie n'est pas un voisinage, c'est une CAGE. *Il mesurait la carte,
+  pas l'interaction* — le défaut n°1 de `CLAUDE.md`, dans le banc écrit pour s'en protéger.
 
----
+⚠️ **IL A GAGNÉ QUATORZE CONTRÔLES EN UNE SEULE SÉANCE DE JEU** (163 → 177), et aucun n'est « en
+plus » : ce sont ceux qui manquaient quand dix défauts visibles à l'œil sont passés à travers six
+bancs verts (le détail est au §25 de `components/ferme/README.md`). Les plus rentables : *chaque
+arrêt de téléport pose le joueur sur une case praticable de son niveau, hors volée* · *chaque
+arrêt et chaque niveau ont un libellé lisible* (un repli en `|| clé` n'échoue pas, il affiche la
+clé) · *un titre de mini-jeu tient dans le cadre* · *le refroidissement laisse plus d'une seconde
+avant de repartir au blanc*.
+
+⚠️ **CE QU'IL NE MESURE PAS, ET IL LE DIT** : il ne joue aucun mini-jeu (ils vivent dans le DOM et
+demandent un vrai canevas), et il ne voit rien de la coopération à deux clients.
+
+## `render-beffroi.mjs` — 28 contrôles, tous verts (444)
+
+`node tools/render-beffroi.mjs` → `beffroi-plan.png`. Sur le modèle de `render-eglise.mjs`, et
+**cadré sur la tourelle, pas sur le niveau** : un niveau d'intérieur fait la largeur du tribunal,
+le beffroi tient dans dix cases, et une planche à 90 % de vide est une planche qu'on n'ouvre plus.
+Le cadrage est dérivé de ce qui est peint.
+
+Ce qu'il mesure : la cage fermée et entièrement praticable · **la volée qui monte de la tribune
+existe RÉELLEMENT sur ce niveau et touche le plancher** (le défaut du premier jet : deux volées
+posées sur le même rectangle, la montante écrasée par la descendante, un escalier qu'on voit,
+qu'on foule, et qui ne va nulle part) · la cloche adossée au nord, entre ses deux portiques,
+solide, et ne bouchant aucune marche · **les quatre abat-son, deux cases par face, centrés sur leur
+face, et bloquants** · le mobilier, ses sprites, et la densité.
+
+⚠️ **CE QU'IL NE MESURE PAS, ET C'EST GÊNANT, DONC C'EST ÉCRIT** : *la ville vue d'en haut à
+travers ces baies*, qui est la raison d'être du niveau. Elle est peinte par `drawCourtFrame`,
+c'est-à-dire dans la closure de la boucle de rendu ; la redessiner ici serait juger notre propre
+maquette (439) sur précisément ce qu'on a construit pour être regardé. **Ça se regarde à l'écran.**
 
 ## `verify-portee.mjs` — une référence qui ne se résout nulle part (443)
 
@@ -606,7 +604,7 @@ dépôt, et `no-undef` n'aurait pas suffi de toute façon : `day` **est** décla
 fichier, ailleurs — donc un `grep` le trouve et conclut à tort. Les trente-et-un autres
 bancs mesurent des données et des dessins ; **aucun ne rend un panneau React**. Et le seul
 chemin qui l'exerce — E devant le tableau, à la mairie — n'était joué par personne, jusqu'à
-ce que l'enquête du 442 y envoie le joueur chercher son **deuxième indice**. Un chantier
+ce que la quête du 444 y envoie le joueur chercher son **deuxième éclat**. Un chantier
 narratif fait passer le joueur dans des pièces où personne n'était allé : c'est ce qui a
 sorti le défaut, pas un banc.
 

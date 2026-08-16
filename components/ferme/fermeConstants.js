@@ -3363,6 +3363,80 @@ export const TOWN_UPPER = { x: 120, y: 8, w: 66, h: 22 };
    cumulé (2 × 14 px) commence à faire flotter les personnages au-dessus de
    leur propre ombre, et un troisième palier n'ajouterait aucune lecture. */
 export const TOWN_BELVEDERE = { x: 164, y: 10, w: 16, h: 11 };
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 444 — LA GÉOGRAPHIE DE LA QUÊTE DE L'ÉTOILE.
+
+   ⚠️⚠️ ELLE EST ICI, ET PAS DANS `quete.js`, POUR SUPPRIMER UNE ARÊTE
+   D'IMPORT. Le 442 faisait importer `enquete.js` par `fermeEngine.js` pour
+   atteindre ses ancres — ça marchait (pas de cycle : l'enquête n'importait que
+   les constantes), et c'était quand même une dépendance de plus entre le moteur
+   et une histoire. Ici, `fermeEngine`, `quete.js`, `FermeGame` et les trois
+   bancs lisent tous `fermeConstants`, qu'ils importaient déjà : **zéro arête
+   nouvelle, et une seule description de chaque position.**
+
+   ⚠️⚠️ TOUT EST DÉRIVÉ D'UN LIEU EXISTANT, RIEN N'EST UNE COORDONNÉE. C'est la
+   leçon la plus chèrement payée du dépôt (§8 de `CLAUDE.md`) : le parc a reculé
+   de huit cases au 437, le bois a été creusé au 440, l'allée du cimetière
+   penchait depuis le 425. Une position écrite ici aurait déjà menti deux fois.
+   Le jour où le champ de foire bouge, le cratère bouge avec lui.
+   ⚠️ Ce sont des NOMBRES et pas des fonctions : tout ce dont ils dépendent est
+   défini plus haut dans ce fichier, donc l'évaluation au chargement est sûre —
+   et un nombre se lit dans un banc sans avoir à l'appeler. */
+
+/* LE CRATÈRE, dans le pré nu (décision de Guillaume au 444). ⚠️ IL RÉPOND À UNE
+   QUESTION OUVERTE DE `CLAUDE.md` §13 depuis trois zips — « la prairie :
+   qu'est-ce qu'on construit là ».
+
+   ⚠️⚠️ SA PLACE A ÉTÉ MESURÉE, PAS CHOISIE, ET LE PREMIER JET ÉTAIT FAUX. Ancré
+   « à l'est du champ de foire » (`TOWN_MARKET.x + w + 14`), il tombait en
+   (78,82) — c'est-à-dire **au milieu de la PLACE**, sous l'obélisque. Ça ne
+   levait rien, le générateur en était parfaitement content, et ça aurait donné
+   un cratère météoritique dans le square municipal. On a balayé la carte à la
+   recherche des disques réellement ouverts hors de toute zone nommée, puis
+   noté trois grandeurs pour chaque candidat : le rayon dégagé, la distance à la
+   première rue, et l'existence d'un chemin depuis la gare (vrai `townFindPath`).
+   ⚠️ **LA DISTANCE À LA RUE EST LA GRANDEUR QUI COMPTE, ET ELLE A DEUX BORNES.**
+   Trop près, ce n'est plus un pré, c'est un trou dans un trottoir ; trop loin,
+   personne ne tombe dessus par hasard et la deuxième étape devient une chasse
+   au décor. Huit cases : on le voit depuis la chaussée, on ne le traverse pas
+   en allant ailleurs.
+
+   Il est donc DÉRIVÉ DU PARC et pas du champ de foire, ce qui est meilleur pour
+   une raison qu'on n'avait pas cherchée : il tombe **sur le chemin naturel de la
+   ville vers le lac**, donc sur le trajet de l'étape 2 vers l'étape 3. On passe
+   devant en allant plonger. */
+export const STAR_CRATER_X = TOWN_PARK.x + 12;
+export const STAR_CRATER_Y = TOWN_PARK.y + TOWN_PARK.h + 17;
+/* ⚠️⚠️ DEUX RAYONS, DEUX SENS, DEUX NOMS — ET C'EST LA LEÇON DU 441 APPLIQUÉE
+   AVANT D'ÊTRE PAYÉE. Le dos d'âne des ponts a coûté un zip entier parce qu'UN
+   nombre portait DEUX sens (il montait le dessin ET reculait le rang) : « une
+   grandeur de DESSIN, une grandeur de RANG, une grandeur de COLLISION : trois
+   choses, trois paramètres ». Ici : `STAR_CRATER_DRAW_R` est ce que le rendu
+   PEINT, `STAR_CRATER_R` (dans `quete.js`) est l'anneau où il faut se tenir
+   pour que l'étoile sorte. Ils sont proches et ils ne sont pas la même chose ;
+   le jour où l'on agrandira le dessin, le jeu ne bougera pas d'un pouce. */
+export const STAR_CRATER_DRAW_R = 4.5;
+/* LE SILLON, à la ferme, dans les champs de l'ouest. ⚠️ COMME LA BORNE
+   D'ORIGINE DU 442, IL NE BLOQUE PAS : une case qui change de sens sur une
+   carte que les joueurs labourent depuis des mois est un piège, et un sillon
+   qu'on traverse ne casse rien puisqu'on ne fait que s'y agenouiller. */
+export const STAR_FURROW_X = WELL.x - 4;
+export const STAR_FURROW_Y = WELL.y + 3;
+export const STAR_FURROW_LEN = 6;              // cases de terre retournée, vers l'ouest
+/* LE PONTON. On ne pose rien : il existe depuis le 434. On note juste où se
+   tient celui qui éclaire, pour que le jeu et le banc désignent la même case. */
+export const STAR_PIER_X = TOWN_PIER.x + (TOWN_PIER.w >> 1);
+export const STAR_PIER_Y = TOWN_PIER.y + TOWN_PIER.h - 1;
+/* LA VERRERIE, dans le quartier des artisans, et L'ARBRE DE LA PIE au-dessus.
+   ⚠️ LE NID SE DÉDUIT DU FOUR, PAS D'UNE SECONDE ANCRE, et l'histoire l'exige :
+   la pie a laissé tomber un éclat dans le sable de l'atelier, c'est comme ça
+   qu'il a fondu dans une perle. Deux ancres finiraient par s'éloigner l'une de
+   l'autre, et il faudrait deux coïncidences là où il n'en faut aucune. */
+export const STAR_GLASS_ANCHOR_X = TOWN_ARTISANS.x + 7;
+export const STAR_GLASS_ANCHOR_Y = TOWN_ARTISANS.y + 32;
+export const STAR_NEST_DX = 3, STAR_NEST_DY = -5;
+
 /* LES ESCALIERS. `dir` donne le sens de la MONTÉE : "n" = on monte vers le
    nord (la volée est parcourue du sud au nord). La longueur de la volée
    (`len`) découle du dénivelé : quatre marches pour une unité, ce qui donne
@@ -3589,6 +3663,18 @@ export const COURT_FLOORS = [
   { key: "hallUp",   emoji: "📜", alt: 1,  bld: "hall" },
   { key: "church",   emoji: "⛪", alt: 0,  bld: "church" },
   { key: "churchLoft", emoji: "🎹", alt: 1, bld: "church" },
+  /* ⚠️⚠️ ZIP 444 — LE BEFFROI, ET C'EST LA MESURE DE CE QUE LA DÉCISION DU 438
+     A FAIT ÉCONOMISER. Le 441 avait écrit, en ouvrant l'église : « deux lignes
+     dans `COURT_FLOORS`, et c'est tout ce qu'a coûté le TROISIÈME bâtiment ».
+     Le quatrième niveau d'église en coûte UNE, plus un palier de vis, plus un
+     plan. Aucune zone de plus (les vingt-cinq tests `zone === "court"` restent
+     vrais), aucun `CT_*` de plus, aucun champ réseau — l'étage se déduit de `y`.
+     ⚠️ LA PRÉMISSE DU CHANTIER LE CROYAIT DÉJÀ EN JEU, ET IL NE L'ÉTAIT PAS.
+     L'église avait une CAGE de clocher et une corde de cloche depuis le 441 :
+     un escalier qui ne monte nulle part, et un décor qui promet un lieu. C'est
+     le « bâtiment muet » du 426 en plus sournois — ici l'escalier parle, et il
+     ment. Il mène quelque part maintenant. */
+  { key: "churchTower", emoji: "🔔", alt: 2, bld: "church" },
 ];
 export const COURT_MAP_H = COURT_FLOORS.length * (COURT_FLOOR_H + COURT_FLOOR_GAP);
 // Sol / structure. ⚠️ ENUM PROPRE À L'INTÉRIEUR, jamais les G_* de la ferme :
@@ -3726,6 +3812,23 @@ export const COURT_STAIRWELLS = [
      entrant. C'est la règle des positions dérivées (§4) appliquée entre le
      DEHORS et le DEDANS — les deux doivent raconter le même bâtiment. */
   { x: 8, y: 22, w: 2, h: 4, a: 5, b: 6 },
+  /* ⚠️⚠️ 444 — LA SECONDE VOLÉE, DANS LA MÊME TOURELLE MAIS PAS SUR LES MÊMES
+     CASES, ET C'EST UN DÉFAUT ATTRAPÉ EN GÉNÉRANT PLUTÔT QU'EN RELISANT.
+     Premier jet : `{ x: 8, y: 22, … a: 6, b: 7 }`, c'est-à-dire EXACTEMENT le
+     rectangle de la volée du dessous. Le générateur remplit une cage par
+     entrée, dans l'ordre de cette table : sur la tribune, la volée MONTANTE
+     (vers le beffroi) était donc écrasée par la volée DESCENDANTE (vers la
+     nef), posée après. Résultat : on montait de la nef à la tribune et **on ne
+     pouvait plus monter au beffroi** — un escalier qu'on voit, qu'on foule, et
+     qui ne va nulle part. Rien ne lève, la connexité de la tribune reste
+     parfaite, et le seul symptôme est une touche qui ne fait rien.
+     ⚠️ Deux volées et un PALIER entre les deux, c'est d'ailleurs ce qu'est une
+     tourelle réelle : on ne monte pas d'un trait de la nef au beffroi. Le
+     palier de la tribune est assez large pour les deux (x 7..12), et le beffroi
+     couvre les deux aussi.
+     ⚠️ `COURT_STAIRWELLS` relie DEUX niveaux par entrée, jamais trois — d'où
+     deux lignes pour une seule tourelle, et le sens se déduit des `alt`. */
+  { x: 11, y: 22, w: 2, h: 4, a: 6, b: 7 },
 ];
 export const COURT_ENTRY = { x: 22, y: 27 };  // le seuil, deux cases (x et x+1) au mur sud du RDC
 export const COURT_SPAWN = { x: 22.5, y: 25 }; // où l'on se retrouve en entrant
@@ -3738,7 +3841,7 @@ export const COURT_SPAWN = { x: 22.5, y: 25 }; // où l'on se retrouve en entran
 export const COURT_BUILDINGS = {
   court: { ground: 0, floors: [0, 1, 2], entry: { x: 22, y: 27 }, spawn: { x: 22.5, y: 25 } },
   hall:  { ground: 3, floors: [3, 4],    entry: { x: 22, y: 27 }, spawn: { x: 22.5, y: 25 } },
-  church: { ground: 5, floors: [5, 6],   entry: { x: 22, y: 27 }, spawn: { x: 22.5, y: 25 } },
+  church: { ground: 5, floors: [5, 6, 7], entry: { x: 22, y: 27 }, spawn: { x: 22.5, y: 25 } },
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -3782,6 +3885,20 @@ export const CHURCH = {
   pewStep: 2,                    // une rangée de bancs sur deux — l'autre est le passage
   colStep: 4,                    // une colonne toutes les quatre rangées
   loftY0: 22, loftY1: 26,        // la tribune, au-dessus du narthex
+  /* ⚠️ 444 — LE BEFFROI. Il ne couvre QUE la cage du clocher, pas la largeur de
+     la tribune : au-dessus d'une tribune il n'y a rien — c'est le vide du
+     vaisseau, et `CT_VOID` le dit mieux qu'un mur (leçon de la poche murée
+     trouvée sur la planche du 441). Ses rangées englobent le palier de la vis
+     (`COURT_STAIRWELLS`, y 22..25) : un palier plus court laisserait la
+     dernière marche entourée de vide, praticable et visiblement en l'air. */
+  /* ⚠️ LES BORNES LAISSENT LA PLACE AUX MURS, ET LE PREMIER JET NE LE FAISAIT
+     PAS : à 20..27, le mur SUD tombait en `y0 + 28`, c'est-à-dire dans les trois
+     rangées de vide qui séparent deux niveaux empilés — il était écrit hors de
+     son étage, sans qu'aucune erreur ne soit levée, et le beffroi n'avait que
+     trois murs. Un niveau va de `y0` à `y0 + COURT_FLOOR_H - 1` : une enceinte
+     doit donc tenir dans 1..26. */
+  towerY0: 19, towerY1: 26,      // le beffroi, au-dessus de la cage du clocher
+  towerW: 10,                    // sa largeur, depuis le mur ouest
 };
 /* ⚠️ LES BANDES SE DÉDUISENT, ELLES NE SE RECOPIENT PAS. `axis` est le milieu
    du bâtiment ; tout le reste s'en écarte symétriquement. Le jour où l'on
@@ -3918,21 +4035,16 @@ export const HALL_TOPICS = [
   { key: "where",    emoji: "🧭", panel: "where" },
   { key: "wedding",  emoji: "💍", panel: "soon" },
   { key: "land",     emoji: "🗺️", panel: "soon" },
-  /* ⚠️⚠️ ZIP 442 — LE SECOND POINT D'ENTRÉE DE L'ENQUÊTE, ET C'EST EXACTEMENT
-     CE POUR QUOI CETTE TABLE A ÉTÉ ÉCRITE AU 439 : « une quête future = UNE
-     LIGNE ». Elle en aura coûté une, plus son texte.
-     Le premier point d'entrée est l'avis affiché au tableau des nouvelles de la
-     place. Un seul point d'entrée, c'est une histoire qui n'existe que pour qui
-     ouvre le bon panneau — et rien n'oblige un joueur à lire un tableau
-     d'affichage. L'hôtesse d'accueil de la mairie est le second endroit du jeu
-     où l'on vient DEMANDER quelque chose : elle y renvoie.
-     ⚠️ ET ELLE NE DONNE RIEN, comme tous les autres sujets : elle dit où est
-     l'avis, elle ne l'inscrit pas au carnet. C'est la règle dure du 439 — le
-     dialogue est la porte, jamais la caisse — et elle vaut ici plus qu'ailleurs,
-     puisque le carnet, lui, paie.
-     ⚠️ La garde `when` la fait disparaître une fois l'enquête close : une
-     hôtesse qui continue d'annoncer un avis retiré est le décor qui ment (429). */
-  { key: "fonds", emoji: "📜", panel: "fonds", when: (c) => !(c.shared && c.shared.enquete && c.shared.enquete.outcome) },
+  /* ⚠️⚠️ ZIP 444 — LA LIGNE DE L'ENQUÊTE EST PARTIE, ET LA QUÊTE DE L'ÉTOILE
+     N'EN MET PAS UNE À LA PLACE. C'est une décision de THÈME, pas un oubli : la
+     quête de l'étoile est SECRÈTE (voir `quete.js`), personne d'autre ne la
+     voit, et une hôtesse de mairie qui en parlerait la ferait exister pour la
+     ville. Le 442 avait ajouté ce sujet parce qu'il craignait qu'une histoire
+     n'existe que pour qui ouvre le bon panneau — crainte juste, réponse
+     coûteuse. La quête de 444 la règle autrement : elle **tombe du ciel**,
+     personne n'a rien à trouver pour la commencer, donc elle n'a besoin
+     d'aucun point d'entrée. La table reste ce que le 439 promettait : une quête
+     future = une ligne, le jour où une quête aura besoin d'une porte. */
   /* Un sujet qui n'apparaît QUE le jour du scrutin : il ne sert à rien
      aujourd'hui, et c'est précisément la démonstration que la garde marche.
      Une quête datée s'écrira exactement comme cette ligne. */
@@ -4463,15 +4575,49 @@ export const DEV_TELEPORTS = [
      finit par livrer sans regarder.* Le code de destination, lui, savait déjà
      traiter « hall » et « hallUpper » : seule l'entrée de menu manquait, donc
      personne ne pouvait s'en servir. Un chemin de code sans porte n'existe pas.
-     ⚠️ L'ENQUÊTE DU 442 LES REND INDISPENSABLES : six de ses vingt-et-un lieux
-     sont dans la mairie et deux dans la tribune de l'église. */
+     ⚠️ LA QUÊTE DE L'ÉTOILE (444) EN A BESOIN AUSSI, et d'un de plus : son
+     climax se joue à cheval sur DEUX niveaux d'église, la tribune et le
+     beffroi, l'un au-dessus de l'autre. Regarder le duo sans arrêt de téléport
+     coûterait la traversée de la ville plus deux volées d'escalier, à chaque
+     rechargement — c'est-à-dire qu'on ne le regarderait pas. */
   { key: "hall",       zone: "court" }, // hôtel de ville, le grand hall (438)
   { key: "hallUpper",  zone: "court" }, // hôtel de ville, l'étage (conseil, maire, archives, géomètre)
   { key: "church",     zone: "court" }, // l'église, la nef (441)
   { key: "churchLoft", zone: "court" }, // l'église, la tribune d'orgue
+  { key: "churchTower", zone: "court" }, // 444 — le beffroi, le point le plus haut de la carte
   { key: "world",   zone: "evil" },  // arrivée dans la terre en cours (EVIL_SPAWN)
   { key: "bridge",  zone: "evil" },  // pied du pont de la terre en cours
 ];
+
+/* ╔══════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 444 — UN ARRÊT DE TÉLÉPORT D'INTÉRIEUR EST UN NIVEAU, ET ÇA SE DÉRIVE.
+   ╚══════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ C'EST UNE RÉPARATION, ET ELLE A ÉTÉ TROUVÉE EN ÉCRIVANT LE BANC. Le
+   beffroi (`churchTower`) avait son entrée de menu dès le premier jet du 444, et
+   le code de destination l'ignorait : la liste des clés acceptées était ÉNUMÉRÉE
+   à la main dans `FermeGame` (« court || courtUpper || courtBasement || hall ||
+   hallUpper || church || churchLoft »), donc le nouvel arrêt tombait dans la
+   branche « ferme » et téléportait devant la maison. **Un chemin de code sans
+   porte n'existe pas ; une porte sans chemin de code MENT**, et c'est le même
+   défaut qu'au 438 et au 441, pris par l'autre bout.
+   ⚠️ LA PARADE N'EST PAS D'AJOUTER UNE CLÉ À LA LISTE, C'EST DE NE PLUS AVOIR DE
+   LISTE. `DEV_TELEPORTS` dit ce qui est proposé, `COURT_FLOORS` dit ce qui
+   existe : cette table est leur JOINTURE, et un niveau de plus ne coûte plus une
+   ligne de code (§8 de CLAUDE.md — ce qui double un autre paramètre doit être
+   DÉRIVÉ, jamais réglé).
+   ⚠️ LES QUATRE ALIAS SONT LE PRIX DE L'HISTOIRE (le tribunal a nommé ses
+   arrêts avant que les niveaux n'aient des clés), et ils sont ICI, seuls et
+   visibles, plutôt que dispersés dans trois chaînes de ternaires.
+   ⚠️ ET `tools/verify-quete.mjs` COMPARE LES DEUX LISTES DANS LES DEUX SENS : un
+   arrêt qui ne mène à aucun niveau et un niveau qu'aucun arrêt n'atteint
+   échouent tous les deux. Le second est celui qui a coûté deux zips au 442. */
+export const DEV_FLOOR_ALIAS = { court: "ground", courtUpper: "upper", courtBasement: "basement", hallUpper: "hallUp" };
+export const DEV_FLOOR_OF = Object.fromEntries(
+  DEV_TELEPORTS
+    .filter(d => d.zone === "court")
+    .map(d => [d.key, COURT_FLOORS.findIndex(f => f.key === (DEV_FLOOR_ALIAS[d.key] || d.key))])
+    .filter(([, i]) => i >= 0)
+);
 
 /* Le téléport « pied du pont » ne pose PAS le joueur sur RUN_GATE : marcher sur
    cette dalle déclenche l'embuscade puis le mini-jeu de la terre (voir

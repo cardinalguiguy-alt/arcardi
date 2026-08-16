@@ -22,7 +22,7 @@ const JSX = ["components/ferme/FermeGame.js"];
 const PLAIN = ["components/ferme/fermeConstants.js", "components/ferme/fermeEngine.js",
                "components/ferme/fermeArt.js", "components/ferme/fermeStrings.js",
                // zip 442 — la table et les règles de l'enquête.
-               "components/ferme/enquete.js"];
+               "components/ferme/quete.js"];
 
 let fails = 0;
 const ok = (n, c, x) => { console.log(`${c ? "  OK  " : "ÉCHEC "} ${n}${x ? "  " + x : ""}`); if (!c) fails++; };

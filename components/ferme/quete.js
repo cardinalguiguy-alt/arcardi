@@ -1,0 +1,698 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 444 — LA QUÊTE DE L'ÉTOILE : « THE FALLEN STRING ».
+   ═══════════════════════════════════════════════════════════════════════════
+   Ce fichier est la TABLE de la quête et ses règles pures. Il ne dessine rien,
+   il n'appelle pas React, il n'ouvre aucun panneau : `FermeGame.js` le lit,
+   `tools/verify-quete.mjs` l'importe, et les textes vivent dans
+   `fermeStrings.js` comme tout ce que le joueur lit.
+
+   ⚠️ IL REMPLACE `enquete.js` (442), retiré en entier sur décision de Guillaume
+   au 444 : l'enquête cadastrale était bonne et mesurée, elle n'était pas pour
+   ce public. **Sa FORME est reprise telle quelle** — table pure d'un côté,
+   textes de l'autre, résolveurs qui n'appliquent rien eux-mêmes, `migrate*`
+   tolérant, dev-ops qui jettent le gain. Son CADRE (21 lieux, 8 chapitres, 3
+   codes, un Vigenère, deux issues qui touchaient `marketRate`) n'est pas repris.
+   Le détail de conception est dans `components/ferme/QUETE.md`.
+
+   ───────────────────────────────────────────────────────────────────────────
+   L'HISTOIRE, EN SIX LIGNES (le détail est dans `QUETE.md`)
+
+   Le ciel a une Lyre. Une lyre à qui il manque une corde ne joue pas. La corde
+   tombe, se brise ; le gros s'enfonce dans un pré à l'est de Valley Town, un
+   éclat dépasse la ville et se plante dans le champ de la ferme. L'étoile est
+   vivante, petite, terrifiée : elle ne rentre que si elle CHANTE SON NOM, et
+   chez les étoiles un nom est une phrase de cinq notes. Elle en a perdu quatre.
+   Les joueurs les retrouvent. Et quand les quatre chantent enfin ensemble, la
+   phrase s'arrête net : **elle est tombée avant qu'on lui donne sa cinquième**.
+   Elle ne sait pas son nom. Alors la cloche de l'église — fondue il y a cent ans
+   dans une étoile tombée qui n'est jamais repartie — lui donne la sienne.
+
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️⚠️ LA GRAMMAIRE MAGIQUE, ET C'EST LA SEULE CHOSE À RETENIR DE CE FICHIER
+
+       « La lumière de l'étoile ne montre pas ce qu'une chose EST.
+         Elle montre ce qu'une chose SE RAPPELLE. »
+
+   Une phrase, et elle explique les six mini-jeux, la coopération, et pourquoi
+   il faut être deux. ⚠️ **LA COOPÉRATION N'EST PAS UNE SERRURE, C'EST UNE
+   CONSÉQUENCE : on ne peut pas tenir la lumière ET lire l'ombre.** Celui qui la
+   tient est ébloui et a l'ombre dans le dos ; celui qui lit est dans le noir et
+   n'a pas de lampe. Deux personnes, deux postes, toujours — et jamais parce
+   qu'une porte a deux serrures. Le premier jet EMPRUNTAIT ses verrous (deux
+   clés, un contrepoids, un guetteur) ; Guillaume l'a refusé en une phrase
+   (« ne t'embête pas à recopier les mécaniques des autres jeux coopératifs »).
+   Ce qui a suivi est meilleur ET plus court.
+
+   ⚠️⚠️ ET ELLE NE COÛTE RIEN AU RÉSEAU, parce qu'elle est bâtie sur les
+   POSITIONS, QUI CIRCULENT DÉJÀ. Qui est où (`x`,`y`,`zone`), qui bouge
+   (`moving`), et — c'est la trouvaille de ce zip — **où l'on REGARDE (`dir`)** :
+   tout est dans le paquet de `pubMe` depuis toujours. §3 de `CLAUDE.md` : ce qui
+   peut se déduire ne se diffuse pas. On n'ajoute AUCUN champ — le 432 a trouvé
+   un champ (`sit`) qui circulait sans être lu, c'est-à-dire des octets pour rien.
+
+   ⚠️ LE THÈME EST LE SECRET, ET IL A UNE CONSÉQUENCE DE CODE : personne d'autre
+   ne voit l'étoile. Aucun PNJ ne donne la quête, aucun panneau ne l'annonce,
+   le tableau des nouvelles n'en dit pas un mot. Elle ARRIVE — la chute est
+   armée par l'hôte, pas déclenchée par une lecture. *Une histoire qui n'existe
+   que pour qui ouvre le bon panneau n'existe pas*, et c'est le reproche que le
+   442 s'était fait à lui-même : il l'a réglé en ajoutant un second point
+   d'entrée, on le règle en n'en demandant aucun.
+
+   ⚠️⚠️ TOUT L'ÉTAT TIENT DANS `shared.star`, ET C'EST UN CHAMP DE PLUS DANS LE
+   JSON DE `ferme_saves` — AUCUNE MIGRATION SQL, exactement comme `townChop`
+   (426), `wardrobe` (427) et `enquete` (442). Absent d'une sauvegarde
+   antérieure = quête pas commencée, ce qui est le bon comportement.
+   ⚠️ Et c'est bien « le mécanisme déjà en place » : `saveGameState` est celui du
+   JEU COURANT DU SALON (Puissance 4 et compagnie), il se perdrait au premier
+   changement de jeu et couperait l'état du monde en deux magasins qu'on ne peut
+   pas réconcilier.
+
+   ⚠️ LA QUÊTE EST PARTAGÉE, PAS PERSONNELLE — même raison qu'au 442. Les quêtes
+   de découverte (`C.QUESTS`) vivent dans `f.quests`, par fermier, parce qu'elles
+   apprennent à jouer. Celle-ci est une histoire DU MONDE : deux joueurs la
+   mènent ensemble et le pisteur dit qui a trouvé quoi. Un second joueur qui
+   regarde l'autre cocher sa propre liste ne joue pas, il assiste.
+
+   ⚠️⚠️ ET ELLE NE TOUCHE À AUCUN PRIX. C'est une différence de fond avec le 442,
+   qui modifiait `marketRate` et a dû s'en justifier sur vingt lignes : ici, rien
+   dans ce fichier ne peut faire diverger deux écrans sur le prix du blé. La
+   récompense n'est pas de l'or (§8).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+import * as C from "./fermeConstants";
+
+/* ───────────────────────────────────────────────────────────────────────────
+   1. LES LIEUX. Un lieu = un endroit du monde où il se passe quelque chose et
+   qui laisse une trace dans l'état partagé.
+
+   ⚠️ `zone` N'EST PAS DE LA DÉCORATION, C'EST CE QUI EMPÊCHE LE PIÈGE DES DEUX
+   CARTES (§4 de `CLAUDE.md`). L'hôte vérifie qu'une trouvaille arrive bien de la
+   bonne ZONE **avant de regarder la moindre distance** — la discipline exacte
+   d'`atMarket` (431) et de l'enquête (442). Le rectangle du marché de la ville
+   tombe aussi au milieu des champs de la ferme : sans ce test, une trouvaille
+   de ponton se validerait depuis un pré.
+
+   ⚠️⚠️ `shard: true` DIT « CECI EST UNE DES QUATRE NOTES », et rien d'autre ne le
+   dit. Le compte d'éclats du pisteur se DÉRIVE de cette colonne (`starShards`),
+   il n'est écrit nulle part — un compteur écrit à côté finirait par ne plus
+   correspondre à la table le jour où l'on déplace une note.
+   ─────────────────────────────────────────────────────────────────────────── */
+export const STAR_SITES = [
+  // ── Chapitre 1 : la ferme. Ce qui a dépassé la ville.
+  { id: "furrow",    zone: "farm",  spot: "starFurrow", shard: true },
+  // ── Chapitre 2 : le cratère. On ne trouve pas une note, on trouve QUELQU'UN.
+  { id: "crater",    zone: "town",  spot: "starCrater" },
+  { id: "leanLake",  zone: "town",  spot: "*lean" },   // révélé par le croisement d'ombres
+  { id: "leanGlass", zone: "town",  spot: "*lean" },
+  // ── Chapitre 3 : le lac.
+  { id: "lakeShard", zone: "town",  spot: "starPier",  shard: true, req: ["leanLake"] },
+  // ── Chapitre 4 : la voleuse. Un lieu, une histoire, deux notes.
+  { id: "beadShard", zone: "town",  spot: "starGlassworks", shard: true, req: ["leanGlass"] },
+  { id: "nestShard", zone: "town",  spot: "starNest",       shard: true, req: ["beadShard"] },
+  // ── Chapitre 5 : l'église. Le beffroi, puis le chant.
+  { id: "belfry",    zone: "court", spot: "starBell" },
+  { id: "song",      zone: "court", spot: "starBell",  req: ["belfry"] },
+];
+export const STAR_SITE = Object.fromEntries(STAR_SITES.map(s => [s.id, s]));
+/* Les quatre notes, DÉRIVÉES de la table. */
+export const STAR_SHARD_IDS = STAR_SITES.filter(s => s.shard).map(s => s.id);
+export const STAR_SHARD_TOTAL = STAR_SHARD_IDS.length;   // 4 — jamais écrit en dur ailleurs
+
+/* ───────────────────────────────────────────────────────────────────────────
+   2. LES CHAPITRES.
+
+   ⚠️ LE CHAPITRE N'EST PAS UNE PORTE, C'EST UN COMPTEUR — reprise mot pour mot
+   de la décision du 442, qui était la bonne : il ne verrouille rien, il dit où
+   l'on en est et ce qu'on cherche. Ce qui verrouille, quand il faut verrouiller,
+   est `req` sur le LIEU, et seulement quand il n'y a physiquement rien à y
+   faire (on ne plonge pas avant de savoir où plonger).
+
+   ⚠️⚠️ ET AUCUN NE PAIE. `reward` n'existe pas dans cette table, et c'est
+   délibéré : le 442 payait 5 700 or de chapitres, cette quête ne touche à aucune
+   pièce. La récompense est la scène, la trace dans le monde, et le crochet
+   cosmétique du §8.
+   ⚠️ `STAR_CH_DONE` (= longueur) vaut « quête terminée ». On ne teste jamais un
+   numéro de chapitre écrit en dur ailleurs qu'ici.
+   ─────────────────────────────────────────────────────────────────────────── */
+export const STAR_CHAPTERS = [
+  { key: "field",  need: ["furrow"] },
+  { key: "crater", need: ["crater", "leanLake", "leanGlass"] },
+  { key: "water",  need: ["lakeShard"] },
+  { key: "thief",  need: ["beadShard", "nestShard"] },
+  /* ⚠️ LE DERNIER NE SE FERME PAS PAR ACCUMULATION. `song` est dedans pour que
+     le pisteur sache quoi demander, mais `starAdvance` s'arrête AVANT lui : la
+     quête ne se termine qu'au moment où l'hôte le décide, dans la scène finale,
+     et pas parce qu'un indice de plus est tombé. Même garde que `depot` au 442. */
+  { key: "note",   need: ["belfry", "song"], final: true },
+];
+export const STAR_CH_DONE = STAR_CHAPTERS.length;
+
+/* ───────────────────────────────────────────────────────────────────────────
+   3. LES GRANDEURS. ⚠️⚠️ ELLES SONT EXPORTÉES PARCE QUE LE JEU ET LE BANC LES
+   LISENT TOUS LES DEUX. Une fenêtre réglée dans `FermeGame` et re-décrite dans
+   `verify-quete` est la divergence en attente du §8 de `CLAUDE.md`, et son
+   symptôme serait le pire possible : « le banc dit que c'est faisable » pendant
+   que ça ne l'est pas.
+   ⚠️ ET AUCUNE N'EST CHOISIE À L'ŒIL. Chaque fenêtre solo est mesurée par
+   `verify-quete`, qui rejoue le vrai trajet image par image avec la vraie
+   collision et la vraie course (Maj) : il échoue si la fenêtre rend le geste
+   IMPOSSIBLE, et il échoue aussi si elle est si large qu'elle ne demande plus
+   rien. Un seuil réglé à la main ici, c'est le seuil d'axe du taxi au 434 —
+   parfaitement défendable, et faux dès que la géométrie bouge.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* ── L'ÉTOILE TIMIDE (chapitre 2). Elle ne sort que si personne ne la regarde.
+   ⚠️ « REGARDER » EST UNE GRANDEUR QUI CIRCULE DÉJÀ : `dir` est dans le paquet
+   de position depuis toujours (0 = sud, 1 = nord, 2 = ouest, 3 = est, la même
+   convention que `PET_DIRS`). C'est ce qui rend cette mécanique gratuite — et
+   c'est aussi pour ça qu'elle a été choisie plutôt qu'un contrepoids ou une
+   seconde clé, qui auraient demandé un état de plus à arbitrer. */
+export const STAR_CRATER_R = 5.5;          // il faut être DANS l'anneau
+export const STAR_CALM_MS = 4000;          // à deux : quatre secondes de dos tourné
+export const STAR_CALM_SOLO_MS = 9000;     // seul : beaucoup plus long, jamais bloqué
+export const STAR_CALM_FACE_DOT = -0.15;   // « dos tourné » = produit scalaire négatif
+
+/* ── LES OMBRES QUI PENCHENT (chapitre 2). Une direction n'est pas un lieu ; il
+   en faut deux, et de deux endroits assez éloignés pour que le croisement veuille
+   dire quelque chose. */
+export const STAR_LEAN_WINDOW_MS = 20000;
+/* ⚠️⚠️ 70 000 → 26 000, ET C'EST LE BANC QUI L'A DIT. La conception annonçait
+   « fenêtre 70 s, écart 45 cases », un chiffre choisi à l'œil et parfaitement
+   défendable sur le papier. `tools/verify-quete.mjs` rejoue le trajet réel,
+   image par image, avec la vraie collision : quarante-cinq cases se traversent
+   en **3,5 s en courant, 6,0 s en marchant**. La fenêtre consommait donc 5 % de
+   sa durée — c'est-à-dire qu'elle ne demandait RIEN : on lisait, on faisait
+   trois pas, on relisait, et le « il faut vraiment se séparer » de la mécanique
+   n'existait pas.
+   ⚠️ C'EST LE QUATRIÈME VISAGE DU DÉFAUT DE BANC DE CLAUDE.md, pris à l'endroit
+   pour une fois : *un banc qui ne mesure que « est-ce faisable » applaudit une
+   mécanique morte.* Il échoue maintenant DANS LES DEUX SENS.
+   ⚠️ 26 s : tenable en courant avec sept fois la marge, et 23 % de la fenêtre
+   consommée par une simple marche — il faut donc y ALLER, sans jamais être
+   pressé. Ne pas remonter ce nombre sans relancer le banc. */
+export const STAR_LEAN_SOLO_WINDOW_MS = 26000;
+export const STAR_LEAN_MIN_TILES = 30;
+export const STAR_LEAN_SOLO_MIN_TILES = 45;
+/* Ce que le croisement révèle, dans l'ordre. ⚠️ DEUX MARQUES TOMBENT DÈS LE
+   CHAPITRE 2, pas une par étape : on sait TOUJOURS ce qu'on cherche. C'est la
+   seule consigne du 442 qu'il fallait garder telle quelle — pas de mystère
+   entretenu, la difficulté est dans le geste, jamais dans le silence. */
+export const STAR_LEAN_MARKS = ["leanLake", "leanGlass"];
+
+/* ── LE REFROIDISSEMENT (chapitre 1). ⚠️ C'EST LE TUTORIEL, ET IL SE JOUE AVEC
+   L'OUTIL QUE LE JOUEUR A DÉJÀ ET QU'IL AIME : l'arrosoir. On arrose par
+   à-coups ; la chaleur doit rester dans une bande qui se resserre à chaque
+   manche pendant que la consigne DESCEND (blanc → orange → rouge → bleu).
+   ⚠️ À DEUX, LA BANDE EST 40 % PLUS LARGE — deux arrosoirs, donc du confort, et
+   surtout PAS une obligation : c'est le premier geste de la quête, il ne doit
+   jamais demander un second joueur (contrainte dure héritée du 442). */
+export const STAR_COOL_ROUNDS = 3;
+export const STAR_COOL_BAND = [0.26, 0.19, 0.13];
+export const STAR_COOL_DUO_WIDEN = 1.4;
+export const STAR_COOL_MS = 14000;       // la descente complète d'une manche
+export const STAR_COOL_RISE = 0.105;     // ce que le verre reprend par seconde, tout seul
+export const STAR_COOL_POUR = 0.085;     // ce qu'une giclée enlève — jamais un maintien : des À-COUPS
+export const STAR_COOL_CRACK = 0.11;     // sous la bande de tant, le verre se fend
+/* ⚠️⚠️ ET AU-DESSUS DE LA BANDE, LA MARGE EST PLUS LARGE QUE DESSOUS, EXPRÈS.
+   Vu à l'écran, et c'est le genre de défaut qu'aucun banc n'attrape : le premier
+   jet démarrait la chaleur à 1,0 avec un plafond ABSOLU à 1,04, et la consigne à
+   0,86. Le verre remontait donc au blanc en un tiers de seconde — la manche
+   repartait avant que le joueur ait pu appuyer une seule fois, en boucle. La
+   manche commence maintenant SUR la consigne, et le plafond est RELATIF à elle
+   comme l'est déjà le plancher : deux bornes de même nature, ce qui est la
+   seule façon d'en régler une sans casser l'autre.
+   ⚠️ Il est plus large que `STAR_COOL_CRACK` parce que les deux fautes n'ont pas
+   le même sens : trop arroser est un GESTE (on l'a fait exprès, ça se punit),
+   ne pas assez arroser est une HÉSITATION (ça se rattrape). */
+export const STAR_COOL_BURN = 0.20;      // au-dessus de la bande de tant, il remonte au blanc
+
+/* ── LA PLONGÉE (chapitre 3). La flaque de lumière au fond de l'eau : son rayon
+   est ce qui rend la coopération PHYSIQUE — hors d'elle, l'écran du plongeur est
+   noir. Le rayon solo est plus large (la lumière est posée, donc plus haute et
+   plus étalée), mais elle ne bouge plus. */
+export const STAR_POOL_R = 3.4;
+export const STAR_POOL_SOLO_R = 4.6;
+/* ⚠️⚠️ LA LARGEUR DE CE QU'ON VOIT EN PLONGÉE, EN CASES — ET C'EST ELLE QUI
+   CONVERTIT LES DEUX RAYONS CI-DESSUS EN PIXELS D'ÉCRAN. Vu à l'écran : le
+   premier jet divisait par 14 « au jugé », la flaque couvrait 42 % de la largeur
+   et le noir autour ne racontait plus rien — or c'est LE noir qui fait la
+   coopération (« B ne voit que l'intérieur de la flaque »). Une flaque qui
+   remplit l'écran, c'est un mini-jeu de plongée ordinaire avec une jolie vignette.
+   ⚠️ CE N'EST PAS UN RÉGLAGE DE DIFFICULTÉ, C'EST UNE ÉCHELLE : le rayon reste
+   ce que dit la règle (en cases), et cette constante dit ce qu'une case vaut à
+   l'écran. Les toucher séparément est le §8 de CLAUDE.md — une grandeur de JEU,
+   une grandeur de DESSIN, deux paramètres. */
+export const STAR_POOL_VIEW_TILES = 21;
+export const STAR_DIVE_ROUNDS = 3;
+export const STAR_DIVE_DEPTH = [22, 34, 48];        // mètres annoncés, pour le texte
+export const STAR_DIVE_BREATH_MS = [16000, 15000, 14000];
+export const STAR_DIVE_CURRENT = [0.35, 0.75, 1.25];
+export const STAR_DIVE_PULSE_MS = 1100;             // l'éclat bat ; on l'attrape au battement
+export const STAR_DIVE_SINK = 4.2;                  // mètres par seconde — on coule, on ne nage pas vers le bas
+export const STAR_DIVE_HIT_COST_MS = 1600;          // un choc coûte du souffle, jamais la manche
+
+/* ── LE BALAYAGE (chapitre 4). ⚠️ LA VITESSE DE BALAYAGE A UNE BONNE ALLURE, ET
+   C'EST TOUT LE MINI-JEU : trop vite, l'ombre vraie passe sans qu'on la voie ;
+   trop lentement, le verre chauffe et l'ombre se brouille. Deux bornes, donc,
+   jamais un seuil unique. */
+export const STAR_RACK_ROUNDS = 3;
+export const STAR_RACK_BEADS = [40, 70, 100];
+export const STAR_RACK_TRUE_MS = [1400, 1000, 700]; // durée de l'ombre vraie
+export const STAR_SWEEP_MIN = 0.25, STAR_SWEEP_MAX = 1.10;  // cases/s de la lumière
+export const STAR_RACK_SOLO_NOTCH_MS = 900;         // seul : on tourne le râtelier d'un cran
+
+/* ── LE LEURRE (chapitre 4). La pie SUIT la lumière ; elle a du retard et de la
+   patience, et elle décroche si la lumière s'arrête ou saute. */
+export const STAR_MAGPIE_LAG = 0.42;         // fraction de rattrapage par seconde
+export const STAR_MAGPIE_PATIENCE_MS = 2600; // temps toléré sans mouvement de la lumière
+export const STAR_MAGPIE_JUMP_TILES = 4.5;   // au-delà, elle perd la lumière des yeux
+export const STAR_MAGPIE_NEST_R = 8;         // elle ne descend pas si quelqu'un est si près
+export const STAR_MAGPIE_SOLO_MS = 26000;    // seul : la lumière posée, elle repart au bout de ça
+export const STAR_MAGPIE_HOLD_MS = 7000;     // ce que dure la montée au nid pendant qu'elle est tenue à l'écart
+/* ⚠️ MÊME RAISON QUE `STAR_POOL_VIEW_TILES` : les deux bornes de la pie sont en
+   CASES (c'est la règle), le toit qu'on voit à l'écran fait tant de cases de
+   large (c'est le dessin). Deux grandeurs, deux paramètres — et un « / 14 »
+   écrit au milieu du code de rendu était très exactement le doublon du §8, avec
+   la particularité qu'il rendait les deux constantes de `quete.js` impossibles à
+   régler sans lire le composant. */
+export const STAR_LURE_VIEW_TILES = 14;
+
+/* ── LE DUO (chapitre 5). Six phrases, de trois à cinq notes. */
+export const STAR_DUET_PHRASES = 6;
+export const STAR_DUET_LEN = [3, 3, 4, 4, 5, 5];
+export const STAR_DUET_AIM_DRIFT = [0.18, 0.26, 0.34, 0.44, 0.55, 0.68]; // dérive de la Lyre
+export const STAR_DUET_SOLO_FADE_MS = 11000;  // seul : les cales tiennent, la note faiblit
+export const STAR_DUET_NOTE_MS = 900;         // ce que dure une note tenue à l'orgue
+export const STAR_DUET_AIM_MS = 5200;         // ce qu'il faut tenir la visée pour renvoyer une phrase
+/* ⚠️⚠️ CE QUI TRAVERSE LE RÉSEAU PENDANT LE DUO EST LA PRÉSENCE, PAS LA
+   PERFORMANCE, ET C'EST UN ARBITRAGE À CONNAÎTRE. La conception (§5 de
+   QUETE.md) demande que chacun VOIE l'effet de l'autre : les rais de l'orgue
+   s'éteignent si le viseur décroche. Une visée image par image, c'est un message
+   par image — le plafond dur de 10/s crevé par un seul joueur (§3 de
+   CLAUDE.md), et dépassé SILENCIEUSEMENT. Ce qui circule déjà, en revanche,
+   c'est OÙ EST L'AUTRE : le partenaire est à son poste, ou il n'y est pas. La
+   lumière faiblit donc quand il quitte le sien — coopération réelle, zéro
+   message, et un geste qu'on comprend sans notice. Le reste (« il a raté sa
+   note ») reste local, et personne ne peut le voir. */
+export const STAR_DUET_ALONE_MUL = 0.55;      // ce que vaut une phrase quand l'autre a quitté son poste
+
+/* ── LA CHUTE. Elle s'arme toute seule ; personne n'a rien à trouver pour
+   commencer. ⚠️ ELLE NE PEUT PAS TOMBER LE PREMIER JOUR : une ferme neuve a
+   assez à apprendre, et une cinématique sur l'écran d'un joueur qui découvre les
+   commandes n'est pas une entrée en matière, c'est une interruption. */
+export const STAR_FALL_MIN_DAY = 3;
+export const STAR_FALL_MS = 9000;      // durée de la scène d'ouverture
+export const STAR_TURN_MS = 7000;      // durée du retournement (fin du chapitre 4)
+export const STAR_END_MS = 14000;      // durée de la résolution
+/* ⚠️ LA CARTE DE CHAPITRE SE FERME TOUTE SEULE, et sa durée est ici plutôt que
+   dans le composant pour la raison de tout ce paragraphe : le banc doit pouvoir
+   vérifier qu'elle ne dépasse pas la scène qui la précède. Une carte qui reste
+   à l'écran pendant qu'on rejoue est un panneau, pas une transition. */
+export const STAR_CARD_MS = 3800;
+/* ⚠️⚠️ ELLE SE CACHE QUAND QUELQU'UN APPROCHE, ET C'EST LE THÈME RENDU VISIBLE
+   (§3 de QUETE.md) : personne d'autre ne voit l'étoile. Le rayon est en cases,
+   la durée dit combien de temps elle reste dans le col après le passage — sans
+   ce délai, elle clignoterait à chaque pas d'un résident qui longe la place. */
+export const STAR_HIDE_R = 4.5;
+export const STAR_HIDE_MS = 2200;
+
+/* ───────────────────────────────────────────────────────────────────────────
+   4. LA GÉOMÉTRIE — DÉRIVÉE, JAMAIS ÉCRITE.
+
+   ⚠️⚠️ AUCUN LIEU DE CETTE QUÊTE NE PORTE DE COORDONNÉES EN DUR, ET C'EST LA
+   LEÇON LA PLUS CHÈREMENT PAYÉE DU DÉPÔT (§8 de `CLAUDE.md`, et le 442 l'a
+   repayée) : une position réglée à la main est une position qui penchera. Le
+   parc a reculé de huit cases au 437, le bois a été creusé au 440 ; le jour où
+   le champ de foire bouge, le cratère doit bouger avec lui **sans que personne
+   ne retouche quoi que ce soit**.
+   ⚠️ Aucun TIRAGE non plus : `generateTownWorld` partage UN générateur, y puiser
+   déplacerait tout le mobilier posé après (leçon du 435 sur l'étang). Les
+   recherches ci-dessous sont des balayages déterministes.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* ⚠️⚠️ LES ANCRES ELLES-MÊMES SONT DANS `fermeConstants.js` (`STAR_CRATER_X`,
+   `STAR_FURROW_X`, `STAR_PIER_X`, `STAR_GLASS_ANCHOR_X`…), ET C'EST DÉLIBÉRÉ.
+   Le 442 les gardait dans `enquete.js`, ce qui obligeait `fermeEngine.js` à
+   importer l'enquête pour poser ses bornes. Ça marchait — pas de cycle — mais
+   c'était une arête de plus entre le moteur et une histoire, et il a fallu la
+   couper aujourd'hui. Dans `fermeConstants`, que TOUT LE MONDE importe déjà,
+   il n'y a **aucune arête nouvelle et une seule description de chaque
+   position** : le générateur pose, le jeu lit, les trois bancs mesurent, et
+   personne ne recopie (§8 de `CLAUDE.md`).
+
+   Ce qui reste ici est ce qui est propre à la QUÊTE et non à la carte : les
+   règles, les rayons de jeu, et le balayage que le banc doit pouvoir rejouer. */
+
+/* Le balayage en spirale, partagé par tous les placements. ⚠️ IL EST ICI ET PAS
+   DANS `FermeGame` : le banc doit pouvoir poser les mêmes pierres que le jeu,
+   sinon il mesure un autre monde (le défaut de `render-parc` et son champ de bois
+   réinventé, §1 du 440). */
+export function starSpiralFree(cx, cy, isFree, maxR) {
+  const R = maxR | 0 || 24;
+  if (isFree(cx, cy)) return { x: cx, y: cy };
+  for (let r = 1; r <= R; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;   // le seul anneau r
+        const x = cx + dx, y = cy + dy;
+        if (isFree(x, y)) return { x, y };
+      }
+    }
+  }
+  return null;
+}
+
+/* ⚠️⚠️ « TOURNER LE DOS » EST UNE FONCTION PURE, ET ELLE EST ICI POUR QUE LE JEU
+   ET LE BANC LA PARTAGENT. Deux écritures de la même règle donneraient
+   l'ambiguïté la plus détestable qui soit : « chez moi elle sort, chez toi
+   non ». `dir` : 0 = sud, 1 = nord, 2 = ouest, 3 = est. */
+const DIR_VEC = [[0, 1], [0, -1], [-1, 0], [1, 0]];
+export function starFacingAway(px, py, dir, tx, ty) {
+  const v = DIR_VEC[dir | 0] || DIR_VEC[0];
+  const dx = tx - px, dy = ty - py;
+  const len = Math.hypot(dx, dy);
+  if (len < 0.001) return false;              // debout SUR elle : on la regarde forcément
+  return (v[0] * dx + v[1] * dy) / len <= STAR_CALM_FACE_DOT;
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   5. L'ÉTAT PARTAGÉ ET SES RÈGLES PURES.
+   ─────────────────────────────────────────────────────────────────────────── */
+export function newStar() {
+  return {
+    ch: 0,          // chapitre courant
+    found: {},      // id de lieu -> { by, at } — idempotent par construction
+    fall: 0,        // horodatage HÔTE de la chute (0 = elle n'est pas encore tombée)
+    calm: {},       // id de joueur -> horodatage HÔTE du dernier « dos tourné »
+    lean: {},       // id de joueur -> { x, y, at } — la dernière lecture d'ombres
+    marks: [],      // les lieux révélés par les croisements
+    duet: 0,        // phrases du duo réussies
+    gift: {},       // id de joueur -> { at, kind } — le crochet cosmétique (§8)
+    seen: {},       // scènes déjà jouées : cartes de chapitre, « previously »
+    doneAt: 0,
+  };
+}
+/* ⚠️ LA REPRISE EST TOLÉRANTE, PAS CONFIANTE. Une sauvegarde d'avant ce zip n'a
+   pas le champ (quête neuve, bon comportement) ; une sauvegarde ABÎMÉE ne doit
+   pas faire planter le chargement d'une ferme entière pour une histoire
+   secondaire. On reconstruit chaque sous-objet plutôt que de faire confiance à
+   sa forme — la leçon de `migrateStation`, reprise de `migrateEnquete`.
+   ⚠️ Une sauvegarde du 442 (`shared.enquete`) n'est pas migrée vers celle-ci :
+   ce sont deux histoires différentes, pas deux versions de la même. Le champ
+   `enquete` est simplement ignoré et disparaît à la première écriture. */
+export function migrateStar(saved) {
+  const e = newStar();
+  if (!saved || typeof saved !== "object") return e;
+  e.ch = Math.max(0, Math.min(STAR_CH_DONE, saved.ch | 0));
+  if (saved.found && typeof saved.found === "object") {
+    for (const id of Object.keys(saved.found)) {
+      if (!STAR_SITE[id]) continue;                 // un lieu inconnu = une version d'après : on l'ignore
+      const v = saved.found[id] || {};
+      e.found[id] = { by: String(v.by || "?").slice(0, 24), at: +v.at || 0 };
+    }
+  }
+  e.fall = +saved.fall || 0;
+  if (saved.calm && typeof saved.calm === "object")
+    for (const k of Object.keys(saved.calm)) e.calm[String(k).slice(0, 40)] = +saved.calm[k] || 0;
+  if (saved.lean && typeof saved.lean === "object") {
+    for (const k of Object.keys(saved.lean)) {
+      const v = saved.lean[k] || {};
+      e.lean[String(k).slice(0, 40)] = { x: +v.x || 0, y: +v.y || 0, at: +v.at || 0 };
+    }
+  }
+  if (Array.isArray(saved.marks))
+    e.marks = saved.marks.filter(m => STAR_LEAN_MARKS.includes(m));
+  e.duet = Math.max(0, Math.min(STAR_DUET_PHRASES, saved.duet | 0));
+  if (saved.gift && typeof saved.gift === "object") {
+    for (const k of Object.keys(saved.gift)) {
+      const v = saved.gift[k] || {};
+      e.gift[String(k).slice(0, 40)] = { at: +v.at || 0, kind: String(v.kind || "starlight").slice(0, 24) };
+    }
+  }
+  if (saved.seen && typeof saved.seen === "object")
+    for (const k of Object.keys(saved.seen)) if (saved.seen[k]) e.seen[String(k).slice(0, 32)] = true;
+  e.doneAt = +saved.doneAt || 0;
+  return e;
+}
+
+export function starFallen(e) { return !!(e && e.fall); }
+export function starStarted(e) { return !!(e && (e.ch > 0 || Object.keys(e.found || {}).length)); }
+export function starDone(e) { return !!(e && e.doneAt); }
+export function starHas(e, id) { return !!(e && e.found && e.found[id]); }
+/* Le compte d'éclats, DÉRIVÉ de la table (voir la note de `shard`). */
+export function starShards(e) { return STAR_SHARD_IDS.filter(id => starHas(e, id)).length; }
+/* Ce qui manque au chapitre courant, dans l'ordre de la table — c'est ce que le
+   pisteur affiche, et c'est ce qui fait qu'on sait toujours quoi chercher. */
+export function starMissing(e) {
+  const ch = STAR_CHAPTERS[Math.min(e ? e.ch | 0 : 0, STAR_CH_DONE - 1)];
+  if (!ch) return [];
+  return ch.need.filter(id => !starHas(e, id));
+}
+export function starChapterKey(e) {
+  return (STAR_CHAPTERS[Math.min(e ? e.ch | 0 : 0, STAR_CH_DONE - 1)] || {}).key || "field";
+}
+
+/* ⚠️⚠️ LA BASCULE EST UNE BOUCLE, PAS UN `if` — reprise telle quelle du 442, où
+   elle avait été écrite pour le désordre et où elle a servi. Un joueur peut
+   fermer DEUX chapitres avec une seule trouvaille : celle qui manquait au 4
+   alors que le 3 était complet depuis dix minutes. Écrite en simple test, la
+   fonction avancerait d'un cran par découverte, et le pisteur réclamerait un
+   objet déjà trouvé sans que rien ne le signale.
+   ⚠️ Elle s'arrête AVANT le chapitre `final` : la fin ne se déclenche pas par
+   accumulation, elle se joue. Rend la liste des chapitres FRANCHIS pour que
+   l'hôte joue la carte de chacun, une fois. */
+export function starAdvance(e) {
+  const crossed = [];
+  let guard = 0;
+  while (e.ch < STAR_CH_DONE && guard++ < STAR_CH_DONE + 2) {
+    const ch = STAR_CHAPTERS[e.ch];
+    if (!ch.need.every(id => starHas(e, id))) break;
+    if (ch.final) break;
+    crossed.push(ch);
+    e.ch++;
+  }
+  return crossed;
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   6. LES RÉSOLVEURS — le côté HÔTE, purs, sans réseau ni React.
+
+   ⚠️⚠️ AUCUN N'APPLIQUE QUOI QUE CE SOIT LUI-MÊME : ils rendent
+   `{ ok, crossed, ... }`, et c'est `FermeGame` qui diffuse. Le double crédit du
+   431 (trois résolveurs qui payaient eux-mêmes, trois qui rendaient un delta) a
+   coûté un contrôle de banc dédié — on ne recommence pas. Ici, la question ne se
+   pose même plus : **rien dans ce fichier ne peut créditer une pièce**, et le
+   banc le vérifie par un scan de source.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* La chute. ⚠️ ELLE EST DATÉE PAR L'HÔTE ET DIFFUSÉE UNE FOIS. Chaque client
+   déroule ensuite SA chronologie à partir de SA réception : on ne compare jamais
+   une horloge hôte à une horloge invité (§3), et une scène de neuf secondes est
+   exactement le genre de chose où trois secondes de dérive se verraient. */
+export function resolveStarFall(e, day, now) {
+  if (e.fall) return { ok: false, already: true };
+  if ((day | 0) < STAR_FALL_MIN_DAY) return { ok: false, tooEarly: true };
+  e.fall = now;
+  return { ok: true, scene: "fall" };
+}
+
+/* Une trouvaille. ⚠️ IDEMPOTENT PAR CONSTRUCTION : `found` est un dictionnaire,
+   le retrouver réécrit la même clé. C'est ce qui autorise un geste à se répéter
+   sans jamais compter deux fois — la règle du 439 (« un panneau qui s'ouvre à
+   volonté ne doit rien donner ») tenue par la forme de la donnée et non par un
+   garde-fou qu'on peut oublier. */
+export function resolveStarFound(e, id, who, now) {
+  const site = STAR_SITE[id];
+  if (!site) return { ok: false };
+  if (site.req && !site.req.every(r => starHas(e, r))) return { ok: false, locked: true };
+  if (starHas(e, id)) return { ok: true, already: true, crossed: [] };
+  e.found[id] = { by: String(who || "?").slice(0, 24), at: now };
+  return { ok: true, crossed: starAdvance(e), shard: !!site.shard };
+}
+
+/* ⚠️⚠️ L'ÉTOILE TIMIDE — LE PREMIER VERROU COOPÉRATIF, ET IL N'EN EST PAS UN.
+   Le client demande quand SA condition locale tient (dans l'anneau, immobile,
+   dos tourné) ; l'hôte enregistre la date, à SA propre horloge, et regarde si
+   quelqu'un d'AUTRE est calme en même temps. Deux dates de la même horloge : la
+   règle du §3 est tenue par construction, comme les deux serrures du 442.
+   ⚠️ `soloAllowed` n'assouplit pas la règle, il en change la DURÉE : seul, il
+   faut tenir `STAR_CALM_SOLO_MS` au lieu de `STAR_CALM_MS`. Un jeu qui exige un
+   second joueur pour avancer est un jeu qu'on ne finit pas. */
+export function resolveStarCalm(e, who, now, soloAllowed) {
+  if (starHas(e, "crater")) return { ok: true, already: true, crossed: [] };
+  const prev = +e.calm[who] || 0;
+  const held = prev && now - prev < 1500 ? now - (e.calm[who + ":t0"] || prev) : 0;
+  /* On garde deux marques par joueur : le début de la tenue (`:t0`) et la
+     dernière image reçue. Sans le début, une tenue interrompue et reprise
+     compterait comme continue — c'est-à-dire qu'il suffirait de marteler. */
+  if (!prev || now - prev > 1500) e.calm[who + ":t0"] = now;
+  e.calm[who] = now;
+  const t0 = +e.calm[who + ":t0"] || now;
+  const mine = now - t0;
+  if (soloAllowed) {
+    if (mine >= STAR_CALM_SOLO_MS) return { ...resolveStarFound(e, "crater", who, now), opened: true };
+    return { ok: true, holding: mine, need: STAR_CALM_SOLO_MS, crossed: [] };
+  }
+  /* À deux : il faut que quelqu'un d'autre soit calme MAINTENANT, et que les
+     deux tenues aient duré assez. */
+  let bestOther = 0;
+  for (const k of Object.keys(e.calm)) {
+    if (k.endsWith(":t0") || k === who) continue;
+    if (now - (+e.calm[k] || 0) > 1500) continue;         // il a lâché
+    bestOther = Math.max(bestOther, now - (+e.calm[k + ":t0"] || now));
+  }
+  const together = Math.min(mine, bestOther);
+  if (bestOther && together >= STAR_CALM_MS)
+    return { ...resolveStarFound(e, "crater", who, now), opened: true };
+  return { ok: true, holding: mine, both: bestOther > 0, need: STAR_CALM_MS, crossed: [] };
+}
+
+/* ⚠️⚠️ LES OMBRES QUI PENCHENT — UNE DIRECTION N'EST PAS UN LIEU. Deux lectures
+   de deux endroits assez éloignés se croisent ; une seule ne dit rien, et c'est
+   ce qui rend ce chapitre coopératif sans qu'aucune porte ne soit fermée.
+   ⚠️ Le croisement n'est pas calculé géométriquement, et c'est délibéré : deux
+   demi-droites qui « se croisent » demanderaient au joueur de viser, ce qui est
+   une compétence de géomètre, pas de conteur. Ce qu'on mesure est l'ÉCART entre
+   les deux points d'écoute — la seule chose qui garantisse que les deux joueurs
+   se sont vraiment séparés. Le lieu révélé vient de la table, dans l'ordre. */
+export function resolveStarLean(e, who, tx, ty, now, soloAllowed) {
+  const win = soloAllowed ? STAR_LEAN_SOLO_WINDOW_MS : STAR_LEAN_WINDOW_MS;
+  const minD = soloAllowed ? STAR_LEAN_SOLO_MIN_TILES : STAR_LEAN_MIN_TILES;
+  const next = STAR_LEAN_MARKS.find(m => !starHas(e, m));
+  if (!next) return { ok: true, already: true, crossed: [] };
+  /* On compare à toutes les lectures encore fraîches, la sienne comprise quand
+     on est seul — c'est exactement ce qui rend le solo jouable : on lit, on
+     traverse la ville, on relit. */
+  let best = null;
+  for (const k of Object.keys(e.lean)) {
+    if (!soloAllowed && k === who) continue;
+    const p = e.lean[k];
+    if (!p || now - p.at > win) continue;
+    const d = Math.hypot(tx - p.x, ty - p.y);
+    if (d >= minD && (!best || d > best.d)) best = { d, k };
+  }
+  e.lean[who] = { x: tx, y: ty, at: now };
+  if (!best) return { ok: true, armed: true, crossed: [] };
+  const r = resolveStarFound(e, next, who, now);
+  if (r.ok && !r.already && !e.marks.includes(next)) e.marks.push(next);
+  return { ...r, crossed: r.crossed || [], mark: next, spread: Math.round(best.d) };
+}
+
+/* Le duo. ⚠️ LES DEUX MINI-JEUX SONT LOCAUX ; SEULE LA PHRASE RÉUSSIE REMONTE.
+   Faire arbitrer une visée image par image aurait demandé un message par image,
+   c'est-à-dire le plafond de 10/s crevé à deux joueurs — et pour rien, puisque
+   ce qui compte n'est pas la trajectoire, c'est le résultat. */
+export function resolveStarDuet(e, phrase, who, now) {
+  if (starHas(e, "song")) return { ok: true, already: true, crossed: [] };
+  const p = phrase | 0;
+  if (p !== (e.duet | 0)) return { ok: false, stale: true };   // une phrase en retard : on ignore
+  e.duet = Math.min(STAR_DUET_PHRASES, p + 1);
+  if (e.duet < STAR_DUET_PHRASES) return { ok: true, phrase: e.duet, crossed: [] };
+  return { ...resolveStarFound(e, "song", who, now), complete: true };
+}
+
+/* ⚠️⚠️ LE CROCHET COSMÉTIQUE — L'ARBITRAGE MAINTENANT, LE CONTENU PLUS TARD.
+   C'est une consigne explicite du chantier, et c'est aussi la règle du 439 («  un
+   panneau qui s'ouvre à volonté ne doit rien donner ») appliquée à un cadeau qui
+   ne contient encore rien. Le jour où la garde-robe cosmétique existera, elle
+   lira `star.gift` : le chemin d'attribution sera déjà là, déjà arbitré par
+   l'hôte, déjà persisté, déjà mesuré par le banc. Elle n'aura pas à en inventer
+   un — et c'est justement au moment où l'on invente un chemin d'attribution
+   qu'on se trompe.
+   ⚠️ IL N'EST APPELÉ QU'UNE FOIS, AU BASCULEMENT DE LA SCÈNE FINALE, et il est
+   idempotent : `gift` est un dictionnaire, pas un compteur. */
+export function resolveStarGift(e, playerIds, now) {
+  if (e.doneAt) return { ok: false, already: true };
+  if (!starHas(e, "song")) return { ok: false, missing: true };
+  e.doneAt = now;
+  e.ch = STAR_CH_DONE;
+  const granted = [];
+  for (const id of playerIds || []) {
+    if (!id || e.gift[id]) continue;
+    e.gift[id] = { at: now, kind: "starlight" };
+    granted.push(id);
+  }
+  return { ok: true, granted, scene: "end" };
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   7. LE MENU DÉVELOPPEUR — LANCER, AVANCER, REVOIR.
+
+   ⚠️⚠️ IL EST CONSTRUIT EN PREMIER, AVANT LA PREMIÈRE SCÈNE, et c'est une
+   décision de méthode. Ce chantier a cinq chapitres et trois cinématiques ; voir
+   la finale coûte cinquante minutes de jeu. *Un outil de test dont le coût
+   dépasse ce qu'il fait gagner cesse d'être utilisé, et c'est comme ça qu'on
+   finit par livrer sans regarder.* Sans ces boutons — et surtout sans « Play
+   scene », qui n'existait pas au 442 — la boucle « faire → regarder → juger →
+   refaire » demandée par le chantier n'est pas tenable.
+
+   ⚠️⚠️ ET AUCUNE DE CES OPÉRATIONS NE DONNE RIEN. Le menu s'ouvre à tout joueur
+   qui connaît le raccourci (398). Le chemin développeur appelle les MÊMES
+   résolveurs — la chaîne reste cohérente, les prérequis d'information sont
+   respectés — et **jette** ce qu'ils rendent, `resolveStarGift` compris : le
+   `gift` est écrit puis effacé. On saute la lecture, on ne gagne rien.
+   ⚠️ `reset` REMET UN OBJET NEUF, il ne « défait » pas : une remise à zéro qui
+   effacerait clé par clé finirait par laisser un état à moitié propre le jour où
+   l'on ajoute un champ. `newStar()` ne peut pas mentir.
+   ─────────────────────────────────────────────────────────────────────────── */
+export const STAR_DEV_OPS = ["reset", "start", "chapter", "skip", "hint", "all"];
+export const STAR_DEV_SCENES = ["fall", "turn", "end"];
+
+export function devStar(e, op, now) {
+  const t = now || Date.now();
+  if (op === "reset") return { star: newStar(), ok: true };
+  if (op === "start") {
+    const s = e.fall ? e : (resolveStarFall(e, STAR_FALL_MIN_DAY, t), e);
+    return { star: s, ok: true, scene: "fall" };
+  }
+  if (op === "chapter") {
+    /* On donne exactement ce qui manque au chapitre COURANT, pas un de plus.
+       `starAdvance` fait le reste, et il peut en franchir deux d'un coup si le
+       suivant était déjà complet : c'est sa raison d'être. */
+    if (!e.fall) e.fall = t;
+    for (const id of starMissing(e)) {
+      if (id === "song") { e.duet = STAR_DUET_PHRASES; }
+      resolveStarFound(e, id, "🛠️", t);
+    }
+    return { star: e, ok: true };
+  }
+  if (op === "skip") {
+    if (!e.fall) e.fall = t;
+    const before = e.ch;
+    for (let guard = 0; guard < STAR_CH_DONE + 2 && e.ch === before; guard++) {
+      for (const id of starMissing(e)) {
+        if (id === "song") e.duet = STAR_DUET_PHRASES;
+        resolveStarFound(e, id, "🛠️", t);
+      }
+      if (STAR_CHAPTERS[e.ch] && STAR_CHAPTERS[e.ch].final) break;
+    }
+    return { star: e, ok: true };
+  }
+  if (op === "hint") {
+    /* Rejoue le marquage du lieu courant : c'est ce que le croisement d'ombres
+       aurait donné, sans avoir à traverser la ville deux fois. */
+    if (!e.fall) e.fall = t;
+    const next = STAR_LEAN_MARKS.find(m => !starHas(e, m));
+    if (next) { resolveStarFound(e, next, "🛠️", t); if (!e.marks.includes(next)) e.marks.push(next); }
+    return { star: e, ok: true };
+  }
+  if (op === "all") {
+    /* ⚠️ DEUX PASSES, PARCE QUE LES PRÉREQUIS SONT RÉELS : on ne plonge pas
+       avant que le lac soit marqué, et le nid exige la perle. Une seule boucle
+       dans l'ordre de la table sauterait `nestShard`, le chapitre 4 resterait
+       ouvert, et on conclurait que la scène finale est cassée alors que c'est le
+       raccourci qui l'était. Le banc le vérifie — c'est le contrôle que le 442
+       avait dû ajouter pour exactement la même raison.
+       ⚠️ ET IL S'ARRÊTE AVANT LE CHANT : le duo est le seul moment du chantier
+       qui vaille d'être joué à la main. */
+    if (!e.fall) e.fall = t;
+    for (let pass = 0; pass < 2; pass++)
+      for (const st of STAR_SITES) {
+        if (st.id === "song") continue;
+        resolveStarFound(e, st.id, "🛠️", t);
+      }
+    for (const m of STAR_LEAN_MARKS) if (starHas(e, m) && !e.marks.includes(m)) e.marks.push(m);
+    return { star: e, ok: true };
+  }
+  return { ok: false };
+}

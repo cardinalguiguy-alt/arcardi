@@ -795,6 +795,47 @@ section("Valley Town — le marché du champ de foire (430)");
     }
   }
   ok("le cours est déterministe (même jour, même famille, même prix)", stable);
+  /* ══════════════════════════════════════════════════════════════════════════
+     ZIP 444 — LE COURS EST BIT À BIT CELUI DU 430, ET CE CONTRÔLE A DÉMÉNAGÉ.
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️⚠️ IL VIVAIT DANS `verify-enquete.mjs`, QUI A ÉTÉ SUPPRIMÉ AVEC L'ENQUÊTE
+     — ET IL NE PROTÉGEAIT PAS L'ENQUÊTE, IL PROTÉGEAIT LE MARCHÉ. Le 442 l'avait
+     écrit parce qu'il ajoutait un troisième argument à `marketRate` ; le 444 a
+     retiré cet argument, ce qui est exactement le moment où l'on casse quelque
+     chose sans s'en apercevoir. Le laisser mourir avec son banc aurait été le
+     défaut nommé en tête de `CLAUDE.md` : *un banc qui disparaît emporte la
+     grandeur qu'il mesurait, et personne ne s'en aperçoit puisque plus personne
+     ne la mesure.* On déplace ce qui protège le code qui reste.
+     ⚠️ LA FORMULE DE RÉFÉRENCE EST RÉÉCRITE ICI, À LA MAIN, ET C'EST LE POINT :
+     *on ne mesure pas un trajet avec l'outil qui l'a produit* (verify-taxi,
+     433). Si `marketRate` dérive, cette copie-ci ne dérivera pas avec elle. */
+  {
+    const span = Math.round(C.MARKET_SPREAD * 100);
+    const ref430 = (day, fi) => {
+      const h = E.marketHash(day, fi);
+      let pct = h % (span + 1);
+      if (E.isMarketDay(day)) pct = Math.max(pct, span - (h % Math.max(1, Math.round(span / 3))));
+      return 1 + pct / 100;
+    };
+    let diff = 0, n = 0;
+    for (let d = 1; d <= 1000; d++) for (let fi = 0; fi < E.MARKET_FAMILIES.length; fi++) {
+      n++;
+      if (Math.abs(E.marketRate(d, E.MARKET_FAMILIES[fi]) - ref430(d, fi)) > 1e-9) diff++;
+    }
+    ok(`⚠️⚠️ le cours est BIT À BIT celui du 430 (${n} couples jour × famille)`, diff === 0);
+    /* ⚠️ ET AUCUNE QUÊTE NE PEUT PLUS LE DÉPLACER. `marketRate` et `marketApply`
+       ne prennent plus de troisième argument : un appelant qui en passerait un
+       serait ignoré en silence, ce qui est pire que refusé. On vérifie donc que
+       l'argument surnuméraire ne CHANGE RIEN — c'est la seule façon de dire
+       « cette porte est bien murée » plutôt que « on ne l'ouvre plus ». */
+    let ignored = true;
+    for (let d = 1; d <= 200; d++) for (const f of E.MARKET_FAMILIES)
+      if (E.marketRate(d, f, { lo: -0.5, mult: 2 }) !== E.marketRate(d, f)) ignored = false;
+    ok("⚠️ un modificateur passé à `marketRate` ne peut RIEN déplacer", ignored);
+    ok("⚠️ le plancher « jamais moins qu'au bac » tient sans argument",
+       E.marketApply(100, 0.2) === 100 && E.marketApply(100, 1.3) === 130);
+  }
+
   ok(`le cours reste dans [0 ; +${Math.round(C.MARKET_SPREAD * 100)} %]`, inRange);
   /* ⚠️ LE PLANCHER EST UNE PROMESSE FAITE AU JOUEUR, pas une conséquence : le
      texte du marché dit « jamais moins que le bac ». Un arrondi malheureux sur

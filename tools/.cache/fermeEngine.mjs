@@ -20,17 +20,19 @@
    ========================================================================== */
 
 import * as C from "./fermeConstants.mjs";
-/* ⚠️ ZIP 442 — L'ENQUÊTE. Le moteur ne lui emprunte QU'UNE chose, et c'est
-   volontairement la plus petite possible : `enqMarketMod`, qui traduit l'issue
-   de l'enquête en modificateur de cote. Le sens de la flèche compte —
-   `enquete.js` n'importe que `fermeConstants`, donc il n'y a pas de cycle, et le
-   jour où l'on voudra retirer l'enquête il y a exactement deux appels à couper.
-   ⚠️ ON NE RECOPIE PAS LA RÈGLE ICI. Deux endroits qui décideraient « ce que
-   l'enquête fait au marché » finiraient par ne pas dire la même chose, et le
-   symptôme serait deux joueurs qui se disputent sur le prix du blé (§11 du
-   README de la ferme) — le défaut le plus cher et le moins visible d'un jeu à
-   deux. */
-import * as Q from "./enquete.mjs";
+/* ⚠️⚠️ ZIP 444 — LE MOTEUR N'IMPORTE PLUS AUCUNE QUÊTE, ET C'EST UNE RÉPARATION
+   AUTANT QU'UN RETRAIT. Le 442 lui faisait emprunter `enqMarketMod` : une issue
+   d'enquête déplaçait la cote du marché. Le 442 avait pris la peine d'écrire
+   pourquoi ce n'était pas une entorse à la règle du 430 (« le cours ne dépend
+   QUE du jour ») — et il avait raison, l'état était partagé. Mais il avait aussi
+   écrit, en toutes lettres, « le jour où l'on voudra retirer l'enquête il y a
+   exactement deux appels à couper ». Ce jour est arrivé, et ils étaient bien
+   deux.
+   ⚠️ LA QUÊTE DE L'ÉTOILE (444) NE TOUCHE À AUCUN PRIX, délibérément : elle ne
+   récompense pas en or (voir `quete.js` §6). Le marché redevient donc **bit à
+   bit celui du 430**, sans troisième argument nulle part — et `verify-vallee`
+   hérite du contrôle qui le vérifiait, parce que ce contrôle protège LE MARCHÉ
+   et pas l'enquête (il vivait dans `verify-enquete`, qui disparaît avec elle). */
 
 const idx = (x, y) => y * C.MAP_W + x;
 export const xOf = (i) => i % C.MAP_W;
@@ -2614,7 +2616,7 @@ export function resolveTownSell(f, m, day, s) {
     n = take(f.inv.products[pt], m.n); f.inv.products[pt] -= n; unit = C.ANIMALS[pt].sell;
   } else return resolveTownSellShared(f, m, day, s, res);
   if (n <= 0) return res;
-  const priced = marketPrice(day, m.item, unit, Q.enqMarketMod(s));
+  const priced = marketPrice(day, m.item, unit);
   res.gain = res.moneyDelta = res.earnedDelta = n * priced;
   res.base = n * unit;
   res.n = n;
@@ -2628,13 +2630,12 @@ export function resolveTownSell(f, m, day, s) {
 function resolveTownSellShared(f, m, day, s, res) {
   if (!s) return res;
   const it = m.item;
-  const mod = Q.enqMarketMod(s);
-  const rate = marketRate(day, marketFamilyOf(it) || "__none__", mod);
+  const rate = marketRate(day, marketFamilyOf(it) || "__none__");
   /* `paid` = le résolveur a DÉJÀ crédité shared.money (voir l'avertissement de
      l'en-tête). `base` = ce qu'il a rapporté au prix de la ferme. */
   const finish = (base, paid, flag, n) => {
     if (base <= 0) return res;
-    const total = marketApply(base, rate, mod);
+    const total = marketApply(base, rate);
     res.base = base; res.gain = total; res.n = n || 1;
     res.moneyDelta = res.earnedDelta = paid ? total - base : total;
     if (flag) res[flag] = true;
@@ -3125,26 +3126,23 @@ export const CRAFT_SELL_ITEMS = ["honey", "cheeseWheel", "cheesePortion", "butte
 export function isMarketDay(day) {
   return C.MARKET_DAY_EVERY > 0 && (day | 0) % C.MARKET_DAY_EVERY === 0;
 }
-/* ⚠️⚠️ ZIP 442 — LE TROISIÈME ARGUMENT EST L'ISSUE DE L'ENQUÊTE, ET IL FAUT
-   DIRE POURQUOI CE N'EST PAS UNE VIOLATION DE LA RÈGLE DU 430.
-   La règle dit : « le cours ne doit dépendre QUE du jour », et son corollaire
-   dit pourquoi — le jour où il dépendra du stock d'un joueur, de son or ou de
-   sa saison locale, **les deux écrans afficheront des prix différents et chacun
-   aura l'air cohérent avec lui-même**. Ce qui est interdit, c'est donc une
-   dépendance à un état PROPRE À UN CLIENT. `mod` vient de `shared.enquete`,
-   c'est-à-dire d'un état arbitré par l'hôte, diffusé et persisté comme l'or :
-   les deux clients lisent le même octet, donc la même cote, et le contrôle de
-   déterminisme du banc reste vrai.
-   ⚠️ SANS `mod`, LA FONCTION EST BIT À BIT CELLE D'AVANT — c'est la seule forme
-   qui garantisse qu'on n'a rien cassé pour une ferme qui n'a jamais ouvert le
-   carnet d'enquête, et le banc le vérifie explicitement (`verify-enquete`,
-   chapitre « le marché sans enquête est le marché d'avant »).
-   ⚠️ LE JOUR DE MARCHÉ EST RELEVÉ AVANT LE REMAPPAGE, sur l'échelle 0..span :
-   appliqué après, il aurait écrasé la borne basse de l'issue « restitution » et
-   le marché libre n'aurait plus jamais pu descendre un jour de marché — un
-   effet de bord de trois caractères, invisible, et exactement le contraire de
-   ce que la restitution promet. */
-export function marketRate(day, family, mod) {
+/* ⚠️⚠️ ZIP 444 — LE TROISIÈME ARGUMENT A DISPARU, ET LE COURS EST REDEVENU UNE
+   PURE FONCTION DU JOUR, comme au 430.
+   Le 442 lui passait un modificateur venu de l'issue de l'enquête. Ce n'était
+   pas une entorse à la règle du 430 (« le cours ne dépend QUE du jour ») — l'état
+   était partagé, arbitré et persisté, donc les deux clients lisaient le même
+   octet — mais c'était un argument que plus rien ne produit depuis que l'enquête
+   est retirée. ⚠️ **UN PARAMÈTRE SANS PRODUCTEUR NE LÈVE RIEN, IL POURRIT** : il
+   reste dans la signature, personne ne le passe, et le premier qui le lit trois
+   zips plus tard croit qu'il sert. On le supprime plutôt que de le laisser à
+   `null` partout.
+   ⚠️ CE QUE LA QUÊTE DE L'ÉTOILE (444) NE FAIT PAS, ET C'EST DÉLIBÉRÉ : elle ne
+   touche à aucun prix. Elle ne peut donc pas faire diverger deux écrans sur le
+   prix du blé — le défaut le plus cher et le moins visible d'un jeu à deux.
+   ⚠️ LE JOUR DE MARCHÉ RELÈVE LE TIRAGE, IL NE LE REMPLACE PAS. Le remplacer par
+   une valeur fixe ferait de ce jour-là une constante connue d'avance, donc le
+   seul jour où l'on vend — et les six autres deviendraient du décor. */
+export function marketRate(day, family) {
   const fi = MARKET_FAMILIES.indexOf(family);
   if (fi < 0) return 1;
   const h = marketHash(day, fi);
@@ -3158,29 +3156,22 @@ export function marketRate(day, family, mod) {
      du décor. En relevant le plancher, un jour de marché reste variable :
      il vaut la peine, sans être une évidence. */
   if (isMarketDay(day)) pct = Math.max(pct, span - (h % Math.max(1, Math.round(span / 3))));
-  if (mod) {
-    const lo = Math.round((mod.lo || 0) * 100);
-    const hi = Math.round(C.MARKET_SPREAD * 100 * (mod.mult || 1));
-    pct = lo + Math.round(pct * (hi - lo) / span);
-  }
   return 1 + pct / 100;
 }
 /* ⚠️⚠️ LE PLANCHER « JAMAIS MOINS CHER QU'AU BAC » ÉTAIT ÉCRIT DEUX FOIS, ET
    C'EST LE §8 DE `CLAUDE.md` QU'ON RÉPARE EN PASSANT. `marketPrice` faisait
    `Math.max(basePrice, …)` et `resolveTownSellShared` faisait `Math.max(base, …)`
    à cinq cents lignes de là : deux descriptions de la même promesse, qui n'ont
-   tenu que tant que personne n'avait de raison d'en lever une. L'enquête en a
-   une, et lever la première seulement aurait donné un marché libre au bac et
-   plancher chez les artisans — deux guichets qui ne racontent pas la même ville,
-   sans qu'aucune erreur ne soit levée.
-   ⚠️ Le plancher tombe UNIQUEMENT quand `mod.lo < 0`, c'est-à-dire quand une
-   issue a explicitement dit qu'il n'y en a plus. Un `mod` qui ne parle pas du
-   plancher (l'issue « maintien ») le garde, et c'est ce qui rend la fonction
-   sûre à l'ajout d'une troisième issue. */
-export function marketApply(base, rate, mod) {
-  const total = Math.ceil(base * rate);
-  if (mod && (mod.lo || 0) < 0) return Math.max(1, total);
-  return Math.max(base, total);
+   tenu que tant que personne n'avait de raison d'en lever une. L'enquête du 442
+   en a eu une, et lever la première seulement aurait donné un marché libre au
+   bac et un plancher chez les artisans — deux guichets qui ne racontent pas la
+   même ville, sans qu'aucune erreur ne soit levée.
+   ⚠️⚠️ ZIP 444 — L'ENQUÊTE EST PARTIE, LA RÉPARATION RESTE. C'est le point : le
+   doublon n'était pas de l'enquête, il était du MARCHÉ, et l'enquête n'a fait
+   que le révéler. Retirer la réparation avec elle aurait remis en place un
+   défaut qui avait attendu douze zips pour se voir. */
+export function marketApply(base, rate) {
+  return Math.max(base, Math.ceil(base * rate));
 }
 /* ⚠️ ZIP 430 — LE JOUR DE SERVICE D'UN RÉSIDENT « À LA SEMAINE ». Dérivé du
    numéro de jour, donc identique chez tous les clients sans qu'un octet ne
@@ -3191,13 +3182,13 @@ export function isShopDay(ro, day) {
   if (!ro || ro.weeklyShift === undefined || ro.weeklyShift === null) return true;
   return ((day | 0) % 7) === (ro.weeklyShift | 0);
 }
-export function marketPrice(day, item, basePrice, mod) {
+export function marketPrice(day, item, basePrice) {
   const fam = marketFamilyOf(item);
   if (!fam) return basePrice;
   // ⚠️ Arrondi au SUPÉRIEUR : à petits prix (une baie vaut 3), un arrondi au
   // plus proche mangerait toute la prime et le marché n'existerait que pour
   // les articles chers. Une baie à +20 % doit rapporter 4, pas 3.
-  return marketApply(basePrice, marketRate(day, fam, mod), mod);
+  return marketApply(basePrice, marketRate(day, fam));
 }
 
 
@@ -5969,64 +5960,74 @@ export function generateTownWorld() {
     }
   }
   /* ═══════════════════════════════════════════════════════════════════════
-     ZIP 442 — LES TROIS BORNES DE SECTION DE L'ARPENTEUR.
+     ZIP 444 — LES LIEUX DE LA QUÊTE DE L'ÉTOILE.
      ─────────────────────────────────────────────────────────────────────────
-     Elles portent le premier code de l'enquête (voir `enquete.js` §3) : deux
-     cotes lisibles au quai et au verger, une cote MARTELÉE au bois. La
-     déduction du joueur — « on numérote d'ouest en est, le plan s'arrête au
-     verger, et voilà une borne plus à l'est » — n'existe que si les trois
-     pierres sont réellement dans cet ordre-là sur la carte, ce que le banc
-     vérifie plutôt que de le croire.
-
-     ⚠️⚠️ ELLES NE BLOQUENT PAS, ET C'EST UNE DÉCISION, PAS UN OUBLI. Une borne
-     fait la hauteur d'un genou : on l'enjambe. Trois cases solides de plus sur
-     une carte dont la connexité est contrôlée à 100 % (`verify-vallee`), c'est
-     trois occasions de fermer un passage d'une case au bord d'un verger ou dans
-     une futaie — et le symptôme serait un trajet de résident qui n'aboutit
-     plus, pas une erreur. Non solides, elles ne peuvent RIEN casser : on ne fait
-     que les lire.
-
-     ⚠️⚠️ LA PASSE EST LA DERNIÈRE QUI POSE UN DÉCOR, ET C'EST OBLIGATOIRE.
-     Posées plus tôt, elles auraient été balayées par le nettoyage de
-     `q.gard` ci-dessus, ou recouvertes par une esplanade, ou plantées dessus.
-     Posées ici, elles voient le sol FINAL et l'emprise de tout ce qui existe —
-     c'est le raisonnement du revêtement (434) et de la berge (435), appliqué à
-     trois cailloux.
-     ⚠️ Le balayage est une SPIRALE DÉTERMINISTE autour de l'ancre, jamais un
+     ⚠️ CETTE PASSE REMPLACE CELLE DES TROIS BORNES DE L'ENQUÊTE (442), AU MÊME
+     ENDROIT ET POUR LA MÊME RAISON, qui était déjà écrite là et qui reste
+     vraie : **c'est la dernière passe qui pose un décor**. Posé plus tôt, un
+     décor de quête serait balayé par le nettoyage des jardins, recouvert par une
+     esplanade, ou planté dessus. Posé ici, il voit le sol FINAL et l'emprise de
+     tout ce qui existe — le raisonnement du revêtement (434) et de la berge
+     (435).
+     ⚠️ Le balayage est une SPIRALE DÉTERMINISTE autour d'une ancre, jamais un
      tirage : `generateTownWorld` partage UN générateur, y puiser déplacerait
-     tout le mobilier posé avant (leçon de l'étang, 435). Et l'ancre elle-même se
-     dérive d'un lieu (`ENQ_STONE_ANCHORS`) : le parc a reculé de huit cases au
-     437 et le bois a été creusé au 440 — une coordonnée écrite ici aurait déjà
-     menti deux fois. */
-  for (const a of Q.ENQ_STONE_ANCHORS) {
-    const ax = a.x() | 0, ay = a.y() | 0;
-    let put = null;
-    for (let r = 0; r <= 12 && !put; r++) {
-      for (let dy = -r; dy <= r && !put; dy++) for (let dx = -r; dx <= r && !put; dx++) {
-        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;   // l'anneau, pas le disque
-        const x = ax + dx, y = ay + dy;
-        if (!inMap(x, y)) continue;
-        const i = id(x, y), g = ground[i];
-        if (g !== C.G_GRASS && g !== C.G_TOWN_LAWN) continue;
-        if (solid[i] || objects[i] !== C.O_NONE || hedge[i]) continue;
-        if (!compoFree("boundStone", x, y)) continue;
-        put = { x, y };
+     tout le mobilier posé avant (leçon de l'étang, 435). Et l'ancre se dérive
+     d'un lieu (`quete.js` §4) : le parc a reculé de huit cases au 437, le bois a
+     été creusé au 440 — une coordonnée écrite ici aurait déjà menti deux fois.
+
+     ⚠️⚠️ ET LE CRATÈRE N'EST PAS ICI, PARCE QUE CE N'EST PAS UN DÉCOR : c'est
+     une COUCHE. Neuf cases d'anneau et de verre fondu posées en `props`
+     auraient été neuf cases SOLIDES au milieu d'un pré — c'est-à-dire un
+     cratère qu'on ne peut pas descendre, ce qui est le contraire de ce qu'il
+     est. Et non solides, elles auraient buté sur le contrôle « aucun décor
+     n'est traversable » de `verify-vallee`, qu'on ne desserre pas (§10). La
+     règle du 434 tranche : *une variante de décor est une couche, pas un
+     identifiant de sol* — et ici même pas une couche du monde, puisque le
+     cratère est **dessiné au rendu à une position dérivée** et n'existe dans
+     aucun tableau. Exactement la borne d'origine du 442, qui vivait de la même
+     façon à la ferme et n'a jamais rien cassé.
+     ═══════════════════════════════════════════════════════════════════════ */
+  {
+    /* La verrerie et l'arbre de la pie : un seul lieu, une seule histoire (la
+       pie a laissé tomber un éclat dans le sable de l'atelier, c'est comme ça
+       qu'il a fondu dans une perle). Les positions se déduisent TOUTES de la
+       même ancre — un nid ailleurs ferait deux coïncidences là où il n'en faut
+       aucune, et deux ancres finiraient par s'éloigner l'une de l'autre. */
+    const gx = C.STAR_GLASS_ANCHOR_X | 0, gy = C.STAR_GLASS_ANCHOR_Y | 0;
+    const putNear = (ax, ay, kind, extra) => {
+      for (let r = 0; r <= 10; r++) {
+        for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;   // l'anneau, pas le disque
+          const x = ax + dx, y = ay + dy;
+          if (!inMap(x, y)) continue;
+          const i = id(x, y), g = ground[i];
+          if (g !== C.G_GRASS && g !== C.G_TOWN_LAWN && g !== C.G_PATH) continue;
+          if (solid[i] || objects[i] !== C.O_NONE || hedge[i]) continue;
+          if (!compoFree(kind, x, y)) continue;
+          props.push(Object.assign({ x, y, kind }, extra || null));
+          solid[i] = 1;
+          return { x, y };
+        }
       }
+      /* ⚠️ ON NE POSE PAS « QUELQUE PART » SI L'ANNEAU DE DIX NE DONNE RIEN.
+         Un décor rabattu au hasard serait un atelier de verrier à l'autre bout
+         du quartier, donc une étape dont le lieu marqué ne correspond à rien.
+         Le banc échoue sur un lieu manquant : mieux vaut une quête qui refuse
+         de se lancer qu'une quête qui ment. */
+      return null;
+    };
+    const kiln = putNear(gx, gy, "starKiln");
+    if (kiln) {
+      /* ⚠️ LES TROIS RÂTELIERS SE DÉDUISENT DU FOUR, pas de l'ancre : si le four
+         a glissé de trois cases en cherchant sa place, l'atelier le suit d'un
+         bloc. Une position réglée à la main est une position qui penchera (§8). */
+      for (let k = 0; k < 3; k++) putNear(kiln.x + 2, kiln.y + 1 + k * 2, "starRack", { rack: k });
+      putNear(kiln.x - 2, kiln.y - 1, "starShutter");
+      /* L'arbre de la pie, au nord de l'atelier. ⚠️ ON NE MONTE PAS DESSUS SUR LA
+         CARTE — la montée est le mini-jeu, comme la plongée. Le prop n'est donc
+         qu'un repère : c'est au pied qu'on appuie sur E. */
+      putNear(kiln.x + C.STAR_NEST_DX, kiln.y + C.STAR_NEST_DY, "starNestTree");
     }
-    /* ⚠️ ON NE POSE PAS « QUELQUE PART » SI L'ANNEAU DE DOUZE NE DONNE RIEN.
-       Un décor rabattu au hasard serait une borne de section posée à l'autre
-       bout d'une section, c'est-à-dire un code A dont la déduction devient
-       fausse. Le banc échoue sur une borne manquante : il vaut mieux une
-       enquête qui refuse de se lancer qu'une enquête qui ment. */
-    /* ⚠️⚠️ ELLES BLOQUENT, ET C'EST LE BANC QUI L'A IMPOSÉ. Premier jet :
-       non solides, au motif qu'une borne fait la hauteur d'un genou et qu'on
-       l'enjambe. `verify-vallee` a refusé sur-le-champ — « aucun décor n'est
-       traversable » — et il a raison : un décor dessiné qu'on traverse est le
-       mur invisible du 425 EN NÉGATIF, et la règle du projet est qu'on ne
-       desserre pas un contrôle, on corrige ce qu'il montre (§10). La connexité
-       de la ville est mesurée à 100 % dans le même banc : si l'une de ces trois
-       pierres fermait un passage, il le dirait à la ligne suivante. */
-    if (put) { props.push({ x: put.x, y: put.y, kind: "boundStone", mark: a.mark }); solid[id(put.x, put.y)] = 1; }
   }
   const bloom = new Uint8Array(W * H);
   for (const b of beds) {
@@ -7766,6 +7767,50 @@ export function townArchRise(tw) {
   return a;
 }
 export function courtFloorY0(f) { return f * (C.COURT_FLOOR_H + C.COURT_FLOOR_GAP); }
+/* ╔══════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 444 — OÙ SE POSE-T-ON EN ARRIVANT SUR UN NIVEAU ? DÉRIVÉ, JAMAIS ÉCRIT.
+   ╚══════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ C'EST UNE RÉPARATION, ET ELLE A ÉTÉ TROUVÉE EN REGARDANT L'ÉCRAN — aucun
+   banc ne pouvait la voir. Le dev-téléport posait le joueur en
+   `COURT_SPAWN` (x = 22,5) sur TOUS les niveaux non-rez-de-chaussée. Ça marchait
+   pour le tribunal et la mairie, qui occupent les 46 cases de large ; le
+   BEFFROI, lui, tient dans sa tourelle (x = 6…15). On atterrissait donc à dix
+   cases à l'est de la tour, en plein `CT_VOID` : écran noir, personnage
+   invisible, et rien qui explique pourquoi. La connexité du beffroi était
+   parfaite, `render-beffroi` était vert, `verify-quete` était vert.
+   *Une position d'arrivée recopiée est une position qui penchera* (§8 de
+   CLAUDE.md) — sauf que celle-ci ne penchait pas, elle tombait dehors.
+   ⚠️ LA PARADE EST DE NE PLUS ÉCRIRE DE POSITION : on part de la CAGE
+   D'ESCALIER qui dessert le niveau (c'est par là qu'on y arriverait à pied, donc
+   c'est là qu'on doit se retrouver) et on prend la case praticable la plus
+   proche. Un niveau de plus, quelle que soit sa taille et où qu'il soit sur la
+   carte, marche sans une ligne de code.
+   ⚠️ ET C'EST DANS LE MOTEUR, PAS DANS LE COMPOSANT, pour que le banc puisse le
+   VÉRIFIER — c'est très exactement le défaut qu'on vient de payer : ce qui vit
+   dans la closure de la boucle n'est regardé par personne. */
+export function courtFloorSpawn(cw, floor) {
+  const y0 = courtFloorY0(floor), W = cw.w;
+  const sw = C.COURT_STAIRWELLS.find(s => s.a === floor || s.b === floor);
+  const ax = sw ? sw.x + (sw.w >> 1) : Math.round(C.COURT_SPAWN.x);
+  const ay = y0 + (sw ? sw.y + sw.h : Math.round(C.COURT_SPAWN.y));
+  /* ⚠️ ON NE SE POSE PAS SUR UNE MARCHE, ET C'EST VU EN JOUANT. Premier jet :
+     l'ancre étant la cage, la case la plus proche ÉTAIT une marche — le premier
+     pas vers le nord redescendait donc d'un niveau, et on quittait le beffroi à
+     la seconde où l'on y arrivait. Rien ne lève, le contrôle « case praticable »
+     passe, et le lieu est inatteignable en pratique. */
+  const isStep = (t) => t === C.CT_STAIR_UP || t === C.CT_STAIR_DOWN;
+  let best = null;
+  for (let y = y0; y < y0 + C.COURT_FLOOR_H; y++) for (let x = 1; x < W - 1; x++) {
+    if (cw.solid[y * W + x] || isStep(cw.tile[y * W + x])) continue;
+    const d = Math.hypot(x - ax, y - ay);
+    if (!best || d < best.d) best = { x, y, d };
+  }
+  /* ⚠️ ON ÉCHOUE VERS UNE POSITION VALIDE, pas vers `null` : un niveau sans
+     aucune case praticable est un défaut de génération, et renvoyer `null` le
+     transformerait en `NaN` de position — c'est-à-dire un joueur qu'on ne
+     retrouve plus, au lieu d'un joueur mal placé. */
+  return best ? { x: best.x + 0.5, y: best.y + 0.5 } : { x: C.COURT_SPAWN.x, y: y0 + C.COURT_SPAWN.y };
+}
 /* ⚠️⚠️ ZIP 442 — DANS QUELLE PIÈCE EST CETTE CASE ? Une seule définition, ici,
    DÉRIVÉE de `COURT_ROOMS`. Elle existe parce que l'enquête pose trois lutrins
    à registre identiques (état civil, géomètre, notaire) et deux commandes de
@@ -7985,7 +8030,7 @@ export function generateCourtWorld() {
     const cx0 = C.COURT_CORRIDOR.x + 1, cx1 = C.COURT_CORRIDOR.x + C.COURT_CORRIDOR.w - 2;
     const axis = C.COURT_CORRIDOR.x + (C.COURT_CORRIDOR.w >> 1);   // 23 : l'axe du couloir
     if (isChurch) {
-      churchBuild(y0, groundFloor, set, fill, border, addProp, place);
+      churchBuild(y0, f - bld.ground, set, fill, border, addProp, place);
     } else {
     // ---- L'ENVELOPPE : le couloir occupe tout le niveau, les pièces viennent
     // le découper. On pose donc le sol partout puis le mur d'enceinte.
@@ -8172,10 +8217,18 @@ export function generateCourtWorld() {
    dessiné, toujours bloquant ». C'est ce qui permet à une église étroite de
    vivre dans la grille large des deux autres bâtiments sans cas particulier.
    ═══════════════════════════════════════════════════════════════════════════ */
-function churchBuild(y0, groundFloor, set, fill, border, addProp, place) {
+/* ⚠️⚠️ ZIP 444 — `level` A REMPLACÉ `groundFloor`, ET C'EST LA MÊME LEÇON QUE
+   PARTOUT AILLEURS DANS CE DÉPÔT : un booléen répond à une question à deux
+   réponses, et l'église en a trois depuis que le beffroi existe (nef, tribune,
+   beffroi). Gardé en booléen, le troisième niveau serait tombé dans la branche
+   « tribune » — on aurait construit une SECONDE tribune au-dessus de la
+   première, praticable, connexe, et absurde. Rien n'aurait levé d'erreur.
+   ⚠️ `level` est DÉRIVÉ (`f - bld.ground`), jamais passé à la main : le jour où
+   l'on insère un niveau dans `COURT_FLOORS`, les trois branches suivent. */
+function churchBuild(y0, level, set, fill, border, addProp, place) {
   const K = C.CHURCH, b = C.churchBands();
   const w = K.x1 - K.x0 + 1;
-  if (groundFloor) {
+  if (level === 0) {
     // ---- LA NEF. Dallage partout, mur d'enceinte, et rien d'autre de plein.
     fill(K.x0, y0, w, C.COURT_FLOOR_H, C.CT_STONE);
     border(K.x0, y0, w, C.COURT_FLOOR_H, C.CT_WALL);
@@ -8269,7 +8322,7 @@ function churchBuild(y0, groundFloor, set, fill, border, addProp, place) {
     place(b.sideE1 - 1, y0 + 12, "pulpit", true);
     place(b.sideE1 - 1, y0 + 8, "saintNiche", true);
     place(b.sideE1 - 1, y0 + 20, "urn", true);
-  } else {
+  } else if (level === 1) {
     /* ---- LA TRIBUNE D'ORGUE. Elle n'occupe QUE sa bande : tout le reste du
        niveau reste `CT_VOID`, et c'est ce vide-là qu'on regarde par-dessus la
        balustrade (voir le rendu, qui y peint la nef d'en dessous).
@@ -8325,6 +8378,76 @@ function churchBuild(y0, groundFloor, set, fill, border, addProp, place) {
     // La corde de cloche, dans la cage : elle pend du clocher, elle ne fait
     // rien, et elle dit à quoi sert cette vis.
     place(b.sideW0 + 1, ly0 + 2, "bellRope", true);
+  } else {
+    /* ═══════════════════════════════════════════════════════════════════════
+       ZIP 444 — LE BEFFROI. Le point le plus haut de la carte, et le seul
+       endroit du jeu d'où l'on voie Valley Town d'en haut.
+
+       ⚠️⚠️ SA RAISON D'ÊTRE EST LA VUE, ET C'EST EXACTEMENT CE QU'UN BANC NE
+       VOIT PAS. Le 441 l'a payé sur la tribune : « une tribune fermée par un
+       mur reste parfaitement praticable, parfaitement connexe, et parfaitement
+       vide de sens ». Un beffroi sans ouvertures serait une chambre de pierre
+       au sommet d'un escalier — irréprochable pour la connexité, et raté. D'où
+       les QUATRE abat-son, et d'où le contrôle 4 de `render-beffroi`.
+
+       ⚠️ IL EST PETIT, ET C'EST LE SUJET. Une cage de clocher fait la largeur
+       de sa tourelle : dix cases, pas trente-quatre. Tout le reste du niveau
+       reste `CT_VOID` — jamais dessiné, toujours bloquant, donc rien à écrire.
+       Un beffroi de la largeur de la nef serait une salle des fêtes. */
+    const ty0 = y0 + K.towerY0, th = K.towerY1 - K.towerY0 + 1;
+    const tx1 = K.x0 + K.towerW - 1;
+    fill(K.x0, ty0 - 1, K.towerW + 2, th + 2, C.CT_VOID);
+    /* ⚠️ LE PLANCHER EST EN BOIS, comme la tribune et pour la même raison : une
+       charpente de beffroi est posée dans la tour, ce n'est pas une dalle
+       maçonnée. La matière le dit avant n'importe quelle plaque. */
+    fill(K.x0, ty0, K.towerW, th, C.CT_WOOD);
+    /* Les quatre murs. ⚠️ ILS NE COURENT QUE LÀ OÙ IL Y A UN PLANCHER — la
+       poche murée et vide trouvée sur la planche du 441 est venue exactement de
+       murs posés d'un bout à l'autre par habitude. */
+    for (let x = K.x0; x <= tx1; x++) { set(x, ty0 - 1, C.CT_WALL); set(x, ty0 + th, C.CT_WALL); }
+    for (let y = ty0 - 1; y <= ty0 + th; y++) { set(K.x0, y, C.CT_WALL); set(tx1, y, C.CT_WALL); }
+    /* ⚠️⚠️ LES QUATRE ABAT-SON. Ce sont des `CT_WINDOW` — ils BLOQUENT le pas et
+       ne bouchent pas le regard, exactement comme les vitraux de la nef. C'est
+       la seule forme qui donne la vue sans donner le vide : un trou praticable
+       au sommet d'une tour est une chute, et un mur plein est une cave.
+       ⚠️ Ils sont posés au MILIEU de chaque face, dérivés du centre — une
+       position réglée à la main est une position qui penchera (§8), et une
+       ouverture décentrée sur une tour carrée se voit de la place. */
+    const tcx = K.x0 + (K.towerW >> 1), tcy = ty0 + (th >> 1);   // tcy : les abat-son est/ouest
+    for (const d of [-1, 0]) {
+      set(tcx + d, ty0 - 1, C.CT_WINDOW); set(tcx + d, ty0 + th, C.CT_WINDOW);
+      set(K.x0, tcy + d, C.CT_WINDOW);    set(tx1, tcy + d, C.CT_WINDOW);
+    }
+    /* ⚠️⚠️ LA CLOCHE EST AUSSI HAUTE QU'UN MUR, DONC ELLE SE DESSINE AVEC LES
+       MURS — et on le sait AVANT d'avoir peint un pixel, parce que le 441 l'a
+       payé sur le buffet d'orgue : « un sprite haut contre le mur du fond avale
+       ce qui passe devant ». Vue de dessus, le mur SUD est le plus près du
+       spectateur ; une cloche de quatre cases posée dans la file des props
+       aurait une clé de tri plus grande que tout ce qui est au nord d'elle,
+       donc elle recouvrirait le joueur qui se tient devant. *On ne règle pas un
+       tri, on change de passe.* Le prop existe pour la COLLISION et pour
+       l'invite ; c'est le rendu qui la peint avec les murs.
+       ⚠️ Elle est au centre, dérivée, et elle bloque : on tourne autour. */
+    /* ⚠️⚠️ ELLE PEND D'UNE POUTRE, ET C'EST LA POUTRE QUI DONNE SA POSITION —
+       pas le centre géométrique du beffroi. Premier jet : centrée en (x, y) sur
+       la pièce, elle tombait **pile sur le palier de la vis**, et le garde-fou
+       des portes l'a refusée à voix haute (« meuble greatBell refusé : il
+       bouchait un escalier »). C'est exactement le refus que le 439 décrit
+       comme dangereux : un avertissement que personne ne lit, et un beffroi
+       sans cloche. On a écouté le générateur plutôt que de désarmer le garde.
+       ⚠️ Et la correction est meilleure que le premier jet, pas seulement
+       différente : dans un vrai beffroi la cloche est suspendue à un beffroi de
+       bois — une POUTRE qui traverse la tour — et l'escalier arrive dans un
+       angle. Une rangée et un centre horizontal suffisent donc à tout
+       positionner, et rien n'est réglé à la main (§8). */
+    const beamY = ty0 + 1;
+    addProp(K.x0 + 1, beamY, "bellFrame", true);
+    addProp(tx1 - 1, beamY, "bellFrame", true);
+    addProp(tcx - 1, beamY, "greatBell2", true);
+    addProp(tcx, beamY, "greatBell", true);
+    /* Le tableau du sonneur, contre le mur ouest, à une case du mur : on ne
+       meuble pas contre un mur (439), et il faut pouvoir passer derrière. */
+    place(K.x0 + 1, ty0 + th - 2, "ringerBoard", true);
   }
 }
 
@@ -8717,120 +8840,20 @@ function courtFurnish(r, rx, ry, addProp, set, fill, place) {
     }
     default: break;
   }
-  /* ═══════════════════════════════════════════════════════════════════════
-     ZIP 442 — LE MOBILIER DE L'ENQUÊTE, PIÈCE PAR PIÈCE.
-     ─────────────────────────────────────────────────────────────────────────
-     ⚠️⚠️ IL EST EN DEHORS DU `switch`, ET C'EST DÉLIBÉRÉ. Le `switch` classe
-     par `kind` — « ce genre de pièce se meuble comme ça » — et c'est ce qui
-     évite d'écrire quatre cents positions à la main. L'enquête, elle, pose des
-     objets dans DES PIÈCES NOMMÉES : le fichier du cadastre n'est pas « ce
-     qu'on met dans une pièce de type cadastre », c'est ce qu'on met dans LE
-     cadastre. Mélanger les deux aurait donné un fichier du cadastre dans toute
-     pièce qui partagerait ce `kind`, et un jour deux répertoires du notaire.
-     ⚠️⚠️ TOUT PASSE PAR `place`, JAMAIS PAR `addProp`, ET C'EST LE POINT QUI
-     REND CE BLOC SÛR. `place` DÉCALE d'une case au lieu de refuser (leçon du
-     439) : aucun de ces meubles ne peut donc être avalé en silence par le
-     garde-fou des portes — ce qui a coûté la statue de la Justice pendant un
-     zip entier — et `render-mairie` peut continuer d'exiger ZÉRO refus.
-     ⚠️ Et rien ici ne dépend de la case exacte : les proximités de
-     `FermeGame.js` cherchent le prop PAR SON `kind` et par la pièce où il est
-     tombé, jamais par une coordonnée recopiée. Un décalage d'une case est donc
-     littéralement sans conséquence — c'est ce qui autorise `place`. */
-  /* ⚠️ ON NE MARQUE PAS LA PIÈCE SUR LE MEUBLE, ON LA DÉDUIT DE SA CASE
-     (`E.courtRoomAt`). Premier jet : chaque meuble portait `room: r.key`, ce qui
-     marche — et ne marche QUE pour les meubles que ce bloc pose. Le plan mural
-     du cadastre, lui, est posé par le `switch` d'au-dessus, sans étiquette, et
-     il en existe aussi un chez le géomètre : il aurait fallu un second
-     mécanisme pour lui. Deux façons de répondre à « dans quelle pièce est ce
-     meuble ? », c'est le §8, et la seconde aurait été écrite dans le composant.
-     Une seule fonction, dérivée de `COURT_ROOMS`, répond pour tous. */
-  const enqPut = (x, y, kind, extra) => place(x, y, kind, true, extra);
-  switch (r.key) {
-    // ── L'HÔTEL DE VILLE.
-    case "cadastre":
-      // Le fichier à tiroirs, contre le mur nord, à côté du plan mural : on
-      // consulte le plan, puis on tire la fiche. Les deux au même endroit,
-      // parce que c'est le geste.
-      enqPut(ix + iw - 3, iy + 1, "cardIndex");
-      break;
-    case "civil":
-      // Le registre d'état civil, sur son lutrin, au milieu de la salle des
-      // mariages : c'est le meuble autour duquel la pièce est faite.
-      enqPut(ix + 2, iy + 2, "registerStand");
-      break;
-    case "surveyor":
-      // Le registre des cotes, chez le géomètre, à côté de sa planche à dessin.
-      enqPut(ix + 1, iy + ih - 3, "registerStand");
-      break;
-    case "cityarch":
-      /* LES DEUX CARTONS DES ARCHIVES MUNICIPALES — la note de service et le
-         procès-verbal du conseil. ⚠️ ILS SONT AUX DEUX BOUTS DE LA PIÈCE, pas
-         côte à côte : ce sont deux découvertes séparées par quatre chapitres, et
-         deux cartons voisins auraient été lus l'un après l'autre dans la même
-         seconde, ce qui écrase le rythme de l'enquête sans rien apporter.
-         ⚠️ Le `mark` voyage avec le prop (`place` accepte un `extra` depuis le
-         439) : c'est LUI, et non la position, qui dit lequel des deux on ouvre.
-         Une position recopiée dans `enquete.js` aurait été le doublon du §8 —
-         et elle aurait menti dès le premier décalage de `place`. */
-      /* ⚠️⚠️ LES DEUX CARTONS SONT AUX COLONNES EXTRÊMES, ET C'EST UNE
-         CONTRAINTE DE CONNEXITÉ, PAS UN GOÛT. Une salle d'archives est un
-         PEIGNE : des rangées d'étagères pleines, percées d'une seule allée
-         centrale. Une case bloquée AU MILIEU d'une rangée libre coupe cette
-         rangée en deux, et la moitié qui ne contient pas l'allée n'a plus
-         aucune sortie — deux cases inaccessibles, invisibles sur une planche,
-         impossibles à voir en jouant sans y tomber. Aux colonnes extrêmes, il
-         n'y a rien derrière : rien à couper. C'est le cul-de-sac d'une case du
-         439, retrouvé par `verify-vallee` avant Guillaume. */
-      enqPut(ix, iy + 2, "docBox", { mark: "note" });
-      enqPut(ix + iw - 1, iy + ih - 2, "docBox", { mark: "pv" });
-      break;
-    // ── LE PALAIS.
-    case "archives":
-      /* OMBELINE REBOUL. ⚠️ ELLE EST DEVANT SON BUREAU ET DOS AUX RAYONNAGES,
-         près de la porte : une archiviste qu'il faut aller chercher au fond
-         d'une allée d'étagères est une archiviste qu'on ne trouve pas, et le
-         chapitre 3 s'arrête là. Comme Léonie (439), elle est un PROP et pas un
-         personnage — elle ne se déplace jamais, donc lui donner une feuille de
-         poses, un état et une position à diffuser serait payer trois mécanismes
-         pour quelqu'un qui reste debout à son bureau. */
-      /* ⚠️ ELLE EST À L'EXTRÊME EST DE LA DERNIÈRE TRAVÉE, et pour la même
-         raison de peigne que les cartons ci-dessus : posée au milieu de la
-         bande libre du fond, elle en isolait SIX CASES. Et c'est le bon endroit
-         de toute façon — la porte est sur le mur est, on la voit en entrant.
-         ⚠️ PAS DE BUREAU DEVANT ELLE : deux meubles empilés dans cette bande la
-         recoupaient, et elle tient déjà son carton contre elle. Le pupitre de
-         consultation posé par le `kind` « archive » est à deux pas ; c'est LUI,
-         le meuble de la pièce. */
-      enqPut(ix + iw - 1, iy + ih - 2, "archivistNPC");
-      break;
-    case "notary":
-      // Le répertoire (on y entre l'année) et le règlement affiché au mur, à
-      // côté du guichet : la règle qui permet de trouver l'année est à deux pas
-      // de l'endroit où on la saisit. C'est voulu — l'énigme est de LIRE, pas
-      // de faire l'aller-retour.
-      enqPut(ix, iy + 2, "registerStand");
-      enqPut(ix + iw - 1, iy + 2, "bylaw");
-      break;
-    case "clerk":
-      enqPut(ix + iw - 2, iy + 2, "keyPost");        // la commande de verrou du greffe
-      break;
-    case "bailiff":
-      enqPut(ix + iw - 2, iy + 2, "keyPost");        // ... et celle de l'huissier
-      break;
-    case "evidence":
-      /* L'ARMOIRE SCELLÉE, deux cases, contre le mur nord de la salle des
-         scellés. ⚠️ LES DEUX MOITIÉS SONT POSÉES CÔTE À CÔTE PAR LE GÉNÉRATEUR,
-         comme la statue de la Justice et le siège du juge : rien dans le rendu
-         n'a besoin de connaître un meuble à cheval sur deux cases. */
-      /* ⚠️ UNE CASE EN RETRAIT DU MUR DU FOND, PAS CONTRE LUI. Adossée, la
-         double armoire enfermait les deux cases restées entre elle et le mur
-         (439 : « meubler le long d'un mur fabrique des poches »). Une case plus
-         bas, la rangée du fond redevient un passage. */
-      enqPut(cx - 1, iy + 2, "strongbox");
-      enqPut(cx, iy + 2, "strongbox2");
-      break;
-    default: break;
-  }
+  /* ⚠️⚠️ ZIP 444 — LE SECOND `switch` A DISPARU AVEC L'ENQUÊTE, ET IL FAUT
+     DIRE CE QU'IL FAISAIT, PARCE QUE LE JOUR OÙ UN GUICHET S'OUVRIRA IL
+     FAUDRA LE REFAIRE PAREIL. Le 442 posait ses huit meubles dans des pièces
+     NOMMÉES (le fichier du cadastre va dans LE cadastre, pas dans « une pièce
+     de type cadastre »), hors du `switch` par `kind` qui, lui, meuble par
+     GENRE — sans quoi un même `kind` aurait donné deux répertoires du notaire.
+     Il passait par `place` et jamais par `addProp`, pour que le garde-fou des
+     portes DÉCALE au lieu de refuser en silence (leçon de la statue de la
+     Justice, 439), et il ne recopiait aucune coordonnée : la pièce se déduit de
+     la case (`courtRoomAt`).
+     ⚠️ LA QUÊTE DE L'ÉTOILE (444) NE MEUBLE AUCUNE PIÈCE DU TRIBUNAL NI DE LA
+     MAIRIE — elle est SECRÈTE, elle ne passe par aucun guichet, et c'est
+     précisément ce qui la rend moins chère que l'enquête. Son seul intérieur
+     est le beffroi, qui est un niveau d'ÉGLISE et se meuble avec lui. */
 }
 // Schedule the next visit on the host clock: random base window, shortened
 // by posted ads and popularity (both capped). Never below 45s.

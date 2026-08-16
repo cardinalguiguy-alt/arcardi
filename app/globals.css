@@ -7214,3 +7214,79 @@ div.ferme-usage{ margin-bottom:10px; }
   .ferme-touch-act{ width:88px; height:88px; }
   .ferme-touch-mini{ width:60px; height:60px; font-size:22px; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ZIP 444 — LA QUÊTE DE L'ÉTOILE. Un habillage de NUIT, distinct du bois des
+   panneaux de ferme : on sait de quel monde vient ce qu'on lit (§6 de
+   components/ferme/QUETE.md). Rien ici n'est un bouton qui donne quelque
+   chose — tout ce qui compte part en `req` et l'hôte arbitre (règle du 439).
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ---- LA CARTE DE CHAPITRE. Plein écran, sur fondu, et elle se ferme toute
+   seule : une carte qu'il faut congédier est un dialogue, pas une transition.
+   ⚠️ `pointer-events:none` EST ESSENTIEL — elle couvre l'écran pendant que le
+   monde continue de tourner derrière, et un clic destiné au jeu ne doit pas
+   se perdre dedans. */
+.ferme-star-card{
+  position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center;
+  background:radial-gradient(circle at 50% 45%, rgba(18,24,48,.86), rgba(4,6,14,.97));
+  pointer-events:none; animation:fermeStarCard 3.8s ease-in-out forwards;
+}
+.ferme-star-card-in{ text-align:center; color:#ffe9a8; text-shadow:0 0 18px rgba(255,220,140,.35); }
+.ferme-star-card-mark{ font-size:38px; letter-spacing:.3em; opacity:.9; animation:fermeStarTwinkle 2.4s ease-in-out infinite; }
+.ferme-star-card-title{
+  margin-top:14px; font-family:var(--font-mono, monospace); font-weight:700;
+  font-size:clamp(15px, 3.4vw, 26px); letter-spacing:.04em; color:#fff6dc;
+}
+@keyframes fermeStarCard{
+  0%{ opacity:0; } 12%{ opacity:1; } 82%{ opacity:1; } 100%{ opacity:0; }
+}
+@keyframes fermeStarTwinkle{ 0%,100%{ opacity:.55; } 50%{ opacity:1; } }
+
+/* ---- LE PANNEAU D'ÉTOILE (le rappel « Previously »). Même famille que les
+   modales de la ferme, palette de nuit. */
+.ferme-star-panel{
+  background:linear-gradient(#161f3a, #0d1226) !important;
+  border-color:rgba(255,230,170,.35) !important;
+  color:#f2ecd8;
+}
+.ferme-star-panel h2{ color:#ffe9a8; }
+.ferme-star-panel .ferme-hint{ color:rgba(255,240,210,.62); }
+
+/* ---- LE PISTEUR. Un bandeau compact : ⭐ + quatre pastilles + UNE phrase.
+   ⚠️ Jamais deux phrases : c'est ce qui le distingue d'un journal de quête,
+   et un journal de quête est exactement ce que ce chantier ne veut pas. */
+.ferme-star-hud{
+  position:fixed; left:50%; transform:translateX(-50%);
+  top:calc(env(safe-area-inset-top, 0px) + 8px); z-index:22;
+  display:flex; align-items:center; gap:10px; max-width:min(520px, 92vw);
+  padding:6px 12px; border-radius:14px; pointer-events:none;
+  background:rgba(10,14,30,.72); border:2px solid rgba(255,228,164,.30);
+  box-shadow:0 3px 14px rgba(0,0,0,.45);
+  color:#f4ecd6; font-size:12px; line-height:1.25;
+}
+.ferme-star-hud .ico{ font-size:15px; filter:drop-shadow(0 0 6px rgba(255,220,140,.6)); }
+.ferme-star-hud .pips{ display:flex; gap:4px; flex:0 0 auto; }
+.ferme-star-hud .pip{ width:9px; height:9px; border-radius:50%; border:1px solid rgba(255,228,164,.55); }
+.ferme-star-hud .pip.on{ background:#ffd868; box-shadow:0 0 7px rgba(255,216,104,.85); }
+.ferme-star-hud .goal{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* ---- LE MINI-JEU. Plein écran, canevas au centre. ⚠️ `touch-action:none` :
+   sans lui, glisser le doigt pour mener la lumière fait défiler la page. */
+.ferme-star-mini{
+  position:fixed; inset:0; z-index:48; display:flex; align-items:center; justify-content:center;
+  background:rgba(2,4,10,.82); touch-action:none;
+}
+.ferme-star-mini-box{ width:min(720px, 96vw); }
+.ferme-star-mini-cv{
+  display:block; width:100%; height:auto; border-radius:10px;
+  border:3px solid rgba(255,228,164,.35); box-shadow:0 6px 26px rgba(0,0,0,.6);
+  touch-action:none; cursor:crosshair;
+}
+.ferme-star-mini-foot{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  margin-top:8px; color:#f4ecd6; font-size:12px;
+}
+@media (max-width: 560px){
+  .ferme-star-hud{ font-size:11px; padding:5px 9px; gap:7px; }
+}
