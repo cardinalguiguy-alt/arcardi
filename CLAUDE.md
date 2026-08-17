@@ -7,205 +7,128 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-⚠️⚠️⚠️ **CE BLOC EST LE SEUL ENDROIT DU FICHIER QUI DÉSIGNE UNE ACTION SUIVANTE, ET IL EXISTE
-PARCE QUE L'EN-TÊTE N'EN DÉSIGNAIT AUCUNE.** Douze blocs d'avertissement y revendiquaient la
-priorité, dont un qui dit « LA PASSE LA PLUS URGENTE DE CE FICHIER » à propos d'autre chose :
-une session neuve serait partie sur un chantier au hasard. *Un fichier qui contient tout ne
-dit rien tant qu'il ne dit pas par quoi commencer.* Ce bloc se met à jour à chaque fin de zip,
-il ne s'empile pas.
+⚠️⚠️⚠️ **CE BLOC EST LE SEUL ENDROIT DU FICHIER QUI DÉSIGNE UNE ACTION SUIVANTE.** Il se
+REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
+rien tant qu'il ne dit pas par quoi commencer.*
 
-**Chantier en cours : le 448 — la comète refaite, et l'impact remis après elle.**
-Livré, mesuré ET regardé à l'écran (ferme et ville) : `drawStarComet` / `drawStarCometTrail` /
-`drawStarImpactFlash` dans `fermeArt.js` sur les deux modèles de Guillaume (`refs/…fgcq7y….jpg`,
-`refs/…hayq7g….jpg`), la planche `etoile-comete.png` et ses **onze contrôles**, l'azimut dérivé
-du point d'impact, et la **jointure de chronologie** `Q.starImpactLanded` qui ferme les
-**quatre** portes par lesquelles le décor d'impact apparaissait avant la chute. Le détail est au
-**§28 de `components/ferme/README.md`**.
+**Livré au 449, en deux passes, toutes deux mesurées ET regardées à l'écran :** la **brûlure du
+cratère** (on ne descend pas dans un trou en fusion — `starCraterBurns`, huit contrôles) ; et la
+**passe de GUIDAGE de la quête**, demandée par Guillaume (« moins mystérieux, plus guidant, sinon
+le jeune public va abandonner ») — le bandeau dit désormais l'**objectif courant** et non le
+chapitre (il mentait la moitié de la quête et pouvait contredire le chevron), les consignes de
+mini-jeu disent le BUT avant le geste sans jamais nommer une touche, et **un familier MÈNE** (G,
+ou tout seul après 2 min 30 : un seul prend la tête, il va au lieu / au train / à la porte, et il
+s'assied à trois cases). Détail au **§12.1 bis de `components/ferme/QUETE.md`**.
 
 **La prochaine action, et elle est unique : POSER LA MAISON `house` (chantier 447).** Elle est
 importée, propre, 90×90 natifs — et posée nulle part. Deux préalables, tous deux écrits au §27.5
-de `components/ferme/README.md`, qui est le **document de reprise** de ce chantier (il porte la
-suite dans l'ordre) : son texte « Aurelien » est **CUIT dans le sprite** et doit être effacé à
-l'import puis réécrit VIVANT au rendu (§4) ; et il faut trancher si elle remplace les dix
-façades de `townHouseVariant` ou en devient la onzième — c'est une décision de CONTENU, donc
-**elle se demande à Guillaume avant d'être codée** (§2).
+de `components/ferme/README.md`, qui est le **document de reprise** de ce chantier : son texte
+« Aurelien » est **CUIT dans le sprite** et doit être effacé à l'import puis réécrit VIVANT au
+rendu (§4) ; et il faut trancher si elle remplace les dix façades de `townHouseVariant` ou en
+devient la onzième — c'est une décision de CONTENU, donc **elle se demande à Guillaume avant
+d'être codée** (§2).
 
 ⚠️ **AVANT DE POUVOIR REGARDER QUOI QUE CE SOIT À L'ÉCRAN, IL FAUT REMONTER LES DEUX
-ÉCHAFAUDAGES** — ils sont supprimés à chaque fin de zip, exprès (une page jetable en
+ÉCHAFAUDAGES** — ils sont supprimés à chaque fin de livraison, exprès (une page jetable en
 production ouvre une ferme sans authentification). La recette complète est au **§10**, et elle
 marche : `.env.local` sur `http://127.0.0.1:54321`, une page jetable montant `<FermeGame …>`,
 `node tools/fake-supabase.mjs`, et **le correctif `requestAnimationFrame` avant toute mesure**.
 
 ⚠️ **CE QUI RESTE OUVERT AILLEURS N'EST PAS OUBLIÉ, C'EST CLASSÉ APRÈS** : la séance à DEUX
-CLIENTS (quête du 444 + ferme peuplée) reste la dette la plus ancienne du dépôt et redevient la
-priorité dès que le chantier de la planche est fini ; les intérieurs du tribunal et de la
-mairie sont une dette datée de cinq zips ; `public/sounds/church-organ.mp3` manque toujours.
+CLIENTS (moitié coopérative de la quête + ferme peuplée) reste la dette la plus ancienne du
+dépôt ; les intérieurs du tribunal et de la mairie sont une dette datée de six zips ;
+`public/sounds/church-organ.mp3` manque toujours (un fichier, pas une ligne de code — décision de
+Guillaume au 441 : un vrai morceau, pas une synthèse).
+
 ---
 
-État à jour du **zip 447**. Chantier actif : **rendre Valley Town habitable au regard ET
-crédible au jeu**, et **lui donner une histoire**. La ville est refaite depuis le 434 ; le 438 a
-ouvert l'hôtel de ville, le 439 l'a audité, le 440 a corrigé la portée des ponts et la COMPOSITION
-des décors, le 441 a réparé leur TRAVERSÉE puis ouvert l'**ÉGLISE**, le 442 y a posé une enquête
-cadastrale, et le **444 l'a RETIRÉE pour la remplacer par une QUÊTE MAGIQUE** — « The Fallen
-String », une étoile tombée, cinq étapes, conçue pour un public de 7 à 27 ans et pour deux joueurs.
-Tout ce qui concerne la ville, ses habitants, ses bâtiments et **ses pièges** est dans
-**`components/ferme/README.md`**, qui fait autorité ; les règles de DESSIN sont dans
-**`components/ferme/DESSIN.md`** (sorties du §4 au 441) ; les bancs sont dans **`tools/README.md`**.
+État à jour du **zip 449**. Chantier actif : **rendre Valley Town habitable au regard ET crédible
+au jeu**, et **lui donner une histoire**. Tout ce qui concerne la ville, ses habitants, ses
+bâtiments et **ses pièges** est dans **`components/ferme/README.md`**, qui fait autorité ; les
+règles de DESSIN sont dans **`components/ferme/DESSIN.md`** ; les bancs dans **`tools/README.md`**.
 **`candyluge` et `crystal` sont EN PAUSE.**
 
-⚠️⚠️⚠️ **LE 444 EST JOUABLE DE BOUT EN BOUT PAR UN JOUEUR SEUL, ET SON DOCUMENT DE REPRISE EST
-`components/ferme/QUETE.md`. LIS-LE AVANT DE TOUCHER À LA QUÊTE.** Il porte le déroulé des cinq
-étapes, la grammaire magique dont TOUT découle (« la lumière de l'étoile ne montre pas ce qu'une
-chose EST, elle montre ce qu'une chose SE RAPPELLE »), le tableau d'avancement §10 et le **§12 —
-ce qui reste, dans l'ordre.**
-**Codé, mesuré ET regardé à l'écran :** le retrait de l'enquête, `quete.js`, les textes, le
-**beffroi**, le placement dérivé, l'arbitrage hôte, le menu dev **⭐ Star**, les huit familles de
-dessins, **les cinq mini-jeux en canevas**, la **chute** et sa carte de chapitre, le **pisteur**,
-la **compagne** qui suit et se cache, le rappel « Previously », et trois bancs
-(`verify-quete` **177/177**, `render-beffroi` **28/28**, `render-etoile`).
-**Ce qui reste, et c'est court :** ⚠️ **la séance à DEUX CLIENTS** — c'est-à-dire toute la moitié
-coopérative, jamais jouée une seule fois ; les cinq mini-jeux joués jusqu'à la victoire à cadence
-réelle (« est-ce que c'est agréable ? », qu'aucun banc ne verra) ; les scènes **turn** et **end** ;
-la **Lyre** (elle ne se dessine que la nuit) ; le dessin de la compagne (§12.3, deux directions).
+⚠️⚠️ **LA QUÊTE DE L'ÉTOILE (444) EST LE CHANTIER VIVANT, ET SON DOCUMENT DE REPRISE EST
+`components/ferme/QUETE.md`. LIS-LE AVANT D'Y TOUCHER.** Il porte les cinq chapitres, la grammaire
+magique dont TOUT découle (« la lumière de l'étoile ne montre pas ce qu'une chose EST, elle montre
+ce qu'une chose SE RAPPELLE »), le tableau §10 qui distingue **codé** et **regardé à l'écran**
+colonne par colonne, et le **§12 — ce qui reste, dans l'ordre**. Elle est jouable de bout en bout
+**par un joueur seul** ; ⚠️ **rien de ce qui se fait à DEUX n'a jamais été joué une seule fois**
+(l'étoile timide, le croisement d'ombres, la flaque de lumière, le duo) — le code lit des
+positions distantes qui n'ont jamais existé. Restent aussi les cinq mini-jeux joués jusqu'à la
+VICTOIRE à cadence réelle, les scènes *turn* et *end*, et la Lyre.
 
-⚠️⚠️⚠️ **ET LA LEÇON DU 444 EST CELLE-CI, ELLE VAUT PLUS QUE LA QUÊTE : SIX BANCS AU VERT N'ONT PAS
-VU DIX DÉFAUTS QU'UNE SÉANCE DE JEU DE VINGT MINUTES A TROUVÉS**, dont **cinq qui rendaient un
-lieu inatteignable** — un arrêt de téléport qui posait le joueur dans le vide, un autre qui le
-posait sur une marche, un mini-jeu qui recommençait avant le premier appui. Les bancs mesuraient
-tous la bonne chose ; **aucun ne mesurait l'ARRIVÉE**. Deux formes neuves à retenir :
-1. ⚠️ **UNE PORTE SANS CHEMIN DE CODE MENT** — c'est le pendant exact de « un chemin de code sans
-   porte n'existe pas » (438, 441), et il est plus sournois : le bouton est là, on clique, il fait
-   autre chose. Parade : **une jointure, jamais deux listes** (`C.DEV_FLOOR_OF`).
-2. ⚠️ **UN REPLI POLI (`|| clé`) N'ÉCHOUE PAS, IL AFFICHE LA CLÉ.** « churchTower » s'écrivait en
-   toutes lettres dans deux endroits de l'interface. Invisible à la relecture, criant à l'écran.
-Le détail défaut par défaut est au **§25 de `components/ferme/README.md`** — c'est la meilleure
-page du dépôt sur ce que les bancs ne savent pas faire. *Un banc protège de ce qu'on a déjà
-compris ; regarder l'écran est la seule chose qui trouve ce qu'on n'a pas encore compris.*
-
-⚠️ **CHANTIER OUVERT — LA MOITIÉ QUI RESTE DU SECOND TEMPS DÉCIDÉ AU 440, ET ELLE N'A TOUJOURS
-PAS BOUGÉ.** L'église est livrée au 441. Les **intérieurs du tribunal et de la mairie** restent
-difficiles à naviguer (« on ne sait pas où est la porte de chaque pièce ») — parade retenue :
-**chambranle dessiné + plaque lisible depuis le couloir + seuil au sol**. C'est une dette datée de
-quatre zips. ⚠️ La quête du 444 la rend MOINS urgente que l'enquête ne la rendait : elle est
-secrète, elle ne passe par aucun guichet, et son seul intérieur est le beffroi.
-
-⚠️ **ET IL MANQUE UN FICHIER, PAS UNE LIGNE DE CODE :** le morceau d'orgue, à déposer dans
-**`public/sounds/church-organ.mp3`** (décision de Guillaume au 441 : un vrai morceau, pas une
-synthèse). Sans lui la scène se joue en entier et le jeu DIT que la soufflerie est muette.
-
-⚠️⚠️ **CE QUI N'A PAS ENCORE ÉTÉ JOUÉ DU 444, ET IL FAUT LE LIRE AVANT DE CROIRE LA QUÊTE
-FINIE : LA MOITIÉ COOPÉRATIVE, C'EST-À-DIRE TOUT CE QUI SE FAIT À DEUX.** L'étoile timide du
-cratère, le croisement d'ombres, la flaque de lumière qu'un joueur promène pour l'autre, le duo
-orgue/beffroi : le code est là, les positions distantes sont lues, **elles n'ont jamais eu de
-position distante à lire**. Restent aussi : les cinq mini-jeux joués jusqu'à la VICTOIRE à cadence
-réelle, les scènes *turn* et *end*, et la Lyre (elle ne se dessine que la nuit). Le tableau
-d'avancement de `components/ferme/QUETE.md` §10 distingue **codé** et **regardé à l'écran**,
-colonne par colonne — c'est lui qui fait autorité, pas cette page.
-
-⚠️⚠️⚠️ **LE 447 A IMPORTÉ LA SECONDE PLANCHE, REFAIT LE SOL DE LA VILLE ET DONNÉ À LA VOLÉE
-MONUMENTALE UN QUART TOURNANT — ET IL EN SORT TROIS LEÇONS QUI VALENT PLUS QUE L'ESCALIER.**
-1. ⚠️⚠️ **UNE MESURE QUI NE RETROUVE PAS LA RÉPONSE CONNUE NE MESURE RIEN.** Deux méthodes ont
-   été écrites pour retrouver le pas natif de la planche 2 ; lancées en contrôle sur la
-   planche 1, dont on SAIT que le pas vaut 3,25, elles rendaient 3,0 avec une erreur de 0,27
-   pour un maximum de 0,5 — du hasard. Elles ont été jetées. **L'échelle d'une planche qui n'en
-   a pas se DÉRIVE des gabarits du jeu** (cinq objets, accord à 3 % : une case = 62 px image).
-2. ⚠️⚠️ **UN DESSIN PEUT MENTIR SUR UNE GRANDEUR PHYSIQUE, ET AUCUN BANC NE LE VOIT SI PERSONNE
-   NE LES COMPARE.** `STAIR_TREAD` peignait QUATRE nez de marche dans une case qui n'en franchit
-   qu'une, et `TOWN_ELEV_PX` ne montait que de 4,5 px par marche : trois bancs au vert sur un
-   escalier que Guillaume a résumé en « tout est condensé et comme plaqué en 2D ». La parade
-   est un contrôle neuf — *la marche DESSINÉE est-elle la marche FRANCHIE ?*
-3. ⚠️⚠️ **UNE ARÊTE FRANCHISSABLE EN DIAGONALE NE L'EST PAS FORCÉMENT EN DEUX PAS AXIAUX.**
-   L'A* piéton coupe les coins, le marcheur avance axe par axe avec une boîte de 0,35 : au bord
-   d'un palier, 108 trajets sur 21 756 se coinçaient. ⚠️ **On n'a PAS élargi le seuil** : on a
-   posé un garde-corps, c'est-à-dire l'objet que la planche dessine à cet endroit. *La collision
-   et le dessin disent la même chose ; c'est le seul cas où l'on a le droit de les confondre.*
-Le détail est au **§27 de `components/ferme/README.md`**, avec ce qui reste à faire (§27.5) —
-notamment **la maison `house`, importée et posée nulle part**, dont le nom est CUIT dans le
-sprite et doit être réécrit vivant.
-
-⚠️⚠️⚠️ **LE 448 A REFAIT LA COMÈTE, ET SA LEÇON EST LA PLUS COURTE DU FICHIER : UN DÉCOR
-D'IMPACT SE DATE À L'IMPACT, PAS À L'ÉVÉNEMENT QUI L'ANNONCE.** `e.fall` horodate le DÉBUT de la
-cinématique ; quatre endroits le lisaient comme « c'est arrivé ». Résultat vu par Guillaume : le
-cratère fumait, ses braises rougeoyaient et l'étoile brillait au fond **trois secondes avant que
-la comète ne touche le sol** — et le sillon de la ferme, gardé par *aucun* test de quête, était
-labouré dans le champ **depuis le premier jour de la partie**.
-1. ⚠️⚠️ **SEPT CONTRÔLES REGARDAIENT CE CRATÈRE — FORME, PROFONDEUR, DEUX RAYONS,
-   REFROIDISSEMENT, FUMÉE, ENFONCEMENT, CONTINUITÉ — ET AUCUN NE DEMANDAIT *QUAND* IL APPARAÎT.**
-   C'est la cinquième forme du défaut de banc, et la plus pure : **un banc de rendu ne peut pas
-   voir un défaut de TEMPS.** Il faut une fonction pure et un banc de logique.
-2. ⚠️⚠️ **QUATRE PORTES SUR LE MÊME TROU, ET UNE SEULE LAISSÉE OUVERTE SUFFIT À RACONTER LA FIN
-   AVANT LE DÉBUT** (le dessin, l'enfoncement, l'invite `E`, le chevron). Les deux dernières se
-   sont vues **en jouant**, après que les deux premières aient été corrigées et déclarées finies.
-   *Corriger un symptôme n'énumère pas ses frères ; seule une jointure le fait*
-   (`Q.starImpactLanded`, lue par la cinématique ET par les quatre).
-3. ⚠️⚠️ **UNE CONSTANTE A ÉTÉ SUPPRIMÉE, PAS AJOUTÉE.** `STAR_CAM_FLASH_MS = 3000` (445) était lue
-   **par le seul banc** ; la cinématique écrivait `t > 3.0` en dur. Elle avait l'air juste, elle
-   était **débranchée** — c'est la forme la plus discrète de « un banc qui n'a jamais pu échouer
-   ne vaut rien », et elle se détecte en cherchant qui LIT une constante, jamais en la relisant.
-4. ⚠️ **UN TEXTE N'EST PAS UN DÉCOR : IL AFFIRME.** La ligne anglaise disait « west to east »
-   pendant que la comète descendait d'est en ouest. Un dessin approximatif se pardonne, une
-   phrase fausse sous l'image, non.
-Le détail est au **§28 de `components/ferme/README.md`** ; les règles de DESSIN qui en sortent
-(la queue qui se lit par ses vides, les paliers trop peu nombreux qui dessinent un bord, le feu
-qui se montre derrière, `clip` absent du faux canevas) sont dans **`DESSIN.md`**.
-
-⚠️⚠️ **LE 446 A REFAIT LE CRATÈRE SUR DEUX IMAGES DE GUILLAUME, ET IL EN SORT UNE RÈGLE DE DESSIN
-QUI VAUT PARTOUT : CE QUI CREUSE UNE IMAGE VUE DE DESSUS EST L'ÉCLAIRAGE D'UNE PENTE, PAS UN
-DÉGRADÉ.** Le cratère du 444 était six anneaux du sombre au clair : tous les bancs au vert, et
-**plat** — un dégradé du centre vers le bord dessine une CIBLE. On décrit désormais une hauteur le
-long du rayon, on en prend la pente, et `1 − k·pente·cos(a − lumière)` rend d'un coup les quatre
-lectures d'un trou. Le détail est au **§26 de `components/ferme/README.md`**, les règles de dessin
-dans **`DESSIN.md`** ; ce qui est nouveau côté JEU : le cratère **fume trois minutes puis
-refroidit** (et l'étoile ne sort pas avant), et **on s'y enfonce en marchant** — ⚠️ par un
-DÉCALAGE D'IMAGE dans `drawCharacter`, jamais par une altitude de case, qui aurait fait du trou
-une falaise infranchissable (`TOWN_STEP_MAX`).
-
-⚠️⚠️⚠️ **LE PIÈGE N°1 DU PROJET, ET IL A TROIS VISAGES : CE QUI VIT DANS LA CLOSURE DE LA BOUCLE
-DE RENDU.** Il a coûté quelque chose à chacun des cinq derniers zips.
-1. **Il plante** (430, 431) : une fonction déclarée dans la closure et appelée depuis le
-   composant lève un `ReferenceError` **à l'exécution seulement** — ni le build, ni le lint, ni
-   aucun banc ne le voient — et l'exception **emporte tout ce que la frame devait encore
-   dessiner**. Mesuré à deux clients : 97 % d'images figées. On EXPOSE par un ref, on ne recopie
-   jamais.
-2. **Il fait vieillir** (436, 439) : un dessin qu'aucun banc ne peut appeler ne se dégrade pas,
-   **il reste au niveau du jour où il a été écrit** pendant que tout ce qui est mesuré monte. Les
-   sols des intérieurs sont restés au 426 pendant douze zips. *L'écart n'est pas un écart de
-   soin, c'est un écart de DATE, et il se lit sur une carte du dépôt sans regarder une image.*
-   ⚠️ Corollaire : **« ce dessin est-il regardable par un banc ? » est une question de QUALITÉ**,
-   et elle se pose avant le premier `fillRect`.
-3. **Il divise** (439) : une même grandeur décrite des deux côtés de la closure DIVERGE. Le seuil
-   de sortie de l'hôtel de ville était écrit dans le générateur *et* dans le composant ; seul le
-   premier a été corrigé, et **on ne pouvait plus ressortir du bâtiment**. Voir §8.
-4. ⚠️⚠️ **Il fait porter DEUX SENS au même nombre** (441, et c'est le visage que le 439 n'avait
-   pas vu alors qu'il en avait nommé deux). `pushE` classe par `wy − altitude × TOWN_ELEV_PX` :
-   une ALTITUDE monte le dessin **et** recule le rang, ce qui est juste pour une terrasse. Le 439
-   y a versé la flèche du dos d'âne des ponts — or *un dos d'âne monte sans éloigner*. Sept pixels
-   ont mangé la marge de 0,02 qui mettait le passant devant le garde-corps du fond, et **le
-   fermier a disparu sur toute la rangée nord des deux ponts pendant un zip entier**, sans qu'un
-   seul banc puisse le voir. **Une grandeur de DESSIN, une grandeur de RANG, une grandeur de
-   COLLISION : trois choses, trois paramètres.** Voir `tools/verify-pont.mjs`.
+---
 
 ⚠️⚠️⚠️ **UN BANC QUI PASSE NE VEUT PAS DIRE QUE LA CHOSE EST BONNE — IL VEUT DIRE QU'ON MESURE
-AUTRE CHOSE.** C'est la leçon la plus rentable du fichier, et elle a quatre formes connues,
+AUTRE CHOSE.** C'est la leçon la plus rentable du fichier, et elle a **six** formes connues,
 toutes payées :
 - **il mesure la carte, pas l'interaction** (439 : « le seuil est bien une sortie, 9/9 » pendant
   que la touche E ne sortait pas) ;
-- **il se donne un périmètre et excuse ce qui déborde** (439 : « le tribunal en garde 10,
-  *antérieurs* » — cinq venaient d'être causés par le zip en cours) ;
+- **il se donne un périmètre et excuse ce qui déborde** (439) ;
 - **il repeint au lieu d'appeler**, donc il juge sa propre maquette (439) ;
-- **il mesure l'inverse de ce qu'on veut** (438 : le « grain » pris pour de la qualité — le grain
-  montait, la propreté baissait, et le banc applaudissait) ;
-- ⚠️ **il mesure ce qu'une chose EST et jamais QUAND elle est** (448 : sept contrôles sur le
-  cratère, aucun sur l'instant où il apparaît — *un banc de rendu ne peut pas voir un défaut de
-  temps*).
-⚠️ **Quand Guillaume voit un défaut qu'aucun banc ne voit, la première question n'est pas « où
-est le bogue » mais « quelle grandeur ne mesure-t-on pas ».** Les cinq dernières fois, la réponse
-tenait en deux ou trois nombres qu'il a suffi d'ajouter.
+- **il mesure l'inverse de ce qu'on veut** (438 : le « grain » pris pour de la qualité) ;
+- **il mesure ce qu'une chose EST et jamais QUAND elle est** (448 : sept contrôles sur le cratère,
+  aucun sur l'instant où il apparaît — *un banc de rendu ne peut pas voir un défaut de temps*) ;
+- ⚠️ **il mesure DEUX réponses séparément et jamais leur ACCORD** (449). Le bandeau de la quête
+  disait le chapitre, le chevron dérivait d'une autre liste : deux réponses à « où vais-je », les
+  deux vertes, et personne n'avait eu l'idée de les comparer **parce qu'elles n'avaient jamais eu
+  la même source**. La parade est celle du 444 : *une jointure, jamais deux listes.*
+⚠️⚠️ **ET UN CONTRÔLE DE CAS NE VAUT PAS UN INVARIANT** (449). Trois contrôles « est-ce que ça
+marche » étaient verts sur le placement du familier meneur ; l'invariant — *il n'est JAMAIS plus
+loin du but que le joueur*, balayé sur toutes les positions — a échoué **20 fois sur 164** et a
+sorti un vrai bogue. **Quand on peut énoncer une propriété, on la balaie ; on n'écrit pas trois
+exemples.**
+⚠️ **Quand Guillaume voit un défaut qu'aucun banc ne voit, la première question n'est pas « où est
+le bogue » mais « quelle grandeur ne mesure-t-on pas ».** Les six dernières fois, la réponse tenait
+en deux ou trois nombres qu'il a suffi d'ajouter.
+⚠️⚠️ **ET REGARDER L'ÉCRAN RESTE LE SEUL MOYEN DE TROUVER CE QU'ON N'A PAS ENCORE COMPRIS** : six
+bancs au vert n'ont pas vu dix défauts qu'une séance de vingt minutes a trouvés au 444, dont cinq
+qui rendaient un lieu **inatteignable** — aucun ne mesurait l'**ARRIVÉE**. Ça s'est reproduit à
+chaque zip depuis, 449 compris (le guide s'éteignait à chaque carte de chapitre : une garde qui
+confondait un INSTANT avec un ÉTAT). Détail au **§25 de `components/ferme/README.md`**, la
+meilleure page du dépôt sur ce que les bancs ne savent pas faire.
 
 ⚠️⚠️ **ET UN DÉFAUT MESURÉ, DOCUMENTÉ, PUIS LAISSÉ EN PLACE REVIENT TOUJOURS — PAR LA BOUCHE DE
 GUILLAUME** (437, 439). La section « ce que ça ne fait pas » n'absout pas : c'est une **dette
-datée**. **La première chose à faire en ouvrant un chantier est de relire celle du zip
-précédent.**
+datée**. **La première chose à faire en ouvrant un chantier est de relire celle du zip précédent.**
+
+⚠️⚠️⚠️ **LE PIÈGE N°1 DU PROJET, ET IL A QUATRE VISAGES : CE QUI VIT DANS LA CLOSURE DE LA BOUCLE
+DE RENDU.**
+1. **Il plante** (430, 431) : une fonction déclarée dans la closure et appelée depuis le composant
+   lève un `ReferenceError` **à l'exécution seulement** — ni le build, ni le lint, ni aucun banc ne
+   le voient — et l'exception **emporte tout ce que la frame devait encore dessiner**. Mesuré à
+   deux clients : 97 % d'images figées. On EXPOSE par un ref, on ne recopie jamais.
+2. **Il fait vieillir** (436, 439) : un dessin qu'aucun banc ne peut appeler ne se dégrade pas,
+   **il reste au niveau du jour où il a été écrit** pendant que tout ce qui est mesuré monte.
+   *L'écart n'est pas un écart de soin, c'est un écart de DATE.* ⚠️ Corollaire : **« ce dessin
+   est-il regardable par un banc ? » est une question de QUALITÉ**, et elle se pose avant le
+   premier `fillRect`.
+3. **Il divise** (439) : une même grandeur décrite des deux côtés de la closure DIVERGE. Le seuil
+   de sortie de l'hôtel de ville était écrit dans le générateur *et* dans le composant ; seul le
+   premier a été corrigé, et **on ne pouvait plus ressortir du bâtiment**. Voir §8.
+4. ⚠️⚠️ **Il fait porter DEUX SENS au même nombre** (441). `pushE` classe par
+   `wy − altitude × TOWN_ELEV_PX` : une ALTITUDE monte le dessin **et** recule le rang, ce qui est
+   juste pour une terrasse — le 439 y a versé la flèche du dos d'âne des ponts, *or un dos d'âne
+   monte sans éloigner*. **Le fermier a disparu sur toute la rangée nord des deux ponts pendant un
+   zip entier**, sans qu'un seul banc puisse le voir. **Une grandeur de DESSIN, une grandeur de
+   RANG, une grandeur de COLLISION : trois choses, trois paramètres.** Voir `tools/verify-pont.mjs`.
+
+⚠️ **LES LEÇONS DES QUATRE DERNIERS ZIPS, EN UNE LIGNE CHACUNE. Le détail est à côté du code
+qu'il décrit — les recopier ici les ferait vieillir en double.**
+
+| # | La leçon, en une phrase | Où est le détail |
+|---|---|---|
+| 446 | **Ce qui creuse une image vue de dessus est l'ÉCLAIRAGE D'UNE PENTE, pas un dégradé** — un dégradé du centre vers le bord dessine une CIBLE, pas un trou. | §26 de `ferme/README.md` + `DESSIN.md` |
+| 447 | **Une mesure qui ne retrouve pas la réponse connue ne mesure rien** — lancée en contrôle sur une planche dont on SAIT le pas, elle rendait du hasard. L'échelle se DÉRIVE des gabarits du jeu. | §27 de `ferme/README.md` |
+| 447 | **Un dessin peut mentir sur une grandeur physique** : `STAIR_TREAD` peignait quatre nez de marche dans une case qui n'en franchit qu'une. *La marche DESSINÉE est-elle la marche FRANCHIE ?* | §27 |
+| 447 | **Une arête franchissable en diagonale ne l'est pas en deux pas axiaux.** On n'élargit pas le seuil, on pose le garde-corps que la planche dessine — *collision et dessin disent la même chose, seul cas où on a le droit de les confondre.* | §27 |
+| 448 | **Un décor d'impact se date à l'IMPACT, pas à l'événement qui l'annonce** — `e.fall` horodate le début de la cinématique, et le cratère fumait trois secondes avant que la comète touche le sol. | §28 de `ferme/README.md` |
+| 448 | **Quatre portes sur le même trou, une seule laissée ouverte suffit.** *Corriger un symptôme n'énumère pas ses frères ; seule une jointure le fait.* | §28 |
+| 448 | **Une constante que SEUL le banc lit est débranchée** — elle a l'air juste et ne peut pas échouer. Ça se détecte en cherchant qui LIT une constante, jamais en la relisant. | §28 |
+| 448 | **Un texte n'est pas un décor : il AFFIRME.** Un dessin approximatif se pardonne, une phrase fausse sous l'image, non. | §28 |
+| 449 | **Une phrase d'interface trop longue ne prévient pas, elle est COUPÉE** (`white-space:nowrap`) — la famille du canevas qui rabote ce qui dépasse, appliquée au texte. | §12.1 bis de `QUETE.md` |
+
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
 
@@ -247,7 +170,14 @@ tribunal** en est la troisième. **`candyluge`** est une descente 3D solo en thr
   piège — avec le numéro de zip. C'est la mémoire longue du projet.
 - **« caveman on »** inverse le contrat : exécuter, vite et bien, sans questions ni
   préambule. « caveman off » rétablit. Accuser réception en une ligne.
-- **Fin de session** : mettre ce fichier à jour sur demande. **Commits et push restent à
+- ⚠️⚠️ **FIN DE LIVRAISON : METTRE CE FICHIER À JOUR FAIT PARTIE DE LA LIVRAISON, ÇA NE SE
+  PROPOSE PAS** (ordre de Guillaume au 449 : « à toujours opérer quand tu finis un delivery »).
+  La formulation d'avant disait « sur demande », et c'est ce qui a fait proposer au lieu de faire.
+  ⚠️ **Dans cet ordre** : (1) réécrire le bloc **⏭️ REPRISE** en tête — il se REMPLACE, il ne
+  s'empile pas, et il désigne UNE action suivante ; (2) faire la passe d'élagage du §14.2 **avant**
+  d'ajouter quoi que ce soit ; (3) n'inscrire que la **LEÇON** d'un défaut, jamais son histoire —
+  celle-ci va en commentaire de code avec le n° de zip, ou dans le README du module concerné.
+  **Commits et push restent à
   Guillaume** (GitHub Desktop). **Dire si une manipulation Supabase est nécessaire — et le dire
   aussi quand elle ne l'est pas.**
 - **Règle dure : aucune migration SQL ni changement de schéma sans validation préalable.**
@@ -285,8 +215,10 @@ Jamais de fichier de doc autonome à la racine (`AUDIT-X.md`, `NOTES.md`…).
 ⚠️⚠️ **CE CHAPITRE A ÉTÉ SCINDÉ AU 431, SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 430.** Les pièges
 de la FERME, de la VILLE et du TRIBUNAL sont partis dans **`components/ferme/README.md`**, qui
 fait déjà autorité sur ce code — ils y sont **à côté de ce qu'ils décrivent**, et ce chapitre
-avait atteint cent lignes en mélangeant deux sujets sans rapport. Il ne reste ici que ce qui
-est vrai à l'échelle du projet : **JavaScript, three.js, canevas**.
+avait atteint cent lignes en mélangeant deux sujets sans rapport. ⚠️ **Il a été scindé DEUX fois
+depuis** — le DESSIN au 441 (`components/ferme/DESSIN.md`), le GÉNÉRATEUR au 449
+(`components/ferme/README.md` §15 bis). Il ne reste ici que ce qui est vrai à l'échelle du
+projet : la **CONCEPTION**, et le **LANGAGE** (JavaScript, three.js, canevas).
 
 ⚠️ **UN PIÈGE A ÉTÉ SUPPRIMÉ PLUTÔT QUE DÉPLACÉ, ET C'EST LE POINT DE LA VÉRIFICATION** : « la
 boucle de nuages tourne à vide (`SKY_CLOUD_COUNT: 0`) » ne correspondait plus à rien — le
@@ -308,34 +240,24 @@ règles de dessin — on assemble des masses et on ne texture pas une silhouette
 ne se replie pas, la période prime sur les détails, une position réglée à la main penchera, un
 cerne sert aussi sur fond clair, un sprite haut contre le mur du fond avale ce qui passe
 devant… — vivent désormais **à côté des dessins qu'elles gouvernent**. Rien n'a été recopié.
-⚠️ **Ce qui est resté ici est resté exprès** : « la case d'un décor n'est pas la surface qu'il
-couvre » est une règle du GÉNÉRATEUR, pas du dessin, et c'est pour ça qu'elle est en Architecture.
+⚠️⚠️ **ET LA PHRASE QUI SUIVAIT ICI EST DEVENUE FAUSSE AU 449, PAR LE DÉPLACEMENT SUIVANT.** Elle
+disait que « la case d'un décor n'est pas la surface qu'il couvre » restait ici parce que c'est une
+règle du GÉNÉRATEUR et non du dessin — vrai au 441, périmé depuis que le générateur est parti à son
+tour au §15 bis de `components/ferme/README.md`. *Un déplacement laisse toujours derrière lui une
+phrase qui explique pourquoi quelque chose n'a pas bougé ; c'est elle qu'il faut relire en dernier.*
 
 
-**Architecture**
-- ⚠️⚠️⚠️ **LA CASE D'UN DÉCOR N'EST PAS LA SURFACE QU'IL COUVRE** (435 pour un cas, **440 pour la
-  règle**). Le générateur raisonne en CASES ; le rendu dessine des sprites de 81, 67, 62 px — donc
-  **une case occupée, quatre ou cinq couvertes**. Tout ce qu'une passe ultérieure sème tombe
-  librement dans les cases couvertes : ça ne bloque rien, ça ne casse aucun trajet, **ça ne lève
-  rien**, ça se voit — et c'est ainsi qu'un chêne s'est planté sur le tablier d'un pont. L'emprise
-  se DÉRIVE du dessin (`townPropBox`, à partir de `planche.js`), jamais d'une largeur recopiée.
-- ⚠️⚠️ **UNE LISTE NOIRE À LAQUELLE IL MANQUE UNE VALEUR NE LÈVE RIEN, ELLE LAISSE PASSER** (440).
-  `plantTree` énumérait ce sur quoi on ne plante pas et avait oublié `G_BRIDGE`. **On énumère ce
-  qui est PERMIS** : le jour où un `G_*` s'ajoute, il n'est pas plantable tant que personne ne
-  l'écrit — c'est le seul sens qui résiste à l'ajout. Même famille que le `% 4` des étals (431).
-- ⚠️⚠️ **UNE PASSE QUI PAVE DÉGAGE CE QU'ELLE PAVE** (437, 439, **440 trois fois**). C'est la
-  famille de défauts la plus coûteuse du générateur : *une passe qui recouvre une passe antérieure
-  sans le savoir*. Trois allées testaient `solid` avant de peindre — or un arbre n'est pas solide
-  dans cette couche — et le gravier passait DESSOUS. Corollaire d'ordre : **ce qui est composé se
-  pose avant ce qui est semé**, sinon le semis gagne l'arbitrage.
-- ⚠️⚠️ **UN SECOND DE QUELQUE CHOSE SE PAIE EN NIVEAUX, PAS EN ZONES** (438). Une zone de plus
-  aurait demandé de retrouver les **vingt-cinq** endroits qui testent `zone === "court"`, et en
-  oublier un ne lève rien. Deux niveaux ne coûtent rien : tous les tests restent vrais, et deux
-  joueurs dans deux bâtiments différents ne peuvent pas se confondre puisque leurs `y` diffèrent.
-- ⚠️⚠️ **UNE VARIANTE DE DÉCOR EST UNE COUCHE, PAS UN NOUVEL IDENTIFIANT DE SOL** (434, 439). Un
-  `G_*` de plus rouvre les quarante tests du moteur ; en oublier un ne lève rien, ça fait juste une
-  rue qu'on ne traverse plus. Le sol garde son identifiant, un tableau parallèle dit avec quoi on
-  le PEINT (`world.road`) ou de combien il MONTE (`tw._arch`, le dos d'âne des ponts).
+**Conception — vrai partout**
+
+⚠️⚠️ **LES CINQ PIÈGES DU GÉNÉRATEUR SONT PARTIS AU 449, SUR L'ORDRE DU §14.2 DU 444** (reporté
+quatre fois) : la case d'un décor, la liste noire, la passe qui pave, le second de quelque chose,
+la variante de décor. Ils décrivent tous `generateTownWorld` et vivent désormais **à côté de lui**,
+au **§15 bis de `components/ferme/README.md`** — même geste qu'au 431 (les zones) et au 441 (le
+dessin). ⚠️ **Rien n'a été recopié, et un DOUBLON a été supprimé** : « une variante de décor est
+une couche » était écrit deux fois dans ce chapitre, une fois court et une fois long.
+⚠️ **Ce qui suit est resté exprès** : ce ne sont pas des règles de générateur, ce sont des règles
+de conception qui valent pour n'importe quel morceau du dépôt.
+
 - ⚠️⚠️ **UNE GRANDEUR DE DESSIN NE DOIT PAS ENTRER DANS LA COLLISION** (439). L'arc du pont ajouté
   à `playerElevTown` aurait été trois lignes plus court et aurait rendu les deux ponts
   **infranchissables** (`canStandTown` refuse tout pas au-delà de `TOWN_STEP_MAX`) : on aurait
@@ -360,15 +282,6 @@ couvre » est une règle du GÉNÉRATEUR, pas du dessin, et c'est pour ça qu'el
   ⚠️ **Corollaire de repli** : quand la carte d'une zone manque chez ce client, un test de
   collision doit ACCEPTER, pas refuser. Refuser épingle l'entité distante à sa dernière
   position connue — c'est-à-dire qu'on reproduit le bogue au lieu de le corriger.
-- ⚠️⚠️ **UNE VARIANTE DE DÉCOR EST UNE COUCHE, PAS UN NOUVEL IDENTIFIANT DE SOL** (434). Peindre
-  les rues de Valley Town en goudron/pavés/briques par trois `G_*` de plus aurait rouvert les
-  **quarante** tests `ground === G_PATH` du moteur (marche, A* piéton, A* du taxi, arrêts,
-  oiseaux, lampadaires, haies…) : en oublier un ne lève rien, ça fait juste une rue qu'on ne
-  traverse plus. Le sol garde son identifiant, un tableau parallèle (`world.road`, comme
-  `hedge` et `solid`) dit avec quoi on le PEINT. ⚠️ Et **la passe qui remplit cette couche est
-  la DERNIÈRE du générateur** : elle ne peint que ce qui est encore du chemin, donc tout ce
-  qu'une esplanade a recouvert entre-temps s'exclut tout seul — zéro cas particulier, alors
-  qu'écrite plus tôt elle en aurait exigé un par esplanade.
 - ⚠️⚠️ **UN MOTIF DE SOL SE JUGE ASSEMBLÉ, ET SA PÉRIODE COMPTE PLUS QUE SES DÉTAILS** (434).
   Une tuile de 16 px se répète tous les 16 px : l'œil voit la grille avant le dessin, **quelle
   que soit sa finesse**. On dessine un pavé de 4×4 tuiles d'un seul tenant et on y découpe la
@@ -424,7 +337,7 @@ couvre » est une règle du GÉNÉRATEUR, pas du dessin, et c'est pour ça qu'el
 |---|---|
 | `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **~20 500 l.** |
 | `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** |
-| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE (444) : la table des lieux, les 5 chapitres, les grandeurs de coopération et les résolveurs purs.** Aucun React, aucun dessin — `verify-quete.mjs` l'importera. ⚠️ Remplace `enquete.js`, supprimé au 444 |
+| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE (444) : la table des lieux, les 5 chapitres, les grandeurs de coopération et les résolveurs purs.** Aucun React, aucun dessin — `verify-quete.mjs` l'importe. Depuis le 449 il porte aussi **`starGoalKey`** (l'objectif courant, lu par le bandeau ET par le chevron) et **`starGuidePoint`** (où se place le familier meneur). ⚠️ Remplace `enquete.js`, supprimé au 444 |
 | `components/ferme/QUETE.md` | **le chantier 444 : déroulé, grammaire magique, avancement, ET CE QUI RESTE À FAIRE (§12) — autorité tant que la quête n'est pas finie** |
 | `components/ferme/README.md` | **Valley Town, le tribunal, l'HÔTEL DE VILLE, l'ÉGLISE, le BEFFROI, les habitants, la VENTE, les OISEAUX, les ÉLECTIONS et les PIÈGES de ces zones — autorité (428-444)** |
 | `components/ferme/DESSIN.md` | **les règles de DESSIN, vraies partout — autorité (441, sorties du §4)** |
@@ -849,48 +762,36 @@ erreur** en choisissant mal.
    en tête sous une seule forme (« un banc qui passe ne veut pas dire que la chose est bonne »)
    avec ses quatre variantes connues, et **trois blocs qui redisaient la même chose que §4 ont
    été supprimés, pas déplacés**.
-   ⚠️⚠️ **ET L'ORDRE LAISSÉ PAR LE 433, QUATRE FOIS REPORTÉ, A ÉTÉ EXÉCUTÉ : §13 EST RELU LIGNE
-   À LIGNE.** Résultat, et il vaut la peine : **une ligne était devenue FAUSSE** (« achète-t-on
-   une parcelle, et à quel guichet ? » — tranché au 439), **une était périmée** (« un joueur qui
-   appuie sans rien voir se passer croit que la touche est cassée » : il se passe quelque chose
-   depuis que les pigeons restent), **une recopiait un chiffre que le banc mesure** (les blocs de
-   prairie nue) — c'est la troisième fois que ce chiffre-là traîne un compte périmé, il renvoie
-   désormais au banc. *Une question à laquelle on a répondu ne sort pas du fichier toute seule :
-   elle y reste, et elle ment.*
-   Historique : 426 (insuffisant), 427 (profond : §7 → `public/candyluge/README.md`), 428 (§6 →
+   ⚠️⚠️⚠️ **LE 449 A EXÉCUTÉ L'ORDRE DU 444, QUATRE FOIS REPORTÉ (446, 447, 448) : §4 EST SCINDÉ
+   UNE TROISIÈME FOIS.** Les cinq pièges du GÉNÉRATEUR sont partis au §15 bis de
+   `components/ferme/README.md` ; les deux règles de CONCEPTION sont restées, parce qu'elles ne
+   parlent pas du générateur. ⚠️ **Et l'élagage a trouvé ce qu'un élagage doit trouver : un
+   DOUBLON.** « Une variante de décor est une couche » était écrit DEUX fois dans le même
+   chapitre — une version courte en Architecture, une longue en JavaScript — et personne ne
+   pouvait s'en apercevoir en lisant, puisque cent lignes les séparaient. La longue a survécu.
+   ⚠️⚠️ **ET L'EN-TÊTE EST REPASSÉ DE 167 À 125 LIGNES, POUR LA SECONDE FOIS EN DIX ZIPS.** Il
+   avait refait exactement ce que le 439 lui avait reproché : quatre récits de zip (444, 446,
+   447, 448) empilés avant le premier chapitre, chacun redisant en quinze lignes ce que
+   `components/ferme/README.md` dit mieux en un paragraphe. Les RÉCITS sont supprimés, les
+   LEÇONS gardées — **une ligne chacune, dans un tableau qui renvoie au détail**. C'est la forme
+   qui résiste à l'empilement, parce qu'un récit s'allonge et qu'une ligne de tableau, non.
+   ⚠️ *La leçon de ces six ordres exécutés est toujours la même : un chapitre qui grossit à chaque
+   zip décrit un code qui vit ailleurs, et il faut le renvoyer là-bas — jamais le résumer ici.*
+
+   Historique : 426 (insuffisant), 427 (§7 → `public/candyluge/README.md`), 428 (§6 →
    `components/ferme/README.md`, 507 → 490), 431 (§4 scindé, 534 → 482),
-   **432 (§10 → `tools/README.md`, 524 → 483)**, 433 à 438 (aucun), **439 (en-tête + §13,
-   687 → 661)**, 440 (aucun — trois leçons ajoutées en §4, seize lignes),
-   **441 (§4 scindé une seconde fois : le DESSIN part dans `components/ferme/DESSIN.md`)**,
-   442 (§13 relu ligne à ligne), **444 (§10 élagué — l'ordre du 442, deux fois reporté)**,
-   446 (aucun — quatre blocs ajoutés : le cratère en tête, la recette du banc de navigateur en
-   §10, et deux chiffres remis à jour ; ⚠️ **l'ordre du 444 sur le §4 reste dû, et il est
-   maintenant reporté une fois**).
-   ⚠️⚠️ **L'ORDRE DU 440 A ÉTÉ EXÉCUTÉ AU 441, APRÈS DEUX REPORTS.** Le §4 avait passé les
-   cent-cinquante lignes en mélangeant trois sujets ; sa partie DESSIN est partie dans
-   `components/ferme/DESSIN.md`, à côté des dessins qu'elle gouverne, exactement comme §6 au 428
-   et §10 au 432. Chaque ligne a été relue avant de bouger, et **ce qui est resté est resté
-   exprès** : « la case d'un décor n'est pas la surface qu'il couvre » est une règle du
-   GÉNÉRATEUR, pas du dessin.
-   ⚠️⚠️ **L'ORDRE DU 441 A ÉTÉ EXÉCUTÉ AU 442 : §13 EST RELU LIGNE À LIGNE, ET DEUX ENTRÉES
-   ÉTAIENT DEVENUES FAUSSES.** « Lequel des deux guichets se branche en premier » n'était plus
-   une question ouverte — l'enquête a branché les DEUX, pour une parcelle ; et « aucune session à
-   deux clients » ne l'était plus non plus, la séance du 442 ayant eu lieu (sur une ferme vide, ce
-   qui est dit). Une question à laquelle on a répondu ne sort pas du fichier toute seule : elle y
-   reste, et elle ment. Trois entrées ont été RESSERRÉES au lieu d'être ajoutées (l'église, les
-   commissions, le voyage), et le 442 n'en ajoute qu'une : les trois arbitrages de l'enquête.
-   ⚠️⚠️ **L'ORDRE DU 442 A ÉTÉ EXÉCUTÉ AU 444, APRÈS DEUX REPORTS : §10 EST ÉLAGUÉ.** Il redisait
-   ce que `tools/README.md` dit mieux (les chiffres de chaque banc, ses trouvailles) et il gardait
-   des recettes devenues fausses. Ce qui est resté est resté exprès : **ce qui n'existe pas**, la
-   recette « jouer en local », et le piège du banc de navigateur — qui a MORDU une fois de plus au
-   444 malgré sa relecture, et dont le remède connu (`MessageChannel`) s'est révélé capable de
-   figer l'onglet. *Un piège qu'on relit et qui mord quand même n'est pas écrit assez court.*
-   ⚠️ **L'ORDRE DU PROCHAIN ZIP : §4.** Il a repassé les cent lignes après deux scissions (440 →
-   `DESSIN.md`, 441), et il mélange à nouveau deux sujets : les pièges d'ARCHITECTURE (générateur,
-   couches, dérivation) et ceux du LANGAGE (JavaScript, three.js, canevas). Les premiers ont leur
-   place à côté du code qu'ils décrivent ; les seconds sont vrais partout et restent ici. Relire
-   chaque ligne avant de la bouger, comme au 441 — et se souvenir qu'un piège périmé recopié
-   ailleurs est pire qu'un piège supprimé.
+   432 (§10 → `tools/README.md`, 524 → 483), 433 à 438 (aucun),
+   **439 (en-tête 151 → 50 et §13 relu, 687 → 661)**, 440 (aucun),
+   **441 (§4 scindé : le DESSIN → `DESSIN.md`)**, 442 (§13 relu ligne à ligne),
+   **444 (§10 élagué)**, 446 à 448 (aucun — et l'ordre du 444 reporté trois fois),
+   **449 (§4 scindé une 3e fois + en-tête 167 → 125, 903 → 804)**.
+
+   ⚠️ **L'ORDRE DU PROCHAIN ZIP : §13, relu LIGNE À LIGNE.** Il n'a pas été relu depuis le 442,
+   c'est-à-dire sept zips, et deux choses ont bougé sous lui depuis : le 444 a retiré l'enquête
+   (donc les entrées qui s'y adossent parlent d'un code supprimé) et le 449 a livré la passe de
+   guidage de la quête (donc au moins une entrée du bloc « la quête de l'étoile » est datée).
+   ⚠️ **Une question à laquelle on a répondu ne sort pas du fichier toute seule : elle y reste, et
+   elle ment.** C'est la seule raison d'être de cet ordre, et il l'a prouvée deux fois (439, 442).
 
 3. **Critère d'inclusion** : « est-ce vrai à l'échelle du projet, et invérifiable en ouvrant
    un seul fichier ? » Sinon, ça va dans un commentaire de code. **L'histoire d'un défaut

@@ -932,6 +932,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const starBubbleRef = useRef({ text: "", until: 0, key: "" });  // ce que l'étoile dit, au-dessus d'elle
   const starHideRef = useRef(0);                     // elle se cache : horodatage de fin (§3 — le secret se MONTRE)
   const starSeenRef = useRef({});                    // scènes/bulles déjà vues DANS CETTE SESSION (le rappel, une fois)
+  /* ZIP 449 — LE FAMILIER QUI MÈNE. ⚠️ TOUT EST LOCAL ET RIEN N'EST DIFFUSÉ :
+     demander son chemin est un confort de JOUEUR, pas un fait du MONDE (§3).
+     `goal` mémorise l'objectif sur lequel on bute, `since` depuis quand, et
+     `offered` interdit au départ spontané de se rejouer sur le même objectif —
+     une aide qui revient toutes les deux minutes est une notification. */
+  const starGuideRef = useRef({ on: false, goal: null, since: 0, offered: false });
+  const starGuidePathRef = useRef({ at: 0, key: "", path: null });
   const [taxiMenu, setTaxiMenu] = useState(false);   // le panneau « Où allez-vous ? »
   const taxiMenuRef = useRef(false);
   const [taxiPhase, setTaxiPhase] = useState(null);  // miroir React, pour le bouton
@@ -1173,6 +1180,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   useEffect(() => { hallTalkOpenRef.current = !!hallTalk; }, [hallTalk]);            // zip 439
   useEffect(() => { starUiOpenRef.current = !!(starMini || starCard || starRecap); },
             [starMini, starCard, starRecap]);                                          // zip 444
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 449 — LE DÉPART SPONTANÉ DU GUIDE. Une veille d'une seconde, et elle
+     ║ est ICI plutôt que dans la boucle de rendu, exprès.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ MESURER « ÇA TRAÎNE » EST UN DÉFAUT DE TEMPS, ET C'EST LA CINQUIÈME
+     FORME DU DÉFAUT DE BANC DU 448 : *un banc de rendu ne peut pas voir un
+     défaut de temps.* La règle vit donc dans une fonction PURE (`Q.starGuideAuto`)
+     que `verify-quete` appelle, et cet effet ne fait que compter les secondes.
+     ⚠️ CE QU'ON CHRONOMÈTRE EST L'OBJECTIF, PAS LE JOUEUR. « Immobile depuis
+     deux minutes » aurait puni celui qui pêche tranquillement ; « le même
+     objectif depuis deux minutes trente » décrit exactement l'enfant qui tourne
+     en rond. Et le compteur repart à zéro tout seul dès que l'objectif change,
+     ce qui est la seule remise à zéro qui ne puisse pas se tromper.
+     ⚠️ IL NE PART PAS PENDANT UNE SCÈNE NI UN MINI-JEU : `starGuideTarget` rend
+     déjà `null` dans ces cas-là (il lit `starUiOpenRef` et `starSceneRef`), donc
+     il n'y a rien à retester ici — une copie de cette garde aurait fini par ne
+     plus dire la même chose que l'originale. */
+  useEffect(() => {
+    const t = setInterval(() => {
+      const e = sharedRef.current.star;
+      const g = starGuideRef.current;
+      const key = e ? Q.starGoalKey(e, { craterHot: !starCraterCoolNow() }) : null;
+      if (key !== g.goal) { g.goal = key; g.since = Date.now(); g.offered = false; }
+      if (!key || g.on || !starGuideTarget()) return;
+      if (!Q.starGuideAuto(Date.now() - g.since, g.offered)) return;
+      const nm = starGuidePetName();
+      if (!nm) return;                        // aucun familier : on se tait plutôt que de promettre
+      g.on = true; g.offered = true;
+      starSay("guide", L.star.guide.offer(nm), 4200);
+    }, 1000);
+    return () => clearInterval(t);
+  }, [L]);                                                                             // zip 449
   /* ⚠️⚠️ ZIP 444 — LA CARTE DE CHAPITRE SE FERME TOUTE SEULE, ET C'EST LA
      DIFFÉRENCE ENTRE UNE TRANSITION ET UN DIALOGUE. Une carte qu'il faut
      congédier oblige le joueur à agir pour continuer une phrase qui n'attend
@@ -12517,6 +12556,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       if (e.code === "KeyT") { e.preventDefault(); setChatOpen(true); setTimeout(() => chatInputRef.current?.focus(), 0); }
       if (e.code === "KeyM") setMapOpen(o => !o);
+      /* ⚠️ ZIP 449 — G COMME GUIDE : le familier de tête part devant, ou revient
+         au pied. Vérifié sur `e.code` comme tout ce gestionnaire (AZERTY et
+         QWERTY désignent alors la même touche physique), et sans `repeat` :
+         maintenir la touche ne doit pas faire clignoter le chien.
+         ⚠️ ET IL NE DONNE RIEN — c'est une aide à s'orienter, pas une trouvaille.
+         Tout ce qu'il déplace est un point de rendez-vous. */
+      if (e.code === "KeyG" && !e.repeat) starGuideToggle();
       if (e.code === "Escape") { setShopOpen(false); setBinOpen(false); setBagOpen(false); setMapOpen(false); setSeedMenuOpen(false); setToolMenuOpen(false); setCraftMenuOpen(null); setCauldronMenuOpen(false); setAdsOpen(false); setVisitorOpen(false); setJewelryDesignOpen(false); setDevMenuOpen(false); /* zip 392 */ }
     }
     function onKeyUp(e) { keysRef.current[e.code] = false; }
@@ -17848,13 +17894,39 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         } else {
           f2.wtx = null;
           tx = followTx; ty = followTy;
+          /* ╔════════════════════════════════════════════════════════════════
+             ║ ZIP 449 — LE MENEUR. « pas tous les pets, seul un prendra le
+             ║ lead » (Guillaume).
+             ╚════════════════════════════════════════════════════════════════
+             ⚠️⚠️ ON NE DÉPLACE QUE SON POINT DE RENDEZ-VOUS, exactement comme
+             les figures de jeu du 388 : *un familier qui mène est un familier
+             dont on a déplacé la cible, pas un familier régi par un second
+             moteur.* Tout ce qui suit — lissage, orientation déduite du
+             déplacement, foulée, ombre — continue de marcher sans une ligne de
+             plus, et il revient tout seul au pied quand le guidage s'arrête.
+             ⚠️ INDICE 0 SEULEMENT, ET SEULEMENT LES MIENS. Un meneur choisi
+             « au plus proche » changerait à chaque pas ; un meneur tiré au sort
+             ne serait pas le même sur deux écrans, puisque les familiers de
+             chacun sont dessinés par tout le monde depuis le 247. Les autres
+             gardent leur rang — c'est ce qui rend le meneur lisible : il se
+             détache du peloton au lieu de l'emmener.
+             ⚠️ ET JAMAIS POUR UN JOUEUR DISTANT : demander son chemin est un
+             confort local qui ne traverse pas le réseau, donc rien ne pourrait
+             dire aux autres clients que ce chien-là mène. */
+          const lead = (i === 0 && id === me.id) ? starGuideAim((meRef.current && meRef.current.zone) || "farm", m.x, m.y) : null;
           /* ---------------- ZIP 388 : LA CIBLE PENDANT UNE FIGURE -----------
              Seule la CIBLE change ; le lissage, lui, reste celui d'avant. Un
              familier qui joue est un familier dont on a déplacé le point de
              rendez-vous, pas un familier régi par un second moteur. C'est ce
              qui garantit qu'à la fin du créneau il revient tout seul à sa
              place, sans transition à écrire. */
-          if (play.figure === "chase" && play.partner >= 0) {
+          if (lead) {
+            /* ⚠️ IL MÈNE, DONC IL NE JOUE PAS : le guidage passe AVANT les
+               figures du 388, sinon le chien s'arrêterait pour se renifler la
+               patte au milieu du trajet — ce qui, vu de l'écran, ressemble
+               exactement à un guide qui a perdu le fil. */
+            tx = lead.x; ty = lead.y;
+          } else if (play.figure === "chase" && play.partner >= 0) {
             // Ronde autour du milieu des deux places. Le meneur et le suiveur
             // sont diamétralement opposés : ils se courent après sans jamais
             // se rattraper, ce qui est exactement ce qu'on veut voir.
@@ -17879,7 +17951,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // place habituelle. Une fois suffisamment proche, on retrouve
           // l'easing serré du suivi normal (comme avant ce chantier).
           const d = Math.hypot(tx - f2.x, ty - f2.y);
-          ease = d > 0.6 ? Math.min(1, dt2 * 1.3) : Math.min(1, dt2 * 6);
+          /* ⚠️ ZIP 449 — LE MENEUR EST PLUS VIF QUE LE SUIVEUR, ET C'EST LE
+             SEUL RÉGLAGE QU'IL DEMANDE. À l'aisance du retour de cheval
+             (`dt2 * 1.3`) il traînait derrière son propre point d'avance : on
+             voyait un chien qui court après une position, pas un chien qui
+             mène. Il reste sous la vitesse du fermier, sinon il sort de la
+             laisse (`STAR_GUIDE_LEASH`) qu'il est censé tenir. */
+          ease = lead ? Math.min(1, dt2 * 2.6) : (d > 0.6 ? Math.min(1, dt2 * 1.3) : Math.min(1, dt2 * 6));
           isMoving = m.moving || d > 0.05;
         }
         const px0 = f2.x, py0 = f2.y;
@@ -20756,6 +20834,118 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
 
   /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 449 — LE FAMILIER QUI MÈNE. « pas tous les pets, seul un prendra le
+     ║ lead » ; « à la demande, et automatique si ça traîne ». (Guillaume)
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ TOUT CE BLOC EST AU NIVEAU DU COMPOSANT, JAMAIS DANS LA CLOSURE DE LA
+     BOUCLE, et c'est le piège n°1 de CLAUDE.md pris à l'endroit : `drawPetsFor`
+     (dans la closure) APPELLE `starGuideAim`, ce qui est le sens autorisé ; le
+     gestionnaire de clavier et l'effet de veille l'appellent aussi, ce qui aurait
+     levé un `ReferenceError` à l'exécution seulement si on l'avait écrit là-bas.
+     ⚠️⚠️ ET IL NE DIFFUSE RIEN. « Est-ce que JE demande de l'aide » est un
+     confort local, pas un fait du monde : deux joueurs peuvent chercher chacun de
+     leur côté, chacun avec son chien. Un champ de plus, c'est surtout un champ à
+     réconcilier (§3 de CLAUDE.md).
+     ⚠️ LA CIBLE N'EST PAS TOUJOURS LE LIEU : quand il est sur l'AUTRE carte, le
+     guide mène au TRAIN, et quand il est dans un intérieur, il mène à la PORTE.
+     C'est la seule façon honnête de guider entre deux mondes — et c'est aussi la
+     discipline de `starTargetPos`, qui rend toujours sa zone plutôt que de
+     mélanger deux jeux de coordonnées (§4, le piège des deux cartes). */
+  function starGuideStop(arrived) {
+    const g = starGuideRef.current;
+    if (!g.on) return;
+    g.on = false;
+    const nm = starGuidePetName();
+    if (nm) starSay("guide", arrived ? L.star.guide.arrived(nm) : L.star.guide.stop(nm), 3600);
+  }
+  /* Le meneur est l'INDICE 0 — déterministe et stable (voir `STAR_GUIDE_*` dans
+     `quete.js`). Rend son nom lisible, ou "" s'il n'y a aucun familier. */
+  function starGuidePetName() {
+    const pets = walkPetsRef.current;
+    if (!pets || !pets.length) return "";
+    const p0 = pets[0];
+    const pid = typeof p0 === "string" ? p0 : (p0 && p0.id);
+    return pid ? C.petName(pid, lang === "en") : "";
+  }
+  function starGuideToggle() {
+    const g = starGuideRef.current;
+    if (g.on) { starGuideStop(false); return; }
+    if (!starGuideTarget()) { pushToast(L.star.guide.none); return; }
+    const nm = starGuidePetName();
+    if (!nm) { pushToast(L.star.guide.noPet); return; }
+    g.on = true; g.offered = true;      // demandé à la main : plus de départ spontané sur cet objectif
+    starSay("guide", L.star.guide.go(nm), 3600);
+  }
+  /* Le chemin, mis en cache. ⚠️ IL SE RECALCULE À LA SECONDE, PAS À L'IMAGE :
+     `townFindPath` est un A* sur 224×168 que les résidents se partagent déjà, et
+     l'appeler soixante fois par seconde pour un chien coûterait plus cher que
+     tout le reste de la quête réunie. ⚠️ Et il n'a PAS besoin d'être frais : le
+     joueur avance le long du chemin, et `Q.starGuidePoint` repart du nœud le plus
+     proche de lui — un chemin d'une seconde d'âge désigne exactement le même
+     couloir. */
+  function starGuidePath(zone, px, py, gx, gy) {
+    const c = starGuidePathRef.current;
+    const key = zone + "|" + Math.round(gx) + "," + Math.round(gy);
+    const now = performance.now();
+    if (c.key === key && now - c.at < 1200) return c.path;
+    let path = null;
+    if (zone === "farm") { const w = worldRef.current; if (w) path = E.findPavedPath(w, px, py, gx, gy); }
+    else if (zone === "town") { const tw = townWorldNow(); if (tw) path = E.townFindPath(tw, px, py, gx, gy); }
+    /* ⚠️ AUCUN CHEMIN EST UN CAS NORMAL, PAS UN ÉCHEC : les intérieurs n'ont pas
+       d'A*, et une cible peut être momentanément inatteignable. L'appelant
+       retombe alors sur le suivi ordinaire — le chien reste au pied, il ne se
+       fige pas et il ne traverse pas un mur. C'est le corollaire de repli du §4
+       (« quand la carte manque, on ACCEPTE, on ne refuse pas »). */
+    c.key = key; c.at = now; c.path = path;
+    return path;
+  }
+  /* Rend `{x, y}` — où le meneur doit se tenir — ou `null` (suivi normal). */
+  function starGuideAim(zone, px, py) {
+    const g = starGuideRef.current;
+    if (!g.on) return null;
+    /* ╔════════════════════════════════════════════════════════════════════════
+       ║ ⚠️⚠️ VU À L'ÉCRAN, ET AUCUN BANC NE POUVAIT LE VOIR : « PAS DE CIBLE
+       ║ MAINTENANT » N'EST PAS « PLUS RIEN À CHERCHER ».
+       ╚════════════════════════════════════════════════════════════════════════
+       Premier jet : `if (!tgt) starGuideStop()`. Ça a l'air d'être la garde
+       évidente, et elle est fausse — `starGuideTarget` rend `null` dans QUATRE
+       situations dont trois sont passagères : une carte de chapitre à l'écran,
+       une cinématique, un mini-jeu ouvert (`starUiOpenRef`), et l'écoute des
+       ombres qui n'a délibérément aucun lieu. Résultat observé en jouant : on
+       demande le guide, on franchit un chapitre, la carte s'affiche 3,8 s — et
+       **le chien renonce sans un mot**, alors que le chemin vers le train était
+       calculé et valide (53 pas). Le joueur, lui, voit son guide se dégonfler
+       pile au moment où il vient de progresser.
+       ⚠️ LA RÈGLE EST DONC : on ne MÈNE pas cette image-ci, on n'ABANDONNE pas.
+       Le guidage ne s'arrête que sur trois faits durables — le joueur le range
+       (touche G), il est ARRIVÉ, ou la quête est finie. C'est la distinction
+       entre un état et un instant, exactement ce que le 448 a payé sur le
+       cratère : *un décor se date à l'impact, pas à l'événement qui l'annonce.* */
+    const tgt = starGuideTarget();
+    if (!tgt) { if (Q.starDone(sharedRef.current.star)) starGuideStop(false); return null; }
+    let gx, gy;
+    if (tgt.zone === zone) { gx = tgt.x; gy = tgt.y; }
+    else if (zone === "farm") { gx = C.TRAIN_BOARD.x; gy = C.TRAIN_BOARD.y; }
+    else if (zone === "town" && tgt.zone === "court") { gx = C.TOWN_CHURCH.x + C.TOWN_CHURCH.w / 2; gy = C.TOWN_CHURCH.y + C.TOWN_CHURCH.h + 1; }
+    else if (zone === "town") { gx = C.TOWN_STATION_SIGN.x; gy = C.TOWN_STATION_SIGN.y; }
+    else return null;                                    // intérieur : rien à mener
+    /* ⚠️⚠️ IL S'ARRÊTE AVANT LE BUT, ET C'EST LA MOITIÉ DE LA MÉCANIQUE. Un guide
+       qui va jusqu'à la trouvaille joue à la place du joueur ; celui-ci s'assied
+       à trois cases et laisse la dernière au chercheur. */
+    if (Math.hypot(gx - px, gy - py) <= Q.STAR_GUIDE_ARRIVE) { starGuideStop(true); return null; }
+    const path = starGuidePath(zone, px, py, gx, gy);
+    if (!path || !path.length) return null;
+    const p = Q.starGuidePoint(path, px, py, Q.STAR_GUIDE_AHEAD);
+    if (!p) return null;
+    /* La laisse : au-delà, il attend. Un guide qu'on perd de vue ne guide plus,
+       il s'en va — et c'est très exactement ce qui fait dire « mon chien est
+       parti tout seul ». */
+    const d = Math.hypot(p.x - px, p.y - py);
+    if (d > Q.STAR_GUIDE_LEASH) return null;
+    return p;
+  }
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ZIP 444 — LE COMPAGNON. C'EST LUI, LE PISTEUR ; LE BANDEAU N'EST QU'UN
      ║ RAPPEL.
      ╚══════════════════════════════════════════════════════════════════════════
@@ -22017,18 +22207,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           pastille VIDE qu'on montre, celle qui manque et qu'on ne trouvera
           jamais. La mise en scène est dans la donnée, il n'y a rien à écrire.
           ⚠️ ET IL NE S'AFFICHE PAS AVANT LA CHUTE : une interface qui annonce une
-          histoire secrète n'est plus une histoire secrète (§3 de QUETE.md). */}
+          histoire secrète n'est plus une histoire secrète (§3 de QUETE.md).
+
+          ⚠️⚠️ ZIP 449 — IL DIT MAINTENANT L'OBJECTIF, PLUS LE CHAPITRE. Il lisait
+          `hud.goal[starChapterKey(e)]`, c'est-à-dire UNE phrase pour tout un
+          chapitre : deux chapitres sur cinq en contiennent plusieurs, donc le
+          bandeau redisait « trouve où le reste est tombé » longtemps après qu'on
+          ait sorti l'étoile du trou. Il lit désormais `Q.starGoalKey`, la même
+          liste que le chevron (`starTargetSite`) — une seule réponse à « où
+          vais-je », pas deux qui peuvent se contredire. */}
       {(() => {
         const e = sharedRef.current.star;
         if (!e || !Q.starFallen(e) || Q.starDone(e) || starMini || starCard) return null;
         const last = Q.starChapterKey(e) === "note";
         const n = Q.starShards(e);
         const pips = last ? [false] : Array.from({ length: Q.STAR_SHARD_TOTAL }, (_, i) => i < n);
+        /* ⚠️ LE CRATÈRE QUI FUME EST UN ÉTAT DE TEMPS, ET C'EST LA SEULE CHOSE
+           QUE LE BANDEAU NE PEUT PAS DÉDUIRE SEUL : `starCraterCoolNow` lit
+           l'horloge de CE client (§3 — jamais deux horloges). Sans lui, le
+           bandeau enverrait dans un trou en fusion pendant que `starCraterBurns`
+           punit d'y descendre — « le jeu propose et refuse » (426). */
+        const goal = Q.starGoalKey(e, { craterHot: !starCraterCoolNow() });
         return (
           <div className="ferme-star-hud" data-tick={starTick}>
             <span className="ico">✦</span>
             <span className="pips">{pips.map((on, i) => <span key={"sp" + i} className={"pip" + (on ? " on" : "")} />)}</span>
-            <span className="goal">{L.star.hud.goal[Q.starChapterKey(e)] || L.star.title}</span>
+            <span className="goal">{(goal && L.star.hud.goal[goal]) || L.star.title}</span>
           </div>
         );
       })()}
@@ -25222,7 +25426,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <h2>✦ {L.star.hud.againTitle}</h2>
               <div className="ferme-hint">{L.star.title}</div>
               <div style={{ marginTop: 10 }}>{L.star.hud.again(Q.starShards(e), Q.STAR_SHARD_TOTAL)}</div>
-              <div style={{ marginTop: 8, opacity: 0.85 }}>{L.star.hud.goal[Q.starChapterKey(e)]}</div>
+              {/* ⚠️ ZIP 449 — MÊME SOURCE QUE LE BANDEAU. Le rappel de reprise
+                  affichait lui aussi la phrase du CHAPITRE : on revenait trois
+                  jours plus tard et le jeu redisait un objectif déjà atteint,
+                  c'est-à-dire exactement l'inverse de ce que ce panneau promet. */}
+              <div style={{ marginTop: 8, opacity: 0.85 }}>
+                {(() => { const g = Q.starGoalKey(e, { craterHot: !starCraterCoolNow() }); return (g && L.star.hud.goal[g]) || L.star.title; })()}
+              </div>
               <div style={{ marginTop: 12 }}><button className="ferme-btn" onClick={close}>✦</button></div>
             </div>
           </div>

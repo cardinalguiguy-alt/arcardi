@@ -601,7 +601,7 @@ touche le sol — le défaut même de ce zip — leur est **totalement invisible
 `verify-quete` qui le tient désormais (cinq contrôles purs sur `starImpactLanded` et l'azimut).
 *Un banc de rendu ne peut pas voir un défaut de temps.*
 
-## `verify-quete.mjs` — 239 contrôles, 239/239 (444, étendu aux 445, 446, 448 et 449)
+## `verify-quete.mjs` — 273 contrôles, 273/273 (444, étendu aux 445, 446, 448 et 449)
 
 `node tools/verify-quete.mjs`. Il remplace `verify-enquete.mjs`, supprimé avec l'enquête du 442 :
 il en reprend la MÉTHODE (appeler le vrai code, jouer la vraie chaîne) et aucun de ses contrôles.
@@ -650,6 +650,36 @@ closure. Il mesurait donc un nombre que le dessin ne lisait pas, et **il ne pouv
 échouer** — « un banc qui n'a jamais pu échouer ne vaut rien » (§10 de `CLAUDE.md`), cette
 fois-ci sous sa forme la plus discrète : la constante avait l'air juste, elle était simplement
 débranchée.
+
+### ⚠️⚠️ ZIP 449 — L'OBJECTIF COURANT : IL MESURE ENFIN L'**ACCORD** ENTRE DEUX RÉPONSES
+
+Trente-quatre contrôles neufs, et le seul qui compte vraiment est celui-ci : **quand le chevron
+désigne un lieu, le bandeau parle-t-il DE CE LIEU ?** Personne ne l'avait jamais demandé parce que
+les deux n'avaient jamais eu la même source — le chevron dérivait de `starTargetSite`, le bandeau
+d'une phrase par CHAPITRE. Or deux chapitres sur cinq contiennent plusieurs objectifs : le bandeau
+**mentait pendant la moitié de la quête** et aucun banc ne pouvait s'en apercevoir. Il rejoue
+désormais la quête entière trouvaille par trouvaille et compare à chaque pas (**9 états
+comparés, 0 désaccord**, dénominateur imprimé). S'y ajoutent : chaque clé de `STAR_GOAL_KEYS` a sa
+phrase et **aucune phrase n'est orpheline** (les deux sens, comme les arrêts de téléport) · le
+cratère BRÛLANT et le cratère FROID ne disent pas la même chose · l'écoute des ombres n'a pas de
+chevron **mais a une phrase** (c'est le seul moment où le joueur n'a rien d'autre) · et les dix
+phrases tiennent dans le bandeau, **compté en signes** — il était en `white-space:nowrap`, donc
+toute consigne un peu longue s'y faisait **couper en silence** au milieu d'un mot.
+
+⚠️⚠️ **ET L'INVARIANT DU GUIDE A TROUVÉ UN VRAI DÉFAUT, LÀ OÙ LES TROIS CAS D'ESPÈCE PASSAIENT.**
+`starGuidePoint` place le familier meneur en avance sur le joueur le long du chemin. Trois
+contrôles « est-ce que ça marche » étaient au vert. Le quatrième — *le meneur n'est JAMAIS plus
+loin du but que le joueur*, balayé sur toutes les positions de départ et quatre avances — a
+échoué **20 fois sur 164** : la première écriture repartait du NŒUD le plus proche, qui est
+derrière un joueur à mi-case, si bien que le chien se retrouvait dans son dos. Corrigé en
+repartant de la PROJECTION sur le chemin. *La différence entre un banc qui mesure un cas et un
+banc qui mesure une propriété tient exactement là.*
+
+⚠️ **CE QU'IL NE VOIT TOUJOURS PAS, ET LA SÉANCE À L'ÉCRAN L'A TROUVÉ :** le guide s'éteignait
+tout seul à chaque carte de chapitre (`starGuideTarget` rend `null` quand une interface est
+ouverte — une garde qui a l'air évidente et qui confond un INSTANT avec un ÉTAT). Le chemin était
+calculé et valide ; le chien renonçait sans un mot. Cinquième fois que « regarder l'écran » trouve
+ce qu'aucune grandeur mesurée ne contenait.
 
 Ce qu'il mesure : la chaîne des cinq chapitres jouée par les vrais résolveurs, dans le DÉSORDRE ·
 `migrateStar` sur huit sauvegardes tordues (absente, nulle, une chaîne, un nombre, un tableau,

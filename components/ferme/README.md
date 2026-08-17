@@ -872,6 +872,47 @@ que la liste est la protection alors que c'est le banc.
   conversation, donc tous appariés d'un coup, donc tous figés à se saluer en boucle. Personne
   ne quittait la gare. **Un débarquement n'est pas une rencontre.**
 
+### 15 bis. LE GÉNÉRATEUR — arrivés ici au 449, sur l'ordre du §14.2 de `CLAUDE.md`
+
+⚠️⚠️ **CES CINQ PIÈGES VENAIENT DE `CLAUDE.md` §4, ET L'ORDRE DE LES DÉPLACER Y TRAÎNAIT DEPUIS
+LE 444** (reporté au 446, au 447, au 448). Ils décrivent tous `generateTownWorld` / le semis /
+les couches de sol : ils sont ici **à côté du code qu'ils gouvernent**, exactement comme les
+pièges de zone au 431 et les règles de dessin au 441. ⚠️ **Rien n'a été recopié** — ce qui est
+resté dans `CLAUDE.md` y est resté parce que c'est vrai à l'échelle du projet et non du
+générateur. ⚠️ **Et un doublon a été SUPPRIMÉ au passage, pas déplacé deux fois** : « une variante
+de décor est une couche » était écrit DEUX fois dans `CLAUDE.md` §4, une version courte en
+Architecture et une longue en JavaScript. C'est la version longue qui a survécu, et c'est très
+exactement ce à quoi sert une passe d'élagage.
+
+- ⚠️⚠️⚠️ **LA CASE D'UN DÉCOR N'EST PAS LA SURFACE QU'IL COUVRE** (435 pour un cas, **440 pour la
+  règle**). Le générateur raisonne en CASES ; le rendu dessine des sprites de 81, 67, 62 px — donc
+  **une case occupée, quatre ou cinq couvertes**. Tout ce qu'une passe ultérieure sème tombe
+  librement dans les cases couvertes : ça ne bloque rien, ça ne casse aucun trajet, **ça ne lève
+  rien**, ça se voit — et c'est ainsi qu'un chêne s'est planté sur le tablier d'un pont. L'emprise
+  se DÉRIVE du dessin (`townPropBox`, à partir de `planche.js`), jamais d'une largeur recopiée.
+- ⚠️⚠️ **UNE LISTE NOIRE À LAQUELLE IL MANQUE UNE VALEUR NE LÈVE RIEN, ELLE LAISSE PASSER** (440).
+  `plantTree` énumérait ce sur quoi on ne plante pas et avait oublié `G_BRIDGE`. **On énumère ce
+  qui est PERMIS** : le jour où un `G_*` s'ajoute, il n'est pas plantable tant que personne ne
+  l'écrit — c'est le seul sens qui résiste à l'ajout. Même famille que le `% 4` des étals (431).
+- ⚠️⚠️ **UNE PASSE QUI PAVE DÉGAGE CE QU'ELLE PAVE** (437, 439, **440 trois fois**). C'est la
+  famille de défauts la plus coûteuse du générateur : *une passe qui recouvre une passe antérieure
+  sans le savoir*. Trois allées testaient `solid` avant de peindre — or un arbre n'est pas solide
+  dans cette couche — et le gravier passait DESSOUS. Corollaire d'ordre : **ce qui est composé se
+  pose avant ce qui est semé**, sinon le semis gagne l'arbitrage.
+- ⚠️⚠️ **UN SECOND DE QUELQUE CHOSE SE PAIE EN NIVEAUX, PAS EN ZONES** (438). Une zone de plus
+  aurait demandé de retrouver les **vingt-cinq** endroits qui testent `zone === "court"`, et en
+  oublier un ne lève rien. Deux niveaux ne coûtent rien : tous les tests restent vrais, et deux
+  joueurs dans deux bâtiments différents ne peuvent pas se confondre puisque leurs `y` diffèrent.
+- ⚠️⚠️ **UNE VARIANTE DE DÉCOR EST UNE COUCHE, PAS UN NOUVEL IDENTIFIANT DE SOL** (434, 439).
+  Peindre les rues de Valley Town en goudron/pavés/briques par trois `G_*` de plus aurait rouvert
+  les **quarante** tests `ground === G_PATH` du moteur (marche, A\* piéton, A\* du taxi, arrêts,
+  oiseaux, lampadaires, haies…) : en oublier un ne lève rien, ça fait juste une rue qu'on ne
+  traverse plus. Le sol garde son identifiant, un tableau parallèle (`world.road`, comme `hedge` et
+  `solid`) dit avec quoi on le PEINT — ou de combien il MONTE (`tw._arch`, le dos d'âne des ponts).
+  ⚠️ Et **la passe qui remplit cette couche est la DERNIÈRE du générateur** : elle ne peint que ce
+  qui est encore du chemin, donc tout ce qu'une esplanade a recouvert entre-temps s'exclut tout
+  seul — zéro cas particulier, alors qu'écrite plus tôt elle en aurait exigé un par esplanade.
+
 ---
 
 ## 16. ZIP 433 — LES PIGEONS ET LES COLOMBES

@@ -959,6 +959,111 @@ section("La chute est vue, et le chevron désigne (445)");
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   8 bis. ZIP 449 — L'OBJECTIF COURANT ET LE FAMILIER QUI MÈNE.
+
+   ⚠️⚠️ CE QUE CETTE SECTION MESURE N'AVAIT AUCUN ENDROIT OÙ SE VOIR, et c'est
+   la question que CLAUDE.md dit de se poser en premier quand Guillaume voit un
+   défaut qu'aucun banc n'attrape : *quelle grandeur ne mesure-t-on pas ?* Ici
+   c'était **l'ACCORD entre ce que le bandeau DIT et ce que le chevron MONTRE**.
+   Sept contrôles regardaient déjà la quête et aucun ne comparait les deux —
+   parce qu'ils n'avaient jamais eu la même source, donc personne n'avait eu
+   l'idée de le demander.
+   ═══════════════════════════════════════════════════════════════════════════ */
+section("L'objectif courant (bandeau) et le guide");
+{
+  const e = Q.newStar();
+  ok("une quête pas tombée n'a pas d'objectif", Q.starGoalKey(e, {}) === null);
+  e.fall = 1000;
+  ok("…une fois tombée, l'objectif est le sillon", Q.starGoalKey(e, {}) === "furrow");
+  Q.resolveStarFound(e, "furrow", "j1", 1001);
+  ok("⚠️ le cratère BRÛLANT et le cratère FROID ne disent pas la même chose",
+     Q.starGoalKey(e, { craterHot: true }) === "craterHot" && Q.starGoalKey(e, {}) === "crater");
+  Q.resolveStarFound(e, "crater", "j1", 1002);
+  ok("⚠️ l'objectif SUIT la trouvaille à l'intérieur d'un chapitre (le défaut du 448 pris ailleurs)",
+     Q.starGoalKey(e, {}) === "lean");
+  Q.resolveStarFound(e, "leanLake", "j1", 1003);
+  ok("…et les deux écoutes d'ombres se distinguent", Q.starGoalKey(e, {}) === "leanAgain");
+
+  /* ⚠️⚠️ LA JOINTURE, ET C'EST LE CONTRÔLE QUI JUSTIFIE TOUTE LA SECTION : quand
+     le chevron désigne un lieu, le bandeau doit parler DE CE LIEU. Deux sources
+     pour « où vais-je » est la forme exacte de « une porte sans chemin de code
+     ment » (444) — sauf qu'ici les deux avaient l'air justes. On rejoue la quête
+     entière, trouvaille par trouvaille, et on compare à chaque pas. */
+  {
+    const e2 = Q.newStar(); e2.fall = 1;
+    let checked = 0, bad = [];
+    for (let guard = 0; guard < 24; guard++) {
+      const tgt = Q.starTargetSite(e2);
+      const goal = Q.starGoalKey(e2, {});
+      if (tgt && goal !== tgt) bad.push(`${goal || "∅"}≠${tgt}`);
+      if (tgt) checked++;
+      const miss = Q.starMissing(e2);
+      if (!miss.length) break;
+      if (miss[0] === "song") e2.duet = Q.STAR_DUET_PHRASES;
+      Q.resolveStarFound(e2, miss[0], "j1", 10 + guard);
+    }
+    ok("⚠️⚠️ le bandeau et le chevron désignent TOUJOURS le même lieu",
+       bad.length === 0 && checked >= 6, bad.join(" ") || `${checked} états comparés`);
+    /* Et le seul endroit où le chevron se tait DOIT être couvert par une phrase :
+       c'est le moment où le joueur n'a rien d'autre (§ `spot: "*lean"`). */
+    const e3 = Q.newStar(); e3.fall = 1;
+    Q.resolveStarFound(e3, "furrow", "j1", 2); Q.resolveStarFound(e3, "crater", "j1", 3);
+    ok("⚠️ pas de chevron pendant l'écoute des ombres…", Q.starTargetSite(e3) === null);
+    ok("…mais le bandeau, lui, dit quoi faire", Q.starGoalKey(e3, {}) === "lean");
+  }
+
+  /* ── LE POINT DU MENEUR. Pure, donc mesurable — c'est la raison pour laquelle
+     elle est dans `quete.js` et pas dans la closure de `drawPetsFor`. */
+  const line = []; for (let i = 0; i <= 20; i++) line.push({ x: i, y: 0 });
+  ok("un chemin vide ne rend pas de point", Q.starGuidePoint([], 0, 0, 3) === null);
+  {
+    const p = Q.starGuidePoint(line, 0, 0, 3);
+    ok("le meneur se place à l'avance demandée", p && Math.abs(p.x - 3) < 0.001 && !p.end,
+       p ? `x=${p.x.toFixed(2)}` : "null");
+  }
+  {
+    /* ⚠️ IL REPART DU NŒUD LE PLUS PROCHE, JAMAIS DU DÉBUT : sans ça, un joueur
+       au milieu du chemin verrait son chien revenir au point de départ, c'est-à-
+       dire lui tourner le dos — un guide qui recule est pire que pas de guide. */
+    const p = Q.starGuidePoint(line, 12, 0, 3);
+    ok("⚠️ il repart du nœud le plus proche du joueur", p && Math.abs(p.x - 15) < 0.001,
+       p ? `x=${p.x.toFixed(2)}` : "null");
+  }
+  {
+    const p = Q.starGuidePoint(line, 19, 0, 6);
+    ok("un chemin plus court que l'avance fait attendre au bout", p && p.end === true && Math.abs(p.x - 20) < 0.001);
+  }
+  {
+    /* ⚠️⚠️ L'INVARIANT, ET IL VAUT PLUS QUE LES TROIS CAS AU-DESSUS : le meneur
+       est TOUJOURS plus près du but que le joueur. C'est la seule chose qu'on
+       veuille vraiment de ce guide, et c'est la seule qui ne dépende ni de la
+       carte, ni de l'avance réglée, ni de la forme du chemin. On balaie toutes
+       les positions de départ et toutes les avances. */
+    let bad = 0, tot = 0;
+    const goal = line[line.length - 1];
+    for (let s = 0; s <= 20; s += 0.5) {
+      for (const ah of [0.5, 1.4, 2.8, 5]) {
+        const p = Q.starGuidePoint(line, s, 0, ah); tot++;
+        if (!p) { bad++; continue; }
+        const dMe = Math.hypot(goal.x - s, goal.y - 0), dHim = Math.hypot(goal.x - p.x, goal.y - p.y);
+        if (dHim > dMe + 1e-6) bad++;
+      }
+    }
+    ok("⚠️⚠️ le meneur n'est JAMAIS plus loin du but que le joueur", bad === 0, `${tot - bad}/${tot} cas`);
+  }
+  /* ── LE DÉPART SPONTANÉ. ⚠️ C'EST UNE RÈGLE DE TEMPS, donc une fonction pure et
+     un banc de LOGIQUE : un banc de rendu ne peut pas la voir (leçon du 448). */
+  ok("il ne part pas spontanément avant l'heure", Q.starGuideAuto(Q.STAR_GUIDE_STUCK_MS - 1, false) === false);
+  ok("…il part quand ça traîne", Q.starGuideAuto(Q.STAR_GUIDE_STUCK_MS, false) === true);
+  ok("⚠️ …et il ne se rejoue pas sur le même objectif", Q.starGuideAuto(Q.STAR_GUIDE_STUCK_MS * 9, true) === false);
+  ok("⚠️ il s'arrête AVANT le but (il ne joue pas à la place du joueur)",
+     Q.STAR_GUIDE_ARRIVE > 0 && Q.STAR_GUIDE_ARRIVE < Q.STAR_GUIDE_LEASH,
+     `arrêt à ${Q.STAR_GUIDE_ARRIVE}, laisse à ${Q.STAR_GUIDE_LEASH}`);
+  ok("⚠️ l'avance tient dans la laisse", Q.STAR_GUIDE_AHEAD < Q.STAR_GUIDE_LEASH,
+     `avance ${Q.STAR_GUIDE_AHEAD} < laisse ${Q.STAR_GUIDE_LEASH}`);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    9. LES TEXTES. Chaque clé lue par le jeu doit exister — une phrase manquante
    rend `undefined`, qui s'affiche tel quel dans une bulle.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -968,9 +1073,28 @@ section("Les textes de la quête");
   const st = S.FERME_STR.en.star;
   ok("la table `star` existe des deux côtés", !!S.FERME_STR.en.star && !!S.FERME_STR.fr.star);
   ok("⚠️ …et c'est LA MÊME table (une seule écriture)", S.FERME_STR.en.star === S.FERME_STR.fr.star);
-  for (const ch of Q.STAR_CHAPTERS) {
-    ok(`le chapitre « ${ch.key} » a son titre`, typeof st.chapter[ch.key] === "string");
-    ok(`…et son objectif de pisteur`, typeof st.hud.goal[ch.key] === "string");
+  for (const ch of Q.STAR_CHAPTERS) ok(`le chapitre « ${ch.key} » a son titre`, typeof st.chapter[ch.key] === "string");
+  /* ⚠️⚠️ ZIP 449 — LES OBJECTIFS SE VÉRIFIENT PAR CLÉ DÉRIVÉE, PLUS PAR CHAPITRE.
+     Le bandeau lisait `goal[chapitre]` : une phrase pour trois objectifs, donc un
+     bandeau qui ment la moitié du temps. Il lit maintenant `Q.starGoalKey`, et ce
+     contrôle balaie `STAR_GOAL_KEYS`, qui est lui-même DÉRIVÉ de `STAR_SITES` :
+     le jour où l'on ajoute un lieu, ce banc réclame sa phrase tout seul. */
+  for (const k of Q.STAR_GOAL_KEYS)
+    ok(`l'objectif « ${k} » a sa phrase de bandeau`, typeof st.hud.goal[k] === "string" && st.hud.goal[k].length > 0);
+  ok("…et aucune phrase de bandeau n'est orpheline",
+     Object.keys(st.hud.goal).every(k => Q.STAR_GOAL_KEYS.includes(k)),
+     Object.keys(st.hud.goal).filter(k => !Q.STAR_GOAL_KEYS.includes(k)).join(",") || `${Q.STAR_GOAL_KEYS.length} objectifs`);
+  /* ⚠️⚠️ ET ELLES SE COMPTENT EN SIGNES, POUR LA MÊME RAISON QUE LES TITRES DE
+     MINI-JEU — SAUF QUE CELLE-CI A ÉTÉ PAYÉE EN SILENCE PENDANT CINQ ZIPS. Le
+     bandeau était en `white-space:nowrap` + `text-overflow:ellipsis` : une phrase
+     trop longue n'était pas signalée, elle était COUPÉE. Il tient deux lignes
+     depuis le 449 ; le plafond reste dur, sinon un bandeau de mission redevient
+     le journal de quête que ce chantier refuse. 560 px, deux lignes de 12 px,
+     l'icône et les pastilles déduites : ~95 signes, on s'arrête à 80. */
+  const GOAL_MAX = 80;
+  for (const k of Q.STAR_GOAL_KEYS) {
+    const s = st.hud.goal[k] || "";
+    ok(`…et « ${k} » tient dans le bandeau`, s.length <= GOAL_MAX, `${s.length} signes`);
   }
   for (const op of Q.STAR_DEV_OPS) ok(`le bouton dev « ${op} » a son libellé`, typeof st.dev.op(op) === "string" && st.dev.op(op) !== op);
   for (const sc of Q.STAR_DEV_SCENES) ok(`la scène dev « ${sc} » a son libellé`, typeof st.dev.scene(sc) === "string" && st.dev.scene(sc) !== sc);

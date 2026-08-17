@@ -7259,7 +7259,7 @@ div.ferme-usage{ margin-bottom:10px; }
 .ferme-star-hud{
   position:fixed; left:50%; transform:translateX(-50%);
   top:calc(env(safe-area-inset-top, 0px) + 8px); z-index:22;
-  display:flex; align-items:center; gap:10px; max-width:min(520px, 92vw);
+  display:flex; align-items:center; gap:10px; max-width:min(560px, 92vw);
   padding:6px 12px; border-radius:14px; pointer-events:none;
   background:rgba(10,14,30,.72); border:2px solid rgba(255,228,164,.30);
   box-shadow:0 3px 14px rgba(0,0,0,.45);
@@ -7269,7 +7269,21 @@ div.ferme-usage{ margin-bottom:10px; }
 .ferme-star-hud .pips{ display:flex; gap:4px; flex:0 0 auto; }
 .ferme-star-hud .pip{ width:9px; height:9px; border-radius:50%; border:1px solid rgba(255,228,164,.55); }
 .ferme-star-hud .pip.on{ background:#ffd868; box-shadow:0 0 7px rgba(255,216,104,.85); }
-.ferme-star-hud .goal{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* ⚠️⚠️ ZIP 449 — DEUX LIGNES, PLUS UNE SEULE TRONQUÉE. Le bandeau était en
+   `white-space:nowrap` + `text-overflow:ellipsis` : toute consigne un peu plus
+   guidante que « A magpie took two of them. » se faisait **couper en silence**,
+   au milieu d'un mot, sans qu'aucun banc ni aucune relecture ne le voie. C'est la
+   famille du « canevas qui découpe ce qui dépasse » (§4 de CLAUDE.md, payé trois
+   fois au 433) appliquée à du texte — et l'endroit le plus cher où la payer,
+   puisque c'est la seule ligne qu'un joueur perdu relit.
+   ⚠️ LE PLAFOND RESTE DUR (deux lignes), sinon un bandeau de mission redevient un
+   journal de quête, ce que ce chantier refuse depuis le 444. Les phrases sont
+   donc écrites COURTES et `verify-quete` compte leurs signes : la contrainte est
+   tenue par le texte, pas par la coupe. */
+.ferme-star-hud .goal{
+  overflow:hidden; white-space:normal;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+}
 
 /* ---- LE MINI-JEU. Plein écran, canevas au centre. ⚠️ `touch-action:none` :
    sans lui, glisser le doigt pour mener la lumière fait défiler la page. */

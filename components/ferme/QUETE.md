@@ -744,6 +744,40 @@ se jouent, les trois scènes se jouent, le pisteur et la compagne suivent, la re
 allait, et la fin laisse ses traces. Tout est arbitré par l'hôte, rien ne paie un or, aucune
 migration SQL.
 
+### 12.1 bis ⚠️⚠️ ZIP 449 — LES CONSIGNES GUIDENT ENFIN, ET UN FAMILIER MÈNE
+
+**Demande de Guillaume :** « il faut que les instructions soient moins mystérieuses, plus
+guidantes sinon le jeune public va abandonner. reste subtil mais ajoute des hints. »
+
+**1. Le bandeau dit l'OBJECTIF, plus le chapitre — et ta remarque était juste : il ne
+s'actualisait pas.** `hud.goal` était classé par CHAPITRE, or le 2 en contient trois et le 4 en
+contient deux : on pouvait sortir l'étoile du cratère, croiser les ombres, et lire encore « Find
+where the rest of it fell. » ⚠️ **Il pouvait même contredire le chevron**, qui dérivait, lui, de
+`starTargetSite` — deux sources pour « où vais-je ». Les deux lisent maintenant la même liste
+(`Q.starGoalKey`), et le rappel de reprise aussi. Le séquençage GTA que tu voulais garder est
+intact : la carte de chapitre plein écran ne bouge pas, c'est le bandeau qui suit.
+
+**2. Les phrases nomment l'endroit.** Règle qu'on se donne : *une phrase de bandeau dit OÙ et
+QUOI, jamais pourquoi.* Le mystère reste dans les bulles et les scènes, où il fait plaisir ; il ne
+coûte plus un aller-retour en train pour rien. Les consignes de mini-jeu disent désormais le BUT
+avant le geste (l'ombre au mur, le battement de l'éclat, les trois façons de perdre la pie) et,
+**décision de Guillaume, aucune ne nomme une touche** : le reste du jeu n'écrit jamais ses
+commandes.
+
+**3. Un familier MÈNE, à la demande (G) et tout seul si ça traîne (2 min 30).** ⚠️ **Un seul
+prend la tête** (indice 0, déterministe) ; les autres suivent, ce qui rend le meneur lisible. Il
+va vers le lieu cherché, vers le TRAIN quand il est sur l'autre carte, vers la PORTE quand il est
+dans un intérieur — et **il s'arrête à trois cases et s'assied** : il guide, il ne joue pas à ta
+place. ⚠️ **On a écarté le PNJ témoin exprès** : `fall.quiet` dit « personne ne sort regarder,
+personne n'en dit un mot », et c'est la meilleure page du chantier. Un animal montre sans parler,
+donc le secret tient. Coût réseau : **zéro** (position dérivée, état purement local).
+
+**Ce que la séance à l'écran a trouvé et qu'aucun banc ne voyait :** le guide s'éteignait à chaque
+carte de chapitre — `starGuideTarget` rend `null` quand une interface est ouverte, et la garde
+« pas de cible → j'arrête » confondait un INSTANT avec un ÉTAT. Corrigé. **Et l'invariant du banc
+(« le meneur n'est jamais plus loin du but que le joueur ») a trouvé l'autre :** repartir du nœud
+le plus proche mettait le chien dans le dos du joueur, 20 cas sur 164.
+
 ### 12.2 ⚠️⚠️ CE QUI RESTE, ET C'EST COURT — MAIS C'EST LE PLUS IMPORTANT
 
 **A. LA SÉANCE À DEUX CLIENTS. C'est la passe qui manque, et c'est TOUTE la moitié coopérative.**

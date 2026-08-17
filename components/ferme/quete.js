@@ -538,6 +538,96 @@ export function starTargetSite(e) {
 export const STAR_HIDE_R = 4.5;
 export const STAR_HIDE_MS = 2200;
 
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 449 — LE FAMILIER QUI MÈNE. « pas tous les pets, seul un prendra le
+   ║ lead » (Guillaume), « à la demande, et automatique si ça traîne ».
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ POURQUOI UN ANIMAL ET PAS UN PNJ, ET CE N'EST PAS UN GOÛT : le thème de
+   cette quête est le SECRET (§3 de QUETE.md, et `fall.quiet` l'écrit noir sur
+   blanc — « personne ne sort regarder, personne n'en dit un mot »). Un habitant
+   qui renseignerait le joueur sur l'impact démolirait la meilleure page du
+   chantier pour rendre un service que n'importe quel chien rend mieux. **Un
+   familier montre sans parler** : il guide, il ne raconte pas, et le silence de
+   la vallée reste entier.
+   ⚠️⚠️ ET IL NE COÛTE RIEN AU RÉSEAU, pour la même raison que la compagne : sa
+   position est DÉRIVÉE chez chaque client (`drawPetsFor` la lisse déjà). Le seul
+   état neuf est LOCAL — « est-ce que je demande de l'aide, là, maintenant » — et
+   il n'a aucune raison de traverser : c'est le confort d'UN joueur, pas un fait
+   du monde. §3 de CLAUDE.md, dans sa forme la moins chère.
+   ⚠️ UN SEUL MÈNE. Le choix est l'INDICE 0, c'est-à-dire déterministe et stable :
+   un « le plus proche » changerait de meneur à chaque pas, et un tirage donnerait
+   deux meneurs différents sur deux écrans (le familier des autres joueurs est
+   dessiné par tout le monde depuis le 247). Les autres continuent de suivre —
+   c'est ce qui rend le meneur LISIBLE : il se détache du peloton. */
+export const STAR_GUIDE_AHEAD = 2.8;        // cases d'avance sur le joueur, le long du chemin
+export const STAR_GUIDE_LEASH = 5.0;        // au-delà, il s'arrête et attend : un guide qu'on perd de vue ne guide pas
+export const STAR_GUIDE_ARRIVE = 3.0;       // assez près du but : il a fini, il revient au pied
+/* ⚠️⚠️ IL S'ARRÊTE DE LUI-MÊME, ET C'EST LA MOITIÉ DE LA MÉCANIQUE. Un guide qui
+   mène jusqu'au bout fait le jeu à la place du joueur ; celui-ci s'arrête à trois
+   cases et laisse la dernière trouvaille à celui qui la cherche. C'est la
+   différence entre « on m'a aidé » et « on a joué pour moi ». */
+export const STAR_GUIDE_STUCK_MS = 150000;  // 2 min 30 sur le MÊME objectif : il part tout seul, une fois
+/* ⚠️ « UNE FOIS », ET LE MOT COMPTE : le départ spontané ne se rejoue pas tant
+   que l'objectif n'a pas changé. Une aide qui revient toutes les deux minutes
+   n'est plus une aide, c'est une notification — le reproche exact fait au rappel
+   de reprise (« une fois par session, jamais deux »). */
+export function starGuideAuto(sameGoalMs, alreadyOffered) {
+  return !alreadyOffered && (+sameGoalMs || 0) >= STAR_GUIDE_STUCK_MS;
+}
+
+/* ⚠️⚠️ LE POINT OÙ SE PLACE LE MENEUR — PURE, DONC MESURABLE, ET PARTAGÉE PAR LES
+   DEUX CARTES. La ferme cherche avec `findPavedPath`, la ville avec
+   `townFindPath` ; les deux rendent une liste de `{x, y}`, et c'est tout ce que
+   cette fonction demande. Une seconde écriture « spéciale ville » aurait divergé
+   au premier réglage, et le symptôme aurait été le §3 du piège n°1 : « il me
+   guide à la ferme et pas en ville ».
+   ⚠️ ELLE REPART DE LA PROJECTION DU JOUEUR SUR LE CHEMIN, JAMAIS DU DÉBUT.
+   Sans ça, un joueur qui coupe par la traverse verrait son chien revenir au point
+   de départ pour refaire le trajet — c'est-à-dire lui tourner le dos.
+   ⚠️⚠️ ET « PROJECTION », PAS « NŒUD LE PLUS PROCHE » : LE BANC A TRANCHÉ. Le
+   premier jet repartait du nœud le plus proche, ce qui est l'écriture qu'on pose
+   naturellement et qui a l'air juste. Elle ne l'est pas : un joueur à mi-case
+   entre deux nœuds a son plus proche DERRIÈRE lui, l'avance est alors dépensée à
+   revenir dessus, et pour une petite avance **le meneur se retrouve dans le dos
+   du joueur**. Vingt cas sur cent-soixante-quatre, tous invisibles à la
+   relecture. ⚠️ Ce n'est pas le contrôle « est-ce que ça marche » qui l'a vu,
+   c'est l'INVARIANT (« le meneur n'est jamais plus loin du but que le joueur »),
+   balayé sur toutes les positions et toutes les avances — la différence entre un
+   banc qui mesure un cas et un banc qui mesure une propriété.
+   ⚠️ ELLE INTERPOLE plutôt que de sauter de case en case : un guide qui se
+   téléporte de tuile en tuile a l'air d'un curseur, pas d'un animal.
+   Rend `null` si le chemin est vide — cas NORMAL (cible dans une autre zone,
+   recherche trop longue), et l'appelant retombe alors sur le suivi ordinaire. */
+export function starGuidePoint(path, px, py, ahead) {
+  if (!path || !path.length) return null;
+  let left = ahead === undefined ? STAR_GUIDE_AHEAD : +ahead;
+  if (path.length === 1) return { x: path[0].x, y: path[0].y, end: true };
+  /* 1. La projection : le point du CHEMIN (segment compris, pas seulement les
+     nœuds) le plus proche du joueur, et l'indice du segment qui le porte. */
+  let bi = 0, bd = Infinity, bx = path[0].x, by = path[0].y;
+  for (let i = 0; i < path.length - 1; i++) {
+    const ax = path[i].x, ay = path[i].y, vx = path[i + 1].x - ax, vy = path[i + 1].y - ay;
+    const len2 = vx * vx + vy * vy;
+    const t = len2 > 1e-9 ? Math.max(0, Math.min(1, ((px - ax) * vx + (py - ay) * vy) / len2)) : 0;
+    const qx = ax + vx * t, qy = ay + vy * t;
+    const d = Math.hypot(qx - px, qy - py);
+    if (d < bd) { bd = d; bi = i; bx = qx; by = qy; }
+  }
+  /* 2. On avance le long du chemin À PARTIR de cette projection. Le trajet ne
+     peut donc que progresser vers le but, quelle que soit la position du joueur. */
+  let cx = bx, cy = by;
+  for (let i = bi + 1; i < path.length; i++) {
+    const nx = path[i].x, ny = path[i].y;
+    const seg = Math.hypot(nx - cx, ny - cy);
+    if (seg >= left && seg > 1e-6) {
+      const k = left / seg;
+      return { x: cx + (nx - cx) * k, y: cy + (ny - cy) * k, end: false };
+    }
+    left -= seg; cx = nx; cy = ny;
+  }
+  return { x: cx, y: cy, end: true };   // le chemin est plus court que l'avance : il attend au bout
+}
+
 /* ───────────────────────────────────────────────────────────────────────────
    4. LA GÉOMÉTRIE — DÉRIVÉE, JAMAIS ÉCRITE.
 
@@ -673,6 +763,67 @@ export function starMissing(e) {
 export function starChapterKey(e) {
   return (STAR_CHAPTERS[Math.min(e ? e.ch | 0 : 0, STAR_CH_DONE - 1)] || {}).key || "field";
 }
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 449 — L'OBJECTIF COURANT. LE BANDEAU DISAIT LE CHAPITRE ; IL DOIT DIRE
+   ║ CE QU'ON CHERCHE MAINTENANT. (demande de Guillaume : « le séquençage par
+   ║ chapitres est excellent, genre GTA […] mais il faut que tout ça s'actualise
+   ║ quand on avance. »)
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ LE DÉFAUT ÉTAIT MESURABLE ET PERSONNE NE LE MESURAIT : le pisteur lisait
+   `hud.goal[starChapterKey(e)]`, **une phrase par CHAPITRE**. Or deux chapitres
+   sur cinq contiennent plusieurs objectifs — le 2 en a trois (le cratère, puis
+   deux croisements d'ombres), le 4 en a deux. On pouvait donc sortir l'étoile du
+   trou, croiser les ombres une fois, et lire encore « Find where the rest of it
+   fell. » ⚠️ **C'est un bandeau qui MENT pendant la moitié de la quête**, et
+   c'est le pire endroit du jeu pour mentir : c'est le seul texte qu'un joueur
+   perdu relit.
+   ⚠️⚠️ ET IL POUVAIT CONTREDIRE LE CHEVRON, QUI EST L'AUTRE MOITIÉ DE LA MÊME
+   RÉPONSE. Le chevron dérive de `starTargetSite` (le premier lieu manquant qui a
+   une vraie position), le bandeau dérivait du chapitre : deux sources pour la
+   question « où vais-je ». C'est la forme exacte de « une porte sans chemin de
+   code ment » (444) — les deux avaient l'air justes, et rien ne garantissait
+   qu'ils parlaient du même endroit. **Ils lisent maintenant la même liste.**
+
+   ⚠️ TROIS CLÉS NE SONT PAS DES LIEUX, ET C'EST VOULU :
+     • `craterHot` — le trou fume encore. C'est un état de TEMPS, pas de place, et
+       c'est la seule chose que le joueur peut faire (attendre) ; un bandeau qui
+       dirait « descends dans le cratère » pendant qu'on brûle en y descendant
+       (`starCraterBurns`) serait « le jeu propose et refuse » du 426, payé ici en
+       dix minutes de repos forcé ;
+     • `lean` / `leanAgain` — l'écoute des ombres n'a **délibérément** aucune
+       position (`spot: "*lean"`), donc pas de chevron. C'est précisément le
+       moment où le joueur n'a plus RIEN, et c'est donc le moment où le bandeau
+       doit porter toute la consigne. Les distinguer laisse dire « une de faite,
+       une à faire » plutôt que de répéter la même phrase.
+   ⚠️ ELLE REND `null` QUAND IL N'Y A RIEN À DIRE (pas tombée, ou finie), jamais
+   une clé de repli : le repli poli du 444 n'échoue pas, il AFFICHE la clé. */
+export function starGoalKey(e, ctx) {
+  if (!e || !starFallen(e) || starDone(e)) return null;
+  const missing = starMissing(e);
+  const first = missing[0];
+  if (!first) return null;
+  /* ⚠️ L'ORDRE DE LA TABLE FAIT FOI, comme pour `starTargetSite` : le premier qui
+     manque est celui qu'on cherche. Aucune liste parallèle. */
+  if (first === "crater" && ctx && ctx.craterHot) return "craterHot";
+  if (first === "leanLake") return "lean";
+  if (first === "leanGlass") return "leanAgain";
+  return first;
+}
+/* Toutes les clés que `starGoalKey` peut rendre — DÉRIVÉES de la table, pour que
+   le banc vérifie qu'aucune n'est orpheline de texte. ⚠️ C'est le contrôle qui
+   manquait aux libellés de téléport (444) : une clé sans phrase ne plante pas,
+   elle affiche `undefined` dans le bandeau. */
+export const STAR_GOAL_KEYS = (() => {
+  const out = [];
+  for (const s of STAR_SITES) {
+    if (s.id === "leanLake") { out.push("lean"); continue; }
+    if (s.id === "leanGlass") { out.push("leanAgain"); continue; }
+    out.push(s.id);
+    if (s.id === "crater") out.push("craterHot");
+  }
+  return out;
+})();
 
 /* ⚠️⚠️ LA BASCULE EST UNE BOUCLE, PAS UN `if` — reprise telle quelle du 442, où
    elle avait été écrite pour le désordre et où elle a servi. Un joueur peut
