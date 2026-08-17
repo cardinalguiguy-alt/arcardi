@@ -5839,7 +5839,24 @@ export function generateTownWorld() {
        largeur rebouge un jour. */
     const top = ry === C.TOWN_MAIN_ST_Y ? C.TOWN_MAIN_ST_Y0 : ry;
     const bot = top + (ry === C.TOWN_MAIN_ST_Y ? C.TOWN_MAIN_ST_W : 2) - 1;
-    for (let x = 12; x < W - 8; x += 6) { plantTree(x, top - 2); plantTree(x + 3, bot + 2); }
+    /* ⚠️⚠️ ZIP 450 — LE PAS DE 6 EST UN DIVISEUR EXACT DE L'ÉCART LE PLUS SERRÉ
+       ENTRE DEUX MAISONS (12, ex. x=46 et x=58, TOWN_HOUSE_W=6). La haie de
+       chaque jardin s'arrête à `hsn.x ± (TOWN_HOUSE_W/2 + 4)` (voir `clearOf`
+       plus bas) et laisse donc, entre deux parcelles voisines, un pincement de
+       DEUX cases que rien ne couvre — et un tirage sur douze du pas d'avenue
+       tombe pile dedans. Guillaume l'a vu à l'écran, systématiquement, sur
+       plusieurs paires de maisons : un arbre planté dans l'axe central de la
+       jointure, infranchissable en ligne droite dans un couloir de deux cases.
+       On saute donc ce point d'alignement quand il est à portée d'une façade
+       (même marge que `clearOf`), plutôt que de le planter puis de compter sur
+       une garde de collision pour le contourner — l'avenue perd un arbre sur
+       douze près des maisons, elle n'en gagne aucun dans un mur. */
+    const nearHouseFront = (tx) => C.TOWN_HOUSES.some(hsn =>
+      tx >= hsn.x - 3 && tx < hsn.x + C.TOWN_HOUSE_W + 3 && Math.abs(ry - hsn.y) <= 10);
+    for (let x = 12; x < W - 8; x += 6) {
+      if (!nearHouseFront(x)) plantTree(x, top - 2);
+      if (!nearHouseFront(x + 3)) plantTree(x + 3, bot + 2);
+    }
   }
 
   /* ------------------------------------------------------- LA GARE, LES RAILS
@@ -5873,7 +5890,17 @@ export function generateTownWorld() {
       if (inMap(x + dx, y + dy) && Math.abs(elev[id(x + dx, y + dy)] - elev[i]) > 0.01) return false;
     }
     for (const hsn of C.TOWN_HOUSES) {
-      if (x >= hsn.x - 1 && x < hsn.x + C.TOWN_HOUSE_W + 1 && y >= hsn.y - 4 && y < hsn.y + C.TOWN_HOUSE_H + 2) return false;
+      /* zip 450 : marge x portée de 1 à 3. Deux parcelles voisines espacées de
+         12 cases (le pas le plus serré de TOWN_HOUSES, ex. x=46 et x=58, W=6)
+         laissaient deux cases NI haie NI exclues entre leurs deux jardins
+         clos — le seul endroit du pourtour qu'aucune des deux haies ne
+         couvre. Le semis (`put`, ci-dessous) y plantait parfois un arbre
+         isolé, pile entre les deux parcelles : un chicane large de deux cases
+         seulement, donc infranchissable en ligne droite. Avec une marge de 3
+         de chaque côté, la somme des deux exclusions (6) couvre exactement
+         l'écart (12 − 6 = 6) entre deux façades voisines, sans laisser de
+         case orpheline. */
+      if (x >= hsn.x - 3 && x < hsn.x + C.TOWN_HOUSE_W + 3 && y >= hsn.y - 4 && y < hsn.y + C.TOWN_HOUSE_H + 2) return false;
     }
     /* ⚠️ ZIP 440 — ET PAS DANS LE CORPS D'UN DÉCOR. Ce semis est le SECOND
        chemin qui plante un arbre (l'autre est `plantTree`) : durcir l'un sans

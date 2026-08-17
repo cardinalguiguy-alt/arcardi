@@ -11,14 +11,24 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**Livré au 449, en deux passes, toutes deux mesurées ET regardées à l'écran :** la **brûlure du
-cratère** (on ne descend pas dans un trou en fusion — `starCraterBurns`, huit contrôles) ; et la
-**passe de GUIDAGE de la quête**, demandée par Guillaume (« moins mystérieux, plus guidant, sinon
-le jeune public va abandonner ») — le bandeau dit désormais l'**objectif courant** et non le
-chapitre (il mentait la moitié de la quête et pouvait contredire le chevron), les consignes de
-mini-jeu disent le BUT avant le geste sans jamais nommer une touche, et **un familier MÈNE** (G,
-ou tout seul après 2 min 30 : un seul prend la tête, il va au lieu / au train / à la porte, et il
-s'assied à trois cases). Détail au **§12.1 bis de `components/ferme/QUETE.md`**.
+**Livré au 450 : deux correctifs d'une séance de jouabilité de Guillaume** (audit à l'écran, pas
+un banc — le §25 de `README.md` le redit à chaque fois). ⚠️⚠️ **1. LA COURSE PLANTAIT TOUT LE
+JEU, 3/3.** `out.farmer = { id, energy }` (course, `spendEnergy`, `FermeGame.js:3059`) était le
+SEUL des trente et quelques patchs de fermier du fichier à omettre `tools`/`inv` — le client
+réapplique ce patch tel quel (`setMyTools(p.farmer.tools)`), donc `myTools` devenait `undefined`
+dès la première dépense d'énergie en Maj, et `toolKind` (barre d'outils) plantait TOUTE la
+session React à la première touche. Un contrôle d'exemples n'aurait rien vu (30 des 31 patchs
+sont corrects) ; c'est un `grep` de tous les `out.farmer = {` qui a isolé le seul défectueux.
+**2. UN ARBRE POUSSAIT SYSTÉMATIQUEMENT ENTRE CHAQUE PAIRE DE MAISONS ESPACÉES DE 12 CASES**
+(le pas le plus serré de `TOWN_HOUSES`, `TOWN_HOUSE_W=6`) : la haie de chaque jardin clos laisse,
+entre deux parcelles voisines, un pincement de DEUX cases que rien ne couvrait — et le pas de 6
+de l'alignement d'arbres d'avenue (`fermeEngine.js`, un tirage sur douze) tombait pile dedans, un
+couloir de deux cases devenant infranchissable en ligne droite. Réparé en sautant ce point
+d'alignement à portée d'une façade (même marge que `clearOf`), **vérifié en régénérant la ville et
+en listant les objets dans chaque pincement** (`verify-vallee` 200/200 inchangé — c'est un défaut
+de PLACEMENT, pas de collision). ⚠️ **Les quatre autres points de l'audit (amas de résidents à
+l'arrivée du train, pas de glissement diagonal, intitulés de métier en anglais, prairie nue) NE
+SONT PAS CORRIGÉS** — Guillaume a demandé seulement les points 1 et 4, ils restent ouverts.
 
 **La prochaine action, et elle est unique : POSER LA MAISON `house` (chantier 447).** Elle est
 importée, propre, 90×90 natifs — et posée nulle part. Deux préalables, tous deux écrits au §27.5

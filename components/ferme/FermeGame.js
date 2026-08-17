@@ -3059,7 +3059,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const amt = Math.max(0, Math.min(C.RUN_ENERGY_CLAMP, req.amount | 0));
       if (amt > 0 && f.energy > 0) {
         f.energy = Math.max(0, f.energy - amt);
-        out.farmer = { id: f.id, energy: f.energy };
+        // zip 450 : seul endroit du fichier où out.farmer omettait tools/inv —
+        // le client réplique ce patch tel quel (setMyTools(p.farmer.tools)),
+        // donc myTools devenait undefined dès la première dépense d'énergie
+        // en course, et plantait au rendu de la barre d'outils (toolKind).
+        out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
         dirtyRef.current = true;
       }
     } else if (req.kind === "wardrobeBuy" || req.kind === "wardrobeWear") {
