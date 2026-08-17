@@ -119,3 +119,37 @@ eux-mêmes ; `tools/README.md` pour les bancs qui les regardent.
   canevas TRANSPARENT, le sol reste dessous, la saison, la nuit et la météo continuent d'être
   héritées gratuitement, et on gagne le droit de peindre pixel par pixel. Ce qu'il ne faut pas
   cuire, c'est le FOND, jamais la forme.
+- ⚠️⚠️ **UNE QUEUE SE LIT PAR SES VIDES AUTANT QUE PAR SA MATIÈRE** (448). La queue de la comète,
+  premier jet : mèches épaisses et fumée qui gonfle par-dessus — le résultat était **le dégradé
+  qu'on remplaçait, en plus gros**, c'est-à-dire un tampon d'ouate. Deux réglages la sauvent, et
+  aucun n'est cosmétique : les mèches sont **minces** (un tiers de rayon de tête), et leur écart à
+  l'axe est multiplié par la distance (`off ∝ s`) — elles se touchent à la tête et **s'écartent**
+  au loin. Le contrôle est mesurable : compter les **inversions de pente en travers** du panache
+  (0 = un dégradé, ≥ 3 = des mèches).
+- ⚠️⚠️ **QUANTIFIER LA VALEUR EST LA RÈGLE, MAIS TROP PEU DE PALIERS NE SIMPLIFIE PAS — ÇA DESSINE
+  UN BORD** (448). Le halo de la comète en trois paliers faisait un **disque franc** sur le ciel
+  noir : une assiette bleue posée derrière elle. C'est l'exception à la ligne « la valeur se
+  quantifie en paliers » ci-dessus, et elle a une forme simple : *ce qui doit s'ÉTEINDRE demande
+  assez de marches pour que l'œil lise une pente, et la dernière doit être presque rien.*
+- ⚠️⚠️ **CE QUI BRÛLE EN AVANÇANT MONTRE SON FEU DERRIÈRE, PAS DEVANT** (448, relevé sur les deux
+  modèles de Guillaume). On peint spontanément l'incandescence sur la face qui frappe l'air ; ce
+  qu'on voit brûler est ce qui a **déjà** été arraché et qui s'échappe vers l'arrière. La face
+  avant ne porte qu'un **fin liseré** (elle chauffe, elle ne fume pas encore). Peint à l'endroit
+  « logique », l'objet a l'air de reculer.
+- ⚠️⚠️ **UNE ELLIPSE SE DÉCRIT DANS L'ESPACE OÙ ON LA PEINT** (448). La gerbe d'impact, construite
+  comme un disque en `dy` puis posée à `round(dy × écrasement)`, sortait **en stries
+  horizontales** : deux rangées voisines tombent sur la même ligne et une rangée sur deux reste
+  vide. On balaye les rangées d'ARRIVÉE et on calcule la largeur, jamais l'inverse.
+- ⚠️⚠️ **UN DESSIN D'INTERFACE QUI SE PEINT PAR-DESSUS LE MONDE DOIT EMPRUNTER SON GROS PIXEL**
+  (448). Une cinématique se peint en espace écran, le monde à ZOOM 3 : un dessin lisse au milieu
+  de gros pixels est une image étrangère collée sur le jeu. Le quantum se **dérive du zoom réel
+  de la vue** — réglé à la main, il diverge au premier changement de dézoom.
+- ⚠️ **UNE FUMÉE QUI PÂLIT DOIT ALLER VERS LE CLAIR, PAS SEULEMENT VERS LE TRANSPARENT** (448).
+  Une bouffée qui garde son ton en devenant transparente fait un **trou** dans un ciel sombre —
+  la traînée de la comète était une file de disques gris foncé posés sur la nuit. Ce qui se dilue
+  s'éclaircit.
+- ⚠️⚠️ **`clip()` N'EXISTE PAS DANS LE FAUX CANEVAS DES BANCS, ET SON `restore()` NE REND QUE LA
+  TRANSFORMATION** (448). Un croissant taillé par deux `clip()` et une teinte posée par
+  `globalAlpha` donnent un dessin **juste en jeu et faux au banc** — le stub menteur du §10, dans
+  l'outil censé nous en protéger. On taille par un CHAMP (une couleur par rayon et par angle) et
+  on module l'alpha **dans la couleur**, jamais par l'état du contexte.

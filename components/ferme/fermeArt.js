@@ -19,6 +19,10 @@ import * as C from "./fermeConstants";
    le reste de ce fichier. C'est ce qui permet aux bancs de rendu — qui n'ont
    pas de navigateur — de continuer à les regarder (§9, §10). */
 import { PLANCHE } from "./planche";
+/* ⚠️ ZIP 447 — la seconde planche de Guillaume (escalier à palier, balustrade,
+   maison, arbres). Générée par `tools/import-planche2.mjs` ; voir sa note
+   d'en-tête pour l'échelle, qui est DÉRIVÉE et non mesurée. */
+import { PLANCHE2 } from "./planche2";
 
 /* ---------------------------------------------------------------- PALETTE ---
    Zip 377. Ces deux constantes vivaient DANS buildSprites(), donc invisibles
@@ -1101,12 +1105,72 @@ export function drawTownCliffFace(ctx, S, tw, x, y, px, py, fh) {
   return true;
 }
 
+/* ⚠️⚠️⚠️ ZIP 447 — LA CONTREMARCHE, ET ELLE N'EST PLUS UN MORCEAU DE FALAISE.
+   Jusqu'ici le trou ouvert sous une marche par le décalage d'altitude était
+   bouché par `drawTownCliffFace`, c'est-à-dire par le parement d'un MUR DE
+   SOUTÈNEMENT : de la pierre brute, à joints décalés, faite pour une hauteur
+   d'étage. Sous une marche de 9,6 px, ça donnait une bande rugueuse qui se
+   lisait comme du désordre, pas comme la face verticale d'une marche.
+   Une contremarche est l'inverse d'un mur : c'est une dalle DRESSÉE, lisse,
+   à l'ombre, et son sommet accroche la lumière. Trois bandes suffisent, et
+   l'ordre compte — le sombre en bas (l'ombre s'accumule au pied), le clair en
+   haut (le nez de la marche du dessus).
+   ⚠️ ELLE EST ICI ET PAS DANS LA BOUCLE DE RENDU, comme les marches depuis le
+   436, pour la seule raison qui vaille : `tools/render-escaliers.mjs` doit
+   pouvoir l'appeler. Un dessin que personne ne peut rastériser ne se dégrade
+   pas, il VIEILLIT (§ en-tête). */
+export function drawTownStairRiser(ctx, S, tw, x, y, px, py, fh) {
+  if (fh <= 0) return false;
+  const T = SPR_T;
+  const h = Math.max(1, Math.round(fh));
+  /* Le corps, en deux valeurs : le haut de la contremarche reçoit encore un peu
+     de ciel, le pied est dans l'ombre de la marche. */
+  ctx.fillStyle = "#6e6b64"; ctx.fillRect(px, py, T, h);
+  ctx.fillStyle = "#5d5a54"; ctx.fillRect(px, py + Math.ceil(h * 0.55), T, h - Math.ceil(h * 0.55));
+  /* Le joint vertical, décalé d'une marche à l'autre — c'est ce qui empêche
+     une volée de se lire comme une seule plaque rayée (leçon du 433 sur la
+     brique de l'hôtel de ville). */
+  ctx.fillStyle = "rgba(38,36,32,0.45)";
+  ctx.fillRect(px + (((x * 7 + y * 13) >>> 0) % (T - 2)) + 1, py, 1, h);
+  /* Le liseré clair du sommet : le nez de la marche du dessus vu par la
+     tranche. Un pixel, et c'est lui qui sépare deux marches à l'œil. */
+  ctx.fillStyle = "#b9b5aa"; ctx.fillRect(px, py, T, 1);
+  return true;
+}
+
+/* ⚠️⚠️⚠️ ZIP 447 — LE LIMON DEVIENT UN VOLUME, ET C'EST L'INDICE DE PROFONDEUR
+   QUE GUILLAUME RÉCLAMAIT SUR LES CÔTÉS. Ce qu'il y avait : une bande de 4 px
+   de pierre, puis un simple voile gris translucide pour le vide en dessous.
+   Un voile n'a pas d'épaisseur — il assombrit l'herbe sans jamais dire qu'il y
+   a de la MATIÈRE là, si bien que la volée semblait posée à plat sur le pré.
+   Un vrai limon est une joue de pierre pleine : elle a un dessus éclairé, une
+   FACE verticale qui descend jusqu'au sol, et elle porte une ombre à son pied.
+   Les trois sont ici, et dans cet ordre — le dessus, la face, l'ombre.
+   ⚠️ LA FACE EST DESSINÉE, PAS TEINTÉE. Teinter aurait été le piège du §4
+   (« teinter un sprite avec un fillRect dessine une boîte ») : ce qu'on veut
+   n'est pas de l'herbe assombrie, c'est de la pierre vue de côté. */
 export function drawTownStairCheek(ctx, S, tw, x, y, px, py, bx, bw, drop) {
   const ST = S && S.townStone;
   if (!ST) return false;
   const T = SPR_T, sup = ST.sup;
   ctx.drawImage(ST.cheek, 0, (y % sup) * T, 4, T, bx, py, bw, T);
-  if (drop > 0) { ctx.fillStyle = "rgba(46,43,38,0.30)"; ctx.fillRect(bx, py + T, bw, drop); }
+  if (drop > 0) {
+    const h = Math.round(drop);
+    // La FACE du limon : deux valeurs, la plus sombre au pied. Même logique que
+    // la contremarche, en plus haut et en plus étroit.
+    ctx.fillStyle = "#6a6760"; ctx.fillRect(bx, py + T, bw, h);
+    ctx.fillStyle = "#575550"; ctx.fillRect(bx, py + T + Math.ceil(h * 0.6), bw, h - Math.ceil(h * 0.6));
+    // L'arête éclairée du haut de la face : c'est elle qui sépare le dessus
+    // du limon de sa face, donc qui donne l'angle.
+    ctx.fillStyle = "#b4b0a5"; ctx.fillRect(bx, py + T, bw, 1);
+    // L'ombre portée au sol, au pied de la joue. Elle DÉBORDE d'un pixel de
+    // chaque côté : une ombre exactement large comme l'objet se lit comme sa
+    // continuation, pas comme son ombre.
+    ctx.fillStyle = "rgba(20,26,16,0.30)";
+    ctx.fillRect(bx - 1, py + T + h, bw + 2, 2);
+    ctx.fillStyle = "rgba(20,26,16,0.16)";
+    ctx.fillRect(bx - 1, py + T + h + 2, bw + 2, 2);
+  }
   return true;
 }
 
@@ -2660,6 +2724,35 @@ export function buildSprites() {
   function plancheSprite(name) {
     const d = PLANCHE[name];
     if (!d) throw new Error("sprite de planche inconnu : " + name);
+    const [c, g] = cv(d.w, d.h);
+    for (let y = 0; y < d.h; y++) {
+      const r = d.rows[y];
+      let x = 0;
+      while (x < d.w) {
+        const ch = r[x];
+        if (ch === ".") { x++; continue; }
+        let n = 1;
+        while (x + n < d.w && r[x + n] === ch) n++;
+        g.fillStyle = d.pal[r.charCodeAt(x) - 48];
+        g.fillRect(x, y, n, 1);
+        x += n;
+      }
+    }
+    return c;
+  }
+
+  /* ⚠️⚠️ ZIP 447 — LE MÊME REJOUEUR, POUR LA SECONDE PLANCHE. Il est écrit à
+     part et non fondu avec `plancheSprite` parce qu'une seule fonction à deux
+     tables se tromperait un jour de table en silence : les deux planches n'ont
+     ni la même échelle (3,25 contre 3,875) ni la même origine, et un nom absent
+     de l'une existe peut-être dans l'autre. Deux portes nommées valent mieux
+     qu'une porte qui devine — c'est la leçon « une jointure, jamais deux
+     listes » prise par le bon bout (§ en-tête, `C.DEV_FLOOR_OF`).
+     ⚠️ Le corps est identique de dix lignes, et c'est assumé : les fondre pour
+     dix lignes créerait le paramètre qui double un paramètre du §8. */
+  function planche2Sprite(name) {
+    const d = PLANCHE2[name];
+    if (!d) throw new Error("sprite de planche 2 inconnu : " + name);
     const [c, g] = cv(d.w, d.h);
     for (let y = 0; y < d.h; y++) {
       const r = d.rows[y];
@@ -6242,6 +6335,425 @@ export function buildSprites() {
     }
   }
 
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 448 — LA COMÈTE. (Guillaume : « l'animation de la comète est trop
+     ║ ridicule… mettre au même niveau de détail et de soin graphique la comète
+     ║ elle-même et le cratère ».)
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ ELLE EST ICI ET PAS DANS LA BOUCLE DE RENDU, ET C'EST LA RAISON MÊME DU
+     DÉFAUT QU'ON CORRIGE. Le dessin du 444/445 tenait en huit lignes au milieu de
+     `drawStarOverlay` : un `createLinearGradient` et un `arc()` blanc. Il n'a
+     jamais été « bâclé » — il a VIEILLI, exactement comme les sols d'intérieur
+     restés au 426 pendant douze zips (§ piège n°1, deuxième visage). Un dessin
+     qu'aucun banc ne peut appeler reste au niveau du jour où il a été écrit
+     pendant que tout ce qui est mesuré monte : le cratère a eu trois passes et
+     un banc, la comète zéro. *« Ce dessin est-il regardable par un banc ? » est
+     une question de QUALITÉ, et elle se pose avant le premier `fillRect`.*
+
+     ── CE QUE MONTRENT LES DEUX MODÈLES DE GUILLAUME (`refs/…fgcq7y….jpg`, la
+        comète seule sur fond vert ; `refs/…hayq7g….jpg`, l'impact dans le
+        cratère). Sept couches, et l'ordre compte :
+          1. une TRAÎNÉE DE FUMÉE gris-bleu, en mèches, qui s'effiloche en
+             pixels détachés — pas un dégradé ;
+          2. du FEU or/orange près de la tête, en langues distinctes ;
+          3. un HALO CYAN large et doux (le « glow » demandé), en paliers ;
+          4. un CERNE bleu nuit tout autour de la tête ;
+          5. un NOYAU en bandes de bleu, du sombre au clair ;
+          6. un CŒUR BLANC PUR, décentré vers l'avant ;
+          7. un CROISSANT D'OR épais à l'ARRIÈRE, qui se raccorde au feu, et un
+             fin liseré d'or sur l'avant.
+     ⚠️ LE CROISSANT EST À L'ARRIÈRE, ET C'EST CONTRE-INTUITIF : on attend la
+     matière incandescente sur la face qui frappe l'air. C'est pourtant ce que
+     montre le modèle, et c'est juste — ce qu'on voit brûler est ce qui a DÉJÀ
+     été arraché et qui s'échappe vers l'arrière. Le liseré avant, lui, est la
+     face chauffée. Peindre l'inverse donne une tête qui a l'air de reculer.
+
+     ⚠️⚠️ TOUT EST EN PIXELS FRANCS D'UN QUANTUM `q`, ET CE N'EST PAS DU STYLE.
+     La cinématique se peint en espace ÉCRAN, par-dessus un monde dessiné à
+     ZOOM 3 : une comète en `arc()` lisse au milieu de gros pixels est une image
+     étrangère collée sur le jeu. `q` se DÉRIVE du zoom réel de la vue (l'appelant
+     le passe), il n'est pas réglé — sinon il divergerait le jour où le dézoom du
+     428 change (§8 : un paramètre qui double un autre doit être dérivé).
+
+     ⚠️ ET LA QUEUE EST FAITE DE MÈCHES DE LONGUEURS TRÈS INÉGALES, tirées avec la
+     même queue lourde que les fibres du cratère (`pow(rnd, 1.8)`). Tirées
+     uniformément elles redonnent un CÔNE — c'est-à-dire le dégradé qu'on
+     remplace. La leçon est identique à celle du 446 sur la gerbe, et elle se
+     paie deux fois si on l'oublie ici. */
+  /* ⚠️⚠️ TOUT EN RVB, JAMAIS EN HEXA, ET CE N'EST PAS UN DÉTAIL DE STYLE : la
+     comète s'ATTÉNUE (elle est lointaine, puis proche) et la seule façon
+     honnête de la faire pâlir est de moduler l'alpha de chaque couleur. Teinter
+     par `globalAlpha` marcherait dans le navigateur et PAS dans le faux canevas
+     des bancs, dont `restore()` ne rend que la transformation — on aurait un
+     dessin juste en jeu et faux au banc, c'est-à-dire le stub menteur du §10
+     dans l'outil censé nous en protéger. */
+  const COMET_PAL = {
+    rim:   [11, 28, 60],                                             // le cerne bleu nuit
+    core:  [[31, 79, 140], [47, 126, 200], [95, 182, 234], [169, 228, 251]],
+    white: [255, 255, 255],
+    gold:  [[240, 132, 42], [255, 176, 60], [255, 208, 106], [255, 233, 176]],
+    smoke: [[143, 162, 184], [108, 125, 146], [84, 98, 122]],
+  };
+  const COMET_TAIL_N = 18;
+  /* Les mèches, tirées UNE FOIS. ⚠️ Même graine à chaque image : une queue
+     retirée par image grouille, elle ne brûle pas. Ce qui bouge est la PHASE,
+     pas la forme (règle des braises du cratère, 446).
+     ⚠️⚠️ ET ELLES SONT MINCES. Premier jet : `fat` jusqu'à 1,3 rayon de tête et
+     un gonflement de la fumée en prime — regardé sur la planche, ça faisait un
+     TAMPON D'OUATE, c'est-à-dire précisément le dégradé qu'on remplaçait, en
+     plus gros. Le banc l'a chiffré avant l'œil (« 1 inversion de pente en
+     travers » : aucune mèche ne se distingue de sa voisine). Une queue se lit
+     par ses VIDES autant que par sa matière. */
+  const COMET_TAIL = (() => {
+    const r = makeRnd(4489), out = [];
+    for (let k = 0; k < COMET_TAIL_N; k++)
+      out.push({
+        len: 0.26 + Math.pow(r(), 1.8) * 0.74,   // la queue lourde : beaucoup de courtes, peu de très longues
+        off: (r() - 0.5) * 2,                    // son écart à l'axe, en rayons de tête
+        wob: 0.5 + r() * 1.6,                    // sa vitesse d'ondulation
+        ph:  r() * 6.283,
+        fat: 0.34 + r() * 0.46,                  // son épaisseur
+      });
+    return out;
+  })();
+
+  /* Un disque et un pavé accrochés à la grille de `q`. ⚠️ ON ARRONDIT LE CENTRE
+     AVANT DE CONSTRUIRE, pas les pavés après : arrondi après coup, un disque qui
+     avance d'un demi-pixel voit ses rangées s'accrocher les unes après les
+     autres et la tête ONDULE en traversant l'écran. */
+  function qDisc(g2, cx, cy, r, col, q) {
+    const s = Math.max(1, Math.round(q || 1));
+    const ri = Math.round(r / s);
+    if (ri < 0) return;
+    const ox = Math.round(cx / s), oy = Math.round(cy / s);
+    g2.fillStyle = col;
+    for (let dy = -ri; dy <= ri; dy++) {
+      const w = Math.round(Math.sqrt(Math.max(0, ri * ri - dy * dy)));
+      g2.fillRect((ox - w) * s, (oy + dy) * s, (w * 2 + 1) * s, s);
+    }
+  }
+  function qDot(g2, cx, cy, n, col, q) {
+    const s = Math.max(1, Math.round(q || 1));
+    g2.fillStyle = col;
+    g2.fillRect(Math.round(cx / s) * s, Math.round(cy / s) * s, n * s, n * s);
+  }
+  const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a.toFixed(3)})`;
+
+  /* ── LA QUEUE. Elle est peinte de l'ARRIÈRE vers l'avant, en deux matières qui
+     se recouvrent : la fumée d'abord (elle est derrière et au-dessus), le feu
+     par-dessus (il est plus proche de la tête et plus lumineux).
+     ⚠️ ELLE S'INCURVE. Une queue rectiligne se lit comme un TRAIT tracé à la
+     règle — c'est très exactement ce que faisait le `createLinearGradient` du
+     445. Ce qui traîne est en retard : l'écart à l'axe croît comme le CARRÉ de
+     la distance, ce qui donne la courbe molle qu'on voit sur le modèle. */
+  function cometTail(g2, cx, cy, ang, R, L, t, q, fade) {
+    const ux = Math.cos(ang), uy = Math.sin(ang);          // le sens de la course
+    const nx = -uy, ny = ux;                               // la normale
+    const CURL = 1.15;
+    /* ⚠️ LA POSITION D'UN POINT DE MÈCHE EST ÉCRITE UNE FOIS, et les deux passes
+       l'appellent. Deux écritures auraient laissé le feu et la fumée diverger
+       d'un demi-pixel — invisible en relecture, et à l'écran la queue se dédouble.
+       ⚠️ `-u` : LA QUEUE EST DERRIÈRE. Écrite `+u` au premier jet, elle partait
+       DEVANT la tête ; le banc l'a chiffré avant que l'œil ne s'en aperçoive
+       (9,2 rayons devant contre 3,5 derrière), et l'œil aurait lu une comète qui
+       recule. C'est exactement pour ça que ce banc existe.
+       ⚠️ ELLE S'OUVRE EN S'ÉLOIGNANT, elle n'est pas un ruban parallèle : l'écart
+       à l'axe est multiplié par `s`, donc les mèches se touchent à la tête et se
+       séparent au loin. C'est ce qui fait les VIDES, et les vides sont ce qui
+       distingue une queue d'un tampon d'ouate. */
+    const at = (st, s) => {
+      const d = s * st.len * L;
+      /* L'ondulation voyage vers l'arrière, elle ne clignote pas sur place : une
+         phase qui ne dépendrait pas de `s` ferait battre la queue entière comme
+         un drapeau d'un seul tenant. */
+      const w = Math.sin(t / 190 * st.wob + st.ph - s * 3.4) * s;
+      const off = R * (st.off * (0.10 + 1.55 * s) + w * 0.60 * s);
+      const cur = R * CURL * s * s;                        // ce qui traîne est en retard
+      return { x: cx - ux * d + nx * (off + cur), y: cy - uy * d + ny * (off + cur) };
+    };
+    /* ⚠️⚠️ DEUX PASSES, ET L'ORDRE EST LE POINT : TOUTE la fumée, PUIS tout le
+       feu. Écrites mèche par mèche, la fumée de la mèche 12 recouvrait le feu de
+       la mèche 3 — le feu vit près de la TÊTE, il doit passer devant la fumée de
+       n'importe quelle mèche. Même famille que « ce qui est composé se pose avant
+       ce qui est semé » (440), à l'échelle d'un dessin. */
+    for (let k = 0; k < COMET_TAIL_N; k++) {
+      const st = COMET_TAIL[k];
+      const steps = Math.max(4, Math.round(st.len * 26));
+      for (let i = steps; i >= 1; i--) {
+        const s = i / steps;
+        if (s < 0.34) continue;
+        const q2 = Math.min(1, (s - 0.34) / 0.66);
+        const p = at(st, s);
+        const col = COMET_PAL.smoke[Math.min(2, (q2 * 2.6) | 0)];
+        const rad = R * st.fat * (0.26 + 0.62 * s);
+        const al = fade * 0.40 * Math.sin(Math.pow(1 - q2, 0.60) * Math.PI * 0.92) * (0.50 + 0.50 * (1 - q2));
+        if (al > 0.02) qDisc(g2, p.x, p.y, rad, rgba(col, al), q);
+        /* ⚠️ LE BOUT SE DÉTACHE EN GRAINS, IL NE S'ÉTEINT PAS EN ALPHA. Une fumée
+           qui s'efface uniformément fait un fondu de télévision ; le modèle montre
+           des paquets qui se séparent et partent seuls. Même raison que la trame
+           de Bayer sur la pointe des fibres du cratère (446) : on garde de la
+           matière, on la RARÉFIE. */
+        if (q2 > 0.55 && ((k + i) & 1) === 0) {
+          const sgn = (i & 2) ? 1 : -1;
+          qDot(g2, p.x + nx * rad * 1.9 * sgn, p.y + ny * rad * 1.9 * sgn,
+               1, rgba(col, fade * 0.34 * (1 - q2)), q);
+        }
+      }
+    }
+    for (let k = 0; k < COMET_TAIL_N; k++) {
+      const st = COMET_TAIL[k];
+      const steps = Math.max(4, Math.round(st.len * 26));
+      for (let i = steps; i >= 1; i--) {
+        const s = i / steps;
+        if (s > 0.52) continue;
+        const q2 = s / 0.52;
+        const p = at(st, s);
+        // Les LANGUES : plus claires au ras de la tête, orange en s'éteignant.
+        const ci = Math.max(0, Math.min(3, 3 - ((q2 * 3.6) | 0)));
+        const rad = R * st.fat * (0.34 + 0.46 * s);
+        const al = fade * (0.80 - 0.62 * q2) * (0.78 + 0.22 * Math.sin(t / 120 + st.ph));
+        if (al > 0.02) qDisc(g2, p.x, p.y, rad, rgba(COMET_PAL.gold[ci], Math.min(1, al)), q);
+      }
+    }
+  }
+
+  /* ── LA TÊTE. `ang` est le sens de la COURSE ; l'avant est donc `+u`. */
+  function drawStarComet(g2, cx, cy, ang, R, tMs, opt) {
+    const o = opt || {};
+    const q = Math.max(1, Math.round(o.q || 3));
+    const t = tMs || 0;
+    const fade = o.fade === undefined ? 1 : Math.max(0, Math.min(1, o.fade));
+    const L = o.tail === undefined ? R * 8.5 : o.tail;
+    if (R < 0.6 || fade <= 0.01) return;
+    const ux = Math.cos(ang), uy = Math.sin(ang);
+    const nx = -uy, ny = ux;
+    cometTail(g2, cx, cy, ang, R, L, t, q, fade);
+    /* LE HALO, EN PALIERS. ⚠️ IL EST LARGE ET FAIBLE, JAMAIS PETIT ET VIF —
+       c'est la règle déjà écrite pour la chaleur du cratère : une lueur qui monte
+       en valeur sans s'élargir se lit comme une lampe, pas comme un rayonnement.
+       Le modèle lui donne trois bons rayons de tête. */
+    /* ⚠️ CINQ PALIERS ET NON TROIS, ET C'EST UN DÉFAUT VU SUR LA PLANCHE : à
+       trois, le palier extérieur formait un DISQUE FRANC sur le ciel noir — une
+       assiette bleue posée derrière la comète. Le modèle montre un halo qui
+       s'éteint ; il faut donc assez de marches pour que l'œil lise une pente, et
+       la dernière doit être presque rien. La règle est celle du cratère
+       (quantifier la valeur), avec la réserve inverse : trop peu de paliers ne
+       simplifie pas, ça dessine un bord. */
+    const puls = 0.5 + 0.5 * Math.sin(t / 210);
+    for (const [mul, al] of [[4.3, 0.035], [3.5, 0.055], [2.8, 0.085], [2.2, 0.12], [1.7, 0.17]])
+      qDisc(g2, cx, cy, R * mul * (1 + 0.04 * puls), `rgba(150,226,255,${(al * fade).toFixed(3)})`, q);
+    /* ╔════════════════════════════════════════════════════════════════════════
+       ║ LA TÊTE EST UN CHAMP, PAS UNE PILE DE DISQUES.
+       ╚════════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ PREMIÈRE ÉCRITURE, JETÉE : six `arc()` empilés plus deux `clip()` pour
+       tailler le croissant. Deux défauts, et le second est le vrai. (1) `clip`
+       N'EXISTE PAS dans le faux canevas des bancs, et `restore()` n'y rend que la
+       transformation : le dessin aurait été juste en jeu et faux au banc — le
+       stub menteur du §10, dans l'outil censé nous en protéger. (2) Empilés, les
+       disques se répondent par leur ORDRE : « quel anneau passe par-dessus quel
+       anneau » devient la question, alors que ce qu'on décrit est une couleur par
+       (rayon, angle). C'est mot pour mot ce que le 446 a compris sur le cratère,
+       et c'est la deuxième fois que la même forme paie.
+       ⚠️ `c` EST LE COSINUS AVEC L'AVANT, et c'est lui qui porte tout : le
+       croissant s'épaissit quand `c` descend vers −1, le liseré n'existe que
+       lorsque `c` est franchement positif. Aucune des deux formes n'est peinte à
+       la main, et aucune ne peut se décoller de l'autre. */
+    const s = Math.max(1, Math.round(q));
+    const RH = R * 1.30;
+    const i0 = Math.round((cx - RH) / s), i1 = Math.round((cx + RH) / s);
+    const j0 = Math.round((cy - RH) / s), j1 = Math.round((cy + RH) / s);
+    const COL = {
+      rim: rgba(COMET_PAL.rim, fade),
+      white: rgba(COMET_PAL.white, fade),
+      core: COMET_PAL.core.map(c2 => rgba(c2, fade)),
+      gold: COMET_PAL.gold.map(c2 => rgba(c2, fade)),
+    };
+    const hx = cx + ux * R * 0.18, hy = cy + uy * R * 0.18;
+    const wCore = R * (0.30 + 0.04 * puls);
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        const x = i * s + s * 0.5, y = j * s + s * 0.5;
+        const dx = x - cx, dy = y - cy;
+        const r = Math.sqrt(dx * dx + dy * dy);
+        if (r > RH) continue;
+        const c = r > 0.001 ? (dx * ux + dy * uy) / r : 1;
+        let col = null;
+        /* ⚠️⚠️ LES TROIS COUCHES SONT DES ANNEAUX QUI NE SE CHEVAUCHENT PAS, ET
+           C'EST LA SECONDE ÉCRITURE. La première laissait le croissant d'or
+           MORDRE dans le cerne : regardé sur la planche, le liseré sombre ne
+           subsistait qu'en bas à gauche, et la tête avait l'air ébréchée. Le
+           modèle de Guillaume montre un cerne qui fait le tour COMPLET, et l'or
+           par-dessus, à l'extérieur. Une frontière franche (`RIM_OUT`) vaut mieux
+           qu'un arbitrage entre deux formes qui se disputent les mêmes pixels. */
+        const RIM_IN = R * 0.99, RIM_OUT = R * 1.10;
+        if (r < RIM_IN) {
+          // LE NOYAU, en bandes, autour d'un centre DÉCALÉ VERS L'AVANT : la face
+          // qui frappe est la plus chaude, donc la plus claire.
+          const rc = Math.sqrt((x - hx) * (x - hx) + (y - hy) * (y - hy));
+          col = rc < wCore ? COL.white
+              : rc < R * 0.52 ? COL.core[3]
+              : rc < R * 0.72 ? COL.core[2]
+              : rc < R * 0.90 ? COL.core[1] : COL.core[0];
+        } else if (r <= RIM_OUT) {
+          /* LE CERNE. ⚠️ IL FAIT LE TOUR, MÊME DU CÔTÉ CLAIR — un cœur blanc sur
+             un ciel voilé de gris disparaît comme un cierge sur du marbre (441),
+             et cette famille ÉMET de la lumière : c'est ici que le contrôle n°4
+             de `render-etoile` compte le plus. */
+          col = COL.rim;
+        } else {
+          // LE CROISSANT D'OR, À L'ARRIÈRE — il s'épaissit vers `c = -1`…
+          const wc = Math.max(0, Math.min(1, (0.34 - c) / 1.10));
+          if (wc > 0 && r <= RIM_OUT + R * 0.30 * wc) {
+            const u2 = (r - RIM_OUT) / Math.max(0.001, R * 0.30 * wc);
+            col = COL.gold[Math.max(0, Math.min(3, Math.round(0.5 + u2 * 2.4)))];
+          }
+          // …et un FIN liseré sur la face avant : elle chauffe, elle ne fume pas.
+          if (!col && c > 0.10) {
+            const wf = Math.max(0, Math.min(1, (c - 0.10) / 0.70));
+            if (r <= RIM_OUT + R * 0.07 * wf) col = COL.gold[3];
+          }
+        }
+        if (!col) continue;
+        g2.fillStyle = col;
+        g2.fillRect(i * s, j * s, s, s);
+      }
+    }
+    /* LES ÉTINCELLES ARRACHÉES. ⚠️ Elles partent VERS L'ARRIÈRE et de côté, et
+       elles sont peu nombreuses : cinq points bien placés disent « ça se
+       désagrège », vingt disent « il neige » (le poivre du 438). */
+    const rnd = makeRnd(4493);
+    for (let k = 0; k < 6; k++) {
+      const ph = (t / (620 + k * 130) + rnd()) % 1;
+      const side = rnd() < 0.5 ? -1 : 1;
+      const d = R * (1.2 + ph * 5.2), lat = side * R * (0.35 + ph * 1.9) * (0.4 + rnd() * 0.9);
+      const al = fade * 0.85 * (1 - ph);
+      if (al < 0.05) continue;
+      qDot(g2, cx - ux * d + nx * lat, cy - uy * d + ny * lat, 1,
+           `rgba(255,${(215 - 60 * ph) | 0},${(140 - 90 * ph) | 0},${al.toFixed(2)})`, q);
+    }
+  }
+
+  /* ── LA TRAÎNÉE QUI RESTE DANS LE CIEL. Une bouffée, à un âge donné (0 fraîche,
+     1 dissipée). ⚠️ ELLE EST UNE FONCTION DE L'ÂGE ET DE RIEN D'AUTRE : la
+     cinématique la rappelle le long des positions que la comète a occupées, donc
+     la TRAJECTOIRE reste chez l'appelant et le DESSIN reste ici. Une closure qui
+     aurait gardé l'historique des positions aurait ramené le dessin dans la
+     boucle de rendu, c'est-à-dire hors de portée du banc — le défaut même qu'on
+     est en train de réparer. */
+  function drawStarCometTrail(g2, x, y, ang, R, age, tMs, opt) {
+    const o = opt || {};
+    const q = Math.max(1, Math.round(o.q || 3));
+    const k = Math.max(0, Math.min(1, age));
+    if (k >= 1 || R < 0.5) return;
+    const t = tMs || 0;
+    const nx = -Math.sin(ang), ny = Math.cos(ang);
+    // Elle GONFLE en vieillissant et elle DÉRIVE : une bouffée qui reste de la
+    // même taille au même endroit est une tache, pas de la fumée.
+    /* ⚠️ ELLE PÂLIT EN GONFLANT, elle ne se contente pas de baisser l'alpha. Une
+       bouffée qui garde son ton en devenant transparente fait un TROU dans un
+       ciel sombre — vu sur la planche, la traînée était une file de disques gris
+       foncé posés sur la nuit. La fumée qui se dilue va vers le clair : c'est ce
+       qui la fait disparaître au lieu de se creuser. */
+    const grow = 1 + k * 2.6;
+    const drift = k * R * 1.1;
+    const base = COMET_PAL.smoke[0];
+    const col = [base[0] + (215 - base[0]) * k, base[1] + (220 - base[1]) * k, base[2] + (228 - base[2]) * k];
+    for (let j = 0; j < 3; j++) {
+      const sp = (j - 1) * R * 0.55 * grow;
+      const al = (1 - k) * (1 - k) * 0.22 * (j === 1 ? 1 : 0.66);
+      if (al < 0.02) continue;
+      qDisc(g2, x + nx * (sp + drift) + Math.sin(t / 900 + j + k * 4) * R * 0.35 * grow,
+            y + ny * (sp + drift) - drift * 0.35,
+            R * (0.42 + 0.42 * (j === 1 ? 1 : 0.6)) * grow, rgba(col, al), q);
+    }
+    // Une braise qui s'attarde dans la fumée fraîche : c'est ce qui distingue une
+    // traînée de comète d'un nuage.
+    if (k < 0.35) qDot(g2, x, y, 1, `rgba(255,190,110,${((0.35 - k) * 1.5).toFixed(2)})`, q);
+  }
+
+  /* ── L'IMPACT. `k` va de 0 à 1 sur la demi-seconde qui suit le contact.
+     ⚠️⚠️ CE N'EST PAS UN `fillRect` BLANC. Le 445 peignait l'écran entier en
+     blanc pendant 160 ms : ça marche comme COUPURE, ça ne montre rien. Le modèle
+     de Guillaume (`…hayq7g….jpg`) montre ce qu'il faut voir — un cœur blanc, une
+     éclaboussure CYAN qui gicle en rayons, un anneau d'or qui s'ouvre, et des
+     éjectas sombres. Le blanc plein écran reste, mais deux images seulement, au
+     sommet : il sert de coupure, pas de spectacle.
+     ⚠️ LES RAYONS SONT INÉGAUX ET TIRÉS UNE FOIS. Douze rayons réguliers font une
+     étoile de dessin animé ; c'est la même faute que la collerette de tournesol
+     du premier cratère (446), et elle se corrige de la même façon. */
+  function drawStarImpactFlash(g2, cx, cy, k, R, opt) {
+    const o = opt || {};
+    const q = Math.max(1, Math.round(o.q || 3));
+    const kk = Math.max(0, Math.min(1, k));
+    const sq = o.squash === undefined ? 0.55 : o.squash;   // la vue est en trois quarts
+    const rnd = makeRnd(4499);
+    const out = 1 - Math.pow(1 - kk, 2.2);                 // ça part vite et ça s'étale
+    // L'ÉCLABOUSSURE, aplatie : elle court AU SOL.
+    /* ⚠️⚠️ ON BALAYE LES RANGÉES D'ARRIVÉE, PAS CELLES DU CERCLE. Premier jet :
+       un disque construit en `dy` puis posé à `Math.round(dy · sq)` — deux
+       rangées voisines tombent alors sur la même ligne et une rangée sur deux
+       reste vide. Sur la planche, la gerbe sortait EN STRIES HORIZONTALES,
+       exactement comme un écran qui saute. L'ellipse doit être décrite dans
+       l'espace où on la peint. */
+    for (const [mul, col, a0] of [[5.6, "150,226,255", 0.34], [3.4, "198,244,255", 0.42], [1.9, "255,255,255", 0.62]]) {
+      const al = a0 * (1 - kk) * (1 - kk);
+      if (al < 0.02) continue;
+      const r = R * mul * (0.25 + out * 1.35);
+      const s = Math.max(1, Math.round(q));
+      const rx = Math.round(r / s), ry = Math.max(1, Math.round(r * sq / s));
+      g2.fillStyle = `rgba(${col},${al.toFixed(3)})`;
+      for (let dy = -ry; dy <= ry; dy++) {
+        const w = Math.round(rx * Math.sqrt(Math.max(0, 1 - (dy / ry) * (dy / ry))));
+        g2.fillRect((Math.round(cx / s) - w) * s, (Math.round(cy / s) + dy) * s, (w * 2 + 1) * s, s);
+      }
+    }
+    /* L'ANNEAU D'OR : la matière chaude, projetée, qui retombe. ⚠️ IL EST PEINT
+       PAR BALAYAGE, jamais par deux ellipses et un `clip` — voir la note de
+       `drawStarComet` : `clip` n'existe pas dans le faux canevas des bancs, donc
+       un anneau taillé comme ça serait un anneau qu'aucun banc ne voit. Le test
+       est la métrique de l'ellipse elle-même, ce qui garde l'épaisseur constante
+       tout autour au lieu de la voir s'écraser avec le trois-quarts. */
+    {
+      const r = R * (1.4 + out * 6.4), al = 0.55 * (1 - kk);
+      const thick = Math.max(q, R * 0.55);
+      if (al > 0.02 && r > thick) {
+        const s = Math.max(1, Math.round(q));
+        const i0 = Math.round((cx - r) / s), i1 = Math.round((cx + r) / s);
+        const j0 = Math.round((cy - r * sq) / s), j1 = Math.round((cy + r * sq) / s);
+        g2.fillStyle = rgba(COMET_PAL.gold[2], al);
+        for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+          const dx = (i * s + s * 0.5 - cx) / r, dy = (j * s + s * 0.5 - cy) / (r * sq);
+          const e = Math.sqrt(dx * dx + dy * dy);
+          if (e <= 1 && e >= 1 - thick / r) g2.fillRect(i * s, j * s, s, s);
+        }
+      }
+    }
+    // LES RAYONS, inégaux — et ils sont BLEUS : c'est l'étoile qu'on voit sortir
+    // une demi-seconde avant de disparaître au fond du trou.
+    for (let i = 0; i < 14; i++) {
+      const a = rnd() * Math.PI * 2, len = R * (2.2 + Math.pow(rnd(), 1.6) * 9.5);
+      const al = 0.75 * (1 - kk) * (1 - kk);
+      if (al < 0.03) continue;
+      const n = 5 + ((len / (q * 3)) | 0);
+      for (let j = 1; j <= n; j++) {
+        const s2 = j / n, d = len * (0.18 + out * 0.95) * s2;
+        qDot(g2, cx + Math.cos(a) * d, cy + Math.sin(a) * d * sq, s2 > 0.7 ? 1 : 2,
+             `rgba(${(198 + 57 * (1 - s2)) | 0},244,255,${(al * (1 - s2 * 0.8)).toFixed(2)})`, q);
+      }
+    }
+    // LES ÉJECTAS : de la TERRE, sombre, qui monte et retombe. Sans eux, la
+    // gerbe est de la lumière pure et l'impact n'a rien creusé.
+    for (let i = 0; i < 22; i++) {
+      const a = rnd() * Math.PI * 2, sp = R * (1.6 + rnd() * 5.0);
+      const up = R * (1.4 + rnd() * 3.2);
+      const d = sp * out, h = up * Math.sin(Math.min(1, out * 1.15) * Math.PI);
+      const al = 0.85 * (1 - kk * kk);
+      if (al < 0.05) continue;
+      qDot(g2, cx + Math.cos(a) * d, cy + Math.sin(a) * d * sq - h, rnd() < 0.4 ? 2 : 1,
+           `rgba(${(58 + rnd() * 40) | 0},${(39 + rnd() * 26) | 0},25,${al.toFixed(2)})`, q);
+    }
+  }
+
   // ----- 10 façades de maison basiques pour Valley Town (zip 235). Toutes
   // au même canevas 96x96 que la maison de ferme, ancrées par leur bord bas.
   function townHouseVariant(styleIdx) {
@@ -6346,7 +6858,20 @@ export function buildSprites() {
      est plus vieille, plus ombragée, plus tondue que le champ — c'est la lecture
      qu'on cherche, et la hauteur d'herbe et les animations viendront plus tard
      (voir §13). */
-  const GRASS_TOWN = { base: "#4e9745", d1: "#458a3d", l1: "#59a24d", blade: "#367c31", tip: "#61ad55", fleck: "#d6cf58" };
+  /* ⚠️⚠️ ZIP 447 — ELLE SUIT LE PAVÉ DE 64, ET CE N'EST PAS DU ZÈLE. Ces trois
+     tuiles ne servent plus que de REPLI (`drawTownGrassTile` échoue seulement
+     chez un client trop vieux pour avoir le pavé) — donc les laisser au vert
+     saturé du 431 n'aurait rien cassé AUJOURD'HUI, et c'est exactement ce qui
+     rend le piège intéressant : deux descriptions de la même herbe, dont une
+     seule est regardée, divergent en silence. C'est le §8 mot pour mot (« un
+     paramètre qui double un autre paramètre est une divergence en attente ») et
+     le §« il fait vieillir » de l'en-tête : un dessin que personne ne regarde
+     reste au niveau du jour où il a été écrit.
+     ⚠️ LA FERME NE BOUGE PAS (`GRASS_FARM` au-dessus, intacte) : la décision du
+     424 interdit de mêler deux changements visuels, et ce zip ne touche qu'à
+     Valley Town. L'écart ferme/ville s'en trouve d'ailleurs AGRANDI — c'est un
+     effet connu, pas un oubli, et il est dit dans le rapport. */
+  const GRASS_TOWN = { base: "#5e9251", d1: "#54864d", l1: "#689b58", blade: "#4b7647", tip: "#71a15f", fleck: "#bcd7b6" };
   function grassTile(variant, pal) {
     const p = pal || GRASS_FARM;
     const [c, g] = cv(T, T), r = makeRnd(77 + variant * 131);
@@ -6711,14 +7236,45 @@ export function buildSprites() {
      ⚠️ ET LES TOUFFES SONT PLACÉES SUR UNE SUITE À FAIBLE DISCRÉPANCE, pas
      tirées : un tirage uniforme laisse des paquets et des vides (c'est ce qui
      fait le grain sale), une suite d'or les répartit sans jamais s'aligner. */
+  /* ⚠️⚠️ ZIP 447 — LES SEPT COULEURS SONT CELLES DE LA MAQUETTE DE GUILLAUME,
+     RELEVÉES AU PIXEL, PAS ACCORDÉES À L'ŒIL. La forme du 438 (plaques douces,
+     touffes sur suite R2, fleurs rares) n'a pas bougé d'une ligne : elle était
+     juste, et `verify-sol2.mjs` le prouve autrement qu'en le disant — l'ÉCART-
+     TYPE du pavé tombait déjà à 1,4 % de celui de la référence.
+     Ce qui était faux, c'était la MATIÈRE, et deux nombres le disaient :
+
+       saturation      jeu 56,6 %   référence 42,7 %   → 14 points de trop
+       brins sombres   jeu 16,6 %   référence 12,3 %   → un tiers de trop
+
+     Un vert trop saturé et trop dru : de loin, du gazon synthétique. La palette
+     ci-dessous EST celle que la quantification lit dans `refs/scene2.png` — sept
+     verts entre L=102 et L=147, tous autour de 42 % de saturation. On ne les
+     recompose pas, on les copie, exactement comme on copie un sprite (439).
+     ⚠️ ET LES TOUFFES PASSENT DE 260 À 190, ce qui n'est pas un réglage non
+     plus : 190 × 2 px sombres + un tiers de rappel = 506 px sur 4 096, soit les
+     12,3 % de la référence. Le compte se DÉRIVE de la densité visée. */
   function townGrassSurface() {
     const [c, g] = cv(ROAD_N, ROAD_N);
-    const BASE = "#4c9740", P1 = "#54a047", P2 = "#448c3a", P3 = "#5aa94c";
+    const BASE = "#5e9251", P1 = "#689b58", P2 = "#54864d", P3 = "#629456";
     P(g, 0, 0, ROAD_N, ROAD_N, BASE);
     /* LES PLAQUES. Des disques doux de deux verts voisins, assez grands pour
        qu'on ne les compte pas — c'est le relief de la pelouse, pas un motif. */
-    const PATCH = [[14, 12, 17, P1], [46, 20, 15, P2], [26, 44, 19, P1], [56, 52, 13, P3],
-                   [6, 34, 12, P2], [38, 6, 11, P3], [60, 8, 10, P1], [10, 58, 12, P2]];
+    /* ⚠️⚠️ ZIP 447 — PLUS NOMBREUSES, PLUS PETITES, ET LE TON LE PLUS CLAIR EST
+       PARTI. Le côte-à-côte de `verify-sol2` l'a montré alors qu'aucun des
+       quatre nombres ne le disait : à gauche, huit TACHES RONDES qu'on compte ;
+       à droite, chez Guillaume, un marbrage qu'on ne compte pas. Deux causes,
+       et la seconde est la vraie :
+         — le rayon. Des disques de 17 px sur un pavé de 64 font trois taches
+           par écran ; à 9-12 px elles se recouvrent et redeviennent du relief ;
+         — `P3`, à +16 de luminance sur la base, dessinait des AURÉOLES CLAIRES.
+           La référence ne monte qu'à +8 sur ses aplats — ce qui est au-dessus,
+           chez elle, ce sont des brins, c'est-à-dire des pixels ISOLÉS.
+       *Une plaque se remarque par son rayon, mais elle se TRAHIT par sa
+       luminance.* On garde donc P1/P2, à ±8 et ±10 de la base, et P3 ne sert
+       plus qu'à la moitié d'une plaque sur six. */
+    const PATCH = [[14, 12, 11, P1], [46, 20, 10, P2], [26, 44, 12, P1], [56, 52, 9, P3],
+                   [6, 34, 10, P2], [38, 6, 9, P1], [60, 8, 9, P2], [10, 58, 10, P1],
+                   [34, 28, 11, P2], [50, 38, 9, P1], [20, 6, 8, P2], [44, 60, 9, P1]];
     for (const [px0, py0, rr, col] of PATCH) {
       for (let y = py0 - rr; y <= py0 + rr; y++) for (let x = px0 - rr; x <= px0 + rr; x++) {
         const dx = x - px0, dy = (y - py0) * 1.15;
@@ -6745,8 +7301,12 @@ export function buildSprites() {
        plastique, faites pour le plan — c'est le même genre d'erreur que la
        distance de Manhattan prise pour l'euclidienne au 435. */
     const R2X = 0.7548776662, R2Y = 0.5698402910;
-    const LIT = ["#67b357", "#71bd60"], DRK = ["#3c7f33", "#35722d"];
-    for (let k = 1; k <= 260; k++) {
+    /* ⚠️ ZIP 447 — les quatre tons de touffe sont eux aussi lus dans la maquette.
+       L'ancien couple montait à L=156 (`#71bd60`) et descendait à L=88
+       (`#35722d`) : 68 de battement, quand Guillaume en a 45. C'est là que
+       partaient les huit points d'écart-type en trop. */
+    const LIT = ["#71a15f", "#78a663"], DRK = ["#4f7d4a", "#4b7647"];
+    for (let k = 1; k <= 190; k++) {
       const x = Math.floor(((k * R2X) % 1) * ROAD_N);
       const y = Math.floor(((k * R2Y) % 1) * ROAD_N);
       const lit = LIT[k % 2], drk = DRK[k % 2];
@@ -6754,10 +7314,18 @@ export function buildSprites() {
       P(g, (x + 1) % ROAD_N, y - 1 < 0 ? ROAD_N - 1 : y - 1, 1, 2, lit);
       if (k % 3 === 0) P(g, (x + 2) % ROAD_N, y, 1, 2, drk);
     }
-    // Quelques fleurs des champs, très rares : une par case en moyenne serait
-    // une prairie, pas une pelouse de ville.
-    const FL = ["#e8e05a", "#f2f0e2", "#e8e05a"];
-    for (let k = 300; k < 311; k++) {
+    /* Quelques fleurs des champs, très rares : une par case en moyenne serait
+       une prairie, pas une pelouse de ville.
+       ⚠️⚠️ ZIP 447 — ELLES ÉTAIENT JAUNE VIF, ELLES SONT BLANCHES. Vu sur le
+       côte-à-côte, et c'est le défaut qui sautait le plus aux yeux : huit points
+       jaunes sur le pavé du jeu, deux points pâles sur celui de Guillaume. Le
+       `#e8e05a` du 438 est à 61 % de saturation dans une pelouse qui en fait 42,
+       donc l'œil ne voit plus que lui — le §8 en une image (« deux couleurs
+       réglées à l'œil côte à côte ne gardent pas leur écart »). La référence n'a
+       qu'un seul ton de fleur, `#bcd7b6`, à 15 % de saturation, et il n'occupe
+       que 0,1 % de sa surface. On passe donc de onze semis à six. */
+    const FL = ["#bcd7b6", "#c9d7a4", "#bcd7b6"];
+    for (let k = 300; k < 306; k++) {
       const x = Math.floor(((k * R2X) % 1) * ROAD_N), y = Math.floor(((k * R2Y) % 1) * ROAD_N);
       P(g, x, y, 1, 1, FL[k % FL.length]);
       if (k % 2) P(g, (x + 1) % ROAD_N, (y + 1) % ROAD_N, 1, 1, FL[k % FL.length]);
@@ -6784,17 +7352,42 @@ export function buildSprites() {
     }
     return c;
   }
+  /* ⚠️⚠️ ZIP 447 — LES 42 COULEURS DE CE PAVÉ ONT ÉTÉ RAMENÉES SUR CELLES DU
+     CHEMIN DE GUILLAUME PAR UNE AFFINE, ET LE DESSIN N'A PAS BOUGÉ D'UNE LIGNE.
+     `verify-sol2.mjs` mesurait, entre le pavé du jeu et la branche verticale de
+     `refs/planche2.png` (celle qu'il a dessinée VUE DE DESSUS, pas le parement
+     horizontal — voir la note du banc) :
+
+       médiane de luminance   jeu 106   référence  92
+       écart-type             jeu 45,8  référence  33,7
+       joints sombres         jeu 40,8 %  référence 40,3 %   ← déjà juste
+
+     Autrement dit : la STRUCTURE était bonne — même densité de joints, mêmes
+     tailles de pierre — mais les corps de pierre montaient à L=195 quand
+     Guillaume plafonne à 160. Une rue trop éclairée, pas une rue mal dessinée.
+     ⚠️ On a donc appliqué à chaque couleur, mortier compris,
+        L' = (L − 106) × (33,7 / 45,8) + 92,
+     puis remis la teinte au prorata. Le mortier ne bouge presque pas (63 → 60),
+     les pierres descendent beaucoup : c'est exactement la correction qu'il
+     fallait, et elle se lit dans une ligne au lieu de trente-six retouches.
+     ⚠️ RETOUCHER LES TRENTE-SIX À L'ŒIL AURAIT ÉTÉ L'ERREUR DU §8 : deux gris
+     réglés à la main côte à côte ne gardent pas leur écart, et on aurait perdu
+     le biseau partiel et les coins mangés, qui sont TOUT ce qui sépare ce pavé
+     d'un carrelage (leçon du 434, « le premier jet donnait du papier bulle »).
+     ⚠️ Contrôlé après coup : `render-rues` et `render-escaliers` restent au vert,
+     la parité de matière marches/pavés comprise — c'est elle qui aurait cassé
+     si on avait descendu les pierres sans descendre le reste. */
   function townCobbleSurface() {
     const [c, g] = cv(ROAD_N, ROAD_N), r = makeRnd(0x5a17);
-    const MORTAR = "#403f47";
+    const MORTAR = "#3d3c44";
     P(g, 0, 0, ROAD_N, ROAD_N, MORTAR);
-    for (let i = 0; i < 900; i++) P(g, (r() * ROAD_N) | 0, (r() * ROAD_N) | 0, 1, 1, r() < 0.5 ? "#4a4950" : "#37363c");
+    for (let i = 0; i < 900; i++) P(g, (r() * ROAD_N) | 0, (r() * ROAD_N) | 0, 1, 1, r() < 0.5 ? "#44444a" : "#36353b");
     /* Les corps de pierre. Deux familles : le gris bleuté dominant, et une
        minorité de pierres chaudes ou sombres — c'est cette minorité qui empêche
        la rue de virer au béton. */
-    const BODY = ["#9b9aa2", "#a5a4ac", "#918f98", "#a9a8b0", "#97969e", "#8b8992", "#a0a0a8", "#8e8c93", "#9d9ba3", "#a7a6ad", "#8f8d94", "#93918a"];
-    const LIT = ["#b8b7bf", "#c0bfc6", "#adacb4", "#c4c3ca", "#b3b2ba", "#a7a5ae", "#bcbcc3", "#aaa8b0", "#b9b8c0", "#c2c1c8", "#aba9b1", "#afada6"];
-    const DRK = ["#6e6d75", "#76757d", "#66646d", "#7a7981", "#6a6971", "#605f67", "#727179", "#63616a", "#706f77", "#787780", "#646269", "#67655f"];
+    const BODY = ["#807f86", "#87878d", "#79777f", "#8a8a90", "#7d7c83", "#74737a", "#84848a", "#77757b", "#828087", "#89888e", "#77767b", "#7a7973"];
+    const LIT = ["#95959b", "#9b9aa0", "#8d8c93", "#9e9da3", "#929197", "#89878f", "#98989e", "#8b8990", "#96959c", "#9d9ca2", "#8c8a91", "#8f8d88"];
+    const DRK = ["#5f5e65", "#65646b", "#59575f", "#68676e", "#5c5b62", "#55545b", "#626168", "#57555d", "#606066", "#66656d", "#58565c", "#5a5853"];
     // 64 = 5×8 + 6×4 : douze rangs, pas un pixel de reste (voir l'en-tête).
     const ROWH = [5, 6, 5, 5, 6, 5, 5, 6, 5, 5, 6, 5];
     let y = 0;
@@ -6839,7 +7432,7 @@ export function buildSprites() {
         // Une pierre sur douze est enfoncée : de l'eau y stagne, elle est plus
         // sombre et plus terne. C'est ce qui donne la « bruine » sans peindre
         // de flaque (la météo est du ressort du jeu, pas de la tuile).
-        if (r() < 0.085) { roadWrap(g, x + 1, yy + 1, w - 2, h - 2, "#75747c"); }
+        if (r() < 0.085) { roadWrap(g, x + 1, yy + 1, w - 2, h - 2, "#64636a"); }
         x += ws[s];
       }
       y += rh;
@@ -6848,7 +7441,7 @@ export function buildSprites() {
     // pierres comme dans la vraie vie, et ça casse la régularité du joint.
     for (let i = 0; i < 40; i++) {
       const gx = (r() * ROAD_N) | 0, gy = (r() * ROAD_N) | 0;
-      roadWrap(g, gx, gy, 1 + ((r() * 2) | 0), 1, r() < 0.45 ? "#5b6a4e" : "#6b665a");
+      roadWrap(g, gx, gy, 1 + ((r() * 2) | 0), 1, r() < 0.45 ? "#505d45" : "#5d594f");
     }
     return c;
   }
@@ -7084,7 +7677,20 @@ export function buildSprites() {
      c'est la seule chose qui dise au joueur « ça monte », et le pas de la
      grille d'altitude en dépend. Ce qui change, c'est que deux marches ne sont
      plus le même dessin. */
-  const STAIR_TREAD = 4;                 // hauteur d'une marche, en pixels
+  /* ⚠️⚠️⚠️ ZIP 447 — UNE CASE, UNE MARCHE. C'était 4 px, donc QUATRE nez de
+     marche peints dans une case qui ne monte réellement que d'une seule marche.
+     Le dessin promettait quatre marches, l'altitude en tenait une : à l'écran,
+     une volée devenait une texture rayée posée à plat — exactement ce que
+     Guillaume a nommé « condensé et plaqué en 2D », et aucun banc ne pouvait le
+     dire, puisqu'ils comptaient les nez SANS jamais les comparer au relief.
+     ⚠️ LA MARCHE DESSINÉE DOIT ÊTRE LA MARCHE FRANCHIE. À 16, le giron est la
+     case, et la contremarche n'est plus peinte du tout : c'est le dénivelé
+     réel, dessiné par le parement (`drawTownCliffFace`), qui la fournit — 9,6 px
+     pour un pas de 0,2. Le dessin ne peut donc plus mentir sur la pente, il la
+     SUIT. C'est la même idée que « la case d'un décor n'est pas sa surface »
+     (§4), retournée : ici on force le dessin à coïncider avec la grandeur
+     physique, parce que c'est justement celle que l'œil compare. */
+  const STAIR_TREAD = 16;                // giron d'une marche = une case
   function townStairSurface(vertical) {
     const [c, g] = cv(ROAD_N, ROAD_N), r = makeRnd(vertical ? 0x3f21 : 0x3f22);
     /* `put` échange les deux axes pour la volée horizontale. Une seule
@@ -7110,6 +7716,10 @@ export function buildSprites() {
     const NOSE = ["#cfccc1", "#d6d3c8", "#c7c4b9", "#d2cfc4"];       // le nez, qui accroche la lumière
     const RISE = ["#5f5c55", "#67645c", "#585550"];                  // la contremarche, dans l'ombre
     const MOSS = ["#5a6b42", "#4d5c39"];
+    /* Les deux tons de l'ombre portée : elle ne se fait pas en alpha (à cette
+       échelle un voile gris fait une auréole sale, §8), mais avec des pierres
+       plus sombres de la même famille. */
+    const SHAD = ["#7d7b74", "#8d8b83"];
     // Fond : de la pierre, pas un gris uni. C'est ce que le granulat du
     // goudron a appris au 434 — à 16 px, la matière tient dans le grain.
     for (let v = 0; v < ROAD_N; v++) for (let u = 0; u < ROAD_N; u++) {
@@ -7127,6 +7737,17 @@ export function buildSprites() {
       for (let k = 0; k < n; k++) {
         const w = ws[k], tone = BODY[(r() * BODY.length) | 0];
         put(u + 1, v0, STAIR_TREAD - 1, w, tone);
+        /* ⚠️⚠️ ZIP 447 — L'OMBRE QUE LA MARCHE DU DESSUS PORTE SUR CELLE-CI, et
+           c'est LE signal de relief d'un escalier vu de dessus. Sans elle, un
+           giron est un rectangle clair : rien ne dit qu'il y a une marche
+           au-dessus de lui, et l'œil lit une dalle. Trois pixels au BORD AMONT,
+           dégradés en deux tons — c'est la même leçon qu'au 446 sur le cratère
+           (« ce qui creuse une image vue de dessus est l'ÉCLAIRAGE d'une pente,
+           pas un dégradé »), appliquée à une arête au lieu d'une pente.
+           ⚠️ Elle est posée AVANT le grain et les joints, pour qu'ils passent
+           par-dessus : une ombre par-dessus le grain aplatit la matière. */
+        put(u + 1, v0, 2, w, SHAD[0]);
+        put(u + 3, v0, 1, w, SHAD[1]);
         // le joint de refend entre deux blocs de la même marche
         put(u + 1, v0, STAIR_TREAD - 1, 1, "#6e6b64");
         v0 = (v0 + w) % ROAD_N;
@@ -11899,6 +12520,26 @@ export function buildSprites() {
     townReedTuft: plancheSprite("reeds"),
     townReedsWater: plancheSprite("reedsWater"),
     townHedgeRow: plancheSprite("hedgeRow"),
+    /* ⚠️⚠️ ZIP 447 — LE GARDE-CORPS, ET IL FAIT EXACTEMENT UNE CASE DE LARGE.
+       Ce n'est pas une chance : `balusterEnd` est le tronçon court que Guillaume
+       a dessiné accroché à son escalier, et il mesure 16 px natifs une fois la
+       planche ramenée à l'échelle du jeu. Il se répète donc case par case sans
+       une ligne de raccord, comme la haie du 439 — et son motif porte DÉJÀ ses
+       pilastres (deux jours de balustre, puis six pixels pleins), si bien que
+       mis bout à bout il dessine des travées régulières au lieu d'une grille.
+       ⚠️ IL EST HAUT DE 25 PX POUR UNE CASE DE 16 : les 9 px qui dépassent sont
+       ce qui le fait passer DEVANT ou DERRIÈRE le fermier selon la rangée, et
+       c'est pour ça qu'il est posé dans la file triée (`pushE`) et jamais dans
+       la passe de sol. */
+    townRail: planche2Sprite("balusterEnd"),
+    /* ⚠️ ZIP 447 — la végétation de la seconde planche. Elle sert à HABILLER un
+       dénivelé : au pied d'un mur de soutènement, un massif casse la ligne
+       droite et donne une échelle. Sans elle, une falaise de 48 px rencontre
+       l'herbe sur un trait net, et un trait net se lit comme un collage. */
+    townBloomBed: [planche2Sprite("flowerBedL"), planche2Sprite("flowerBedR")],
+    townBloomRow: planche2Sprite("flowerRow"),
+    townRockBed: planche2Sprite("rockBed"),
+    townHedgeAngle: planche2Sprite("hedgeCorner"),
     townHedgeBush: plancheSprite("hedgeBush"),
     townGrassTuft: plancheSprite("grassTuft"),
     townGrassPatch: plancheSprite("grassPatch"),
@@ -12082,6 +12723,9 @@ house: house(),
     drawStarCrater,
     drawStarCraterAir,
     starCraterSink,
+    drawStarComet,          // zip 448 — la comète, sa queue, sa traînée et son impact
+    drawStarCometTrail,
+    drawStarImpactFlash,
     townHouses: Array.from({ length: C.TOWN_HOUSE_STYLES }, (_, i) => townHouseVariant(i)),
     rabbit: [rabbitSprite(0), rabbitSprite(1), rabbitSprite(2)],
     torch: torchSprite(),

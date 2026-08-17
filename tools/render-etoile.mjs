@@ -227,6 +227,38 @@ function craterBoard() {
   return sur;
 }
 
+/* ╔═══════════════════════════════════════════════════════════════════════════
+   ║ ZIP 448 — LA PLANCHE DE LA COMÈTE. ELLE N'EXISTAIT PAS, ET C'EST LA CAUSE.
+   ╚═══════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ LE DESSIN DU 445 TENAIT EN HUIT LIGNES DANS LA CLOSURE DE LA BOUCLE DE
+   RENDU — un `createLinearGradient` et un `arc()` blanc. Guillaume l'a résumé en
+   « trop ridicule ». Il ne l'a jamais été par négligence : il a VIEILLI, faute
+   d'un endroit où se voir, pendant que le cratère prenait trois passes et sept
+   contrôles. C'est le deuxième visage du piège n°1, et c'est la troisième fois
+   qu'il se paie (les sols d'intérieur, les arbres de la ferme, la comète).
+   ⚠️ ON MONTRE TROIS TAILLES sur DEUX FONDS : la comète loin (elle doit encore
+   se lire), à mi-course, et au moment du contact. Un seul fond aurait flatté le
+   halo — c'est déjà la règle de la planche principale, cette famille émet de la
+   lumière. */
+function cometBoard() {
+  const W = 900, H = 460;
+  const sur = makeCanvas(W, H), g = sur.ctx;
+  // Un ciel de nuit voilé (celui de la scène) et une bande claire : un cœur
+  // blanc sur du gris pâle est exactement ce qui disparaît sans cerne (441).
+  g.fillStyle = "#0a0c1e"; g.fillRect(0, 0, W, H * 0.62);
+  g.fillStyle = "#b9c2cc"; g.fillRect(0, H * 0.62, W, H * 0.38);
+  const ang = Math.atan2(Math.sin(0.72), -Math.cos(0.72));   // le même quadrant que le jeu
+  const shots = [[130, 100, 5], [370, 120, 13], [700, 150, 27]];
+  for (const [x, y, R] of shots) S.drawStarComet(g, x, y, ang, R, 2400, { q: 3 });
+  for (const [x, y, R] of shots) S.drawStarComet(g, x, y + 310, ang, R, 2400, { q: 3 });
+  // La traînée qui reste, à cinq âges — et l'impact, à quatre instants.
+  for (let i = 0; i < 5; i++)
+    S.drawStarCometTrail(g, 60 + i * 60, 262, ang, 14, i / 5, 2400, { q: 3 });
+  for (let i = 0; i < 4; i++)
+    S.drawStarImpactFlash(g, 420 + i * 145, 262, i * 0.30, 15, { q: 3 });
+  return sur;
+}
+
 /* ⚠️⚠️ ET UNE PLANCHE DE MESURE, SUR FOND NOIR, QUI N'EST PAS LA PLANCHE QU'ON
    REGARDE. Sur l'herbe, la terre et une fissure ont la même teinte dominante
    (rouge > vert dans les deux cas) et rien ne les sépare ; sur du noir, la
@@ -273,6 +305,8 @@ const planche = board();
 { const up = scale(planche.px, planche.width, planche.height, 2); writePNG(path.join(OUT, "etoile-planche.png"), up.px, up.W, up.H); }
 const crat = craterBoard();
 { const up = scale(crat.px, crat.width, crat.height, 3); writePNG(path.join(OUT, "etoile-cratere.png"), up.px, up.W, up.H); }
+const com = cometBoard();
+{ const up = scale(com.px, com.width, com.height, 2); writePNG(path.join(OUT, "etoile-comete.png"), up.px, up.W, up.H); }
 
 console.log("1. LE BORD DU HAUT — le piège n°1 des sprites\n");
 {
@@ -528,6 +562,163 @@ console.log("\n7. LE CRATÈRE — deux rayons, une profondeur, et un refroidisse
   }
 }
 
-console.log(`\nPlanches : tools/out/etoile-planche.png · tools/out/etoile-cratere.png`);
+console.log("\n8. LA COMÈTE — sept couches, un sens de course, et un halo\n");
+{
+  /* ⚠️⚠️ ON SONDE UNE COMÈTE ISOLÉE SUR FOND NOIR, jamais celle de la planche :
+     trois comètes qui se chevauchent mesureraient la voisine. Même discipline
+     que `craterProbe`. */
+  const S2 = 420, R = 26;
+  const ANG = Math.atan2(Math.sin(0.72), -Math.cos(0.72));
+  const ux = Math.cos(ANG), uy = Math.sin(ANG);
+  const probe = (opt) => {
+    const s2 = makeCanvas(S2, S2), g2 = s2.ctx;
+    g2.fillStyle = "#000"; g2.fillRect(0, 0, S2, S2);
+    S.drawStarComet(g2, S2 / 2, S2 / 2, ANG, R, 2400, Object.assign({ q: 3 }, opt || {}));
+    const d = s2.px;
+    return {
+      at: (x, y) => {
+        if (x < 0 || y < 0 || x >= S2 || y >= S2) return [0, 0, 0];
+        const i = ((y | 0) * S2 + (x | 0)) * 4;
+        return [d[i], d[i + 1], d[i + 2]];
+      },
+      px: d,
+    };
+  };
+  const P2 = probe();
+  const lum = (c) => 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+
+  /* 1. LE CŒUR EST BLANC. Le modèle de Guillaume en fait le point le plus clair
+        de toute l'image ; sans lui la tête est une bille bleue. */
+  const heart = P2.at(S2 / 2 + ux * R * 0.18, S2 / 2 + uy * R * 0.18);
+  ok(heart[0] > 240 && heart[1] > 240 && heart[2] > 240, "⚠️ le CŒUR est blanc pur",
+     `rgb(${heart.join(",")})`);
+
+  /* 2. LE CROISSANT D'OR EST À L'ARRIÈRE, ET SEULEMENT LÀ. C'est le point
+        contre-intuitif du modèle, et le seul qui, peint à l'envers, donne une
+        tête qui a l'air de reculer. On lit l'or par sa signature (R nettement
+        au-dessus de B) sur deux arcs opposés. */
+  const goldOn = (sign) => {
+    let n = 0, tot = 0;
+    for (let k = 0; k < 64; k++) {
+      const a = k / 64 * Math.PI * 2;
+      const c = Math.cos(a) * ux + Math.sin(a) * uy;
+      if (sign * c < 0.55) continue;
+      for (let rr = R * 0.95; rr <= R * 1.30; rr += 1) {
+        const p = P2.at(S2 / 2 + Math.cos(a) * rr, S2 / 2 + Math.sin(a) * rr);
+        tot++;
+        if (p[0] > 150 && p[0] > p[2] + 60) n++;
+      }
+    }
+    return tot ? n / tot : 0;
+  };
+  const back = goldOn(-1), front = goldOn(1);
+  ok(back > 0.30, "⚠️⚠️ la gaine d'or est à l'ARRIÈRE (ce que montre le modèle)",
+     `${(back * 100).toFixed(0)} % de l'arc arrière`);
+  ok(back > front * 1.8, "…et elle n'est qu'un liseré à l'avant",
+     `arrière ${(back * 100).toFixed(0)} %, avant ${(front * 100).toFixed(0)} %`);
+
+  /* 3. LE HALO EST LARGE ET FAIBLE, JAMAIS PETIT ET VIF. C'est la règle déjà
+        écrite pour la chaleur du cratère (446) : une lueur qui monte en valeur
+        sans s'élargir se lit comme une lampe. Guillaume demande « un glow » ;
+        c'est ce nombre-là qui dit s'il y en a un. */
+  {
+    let far = 0;
+    for (let k = 0; k < 48; k++) {
+      const a = k / 48 * Math.PI * 2;
+      const c = Math.cos(a) * ux + Math.sin(a) * uy;
+      if (c < 0.4) continue;                        // devant, là où la queue ne peut pas mentir
+      const p = P2.at(S2 / 2 + Math.cos(a) * R * 2.9, S2 / 2 + Math.sin(a) * R * 2.9);
+      if (lum(p) > 8) far++;
+    }
+    ok(far >= 8, "⚠️ le HALO déborde largement de la tête (≥ 2,9 rayons)", `${far} rayons sur 19`);
+  }
+
+  /* 4. LA QUEUE EST DERRIÈRE, ET ELLE EST LONGUE. Une comète dont la queue
+        n'atteint pas plusieurs rayons est un point lumineux. */
+  {
+    let reach = 0;
+    for (let d = R; d < R * 12; d += 2) {
+      const p = P2.at(S2 / 2 - ux * d, S2 / 2 - uy * d);
+      if (lum(p) > 10) reach = d;
+    }
+    ok(reach > R * 5, "⚠️ la QUEUE traîne loin derrière", `${(reach / R).toFixed(1)} rayons`);
+    let ahead = 0;
+    for (let d = R * 1.6; d < R * 12; d += 2) {
+      const p = P2.at(S2 / 2 + ux * d, S2 / 2 + uy * d);
+      if (lum(p) > 10) ahead = d;
+    }
+    ok(ahead < reach * 0.55, "⚠️⚠️ …et rien de comparable DEVANT (sinon elle recule)",
+       `devant ${(ahead / R).toFixed(1)} rayons, derrière ${(reach / R).toFixed(1)}`);
+  }
+
+  /* 5. LA QUEUE EST FAITE DE MÈCHES INÉGALES, PAS D'UN DÉGRADÉ. C'est très
+        exactement ce que le dessin du 445 ne faisait pas, et c'est la même leçon
+        que la gerbe du cratère (446) : tirées uniformément, les mèches redonnent
+        un cône. On mesure la variation de luminance TRAVERS la queue. */
+  {
+    const nx2 = -uy, ny2 = ux, vals = [];
+    for (let j = -14; j <= 14; j++) {
+      const x = S2 / 2 - ux * R * 4 + nx2 * j * 3, y = S2 / 2 - uy * R * 4 + ny2 * j * 3;
+      vals.push(lum(P2.at(x, y)));
+    }
+    let flips = 0;
+    for (let i = 2; i < vals.length; i++) {
+      const d1 = vals[i - 1] - vals[i - 2], d2 = vals[i] - vals[i - 1];
+      if (d1 * d2 < 0 && Math.abs(d2) > 3) flips++;
+    }
+    ok(flips >= 3, "⚠️⚠️ la queue a du GRAIN en travers (des mèches, pas un dégradé)",
+       `${flips} inversions de pente`);
+  }
+
+  /* 6. LE CERNE FAIT LE TOUR — le contrôle n°4 de ce banc, appliqué à la seule
+        famille qui émette vraiment de la lumière. Sur un ciel voilé de gris, une
+        tête sans cerne se dissout. */
+  {
+    let dark = 255;
+    for (let k = 0; k < 48; k++) {
+      const a = k / 48 * Math.PI * 2;
+      const c = Math.cos(a) * ux + Math.sin(a) * uy;
+      if (c < 0.2) continue;                        // hors du croissant d'or
+      let best = 255;
+      for (let rr = R * 0.98; rr <= R * 1.14; rr += 0.5) best = Math.min(best, lum(P2.at(S2 / 2 + Math.cos(a) * rr, S2 / 2 + Math.sin(a) * rr)));
+      dark = Math.min(dark, best);
+    }
+    ok(dark <= 60, "⚠️ le bord de la tête porte un ton sombre (le cerne)", `L ${dark.toFixed(0)}`);
+  }
+
+  /* 7. `fade` ÉTEINT VRAIMENT. La comète arrive de loin : si l'atténuation ne
+        passe pas par l'alpha des couleurs, elle APPARAÎT au lieu d'arriver — et
+        elle serait fausse au banc, dont le `restore()` ne rend pas
+        `globalAlpha` (le stub menteur du §10). */
+  {
+    const ink = (P) => { let n = 0; for (let i = 0; i < P.px.length; i += 4) if (P.px[i] + P.px[i + 1] + P.px[i + 2] > 40) n++; return n; };
+    const full = ink(P2), dim = ink(probe({ fade: 0.25 }));
+    ok(dim < full * 0.75, "⚠️ `fade` atténue pour de bon", `${full} px → ${dim} px`);
+    ok(dim > 0, "…sans tout effacer", `${dim} px`);
+  }
+
+  /* 8. L'IMPACT MONTE ET RETOMBE, il ne s'allume pas. ⚠️ On mesure l'ÉTALEMENT
+        entre deux instants : un flash qui garde la même taille est un
+        `fillRect` blanc, c'est-à-dire ce qu'on vient de remplacer. */
+  {
+    const spread = (k) => {
+      const s3 = makeCanvas(S2, S2), g3 = s3.ctx;
+      g3.fillStyle = "#000"; g3.fillRect(0, 0, S2, S2);
+      S.drawStarImpactFlash(g3, S2 / 2, S2 / 2, k, 22, { q: 3 });
+      const d = s3.px;
+      let far = 0;
+      for (let y = 0; y < S2; y++) for (let x = 0; x < S2; x++) {
+        const i = (y * S2 + x) * 4;
+        if (d[i] + d[i + 1] + d[i + 2] < 60) continue;
+        far = Math.max(far, Math.hypot(x - S2 / 2, y - S2 / 2));
+      }
+      return far;
+    };
+    const s0 = spread(0.05), s1 = spread(0.55);
+    ok(s1 > s0 * 1.5, "⚠️ la gerbe d'impact S'ÉTALE", `${s0.toFixed(0)} px → ${s1.toFixed(0)} px`);
+  }
+}
+
+console.log(`\nPlanches : tools/out/etoile-planche.png · tools/out/etoile-cratere.png · tools/out/etoile-comete.png`);
 console.log(fails === 0 ? `\n✅ tous les contrôles passés.\n` : `\n❌ ${fails} contrôle(s) en échec.\n`);
 process.exit(fails ? 1 : 0);

@@ -3996,6 +3996,25 @@ export function generateTownWorld() {
       }
     }
   }
+  /* ⚠️ ZIP 447 — LES PALIERS, APRÈS LES VOLÉES ET C'EST UN ORDRE, PAS UN HASARD.
+     Le palier recouvre le haut de la volée basse : posé AVANT, il se ferait
+     repeindre en marches et le quart tournant se lirait comme une seule volée
+     droite qui rétrécit. C'est la famille de défauts du §4 (« une passe qui pave
+     dégage ce qu'elle pave ») prise dans le bon sens pour une fois : ici on VEUT
+     que la seconde passe gagne, donc on la met en second et on le dit. */
+  for (const lg of (C.TOWN_STAIR_LANDINGS || [])) {
+    rect(lg, (x, y, i) => { elev[i] = lg.elev; ground[i] = C.G_PATH_STONE; });
+  }
+  /* ⚠️ LES GARDE-CORPS SONT POSÉS ICI, AVEC LE RELIEF, ET PAS AVEC LES DÉCORS.
+     Ils appartiennent à la forme du terrain — ils bordent un dénivelé — donc
+     tout ce qui suit (rues, arbres, semis) doit déjà les voir comme occupés.
+     Posés plus tard, une allée serait passée dessous et un arbre dedans : c'est
+     la famille « une passe qui pave dégage ce qu'elle pave » du §4.
+     ⚠️ ILS NE TOUCHENT QUE `solid`. Pas `elev` (le piège des ponts du 439 :
+     une grandeur de dessin dans la collision fait un mur infranchissable), pas
+     `ground` (une case de garde-corps reste la dalle ou l'herbe qu'elle était,
+     et c'est ce qui fait qu'il a l'air POSÉ dessus au lieu de la remplacer). */
+  for (const rl of (C.TOWN_RAILS || [])) rect(rl, (x, y, i) => { solid[i] = 1; });
 
   /* ------------------------------------------------------------------ RUES
      ⚠️ UNE RUE S'ARRÊTE AU PIED D'UNE FALAISE. `paveRun` refuse toute case
@@ -4070,6 +4089,50 @@ export function generateTownWorld() {
     props.push({ x, y, kind });
     if (blocks) solid[id(x, y)] = 1;
   };
+  /* ⚠️⚠️ ZIP 447 — LES GARDE-CORPS DEVIENNENT DES DÉCORS, ET C'EST `verify-vallee`
+     QUI L'A EXIGÉ. Marqués seulement `solid` dans la passe de relief, ils
+     sortaient dix « cases bloquantes invisibles » — le contrôle que le 425 a
+     laissé et qui refuse tout blocage que personne ne dessine. La leçon vaut
+     au-delà : *ce qui arrête le joueur doit être quelque chose qu'il VOIT*, et
+     la façon la plus sûre de s'y tenir est que la même liste serve aux deux.
+     ⚠️ `solid` est déjà posé en amont (avec le relief, pour que rues et arbres
+     l'évitent) ; on ne le repose pas ici, on ajoute le DESSIN. */
+  for (const rl of (C.TOWN_RAILS || [])) {
+    for (let y = rl.y; y < rl.y + rl.h; y++) for (let x = rl.x; x < rl.x + rl.w; x++) addProp(x, y, "rail", true);
+  }
+  /* ⚠️⚠️ ZIP 447 — LA VÉGÉTATION DU DÉNIVELÉ, ET ELLE SE PLACE PAR DÉRIVATION.
+     Chaque massif est posé RELATIVEMENT à une volée ou à un palier lus dans les
+     constantes : le jour où l'escalier bouge d'une case, ils suivent. Les
+     écrire en dur aurait été le défaut payé quatre fois du §4 — deux
+     descriptions du même endroit, qui s'éloignent au premier réglage.
+     ⚠️ Ils ne bloquent PAS (`false`) : un massif de fleurs qu'on ne peut pas
+     traverser est un mur invisible déguisé en décor, et c'est le contrôle que
+     `verify-vallee` fait dans les deux sens. */
+  {
+    const vBas = C.TOWN_STAIRS[0], vHaut = C.TOWN_STAIRS[1], pal = (C.TOWN_STAIR_LANDINGS || [])[0];
+    /* ⚠️⚠️ ILS BLOQUENT TOUS, ET C'EST LA RÈGLE DU DÉPÔT, PAS UN CHOIX : le
+       contrôle inverse de `verify-vallee` refuse tout décor traversable, avec
+       quatre exceptions nommées qui FLOTTENT (le pont, les nénuphars, les
+       roseaux, les pas japonais). Un massif de fleurs qu'on traverse est un
+       décor qui ment sur ce qu'il est. Le prix se paie donc au PLACEMENT :
+       aucun de ces massifs ne tombe sur l'avenue ni sur une marche, sinon on
+       aurait bouché une rue avec des fleurs — et c'est le taxi qui l'aurait
+       découvert, pas nous.
+       ⚠️ La rangée du PIED est `y + len - 1`, la dernière marche, et pas
+       `y + len` qui est l'avenue elle-même. Premier jet : deux massifs plantés
+       au milieu de la chaussée. */
+    if (vBas && pal) {
+      /* ⚠️ L'ESPACEMENT EST DICTÉ PAR L'EMPRISE DES SPRITES, PAS PAR L'ŒIL.
+         Ces massifs font 1 à 2 cases de large une fois dérivés par
+         `townPropBox` ; posés tous les deux, ils s'interpénétraient et
+         `verify-compo` les a refusés trois fois de suite. Les abscisses
+         ci-dessous sont celles qui laissent leurs CORPS disjoints, mesurées. */
+      const pied = vBas.y + vBas.len - 1;
+      addProp(vBas.x - 7, pied, "bloomBed", true);
+      addProp(vBas.x - 5, pied, "rockBed", true);
+      addProp(vBas.x - 1, pied, "bloomRow", true);
+    }
+  }
   // Lampadaires : les quatre angles de la place, plus deux paires en garde
   // d'honneur de part et d'autre de la fontaine et du monument.
   for (const [lx, ly] of [

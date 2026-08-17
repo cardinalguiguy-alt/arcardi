@@ -74,7 +74,14 @@ const STAR_EN = {
   /* ── LA CHUTE. Personne d'autre ne la commente : c'est le thème (§3 de
      QUETE.md). Le silence de la ville EST la première chose étrange. */
   fall: {
-    line1: "The sky tears open, west to east.",
+    /* ⚠️⚠️ ZIP 448 — « west to east » ÉTAIT FAUX, ET ÇA S'EST VU À L'ÉCRAN AVANT
+       DE SE VOIR ICI : la comète descend d'EST EN OUEST (le sillon est plus
+       profond à son bout ouest, c'est là que la course s'arrête, et les deux
+       modèles de Guillaume la montrent arrivant du haut-droite). Le texte disait
+       donc le contraire de l'image, sous l'image. Un texte n'est pas un décor :
+       il AFFIRME, et une affirmation fausse coûte plus cher qu'un dessin
+       approximatif. */
+    line1: "The sky tears open, east to west.",
     line2: "Something hits the ground far away. The windows rattle.",
     line3: "Every bird in the valley goes up at once.",
     quiet: "Nobody comes out to look. Nobody says anything about it. Not one person.",

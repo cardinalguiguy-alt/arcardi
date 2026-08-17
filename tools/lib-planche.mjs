@@ -37,14 +37,37 @@ import { readPNG } from "./lib-png.mjs";
 
 export const STEP = 3.25, OX = 2, OY = 1.5;
 
-/* La planche ramenée au pixel natif, en RGBA opaque. */
-export function nativeSheet(file) {
+/* ⚠️⚠️ ZIP 447 — LE PAS EST DEVENU UN PARAMÈTRE, ET LA PLANCHE 2 EST LA RAISON.
+   Les valeurs ci-dessus restent les DÉFAUTS, donc `import-planche.mjs` ne voit
+   strictement aucun changement ; mais la seconde planche de Guillaume n'a pas
+   le même pas, et surtout elle n'a pas de pas MESURABLE : ses plages internes
+   font 1 et 2 px, c'est un dessin fin avec anticrénelage, pas un pixel art
+   agrandi d'un facteur propre. Les deux mesures tentées (peigne de gradient,
+   histogramme de plages) rendaient du HASARD — et le contrôle le prouve :
+   lancées sur la planche 1, dont on sait que le pas vaut 3,25, elles répondent
+   3,0 avec une erreur de 0,27 pour un maximum de 0,5.
+
+   ⚠️ SON ÉCHELLE SE DÉRIVE DONC DU GABARIT, JAMAIS DE L'IMAGE — c'est la règle
+   du §9 (`Models.fit`) appliquée à un import. Cinq objets de la planche 2 ont
+   un homologue dont la taille est déjà fixée par le jeu, et les cinq tombent
+   d'accord à moins de 3 % : le banc (138 px pour les 36 natifs de `benchWood`),
+   le petit arbre (174×209 pour le gabarit 44×52 du 438), le lampadaire (195 px
+   pour un canevas de 48), la haie (62 px pour UNE case de 16) et la maison
+   (~349 px pour les 96 d'une maison de ville). Moyenne : 3,875 px image par
+   pixel natif, soit **une case = 62 px image**. Une mesure sur cinq objets
+   indépendants, pas un réglage. */
+
+/* La planche ramenée au pixel natif, en RGBA opaque.
+   ⚠️ `opt` par défaut = la planche 1 au pixel près : aucun appelant existant ne
+   change de comportement. */
+export function nativeSheet(file, opt = {}) {
+  const step = opt.step ?? STEP, ox = opt.ox ?? OX, oy = opt.oy ?? OY;
   const img = readPNG(file);
-  const gw = Math.floor((img.W - OX) / STEP), gh = Math.floor((img.H - OY) / STEP);
+  const gw = Math.floor((img.W - ox) / step), gh = Math.floor((img.H - oy) / step);
   const px = new Uint8ClampedArray(gw * gh * 4);
   const med = (a) => { a.sort((u, v) => u - v); return a[a.length >> 1]; };
   for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) {
-    const cx = OX + (i + 0.5) * STEP, cy = OY + (j + 0.5) * STEP;
+    const cx = ox + (i + 0.5) * step, cy = oy + (j + 0.5) * step;
     const R = [], G = [], B = [];
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
       const x = Math.round(cx) + dx, y = Math.round(cy) + dy;
@@ -64,14 +87,30 @@ export function nativeSheet(file) {
    arbres, elles aussi grises, valent ~104 et doivent RESTER. Ce sont elles qui
    « posent » l'objet au sol — les retirer reviendrait à jeter ce que le 439 a
    passé une passe entière à remettre sur les arbres du jeu. */
-export function backgroundMask(sh, tol = 12) {
+/* ⚠️⚠️ ZIP 447 — `opt.ref` ET `opt.enclosed`, POUR LA PLANCHE 2, ET IL FAUT DIRE
+   POURQUOI ON DÉROGE À LA RÈGLE DE L'EN-TÊTE. « Le fond n'est pas une teinte,
+   c'est ce qui est CONNEXE AU BORD » a été écrit contre la planche 1, dont le
+   fond est GRIS et dont la moitié des objets sont gris eux aussi (le muret, les
+   bancs de pierre, les galets) : là-bas, un test de couleur mange les objets
+   par le milieu, et seule la connexité s'en sort.
+   La planche 2 est l'exacte situation inverse, et deux mesures le montrent :
+   son fond est un blanc PUR (253-255, écart RVB ≤ 2) quand le pixel le plus
+   clair de tout son dessin plafonne à 178 — il n'y a aucune ambiguïté à lever ;
+   et ses jours ENTRE LES BALUSTRES sont des trous fermés, que le remplissage
+   depuis le bord n'atteint jamais. Y appliquer la connexité seule ne serait pas
+   prudent, ce serait FAUX : on livrerait une balustrade pleine, c'est-à-dire un
+   muret. *La bonne règle dépend de ce qui est ambigu dans l'image qu'on a, pas
+   de ce qui l'était dans l'image d'avant.* */
+export function backgroundMask(sh, tol = 12, opt = {}) {
   const { w, h, px } = sh;
+  const ref = opt.ref ?? 120, enclosed = !!opt.enclosed;
   const bg = new Uint8Array(w * h);
   const isNeutral = (i) => {
     const r = px[i * 4], g = px[i * 4 + 1], b = px[i * 4 + 2];
     return Math.abs(r - g) <= 6 && Math.abs(g - b) <= 6 && Math.abs(r - b) <= 6
-        && Math.abs(r - 120) <= tol;
+        && Math.abs(r - ref) <= tol;
   };
+  if (enclosed) { for (let i = 0; i < w * h; i++) if (isNeutral(i)) bg[i] = 1; return bg; }
   const st = [];
   for (let x = 0; x < w; x++) { st.push(x, (h - 1) * w + x); }
   for (let y = 0; y < h; y++) { st.push(y * w, y * w + w - 1); }

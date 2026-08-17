@@ -162,11 +162,25 @@ title("3. rien ne pousse dans le corps d'un décor");
    de `townPropCovers` — la moitié d'une case — et c'est le seul du projet. */
 title("4. deux décors ne s'interpénètrent pas");
 {
+  /* ⚠️⚠️ ZIP 447 — DEUX TRONÇONS DU MÊME OUVRAGE LINÉAIRE ONT LE DROIT DE SE
+     TOUCHER, ET C'EST UNE PRÉCISION DE LA RÈGLE, PAS UN TROU DEDANS. Le §5
+     ci-dessous dit déjà qu'un garde-corps, une murette ou une haie sont des
+     ouvrages CONTINUS — « ce qui en fait un garde-corps est le fait qu'il
+     court ». Or continu veut dire jointif : une rambarde faite de tuiles d'une
+     case se recouvre forcément d'un tronçon à l'autre, et l'exiger disjointe
+     reviendrait à exiger qu'elle soit trouée.
+     ⚠️ L'EXEMPTION EST ÉTROITE : même famille ET famille linéaire. Un massif
+     planté dans une rambarde reste un défaut, un banc dans une haie aussi —
+     c'est-à-dire que tout ce que ce contrôle attrapait, il l'attrape encore.
+     Ce qu'on retire n'est pas la mesure, c'est un cas dont on peut nommer la
+     raison (même geste qu'au 439 sur `archBridge` et les nénuphars). */
+  const CONTINU = new Set(["fence", "lowWall", "hedgeRow", "benchWall", "rail"]);
   const seen = new Set(), bad = [];
   for (const p of props) {
     if (!C.TOWN_PROP_ART[p.kind]) continue;
     for (const q of props) {
       if (p === q || !C.TOWN_PROP_ART[q.kind]) continue;
+      if (p.kind === q.kind && CONTINU.has(p.kind)) continue;
       if (Math.abs(p.x - q.x) > 6 || Math.abs(p.y - q.y) > 5) continue;
       const key = [p.x, p.y, q.x, q.y].sort().join(",");
       if (seen.has(key)) continue;
@@ -192,7 +206,7 @@ title("4. deux décors ne s'interpénètrent pas");
    rangée de haie. */
 title("5. un ouvrage linéaire court, il ne se pose pas tout seul");
 {
-  const LINEAR = ["fence", "lowWall", "hedgeRow", "benchWall"];
+  const LINEAR = ["fence", "lowWall", "hedgeRow", "benchWall", "rail"];   // 447
   for (const kind of LINEAR) {
     const list = props.filter(p => p.kind === kind);
     if (!list.length) { console.log(`  ····   ${kind} : aucun posé`); continue; }

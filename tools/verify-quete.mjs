@@ -647,7 +647,7 @@ section("Les grandeurs partagées");
     "STAR_MAGPIE_LAG", "STAR_MAGPIE_PATIENCE_MS", "STAR_MAGPIE_JUMP_TILES", "STAR_MAGPIE_NEST_R",
     "STAR_MAGPIE_SOLO_MS", "STAR_MAGPIE_HOLD_MS", "STAR_DUET_PHRASES", "STAR_DUET_SOLO_FADE_MS",
     "STAR_DUET_NOTE_MS", "STAR_DUET_AIM_MS", "STAR_DUET_ALONE_MUL", "STAR_FALL_MIN_DAY",
-    "STAR_FALL_MS", "STAR_TURN_MS", "STAR_END_MS", "STAR_CARD_MS", "STAR_HIDE_R", "STAR_HIDE_MS",
+    "STAR_FALL_MS", "STAR_FALL_IMPACT_MS", "STAR_FALL_APPEAR_MS", "STAR_TURN_MS", "STAR_END_MS", "STAR_CARD_MS", "STAR_HIDE_R", "STAR_HIDE_MS",
     "STAR_COOL_ROUNDS", "STAR_COOL_MS", "STAR_COOL_RISE", "STAR_COOL_POUR", "STAR_COOL_CRACK",
     "STAR_COOL_BURN", "STAR_COOL_DUO_WIDEN", "STAR_DIVE_HIT_COST_MS",
     "STAR_POOL_VIEW_TILES", "STAR_LURE_VIEW_TILES"];
@@ -756,10 +756,10 @@ section("La chute est vue, et le chevron désigne (445)");
 
   /* ── LA CAMÉRA. Trois inégalités, pas un réglage à l'œil. */
   ok("⚠️ la caméra est POSÉE quand le flash tombe",
-     Q.STAR_CAM_GO_MS < Q.STAR_CAM_FLASH_MS,
-     `vol ${Q.STAR_CAM_GO_MS} ms, flash à ${Q.STAR_CAM_FLASH_MS} ms`);
+     Q.STAR_CAM_GO_MS < Q.STAR_FALL_IMPACT_MS,
+     `vol ${Q.STAR_CAM_GO_MS} ms, flash à ${Q.STAR_FALL_IMPACT_MS} ms`);
   ok("…et elle y reste APRÈS le flash (sinon on ne voit pas ce qu'on est venu voir)",
-     Q.STAR_CAM_HOLD_MS > Q.STAR_CAM_FLASH_MS,
+     Q.STAR_CAM_HOLD_MS > Q.STAR_FALL_IMPACT_MS,
      `tenue jusqu'à ${Q.STAR_CAM_HOLD_MS} ms`);
   ok("⚠️ …et elle est revenue au joueur AVANT la fin de la scène",
      Q.STAR_CAM_HOLD_MS + Q.STAR_CAM_BACK_MS <= Q.STAR_FALL_MS,
@@ -768,10 +768,74 @@ section("La chute est vue, et le chevron désigne (445)");
      là-bas ») et on revient posément ; l'inverse donne un plan qui fuit. */
   ok("le retour est plus lent que le vol", Q.STAR_CAM_BACK_MS > Q.STAR_CAM_GO_MS,
      `${Q.STAR_CAM_GO_MS} ms → ${Q.STAR_CAM_BACK_MS} ms`);
+
+  /* ╔════════════════════════════════════════════════════════════════════════════
+     ║ ZIP 448 — LA CHRONOLOGIE DE LA CHUTE. LA GRANDEUR QUE PERSONNE NE MESURAIT.
+     ╚════════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ SEPT CONTRÔLES REGARDAIENT LE CRATÈRE (sa forme, sa profondeur, ses deux
+     rayons, son refroidissement, sa fumée, son enfoncement) ET AUCUN NE
+     DEMANDAIT QUAND IL APPARAÎT. Il apparaissait à t=0, trois secondes avant que
+     la comète ne touche le sol, et le sillon de la ferme existait depuis le
+     premier jour de la partie. Défaut vu à l'écran par Guillaume, invisible à
+     tous les bancs — c'est le §25 du README de la ferme, une fois de plus.
+     ⚠️ ET `STAR_CAM_FLASH_MS` A ÉTÉ SUPPRIMÉE EN MÊME TEMPS : elle valait 3000,
+     ce banc la lisait, et la cinématique écrivait `t > 3.0` en dur dans sa
+     closure. Le banc mesurait donc un nombre que le dessin ne lisait pas — il ne
+     pouvait pas échouer (§10 : « un banc qui n'a jamais pu échouer ne vaut
+     rien »). Il n'en reste qu'une, `STAR_FALL_IMPACT_MS`, et elle est lue par les
+     deux côtés. */
+  ok("⚠️⚠️ le décor d'impact n'existe PAS avant l'impact",
+     Q.starImpactLanded("fall", 0) === false
+     && Q.starImpactLanded("fall", Q.STAR_FALL_IMPACT_MS - 1) === false,
+     `rien jusqu'à ${Q.STAR_FALL_IMPACT_MS} ms`);
+  ok("…et il existe à partir de l'instant du contact",
+     Q.starImpactLanded("fall", Q.STAR_FALL_IMPACT_MS) === true
+     && Q.starImpactLanded("fall", Q.STAR_FALL_MS) === true);
+  /* ⚠️ HORS CINÉMATIQUE, L'IMPACT EST DE L'HISTOIRE. Écrire l'inverse aurait fait
+     disparaître le cratère les 999 fois sur 1000 où aucune scène ne joue —
+     c'est-à-dire pendant toute la partie. */
+  ok("⚠️ sans scène en cours, le décor est là (c'est le cas NORMAL)",
+     Q.starImpactLanded(null, 0) === true && Q.starImpactLanded("turn", 0) === true
+     && Q.starImpactLanded("end", 0) === true);
+  ok("la comète entre en scène après le vol de caméra et avant l'impact",
+     Q.STAR_CAM_GO_MS <= Q.STAR_FALL_APPEAR_MS && Q.STAR_FALL_APPEAR_MS < Q.STAR_FALL_IMPACT_MS,
+     `caméra posée ${Q.STAR_CAM_GO_MS} ms, comète ${Q.STAR_FALL_APPEAR_MS} ms, contact ${Q.STAR_FALL_IMPACT_MS} ms`);
+  /* ⚠️ ELLE RESTE RAPIDE, ET C'EST UNE CONSIGNE DE GUILLAUME (« une comète reste
+     rapide ») : plus d'une seconde pour qu'on la voie, moins de trois pour
+     qu'elle ne se traîne pas. Deux bornes, pas un ressenti. */
+  {
+    const vol = Q.STAR_FALL_IMPACT_MS - Q.STAR_FALL_APPEAR_MS;
+    ok("⚠️ on la voit assez longtemps pour la regarder", vol >= 1200, `${vol} ms`);
+    ok("…sans qu'elle cesse d'être rapide", vol <= 3000, `${vol} ms`);
+  }
+
+  /* ── L'AZIMUT. ⚠️ REMARQUE DE GUILLAUME : « si l'animation montre un
+     déplacement d'ouest en est, l'impact ne peut pas être à l'ouest ». Le sens
+     est dicté par le SILLON, qui est plus profond à son bout ouest — c'est là que
+     la course s'arrête. On vérifie donc le signe, jamais un nombre recopié. */
+  for (const z of ["farm", "town"]) {
+    const a = Q.starFallAngle(z);
+    ok(`la comète descend vers l'OUEST (${z})`, Math.cos(a) < 0 && Math.sin(a) > 0,
+       `dx ${Math.cos(a).toFixed(2)}, dy ${Math.sin(a).toFixed(2)}`);
+  }
+  /* ⚠️⚠️ ET LA PLONGÉE SUIT LE TROU QU'ELLE CREUSE. Un cratère ROND se creuse à
+     la verticale, une balafre de six cases se laboure en rasant : c'est la même
+     discipline que le garde-corps du 447 — la collision et le dessin disent la
+     même chose, et c'est le seul cas où l'on a le droit de les confondre. */
+  ok("⚠️ elle plonge plus raide sur le cratère que sur le sillon",
+     Q.starFallDive("town") > Q.starFallDive("farm") * 1.5,
+     `ville ${(Q.starFallDive("town") * 180 / Math.PI).toFixed(0)}°, ferme ${(Q.starFallDive("farm") * 180 / Math.PI).toFixed(0)}°`);
+  ok("…et le sillon reste un impact RASANT (sinon ce serait un trou)",
+     Q.starFallDive("farm") < 30 * Math.PI / 180,
+     `${(Q.starFallDive("farm") * 180 / Math.PI).toFixed(0)}°`);
+  /* ⚠️ UNE ZONE INCONNUE NE DOIT PAS RENDRE `NaN` : elle retombe sur la ferme.
+     Un `NaN` d'angle ne lève rien, il fait juste disparaître la comète — le repli
+     poli du 444, dans une trigonométrie. */
+  ok("une zone inconnue ne rend pas NaN", Number.isFinite(Q.starFallAngle("inventée")));
   /* La carte de chapitre tombe à `STAR_FALL_MS - 3000` : elle ne doit pas
      recouvrir le plan sur l'impact qu'on vient de payer. */
   ok("⚠️ la carte de chapitre n'arrive pas avant que la caméra ait fini de tenir",
-     Q.STAR_FALL_MS - 3000 >= Q.STAR_CAM_FLASH_MS,
+     Q.STAR_FALL_MS - 3000 >= Q.STAR_FALL_IMPACT_MS,
      `carte à ${Q.STAR_FALL_MS - 3000} ms`);
 
   /* ── LA CIBLE DU CHEVRON, SUR TOUTE LA QUÊTE. ⚠️ ON REJOUE LA QUÊTE ENTIÈRE

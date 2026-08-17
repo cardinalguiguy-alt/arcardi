@@ -15,6 +15,7 @@
    déjà les imports de proche en proche depuis le 439.
    ========================================================================== */
 import { PLANCHE } from "./planche.mjs";
+import { PLANCHE2 } from "./planche2.mjs";   // 447
 
 // --- Carte ---
 export const MAP_W = 180;   // largeur en tuiles
@@ -3344,7 +3345,23 @@ export const TOWN_HOUSE_H = 3;                      // blocked footprint rows (t
    ⚠️ Ce nombre ne change RIEN à ce qui est franchissable : la marche et le saut
    ne lisent que `elev`, jamais des pixels. C'est un réglage purement optique,
    et c'est exactement pour ça qu'on peut le pousser sans rien re-tester. */
-export const TOWN_ELEV_PX = 30;      // décalage vertical à l'écran, par unité d'altitude
+/* ⚠️⚠️⚠️ ZIP 447 — 30 → 48, ET C'EST LA CORRECTION LA PLUS RENTABLE DU ZIP.
+   Guillaume, devant l'escalier : « tout est condensé et comme plaqué en 2D ».
+   Le chiffre lui donne raison sans appel : à 30 px l'unité, une marche montait
+   de 4,5 px pour une case large de 16, et un étage entier — la Haute-Ville —
+   ne s'élevait que de 30 px, soit moins de deux cases. Rien ne pouvait se lire
+   comme étant AU-DESSUS de quoi que ce soit : la terrasse, le palier et le sol
+   n'étaient séparés que par l'épaisseur d'un trait.
+   À 48, un étage vaut TROIS CASES et une marche monte de 9,6 px pour 16 px de
+   giron — le rapport contremarche/giron d'un vrai escalier (0,6), et celui que
+   la planche de Guillaume dessine. Le parement de falaise, qui se calcule en
+   `dénivelé × TOWN_ELEV_PX`, grandit dans le même mouvement : le mur de
+   soutènement passe de 30 à 48 px et redevient un mur.
+   ⚠️ RIEN À RE-TESTER, ET LA NOTE CI-DESSUS LE DISAIT DÉJÀ : ce paramètre est
+   PUREMENT OPTIQUE. La marche, l'A* piéton, l'A* du taxi et les collisions ne
+   lisent que `elev`, jamais des pixels — `TOWN_STEP_MAX` est en unités
+   d'altitude et ne bouge pas. Les 34 bancs ont été relancés après coup. */
+export const TOWN_ELEV_PX = 48;      // décalage vertical à l'écran, par unité d'altitude
 export const TOWN_STEP_MAX = 0.34;   // dénivelé franchissable EN MARCHANT (une marche vaut 0,25)
 /* Le SAUT depuis un rebord (Espace). Il ne sert qu'à DESCENDRE : on grimpe par
    les marches, on redescend où l'on veut. C'est le contrat de tous les jeux qui
@@ -3464,15 +3481,103 @@ export const STAR_NEST_DX = 3, STAR_NEST_DY = -5;
    nord (la volée est parcourue du sud au nord). La longueur de la volée
    (`len`) découle du dénivelé : quatre marches pour une unité, ce qui donne
    les 0,25 de TOWN_STEP_MAX. */
+/* ⚠️⚠️⚠️ ZIP 447 — LA VOLÉE MONUMENTALE EST DEVENUE UN QUART TOURNANT, ET ELLE
+   N'A DEMANDÉ AUCUN MÉCANISME NEUF. C'est le point de la chose : la planche de
+   Guillaume montre un escalier à palier, et le réflexe aurait été d'inventer un
+   descripteur « corner » avec un sens de virage — c'est-à-dire un second de
+   quelque chose, payé en cas particuliers dans les vingt endroits qui lisent
+   `TOWN_STAIRS` (§4 : « un second de quelque chose se paie en NIVEAUX, pas en
+   zones »).
+   Or un quart tournant EST déjà exprimable : ce sont DEUX volées droites qui ne
+   partent pas de la même altitude, séparées par un PALIER plat à mi-hauteur, et
+   décalées l'une par rapport à l'autre. Le moteur ne voit que des cases et des
+   altitudes ; il n'a jamais eu besoin de savoir qu'un escalier « tourne ».
+   ⚠️ ET C'EST CE DÉCALAGE QUI FAIT LE VIRAGE, PAS UN ANGLE : la volée basse
+   occupe x 138-143, la haute x 144-147. Depuis le palier, le nord n'est ouvert
+   qu'à l'est — un joueur qui monte tout droit bute sur le muret et doit
+   longer. La contrainte naît de la CARTE, donc `canStandTown` la fait respecter
+   sans une ligne, et `townFindPath` la contourne sans une ligne non plus.
+
+   `dir` donne le sens de la MONTÉE : "n" = on monte vers le nord (la volée est
+   parcourue du sud au nord). La longueur de la volée (`len`) découle du
+   dénivelé : quatre marches pour une unité, ce qui donne les 0,25 de
+   TOWN_STEP_MAX. */
 export const TOWN_STAIRS = [
-  // La volée monumentale, dans l'axe du tribunal : six cases de large, on la
-  // voit depuis la place.
-  { x: 140, y: 30, w: 6, len: 4, dir: "n", from: 0, to: 1 },
+  /* ① LA VOLÉE BASSE, LARGE, CELLE QU'ON VOIT DEPUIS LA PLACE. Six cases de
+     large, elle ne monte plus qu'à MI-HAUTEUR : ses marches font donc 0,1 au
+     lieu de 0,2, la montée est deux fois plus douce et le personnage s'élève
+     de trois pixels par case au lieu de six. C'est ce qui fait qu'on la GRAVIT
+     au lieu de la franchir. */
+  { x: 143, y: 32, w: 6, len: 2, dir: "n", from: 0, to: 0.6 },
+  /* ② LA VOLÉE HAUTE, PLUS ÉTROITE ET DÉCALÉE DE SIX CASES À L'EST. Quatre
+     cases de large : une volée qui rétrécit en montant est ce qui donne sa
+     perspective à un escalier monumental — et c'est ce que montre la planche. */
+  { x: 139, y: 28, w: 4, len: 2, dir: "n", from: 0.6, to: 1 },
   // La volée de service, à l'ouest, pour ne pas obliger à traverser toute la
   // ville quand on arrive de la gare.
   { x: 116, y: 18, w: 4, len: 4, dir: "e", from: 0, to: 1 },
   // La montée du belvédère, courte et étroite.
   { x: 170, y: 21, w: 3, len: 4, dir: "n", from: 1, to: 2 },
+];
+
+/* LE PALIER. Une plate-forme PLATE à l'altitude de raccord des deux volées.
+   ⚠️ IL N'EST PAS EN MARCHES, ET C'EST TOUT SON INTÉRÊT : `G_TOWN_STAIR` y
+   dessinerait des nez de marche sur une surface de niveau, ce qui est le
+   contresens le plus visible qu'un escalier puisse commettre. On le pave en
+   `G_PATH_STONE` — la dalle — qui est déjà ce que la ville emploie pour ses
+   surfaces de pierre plates.
+   ⚠️ IL DÉBORDE À L'OUEST DE LA VOLÉE HAUTE (x 138-147 contre 144-147), et ce
+   débord EST le virage : c'est la surface sur laquelle on tourne. Sans lui, le
+   raccord serait un angle mort où l'on resterait coincé contre deux dénivelés.
+   ⚠️ Son bord sud, à x 144-147, surplombe le vide de 0,5 unité : ça dépasse
+   TOWN_STEP_MAX, donc c'est un mur — mais un mur qui se VOIT, puisque le rendu
+   lui dessine son parement de falaise tout seul. C'est exactement le muret de
+   brique sous la balustrade de la planche. */
+export const TOWN_STAIR_LANDINGS = [
+  { x: 139, y: 30, w: 10, h: 2, elev: 0.6 },
+];
+
+/* ⚠️⚠️⚠️ ZIP 447 — LA BALUSTRADE, ET ELLE N'EST PAS QU'UN DÉCOR : ELLE EST LA
+   CORRECTION D'UN COINCEMENT QUE `verify-vallee` A TROUVÉ ET QUE RIEN D'AUTRE
+   N'AURAIT VU.
+   Le quart tournant est RECESSÉ dans la terrasse (il le faut : entre l'avenue
+   et le plateau il n'y a que six rangées, et une volée + un palier + une volée
+   en demandent six). Son creusement laisse donc, à l'est de la volée haute, un
+   bord de terrasse qui surplombe le palier de 0,4 unité. C'est un mur — sauf
+   qu'un marcheur a une BOÎTE de 0,35 de profondeur : avancé à y=28,8 sur une
+   case dont le sud est 0,4 plus bas, sa boîte enjambe les deux niveaux, les
+   deux contrôles d'altitude refusent, et il ne peut plus ni avancer ni
+   reculer. Mesuré : 108 trajets sur 21 756 finissaient « bloqué en
+   (143.0,28.8) ».
+   ⚠️ ON NE CORRIGE PAS ÇA EN ÉLARGISSANT UN SEUIL. On empêche d'y aller, et la
+   chose qui empêche d'aller au bord d'une terrasse s'appelle un garde-corps —
+   c'est-à-dire, très exactement, l'objet que la planche de Guillaume pose là.
+   *La collision et le dessin disent la même chose, ce qui est le seul cas où
+   l'on a le droit de les faire coïncider.*
+   ⚠️⚠️ ET ELLE NE PORTE AUCUNE ALTITUDE. C'est le piège du 439, celui qui a
+   failli rendre les deux ponts infranchissables : une grandeur de DESSIN
+   (elle monte de 14 px au-dessus de la case) ne doit JAMAIS entrer dans
+   `elev`, sinon `canStandTown` en fait une falaise. Elle marque `solid`, rien
+   d'autre. Trois grandeurs, trois paramètres (§4). */
+export const TOWN_RAILS = [
+  // Le garde-corps du bord est du palier haut, celui du défaut ci-dessus.
+  { x: 143, y: 29, w: 6, h: 1 },
+  // Le bord ouest du palier, qui surplombe le vide de la même façon.
+  { x: 139, y: 31, w: 4, h: 1 },
+  /* ⚠️⚠️ ZIP 447 — ET LES RAMPES DES DEUX VOLÉES, QUI SONT L'INDICE DE
+     PROFONDEUR LE PLUS FORT DE TOUT L'ESCALIER. Elles sont posées SUR les cases
+     de marche extérieures, pas à côté : c'est ce qui les fait MONTER avec la
+     volée, puisque la file de rendu classe chaque décor à l'altitude de sa case
+     (`pushE(by, elAt(pr.x, pr.y))`). Une rampe posée sur l'herbe voisine serait
+     restée plate le long d'un escalier qui monte — le contresens exact que le
+     zip corrige.
+     ⚠️ ELLES COÛTENT DEUX CASES DE LARGEUR À CHAQUE VOLÉE, et c'est le prix
+     juste : la volée basse passe de 6 à 4 cases praticables, la haute de 4 à 2.
+     Un escalier dont la rampe ne prend pas de place est un escalier dont la
+     rampe est peinte sur le sol. `verify-vallee` a confirmé que les 21 756
+     trajets passent toujours. */
+  { x: 143, y: 32, w: 1, h: 2 }, { x: 148, y: 32, w: 1, h: 2 },   // volée basse
+  { x: 139, y: 28, w: 1, h: 2 }, { x: 142, y: 28, w: 1, h: 2 },   // volée haute
 ];
 
 export const TOWN_HOUSES = [                        // door faces south onto a street
@@ -4249,6 +4354,10 @@ export const TOWN_PROP_ART = {
   goldBush: "goldBush1", lavender: "lavender1", clump: "flowersPurple",
   lily: "lilyPads", reedTuft: "reeds", reedsWater: "reedsWater",
   hedgeRow: "hedgeRow", grassTuft: "grassTuft", flatStone: "flatStone",
+  /* ⚠️ ZIP 447 — les décors de la SECONDE planche. Même table, même mécanique :
+     c'est `townPropBox` qui va chercher dans l'une puis l'autre. */
+  rail: "balusterEnd", bloomBed: "flowerBedL", bloomBed2: "flowerBedR",
+  bloomRow: "flowerRow", rockBed: "rockBed", hedgeAngle: "hedgeCorner",
 };
 /* L'emprise d'un décor, en cases, dans le repère du monde : le sprite est
    dessiné centré en x sur `pr.x` et POSÉ par le bas sur `pr.y + 1` (voir la
@@ -4256,7 +4365,12 @@ export const TOWN_PROP_ART = {
    seuil de recouvrement, et il n'y en a qu'un dans le projet (voir
    `townPropCovers`). */
 export function townPropBox(kind, x, y) {
-  const a = TOWN_PROP_ART[kind], s = a && PLANCHE[a];
+  /* ⚠️ ZIP 447 — L'EMPRISE SE CHERCHE DANS LES DEUX PLANCHES. Un décor de la
+     seconde qui n'aurait pas trouvé son sprite ici serait retombé sur la boîte
+     d'UNE case : le générateur l'aurait cru minuscule et aurait semé un arbre
+     dedans. C'est exactement le défaut du §4 (« la case d'un décor n'est pas la
+     surface qu'il couvre »), qu'un `|| {}` silencieux aurait ramené. */
+  const a = TOWN_PROP_ART[kind], s = a && (PLANCHE[a] || PLANCHE2[a]);
   if (!s) return { x0: x, x1: x + 1, y0: y, y1: y + 1 };
   const hw = s.w / (2 * TILE);
   return { x0: x + 0.5 - hw, x1: x + 0.5 + hw, y0: y + 1 - s.h / TILE, y1: y + 1 };

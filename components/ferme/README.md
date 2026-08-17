@@ -1,4 +1,4 @@
-# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 440
+# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 447
 
 Ce fichier est **l'autorité** sur la seconde carte du jeu et sur ses habitants. Il a été
 extrait de `CLAUDE.md` §6 au zip 428, sur l'ordre laissé par le §14.2 du 427 et sur le modèle
@@ -2410,3 +2410,320 @@ suite y donnent le même nombre, et on accuse le code qu'on vient d'écrire.
   a aucun dans le pré, et c'est la raison pour laquelle on n'a rien fait de plus.
 - **Le bassin de verre vert de la fin** (phase 1) reprend la même géométrie et n'a jamais été vu
   en jeu — il demande une quête terminée. Il est sur la planche `etoile-cratere.png`, troisième.
+
+## 27. ZIP 447 — LA SECONDE PLANCHE, LE SOL REFAIT, ET L'ESCALIER À QUART TOURNANT
+
+**Ce qui est livré, mesuré et regardé à l'écran :** l'import de la seconde planche de
+Guillaume (`refs/planche2.png` → `components/ferme/planche2.js`, 17 sprites), le SOL de
+Valley Town recalé sur sa maquette, et la volée monumentale devenue un **escalier à quart
+tournant** avec ses rampes, ses contremarches, ses limons et sa végétation de pied.
+
+### 27.1 L'échelle d'une planche peut ne pas être mesurable — alors on la DÉRIVE
+
+⚠️⚠️ **LA PLANCHE 2 N'A PAS DE PAS NATIF, ET DEUX MESURES ONT ÉTÉ ÉCRITES PUIS JETÉES.**
+La planche 1 (439) en avait un, franc : 3,25, trouvé par autocorrélation de la période des
+haies (52 px = 16 × 3,25). La seconde est dessinée FIN, avec de l'anticrénelage : ses plages
+de couleur constante font 1 et 2 px. Un peigne de gradient puis un histogramme de plages ont
+été écrits pour retrouver son pas ; **c'est le contrôle qui les a jetés** — lancés sur la
+planche 1, dont on CONNAÎT la réponse, ils rendaient 3,0 avec une erreur de 0,27 sur un
+maximum de 0,5, c'est-à-dire du hasard. *Une mesure qui ne retrouve pas la réponse connue ne
+mesure rien, et la seule façon de le savoir est de la lancer sur un cas connu.*
+
+L'échelle vient donc des **gabarits du jeu**, sur cinq objets indépendants qui tombent
+d'accord à moins de 3 % : le banc (138 px pour les 36 natifs de `benchWood`), le petit arbre
+(174×209 pour le gabarit 44×52 du 438), le lampadaire (195 px pour un canevas de 48), la haie
+(62 px pour UNE case de 16) et la maison (349 px pour les 96 d'une maison de ville).
+**Une case = 62 px image**, soit un pas de 3,875. On garde la valeur de la HAIE parce qu'elle
+est le seul objet qui doive tomber au pixel près : elle se répète case par case.
+
+⚠️ **LE FOND SE PREND PAR LA COULEUR ICI, ET C'EST L'INVERSE DE LA RÈGLE DU 439.** « Le fond
+n'est pas une teinte, c'est ce qui est connexe au bord » a été écrit contre la planche 1, dont
+le fond est gris et dont la moitié des objets le sont aussi. La planche 2 est le cas inverse :
+fond blanc pur (253-255, écart RVB ≤ 2), pixel le plus clair du dessin à 178 — aucune ambiguïté
+— **et des jours FERMÉS entre les balustres**, que le remplissage depuis le bord n'atteint
+jamais. La connexité seule aurait livré une balustrade pleine, c'est-à-dire un muret.
+*La bonne règle dépend de ce qui est ambigu dans l'image qu'on a, pas dans celle d'avant.*
+
+⚠️ **DEUX EXCLUSIONS ONT ÉTÉ NÉCESSAIRES, ET AUCUNE N'ÉTAIT VISIBLE DANS LE CODE** : le pied
+du petit arbre pend dans la boîte de l'escalier, le bas de la balustrade tombe dans celle de
+la maison. Les deux se sont vus sur la planche de contrôle (`tools/out/planche2-importee.png`),
+sous la forme d'une souche brune qui flotte et d'un trait violet au-dessus d'un toit. **Aucun
+contrôle ne pouvait les lever** : le dessin visé est ENTIER, il a juste un morceau de voisin
+en plus, et « en plus » ne déclenche rien.
+
+### 27.2 Le sol : la structure était juste, la MATIÈRE était fausse
+
+`tools/verify-sol2.mjs` (neuf contrôles) compare le sol du jeu à `refs/scene2.png` passés par
+la même toise. Il existe parce que **la grandeur qui manquait est l'écart à la référence** :
+`render-rues` mesure très bien le bouclage, la période et le nombre de teintes, et aucun de ces
+trois nombres ne bouge si l'herbe du jeu est d'un vert franc et celle de Guillaume d'un vert
+grisé. Résultat de la première mesure :
+
+| | avant | après | référence |
+|---|---|---|---|
+| herbe · saturation | 56,6 % | **42,9 %** | 42,7 % |
+| herbe · écart-type | 18,3 | **11,6** | 10,5 |
+| chemin · médiane de luminance | 106 | **92** | 92 |
+| chemin · écart-type | 45,8 | **33,7** | 33,7 |
+
+Le pavé de gazon du 438 n'a pas changé d'une ligne de FORME (plaques, touffes sur suite R2,
+fleurs rares) — son écart-type tombait déjà à 1,4 % de la référence. Ses sept couleurs sont
+maintenant celles que la quantification lit dans la maquette. Les 42 couleurs du pavé de rue
+ont été ramenées par une **affine mesurée** (`L' = (L−106)×33,7/45,8 + 92`) : le mortier ne
+bouge presque pas, les pierres descendent beaucoup.
+
+⚠️ **UN DÉFAUT DE BANC CRÉÉ PUIS CORRIGÉ DANS LA MÊME HEURE, ET IL VAUT D'ÊTRE LU.** La
+première toise comptait les brins au-delà de **1,2 écart-type** — un seuil qui se resserre
+quand l'image s'aplatit. Une pelouse rendue uniforme aurait donc vu sa « densité de brins »
+MONTER, et le banc aurait applaudi le défaut. C'est le grain du 438 pris pour de la qualité,
+refait à l'identique. Le seuil est désormais **fixe et calé sur la médiane** (±12 de
+luminance), qui est le ton de base d'un sol semé et ne bouge pas quand le dessin change.
+
+⚠️ **ET LA ZONE DE RÉFÉRENCE EST UNE MESURE.** Prise trop large, elle mordait sur la haie et le
+muret : 1,9 % de gris versés dans une palette d'herbe, presque rien sur la luminance, et la
+SATURATION faussée — c'est-à-dire précisément le nombre qu'on était venu chercher.
+
+### 27.3 L'escalier à quart tournant : aucun mécanisme neuf
+
+⚠️⚠️⚠️ **UN QUART TOURNANT EST DÉJÀ EXPRIMABLE : deux volées droites à altitudes de raccord
+différentes, DÉCALÉES, séparées par un palier plat.** Le réflexe aurait été d'inventer un
+descripteur `corner` avec un sens de virage — un second de quelque chose, payé en cas
+particuliers dans les vingt endroits qui lisent `TOWN_STAIRS` (§4). Le moteur ne voit que des
+cases et des altitudes ; il n'a jamais eu besoin de savoir qu'un escalier tourne.
+**C'est le DÉCALAGE qui fait le virage, pas un angle** : volée basse en x 143-148, haute en
+x 139-142. Depuis le palier, le nord n'est ouvert qu'à l'ouest. La contrainte naît de la
+CARTE, donc `canStandTown` la fait respecter et `townFindPath` la contourne, sans une ligne.
+
+Onze pas, le plus grand à 0,2 pour un `TOWN_STEP_MAX` de 0,34.
+
+⚠️⚠️ **DEUX DÉFAUTS TROUVÉS PAR `verify-vallee`, ET LE SECOND EST UNE FORME NEUVE.**
+1. La volée avait d'abord été posée **au milieu d'une avenue**. Recalée.
+2. **108 trajets sur 21 756 finissaient « bloqué en (143,28) ».** L'A\* coupe en DIAGONALE vers
+   le palier ; le marcheur, lui, se déplace **axe par axe**, et sa boîte de 0,35 de profondeur
+   enjambait alors 0,4 de dénivelé : les deux contrôles d'altitude refusent, il ne peut plus ni
+   avancer ni reculer. ⚠️ **UNE ARÊTE FRANCHISSABLE EN DIAGONALE NE L'EST PAS FORCÉMENT EN DEUX
+   PAS AXIAUX**, et c'est vrai partout où un palier surplombe autre chose que sa volée.
+   ⚠️ **La parade n'a pas été d'élargir un seuil** : on empêche d'y aller, et la chose qui
+   empêche d'aller au bord d'une terrasse s'appelle un **garde-corps** — l'objet exact que la
+   planche pose là. *La collision et le dessin disent la même chose ; c'est le seul cas où l'on
+   a le droit de les faire coïncider.*
+
+Puis le banc a refusé ces garde-corps tant qu'ils étaient **invisibles** (dix cases bloquantes
+que personne ne dessinait) : ils sont devenus des décors. *Ce qui arrête le joueur doit être
+quelque chose qu'il VOIT, et la façon sûre de s'y tenir est que la même liste serve aux deux.*
+
+### 27.4 « Tout est condensé et plaqué en 2D » — les trois nombres derrière la phrase
+
+Guillaume, devant le premier jet. Trois causes, toutes chiffrables :
+
+1. **`TOWN_ELEV_PX` valait 30.** Une marche montait de 4,5 px pour une case large de 16, et un
+   étage entier ne s'élevait que de 30 px — moins de deux cases. Rien ne pouvait se lire comme
+   étant AU-DESSUS de quoi que ce soit. **Porté à 48** : un étage vaut trois cases, une marche
+   monte de 9,6 px pour 16 de giron (rapport 0,6, celui d'un vrai escalier). ⚠️ La note du
+   paramètre le disait déjà : il est **purement optique**, la marche et les A\* ne lisent que
+   `elev`. Rien à re-tester, et les 34 bancs l'ont confirmé.
+2. **`STAIR_TREAD` valait 4 px** — donc QUATRE nez de marche peints dans une case qui n'en
+   franchit qu'une. Le dessin promettait quatre marches, l'altitude en tenait une : une volée
+   devenait une texture rayée posée à plat. **Porté à 16 : une case, une marche.** ⚠️ Aucun
+   banc ne pouvait le dire, parce qu'ils comptaient les nez **sans jamais les comparer au
+   relief**. `render-escaliers` a donc gagné le contrôle qui manquait : *la marche dessinée
+   est-elle la marche franchie ?*
+3. **La contremarche était un morceau de FALAISE.** Le trou sous une marche était bouché par
+   `drawTownCliffFace`, le parement d'un mur de soutènement — de la pierre brute à joints
+   décalés, faite pour une hauteur d'étage. `drawTownStairRiser` lui donne ce qu'est une
+   contremarche : une dalle dressée, lisse, sombre au pied, avec un liseré clair au sommet.
+
+Et trois indices de profondeur ajoutés ensuite, sur demande : le **limon** est devenu un volume
+(un dessus éclairé, une FACE de pierre qui descend au sol, une ombre au pied qui déborde d'un
+pixel) au lieu d'un voile translucide ; l'**ombre au pied d'un mur suit sa hauteur** au lieu de
+faire 3 px quoi qu'il arrive ; les **rampes sont posées SUR les cases de marche extérieures**,
+ce qui les fait monter avec la volée (`pushE` classe chaque décor à l'altitude de sa case) —
+une rampe posée sur l'herbe voisine serait restée plate le long d'un escalier qui monte.
+
+### 27.5 Ce qui reste à faire — POUR UNE REPRISE, DANS L'ORDRE
+
+⚠️⚠️ **C'EST LE DOCUMENT DE REPRISE DU CHANTIER, et `CLAUDE.md` y renvoie depuis son bloc
+⏭️ REPRISE.** Rien de ce qui suit n'est cassé ; tout est **non fait**. La liste est ORDONNÉE :
+le n°1 est la prochaine action, et les suivants ne se prennent pas avant.
+
+⚠️ **Étape 0, avant de regarder quoi que ce soit :** remonter les deux échafaudages du §10 de
+`CLAUDE.md` (`.env.local`, page jetable, `fake-supabase`, correctif `requestAnimationFrame`).
+Ils sont supprimés à chaque fin de zip, exprès.
+
+1. ⚠️⚠️ **LA MAISON `house` EST IMPORTÉE ET N'EST POSÉE NULLE PART.** 90×90 natifs, sprite
+   propre, dans `planche2.js`. Deux choses avant de l'employer : **son texte « Aurelien » est
+   CUIT dans le sprite** (il faut effacer ces pixels à l'import et réécrire le nom VIVANT au
+   rendu, §4 — c'est ce qui permettra d'y mettre le nom du joueur), et les dix façades de
+   `townHouseVariant` sont à 96×96 : le remplacement est un choix de CONTENU (garder dix
+   maisons différentes, ou faire de celle-ci un modèle de plus).
+2. **`treeBig`, `treeSmall`, `brickWall`, `stoneWall`, `pathStone` sont importés et inemployés.**
+   Le grand arbre est délibérément hors gabarit (60×85 contre 48×64) : c'est un arbre de PLACE.
+3. ⚠️ **LE CHEMIN PORTE LA COULEUR DE GUILLAUME, PAS SES PIERRES.** `pathStone` fait 24×32
+   natifs : un tronçon, pas une texture. Le répéter dessinerait une couture tous les 24 px. La
+   version exacte consiste à relever la position et la taille de chacune de ses pierres et à les
+   reposer sur un pavé de 64 qui boucle. Une demi-séance.
+4. ⚠️ **L'ÉCART FERME/VILLE S'EST AGRANDI.** La ferme garde le vert saturé du zip 232 ; la
+   décision du 424 interdisait de mêler les deux changements. Un joueur qui prend le train voit
+   maintenant deux herbes différentes.
+5. **Les trois autres volées n'ont pas été retouchées.** Elles héritent du nouveau
+   `TOWN_ELEV_PX` et des contremarches, mais restent droites et sans rampe.
+6. ⚠️ **AUCUN BANC NE REGARDE LES RAMPES NI LA VÉGÉTATION.** `render-escaliers` ne dessine que
+   la couche de SOL ; tout ce qui vit dans la file triée (`pushE`) lui est invisible. C'est
+   exactement le trou décrit au §« aucun banc ne regarde une fenêtre complète de Valley Town ».
+7. **La séance à DEUX CLIENTS n'a pas eu lieu** — ni pour ce zip, ni pour la quête du 444.
+
+---
+
+## 28. ZIP 448 — LA COMÈTE REFAITE SUR MODÈLE, ET L'IMPACT QUI ARRIVAIT AVANT LA COMÈTE
+
+**Demande de Guillaume, en deux morceaux :** « je veux revoir l'animation de la comète, qui est
+trop ridicule. L'impact doit apparaître **après** l'écrasement de la comète et pas avant » ; et
+« mettre au même niveau de détail et de soin graphique la comète elle-même et le cratère (très
+bien travaillé) ».
+
+⚠️⚠️ **LES DEUX MOITIÉS N'ONT QU'UNE CAUSE, ET C'EST LA MÊME QUE LES SOLS D'INTÉRIEUR : LE
+DESSIN DE LA COMÈTE VIVAIT DANS LA CLOSURE DE LA BOUCLE DE RENDU.** Huit lignes au milieu de
+`drawStarOverlay` — un `createLinearGradient` et un `arc()` blanc. Aucun banc ne pouvait
+l'appeler, donc il est resté au niveau du jour où il a été écrit pendant que le cratère prenait
+trois passes et sept contrôles. *C'est le deuxième visage du piège n°1 (« il fait vieillir »),
+et c'est la troisième fois qu'il se paie dans ce dépôt.*
+
+### 28.1 La chronologie — le défaut que sept contrôles n'ont pas vu
+
+`e.fall` est l'horodatage de la chute, **daté au DÉBUT de la cinématique**. Or le décor le
+lisait comme « c'est arrivé » :
+
+| Où | Ce qui se passait | Depuis |
+|---|---|---|
+| `drawStarCrater` (ville) | le trou fumait, ses braises rougeoyaient et l'étoile brillait au fond **trois secondes avant que la comète ne touche le sol** | 444 |
+| `starFurrow` (ferme) | **aucun test de quête ne le gardait** — le sillon était labouré dans le champ **dès le premier jour de la partie** | 444 |
+| `starCraterSink` | on s'enfonçait de onze pixels dans un trou pas encore creusé | 446 |
+| `starNearby` | l'invite « E : attends que ça refroidisse » s'affichait **sous la comète en vol** | 444 |
+
+⚠️⚠️ **QUATRE PORTES SUR LE MÊME TROU, ET UNE SEULE LAISSÉE OUVERTE SUFFIT À RACONTER LA FIN
+AVANT LE DÉBUT.** Les deux dernières n'ont **pas** été trouvées en relisant : elles se sont vues
+en JOUANT, la seconde après que les deux premières aient été corrigées et déclarées finies.
+
+⚠️ **LA GRANDEUR QUI MANQUAIT EST LE TEMPS.** Sept contrôles regardaient le cratère — sa forme,
+sa profondeur, ses deux rayons, son refroidissement, sa fumée, son enfoncement, sa continuité —
+et **aucun ne demandait QUAND il apparaît**. C'est le §25 mot pour mot : *quand Guillaume voit un
+défaut qu'aucun banc ne voit, la question n'est pas « où est le bogue » mais « quelle grandeur ne
+mesure-t-on pas ».*
+
+**La parade est une jointure, jamais une seconde liste** : `Q.starImpactLanded(sceneKey,
+elapsed)` dans `quete.js`, appelée par la cinématique ET par les quatre portes via
+`starImpactLandedNow()`. ⚠️ Une scène **en attente** compte comme « pas encore vue » : un joueur
+qui rejoint le lendemain a la chute en file, et lui montrer le cratère avant de la lui jouer
+raconterait l'histoire à l'envers.
+
+⚠️⚠️ **ET UNE CONSTANTE A ÉTÉ SUPPRIMÉE, PAS AJOUTÉE.** `STAR_CAM_FLASH_MS = 3000` existait
+depuis le 445 et **seul le banc la lisait** : la cinématique écrivait `t > 3.0` en dur dans sa
+closure. Le banc mesurait donc un nombre que le dessin ne lisait pas — *un banc qui n'a jamais pu
+échouer ne vaut rien* (§10 de `CLAUDE.md`). Il n'en reste qu'une, `STAR_FALL_IMPACT_MS`, et les
+deux côtés la lisent. Les quatre instants qui suivent l'impact (secousse, oiseaux, colonne,
+textes) sont désormais écrits **en écart à elle**, plus en secondes absolues.
+
+### 28.2 L'azimut — « l'impact ne peut pas être à l'ouest »
+
+⚠️⚠️ **REMARQUE DE GUILLAUME, ET C'ÉTAIT UN VRAI DÉFAUT :** « si l'animation montre un
+déplacement de la comète d'ouest en est, l'impact ne peut pas être à l'ouest. Donc adapter
+l'animation à l'emplacement de l'impact (et ne pas la déclencher si la position d'un joueur pose
+problème). » Le 445 partait **toujours** de `x = -60`, c'est-à-dire du bord ouest de l'écran, et
+visait un point qui pouvait se trouver à sa gauche : on voyait une comète **reculer**.
+
+**La parade n'est pas un cas particulier, c'est un changement de sens de lecture** : le point
+d'entrée se DÉDUIT de l'impact (`impact − direction × LEN`, `LEN = 1,3 × diagonale`). L'entrée
+est donc toujours hors champ, toujours en amont, et **il n'existe plus de position de joueur qui
+pose problème** — la seconde moitié de la demande se règle en supprimant le cas, pas en
+l'attrapant.
+
+⚠️ **ET SANS POINT D'IMPACT, PLUS DE COMÈTE DU TOUT.** Le repli du 445 dessinait une trajectoire
+arbitraire « pour ne pas ne rien dessiner » : il MENTAIT quand on venait d'entrer dans un
+bâtiment. On garde le voile, la lueur, la secousse et le texte — *tu n'as pas vu la chute, tu as
+vu le ciel s'allumer.*
+
+⚠️⚠️ **LE SENS EST-OUEST N'EST PAS UN GOÛT : LE SILLON LE DICTE.** `starFurrowSprite` est plus
+**profond à son bout ouest**, c'est-à-dire que la course s'y arrête ; un objet qui laboure creuse
+de plus en plus jusqu'à se poser. Les deux modèles de Guillaume le confirment (elle arrive du
+haut-droite). ⚠️ **Le texte anglais disait le contraire** (« The sky tears open, west to east »)
+et personne ne l'avait relevé : *un texte n'est pas un décor, il AFFIRME* — corrigé en
+« east to west ».
+
+⚠️ **LA PLONGÉE SUIT LE TROU QU'ELLE CREUSE**, et c'est la seule chose qui change d'une carte à
+l'autre : `STAR_FALL_DIVE` vaut **46°** en ville (un trou rond se creuse à la verticale) et
+**19°** à la ferme (une balafre de six cases se laboure en rasant). *Le dessin au sol et la
+trajectoire disent la même chose* — même discipline que le garde-corps du 447.
+
+⚠️ **ET LE POINT DE POSE N'EST PAS LE CENTRE DE LA CASE À LA FERME** : le sillon fait 96 px et
+se creuse à l'ouest, donc la comète vise le bout ouest du sprite. Le décalage **se dérive de la
+largeur du dessin**, pas de `STAR_FURROW_LEN` recopié (règle du 440).
+
+### 28.3 Le dessin — sept couches, et deux jets
+
+Le dessin est dans **`fermeArt.js`** (`drawStarComet`, `drawStarCometTrail`,
+`drawStarImpactFlash`) et **`render-etoile.mjs` le regarde** (planche `etoile-comete.png`,
+onze contrôles). Sept couches, relevées sur les deux modèles de Guillaume : fumée en mèches →
+feu en langues → halo cyan → cerne bleu nuit → noyau en bandes de bleu → cœur blanc pur →
+croissant d'or **à l'arrière** + fin liseré à l'avant.
+
+⚠️ **LE CROISSANT EST À L'ARRIÈRE, ET C'EST CONTRE-INTUITIF.** On attend l'incandescence sur la
+face qui frappe l'air. Le modèle montre l'inverse, et il a raison : ce qu'on voit brûler est ce
+qui a **déjà** été arraché et qui s'échappe. Peint à l'endroit « logique », la tête a l'air de
+reculer. Le banc le mesure sur deux arcs opposés.
+
+**Trois défauts corrigés entre le premier jet et le second, tous vus sur la planche :**
+
+1. ⚠️⚠️ **LA TÊTE EST UN CHAMP, PAS UNE PILE DE DISQUES.** Premier jet : six `arc()` empilés et
+   deux `clip()` pour tailler le croissant. Deux raisons de jeter, et la seconde est la vraie —
+   `clip` **n'existe pas dans le faux canevas des bancs** (et son `restore()` ne rend que la
+   transformation), donc le dessin aurait été juste en jeu et faux au banc ; et empilés, les
+   disques se répondent par leur ORDRE, alors que ce qu'on décrit est **une couleur par (rayon,
+   angle)**. C'est mot pour mot ce que le 446 a compris sur le cratère : **deuxième fois que la
+   même forme paie.**
+2. ⚠️⚠️ **LA QUEUE ÉTAIT UN TAMPON D'OUATE.** Mèches trop épaisses, fumée qui gonflait en plus :
+   le résultat était **le dégradé qu'on remplaçait, en plus gros**. Le banc l'a chiffré avant
+   l'œil (« 1 inversion de pente en travers » : aucune mèche ne se distingue de sa voisine).
+   *Une queue se lit par ses VIDES autant que par sa matière* — les mèches se touchent à la tête
+   et **s'écartent** au loin (`off ∝ s`). Corrigé : 5 inversions.
+3. ⚠️ **TROIS PALIERS DE HALO DESSINAIENT UN BORD.** Le palier extérieur formait un disque franc
+   sur le ciel noir — une assiette bleue posée derrière la comète. **Quantifier la valeur reste
+   la règle, mais trop peu de paliers ne simplifie pas : ça dessine un bord.** Cinq paliers, le
+   dernier presque rien.
+
+⚠️ **Et deux défauts de forme, tous deux « invisibles en relecture, criants à l'écran » :** la
+queue partait **devant** la tête au premier jet (le banc : 9,2 rayons devant contre 3,5
+derrière) ; et la gerbe d'impact sortait **en stries horizontales** parce qu'un disque construit
+en `dy` puis posé à `round(dy·sq)` laisse une rangée sur deux vide — *une ellipse doit être
+décrite dans l'espace où on la peint.*
+
+⚠️ **LE MOUVEMENT EST PERSPECTIF, PAS LINÉAIRE.** Un objet qui vient droit sur nous à vitesse
+constante grandit en `1/d` et se déplace à l'écran en `1/d²` : d'où `k^1.9` sur le chemin et
+`k^2.5` sur la taille. Elle traîne loin, minuscule, puis fond sur le point en un éclair — **c'est
+la seule façon de la voir longtemps sans la rendre lente**, ce que Guillaume demande
+explicitement (« une comète reste rapide »). La scène n'a pas été rallongée : 9 s, contact à
+3,2 s, **2,05 s de comète** au lieu de 1,8.
+
+⚠️ **LA TRAÎNÉE QUI RESTE DANS LE CIEL EST RE-CALCULÉE, PAS MÉMORISÉE** : les positions passées
+sont `cpath(k')` pour `k' < k`, donc une pure fonction du temps. Un historique de positions
+aurait vécu dans la closure — c'est-à-dire hors de portée de tout banc, et remis à zéro à chaque
+remontage. *Le défaut même qu'on était en train de réparer.*
+
+⚠️ **`q`, LE GROS PIXEL, SE DÉRIVE DU ZOOM RÉEL DE LA VUE.** La cinématique se peint en espace
+écran par-dessus un monde dessiné à ZOOM 3 : une comète lisse au milieu de gros pixels est une
+image étrangère collée sur le jeu. Réglé à la main, il aurait divergé le jour où le dézoom du
+428 change.
+
+### 28.4 Ce que ça ne fait pas
+
+- **La comète ne se fragmente pas.** La fiction l'écrit (« un éclat dépasse la ville et se plante
+  dans le champ de la ferme ») et les deux impacts la racontent déjà par leur FORME (trou rond
+  contre balafre rasante, 46° contre 19°). Une fragmentation visible demanderait deux corps à
+  suivre et deux points de pose ; c'est une demi-séance, et elle n'a pas été faite.
+- **Aucun banc ne joue la scène.** Les onze contrôles regardent des dessins isolés ; la
+  CHRONOLOGIE, elle, n'est mesurée que par les cinq contrôles purs de `verify-quete`. Ce qui se
+  juge en la regardant tourner — *est-ce que ça fait peur ?* — ne se mesure nulle part.
+- **La séance à deux clients n'a pas eu lieu.** La chute est datée par l'hôte et rejouée
+  localement chez chacun : c'est le cas exact où deux clients diraient quelque chose qu'un seul
+  ne dit pas.
+- **La ferme n'a jamais été vue avec la comète pendant la NUIT** ; le voile de nuit et le halo
+  cyan n'ont pas été regardés ensemble.

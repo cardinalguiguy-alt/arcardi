@@ -481,11 +481,11 @@ donnait pas, d'une rangée.
 
 ---
 
-## `render-etoile.mjs` — les dessins de la quête de l'étoile (444, cratère refait au 446)
+## `render-etoile.mjs` — les dessins de la quête de l'étoile (444, cratère 446, comète 448)
 
 `node tools/render-etoile.mjs` → `etoile-planche.png` · `etoile-cratere.png` (446 : **trois
 états du cratère côte à côte** — fumant, refroidi, bassin de verre — parce que ce qui a changé
-est la PAIRE, pas l'image).
+est la PAIRE, pas l'image) · `etoile-comete.png` (448).
 
 ⚠️⚠️ **IL REMPLACE `verify-enquete.mjs` ET `render-enquete.mjs`, SUPPRIMÉS AU 444 AVEC L'ENQUÊTE
 QU'ILS MESURAIENT.** Un banc qui mesure du contenu disparu est pire qu'un banc absent : il passe
@@ -548,10 +548,70 @@ huitième fois d'affilée dans ce dépôt qu'un banc neuf se trompe d'abord de g
 ⚠️ **CE QU'IL NE MESURE PAS, ET IL LE DIT** : il ne joue pas, et il ne juge pas le cratère dans sa
 vraie herbe (il le peint sur un fond approximé). Trou déclaré.
 
-## `verify-quete.mjs` — 220 contrôles, 220/220 (444, étendu au 445 et au 446)
+### ⚠️⚠️ ZIP 448 — LA COMÈTE, ONZE CONTRÔLES, ET UN BANC QUI A CORRIGÉ TROIS DÉFAUTS AVANT L'ŒIL
+
+`etoile-comete.png` : trois tailles (loin, mi-course, contact) sur **deux fonds** — un ciel de
+nuit et une bande claire — plus la traînée qui reste à cinq âges et la gerbe d'impact à quatre
+instants.
+
+⚠️⚠️ **LE DESSIN QU'IL REGARDE N'EXISTAIT PAS AVANT LUI.** La comète du 444/445 tenait en huit
+lignes dans la closure de `drawStarOverlay` — un `createLinearGradient` et un `arc()` blanc.
+Guillaume l'a résumée en « trop ridicule ». Elle ne l'a jamais été par négligence : **elle a
+vieilli**, faute d'un endroit où se voir, pendant que le cratère prenait trois passes et sept
+contrôles. *Troisième fois que le deuxième visage du piège n°1 se paie dans ce dépôt.*
+
+Ce qu'il mesure : le **cœur est blanc pur** · la **gaine d'or est à l'ARRIÈRE** et n'est qu'un
+liseré à l'avant (mesuré sur deux arcs opposés) · le **halo déborde de 2,9 rayons** (c'est le
+« glow » demandé, et c'est le seul nombre qui dise s'il y en a un) · la **queue traîne 7 rayons
+derrière** et rien de comparable devant · ⚠️ la queue a du **GRAIN en travers** (inversions de
+pente : 0 = un dégradé, ≥ 3 = des mèches) · le **cerne** fait le tour · `fade` **atténue pour de
+bon** sans tout effacer · et la gerbe d'impact **s'étale** au lieu de s'allumer.
+
+⚠️⚠️ **TROIS DÉFAUTS TROUVÉS PAR LE BANC AVANT D'ÊTRE VUS SUR LA PLANCHE :**
+1. **la queue partait DEVANT la tête** — 9,2 rayons devant contre 3,5 derrière. Un signe inversé
+   dans une ligne ; à l'écran, une comète qui recule ;
+2. **la queue était un tampon d'ouate** — « 1 inversion de pente en travers », c'est-à-dire
+   aucune mèche distincte de sa voisine : le dégradé qu'on remplaçait, en plus gros ;
+3. **`fade` ne pouvait pas être mesuré tant qu'il passait par `globalAlpha`** — et c'est le
+   contrôle qui a imposé de moduler l'alpha **dans la couleur**, ce qui a du même coup rendu le
+   dessin honnête au banc (dont le `restore()` ne rend que la transformation).
+
+⚠️ **ET UN QUATRIÈME QUE LE BANC N'A PAS VU, PARCE QU'IL NE LE MESURAIT PAS :** la gerbe
+d'impact sortait **en stries horizontales** (un disque construit en `dy` puis posé à
+`round(dy × écrasement)` laisse une rangée sur deux vide). Vu sur la planche, en la regardant.
+*Le banc protège de ce qu'on a déjà compris ; regarder l'image reste la seule chose qui trouve ce
+qu'on n'a pas encore compris.*
+
+⚠️⚠️ **CE QU'IL NE MESURE PAS, ET C'EST LE TROU QUI COMPTE : LA CHRONOLOGIE.** Ces onze contrôles
+regardent des dessins ISOLÉS. Que le cratère apparaisse trois secondes avant que la comète ne
+touche le sol — le défaut même de ce zip — leur est **totalement invisible**, et c'est
+`verify-quete` qui le tient désormais (cinq contrôles purs sur `starImpactLanded` et l'azimut).
+*Un banc de rendu ne peut pas voir un défaut de temps.*
+
+## `verify-quete.mjs` — 231 contrôles, 231/231 (444, étendu aux 445, 446 et 448)
 
 `node tools/verify-quete.mjs`. Il remplace `verify-enquete.mjs`, supprimé avec l'enquête du 442 :
 il en reprend la MÉTHODE (appeler le vrai code, jouer la vraie chaîne) et aucun de ses contrôles.
+
+### ⚠️⚠️ ZIP 448 — IL MESURE LE TEMPS, ET C'EST LA GRANDEUR QUE PERSONNE N'AVAIT
+
+Cinq contrôles neufs, et ils existent parce que **sept contrôles regardaient le cratère sans
+jamais demander QUAND il apparaît** : le décor d'impact **n'existe pas** avant
+`STAR_FALL_IMPACT_MS` et existe à partir de cet instant · ⚠️ **hors cinématique il est là**
+(c'est le cas normal — écrire l'inverse aurait fait disparaître le cratère pendant toute la
+partie) · la comète entre en scène **après** que la caméra se soit posée et **avant** l'impact ·
+elle reste **rapide** (entre 1,2 et 3,0 s de vol, deux bornes plutôt qu'un ressenti) · elle
+descend **vers l'OUEST** sur les deux cartes (on vérifie le SIGNE, jamais un nombre recopié) ·
+elle **plonge plus raide sur le cratère que sur le sillon** · et une zone inconnue ne rend pas
+`NaN` (un `NaN` d'angle ne lève rien, il fait juste disparaître la comète — le repli poli du 444,
+dans une trigonométrie).
+
+⚠️⚠️ **ET UNE CONSTANTE A ÉTÉ SUPPRIMÉE, PAS AJOUTÉE.** `STAR_CAM_FLASH_MS = 3000` existait
+depuis le 445 et **seul ce banc la lisait** : la cinématique écrivait `t > 3.0` en dur dans sa
+closure. Il mesurait donc un nombre que le dessin ne lisait pas, et **il ne pouvait pas
+échouer** — « un banc qui n'a jamais pu échouer ne vaut rien » (§10 de `CLAUDE.md`), cette
+fois-ci sous sa forme la plus discrète : la constante avait l'air juste, elle était simplement
+débranchée.
 
 Ce qu'il mesure : la chaîne des cinq chapitres jouée par les vrais résolveurs, dans le DÉSORDRE ·
 `migrateStar` sur huit sauvegardes tordues (absente, nulle, une chaîne, un nombre, un tableau,

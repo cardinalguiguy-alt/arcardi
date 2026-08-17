@@ -261,8 +261,27 @@ section("Valley Town — géométrie");
   ok("aucune marche isolée", bad.length === 0, bad.slice(0, 8).join(" "));
 }
 {
+  /* ⚠️⚠️ ZIP 447 — ON BALAIE LA VOLÉE ENTIÈRE AU LIEU DE SONDER TROIS COINS, et
+     c'est un RESSERREMENT, pas une tolérance. L'ancien test prenait le coin
+     haut-gauche, le coin bas-droit et le coin bas-gauche : trois points qui
+     supposaient tous que les BORDS d'une volée soient praticables. Depuis que
+     les rampes sont posées sur les colonnes extérieures (elles doivent l'être
+     pour monter avec la volée), ces trois points sont solides et le banc
+     déclarait « isolée » une volée qu'on gravit très bien — un faux négatif.
+     Balayer toutes les cases répond à la question qu'on pose vraiment (« peut-on
+     entrer dans cette volée ? ») et couvre STRICTEMENT plus de cas que trois
+     sondes : une volée dont seuls les coins seraient atteignables passait
+     avant, elle ne passe plus. */
   const stairsReached = [];
-  for (const st of C.TOWN_STAIRS) stairsReached.push(reach(st.x, st.y) || reach(st.x + st.w - 1, st.y + st.len - 1) || reach(st.x, st.y + st.len - 1));
+  for (const st of C.TOWN_STAIRS) {
+    let vu = false;
+    for (let k = 0; k < st.len && !vu; k++) for (let w2 = 0; w2 < st.w && !vu; w2++) {
+      const sx = st.dir === "e" ? st.x + k : st.x + w2;
+      const sy = st.dir === "e" ? st.y + w2 : st.y + k;
+      if (reach(sx, sy)) vu = true;
+    }
+    stairsReached.push(vu);
+  }
   ok(`les ${C.TOWN_STAIRS.length} volées sont atteignables`, stairsReached.every(Boolean), stairsReached.map((b, i) => `#${i}:${b ? "ok" : "isolée"}`).join(" "));
 }
 {

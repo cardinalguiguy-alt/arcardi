@@ -233,7 +233,37 @@ console.log("\n=== 3. la volée reste lisible, et deux cases ne sont pas le mêm
   for (let lag = 2; lag <= 16; lag++) peak = Math.max(peak, ac(lag));
   let best = 0;
   for (let lag = 2; lag <= 16; lag++) if (ac(lag) >= peak - 0.03) { best = lag; break; }
-  ok(best === 4, "la volée a une période de 4 px (autocorrélation)", `fondamental au décalage ${best} (r = ${ac(best).toFixed(2)}), pic ${peak.toFixed(2)}`);
+  /* ⚠️⚠️ ZIP 447 — LE CHIFFRE ATTENDU PASSE DE 4 À 16, ET C'EST UN CHANGEMENT
+     D'INTENTION, PAS UN DESSERRAGE. Ce contrôle mesurait très bien la période
+     du DESSIN ; ce qu'il ne mesurait pas, c'est si cette période avait le
+     moindre rapport avec la MONTÉE. Elle n'en avait aucune : quatre nez peints
+     par case, une seule marche franchie. Le banc était donc au vert sur un
+     escalier qui, à l'écran, se lit à plat — la quatrième forme du §« un banc
+     qui passe » : il mesurait autre chose que ce qu'on voulait.
+     La période attendue est maintenant la CASE, parce que le giron EST la case
+     (`STAIR_TREAD = 16`). Et le contrôle qui suit, lui, est neuf : il compare la
+     période du dessin au dénivelé réellement franchi. C'est celui qui aurait
+     attrapé le défaut d'origine, et il n'existait pas. */
+  ok(best === 16, "la volée a une période d'UNE CASE (autocorrélation)", `fondamental au décalage ${best} (r = ${ac(best).toFixed(2)}), pic ${peak.toFixed(2)}`);
+
+  /* ⚠️⚠️ LE CONTRÔLE QUI MANQUAIT : LA MARCHE DESSINÉE EST-ELLE LA MARCHE
+     FRANCHIE ? On compte les girons peints sur une case et on exige qu'il y en
+     ait UN, puis on vérifie que la contremarche que le relief lui donne est
+     visible — au moins 6 px, sinon la volée redevient une texture rayée.
+     ⚠️ Les deux nombres viennent du monde, pas d'un réglage : le dénivelé le
+     plus faible d'une volée réelle, multiplié par TOWN_ELEV_PX. */
+  {
+    const girons = 16 / best;
+    ok(girons === 1, "une case porte exactement UNE marche", `${girons} giron(s) par case`);
+    let pire = 99, oùPire = "";
+    for (const st of C.TOWN_STAIRS) {
+      const pas = Math.abs(st.to - st.from) / (st.len + 1);
+      const h = pas * C.TOWN_ELEV_PX;
+      if (h < pire) { pire = h; oùPire = `(${st.x},${st.y})`; }
+    }
+    ok(pire >= 6, "la contremarche se voit sur toutes les volées",
+       `la plus basse : ${pire.toFixed(1)} px en ${oùPire} (il en faut 6)`);
+  }
 
   /* ⚠️ ET LE CONTRÔLE QUI DIT SI LE PAVÉ DE 4×4 SERT À QUELQUE CHOSE : deux
      cases voisines de la MÊME volée doivent différer. C'est très exactement ce
@@ -358,7 +388,12 @@ for (const [name, v] of VIEWS) {
     const drop = e - elAt(x, y + 1);
     if (drop > 0.01) {
       const fh = drop * EP;
-      A.drawTownCliffFace(sh.ctx, S, tw, x, y, px, py + T, fh);
+      /* ⚠️ ZIP 447 — le banc suit le jeu : une marche reçoit sa CONTREMARCHE,
+         une falaise son parement. Recopier ici le seul parement aurait remesuré
+         un dessin que le jeu n'emploie plus sous les volées — le stub menteur
+         du §10, dans l'outil censé nous en protéger. */
+      if (tw.ground[y * tw.w + x] === C.G_TOWN_STAIR) A.drawTownStairRiser(sh.ctx, S, tw, x, y, px, py + T, fh);
+      else A.drawTownCliffFace(sh.ctx, S, tw, x, y, px, py + T, fh);
       sh.ctx.fillStyle = "#c6c1b6"; sh.ctx.fillRect(px, py + T - 2, T, 2);
       sh.ctx.fillStyle = "rgba(20,26,16,0.30)"; sh.ctx.fillRect(px, py + T + fh, T, 3);
     }

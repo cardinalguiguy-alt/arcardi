@@ -388,10 +388,80 @@ export function starImpactZone(zone) { return STAR_FALL_WORLDS.includes(zone || 
 export const STAR_CAM_GO_MS = 1100;     // le vol vers l'impact
 export const STAR_CAM_HOLD_MS = 6200;   // ce qu'elle y reste (depuis t=0)
 export const STAR_CAM_BACK_MS = 1900;   // le retour vers le joueur
-/* ⚠️ CONTRÔLÉ PAR LE BANC : la caméra doit être POSÉE quand le flash tombe
-   (3,0 s) et être revenue avant la fin de la scène. Deux inégalités, pas un
-   réglage à l'œil. */
-export const STAR_CAM_FLASH_MS = 3000;
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 448 — L'INSTANT DE L'IMPACT. UNE JOINTURE, PAS UN NOMBRE DE PLUS.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ CE BLOC EXISTE PARCE QUE « 3,0 s » ÉTAIT ÉCRIT DEUX FOIS SANS QUE LES DEUX
+   ÉCRITURES SE CONNAISSENT. Le 445 avait posé `STAR_CAM_FLASH_MS = 3000` ici,
+   que le BANC lisait ; la cinématique, elle, écrivait `t > 3.0` en dur dans sa
+   closure. Le banc mesurait donc un nombre que le dessin ne lisait pas — le
+   quatrième visage du défaut de banc (§ CLAUDE.md : *il mesure autre chose*), et
+   la constante ne pouvait pas faire échouer quoi que ce soit. Elle est
+   SUPPRIMÉE ; il n'en reste qu'une, et c'est celle-ci.
+   ⚠️⚠️ ET ELLE NE SERT PAS QU'À DESSINER : LE DÉCOR D'IMPACT LA LIT AUSSI.
+   C'est le défaut que Guillaume a vu à l'écran — « l'impact apparaît avant
+   l'écrasement de la comète ». Le cratère de la ville se peignait dès que
+   `starFallen` était vrai, c'est-à-dire à t=0 : pendant trois secondes le trou
+   fumait, ses braises rougeoyaient et l'étoile brillait au fond PENDANT QUE LA
+   COMÈTE ÉTAIT ENCORE DANS LE CIEL. Le sillon de la ferme était pire — aucun
+   test de quête ne le gardait, il était labouré dans le champ depuis le premier
+   jour. Aucun banc ne pouvait le voir : ils mesurent tous ce qu'un décor
+   DESSINE, aucun ne mesurait QUAND il apparaît.
+   ⚠️ La parade est `starImpactLanded`, appelée par la cinématique ET par les
+   deux décors. Deux listes auraient redivergé au premier réglage (§ « une porte
+   sans chemin de code ment », 444). */
+export const STAR_FALL_APPEAR_MS = 1150;  // la comète entre en scène — APRÈS que la caméra se soit posée
+export const STAR_FALL_IMPACT_MS = 3200;  // elle touche le sol — L'INSTANT, lu par tout le monde
+
+/* Le décor d'impact est-il POSÉ ? ⚠️ ELLE PREND LA SCÈNE EN COURS, PAS L'ÉTAT
+   PARTAGÉ : hors cinématique (un joueur qui arrive le lendemain, ou qui a déjà
+   vu la chute) l'impact est de l'HISTOIRE, donc il est là. Pendant la chute, il
+   n'existe qu'après `STAR_FALL_IMPACT_MS`.
+   ⚠️ `sceneKey` peut être `null` (aucune scène) : c'est le cas NORMAL, et il
+   rend `true`. Écrire l'inverse aurait fait disparaître le cratère les
+   999 fois sur 1000 où il n'y a pas de cinématique. */
+export function starImpactLanded(sceneKey, elapsedMs) {
+  if (sceneKey !== "fall") return true;
+  return (+elapsedMs || 0) >= STAR_FALL_IMPACT_MS;
+}
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 448 — L'AZIMUT DE LA CHUTE, ET IL SE DÉRIVE DU DÉCOR QU'ELLE LAISSE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ REMARQUE DE GUILLAUME, MOT POUR MOT : « si l'animation montre un
+   déplacement de la comète d'ouest en est, l'impact ne peut pas être à l'ouest.
+   Donc adapter l'animation à l'emplacement de l'impact. » Le 445 faisait
+   exactement cette faute : la comète partait TOUJOURS de `x = -60`, c'est-à-dire
+   du bord OUEST de l'écran, et visait un point d'impact qui pouvait se trouver
+   n'importe où — y compris à sa gauche. On voyait alors une comète reculer.
+   ⚠️ LA PARADE N'EST PAS UN CAS PARTICULIER, C'EST UN CHANGEMENT DE SENS DE
+   LECTURE : le point d'entrée se DÉDUIT de l'impact (`impact − direction × L`),
+   jamais l'inverse. L'entrée est donc toujours hors champ, toujours en amont, et
+   il n'existe plus de position de joueur « qui pose problème ».
+   ⚠️⚠️ ET LE SENS EST-OUEST N'EST PAS UN GOÛT : LE SILLON LE DICTE. Son sprite
+   (`starFurrowSprite`) est plus PROFOND à l'ouest, c'est-à-dire que la course
+   s'y arrête ; un objet qui laboure creuse de plus en plus jusqu'à se poser.
+   Une comète venue de l'ouest aurait laissé un sillon qui se creuse en partant.
+   Les deux modèles de Guillaume (`refs/Gemini_Generated_Image_fgcq7y*.jpg` et
+   `…hayq7g*.jpg`) montrent la même chose : elle arrive du HAUT-DROITE.
+   ⚠️⚠️ LA PLONGÉE, ELLE, DÉPEND DU TROU — et c'est la seule chose qui change
+   d'une carte à l'autre. Un trou ROND se creuse à la verticale, une balafre de
+   six cases se laboure en rasant. Deux décors, deux angles, une seule formule :
+   le dessin au sol et la trajectoire disent la même chose, ce qui est la seule
+   fois où l'on a le droit de les confondre (leçon du 447 sur le garde-corps). */
+export const STAR_FALL_DIVE = { town: 46, farm: 19 };   // degrés sous l'horizontale, à l'ÉCRAN
+export function starFallDive(zone) {
+  const d = STAR_FALL_DIVE[zone || "farm"];
+  return (d === undefined ? STAR_FALL_DIVE.farm : d) * Math.PI / 180;
+}
+/* La direction de la COURSE en espace écran (x vers l'est, y vers le bas), prête
+   pour `atan2`. Elle descend et va vers l'OUEST : l'angle est donc toujours dans
+   le second quadrant, ce que le banc vérifie plutôt que de recopier un nombre. */
+export function starFallAngle(zone) {
+  const d = starFallDive(zone);
+  return Math.atan2(Math.sin(d), -Math.cos(d));
+}
 
 /* ⚠️⚠️ CE QUE LE CHEVRON DÉSIGNE — UNE JOINTURE, JAMAIS UNE SECONDE LISTE.
    C'est le défaut n°1 du 444 pris à la racine (« une porte sans chemin de code

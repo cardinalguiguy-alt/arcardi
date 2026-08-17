@@ -13520,7 +13520,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            garde de toute l'histoire, et le 442 se reprochait justement de ne rien
            lui laisser. Le second état se DÉDUIT de l'état partagé, il n'est
            stocké nulle part (règle des cierges de l'église, 441). */
-        if (sprites.starFurrow) {
+        /* ⚠️⚠️ ZIP 448 — IL N'ÉTAIT GARDÉ PAR RIEN, ET PERSONNE NE L'AVAIT VU.
+           Écrit `if (sprites.starFurrow)`, le sillon était labouré dans le champ
+           DÈS LE PREMIER JOUR de la partie — avant la chute, avant que la quête
+           n'existe. Le contrôle manquant n'était pas un test de plus : c'était le
+           SEUL, et son absence ne lève rien, ne casse rien, ne se voit qu'en
+           jouant. Même famille que la liste noire de `plantTree` (440) : ce qui
+           n'est pas énuméré passe. */
+        if (sprites.starFurrow && starImpactLandedNow()) {
           const st0 = sharedRef.current.star;
           const cold = !!(st0 && (Q.starHas(st0, "furrow") || st0.doneAt));
           const fp0 = { x: C.STAR_FURROW_X, y: C.STAR_FURROW_Y };
@@ -15626,11 +15633,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              ligne d'assise, c'est l'alternance des joints verticaux » — resté
              ici parce que personne ne pouvait le regarder. Six cases de
              falaise donnaient six fois le même mur. */
-          if (!A.drawTownCliffFace(ctx, sprites, tw, x, y, px, py + T, fh)) {
-            ctx.fillStyle = "#8f8a80"; ctx.fillRect(px, py + T, T, fh);
-          }
+          /* ⚠️⚠️ ZIP 447 — UNE MARCHE N'A PAS UNE FALAISE SOUS ELLE, ELLE A UNE
+             CONTREMARCHE. Le même trou, deux dessins, et le choix se fait sur
+             ce qu'EST la case, pas sur la hauteur du trou : une volée garde des
+             contremarches lisses même haute, un mur de soutènement garde son
+             appareil même bas. Décider au seuil de hauteur aurait produit des
+             escaliers qui changent de matière en montant. */
+          const surMarche = g === C.G_TOWN_STAIR;
+          const peint = surMarche
+            ? A.drawTownStairRiser(ctx, sprites, tw, x, y, px, py + T, fh)
+            : A.drawTownCliffFace(ctx, sprites, tw, x, y, px, py + T, fh);
+          if (!peint) { ctx.fillStyle = "#8f8a80"; ctx.fillRect(px, py + T, T, fh); }
           ctx.fillStyle = "#c6c1b6"; ctx.fillRect(px, py + T - 2, T, 2);          // nez du rebord
-          ctx.fillStyle = "rgba(20,26,16,0.30)"; ctx.fillRect(px, py + T + fh, T, 3); // ombre au pied
+          /* ⚠️ ZIP 447 — L'OMBRE AU PIED SUIT LA HAUTEUR DU MUR, elle ne fait
+             plus 3 px quoi qu'il arrive. Un mur de 48 px et une marche de 10 px
+             portaient la même ombre : la plus haute paraissait donc flotter, et
+             c'est ce genre d'écart qui fait dire « plaqué ». On la borne à 5 px
+             — au-delà, l'ombre devient une flaque et mange le sol. */
+          const oh = Math.max(2, Math.min(5, Math.round(fh * 0.14)));
+          ctx.fillStyle = "rgba(20,26,16,0.34)"; ctx.fillRect(px, py + T + fh, T, oh);
+          ctx.fillStyle = "rgba(20,26,16,0.16)"; ctx.fillRect(px, py + T + fh + oh, T, Math.ceil(oh * 0.8));
         }
         /* ---- ARÊTES EST/OUEST. Un liseré suffit pour une terrasse : sans lui,
            vue de côté, elle n'a pas d'épaisseur.
@@ -15819,7 +15841,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            courent jusqu'à `STAR_CRATER_CRACK_R` : la marge de 10 cases du 444 les
            aurait fait apparaître d'un coup en bord d'écran. */
         const cmar = C.STAR_CRATER_CRACK_R + 2;
-        if (cpos && st1 && Q.starFallen(st1) && sprites.drawStarCrater
+        /* ⚠️ ZIP 448 — `starImpactLandedNow` REMPLACE `Q.starFallen` ICI, et c'est
+           tout le correctif : `e.fall` date le DÉBUT de la cinématique, pas le
+           contact. Voir sa note au niveau du composant. */
+        if (cpos && st1 && starImpactLandedNow() && sprites.drawStarCrater
             && cpos.x >= x0 - cmar && cpos.x <= x1 + cmar && cpos.y >= y0 - cmar && cpos.y <= yBot + cmar) {
           const ce = elAt(cpos.x, cpos.y);
           const cph = Q.starDone(st1) ? 1 : 0;
@@ -16068,7 +16093,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const PLANCHE_PROPS = new Set(["archBridge", "fence", "woodBox", "lowWall", "stoneBlock",
         "stoneBench", "benchWall", "hangLamp", "stepStones", "chest", "bucket", "rod", "potReeds",
         "flowerTrough", "bonsai", "roseBox", "potPink", "oilLamp", "table", "reedTuft", "reedsWater",
-        "hedgeRow", "grassTuft", "flatStone", "goldBush", "lavender", "clump", "lily", "bench"]);
+        "hedgeRow", "grassTuft", "flatStone", "goldBush", "lavender", "clump", "lily", "bench",
+        "rail", "bloomBed", "bloomRow", "rockBed", "hedgeAngle"]);   // 447 : le garde-corps vient de la planche 2, il porte son ombre
       /* ZIP 439 — la variante d'un décor à plusieurs dessins. Deux nombres
          premiers différents de ceux du 437 (7/13) : réutiliser les mêmes ferait
          tomber le buisson d'or et le buisson fleuri sur la même variante à
@@ -16176,6 +16202,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   : pr.kind === "table" ? sprites.townTable
                   : pr.kind === "reedTuft" ? sprites.townReedTuft
                   : pr.kind === "reedsWater" ? sprites.townReedsWater
+                  /* ⚠️ ZIP 447 — le garde-corps du quart tournant. Il est dans
+                     CETTE liste et pas dans une passe à part, pour la raison du
+                     444 : un décor peint hors de la file triée serait toujours
+                     devant ou toujours derrière le fermier. Ici il doit être les
+                     DEUX, selon qu'on passe au nord ou au sud de lui. */
+                  : pr.kind === "rail" ? sprites.townRail
+                  : pr.kind === "bloomBed" ? pick(sprites.townBloomBed, pr)
+                  : pr.kind === "bloomRow" ? sprites.townBloomRow
+                  : pr.kind === "rockBed" ? sprites.townRockBed
+                  : pr.kind === "hedgeAngle" ? sprites.townHedgeAngle
                   : pr.kind === "hedgeRow" ? sprites.townHedgeRow
                   : pr.kind === "grassTuft" ? sprites.townGrassTuft
                   : pr.kind === "flatStone" ? sprites.townFlatStone
@@ -18192,8 +18228,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          la caméra vole vers l'impact puis revient, donc le point bouge à
          l'écran, et une position figée décollerait du décor au retour. */
       const tgt0 = starCamRef.current;
+      /* ⚠️⚠️ ZIP 448 — LE POINT DE POSE N'EST PAS LE CENTRE DE LA CASE À LA FERME.
+         Le sillon est un sprite de SIX cases (96 px) centré sur sa case, et il est
+         plus profond à son bout OUEST : c'est là que la course s'arrête, donc
+         c'est là que la comète doit se poser. Viser le centre de la case faisait
+         mourir la trajectoire trois cases après le point le plus creusé — un
+         décalage qu'aucun banc ne peut voir et qui saute aux yeux à l'écran.
+         ⚠️ ET IL SE DÉRIVE DU SPRITE, PAS D'UN NOMBRE RECOPIÉ : `STAR_FURROW_LEN`
+         et la largeur du dessin sont la même grandeur écrite deux fois, et c'est
+         le dessin qui a raison (règle du 440 sur `townPropBox`). */
+      const spr0 = spritesRef.current;   // zip 448 — le dessin de la comète vit dans `fermeArt`
+      const furW = (spr0 && spr0.starFurrow && spr0.starFurrow[0] && spr0.starFurrow[0].width) || 0;
+      const restDx = (tgt0 && tgt0.zone === "farm" && furW) ? -(furW / 2 - 10) : 0;
       const impact = (tgt0 && cam && (meRef.current && (meRef.current.zone || "farm") === tgt0.zone))
-        ? { x: ((tgt0.x + 0.5) * T - cam.x) * (zoom || 1), y: ((tgt0.y + 0.5) * T - cam.y) * (zoom || 1) }
+        ? { x: ((tgt0.x + 0.5) * T + restDx - cam.x) * (zoom || 1), y: ((tgt0.y + 0.5) * T - cam.y) * (zoom || 1) }
         : null;
       /* ── LA LYRE. ⚠️ LE CIEL EST LE COMPTEUR, et c'est l'idée d'interface la
          moins chère du chantier : dès la chute, la constellation est visible la
@@ -18253,29 +18301,78 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            montrer une vidéo ». */
         const veil = Math.min(0.55, t * 0.5) * (t > 7 ? Math.max(0, (dur / 1000 - t) / 2) : 1);
         ctx.fillStyle = `rgba(8,10,26,${veil.toFixed(3)})`; ctx.fillRect(0, 0, W, H);
-        /* ⚠️⚠️ ZIP 445 — LA COMÈTE VISE LE POINT D'IMPACT, elle ne traverse plus
-           l'écran pour rien. Elle part du bord ouest, en haut, et son point
-           d'arrivée EST le sillon (ferme) ou le cratère (ville) : à 3,0 s la tête
-           touche le sol exactement là où le décor est dessiné. Sans repère de
-           caméra (cas de repli), on retombe sur l'ancienne trajectoire plutôt
-           que de ne rien dessiner. */
-        if (t > 1.2 && t < 3.1) {                       // le trait de lumière, ouest → est
-          const k = (t - 1.2) / 1.8;
-          const ex = impact ? impact.x : W * 1.05, ey = impact ? impact.y : H * 0.30;
-          const hx = -60 + (ex + 60) * k, hy = H * 0.08 + (ey - H * 0.08) * (k * k);
-          const grd = ctx.createLinearGradient(hx - 190, hy - 60, hx, hy);
-          grd.addColorStop(0, "rgba(255,240,200,0)"); grd.addColorStop(1, "rgba(255,250,225,0.95)");
-          ctx.strokeStyle = grd; ctx.lineWidth = 3;
-          ctx.beginPath(); ctx.moveTo(hx - 190, hy - 60); ctx.lineTo(hx, hy); ctx.stroke();
-          ctx.fillStyle = "rgba(255,255,245,0.95)";
-          ctx.beginPath(); ctx.arc(hx, hy, 4 + k * 3, 0, 7); ctx.fill();
+        /* ╔══════════════════════════════════════════════════════════════════════
+           ║ ZIP 448 — LA COMÈTE. LA TRAJECTOIRE SE DÉDUIT DE L'IMPACT.
+           ╚══════════════════════════════════════════════════════════════════════
+           ⚠️⚠️ REMARQUE DE GUILLAUME : « si l'animation montre un déplacement
+           d'ouest en est, l'impact ne peut pas être à l'ouest ». Le 445 faisait
+           exactement ça — la tête partait toujours de `x = -60`, donc du bord
+           OUEST, et visait un point qui pouvait se trouver à sa GAUCHE : on
+           voyait une comète reculer. Le sens de lecture est inversé ici : on part
+           de l'IMPACT et on remonte la course de `LEN` pixels en amont
+           (`Q.starFallAngle`). L'entrée est donc toujours hors champ, toujours du
+           bon côté, et il n'existe plus de position de joueur qui « pose
+           problème ». `LEN` déborde volontiers de l'écran : c'est ce qui garantit
+           qu'aucun cadrage ne peut la faire naître dans le champ.
+           ⚠️ SANS POINT D'IMPACT, PLUS DE COMÈTE DU TOUT (et c'était l'autre
+           moitié de la remarque). Le repli du 445 dessinait une trajectoire
+           arbitraire « pour ne pas ne rien dessiner » — c'est-à-dire qu'il MENTAIT
+           quand on venait d'entrer dans un bâtiment. On garde alors le voile, la
+           lueur au loin, la secousse et le texte : tu n'as pas vu la chute, tu as
+           vu le ciel s'allumer. C'est honnête, et ça se code en une ligne.
+           ⚠️⚠️ ET LE MOUVEMENT EST PERSPECTIF, PAS LINÉAIRE : un objet qui vient
+           droit sur nous à vitesse constante grandit en 1/d et se déplace à
+           l'écran en 1/d². D'où `k^1.9` sur le chemin et `k^2.5` sur la taille —
+           elle traîne loin, minuscule, puis fond sur le point en un éclair. C'est
+           la seule façon de la voir LONGTEMPS sans la rendre lente, ce que
+           Guillaume demande explicitement (« une comète reste rapide »). */
+        const T_IN = Q.STAR_FALL_APPEAR_MS / 1000, T_HIT = Q.STAR_FALL_IMPACT_MS / 1000;
+        const cang = Q.starFallAngle((tgt0 && tgt0.zone) || "farm");
+        const LEN = Math.hypot(W, H) * 1.30;
+        const cq = Math.max(2, Math.round(zoom || 3));    // le gros pixel du monde, jamais un réglage
+        const Rend = Math.max(9, Math.min(34, 7.5 * (zoom || 3)));
+        const cpath = (k) => {
+          const s = Math.pow(Math.max(0, Math.min(1, k)), 1.9);
+          return { x: impact.x - Math.cos(cang) * LEN * (1 - s), y: impact.y - Math.sin(cang) * LEN * (1 - s) };
+        };
+        const cradius = (k) => Rend * (0.055 + 0.945 * Math.pow(Math.max(0, Math.min(1, k)), 2.5));
+        if (impact && spr0.drawStarComet && t > T_IN && t < T_HIT) {
+          const k = (t - T_IN) / (T_HIT - T_IN);
+          /* LA TRAÎNÉE QUI RESTE DANS LE CIEL. ⚠️ ELLE EST RE-CALCULÉE, PAS
+             MÉMORISÉE : les positions passées sont `cpath(k')` pour k' < k, donc
+             une pure fonction du temps. Un historique de positions aurait vécu
+             dans la closure de la boucle de rendu — c'est-à-dire hors de portée
+             de tout banc, et ré-initialisé à chaque remontage (piège n°1). */
+          for (let n = 1; n <= 14; n++) {
+            const kb = k - n * 0.055;
+            if (kb <= 0) break;
+            const p = cpath(kb);
+            spr0.drawStarCometTrail(ctx, p.x, p.y, cang, cradius(kb) * 1.15,
+                                       Math.min(1, n / 14 + (1 - k) * 0.15), now, { q: cq });
+          }
+          const p = cpath(k);
+          /* ⚠️ ELLE S'ALLUME EN ENTRANT DANS L'AIR. À `k` proche de 0 elle est
+             encore dans le noir et sa gaine ne brûle pas : `fade` monte vite mais
+             pas d'un coup, sinon elle APPARAÎT au lieu d'arriver. */
+          spr0.drawStarComet(ctx, p.x, p.y, cang, cradius(k), now,
+                                { q: cq, fade: Math.min(1, 0.15 + k * 3.2), tail: cradius(k) * (12 - 4 * k) });
         }
-        if (t > 3.0 && t < 3.16) { ctx.fillStyle = "rgba(255,255,255,0.92)"; ctx.fillRect(0, 0, W, H); }
+        /* ── L'IMPACT. ⚠️⚠️ LE BLANC PLEIN ÉCRAN NE DURE PLUS QUE DEUX IMAGES.
+           Le 445 le tenait 160 ms et ne montrait rien d'autre : un blanc qui dure
+           est une COUPURE, pas un impact. Il sert de coupure, la gerbe fait le
+           reste — et elle est dessinée dans `fermeArt`, donc regardable. */
+        if (impact && spr0.drawStarImpactFlash && t >= T_HIT && t < T_HIT + 0.75)
+          spr0.drawStarImpactFlash(ctx, impact.x, impact.y, (t - T_HIT) / 0.75, Rend, { q: cq });
+        if (t >= T_HIT && t < T_HIT + 0.05) { ctx.fillStyle = "rgba(255,255,255,0.92)"; ctx.fillRect(0, 0, W, H); }
+        if (t >= T_HIT && t < T_HIT + 0.34) {
+          const k = (t - T_HIT) / 0.34;                  // la rémanence, partout : l'œil est ébloui
+          ctx.fillStyle = `rgba(255,248,232,${(0.55 * (1 - k) * (1 - k)).toFixed(3)})`; ctx.fillRect(0, 0, W, H);
+        }
         /* L'ONDE DE CHOC, au sol, depuis le point d'impact. ⚠️ Elle est PLATE
            (une ellipse écrasée) parce que la vue est en trois quarts : un cercle
            parfait se lirait comme un anneau vertical planté dans le décor. */
-        if (impact && t > 3.05 && t < 4.6) {
-          const k = (t - 3.05) / 1.55;
+        if (impact && t > T_HIT + 0.05 && t < T_HIT + 1.6) {
+          const k = (t - T_HIT - 0.05) / 1.55;
           ctx.strokeStyle = `rgba(255,246,214,${(0.85 * (1 - k)).toFixed(3)})`;
           ctx.lineWidth = 3 * (1 - k) + 1;
           ctx.beginPath(); ctx.ellipse(impact.x, impact.y, 30 + k * 260, (30 + k * 260) * 0.42, 0, 0, 7); ctx.stroke();
@@ -18285,12 +18382,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            mur en douce — et la caméra du jeu est calculée dans trois fonctions
            différentes. Un `transform` CSS sur l'élément secoue exactement ce
            qu'il faut (le monde), et rien de ce qu'il ne faut pas (le HUD). */
-        if (t > 3.2 && t < 4.4) {
-          const a = (1 - (t - 3.2) / 1.2) * 7;
+        /* ⚠️ ZIP 448 — ELLE PART 0,2 s APRÈS LE CONTACT, ET CE RETARD EST JUSTE :
+           la lumière arrive tout de suite, l'onde du sol met un temps à monter
+           sous les pieds. Le faire coïncider donnait un « clac » d'interface. Les
+           trois instants qui suivent sont désormais écrits en écart à
+           `STAR_FALL_IMPACT_MS` et non en secondes absolues : le jour où l'on
+           déplace l'impact, la scène entière suit sans qu'on relise quatre
+           nombres (§ « un paramètre qui double un autre doit être dérivé »). */
+        if (t > T_HIT + 0.2 && t < T_HIT + 1.4) {
+          const a = (1 - (t - T_HIT - 0.2) / 1.2) * 7;
           canvas.style.transform = `translate(${(Math.sin(t * 47) * a).toFixed(2)}px, ${(Math.cos(t * 39) * a).toFixed(2)}px)`;
         } else if (canvas.style.transform) canvas.style.transform = "";
-        if (t > 3.4 && t < 6.2) {                       // tous les oiseaux décollent
-          const k = (t - 3.4) / 2.8;
+        if (t > T_HIT + 0.4 && t < T_HIT + 3.2) {       // tous les oiseaux décollent
+          const k = (t - T_HIT - 0.4) / 2.8;
           ctx.strokeStyle = `rgba(20,24,30,${(0.75 * (1 - k)).toFixed(3)})`; ctx.lineWidth = 2;
           for (let b = 0; b < 22; b++) {
             const bx = ((b * 89) % W), by = H * 0.9 - k * H * (0.5 + (b % 5) * 0.09);
@@ -18301,17 +18405,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         /* ⚠️ ZIP 445 — LA COLONNE MONTE DU POINT D'IMPACT, PLUS DE `W × 0,86`.
            Elle part du sol (le point lui-même) et pas du bas de l'écran : c'est
            ce qui la rattache au décor au lieu d'en faire un ruban d'interface. */
-        if (t > 4.5) {
-          const k = Math.min(1, (t - 4.5) / 1.4);
+        if (t > T_HIT + 1.5) {
+          const k = Math.min(1, (t - T_HIT - 1.5) / 1.4);
           const cx2 = impact ? impact.x : W * 0.86, cy2 = impact ? impact.y : H;
           const grd = ctx.createLinearGradient(cx2, cy2, cx2, 0);
           grd.addColorStop(0, `rgba(180,240,210,${(0.34 * k).toFixed(3)})`);
           grd.addColorStop(1, "rgba(180,240,210,0)");
           ctx.fillStyle = grd; ctx.fillRect(cx2 - 26, 0, 52, Math.max(0, cy2));
         }
-        line(L.star.fall.line1, t > 1.4 && t < 3.4 ? 1 : 0, H * 0.78);
-        line(L.star.fall.line2, t > 3.5 && t < 5.4 ? 1 : 0, H * 0.78);
-        line(L.star.fall.line3, t > 5.5 && t < 7.2 ? 1 : 0, H * 0.78);
+        /* ⚠️ ZIP 448 — LES TROIS LIGNES SONT ACCROCHÉES À L'IMPACT, PLUS À DES
+           SECONDES ABSOLUES. La première accompagne la chute, les deux autres la
+           commentent : écrites en dur, elles auraient parlé de l'après pendant
+           que la comète volait encore le jour où l'on a décalé le contact. */
+        line(L.star.fall.line1, t > 1.4 && t < T_HIT + 0.2 ? 1 : 0, H * 0.78);
+        line(L.star.fall.line2, t > T_HIT + 0.3 && t < T_HIT + 2.2 ? 1 : 0, H * 0.78);
+        line(L.star.fall.line3, t > T_HIT + 2.3 && t < T_HIT + 4.0 ? 1 : 0, H * 0.78);
       } else if (sc0.key === "turn") {
         /* ⚠️ LE RETOURNEMENT EST LE SEUL MOMENT OÙ LE JEU DOIT SE TAIRE. Quatre
            notes montent, ça s'arrête net, et le décor se tait avec. Le blanc
@@ -18403,7 +18511,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          quand on y est, et `charOf` ne remplit pas `zone` pour les résidents —
          un test sur `p.zone` aurait laissé les habitants marcher à plat. */
       let sinkPx = 0;
-      if ((meRef.current && (meRef.current.zone || "farm")) === "town" && sprites.starCraterSink) {
+      /* ⚠️ ZIP 448 — ON NE S'ENFONCE PAS DANS UN TROU QUI N'EST PAS ENCORE
+         CREUSÉ. Sans ce test, un joueur posté à l'emplacement du cratère
+         descendait de onze pixels pendant que la comète était encore en vol :
+         l'enfoncement lit le même champ que le dessin (446), il doit donc lire
+         aussi la même CHRONOLOGIE. */
+      if ((meRef.current && (meRef.current.zone || "farm")) === "town" && sprites.starCraterSink
+          && starImpactLandedNow()) {
         const cp0 = starCraterPos();
         if (cp0) sinkPx = sprites.starCraterSink(p.x - cp0.x, p.y - cp0.y, T);
       }
@@ -20371,6 +20485,39 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     return Math.max(0, Date.now() - a.at);
   }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 448 — LE DÉCOR D'IMPACT N'EXISTE QU'APRÈS L'IMPACT.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ DÉFAUT VU À L'ÉCRAN PAR GUILLAUME : « l'impact doit apparaître après
+     l'écrasement de la comète et pas avant ». Il l'était, et de deux façons :
+       · le CRATÈRE de la ville se peignait dès que `starFallen` était vrai, or
+         `e.fall` est daté au DÉBUT de la cinématique. Pendant trois secondes le
+         trou fumait, ses braises rougeoyaient et l'étoile brillait au fond
+         pendant que la comète traversait encore le ciel ;
+       · le SILLON de la ferme était pire — aucun test de quête ne le gardait, il
+         était labouré dans le champ depuis le premier jour de la partie.
+     ⚠️ AUCUN BANC NE POUVAIT LE VOIR, et c'est la leçon : ils mesurent tous ce
+     qu'un décor DESSINE (sa forme, sa profondeur, son refroidissement, son
+     enfoncement — sept contrôles rien que pour le cratère), aucun ne mesurait
+     QUAND il apparaît. *Quand Guillaume voit un défaut qu'aucun banc ne voit, la
+     question n'est pas « où est le bogue » mais « quelle grandeur ne mesure-t-on
+     pas ».* Ici, la grandeur manquante était le TEMPS.
+     ⚠️⚠️ ET C'EST UNE JOINTURE, PAS UNE SECONDE LISTE : la règle vit dans
+     `Q.starImpactLanded`, que la cinématique et les deux décors appellent. Deux
+     écritures auraient redivergé au premier réglage, exactement comme le seuil de
+     sortie de l'hôtel de ville écrit des deux côtés de la closure (439).
+     ⚠️ UNE SCÈNE EN ATTENTE COMPTE COMME « PAS ENCORE VUE » : un joueur qui
+     rejoint le lendemain a la chute EN FILE (`starScenePump`), et lui montrer le
+     cratère avant de lui jouer la scène raconterait l'histoire à l'envers. */
+  function starImpactLandedNow() {
+    const e = sharedRef.current.star;
+    if (!e || !Q.starFallen(e)) return false;
+    const pend = starScenePendRef.current;
+    if (pend && pend.key === "fall") return false;
+    const sc = starSceneRef.current;
+    if (!sc) return true;
+    return Q.starImpactLanded(sc.key, performance.now() - sc.t0);
+  }
   function starCraterHeatNow() { return Q.starCraterHeat(sharedRef.current.star, starCraterElapsed()); }
   function starCraterCoolNow() { return Q.starCraterCool(sharedRef.current.star, starCraterElapsed()); }
 
@@ -20562,7 +20709,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      où aller (§ `starTargetSite` dans `quete.js`). */
   function starGuideTarget() {
     const e = sharedRef.current.star;
-    if (!e || !Q.starFallen(e) || Q.starDone(e)) return null;
+    /* ⚠️ ZIP 448 — MÊME RAISON QUE `starNearby` : le chevron ne peut pas désigner
+       un cratère qui n'est pas encore creusé. Il était déjà masqué PENDANT la
+       scène (`starSceneRef`), mais pas pendant qu'elle attendait de se jouer. */
+    if (!e || !starImpactLandedNow() || Q.starDone(e)) return null;
     if (starUiOpenRef.current || starSceneRef.current) return null;
     const id = Q.starTargetSite(e);
     if (!id) return null;
@@ -20759,7 +20909,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function starNearby() {
     const m = meRef.current; if (!m) return null;
     const e = sharedRef.current.star;
-    if (!e || !Q.starFallen(e) || Q.starDone(e)) return null;
+    /* ⚠️⚠️ ZIP 448 — `starImpactLandedNow` ET PAS `starFallen`, ET C'EST LA
+       TROISIÈME FUITE DE LA MÊME CHRONOLOGIE, celle-là trouvée en JOUANT et pas
+       en relisant : l'invite « E : attends que ça refroidisse » s'affichait sous
+       la comète encore en vol, au-dessus d'un cratère qui n'existait pas. Le
+       décor, l'enfoncement ET l'interaction sont trois portes sur le même trou :
+       une seule d'entre elles laissée ouverte suffit à raconter la fin avant le
+       début. C'est le pendant exact de « une porte sans chemin de code ment »
+       (444) — ici, un chemin de code sans décor. */
+    if (!e || !starImpactLandedNow() || Q.starDone(e)) return null;
     const zone = m.zone || "farm";
 
     if (zone === "farm") {

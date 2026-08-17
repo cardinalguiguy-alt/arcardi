@@ -4,7 +4,45 @@
 Il remplace l'exploration du dépôt pour tout ce qui est global. Le README est un journal
 chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
-État à jour du **zip 446**. Chantier actif : **rendre Valley Town habitable au regard ET
+---
+## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
+
+⚠️⚠️⚠️ **CE BLOC EST LE SEUL ENDROIT DU FICHIER QUI DÉSIGNE UNE ACTION SUIVANTE, ET IL EXISTE
+PARCE QUE L'EN-TÊTE N'EN DÉSIGNAIT AUCUNE.** Douze blocs d'avertissement y revendiquaient la
+priorité, dont un qui dit « LA PASSE LA PLUS URGENTE DE CE FICHIER » à propos d'autre chose :
+une session neuve serait partie sur un chantier au hasard. *Un fichier qui contient tout ne
+dit rien tant qu'il ne dit pas par quoi commencer.* Ce bloc se met à jour à chaque fin de zip,
+il ne s'empile pas.
+
+**Chantier en cours : le 448 — la comète refaite, et l'impact remis après elle.**
+Livré, mesuré ET regardé à l'écran (ferme et ville) : `drawStarComet` / `drawStarCometTrail` /
+`drawStarImpactFlash` dans `fermeArt.js` sur les deux modèles de Guillaume (`refs/…fgcq7y….jpg`,
+`refs/…hayq7g….jpg`), la planche `etoile-comete.png` et ses **onze contrôles**, l'azimut dérivé
+du point d'impact, et la **jointure de chronologie** `Q.starImpactLanded` qui ferme les
+**quatre** portes par lesquelles le décor d'impact apparaissait avant la chute. Le détail est au
+**§28 de `components/ferme/README.md`**.
+
+**La prochaine action, et elle est unique : POSER LA MAISON `house` (chantier 447).** Elle est
+importée, propre, 90×90 natifs — et posée nulle part. Deux préalables, tous deux écrits au §27.5
+de `components/ferme/README.md`, qui est le **document de reprise** de ce chantier (il porte la
+suite dans l'ordre) : son texte « Aurelien » est **CUIT dans le sprite** et doit être effacé à
+l'import puis réécrit VIVANT au rendu (§4) ; et il faut trancher si elle remplace les dix
+façades de `townHouseVariant` ou en devient la onzième — c'est une décision de CONTENU, donc
+**elle se demande à Guillaume avant d'être codée** (§2).
+
+⚠️ **AVANT DE POUVOIR REGARDER QUOI QUE CE SOIT À L'ÉCRAN, IL FAUT REMONTER LES DEUX
+ÉCHAFAUDAGES** — ils sont supprimés à chaque fin de zip, exprès (une page jetable en
+production ouvre une ferme sans authentification). La recette complète est au **§10**, et elle
+marche : `.env.local` sur `http://127.0.0.1:54321`, une page jetable montant `<FermeGame …>`,
+`node tools/fake-supabase.mjs`, et **le correctif `requestAnimationFrame` avant toute mesure**.
+
+⚠️ **CE QUI RESTE OUVERT AILLEURS N'EST PAS OUBLIÉ, C'EST CLASSÉ APRÈS** : la séance à DEUX
+CLIENTS (quête du 444 + ferme peuplée) reste la dette la plus ancienne du dépôt et redevient la
+priorité dès que le chantier de la planche est fini ; les intérieurs du tribunal et de la
+mairie sont une dette datée de cinq zips ; `public/sounds/church-organ.mp3` manque toujours.
+---
+
+État à jour du **zip 447**. Chantier actif : **rendre Valley Town habitable au regard ET
 crédible au jeu**, et **lui donner une histoire**. La ville est refaite depuis le 434 ; le 438 a
 ouvert l'hôtel de ville, le 439 l'a audité, le 440 a corrigé la portée des ponts et la COMPOSITION
 des décors, le 441 a réparé leur TRAVERSÉE puis ouvert l'**ÉGLISE**, le 442 y a posé une enquête
@@ -64,6 +102,53 @@ réelle, les scènes *turn* et *end*, et la Lyre (elle ne se dessine que la nuit
 d'avancement de `components/ferme/QUETE.md` §10 distingue **codé** et **regardé à l'écran**,
 colonne par colonne — c'est lui qui fait autorité, pas cette page.
 
+⚠️⚠️⚠️ **LE 447 A IMPORTÉ LA SECONDE PLANCHE, REFAIT LE SOL DE LA VILLE ET DONNÉ À LA VOLÉE
+MONUMENTALE UN QUART TOURNANT — ET IL EN SORT TROIS LEÇONS QUI VALENT PLUS QUE L'ESCALIER.**
+1. ⚠️⚠️ **UNE MESURE QUI NE RETROUVE PAS LA RÉPONSE CONNUE NE MESURE RIEN.** Deux méthodes ont
+   été écrites pour retrouver le pas natif de la planche 2 ; lancées en contrôle sur la
+   planche 1, dont on SAIT que le pas vaut 3,25, elles rendaient 3,0 avec une erreur de 0,27
+   pour un maximum de 0,5 — du hasard. Elles ont été jetées. **L'échelle d'une planche qui n'en
+   a pas se DÉRIVE des gabarits du jeu** (cinq objets, accord à 3 % : une case = 62 px image).
+2. ⚠️⚠️ **UN DESSIN PEUT MENTIR SUR UNE GRANDEUR PHYSIQUE, ET AUCUN BANC NE LE VOIT SI PERSONNE
+   NE LES COMPARE.** `STAIR_TREAD` peignait QUATRE nez de marche dans une case qui n'en franchit
+   qu'une, et `TOWN_ELEV_PX` ne montait que de 4,5 px par marche : trois bancs au vert sur un
+   escalier que Guillaume a résumé en « tout est condensé et comme plaqué en 2D ». La parade
+   est un contrôle neuf — *la marche DESSINÉE est-elle la marche FRANCHIE ?*
+3. ⚠️⚠️ **UNE ARÊTE FRANCHISSABLE EN DIAGONALE NE L'EST PAS FORCÉMENT EN DEUX PAS AXIAUX.**
+   L'A* piéton coupe les coins, le marcheur avance axe par axe avec une boîte de 0,35 : au bord
+   d'un palier, 108 trajets sur 21 756 se coinçaient. ⚠️ **On n'a PAS élargi le seuil** : on a
+   posé un garde-corps, c'est-à-dire l'objet que la planche dessine à cet endroit. *La collision
+   et le dessin disent la même chose ; c'est le seul cas où l'on a le droit de les confondre.*
+Le détail est au **§27 de `components/ferme/README.md`**, avec ce qui reste à faire (§27.5) —
+notamment **la maison `house`, importée et posée nulle part**, dont le nom est CUIT dans le
+sprite et doit être réécrit vivant.
+
+⚠️⚠️⚠️ **LE 448 A REFAIT LA COMÈTE, ET SA LEÇON EST LA PLUS COURTE DU FICHIER : UN DÉCOR
+D'IMPACT SE DATE À L'IMPACT, PAS À L'ÉVÉNEMENT QUI L'ANNONCE.** `e.fall` horodate le DÉBUT de la
+cinématique ; quatre endroits le lisaient comme « c'est arrivé ». Résultat vu par Guillaume : le
+cratère fumait, ses braises rougeoyaient et l'étoile brillait au fond **trois secondes avant que
+la comète ne touche le sol** — et le sillon de la ferme, gardé par *aucun* test de quête, était
+labouré dans le champ **depuis le premier jour de la partie**.
+1. ⚠️⚠️ **SEPT CONTRÔLES REGARDAIENT CE CRATÈRE — FORME, PROFONDEUR, DEUX RAYONS,
+   REFROIDISSEMENT, FUMÉE, ENFONCEMENT, CONTINUITÉ — ET AUCUN NE DEMANDAIT *QUAND* IL APPARAÎT.**
+   C'est la cinquième forme du défaut de banc, et la plus pure : **un banc de rendu ne peut pas
+   voir un défaut de TEMPS.** Il faut une fonction pure et un banc de logique.
+2. ⚠️⚠️ **QUATRE PORTES SUR LE MÊME TROU, ET UNE SEULE LAISSÉE OUVERTE SUFFIT À RACONTER LA FIN
+   AVANT LE DÉBUT** (le dessin, l'enfoncement, l'invite `E`, le chevron). Les deux dernières se
+   sont vues **en jouant**, après que les deux premières aient été corrigées et déclarées finies.
+   *Corriger un symptôme n'énumère pas ses frères ; seule une jointure le fait*
+   (`Q.starImpactLanded`, lue par la cinématique ET par les quatre).
+3. ⚠️⚠️ **UNE CONSTANTE A ÉTÉ SUPPRIMÉE, PAS AJOUTÉE.** `STAR_CAM_FLASH_MS = 3000` (445) était lue
+   **par le seul banc** ; la cinématique écrivait `t > 3.0` en dur. Elle avait l'air juste, elle
+   était **débranchée** — c'est la forme la plus discrète de « un banc qui n'a jamais pu échouer
+   ne vaut rien », et elle se détecte en cherchant qui LIT une constante, jamais en la relisant.
+4. ⚠️ **UN TEXTE N'EST PAS UN DÉCOR : IL AFFIRME.** La ligne anglaise disait « west to east »
+   pendant que la comète descendait d'est en ouest. Un dessin approximatif se pardonne, une
+   phrase fausse sous l'image, non.
+Le détail est au **§28 de `components/ferme/README.md`** ; les règles de DESSIN qui en sortent
+(la queue qui se lit par ses vides, les paliers trop peu nombreux qui dessinent un bord, le feu
+qui se montre derrière, `clip` absent du faux canevas) sont dans **`DESSIN.md`**.
+
 ⚠️⚠️ **LE 446 A REFAIT LE CRATÈRE SUR DEUX IMAGES DE GUILLAUME, ET IL EN SORT UNE RÈGLE DE DESSIN
 QUI VAUT PARTOUT : CE QUI CREUSE UNE IMAGE VUE DE DESSUS EST L'ÉCLAIRAGE D'UNE PENTE, PAS UN
 DÉGRADÉ.** Le cratère du 444 était six anneaux du sombre au clair : tous les bancs au vert, et
@@ -109,7 +194,10 @@ toutes payées :
   *antérieurs* » — cinq venaient d'être causés par le zip en cours) ;
 - **il repeint au lieu d'appeler**, donc il juge sa propre maquette (439) ;
 - **il mesure l'inverse de ce qu'on veut** (438 : le « grain » pris pour de la qualité — le grain
-  montait, la propreté baissait, et le banc applaudissait).
+  montait, la propreté baissait, et le banc applaudissait) ;
+- ⚠️ **il mesure ce qu'une chose EST et jamais QUAND elle est** (448 : sept contrôles sur le
+  cratère, aucun sur l'instant où il apparaît — *un banc de rendu ne peut pas voir un défaut de
+  temps*).
 ⚠️ **Quand Guillaume voit un défaut qu'aucun banc ne voit, la première question n'est pas « où
 est le bogue » mais « quelle grandeur ne mesure-t-on pas ».** Les cinq dernières fois, la réponse
 tenait en deux ou trois nombres qu'il a suffi d'ajouter.
@@ -343,7 +431,7 @@ couvre » est une règle du GÉNÉRATEUR, pas du dessin, et c'est pour ça qu'el
 | `tools/README.md` | **les bancs, ce qu'ils attrapent et leurs chiffres — autorité (432-439)** |
 | `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** · depuis le 440 il **importe `planche.js`** : une portée de pont et une emprise de décor sont des grandeurs de DESSIN, on les dérive du sprite au lieu de les recopier |
 | `components/ferme/planche.js` | **GÉNÉRÉ** par `tools/import-planche.mjs` — les sprites de la planche de Guillaume, en données. Ne pas éditer à la main |
-| `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural (aucun bitmap **à ce jour** — voir §9, le principe est tombé au 443) · **`drawSeated()`** |
+| `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural (aucun bitmap **à ce jour** — voir §9, le principe est tombé au 443) · **`drawSeated()`** · **`drawStarCrater()` (446) et `drawStarComet()` (448) : les deux gros dessins de la quête vivent ICI et pas dans la boucle, exprès — c'est la seule façon qu'un banc les regarde** |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
 | `public/candyluge/README.md` | **la dette et les 18 règles de la luge — autorité (427)** |
 | `public/candyluge/js/` | `config.js` (tous les nombres) · `slope.js` (la piste) · `sled.js` · `world.js` |
