@@ -443,6 +443,47 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
     ok("⚠️⚠️ …et elle s'éteint le jour où on la sort", Q.starCraterHeat(e2, 10) === 0);
     ok("une quête pas encore tombée n'a pas de cratère chaud", Q.starCraterHeat(Q.newStar(), 10) === 0);
   }
+  /* ── ZIP 449 — LA BRÛLURE, ET C'EST UN CONTRÔLE DE TEMPS AVANT D'ÊTRE UN
+     CONTRÔLE DE PLACE.
+     ⚠️⚠️ IL EXISTE PARCE QUE LE 448 A MONTRÉ QU'UN BANC DE RENDU NE PEUT PAS
+     VOIR UN DÉFAUT DE TEMPS : sept contrôles regardaient déjà ce cratère (forme,
+     profondeur, deux rayons, refroidissement, fumée, enfoncement) et aucun ne
+     demandait QUAND. `render-etoile` mesure la moitié GÉOMÉTRIE de la brûlure
+     (où elle mord) ; celui-ci mesure la moitié CHRONOLOGIE (quand), et la
+     dernière ligne du bloc vérifie que les deux moitiés ne se sont pas données
+     deux seuils au lieu d'un. */
+  {
+    const e = Q.devStar(Q.newStar(), "start", 1).star;
+    const FOND = 1, MILIEU = Q.STAR_BURN_DEPTH_K * 0.99, LEVRE = -0.2;
+    ok("⚠️ au fond du trou en fusion, on brûle", Q.starCraterBurns(e, 1000, FOND));
+    ok("…une seconde avant la fin du refroidissement, encore",
+       Q.starCraterBurns(e, Q.STAR_CRATER_COOL_MS - 1000, FOND));
+    ok("⚠️⚠️ …et plus du tout une seconde après (le seuil est celui de l'étoile)",
+       !Q.starCraterBurns(e, Q.STAR_CRATER_COOL_MS + 1000, FOND));
+    ok("⚠️ sur la PENTE, on ne brûle pas, même en pleine fusion (décision : le fond)",
+       !Q.starCraterBurns(e, 0, MILIEU), `enfoncement ${(MILIEU * 100).toFixed(1)} % sur ${(Q.STAR_BURN_DEPTH_K * 100).toFixed(1)} % requis`);
+    ok("…ni sur le bourrelet, où l'on MONTE au lieu de descendre",
+       !Q.starCraterBurns(e, 0, LEVRE));
+    ok("⚠️ un trou pas encore creusé ne brûle personne (quête neuve)",
+       !Q.starCraterBurns(Q.newStar(), 0, FOND));
+    const e3 = Q.devStar(Q.newStar(), "start", 1).star;
+    Q.resolveStarFound(e3, "crater", "banc", 9);
+    ok("⚠️⚠️ …et le trou s'éteint le jour où l'étoile en sort : on peut y descendre",
+       !Q.starCraterBurns(e3, 0, FOND));
+    /* ⚠️⚠️ LA JOINTURE, ET C'EST LE SEUL CONTRÔLE DE CE BLOC QUI PROTÈGE D'UN
+       DÉFAUT QU'ON NE VERRAIT JAMAIS À L'ŒIL : « ça brûle » et « elle refuse de
+       sortir » doivent être la MÊME fenêtre, pas deux. Le jour où quelqu'un
+       donne à la brûlure un seuil à elle, le jeu dira « c'est froid, tiens-toi
+       tranquille » en brûlant quand même — défaut du 426 (« le jeu propose et
+       refuse »), payé ici en dix minutes de repos forcé. */
+    let dis = 0, read = 0;
+    for (let t = 0; t <= Q.STAR_CRATER_COOL_MS * 2; t += 2500) {
+      read++;
+      if (Q.starCraterBurns(e, t, FOND) === Q.starCraterCool(e, t)) dis++;
+    }
+    ok("⚠️⚠️ la fenêtre qui BRÛLE est exactement celle qui RETIENT l'étoile",
+       dis === 0, `${read} instants lus, ${dis} en désaccord`);
+  }
   /* Et « tourner le dos » doit vouloir dire quelque chose : le contrôle porte
      sur la FONCTION PURE que le jeu et le banc partagent. */
   {

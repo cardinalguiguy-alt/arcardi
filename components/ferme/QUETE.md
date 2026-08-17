@@ -681,6 +681,7 @@ minutes, donc personne ne la reverrait.
 | **445 — le CHEVRON** (repère directionnel de quête) | ✅ | ✅ | ✅ | ✅ |
 | **446 — le cratère refait sur modèle** (relief éclairé, fissures, chaleur, enfoncement) | ✅ | ✅ | ✅ **planche + en jeu** | ✅ |
 | ⚠️ **La quête à DEUX CLIENTS** | ✅ | ✅ | ❌ **RIEN** | ❌ |
+| **449 — le cratère BRÛLE** (fond en fusion, blessure 10 min, retour maison) | ✅ | ✅ | ✅ **en jeu, chaud ET froid** | ✅ |
 
 ### Ce qui est vérifié à ce stade
 

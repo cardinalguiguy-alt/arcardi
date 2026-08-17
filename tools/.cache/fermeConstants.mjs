@@ -796,6 +796,15 @@ export const RUN_AMBUSH_DESPAWN_DIST = 22;   // au-delà, le joueur a semé l'em
 // plutôt que réutilisation : les deux évolueront séparément.
 export const RUN_INJURED_MS = 10 * 60 * 1000;
 
+/* Brûlure du cratère (zip 449, demande de Guillaume : « si l'on entre dans le
+   cratère incandescent sans attendre qu'il ne se refroidisse, on est
+   immédiatement blessé »). DIX MINUTES, le chiffre qu'il a donné — donc la même
+   durée que la défaite au défi, et une constante dédiée pour la même raison
+   qu'elle : les deux évolueront séparément. La RÈGLE, elle, n'est pas ici mais
+   dans `quete.js` (`starCraterBurns`), parce qu'elle dépend de l'état de la
+   quête et qu'un banc de logique doit pouvoir l'appeler. */
+export const BURN_INJURED_MS = 10 * 60 * 1000;
+
 // Abandonner depuis l'écran-titre du défi est gratuit ; abandonner une course
 // DÉJÀ COMMENCÉE compte comme une défaite. Sans ça, il suffirait de quitter
 // une demi-seconde avant de se faire rattraper pour ne jamais être blessé.

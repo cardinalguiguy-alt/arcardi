@@ -1508,6 +1508,11 @@ export const FERME_STR = {
     bagCandiesRow: (n) => `${n} bonbon(s)`,
     bagRunBestSub: (n) => n > 0 ? `Meilleur score : ${n}` : "Aucun score pour l'instant.",
     drownToast: "🌊 Glouglou... tu as coulé ! Ramené à la maison, blessé (1 min).",
+    /* Zip 449 — la brûlure du cratère. ⚠️ ELLE DIT LA CAUSE, PAS LA SANCTION : un
+       joueur qui lit « blessé 10 minutes » sans comprendre POURQUOI croit à un
+       bogue. Le texte du jeu est en français des deux côtés ici (les répliques de
+       la quête, elles, sont encore en anglais dans STAR_EN — voir sa note). */
+    burnToast: "🔥 Le fond est encore en fusion ! Brûlé, ramené à la maison (10 min).",
     mapDarkPassage: "Passage sombre",
     /* Zip 426 — les repères de la carte de Valley Town. ⚠️ CE SONT DES NOMS DE
        LIEUX, pas des libellés d'invite : « Tribunal », pas « E : entrer ». Une
@@ -3162,6 +3167,7 @@ export const FERME_STR = {
     bagCandiesRow: (n) => `${n} candy(ies)`,
     bagRunBestSub: (n) => n > 0 ? `Best score: ${n}` : "No score yet.",
     drownToast: "🌊 Glub glub... you sank! Carried back home, injured (1 min).",
+    burnToast: "🔥 The bottom is still molten! Burned, carried back home (10 min).",   // zip 449 : voir la note côté français
     mapDarkPassage: "Dark passage",
     mapTownStation: "Station",          // zip 426 : voir la note côté français
     mapTownPlaza: "Main square",

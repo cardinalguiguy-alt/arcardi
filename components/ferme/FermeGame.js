@@ -2890,6 +2890,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         type: "broadcast", event: "apply",
         payload: { injured: { id: f.id, until: f.injuredUntil } },
       });
+    } else if (req.kind === "starBurn") {
+      /* Brûlure du cratère (zip 449, demande de Guillaume). Calque exact de
+         "drown" ci-dessus, y compris son contrat de confiance : la chaleur du
+         trou se déroule sur l'horloge LOCALE de chaque client (starCraterElapsed
+         est ancrée sur SA réception de la chute, §3), donc l'hôte ne peut pas
+         recalculer « était-ce encore chaud chez lui ? » sans comparer deux
+         horloges — c'est-à-dire sans commettre la faute que tout le chantier
+         évite. Il persiste et rediffuse ; la valeur est bornée comme partout
+         ailleurs pour qu'un message aberrant ne puisse pas clouer un joueur.
+         ⚠️ ET IL NE REDIFFUSE PAS `farmer` : voir la note de `starTryBurn`, ce
+         paquet-là retéléporterait le fermier une seconde fois. */
+      const nowB = Date.now();
+      const untilB = (typeof req.until === "number" && req.until > nowB && req.until <= nowB + C.BURN_INJURED_MS + 5000) ? req.until : nowB + C.BURN_INJURED_MS;
+      f.injuredUntil = untilB;
+      f.injuryKind = "burn"; // même famille que "drown" : soignable au pansement (voir req "heal")
+      dirtyRef.current = true;
+      hostSend({
+        type: "broadcast", event: "apply",
+        payload: { injured: { id: f.id, until: f.injuredUntil } },
+      });
     } else if (req.kind === "evilBiteResult") {
       // Dénouement du mini-jeu de morsure d'une créature PARTAGÉE (2026-07) :
       // "win" = repoussée, elle fuit un moment (visible par tous) ; "fail" =
@@ -12098,10 +12118,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              vingt pas à l'est. */
           else if (dk === "townBoutique") { m.x = C.TOWN_BOUTIQUE.x + C.TOWN_BOUTIQUE.w / 2; m.y = C.TOWN_BOUTIQUE.y + C.TOWN_BOUTIQUE.h + 1; }
           /* ⚠️ ZIP 446 — LE CRATÈRE, ET ON SE POSE SUR SON BORD, PAS DEDANS. Sa
-             position vient de `starCraterPos` (le vrai balayage), et on recule de
-             trois cases au sud : arriver au centre du trou aurait montré le
-             dessin de trop près, et c'est de l'extérieur qu'on juge une gerbe. */
-          else if (dk === "townCrater") { const cc = starCraterPos(); if (cc) { m.x = cc.x; m.y = cc.y + 3; } else { m.x = C.STAR_CRATER_X; m.y = C.STAR_CRATER_Y + 3; } }
+             position vient de `starCraterPos` (le vrai balayage), et on recule au
+             sud : arriver au centre du trou aurait montré le dessin de trop près,
+             et c'est de l'extérieur qu'on juge une gerbe.
+             ⚠️⚠️ ZIP 449 — TROIS CASES SONT DEVENUES QUATRE, ET C'EST UN DÉFAUT VU
+             EN JOUANT, PAS AU BANC. Depuis que le fond brûle, un arrêt à trois
+             cases posait le joueur à UNE case du disque qui punit : téléporter,
+             appuyer une fois sur ↑, et dix minutes de repos forcé. C'est très
+             exactement la famille de défauts du 444 — *les bancs mesuraient tous
+             la bonne chose, aucun ne mesurait l'ARRIVÉE* — et elle se reproduit
+             dès qu'un arrêt de téléport côtoie une règle neuve.
+             ⚠️ QUATRE, ET LES QUATRE BORNES SONT TOUTES DÉRIVÉES, AUCUNE AU JUGÉ :
+             la cuvette dessinée s'arrête à `STAR_CRATER_DRAW_R × CRATER_SQUASH`
+             ≈ 3,9 cases vers le sud (on est donc hors du trou, enfoncement nul,
+             donc hors de la brûlure) ; `starCraterPos` ne retient qu'un endroit
+             dont le disque de rayon 4,5 est libre (donc la case est praticable) ;
+             l'anneau de calme vaut 5,5 (donc la posture s'y tient déjà) ; et
+             l'invite s'affiche jusqu'à 6,5. Une case de plus sortirait du disque
+             garanti libre et pourrait poser le joueur dans une haie. */
+          else if (dk === "townCrater") { const cc = starCraterPos(); if (cc) { m.x = cc.x; m.y = cc.y + 4; } else { m.x = C.STAR_CRATER_X; m.y = C.STAR_CRATER_Y + 4; } }
           else { m.x = C.TOWN_SPAWN.x; m.y = C.TOWN_SPAWN.y; }
         } else if (DEV_FLOOR_OF[dk] !== undefined) {
           /* Zip 426 — les trois arrêts du tribunal. ⚠️ ON N'ENTRE PAS AU
@@ -20798,6 +20833,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!e || !Q.starFallen(e) || Q.starDone(e)) return;
     const zone = m.zone || "farm";
     if (starUiOpenRef.current) return;         // un mini-jeu ouvert : le monde attend
+    /* ── LA BRÛLURE (zip 449). ⚠️ AVANT LE CALME, ET SANS PARTAGER SON `if` : le
+       calme ne vit que tant que l'étoile n'est pas sortie, la brûlure a ses
+       propres portes (voir `starTryBurn`). Deux règles dans la même condition,
+       c'est la divergence garantie au premier réglage de l'une des deux. */
+    starTryBurn();
     /* ── LE CALME DU CRATÈRE. */
     if (zone === "town" && !Q.starHas(e, "crater")) {
       const c = starCraterPos();
@@ -20865,6 +20905,61 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!p || (p.zone || "farm") !== "town" || p.moving) return false;
     if (Math.hypot(p.x - c.x, p.y - c.y) > Q.STAR_CRATER_R) return false;
     return Q.starFacingAway(p.x, p.y, p.dir | 0, c.x, c.y);
+  }
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 449 — LA BRÛLURE DU CRATÈRE. « ON N'ENTRE PAS DANS UN TROU EN FUSION. »
+     ╚══════════════════════════════════════════════════════════════════════════
+     Demande de Guillaume : entrer dans le cratère incandescent sans attendre
+     qu'il refroidisse blesse IMMÉDIATEMENT — dix minutes de repos forcé, et
+     retour à la maison. La règle elle-même est dans `quete.js`
+     (`Q.starCraterBurns`), pure et mesurée par `verify-quete` ; ici il ne reste
+     que le geste : demander à l'hôte, se téléporter, le dire.
+
+     ⚠️⚠️ C'EST LA CINQUIÈME PORTE SUR LE MÊME TROU, ET ELLE PASSE PAR LA MÊME
+     JOINTURE QUE LES QUATRE AUTRES (448) : `starImpactLandedNow()`, pas
+     `starFallen`. Le dessin, l'enfoncement, l'invite E et le chevron s'y sont
+     déjà branchés après avoir chacun raconté la fin avant le début ; une
+     brûlure sous une comète encore en vol aurait été la pire des cinq — les
+     quatre autres racontent trop tôt, celle-ci PUNIT trop tôt.
+     ⚠️ ET ELLE LIT L'ENFONCEMENT, PAS UN RAYON À ELLE : `starCraterSink` est ce
+     qui fait descendre le fermier à l'écran (446). Ce qu'on voit sous ses pieds
+     et ce qui le brûle sont donc le même champ — c'est le seul cas où l'on a le
+     droit de confondre le dessin et la règle (447, le garde-corps du palier),
+     parce qu'ils disent littéralement la même chose : « tu es au fond ».
+     ⚠️ TOUJOURS À LA TUILE DE RÉFÉRENCE 16 : `starCraterSink` met son résultat à
+     l'échelle par T/16 (c'est un décalage en PIXELS D'ÉCRAN). Ce qu'on veut ici
+     est une FRACTION de profondeur ; l'appeler avec le T courant ferait brûler
+     un cratère plus large au zoom, ce qu'aucun banc n'irait chercher. */
+  function starCraterSinkK(dxTiles, dyTiles) {
+    const sp = spritesRef.current;
+    if (!sp || !sp.starCraterSink) return 0;
+    return sp.starCraterSink(dxTiles, dyTiles, 16) / C.STAR_CRATER_SINK_PX;
+  }
+  /* ⚠️⚠️ OPTIMISTE EN LOCAL, PERSISTÉ PAR L'HÔTE — le contrat exact de la noyade
+     et de la créature maléfique. La brûlure se constate CHEZ SOI (c'est ma
+     position, mon cratère, ma chronologie de chaleur : `starCraterElapsed` est
+     ancrée sur MA réception de la chute, §3 de CLAUDE.md), et l'hôte se contente
+     de la garder et de la rediffuser. Le rediffuser en `injured` seul, jamais en
+     `farmer` : le paquet `farmer` déclenche la téléportation d'applyDeltas, et
+     on serait ramené chez soi DEUX fois.
+     ⚠️ LA ZONE EST REMISE À `farm` EN MÊME TEMPS QUE X/Y. C'est le correctif du
+     zip 234 (voir applyDeltas) : poser les coordonnées de la ferme sans changer
+     de zone téléporte le fermier au milieu de Valley Town, à l'endroit qui porte
+     par hasard les mêmes nombres — le piège des deux cartes (§4). */
+  function starTryBurn() {
+    const m = meRef.current; if (!m || (m.zone || "farm") !== "town") return;
+    if (isInjured()) return;                    // déjà blessé : on ne recommence pas le compte
+    if (!starImpactLandedNow()) return;         // le trou n'existe pas encore
+    const c = starCraterPos(); if (!c) return;
+    if (!Q.starCraterBurns(sharedRef.current.star, starCraterElapsed(),
+                           starCraterSinkK(m.x - c.x, m.y - c.y))) return;
+    const until = Date.now() + C.BURN_INJURED_MS;
+    injuredUntilRef.current = until; setInjuredUntil(until);
+    sendReq({ kind: "starBurn", until });
+    m.zone = "farm"; m.x = C.SPAWN.x; m.y = C.SPAWN.y; m.moving = false;
+    sendPos();
+    pushToast(L.burnToast);
   }
 
   /* Un prop de quête à portée, dans la ville. ⚠️ ON CHERCHE PAR `kind`, JAMAIS

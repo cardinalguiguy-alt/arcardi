@@ -513,6 +513,19 @@ le générateur lui garantit**.
   d'échancrure d'au moins trois pixels**, sinon le contour rebouche la forme qu'il souligne. Vrai
   de toute dentelure à cette échelle.
 
+### ⚠️ ZIP 449 — OÙ ÇA BRÛLE, EN CASES
+
+La brûlure du cratère n'a pas de rayon à elle : elle mord là où `starCraterSink` enfonce le
+fermier de la moitié de la profondeur. **Ce que ça vaut en CASES ne se lit donc nulle part, il
+faut le sonder** — et ça bouge tout seul le jour où `craterHoleK` ou `STAR_CRATER_SINK_PX` change,
+sans que personne n'ait touché à la brûlure. Quatre contrôles, et ils échouent **dans les deux
+sens** (leçon du 444 : une mécanique qui ne demande rien n'est pas une réussite) : ce qui brûle
+est **strictement dans le trou** (brûlure 2,23 cases, trou 3,16 — la pente se franchit) · loin du
+bourrelet (**50 % de l'emprise dessinée**) · **assez large pour qu'on tombe dedans** (3,7 cases de
+traversée au plus étroit) · et l'anneau où l'on se tient tranquille (5,5) **reste praticable**.
+⚠️ Ce banc **appelle** `quete.js` au lieu de recopier son seuil : sinon il jugerait sa propre
+maquette (troisième forme du défaut de banc).
+
 ### ⚠️⚠️ ZIP 446 — IL MESURE ENFIN LA PROFONDEUR, ET IL S'EST TROMPÉ TROIS FOIS DE PLUS EN L'APPRENANT
 
 Le cratère du 444 était **plat**, et le banc était **vert** : il mesurait l'emprise, l'ondulation
@@ -588,7 +601,7 @@ touche le sol — le défaut même de ce zip — leur est **totalement invisible
 `verify-quete` qui le tient désormais (cinq contrôles purs sur `starImpactLanded` et l'azimut).
 *Un banc de rendu ne peut pas voir un défaut de temps.*
 
-## `verify-quete.mjs` — 231 contrôles, 231/231 (444, étendu aux 445, 446 et 448)
+## `verify-quete.mjs` — 239 contrôles, 239/239 (444, étendu aux 445, 446, 448 et 449)
 
 `node tools/verify-quete.mjs`. Il remplace `verify-enquete.mjs`, supprimé avec l'enquête du 442 :
 il en reprend la MÉTHODE (appeler le vrai code, jouer la vraie chaîne) et aucun de ses contrôles.
@@ -605,6 +618,31 @@ descend **vers l'OUEST** sur les deux cartes (on vérifie le SIGNE, jamais un no
 elle **plonge plus raide sur le cratère que sur le sillon** · et une zone inconnue ne rend pas
 `NaN` (un `NaN` d'angle ne lève rien, il fait juste disparaître la comète — le repli poli du 444,
 dans une trigonométrie).
+
+### ⚠️ ZIP 449 — LA BRÛLURE DU CRATÈRE : HUIT CONTRÔLES, ET LE DERNIER EST LE SEUL QUI COMPTE
+
+`starCraterBurns` est une règle de TEMPS avant d'être une règle de place, donc elle se mesure ici
+(la moitié GÉOMÉTRIE est dans `render-etoile`). Sept contrôles disent l'attendu — on brûle au fond
+d'un trou en fusion, encore une seconde avant la fin du refroidissement, plus du tout une seconde
+après ; **pas sur la pente**, **pas sur le bourrelet** (décision de Guillaume : seul le FOND) ;
+pas dans un trou qui n'est pas encore creusé ; plus du tout une fois l'étoile sortie.
+
+⚠️⚠️ **LE HUITIÈME EST LA JOINTURE, ET C'EST LE SEUL QUI PROTÈGE D'UN DÉFAUT QU'ON NE VERRAIT
+JAMAIS À L'ŒIL :** il balaie la durée et compte les instants où « ça brûle » et « elle refuse de
+sortir » ne disent pas la même chose (**145 instants lus, 0 en désaccord** — le dénominateur est
+imprimé, règle du 441). Le jour où quelqu'un donne à la brûlure un seuil à elle, le jeu dira
+« c'est froid, tiens-toi tranquille » en brûlant quand même — défaut du 426, payé ici en dix
+minutes de repos forcé.
+
+⚠️ **LES DEUX MOITIÉS ONT ÉTÉ FALSIFIÉES AVANT D'ÊTRE CRUES** (« un banc qui n'a jamais pu
+échouer ne vaut rien ») : `STAR_BURN_DEPTH_K` mis à 0 fait tomber le contrôle de la pente
+(238/239), et remplacer le seuil de temps par une demi-durée en fait tomber deux dont la jointure
+(237/239, 36 instants en désaccord).
+
+⚠️⚠️ **ET LES HUIT ÉTAIENT VERTS QUAND LA SÉANCE À L'ÉCRAN A TROUVÉ LE VRAI DÉFAUT** : l'arrêt dev
+« le cratère » posait le joueur à 1,1 case du disque qui punit. **Aucun banc ne mesure une
+ARRIVÉE** — c'est la leçon du 444, et elle se reproduit dès qu'un arrêt de téléport côtoie une
+règle neuve. Voir §29.3 de `components/ferme/README.md`.
 
 ⚠️⚠️ **ET UNE CONSTANTE A ÉTÉ SUPPRIMÉE, PAS AJOUTÉE.** `STAR_CAM_FLASH_MS = 3000` existait
 depuis le 445 et **seul ce banc la lisait** : la cinématique écrivait `t > 3.0` en dur dans sa

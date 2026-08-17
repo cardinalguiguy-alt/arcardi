@@ -59,8 +59,13 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = path.join(ROOT, "tools", "out");
 
 installFakeDOM();
-const mods = await loadFerme(ROOT, ["fermeConstants", "fermeArt"]);
-const C = mods.fermeConstants, A = mods.fermeArt;
+/* ⚠️ `quete` EST DEMANDÉ DEPUIS LE 449 POUR UNE SEULE RAISON : la brûlure du
+   cratère a une moitié GÉOMÉTRIE, qui se mesure ici, et une moitié CHRONOLOGIE,
+   qui se mesure dans `verify-quete`. Sa règle vit dans `quete.js` ; ce banc
+   l'APPELLE au lieu de recopier son seuil — sinon il jugerait sa propre maquette
+   (troisième forme du défaut de banc, CLAUDE.md). */
+const mods = await loadFerme(ROOT, ["fermeConstants", "fermeArt", "quete"]);
+const C = mods.fermeConstants, A = mods.fermeArt, Q = mods.quete;
 const S = A.buildSprites();
 
 let fails = 0;
@@ -559,6 +564,38 @@ console.log("\n7. LE CRATÈRE — deux rayons, une profondeur, et un refroidisse
     ok(lip <= -1, "⚠️ on ENJAMBE le bourrelet (on monte avant de descendre)", `${lip.toFixed(1)} px`);
     ok(jump < 0.5, "⚠️⚠️ et le décalage est CONTINU (aucun tressautement au bord)",
        `plus grand saut ${jump.toFixed(2)} px pour 0,02 case`);
+  }
+
+  /* ── ZIP 449 — OÙ ÇA BRÛLE, EN CASES. La moitié GÉOMÉTRIE de la brûlure (la
+     moitié CHRONOLOGIE est dans `verify-quete`, qui balaie le temps).
+     ⚠️⚠️ CE BLOC MESURE UNE DÉCISION DE GUILLAUME — « seulement le fond du trou »
+     — ET C'EST LA SEULE FAÇON DE SAVOIR QU'ELLE EST TENUE. `STAR_BURN_DEPTH_K`
+     est une fraction de PROFONDEUR ; ce qu'elle vaut en CASES ne se lit nulle
+     part, il faut le sonder. Le jour où `craterHoleK` ou `STAR_CRATER_SINK_PX`
+     bouge, ce rayon bouge sans que personne n'ait touché à la brûlure.
+     ⚠️ ET IL ÉCHOUE DANS LES DEUX SENS (leçon du 444) : une brûlure qui déborde
+     du trou punirait un passant, une brûlure trop petite ne se rencontrerait
+     jamais — les deux sont des mécaniques mortes, pas des réglages. */
+  {
+    let rb = 0, rbMin = 99, rh = 0;
+    for (let ai = 0; ai < 64; ai++) {
+      const a = ai / 64 * Math.PI * 2;
+      let lastBurn = 0;
+      for (let r = 0; r <= C.STAR_CRATER_DRAW_R + 0.5; r += 0.01) {
+        const k = S.starCraterSink(Math.cos(a) * r, Math.sin(a) * r * 0.86, 16) / C.STAR_CRATER_SINK_PX;
+        if (k >= Q.STAR_BURN_DEPTH_K) lastBurn = r;
+        if (k > 0) rh = Math.max(rh, r);
+      }
+      rb = Math.max(rb, lastBurn); rbMin = Math.min(rbMin, lastBurn);
+    }
+    ok(rb < rh, "⚠️⚠️ ce qui BRÛLE est strictement dans le trou (la pente se franchit)",
+       `brûlure ${rb.toFixed(2)} cases, trou ${rh.toFixed(2)} cases`);
+    ok(rb < C.STAR_CRATER_DRAW_R * 0.6, "…et loin du bourrelet, qu'on enjambe sans rien",
+       `${(rb / C.STAR_CRATER_DRAW_R * 100).toFixed(0)} % de l'emprise dessinée`);
+    ok(rbMin >= 1.2, "⚠️ mais assez large pour qu'on tombe dedans en y entrant",
+       `${(rbMin * 2).toFixed(1)} cases de traversée au plus étroit`);
+    ok(rb < Q.STAR_CRATER_R, "⚠️⚠️ et l'anneau où l'on se tient tranquille reste praticable",
+       `brûlure ${rb.toFixed(2)} cases, anneau de calme ${Q.STAR_CRATER_R}`);
   }
 }
 

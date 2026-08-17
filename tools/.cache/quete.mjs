@@ -79,7 +79,7 @@
    récompense n'est pas de l'or (§8).
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import * as C from "./fermeConstants";
+import * as C from "./fermeConstants.mjs";
 
 /* ───────────────────────────────────────────────────────────────────────────
    1. LES LIEUX. Un lieu = un endroit du monde où il se passe quelque chose et

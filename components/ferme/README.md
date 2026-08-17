@@ -2727,3 +2727,72 @@ image étrangère collée sur le jeu. Réglé à la main, il aurait divergé le 
   ne dit pas.
 - **La ferme n'a jamais été vue avec la comète pendant la NUIT** ; le voile de nuit et le halo
   cyan n'ont pas été regardés ensemble.
+
+---
+
+## 29. ZIP 449 — LE CRATÈRE BRÛLE : ON NE DESCEND PAS DANS UN TROU EN FUSION
+
+**Demande de Guillaume, mot pour mot :** « si l'on entre dans le cratère incandescent sans
+attendre qu'il ne se refroidisse, on est immédiatement blessé (envoyé pour blessure de 10 minutes
+pour brûlure) ». Trois décisions de contenu ont été posées avant d'écrire une ligne (§2 de
+`CLAUDE.md`) et c'est lui qui a tranché les trois : **on se réveille chez soi, à la ferme** ;
+**seul le FOND brûle**, pas la pente ni le bourrelet ; **ça brûle jusqu'au refroidissement
+complet**, c'est-à-dire exactement le seuil qui laisse sortir l'étoile.
+
+### 29.1 Ce que ça fait
+
+Le fond du cratère brûle tant que `Q.starCraterCool` est faux (les trois minutes du 446). Y
+descendre pose une blessure de **dix minutes** (`C.BURN_INJURED_MS`, la durée que Guillaume a
+donnée — la même que la défaite au défi, `RUN_INJURED_MS`), ramène le fermier à `C.SPAWN` **en
+remettant sa zone à `farm`**, et affiche un toast qui dit la CAUSE (`burnToast`, bilingue).
+Le repos forcé coupe les touches de déplacement comme toutes les autres blessures ; un autre
+joueur peut le réduire à une minute avec un pansement (`injuryKind: "burn"` tombe dans la
+famille de `drown` — aucun cas particulier à écrire).
+
+### 29.2 Trois jointures, et aucune seconde liste
+
+⚠️⚠️ **LE SEUIL DE TEMPS EST CELUI DE L'ÉTOILE, PAS UN SECOND.** `starCraterBurns` appelle
+`starCraterCool`, la MÊME écriture qui autorise la sortie de l'étoile. Deux seuils auraient donné
+« le jeu dit *c'est froid, tiens-toi tranquille* et brûle quand même » — le défaut du 426, payé
+ici en dix minutes de repos forcé. **`verify-quete` le mesure explicitement** : il balaie la durée
+et compte les instants où les deux ne disent pas la même chose (145 lus, 0 en désaccord).
+
+⚠️⚠️ **LE RAYON QUI BRÛLE EST DÉRIVÉ DU DESSIN, PAS RÉGLÉ.** La brûlure lit `starCraterSink`
+(fermeArt, 446) — l'enfoncement qui fait descendre le fermier à l'écran — et mord à partir de la
+MOITIÉ de la profondeur (`STAR_BURN_DEPTH_K`). Ce qu'on voit sous ses pieds et ce qui le brûle
+sont donc littéralement le même champ. Mesuré par `render-etoile` : **la brûlure fait 1,83 à 2,23
+cases de rayon**, le trou 2,59 à 3,16, l'emprise dessinée 4,5, l'anneau de calme 5,5. Un second
+rayon écrit en cases aurait dessiné une brûlure à côté du trou au premier réglage de
+`craterHoleK`. ⚠️ **Toujours interrogé à la tuile de référence 16** : `starCraterSink` rend des
+PIXELS D'ÉCRAN mis à l'échelle par `T/16`, donc appelé au zoom courant il ferait un cratère qui
+brûle plus large quand on dézoome — ce qu'aucun banc n'irait chercher.
+
+⚠️⚠️ **C'EST LA CINQUIÈME PORTE SUR LE MÊME TROU, ET ELLE PASSE PAR LA JOINTURE DU 448.**
+`starImpactLandedNow()`, jamais `starFallen` : les quatre autres (le dessin, l'enfoncement,
+l'invite `E`, le chevron) racontaient la fin avant le début ; celle-ci aurait PUNI avant le début.
+
+### 29.3 ⚠️⚠️ LE DÉFAUT TROUVÉ EN JOUANT, ET IL EST DE LA FAMILLE DU 444
+
+Les bancs étaient au vert (239/239 + les quatre nouveaux contrôles de géométrie) quand la séance à
+l'écran a montré ceci : **l'arrêt dev « ☄️ le cratère » posait le joueur à trois cases du centre,
+soit 1,1 case du disque qui punit.** Téléporter, appuyer une fois sur ↑, et dix minutes de repos
+forcé. C'est mot pour mot la leçon du 444 — *les bancs mesuraient tous la bonne chose, aucun ne
+mesurait l'ARRIVÉE* — et elle se reproduit **dès qu'un arrêt de téléport côtoie une règle neuve**.
+L'arrêt est passé à quatre cases, et les quatre bornes qui justifient ce nombre sont toutes
+dérivées : hors de la cuvette dessinée (`DRAW_R × CRATER_SQUASH` ≈ 3,9), dans le disque que
+`starCraterPos` garantit libre (4,5), dans l'anneau de calme (5,5), sous le rayon d'invite (6,5).
+
+### 29.4 Ce que ça ne fait pas
+
+- **Aucune séance à deux clients.** La brûlure se constate chez soi et l'hôte ne fait que la
+  persister (contrat de la noyade) : deux joueurs dont l'un descend pendant que l'autre regarde
+  n'ont jamais été essayés.
+- **Un joueur planté sur le point d'impact au moment de la chute est brûlé** dès la fin de la
+  scène. C'est la conséquence exacte de « tu es dans le verre en fusion », mais ce n'est pas
+  « entrer », et personne ne l'a joué (il faut se tenir sur une pelouse précise du parc au jour
+  où l'étoile tombe).
+- **Rien n'avertit avant de descendre**, sinon l'invite `E : attends que ça refroidisse` qui
+  s'affiche déjà à 6,5 cases et la fumée. C'est délibéré — un trou qui fume est un avertissement —
+  mais ça n'a pas été jugé par quelqu'un qui découvre le jeu.
+- **Les résidents ne brûlent pas.** Ils ne vont pas au cratère, et leur donner la règle
+  demanderait de la faire tourner côté hôte pour vingt entités à chaque image.
