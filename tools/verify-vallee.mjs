@@ -185,6 +185,17 @@ for (const h of C.TOWN_HOUSES) markRect({ x: h.x, y: h.y }, C.TOWN_HOUSE_W, C.TO
 for (const p of tw.props) mark(p.x, p.y);
 markRect({ x: C.TOWN_KIOSK.x, y: C.TOWN_KIOSK.y }, 3, 3);
 markRect({ x: C.TOWN_MONUMENT.x, y: C.TOWN_MONUMENT.y }, 2, 2);
+/* ⚠️⚠️ ZIP 450 — LA COQUE DU CHANTIER NAVAL, ET ELLE SE LIT SUR LE MONDE, PAS SUR
+   UNE ANCRE. `tw.shipX/shipY` est la valeur que le GÉNÉRATEUR a posée et que le
+   rendu dessinera : le banc lit donc exactement la même chose que les deux autres.
+   Reprendre `C.STAR_SHIP_X` ici aurait rejoué le balayage à côté du vrai — c'est
+   la seconde liste que ce contrôle existe précisément pour attraper, et elle
+   n'aurait rien levé tant que la spirale tombe au même endroit.
+   ⚠️ Ce contrôle a servi DÈS LE PREMIER LANCEMENT : douze cases bloquantes
+   orphelines, exactement comme les trois bâtiments du 427. */
+if (tw.shipX)
+  markRect({ x: tw.shipX - (C.STAR_SHIP_BLOCK_W >> 1), y: tw.shipY - C.STAR_SHIP_BLOCK_H + 1 },
+           C.STAR_SHIP_BLOCK_W, C.STAR_SHIP_BLOCK_H);
 {
   const orphans = [];
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
@@ -236,6 +247,70 @@ section("Valley Town — géométrie");
     if (mixed || onStreet || onStair) bad.push(`${name}${mixed ? " (2 altitudes)" : ""}${onStreet ? " (sur une rue)" : ""}${onStair ? " (sur un escalier)" : ""}`);
   }
   ok("aucun bâtiment sur une rue, un escalier ou à cheval sur deux altitudes", bad.length === 0, bad.join(" · "));
+}
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 450 — LE CHANTIER NAVAL. TROIS CONTRÔLES, ET LE DEUXIÈME EST CELUI DU 444.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ « IL EST PLACÉ » NE VEUT PAS DIRE « ON PEUT Y ALLER ». C'est la leçon la
+   plus chère du dépôt (§25 du README : *les bancs mesuraient tous la bonne chose,
+   aucun ne mesurait l'ARRIVÉE*, cinq lieux inatteignables), et un objet qui BLOQUE
+   six cases est exactement le genre de chose qui s'enferme lui-même dans une anse.
+   ⚠️ Et « au bord de l'eau » est la condition qui distingue un chantier naval d'une
+   épave posée dans un pré : elle est dans le balayage du générateur, elle doit être
+   dans le banc, sinon rien ne dit qu'elle a marché. */
+{
+  ok("le chantier naval a trouvé sa cale", !!tw.shipX, `(${tw.shipX},${tw.shipY})`);
+  if (tw.shipX) {
+    /* ⚠️ ON APPROCHE PAR LA PROMENADE, C'EST-À-DIRE PAR LE NORD. Le premier jet
+       testait la case au SUD de la coque : c'est le LAC, et il a fallu que la proue
+       arrive vraiment au bord de l'eau pour que ce contrôle devienne faux. *Une
+       position d'approche se dérive du côté par lequel on vient, jamais d'un « juste
+       à côté » qui a l'air symétrique.* */
+    ok("…et on peut y arriver à pied depuis la gare", reach(tw.shipX, tw.shipY - C.STAR_SHIP_BLOCK_H),
+       `(${tw.shipX},${tw.shipY - C.STAR_SHIP_BLOCK_H})`);
+    /* ⚠️⚠️ ON MESURE LA DISTANCE À L'EAU, PAS SA PRÉSENCE — ET C'EST L'ÉCRAN QUI A
+       CORRIGÉ CE CONTRÔLE. Le premier jet comptait les cases d'eau dans un
+       rectangle au sud : il en trouvait 36, il annonçait « bien au bord de l'eau »,
+       et le navire était posé sur l'herbe haute avec la promenade et son muret
+       entre lui et le lac. *Compter ce qui existe quelque part n'est pas mesurer une
+       distance*, et c'est la même faute que le « il y a bien une sortie » du 439
+       pendant que la touche E ne sortait pas.
+       ⚠️ Le plafond est lu dans `C.STAR_SHIP_WATER_MAX`, la valeur même que le
+       générateur applique : deux écritures auraient laissé le banc valider un
+       placement que le moteur refuse, ou l'inverse. */
+    let dist = 99;
+    for (let dy = 0; dy <= 10; dy++) for (let dx = -6; dx <= 6; dx++) {
+      const nx = tw.shipX + dx, ny = tw.shipY + dy;
+      if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+      if (tw.ground[idx(nx, ny)] === C.G_WATER) dist = Math.min(dist, dy);
+    }
+    ok("…et sa proue est vraiment au bord de l'eau", dist <= C.STAR_SHIP_WATER_MAX,
+       `${dist} case(s) jusqu'à l'eau, plafond ${C.STAR_SHIP_WATER_MAX}`);
+    /* ⚠️⚠️ ET IL NE COUPE PAS LA PROMENADE — ET LA BONNE FORMULATION A DEMANDÉ DEUX
+       ESSAIS. Le premier contrôle disait « aucune case de chemin sous la coque » :
+       c'est une règle de MATIÈRE, et elle est fausse ici, puisque la rive du lac est
+       un quai de pierre sur toute sa longueur et qu'un chantier naval s'y hale.
+       ⚠️ Ce qu'on veut protéger n'est pas le revêtement, c'est le PASSAGE : la
+       rangée juste derrière la coque doit rester franchissable sur toute la largeur
+       du navire. C'est la différence entre décrire un décor et décrire un jeu. */
+    let free = 0;
+    for (let dx = -(C.STAR_SHIP_BLOCK_W >> 1) - 1; dx <= (C.STAR_SHIP_BLOCK_W >> 1); dx++) {
+      const nx = tw.shipX + dx, ny = tw.shipY - C.STAR_SHIP_BLOCK_H;
+      if (nx >= 0 && ny >= 0 && nx < W && ny < H && walkable(nx, ny)) free++;
+    }
+    ok("…et la promenade reste franchissable derrière lui", free >= C.STAR_SHIP_BLOCK_W,
+       `${free} case(s) libres sur ${C.STAR_SHIP_BLOCK_W + 1} lues, juste derrière la coque`);
+    /* ⚠️ L'EMPRISE QUI BLOQUE EST PLUS PETITE QUE CE QU'ON PEINT (441) : mesuré ici
+       aussi, parce que c'est ici qu'on connaît la carte. Le navire couvre neuf
+       cases de large et n'en bloque que six : on doit pouvoir passer DERRIÈRE. */
+    let behind = 0;
+    for (let dx = -(C.STAR_SHIP_DRAW_W >> 1); dx <= (C.STAR_SHIP_DRAW_W >> 1); dx++) {
+      const nx = tw.shipX + dx, ny = tw.shipY - C.STAR_SHIP_BLOCK_H;
+      if (nx >= 0 && ny >= 0 && nx < W && ny < H && walkable(nx, ny)) behind++;
+    }
+    ok("…et on passe derrière lui sans le contourner", behind >= 5,
+       `${behind} case(s) praticables au nord de la coque`);
+  }
 }
 {
   // Des rebords sautables doivent exister, sinon la mécanique est morte.

@@ -8,7 +8,8 @@ Le 433 en ajoute trois (`verify-taxi`, `render-taxi`, `render-oiseaux`), le 434 
 (`render-rues`), le 435 une (`render-eau`), le 436 une (`render-escaliers`), le 440 une
 (`verify-compo`), le 441 une (`verify-pont`), le 443 une (`verify-portee`), et le **444 trois**
 (`render-etoile`, `verify-quete`, `render-beffroi`) contre deux supprimés (`verify-enquete`,
-`render-enquete`, partis avec l'enquête qu'ils mesuraient).
+`render-enquete`, partis avec l'enquête qu'ils mesuraient), et le **451 une**
+(`render-navire`, le navire des étoiles).
 
 ⚠️⚠️ **ET LE 444 A APPRIS QUELQUE CHOSE QUI VAUT POUR TOUS LES BANCS DE CE DOSSIER : SIX BANCS AU
 VERT N'ONT PAS VU DIX DÉFAUTS QU'UNE SEULE SÉANCE DE JEU A TROUVÉS EN VINGT MINUTES**, dont cinq
@@ -826,3 +827,46 @@ vraie liaison ; il imprime le débit réel PAR TYPE de message toutes les 5 s.
 ⚠️ **C'est lui qui a trouvé les trois défauts multijoueur du 432**, dont un qui rendait Valley
 Town injouable à deux depuis un zip entier. La recette complète (`.env.local`, page jetable,
 onglet d'arrière-plan) est en §10 de `CLAUDE.md`, avec ses trois pièges.
+
+---
+
+## `render-navire.mjs` — LE NAVIRE DES ÉTOILES (451)
+
+`node tools/render-navire.mjs` — **26 contrôles**, planche `tools/out/navire.png` (zéro à cinq
+morceaux, de nuit puis de jour, avec un fermier comme repère d'échelle).
+
+Le navire est le **pisteur** de la quête : ce qu'il montre, c'est ce qui manque. Un dessin qui
+ment là-dessus fait rater la quête entière, d'où deux contrôles qu'aucun autre banc n'a :
+
+- ⚠️⚠️ **LE FANTÔME NE DÉBORDE JAMAIS DE SA PIÈCE** (0 px sur les cinq morceaux). Le morceau absent
+  est peint en creux à sa place exacte ; s'il ne ressemble pas à ce qu'on obtient, le jeu ment.
+  L'isolation est « **tout** contre **tout sauf lui** » : les deux images ont les mêmes occultants
+  dans le même ordre, donc leur différence EST la pièce.
+- ⚠️⚠️ **UN INVARIANT SUR LES 32 MASQUES** — *poser un morceau n'en efface jamais un autre*,
+  80 paires balayées. Le bordé recouvre le pied du mât et la coque recouvre les membrures : c'est
+  exactement le cas où une pièce en mange une autre, et l'œil ne le voit pas sur une planche.
+
+⚠️⚠️ **TROIS RÉDACTIONS POUR UN SEUL CONTRÔLE, ET LES DEUX PREMIÈRES ONT MESURÉ AUTRE CHOSE :**
+1. elle comparait `rien` à `une pièce` — les quatre autres fantômes s'annulaient, et ce qui restait
+   était comparé à lui-même : **« 0,0 % » cinq fois**, c'est-à-dire un banc qui ne pouvait pas
+   échouer (§10 de `CLAUDE.md`, payé au 441) ;
+2. elle comptait « fantôme dedans » comme « les deux images sont opaques ici », ce qui est vrai de
+   tout le reste du bateau ;
+3. et le dénominateur attrapait **la lueur**, qui est proportionnelle au nombre de morceaux : `A`
+   et `B` n'ont donc pas le même éclairage, et le dénominateur passait de 290 à 6 027 sans qu'une
+   ligne du dessin ait bougé. **La parade est l'ALPHA**, insensible à une lumière de faible opacité.
+
+⚠️⚠️ **ET IL A TROUVÉ UN PIÈGE D'OUTIL QUI VAUT POUR TOUT BANC DE RENDU : LE FAUX CANEVAS DE
+`lib-canvas.mjs` PRÉMULTIPLIE L'ALPHA, UN VRAI NAVIGATEUR NON.** `rgba(150,232,255,0.745)` sur du
+transparent y ressort à `112,173,190` (chaque canal multiplié par l'alpha) et à `150,232,255` dans
+Chrome. Un contrôle écrit sur la couleur EXACTE passe donc au rouge sans qu'il y ait le moindre
+défaut — le stub menteur du §10 dans sa forme la plus coûteuse : *il accuse un dessin juste.* On
+mesure ce qui survit aux deux conventions, c'est-à-dire la **teinte** (B−R > 45), avec de la marge :
+le fantôme donne 105 pur et 78 prémultiplié, le pixel le plus bleu du reste du dessin plafonne à 32.
+
+⚠️ **CE QU'IL NE MESURE PAS, ET IL LE DIT** : il ne voit pas le navire dans son herbe ni au bord de
+l'eau (le fond est peint par le banc, donc approximé) ; il ne juge pas la nuit du jeu ; et il ne
+sait pas si c'est beau. **Le placement, lui, est mesuré par `verify-vallee`** (cale trouvée,
+atteignable par le nord, proue à ≤ 3 cases de l'eau, promenade franchissable derrière) — et c'est
+là que la séance à l'écran a corrigé le banc, pas l'inverse : voir §30.4 de
+`components/ferme/README.md`.

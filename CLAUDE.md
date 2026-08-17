@@ -11,32 +11,34 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**Livré au 450 : deux correctifs d'une séance de jouabilité de Guillaume** (audit à l'écran, pas
-un banc — le §25 de `README.md` le redit à chaque fois). ⚠️⚠️ **1. LA COURSE PLANTAIT TOUT LE
-JEU, 3/3.** `out.farmer = { id, energy }` (course, `spendEnergy`, `FermeGame.js:3059`) était le
-SEUL des trente et quelques patchs de fermier du fichier à omettre `tools`/`inv` — le client
-réapplique ce patch tel quel (`setMyTools(p.farmer.tools)`), donc `myTools` devenait `undefined`
-dès la première dépense d'énergie en Maj, et `toolKind` (barre d'outils) plantait TOUTE la
-session React à la première touche. Un contrôle d'exemples n'aurait rien vu (30 des 31 patchs
-sont corrects) ; c'est un `grep` de tous les `out.farmer = {` qui a isolé le seul défectueux.
-**2. UN ARBRE POUSSAIT SYSTÉMATIQUEMENT ENTRE CHAQUE PAIRE DE MAISONS ESPACÉES DE 12 CASES**
-(le pas le plus serré de `TOWN_HOUSES`, `TOWN_HOUSE_W=6`) : la haie de chaque jardin clos laisse,
-entre deux parcelles voisines, un pincement de DEUX cases que rien ne couvrait — et le pas de 6
-de l'alignement d'arbres d'avenue (`fermeEngine.js`, un tirage sur douze) tombait pile dedans, un
-couloir de deux cases devenant infranchissable en ligne droite. Réparé en sautant ce point
-d'alignement à portée d'une façade (même marge que `clearOf`), **vérifié en régénérant la ville et
-en listant les objets dans chaque pincement** (`verify-vallee` 200/200 inchangé — c'est un défaut
-de PLACEMENT, pas de collision). ⚠️ **Les quatre autres points de l'audit (amas de résidents à
-l'arrivée du train, pas de glissement diagonal, intitulés de métier en anglais, prairie nue) NE
-SONT PAS CORRIGÉS** — Guillaume a demandé seulement les points 1 et 4, ils restent ouverts.
+**Livré au 451 : LE NAVIRE DES ÉTOILES, et LA QUÊTE PARLE FRANÇAIS.** Décision de Guillaume,
+après avoir écarté une première proposition (« construire une lyre, c'est un peu arbitraire ? » —
+oui : une lyre est un objet d'ADULTE, donc « pourquoi on construit ça » est la première question
+qu'un enfant pose) : **« construire un bateau magique avec les étoiles […] prendre le large et
+amarrer sur des îles, dans le futur ».**
+⚠️⚠️ **LE NAVIRE EST LE PISTEUR DE LA QUÊTE, ET C'EST TOUT SON INTÉRÊT** : cinq morceaux, ceux
+qui manquent peints **en fantôme à leur place exacte**. On sait quoi faire en regardant l'écran,
+sans lire une phrase ni ouvrir un menu. Il se dresse sur le quai du lac, il est un lieu de la
+VILLE (il existe sans la quête, on y bâtit avec elle), et **il n'ajoute aucun état** : les cinq
+morceaux sont une LECTURE des cinq trouvailles qui existaient déjà (`quete.js`, `starShipParts`).
+Zéro migration SQL, zéro `send()`, zéro champ de position. Le détail est au **§30 de
+`components/ferme/README.md`**.
+⚠️ **`fr` contenait littéralement `star: STAR_EN`** — la seule des 1 082 clés du fichier à ne pas
+être bilingue, c'est-à-dire que le public visé ne pouvait lire **aucune ligne** de la seule
+histoire du jeu. Traduit en entier, et `verify-strings` a gagné le contrôle de VALEUR qui lui
+manquait.
 
-**La prochaine action, et elle est unique : POSER LA MAISON `house` (chantier 447).** Elle est
-importée, propre, 90×90 natifs — et posée nulle part. Deux préalables, tous deux écrits au §27.5
-de `components/ferme/README.md`, qui est le **document de reprise** de ce chantier : son texte
-« Aurelien » est **CUIT dans le sprite** et doit être effacé à l'import puis réécrit VIVANT au
-rendu (§4) ; et il faut trancher si elle remplace les dix façades de `townHouseVariant` ou en
-devient la onzième — c'est une décision de CONTENU, donc **elle se demande à Guillaume avant
-d'être codée** (§2).
+⚠️⚠️ **LA PROCHAINE ACTION, ET ELLE EST UNIQUE : LE CHANTIER B, LES MAISONS.** Il est commandé
+(« pioche dans REFS pour refaire la forme des maisons, plus détaillée ») et **il n'est pas
+commencé**. La décision de contenu est PRISE par Guillaume : **une FAMILLE dérivée de
+`PLANCHE2.house`** — la façade dessinée comme base, la variation par couleur de toit, menuiserie,
+jardin et clôture. Les deux préalables sont au §27.5 de `components/ferme/README.md`, qui reste le
+document de reprise de ce chantier : le texte « Aurelien » est **CUIT dans le sprite, deux fois**
+(panneau de toit + plaque de porte) et doit être effacé à l'import puis réécrit VIVANT au rendu
+(§4) — c'est ce qui permettra d'y mettre le nom du JOUEUR. ⚠️ Et la référence n'est pas le sprite,
+**c'est l'assemblage de `refs/scene2.png`** : muret de rue à ouverture unique, chemin de dalles
+dans l'axe de la porte, haie en retour d'équerre, terrasse à balustrade au-dessus. Le banc exigé
+est `tools/render-maison.mjs`, il n'existe pas.
 
 ⚠️ **AVANT DE POUVOIR REGARDER QUOI QUE CE SOIT À L'ÉCRAN, IL FAUT REMONTER LES DEUX
 ÉCHAFAUDAGES** — ils sont supprimés à chaque fin de livraison, exprès (une page jetable en
@@ -46,9 +48,10 @@ marche : `.env.local` sur `http://127.0.0.1:54321`, une page jetable montant `<F
 
 ⚠️ **CE QUI RESTE OUVERT AILLEURS N'EST PAS OUBLIÉ, C'EST CLASSÉ APRÈS** : la séance à DEUX
 CLIENTS (moitié coopérative de la quête + ferme peuplée) reste la dette la plus ancienne du
-dépôt ; les intérieurs du tribunal et de la mairie sont une dette datée de six zips ;
-`public/sounds/church-organ.mp3` manque toujours (un fichier, pas une ligne de code — décision de
-Guillaume au 441 : un vrai morceau, pas une synthèse).
+dépôt ; le SON (le jeu est muet : un seul fichier importé, et il n'existe pas) ; les six points
+d'audit du 450 restés ouverts (amas de résidents à l'arrivée du train, pas de glissement
+diagonal, intitulés de métier en anglais, prairie nue) ; `public/sounds/church-organ.mp3`
+(un fichier, pas une ligne de code — décision de Guillaume au 441 : un vrai morceau).
 
 ---
 
@@ -138,6 +141,11 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 | 448 | **Une constante que SEUL le banc lit est débranchée** — elle a l'air juste et ne peut pas échouer. Ça se détecte en cherchant qui LIT une constante, jamais en la relisant. | §28 |
 | 448 | **Un texte n'est pas un décor : il AFFIRME.** Un dessin approximatif se pardonne, une phrase fausse sous l'image, non. | §28 |
 | 449 | **Une phrase d'interface trop longue ne prévient pas, elle est COUPÉE** (`white-space:nowrap`) — la famille du canevas qui rabote ce qui dépasse, appliquée au texte. | §12.1 bis de `QUETE.md` |
+| 451 | ⚠️⚠️ **Une clé appariée n'est pas une clé traduite.** `verify-strings` a été vert six zips sur une quête en anglais des DEUX côtés : c'était le même objet, donc les clés s'appariaient parfaitement. *La grandeur qui manquait n'était pas la clé, c'était la VALEUR.* | §30 de `ferme/README.md` |
+| 451 | ⚠️⚠️ **Un banc qui compte « y a-t-il de l'eau quelque part » applaudit une barque dans un pré.** Trois contrôles verts sur le placement du navire, et à l'écran il était six cases et un muret au-dessus du lac. *Compter une présence n'est pas mesurer une DISTANCE.* | §30 |
+| 451 | **Un rayon plus grand ne résout pas un problème de connexité, il le déménage** — élargir la zone dégagée autour du navire a déplacé le tronçon de haie isolé de 16 cases au lieu de le supprimer. On propage le long de la file, on n'élargit pas la fenêtre. | §30 |
+| 451 | ⚠️ **Le faux canevas des bancs PRÉMULTIPLIE l'alpha, un navigateur non** — `rgba(150,232,255,.745)` y sort à `112,173,190`. Un contrôle écrit sur la couleur exacte accuse un dessin juste. On mesure la TEINTE, qui survit aux deux conventions. | `render-navire.mjs` |
+| 451 | **Une question à laquelle on a répondu ne sort pas du fichier toute seule.** `verify-quete` EXIGEAIT que les deux tables de texte soient le même objet (juste au 444) : le jour de la traduction, il l'a REFUSÉE. | §14.2 |
 
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
@@ -347,14 +355,14 @@ de conception qui valent pour n'importe quel morceau du dépôt.
 |---|---|
 | `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **~20 500 l.** |
 | `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** |
-| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE (444) : la table des lieux, les 5 chapitres, les grandeurs de coopération et les résolveurs purs.** Aucun React, aucun dessin — `verify-quete.mjs` l'importe. Depuis le 449 il porte aussi **`starGoalKey`** (l'objectif courant, lu par le bandeau ET par le chevron) et **`starGuidePoint`** (où se place le familier meneur). ⚠️ Remplace `enquete.js`, supprimé au 444 |
+| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE (444) : la table des lieux, les 5 chapitres, les grandeurs de coopération et les résolveurs purs.** Aucun React, aucun dessin — `verify-quete.mjs` l'importe. Depuis le 449 il porte aussi **`starGoalKey`** (l'objectif courant, lu par le bandeau ET par le chevron) et **`starGuidePoint`** (où se place le familier meneur) ; depuis le 451 **`starShipParts`** — les cinq morceaux du NAVIRE, une pure LECTURE des cinq trouvailles, aucun état de plus. ⚠️ Remplace `enquete.js`, supprimé au 444 |
 | `components/ferme/QUETE.md` | **le chantier 444 : déroulé, grammaire magique, avancement, ET CE QUI RESTE À FAIRE (§12) — autorité tant que la quête n'est pas finie** |
 | `components/ferme/README.md` | **Valley Town, le tribunal, l'HÔTEL DE VILLE, l'ÉGLISE, le BEFFROI, les habitants, la VENTE, les OISEAUX, les ÉLECTIONS et les PIÈGES de ces zones — autorité (428-444)** |
 | `components/ferme/DESSIN.md` | **les règles de DESSIN, vraies partout — autorité (441, sorties du §4)** |
 | `tools/README.md` | **les bancs, ce qu'ils attrapent et leurs chiffres — autorité (432-439)** |
 | `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** · depuis le 440 il **importe `planche.js`** : une portée de pont et une emprise de décor sont des grandeurs de DESSIN, on les dérive du sprite au lieu de les recopier |
 | `components/ferme/planche.js` | **GÉNÉRÉ** par `tools/import-planche.mjs` — les sprites de la planche de Guillaume, en données. Ne pas éditer à la main |
-| `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural (aucun bitmap **à ce jour** — voir §9, le principe est tombé au 443) · **`drawSeated()`** · **`drawStarCrater()` (446) et `drawStarComet()` (448) : les deux gros dessins de la quête vivent ICI et pas dans la boucle, exprès — c'est la seule façon qu'un banc les regarde** |
+| `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural (aucun bitmap **à ce jour** — voir §9, le principe est tombé au 443) · **`drawSeated()`** · **`drawStarCrater()` (446), `drawStarComet()` (448) et `drawStarShip()` (451) : les gros dessins de la quête vivent ICI et pas dans la boucle, exprès — c'est la seule façon qu'un banc les regarde** |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
 | `public/candyluge/README.md` | **la dette et les 18 règles de la luge — autorité (427)** |
 | `public/candyluge/js/` | `config.js` (tous les nombres) · `slope.js` (la piste) · `sled.js` · `world.js` |
@@ -632,13 +640,11 @@ erreur** en choisissant mal.
 
 ## 13. À compléter par Guillaume
 
-- ⚠️⚠️ **LE CADASTRE ET LE NOTAIRE SONT REDEVENUS DES GUICHETS FERMÉS, ET C'EST UNE RÉGRESSION
-  ASSUMÉE.** Le 442 les avait ouverts — mais pour UNE parcelle, celle de son histoire — et le 444
-  a retiré cette histoire : les deux pièces existent, meublées, et ne rendent plus de service. La
-  question redevient donc entière : **acheter une parcelle, avec un prix, un titre et une
-  conséquence sur la carte.** ⚠️ Ce qui reste acquis du 442 est la FORME (une `req` arbitrée par
-  l'hôte, un état partagé dans `ferme_saves`, aucune migration SQL) ; ce qui est parti est le
-  contenu. La quête de l'étoile, elle, est SECRÈTE et ne passe par aucun guichet — délibérément.
+- ⚠️ **LE CADASTRE ET LE NOTAIRE SONT DES GUICHETS FERMÉS** : les deux pièces existent, meublées,
+  et ne rendent aucun service depuis que le 444 a retiré l'histoire qui les employait. La question
+  est donc entière : **acheter une parcelle, avec un prix, un titre et une conséquence sur la
+  carte.** ⚠️ La FORME est acquise et mesurée (une `req` arbitrée par l'hôte, un état partagé dans
+  `ferme_saves`, aucune migration SQL) ; c'est le contenu qui manque.
   ⚠️ **Le MARIAGE n'a toujours pas bougé** — la salle est dressée, les bans sont prêts, il manque
   l'officier depuis le 439. C'est le seul endroit du jeu où deux joueurs feraient quelque chose
   ENSEMBLE qui ne soit pas du commerce, et aucune des deux quêtes ne l'a remplacé : elles se
@@ -696,11 +702,11 @@ erreur** en choisissant mal.
   élargir la portée du marché, ou raccourcir le trajet — et **aucun ne doit être touché avant
   d'avoir joué**. On a délibérément conservé la prime de cours (jusqu'à +35 %) comme
   contrepartie : le voyage doit PAYER, pas seulement coûter.
-  ⚠️ **ET LE 442 A AJOUTÉ UNE SECONDE RAISON D'Y ALLER, QUI N'EST PAS DE L'ARGENT** : l'enquête
-  fait faire l'aller-retour au moins deux fois (la borne d'origine est à la ferme, tout le reste
-  est en ville), et elle le fait en donnant à chaque trajet quelque chose à rapporter. Si le
-  voyage cesse d'être une corvée, ce sera peut-être pour cette raison-là plutôt que par un
-  réglage — à juger en jouant, comme prévu.
+  ⚠️ **ET IL Y A DÉSORMAIS UNE SECONDE RAISON D'Y ALLER, QUI N'EST PAS DE L'ARGENT** : la quête
+  de l'étoile fait faire l'aller-retour (le sillon est à la ferme, tout le reste est en ville), et
+  depuis le 451 **le NAVIRE donne une raison de revenir voir** — il grandit sur le quai du lac à
+  chaque morceau rapporté. Si le voyage cesse d'être une corvée, ce sera peut-être pour cette
+  raison-là plutôt que par un réglage — à juger en jouant, comme prévu.
 - ⚠️ **LE PAIN DES PIGEONS EST GRATUIT (433) — ARBITRAGE TOUJOURS À TRANCHER**, mais la scène
   MARCHE depuis le 439 (assis, treize pigeons viennent manger ; se lever en fait partir dix sur
   quatorze). L'objection « un joueur qui appuie sans rien voir se passer croit que la touche est
@@ -730,25 +736,24 @@ erreur** en choisissant mal.
   **3. Le réglage des cinq mini-jeux.** Ils sont dessinés et vérifiés, jamais joués jusqu'à la
   victoire à cadence réelle. Ce qui s'y juge — *est-ce que c'est agréable ?* — n'est mesuré nulle
   part et ne le sera jamais.
-  **4. Une deuxième quête ?** La table de `quete.js` en accepte une autre sans une ligne de
-  moteur ; ce qui coûte, c'est l'écriture. À décider seulement après avoir joué celle-là **à
-  deux**.
+  **4. ⚠️ CE QUE LE NAVIRE FAIT UNE FOIS FINI (451).** Il est bâti, il s'allume, il reste à quai —
+  et ta phrase dit la suite : « prendre le large et amarrer sur des ÎLES, dans le futur ». Rien de
+  cette suite n'est construit, et c'est bien : **le navire est le premier objet du jeu qui promette
+  un ailleurs.** Ce qui se décide est s'il devient un vrai départ (une carte de plus, donc un
+  chantier de plusieurs séances) ou s'il reste un monument qui fait envie.
 - **La garde-robe** (427) : les prix sont volontairement très hauts. À jouer pour savoir si
   « très cher » veut dire « on économise pour » ou « on n'y va jamais ».
 - **`candyluge`** : voir `public/candyluge/README.md`, qui fait autorité. La décision qui
   manque est de CONCEPTION (le bonbon empoisonné), pas de technique.
 - **Gels de PNJ chez l'invité** (359-365) : encore observés ? Vérification demandée depuis le
   419 — session réelle à 2, **ferme PEUPLÉE**, console de l'hôte ouverte. ⚠️⚠️ **C'EST TOUJOURS
-  LA PASSE LA PLUS URGENTE DE CE FICHIER**, et le 442 ne l'a pas faite : sa séance à deux clients
-  a validé la chaîne réseau de l'enquête sur une ferme VIDE, ce qui ne dit rien des vingt
-  résidents. Elle a en revanche montré que la recette du §10 marche (deux onglets, deux joueurs,
-  un état partagé qui traverse) — l'excuse technique est tombée pour de bon. Le 427 a doublé la population et ajouté une seconde carte
-  peuplée ; le 428 fait circuler ces vingt résidents pour de bon (79 % de leurs trajets
-  n'aboutissaient pas) et fait diffuser un champ de plus dans le paquet de position (l'assise).
-  **Rien de tout ça n'a été vu à deux joueurs** — les bancs mesurent la simulation de l'hôte,
-  pas ce que voit l'invité. ⚠️ **L'EXCUSE EST TOMBÉE AU 432** : `tools/fake-supabase.mjs` fait
-  tourner deux clients en local (§10). La première séance a immédiatement trouvé trois défauts
-  du multijoueur de la VILLE ; la ferme peuplée n'a toujours pas été passée au même crible.
+  LA PASSE LA PLUS URGENTE DE CE FICHIER**, et aucune des cinq séances à deux clients (432, 442)
+  ne l'a faite : elles ont validé des chaînes réseau sur une ferme VIDE, ce qui ne dit rien des
+  vingt résidents. ⚠️ **L'EXCUSE TECHNIQUE EST TOMBÉE POUR DE BON AU 432** : `fake-supabase.mjs`
+  fait tourner deux clients en local (§10), et la première séance a immédiatement trouvé trois
+  défauts du multijoueur de la VILLE. Ce qui n'a jamais été vu à deux : les vingt résidents que le
+  428 fait circuler, et le champ d'assise qu'il diffuse. **Les bancs mesurent la simulation de
+  l'hôte, jamais ce que voit l'invité.**
 - **`crystal`** : le chapitre a **deux** segments jouables (`play run` et `play walk`).
   Retirer le second retire le seul endroit où l'on ramasse des éclats.
 - ⚠️ **VERCEL NE DÉPLOIE PLUS AUTOMATIQUEMENT depuis le 425**, et **ce n'est pas le dépôt** :
@@ -794,14 +799,21 @@ erreur** en choisissant mal.
    **439 (en-tête 151 → 50 et §13 relu, 687 → 661)**, 440 (aucun),
    **441 (§4 scindé : le DESSIN → `DESSIN.md`)**, 442 (§13 relu ligne à ligne),
    **444 (§10 élagué)**, 446 à 448 (aucun — et l'ordre du 444 reporté trois fois),
-   **449 (§4 scindé une 3e fois + en-tête 167 → 125, 903 → 804)**.
+   **449 (§4 scindé une 3e fois + en-tête 167 → 125, 903 → 804)**, 450 (aucun),
+   **451 (§13 relu ligne à ligne, quatre entrées périmées supprimées)**.
 
-   ⚠️ **L'ORDRE DU PROCHAIN ZIP : §13, relu LIGNE À LIGNE.** Il n'a pas été relu depuis le 442,
-   c'est-à-dire sept zips, et deux choses ont bougé sous lui depuis : le 444 a retiré l'enquête
-   (donc les entrées qui s'y adossent parlent d'un code supprimé) et le 449 a livré la passe de
-   guidage de la quête (donc au moins une entrée du bloc « la quête de l'étoile » est datée).
-   ⚠️ **Une question à laquelle on a répondu ne sort pas du fichier toute seule : elle y reste, et
-   elle ment.** C'est la seule raison d'être de cet ordre, et il l'a prouvée deux fois (439, 442).
+   ⚠️⚠️ **LE 451 A EXÉCUTÉ L'ORDRE DU 449 : §13 RELU LIGNE À LIGNE**, huit zips après le 442.
+   Quatre entrées parlaient d'un code SUPPRIMÉ au 444 — elles décrivaient l'enquête cadastrale
+   comme si elle tournait encore (« le 442 a ajouté une seconde raison d'aller en ville :
+   l'enquête… ») — et une cinquième racontait sur onze lignes l'histoire de séances à deux clients
+   au lieu de dire ce qui reste à faire. ⚠️ **Une question à laquelle on a répondu ne sort pas du
+   fichier toute seule : elle y reste, et elle ment** — troisième preuve après 439 et 442.
+
+   ⚠️ **L'ORDRE DU PROCHAIN ZIP : `components/ferme/QUETE.md`, RELU CONTRE LE CODE.** Il fait 943
+   lignes, il est le document de reprise de la quête, et le 451 vient de changer sous lui ce qu'il
+   décrit en premier : sa fiction n'est plus « une lyre à qui il manque une corde » mais **un
+   bateau qu'on rebâtit**, et son §10 (« codé / regardé à l'écran ») ne connaît pas le navire.
+   Un document de reprise qui décrit l'histoire d'avant est pire qu'un document manquant.
 
 3. **Critère d'inclusion** : « est-ce vrai à l'échelle du projet, et invérifiable en ouvrant
    un seul fichier ? » Sinon, ça va dans un commentaire de code. **L'histoire d'un défaut

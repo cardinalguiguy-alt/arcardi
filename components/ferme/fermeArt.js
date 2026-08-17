@@ -6336,6 +6336,464 @@ export function buildSprites() {
   }
 
   /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 450 — LE NAVIRE DES ÉTOILES. « construire un bateau magique avec les
+     ║ étoiles » (Guillaume), après avoir écarté la Lyre : « un peu arbitraire ? ».
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ CE DESSIN EST LE PISTEUR DE LA QUÊTE, ET C'EST TOUT SON INTÉRÊT. La
+     règle qu'on se donne est celle des dix secondes : *à n'importe quel instant,
+     l'enfant doit savoir ce qu'il fait EN REGARDANT L'ÉCRAN, sans ouvrir un menu
+     et sans lire une phrase.* Un bandeau ne le fait pas — il faut savoir lire, et
+     il faut le relire. Un bateau à qui il manque un mât, si.
+
+     ⚠️⚠️⚠️ LES MORCEAUX MANQUANTS SONT DESSINÉS EN FANTÔME, ET C'EST LA DÉCISION
+     DE FOND DE CE DESSIN. Trois écritures ont été envisagées :
+       1. cinq logements vides en rang sur une borne → il faut comprendre que la
+          borne compte quelque chose, donc il faut l'expliquer. Écarté ;
+       2. rien du tout, le bateau pousse morceau par morceau → on voit qu'il
+          grandit, jamais ce qu'il lui MANQUE, donc on ne sait pas où l'on en est ;
+       3. **le morceau absent, peint en creux, à sa place exacte.** On voit d'un
+          coup d'œil qu'il manque une voile, et on voit à quoi elle ressemblera.
+          C'est le langage que tout jeu de construction emploie, et un enfant de
+          sept ans le lit sans une ligne de texte.
+     ⚠️ ET LE FANTÔME EST **DÉRIVÉ** DE LA PIÈCE, PAS DESSINÉ UNE SECONDE FOIS :
+     on cuit la pièce, on relit ses pixels, on remplace chaque pixel opaque par du
+     bleu d'étoile sur un damier. Deux dessins séparés auraient divergé au premier
+     réglage (§8 de `CLAUDE.md` : ce qui double un autre paramètre se DÉRIVE), et
+     le symptôme aurait été le pire possible — *le fantôme ne ressemble pas à ce
+     qu'on obtient*, c'est-à-dire une promesse fausse.
+
+     ⚠️ LA CARCASSE (quille + membrures) EST DANS LA CALE, PAS DANS LA COQUE, et
+     ce partage porte tout le sens : dès la première nuit, il y a sur la grève un
+     CHANTIER, pas un terrain vague. On ne se demande pas ce que c'est — on voit
+     un bateau qu'on n'a pas fini. La coque, elle, n'est que le bordé.
+
+     ⚠️⚠️ AUCUN `translate`, AUCUN `rotate`, AUCUN `clip`, AUCUN DÉGRADÉ, AUCUN
+     `fillText` — le faux canevas des bancs ignore les trois premiers, ne connaît
+     pas les deux derniers, et un dessin qui en dépend se juge FAUX au banc tout
+     en étant juste en jeu (le stub menteur du §10, payé au 448 sur le croissant de
+     la comète). Tout est en `fillRect` et en `drawImage`, comme le reste du jeu.
+     ⚠️ MARGE SUR LES QUATRE BORDS : un canevas découpe en silence ce qui dépasse
+     (427, payé trois fois au 433), et `render-navire` refuse tout pixel peint sur
+     le bord.
+
+     LES CINQ MORCEAUX, ET LEUR ORDRE DE DESSIN (de l'arrière vers l'avant) :
+       · `sail`   la voile, derrière le mât qui la tient
+       · `mast`   le mât et sa vergue
+       · `hull`   le bordé, qui recouvre le pied du mât
+       · `rudder` le safran, à l'arrière, contre le bordé
+       · `bell`   la cloche de bord, à l'étrave, la plus en avant
+     ⚠️ L'ORDRE N'EST PAS L'ORDRE DE LA TABLE de `quete.js`, et il ne doit pas
+     l'être : celle-ci dit dans quel ORDRE ON LES TROUVE, celui-ci dit ce qui passe
+     DEVANT quoi. Les confondre aurait fait passer la voile devant le mât le jour
+     où l'on déplace une trouvaille — une grandeur de jeu et une grandeur de
+     dessin, deux choses (§441). */
+  const SHIP_PAL = {
+    wood:  ["#3a2718", "#4e3520", "#66462b", "#7d5836", "#946b43", "#ab8055"],
+    keel:  "#33230f",
+    rib:   "#4a3320",
+    trim:  "#c8a05a",           // le liseré d'or de la lisse
+    stone: ["#5f5a50", "#7c766a", "#98917f", "#b0a894"],
+    rope:  "#9a8a68",
+    sail:  ["#b8b0a0", "#cfc7b6", "#e4dccb", "#f2ecdd"],
+    metal: ["#6a5018", "#9a7726", "#c79c3c", "#e8c874"],
+    star:  "#dff6ff",
+    glow:  [150, 232, 255],
+    dark:  "#241a10",           // le cerne
+  };
+  /* La boîte de dessin, DÉRIVÉE des constantes de jeu — jamais recopiée (§8). */
+  const SHIP_W = () => C.STAR_SHIP_DRAW_W * 16;    // 144 px de référence
+  const SHIP_H = () => C.STAR_SHIP_DRAW_H * 16;    // 112
+  const SHIP_GROUND = 100;                          // la ligne de sol DANS la boîte
+  const SHIP_X0 = 14, SHIP_X1 = 132;                // étambot → étrave
+
+  /* Les deux courbes de la coque. ⚠️ CE SONT DES FONCTIONS DE `x`, ET C'EST LE
+     SEUL CAS OÙ LA RÈGLE DU 437 (« une courbe `f(x)` ne peut pas se replier »)
+     N'EST PAS VIOLÉE : un bordé vu de profil ne se replie effectivement pas — il
+     a un dessus et un dessous pour chaque colonne. Une coque vue de DESSUS, elle,
+     demanderait un champ ; ce n'est pas ce qu'on peint. */
+  function shipT(x) { return (x - SHIP_X0) / (SHIP_X1 - SHIP_X0); }
+  function shipKeelY(x) {
+    const t = shipT(x);
+    const aft = Math.max(0, (0.16 - t) / 0.16), fwd = Math.max(0, (t - 0.78) / 0.22);
+    return SHIP_GROUND - 4 - 13 * Math.pow(aft, 1.6) - 21 * Math.pow(fwd, 1.7);
+  }
+  function shipSheerY(x) {
+    const t = shipT(x);
+    /* ⚠️ L'ÉTRAVE MONTE PLUS QUE L'ÉTAMBOT, et ce n'est pas un goût : c'est ce
+       qui donne un SENS au bateau. Deux extrémités égales font une barque. */
+    return 74 - 17 * Math.pow(t, 2.3) - 4 * Math.pow(Math.max(0, (0.14 - t) / 0.14), 1.5);
+  }
+
+  /* ⚠️ UN SEUL POINT D'ENTRÉE POUR PEINDRE, ET IL ARRONDIT. Toutes les
+     coordonnées de ce dessin sont en pixels de RÉFÉRENCE (tuile 16) ; `u` les
+     porte à la tuile courante. Arrondir dans chaque appel plutôt qu'à la fin
+     évite les rangées vides d'une rangée sur deux — le défaut de l'ellipse du 448
+     (« une ellipse se décrit dans l'espace où on la peint »). */
+  function shipR(g, u, x, y, w, h, col) {
+    P(g, Math.round(x * u), Math.round(y * u),
+      Math.max(1, Math.round(w * u)), Math.max(1, Math.round(h * u)), col);
+  }
+
+  /* ── LA CALE : l'ombre, le ber, les tins de pierre, ET LA CARCASSE. */
+  function shipPartCradle(g, u) {
+    const S = SHIP_PAL;
+    /* L'ombre portée. ⚠️ Elle est peinte en rangées de largeur calculée, pas en
+       `arc()` mis à l'échelle : le faux canevas des bancs connaît `arc`, mais une
+       ombre en rangées reste franche au gros pixel. */
+    for (let dy = 0; dy <= 5; dy++) {
+      const w = Math.round(112 * Math.sqrt(Math.max(0, 1 - (dy / 6) * (dy / 6))));
+      shipR(g, u, 72 - w / 2, SHIP_GROUND + dy, w, 1, `rgba(24,30,22,${(0.26 - dy * 0.035).toFixed(3)})`);
+    }
+    // Le ber : trois madriers qui filent vers l'eau, tons alternés.
+    for (let k = 0; k < 3; k++) {
+      const y = SHIP_GROUND - 1 + k * 2;
+      shipR(g, u, 18 + k * 3, y, 116 - k * 6, 2, S.wood[k === 1 ? 2 : 1]);
+      shipR(g, u, 18 + k * 3, y, 116 - k * 6, 1, S.wood[3]);
+    }
+    // Les tins de pierre sous la quille, appareillés (lumière en haut à gauche).
+    for (const bx of [34, 92]) {
+      shipR(g, u, bx, SHIP_GROUND - 9, 20, 10, S.stone[1]);
+      shipR(g, u, bx, SHIP_GROUND - 9, 20, 2, S.stone[3]);
+      shipR(g, u, bx, SHIP_GROUND - 1, 20, 2, S.stone[0]);
+      for (let j = 0; j < 3; j++) shipR(g, u, bx + 2 + j * 6, SHIP_GROUND - 7, 1, 8, S.stone[0]);
+    }
+    /* ⚠️⚠️ LA QUILLE ET LES MEMBRURES SONT ICI, PAS DANS `hull` — voir le chapeau.
+       C'est ce qui fait qu'on lit un CHANTIER dès la première nuit. */
+    for (let x = SHIP_X0; x <= SHIP_X1; x++) shipR(g, u, x, shipKeelY(x) - 1, 1, 5, S.keel);
+    /* ⚠️⚠️ SEPT MEMBRURES, ET UNE LISSE DE CONSTRUCTION QUI LES RELIE — vu sur la
+       planche : dix membrures nues, toutes de la même hauteur et régulièrement
+       espacées, font une PALISSADE et pas une carcasse de bateau. C'est la règle du
+       437 prise par l'autre bout (« le naturel ne s'obtient pas en mettant du
+       désordre partout ») : ce qui manquait n'était pas de l'irrégularité, c'était
+       la pièce qui prouve que ces bois appartiennent au MÊME ouvrage. Une lisse
+       courbe posée sur leur tête, et l'œil lit une coque en construction. */
+    const RIBS = 7;
+    for (let k = 0; k <= RIBS; k++) {
+      const x = SHIP_X0 + 5 + k * ((SHIP_X1 - SHIP_X0 - 12) / RIBS);
+      const y0 = shipSheerY(x), y1 = shipKeelY(x);
+      if (y1 - y0 < 3) continue;
+      shipR(g, u, x - 1, y0 + 1, 2, y1 - y0 + 1, S.rib);
+      shipR(g, u, x - 1, y0 + 1, 1, y1 - y0 + 1, S.wood[1]);   // l'arête éclairée, discrète
+    }
+    // La lisse de construction : elle suit la sheer, donc elle ne peut pas mentir.
+    for (let x = SHIP_X0 + 4; x <= SHIP_X1 - 6; x++) {
+      shipR(g, u, x, shipSheerY(x) + 1, 1, 2, S.rib);
+      shipR(g, u, x, shipSheerY(x) + 1, 1, 1, S.wood[2]);
+    }
+  }
+
+  /* ── LE BORDÉ. Cinq virures, la lisse claire, la ligne de flottaison sombre. */
+  function shipPartHull(g, u) {
+    const S = SHIP_PAL;
+    for (let x = SHIP_X0; x <= SHIP_X1; x++) {
+      const y0 = shipSheerY(x), y1 = shipKeelY(x);
+      if (y1 - y0 < 2) continue;
+      const h = y1 - y0;
+      for (let y = Math.round(y0); y <= Math.round(y1); y++) {
+        /* ⚠️ LA VALEUR SE QUANTIFIE EN PALIERS (446) : un dégradé continu sur un
+           bordé fait une tache lisse, les paliers font des VIRURES. Six tons, le
+           clair en haut (la lumière du jeu vient d'en haut à gauche). */
+        const k = (y - y0) / h;
+        let ci = 5 - Math.min(5, Math.floor(k * 6.2));
+        if ((y - Math.round(y0)) % 5 === 4) ci = Math.max(0, ci - 2);   // le joint entre deux virures
+        shipR(g, u, x, y, 1, 1, S.wood[ci]);
+      }
+      // La lisse : deux rangées claires, puis le liseré d'or au-dessus.
+      shipR(g, u, x, y0, 1, 2, S.wood[5]);
+      shipR(g, u, x, y0 - 1, 1, 1, S.trim);
+    }
+    // L'étrave et l'étambot, plus épais que le bordé : ce sont des pièces.
+    for (let y = Math.round(shipSheerY(SHIP_X1) - 2); y <= Math.round(shipKeelY(SHIP_X1)); y++)
+      shipR(g, u, SHIP_X1 - 2, y, 4, 1, S.wood[1]);
+    for (let y = Math.round(shipSheerY(SHIP_X0)); y <= Math.round(shipKeelY(SHIP_X0)); y++)
+      shipR(g, u, SHIP_X0 - 1, y, 4, 1, S.wood[1]);
+    /* Les sabords : quatre ouvertures sombres, DÉDUITES de la lisse et non posées
+       à la main — une position réglée à l'œil penchera (441). */
+    for (let k = 0; k < 4; k++) {
+      const x = 40 + k * 20, y = shipSheerY(x) + 7;
+      shipR(g, u, x, y, 7, 6, S.dark);
+      shipR(g, u, x + 1, y + 1, 5, 4, "rgba(90,160,190,0.55)");
+      shipR(g, u, x, y - 1, 7, 1, S.wood[4]);
+    }
+  }
+
+  /* ── LE SAFRAN, à l'étambot. Petit, mais c'est ce qui fait qu'un bateau se
+     DIRIGE : sans lui il dérive, et l'étoile le dit. */
+  function shipPartRudder(g, u) {
+    const S = SHIP_PAL;
+    const yTop = shipSheerY(SHIP_X0) + 4, yBot = shipKeelY(SHIP_X0) + 8;
+    shipR(g, u, SHIP_X0 - 7, yTop, 6, yBot - yTop, S.wood[2]);
+    shipR(g, u, SHIP_X0 - 7, yTop, 2, yBot - yTop, S.wood[4]);
+    shipR(g, u, SHIP_X0 - 7, yBot - 2, 6, 2, S.wood[0]);
+    for (const fy of [yTop + 3, yBot - 7]) {                 // les ferrures
+      shipR(g, u, SHIP_X0 - 8, fy, 10, 2, S.metal[1]);
+      shipR(g, u, SHIP_X0 - 8, fy, 10, 1, S.metal[3]);
+    }
+    // La barre, qui monte vers le pont : une diagonale en escalier.
+    for (let k = 0; k < 12; k++)
+      shipR(g, u, SHIP_X0 - 5 + k, yTop - 1 - Math.round(k * 0.55), 2, 2, S.wood[3]);
+  }
+
+  /* ── LE MÂT ET SA VERGUE. ⚠️ IL MONTE JUSQU'À SIX PIXELS DU BORD HAUT, et pas
+     plus : c'est le piège du canevas qui découpe en silence (427/433). */
+  function shipPartMast(g, u) {
+    const S = SHIP_PAL;
+    const mx = 74, top = 8, foot = shipSheerY(mx) + 6;
+    shipR(g, u, mx - 2, top, 5, foot - top, S.wood[2]);
+    shipR(g, u, mx - 2, top, 2, foot - top, S.wood[4]);      // l'arête éclairée
+    shipR(g, u, mx + 2, top, 1, foot - top, S.wood[0]);
+    shipR(g, u, mx - 3, top, 7, 3, S.metal[1]);              // le capelage
+    // La vergue, et ses deux itagues.
+    shipR(g, u, 44, 26, 61, 3, S.wood[3]);
+    shipR(g, u, 44, 26, 61, 1, S.wood[5]);
+    shipR(g, u, 44, 26, 2, 4, S.wood[1]); shipR(g, u, 103, 26, 2, 4, S.wood[1]);
+    /* Les haubans : deux par bord, en escalier d'un pixel. ⚠️ Ils partent du
+       capelage et tombent sur la lisse, donc leurs PIEDS sont dérivés de
+       `shipSheerY` — posés à la main, ils flotteraient au-dessus du bordé. */
+    for (const [x1, sgn] of [[30, -1], [118, 1]]) {
+      const y1 = shipSheerY(x1) + 1, n = Math.round(Math.abs(x1 - mx));
+      for (let k = 0; k <= n; k += 1) {
+        const x = mx + sgn * k, y = top + 4 + (y1 - top - 4) * (k / n);
+        shipR(g, u, x, y, 1, 1, S.rope);
+      }
+    }
+  }
+
+  /* ── LA VOILE. ⚠️ ELLE EST BOMBÉE, ET SON VENTRE EST DU CÔTÉ DE L'ÉTRAVE : une
+     voile plate est un drap. Le ventre se décrit par une largeur qui varie avec
+     la hauteur, jamais par une forme repliée (437). */
+  /* ⚠️⚠️ PREMIER JET JETÉ, ET LA PLANCHE L'A MONTRÉ EN UNE SECONDE : une demi-
+     largeur en `sin(k^0.85 · π)` donne une LENTILLE — un ballon blanc pendu au
+     mât, pas une voile. La faute est la même que la collerette de tournesol du
+     446 : *une formule de forme qui décore au lieu de décrire l'objet.* Une voile
+     carrée est un TRAPÈZE — un peu plus large au bas (le point d'écoute borde plus
+     loin que la vergue) — dont les bords se creusent légèrement sous le vent. On
+     décrit donc la largeur par une interpolation franche entre têtière et bordure,
+     plus un ventre en `sin(πk)` qui ne fait que la BOMBER. */
+  function shipPartSail(g, u) {
+    const S = SHIP_PAL;
+    const yTop = 30, yBot = 70, mx = 74;
+    const HALF_TOP = 27, HALF_BOT = 31;
+    for (let y = yTop; y <= yBot; y++) {
+      const k = (y - yTop) / (yBot - yTop);
+      const half = HALF_TOP + (HALF_BOT - HALF_TOP) * k + 2.5 * Math.sin(k * Math.PI);
+      /* Le ventre : la voile est poussée vers l'ÉTRAVE, donc son centre glisse
+         vers la droite. C'est ce qui la fait lire comme portée par le vent plutôt
+         que pendue. */
+      const belly = 5 * Math.sin(k * Math.PI);
+      const x0 = mx - half + belly, w = half * 2;
+      /* Quatre valeurs quantifiées, du guindant (à l'ombre) à la chute (éclairée).
+         ⚠️ Le clair est vers la DROITE et non au centre : une voile creuse reçoit
+         la lumière sur sa partie la plus fuyante, et un dégradé symétrique ferait
+         un coussin. */
+      shipR(g, u, x0, y, w, 1, S.sail[1]);
+      shipR(g, u, x0 + w * 0.22, y, w * 0.58, 1, S.sail[2]);
+      shipR(g, u, x0 + w * 0.58, y, w * 0.30, 1, S.sail[3]);
+      shipR(g, u, x0, y, 3, 1, S.sail[0]);                    // le guindant, dans l'ombre du mât
+      shipR(g, u, x0 + w - 2, y, 2, 1, S.sail[1]);            // la chute, un rien plus sourde
+      // Les bandes de ris : trois, horizontales, comme sur une vraie voile carrée.
+      if ((y - yTop) % 13 === 12) shipR(g, u, x0 + 2, y, w - 4, 1, S.sail[0]);
+    }
+    // La têtière et la bordure : deux ralingues franches, sinon la toile bave.
+    shipR(g, u, mx - HALF_TOP, yTop, HALF_TOP * 2, 1, S.sail[0]);
+    shipR(g, u, mx - HALF_BOT + 5, yBot, HALF_BOT * 2, 1, S.sail[0]);
+    /* ⚠️⚠️ L'ÉTOILE COUSUE, ET ELLE EST UNE ÉTINCELLE À QUATRE BRANCHES, PAS UN
+       PENTAGRAMME. Le premier jet posait cinq rayons de carrés : à vingt pixels ça
+       ne fait pas une étoile, ça fait une tache avec des pattes — l'échancrure
+       d'un pentagramme demande plus de place que le dessin n'en a (c'est la leçon
+       du 449 sur la compagne : *un cerne d'un pixel impose une échancrure d'au
+       moins trois*). Quatre branches effilées se lisent à cette taille, et c'est
+       déjà le langage visuel de la quête (le chevron, les éclats). */
+    const sx = mx + 4, sy = 49, R0 = 13;
+    for (let r = 0; r <= R0; r++) {
+      const w = Math.max(1, Math.round(Math.pow(1 - r / R0, 1.9) * 6));
+      shipR(g, u, sx - w / 2, sy - r, w, 1, S.star);          // haut
+      shipR(g, u, sx - w / 2, sy + r, w, 1, S.star);          // bas
+      shipR(g, u, sx - r, sy - w / 2, 1, w, S.star);          // gauche
+      shipR(g, u, sx + r, sy - w / 2, 1, w, S.star);          // droite
+    }
+    for (let r = 0; r <= 5; r++) {                            // les quatre diagonales, courtes
+      const w = Math.max(1, Math.round((1 - r / 5) * 2));
+      for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]])
+        shipR(g, u, sx + dx * r * 0.7 - w / 2, sy + dy * r * 0.7 - w / 2, w, w, S.star);
+    }
+    // Les écoutes, du point d'écoute vers le pont.
+    for (let k = 0; k <= 14; k++) shipR(g, u, mx + 30 + k * 0.7, yBot + Math.round(k * 0.5), 1, 1, S.rope);
+  }
+
+  /* ── LA CLOCHE DE BORD. ⚠️ C'EST LE CINQUIÈME MORCEAU, ET C'EST CELUI DE
+     L'ÉGLISE : elle est trop lourde pour rentrer au ciel, elle n'a jamais eu de
+     bateau, elle donne sa voix et elle voyagera. Elle est donc EN BRONZE VERDI et
+     pas en laiton neuf — c'est la même cloche, on doit la reconnaître. */
+  function shipPartBell(g, u) {
+    const S = SHIP_PAL;
+    const bx = 118, by = 38;
+    /* La potence : deux montants et un chapeau, pour qu'elle soit MONTÉE et non
+       posée en l'air. ⚠️ Vu sur la planche : sans montants visibles, la cloche
+       flottait et se lisait comme une lanterne accrochée. */
+    shipR(g, u, bx - 8, by - 3, 3, 14, S.wood[2]);
+    shipR(g, u, bx + 6, by - 3, 3, 14, S.wood[2]);
+    shipR(g, u, bx - 9, by - 5, 19, 3, S.wood[3]);
+    shipR(g, u, bx - 9, by - 5, 19, 1, S.wood[5]);
+    // Le joug de bois et l'axe : ce qui la fait basculer.
+    shipR(g, u, bx - 5, by - 1, 13, 3, S.wood[1]);
+    shipR(g, u, bx - 5, by - 1, 13, 1, S.wood[4]);
+    /* ⚠️⚠️ UNE CLOCHE N'EST PAS UN CÔNE, ET LE PREMIER JET EN ÉTAIT UN — vu sur la
+       planche, il se lisait comme un VASE. Le profil qui la fait reconnaître a
+       quatre parties et trois d'entre elles sont presque droites : un cerveau
+       étroit, une ÉPAULE qui s'élargit d'un coup, une taille qui ne bouge presque
+       pas, puis un PIED DE SON large et ÉPAIS. C'est la règle du 438 sous une
+       autre forme : *on assemble des masses, on ne texture pas une silhouette* —
+       et ici la silhouette EST ce qui identifie l'objet. */
+    const PROFILE = [3, 4, 7, 8, 9, 9, 10, 10, 11, 12, 13, 15, 16, 16];
+    for (let k = 0; k < PROFILE.length; k++) {
+      const w = PROFILE[k], y = by + 2 + k;
+      const tone = k < 2 ? S.metal[0] : k >= PROFILE.length - 2 ? S.metal[0] : S.metal[1];
+      shipR(g, u, bx + 1 - w / 2, y, w, 1, tone);
+      // La lumière en haut à gauche, comme partout dans le jeu.
+      shipR(g, u, bx + 1 - w / 2, y, Math.max(1, Math.round(w * 0.30)), 1, k < 2 ? S.metal[1] : S.metal[2]);
+      shipR(g, u, bx + 1 + w / 2 - 1, y, 1, 1, S.metal[0]);
+    }
+    // Le pied de son : deux rangées franches, plus larges que la jupe.
+    shipR(g, u, bx - 8, by + 16, 18, 2, S.metal[1]);
+    shipR(g, u, bx - 8, by + 16, 6, 1, S.metal[3]);
+    shipR(g, u, bx - 8, by + 18, 18, 1, S.metal[0]);
+    shipR(g, u, bx, by + 19, 2, 3, S.metal[2]);           // le battant, qui dépasse
+    shipR(g, u, bx - 1, by + 21, 4, 2, S.metal[3]);
+  }
+
+  const SHIP_PARTS_DRAW = {
+    sail: shipPartSail, mast: shipPartMast, hull: shipPartHull,
+    rudder: shipPartRudder, bell: shipPartBell,
+  };
+  /* ⚠️ L'ORDRE DE DESSIN, ÉCRIT UNE FOIS. Voir le chapeau : il n'est pas celui de
+     la table de `quete.js`, et c'est délibéré. */
+  const SHIP_Z = ["sail", "mast", "hull", "rudder", "bell"];
+
+  const shipCache = new Map();
+  /* Cuit une couche. ⚠️ CANEVAS TRANSPARENT (446) : le sol, la saison, la nuit et
+     la météo restent dessous et continuent d'être hérités gratuitement.
+     ⚠️⚠️ ET LE FANTÔME EST DÉRIVÉ DE LA PIÈCE PAR RELECTURE DE SES PIXELS — c'est
+     la garantie que la promesse ressemble à ce qu'on obtient. Le damier tient
+     chaque pixel OPAQUE (règle du tramage, 446) : un fantôme en alpha uniforme
+     sur de l'herbe donne un vert bleuté translucide, c'est-à-dire du brouillard. */
+  function shipBake(T2, part, ghost) {
+    const key = (T2 | 0) + ":" + part + ":" + (ghost ? "g" : "s");
+    const hit = shipCache.get(key);
+    if (hit) return hit;
+    const u = T2 / 16, W = Math.round(SHIP_W() * u), H = Math.round(SHIP_H() * u);
+    const [c, g] = cv(W, H);
+    (part === "cradle" ? shipPartCradle : SHIP_PARTS_DRAW[part])(g, u);
+    if (part !== "cradle") outlineSprite(g, W, H, SHIP_PAL.dark);
+    if (ghost) {
+      const img = g.getImageData(0, 0, W, H), d = img.data;
+      const G = SHIP_PAL.glow;
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const i = (y * W + x) * 4;
+        if (!d[i + 3]) continue;
+        /* ⚠️⚠️ LE CERNE RESTE SOMBRE, ET C'EST LA RÈGLE DU 441 (« un cerne sert
+           AUSSI contre un fond clair »), vue sur la planche : un fantôme
+           entièrement bleu clair est parfaitement lisible sur la nuit et
+           DISPARAÎT sur l'herbe de jour — exactement les cierges de cire blanche
+           sur le marbre pâle du chœur. Ce qui manquait n'était pas du contraste,
+           c'était un contour. On reconnaît le cerne à ce qu'il est très sombre :
+           il a été posé juste avant par `outlineSprite`. */
+        const dark = d[i] < 70 && d[i + 1] < 70 && d[i + 2] < 70;
+        /* Un damier de pas 2 : la moitié des pixels tombe, l'autre reste franche.
+           C'est ce qui fait lire « pas encore là » sans faire lire « flou ».
+           ⚠️ Le cerne, lui, n'est PAS ajouré : ajouré, il cesse d'être un trait. */
+        if (!dark && ((x + y) & 1) === 0) { d[i + 3] = 0; continue; }
+        if (dark) { d[i + 3] = 150; continue; }
+        d[i] = G[0]; d[i + 1] = G[1]; d[i + 2] = G[2]; d[i + 3] = 190;
+      }
+      g.putImageData(img, 0, 0);
+    }
+    c.ox = W >> 1; c.oy = Math.round((SHIP_GROUND + 1) * u);
+    shipCache.set(key, c);
+    return c;
+  }
+
+  /* ⚠️⚠️ LE POINT D'ENTRÉE. `parts` EST LE TABLEAU RENDU PAR `Q.starShipParts` —
+     on ne lui passe PAS l'état de la quête, et c'est volontaire : `fermeArt` ne
+     doit rien savoir de `quete.js`, sinon le banc de rendu devrait monter toute la
+     quête pour peindre un bateau. Il reçoit cinq booléens, il peint.
+     `opt.t` anime, `opt.night` allume, `opt.sail` gonfle la voile. */
+  function drawStarShip(g2, cx, cy, T2, parts, tMs, opt) {
+    const o = opt || {}, t = tMs || 0, u = T2 / 16;
+    const P5 = Array.isArray(parts) ? parts : [];
+    const built = P5.filter(Boolean).length;
+    const cr = shipBake(T2, "cradle", false);
+    g2.drawImage(cr, Math.round(cx) - cr.ox, Math.round(cy) - cr.oy);
+    for (const key of SHIP_Z) {
+      const idx = C.STAR_SHIP_ORDER.indexOf(key);
+      const has = idx >= 0 && !!P5[idx];
+      /* ⚠️ LE FANTÔME PULSE, LA PIÈCE NON. Une pièce posée qui respirerait dirait
+         « pas encore fini » : ce qui bouge est ce qui MANQUE, jamais l'inverse. */
+      const c2 = shipBake(T2, key, !has);
+      if (has) g2.drawImage(c2, Math.round(cx) - c2.ox, Math.round(cy) - c2.oy);
+      else {
+        /* Le battement du fantôme, peint en repassant la pièce une seconde fois
+           aux instants clairs — jamais par `globalAlpha`, que le faux canevas des
+           bancs ne restitue pas (448). */
+        g2.drawImage(c2, Math.round(cx) - c2.ox, Math.round(cy) - c2.oy);
+        if (Math.sin(t / 700 + idx * 1.1) > 0.35)
+          g2.drawImage(c2, Math.round(cx) - c2.ox, Math.round(cy) - c2.oy);
+      }
+    }
+    /* ╔══════════════════════════════════════════════════════════════════════════
+       ║ LA LUEUR — ET LE PREMIER JET A REFAIT LE HALO DE LA COMÈTE DU 448.
+       ╚══════════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ UN SEUL DISQUE À UNE SEULE VALEUR DESSINE UN BORD. Vu sur la planche :
+       une **assiette bleue** posée derrière le navire, dont la limite se voyait
+       mieux que le bateau. C'est mot pour mot le défaut du 448 (« quantifier la
+       valeur reste la règle, mais trop peu de paliers ne simplifie pas : ça dessine
+       un bord »), et c'est la deuxième fois qu'il se paie. *Ce qui doit s'ÉTEINDRE
+       demande assez de marches pour que l'œil lise une pente, et la dernière doit
+       être presque rien.*
+       ⚠️ ET LA LUMIÈRE VIENT DES PIÈCES, PAS DU CIEL : une étincelle par morceau
+       posé, à SA place, plus un voile très faible autour d'elles. On voit alors
+       COMBIEN de morceaux brillent — c'est le compteur — au lieu d'un halo global
+       qui ne dit qu'« il se passe quelque chose ». */
+    if (built > 0) {
+      /* ⚠️ CHAQUE ÉTINCELLE EST À UN POINT CARACTÉRISTIQUE DE SA PIÈCE, PAS EN SON
+         MILIEU. Premier jet : celle de la coque était au centre du bordé, et sur la
+         planche elle se lisait comme une TACHE sur le bois. Posée sur la tête de
+         l'étrave — le point qu'on regarde quand on regarde une coque — elle se lit
+         comme une lumière AU BOUT du bateau. Même déplacement pour le mât, monté à
+         sa pomme. */
+      const SPARK = { hull: [129, 60], rudder: [8, 86], mast: [74, 11], sail: [78, 49], bell: [119, 47] };
+      for (let i = 0; i < C.STAR_SHIP_ORDER.length; i++) {
+        if (!P5[i]) continue;
+        const sp = SPARK[C.STAR_SHIP_ORDER[i]];
+        if (!sp) continue;
+        const b = 0.5 + 0.5 * Math.sin(t / 1150 + i * 1.7);
+        const sx = cx + Math.round((sp[0] - SHIP_W() / 2) * u);
+        const sy = cy - Math.round((SHIP_GROUND + 1 - sp[1]) * u);
+        /* Six paliers, le dernier presque rien — la recette du 448. ⚠️ ET SERRÉS :
+           le premier jet montait à 14 px de rayon et faisait, sur la planche, une
+           buée blanche large comme trois cases. Une étincelle est petite ; ce qui
+           doit être grand, c'est leur NOMBRE. */
+        for (let s = 5; s >= 0; s--) {
+          const r = (1.2 + s * 1.35) * u, a = (0.115 - s * 0.019) * (o.night ? 1.7 : 1) * (0.55 + 0.45 * b);
+          if (a <= 0.004) continue;
+          craterDisc(g2, sx, sy, r, `rgba(${SHIP_PAL.glow[0]},${SHIP_PAL.glow[1]},${SHIP_PAL.glow[2]},${a.toFixed(3)})`, 1);
+        }
+        craterDisc(g2, sx, sy, Math.max(1, 0.9 * u), `rgba(255,255,255,${(0.50 + 0.3 * b).toFixed(2)})`, 1);
+      }
+    }
+    /* LA MARQUE DE FIN : quand les cinq y sont, l'étoile de la voile bat pour de
+       bon. C'est la seule différence entre « fini » et « presque fini », et elle
+       doit se voir d'un coup. */
+    if (built === C.STAR_SHIP_ORDER.length) {
+      const p = 0.5 + 0.5 * Math.sin(t / 620);
+      const sx = cx + Math.round((78 - SHIP_W() / 2) * u), sy = cy - Math.round((SHIP_GROUND + 1 - 49) * u);
+      for (let s = 4; s >= 0; s--)
+        craterDisc(g2, sx, sy, (5 + s * 3.4) * u,
+                   `rgba(255,255,255,${(0.11 - s * 0.021 + 0.03 * p).toFixed(3)})`, 1);
+    }
+  }
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ZIP 448 — LA COMÈTE. (Guillaume : « l'animation de la comète est trop
      ║ ridicule… mettre au même niveau de détail et de soin graphique la comète
      ║ elle-même et le cratère ».)
@@ -12722,6 +13180,7 @@ house: house(),
     magpie: [magpieSprite(0), magpieSprite(1), magpieSprite(2)],
     drawStarCrater,
     drawStarCraterAir,
+    drawStarShip,          // 450 — le navire des étoiles, sur la grève du lac
     starCraterSink,
     drawStarComet,          // zip 448 — la comète, sa queue, sa traînée et son impact
     drawStarCometTrail,

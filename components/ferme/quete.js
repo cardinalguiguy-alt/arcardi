@@ -118,6 +118,79 @@ export const STAR_SITE = Object.fromEntries(STAR_SITES.map(s => [s.id, s]));
 export const STAR_SHARD_IDS = STAR_SITES.filter(s => s.shard).map(s => s.id);
 export const STAR_SHARD_TOTAL = STAR_SHARD_IDS.length;   // 4 — jamais écrit en dur ailleurs
 
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 450 — LE NAVIRE. « CONSTRUIRE QUELQUE CHOSE AVEC LES ÉTOILES. »
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ DEMANDE DE GUILLAUME, MOT POUR MOT : « construire un bateau magique avec
+   les étoiles. Une fois qu'on les récolte toutes […] on arrive à bâtir un grand
+   navire qui permettra de prendre le large et d'amarrer sur des îles, dans le
+   futur. » Et, juste avant, le refus qui a produit celle-ci : *« l'idée de
+   construire une lyre est un peu arbitraire ? »* — elle l'était. Une lyre est un
+   objet d'ADULTE : un enfant de sept ans ne sait pas ce que c'est, donc « pourquoi
+   on construit ça ? » est la première question qu'il pose, et c'est très
+   exactement celle qu'on ne veut pas entendre (règle des 60 secondes).
+   **Un bateau cassé qu'on répare ne demande aucune explication.**
+
+   ⚠️⚠️⚠️ ET IL N'AJOUTE PAS UN SEUL CHAMP D'ÉTAT — C'EST TOUT LE POINT DE CE
+   BLOC. Les cinq morceaux du navire sont une LECTURE des cinq trouvailles qui
+   existaient déjà, pas une seconde comptabilité :
+
+       la coque   ← `furrow`      (chapitre 1, le champ de la ferme)
+       le safran  ← `lakeShard`   (chapitre 3, le fond du lac)
+       le mât     ← `beadShard`   (chapitre 4, la perle de la verrerie)
+       la voile   ← `nestShard`   (chapitre 4, le nid de la pie)
+       la cloche  ← `song`        (chapitre 5, ce que la cloche donne)
+
+   Un compteur `ship: 3` dans l'état partagé aurait été le réflexe, et il aurait
+   été le doublon du §8 de `CLAUDE.md` — « un paramètre qui double un autre est une
+   divergence en attente ». Le jour où l'on déplace une trouvaille, le navire suit
+   tout seul ; il ne peut PAS afficher quatre morceaux pour trois éclats trouvés.
+   Zéro migration SQL, zéro `send()`, zéro champ dans le paquet de position.
+
+   ⚠️ LA CLOCHE EST LE CINQUIÈME MORCEAU, ET C'EST CE QUI SAUVE LE RETOURNEMENT.
+   Elle a été fondue il y a cent ans dans une étoile tombée qui n'est jamais
+   repartie : elle est trop lourde pour rentrer, elle n'a jamais eu de bateau.
+   Elle donne sa voix, elle devient la cloche de bord — donc **elle voyagera**
+   sans jamais rentrer. Le sacrifice reste, il se change en départ, et un enfant
+   comprend « la cloche va enfin voir la mer » sans qu'on lui explique rien.
+   ⚠️ Le morceau qu'on ne trouve pas DEHORS est donc le dernier, et il se VOIT :
+   quatre logements allumés, un noir. C'est la règle des 10 secondes tenue par un
+   objet du monde au lieu d'un bandeau — le sujet entier de cette passe.
+
+   ⚠️⚠️ L'ORDRE DES CINQ CLÉS N'EST PAS ÉCRIT ICI : il vient de
+   `C.STAR_SHIP_ORDER`, que `fermeArt.js` lit aussi pour savoir quelle pièce il
+   peint. Une seconde liste ici aurait été le doublon le plus sournois possible —
+   les deux auraient eu l'air justes, et le jour où l'on intervertit deux morceaux
+   le bateau aurait affiché une voile là où le joueur a trouvé un safran, **sans
+   qu'aucun banc ne puisse le voir** (chacun aurait mesuré sa propre liste). C'est
+   le défaut du bandeau et du chevron au 449, pris à l'avance : *une jointure,
+   jamais deux listes.*
+   ───────────────────────────────────────────────────────────────────────────── */
+const SHIP_SITE_OF = {
+  hull: "furrow", rudder: "lakeShard", mast: "beadShard", sail: "nestShard", bell: "song",
+};
+export const STAR_SHIP_PARTS = C.STAR_SHIP_ORDER.map(key => ({ key, site: SHIP_SITE_OF[key] }));
+export const STAR_SHIP_TOTAL = STAR_SHIP_PARTS.length;   // 5 — jamais écrit en dur ailleurs
+export const STAR_SHIP_KEYS = C.STAR_SHIP_ORDER;
+
+/* Quels morceaux sont posés, DANS L'ORDRE DE LA TABLE. ⚠️ Rend un tableau de
+   booléens et non un compte : le dessin a besoin de savoir LEQUEL manque (un
+   logement vide n'est pas au même endroit selon la pièce), et un compte seul
+   forcerait à supposer que les morceaux arrivent dans l'ordre. Ils n'y arrivent
+   pas — le chapitre 4 en donne deux d'affilée, et rien n'interdit de finir le lac
+   après la verrerie le jour où l'ordre des chapitres bouge. */
+export function starShipHas(e, key) {
+  const p = STAR_SHIP_PARTS.find(q => q.key === key);
+  return !!(p && starHas(e, p.site));
+}
+export function starShipParts(e) { return STAR_SHIP_PARTS.map(p => starHas(e, p.site)); }
+export function starShipBuilt(e) { return starShipParts(e).filter(Boolean).length; }
+/* ⚠️ « FINI » N'EST PAS « QUÊTE FINIE » : les cinq morceaux sont posés dès que la
+   cloche a chanté, et la scène finale se joue APRÈS. Les distinguer laisse le
+   navire s'achever à l'écran pendant la résolution, au lieu d'apparaître d'un coup
+   sur un fondu — et `starDone` reste le seul témoin de la fin. */
+export function starShipComplete(e) { return starShipBuilt(e) === STAR_SHIP_TOTAL; }
+
 /* ───────────────────────────────────────────────────────────────────────────
    2. LES CHAPITRES.
 

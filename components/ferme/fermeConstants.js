@@ -3477,6 +3477,64 @@ export const STAR_FURROW_LEN = 6;              // cases de terre retournée, ver
    tient celui qui éclaire, pour que le jeu et le banc désignent la même case. */
 export const STAR_PIER_X = TOWN_PIER.x + (TOWN_PIER.w >> 1);
 export const STAR_PIER_Y = TOWN_PIER.y + TOWN_PIER.h - 1;
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 450 — LA CALE DU NAVIRE. (demande de Guillaume : « construire un bateau
+   ║ magique avec les étoiles […] prendre le large et amarrer sur des îles ».)
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ IL EST DÉRIVÉ DU PONTON, ET C'EST LA MÊME DISCIPLINE QUE LE CRATÈRE DÉRIVÉ
+   DU PARC (444) : aucune coordonnée en dur, donc le jour où le lac recule le
+   chantier recule avec lui. `starShipPos` (FermeGame) part d'ici et balaie en
+   spirale jusqu'à une cale qui tienne — libre, praticable, ET AU BORD DE L'EAU.
+   ⚠️⚠️ « AU BORD DE L'EAU » EST UNE CONDITION DE PLACEMENT ET PAS UN GOÛT : un
+   navire posé au milieu d'un pré est un décor absurde, et la spirale l'y aurait
+   mis sans broncher (la rive du 435 est ONDULÉE, ses baies remontent de plusieurs
+   cases). Le balayage exige donc de l'eau à portée — c'est ce qui fait qu'on le
+   lit comme un chantier naval et non comme une épave.
+   ⚠️ À L'OUEST DU PONTON, PAS À L'EST : le ponton est dans l'axe de l'artère
+   centrale, donc on arrive du NORD. Posé à l'ouest, le navire est de trois quarts
+   dans le champ quand on descend vers l'eau, et il ne masque jamais le ponton —
+   qui est, lui, le lieu du chapitre 3. */
+export const STAR_SHIP_X = TOWN_PIER.x - 11;
+export const STAR_SHIP_Y = TOWN_PIER.y + 2;
+/* ⚠️⚠️ TROIS GRANDEURS, TROIS NOMS — LA LEÇON DU 441 (« une grandeur de DESSIN,
+   une grandeur de RANG, une grandeur de COLLISION : trois choses, trois
+   paramètres »), appliquée AVANT d'être payée, exactement comme au cratère.
+   `STAR_SHIP_DRAW_W/H` sont ce que le rendu PEINT (en cases) ; `STAR_SHIP_BLOCK_*`
+   est l'emprise qui BLOQUE le pas ; `STAR_SHIP_NEAR_R` est le rayon auquel on peut
+   le regarder avec E. Les confondre aurait donné soit une coque qu'on traverse,
+   soit un mur invisible large comme le dessin — le défaut du 440 dans les deux
+   sens.
+   ⚠️ L'EMPRISE BLOQUANTE EST PLUS PETITE QUE LE DESSIN, et c'est le bon sens :
+   la voile et le mât montent, ils ne barrent rien au sol ; seule la coque est un
+   obstacle. Un joueur doit pouvoir passer DERRIÈRE le navire pour aller au
+   ponton. */
+/* ⚠️⚠️ L'ORDRE CANONIQUE DES CINQ MORCEAUX, ET IL EST ICI PARCE QUE TROIS
+   FICHIERS LE LISENT : `quete.js` y accroche ses cinq trouvailles, `fermeArt.js`
+   y prend l'indice de la pièce qu'il peint, `FermeGame.js` et le banc s'en
+   servent pour nommer. Écrit dans `quete.js`, il aurait obligé `fermeArt` à
+   importer la quête — c'est-à-dire à monter toute une histoire pour peindre un
+   bateau, et à faire dépendre un banc de RENDU d'un banc de LOGIQUE.
+   ⚠️ C'est le §8 dans sa forme la plus simple : une liste, trois lecteurs, aucune
+   copie. Le jour où un sixième morceau s'ajoute, il s'ajoute ICI et les trois
+   suivent — ou aucun ne suit, et le banc le dit. */
+export const STAR_SHIP_ORDER = ["hull", "rudder", "mast", "sail", "bell"];
+export const STAR_SHIP_DRAW_W = 9;      // cases peintes en largeur (coque + beaupré)
+export const STAR_SHIP_DRAW_H = 7;      // cases peintes en hauteur (jusqu'au haut du mât)
+export const STAR_SHIP_BLOCK_W = 6;     // la COQUE, et elle seule, arrête le pas
+/* ⚠️⚠️ UNE SEULE RANGÉE BLOQUE, ET C'EST UN CHOIX DE JEU VU À L'ÉCRAN. La coque
+   est peinte sur trois rangées ; en bloquer deux la faisait déborder de la grève
+   sur la promenade du lac, c'est-à-dire couper un chemin. Une rangée suffit à ce
+   qu'on ne traverse pas un bateau, et le reste du dessin passe DEVANT les
+   promeneurs sans les arrêter — « la case d'un décor n'est pas la surface qu'il
+   couvre » (§15 bis), appliquée dans le sens où elle rend service. */
+export const STAR_SHIP_BLOCK_H = 1;
+/* ⚠️⚠️ LA DISTANCE MAXIMALE À L'EAU, ET ELLE EXISTE PARCE QUE L'ÉCRAN A CORRIGÉ LE
+   BANC. « De l'eau quelque part au sud » laissait le navire sur l'herbe haute, six
+   cases et un muret au-dessus du lac : trois contrôles verts, et un bateau garé
+   dans un pré. La grandeur juste est la DISTANCE, et elle est ici pour que le
+   générateur et le banc lisent le même nombre. */
+export const STAR_SHIP_WATER_MAX = 3;
+export const STAR_SHIP_NEAR_R = 5.0;    // à portée de « E : regarder le navire »
 /* LA VERRERIE, dans le quartier des artisans, et L'ARBRE DE LA PIE au-dessus.
    ⚠️ LE NID SE DÉDUIT DU FOUR, PAS D'UNE SECONDE ANCRE, et l'histoire l'exige :
    la pie a laissé tomber un éclat dans le sable de l'atelier, c'est comme ça

@@ -56,6 +56,52 @@ ok("les clés-fonctions prennent les mêmes paramètres dans les deux langues",
 // rien est pire qu'un contrôle absent, parce qu'il rassure).
 ok("le découpage des deux tables marche encore", FR.size > 500 && EN.size > 500, `${FR.size} / ${EN.size}`);
 
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 450 — UNE CLÉ APPARIÉE N'EST PAS UNE CLÉ TRADUITE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ CE BANC A ÉTÉ VERT PENDANT SIX ZIPS PENDANT QUE LA QUÊTE ÉTAIT EN ANGLAIS
+   DES DEUX CÔTÉS. Le bloc `fr` contenait littéralement `star: STAR_EN` : les clés
+   étaient appariées — parfaitement, puisque c'était le MÊME OBJET — et les cinq
+   contrôles ci-dessus n'avaient rien à redire. *Un banc qui mesure la bonne chose
+   ne voit pas ce qu'on ne lui a pas demandé de mesurer* (§ CLAUDE.md, deuxième
+   visage). La grandeur qui manquait n'est pas la clé, c'est la VALEUR.
+   ⚠️ ON NE PEUT PAS EXIGER QUE CHAQUE PHRASE DIFFÈRE, et ce serait faux de le
+   faire : « Valley Town », « OK », un emoji, un nom propre sont identiques dans les
+   deux langues, et il y en a des dizaines. Ce qui n'est jamais légitime, c'est
+   qu'une SECTION ENTIÈRE le soit — c'est la signature exacte du défaut qu'on
+   corrige, et elle ne peut pas arriver par hasard sur huit phrases.
+   ⚠️ `star.dev` est déclaré identique EXPRÈS (le menu développeur est un outil,
+   pointé et non recopié) : il est nommé ici, ce qui est la seule façon honnête de
+   l'excuser — une exception écrite se relit, une exception implicite se subit. */
+{
+  const { FERME_STR } = await import(path.join(ROOT, "components", "ferme", "fermeStrings.js")
+    .replace(/^/, "file://"));
+  const SHARED_ON_PURPOSE = new Set(["star.dev"]);
+  const groups = new Map();     // chemin de section -> { same, total }
+  (function walk(fr, en, at) {
+    if (!fr || !en || typeof fr !== "object" || typeof en !== "object") return;
+    for (const k of Object.keys(fr)) {
+      const a = fr[k], b = en[k], p = at ? at + "." + k : k;
+      if (a && typeof a === "object" && !Array.isArray(a)) { walk(a, b, p); continue; }
+      if (typeof a !== "string" || typeof b !== "string") continue;
+      const g = groups.get(at) || { same: 0, total: 0 };
+      g.total++; if (a === b) g.same++;
+      groups.set(at, g);
+    }
+  })(FERME_STR.fr, FERME_STR.en, "");
+  let leaves = 0, twins = 0;
+  const untranslated = [];
+  for (const [at, g] of groups) {
+    leaves += g.total; twins += g.same;
+    if (!at || SHARED_ON_PURPOSE.has(at)) continue;
+    /* Huit phrases : en dessous, une section peut légitimement être faite de noms
+       propres. Au-dessus, l'identité complète n'est pas un hasard. */
+    if (g.total >= 8 && g.same === g.total) untranslated.push(`${at} (${g.total} phrases)`);
+  }
+  ok("aucune SECTION n'est identique mot pour mot dans les deux langues",
+     untranslated.length === 0, untranslated.join(", ") || `${groups.size} sections, ${leaves} phrases lues, ${twins} jumelles légitimes`);
+}
+
 console.log(fails ? `\n${fails} ÉCHEC(S)\n` : `\nLes ${FR.size} clés sont appariées.\n`);
 console.log(`Ce script ne dit RIEN de la QUALITÉ des traductions : il dit qu'aucune
 clé ne manque et qu'aucune fonction n'a perdu un paramètre en route.\n`);

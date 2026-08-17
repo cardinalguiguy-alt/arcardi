@@ -15952,6 +15952,43 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
       /* ══════════════════════════════════════════════════════════════════════
+         ZIP 450 — LE NAVIRE DES ÉTOILES, SUR LA GRÈVE DU LAC.
+         ──────────────────────────────────────────────────────────────────────
+         ⚠️⚠️ IL EST DANS LA FILE DE TRI, PAS DANS LE DÉCAL DE SOL — L'INVERSE DU
+         CRATÈRE, ET LES DEUX SONT JUSTES. Un cratère est un TROU : on marche
+         dedans, donc il se peint avec les tuiles et rien ne passe derrière lui.
+         Un navire est un VOLUME de sept cases de haut : un joueur au nord doit
+         passer DERRIÈRE, un joueur au sud DEVANT. C'est exactement ce que fait
+         `pushE`, et c'est pour ça qu'il existe.
+         ⚠️ ET IL N'EST PAS DANS LA PASSE DES MURS. La règle du 441 (« ce qui est
+         aussi haut qu'un mur EST un mur ») vise un sprite adossé au mur SUD d'un
+         intérieur, qui avale ce qui passe devant parce que sa clé de tri est la
+         plus grande de la pièce. Le navire est en plein air, au milieu d'une
+         grève : sa clé de tri est celle de sa case, elle le range correctement
+         des deux côtés. Le sortir de la file en ferait un décor qui recouvre
+         tout le rivage.
+         ⚠️⚠️ SA POSITION VIENT DU MONDE (`tw.shipX/shipY`), PAS D'UN SECOND
+         BALAYAGE. Le générateur l'a dérivée, y a posé la collision, et
+         `verify-vallee` lit la même valeur : trois lecteurs, une écriture (§8 de
+         `CLAUDE.md`). Un `starShipPos()` local ici aurait été le doublon parfait
+         — il aurait « marché » tant que les deux spirales tombent d'accord.
+         ⚠️ LES CINQ MORCEAUX SONT UNE LECTURE DE L'ÉTAT, JAMAIS UN COMPTEUR :
+         `Q.starShipParts` dérive des cinq trouvailles. `fermeArt` ne reçoit que
+         cinq booléens et ne sait rien de la quête. */
+      if (tw.shipX && sprites.drawStarShip) {
+        const smar = C.STAR_SHIP_DRAW_W;
+        if (tw.shipX >= x0 - smar && tw.shipX <= x1 + smar && tw.shipY >= y0 - smar && tw.shipY <= yBot + smar) {
+          const se = elAt(tw.shipX, tw.shipY);
+          const sparts = Q.starShipParts(sharedRef.current.star);
+          /* ⚠️ LA NUIT SE DÉDUIT DE `dayStartAt`, COMME PARTOUT — jamais d'un champ
+             `time` qui n'existe pas dans l'état partagé. C'est le même appel que
+             les vols de nuit des oiseaux (433) et l'orgue (441). */
+          const snight = E.isNightTime(E.gameTimeMin(sharedRef.current.dayStartAt, now));
+          pushE((tw.shipY + 1) * T, se, () =>
+            sprites.drawStarShip(ctx, (tw.shipX + 0.5) * T, (tw.shipY + 1) * T, T, sparts, now, { night: snight }));
+        }
+      }
+      /* ══════════════════════════════════════════════════════════════════════
          LA FONTAINE (425). Le bassin de pierre est un SPRITE (voir
          plazaFountainSprite), le jet et les gouttes restent dessinés ici.
          ⚠️ LE PARTAGE N'EST PAS ARBITRAIRE : ce qui ne bouge pas va dans le

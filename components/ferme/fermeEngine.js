@@ -6247,7 +6247,185 @@ export function generateTownWorld() {
       }
     }
   }
-  return { w: W, h: H, ground, objects, objHp, elev, solid, props, hedge, road, bloom, depth, shore };
+  /* ╔═════════════════════════════════════════════════════════════════════════════
+     ║ ZIP 450 — LE CHANTIER NAVAL, SUR LA GRÈVE DU LAC.
+     ╚═════════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ C'EST UN LIEU DE LA VILLE, PAS UN DÉCOR DE QUÊTE, ET LA DIFFÉRENCE EST
+     STRUCTURELLE. La cale, ses tins et la carcasse sur ber existent que la quête
+     ait commencé ou non : Valley Town est une ville de lac, elle a un chantier
+     naval, point. Ce que la quête fait, c'est y BÂTIR quelque chose.
+     Trois conséquences, toutes bonnes :
+       · l'emprise bloquante est posée UNE FOIS, ici, au moment où l'on connaît la
+         carte — plutôt que d'apparaître sous les pieds d'un joueur le jour où la
+         cinquième note tombe (une case qui change de sens en cours de partie est
+         le piège que le sillon de la ferme évite depuis le 444) ;
+       · `verify-vallee` la voit comme n'importe quel bâti et vérifie que les
+         21 756 trajets passent toujours ;
+       · le joueur qui n'a pas la quête voit un chantier naval, ce qui est un
+         endroit de vie de plus sur une rive qui n'en avait aucun.
+
+     ⚠️⚠️ LA POSITION EST DÉRIVÉE ICI ET STOCKÉE SUR LE MONDE (`shipX`/`shipY`) —
+     JAMAIS RECALCULÉE DANS `FermeGame`. Le cratère, lui, a deux écritures (une
+     ancre dans les constantes, un balayage dans le composant) et c'est supportable
+     parce qu'il ne bloque RIEN : ici, le dessin et la collision doivent tomber sur
+     la même case, et deux balayages qui « devraient » donner le même résultat sont
+     la divergence en attente du §8 de `CLAUDE.md`. Une seule écriture, deux
+     lecteurs.
+     ⚠️ ET « AU BORD DE L'EAU » EST UNE CONDITION DU BALAYAGE, PAS UN VŒU : la rive
+     du 435 est ondulée, ses baies remontent de plusieurs cases, et une spirale qui
+     ne demanderait que « libre et praticable » poserait le navire au milieu du pré
+     — un décor absurde que rien n'aurait signalé. */
+  let shipX = 0, shipY = 0;
+  {
+    const bw = C.STAR_SHIP_BLOCK_W, bh = C.STAR_SHIP_BLOCK_H;
+    const x0 = (x) => x - (bw >> 1);
+    /* ⚠️⚠️ « DE L'EAU À PORTÉE » N'ÉTAIT PAS LA BONNE GRANDEUR, ET SEUL L'ÉCRAN L'A
+       DIT. Le premier jet acceptait de l'eau dans un rectangle de six cases au sud
+       et prenait la PREMIÈRE case libre de la spirale : le navire s'est posé sur
+       l'herbe haute, avec la promenade du lac ET son muret entre lui et le lac. Les
+       trois contrôles du banc étaient verts (placé, atteignable, « au bord de
+       l'eau » — 36 cases d'eau lues), et à l'écran c'était un bateau garé dans un
+       pré. *Un banc qui mesure « y a-t-il de l'eau quelque part » applaudit une
+       barque au milieu d'un champ.*
+       ⚠️ LA BONNE GRANDEUR EST LA DISTANCE À L'EAU, ET ON PREND LE MINIMUM. On ne
+       choisit donc plus la première case qui convient, on choisit **la plus proche
+       du lac** — départage par la distance à l'ancre, ce qui garde le balayage
+       parfaitement déterministe. */
+    const waterDist = (x, y) => {
+      let best = 99;
+      for (let dy = 0; dy <= 8; dy++) for (let dx = -5; dx <= 5; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if (inMap(nx, ny) && ground[id(nx, ny)] === C.G_WATER) best = Math.min(best, dy + Math.abs(dx) * 0.5);
+      }
+      return best;
+    };
+    /* ⚠️⚠️ CE QUE LA PASSE VA DÉGAGER NE DOIT PAS LUI INTERDIRE SA PLACE. La rive est
+       bordée de bittes et de lampadaires tous les huit pas (chacun pose `solid`
+       lui-même) : exiger huit cases sans une seule case solide n'a JAMAIS pu être
+       satisfait, et le balayage rendait « aucune cale » sur les 3 000 positions
+       essayées. C'est la règle du §15 bis prise à l'endroit — *une passe qui pave
+       dégage ce qu'elle pave* — et la conséquence est qu'elle doit en tenir compte
+       AVANT de choisir, pas seulement après.
+       ⚠️ ON N'IGNORE QUE LES DÉCORS, jamais une solidité d'une autre origine (un
+       bâtiment, une haie) : celles-là ne s'enlèvent pas, et les confondre aurait
+       posé un navire dans un mur. */
+    const propAt = new Set(props.map(p => id(p.x, p.y)));
+    const fits = (x, y) => {
+      if (!inMap(x, y)) return false;
+      const e0 = elev[id(x, y)];
+      /* ⚠️ UNE MARGE D'UNE CASE TOUT AUTOUR : ce qui bloque doit être contournable.
+         Sans elle, la coque pouvait naître collée à la haie d'un jardin et fabriquer
+         le cul-de-sac d'une case du 439 — que seule une mesure de connexité trouve. */
+      /* ⚠️⚠️ LA MARGE EST SUR LES CÔTÉS ET AU-DESSUS, JAMAIS EN DESSOUS — et le
+         premier jet la mettait partout, ce qui rendait le placement IMPOSSIBLE :
+         il exigeait une case de terre ferme sous la proue, alors que ce qui doit
+         s'y trouver est précisément L'EAU. Le symptôme n'a rien montré (aucune cale
+         trouvée, coordonnées 0,0), et c'est le banc qui l'a dit ; à l'œil on aurait
+         cherché du côté du dessin. */
+      for (let dy = -bh; dy <= 0; dy++) for (let dx = -1; dx <= bw; dx++) {
+        const nx = x0(x) + dx, ny = y + dy;
+        if (!inMap(nx, ny)) return false;
+        const i = id(nx, ny), g = ground[i];
+        if (elev[i] !== e0) return false;
+        if (hedge[i]) return false;
+        if (solid[i] && !propAt.has(i)) return false;
+        /* ⚠️⚠️ LE QUAI EST AUTORISÉ, ET C'EST LA CARTE QUI L'IMPOSE — pas un
+           relâchement. En relevant le terrain (et non en l'imaginant), la rive du lac
+           n'a AUCUNE bande d'herbe au bord de l'eau : elle est bordée sur toute sa
+           longueur par un quai de pierre de deux rangées, l'eau commence juste après.
+           Exiger de l'herbe au contact de l'eau ne rendait donc pas le placement
+           « plus propre », ça le rendait IMPOSSIBLE — le balayage n'a plus rien
+           trouvé du tout, et c'est ainsi qu'on l'a su.
+           ⚠️ Un chantier naval se hale sur un quai : c'est l'endroit juste, pas un
+           pis-aller. Ce qu'il faut protéger n'est pas « ne pas être sur un chemin »
+           mais « la promenade reste praticable DERRIÈRE lui » — une seule rangée
+           bloque (`STAR_SHIP_BLOCK_H`), l'autre reste libre, et le banc le mesure.
+           ⚠️ `G_PATH` (les allées de terre, à l'intérieur des terres) reste interdit :
+           là, rien ne justifierait de barrer un passage. */
+        if (g !== C.G_GRASS && g !== C.G_TOWN_LAWN && g !== C.G_PATH_STONE) return false;
+      }
+      return waterDist(x, y) <= C.STAR_SHIP_WATER_MAX;
+    };
+    /* Balayage déterministe : on énumère la même spirale, on garde le MEILLEUR. */
+    let best = null;
+    for (let r = 0; r <= 26; r++)
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const x = C.STAR_SHIP_X + dx, y = C.STAR_SHIP_Y + dy;
+        if (!fits(x, y)) continue;
+        const score = waterDist(x, y) * 100 + r;    // l'eau d'abord, l'ancre pour départager
+        if (!best || score < best.score) best = { x, y, score };
+      }
+    if (best) { shipX = best.x; shipY = best.y; }
+    if (shipX) {
+      /* ⚠️ LA PASSE DÉGAGE CE QU'ELLE PAVE (§15 bis) : tout ce qui a été semé dans
+         la SURFACE COUVERTE par le dessin s'en va, pas seulement dans l'emprise
+         bloquante. C'est très exactement le chêne planté sur le tablier du pont
+         (440) — ça ne bloque rien, ça ne lève rien, et ça se voit. */
+      const dw = C.STAR_SHIP_DRAW_W, dh = C.STAR_SHIP_DRAW_H;
+      /* ⚠️⚠️ RETIRER UN DÉCOR NE SUFFIT PAS : IL FAUT AUSSI RENDRE SA CASE. Trois
+         familles de décors posent `solid` elles-mêmes (le lampadaire, la topiaire,
+         le garde-corps du 447) — les enlever de la liste sans effacer leur
+         collision laisse un MUR INVISIBLE, c'est-à-dire le défaut que le 425 a payé
+         sur six cents haies. `verify-vallee` l'a dit dès le premier lancement, sur
+         une seule case : (81,153), un lampadaire de la promenade.
+         ⚠️ Et la fenêtre est celle de la boîte réellement PEINTE — au NORD de
+         l'ancre, jamais au sud. Le premier jet mordait une rangée trop bas et
+         effaçait un décor que le navire ne recouvre pas : *on ne dégage que ce
+         qu'on pave* (§15 bis). */
+      /* ⚠️⚠️ UN OUVRAGE LINÉAIRE SE RETIRE ENTIER, JAMAIS PAR LE MILIEU. `verify-compo`
+         l'a dit dès le premier lancement : la boîte du navire coupait une haie en
+         deux et laissait un tronçon SEUL à côté — « un ouvrage linéaire court, il ne
+         se pose pas tout seul ». C'est la même famille que la passe qui pave (§15
+         bis), vue depuis l'autre bout : *dégager sans regarder ce qu'on coupe laisse
+         un moignon, et un moignon se voit alors que la coupure ne se voyait pas.*
+         ⚠️ On élargit donc la fenêtre pour CES familles seulement — pas pour les
+         décors isolés, qu'il n'y a aucune raison de raser plus loin que le dessin. */
+      const LINEAR = new Set(["hedgeRow", "fence", "lowWall", "benchWall", "rail"]);
+      const RUN_STEP = 6;                 // l'écart maximal entre deux tronçons d'une même file
+      const doomed = new Set();
+      for (let k = 0; k < props.length; k++) {
+        const p = props[k];
+        if (Math.abs(p.x - shipX) <= (dw >> 1) && p.y <= shipY && shipY - p.y <= dh) doomed.add(k);
+      }
+      /* ⚠️⚠️ ON PROPAGE LE LONG DE LA FILE, ON N'ÉLARGIT PAS LA FENÊTRE. Le premier
+         correctif ajoutait quatre cases de marge : le moignon s'est simplement
+         déplacé de (81,153) à (97,153). *Un rayon plus grand ne résout pas un
+         problème de connexité, il le déménage.* On part donc des tronçons touchés et
+         on remonte la file de proche en proche, ce qui s'arrête tout seul au bout de
+         l'ouvrage — quelle que soit sa longueur. */
+      for (let pass = 0; pass < 40; pass++) {
+        let grew = false;
+        for (let a = 0; a < props.length; a++) {
+          if (!doomed.has(a) || !LINEAR.has(props[a].kind)) continue;
+          for (let b = 0; b < props.length; b++) {
+            if (doomed.has(b) || props[b].kind !== props[a].kind) continue;
+            if (props[b].y !== props[a].y || Math.abs(props[b].x - props[a].x) > RUN_STEP) continue;
+            doomed.add(b); grew = true;
+          }
+        }
+        if (!grew) break;
+      }
+      for (let k = props.length - 1; k >= 0; k--) {
+        if (!doomed.has(k)) continue;
+        const p = props[k];
+        if (inMap(p.x, p.y)) solid[id(p.x, p.y)] = 0;
+        props.splice(k, 1);
+      }
+      for (let dy = -dh; dy <= 1; dy++) for (let dx = -(dw >> 1) - 1; dx <= (dw >> 1) + 1; dx++) {
+        const nx = shipX + dx, ny = shipY + dy;
+        if (inMap(nx, ny)) objects[id(nx, ny)] = C.O_NONE;
+      }
+      // Puis, et seulement là, la COQUE bloque. Le mât et la voile ne bloquent rien.
+      for (let dy = 0; dy < C.STAR_SHIP_BLOCK_H; dy++)
+        for (let dx = 0; dx < C.STAR_SHIP_BLOCK_W; dx++) {
+          const nx = x0(shipX) + dx, ny = shipY - dy;
+          if (inMap(nx, ny)) solid[id(nx, ny)] = 1;
+        }
+    }
+  }
+
+  return { w: W, h: H, ground, objects, objHp, elev, solid, props, hedge, road, bloom, depth, shore, shipX, shipY };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

@@ -2837,3 +2837,139 @@ dérivées : hors de la cuvette dessinée (`DRAW_R × CRATER_SQUASH` ≈ 3,9), d
   mais ça n'a pas été jugé par quelqu'un qui découvre le jeu.
 - **Les résidents ne brûlent pas.** Ils ne vont pas au cratère, et leur donner la règle
   demanderait de la faire tourner côté hôte pour vingt entités à chaque image.
+
+---
+
+## 30. ZIP 451 — LE NAVIRE DES ÉTOILES, ET LA QUÊTE PARLE FRANÇAIS
+
+**Demande de Guillaume, en deux temps.** D'abord le refus d'une première proposition, et il vaut
+d'être cité parce qu'il porte tout le chantier : *« l'idée de construire une lyre est un peu
+arbitraire ? »* — oui. **Une lyre est un objet d'ADULTE** : un enfant de sept ans ne sait pas ce
+que c'est, donc « pourquoi on construit ça ? » est la première question qu'il pose, et c'est très
+exactement celle qu'on ne veut pas entendre. Puis la sienne, qui n'a pas ce défaut :
+*« construire un bateau magique avec les étoiles. Une fois qu'on les récolte toutes […] on arrive
+à bâtir un grand navire qui permettra de prendre le large et d'amarrer sur des îles, dans le
+futur. »*
+
+### 30.1 Ce que le navire résout, et ce n'est pas un décor de plus
+
+⚠️⚠️ **LE NAVIRE EST LE PISTEUR DE LA QUÊTE.** La règle qu'on se donne est celle des dix
+secondes : *à n'importe quel instant, l'enfant doit savoir ce qu'il fait EN REGARDANT L'ÉCRAN,
+sans ouvrir un menu et sans lire une phrase.* Un bandeau ne le fait pas — il faut savoir lire, et
+il faut le relire. Un bateau à qui il manque un mât, si.
+
+⚠️ **LES MORCEAUX MANQUANTS SONT PEINTS EN FANTÔME, À LEUR PLACE EXACTE.** Trois écritures ont
+été envisagées et deux jetées : cinq logements vides sur une borne (il faut expliquer ce que la
+borne compte), un bateau qui pousse morceau par morceau (on voit qu'il grandit, jamais ce qui lui
+MANQUE). La troisième est le langage que tout jeu de construction emploie, et un enfant le lit
+sans une ligne de texte.
+⚠️⚠️ **ET LE FANTÔME EST DÉRIVÉ DE LA PIÈCE, PAS DESSINÉ UNE SECONDE FOIS** : on cuit la pièce, on
+relit ses pixels, on remplace chaque pixel opaque par du bleu d'étoile sur un damier. Deux dessins
+séparés auraient divergé au premier réglage (§8 de `CLAUDE.md`), et le symptôme aurait été le pire
+possible — *le fantôme ne ressemble pas à ce qu'on obtient*, c'est-à-dire une promesse fausse.
+
+### 30.2 ⚠️⚠️ IL N'AJOUTE PAS UN SEUL CHAMP D'ÉTAT
+
+C'est le point d'architecture du chantier. Les cinq morceaux sont une **LECTURE** des cinq
+trouvailles qui existaient déjà :
+
+| morceau | vient de | chapitre |
+|---|---|---|
+| la coque | `furrow` | 1, le champ de la ferme |
+| le safran | `lakeShard` | 3, le fond du lac |
+| le mât | `beadShard` | 4, la perle de la verrerie |
+| la voile | `nestShard` | 4, le nid de la pie |
+| **la cloche** | `song` | 5, ce que la cloche donne |
+
+Un compteur `ship: 3` dans l'état partagé aurait été le réflexe, et il aurait été le doublon du
+§8 : le jour où l'on déplace une trouvaille, le navire suit tout seul, et il ne PEUT PAS afficher
+quatre morceaux pour trois éclats trouvés. **Zéro migration SQL, zéro `send()`, zéro champ dans le
+paquet de position.**
+
+⚠️ **LA CLOCHE EST LE CINQUIÈME MORCEAU, ET C'EST CE QUI SAUVE LE RETOURNEMENT.** Elle a été
+fondue il y a cent ans dans une étoile tombée qui n'est jamais repartie : trop lourde pour
+rentrer, elle n'a jamais eu de bateau. Elle donne sa voix, elle devient la cloche de bord — donc
+**elle voyagera sans jamais rentrer**. Le sacrifice reste, il se change en départ, et un enfant
+comprend « la cloche va enfin voir la mer » sans qu'on lui explique rien.
+
+⚠️ **L'ORDRE DES CINQ CLÉS VIT DANS `fermeConstants.STAR_SHIP_ORDER`**, lu par `quete.js` (qui y
+accroche ses trouvailles), par `fermeArt.js` (qui y prend l'indice de la pièce qu'il peint) et par
+le banc. Une seconde liste aurait affiché une voile là où le joueur a trouvé un safran **sans
+qu'aucun banc ne puisse le voir** — chacun aurait mesuré la sienne. *Une jointure, jamais deux
+listes* (449).
+
+### 30.3 Le chantier naval est un lieu de la VILLE, pas un décor de quête
+
+La cale, ses tins et la carcasse sur ber existent que la quête ait commencé ou non : Valley Town
+est une ville de lac, elle a un chantier naval. Trois conséquences, toutes bonnes : l'emprise
+bloquante est posée **une fois, au moment où l'on connaît la carte** (une case qui change de sens
+en cours de partie est le piège que le sillon évite depuis le 444) ; `verify-vallee` la traite
+comme n'importe quel bâti ; et le joueur qui n'a pas la quête voit un endroit de vie de plus sur
+une rive qui n'en avait aucun.
+
+⚠️ **LA POSITION EST DÉRIVÉE DANS LE GÉNÉRATEUR ET STOCKÉE SUR LE MONDE** (`tw.shipX/shipY`),
+jamais recalculée dans `FermeGame`. Le cratère a deux écritures et c'est supportable parce qu'il
+ne bloque rien ; ici le dessin et la collision doivent tomber sur la même case.
+
+### 30.4 ⚠️⚠️ CE QUE LA SÉANCE À L'ÉCRAN A TROUVÉ, ET QUE TROIS CONTRÔLES VERTS DISAIENT BON
+
+**Le navire était posé sur l'herbe haute, six cases et un muret au-dessus du lac.** Les trois
+contrôles étaient au vert : placé, atteignable, « au bord de l'eau » — *36 cases d'eau lues*. Ils
+mesuraient une PRÉSENCE là où il fallait mesurer une **DISTANCE**. C'est le §25 mot pour mot :
+*la question n'est pas « où est le bogue » mais « quelle grandeur ne mesure-t-on pas ».*
+⚠️ Corrigé en trois temps, et chacun a été mesuré parce que chacun s'est trompé :
+1. **le balayage prend le MINIMUM**, plus la première case qui convient ;
+2. **la marge est sur les côtés et au-dessus, jamais en dessous** — le premier jet exigeait de la
+   terre ferme sous la proue, c'est-à-dire là où doit se trouver l'eau : plus aucune cale trouvée
+   sur trois mille positions, et c'est le banc qui l'a dit ;
+3. ⚠️ **le quai est autorisé, et c'est la CARTE qui l'impose** — en relevant le terrain, la rive du
+   lac n'a aucune bande d'herbe au contact de l'eau, elle est bordée d'un quai de pierre sur toute
+   sa longueur. Exiger de l'herbe ne rendait pas le placement plus propre, ça le rendait
+   impossible. Ce qu'il faut protéger n'est pas le revêtement, c'est le **passage** : une seule
+   rangée bloque, la promenade reste franchissable derrière, et le banc mesure ça.
+
+⚠️⚠️ **ET DÉGAGER SANS REGARDER CE QU'ON COUPE LAISSE UN MOIGNON.** `verify-compo` a refusé la
+première version : la boîte du navire coupait une haie en deux. Élargir la fenêtre de quatre cases
+a simplement déplacé le tronçon isolé de (81,153) à (97,153) — *un rayon plus grand ne résout pas
+un problème de connexité, il le déménage.* On propage donc **le long de la file**, de proche en
+proche, ce qui s'arrête tout seul au bout de l'ouvrage.
+
+⚠️ **Et un décor retiré doit rendre sa case** : lampadaires, topiaires et garde-corps posent
+`solid` eux-mêmes, les enlever de la liste sans effacer leur collision laisse un **mur invisible**
+— le défaut des six cents haies du 425, attrapé cette fois par le banc, sur une seule case.
+
+### 30.5 La quête parle enfin français
+
+⚠️⚠️⚠️ **LE BLOC `fr` CONTENAIT LITTÉRALEMENT `star: STAR_EN`.** Le fichier est bilingue sur 1 082
+clés ; la quête était en anglais des DEUX côtés, c'est-à-dire que **le public visé ne pouvait lire
+aucune ligne de la seule histoire du jeu.** `verify-strings` ne pouvait rien dire, et pour une
+bonne raison : il apparie les CLÉS, et c'était le même objet, donc elles s'appariaient
+parfaitement. **La grandeur qui manquait n'était pas la clé, c'était la VALEUR** — il a gagné le
+contrôle « aucune SECTION n'est identique mot pour mot dans les deux langues », vérifié capable
+d'échouer en remettant la régression.
+
+⚠️ **Le registre est plus dur en français** : la langue est 15 à 20 % plus longue à sens égal, et
+le bandeau coupe **en silence** au-delà de ~80 signes (449). Plusieurs consignes sont donc
+raccourcies plutôt que traduites mot à mot — et `verify-quete` balaie désormais **les deux
+langues**, alors qu'il ne lisait que l'anglais, c'est-à-dire la seule qui ne risquait pas d'être
+coupée.
+
+⚠️ **Un contrôle a dû dire l'INVERSE de ce qu'il disait.** `verify-quete` exigeait
+`en.star === fr.star`, *le même objet* : c'était la bonne règle au 444 (une quête non traduite ne
+peut pas diverger d'elle-même) et elle est devenue fausse le jour de la traduction — elle l'aurait
+**refusée**. *Une question à laquelle on a répondu ne sort pas du fichier toute seule.*
+
+### 30.6 Ce que ça ne fait pas
+
+- ⚠️⚠️ **LE CHANTIER B — LES MAISONS — N'EST PAS COMMENCÉ.** Il est commandé, la décision de
+  contenu est prise (une FAMILLE dérivée de `PLANCHE2.house`), et il reste entier. Voir §27.5, qui
+  demeure son document de reprise, et le bloc ⏭️ REPRISE de `CLAUDE.md`.
+- **Le navire n'a pas de « E : regarder ».** On le lit à l'œil, ce qui est le sujet — mais il n'y
+  a aucune phrase pour dire ce qui manque, donc rien de bilingue à ce sujet.
+- **Il ne part jamais.** La scène finale ne le montre pas larguer les amarres : les textes le
+  disent (`end1`, `end2`), le dessin non. C'est une dette datée.
+- **Aucune séance à deux clients**, ni pour le navire ni pour le reste de la quête.
+- **Les cinq mini-jeux ne sont toujours pas joués jusqu'à la victoire** à cadence réelle.
+- **Le jeu reste MUET.** Un seul son est importé dans `FermeGame.js` (`church-organ.mp3`) et le
+  fichier n'existe pas, alors que `dig-dirt`, `door-open` et `cash-register` dorment dans
+  `public/sounds/`. C'est le défaut qui fait dire « c'est pas fini » en dix secondes.

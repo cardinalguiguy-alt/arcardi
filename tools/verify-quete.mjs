@@ -1072,7 +1072,29 @@ section("Les textes de la quête");
   const S = await import(pathToFileURL(path.join(tmp, "fermeStrings.js")).href);
   const st = S.FERME_STR.en.star;
   ok("la table `star` existe des deux côtés", !!S.FERME_STR.en.star && !!S.FERME_STR.fr.star);
-  ok("⚠️ …et c'est LA MÊME table (une seule écriture)", S.FERME_STR.en.star === S.FERME_STR.fr.star);
+  /* ╔═══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 450 — CE CONTRÔLE DISAIT L'INVERSE, ET IL AVAIT RAISON JUSQU'À
+     ║ AUJOURD'HUI. Il exigeait `en.star === fr.star`, LE MÊME OBJET.
+     ╚═══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ C'ÉTAIT LA BONNE RÈGLE AU 444 : tant que la quête n'était écrite qu'en
+     anglais, deux tables jumelles auraient divergé à la première réplique corrigée,
+     et une seule écriture rendait l'état « pas encore traduit » visible d'un coup
+     d'œil. Elle est devenue FAUSSE le jour où la traduction est arrivée — et c'est
+     très exactement le §14.2 de `CLAUDE.md` : *une question à laquelle on a répondu
+     ne sort pas du fichier toute seule ; elle y reste, et elle ment.* Ici elle
+     aurait menti dans le sens le plus coûteux : elle aurait REFUSÉ la traduction.
+     ⚠️ Ce qu'il faut mesurer maintenant est le contraire ET le complément : deux
+     tables DISTINCTES, et pas une clé de moins d'un côté. La parité fine est le
+     travail de `verify-strings` (qui a gagné au 450 le contrôle de VALEUR qui lui
+     manquait) ; ici on ne garde que la porte. */
+  ok("⚠️ …et ce sont DEUX tables distinctes (la quête est traduite)",
+     S.FERME_STR.en.star !== S.FERME_STR.fr.star);
+  {
+    const kEn = Object.keys(S.FERME_STR.en.star), kFr = Object.keys(S.FERME_STR.fr.star);
+    const miss = kEn.filter(k => !kFr.includes(k)).concat(kFr.filter(k => !kEn.includes(k)));
+    ok("⚠️ …et aucune section de quête ne manque d'un côté", miss.length === 0,
+       miss.join(",") || `${kEn.length} sections lues des deux côtés`);
+  }
   for (const ch of Q.STAR_CHAPTERS) ok(`le chapitre « ${ch.key} » a son titre`, typeof st.chapter[ch.key] === "string");
   /* ⚠️⚠️ ZIP 449 — LES OBJECTIFS SE VÉRIFIENT PAR CLÉ DÉRIVÉE, PLUS PAR CHAPITRE.
      Le bandeau lisait `goal[chapitre]` : une phrase pour trois objectifs, donc un
@@ -1091,11 +1113,22 @@ section("Les textes de la quête");
      depuis le 449 ; le plafond reste dur, sinon un bandeau de mission redevient
      le journal de quête que ce chantier refuse. 560 px, deux lignes de 12 px,
      l'icône et les pastilles déduites : ~95 signes, on s'arrête à 80. */
+  /* ⚠️⚠️ ZIP 450 — IL BALAIE LES DEUX LANGUES, ET IL N'EN LISAIT QU'UNE. Le
+     contrôle ne regardait que `st`, c'est-à-dire l'ANGLAIS, parce qu'au 449 il n'y
+     avait rien d'autre à lire. Or **le français est 15 à 20 % plus long à sens
+     égal**, et c'est lui qui part chez le public visé : le banc mesurait donc la
+     seule langue qui ne risquait pas d'être coupée. *Il mesure autre chose* — le
+     premier visage du défaut de banc, dans sa version la plus discrète, celle où
+     l'on mesure une VARIANTE de la bonne grandeur. */
   const GOAL_MAX = 80;
-  for (const k of Q.STAR_GOAL_KEYS) {
-    const s = st.hud.goal[k] || "";
-    ok(`…et « ${k} » tient dans le bandeau`, s.length <= GOAL_MAX, `${s.length} signes`);
-  }
+  let goalsRead = 0;
+  for (const [lang, tbl] of [["en", S.FERME_STR.en.star], ["fr", S.FERME_STR.fr.star]])
+    for (const k of Q.STAR_GOAL_KEYS) {
+      const s = tbl.hud.goal[k] || "";
+      goalsRead++;
+      ok(`…et « ${k} » (${lang}) tient dans le bandeau`, s.length <= GOAL_MAX, `${s.length} signes`);
+    }
+  console.log(`         (${goalsRead} phrases de bandeau lues, deux langues)`);
   for (const op of Q.STAR_DEV_OPS) ok(`le bouton dev « ${op} » a son libellé`, typeof st.dev.op(op) === "string" && st.dev.op(op) !== op);
   for (const sc of Q.STAR_DEV_SCENES) ok(`la scène dev « ${sc} » a son libellé`, typeof st.dev.scene(sc) === "string" && st.dev.scene(sc) !== sc);
   for (const p of ["furrow", "crater", "lean", "dive", "sweep", "lure", "bell", "organ"])
