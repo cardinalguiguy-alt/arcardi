@@ -3644,7 +3644,13 @@ export const STAR_NERVE_PERIOD_MS = 11000;    // un tic par PNJ toutes les onze 
 export const STAR_NERVE_TIC_MS = 2600;        // ce que dure un tic (balancement ou tour sur soi)
 export const STAR_NERVE_SPIN_EVERY = 3;       // un tic sur trois est un tour sur soi-même, les autres balancent
 export const STAR_NERVE_TALK_R = 3.4;         // en cases : à cette distance, il vous dit ce qu'il a entendu
-export const STAR_NERVE_TALK_MS = 5200;       // ce que la phrase reste affichée une fois déclenchée
+/* ⚠️ ZIP 456 — `STAR_NERVE_TALK_MS` A ÉTÉ SUPPRIMÉE ICI. Elle bornait la fenêtre
+   pendant laquelle un PNJ nerveux disait sa phrase ; depuis que le PNJ S'ARRÊTE et
+   se tourne vers le joueur, la phrase reste affichée tant qu'on est à portée et
+   il n'y a plus de fenêtre à borner. Une constante que plus personne ne lit est le
+   pendant exact d'une chaîne que personne n'affiche (453) : on la supprime, on ne
+   la garde pas « en réserve » — c'est la faute que le 452 a commise et que le 453
+   a payée. */
 /* ⚠️ LE « ! » DE L'IMPACT DURE DEUX SECONDES, ET C'EST LE CHIFFRE DE GUILLAUME
    (« Tous les pnj doivent avoir un "!" en bulle au dessus de leurs têtes pendant
    2 secondes à partir du moment de l'impact »). Il est ici parce que la scène le

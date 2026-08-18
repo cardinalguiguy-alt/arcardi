@@ -7532,7 +7532,15 @@ export function buildSprites() {
     /* Le ressort : 1,25 au premier dixième, 1 ensuite. `a` descend de 1 à 0 chez
        l'appelant, donc « le début » est `a` proche de 1. */
     const pop = al > 0.86 ? 1 + (al - 0.86) * 1.8 : 1;
-    const W = Math.round(11 * pop), H = Math.round(13 * pop);
+    /* ⚠️ ZIP 456 — 11×13 → 9×11, SUR RETOUR DE GUILLAUME (« le point
+       d'exclamation est un peu gros »). Elle se pose au-dessus d'une tête de 16 px
+       de large : à 11 px elle en couvrait les deux tiers, donc elle lisait comme
+       une étiquette d'interface posée sur le PNJ plutôt que comme sa réaction. Le
+       sursaut, lui, n'a pas bougé — c'est lui qui la fait remarquer, pas sa
+       taille. ⚠️ `render-etoile` mesure la largeur du corps : son plancher est
+       descendu de 8 à 6 px DANS LE MÊME ZIP, sans quoi le banc aurait refusé un
+       dessin que personne n'a le droit de trouver trop petit à sa place. */
+    const W = Math.round(9 * pop), H = Math.round(11 * pop);
     const bx = Math.round(cx - W / 2), byTop = Math.round(by - H);
     g2.save();
     g2.globalAlpha = Math.min(1, al * 1.6);       // elle reste franche puis tombe d'un coup
@@ -7556,9 +7564,8 @@ export function buildSprites() {
     notch(bx + 1, byTop + 1, W - 2, H - 2, o.tone === "calm" ? "rgba(226,238,255,0.96)" : "rgba(255,247,222,0.97)");
     /* La queue, trois rangées qui rétrécissent : elle pointe la tête du PNJ. */
     g2.fillStyle = o.tone === "calm" ? "rgba(226,238,255,0.96)" : "rgba(255,247,222,0.97)";
-    g2.fillRect(cx - 2, byTop + H, 5, 1);
-    g2.fillRect(cx - 1, byTop + H + 1, 3, 1);
-    g2.fillRect(cx, byTop + H + 2, 1, 1);
+    g2.fillRect(cx - 1, byTop + H, 3, 1);
+    g2.fillRect(cx, byTop + H + 1, 1, 1);
     /* Le signe, en barres. ⚠️ Le point est SÉPARÉ du fût d'une rangée pleine :
        collés, à cette taille, les deux se fondent en un trait et le « ! » devient
        un « l ». C'est ce que `render-etoile` mesure, et c'est la seule chose de ce
@@ -7566,7 +7573,7 @@ export function buildSprites() {
     g2.fillStyle = ink;
     const w = Math.max(2, Math.round(2 * pop));
     const x0 = Math.round(cx - w / 2), y0 = byTop + Math.max(2, Math.round(2 * pop));
-    const hh = Math.max(4, Math.round(6 * pop));
+    const hh = Math.max(3, Math.round(4 * pop));
     /* ⚠️⚠️ IL N'Y A QU'UN SIGNE, ET C'EST DÉLIBÉRÉ. Le premier jet portait aussi
        un « ? », « parce que la famille en aura besoin » — personne ne l'appelait,
        donc seul le banc le regardait, donc il était faux (la planche l'a montré :
@@ -7576,6 +7583,74 @@ export function buildSprites() {
        AVEC son appelant et il sera regardé le même jour. */
     g2.fillRect(x0, y0, w, hh);
     g2.fillRect(x0, y0 + hh + Math.max(1, Math.round(pop)), w, w);
+    g2.restore();
+  }
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 456 — LA JAUGE DE LA POSTURE. LA SEULE RÉPONSE À « EST-CE QUE JE FAIS
+     ║ BIEN ? » DANS TOUT LE CHANTIER.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ DEMANDE DE GUILLAUME : « ça dit stand still mais on ne comprend pas si
+     on fait les choses bien ou ce qu'il faut faire de ce cratère. » Le geste du
+     cratère est le seul geste CONTINU du jeu : neuf secondes de dos tourné, sans
+     touche, sans animation, sans rien à l'écran. Une tenue qui ne rend rien ne se
+     distingue pas d'un jeu bloqué — et c'est très exactement ce que Guillaume a
+     vécu. Une barre qui monte répond aux deux moitiés de la phrase d'un coup :
+     *je fais bien* (elle monte) et *voilà ce que ce trou attend* (elle se vide
+     dès qu'on se retourne ou qu'on marche).
+     ⚠️ ELLE VIT ICI ET PAS DANS LA BOUCLE DE RENDU, comme la bulle du 455 et pour
+     la même raison (§2 du piège n°1) : un dessin qu'aucun banc n'appelle reste au
+     niveau du jour où il a été écrit. Elle a ses contrôles dans `render-etoile`
+     le jour de son écriture.
+     ⚠️⚠️ ET ELLE EST EN `fillRect` PURS, comme la bulle : ni `roundRect` (le faux
+     canevas LÈVE sur l'accès, 455) ni `fillText` (il ne le connaît pas, 427).
+     C'est ce qui la rend regardable, donc ce qui l'empêchera de vieillir.
+     ⚠️ `warn` N'EST PAS UNE COULEUR D'ERREUR : la posture n'est jamais « fausse »,
+     elle est seulement « pas encore tenue ». Un rouge d'alerte ferait croire à
+     une punition là où le jeu ATTEND (`resolveStarCalm` ne punit pas, il ne
+     compte simplement pas). La jauge passe donc au gris-bleu de nuit et se vide —
+     elle dit « ça ne compte pas », pas « tu as raté ». */
+  function drawCalmMeter(g2, cx, by, k, opt) {
+    const o = opt || {};
+    const kk = Math.max(0, Math.min(1, +k || 0));
+    const W = 24, H = 6;
+    const bx = Math.round(cx - W / 2), byTop = Math.round(by - H);
+    g2.save();
+    if (o.alpha !== undefined) g2.globalAlpha = Math.max(0, Math.min(1, o.alpha));
+    /* Le cadre, coins coupés au pixel (même geste que la bulle) : à 24×6 un
+       arrondi anticrénelé ferait une bouillie grise. */
+    const notch = (x, y, w, h, col) => {
+      g2.fillStyle = col;
+      g2.fillRect(x + 1, y, w - 2, h);
+      g2.fillRect(x, y + 1, w, h - 2);
+    };
+    /* ⚠️⚠️ LE CERNE EST CLAIR ET LE CREUX EST SOMBRE, PAS L'INVERSE — LA PLANCHE
+       DU BANC L'A MONTRÉ DU PREMIER COUP. Premier jet : cadre brun sombre sur la
+       terre du cratère, c'est-à-dire un brun sur un brun. Tous les contrôles
+       étaient verts (elle monte, elle est vide à zéro…) et sur la planche la
+       jauge VIDE avait littéralement disparu dans le sol — or c'est l'état vide
+       qui doit se voir le plus, puisque c'est celui où le joueur cherche quoi
+       faire. C'est la règle du 441 (« un cerne sert aussi sur fond clair »)
+       retournée : ici c'est le fond qui est sombre, donc le cerne est clair. */
+    notch(bx, byTop, W, H, o.warn ? "rgba(198,214,238,0.88)" : "rgba(246,236,214,0.88)");
+    notch(bx + 1, byTop + 1, W - 2, H - 2, o.warn ? "rgba(26,38,60,0.92)" : "rgba(30,22,10,0.92)");
+    /* LE REMPLISSAGE. ⚠️ IL PART DE LA GAUCHE ET IL EST ENTIER EN PIXELS : une
+       largeur fractionnaire anticrénelée donnerait un bord flou qui, à cette
+       taille, se lit comme une barre qui tremble. */
+    const iw = W - 4, fw = Math.round(iw * kk);
+    if (fw > 0 && !o.warn) {
+      g2.fillStyle = "#e8a83c";
+      g2.fillRect(bx + 2, byTop + 2, fw, H - 4);
+      // La rangée du haut plus claire : sans elle la barre est un aplat, et un
+      // aplat de 2 px de haut se lit comme un trait (DESSIN.md, les masses).
+      g2.fillStyle = "#ffe08a";
+      g2.fillRect(bx + 2, byTop + 2, fw, 1);
+    }
+    /* LES DEUX REPÈRES. ⚠️ ILS NE SONT PAS DÉCORATIFS : sur 20 px utiles, une
+       barre sans graduation ne dit pas si l'on est au tiers ou à la moitié, et
+       c'est précisément la question que le joueur se pose pendant neuf secondes. */
+    g2.fillStyle = o.warn ? "rgba(120,140,170,0.75)" : "rgba(120,96,58,0.75)";
+    for (let i = 1; i <= 2; i++) g2.fillRect(bx + 2 + Math.round(iw * i / 3), byTop + 2, 1, H - 4);
     g2.restore();
   }
 
@@ -13643,6 +13718,7 @@ house: house(),
     drawStarCometTrail,
     drawStarImpactFlash,
     drawEmoteBubble,        // zip 455 — le « ! » des PNJ : tampon d'annonce et impact
+    drawCalmMeter,          // zip 456 — la tenue du cratère, la seule réponse à « est-ce que je fais bien ? »
     townHouses: Array.from({ length: C.TOWN_HOUSE_STYLES }, (_, i) => townHouseVariant(i)),
     rabbit: [rabbitSprite(0), rabbitSprite(1), rabbitSprite(2)],
     torch: torchSprite(),

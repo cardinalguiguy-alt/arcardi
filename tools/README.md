@@ -482,7 +482,31 @@ donnait pas, d'une rangée.
 
 ---
 
-## `render-etoile.mjs` — les dessins de la quête de l'étoile (444, cratère 446, comète 448, sillon 454, alerte 455)
+## `render-etoile.mjs` — les dessins de la quête de l'étoile (444, cratère 446, comète 448, sillon 454, alerte 455, jauge 456)
+
+### ⚠️⚠️ ZIP 456 — LA JAUGE DE POSTURE, ET UN SEUIL DE BANC QUI A DÛ BAISSER
+
+Section **11**, six contrôles, plus la planche `etoile-jauge.png`. La jauge répond à la seule
+question que le chantier ne posait à personne (« est-ce que je fais bien ? ») ; elle est née **avec
+ses mesures**, comme la bulle du 455. Ce qui est mesuré est ce qu'une capture ne montre pas : la
+**monotonie** (balayée sur 31 valeurs — une barre qui recule d'un pixel dit au joueur qu'il a perdu
+du temps), le fait qu'elle soit **vide à zéro** (une barre qui commence à 2 px promet une avance qui
+n'existe pas), et que l'état « ça ne compte pas » se distingue **au CADRE et pas à la longueur** —
+sans quoi une barre courte et une barre en attente se confondent, ce qui est exactement la
+confusion à éviter.
+
+⚠️⚠️ **ET LA PLANCHE A ATTRAPÉ CE QUE LES SIX CONTRÔLES LAISSAIENT PASSER, DU PREMIER COUP** : tous
+verts, et la jauge **VIDE avait disparu dans le sol** — cadre brun sombre sur la terre brune du
+cratère. Or l'état vide est celui qui doit se voir le plus, puisque c'est celui où le joueur cherche
+quoi faire. Le cerne est passé au clair. *Un contrôle vert ne dit pas si c'est joli* (§25 de
+`ferme/README.md`), et c'est la deuxième fois en deux zips qu'une planche paie.
+
+⚠️⚠️ **UN SEUIL A BAISSÉ AVEC LE DESSIN, DANS LE MÊME ZIP, ET C'EST LA SEULE FAÇON HONNÊTE DE LE
+FAIRE.** Guillaume a trouvé le « ! » trop gros (11×13 sur une tête de 16 px) ; le contrôle « elle
+reste lisible ensuite » mesurait la taille d'AVANT (≥ 8 px) et refusait donc la correction. Il est
+passé à ≥ 6 px **en le disant**. *Un seuil de banc n'est pas une vérité, c'est la décision du jour
+où on l'a écrit : quand la décision change, il change avec elle et il dit lequel des deux a bougé.*
+
 
 ### ⚠️⚠️ ZIP 455 — LA BULLE « ! » EST REGARDÉE DÈS SA PREMIÈRE LIGNE, ET LE BANC S'EST TROMPÉ DEUX FOIS
 
@@ -527,7 +551,8 @@ qui change vraiment.
 
 `node tools/render-etoile.mjs` → `etoile-planche.png` · `etoile-cratere.png` (446 : **trois
 états du cratère côte à côte** — fumant, refroidi, bassin de verre — parce que ce qui a changé
-est la PAIRE, pas l'image) · `etoile-comete.png` (448).
+est la PAIRE, pas l'image) · `etoile-comete.png` (448) · `etoile-alerte.png` (455) ·
+`etoile-jauge.png` (456 : cinq remplissages et deux états d'attente sur la terre du cratère).
 
 ⚠️⚠️ **IL REMPLACE `verify-enquete.mjs` ET `render-enquete.mjs`, SUPPRIMÉS AU 444 AVEC L'ENQUÊTE
 QU'ILS MESURAIENT.** Un banc qui mesure du contenu disparu est pire qu'un banc absent : il passe
@@ -643,7 +668,39 @@ touche le sol — le défaut même de ce zip — leur est **totalement invisible
 `verify-quete` qui le tient désormais (cinq contrôles purs sur `starImpactLanded` et l'azimut).
 *Un banc de rendu ne peut pas voir un défaut de temps.*
 
-## `verify-quete.mjs` — 396 contrôles, 396/396 (444, étendu aux 445, 446, 448, 449, 453, 454 et 455)
+## `verify-quete.mjs` — 413 contrôles, 413/413 (444, étendu aux 445, 446, 448, 449, 453, 454, 455 et 456)
+
+### ⚠️⚠️⚠️ ZIP 456 — LES DEUX SEULS CONTRÔLES DU DÉPÔT QUI LISENT LE SOURCE POUR VOIR SI UN LECTEUR S'EXÉCUTE
+
+Section **10**, dix-sept contrôles. Trois défauts vus par Guillaume, et **aucun banc n'aurait pu en
+voir un seul** — parce qu'aucun ne mesurait la grandeur en cause :
+
+- **LA PORTÉE DE PAROLE NE REGARDAIT PAS LA ZONE.** Un fermier debout en (50, 50) à la ferme
+  déclenchait la phrase d'un habitant debout en (50, 50) à Valley Town : le piège des deux cartes
+  (§4 de `CLAUDE.md`, payé quatre fois) dans sa forme la moins visible, une bulle qui s'ouvre toute
+  seule devant personne. On balaie **625 positions** de la couronne, et le balayage n'est pas du
+  luxe : une portée euclidienne écrite par mégarde passe les contrôles de cas et échoue **sur les
+  diagonales**, qui sont justement là où les deux métriques diffèrent.
+- **VERS OÙ IL SE TOURNE**, balayé sur **1 088 directions** : *il regarde toujours le demi-plan où
+  est le joueur*. Trois exemples auraient laissé passer l'inversion nord/sud, qui est l'erreur qu'on
+  fait à tous les coups dans un monde où `y` croît vers le bas.
+- ⚠️⚠️ **LA POSTURE DU CRATÈRE, ET C'EST L'ACCORD QU'ON MESURE, PAS LE CAS.** `starCalmStep` (le
+  texte d'aide + la jauge) doit rendre « ça compte » **exactement** quand `starFacingAway` dit oui,
+  qu'on ne bouge pas et qu'on est dans l'anneau — c'est-à-dire exactement la condition que le client
+  envoie et que l'hôte revérifie. **4 356 postures balayées.** Si les deux divergeaient, la jauge
+  monterait pendant que l'hôte ne compte rien, et **aucune capture ne montre qu'une barre ment** :
+  on voit qu'elle est pleine, pas qu'elle a tort. Leçon 449 dans sa forme la plus concrète.
+
+⚠️⚠️⚠️ **ET DEUX CONTRÔLES LISENT `FermeGame.js` COMME UN TEXTE, CE QUE CE BANC NE FAISAIT QU'AU §8-B.**
+La raison est un défaut que le banc des lecteurs **ne pouvait pas voir** : il compte
+`starSay(…, L.star.s2.peek)` comme une lecture, et il a raison sur la lettre. Sauf que `starSay`
+écrit dans la bulle de l'**étoile**, laquelle n'est dessinée que là où `starCompanionAt` rend un
+point — donc **jamais avant que le cratère s'ouvre**. Cinq phrases du premier quart d'heure de jeu
+étaient dans ce cas, dont la seule qui dise pourquoi on se tient immobile devant un trou.
+*Un lecteur qui ne s'exécute jamais vaut zéro lecteur*, et compter des clés ne le voit pas. Les deux
+contrôles : **aucun `starSay` dans le bloc du cratère** (1 891 signes lus, avec témoin positif) et
+**les trois boucles de rendu ont un repli sur le joueur** quand il n'y a pas de compagnon.
+
 
 ### ⚠️⚠️⚠️ ZIP 455 — LE TAMPON D'ANNONCE : IL BALAIE, IL NE DONNE PAS D'EXEMPLES
 

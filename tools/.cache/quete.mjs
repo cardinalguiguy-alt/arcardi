@@ -786,6 +786,39 @@ export function starNerveDir(rid, tic) {
    ce qui rend le tampon jouable plutôt que décoratif : on peut retourner voir
    celui qui parlait de l'ingénieur breton. Un tirage par approche aurait donné
    une machine à phrases, et personne n'aurait rien retenu. */
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 456 — IL S'ARRÊTE, IL SE TOURNE VERS TOI, ET *ENSUITE* IL PARLE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ DEMANDE DE GUILLAUME : « les indices que donnent les résidents visiteurs
+   sont difficiles à lire car ils sont en mouvement. Ils pourraient s'arrêter
+   devant nous pour nous parler ? » Le 455 avait tout : la phrase, la portée, la
+   bulle. Il lui manquait la seule chose qui la rende LISIBLE — que le PNJ et sa
+   bulle cessent de glisser pendant qu'on les lit. Une bulle qui bouge est une
+   bulle qu'on ne finit pas.
+   ⚠️⚠️ ET C'ÉTAIT AUSSI UN MÉLANGE DE CARTES (§4 de `CLAUDE.md`, payé quatre
+   fois) : `starNerveNear` du 455 comparait un x de joueur à un x de PNJ SANS
+   REGARDER LA ZONE. Un fermier debout en (50, 50) à la ferme faisait donc parler
+   un habitant debout en (50, 50) à Valley Town. La parade est celle du §4 : on
+   teste la ZONE d'abord, les distances ensuite — d'où la zone en paramètre, ici
+   et chez les trois appelants.
+   ⚠️ LA DISTANCE EST DE MANHATTAN, comme toutes les portées de dialogue du
+   projet : une seconde métrique donnerait une portée qui ne ressemble à aucune
+   autre, et le joueur les compare sans le savoir. */
+export function starNerveNearTo(pz, px, py, z, x, y) {
+  if ((pz || "farm") !== (z || "farm")) return false;
+  if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+  return Math.abs(px - x) + Math.abs(py - y) <= C.STAR_NERVE_TALK_R;
+}
+/* VERS OÙ IL SE TOURNE. ⚠️ MÊME NUMÉROTATION QUE `drawCharacter` (0 sud, 1 nord,
+   2 ouest, 3 est) et même convention d'écran que tout le reste du jeu : `y`
+   croît vers le BAS, donc un joueur plus bas que le PNJ est au SUD.
+   ⚠️ ELLE EST ICI ET PAS DANS LA BOUCLE parce qu'elle a un invariant qu'un banc
+   peut balayer — *il regarde toujours le demi-plan où se trouve le joueur* — et
+   qu'un `if` recopié dans trois boucles de rendu ne l'aurait dans aucune. */
+export function starNerveFace(dx, dy) {
+  if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? 3 : 2;
+  return dy > 0 ? 0 : 1;
+}
 export const STAR_NERVE_HINT_IN = 5, STAR_NERVE_HINT_OF = 2;   // deux PNJ nerveux sur cinq donnent un vrai indice
 export function starNerveSay(rid, nRumor, nHint) {
   if (!starNerveHas(rid)) return null;
@@ -1348,6 +1381,44 @@ export function starFacingAway(px, py, dir, tx, ty) {
   if (len < 0.001) return false;              // debout SUR elle : on la regarde forcément
   return (v[0] * dx + v[1] * dy) / len <= STAR_CALM_FACE_DOT;
 }
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 456 — « ÇA DIT STAND STILL ET ON NE COMPREND PAS SI ON FAIT BIEN. »
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️⚠️ DEMANDE DE GUILLAUME, ET C'EST LE DÉFAUT LE PLUS CHER DU CHANTIER :
+   « quand on récupère l'étoile dans le cratère seul c'est compliqué de
+   comprendre ce qu'il se passe quand on ne connaît pas l'histoire. » Le geste
+   du cratère est le SEUL geste continu du jeu — pas de touche, une posture — et
+   il ne rendait RIEN : ni ce qui manquait (tu bouges ? tu la regardes ?), ni ce
+   qui avançait. Neuf secondes de dos tourné, sans un pixel qui bouge, ça ne se
+   distingue pas d'un jeu cassé.
+   ⚠️⚠️ ET LE PIRE ÉTAIT MESURABLE : les deux phrases qui expliquaient la scène
+   (`s2.tooHot`, `s2.peek`) passaient par `starSay`, c'est-à-dire par la bulle de
+   l'ÉTOILE — or `starCompanionAt` rend `null` tant que l'étoile n'est pas sortie
+   du trou. Elles étaient écrites, traduites, comptées par le banc des lecteurs
+   (`starSay` compte comme une lecture) et **affichées nulle part**, très
+   exactement au seul endroit du jeu où elles servaient. C'est la leçon du 453
+   dans sa forme la plus retorse : *un lecteur qui ne s'exécute jamais vaut zéro
+   lecteur*, et un banc qui compte les lectures ne peut pas le voir.
+   ⚠️⚠️ CE QUI SUIT EST UNE SEULE RÉPONSE À « OÙ EN SUIS-JE », et c'est la règle
+   du 449 : le texte d'aide, la jauge et la posture qui compte doivent sortir de
+   la MÊME fonction, sinon on obtient deux réponses vertes qui se contredisent
+   (« ne bouge plus » affiché pendant que la tenue monte). Une jointure, jamais
+   deux listes. */
+export const STAR_CALM_STEPS = ["away", "far", "moving", "watching", "holding"];
+export function starCalmStep(px, py, dir, moving, cx, cy, ringPad) {
+  const d = Math.hypot(px - cx, py - cy);
+  if (d > STAR_CRATER_R + (ringPad === undefined ? 1 : ringPad)) return "away";
+  if (d > STAR_CRATER_R) return "far";        // au bord : il faut DESCENDRE dedans
+  if (moving) return "moving";
+  if (!starFacingAway(px, py, dir | 0, cx, cy)) return "watching";
+  return "holding";
+}
+/* ⚠️ LE BESOIN EST DÉRIVÉ DU NOMBRE DE JOUEURS, PAS RECOPIÉ : la jauge et
+   `resolveStarCalm` liraient sinon deux durées différentes, et la barre serait
+   pleine avant (ou après) que l'étoile sorte. C'est le §14 de `CLAUDE.md` — un
+   paramètre qui double un autre paramètre est une divergence en attente. */
+export function starCalmNeed(soloAllowed) { return soloAllowed ? STAR_CALM_SOLO_MS : STAR_CALM_MS; }
 
 /* ───────────────────────────────────────────────────────────────────────────
    5. L'ÉTAT PARTAGÉ ET SES RÈGLES PURES.

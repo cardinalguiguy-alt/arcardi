@@ -1916,6 +1916,155 @@ section("Le tampon d'annonce (455)");
   }
 }
 
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   10. ZIP 456 — IL S'ARRÊTE POUR PARLER, ET LA POSTURE DU CRATÈRE SE VOIT.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ TROIS DES QUATRE DÉFAUTS DE CE ZIP ÉTAIENT INVISIBLES À TOUT BANC, ET LA
+   RAISON EST TOUJOURS LA MÊME : personne ne mesurait la grandeur en cause.
+     · le PNJ parlait EN MARCHANT — aucun banc ne mesure « est-ce lisible » ;
+     · sa portée ne regardait pas la ZONE — deux cartes qui se mélangent (§4),
+       et le symptôme est une bulle qui s'ouvre toute seule à l'autre bout ;
+     · la tenue du cratère ne rendait RIEN — aucun banc ne mesure « le joueur
+       sait-il qu'il fait bien ».
+   ⚠️ CE QUI SE MESURE VRAIMENT ICI EST DONC L'ACCORD entre ce qu'on affiche et ce
+   qui compte : la jauge, le texte d'aide et la condition d'envoi doivent sortir de
+   la MÊME fonction. Deux réponses vertes qui se contredisent, c'est la leçon 449,
+   et c'est le défaut le plus cher du dépôt.
+   ═══════════════════════════════════════════════════════════════════════════ */
+console.log("\n10. LE PNJ QUI S'ARRÊTE, ET LA POSTURE DU CRATÈRE (456)\n");
+{
+  /* ── LA PORTÉE DE PAROLE, ET SA ZONE. */
+  {
+    ok("⚠️⚠️ deux cartes ne se mélangent plus : même x/y, zones différentes → rien",
+       !Q.starNerveNearTo("farm", 50, 50, "town", 50, 50)
+       && !Q.starNerveNearTo("town", 12, 8, "farm", 12, 8));
+    ok("…et dans la même zone, la portée est bien celle de la constante",
+       Q.starNerveNearTo("town", 0, 0, "town", C.STAR_NERVE_TALK_R, 0)
+       && !Q.starNerveNearTo("town", 0, 0, "town", C.STAR_NERVE_TALK_R + 0.2, 0),
+       `${C.STAR_NERVE_TALK_R} cases, Manhattan`);
+    /* ⚠️ LA MÉTRIQUE EST BALAYÉE, PAS ÉCHANTILLONNÉE (leçon 449) : une portée
+       euclidienne écrite par mégarde passerait les deux contrôles ci-dessus et
+       échouerait ici, sur les diagonales — qui sont justement là où les deux
+       métriques diffèrent le plus. */
+    {
+      let bad = 0, seen = 0;
+      for (let dx = -6; dx <= 6; dx += 0.5) for (let dy = -6; dy <= 6; dy += 0.5) {
+        seen++;
+        const want = Math.abs(dx) + Math.abs(dy) <= C.STAR_NERVE_TALK_R;
+        if (Q.starNerveNearTo("farm", 30 + dx, 30 + dy, "farm", 30, 30) !== want) bad++;
+      }
+      ok("…balayé sur toute la couronne, jamais trois exemples", bad === 0, `${seen} positions, ${bad} désaccord(s)`);
+    }
+    ok("…et une position invalide ne fait parler personne",
+       !Q.starNerveNearTo("farm", NaN, 30, "farm", 30, 30) && !Q.starNerveNearTo("farm", 30, 30, "farm", undefined, 30));
+  }
+
+  /* ── VERS OÙ IL SE TOURNE.
+     ⚠️⚠️ L'INVARIANT EST « IL REGARDE LE DEMI-PLAN OÙ EST LE JOUEUR », et il se
+     balaie : trois exemples auraient laissé passer l'inversion nord/sud, qui est
+     l'erreur qu'on fait à tous les coups dans un monde où `y` croît vers le bas
+     (le §4 la nomme, et `starNerveDir` la commente déjà pour le tour sur soi). */
+  {
+    const VEC = [[0, 1], [0, -1], [-1, 0], [1, 0]];   // 0 sud, 1 nord, 2 ouest, 3 est
+    let bad = 0, seen = 0;
+    for (let dx = -8; dx <= 8; dx += 0.5) for (let dy = -8; dy <= 8; dy += 0.5) {
+      if (dx === 0 && dy === 0) continue;
+      seen++;
+      const v = VEC[Q.starNerveFace(dx, dy)];
+      if (v[0] * dx + v[1] * dy <= 0) bad++;
+    }
+    ok("⚠️⚠️ il regarde TOUJOURS du côté du joueur", bad === 0, `${seen} directions, ${bad} dos tourné(s)`);
+    ok("…et le sud est bien vers le bas de l'écran",
+       Q.starNerveFace(0, 3) === 0 && Q.starNerveFace(0, -3) === 1
+       && Q.starNerveFace(3, 0) === 3 && Q.starNerveFace(-3, 0) === 2);
+  }
+
+  /* ── LA POSTURE DU CRATÈRE : UNE SEULE RÉPONSE.
+     ⚠️⚠️ CE QUI EST MESURÉ EST L'ACCORD, PAS LE CAS. `starCalmStep` rend
+     « holding » exactement quand `starFacingAway` dit oui, qu'on ne bouge pas et
+     qu'on est dans l'anneau — c'est-à-dire exactement la condition que le client
+     envoie et que l'hôte revérifie. Si les deux divergeaient, la jauge monterait
+     pendant que l'hôte ne compte rien, et c'est un défaut qu'aucune capture ne
+     montre : on ne voit pas qu'une barre ment, on voit qu'elle est pleine. */
+  {
+    const CX = 40, CY = 40;
+    let bad = 0, seen = 0, holds = 0;
+    for (let dx = -8; dx <= 8; dx += 0.5) for (let dy = -8; dy <= 8; dy += 0.5) for (let d = 0; d < 4; d++) {
+      const px = CX + dx, py = CY + dy;
+      const st = Q.starCalmStep(px, py, d, false, CX, CY);
+      const inRing = Math.hypot(dx, dy) <= Q.STAR_CRATER_R;
+      const away = Q.starFacingAway(px, py, d, CX, CY);
+      seen++;
+      if (st === "holding") holds++;
+      if ((st === "holding") !== (inRing && away)) bad++;
+    }
+    ok("⚠️⚠️ « ça compte » veut dire exactement « dans l'anneau, dos tourné »",
+       bad === 0, `${seen} postures balayées, ${holds} qui comptent, ${bad} désaccord(s)`);
+    ok("⚠️ …et marcher ne compte JAMAIS, où qu'on soit",
+       [0, 1, 2, 3].every(d => Q.starCalmStep(CX + 1, CY, d, true, CX, CY) === "moving"));
+    /* Les cinq états, et le fait qu'ils sont bien tous atteignables : un état
+       qu'aucune position ne produit est une phrase que personne ne lira jamais —
+       la leçon 453, prise à l'avance cette fois. */
+    const got = new Set();
+    for (let dx = -12; dx <= 12; dx += 0.5) for (const mv of [false, true]) for (let d = 0; d < 4; d++)
+      got.add(Q.starCalmStep(CX + dx, CY, d, mv, CX, CY));
+    ok("…et les cinq états de la posture sont tous atteignables",
+       Q.STAR_CALM_STEPS.every(k => got.has(k)), [...got].join(", "));
+  }
+
+  /* ── LA DURÉE À TENIR : UNE SOURCE, PAS DEUX. */
+  {
+    ok("⚠️ la jauge et le résolveur lisent la MÊME durée",
+       Q.starCalmNeed(true) === Q.STAR_CALM_SOLO_MS && Q.starCalmNeed(false) === Q.STAR_CALM_MS,
+       `${Q.starCalmNeed(true)} ms seul, ${Q.starCalmNeed(false)} ms à deux`);
+    ok("…et seul, c'est plus long (jamais bloqué, juste long)", Q.starCalmNeed(true) > Q.starCalmNeed(false));
+  }
+
+  /* ── LES QUATRE PHRASES DE LA POSTURE, DANS LES DEUX LANGUES. */
+  {
+    const KEYS = ["calmIn", "calmStill", "calmTurn", "calmHold"];
+    const S3 = await import(pathToFileURL(path.join(tmp, "fermeStrings.js")).href);
+    const TBL = { fr: S3.FERME_STR.fr.star, en: S3.FERME_STR.en.star };
+    for (const lang of ["fr", "en"]) {
+      const s2 = TBL[lang].s2;
+      ok(`les quatre phrases de la posture existent en ${lang}`,
+         KEYS.every(k => typeof s2[k] === "string" && s2[k].length > 3 && s2[k].length < 60),
+         KEYS.map(k => (s2[k] || "").length).join("/") + " signes");
+    }
+    ok("…et elles disent quatre choses différentes",
+       new Set(KEYS.map(k => TBL.fr.s2[k])).size === KEYS.length);
+  }
+
+  /* ── ET LE DÉFAUT QUI A COÛTÉ LE PLUS CHER : UN LECTEUR QUI NE S'EXÉCUTE PAS.
+     ⚠️⚠️⚠️ LE BANC DES LECTEURS (§8-B) COMPTE UN `starSay(…, L.star.s2.peek)`
+     COMME UNE LECTURE. Il a raison sur la lettre et il avait tort sur le fond :
+     `starSay` écrit dans la bulle de l'ÉTOILE, laquelle n'est dessinée que là où
+     `starCompanionAt` rend un point — donc jamais avant que le cratère s'ouvre.
+     Cinq phrases du premier quart d'heure étaient dans ce cas. On ne peut pas
+     mesurer ça en comptant des clés ; on peut le mesurer en LISANT LE SOURCE, et
+     ce sont les deux seuls contrôles de ce banc qui le font. */
+  {
+    const src = fs.readFileSync(path.join(ROOT, "components", "ferme", "FermeGame.js"), "utf8");
+    const i0 = src.indexOf('if (zone === "town" && !Q.starHas(e, "crater")) {');
+    const i1 = src.indexOf("CE QU'ELLE DIT QUAND ELLE EST LÀ", i0 + 1);
+    const block = i0 >= 0 && i1 > i0 ? src.slice(i0, i1) : "";
+    ok("⚠️⚠️ rien ne parle par la bulle de l'étoile AVANT qu'elle sorte du trou",
+       block.length > 400 && !/starSay\(/.test(block),
+       `${block.length} signes lus dans le bloc du cratère`);
+    ok("…et ce contrôle sait reconnaître un `starSay` (témoin positif)",
+       /starSay\(/.test(src), `${(src.match(/starSay\(/g) || []).length} appels dans le fichier`);
+    /* ⚠️ ET LA VOIX A UN REPLI : les trois boucles de rendu doivent poser la bulle
+       au-dessus du JOUEUR quand il n'y a pas encore de compagnon. Sans ce repli,
+       la moitié des phrases de la quête retombent dans le trou d'où on vient de
+       les sortir — et c'est exactement ce qui s'est passé entre le 444 et le 456. */
+    const reads = (src.match(/starBubbleNow\(\)/g) || []).length;
+    const falls = (src.match(/cp \? cp\.x : m\.x/g) || []).length;
+    ok("⚠️⚠️ les trois cartes savent parler SANS compagnon",
+       reads >= 4 && falls === 3, `${reads} lectures de la bulle, ${falls} replis sur le joueur`);
+  }
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(`\n${fails === 0 ? "✅" : "❌"} ${total - fails}/${total} contrôles passés.\n`);
 process.exit(fails === 0 ? 0 : 1);

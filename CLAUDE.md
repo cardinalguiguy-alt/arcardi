@@ -11,68 +11,52 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**Livré au 455 : LA QUÊTE NE TOMBE PLUS DU CIEL SANS PRÉVENIR — ELLE S'ANNONCE, LA VALLÉE
-S'INQUIÈTE, PUIS ELLE TOMBE.** Quatre demandes de Guillaume, toutes livrées.
-⚠️⚠️⚠️ **(1) LE THÈME DU SECRET A ÉTÉ COUPÉ EN DEUX, PAS RENIÉ, ET C'EST LA DÉCISION DE FOND DU
-ZIP** : **la PIERRE est publique, l'ÉTOILE reste secrète.** Des astronomes annoncent une pluie
-d'astéroïdes, l'affiche est au tableau des nouvelles, la moitié des habitants s'agitent, tout le
-monde voit tomber le caillou — et **personne ne saura jamais ce qu'il y avait dedans**. Le silence
-de la vallée cesse d'être une ABSENCE pour devenir un ÉCART, et le familier-guide du 449 reste
-justifié au mot près. ⚠️ **`verify-quete` tient la moitié qui reste** : deux listes de mots interdits
-balayées sur les phrases d'habitants — ce qui est secret, et ce qui ENVOIE quelque part.
-⚠️⚠️ **(2) L'HÔTE DÉCIDE, ET RIEN NE SE PASSE TOUT DE SUITE.** Au crépuscule, quand la porte du 454
-est franchie, il voit « Démarrer l'enquête « La Belle Étoile » ? » · Oui / Plus tard. « Oui » date
-`star.warn`, diffuse **un** `send()`, joue une carte plein écran — puis il ne se passe **rien**
-pendant 5 à 16 minutes réelles : ~4 PNJ sur 10 se balancent ou tournent sur eux-mêmes avec un « ! »,
-et disent à qui s'approche huit rumeurs de peur et **six indices** qui annoncent chacun une étape à
-venir. ⚠️ **Tout est DÉRIVÉ du `rid` et de `star.warn` : zéro message, zéro champ de plus** — un
-seul champ d'état en tout pour le zip, dans le JSON, aucune migration SQL.
-⚠️⚠️ **(3) LA CHUTE À LA FERME NE MONTRE PLUS LA RÉPONSE AVANT LA QUESTION.** La caméra se posait
-sur le sillon six secondes avant l'impact : on savait donc où ça tombait avant que ça tombe, et le
-chevron qui suit n'apprenait plus rien. Elle vise maintenant un point **en amont de la course**
-(dérivé de la fenêtre RÉELLE, pas d'un nombre de cases), le caillou **se fend en vol**, l'impact a
-lieu **hors cadre**, la secousse arrive quelques secondes après, et **tous les PNJ portent un « ! »
-pendant deux secondes**. La ville garde sa scène, comme demandé.
-⚠️ **(4) LES CONSIGNES DISENT LA TOUCHE** (`hud.goal` réécrit dans les deux langues : « Va demander
-un ingénieur naval à la mairie (E) », « Le plan : touche P »), et **la bulle de l'étoile est dorée**
-— elle parlait jusqu'ici dans la bulle grise des commentaires d'ambiance, c'est-à-dire que la seule
-voix qui GUIDE avait l'aspect exact des voix qui meublent.
+**Livré au 456 : ON PARLE À QUELQU'UN QUI S'ARRÊTE, ET LE CRATÈRE RÉPOND ENFIN QUAND ON FAIT BIEN.**
+Trois retours de Guillaume, tous livrés, **et le troisième a découvert le plus gros défaut du
+chantier depuis le 453**.
+⚠️ **(1) LE « ! » EST PLUS PETIT** — 11×13 → 9×11. Sur une tête de 16 px il en couvrait les deux
+tiers : il lisait comme une étiquette posée sur le PNJ, pas comme sa réaction. Le sursaut n'a pas
+bougé, c'est lui qui la fait remarquer.
+⚠️⚠️ **(2) LE PNJ S'ARRÊTE, SE TOURNE VERS TOI, ET PARLE TANT QUE TU ES LÀ.** La fenêtre périodique
+du 455 a disparu avec son problème (on s'approchait, il se taisait cinq secondes, puis lâchait sa
+phrase **en continuant à marcher**). L'arrêt est décidé chez l'HÔTE, qui simule et diffuse ; le
+regard est un override d'affichage, comme l'étoile timide. ⚠️ **Et sa portée regarde enfin la
+ZONE** : un fermier en (50, 50) à la ferme faisait parler un habitant en (50, 50) en ville — le
+piège des deux cartes du §4, cinquième occurrence.
+⚠️⚠️ **(3) LE CRATÈRE RÉPOND À « EST-CE QUE JE FAIS BIEN ? »** — une **jauge** au-dessus de la tête
+et **une phrase par état** (« Descends jusqu'au fond du trou », « Ne bouge plus », « Tourne-lui le
+dos », « Quelque chose remonte derrière toi »), toutes issues d'une seule fonction pure avec ce que
+l'hôte compte. L'invite ne dit plus « E : ne plus bouger » — c'était le préfixe des touches devant
+le seul geste du jeu qui n'en a pas.
+⚠️⚠️⚠️ **ET EN CHERCHANT (3), ON A TROUVÉ QUE CINQ PHRASES DU PREMIER QUART D'HEURE N'AVAIENT AUCUN
+CHEMIN D'AFFICHAGE** : `starSay` écrit dans la bulle de l'ÉTOILE, qui n'est dessinée que là où le
+compagnon existe — donc jamais avant que le cratère s'ouvre. `s2.tooHot`, `s2.peek`, `s1.shadow` et
+**les trois phrases du familier-guide** étaient écrites, traduites, relues et **comptées comme lues
+par le banc**. La voix se pose désormais au-dessus du JOUEUR quand il n'y a pas de compagnon.
 
-⚠️⚠️⚠️ **LA PROCHAINE ACTION : OUVRIR LE JEU ET REGARDER, PARCE QUE RIEN DE CE ZIP N'A TOURNÉ DANS
-UN NAVIGATEUR.** Les 35 bancs sont verts (`verify-quete` **345 → 396**, `render-etoile` +13
-contrôles et une planche neuve regardée), et **quatre défauts ont été trouvés par les bancs en
-s'écrivant** — dont la fracture de la comète qui se jouait HORS DE L'ÉCRAN, septième forme du défaut
-de banc repayée en un zip. Mais cinq choses ne se jugent que là : **l'invite au crépuscule**, **la
-vallée nerveuse** (est-ce que ça fait inquiet ou est-ce que ça fait bogue d'animation ? aucun nombre
-ne peut le dire), **les phrases à l'approche**, ⚠️⚠️ **la chute à la ferme — le plus gros risque du
-zip** (« l'impact est hors cadre » est mesuré, « la scène raconte quelque chose » ne l'est pas), et
-le « ! » de toutes les têtes. **Deux boutons dev neufs sont là pour ça** : « 📣 Announce it » (le
-tampon SEUL) et « 🎬 The announcement ». ⚠️ `▶ Start` saute le tampon — ce n'est donc PAS le bouton
-qui juge ce zip. Détail au **§12.0 de `components/ferme/QUETE.md`**.
+⚠️⚠️ **LA PROCHAINE ACTION : LE TAMPON D'ANNONCE, JOUÉ EN ENTIER, À CADENCE RÉELLE ET DE
+PRÉFÉRENCE À DEUX.** Ce zip a été **regardé à l'écran** (c'est la première fois depuis le 454 :
+l'arrêt, la bulle unique, le « ! » réduit, et les quatre états du cratère jusqu'à la sortie de
+l'étoile — tout est au §12.0 de `QUETE.md`), et **c'est précisément là qu'il a trouvé son
+quatrième défaut, invisible à tout banc** : neuf PNJ nerveux groupés ont ouvert **neuf bulles
+empilées**. Chaque bulle était juste ; leur SOMME était illisible. Ce qui reste à juger tient à ce
+que quinze minutes de jeu montrent et qu'aucun nombre ne dit : est-ce qu'on a **envie** de faire le
+tour des habitants pour récolter les six indices ? est-ce qu'un PNJ qui s'arrête net se lit comme
+« il me parle » ou comme « il a bogué » ? les 5 à 16 minutes d'attente sont-elles un suspense ou un
+temps mort ? ⚠️ **Le bouton est « 📣 Announce it (the buffer) »** — `▶ Start` saute le tampon.
 
-⚠️ **CE QUI RESTE OUVERT AILLEURS N'EST PAS OUBLIÉ, C'EST CLASSÉ APRÈS** : les trois choses du 454
-qui n'ont jamais tourné à leur cadence (l'ingénieur sur la grève, une commande de bois de bout en
-bout, la résolution qui attend le dernier bordage) ; le **CHANTIER B, LES MAISONS**, commandé et non
-commencé (préalables au **§27.5 de `components/ferme/README.md`**) ; la séance à DEUX CLIENTS (moitié
-coopérative de la quête + ferme peuplée), la dette la plus ancienne du dépôt ; le SON
-(`public/sounds/church-organ.mp3` — un fichier, pas une ligne de code) ; les six points d'audit du 450.
-
-⚠️ **AVANT DE POUVOIR REGARDER QUOI QUE CE SOIT À L'ÉCRAN, IL FAUT REMONTER LES DEUX
-ÉCHAFAUDAGES** — ils sont supprimés à chaque fin de livraison, exprès (une page jetable en
-production ouvre une ferme sans authentification). La recette complète est au **§10**, et elle a
-resservi telle quelle au 454 : `.env.local` sur `http://127.0.0.1:54321`, une page jetable montant
-`<FermeGame …>`, `node tools/fake-supabase.mjs`, et le correctif `requestAnimationFrame`.
-⚠️⚠️ **ET LE CORRECTIF `setTimeout(…, 16)` NE SUFFIT PLUS : CHROME ÉTRANGLE LES TIMERS D'UN ONGLET
-MASQUÉ À UN PAR SECONDE.** Mesuré au 454 : le monde avance (l'horloge tourne) mais à ~1 image/s, ce
-qui donne un jeu « qui marche » et des mesures fausses — la scène de chute défilait en douze images.
-**La parade est un WORKER, qui n'est pas étranglé** : `new Worker(URL.createObjectURL(new
-Blob(["setInterval(()=>postMessage(0),16);"])))`, dont chaque message vide une file de callbacks
-`requestAnimationFrame`. C'est le frein du 446 (une file, pas un relais qui se repose un message)
-avec une horloge qui ne dort pas.
+⚠️ **CE QUI RESTE OUVERT AILLEURS N'EST PAS OUBLIÉ, C'EST CLASSÉ APRÈS** : la chute à la ferme du
+455, jamais regardée (« l'impact est hors cadre » est mesuré, « la scène raconte quelque chose » ne
+l'est pas) ; les trois choses du 454 qui n'ont jamais tourné à leur cadence (l'ingénieur sur la
+grève, une commande de bois de bout en bout, la résolution qui attend le dernier bordage) ; le
+**CHANTIER B, LES MAISONS**, commandé et non commencé (préalables au **§27.5 de
+`components/ferme/README.md`**) ; la séance à DEUX CLIENTS (moitié coopérative de la quête + ferme
+peuplée), la dette la plus ancienne du dépôt ; le SON (`public/sounds/church-organ.mp3` — un
+fichier, pas une ligne de code) ; les six points d'audit du 450.
 
 ---
 
-État à jour du **zip 455**. Chantier actif : **rendre Valley Town habitable au regard ET crédible
+État à jour du **zip 456**. Chantier actif : **rendre Valley Town habitable au regard ET crédible
 au jeu**, et **lui donner une histoire**. Tout ce qui concerne la ville, ses habitants, ses
 bâtiments et **ses pièges** est dans **`components/ferme/README.md`**, qui fait autorité ; les
 règles de DESSIN sont dans **`components/ferme/DESSIN.md`** ; les bancs dans **`tools/README.md`**.
@@ -152,13 +136,8 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 
 | # | La leçon, en une phrase | Où est le détail |
 |---|---|---|
-| 452 | ⚠️⚠️ **QUAND LA FICTION CHANGE, LE DOCUMENT QUI LA RACONTE FAIT PARTIE DE LA LIVRAISON.** Le 450-451 a remplacé la lyre par le bateau dans le CODE et les CHAÎNES ; `QUETE.md` — le document de reprise de la quête — et l'en-tête de `quete.js` ont continué à raconter la lyre. *Un document de reprise qui décrit l'histoire d'avant est pire qu'un document manquant : on ne s'en méfie pas.* | §1 de `QUETE.md` |
-| 452 | ⚠️⚠️ **UN COMPTEUR AJOUTÉ NE RECOMPTE PAS LES PHRASES DÉJÀ ÉCRITES.** Poser un cinquième morceau a rendu FAUX trois textes qui disaient vrai, sans qu'aucun banc bouge : chaque compte restait juste **dans sa propre liste**. La leçon 449 (« deux réponses, jamais comparées ») dans sa forme la plus banale — et le banc qui manquait s'écrit en trois lignes : *aucun texte ne contient un nombre de morceaux qui ne soit pas `STAR_SHIP_TOTAL`.* | §12.2 de `QUETE.md` |
-| 452 | **Une section « ce qui n'existe pas encore » est la première à mentir** — elle est vraie le jour où on l'écrit et fausse le jour où on la lit. `QUETE.md` annonçait le beffroi comme non construit, huit zips après sa construction. | §5 de `QUETE.md` |
 | 453 | ⚠️⚠️⚠️ **UNE CHAÎNE QUE PERSONNE N'AFFICHE EST LE PENDANT EXACT D'UNE CONSTANTE QUE SEUL LE BANC LIT** — elle a l'air juste et elle ne peut pas échouer. **41 des 136 phrases de la quête** n'avaient aucun `L.star.…` en face : la rencontre avec l'étoile, les quatre phrases de la cloche, le don. *Écrites, traduites, relues, citées dans la doc, et invisibles.* Ça se mesure en une passe : comparer les clés du texte aux lectures du composant. | §1 de `QUETE.md` |
 | 453 | ⚠️⚠️ **QUAND PERSONNE NE LIT UN TEXTE, PLUS RIEN NE LE CORRIGE.** Les trois comptes de morceaux qui se contredisaient vivaient dans des phrases dont **deux sur trois ne s'affichaient jamais** : le défaut visible et le défaut invisible avaient la même cause. *Un texte mort est un endroit où la vérité cesse d'être maintenue.* | §12.2 de `QUETE.md` |
-| 453 | ⚠️⚠️ **UN NOMBRE DANS UNE PHRASE EST UN COMPTEUR DE PLUS, ET IL NE SE MET PAS À JOUR.** La parade tient dans la FORME : une phrase qui compte est une **fonction `(n, total)`** — donc elle n'est pas une chaîne, donc un banc qui balaie les chaînes ne peut pas la rater. L'exception (les titres de chapitre) est nommée **et elle expire toute seule**. | §12.2 de `QUETE.md` |
-| 453 | **Un message de fin de manche décrit la MANCHE.** « Trois morceaux. Trois notes. » servait de message entre deux plongées : le jeu annonçait trois morceaux après la première, quand on n'en avait ramené aucun. *Ce qui récompense se dit quand l'hôte l'a posé, jamais quand le mini-jeu se ferme.* | §5 de `QUETE.md` |
 | 454 | ⚠️⚠️⚠️ **UNE GRANDEUR JUSTE, MESURÉE SUR UN INTERVALLE QUE LE JOUEUR NE REGARDE PAS.** C'est la SEPTIÈME forme du défaut de banc, et elle est la plus retorse : le ralentissement de la comète était vert sur ses deux contrôles (⅓ de vitesse, vitesse d'origine au contact) et **ne changeait rien à l'écran** — elle n'entre dans le cadre qu'aux derniers 22 % de sa course, très exactement la portion que la reprise couvrait. *On mesurait la bonne chose au mauvais endroit.* La parade : mesurer la durée de ce qui est **VISIBLE**, ce qui a obligé à sortir deux nombres de la closure de rendu. | §12.0 de `QUETE.md` |
 | 454 | ⚠️⚠️ **UN DESSIN QU'AUCUN BANC N'APPELLE RESTE AU NIVEAU DU JOUR OÙ IL A ÉTÉ ÉCRIT — ET LE SILLON EN ÉTAIT LA PREUVE VIVANTE.** Deux contrôles le regardaient depuis le 444 (bord du haut, « les deux états sont le même sillon ») et **aucun ne mesurait le RELIEF** : c'était une bande de terre plate, sans ombre, sans bourrelet, sans enfoncement, à côté d'un cratère qui prenait sept contrôles. *Un banc qui regarde un dessin ne le protège que sur les grandeurs qu'il mesure.* | §5 bis de `render-etoile.mjs` |
 | 454 | ⚠️⚠️ **UN CONTRASTE PEUT ÊTRE UN DÉFAUT ALORS QUE LA STATISTIQUE EST EXCELLENTE.** Le sillon avait un liseré vert vif tout autour : le bourrelet partait au brun presque noir sur son bord, et l'herbe claire d'à côté ressortait comme un néon. L'écart-type de luminance — la grandeur du §8 — était **très bon**, et c'est justement lui qui faisait le défaut. *Le §8 dit qu'il faut un écart ; il ne dit pas où le mettre.* | commentaire de `furrowBake` |
@@ -168,6 +147,10 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 | 455 | ⚠️⚠️ **La septième forme du 454, repayée en UN zip.** Le moment de la fracture de la comète (`0,34`) « avait l'air d'être au début du vol » — il l'était, et la comète n'entre dans le cadre qu'à **0,84** : elle se fendait hors de l'écran. *La parade est toujours la même : ne pas régler, DÉRIVER de ce qui est visible.* | `STAR_FRAG_AT`, `quete.js` |
 | 455 | ⚠️⚠️ **Le fond d'une mesure n'est pas un décor, c'est un réactif.** La sonde de la bulle peignait « de l'herbe, comme dans le jeu » : ses trois composantes passaient sous le seuil d'encre, donc le banc comptait le fond comme du trait. Puis il a mesuré le CERNE en croyant mesurer le glyphe. *Un banc de rendu se vérifie aussi* — deux fois de suite ici. | §9 de `render-etoile.mjs` |
 | 455 | ⚠️ **`if (g2.roundRect)` n'est pas une garde : le faux canevas LÈVE sur l'ACCÈS.** Un dessin qui dépend d'une méthode exotique n'est pas regardable, donc il vieillira. À 11 px de large, deux `fillRect` croisés font un meilleur coin qu'un arrondi anticrénelé. | `drawEmoteBubble` |
+| 456 | ⚠️⚠️⚠️ **UN LECTEUR QUI NE S'EXÉCUTE JAMAIS VAUT ZÉRO LECTEUR — et compter les lecteurs ne le voit pas.** C'est la leçon 453 d'un cran plus bas, et elle est pire : `starSay` écrit dans la bulle de l'ÉTOILE, qui n'est dessinée que là où le compagnon existe, c'est-à-dire **jamais avant que le cratère s'ouvre**. Cinq phrases du premier quart d'heure — dont celle qui dit *pourquoi* on se tient immobile devant un trou — étaient écrites, traduites, relues et **comptées comme lues par le banc**. Ça ne se mesure pas en comparant des clés : ça se mesure en LISANT LE SOURCE. | §12.0 de `QUETE.md` |
+| 456 | ⚠️⚠️ **CHAQUE BULLE JUSTE, LEUR SOMME FAUSSE.** Neuf PNJ nerveux groupés ont ouvert neuf bulles empilées : rien à redire à aucune, et l'écran était illisible. **Aucun banc ne peut voir ça** — il faudrait qu'il mesure une somme dont il n'a pas la liste. *Quand une demande porte sur la LISIBILITÉ, la grandeur à regarder est ce que l'écran montre au total, pas ce que chaque élément décide.* | `starTalkerPick` |
+| 456 | ⚠️⚠️ **UN GESTE CONTINU QUI NE REND RIEN NE SE DISTINGUE PAS D'UN JEU BLOQUÉ.** Le cratère demandait neuf secondes de dos tourné, sans touche, sans animation, sans un pixel qui bouge — et l'invite disait « E : ne plus bouger », c'est-à-dire le préfixe des touches devant le seul geste du jeu qui n'en a pas. *Une posture qu'on demande doit rendre deux choses : ce qui manque, et ce qui avance.* | `drawCalmMeter`, `starCalmStep` |
+| 456 | ⚠️ **UN SEUIL DE BANC N'EST PAS UNE VÉRITÉ, C'EST LA DÉCISION DU JOUR OÙ ON L'A ÉCRIT.** « La bulle reste lisible (≥ 8 px) » mesurait la taille d'AVANT et refusait donc la correction demandée par Guillaume. Il descend à 6 px **dans le même zip et en le disant** : quand la décision change, le seuil change avec elle et dit lequel des deux a bougé. | §11 de `render-etoile.mjs` |
 
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
@@ -377,14 +360,14 @@ de conception qui valent pour n'importe quel morceau du dépôt.
 |---|---|
 | `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **~20 500 l.** |
 | `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** |
-| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE (444) : la table des lieux, les 5 chapitres, les grandeurs de coopération et les résolveurs purs.** Aucun React, aucun dessin — `verify-quete.mjs` l'importe. Depuis le 449 il porte aussi **`starGoalKey`** (l'objectif courant, lu par le bandeau ET par le chevron) et **`starGuidePoint`** (où se place le familier meneur) ; depuis le 451 **`starShipParts`** — les cinq morceaux du NAVIRE, une pure LECTURE des cinq trouvailles, aucun état de plus ; depuis le 453 **`starShipGone`** (le navire prend la mer avec Eduardo) et **plus aucun second compte** (`shard` / `starShards` / `STAR_SHARD_TOTAL` supprimés) ; depuis le 455 **l'ANNONCE et le TAMPON** — `resolveStarWarn`, `starWarnOffer`, `starFallDue` (« la première nuit qui COMMENCE après l'annonce »), les quatre fonctions pures de la vallée nerveuse (`starNerveHas` / `Tic` / `Dir` / `Say`), `starCamTarget` (le point de vue en amont, à la ferme) et `starFragments`. ⚠️ Remplace `enquete.js`, supprimé au 444 |
+| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE (444) : la table des lieux, les 5 chapitres, les grandeurs de coopération et les résolveurs purs.** Aucun React, aucun dessin — `verify-quete.mjs` l'importe. Depuis le 449 il porte aussi **`starGoalKey`** (l'objectif courant, lu par le bandeau ET par le chevron) et **`starGuidePoint`** (où se place le familier meneur) ; depuis le 451 **`starShipParts`** — les cinq morceaux du NAVIRE, une pure LECTURE des cinq trouvailles, aucun état de plus ; depuis le 453 **`starShipGone`** (le navire prend la mer avec Eduardo) et **plus aucun second compte** (`shard` / `starShards` / `STAR_SHARD_TOTAL` supprimés) ; depuis le 455 **l'ANNONCE et le TAMPON** — `resolveStarWarn`, `starWarnOffer`, `starFallDue` (« la première nuit qui COMMENCE après l'annonce »), les quatre fonctions pures de la vallée nerveuse (`starNerveHas` / `Tic` / `Dir` / `Say`), `starCamTarget` (le point de vue en amont, à la ferme) et `starFragments` ; depuis le 456 **la PAROLE et la POSTURE** — `starNerveNearTo` (⚠️ la ZONE avant les distances, §4), `starNerveFace`, et `starCalmStep` / `starCalmNeed`, **une seule source pour le texte d'aide, la jauge et ce que l'hôte compte**. ⚠️ Remplace `enquete.js`, supprimé au 444 |
 | `components/ferme/QUETE.md` | **le chantier 444 : déroulé, grammaire magique, avancement, ET CE QUI RESTE À FAIRE (§12) — autorité tant que la quête n'est pas finie** |
 | `components/ferme/README.md` | **Valley Town, le tribunal, l'HÔTEL DE VILLE, l'ÉGLISE, le BEFFROI, les habitants, la VENTE, les OISEAUX, les ÉLECTIONS et les PIÈGES de ces zones — autorité (428-444)** |
 | `components/ferme/DESSIN.md` | **les règles de DESSIN, vraies partout — autorité (441, sorties du §4)** |
 | `tools/README.md` | **les bancs, ce qu'ils attrapent et leurs chiffres — autorité (432-439)** |
 | `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** · depuis le 440 il **importe `planche.js`** : une portée de pont et une emprise de décor sont des grandeurs de DESSIN, on les dérive du sprite au lieu de les recopier |
 | `components/ferme/planche.js` | **GÉNÉRÉ** par `tools/import-planche.mjs` — les sprites de la planche de Guillaume, en données. Ne pas éditer à la main |
-| `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural (aucun bitmap **à ce jour** — voir §9, le principe est tombé au 443) · **`drawSeated()`** · **`drawStarCrater()` (446), `drawStarComet()` (448), `drawStarShip()` (451), `drawStarFurrow()` + `starFurrowSink()` et `drawStarPlan()` (454) : les gros dessins de la quête vivent ICI et pas dans la boucle, exprès — c'est la seule façon qu'un banc les regarde** |
+| `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural (aucun bitmap **à ce jour** — voir §9, le principe est tombé au 443) · **`drawSeated()`** · **`drawStarCrater()` (446), `drawStarComet()` (448), `drawStarShip()` (451), `drawStarFurrow()` + `starFurrowSink()` et `drawStarPlan()` (454), `drawEmoteBubble()` (455), `drawCalmMeter()` (456) : les gros dessins de la quête vivent ICI et pas dans la boucle, exprès — c'est la seule façon qu'un banc les regarde** |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
 | `public/candyluge/README.md` | **la dette et les 18 règles de la luge — autorité (427)** |
 | `public/candyluge/js/` | `config.js` (tous les nombres) · `slope.js` (la piste) · `sled.js` · `world.js` |
@@ -533,11 +516,11 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 ⚠️⚠️ **LES BANCS SONT DANS `tools/README.md` DEPUIS LE 432, ET CE CHAPITRE A ÉTÉ ÉLAGUÉ AU 444
 SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 442** (reporté deux fois). **16 bancs de contrôle et 19 bancs
 de rendu**, comptés en listant `tools/` (⚠️ le chiffre disait 15 et 18 : il était périmé, recompté
-au 453 — et **les 34 ont été lancés un par un**, tous verts ; **relancés au 454**, `verify-quete`
-passant de 294 à **345/345**). ⚠️ **Six d'entre eux existent parce qu'un défaut vu par
+au 453 — et **les 35 ont été lancés un par un au 456**, tous verts, `verify-quete` passant de 396 à
+**413/413**). ⚠️ **Six d'entre eux existent parce qu'un défaut vu par
 Guillaume — ou vu à l'écran — n'était mesuré nulle part** : `verify-compo` (440), `verify-pont`
 (441), `verify-portee` (443), et au 444 `render-etoile`, `verify-quete`, `render-beffroi`.
-⚠️ **Le seul qui touche à de l'ARGENT est `verify-vallee`** (205/205, relancé au 455) : il joue des ventes,
+⚠️ **Le seul qui touche à de l'ARGENT est `verify-vallee`** (205/205, relancé au 456) : il joue des ventes,
 compte les pièces, et vérifie que **le cours est bit à bit celui du 430** — contrôle hérité de
 `verify-enquete`, sauvé de sa suppression parce qu'il protégeait le marché, pas l'enquête.
 **Tout chiffre écrit là-bas a été obtenu en lançant le banc**, c'est sa règle d'entrée.
@@ -594,7 +577,8 @@ JIT=60` simule une vraie liaison ; il imprime le débit réel PAR TYPE toutes le
 ⚠️ **Le broadcast de supabase-js est BINAIRE**, pas JSON — un relais qui ne lit que les trames
 texte voit tout se connecter et rien passer.
 
-**Jouer en local** — deux échafaudages TEMPORAIRES, **à supprimer après** :
+**Jouer en local** — deux échafaudages TEMPORAIRES, **à supprimer après** (recette resservie telle
+quelle au 454 puis au 456) :
 1. un `.env.local` pointant sur `http://127.0.0.1:54321` ; sans lui on reste bloqué à l'écran
    « code de ferme » ;
 2. une page jetable `app/<nom>/page.js` montant `<FermeGame room={{id}} me={{id,username}}
@@ -630,6 +614,20 @@ patch AVANT de mesurer quoi que ce soit**, et on peut ensuite lire les pixels du
 (`getImageData`) pour mesurer ce qu'aucune capture ne montre — un décalage de sprite, par exemple.
 ⚠️ Un canevas mesuré pendant qu'un panneau est masqué sort à **0×0**, ce qui ressemble trait pour
 trait à un rendu cassé.
+⚠️⚠️ **ET DEPUIS LE 454, `setTimeout(…, 16)` NE SUFFIT PLUS : CHROME ÉTRANGLE LES TIMERS D'UN
+ONGLET MASQUÉ À UN PAR SECONDE.** Le monde avance (l'horloge tourne) mais à ~1 image/s, ce qui donne
+un jeu « qui marche » et des mesures fausses — une scène de chute défilait en douze images. **La
+parade est un WORKER, qui n'est pas étranglé** :
+`new Worker(URL.createObjectURL(new Blob(["setInterval(()=>postMessage(0),16);"])))`, dont chaque
+message vide une file de callbacks `requestAnimationFrame`. C'est le frein du 446 (une file, pas un
+relais qui se repose un message) avec une horloge qui ne dort pas. ⚠️ **Il a resservi tel quel au
+456**, où il a fait tourner toute la séance.
+⚠️⚠️ **MAIS `getImageData` RESTE MENTEUR DANS UN ONGLET MASQUÉ — MESURÉ AU 456.** Avec le worker en
+place, l'horloge avançait, les résidents se déplaçaient, et **le hachage de l'écran entier ne
+changeait pas d'une image à l'autre** : on aurait conclu « les PNJ sont arrêtés » sur un monde qui
+bougeait. **La capture d'écran, elle, est juste** : c'est elle qu'il faut échantillonner, pas les
+pixels du canevas. *Deux mesures de suite qui rendent le même nombre ne prouvent rien ; deux
+CAPTURES qui rendent la même image, si.*
 
 ⚠️ **Le faux canvas de `lib-canvas.mjs` IGNORE `translate`/`rotate` et ne connaît pas `fillText`**
 — un sprite qui en dépend s'y juge faux. Ce n'est pas un bogue du jeu. ⚠️⚠️ **Et il
@@ -846,7 +844,13 @@ erreur** en choisissant mal.
    **454 (le même tableau re-ramené à quatre : 448 et 449 partent, leur détail est déjà ailleurs)**,
    **455 (le même tableau re-ramené à quatre pour la TROISIÈME fois en trois zips : le 451 part, ses
    quatre lignes vivent au §30 de `ferme/README.md` et dans `render-navire.mjs`, que leur colonne de
-   droite désignait déjà — la forme tient, c'est tout ce qu'on lui demande)**.
+   droite désignait déjà — la forme tient, c'est tout ce qu'on lui demande)*,
+   **456 (QUATRIÈME fois en quatre zips, et pour la première fois l'élagage a mordu DANS un zip et
+   pas seulement sur le plus vieux : le 452 part en entier — ses trois lignes vivent au §1 et au
+   §12.2 de `QUETE.md`, que leur colonne de droite désignait déjà — et le 453 passe de quatre lignes
+   à deux, les deux qui ne sont pas des cas particuliers de compteur. ⚠️ *Le tableau annonce « les
+   quatre derniers zips » : le tenir demande de retirer autant qu'on ajoute, et un zip qui ajoute
+   quatre lignes doit en retirer cinq.*)**.
 
    ⚠️⚠️ **LE 451 A EXÉCUTÉ L'ORDRE DU 449 : §13 RELU LIGNE À LIGNE**, huit zips après le 442.
    Quatre entrées parlaient d'un code SUPPRIMÉ au 444 — elles décrivaient l'enquête cadastrale
@@ -879,6 +883,14 @@ erreur** en choisissant mal.
    — elles vivent au §28 de `ferme/README.md`, que leur colonne de droite désignait déjà. *Une ligne
    de tableau qu'on retire en ayant vérifié où elle vit n'est pas une perte, c'est un déménagement
    qui a réussi.*
+
+   ⚠️⚠️ **LE 456 N'A PAS EXÉCUTÉ L'ORDRE DU 453 (RELIRE `ferme/README.md` CONTRE LE CODE) — IL EST
+   DONC REPORTÉ POUR LA TROISIÈME FOIS, ET ÇA COMMENCE À RESSEMBLER AUX QUATRE REPORTS DU 444.** Ce
+   qu'il a fait à la place mérite quand même d'être noté, parce que c'est la même grandeur : il a
+   trouvé, en jouant, que **cinq phrases de la quête n'avaient aucun chemin d'affichage** alors que
+   le banc les comptait comme lues. *La question du 453 — « chaque chose que le document dit visible
+   a-t-elle un chemin de code qui l'affiche ? » — vient de se reposer sur le CODE au lieu du
+   document, et elle a payé une seconde fois.*
 
    ⚠️ **L'ORDRE DU PROCHAIN ZIP : RELIRE `components/ferme/README.md` CONTRE LE CODE**, comme le 452
    l'a fait pour `QUETE.md` et avec le même rendement. C'est le seul document d'autorité du dépôt

@@ -992,7 +992,15 @@ console.log("\n9. LA BULLE D'ÉMOTION (455) — un signe, pas une phrase\n");
     };
     const w0 = bodyW(1), w1 = bodyW(0.6);
     ok(w0 > w1, "⚠️ la bulle SURSAUTE à l'apparition", `${w0} px → ${w1} px`);
-    ok(w1 >= 8, "…et elle reste lisible ensuite", `${w1} px de large`);
+    /* ⚠️⚠️ ZIP 456 — CE PLANCHER EST DESCENDU DE 8 À 6 PX AVEC LA BULLE, DANS LE
+       MÊME ZIP, ET C'EST LA SEULE FAÇON HONNÊTE DE LE FAIRE. Guillaume a trouvé
+       le « ! » trop gros (11×13 sur une tête de 16 px) ; le banc mesurait la
+       taille d'AVANT, donc il refusait la correction. Un seuil de banc n'est pas
+       une vérité, c'est la décision du jour où on l'a écrit : quand la décision
+       change, il change AVEC elle et il dit lequel des deux a bougé. Ce qu'il
+       protège, lui, n'a pas changé — un corps de bulle sous 6 px ne porterait plus
+       un glyphe séparé de son point (contrôle du dessus). */
+    ok(w1 >= 6, "…et elle reste lisible ensuite", `${w1} px de large`);
   }
   {
     const painted = (a2) => {
@@ -1009,6 +1017,7 @@ console.log("\n9. LA BULLE D'ÉMOTION (455) — un signe, pas une phrase\n");
     ok(painted(0.01) === 0, "…et elle ne laisse pas un fantôme à 1 %");
   }
 }
+
 
 /* ⚠️⚠️ LA FRACTURE : ON COMPTE LES TÊTES, PAS LES PIXELS. Trois morceaux dessinés
    l'un sur l'autre font une seule tache ; ce qui doit se voir est qu'ils se
@@ -1072,6 +1081,100 @@ console.log("\n10. LA COMÈTE SE FEND (455)\n");
      `${Q.starFragments(0.99).length} morceaux`);
 }
 
-console.log(`\nPlanches : tools/out/etoile-planche.png · tools/out/etoile-cratere.png · tools/out/etoile-comete.png · tools/out/etoile-alerte.png`);
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 456 — LA JAUGE DE LA POSTURE DU CRATÈRE.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ ELLE EST REGARDÉE LE JOUR DE SON ÉCRITURE, comme la bulle du 455 et pour
+   la raison du 454 : un dessin qu'aucun banc n'appelle reste au niveau du jour où
+   il a été écrit (le sillon en a été la preuve, plat pendant dix zips).
+   ⚠️⚠️ ET CE QU'ON MESURE EST CE QU'UNE CAPTURE NE MONTRE PAS. Une capture montre
+   une barre ; elle ne montre pas qu'elle est MONOTONE (une barre qui reculerait
+   d'un pixel entre deux tenues dirait au joueur qu'il a perdu du temps), ni
+   qu'elle est VIDE à zéro (une barre qui commence à 2 px promet une avance qui
+   n'existe pas), ni que l'état « ça ne compte pas » se distingue de l'état « ça
+   monte » AUTREMENT QUE PAR LA LONGUEUR — c'est très exactement la question que
+   le joueur se pose, et une barre courte et une barre grise se confondent.
+   ═══════════════════════════════════════════════════════════════════════════ */
+console.log("\n11. LA JAUGE DE LA POSTURE (456) — « est-ce que je fais bien ? »\n");
+{
+  const S4 = 40;
+  /* ⚠️ FOND BLEU PUR, LA LEÇON DU 455 : le fond d'une mesure n'est pas un décor,
+     c'est un réactif — il doit être ce que le dessin n'est JAMAIS. La jauge est
+     brune, crème et or ; aucun de ses tons n'a le bleu dominant. */
+  const shot = (k, opt) => {
+    const sur = makeCanvas(S4, S4), gg = sur.ctx;
+    gg.fillStyle = "#0000ff"; gg.fillRect(0, 0, S4, S4);
+    S.drawCalmMeter(gg, S4 / 2, S4 - 12, k, opt);
+    return sur;
+  };
+  /* L'or du remplissage : rouge fort, vert moyen, bleu faible. Le cadre est brun
+     très sombre et le fond est bleu — aucun des deux ne passe ce filtre. */
+  const goldPx = (sur) => {
+    const d = sur.px; let n = 0;
+    for (let y = 0; y < S4; y++) for (let x = 0; x < S4; x++) {
+      const i = (y * S4 + x) * 4;
+      if (d[i] > 190 && d[i + 1] > 140 && d[i + 2] < 160) n++;
+    }
+    return n;
+  };
+  ok(goldPx(shot(0)) === 0, "⚠️ à zéro, la jauge est VIDE", `${goldPx(shot(0))} px d'or`);
+  const g33 = goldPx(shot(0.34)), g66 = goldPx(shot(0.67)), g100 = goldPx(shot(1));
+  ok(g33 > 0 && g66 > g33 && g100 > g66, "⚠️⚠️ elle monte, et elle ne recule jamais",
+     `${g33} → ${g66} → ${g100} px`);
+  /* ⚠️ LA MONOTONIE SE BALAIE, ELLE NE S'ÉCHANTILLONNE PAS (leçon 449 : un
+     contrôle de cas ne vaut pas un invariant). Trente pas, et aucun ne doit
+     redescendre — c'est ce qu'un arrondi mal posé casse en premier. */
+  {
+    let last = -1, bad = 0;
+    for (let i = 0; i <= 30; i++) { const g = goldPx(shot(i / 30)); if (g < last) bad++; last = g; }
+    ok(bad === 0, "…balayé sur 31 valeurs, pas trois", `${bad} recul(s)`);
+  }
+  /* ⚠️⚠️ L'ÉTAT « ÇA NE COMPTE PAS » NE SE DIT PAS PAR LA LONGUEUR. Une jauge
+     vide et une jauge en attente se ressemblent trait pour trait si la seule
+     différence est le remplissage : il faut que le CADRE change de ton. On
+     compare donc le bleu moyen des deux cadres — le gris-bleu de nuit contre le
+     brun. */
+  {
+    const blueOf = (sur) => {
+      const d = sur.px; let sum = 0, n = 0;
+      for (let y = 0; y < S4; y++) for (let x = 0; x < S4; x++) {
+        const i = (y * S4 + x) * 4;
+        if (d[i + 2] === 255 && d[i] === 0) continue;       // le fond
+        sum += d[i + 2]; n++;
+      }
+      return n ? sum / n : 0;
+    };
+    const b0 = blueOf(shot(0)), bw = blueOf(shot(0, { warn: true }));
+    ok(bw > b0 + 20, "⚠️⚠️ « ça ne compte pas » se voit AU CADRE, pas à la longueur",
+       `bleu ${b0.toFixed(0)} → ${bw.toFixed(0)}`);
+    ok(goldPx(shot(0.8, { warn: true })) === 0, "…et en attente, elle ne se remplit jamais");
+  }
+  /* ⚠️ LE §4 DE `CLAUDE.md`, PAYÉ TROIS FOIS AU 433 : un canevas découpe en
+     silence ce qui dépasse. La jauge fait 24 px de large sur un canevas de 40 :
+     aucun pixel ne doit toucher un bord. */
+  {
+    const d = shot(1).px; let edge = 0;
+    for (let x = 0; x < S4; x++) for (const y of [0, S4 - 1]) {
+      const i = (y * S4 + x) * 4;
+      if (!(d[i] === 0 && d[i + 2] === 255)) edge++;
+    }
+    for (let y = 0; y < S4; y++) for (const x of [0, S4 - 1]) {
+      const i = (y * S4 + x) * 4;
+      if (!(d[i] === 0 && d[i + 2] === 255)) edge++;
+    }
+    ok(edge === 0, "⚠️ rien n'est peint sur le bord du canevas", `${edge} px`);
+  }
+  /* Une planche à regarder : un contrôle vert ne dit pas si c'est joli (§25). */
+  {
+    const W3 = 260, H3 = 60;
+    const sur = makeCanvas(W3, H3), gg = sur.ctx;
+    gg.fillStyle = "#2d2418"; gg.fillRect(0, 0, W3, H3);              // la terre du cratère
+    [0, 0.25, 0.5, 0.75, 1].forEach((k, i) => S.drawCalmMeter(gg, 34 + i * 48, 26, k));
+    [0, 0.5].forEach((k, i) => S.drawCalmMeter(gg, 58 + i * 96, 50, k, { warn: true }));
+    const up = scale(sur.px, W3, H3, 3);
+    writePNG(path.join(OUT, "etoile-jauge.png"), up.px, up.W, up.H);
+  }
+}
+console.log(`\nPlanches : tools/out/etoile-planche.png · tools/out/etoile-cratere.png · tools/out/etoile-comete.png · tools/out/etoile-alerte.png · tools/out/etoile-jauge.png`);
 console.log(fails === 0 ? `\n✅ tous les contrôles passés.\n` : `\n❌ ${fails} contrôle(s) en échec.\n`);
 process.exit(fails ? 1 : 0);

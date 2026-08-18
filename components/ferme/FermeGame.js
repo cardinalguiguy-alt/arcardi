@@ -952,6 +952,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      seules : ailleurs il reste `null`, donc la scène retombe sur son repli. */
   const starViewRef = useRef({ cam: null, zoom: 1 });
   const starHoldRef = useRef(0);                     // depuis quand on tient un geste continu (le calme du cratère)
+  /* ⚠️ ZIP 456 — L'INSTANT OÙ LA TENUE A COMMENCÉ, POUR L'AFFICHER. Il ne décide
+     RIEN : l'hôte compte la tenue à sa propre horloge (`resolveStarCalm`) et c'est
+     lui qui ouvre le cratère. Ceci n'est que la jauge — une seconde source de
+     vérité sur « combien de temps ai-je tenu » serait exactement la divergence que
+     le §14 interdit, d'où le besoin (`Q.starCalmNeed`) lu dans `quete.js` et
+     jamais recopié ici. Les deux horloges dérivent au pire de la latence d'un
+     `send()`, ce qui se voit comme une barre pleine une demi-seconde avant qu'elle
+     sorte — jamais l'inverse, puisque l'hôte démarre son compte AVANT nous. */
+  const starCalmT0Ref = useRef(0);
+  /* ⚠️⚠️ ZIP 456 — QUI PARLE, CETTE IMAGE. UN SEUL. Vu à l'écran dès la première
+     séance : les vingt résidents apparaissent groupés près de la maison, neuf
+     sont nerveux, et neuf bulles se sont ouvertes EN MÊME TEMPS, empilées les
+     unes sur les autres. La demande de Guillaume était de rendre les indices
+     LISIBLES ; arrêter le PNJ ne sert à rien si huit voisins parlent par-dessus.
+     ⚠️ C'est aussi ce que la fenêtre périodique du 455 faisait sans le dire — elle
+     décalait les prises de parole. En la retirant, on a retiré son effet utile :
+     il fallait le remettre, mais choisi par la DISTANCE plutôt que par l'horloge,
+     c'est-à-dire par ce que le joueur montre en s'approchant. */
+  const starTalkerRef = useRef(null);
   /* ⚠️ LA TRAÎNE DU COMPAGNON — LA MÊME QUE CELLE DE LEO (427), ET C'EST TOUT CE
      QUE COÛTE L'ÉTOILE QUI SUIT LE JOUEUR : sa position se DÉRIVE de la mienne,
      donc zéro message, aucune collision propre, et l'impossibilité de traverser
@@ -5788,7 +5807,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               break;
             }
           }
-          if (v.roamTarget) walkVia(v.roamTarget.x, v.roamTarget.y, v.strollMul || 0.4);
+          /* ⚠️⚠️ ZIP 456 — IL S'ARRÊTE POUR TE PARLER (demande de Guillaume). Voir
+             `starNerveHalt` : c'est l'HÔTE qui arrête, parce que c'est lui qui
+             simule et qui diffuse. On ne touche pas à `roamTarget` — il reprend
+             sa promenade là où il l'avait laissée dès qu'on s'éloigne, ce qui
+             est la différence entre « il s'est arrêté » et « il a oublié où il
+             allait ». */
+          if (starNerveHalt("farm", v.rid, v.x, v.y)) v.moving = false;
+          else if (v.roamTarget) walkVia(v.roamTarget.x, v.roamTarget.y, v.strollMul || 0.4);
         }
       } else if (v.phase === "leave") {
         if (v.wpi === undefined || v.wpi >= WP.length) v.wpi = WP.length - 2;
@@ -10360,7 +10386,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          traitement que la mission d'Eduardo, juste en dessous). */
       if (resZone(res) === "town") {
         const tw = townWorldNow();
-        if (tw) townResidentRoam(res, tw, now, dt, ro, residents);
+        // zip 456 — voir `starNerveHalt` : à portée de parole, il s'arrête.
+        if (starNerveHalt("town", res.rid, res.x, res.y)) res.moving = false;
+        else if (tw) townResidentRoam(res, tw, now, dt, ro, residents);
         continue;
       }
       // Zip 258 : Eduardo en voyage. Tant qu'il n'est pas rentré, il ne se
@@ -10430,6 +10458,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const tjBrawlNow = s.station && s.station.tjBrawl;
       const inTjScene = tjBrawlNow && (tjBrawlNow.aRid === res.rid || tjBrawlNow.bRid === res.rid);
       if (inScene || inTjScene) { res.moving = false; }
+      /* ⚠️ ZIP 456 — L'ARRÊT PASSE APRÈS LES SCÈNES ET AVANT LA RÔDAILLE, et il
+         ne s'applique PAS à un déplacement scripté (`storming`, `tjReact`) : une
+         bagarre qui s'interrompt parce qu'un joueur passe à trois cases serait un
+         arrêt qui casse une scène au lieu d'en jouer une. */
+      else if (!res.hidden && !res.storming && !res.tjReact && starNerveHalt("farm", res.rid, res.x, res.y)) res.moving = false;
       else if (!res.hidden) residentRoam(res, w, now, dt, ro, residents); // zip 252 : balade sur la ferme (chaque tick) — zip 256 : ancre dédiée — zip 298 : passe la liste des voisins (rendez-vous sociaux)
       // Chantier "Super Tristan" : indépendant de la temporisation normale
       // ci-dessous (res.nextWorkAt / C.RESIDENT_WORK_MS) — la file de cases
@@ -13994,14 +14027,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                TAMPON. C'est un OVERRIDE d'affichage, comme `turnAwayDir` chez les
                résidents : on ne touche pas à `vv.dir`, sinon l'hôte et l'invité
                auraient à réconcilier une humeur. */
-            const vNerve = starNerveDirOf(vv.rid, vx, vy);
+            const vNerve = starNerveDirOf("farm", vv.rid, vx, vy);
             drawCharacter({ id: "visitor" + vv.rid, name: ro.name, x: vx, y: vy, dir: vNerve != null ? vNerve : (vv.dir || 0), moving: vNerve != null ? false : !!vv.moving, animT: vv.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, plaid: ro.skill === "lumberjack", sugarWorker: ro.skill === "sugarworker", look: ro.look, mount: onWhiteHorse ? "white" : null }, false);
             /* ⚠️ ZIP 455 — LE TAMPON D'ANNONCE : le « ! », ou la phrase si on
                s'approche. UNE seule question posée à `starNpcEmote`, qui vit au
                niveau du composant — trois copies dans trois boucles auraient fini
                par ne pas répondre la même chose (piège n°1, troisième visage). */
             {
-              const em = starNpcEmote(vv.rid, vx, vy);
+              const em = starNpcEmote("farm", vv.rid, vx, vy);
               if (em && em.say) queueBubble(Math.round(vx * T) + 8, Math.round(vy * T) - 18, em.say, false);
               else if (em) bubbleQueue.push({ cx: Math.round(vx * T) + 8, by: Math.round(vy * T) - 18, emote: em });
             }
@@ -14180,11 +14213,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          suiveur (le principe de Leo). */
       {
         const cp = starCompanionAt("farm", m.x, m.y, !!m.moving, performance.now());
-        if (cp) {
-          draws.push({ y: (cp.y + 1) * T - 0.01, fn: () => drawStarWisp(cp) });
-          const sb = starBubbleNow();
-          if (sb) queueBubble(Math.round(cp.x * T) + 8, Math.round(cp.y * T) - 22, sb, "star");   // zip 455 — la voix qui guide se reconnaît
-        }
+        if (cp) draws.push({ y: (cp.y + 1) * T - 0.01, fn: () => drawStarWisp(cp) });
+      /* ⚠️⚠️⚠️ ZIP 456 — ET QUAND ELLE N'EST PAS ENCORE LÀ, C'EST LE JOUEUR QUI
+         PORTE SA VOIX. La bulle n'était dessinée QUE sous ce `if (cp)` : avant
+         que l'étoile sorte du cratère, `starCompanionAt` rend `null`, donc TOUT
+         ce que le chantier fait dire avant ce moment-là était affiché nulle part
+         — l'ombre du champ (`s1.shadow`, la première image magique de toute la
+         quête) et les trois phrases du familier-guide (449), c'est-à-dire la
+         voix qui explique où aller. Quatre phrases mortes, dans le premier quart
+         d'heure de jeu, très exactement là où un joueur qui découvre l'histoire
+         a besoin qu'on lui parle (retour de Guillaume : « on ne comprend pas ce
+         qu'il se passe quand on ne connaît pas l'histoire »).
+         ⚠️ C'est la leçon du 453 (« une chaîne que personne n'affiche »), d'un
+         cran plus bas et plus vicieuse : ici le lecteur EXISTE, il est écrit,
+         relu, compté par le banc — il ne s'exécute simplement jamais. */
+        const sb = starBubbleNow();
+        if (sb) queueBubble(Math.round((cp ? cp.x : m.x) * T) + 8, Math.round((cp ? cp.y : m.y) * T) - (cp ? 22 : 34), sb, "star");   // zip 455 — la voix qui guide se reconnaît
       }
       // Zip 234 (Guillaume: "when we walk over a certain crop, we can see
       // what they are"): standing on a planted tile floats a small paper tag
@@ -14457,7 +14501,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                overrides sur la même grandeur se classent, ils ne s'additionnent
                pas — le §4 (« une grandeur de dessin, une de rang, une de
                collision ») dans sa version la plus petite. */
-            const resNerve = turnAwayDir != null ? null : starNerveDirOf(res.rid, rx, ry);
+            const resNerve = turnAwayDir != null ? null : starNerveDirOf("farm", res.rid, rx, ry);
             drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: turnAwayDir != null ? turnAwayDir : (resNerve != null ? resNerve : resDir), moving: resNerve != null ? false : resMoving, animT: resAnimT, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(res, ro), plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker", sugarWorker: ro.skill === "sugarworker", look: ro.look, mount: onWhiteHorse ? "white" : null, injuredUntil: res.injuredUntil }, false);
             if (ro.skill === "breadmaker" && (inScene || (performance.now() % 12000 < 3000)) && turnAwayDir == null && resDir === 0) drawFrown(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 3);
             // Chantier fumigateur (demande Guillaume) : René tient un petit
@@ -14544,7 +14588,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                s'approche. UNE seule question posée à `starNpcEmote`, qui vit au
                niveau du composant — trois copies dans trois boucles auraient fini
                par ne pas répondre la même chose (piège n°1, troisième visage). */
-            const resEmote = starNpcEmote(res.rid, rx, ry);
+            const resEmote = starNpcEmote("farm", res.rid, rx, ry);
             if (resEmote && resEmote.say) queueBubble(Math.round(rx * T) + 8, Math.round(ry * T) - 18, resEmote.say, false);
             else if (resEmote) bubbleQueue.push({ cx: Math.round(rx * T) + 8, by: Math.round(ry * T) - 18, emote: resEmote });
             // Bulle métier quand le joueur local est à proximité (zip 299).
@@ -17022,14 +17066,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                assise a sa propre orientation et un `dir` imposé la ferait pivoter
                sur son banc. Il garde le « ! », il perd le tic — ce qui est très
                exactement ce qu'un inquiet assis fait. */
-            const tNerve = sitting ? null : starNerveDirOf(res.rid, dx2, dy2);
+            const tNerve = sitting ? null : starNerveDirOf("town", res.rid, dx2, dy2);
             drawCharacter(charOf({ x: dx2, y: dy2, dir: tNerve != null ? tNerve : rDir, moving: tNerve != null ? false : rMoving, animT: rAnim, sit: sitting, injuredUntil: res.injuredUntil }), false);
             const by0 = Math.round(dy2 * T) - 18 - pe * C.TOWN_ELEV_PX - pLift;
             /* ⚠️ ZIP 455 — LE TAMPON D'ANNONCE : le « ! », ou la phrase si on
                s'approche. UNE seule question posée à `starNpcEmote`, qui vit au
                niveau du composant — trois copies dans trois boucles auraient fini
                par ne pas répondre la même chose (piège n°1, troisième visage). */
-            const em = starNpcEmote(res.rid, dx2, dy2);
+            const em = starNpcEmote("town", res.rid, dx2, dy2);
             if (em && em.say) queueTownBubble(Math.round(dx2 * T) + 8, by0, em.say, false);
             else if (em) townBubbles.push({ cx: Math.round(dx2 * T) + 8, by: by0, emote: em });
             const line = em ? null : townActLine(res);
@@ -17264,6 +17308,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          exactement celle du véhicule, on ne le verrait même pas dépasser, on
          verrait juste un taxi avec une tête qui sort du capot. */
       if (!inCar) pushE((m.y + 1) * T, myE, () => drawSelf(m), myLift);
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ ZIP 456 — LA POSTURE DU CRATÈRE SE VOIT ENFIN.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️⚠️ AU-DESSUS DU JOUEUR, ET C'EST TOUT LE POINT : la seule bulle du
+         chantier qui parlait de cette scène passait par `starSay`, donc par la
+         bulle de l'ÉTOILE — laquelle n'existe pas tant qu'elle est au fond du
+         trou. Deux phrases écrites, traduites, et affichées nulle part, très
+         exactement là où le joueur ne comprenait rien (retour de Guillaume).
+         ⚠️ ELLE PASSE PAR LA FILE DES BULLES et pas par `pushE` : le cratère est
+         un creux, le joueur y est plus bas que le bord, et un dessin trié au sol
+         se ferait recouvrir par la lèvre du trou — c'est-à-dire que la jauge
+         disparaîtrait au moment précis où elle sert. */
+      if (!inCar) {
+        const cm = starCalmUi();
+        if (cm) {
+          const by = Math.round(m.y * T) - 20 - myE * C.TOWN_ELEV_PX - myLift;
+          if (cm.text) queueTownBubble(Math.round(m.x * T) + 8, by - 8, cm.text, "star");
+          townBubbles.push({ cx: Math.round(m.x * T) + 8, by, meter: cm });
+        }
+      }
       /* ZIP 444 — l'étoile qui suit, en ville. ⚠️ ELLE PORTE L'ALTITUDE DE SA
          PROPRE CASE, pas la mienne : sur les marches de la Haute-Ville elle est
          une case derrière moi, donc un demi-niveau plus bas, et lui donner mon
@@ -17273,8 +17337,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (cp) {
           const ce2 = elevTown(tw, cp.x, cp.y), cl2 = archPxTown(tw, cp.x, cp.y);
           pushE((cp.y + 1) * T - 0.01, ce2, () => drawStarWisp(cp), cl2);
-          const sb = starBubbleNow();
-          if (sb) queueTownBubble(Math.round(cp.x * T) + 8, Math.round(cp.y * T) - 22 - ce2 * C.TOWN_ELEV_PX - cl2, sb, "star");   // zip 455
+        }
+        // zip 456 — sans compagnon, la voix se pose au-dessus du joueur (voir la ferme).
+        const sb = starBubbleNow();
+        if (sb) {
+          const bxp = cp ? cp.x : m.x, byp = cp ? cp.y : m.y;
+          const be = cp ? elevTown(tw, bxp, byp) : myE, bl = cp ? archPxTown(tw, bxp, byp) : myLift;
+          queueTownBubble(Math.round(bxp * T) + 8, Math.round(byp * T) - (cp ? 22 : 34) - be * C.TOWN_ELEV_PX - bl, sb, "star");   // zip 455
         }
       }
       if (myTaxi) {
@@ -17331,6 +17400,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       for (const bq of townBubbles) {
         try {
           if (bq.emote) spritesRef.current.drawEmoteBubble(ctx, bq.cx, bq.by, bq.emote.a);   // zip 455
+          else if (bq.meter) spritesRef.current.drawCalmMeter(ctx, bq.cx, bq.by, bq.meter.k, bq.meter);   // zip 456
           else drawSpeechBubble(ctx, bq.cx, bq.by, bq.text, bq.major);
         } catch (e) { console.error("[FERME] bulle ville ignorée", e); }
       }
@@ -17984,8 +18054,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const cp = starCompanionAt("court", m.x, m.y, !!m.moving, performance.now());
         if (cp) {
           draws.push({ y: (cp.y + 1) * T - myRz - 0.01, fn: () => { ctx.save(); ctx.translate(0, -myRz); drawStarWisp(cp); ctx.restore(); } });
-          const sb = starBubbleNow();
-          if (sb) draws.push({ y: 1e9, fn: () => drawSpeechBubble(ctx, Math.round(cp.x * T) + 8, Math.round(cp.y * T) - 22 - myRz, sb, "star") });   // zip 455
+        }
+        // zip 456 — sans compagnon, la voix se pose au-dessus du joueur (voir la ferme).
+        const sb = starBubbleNow();
+        if (sb) {
+          const bxp = cp ? cp.x : m.x, byp = cp ? cp.y : m.y;
+          draws.push({ y: 1e9, fn: () => drawSpeechBubble(ctx, Math.round(bxp * T) + 8, Math.round(byp * T) - (cp ? 22 : 34) - myRz, sb, "star") });   // zip 455
         }
       }
       /* ╔══════════════════════════════════════════════════════════════════════
@@ -21486,23 +21560,73 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!pick) return null;
     return (pick.pool === "hint" ? w.hint : w.rumor)[pick.idx] || null;
   }
-  /* SUIS-JE ASSEZ PRÈS POUR QU'IL ME PARLE ? ⚠️ La distance est de MANHATTAN,
-     comme toutes les portées de dialogue du fichier (`residentPromptNearby`,
-     `townResidentPromptNearby`) : une seconde métrique aurait donné une portée qui
-     ne ressemble à aucune autre, et le joueur les compare sans le savoir. */
-  function starNerveNear(x, y) {
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 456 — SUIS-JE ASSEZ PRÈS POUR QU'IL ME PARLE ? ET SURTOUT : DANS QUELLE
+     ║ CARTE ?
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ LA VERSION DU 455 NE REGARDAIT PAS LA ZONE, ce qui est le piège n°1 du
+     §4 de `CLAUDE.md` (« deux cartes sans repère commun finissent par se
+     mélanger », payé quatre fois) dans sa forme la moins visible : un fermier
+     debout en (50, 50) à la ferme déclenchait la phrase d'un habitant debout en
+     (50, 50) à Valley Town — donc une bulle qui s'ouvre toute seule à l'autre
+     bout du monde, sans personne devant. La règle du §4 est « on teste la ZONE
+     avant les distances », et c'est maintenant `Q.starNerveNearTo` qui la tient,
+     pour le jeu ET pour le banc.
+     ⚠️ LA FENÊTRE PÉRIODIQUE DU 455 A DISPARU AVEC SON PROBLÈME. Elle existait
+     pour que la phrase et le « ! » ne se recouvrent pas ; maintenant que le PNJ
+     s'ARRÊTE et se tourne vers toi, la phrase se dit tant que tu es là et le
+     « ! » ne s'affiche que de loin — deux états exclusifs par construction, plus
+     par horloge. `STAR_NERVE_TALK_MS` est donc supprimée : une constante que plus
+     personne ne lit est le pendant exact d'une chaîne que personne n'affiche. */
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 456 — UNE SEULE VOIX À LA FOIS, ET C'EST LA PLUS PROCHE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ ELLE TOURNE UNE FOIS PAR IMAGE, AVANT LE RENDU, parce que le choix
+     demande de comparer TOUS les candidats et qu'une boucle de dessin les voit un
+     par un. Trois `if` dans trois boucles n'auraient jamais pu répondre « le plus
+     proche » — ils auraient répondu « le premier dessiné », c'est-à-dire l'ordre
+     du tableau des résidents, c'est-à-dire n'importe qui.
+     ⚠️ ELLE NE LIT QUE DES POSITIONS DÉJÀ DIFFUSÉES (§3) : zéro message, zéro
+     champ, et les deux joueurs peuvent avoir deux interlocuteurs différents — ce
+     qui est juste, puisque chacun parle à celui devant qui il s'est mis. */
+  function starTalkerPick() {
+    const m = meRef.current;
+    if (!m || starNerveSince() < 0) { starTalkerRef.current = null; return; }
+    const z = m.zone || "farm", st = sharedRef.current.station;
+    let best = null, bd = Infinity;
+    const scan = (arr, zoneOf) => {
+      for (const r of arr || []) {
+        if (!r || !Q.starNerveHas(r.rid)) continue;
+        if (!Q.starNerveNearTo(z, m.x, m.y, zoneOf(r), r.x, r.y)) continue;
+        const d = Math.abs(m.x - r.x) + Math.abs(m.y - r.y);
+        if (d < bd) { bd = d; best = r.rid; }
+      }
+    };
+    scan(st && st.residents, r => r.zone || "farm");
+    scan(st && st.visitors, () => "farm");     // un visiteur ne quitte jamais la ferme
+    starTalkerRef.current = best;
+  }
+  function starNerveNear(zone, x, y) {
     const m = meRef.current;
     if (!m) return false;
-    return Math.abs(m.x - x) + Math.abs(m.y - y) <= C.STAR_NERVE_TALK_R;
+    return Q.starNerveNearTo(m.zone || "farm", m.x, m.y, zone, x, y);
   }
-  /* La fenêtre d'affichage de la phrase, quand on est à portée. ⚠️ MÊME PÉRIODE
-     QUE LE TIC, DÉCALÉE PAREIL : sans ça, un PNJ dirait sa phrase pendant qu'il
-     tourne sur lui-même, et la bulle et le « ! » se recouvriraient. */
-  function starNerveTalking(rid) {
+  /* ⚠️⚠️ CELLE-CI EST LA SEULE À TOURNER CHEZ L'HÔTE, ET C'EST ELLE QUI ARRÊTE
+     VRAIMENT LE PNJ : le déplacement des résidents et des visiteurs est simulé
+     par l'hôte et diffusé (§3), donc un arrêt décidé chez l'invité aurait fait
+     glisser un personnage immobile — le pire des deux mondes. Elle regarde TOUS
+     les joueurs, pas seulement le local : quelqu'un qui parle à un habitant ne
+     doit pas le voir détaler parce que c'est l'autre qui s'est approché.
+     ⚠️ ZÉRO MESSAGE, ZÉRO CHAMP : les positions des joueurs sont déjà là, la date
+     de l'annonce voyageait déjà dans `star`. */
+  function starNerveHalt(zone, rid, x, y) {
     const since = starNerveSince();
     if (since < 0 || !Q.starNerveHas(rid)) return false;
-    const P = C.STAR_NERVE_PERIOD_MS;
-    return (since + (rid * 2654435761 >>> 0) % P) % P < C.STAR_NERVE_TALK_MS;
+    const m = meRef.current;
+    if (m && Q.starNerveNearTo(m.zone || "farm", m.x, m.y, zone, x, y)) return true;
+    for (const p of playersRef.current.values())
+      if (p && Q.starNerveNearTo(p.zone || "farm", p.x, p.y, zone, x, y)) return true;
+    return false;
   }
   /* ⚠️ LE « ! » DE L'IMPACT. Il lit la scène en cours, comme `starImpactLandedNow`
      — donc il tombe au même instant que la secousse chez tout le monde, et il ne
@@ -21518,13 +21642,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      `if` recopiés dans trois boucles auraient fini par ne pas se répondre pareil.
      L'ordre est celui des priorités : l'impact passe devant tout (il concerne
      TOUS les PNJ, nerveux ou non), la phrase passe devant le tic. */
-  function starNpcEmote(rid, x, y) {
+  function starNpcEmote(zone, rid, x, y) {
     const bang = starBangNow();
     if (bang > 0) return { a: bang };
     const since = starNerveSince();
     if (since < 0 || !Q.starNerveHas(rid)) return null;
-    if (starNerveNear(x, y)) {
-      if (!starNerveTalking(rid)) return null;
+    if (starNerveNear(zone, x, y) && starTalkerRef.current === rid) {
+      /* ⚠️ ZIP 456 — IL PARLE TANT QU'ON EST LÀ. Le 455 attendait une fenêtre
+         périodique : on s'approchait d'un habitant marqué d'un « ! », il se
+         taisait cinq secondes, puis lâchait une phrase pendant qu'il continuait
+         à marcher. Deux défauts pour le prix d'un — l'attente et le mouvement.
+         Maintenant il s'arrête (`starNerveHalt`, chez l'hôte) et sa phrase reste
+         affichée : une bulle qu'on n'a pas à courir après est une bulle qu'on
+         finit de lire. */
       const txt = starNerveLine(rid);
       return txt ? { say: txt } : null;
     }
@@ -21538,10 +21668,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      : c'est un OVERRIDE d'affichage, exactement comme `turnAwayDir` (l'étoile
      timide, 444). Écrire dans l'état du résident aurait fait diverger l'hôte et
      l'invité sur une humeur, c'est-à-dire réconcilier une agitation. */
-  function starNerveDirOf(rid, x, y) {
+  function starNerveDirOf(zone, rid, x, y) {
     const since = starNerveSince();
     if (since < 0 || !Q.starNerveHas(rid)) return null;
-    if (starNerveNear(x, y)) return null;        // à portée, il vous fait face à sa façon : on le laisse tranquille
+    /* ⚠️⚠️ ZIP 456 — À PORTÉE, IL SE TOURNE VERS TOI. Le 455 rendait `null` ici
+       (« on le laisse tranquille ») : il te parlait donc de dos, ou de profil, en
+       marchant. Se tourner vers son interlocuteur est ce qui transforme une
+       phrase qui flotte au-dessus d'un passant en quelqu'un qui t'adresse la
+       parole — et c'est gratuit, la direction se déduit des deux positions. */
+    const m = meRef.current;
+    if (m && starNerveNear(zone, x, y)) return Q.starNerveFace(m.x - x, m.y - y);
     return Q.starNerveDir(rid, Q.starNerveTic(rid, since));
   }
 
@@ -21980,6 +22116,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      tranche, comme partout ailleurs. */
   function starFrame(nowMs) {
     const m = meRef.current; if (!m) return;
+    /* ⚠️ AVANT LA GARDE `starFallen` : le tampon d'annonce se joue AVANT la
+       chute, donc tout ce qui le concerne doit passer avant elle. C'est très
+       exactement la garde qui a coûté un zip au 449 (« un INSTANT confondu avec
+       un ÉTAT »), prise à l'endroit cette fois. */
+    starTalkerPick();
     const e = sharedRef.current.star;
     if (!e || !Q.starFallen(e)) return;
     starWatch(e, nowMs);                       // zip 453 — AVANT la garde de fin : le don et les traces se disent après
@@ -21991,27 +22132,46 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        propres portes (voir `starTryBurn`). Deux règles dans la même condition,
        c'est la divergence garantie au premier réglage de l'une des deux. */
     starTryBurn();
-    /* ── LE CALME DU CRATÈRE. */
+    /* ── LE CALME DU CRATÈRE.
+       ⚠️⚠️ ZIP 456 — UNE SEULE LIGNE REMET LA TENUE À ZÉRO, ET ELLE EST AVANT
+       TOUT LE RESTE. Écrite dans les branches (« pas assez près », « ça fume »,
+       « je regarde »), elle en oubliait forcément une : celle du joueur qui
+       s'ÉLOIGNE du cratère, laquelle n'exécute aucune branche du tout. On revenait
+       alors trois minutes plus tard, on se retournait, et la jauge était pleine
+       instantanément pendant que l'hôte commençait à peine à compter — une barre
+       qui ment dans le sens le plus détestable, celui qui promet. La condition de
+       tenue est `starCalmSelf`, la même que celle qui envoie : il n'y en a
+       qu'une. */
+    if (!starCalmSelf()) starCalmT0Ref.current = 0;
     if (zone === "town" && !Q.starHas(e, "crater")) {
       const c = starCraterPos();
       if (c) {
         const near = Math.hypot(m.x - c.x, m.y - c.y) <= Q.STAR_CRATER_R + 1;
-        /* ⚠️ ZIP 446 — LA PREMIÈRE PHRASE DIT LA FUMÉE, PAS L'ÉNIGME. Un joueur
-           qui arrive dans les trois premières minutes doit comprendre qu'il n'y a
-           rien à faire d'autre qu'attendre ; lui souffler « quelque chose bouge
-           du coin de l'œil » à ce moment-là l'enverrait tourner en rond. */
-        if (near && !starCraterCoolNow()) { starSay("hot", L.star.s2.tooHot, 4200); starHoldRef.current = 0; }
+        /* ⚠️⚠️⚠️ ZIP 456 — LES DEUX `starSay` DE CE BLOC ONT ÉTÉ SUPPRIMÉS, ET
+           C'EST LE DÉFAUT QUE GUILLAUME A VU SANS POUVOIR LE NOMMER. `starSay`
+           écrit dans la bulle de l'ÉTOILE ; cette bulle n'est dessinée qu'à
+           l'endroit rendu par `starCompanionAt`, laquelle rend `null` tant que
+           `starHas(e, "crater")` est faux — c'est-à-dire pendant TOUTE cette
+           scène. « Le trou fume encore » et « quelque chose bouge au coin de
+           l'œil » étaient donc écrits, traduits, comptés comme lus par le banc
+           des lecteurs (un `starSay` est une lecture), et affichés NULLE PART.
+           C'est la leçon du 453 d'un cran plus bas : *un lecteur qui ne
+           s'exécute jamais vaut zéro lecteur*, et compter les lectures ne le
+           voit pas. Les deux phrases vivent maintenant l'une dans `starCalmUi`
+           (au-dessus du joueur), l'autre dans l'explication du E. Ce bloc ne
+           garde que ce qu'il décide vraiment : la cadence d'envoi. */
+        if (near && !starCraterCoolNow()) { starHoldRef.current = 0; }
         else if (near && starCalmSelf()) {
+          /* ⚠️⚠️ ZIP 456 — LA DATE DE DÉBUT EST POSÉE ICI, AU MÊME ENDROIT QUE
+             L'ENVOI, et pas dans la jauge : deux endroits qui décident quand une
+             tenue commence, c'est une barre qui monte pendant que l'hôte ne
+             compte rien. */
+          if (!starCalmT0Ref.current) starCalmT0Ref.current = nowMs;
           if (nowMs >= (starHoldRef.current || 0)) {
             starHoldRef.current = nowMs + 500;
             sendReq({ kind: "starCalm" });
           }
         } else if (near) {
-          /* ⚠️ LA LUEUR EN COIN D'ŒIL. Elle ne dit pas la solution, elle dit
-             qu'il y a quelque chose — c'est la différence entre un indice et une
-             notice. Le texte, lui, est dans `fermeStrings`, comme tout ce que le
-             joueur lit. */
-          starSay("peek", L.star.s2.peek, 3400);
           starHoldRef.current = 0;
         }
       }
@@ -22040,6 +22200,41 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      écritures de « tourner le dos » donneraient l'ambiguïté la plus détestable
      qui soit : « chez moi elle sort, chez toi non ».
      ⚠️ L'HÔTE REVÉRIFIE (`starCalmOk`), il ne croit pas le client. */
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 456 — CE QUE LE JOUEUR VOIT DE SA PROPRE POSTURE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ ELLE REND *UNE* RÉPONSE — un texte ET une jauge issus du MÊME
+     `Q.starCalmStep`. La leçon 449 est ici dans sa forme la plus concrète : écrit
+     en deux morceaux (« quel texte afficher » d'un côté, « la barre monte-t-elle »
+     de l'autre), ce code aurait fini par dire « ne bouge plus » avec une barre qui
+     monte, ou l'inverse, et les deux moitiés auraient été vertes.
+     ⚠️ ELLE NE S'AFFICHE QUE TANT QUE L'ÉTOILE EST DANS LE TROU : une jauge qui
+     survivrait à la sortie serait une interface qui commente une scène finie.
+     ⚠️ ET ELLE VIT AU NIVEAU DU COMPOSANT, appelée par la boucle de la ville —
+     jamais l'inverse (piège n°1, payé au 430 et au 431). */
+  function starCalmUi() {
+    const m = meRef.current, e = sharedRef.current.star;
+    if (!m || !e || !Q.starFallen(e) || Q.starHas(e, "crater") || Q.starDone(e)) return null;
+    if ((m.zone || "farm") !== "town") return null;
+    const c = starCraterPos(); if (!c) return null;
+    const step = Q.starCalmStep(m.x, m.y, m.dir | 0, !!m.moving, c.x, c.y);
+    if (step === "away") return null;
+    /* Le trou qui fume passe devant tout : « tourne-toi » pendant que le cratère
+       refuse serait « le jeu propose et refuse » (426), au seul endroit du
+       chantier où le joueur n'a aucun moyen de deviner qu'il faut attendre. */
+    if (!starCraterCoolNow()) return { k: 0, warn: true, text: L.star.s2.tooHot };
+    const need = Q.starCalmNeed(starSoloRoom());
+    const t0 = starCalmT0Ref.current;
+    const held = step === "holding" && t0 ? Math.min(need, performance.now() - t0) : 0;
+    return {
+      k: need > 0 ? held / need : 0,
+      warn: step !== "holding",
+      text: step === "far" ? L.star.s2.calmIn
+          : step === "moving" ? L.star.s2.calmStill
+          : step === "watching" ? L.star.s2.calmTurn
+          : L.star.s2.calmHold,
+    };
+  }
   function starCalmSelf() {
     const m = meRef.current, c = starCraterPos();
     if (!m || !c || (m.zone || "farm") !== "town" || m.moving) return false;
@@ -22216,8 +22411,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            GESTE. La première n'était affichée nulle part : on lisait « dos
            tourné, ne bougez plus » sans jamais savoir qu'elle ne sort pas tant
            qu'on la regarde, c'est-à-dire la consigne sans son pourquoi. */
-        return { p: "crater", act: () => starTell([L.star.s2.calmHint,
-                 starSoloRoom() ? L.star.s2.calmSolo : L.star.s2.calmBoth], 1500) };
+        /* ⚠️ ZIP 456 — `peek` OUVRE L'EXPLICATION. Elle passait par `starSay`, donc
+           par une bulle qui n'existe pas encore (voir la note de `starFrame`) : la
+           seule phrase qui dise POURQUOI on se tient là — quelque chose bouge au
+           coin de l'œil — n'a jamais été lue par personne. Elle est ici parce que
+           c'est ici qu'on demande « pourquoi ? ». */
+        return { p: "crater", act: () => starTell([L.star.s2.peek, L.star.s2.calmHint,
+                 starSoloRoom() ? L.star.s2.calmSolo : L.star.s2.calmBoth], 1800) };
       }
       /* Le ponton — on ne plonge que si l'on sait où plonger. */
       if (Q.starHas(e, "leanLake") && !Q.starHas(e, "lakeShard")

@@ -238,7 +238,24 @@ const STAR_FR = {
     tooHot: "Le trou fume encore. Ce qui est au fond ne remontera pas.",
     empty: "Le cratère est vide. Du sable chaud, devenu du verre vert.",
     peek: "Quelque chose bouge au coin de l'œil. Tu regardes. C'est parti.",
+    /* ╔═════════════════════════════════════════════════════════════════════
+       ║ ZIP 456 — LES QUATRE ÉTATS DE LA POSTURE. UNE PHRASE PAR ÉTAT.
+       ╚═════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ DEMANDE DE GUILLAUME : « on ne comprend pas si on fait les choses bien
+       ou ce qu'il faut faire de ce cratère. » Le chapitre entier tenait sur une
+       posture que rien ne commentait. Ces quatre phrases sont l'unique endroit du
+       jeu qui répond en direct à « est-ce que je fais bien » — elles sortent de
+       `starCalmStep` (une seule source, jamais deux listes) et s'affichent
+       AU-DESSUS DU JOUEUR, pas au-dessus de l'étoile : l'étoile n'existe pas
+       encore, c'est tout le sujet du chapitre.
+       ⚠️ AUCUNE NE DIT CE QU'IL Y A AU FOND. Elles disent le GESTE, jamais la
+       chose — le mystère du chantier n'est pas « quelle posture », il est
+       « qu'est-ce que c'est » (§3 de `QUETE.md`). */
     calmHint: "Elle ne sort pas tant qu'on la regarde.",
+    calmIn: "Descends jusqu'au fond du trou.",
+    calmStill: "Ne bouge plus.",
+    calmTurn: "Tourne-lui le dos.",
+    calmHold: "Quelque chose remonte derrière toi.",
     calmBoth: "Tous les deux. Dos tourné. Ne bougez plus.",
     calmSolo: "Tout seul, c'est long. Reste retourné.",
     meet1: "Elle est plus petite qu'une poule. Elle tremble.",
@@ -441,7 +458,14 @@ const STAR_FR = {
   },
   prompt: (k) => ({
     furrow: "E : regarder",
-    crater: "E : ne plus bouger",
+    /* ⚠️⚠️ ZIP 456 — LE CRATÈRE NE PROMET PLUS UNE TOUCHE. « E : ne plus bouger »
+       décrivait le seul geste du jeu qui n'A PAS de touche, avec le préfixe de
+       toutes celles qui en ont une : le joueur pressait E, lisait deux phrases, et
+       il ne se passait rien — donc il croyait la touche cassée. C'est le défaut du
+       426 (« le jeu propose et refuse ») retourné : ici il proposait la mauvaise
+       CHOSE. L'invite dit maintenant la posture, et garde E pour ce que E fait
+       vraiment — expliquer POURQUOI. */
+    crater: "Tourne-lui le dos, ne bouge plus (E : pourquoi ?)",
     craterHot: "E : attendre que ça refroidisse",
     lean: "E : la laisser chanter",
     dive: "E : plonger",
@@ -656,6 +680,12 @@ const STAR_EN = {
     empty: "The crater is empty. Warm sand, turned to green glass.",
     peek: "Something moves at the edge of your eye. You look. It's gone.",
     calmHint: "It won't come out while it's being watched.",
+    /* ⚠️ ZIP 456 — voir la note en face, côté français : les quatre états de la
+       posture, dits au-dessus du joueur pendant qu'il les tient. */
+    calmIn: "Climb down to the bottom.",
+    calmStill: "Stop moving.",
+    calmTurn: "Turn your back on it.",
+    calmHold: "Something is climbing up behind you.",
     calmBoth: "Both of you. Backs turned. Don't move.",
     calmSolo: "Alone, this takes a while. Stay turned around.",
     meet1: "It is smaller than a hen. It is shaking.",
@@ -896,7 +926,7 @@ const STAR_EN = {
      et c'est la seule chose de l'enquête qui survit telle quelle). */
   prompt: (k) => ({
     furrow: "E: look at it",
-    crater: "E: stand still",
+    crater: "Turn your back, stand still (E: why?)",
     craterHot: "E: wait for it to cool",
     lean: "E: let it sing",
     dive: "E: dive",

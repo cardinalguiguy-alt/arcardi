@@ -322,7 +322,7 @@ la première nuit où jour ≥ 3 et un joueur est en ligne ». Elle ne s'arme pl
    « la prochaine fois qu'il fait nuit », un « oui » cliqué à 20 h faisait tomber la comète dans la
    minute — c'est-à-dire ce que la demande refuse. Un tampon dure donc **5 à 16 minutes réelles**.
 
-⚠️ **ET LA CHUTE ELLE-MÊME A CHANGÉ À LA FERME** (voir §12.0) : la caméra ne se pose plus sur le
+⚠️ **ET LA CHUTE ELLE-MÊME A CHANGÉ À LA FERME** (voir §12.0 bis) : la caméra ne se pose plus sur le
 sillon avant l'impact, le caillou **se fend en vol**, et l'impact a lieu **hors cadre**.
 
 ---
@@ -1051,7 +1051,59 @@ relais qui se repose un message à chaque image tourne en boucle serrée. *Il lu
 
 ⚠️ **Rien n'est committé.** Tout est en fichiers modifiés / non indexés, prêt à relire.
 
-### 12.0 ⚠️⚠️⚠️ ZIP 455 — L'ANNONCE, LE TAMPON, ET LA CHUTE QU'ON NE VOIT PLUS TOMBER
+### 12.0 ⚠️⚠️⚠️ ZIP 456 — ON PARLE À QUELQU'UN QUI S'ARRÊTE, ET LE CRATÈRE RÉPOND
+
+**Trois retours de Guillaume, tous livrés, et le troisième a découvert un défaut de fond.**
+
+| ce qu'il a dit | ce qui a été fait | où ça vit |
+|---|---|---|
+| « le point d'exclamation est un peu gros » | **11×13 → 9×11.** Sur une tête de 16 px, l'ancienne bulle en couvrait les deux tiers : elle lisait comme une étiquette posée sur le PNJ, pas comme sa réaction. Le sursaut n'a pas bougé — c'est lui qui la fait remarquer, pas sa taille | `drawEmoteBubble`, `fermeArt.js` |
+| « les indices sont difficiles à lire car ils sont en mouvement. Ils pourraient s'arrêter devant nous pour nous parler ? » | **Il s'arrête, il se tourne vers toi, et il parle tant que tu es là.** La fenêtre périodique du 455 a disparu avec son problème : on s'approchait d'un « ! », il se taisait cinq secondes, puis lâchait sa phrase en continuant à marcher. ⚠️ **Et UN SEUL parle** — voir plus bas | `starNerveHalt` / `starTalkerPick` (`FermeGame.js`), `starNerveNearTo` / `starNerveFace` (`quete.js`) |
+| « dans le cratère, ça dit *stand still* mais on ne comprend pas si on fait les choses bien ou ce qu'il faut faire de ce cratère » | **Une jauge au-dessus de la tête et une phrase par état.** Le seul geste CONTINU du jeu — neuf secondes de dos tourné, sans touche, sans animation — ne rendait rien : une tenue qui ne rend rien ne se distingue pas d'un jeu bloqué. Et l'invite disait « E : ne plus bouger », c'est-à-dire le préfixe des touches devant le seul geste qui n'en a pas | `drawCalmMeter` (`fermeArt.js`), `starCalmUi` (`FermeGame.js`), `starCalmStep` (`quete.js`) |
+
+⚠️⚠️⚠️ **ET EN CHERCHANT LE TROISIÈME, ON A TROUVÉ LE DÉFAUT LE PLUS CHER DU CHANTIER DEPUIS LE
+453 : CINQ PHRASES DU PREMIER QUART D'HEURE N'AVAIENT AUCUN CHEMIN D'AFFICHAGE.** `starSay` écrit
+dans la bulle de l'**étoile** ; cette bulle n'est dessinée qu'à l'endroit rendu par
+`starCompanionAt`, laquelle rend `null` tant que l'étoile est au fond du trou. Donc **tout ce que la
+quête fait dire avant que le cratère s'ouvre était perdu** : `s2.tooHot` (« le trou fume encore »),
+`s2.peek` (« quelque chose bouge au coin de l'œil » — la seule phrase qui dise POURQUOI on se tient
+immobile devant un trou), `s1.shadow` (la première image magique de toute la quête) et **les trois
+phrases du familier-guide du 449**, c'est-à-dire la voix qui dit où aller.
+⚠️ **C'est la leçon du 453 d'un cran plus bas, et elle est pire** : là-bas la chaîne n'avait pas de
+lecteur ; ici le lecteur EXISTE, il est écrit, relu, et **compté par le banc** (`starSay` est une
+lecture au sens du §8-B de `verify-quete`) — il ne s'exécute simplement jamais. *Un lecteur qui ne
+s'exécute pas vaut zéro lecteur, et compter des clés ne le voit pas.* La parade tient en deux
+lignes : **quand il n'y a pas de compagnon, la voix se pose au-dessus du JOUEUR**, dans les trois
+boucles de rendu ; et deux contrôles neufs lisent le source pour le tenir.
+
+⚠️⚠️ **UN QUATRIÈME DÉFAUT A ÉTÉ TROUVÉ EN JOUANT, ET IL N'ÉTAIT PAS DANS LA DEMANDE.** Les vingt
+résidents apparaissent groupés près de la maison ; neuf sont nerveux ; **neuf bulles se sont ouvertes
+en même temps, empilées**. Arrêter le PNJ ne sert à rien si huit voisins parlent par-dessus — la
+demande de Guillaume était la LISIBILITÉ, pas l'arrêt. C'est aussi ce que la fenêtre périodique du
+455 faisait sans le dire : elle décalait les prises de parole. En la retirant on a retiré son effet
+utile ; il fallait le remettre, mais **choisi par la DISTANCE** (`starTalkerPick`, une fois par
+image, avant le rendu) plutôt que par l'horloge — c'est-à-dire par ce que le joueur montre en
+s'approchant. Les autres gardent leur « ! ». ⚠️ *Ce défaut ne pouvait se voir qu'à l'écran : chaque
+bulle était juste, c'est leur SOMME qui était fausse.*
+
+**CE QUI A ÉTÉ REGARDÉ À L'ÉCRAN (session du 456, un client, onglet masqué + pompe `Worker`)** —
+et c'est la première fois depuis le 454 qu'un zip de ce chantier est joué avant d'être livré :
+l'**arrêt** (le PNJ qui parle reste au pixel près d'une capture à l'autre pendant que les autres se
+dispersent — c'est la mesure, pas une impression), la **bulle unique**, le **« ! » réduit**, et
+**toute la scène du cratère de bout en bout** : trou chaud (`tooHot` + jauge en attente, bleu
+froid), refroidi et face au trou (`calmTurn` + jauge en attente), dos tourné (`calmHold` + **jauge
+d'or qui se remplit**), puis la sortie de l'étoile à la neuvième seconde.
+⚠️ **CE QUI N'A PAS ÉTÉ REGARDÉ** : `calmIn` (au bord de l'anneau) et `calmStill` (en marchant
+dedans). Les deux sortent du même `starCalmStep` que les trois autres, balayé sur 4 356 postures.
+⚠️⚠️ **ET UN PIÈGE DE SÉANCE, POUR LA PROCHAINE FOIS** : le trou met **trois minutes réelles** à
+refroidir et **il BRÛLE** (449) — attendre au milieu du cratère renvoie à la ferme, blessé, avec
+neuf minutes de repos forcé. On attend au BORD (brûlure 2,2 cases, anneau de calme 5,5), ou on se
+soigne au menu dev et on se téléporte quand le bandeau dit « le cratère a refroidi ».
+⚠️⚠️ **ET `getImageData` MENT DANS UN ONGLET MASQUÉ, MÊME AVEC LE WORKER** : le hachage de l'écran
+entier ne changeait pas d'une image à l'autre pendant que le monde bougeait. **Ce sont les CAPTURES
+qu'il faut échantillonner**, pas les pixels du canevas (§10 de `CLAUDE.md`).
+
+### 12.0 bis ⚠️⚠️⚠️ ZIP 455 — L'ANNONCE, LE TAMPON, ET LA CHUTE QU'ON NE VOIT PLUS TOMBER
 
 **Quatre demandes de Guillaume, toutes livrées.** Le détail de fiction est au §3 (le thème coupé en
 deux) et le déroulé au §5 (OUVERTURE). Ce qui suit est ce qu'il faut savoir pour reprendre.
@@ -1119,7 +1171,7 @@ qui juge ce zip.
 
 ---
 
-### 12.0 bis ⚠️⚠️ ZIP 454 — LA CHAÎNE DE CONSTRUCTION, ET CE QUI A ÉTÉ VU À L'ÉCRAN
+### 12.0 ter ⚠️⚠️ ZIP 454 — LA CHAÎNE DE CONSTRUCTION, ET CE QUI A ÉTÉ VU À L'ÉCRAN
 
 **Le déroulé complet, dans l'ordre où le joueur le vit :**
 
