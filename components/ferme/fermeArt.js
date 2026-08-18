@@ -5677,70 +5677,340 @@ export function buildSprites() {
     return c;
   }
 
-  /* ── LE SILLON DE LA FERME. Deux états : chaud (l'éclat y est), refermé.
-     ⚠️ IL FAIT SIX CASES DE LARGE, donc 96 px, et c'est le seul dessin de cette
-     famille qui soit plus large que haut : un impact rasant laboure, il ne perce
-     pas. Un cratère rond à la ferme aurait dit « c'est ici que ça s'est écrasé »,
-     alors que le gros est tombé en ville — le dessin doit dire « ça a RICOCHÉ ».
-     ⚠️ AUCUN PIXEL SUR LE BORD HAUT du canevas (piège n°1 des sprites, 433). */
-  function starFurrowSprite(cold) {
-    const W = 96, H = 34;
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 454 — LE SILLON : UN VRAI IMPACT, PAS UNE TEXTURE DE TERRE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ DEMANDE DE GUILLAUME : « que l'impact ait une vraie physique, un peu
+     comme le cratère sur valley town. » Le dessin d'avant était une bande de
+     96×34 peinte à plat : de la terre plus foncée, un liseré au nord, et rien
+     d'autre — aucun relief, aucune ombre calculée, aucune fissure, et **on
+     marchait dessus comme sur de l'herbe**. À côté du cratère du 446, qui décrit
+     une HAUTEUR, en prend la PENTE et l'éclaire, c'était le §2 du piège n°1
+     (« il fait vieillir ») pris la main dans le sac : le cratère avait un banc
+     qui le regardait, le sillon n'en avait aucun.
+     ⚠️⚠️ ON REPREND DONC LE MODÈLE DU CRATÈRE, PAS SON DESSIN : une hauteur
+     `furrowH(x, y)` en cases, sa pente par différences finies, un Lambert éclairé
+     de l'ouest-haut, des paliers de valeur, un bourrelet, des fissures qui
+     débordent. Ce qui CHANGE est la géométrie, et elle raconte autre chose : le
+     cratère est un trou rond (ça tombe droit), le sillon est une balafre qui
+     s'enfonce d'est en ouest et finit dans une cuvette (ça a labouré et ça s'est
+     arrêté). Le sens de la course, la profondeur croissante et l'azimut de la
+     chute (`starFallAngle`, 448) disent tous les trois la même chose.
+     ⚠️ ET IL SE PEINT AVEC LES TUILES, PLUS DANS LA FILE DE TRI. C'est la
+     conséquence de tout ce qui précède : un décor qu'on TRAVERSE se range par
+     ancrage au sol, un décor dans lequel on DESCEND est un décal de sol. Le
+     cratère l'avait compris au 444 ; le sillon l'apprend ici. */
+  const FURROW_SQUASH = 0.82;          // vu de trois quarts, comme le cratère
+  /* La géométrie, en CASES, relative à l'ancre. ⚠️ TOUT EST DÉRIVÉ DES CONSTANTES :
+     un nombre recopié ici mentirait au premier réglage de `STAR_FURROW_LEN`. */
+  const F_L = C.STAR_FURROW_LEN / 2;               // demi-longueur (est = +, ouest = −)
+  const F_BX = C.STAR_FURROW_BOWL_DX;              // la cuvette d'arrêt, à l'ouest
+  const F_W = C.STAR_FURROW_W / 2;                 // demi-largeur à la cuvette
+  const F_PIT = 1.0, F_LIP = 0.42, F_BAND = 0.55;  // profondeur, bourrelet, largeur du bourrelet
+  /* ⚠️ L'AVANCEMENT LE LONG DE LA COURSE : 0 à l'entrée (est), 1 au bout (ouest).
+     `f` est la profondeur relative — elle monte doucement, culmine à la cuvette,
+     et retombe vite. Un profil symétrique aurait dessiné un ballon de rugby, ce
+     qui ne raconte ni une entrée ni un arrêt. */
+  const F_UB = (F_L - F_BX) / (2 * F_L);
+  function furrowF(u) {
+    if (u <= 0 || u >= 1) return 0;
+    return u <= F_UB ? Math.pow(u / F_UB, 1.7) : Math.pow((1 - u) / (1 - F_UB), 0.75);
+  }
+  function furrowW(u) { const f = furrowF(u); return F_W * (0.30 + 0.70 * Math.pow(f, 0.55)); }
+  /* ⚠️⚠️ LA HAUTEUR, EN CASES, ET C'EST LE SEUL CHAMP : le dessin l'éclaire, les
+     pieds la lisent (`starFurrowSink`). Deux formules auraient donné « il
+     s'enfonce à côté du sillon » — défaut invisible en relecture et criant à
+     l'écran (c'est écrit tel quel au cratère, et c'est la même règle). */
+  /* ⚠️⚠️ LE BOURRELET EST FIBREUX, ET C'EST LE PREMIER DÉFAUT VU À L'ÉCRAN (454).
+     Premier jet : une bande de largeur CONSTANTE tout autour de la balafre. Sur
+     l'herbe, ça dessinait un OVALE parfaitement régulier bordé d'un liseré — la
+     même faute que le premier cratère du 446, qui faisait un tournesol, et pour la
+     même raison : *une silhouette lisse se lit comme un dessin posé, pas comme une
+     terre projetée*. On fait donc respirer la largeur du bourrelet le long de la
+     course et de part et d'autre, avec deux harmoniques et rien de plus — assez
+     pour que le bord soit déchiré, pas assez pour qu'il fasse du bruit.
+     ⚠️ ELLE EST DÉTERMINISTE (une somme de sinus, pas un tirage) parce que
+     `starFurrowSink` lit le MÊME champ : un bord tiré au sort ferait tressauter le
+     fermier d'un pas à l'autre. */
+  function furrowFib(x, side) {
+    return 0.55 + 0.28 * Math.sin(x * 2.7 + side * 2.1) + 0.17 * Math.sin(x * 6.1 - side * 1.3);
+  }
+  function furrowH(x, y) {
+    const u = (F_L - x) / (2 * F_L);
+    if (u <= 0 || u >= 1) return 0;
+    const w = furrowW(u), f = furrowF(u);
+    if (w <= 0.001) return 0;
+    const v = Math.abs(y) / w;
+    if (v <= 1) return -F_PIT * f * (1 - v * v);
+    const band = F_BAND * furrowFib(x, y >= 0 ? 1 : -1);
+    if (v <= 1 + band) return F_LIP * f * Math.sin(Math.PI * (v - 1) / band);
+    return 0;
+  }
+  /* ⚠️ LES DEUX PALETTES, EN RVB PARCE QU'ON LES MODULE — l'ombre d'une paroi est
+     un FACTEUR, jamais une seconde couleur choisie à la main (446). État 0 : la
+     terre retournée. État 1 : refermé, l'herbe a repris (une terre remuée pousse
+     mieux, donc plus clair que l'herbe d'à côté). */
+  const FURROW_PAL = [
+    { pit: [88, 60, 38], earth: [146, 106, 66], tip: [54, 37, 24],
+      clod: [[120, 92, 62], [146, 114, 80]], clodDark: [38, 26, 16], crack: "30,20,13" },
+    { pit: [104, 132, 76], earth: [132, 160, 92], tip: [64, 82, 46],
+      clod: [[112, 138, 78], [134, 162, 94]], clodDark: [44, 58, 34], crack: "44,56,34" },
+  ];
+  /* Le grain, PAR-DESSUS le relief. ⚠️ IL NE DÉPEND QUE DE LA POSITION LE LONG DE
+     LA COURSE : un grain qui varierait aussi en travers ferait du bruit, alors
+     qu'une terre labourée porte des STRIES dans le sens du passage. */
+  function furrowNoise(x) {
+    return 0.55 * Math.sin(x * 5.7 + 1.2) + 0.30 * Math.sin(x * 13.1 + 4.1) + 0.15 * Math.sin(x * 2.9 + 2.2);
+  }
+  /* LES FISSURES. Elles partent de la CUVETTE et des lèvres, jamais du milieu de
+     la course : c'est là que la terre a encaissé. ⚠️ ELLES S'ARRÊTENT NET À
+     `STAR_FURROW_CRACK_R` — sans cette borne, la marche aléatoire sortirait du
+     canevas cuit et se ferait raboter en silence (piège n°1 des sprites, 433). */
+  function furrowCracks(g, ox, oy, T2, pal) {
+    const rnd = makeRnd(4547);
+    const RC = C.STAR_FURROW_CRACK_R * T2;
+    const bx = ox + F_BX * T2, by = oy;
+    const walk = (x0, y0, a0, len, wid, al0, depth) => {
+      let x = x0, y = y0, a = a0, run = 0;
+      while (run < len) {
+        const step = 2.0 + rnd() * 1.4;
+        a += (rnd() - 0.5) * 0.30;
+        x += Math.cos(a) * step; y += Math.sin(a) * step * FURROW_SQUASH;
+        run += step;
+        const dx = x - bx, dy = (y - by) / FURROW_SQUASH;
+        if (Math.sqrt(dx * dx + dy * dy) > RC) return;
+        const k = run / len;
+        const w = Math.max(1, Math.round(wid * (1 - k * 0.72)));
+        P(g, Math.round(x) - (w >> 1), Math.round(y) - (w >> 1), w, w,
+          `rgba(${pal.crack},${(al0 * (1 - 0.42 * k)).toFixed(2)})`);
+        if (depth < 2 && k > 0.16 && k < 0.74 && rnd() < 0.11)
+          walk(x, y, a + (rnd() < 0.5 ? -1 : 1) * (0.35 + rnd() * 0.45),
+               (len - run) * (0.35 + rnd() * 0.30), Math.max(1, wid - 1), al0 * 0.9, depth + 1);
+      }
+    };
+    /* ⚠️⚠️ ELLES SONT ORIENTÉES, ET C'EST TOUTE LA DIFFÉRENCE AVEC LE CRATÈRE. Un
+       trou rond se fend dans toutes les directions ; une course qui s'arrête pousse
+       la terre DEVANT elle. Les fissures de la cuvette partent donc vers l'ouest en
+       éventail, et celles des lèvres partent en travers — c'est ce qui fait lire
+       « ça venait de là et ça s'est arrêté là » sans une seule flèche. */
+    for (let k = 0; k < 13; k++) {
+      const a = Math.PI + (k / 12 - 0.5) * 1.9;                  // éventail vers l'ouest
+      walk(bx + Math.cos(a) * F_W * T2, by + Math.sin(a) * F_W * T2 * FURROW_SQUASH,
+           a + (rnd() - 0.5) * 0.3, (2.4 + rnd() * 2.6) * T2, rnd() < 0.4 ? 3 : 2, 0.80, 0);
+    }
+    for (let k = 0; k < 10; k++) {
+      const u = 0.18 + (k % 5) * 0.16, side = k < 5 ? -1 : 1;
+      const x = ox + (F_L - u * 2 * F_L) * T2;
+      const y = oy + side * furrowW(u) * (1 + F_BAND) * T2 * FURROW_SQUASH;
+      walk(x, y, (side > 0 ? Math.PI / 2 : -Math.PI / 2) + (rnd() - 0.5) * 1.1,
+           (0.9 + rnd() * 1.7) * T2, 2, 0.62, 1);
+    }
+  }
+  /* LES MOTTES, toutes DANS la balafre : dehors, elles poivrent le décor (438). */
+  function furrowClods(g, ox, oy, T2, pal) {
+    const rnd = makeRnd(4551);
+    for (let k = 0; k < 44; k++) {
+      const u = 0.06 + Math.pow(rnd(), 0.8) * 0.9;
+      const w2 = furrowW(u);
+      const x = Math.round(ox + (F_L - u * 2 * F_L) * T2);
+      const y = Math.round(oy + (rnd() * 2 - 1) * w2 * 0.8 * T2 * FURROW_SQUASH);
+      const w = 2 + ((rnd() * 3) | 0), h = 1 + ((rnd() * 2) | 0);
+      const c1 = pal.clod[rnd() < 0.5 ? 0 : 1];
+      P(g, x, y, w, h, `rgb(${c1[0]},${c1[1]},${c1[2]})`);
+      P(g, x, y + h, w, 1, `rgba(${pal.clodDark[0]},${pal.clodDark[1]},${pal.clodDark[2]},0.75)`);
+    }
+  }
+
+  const furrowCache = new Map();
+  function furrowBake(T2, phase) {
+    const key = (T2 | 0) + ":" + (phase ? 1 : 0);
+    const hit = furrowCache.get(key);
+    if (hit) return hit;
+    const pal = FURROW_PAL[phase ? 1 : 0];
+    /* La boîte : elle couvre la course ET les fissures, qui débordent volontiers
+       à l'ouest. ⚠️ ELLE EST CALCULÉE, PAS DEVINÉE — un canevas trop juste rabote
+       en silence, et c'est le piège de sprite le plus répétitif du dépôt. */
+    const CR = C.STAR_FURROW_CRACK_R;
+    const xMin = Math.min(-F_L, F_BX - CR) - 0.5, xMax = Math.max(F_L, F_BX + CR) + 0.5;
+    const yHalf = Math.max(F_W * (1 + F_BAND), CR) + 0.5;
+    const W = Math.ceil((xMax - xMin) * T2), H = Math.ceil(2 * yHalf * T2 * FURROW_SQUASH);
+    const ox = Math.round(-xMin * T2), oy = H >> 1;
     const [c, g] = cv(W, H);
-    const rnd = makeRnd(4441);
-    /* La terre retournée. ⚠️ ELLE EST DÉCRITE PAR UN CHAMP, pas par une bande :
-       la profondeur décroît d'est en ouest (le sens de la course) et le bord
-       ondule. Une bande à bords francs se lit comme une couture (441). */
-    for (let x = 2; x < W - 2; x++) {
-      const t = x / W;                                  // 0 à l'ouest, 1 à l'est
-      const depth = (1 - t) * 5 + 3 + Math.sin(x * 0.31) * 1.4 + Math.sin(x * 0.13) * 1.1;
-      const y0 = 20 - depth * 0.55, h = depth;
-      const dark = cold ? "#4c5c34" : "#241a12";
-      const mid = cold ? "#5e7040" : "#3a2a1c";
-      P(g, x, y0 | 0, 1, h | 0, dark);
-      P(g, x, (y0 + h * 0.55) | 0, 1, Math.max(1, (h * 0.45) | 0), mid);
-      // Le bourrelet de terre projetée, au nord — plus haut là où c'est profond.
-      const lip = Math.max(0, (depth - 4) | 0);
-      if (lip) P(g, x, (y0 - lip) | 0, 1, lip, cold ? "#6a7c48" : "#4a3826");
+    /* Les fissures D'ABORD : la terre projetée est retombée dessus. */
+    furrowCracks(g, ox, oy, T2, pal);
+    const img = g.getImageData(0, 0, W, H), d = img.data;
+    const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+    /* ⚠️ LA LUMIÈRE VIENT DE L'OUEST-HAUT, comme partout dans ce jeu (le four, les
+       moellons, les toits, le cratère). Un impact éclairé de l'autre côté aurait
+       l'air d'un trou découpé et collé. */
+    const LX = -1, LY = -0.55;
+    const ln = Math.hypot(LX, LY);
+    const EPS = 0.06;                                  // en cases, pour la pente
+    for (let py = 0; py < H; py++) {
+      const wy = (py + 0.5 - oy) / (T2 * FURROW_SQUASH);
+      for (let px = 0; px < W; px++) {
+        const wx = (px + 0.5 - ox) / T2;
+        const h = furrowH(wx, wy);
+        if (h === 0) continue;
+        const u = (F_L - wx) / (2 * F_L);
+        const gx = (furrowH(wx + EPS, wy) - furrowH(wx - EPS, wy)) / (2 * EPS);
+        const gy = (furrowH(wx, wy + EPS) - furrowH(wx, wy - EPS)) / (2 * EPS);
+        /* Lambert d'un relief : la pente projetée sur la lumière. ⚠️ NORMALISÉE
+           PAR SA PROPRE NORME, sinon les parois raides partent au blanc — la faute
+           que le cratère a dû borner après coup. */
+        const gn = Math.hypot(gx, gy, 1);
+        let shade = 1 - 0.85 * ((gx * LX + gy * LY) / (ln * gn));
+        /* L'occlusion : au fond d'une balafre, la lumière du ciel elle-même
+           n'entre plus. C'est ce qui creuse VRAIMENT l'image. */
+        const occl = Math.max(0, Math.min(1, (h + F_PIT) / (F_PIT + F_LIP)));
+        shade *= 0.42 + 0.58 * Math.pow(occl, 1.2);
+        shade *= 1 + 0.08 * furrowNoise(wx);
+        shade = Math.max(0.16, Math.min(1.20, shade));
+        shade = Math.round(shade * 14) / 14;           // les paliers : le monde est en gros pixels
+        const inPit = h < 0;
+        const base = inPit ? pal.pit : pal.earth;
+        let cr = base[0], cg = base[1], cb = base[2];
+        /* La pointe du bourrelet va au brun sombre : c'est ce qui relie la terre
+           projetée aux fissures et fait lire UNE seule chose (446). */
+        /* ⚠️ ET LE BRUNISSEMENT DE LA POINTE EST PLUS DOUX QU'AU PREMIER JET (0,8
+           → 0,45) : à 0,8, l'extrême bord du bourrelet partait presque au brun
+           noir, et l'herbe claire juste à côté ressortait comme un LISERÉ VERT VIF
+           tout autour de la balafre. Vu à l'écran, pas au banc : le banc mesurait
+           l'écart-type, qui était excellent — c'est justement le contraste qui
+           faisait le défaut. */
+        if (!inPit) {
+          const q = Math.min(1, Math.abs(h) / (F_LIP * 0.9));
+          cr += (pal.tip[0] - cr) * (1 - q) * 0.45; cg += (pal.tip[1] - cg) * (1 - q) * 0.45;
+          cb += (pal.tip[2] - cb) * (1 - q) * 0.45;
+        }
+        /* ⚠️ LE BORD S'EFFILOCHE EN TRAME DE BAYER, PAS EN ALPHA : une terre
+           semi-transparente sur de l'herbe donne du brouillard vert-brun (446). */
+        const edge = Math.abs(h) / (inPit ? F_PIT : F_LIP);
+        /* ⚠️⚠️ ET ELLE EST BORNÉE SOUS UN QUART, CE QUI N'EST PAS UN RÉGLAGE : c'est
+           le contrat que `render-etoile` mesure entre ce dessin et
+           `starFurrowSink` (« on ne s'enfonce que là où la terre est peinte », au
+           delà du quart de profondeur). Une frange qui monterait plus haut
+           rendrait ce contrôle faux — le banc l'a dit à un pixel près, ce qui est
+           exactement ce qu'on lui demande. Le maximum ici vaut 0,24. */
+        const frayed = 0.18 + 0.06 * furrowNoise(wy * 3.1);
+        if (edge < frayed) {
+          const keep = edge / Math.max(0.02, frayed);
+          if (keep <= BAYER[(py & 3) * 4 + (px & 3)] / 16) continue;
+        }
+        const i = (py * W + px) * 4;
+        d[i] = Math.max(0, Math.min(255, cr * shade));
+        d[i + 1] = Math.max(0, Math.min(255, cg * shade));
+        d[i + 2] = Math.max(0, Math.min(255, cb * shade));
+        d[i + 3] = 255;
+      }
     }
-    if (!cold) {
-      /* Le SEL DE VERRE : le sable fondu par le passage, en PLAQUES et jamais en
-         grains. ⚠️ Cinq pixels isolés sur de la terre, c'est « du poivre » —
-         l'îlot qui flotte dans un aplat, que le 438 a mis quatre rédactions à
-         nommer et que le 442 a repayé sur la mousse des bornes. */
-      for (let k = 0; k < 9; k++) {
-        const gx = 8 + ((k * 11 + (rnd() * 4 | 0)) % (W - 18));
-        const gy = 15 + (rnd() * 6 | 0);
-        P(g, gx, gy, 3, 2, "#cfe6d8"); P(g, gx + 1, gy, 2, 1, "#eef8f0");
-        P(g, gx - 1, gy + 1, 2, 1, "#a8c4b6");
+    g.putImageData(img, 0, 0);
+    furrowClods(g, ox, oy, T2, pal);
+    if (phase) {
+      /* Refermé : de l'herbe rase a repris dans la balafre, et UN éclat de verre
+         est resté dedans. C'est la trace que la ferme garde de toute l'histoire. */
+      const rnd = makeRnd(4557);
+      for (let k = 0; k < 26; k++) {
+        const u = 0.08 + rnd() * 0.86, w2 = furrowW(u);
+        const x = Math.round(ox + (F_L - u * 2 * F_L) * T2);
+        const y = Math.round(oy + (rnd() * 2 - 1) * w2 * 0.7 * T2 * FURROW_SQUASH);
+        P(g, x, y, 1, 3, "#7ea45c"); P(g, x + 1, y + 1, 1, 2, "#96bc70");
       }
-      // La chaleur : un halo bas, très étalé, jamais par-dessus la terre claire.
-      g.fillStyle = "rgba(255,190,110,0.10)";
-      g.beginPath(); g.ellipse(W - 22, 20, 22, 8, 0, 0, 7); g.fill();
-      g.fillStyle = "rgba(255,150,70,0.13)";
-      g.beginPath(); g.ellipse(W - 22, 20, 11, 4.5, 0, 0, 7); g.fill();
-      // La vapeur : trois volutes, chacune une masse et pas un semis.
-      for (let k = 0; k < 3; k++) {
-        /* ⚠️ MÊME CORRECTION, TROISIÈME FOIS DANS LE MÊME ZIP : la volute la
-           plus haute partait de `vy - 6` avec `vy = 6`, donc de la rangée 0. */
-        const vx = W - 34 + k * 10, vy = 11 - k;
-        P(g, vx, vy, 4, 2, "rgba(232,238,236,0.34)");
-        P(g, vx + 1, vy - 3, 3, 3, "rgba(232,238,236,0.22)");
-        P(g, vx + 2, vy - 6, 2, 3, "rgba(232,238,236,0.12)");
-      }
-    } else {
-      /* Refermé : de l'herbe rase a repris, plus claire que l'herbe d'à côté (une
-         terre remuée pousse mieux), et UN éclat de verre est resté dedans. C'est
-         la trace que la ferme garde de toute l'histoire. */
-      for (let k = 0; k < 14; k++) {
-        const gx = 5 + k * 6 + (rnd() * 3 | 0), gy = 17 + (rnd() * 4 | 0);
-        P(g, gx, gy, 1, 3, "#7ea45c"); P(g, gx + 1, gy + 1, 1, 2, "#96bc70");
-      }
-      P(g, 52, 18, 3, 4, "#cfe6d8"); P(g, 53, 18, 1, 3, "#f2fbf4"); P(g, 52, 22, 3, 1, "#7c9a8c");
-      g.fillStyle = "rgba(180,230,210,0.13)";
-      g.beginPath(); g.arc(53, 20, 7, 0, 7); g.fill();
+      const bx = Math.round(ox + F_BX * T2);
+      P(g, bx, oy - 2, 3, 4, "#cfe6d8"); P(g, bx + 1, oy - 2, 1, 3, "#f2fbf4");
+      P(g, bx, oy + 2, 3, 1, "#7c9a8c");
     }
-    P(g, 4, H - 3, W - 8, 2, "rgba(20,26,16,0.16)");
-    return c;
+    const out = { c, ox, oy, w: W, h: H };
+    furrowCache.set(key, out);
+    return out;
+  }
+
+  /* ⚠️⚠️ L'ENFONCEMENT — UNE GRANDEUR DE DESSIN, ET RIEN D'AUTRE (voir la note
+     jumelle de `starCraterSink`). Positif = on descend dans la balafre, négatif =
+     on enjambe le bourrelet. Il ne touche NI au rang de tri, NI à la collision, NI
+     au réseau : chaque client calcule le décalage de chacun à partir des x/y qui
+     circulent déjà. Et il lit `furrowH`, LE MÊME CHAMP QUE LE DESSIN. */
+  function starFurrowSink(dxTiles, dyTiles, T2) {
+    const h = furrowH(dxTiles, dyTiles / FURROW_SQUASH);
+    const sc = T2 / 16;
+    if (h < 0) return (-h / F_PIT) * C.STAR_FURROW_SINK_PX * sc;
+    if (h > 0) return -(h / F_LIP) * C.STAR_FURROW_LIP_PX * sc;
+    return 0;
+  }
+
+  /* LE SOL DU SILLON. ⚠️ `opt` : { heat 0..1 } — DÉRIVÉE par l'appelant, jamais
+     stockée (règle des cierges, 441). `phase` : 0 = frais, 1 = refermé. */
+  function drawStarFurrow(g2, cx, cy, T2, phase, tMs, opt) {
+    const o = opt || {};
+    const heat = phase ? 0 : Math.max(0, Math.min(1, o.heat === undefined ? 1 : o.heat));
+    const t = tMs || 0;
+    const bk = furrowBake(T2, phase ? 1 : 0);
+    g2.drawImage(bk.c, Math.round(cx) - bk.ox, Math.round(cy) - bk.oy);
+    if (phase) return;
+    const bx = cx + F_BX * T2, by = cy;
+    /* LE SEL DE VERRE : le sable fondu par le passage, en PLAQUES et jamais en
+       grains — cinq pixels isolés sur de la terre, c'est du poivre (438). Il suit
+       la course, il ne s'amasse pas dans la cuvette : c'est le passage qui a fondu
+       le sable, pas l'arrêt. */
+    {
+      const rnd = makeRnd(4561);
+      for (let k = 0; k < 11; k++) {
+        const u = 0.12 + rnd() * 0.8, w2 = furrowW(u);
+        const x = Math.round(cx + (F_L - u * 2 * F_L) * T2);
+        const y = Math.round(cy + (rnd() * 2 - 1) * w2 * 0.6 * T2 * FURROW_SQUASH);
+        P(g2, x, y, 3, 2, "#cfe6d8"); P(g2, x + 1, y, 2, 1, "#eef8f0");
+        P(g2, x - 1, y + 1, 2, 1, "#a8c4b6");
+      }
+    }
+    if (heat > 0.02) {
+      /* LA CHALEUR EST DANS LA CUVETTE, ET SEULEMENT LÀ. C'est là que la course
+         s'est arrêtée, donc là que tout s'est dissipé : une balafre qui rougeoierait
+         sur toute sa longueur dirait qu'elle brûle encore partout — c'est-à-dire
+         qu'elle n'a pas de sens de lecture. */
+      const br = 0.5 + 0.5 * Math.sin(t / 760);
+      craterDisc(g2, bx, by, F_W * T2 * 1.5, `rgba(255,110,40,${(0.05 * heat).toFixed(3)})`, FURROW_SQUASH);
+      craterDisc(g2, bx, by, F_W * T2 * 0.9, `rgba(255,140,50,${((0.06 + 0.02 * br) * heat).toFixed(3)})`, FURROW_SQUASH);
+      const rnd = makeRnd(4567);
+      for (let k = 0; k < 30; k++) {
+        if (k / 30 >= heat * 1.3) continue;
+        const u = F_UB + (rnd() - 0.5) * 0.30, w2 = furrowW(u);
+        const x = Math.round(cx + (F_L - u * 2 * F_L) * T2);
+        const y = Math.round(cy + (rnd() * 2 - 1) * w2 * 0.7 * T2 * FURROW_SQUASH);
+        const ph = rnd() * 6.283, big = rnd() < 0.34;
+        const b = (0.45 + 0.55 * (0.5 + 0.5 * Math.sin(t / 420 + ph))) * (0.60 + 0.40 * heat);
+        if (b > 0.62) craterDisc(g2, x, y, 3 + b * 2, `rgba(255,120,40,${(0.05 + 0.05 * b).toFixed(3)})`, FURROW_SQUASH);
+        /* ⚠️ UNE BRAISE EST UN TIRET COUCHÉ DANS LE SENS DE LA COURSE, pas un
+           point : le modèle du cratère l'a payé, on ne le repaie pas. */
+        P(g2, x, y, big ? 3 : 2, 1, b > 0.78 ? "#ffdc8c" : b > 0.52 ? "#ff8a2a" : "#c03a10");
+        if (big) P(g2, x, y + 1, 3, 1, "rgba(150,40,10,0.65)");
+      }
+    }
+  }
+  /* LA VAPEUR — l'autre moitié, et elle MONTE, donc elle part dans la file de tri
+     (même partage qu'au cratère : peinte avec les tuiles, un fermier passant au
+     nord se dessinerait par-dessus une colonne qui est devant lui). */
+  function drawStarFurrowAir(g2, cx, cy, T2, tMs, opt) {
+    const o = opt || {};
+    const heat = Math.max(0, Math.min(1, o.heat === undefined ? 1 : o.heat));
+    if (heat <= 0.01) return;
+    const t = tMs || 0, bx = cx + F_BX * T2;
+    const cols = 1 + Math.round(3 * heat);
+    for (let k = 0; k < cols; k++) {
+      const sx = bx + Math.sin(k * 2.39) * F_W * T2 * 0.8, sy = cy + Math.cos(k * 1.71) * F_W * T2 * 0.3;
+      const per = 4600 + k * 730;
+      for (let j = 3; j >= 0; j--) {
+        const age = ((t / per) + j / 4 + k * 0.37) % 1;
+        const x = sx + age * age * 15 + Math.sin(age * 3.1 + k) * 4;
+        const y = sy - age * T2 * (2.2 + 0.5 * (k % 3));
+        const rad = 2.4 + age * (7.5 + (k % 3) * 1.4);
+        const al = heat * 0.44 * Math.sin(Math.pow(age, 0.80) * Math.PI);
+        if (al < 0.02) continue;
+        const col = `rgba(196,194,184,${al.toFixed(3)})`;
+        craterDisc(g2, x, y, rad, col, 1);
+        craterDisc(g2, x + rad * 0.62, y + rad * 0.20, rad * 0.66, col, 1);
+        craterDisc(g2, x - rad * 0.55, y + rad * 0.30, rad * 0.58, col, 1);
+      }
+    }
   }
 
   /* ── LA VERRERIE : le four, un râtelier de perles, le volet à contrepoids, et
@@ -6434,8 +6704,15 @@ export function buildSprites() {
       Math.max(1, Math.round(w * u)), Math.max(1, Math.round(h * u)), col);
   }
 
-  /* ── LA CALE : l'ombre, le ber, les tins de pierre, ET LA CARCASSE. */
-  function shipPartCradle(g, u) {
+  /* ── LA CALE : l'ombre, le ber, les tins de pierre, ET LA CARCASSE.
+     ⚠️⚠️ ZIP 453 — `carcass` DÉCOUPE CE DESSIN EN DEUX ÉTATS, ET C'EST CE QUI
+     PERMET À LA CALE DE SE VIDER. Quand Eduardo prend le large avec le navire
+     (voir `Q.starShipGone`), il ne doit rester QUE le ber, les tins et l'ombre :
+     la quille et les membrures peintes ici se liraient sinon comme un bateau
+     qu'on n'a pas fini, c'est-à-dire l'inverse exact de ce qui vient de se
+     passer. Un second dessin « cale vide » aurait divergé au premier réglage du
+     ber (§8 de `CLAUDE.md`) — c'est le MÊME dessin, amputé de sa carcasse. */
+  function shipPartCradle(g, u, carcass) {
     const S = SHIP_PAL;
     /* L'ombre portée. ⚠️ Elle est peinte en rangées de largeur calculée, pas en
        `arc()` mis à l'échelle : le faux canevas des bancs connaît `arc`, mais une
@@ -6457,6 +6734,7 @@ export function buildSprites() {
       shipR(g, u, bx, SHIP_GROUND - 1, 20, 2, S.stone[0]);
       for (let j = 0; j < 3; j++) shipR(g, u, bx + 2 + j * 6, SHIP_GROUND - 7, 1, 8, S.stone[0]);
     }
+    if (!carcass) return;   // zip 453 — la cale seule : il est parti
     /* ⚠️⚠️ LA QUILLE ET LES MEMBRURES SONT ICI, PAS DANS `hull` — voir le chapeau.
        C'est ce qui fait qu'on lit un CHANTIER dès la première nuit. */
     for (let x = SHIP_X0; x <= SHIP_X1; x++) shipR(g, u, x, shipKeelY(x) - 1, 1, 5, S.keel);
@@ -6683,8 +6961,12 @@ export function buildSprites() {
     if (hit) return hit;
     const u = T2 / 16, W = Math.round(SHIP_W() * u), H = Math.round(SHIP_H() * u);
     const [c, g] = cv(W, H);
-    (part === "cradle" ? shipPartCradle : SHIP_PARTS_DRAW[part])(g, u);
-    if (part !== "cradle") outlineSprite(g, W, H, SHIP_PAL.dark);
+    /* ⚠️ ZIP 453 — DEUX CLÉS POUR LE MÊME DESSIN : `cradle` (avec la carcasse,
+       tout le temps de la quête) et `slip` (sans, une fois le navire parti). */
+    const isBase = part === "cradle" || part === "slip";
+    if (isBase) shipPartCradle(g, u, part === "cradle");
+    else SHIP_PARTS_DRAW[part](g, u);
+    if (!isBase) outlineSprite(g, W, H, SHIP_PAL.dark);
     if (ghost) {
       const img = g.getImageData(0, 0, W, H), d = img.data;
       const G = SHIP_PAL.glow;
@@ -6713,20 +6995,113 @@ export function buildSprites() {
     return c;
   }
 
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 454 — LA FEUILLE DE PLAN. « on verra le plan virtuel du bateau. »
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ ELLE EST ICI ET PAS DANS LE PANNEAU REACT, ET C'EST LA MÊME RAISON QUE
+     POUR LE CRATÈRE, LE NAVIRE ET LA COMÈTE : un dessin écrit dans un composant
+     est un dessin qu'aucun banc ne peut appeler, donc un dessin qui **reste au
+     niveau du jour où il a été écrit** pendant que tout le reste monte (§ piège
+     n°1, deuxième visage — payé sur les sols d'intérieur, les arbres de la ferme
+     et la comète du 445).
+     ⚠️⚠️ ET ELLE RÉUTILISE LES CUISSONS DU NAVIRE, elle ne redessine RIEN. C'est
+     ce qui garantit qu'un plan ne peut pas montrer un autre bateau que celui de la
+     grève : même `shipBake`, mêmes pièces, même ordre. Un second dessin « vu de
+     côté, en bleu » aurait divergé au premier réglage de la coque, et personne
+     n'aurait pu s'en apercevoir — les deux auraient eu l'air justes (§8).
+     ⚠️ LE BLEU DE PLAN EST OBTENU EN INVERSANT LA VALEUR, pas en repeignant : on
+     pose la feuille, on tire les pièces en fantôme, et on couche par-dessus une
+     encre. Trois pièces posées et deux à venir se distinguent alors par leur
+     ÉCLAT et pas par leur couleur — ce qui reste lisible pour un daltonien, et ce
+     qui reste lisible en petit. */
+  function drawStarPlan(g2, x, y, W, H, parts, tMs) {
+    const P5 = Array.isArray(parts) ? parts : [];
+    const t = tMs || 0;
+    /* La feuille : un bleu d'ozalid, un peu sali sur les bords (une feuille
+       parfaitement propre se lit comme un rectangle d'interface). */
+    g2.fillStyle = "#14324e"; g2.fillRect(x, y, W, H);
+    g2.fillStyle = "#1b4066";
+    for (let i = 0; i < 5; i++) {
+      const bx = x + ((i * 37) % Math.max(1, W - 40)), by = y + ((i * 53) % Math.max(1, H - 30));
+      g2.fillRect(bx, by, 26 + (i % 3) * 8, 12 + (i % 2) * 6);
+    }
+    /* Le quadrillage, franc et à période longue : une trame fine ferait une
+       moirure au gros pixel (434 — la période prime sur les détails). */
+    g2.fillStyle = "rgba(150,200,240,0.16)";
+    for (let gx = x + 8; gx < x + W; gx += 16) g2.fillRect(gx, y, 1, H);
+    for (let gy = y + 8; gy < y + H; gy += 16) g2.fillRect(x, gy, W, 1);
+    g2.fillStyle = "rgba(190,225,255,0.55)";
+    g2.fillRect(x + 3, y + 3, W - 6, 1); g2.fillRect(x + 3, y + H - 4, W - 6, 1);
+    g2.fillRect(x + 3, y + 3, 1, H - 6); g2.fillRect(x + W - 4, y + 3, 1, H - 6);
+    /* Le bateau, à l'échelle de la feuille. ⚠️ L'ÉCHELLE EST DÉRIVÉE DE LA BOÎTE
+       DE DESSIN DU NAVIRE, jamais choisie : le jour où la coque s'allonge, le plan
+       la contient toujours. */
+    const T2 = Math.max(4, Math.floor(Math.min((W - 24) / C.STAR_SHIP_DRAW_W, (H - 40) / C.STAR_SHIP_DRAW_H)));
+    const cx = x + W / 2, cy = y + H - 18;
+    for (const key of SHIP_Z) {
+      const idx = C.STAR_SHIP_ORDER.indexOf(key);
+      const has = idx >= 0 && !!P5[idx];
+      const c2 = shipBake(T2, key, !has);
+      g2.drawImage(c2, Math.round(cx) - c2.ox, Math.round(cy) - c2.oy);
+      /* ⚠️ CE QUI EST DÉJÀ CONSTRUIT EST REPASSÉ, donc plus dense — c'est
+         l'avancement, lu sans un seul chiffre. Une pièce à venir bat lentement :
+         ce qui bouge est ce qui MANQUE, jamais l'inverse (règle du 450). */
+      if (has) g2.drawImage(c2, Math.round(cx) - c2.ox, Math.round(cy) - c2.oy);
+      else if (Math.sin(t / 900 + idx * 1.1) > 0.2)
+        g2.drawImage(c2, Math.round(cx) - c2.ox, Math.round(cy) - c2.oy);
+    }
+    /* La ligne de flottaison et les cotes : ce qui fait qu'une silhouette de
+       bateau se lit comme un PLAN et pas comme une image de bateau. */
+    g2.fillStyle = "rgba(190,225,255,0.40)";
+    g2.fillRect(x + 10, cy - 2, W - 20, 1);
+    for (let k = 0; k <= 4; k++) g2.fillRect(x + 10 + k * ((W - 20) / 4), cy - 5, 1, 4);
+  }
+
   /* ⚠️⚠️ LE POINT D'ENTRÉE. `parts` EST LE TABLEAU RENDU PAR `Q.starShipParts` —
      on ne lui passe PAS l'état de la quête, et c'est volontaire : `fermeArt` ne
      doit rien savoir de `quete.js`, sinon le banc de rendu devrait monter toute la
      quête pour peindre un bateau. Il reçoit cinq booléens, il peint.
-     `opt.t` anime, `opt.night` allume, `opt.sail` gonfle la voile. */
+     `opt.t` anime, `opt.night` allume, `opt.sail` gonfle la voile.
+     ⚠️⚠️ ZIP 453 — `opt.gone` VIDE LA CALE, et c'est la seule chose de ce dessin
+     qui parle de la FIN. Le rendu ne lisait que `parts`, donc un navire complet
+     restait à quai pour toujours pendant que la scène finale affirmait qu'il
+     prenait la mer. Il part maintenant avec Eduardo (`Q.starShipGone`) et il
+     revient quand Eduardo rentre : c'est le même bateau, pas un décor de plus.
+     ⚠️ ET IL NE DESSINE PAS DE FANTÔMES DANS CE CAS — un fantôme dit « ça
+     viendra », or ici c'est parti. */
   function drawStarShip(g2, cx, cy, T2, parts, tMs, opt) {
     const o = opt || {}, t = tMs || 0, u = T2 / 16;
     const P5 = Array.isArray(parts) ? parts : [];
     const built = P5.filter(Boolean).length;
+    if (o.gone) {
+      const sl = shipBake(T2, "slip", false);
+      g2.drawImage(sl, Math.round(cx) - sl.ox, Math.round(cy) - sl.oy);
+      return;
+    }
     const cr = shipBake(T2, "cradle", false);
     g2.drawImage(cr, Math.round(cx) - cr.ox, Math.round(cy) - cr.oy);
     for (const key of SHIP_Z) {
       const idx = C.STAR_SHIP_ORDER.indexOf(key);
       const has = idx >= 0 && !!P5[idx];
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ ZIP 454 — LE FANTÔME NE S'AFFICHE QUE SI ON A LES PLANS.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️⚠️ DEMANDE DE GUILLAUME : « le fantôme du bateau (visualisation
+         virtuelle) […] ne doit être visible que lorsqu'on a trouvé le moyen de
+         produire *le plan* de construction […] mais seulement à partir de ce
+         moment là. » Le 450 les peignait TOUJOURS : un joueur qui n'a rien
+         commencé voyait, dès la première nuit, la silhouette spectrale du bateau
+         entier — c'est-à-dire la fin de l'histoire offerte à qui n'en a pas lu la
+         première ligne. Un fantôme est une PROMESSE, et une promesse gratuite ne
+         promet rien.
+         ⚠️ LE TEST EST UN BOOLÉEN PASSÉ PAR L'APPELANT, jamais l'état de la quête :
+         `fermeArt` ne sait toujours rien de `quete.js` (c'est ce qui permet au banc
+         de peindre ce bateau sans monter toute l'histoire). Il reçoit cinq
+         booléens et un sixième ; il peint.
+         ⚠️ ET LA CALE, ELLE, RESTE : décision du 450, toujours juste. Sans bateau
+         ni fantôme, la grève garde un chantier naval — un endroit de vie, pas un
+         trou dans le décor. */
+      if (!has && !o.ghosts) continue;
       /* ⚠️ LE FANTÔME PULSE, LA PIÈCE NON. Une pièce posée qui respirerait dirait
          « pas encore fini » : ce qui bouge est ce qui MANQUE, jamais l'inverse. */
       const c2 = shipBake(T2, key, !has);
@@ -7127,6 +7502,81 @@ export function buildSprites() {
     // Une braise qui s'attarde dans la fumée fraîche : c'est ce qui distingue une
     // traînée de comète d'un nuage.
     if (k < 0.35) qDot(g2, x, y, 1, `rgba(255,190,110,${((0.35 - k) * 1.5).toFixed(2)})`, q);
+  }
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 455 — LA BULLE D'ÉMOTION. UN SIGNE, PAS UNE PHRASE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ DEUX DEMANDES DE GUILLAUME LA PARTAGENT, ET C'EST POURQUOI ELLE EST UNE
+     FONCTION ET PAS UN CAS PARTICULIER : le « ! » des PNJ nerveux pendant le
+     tampon (« tourner une ou deux fois sur eux mêmes avec un "!" au dessus de leur
+     tête ») et le « ! » de TOUTES les têtes à l'impact (« pendant 2 secondes à
+     partir du moment de l'impact »). Écrite deux fois, elle aurait divergé au
+     premier réglage et personne n'aurait pu comparer les deux — la troisième forme
+     du piège n°1.
+     ⚠️ ELLE EST ICI ET PAS DANS LA BOUCLE DE RENDU pour la raison du 454 : un
+     dessin qu'aucun banc n'appelle reste au niveau du jour où il a été écrit. Le
+     sillon en était la preuve vivante (plat pendant dix zips).
+     ⚠️ ELLE NE PASSE PAS PAR `fillText` : le faux canevas des bancs ne le connaît
+     pas (§4 de `CLAUDE.md`, payé au 427), donc un « ! » écrit en police aurait fait
+     PLANTER `render-etoile`, c'est-à-dire qu'on aurait perdu le seul moyen de
+     regarder ce dessin. Il est peint en barres — et il est du coup net à toutes
+     les tailles, ce qu'une police de 6 px n'est jamais.
+     ⚠️ `a` EST L'OPACITÉ *ET* LE RESSORT : la bulle apparaît en sursautant (elle
+     dépasse sa taille puis retombe), parce qu'une bulle qui grandit régulièrement
+     se lit comme une interface, et qu'un sursaut se lit comme une réaction. */
+  function drawEmoteBubble(g2, cx, by, a, opt) {
+    const o = opt || {};
+    const al = Math.max(0, Math.min(1, a === undefined ? 1 : a));
+    if (al <= 0.02) return;
+    /* Le ressort : 1,25 au premier dixième, 1 ensuite. `a` descend de 1 à 0 chez
+       l'appelant, donc « le début » est `a` proche de 1. */
+    const pop = al > 0.86 ? 1 + (al - 0.86) * 1.8 : 1;
+    const W = Math.round(11 * pop), H = Math.round(13 * pop);
+    const bx = Math.round(cx - W / 2), byTop = Math.round(by - H);
+    g2.save();
+    g2.globalAlpha = Math.min(1, al * 1.6);       // elle reste franche puis tombe d'un coup
+    /* ⚠️⚠️ NI `roundRect` NI `fillText` — ET C'EST LE BANC QUI L'A EXIGÉ, À SA
+       PREMIÈRE EXÉCUTION. Le faux canevas de `tools/lib-canvas.mjs` LÈVE sur
+       l'ACCÈS à une méthode qu'il n'implémente pas : `if (g2.roundRect)`, qui a
+       l'air d'une garde, était donc déjà l'erreur. C'est le §4 de `CLAUDE.md` dans
+       sa version la plus utile — un dessin qui dépend d'une méthode exotique n'est
+       pas regardable, donc il vieillira.
+       ⚠️ ET LE COIN COUPÉ AU PIXEL EST MEILLEUR QUE L'ARRONDI À CETTE TAILLE :
+       à onze pixels de large, un rayon de 3 px anticrénelé fait une bouillie
+       grise ; deux rectangles qui se croisent font un coin net, et le dessin reste
+       du pixel art comme tout le reste du jeu. */
+    const notch = (x, y, w, h, col) => {
+      g2.fillStyle = col;
+      g2.fillRect(x + 1, y, w - 2, h);
+      g2.fillRect(x, y + 1, w, h - 2);
+    };
+    const ink = o.tone === "calm" ? "#26405e" : "#4a2f12";
+    notch(bx, byTop, W, H, o.tone === "calm" ? "rgba(38,64,94,0.80)" : "rgba(58,44,26,0.80)");
+    notch(bx + 1, byTop + 1, W - 2, H - 2, o.tone === "calm" ? "rgba(226,238,255,0.96)" : "rgba(255,247,222,0.97)");
+    /* La queue, trois rangées qui rétrécissent : elle pointe la tête du PNJ. */
+    g2.fillStyle = o.tone === "calm" ? "rgba(226,238,255,0.96)" : "rgba(255,247,222,0.97)";
+    g2.fillRect(cx - 2, byTop + H, 5, 1);
+    g2.fillRect(cx - 1, byTop + H + 1, 3, 1);
+    g2.fillRect(cx, byTop + H + 2, 1, 1);
+    /* Le signe, en barres. ⚠️ Le point est SÉPARÉ du fût d'une rangée pleine :
+       collés, à cette taille, les deux se fondent en un trait et le « ! » devient
+       un « l ». C'est ce que `render-etoile` mesure, et c'est la seule chose de ce
+       dessin qu'une capture d'écran de jeu ne montrerait jamais. */
+    g2.fillStyle = ink;
+    const w = Math.max(2, Math.round(2 * pop));
+    const x0 = Math.round(cx - w / 2), y0 = byTop + Math.max(2, Math.round(2 * pop));
+    const hh = Math.max(4, Math.round(6 * pop));
+    /* ⚠️⚠️ IL N'Y A QU'UN SIGNE, ET C'EST DÉLIBÉRÉ. Le premier jet portait aussi
+       un « ? », « parce que la famille en aura besoin » — personne ne l'appelait,
+       donc seul le banc le regardait, donc il était faux (la planche l'a montré :
+       une tache, pas un point d'interrogation). C'est mot pour mot la leçon du
+       453 : *une constante que seul le banc lit est débranchée, elle a l'air juste
+       et elle ne peut pas échouer.* Le jour où un « ? » servira, il se dessinera
+       AVEC son appelant et il sera regardé le même jour. */
+    g2.fillRect(x0, y0, w, hh);
+    g2.fillRect(x0, y0 + hh + Math.max(1, Math.round(pop)), w, w);
+    g2.restore();
   }
 
   /* ── L'IMPACT. `k` va de 0 à 1 sur la demi-seconde qui suit le contact.
@@ -13167,12 +13617,18 @@ house: house(),
     courtProps: Object.fromEntries(COURT_PROP_KINDS.map(k => [k, courtPropSprite(k)])),
     /* ⚠️ ZIP 444 — LA QUÊTE DE L'ÉTOILE. Quatre poses × trois états pour la
        compagne (la respiration et l'humeur), quatre éclats (une couleur par
-       note), deux états de sillon, quatre décors de la verrerie, trois poses de
-       pie. Le cratère et la Lyre ne sont PAS ici : ce sont des fonctions, parce
+       note), quatre décors de la verrerie, trois poses de pie. Le cratère, le
+       SILLON (454) et le navire ne sont PAS ici : ce sont des fonctions, parce
        qu'ils se peignent sur un fond déjà là (voir leur note). */
     starWisp: Array.from({ length: 3 }, (_, st) => Array.from({ length: 4 }, (_, po) => starWispSprite(po, st))),
     starShard: Array.from({ length: 4 }, (_, n) => starShardSprite(n)),
-    starFurrow: [starFurrowSprite(false), starFurrowSprite(true)],
+    /* ⚠️ ZIP 454 — LE SILLON N'EST PLUS UN SPRITE, C'EST UNE FONCTION, exactement
+       comme le cratère et pour la même raison : il se peint sur un fond déjà là et
+       il porte un CHAMP que les pieds lisent aussi (`starFurrowSink`). Les deux
+       canevas cuits d'avant sont partis avec lui. */
+    drawStarFurrow,
+    drawStarFurrowAir,
+    starFurrowSink,
     starKiln: starKilnSprite(),
     starRack: starRackSprite(),
     starShutter: starShutterSprite(),
@@ -13181,10 +13637,12 @@ house: house(),
     drawStarCrater,
     drawStarCraterAir,
     drawStarShip,          // 450 — le navire des étoiles, sur la grève du lac
+    drawStarPlan,          // 454 — la feuille de plan de Kerguélen
     starCraterSink,
     drawStarComet,          // zip 448 — la comète, sa queue, sa traînée et son impact
     drawStarCometTrail,
     drawStarImpactFlash,
+    drawEmoteBubble,        // zip 455 — le « ! » des PNJ : tampon d'annonce et impact
     townHouses: Array.from({ length: C.TOWN_HOUSE_STYLES }, (_, i) => townHouseVariant(i)),
     rabbit: [rabbitSprite(0), rabbitSprite(1), rabbitSprite(2)],
     torch: torchSprite(),

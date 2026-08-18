@@ -201,8 +201,10 @@ function board() {
   twice(cp.greatBell, 226, 48);
   twice(cp.ringerBoard, 248, 66);
   // Le sillon, ses deux états.
-  put(S.starFurrow[0], 280, 60); put(S.starFurrow[1], 280, 100);
-  put(S.starFurrow[0], 280, 60 + H / 2); put(S.starFurrow[1], 280, 100 + H / 2);
+  /* ⚠️ ZIP 454 — le sillon est une FONCTION maintenant : on l'appelle, on ne
+     pioche plus un canevas cuit. C'est ce qui fait qu'il ne peut plus vieillir. */
+  S.drawStarFurrow(g, 330, 66, 16, 0, 2200, { heat: 1 });
+  S.drawStarFurrow(g, 330, 66 + H / 2, 16, 1, 2200, {});
   return sur;
 }
 
@@ -231,6 +233,28 @@ function craterBoard() {
   S.drawStarCrater(g, at[2], 170, T, 1, 2200, {});
   return sur;
 }
+
+/* ╔═══════════════════════════════════════════════════════════════════════════
+   ║ ZIP 454 — LE SILLON DEVIENT UN DESSIN QU'ON PEUT MESURER.
+   ╚═══════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ IL ÉTAIT DÉJÀ SUR LA PLANCHE, ET ÇA N'A JAMAIS SUFFI. Deux contrôles le
+   regardaient (le bord du haut, « les deux états sont le même sillon ») et aucun
+   ne mesurait ce qu'un impact doit avoir : du RELIEF. Il n'en avait aucun — une
+   bande de terre à plat, peinte en 2022, à côté d'un cratère qui prenait sept
+   contrôles. *Un dessin qu'aucun banc ne juge ne se dégrade pas : il reste au
+   niveau du jour où il a été écrit* (§ piège n°1, deuxième visage), et c'est
+   Guillaume qui l'a vu à l'écran, comme les six fois précédentes.
+   ⚠️ ON LE CUIT DANS UN CANEVAS À FOND TRANSPARENT pour garder les contrôles de
+   silhouette qui existaient (ils sont bons), et on en ajoute trois qui mesurent
+   la seule chose qui a changé : la pente, la profondeur, et l'accord entre ce
+   qu'on voit et ce que les pieds sentent. */
+function furrowProbe(phase, heat) {
+  const T = 16, W = 340, H = 220;
+  const sur = makeCanvas(W, H);
+  S.drawStarFurrow(sur.ctx, W / 2, H / 2, T, phase, 2200, { heat: heat === undefined ? 1 : heat });
+  return sur;
+}
+const FURROW_HOT = furrowProbe(0, 1), FURROW_COLD = furrowProbe(1, 0);
 
 /* ╔═══════════════════════════════════════════════════════════════════════════
    ║ ZIP 448 — LA PLANCHE DE LA COMÈTE. ELLE N'EXISTAIT PAS, ET C'EST LA CAUSE.
@@ -320,7 +344,7 @@ console.log("1. LE BORD DU HAUT — le piège n°1 des sprites\n");
   for (let n = 0; n < 4; n++) all.push(["shard " + n, S.starShard[n]]);
   for (let p = 0; p < 3; p++) all.push(["magpie " + p, S.magpie[p]]);
   all.push(["kiln", S.starKiln], ["rack", S.starRack], ["shutter", S.starShutter],
-           ["nestTree", S.starNestTree], ["furrow chaud", S.starFurrow[0]], ["furrow froid", S.starFurrow[1]],
+           ["nestTree", S.starNestTree], ["furrow chaud", FURROW_HOT], ["furrow froid", FURROW_COLD],
            ["greatBell", S.courtProps.greatBell], ["greatBell2", S.courtProps.greatBell2],
            ["bellFrame", S.courtProps.bellFrame], ["ringerBoard", S.courtProps.ringerBoard]);
   const guilty = all.filter(([, cv]) => topEdgeInk(cv) > 0).map(([n]) => n);
@@ -333,7 +357,7 @@ console.log("\n2. LA PROPRETÉ — les îlots qui flottent dans un aplat (connex
   for (const [name, cv] of [["l'étoile calme", S.starWisp[0][0]], ["l'étoile apeurée", S.starWisp[1][0]],
                             ["un éclat", S.starShard[0]], ["la pie de dos", S.magpie[0]],
                             ["le four", S.starKiln], ["le râtelier", S.starRack],
-                            ["l'arbre au nid", S.starNestTree], ["le sillon chaud", S.starFurrow[0]],
+                            ["l'arbre au nid", S.starNestTree], ["le sillon chaud", FURROW_HOT],
                             ["la cloche", S.courtProps.greatBell]]) {
     const r = floatingIslands(cv);
     worst.push([name, r]);
@@ -395,13 +419,141 @@ console.log("\n4. LE CERNE — il sert AUSSI contre un fond clair (441)\n");
 
 console.log("\n5. LES DEUX ÉTATS GARDENT LA MÊME SILHOUETTE\n");
 {
-  const a = silhouette(S.starFurrow[0]), b = silhouette(S.starFurrow[1]);
+  const a = silhouette(FURROW_HOT), b = silhouette(FURROW_COLD);
   let same = 0, any = 0;
   for (let i = 0; i < a.length; i++) { if (a[i] || b[i]) any++; if (a[i] && b[i]) same++; }
   const r = same / any;
   ok(r > 0.62, "⚠️ le sillon chaud et le sillon refermé sont le MÊME sillon",
      `${(r * 100).toFixed(0)} % de recouvrement`);
-  ok(r < 0.98, "…mais ils ne sont pas identiques (sinon rien n'a changé)", `${(r * 100).toFixed(0)} %`);
+  /* ⚠️⚠️ ZIP 454 — CE SECOND CONTRÔLE A CHANGÉ DE GRANDEUR, ET LE BANC L'A EXIGÉ.
+     Il lisait « les deux silhouettes ne sont pas identiques », ce qui était vrai
+     tant que les deux états étaient deux canevas peints séparément : le sillon
+     refermé était un peu plus court, et cet écart-là servait de preuve qu'il
+     s'était passé quelque chose. Depuis que les deux états sortent du MÊME champ
+     de hauteur (c'est tout l'intérêt : la balafre ne change pas de forme en se
+     refermant, l'herbe repousse dedans), la silhouette est identique par
+     construction et le contrôle est passé au rouge à 100 %.
+     ⚠️ Il n'a pas trouvé de défaut : il mesurait une différence qui a cessé
+     d'exister. Ce qui change VRAIMENT entre les deux états est la COULEUR — terre
+     brune contre herbe verte — et c'est donc elle qu'on mesure. Un état refermé
+     qui ressemblerait au frais serait un vrai défaut, et celui-là, on le verrait. */
+  {
+    const mean = (cv) => { const d = px(cv); let r = 0, g2 = 0, b = 0, n = 0;
+      for (let i = 0; i < cv.width * cv.height; i++)
+        if (d[i * 4 + 3] > 200) { r += d[i * 4]; g2 += d[i * 4 + 1]; b += d[i * 4 + 2]; n++; }
+      return n ? [r / n, g2 / n, b / n] : [0, 0, 0]; };
+    const A = mean(FURROW_HOT), B = mean(FURROW_COLD);
+    /* La terre est plus rouge que verte, l'herbe l'inverse : c'est le seul écart
+       qui survit à un changement d'éclairage. */
+    ok(A[0] > A[1] && B[1] > B[0], "…et le frais est de la TERRE quand le refermé est de l'HERBE",
+       `chaud R${A[0].toFixed(0)}/V${A[1].toFixed(0)} · froid R${B[0].toFixed(0)}/V${B[1].toFixed(0)}`);
+  }
+}
+
+/* ╔═══════════════════════════════════════════════════════════════════════════
+   ║ 5 bis. ZIP 454 — LE SILLON A-T-IL VRAIMENT UNE PHYSIQUE ?
+   ╚═══════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ C'EST LA DEMANDE DE GUILLAUME MOT POUR MOT (« que l'impact ait une vraie
+   physique, un peu comme le cratère »), et elle se mesure — sans quoi on aurait
+   simplement REDESSINÉ une bande de terre en croyant l'avoir creusée. Trois
+   grandeurs, et chacune répond à une phrase de la demande.
+   ⚠️ LA PREMIÈRE EST CELLE DU §8 DE `CLAUDE.md` : ce qui manque à une image plate
+   n'est pas une moyenne, c'est un ÉCART. Une bande de terre uniforme et une
+   balafre creusée ont la même couleur moyenne ; seul l'écart-type les sépare. */
+console.log("\n5 bis. LE SILLON A UNE PHYSIQUE (454)\n");
+{
+  const dev = (cv) => { const d = px(cv); const v = [];
+    for (let i = 0; i < cv.width * cv.height; i++)
+      if (d[i * 4 + 3] > 200) v.push(0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]);
+    const m = v.reduce((a, b) => a + b, 0) / Math.max(1, v.length);
+    return Math.sqrt(v.reduce((a, b) => a + (b - m) * (b - m), 0) / Math.max(1, v.length)); };
+  const sd = dev(FURROW_HOT);
+  ok(sd > 18, "⚠️⚠️ la terre est ÉCLAIRÉE, pas coloriée (écart-type de luminance)",
+     `écart-type ${sd.toFixed(1)} (le plat d'avant tournait autour de 8)`);
+
+  /* ⚠️ LA COURSE A UN SENS, ET C'EST LA MOITIÉ DE L'HISTOIRE : elle entre par
+     l'est, se creuse, et s'arrête à l'ouest. On mesure donc la LARGEUR peinte aux
+     deux bouts. Un sillon symétrique se lirait comme une tranchée qu'on a
+     creusée, pas comme quelque chose qui est tombé. */
+  {
+    const d = px(FURROW_HOT), W = FURROW_HOT.width, H = FURROW_HOT.height;
+    const colH = (x) => { let n = 0; for (let y = 0; y < H; y++) if (d[(y * W + x) * 4 + 3] > 200) n++; return n; };
+    /* Le centre du canevas est l'ANCRE ; la cuvette est à `BOWL_DX` cases à
+       l'ouest, l'entrée à `LEN/2` cases à l'est. On lit là où le dessin est,
+       jamais à des pixels choisis à l'œil. */
+    const T = 16, cx = W / 2;
+    const east = colH(Math.round(cx + (C.STAR_FURROW_LEN / 2 - 0.8) * T));
+    const bowl = colH(Math.round(cx + C.STAR_FURROW_BOWL_DX * T));
+    ok(bowl > east * 1.8, "⚠️ elle s'élargit d'est en ouest : c'est une COURSE, pas une tranchée",
+       `entrée ${east} px de haut, cuvette ${bowl} px`);
+  }
+
+  /* ⚠️⚠️ ET L'ENFONCEMENT LIT LE MÊME CHAMP QUE LE DESSIN — c'est le contrôle qui
+     protège du pire défaut possible ici : « il s'enfonce à côté du sillon »,
+     invisible en relecture et criant à l'écran. On balaie la balafre entière et on
+     vérifie que là où ça descend, c'est peint, et que le point le plus profond est
+     bien la cuvette. */
+  {
+    const T = 16;
+    let outside = 0, inked = 0, deepest = null, maxSink = 0;
+    const d = px(FURROW_HOT), W = FURROW_HOT.width, H = FURROW_HOT.height;
+    for (let dy = -60; dy <= 60; dy++) for (let dx = -140; dx <= 90; dx++) {
+      /* ⚠️⚠️ LE SEUIL N'EST PAS UNE COMPLAISANCE, C'EST LA BORDURE TRAMÉE. Le bord
+         de la terre s'effiloche en trame de Bayer (446 : une terre semi-transparente
+         sur de l'herbe donne du brouillard), donc la toute dernière frange est
+         volontairement AJOURÉE — un pixel sur deux y manque, et l'enfoncement, lui,
+         est continu. Comparer les deux dans cette frange, c'est reprocher au dessin
+         d'avoir fait exactement ce qu'on lui a demandé. On mesure donc l'accord là
+         où le sillon est un sillon (un quart de sa profondeur), et le contrôle
+         suivant tient la frange à sa place. */
+      const sink = S.starFurrowSink(dx / T, dy / T, T);
+      if (sink <= C.STAR_FURROW_SINK_PX * 0.25) continue;
+      inked++;
+      const x = Math.round(W / 2 + dx), y = Math.round(H / 2 + dy);
+      if (x < 0 || y < 0 || x >= W || y >= H || d[(y * W + x) * 4 + 3] <= 200) outside++;
+      if (sink > maxSink) { maxSink = sink; deepest = dx / T; }
+    }
+    ok(inked > 500 && outside === 0, "⚠️⚠️ on ne s'enfonce QUE là où la terre est peinte",
+       `${inked} points d'enfoncement, ${outside} hors du dessin`);
+    /* ⚠️ ET LA FRANGE AJOURÉE RESTE UNE FRANGE : si elle s'épaississait, le
+       contrôle du dessus deviendrait complaisant sans que personne ne s'en
+       aperçoive — c'est comme ça qu'un banc cesse de mesurer quelque chose. */
+    {
+      let frange = 0, frangeOut = 0;
+      for (let dy = -60; dy <= 60; dy++) for (let dx = -140; dx <= 90; dx++) {
+        const sk = S.starFurrowSink(dx / T, dy / T, T);
+        if (sk <= 0.2 || sk > C.STAR_FURROW_SINK_PX * 0.25) continue;
+        frange++;
+        const x = Math.round(W / 2 + dx), y = Math.round(H / 2 + dy);
+        if (x < 0 || y < 0 || x >= W || y >= H || d[(y * W + x) * 4 + 3] <= 200) frangeOut++;
+      }
+      ok(frangeOut < frange * 0.5, "…et la frange ajourée reste minoritaire, même dans la frange",
+         `${frangeOut} px ajourés sur ${frange} points de bordure`);
+    }
+    ok(deepest !== null && Math.abs(deepest - C.STAR_FURROW_BOWL_DX) < 0.6,
+       "…et le point le plus profond est la cuvette d'arrêt",
+       `plus profond à ${deepest === null ? "?" : deepest.toFixed(2)} cases (cuvette ${C.STAR_FURROW_BOWL_DX})`);
+    ok(Math.abs(maxSink - C.STAR_FURROW_SINK_PX) < 1.2, "…et il descend de ce qui est annoncé",
+       `${maxSink.toFixed(1)} px pour ${C.STAR_FURROW_SINK_PX} annoncés`);
+    /* ⚠️ LE BOURRELET SE MONTE, IL NE SE DESCEND PAS : signe opposé, et c'est ce
+       qui fait qu'on l'ENJAMBE. Sans ce contrôle, une erreur de signe donnerait un
+       fermier qui plonge en marchant sur la terre projetée. */
+    let lipUp = 0;
+    for (let dx = -140; dx <= 90; dx++) for (let dy = -60; dy <= 60; dy++)
+      if (S.starFurrowSink(dx / T, dy / T, T) < -0.2) lipUp++;
+    ok(lipUp > 100, "⚠️ …et le bourrelet, lui, se monte", `${lipUp} points au-dessus du sol`);
+  }
+
+  /* ⚠️ ET LE CANEVAS CUIT EST ASSEZ GRAND : rien ne touche son bord. C'est le
+     piège n°1 des sprites mesuré sur les QUATRE bords (ici on a le droit, ce
+     dessin ne se raccorde à rien) — un canevas trop juste rabote en silence. */
+  {
+    const d = px(FURROW_HOT), W = FURROW_HOT.width, H = FURROW_HOT.height;
+    let edge = 0;
+    for (let x = 0; x < W; x++) { if (d[(x) * 4 + 3] > 8) edge++; if (d[((H - 1) * W + x) * 4 + 3] > 8) edge++; }
+    for (let y = 0; y < H; y++) { if (d[(y * W) * 4 + 3] > 8) edge++; if (d[(y * W + W - 1) * 4 + 3] > 8) edge++; }
+    ok(edge === 0, "⚠️ le sillon ne touche aucun bord de sa toile", `${edge} px sur le cadre`);
+  }
 }
 
 console.log("\n6. L'ÉTOILE RESPIRE — quatre poses réellement différentes\n");
@@ -756,6 +908,170 @@ console.log("\n8. LA COMÈTE — sept couches, un sens de course, et un halo\n")
   }
 }
 
-console.log(`\nPlanches : tools/out/etoile-planche.png · tools/out/etoile-cratere.png · tools/out/etoile-comete.png`);
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 455 — LA BULLE D'ÉMOTION, ET LA FRACTURE DE LA COMÈTE.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ LA BULLE EST REGARDÉE DÈS SA PREMIÈRE LIGNE, ET C'EST DÉLIBÉRÉ. La leçon
+   du 454 était payée par le SILLON : deux contrôles le regardaient depuis dix
+   zips sans jamais mesurer son relief, et il était resté plat. Un dessin neuf
+   qu'aucun banc n'appelle est un dessin qui vieillira ; celui-ci a ses mesures le
+   jour où il est écrit.
+   ⚠️ CE QU'ON MESURE EST CE QU'UNE CAPTURE NE MONTRE PAS : que le signe est bien
+   SÉPARÉ de son point (à six pixels, un « ! » collé devient un « l »), que la
+   bulle SURSAUTE au lieu d'apparaître, et qu'elle s'éteint pour de bon.
+   ═══════════════════════════════════════════════════════════════════════════ */
+console.log("\n9. LA BULLE D'ÉMOTION (455) — un signe, pas une phrase\n");
+{
+  const S3 = 48;
+  const shot = (a2) => {
+    const sur = makeCanvas(S3, S3), gg = sur.ctx;
+    /* ⚠️⚠️ UN FOND BLEU PUR, ET PAS DE L'HERBE — LE BANC S'EST TROMPÉ LÀ-DESSUS
+       À SA PREMIÈRE ÉCRITURE. Le premier jet peignait « de l'herbe, comme dans le
+       jeu » (#2a5c2a) : ses trois composantes sont TOUTES sous le seuil d'encre,
+       donc le banc comptait le fond comme du trait et annonçait « 48 rangées
+       d'encre » sur une image de 48 px de haut. *Un banc de rendu se vérifie
+       aussi* (§10 de `CLAUDE.md`) — et le fond d'une mesure n'est pas un décor,
+       c'est un réactif : il doit être ce que le dessin n'est JAMAIS. */
+    gg.fillStyle = "#0000ff"; gg.fillRect(0, 0, S3, S3);
+    S.drawEmoteBubble(gg, S3 / 2, S3 - 8, a2);
+    return sur;
+  };
+  /* L'encre : les pixels franchement sombres. Le corps de la bulle est crème, le
+     fond est vert — le signe est donc la seule chose noire de l'image. */
+  /* ⚠️⚠️ ON NE REGARDE QU'UNE BANDE CENTRALE DE SIX PIXELS, ET C'EST LA SECONDE
+     CORRECTION DE CE CONTRÔLE. Sur toute la largeur, le CERNE de la bulle (brun
+     foncé) est de l'encre lui aussi : il traverse chaque rangée, donc il bouchait
+     le trou qu'on cherche et le banc annonçait « 0 rangée vide » sur un « ! »
+     parfaitement formé. *Il mesure autre chose* — quatrième visage du défaut de
+     banc, ici dans sa version la plus bête : on mesurait le cadre en croyant
+     mesurer le texte. La bande ne contient que le glyphe. */
+  const inkRows = (sur) => {
+    const d = sur.px, rows = [];
+    const x0 = Math.round(S3 / 2 - 3), x1 = Math.round(S3 / 2 + 3);
+    for (let y = 0; y < S3; y++) {
+      let n = 0;
+      for (let x = x0; x <= x1; x++) {
+        const i = (y * S3 + x) * 4;
+        if (d[i] < 110 && d[i + 1] < 110 && d[i + 2] < 90) n++;   // l'encre : sombre PARTOUT, bleu compris
+      }
+      rows.push(n);
+    }
+    return rows;
+  };
+  {
+    const rows = inkRows(shot(1));
+    /* ⚠️ ET LE GLYPHE SE DISTINGUE DU CERNE PAR SA LARGEUR, PAS PAR SA COULEUR
+       (les deux sont la même encre) : le cerne traverse la bande entière, le fût
+       fait trois pixels. Sans ce tri, les deux rangées vides qui séparent le cerne
+       du haut du glyphe se comptaient comme le trou du « ! » — le banc aurait été
+       vert sur un point collé au fût, ce qu'il est censé refuser. */
+    const on = rows.map((n, y) => (n > 0 && n <= 4 ? y : -1)).filter(y => y >= 0);
+    ok(on.length > 0, "la bulle « ! » peint bien quelque chose", `${on.length} rangées de glyphe`);
+    /* ⚠️⚠️ LE POINT EST SÉPARÉ DU FÛT, ET C'EST TOUT LE CONTRÔLE. À six pixels de
+       haut, un « ! » dont le point touche la barre se lit « l » — et sur une
+       capture d'écran de jeu, personne ne le verra jamais. Il faut donc au moins
+       UNE rangée vide entre deux rangées encrées. */
+    let gaps = 0;
+    for (let y = on[0]; y < on[on.length - 1]; y++) if (rows[y] === 0) gaps++;
+
+    ok(gaps >= 1, "⚠️⚠️ le point du « ! » est SÉPARÉ du fût", `${gaps} rangée(s) vide(s) au milieu`);
+    ok(gaps <= 2, "…mais pas au point de flotter", `${gaps} rangée(s)`);
+  }
+  {
+    /* ⚠️ ELLE SURSAUTE : au tout début elle dépasse sa taille, puis retombe. Une
+       bulle qui grandit régulièrement se lit comme une interface qui s'ouvre ;
+       un sursaut se lit comme une réaction. Ça se mesure en largeur du corps. */
+    const bodyW = (a2) => {
+      const sur = shot(a2), d = sur.px;
+      let lo = S3, hi = -1;
+      for (let y = 0; y < S3; y++) for (let x = 0; x < S3; x++) {
+        const i = (y * S3 + x) * 4;
+        if (d[i] > 200 && d[i + 1] > 190 && d[i + 2] > 150) { lo = Math.min(lo, x); hi = Math.max(hi, x); }
+      }
+      return hi - lo;
+    };
+    const w0 = bodyW(1), w1 = bodyW(0.6);
+    ok(w0 > w1, "⚠️ la bulle SURSAUTE à l'apparition", `${w0} px → ${w1} px`);
+    ok(w1 >= 8, "…et elle reste lisible ensuite", `${w1} px de large`);
+  }
+  {
+    const painted = (a2) => {
+      const sur = shot(a2), d = sur.px;
+      let n = 0;
+      for (let y = 0; y < S3; y++) for (let x = 0; x < S3; x++) {
+        const i = (y * S3 + x) * 4;
+        if (d[i] > 200 && d[i + 2] < 240) n++;      // du crème, jamais le bleu du fond
+      }
+      return n;
+    };
+    ok(painted(0.6) > 20, "elle est bien là en pleine vie", `${painted(0.6)} px`);
+    ok(painted(0) === 0, "⚠️ …et elle DISPARAÎT pour de bon à zéro", `${painted(0)} px`);
+    ok(painted(0.01) === 0, "…et elle ne laisse pas un fantôme à 1 %");
+  }
+}
+
+/* ⚠️⚠️ LA FRACTURE : ON COMPTE LES TÊTES, PAS LES PIXELS. Trois morceaux dessinés
+   l'un sur l'autre font une seule tache ; ce qui doit se voir est qu'ils se
+   SÉPARENT. On mesure donc la largeur du groupe perpendiculairement à la course,
+   à deux instants, comme le 454 mesure l'étalement de la gerbe. */
+/* ⚠️ ET UNE PLANCHE À REGARDER, parce qu'un contrôle vert ne dit pas si c'est
+   joli (§25 de `ferme/README.md`). Trois tailles de bulle sur une bande de fond
+   de jeu, puis la comète à trois instants de sa fracture. */
+{
+  const W2 = 300, H2 = 150;
+  const sur = makeCanvas(W2, H2), gg = sur.ctx;
+  gg.fillStyle = "#3a6b34"; gg.fillRect(0, 0, W2, H2 / 2);          // l'herbe de la ferme
+  gg.fillStyle = "#0b1024"; gg.fillRect(0, H2 / 2, W2, H2 / 2);     // le ciel de nuit
+  [1, 0.8, 0.55, 0.3, 0.12].forEach((a2, i) => S.drawEmoteBubble(gg, 40 + i * 46, 48, a2));
+  const angP = Q.starFallAngle("farm");
+  [Q.STAR_FRAG_AT - 0.06, Q.STAR_FRAG_AT + 0.05, 0.99].forEach((k, i) => {
+    const cx0 = 74 + i * 82, cy0 = H2 / 2 + 44, R = 6 + i * 1.6;
+    for (const f of Q.starFragments(k)) {
+      S.drawStarComet(gg,
+        cx0 - Math.cos(angP) * R * f.along - Math.sin(angP) * R * f.side,
+        cy0 - Math.sin(angP) * R * f.along + Math.cos(angP) * R * f.side,
+        angP, R * f.scale, 0, { q: 3, fade: 1, tail: R * f.scale * 7 });
+    }
+  });
+  const up = scale(sur.px, W2, H2, 3);
+  writePNG(path.join(OUT, "etoile-alerte.png"), up.px, up.W, up.H);
+}
+
+console.log("\n10. LA COMÈTE SE FEND (455)\n");
+{
+  const S4 = 260;
+  const ang = Q.starFallAngle("farm");
+  const groupWidth = (k) => {
+    const sur = makeCanvas(S4, S4), gg = sur.ctx;
+    gg.fillStyle = "#06060f"; gg.fillRect(0, 0, S4, S4);
+    const R = 9;
+    for (const f of Q.starFragments(k)) {
+      const x = S4 / 2 - Math.cos(ang) * R * f.along - Math.sin(ang) * R * f.side;
+      const y = S4 / 2 - Math.sin(ang) * R * f.along + Math.cos(ang) * R * f.side;
+      S.drawStarComet(gg, x, y, ang, R * f.scale, 0, { q: 3, fade: 1, tail: R * f.scale * 8 });
+    }
+    /* La normale à la course : c'est le long d'ELLE que la séparation se lit. */
+    const nx = -Math.sin(ang), ny = Math.cos(ang);
+    const d = sur.px;
+    let lo = 1e9, hi = -1e9, n = 0;
+    for (let y = 0; y < S4; y++) for (let x = 0; x < S4; x++) {
+      const i = (y * S4 + x) * 4;
+      if (d[i] + d[i + 1] + d[i + 2] < 330) continue;          // le cœur clair des têtes
+      const t = (x - S4 / 2) * nx + (y - S4 / 2) * ny;
+      lo = Math.min(lo, t); hi = Math.max(hi, t); n++;
+    }
+    return { w: n ? hi - lo : 0, n };
+  };
+  const before = groupWidth(Q.STAR_FRAG_AT - 0.05);
+  const after = groupWidth(0.99);
+  ok(before.n > 0 && after.n > 0, "les deux instants dessinent bien quelque chose",
+     `${before.n} px puis ${after.n} px`);
+  ok(after.w > before.w * 1.6, "⚠️⚠️ les morceaux SE SÉPARENT en travers de la course",
+     `${before.w.toFixed(0)} px → ${after.w.toFixed(0)} px`);
+  ok(Q.starFragments(0.99).length === Q.STAR_FRAG_N, "…et ils sont bien trois à la fin",
+     `${Q.starFragments(0.99).length} morceaux`);
+}
+
+console.log(`\nPlanches : tools/out/etoile-planche.png · tools/out/etoile-cratere.png · tools/out/etoile-comete.png · tools/out/etoile-alerte.png`);
 console.log(fails === 0 ? `\n✅ tous les contrôles passés.\n` : `\n❌ ${fails} contrôle(s) en échec.\n`);
 process.exit(fails ? 1 : 0);

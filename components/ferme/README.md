@@ -2973,3 +2973,135 @@ peut pas diverger d'elle-même) et elle est devenue fausse le jour de la traduct
 - **Le jeu reste MUET.** Un seul son est importé dans `FermeGame.js` (`church-organ.mp3`) et le
   fichier n'existe pas, alors que `dig-dirt`, `door-open` et `cash-register` dorment dans
   `public/sounds/`. C'est le défaut qui fait dire « c'est pas fini » en dix secondes.
+
+---
+
+## 31. ZIP 454 — LA QUÊTE SE MÉRITE : UNE PORTE, DES PLANS, UN BÛCHERON
+
+⚠️⚠️ **DEMANDE DE GUILLAUME, EN QUATRE POINTS.** Ils tiennent ensemble parce qu'ils répondent tous
+à la même question — *qui construit ce bateau, et avec quoi ?* — que le 450 avait laissée ouverte en
+faisant pousser un navire tout seul à mesure qu'on trouvait des éclats.
+
+### 31.1 La porte : la comète ne tombe plus sur n'importe quelle ferme
+
+*« LA ferme doit avoir déjà débloqué au moins eduardo et tristan (actif) ainsi qu'au moins
+4 artisans sur la ferme. ce patch est logique : eduardo prend le bateau à la fin de la quête et
+tristan y travaille. »*
+
+`Q.starFallGate({ skills, artisans })`, appelée par `resolveStarFall`. Le CONSTAT se fabrique côté
+hôte avec **deux fonctions qui existaient déjà** — `E.residentActiveSkill` (la même que la sucrerie
+emploie pour savoir si Jérôme n'est pas en ITT) et `E.countSkilledResidents` (la porte d'apparition
+de Carla depuis le 376). **Zéro nouvelle façon de compter un résident**, donc zéro seconde liste qui
+pourrait dire autre chose que la première. Le seuil d'artisans est `CARLA_MIN_ARTISANS`, dérivé et
+jamais recopié.
+
+⚠️ **Elle rend ce qui MANQUE, pas un booléen** : sans ça, le premier symptôme de cette porte aurait
+été « la quête est cassée » alors qu'elle attend deux habitants. ⚠️ Et **le menu développeur la
+franchit** avec un contexte fabriqué : recruter six personnes avant de pouvoir regarder une
+cinématique de douze secondes, c'est une scène qu'on ne juge qu'une fois.
+
+### 31.2 Le fantôme se mérite — et c'est un vrai défaut du 450 qui se corrige
+
+⚠️⚠️ **LE NAVIRE PEIGNAIT SES CINQ FANTÔMES DÈS LA PREMIÈRE NUIT DE LA PARTIE**, à quiconque
+passait sur la rive du lac. Une silhouette spectrale de bateau complet, gratuitement, à un joueur
+qui n'a pas commencé la quête : *la fin de l'histoire offerte à qui n'en a pas lu la première
+ligne.* Aucun banc ne pouvait le voir — `render-navire` mesurait la forme des fantômes, leur
+damier, leur débordement, leur pulsation, **jamais leur droit d'exister** (cinquième forme du défaut
+de banc, 448 : *il mesure ce qu'une chose EST et jamais QUAND elle est*).
+
+**La chaîne qui les débloque**, et c'est une étape de scénario entière :
+
+1. **l'étoile conseille** — à peine sortie du cratère, elle regarde la cale vide et dit qu'il faut
+   « quelqu'un qui dessine les bateaux ». Trois toasts à la suite de la rencontre : c'est le seul
+   moment de la quête où l'histoire s'énonce, donc c'est là qu'il faut poser la suite ;
+2. **la mairie** — sujet `engineer` chez Léonie Sarrazin. ⚠️ **C'est la ligne que le §4236 des
+   constantes attendait depuis le 439** (« une quête future = une ligne dans cette table »), et
+   c'est le **premier sujet de dialogue qui débouche sur une `req`**. La règle « aucun sujet ne
+   donne rien » tient toujours : celui-ci ne DONNE pas, il PREND ;
+3. **le prix** — 24 000 or (bourse commune) + 60 récoltes + 12 poissons (le sac du demandeur).
+   ⚠️ **On vérifie les trois AVANT d'en prélever un seul** : un paiement en trois fois qui échoue au
+   troisième laisserait l'or parti et le poisson en place, la seule faute vraiment irrattrapable de
+   ce fichier ;
+4. **Célestin Kerguélen** arrive en trois minutes, s'installe à quatre cases de la cale, marmonne,
+   travaille **quinze minutes réelles**, rend ses plans et repart. ⚠️ **Ce n'est pas un résident** :
+   pas de `rid`, pas de maison, pas de vote d'exclusion — c'est ce que Léonie est à la mairie depuis
+   le 439, un **décor qui parle**, à une position dérivée de la cale. « Il est là » se déduit de
+   `plan.at` ;
+5. **le plan** (touche **P**, ou la pastille 📐 du bandeau) — une feuille d'ozalid dessinée par
+   `drawStarPlan`, dans `fermeArt.js` **et pas dans le panneau React**, sans quoi elle aurait
+   vieilli exactement comme la comète du 445. Elle réutilise les cuissons du navire : un plan ne
+   peut donc pas montrer un autre bateau que celui de la grève ;
+6. **au bord du lac** (12 cases), déplier le plan n'ouvre AUCUN panneau — il fait apparaître le
+   bateau entier en fantôme sur sa cale. Un panneau y aurait caché ce qu'on vient de déplier le plan
+   pour voir.
+
+### 31.3 Le bois de Tristan : un morceau demande DEUX choses
+
+`starShipParts` rendait « les cinq trouvailles ». Il rend maintenant **`found ∧ wood`** : l'étoile
+se rappelle la forme, le bûcheron taille la pièce. ⚠️ **Ce n'est pas un second compteur** — c'est un
+`ET` entre deux lectures, indexé par les MÊMES clés que le navire (`STAR_SHIP_ORDER`), donc rien ne
+peut afficher quatre morceaux pour trois pièces. C'est la leçon du 452 tenue une seconde fois.
+
+Cinq commandes, **dans l'ordre du plan** (on ne borde pas une coque avant d'avoir la quille), payées
+en bois pris **d'abord dans la réserve commune** — celle que Tristan remplit lui-même en abattant —
+puis dans le sac. Deux pièces ne sont pas en bois (la voile est de la toile, la cloche est de
+bronze) et ont quand même une pièce : **la vergue** et **la chaise de cloche**. Le bûcheron a donc
+quelque chose à faire pour les cinq sans qu'on lui invente un métier de tisserand.
+
+⚠️⚠️ **ET LA RÉSOLUTION ATTEND LE DERNIER BORDAGE.** `resolveStarGift` exige un navire entier :
+la cloche peut avoir chanté, si la chaise n'est pas livrée il reste un chantier sur la grève, et
+faire partir un bateau qu'on voit inachevé serait la faute du 448 (*un texte affirme*) au pire
+endroit du jeu. Le refus est silencieux et **rejouable** — c'est `resolveStarTimberTick` qui
+rappelle le don quand Tristan pose la dernière pièce, dans le MÊME `apply`. Personne n'a à rejouer
+le duo.
+
+⚠️ **L'invariant que le banc balaie** : la chaîne ne peut JAMAIS se bloquer. Elle exige la pièce
+précédente ET le morceau d'étoile correspondant ; si les deux ordres divergeaient d'un cran, la
+quête deviendrait infinissable sans que rien ne le signale. On le balaie sur tous les états que la
+quête traverse au lieu d'écrire trois exemples (leçon du 449).
+
+### 31.4 Le sillon : il a déménagé, et il a une physique
+
+*« fais attention à la trainée qui tombe dans la ferme. il faudrait qu'elle tombe ailleurs sur la
+map et que l'impact ait une vraie physique, un peu comme le cratère sur valley town. »*
+
+Deux corrections sans rapport l'une avec l'autre :
+
+- **L'ENDROIT.** Il tombait à `WELL − 4`, c'est-à-dire **dans le carré que les joueurs labourent
+  depuis le premier jour**. Il tombe au **nord**, très au-dessus de la cour de ferme, dans la bande
+  vide que le 363 décrivait déjà comme « un champ vide au nord de la carte ». Le générateur dégage
+  ce qu'il laboure (§15 bis : *la passe qui pave dégage ce qu'elle pave*), ce qui est en plus
+  physiquement juste : il ne devrait pas rester un chêne dans une balafre de sept cases.
+- **LA PHYSIQUE.** Ce n'était pas un impact, c'était une TEXTURE : une bande de 96×34 peinte à
+  plat, sans relief, sans bourrelet, sans fissures, **et on marchait dessus comme sur de l'herbe**.
+  Il reprend le modèle du cratère (une hauteur, sa pente, un Lambert éclairé de l'ouest-haut, des
+  paliers de valeur, des fissures qui débordent) avec une géométrie qui raconte autre chose : le
+  cratère est un trou rond (ça tombe droit), le sillon est une balafre qui s'enfonce d'est en ouest
+  et finit dans une cuvette (ça a labouré et ça s'est arrêté). ⚠️ Il est passé du **tri par ancrage**
+  au **décal de sol**, comme le cratère : un décor dans lequel on descend se peint avec les tuiles.
+
+⚠️⚠️ **ET C'EST LE PREMIER DÉCOR DE LA FERME QU'UN BANC REGARDE** (`render-etoile`, §5 bis). Le jour
+où il est devenu regardable, on a découvert qu'il était plat depuis dix zips — *un dessin qu'aucun
+banc n'appelle reste au niveau du jour où il a été écrit*, pour la quatrième fois après les sols
+d'intérieur, les arbres de la ferme et la comète.
+
+### 31.5 Ce que l'écran a trouvé et que les bancs ne voyaient pas
+
+| ce qu'on voyait | ce que le banc disait | la cause |
+|---|---|---|
+| la comète ne semblait pas plus lente | ⅓ de vitesse ✅, vitesse d'origine au contact ✅ | elle n'est à l'écran que sur les **derniers 22 %** de sa course, très exactement la portion que la reprise couvrait — *une grandeur juste, mesurée sur un intervalle que le joueur ne regarde pas* |
+| un **liseré vert vif** tout autour du sillon | écart-type de luminance excellent | le bourrelet partait au brun presque noir sur son bord, et l'herbe claire d'à côté ressortait comme un néon. **C'est le contraste qui faisait le défaut**, et c'est lui que la statistique récompensait |
+| le sillon se lisait comme un **ovale** | silhouette ✅, profondeur ✅ | largeur de bourrelet constante — mot pour mot le premier cratère du 446 (« un tournesol »). L'irrégularité d'une matière projetée est dans la **géométrie**, pas dans la texture |
+
+### 31.6 Ce que ça ne fait pas
+
+- ⚠️ **Trois choses n'ont jamais tourné à leur vraie cadence** : Kerguélen en personne sur la grève,
+  une commande de bois de bout en bout, et la résolution qui attend le dernier bordage. Ce sont les
+  trois seuls endroits du zip où le TEMPS fait partie de la mécanique — donc les trois qu'aucun banc
+  ne peut juger.
+- **Les trois prix et les six durées sont posés par déduction.** Ils se jugent en jouant, et rien ne
+  doit bouger avant (règle du voyage en train, 431).
+- **Toujours aucune séance à deux clients**, et le fantôme du plan est justement le genre de chose
+  qui se raconte à l'autre joueur — c'est un usage à essayer.
+- **Kerguélen n'a pas de sprite dédié** : il emprunte un skin générique. Un architecte naval mérite
+  peut-être mieux, mais un personnage qui reste quinze minutes ne mérite peut-être pas un dessin.

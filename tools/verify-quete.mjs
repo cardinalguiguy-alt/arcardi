@@ -56,6 +56,24 @@ let fails = 0, total = 0;
 const ok = (n, c, x) => { total++; console.log(`${c ? "  OK  " : "ÉCHEC "} ${n}${x ? "  —  " + x : ""}`); if (!c) fails++; };
 const section = (t) => console.log(`\n=== ${t} ===\n`);
 
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 455 — LA CHUTE S'ANNONCE AVANT DE TOMBER, DONC LE BANC AUSSI.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️ Sept contrôles appelaient `resolveStarFall` directement et sont passés au
+   ROUGE le jour où la règle a changé — c'est exactement ce qu'on attend d'eux, et
+   c'est pourquoi le tampon a le droit d'exister. Le raccourci est écrit UNE fois :
+   trois copies auraient fini par ne pas armer la même chose (leçon du 387).
+   ⚠️ `DAY0 = 0` DONNE UNE NUIT À `STAR_WARN_FLOOR_MS` PRÈS CALCULABLE À LA MAIN,
+   ce qui rend les échéances de ce fichier lisibles sans lancer le banc. */
+const DAY0 = 0;
+const NIGHT0 = Q.starNightStart(DAY0);
+const gateCtx = (extra) => ({ skills: C.STAR_GATE_SKILLS, artisans: C.STAR_GATE_ARTISANS, dayStartAt: DAY0, ...extra });
+/* Annonce + chute, comme l'hôte les enchaîne. Rend le résultat de la CHUTE. */
+const armFall = (e, day, now) => {
+  Q.resolveStarWarn(e, "banc", day === undefined ? Q.STAR_FALL_MIN_DAY : day, 1, gateCtx());
+  return Q.resolveStarFall(e, day === undefined ? Q.STAR_FALL_MIN_DAY : day, now === undefined ? NIGHT0 + 1 : now, gateCtx());
+};
+
 /* ═══════════════════════════════════════════════════════════════════════════
    1. LA CHAÎNE DES CINQ CHAPITRES.
    ⚠️ C'EST LE CONTRÔLE QUE LE 442 A DÛ AJOUTER APRÈS COUP, ET POUR LA MÊME
@@ -78,7 +96,12 @@ section("La chaîne des chapitres");
   ok("…et il ne saute aucun indice",
      Q.STAR_SITES.filter(s => s.id !== "song").every(s => Q.starHas(e2, s.id)),
      Q.STAR_SITES.filter(s => s.id !== "song" && !Q.starHas(e2, s.id)).map(s => s.id).join(",") || "aucun manquant");
-  ok("…les quatre éclats sont là", Q.starShards(e2) === Q.STAR_SHARD_TOTAL, `${Q.starShards(e2)}/${Q.STAR_SHARD_TOTAL}`);
+  /* ⚠️ ZIP 453 — LE COMPTE EST CELUI DU NAVIRE, ET C'EST LE SEUL. Ce contrôle
+     lisait `starShards` (quatre « notes ») : il était vert pendant que le
+     bateau, lui, montrait cinq emplacements. Un banc qui mesure la liste que le
+     joueur ne regarde pas ne peut pas voir la contradiction. */
+  ok("…quatre des cinq morceaux du navire sont posés",
+     Q.starShipBuilt(e2) === Q.STAR_SHIP_TOTAL - 1, `${Q.starShipBuilt(e2)}/${Q.STAR_SHIP_TOTAL}`);
   ok("⚠️ …et il S'ARRÊTE AVANT LE CHANT (le duo se joue à la main)", !Q.starHas(e2, "song"));
   ok("…la quête n'est donc PAS terminée", !Q.starDone(e2));
 
@@ -108,15 +131,29 @@ section("La chaîne des chapitres");
     const e5 = Q.newStar(); e5.fall = 1;
     Q.resolveStarFound(e5, "furrow", "a", 1);
     const again = Q.resolveStarFound(e5, "furrow", "b", 2);
+    /* ⚠️ ZIP 454 — LE BOIS EST DONNÉ À LA MAIN ICI : ce qu'on mesure est
+       l'idempotence de la TROUVAILLE, pas la construction. Sans lui, `starShipBuilt`
+       rendrait 0 et le contrôle échouerait pour une raison qui n'est pas la sienne. */
+    e5.wood.hull = { at: 1, readyAt: 1, done: true, by: "a" };
     ok("retrouver le même éclat ne le compte pas deux fois",
-       again.already === true && Q.starShards(e5) === 1 && e5.found.furrow.by === "a");
+       again.already === true && Q.starShipBuilt(e5) === 1 && e5.found.furrow.by === "a");
   }
   /* La chute ne peut pas tomber le premier jour, et elle ne rejoue jamais. */
   {
     const e6 = Q.newStar();
-    ok("la chute refuse un jour trop tôt", Q.resolveStarFall(e6, Q.STAR_FALL_MIN_DAY - 1, 5).tooEarly === true);
-    ok("…et elle s'arme au bon jour", Q.resolveStarFall(e6, Q.STAR_FALL_MIN_DAY, 5).ok === true);
-    ok("…et elle ne rejoue jamais", Q.resolveStarFall(e6, 9, 6).already === true);
+    /* ⚠️ ZIP 454 — LA PORTE DES DEUX HABITANTS EST OUVERTE ICI, ET FERMÉE JUSTE
+       APRÈS : ce bloc mesure la DATE, le suivant mesure la porte. Mélanger les deux
+       aurait donné un contrôle qui échoue pour deux raisons — c'est-à-dire un
+       contrôle qui ne dit rien quand il échoue. */
+    ok("la chute refuse un jour trop tôt", Q.resolveStarFall(e6, Q.STAR_FALL_MIN_DAY - 1, 5, gateCtx()).tooEarly === true);
+    /* ⚠️ ZIP 455 — ELLE REFUSE AUSSI SANS ANNONCE, ET C'EST LE NOUVEAU DÉFAUT
+       PRINCIPAL : sans ce contrôle, retirer par mégarde le test d'annonce rendrait
+       toute la demande de Guillaume silencieusement inopérante (la comète
+       retomberait « comme ça »), et les 344 autres contrôles resteraient verts. */
+    ok("⚠️ …ni une chute qui n'a pas été annoncée",
+       Q.resolveStarFall(e6, Q.STAR_FALL_MIN_DAY, 5, gateCtx()).unannounced === true);
+    ok("…et elle s'arme au bon jour, une fois annoncée", armFall(e6).ok === true);
+    ok("…et elle ne rejoue jamais", Q.resolveStarFall(e6, 9, NIGHT0 + 2, gateCtx()).already === true);
   }
   /* Le duo : une phrase en retard est IGNORÉE, pas comptée. */
   {
@@ -650,6 +687,20 @@ section("La quête ne paie rien (scan de source)");
   let read = 0, guilty = [];
   let inBlock = false;
   const MONEY = /\b(money|gold|coins?|reward|marketRate|price|prix)\b/;
+  /* ⚠️⚠️ ZIP 454 — UNE LIGNE QUI ANNONCE UN PRIX N'EST PAS UNE LIGNE QUI ENCAISSE,
+     ET LE MOTIF NE SAVAIT PAS FAIRE LA DIFFÉRENCE. `resolveStarPlanAsk` rend
+     `{ cost: { gold: … } }` : c'est un TARIF affiché à l'appelant, exactement comme
+     `resolveStarTimberOrder` rend une quantité de bois. Ce que la règle interdit
+     est de CRÉDITER — de rendre plus riche depuis ce fichier — et un résolveur qui
+     dit « ça coûte 24 000 » ne rend personne plus riche.
+     ⚠️ L'EXCEPTION EST NOMMÉE, PAS ÉLARGIE : seule une lecture de `C.STAR_ENG_FEE_*`
+     est excusée. Le jour où quelqu'un écrira `s.money += …` ici, le motif le verra
+     comme avant — c'est la différence entre lever une exception et lever la règle.
+     Et le contrôle publie combien de lignes il a excusées, sans quoi une exception
+     trop large passerait inaperçue (leçon du 441 : un banc doit publier son
+     dénominateur). */
+  const FEE_OK = /C\.STAR_ENG_FEE_/;
+  let excused = 0;
   for (let i = 0; i < lines.length; i++) {
     let l = lines[i];
     if (inBlock) { const e = l.indexOf("*/"); if (e < 0) continue; l = l.slice(e + 2); inBlock = false; }
@@ -658,11 +709,17 @@ section("La quête ne paie rien (scan de source)");
     const c = l.indexOf("//"); if (c >= 0) l = l.slice(0, c);
     if (!l.trim()) continue;
     read++;
-    if (MONEY.test(l)) guilty.push(`${i + 1}: ${l.trim().slice(0, 70)}`);
+    if (!MONEY.test(l)) continue;
+    if (FEE_OK.test(l)) { excused++; continue; }
+    guilty.push(`${i + 1}: ${l.trim().slice(0, 70)}`);
   }
   ok("le scanner a bien lu quelque chose", read > 150, `${read} lignes de code lues (sur ${lines.length})`);
   ok("⚠️ aucune ligne de `quete.js` ne touche à de l'argent", guilty.length === 0,
-     guilty.length ? guilty.join(" | ") : `0 sur ${read} lignes lues`);
+     guilty.length ? guilty.join(" | ") : `0 sur ${read} lignes lues, ${excused} tarif(s) annoncé(s)`);
+  /* ⚠️ ET L'EXCEPTION EST ÉTROITE : elle n'excuse que des lignes qui ANNONCENT.
+     Si l'une d'elles affectait quoi que ce soit, on serait revenu au double crédit
+     du 431 avec la bénédiction du banc. */
+  ok("…et les tarifs annoncés n'affectent rien", excused > 0 && excused <= 2, `${excused} ligne(s)`);
   /* Et la table des chapitres ne porte aucune récompense : `reward` n'existe
      pas dans ce chantier, contrairement aux 5 700 or du 442. */
   ok("aucun chapitre ne porte de récompense", Q.STAR_CHAPTERS.every(c => c.reward === undefined));
@@ -747,9 +804,12 @@ section("Les grandeurs partagées");
     ok("…sans devenir un trou de serrure", duo >= 0.10, `${(duo * 100).toFixed(0)} %`);
   }
   ok("⚠️ la carte de chapitre ne survit pas à sa scène", Q.STAR_CARD_MS < Q.STAR_FALL_MS && Q.STAR_CARD_MS < Q.STAR_TURN_MS);
-  /* Les quatre éclats se DÉRIVENT de la table, jamais écrits en dur. */
-  ok("les quatre notes viennent de la table", Q.STAR_SHARD_TOTAL === Q.STAR_SITES.filter(s => s.shard).length,
-     `${Q.STAR_SHARD_TOTAL} éclats`);
+  /* ⚠️ ZIP 453 — LE TOTAL SE DÉRIVE DE LA TABLE DES MORCEAUX, ET IL N'Y EN A
+     PLUS QU'UN. `STAR_SHARD_TOTAL` (4) a été supprimé avec la colonne `shard`. */
+  ok("le total de morceaux vient de la table", Q.STAR_SHIP_TOTAL === Q.STAR_SHIP_PARTS.length,
+     `${Q.STAR_SHIP_TOTAL} morceaux`);
+  ok("…et il n'existe plus de second compte", Q.STAR_SHARD_TOTAL === undefined && Q.starShards === undefined,
+     "STAR_SHARD_TOTAL / starShards retirés au 453");
   ok("chaque chapitre ne demande que des lieux qui existent",
      Q.STAR_CHAPTERS.every(c => c.need.every(id => !!Q.STAR_SITE[id])));
   ok("chaque prérequis désigne un lieu qui existe",
@@ -841,13 +901,75 @@ section("La chute est vue, et le chevron désigne (445)");
   ok("la comète entre en scène après le vol de caméra et avant l'impact",
      Q.STAR_CAM_GO_MS <= Q.STAR_FALL_APPEAR_MS && Q.STAR_FALL_APPEAR_MS < Q.STAR_FALL_IMPACT_MS,
      `caméra posée ${Q.STAR_CAM_GO_MS} ms, comète ${Q.STAR_FALL_APPEAR_MS} ms, contact ${Q.STAR_FALL_IMPACT_MS} ms`);
-  /* ⚠️ ELLE RESTE RAPIDE, ET C'EST UNE CONSIGNE DE GUILLAUME (« une comète reste
-     rapide ») : plus d'une seconde pour qu'on la voie, moins de trois pour
-     qu'elle ne se traîne pas. Deux bornes, pas un ressenti. */
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 454 — LA LOURDEUR SE MESURE EN VITESSES, PAS EN DURÉE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ LE CONTRÔLE D'AVANT DISAIT « moins de trois secondes de vol », et il est
+     passé au ROUGE le jour où Guillaume a demandé une chute trois fois plus lente.
+     Il n'avait pas tort : il mesurait la seule grandeur qu'on savait écrire à
+     l'époque. Mais la demande n'est pas une durée — c'est « ⅓ de la vitesse
+     partout, la vitesse d'avant à l'absolue fin », c'est-à-dire DEUX vitesses. Une
+     borne sur le total ne peut, par construction, en voir aucune des deux : on
+     aurait pu la satisfaire avec une comète qui accélère au début et rampe à la
+     fin, très exactement l'inverse de ce qui est demandé.
+     ⚠️ On dérive donc la vitesse instantanée de `starFallEase` par différences
+     finies, aux deux endroits qui comptent, et on la compare à ce que la même
+     trajectoire faisait avant ce zip (durée `STAR_FALL_BASE_FLIGHT_MS`, avancement
+     linéaire). C'est le seul moyen de dire « trois fois plus lente » autrement
+     qu'en le croyant. */
   {
     const vol = Q.STAR_FALL_IMPACT_MS - Q.STAR_FALL_APPEAR_MS;
     ok("⚠️ on la voit assez longtemps pour la regarder", vol >= 1200, `${vol} ms`);
-    ok("…sans qu'elle cesse d'être rapide", vol <= 3000, `${vol} ms`);
+    /* La vitesse d'avancement d'AVANT le 454, en fraction de trajectoire par ms. */
+    const v0 = 1 / Q.STAR_FALL_BASE_FLIGHT_MS;
+    const dk = 1e-4;
+    const speedAt = (k) => (Q.starFallEase(Math.min(1, k + dk)) - Q.starFallEase(Math.max(0, k - dk)))
+                           / ((Math.min(1, k + dk) - Math.max(0, k - dk)) * vol);
+    const slow = speedAt(0.4), rush = speedAt(1 - 1e-4);
+    ok("⚠️⚠️ la phase lourde va exactement trois fois moins vite qu'avant",
+       Math.abs(slow / v0 - 1 / Q.STAR_FALL_SLOW) < 0.02,
+       `${(v0 / slow).toFixed(2)}× plus lente (demandé ${Q.STAR_FALL_SLOW}×)`);
+    ok("⚠️⚠️ …et à l'absolue fin elle a retrouvé sa vitesse d'avant",
+       Math.abs(rush / v0 - 1) < 0.05, `${(rush / v0).toFixed(2)}× la vitesse d'origine`);
+    /* ⚠️ ET LA REMONTÉE EST GRADUELLE (« la vitesse augmente graduellement ») : la
+       vitesse ne doit jamais REDESCENDRE, sinon on a un à-coup et pas une reprise.
+       Une seule marche en arrière suffit à ce que l'œil le voie. */
+    let mono = true, prev = -1;
+    for (let k = 0; k <= 1.0001; k += 0.02) { const s = speedAt(Math.min(1, k)); if (s < prev - 1e-9) mono = false; prev = s; }
+    ok("…et elle ne redescend jamais en chemin", mono);
+    /* ⚠️ LES BOUTS SONT LES BOUTS : une reparamétrisation qui ne rendrait pas
+       exactement 0 et 1 ferait naître la comète dans le champ ou la ferait toucher
+       à côté du point d'impact. C'est le genre d'erreur d'un demi-pixel qui ne se
+       voit qu'à la douzième relecture. */
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ ⚠️⚠️ ET LA GRANDEUR QUI MANQUAIT : COMBIEN DE TEMPS LA VOIT-ON ?
+       ╚══════════════════════════════════════════════════════════════════════
+       Le premier réglage du 454 était VERT sur les deux contrôles de vitesse et
+       ne changeait RIEN à l'écran. La comète naît à 1,3 diagonale et avance en
+       `u^1,9` : elle n'entre dans le cadre qu'aux derniers 22 % de sa course, et
+       la reprise de vitesse (un cinquième du vol) couvrait justement ces 22 %. On
+       ralentissait donc, très exactement, la partie qu'on ne voit pas.
+       ⚠️ *Une grandeur juste, mesurée sur un intervalle que le joueur ne regarde
+       pas.* On mesure maintenant la portion VISIBLE, et on la compare à ce
+       qu'elle durait avant le zip — parce que « plus lourde » n'a de sens que
+       par rapport à avant. */
+    {
+      const vis = Q.starFallVisibleMs();
+      const avant = (1 - Q.starFallOnScreenFrom()) * Q.STAR_FALL_BASE_FLIGHT_MS;
+      ok("⚠️⚠️ la partie VISIBLE de la chute dure vraiment plus longtemps qu'avant", vis > avant * 1.8,
+         `${Math.round(vis)} ms contre ${Math.round(avant)} ms (×${(vis / avant).toFixed(2)})`);
+      /* ⚠️ ET LA REPRISE DE VITESSE TOMBE DANS LE CADRE, pas au-dessus : c'est
+         l'autre moitié de la demande (« sauf à l'absolue fin »). Si elle
+         commençait avant l'entrée en scène, on ne verrait jamais qu'une comète
+         rapide — le défaut qu'on vient de payer. */
+      const kRush = 1 - Q.STAR_FALL_RUSH;
+      ok("…et l'accélération finale a lieu À L'ÉCRAN, pas hors champ",
+         Q.starFallEase(kRush) > Q.starFallOnScreenFrom(),
+         `reprise à u=${Q.starFallEase(kRush).toFixed(3)}, entrée en scène à u=${Q.starFallOnScreenFrom().toFixed(3)}`);
+    }
+    ok("la trajectoire part de 0 et finit à 1",
+       Math.abs(Q.starFallEase(0)) < 1e-9 && Math.abs(Q.starFallEase(1) - 1) < 1e-9,
+       `${Q.starFallEase(0).toFixed(6)} → ${Q.starFallEase(1).toFixed(6)}`);
   }
 
   /* ── L'AZIMUT. ⚠️ REMARQUE DE GUILLAUME : « si l'animation montre un
@@ -885,10 +1007,14 @@ section("La chute est vue, et le chevron désigne (445)");
      vers rien alors qu'il reste quelque chose à faire. */
   {
     const e = Q.newStar();
-    Q.resolveStarFall(e, Q.STAR_FALL_MIN_DAY, 1000);
-    ok("⚠️ au premier chapitre, le chevron pointe le sillon", Q.starTargetSite(e) === "furrow");
+    armFall(e);
+    /* ⚠️ ZIP 454 — les plans sont accordés d'emblée : ce bloc mesure le PARCOURS du
+       chevron, et l'étape « va chercher un ingénieur » a sa propre section. Un
+       contrôle qui mesure deux choses n'en mesure aucune. */
+    e.plan = { at: 1000, by: "banc", done: 1000 };
+    ok("⚠️ au premier chapitre, le chevron pointe le sillon", Q.starTargetSite(e, {}) === "furrow");
     Q.resolveStarFound(e, "furrow", "banc", 2000);
-    ok("…puis le cratère", Q.starTargetSite(e) === "crater");
+    ok("…puis le cratère", Q.starTargetSite(e, {}) === "crater");
     Q.resolveStarFound(e, "crater", "banc", 3000);
     /* ⚠️⚠️ ET LÀ, RIEN — C'EST VOULU ET C'EST LE CONTRÔLE LE PLUS UTILE DU BLOC.
        Pendant l'écoute des ombres, il n'y a nulle part où aller : la mécanique
@@ -896,18 +1022,18 @@ section("La chute est vue, et le chevron désigne (445)");
        chevron qui désignerait quoi que ce soit à cet instant serait un mensonge
        poli — la famille du `|| clé` du 444, qui n'échoue pas : il affiche. */
     ok("⚠️ pendant l'écoute des ombres, le chevron ne désigne RIEN",
-       Q.starTargetSite(e) === null, "les deux lieux sont encore inconnus");
+       Q.starTargetSite(e, {}) === null, "les deux lieux sont encore inconnus");
     Q.resolveStarFound(e, "leanLake", "banc", 4000);
     Q.resolveStarFound(e, "leanGlass", "banc", 4100);
-    ok("…et il repart dès que les ombres ont parlé", Q.starTargetSite(e) === "lakeShard");
+    ok("…et il repart dès que les ombres ont parlé", Q.starTargetSite(e, {}) === "lakeShard");
     Q.resolveStarFound(e, "lakeShard", "banc", 5000);
-    ok("…puis la verrerie", Q.starTargetSite(e) === "beadShard");
+    ok("…puis la verrerie", Q.starTargetSite(e, {}) === "beadShard");
     Q.resolveStarFound(e, "beadShard", "banc", 6000);
-    ok("…puis le nid", Q.starTargetSite(e) === "nestShard");
+    ok("…puis le nid", Q.starTargetSite(e, {}) === "nestShard");
     Q.resolveStarFound(e, "nestShard", "banc", 7000);
-    ok("…puis le beffroi", Q.starTargetSite(e) === "belfry");
+    ok("…puis le beffroi", Q.starTargetSite(e, {}) === "belfry");
     Q.resolveStarFound(e, "belfry", "banc", 8000);
-    ok("…et enfin le chant", Q.starTargetSite(e) === "song");
+    ok("…et enfin le chant", Q.starTargetSite(e, {}) === "song");
     /* ⚠️ TOUTE CIBLE RENDUE A UN `spot` NOMMÉ. Un lieu sans `spot` ne se
        dessine nulle part ; le rendre serait pointer vers `undefined`. */
     ok("⚠️ toute cible désignable porte un `spot` réel",
@@ -979,6 +1105,13 @@ section("L'objectif courant (bandeau) et le guide");
   ok("⚠️ le cratère BRÛLANT et le cratère FROID ne disent pas la même chose",
      Q.starGoalKey(e, { craterHot: true }) === "craterHot" && Q.starGoalKey(e, {}) === "crater");
   Q.resolveStarFound(e, "crater", "j1", 1002);
+  /* ⚠️⚠️ ZIP 454 — LA RENCONTRE ENVOIE À LA MAIRIE, ET LE BANDEAU LE DIT AVANT
+     TOUT LE RESTE. C'est la consigne « le rôle des étoiles est de nous guider dans
+     le projet » réduite à sa plus petite forme vérifiable : au sortir du cratère,
+     et tant que personne n'a demandé l'ingénieur, l'objectif EST l'ingénieur. */
+  ok("⚠️⚠️ à peine sortie du trou, l'étoile envoie chercher un ingénieur",
+     Q.starGoalKey(e, {}) === "engineer");
+  e.plan = { at: 1002, by: "j1", done: 1002 };
   ok("⚠️ l'objectif SUIT la trouvaille à l'intérieur d'un chapitre (le défaut du 448 pris ailleurs)",
      Q.starGoalKey(e, {}) === "lean");
   Q.resolveStarFound(e, "leanLake", "j1", 1003);
@@ -989,13 +1122,25 @@ section("L'objectif courant (bandeau) et le guide");
      pour « où vais-je » est la forme exacte de « une porte sans chemin de code
      ment » (444) — sauf qu'ici les deux avaient l'air justes. On rejoue la quête
      entière, trouvaille par trouvaille, et on compare à chaque pas. */
+  /* ⚠️⚠️ ZIP 454 — LE CONTRÔLE A CHANGÉ DE FORME PARCE QUE LE CODE A CHANGÉ DE
+     FORME, ET C'EST LE BANC QUI L'A EXIGÉ. Il comparait deux lectures INDÉPENDANTES
+     (« le premier manquant » contre « le premier manquant qui a une position ») et
+     il est passé au rouge dès que le 454 a ajouté deux objectifs qui ne sont pas des
+     lieux de la table — la mairie et l'atelier du bûcheron. La bonne réponse n'était
+     pas d'excuser ces deux cas (« se donner un périmètre et excuser ce qui déborde »,
+     le deuxième visage du défaut de banc), c'était de DÉRIVER le chevron du bandeau.
+     Ce qu'on mesure désormais est donc autre chose : que la traduction objectif →
+     adresse soit TOTALE (aucun objectif ne tombe dans le vide sans qu'on l'ait dit)
+     et que rien ne pointe vers un lieu dont la phrase ne parle pas. */
   {
     const e2 = Q.newStar(); e2.fall = 1;
+    e2.plan = { at: 1, by: "j1", done: 1 };     // sinon l'objectif « ingénieur » couvre tout le chapitre 2
     let checked = 0, bad = [];
     for (let guard = 0; guard < 24; guard++) {
-      const tgt = Q.starTargetSite(e2);
+      const tgt = Q.starTargetSite(e2, {});
       const goal = Q.starGoalKey(e2, {});
-      if (tgt && goal !== tgt) bad.push(`${goal || "∅"}≠${tgt}`);
+      const want = goal ? (Q.STAR_GOAL_TARGET[goal] || goal) : null;
+      if (tgt && tgt !== want) bad.push(`${goal || "∅"}→${tgt}`);
       if (tgt) checked++;
       const miss = Q.starMissing(e2);
       if (!miss.length) break;
@@ -1004,11 +1149,28 @@ section("L'objectif courant (bandeau) et le guide");
     }
     ok("⚠️⚠️ le bandeau et le chevron désignent TOUJOURS le même lieu",
        bad.length === 0 && checked >= 6, bad.join(" ") || `${checked} états comparés`);
+    /* ⚠️ ET LA TRADUCTION EST TOTALE : chaque objectif possible mène soit à un lieu
+       de la table, soit à une adresse NOMMÉE, soit à rien — et « rien » n'est
+       acceptable que pour les trois objectifs qui n'ont délibérément pas de place
+       (les deux écoutes d'ombres, l'attente de l'ingénieur). Sans ce contrôle, un
+       objectif ajouté plus tard pointerait silencieusement dans le vide. */
+    {
+      const NOWHERE = ["lean", "leanAgain", "engineerWait"];
+      const orphan = Q.STAR_GOAL_KEYS.filter(k => {
+        const id = Q.STAR_GOAL_TARGET[k] || k;
+        if (Q.STAR_OFF_TABLE_TARGETS.includes(id)) return false;
+        const s = Q.STAR_SITE[id];
+        return !(s && s.spot && s.spot[0] !== "*") && !NOWHERE.includes(k);
+      });
+      ok("⚠️ chaque objectif a une adresse, ou une raison écrite de n'en pas avoir",
+         orphan.length === 0, orphan.join(" ") || `${Q.STAR_GOAL_KEYS.length} objectifs traduits`);
+    }
     /* Et le seul endroit où le chevron se tait DOIT être couvert par une phrase :
        c'est le moment où le joueur n'a rien d'autre (§ `spot: "*lean"`). */
     const e3 = Q.newStar(); e3.fall = 1;
+    e3.plan = { at: 1, by: "j1", done: 1 };
     Q.resolveStarFound(e3, "furrow", "j1", 2); Q.resolveStarFound(e3, "crater", "j1", 3);
-    ok("⚠️ pas de chevron pendant l'écoute des ombres…", Q.starTargetSite(e3) === null);
+    ok("⚠️ pas de chevron pendant l'écoute des ombres…", Q.starTargetSite(e3, {}) === null);
     ok("…mais le bandeau, lui, dit quoi faire", Q.starGoalKey(e3, {}) === "lean");
   }
 
@@ -1061,6 +1223,172 @@ section("L'objectif courant (bandeau) et le guide");
      `arrêt à ${Q.STAR_GUIDE_ARRIVE}, laisse à ${Q.STAR_GUIDE_LEASH}`);
   ok("⚠️ l'avance tient dans la laisse", Q.STAR_GUIDE_AHEAD < Q.STAR_GUIDE_LEASH,
      `avance ${Q.STAR_GUIDE_AHEAD} < laisse ${Q.STAR_GUIDE_LEASH}`);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   8 bis. LA CONSTRUCTION (zip 454) : LA PORTE, L'INGÉNIEUR, LE BOIS.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ CE QUI EST MESURÉ ICI N'EST PAS « est-ce que ça marche » MAIS L'INVARIANT,
+   et c'est la leçon du 449 (« un contrôle de cas ne vaut pas un invariant ») :
+   trois exemples verts sur le placement du familier meneur, et l'invariant balayé
+   avait sorti un vrai bogue vingt fois sur cent soixante-quatre. Ici l'invariant
+   qui compte tient en une phrase : **la chaîne du bûcheron ne peut jamais se
+   bloquer**. Elle exige la pièce précédente ET le morceau d'étoile correspondant ;
+   si ces deux ordres divergeaient d'un cran, la quête deviendrait infinissable
+   sans que rien ne le signale — le pire défaut possible, et celui que le 442 avait
+   payé sur « suis-je seul ce soir ». On le balaie donc au lieu de le croire.
+   ═══════════════════════════════════════════════════════════════════════════ */
+section("La construction du navire (454)");
+{
+  const GATE_FULL = { skills: C.STAR_GATE_SKILLS, artisans: C.STAR_GATE_ARTISANS };
+  /* ── LA PORTE. */
+  ok("⚠️ une ferme sans personne ne reçoit pas d'étoile",
+     Q.resolveStarWarn(Q.newStar(), "b", 9, 1, { skills: [], artisans: 9 }).gated === true);
+  /* ⚠️ ZIP 455 — ET C'EST L'ANNONCE QU'ELLE FERME MAINTENANT, pas seulement la
+     chute : une invite « démarrer l'enquête ? » qui s'ouvrirait sur une ferme non
+     éligible serait « le jeu propose et refuse » (426), le défaut le plus
+     désagréable du dépôt et le seul qu'il ait payé quatre fois. */
+  ok("⚠️ …et l'invite ne s'ouvre même pas", !Q.starWarnOffer(Q.newStar(), 9, { skills: [], artisans: 9 }));
+  ok("…il manque nommément qui manque",
+     Q.starFallGate({ skills: ["voyager"], artisans: 9 }).missing.join() === "lumberjack");
+  ok("⚠️ …et quatre artisans ne suffisent pas sans les deux nommés",
+     !Q.starFallGate({ skills: [], artisans: 40 }).ok);
+  ok("⚠️ …ni les deux nommés sans les quatre artisans",
+     !Q.starFallGate({ skills: C.STAR_GATE_SKILLS, artisans: C.STAR_GATE_ARTISANS - 1 }).ok);
+  ok("…et la porte s'ouvre quand tout est là", Q.starFallGate(GATE_FULL).ok === true);
+  /* ⚠️ LES DEUX SKILLS EXIGÉS EXISTENT VRAIMENT DANS LE VIVIER. Sans ce contrôle,
+     une faute de frappe (« lumberjak ») fermerait la quête POUR TOUJOURS sur toutes
+     les fermes, et rien au monde ne le dirait — le symptôme serait « la comète ne
+     tombe jamais », qu'on mettrait sur le dos de la nuit ou du jour minimum. */
+  for (const sk of C.STAR_GATE_SKILLS)
+    ok(`le métier « ${sk} » existe dans le vivier`, C.VISITOR_ROSTER.some(v => v.skill === sk));
+
+  /* ── L'INGÉNIEUR. Trois états, deux échéances, une seule date écrite. */
+  {
+    const e = Q.newStar(); e.fall = 1;
+    ok("on ne demande pas d'ingénieur avant d'avoir vu l'étoile",
+       Q.resolveStarPlanAsk(e, "j1", 10).tooEarly === true);
+    Q.resolveStarFound(e, "furrow", "j1", 11);
+    Q.resolveStarFound(e, "crater", "j1", 12);
+    const r = Q.resolveStarPlanAsk(e, "j1", 20);
+    ok("…et la demande annonce ses trois monnaies",
+       r.ok && r.cost.gold === C.STAR_ENG_FEE_GOLD && r.cost.crops === C.STAR_ENG_FEE_CROPS
+       && r.cost.fish === C.STAR_ENG_FEE_FISH);
+    Q.commitStarPlan(e, "j1", 1000);
+    ok("on ne la passe pas deux fois", Q.resolveStarPlanAsk(e, "j1", 1100).already === true);
+    ok("⚠️ il voyage d'abord", Q.starPlanPhase(e, 1000 + C.STAR_ENG_TRAVEL_MS - 1) === "travel");
+    ok("…puis il est sur place et il travaille",
+       Q.starPlanPhase(e, 1000 + C.STAR_ENG_TRAVEL_MS + 1) === "work" && Q.starEngineerHere(e, 1000 + C.STAR_ENG_TRAVEL_MS + 1));
+    ok("⚠️ les plans ne sont pas prêts une minute trop tôt",
+       Q.resolveStarPlanTick(e, 1000 + C.STAR_ENG_TRAVEL_MS + C.STAR_ENG_WORK_MS - 60000).ok === false);
+    ok("⚠️⚠️ …et ils le sont après les quinze minutes demandées",
+       Q.resolveStarPlanTick(e, 1000 + C.STAR_ENG_TRAVEL_MS + C.STAR_ENG_WORK_MS).ok === true
+       && Q.starPlanReady(e) === true,
+       `${Math.round(C.STAR_ENG_WORK_MS / 60000)} min de travail`);
+    ok("…et l'ingénieur repart quand il a rendu", Q.starEngineerHere(e, 9e9) === false);
+    ok("le compte à rebours ne descend jamais sous zéro", Q.starPlanRemainMs(e, 9e9) === 0);
+  }
+
+  /* ── LE BOIS, ET L'INVARIANT QUI COMPTE. */
+  {
+    /* ⚠️ AUCUNE PIÈCE NE SE COMMANDE SANS PLANS, et c'est la porte que Guillaume
+       demande explicitement (« seulement à partir de ce moment là »). */
+    const e0 = Q.devStar(Q.newStar(), "all", 1).star;
+    e0.plan = { at: 0, by: "", done: 0 };
+    for (const k of Q.STAR_SHIP_KEYS) e0.wood = {};
+    ok("⚠️ sans les plans, Tristan ne coupe rien",
+       Q.STAR_SHIP_KEYS.every(k => Q.starTimberBlock(e0, k) === "noPlan"));
+
+    /* ⚠️⚠️ LE BALAYAGE : on rejoue la quête entière, trouvaille par trouvaille, et
+       à CHAQUE état on vérifie qu'il existe au moins une pièce commandable — ou que
+       tout est livré. C'est l'invariant « ça ne peut pas se bloquer », mesuré sur
+       tous les états que la quête traverse au lieu de trois exemples choisis. */
+    const e = Q.newStar(); e.fall = 1;
+    e.plan = { at: 1, by: "j1", done: 1 };
+    let stuck = [], steps = 0, ordered = 0;
+    for (let guard = 0; guard < 60; guard++) {
+      /* On livre tout ce qui est commandable avant d'avancer d'un cran : c'est ce
+         qu'un joueur fait, et c'est ce qui rend le blocage visible s'il existe. */
+      for (let inner = 0; inner < 8; inner++) {
+        const k = Q.STAR_SHIP_KEYS.find(kk => Q.starTimberCan(e, kk));
+        if (!k) break;
+        const ro = Q.resolveStarTimberOrder(e, k, "j1", 100 + guard);
+        if (!ro.ok || ro.wood <= 0 || ro.ms <= 0) { stuck.push("commande " + k); break; }
+        Q.commitStarTimber(e, k, "j1", 100 + guard);
+        ordered++;
+        Q.resolveStarTimberTick(e, 100 + guard + C.STAR_TIMBER[k].ms);
+      }
+      steps++;
+      const miss = Q.starMissing(e);
+      if (!miss.length) break;
+      /* Un morceau trouvé mais dont la pièce n'est pas commandable ET dont la
+         précédente est livrée serait le blocage : on le note. */
+      const blocked = Q.STAR_SHIP_KEYS.filter((kk, i) => {
+        const why = Q.starTimberBlock(e, kk);
+        return why === "prev" && Q.starTimberDone(e, Q.STAR_SHIP_KEYS[i - 1] || kk);
+      });
+      if (blocked.length) stuck.push("bloqué " + blocked.join());
+      if (miss[0] === "song") e.duet = Q.STAR_DUET_PHRASES;
+      Q.resolveStarFound(e, miss[0], "j1", 200 + guard);
+    }
+    ok("⚠️⚠️ la chaîne du bûcheron ne se bloque JAMAIS, à aucun état de la quête",
+       stuck.length === 0 && ordered === Q.STAR_SHIP_TOTAL,
+       stuck.join(" | ") || `${steps} états balayés, ${ordered} pièces commandées`);
+    ok("…et le navire est entier à l'arrivée", Q.starShipComplete(e) === true);
+  }
+
+  /* ── LES DEUX MOITIÉS SONT VRAIMENT DEUX MOITIÉS. */
+  {
+    const e = Q.newStar(); e.fall = 1;
+    Q.resolveStarFound(e, "furrow", "j1", 2);
+    ok("⚠️⚠️ un morceau trouvé sans bois ne se pose pas sur la cale", Q.starShipBuilt(e) === 0);
+    e.plan = { at: 1, by: "j1", done: 1 };
+    Q.commitStarTimber(e, "hull", "j1", 3);
+    ok("…ni pendant que Tristan scie", Q.starShipBuilt(e) === 0);
+    Q.resolveStarTimberTick(e, 3 + C.STAR_TIMBER.hull.ms);
+    ok("…et il se pose quand les deux sont là", Q.starShipBuilt(e) === 1);
+    /* ⚠️ ET L'INVERSE EST VRAI AUSSI : du bois sans souvenir ne construit rien. Sans
+       ce contrôle, un `||` écrit à la place d'un `&&` passerait inaperçu — les deux
+       expressions ont raison une fois sur deux. */
+    const e2 = Q.newStar(); e2.fall = 1; e2.plan = { at: 1, by: "j1", done: 1 };
+    e2.wood.hull = { at: 1, readyAt: 1, done: true, by: "j1" };
+    ok("⚠️ du bois sans morceau d'étoile ne construit rien", Q.starShipBuilt(e2) === 0);
+  }
+
+  /* ── LA TABLE DE BOIS EST LA MÊME LISTE QUE LE NAVIRE (la leçon du 452). */
+  ok("⚠️⚠️ chaque morceau du navire a sa pièce de bois, et réciproquement",
+     Q.STAR_SHIP_KEYS.every(k => C.STAR_TIMBER[k])
+     && Object.keys(C.STAR_TIMBER).every(k => Q.STAR_SHIP_KEYS.includes(k)),
+     `${Object.keys(C.STAR_TIMBER).length} pièces / ${Q.STAR_SHIP_TOTAL} morceaux`);
+  ok("…et aucune n'est gratuite ni instantanée",
+     Q.STAR_SHIP_KEYS.every(k => C.STAR_TIMBER[k].wood > 0 && C.STAR_TIMBER[k].ms > 0));
+
+  /* ── LA FIN ATTEND LE BATEAU. */
+  {
+    const e = Q.devStar(Q.newStar(), "all", 1).star;
+    for (const k of Q.STAR_SHIP_KEYS) delete e.wood[k];
+    e.duet = Q.STAR_DUET_PHRASES;
+    Q.resolveStarFound(e, "song", "j1", 2);
+    const r = Q.resolveStarGift(e, ["j1"], 3);
+    ok("⚠️⚠️ la cloche a chanté, mais un chantier ne part pas en mer",
+       r.ok === false && r.unbuilt === true, `${r.built}/${r.total} morceaux posés`);
+    for (const k of Q.STAR_SHIP_KEYS) e.wood[k] = { at: 1, readyAt: 1, done: true, by: "j1" };
+    ok("…et la résolution part dès que la dernière pièce est livrée",
+       Q.resolveStarGift(e, ["j1"], 4).scene === "end" && Q.starDone(e));
+  }
+
+  /* ── LE MENU DÉVELOPPEUR NE PROMET PAS CE QU'IL NE DONNE PAS. */
+  {
+    const d = Q.devStar(Q.newStar(), "plans", 5).star;
+    ok("⚠️ le bouton « plans » rend vraiment des plans", Q.starPlanReady(d) === true);
+    ok("…sans construire le bateau à notre place", Q.starTimberBuilt(d) === 0);
+    const d2 = Q.devStar(Q.newStar(), "timber", 5).star;
+    ok("⚠️ le bouton « bois » livre les cinq pièces", Q.starTimberBuilt(d2) === Q.STAR_SHIP_TOTAL);
+    ok("…sans trouver un seul morceau d'étoile", Q.starShipBuilt(d2) === 0);
+    const d3 = Q.devStar(Q.newStar(), "all", 5).star;
+    ok("⚠️⚠️ « tout sauf le duo » tient sa promesse : il ne manque QUE le chant",
+       Q.starMissing(d3).join() === "song" && Q.starTimberBuilt(d3) === Q.STAR_SHIP_TOTAL);
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1160,6 +1488,431 @@ section("Les textes de la quête");
     const noFloor = C.COURT_FLOORS.filter(f => S.FERME_STR[lang].courtFloorName(f.key) === f.key);
     ok(`⚠️ chaque niveau d'intérieur a son nom lisible (${lang})`, noFloor.length === 0,
        noFloor.map(f => f.key).join(",") || `${C.COURT_FLOORS.length} niveaux nommés`);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   10. ⚠️⚠️⚠️ ZIP 453 — DEUX GRANDEURS QUE PERSONNE NE MESURAIT, ET ELLES ONT
+   CHACUNE COÛTÉ UN DÉFAUT VISIBLE À L'ÉCRAN.
+   ───────────────────────────────────────────────────────────────────────────
+   Les deux sont de la même famille — *le texte et le monde répondent à la même
+   question sans jamais être comparés* (la leçon du 449) — et aucune n'était
+   regardable par un banc de logique ni par un banc de rendu.
+
+     A. UN NOMBRE DE MORCEAUX ÉCRIT EN TOUTES LETTRES DANS UNE PHRASE. Trois
+        d'entre elles disaient « Trois morceaux », « Quatre morceaux », « Cinq
+        notes » pendant que le navire en comptait cinq : elles étaient vraies au
+        444 (on comptait quatre NOTES) et le 450 a posé un cinquième morceau
+        sans les relire. *Un compteur ajouté ne recompte pas les phrases déjà
+        écrites*, et chaque compte restait juste DANS SA PROPRE LISTE.
+        ⚠️ Le contrôle balaie les DEUX langues et refuse tout mot-nombre ou
+        chiffre au voisinage d'un mot de morceau. Une phrase qui doit compter
+        est une FONCTION `(n, total)` — donc elle n'est pas une chaîne, donc
+        elle n'est pas balayée : la forme porte la règle.
+
+     B. UNE CHAÎNE DE QUÊTE QUE LE JEU N'AFFICHE JAMAIS. Au 453, **41 des 136**
+        l'étaient — dont la rencontre avec l'étoile (la seule phrase qui dit ce
+        qu'on fait et pourquoi), les quatre phrases de la cloche, le don, deux
+        des cinq traces, et `fall.quiet`. Écrites, traduites, citées dans
+        `QUETE.md`, invisibles. C'est le défaut du 448 retourné : *une constante
+        que seul le banc lit* a son exact pendant, *une chaîne que personne ne
+        lit* — elle a l'air juste et elle ne peut pas échouer.
+   ═══════════════════════════════════════════════════════════════════════════ */
+section("Les textes disent-ils la même chose que le monde ?");
+{
+  const ST = await import(pathToFileURL(path.join(tmp, "fermeStrings.js")).href);
+  const stars = { fr: ST.FERME_STR.fr.star, en: ST.FERME_STR.en.star };
+
+  /* ── A. AUCUN NOMBRE DE MORCEAUX EN DUR.
+     ⚠️ LES EXCEPTIONS SONT NOMMÉES, ET C'EST LA SEULE FAÇON HONNÊTE DE LES
+     AVOIR (même discipline que `star.dev` dans `verify-strings`) : les TITRES
+     DE CHAPITRE portent leur numéro d'ordre (« Chapitre Cinq »), qui compte des
+     chapitres et pas des morceaux. Ils sont donc exclus — mais l'exclusion est
+     GARDÉE par le contrôle suivant, qui échoue si le nombre de chapitres
+     change. Une exception qui ne peut pas expirer est une porte ouverte. */
+  const SKIP = new Set(["chapter", "title"]);
+  const NUMW = "(?:deux|trois|quatre|cinq|six|two|three|four|five|six)";
+  const PIECE = "(?:morceau|morceaux|note|notes|piece|pieces)";
+  const RE = new RegExp(`(?:\\b${NUMW}\\b|\\b\\d+\\b)[^.!?]{0,24}\\b${PIECE}\\b|\\b${PIECE}\\b[^.!?]{0,24}(?:\\b${NUMW}\\b|\\b\\d+\\b)`, "i");
+  let read = 0;
+  const guilty = [];
+  for (const lang of ["fr", "en"]) {
+    (function walk(o, at) {
+      for (const k of Object.keys(o)) {
+        const v = o[k], p = at ? at + "." + k : k;
+        if (SKIP.has(p.split(".")[0])) continue;
+        if (v && typeof v === "object" && !Array.isArray(v)) { walk(v, p); continue; }
+        if (typeof v !== "string") continue;          // une fonction compte, donc elle dérive
+        read++;
+        if (RE.test(v)) guilty.push(`${lang}.${p} : « ${v.slice(0, 60)} »`);
+      }
+    })(stars[lang], "");
+  }
+  /* ⚠️ IL PUBLIE COMBIEN DE PHRASES IL A LUES (leçon du 441) : un motif qui ne
+     matche plus rien passerait au vert éternellement sans qu'on le sache. */
+  ok("⚠️⚠️ aucun texte de quête n'écrit un nombre de morceaux en dur",
+     guilty.length === 0, guilty.slice(0, 4).join(" · ") || `${read} phrases lues dans les deux langues`);
+  /* Le garde-fou du garde-fou : il DOIT pouvoir échouer. */
+  ok("…et ce contrôle attrape bien ce qu'il cherche",
+     RE.test("Trois morceaux. Trois notes.") && RE.test("Four pieces. The boat waits.")
+     && !RE.test("Un morceau du bateau. Il chante une note quand on le touche."),
+     "témoin positif et témoin négatif");
+  /* ⚠️ L'EXCEPTION DES TITRES EXPIRE TOUTE SEULE. « Chapitre Cinq » est le nom
+     du cinquième chapitre ; le jour où il y en a six, ce contrôle tombe et
+     renvoie quelqu'un vers les titres. */
+  ok("…et l'exception des titres de chapitre est encore vraie",
+     Q.STAR_CH_DONE === 5 && !!stars.fr.chapter.note,
+     `${Q.STAR_CH_DONE} chapitres — les titres nomment leur rang, pas des morceaux`);
+
+  /* ── B. CHAQUE PHRASE A UN LECTEUR.
+     ⚠️ ON LIT LE SOURCE DU COMPOSANT, PAS UNE LISTE ÉCRITE À CÔTÉ : une liste
+     de « ce qui est branché » serait la seconde liste que ce banc existe pour
+     interdire. */
+  {
+    const src = fs.readFileSync(path.join(ROOT, "components", "ferme", "FermeGame.js"), "utf8");
+    const used = new Set();
+    for (const m of src.matchAll(/L\.star\.([A-Za-z0-9_.]*)/g)) used.add(m[1]);
+    const leaves = [];
+    (function walk(o, at) {
+      for (const k of Object.keys(o)) {
+        const v = o[k], p = at ? at + "." + k : k;
+        if (v && typeof v === "object" && !Array.isArray(v)) walk(v, p); else leaves.push(p);
+      }
+    })(stars.fr, "");
+    const dead = leaves.filter(l => {
+      if (used.has(l)) return false;
+      const parent = l.split(".").slice(0, -1).join(".");   // `hud.goal[goal]`, `prompt(k)`
+      return !used.has(parent);
+    });
+    ok("⚠️⚠️ chaque phrase de la quête est affichée quelque part",
+       dead.length === 0, dead.slice(0, 6).join(", ") || `${leaves.length} phrases, ${used.size} lectures dans FermeGame.js`);
+    ok("…et ce contrôle lit vraiment le composant", used.size > 40 && leaves.length > 80,
+       `${used.size} lectures, ${leaves.length} phrases`);
+  }
+
+  /* ── C. LE NAVIRE PART, ET IL PEUT REVENIR (453, décision de Guillaume).
+     ⚠️ La règle est une fonction PURE de `quete.js`, donc le jeu et le banc la
+     partagent ; écrite dans la boucle de rendu, aucun des deux ne l'aurait vue. */
+  {
+    const e = Q.devStar(Q.newStar(), "all", 1000).star;
+    Q.resolveStarDuet(e, 0, "banc", 1000);
+    for (let i = 1; i < Q.STAR_DUET_PHRASES; i++) Q.resolveStarDuet(e, i, "banc", 1000);
+    Q.resolveStarGift(e, ["banc"], 1000);
+    ok("la quête finie, le navire est entier", Q.starShipComplete(e) && Q.starDone(e),
+       `${Q.starShipBuilt(e)}/${Q.STAR_SHIP_TOTAL}`);
+    ok("…il reste à quai tant qu'Eduardo est au village", !Q.starShipGone(e, false));
+    ok("…il n'est plus là quand Eduardo est en voyage", Q.starShipGone(e, true));
+    ok("⚠️ …et un voyage AVANT la fin ne fait pas disparaître un chantier",
+       !Q.starShipGone(Q.newStar(), true));
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   9. LE TAMPON D'ANNONCE (zip 455) : LA DATE, LA VALLÉE NERVEUSE, LE CADRAGE.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ CE QUI EST MESURÉ ICI N'EST PAS « EST-CE QUE ÇA MARCHE » MAIS CE QUE
+   PERSONNE NE PEUT VOIR À L'ÉCRAN. Trois grandeurs, et chacune répond à une
+   forme connue du défaut de banc :
+     · LA DATE — « la nuit qui suit » a deux lectures qui donnent le même code
+       neuf fois sur dix et un jeu complètement différent la dixième (accepter à
+       20 h). On balaie donc TOUTES les heures d'annonce d'une journée plutôt que
+       d'en croire une (leçon 449 : *un contrôle de cas ne vaut pas un invariant*) ;
+     · LA VALLÉE — la part de PNJ nerveux et leur désynchronisation sont
+       invisibles sur une capture : à l'écran, « ils s'agitent » et « ils
+       s'agitent tous en même temps » se ressemblent beaucoup ;
+     · LE CADRAGE — c'est très exactement la SEPTIÈME forme du 454 (*une grandeur
+       juste mesurée sur un intervalle que le joueur ne regarde pas*) : le point
+       de vue est juste par construction, encore faut-il qu'il le reste sur les
+       fenêtres RÉELLES, du téléphone au grand écran. On balaie les formats.
+   ⚠️⚠️ ET LE DERNIER BLOC EST LE PLUS IMPORTANT DU ZIP : il tient la moitié du
+   thème qui reste (§3 de `QUETE.md`). Rien n'empêche, dans six mois, d'ajouter
+   une rumeur qui dit « va voir au nord du champ » — sauf ce contrôle.
+   ═══════════════════════════════════════════════════════════════════════════ */
+section("Le tampon d'annonce (455)");
+{
+  /* ── LA DATE. On balaie une journée entière d'heures d'annonce possibles. */
+  {
+    let bad = [], tooSoon = [], sameNight = 0;
+    const STEP = C.DAY_REAL_MS / 96;                       // ~10 s de jeu par pas
+    /* ⚠️ ON PART DE `STEP` ET PAS DE 0 : `warn.at = 0` VEUT DIRE « PAS ANNONCÉE »
+       dans ce fichier, exactement comme `fall = 0` veut dire « pas tombée ». C'est
+       la convention du 444 et elle est bonne ; c'est le BANC qui n'a pas le droit
+       d'annoncer à l'instant zéro de l'univers. */
+    for (let off = STEP; off < C.DAY_REAL_MS; off += STEP) {
+      const e = Q.newStar();
+      Q.resolveStarWarn(e, "banc", Q.STAR_FALL_MIN_DAY, off, gateCtx());
+      /* On avance minute par minute jusqu'à trouver l'instant où elle tombe. Le
+         jour de jeu SUIVANT a son propre `dayStartAt` — c'est ce que fait l'hôte
+         (`s.dayStartAt` est réécrit à chaque nouveau jour), et l'ignorer aurait
+         mesuré un monde où la nuit ne revient jamais. */
+      let fellAt = -1;
+      for (let t = off; t < off + 3 * C.DAY_REAL_MS && fellAt < 0; t += 1000) {
+        const dayStart = Math.floor(t / C.DAY_REAL_MS) * C.DAY_REAL_MS;
+        if (Q.starFallDue(e, dayStart, t)) fellAt = t;
+      }
+      if (fellAt < 0) { bad.push(off); continue; }
+      if (fellAt - off < C.STAR_WARN_FLOOR_MS) tooSoon.push(off);
+      if (fellAt < C.DAY_REAL_MS) sameNight++;
+    }
+    ok("⚠️ une annonce finit TOUJOURS par produire une chute", bad.length === 0,
+       `${95 - bad.length}/95 heures d'annonce balayées`);
+    ok("⚠️⚠️ …et jamais avant le plancher, à aucune heure de la journée",
+       tooSoon.length === 0,
+       tooSoon.length ? `${tooSoon.length} cas trop tôt` : `plancher ${C.STAR_WARN_FLOOR_MS / 60000} min tenu 95 fois`);
+    ok("…et une annonce faite EN PLEIN JOUR tombe bien la nuit du même jour",
+       sameNight > 0, `${sameNight} annonces sur 95 tombent le soir même`);
+  }
+  {
+    /* ⚠️ LE CAS QUI A MOTIVÉ TOUTE LA FONCTION : accepter alors qu'il fait DÉJÀ
+       nuit ne doit pas faire tomber la comète dans la minute — c'est « la comète
+       ne doit pas arriver comme ça », mot pour mot. */
+    const e = Q.newStar();
+    const atNight = NIGHT0 + 60000;                       // une minute après le crépuscule
+    Q.resolveStarWarn(e, "banc", Q.STAR_FALL_MIN_DAY, atNight, gateCtx());
+    ok("⚠️⚠️ annoncer DE NUIT ne fait pas tomber la comète cette nuit-là",
+       !Q.starFallDue(e, DAY0, atNight + C.STAR_WARN_FLOOR_MS + 60000));
+    const d2 = C.DAY_REAL_MS;                              // le lendemain
+    ok("…mais bien la nuit suivante", Q.starFallDue(e, d2, d2 + (Q.starNightStart(d2) - d2) + 1000));
+  }
+  {
+    const e = Q.newStar();
+    ok("une quête neuve n'est pas annoncée", !Q.starWarned(e) && !Q.starWarning(e));
+    Q.resolveStarWarn(e, "j1", Q.STAR_FALL_MIN_DAY, 5000, gateCtx());
+    ok("…annoncée, elle est en tampon", Q.starWarning(e) && Q.starWarnAt(e) === 5000);
+    ok("⚠️ …et deux « oui » ne repoussent pas la nuit",
+       Q.resolveStarWarn(e, "j2", 9, 900000, gateCtx()).already === true && Q.starWarnAt(e) === 5000);
+    e.fall = 6000;
+    ok("…tombée, le tampon est fini", Q.starWarned(e) && !Q.starWarning(e));
+  }
+  {
+    /* ⚠️⚠️ LA REPRISE D'UNE PARTIE D'AVANT LE 455. Une sauvegarde peut porter une
+       chute sans annonce : sans le rattrapage de `migrateStar`, `starWarning`
+       serait faux pour toujours et RIEN ne casserait bruyamment — le pire des
+       deux mondes, et le genre de défaut qu'on découvre chez un joueur. */
+    const old = { ch: 2, fall: 4242, found: {}, calm: {}, lean: {}, marks: [] };
+    const e = Q.migrateStar(old);
+    ok("⚠️ une partie d'avant ce zip compte comme annoncée", Q.starWarned(e) && Q.starWarnAt(e) === 4242);
+    ok("…et une sauvegarde abîmée ne fait pas tomber le chargement",
+       Q.starWarnAt(Q.migrateStar({ warn: "n'importe quoi" })) === 0);
+  }
+
+  /* ── LA VALLÉE NERVEUSE. */
+  {
+    const RIDS = C.VISITOR_ROSTER.map((_, i) => i);
+    const nerv = RIDS.filter(Q.starNerveHas);
+    const share = nerv.length / RIDS.length;
+    /* ⚠️ « TOUS NE DOIVENT PAS EN PARLER » (Guillaume) : les DEUX bornes comptent.
+       Un banc qui ne vérifierait que « pas tous » passerait au vert sur une vallée
+       entièrement calme, c'est-à-dire sur la fonctionnalité absente. */
+    ok("⚠️⚠️ une partie seulement des PNJ est nerveuse",
+       share > 0.15 && share < 0.85, `${nerv.length}/${RIDS.length} (${(share * 100) | 0} %)`);
+    ok("…et c'est stable : le même PNJ l'est toujours",
+       RIDS.every(r => Q.starNerveHas(r) === Q.starNerveHas(r)));
+    /* ⚠️ L'INVARIANT DE DÉSYNCHRONISATION, ET IL EST LE POINT DE CE BLOC. À
+       l'écran, « ils s'agitent » et « ils s'agitent tous dans la même image » se
+       ressemblent beaucoup — et le second est une chorégraphie, c'est-à-dire le
+       contraire d'une foule inquiète. On mesure donc la proportion maximale de
+       nerveux qui tiquent EN MÊME TEMPS, balayée sur toute une période. */
+    let worst = 0;
+    for (let t = 0; t < C.STAR_NERVE_PERIOD_MS; t += 100) {
+      const n = nerv.filter(r => Q.starNerveTic(r, t)).length;
+      if (n > worst) worst = n;
+    }
+    ok("⚠️⚠️ ils ne s'agitent jamais tous en même temps",
+       worst < nerv.length * 0.75, `au pire ${worst}/${nerv.length} en même temps`);
+    /* Un tic finit, et il finit dans la même image chez tout le monde. */
+    ok("un PNJ calme n'a jamais de tic", RIDS.filter(r => !Q.starNerveHas(r)).every(r => !Q.starNerveTic(r, 3000)));
+    let onTime = 0;
+    for (let t = 0; t < C.STAR_NERVE_PERIOD_MS * 3; t += 250) onTime += nerv.filter(r => Q.starNerveTic(r, t)).length;
+    const duty = onTime / (nerv.length * (C.STAR_NERVE_PERIOD_MS * 3 / 250));
+    ok("⚠️ un nerveux tique une petite partie du temps, pas en continu",
+       duty > 0.10 && duty < 0.40, `${(duty * 100).toFixed(0)} % du temps`);
+    /* ⚠️⚠️ UN TOUR SUR SOI-MÊME REVIENT À SON POINT DE DÉPART, ET C'EST CE QU'UN
+       BANC DE RENDU NE POURRAIT JAMAIS VOIR : à l'image, une rotation ratée
+       ressemble à une rotation. Elle se voit ICI, et nulle part ailleurs. */
+    let spins = 0, closed = 0, dirsSeen = new Set();
+    for (const r of nerv) {
+      for (let n = 0; n < 6; n++) {
+        const t0 = n * C.STAR_NERVE_PERIOD_MS;
+        const tic = Q.starNerveTic(r, t0 - (Q.starNerveTic(r, t0) ? 0 : 0));
+        if (!tic || !tic.spin) continue;
+        spins++;
+        const seq = [];
+        for (let kk = 0; kk < 1; kk += 0.02) seq.push(Q.starNerveDir(r, { k: kk, spin: true, n }));
+        seq.forEach(d => dirsSeen.add(d));
+        if (seq[0] === Q.STAR_NERVE_DIRS[0]) closed++;
+      }
+    }
+    ok("⚠️ un tour sur soi-même part face au joueur", spins > 0 && closed === spins,
+       `${spins} tours mesurés`);
+    ok("…et il passe bien par les quatre directions", dirsSeen.size === 4,
+       `${dirsSeen.size} directions`);
+    /* Le balancement, lui, ne doit JAMAIS regarder le nord ou le sud : c'est un
+       gauche-droite, et s'il passait par le dos on ne le distinguerait plus d'un
+       tour raté. */
+    const sway = [];
+    for (let kk = 0; kk < 1; kk += 0.01) sway.push(Q.starNerveDir(7, { k: kk, spin: false, n: 0 }));
+    ok("⚠️ le balancement reste gauche-droite", sway.every(d => d === 2 || d === 3),
+       `${new Set(sway).size} directions employées`);
+    ok("…et il change de côté plusieurs fois", new Set(sway).size === 2);
+  }
+
+  /* ── CE QU'ILS DISENT : LE CONTRÔLE QUI TIENT LE THÈME. */
+  {
+    /* ⚠️ `S` est chargé dans la section 9 des textes, dont la portée s'arrête là :
+       on le recharge ici plutôt que de le hisser au module. Le cache d'`import`
+       rend la seconde lecture gratuite, et une variable de haut niveau de plus
+       aurait donné deux endroits d'où lire les textes. */
+    const S2 = await import(pathToFileURL(path.join(tmp, "fermeStrings.js")).href);
+    const FR = S2.FERME_STR.fr.star.warn, EN = S2.FERME_STR.en.star.warn;
+    ok("les deux langues ont le même nombre de rumeurs", FR.rumor.length === EN.rumor.length, `${FR.rumor.length}`);
+    ok("…et le même nombre d'indices", FR.hint.length === EN.hint.length, `${FR.hint.length}`);
+    /* ⚠️⚠️ AUCUNE PHRASE DE PNJ NE PEUT NOMMER L'ÉTOILE NI DIRE OÙ ALLER. C'est
+       la moitié du thème qui survit au 455, et rien d'autre que ce contrôle ne la
+       protège : dans six mois, une rumeur « va voir au nord du champ » aurait
+       l'air d'une bonne idée et démolirait le chantier en une ligne.
+       ⚠️ LA LISTE EST CELLE DES MOTS INTERDITS, ET ELLE PUBLIE COMBIEN DE PHRASES
+       ELLE A LUES : un banc qui compte des occurrences doit dire son dénominateur
+       (441), sinon « 0 faute » peut vouloir dire « 0 phrase lue ». */
+/* ⚠️⚠️ CE QUI EST INTERDIT N'EST PAS LE MOT « ÉTOILE », ET LE BANC S'EST TROMPÉ
+       LÀ-DESSUS À SA PREMIÈRE ÉCRITURE. Il bannissait le nom commun, donc il
+       refusait « j'ai vu des étoiles bizarres dans le ciel » — c'est-à-dire très
+       exactement la phrase que Guillaume a demandée, et une phrase qui ne trahit
+       RIEN : des étoiles dans le ciel, tout le monde en voit.
+       ⚠️ CE QUI EST SECRET EST **LA CRÉATURE** ET **LE CHEMIN**. On bannit donc
+       deux familles : les noms de ce que personne ne doit connaître (la petite
+       étoile, le cratère, le sillon, le navire), et les tournures qui ENVOIENT
+       quelque part — parce qu'un habitant qui dit « va voir au nord du champ »
+       remplace le familier-guide du 449 et démolit la meilleure page du chantier. */
+    const BANNED = [
+      "petite étoile", "little star", "cratère", "crater", "sillon", "furrow",
+      "quête", "quest", "bateau des étoiles", "star boat", "navire",
+    ];
+    const DIRECTIVE = [
+      " va voir", " va au", " va à ", " vas-y", " cherche", " trouve", " il faut aller",
+      " go and", " go to", " look for", " find the", " you must go",
+    ];
+    const lines = [...FR.rumor, ...FR.hint, ...EN.rumor, ...EN.hint];
+    const pad = (l) => " " + l.toLowerCase();
+    const guilty = lines.filter(l => BANNED.some(w => l.toLowerCase().includes(w)));
+    ok("⚠️⚠️ aucune phrase d'habitant ne nomme ce qui est secret",
+       guilty.length === 0, guilty[0] || `${lines.length} phrases lues, ${BANNED.length} mots interdits`);
+    const bossy = lines.filter(l => DIRECTIVE.some(w => pad(l).includes(w)));
+    ok("⚠️⚠️ …et aucune n'envoie le joueur quelque part",
+       bossy.length === 0, bossy[0] || `${lines.length} phrases lues, ${DIRECTIVE.length} tournures interdites`);
+    ok("…et les deux contrôles attrapent bien ce qu'ils cherchent",
+       BANNED.some(w => "regarde la petite étoile".includes(w))
+       && DIRECTIVE.some(w => " il faut aller au nord du champ".includes(w)));
+    ok("⚠️ chaque PNJ nerveux a bien quelque chose à dire",
+       C.VISITOR_ROSTER.map((_, i) => i).filter(Q.starNerveHas)
+        .every(r => Q.starNerveSay(r, FR.rumor.length, FR.hint.length)));
+    ok("…et un PNJ calme n'a rien à dire",
+       C.VISITOR_ROSTER.map((_, i) => i).filter(r => !Q.starNerveHas(r))
+        .every(r => !Q.starNerveSay(r, FR.rumor.length, FR.hint.length)));
+    const says = C.VISITOR_ROSTER.map((_, i) => i).filter(Q.starNerveHas)
+      .map(r => Q.starNerveSay(r, FR.rumor.length, FR.hint.length));
+    const hints = says.filter(x => x.pool === "hint").length;
+    ok("⚠️ une minorité de nerveux donne un vrai indice",
+       hints > 0 && hints < says.length, `${hints}/${says.length} indices`);
+    ok("…et tous les index tombent dans leur table",
+       says.every(x => x.idx >= 0 && x.idx < (x.pool === "hint" ? FR.hint.length : FR.rumor.length)));
+  }
+
+  /* ── LE CADRAGE DE LA FERME. */
+  {
+    const hit = { x: C.STAR_FURROW_X, y: C.STAR_FURROW_Y };
+    /* ⚠️⚠️ ON BALAIE LES FENÊTRES RÉELLES, DU TÉLÉPHONE AU GRAND ÉCRAN, et on
+       rejoue le CLAMP de la caméra (elle ne sort pas de la carte) : sans lui, le
+       contrôle mesurerait un point de vue que le jeu n'atteint jamais près du bord
+       nord — et le sillon est à dix-sept cases du bord nord. C'est le défaut du
+       banc qui juge sa propre maquette (439), pris à l'avance. */
+    let worstIn = null, cases = 0;
+    for (const W of [720, 900, 1280, 1600, 1920, 2560])
+      for (const H of [480, 540, 720, 900, 1080, 1440]) {
+        const vw = W / 3, vh = H / 3;                       // ZOOM = 3 à la ferme
+        const halfDiag = Math.hypot(vw, vh) / 2 / C.TILE;
+        const v = Q.starCamTarget("farm", hit, halfDiag);
+        /* le clamp de `getCam`, en cases */
+        const cx = Math.max(vw / 2 / C.TILE, Math.min(C.MAP_W - vw / 2 / C.TILE, v.x));
+        const cy = Math.max(vh / 2 / C.TILE, Math.min(C.MAP_H - vh / 2 / C.TILE, v.y));
+        cases++;
+        const inFrame = Math.abs(hit.x - cx) <= vw / 2 / C.TILE && Math.abs(hit.y - cy) <= vh / 2 / C.TILE;
+        if (inFrame && !worstIn) worstIn = `${W}×${H}`;
+      }
+    ok("⚠️⚠️ à la ferme, le point d'impact est HORS CADRE sur toutes les fenêtres",
+       !worstIn, worstIn ? `visible en ${worstIn}` : `${cases} formats balayés`);
+    /* ⚠️ ET LE POINT DE VUE EST EN AMONT, PAS N'IMPORTE OÙ : il doit se trouver du
+       côté d'où vient la comète, sinon elle entre par le bord opposé et on la voit
+       s'ÉLOIGNER — la faute exacte du 445, corrigée au 448, qu'un déplacement de
+       caméra pouvait rejouer sans que rien ne lève. */
+    const a = Q.starFallAngle("farm");
+    const v = Q.starCamTarget("farm", hit, 12);
+    const dot = (hit.x - v.x) * Math.cos(a) + (hit.y - v.y) * Math.sin(a);
+    ok("⚠️ …et il est en AMONT de la course, jamais en aval", dot > 0, `produit scalaire ${dot.toFixed(1)}`);
+    ok("la ville, elle, garde sa scène (la caméra vise le cratère)",
+       (() => { const c = Q.starCamTarget("town", { x: 50, y: 60 }, 12); return c.x === 50 && c.y === 60; })());
+    ok("…et la ville ne fractionne pas la comète", !Q.starFragmentsOn("town") && Q.starFragmentsOn("farm"));
+  }
+
+  /* ── LA FRACTURE. */
+  {
+    ok("avant la fracture il n'y a qu'un caillou", Q.starFragments(Q.STAR_FRAG_AT - 0.01).length === 1);
+    ok("…après, il y en a plusieurs", Q.starFragments(Q.STAR_FRAG_AT + 0.01).length === Q.STAR_FRAG_N);
+    /* ⚠️ L'ÉCART DOIT CROÎTRE : des morceaux qui se séparent puis se rapprochent
+       se lisent comme un défaut d'affichage. On balaie plutôt que de tester deux
+       instants (leçon 449). */
+    let mono = true, prev = 0;
+    for (let k = Q.STAR_FRAG_AT + 0.001; k <= 1; k += 0.005) {
+      const f = Q.starFragments(k);
+      const spread = Math.max(...f.map(x => Math.abs(x.side)));
+      if (spread < prev - 1e-9) mono = false;
+      prev = spread;
+    }
+    ok("⚠️ les éclats ne font que s'écarter, jamais se rapprocher", mono,
+       `écart final ${prev.toFixed(2)} rayons`);
+    ok("…et le premier morceau reste la TÊTE (jamais décalée)",
+       Q.starFragments(1)[0].along === 0 && Q.starFragments(1)[0].side === 0 && Q.starFragments(1)[0].scale === 1);
+    ok("…et les éclats sont plus petits qu'elle",
+       Q.starFragments(1).slice(1).every(f => f.scale > 0 && f.scale < 1));
+    ok("…et ils sont EN RETARD, jamais devant",
+       Q.starFragments(1).slice(1).every(f => f.along > 0));
+    ok("⚠️ …et ils partent des deux côtés", new Set(Q.starFragments(1).slice(1).map(f => Math.sign(f.side))).size === 2);
+    /* La fracture doit tomber DANS ce que le joueur voit : c'est la leçon 454
+       (une grandeur juste mesurée là où personne ne regarde) appliquée à un
+       nouveau réglage, le jour même où on le pose. */
+    /* ⚠️⚠️ ET IL A ÉCHOUÉ À SA PREMIÈRE EXÉCUTION, sur un `0.34` réglé à la main :
+       la comète n'entre dans le cadre qu'à 0,84 du temps de vol, donc le caillou se
+       fendait hors de l'écran et l'on ne voyait arriver que trois morceaux déjà
+       séparés. Septième forme du défaut de banc (454), repayée en un zip.
+       ⚠️ LES DEUX BORNES COMPTENT : trop tôt, on ne voit pas la fracture ; trop
+       tard, on ne voit pas les morceaux se séparer avant le contact. */
+    ok("⚠️⚠️ la fracture a lieu pendant que la comète est À L'ÉCRAN",
+       Q.STAR_FRAG_AT > Q.starFallOnScreenK() && Q.STAR_FRAG_AT < 0.96,
+       `fracture à ${Q.STAR_FRAG_AT.toFixed(3)}, entrée en cadre à ${Q.starFallOnScreenK().toFixed(3)}`);
+    ok("…et il lui reste assez de vol pour qu'on la voie se séparer",
+       (1 - Q.STAR_FRAG_AT) * Q.STAR_FALL_FLIGHT_MS > 500,
+       `${Math.round((1 - Q.STAR_FRAG_AT) * Q.STAR_FALL_FLIGHT_MS)} ms après la fracture`);
+    /* ⚠️ `starFallVisibleMs` DOIT RESTER D'ACCORD AVEC `starFallOnScreenK` : elles
+       partagent désormais une écriture, et ce contrôle est ce qui empêchera de les
+       redédoubler « pour aller plus vite » (leçon 449, une jointure jamais deux). */
+    ok("…et les deux lectures de « depuis quand la voit-on » s'accordent",
+       Math.abs(Q.starFallVisibleMs() - (1 - Q.starFallOnScreenK()) * Q.STAR_FALL_FLIGHT_MS) < 1);
+  }
+
+  /* ── LE « ! » DE L'IMPACT. */
+  {
+    ok("⚠️ le « ! » tombe À L'INSTANT du contact, pas avant",
+       Q.starBang("fall", Q.STAR_FALL_IMPACT_MS - 1) === 0 && Q.starBang("fall", Q.STAR_FALL_IMPACT_MS) > 0);
+    ok("…et il dure exactement deux secondes",
+       Q.starBang("fall", Q.STAR_FALL_IMPACT_MS + C.STAR_BANG_MS - 1) > 0
+       && Q.starBang("fall", Q.STAR_FALL_IMPACT_MS + C.STAR_BANG_MS) === 0,
+       `${C.STAR_BANG_MS} ms`);
+    ok("⚠️ …et il ne se déclenche sur AUCUNE autre scène",
+       ["turn", "end", "card", "warn", null].every(k => Q.starBang(k, Q.STAR_FALL_IMPACT_MS + 10) === 0));
+    /* ⚠️ IL TOMBE AVEC LA SECOUSSE ET AVEC LE DÉCOR, parce que les trois lisent le
+       MÊME `STAR_FALL_IMPACT_MS` — une jointure, jamais trois listes (449). */
+    ok("…et il coïncide avec l'apparition du décor d'impact",
+       Q.starImpactLanded("fall", Q.STAR_FALL_IMPACT_MS) && !Q.starImpactLanded("fall", Q.STAR_FALL_IMPACT_MS - 1));
   }
 }
 

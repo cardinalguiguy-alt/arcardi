@@ -184,10 +184,14 @@ console.log(`  morceaux        : ${C.STAR_SHIP_ORDER.join(", ")}\n`);
   /* ⚠️ DANS LES DEUX SENS : les quatre éclats ET le chant doivent tous porter un
      morceau. Un éclat qui ne bâtirait rien serait une trouvaille sans effet
      visible — c'est-à-dire le défaut que cette passe corrige. */
+  /* ⚠️ ZIP 453 — `STAR_SHARD_IDS` A ÉTÉ SUPPRIMÉE (le second compte). Ce qui
+     doit bâtir un morceau, c'est tout lieu qui donne quelque chose de MATÉRIEL :
+     les cinq trouvailles portées par `STAR_SHIP_PARTS`. Le sens du contrôle ne
+     change pas — aucune trouvaille sans effet visible sur la cale — mais il ne
+     s'appuie plus sur une liste parallèle. */
   const carried = new Set(Q.STAR_SHIP_PARTS.map(p => p.site));
-  const uncarried = [...Q.STAR_SHARD_IDS, "song"].filter(id => !carried.has(id));
-  ok(uncarried.length === 0, "chaque éclat (et le chant) bâtit un morceau",
-     `${Q.STAR_SHARD_IDS.length + 1} lus, ${uncarried.length} sans effet : ${uncarried.join(",") || "—"}`);
+  ok(carried.size === Q.STAR_SHIP_TOTAL, "chaque morceau vient d'un lieu DISTINCT",
+     `${carried.size} lieux pour ${Q.STAR_SHIP_TOTAL} morceaux`);
   ok(Q.STAR_SHIP_TOTAL === N, "STAR_SHIP_TOTAL est dérivé, pas écrit", `${Q.STAR_SHIP_TOTAL}`);
 }
 
@@ -197,9 +201,11 @@ console.log(`  morceaux        : ${C.STAR_SHIP_ORDER.join(", ")}\n`);
 ok(C.STAR_SHIP_BLOCK_W < C.STAR_SHIP_DRAW_W && C.STAR_SHIP_BLOCK_H < C.STAR_SHIP_DRAW_H,
    "l'emprise qui BLOQUE est plus petite que ce qu'on PEINT",
    `bloque ${C.STAR_SHIP_BLOCK_W}×${C.STAR_SHIP_BLOCK_H}, peint ${C.STAR_SHIP_DRAW_W}×${C.STAR_SHIP_DRAW_H}`);
-ok(C.STAR_SHIP_NEAR_R > C.STAR_SHIP_BLOCK_W / 2,
-   "on peut se tenir à portée de lecture sans être dans la coque",
-   `portée ${C.STAR_SHIP_NEAR_R}, demi-coque ${C.STAR_SHIP_BLOCK_W / 2}`);
+/* ⚠️ ZIP 453 — LE CONTRÔLE SUR `STAR_SHIP_NEAR_R` A ÉTÉ SUPPRIMÉ AVEC ELLE. Il
+   comparait deux constantes dont AUCUN code de jeu ne lisait la première : ce
+   banc mesurait donc sa propre lecture, ce qui est la définition d'un contrôle
+   qui ne peut pas échouer (441). Voir la note de suppression dans
+   `fermeConstants.js`. */
 
 /* ═══════════════════════════════════════════════════════════════════════════
    3. LES BORDS ET LA PROPRETÉ, SUR LES DEUX EXTRÊMES ET UN INTERMÉDIAIRE.
@@ -251,7 +257,12 @@ ok(C.STAR_SHIP_NEAR_R > C.STAR_SHIP_BLOCK_W / 2,
    pixel le plus bleu du reste du dessin (l'eau des sabords, l'étoile de la voile)
    plafonne à 32. */
 {
-  const A = shot(ALL, { t: 0 }), dA = px(A);
+  /* ⚠️⚠️ ZIP 454 — `ghosts: true` EST OBLIGATOIRE ICI, ET SON ABSENCE A FAIT
+     ÉCHOUER CE BLOC À LA PREMIÈRE EXÉCUTION — ce qui est exactement ce qu'on
+     attend d'un banc. Les fantômes ne se peignent plus que le plan déplié (demande
+     de Guillaume) : un banc qui mesure des fantômes doit donc DIRE qu'il déplie le
+     plan, sinon il mesure une image où il n'y en a aucun. */
+  const A = shot(ALL, { t: 0, ghosts: true }), dA = px(A);
   const isGhost = (d, k) => d[k * 4 + 3] > 150
                          && d[k * 4 + 2] - d[k * 4] > 45 && d[k * 4 + 1] - d[k * 4] > 25;
   let checked = 0;
@@ -260,7 +271,7 @@ ok(C.STAR_SHIP_NEAR_R > C.STAR_SHIP_BLOCK_W / 2,
        occultants dessinés dans le même ordre, donc leur différence EST la pièce i.
        Et dans `B`, i est le SEUL fantôme — tout pixel de teinte fantôme lui
        appartient. */
-    const B = shot(C.STAR_SHIP_ORDER.map((_, j) => j !== i), { t: 0 }), dB = px(B);
+    const B = shot(C.STAR_SHIP_ORDER.map((_, j) => j !== i), { t: 0, ghosts: true }), dB = px(B);
     let ghost = 0, ghostOutside = 0;
     for (let k = 0; k < A.width * A.height; k++)
       if (isGhost(dB, k)) { ghost++; if (dA[k * 4 + 3] <= 150) ghostOutside++; }
@@ -331,6 +342,50 @@ ok(C.STAR_SHIP_NEAR_R > C.STAR_SHIP_BLOCK_W / 2,
 {
   const cale = count(shot(NONE, { t: 0 }), 150);
   ok(cale > 900, "à zéro morceau il y a un chantier, pas un terrain vague", `${cale} px de matière`);
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 454 — PAS DE PLAN, PAS DE FANTÔME. LE CONTRÔLE QUI MANQUAIT.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ CE BANC A REGARDÉ CE NAVIRE SOUS TRENTE-DEUX MASQUES PENDANT TROIS ZIPS
+     SANS JAMAIS REMARQUER QUE LES FANTÔMES ÉTAIENT LÀ DÈS LE PREMIER JOUR. Il
+     mesurait leur forme, leur damier, leur débordement, leur pulsation — jamais
+     leur DROIT D'EXISTER. C'est le cinquième visage du défaut de banc (« il mesure
+     ce qu'une chose EST et jamais QUAND elle est », 448) sur un autre dessin, et
+     c'est Guillaume qui l'a vu, pas nous.
+     ⚠️ ON MESURE DONC LA CONDITION : sans `ghosts`, aucun pixel de teinte fantôme,
+     et le chantier reste franchement plus léger qu'avec. Deux nombres, et le second
+     empêche le premier de passer au vert sur une image vide. */
+  const ghostHue = (cv) => { const d = px(cv); let n = 0;
+    for (let k = 0; k < cv.width * cv.height; k++)
+      if (d[k * 4 + 3] > 150 && d[k * 4 + 2] - d[k * 4] > 45 && d[k * 4 + 1] - d[k * 4] > 25) n++;
+    return n; };
+  const sansPlan = ghostHue(shot(NONE, { t: 0 }));
+  const avecPlan = ghostHue(shot(NONE, { t: 0, ghosts: true }));
+  ok(sansPlan === 0, "⚠️⚠️ sans les plans, la cale ne montre AUCUN fantôme",
+     `${sansPlan} px de teinte fantôme`);
+  ok(avecPlan > 400, "…et le plan déplié les fait tous apparaître d'un coup",
+     `${avecPlan} px de teinte fantôme`);
+  const caleGhost = count(shot(NONE, { t: 0, ghosts: true }), 150);
+  ok(caleGhost > cale * 1.5, "…ce qui se voit aussi à la quantité de dessin",
+     `${cale} px sans plan → ${caleGhost} px avec (×${(caleGhost / cale).toFixed(2)})`);
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 453 — LA CALE VIDE : IL EST PARTI, ET ÇA DOIT SE LIRE COMME ÇA.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ TROIS ÉTATS SE RESSEMBLENT ASSEZ POUR QU'ON LES CONFONDE, et le banc
+     doit tenir les trois séparés : « rien n'a commencé » (la carcasse + cinq
+     fantômes), « il est fini » (les cinq morceaux), « il est en mer » (le ber et
+     les tins, RIEN d'autre). Si la cale vide ressemblait au chantier de la
+     première nuit, le joueur lirait « le bateau a été défait » — l'inverse exact
+     de ce qui vient de se passer.
+     ⚠️ ON MESURE DEUX CHOSES, PAS UNE : qu'il reste quelque chose (une cale, pas
+     un trou dans le décor) et qu'il en reste FRANCHEMENT MOINS que le chantier
+     (donc plus de quille, plus de membrures, plus de fantôme). */
+  const parti = count(shot(NONE, { t: 0, gone: true }), 150);
+  ok(parti > 200, "la cale vide reste un lieu, pas un trou dans le décor", `${parti} px de matière`);
+  ok(parti < cale * 0.55, "…et elle ne se confond pas avec le chantier du début",
+     `cale vide ${parti} px contre chantier ${cale} px (${((parti / cale) * 100).toFixed(0)} %)`);
+  const partiFull = count(shot(ALL, { t: 0, gone: true }), 150);
+  ok(partiFull === parti, "⚠️ …et elle ne dépend PAS des morceaux trouvés",
+     `${partiFull} px avec les cinq morceaux, ${parti} px sans — le bateau est parti avec`);
   /* ⚠️ L'ÉCHELLE CONTRE LE FERMIER, ET PAS CONTRE D'AUTRES DÉCORS (429) : un objet
      deux fois trop grand au milieu d'objets deux fois trop grands a l'air juste.
      Un fermier fait 24 px de haut ; « un grand navire » doit faire au moins trois
@@ -350,7 +405,9 @@ ok(C.STAR_SHIP_NEAR_R > C.STAR_SHIP_BLOCK_W / 2,
      fantôme et la lueur), et la juger sur un seul fond, c'est ne pas voir la
      moitié des défauts. Le fond CLAIR est celui qui a fait disparaître les
      cierges du chœur au 441. */
-  const cols = N + 1, W = cols * (BOX_W + 10) + 10, H = (BOX_H + 26) * 2 + 10;
+  /* ⚠️ ZIP 453 — UNE COLONNE DE PLUS : LA CALE VIDE. Un état qu'on ne peint
+     jamais sur la planche est un état qu'on ne regarde jamais. */
+  const cols = N + 2, W = cols * (BOX_W + 10) + 10, H = (BOX_H + 26) * 2 + 10;
   const sur = makeCanvas(W, H), g = sur.ctx;
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const night = y < H / 2;
@@ -360,12 +417,13 @@ ok(C.STAR_SHIP_NEAR_R > C.STAR_SHIP_BLOCK_W / 2,
       : `rgb(${(122 + v * 12) | 0},${(150 + v * 14) | 0},${(96 + v * 10) | 0})`;
     g.fillRect(x, y, 1, 1);
   }
-  for (let n = 0; n <= N; n++) {
-    const parts = C.STAR_SHIP_ORDER.map((_, i) => i < n);
+  for (let n = 0; n <= N + 1; n++) {
+    const gone = n > N;                        // la dernière colonne : il a pris la mer
+    const parts = C.STAR_SHIP_ORDER.map((_, i) => i < Math.min(n, N));
     const cx = 10 + n * (BOX_W + 10) + BOX_W / 2;
     for (const [row, night] of [[0, true], [1, false]]) {
       const cy = 8 + row * (BOX_H + 26) + BOX_H - 11;
-      S.drawStarShip(g, cx, cy, T, parts, 1500, { t: 1500, night });
+      S.drawStarShip(g, cx, cy, T, parts, 1500, { t: 1500, night, gone });
     }
   }
   /* Le repère d'échelle : un fermier, à côté du navire complet. */
@@ -375,7 +433,67 @@ ok(C.STAR_SHIP_NEAR_R > C.STAR_SHIP_BLOCK_W / 2,
                 8 + row * (BOX_H + 26) + BOX_H - 34, 16, 24);
   const z = scale(sur.px, W, H, 2);
   writePNG(path.join(OUT, "navire.png"), z.px, z.W, z.H);
-  console.log(`\n  planche : tools/out/navire.png (${z.W}×${z.H}, ×2) — zéro à cinq morceaux, nuit puis jour`);
+  console.log(`\n  planche : tools/out/navire.png (${z.W}×${z.H}, ×2) — zéro à cinq morceaux PUIS la cale vide, nuit puis jour`);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   7. ZIP 454 — LA FEUILLE DE PLAN. UN DESSIN NEUF A UN BANC LE JOUR DE SA
+      NAISSANCE, PAS TROIS ZIPS PLUS TARD.
+   ═══════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ C'EST LA LEÇON DU 445 PRISE À L'ENDROIT : la comète est restée huit lignes
+   dans une closure pendant trois zips parce qu'aucun banc ne pouvait l'appeler,
+   et Guillaume l'a résumée en « trop ridicule ». Le plan est un dessin de la même
+   famille — il vit dans un panneau, l'endroit le plus facile du monde où laisser
+   vieillir quelque chose. Il a donc trois contrôles et une planche dès aujourd'hui.
+   ⚠️ ET IL MESURE CE QUI COMPTE VRAIMENT ICI : qu'un plan à trois pièces posées ne
+   ressemble PAS à un plan vierge. C'est la seule promesse que cette feuille fait
+   au joueur — « voilà où on en est » — et c'est la seule qu'on puisse casser sans
+   s'en apercevoir. */
+{
+  console.log("\n7. LA FEUILLE DE PLAN (454)\n");
+  const PW = 288, PH = 192;
+  const sheet = (n) => {
+    const sur = makeCanvas(PW, PH);
+    S.drawStarPlan(sur.ctx, 0, 0, PW, PH, C.STAR_SHIP_ORDER.map((_, i) => i < n), 0);
+    return sur;
+  };
+  /* ⚠️ « ENCRE » ET PAS « MATIÈRE » : sur une feuille opaque, tout est opaque. Ce
+     qui distingue le bateau du papier est sa CLARTÉ — on compte donc les pixels
+     franchement plus clairs que le fond, ce qui survit à un changement de bleu. */
+  const inkOf = (cv) => { const d = cv.px; let n = 0;
+    for (let i = 0; i < PW * PH; i++) {
+      const l = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+      if (l > 90) n++;
+    }
+    return n; };
+  const vide = inkOf(sheet(0)), plein = inkOf(sheet(N));
+  ok(vide > 600, "une feuille vierge montre déjà le bateau en fantôme", `${vide} px d'encre`);
+  ok(plein > vide * 1.15, "⚠️ un bateau avancé se lit franchement plus dense qu'un plan vierge",
+     `${vide} px → ${plein} px (×${(plein / vide).toFixed(2)})`);
+  /* ⚠️ ET LA PROGRESSION EST MONOTONE : chaque pièce posée AJOUTE de l'encre. Sans
+     ce balayage, une pièce qui en effacerait une autre passerait inaperçue — c'est
+     l'invariant que ce banc mesure déjà sur le navire lui-même (32 masques), et il
+     n'y a aucune raison que la feuille y échappe. */
+  let mono = true, prev = -1;
+  for (let n = 0; n <= N; n++) { const v = inkOf(sheet(n)); if (v < prev - 40) mono = false; prev = v; }
+  ok(mono, "…et poser une pièce n'en efface jamais une autre sur le plan");
+  /* La feuille ne doit pas déborder : elle est peinte dans un rectangle donné, et
+     un panneau React la posera à des tailles variables. */
+  {
+    const sur = makeCanvas(PW + 40, PH + 40);
+    S.drawStarPlan(sur.ctx, 20, 20, PW, PH, C.STAR_SHIP_ORDER.map(() => true), 0);
+    const d = sur.px; let outside = 0;
+    for (let y = 0; y < PH + 40; y++) for (let x = 0; x < PW + 40; x++)
+      if ((x < 20 || y < 20 || x >= 20 + PW || y >= 20 + PH) && d[(y * (PW + 40) + x) * 4 + 3] > 8) outside++;
+    ok(outside === 0, "⚠️ le plan tient dans le rectangle qu'on lui donne", `${outside} px dehors`);
+  }
+  const board = makeCanvas((PW + 12) * 3 + 12, PH + 24);
+  board.ctx.fillStyle = "#20242c"; board.ctx.fillRect(0, 0, board.width, board.height);
+  [0, 3, N].forEach((n, k) => S.drawStarPlan(board.ctx, 12 + k * (PW + 12), 12, PW, PH,
+                                             C.STAR_SHIP_ORDER.map((_, i) => i < n), 0));
+  const zp = scale(board.px, board.width, board.height, 2);
+  writePNG(path.join(OUT, "navire-plan.png"), zp.px, zp.W, zp.H);
+  console.log(`\n  planche : tools/out/navire-plan.png (${zp.W}×${zp.H}, ×2) — zéro, trois et cinq pièces`);
 }
 
 console.log(`\n${fails ? `❌ ${fails} contrôle(s) en échec` : "✅ tout est vert"}\n`);

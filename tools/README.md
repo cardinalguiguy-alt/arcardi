@@ -482,7 +482,48 @@ donnait pas, d'une rangée.
 
 ---
 
-## `render-etoile.mjs` — les dessins de la quête de l'étoile (444, cratère 446, comète 448)
+## `render-etoile.mjs` — les dessins de la quête de l'étoile (444, cratère 446, comète 448, sillon 454, alerte 455)
+
+### ⚠️⚠️ ZIP 455 — LA BULLE « ! » EST REGARDÉE DÈS SA PREMIÈRE LIGNE, ET LE BANC S'EST TROMPÉ DEUX FOIS
+
+Sections **9** et **10**, treize contrôles. Le dessin est neuf (`drawEmoteBubble`, `starFragments`)
+et il a ses mesures **le jour où il est écrit** — c'est la leçon du sillon prise à l'endroit : un
+dessin qu'aucun banc n'appelle reste au niveau du jour où il a été écrit, et le sillon a mis dix
+zips à s'en apercevoir.
+
+⚠️⚠️ **CE QU'ON MESURE EST CE QU'UNE CAPTURE NE MONTRE PAS :** que le point du « ! » est **séparé**
+du fût par une rangée pleine (collés, à six pixels de haut, un « ! » devient un « l ») · que la
+bulle **sursaute** à l'apparition au lieu de grandir régulièrement (une bulle qui s'ouvre
+proprement se lit comme une interface, un sursaut se lit comme une réaction) · qu'elle **disparaît
+pour de bon** et ne laisse pas de fantôme à 1 % · et que les morceaux de la comète **s'écartent**
+en travers de la course entre deux instants.
+
+⚠️⚠️ **ET IL A FALLU CORRIGER LE BANC DEUX FOIS AVANT DE CROIRE LE DESSIN** — *un banc de rendu se
+vérifie aussi* (§10 de `CLAUDE.md`), et les deux fautes sont instructives :
+1. **il mesurait son propre fond.** La sonde peignait « de l'herbe, comme dans le jeu » (#2a5c2a) :
+   ses trois composantes sont sous le seuil d'encre, donc il annonçait « 48 rangées encrées » sur
+   une image de 48 px de haut. **Le fond d'une mesure n'est pas un décor, c'est un réactif** — il
+   doit être ce que le dessin n'est jamais (ici, du bleu pur) ;
+2. **il mesurait le cerne en croyant mesurer le glyphe.** Le contour de la bulle est de la même
+   encre que le « ! » et traverse chaque rangée : le trou qu'on cherche était bouché, et le banc
+   aurait été **vert sur un point collé au fût**. On trie par LARGEUR (le cerne traverse la bande,
+   le fût fait trois pixels).
+
+⚠️ **UN DESSIN A ÉTÉ SUPPRIMÉ PAR CE BANC** : un « ? » écrit « parce que la famille en aura
+besoin ». Personne ne l'appelait, donc seul le banc le regardait, donc il était faux — la planche a
+montré une tache. Leçon 453, exactement.
+
+⚠️⚠️ **ZIP 454 — LE SILLON EST LE PREMIER DÉCOR DE LA FERME QU'UN BANC REGARDE VRAIMENT**, et il a
+fallu qu'il le devienne pour qu'on s'aperçoive qu'il était PLAT depuis dix zips. Deux contrôles le
+regardaient depuis le 444 (le bord du haut, « les deux états sont le même sillon ») et **aucun ne
+mesurait le relief** — à côté d'un cratère qui en prenait sept. Section **5 bis**, six contrôles :
+l'écart-type de luminance (une terre ÉCLAIRÉE, pas coloriée), l'élargissement d'est en ouest (une
+COURSE, pas une tranchée), l'accord entre l'enfoncement et le dessin, la profondeur annoncée, le
+signe du bourrelet, et le fait que rien ne touche le bord de la toile.
+⚠️ **Un contrôle a dû CHANGER DE GRANDEUR** : « les deux états ne sont pas identiques » mesurait un
+écart de silhouette qui a cessé d'exister le jour où les deux états sont sortis du même champ de
+hauteur. Il ne mesurait plus rien ; il mesure maintenant la COULEUR (terre contre herbe), qui est ce
+qui change vraiment.
 
 `node tools/render-etoile.mjs` → `etoile-planche.png` · `etoile-cratere.png` (446 : **trois
 états du cratère côte à côte** — fumant, refroidi, bassin de verre — parce que ce qui a changé
@@ -602,7 +643,41 @@ touche le sol — le défaut même de ce zip — leur est **totalement invisible
 `verify-quete` qui le tient désormais (cinq contrôles purs sur `starImpactLanded` et l'azimut).
 *Un banc de rendu ne peut pas voir un défaut de temps.*
 
-## `verify-quete.mjs` — 273 contrôles, 273/273 (444, étendu aux 445, 446, 448 et 449)
+## `verify-quete.mjs` — 396 contrôles, 396/396 (444, étendu aux 445, 446, 448, 449, 453, 454 et 455)
+
+### ⚠️⚠️⚠️ ZIP 455 — LE TAMPON D'ANNONCE : IL BALAIE, IL NE DONNE PAS D'EXEMPLES
+
+Section **9**, cinquante contrôles, et trois d'entre eux ont trouvé un vrai défaut à la première
+exécution. Ce qui est mesuré est ce que personne ne peut voir à l'écran :
+
+- **LA DATE.** « La nuit qui suit » a deux lectures qui donnent le même code neuf fois sur dix et un
+  jeu complètement différent la dixième (accepter à 20 h). On balaie donc **95 heures d'annonce**
+  d'une journée entière et on vérifie que chacune finit par produire une chute, jamais avant le
+  plancher de 5 minutes. *Un contrôle de cas ne vaut pas un invariant* (449).
+- **LA VALLÉE.** À l'écran, « ils s'agitent » et « ils s'agitent tous dans la même image » se
+  ressemblent beaucoup — et le second est une chorégraphie, c'est-à-dire le contraire d'une foule
+  inquiète. On mesure la part de nerveux (**13/31**), le pire simultané (**5/13**), le taux
+  d'occupation (**24 %**), et qu'un tour sur soi-même **part face au joueur et passe par les quatre
+  directions** — ce qu'un banc de rendu ne pourrait jamais voir, puisqu'à l'image une rotation ratée
+  ressemble à une rotation.
+- ⚠️⚠️ **LE THÈME.** Deux listes de mots interdits balayées sur les 28 phrases d'habitants : ce qui
+  est secret (la petite étoile, le cratère, le sillon, le navire) et ce qui ENVOIE quelque part
+  (« va voir », « cherche », « trouve », « go to », « look for »). **Rien d'autre que ce contrôle ne
+  protège la moitié du thème qui survit au 455** — dans six mois, une rumeur « va voir au nord du
+  champ » aurait l'air d'une bonne idée. ⚠️ Il s'est trompé lui-même à sa première écriture en
+  bannissant le mot « étoile » : il refusait « j'ai vu des étoiles bizarres dans le ciel », qui est
+  la phrase que Guillaume a demandée et qui ne trahit rien. *Ce qui est secret est la CRÉATURE et le
+  CHEMIN, pas le nom commun.*
+- **LE CADRAGE.** 36 formats de fenêtre balayés, **clamp de caméra rejoué**, et l'impact doit être
+  hors cadre sur tous — sinon le banc jugerait un point de vue que le jeu n'atteint jamais près du
+  bord nord (le sillon est à 17 cases du bord). Plus le produit scalaire : le point de vue est **en
+  amont** de la course, jamais en aval (sinon on voit la comète s'éloigner — faute du 445).
+- **LA FRACTURE**, et c'est elle qui a échoué : `STAR_FRAG_AT = 0,34` réglé à la main, contre une
+  entrée en cadre à **0,84**. Le caillou se fendait hors de l'écran. Septième forme du défaut de
+  banc (454), repayée en un zip — la constante est maintenant **dérivée** de `starFallOnScreenK()`.
+
+⚠️ **ET SEPT CONTRÔLES SONT PASSÉS AU ROUGE LE JOUR OÙ LA RÈGLE A CHANGÉ** (`resolveStarFall` exige
+désormais une annonce), ce qui est exactement ce qu'on attend d'eux.
 
 `node tools/verify-quete.mjs`. Il remplace `verify-enquete.mjs`, supprimé avec l'enquête du 442 :
 il en reprend la MÉTHODE (appeler le vrai code, jouer la vraie chaîne) et aucun de ses contrôles.
@@ -830,10 +905,20 @@ onglet d'arrière-plan) est en §10 de `CLAUDE.md`, avec ses trois pièges.
 
 ---
 
-## `render-navire.mjs` — LE NAVIRE DES ÉTOILES (451)
+## `render-navire.mjs` — LE NAVIRE DES ÉTOILES (451, étendu au 454)
 
-`node tools/render-navire.mjs` — **26 contrôles**, planche `tools/out/navire.png` (zéro à cinq
-morceaux, de nuit puis de jour, avec un fermier comme repère d'échelle).
+⚠️⚠️ **ZIP 454 — CE BANC A REGARDÉ CE NAVIRE SOUS TRENTE-DEUX MASQUES PENDANT TROIS ZIPS SANS
+JAMAIS REMARQUER QUE LES FANTÔMES ÉTAIENT LÀ DÈS LE PREMIER JOUR.** Il mesurait leur forme, leur
+damier, leur débordement, leur pulsation — jamais leur **droit d'exister**. C'est le cinquième
+visage du défaut de banc (448 : *il mesure ce qu'une chose EST et jamais QUAND elle est*), et c'est
+Guillaume qui l'a vu. Trois contrôles neufs le tiennent (« sans les plans, aucun fantôme », « le
+plan déplié les fait tous apparaître », « ce qui se voit aussi à la quantité de dessin »), plus
+quatre sur la feuille de plan elle-même — écrits **le jour de sa naissance**, pas trois zips plus
+tard.
+
+`node tools/render-navire.mjs` — **35 contrôles**, planches `tools/out/navire.png` (zéro à cinq
+morceaux, de nuit puis de jour, avec un fermier comme repère d'échelle) et, depuis le 454,
+`tools/out/navire-plan.png` (la feuille de plan de Kerguélen à zéro, trois et cinq pièces).
 
 Le navire est le **pisteur** de la quête : ce qu'il montre, c'est ce qui manque. Un dessin qui
 ment là-dessus fait rater la quête entière, d'où deux contrôles qu'aucun autre banc n'a :

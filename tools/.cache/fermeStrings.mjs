@@ -69,24 +69,68 @@
    ⚠️⚠️ ET LE TUTOIEMENT EST UN CHOIX, pas un oubli : le jeu s'adresse à un enfant
    qui joue avec un copain. Le vouvoiement mettrait une distance que l'anglais n'a
    pas et que la scène ne veut pas. */
+/* ╔═══════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 453 — LES NOMBRES DE MORCEAUX SONT DES PARAMÈTRES, PLUS DES MOTS.
+   ╚═══════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️⚠️ TROIS PHRASES DISAIENT UN NOMBRE ÉCRIT EN TOUTES LETTRES (« Trois
+   morceaux », « Quatre morceaux », « Cinq notes ») pendant que le navire, lui,
+   comptait sur CINQ. Elles étaient vraies le jour où on les a écrites — le 444
+   comptait quatre NOTES — et le 450 a posé un cinquième morceau sans les
+   relire. *Un compteur ajouté ne recompte pas les phrases déjà écrites*, et
+   aucun banc ne pouvait le voir : chaque compte était juste dans sa propre
+   liste.
+   ⚠️ LA PARADE EST DE NE PLUS JAMAIS ÉCRIRE LE NOMBRE ICI : toute phrase qui
+   compte des morceaux est une FONCTION `(n, total)`, appelée avec
+   `Q.starShipBuilt(e)` et `Q.STAR_SHIP_TOTAL`. `tools/verify-quete.mjs` refuse
+   désormais tout nombre de morceaux littéral dans ces deux tables.
+   ⚠️ `NUM` EXISTE POUR QUE LA PHRASE RESTE JOLIE. « Elle en a 1 » se lit comme
+   un tableau de bord ; « Elle en a un » se lit comme un conte, et le public a
+   sept ans. C'est la seule raison de cette table — elle ne décide de rien. */
+const NUM_FR = ["zéro", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit"];
+const nfr = (n) => NUM_FR[n | 0] || String(n | 0);
+const Nfr = (n) => { const s = nfr(n); return s.charAt(0).toUpperCase() + s.slice(1); };
+
 const STAR_FR = {
   title: "Le Bateau des Étoiles",
   hud: {
-    shards: (n, total) => `${n} sur ${total}`,
     goal: {
-      furrow:    "Quelque chose brûle dans le champ ouest. Va voir.",
-      craterHot: "Le reste est tombé à l'est de la ville. C'est encore brûlant.",
-      crater:    "Le cratère a refroidi. Quelque chose se cache au fond.",
-      lean:      "Écoute les ombres ici, puis très loin, et vite.",
-      leanAgain: "Un endroit trouvé. Croise les ombres encore une fois, ailleurs.",
-      lakeShard: "Un morceau a coulé sous le ponton. Amène l'étoile au bord.",
-      beadShard: "La verrerie, à l'est. Un morceau est caché dans les perles.",
-      nestShard: "Le nid de la pie est dans l'arbre. Éloigne l'oiseau.",
-      belfry:    "Monte l'étoile en haut du clocher.",
-      song:      "La cloche a la cinquième note. Un à l'orgue, un au beffroi.",
+      /* ╔═══════════════════════════════════════════════════════════════════
+         ║ ZIP 455 — PLUS CLAIRES, ET ELLES DISENT LE GESTE.
+         ╚═══════════════════════════════════════════════════════════════════
+         ⚠️⚠️ DEMANDE DE GUILLAUME : « Les indications des étoiles guide ne doivent
+         pas être trop évasives, je préfère qu'elles soient plus claires. Qu'on
+         sache quoi faire. Genre trouver l'ingénieur par exemple. ouvrir le plan
+         avec P etc. » La règle du 449 (« OÙ et QUOI, jamais pourquoi ») tenait ;
+         il lui manquait le troisième terme, **COMMENT** — la touche à presser.
+         ⚠️ ET C'EST GRATUIT EN MYSTÈRE : ce que ces phrases disent est ce que le
+         joueur ferait de toute façon, dix minutes plus tard, en tâtonnant. Le
+         mystère du chantier n'est pas « quelle touche », il est « qu'est-ce que
+         c'est » — et ça, aucune de ces phrases ne le dit.
+         ⚠️ LE PLAFOND DE 80 SIGNES N'A PAS BOUGÉ : le bandeau rabote en silence
+         (449), donc c'est le TEXTE qui tient la contrainte, jamais la coupe. */
+      furrow:    "Quelque chose brûle au nord de la ferme. Va voir (E).",
+      craterHot: "À l'est de Valley Town, le trou brûle encore. Attends qu'il refroidisse.",
+      crater:    "Le cratère a refroidi. Descends : quelque chose se cache au fond.",
+      lean:      "Écoute les ombres ici (E), puis à l'autre bout de la ville. Vite.",
+      leanAgain: "Un endroit marqué. Traverse la ville et réécoute les ombres (E).",
+      lakeShard: "Emmène l'étoile au ponton du lac, et plonge (E).",
+      beadShard: "La verrerie, à l'est de la ville. Cherche la perle à la lumière (E).",
+      nestShard: "Le nid de la pie, en haut de l'arbre. Éloigne l'oiseau (E).",
+      belfry:    "Monte l'étoile en haut du clocher de l'église (E).",
+      /* ⚠️ ZIP 453 — « la cinquième note » → « la dernière note ». L'ordinal
+         était vrai tant que le bateau avait cinq morceaux ; « dernière » l'est
+         quel que soit leur nombre, et se lit exactement pareil. */
+      song:      "La cloche a la dernière note. Un à l'orgue, un au beffroi (E).",
+      /* ⚠️ ZIP 454 — plus courtes que leurs sœurs : le français gonfle de 15 à
+         20 %, et ces deux-là portent un nom propre qu'on ne peut pas raccourcir. */
+      engineer:     "Va demander un ingénieur naval à la mairie (E). L'étoile insiste.",
+      engineerWait: "Kerguélen dessine sur la grève du lac. Reviens dans quelques minutes.",
+      timber:       "Commande la pièce suivante à Tristan, à la ferme. Le plan : touche P.",
     },
     againTitle: "Où tu en étais",
-    again: (n, total) => `Tu as ${n} morceaux sur ${total}. La petite étoile est toujours là.`,
+    /* ⚠️ ZIP 453 — LE PLURIEL EST DÉRIVÉ, LUI AUSSI : cette phrase écrivait
+       « Tu as 1 morceaux » au premier morceau, ce qu'aucun banc ne regardait. */
+    again: (n, total) => `Tu as ${nfr(n)} morceau${n > 1 ? "x" : ""} sur ${nfr(total)}. La petite étoile est toujours là.`,
   },
   guide: {
     go: (pet) => `${pet} part devant toi et se retourne.`,
@@ -110,10 +154,77 @@ const STAR_FR = {
     line1: "Le ciel se déchire, d'est en ouest.",
     line2: "Quelque chose s'écrase au loin. Les vitres tremblent.",
     line3: "Tous les oiseaux de la vallée s'envolent d'un coup.",
-    quiet: "Personne ne sort regarder. Personne n'en dit un mot. Pas une seule personne.",
+    /* ⚠️⚠️ ZIP 455 — CETTE PHRASE ÉTAIT DEVENUE FAUSSE LE JOUR MÊME OÙ ON L'A
+       ENFIN AFFICHÉE. Elle disait « Personne ne sort regarder. Personne n'en dit
+       un mot. » — or depuis ce zip toute la vallée l'attendait, et tous les PNJ
+       ont un « ! » au-dessus de la tête à l'instant du contact. *Quand la fiction
+       change, le texte qui la raconte fait partie de la livraison* (452).
+       ⚠️ ET ELLE DIT MIEUX LE THÈME QU'AVANT : le silence n'est plus une absence,
+       c'est un écart. Ils ont tous vu tomber la pierre ; pas un ne verra ce qui
+       en est sorti. */
+    quiet: "Tout le monde a vu tomber la pierre. Personne ne verra ce qu'il y avait dedans.",
+  },
+  /* ╔═══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 455 — LE TAMPON. LA PIERRE EST PUBLIQUE, L'ÉTOILE RESTE SECRÈTE.
+     ╚═══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️⚠️ LA RÈGLE D'ÉCRITURE DE CE BLOC EST LA SEULE CHOSE À EN RETENIR, ET
+     `verify-quete` LA TIENT : **aucune de ces phrases ne peut nommer l'étoile, ni
+     dire où aller, ni dire quoi faire.** Les habitants parlent d'un CAILLOU
+     annoncé par des astronomes ; ils ne savent rien d'autre, et ils ne sauront
+     jamais rien d'autre. C'est ce qui permet à cette demande de coexister avec le
+     thème du secret au lieu de le remplacer (voir l'en-tête de `quete.js`).
+     ⚠️⚠️ LES `hint` SONT L'EXCEPTION QUI CONFIRME LA RÈGLE : ils annoncent une
+     ÉTAPE À VENIR sans jamais dire qu'elle en est une. « Un ingénieur breton a
+     posé ses valises » est un ragot de village ; il se trouve qu'il sera vrai. Un
+     joueur qui a écouté a une minute d'avance, un joueur qui n'a rien écouté ne
+     perd rien — c'est très exactement ce qu'on veut d'un indice, et c'est ce qui
+     sépare un tampon JOUABLE d'un tampon décoratif.
+     ⚠️ ET ILS SONT FIGÉS PAR PNJ (`starNerveSay`) : le même habitant redit
+     toujours la même chose, donc on peut retourner le voir. Un tirage à chaque
+     approche aurait fait une machine à phrases dont personne ne retient rien. */
+  warn: {
+    /* L'INVITE DE L'HÔTE. ⚠️ ELLE EST À LUI SEUL — c'est le seul panneau du jeu
+       qui décide de quelque chose pour tout le monde, et le §3 est formel sur qui
+       arbitre. Le libellé est celui de Guillaume, mot pour mot. */
+    askTitle: "Démarrer l'enquête « La Belle Étoile » ?",
+    askBody: "Des astronomes annoncent une pluie d'astéroïdes au-dessus de la vallée. Si tu dis oui, la nouvelle se répand ce soir — et la nuit qui suit, quelque chose tombera.",
+    askNote: "Tu peux dire non. On te le redemandera au crépuscule.",
+    yes: "Oui",
+    later: "Plus tard",
+    laterToast: "Plus tard, alors. On te le redemandera au crépuscule.",
+    /* LA CARTE D'ANNONCE, plein écran, sur fondu enchaîné. ⚠️ Elle ne dit PAS
+       « quête commencée » : elle dit ce que la vallée apprend. Un panneau qui
+       annonce une quête transforme une histoire en tâche. */
+    cardTitle: "La Belle Étoile",
+    cardSub: "Les astronomes ont prévenu. La vallée regarde le ciel.",
+    chat: "Les astronomes ont prévenu la vallée : une pluie d'astéroïdes, cette nuit ou la prochaine.",
+    /* L'AFFICHE. ⚠️ Elle se lit sur le tableau des nouvelles de Valley Town, qui
+       existe depuis le 427 : zéro dessin, zéro message, et une raison d'aller en
+       ville pendant le tampon. */
+    boardTitle: "AVIS DE L'OBSERVATOIRE",
+    boardBody: "Une pluie d'astéroïdes est attendue au-dessus de la vallée. Le risque est jugé ÉLEVÉ. Rentrez les bêtes. Ne restez pas sous les grands arbres. Ne regardez pas la lumière en face.",
+    /* LES RUMEURS. ⚠️ De la peur, jamais un renseignement. */
+    rumor: [
+      "Les astronomes ont écrit à la mairie. Ils ont peur, eux aussi.",
+      "Une pluie d'astéroïdes. C'est le mot qu'ils ont employé. Une pluie.",
+      "J'ai rentré les bêtes deux heures plus tôt. On ne sait jamais.",
+      "Ils disent que ça passera peut-être à côté. Peut-être.",
+      "Je n'arrive plus à dormir. Je regarde le ciel toute la nuit.",
+      "Le maire dit de rester calme. Il n'a pas l'air calme.",
+      "Cette nuit, très loin, il y a eu un bruit. Personne n'a rien vu.",
+      "Et si ça tombe sur les champs ? On recommencera, voilà tout.",
+    ],
+    /* LES INDICES. ⚠️ Chacun annonce une étape à venir, aucun ne le sait. */
+    hint: [
+      "Il paraît qu'un brillant ingénieur breton a posé ses valises à Valley Town.",
+      "J'ai vu des étoiles bizarres dans le ciel, les nuits d'avant. Elles bougeaient.",
+      "La cloche de l'église a été fondue dans une pierre du ciel. Il y a cent ans.",
+      "La pie du verrier vole tout ce qui brille. Son nid est dans le grand arbre.",
+      "Sous le ponton, le lac est très profond. Personne n'est allé au fond.",
+      "Quand une pierre brûlante tombe dans le sable, le sable devient du verre vert.",
+    ],
   },
   s1: {
-    prompt: "E : regarder",
     tooHot: "C'est trop brûlant pour regarder. Ça siffle sous la pluie.",
     coolTitle: "Fais-le refroidir",
     coolHint: "Garde la lueur dans le repère. Arrose à petits coups — un grand le fend.",
@@ -124,7 +235,6 @@ const STAR_FR = {
     east: "Il penche vers l'est. Toujours vers l'est.",
   },
   s2: {
-    promptCalm: "Reste immobile et regarde ailleurs",
     tooHot: "Le trou fume encore. Ce qui est au fond ne remontera pas.",
     empty: "Le cratère est vide. Du sable chaud, devenu du verre vert.",
     peek: "Quelque chose bouge au coin de l'œil. Tu regardes. C'est parti.",
@@ -133,10 +243,14 @@ const STAR_FR = {
     calmSolo: "Tout seul, c'est long. Reste retourné.",
     meet1: "Elle est plus petite qu'une poule. Elle tremble.",
     meet2: "Tu tends le morceau de ton champ. Elle le reprend.",
-    meet3: "Deux notes, ensemble. Elle arrête de trembler.",
-    name: "Son bateau s'est cassé en tombant. Cinq morceaux. Elle n'en a que deux.",
-    promptLean: "E : la laisser chanter",
-    leanTitle: "Écoute les ombres",
+    /* ⚠️ ZIP 453 — « Deux notes, ensemble » DISAIT DEUX MORCEAUX LÀ OÙ LE
+       NAVIRE EN MONTRE UN. Elle chante avec le morceau qu'on vient de lui
+       rendre : c'est ça qu'on entend, et ça ne compte rien. */
+    meet3: "Le morceau chante avec elle. Elle arrête de trembler.",
+    /* ⚠️ « Elle n'en a que … » A ÉTÉ ÉCARTÉ : l'élision (« qu'un », « que deux »)
+       demanderait une règle de grammaire dans une table de textes. « Elle en a
+       un » dit la même chose et tient dans toutes les langues du fichier. */
+    name: (n, total) => `Son bateau s'est cassé en tombant. ${Nfr(total)} morceaux. Elle en a ${nfr(n)}.`,
     leanHint: "Une ombre est une direction. Deux font un endroit. Écoute ici, puis tout à l'autre bout de la ville.",
     leanArmed: "Les ombres penchent. D'ici, c'est tout ce qu'on peut dire.",
     leanSoloArmed: "Retiens la direction. Traverse la ville et réécoute, avant que ça s'efface.",
@@ -146,8 +260,6 @@ const STAR_FR = {
     markGlass: "La verrerie, à l'est de la ville.",
   },
   s3: {
-    promptDive: "E : plonger",
-    promptHold: "Tiens l'étoile au-dessus de l'eau",
     dark: "L'eau est noire. Tu ne vois même pas tes mains.",
     poolHint: "Sa lumière traverse l'eau et fait une flaque claire au fond.",
     poolLead: "Celui qui tient l'étoile marche sur le ponton. La flaque suit. Le plongeur ne voit que dedans.",
@@ -156,14 +268,15 @@ const STAR_FR = {
     diveHint: "Tu coules tout seul — tu ne fais que diriger. L'anneau est ton souffle. Le morceau clignote.",
     diveDeeper: "Il a glissé plus bas.",
     diveUp: "Tu remontes les mains vides. Respire. Replonge.",
-    got: "Trois morceaux. Trois notes.",
+    /* ⚠️⚠️ ZIP 453 — CETTE PHRASE SERVAIT DE MESSAGE DE FIN DE MANCHE, donc elle
+       s'affichait APRÈS CHAQUE plongée, y compris la première : « Trois
+       morceaux » alors qu'on n'en avait aucun de plus. Elle ne se dit plus qu'au
+       moment où le morceau est vraiment posé sur le navire (voir `starWatch`),
+       et c'est `diveDeeper` qui ferme les manches — ce qu'elle décrit. */
+    got: (n, total) => `${Nfr(n)} morceaux sur ${nfr(total)}. Le bateau grandit.`,
     wings: "Une ombre traverse l'eau. Des ailes. Quelque chose de petit et brillant part vers l'est.",
   },
   s4: {
-    promptSweep: "E : lever l'étoile",
-    promptWatch: "Regarde le mur du fond",
-    promptLure: "E : l'emmener plus loin",
-    promptClimb: "E : grimper",
     shut: "La verrerie est fermée pour la nuit. Le four est froid. Il n'y a personne.",
     rackTitle: "Une ombre qui ment",
     lureTitle: "Le leurre",
@@ -181,16 +294,16 @@ const STAR_FR = {
     lureSolo: "Tu poses l'étoile. La pie descend. Elle ne restera pas longtemps.",
     climbHint: "Grimpe pendant que la pie est loin. Arrête-toi si elle lève la tête.",
     climbSeen: "Elle a levé la tête. Redescends.",
-    got: "Quatre morceaux. Il ne manque plus que la cloche.",
-    turn1: "Quatre morceaux chantent ensemble. Le bateau attend le cinquième.",
+    got: (n, total) => `${Nfr(n)} morceaux sur ${nfr(total)}. Il ne manque plus que la cloche.`,
+    /* ⚠️ « le cinquième » DEMANDAIT UN ORDINAL, donc une seconde table de mots à
+       tenir juste. « le dernier » est vrai quel que soit le nombre de morceaux,
+       et c'est exactement ce que le retournement raconte. */
+    turn1: (n, total) => `${Nfr(n)} morceaux sur ${nfr(total)} chantent ensemble. Le bateau attend le dernier.`,
     turn2: "Il n'y en a pas. Elle est tombée avant que son bateau ait une cloche.",
     turn3: "Un bateau qui ne peut pas sonner. Une mer qu'il ne peut pas traverser.",
     turn4: "Alors, à l'autre bout de la ville, la cloche de l'église sonne. Une fois. Personne ne l'a tirée.",
   },
   s5: {
-    promptUp: "E : monter",
-    promptBell: "E : écouter la cloche",
-    promptOrgan: "E : s'asseoir à l'orgue",
     stair1: "Gravé dans la pierre : « J.M. a sonné pour la crue. 1889. »",
     stair2: "Plus bas, en plus petit : « et pour rien du tout, certains jours. »",
     bell1: "Je suis tombée aussi. Il y a très longtemps. Avant que la ville ait un nom.",
@@ -203,11 +316,107 @@ const STAR_FR = {
     duetDropped: "La lumière s'est éteinte. On recommence, ensemble.",
     duetPhrase: (n, total) => `Phrase ${n} sur ${total}`,
     duetSolo: "Tu cales les touches et tu cours dans l'escalier. La note faiblit déjà.",
-    duetWin: "Cinq notes. Le bateau entier, qui chante d'un coup, pour la première fois.",
-    end1: "Il largue les amarres comme un ballon qu'on lâche. Doucement. Comme s'il avait toute la nuit.",
-    end2: "Le bateau est entier. Il prend l'eau comme s'il n'avait jamais coulé.",
+    duetWin: (total) => `${Nfr(total)} notes. Le bateau entier, qui chante d'un coup, pour la première fois.`,
+    /* ╔═══════════════════════════════════════════════════════════════════════
+       ║ ZIP 453 — LA FIN NE MENT PLUS SUR CE QU'ELLE MONTRE.
+       ╚═══════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ `end1` DÉCRIVAIT LE BATEAU QUI LARGUE LES AMARRES ; le dessin de la
+       scène, lui, montre L'ÉTOILE qui monte, et le navire — six cents pixels
+       plus bas, au bord du lac — ne bougeait jamais. Deux affirmations fausses
+       dans deux phrases sur trois. Décision de Guillaume : **le bateau reste,
+       entier et réel, et c'est Eduardo Da Fonseca qui le prendra** pour aller
+       voir le large. Les deux phrases disent donc ce qu'on voit : elle rentre,
+       le bateau attend. Le départ a maintenant un porteur et une suite. */
+    end1: "Elle monte comme un ballon qu'on lâche. Doucement. Comme si elle avait toute la nuit.",
+    end2: "En bas, le bateau est entier. Il flotte enfin. Il attend quelqu'un qui sache partir.",
     end3: "La cloche ne dit rien d'autre.",
     gift: "Quelque chose d'elle est resté avec toi.",
+  },
+  /* ╔═══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 454 — LES PLANS, L'INGÉNIEUR ET LE BOIS. « ON NE CONSTRUIT PAS UN
+     ║ BATEAU EN LE REGARDANT. »
+     ╚═══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ CES PHRASES SONT LE SEUL ENDROIT DE LA QUÊTE OÙ QUELQU'UN D'AUTRE EST AU
+     COURANT, et c'est une entorse ASSUMÉE au thème du secret (§3 de `QUETE.md`).
+     Elle est possible parce qu'elle ne trahit rien : l'hôtesse de mairie et
+     l'ingénieur entendent parler d'un BATEAU, pas d'une étoile. Kerguélen dessine
+     une coque pour des fermiers fortunés et repart ; Tristan scie des bordages. Le
+     secret tient, et la vallée cesse d'être un endroit où personne ne remarque
+     jamais rien — ce qui, à force, était devenu invraisemblable plutôt que
+     mystérieux.
+     ⚠️ ET AUCUNE NE DIT « L'ÉTOILE » À UN PNJ. C'est la règle de ce bloc, et elle
+     se vérifie en le relisant : le joueur sait, les habitants non. */
+  plan: {
+    /* ── LE CONSEIL DE L'ÉTOILE. Demande de Guillaume : « sur conseil (guidé) de
+       la première étoile récoltée dans le cratère ». C'est elle qui envoie, et
+       elle le dit avec ses mots — elle ne connaît pas le mot « mairie ». */
+    advise1: "Elle regarde la cale vide, au bord du lac. Elle secoue la tête.",
+    advise2: "Elle ne sait pas comment on construit. Elle sait seulement à quoi ça ressemblait.",
+    advise3: "Il faut quelqu'un qui dessine les bateaux. En ville, la grande maison où l'on demande.",
+    /* ── LA MAIRIE. */
+    hallIntro: "Un architecte naval ? Il en reste un, oui. Célestin Kerguélen. Il ne se dérange pas pour rien.",
+    hallFee: (gold, crops, fish) => `Ses conditions : ${gold} or, ${crops} récoltes et ${fish} poissons. Payables d'avance.`,
+    hallWhy: "Il dit qu'un plan se paie en une fois ou pas du tout. Il n'a jamais expliqué pourquoi.",
+    hallSendBtn: "Faire venir l'ingénieur",
+    hallPoor: "Il te manque de quoi payer. Il ne fera pas crédit.",
+    hallSent: "C'est envoyé. Il prendra le premier train.",
+    hallTravel: (d) => `Kerguélen est en route. Il arrive dans ${d}.`,
+    hallWork: (d) => `Kerguélen dessine, sur la grève. Il rendra ses plans dans ${d}.`,
+    hallReady: "Kerguélen a rendu ses plans et il est reparti.",
+    /* ── L'INGÉNIEUR. Il est sec, précis, et il ne pose aucune question — c'est ce
+       qui le rend supportable dans une histoire secrète. */
+    engName: "Célestin Kerguélen",
+    engRole: "architecte naval",
+    engHello: "Ne me racontez rien. Montrez-moi la cale et laissez-moi travailler.",
+    engWork: (d) => `Il mesure, il rature, il recommence. Encore ${d}.`,
+    engBubble: "…et si la quille porte, le reste suivra.",
+    /* ⚠️ ZIP 454 — CES DEUX PHRASES COMPTENT, DONC CE SONT DES FONCTIONS. Écrites
+       « cinq pièces », elles auraient été la faute du 452 commise par le zip qui
+       vient d'écrire la règle : un compteur ajouté ne recompte pas les phrases déjà
+       écrites. `verify-quete` les a refusées à la première exécution. */
+    engDone: (total) => `Voilà. ${Nfr(total)} pièces, dans cet ordre. Trouvez-vous un bon bûcheron.`,
+    engGone: "Il a plié ses feuilles et il est parti sans se retourner.",
+    /* ── LE PLAN. */
+    ready: "Les plans sont à toi. Ouvre-les (P) pour voir le bateau.",
+    openBtn: "📐 Le plan",
+    panelTitle: (name) => `📐 Plans de construction — ${name}`,
+    panelHint: (total) => `${Nfr(total)} pièces, dans l'ordre. L'étoile se souvient de la forme ; le bois, il faut le tailler.`,
+    panelAtLake: "Déplie-le au bord du lac : le bateau apparaîtra sur sa cale.",
+    lakeToast: "Tu déplies le plan devant la cale. Le bateau se dessine dans l'air, en entier.",
+    lakeClose: "Tu replies le plan. Le bateau s'efface.",
+    none: "Tu n'as pas de plan. Personne ne sait à quoi ce bateau ressemblait.",
+    /* ── LES CINQ PIÈCES. ⚠️ UN NOM DE PIÈCE, PAS UNE DESCRIPTION : elles sont
+       lues dans un tableau de commande, à côté d'un prix et d'une durée. */
+    part: (k) => ({
+      hull: "Le bordé de la coque", rudder: "Le safran et sa barre",
+      mast: "Le mât", sail: "La vergue", bell: "La chaise de cloche",
+    }[k] || k),
+    /* ── TRISTAN. */
+    orderTitle: (name) => `🪵 Le chantier de ${name}`,
+    orderHint: "Il travaille dans l'ordre du plan. Une pièce à la fois, et il ne commence pas la suivante avant d'avoir fini.",
+    orderCost: (wood, d) => `${wood} bois · ${d} de travail`,
+    orderBtn: "Commander",
+    orderSent: (part, d) => `${part} : Tristan s'y met. Ce sera prêt dans ${d}.`,
+    orderPoor: (wood) => `Il faut ${wood} bois dans la réserve. Abats des arbres, ou laisse-le en abattre.`,
+    orderWait: (d) => `en cours — ${d}`,
+    orderDone: "✅ livrée",
+    /* ⚠️ CHAQUE REFUS DIT SA RAISON. Un bouton grisé sans explication, c'est « le
+       jeu propose et refuse » (426) avec un pas d'avance. */
+    blockNoPlan: "🔒 Il faut d'abord les plans",
+    blockPrev: "🔒 La pièce précédente d'abord",
+    blockNoShard: "🔒 L'étoile ne se rappelle pas encore cette pièce",
+    delivered: (part) => `${part} — livrée sur la cale. Le bateau grandit pour de bon.`,
+    lastOne: "La dernière pièce est en place. Le bateau est fini.",
+    noTristan: "Personne à la ferme ne sait travailler le bois comme ça.",
+    unbuilt: (n, total) => `La cloche a chanté, mais il manque encore du bois : ${n} pièces sur ${total}.`,
+  },
+  /* ⚠️ ZIP 453 — LE NAVIRE PREND LA MER AVEC EDUARDO (décision de Guillaume).
+     Ces deux phrases REMPLACENT `voyagerDeparted` / `voyagerReturned` une fois
+     la quête finie : elles ne coûtent donc pas un `send()` de plus, elles
+     changent celui qui partait déjà (§3 de `CLAUDE.md`). */
+  sail: {
+    away: (d) => `Eduardo emmène le bateau des étoiles au large. Il veut voir ce qu'il y a de l'autre côté (retour dans ${d}).`,
+    back: (goods) => `Le bateau des étoiles est rentré. Eduardo rapporte : ${goods}.`,
   },
   trace: {
     dawnBell: "La vieille cloche sonne une fois à l'aube. Elle a toujours fait ça, paraît-il.",
@@ -221,12 +430,14 @@ const STAR_FR = {
   dev: null,        // rempli juste après, depuis STAR_EN (voir la note)
   chat: {
     start: "Quelque chose est tombé du ciel.",
-    found: (who, n, total) => `${who} a trouvé un morceau. ${n} sur ${total}.`,
+    found: (who, n, total) => `${who} a trouvé un morceau. ${nfr(n)} sur ${nfr(total)}.`,
     chapter: (t) => `${t}`,
     crater: (who) => `${who} a fait sortir la petite étoile du cratère.`,
     lean: (who) => `${who} a croisé les ombres. Un nouvel endroit est marqué.`,
     duet: (n, total) => `Phrase ${n} sur ${total}.`,
-    done: "Le bateau a pris la mer. L'étoile est rentrée.",
+    /* ⚠️ ZIP 453 — « Le bateau a pris la mer » ÉTAIT FAUX : il restait à quai.
+       Il est fini ; il partira avec Eduardo (voir `sail`). */
+    done: "Le bateau est fini. L'étoile est rentrée.",
   },
   prompt: (k) => ({
     furrow: "E : regarder",
@@ -239,6 +450,7 @@ const STAR_FR = {
     climb: "E : grimper",
     bell: "E : écouter",
     organ: "E : s'asseoir à l'orgue",
+    engineer: "E : parler à l'ingénieur",
   })[k] || "E",
 };
 
@@ -246,11 +458,16 @@ const STAR_FR = {
    aurait divergé au premier bouton ajouté, et personne ne s'en apercevrait — c'est
    la divergence en attente du §8 de `CLAUDE.md`, sur le seul écran que le joueur ne
    voit jamais, donc celui où elle vivrait le plus longtemps. */
+/* ⚠️ ZIP 453 — voir la note de `NUM_FR` : les nombres de morceaux ne s'écrivent
+   plus dans une phrase, ils arrivent en paramètre. */
+const NUM_EN = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight"];
+const nen = (n) => NUM_EN[n | 0] || String(n | 0);
+const Nen = (n) => { const s = nen(n); return s.charAt(0).toUpperCase() + s.slice(1); };
+
 const STAR_EN = {
   title: "The Star Boat",
   /* ── LE PISTEUR. Une icône, des pastilles, UNE phrase. Jamais deux. */
   hud: {
-    shards: (n, total) => `${n} of ${total}`,
     /* ╔═══════════════════════════════════════════════════════════════════════
        ║ ZIP 449 — UNE PHRASE PAR OBJECTIF, PLUS UNE PAR CHAPITRE.
        ╚═══════════════════════════════════════════════════════════════════════
@@ -271,13 +488,31 @@ const STAR_EN = {
        « canevas qui découpe ce qui dépasse » (§4 de CLAUDE.md). `verify-quete`
        compte les signes, comme il le fait déjà pour les titres de mini-jeu. */
     goal: {
-      furrow:    "Something is burning in the west field. Go and look at it.",
-      craterHot: "The rest fell east of Valley Town. It's still too hot to go near.",
-      crater:    "The crater has cooled. Something is hiding down in it.",
-      lean:      "Listen to the shadows here, then far across town, and fast.",
-      leanAgain: "One place found. Cross the shadows once more, somewhere else.",
-      lakeShard: "A piece sank under the lake pier. Bring the star to the water.",
-      beadShard: "The glassworks, east of town. A piece is hidden in the beads.",
+      /* ⚠️ ZIP 454 — « west field » → « north field » : le sillon a déménagé loin
+         des potagers (voir `STAR_FURROW_X/Y`). Une phrase de bandeau qui nomme un
+         endroit doit nommer le BON, sinon elle envoie chercher ailleurs — et c'est
+         le seul texte qu'un joueur perdu relit. */
+      /* ╔═══════════════════════════════════════════════════════════════════
+         ║ ZIP 455 — PLUS CLAIRES, ET ELLES DISENT LE GESTE.
+         ╚═══════════════════════════════════════════════════════════════════
+         ⚠️⚠️ DEMANDE DE GUILLAUME : « Les indications des étoiles guide ne doivent
+         pas être trop évasives, je préfère qu'elles soient plus claires. Qu'on
+         sache quoi faire. Genre trouver l'ingénieur par exemple. ouvrir le plan
+         avec P etc. » La règle du 449 (« OÙ et QUOI, jamais pourquoi ») tenait ;
+         il lui manquait le troisième terme, **COMMENT** — la touche à presser.
+         ⚠️ ET C'EST GRATUIT EN MYSTÈRE : ce que ces phrases disent est ce que le
+         joueur ferait de toute façon, dix minutes plus tard, en tâtonnant. Le
+         mystère du chantier n'est pas « quelle touche », il est « qu'est-ce que
+         c'est » — et ça, aucune de ces phrases ne le dit.
+         ⚠️ LE PLAFOND DE 80 SIGNES N'A PAS BOUGÉ : le bandeau rabote en silence
+         (449), donc c'est le TEXTE qui tient la contrainte, jamais la coupe. */
+      furrow:    "Something is burning north of the farm. Go and look (E).",
+      craterHot: "East of Valley Town the hole still burns. Wait for it to cool.",
+      crater:    "The crater has cooled. Climb down: something hides at the bottom.",
+      lean:      "Listen to the shadows here (E), then right across town. Be quick.",
+      leanAgain: "One place marked. Cross the town and listen to the shadows again (E).",
+      lakeShard: "Take the star to the lake pier, then dive (E).",
+      beadShard: "The glassworks, east of town. Sweep the beads with the light (E).",
       /* ⚠️ ZIP 449 — « ON THE ROOF » ÉTAIT FAUX, ET IL L'ÉTAIT DÉJÀ DANS `s4.sand`
          (corrigé là-bas aussi). Le nid est dans un ARBRE planté contre la
          verrerie (`starNestTree`, posé à `STAR_NEST_DX/DY` du four) : le sprite
@@ -285,14 +520,23 @@ const STAR_EN = {
          doive lire de loin. Envoyer le joueur sur un toit qui n'existe pas est la
          faute du 448 — un dessin approximatif se pardonne, une phrase fausse
          sous l'image, non. */
-      nestShard: "The magpie's nest is in the tree by the glassworks. Lure the bird off.",
-      belfry:    "Take the star up the church bell tower.",
-      song:      "The bell knows the fifth note. One at the organ, one at the bell.",
+      nestShard: "The magpie's nest, up the tree by the glassworks. Lure the bird off (E).",
+      belfry:    "Carry the star to the top of the church bell tower (E).",
+      /* ⚠️ ZIP 453 — « the fifth note » → « the last note » : l'ordinal vieillit
+         avec le nombre de morceaux, « last » non. */
+      song:      "The bell knows the last note. One at the organ, one in the belfry (E).",
+      /* ⚠️⚠️ ZIP 454 — LES DEUX OBJECTIFS DE LA CONSTRUCTION. Ils suivent la même
+         règle que les huit autres — OÙ et QUOI, jamais pourquoi — et ils sont plus
+         courts que la moyenne parce qu'ils portent un NOM PROPRE, qui ne se coupe
+         pas sans devenir illisible (le bandeau rabote en silence, 449). */
+      engineer:     "Ask the town hall for a naval engineer (E). The star insists.",
+      engineerWait: "Kerguélen is drawing on the lake shore. Come back in a few minutes.",
+      timber:       "Order the next piece from Tristan, at the farm. The plan: press P.",
     },
     /* Le rappel de reprise. ⚠️ UNE FOIS PAR SESSION, jamais deux — un « où en
        étions-nous » qui revient à chaque écran est une notification. */
     againTitle: "Where you were",
-    again: (n, total) => `You have ${n} of ${total} pieces. The little star is still with you.`,
+    again: (n, total) => `You have ${nen(n)} of ${nen(total)} piece${n > 1 ? "s" : ""}. The little star is still with you.`,
   },
   /* ╔═══════════════════════════════════════════════════════════════════════════
      ║ ZIP 449 — LE FAMILIER QUI MÈNE. Trois lignes, pas une de plus.
@@ -334,11 +578,59 @@ const STAR_EN = {
     line1: "The sky tears open, east to west.",
     line2: "Something hits the ground far away. The windows rattle.",
     line3: "Every bird in the valley goes up at once.",
-    quiet: "Nobody comes out to look. Nobody says anything about it. Not one person.",
+    quiet: "Everyone saw the stone fall. Nobody will ever see what was inside it.",
+  },
+  /* ╔═══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 455 — LE TAMPON. LA PIERRE EST PUBLIQUE, L'ÉTOILE RESTE SECRÈTE.
+     ╚═══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️⚠️ LA RÈGLE D'ÉCRITURE DE CE BLOC EST LA SEULE CHOSE À EN RETENIR, ET
+     `verify-quete` LA TIENT : **aucune de ces phrases ne peut nommer l'étoile, ni
+     dire où aller, ni dire quoi faire.** Les habitants parlent d'un CAILLOU
+     annoncé par des astronomes ; ils ne savent rien d'autre, et ils ne sauront
+     jamais rien d'autre. C'est ce qui permet à cette demande de coexister avec le
+     thème du secret au lieu de le remplacer (voir l'en-tête de `quete.js`).
+     ⚠️⚠️ LES `hint` SONT L'EXCEPTION QUI CONFIRME LA RÈGLE : ils annoncent une
+     ÉTAPE À VENIR sans jamais dire qu'elle en est une. « Un ingénieur breton a
+     posé ses valises » est un ragot de village ; il se trouve qu'il sera vrai. Un
+     joueur qui a écouté a une minute d'avance, un joueur qui n'a rien écouté ne
+     perd rien — c'est très exactement ce qu'on veut d'un indice, et c'est ce qui
+     sépare un tampon JOUABLE d'un tampon décoratif.
+     ⚠️ ET ILS SONT FIGÉS PAR PNJ (`starNerveSay`) : le même habitant redit
+     toujours la même chose, donc on peut retourner le voir. Un tirage à chaque
+     approche aurait fait une machine à phrases dont personne ne retient rien. */
+  warn: {
+    askTitle: "Start the “Beautiful Star” investigation?",
+    askBody: "Astronomers are announcing a shower of asteroids over the valley. Say yes and the news spreads tonight — and the night after that, something will fall.",
+    askNote: "You can say no. We'll ask again at dusk.",
+    yes: "Yes",
+    later: "Later",
+    laterToast: "Later, then. We'll ask again at dusk.",
+    cardTitle: "The Beautiful Star",
+    cardSub: "The astronomers have warned us. The valley is watching the sky.",
+    chat: "The astronomers have warned the valley: a shower of asteroids, tonight or the next.",
+    boardTitle: "OBSERVATORY NOTICE",
+    boardBody: "A shower of asteroids is expected over the valley. The risk is judged HIGH. Bring your animals in. Do not stand under tall trees. Do not look straight at the light.",
+    rumor: [
+      "The astronomers wrote to the town hall. They're frightened too.",
+      "A shower of asteroids. That's the word they used. A shower.",
+      "I brought the animals in two hours early. You never know.",
+      "They say it might pass us by. Might.",
+      "I can't sleep any more. I watch the sky all night.",
+      "The mayor says stay calm. He doesn't look calm.",
+      "Last night, far away, there was a noise. Nobody saw anything.",
+      "And if it lands on the fields? We start again, that's all.",
+    ],
+    hint: [
+      "They say a brilliant engineer from Brittany has moved into Valley Town.",
+      "I saw odd stars in the sky, the nights before. They were moving.",
+      "The church bell was cast from a stone that fell from the sky. A hundred years ago.",
+      "The glassblower's magpie steals anything that shines. Its nest is up the big tree.",
+      "Under the pier the lake is very deep. Nobody has ever reached the bottom.",
+      "When a burning stone lands in sand, the sand turns to green glass.",
+    ],
   },
   /* ── ÉTAPE 1 : LE CHAMP. */
   s1: {
-    prompt: "E: look at it",
     tooHot: "It's too hot to look at. It hisses when the rain touches it.",
     coolTitle: "Cool it down",
     /* ⚠️⚠️ ZIP 449 — LES CONSIGNES DISENT LE BUT, PAS SEULEMENT LE GESTE
@@ -357,7 +649,6 @@ const STAR_EN = {
   },
   /* ── ÉTAPE 2 : LE CRATÈRE. */
   s2: {
-    promptCalm: "Stand still and look away",
     /* ⚠️ ZIP 446 — LE CRATÈRE FUME AVANT DE RENDRE QUOI QUE CE SOIT. La phrase
        doit dire les DEUX choses en une ligne : rien à faire, et ça va passer.
        Une phrase qui ne dirait que « trop chaud » enverrait chercher un seau. */
@@ -369,10 +660,10 @@ const STAR_EN = {
     calmSolo: "Alone, this takes a while. Stay turned around.",
     meet1: "It is smaller than a hen. It is shaking.",
     meet2: "You hold out the piece from your field. It takes it back.",
-    meet3: "Two notes, together. It stops shaking.",
-    name: "Its boat broke when it fell. Five pieces. It only has two.",
-    promptLean: "E: let it sing",
-    leanTitle: "Listen to the shadows",
+    /* ⚠️ ZIP 453 — voir la note française : « two notes » comptait deux morceaux
+       là où le navire en montre un. */
+    meet3: "The piece sings with it. It stops shaking.",
+    name: (n, total) => `Its boat broke when it fell. ${Nen(total)} pieces. It has ${nen(n)}.`,
     /* ⚠️⚠️ ZIP 449 — C'EST ICI QUE LE JEUNE PUBLIC ABANDONNAIT, ET C'ÉTAIT
        PRÉVISIBLE : l'écoute des ombres est le SEUL moment de la quête sans
        chevron (`spot: "*lean"` ne rend aucune position, et c'est délibéré). Le
@@ -393,8 +684,6 @@ const STAR_EN = {
   },
   /* ── ÉTAPE 3 : LE LAC. */
   s3: {
-    promptDive: "E: dive",
-    promptHold: "Hold the star over the water",
     dark: "The water is black. You can't see your own hands.",
     poolHint: "Its light goes through the water and makes a bright pool on the bottom.",
     poolLead: "Whoever holds the star walks the pier. The pool follows. The diver can only see inside it.",
@@ -407,15 +696,13 @@ const STAR_EN = {
     diveHint: "You sink on your own — just steer. The ring is your breath. The piece blinks.",
     diveDeeper: "It slid deeper.",
     diveUp: "You come up empty. Breathe. Go again.",
-    got: "Three pieces. Three notes.",
+    /* ⚠️⚠️ ZIP 453 — voir la note française : elle servait de message de FIN DE
+       MANCHE et s'affichait donc après chaque plongée, y compris la première. */
+    got: (n, total) => `${Nen(n)} of ${nen(total)} pieces. The boat is growing.`,
     wings: "A shadow crosses the water. Wings. Something small and bright goes east with it.",
   },
   /* ── ÉTAPE 4 : LA VERRERIE ET LA PIE. */
   s4: {
-    promptSweep: "E: hold the star up",
-    promptWatch: "Watch the back wall",
-    promptLure: "E: lead it away",
-    promptClimb: "E: climb",
     shut: "The glassworks is shut for the night. The furnace is cold. Nobody's here.",
     /* ⚠️ DEUX TITRES COURTS, ET ILS ONT ÉTÉ AJOUTÉS EN REGARDANT L'ÉCRAN. Le
        premier jet prenait `rackHint` et `lureHint` comme titres de mini-jeu :
@@ -448,18 +735,16 @@ const STAR_EN = {
        qui a une fenêtre : on grimpe PENDANT que l'autre tient l'oiseau à l'écart. */
     climbHint: "Climb while the magpie is away. Stop if it looks up.",
     climbSeen: "It looked up. Down you go.",
-    got: "Four pieces. The boat only needs its bell now.",
-    /* Le retournement. */
-    turn1: "Four pieces sing together. The boat waits for the fifth.",
+    got: (n, total) => `${Nen(n)} of ${nen(total)} pieces. The boat only needs its bell now.`,
+    /* Le retournement. ⚠️ ZIP 453 — « the fifth » demandait un ordinal, donc une
+       seconde table de mots ; « the last one » est vrai quel que soit le total. */
+    turn1: (n, total) => `${Nen(n)} of ${nen(total)} pieces sing together. The boat waits for the last one.`,
     turn2: "There is no fifth. It fell before its boat ever had a bell.",
     turn3: "A boat that cannot ring. A sea it cannot cross.",
     turn4: "Then, across the town, the church bell rings. Once. Nobody pulled it.",
   },
   /* ── ÉTAPE 5 : LE BEFFROI. */
   s5: {
-    promptUp: "E: go up",
-    promptBell: "E: listen to the bell",
-    promptOrgan: "E: sit at the organ",
     stair1: "Scratched in the stone: \"J.M. rang for the flood. 1889.\"",
     stair2: "Lower down, smaller: \"and for nothing at all, some days.\"",
     bell1: "I fell too. A long time ago. Before the town had a name.",
@@ -476,15 +761,85 @@ const STAR_EN = {
     duetDropped: "The light died. Again, together.",
     duetPhrase: (n, total) => `Phrase ${n} of ${total}`,
     duetSolo: "You wedge the keys down and run for the stairs. The note is already fading.",
-    duetWin: "Five notes. The whole boat, singing at once, for the first time.",
-    /* La résolution. */
-    end1: "It casts off the way a balloon goes up. Slowly. Like it has all night.",
-    end2: "The boat is whole. It takes the water like it never sank.",
+    duetWin: (total) => `${Nen(total)} notes. The whole boat, singing at once, for the first time.`,
+    /* La résolution. ⚠️⚠️ ZIP 453 — voir la note française : `end1` racontait un
+       appareillage que le dessin ne montrait pas et que le navire ne faisait
+       jamais. Le bateau reste, entier ; Eduardo l'emmènera. */
+    end1: "It goes up the way a balloon does. Slowly. Like it has all night.",
+    end2: "Down by the water, the boat is whole. It floats at last. It is waiting for someone who can sail.",
     end3: "The bell doesn't say anything else.",
     /* ⚠️ LE CROCHET COSMÉTIQUE. Il ne donne encore RIEN — l'arbitrage est posé,
        le contenu viendra (voir `resolveStarGift`). La phrase est donc vraie
        aujourd'hui et le restera quand l'objet existera. */
     gift: "Something of it stayed with you.",
+  },
+  /* ╔═══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 454 — LES PLANS, L'INGÉNIEUR ET LE BOIS. « ON NE CONSTRUIT PAS UN
+     ║ BATEAU EN LE REGARDANT. »
+     ╚═══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ CES PHRASES SONT LE SEUL ENDROIT DE LA QUÊTE OÙ QUELQU'UN D'AUTRE EST AU
+     COURANT, et c'est une entorse ASSUMÉE au thème du secret (§3 de `QUETE.md`).
+     Elle est possible parce qu'elle ne trahit rien : l'hôtesse de mairie et
+     l'ingénieur entendent parler d'un BATEAU, pas d'une étoile. Kerguélen dessine
+     une coque pour des fermiers fortunés et repart ; Tristan scie des bordages. Le
+     secret tient, et la vallée cesse d'être un endroit où personne ne remarque
+     jamais rien — ce qui, à force, était devenu invraisemblable plutôt que
+     mystérieux.
+     ⚠️ ET AUCUNE NE DIT « L'ÉTOILE » À UN PNJ. C'est la règle de ce bloc, et elle
+     se vérifie en le relisant : le joueur sait, les habitants non. */
+  plan: {
+    advise1: "It looks at the empty slipway by the lake. It shakes its head.",
+    advise2: "It doesn't know how boats are built. It only knows what this one looked like.",
+    advise3: "You need someone who draws boats. In town — the big house where you ask for things.",
+    hallIntro: "A shipwright? There's one left, yes. Célestin Kerguélen. He doesn't travel for nothing.",
+    hallFee: (gold, crops, fish) => `His terms: ${gold} gold, ${crops} crops and ${fish} fish. Paid up front.`,
+    hallWhy: "He says a plan is paid all at once or not at all. He has never explained why.",
+    hallSendBtn: "Send for the shipwright",
+    hallPoor: "You're short. He doesn't give credit.",
+    hallSent: "It's sent. He'll take the first train.",
+    hallTravel: (d) => `Kerguélen is on his way. He arrives in ${d}.`,
+    hallWork: (d) => `Kerguélen is drawing, down on the shore. His plans will be ready in ${d}.`,
+    hallReady: "Kerguélen handed over his plans and left.",
+    engName: "Célestin Kerguélen",
+    engRole: "naval architect",
+    engHello: "Don't tell me anything. Show me the slipway and let me work.",
+    engWork: (d) => `He measures, crosses out, starts again. ${d} to go.`,
+    engBubble: "…and if the keel holds, the rest follows.",
+    engDone: (total) => `There. ${Nen(total)} pieces, in that order. Go and find yourself a good lumberjack.`,
+    engGone: "He folded his sheets and left without looking back.",
+    ready: "The plans are yours. Open them (P) to see the boat.",
+    openBtn: "📐 The plan",
+    panelTitle: (name) => `📐 Building plans — ${name}`,
+    panelHint: (total) => `${Nen(total)} pieces, in order. The star remembers the shape; the wood still has to be cut.`,
+    panelAtLake: "Unfold it by the lake and the boat will stand on its slipway.",
+    lakeToast: "You unfold the plan in front of the slipway. The whole boat draws itself in the air.",
+    lakeClose: "You fold the plan away. The boat fades out.",
+    none: "You have no plan. Nobody knows what this boat looked like.",
+    part: (k) => ({
+      hull: "Hull planking", rudder: "Rudder and tiller",
+      mast: "The mast", sail: "The yard", bell: "The bell cradle",
+    }[k] || k),
+    orderTitle: (name) => `🪵 ${name}'s workshop`,
+    orderHint: "He works in the order of the plan. One piece at a time, and he won't start the next before he's done.",
+    orderCost: (wood, d) => `${wood} wood · ${d} of work`,
+    orderBtn: "Order it",
+    orderSent: (part, d) => `${part}: Tristan gets to it. Ready in ${d}.`,
+    orderPoor: (wood) => `You need ${wood} wood in the stores. Fell some trees, or let him fell them.`,
+    orderWait: (d) => `under way — ${d}`,
+    orderDone: "✅ delivered",
+    blockNoPlan: "🔒 You need the plans first",
+    blockPrev: "🔒 The previous piece first",
+    blockNoShard: "🔒 The star doesn't remember that piece yet",
+    delivered: (part) => `${part} — set on the slipway. The boat is growing for real now.`,
+    lastOne: "The last piece is in place. The boat is finished.",
+    noTristan: "Nobody on the farm can work timber like that.",
+    unbuilt: (n, total) => `The bell has sung, but the wood is short: ${n} pieces of ${total}.`,
+  },
+  /* ⚠️ ZIP 453 — voir la note française : elles remplacent `voyagerDeparted` /
+     `voyagerReturned` une fois la quête finie, donc zéro `send()` de plus. */
+  sail: {
+    away: (d) => `Eduardo takes the star boat out to sea. He wants to see what's on the other side (back in ${d}).`,
+    back: (goods) => `The star boat is back. Eduardo brings: ${goods}.`,
   },
   /* ── CE QUE LA VILLE GARDE. */
   trace: {
@@ -502,12 +857,23 @@ const STAR_EN = {
     op: (op) => ({
       reset: "↺ Wipe it",
       start: "▶ Start (the fall)",
+      /* ⚠️ ZIP 455 — deux boutons pour deux choses : « Start » saute le tampon
+         (annonce + chute d'un coup), « Announce » ne joue QUE le tampon. Sans le
+         second, juger les PNJ nerveux demanderait une ferme à quatre artisans et
+         cinq minutes d'attente réelle — c'est-à-dire qu'on ne les jugerait pas. */
+      warn: "📣 Announce it (the buffer)",
       chapter: "⏭ Finish this chapter",
       skip: "⏩ Skip ahead one",
       hint: "💡 Mark the next place",
       all: "⏭⏭ All but the duet",
+      /* ⚠️ ZIP 454 — les deux étapes qui se comptent en MINUTES RÉELLES (15 pour
+         les plans, 24 pour les cinq pièces de bois). Sans ces boutons, on ne
+         regarderait le plan et le fantôme qu'une fois, donc on ne les jugerait
+         qu'une fois — la raison d'être de tout ce menu. */
+      plans: "📐 Hand me the plans",
+      timber: "🪵 Deliver all the timber",
     }[op] || op),
-    scene: (s) => ({ fall: "🎬 The fall", turn: "🎬 The turn", end: "🎬 The ending" }[s] || s),
+    scene: (s) => ({ warn: "🎬 The announcement", fall: "🎬 The fall", turn: "🎬 The turn", end: "🎬 The ending" }[s] || s),
     sceneLabel: "Replay a scene",
     chat: (who, what) => `${who} touched the star quest: ${what}.`,
   },
@@ -516,12 +882,13 @@ const STAR_EN = {
      avant qu'une séance à deux clients ne le montre. */
   chat: {
     start: "Something fell out of the sky.",
-    found: (who, n, total) => `${who} found a piece. ${n} of ${total}.`,
+    found: (who, n, total) => `${who} found a piece. ${nen(n)} of ${nen(total)}.`,
     chapter: (t) => `${t}`,
     crater: (who) => `${who} coaxed the little star out of the crater.`,
     lean: (who) => `${who} crossed the shadows. A new place is marked.`,
     duet: (n, total) => `Phrase ${n} of ${total}.`,
-    done: "The boat sailed. The star went home.",
+    /* ⚠️ ZIP 453 — « The boat sailed » était faux : il restait à quai. */
+    done: "The boat is finished. The star went home.",
   },
   /* ── LES INVITES, UNE SEULE CLÉ-FONCTION. ⚠️ Le préfixe `star:` est lu une
      fois, ici — six `if` répartis dans trois boucles de rendu finiraient par ne
@@ -538,6 +905,7 @@ const STAR_EN = {
     climb: "E: climb",
     bell: "E: listen",
     organ: "E: sit at the organ",
+    engineer: "E: talk to the shipwright",
   })[k] || "E",
 };
 /* ⚠️ LE MENU DÉVELOPPEUR EST LA MÊME TABLE DES DEUX CÔTÉS — pointée, jamais
@@ -858,6 +1226,8 @@ export const FERME_STR = {
       land: "Je voudrais acheter une parcelle.",
       ballot: "Je viens voter.",
       fonds: "C'est quoi, le fonds de la halle ?",
+      engineer: "Connaissez-vous quelqu'un qui dessine des bateaux ?",
+      engineer: "Connaissez-vous quelqu'un qui dessine des bateaux ?",
     }[k] || k),
     hallTopicTitle: (k) => ({
       mayor: "🎩 Rencontrer le maire",
@@ -867,6 +1237,8 @@ export const FERME_STR = {
       land: "🗺️ Le cadastre",
       ballot: "🗳️ Le scrutin",
       fonds: "📜 Le fonds de la halle",
+      engineer: "📐 L'architecte naval",
+      engineer: "📐 L'architecte naval",
     }[k] || k),
     hallMayorNow: (e, n) => `Le maire en exercice est ${e} ${n}.`,
     hallMayorAudience: (d, k) => k === 0
@@ -2741,6 +3113,7 @@ export const FERME_STR = {
       land: "I would like to buy a plot.",
       ballot: "I am here to vote.",
       fonds: "What is the market hall fund?",
+      engineer: "Do you know anyone who draws boats?",
     }[k] || k),
     hallTopicTitle: (k) => ({
       mayor: "🎩 Meeting the mayor",
@@ -2750,6 +3123,7 @@ export const FERME_STR = {
       land: "🗺️ Land registry",
       ballot: "🗳️ The ballot",
       fonds: "📜 The market hall fund",
+      engineer: "📐 The naval architect",
     }[k] || k),
     hallMayorNow: (e, n) => `The sitting mayor is ${e} ${n}.`,
     hallMayorAudience: (d, k) => k === 0

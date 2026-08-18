@@ -1,11 +1,66 @@
-# LA QUÊTE DE L'ÉTOILE — « THE FALLEN STRING »
+# LA QUÊTE DE L'ÉTOILE — « LE BATEAU DES ÉTOILES » / « THE STAR BOAT »
 
-**Document de conception, zip 444.** Écrit sur disque exprès (consigne de reprise) : si la
-session est interrompue, tout est ici, y compris l'**état d'avancement** (§10).
+**Document de conception, ouvert au zip 444, RELU CONTRE LE CODE AU 452, PUIS AU 453, ÉTENDU AU
+454.** Écrit sur disque exprès (consigne de reprise) : si la session est interrompue, tout est ici,
+y compris l'**état d'avancement** (§10).
 
-⚠️ **Le texte du JEU est en ANGLAIS et en anglais seulement** (cette passe). Ce document-ci est en
-français comme le reste de la doc. Toutes les chaînes joueur vivent dans `fermeStrings.js` sous
-une seule clé racine `star:` — la passe française sera un ajout de clés, pas un refactor.
+⚠️⚠️⚠️ **ZIP 454 — LA QUÊTE A UNE PORTE D'ENTRÉE, UN CHANTIER NAVAL, ET UN MÉTIER.** Demande de
+Guillaume, en quatre points, tous livrés :
+1. **La chute ne tombe plus sur n'importe quelle ferme** : il faut **Eduardo ET Tristan actifs**,
+   plus **quatre artisans** (`starFallGate`). *« ce patch est logique : eduardo prend le bateau à
+   la fin de la quête et tristan y travaille. »* — et il répare une incohérence du 450 : la fin
+   faisait partir avec le navire un personnage dont rien ne garantissait la présence.
+2. **Le fantôme du bateau ne s'affiche plus gratuitement.** Il fallait des PLANS : l'étoile, à
+   peine sortie du cratère, envoie demander un **architecte naval** à la mairie ; **Célestin
+   Kerguélen** arrive en trois minutes contre **24 000 or, 60 récoltes et 12 poissons**, travaille
+   **quinze minutes réelles** sur la grève, et rend ses plans. **P** déplie le plan ; **au bord du
+   lac, il fait apparaître le bateau entier en fantôme sur sa cale.**
+3. **Le bois est un travail, pas une trouvaille.** Un morceau ne se pose sur la cale que si
+   l'étoile s'en souvient **ET** que Tristan a livré la pièce : cinq commandes, dans l'ordre du
+   plan, payées en bois, chacune quelques minutes de sciage. La résolution finale attend le
+   dernier bordage.
+4. **Le sillon a déménagé et il a une physique.** Il tombait à quatre cases du puits, au milieu
+   des potagers, et c'était une bande de terre PLATE qu'on traversait comme de l'herbe. Il tombe
+   maintenant **au nord, loin de tout**, et il est décrit comme le cratère : une hauteur, une
+   pente, un éclairage, un bourrelet fibreux, des fissures, **et un enfoncement sous les pieds**.
+5. **La comète tombe trois fois moins vite**, sauf à l'absolue fin où elle reprend sa vitesse.
+
+⚠️⚠️ **ET LE 454 A PAYÉ UNE SEPTIÈME FORME DU DÉFAUT DE BANC, QUI MÉRITE SON NOM : UNE GRANDEUR
+JUSTE, MESURÉE SUR UN INTERVALLE QUE LE JOUEUR NE REGARDE PAS.** Le premier réglage du
+ralentissement était vert sur les deux contrôles (⅓ de vitesse pendant la phase lourde, vitesse
+d'origine au contact) et **ne changeait rien à l'écran** : la comète naît à 1,3 diagonale et
+n'entre dans le cadre qu'aux derniers 22 % de sa course, très exactement la portion que la reprise
+de vitesse couvrait. On ralentissait une comète invisible. Le banc mesure désormais la **durée de
+la partie VISIBLE** (×2,25), et les deux nombres de la perspective sont sortis de la closure de la
+boucle de rendu pour qu'il puisse la calculer.
+
+⚠️⚠️⚠️ **LE 453 A TROUVÉ, EN CHERCHANT AUTRE CHOSE, LE PLUS GROS DÉFAUT DE TOUT LE CHANTIER : 41
+DES 136 PHRASES DE LA QUÊTE N'ÉTAIENT AFFICHÉES PAR AUCUN CHEMIN DE CODE.** Parmi elles : **la
+rencontre avec l'étoile** — c'est-à-dire la seule phrase de toute la quête qui dit ce qu'on fait et
+pourquoi (§5, étape 2) — **les quatre phrases de la cloche**, qui sont la réponse au retournement,
+**le don**, **deux des cinq traces**, et **`fall.quiet`**, que ce document appelle lui-même la
+meilleure page du chantier. Elles étaient écrites, traduites au 451, relues au 452, **citées mot
+pour mot dans les pages qui suivent** — et un joueur ne pouvait en lire aucune.
+⚠️ **La leçon est le pendant exact de celle du 448** (*une constante que seul le banc lit est
+débranchée*) : **une chaîne que personne n'affiche a l'air juste et ne peut pas échouer.** Les 41
+sont branchées, et `verify-quete` compte désormais les lecteurs de chaque phrase.
+⚠️ **Et ça explique le reste du 453** : quand personne ne lit un texte, plus rien ne le corrige. Les
+trois comptes de morceaux qui se contredisaient vivaient dans des phrases dont deux sur trois ne
+s'affichaient jamais.
+
+⚠️⚠️⚠️ **CE DOCUMENT A DÉCRIT L'HISTOIRE D'AVANT PENDANT UN ZIP ENTIER, ET C'EST LA LEÇON QUI
+OUVRE LE FICHIER.** Le 450-451 a remplacé la fiction motrice — **une lyre à qui il manque une
+corde** est devenue **un bateau qu'on rebâtit** — et ce document, qui est le document de REPRISE
+de la quête, a continué de raconter la lyre au §1, au §2, au §5 et au §6. *Un document de reprise
+qui décrit l'histoire d'avant est pire qu'un document manquant : on ne s'en méfie pas.* La règle
+qui en sort, et elle vaut pour tous les documents du dépôt : **quand la FICTION change, le
+document qui la porte fait partie de la livraison, au même titre que les chaînes.**
+
+⚠️ **Le texte du jeu est BILINGUE depuis le 451** (il était en anglais des deux côtés — `fr`
+contenait littéralement `star: STAR_EN`, voir §30.5 de `components/ferme/README.md`). Toutes les
+chaînes joueur vivent dans `fermeStrings.js` sous la clé racine `star:`, **deux tables distinctes**
+— ⚠️ `verify-quete` a dû apprendre à REFUSER ce qu'il exigeait (`en.star === fr.star`). Les
+citations de ce document sont désormais les phrases **françaises réelles**, relues dans le fichier.
 
 ⚠️⚠️ **RÉVISION APRÈS LE PREMIER RETOUR DE GUILLAUME**, et c'est la remarque la plus utile du
 chantier : *« ne t'embête pas à recopier les mécaniques des autres jeux coopératifs, il faut
@@ -36,56 +91,102 @@ L'enquête « la parcelle qui n'existe pas » (442) est **retirée entièrement*
 
 ## 1. L'HISTOIRE
 
-Le ciel a une **Lyre**. Une lyre à qui il manque une corde ne joue pas.
+⚠️⚠️ **RÉÉCRITE AU 450-451, SUR DEMANDE DE GUILLAUME**, et le refus qui l'a produite vaut d'être
+gardé parce qu'il est devenu une règle : *« l'idée de construire une lyre est un peu arbitraire ? »*
+— elle l'était. **Une lyre est un objet d'ADULTE** : un enfant de sept ans ne sait pas ce que c'est,
+donc « pourquoi on construit ça ? » est la première question qu'il pose, et c'est exactement celle
+qu'on ne veut pas entendre. **Un bateau cassé qu'on répare n'a besoin d'aucune explication.**
 
-Une nuit, la corde tombe. Elle traverse le ciel au-dessus de la vallée, se brise ; le gros du
-morceau s'enfonce dans un pré à l'est de Valley Town, un éclat dépasse la ville et vient se
-planter **dans le champ de la ferme**, encore brûlant.
+**Les étoiles naviguent.** Une nuit, l'une d'elles fait naufrage au-dessus de la vallée : le ciel
+se déchire d'est en ouest, quelque chose s'écrase au loin, les vitres tremblent, tous les oiseaux
+de la vallée s'envolent d'un coup. **Son bateau s'est cassé en tombant. Cinq morceaux.** Le gros de
+l'épave — et l'étoile avec — creuse un cratère dans un pré à l'est de Valley Town ; **la coque**
+dépasse la ville et vient se planter **dans le champ de la ferme**, encore brûlante.
+⚠️ *Ce paragraphe disait « le gros de la COQUE creuse un cratère » jusqu'au 453, ce que la table du
+code contredit depuis le 450 (`hull` vient de `furrow`, le champ de la ferme). Un document et une
+table qui racontent deux fois la même chose finissent par ne plus la raconter pareil ; ici, c'est la
+table qui a raison, et le document qui a menti pendant trois zips.*
 
-L'étoile est vivante, petite, terrifiée. Elle ne rentre chez elle que si elle **chante son nom** —
-chez les étoiles, un nom est une phrase de cinq notes. Elle en a perdu quatre dans sa chute.
+L'étoile est vivante, plus petite qu'une poule, elle tremble. Sans son bateau, elle ne rentre pas.
+**Chaque morceau chante une note quand on le touche** — c'est à ça qu'on les reconnaît, et c'est ce
+qui a survécu de la version d'avant : le nom en cinq notes est devenu un bateau en cinq morceaux
+**sans qu'aucune mécanique ne bouge**.
 
-Les joueurs les retrouvent une par une. Quand les quatre chantent enfin ensemble, la phrase
-**s'arrête net** : l'étoile est tombée **avant qu'on lui donne sa cinquième note**. Elle ne sait
-pas son propre nom. Le ciel ne peut pas la retrouver.
+Les joueurs les retrouvent un par un. Quand tous ceux qu'on peut trouver dehors chantent enfin
+ensemble, la phrase **s'arrête net** : le bateau attend le dernier, et il n'y en a pas. **Elle est tombée avant que
+son bateau ait une cloche.** Un bateau qui ne peut pas sonner ne traverse pas.
 
 Et de l'autre bout de la ville, **la cloche de l'église sonne une fois, toute seule.**
 
-La cloche a été fondue il y a cent ans dans une étoile tombée qui n'est jamais repartie — trop
-lourde, coulée dans le bronze, restée. Elle connaît son nom. Elle a une note. **La donner veut
-dire ne plus jamais pouvoir partir.**
+La cloche a été fondue il y a cent ans dans une étoile tombée qui n'est jamais repartie — trouvée
+tiède dans un champ, coulée dans cette forme, trop lourde pour rentrer. **Mais elle n'est jamais
+allée en mer.**
 
-Elle la donne.
+> *« Petite. Emmène-moi. J'ai sonné quatre mille fois de la même poutre. »*
+
+Elle devient la cloche de bord.
 
 ---
 
 ## 2. POURQUOI CETTE HISTOIRE
 
-- **L'enjeu tient en une phrase pour un enfant de 7 ans** : « une étoile est tombée, elle a
-  oublié son nom, il faut le lui rendre ». Aucun vocabulaire à apprendre.
-- **Pas de méchant, et pourtant une perte.** Ce qui coûte, c'est ce que la cloche donne. Un
-  enfant le comprend tout de suite ; à 27 ans on y trouve le poids.
-- **Tout rime avec ce qui existe.** La Lyre est un instrument → le nom est une chanson → il faut
-  un instrument assez fort pour atteindre le ciel → **l'orgue de l'église**, déjà en jeu, dans la
-  tribune, sous le clocher. Rien n'est plaqué.
+- **L'enjeu tient en une phrase pour un enfant de 7 ans** : « une étoile est tombée, son bateau
+  est cassé, il faut le rebâtir ». Aucun vocabulaire à apprendre, **et aucune question à poser**.
+- ⚠️⚠️ **ET IL SE VOIT, CE QUI EST TOUT L'INTÉRÊT DU CHANGEMENT.** Un nom en cinq notes est une
+  idée qu'il faut LIRE ; un bateau à qui il manque un mât est une idée qu'on lit **en regardant
+  l'écran**. C'est ce qui a permis au navire de devenir le pisteur (§6), et c'est la vraie raison
+  pour laquelle la lyre est sortie — pas parce qu'elle était moins belle, **parce qu'elle n'était
+  pas regardable**.
+- **Pas de méchant, et pourtant une perte.** Ce qui coûte, c'est ce que la cloche donne : sa voix,
+  et sa place. ⚠️ **Le 451 a changé ce sacrifice en DÉPART sans l'affaiblir** — avant, la cloche
+  donnait sa note et restait ; maintenant elle part et ne rentrera jamais chez elle. Un enfant
+  comprend « la cloche va enfin voir la mer » sans qu'on lui explique rien.
+- **Tout rime avec ce qui existe.** Les morceaux chantent → il faut un instrument assez fort pour
+  les faire chanter ensemble → **l'orgue de l'église**, déjà en jeu, dans la tribune, sous le
+  clocher — et la cloche est juste au-dessus. Rien n'est plaqué.
 - ⚠️ **Ça donne enfin une raison au fichier `public/sounds/church-organ.mp3`** que le 441 attend.
-  Le son n'est pas dans cette passe ; la scène qui le justifie, si.
-- **La ferme y gagne quelque chose** (le premier éclat, et la trace finale). Le 442 se reprochait
+  Le son n'est toujours pas là ; la scène qui le justifie, si.
+- **La ferme y gagne quelque chose** (le premier morceau, et la trace finale). Le 442 se reprochait
   de ne rien lui donner.
 - **Le pré nu y gagne une raison d'être** — `CLAUDE.md` §13 pose la question depuis trois zips.
+- ⚠️ **Et la rive du lac aussi** : le bateau se rebâtit sur la cale du chantier naval, un endroit
+  de vie de plus sur une rive qui n'en avait aucun (§30.3 du README).
 
 ---
 
 ## 3. ⭐ LE THÈME : UNE QUÊTE MAGIQUE **SECRÈTE**
 
-⚠️⚠️ **PERSONNE D'AUTRE NE VOIT L'ÉTOILE.** C'est la décision de ton retour, et elle change tout
-le ton. Les résidents passent devant le cratère et n'y voient qu'un trou. Aucun panneau ne
-l'annonce, aucun PNJ ne la donne, le tableau des nouvelles n'en dit pas un mot. Conséquences,
-toutes bonnes :
+⚠️⚠️⚠️ **ZIP 455 — CE CHAPITRE A ÉTÉ COUPÉ EN DEUX, PAS RENIÉ, ET C'EST LA PLUS IMPORTANTE LIGNE
+DE LA PAGE.** Il disait : *« personne d'autre ne voit l'étoile ; aucun panneau ne l'annonce, aucun
+PNJ ne la donne, le tableau des nouvelles n'en dit pas un mot ; la quête ne commence pas, elle
+ARRIVE »*. Guillaume a demandé l'inverse de la seconde moitié (« le lancement de la mission doit
+être annoncé, pas automatique, la comète ne doit pas arriver comme ça »), et la première moitié est
+restée intacte parce qu'on a séparé deux choses qui n'en faisaient qu'une :
 
-- **La quête ne commence pas, elle ARRIVE.** Elle tombe du ciel pendant qu'on fait autre chose.
-  *Une histoire qui n'existe que pour qui ouvre le bon panneau n'existe pas* — le reproche que le
-  442 s'est fait à lui-même, réglé en le supprimant plutôt qu'en ajoutant un second panneau.
+> **LA PIERRE EST PUBLIQUE. L'ÉTOILE RESTE SECRÈTE.**
+
+- **Ce que la vallée sait** : des astronomes annoncent une pluie d'astéroïdes. L'hôte décide quand
+  la nouvelle se répand, l'affiche de l'observatoire est punaisée au tableau des nouvelles, la
+  moitié des habitants s'agitent, et **tout le monde voit tomber le caillou** — « ! » compris,
+  au-dessus de chaque tête, à l'instant du contact.
+- **Ce que personne ne saura jamais** : ce qu'il y avait dedans. Aucun habitant ne nomme l'étoile,
+  aucun ne dit où aller, aucun ne dit quoi faire. `verify-quete` **le refuse** — deux listes de mots
+  interdits, l'une pour ce qui est secret (la petite étoile, le cratère, le sillon, le navire),
+  l'autre pour les tournures qui envoient quelque part (« va voir », « cherche », « trouve »).
+- ⚠️⚠️ **ET LE CONTRASTE REND LE SECRET PLUS FORT QU'AVANT.** Jusqu'ici le silence de la vallée
+  était une ABSENCE — personne ne parlait de rien, ce qui est aussi ce que fait un décor. C'est
+  maintenant un ÉCART : ils en ont tous parlé pendant deux jours, ils l'ont tous vue tomber, et pas
+  un ne verra la lumière qui vous suit. `L.star.fall.quiet` dit désormais exactement ça — elle
+  disait « personne ne sort regarder », ce que ce zip a rendu faux.
+- ⚠️ **LE FAMILIER-GUIDE DU 449 RESTE JUSTIFIÉ AU MOT PRÈS.** Sa note dit qu'« un habitant qui
+  renseignerait le joueur démolirait la meilleure page du chantier » : c'est toujours vrai, et
+  c'est très exactement ce que le second contrôle ci-dessus protège.
+
+**Ce qui reste vrai sans changement :**
+
+- **La quête ne se cherche pas.** Elle s'annonce et elle tombe ; il n'y a toujours aucun panneau à
+  ouvrir pour la trouver, aucun PNJ à qui parler pour l'obtenir. *Une histoire qui n'existe que
+  pour qui ouvre le bon panneau n'existe pas* — le reproche que le 442 s'est fait à lui-même.
 - **Aucun nouveau PNJ.** Le premier jet en posait un (une verrière). Il est supprimé : moins de
   travail, plus de secret, et surtout **plus juste**. Les deux seuls personnages sont l'étoile et
   la cloche — deux êtres magiques, et c'est très bien ainsi.
@@ -110,7 +211,7 @@ Trois usages, de plus en plus forts :
 | | ce que fait la lumière | où |
 |---|---|---|
 | **une ombre qui MONTRE** | ton ombre au sol n'est pas ta forme : il y a quelqu'un de petit dessus | étape 1 |
-| **une ombre qui PENCHE** | toutes les ombres de la ville se tournent vers les éclats perdus | étape 2 |
+| **une ombre qui PENCHE** | toutes les ombres de la ville se tournent vers les morceaux perdus | étape 2 |
 | **une lumière qui PORTE** | elle descend dans l'eau noire, elle monte dans les tuyaux d'orgue | étapes 3 et 5 |
 | **une ombre qui MENT** | sur cent perles de verre, une seule projette l'ombre d'une étoile | étape 4 |
 
@@ -148,11 +249,12 @@ avec la vraie collision et la vraie course — jamais réglée à l'œil (leçon
 
 | # | titre (carte de chapitre) | où | min |
 |---|---|---|---|
-| 1 | **What Landed in the Field** | la ferme | 8 |
-| 2 | **The Crater** | le pré à l'est de Valley Town | 10 |
-| 3 | **What the Water Kept** | le lac du sud, le ponton | 10 |
-| 4 | **The Thief's Two Prizes** | le quartier des artisans, la nuit | 13 |
-| 5 | **The Fifth Note** | l'église : tribune + **beffroi** | 14 |
+| 1 | **Ce qui est tombé dans le champ** · *What Landed in the Field* | la ferme | 8 |
+| 2 | **Le cratère** · *The Crater* | le pré à l'est de Valley Town | 10 |
+| 3 | **Ce que l'eau gardait** · *What the Water Kept* | le lac du sud, le ponton | 10 |
+| 4 | **Les deux trésors de la voleuse** · *The Thief's Two Prizes* | le quartier des artisans, la nuit | 13 |
+| 5 | **La cinquième note** · *The Fifth Note* | l'église : tribune + **beffroi** | 14 |
+| — | **`Le Bateau des Étoiles`** · *The Star Boat* — la carte de FIN | le beffroi, puis l'aube | — |
 
 ⚠️ **Rien ne s'ajoute sans en retirer.** C'est la première chose que le 442 n'a pas tenue.
 ⚠️ **Aucun minuteur d'échec nulle part.** Rater un mini-jeu recommence la manche, jamais l'étape.
@@ -166,28 +268,66 @@ intérieur — et **au même instant pour tout le monde** : l'hôte décide, dif
 chaque client date à SA réception et déroule sa chronologie (jamais de comparaison d'horloge, §3).
 Le jeu tourne derrière ; on ne coupe pas la simulation.
 
-| t | ce qui se passe | ce que ça réutilise |
-|---|---|---|
-| 0,0 s | le ciel s'assombrit d'un cran, les couleurs se désaturent | le voile de nuit existe, on le multiplie |
-| 1,2 s | **un trait de lumière traverse le ciel**, ouest → est, la traîne s'effiloche | la couche de ciel est PARTAGÉE ferme/ville depuis le 429 : une seule écriture |
-| 3,0 s | **flash blanc** (2 images) puis noir | l'alpha de `zoneTransRef`, inversé en blanc |
-| 3,2 s | **la caméra tremble** (amorti, 1,2 s) | offset de caméra, jamais la position du joueur |
-| 3,4 s | **tous les oiseaux décollent** | le système de nuées (§16 du README) |
-| 4,5 s | à l'est, **une colonne de lumière** monte du pré — visible depuis la ferme ET depuis la ville | la fonction de ciel commune |
-| 6,0 s | **carte de chapitre** : noir, un point de lumière, `Chapter One — What Landed in the Field` | overlay neuf, réutilisé 5 fois |
+⚠️⚠️ **CE TABLEAU EST ÉCRIT EN ÉCART À L'IMPACT, PLUS EN SECONDES ABSOLUES — RÉÉCRIT AU 455.** Il
+donnait « 1,2 s · 3,0 s · 3,4 s » depuis le 444 ; le 454 a triplé la durée du vol (2,05 s → 5,1 s)
+et **tous ces nombres sont devenus faux d'un coup**, sans que rien ne le dise. Le CODE, lui, était
+déjà écrit en écart à `STAR_FALL_IMPACT_MS` depuis le 448 : c'est la doc qui avait une seconde
+description du même rythme. ⚠️ Il disait aussi le trait de lumière « **ouest → est** », alors que le
+448 a inversé la course (le sillon se creuse en s'arrêtant à l'ouest, donc elle vient de l'est).
 
-⚠️ **Puis personne ne dit rien.** Aucun résident ne commente. C'est la première chose étrange, et
-c'est le thème (§3).
+| quand | ce qui se passe | ce que ça réutilise |
+|---|---|---|
+| t = 0 | le ciel s'assombrit d'un cran, les couleurs se désaturent | le voile de nuit existe, on le multiplie |
+| après `STAR_CAM_GO_MS` | **la caméra part** — vers le cratère en ville, ⚠️ **vers un point EN AMONT de la course à la ferme** (455) | `starCamTarget`, une jointure avec l'azimut |
+| après `STAR_FALL_APPEAR_MS` | **la comète traverse le ciel**, est → ouest, lourde (⅓ de vitesse jusqu'aux derniers dixièmes) | la couche de ciel est PARTAGÉE ferme/ville depuis le 429 |
+| ⚠️ à `STAR_FRAG_AT` du vol (455) | **elle se fend**, à la ferme seulement — la gerbe d'impact resert d'éclat de fracture | `starFragments` (règle) + `drawStarComet` (dessin) |
+| `IMPACT` | **flash blanc** (2 images), puis la gerbe · ⚠️ **hors cadre à la ferme** | `drawStarImpactFlash` |
+| `IMPACT` + 0,2 s | **la caméra tremble** (amorti, 1,2 s) | `transform` du canevas, jamais la position du joueur |
+| ⚠️ `IMPACT` → +2 s (455) | **tous les PNJ portent un « ! »** | `starBang` + `drawEmoteBubble`, dérivés de la même horloge |
+| `IMPACT` + 0,4 s | **tous les oiseaux décollent** | le système de nuées (§16 du README) |
+| `IMPACT` + 1,5 s | **une colonne de lumière** monte du point d'impact | la fonction de ciel commune |
+| `STAR_FALL_MS` − 3 s | **carte de chapitre** | overlay neuf, réutilisé 6 fois depuis le 455 |
+
+⚠️⚠️ **Puis plus personne n'en dit un mot — ET C'EST LE CONTRASTE, PLUS L'ABSENCE.** Ils en ont
+tous parlé pendant deux jours, ils l'ont tous vue tomber, ils ont tous sursauté. Et pas un ne verra
+jamais ce qui est sorti du trou. C'est le thème (§3), et il est plus fort depuis le 455 qu'avant.
 
 🔊 Accroches son, **vides et nommées** : `starSfx("fall")`, `starSfx("impact")`,
 `starSfx("chapterCard")`.
 
-**Déclenchement** : la quête s'arme toute seule à la première nuit où jour ≥ 3 et un joueur est en
-ligne. **Personne n'a rien à trouver pour commencer : ça tombe du ciel.**
+⚠️⚠️⚠️ **DÉCLENCHEMENT — RÉÉCRIT AU 455.** Ce paragraphe disait : « la quête s'arme toute seule à
+la première nuit où jour ≥ 3 et un joueur est en ligne ». Elle ne s'arme plus toute seule.
+
+1. **L'INVITE.** Quand la ferme est éligible (jour ≥ 3, Eduardo + Tristan **actifs**, 4 artisans —
+   `starFallGate`, inchangé depuis le 454), **l'hôte** voit au crépuscule un panneau :
+   « Démarrer l'enquête « La Belle Étoile » ? » · **Oui** / **Plus tard**. L'invité ne voit rien.
+   ⚠️ Elle ne s'ouvre QUE si la quête est réellement déblocable : un panneau qui s'ouvre suivi d'un
+   résolveur qui refuse, c'est « le jeu propose et refuse » (426). « Plus tard » ne traverse pas le
+   réseau — l'invite revient au crépuscule suivant, une fois par jour de jeu.
+2. **L'ANNONCE.** « Oui » date `star.warn` côté hôte et diffuse **un** `send()` : fondu enchaîné,
+   carte plein écran « La Belle Étoile — Les astronomes ont prévenu », une ligne de chat.
+3. ⚠️⚠️ **LE TAMPON, ET IL NE SE PASSE RIEN D'AUTRE.** C'est la moitié la plus importante de la
+   demande (« rien ne doit se passer immédiatement »). Pendant ce temps :
+   · l'**avis de l'observatoire** est lisible au tableau des nouvelles de Valley Town ;
+   · **~4 PNJ sur 10** (`STAR_NERVE_SHARE`) se balancent ou tournent une ou deux fois sur eux-mêmes
+     avec un **« ! »** au-dessus de la tête, toutes les onze secondes, **décalés** ;
+   · **quand on s'approche d'eux à 3,4 cases**, ils disent ce qu'ils ont entendu — huit rumeurs de
+     peur, et **six indices** qui annoncent chacun une étape à venir sans jamais le savoir
+     (l'ingénieur breton, les étoiles bizarres des nuits d'avant, la cloche fondue dans une pierre
+     du ciel, la pie du verrier, le fond du lac, le sable qui devient du verre vert).
+   ⚠️ **Tout est DÉRIVÉ de `star.warn` et du `rid`** : les mêmes PNJ s'agitent et disent les mêmes
+   phrases sur les deux écrans, **pour zéro message et zéro champ d'état**.
+4. **LA CHUTE**, à la **première nuit qui COMMENCE après l'annonce**, avec un plancher de
+   **5 minutes réelles** (`starFallDue`). ⚠️ « La nuit qui suit » a deux lectures : prise au sens
+   « la prochaine fois qu'il fait nuit », un « oui » cliqué à 20 h faisait tomber la comète dans la
+   minute — c'est-à-dire ce que la demande refuse. Un tampon dure donc **5 à 16 minutes réelles**.
+
+⚠️ **ET LA CHUTE ELLE-MÊME A CHANGÉ À LA FERME** (voir §12.0) : la caméra ne se pose plus sur le
+sillon avant l'impact, le caillou **se fend en vol**, et l'impact a lieu **hors cadre**.
 
 ---
 
-### ÉTAPE 1 — **WHAT LANDED IN THE FIELD** · la ferme · ~8 min
+### ÉTAPE 1 — **CE QUI EST TOMBÉ DANS LE CHAMP** · la ferme · ~8 min
 
 **Où.** Un sillon de terre brûlée dans les champs de l'ouest. ⚠️ **Position DÉRIVÉE, pas écrite** :
 ancre au sud du puits, balayage déterministe en spirale jusqu'à la première case libre et
@@ -196,33 +336,37 @@ sur une carte labourée depuis des mois est un piège. Le banc vérifie qu'elle 
 praticable, et distincte de la boutique, du bac, du panneau de gare et du seuil de la maison.
 
 **Ce qu'on voit.** Six cases de terre noire retournée, de l'herbe givrée de sel de verre, et au
-bout un éclat **trop brillant pour être regardé**, qui fume.
+bout un morceau **trop brillant pour être regardé**, qui fume.
 
-> `star.s1.tooHot` — "It's too hot to look at. It hisses when the rain touches it."
+> `star.s1.tooHot` — « C'est trop brûlant pour regarder. Ça siffle sous la pluie. »
 
-**🎮 MINI-JEU 1 — « COOLING » · l'arrosoir**
+**🎮 MINI-JEU 1 — « COOLING » · l'arrosoir · à l'écran : « Fais-le refroidir »**
 Le joueur a déjà l'outil et il l'aime. On arrose **par à-coups** ; une jauge de chaleur doit rester
 dans une bande étroite. Trop d'eau d'un coup et le verre **se fend** (la manche repart) ; pas assez
 et il remonte au blanc.
-- **En canevas**, pas en barres CSS : on voit l'éclat, la vapeur, la couleur descendre
+- **En canevas**, pas en barres CSS : on voit le morceau, la vapeur, la couleur descendre
   blanc → orange → rouge sombre → bleu. ⚠️ **Chaque impulsion fait un panache de vapeur qui masque
   la jauge une seconde** — c'est ça, la difficulté, et elle est diégétique.
 - **Trois manches**, bande de 0,26 → 0,19 → 0,13.
 - À deux : deux arrosoirs, bande 40 % plus large. Confort, pas obligation — c'est le tutoriel.
 
-**LA PREMIÈRE MAGIE.** L'éclat refroidit, sa lumière s'allume — et **l'ombre du joueur au sol
+**LA PREMIÈRE MAGIE.** Le morceau refroidit, sa lumière s'allume — et **l'ombre du joueur au sol
 n'est plus sa forme** : il y a quelqu'un de petit assis sur son épaule. On se retourne : il n'y a
 personne.
 
-> `star.s1.shadow` — "Your shadow has someone small sitting on its shoulder. You turn around.
-> Nothing there."
+> `star.s1.shadow` — « Ton ombre a quelqu'un de tout petit assis sur son épaule. Tu te retournes.
+> Il n'y a personne. »
 
-**Ce que ça donne.** **Éclat 1.** Le pisteur apparaît. L'éclat penche vers l'est, toujours.
-→ **prendre le train.**
+**Ce que ça donne.** **Le premier morceau — LA COQUE.** ⚠️ **C'est ici que le navire apparaît sur
+la cale** (§6) : une coque posée sur ses tins, et quatre fantômes bleus autour d'elle. Le morceau
+penche vers l'est, toujours. → **prendre le train.**
+
+> `star.s1.got` — « Un morceau du bateau. Il chante une note quand on le touche. »
+> `star.s1.east` — « Il penche vers l'est. Toujours vers l'est. »
 
 ---
 
-### ÉTAPE 2 — **THE CRATER** · le pré à l'est · ~10 min
+### ÉTAPE 2 — **LE CRATÈRE** · le pré à l'est · ~10 min
 
 **Où.** Un cratère de neuf cases dans le pré entre le champ de foire et le bois (validé). ⚠️
 **Dérivé** d'une ancre, recherche déterministe de la première zone dégagée. Le sentier de l'est
@@ -255,23 +399,28 @@ retourner l'efface.
   le défaut du 432.
 - **Solo** : dos tourné et immobile **beaucoup plus longtemps** ; elle ressort si on rate.
 
-**LA RENCONTRE.** Grosse comme un poing, elle tremble, elle parle **en bulles courtes** au-dessus
-d'elle, comme les résidents. Elle voit l'éclat qu'on porte, **le reprend**, et pour la première
+**LA RENCONTRE.** Plus petite qu'une poule, elle tremble, elle parle **en bulles courtes** au-dessus
+d'elle, comme les résidents. Elle voit le morceau qu'on porte, **le reprend**, et pour la première
 fois **deux notes chantent ensemble**. Elle arrête de trembler.
 
-> `star.s2.meet1` — "It is smaller than a hen. It is shaking."
-> `star.s2.meet2` — "You hold out the piece from your field. It takes it back."
-> `star.s2.meet3` — "Two notes, together. It stops shaking."
+> `star.s2.meet1` — « Elle est plus petite qu'une poule. Elle tremble. »
+> `star.s2.meet2` — « Tu tends le morceau de ton champ. Elle le reprend. »
+> `star.s2.meet3` — « Deux notes, ensemble. Elle arrête de trembler. »
+
+⚠️ **ET C'EST ICI, ET NULLE PART AILLEURS, QUE L'HISTOIRE S'ÉNONCE** — une ligne, jamais un
+panneau. C'est la seule phrase de toute la quête qui dit ce qu'on fait et pourquoi :
+
+> `star.s2.name` — « Son bateau s'est cassé en tombant. Cinq morceaux. Elle n'en a que deux. »
 
 **LE COMPAGNON.** ⚠️ **Sa position est DÉRIVÉE de celle de son porteur** (`trailFollow`, le
 mécanisme des invités de famille depuis le 428) : **zéro message, aucune collision propre,
-impossible de traverser un mur**. Elle brille près d'un éclat, **elle se cache quand un résident
+impossible de traverser un mur**. Elle brille près d'un morceau, **elle se cache quand un résident
 approche** (§3), elle se pose sur le banc d'orgue à la fin. **C'est elle, l'interface qui
 accompagne le joueur.**
 
-**🎮 MINI-JEU 2 — « THE LEANING SHADOWS »**
+**🎮 MINI-JEU 2 — « THE LEANING SHADOWS » · à l'écran : « Écoute les ombres »**
 L'étoile chante, et **toutes les ombres de la ville se tournent** — arbres, lampadaires, statues,
-étals : elles cessent de suivre le soleil et penchent vers un éclat perdu. Mais **une direction
+étals : elles cessent de suivre le soleil et penchent vers un morceau perdu. Mais **une direction
 n'est pas un lieu**.
 - Geste : `E` n'importe où → une onde part au sol, et les ombres autour de soi pivotent
   lentement, en montrant leur direction. **C'est le plus beau plan de la quête et il ne coûte
@@ -287,7 +436,7 @@ n'est pas un lieu**.
 
 ---
 
-### ÉTAPE 3 — **WHAT THE WATER KEPT** · le lac du sud · ~10 min
+### ÉTAPE 3 — **CE QUE L'EAU GARDAIT** · le lac du sud · ~10 min
 
 **Où.** Sous le ponton (`TOWN_PIER`). L'eau du 435-436 est le plus beau morceau de la carte —
 profondeur, reflets, haut-fond. On plonge dedans, enfin.
@@ -300,39 +449,46 @@ que l'intérieur de la flaque** — dehors, écran noir.
 - Donc : **A éclaire le chemin de B, littéralement.** A voit la surface et devine ; B voit le fond
   et cherche. Aucun des deux ne peut faire les deux.
 - Zéro message : la position de A circule déjà, le client de B dessine la flaque sous elle.
-- **Solo** : on cale l'étoile sur la bitte d'amarrage. La flaque **ne bouge plus** ; l'éclat est à
+- **Solo** : on cale l'étoile sur la bitte d'amarrage. La flaque **ne bouge plus** ; le morceau est à
   son bord, il faut plonger en biais, ressortir, recommencer. Trois essais au lieu d'un.
 
-**🎮 MINI-JEU 3 — « THE DIVE »** — canevas plein écran, trois descentes :
+**🎮 MINI-JEU 3 — « THE DIVE » · à l'écran : « Plongée n »** — canevas plein écran, trois descentes :
 1. **Le souffle** : un anneau de lumière se referme depuis le bord de l'écran. Seule limite.
 2. **Le courant** : des veines sombres poussent de côté ; on corrige aux flèches, plus fort en
    descendant.
 3. **Les obstacles** : pilotis, herbiers, une vieille barque. Un choc coûte du souffle, pas la
    manche.
-4. **La prise** : l'éclat **pulse** toutes les 1,1 s ; il faut être dessus au bon battement.
+4. **La prise** : le morceau **pulse** toutes les 1,1 s ; il faut être dessus au bon battement.
    Rythme, pas réflexe.
 - **Montée** : 22 m courant faible et aucune pulsation (on apprend) · 34 m courant moyen · 48 m
-  courant fort, **et l'éclat glisse de deux cases quand on approche**.
+  courant fort, **et le morceau glisse de deux cases quand on approche**.
 - Feedback : bulles, assombrissement, le halo de A qui s'éloigne en surface, un battement visuel
   quand le souffle est court.
 - Échec = on remonte, on souffle, on replonge. **Aucune perte.**
 
-**Éclat 2.** En remontant : **une ombre traverse l'eau. Des ailes.**
+**Le deuxième morceau — LE SAFRAN.** En remontant : **une ombre traverse l'eau. Des ailes.**
 
-> `star.s3.wings` — "A shadow crosses the water. Wings. Something small and bright goes east with
-> it."
+> `star.s3.got` — ⚠️⚠️ **CORRIGÉ AU 453 : C'EST DÉSORMAIS UNE FONCTION `(n, total)`**, appelée
+> avec ce que le navire montre. Elle disait « Trois morceaux. Trois notes. » devant un bateau à
+> **deux** morceaux sur cinq — le compte en NOTES du 444, laissé en place quand le navire est
+> arrivé. ⚠️ **Et elle servait de message de FIN DE MANCHE**, donc elle s'affichait après CHAQUE
+> plongée, y compris la première : trois morceaux annoncés quand on n'en avait ramené aucun. Le
+> compte ne se dit plus qu'au moment où le navire grandit vraiment (`starWatch`), et les manches se
+> ferment sur `diveDeeper`, qui décrit ce qui se passe.
+> `star.s3.wings` — « Une ombre traverse l'eau. Des ailes. Quelque chose de petit et brillant part
+> vers l'est. »
 
 ---
 
-### ÉTAPE 4 — **THE THIEF'S TWO PRIZES** · les artisans, la nuit · ~13 min
+### ÉTAPE 4 — **LES DEUX TRÉSORS DE LA VOLEUSE** · les artisans, la nuit · ~13 min
 
-⚠️ **Un seul lieu, une seule histoire, deux éclats.** Le premier jet en faisait deux étapes ; les
+⚠️ **Un seul lieu, une seule histoire, deux morceaux.** Le premier jet en faisait deux étapes ; les
 fusionner **raccourcit ET resserre** : une pie niche sur le toit de la verrerie. Elle a pris deux
-éclats. Elle en a **laissé tomber un dans le sable** — fondu dans une perle. Elle a gardé l'autre.
+morceaux. Elle en a **laissé tomber un dans le sable** — fondu dans une perle. Elle a gardé l'autre.
 
 **L'atelier est fermé et noir.** On entre la nuit. **Personne. Aucun PNJ** (§3).
 
-**🤝 + 🎮 MINI-JEU 4 — « A SHADOW THAT LIES »**
+**🤝 + 🎮 MINI-JEU 4 — « A SHADOW THAT LIES » · à l'écran : « Une ombre qui ment »**
 Un râtelier de cent perles de verre. Toutes pareilles. A tient l'étoile et **balaie** le râtelier ;
 les ombres défilent sur le mur du fond. **B regarde le mur.** À un seul angle, une perle projette
 **l'ombre d'une étoile** au lieu de l'ombre d'une bille.
@@ -344,9 +500,9 @@ les ombres défilent sur le mur du fond. **B regarde le mur.** À un seul angle,
 - **Solo** : on coince l'étoile dans le châssis de la fenêtre. La lumière ne bouge plus, donc
   **c'est le râtelier qu'on tourne**, d'un cran à la fois, à la manivelle. Plus long, jouable.
 
-**Éclat 3.**
+**Le troisième morceau — LE MÂT.**
 
-**🤝 + 🎮 MINI-JEU 5 — « THE LURE »**
+**🤝 + 🎮 MINI-JEU 5 — « THE LURE » · à l'écran : « Le leurre »**
 Le nid est sur le toit. **La pie suit la lumière** comme un chat suit une lampe de poche.
 - A **emmène** la lumière — il faut *mener*, pas *tirer* : la pie a du retard et de la patience,
   elle décroche si la lumière s'arrête ou saute. Un vrai petit geste d'adresse.
@@ -354,40 +510,53 @@ Le nid est sur le toit. **La pie suit la lumière** comme un chat suit une lampe
   manche repart.
 - **Solo** : on pose l'étoile, la pie descend et **repart sur un minuteur mesuré**.
 
-**Éclat 4.**
+**Le quatrième morceau — LA VOILE.** (Le mât venait de la perle, juste avant.)
+
+> `star.s4.got` — fonction `(n, total)` depuis le 453 : « Quatre morceaux sur cinq. Il ne manque
+> plus que la cloche. »
 
 #### ⚡ LE RETOURNEMENT
 
-Sur le toit, les **quatre notes chantent ensemble pour la première fois**. C'est beau, ça monte —
-**et ça s'arrête net.** Blanc. Le décor se tait : les oiseaux, le vent (le voile de météo est déjà
-là).
+Sur le toit, les **quatre morceaux chantent ensemble pour la première fois**. C'est beau, ça monte
+— **et ça s'arrête net.** Blanc. Le décor se tait : les oiseaux, le vent (le voile de météo est
+déjà là).
 
-Elle a **quatre** notes. Un nom en fait **cinq**. Elle est tombée **avant qu'on lui donne la
-sienne** — c'est pour ça qu'elle est tombée. Elle ne sait pas son nom. **Le ciel ne peut pas la
-retrouver.**
+Le bateau attend le cinquième, **et il n'y en a pas.** Elle est tombée **avant que son bateau ait
+une cloche** — c'est pour ça qu'elle est tombée. Un bateau qui ne peut pas sonner ne traverse pas.
 
 Elle s'éteint presque. Puis, à l'autre bout de la ville, **la cloche sonne une fois, toute seule.**
 
-> `star.s4.turn1` — "Four notes. It waits for the fifth."
-> `star.s4.turn2` — "There is no fifth. It fell before anyone gave it one."
-> `star.s4.turn3` — "A name it cannot say. A sky that cannot find it."
-> `star.s4.turn4` — "Then, across the town, the church bell rings. Once. Nobody pulled it."
+> `star.s4.turn1` — fonction `(n, total)` depuis le 453 : « Quatre morceaux sur cinq chantent
+> ensemble. Le bateau attend le dernier. » ⚠️ *« le cinquième » demandait un ORDINAL, donc une
+> seconde table de mots à tenir juste ; « le dernier » est vrai quel que soit le nombre de morceaux.*
+> `star.s4.turn2` — « Il n'y en a pas. Elle est tombée avant que son bateau ait une cloche. »
+> `star.s4.turn3` — « Un bateau qui ne peut pas sonner. Une mer qu'il ne peut pas traverser. »
+> `star.s4.turn4` — « Alors, à l'autre bout de la ville, la cloche de l'église sonne. Une fois.
+> Personne ne l'a tirée. »
 
-**Carte de chapitre : `Chapter Five — The Fifth Note`.** ⚠️ **Le pisteur change de sujet en même
-temps que l'histoire** : les quatre pastilles d'éclats laissent place à **une seule, vide**, et à
-une direction vers le clocher.
+⚠️⚠️ **C'EST LE MORCEAU DE FICTION QUE LE NAVIRE A LE PLUS AMÉLIORÉ, ET IL FAUT SAVOIR POURQUOI.**
+La version « nom en cinq notes » demandait au joueur de retenir une règle abstraite (*chez les
+étoiles, un nom fait cinq notes*) pour que le retournement le touche. La version bateau ne demande
+rien : **le cinquième emplacement est vide à l'écran depuis le premier chapitre**, et il a une
+forme de cloche. Le retournement ne révèle pas une règle, **il nomme ce qu'on regardait déjà.**
+
+**Carte de chapitre : `Chapitre Cinq — La cinquième note`.** ⚠️ **Le pisteur change de sujet en même
+temps que l'histoire** : le navire est complet sauf sa cloche, et le chevron pointe le clocher.
 
 ---
 
-### ÉTAPE 5 — **THE FIFTH NOTE** · l'église · ~14 min
+### ÉTAPE 5 — **LA CINQUIÈME NOTE** · l'église · ~14 min
 
-#### ⚠️ CE QUI N'EXISTE PAS ENCORE, ET QU'IL FAUT DIRE
+#### ⚠️ LE BEFFROI EST CONSTRUIT (444) — CE PARAGRAPHE DISAIT L'INVERSE JUSQU'AU 452
 
-**Le clocher n'est pas un lieu du jeu.** L'église a `church` + `churchLoft` ; la tribune contient
-une **cage de vis** et une **corde de cloche** (441), mais **on ne monte pas**, il n'y a pas de
-beffroi. La prémisse le suppose, le dépôt ne l'a pas. **Prix mesuré au 441 : une ligne dans
-`COURT_FLOORS`** + un plan + le palier haut de la vis existante. Aucun `CT_*` de plus, aucune
-zone, aucun champ réseau (l'étage se déduit de `y`). Validé.
+**Il l'a dit un zip de trop, et c'est la deuxième chose que cette relecture a trouvée.** Au moment
+où ces lignes ont été écrites, le clocher n'était pas un lieu du jeu : l'église avait `church` +
+`churchLoft`, la tribune avait sa cage de vis et sa corde (441), et on ne montait pas. **Le 444 l'a
+bâti** — une ligne dans `COURT_FLOORS`, le palier haut de la vis existante, aucun `CT_*` de plus,
+aucune zone, aucun champ réseau (l'étage se déduit de `y`). Il a son arrêt de téléport
+(`churchTower`), son banc (`render-beffroi.mjs`, **28/28**), et il a été monté à l'écran.
+*Une section « ce qui n'existe pas encore » est la première à mentir, parce qu'elle est vraie le
+jour où on l'écrit et fausse le jour où on la lit.*
 
 **Le beffroi.** Huit cases sur dix : la **charpente de bois**, **la cloche** au centre, **quatre
 abat-son** ouverts aux quatre vents, le palier de la vis, de la fiente de pigeon partout. ⚠️ **Ses
@@ -400,26 +569,31 @@ on aura construit une pièce fermée en haut d'un escalier.
 La vis est étroite et noire ; **l'étoile éclaire**. Deux inscriptions à hauteur de main, gravées
 par des sonneurs morts depuis longtemps. Court, savoureux, jamais obligatoire.
 
-> `star.s5.stair1` — "Scratched in the stone: 'J.M. rang for the flood. 1889.'"
-> `star.s5.stair2` — "Lower down, smaller: 'and for nothing at all, some days.'"
+> `star.s5.stair1` — « Gravé dans la pierre : "J.M. a sonné pour la crue. 1889." »
+> `star.s5.stair2` — « Plus bas, en plus petit : "et pour rien du tout, certains jours." »
 
 #### CE QUE DIT LA CLOCHE
 
 Vieille, verte, immense. **Elle parle en vibrant** — le texte apparaît **dans le bronze**, pas dans
 une bulle.
 
-> `star.s5.bell1` — "I fell too. A long time ago. Before the town had a name."
-> `star.s5.bell2` — "They found me warm in a field and they poured me into this shape."
-> `star.s5.bell3` — "I am too heavy to go home now. But I kept my note."
-> `star.s5.bell4` — "Small one. Take it. I have rung four thousand times and I am not tired of
-> staying."
+> `star.s5.bell1` — « Je suis tombée aussi. Il y a très longtemps. Avant que la ville ait un nom. »
+> `star.s5.bell2` — « On m'a trouvée tiède dans un champ, et on m'a coulée dans cette forme. »
+> `star.s5.bell3` — « Je suis trop lourde pour rentrer. Mais je ne suis jamais allée en mer. »
+> `star.s5.bell4` — « Petite. Emmène-moi. J'ai sonné quatre mille fois de la même poutre. »
+
+⚠️⚠️ **LES QUATRE PHRASES ONT ÉTÉ RÉÉCRITES AU 451, ET C'EST LE MEILLEUR GAIN DU NAVIRE.** Avant,
+la cloche *gardait sa note* et la *donnait* : elle restait, et ce qu'elle perdait était sa voix.
+Maintenant elle **demande à partir** — `bell4` n'est plus « prends-la », c'est **« emmène-moi »**.
+Le sacrifice n'a pas disparu (elle ne rentrera jamais chez elle, elle est trop lourde) : il s'est
+**changé en départ**. Un enfant n'a rien à comprendre, il voit une vieille cloche embarquer.
 
 ⚠️ **Aucun choix moral n'est proposé, et c'est délibéré.** La cloche décide. Un menu à deux
 boutons transformerait un don en arbitrage — exactement ce qu'on retire au 442. Ce que les joueurs
 font n'est pas *choisir*, c'est **sonner**, ensemble, pour que le don ait lieu. **On joue le geste
 au lieu de cocher la case.**
 
-#### 🎮 MINI-JEU 6 — « THE DUET » · le climax
+#### 🎮 MINI-JEU 6 — « THE DUET » · le climax · à l'écran : « Le duo »
 
 **Deux pièces, deux jeux différents, un seul échec.** Les joueurs ne se voient pas.
 
@@ -433,9 +607,17 @@ les touches, comme à l'orgue, et **les rais qui montent disent lesquelles sont 
 juste, gris = fausse). On peut se rattraper, rien n'est perdu.
 
 **Joueur B — au beffroi**, un étage plus haut.
-Il tient les quatre éclats dans les rais qui percent le plancher, et **les renvoie par les
-abat-son vers la Lyre — qui dérive**. Une visée lente à corriger sans arrêt, plus rapide à chaque
-phrase.
+Il tient les quatre morceaux dans les rais qui percent le plancher, et **les renvoie par les
+abat-son vers un point du ciel — qui dérive** (`STAR_DUET_AIM_DRIFT`). Une visée lente à corriger
+sans arrêt, plus rapide à chaque phrase.
+
+⚠️⚠️ **TRANCHÉ AU 453 : LA LYRE RESTE DANS LE CIEL, ELLE NE COMPTE PLUS RIEN.** C'était la
+constellation-compteur de la fiction d'AVANT (« il manque une corde à la lyre »), et plus rien
+n'expliquait pourquoi c'était ELLE ni pourquoi elle se remplissait. ⚠️ **Elle n'a jamais été NOMMÉE
+au joueur** — aucune chaîne du jeu ne la cite, la vérification a été faite avant de décider — donc
+il n'y avait rien à retirer de l'histoire : ce sont des étoiles, elles brillent, et le viseur du duo
+les rattrape. **Ce qui est parti, c'est le TROU et le remplissage** (voir §6.7). *Deux compteurs de
+la même chose, c'est un de trop* — et celui-ci ne comptait même pas comme l'autre.
 
 ⚠️ **Chacun VOIT l'effet de l'autre** : les rais de A **s'éteignent** si B décroche, le faisceau
 de B **faiblit** si A se trompe. *Sans ça, ce sont deux mini-jeux côte à côte, pas une
@@ -444,26 +626,48 @@ coopération.*
   compte et diffuse. Six phrases = 12 messages en tout.
 - **Solo** : les **cales du sonneur** (des coins de bois — un vrai usage d'orgue) tiennent les
   touches. On cale, on court dans la vis, on vise, on redescend ; **la note faiblit pendant la
-  montée**, fenêtre **mesurée** sur le trajet réel banc d'orgue → beffroi en courant. L'étoile le
-  dit : "Go. I'll hold what I can."
+  montée**, fenêtre **mesurée** sur le trajet réel banc d'orgue → beffroi en courant. Le jeu le
+  dit : « Tu cales les touches et tu cours dans l'escalier. La note faiblit déjà. »
 
 #### 🌟 LA RÉSOLUTION
 
-Cinq notes. La cloche donne la sienne — **elle sonne, et sa voix devient plus mate d'un demi-ton
-pour toujours.**
+Cinq morceaux. La cloche embarque — **elle sonne, et sa voix devient plus mate d'un demi-ton pour
+toujours.**
 
-1. Les quatre éclats **quittent les mains de B** et tournent autour de la cloche.
+1. Les quatre morceaux **quittent les mains de B** et tournent autour de la cloche.
 2. La caméra **dézoome** (le dézoom des monuments existe depuis le 428, on le pousse d'un cran).
 3. Les abat-son s'ouvrent en grand : la lumière sort par les quatre côtés — **on voit la ville
    entière s'éclairer par en haut**, un mur après l'autre.
-4. L'étoile monte. Lentement. **Comme un ballon qu'on lâche**, pas comme une fusée.
-5. Le trou de la Lyre se referme. **Une étoile de plus dans le ciel, pour toujours.**
-6. Fondu au blanc → **l'aube**. La ville vide au petit matin. La cloche sonne une fois. Carte de
-   fin : `The Fallen String`.
+4. **Le navire est entier sur sa cale**, et il le RESTE — voir la note ci-dessous. Ce qui monte
+   « comme un ballon qu'on lâche », c'est **l'étoile**, et c'est ce que le dessin a toujours peint.
+5. Fondu au blanc → **l'aube**. La ville vide au petit matin. La cloche sonne une fois. Carte de
+   fin : **`Le Bateau des Étoiles`** / `The Star Boat`.
 
-> `star.end1` — "It goes up the way a balloon goes up. Slowly. Like it has all night."
-> `star.end2` — "The gap in the Lyre closes."
-> `star.end3` — "The bell doesn't say anything else."
+> `star.end1` — « Elle monte comme un ballon qu'on lâche. Doucement. Comme si elle avait toute la
+> nuit. »
+> `star.end2` — « En bas, le bateau est entier. Il flotte enfin. Il attend quelqu'un qui sache
+> partir. »
+> `star.end3` — « La cloche ne dit rien d'autre. »
+
+⚠️⚠️⚠️ **RÉSOLU AU 453, ET C'EST UNE DÉCISION DE GUILLAUME, PAS UN CORRECTIF.** Jusque-là `end1` et
+`end2` racontaient l'appareillage et **le navire ne partait jamais à l'écran** : le rendu lisait les
+cinq morceaux et ne testait pas `doneAt`, donc un bateau complet restait à quai pour toujours sous
+une phrase qui venait de dire le contraire. ⚠️ **Pire : `end1` décrivait le BATEAU qui monte « comme
+un ballon qu'on lâche », alors que le dessin de la scène peint L'ÉTOILE qui monte.** Deux
+affirmations fausses dans deux phrases sur trois, sous une image que personne n'avait comparée au
+texte.
+⚠️⚠️ **La décision, mot pour mot :** *« Quand c'est fini, le bateau est construit et réel. Eduardo
+Da Fonseca (quand il est recruté) le prend et part au large, explique qu'il va explorer le large. Ça
+laisse de la marge narrative, pour développer de nouveaux mondes et ensuite permettre au bateau de
+revenir. »* Les deux écritures écartées sont gardées ici parce qu'elles reviendront : une **scène de
+départ** à la résolution (la plus belle, mais la finale se joue dans le BEFFROI et le navire est au
+bord du lac — c'est une caméra qui change de lieu, donc un chantier), et une **cale vide dès la fin**
+(gratuite, mais elle fait disparaître l'objet au moment où il vient d'être fini).
+⚠️ **Ce que ça donne dans le code, et ça ne coûte NI état NI message** : `Q.starShipGone(e,
+voyagerAway)` — pure, lue par le jeu et par le banc — vide la cale tant qu'Eduardo est en voyage
+(`res.trip.phase`, dans l'état partagé depuis le 258) et la remplit quand il rentre. Le dessin a un
+état de plus (`opt.gone` → la cale SANS sa carcasse : ber, tins, ombre), et les deux messages de
+chat du voyage sont REMPLACÉS une fois la quête finie, donc zéro `send()` de plus.
 
 #### LA TRACE
 
@@ -472,11 +676,17 @@ ouvrir un panneau :
 
 | trace | où | coût |
 |---|---|---|
-| **une étoile de plus** la nuit, plus brillante que les autres | ville **et** ferme | la couche de ciel existe |
+| **une étoile de plus** la nuit, plus brillante que les autres — ⚠️ et le texte dit désormais d'où elle vient : *« Elle vient du lac. »* | ville **et** ferme | la couche de ciel existe |
 | **la cloche sonne une fois à chaque aube**, toute seule | toute la ville | un crochet d'aube existe déjà |
 | **le cratère refroidit en bassin de verre vert** qui luit la nuit | le pré | variante de décor |
 | **le beffroi reste ouvert** — la plus belle vue du jeu | l'église | le niveau est construit |
-| **le sillon de la ferme se referme en herbe rase**, un éclat de verre dedans | la ferme | variante de décor |
+| **le sillon de la ferme se referme en herbe rase**, un morceau de verre dedans | la ferme | variante de décor |
+
+⚠️⚠️ **ET IL Y EN A UNE SIXIÈME, DÉCIDÉE AU 453 : LE NAVIRE RESTE, ENTIER, ET IL NAVIGUE.** Il se
+dresse sur sa cale une fois la quête finie ; **la cale se vide quand Eduardo Da Fonseca prend le
+large avec lui, et se remplit quand il rentre.** C'est la seule trace qui BOUGE, et c'est celle qui
+promet un ailleurs — la phrase de Guillaume dit la suite (« amarrer sur des îles, dans le futur »).
+⚠️ Elle ne coûte rien : « Eduardo est en voyage » circule dans l'état partagé depuis le 258.
 
 #### 🎁 LA RÉCOMPENSE
 
@@ -493,44 +703,77 @@ où la garde-robe cosmétique existera, elle lira `star.gift` : le chemin d'attr
 déjà arbitré, déjà persisté, déjà mesuré. **Ce qu'on ne fait PAS** : le système de déblocage,
 l'objet, son sprite, son panneau. Le jeu dit simplement, une fois :
 
-> `star.gift` — "Something of it stayed with you."
+> `star.gift` — « Quelque chose d'elle est resté avec toi. »
 
 ---
 
 ## 6. L'INTERFACE QUI ACCOMPAGNE
 
-1. **LE PISTEUR** — bandeau compact : ⭐ + quatre pastilles + **une phrase courte**, jamais deux.
-   Il change de forme au retournement.
-2. **LE COMPAGNON** — le vrai changement. Position dérivée, **zéro message**. Elle brille près
-   d'un éclat, **se cache des résidents**, se pose sur le banc d'orgue. **C'est le pisteur, en
-   vivant.**
-3. **LES BULLES** — l'étoile parle au-dessus d'elle, comme les résidents. Phrases courtes, mots
+⚠️⚠️⚠️ **CETTE SECTION A CHANGÉ DE TÊTE AU 451 : LE PISTEUR N'EST PLUS UN BANDEAU, C'EST LE
+NAVIRE.** La règle qu'on se donne est celle des dix secondes — *à n'importe quel instant, l'enfant
+doit savoir ce qu'il fait EN REGARDANT L'ÉCRAN, sans ouvrir un menu et sans lire une phrase.* Un
+bandeau ne le fait pas : il faut savoir lire, et il faut le relire. **Un bateau à qui il manque un
+mât, si.**
+
+1. ⚠️⚠️ **LE NAVIRE, SUR LA CALE DU CHANTIER NAVAL** (451) — cinq morceaux, et **ceux qui manquent
+   sont peints en fantôme à leur place exacte**. C'est le langage de tous les jeux de construction,
+   et il ne coûte pas une ligne de texte, donc pas une traduction. ⚠️ **Le fantôme est DÉRIVÉ de la
+   pièce** (on cuit la pièce, on relit ses pixels opaques, on les repeint en bleu d'étoile sur un
+   damier) : deux dessins séparés auraient divergé au premier réglage, et le symptôme aurait été
+   une **promesse fausse**. ⚠️ **Il n'ajoute aucun état** : `Q.starShipParts` est une LECTURE des
+   cinq trouvailles. Détail au §30 de `components/ferme/README.md`.
+2. **LE BANDEAU** — il reste, et il dit l'**OBJECTIF**, plus le chapitre (449) : `Q.starGoalKey`,
+   **la même source que le chevron**, parce que deux listes pour « où vais-je » ont déjà donné deux
+   réponses vertes et contradictoires. Une phrase courte, jamais deux, et ⚠️ **jamais plus de
+   ~80 signes** : au-delà, `white-space:nowrap` la coupe **en silence** (§12.1 bis).
+3. **LE COMPAGNON** — position dérivée, **zéro message**. Elle brille près d'un morceau, **se cache
+   des résidents**, se pose sur le banc d'orgue.
+4. **LE CHEVRON** (445) et **LE FAMILIER MENEUR** (449) — un repère directionnel qui se pose sur la
+   cible, et un animal qui **mène** à la demande (G) ou tout seul après 2 min 30, s'arrête à trois
+   cases et s'assied. ⚠️ **Il ne parle pas, et c'est le sujet** : `fall.quiet` dit que personne
+   n'en dit un mot ; un animal montre sans rompre le secret.
+5. **LES BULLES** — l'étoile parle au-dessus d'elle, comme les résidents. Phrases courtes, mots
    simples, **jamais un panneau quand une bulle suffit**.
-4. **LES CARTES DE CHAPITRE** — cinq, plein écran, sur fondu. C'est la mise en scène JRPG, et
+6. **LES CARTES DE CHAPITRE** — cinq, plein écran, sur fondu. C'est la mise en scène JRPG, et
    c'est ce qui découpe l'heure en cinq soirées possibles.
-5. **LE CIEL EST LE COMPTEUR** — dès la chute, la **Lyre** est visible la nuit, avec son trou. Elle
-   dérive de nuit en nuit. À la fin, elle est complète.
-6. **LES PANNEAUX D'ÉTOILE** ont leur habillage : fond de nuit, lumière, bordure claire — distinct
+7. **LE CIEL** — dès la chute, une constellation est visible la nuit. ⚠️⚠️ **ELLE NE COMPTE PLUS
+   RIEN DEPUIS LE 453, ET C'EST LA CORRECTION QUI COMPTE ICI.** C'était la **Lyre**, avec un TROU
+   qui se remplissait — donc un **second compteur de la même progression que le navire, et qui ne
+   comptait même pas pareil** : `1 + Q.starShards(e)` sur cinq points, décalé d'un cran par rapport
+   à `Q.starShipParts`. Deux réponses vertes à « où j'en suis », jamais comparées : la leçon du 449,
+   dans le ciel. Elle racontait « il manque une corde à la Lyre », phrase qui n'existe plus depuis
+   le 450. **Le pisteur est le navire, et il est seul.**
+8. **LES PANNEAUX D'ÉTOILE** ont leur habillage : fond de nuit, lumière, bordure claire — distinct
    du bois des panneaux de ferme. On sait de quel monde vient ce qu'on lit.
-7. **LA REPRISE** — carte **« Previously »** : une ligne, le compte d'éclats, où l'on allait. Une
-   fois par session.
+9. **LA REPRISE** — carte « Où tu en étais » : une ligne, le compte de morceaux, où l'on allait.
+   Une fois par session. ⚠️ **Elle disait « n sur 4 »** (`STAR_SHARD_TOTAL`) devant un navire à cinq
+   emplacements, et « Tu as 1 morceaux » au premier morceau. Elle lit `Q.starShipBuilt` /
+   `Q.STAR_SHIP_TOTAL` depuis le 453, comme le chat, comme les pastilles, comme la cale.
 
 ---
 
 ## 7. LES DESSINS NEUFS, ET LE CHOIX DE NE PAS OUVRIR BLENDER
 
-**Huit familles**, toutes en **canevas procédural** dans `fermeArt.js` :
+**Dix familles** (huit au 444, **plus deux depuis**), toutes en **canevas procédural** dans
+`fermeArt.js` :
 
 | | quoi | la règle de `DESSIN.md` qui le gouverne |
 |---|---|---|
 | 1 | **l'étoile compagnon** — 4 poses × 3 états (calme / apeurée / éteinte) | ⚠️ **un cerne sert aussi sur fond clair** (441) : une étoile blanche sur un mur clair disparaît |
-| 2 | **l'éclat**, 4 couleurs (une par note) | échelle jugée **contre le fermier**, pas contre d'autres décors (429) |
+| 2 | **le morceau**, 4 couleurs (une par note) | échelle jugée **contre le fermier**, pas contre d'autres décors (429) |
 | 3 | **le sillon de la ferme**, chaud / refroidi | une usure a un bord flou (441) |
-| 4 | **le cratère** : anneau, herbe couchée en étoile, verre fondu ; jour / nuit / après | ⚠️ un champ `s(x,y)` et son isoligne, **jamais une hauteur par colonne** (437) : un cratère est un ovale, et un ovale ne s'écrit pas `f(x)` |
+| 4 | **le cratère** (`drawStarCrater`) — ⚠️ **refait au 446 sur deux images de Guillaume** : un TROU à paroi ouest dans l'ombre, gerbe de fibres, fissures, braises, fumée ; puis **le fond en fusion du 449** | ⚠️ **ce qui creuse une image vue de dessus est l'ÉCLAIRAGE D'UNE PENTE, pas un dégradé** (446) — un dégradé centre→bord dessine une CIBLE, pas un trou |
 | 5 | **la verrerie** : four éteint, râteliers de perles, châssis, manivelle | on ne meuble pas contre le mur (439) |
 | 6 | **la pie et son nid** — de dos, tête tournée, envol | le canevas dimensionné **sur ce qui dépasse** (433, payé trois fois) |
 | 7 | **le beffroi** : charpente, cloche, abat-son, palier | ⚠️ **la cloche est aussi haute qu'un mur, donc elle se dessine dans la passe des MURS** — le défaut exact de l'orgue au 441, connu d'avance |
-| 8 | **la Lyre** dans le ciel, avec et sans son trou | période et bouclage du motif (434) |
+| 8 | **la constellation** dans le ciel (ex-« la Lyre », **sans trou et sans compte depuis le 453**) | période et bouclage du motif (434) |
+| **9** | ⚠️ **la comète** (`drawStarComet`, 448) — le trait, le flash, l'onde de choc | ⚠️ **un décor d'impact se date à l'IMPACT, pas à l'événement qui l'annonce** : `e.fall` horodate le début de la cinématique, et le cratère a fumé trois secondes avant que la comète touche le sol |
+| **10** | ⚠️⚠️ **le navire** (`drawStarShip`, 451) — la cale, les tins, la carcasse sur ber, les cinq morceaux, les fantômes, jour et nuit | ⚠️ **le fantôme se DÉRIVE de la pièce cuite**, jamais dessiné une seconde fois · et le faux canevas des bancs **prémultiplie l'alpha** quand un navigateur ne le fait pas : on mesure la TEINTE, pas la couleur exacte |
+
+⚠️⚠️ **CES TROIS GROS DESSINS VIVENT DANS `fermeArt.js` ET PAS DANS LA BOUCLE, EXPRÈS** — c'est la
+seule façon qu'un banc les regarde (`render-etoile`, `render-navire`, `render-beffroi`). Le piège
+n°1 du projet, deuxième visage : *un dessin qu'aucun banc ne peut appeler ne se dégrade pas, il
+reste au niveau du jour où il a été écrit.*
 
 ⚠️ **Le PNJ neuf a disparu du chantier** avec le thème du secret (§3) : un dessin de moins, et
 c'était le plus cher.
@@ -567,7 +810,26 @@ aucun dessin.
 
 - `STAR_SITES` — chaque lieu avec `zone` + `spot`. ⚠️ **La zone est testée AVANT toute distance** :
   seule parade au piège des deux cartes (§4 de `CLAUDE.md`).
+  ⚠️⚠️ **LA COLONNE `shard` A ÉTÉ SUPPRIMÉE AU 453, AVEC `starShards` ET `STAR_SHARD_TOTAL`.** Elle
+  marquait « une des QUATRE notes » et portait **un second compte** à côté de celui du navire. Les
+  deux étaient justes *dans leur propre liste*, donc aucun banc ne pouvait les voir se contredire —
+  et à l'écran, après la plongée du lac, le joueur lisait **trois réponses différentes** à la même
+  question. Il n'y a plus qu'un objet compté, d'une seule façon : les morceaux du bateau.
 - `STAR_CHAPTERS` — cinq entrées. ⚠️ **`starAdvance` est une BOUCLE, pas un `if`** (leçon du 442).
+- **`starGoalKey`** (449) — l'objectif courant, **lu par le bandeau ET par le chevron**. Ils
+  dérivaient de deux listes ; les deux étaient vertes et elles se contredisaient. *Une jointure,
+  jamais deux listes.*
+- **`starGuidePoint`** (449) — où se place le familier meneur.
+- ⚠️⚠️ **`STAR_SHIP_PARTS` / `starShipParts` / `starShipBuilt` / `starShipComplete`** (451) — les
+  cinq morceaux du navire, **une pure LECTURE des cinq trouvailles**, aucun état de plus. L'ordre
+  vit dans `fermeConstants.STAR_SHIP_ORDER`, lu par `quete.js`, par `fermeArt.js` et par le banc :
+  une seconde liste aurait peint une voile là où le joueur a trouvé un safran **sans qu'aucun banc
+  ne puisse le voir**. ⚠️ `starShipComplete` ≠ `starDone` : les cinq morceaux sont posés dès que la
+  cloche a chanté, **la scène finale se joue après** — c'est ce qui laisse le navire s'achever à
+  l'écran au lieu d'apparaître d'un coup sur un fondu.
+- ⚠️ **`starShipGone(e, voyagerAway)`** (453) — la cale est-elle vide ? Pure, lue par le jeu ET par
+  le banc. Le navire reste après la fin ; **Eduardo l'emmène** quand il part en voyage, et le ramène
+  (décision de Guillaume, §5). Aucun état, aucun `send()` : `res.trip.phase` circule depuis le 258.
 - `newStar()` / `migrateStar(saved)` — reprise **tolérante, pas confiante**.
 - `resolveStarShard` · `resolveStarCalm` · `resolveStarLean` · `resolveStarDuet` ·
   `resolveStarGift` — ⚠️ **aucun ne crédite quoi que ce soit lui-même** : ils annoncent, l'hôte
@@ -581,7 +843,7 @@ aucun dessin.
 | moment | `send()` |
 |---|---|
 | la chute (hôte → tous) | 1 |
-| chaque éclat / chapitre franchi | 1 `req` + 1 `apply` |
+| chaque morceau / chapitre franchi | 1 `req` + 1 `apply` |
 | le calme du cratère | 1 + 1 |
 | chaque lecture d'ombres | 1 + 1 (×4 environ) |
 | chaque phrase du duo | 1 + 1 (×6) |
@@ -601,7 +863,7 @@ aucune manipulation Supabase**, exactement comme `townChop` (426), `wardrobe` (4
 et se perdrait au premier changement de jeu.
 
 **Checkpoints** : chaque chapitre franchi **force une écriture immédiate** (`persistFnRef`, en plus
-du minuteur de 3 s). À la reprise, la carte « Previously ». ⚠️ **Aucune étape acquise n'est
+du minuteur de 3 s). À la reprise, la carte « Où tu en étais ». ⚠️ **Aucune étape acquise n'est
 rejouée, aucune n'est sautée visuellement** : on reprend au début du chapitre courant.
 
 ### Les bancs — `tools/`
@@ -620,7 +882,16 @@ rejouée, aucune n'est sautée visuellement** : on reprend au début du chapitre
    442 : quatre arrêts manquants pendant deux zips) ;
 8. ⚠️ **aucun résolveur ne crédite d'or** — scan de source **avec le compte de lignes LUES**
    (leçon du 441 : un banc qui compte doit publier ce qu'il a lu, sinon on ne s'aperçoit jamais
-   qu'il ne scanne rien).
+   qu'il ne scanne rien) ;
+9. ⚠️⚠️ **AUCUN TEXTE N'ÉCRIT UN NOMBRE DE MORCEAUX EN DUR** (453), balayé sur les deux langues,
+   avec un témoin positif ET un témoin négatif pour que le motif ne puisse pas se vider en silence.
+   Les titres de chapitre sont la seule exception, elle est NOMMÉE, et **elle expire toute seule**
+   (un contrôle échoue si le nombre de chapitres change) ;
+10. ⚠️⚠️⚠️ **CHAQUE PHRASE DE LA QUÊTE EST AFFICHÉE QUELQUE PART** (453) — il lit les `L.star.…` du
+   composant, jamais une liste écrite à côté (qui serait la seconde liste que ce banc interdit).
+   **41 des 136 phrases ne l'étaient pas** le jour où il a été écrit ;
+11. **le navire part et revient** : entier à la fin, absent pendant le voyage d'Eduardo, et un
+   voyage AVANT la fin ne fait pas disparaître un chantier en cours.
 
 **`tools/render-etoile.mjs`** — les huit familles, avec les contrôles de `DESSIN.md` : aucun pixel
 sur le bord HAUT, îlots flottant dans un aplat (connexité à 8), échelle contre le fermier, symétrie
@@ -629,6 +900,19 @@ déduite d'un centre.
 **`tools/render-beffroi.mjs`** — le plan du niveau, sur le modèle de `render-eglise.mjs` : chaque
 case atteignable, aucune poche murée, la cloche dans la passe des murs, et la vue plongeante
 réellement peinte par les quatre ouvertures.
+
+**`tools/render-navire.mjs`** (451) — la planche des **sept** états (zéro à cinq morceaux **puis la
+cale vide**, nuit puis jour). ⚠️ Trois états se ressemblent assez pour qu'on les confonde — « rien
+n'a commencé » (carcasse + fantômes), « il est fini » (les cinq morceaux), « il est en mer » (le ber
+et les tins, rien d'autre) — et le banc les tient séparés : sans ça, une cale vide qui ressemble au
+chantier de la première nuit ferait lire « le bateau a été défait ». ⚠️ **Il est né d'un défaut que trois contrôles verts ne voyaient pas** : le navire était
+posé six cases et un muret **au-dessus** du lac, et les trois contrôles disaient « placé,
+atteignable, au bord de l'eau — 36 cases d'eau lues ». *Compter une PRÉSENCE n'est pas mesurer une
+DISTANCE.* Il mesure donc la distance à l'eau, la marge (sur les côtés et **au-dessus**, jamais en
+dessous — la proue doit avoir de l'eau devant elle), le passage laissé sur le quai, et l'échelle
+contre le fermier. ⚠️ **Et il mesure la TEINTE, pas la couleur** : le faux canevas prémultiplie
+l'alpha là où un navigateur ne le fait pas, donc un contrôle écrit sur `rgba(...)` exact accuse un
+dessin juste.
 
 **Ce qu'aucun banc ne verra** : le plaisir. Les six mini-jeux sont joués à l'écran, un par un,
 avant d'être considérés finis.
@@ -643,6 +927,8 @@ Structure **reprise exactement** de la section « 🔍 Enquête » (⌘⇧X → 
 | bouton | ce qu'il fait |
 |---|---|
 | **Reset** | `newStar()` — un objet neuf, jamais un défaire pièce à pièce |
+| ⚠️ **Hand me the plans** (454) | donne le sillon, le cratère et **les plans rendus** — sans quoi juger le plan et le fantôme coûte dix-huit minutes d'attente |
+| ⚠️ **Deliver all the timber** (454) | livre les cinq pièces de bois **et rien d'autre** : les deux moitiés (souvenir / bois) restent distinctes, sinon on ne saurait plus laquelle manque à l'écran |
 | **Start** | joue la chute et ouvre le chapitre 1 |
 | **Finish chapter** | donne exactement ce qui manque au chapitre COURANT |
 | **Skip ahead** | avance d'un chapitre entier, scène comprise |
@@ -666,36 +952,57 @@ minutes, donc personne ne la reverrait.
 |---|---|---|---|---|
 | **Retrait de l'enquête 442** | ✅ | ✅ | — | — |
 | **`quete.js`** — table, résolveurs, dev-ops | ✅ | ✅ | ✅ (banc) | — |
-| **Textes** (`STAR_EN`, une table, deux langues) | ✅ | ✅ | ✅ | — |
+| **Textes** — ⚠️ **une table pour deux langues jusqu'au 450**, deux tables depuis | ✅ | ✅ | ✅ | — |
 | **Beffroi** (`churchTower`, 3ᵉ niveau d'église) | ✅ | ✅ | ✅ | — |
 | **Placement** cratère / verrerie / nid / sillon | ✅ | ✅ | ✅ (cratère, beffroi) | — |
 | **Hôte** — 5 requêtes, une sortie, checkpoint forcé | ✅ | ✅ | ✅ | — |
 | **Menu dev ⭐ Star** + arrêt beffroi + « rejouer une scène » | ✅ | ✅ | ✅ | — |
-| Sprites (8 familles) | ✅ | ✅ | ✅ (compagne, beffroi, cratère) | — |
+| Sprites (**10** familles) | ✅ | ✅ | ✅ (compagne, beffroi, cratère, comète, navire) | — |
 | **Mise en scène** (chute, cartes, retournement, finale) | ✅ | ✅ | ✅ chute + carte · ⚠️ **turn/end : non** | — |
 | **Les cinq mini-jeux** | ✅ | ✅ | ✅ **dessinés** · ⚠️ **aucun joué jusqu'à la victoire** | — |
-| **Interface** (pisteur, compagnon, ciel, reprise) | ✅ | ✅ | ✅ (sauf la Lyre, jamais vue de nuit) | — |
-| **Bancs** (`verify-quete`, `render-etoile`, `render-beffroi`) | ✅ | ✅ | ✅ | ✅ |
+| **Interface** (navire, bandeau, compagnon, ciel, reprise) | ✅ | ✅ | ✅ (sauf la Lyre, jamais vue de nuit) | — |
+| **Bancs** (`verify-quete`, `render-etoile`, `render-beffroi`, `render-navire`) | ✅ | ✅ | ✅ | ✅ |
 | **Docs** (`README.md` §25, `CLAUDE.md`, `tools/README.md`) | ✅ | ✅ | — | — |
 | **445 — la chute VUE** (file d'attente, rattrapage, caméra sur l'impact) | ✅ | ✅ | ✅ | ✅ |
 | **445 — le CHEVRON** (repère directionnel de quête) | ✅ | ✅ | ✅ | ✅ |
 | **446 — le cratère refait sur modèle** (relief éclairé, fissures, chaleur, enfoncement) | ✅ | ✅ | ✅ **planche + en jeu** | ✅ |
 | ⚠️ **La quête à DEUX CLIENTS** | ✅ | ✅ | ❌ **RIEN** | ❌ |
+| **448 — la comète VISE** (impact daté à l'impact, onde de choc, `drawStarComet`) | ✅ | ✅ | ✅ | ✅ |
 | **449 — le cratère BRÛLE** (fond en fusion, blessure 10 min, retour maison) | ✅ | ✅ | ✅ **en jeu, chaud ET froid** | ✅ |
+| **449 — le bandeau dit l'OBJECTIF** (`starGoalKey`, une source pour le bandeau et le chevron) | ✅ | ✅ | ✅ | ✅ |
+| **449 — le familier MÈNE** (G, ou seul après 2 min 30 ; invariant balayé sur 164 positions) | ✅ | ✅ | ✅ | ✅ |
+| ⚠️⚠️ **451 — LE NAVIRE** (pisteur, 5 morceaux, fantômes, chantier naval, zéro état de plus) | ✅ | ✅ | ✅ **planche + en jeu** | ✅ |
+| ⚠️⚠️ **451 — LA QUÊTE PARLE FRANÇAIS** (`fr` contenait `star: STAR_EN`) | ✅ | ✅ | ✅ | ✅ |
+| ⚠️⚠️ **451 — la FICTION change** : la lyre → le bateau | ✅ | ✅ (chaînes + navire) | ✅ | ⚠️ **`QUETE.md` n'a suivi qu'au 452** |
+| ⚠️⚠️ **453 — LE COMPTE DE MORCEAUX, UNE SEULE RÉPONSE** (`STAR_SHIP_TOTAL` partout, `shard` supprimé, banc qui refuse tout nombre en dur) | ✅ | ✅ | ⚠️ **banc seulement** | ✅ |
+| ⚠️⚠️⚠️ **453 — LES 41 PHRASES MUETTES SONT BRANCHÉES** (la rencontre, la cloche, le don, 2 traces, `fall.quiet`…) | ✅ | ✅ | ⚠️ **banc seulement** | ✅ |
+| ⚠️⚠️ **453 — LE NAVIRE PART AVEC EDUARDO** (`starShipGone`, cale vide, textes de fin réécrits) | ✅ | ✅ | ✅ **planche** · ⚠️ **pas en jeu** | ✅ |
+| ⚠️ **453 — LA LYRE NE COMPTE PLUS** (constellation simple, plus de trou, plus de second compteur) | ✅ | ✅ | ❌ **jamais vue de nuit** | — |
+| ⚠️ **453 — `STAR_SHIP_NEAR_R` supprimée** (constante que seul le banc lisait) | ✅ | ✅ | — | ✅ |
+| ⚠️⚠️ **454 — LA PORTE** (Eduardo + Tristan actifs + 4 artisans, `starFallGate`) | ✅ | ✅ | ⚠️ **banc seulement** (le menu dev la franchit) | ✅ |
+| ⚠️⚠️⚠️ **454 — L'INGÉNIEUR ET LES PLANS** (mairie, 3 monnaies, 3 min de voyage, 15 min de travail) | ✅ | ✅ | ✅ **le plan et son panneau** · ❌ **Kerguélen en personne** | ⚠️ |
+| ⚠️⚠️⚠️ **454 — LE FANTÔME EST GAGNÉ** (plus de silhouette gratuite ; P au bord du lac) | ✅ | ✅ | ✅ **en jeu, les deux états** | ✅ |
+| ⚠️⚠️⚠️ **454 — LE BOIS DE TRISTAN** (5 commandes dans l'ordre, `found ∧ wood`, la fin attend) | ✅ | ✅ | ⚠️ **banc seulement** | ⚠️ |
+| ⚠️⚠️ **454 — LE SILLON DÉMÉNAGE ET A UNE PHYSIQUE** (pré nord, relief éclairé, bourrelet fibreux, enfoncement) | ✅ | ✅ | ✅ **planche + en jeu** (2 défauts trouvés et corrigés) | ✅ |
+| ⚠️⚠️ **454 — LA CHUTE EST TROIS FOIS PLUS LENTE** (sauf à l'absolue fin) | ✅ | ✅ | ✅ **la scène joue** · ⚠️ **la lourdeur reste à juger à l'œil** | ⚠️ |
 
 ### Ce qui est vérifié à ce stade
 
 | | |
 |---|---|
-| `npx next build` | **✓ Compiled successfully**, plus aucun avertissement nouveau (seul `G_SOIL` reste, préexistant §10 de CLAUDE.md) |
+| `npx next build` | ⚠️ **PAS RELANCÉ AU 453 : un `npm run dev` tournait dans le dossier** (§10 de `CLAUDE.md` — les deux écrivent dans le même `.next/`, et le faux négatif coûte une demi-session). `verify-syntax` a servi de contrôle de remplacement. Vert au 452 |
 | `verify-syntax` | tout se parse, JSX compris |
-| `verify-strings` | **1081 clés appariées** |
-| **`verify-quete`** | **220/220** (446 : +43, dont la porte de refroidissement et la tenue du calme, que rien ne jouait) |
-| `verify-vallee` | **200/200** |
+| `verify-strings` | **1082 clés appariées** — ⚠️ **et depuis le 451 il vérifie aussi les VALEURS** : aucune section identique mot pour mot dans les deux langues. C'est ce contrôle qui manquait, et son absence a laissé passer six zips de quête en anglais des deux côtés |
+| **`verify-quete`** | **345/345** (lancé au 454 ; 294 au 453, 284 au 452, 220 au 446, 207 au 445, 177 pendant la séance du 444) |
+| `verify-vallee` | **205/205** (relancé au 454) |
 | **`render-beffroi`** | **28/28**, planche `beffroi-plan.png` |
 | `render-etoile` | tous contrôles verts, 3 planches |
-| les 13 autres bancs de contrôle · les 16 autres bancs de rendu | OK |
-| **séance de jeu réelle, un client** | chute · carte de chapitre · pisteur · rappel « Previously » · compagne · beffroi · les cinq mini-jeux dessinés |
+| **`render-navire`** | tout vert, planche `navire.png` (**2176×572**, zéro à cinq morceaux **puis la cale vide**, nuit puis jour) |
+| les **34** bancs du dépôt (16 de contrôle, 18 de rendu) | **tous verts, lancés un par un au 453** |
+| **séance de jeu réelle, un client** | chute · carte de chapitre · pisteur · rappel de reprise · compagne · beffroi · les cinq mini-jeux dessinés · le navire sur sa cale |
+
+⚠️ **Les chiffres ci-dessus ont été obtenus en LANÇANT les bancs au 452**, jamais recopiés (§14.6
+de `CLAUDE.md`). Les précédents étaient périmés de trois zips.
 
 ### ⚠️⚠️ CE QUE LA SÉANCE DE JEU A TROUVÉ, ET QUE SIX BANCS VERTS N'AVAIENT PAS VU
 
@@ -716,6 +1023,14 @@ relais qui se repose un message à chaque image tourne en boucle serrée. *Il lu
 
 ## 11. DÉCISIONS PRISES
 
+0. ⚠️⚠️ **LA FICTION MOTRICE EST UN BATEAU, PLUS UNE LYRE** (450-451, Guillaume). *« Construire un
+   bateau magique avec les étoiles. Une fois qu'on les récolte toutes […] on arrive à bâtir un grand
+   navire qui permettra de prendre le large et d'amarrer sur des îles, dans le futur. »* Et le refus
+   qui l'a précédée : *« construire une lyre, c'est un peu arbitraire ? »* — **une lyre est un objet
+   d'adulte.** Voir §1 et §2.
+0 bis. ✅ **Le navire est le PISTEUR**, pas un décor de fin (451) : cinq morceaux, ceux qui manquent
+   peints en fantôme à leur place exacte. **Aucun état ajouté** — c'est une lecture des cinq
+   trouvailles. Et **le chantier naval est un lieu de la ville**, qui existe sans la quête.
 1. ✅ **L'enquête 442 est retirée entièrement.**
 2. ✅ **`shared.star` dans `ferme_saves`** — aucune manipulation Supabase.
 3. ✅ **Le beffroi est un troisième niveau d'église** (`churchTower`, alt 2).
@@ -736,13 +1051,119 @@ relais qui se repose un message à chaque image tourne en boucle serrée. *Il lu
 
 ⚠️ **Rien n'est committé.** Tout est en fichiers modifiés / non indexés, prêt à relire.
 
+### 12.0 ⚠️⚠️⚠️ ZIP 455 — L'ANNONCE, LE TAMPON, ET LA CHUTE QU'ON NE VOIT PLUS TOMBER
+
+**Quatre demandes de Guillaume, toutes livrées.** Le détail de fiction est au §3 (le thème coupé en
+deux) et le déroulé au §5 (OUVERTURE). Ce qui suit est ce qu'il faut savoir pour reprendre.
+
+| ce qui change | où ça vit | ce que ça coûte |
+|---|---|---|
+| l'invite de l'hôte (« Oui / Plus tard ») | `starWarnOffer` + `starOfferPump` + JSX `starOffer` | 0 message tant qu'on n'a pas dit oui |
+| l'annonce | `resolveStarWarn` → `starScene: { key: "warn" }` | **1** `send()`, une carte plein écran |
+| le tampon (5 à 16 min réelles) | `starFallDue` (jamais une lecture d'horloge distante) | 0 |
+| les PNJ nerveux + leurs phrases | `starNerveHas` / `starNerveTic` / `starNerveDir` / `starNerveSay` | **0** — tout est dérivé du `rid` et de `star.warn` |
+| l'avis de l'observatoire | `L.star.warn.board*`, tableau des nouvelles | 0 |
+| le « ! » de toutes les têtes à l'impact | `starBang` + `drawEmoteBubble` | 0 — dérivé de l'horloge de scène |
+| la caméra en amont, à la ferme | `starCamTarget` + `starHitRef` (une ref de plus, deux grandeurs) | 0 |
+| la comète se fend | `starFragments` (règle) + `drawStarComet` (dessin) | 0 |
+| la bulle dorée de l'étoile | `drawSpeechBubble(…, "star")` | 0 |
+| les consignes qui disent la TOUCHE | `L.star.hud.goal` réécrit dans les deux langues | 0 |
+
+⚠️⚠️ **UN SEUL CHAMP D'ÉTAT AJOUTÉ EN TOUT** (`star.warn = { at, by }`), dans le JSON de
+`ferme_saves` — **aucune migration SQL**, et `migrateStar` compte une partie d'avant ce zip comme
+déjà annoncée (sinon `starWarning` serait faux pour toujours sans que rien ne casse bruyamment).
+
+⚠️⚠️⚠️ **CE QUE LES BANCS ONT TROUVÉ EN S'ÉCRIVANT, ET C'EST LA PARTIE QUI VAUT LE PLUS CHER.**
+Quatre défauts, tous invisibles à la relecture, tous trouvés le jour même :
+
+1. **La fracture de la comète avait lieu HORS DE L'ÉCRAN.** `STAR_FRAG_AT = 0.34` — un nombre qui
+   « avait l'air d'être au début du vol ». Il l'était : la comète n'entre dans le cadre qu'à **0,84**
+   du temps de vol (perspective du 448), donc le caillou se fendait très soigneusement dans le noir
+   et l'on ne voyait arriver que trois morceaux déjà séparés. **C'est mot pour mot la septième forme
+   du défaut de banc écrite au 454** (*une grandeur juste, mesurée sur un intervalle que le joueur ne
+   regarde pas*), repayée en un zip. Elle est maintenant **dérivée** de `starFallOnScreenK()`.
+2. ⚠️ **`T` N'EXISTE PAS AU NIVEAU DU COMPOSANT** — le calcul du point de vue le lisait pour
+   convertir des pixels en cases. `ReferenceError` à l'exécution seulement, qui aurait emporté toute
+   la frame (piège n°1, payé au 430 et au 431). **`verify-portee` l'a dit à la première exécution.**
+3. **Le faux canevas des bancs LÈVE sur l'accès à `roundRect`** — donc `if (g2.roundRect)`, qui a
+   l'air d'une garde, ÉTAIT déjà l'erreur. La bulle est repeinte en rectangles, ce qui est meilleur
+   à 11 px de large de toute façon.
+4. **Le banc de la bulle mesurait son propre fond** (l'herbe passait sous le seuil d'encre : 48
+   rangées encrées sur une image de 48 px), puis **le cerne de la bulle en croyant mesurer le
+   glyphe**. *Un banc de rendu se vérifie aussi* — le fond d'une mesure n'est pas un décor, c'est un
+   réactif.
+5. **Un « ? » que personne n'appelait** avait été dessiné « parce que la famille en aura besoin ».
+   La planche a montré une tache. **Supprimé** — leçon 453 : *une chose que seul le banc regarde est
+   débranchée, elle a l'air juste et elle ne peut pas échouer.*
+
+⚠️⚠️⚠️ **CE QUI N'A PAS ÉTÉ REGARDÉ À L'ÉCRAN, ET C'EST TOUT CE QUI RESTE DE CE ZIP.** Les 35 bancs
+sont verts, `verify-quete` est passé de 345 à **396**, `render-etoile` a **13 contrôles de plus** et
+une planche neuve (`tools/out/etoile-alerte.png`, regardée). **Rien de tout cela n'a tourné dans un
+navigateur** — et cinq choses ne peuvent se juger que là :
+
+- **l'invite au crépuscule** (elle s'ouvre au bon moment ? « Plus tard » revient bien le lendemain ?) ;
+- **la vallée nerveuse** : est-ce que ça fait inquiet, ou est-ce que ça fait bogue d'animation ?
+  C'est la seule question de ce zip qu'aucun nombre ne peut trancher ;
+- **les phrases à l'approche** : est-ce qu'on les lit, ou est-ce qu'elles passent trop vite ?
+- ⚠️⚠️ **la chute à la ferme, qui est le plus gros risque** : le point de vue est en amont sur
+  `STAR_CAM_VANTAGE = 1,15` demi-diagonales, ce qui est juste **par construction** — mais « l'impact
+  est hors cadre » et « la scène est belle » sont deux choses différentes, et seule la première est
+  mesurée. La comète peut très bien traverser un coin de l'écran en une seconde et ne rien raconter ;
+- **le « ! » sur toutes les têtes** à l'instant du contact.
+
+**La marche à suivre est celle du §10 de `CLAUDE.md`** (les deux échafaudages, le worker), et le
+menu dev a **deux boutons neufs** pour ça : **📣 Announce it** (le tampon SEUL, sans que la comète
+tombe cinq minutes plus tard au milieu de l'observation) et **🎬 The announcement** (rejouer la
+carte). ⚠️ `▶ Start` saute le tampon d'un coup — c'est fait exprès, mais ce n'est donc PAS le bouton
+qui juge ce zip.
+
+---
+
+### 12.0 bis ⚠️⚠️ ZIP 454 — LA CHAÎNE DE CONSTRUCTION, ET CE QUI A ÉTÉ VU À L'ÉCRAN
+
+**Le déroulé complet, dans l'ordre où le joueur le vit :**
+
+| étape | où | ce qui se passe | ce qui l'arbitre |
+|---|---|---|---|
+| la porte | — | Eduardo + Tristan **actifs** + 4 artisans, sinon la comète ne tombe pas | `starFallGate`, lu par `resolveStarFall` |
+| le conseil | cratère | l'étoile regarde la cale vide et envoie chercher « quelqu'un qui dessine les bateaux » | `starWatch`, 3 toasts à la suite de la rencontre |
+| la demande | mairie | sujet `engineer` chez Léonie · **24 000 or + 60 récoltes + 12 poissons**, payés d'avance | `req starPlanAsk` → `resolveStarPlanAsk` + `commitStarPlan` |
+| le voyage | — | 3 minutes réelles | dérivé de `plan.at` |
+| le travail | grève du lac | **Célestin Kerguélen** est là, il dessine, il marmonne ; E lui parle | `starEngineerHere` (aucun champ d'état de plus) |
+| la remise | — | **15 minutes réelles**, puis l'hôte diffuse une fois | `resolveStarPlanTick` |
+| le plan | partout | **P** ouvre la feuille : le bateau en fantôme, les cinq pièces et leur état | `drawStarPlan` (dans `fermeArt`, donc regardé par un banc) |
+| le fantôme | à 12 cases de la cale | **P** au bord du lac fait apparaître le bateau entier sur sa cale | `starGhostsOn` → `drawStarShip({ ghosts })` |
+| le bois | menu Employés | 5 commandes à Tristan, **dans l'ordre du plan**, en bois de la réserve commune puis du sac | `req starTimberOrder` → `resolveStarTimberOrder` |
+| la pose | cale | un morceau apparaît quand **l'étoile s'en souvient ET que le bois est livré** | `starShipParts` = `found ∧ wood` |
+| la fin | — | la résolution attend le dernier bordage, et part toute seule quand il tombe | `resolveStarGift` (refuse `unbuilt`) + `resolveStarTimberTick` |
+
+⚠️⚠️ **CE QUE LA SÉANCE À L'ÉCRAN A TROUVÉ, ET QUE LES BANCS NE VOYAIENT PAS** (c'est la septième
+fois que ce paragraphe existe, et il n'a jamais été vide) :
+1. **Le ralentissement de la comète ne se voyait pas** — voir l'en-tête. Deux contrôles verts, zéro
+   effet à l'écran. Corrigé (`STAR_FALL_RUSH` 0,20 → 0,06) **et mesuré autrement** : la durée de la
+   partie visible, et le fait que l'accélération finale tombe **dans le cadre**.
+2. **Le sillon avait un liseré vert vif tout autour.** Le bourrelet partait au brun presque noir sur
+   son bord extérieur, et l'herbe claire juste à côté ressortait comme un trait de néon. Le banc
+   mesurait l'écart-type de luminance — excellent — *et c'est justement le contraste qui faisait le
+   défaut.* Brunissement ramené de 0,8 à 0,45, frange élargie.
+3. **Le sillon se lisait comme un OVALE**, parce que la largeur du bourrelet était constante. C'est
+   mot pour mot le premier cratère du 446 (« un tournesol »). Le bourrelet est maintenant fibreux
+   (deux harmoniques), et la silhouette est déchirée.
+
+**Vu et validé à l'écran :** la scène de chute, le bandeau qui nomme le pré nord, le sillon fumant
+avec ses braises et sa vapeur, l'invite `E : regarder`, le chevron avec sa distance, la feuille de
+plan, **la cale nue sans plan**, et **le fantôme entier qui apparaît quand on déplie le plan devant
+elle**. Non vu : l'ingénieur en personne (il faut quinze minutes ou le bouton dev), une commande de
+bois jusqu'à sa livraison, et la fin qui attend le dernier bordage.
+
 ### 12.1 Ce qui est FAIT
 
 **La quête est jouable de bout en bout par un joueur seul.** La chute s'arme toute seule à la
 première nuit du troisième jour, les cinq chapitres s'enchaînent, les cinq mini-jeux s'ouvrent et
-se jouent, les trois scènes se jouent, le pisteur et la compagne suivent, la reprise redit où l'on
-allait, et la fin laisse ses traces. Tout est arbitré par l'hôte, rien ne paie un or, aucune
-migration SQL.
+se jouent, les trois scènes se jouent, **le navire se bâtit morceau par morceau sur sa cale**, la
+compagne suit, le bandeau dit l'objectif, le familier mène, la reprise redit où l'on allait, et la
+fin laisse ses traces. **Le jeu parle français** (451). Tout est arbitré par l'hôte, rien ne paie
+un or, aucune migration SQL.
 
 ### 12.1 bis ⚠️⚠️ ZIP 449 — LES CONSIGNES GUIDENT ENFIN, ET UN FAMILIER MÈNE
 
@@ -760,7 +1181,7 @@ intact : la carte de chapitre plein écran ne bouge pas, c'est le bandeau qui su
 **2. Les phrases nomment l'endroit.** Règle qu'on se donne : *une phrase de bandeau dit OÙ et
 QUOI, jamais pourquoi.* Le mystère reste dans les bulles et les scènes, où il fait plaisir ; il ne
 coûte plus un aller-retour en train pour rien. Les consignes de mini-jeu disent désormais le BUT
-avant le geste (l'ombre au mur, le battement de l'éclat, les trois façons de perdre la pie) et,
+avant le geste (l'ombre au mur, le battement de le morceau, les trois façons de perdre la pie) et,
 **décision de Guillaume, aucune ne nomme une touche** : le reste du jeu n'écrit jamais ses
 commandes.
 
@@ -779,6 +1200,33 @@ carte de chapitre — `starGuideTarget` rend `null` quand une interface est ouve
 le plus proche mettait le chien dans le dos du joueur, 20 cas sur 164.
 
 ### 12.2 ⚠️⚠️ CE QUI RESTE, ET C'EST COURT — MAIS C'EST LE PLUS IMPORTANT
+
+**0. ⚠️⚠️⚠️ LES CINQ POINTS DU 452 SONT TOUS TRAITÉS — ET LE CINQUIÈME N'ÉTAIT PAS DANS LA LISTE.**
+Ils sont gardés ici en une ligne chacun, parce qu'ils disent où regarder la prochaine fois :
+
+| ce qui n'allait pas | ce qui a été fait au 453 |
+|---|---|
+| **le compte de morceaux avait TROIS réponses** (navire 2/5, bulle « Trois morceaux », chat « n sur 4 ») | la colonne `shard`, `starShards` et `STAR_SHARD_TOTAL` **supprimées** ; tout lit `starShipBuilt` / `STAR_SHIP_TOTAL` ; **toute phrase qui compte est une fonction `(n, total)`**, et un banc refuse les nombres en dur |
+| **le navire ne partait jamais** alors que `end1`/`end2` l'affirmaient | décision de Guillaume : il reste, **Eduardo l'emmène** et le ramène (`starShipGone`) ; `end1`/`end2` réécrites — `end1` décrivait même le bateau là où le dessin peint l'étoile |
+| **la Lyre était un second compteur** de la même progression | elle reste comme constellation, **sans trou et sans compte** ; elle n'était jamais nommée au joueur, donc rien n'a été retiré de l'histoire |
+| **`STAR_SHIP_NEAR_R` était débranchée** (seul le banc la lisait) | **supprimée**, avec le contrôle qui la lisait. Une « réserve » est une idée, pas un état du code — celle-ci est écrite au point B ci-dessous |
+| ⚠️⚠️⚠️ **41 des 136 phrases n'étaient affichées nulle part** — trouvé en faisant l'audit, jamais par un banc | **toutes branchées** (la rencontre, les quatre phrases de la cloche, les inscriptions de la vis, le don, deux traces, `fall.quiet`), et **un banc les compte désormais** |
+
+⚠️ **Ce qui a été supprimé plutôt que branché, et pourquoi** : **quatorze clés d'invite** (`s1.prompt`,
+`s2.promptCalm`, `s3.promptDive`, `s3.promptHold`, `s4.promptWatch`, `s5.promptUp`… et `hud.shards`).
+Sept étaient des **doublons mot pour mot** de `prompt(k)`, la table unique d'invites — c'est-à-dire
+la divergence en attente du §8 de `CLAUDE.md`, dans la table de textes elle-même. Les autres
+décrivaient des postes coopératifs **qui n'ont pas de code** : celui qui tient la lumière sur le
+ponton, celui qui regarde le mur du fond. ⚠️ **Elles se réécriront AVEC le code qui les affiche**,
+et elles auront un lecteur dès leur première ligne. *Une chaîne sans lecteur a l'air juste et ne
+peut pas échouer.*
+
+**0 bis. ⚠️ LA PLAQUE DU CHANTIER NAVAL — L'IDÉE QUI RESTE, ET ELLE EST BONNE.** C'est le seul endroit
+où l'on pourrait **nommer les cinq morceaux dans les deux langues** (la coque, le safran, le mât, la
+voile, la cloche) : aujourd'hui le joueur voit cinq formes et n'en connaît aucune. Un `E` sur le
+navire, un panneau qui ne donne RIEN (§4 de `CLAUDE.md` : la porte n'est jamais la caisse), et la
+portée qui va avec — **écrite le jour où on l'écrit, pas gardée en réserve** (c'est ce que le 452
+avait fait avec `STAR_SHIP_NEAR_R`, et le 453 l'a supprimée pour ça).
 
 **A. LA SÉANCE À DEUX CLIENTS. C'est la passe qui manque, et c'est TOUTE la moitié coopérative.**
 `node tools/fake-supabase.mjs` + deux onglets (recette du §10 de `CLAUDE.md`). Ce qui n'a jamais
@@ -806,8 +1254,20 @@ se resserre-t-elle trop vite ?), `STAR_DIVE_CURRENT` (le courant du troisième p
 **C. LES DEUX SCÈNES JAMAIS VUES** : le retournement (fin du chapitre 4) et la finale. Le bouton
 « 🎬 Rejouer une scène » du menu dev les joue isolément — c'est exactement pour ça qu'il existe.
 
-**D. LA LYRE DANS LE CIEL, jamais vue** : elle ne se dessine que la NUIT (`E.isNightTime`), et la
-séance s'est faite de jour. Elle porte le compteur d'éclats et son trou ; à regarder une nuit.
+**D. LA CONSTELLATION DANS LE CIEL, TOUJOURS JAMAIS VUE — trois zips qu'elle attend.** Elle ne se
+dessine que la NUIT (`E.isNightTime`), et les trois séances se sont faites de jour. ⚠️ **Ce qui se
+juge maintenant a changé** : elle ne compte plus rien (453), donc la question n'est plus « faut-il
+la retirer » mais **« est-ce qu'elle apporte encore quelque chose, réduite à un motif d'ambiance ? »**
+Si la réponse est non, elle part en quatre lignes et le ciel ne perd rien.
+
+**D bis. ⚠️⚠️ LES 41 PHRASES BRANCHÉES AU 453 N'ONT ÉTÉ VUES PAR AUCUN ŒIL.** Le banc dit que
+chacune a un lecteur ; il ne dit RIEN de ce qu'elles donnent à l'écran — et elles arrivent
+maintenant en **suites de toasts échelonnés** (`starTell`), ce qui est très exactement le genre de
+chose qui se juge en jouant et nulle part ailleurs. Les trois moments à regarder en premier, dans
+l'ordre : **la rencontre au cratère** (quatre toasts sur ~8 s, pendant que l'étoile sort du trou),
+**la cloche** (six toasts sur ~14 s, dans le beffroi, juste après la montée), et **l'ouverture** (la
+quatrième ligne, `fall.quiet`, doit tomber avant la fin des neuf secondes de la scène). ⚠️ *Un
+rythme de texte ne se mesure pas ; il se regarde une fois et il se sait.*
 
 **E. LE MORCEAU D'ORGUE** — `public/sounds/church-organ.mp3`, toujours absent (décision du 441).
 Rien à coder.

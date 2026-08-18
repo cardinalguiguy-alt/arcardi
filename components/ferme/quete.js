@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   ZIP 444 — LA QUÊTE DE L'ÉTOILE : « THE FALLEN STRING ».
+   ZIP 444 — LA QUÊTE DE L'ÉTOILE : « LE BATEAU DES ÉTOILES » / « THE STAR BOAT ».
    ═══════════════════════════════════════════════════════════════════════════
    Ce fichier est la TABLE de la quête et ses règles pures. Il ne dessine rien,
    il n'appelle pas React, il n'ouvre aucun panneau : `FermeGame.js` le lit,
@@ -17,15 +17,29 @@
    ───────────────────────────────────────────────────────────────────────────
    L'HISTOIRE, EN SIX LIGNES (le détail est dans `QUETE.md`)
 
-   Le ciel a une Lyre. Une lyre à qui il manque une corde ne joue pas. La corde
-   tombe, se brise ; le gros s'enfonce dans un pré à l'est de Valley Town, un
-   éclat dépasse la ville et se plante dans le champ de la ferme. L'étoile est
-   vivante, petite, terrifiée : elle ne rentre que si elle CHANTE SON NOM, et
-   chez les étoiles un nom est une phrase de cinq notes. Elle en a perdu quatre.
-   Les joueurs les retrouvent. Et quand les quatre chantent enfin ensemble, la
-   phrase s'arrête net : **elle est tombée avant qu'on lui donne sa cinquième**.
-   Elle ne sait pas son nom. Alors la cloche de l'église — fondue il y a cent ans
-   dans une étoile tombée qui n'est jamais repartie — lui donne la sienne.
+   ⚠️⚠️ RÉÉCRITE AU 452. Ce bloc racontait encore la LYRE — « une lyre à qui il
+   manque une corde » — deux zips après que le 450 l'a remplacée par le BATEAU
+   (voir le bloc ZIP 450 plus bas, qui, lui, était juste). C'est le même défaut
+   qu'au §1 de `QUETE.md` : **quand la fiction change, tout ce qui la RACONTE
+   fait partie de la livraison**, y compris les commentaires — un en-tête faux
+   est lu par le prochain qui ouvre le fichier, et il le croit.
+
+   Les étoiles naviguent. L'une d'elles fait naufrage au-dessus de la vallée :
+   SON BATEAU SE CASSE EN TOMBANT, en cinq morceaux. Le gros de l'épave — et
+   l'étoile avec — creuse un cratère dans un pré à l'est de Valley Town ; LA
+   COQUE dépasse la ville et se plante dans le champ de la ferme.
+   ⚠️ ZIP 453 — CE PARAGRAPHE DISAIT « le gros de la COQUE creuse un cratère »,
+   ce qui contredisait `SHIP_SITE_OF` trois cents lignes plus bas (`hull` vient
+   de `furrow`, le champ de la FERME). Une seule table dit où est quoi ; un
+   commentaire qui dit autre chose est un second récit, et c'est celui-là qu'on
+   lit en ouvrant le fichier.
+   L'étoile est vivante, plus petite qu'une
+   poule, terrifiée : sans son bateau, elle ne rentre pas. Chaque morceau CHANTE
+   UNE NOTE quand on le touche. Les joueurs les retrouvent, et quand les quatre
+   chantent enfin ensemble la phrase s'arrête net : **le bateau n'a pas de
+   cloche, et un bateau qui ne peut pas sonner ne traverse pas**. Alors la cloche
+   de l'église — fondue il y a cent ans dans une étoile tombée qui n'est jamais
+   repartie, trop lourde pour rentrer, jamais allée en mer — demande à embarquer.
 
    ───────────────────────────────────────────────────────────────────────────
    ⚠️⚠️⚠️ LA GRAMMAIRE MAGIQUE, ET C'EST LA SEULE CHOSE À RETENIR DE CE FICHIER
@@ -50,13 +64,30 @@
    peut se déduire ne se diffuse pas. On n'ajoute AUCUN champ — le 432 a trouvé
    un champ (`sit`) qui circulait sans être lu, c'est-à-dire des octets pour rien.
 
-   ⚠️ LE THÈME EST LE SECRET, ET IL A UNE CONSÉQUENCE DE CODE : personne d'autre
-   ne voit l'étoile. Aucun PNJ ne donne la quête, aucun panneau ne l'annonce,
-   le tableau des nouvelles n'en dit pas un mot. Elle ARRIVE — la chute est
-   armée par l'hôte, pas déclenchée par une lecture. *Une histoire qui n'existe
-   que pour qui ouvre le bon panneau n'existe pas*, et c'est le reproche que le
-   442 s'était fait à lui-même : il l'a réglé en ajoutant un second point
-   d'entrée, on le règle en n'en demandant aucun.
+   ⚠️⚠️⚠️ LE THÈME EST LE SECRET, ET LE ZIP 455 A DÛ EN COUPER LE MOT EN DEUX.
+   Ce paragraphe disait : « personne d'autre ne voit l'étoile. Aucun PNJ ne donne
+   la quête, aucun panneau ne l'annonce, le tableau des nouvelles n'en dit pas un
+   mot. Elle ARRIVE. » La moitié reste vraie et l'autre est morte au 455, sur
+   demande de Guillaume (« le lancement de la mission doit être annoncé, pas
+   automatique, la comète ne doit pas arriver comme ça »).
+   **LA PIERRE EST PUBLIQUE, L'ÉTOILE RESTE SECRÈTE**, et cette phrase est
+   désormais la conséquence de code :
+     · des astronomes prédisent une pluie d'astéroïdes ; l'affiche de la mairie le
+       dit, les habitants s'en inquiètent, l'hôte décide QUAND ça commence, et
+       toute la vallée voit tomber le caillou (`e.warn`, puis `e.fall`) ;
+     · **ce qu'il y avait dedans, personne ne le saura jamais.** Aucun PNJ ne
+       parle de l'étoile, aucun ne dit où chercher, `STAR_HIDE_R` la fait rentrer
+       dans le col du joueur dès qu'un habitant approche, et le guide reste un
+       ANIMAL (449) parce qu'un habitant qui renseignerait le joueur démolirait la
+       meilleure page du chantier.
+   ⚠️ LE CONTRASTE RENFORCE LE SECRET AU LIEU DE LE DÉMOLIR : jusqu'ici le silence
+   de la vallée était une absence, il devient une étrangeté — tout le monde a vu la
+   pierre, tout le monde en parle, et pas une seule personne ne voit la lumière qui
+   vous suit. `L.star.fall.quiet` est réécrite dans ce sens (elle disait
+   « personne ne sort regarder », ce que le 455 rend faux : ils ont tous un « ! »
+   au-dessus de la tête).
+   ⚠️ ET C'EST LE BANC QUI TIENT LA MOITIÉ QUI RESTE : `verify-quete` refuse
+   qu'une phrase de PNJ (rumeur ou indice) nomme l'étoile ou dise où aller.
 
    ⚠️⚠️ TOUT L'ÉTAT TIENT DANS `shared.star`, ET C'EST UN CHAMP DE PLUS DANS LE
    JSON DE `ferme_saves` — AUCUNE MIGRATION SQL, exactement comme `townChop`
@@ -92,31 +123,40 @@ import * as C from "./fermeConstants";
    tombe aussi au milieu des champs de la ferme : sans ce test, une trouvaille
    de ponton se validerait depuis un pré.
 
-   ⚠️⚠️ `shard: true` DIT « CECI EST UNE DES QUATRE NOTES », et rien d'autre ne le
-   dit. Le compte d'éclats du pisteur se DÉRIVE de cette colonne (`starShards`),
-   il n'est écrit nulle part — un compteur écrit à côté finirait par ne plus
-   correspondre à la table le jour où l'on déplace une note.
+   ⚠️⚠️⚠️ ZIP 453 — LA COLONNE `shard` EST SUPPRIMÉE, ET C'EST LA CORRECTION LA
+   PLUS CHÈRE DE CE ZIP. Elle marquait « une des QUATRE notes » et portait un
+   second compte (`starShards` / `STAR_SHARD_TOTAL` = 4) à côté du compte du
+   NAVIRE (`starShipBuilt` / `STAR_SHIP_TOTAL` = 5). Les deux étaient justes
+   **dans leur propre liste**, donc aucun banc ne pouvait les voir se
+   contredire — et à l'écran, après la plongée du lac, le joueur lisait TROIS
+   réponses différentes à la même question : le navire montrait 2 sur 5, la
+   bulle disait « Trois morceaux », le chat disait « n sur 4 ».
+   ⚠️ La cause est datée : le 444 comptait des NOTES (quatre, plus celle de la
+   cloche) ; le 450 a posé un CINQUIÈME morceau — la coque — sans recompter les
+   phrases. *Un compteur ajouté ne recompte pas les phrases déjà écrites.*
+   ⚠️ IL N'Y A DONC PLUS QU'UN SEUL OBJET COMPTÉ, ET D'UNE SEULE FAÇON : les
+   cinq morceaux du bateau. Les mots « note » et « morceau » désignent désormais
+   la même chose, et `tools/verify-quete.mjs` refuse tout nombre de morceaux
+   écrit en dur dans un texte de quête — ce qui empêche un sixième morceau de
+   refaire exactement la même chose en silence.
    ─────────────────────────────────────────────────────────────────────────── */
 export const STAR_SITES = [
   // ── Chapitre 1 : la ferme. Ce qui a dépassé la ville.
-  { id: "furrow",    zone: "farm",  spot: "starFurrow", shard: true },
-  // ── Chapitre 2 : le cratère. On ne trouve pas une note, on trouve QUELQU'UN.
+  { id: "furrow",    zone: "farm",  spot: "starFurrow" },
+  // ── Chapitre 2 : le cratère. On ne trouve pas un morceau, on trouve QUELQU'UN.
   { id: "crater",    zone: "town",  spot: "starCrater" },
   { id: "leanLake",  zone: "town",  spot: "*lean" },   // révélé par le croisement d'ombres
   { id: "leanGlass", zone: "town",  spot: "*lean" },
   // ── Chapitre 3 : le lac.
-  { id: "lakeShard", zone: "town",  spot: "starPier",  shard: true, req: ["leanLake"] },
-  // ── Chapitre 4 : la voleuse. Un lieu, une histoire, deux notes.
-  { id: "beadShard", zone: "town",  spot: "starGlassworks", shard: true, req: ["leanGlass"] },
-  { id: "nestShard", zone: "town",  spot: "starNest",       shard: true, req: ["beadShard"] },
+  { id: "lakeShard", zone: "town",  spot: "starPier",  req: ["leanLake"] },
+  // ── Chapitre 4 : la voleuse. Un lieu, une histoire, deux morceaux.
+  { id: "beadShard", zone: "town",  spot: "starGlassworks", req: ["leanGlass"] },
+  { id: "nestShard", zone: "town",  spot: "starNest",       req: ["beadShard"] },
   // ── Chapitre 5 : l'église. Le beffroi, puis le chant.
   { id: "belfry",    zone: "court", spot: "starBell" },
   { id: "song",      zone: "court", spot: "starBell",  req: ["belfry"] },
 ];
 export const STAR_SITE = Object.fromEntries(STAR_SITES.map(s => [s.id, s]));
-/* Les quatre notes, DÉRIVÉES de la table. */
-export const STAR_SHARD_IDS = STAR_SITES.filter(s => s.shard).map(s => s.id);
-export const STAR_SHARD_TOTAL = STAR_SHARD_IDS.length;   // 4 — jamais écrit en dur ailleurs
 
 /* ╔═════════════════════════════════════════════════════════════════════════════
    ║ ZIP 450 — LE NAVIRE. « CONSTRUIRE QUELQUE CHOSE AVEC LES ÉTOILES. »
@@ -179,17 +219,160 @@ export const STAR_SHIP_KEYS = C.STAR_SHIP_ORDER;
    forcerait à supposer que les morceaux arrivent dans l'ordre. Ils n'y arrivent
    pas — le chapitre 4 en donne deux d'affilée, et rien n'interdit de finir le lac
    après la verrerie le jour où l'ordre des chapitres bouge. */
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 454 — UN MORCEAU POSÉ DEMANDE DEUX CHOSES, ET C'EST TOUTE LA PASSE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ DEMANDE DE GUILLAUME : « tristan devra produire étape par étape les
+   planches et pièces nécessaires pour assurer l'avancement de la construction.
+   Le rôle des étoiles est de nous guider dans le projet. » Ça se lit en une
+   ligne de code : un morceau est posé quand **l'étoile s'en souvient** (la
+   trouvaille) ET quand **le bois existe** (la pièce livrée par le bûcheron).
+   Avant ce zip, la seconde moitié n'existait pas : on trouvait un éclat et une
+   voile apparaissait toute seule sur la cale. Un bateau qui se construit sans
+   personne qui le construise est joli et il ne veut rien dire.
+   ⚠️⚠️ ET CE N'EST TOUJOURS PAS UN SECOND COMPTEUR — c'est la leçon du 452, tenue
+   une deuxième fois. `wood` n'est pas « combien de morceaux », c'est « quelles
+   pièces Tristan a livrées », indexé par les MÊMES clés que le navire. Rien ne
+   peut afficher quatre morceaux pour trois pièces : il n'y a qu'un `ET` entre
+   deux lectures, jamais une addition tenue à part.
+   ⚠️ LA GRAMMAIRE MAGIQUE EST INTACTE, ET ELLE S'EN TROUVE MIEUX : la lumière de
+   l'étoile montre ce qu'une chose SE RAPPELLE — elle se rappelle la forme du
+   safran, pas le chêne dont on le taille. Il fallait bien que quelqu'un aille
+   couper le chêne. */
+export function starTimberDone(e, key) {
+  const w = e && e.wood && e.wood[key];
+  return !!(w && w.done);
+}
+export function starTimberOrder(e, key) {
+  const w = e && e.wood && e.wood[key];
+  return w && !w.done ? w : null;
+}
 export function starShipHas(e, key) {
   const p = STAR_SHIP_PARTS.find(q => q.key === key);
-  return !!(p && starHas(e, p.site));
+  return !!(p && starHas(e, p.site) && starTimberDone(e, key));
 }
-export function starShipParts(e) { return STAR_SHIP_PARTS.map(p => starHas(e, p.site)); }
+export function starShipParts(e) { return STAR_SHIP_PARTS.map(p => starHas(e, p.site) && starTimberDone(e, p.key)); }
 export function starShipBuilt(e) { return starShipParts(e).filter(Boolean).length; }
 /* ⚠️ « FINI » N'EST PAS « QUÊTE FINIE » : les cinq morceaux sont posés dès que la
    cloche a chanté, et la scène finale se joue APRÈS. Les distinguer laisse le
    navire s'achever à l'écran pendant la résolution, au lieu d'apparaître d'un coup
    sur un fondu — et `starDone` reste le seul témoin de la fin. */
 export function starShipComplete(e) { return starShipBuilt(e) === STAR_SHIP_TOTAL; }
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 453 — QUI PREND LE LARGE, ET POURQUOI CE N'EST PAS L'ÉTOILE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ DÉCISION DE GUILLAUME, MOT POUR MOT : « Quand c'est fini, le bateau est
+   construit et réel. Eduardo Da Fonseca (quand il est recruté) le prend et part
+   au large, explique qu'il va explorer le large. Ça laisse de la marge
+   narrative, pour développer de nouveaux mondes et ensuite permettre au bateau
+   de revenir. »
+   ⚠️ CE QU'ELLE CORRIGE : `end1` et `end2` affirmaient que le navire larguait
+   les amarres à la résolution, et le rendu ne le montrait JAMAIS — il lisait
+   `starShipParts` et ne testait pas `doneAt`, donc un bateau complet restait à
+   quai pour toujours sous une phrase qui venait de dire le contraire. *Un texte
+   n'est pas un décor : il AFFIRME* (448). Les deux phrases sont réécrites, et
+   le départ a désormais un porteur.
+   ⚠️⚠️ ET IL NE COÛTE NI ÉTAT NI MESSAGE : « Eduardo est en voyage » existe
+   depuis le 258 (`res.trip.phase === "away"`, dans l'état partagé, diffusé et
+   persisté). La cale se vide quand il part, elle se remplit quand il rentre —
+   c'est-à-dire que le monde raconte le voyage tout seul, avec un champ qui
+   circulait déjà (§3 de `CLAUDE.md`).
+   ⚠️ ELLE EST ICI, PURE, PARCE QUE LE JEU ET LE BANC LA LISENT TOUS LES DEUX :
+   écrite dans la closure de la boucle de rendu, elle aurait été invisible aux
+   deux (piège n°1, deuxième visage). */
+export function starShipGone(e, voyagerAway) {
+  return !!(starDone(e) && voyagerAway);
+}
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 454 — LES PLANS. « ON NE CONSTRUIT PAS UN BATEAU EN LE REGARDANT. »
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ DEMANDE DE GUILLAUME, EN TROIS TEMPS ET DANS CET ORDRE : (1) « le fantôme
+   du bateau (visualisation virtuelle) […] ne doit être visible que lorsqu'on a
+   trouvé le moyen de produire *le plan* de construction » ; (2) « un nouveau pnj
+   ingénieur devra être contacté via une demande à la mairie ; sur conseil (guidé)
+   de la première étoile récoltée dans le cratère » ; (3) « quand on ouvrira le
+   plan on verra le plan virtuel du bateau. Et si on ouvre le plan à côté du lac,
+   on verra effectivement le fantôme virtuel du bateau ; mais seulement à partir
+   de ce moment là. »
+   ⚠️⚠️ CE QUE ÇA CORRIGE EST UN DÉFAUT DE FOND DU 450, ET IL ÉTAIT SOUS NOS YEUX :
+   le navire dessinait ses CINQ FANTÔMES dès la première nuit de la partie, avant
+   la chute, avant la quête, à quiconque passait sur la rive. Une silhouette
+   spectrale de bateau complet, gratuitement, à un joueur qui n'a rien commencé —
+   c'est-à-dire que le jeu montrait la fin de l'histoire à qui n'en avait pas lu la
+   première ligne. Le fantôme est une PROMESSE : il faut l'avoir méritée.
+   ⚠️ LA CALE, ELLE, RESTE VISIBLE (décision du 450, toujours juste : « le joueur
+   qui n'a pas la quête voit un chantier naval, un endroit de vie de plus sur une
+   rive qui n'en avait aucun »), et sa collision ne bouge donc pas d'une case.
+
+   ⚠️⚠️ TROIS ÉTATS, UNE SEULE DATE POSÉE PAR L'HÔTE. `plan.at` est l'instant de la
+   commande ; l'arrivée et la remise s'en DÉDUISENT (`+ TRAVEL`, `+ TRAVEL + WORK`)
+   — deux échéances écrites à côté auraient été deux nombres à tenir d'accord (§8).
+   ⚠️ ET LA BASCULE « les plans sont prêts » EST DIFFUSÉE PAR L'HÔTE, exactement
+   comme le retour d'Eduardo (`res.trip.returnAt`, zip 258) : un client qui la
+   déduirait de SA propre horloge comparerait deux horloges (§3 de `CLAUDE.md`).
+   Le compte à rebours affiché, lui, est cosmétique et se lit comme celui du
+   voyageur — une seconde d'écart sur quinze minutes ne raconte rien de faux. */
+export function starPlanAsked(e) { return !!(e && e.plan && e.plan.at); }
+export function starPlanReady(e) { return !!(e && e.plan && e.plan.done); }
+/* L'ingénieur est-il SUR PLACE ? ⚠️ IL Y RESTE TANT QU'IL TRAVAILLE, ET PAS UNE
+   MINUTE DE PLUS : un PNJ qui ne bouge plus une fois son travail rendu devient un
+   décor, et un décor qui a une réplique de quête est un mensonge poli. Il repart
+   avec le train du soir, et le plan reste. */
+export function starEngineerHere(e, now) {
+  if (!starPlanAsked(e) || starPlanReady(e)) return false;
+  return (+now || 0) >= (e.plan.at + C.STAR_ENG_TRAVEL_MS);
+}
+export function starPlanPhase(e, now) {
+  if (!starPlanAsked(e)) return "none";
+  if (starPlanReady(e)) return "ready";
+  return starEngineerHere(e, now) ? "work" : "travel";
+}
+/* Ce qui reste, en millisecondes, pour l'étape en cours. ⚠️ REND 0 QUAND IL N'Y A
+   RIEN À ATTENDRE, jamais un nombre négatif : un « −00:12 » sous un panneau est le
+   genre de détail qui fait douter de tout le reste. */
+export function starPlanRemainMs(e, now) {
+  if (!starPlanAsked(e) || starPlanReady(e)) return 0;
+  const end = e.plan.at + C.STAR_ENG_TRAVEL_MS + (starEngineerHere(e, now) ? C.STAR_ENG_WORK_MS : 0);
+  return Math.max(0, end - (+now || 0));
+}
+export function starPlanProgress(e, now) {
+  if (!starPlanAsked(e)) return 0;
+  if (starPlanReady(e)) return 1;
+  const tot = C.STAR_ENG_TRAVEL_MS + C.STAR_ENG_WORK_MS;
+  return Math.max(0, Math.min(1, ((+now || 0) - e.plan.at) / tot));
+}
+
+/* ── LES CINQ COMMANDES DE BOIS. ⚠️ « ÉTAPE PAR ÉTAPE » EST UNE RÈGLE, PAS UNE
+   MISE EN PAGE : une pièce n'est commandable que si (a) les plans sont rendus,
+   (b) l'étoile a retrouvé le morceau correspondant, (c) la pièce PRÉCÉDENTE est
+   livrée. Les trois sont des lectures, aucune n'est un état de plus.
+   ⚠️ Elle rend une CLÉ de raison, jamais `false` tout court : c'est ce qui permet
+   au panneau de dire *pourquoi* on ne peut pas, au lieu de griser un bouton sans
+   rien expliquer — « le jeu propose et refuse » (426) commence toujours par un
+   bouton muet. */
+export function starTimberBlock(e, key) {
+  const idx = STAR_SHIP_KEYS.indexOf(key);
+  if (idx < 0) return "unknown";
+  if (!starPlanReady(e)) return "noPlan";
+  if (starTimberDone(e, key)) return "done";
+  if (starTimberOrder(e, key)) return "busy";
+  const part = STAR_SHIP_PARTS[idx];
+  if (!starHas(e, part.site)) return "noShard";
+  if (idx > 0 && !starTimberDone(e, STAR_SHIP_KEYS[idx - 1])) return "prev";
+  return null;
+}
+export function starTimberCan(e, key) { return starTimberBlock(e, key) === null; }
+/* La pièce qu'on attend MAINTENANT — celle du bandeau et du plan. ⚠️ UNE
+   JOINTURE, PAS UNE SECONDE LISTE (449) : elle balaie `STAR_SHIP_KEYS` dans
+   l'ordre et rend la première qui n'est pas livrée, ce qui est exactement l'ordre
+   dans lequel on construit. */
+export function starTimberNext(e) {
+  for (const k of STAR_SHIP_KEYS) if (!starTimberDone(e, k)) return k;
+  return null;
+}
+export function starTimberBuilt(e) { return STAR_SHIP_KEYS.filter(k => starTimberDone(e, k)).length; }
 
 /* ───────────────────────────────────────────────────────────────────────────
    2. LES CHAPITRES.
@@ -444,7 +627,14 @@ export const STAR_LURE_VIEW_TILES = 14;
 /* ── LE DUO (chapitre 5). Six phrases, de trois à cinq notes. */
 export const STAR_DUET_PHRASES = 6;
 export const STAR_DUET_LEN = [3, 3, 4, 4, 5, 5];
-export const STAR_DUET_AIM_DRIFT = [0.18, 0.26, 0.34, 0.44, 0.55, 0.68]; // dérive de la Lyre
+/* ⚠️ ZIP 453 — CE COMMENTAIRE DISAIT « dérive de la Lyre ». La Lyre était la
+   constellation-compteur de la fiction d'AVANT (une lyre à qui il manque une
+   corde), et plus rien n'expliquait pourquoi c'était ELLE. Elle n'a d'ailleurs
+   jamais été nommée au joueur — aucune chaîne de `fermeStrings` ne la cite —
+   donc il n'y avait rien à retirer du jeu : c'est un point du ciel qui bouge,
+   et le viseur doit le rattraper. Le compteur, lui, est parti (voir la note du
+   ciel dans `drawStarOverlay`). */
+export const STAR_DUET_AIM_DRIFT = [0.18, 0.26, 0.34, 0.44, 0.55, 0.68]; // dérive de la cible dans le ciel
 export const STAR_DUET_SOLO_FADE_MS = 11000;  // seul : les cales tiennent, la note faiblit
 export const STAR_DUET_NOTE_MS = 900;         // ce que dure une note tenue à l'orgue
 export const STAR_DUET_AIM_MS = 5200;         // ce qu'il faut tenir la visée pour renvoyer une phrase
@@ -465,7 +655,323 @@ export const STAR_DUET_ALONE_MUL = 0.55;      // ce que vaut une phrase quand l'
    assez à apprendre, et une cinématique sur l'écran d'un joueur qui découvre les
    commandes n'est pas une entrée en matière, c'est une interruption. */
 export const STAR_FALL_MIN_DAY = 3;
-export const STAR_FALL_MS = 9000;      // durée de la scène d'ouverture
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 455 — ELLE NE S'ARME PLUS TOUTE SEULE : ON L'ANNONCE, PUIS ON ATTEND.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ DEMANDE DE GUILLAUME : « le lancement de la mission doit être annoncé, pas
+   automatique, la comète ne doit pas arriver comme ça. […] Et rien ne doit se
+   passer immédiatement […] la nuit qui suit, l'événement pourra survenir enfin. »
+   ⚠️⚠️⚠️ ET C'EST L'INVERSE DE CE QUE L'EN-TÊTE DE CE FICHIER A DIT PENDANT ONZE
+   ZIPS (« la chute est armée par l'hôte, pas déclenchée par une lecture »). Le
+   paragraphe est réécrit plus haut plutôt que laissé en place : *quand la fiction
+   change, le document qui la raconte fait partie de la livraison* (452), et un
+   en-tête faux est lu par le prochain qui ouvre le fichier, qui le croit.
+   ⚠️ CE QUI **N'A PAS** CHANGÉ, ET C'EST LE POINT : le secret. Ce qu'on annonce
+   est une PIERRE, prédite par des astronomes ; ce que personne ne saura jamais est
+   ce qu'il y avait dedans. Séparer les deux garde `STAR_HIDE_R` (elle se cache
+   quand on approche), garde le familier-guide du 449, et donne au silence de la
+   vallée un contraste qu'il n'avait pas — toute la vallée a vu tomber le caillou.
+
+   TROIS ÉTATS, ET UN SEUL CHAMP POUR LES TENIR (`e.warn`) :
+     · rien          — la porte des habitants n'est pas franchie, ou l'hôte n'a
+                       pas encore dit oui. Aucune interface, aucun PNJ nerveux ;
+     · `warn.at`     — le TAMPON. Les astronomes ont parlé, les PNJ s'agitent et
+                       distillent, la comète n'est pas encore tombée ;
+     · `fall`        — la suite, inchangée depuis le 444.
+   ⚠️ UN CHAMP, PAS DEUX : « la quête est-elle annoncée » et « quand » sont la
+   même question posée deux fois, et le §8 de `CLAUDE.md` est formel sur ce que
+   coûte un paramètre qui en double un autre. */
+export function starWarned(e) { return !!(e && e.warn && e.warn.at); }
+export function starWarnAt(e) { return starWarned(e) ? +e.warn.at : 0; }
+/* Le tampon est-il EN COURS ? ⚠️ « annoncée et pas encore tombée », et rien
+   d'autre : c'est cette fonction que lisent les PNJ nerveux, l'affiche de la
+   mairie et le banc. Une seconde écriture (« warn && !fall ») dans la boucle de
+   rendu aurait été la troisième forme du piège n°1 — deux descriptions de la même
+   grandeur, qui divergent au premier réglage. */
+export function starWarning(e) { return starWarned(e) && !starFallen(e); }
+/* Depuis combien de temps ? ⚠️ ELLE SERT DE PHASE, PAS D'ÉCHÉANCE, et c'est ce
+   qui autorise chaque client à la calculer sur SA propre horloge (§3 : jamais
+   deux horloges). Un tic de PNJ décalé de deux dixièmes entre deux écrans n'est
+   visible par personne ; une ÉCHÉANCE décalée de deux dixièmes se verrait. */
+export function starWarnSince(e, now) { return starWarned(e) ? Math.max(0, (+now || 0) - starWarnAt(e)) : 0; }
+
+/* L'INSTANT OÙ LA NUIT COMMENCE, pour un jour de jeu donné. ⚠️ IL EST DÉRIVÉ DU
+   MÊME COUPLE QUE `E.gameTimeMin` (`DAY_START_MIN` → `DAY_END_MIN` étalés sur
+   `DAY_REAL_MS`) : recopier « la nuit tombe à 55 % du jour » aurait été un second
+   calendrier, faux le jour où l'on rallonge la journée. */
+export function starNightStart(dayStartAt) {
+  const span = C.DAY_END_MIN - C.DAY_START_MIN;
+  return (+dayStartAt || 0) + C.DAY_REAL_MS * (C.DUSK_START_MIN - C.DAY_START_MIN) / span;
+}
+/* ⚠️⚠️ « LA NUIT QUI SUIT » SE LIT « LA PREMIÈRE NUIT QUI **COMMENCE** APRÈS
+   L'ANNONCE », ET LES DEUX LECTURES NE DONNENT PAS LE MÊME JEU. Prise au sens
+   « la prochaine fois qu'il fait nuit », un « oui » cliqué à 20 h faisait tomber
+   la comète dans la minute — c'est-à-dire très exactement ce que cette demande
+   refuse. On compare donc l'annonce au DÉBUT de la nuit courante : s'il est
+   antérieur, cette nuit-là ne compte pas, et c'est celle du lendemain.
+   ⚠️ ET LE PLANCHER RATTRAPE LE CAS SYMÉTRIQUE : accepter trente secondes avant
+   le crépuscule laissait un tampon qui existait dans le code et pas à l'écran. */
+export function starFallDue(e, dayStartAt, now) {
+  if (!starWarned(e)) return false;
+  const t = +now || 0, warn = starWarnAt(e);
+  if (t < warn + C.STAR_WARN_FLOOR_MS) return false;
+  const night = starNightStart(dayStartAt);
+  return night > warn && t >= night;
+}
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 455 — LES PNJ NERVEUX. DÉRIVÉS, JAMAIS DIFFUSÉS.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ DEMANDE DE GUILLAUME : « Les visiteurs et résidents doivent seulement à ce
+   stade avoir un comportement un peu different, parfois osciller droite, gauche…
+   ou tourner une ou deux fois sur eux mêmes avec un "!" au dessus de leur tête.
+   […] Mais tous ne doivent pas en parler. »
+   ⚠️⚠️ TOUT EST UNE FONCTION DE `rid` ET DU TEMPS ÉCOULÉ DEPUIS L'ANNONCE — donc
+   les MÊMES PNJ s'agitent sur les deux écrans, avec les mêmes phrases, pour ZÉRO
+   `send()`. C'est la discipline de `TJ_REACT_TALK_EVERY` (368, « déterministe,
+   donc les mêmes PNJ sont bavards chez tous les joueurs, sans un octet de
+   réseau ») et des oiseaux (433), appliquée à une humeur.
+   ⚠️ ET ELLES SONT ICI, PAS DANS LA BOUCLE DE RENDU : un comportement écrit dans
+   la closure ne peut pas être balayé par un banc, donc il reste au niveau du jour
+   où il a été écrit (piège n°1, §2). Le banc peut vérifier ici ce qu'aucune
+   capture ne montre — que la part de nerveux est proche de `STAR_NERVE_SHARE`,
+   qu'un tour sur soi-même revient bien à sa direction de départ, et que deux PNJ
+   voisins ne s'agitent pas en chœur. */
+function starHash(n) {
+  let h = ((n | 0) + 0x9e3779b9) >>> 0;
+  h ^= h >>> 16; h = Math.imul(h, 0x21f0aaad) >>> 0;
+  h ^= h >>> 15; h = Math.imul(h, 0x735a2d97) >>> 0;
+  h ^= h >>> 15;
+  return h >>> 0;
+}
+/* ⚠️ « TOUS NE DOIVENT PAS EN PARLER » : c'est ce test-là, et il ne dépend que du
+   `rid`. Le même PNJ est nerveux du début à la fin du tampon — un tirage par tic
+   aurait donné une foule uniformément agitée par intermittence, ce qui se lit
+   comme un bogue d'animation et pas comme une peur. */
+export function starNerveHas(rid) { return (starHash(rid) % 1024) < C.STAR_NERVE_SHARE * 1024; }
+/* Le tic courant, ou `null`. ⚠️ LE DÉCALAGE PAR PNJ EST LA MOITIÉ DE L'EFFET :
+   sans lui, toute la place se retourne dans la même image, ce qui a l'air
+   chorégraphié — le contraire d'une foule inquiète. */
+export function starNerveTic(rid, sinceMs) {
+  if (!starNerveHas(rid)) return null;
+  const P = C.STAR_NERVE_PERIOD_MS;
+  const t = (+sinceMs || 0) + starHash(rid ^ 0x5bf0) % P;
+  if (t < 0) return null;
+  const k = (t % P) / C.STAR_NERVE_TIC_MS;
+  if (k >= 1) return null;
+  const n = Math.floor(t / P);
+  return { k, n, spin: (n + starHash(rid ^ 0x13c7) % C.STAR_NERVE_SPIN_EVERY) % C.STAR_NERVE_SPIN_EVERY === 0 };
+}
+/* ⚠️ L'ORDRE EST CELUI D'UN TOUR SUR SOI-MÊME, PAS CELUI DES INDICES DE POSE.
+   `drawCharacter` numérote 0 sud, 1 nord, 2 ouest, 3 est ; les prendre dans cet
+   ordre-là ferait faire au PNJ un aller-retour sud-nord, c'est-à-dire un
+   clignotement et pas une rotation. */
+export const STAR_NERVE_DIRS = [0, 2, 1, 3];   // sud → ouest → nord → est
+export function starNerveDir(rid, tic) {
+  if (!tic) return null;
+  if (tic.spin) {
+    /* « une ou deux fois » (Guillaume), et c'est le `rid` qui tranche : deux PNJ
+       côte à côte ne tournent pas au même rythme. */
+    const turns = 1 + starHash(rid ^ 0x2c1b) % 2;
+    return STAR_NERVE_DIRS[Math.floor(tic.k * 4 * turns) % 4];
+  }
+  return (Math.floor(tic.k * 8) % 2) ? 3 : 2;   // le balancement : quatre allers-retours gauche-droite
+}
+/* CE QU'IL DIT QUAND ON S'APPROCHE. ⚠️⚠️ IL REND UN INDEX, PAS UNE PHRASE : ce
+   fichier ne connaît aucun texte, c'est la règle depuis le 444. Les deux tailles
+   de pool arrivent en paramètre, donc ajouter une rumeur ne demande de toucher à
+   rien ici.
+   ⚠️ LE CHOIX EST FIGÉ PAR `rid` — le forgeron dit TOUJOURS la même chose. C'est
+   ce qui rend le tampon jouable plutôt que décoratif : on peut retourner voir
+   celui qui parlait de l'ingénieur breton. Un tirage par approche aurait donné
+   une machine à phrases, et personne n'aurait rien retenu. */
+export const STAR_NERVE_HINT_IN = 5, STAR_NERVE_HINT_OF = 2;   // deux PNJ nerveux sur cinq donnent un vrai indice
+export function starNerveSay(rid, nRumor, nHint) {
+  if (!starNerveHas(rid)) return null;
+  const h = starHash(rid ^ 0x77af);
+  const useHint = (nHint | 0) > 0 && h % STAR_NERVE_HINT_IN < STAR_NERVE_HINT_OF;
+  const n = useHint ? (nHint | 0) : (nRumor | 0);
+  if (n <= 0) return null;
+  return { pool: useHint ? "hint" : "rumor", idx: (h >>> 7) % n };
+}
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 454 — ET ELLE NE TOMBE PLUS SUR N'IMPORTE QUELLE FERME.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ DEMANDE DE GUILLAUME : « LA ferme doit avoir déjà débloqué au moins eduardo
+   et tristan (actif) ainsi qu'au moins 4 artisans sur la ferme. ce patch est
+   logique : eduardo prend le bateau à la fin de la quête et tristan y travaille. »
+   ⚠️ ELLE EST PURE ET ELLE PREND UN CONSTAT, PAS L'ÉTAT DE LA STATION : `ctx` est
+   `{ skills: [...], artisans: n }`, rempli par l'hôte avec `E.residentActiveSkill`
+   et `E.countSkilledResidents`. Écrite ici avec `station` en paramètre, elle
+   aurait obligé `quete.js` à connaître le format d'un résident — et le banc à
+   fabriquer une station complète pour tester trois conditions.
+   ⚠️⚠️ ELLE REND CE QUI MANQUE, PAS UN BOOLÉEN, et ce n'est pas du luxe : le menu
+   développeur DOIT pouvoir dire pourquoi rien ne tombe, sinon le premier
+   symptôme de cette porte sera « la quête est cassée » (elle ne l'est pas : elle
+   attend deux habitants). */
+export function starFallGate(ctx) {
+  const have = (ctx && ctx.skills) || [];
+  const missing = C.STAR_GATE_SKILLS.filter(s => !have.includes(s));
+  const artisans = (ctx && ctx.artisans) | 0;
+  return { ok: !missing.length && artisans >= C.STAR_GATE_ARTISANS, missing, artisans, need: C.STAR_GATE_ARTISANS };
+}
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 454 — LA CHUTE EST TROIS FOIS PLUS LENTE, SAUF À LA TOUTE FIN.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ DEMANDE DE GUILLAUME, MOT POUR MOT : « la chute de la comète doit être
+   ralentie par 3 pour créer une impression de lourdeur, sauf à l'absolue fin, où
+   la vitesse augmente graduellement jusqu'à atteindre la vitesse actuelle. »
+   ⚠️⚠️ CE N'EST PAS UNE DURÉE QU'ON TRIPLE, C'EST UNE VITESSE — et les deux ne se
+   ressemblent pas. Tripler la durée seule donne une comète trois fois plus lente
+   PARTOUT, y compris au contact : le poids serait là, l'impact serait mou. Ce que
+   demande la phrase est un profil : ⅓ de vitesse tout du long, puis une remontée
+   graduelle jusqu'à la vitesse d'avant AU MOMENT DU CONTACT.
+   ⚠️ D'où une reparamétrisation du temps plutôt qu'un facteur : `starFallEase`
+   rend l'avancement `u` à partir du temps `k`, avec une dérivée qui vaut 1 sur les
+   80 % du vol et monte en `smoothstep` jusqu'à `STAR_FALL_SLOW` sur les 20 %
+   derniers. La durée du vol s'en DÉDUIT (`× SLOW / N`, où `N` est l'intégrale de
+   cette dérivée) : c'est ce qui garantit les deux bouts à la fois — exactement ⅓
+   de la vitesse d'avant pendant la phase lourde, exactement la vitesse d'avant à
+   l'instant du contact. Deux nombres réglés à la main auraient donné l'un OU
+   l'autre, et le banc mesure les deux.
+   ⚠️⚠️ ET TOUTE LA SCÈNE SUIT, PARCE QU'ELLE EST DÉRIVÉE. `STAR_FALL_MS`,
+   `STAR_CAM_HOLD_MS`, les trois lignes de texte et la carte de chapitre étaient
+   accrochées à `STAR_FALL_IMPACT_MS` depuis le 448 : allonger le vol de cinq
+   secondes ne demande donc de relire AUCUN de ces nombres. C'est très exactement
+   ce que le 448 avait acheté, et c'est la première fois que ça sert. */
+export const STAR_FALL_SLOW = 3;         // « ralentie par 3 » — le facteur de la phase lourde
+/* ⚠️⚠️ 0,06 ET PAS 0,20, ET C'EST L'ÉCRAN QUI L'A DIT — LE BANC ÉTAIT VERT AVEC
+   LES DEUX. Premier réglage : un cinquième du vol en reprise de vitesse. Les deux
+   contrôles passaient (⅓ pendant la phase lourde, vitesse d'origine au contact) et
+   à l'écran **on ne voyait rien de plus lent qu'avant**. La raison tient à la
+   perspective du 448 : la comète naît à 1,3 diagonale d'écran et avance en `s =
+   u^1,9`, donc elle n'ENTRE dans le cadre qu'aux derniers 22 % de sa trajectoire.
+   Avec une reprise longue, ces 22 % étaient parcourus PENDANT la reprise — on
+   ralentissait très soigneusement une comète invisible, et on gardait à l'écran
+   exactement la chute d'avant.
+   ⚠️ *Le banc mesurait la bonne grandeur au mauvais endroit* : il regardait la
+   vitesse le long du vol, pas la vitesse le long de ce qu'on VOIT. C'est une
+   septième forme du défaut de banc, et elle vaut d'être notée : **une grandeur
+   juste, mesurée sur un intervalle que le joueur ne regarde pas.**
+   ⚠️ À 0,06, la portion visible dure ~1,05 s au lieu de 0,45 (2,3× plus longue) et
+   la reprise tombe dans les trois derniers dixièmes — sur l'écran, pas au-dessus. */
+export const STAR_FALL_RUSH = 0.06;      // « à l'absolue fin » — la fraction du vol où elle reprend sa vitesse
+export const STAR_FALL_BASE_FLIGHT_MS = 2050;   // ce que le vol durait jusqu'au 453 (1150 → 3200)
+/* L'intégrale de la dérivée ci-dessous : `1 + (SLOW − 1) × RUSH / 2`. Elle est
+   nommée parce que la DURÉE en dépend, et qu'un `1.2` écrit dans une
+   multiplication n'aurait eu aucun moyen de dire d'où il vient. */
+export const STAR_FALL_EASE_NORM = 1 + (STAR_FALL_SLOW - 1) * STAR_FALL_RUSH / 2;
+export const STAR_FALL_FLIGHT_MS = Math.round(STAR_FALL_BASE_FLIGHT_MS * STAR_FALL_SLOW / STAR_FALL_EASE_NORM);
+export function starFallEase(k) {
+  const u = Math.max(0, Math.min(1, +k || 0));
+  const f = STAR_FALL_RUSH, R = STAR_FALL_SLOW;
+  if (u <= 1 - f) return u / STAR_FALL_EASE_NORM;
+  const x = (u - (1 - f)) / f;
+  const s = x * x * x - x * x * x * x / 2;        // ∫ smoothstep, forme fermée
+  return ((1 - f) + f * (x + (R - 1) * s)) / STAR_FALL_EASE_NORM;
+}
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 454 — LES DEUX NOMBRES DE LA PERSPECTIVE SORTENT DE LA CLOSURE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ ILS ÉTAIENT ÉCRITS EN DUR DANS LA BOUCLE DE RENDU (`LEN = hypot(W,H) *
+   1.30`, `Math.pow(k, 1.9)`) — donc invisibles à tout banc, donc impossibles à
+   croiser avec la vitesse. C'est très exactement ce qui a laissé passer le premier
+   réglage de `STAR_FALL_RUSH` : on savait mesurer la vitesse le long du VOL, et
+   personne ne pouvait mesurer la durée de ce qui est À L'ÉCRAN, parce que « à
+   partir de quand est-elle dans le cadre » vivait dans la closure.
+   ⚠️ Ils sont ici, le rendu les lit, le banc les lit. Une jointure, jamais deux
+   listes — la règle du 449, appliquée à deux nombres qu'on n'avait jamais pensé à
+   sortir parce qu'ils avaient l'air d'être du dessin. */
+export const STAR_FALL_ENTRY_LEN = 1.30;   // en DIAGONALES d'écran : d'où elle vient, toujours hors champ
+export const STAR_FALL_PERSP = 1.9;        // l'exposant de la course (un objet qui vient sur nous)
+/* Depuis quel avancement `u` la comète est-elle DANS le cadre ? ⚠️ « Dans le
+   cadre » = à moins d'une demi-diagonale du point d'impact : c'est une
+   approximation généreuse (l'impact n'est pas au centre), et elle est déclarée —
+   ce qu'on mesure avec est une DURÉE MINIMALE, donc l'approximation joue du bon
+   côté. */
+export function starFallOnScreenFrom() {
+  const s = 1 - 0.5 / STAR_FALL_ENTRY_LEN;
+  return Math.pow(s, 1 / STAR_FALL_PERSP);
+}
+/* ⚠️⚠️ ZIP 455 — LE MÊME INSTANT, MAIS EN TEMPS. `starFallOnScreenFrom` rend un
+   AVANCEMENT (`u`, après reparamétrisation) ; tout ce qui se règle dans la scène
+   se règle en FRACTION DE DURÉE (`k`, avant reparamétrisation), et les deux ne
+   sont pas le même nombre — 0,77 d'un côté vaut 0,84 de l'autre. Confondre les
+   deux, c'est exactement le défaut du 454 dans son autre sens : *une grandeur
+   juste, lue dans la mauvaise unité.* Elle est sortie ici parce que le réglage de
+   la fracture en dépend, et parce que `starFallVisibleMs` la calculait déjà sans
+   la nommer — une seule écriture, jamais deux. */
+export function starFallOnScreenK(ease) {
+  const uIn = starFallOnScreenFrom();
+  const f = ease || starFallEase;
+  for (let k = 0; k <= 1.0001; k += 0.0005) if (f(k) >= uIn) return k;
+  return 1;
+}
+/* Combien de temps la voit-on VRAIMENT, en millisecondes. C'est la grandeur que le
+   premier réglage du 454 avait laissée filer. */
+export function starFallVisibleMs(flightMs, ease) {
+  return (1 - starFallOnScreenK(ease)) * (flightMs === undefined ? STAR_FALL_FLIGHT_MS : flightMs);
+}
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 455 — LE CAILLOU SE FEND EN VOL, ET LA GÉOMÉTRIE EST ICI.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ DEMANDE DE GUILLAUME : « on verra passer l'astéroïde qui se fractionne ».
+   ⚠️ ELLE EST DANS CE FICHIER ET PAS DANS LA BOUCLE : le DESSIN d'une tête de
+   comète vit dans `fermeArt` (448), sa TRAJECTOIRE chez l'appelant, et la
+   RÉPARTITION des morceaux — c'est-à-dire la seule chose qu'on peut se tromper en
+   réglant — doit vivre là où un banc l'atteint. Écrite dans la closure, elle
+   aurait été le vingtième nombre invisible du chantier.
+   ⚠️⚠️ ET ELLE RACONTE L'HISTOIRE QUI EXISTAIT DÉJÀ : le bateau se casse EN
+   TOMBANT, et c'est ce qui envoie la coque au-delà de la ville jusqu'au champ de
+   la ferme. La fracture n'est donc pas un effet, c'est la seule image du jeu qui
+   montre pourquoi il y a deux impacts sur deux cartes.
+   ⚠️ ELLE NE SE JOUE QU'À LA FERME, comme le point de vue : « Pour l'écrasement de
+   la météorite et le gros cratère à valley town, garder l'animation actuelle ». Là
+   -bas on regarde tomber un bloc, ici on regarde passer une chose qui se défait.
+   ⚠️ LES ÉCARTS SONT EN RAYONS DE TÊTE, JAMAIS EN PIXELS : la tête grossit d'un
+   facteur vingt le long du vol (perspective en `k^2,5`), donc des pixels auraient
+   donné des éclats collés au départ et un feu d'artifice à l'arrivée. */
+export const STAR_FRAG_N = 3;             // la coque, plus deux éclats
+/* ⚠️⚠️ ZIP 455 — ELLE EST DÉRIVÉE, ET LE BANC A EXIGÉ QU'ELLE LE SOIT. Premier
+   jet : `0.34`, un nombre qui « avait l'air d'être au début du vol ». Il l'était —
+   et la comète n'entre dans le cadre qu'à 0,84 du temps de vol (perspective du
+   448), donc **le caillou se fendait très soigneusement hors de l'écran** et l'on
+   ne voyait arriver que trois morceaux déjà séparés. C'est mot pour mot la
+   septième forme du défaut de banc écrite au 454 — *une grandeur juste, mesurée
+   sur un intervalle que le joueur ne regarde pas* — et c'est la deuxième fois en
+   deux zips. La parade est la même que pour la vitesse : on ne règle pas, on
+   DÉRIVE de ce qui est VISIBLE (§8 de `CLAUDE.md`).
+   ⚠️ 0,28 DE LA PORTION VISIBLE : assez tard pour qu'on ait vu un seul caillou
+   arriver, assez tôt pour que la séparation ait le temps de se lire avant le
+   contact. C'est le seul chiffre réglé du bloc, et il est relatif. */
+export const STAR_FRAG_AT = (() => { const kIn = starFallOnScreenK(); return kIn + (1 - kIn) * 0.28; })();
+export const STAR_FRAG_SPREAD = 3.2;      // écart latéral au contact, en rayons de tête
+export const STAR_FRAG_LAG = 2.4;         // ce que les éclats prennent de RETARD, idem
+export function starFragmentsOn(zone) { return starCamVantageOn(zone); }
+/* Les morceaux visibles à l'avancement `k`, le premier étant toujours la tête.
+   ⚠️ `along` EST UN RETARD (vers l'arrière de la course) et `side` un écart
+   latéral, tous deux en rayons de tête ; `scale` est la taille relative. Rendre
+   des positions absolues aurait obligé ce fichier à connaître l'angle, la
+   perspective et le zoom — c'est-à-dire à redevenir du dessin. */
+export function starFragments(k) {
+  const u = Math.max(0, Math.min(1, +k || 0));
+  const out = [{ along: 0, side: 0, scale: 1, split: 0 }];
+  if (u <= STAR_FRAG_AT) return out;            // pas encore fendu : un seul caillou
+  const s = (u - STAR_FRAG_AT) / (1 - STAR_FRAG_AT);
+  for (let i = 1; i < STAR_FRAG_N; i++) {
+    const side = (i % 2 ? 1 : -1) * (0.62 + 0.38 * ((i - 1) % 2));
+    out.push({
+      along: STAR_FRAG_LAG * s * (0.55 + 0.45 * i),
+      side: STAR_FRAG_SPREAD * s * side,
+      scale: 0.46 - 0.09 * (i - 1),
+      split: s,
+    });
+  }
+  return out;
+}
+
+export const STAR_FALL_TAIL_MS = 5800;  // ce qui suit le contact : gerbe, onde, colonne, quatre lignes
 export const STAR_TURN_MS = 7000;      // durée du retournement (fin du chapitre 4)
 export const STAR_END_MS = 14000;      // durée de la résolution
 /* ⚠️ LA CARTE DE CHAPITRE SE FERME TOUTE SEULE, et sa durée est ici plutôt que
@@ -508,8 +1014,64 @@ export function starImpactZone(zone) { return STAR_FALL_WORLDS.includes(zone || 
    AVANT LE TRAIT DE LUMIÈRE (1,2 s) et elle ne repart qu'APRÈS la colonne
    (4,5 s) : une caméra qui bouge pendant le flash rend le flash illisible. */
 export const STAR_CAM_GO_MS = 1100;     // le vol vers l'impact
-export const STAR_CAM_HOLD_MS = 6200;   // ce qu'elle y reste (depuis t=0)
 export const STAR_CAM_BACK_MS = 1900;   // le retour vers le joueur
+/* ⚠️ ZIP 454 — `STAR_CAM_HOLD_MS` EST DÉRIVÉE ET VIT PLUS BAS, avec l'instant du
+   contact dont elle dépend : elle valait 6200 = 3200 + 3000, c'est-à-dire un
+   nombre qui doublait l'impact sans le dire. La caméra tient trois secondes APRÈS
+   le contact, quelle que soit la durée du vol. */
+export const STAR_CAM_AFTER_MS = 3000;  // ce qu'elle reste sur l'impact, une fois le contact passé
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 455 — À LA FERME, LA CAMÉRA NE REGARDE PLUS L'ENDROIT OÙ ÇA VA TOMBER.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ DEMANDE DE GUILLAUME : « l'animation astéroïde sur la ferme ne doit pas
+   figer la zone d'écrasement avant l'arrivée de l'éclat d'astéroïde, mais prendre
+   une scène ailleurs, plus éloignée du futur point d'impact où l'on verra passer
+   l'astéroïde qui se fractionne. Et quelques secondes plus tard, animation
+   tremblante habituelle suggérant l'écrasement puis chevron. »
+   ⚠️⚠️ C'EST UN DÉFAUT DE RÉCIT, PAS DE DESSIN, ET IL EST DE LA MÊME FAMILLE QUE
+   CELUI DU 448 : la scène RÉPONDAIT à la question qu'elle venait de poser. On
+   cadrait un bout de champ vide pendant six secondes — donc on savait où ça allait
+   tomber avant que ça tombe, et le chevron qui suit n'apprenait plus rien. Ici on
+   voit passer la chose, on la perd de vue, le sol tremble : il faut CHERCHER.
+   ⚠️ LE POINT DE VUE EST DÉRIVÉ, JAMAIS RÉGLÉ : impact moins la direction de la
+   course, sur `STAR_CAM_VANTAGE` demi-diagonales d'écran. Un nombre de cases écrit
+   à la main aurait penché le jour où l'on change le zoom ou la taille du canevas
+   (§8), et surtout il aurait été JUSTE sur l'écran de celui qui l'a réglé.
+   ⚠️⚠️ ET IL EST > 1 EXPRÈS : à une demi-diagonale on regarde encore le bord du
+   cratère. Au-delà de 1, l'impact est HORS CADRE quelle que soit la direction de
+   la course — c'est une garantie géométrique, pas un réglage heureux, et c'est ce
+   que le banc mesure (il balaie les formats de fenêtre plutôt que d'en croire un).
+   ⚠️ LA VILLE GARDE SA SCÈNE (« Pour l'écrasement de la météorite et le gros
+   cratère à valley town, garder l'animation actuelle »). Là-bas le cratère est le
+   sujet, ici il est la question. */
+export const STAR_CAM_VANTAGE = 1.15;      // en DEMI-DIAGONALES d'écran, en AMONT de la course
+export const STAR_CAM_VANTAGE_ZONES = ["farm"];
+export function starCamVantageOn(zone) { return STAR_CAM_VANTAGE_ZONES.includes(zone || "farm"); }
+/* Le point que la caméra vise. ⚠️ ELLE REND L'IMPACT LUI-MÊME LÀ OÙ IL EST LE
+   SUJET : une liste de ce qui est PERMIS et non de ce qui est interdit, comme
+   `STAR_FALL_WORLDS` (leçon de `plantTree`, 440). Le jour où une carte s'ajoute,
+   elle a la scène d'origine tant que personne ne l'écrit ici.
+   `halfDiagTiles` est la demi-diagonale de la fenêtre EN CASES — l'appelant la
+   connaît (`starViewRef`), ce fichier ne doit surtout pas la deviner. */
+export function starCamTarget(zone, impact, halfDiagTiles) {
+  if (!impact) return null;
+  if (!starCamVantageOn(zone)) return { zone, x: impact.x, y: impact.y };
+  const a = starFallAngle(zone), d = STAR_CAM_VANTAGE * Math.max(1, +halfDiagTiles || 0);
+  return { zone, x: impact.x - Math.cos(a) * d, y: impact.y - Math.sin(a) * d };
+}
+
+/* ⚠️ LE « ! » DE TOUTES LES TÊTES, À L'IMPACT (demande de Guillaume : « Tous les
+   pnj doivent avoir un "!" en bulle au dessus de leurs têtes pendant 2 secondes à
+   partir du moment de l'impact »). Il se dérive de l'horloge de scène que chaque
+   client a déjà — donc zéro message, et il tombe au même instant que la secousse
+   parce qu'il lit le MÊME `STAR_FALL_IMPACT_MS` (une jointure, jamais deux
+   listes). Hors cinématique il rend `false` : le monde ne sursaute pas tout seul. */
+export function starBang(sceneKey, elapsedMs) {
+  if (sceneKey !== "fall") return 0;
+  const t = (+elapsedMs || 0) - STAR_FALL_IMPACT_MS;
+  return (t >= 0 && t < C.STAR_BANG_MS) ? 1 - t / C.STAR_BANG_MS : 0;
+}
 
 /* ╔═════════════════════════════════════════════════════════════════════════════
    ║ ZIP 448 — L'INSTANT DE L'IMPACT. UNE JOINTURE, PAS UN NOMBRE DE PLUS.
@@ -534,7 +1096,15 @@ export const STAR_CAM_BACK_MS = 1900;   // le retour vers le joueur
    deux décors. Deux listes auraient redivergé au premier réglage (§ « une porte
    sans chemin de code ment », 444). */
 export const STAR_FALL_APPEAR_MS = 1150;  // la comète entre en scène — APRÈS que la caméra se soit posée
-export const STAR_FALL_IMPACT_MS = 3200;  // elle touche le sol — L'INSTANT, lu par tout le monde
+/* ⚠️⚠️ ZIP 454 — LES DEUX SUIVANTES SONT DÉSORMAIS DÉRIVÉES, ET C'EST CE QUI A
+   RENDU LE RALENTISSEMENT GRATUIT. `3200` et `9000` étaient écrits à la main ; la
+   chute passant de 2,05 s à 5,1 s, il aurait fallu relire quatre nombres et en
+   oublier un. Ils se déduisent maintenant du vol (`STAR_FALL_FLIGHT_MS`) et de la
+   queue de scène (`STAR_FALL_TAIL_MS`) — §8 de `CLAUDE.md`, « un paramètre qui
+   double un autre doit être DÉRIVÉ, jamais réglé ». */
+export const STAR_FALL_IMPACT_MS = STAR_FALL_APPEAR_MS + STAR_FALL_FLIGHT_MS;  // elle touche le sol — L'INSTANT, lu par tout le monde
+export const STAR_FALL_MS = STAR_FALL_IMPACT_MS + STAR_FALL_TAIL_MS;           // durée de la scène d'ouverture
+export const STAR_CAM_HOLD_MS = STAR_FALL_IMPACT_MS + STAR_CAM_AFTER_MS;       // ce qu'elle y reste (depuis t=0)
 
 /* Le décor d'impact est-il POSÉ ? ⚠️ ELLE PREND LA SCÈNE EN COURS, PAS L'ÉTAT
    PARTAGÉ : hors cinématique (un joueur qui arrive le lendemain, ou qui a déjà
@@ -589,19 +1159,38 @@ export function starFallAngle(zone) {
    C'est le défaut n°1 du 444 pris à la racine (« une porte sans chemin de code
    ment ») : le pisteur affichait une PHRASE tirée du chapitre, et rien au monde
    ne garantissait qu'elle parlait du même endroit que celui vers lequel on
-   aurait pointé. Ici la cible se DÉRIVE de `starMissing`, donc de la table, donc
-   du même endroit que la phrase — le jour où l'on déplace une note, les deux
-   suivent ensemble ou aucune ne suit.
-   ⚠️ `spot: "*lean"` NE REND RIEN, ET C'EST JUSTE : l'écoute des ombres se fait
-   n'importe où en ville. Un chevron qui pointerait quelque part pendant qu'on
-   demande au joueur d'aller AILLEURS écouter serait un mensonge poli — la même
-   famille que le `|| clé` du 444. Pas de cible : pas de chevron. */
-export function starTargetSite(e) {
-  for (const id of starMissing(e)) {
-    const s = STAR_SITE[id];
-    if (s && s.spot && s.spot[0] !== "*") return id;
-  }
-  return null;
+   aurait pointé. Le 449 a fait converger les deux lectures ; le 454 les réduit à
+   UNE SEULE — voir le bloc qui suit, qui explique pourquoi la convergence ne
+   suffisait plus. */
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 454 — LE CHEVRON SE DÉRIVE DU BANDEAU, ET PLUS L'INVERSE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ LE 449 AVAIT FAIT CONVERGER DEUX LISTES ; CE ZIP LES RÉDUIT À UNE. Tant que
+   les deux étapes de la quête étaient des LIEUX de la table, « le premier manquant
+   qui a une position » et « le premier manquant » tombaient toujours d'accord — et
+   `verify-quete` le vérifiait à chaque pas. Le zip 454 ajoute deux objectifs qui
+   ne sont PAS des lieux de la table (la mairie, l'atelier du bûcheron) : la
+   coïncidence heureuse s'arrête là, et le banc l'a dit à la première exécution.
+   ⚠️ On ne rattrape donc pas le cas, on supprime la cause : le chevron LIT
+   l'objectif, le traduit par une table de deux lignes, et rend `null` quand il n'a
+   rien à montrer. Il ne peut plus désigner autre chose que ce que la phrase dit,
+   quel que soit le nombre d'étapes qu'on ajoutera ensuite.
+   ⚠️ `townHall` ET `sawmill` NE SONT PAS DES LIEUX DE `STAR_SITES`, et il ne faut
+   surtout pas les y mettre : un lieu de la table est une chose qu'on TROUVE et qui
+   coche une case. Ceux-ci sont des adresses. `FermeGame` sait où ils sont ; ce
+   fichier sait seulement qu'on y va. */
+export const STAR_GOAL_TARGET = { craterHot: "crater", engineer: "townHall", timber: "sawmill" };
+export const STAR_OFF_TABLE_TARGETS = ["townHall", "sawmill"];
+export function starTargetSite(e, ctx) {
+  const goal = starGoalKey(e, ctx);
+  if (!goal) return null;
+  const id = STAR_GOAL_TARGET[goal] || goal;
+  if (STAR_OFF_TABLE_TARGETS.includes(id)) return id;
+  const s = STAR_SITE[id];
+  /* ⚠️ `spot: "*lean"` NE REND RIEN, ET C'EST JUSTE : l'écoute des ombres se fait
+     n'importe où en ville. Un chevron qui pointerait quelque part pendant qu'on
+     demande au joueur d'aller AILLEURS écouter serait un mensonge poli. */
+  return (s && s.spot && s.spot[0] !== "*") ? id : null;
 }
 
 /* ⚠️⚠️ ELLE SE CACHE QUAND QUELQU'UN APPROCHE, ET C'EST LE THÈME RENDU VISIBLE
@@ -767,11 +1356,23 @@ export function newStar() {
   return {
     ch: 0,          // chapitre courant
     found: {},      // id de lieu -> { by, at } — idempotent par construction
+    /* ⚠️ ZIP 455 — L'ANNONCE ET LA CHUTE SONT DEUX INSTANTS, ET IL EN FAUT
+       BIEN DEUX : entre les deux vit tout le tampon (les PNJ nerveux, les
+       indices, l'affiche). Un booléen « annoncée » n'aurait pas suffi — c'est de
+       la DATE que se déduisent la nuit qui suit et la phase des tics. */
+    warn: { at: 0, by: "" },
     fall: 0,        // horodatage HÔTE de la chute (0 = elle n'est pas encore tombée)
     calm: {},       // id de joueur -> horodatage HÔTE du dernier « dos tourné »
     lean: {},       // id de joueur -> { x, y, at } — la dernière lecture d'ombres
     marks: [],      // les lieux révélés par les croisements
     duet: 0,        // phrases du duo réussies
+    /* ⚠️ ZIP 454 — DEUX CHAMPS DE PLUS, ET PAS UN DE TROP. `plan` porte UNE date
+       (la commande à la mairie) et le drapeau que l'hôte lève quand l'ingénieur
+       rend son travail : arrivée et échéance s'en déduisent. `wood` porte les cinq
+       commandes du bûcheron, indexées par les clés du NAVIRE — jamais par un
+       numéro d'étape, qui aurait été une seconde liste. */
+    plan: { at: 0, by: "", done: 0 },
+    wood: {},       // clé de morceau -> { at, readyAt, done, by }
     gift: {},       // id de joueur -> { at, kind } — le crochet cosmétique (§8)
     seen: {},       // scènes déjà jouées : cartes de chapitre, « previously »
     doneAt: 0,
@@ -797,6 +1398,14 @@ export function migrateStar(saved) {
     }
   }
   e.fall = +saved.fall || 0;
+  /* ── ZIP 455 : l'annonce. ⚠️ UNE SAUVEGARDE D'AVANT CE ZIP N'A PAS LE CHAMP ET
+     PEUT AVOIR `fall` — c'est une partie commencée sous l'ancienne règle, et elle
+     doit continuer de tourner. On considère donc qu'une chute déjà tombée VAUT
+     annonce : sans ça, `starWarning` serait faux, `starFallDue` refuserait, et
+     rien ne casserait bruyamment — le pire des deux mondes. */
+  if (saved.warn && typeof saved.warn === "object")
+    e.warn = { at: +saved.warn.at || 0, by: String(saved.warn.by || "").slice(0, 24) };
+  if (!e.warn.at && e.fall) e.warn = { at: e.fall, by: "" };
   if (saved.calm && typeof saved.calm === "object")
     for (const k of Object.keys(saved.calm)) e.calm[String(k).slice(0, 40)] = +saved.calm[k] || 0;
   if (saved.lean && typeof saved.lean === "object") {
@@ -817,6 +1426,31 @@ export function migrateStar(saved) {
   if (saved.seen && typeof saved.seen === "object")
     for (const k of Object.keys(saved.seen)) if (saved.seen[k]) e.seen[String(k).slice(0, 32)] = true;
   e.doneAt = +saved.doneAt || 0;
+  /* ── ZIP 454 : les plans et le bois. */
+  if (saved.plan && typeof saved.plan === "object") {
+    e.plan = { at: +saved.plan.at || 0, by: String(saved.plan.by || "").slice(0, 24), done: +saved.plan.done || 0 };
+  }
+  if (saved.wood && typeof saved.wood === "object") {
+    for (const k of Object.keys(saved.wood)) {
+      if (!STAR_SHIP_KEYS.includes(k)) continue;      // une clé inconnue = une version d'après : on l'ignore
+      const v = saved.wood[k] || {};
+      e.wood[k] = { at: +v.at || 0, readyAt: +v.readyAt || 0, done: !!v.done, by: String(v.by || "?").slice(0, 24) };
+    }
+  }
+  /* ⚠️⚠️ UNE PARTIE FINIE AVANT CE ZIP A UN BATEAU CONSTRUIT, ET IL DOIT LE
+     RESTER. Sans cette ligne, `starShipParts` (qui exige désormais le bois) ferait
+     DISPARAÎTRE de la grève un navire achevé il y a trois semaines : la nouvelle
+     règle réécrirait le passé. On accorde donc les cinq pièces aux sauvegardes qui
+     portent `doneAt` — c'est la seule migration de ce zip, et elle ne touche qu'à
+     des parties qui n'ont plus rien à jouer.
+     ⚠️ Une partie EN COURS, elle, n'est pas rattrapée : la chaîne du bûcheron
+     commence là où elle en est, ce qui est le comportement voulu (on ne construit
+     pas un bateau rétroactivement). */
+  if (e.doneAt) {
+    e.plan.at = e.plan.at || e.doneAt; e.plan.done = e.plan.done || e.doneAt;
+    for (const k of STAR_SHIP_KEYS)
+      if (!e.wood[k]) e.wood[k] = { at: e.doneAt, readyAt: e.doneAt, done: true, by: "?" };
+  }
   return e;
 }
 
@@ -824,8 +1458,10 @@ export function starFallen(e) { return !!(e && e.fall); }
 export function starStarted(e) { return !!(e && (e.ch > 0 || Object.keys(e.found || {}).length)); }
 export function starDone(e) { return !!(e && e.doneAt); }
 export function starHas(e, id) { return !!(e && e.found && e.found[id]); }
-/* Le compte d'éclats, DÉRIVÉ de la table (voir la note de `shard`). */
-export function starShards(e) { return STAR_SHARD_IDS.filter(id => starHas(e, id)).length; }
+/* ⚠️ ZIP 453 — `starShards` A ÉTÉ SUPPRIMÉE. Le seul compte de la quête est
+   `starShipBuilt` (voir la note de `STAR_SITES`) : un objet, une façon de le
+   compter. Tout ce qui affichait « n sur 4 » lit maintenant « n sur
+   STAR_SHIP_TOTAL », c'est-à-dire exactement ce que le navire montre. */
 /* Ce qui manque au chapitre courant, dans l'ordre de la table — c'est ce que le
    pisteur affiche, et c'est ce qui fait qu'on sait toujours quoi chercher. */
 export function starMissing(e) {
@@ -875,7 +1511,23 @@ export function starGoalKey(e, ctx) {
   if (!e || !starFallen(e) || starDone(e)) return null;
   const missing = starMissing(e);
   const first = missing[0];
-  if (!first) return null;
+  /* ⚠️⚠️ ZIP 454 — LES DEUX NOUVELLES ÉTAPES PASSENT DEVANT, ET SEULEMENT QUAND
+     ELLES SONT ACTIONNABLES. C'est le sens de « le rôle des étoiles est de nous
+     guider dans le projet » : le bandeau est la voix de l'étoile.
+     · `engineer` — l'étoile vient de sortir du trou et elle conseille la mairie.
+       C'est la seule chose à faire à cet instant, elle passe donc avant le reste ;
+     · `timber` — tout est trouvé, il ne manque que du bois. Sans cette clé, le
+       bandeau n'aurait plus rien à dire pendant toute la fin de la construction.
+     ⚠️⚠️ ET L'ATTENTE DE L'INGÉNIEUR N'EST **PAS** UN OBJECTIF, exprès : pendant
+     ses quinze minutes il y a les deux croisements d'ombres à faire. Un bandeau qui
+     dirait « attends » pendant qu'on peut jouer transformerait du rythme en temps
+     mort — c'est le défaut du 426 par l'autre bout (le jeu propose de ne rien
+     faire). Il ne le dit QUE s'il ne reste vraiment rien d'autre. */
+  if (starHas(e, "crater") && !starPlanAsked(e)) return "engineer";
+  if (!first) {
+    if (!starPlanReady(e)) return "engineerWait";
+    return starTimberNext(e) ? "timber" : null;
+  }
   /* ⚠️ L'ORDRE DE LA TABLE FAIT FOI, comme pour `starTargetSite` : le premier qui
      manque est celui qu'on cherche. Aucune liste parallèle. */
   if (first === "crater" && ctx && ctx.craterHot) return "craterHot";
@@ -893,8 +1545,13 @@ export const STAR_GOAL_KEYS = (() => {
     if (s.id === "leanLake") { out.push("lean"); continue; }
     if (s.id === "leanGlass") { out.push("leanAgain"); continue; }
     out.push(s.id);
-    if (s.id === "crater") out.push("craterHot");
+    if (s.id === "crater") out.push("craterHot", "engineer");
   }
+  /* ⚠️ ZIP 454 — les deux clés de la construction. Elles ne sont pas dérivées de
+     `STAR_SITES` parce qu'elles ne sont pas des LIEUX : l'une désigne une attente,
+     l'autre un atelier de ferme. Elles sont ici pour que le banc vérifie qu'elles
+     ont un texte — c'est tout ce que cette liste sert à faire. */
+  out.push("engineerWait", "timber");
   return out;
 })();
 
@@ -931,15 +1588,128 @@ export function starAdvance(e) {
    banc le vérifie par un scan de source.
    ─────────────────────────────────────────────────────────────────────────── */
 
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 455 — L'ANNONCE. C'EST L'HÔTE QUI DIT OUI, ET UNE SEULE FOIS.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ IL PORTE LA MÊME PORTE QUE LA CHUTE (`starFallGate`) ET LE MÊME JOUR
+   MINIMUM, et ce n'est pas de la ceinture-bretelles : l'invite ne doit s'afficher
+   QUE quand la quête est réellement déblocable (« ne s'affichant que lorsque la
+   quête est débloquée par les conditions de ferme déjà discutées »). Une invite
+   qui s'ouvre puis un résolveur qui refuse, c'est « le jeu propose et refuse »
+   (426) — le défaut le plus désagréable du dépôt, et le seul que ce projet ait
+   payé quatre fois.
+   ⚠️ IL EST IDEMPOTENT : deux clics sur « Oui » (ou deux hôtes qui se succèdent)
+   ne redatent pas le tampon, donc ne repoussent pas la nuit.
+   ⚠️ ET IL N'ENCAISSE RIEN, comme les dix autres : il écrit une date et rend
+   `{ ok, scene }`. C'est `FermeGame` qui diffuse — la règle du 431 sur le double
+   crédit, tenue depuis. */
+export function resolveStarWarn(e, who, day, now, ctx) {
+  if (e.warn && e.warn.at) return { ok: false, already: true };
+  if (e.fall) return { ok: false, already: true };
+  if ((day | 0) < STAR_FALL_MIN_DAY) return { ok: false, tooEarly: true };
+  const gate = starFallGate(ctx);
+  if (!gate.ok) return { ok: false, gated: true, ...gate };
+  e.warn = { at: +now || 0, by: String(who || "?").slice(0, 24) };
+  return { ok: true, scene: "warn" };
+}
+/* L'INVITE EST-ELLE À PROPOSER ? ⚠️ ELLE EST ICI PLUTÔT QUE DANS LE COMPOSANT
+   POUR LA RAISON DE TOUT CE FICHIER : c'est elle qui décide si un joueur voit un
+   panneau annoncer une histoire secrète, et c'est donc elle qu'un banc doit
+   pouvoir balayer. Elle ne dit RIEN du « plus tard » — le refus est un confort
+   d'interface pour UN joueur, il ne traverse pas et il n'a rien à faire ici. */
+export function starWarnOffer(e, day, ctx) {
+  if (!e || e.fall || starWarned(e)) return false;
+  if ((day | 0) < STAR_FALL_MIN_DAY) return false;
+  return starFallGate(ctx).ok;
+}
+
 /* La chute. ⚠️ ELLE EST DATÉE PAR L'HÔTE ET DIFFUSÉE UNE FOIS. Chaque client
    déroule ensuite SA chronologie à partir de SA réception : on ne compare jamais
    une horloge hôte à une horloge invité (§3), et une scène de neuf secondes est
    exactement le genre de chose où trois secondes de dérive se verraient. */
-export function resolveStarFall(e, day, now) {
+export function resolveStarFall(e, day, now, ctx) {
   if (e.fall) return { ok: false, already: true };
   if ((day | 0) < STAR_FALL_MIN_DAY) return { ok: false, tooEarly: true };
+  /* ⚠️⚠️ ZIP 455 — ELLE NE TOMBE PLUS SANS AVOIR ÉTÉ ANNONCÉE, ET LE TAMPON EST
+     VÉRIFIÉ ICI. Écrits dans l'appelant, ces deux tests auraient été des règles
+     que le banc ne peut pas appeler — c'est-à-dire des règles qui vieillissent
+     (piège n°1, §2), et c'est exactement le raisonnement qui a fait descendre la
+     porte des habitants dans ce fichier au 454. */
+  if (!starWarned(e)) return { ok: false, unannounced: true };
+  if (!starFallDue(e, ctx && ctx.dayStartAt, now)) return { ok: false, waiting: true };
+  /* ⚠️ ZIP 454 — LA PORTE DES DEUX HABITANTS. Elle est ICI et pas dans l'appelant
+     pour la raison qui vaut pour tout ce fichier : le banc appelle ce résolveur, il
+     n'appelle pas `FermeGame`. Un test écrit là-bas aurait été un test que personne
+     ne mesure — c'est-à-dire, à terme, un test qu'on déplace en croyant le garder. */
+  const gate = starFallGate(ctx);
+  if (!gate.ok) return { ok: false, gated: true, ...gate };
   e.fall = now;
   return { ok: true, scene: "fall" };
+}
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 454 — LES QUATRE RÉSOLVEURS DE LA CONSTRUCTION.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ AUCUN NE PAIE ET AUCUN N'ENCAISSE, comme les six autres : ils rendent un
+   COÛT, et c'est `FermeGame` qui prend l'or, les récoltes, les poissons et le
+   bois. C'est la règle du 431 (le double crédit) tenue depuis, et le banc la
+   vérifie par un scan de source — rien dans ce fichier ne touche à une pièce. */
+
+/* La demande à la mairie. ⚠️ ELLE EXIGE LA RENCONTRE (`crater`) ET RIEN D'AUTRE :
+   c'est l'étoile qui envoie, donc il faut l'avoir vue. Le PAIEMENT est vérifié par
+   l'hôte avec ce que rend `cost` — un client qui forgerait la requête ne
+   court-circuite rien. */
+export function resolveStarPlanAsk(e, who, now) {
+  if (!starHas(e, "crater")) return { ok: false, tooEarly: true };
+  if (starPlanAsked(e)) return { ok: false, already: true };
+  return { ok: true, cost: { gold: C.STAR_ENG_FEE_GOLD, crops: C.STAR_ENG_FEE_CROPS, fish: C.STAR_ENG_FEE_FISH } };
+}
+/* Ce que l'hôte écrit UNE FOIS le paiement pris. ⚠️ SÉPARÉE DE LA PRÉCÉDENTE
+   EXPRÈS : un résolveur qui daterait la commande avant que l'or ne soit compté
+   laisserait un ingénieur en route pour une ferme qui n'a pas payé, et la seule
+   façon d'annuler serait d'effacer une date — c'est-à-dire de mentir deux fois. */
+export function commitStarPlan(e, who, now) {
+  e.plan = { at: now, by: String(who || "?").slice(0, 24), done: 0 };
+  return { ok: true };
+}
+/* Le battement de l'hôte : les plans sont rendus. ⚠️ IL COMPARE DEUX DATES DE SA
+   PROPRE HORLOGE (`now` et `plan.at`), donc le §3 tient par construction — c'est
+   la même discipline que le retour d'Eduardo et que le refroidissement du cratère. */
+export function resolveStarPlanTick(e, now) {
+  if (!starPlanAsked(e) || starPlanReady(e)) return { ok: false };
+  if ((+now || 0) < e.plan.at + C.STAR_ENG_TRAVEL_MS + C.STAR_ENG_WORK_MS) return { ok: false };
+  e.plan.done = now;
+  return { ok: true };
+}
+
+/* Une commande de bois. ⚠️ ELLE REND LE COÛT ET LA DURÉE, elle ne prélève rien.
+   `starTimberBlock` porte TOUTES les conditions (plans, morceau trouvé, pièce
+   précédente livrée) : les réécrire ici aurait donné deux règles pour une seule
+   question, et le panneau grise ses boutons avec la première. */
+export function resolveStarTimberOrder(e, key, who, now) {
+  const why = starTimberBlock(e, key);
+  if (why) return { ok: false, why };
+  const t = C.STAR_TIMBER[key];
+  return { ok: true, wood: t.wood, ms: t.ms };
+}
+export function commitStarTimber(e, key, who, now) {
+  const t = C.STAR_TIMBER[key];
+  e.wood[key] = { at: now, readyAt: now + t.ms, done: false, by: String(who || "?").slice(0, 24) };
+  return { ok: true };
+}
+/* Le battement : Tristan livre. ⚠️ IL NE REND QU'UNE CLÉ À LA FOIS, et c'est
+   voulu — deux pièces ne peuvent pas être en cours en même temps (l'ordre l'
+   interdit), donc une boucle qui en livrerait plusieurs serait du code pour un cas
+   qui ne peut pas exister. */
+export function resolveStarTimberTick(e, now) {
+  for (const k of STAR_SHIP_KEYS) {
+    const w = e.wood && e.wood[k];
+    if (!w || w.done) continue;
+    if ((+now || 0) < w.readyAt) continue;
+    w.done = true;
+    return { ok: true, key: k, complete: starShipComplete(e) };
+  }
+  return { ok: false };
 }
 
 /* Une trouvaille. ⚠️ IDEMPOTENT PAR CONSTRUCTION : `found` est un dictionnaire,
@@ -953,7 +1723,11 @@ export function resolveStarFound(e, id, who, now) {
   if (site.req && !site.req.every(r => starHas(e, r))) return { ok: false, locked: true };
   if (starHas(e, id)) return { ok: true, already: true, crossed: [] };
   e.found[id] = { by: String(who || "?").slice(0, 24), at: now };
-  return { ok: true, crossed: starAdvance(e), shard: !!site.shard };
+  /* ⚠️ ZIP 453 — `shard: !!site.shard` EST RETIRÉ DU RETOUR : il n'avait aucun
+     lecteur (vérifié par grep avant de le supprimer), et il portait le second
+     vocabulaire qu'on vient de faire disparaître. Ce qui compte maintenant se
+     lit sur le navire, et le navire se lit sur `found`. */
+  return { ok: true, crossed: starAdvance(e) };
 }
 
 /* ⚠️⚠️ L'ÉTOILE TIMIDE — LE PREMIER VERROU COOPÉRATIF, ET IL N'EN EST PAS UN.
@@ -1063,6 +1837,16 @@ export function resolveStarDuet(e, phrase, who, now) {
 export function resolveStarGift(e, playerIds, now) {
   if (e.doneAt) return { ok: false, already: true };
   if (!starHas(e, "song")) return { ok: false, missing: true };
+  /* ⚠️⚠️ ZIP 454 — ET LE BATEAU DOIT ÊTRE FINI. La cloche a donné sa note, les
+     cinq morceaux sont RETROUVÉS — mais si le bûcheron n'a pas encore livré la
+     chaise de cloche, il reste un chantier sur la grève. Jouer la résolution
+     par-dessus, c'est faire partir un bateau qu'on voit inachevé derrière : la
+     famille du 453 (« un texte affirme »), et le seul endroit du jeu où elle
+     coûterait la scène finale.
+     ⚠️ LE REFUS EST SILENCIEUX ET REJOUABLE : `resolveStarTimberTick` rappelle ce
+     résolveur quand la dernière pièce tombe, donc la fin arrive toute seule au
+     moment où le navire s'achève. Personne n'a à re-jouer le duo. */
+  if (!starShipComplete(e)) return { ok: false, unbuilt: true, built: starShipBuilt(e), total: STAR_SHIP_TOTAL };
   e.doneAt = now;
   e.ch = STAR_CH_DONE;
   const granted = [];
@@ -1094,20 +1878,64 @@ export function resolveStarGift(e, playerIds, now) {
    effacerait clé par clé finirait par laisser un état à moitié propre le jour où
    l'on ajoute un champ. `newStar()` ne peut pas mentir.
    ─────────────────────────────────────────────────────────────────────────── */
-export const STAR_DEV_OPS = ["reset", "start", "chapter", "skip", "hint", "all"];
-export const STAR_DEV_SCENES = ["fall", "turn", "end"];
+export const STAR_DEV_OPS = ["reset", "warn", "start", "chapter", "skip", "hint", "all", "plans", "timber"];
+export const STAR_DEV_SCENES = ["warn", "fall", "turn", "end"];
+/* ⚠️⚠️ ZIP 454 — LE MENU DEV FRANCHIT LA PORTE DES DEUX HABITANTS, ET C'EST LE
+   SEUL ENDROIT QUI EN A LE DROIT. Recruter Eduardo, Tristan et quatre artisans
+   avant de pouvoir REGARDER une cinématique de douze secondes, c'est une demi-
+   heure de jeu par essai — c'est-à-dire une scène qu'on ne regarde qu'une fois,
+   donc qu'on ne juge qu'une fois (§10 de `CLAUDE.md`, la raison d'être du bouton
+   « rejouer une scène »). Le contexte est FABRIQUÉ ici, il n'est pas lu : la porte
+   reste entière pour tout le monde, y compris pour l'hôte qui arme la chute. */
+const DEV_GATE = { skills: C.STAR_GATE_SKILLS, artisans: C.STAR_GATE_ARTISANS };
 
 export function devStar(e, op, now) {
   const t = now || Date.now();
   if (op === "reset") return { star: newStar(), ok: true };
+  /* ⚠️⚠️ ZIP 455 — « ▶ START » SAUTE LE TAMPON, ET C'EST SA RAISON D'ÊTRE. Il
+     annonce et fait tomber dans le même geste : sans ça, regarder la chute
+     coûterait cinq minutes d'attente réelle par essai, c'est-à-dire qu'on ne la
+     regarderait plus (§10 de `CLAUDE.md`, la raison d'être du bouton « rejouer une
+     scène »). Le tampon a son propre bouton juste dessous, pour qui veut le juger. */
   if (op === "start") {
-    const s = e.fall ? e : (resolveStarFall(e, STAR_FALL_MIN_DAY, t), e);
-    return { star: s, ok: true, scene: "fall" };
+    if (!e.warn || !e.warn.at) e.warn = { at: t - C.STAR_WARN_FLOOR_MS - 1000, by: "🛠️" };
+    if (!e.fall) e.fall = t;
+    return { star: e, ok: true, scene: "fall" };
+  }
+  /* ⚠️ LE TAMPON SEUL. C'est le seul moyen de juger les PNJ nerveux et leurs
+     phrases sans attendre qu'une ferme atteigne quatre artisans — et sans que la
+     comète tombe cinq minutes plus tard au milieu de l'observation. */
+  if (op === "warn") {
+    if (e.fall) return { ok: false };
+    e.warn = { at: t, by: "🛠️" };
+    return { star: e, ok: true, scene: "warn" };
+  }
+  /* ── ZIP 454 : les deux étapes qui se comptent en MINUTES RÉELLES. Sans ces
+     boutons, juger le plan et le fantôme demanderait dix-huit minutes d'attente,
+     et juger le navire fini, quarante — c'est-à-dire qu'on ne les jugerait pas. */
+  if (op === "plans") {
+    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "🛠️" };
+    if (!e.fall) e.fall = t;
+    resolveStarFound(e, "furrow", "🛠️", t);
+    resolveStarFound(e, "crater", "🛠️", t);
+    e.plan = { at: t - C.STAR_ENG_TRAVEL_MS - C.STAR_ENG_WORK_MS, by: "🛠️", done: t };
+    return { star: e, ok: true };
+  }
+  if (op === "timber") {
+    /* ⚠️ IL NE DONNE QUE LE BOIS, jamais les morceaux d'étoile : les deux moitiés
+       restent distinctes, sinon ce bouton effacerait la quête au lieu de la
+       raccourcir — et on ne saurait plus lequel des deux manque à l'écran. */
+    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "🛠️" };
+    if (!e.fall) e.fall = t;
+    if (!starPlanAsked(e)) e.plan = { at: t, by: "🛠️", done: t };
+    for (const k of STAR_SHIP_KEYS) e.wood[k] = { at: t, readyAt: t, done: true, by: "🛠️" };
+    return { star: e, ok: true };
   }
   if (op === "chapter") {
     /* On donne exactement ce qui manque au chapitre COURANT, pas un de plus.
        `starAdvance` fait le reste, et il peut en franchir deux d'un coup si le
        suivant était déjà complet : c'est sa raison d'être. */
+    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "🛠️" };
     if (!e.fall) e.fall = t;
     for (const id of starMissing(e)) {
       if (id === "song") { e.duet = STAR_DUET_PHRASES; }
@@ -1116,6 +1944,7 @@ export function devStar(e, op, now) {
     return { star: e, ok: true };
   }
   if (op === "skip") {
+    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "🛠️" };
     if (!e.fall) e.fall = t;
     const before = e.ch;
     for (let guard = 0; guard < STAR_CH_DONE + 2 && e.ch === before; guard++) {
@@ -1130,6 +1959,7 @@ export function devStar(e, op, now) {
   if (op === "hint") {
     /* Rejoue le marquage du lieu courant : c'est ce que le croisement d'ombres
        aurait donné, sans avoir à traverser la ville deux fois. */
+    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "🛠️" };
     if (!e.fall) e.fall = t;
     const next = STAR_LEAN_MARKS.find(m => !starHas(e, m));
     if (next) { resolveStarFound(e, next, "🛠️", t); if (!e.marks.includes(next)) e.marks.push(next); }
@@ -1144,6 +1974,7 @@ export function devStar(e, op, now) {
        avait dû ajouter pour exactement la même raison.
        ⚠️ ET IL S'ARRÊTE AVANT LE CHANT : le duo est le seul moment du chantier
        qui vaille d'être joué à la main. */
+    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "🛠️" };
     if (!e.fall) e.fall = t;
     for (let pass = 0; pass < 2; pass++)
       for (const st of STAR_SITES) {
@@ -1151,6 +1982,13 @@ export function devStar(e, op, now) {
         resolveStarFound(e, st.id, "🛠️", t);
       }
     for (const m of STAR_LEAN_MARKS) if (starHas(e, m) && !e.marks.includes(m)) e.marks.push(m);
+    /* ⚠️ ZIP 454 — « TOUT SAUF LE DUO » DOIT AUSSI DIRE LE BOIS, sans quoi le duo
+       joué à la main ne déclencherait plus la résolution (`resolveStarGift` exige
+       un navire fini) : le bouton promettrait « il ne reste que le duo » et le
+       jeu, lui, attendrait quarante minutes de sciage. Un raccourci qui ment est
+       pire que pas de raccourci. */
+    if (!starPlanAsked(e)) e.plan = { at: t, by: "🛠️", done: t };
+    for (const k of STAR_SHIP_KEYS) e.wood[k] = { at: t, readyAt: t, done: true, by: "🛠️" };
     return { star: e, ok: true };
   }
   return { ok: false };

@@ -7243,6 +7243,66 @@ div.ferme-usage{ margin-bottom:10px; }
 }
 @keyframes fermeStarTwinkle{ 0%,100%{ opacity:.55; } 50%{ opacity:1; } }
 
+/* ---- ZIP 455 — LE SOUS-TITRE DE LA CARTE D'ANNONCE. ⚠️ La carte de chapitre
+   n'en a jamais eu, et n'en aura jamais : un titre de chapitre qui s'explique
+   n'est plus un titre. L'annonce, elle, dit une NOUVELLE — le titre nomme, la
+   ligne du dessous raconte, et les deux tiennent en une seconde de lecture. */
+.ferme-star-card-sub{
+  margin-top:8px; font-family:var(--font-mono, monospace);
+  font-size:clamp(11px, 2.1vw, 14px); letter-spacing:.02em;
+  color:rgba(255,236,196,.78);
+}
+
+/* ---- ZIP 455 — L'INVITE DE L'HÔTE (« Démarrer l'enquête ? »).
+   ⚠️⚠️ ELLE NE SE FERME PAS TOUTE SEULE, contrairement à la carte : elle DEMANDE
+   quelque chose, et une question qui s'efface est une question qu'on n'a pas
+   posée. D'où un vrai modal (`pointer-events` actifs) et pas un voile.
+   ⚠️ LE FOND EST CELUI DE `.ferme-star-panel` (palette de nuit) : c'est la même
+   famille que le rappel de reprise et que le plan, donc le joueur reconnaît
+   « c'est l'histoire de l'étoile » avant d'avoir lu le titre. */
+.ferme-star-offer{ background:rgba(4,6,16,.72); }
+.ferme-star-offer .ferme-modal-panel{
+  max-width:min(460px, 92vw); text-align:center;
+  box-shadow:0 10px 44px rgba(0,0,0,.6), 0 0 0 1px rgba(255,228,164,.18) inset;
+  animation:fermeStarOfferIn .42s cubic-bezier(.2,.9,.3,1) both;
+}
+/* La comète, au-dessus du titre. ⚠️ Elle DÉRIVE lentement plutôt que de
+   clignoter : un pictogramme qui clignote se lit comme une alerte système. */
+.ferme-star-offer-mark{
+  font-size:34px; line-height:1; margin-bottom:6px;
+  filter:drop-shadow(0 0 12px rgba(255,214,120,.55));
+  animation:fermeStarOfferDrift 5.5s ease-in-out infinite;
+}
+.ferme-star-offer-btns{
+  display:flex; gap:10px; justify-content:center; margin-top:16px; flex-wrap:wrap;
+}
+/* ⚠️ « OUI » EST MIS EN AVANT, « PLUS TARD » RESTE UN BOUTON NORMAL — et pas un
+   lien en petit gris. Un refus qu'il faut chercher n'est pas un refus offert. */
+.ferme-star-offer-yes{
+  background:linear-gradient(#f5d071, #d8a52f) !important;
+  border-color:rgba(255,240,200,.7) !important; color:#2a1d05 !important;
+  font-weight:700;
+}
+@keyframes fermeStarOfferIn{
+  0%{ opacity:0; transform:translateY(14px) scale(.97); }
+  100%{ opacity:1; transform:none; }
+}
+@keyframes fermeStarOfferDrift{
+  0%,100%{ transform:translate(0,0) rotate(-4deg); }
+  50%{ transform:translate(3px,-3px) rotate(4deg); }
+}
+
+/* ---- ZIP 455 — L'AVIS DE L'OBSERVATOIRE, sur le tableau des nouvelles.
+   ⚠️ Il est ENCADRÉ et pas simplement en gras : c'est une affiche punaisée au
+   milieu d'annonces de village, et il doit se lire comme un papier d'ailleurs. */
+.ferme-star-notice{
+  margin:12px 0 4px; padding:9px 11px; border-radius:8px;
+  border:2px dashed rgba(216,165,47,.55);
+  background:linear-gradient(rgba(60,44,12,.30), rgba(30,22,6,.30));
+  color:#f6ecd2; font-size:12px; line-height:1.45;
+}
+.ferme-star-notice b{ color:#ffe9a8; letter-spacing:.06em; }
+
 /* ---- LE PANNEAU D'ÉTOILE (le rappel « Previously »). Même famille que les
    modales de la ferme, palette de nuit. */
 .ferme-star-panel{

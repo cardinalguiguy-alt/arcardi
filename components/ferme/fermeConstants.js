@@ -3466,13 +3466,49 @@ export const STAR_CRATER_CRACK_R = 7.6;
    `playerElevTown` que le 439 a évité de justesse. */
 export const STAR_CRATER_SINK_PX = 11;     // au fond du trou
 export const STAR_CRATER_LIP_PX = 3;       // sur le bourrelet, on monte
-/* LE SILLON, à la ferme, dans les champs de l'ouest. ⚠️ COMME LA BORNE
-   D'ORIGINE DU 442, IL NE BLOQUE PAS : une case qui change de sens sur une
-   carte que les joueurs labourent depuis des mois est un piège, et un sillon
-   qu'on traverse ne casse rien puisqu'on ne fait que s'y agenouiller. */
-export const STAR_FURROW_X = WELL.x - 4;
-export const STAR_FURROW_Y = WELL.y + 3;
-export const STAR_FURROW_LEN = 6;              // cases de terre retournée, vers l'ouest
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 454 — LE SILLON DÉMÉNAGE, ET IL DEVIENT UN VRAI IMPACT.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ DEMANDE DE GUILLAUME, MOT POUR MOT : « fais attention à la trainée qui
+   tombe dans la ferme. il faudrait qu'elle tombe ailleurs sur la map et que
+   l'impact ait une vraie physique, un peu comme le cratère sur valley town. »
+   Deux corrections dans une, et elles n'ont rien à voir l'une avec l'autre :
+   ⚠️ 1. L'ENDROIT. Il tombait à `WELL − 4`, c'est-à-dire **dans le carré que les
+   joueurs labourent depuis le premier jour** : une comète qui s'écrase pile au
+   milieu des potagers, à quatre cases du puits, se lit comme un décor posé là
+   pour être commode. Il part au NORD, très au-dessus de la cour de ferme (la
+   passe de dégagement du générateur va de `HOUSE.y−4` à `HOUSE.y+19` : on est
+   dehors), dans la bande vide que le 363 décrivait déjà comme « un champ vide au
+   nord de la carte » (voir `VOYAGER_ANCHOR`). Il tombe donc **où il n'y a
+   personne**, ce qui est la seule chose que l'histoire demande — et ce qui rend
+   la marche jusqu'à lui un vrai déplacement au lieu d'un pas de côté.
+   ⚠️ 2. LA PHYSIQUE. Ce n'était pas un impact, c'était une TEXTURE : une bande
+   de terre de 96×34 posée à plat, sans relief, sans bourrelet, sans fissures, et
+   surtout **sans enfoncement** — on marchait dessus comme sur de l'herbe. Il est
+   maintenant décrit comme le cratère : une hauteur le long du rayon, une pente,
+   un éclairage, un bourrelet, des fissures qui débordent, et `starFurrowSink`
+   pour qu'on y descende. La différence avec le cratère reste la FORME (une
+   balafre allongée d'est en ouest contre un trou rond), pas la nature.
+   ⚠️ COMME LA BORNE D'ORIGINE DU 442, IL NE BLOQUE TOUJOURS PAS : une case qui
+   change de sens sur une carte que les joueurs labourent depuis des mois est un
+   piège, et un sillon qu'on traverse ne casse rien puisqu'on ne fait que s'y
+   agenouiller. L'enfoncement est une grandeur de DESSIN, jamais d'altitude
+   (leçon du 439/441, tenue au cratère depuis le 446). */
+export const STAR_FURROW_X = HOUSE.x - 6;
+export const STAR_FURROW_Y = HOUSE.y - 17;
+export const STAR_FURROW_LEN = 7;              // cases de terre retournée, d'est en ouest
+export const STAR_FURROW_W = 3.6;              // cases de large au plus creux (la cuvette d'arrêt)
+/* ⚠️ TROIS GRANDEURS, TROIS NOMS — la règle du 441, la même qu'au cratère.
+   `DRAW` est ce qu'on peint, `CRACK` jusqu'où courent les fissures (elles
+   débordent, et c'est nommé plutôt que subi), `SINK`/`LIP` ce que le fermier
+   descend et remonte. Aucune n'entre dans la collision. */
+export const STAR_FURROW_CRACK_R = 6.4;        // cases, autour de la cuvette d'arrêt
+export const STAR_FURROW_SINK_PX = 8;          // au fond de la balafre
+export const STAR_FURROW_LIP_PX = 3;           // sur le bourrelet, on monte
+/* La cuvette d'arrêt est à l'OUEST : une course qui laboure creuse de plus en
+   plus jusqu'à se poser. C'est ce qui a dicté le sens de la chute au 448
+   (`starFallAngle`), et les deux se lisent ensemble. */
+export const STAR_FURROW_BOWL_DX = -2.2;       // cases à l'ouest de l'ancre : le point le plus creux
 /* LE PONTON. On ne pose rien : il existe depuis le 434. On note juste où se
    tient celui qui éclaire, pour que le jeu et le banc désignent la même case. */
 export const STAR_PIER_X = TOWN_PIER.x + (TOWN_PIER.w >> 1);
@@ -3500,10 +3536,10 @@ export const STAR_SHIP_Y = TOWN_PIER.y + 2;
    une grandeur de RANG, une grandeur de COLLISION : trois choses, trois
    paramètres »), appliquée AVANT d'être payée, exactement comme au cratère.
    `STAR_SHIP_DRAW_W/H` sont ce que le rendu PEINT (en cases) ; `STAR_SHIP_BLOCK_*`
-   est l'emprise qui BLOQUE le pas ; `STAR_SHIP_NEAR_R` est le rayon auquel on peut
-   le regarder avec E. Les confondre aurait donné soit une coque qu'on traverse,
-   soit un mur invisible large comme le dessin — le défaut du 440 dans les deux
-   sens.
+   est l'emprise qui BLOQUE le pas. Les confondre aurait donné soit une coque
+   qu'on traverse, soit un mur invisible large comme le dessin — le défaut du 440
+   dans les deux sens. (⚠️ Il y en avait TROIS jusqu'au 453 ; la troisième était
+   débranchée depuis sa naissance, voir sa note plus bas.)
    ⚠️ L'EMPRISE BLOQUANTE EST PLUS PETITE QUE LE DESSIN, et c'est le bon sens :
    la voile et le mât montent, ils ne barrent rien au sol ; seule la coque est un
    obstacle. Un joueur doit pouvoir passer DERRIÈRE le navire pour aller au
@@ -3534,7 +3570,163 @@ export const STAR_SHIP_BLOCK_H = 1;
    dans un pré. La grandeur juste est la DISTANCE, et elle est ici pour que le
    générateur et le banc lisent le même nombre. */
 export const STAR_SHIP_WATER_MAX = 3;
-export const STAR_SHIP_NEAR_R = 5.0;    // à portée de « E : regarder le navire »
+/* ⚠️⚠️⚠️ ZIP 453 — `STAR_SHIP_NEAR_R` EST SUPPRIMÉE, ET LE 452 AVAIT EU TORT DE
+   LA GARDER. Elle valait 5,0 et **aucun code de jeu ne la lisait** : seul
+   `render-navire.mjs` la citait, dans un contrôle qui ne pouvait donc mesurer
+   que lui-même. Son commentaire annonçait un « E : regarder le navire » qui
+   n'existe pas — le navire se lit à l'œil, c'est tout son intérêt (451).
+   ⚠️ Le 452 l'a gardée « en réserve, pour le jour où l'on posera une plaque ».
+   C'est exactement ce que le §4 de `CLAUDE.md` interdit depuis le 448 : *une
+   constante que SEUL le banc lit est débranchée — elle a l'air juste et elle ne
+   peut pas échouer.* Une réserve n'est pas un état du code, c'est une idée ; les
+   idées vivent dans `QUETE.md`, où celle-ci est écrite (§12.2). Le jour où la
+   plaque existera, la portée se posera AVEC elle, et elle aura un lecteur dès sa
+   première ligne. */
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 454 — LES TROIS PORTES DE LA QUÊTE, ET ELLES SONT TOUTES DES GENS.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ DEMANDE DE GUILLAUME, MOT POUR MOT : « LA ferme doit avoir déjà débloqué
+   au moins eduardo et tristan (actif) ainsi qu'au moins 4 artisans sur la ferme.
+   ce patch est logique : eduardo prend le bateau à la fin de la quête et tristan
+   y travaille. »
+   ⚠️ C'EST LA PREMIÈRE FOIS QUE LA CHUTE A UNE CONDITION QUI N'EST PAS UNE DATE,
+   et elle répare une incohérence qui traînait depuis le 450 : la fin de la quête
+   fait partir Eduardo avec le navire (453) et toute la construction passe par le
+   bûcheron — deux personnages dont RIEN ne garantissait la présence. Une quête
+   qui se termine par « et untel prend le large » sur une ferme où untel n'a
+   jamais mis les pieds est un texte qui ment, catégorie la plus chère du dépôt.
+   ⚠️⚠️ ET ELLES SE COMPTENT AVEC CE QUI EXISTE DÉJÀ : `E.residentActiveSkill`
+   (skill présent ET pas en ITT, chantier Tristan/Jérôme) et
+   `E.countSkilledResidents` (la porte d'apparition de Carla depuis le 376). Zéro
+   nouvelle façon de compter un résident — c'est-à-dire zéro seconde liste qui
+   pourrait dire autre chose que la première (§8 de `CLAUDE.md`).
+   ⚠️ LE CHIFFRE EST LE MÊME QUE CELUI DE CARLA (`CARLA_MIN_ARTISANS = 4`) et il
+   n'est PAS écrit deux fois : quatre artisans, c'est le moment où la ferme cesse
+   d'être un champ de patates — pour elle comme pour une étoile. */
+export const STAR_GATE_SKILLS = ["voyager", "lumberjack"];   // Eduardo, Tristan — actifs tous les deux
+export const STAR_GATE_ARTISANS = CARLA_MIN_ARTISANS;        // dérivé, jamais recopié
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 455 — L'ANNONCE, LE TAMPON, ET LES PNJ QUI S'EN INQUIÈTENT.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ DEMANDE DE GUILLAUME : « le lancement de la mission doit être annoncé, pas
+   automatique, la comète ne doit pas arriver comme ça. […] l'hôte doit cliquer
+   sur un overlay "démarrer l'enquête la belle étoile ?" oui / plus tard […] Et
+   rien ne doit se passer immédiatement […] la nuit qui suit, l'événement pourra
+   survenir enfin. »
+   ⚠️⚠️⚠️ ET ÇA N'INVERSE **PAS** LE THÈME DU SECRET (§3 de `QUETE.md`), PARCE
+   QU'ON A SÉPARÉ DEUX CHOSES QUI N'EN FAISAIENT QU'UNE : **la PIERRE est
+   publique, l'ÉTOILE reste secrète**. Des astronomes annoncent une pluie
+   d'astéroïdes, la vallée entière est nerveuse, tout le monde voit tomber le
+   caillou — et personne, jamais, ne saura ce qu'il y avait dedans. Le contraste
+   RENFORCE le secret au lieu de le démolir : `STAR_HIDE_R` garde tout son sens,
+   et le familier-guide du 449 (« un habitant qui renseignerait le joueur
+   démolirait la meilleure page du chantier ») reste juste au mot près — les PNJ
+   parlent de l'astéroïde, jamais du chemin à suivre.
+   ⚠️ LE PLANCHER EXISTE PARCE QUE « LA NUIT QUI SUIT » EST AMBIGU. Accepter à
+   16 h 55 fait commencer la nuit trente secondes plus tard : le tampon existerait
+   dans le code et pas à l'écran. Le plancher garantit qu'il existe TOUJOURS.
+   ⚠️ ET LA NUIT DOIT AVOIR **COMMENCÉ** APRÈS L'ANNONCE (voir `starFallDue`) :
+   accepter à 20 h ne fait pas tomber la comète dans les minutes qui suivent, mais
+   la nuit d'après. Sans ce test, un « oui » cliqué de nuit donnait très exactement
+   ce que cette demande refuse — la comète qui arrive comme ça. */
+export const STAR_WARN_FLOOR_MS = 5 * 60 * 1000;   // 5 min réelles minimum entre l'annonce et la chute
+
+/* ── LES PNJ NERVEUX. ⚠️⚠️ TOUT EST DÉRIVÉ, RIEN NE CIRCULE. « Ce PNJ est-il
+   nerveux » est une fonction de son `rid` seul ; « où en est son tic » une
+   fonction du temps écoulé depuis l'annonce, que les deux clients LISENT dans
+   l'état partagé. Deux écrans voient donc les mêmes PNJ s'agiter, sans un octet
+   de plus — la discipline de `TJ_REACT_TALK_EVERY` (368) et des oiseaux (433).
+   ⚠️ « TOUS NE DOIVENT PAS EN PARLER » (Guillaume) : la part est ici, en dur, et
+   c'est le seul endroit qui la dit. */
+export const STAR_NERVE_SHARE = 0.45;         // ~un PNJ sur deux montre quelque chose
+export const STAR_NERVE_PERIOD_MS = 11000;    // un tic par PNJ toutes les onze secondes, décalées
+export const STAR_NERVE_TIC_MS = 2600;        // ce que dure un tic (balancement ou tour sur soi)
+export const STAR_NERVE_SPIN_EVERY = 3;       // un tic sur trois est un tour sur soi-même, les autres balancent
+export const STAR_NERVE_TALK_R = 3.4;         // en cases : à cette distance, il vous dit ce qu'il a entendu
+export const STAR_NERVE_TALK_MS = 5200;       // ce que la phrase reste affichée une fois déclenchée
+/* ⚠️ LE « ! » DE L'IMPACT DURE DEUX SECONDES, ET C'EST LE CHIFFRE DE GUILLAUME
+   (« Tous les pnj doivent avoir un "!" en bulle au dessus de leurs têtes pendant
+   2 secondes à partir du moment de l'impact »). Il est ici parce que la scène le
+   lit ET que le banc le mesure : écrit dans la boucle de rendu, il aurait été un
+   nombre que personne ne peut croiser avec `STAR_FALL_IMPACT_MS`. */
+export const STAR_BANG_MS = 2000;
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 454 — L'INGÉNIEUR NAVAL, ET POURQUOI IL COÛTE SI CHER.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ DEMANDE DE GUILLAUME : « un nouveau pnj ingénieur devra être contacté via
+   une demande à la mairie ; sur conseil (guidé) de la première étoile récoltée
+   dans le cratère, et cet ingénieur arrivera sur place rapidement contre forte
+   rémunération (or, crops et poissons). […] Quand l'ingénieur aura travaillé sur
+   les plans de construction (pendant 15 minutes réelles), il nous les rendra. »
+   ⚠️ TROIS MONNAIES, ET C'EST VOULU : l'or seul, c'est un prix ; l'or + la
+   récolte + la pêche, c'est **la ferme entière qui paie**. C'est aussi la seule
+   dépense du jeu qui touche à trois réserves à la fois, donc la seule qui se
+   sente vraiment — et elle tombe au bon moment, puisqu'elle demande une ferme
+   déjà installée (voir les portes ci-dessus).
+   ⚠️⚠️ ET LE VOYAGE EST COURT, LE TRAVAIL EST LONG. « Il arrive rapidement » :
+   trois minutes. « Il travaille quinze minutes réelles » : c'est le chiffre de
+   Guillaume, et il n'est pas décoratif — c'est le temps pendant lequel on
+   retourne jouer (les deux croisements d'ombres du chapitre 2 tiennent très
+   exactement dans cette fenêtre). Un compte à rebours qu'on regarde est du temps
+   perdu ; un compte à rebours pendant lequel on a autre chose à faire est du
+   rythme. */
+export const STAR_ENG_TRAVEL_MS = 3 * 60 * 1000;    // il monte dans le premier train
+export const STAR_ENG_WORK_MS = 15 * 60 * 1000;     // les plans, demande de Guillaume
+export const STAR_ENG_FEE_GOLD = 24000;             // sur la bourse commune
+export const STAR_ENG_FEE_CROPS = 60;               // récoltes, toutes espèces confondues, dans MON sac
+export const STAR_ENG_FEE_FISH = 12;                // poissons, toutes espèces confondues, dans MON sac
+/* Où il s'installe : à trois cases à l'est de la cale, sur la grève. ⚠️ DÉRIVÉ
+   DE `shipX/shipY` AU RENDU et pas écrit en dur ici — la cale est posée par un
+   balayage du générateur (450), une coordonnée recopiée mentirait au premier
+   déplacement de la rive. Seul l'ÉCART est une constante. */
+export const STAR_ENG_DX = 4, STAR_ENG_DY = 1;
+/* ⚠️ « À CÔTÉ DU LAC » A UN RAYON, ET IL EST GÉNÉREUX EXPRÈS. Demande de
+   Guillaume : « si on ouvre le plan à côté du lac, on verra effectivement le
+   fantôme virtuel du bateau ». Trop serré, le joueur ouvre le plan à trois pas de
+   la cale, voit une feuille de papier, et conclut que le fantôme n'existe pas —
+   « le jeu propose et refuse » (426) sur la seule chose que ce zip ajoute à
+   l'écran. Douze cases : on est encore sur la grève, et on voit la cale. */
+export const STAR_PLAN_LAKE_R = 12;
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 454 — LE BOIS DE TRISTAN. CINQ COMMANDES, DANS L'ORDRE DU BATEAU.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ DEMANDE DE GUILLAUME : « On devra ensuite demander à tristan de travailler
+   le bois, lui passer des commandes (nouvelles étapes) pour qu'il nous aide à
+   construire le bateau "La belle étoile" […] tristan devra produire étape par
+   étape les planches et pièces nécessaires pour assurer l'avancement de la
+   construction. Le rôle des étoiles est de nous guider dans le projet. »
+   ⚠️⚠️ LA TABLE EST INDEXÉE PAR `STAR_SHIP_ORDER`, ET C'EST TOUT LE POINT. Une
+   sixième liste de morceaux aurait été la faute du 452 refaite à l'identique (un
+   compteur ajouté ne recompte pas les phrases déjà écrites) : ici, une pièce de
+   bois EST un morceau du navire, désigné par la même clé, peint par le même
+   dessin, compté par le même `starShipParts`. `verify-quete` refuse toute clé qui
+   n'est pas dans `STAR_SHIP_ORDER` et toute clé de `STAR_SHIP_ORDER` absente.
+   ⚠️ DEUX MORCEAUX NE SONT PAS EN BOIS, ET ILS ONT QUAND MÊME UNE PIÈCE : la
+   voile est de la toile, la cloche est de bronze — mais une voile sans VERGUE ne
+   se hisse pas et une cloche sans CHAISE ne se monte pas. Le bûcheron a donc
+   quelque chose à faire pour les cinq, sans qu'on ait eu à lui inventer un
+   métier de tisserand ou de fondeur.
+   ⚠️⚠️ L'ORDRE EST UNE RÈGLE DE JEU, PAS UN AFFICHAGE : on ne borde pas une coque
+   avant d'avoir la quille. Chaque pièce exige la PRÉCÉDENTE livrée — et, comme le
+   morceau d'étoile correspondant arrive dans exactement le même ordre (coque au
+   chapitre 1, safran au 3, mât et voile au 4, cloche au 5), la chaîne ne peut pas
+   se bloquer. Vérifié par le banc plutôt que par la confiance. */
+export const STAR_TIMBER = {
+  hull:   { wood: 140, ms: 8 * 60 * 1000 },   // le bordé
+  rudder: { wood:  45, ms: 3 * 60 * 1000 },   // le safran et sa barre
+  mast:   { wood: 110, ms: 6 * 60 * 1000 },   // le mât
+  sail:   { wood:  60, ms: 4 * 60 * 1000 },   // la vergue
+  bell:   { wood:  40, ms: 3 * 60 * 1000 },   // la chaise de cloche
+};
+/* Le nom du bateau. ⚠️ IL NE SE TRADUIT PAS (consigne de Guillaume, mot pour
+   mot : « nom français pas à traduire ») : un bateau porte son nom peint sur son
+   tableau arrière, dans la langue de qui l'a baptisé. C'est la même règle que
+   « Valley Town », qui n'est pas « La ville de la vallée » en français. */
+export const STAR_SHIP_NAME = "La Belle Étoile";
+
 /* LA VERRERIE, dans le quartier des artisans, et L'ARBRE DE LA PIE au-dessus.
    ⚠️ LE NID SE DÉDUIT DU FOUR, PAS D'UNE SECONDE ANCRE, et l'histoire l'exige :
    la pie a laissé tomber un éclat dans le sable de l'atelier, c'est comme ça
@@ -4244,6 +4436,24 @@ export const HALL_TOPICS = [
      aujourd'hui, et c'est précisément la démonstration que la garde marche.
      Une quête datée s'écrira exactement comme cette ligne. */
   { key: "ballot",   emoji: "🗳️", panel: "election", when: (c) => c.electionToday },
+  /* ╔═════════════════════════════════════════════════════════════════════════
+     ║ ZIP 454 — ET VOILÀ LA LIGNE QUE LE 439 ATTENDAIT.
+     ╚═════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ « Une quête future = une ligne dans cette table, pas une ligne dans le
+     panneau. » C'était la promesse du 439, et le 444 l'avait déclinée exprès (la
+     quête de l'étoile est SECRÈTE, une hôtesse qui en parlerait la ferait exister
+     pour la ville). Ce zip la prend enfin, et sans casser le secret : Léonie ne
+     sait rien d'une étoile, elle sait qu'on lui demande un ARCHITECTE NAVAL. Des
+     fermiers qui veulent un bateau, c'est une lubie de riches, pas un mystère.
+     ⚠️ LA GARDE EST L'ÉTAT DE LA QUÊTE, ce qui fait que le sujet n'apparaît QUE
+     pour qui a rencontré l'étoile — un joueur qui n'a rien commencé ne verra
+     jamais cette ligne, donc le secret tient même à deux.
+     ⚠️⚠️ ET C'EST LE PREMIER SUJET QUI DÉBOUCHE SUR UNE `req`. Le chapeau du
+     panneau dit « aucun sujet ne donne rien » et il reste vrai : celui-ci ne
+     DONNE pas, il PREND (24 000 or, des récoltes, des poissons) et c'est l'hôte
+     qui arbitre. La porte n'est toujours pas la caisse. */
+  { key: "engineer", emoji: "📐", panel: "engineer",
+    when: (c) => !!(c.shared && c.shared.star && c.shared.star.found && c.shared.star.found.crater) },
 ];
 /* Le rendez-vous chez le maire : il reçoit un jour sur sept du mandat. ⚠️ PURE
    FONCTION, encore : « quand puis-je le voir ? » a la même réponse chez les
