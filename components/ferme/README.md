@@ -2342,6 +2342,16 @@ cosmétique, dont l'arbitrage est posé et vide (`resolveStarGift`).
 
 ## 26. ZIP 446 — LE CRATÈRE REFAIT SUR MODÈLE : DU RELIEF, DE LA CHALEUR, ET UN TROU OÙ L'ON DESCEND
 
+> ⚠️⚠️ **ZIP 459 — CE CHAPITRE DÉCRIT LE DESSIN ; LE MOUVEMENT A CHANGÉ DEPUIS.** On ne se contente
+> plus de s'enfoncer à l'image : on **perd pied** sur la paroi, on **dévale** avec de l'inertie, on
+> se **rétablit** au fond, et on **s'agrippe** au bout de trois secondes de direction tenue pour en
+> ressortir. Cinq états purs (`starSlipStep`, `quete.js`), trois poses découpées dans la feuille du
+> personnage (`drawStarSlide` / `drawStarBrace` / `drawStarClimb`, `fermeArt.js`), et un banc qui
+> JOUE la sortie du trou depuis 317 points de départ. ⚠️ **Rien de ce qui suit n'a bougé** — le
+> creux dessiné (`starCraterSink`) reste la seule source, et c'est LUI que la physique
+> échantillonne. Le détail est au **§12.0 de `QUETE.md`**, et la raison pour laquelle une gravité
+> permanente aurait supprimé le chapitre 2 y est en tête.
+
 **Demande de Guillaume, deux images à l'appui :** « redesign du cratère. très rigoureux avec
 profondeur : quand on se déplace à l'intérieur, prévoir un déplacement qui suggère une profondeur ;
 pas plat. il doit fumer pendant un moment, avant de se refroidir, et nous permettre de récupérer

@@ -247,6 +247,36 @@ export function starTimberOrder(e, key) {
   const w = e && e.wood && e.wood[key];
   return w && !w.done ? w : null;
 }
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 459 — CE QUE TRISTAN EST EN TRAIN DE FAIRE, ET OÙ ÇA EN EST.
+   ╚════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ DEMANDE DE GUILLAUME : *« rends plus explicite la commande auprès de
+   Tristan. Il faut une bulle spéciale où l'on voit Tristan se mettre au travail. »*
+   Jusqu'ici, commander une pièce fermait un panneau et il ne se passait RIEN :
+   le bûcheron continuait d'abattre ses arbres comme si de rien n'était, et la
+   seule trace de la commande était une ligne grisée dans un panneau qu'il faut
+   rouvrir pour la lire. C'est le défaut du 453 (« un texte affirme, le monde ne
+   montre pas ») sur le seul geste de la quête qui coûte du bois et du temps.
+   ⚠️ DEUX FONCTIONS, PAS UNE : ce qu'il fait (`starTimberBusy`) et où ça en est
+   (`starTimberProgress`). La bulle a besoin des deux, et une seule qui rendrait
+   « la clé plus un pourcentage » forcerait tous les autres appelants à démêler.
+   ⚠️ ET LE PROGRÈS SE DÉRIVE DES DEUX DATES DÉJÀ ÉCRITES (`at`, `readyAt`), il
+   n'est jamais stocké : un troisième champ à faire vieillir pour une barre qui se
+   recalcule en une soustraction, c'est le §3 pris à l'envers. */
+export function starTimberBusy(e) {
+  for (const k of STAR_SHIP_KEYS) {
+    const w = starTimberOrder(e, k);
+    if (w) return { key: k, at: w.at, readyAt: w.readyAt, by: w.by || "" };
+  }
+  return null;
+}
+export function starTimberProgress(e, now) {
+  const w = starTimberBusy(e);
+  if (!w) return 0;
+  const span = w.readyAt - w.at;
+  if (!(span > 0)) return 1;
+  return Math.max(0, Math.min(1, ((+now || 0) - w.at) / span));
+}
 export function starShipHas(e, key) {
   const p = STAR_SHIP_PARTS.find(q => q.key === key);
   return !!(p && starHas(e, p.site) && starTimberDone(e, key));
@@ -550,25 +580,24 @@ export function starCraterBurns(e, elapsedMs, sinkK) {
    ═════════════════════════════════════════════════════════════════════════════ */
 export const STAR_SLOPE_H = 0.35;        // le pas d'échantillonnage de la pente, en cases
 export const STAR_SLOPE_STEEP = 6.0;     // px d'enfoncement par case = « raide » (mesuré : la paroi monte à ~10)
-/* ⚠️⚠️⚠️ CES TROIS NOMBRES SONT LIÉS PAR UNE INÉGALITÉ, ET ELLE A ÉTÉ TROUVÉE EN
-   JOUANT — PAS AU BANC. Premier réglage : glissade 3,2 et 45 % de vitesse en
-   montée. À l'écran, le fermier posté sur le bourrelet **ne pouvait plus entrer
-   dans le cratère du tout** : il marchait vers le nord à 5,2 × 0,45 = 2,34 cases/s
-   et la pente le repoussait à 3,2. Net : −0,86, c'est-à-dire un MUR — et un mur
-   fait de vitesse, donc invisible pour `canStandTown`, invisible au build, et
-   qu'aucun banc ne cherchait.
-   ⚠️⚠️ C'EST LA LEÇON DU 439 SOUS UN VISAGE NEUF : « une grandeur de dessin ne
-   doit pas entrer dans la collision » — ici elle n'y entrait pas, elle est entrée
-   dans la VITESSE, et le résultat est le même (l'arc du pont, en plus sournois :
-   il n'y a pas de test à écrire sur un pas refusé, puisqu'aucun pas n'est refusé).
-   ⚠️ LA RÈGLE À TENIR, ET `render-etoile` LA BALAIE DÉSORMAIS SUR TOUT LE TROU :
-       PLAYER_SPEED × STAR_CLIMB_MIN − STAR_SLIDE_MAX ≥ 1 case/s
-   soit 5,2 × 0,58 − 1,9 = 1,12. On remonte donc lentement — c'est la demande —
-   mais on remonte TOUJOURS, et en courant (× 1,75) on sort sans peiner. */
-export const STAR_SLIDE_MAX = 1.9;       // cases/s emportées par la pente la plus raide (la marche est à 5,2)
-export const STAR_SLIDE_COAST_MS = 520;  // ce qu'on continue de glisser après avoir lâché les touches
+/* ⚠️⚠️⚠️ ZIP 459 — TROIS DE CES NOMBRES ONT ÉTÉ SUPPRIMÉS, ET LA LEÇON QUI LES
+   ACCOMPAGNAIT VAUT PLUS QUE LES NOMBRES. Elle disait : « le premier réglage
+   rendait le cratère infranchissable, parce que la glissade (3,2 cases/s)
+   dépassait ce qu'un joueur peut remonter (2,34) — un MUR fait de vitesse,
+   invisible pour `canStandTown` puisqu'aucun pas n'est refusé ». La parade était
+   une inégalité balayée au banc : `PLAYER_SPEED × STAR_CLIMB_MIN − STAR_SLIDE_MAX
+   ≥ 1 case/s`.
+   ⚠️⚠️ CETTE INÉGALITÉ N'A PLUS DE SENS DEPUIS QUE LA GLISSADE EST UN ÉTAT et non
+   une poussée permanente : on ne remonte plus « en marchant contre la pente », on
+   remonte EN S'AGRIPPANT (voir `starSlipStep`). Mais la QUESTION qu'elle posait
+   reste la seule qui compte, et le banc la pose maintenant en dur, par simulation :
+   *depuis n'importe quel point de la cuvette, en tenant une direction, est-ce
+   qu'on SORT ?* — 317 points de départ, 0 bloqué, pire cas 5,4 s. Une inégalité
+   algébrique était un raccourci ; jouer le moteur sur le vrai creux est la mesure.
+   ⚠️ `STAR_CLIMB_MIN` SURVIT SEUL parce qu'il sert encore, et à autre chose : c'est
+   la peine de la marche en montée tant qu'on a ses appuis — les « quelques
+   centimètres gagnés avant de reglisser » de la demande du 459. */
 export const STAR_CLIMB_MIN = 0.58;      // ce qu'il reste de vitesse en remontant droit dans la pente la plus raide
-export const STAR_CLIMB_NET_MIN = 1.0;   // ce qui doit RESTER de progression vers le haut, partout — voir ci-dessus
 
 /* La pente locale, en pixels d'enfoncement par case, sous forme d'un vecteur qui
    pointe vers le BAS — c'est-à-dire là où l'on tombe. ⚠️ `sink` EST PASSÉ EN
@@ -581,12 +610,6 @@ export function starCraterSlope(sink, dx, dy) {
   const gy = (sink(dx, dy + h) - sink(dx, dy - h)) / (2 * h);
   return { gx, gy, n: Math.hypot(gx, gy) };
 }
-/* Ce que la pente emporte, en cases/seconde. ⚠️ BORNÉE ET NON PROPORTIONNELLE :
-   la paroi du cratère atteint dix pixels par case, et une glissade proportionnelle
-   y aurait dépassé la course. Ce qu'on veut est « un peu rapide », pas « éjecté ». */
-export function starSlideSpeed(n) {
-  return Math.min(1, (+n || 0) / STAR_SLOPE_STEEP) * STAR_SLIDE_MAX;
-}
 /* Ce qu'il reste de la marche quand on monte. ⚠️ `dot` EST LE PRODUIT SCALAIRE
    NORMALISÉ entre le pas qu'on tente et la descente : −1 = pleine montée, +1 =
    pleine descente. On ne ralentit QUE la montée — accélérer la descente serait
@@ -595,6 +618,312 @@ export function starClimbMul(n, dot) {
   const up = Math.max(0, -(+dot || 0));
   const steep = Math.min(1, (+n || 0) / STAR_SLOPE_STEEP);
   return 1 - (1 - STAR_CLIMB_MIN) * up * steep;
+}
+
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 459 — ON PERD PIED, ON DÉVALE, ON SE RELÈVE, ON S'AGRIPPE.
+   ╚════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ DEMANDE DE GUILLAUME, MOT POUR MOT : *« une animation réelle poussée
+   montrant le personnage qui climb up et glisse du cratère […] il doit lean back
+   et slide quand il glisse rendant la trajectoire difficile à contrôler avant
+   d'atteindre le fond. Ensuite il peut se déplacer sur ses pieds dans le cratère.
+   Et si l'on veut remonter, il tentera de le faire debout, avant de glisser
+   encore. Et au bout de 3 pleines secondes de maintien d'une direction, l'anim
+   grimpeur avec les bras et jambes s'activera. »*
+
+   ⚠️⚠️⚠️ LA QUESTION QUI A DÉCIDÉ DE TOUTE LA FORME : **UNE GRAVITÉ PERMANENTE
+   AURAIT SUPPRIMÉ LE CHAPITRE 2.** La cuvette est un paraboloïde (`1 − u²`) : sa
+   pente est proportionnelle au rayon, donc elle n'a PAS de fond plat — mesuré au
+   banc, la pente vaut déjà 1,2 px/case à 0,5 case du centre. Une poussée
+   permanente entonnoirait donc le fermier jusqu'au point unique du milieu… c'est-
+   à-dire à distance nulle de l'étoile, là où `starFacingAway` rend `false` par
+   construction (« debout SUR elle : on la regarde forcément »). La seule
+   mécanique du lieu — se tenir immobile, dos tourné — serait devenue
+   inexécutable, et le symptôme aurait été « la jauge ne monte plus jamais »,
+   sans une seule erreur nulle part. C'est le piège du 458 (`starSoloRoom`) dans
+   sa version physique : *une réponse juste (la gravité) à une question qui n'était
+   pas posée (le repos).*
+   ⚠️⚠️ LA PARADE VIENT DES JEUX QUI ONT DÉJÀ CE GESTE (l'escalade des pentes de
+   Breath of the Wild, les dévers de Death Stranding) : **on ne perd pas pied
+   parce qu'on est sur une pente, on perd pied parce qu'on la SOLLICITE.** Debout,
+   sans rien demander, le personnage plante ses talons — c'est une posture, elle se
+   dessine (`drawStarBrace`). Dès qu'il marche sur la paroi raide, ses appuis
+   partent. Et comme on ne peut pas ENTRER dans le trou sans marcher, la glissade
+   se joue à 100 % des entrées : l'effet demandé est là, et le chapitre survit.
+   ⚠️ CE QUE ÇA NE FAIT PAS, ET C'EST ÉCRIT PLUTÔT QUE SUBI : un fermier lâché
+   immobile en plein milieu de la paroi y RESTE (jambes écartées, dos au vide) au
+   lieu de partir tout seul. C'est la seule liberté prise avec la physique, elle
+   est visible, et elle est le prix exact du chapitre 2.
+
+   ⚠️⚠️ CINQ ÉTATS, ET CHACUN EST UNE PHRASE DE LA DEMANDE :
+     · `foot`    — on marche sur ses pieds (le fond, et toute pente douce) ;
+     · `brace`   — « il tentera de le faire debout » : il GAGNE du terrain pendant
+                   `STAR_SLIP_BRACE_MS`, à la peine de `starClimbMul` ;
+     · `slide`   — « avant de glisser encore » : le pied part. Une VITESSE avec de
+                   l'inertie, pas une poussée par image — c'est ce qui rend la
+                   trajectoire difficile à contrôler ;
+     · `recover` — il se rétablit au fond, un quart de seconde, et se remet debout ;
+     · `climb`   — trois secondes de la même direction tenue : il s'agrippe, et
+                   plus rien ne le reprend jusqu'au bourrelet.
+
+   ⚠️⚠️ ET TOUT CECI EST PUR : aucune position, aucun canevas, aucun réseau. Le
+   banc `render-etoile` SIMULE ce moteur sur le VRAI creux (`starCraterSink`) et
+   vérifie la seule chose qui compte vraiment — *depuis n'importe quel point de la
+   cuvette, en tenant la direction, on SORT* — c'est-à-dire l'ARRIVÉE, la grandeur
+   que le §25 de `ferme/README.md` reproche à tous les bancs de ne jamais mesurer.
+   ═════════════════════════════════════════════════════════════════════════════ */
+/* ⚠️ LE SEUIL DE PERTE D'APPUI EST DÉRIVÉ D'UNE INTENTION MESURABLE, PAS CHOISI :
+   « la moitié intérieure de la cuvette se marche, la moitié extérieure se glisse ».
+   Balayé au banc sur le vrai creux : n < 4,2 tient jusqu'à 1,55 case du centre
+   (axe court) et 2,80 (axe long), pour une cuvette qui va de 3,50 à 4,75 — soit
+   un plancher de trois à cinq cases et demie de large. C'est ce nombre-là que
+   `render-etoile` re-mesure ; s'il tombe sous 1,5 case, le trou n'a plus de fond
+   où se tenir et la demande n°3 (« il peut se déplacer sur ses pieds ») est morte. */
+export const STAR_SLIP_N = 4.2;            // px d'enfoncement par case : au-delà, l'appui part
+export const STAR_SLIP_FLOOR_MIN = 1.5;    // cases : le plancher marchable ne descend jamais sous ça
+export const STAR_SLIP_BRACE_MS = 420;     // « il tentera de le faire debout » — et il gagne vraiment du terrain
+export const STAR_SLIP_ACC = 7.5;          // cases/s² dans la pente la plus raide
+export const STAR_SLIP_DRAG = 1.8;         // /s — le frottement. Vitesse terminale = ACC/DRAG ≈ 4,2 cases/s
+export const STAR_SLIP_VMAX = 4.6;         // ⚠️ SOUS `PLAYER_SPEED` (5,2) : on glisse, on n'est pas éjecté
+/* ⚠️⚠️ « RENDANT LA TRAJECTOIRE DIFFICILE À CONTRÔLER » — ET C'EST UNE AUTORITÉ
+   LATÉRALE, PAS UN FREIN. Les touches accélèrent EN TRAVERS de la pente ; leur
+   composante de remontée est retirée. On vise donc un côté du fond, on ne s'arrête
+   jamais. Un frein aurait rendu la glissade décorative ; aucune autorité l'aurait
+   rendue indistinguable d'un jeu bloqué (leçon du 456). */
+export const STAR_SLIP_STEER = 3.0;        // cases/s² en travers
+export const STAR_SLIP_STOP = 0.9;         // cases/s : en dessous, sur pente douce, on se rétablit
+export const STAR_SLIP_RECOVER_MS = 260;   // le temps de se remettre debout
+export const STAR_CLIMB_HOLD_MS = 3000;    // « 3 pleines secondes » — le mot de la demande
+/* ⚠️ UN SURSIS COURT, ET IL N'EST PAS UNE FAVEUR : passer de « ↑ » à « ↑ + → »
+   relâche une touche pendant une image. Sans lui, une main normale remettrait le
+   compteur à zéro sans jamais comprendre pourquoi. Il est trop court (0,18 s) pour
+   qu'on puisse lâcher volontairement et garder son effort. */
+export const STAR_CLIMB_GRACE_MS = 180;
+export const STAR_CLIMB_SPEED = 1.6;       // cases/s, cramponné — lent, mais rien ne le reprend
+export const STAR_CLIMB_DOT = -0.30;       // « vers le haut » : le pas doit s'opposer à la pente
+export const STAR_SLIP_MODES = ["foot", "brace", "slide", "recover", "climb"];
+
+export function starSlipNew() {
+  return { mode: "foot", vx: 0, vy: 0, t: 0, hold: 0, idle: 0, hx: 0, hy: 0 };
+}
+
+/* Le moteur, une image. ⚠️ IL MUTE `s` ET REND `s` : c'est un état de RENDU local
+   (comme la poussière), jamais un état partagé — chaque client calcule celui de
+   chacun à partir des positions qui circulent déjà (§3 de `CLAUDE.md`).
+     · `slope` : `{ gx, gy, n }` de `starCraterSlope`, ou `null` hors du trou ;
+     · `sinkPx` : l'enfoncement DESSINÉ sous les pieds (> 0 = dans la cuvette) —
+       c'est lui qui dit « dedans », jamais un rayon écrit à la main. ⚠️ SANS LUI,
+       le bourrelet extérieur (4 px sur 0,8 case, donc n ≈ 6) déclencherait une
+       glissade VERS L'EXTÉRIEUR à chaque approche : on ne pourrait plus entrer.
+     · `ix, iy` : la direction demandée, normalisée (0,0 = aucune touche) ;
+     · `enabled` : faux tant que le trou brûle — la justice du 458, on ne fait pas
+       tomber dans le feu quelqu'un qui n'a rien demandé. */
+export function starSlipStep(s, slope, sinkPx, ix, iy, dt, enabled) {
+  const st = s || starSlipNew();
+  const d = Math.max(0, Math.min(0.05, +dt || 0));     // ⚠️ borné : une image de 2 s ne téléporte personne
+  const inside = enabled !== false && !!slope && (+sinkPx || 0) > 0;
+  if (!inside) {                                       // dehors : on est debout, et on n'a rien en réserve
+    st.mode = "foot"; st.vx = 0; st.vy = 0; st.t = 0; st.hold = 0; st.idle = 0;
+    return st;
+  }
+  const n = slope.n, inv = n > 0.001 ? 1 / n : 0;
+  const dxn = slope.gx * inv, dyn = slope.gy * inv;    // vers le BAS de la pente
+  const im = Math.hypot(ix, iy);
+  const has = im > 0.01;
+  const ux = has ? ix / im : 0, uy = has ? iy / im : 0;
+  const dot = has ? ux * dxn + uy * dyn : 0;           // +1 = on descend, −1 = on monte
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ LE COMPTEUR D'EFFORT — ET IL COMPTE UNE MAIN, PAS UN TERRAIN.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ IL SURVIT À LA GLISSADE, ET C'EST TOUTE LA DEMANDE : « au bout de
+     3 pleines secondes de maintien d'une direction ». On tient la touche, on
+     dérape, on retente — l'effort s'accumule pendant tout ça. Ne le remettent à
+     zéro que les deux gestes du JOUEUR : lâcher (au-delà du sursis) ou changer de
+     cap.
+     ⚠️⚠️⚠️ LE PREMIER JET LE GAGEAIT SUR « EST-CE QUE JE MONTE ? » (produit
+     scalaire avec la pente), ET LA SIMULATION L'A TUÉ EN TROIS LIGNES DE TRACE :
+     en dévalant, on DÉPASSE le point bas de quelques centimètres — la pente
+     s'inverse sous les pieds, le pas tenu devient « une descente », et le
+     compteur repartait de zéro à chaque passage au fond. Résultat mesuré :
+     2,0 s atteintes, jamais 3,0, donc **la grimpe n'existait pas** et 219 points
+     de départ sur 317 ne pouvaient plus sortir du trou. C'est la huitième forme
+     du défaut de banc du 458 (deux grandeurs qu'on ne mesure pas ensemble) prise
+     à l'envers : *une grandeur qui décrit le JOUEUR ne doit pas dépendre du
+     TERRAIN.* La question « est-ce que ça monte ? » ne sert qu'au moment de
+     s'agripper, plus bas. */
+  if (has) {
+    const same = st.hold > 0 && (ux * st.hx + uy * st.hy) >= 0.5;
+    if (!same) st.hold = 0;
+    st.hx = ux; st.hy = uy; st.idle = 0;
+    st.hold += d * 1000;
+  } else {
+    st.idle += d * 1000;
+    if (st.idle > STAR_CLIMB_GRACE_MS) st.hold = 0;
+  }
+
+  if (st.mode === "climb") {
+    /* ⚠️ CRAMPONNÉ : LA PENTE N'ENTRE PAS. C'est la réponse de Guillaume — « lâcher
+       la touche = rechute ». Tant qu'on tient, il monte ; on lâche, il décroche. */
+    if (st.idle > STAR_CLIMB_GRACE_MS || (has && (ux * st.hx + uy * st.hy) < 0.5)) {
+      st.mode = "slide"; st.hold = 0;
+      st.vx = dxn * STAR_SLIP_STOP * 1.6; st.vy = dyn * STAR_SLIP_STOP * 1.6;
+      return st;
+    }
+    st.vx = st.hx * STAR_CLIMB_SPEED; st.vy = st.hy * STAR_CLIMB_SPEED;
+    return st;
+  }
+  /* ⚠️⚠️ ON S'AGRIPPE À UNE PAROI, PAS À UN PRÉ — ET CETTE GARDE A ÉTÉ TROUVÉE
+     PAR LA SIMULATION, PAS PAR LA RELECTURE. Sans elle, trois secondes passées à
+     marcher au FOND (où la pente est nulle) faisaient partir la grimpe sur du
+     plat : le fermier se mettait à quatre pattes en terrain plan et avançait à
+     1,6 case/s au lieu de 5,2 — c'est-à-dire qu'une récompense d'effort se serait
+     lue comme un ralentissement inexplicable.
+     ⚠️ ET LE COMPTEUR, LUI, TOURNE PARTOUT DANS LA CUVETTE (voir juste au-dessus) :
+     il compte l'INTENTION (« je veux sortir »), pas l'endroit. Le premier jet le
+     gageait sur la pente et le remettait à zéro à chaque retour au fond — donc les
+     trois secondes n'étaient JAMAIS atteignables et la grimpe n'existait pas. La
+     simulation de sortie l'a dit en une ligne : 219 points bloqués sur 317. */
+  if (st.hold >= STAR_CLIMB_HOLD_MS && n >= STAR_SLIP_N * 0.75 && dot <= STAR_CLIMB_DOT) {
+    st.mode = "climb"; st.t = 0;
+    st.vx = st.hx * STAR_CLIMB_SPEED; st.vy = st.hy * STAR_CLIMB_SPEED;
+    return st;
+  }
+
+  if (st.mode === "slide" || st.mode === "recover") {
+    /* La glissade : une VITESSE. ⚠️ L'ACCÉLÉRATION EST BORNÉE PAR `STAR_SLOPE_STEEP`
+       comme l'était l'ancienne poussée — la paroi monte à onze px/case, une gravité
+       proportionnelle y aurait éjecté. */
+    const g = STAR_SLIP_ACC * Math.min(1, n / STAR_SLOPE_STEEP);
+    st.vx += dxn * g * d; st.vy += dyn * g * d;
+    if (has && st.mode === "slide") {
+      /* ⚠️ ON RETIRE LA COMPOSANTE DE REMONTÉE DE L'ORDRE DONNÉ, on ne l'inverse
+         pas : il reste exactement ce qui va EN TRAVERS. C'est « on infléchit ». */
+      let ax = ux, ay = uy;
+      const up = ax * dxn + ay * dyn;
+      if (up < 0) { ax -= dxn * up; ay -= dyn * up; }
+      st.vx += ax * STAR_SLIP_STEER * d; st.vy += ay * STAR_SLIP_STEER * d;
+    }
+    /* ⚠️⚠️ LE FROTTEMENT MONTE QUAND LA PENTE TOMBE, ET CE N'EST PAS UN RÉGLAGE DE
+       CONFORT : sans lui, la chute DÉPASSE le point bas, remonte de l'autre côté,
+       redescend, et le fermier oscille au fond comme une bille dans un saladier
+       pendant plus de deux secondes. Mesuré à la simulation : 141 images où
+       personne — pas même un banc — ne peut dire s'il dévale encore ou s'il
+       marche. C'est physiquement vrai en plus (on freine des talons dès qu'on sent
+       le plat) et c'est ce qui rend la fin de la glissade LISIBLE : il arrive au
+       fond, il se rétablit, on reprend la main. */
+    const flat = 1 + 2 * (1 - Math.min(1, n / STAR_SLIP_N));
+    const k = Math.max(0, 1 - STAR_SLIP_DRAG * flat * d);
+    st.vx *= k; st.vy *= k;
+    const sp = Math.hypot(st.vx, st.vy);
+    if (sp > STAR_SLIP_VMAX) { const q = STAR_SLIP_VMAX / sp; st.vx *= q; st.vy *= q; }
+    if (st.mode === "slide") {
+      if (n < STAR_SLIP_N * 0.55 && sp < STAR_SLIP_STOP) { st.mode = "recover"; st.t = 0; }
+    } else {
+      st.t += d * 1000;
+      st.vx *= 0.55; st.vy *= 0.55;                     // il pose les mains, il s'arrête net
+      if (st.t >= STAR_SLIP_RECOVER_MS) { st.mode = "foot"; st.vx = 0; st.vy = 0; st.t = 0; }
+    }
+    return st;
+  }
+
+  /* ── DEBOUT. Deux façons de perdre pied, et une seule d'y rester. */
+  st.vx = 0; st.vy = 0;
+  if (!has || n < STAR_SLIP_N) { st.mode = "foot"; st.t = 0; return st; }
+  if (dot > 0.25) {                                     // on marche VERS le vide : le pied part tout de suite
+    st.mode = "slide"; st.t = 0;
+    st.vx = dxn * STAR_SLIP_STOP; st.vy = dyn * STAR_SLIP_STOP;
+    return st;
+  }
+  /* « Il tentera de le faire debout » : on gagne du terrain, à la peine de
+     `starClimbMul`, pendant `STAR_SLIP_BRACE_MS` — puis les appuis lâchent. */
+  st.mode = "brace"; st.t += d * 1000;
+  if (st.t >= STAR_SLIP_BRACE_MS) {
+    st.mode = "slide"; st.t = 0;
+    st.vx = dxn * STAR_SLIP_STOP * 0.6; st.vy = dyn * STAR_SLIP_STOP * 0.6;
+  }
+  return st;
+}
+/* Ce que le DESSIN doit montrer, DÉRIVÉ de l'état et de la pente — jamais un
+   second champ, jamais une seconde liste (leçon du 449).
+   ⚠️ `brace` (il pousse en montant) ne rend PAS une pose à lui : il marche, à la
+   peine de `starClimbMul`, et une pose d'effort figée sur quelqu'un qui avance se
+   lirait comme une image bloquée. Ce qui montre l'effort à ce moment-là est la
+   JAUGE, plus la poussière sous les semelles.
+   ⚠️ La posture d'appui, elle, ne sert qu'À L'ARRÊT sur la paroi raide : c'est la
+   seule liberté que ce moteur prend avec la physique (voir le chapeau), et elle
+   se DESSINE plutôt que de se cacher. */
+export function starSlipPose(s, moving, n) {
+  const m = s ? s.mode : "foot";
+  if (m === "climb") return "climb";
+  if (m === "slide" || m === "recover") return "slide";
+  if (!moving && (+n || 0) >= STAR_SLIP_N) return "brace";
+  return null;
+}
+
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ LA POSE DE L'AUTRE — DÉDUITE, JAMAIS REÇUE.
+   ╚════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ AUCUN CHAMP DE PLUS SUR LE RÉSEAU, ET C'EST LE §3 DE `CLAUDE.md` PRIS AU
+   MOT (« ce qui peut se déduire ne se diffuse pas »). Le paquet de position porte
+   déjà la VITESSE RÉELLE depuis le 365 ; la carte du cratère est la même chez
+   tout le monde ; donc « ce fermier-là dévale-t-il ou grimpe-t-il ? » se répond
+   entièrement chez celui qui regarde. Diffuser un mode, c'eût été un champ à
+   réconcilier, un état de plus à migrer, et une divergence possible entre ce
+   qu'un client dessine et ce que l'autre vit.
+   ⚠️⚠️ ET ELLE EST SANS MÉMOIRE, EXPRÈS : trois grandeurs observables suffisent
+   (la pente sous ses pieds, l'enfoncement, sa vitesse), donc rien à faire vieillir
+   quand un joueur se déconnecte, rien à remettre à zéro, aucune `Map` à purger.
+   Une machine d'état recopiée pour les autres joueurs aurait dérivé de la vraie au
+   premier paquet perdu — c'est-à-dire au bout de dix secondes.
+   ⚠️ LES TROIS BORNES SE DÉDUISENT DU MOTEUR, elles ne sont pas choisies : on ne
+   peut dévaler qu'en dessous de `STAR_SLIP_VMAX`, on ne peut se hisser qu'à
+   `STAR_CLIMB_SPEED`, et la marche en montée la plus lente (`PLAYER_SPEED ×
+   STAR_CLIMB_MIN` ≈ 3,0 cases/s) reste très au-dessus de la grimpe — les deux
+   familles ne peuvent donc pas se confondre. */
+export function starSlipSeen(slope, sinkPx, vx, vy) {
+  if (!slope || (+sinkPx || 0) <= 0) return null;
+  const n = slope.n;
+  const sp = Math.hypot(+vx || 0, +vy || 0);
+  /* L'ARC-BOUTEMENT demande une VRAIE paroi : c'est la posture de qui plante ses
+     talons, elle n'a aucun sens au fond. */
+  if (sp < 0.2) return n >= STAR_SLIP_N ? "brace" : null;
+  /* ⚠️⚠️ CE QUI SUIT A ÉTÉ ÉCRIT TROIS FOIS, ET LES DEUX PREMIÈRES SONT LA LEÇON :
+     la déduction ne peut pas se contenter de « on ne dévale que là où la pente
+     dépasse le seuil de perte d'appui ». On perd pied EN HAUT et on s'arrête EN
+     BAS : les deux tiers d'une glissade se passent sur une pente plus douce que
+     celle qui l'a déclenchée, et le dernier tiers DÉPASSE le point bas. Confrontée
+     au moteur image par image (le contrôle §6 de `render-etoile`), la première
+     rédaction n'était d'accord que 40 % du temps — un joueur distant se serait
+     redressé au milieu de sa chute, chez tout le monde sauf chez lui. */
+  const inv = n > 0.001 ? 1 / n : 0;
+  const dot = ((+vx || 0) * slope.gx + (+vy || 0) * slope.gy) * inv / sp;
+  /* ⚠️ LE PLAFOND DE VITESSE EST CE QUI SÉPARE « IL DÉVALE » DE « IL MARCHE VERS
+     LE BAS » : la glissade est bornée par `STAR_SLIP_VMAX` (4,6) et la marche vaut
+     `PLAYER_SPEED` (5,2), course et bonbon en plus. Les deux familles ne peuvent
+     donc pas se confondre — sans ce plafond, un joueur qui traverse le fond en
+     courant serait dessiné en train de déraper. */
+  /* ⚠️⚠️ LA GRIMPE SE TESTE LA PREMIÈRE, ET ELLE EXIGE LA MÊME PAROI QUE LE MOTEUR
+     (`n ≥ STAR_SLIP_N × 0,75`, la condition exacte de `starSlipStep` pour
+     s'agripper). Sans cette garde, une glissade qui DÉPASSE le point bas et
+     remonte de l'autre côté — ce qu'elle fait à chaque fois, l'inertie ne s'arrête
+     pas au fond — était lue comme une escalade : dix-sept images de fermier à
+     quatre pattes en plein milieu de sa chute. */
+  if (n >= STAR_SLIP_N * 0.75 && dot < -0.35 && sp <= STAR_CLIMB_SPEED * 1.5) return "climb";
+  /* ⚠️⚠️ SUR LE PLANCHER, C'EST LA VITESSE SEULE QUI TRANCHE, ET C'EST UNE
+     DÉDUCTION, PAS UNE TOLÉRANCE : au fond du trou on MARCHE (5,2 cases/s, course
+     et bonbon au-dessus) ou on FINIT DE DÉVALER (au plus `STAR_SLIP_VMAX` = 4,6).
+     Entre 1,2 et 4,8, aucun pas ne peut produire cette vitesse — donc c'est une
+     glissade, quelle que soit sa direction. Ça règle le seul cas que la direction
+     ne peut pas trancher : une chute DÉPASSE le point bas et remonte de l'autre
+     côté, donc elle finit en montant. */
+  const band = sp > 1.2 && sp <= STAR_SLIP_VMAX + 0.2;
+  if (n < STAR_SLIP_N) return band ? "slide" : null;
+  /* Sur la PAROI, en revanche, la direction compte : on y monte aussi à pied
+     (5,2 × `STAR_CLIMB_MIN` ≈ 3,0 cases/s, en plein dans la fourchette), et ce
+     fermier-là marche, il ne dérape pas. */
+  if (dot > -0.2 && band) return "slide";
+  return null;                                       // il marche, et ça se dessine comme une marche
 }
 
 /* ╔════════════════════════════════════════════════════════════════════════════

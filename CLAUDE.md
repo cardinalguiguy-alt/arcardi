@@ -11,50 +11,49 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**Livré au 458 : LA QUÊTE NE SE BLOQUE PLUS QUAND UN AMI SE CONNECTE — ET ÇA NE POUVAIT SE
-VOIR QU'À DEUX CLIENTS.** Guillaume a demandé de vérifier la quête à deux joueurs. Ce qu'on y a
-trouvé est le plus gros défaut du chantier, et il tenait dans **une seule ligne** :
-`starSoloRoom()` répondait *« y a-t-il un autre joueur CONNECTÉ »* et servait à répondre à
-*« puis-je avancer tout seul »*.
-⚠️⚠️⚠️ **CONSÉQUENCE, REPRODUITE PUIS CORRIGÉE EN JEU** : un ami qui labourait à la ferme rendait
-le **cratère impossible à ouvrir pour toujours** (la jauge montait à 100 % et il ne se passait
-rien) et les **deux croisements d'ombres impossibles**, donc **les chapitres 3, 4 et 5
-inatteignables**. La quête s'arrêtait au chapitre 2 *parce qu'un ami s'était connecté*.
-⚠️⚠️ **La parade est structurelle : le duo est un RACCOURCI, jamais une serrure.** Le chemin
-solo reste ouvert en permanence dans les deux résolveurs ; `starAlone(kind)` ne décide plus *si
-l'on peut* mais **quel barème on annonce**, geste par geste, zone testée avant les distances.
-⚠️ **Livré aussi** : le cratère de Valley Town **1,56× plus large** avec une vraie glissade et
-de la poussière marron/grise ; la **plongée refaite** (la flaque n'est plus une fenêtre, c'est
-le terrain — dehors on est aveugle, on manque d'air et on percute des pilotis qu'on ne voit
-pas, et ces pilotis **penchent vers le morceau**) ; le **refroidissement poli** (l'arrosoir est
-enfin à l'écran et il verse, l'anneau autour de l'éclat est peint à la couleur VISÉE) ; **six
-phrases** qui disent enfin pourquoi chaque étape sert le bateau ; la **transaction de
-l'ingénieur** rendue explicite (trois provenances, Ajouter / Valider, refus chiffré) ; et
-**l'étoile qui grimpe le long du dos, tournicote une seconde, puis se pose** au lieu
-d'apparaître. Détail complet au **§12.0 de `components/ferme/QUETE.md`**.
+**Livré au 459 : ON PERD PIED, ON DÉVALE, ON S'AGRIPPE — ET LA MÉCANIQUE DU CHAPITRE 2 A
+SURVÉCU.** Guillaume a demandé une vraie animation de glissade et de grimpe dans le cratère
+(« lean back and slide », trajectoire difficile à contrôler, puis **3 pleines secondes** de
+direction tenue pour que la grimpe s'active). ⚠️⚠️⚠️ **LA QUESTION QUI A DÉCIDÉ DE TOUT :
+une gravité permanente aurait SUPPRIMÉ le chapitre 2** — la cuvette est un paraboloïde,
+elle n'a pas de fond plat, donc elle entonne jusqu'au point unique du centre, c'est-à-dire à
+distance nulle de l'étoile, là où « dos tourné » est faux par construction. La parade est
+celle des jeux qui ont déjà ce geste : **on ne perd pied que si l'on SOLLICITE la pente** ;
+debout, on plante ses talons, et cette exception se DESSINE (`drawStarBrace`) au lieu de se
+cacher. Comme on ne peut pas entrer dans le trou sans marcher, la glissade se joue quand
+même à **100 % des entrées**.
+⚠️⚠️ **Cinq états purs** (`starSlipStep`), **trois poses découpées dans la feuille du
+personnage** (donc gratuites pour la salopette, l'apiculteur et la garde-robe), et un banc
+qui **JOUE** le moteur sur le vrai creux : 317 départs, **0 bloqué**, pire cas 4,7 s. Le
+premier jet en bloquait **219** — un compteur d'effort gagé sur la pente au lieu de la main.
+⚠️ **Livré aussi** : la **poussière ramenée aux pieds** (elle enveloppait la tête : l'ancre
+d'un sprite tombe à la ceinture, quatorze pixels au-dessus des semelles), et **Tristan qui
+se met visiblement au travail** — il accepte en nommant la pièce, puis une bulle où la scie
+va et vient et où le trait de scie s'enfonce, jusqu'à la livraison. Détail complet au
+**§12.0 de `components/ferme/QUETE.md`**.
 
-⚠️⚠️ **LA PROCHAINE ACTION : LA SECONDE MOITIÉ DE LA SÉANCE À DEUX CLIENTS.** La première a
-validé la connexion, la chute et l'ouverture du cratère par un seul joueur ; **rien de ce qui se
-joue FACE À FACE n'a encore été joué** — l'étoile timide dos à dos, le croisement d'ombres à
-deux (barème court, 30 cases / 20 s), la flaque que l'un promène pour l'autre sur le ponton, le
-duo orgue/beffroi. ⚠️ **Et la même séance doit faire la ferme PEUPLÉE** (dette du §13, la plus
-ancienne du dépôt). ⚠️ **Trois choses n'ont PAS été regardées à l'écran au 458 et attendent leur
-première image** : le **panneau de transaction de la mairie**, l'**arrivée de l'étoile** (la
-courbe est mesurée, l'animation non), et le **croisement d'ombres** (corrigé et balayé au banc,
-jamais rejoué en jeu).
+⚠️⚠️ **LA PROCHAINE ACTION : LA SÉANCE À DEUX CLIENTS, SECONDE MOITIÉ — ET ELLE A MAINTENANT
+UNE RAISON DE PLUS.** Rien de ce qui se joue **FACE À FACE** n'a jamais été joué : l'étoile
+timide dos à dos, le croisement d'ombres à deux (barème court, 30 cases / 20 s), la flaque
+que l'un promène pour l'autre sur le ponton, le duo orgue/beffroi. ⚠️ **Et le 459 y ajoute
+la GLISSADE VUE PAR L'AUTRE** : `starSlipSeen` déduit la pose du voisin de sa seule vitesse
+(zéro champ réseau de plus) et le banc la confronte au moteur — **209 images sur 209** —
+mais **jamais à deux écrans**. ⚠️ **La même séance doit faire la ferme PEUPLÉE** (dette du
+§13, la plus ancienne du dépôt) : peupler EN PREMIER, et ne plus recharger (le faux Supabase
+ne persiste pas). ⚠️ La **bulle de Tristan** n'a été regardée qu'au banc et sur une ferme
+vide.
 
 ⚠️ **CE QUI RESTE OUVERT AILLEURS N'EST PAS OUBLIÉ, C'EST CLASSÉ APRÈS** : les cinq mini-jeux
-joués jusqu'à la VICTOIRE à cadence réelle (deux viennent de changer) ; les scènes *turn* et
-*end*, jamais vues ; la chute à la ferme du 455, jamais regardée ; les trois choses du 454 qui
-n'ont jamais tourné à leur cadence ; le **CHANTIER B, LES MAISONS**, commandé et non commencé
-(préalables au **§27.5 de `components/ferme/README.md`**) ; le SON
-(`public/sounds/church-organ.mp3` — un fichier, pas une ligne de code) ; les six points d'audit
-du 450 ; **la relecture de `components/ferme/README.md` contre le code**, l'ordre du 453,
-reporté une CINQUIÈME fois.
+joués jusqu'à la VICTOIRE à cadence réelle ; les scènes *turn* et *end*, jamais vues ; le
+**panneau de transaction de la mairie** et l'**arrivée de l'étoile**, jamais regardés à
+l'écran ; le **CHANTIER B, LES MAISONS**, commandé et non commencé (préalables au **§27.5 de
+`components/ferme/README.md`**) ; le SON (`public/sounds/church-organ.mp3` — un fichier, pas
+une ligne de code) ; **la relecture de `components/ferme/README.md` contre le code**, l'ordre
+du 453, reporté une SIXIÈME fois.
 
 ---
 
-État à jour du **zip 458**. Chantier actif : **rendre Valley Town habitable au regard ET crédible
+État à jour du **zip 459**. Chantier actif : **rendre Valley Town habitable au regard ET crédible
 au jeu**, et **lui donner une histoire**. Tout ce qui concerne la ville, ses habitants, ses
 bâtiments et **ses pièges** est dans **`components/ferme/README.md`**, qui fait autorité ; les
 règles de DESSIN sont dans **`components/ferme/DESSIN.md`** ; les bancs dans **`tools/README.md`**.
@@ -144,19 +143,17 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 
 | # | La leçon, en une phrase | Où est le détail |
 |---|---|---|
-| 455 | ⚠️⚠️⚠️ **Une demande qui contredit un principe le coupe souvent en deux au lieu de le tuer.** « Les PNJ doivent parler de l'astéroïde » contredisait frontalement « personne d'autre ne voit l'étoile » — jusqu'à ce qu'on sépare **la PIERRE (publique) de ce qu'il y avait DEDANS (secret)**. Le principe survit entier et gagne un contraste. *Avant de renier une page, chercher ce qu'elle mélangeait.* | §3 de `QUETE.md` |
-| 455 | ⚠️⚠️ **La septième forme du 454, repayée en UN zip.** Le moment de la fracture de la comète (`0,34`) « avait l'air d'être au début du vol » — il l'était, et la comète n'entre dans le cadre qu'à **0,84** : elle se fendait hors de l'écran. *La parade est toujours la même : ne pas régler, DÉRIVER de ce qui est visible.* | `STAR_FRAG_AT`, `quete.js` |
-| 455 | ⚠️⚠️ **Le fond d'une mesure n'est pas un décor, c'est un réactif.** La sonde de la bulle peignait « de l'herbe, comme dans le jeu » : ses trois composantes passaient sous le seuil d'encre, donc le banc comptait le fond comme du trait. Puis il a mesuré le CERNE en croyant mesurer le glyphe. *Un banc de rendu se vérifie aussi* — deux fois de suite ici. | §9 de `render-etoile.mjs` |
-| 455 | ⚠️ **`if (g2.roundRect)` n'est pas une garde : le faux canevas LÈVE sur l'ACCÈS.** Un dessin qui dépend d'une méthode exotique n'est pas regardable, donc il vieillira. À 11 px de large, deux `fillRect` croisés font un meilleur coin qu'un arrondi anticrénelé. | `drawEmoteBubble` |
 | 456 | ⚠️⚠️⚠️ **UN LECTEUR QUI NE S'EXÉCUTE JAMAIS VAUT ZÉRO LECTEUR — et compter les lecteurs ne le voit pas.** C'est la leçon 453 d'un cran plus bas, et elle est pire : `starSay` écrit dans la bulle de l'ÉTOILE, qui n'est dessinée que là où le compagnon existe, c'est-à-dire **jamais avant que le cratère s'ouvre**. Cinq phrases du premier quart d'heure — dont celle qui dit *pourquoi* on se tient immobile devant un trou — étaient écrites, traduites, relues et **comptées comme lues par le banc**. Ça ne se mesure pas en comparant des clés : ça se mesure en LISANT LE SOURCE. | §12.0 de `QUETE.md` |
-| 456 | ⚠️⚠️ **CHAQUE BULLE JUSTE, LEUR SOMME FAUSSE.** Neuf PNJ nerveux groupés ont ouvert neuf bulles empilées : rien à redire à aucune, et l'écran était illisible. **Aucun banc ne peut voir ça** — il faudrait qu'il mesure une somme dont il n'a pas la liste. *Quand une demande porte sur la LISIBILITÉ, la grandeur à regarder est ce que l'écran montre au total, pas ce que chaque élément décide.* | `starTalkerPick` |
 | 456 | ⚠️⚠️ **UN GESTE CONTINU QUI NE REND RIEN NE SE DISTINGUE PAS D'UN JEU BLOQUÉ.** Le cratère demandait neuf secondes de dos tourné, sans touche, sans animation, sans un pixel qui bouge — et l'invite disait « E : ne plus bouger », c'est-à-dire le préfixe des touches devant le seul geste du jeu qui n'en a pas. *Une posture qu'on demande doit rendre deux choses : ce qui manque, et ce qui avance.* | `drawCalmMeter`, `starCalmStep` |
-| 456 | ⚠️ **UN SEUIL DE BANC N'EST PAS UNE VÉRITÉ, C'EST LA DÉCISION DU JOUR OÙ ON L'A ÉCRIT.** « La bulle reste lisible (≥ 8 px) » mesurait la taille d'AVANT et refusait donc la correction demandée par Guillaume. Il descend à 6 px **dans le même zip et en le disant** : quand la décision change, le seuil change avec elle et dit lequel des deux a bougé. | §11 de `render-etoile.mjs` |
 | 457 | **UN MINI-JEU AGRÉABLE ET GRATUIT RESTE GRATUIT.** Le refroidissement ne disait pas pourquoi refroidir : la raison (un matériau de construction) est dite AVANT le geste et confirmée après. *Une consigne qui arrive sans sa raison se lit comme une épreuve.* | `s1` dans `fermeStrings.js` |
 | 458 | ⚠️⚠️⚠️ **UNE QUESTION POSÉE AU SALON POUR RÉPONDRE À UNE QUESTION DE LIEU.** `starSoloRoom()` répondait « y a-t-il un autre joueur CONNECTÉ » et servait à répondre « puis-je avancer tout seul ». Un ami qui labourait à la ferme rendait le cratère **inouvrable pour toujours** et les chapitres 3 à 5 **inatteignables**. *Quand une réponse dépend d'un LIEU, la compter en POPULATION est un blocage en attente* — et il ne peut se voir qu'à deux clients. La parade : le duo est un RACCOURCI, jamais une serrure. | §12.0 de `QUETE.md` |
 | 458 | ⚠️⚠️⚠️ **HUITIÈME FORME DU DÉFAUT DE BANC : UN MUR FAIT DE VITESSE.** La glissade du cratère (3,2) dépassait ce qu'un joueur peut remonter (5,2 × 0,45 = 2,34) : **on ne pouvait plus entrer dans le trou.** Aucun pas n'est refusé, donc `canStandTown` n'est jamais consulté, donc rien ne lève ; et les six contrôles étaient verts parce qu'ils mesuraient la glissade et la peine **séparément, jamais leur SOMME**. *Deux grandeurs qui s'opposent se mesurent ensemble ou pas du tout.* | `STAR_SLIDE_MAX`, `render-etoile.mjs` |
 | 458 | ⚠️⚠️ **UN BANC QUI CHOISIT LUI-MÊME LE PARAMÈTRE COMMODE NE MESURE QUE SON RÉGLAGE.** `verify-quete` jouait le cratère avec `solo = true` et les ombres avec `solo = false` — les deux seuls mondes où ils marchaient. Il balaie maintenant **les deux valeurs sur les deux gestes**. *Un drapeau passé en dur par le banc est une hypothèse que personne ne vérifie.* | §4 de `verify-quete.mjs` |
 | 458 | ⚠️⚠️ **UNE MISE EN SCÈNE PARTAGÉE TOMBE SUR L'ÉCRAN DE QUELQU'UN QUI JOUE.** A ferme un chapitre à la ferme, B reçoit une carte plein écran pendant qu'il est au fond du lac — et son mini-jeu continue de tourner derrière. **Aucun banc ne peut voir ça, il faudrait deux écrans.** *Tout ce qui s'affiche chez TOUT LE MONDE doit demander un écran libre.* | `starShowCard`, `starScenePump` |
+| 459 | ⚠️⚠️⚠️ **UNE RÉPONSE JUSTE À UNE QUESTION QUE PERSONNE NE POSAIT.** Une gravité permanente dans le cratère — physiquement irréprochable — aurait **supprimé le chapitre 2** : la cuvette est un paraboloïde, elle n'a pas de fond plat, donc elle entonne jusqu'au point unique du centre, là où `starFacingAway` rend `false` par construction. *On ne perd pied que si l'on SOLLICITE la pente ; debout, on plante ses talons — et cette exception se DESSINE au lieu de se cacher.* | §12.0 de `QUETE.md` |
+| 459 | ⚠️⚠️⚠️ **UN BANC QUI JOUE TROUVE CE QU'UN BANC QUI CALCULE NE PEUT PAS VOIR.** Le 458 vérifiait une inégalité ; le 459 SIMULE la sortie du trou depuis 317 points de départ, à 60 images/seconde, sur le vrai creux. Le premier jet du moteur : **219 bloqués sur 317**, et aucune relecture n'aurait pu le dire. *La question du §25 — « est-ce qu'on ARRIVE ? » — se pose enfin en dur.* | §7 de `render-etoile.mjs` |
+| 459 | ⚠️⚠️ **UNE GRANDEUR QUI DÉCRIT LE JOUEUR NE DOIT PAS DÉPENDRE DU TERRAIN.** Le compteur d'effort (« 3 s de la même direction ») était gagé sur « est-ce que je monte ? » : en dévalant on dépasse le point bas, la pente s'inverse sous les pieds, et il repartait de zéro à chaque passage au fond — la grimpe n'existait donc pas. | `starSlipStep`, `quete.js` |
+| 459 | ⚠️ **UN BANC QUI LIT UNE FEUILLE DE PERSONNAGE NE VOIT QUE SA RANGÉE 0.** `charSheet` empile ses trois orientations avec `translate`, que le faux canevas IGNORE : une pose demandée de dos y est vide. Quatre contrôles rouges, zéro défaut. *Le stub menteur du §10, huit zips après le dernier.* | §12 de `render-etoile.mjs` |
 
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
@@ -366,14 +363,14 @@ de conception qui valent pour n'importe quel morceau du dépôt.
 |---|---|
 | `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **~20 500 l.** |
 | `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** |
-| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE (444) : la table des lieux, les 5 chapitres, les grandeurs de coopération et les résolveurs purs.** Aucun React, aucun dessin — `verify-quete.mjs` l'importe. Depuis le 449 il porte aussi **`starGoalKey`** (l'objectif courant, lu par le bandeau ET par le chevron) et **`starGuidePoint`** (où se place le familier meneur) ; depuis le 451 **`starShipParts`** — les cinq morceaux du NAVIRE, une pure LECTURE des cinq trouvailles, aucun état de plus ; depuis le 453 **`starShipGone`** (le navire prend la mer avec Eduardo) et **plus aucun second compte** (`shard` / `starShards` / `STAR_SHARD_TOTAL` supprimés) ; depuis le 455 **l'ANNONCE et le TAMPON** — `resolveStarWarn`, `starWarnOffer`, `starFallDue` (« la première nuit qui COMMENCE après l'annonce »), les quatre fonctions pures de la vallée nerveuse (`starNerveHas` / `Tic` / `Dir` / `Say`), `starCamTarget` (le point de vue en amont, à la ferme) et `starFragments` ; depuis le 456 **la PAROLE et la POSTURE** — `starNerveNearTo` (⚠️ la ZONE avant les distances, §4), `starNerveFace`, et `starCalmStep` / `starCalmNeed`, **une seule source pour le texte d'aide, la jauge et ce que l'hôte compte** ; depuis le 458 **la PENTE, LA PLONGÉE ET L'ARRIVÉE** — `starCraterSlope` / `starSlideSpeed` / `starClimbMul` (⚠️ liées par une INÉGALITÉ, voir `STAR_CLIMB_NET_MIN` : sans elle, le cratère devient un mur), `starDivePosts` / `starDiveShardX` (les pilotis penchent vers le morceau — une jointure, jamais deux listes) et `starJoinAnim` (elle grimpe, tournicote, se pose — courbe pure et CONTINUE par construction). ⚠️ Remplace `enquete.js`, supprimé au 444 |
+| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE (444) : la table des lieux, les 5 chapitres, les grandeurs de coopération et les résolveurs purs.** Aucun React, aucun dessin — `verify-quete.mjs` l'importe. Depuis le 449 il porte aussi **`starGoalKey`** (l'objectif courant, lu par le bandeau ET par le chevron) et **`starGuidePoint`** (où se place le familier meneur) ; depuis le 451 **`starShipParts`** — les cinq morceaux du NAVIRE, une pure LECTURE des cinq trouvailles, aucun état de plus ; depuis le 453 **`starShipGone`** (le navire prend la mer avec Eduardo) et **plus aucun second compte** (`shard` / `starShards` / `STAR_SHARD_TOTAL` supprimés) ; depuis le 455 **l'ANNONCE et le TAMPON** — `resolveStarWarn`, `starWarnOffer`, `starFallDue` (« la première nuit qui COMMENCE après l'annonce »), les quatre fonctions pures de la vallée nerveuse (`starNerveHas` / `Tic` / `Dir` / `Say`), `starCamTarget` (le point de vue en amont, à la ferme) et `starFragments` ; depuis le 456 **la PAROLE et la POSTURE** — `starNerveNearTo` (⚠️ la ZONE avant les distances, §4), `starNerveFace`, et `starCalmStep` / `starCalmNeed`, **une seule source pour le texte d'aide, la jauge et ce que l'hôte compte** ; depuis le 459 **LA PERTE D'APPUI** — `starSlipStep` (cinq états purs : `foot`, `brace`, `slide`, `recover`, `climb`), `starSlipPose` et `starSlipSeen` (⚠️ la pose de l'AUTRE joueur, DÉDUITE de sa vitesse, zéro champ réseau) — et **`starTimberBusy` / `starTimberProgress`** (ce que Tristan fabrique, et où ça en est) ; depuis le 458 **la PENTE, LA PLONGÉE ET L'ARRIVÉE** — `starCraterSlope` / `starSlideSpeed` / `starClimbMul` (⚠️ liées par une INÉGALITÉ, voir `STAR_CLIMB_NET_MIN` : sans elle, le cratère devient un mur), `starDivePosts` / `starDiveShardX` (les pilotis penchent vers le morceau — une jointure, jamais deux listes) et `starJoinAnim` (elle grimpe, tournicote, se pose — courbe pure et CONTINUE par construction). ⚠️ Remplace `enquete.js`, supprimé au 444 |
 | `components/ferme/QUETE.md` | **le chantier 444 : déroulé, grammaire magique, avancement, ET CE QUI RESTE À FAIRE (§12) — autorité tant que la quête n'est pas finie** |
 | `components/ferme/README.md` | **Valley Town, le tribunal, l'HÔTEL DE VILLE, l'ÉGLISE, le BEFFROI, les habitants, la VENTE, les OISEAUX, les ÉLECTIONS et les PIÈGES de ces zones — autorité (428-444)** |
 | `components/ferme/DESSIN.md` | **les règles de DESSIN, vraies partout — autorité (441, sorties du §4)** |
 | `tools/README.md` | **les bancs, ce qu'ils attrapent et leurs chiffres — autorité (432-439)** |
 | `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** · depuis le 440 il **importe `planche.js`** : une portée de pont et une emprise de décor sont des grandeurs de DESSIN, on les dérive du sprite au lieu de les recopier |
 | `components/ferme/planche.js` | **GÉNÉRÉ** par `tools/import-planche.mjs` — les sprites de la planche de Guillaume, en données. Ne pas éditer à la main |
-| `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural (aucun bitmap **à ce jour** — voir §9, le principe est tombé au 443) · **`drawSeated()`** · **`drawStarCrater()` (446), `drawStarComet()` (448), `drawStarShip()` (451), `drawStarFurrow()` + `starFurrowSink()` et `drawStarPlan()` (454), `drawEmoteBubble()` (455), `drawCalmMeter()` (456) : les gros dessins de la quête vivent ICI et pas dans la boucle, exprès — c'est la seule façon qu'un banc les regarde** |
+| `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural (aucun bitmap **à ce jour** — voir §9, le principe est tombé au 443) · **`drawSeated()`** · **`drawStarCrater()` (446), `drawStarComet()` (448), `drawStarShip()` (451), `drawStarFurrow()` + `starFurrowSink()` et `drawStarPlan()` (454), `drawEmoteBubble()` (455), `drawCalmMeter()` (456), **`drawStarSlide()` / `drawStarBrace()` / `drawStarClimb()` et `drawWorkBubble()` (459)** : les gros dessins de la quête vivent ICI et pas dans la boucle, exprès — c'est la seule façon qu'un banc les regarde** |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
 | `public/candyluge/README.md` | **la dette et les 18 règles de la luge — autorité (427)** |
 | `public/candyluge/js/` | `config.js` (tous les nombres) · `slope.js` (la piste) · `sled.js` · `world.js` |
@@ -522,8 +519,8 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 ⚠️⚠️ **LES BANCS SONT DANS `tools/README.md` DEPUIS LE 432, ET CE CHAPITRE A ÉTÉ ÉLAGUÉ AU 444
 SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 442** (reporté deux fois). **16 bancs de contrôle et 19 bancs
 de rendu**, comptés en listant `tools/` (⚠️ le chiffre disait 15 et 18 : il était périmé, recompté
-au 453 — et **les 35 ont été lancés un par un au 458**, tous verts, `verify-quete` passant de 413 à
-**433/433**). ⚠️ **Six d'entre eux existent parce qu'un défaut vu par
+au 453 — et **les 35 ont été relancés un par un au 459**, tous verts, `verify-quete` passant de 433
+à **439/439**). ⚠️ **Six d'entre eux existent parce qu'un défaut vu par
 Guillaume — ou vu à l'écran — n'était mesuré nulle part** : `verify-compo` (440), `verify-pont`
 (441), `verify-portee` (443), et au 444 `render-etoile`, `verify-quete`, `render-beffroi`.
 ⚠️ **Le seul qui touche à de l'ARGENT est `verify-vallee`** (205/205, relancé au 458) : il joue des ventes,
@@ -576,6 +573,10 @@ vérifie jamais — c'est elle, et elle seule, qui protège du banc imaginaire (
   clients a désormais payé les trois fois sur trois où elle a eu lieu.* **Ce qui reste** : la
   moitié qui se joue FACE À FACE (l'étoile timide dos à dos, le croisement d'ombres à deux, la
   flaque promenée sur le ponton, le duo) et **la ferme PEUPLÉE**, jamais vue à deux.
+- ⚠️⚠️ **UN BANC JOUE ENFIN UN MOUVEMENT, DEPUIS LE 459, ET C'EST LE SEUL** : `render-etoile` §7
+  simule `starSlipStep` sur le vrai creux du cratère, 317 départs, et vérifie qu'on SORT du trou.
+  Il a trouvé, avant d'être fini, que 219 départs sur 317 étaient bloqués. ⚠️ Ce qu'il ne fait
+  toujours pas : jouer un mini-jeu (voir juste en dessous) ni tourner à deux clients.
 - ⚠️ **AUCUN BANC NE JOUE UN MINI-JEU.** Ils vivent dans le DOM et demandent un vrai canevas et un
   vrai `rAF`. Ce qui se juge là — *est-ce que c'est agréable ?* — ne se mesure nulle part.
 
@@ -879,6 +880,11 @@ erreur** en choisissant mal.
    §5 bis, `furrowBake`, `furrowFib`, §10. ⚠️ *Un zip qui ajoute cinq lignes doit en retirer sept ;
    c'est ce que « les quatre derniers zips » veut dire, et c'est la seule façon que ce tableau ne
    devienne pas ce que l'en-tête est devenu deux fois.*)**.
+
+   **459 (SIXIÈME fois en six zips que le tableau des leçons est ramené à quatre : les QUATRE lignes
+   du 455 partent, plus deux du 456 — le seuil de banc et la somme des bulles, qui vivent déjà dans
+   `render-etoile` §11 et dans `starTalkerPick` — pour laisser entrer les quatre du 459. Six lignes
+   retirées, quatre ajoutées : le tableau RÉTRÉCIT, ce qui est la seule preuve que la forme tient.)**.
 
    ⚠️⚠️ **LE 451 A EXÉCUTÉ L'ORDRE DU 449 : §13 RELU LIGNE À LIGNE**, huit zips après le 442.
    Quatre entrées parlaient d'un code SUPPRIMÉ au 444 — elles décrivaient l'enquête cadastrale

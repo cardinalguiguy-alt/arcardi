@@ -2563,6 +2563,156 @@ export function drawSeated(ctx, sheet, row, px, py) {
   ctx.fillRect(px + S2.shinInset, py + S2.shinY, 16 - S2.shinInset * 2, 1);
 }
 
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 459 — LES TROIS POSES DU CRATÈRE : IL DÉVALE, IL S'ARC-BOUTE, IL GRIMPE.
+   ╚════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ DEMANDE DE GUILLAUME : *« une animation réelle poussée montrant le
+   personnage qui climb up et glisse du cratère. ça doit être très beau et
+   logique. nouveau mouvement pour le perso du fermier qui doit lean back et
+   slide quand il glisse. »*
+
+   ⚠️⚠️⚠️ ELLES SONT DÉCOUPÉES DANS LA FEUILLE DU PERSONNAGE, JAMAIS REPEINTES —
+   c'est LA décision, et c'est celle de `drawSeated` (428) reprise mot pour mot.
+   Peindre un bras avec une couleur de chemise prise dans `OUTFITS` marcherait
+   jusqu'au premier article de la Maison Garfield : la teinte d'une tenue est
+   CUITE dans la feuille (c'est même toute son astuce). Deux sources pour la même
+   couleur, c'est la divergence en attente du §8 de `CLAUDE.md`, et le symptôme
+   aurait été « le pantalon acheté ne se voit pas quand on glisse ». En
+   redécoupant, les trois poses héritent GRATUITEMENT de la tenue, de la
+   salopette, de la combinaison d'apiculteur et de tout ce qu'on ajoutera.
+
+   ⚠️⚠️ ET ELLES VIVENT ICI, PAS DANS LA BOUCLE DE RENDU. Le piège n°1 du projet
+   (§4 de `CLAUDE.md`) a deux visages, et c'est le SECOND qui menaçait ici : *un
+   dessin qu'aucun banc ne peut appeler ne se dégrade pas, il reste au niveau du
+   jour où il a été écrit.* `render-etoile` appelle ces trois fonctions et mesure
+   leur silhouette, leur ancrage au sol et — pour la grimpe — le fait que ses
+   quatre images soient VRAIMENT différentes (leçon du 449 sur la compagne, dont
+   deux poses sortaient identiques au pixel près).
+
+   ⚠️ AUCUN `translate`, AUCUN `rotate`, AUCUN `roundRect` : le faux canevas du
+   banc les ignore ou LÈVE (leçon du 455), et une pose qui en dépendrait ne serait
+   plus regardable — donc elle vieillirait. L'inclinaison se fait donc par
+   CISAILLEMENT : trois bandes horizontales décalées les unes par rapport aux
+   autres, ce qui est de toute façon ce qu'on ferait à la main en pixel art (un
+   corps penché n'est pas un corps tourné, c'est un corps dont les épaules ne sont
+   plus au-dessus des pieds).
+   ═════════════════════════════════════════════════════════════════════════════ */
+/* Les trois tranches d'un personnage, telles que les peint `drawCharFrame` :
+   0..10 la tête, 10..16 le buste (et les bras en 11..16), 16..24 les jambes et
+   les bottes. ⚠️ ELLES SONT ÉCRITES UNE FOIS ICI et lues par les trois poses —
+   trois copies auraient divergé au premier réglage du sprite. */
+const POSE_HEAD_H = 10, POSE_TORSO_Y = 10, POSE_TORSO_H = 6, POSE_LEG_Y = 16, POSE_LEG_H = 8;
+const POSE_ARM_Y = 11, POSE_ARM_H = 5, POSE_ARM_W = 3;   // les manches, x 3..6 et x 10..13
+const POSE_ARM_LX = 3, POSE_ARM_RX = 10;
+/* ⚠️⚠️ LA SILHOUETTE OCCUPE x 3..13 DANS SA CASE DE SEIZE, ET CE NOMBRE EST LA
+   CHOSE À NE PAS OUBLIER. Un bras posé « deux pixels à gauche de l'ancre » se
+   retrouve à CINQ pixels du corps : il flotte, détaché, et ça se voit comme un
+   défaut de dessin alors que c'est une erreur d'arithmétique. Les trois poses du
+   459 sont nées avec, aux trois endroits, et c'est la planche du banc qui l'a
+   montré — pas la relecture. On écrit donc les deux bords une fois pour toutes. */
+const POSE_BODY_L = 3, POSE_BODY_R = 13;
+
+/* ── LA GLISSADE. « lean back and slide. »
+   ⚠️ LE CORPS EST PLUS COURT DE QUATRE PIXELS (20 au lieu de 24) ET LES PIEDS NE
+   BOUGENT PAS : on s'accroupit en dévalant, on ne rapetisse pas. C'est la même
+   règle que la pose assise — l'ancrage au sol est ce qui empêche une pose de
+   flotter, et c'est la première chose que le banc mesure.
+   ⚠️ `lx`/`ly` sont la direction de la GLISSADE à l'écran (unitaires). Le buste
+   part À CONTRESENS et les jambes partent DEVANT : c'est ça, « lean back » — les
+   épaules ne sont plus au-dessus des pieds. Deux pixels suffisent à 16 de large ;
+   au troisième, le personnage se disloque (essayé, mesuré, reculé). */
+export function drawStarSlide(ctx, sheet, row, px, py, lx, ly) {
+  const sy = row * 24;
+  const kx = Math.max(-1, Math.min(1, +lx || 0)), ky = Math.max(-1, Math.min(1, +ly || 0));
+  const hx = Math.round(-3 * kx), tx = Math.round(-1.5 * kx), fx = Math.round(2 * kx);
+  /* Le tassement vertical : on descend vers la caméra (ky > 0) le buste se
+     redresse et les jambes partent devant ; on s'éloigne, c'est l'inverse. */
+  const rise = Math.round(-1.5 * ky);
+  const top = py - 4 + rise;                       // 20 px de haut, pieds toujours à py+16
+  // 1. La tête et les épaules, rejetées en arrière.
+  ctx.drawImage(sheet, 0, sy, 16, POSE_HEAD_H, px + hx, top, 16, POSE_HEAD_H);
+  // 2. Le buste, à mi-chemin — sans lui, la tête et les jambes se toucheraient
+  //    en un coude franc au lieu d'une courbe.
+  ctx.drawImage(sheet, 0, sy + POSE_TORSO_Y, 16, POSE_TORSO_H, px + tx, top + 8, 16, POSE_TORSO_H);
+  /* 3. Les jambes, DEVANT et ÉCRASÉES (8 px de source pour 6 de rendu) : elles
+        pointent vers le bas de la pente, donc vers la caméra, donc on les voit en
+        raccourci. C'est ce raccourci qui fait lire « il dévale » plutôt que
+        « il est debout, plus bas ». */
+  ctx.drawImage(sheet, 0, sy + POSE_LEG_Y, 16, POSE_LEG_H, px + fx, py + 10, 16, 6);
+  /* 4. Les bras en balancier, écartés et remontés. ⚠️ DÉCOUPÉS DANS LA MANCHE
+        (x 3..6 et x 10..13 du buste) : c'est le seul endroit de la feuille où la
+        couleur du vêtement et la main sont déjà l'une sous l'autre. */
+  ctx.drawImage(sheet, POSE_ARM_LX, sy + POSE_ARM_Y, POSE_ARM_W, POSE_ARM_H, px + hx + POSE_BODY_L - POSE_ARM_W, top + 4, POSE_ARM_W, POSE_ARM_H);
+  ctx.drawImage(sheet, POSE_ARM_RX, sy + POSE_ARM_Y, POSE_ARM_W, POSE_ARM_H, px + hx + POSE_BODY_R, top + 4, POSE_ARM_W, POSE_ARM_H);
+  /* 5. Le creux sous le bassin. Même rôle que dans la pose assise : une VALEUR,
+        pas une forme — sans elle, buste et jambes se lisent comme un seul bloc. */
+  ctx.fillStyle = "rgba(0,0,0,0.30)";
+  ctx.fillRect(px + 3 + fx, py + 10, 10, 1);
+}
+
+/* ── L'ARC-BOUTEMENT. La posture de qui se tient debout, immobile, sur la paroi.
+   ⚠️⚠️ ELLE EXISTE POUR RENDRE VISIBLE LA SEULE LIBERTÉ QUE LE MOTEUR PREND AVEC
+   LA PHYSIQUE (voir le chapeau de `starSlipStep` dans quete.js) : au repos sur la
+   pente, on ne glisse pas. Un fermier debout, jambes serrées, au milieu d'un
+   dévers, se lit comme un bogue ; jambes écartées et bras en balancier, il se lit
+   comme quelqu'un qui plante ses talons — et c'est vrai, c'est exactement ce
+   qu'il fait. *Une exception assumée se dessine ; une exception cachée se paie.* */
+export function drawStarBrace(ctx, sheet, row, px, py) {
+  const sy = row * 24;
+  // Tête et buste, tels quels mais tassés d'un pixel (genoux fléchis).
+  ctx.drawImage(sheet, 0, sy, 16, POSE_TORSO_Y + POSE_TORSO_H, px, py - 7, 16, POSE_TORSO_Y + POSE_TORSO_H);
+  /* Les jambes en DEUX moitiés écartées : la feuille les peint côte à côte
+     (x 5..8 et x 8..11), il suffit de les éloigner de deux pixels chacune. */
+  ctx.drawImage(sheet, 0, sy + POSE_LEG_Y, 8, POSE_LEG_H, px - 2, py + 9, 8, 7);
+  ctx.drawImage(sheet, 8, sy + POSE_LEG_Y, 8, POSE_LEG_H, px + 10, py + 9, 8, 7);
+  // Les bras, écartés et bas — un balancier, pas une garde.
+  ctx.drawImage(sheet, POSE_ARM_LX, sy + POSE_ARM_Y, POSE_ARM_W, POSE_ARM_H, px + POSE_BODY_L - POSE_ARM_W, py + 4, POSE_ARM_W, POSE_ARM_H);
+  ctx.drawImage(sheet, POSE_ARM_RX, sy + POSE_ARM_Y, POSE_ARM_W, POSE_ARM_H, px + POSE_BODY_R, py + 4, POSE_ARM_W, POSE_ARM_H);
+}
+
+/* ── LA GRIMPE. « l'anim grimpeur avec les bras et jambes. »
+   ⚠️⚠️ QUATRE IMAGES, ET ELLES SONT CONTRALATÉRALES : bras gauche haut avec jambe
+   DROITE haute. C'est ce qui distingue une escalade d'une reptation, et ça ne se
+   voit qu'en mouvement — le banc, lui, vérifie que les quatre images diffèrent
+   vraiment au pixel près (au 449, deux poses de la compagne sortaient identiques
+   et personne ne l'avait vu à l'œil).
+   ⚠️ LE CORPS EST PLUS ÉTROIT DE DEUX PIXELS : plaqué contre la paroi, on se
+   présente de trois quarts, pas de face. C'est le seul endroit du jeu où l'on
+   redimensionne un personnage en LARGEUR, et c'est ce qui achète le « collé au
+   mur » sans dessiner un seul pixel de mur. */
+export const STAR_CLIMB_FRAMES = 4;
+export function drawStarClimb(ctx, sheet, row, px, py, phase) {
+  const sy = row * 24, f = ((phase | 0) % STAR_CLIMB_FRAMES + STAR_CLIMB_FRAMES) % STAR_CLIMB_FRAMES;
+  const bob = [0, -1, 0, 1][f];
+  /* Les quatre temps, en une table : la hauteur du bras gauche, du bras droit, de
+     la jambe gauche, de la jambe droite. ⚠️ UNE TABLE ET PAS QUATRE `if` : c'est
+     ce qui rend le cycle lisible d'un coup d'œil et vérifiable d'une boucle. */
+  const AL = [-4, -1, 0, -1][f], AR = [0, -1, -4, -1][f];
+  /* ⚠️⚠️ LES JAMBES SONT L'INVERSE DES BRAS, PAS LEUR COPIE — c'est ÇA, la marche
+     contralatérale, et le premier jet avait écrit les deux tables dans le même
+     sens : bras gauche en l'air AVEC jambe gauche en l'air, c'est-à-dire un
+     lézard. Personne ne le voit sur une image fixe ; le banc, lui, compare les
+     quatre hauteurs et le dit en une ligne. */
+  const LL = [2, 1, 0, 1][f], LR = [0, 1, 2, 1][f];
+  const top = py - 7 + bob;
+  // 1. Le corps, plaqué : 14 px de large au lieu de 16, tête + buste d'un bloc.
+  ctx.drawImage(sheet, 0, sy, 16, POSE_TORSO_Y + POSE_TORSO_H, px + 1, top, 14, POSE_TORSO_Y + POSE_TORSO_H);
+  /* 2. Les jambes, écartées et repliées : deux moitiés de la tranche basse, l'une
+        plus haute que l'autre selon le temps. La compression (8 → 6) est le genou
+        qui remonte, pas un rétrécissement. */
+  ctx.drawImage(sheet, 0, sy + POSE_LEG_Y, 8, POSE_LEG_H, px - 2, py + 8 + LL, 8, 6);
+  ctx.drawImage(sheet, 8, sy + POSE_LEG_Y, 8, POSE_LEG_H, px + 10, py + 8 + LR, 8, 6);
+  /* 3. Les bras, TENDUS VERS LE HAUT — c'est eux qui font toute la lecture. Ils
+        montent jusqu'au niveau du crâne et pas au-delà : au-dessus, ils passent
+        derrière l'étiquette du nom (py − 10) et on ne voit plus rien. */
+  /* ⚠️ Le corps est RÉTRÉCI à 14/16 : ses épaules ne sont donc plus à `px + 3` mais
+     à `px + 1 + 3 × 14/16`. Les bras se collent à CE bord-là, pas à celui du sprite
+     debout — sans quoi ils flottent d'un pixel et demi, ce qui se voit. */
+  const cbl = Math.round(px + 1 + POSE_BODY_L * 14 / 16), cbr = Math.round(px + 1 + POSE_BODY_R * 14 / 16);
+  ctx.drawImage(sheet, POSE_ARM_LX, sy + POSE_ARM_Y, POSE_ARM_W, POSE_ARM_H, cbl - POSE_ARM_W, top + 1 + AL, POSE_ARM_W, POSE_ARM_H);
+  ctx.drawImage(sheet, POSE_ARM_RX, sy + POSE_ARM_Y, POSE_ARM_W, POSE_ARM_H, cbr, top + 1 + AR, POSE_ARM_W, POSE_ARM_H);
+}
+
 export function buildSprites() {
   const T = 16;
 
@@ -6589,6 +6739,21 @@ export function buildSprites() {
      arrache (elle part avec le pied, elle retombe vite), le GRIS est la cendre
      sèche du fond, plus légère, qui monte et traîne. Un seul ton aurait fait un
      nuage de dessin animé ; deux font une matière. */
+  /* ⚠️⚠️ ZIP 459 — ELLE EST AUX PIEDS, ET C'EST UN DÉCALAGE, PAS UN RÉGLAGE.
+     Retour de Guillaume, en jouant : *« la poussière doit être autour des pieds,
+     pas de la tête aussi. »* L'appelant passe l'ANCRE du personnage — sa case —
+     et l'ancre d'un sprite de 24 px tombe à la CEINTURE : l'ombre portée, elle,
+     est peinte quatorze pixels plus bas (`py + 15` dans `drawCharacter`). Une
+     bouffée centrée sur l'ancre et qui montait de sept pixels culminait donc à
+     hauteur de crâne — elle ne sortait pas de sous les semelles, elle enveloppait
+     le fermier.
+     ⚠️ LE DÉCALAGE VIT ICI ET PAS CHEZ L'APPELANT, pour que le banc puisse le
+     mesurer : `render-etoile` vérifie qu'aucun grain ne monte plus haut que le
+     genou (la moitié basse du sprite). Chez l'appelant, il aurait été invisible.
+     ⚠️ ET LA MONTÉE A ÉTÉ RABOTÉE AVEC : décaler sans raccourcir aurait rendu le
+     même défaut, un cran plus bas. */
+  const DUST_FOOT_PX = 14;      // de l'ancre du personnage à ses semelles
+  const DUST_RISE_PX = 4;       // ce que la cendre s'autorise à monter, au plus
   function drawStarDust(g2, cx, cy, T2, k, seed) {
     const a = Math.max(0, Math.min(1, +k || 0));
     if (a >= 1) return;
@@ -6601,17 +6766,25 @@ export function buildSprites() {
       const h = ((seed | 0) * 2654435761 + i * 40503) >>> 0;
       const ax = (((h >>> 3) & 255) / 255 - 0.5), ay = (((h >>> 11) & 255) / 255 - 0.5);
       const grey = (h & 1) === 0;
-      /* Le gris MONTE (cendre), le marron RETOMBE (terre). */
-      const rise = grey ? -grow * 7 : grow * 2.5;
-      const x = cx + (ax * 6 + ax * grow * 13) * sc;
-      const y = cy + (ay * 3 + rise) * sc;
-      const rad = (1.7 + grow * (grey ? 5.2 : 3.6)) * sc;
+      /* Le gris MONTE (cendre), le marron RETOMBE (terre) — mais deux fois moins
+         qu'avant : ce qui doit se voir est une gerbe SOUS le pied, pas un nuage
+         autour du personnage. */
+      const rise = grey ? -grow * DUST_RISE_PX : grow * 2.0;
+      const x = cx + (ax * 6 + ax * grow * 15) * sc;
+      const y = cy + (DUST_FOOT_PX + ay * 1.5 + rise) * sc;
+      /* ⚠️⚠️ ELLE S'ÉTALE, ELLE NE GONFLE PAS : une ELLIPSE couchée (0,52) et non
+         un disque. Rendre la bouffée plus petite pour la garder basse l'aurait
+         rendue invisible — le premier jet du 459 est tombé sous le seuil du banc
+         (37 px pour 40 exigés). Une poussière arrachée par une semelle FUIT LE
+         LONG DU SOL ; l'élargir au lieu de la grossir la rend plus lisible ET
+         plus basse, c'est-à-dire les deux choses à la fois. */
+      const rad = (1.6 + grow * (grey ? 5.0 : 3.8)) * sc;
       const al = fade * (grey ? 0.34 : 0.46);
       if (al < 0.02) continue;
       g2.fillStyle = grey
         ? `rgba(152,148,140,${al.toFixed(3)})`
         : `rgba(112,86,58,${al.toFixed(3)})`;
-      g2.beginPath(); g2.arc(x, y, rad, 0, 7); g2.fill();
+      g2.beginPath(); g2.ellipse(x, y, rad, rad * 0.52, 0, 0, 7); g2.fill();
     }
   }
 
@@ -7694,6 +7867,83 @@ export function buildSprites() {
     g2.fillStyle = o.warn ? "rgba(120,140,170,0.75)" : "rgba(120,96,58,0.75)";
     for (let i = 1; i <= 2; i++) g2.fillRect(bx + 2 + Math.round(iw * i / 3), byTop + 2, 1, H - 4);
     g2.restore();
+  }
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 459 — LA BULLE DE TRAVAIL DE TRISTAN. « on doit LE VOIR s'y mettre. »
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ CE N'EST PAS UNE BULLE DE TEXTE, ET C'EST TOUT L'INTÉRÊT. Une phrase
+     (« je m'y mets ») s'affiche trois secondes et disparaît ; la commande, elle,
+     dure de trois à huit minutes. Ce qu'il faut montrer n'est pas l'INSTANT où il
+     accepte, c'est l'ÉTAT « il est en train de la faire » — donc un dessin qui
+     reste au-dessus de lui tant que le bois n'est pas prêt, et qui AVANCE.
+     ⚠️ LA SCIE VA ET VIENT (le temps), LE TRAIT DE SCIE S'ENFONCE (l'avancement).
+     Deux mouvements, deux sens : sans le premier, la bulle a l'air figée pendant
+     huit minutes ; sans le second, elle ne dit pas qu'on approche. C'est la leçon
+     du 456 (« un geste continu doit rendre ce qui manque ET ce qui avance »)
+     appliquée à quelqu'un d'AUTRE que le joueur.
+     ⚠️ AUCUN `roundRect`, AUCUN `fillText` : mêmes raisons qu'à la bulle du 455 —
+     le faux canevas LÈVE sur l'accès, donc un dessin qui en dépend n'est pas
+     regardable, donc il vieillit. Coins coupés au pixel, comme partout ici. */
+  function drawWorkBubble(g2, cx, by, k, tMs) {
+    const kk = Math.max(0, Math.min(1, +k || 0)), t = +tMs || 0;
+    const W = 26, H = 18;
+    const bx = Math.round(cx - W / 2), byTop = Math.round(by - H);
+    const notch = (x, y, w, h, col) => {
+      g2.fillStyle = col;
+      g2.fillRect(x + 1, y, w - 2, h);
+      g2.fillRect(x, y + 1, w, h - 2);
+    };
+    notch(bx, byTop, W, H, "rgba(58,44,26,0.85)");
+    notch(bx + 1, byTop + 1, W - 2, H - 2, "rgba(255,247,222,0.97)");
+    // La queue : elle pointe la tête du bûcheron.
+    g2.fillStyle = "rgba(255,247,222,0.97)";
+    g2.fillRect(cx - 1, byTop + H, 3, 1);
+    g2.fillRect(cx, byTop + H + 1, 1, 1);
+    /* ╔════════════════════════════════════════════════════════════════════════
+       ║ LA BILLE DE BOIS. ⚠️ LE PREMIER JET ÉTAIT UNE CAISSE, ET LA PLANCHE L'A DIT.
+       ╚════════════════════════════════════════════════════════════════════════
+       Un rectangle brun de vingt pixels sur six, avec une barre grise posée
+       dessus, ne se lit pas comme « une scie sur un rondin » — ça se lit comme un
+       coffre avec une règle dessus. Trois choses le corrigent, et aucune n'est un
+       détail : le BOUT DE FIL (l'ellipse claire du côté gauche, la seule chose qui
+       dise « c'est cylindrique »), les COINS RETIRÉS (un rondin n'a pas d'angle
+       droit), et l'ÉCART entre la lame et le bois (posée dessus, la lame CACHE ce
+       qu'elle est censée couper). C'est la règle du DESSIN.md — on assemble des
+       masses, et une masse qu'on ne voit pas ne compte pas. */
+    const lx = bx + 4, ly = byTop + 9, lw = W - 8, lh = 6;
+    g2.fillStyle = "#6a4a28"; g2.fillRect(lx, ly + 1, lw, lh - 2);
+    g2.fillRect(lx + 1, ly, lw - 2, lh);                       // coins retirés
+    g2.fillStyle = "#8a6538"; g2.fillRect(lx + 1, ly + 1, lw - 2, 2);
+    g2.fillStyle = "#a8834c"; g2.fillRect(lx + 2, ly + 1, lw - 4, 1);   // la rangée qui prend la lumière
+    /* Le bout de fil, à gauche : deux tons concentriques. C'est LUI qui fait le
+       rondin — sans lui, aucune quantité d'ombre ne sauve le rectangle. */
+    g2.fillStyle = "#4a3018"; g2.fillRect(lx, ly + 1, 2, lh - 2); g2.fillRect(lx + 1, ly, 1, lh);
+    g2.fillStyle = "#7d5c34"; g2.fillRect(lx + 1, ly + 2, 1, 2);
+    /* ── LE TRAIT DE SCIE, EN COIN : trois pixels de large en haut, un au fond.
+       Il s'enfonce avec l'avancement — à `k` = 1 la bille est traversée. */
+    const cxk = lx + Math.round(lw * 0.58);
+    const cut = Math.max(1, Math.round((lh + 1) * kk));
+    g2.fillStyle = "#2e1c0c";
+    for (let i = 0; i < cut; i++) g2.fillRect(cxk - (i < cut - 1 ? 1 : 0), ly + i, i < cut - 1 ? 3 : 1, 1);
+    /* ── LA SCIE, AU-DESSUS ET PAS DESSUS. Un va-et-vient sinusoïdal (amorti aux
+       extrémités : un aller-retour linéaire se lit comme un ascenseur), les dents
+       tournées vers le bois, et la poignée du côté d'où elle revient. */
+    const sw = 13, sway = Math.sin(t / 240) * 4;
+    const sx = Math.round(cxk - sw / 2 + sway), sy = ly - 4;
+    g2.fillStyle = "#8f96a0"; g2.fillRect(sx, sy, sw, 1);
+    g2.fillStyle = "#c8ced6"; g2.fillRect(sx, sy - 1, sw, 1);
+    g2.fillStyle = "#6f767f";
+    for (let i = 1; i < sw; i += 2) g2.fillRect(sx + i, sy + 1, 1, 1);   // les dents, une sur deux
+    g2.fillStyle = "#7a4a22";
+    g2.fillRect(sway < 0 ? sx - 2 : sx + sw, sy - 2, 2, 4);
+    /* ── LA SCIURE. Deux grains qui tombent du trait, décalés dans le temps : sans
+       eux, on voit une scie POSÉE sur un rondin, pas une scie qui COUPE. */
+    g2.fillStyle = "rgba(214,178,120,0.9)";
+    for (let i = 0; i < 2; i++) {
+      const ph = ((t / 520) + i * 0.5) % 1;
+      g2.fillRect(cxk - 1 + i * 2, ly + lh + Math.round(ph * 2), 1, 1);
+    }
   }
 
   /* ── L'IMPACT. `k` va de 0 à 1 sur la demi-seconde qui suit le contact.
@@ -13762,6 +14012,7 @@ house: house(),
     drawStarImpactFlash,
     drawEmoteBubble,        // zip 455 — le « ! » des PNJ : tampon d'annonce et impact
     drawCalmMeter,          // zip 456 — la tenue du cratère, la seule réponse à « est-ce que je fais bien ? »
+    drawWorkBubble,         // zip 459 — Tristan à l'ouvrage : la scie va et vient, le trait s'enfonce
     townHouses: Array.from({ length: C.TOWN_HOUSE_STYLES }, (_, i) => townHouseVariant(i)),
     rabbit: [rabbitSprite(0), rabbitSprite(1), rabbitSprite(2)],
     torch: torchSprite(),

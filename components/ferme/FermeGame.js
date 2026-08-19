@@ -931,7 +931,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      autre l'a vue pour lui. */
   const starScenePendRef = useRef(null);             // { key, ch, at } — la scène en attente d'être VISIBLE
   const starCardPendRef = useRef(null);              // zip 458 — { key } — la carte de chapitre en attente d'un écran libre
-  const craterSlideRef = useRef(0);                  // zip 458 — jusqu'à quand l'élan de la glissade survit à la touche
+  /* ⚠️ ZIP 459 — L'ÉLAN N'EST PLUS UNE DATE, C'EST UN ÉTAT. Le 458 gardait « jusqu'à
+     quand la poussée survit à la touche » ; la glissade a maintenant une VITESSE et
+     ses cinq états (`Q.starSlipStep`), donc l'inertie est dans la vitesse, là où
+     elle doit être. Purement local, jamais diffusé : chaque client recalcule celui
+     de chacun à partir des positions qui circulent déjà (§3 de CLAUDE.md). */
+  const craterSlipRef = useRef(null);                // zip 459 — MON état de glissade/grimpe
+  const craterSlipOtherRef = useRef(new Map());      // zip 459 — celui des AUTRES, déduit de leur position
   /* zip 458 — l'instant où CE client a vu l'étoile sortir du trou. ⚠️ UNE HORLOGE
      LOCALE, comme l'ancre de la chaleur du cratère (446) : `found.crater.at` est
      une date de l'HÔTE, la soustraire de la nôtre est la faute du §3. */
@@ -7321,6 +7327,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const u = span > 0 ? (renderT - a.t) / span : 1;
           p.tx = a.x + (b.x - a.x) * u; p.ty = a.y + (b.y - a.y) * u;
           p.moving = a.moving || b.moving; if (a.dir != null) p.dir = a.dir;
+          /* ⚠️ ZIP 459 — SA VITESSE EST RECOPIÉE ICI, ET ELLE NE COÛTE RIEN : le
+             paquet la porte déjà depuis le 365 (`pub.vx/vy`, la vraie, pas une
+             estimée). C'est elle qui permet de DÉDUIRE, chez chaque client, si le
+             fermier d'en face dévale le cratère ou s'il le remonte — donc de lui
+             donner la bonne pose sans un seul champ de plus (§3 de CLAUDE.md :
+             ce qui peut se déduire ne se diffuse pas). */
+          p.vx = (b.vx !== undefined ? b.vx : a.vx) || 0;
+          p.vy = (b.vy !== undefined ? b.vy : a.vy) || 0;
           return;
         }
       }
@@ -7330,6 +7344,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // intention connue. Collision rejouée localement (la carte est partagée),
     // pour qu'un personnage prolongé ne traverse jamais un mur.
     p.moving = last.moving;
+    p.vx = last.vx || 0; p.vy = last.vy || 0;                    // zip 459 — voir plus haut
     if (!last.moving || (last.vx === 0 && last.vy === 0)) { p.tx = last.x; p.ty = last.y; return; }
     const el = Math.min((renderT - last.t) / 1000, C.POS_EXTRAP_MAX_MS / 1000);
     if (el <= 0) { p.tx = last.x; p.ty = last.y; return; }
@@ -14159,6 +14174,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               const em = starNpcEmote("farm", vv.rid, vx, vy);
               if (em && em.say) queueBubble(Math.round(vx * T) + 8, Math.round(vy * T) - 18, em.say, false);
               else if (em) bubbleQueue.push({ cx: Math.round(vx * T) + 8, by: Math.round(vy * T) - 18, emote: em });
+              // zip 459 — l'ouvrage de Tristan, s'il est de passage (voir starWorkBubble).
+              const wb = em ? null : starWorkBubble(vv.rid);
+              if (wb && wb.say) queueBubble(Math.round(vx * T) + 8, Math.round(vy * T) - 18, wb.say, true);
+              else if (wb) bubbleQueue.push({ cx: Math.round(vx * T) + 8, by: Math.round(vy * T) - 18, work: wb });
             }
             // Chantier "bagarre = vrai événement, en public" : même bulle de
             // réaction de foule que les résidents (voir plus bas dans la
@@ -14713,6 +14732,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const resEmote = starNpcEmote("farm", res.rid, rx, ry);
             if (resEmote && resEmote.say) queueBubble(Math.round(rx * T) + 8, Math.round(ry * T) - 18, resEmote.say, false);
             else if (resEmote) bubbleQueue.push({ cx: Math.round(rx * T) + 8, by: Math.round(ry * T) - 18, emote: resEmote });
+            /* zip 459 — L'OUVRAGE DE TRISTAN. ⚠️ Il PASSE DEVANT sa réplique de
+               métier (voir la garde `!resWork` juste en dessous) : « je coupe des
+               arbres toute la journée » pendant qu'il scie la quille du navire
+               serait deux bulles qui se contredisent, et la faute du 456 sur les
+               neuf bulles empilées. */
+            const resWork = resEmote ? null : starWorkBubble(res.rid);
+            if (resWork && resWork.say) queueBubble(Math.round(rx * T) + 8, Math.round(ry * T) - 18, resWork.say, true);
+            else if (resWork) bubbleQueue.push({ cx: Math.round(rx * T) + 8, by: Math.round(ry * T) - 18, work: resWork });
             // Bulle métier quand le joueur local est à proximité (zip 299).
             // Chantier "rivalité Tristan/Jérôme" : un résident en ITT (post-
             // bagarre) reste silencieux, il ne débite pas ses répliques
@@ -14720,7 +14747,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             // pleine réaction de foule (tjReact) commente déjà (voir plus
             // haut) : pas de double bulle.
             const mm = meRef.current;
-            if (talkLines && talkLines.length && !res.tjReact && !resEmote && !(res.injuredUntil && res.injuredUntil > Date.now()) && mm && (!mm.zone || mm.zone === "farm") && Math.abs(mm.x - rx) + Math.abs(mm.y - ry) <= 3) {
+            if (talkLines && talkLines.length && !res.tjReact && !resEmote && !resWork && !(res.injuredUntil && res.injuredUntil > Date.now()) && mm && (!mm.zone || mm.zone === "farm") && Math.abs(mm.x - rx) + Math.abs(mm.y - ry) <= 3) {
               // Zip 301 (demande Guillaume) : Rosalie (breadmaker) est aigrie et
               // parle RAREMENT — sa bulle ne s'affiche qu'~3 s par tranche de
               // 12 s (les autres artisans parlent en continu, cycle 3,5 s).
@@ -14782,6 +14809,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       for (const bq of bubbleQueue) {
         try {
           if (bq.emote) spritesRef.current.drawEmoteBubble(ctx, bq.cx, bq.by, bq.emote.a);
+          else if (bq.work) spritesRef.current.drawWorkBubble(ctx, bq.cx, bq.by, bq.work.k, performance.now());   // zip 459
           else drawSpeechBubble(ctx, bq.cx, bq.by, bq.text, bq.major);
         } catch (e) { console.error("[FERME] bulle ignorée", e); }
       }
@@ -15920,7 +15948,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          (avant et après le pas), donc auraient fait diverger la peine et la
          glissade — le §8 de `CLAUDE.md` dans sa version la plus discrète. */
       const slideNow = starCraterSlopeNow(m.x, m.y);
-      if (moving) {
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ ZIP 459 — LES CINQ ÉTATS DU CRATÈRE, RÉSOLUS AVANT LE PAS.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️⚠️ TOUT LE RAISONNEMENT EST DANS `Q.starSlipStep` (quete.js), ici il ne
+         reste que le GESTE : normaliser l'ordre donné, faire avancer la machine,
+         puis marcher OU dévaler selon ce qu'elle rend. C'est la discipline du 444
+         (des résolveurs purs qu'un banc peut appeler) appliquée à un mouvement —
+         et c'est ce qui permet à `render-etoile` de SIMULER la sortie du trou sur
+         le vrai creux, ce qu'aucune relecture n'aurait pu faire.
+         ⚠️ `starCraterCoolNow()` GARDE L'ENTRÉE ENTIÈRE : tant que ça fume, on ne
+         perd pas pied. C'est la justice du 458 — on ne fait pas tomber dans le feu
+         quelqu'un qui n'a rien demandé (et la brûlure coûte dix minutes). */
+      let ix = 0, iy = 0;
+      if (moving) { const li = Math.hypot(dx, dy); ix = dx / li; iy = dy / li; }
+      const slip = Q.starSlipStep(craterSlipRef.current || (craterSlipRef.current = Q.starSlipNew()),
+                                  slideNow, slideNow ? slideNow.sink : 0, ix, iy, dt,
+                                  starCraterCoolNow());
+      const slipping = slip.mode === "slide" || slip.mode === "recover" || slip.mode === "climb";
+      if (moving && !slipping) {
         const len = Math.hypot(dx, dy); dx /= len; dy /= len;
         // Zip 250 (demande Guillaume : "mêmes déplacements qu'à la ferme, on
         // ne fait que marcher en ville") : on retire l'ancien bonus de vitesse
@@ -15935,7 +15981,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            Elle ralentit la MONTÉE (elle n'accélère pas la descente : la glissade
            s'en charge juste après, et compter deux fois donnerait une éjection).
            Voir le chapeau de `starCraterSlope` dans quete.js pour les trois
-           grandeurs qu'on refuse de mélanger. */
+           grandeurs qu'on refuse de mélanger.
+           ⚠️ ZIP 459 — ELLE NE VAUT PLUS QUE TANT QU'ON A SES APPUIS (`brace` et
+           `foot`) : dès que le pied part, c'est la vitesse de la glissade qui
+           commande et cette pénalité n'a plus de sens. C'est elle qui fait les
+           « quelques centimètres gagnés avant de reglisser » de la demande. */
         if (slideNow && slideNow.n > 0.01) {
           const inv = 1 / slideNow.n;
           spSec *= Q.starClimbMul(slideNow.n, dx * slideNow.gx * inv + dy * slideNow.gy * inv);
@@ -15952,40 +16002,44 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (canStandTown(tw, m.x, ny, playerElevTown(tw, m))) m.y = ny;
         if (dx < 0) m.dir = 2; else if (dx > 0) m.dir = 3; else if (dy < 0) m.dir = 1; else if (dy > 0) m.dir = 0;
         m.animT += dt * 9;
-        /* ⚠️⚠️ ZIP 458 — L'ÉLAN NE SURVIT PAS À LA TOUCHE TANT QUE LE TROU BRÛLE,
-           ET C'EST UNE RÈGLE DE JUSTICE, PAS UN RÉGLAGE. Vu en jouant : le
-           cratère agrandi a une brûlure qui commence à 3,5 cases du centre pour
-           une cuvette de 4,9 — une glissade qui continue une demi-seconde après
-           qu'on a lâché les flèches peut donc pousser dans le feu quelqu'un qui
-           venait justement d'arrêter de marcher. Dix minutes de repos forcé pour
-           un geste qu'on n'a pas fait, c'est très exactement ce que ce dépôt
-           appelle « le jeu propose et refuse » (426), en pire : il PUNIT.
-           ⚠️ ON NE RETIRE PAS LA GLISSADE POUR AUTANT — elle reste entière tant
-           qu'on tient une touche, donc la sensation de profondeur est là dès la
-           première minute. Ce qui disparaît est le seul cas où le joueur n'a pas
-           choisi. Une fois froid, le trou ne punit plus rien, et l'élan revient. */
-        craterSlideRef.current = starCraterCoolNow() ? performance.now() + Q.STAR_SLIDE_COAST_MS : 0;
-      } else { m.animT = 0; m.vx = 0; m.vy = 0; }
+        /* ⚠️⚠️ ZIP 459 — LA RÈGLE DE JUSTICE DU 458 N'A PAS DISPARU, ELLE A REMONTÉ
+           D'UN CRAN. Elle disait « l'élan ne survit pas à la touche tant que le trou
+           brûle », parce qu'une poussée résiduelle pouvait jeter dans le feu
+           quelqu'un qui venait d'arrêter de marcher — dix minutes de repos forcé
+           pour un geste qu'on n'a pas fait, c'est-à-dire « le jeu propose et
+           refuse » (426) en pire : il PUNIT. Il n'y a plus d'élan résiduel à
+           éteindre : c'est la machine d'état ENTIÈRE qui est débranchée tant que
+           `starCraterCoolNow()` est faux (voir son appel ci-dessus). Sur un trou
+           chaud, on marche donc normalement, à la peine près. */
+      } else if (!slipping) { m.animT = 0; m.vx = 0; m.vy = 0; }
       /* ╔══════════════════════════════════════════════════════════════════════
-         ║ ZIP 458 — LA GLISSADE. « il doit un peu glisser maladroitement vers le
-         ║ bas, et avoir un peu de mal à remonter. »
+         ║ ZIP 459 — ON DÉVALE, ON SE RÉTABLIT, ON GRIMPE. Le pas que la machine
+         ║ d'état décide, appliqué exactement comme la marche.
          ╚══════════════════════════════════════════════════════════════════════
-         ⚠️⚠️ ELLE NE S'APPLIQUE QU'EN MOUVEMENT (et une demi-seconde après) : la
-         mécanique du chapitre 2 est de se tenir IMMOBILE dans le trou, dos
-         tourné. Une pente qui pousse en permanence aurait rendu la seule chose à
-         faire de ce lieu impossible à faire — on aurait ajouté une physique et
-         retiré un chapitre. Détail au chapeau de `starCraterSlope`.
-         ⚠️ ET ELLE PASSE PAR `canStandTown`, AXE PAR AXE, COMME LA MARCHE : une
-         glissade qui traverserait un mur serait un déplacement que l'hôte ne peut
-         pas rejouer. Ce n'est pas une téléportation, c'est un pas de plus. */
-      if (slideNow && slideNow.n > 0.01 && (moving || performance.now() < (craterSlideRef.current || 0))) {
-        const push = Q.starSlideSpeed(slideNow.n) * dt / slideNow.n;
-        const sx = m.x + slideNow.gx * push, sy = m.y + slideNow.gy * push;
+         ⚠️ IL PASSE PAR `canStandTown`, AXE PAR AXE, COMME LA MARCHE : une glissade
+         qui traverserait un mur serait un déplacement que l'hôte ne peut pas
+         rejouer. Ce n'est pas une téléportation, c'est un pas de plus.
+         ⚠️⚠️ ET LE CAP SUIT LE MOUVEMENT, PAS LES TOUCHES. En dévalant, le fermier
+         regarde où il va (c'est ce qui donne son sens au « lean back » : les
+         épaules partent à contresens du REGARD) ; en grimpant, il regarde la paroi
+         qu'il monte. Laisser `m.dir` sur la dernière flèche pressée aurait donné un
+         personnage qui descend en marche arrière. */
+      if (slipping) {
+        const sp2 = Math.hypot(slip.vx, slip.vy);
+        const sx = m.x + slip.vx * dt, sy = m.y + slip.vy * dt;
         if (canStandTown(tw, sx, m.y, playerElevTown(tw, m))) m.x = sx;
         if (canStandTown(tw, m.x, sy, playerElevTown(tw, m))) m.y = sy;
+        m.vx = slip.vx; m.vy = slip.vy;
+        if (sp2 > 0.05) {
+          if (Math.abs(slip.vx) > Math.abs(slip.vy)) m.dir = slip.vx < 0 ? 2 : 3;
+          else m.dir = slip.vy < 0 ? 1 : 0;
+        }
+        /* La grimpe a sa propre cadence : quatre images pour un cycle de bras et
+           de jambes, plus lentes que la marche parce qu'on s'y hisse. */
+        m.animT += dt * (slip.mode === "climb" ? 5 : 9);
         craterDustPuff(m, slideNow, performance.now());
       }
-      m.moving = !!moving;
+      m.moving = !!moving || slipping;
       const nowP = performance.now();
       maybeSendPos();
     }
@@ -17512,7 +17566,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          se ferait recouvrir par la lèvre du trou — c'est-à-dire que la jauge
          disparaîtrait au moment précis où elle sert. */
       if (!inCar) {
-        const cm = starCalmUi();
+        /* ⚠️ ZIP 459 — L'EFFORT PASSE DEVANT LA TENUE. Voir `starEffortUi` : deux
+           jauges au-dessus du même fermier, c'est la faute du 456 sur les bulles
+           empilées, et celle-ci répond à la question la plus urgente des deux. */
+        const ef = starEffortUi();
+        const cm = ef || starCalmUi();
         if (cm) {
           const by = Math.round(m.y * T) - 20 - myE * C.TOWN_ELEV_PX - myLift;
           if (cm.text) queueTownBubble(Math.round(m.x * T) + 8, by - 8, cm.text, "star");
@@ -17861,11 +17919,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            dix-sept pièces sur trois niveaux est justement un endroit où l'on
            veut aller vite. */
         let spSec = C.PLAYER_SPEED * (performance.now() < speedBuffUntilRef.current ? C.CANDY_SPEED_MUL : 1) * (isRunningNow(dt, uiBlocked) ? C.RUN_SPEED_MULT : 1);
-        /* ⚠️⚠️ ZIP 458 — LA PENTE DU CRATÈRE ENTRE ICI, ET NULLE PART AILLEURS.
-           Elle ralentit la MONTÉE (elle n'accélère pas la descente : la glissade
-           s'en charge juste après, et compter deux fois donnerait une éjection).
-           Voir le chapeau de `starCraterSlope` dans quete.js pour les trois
-           grandeurs qu'on refuse de mélanger. */
         const sp = spSec * dt;
         m.vx = dx * spSec; m.vy = dy * spSec;
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
@@ -18772,7 +18825,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          ne l'intéresse pas, puisque la position du personnage est DÉJÀ celle du
          point d'assise (voir sitOnBench). Les joueurs distants arrivent avec le
          même champ `sit` rempli par pubMe, donc la même branche les dessine. */
-      drawCharacter({ ...m, sit: !!m.sitOn, look: wardrobeLookOf(m.id) || m.look || null }, true);
+      /* ⚠️ ZIP 459 — MA POSE DE CRATÈRE EST LUE SUR MA MACHINE D'ÉTAT, celle des
+         autres est DÉDUITE de leur vitesse (`starSlipSeen`). Deux chemins, une
+         seule famille de poses, et aucun champ de plus sur le réseau. */
+      drawCharacter({ ...m, sit: !!m.sitOn, look: wardrobeLookOf(m.id) || m.look || null, ...craterSlipDraw(m, true) }, true);
       if (actAnimRef.current > 0 && slotRef.current <= SLOT.can) {
         const sprites = spritesRef.current;
         const key = slotRef.current === SLOT.tools ? toolKindRef.current : "can";
@@ -18781,7 +18837,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         ctx.drawImage(sprites.icons[key], px + fx2 * 10 + 2, py + fy2 * 8 - 4);
       }
     }
-    function drawRemote(p) { drawCharacter(p, false); }
+    function drawRemote(p) { drawCharacter({ ...p, ...craterSlipDraw(p, false) }, false); }
+    /* Les trois champs de dessin de la pose de cratère — et rien d'autre : ni
+       position, ni vitesse, ni état. ⚠️ ELLE REND UN OBJET VIDE PARTOUT AILLEURS
+       (hors ville, hors trou, trou chaud), donc les vingt autres appelants de
+       `drawCharacter` ne changent pas d'un pouce. */
+    function craterSlipDraw(p, isSelf) {
+      if (!p) return {};
+      const g = starCraterSlopeNow(p.x, p.y);
+      if (!g) return {};
+      const pose = isSelf
+        ? Q.starSlipPose(craterSlipRef.current, p.moving, g.n)
+        : Q.starSlipSeen(g, g.sink, p.vx, p.vy);
+      if (!pose) return {};
+      /* Le sens du dévalement, à l'écran : c'est lui qui décide de quel côté les
+         épaules partent. On le prend sur la VITESSE quand il y en a une, sur la
+         pente sinon (la première image d'une glissade a une vitesse presque
+         nulle, et une pose qui se retourne à la deuxième image se voit). */
+      const vx = p.vx || 0, vy = p.vy || 0, sp = Math.hypot(vx, vy);
+      const inv = g.n > 0.001 ? 1 / g.n : 0;
+      const ux = sp > 0.4 ? vx / sp : g.gx * inv, uy = sp > 0.4 ? vy / sp : g.gy * inv;
+      return { slip: pose, slipX: ux, slipY: uy };
+    }
     // Habillage nage (chantier 2026-07, décision Guillaume "immersion +
     // ondulations") : ligne d'eau semi-opaque qui immerge les pattes du
     // cheval + petites vaguelettes claires animées. (sx, sy) = coin du
@@ -19588,6 +19665,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         ctx.fillStyle = "#241c14";  // botte
         ctx.fillRect(10, 19, 4, 3);
         ctx.restore();
+      } else if (p.slip) {
+        /* ╔══════════════════════════════════════════════════════════════════════
+           ║ ZIP 459 — LES TROIS POSES DU CRATÈRE.
+           ╚══════════════════════════════════════════════════════════════════════
+           ⚠️ MÊME CONTRAT QUE LA POSE ASSISE, ET POUR LA MÊME RAISON : le dessin
+           vit dans `fermeArt` (donc `render-etoile` le REGARDE), il ne reste ici
+           que le choix. `p.slip` vaut "slide", "climb" ou "brace" — une clé rendue
+           par un résolveur pur (`Q.starSlipPose` pour moi, `Q.starSlipSeen` pour
+           les autres), jamais un booléen inventé au rendu.
+           ⚠️ ET LE MIROIR EST FAIT PAR L'APPELANT, comme pour toutes les autres
+           poses : les fonctions de `fermeArt` ne connaissent ni `translate` ni
+           `scale` (le faux canevas du banc les ignore, §10 de CLAUDE.md). */
+        /* ⚠️ LE PENCHÉ SE MIROITE AVEC LE PERSONNAGE. `slipX` est une direction du
+           MONDE ; sous le `scale(-1,1)` du profil ouest, la passer telle quelle
+           ferait pencher le fermier du mauvais côté — un défaut qui ne se voit que
+           dans une des deux directions, donc une image sur deux, donc jamais en
+           relecture. */
+        const drawSlip = (ox, mir) => {
+          if (p.slip === "climb") A.drawStarClimb(ctx, sheet, row, ox, py, Math.floor((p.animT || 0) % A.STAR_CLIMB_FRAMES));
+          else if (p.slip === "brace") A.drawStarBrace(ctx, sheet, row, ox, py);
+          else A.drawStarSlide(ctx, sheet, row, ox, py, (p.slipX || 0) * mir, p.slipY || 0);
+        };
+        if (flip) { ctx.translate(px + 16, 0); ctx.scale(-1, 1); drawSlip(0, -1); }
+        else drawSlip(px, 1);
       } else if (p.sit) {
         /* ⚠️ ZIP 428 — LA POSE ASSISE EST DESSINÉE PAR `A.drawSeated`, ET ELLE
            A DÉMÉNAGÉ DANS fermeArt.js EXPRÈS. Elle vivait ici, dans la closure
@@ -22616,6 +22717,67 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           : L.star.s2.calmHold,
     };
   }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 459 — L'EFFORT SE VOIT PENDANT QU'ON LE FOURNIT.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ C'EST LA LEÇON DU 456, APPLIQUÉE AVANT D'ÊTRE PAYÉE : *un geste continu
+     qui ne rend rien ne se distingue pas d'un jeu bloqué.* Tenir une direction
+     trois secondes en dérapant sur une paroi, sans jauge, ce serait le cratère du
+     456 exactement — sauf qu'en plus le fermier RECULE pendant ce temps, donc le
+     joueur conclurait « on ne peut pas sortir » et remonterait chercher un autre
+     chemin qui n'existe pas.
+     ⚠️ ELLE REND *UNE* RÉPONSE, comme `starCalmUi` : la même jauge et le texte qui
+     dit laquelle des deux moitiés manque. Et elle PASSE DEVANT la jauge de tenue —
+     deux jauges empilées au-dessus du même fermier, c'est la faute du 456 sur les
+     neuf bulles (« chaque bulle juste, leur somme fausse »). Elles ne se disputent
+     jamais vraiment : pendant qu'on grimpe, on bouge, donc la tenue ne compte pas.
+     ⚠️ ET ELLE NE S'AFFICHE QUE SUR UNE VRAIE PAROI : le compteur, lui, tourne dès
+     qu'une direction est tenue (voir `starSlipStep`), y compris en traversant le
+     fond — une jauge qui monterait pendant qu'on marche tranquillement au fond du
+     trou serait du bruit, et du bruit qui ment. */
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 459 — TRISTAN SE MET AU TRAVAIL, ET ON LE VOIT.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ DEMANDE DE GUILLAUME : *« rends plus explicite la commande auprès de
+     Tristan. Il faut une bulle spéciale où l'on voit Tristan se mettre au
+     travail. »* Commander fermait un panneau et faisait passer une ligne de chat ;
+     le bûcheron, lui, continuait d'abattre ses arbres exactement comme avant. Un
+     joueur qui vient de dépenser 140 bois n'a aucun moyen de savoir que quelque
+     chose a commencé — c'est le défaut du 453 (« un texte affirme, le monde ne
+     montre pas ») sur le seul geste payant de la construction.
+     ⚠️ DEUX TEMPS, UN SEUL ÉTAT (`wood[k].at`, déjà écrit) : il ACCEPTE (une
+     phrase, six secondes), puis il TRAVAILLE (la bulle à la scie, jusqu'au bout).
+     Aucun champ de plus, aucun message de plus.
+     ⚠️⚠️ ET ELLE VIT ICI, AU NIVEAU DU COMPOSANT, APPELÉE PAR LES DEUX BOUCLES QUI
+     PEUVENT LE DESSINER (visiteur de passage / résident installé). Deux copies
+     auraient fini par ne pas répondre la même chose — c'est le piège n°1 dans son
+     troisième visage, et c'est exactement ce que la note du tampon d'annonce (455)
+     dit dix lignes plus haut dans ces mêmes boucles. */
+  function starWorkBubble(rid) {
+    if (rid !== C.TRISTAN_RID) return null;
+    const e = Q.migrateStar(sharedRef.current.star);
+    const w = e && Q.starTimberBusy(e);
+    if (!w) return null;
+    /* ⚠️ `at` EST L'HORLOGE DE L'HÔTE, et on la compare ici à la nôtre. C'est la
+       convention déjà tenue par tout le reste de la construction (le panneau
+       affiche « prêt dans… » de la même façon, et `BUILD_TIMES` aussi) : ce sont
+       des durées de plusieurs MINUTES, pour lesquelles un décalage d'horloge de
+       quelques secondes ne change rien à ce qu'on voit. Le §3 interdit d'en faire
+       une RÈGLE, pas un affichage. */
+    const now = Date.now();
+    if (now < w.at + C.STAR_TIMBER_GO_MS) return { say: L.star.plan.tristanGo(L.star.plan.part(w.key)) };
+    return { k: Q.starTimberProgress(e, now) };
+  }
+  function starEffortUi() {
+    const m = meRef.current, s0 = craterSlipRef.current;
+    if (!m || !s0 || (m.zone || "farm") !== "town") return null;
+    if (s0.mode === "climb") return { k: 1, text: L.star.s2.slipClimb };
+    const g = starCraterSlopeNow(m.x, m.y);
+    if (!g || g.sink <= 0 || g.n < Q.STAR_SLIP_N * 0.75) return null;
+    const k = Math.min(1, (s0.hold || 0) / Q.STAR_CLIMB_HOLD_MS);
+    if (k < 0.06) return null;
+    return { k, warn: false, text: L.star.s2.slipHold };
+  }
   function starCalmSelf() {
     const m = meRef.current, c = starCraterPos();
     if (!m || !c || (m.zone || "farm") !== "town" || m.moving) return false;
@@ -22687,7 +22849,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const dx = x - c.x, dy = y - c.y;
     const lim = C.STAR_CRATER_DRAW_R + 1;
     if (Math.abs(dx) > lim || Math.abs(dy) > lim) return null;
-    return Q.starCraterSlope((a, b) => sp.starCraterSink(a, b, 16), dx, dy);
+    const g = Q.starCraterSlope((a, b) => sp.starCraterSink(a, b, 16), dx, dy);
+    /* ⚠️⚠️ ZIP 459 — L'ENFONCEMENT VOYAGE AVEC LA PENTE, DANS LE MÊME OBJET, et
+       c'est la règle du 449 (« une jointure, jamais deux listes ») appliquée à
+       deux nombres. La machine d'état a besoin des DEUX à la même position : la
+       pente pour savoir si ça glisse, l'enfoncement pour savoir si l'on est DANS
+       la cuvette. Deux appels séparés, c'était deux échantillonnages à deux
+       instants — et le premier symptôme aurait été « il perd pied sur le bourrelet
+       extérieur », c'est-à-dire qu'on ne pourrait plus entrer dans le trou. */
+    g.sink = sp.starCraterSink(dx, dy, 16);
+    return g;
   }
   /* Une bouffée, cadencée. ⚠️ PUREMENT LOCALE ET JAMAIS DIFFUSÉE : c'est de la
      poussière, elle se déduit d'une position qui circule déjà (§3 de

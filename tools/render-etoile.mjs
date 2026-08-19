@@ -719,84 +719,230 @@ console.log("\n7. LE CRATÈRE — deux rayons, une profondeur, et un refroidisse
   }
 
   /* ╔═══════════════════════════════════════════════════════════════════════════
-     ║ ZIP 458 — LA GLISSADE. « il doit un peu glisser vers le bas, et avoir un
-     ║ peu de mal à remonter » (Guillaume).
+     ║ ZIP 459 — ON PERD PIED, ON DÉVALE, ON S'AGRIPPE : LE MOTEUR EST *JOUÉ* ICI.
      ╚═══════════════════════════════════════════════════════════════════════════
-     ⚠️⚠️ CE BLOC EST ICI ET PAS DANS `verify-quete` POUR UNE RAISON DE FOND : les
-     trois fonctions sont pures, mais elles ne veulent RIEN DIRE sans le creux
-     réel — `starCraterSlope` prend le sondeur en paramètre exprès. Mesurées sur
-     un faux creux, elles seraient vertes sur une pente qui n'existe pas : c'est
-     la sixième forme du défaut de banc (une grandeur juste, sur un intervalle que
-     le joueur ne regarde pas). Ici, on les balaie sur LE creux du jeu.
-     ⚠️ ET ON BALAIE UN INVARIANT, PAS TROIS EXEMPLES (leçon du 449) : « la pente
-     pointe TOUJOURS vers le centre à l'intérieur du trou », sur toute la cuvette. */
+     ⚠️⚠️ CE BLOC NE MESURE PLUS DES FORMULES, IL SIMULE UNE PARTIE. Le 458
+     vérifiait une inégalité (« marche en montée − glissade ≥ 1 case/s ») ; c'était
+     un raccourci algébrique vers la vraie question, et la vraie question est
+     celle que le §25 de `ferme/README.md` reproche à tous les bancs du dépôt de ne
+     jamais poser : **est-ce qu'on ARRIVE ?** Ici on la pose en dur — on prend
+     `starSlipStep`, on lui donne le VRAI creux (`starCraterSink`), on tient une
+     direction à 60 images par seconde, et on regarde si le fermier sort du trou.
+     ⚠️⚠️ ET ELLE A PAYÉ AVANT MÊME D'ÊTRE ÉCRITE EN BANC : le premier jet du
+     moteur gageait le compteur d'effort sur « est-ce que je monte ? ». En dévalant
+     on dépasse le point bas de quelques centimètres, la pente s'inverse sous les
+     pieds, le compteur repartait de zéro — **219 points de départ sur 317 ne
+     pouvaient plus sortir du cratère**, et aucune relecture ne l'aurait vu. C'est
+     la leçon du 449 (« quand on peut énoncer une propriété, on la BALAIE ») portée
+     à un cran de plus : quand on peut JOUER une propriété, on la joue.
+     ⚠️ LE MOTEUR EST PUR EXPRÈS (aucun React, aucun canevas) : c'est ce qui rend
+     cette simulation possible. Un état de glissade écrit dans la closure de la
+     boucle de rendu aurait été le piège n°1 du projet, dans sa version « il fait
+     vieillir ». */
   {
     const sink = (a, b) => S.starCraterSink(a, b, 16);
-    let wrong = 0, tested = 0, maxN = 0, maxSlide = 0;
+    /* Le pas de jeu, tel que `updateMeTown` l'applique : la machine décide, on
+       marche OU on dévale. ⚠️ CETTE BOUCLE EST LA SEULE COPIE DU JEU DANS CE
+       FICHIER, et elle tient en huit lignes — au-delà, on jugerait sa propre
+       maquette (troisième forme du défaut de banc, CLAUDE.md). */
+    function play(x0, y0, dirf, maxS) {
+      /* ⚠️ « DEDANS » SE LIT DÈS LA POSITION DE DÉPART. Écrit `false` puis mis à
+         jour après le premier pas, il ratait les départs posés SUR la lèvre : un
+         seul pas vers l'extérieur et le harnais n'avait jamais rien vu, donc il
+         déclarait « bloqué » quelqu'un qui venait de sortir en une image. Trois
+         faux échecs sur 317, tous à 4,2 cases du centre. */
+      let x = x0, y = y0, st = Q.starSlipNew(), t = 0, vpk = 0, slid = 0, inside = sink(x0, y0) > 0;
+      const dt = 1 / 60;
+      while (t < maxS) {
+        const g = Q.starCraterSlope(sink, x, y), sk = sink(x, y);
+        const [ix, iy] = dirf(x, y, st, t);
+        Q.starSlipStep(st, g, sk, ix, iy, dt, true);
+        let vx = st.vx, vy = st.vy;
+        const slipping = st.mode === "slide" || st.mode === "recover" || st.mode === "climb";
+        if (!slipping) {
+          const im = Math.hypot(ix, iy);
+          if (im > 0.01) {
+            const inv = g.n > 0.001 ? 1 / g.n : 0;
+            const dot = (ix / im) * g.gx * inv + (iy / im) * g.gy * inv;
+            const sp = C.PLAYER_SPEED * Q.starClimbMul(g.n, dot);
+            vx = (ix / im) * sp; vy = (iy / im) * sp;
+          } else { vx = 0; vy = 0; }
+        }
+        if (st.mode === "slide") { vpk = Math.max(vpk, Math.hypot(vx, vy)); slid += Math.hypot(vx, vy) * dt; }
+        x += vx * dt; y += vy * dt; t += dt;
+        /* ⚠️ « SORTI » VEUT DIRE « ENTRÉ PUIS RESSORTI ». Le premier jet coupait
+           dès que l'enfoncement était nul et qu'on tenait debout — c'est-à-dire à
+           la PREMIÈRE image des essais qui partent du sentier, hors de la cuvette.
+           Deux contrôles sortaient alors « crête 0,00 case/s » sur un moteur qui
+           marchait très bien : le banc mesurait une partie qui n'avait pas
+           commencé. C'est la sixième forme du défaut de banc (une grandeur juste
+           sur un intervalle que le joueur ne regarde pas), en version harnais. */
+        if (sink(x, y) > 0) inside = true;
+        if (inside && sink(x, y) <= 0 && st.mode === "foot") break;
+      }
+      return { x, y, t, st, vpk, slid, out: inside && sink(x, y) <= 0 };
+    }
+
+    /* ── 1. LE PLANCHER. « Ensuite il peut se déplacer sur ses pieds dans le
+       cratère » — c'est une DEMANDE, donc c'est une mesure. Le fond marchable est
+       l'endroit où la pente reste sous le seuil de perte d'appui ; s'il se réduit à
+       un point, la phrase est morte et la mécanique du chapitre 2 avec elle (on ne
+       peut pas se tenir immobile là où l'on glisse). */
+    let floorMin = 99, floorMax = 0, bowlMin = 99;
     for (let ai = 0; ai < 48; ai++) {
-      const a = ai / 48 * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a) * 0.86;
-      for (let r = 0.6; r <= C.STAR_CRATER_DRAW_R; r += 0.1) {
-        const x = ca * r, y = sa * r;
-        if (sink(x, y) <= 0.5) continue;                 // hors de la cuvette : rien à prouver
-        const g = Q.starCraterSlope(sink, x, y);
-        if (g.n < 0.2) continue;
+      const a = ai / 48 * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
+      let fr = 99, br = 0;
+      for (let r = 0.05; r <= 8; r += 0.05) {
+        if (fr === 99 && Q.starCraterSlope(sink, ca * r, sa * r).n >= Q.STAR_SLIP_N) fr = r;
+        if (sink(ca * r, sa * r) > 0) br = r;
+      }
+      floorMin = Math.min(floorMin, fr); floorMax = Math.max(floorMax, fr); bowlMin = Math.min(bowlMin, br);
+    }
+    ok(floorMin >= Q.STAR_SLIP_FLOOR_MIN,
+       "⚠️⚠️ LE FOND SE MARCHE VRAIMENT (« il peut se déplacer sur ses pieds »)",
+       `plancher de ${floorMin.toFixed(2)} à ${floorMax.toFixed(2)} case (plancher mini ${Q.STAR_SLIP_FLOOR_MIN})`);
+    ok(floorMax < bowlMin * 0.85,
+       "…et la paroi reste une PAROI (le plancher ne mange pas la cuvette)",
+       `plancher ${floorMax.toFixed(2)} contre cuvette ${bowlMin.toFixed(2)}`);
+
+    /* ── 2. L'ARRIVÉE. ⚠️⚠️ LE CONTRÔLE LE PLUS IMPORTANT DU FICHIER. */
+    let stuck = 0, tested = 0, worstT = 0, worstAt = null;
+    for (let ai = 0; ai < 24; ai++) {
+      const a = ai / 24 * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
+      for (let r = 0.3; r <= 4.4; r += 0.3) {
+        if (sink(ca * r, sa * r) <= 0) continue;
         tested++;
-        maxN = Math.max(maxN, g.n); maxSlide = Math.max(maxSlide, Q.starSlideSpeed(g.n));
-        /* La descente doit ramener vers le centre : produit scalaire du vecteur
-           de pente avec la direction « vers le milieu » (−x, −y). */
-        if (g.gx * -x + g.gy * -y <= 0) wrong++;
+        const o = play(ca * r, sa * r, () => [ca, sa], 40);
+        if (!o.out) stuck++;
+        else if (o.t > worstT) { worstT = o.t; worstAt = r; }
       }
     }
-    ok(tested > 400, "⚠️ la pente est balayée sur toute la cuvette, pas sur trois points", `${tested} points`);
-    ok(wrong === 0, "⚠️⚠️ la glissade ramène TOUJOURS vers le fond, jamais vers le bord",
-       `${wrong} contresens sur ${tested}`);
-    ok(maxSlide > 1.2 && maxSlide <= Q.STAR_SLIDE_MAX,
-       "⚠️ elle se sent vraiment, sans dépasser sa borne", `${maxSlide.toFixed(2)} cases/s (marche : ${C.PLAYER_SPEED})`);
-    ok(maxSlide < C.PLAYER_SPEED,
-       "…et elle reste plus lente que la marche (on glisse, on n'est pas éjecté)",
-       `${(maxSlide / C.PLAYER_SPEED * 100).toFixed(0)} % de la marche`);
-    /* ⚠️ LA MONTÉE COÛTE, LA DESCENTE NE RAPPORTE PAS. Une pénalité symétrique
-       aurait compté la glissade deux fois — c'est écrit dans `starClimbMul`, et
-       c'est exactement le genre de chose qu'on croit avoir écrit. */
-    ok(Q.starClimbMul(maxN, 1) === 1, "⚠️ descendre ne donne AUCUN bonus de vitesse");
-    ok(Q.starClimbMul(0, -1) === 1, "…et sur le plat, monter ne coûte rien");
-    const up = Q.starClimbMul(maxN, -1);
-    ok(up <= 0.7 && up >= 0.35, "⚠️⚠️ remonter la paroi coûte vraiment, sans coller au sol",
-       `il reste ${(up * 100).toFixed(0)} % de la marche`);
-    /* ╔═══════════════════════════════════════════════════════════════════════
-       ║ ⚠️⚠️⚠️ L'INVARIANT QUI MANQUAIT, ET IL A COÛTÉ UN MUR (458).
-       ╚═══════════════════════════════════════════════════════════════════════
-       Le premier réglage rendait le cratère IMPOSSIBLE À FRANCHIR : sur le
-       bourrelet, la pénalité de montée (× 0,45) laissait 2,34 cases/s pendant que
-       la glissade en reprenait 3,2. Le fermier reculait en marchant, et rien ne
-       pouvait le voir — `canStandTown` n'est pas consulté (aucun pas n'est
-       refusé), le build compile, et les six contrôles ci-dessus étaient VERTS :
-       ils mesuraient la glissade et la peine SÉPARÉMENT, jamais leur SOMME.
-       ⚠️ C'est la septième forme du défaut de banc de `CLAUDE.md` — « il mesure
-       DEUX réponses et jamais leur ACCORD » — et la parade est celle du 449 :
-       quand on peut énoncer une propriété, on la BALAIE. Ici : *en marchant droit
-       vers le haut, on gagne du terrain, partout, toujours.* */
-    let worst = 99, worstAt = null, swept = 0;
-    for (let ai = 0; ai < 48; ai++) {
-      const a = ai / 48 * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a) * 0.86;
-      for (let r = 0.2; r <= C.STAR_CRATER_DRAW_R + 0.6; r += 0.05) {
-        const x = ca * r, y = sa * r;
-        const g = Q.starCraterSlope(sink, x, y);
-        if (g.n < 0.01) continue;
-        swept++;
-        // On marche EXACTEMENT à contresens de la pente : le pire cas possible.
-        const net = C.PLAYER_SPEED * Q.starClimbMul(g.n, -1) - Q.starSlideSpeed(g.n);
-        if (net < worst) { worst = net; worstAt = r; }
-      }
+    ok(tested > 250, "⚠️ la sortie est JOUÉE depuis toute la cuvette, pas depuis trois points", `${tested} départs`);
+    ok(stuck === 0,
+       "⚠️⚠️⚠️ EN TENANT UNE DIRECTION, ON SORT DU TROU — DEPUIS PARTOUT",
+       `${stuck} bloqué(s) sur ${tested}, pire cas ${worstT.toFixed(1)} s à ${worstAt === null ? "?" : worstAt.toFixed(1)} case du centre`);
+    /* ⚠️ ET IL ÉCHOUE DANS LES DEUX SENS (leçon du 444) : une sortie instantanée
+       voudrait dire qu'on ne glisse pas, et la demande était « sensation d'effort
+       renforcée ». Trois secondes de maintien + la remontée : moins de deux
+       secondes serait un trou décoratif, plus de douze une corvée. */
+    ok(worstT > 2 && worstT < 12, "…et elle COÛTE, sans devenir une corvée",
+       `pire cas ${worstT.toFixed(1)} s`);
+
+    /* ── 3. LA GLISSADE ELLE-MÊME. On entre en marchant, exactement comme un
+       joueur qui arrive du sentier — puis on lâche tout. */
+    let slideT = 0, slidePk = 0, endR = 0, n3 = 0;
+    for (let ai = 0; ai < 8; ai++) {
+      const a = ai / 8 * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
+      const o = play(ca * 5.2, sa * 5.2, (x, y, st, t) => (t < 0.9 ? [-ca, -sa] : [0, 0]), 12);
+      slideT += o.t; slidePk = Math.max(slidePk, o.vpk); endR = Math.max(endR, Math.hypot(o.x, o.y)); n3++;
     }
-    ok(swept > 2000, "⚠️ l'invariant est balayé sur tout le relief", `${swept} points`);
-    ok(worst >= Q.STAR_CLIMB_NET_MIN,
-       "⚠️⚠️⚠️ EN MARCHANT DROIT VERS LE HAUT, ON GAGNE DU TERRAIN — PARTOUT",
-       `pire cas ${worst.toFixed(2)} case/s à ${worstAt === null ? "?" : worstAt.toFixed(2)} case du centre (plancher ${Q.STAR_CLIMB_NET_MIN})`);
-    /* ⚠️ ET IL ÉCHOUE DANS LES DEUX SENS : une glissade qu'on ne sent pas est une
-       mécanique morte, exactement comme une fenêtre trop large (leçon du 444). */
-    ok(worst <= C.PLAYER_SPEED * 0.55, "…et il en coûte quand même vraiment",
-       `${(worst / C.PLAYER_SPEED * 100).toFixed(0)} % de la marche à plat`);
+    ok(slidePk > 2.2, "⚠️⚠️ ÇA DÉVALE VRAIMENT (« glissade un peu rapide »)", `crête ${slidePk.toFixed(2)} cases/s`);
+    ok(slidePk < C.PLAYER_SPEED, "…et jamais plus vite que la marche (on glisse, on n'est pas éjecté)",
+       `${(slidePk / C.PLAYER_SPEED * 100).toFixed(0)} % de la marche`);
+    ok(slidePk <= Q.STAR_SLIP_VMAX + 0.01, "…sous sa borne dure", `${slidePk.toFixed(2)} ≤ ${Q.STAR_SLIP_VMAX}`);
+    ok(endR < floorMax + 0.6,
+       "⚠️⚠️ ON FINIT AU FOND, DEBOUT — « avant d'atteindre le fond » a une fin",
+       `au plus loin ${endR.toFixed(2)} case du centre, plancher ${floorMax.toFixed(2)}`);
+
+    /* ── 4. « DIFFICILE À CONTRÔLER » — ET C'EST UN INTERVALLE, PAS UN SEUIL.
+       On mesure la même chute avec et sans ordre latéral. Trop peu de déviation :
+       le joueur appuie sans effet, donc il croit le jeu bloqué (456). Trop :
+       ce n'est plus une glissade, c'est une marche rapide. */
+    const epis = (dirf) => {
+      let x = 0, y = -3.4, st = Q.starSlipNew(), t = 0, on = false;
+      const dt = 1 / 60;
+      while (t < 10) {
+        const g = Q.starCraterSlope(sink, x, y), sk = sink(x, y);
+        const [ix, iy] = dirf(t);
+        Q.starSlipStep(st, g, sk, ix, iy, dt, true);
+        let vx = st.vx, vy = st.vy;
+        if (st.mode === "foot" || st.mode === "brace") {
+          const im = Math.hypot(ix, iy);
+          if (im > 0.01) {
+            const inv = g.n > 0.001 ? 1 / g.n : 0;
+            const dot = (ix / im) * g.gx * inv + (iy / im) * g.gy * inv;
+            const sp = C.PLAYER_SPEED * Q.starClimbMul(g.n, dot);
+            vx = (ix / im) * sp; vy = (iy / im) * sp;
+          } else { vx = 0; vy = 0; }
+        }
+        if (st.mode === "slide") on = true; else if (on) return { x, y, t };
+        x += vx * dt; y += vy * dt; t += dt;
+      }
+      return { x, y, t };
+    };
+    const free = epis(t => (t < 0.2 ? [0, 1] : [0, 0]));
+    const side = epis(t => (t < 0.2 ? [0, 1] : [1, 0]));
+    const brake = epis(t => (t < 0.2 ? [0, 1] : [0, -1]));
+    const dev = Math.abs(side.x - free.x), held = free.y - brake.y;
+    ok(dev > 0.35, "⚠️ on peut VISER un côté du fond (sinon les touches ne répondent pas)", `${dev.toFixed(2)} case de déviation`);
+    ok(dev < 2.0, "⚠️⚠️ …mais on ne PILOTE pas (« trajectoire difficile à contrôler »)", `${dev.toFixed(2)} case`);
+    ok(held < 0.8, "⚠️⚠️ ET ON NE FREINE PAS : pousser à contresens ne retient presque rien",
+       `${held.toFixed(2)} case gagnée vers le haut`);
+
+    /* ── 5. LA GRIMPE. Cramponné veut dire : la pente n'entre pas. */
+    {
+      const st = Q.starSlipNew();
+      st.mode = "climb"; st.hold = Q.STAR_CLIMB_HOLD_MS; st.hx = 0; st.hy = -1;
+      let vmin = 99, vmax = 0;
+      for (let ai = 0; ai < 24; ai++) {
+        const a = ai / 24 * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
+        for (let r = 0.5; r <= 4.4; r += 0.2) {
+          const x = ca * r, y = sa * r; if (sink(x, y) <= 0) continue;
+          st.mode = "climb"; st.idle = 0; st.hold = Q.STAR_CLIMB_HOLD_MS;
+          Q.starSlipStep(st, Q.starCraterSlope(sink, x, y), sink(x, y), 0, -1, 1 / 60, true);
+          const v = Math.hypot(st.vx, st.vy);
+          vmin = Math.min(vmin, v); vmax = Math.max(vmax, v);
+        }
+      }
+      ok(Math.abs(vmax - vmin) < 0.001 && Math.abs(vmax - Q.STAR_CLIMB_SPEED) < 0.001,
+         "⚠️⚠️ CRAMPONNÉ, LA PENTE N'ENTRE PLUS : même vitesse partout dans le trou",
+         `${vmin.toFixed(2)} à ${vmax.toFixed(2)} case/s (visé ${Q.STAR_CLIMB_SPEED})`);
+      // …et lâcher décroche (réponse de Guillaume : « lâcher la touche = rechute »).
+      const st2 = Q.starSlipNew(); st2.mode = "climb"; st2.hx = 0; st2.hy = -1; st2.hold = Q.STAR_CLIMB_HOLD_MS;
+      const g5 = Q.starCraterSlope(sink, 0, -3.0);
+      for (let i = 0; i < 20; i++) Q.starSlipStep(st2, g5, sink(0, -3.0), 0, 0, 1 / 60, true);
+      ok(st2.mode === "slide", "⚠️ …et lâcher la direction DÉCROCHE", `mode « ${st2.mode} » après 0,33 s sans touche`);
+    }
+
+    /* ── 6. CE QUE VOIT L'AUTRE JOUEUR. ⚠️ `starSlipSeen` est une DÉDUCTION (§3 de
+       CLAUDE.md : aucun champ de plus sur le réseau) ; si elle se trompe, deux
+       clients dessinent deux fermiers différents au même endroit. On la confronte
+       donc au moteur, image par image, sur une descente et sur une remontée. */
+    {
+      let agree = 0, seen = 0;
+      let x = 0, y = -4.0, st = Q.starSlipNew(), t = 0;
+      const dt = 1 / 60;
+      while (t < 14) {
+        const g = Q.starCraterSlope(sink, x, y), sk = sink(x, y);
+        const [ix, iy] = t < 2 ? [0, 1] : [0, -1];          // on descend, puis on veut ressortir
+        Q.starSlipStep(st, g, sk, ix, iy, dt, true);
+        let vx = st.vx, vy = st.vy;
+        const slipping = st.mode === "slide" || st.mode === "recover" || st.mode === "climb";
+        if (!slipping) {
+          const inv = g.n > 0.001 ? 1 / g.n : 0;
+          const dot = ix * g.gx * inv + iy * g.gy * inv;
+          const sp = C.PLAYER_SPEED * Q.starClimbMul(g.n, dot);
+          vx = ix * sp; vy = iy * sp;
+        }
+        const mine = Q.starSlipPose(st, true, g.n), his = Q.starSlipSeen(g, sk, vx, vy);
+        /* ⚠️⚠️ ON MESURE L'ACCORD LÀ OÙ LE JOUEUR REGARDE, et on dit lequel : sur
+           les images où ça VA VITE (plus d'une case et demie par seconde) ou où
+           l'on grimpe. Le reste est la queue de la glissade — le fermier finit de
+           s'immobiliser au fond, à trente centimètres près et pendant deux
+           dixièmes de seconde, et « il dérape encore » ou « il est debout » y sont
+           littéralement indiscernables de l'extérieur. Exiger l'accord là aussi
+           demanderait de la MÉMOIRE chez celui qui regarde, donc un état par
+           joueur distant, donc quelque chose qui dérive au premier paquet perdu.
+           *On préfère un désaccord nommé à un état à réconcilier.* */
+        if (mine && (Math.hypot(vx, vy) > 1.5 || st.mode === "climb")) { seen++; if (mine === his) agree++; }
+        x += vx * dt; y += vy * dt; t += dt;
+        if (sk <= 0 && st.mode === "foot" && t > 3) break;
+      }
+      ok(seen > 120, "⚠️ la déduction est confrontée au moteur sur toute une descente-remontée", `${seen} images vives`);
+      ok(agree === seen,
+         "⚠️⚠️ CE QUE L'AUTRE CLIENT DÉDUIT EST EXACTEMENT CE QUE LE MOTEUR FAIT",
+         `${agree}/${seen} images (glissade rapide et grimpe)`);
+    }
   }
 
   /* ── LA POUSSIÈRE (458). ⚠️ ELLE EST REGARDABLE DÈS LE JOUR DE SON ÉCRITURE,
@@ -811,23 +957,65 @@ console.log("\n7. LE CRATÈRE — deux rayons, une profondeur, et un refroidisse
       return n;
     };
     const a0 = count(0.15), a1 = count(0.55), a2 = count(0.99), a3 = count(1);
-    ok(a0 > 40, "⚠️ une bouffée neuve se voit", `${a0} px`);
+    /* ⚠️⚠️ ZIP 459 — CE SEUIL DESCEND DE 40 À 28, ET C'EST LA DÉCISION QUI A
+       CHANGÉ, PAS LA MESURE (leçon du 456 : *un seuil de banc n'est pas une
+       vérité, c'est la décision du jour où on l'a écrit*). Guillaume, en jouant :
+       « la poussière doit être autour des pieds, pas de la tête aussi. » Une
+       bouffée qui reste sous le genou est forcément plus petite qu'une bouffée qui
+       montait jusqu'au crâne ; garder l'ancien seuil aurait REFUSÉ la correction
+       demandée. Ce qui ne bouge pas, c'est qu'elle doit se VOIR. */
+    ok(a0 > 28, "⚠️ une bouffée neuve se voit", `${a0} px`);
     ok(a1 > a0, "⚠️⚠️ elle S'OUVRE (une bouffée qui ne grandit pas est une tache)", `${a0} → ${a1} px`);
     ok(a3 === 0, "⚠️ et à un, elle a totalement disparu", `${a2} px à 0,99 · ${a3} px à 1`);
     /* ⚠️ LES DEUX TONS DEMANDÉS SE VOIENT, ET C'EST LE MOT MÊME DE LA DEMANDE :
        « poussière marron / grise ». Un seul ton passerait tous les contrôles
        ci-dessus. */
-    g4.clearRect(0, 0, 120, 120);
-    for (let sd = 0; sd < 8; sd++) S.drawStarDust(g4, 60, 60, 16, 0.5, sd);
+    /* ⚠️⚠️ LA TEINTE SE LIT SUR LA COULEUR DÉMULTIPLIÉE, PAS SUR LE TAMPON — ET
+       CE CORRECTIF DU 459 EST EXACTEMENT « UN BANC DE RENDU SE VÉRIFIE AUSSI »
+       (455, la sonde de la bulle). Le faux canevas compose sur du NOIR
+       transparent : une bouffée à 34 % d'opacité y sort à 52 de rouge, pas 152.
+       Le contrôle passait quand même parce que huit bouffées empilées finissaient
+       par saturer — c'est-à-dire qu'il mesurait un EMPILEMENT et pas une palette,
+       et qu'il serait passé au vert sur deux tons faux. On divise donc par l'alpha
+       avant de juger, et chaque graine est comptée seule. */
     let brown = 0, grey = 0;
-    for (let i = 0; i < sur.px.length; i += 4) {
-      if (sur.px[i + 3] < 8) continue;
-      const r = sur.px[i], gg = sur.px[i + 1], b = sur.px[i + 2];
-      if (r > gg + 6 && gg > b + 6) brown++;
-      else if (Math.abs(r - b) <= 12 && r > 90) grey++;
+    for (let sd = 0; sd < 8; sd++) {
+      g4.clearRect(0, 0, 120, 120);
+      S.drawStarDust(g4, 60, 60, 16, 0.5, sd);
+      for (let i = 0; i < sur.px.length; i += 4) {
+        const al = sur.px[i + 3] / 255;
+        if (al < 0.03) continue;
+        const r = sur.px[i] / al, gg = sur.px[i + 1] / al, b = sur.px[i + 2] / al;
+        if (r > gg + 6 && gg > b + 6) brown++;
+        else if (Math.abs(r - b) <= 12 && r > 90) grey++;
+      }
     }
     ok(brown > 20 && grey > 20, "⚠️⚠️ il y a du MARRON et du GRIS, pas un ton unique",
        `${brown} px marron · ${grey} px gris`);
+    /* ╔═══════════════════════════════════════════════════════════════════════
+       ║ ZIP 459 — ET ELLE RESTE SOUS LE GENOU. Retour de Guillaume, en jouant.
+       ╚═══════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ CE CONTRÔLE EST LE SEUL QUI AURAIT ATTRAPÉ LE DÉFAUT, ET IL N'EXISTAIT
+       PAS : les cinq contrôles ci-dessus mesurent la VIE d'une bouffée (elle
+       s'ouvre, elle s'éteint, elle a deux tons) et pas un seul ne mesurait OÙ elle
+       est. C'est mot pour mot la cinquième forme du défaut de banc du 458 — *il
+       mesure ce qu'une chose EST et jamais QUAND (ou ici : OÙ) elle est.*
+       ⚠️ LA BORNE EST DÉRIVÉE DU SPRITE : l'appelant passe l'ancre du personnage,
+       ses semelles sont quatorze pixels plus bas, son genou quatre pixels au-dessus
+       des semelles. Rien au-dessus de l'ancre + 8, donc rien au-dessus du genou —
+       et surtout rien près de la tête, qui est à l'ancre − 8. */
+    {
+      let top = 999, bot = -999;
+      for (const k of [0.1, 0.3, 0.6, 0.85]) {
+        g4.clearRect(0, 0, 120, 120);
+        for (let sd = 0; sd < 6; sd++) S.drawStarDust(g4, 60, 60, 16, k, sd);
+        for (let y = 0; y < 120; y++) for (let x = 0; x < 120; x++)
+          if (sur.px[(y * 120 + x) * 4 + 3] > 8) { if (y - 60 < top) top = y - 60; if (y - 60 > bot) bot = y - 60; }
+      }
+      ok(top >= 6, "⚠️⚠️⚠️ LA POUSSIÈRE EST AUX PIEDS : rien ne monte au-dessus du genou",
+         `plus haut grain à ${top} px sous l'ancre (semelles à +14, tête à −8)`);
+      ok(bot >= 14, "…et elle touche bien le sol", `plus bas grain à ${bot} px`);
+    }
   }
 
   /* ── ZIP 449 — OÙ ÇA BRÛLE, EN CASES. La moitié GÉOMÉTRIE de la brûlure (la
@@ -1287,6 +1475,215 @@ console.log("\n11. LA JAUGE DE LA POSTURE (456) — « est-ce que je fais bien ?
     writePNG(path.join(OUT, "etoile-jauge.png"), up.px, up.W, up.H);
   }
 }
-console.log(`\nPlanches : tools/out/etoile-planche.png · tools/out/etoile-cratere.png · tools/out/etoile-comete.png · tools/out/etoile-alerte.png · tools/out/etoile-jauge.png`);
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 12. ZIP 459 — LES TROIS POSES DU CRATÈRE, REGARDÉES LE JOUR DE LEUR ÉCRITURE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ C'EST LE BANC DE LA POSE ASSISE (`render-assise`, 428) TRANSPOSÉ, ET IL
+   MESURE LES MÊMES TROIS CHOSES, parce que ce sont celles qui ont été payées :
+     1. LES PIEDS NE BOUGENT PAS. Une pose ancrée ailleurs qu'au sol FLOTTE, et
+        c'est le défaut qui a fait passer trois zips à la pose assise « assise par
+        terre devant le banc » — invisible en relecture, criant à l'écran.
+     2. RIEN NE DÉBORDE DU CADRE. Le canevas DÉCOUPE EN SILENCE (§4 de CLAUDE.md,
+        payé trois fois dans le seul zip 433) : un bras levé de deux pixels de trop
+        sort décapité et personne ne cherche pourquoi.
+     3. LES QUATRE IMAGES DE LA GRIMPE SONT VRAIMENT QUATRE. C'est la leçon du 449
+        sur la compagne, dont deux poses sortaient IDENTIQUES au pixel près sans
+        que l'œil s'en aperçoive — un cycle de trois images sur quatre est un cycle
+        qui boite, et on croit avoir écrit un cycle de quatre.
+   ⚠️ ET ELLES SONT ÉPROUVÉES SUR PLUSIEURS TENUES, jamais sur un personnage : les
+   poses DÉCOUPENT la feuille (elles n'inventent aucune couleur), donc ce qui se
+   vérifie est la RECETTE. Si la salopette ou la combinaison d'apiculteur sort
+   fausse, c'est la recette qui est fausse, pas ce cas-là. */
+{
+  console.log("\n12. les trois poses du cratère (459)\n");
+  const CASES = [
+    ["fermier", S.getChar("m", 0, false, false, false, false, false, false, null)],
+    ["fermière", S.getChar("f", 1, false, false, false, false, false, false, null)],
+    ["salopette", S.getChar("m", 3, true, false, false, false, false, false, null)],
+    ["apiculteur", S.getChar("m", 2, false, false, true, false, false, false, null)],
+  ];
+  /* ⚠️⚠️⚠️ TOUTES LES POSES SONT TIRÉES DE LA RANGÉE 0, ET CE N'EST PAS UN CHOIX
+     DE CADRAGE : `charSheet` empile ses trois orientations avec `g.translate`, que
+     le faux canevas IGNORE (§10 de CLAUDE.md). Sur un banc, une feuille de
+     personnage n'a donc QU'UNE rangée peinte — les rangées 1 (de dos) et 2 (de
+     profil) y sont vides. Une pose demandée en rangée 1 ne dessine rien du tout,
+     et le banc conclut « la pose est vide » sur un dessin parfaitement correct
+     dans le jeu. C'est le stub menteur du §10, et il a coûté vingt minutes ici :
+     quatre contrôles rouges, zéro défaut. `render-assise` fait pareil depuis le
+     428 (`drawSeated(…, 0, …)`), sans avoir jamais écrit pourquoi. */
+  const ROW = 0;
+  const BOX = 40;                                     // large : on VEUT voir ce qui déborde
+  const shotPose = (sheet, fn) => {
+    const v = makeCanvas(BOX, BOX);
+    fn(v.ctx, sheet, 12, 12);                         // ancre à (12,12) : 12 px de marge partout
+    return v;
+  };
+  const ext = (v) => {
+    let top = 1e9, bot = -1, left = 1e9, right = -1, n = 0;
+    for (let y = 0; y < BOX; y++) for (let x = 0; x < BOX; x++) {
+      if (v.px[(y * BOX + x) * 4 + 3] > 8) { n++; if (y < top) top = y; if (y > bot) bot = y; if (x < left) left = x; if (x > right) right = x; }
+    }
+    return { top, bot, left, right, n, h: bot - top + 1, w: right - left + 1 };
+  };
+  const debout = (sheet) => shotPose(sheet, (c, sh, px, py) => c.drawImage(sh, 0, 0, 16, 24, px, py - 8, 16, 24));
+
+  console.log("cas             debout  glissade  arc-bout.  grimpe   (hauteur, px)");
+  console.log("-".repeat(66));
+  let anchorBad = 0, edgeBad = 0;
+  for (const [name, sh] of CASES) {
+    const st = ext(debout(sh));
+    const sl = ext(shotPose(sh, (c, x, px, py) => A.drawStarSlide(c, x, ROW, px, py, 0, 1)));
+    const br = ext(shotPose(sh, (c, x, px, py) => A.drawStarBrace(c, x, ROW, px, py)));
+    const cl = ext(shotPose(sh, (c, x, px, py) => A.drawStarClimb(c, x, ROW, px, py, 0)));
+    console.log(`${name.padEnd(14)}${String(st.h).padStart(6)}${String(sl.h).padStart(10)}${String(br.h).padStart(11)}${String(cl.h).padStart(9)}`);
+    /* ⚠️ L'ANCRAGE : le bas de chaque pose tombe sur le sol de la pose debout, à
+       un pixel près. C'est LA mesure — une pose qui flotte est le seul défaut de
+       cette famille qu'on ne voit pas en relecture. */
+    for (const [k, e] of [["glissade", sl], ["arc-boutement", br], ["grimpe", cl]]) {
+      if (Math.abs(e.bot - st.bot) > 2) { anchorBad++; console.log(`      ⚠️ ${name}/${k} : bas à ${e.bot} contre ${st.bot} debout`); }
+      if (e.top <= 0 || e.left <= 0 || e.bot >= BOX - 1 || e.right >= BOX - 1) edgeBad++;
+    }
+  }
+  ok(anchorBad === 0, "⚠️⚠️ LES TROIS POSES GARDENT LES PIEDS AU SOL (aucune ne flotte)", `${anchorBad} écart(s)`);
+  ok(edgeBad === 0, "⚠️ et aucune ne touche le bord de son cadre (le canevas découpe en silence)", `${edgeBad} débordement(s)`);
+
+  /* LA GLISSADE PENCHE VRAIMENT — et dans le bon sens. On compare le centre de
+     gravité du HAUT (tête et épaules) entre deux dévalements opposés : s'il ne
+     bouge pas, il n'y a pas de « lean back », il y a un personnage debout. */
+  {
+    const sh = CASES[0][1];
+    const headX = (lx) => {
+      const v = shotPose(sh, (c, x, px, py) => A.drawStarSlide(c, x, ROW, px, py, lx, 0));
+      let sum = 0, n = 0;
+      for (let y = 0; y < 14; y++) for (let x = 0; x < BOX; x++)
+        if (v.px[(y * BOX + x) * 4 + 3] > 8) { sum += x; n++; }
+      return n ? sum / n : 0;
+    };
+    const east = headX(1), west = headX(-1);
+    ok(west - east >= 4, "⚠️⚠️ ELLE PENCHE EN ARRIÈRE, ET DANS LE BON SENS",
+       `épaules à ${east.toFixed(1)} px en dévalant vers l'est, ${west.toFixed(1)} vers l'ouest`);
+    const straight = ext(shotPose(sh, (c, x, px, py) => A.drawStarSlide(c, x, ROW, px, py, 0, 1)));
+    const stand = ext(debout(sh));
+    ok(straight.h < stand.h - 1, "⚠️ …et il s'accroupit (une glissade debout n'est pas une glissade)",
+       `${straight.h} px contre ${stand.h} debout`);
+  }
+
+  /* LES QUATRE TEMPS DE LA GRIMPE SONT QUATRE. */
+  {
+    const sh = CASES[0][1];
+    const sig = [];
+    for (let f = 0; f < A.STAR_CLIMB_FRAMES; f++) {
+      const v = shotPose(sh, (c, x, px, py) => A.drawStarClimb(c, x, ROW, px, py, f));
+      sig.push(Array.from(v.px).join(","));
+    }
+    const uniq = new Set(sig).size;
+    ok(uniq === A.STAR_CLIMB_FRAMES, "⚠️⚠️ LES QUATRE IMAGES DE LA GRIMPE SONT VRAIMENT QUATRE",
+       `${uniq} images distinctes sur ${A.STAR_CLIMB_FRAMES}`);
+    /* ⚠️ ET ELLES SONT CONTRALATÉRALES : au premier temps, le bras gauche est plus
+       haut que le droit ET la jambe droite plus haute que la gauche. Une escalade
+       homolatérale (même côté ensemble) se lit comme une reptation. */
+    const half = (f, x0, x1, y0, y1) => {
+      const v = shotPose(sh, (c, x, px, py) => A.drawStarClimb(c, x, ROW, px, py, f));
+      let top = 1e9;
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++)
+        if (v.px[(y * BOX + x) * 4 + 3] > 8) { top = Math.min(top, y); }
+      return top;
+    };
+    /* ⚠️ LES QUATRE FENÊTRES SONT CALÉES SUR LA SILHOUETTE RÉELLE (corps x 16..25
+       pour une ancre à 12), et pas devinées : une fenêtre à côté ne trouve RIEN,
+       rend `1e9`, et le contrôle passe au vert en comparant deux infinis. C'est
+       « un banc qui n'a jamais pu échouer ne vaut rien » (441) — il est passé
+       comme ça une fois, ici, avant qu'on regarde les nombres qu'il imprimait. */
+    const armL = half(0, 12, 16, 0, 20), armR = half(0, 24, 28, 0, 20);
+    const legL = half(0, 14, 19, 21, BOX), legR = half(0, 21, 26, 21, BOX);
+    ok(armL < 900 && armR < 900 && legL < 900 && legR < 900,
+       "⚠️ les quatre membres sont bien là où le contrôle les cherche",
+       `bras ${armL}/${armR} · jambes ${legL}/${legR}`);
+    ok(armL < armR && legL > legR,
+       "⚠️⚠️ ET LE CYCLE EST CONTRALATÉRAL (bras gauche haut ⇄ jambe droite haute)",
+       `bras ${armL} vs ${armR} · jambes ${legL} vs ${legR}`);
+  }
+
+  /* La planche : cinq colonnes, quatre lignes. ⚠️ SUR LA TERRE DU CRATÈRE, pas sur
+     du blanc — un cerne clair sur fond clair disparaît (leçon du 441), et c'est là
+     que ces poses vivent. */
+  {
+    const W4 = 6 * 34 + 8, H4 = CASES.length * 34 + 8;
+    const sur = makeCanvas(W4, H4), gg = sur.ctx;
+    gg.fillStyle = "#3a2e1e"; gg.fillRect(0, 0, W4, H4);
+    CASES.forEach(([, sh], r) => {
+      const py = 8 + r * 34 + 16;
+      gg.drawImage(sh, 0, 0, 16, 24, 12, py - 8, 16, 24);
+      A.drawStarSlide(gg, sh, ROW, 12 + 34, py, 0, 1);
+      A.drawStarBrace(gg, sh, ROW, 12 + 68, py);
+      A.drawStarClimb(gg, sh, ROW, 12 + 102, py, 0);
+      A.drawStarClimb(gg, sh, ROW, 12 + 136, py, 2);
+      /* ⚠️ LA SIXIÈME COLONNE EST UNE GLISSADE DE BIAIS (vers l'est), et elle est
+         là parce que la deuxième ne montre PAS ce qui a été demandé : de face, un
+         « lean back » se lit à peine ; c'est en travers qu'on voit les épaules
+         partir à contresens des pieds. Une planche qui ne montre pas la chose
+         demandée est une planche qui rassure à tort. */
+      A.drawStarSlide(gg, sh, ROW, 12 + 170, py, 1, 0.4);
+    });
+    const up = scale(sur.px, W4, H4, 4);
+    writePNG(path.join(OUT, "etoile-poses.png"), up.px, up.W, up.H);
+  }
+}
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 13. ZIP 459 — LA BULLE D'OUVRAGE DE TRISTAN.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ ELLE A DEUX MOUVEMENTS ET IL FAUT MESURER LES DEUX SÉPARÉMENT, parce
+   qu'ils répondent à deux questions différentes : la scie qui va et vient dit
+   « c'est en train de se faire MAINTENANT », le trait de scie qui s'enfonce dit
+   « on approche ». Un dessin qui n'aurait que le premier serait un moulin ; un
+   dessin qui n'aurait que le second serait une barre de progression. C'est la
+   leçon du 456 (« un geste continu doit rendre ce qui manque ET ce qui avance »),
+   et un banc qui ne compterait que « des pixels sont peints » l'aurait ratée. */
+{
+  console.log("\n13. la bulle d'ouvrage de Tristan (459)\n");
+  const B = 48;
+  const shotB = (k, t) => {
+    const v = makeCanvas(B, B);
+    S.drawWorkBubble(v.ctx, 24, 34, k, t);
+    return v;
+  };
+  const inkOf = (v) => { let n = 0; for (let i = 3; i < v.px.length; i += 4) if (v.px[i] > 8) n++; return n; };
+  const sigOf = (v) => Array.from(v.px).join(",");
+  ok(inkOf(shotB(0, 0)) > 200, "⚠️ la bulle se voit", `${inkOf(shotB(0, 0))} px`);
+  const t0 = sigOf(shotB(0.5, 0)), t1 = sigOf(shotB(0.5, 380));
+  ok(t0 !== t1, "⚠️⚠️ LA SCIE VA ET VIENT (sinon c'est une image fixe pendant huit minutes)");
+  const k0 = shotB(0.05, 0), k1 = shotB(0.95, 0);
+  ok(sigOf(k0) !== sigOf(k1), "⚠️⚠️ …ET LE TRAIT DE SCIE S'ENFONCE (sinon elle ne dit pas qu'on approche)");
+  /* ⚠️ LE TRAIT SE MESURE, IL NE SE CROIT PAS : on compte les pixels sombres de la
+     colonne du trait. Deux images « différentes » pouvaient l'être par la seule
+     sciure qui tombe — c'est-à-dire que le contrôle du dessus, seul, serait passé
+     au vert sur un trait qui ne bouge pas. */
+  const cutDepth = (v) => {
+    let n = 0;
+    for (let y = 0; y < B; y++) for (let x = 0; x < B; x++) {
+      const i = (y * B + x) * 4;
+      if (v.px[i + 3] > 8 && v.px[i] < 70 && v.px[i + 1] < 55 && v.px[i + 2] < 40) n++;
+    }
+    return n;
+  };
+  ok(cutDepth(k1) > cutDepth(k0), "⚠️⚠️ …et il s'enfonce VRAIMENT, en pixels comptés",
+     `${cutDepth(k0)} px de trait à 5 %, ${cutDepth(k1)} px à 95 %`);
+  {
+    const d = shotB(0.5, 0).px; let edge = 0;
+    for (let x = 0; x < B; x++) for (const y of [0, B - 1]) if (d[(y * B + x) * 4 + 3] > 8) edge++;
+    for (let y = 0; y < B; y++) for (const x of [0, B - 1]) if (d[(y * B + x) * 4 + 3] > 8) edge++;
+    ok(edge === 0, "⚠️ rien n'est peint sur le bord du canevas", `${edge} px`);
+  }
+  {
+    const W5 = 5 * 32, H5 = 34;
+    const sur = makeCanvas(W5, H5), gg = sur.ctx;
+    gg.fillStyle = "#4c8f40"; gg.fillRect(0, 0, W5, H5);          // l'herbe de la ferme
+    [0, 0.25, 0.5, 0.75, 1].forEach((k, i) => S.drawWorkBubble(gg, 16 + i * 32, 28, k, i * 260));
+    const up = scale(sur.px, W5, H5, 4);
+    writePNG(path.join(OUT, "etoile-tristan.png"), up.px, up.W, up.H);
+  }
+}
+console.log(`\nPlanches : tools/out/etoile-planche.png · tools/out/etoile-cratere.png · tools/out/etoile-comete.png · tools/out/etoile-alerte.png · tools/out/etoile-jauge.png · tools/out/etoile-poses.png · tools/out/etoile-tristan.png`);
 console.log(fails === 0 ? `\n✅ tous les contrôles passés.\n` : `\n❌ ${fails} contrôle(s) en échec.\n`);
 process.exit(fails ? 1 : 0);

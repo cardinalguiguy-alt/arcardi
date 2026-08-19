@@ -1065,7 +1065,119 @@ relais qui se repose un message à chaque image tourne en boucle serrée. *Il lu
 
 ⚠️ **Rien n'est committé.** Tout est en fichiers modifiés / non indexés, prêt à relire.
 
-### 12.0 ⚠️⚠️⚠️ ZIP 458 — LA QUÊTE NE SE BLOQUE PLUS QUAND UN AMI SE CONNECTE
+### 12.0 ⚠️⚠️⚠️ ZIP 459 — ON PERD PIED, ON DÉVALE, ON S'AGRIPPE
+
+**Demande de Guillaume, mot pour mot :** *« ajouter une animation réelle poussée montrant
+le personnage qui climb up et glisse du cratère. ça doit être très beau et logique.
+nouveau mouvement pour le perso du fermier qui doit lean back et slide quand il glisse
+rendant la trajectoire difficile à contrôler avant d'atteindre le fond. Ensuite il peut se
+déplacer sur ses pieds dans le cratère. Et si l'on veut remonter, il tentera de le faire
+debout, avant de glisser encore. Et au bout de 3 pleines secondes de maintien d'une
+direction, l'anim grimpeur avec les bras et jambes s'activera et il pourra grimper jusqu'en
+dehors du cratère = sensation d'effort renforcée pour le joueur. »* Puis, en cours de
+route : *« la poussière doit être autour des pieds, pas de la tête aussi »* et *« rends
+plus explicite la commande auprès de Tristan — il faut une bulle spéciale où l'on voit
+Tristan se mettre au travail. »*
+
+#### ⚠️⚠️⚠️ LA QUESTION QUI A DÉCIDÉ DE TOUT : UNE GRAVITÉ PERMANENTE AURAIT SUPPRIMÉ LE CHAPITRE 2
+
+La cuvette est un **paraboloïde** (`1 − u²`) : sa pente est proportionnelle au rayon, donc
+elle n'a **pas de fond plat** — mesuré au banc, 1,2 px/case de pente à une demi-case du
+centre. Une poussée permanente aurait donc entonné le fermier jusqu'au point unique du
+milieu, c'est-à-dire **à distance nulle de l'étoile**, là où `starFacingAway` rend `false`
+par construction (« debout SUR elle : on la regarde forcément »). La seule mécanique du
+lieu — se tenir immobile, dos tourné — serait devenue **inexécutable**, et le symptôme
+aurait été « la jauge ne monte plus jamais », sans une seule erreur nulle part.
+
+**La parade vient des jeux qui ont déjà ce geste** (l'escalade des pentes de *Breath of the
+Wild*, les dévers de *Death Stranding*) : **on ne perd pas pied parce qu'on est sur une
+pente, on perd pied parce qu'on la SOLLICITE.** Debout, sans rien demander, le personnage
+plante ses talons — c'est une posture, et elle se DESSINE (`drawStarBrace`). Dès qu'il
+marche sur la paroi raide, ses appuis partent. Comme on ne peut pas ENTRER dans le trou
+sans marcher, **la glissade se joue à 100 % des entrées**.
+
+⚠️ **Ce que ça ne fait pas, et c'est écrit plutôt que subi** : un fermier lâché immobile en
+plein milieu de la paroi y RESTE, jambes écartées, au lieu de partir tout seul. C'est la
+seule liberté prise avec la physique ; elle est visible, et elle est le prix exact du
+chapitre 2.
+
+#### Les cinq états (`starSlipStep`, `quete.js` — pur, sans React ni canevas)
+
+| état | ce que le joueur voit | ce qui en sort |
+|---|---|---|
+| `foot` | il marche | pente < 4,2 px/case, ou aucune touche |
+| `brace` | il pousse en montant, il **gagne** du terrain | 420 ms, puis les appuis lâchent |
+| `slide` | **il dévale**, épaules en arrière, poussière aux pieds | pente douce **et** vitesse < 0,9 |
+| `recover`| il se rétablit, un quart de seconde | 260 ms |
+| `climb` | **bras et jambes**, cramponné, rien ne le reprend | il lâche, ou il sort de la cuvette |
+
+**Les nombres, tous mesurés sur le vrai creux, jamais réglés à l'œil :**
+
+| grandeur | valeur | ce qu'elle achète |
+|---|---|---|
+| plancher marchable | **1,55 à 2,80 case** de rayon (cuvette : 3,50 à 4,75) | « il peut se déplacer sur ses pieds » |
+| crête de la glissade | **4,0 cases/s** (marche : 5,2) | « un peu rapide », jamais éjecté |
+| déviation latérale | **0,68 case** sur une chute entière | on VISE, on ne PILOTE pas |
+| freinage à contresens | **0,04 case** | on ne s'arrête pas |
+| effort avant la prise | **3 000 ms** de la même direction | le mot de la demande |
+| sortie, pire cas | **4,7 s** depuis n'importe quel point, **0 bloqué sur 317** | *on sort toujours* |
+
+#### ⚠️⚠️ CE QUE LE BANC MESURE MAINTENANT : IL **JOUE**, IL NE CALCULE PLUS
+
+Le 458 vérifiait une inégalité (« marche en montée − glissade ≥ 1 case/s »). C'était un
+raccourci algébrique vers la vraie question, et la vraie question est celle que le §25 de
+`ferme/README.md` reproche à tous les bancs du dépôt de ne jamais poser : **est-ce qu'on
+ARRIVE ?** `render-etoile` §7 prend maintenant `starSlipStep`, lui donne le VRAI creux
+(`starCraterSink`), tient une direction à 60 images/seconde depuis 317 points de départ, et
+regarde si le fermier sort du trou.
+
+⚠️ **Et ça a payé avant même d'être écrit en banc.** Le premier jet du moteur gageait le
+compteur d'effort sur « est-ce que je monte ? ». Or en dévalant on **dépasse** le point bas
+de quelques centimètres : la pente s'inverse sous les pieds, le pas tenu devient « une
+descente », et le compteur repartait de zéro. Résultat mesuré : 2,0 s atteintes, jamais
+3,0 — donc **la grimpe n'existait pas** et **219 points de départ sur 317 ne pouvaient plus
+sortir du cratère**. *Une grandeur qui décrit le JOUEUR ne doit pas dépendre du TERRAIN.*
+
+#### Les trois poses (`fermeArt.js`, donc regardables — `tools/out/etoile-poses.png`)
+
+Elles sont **découpées dans la feuille du personnage**, jamais repeintes : c'est la
+décision de `drawSeated` (428) reprise mot pour mot, et c'est ce qui leur fait hériter
+gratuitement de la salopette, de la combinaison d'apiculteur et de la garde-robe. Aucun
+`translate`, aucun `rotate` — l'inclinaison se fait par **cisaillement** (trois bandes
+horizontales décalées), ce qui est de toute façon ce qu'on ferait à la main.
+
+⚠️ **Trois pièges payés en les écrivant**, tous vus par la planche du banc et par aucune
+relecture : les bras posés « deux pixels à gauche de l'ancre » se retrouvaient à **cinq
+pixels du corps** (la silhouette occupe x 3..13 dans sa case de seize) ; le cycle de grimpe
+était **homolatéral** (bras gauche ET jambe gauche en l'air — un lézard) ; et le banc
+lui-même lisait les rangées 1 et 2 d'une feuille de personnage, **qui sont vides sous le
+faux canevas** (`charSheet` les empile avec `translate`, que le faux canevas ignore) —
+quatre contrôles rouges, zéro défaut.
+
+#### La poussière, et Tristan
+
+⚠️ **La poussière est aux pieds** (retour de Guillaume) : l'ancre d'un sprite de 24 px tombe
+à la **ceinture**, et une bouffée qui montait de sept pixels culminait donc à hauteur de
+crâne. Elle est décalée de 14 px vers le bas (les semelles), sa montée est rabotée, et elle
+**s'étale** au lieu de gonfler (une ellipse couchée) — la rendre plus petite pour la garder
+basse l'avait fait tomber sous le seuil du banc. Un contrôle neuf mesure ce qu'aucun des
+cinq autres ne mesurait : **où** elle est, pas ce qu'elle est.
+
+⚠️ **Tristan se met au travail, et on le voit.** Commander fermait un panneau et faisait
+passer une ligne de chat ; le bûcheron continuait d'abattre ses arbres comme si de rien
+n'était. Deux temps, **un seul état** (`wood[k].at`, déjà écrit) : il ACCEPTE (une phrase
+qui nomme la pièce, six secondes), puis il TRAVAILLE — une bulle où **la scie va et vient**
+(le temps) et où **le trait de scie s'enfonce** (l'avancement), jusqu'à la livraison. Zéro
+champ de plus, zéro message de plus.
+
+#### Ce qui n'a PAS été regardé à l'écran
+
+⚠️ La séance de jeu de ce zip a validé le cratère **à un client**. N'ont pas été rejoués :
+la glissade **vue par l'autre joueur** (`starSlipSeen` est confrontée au moteur au banc,
+209 images sur 209 — mais jamais à deux écrans), et la bulle de Tristan **sur une ferme
+peuplée** (elle a été regardée au banc et sur une ferme vide).
+
+### 12.0 bis ⚠️⚠️⚠️ ZIP 458 — LA QUÊTE NE SE BLOQUE PLUS QUAND UN AMI SE CONNECTE
 
 **Demande de Guillaume, en cinq points :** vérifier la quête À DEUX JOUEURS et régler
 ce qu'on y trouve ; agrandir le cratère de Valley Town avec une vraie glissade ; polir le
@@ -1211,7 +1323,7 @@ persiste pas. Prévoir de rejouer `▶ Start` après chaque rechargement.
 
 ---
 
-### 12.0 bis ⚠️⚠️⚠️ ZIP 456 — ON PARLE À QUELQU'UN QUI S'ARRÊTE, ET LE CRATÈRE RÉPOND
+### 12.0 ter ⚠️⚠️⚠️ ZIP 456 — ON PARLE À QUELQU'UN QUI S'ARRÊTE, ET LE CRATÈRE RÉPOND
 
 **Trois retours de Guillaume, tous livrés, et le troisième a découvert un défaut de fond.**
 
@@ -1263,7 +1375,7 @@ soigne au menu dev et on se téléporte quand le bandeau dit « le cratère a re
 entier ne changeait pas d'une image à l'autre pendant que le monde bougeait. **Ce sont les CAPTURES
 qu'il faut échantillonner**, pas les pixels du canevas (§10 de `CLAUDE.md`).
 
-### 12.0 ter ⚠️⚠️⚠️ ZIP 455 — L'ANNONCE, LE TAMPON, ET LA CHUTE QU'ON NE VOIT PLUS TOMBER
+### 12.0 quater ⚠️⚠️⚠️ ZIP 455 — L'ANNONCE, LE TAMPON, ET LA CHUTE QU'ON NE VOIT PLUS TOMBER
 
 **Quatre demandes de Guillaume, toutes livrées.** Le détail de fiction est au §3 (le thème coupé en
 deux) et le déroulé au §5 (OUVERTURE). Ce qui suit est ce qu'il faut savoir pour reprendre.
@@ -1331,7 +1443,7 @@ qui juge ce zip.
 
 ---
 
-### 12.0 quater ⚠️⚠️ ZIP 454 — LA CHAÎNE DE CONSTRUCTION, ET CE QUI A ÉTÉ VU À L'ÉCRAN
+### 12.0 quinquies ⚠️⚠️ ZIP 454 — LA CHAÎNE DE CONSTRUCTION, ET CE QUI A ÉTÉ VU À L'ÉCRAN
 
 **Le déroulé complet, dans l'ordre où le joueur le vit :**
 

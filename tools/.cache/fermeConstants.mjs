@@ -3755,6 +3755,11 @@ export const STAR_TIMBER = {
    tableau arrière, dans la langue de qui l'a baptisé. C'est la même règle que
    « Valley Town », qui n'est pas « La ville de la vallée » en français. */
 export const STAR_SHIP_NAME = "La Belle Étoile";
+/* ⚠️ ZIP 459 — CE QUE DURE SON « JE M'Y METS ». Six secondes : le temps de
+   traverser la ferme pour aller le voir si l'on n'était pas à côté, pas assez pour
+   qu'une phrase reste plantée au-dessus de quelqu'un qui travaille. Ensuite, c'est
+   la bulle à la scie qui prend le relais et qui, elle, dure toute la commande. */
+export const STAR_TIMBER_GO_MS = 6000;
 
 /* LA VERRERIE, dans le quartier des artisans, et L'ARBRE DE LA PIE au-dessus.
    ⚠️ LE NID SE DÉDUIT DU FOUR, PAS D'UNE SECONDE ANCRE, et l'histoire l'exige :

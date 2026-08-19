@@ -290,6 +290,16 @@ const STAR_FR = {
     calmHold: "Quelque chose remonte derrière toi.",
     calmBoth: "Tous les deux. Dos tourné. Ne bougez plus.",
     calmSolo: "Tout seul, c'est long. Reste retourné.",
+    /* ⚠️⚠️ ZIP 459 — LES DEUX PHRASES DE L'EFFORT, ET ELLES EXISTENT À CAUSE DU
+       456 : *un geste continu qui ne rend rien ne se distingue pas d'un jeu
+       bloqué.* Tenir une direction trois secondes en dérapant, c'est exactement
+       ça — sauf que la jauge monte et que ces deux lignes disent laquelle des
+       deux moitiés manque : garder le cap, puis ne pas lâcher.
+       ⚠️ AUCUNE NE NOMME UNE TOUCHE. La direction, on la tient déjà ; nommer
+       « ↑ » ferait croire à une commande neuve alors que le geste est le même
+       que marcher (c'est le reproche du 456 à « E : ne plus bouger »). */
+    slipHold: "Ça glisse. Garde le même cap, il va trouver une prise.",
+    slipClimb: "Il tient. Ne lâche pas la direction.",
     meet1: "Elle est plus petite qu'une poule. Elle tremble.",
     meet2: "Tu tends le morceau de ton champ. Elle le reprend.",
     /* ⚠️ ZIP 453 — « Deux notes, ensemble » DISAIT DEUX MORCEAUX LÀ OÙ LE
@@ -519,6 +529,14 @@ const STAR_FR = {
     orderCost: (wood, d) => `${wood} bois · ${d} de travail`,
     orderBtn: "Commander",
     orderSent: (part, d) => `${part} : Tristan s'y met. Ce sera prêt dans ${d}.`,
+    /* ⚠️⚠️ ZIP 459 — CE QU'IL DIT EN RECEVANT LA COMMANDE, au-dessus de sa tête et
+       pendant six secondes. Demande de Guillaume : « rends plus explicite la
+       commande auprès de Tristan ». Une ligne de chat passe et se perd ; une bulle
+       sur SA tête relie la dépense (140 bois) à quelqu'un.
+       ⚠️ IL NOMME LA PIÈCE. « Je m'y mets » tout seul laisserait le joueur se
+       demander laquelle des cinq — et c'est la question qu'il se pose, puisqu'il
+       vient de choisir dans une liste. */
+    tristanGo: (part) => `${part} ? Compte sur moi. J'attaque tout de suite.`,
     orderPoor: (wood) => `Il faut ${wood} bois dans la réserve. Abats des arbres, ou laisse-le en abattre.`,
     orderWait: (d) => `en cours — ${d}`,
     orderDone: "✅ livrée",
@@ -802,6 +820,10 @@ const STAR_EN = {
     calmHold: "Something is climbing up behind you.",
     calmBoth: "Both of you. Backs turned. Don't move.",
     calmSolo: "Alone, this takes a while. Stay turned around.",
+    /* ⚠️ ZIP 459 — voir la note en face, côté français : les deux moitiés de
+       l'effort, dites pendant qu'on le fournit. */
+    slipHold: "You're sliding. Keep the same heading — he'll find a grip.",
+    slipClimb: "He's holding on. Don't let go of the direction.",
     meet1: "It is smaller than a hen. It is shaking.",
     meet2: "You hold out the piece from your field. It takes it back.",
     /* ⚠️ ZIP 453 — voir la note française : « two notes » comptait deux morceaux
@@ -1003,6 +1025,9 @@ const STAR_EN = {
     orderCost: (wood, d) => `${wood} wood · ${d} of work`,
     orderBtn: "Order it",
     orderSent: (part, d) => `${part}: Tristan gets to it. Ready in ${d}.`,
+    /* ⚠️ ZIP 459 — voir la note en face, côté français : ce qu'il dit en recevant
+       la commande, au-dessus de sa tête, et il nomme la pièce. */
+    tristanGo: (part) => `${part}? You've got it. Starting right now.`,
     orderPoor: (wood) => `You need ${wood} wood in the stores. Fell some trees, or let him fell them.`,
     orderWait: (d) => `under way — ${d}`,
     orderDone: "✅ delivered",

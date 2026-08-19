@@ -2174,6 +2174,42 @@ console.log("\n10. LE PNJ QUI S'ARRÊTE, ET LA POSTURE DU CRATÈRE (456)\n");
   }
 }
 
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 11. ZIP 459 — CE QUE TRISTAN FABRIQUE, ET OÙ ÇA EN EST.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ LA BULLE D'OUVRAGE EST UN DESSIN (mesuré par `render-etoile` §13) ; ce qui
+   se mesure ICI est la LECTURE qui la nourrit. Elle est purement dérivée des deux
+   dates déjà écrites au moment de la commande — aucun champ de plus à faire
+   vieillir — et c'est justement ce qui doit être vérifié : une lecture qui se
+   tromperait de pièce ferait scier la quille pendant qu'on attend le mât. */
+console.log("\n11. L'OUVRAGE DE TRISTAN (459)\n");
+{
+  const e = Q.newStar(); e.fall = 1; e.plan = { at: 1, by: "j1", done: 1 };
+  ok("⚠️ sans commande, il ne fabrique rien", Q.starTimberBusy(e) === null && Q.starTimberProgress(e, 10) === 0);
+  Q.commitStarTimber(e, "hull", "j1", 1000);
+  const w = Q.starTimberBusy(e);
+  ok("⚠️⚠️ dès la commande, il fabrique LA pièce commandée",
+     !!w && w.key === "hull" && w.at === 1000 && w.readyAt === 1000 + C.STAR_TIMBER.hull.ms);
+  const mid = 1000 + C.STAR_TIMBER.hull.ms / 2;
+  ok("…et l'avancement se lit sur les deux dates, sans troisième champ",
+     Math.abs(Q.starTimberProgress(e, mid) - 0.5) < 0.001,
+     `${(Q.starTimberProgress(e, mid) * 100).toFixed(0)} % à mi-parcours`);
+  /* ⚠️ BORNÉ AUX DEUX BOUTS : une bulle qui afficherait un trait de scie négatif
+     avant l'heure, ou plus profond que la bille après, dirait n'importe quoi
+     pendant les quelques images où l'horloge de l'hôte et la nôtre se croisent. */
+  ok("⚠️ et il est borné des deux côtés (les horloges des deux clients se croisent)",
+     Q.starTimberProgress(e, 0) === 0 && Q.starTimberProgress(e, 1e12) === 1);
+  Q.resolveStarTimberTick(e, 1000 + C.STAR_TIMBER.hull.ms);
+  ok("⚠️⚠️ pièce livrée = plus personne à l'ouvrage (la bulle disparaît)",
+     Q.starTimberBusy(e) === null);
+  /* ⚠️ ET UNE SEULE À LA FOIS : l'ordre du plan l'interdit, mais c'est la BULLE qui
+     paierait une seconde commande simultanée — deux bulles sur la même tête. */
+  Q.resolveStarFound(e, "furrow", "j1", 2000);
+  Q.commitStarTimber(e, "rudder", "j1", 3000);
+  const w2 = Q.starTimberBusy(e);
+  ok("⚠️ et il n'y a jamais qu'UNE pièce en cours", !!w2 && w2.key === "rudder");
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(`\n${fails === 0 ? "✅" : "❌"} ${total - fails}/${total} contrôles passés.\n`);
 process.exit(fails === 0 ? 0 : 1);

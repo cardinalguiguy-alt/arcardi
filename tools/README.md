@@ -482,7 +482,74 @@ donnait pas, d'une rangée.
 
 ---
 
-## `render-etoile.mjs` — les dessins de la quête de l'étoile (444, cratère 446, comète 448, sillon 454, alerte 455, jauge 456)
+## `render-etoile.mjs` — les dessins de la quête de l'étoile (444, cratère 446, comète 448, sillon 454, alerte 455, jauge 456, glissade et poses 459)
+
+### ⚠️⚠️⚠️ ZIP 459 — LE PREMIER BANC DU DÉPÔT QUI **JOUE** AU LIEU DE MESURER
+
+Section **7**, réécrite de fond en comble. Le 458 y vérifiait une INÉGALITÉ (« marche en montée
+− glissade ≥ 1 case/s ») ; c'était un raccourci algébrique vers la vraie question, et la vraie
+question est celle que le §25 de `components/ferme/README.md` reproche à tous les bancs du dépôt
+de ne jamais poser : **est-ce qu'on ARRIVE ?** Le banc prend maintenant `Q.starSlipStep` — la
+machine d'état pure de la glissade —, lui donne le VRAI creux (`starCraterSink`), tient une
+direction à 60 images par seconde depuis **317 points de départ** répartis dans toute la cuvette,
+et regarde si le fermier **sort du trou**. Verdict imprimé : *0 bloqué sur 317, pire cas 4,7 s.*
+
+⚠️⚠️ **ET LA SIMULATION A PAYÉ AVANT MÊME D'ÊTRE UN BANC.** Le premier jet du moteur gageait le
+compteur d'effort (« 3 s de la même direction ») sur « est-ce que je monte ? ». Or en dévalant on
+DÉPASSE le point bas de quelques centimètres : la pente s'inverse sous les pieds, le pas tenu
+devient « une descente », le compteur repartait de zéro. Mesuré : **219 points bloqués sur 317**,
+c'est-à-dire une grimpe qui n'existait pas — et rien de tout ça n'était visible en relecture, ni
+au build, ni à l'œil sur trois essais en jeu. *Quand on peut JOUER une propriété, on la joue.*
+
+Les six autres contrôles de la section tiennent l'intervalle plutôt qu'un seuil, parce que chacun
+échoue **dans les deux sens** : le plancher marchable (1,55 à 2,80 case — sous 1,5 la demande
+« il peut se déplacer sur ses pieds » est morte, au-dessus la paroi n'existe plus), la crête de
+la glissade (elle doit se sentir, elle ne doit jamais dépasser la marche), la déviation latérale
+(assez pour viser, pas assez pour piloter), le freinage (il ne doit PAS marcher), et la grimpe
+cramponnée (même vitesse partout : si la pente y entrait encore, ce ne serait pas une prise).
+
+⚠️ **Un septième confronte la DÉDUCTION au moteur** : `starSlipSeen` rend la pose d'un joueur
+distant à partir de sa seule vitesse (aucun champ réseau de plus, §3 de `CLAUDE.md`). Le banc joue
+une descente-remontée complète et compare image par image — **209 sur 209** sur les images où ça
+va vite ou où l'on grimpe. Il ne l'exige PAS sur la queue de la glissade (le fermier finit de
+s'immobiliser au fond, à trente centimètres près) : là, « il dérape encore » et « il est debout »
+sont indiscernables de l'extérieur, et exiger l'accord demanderait de la MÉMOIRE chez celui qui
+regarde, donc un état par joueur distant, donc quelque chose qui dérive au premier paquet perdu.
+*On préfère un désaccord nommé à un état à réconcilier.*
+
+### ⚠️⚠️ ZIP 459 — LES TROIS POSES, ET LE STUB MENTEUR QUI LES A DÉCLARÉES VIDES
+
+Section **12**, huit contrôles, planche `etoile-poses.png` (quatre tenues × six colonnes). Elle
+mesure ce que `render-assise` mesure depuis le 428, pour les mêmes raisons payées : **les pieds
+restent au sol** (une pose ancrée ailleurs FLOTTE), **rien ne touche le bord du cadre** (le canevas
+découpe en silence), et **les quatre images de la grimpe sont vraiment quatre** (au 449, deux poses
+de la compagne sortaient identiques au pixel près). Deux contrôles de plus disent ce que la demande
+disait : la glissade **penche en arrière** (centre de gravité des épaules comparé entre deux
+dévalements opposés) et **s'accroupit**, et le cycle de grimpe est **contralatéral**.
+
+⚠️⚠️⚠️ **ET IL A FALLU VÉRIFIER LE BANC AVANT DE CROIRE SES QUATRE ROUGES.** Une feuille de
+personnage empile ses trois orientations avec `g.translate`, **que le faux canevas IGNORE** (§10 de
+`CLAUDE.md`) : sur un banc, les rangées « de dos » et « de profil » sont VIDES. Une pose demandée
+en rangée 1 n'y dessine rien du tout, et le banc conclut « la pose est vide » sur un dessin
+parfaitement correct dans le jeu. `render-assise` prend la rangée 0 depuis le 428 sans avoir
+jamais écrit pourquoi ; c'est écrit maintenant, aux deux endroits.
+
+⚠️ Un neuvième contrôle, dans la section de la POUSSIÈRE, mesure une grandeur qu'aucun des cinq
+autres ne mesurait : **où** elle est. Les cinq disaient sa vie (elle s'ouvre, elle s'éteint, elle a
+deux tons) ; aucun ne disait qu'elle enveloppait la TÊTE du fermier au lieu de sortir de sous ses
+semelles — cinquième forme du défaut de banc (« il mesure ce qu'une chose EST et jamais OÙ »).
+⚠️ Et son contrôle de teinte a dû être corrigé dans le même zip : il lisait la couleur **composée
+sur du noir transparent** (34 % d'opacité → 52 de rouge au lieu de 152) et ne passait que parce
+que huit bouffées empilées finissaient par saturer. Il mesurait un empilement, pas une palette.
+
+### Section 13 — la bulle d'ouvrage de Tristan (459)
+
+Cinq contrôles. Elle a **deux mouvements**, et ils répondent à deux questions différentes : la scie
+qui va et vient dit « c'est en train de se faire MAINTENANT », le trait de scie qui s'enfonce dit
+« on approche ». Un dessin qui n'aurait que le premier serait un moulin ; que le second, une barre
+de progression. ⚠️ Le trait est compté **en pixels sombres**, pas déduit d'un « les deux images
+diffèrent » : deux images peuvent différer par la seule sciure qui tombe, et le contrôle serait
+passé au vert sur un trait immobile.
 
 ### ⚠️⚠️ ZIP 456 — LA JAUGE DE POSTURE, ET UN SEUIL DE BANC QUI A DÛ BAISSER
 
@@ -552,7 +619,9 @@ qui change vraiment.
 `node tools/render-etoile.mjs` → `etoile-planche.png` · `etoile-cratere.png` (446 : **trois
 états du cratère côte à côte** — fumant, refroidi, bassin de verre — parce que ce qui a changé
 est la PAIRE, pas l'image) · `etoile-comete.png` (448) · `etoile-alerte.png` (455) ·
-`etoile-jauge.png` (456 : cinq remplissages et deux états d'attente sur la terre du cratère).
+`etoile-jauge.png` (456 : cinq remplissages et deux états d'attente sur la terre du cratère) ·
+`etoile-poses.png` (459 : les trois poses du cratère sur quatre tenues) · `etoile-tristan.png`
+(459 : la bulle d'ouvrage à cinq avancements).
 
 ⚠️⚠️ **IL REMPLACE `verify-enquete.mjs` ET `render-enquete.mjs`, SUPPRIMÉS AU 444 AVEC L'ENQUÊTE
 QU'ILS MESURAIENT.** Un banc qui mesure du contenu disparu est pire qu'un banc absent : il passe
