@@ -23644,20 +23644,34 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         </div>
       )}
 
-      {/* Roue "paramètres" : maison/puits/carte/employés/perso/quitter étaient
-          six boutons en permanence visibles en haut à droite. Repliés ici,
-          dépliés au clic sur la roue (⚙️, qui tourne au survol). Chaque
-          bouton referme le menu en plus de son action normale — sinon il
-          resterait ouvert par-dessus le panneau qu'on vient d'ouvrir. */}
+      {/* ZIP 2026-08 — CARTE ET EMPLOYÉS SORTENT DE LA ROUE, SUR RETOUR DE
+          GUILLAUME : « le puits, par exemple, est presque inutile [dans la
+          roue] et celui qui est super utile c'est staff ». La roue (juste en
+          dessous) résumait six actions à poids égal derrière un clic
+          supplémentaire — juste pour celles qu'on ouvre en fait à chaque
+          session (la carte, les employés) autant que pour celles qu'on
+          n'ouvre presque jamais (changer de perso, quitter). Les deux
+          fréquentes deviennent des icônes seules, toujours visibles, à côté
+          de la roue — même famille visuelle que le sifflet/la torche
+          (cerclées, sans étiquette, `title` pour l'infobulle), gardées
+          exprès à ce jugées comme fine par Guillaume. Employés reste
+          conditionnel (aucun employé tant que rien n'est embauché) : une
+          icône qui ne mène nulle part ne doit pas apparaître. */}
+      {(sharedRef.current.greg || sharedRef.current.soan || skilledResidents().length > 0 || ((sharedRef.current.station && sharedRef.current.station.residents) || []).length > 0) && (
+        <button className="ferme-quick-fab ferme-employees-fab" title={L.btnEmployees} onClick={() => setEmployeesOpen(true)}>👥</button>
+      )}
+      <button className="ferme-quick-fab ferme-map-fab" title={L.btnMap} onClick={() => setMapOpen(true)}>🗺️</button>
+      {/* Roue "paramètres" : ce qui reste (maison, puits, changer de perso,
+          quitter) — actions rares ou qui ont déjà leur propre porte d'entrée
+          ailleurs (le puits se rejoint aussi à pied). Dépliée au clic sur la
+          roue (⚙️, qui tourne au survol). Chaque bouton referme le menu en
+          plus de son action normale — sinon il resterait ouvert par-dessus
+          le panneau qu'on vient d'ouvrir. */}
       <button className={"ferme-settings-fab" + (settingsOpen ? " open" : "")}
               title={L.btnSettings} onClick={() => setSettingsOpen(o => !o)}>⚙️</button>
       <div className={"ferme-actions" + (settingsOpen ? " open" : "")}>
         <button className="ferme-btn" onClick={() => { setSettingsOpen(false); teleportHome(); }}>{L.btnHome}</button>
         {buildings.wellBuilt && <button className="ferme-btn" onClick={() => { setSettingsOpen(false); teleportWell(); }}>{L.btnWell}</button>}
-        <button className="ferme-btn" onClick={() => { setSettingsOpen(false); setMapOpen(true); }}>{L.btnMap}</button>
-        {(sharedRef.current.greg || sharedRef.current.soan || skilledResidents().length > 0 || ((sharedRef.current.station && sharedRef.current.station.residents) || []).length > 0) && (
-          <button className="ferme-btn" onClick={() => { setSettingsOpen(false); setEmployeesOpen(true); }}>{L.btnEmployees}</button>
-        )}
         <button className="ferme-btn ferme-btn-ghost" onClick={() => { setSettingsOpen(false); changeCharacter(); }}>{L.btnChangeChar}</button>
         <button className="ferme-btn ferme-btn-ghost" onClick={() => { setSettingsOpen(false); leaveGame(); }}>{L.btnLeave}</button>
       </div>
