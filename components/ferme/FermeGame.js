@@ -2847,6 +2847,65 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       hostFlushOut(out, f, null);
       return;
     }
+    if (req.kind === "devMoney") {
+      /* ═══ ZIP 2026-08 — S'ATTRIBUER DE L'OR (menu développeur) ═══
+         Même famille que devResidents/devHeal juste au-dessus : l'hôte
+         arbitre, la requête ne fait que demander un montant borné. L'or est
+         commun (§3 de CLAUDE.md), donc un seul champ à toucher, comme
+         partout ailleurs dans ce fichier (`s.money += …`). */
+      const amt = Math.max(0, Math.min(10000000, req.amount | 0));
+      if (amt > 0) {
+        s.money += amt;
+        s.totalEarned = (s.totalEarned || 0) + amt;
+        out.state = shareState();
+        dirtyRef.current = true;
+        broadcastChat("🛠️", L.devMoneyChat(f.name, amt));
+        persistFnRef.current && persistFnRef.current();
+      }
+      hostFlushOut(out, f, null);
+      return;
+    }
+    if (req.kind === "devBuild") {
+      /* ═══ ZIP 2026-08 — TOUT TERMINER (menu développeur) ═══
+         Demande de Guillaume : pouvoir construire/tester une fonctionnalité
+         de la ferme sans attendre les délais réels (lampadaire, épouvantail,
+         moulin, chaudron, repousse d'herbe — tous stockés comme un horodatage
+         dans `w.objHp`, voir buildReady/BUILD_TIMES dans fermeEngine.js — et,
+         dans le même esprit, les cultures et la production animale en cours).
+         ⚠️ On ne réécrit AUCUNE règle de construction : on avance simplement
+         l'horodatage à MAINTENANT, exactement ce qu'un joueur obtiendrait en
+         attendant vraiment. Le tick 1 Hz déjà en place (repousse d'herbe,
+         etc.) fait le reste tout seul à la frame suivante.
+         ⚠️ Un objHp est SOIT une petite santé d'arbre/rocher (1-3), SOIT un
+         horodatage de construction (~10^12) : le seuil ci-dessous les
+         distingue sans avoir à connaître chaque type un par un. */
+      const now = Date.now();
+      let n = 0;
+      for (const [i, v] of w.objHp) {
+        if (v > 1e6 && v > now) {
+          w.objHp.set(i, now);
+          recordTileOverride(i);
+          out.tiles.push({ i, g: w.ground[i], o: w.objects[i], hp: now });
+          n++;
+        }
+      }
+      for (const [i, c] of w.crops) {
+        const def = C.CROPS[c.t] || C.CROPS[0];
+        if ((c.bankedMs || 0) < def.growMs) {
+          c.bankedMs = def.growMs; c.wateredAt = now;
+          out.crops.push({ i, c: { t: c.t, n: c.n || 1, bankedMs: c.bankedMs, wateredAt: c.wateredAt } });
+          n++;
+        }
+      }
+      for (const an of (s.animals || [])) {
+        if (an.readyAt > now) { an.readyAt = now; n++; }
+      }
+      if (n > 0) { out.animals = s.animals; dirtyRef.current = true; minimapDirtyRef.current = true; }
+      broadcastChat("🛠️", L.devBuildChat(f.name, n));
+      persistFnRef.current && persistFnRef.current();
+      hostFlushOut(out, f, null);
+      return;
+    }
     if (req.kind === "wolfBiteResult") {
       // Dénouement du mini-jeu de morsure (chantier 2026-07) : n'affecte que
       // le loup concerné, encore en attente ("biting") et visant bien CE
@@ -27109,6 +27168,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     {L.devResidentsBtn(n)}
                   </button>
                 ))}
+              </div>
+              {/* Zip 2026-08 — s'attribuer de l'or / terminer les
+                  constructions en cours, sur demande de Guillaume. Même
+                  raison que « peupler la ferme » juste au-dessus : tester une
+                  fonctionnalité de la ferme sans compter sur le temps réel ou
+                  sur une économie qu'il faudrait faire tourner à la main. */}
+              <h3 style={{ margin: "14px 0 6px" }}>{L.devMoneySection}</h3>
+              <div className="ferme-hint">{L.devMoneyHint}</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {[100000, 1000000, 10000000].map(n => (
+                  <button key={"devmoney-" + n} className="ferme-btn" onClick={() => sendReq({ kind: "devMoney", amount: n })}>
+                    {L.devMoneyBtn(n)}
+                  </button>
+                ))}
+              </div>
+              <h3 style={{ margin: "14px 0 6px" }}>{L.devBuildSection}</h3>
+              <div className="ferme-hint">{L.devBuildHint}</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <button className="ferme-btn" onClick={() => sendReq({ kind: "devBuild" })}>{L.devBuildBtn}</button>
               </div>
               {/* ╔══════════════════════════════════════════════════════════════
                   ║ ZIP 444 — LA QUÊTE DE L'ÉTOILE.

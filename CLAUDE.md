@@ -595,6 +595,16 @@ cran · marquer le lieu suivant · tout sauf le duo · **et REJOUER UNE SCÈNE i
 remettre la quête à zéro, donc on ne la revoit qu'une fois, donc on ne la juge qu'une fois.
 ⚠️ **AUCUN BOUTON DE QUÊTE NE DONNE QUOI QUE CE SOIT** : le menu s'ouvre à tout joueur qui connaît
 le raccourci (398). Le chemin développeur appelle les mêmes résolveurs et JETTE ce qu'ils rendent.
+⚠️ **DEPUIS 2026-08, DEUX BOUTONS DU MENU DONNENT VOLONTAIREMENT QUELQUE CHOSE** — exception
+délibérée à la ligne du dessus, sur demande de Guillaume : « Argent » (+100 000/+1 000 000/
++10 000 000 or, arbitré par l'hôte comme `devResidents`) et « Constructions & cultures → Tout terminer », qui
+avance à MAINTENANT tout horodatage de construction en attente dans `w.objHp` (lampadaire,
+épouvantail, moulin, chaudron, repousse d'herbe — voir `BUILD_TIMES`/`buildReady` dans
+`fermeEngine.js`), toute culture (`bankedMs` porté à `growMs`) et toute production animale
+(`readyAt`). Sert à tester une fonctionnalité de la ferme (bâtiments compris) sans attendre les
+délais réels ni faire tourner l'économie à la main. Testé en session à 1 client
+(`fake-supabase.mjs`) : l'or s'incrémente bien côté hôte, le bouton renvoie « aucune construction
+en cours » sans rien casser quand il n'y a rien à finir.
 
 ⚠️⚠️ **AUTOMATISATION DU NAVIGATEUR — LA RECETTE COMPLÈTE, ET ELLE MARCHE DEPUIS LE 446.**
 `window.dispatchEvent(new KeyboardEvent("keydown", {code:"KeyE"}))` marche pour TOUTES les touches
