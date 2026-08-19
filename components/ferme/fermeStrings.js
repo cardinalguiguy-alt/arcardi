@@ -163,6 +163,21 @@ const STAR_FR = {
        c'est un écart. Ils ont tous vu tomber la pierre ; pas un ne verra ce qui
        en est sorti. */
     quiet: "Tout le monde a vu tomber la pierre. Personne ne verra ce qu'il y avait dedans.",
+    /* ╔═══════════════════════════════════════════════════════════════════════
+       ║ ZIP 458 — CE QUI TOMBE DANS LE CHAMP N'EST QU'UN ÉCLAT, ET ON LE DIT.
+       ╚═══════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ DEMANDE DE GUILLAUME : « clairement faire comprendre que ce qui
+       s'écrase à la ferme n'est qu'un fragment de la comète, mais que le vrai
+       cratère est tombé quelque part autour de Valley Town ».
+       ⚠️ LE CODE LE DISAIT DÉJÀ ET LE TEXTE, NON : `starFragments` fend la comète
+       en vol depuis le 455, et on VOIT trois morceaux se séparer au-dessus du
+       champ — mais aucune phrase ne reliait cette image à ce qu'on trouvait
+       ensuite. Un joueur en concluait que tout était tombé chez lui, cherchait la
+       suite dans ses champs, et ne prenait le train que parce que le bandeau le
+       lui disait. *Une image qui n'est pas nommée ne raconte rien.*
+       ⚠️ ELLE SE DIT À LA FERME SEULEMENT : en ville, on voit tomber le gros
+       morceau, et lui annoncer qu'il n'a qu'un éclat serait faux. */
+    split: "Elle s'est fendue en tombant. Ça, ce n'est qu'un éclat — le gros est passé au-dessus, vers Valley Town.",
   },
   /* ╔═══════════════════════════════════════════════════════════════════════════
      ║ ZIP 455 — LE TAMPON. LA PIERRE EST PUBLIQUE, L'ÉTOILE RESTE SECRÈTE.
@@ -224,15 +239,32 @@ const STAR_FR = {
       "Quand une pierre brûlante tombe dans le sable, le sable devient du verre vert.",
     ],
   },
+  /* ⚠️⚠️ ZIP 457 — POURQUOI ON REFROIDIT, ET CE QUE « VERS L'EST » VEUT DIRE.
+     Retour de Guillaume après une vraie séance : le mini-jeu de l'arrosoir est
+     agréable mais gratuit tant que rien ne dit pourquoi refroidir un bout
+     d'étoile a un intérêt, et `east` était un vers énigmatique que même lui ne
+     décodait plus. `tooHot` porte maintenant la raison AVANT le mini-jeu (un
+     matériau pareil, une fois dur, vaut une proue increvable — une contrainte
+     de CONSTRUCTION, pas un mystère gratuit), `got` la confirme APRÈS, et
+     `east` dit clairement où aller (la ville) tout en plantant la graine du
+     chantier des îles (§13 de CLAUDE.md) : les étoiles guideront un jour le
+     navigateur. Un peu de magie, jamais au prix de la clarté — c'est le
+     principe demandé. */
   s1: {
-    tooHot: "C'est trop brûlant pour regarder. Ça siffle sous la pluie.",
+    tooHot: "C'est trop brûlant pour qu'on y touche. Une fois froid, ça fera une proue increvable — personne n'a jamais rien vu d'aussi dur.",
     coolTitle: "Fais-le refroidir",
     coolHint: "Garde la lueur dans le repère. Arrose à petits coups — un grand le fend.",
     coolCrack: "Crac. On recommence, plus doucement.",
     coolWin: "Le blanc devient orange, puis rouge, puis bleu. Ça ne siffle plus.",
     shadow: "Ton ombre a quelqu'un de tout petit assis sur son épaule. Tu te retournes. Il n'y a personne.",
-    got: "Un morceau du bateau. Il chante une note quand on le touche.",
-    east: "Il penche vers l'est. Toujours vers l'est.",
+    got: "La première pièce de la coque : froide, dure comme la pierre, de quoi faire une proue increvable. Elle chante une note quand on la touche.",
+    /* ⚠️⚠️ ZIP 458 — LA MÊME VÉRITÉ, DITE UNE SECONDE FOIS AU BON MOMENT. La
+       chute le dit dans le fracas (`fall.split`), à un joueur qui regarde le ciel ;
+       celle-ci le redit quand il a l'éclat dans les mains et qu'il se demande où
+       aller. Ce n'est pas un doublon : c'est la même information à deux instants
+       où l'on ne se pose pas la même question. */
+    fragment: "Ce n'est qu'un éclat de ce qui est tombé. Le cratère, le vrai, est quelque part du côté de Valley Town.",
+    east: "Il penche vers l'est, du côté de la ville, comme s'il montrait un chemin. Peut-être que c'est ainsi qu'on naviguera, une fois le navire fini.",
   },
   s2: {
     tooHot: "Le trou fume encore. Ce qui est au fond ne remontera pas.",
@@ -268,6 +300,14 @@ const STAR_FR = {
        demanderait une règle de grammaire dans une table de textes. « Elle en a
        un » dit la même chose et tient dans toutes les langues du fichier. */
     name: (n, total) => `Son bateau s'est cassé en tombant. ${Nfr(total)} morceaux. Elle en a ${nfr(n)}.`,
+    /* ⚠️⚠️ ZIP 458 — POURQUOI DES OMBRES, ET PAS ELLE QUI DIT L'ENDROIT. C'est la
+       question qu'un enfant pose en trois secondes, et rien n'y répondait : on
+       obéissait à une consigne magique sans savoir pourquoi elle existait. La
+       réponse tient en deux phrases et elle RENFORCE la grammaire du §4 (« la
+       lumière montre ce qu'une chose se rappelle ») au lieu de la commenter :
+       elle tombait, elle n'a rien vu ; tout ce qui a une ombre, si. */
+    whyLean: "Elle ne sait pas où ils sont tombés — elle tombait aussi, et elle avait les yeux fermés.",
+    whyLean2: "Mais tout ce qui a une ombre les a vus passer. Il suffit de demander aux ombres.",
     leanHint: "Une ombre est une direction. Deux font un endroit. Écoute ici, puis tout à l'autre bout de la ville.",
     leanArmed: "Les ombres penchent. D'ici, c'est tout ce qu'on peut dire.",
     leanSoloArmed: "Retiens la direction. Traverse la ville et réécoute, avant que ça s'efface.",
@@ -277,12 +317,36 @@ const STAR_FR = {
     markGlass: "La verrerie, à l'est de la ville.",
   },
   s3: {
+    /* ╔═══════════════════════════════════════════════════════════════════════
+       ║ ZIP 458 — LE CHAPITRE DU LAC DIT ENFIN POURQUOI IL EXISTE.
+       ╚═══════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ REPROCHE REPRIS À GUILLAUME : « rien ne dit pourquoi ce morceau est
+       dans un lac noir plutôt qu'ailleurs, ni pourquoi plonger à l'aveugle a un
+       sens ». C'était vrai, et c'était le même défaut que le 457 vient de
+       corriger au chapitre 1 : une épreuve sans sa raison se lit comme une
+       épreuve. Trois phrases répondent aux trois questions, dans l'ordre où on
+       les pose :
+         · `why`     — à quoi sert CETTE pièce pour le bateau (le safran) ;
+         · `whyDark` — pourquoi ici, et pas ailleurs (le vieux ponton) ;
+         · `poolHint` — pourquoi SA lumière et pas une lampe (la grammaire du §4).
+       ⚠️ Aucune n'ajoute de mystère : chacune referme une question. */
+    why: "Le safran. Une coque sans safran flotte, mais elle ne va nulle part.",
     dark: "L'eau est noire. Tu ne vois même pas tes mains.",
-    poolHint: "Sa lumière traverse l'eau et fait une flaque claire au fond.",
+    whyDark: "Il y avait un ponton avant celui-là. Ses pilotis sont encore debout là-dessous, dans le noir.",
+    poolHint: "Sa lumière ne montre pas ce qu'il y a. Elle montre ce que le vieux bois se rappelle.",
     poolLead: "Celui qui tient l'étoile marche sur le ponton. La flaque suit. Le plongeur ne voit que dedans.",
     poolSolo: "Tu cales l'étoile sur la bitte. La flaque ne bouge plus. Il faudra plonger en biais.",
     diveTitle: (n) => `Plongée ${n}`,
-    diveHint: "Tu coules tout seul — tu ne fais que diriger. L'anneau est ton souffle. Le morceau clignote.",
+    /* ⚠️⚠️ ZIP 458 — LA CONSIGNE A CHANGÉ PARCE QUE LE JEU A CHANGÉ. Elle disait
+       « tu ne fais que diriger », ce qui était vrai quand la flaque n'était qu'une
+       vignette ; la flaque est maintenant le TERRAIN. Une consigne qui survit à la
+       mécanique qu'elle décrit est le pire des textes morts : elle s'affiche, donc
+       personne ne la soupçonne. */
+    diveHint: "Reste dans la flaque : dehors, tu ne vois plus les pilotis et tu manques d'air. Ils penchent vers ce qu'ils se rappellent.",
+    diveBlind: "Hors de la lumière. Tu ne vois plus rien, et tu respires mal.",
+    diveHitDark: "Tu as heurté quelque chose que tu n'as pas vu venir.",
+    diveFar: "Trop loin. Il faut être juste dessus.",
+    diveBeat: "Pas au bon moment. Attends qu'il batte.",
     diveDeeper: "Il a glissé plus bas.",
     diveUp: "Tu remontes les mains vides. Respire. Replonge.",
     /* ⚠️⚠️ ZIP 453 — CETTE PHRASE SERVAIT DE MESSAGE DE FIN DE MANCHE, donc elle
@@ -299,6 +363,11 @@ const STAR_FR = {
     lureTitle: "Le leurre",
     sand: "Il y a un nid de pie dans l'arbre dehors. Et un caillou brillant fondu dans des perles.",
     rackHint: "Une de ces perles était une étoile. Son ombre s'en souvient ; le verre, non.",
+    /* ⚠️ ZIP 458 — CE QUE CHAQUE MORCEAU DEVIENT. Le chapitre 4 en donne DEUX et
+       ne disait ce qu'aucun des deux servirait : on ramassait deux cailloux
+       brillants. Une pièce dont on ignore l'usage ne construit rien. */
+    whyMast: "Fondu dans le verre, le morceau a gardé sa forme. Une fois sorti du sable, c'est un mât : droit, et qui ne pourrira jamais.",
+    whySail: "La pie a pris le plus léger des cinq. C'est la voile — pliée, elle tient dans un nid ; ouverte, elle prend tout le vent du lac.",
     sweepHint: "Promène la lumière le long du râtelier et regarde le mur. Ni trop vite, ni trop lentement.",
     sweepTooFast: "Trop vite. Les ombres passent sans qu'on les voie.",
     sweepTooSlow: "Trop lentement. Le verre chauffe et l'ombre se brouille.",
@@ -326,6 +395,15 @@ const STAR_FR = {
     bell1: "Je suis tombée aussi. Il y a très longtemps. Avant que la ville ait un nom.",
     bell2: "On m'a trouvée tiède dans un champ, et on m'a coulée dans cette forme.",
     bell3: "Je suis trop lourde pour rentrer. Mais je ne suis jamais allée en mer.",
+    /* ⚠️⚠️ ZIP 458 — POURQUOI UNE CLOCHE, ET C'EST LA PHRASE QUI RIME AVEC LE LAC.
+       Le retournement disait « un bateau qui ne peut pas sonner ne traverse pas »,
+       ce qui est joli et ne s'explique pas. Une cloche est ce qui dit où l'on est
+       quand on n'y voit plus rien — très exactement ce que le chapitre 3 vient de
+       faire vivre au joueur, au fond de l'eau noire. Le dernier morceau s'explique
+       donc par le troisième, et l'histoire se referme sur elle-même.
+       ⚠️ ELLE EST DITE AVANT `bell4`, jamais après : « emmène-moi » doit rester la
+       dernière chose qu'on lit. */
+    whyBell: "Une cloche, c'est ce qui dit où l'on est quand on n'y voit plus rien. En pleine mer, sans elle, on ne se retrouve pas.",
     bell4: "Petite. Emmène-moi. J'ai sonné quatre mille fois de la même poutre.",
     duetTitle: "Le duo",
     duetOrgan: "Répète les notes qu'elle chante, dans l'ordre. Les tuyaux s'allument quand c'est juste.",
@@ -375,6 +453,33 @@ const STAR_FR = {
     hallFee: (gold, crops, fish) => `Ses conditions : ${gold} or, ${crops} récoltes et ${fish} poissons. Payables d'avance.`,
     hallWhy: "Il dit qu'un plan se paie en une fois ou pas du tout. Il n'a jamais expliqué pourquoi.",
     hallSendBtn: "Faire venir l'ingénieur",
+    /* ╔═══════════════════════════════════════════════════════════════════════
+       ║ ZIP 458 — LA TRANSACTION SE VOIT, SE COMPOSE, ET SE VALIDE.
+       ╚═══════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ REPROCHE DE GUILLAUME : *« il me dit que je suis short alors que je
+       crois tout avoir »*. Il avait raison de le croire : l'or se prend sur la
+       CAISSE COMMUNE, les récoltes et les poissons dans SON SAC — trois
+       provenances différentes, aucune écrite nulle part, et un refus d'une seule
+       ligne (« il te manque de quoi payer ») qui ne disait ni QUOI ni COMBIEN.
+       ⚠️ Ces libellés sont donc au nombre de trois familles : ce qu'on POSE sur
+       la table (`dealHave`), ce qui MANQUE (`dealShort`), et ce que ça VEUT dire
+       (`dealFrom*`). Aucune ne remplace l'arbitrage de l'hôte : il refuse
+       toujours, mais il ne refuse plus en silence. */
+    dealTitle: "La transaction",
+    dealAdd: "Ajouter",
+    dealAdded: "Posé sur la table",
+    dealClear: "Tout reprendre",
+    dealValidate: "Valider la transaction",
+    dealGold: "Or",
+    dealCrops: "Récoltes",
+    dealFish: "Poissons",
+    dealFromPurse: "caisse commune",
+    dealFromBag: "ton sac",
+    dealFromBagPool: "ton sac + réserve commune",
+    dealHave: (have, need) => `${have} / ${need}`,
+    dealShort: (n, what) => `Il manque ${n} ${what}.`,
+    dealReady: "Kerguélen compte. Tout y est.",
+    dealNotReady: "Il ne prendra pas la moitié. Complète, ou reviens plus tard.",
     hallPoor: "Il te manque de quoi payer. Il ne fera pas crédit.",
     hallSent: "C'est envoyé. Il prendra le premier train.",
     hallTravel: (d) => `Kerguélen est en route. Il arrive dans ${d}.`,
@@ -603,6 +708,9 @@ const STAR_EN = {
     line2: "Something hits the ground far away. The windows rattle.",
     line3: "Every bird in the valley goes up at once.",
     quiet: "Everyone saw the stone fall. Nobody will ever see what was inside it.",
+    /* ⚠️⚠️ ZIP 458 — voir la note française : ce qui tombe dans le champ n'est
+       qu'un éclat, et le gros est passé au-dessus, vers Valley Town. */
+    split: "It broke apart as it fell. This is only a splinter — the big one went over, toward Valley Town.",
   },
   /* ╔═══════════════════════════════════════════════════════════════════════════
      ║ ZIP 455 — LE TAMPON. LA PIERRE EST PUBLIQUE, L'ÉTOILE RESTE SECRÈTE.
@@ -654,8 +762,11 @@ const STAR_EN = {
     ],
   },
   /* ── ÉTAPE 1 : LE CHAMP. */
+  /* ⚠️⚠️ ZIP 457 — voir la note française : `tooHot`/`got` disent maintenant
+     pourquoi on refroidit (une proue increvable, pas un mystère gratuit), et
+     `east` dit clairement où aller tout en plantant le futur navigateur. */
   s1: {
-    tooHot: "It's too hot to look at. It hisses when the rain touches it.",
+    tooHot: "It's too hot to touch. Once it's cold, it'll make an unbreakable prow — nobody's ever seen anything this hard.",
     coolTitle: "Cool it down",
     /* ⚠️⚠️ ZIP 449 — LES CONSIGNES DISENT LE BUT, PAS SEULEMENT LE GESTE
        (demande de Guillaume). Celle-ci savait déjà dire « à petits coups » ;
@@ -668,8 +779,11 @@ const STAR_EN = {
     coolCrack: "Crack. Start again, gentler.",
     coolWin: "The white goes orange, then red, then blue. It stops hissing.",
     shadow: "Your shadow has someone small sitting on its shoulder. You turn around. Nothing there.",
-    got: "One piece of the boat. It hums a note when you touch it.",
-    east: "It leans east. Always east.",
+    got: "The first piece of the hull: cold, hard as stone, enough to make an unbreakable prow. It hums a note when you touch it.",
+    /* ⚠️⚠️ ZIP 458 — voir la note française : la même vérité, redite au moment où
+       l'on a l'éclat dans les mains. */
+    fragment: "This is only a splinter of what fell. The crater, the real one, is somewhere over by Valley Town.",
+    east: "It leans east, toward town, as if it's pointing the way. Maybe that's how we'll navigate one day, once the ship is done.",
   },
   /* ── ÉTAPE 2 : LE CRATÈRE. */
   s2: {
@@ -704,6 +818,9 @@ const STAR_EN = {
        ⚠️ On dit « the far side of town » plutôt que « 30 tiles » : la grandeur
        exacte est un réglage (elle a déjà bougé de 45 à 30), la consigne est une
        phrase. Recopier le nombre ici serait le doublon du §8 de CLAUDE.md. */
+    /* ⚠️⚠️ ZIP 458 — voir la note française : pourquoi des ombres, et pas elle. */
+    whyLean: "It doesn't know where they fell — it was falling too, with its eyes shut.",
+    whyLean2: "But everything with a shadow saw them go past. You only have to ask the shadows.",
     leanHint: "One shadow is a direction. Two are a place. Listen here, then again from the far side of town.",
     leanArmed: "The shadows lean. From here, that's all you can tell.",
     leanSoloArmed: "Remember which way. Now cross town and listen again, before it fades.",
@@ -714,8 +831,12 @@ const STAR_EN = {
   },
   /* ── ÉTAPE 3 : LE LAC. */
   s3: {
+    /* ⚠️⚠️ ZIP 458 — voir la note française : les trois questions du chapitre du
+       lac (à quoi sert cette pièce, pourquoi ici, pourquoi SA lumière). */
+    why: "The rudder. A hull without a rudder floats, but it goes nowhere.",
     dark: "The water is black. You can't see your own hands.",
-    poolHint: "Its light goes through the water and makes a bright pool on the bottom.",
+    whyDark: "There was a pier here before this one. Its pilings are still standing down there, in the dark.",
+    poolHint: "Its light doesn't show what is there. It shows what the old wood remembers.",
     poolLead: "Whoever holds the star walks the pier. The pool follows. The diver can only see inside it.",
     poolSolo: "You wedge the star on the bollard. The pool stops moving. You'll have to dive at an angle.",
     diveTitle: (n) => `Dive ${n}`,
@@ -723,7 +844,13 @@ const STAR_EN = {
        coule tout seul (`STAR_DIVE_SINK`), on ne pilote que la dérive, et l'éclat
        BAT (`STAR_DIVE_PULSE_MS`) — c'est au battement qu'on le voit. Un joueur
        qui ignore le battement croit que le fond est vide et remonte. */
-    diveHint: "You sink on your own — just steer. The ring is your breath. The piece blinks.",
+    /* ⚠️⚠️ ZIP 458 — voir la note française : la consigne d'avant décrivait une
+       mécanique qui n'existe plus. */
+    diveHint: "Stay in the pool: outside it you can't see the pilings, and you run out of air. They lean toward what they remember.",
+    diveBlind: "Out of the light. You can't see, and you can't breathe well.",
+    diveHitDark: "You hit something you never saw coming.",
+    diveFar: "Too far. You have to be right on it.",
+    diveBeat: "Wrong moment. Wait for the beat.",
     diveDeeper: "It slid deeper.",
     diveUp: "You come up empty. Breathe. Go again.",
     /* ⚠️⚠️ ZIP 453 — voir la note française : elle servait de message de FIN DE
@@ -745,6 +872,9 @@ const STAR_EN = {
        contre la verrerie (`starNestTree`). Voir la note de `hud.goal.nestShard`. */
     sand: "There's a magpie's nest in the tree outside. And a bright pebble melted into somebody's beads.",
     rackHint: "One of these beads used to be a star. Its shadow remembers; the glass doesn't.",
+    /* ⚠️ ZIP 458 — voir la note française : ce que chaque morceau DEVIENT. */
+    whyMast: "Melted into the glass, the piece kept its shape. Out of the sand it's a mast: straight, and it will never rot.",
+    whySail: "The magpie took the lightest of the five. That's the sail — folded, it fits in a nest; open, it takes the whole lake wind.",
     /* ⚠️ ZIP 449 — LE BUT AVANT LE GESTE. « Sweep the light » ne disait pas ce
        qu'on cherche : c'est l'OMBRE au mur qui trahit, jamais la perle. */
     sweepHint: "Sweep the light along the rack and watch the wall. Not too fast, not too slow.",
@@ -780,6 +910,8 @@ const STAR_EN = {
     bell1: "I fell too. A long time ago. Before the town had a name.",
     bell2: "They found me warm in a field and they poured me into this shape.",
     bell3: "I am too heavy to go home now. But I have never been to sea.",
+    /* ⚠️⚠️ ZIP 458 — voir la note française : la cloche s'explique par le lac. */
+    whyBell: "A bell is what tells you where you are when you can't see anything. Out at sea, without one, you don't find each other again.",
     bell4: "Small one. Take me with you. I have rung four thousand times from the same beam.",
     duetTitle: "The duet",
     /* ⚠️ ZIP 449 — CHAQUE POSTE DIT CE QU'IL FAIT *ET* CE QU'IL DOIT TENIR : le
@@ -825,6 +957,23 @@ const STAR_EN = {
     hallFee: (gold, crops, fish) => `His terms: ${gold} gold, ${crops} crops and ${fish} fish. Paid up front.`,
     hallWhy: "He says a plan is paid all at once or not at all. He has never explained why.",
     hallSendBtn: "Send for the shipwright",
+    /* ⚠️⚠️ ZIP 458 — voir la note française : la transaction se voit, se compose
+       et se valide, et un refus dit QUOI et COMBIEN. */
+    dealTitle: "The deal",
+    dealAdd: "Add",
+    dealAdded: "On the table",
+    dealClear: "Take it all back",
+    dealValidate: "Close the deal",
+    dealGold: "Gold",
+    dealCrops: "Crops",
+    dealFish: "Fish",
+    dealFromPurse: "common purse",
+    dealFromBag: "your bag",
+    dealFromBagPool: "your bag + common store",
+    dealHave: (have, need) => `${have} / ${need}`,
+    dealShort: (n, what) => `${n} ${what} short.`,
+    dealReady: "Kerguélen counts it. It's all there.",
+    dealNotReady: "He won't take half of it. Make it up, or come back later.",
     hallPoor: "You're short. He doesn't give credit.",
     hallSent: "It's sent. He'll take the first train.",
     hallTravel: (d) => `Kerguélen is on his way. He arrives in ${d}.`,

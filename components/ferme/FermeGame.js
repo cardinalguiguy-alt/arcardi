@@ -616,6 +616,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      monde — un mini-jeu plein écran, une carte de chapitre, et des bulles
      au-dessus de l'étoile. Le seul panneau qui reste est le rappel de reprise. */
   const [starMini, setStarMini] = useState(null);   // { kind, round, … } — un mini-jeu plein écran
+  /* zip 458 — la mise POSÉE sur la table de la mairie : { gold, crops, fish } en
+     booléens, purement LOCALE, jamais diffusée (voir `starDealNow`). */
+  const [engDeal, setEngDeal] = useState({});
   const [starCard, setStarCard] = useState(null);   // { key } — une carte de chapitre
   /* ⚠️ ZIP 455 — L'INVITE DE L'HÔTE, ET LE JOUR OÙ IL A DIT « PLUS TARD ». Le
      refus n'est PAS un état partagé : c'est le confort d'un joueur, il ne concerne
@@ -927,6 +930,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      qu'un joueur qui arrive après la chute ne la verrait JAMAIS parce qu'un
      autre l'a vue pour lui. */
   const starScenePendRef = useRef(null);             // { key, ch, at } — la scène en attente d'être VISIBLE
+  const starCardPendRef = useRef(null);              // zip 458 — { key } — la carte de chapitre en attente d'un écran libre
+  const craterSlideRef = useRef(0);                  // zip 458 — jusqu'à quand l'élan de la glissade survit à la touche
+  /* zip 458 — l'instant où CE client a vu l'étoile sortir du trou. ⚠️ UNE HORLOGE
+     LOCALE, comme l'ancre de la chaleur du cratère (446) : `found.crater.at` est
+     une date de l'HÔTE, la soustraire de la nôtre est la faute du §3. */
+  const starJoinT0Ref = useRef(0);
+  const craterDustRef = useRef([]);                  // zip 458 — { x, y, t0, seed } — les bouffées, purement locales
+  const craterDustNextRef = useRef(new Map());       // zip 458 — la cadence d'émission, par joueur
   /* ⚠️ LA CAMÉRA DE SCÈNE EST UN REF LU PAR `getCam` ET `getCamTown` — UNE
      JOINTURE, JAMAIS DEUX COPIES (le défaut n°1 du 444). Deux calculs de
      « où regarde la caméra » divergeraient au premier réglage, et le symptôme
@@ -2649,9 +2660,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            circulent depuis toujours — et refuse si elles ne disent pas la même
            chose. Sans ça, la mécanique la plus jolie du chantier serait aussi la
            plus facile à contourner, et le contournement serait invisible. */
-        if (req.pz === "town" && starCalmOk(f.id)) r = Q.resolveStarCalm(e, f.id, now, starSoloRoom());
+        if (req.pz === "town" && starCalmOk(f.id)) r = Q.resolveStarCalm(e, f.id, now, starAlone("crater"));
       } else if (req.kind === "starLean") {
-        if (req.pz === "town") r = Q.resolveStarLean(e, f.id, +req.tx || 0, +req.ty || 0, now, starSoloRoom());
+        if (req.pz === "town") r = Q.resolveStarLean(e, f.id, +req.tx || 0, +req.ty || 0, now, starAlone("lean"));
       } else if (req.kind === "starDuet") {
         if (req.pz === "court") r = Q.resolveStarDuet(e, req.phrase | 0, who, now);
       } else {
@@ -5154,22 +5165,52 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const r = Q.resolveStarPlanAsk(e, f.name, Date.now());
       if (!r.ok) return true;
       const need = r.cost;
-      const crops = (f.inv.crops || []).reduce((a, b) => a + (b | 0), 0);
-      const fish = (f.inv.fish || []).reduce((a, b) => a + (b | 0), 0);
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ ZIP 458 — TROIS PROVENANCES, DITES ET TENUES AU MÊME ENDROIT.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️⚠️ REPROCHE DE GUILLAUME : « il me dit que je suis short alors que je
+         crois tout avoir ». Il avait raison de le croire — l'or venait de la
+         CAISSE COMMUNE, les récoltes et les poissons de SON SAC, et rien ne le
+         disait. Un refus qui ne nomme pas ce qui manque n'est pas un refus, c'est
+         une énigme.
+         ⚠️⚠️ ET LES POISSONS PRENNENT AUSSI DANS LA RÉSERVE COMMUNE, exactement
+         comme le bois de Tristan depuis le 454 : c'est là que le pêcheur dépose
+         sa pêche, et laisser Kerguélen l'ignorer voulait dire « vous avez les
+         poissons, mais pas au bon endroit ». Les récoltes, elles, restent dans le
+         sac : il n'existe AUCUNE réserve commune de récoltes dans ce jeu (vérifié
+         avant d'écrire cette ligne, `gregStock` porte `fish` et pas `crops`) — et
+         inventer un second contenant pour l'occasion serait le doublon du §8. */
+      const pool = s2.gregStock || (s2.gregStock = { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
+      const sum = (arr) => (arr || []).reduce((a, b) => a + (b | 0), 0);
+      const crops = sum(f.inv.crops);
+      const fish = sum(f.inv.fish) + sum(pool.fish);
       if (s2.money < need.gold || crops < need.crops || fish < need.fish) {
-        hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: f.id, key: "starPoor" } } });
+        /* ⚠️ ON DIT QUOI ET COMBIEN. Le `toast` porte les trois manques ; le
+           libellé, lui, vit dans `fermeStrings` (`plan.dealShort`), parce qu'un
+           texte cuit ici serait un texte que `verify-strings` ne voit pas. */
+        hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: f.id, key: "starShort", n: {
+          gold: Math.max(0, need.gold - s2.money),
+          crops: Math.max(0, need.crops - crops),
+          fish: Math.max(0, need.fish - fish),
+        } } } });
         return true;
       }
       s2.money -= need.gold; setHud(h => ({ ...h, money: s2.money }));
       /* ⚠️ ON PRÉLÈVE À PLAT, ESPÈCE PAR ESPÈCE, DANS L'ORDRE DU SAC : l'ingénieur
          se fiche de savoir si ce sont des patates ou des carottes, et un joueur qui
          devrait choisir quoi donner ouvrirait un troisième panneau pour rien. */
-      const take = (arr, n) => { let left = n; for (let i = 0; i < arr.length && left > 0; i++) { const d = Math.min(arr[i] | 0, left); arr[i] -= d; left -= d; } };
-      take(f.inv.crops, need.crops); take(f.inv.fish, need.fish);
+      const take = (arr, n) => { let left = n; for (let i = 0; i < arr.length && left > 0; i++) { const d = Math.min(arr[i] | 0, left); arr[i] -= d; left -= d; } return left; };
+      take(f.inv.crops, need.crops);
+      /* ⚠️ LE SAC D'ABORD, LA RÉSERVE ENSUITE — l'inverse du bois (454), et c'est
+         voulu : le bois est le métier de Tristan (sa réserve est faite pour ça),
+         les poissons du sac sont ceux qu'on vient de pêcher. On vide ce qu'on
+         porte avant de puiser dans le bien commun. */
+      const restFish = take(f.inv.fish, need.fish);
+      if (restFish > 0) take(pool.fish, restFish);
       Q.commitStarPlan(e, f.name, Date.now());
       dirtyRef.current = true;
       hostSend({ type: "broadcast", event: "apply", payload: {
-        star: e, money: s2.money,
+        star: e, money: s2.money, gregStock: pool,
         farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets },
       } });
       broadcastChat("\u{1F4D0}", L.star.plan.hallSent);
@@ -6000,19 +6041,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        joue les mêmes neuf secondes. */
     if (p.starScene) {
       const sc = p.starScene;
-      if (sc.key === "card") setStarCard({ key: sc.ch });
+      if (sc.key === "card") starShowCard(sc.ch);
       /* ⚠️ ZIP 455 — L'ANNONCE EST UNE CARTE, PAS UNE SCÈNE : elle n'a rien à
          montrer dans le monde (c'est une NOUVELLE, pas un événement), donc elle
          passe par le même fondu enchaîné que les cartes de chapitre et se ferme
          toute seule. Une scène l'aurait mise dans la file de `starScenePump`,
          c'est-à-dire en attente d'un endroit où il y a du ciel — pour un texte. */
-      else if (sc.key === "warn") setStarCard({ key: "warn" });
+      else if (sc.key === "warn") starShowCard("warn");
       /* ⚠️⚠️ ZIP 445 — LA CHUTE PASSE PAR LA FILE, LES DEUX AUTRES NON. Voir la
          note de `starScenePendRef` : le retournement et la finale sont la suite
          immédiate d'un geste du joueur, la chute est la seule qui ARRIVE. */
       else if (sc.key === "fall") starQueueScene("fall");
       else {
-        starPlayScene(sc.key, sc.ch);
+        /* ⚠️⚠️ ZIP 458 — LE RETOURNEMENT ET LA FINALE PASSENT PAR LA FILE EUX
+           AUSSI. La note d'à côté disait vrai pour CELUI QUI VIENT DE JOUER — la
+           scène est la suite immédiate de son geste, elle doit partir tout de
+           suite — et faux pour l'AUTRE, qui peut très bien être au fond du lac ou
+           au marché. La file ne retarde personne quand l'écran est libre
+           (`starPanelsClear` passe, la scène part dans la même image) ; elle ne
+           fait quelque chose que dans le cas où l'ancienne version faisait du
+           dégât. */
+        starQueueScene(sc.key, sc.ch);
       }
     }
     if (p.townChop) {
@@ -6347,6 +6396,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        bouton qui ne répond rien est « le jeu propose et refuse » (426), et ces
        trois-là coûtent cher (24 000 or, 140 bois, une scène finale). */
     if (key === "starPoor") return L.star.plan.hallPoor;
+    /* ⚠️⚠️ ZIP 458 — LE REFUS DIT QUOI ET COMBIEN. `starPoor` disait « il te
+       manque de quoi payer » devant trois provenances différentes (caisse
+       commune, sac, réserve) : c'est-à-dire qu'il fallait deviner LAQUELLE. Le
+       nouveau porte les trois manques et n'énumère que ceux qui ne sont pas nuls.
+       ⚠️ Il ne remplace pas l'ancien, il s'y ajoute — `starPoor` reste le repli
+       si un jour un appelant n'a pas les chiffres, et un repli qui MENT est pire
+       qu'un repli qui reste vague (444). */
+    if (key === "starShort") {
+      const t = n || {}, P = L.star.plan, out = [];
+      if (t.gold > 0) out.push(P.dealShort(t.gold | 0, P.dealGold.toLowerCase()));
+      if (t.crops > 0) out.push(P.dealShort(t.crops | 0, P.dealCrops.toLowerCase()));
+      if (t.fish > 0) out.push(P.dealShort(t.fish | 0, P.dealFish.toLowerCase()));
+      return out.length ? out.join(" ") : P.hallPoor;
+    }
     if (key === "starNoWood") return L.star.plan.orderPoor(n | 0);
     if (key === "starNoTristan") return L.star.plan.noTristan;
     if (key === "starUnbuilt") { const t = n || {}; return L.star.plan.unbuilt(t.n | 0, t.total | 0); }
@@ -15851,6 +15914,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (m.sitOn && (dx || dy)) { standUpTown(); return; }
       if (m.sitOn) { m.moving = false; m.animT = 0; m.vx = 0; m.vy = 0; maybeSendPos(); return; }
       const moving = (dx || dy) && actAnimRef.current <= 0;
+      /* ⚠️ ZIP 458 — LA PENTE SE LIT UNE FOIS PAR IMAGE, AVANT LE PAS, et elle
+         sert DEUX fois : à ralentir la montée, puis à emporter la glissade. Deux
+         lectures auraient échantillonné le creux à deux positions différentes
+         (avant et après le pas), donc auraient fait diverger la peine et la
+         glissade — le §8 de `CLAUDE.md` dans sa version la plus discrète. */
+      const slideNow = starCraterSlopeNow(m.x, m.y);
       if (moving) {
         const len = Math.hypot(dx, dy); dx /= len; dy /= len;
         // Zip 250 (demande Guillaume : "mêmes déplacements qu'à la ferme, on
@@ -15861,7 +15930,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // tuiles/seconde pour être diffusée, plutôt que devinée à l'arrivée.
         // Zip 429 : on court aussi en ville — c'est même là que ça compte, la
         // carte fait 224×168 contre 96×72 pour la ferme.
-        const spSec = C.PLAYER_SPEED * (performance.now() < speedBuffUntilRef.current ? C.CANDY_SPEED_MUL : 1) * (isRunningNow(dt, uiBlocked) ? C.RUN_SPEED_MULT : 1);
+        let spSec = C.PLAYER_SPEED * (performance.now() < speedBuffUntilRef.current ? C.CANDY_SPEED_MUL : 1) * (isRunningNow(dt, uiBlocked) ? C.RUN_SPEED_MULT : 1);
+        /* ⚠️⚠️ ZIP 458 — LA PENTE DU CRATÈRE ENTRE ICI, ET NULLE PART AILLEURS.
+           Elle ralentit la MONTÉE (elle n'accélère pas la descente : la glissade
+           s'en charge juste après, et compter deux fois donnerait une éjection).
+           Voir le chapeau de `starCraterSlope` dans quete.js pour les trois
+           grandeurs qu'on refuse de mélanger. */
+        if (slideNow && slideNow.n > 0.01) {
+          const inv = 1 / slideNow.n;
+          spSec *= Q.starClimbMul(slideNow.n, dx * slideNow.gx * inv + dy * slideNow.gy * inv);
+        }
         const sp = spSec * dt;
         m.vx = dx * spSec; m.vy = dy * spSec;
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
@@ -15874,7 +15952,39 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (canStandTown(tw, m.x, ny, playerElevTown(tw, m))) m.y = ny;
         if (dx < 0) m.dir = 2; else if (dx > 0) m.dir = 3; else if (dy < 0) m.dir = 1; else if (dy > 0) m.dir = 0;
         m.animT += dt * 9;
+        /* ⚠️⚠️ ZIP 458 — L'ÉLAN NE SURVIT PAS À LA TOUCHE TANT QUE LE TROU BRÛLE,
+           ET C'EST UNE RÈGLE DE JUSTICE, PAS UN RÉGLAGE. Vu en jouant : le
+           cratère agrandi a une brûlure qui commence à 3,5 cases du centre pour
+           une cuvette de 4,9 — une glissade qui continue une demi-seconde après
+           qu'on a lâché les flèches peut donc pousser dans le feu quelqu'un qui
+           venait justement d'arrêter de marcher. Dix minutes de repos forcé pour
+           un geste qu'on n'a pas fait, c'est très exactement ce que ce dépôt
+           appelle « le jeu propose et refuse » (426), en pire : il PUNIT.
+           ⚠️ ON NE RETIRE PAS LA GLISSADE POUR AUTANT — elle reste entière tant
+           qu'on tient une touche, donc la sensation de profondeur est là dès la
+           première minute. Ce qui disparaît est le seul cas où le joueur n'a pas
+           choisi. Une fois froid, le trou ne punit plus rien, et l'élan revient. */
+        craterSlideRef.current = starCraterCoolNow() ? performance.now() + Q.STAR_SLIDE_COAST_MS : 0;
       } else { m.animT = 0; m.vx = 0; m.vy = 0; }
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ ZIP 458 — LA GLISSADE. « il doit un peu glisser maladroitement vers le
+         ║ bas, et avoir un peu de mal à remonter. »
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️⚠️ ELLE NE S'APPLIQUE QU'EN MOUVEMENT (et une demi-seconde après) : la
+         mécanique du chapitre 2 est de se tenir IMMOBILE dans le trou, dos
+         tourné. Une pente qui pousse en permanence aurait rendu la seule chose à
+         faire de ce lieu impossible à faire — on aurait ajouté une physique et
+         retiré un chapitre. Détail au chapeau de `starCraterSlope`.
+         ⚠️ ET ELLE PASSE PAR `canStandTown`, AXE PAR AXE, COMME LA MARCHE : une
+         glissade qui traverserait un mur serait un déplacement que l'hôte ne peut
+         pas rejouer. Ce n'est pas une téléportation, c'est un pas de plus. */
+      if (slideNow && slideNow.n > 0.01 && (moving || performance.now() < (craterSlideRef.current || 0))) {
+        const push = Q.starSlideSpeed(slideNow.n) * dt / slideNow.n;
+        const sx = m.x + slideNow.gx * push, sy = m.y + slideNow.gy * push;
+        if (canStandTown(tw, sx, m.y, playerElevTown(tw, m))) m.x = sx;
+        if (canStandTown(tw, m.x, sy, playerElevTown(tw, m))) m.y = sy;
+        craterDustPuff(m, slideNow, performance.now());
+      }
       m.moving = !!moving;
       const nowP = performance.now();
       maybeSendPos();
@@ -16391,6 +16501,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              cratère, elle se range comme n'importe quel décor haut. */
           if (!cph && sprites.drawStarCraterAir && copt.heat > 0.01)
             pushE((cpos.y + 1) * T, ce, () => sprites.drawStarCraterAir(ctx, ccx, ccy, T, now, copt));
+          /* ⚠️⚠️ ZIP 458 — LA POUSSIÈRE DE LA GLISSADE, EN FILE DE TRI ET PAS EN
+             DÉCAL DE SOL. Elle est à hauteur de mollet : peinte avec les tuiles,
+             elle passerait SOUS le fermier qui la lève, c'est-à-dire sous la seule
+             chose qu'elle est censée souligner. Mise en file à SA propre rangée,
+             elle passe derrière celui qui monte et devant celui qui descend —
+             comme n'importe quel objet bas.
+             ⚠️ ET LA BOUFFÉE S'ENFONCE AVEC LE SOL : elle lit le MÊME
+             `starCraterSink` que le fermier, donc elle ne flotte pas au-dessus du
+             trou (c'est exactement le défaut que le 454 a trouvé sur le sillon).
+             ⚠️ LE BATTEMENT EST ICI, DANS LA SEULE FONCTION QUI TOURNE À COUP SÛR
+             quand on est en ville — jamais dans `updateMeTown`, qui ne voit que
+             moi : c'est ce qui fait que la glissade de l'AUTRE joueur lève de la
+             poussière chez moi, pour zéro message. */
+          craterDustStep(now);
+          if (sprites.drawStarDust) for (const d of craterDustRef.current) {
+            const dk = (now - d.t0) / C.STAR_DUST_MS;
+            if (dk < 0 || dk >= 1) continue;
+            const dsink = sprites.starCraterSink(d.x - cpos.x, d.y - cpos.y, T);
+            pushE((d.y + 0.5) * T, ce,
+                  ((dx2, dy2, dk2, sd) => () => sprites.drawStarDust(ctx, dx2, dy2, T, dk2, sd))(
+                    d.x * T, d.y * T + dsink, dk, d.seed));
+          }
         }
       }
       /* ══════════════════════════════════════════════════════════════════════
@@ -17728,7 +17860,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            fait rien, c'est-à-dire un bogue de son point de vue. Un bâtiment de
            dix-sept pièces sur trois niveaux est justement un endroit où l'on
            veut aller vite. */
-        const spSec = C.PLAYER_SPEED * (performance.now() < speedBuffUntilRef.current ? C.CANDY_SPEED_MUL : 1) * (isRunningNow(dt, uiBlocked) ? C.RUN_SPEED_MULT : 1);
+        let spSec = C.PLAYER_SPEED * (performance.now() < speedBuffUntilRef.current ? C.CANDY_SPEED_MUL : 1) * (isRunningNow(dt, uiBlocked) ? C.RUN_SPEED_MULT : 1);
+        /* ⚠️⚠️ ZIP 458 — LA PENTE DU CRATÈRE ENTRE ICI, ET NULLE PART AILLEURS.
+           Elle ralentit la MONTÉE (elle n'accélère pas la descente : la glissade
+           s'en charge juste après, et compter deux fois donnerait une éjection).
+           Voir le chapeau de `starCraterSlope` dans quete.js pour les trois
+           grandeurs qu'on refuse de mélanger. */
         const sp = spSec * dt;
         m.vx = dx * spSec; m.vy = dy * spSec;
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
@@ -18858,7 +18995,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         ctx.beginPath(); ctx.moveTo(cx - 3, byTop + bh - 0.5); ctx.lineTo(cx + 3, byTop + bh - 0.5); ctx.lineTo(cx, byTop + bh + 4); ctx.closePath(); ctx.fill();
         ctx.fillStyle = "#1d1d1d"; ctx.fillText(text, bx + padX, byTop + bh - 4);
       } else {
-        ctx.font = "6px monospace";
+        /* ⚠️⚠️ ZIP 457 — RETOUR DE GUILLAUME EN SÉANCE : LA POLICE EST TROP FINE
+           POUR SE LIRE. À 6px non gras sur un fond de jeu chargé, chaque lettre
+           tient sur un pixel ou deux — c'est exactement la voix de l'étoile
+           (`s1.shadow`, les quatre états de la posture du cratère, la
+           rencontre) qui en souffrait le plus, puisque c'est elle qui passe par
+           CETTE branche. Gras à la même taille : les traits restent lisibles au
+           lieu de se fondre dans le fond. */
+        ctx.font = "bold 6px monospace";
         const padX = 3, lineH = 7, maxWidth = 64;
         const lines = wrapBubbleText(ctx, text, maxWidth);
         const tw = Math.ceil(Math.max(...lines.map(l => ctx.measureText(l).width)));
@@ -18908,16 +19052,31 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!im) return;
       const nowB = performance.now();
       const bob = Math.sin(nowB / 430) * 1.8;
-      const cx = cp.x * T + T / 2, cy = (cp.y + 1) * T - 16 + bob;
+      /* ⚠️⚠️ ZIP 458 — LE DÉCALAGE D'ARRIVÉE, EN PIXELS D'ÉCRAN. `starJoinAnim`
+         rend des pixels À LA TUILE DE RÉFÉRENCE 16 ; on les met à l'échelle par
+         T/16, exactement comme `starCraterSink`. Sans ça, le tournicotage
+         grandirait avec le zoom, ce qu'aucun banc n'irait chercher.
+         ⚠️ ET IL NE TOUCHE QUE LE DESSIN : `cp.x`/`cp.y` restent la position que
+         le reste du jeu lit (la bulle, le tri, la cachette). */
+      const jn = cp.join, jk = T / 16;
+      const jdx = jn ? jn.dx * jk : 0, jdy = jn ? jn.dy * jk : 0, jsc = jn ? jn.scale : 1;
+      const cx = cp.x * T + T / 2 + jdx, cy = (cp.y + 1) * T - 16 + (jn ? 0 : bob) + jdy;
       ctx.save();
       if (cp.hiding) ctx.globalAlpha = 0.22;
+      /* ⚠️ ELLE PASSE DERRIÈRE LE FERMIER PENDANT LA MOITIÉ DU TOUR, et c'est ce
+         seul détail qui fait qu'on la voit TOURNER AUTOUR plutôt que glisser
+         autour. Vu de dessus, un cercle sans profondeur est un cercle plat. */
+      if (jn && !jn.front) ctx.globalAlpha *= 0.55;
       // Le halo, deux couronnes, AUTOUR : la source reste la partie la plus claire.
       const puls = 0.5 + 0.5 * Math.sin(nowB / 700);
       ctx.fillStyle = `rgba(255,226,148,${(0.10 + 0.05 * puls).toFixed(3)})`;
       ctx.beginPath(); ctx.arc(cx, cy, 15, 0, 7); ctx.fill();
       ctx.fillStyle = `rgba(255,240,190,${(0.14 + 0.06 * puls).toFixed(3)})`;
       ctx.beginPath(); ctx.arc(cx, cy, 8.5, 0, 7); ctx.fill();
-      ctx.drawImage(im, Math.round(cx - im.width / 2), Math.round(cy - im.height / 2));
+      if (jsc !== 1) {
+        const w2 = Math.max(1, Math.round(im.width * jsc)), h2 = Math.max(1, Math.round(im.height * jsc));
+        ctx.drawImage(im, Math.round(cx - w2 / 2), Math.round(cy - h2 / 2), w2, h2);
+      } else ctx.drawImage(im, Math.round(cx - im.width / 2), Math.round(cy - im.height / 2));
       ctx.restore();
     }
     /* La bulle de l'étoile : le texte courant, s'il n'a pas expiré. Rendue par
@@ -21251,7 +21410,94 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      ⚠️ L'INVITE ET L'HÔTE L'APPELLENT TOUS LES DEUX. Une invite qui promet un
      geste solo pendant que l'hôte en exige deux, c'est le « propose puis
      refuse » du 426 sur la mécanique centrale du chantier. */
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 458 — « SUIS-JE SEUL ? » N'EST PAS UNE QUESTION DE SALON, C'EST UNE
+     ║ QUESTION DE LIEU. TROIS BLOCAGES DURS SONT SORTIS DE CETTE LIGNE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️⚠️ `starSoloRoom()` RÉPONDAIT « y a-t-il un autre joueur CONNECTÉ » et
+     servait à répondre à « puis-je avancer tout seul ». Les deux questions n'ont
+     jamais eu la même réponse, et l'écart ne peut se voir qu'à DEUX CLIENTS —
+     c'est-à-dire la séance que ce dépôt n'a jamais faite (§13 de `CLAUDE.md`).
+     Un joueur B qui laboure à la ferme rendait, pour A resté en ville :
+       · le CRATÈRE définitivement impossible à ouvrir (jauge pleine, rien) ;
+       · les DEUX CROISEMENTS D'OMBRES impossibles, donc les chapitres 3, 4 et 5 ;
+       · la FLAQUE de la plongée figée au centre et rétrécie au rayon « à deux » ;
+       · le refroidissement du chapitre 1 RENDU PLUS FACILE (bande × 1,4) par la
+         présence d'un joueur qui n'était même pas dans la bonne zone.
+     ⚠️ LA PARADE EST UNE SEULE IDÉE : on ne demande plus « sommes-nous
+     plusieurs », on demande **« quelqu'un peut-il tenir l'autre poste, ici et
+     maintenant »**. La réponse dépend du GESTE, donc elle se lit par geste — et
+     la zone se teste avant les distances, comme partout (§4 de `CLAUDE.md`).
+     ⚠️⚠️ ET ELLE NE VERROUILLE PLUS RIEN : depuis le même zip, `resolveStarCalm`
+     et `resolveStarLean` gardent le chemin solo OUVERT en permanence. Ce que
+     cette fonction décide n'est donc plus « est-ce possible » — c'est **quel
+     barème on annonce et quelle variante on joue**. Le pire qu'une erreur ici
+     puisse coûter est une phrase mal choisie, plus jamais une quête arrêtée.
+     ⚠️ ELLE NE COMPTE JAMAIS `me` : c'est « quelqu'un d'AUTRE », et `playersRef`
+     ne contient que les distants (voir `starRoomPlayerIds`, qui ajoute `me`
+     exprès parce qu'il répond, lui, à une autre question). */
+  function starOtherThere(pred) {
+    const ps = playersRef.current;
+    if (!ps) return false;
+    for (const p of ps.values()) if (p && pred(p)) return true;
+    return false;
+  }
+  /* ⚠️ « SEUL POUR CE GESTE-LÀ ». Rend `true` quand personne ne peut tenir
+     l'autre poste — c'est le sens que `solo` a toujours eu dans `quete.js` et
+     dans `StarMinigame`, et c'est la première fois qu'il est vrai. */
+  function starAlone(kind) {
+    if (kind === "cool") {
+      /* Le sillon est à la FERME. Un joueur en ville ne peut pas tenir le second
+         arrosoir — la bande large lui était pourtant offerte. */
+      return !starOtherThere(p => (p.zone || "farm") === "farm");
+    }
+    if (kind === "crater") {
+      const c = starCraterPos(); if (!c) return true;
+      /* Dans l'anneau, ou en train d'y descendre : on est généreux sur la marge
+         (le barème court ne s'obtient de toute façon que si l'autre TIENT
+         vraiment la posture, ce que l'hôte revérifie). */
+      return !starOtherThere(p => (p.zone || "farm") === "town"
+        && Math.hypot(p.x - c.x, p.y - c.y) <= Q.STAR_CRATER_R + 6);
+    }
+    if (kind === "dive") return starMiniLead() == null;   // personne sur le ponton
+    if (kind === "duet") return !starOtherThere(p => (p.zone || "farm") === "court");
+    /* `lean`, `rack`, `lure` : la ville entière est le poste. L'écoute des ombres
+       se fait d'un bout à l'autre de la carte, et pour le râtelier comme pour le
+       leurre, « l'autre » n'a besoin que d'être dans le même monde. */
+    return !starOtherThere(p => (p.zone || "farm") === "town");
+  }
+  /* ⚠️ CONSERVÉE POUR CE QU'ELLE DIT VRAIMENT : « personne d'autre n'est en
+     ligne ». Elle ne décide plus d'aucune mécanique ; elle sert au libellé du
+     menu dev et de garde-fou dans les bancs. */
   function starSoloRoom() { return (playersRef.current ? playersRef.current.size : 0) <= 0; }
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 458 — CE QUE LA TRANSACTION DE LA MAIRIE A SOUS LES YEUX.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ ELLE LIT LES MÊMES TROIS SOURCES QUE L'HÔTE, DANS LE MÊME ORDRE, et
+     c'est tout l'enjeu : un panneau qui compterait autrement que l'arbitre est le
+     « le jeu propose et refuse » du 426 sous sa forme la plus vexante — on voit
+     trois lignes vertes et on se fait recaler. Si l'une des deux écritures change,
+     l'autre doit changer avec (elles sont à trente lignes l'une de l'autre dans
+     ce fichier, exprès).
+     ⚠️ ELLE NE PRÉLÈVE RIEN. `staged` n'est qu'un booléen d'interface : « j'ai
+     poussé ma part au milieu de la table ». Tant qu'on n'a pas validé, il n'y a
+     ni `req`, ni or en moins, ni sac entamé — donc rien à annuler. */
+  function starDealNow() {
+    const s2 = sharedRef.current;
+    const f = farmersRef.current[me.id] || {};
+    const sum = (arr) => (arr || []).reduce((a, b) => a + (b | 0), 0);
+    const pool = s2.gregStock || {};
+    const mk = (have, need, key) => ({ have, need, staged: !!engDeal[key] });
+    const gold = mk(s2.money | 0, C.STAR_ENG_FEE_GOLD, "gold");
+    const crops = mk(sum(f.inv && f.inv.crops), C.STAR_ENG_FEE_CROPS, "crops");
+    const fish = mk(sum(f.inv && f.inv.fish) + sum(pool.fish), C.STAR_ENG_FEE_FISH, "fish");
+    const P = L.star.plan, short = [];
+    if (gold.have < gold.need) short.push(P.dealShort(gold.need - gold.have, P.dealGold.toLowerCase()));
+    if (crops.have < crops.need) short.push(P.dealShort(crops.need - crops.have, P.dealCrops.toLowerCase()));
+    if (fish.have < fish.need) short.push(P.dealShort(fish.need - fish.have, P.dealFish.toLowerCase()));
+    return { gold, crops, fish, short, allStaged: gold.staged && crops.staged && fish.staged };
+  }
   /* ⚠️⚠️ ZIP 453 — « LE NAVIRE EST-IL SORTI ? », ET ÇA SE LIT SUR EDUARDO.
      Décision de Guillaume : une fois la quête finie, le bateau est réel et
      c'est le voyageur qui le prend. On cherche donc par SKILL et jamais par
@@ -21493,10 +21739,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (devMenuOpenRef.current) return false;
     return true;
   }
-  function starSceneCanPlay() {
+  /* ⚠️⚠️ ZIP 458 — ELLE PREND LA CLÉ, ET LA CONDITION DE CIEL NE VAUT QUE POUR
+     LA CHUTE. C'est ce qui permet de mettre le RETOURNEMENT et la FINALE dans la
+     même file (voir `applyDeltas`) : la finale se joue dans le BEFFROI, donc en
+     zone `court`, que `starImpactZone` refuse — à raison, puisqu'une comète a
+     besoin d'un ciel et qu'un retournement n'a besoin que d'un écran libre. */
+  function starSceneCanPlay(key) {
     const m = meRef.current;
     if (!m || m.sleeping) return false;
-    if (!Q.starImpactZone(m.zone || "farm")) return false;
+    if ((key || "fall") === "fall" && !Q.starImpactZone(m.zone || "farm")) return false;
     if (starUiOpenRef.current) return false;                 // mini-jeu, carte de chapitre, rappel
     if (zoneTransRef.current && zoneTransRef.current.active) return false;
     if (mapOpenRef.current || shopOpenRef.current || binOpenRef.current || bagOpenRef.current
@@ -21514,8 +21765,31 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     return true;
   }
 
-  function starQueueScene(key) {
-    starScenePendRef.current = { key, at: performance.now() };
+  function starQueueScene(key, ch) {
+    starScenePendRef.current = { key, ch, at: performance.now() };
+    setStarTick(t => t + 1);
+  }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 458 — UNE CARTE DE CHAPITRE N'ARRIVE PLUS SUR L'ÉCRAN D'UN JOUEUR QUI
+     ║ EST EN TRAIN DE JOUER. C'est un défaut de DEUX JOUEURS, invisible à un.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ `setStarCard` était appelé DIRECTEMENT depuis `applyDeltas`. Or les
+     chapitres se ferment chez tout le monde en même temps : A refroidit son
+     morceau à la ferme, le chapitre 1 se ferme, et B — qui est à quarante mètres
+     de fond dans le lac, mini-jeu ouvert — reçoit une carte plein écran par
+     dessus. Le mini-jeu, lui, continue de tourner derrière (il a son propre
+     `rAF`) : B perd la manche sans avoir rien fait de mal, et il ne peut même pas
+     savoir pourquoi. **Aucun banc ne peut voir ça** — il faudrait qu'il ait deux
+     écrans.
+     ⚠️ LA FILE NE PERD RIEN ET NE DOUBLE RIEN : une seule carte en attente, la
+     dernière annoncée (deux chapitres qui tombent coup sur coup annoncent celui
+     où l'on se trouve, exactement comme l'hôte le fait déjà côté diffusion).
+     ⚠️ SON REF EST DÉCLARÉ AVEC LES AUTRES, EN TÊTE DE COMPOSANT : un `useRef`
+     écrit ici, au milieu du corps, changerait l'ordre des crochets le jour où une
+     sortie anticipée apparaîtrait au-dessus. */
+  function starShowCard(key) {
+    if (starPanelsClear()) { setStarCard({ key }); return; }
+    starCardPendRef.current = { key };
     setStarTick(t => t + 1);
   }
 
@@ -21531,6 +21805,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     starSceneRef.current = { key, t0: performance.now() };
     setStarTick(t => t + 1);
     if (key === "fall") {
+      /* ⚠️⚠️ ZIP 458 — « CE N'EST QU'UN ÉCLAT », DIT LÀ OÙ ON L'A VU SE FENDRE.
+         La jointure est `Q.starFragmentsOn`, c'est-à-dire **la fonction même qui
+         décide si la comète se fend à l'écran** : le texte ne peut donc pas
+         annoncer une fracture que le dessin n'a pas jouée, ni se taire là où il
+         l'a jouée. C'est la parade du 449 (« une jointure, jamais deux listes »)
+         appliquée à une phrase.
+         ⚠️ APRÈS LES QUATRE LIGNES DE LA SCÈNE ET AVANT LA CARTE DE CHAPITRE :
+         `line3` s'éteint à IMPACT + 4,0 s et la carte tombe à `STAR_FALL_MS − 3 s`
+         ; on se pose entre les deux, dans le seul trou qui reste. */
+      const zone0 = (meRef.current && (meRef.current.zone || "farm")) || "farm";
+      if (Q.starFragmentsOn(zone0))
+        setTimeout(() => pushToast(L.star.fall.split), Q.STAR_FALL_IMPACT_MS + 4400);
       /* ⚠️⚠️ ZIP 455 — LE POINT DE VUE SE DÉRIVE DE LA FENÊTRE RÉELLE, PAS D'UN
          NOMBRE DE CASES. `starViewRef` est écrit à chaque image par la boucle de
          rendu, donc il porte la demi-diagonale VRAIE de cet écran-ci : un joueur
@@ -21768,8 +22054,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!starScenePendRef.current && !starSceneRef.current && !Q.starDone(e) && starFallSeen() !== e.fall)
       starQueueScene("fall");
     const pend = starScenePendRef.current;
+    /* ⚠️ LA CARTE EN ATTENTE PASSE APRÈS LA SCÈNE EN ATTENTE, et jamais pendant :
+       une carte de chapitre est la DERNIÈRE image d'une scène (voir
+       `starPlayScene`), l'ouvrir avant retournerait l'ordre du récit. */
+    if (!pend && !starSceneRef.current && starCardPendRef.current && starPanelsClear()) {
+      const c = starCardPendRef.current; starCardPendRef.current = null;
+      setStarCard({ key: c.key });
+      return;
+    }
     if (!pend || starSceneRef.current) return;
-    if (!starSceneCanPlay()) return;
+    if (!starSceneCanPlay(pend.key)) return;
     starPlayScene(pend.key, pend.ch);
   }
 
@@ -22035,6 +22329,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        PART. Éteinte pendant le dernier chapitre (elle vient d'apprendre qu'elle
        n'a pas de nom), apeurée quand elle se cache, calme le reste du temps. */
     const state = hiding ? 1 : (Q.starChapterKey(e) === "note" && !Q.starHas(e, "song")) ? 2 : 0;
+    /* ⚠️⚠️ ZIP 458 — L'ARRIVÉE SE COLLE AU JOUEUR, PAS À LA TRAÎNE. Pendant les
+       2,6 s de la montée et du tournicotage, l'étoile tourne autour de MOI (`cx`,
+       `cy`) et non autour du point que la traîne lui réserve : une orbite calculée
+       autour d'un suiveur qui est déjà à une case derrière se lirait comme un
+       insecte qui tourne dans le vide. La traîne, elle, continue de tourner
+       derrière — on ne la coupe pas, on la couvre (voir `starJoinAnim`). */
+    const join = Q.starJoinAnim(starJoinT0Ref.current ? nowMs - starJoinT0Ref.current : -1);
+    if (join) return { x: cx, y: cy, state, pose: Math.floor(nowMs / 180) & 3, hiding: false, join };
     return { x: p.x, y: p.y, state, pose: Math.floor(nowMs / 260) & 3, hiding };
   }
   /* Ce qu'elle dit. ⚠️ UNE BULLE, JAMAIS UN PANNEAU : elle parle au-dessus
@@ -22097,6 +22399,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     /* ── LA RENCONTRE. La seule fois de toute la quête où l'histoire s'énonce. */
     if (crater && !w.crater) {
       w.crater = true;
+      /* ⚠️⚠️ ZIP 458 — C'EST ICI QUE L'ARRIVÉE S'ARME, ET NULLE PART AILLEURS.
+         `starWatch` est le seul endroit qui voie le PASSAGE de « elle est dans le
+         trou » à « elle est avec moi » ; l'armer dans le dessin aurait demandé au
+         dessin de se souvenir, c'est-à-dire d'avoir un état. Voir `starJoinAnim`
+         dans `quete.js` pour la courbe. */
+      starJoinT0Ref.current = nowMs;
       /* ⚠️⚠️ ZIP 454 — ET ELLE ENCHAÎNE SUR LE CONSEIL. Demande de Guillaume :
          « sur conseil (guidé) de la première étoile récoltée dans le cratère ».
          C'est la SEULE fois de la quête où l'histoire s'énonce, donc c'est là
@@ -22137,6 +22445,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        (`chat.lean`) ; celui qui l'a fait ne lisait rien. */
     if (marks > w.marks) { w.marks = marks; pushToast(L.star.s2.leanFound); }
     else if (marks < w.marks) w.marks = marks;
+
+    /* ── ⚠️⚠️ ZIP 458 — POURQUOI DES OMBRES, ET UNE SEULE FOIS. La consigne
+       (`leanHint`) était là depuis le 449 ; sa RAISON, non — on obéissait à une
+       règle magique sans savoir d'où elle venait, ce qui est exactement le
+       reproche fait au chapitre du lac. Elle se dit à l'instant où l'écoute
+       devient l'objectif, pas à la rencontre : sept phrases y passaient déjà, une
+       huitième et une neuvième s'y seraient noyées.
+       ⚠️ ELLE VIT DANS `starWatch` PARCE QUE C'EST LE SEUL ENDROIT QUI A UNE
+       MÉMOIRE DE SESSION (`w`) : écrite dans `starListen`, elle serait repartie à
+       chaque appui sur E. */
+    if (crater && Q.STAR_LEAN_MARKS.some(k => !Q.starHas(e, k)) && !w.whyLean) {
+      w.whyLean = true;
+      starTell([L.star.s2.whyLean, L.star.s2.whyLean2, L.star.s2.leanHint], 2600);
+    }
 
     if (gift && !w.gift) { w.gift = true; pushToast(L.star.s5.gift); }
 
@@ -22282,7 +22604,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        refuse serait « le jeu propose et refuse » (426), au seul endroit du
        chantier où le joueur n'a aucun moyen de deviner qu'il faut attendre. */
     if (!starCraterCoolNow()) return { k: 0, warn: true, text: L.star.s2.tooHot };
-    const need = Q.starCalmNeed(starSoloRoom());
+    const need = Q.starCalmNeed(starAlone("crater"));
     const t0 = starCalmT0Ref.current;
     const held = step === "holding" && t0 ? Math.min(need, performance.now() - t0) : 0;
     return {
@@ -22338,6 +22660,67 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      l'échelle par T/16 (c'est un décalage en PIXELS D'ÉCRAN). Ce qu'on veut ici
      est une FRACTION de profondeur ; l'appeler avec le T courant ferait brûler
      un cratère plus large au zoom, ce qu'aucun banc n'irait chercher. */
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 458 — LA PENTE SOUS LES PIEDS, LUE SUR LE CREUX QU'ON VOIT.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️ MÊME DISCIPLINE QUE `starCraterSinkK` JUSTE EN DESSOUS : on interroge
+     `starCraterSink` À LA TUILE DE RÉFÉRENCE 16, jamais au T courant. Ce qu'on
+     veut est une pente du MONDE (px d'enfoncement par CASE) ; l'appeler au T de
+     l'écran ferait glisser plus fort au zoom, ce qu'aucun banc n'irait chercher.
+     ⚠️ ET ELLE PORTE LA MÊME GARDE DE CHRONOLOGIE QUE LES CINQ AUTRES PORTES
+     (448) : on ne glisse pas dans un trou que la comète n'a pas encore creusé. */
+  function starCraterSlopeNow(x, y) {
+    const sp = spritesRef.current;
+    /* ⚠️⚠️⚠️ LA ZONE AVANT LES DISTANCES, ET CELLE-CI A FAILLI COÛTER CHER (458).
+       C'est le piège des DEUX CARTES (§4 de `CLAUDE.md`), payé quatre fois dans ce
+       dépôt : les coordonnées du cratère de la VILLE existent aussi au milieu des
+       champs de la ferme et à l'intérieur de l'église. Sans ce test, un fermier
+       qui laboure au bon endroit se serait mis à glisser dans un trou qui n'est
+       pas là — et il n'y aurait eu ni erreur, ni message, ni banc pour le voir.
+       ⚠️ ELLE EST ICI, DANS LA FONCTION, ET PAS CHEZ L'APPELANT : un test écrit
+       chez l'appelant se recopie mal le jour où un second appelant arrive, et
+       c'est exactement ce qui est arrivé pendant l'écriture de ce zip. */
+    const me0 = meRef.current;
+    if (!me0 || (me0.zone || "farm") !== "town") return null;
+    if (!sp || !sp.starCraterSink || !starImpactLandedNow()) return null;
+    const c = starCraterPos(); if (!c) return null;
+    const dx = x - c.x, dy = y - c.y;
+    const lim = C.STAR_CRATER_DRAW_R + 1;
+    if (Math.abs(dx) > lim || Math.abs(dy) > lim) return null;
+    return Q.starCraterSlope((a, b) => sp.starCraterSink(a, b, 16), dx, dy);
+  }
+  /* Une bouffée, cadencée. ⚠️ PUREMENT LOCALE ET JAMAIS DIFFUSÉE : c'est de la
+     poussière, elle se déduit d'une position qui circule déjà (§3 de
+     `CLAUDE.md` — ce qui peut se déduire ne se diffuse pas). Deux joueurs ne
+     voient donc pas les mêmes grains, et c'est très bien : personne ne compte
+     des grains. */
+  function craterDustPuff(p, slope, now) {
+    if (!p || !slope || slope.n < 1.2) return;                 // sur le plat, on ne lève rien
+    const nx = craterDustNextRef.current;
+    const id = p.id || "me";
+    if (now < (nx.get(id) || 0)) return;
+    nx.set(id, now + 62);
+    const list = craterDustRef.current;
+    if (list.length > 64) list.splice(0, list.length - 64);    // borne dure : une bouffée n'est pas un état
+    /* ⚠️ ELLE NAÎT DERRIÈRE LE PIED, DONC EN AMONT DE LA PENTE : c'est ce qui la
+       fait lire comme « arrachée par la glissade » plutôt que « posée sous le
+       personnage ». */
+    const inv = 1 / Math.max(0.001, slope.n);
+    list.push({ x: p.x - slope.gx * inv * 0.35, y: p.y - slope.gy * inv * 0.35,
+                t0: now, seed: (Math.random() * 1e9) | 0 });
+  }
+  /* Le battement : on vieillit, on émet pour les AUTRES (leur glissade se déduit
+     de leur position, qui circule), on jette. */
+  function craterDustStep(now) {
+    const list = craterDustRef.current;
+    for (let i = list.length - 1; i >= 0; i--) if (now - list[i].t0 > C.STAR_DUST_MS) list.splice(i, 1);
+    const ps = playersRef.current;
+    if (!ps) return;
+    for (const p of ps.values()) {
+      if (!p || (p.zone || "farm") !== "town" || !p.moving) continue;
+      craterDustPuff(p, starCraterSlopeNow(p.x, p.y), now);
+    }
+  }
   function starCraterSinkK(dxTiles, dyTiles) {
     const sp = spritesRef.current;
     if (!sp || !sp.starCraterSink) return 0;
@@ -22476,7 +22859,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            coin de l'œil — n'a jamais été lue par personne. Elle est ici parce que
            c'est ici qu'on demande « pourquoi ? ». */
         return { p: "crater", act: () => starTell([L.star.s2.peek, L.star.s2.calmHint,
-                 starSoloRoom() ? L.star.s2.calmSolo : L.star.s2.calmBoth], 1800) };
+                 starAlone("crater") ? L.star.s2.calmSolo : L.star.s2.calmBoth], 1800) };
       }
       /* Le ponton — on ne plonge que si l'on sait où plonger. */
       if (Q.starHas(e, "leanLake") && !Q.starHas(e, "lakeShard")
@@ -22489,8 +22872,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            mini-jeu de plongée s'ouvrait sur un écran noir sans un mot, et la
            moitié coopérative de l'étape ne s'annonçait jamais. */
         return { p: "dive", act: () => {
-          starTell([L.star.s3.dark, L.star.s3.poolHint,
-                    starSoloRoom() ? L.star.s3.poolSolo : L.star.s3.poolLead], 2200);
+          /* ⚠️⚠️ ZIP 458 — DEUX PHRASES DE PLUS, ET ELLES RÉPONDENT AUX DEUX
+             QUESTIONS QU'ON POSAIT SANS RÉPONSE (reproche de Guillaume) : à quoi
+             sert cette pièce-là pour le bateau (`why`), et pourquoi elle est au
+             fond d'une eau noire plutôt qu'ailleurs (`whyDark`). L'ordre compte :
+             on dit d'abord ce qu'on vient chercher, ensuite pourquoi c'est ici,
+             ensuite comment on s'y prend. Une consigne posée avant sa raison se
+             lit comme une épreuve — c'est le défaut que le 457 a corrigé au
+             chapitre 1, laissé tel quel ici pendant quatorze zips. */
+          starTell([L.star.s3.why, L.star.s3.dark, L.star.s3.whyDark, L.star.s3.poolHint,
+                    starAlone("dive") ? L.star.s3.poolSolo : L.star.s3.poolLead], 2200);
           setStarMini({ kind: "dive", round: 0 });
         } };
       /* La verrerie, puis l'arbre de la pie. L'ordre EST l'histoire : la perle
@@ -22502,11 +22893,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            `rackHint` qui porte la grammaire magique du §4 de `QUETE.md` — la
            seule idée dont TOUT découle — et elle n'a jamais été lue. */
         return { p: "sweep", act: () => {
-          starTell([L.star.s4.shut, L.star.s4.sand, L.star.s4.rackHint], 2200);
+          starTell([L.star.s4.shut, L.star.s4.sand, L.star.s4.rackHint, L.star.s4.whyMast], 2200);
           setStarMini({ kind: "rack", round: 0 });
         } };
       if (Q.starHas(e, "beadShard") && !Q.starHas(e, "nestShard") && nearStarTownProp("starNestTree", 1.8))
-        return { p: "lure", act: () => setStarMini({ kind: "lure", round: 0 }) };
+        /* ⚠️⚠️ ZIP 458 — LE NID S'OUVRAIT SANS UN MOT, ET C'EST LE SEUL MINI-JEU
+           DE LA QUÊTE QUI LE FAISAIT. On grimpait à un arbre pour un objet dont on
+           n'apprenait ni ce que c'était ni à quoi il servait ; le morceau était
+           « un caillou brillant de plus ». `whySail` dit les deux en une phrase,
+           et elle rime avec le nid (le plus léger des cinq — c'est justement pour
+           ça que la pie l'a pris). */
+        return { p: "lure", act: () => {
+          starTell([L.star.s4.whySail, L.star.s4.lureHint], 2400);
+          setStarMini({ kind: "lure", round: 0 });
+        } };
       /* ⚠️ EN DERNIER : l'écoute des ombres. Voir la note du chapeau. */
       if (Q.starHas(e, "crater") && Q.STAR_LEAN_MARKS.some(k => !Q.starHas(e, k)))
         return { p: "lean", act: () => starListen() };
@@ -22540,7 +22940,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        ne s'annonce plus à la VICTOIRE d'un mini-jeu (l'hôte n'a encore rien
        posé à cet instant, donc on aurait annoncé un morceau en pariant) mais
        quand le navire grandit vraiment — voir `starWatch`. */
-    if (k === "cool") { sendReq({ kind: "starFound", site: "furrow" }); starSay("shadow", L.star.s1.shadow, 7000); }
+    if (k === "cool") {
+      sendReq({ kind: "starFound", site: "furrow" });
+      starSay("shadow", L.star.s1.shadow, 7000);
+      /* ⚠️⚠️ ZIP 458 — ET ON DIT ENFIN QUE CE N'EST QU'UN ÉCLAT (demande de
+         Guillaume). C'est le moment exact où le joueur a l'objet dans les mains
+         et se demande « et maintenant ? » : `fragment` répond « le vrai cratère
+         est là-bas », `east` dit dans quelle direction. Les deux étaient
+         séparées d'un geste — on lisait « il penche vers l'est » sans avoir
+         jamais appris qu'il y avait autre chose à trouver ailleurs.
+         ⚠️ ÉCHELONNÉES, PAS EMPILÉES : `starTell` les sépare de trois secondes,
+         sinon elles arrivent en bloc par-dessus l'ombre du champ, qui est la
+         première image magique de toute la quête. */
+      setTimeout(() => starTell([L.star.s1.fragment, L.star.s1.east], 3200), 3600);
+    }
     else if (k === "dive") { sendReq({ kind: "starFound", site: "lakeShard" }); starSay("wings", L.star.s3.wings, 7000); }
     else if (k === "rack") { sendReq({ kind: "starFound", site: "beadShard" }); }
     else if (k === "lure") { sendReq({ kind: "starFound", site: "nestShard" }); }
@@ -22564,11 +22977,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      son rayon (`STAR_POOL_SOLO_R`) — la parade solo change la DURÉE et la
      GÉOMÉTRIE, jamais la règle. */
   function starMiniLead() {
-    if (starSoloRoom()) return null;
+    const ps = playersRef.current; if (!ps) return null;
     const span = 9;    // les cases de ponton sur lesquelles on peut marcher
-    for (const p of playersRef.current.values()) {
+    for (const p of ps.values()) {
       if (!p || (p.zone || "farm") !== "town") continue;
+      /* ⚠️⚠️ ZIP 458 — DEUX CORRECTIONS, ET LA SECONDE EST UN BOGUE DE TROIS
+         ZIPS. (1) Le garde `starSoloRoom()` est parti : il rendait `null` — donc
+         « lumière posée » — dès qu'on était seul EN LIGNE, alors que la question
+         est « quelqu'un est-il sur le ponton », et il rendait une flaque MOBILE
+         dès qu'un second joueur existait, même à la ferme. (2) On ne regardait
+         que l'écart en Y : n'importe quel joueur traversant le sud de la ville,
+         à quarante cases du ponton, pilotait la flaque du plongeur. On exige
+         maintenant d'être SUR le ponton, dans les deux axes. */
       if (Math.abs(p.y - C.STAR_PIER_Y) > 4) continue;
+      if (Math.abs(p.x - C.STAR_PIER_X) > span / 2 + 2) continue;
       return Math.max(0.08, Math.min(0.92, 0.5 + (p.x - C.STAR_PIER_X) / span));
     }
     return null;
@@ -22610,7 +23032,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     starKeyNextRef.current = nowC + 1000;
     const m = meRef.current;
     sendReq({ kind: "starLean", tx: Math.round(m.x), ty: Math.round(m.y) });
-    pushToast(starSoloRoom() ? L.star.s2.leanSoloArmed : L.star.s2.leanArmed);
+    pushToast(starAlone("lean") ? L.star.s2.leanSoloArmed : L.star.s2.leanArmed);
   }
   function starTouchBell() {
     const e = sharedRef.current.star;
@@ -22629,7 +23051,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          minuteur d'affichage. */
       sendReq({ kind: "starFound", site: "belfry" });
       starTell([L.star.s5.stair1, L.star.s5.stair2,
-                L.star.s5.bell1, L.star.s5.bell2, L.star.s5.bell3, L.star.s5.bell4], 2800);
+                L.star.s5.bell1, L.star.s5.bell2, L.star.s5.bell3,
+                /* ⚠️ ZIP 458 — ELLE S'INSÈRE AVANT « emmène-moi », PAS APRÈS : la
+                   demande de la cloche est la dernière chose qu'on doit lire, et
+                   une explication posée derrière elle l'aurait désamorcée. */
+                L.star.s5.whyBell, L.star.s5.bell4], 2800);
       return;
     }
     if (Q.starHas(e, "song")) { pushToast(L.star.s5.end3); return; }
@@ -22640,7 +23066,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        différence entre une coopération et une case à cocher (§4 de QUETE.md).
        ⚠️ SEUL, ON A LES DEUX : les cales du sonneur tiennent les touches, on
        court dans la vis, la note faiblit pendant la montée. */
-    setStarMini({ kind: "duet", round: e.duet | 0, role: starSoloRoom() ? "both" : "aim" });
+    setStarMini({ kind: "duet", round: e.duet | 0, role: starAlone("duet") ? "both" : "aim" });
   }
   // Zip 426 : voir la note de drawTownFrame — une seule définition de « je suis
   // devant la porte de ce monument », partagée par l'invite et par la touche E.
@@ -26747,18 +27173,65 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     return (
                       <div>
                         <div>{L.star.plan.hallIntro}</div>
-                        {ph === "none" && (
-                          <>
-                            <div style={{ margin: "8px 0" }}>
-                              {L.star.plan.hallFee(C.STAR_ENG_FEE_GOLD, C.STAR_ENG_FEE_CROPS, C.STAR_ENG_FEE_FISH)}
+                        {ph === "none" && (() => {
+                          /* ╔══════════════════════════════════════════════════
+                             ║ ZIP 458 — LA TRANSACTION SE COMPOSE À LA MAIN.
+                             ╚══════════════════════════════════════════════════
+                             ⚠️⚠️ DEMANDE DE GUILLAUME, MOT POUR MOT : « expliquer
+                             ce qui manque […] je veux un truc comme ajouter à la
+                             transaction et valider la transaction avec l'agent de
+                             la mairie ». Le bouton d'avant était un pari : on
+                             cliquait, l'hôte refusait, et « il te manque de quoi
+                             payer » ne disait ni quoi ni combien — alors que les
+                             trois monnaies viennent de TROIS endroits différents
+                             (la caisse commune, ton sac, la réserve commune).
+                             ⚠️⚠️ LA MISE EST LOCALE, L'ARBITRAGE RESTE À L'HÔTE.
+                             Poser une pièce sur la table ne prélève RIEN et ne
+                             traverse pas le réseau : c'est un geste d'interface,
+                             et c'est très exactement la règle du 439 (« un panneau
+                             qui s'ouvre à volonté ne doit rien donner »). Quand
+                             les trois lignes sont pleines, on envoie LA MÊME `req`
+                             qu'avant, et l'hôte recompte à sa propre horloge.
+                             ⚠️ ON NE PEUT DONC PAS TRICHER, et on ne peut pas non
+                             plus perdre : fermer le panneau ne coûte rien, puisque
+                             rien n'a bougé. */
+                          const d = starDealNow();
+                          const line = (key, lab, from, v) => (
+                            <div key={key} style={{ display: "flex", alignItems: "center", gap: 8, margin: "6px 0" }}>
+                              <span style={{ minWidth: 92 }}>{lab}</span>
+                              <span style={{ minWidth: 92, color: v.have >= v.need ? "#8fd18f" : "#e8a27a" }}>
+                                {L.star.plan.dealHave(v.have, v.need)}
+                              </span>
+                              <span className="ferme-hint" style={{ flex: 1 }}>{from}</span>
+                              <button className="ferme-btn" disabled={v.staged || v.have < v.need}
+                                      onClick={() => setEngDeal(s0 => ({ ...s0, [key]: true }))}>
+                                {v.staged ? "✓" : L.star.plan.dealAdd}
+                              </button>
                             </div>
-                            <div className="ferme-hint">{L.star.plan.hallWhy}</div>
-                            <button className="ferme-btn" style={{ marginTop: 10 }}
-                                    onClick={() => { sendReq({ kind: "starPlanAsk" }); setHallTalk(null); }}>
-                              {L.star.plan.hallSendBtn}
-                            </button>
-                          </>
-                        )}
+                          );
+                          return (
+                            <>
+                              <div style={{ margin: "8px 0" }}>
+                                {L.star.plan.hallFee(C.STAR_ENG_FEE_GOLD, C.STAR_ENG_FEE_CROPS, C.STAR_ENG_FEE_FISH)}
+                              </div>
+                              <div style={{ margin: "10px 0 4px", fontWeight: "bold" }}>{L.star.plan.dealTitle}</div>
+                              {line("gold", L.star.plan.dealGold, L.star.plan.dealFromPurse, d.gold)}
+                              {line("crops", L.star.plan.dealCrops, L.star.plan.dealFromBag, d.crops)}
+                              {line("fish", L.star.plan.dealFish, L.star.plan.dealFromBagPool, d.fish)}
+                              <div className="ferme-hint" style={{ marginTop: 6 }}>
+                                {d.short.length ? d.short.join(" ") : (d.allStaged ? L.star.plan.dealReady : L.star.plan.dealNotReady)}
+                              </div>
+                              <div className="ferme-hint" style={{ marginTop: 6 }}>{L.star.plan.hallWhy}</div>
+                              <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+                                <button className="ferme-btn" disabled={!d.allStaged}
+                                        onClick={() => { sendReq({ kind: "starPlanAsk" }); setEngDeal({}); setHallTalk(null); }}>
+                                  {L.star.plan.dealValidate}
+                                </button>
+                                <button className="ferme-btn" onClick={() => setEngDeal({})}>{L.star.plan.dealClear}</button>
+                              </div>
+                            </>
+                          );
+                        })()}
                         {ph === "travel" && <div style={{ marginTop: 8 }}>{L.star.plan.hallTravel(rem)}</div>}
                         {ph === "work" && <div style={{ marginTop: 8 }}>{L.star.plan.hallWork(rem)}</div>}
                         {ph === "ready" && <div style={{ marginTop: 8 }}>{L.star.plan.hallReady}</div>}
@@ -26815,7 +27288,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           round={starMini.round | 0}
           role={starMini.role || "both"}
           phrase0={starMini.round | 0}
-          solo={starSoloRoom()}
+          solo={starAlone(starMini.kind)}
           L={L}
           lead={starMiniLead}
           partner={starMiniPartner}
@@ -27503,6 +27976,7 @@ function PixBtn({ icon, label, tone = "plain", disabled, onClick, small, sprites
    les trois, il n'a pas le droit d'être le premier morceau injouable au doigt.
    ══════════════════════════════════════════════════════════════════════════════ */
 const SM_W = 640, SM_H = 380;   // le canevas logique ; le CSS le met à l'échelle
+const SM_POUR_MS = 380;         // zip 458 — ce que dure une giclée d'arrosoir à l'écran
 
 /* La couleur d'un verre qui refroidit : blanc → orange → rouge sombre → bleu.
    ⚠️ ELLE EST LA JAUGE. Le thermomètre de côté n'est qu'un rappel — ce qu'on
@@ -27569,13 +28043,23 @@ export function StarMinigame({ kind, round, role, phrase0, solo, L, lead, partne
     const st = stRef.current; if (!st || doneRef.current) return;
     if (kind === "cool") {
       st.heat = Math.max(0, st.heat - Q.STAR_COOL_POUR);
+      /* ⚠️ ZIP 458 — LA GICLÉE EST DATÉE, ET C'EST TOUT CE QU'IL FALLAIT POUR
+         QU'ON LA VOIE : l'arrosoir bascule et l'eau tombe pendant `SM_POUR_MS`.
+         Avant, le seul retour d'un appui était de la vapeur qui montait — on
+         arrosait un éclat avec un outil invisible. */
+      st.pour = performance.now();
       st.steam.push({ t: performance.now(), x: 0.5 + (Math.random() - 0.5) * 0.5, r: 10 + Math.random() * 14 });
     } else if (kind === "dive") {
       if (!st.atBottom) return;
       const ph = ((performance.now() - st.pulse0) % Q.STAR_DIVE_PULSE_MS) / Q.STAR_DIVE_PULSE_MS;
       const onBeat = ph > 0.40 && ph < 0.64;
-      if (Math.abs(st.x - st.shardX) < 0.07 && onBeat) st.grabbed = true;
-      else say(onBeat ? L.star.s3.diveUp : L.star.s3.diveHint, 1400);
+      /* ⚠️ ZIP 458 — TROIS REFUS DIFFÉRENTS, TROIS PHRASES. « Rien » ou une seule
+         phrase générique laissait le joueur croire qu'il appuyait au mauvais
+         moment alors qu'il était simplement à côté — le pire des retours, celui
+         qui fait corriger la mauvaise chose. */
+      if (Math.abs(st.x - st.shardX) >= 0.07) say(L.star.s3.diveFar, 1300);
+      else if (!onBeat) say(L.star.s3.diveBeat, 1300);
+      else st.grabbed = true;
     } else if (kind === "rack") {
       if (st.trueUntil && performance.now() < st.trueUntil) st.hit = true;
       else say(L.star.s4.rackWrong, 1600);
@@ -27597,11 +28081,21 @@ export function StarMinigame({ kind, round, role, phrase0, solo, L, lead, partne
     /* ⚠️ LA MANCHE COMMENCE SUR LA CONSIGNE, pas au-dessus : voir la note de
        `STAR_COOL_BURN` dans quete.js — démarrer à 1,0 faisait repartir la manche
        avant le premier appui, en boucle, et ça ne se voit qu'à l'écran. */
-    if (kind === "cool") { st.goal = 0.86; st.heat = st.goal; st.steam = []; }
+    if (kind === "cool") { st.goal = 0.86; st.heat = st.goal; st.steam = []; st.pour = -9e9; st.crack = -9e9; }
     else if (kind === "dive") {
-      st.depth = 0; st.x = 0.5; st.breath = Q.STAR_DIVE_BREATH_MS[Math.min(r0, 2)];
-      st.pulse0 = now0; st.atBottom = false; st.grabbed = false; st.shardX = 0.5; st.hitFlash = 0;
-      st.obs = smDiveObstacles(r0);
+      /* ⚠️⚠️ ZIP 458 — ON ENTRE DANS L'EAU DANS LA LUMIÈRE, PAS À CÔTÉ. Vu à
+         l'écran : la manche démarrait à 0,5 pendant que la flaque était où
+         l'autre joueur se tenait — on commençait donc aveugle, essoufflé, et en
+         train de chercher une lumière qu'on n'avait pas encore vue. Un mini-jeu
+         qui punit avant la première touche ne se lit pas comme une difficulté. */
+      st.depth = 0; st.x = (lead && lead() != null) ? lead() : 0.5; st.breath = Q.STAR_DIVE_BREATH_MS[Math.min(r0, 2)];
+      st.pulse0 = now0; st.atBottom = false; st.grabbed = false; st.hitFlash = 0;
+      /* ⚠️ ZIP 458 — LES DEUX VIENNENT DE `quete.js`, PLUS DE LA CLOSURE : les
+         pilotis portent l'indice (ils penchent vers le morceau), donc ce sont des
+         RÈGLES, et une règle écrite ici n'est regardable par aucun banc. */
+      st.shardX = Q.starDiveShardX(r0);
+      st.obs = Q.starDivePosts(r0);
+      st.blind = 0; st.lit = 1; st.poolX = 0.5; st.poolR = 0.16;
     } else if (kind === "rack") {
       st.s = 0.08; st.prevS = 0.08; st.speed = 0; st.warm = 0; st.trueUntil = 0; st.hit = false;
       st.p = smTrueBead(r0); st.notchAt = 0;
@@ -27637,7 +28131,7 @@ export function StarMinigame({ kind, round, role, phrase0, solo, L, lead, partne
         s.band = band;
         s.heat += Q.STAR_COOL_RISE * dt;
         s.steam = s.steam.filter(p => now - p.t < 1100);
-        if (s.heat < s.goal - band / 2 - Q.STAR_COOL_CRACK) return smRestart(s, L.star.s1.coolCrack);
+        if (s.heat < s.goal - band / 2 - Q.STAR_COOL_CRACK) { s.crack = now; return smRestart(s, L.star.s1.coolCrack); }
         /* ⚠️ LE PLAFOND EST RELATIF À LA CONSIGNE, comme le plancher. Absolu, il
            déclenchait avant le premier appui (voir `STAR_COOL_BURN`). */
         if (s.heat > s.goal + band / 2 + Q.STAR_COOL_BURN) return smRestart(s, L.star.s1.coolHint);
@@ -27647,7 +28141,29 @@ export function StarMinigame({ kind, round, role, phrase0, solo, L, lead, partne
         }
       } else if (k === "dive") {
         const D = Q.STAR_DIVE_DEPTH[Math.min(s.round, 2)], cur = Q.STAR_DIVE_CURRENT[Math.min(s.round, 2)];
-        s.breath -= dt * 1000;
+        /* ╔══════════════════════════════════════════════════════════════════════
+           ║ ZIP 458 — LA FLAQUE N'EST PLUS UNE FENÊTRE, C'EST LE TERRAIN.
+           ╚══════════════════════════════════════════════════════════════════════
+           ⚠️⚠️ C'EST LA SEULE LIGNE QUI COMPTE DE TOUTE LA RÉÉCRITURE : `s.lit`
+           est calculé ICI, dans le PAS, et non plus seulement au dessin. Tant
+           qu'il ne servait qu'à découper une vignette, la lumière de l'autre
+           joueur ne changeait strictement rien à ce qu'on faisait — c'est très
+           exactement le « trop cheap » que Guillaume a vu. Elle décide maintenant
+           du souffle, de ce qu'on voit, et donc de ce qu'on percute.
+           ⚠️ LE BORD EST DOUX (`STAR_DIVE_EDGE`) : un seuil net ferait clignoter
+           l'écran entre noir et clair au moindre remous du courant, ce qui se lit
+           comme un défaut d'affichage et pas comme une limite. */
+        const poolX = (lead && lead() != null) ? lead() : 0.5;
+        const poolR = (solo ? Q.STAR_POOL_SOLO_R : Q.STAR_POOL_R) / Q.STAR_POOL_VIEW_TILES;
+        const away = Math.abs(s.x - poolX) / Math.max(0.001, poolR);
+        s.poolX = poolX; s.poolR = poolR;
+        s.lit = Math.max(0, Math.min(1, (1 - away) / (1 - Q.STAR_DIVE_EDGE * 0.86)));
+        /* ⚠️ HORS DE LA LUMIÈRE, LE SOUFFLE PART PLUS VITE, ET C'EST LA PRESSION
+           QUI REMPLACE LES BARRES MARRON. Un joueur qui s'égare n'est pas puni
+           d'un coup — il voit son anneau se refermer, il a le temps de revenir. */
+        s.breath -= dt * 1000 * (1 + (Q.STAR_DIVE_BLIND_MUL - 1) * (1 - s.lit));
+        s.blind = s.lit < 0.35 ? s.blind + dt : 0;
+        if (s.blind > 0.8 && now > (s.blindSaid || 0)) { s.blindSaid = now + 3200; say(L.star.s3.diveBlind, 1600); }
         if (s.hitFlash > 0) s.hitFlash -= dt;
         if (!s.atBottom) {
           s.depth += Q.STAR_DIVE_SINK * dt;
@@ -27665,7 +28181,15 @@ export function StarMinigame({ kind, round, role, phrase0, solo, L, lead, partne
         s.x = Math.max(0.05, Math.min(0.95, s.x));
         for (const o of s.obs) {
           if (o.hit || Math.abs(o.d - s.depth) > 0.9) continue;
-          if (Math.abs(o.x - s.x) < o.w * 0.5 + 0.03) { o.hit = true; s.breath -= Q.STAR_DIVE_HIT_COST_MS; s.hitFlash = 0.35; }
+          /* ⚠️⚠️ ZIP 458 — ON PERCUTE CE QU'ON N'A PAS PU VOIR, ET C'EST TOUT
+             L'INTÉRÊT. Le pilotis existe que la lumière soit là ou non ; dans la
+             lumière on le voit venir et on l'évite, dans le noir on le prend. Un
+             obstacle qui disparaît avec la lumière serait un décor ; un obstacle
+             qu'on ne voit pas est une raison d'avoir besoin de l'autre. */
+          if (Math.abs(o.x - s.x) < o.w * 0.5 + 0.03) {
+            o.hit = true; s.breath -= Q.STAR_DIVE_HIT_COST_MS; s.hitFlash = 0.35;
+            if (s.lit < 0.35) say(L.star.s3.diveHitDark, 1500);
+          }
         }
         /* ⚠️ AU TROISIÈME PALIER L'ÉCLAT GLISSE QUAND ON APPROCHE. Il ne fuit
            pas (ce serait une course), il DÉRIVE de deux cases : on doit corriger
@@ -27779,8 +28303,8 @@ export function StarMinigame({ kind, round, role, phrase0, solo, L, lead, partne
       say(why, 2200);
       const k = kind, r = s.round, now = performance.now();
       s.roundT0 = now; s.t0 = now;
-      if (k === "cool") { s.goal = 0.86; s.heat = s.goal; s.steam = []; }
-      else if (k === "dive") { s.depth = 0; s.x = 0.5; s.breath = Q.STAR_DIVE_BREATH_MS[Math.min(r, 2)]; s.atBottom = false; s.grabbed = false; s.shardX = 0.5; s.obs = smDiveObstacles(r); }
+      if (k === "cool") { s.goal = 0.86; s.heat = s.goal; s.steam = []; s.pour = -9e9; }
+      else if (k === "dive") { s.depth = 0; s.x = (lead && lead() != null) ? lead() : 0.5; s.breath = Q.STAR_DIVE_BREATH_MS[Math.min(r, 2)]; s.atBottom = false; s.grabbed = false; s.shardX = Q.starDiveShardX(r); s.obs = Q.starDivePosts(r); s.blind = 0; s.lit = 1; }
       else if (k === "rack") { s.s = 0.08; s.warm = 0; s.trueUntil = 0; s.hit = false; }
     }
     function smNextRound(s, total, why) {
@@ -27803,19 +28327,106 @@ export function StarMinigame({ kind, round, role, phrase0, solo, L, lead, partne
       if (k === "cool") {
         smFrame(g, L.star.s1.coolTitle, L.star.s1.coolHint);
         const cx = SM_W * 0.42, cy = SM_H * 0.58;
+        const band = s.band || 0.2;
+        const inBand = Math.abs(s.heat - s.goal) <= band / 2;
         // La terre du sillon, en creux, pour que l'éclat soit POSÉ quelque part.
         g.fillStyle = "#2a2016"; g.beginPath(); g.ellipse(cx, cy + 62, 150, 26, 0, 0, 7); g.fill();
         g.fillStyle = "#1d1610"; g.beginPath(); g.ellipse(cx, cy + 62, 108, 17, 0, 0, 7); g.fill();
+        /* ╔══════════════════════════════════════════════════════════════════════
+           ║ ZIP 458 — LA CONSIGNE EST UNE COULEUR, PAS SEULEMENT UNE BARRE.
+           ╚══════════════════════════════════════════════════════════════════════
+           ⚠️⚠️ LE MINI-JEU AVAIT UNE CONTRADICTION QUE PERSONNE N'AVAIT NOMMÉE : sa
+           difficulté voulue est que la vapeur MASQUE la jauge une seconde (c'est
+           écrit noir sur blanc plus bas, et c'est une bonne idée) — mais la jauge
+           était le SEUL endroit où lire la consigne. Masquer la seule source
+           d'information ne demande pas de la mémoire, ça demande d'attendre. On
+           donne donc une seconde lecture, DIÉGÉTIQUE et au centre de l'écran :
+           l'anneau autour de l'éclat est peint à la couleur VISÉE. Quand l'éclat
+           a la couleur de son anneau, on est dedans. La vapeur peut alors cacher
+           le thermomètre : il reste la couleur, et c'est très exactement le geste
+           d'un forgeron.
+           ⚠️ L'ANNEAU NE DIT PAS « c'est bon », il MONTRE la cible : le liseré clair
+           qui se referme dessus est la seule confirmation, et il est discret. */
+        const ringR = 96;
+        g.lineWidth = 16;
+        g.strokeStyle = smHeatColor(Math.max(0, Math.min(1, s.goal)));
+        g.globalAlpha = 0.55;
+        g.beginPath(); g.arc(cx, cy, ringR, 0, 7); g.stroke();
+        g.globalAlpha = 1;
+        if (inBand) {
+          g.lineWidth = 2; g.strokeStyle = "rgba(255,255,255,0.85)";
+          g.beginPath(); g.arc(cx, cy, ringR + 11, 0, 7); g.stroke();
+          g.beginPath(); g.arc(cx, cy, ringR - 11, 0, 7); g.stroke();
+        }
         // Le halo de l'éclat : il RÉTRÉCIT en refroidissant. C'est la vraie jauge.
         const gl = 40 + s.heat * 120;
         g.fillStyle = `rgba(255,220,150,${(0.05 + s.heat * 0.13).toFixed(3)})`;
         g.beginPath(); g.arc(cx, cy, gl, 0, 7); g.fill();
         smShard(g, cx, cy, 54, smHeatColor(s.heat), "rgba(40,26,10,0.7)");
+        /* ⚠️ LA FÊLURE SE VOIT, ELLE NE SE LIT PLUS. « Crac. On recommence » était
+           le seul retour d'un échec : un texte, au moment précis où le joueur
+           regarde l'objet. Deux traits en travers pendant une demi-seconde disent
+           la même chose sans qu'on ait à lire. */
+        const ck = (now - (s.crack || -9e9)) / 520;
+        if (ck >= 0 && ck < 1) {
+          g.strokeStyle = `rgba(20,10,6,${(0.9 * (1 - ck)).toFixed(2)})`; g.lineWidth = 3;
+          g.beginPath(); g.moveTo(cx - 30, cy - 44); g.lineTo(cx + 8, cy + 6); g.lineTo(cx - 14, cy + 48); g.stroke();
+          g.beginPath(); g.moveTo(cx + 8, cy + 6); g.lineTo(cx + 40, cy - 4); g.stroke();
+        }
+        /* ╔══════════════════════════════════════════════════════════════════════
+           ║ ZIP 458 — L'ARROSOIR EST À L'ÉCRAN, ET IL VERSE.
+           ╚══════════════════════════════════════════════════════════════════════
+           ⚠️ « Le joueur a déjà l'outil et il l'aime » dit `QUETE.md` du premier
+           mini-jeu — et l'outil n'était nulle part. On appuyait, de la vapeur
+           montait, rien ne disait que c'était de l'eau qu'on versait. L'arrosoir
+           bascule sur l'appui et un filet tombe : le geste est enfin visible.
+           ⚠️ IL EST DESSINÉ EN MASSES (§ DESSIN.md) et pas en contours : à cette
+           taille, un trait de 1 px ferait un croquis au milieu d'un dessin peint. */
+        {
+          const pk = Math.max(0, Math.min(1, (now - (s.pour || -9e9)) / SM_POUR_MS));
+          const pouring = pk < 1;
+          const wx = cx - 132, wy = cy - 118;
+          g.save(); g.translate(wx, wy); g.rotate(pouring ? 0.58 + 0.10 * Math.sin(now / 60) : 0.10);
+          /* ⚠️ EN MASSES, PAS EN TRAITS (DESSIN.md) : à cette taille un contour
+             d'un pixel ferait un croquis au milieu d'un dessin peint. Et l'ANSE
+             est un arc épais — c'est elle qui fait lire « arrosoir » plutôt que
+             « bidon », et c'est la seule pièce qu'on ne pouvait pas faire au
+             `fillRect` (la première version en avait un, et elle ressemblait à un
+             jerrican). */
+          g.strokeStyle = "#4d6543"; g.lineWidth = 6; g.lineCap = "round";
+          g.beginPath(); g.arc(-6, -22, 20, Math.PI * 1.08, Math.PI * 1.92); g.stroke();
+          g.fillStyle = "#5f7a52"; g.fillRect(-26, -16, 52, 36);          // le corps
+          g.fillStyle = "#6d8a5e"; g.fillRect(-26, -16, 52, 7);           // la lumière du haut
+          g.fillStyle = "#42583a"; g.fillRect(-26, 13, 52, 7);            // l'ombre du bas
+          g.fillStyle = "#6d8a5e"; g.fillRect(-11, -25, 22, 10);          // le col
+          /* Le bec MONTE puis retombe : un tube droit se lit comme une paille. */
+          g.strokeStyle = "#5f7a52"; g.lineWidth = 9; g.lineCap = "butt";
+          g.beginPath(); g.moveTo(22, -4); g.lineTo(46, -16); g.lineTo(62, -10); g.stroke();
+          g.fillStyle = "#7b9a6a"; g.fillRect(58, -16, 13, 15);           // la pomme
+          g.fillStyle = "#42583a"; g.fillRect(58, -1, 13, 4);
+          g.restore();
+          if (pouring) {
+            /* Le filet : il part du bec et retombe sur l'éclat. Il s'amincit avec
+               l'appui, ce qui rend visible « à petits coups » sans une phrase. */
+            const t0x = wx + 64, t0y = wy - 2;
+            g.strokeStyle = `rgba(178,214,238,${(0.85 * (1 - pk)).toFixed(2)})`;
+            g.lineWidth = 7 * (1 - pk * 0.6);
+            g.beginPath(); g.moveTo(t0x, t0y);
+            g.bezierCurveTo(t0x + 40, t0y + 10, cx - 30, cy - 60, cx - 4, cy - 26);
+            g.stroke();
+            // L'éclaboussure au contact, et le sifflement qu'on voit à défaut de l'entendre.
+            g.fillStyle = `rgba(236,248,255,${(0.5 * (1 - pk)).toFixed(2)})`;
+            for (let i = 0; i < 5; i++) {
+              const an = -0.4 - i * 0.5, rr = 14 + pk * 26;
+              g.beginPath(); g.arc(cx + Math.cos(an) * rr, cy - 18 + Math.sin(an) * rr * 0.5, 3.5 * (1 - pk), 0, 7); g.fill();
+            }
+          }
+        }
         // La jauge, à droite : la bande visée descend, le curseur est la chaleur.
         const bx = SM_W - 92, by = 66, bw = 30, bh = SM_H - 130;
         g.fillStyle = "rgba(0,0,0,0.5)"; g.fillRect(bx - 3, by - 3, bw + 6, bh + 6);
         for (let i = 0; i < bh; i++) { g.fillStyle = smHeatColor(1 - i / bh); g.fillRect(bx, by + i, bw, 1); }
-        const bandPx = (s.band || 0.2) * bh;
+        const bandPx = band * bh;
         const gy = by + (1 - s.goal) * bh;
         g.strokeStyle = "#fff"; g.lineWidth = 2;
         g.strokeRect(bx - 5, gy - bandPx / 2, bw + 10, bandPx);
@@ -27827,7 +28438,10 @@ export function StarMinigame({ kind, round, role, phrase0, solo, L, lead, partne
            seconde : on doit donc arroser AU JUGÉ, puis vérifier. Une barre de
            progression qu'on voit toujours ne demande que de la précision ; une
            barre qu'on cache une seconde demande de la MÉMOIRE, et c'est
-           beaucoup plus intéressant à jouer. */
+           beaucoup plus intéressant à jouer.
+           ⚠️ ZIP 458 — ELLE NE COUVRE PLUS L'ANNEAU DE COULEUR, exprès : la vapeur
+           monte, l'anneau est au niveau de l'éclat. Cacher les DEUX lectures
+           reviendrait à ne rien montrer, ce qui n'est pas une difficulté. */
         for (const p of s.steam) {
           const a = 1 - (now - p.t) / 1100;
           const py = cy - 20 - (1 - a) * 150;
@@ -27835,52 +28449,123 @@ export function StarMinigame({ kind, round, role, phrase0, solo, L, lead, partne
           g.beginPath(); g.arc(cx + (p.x - 0.5) * 90, py, p.r * (1.6 - a), 0, 7); g.fill();
           g.beginPath(); g.arc(bx + bw / 2 + (p.x - 0.5) * 40, py + 40, p.r * (1.9 - a), 0, 7); g.fill();
         }
+        /* ⚠️ LES MANCHES SE COMPTENT EN PASTILLES, ET LE TEXTE RESTE. Trois points
+           se lisent d'un coup d'œil au milieu d'une manche ; « 2 / 3 » demande de
+           lire. On garde les deux : l'un pour le coup d'œil, l'autre pour le doute. */
+        for (let i = 0; i < Q.STAR_COOL_ROUNDS; i++) {
+          g.fillStyle = i <= s.round ? "#ffe9a8" : "rgba(255,255,255,0.22)";
+          g.beginPath(); g.arc(70 + i * 16, SM_H - 20, 5, 0, 7); g.fill();
+        }
         g.textAlign = "left"; g.font = "11px monospace"; g.fillStyle = "rgba(255,255,255,0.75)";
         g.fillText(`${s.round + 1} / ${Q.STAR_COOL_ROUNDS}`, 16, SM_H - 16);
       } else if (k === "dive") {
         const D = Q.STAR_DIVE_DEPTH[Math.min(s.round, 2)];
         g.fillStyle = "#02060e"; g.fillRect(0, 0, SM_W, SM_H);
-        /* ⚠️ L'ÉCRAN DU PLONGEUR EST NOIR HORS DE LA FLAQUE, ET C'EST LA
-           COOPÉRATION ELLE-MÊME : celui qui tient la lumière voit la surface et
-           DEVINE, celui qui plonge voit le fond et CHERCHE. Aucun des deux ne
-           peut faire les deux. La flaque suit la position de l'autre — qui
-           circule déjà (§3), donc zéro message. */
-        const px = (lead && lead()) != null ? lead() : 0.5;
-        const pw = (solo ? Q.STAR_POOL_SOLO_R : Q.STAR_POOL_R) / Q.STAR_POOL_VIEW_TILES;
-        const pcx = px * SM_W, pcy = SM_H * 0.52, prx = pw * SM_W;
+        /* ╔══════════════════════════════════════════════════════════════════════
+           ║ ZIP 458 — L'ÉCRAN DU PLONGEUR, RÉÉCRIT AUTOUR DE LA FLAQUE.
+           ╚══════════════════════════════════════════════════════════════════════
+           ⚠️ TROIS DÉFAUTS DU PREMIER JET SONT CORRIGÉS ICI, ET LE PREMIER EST UN
+           VRAI BOGUE DE GÉOMÉTRIE : le morceau se dessinait 90 px SOUS le centre
+           de la flaque, alors que la flaque à deux ne fait que 95 px de demi-
+           hauteur — il tombait donc sur le bord du découpage, et pour la moindre
+           dérive de la lumière il devenait **complètement invisible**. On ne le
+           voyait pas parce qu'à un seul joueur `lead()` rendait toujours 0,5 :
+           le morceau était pile au centre, et le défaut n'existait qu'à deux.
+           ⚠️ LE MORCEAU EST DONC SUR LA LIGNE DU PLONGEUR, à sa propre abscisse :
+           « être dessus » se lit alors comme ce que c'est, un alignement.
+           ⚠️ ET LE PLONGEUR RESTE VISIBLE HORS DE LA LUMIÈRE, en silhouette
+           sourde. Un écran totalement noir n'est pas tendu, il est cassé — on ne
+           sait même plus si le jeu tourne (leçon du 456 : « un geste continu qui
+           ne rend rien ne se distingue pas d'un jeu bloqué »). */
+        const pcx = s.poolX * SM_W, pcy = SM_H * 0.52, prx = s.poolR * SM_W;
+        const dx0 = s.x * SM_W;
         g.save();
         g.beginPath(); g.ellipse(pcx, pcy, prx, prx * 0.92, 0, 0, 7); g.clip();
-        g.fillStyle = "#0d2436"; g.fillRect(0, 0, SM_W, SM_H);
+        /* ⚠️ L'INTÉRIEUR DE LA FLAQUE EST PLUS CLAIR AU CENTRE. Un aplat uni se
+           lisait comme un trou gris ; la lumière vient d'en haut, donc elle
+           s'éteint vers le bord — et c'est ce dégradé qui fait qu'on SENT le bord
+           avant de le franchir. */
+        const inner = g.createRadialGradient(pcx, pcy - prx * 0.2, prx * 0.1, pcx, pcy, prx);
+        inner.addColorStop(0, "#1d4f66"); inner.addColorStop(0.7, "#123a4e"); inner.addColorStop(1, "#0b2130");
+        g.fillStyle = inner; g.fillRect(0, 0, SM_W, SM_H);
         // Le fond : des herbiers et de la vase, qui défilent avec la profondeur.
         for (let i = 0; i < 26; i++) {
           const dd = (i * 3.1 + 1) - (s.depth % 3.1);
           const yy = SM_H - (dd * 14) % SM_H;
-          g.fillStyle = "rgba(24,60,52,0.55)";
+          g.fillStyle = "rgba(38,92,80,0.75)";
           g.fillRect(((i * 97) % SM_W), yy, 3, 22);
         }
+        /* ⚠️⚠️ LES PILOTIS DU VIEUX PONTON, ET ILS PENCHENT. C'est la grammaire
+           du §4 de `QUETE.md` — « la lumière ne montre pas ce qu'une chose EST,
+           elle montre ce qu'elle SE RAPPELLE » — appliquée une troisième fois :
+           le bois se rappelle vers où le morceau a roulé. Le fantôme penché est
+           dessiné PAR-DESSUS le pilotis droit, en bleu d'étoile, comme les pièces
+           manquantes du navire (451). Une seule idée, trois usages, zéro objet
+           ajouté. */
         for (const o of s.obs) {
           const oy = pcy + (o.d - s.depth) * 34;
-          if (oy < -60 || oy > SM_H + 60) continue;
-          g.fillStyle = o.hit ? "rgba(90,70,50,0.5)" : "#4a3a26";
-          g.fillRect(o.x * SM_W - o.w * SM_W / 2, oy - 8, o.w * SM_W, 16);
-          g.fillStyle = "rgba(20,14,8,0.6)"; g.fillRect(o.x * SM_W - o.w * SM_W / 2, oy + 5, o.w * SM_W, 3);
+          if (oy < -80 || oy > SM_H + 80) continue;
+          const ow = o.w * SM_W, ox = o.x * SM_W;
+          /* ⚠️ LE FANTÔME D'ABORD, LE BOIS PAR-DESSUS : ce qu'on voit en premier
+             est le pilotis, et son souvenir se lit DERRIÈRE lui — l'inverse ferait
+             un bâton bleu posé sur un bâton brun. */
+          if (!o.hit) {
+            g.save();
+            g.translate(ox, oy + 18); g.rotate(o.lean * 0.44);
+            g.fillStyle = "rgba(150,205,255,0.26)";
+            g.fillRect(-ow * 0.34, -56, ow * 0.68, 58);
+            g.fillStyle = "rgba(190,225,255,0.34)";
+            g.fillRect(-ow * 0.34, -56, ow * 0.68, 7);
+            g.restore();
+          }
+          /* Un PILOTIS, pas une caisse : un fût étroit, une tête plus large et
+             sombre (le bois gonflé), de la mousse au sommet, et une ombre au
+             pied. Le premier jet était un rectangle plein — il se lisait comme
+             une planche flottante. */
+          const w2 = ow * 0.44;
+          g.fillStyle = o.hit ? "rgba(92,74,54,0.45)" : "#4a3a26";
+          g.fillRect(ox - w2 / 2, oy - 34, w2, 52);
+          g.fillStyle = o.hit ? "rgba(70,56,40,0.45)" : "#392c1c";
+          g.fillRect(ox - ow / 2, oy - 40, ow, 9);
+          if (!o.hit) { g.fillStyle = "rgba(56,110,86,0.85)"; g.fillRect(ox - ow / 2, oy - 42, ow, 4); }
+          g.fillStyle = "rgba(8,20,26,0.55)";
+          g.beginPath(); g.ellipse(ox, oy + 20, ow * 0.6, 5, 0, 0, 7); g.fill();
         }
         if (s.atBottom) {
+          /* Le fond : une ligne de vase, pour qu'on sache qu'on est arrivé. */
+          g.fillStyle = "rgba(30,44,40,0.85)"; g.fillRect(0, pcy + 16, SM_W, SM_H);
           const ph = ((now - s.pulse0) % Q.STAR_DIVE_PULSE_MS) / Q.STAR_DIVE_PULSE_MS;
           const beat = Math.max(0, Math.sin(ph * Math.PI));
+          const shx = s.shardX * SM_W;
           g.fillStyle = `rgba(150,210,255,${(0.10 + beat * 0.35).toFixed(3)})`;
-          g.beginPath(); g.arc(s.shardX * SM_W, pcy + 90, 16 + beat * 22, 0, 7); g.fill();
-          smShard(g, s.shardX * SM_W, pcy + 90, 16 + beat * 4, "#eaf6ff", "rgba(10,30,50,0.8)");
+          g.beginPath(); g.arc(shx, pcy + 6, 16 + beat * 22, 0, 7); g.fill();
+          smShard(g, shx, pcy + 6, 15 + beat * 4, "#eaf6ff", "rgba(10,30,50,0.8)");
         }
-        // Le plongeur : une silhouette, des bulles.
-        g.fillStyle = "#e8dfc4";
-        g.beginPath(); g.ellipse(s.x * SM_W, pcy, 7, 11, 0, 0, 7); g.fill();
-        g.fillStyle = "rgba(220,240,255,0.5)";
-        for (let b = 0; b < 4; b++) g.fillRect(s.x * SM_W - 2 + b, pcy - 14 - ((now / 90 + b * 13) % 40), 2, 2);
         g.restore();
-        // Le halo de celui qui tient la lumière, en surface.
-        g.fillStyle = "rgba(255,232,160,0.10)";
-        g.beginPath(); g.ellipse(pcx, pcy, prx * 1.15, prx * 1.05, 0, 0, 7); g.fill();
+        /* Le halo de celui qui tient la lumière, vu d'en bas. Il déborde de la
+           flaque exprès : c'est ce qui permet de la RETROUVER quand on en sort. */
+        const glow = g.createRadialGradient(pcx, pcy, prx * 0.6, pcx, pcy, prx * 1.9);
+        glow.addColorStop(0, "rgba(255,232,160,0.16)");
+        glow.addColorStop(1, "rgba(255,232,160,0)");
+        g.fillStyle = glow;
+        g.beginPath(); g.ellipse(pcx, pcy, prx * 1.9, prx * 1.75, 0, 0, 7); g.fill();
+        // Le plongeur, TOUJOURS dessiné — sourd dans le noir, net dans la lumière.
+        const al = 0.28 + 0.72 * s.lit;
+        g.fillStyle = `rgba(232,223,196,${al.toFixed(2)})`;
+        g.beginPath(); g.ellipse(dx0, pcy, 7, 11, 0, 0, 7); g.fill();
+        g.fillStyle = `rgba(220,240,255,${(0.5 * al).toFixed(2)})`;
+        for (let b = 0; b < 4; b++) g.fillRect(dx0 - 2 + b, pcy - 14 - ((now / 90 + b * 13) % 40), 2, 2);
+        /* ⚠️⚠️ LA FLÈCHE DE RETOUR — ELLE N'EST PAS UNE AIDE, ELLE EST LA RÈGLE
+           RENDUE JOUABLE. « Reviens dans la lumière » n'a de sens que si l'on sait
+           de quel côté elle est ; sans ça, sortir de la flaque est un coup de dés
+           et le mini-jeu redevient de la chance. Elle n'apparaît QUE dans le noir,
+           et elle ne dit qu'une direction. */
+        if (s.lit < 0.5) {
+          const dir = s.poolX > s.x ? 1 : -1;
+          const ax = dx0 + dir * 34, ay = pcy;
+          g.fillStyle = `rgba(255,232,160,${(0.35 + 0.45 * (1 - s.lit)).toFixed(2)})`;
+          g.beginPath(); g.moveTo(ax + dir * 12, ay); g.lineTo(ax, ay - 9); g.lineTo(ax, ay + 9); g.closePath(); g.fill();
+        }
         if (s.hitFlash > 0) { g.fillStyle = `rgba(180,40,30,${(s.hitFlash * 0.5).toFixed(3)})`; g.fillRect(0, 0, SM_W, SM_H); }
         /* L'ANNEAU DE SOUFFLE : il se referme depuis le BORD de l'écran. C'est la
            seule limite du jeu, et elle est peinte là où on ne peut pas ne pas la
@@ -28017,11 +28702,18 @@ export function StarMinigame({ kind, round, role, phrase0, solo, L, lead, partne
         g.textAlign = "left"; g.font = "11px monospace"; g.fillStyle = "rgba(255,255,255,0.75)";
         g.fillText(L.star.s5.duetPhrase(s.phrase + 1, Q.STAR_DUET_PHRASES), 16, SM_H - 14);
       }
+      /* ⚠️⚠️ ZIP 458 — LE BANDEAU DE MESSAGE DESCEND SOUS LE SUJET. Il était au
+         MILIEU de l'écran, c'est-à-dire pile sur ce qu'on regarde : l'éclat et son
+         anneau de couleur pour le refroidissement, le morceau qui bat pour la
+         plongée. Un message qui cache la chose dont il parle est un message qui
+         coûte la manche qu'il commente. Vu à l'écran, et il était là depuis le
+         444 — personne ne l'avait regardé pendant qu'un mini-jeu TOURNAIT. */
       const mm = msgRef.current;
       if (mm.text && now < mm.until) {
         g.textAlign = "center"; g.font = "bold 14px monospace";
-        g.fillStyle = "rgba(0,0,0,0.55)"; g.fillRect(0, SM_H / 2 - 18, SM_W, 34);
-        g.fillStyle = "#ffe9a8"; g.fillText(mm.text, SM_W / 2, SM_H / 2 + 5);
+        const my = Math.round(SM_H * 0.855);
+        g.fillStyle = "rgba(0,0,0,0.62)"; g.fillRect(0, my - 17, SM_W, 32);
+        g.fillStyle = "#ffe9a8"; g.fillText(mm.text, SM_W / 2, my + 5);
       }
     }
     /* Le bandeau de la plongée est peint EN DERNIER (l'anneau de souffle passe
@@ -28101,20 +28793,19 @@ export function StarMinigame({ kind, round, role, phrase0, solo, L, lead, partne
     </div>
   );
 }
-/* Les obstacles d'une descente. ⚠️ DÉTERMINISTES, PAS TIRÉS : une plongée qu'on
-   recommence doit être LA MÊME, sinon rater n'apprend rien et le joueur attend
-   simplement une descente facile. C'est la règle des étals (426) et des buissons
-   (437), appliquée à un obstacle. */
-function smDiveObstacles(round) {
-  const D = Q.STAR_DIVE_DEPTH[Math.min(round, 2)];
-  const n = 4 + round * 3;
-  return Array.from({ length: n }, (_, i) => ({
-    d: 4 + (D - 8) * (i + 0.5) / n,
-    x: 0.5 + Math.sin(i * 2.399 + round * 1.7) * 0.34,
-    w: 0.10 + ((i * 7 + round * 3) % 5) * 0.02,
-    hit: false,
-  }));
-}
+/* ⚠️⚠️ ZIP 458 — `smDiveObstacles` A ÉTÉ SUPPRIMÉE, PAS DÉPLACÉE TELLE QUELLE.
+   Elle vivait ici, au niveau du module, donc aucun banc ne l'appelait — et elle
+   ne décrivait que des barres à éviter. Sa remplaçante est `Q.starDivePosts` :
+   ce sont les pilotis du VIEUX ponton, ils portent un `lean` qui montre où le
+   morceau est tombé, et c'est une RÈGLE de la quête. Une règle qui dit où
+   chercher n'a pas le droit de vivre là où personne ne peut la lire (§1 de
+   `QUETE.md` : une chose que rien n'appelle a l'air juste et ne peut pas
+   échouer). Elle est mesurée par `verify-quete`.
+   ⚠️ ET `smDiveShardX` N'EXISTE PAS ICI NON PLUS, pour la même raison : la
+   position du morceau et le penchant des pilotis doivent venir de la MÊME source,
+   sinon les indices montrent un endroit où il n'y a rien — le pire défaut
+   possible dans une plongée à l'aveugle, et exactement la « jointure, jamais deux
+   listes » du 449. */
 /* La perle qui ment. ⚠️ SA POSITION EST DÉRIVÉE DE LA MANCHE : recommencer un
    râtelier ne doit pas la déplacer, sinon on ne cherche plus, on attend. */
 function smTrueBead(round) { return 0.20 + ((round * 0.37 + 0.13) % 0.62); }

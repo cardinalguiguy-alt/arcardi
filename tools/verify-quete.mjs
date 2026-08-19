@@ -543,6 +543,68 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
     const stale = Q.resolveStarLean(e, "j1", 40, 40, 3000 + Q.STAR_LEAN_WINDOW_MS + 1000, false);
     ok("⚠️ une lecture périmée ne croise plus rien", !!stale.armed && !stale.mark);
   }
+  /* ╔═════════════════════════════════════════════════════════════════════════
+     ║ ZIP 458 — AUCUNE CONFIGURATION DE JOUEURS NE PEUT BLOQUER LA QUÊTE.
+     ╚═════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️⚠️ CE BLOC EXISTE PARCE QUE LE PIRE BLOCAGE DU DÉPÔT ÉTAIT VERT PARTOUT :
+     les deux gestes coopératifs étaient joués par le banc avec le drapeau solo
+     CHOISI PAR LE BANC (`true` pour le cratère, `false` pour les ombres), c'est-
+     à-dire dans les deux seuls mondes où ils marchaient. Le jeu, lui, passait
+     `starSoloRoom()` — « y a-t-il un autre joueur connecté » — donc un ami qui
+     labourait à la ferme rendait le cratère inouvrable ET les deux croisements
+     impossibles, pour toujours. *Un banc qui choisit lui-même le paramètre le
+     plus commode ne mesure pas une mécanique, il mesure son propre réglage.*
+     On balaie donc les DEUX valeurs sur les DEUX gestes. */
+  for (const flag of [true, false]) {
+    const e = Q.devStar(Q.newStar(), "start", 1).star;
+    let t = e.fall + Q.STAR_CRATER_COOL_MS + 500;
+    for (let k = 0; k < 40 && !Q.starHas(e, "crater"); k++) { t += 500; Q.resolveStarCalm(e, "j1", t, flag); }
+    ok(`⚠️⚠️ le cratère s'ouvre TOUT SEUL, drapeau solo = ${flag}`, Q.starHas(e, "crater"),
+       `${((t - (e.fall + Q.STAR_CRATER_COOL_MS + 500)) / 1000).toFixed(1)} s de tenue`);
+  }
+  {
+    /* Le raccourci à deux reste un raccourci : deux tenues simultanées ouvrent le
+       trou en `STAR_CALM_MS`, c'est-à-dire bien avant le plancher solo. */
+    const e = Q.devStar(Q.newStar(), "start", 1).star;
+    const t0 = e.fall + Q.STAR_CRATER_COOL_MS + 500;
+    let t = t0, opened = null;
+    for (let k = 0; k < 12 && !Q.starHas(e, "crater"); k++) {
+      t += 400;
+      /* ⚠️ ON GARDE LA RÉPONSE QUI OUVRE, PAS LA DERNIÈRE : celui des deux qui
+         franchit le seuil le premier reçoit `opened`, l'autre reçoit `already`.
+         Lire la dernière, c'est mesurer le perdant de la course. */
+      for (const who of ["j2", "j1"]) {
+        const r0 = Q.resolveStarCalm(e, who, t, false);
+        if (r0.opened) opened = opened || r0;
+      }
+    }
+    ok("⚠️ à deux, le trou s'ouvre par le chemin COURT", Q.starHas(e, "crater") && !!(opened && opened.both),
+       `${((t - t0) / 1000).toFixed(1)} s, soit moins que le plancher solo (${(Q.STAR_CALM_SOLO_MS / 1000).toFixed(1)} s)`);
+    ok("…et c'est bien plus rapide que tout seul", t - t0 < Q.STAR_CALM_SOLO_MS);
+  }
+  for (const flag of [true, false]) {
+    /* Les ombres : un joueur SEUL en ville doit pouvoir croiser ses deux propres
+       lectures, quel que soit le nombre de connectés. */
+    const e = Q.devStar(Q.newStar(), "start", 1).star;
+    Q.resolveStarFound(e, "furrow", "a", 1); Q.resolveStarFound(e, "crater", "a", 1);
+    Q.resolveStarLean(e, "j1", 20, 20, 1000, flag);
+    const cross = Q.resolveStarLean(e, "j1", 20 + Q.STAR_LEAN_SOLO_MIN_TILES + 2, 20,
+                                    1000 + Q.STAR_LEAN_SOLO_WINDOW_MS - 2000, flag);
+    ok(`⚠️⚠️ un joueur seul croise ses PROPRES lectures, drapeau solo = ${flag}`,
+       cross.mark === "leanLake", cross.mark || "aucune marque");
+    ok("…et le banc sait que c'est bien le chemin solo", cross.duo === false);
+  }
+  {
+    /* Et la lecture d'un AUTRE garde le barème court : c'est ça, le raccourci. */
+    const e = Q.devStar(Q.newStar(), "start", 1).star;
+    Q.resolveStarFound(e, "furrow", "a", 1); Q.resolveStarFound(e, "crater", "a", 1);
+    Q.resolveStarLean(e, "j1", 20, 20, 1000, false);
+    const d = Q.STAR_LEAN_MIN_TILES + 2;
+    ok("⚠️ le barème court est réservé à la lecture d'un AUTRE",
+       d < Q.STAR_LEAN_SOLO_MIN_TILES, `${d} cases < ${Q.STAR_LEAN_SOLO_MIN_TILES}`);
+    const cross = Q.resolveStarLean(e, "j2", 20 + d, 20, 2000, false);
+    ok("…et à cette distance, seul le duo croise", cross.mark === "leanLake" && cross.duo === true);
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -802,6 +864,53 @@ section("Les grandeurs partagées");
     ok("⚠️ la flaque laisse du NOIR autour d'elle", solo <= 0.26 && duo <= 0.20,
        `solo ${(solo * 100).toFixed(0)} % · à deux ${(duo * 100).toFixed(0)} % du demi-écran`);
     ok("…sans devenir un trou de serrure", duo >= 0.10, `${(duo * 100).toFixed(0)} %`);
+  }
+  /* ╔═════════════════════════════════════════════════════════════════════════
+     ║ ZIP 458 — L'ARRIVÉE DE L'ÉTOILE (elle grimpe, elle tournicote, elle se pose)
+     ╚═════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ CE BLOC EXISTE PARCE QUE C'EST UNE ANIMATION, ET QU'UNE ANIMATION ÉCRITE
+     DANS LA BOUCLE DE RENDU NE SE MESURE JAMAIS (piège n°1, §4 de `CLAUDE.md`,
+     deuxième visage : « elle reste au niveau du jour où elle a été écrite »).
+     `starJoinAnim` est une COURBE PURE justement pour qu'un banc puisse la
+     balayer image par image — et le premier contrôle est celui qui compte : la
+     CONTINUITÉ. Un saut de dix pixels entre deux images ne se voit sur aucune
+     capture fixe, et se voit immédiatement à l'écran (leçon du 446 sur
+     l'enfoncement du cratère, exactement la même grandeur). */
+  {
+    ok("⚠️ hors de sa fenêtre, il n'y a plus d'arrivée",
+       Q.starJoinAnim(-1) === null && Q.starJoinAnim(Q.STAR_JOIN_MS) === null && Q.starJoinAnim(Q.STAR_JOIN_MS + 500) === null);
+    const a0 = Q.starJoinAnim(0);
+    ok("⚠️⚠️ elle part du SOL (c'est ce qui fait qu'elle GRIMPE)",
+       a0 && a0.dy >= Q.STAR_JOIN_RISE_PX * 0.9, a0 ? `${a0.dy.toFixed(1)} px sous l'épaule` : "rien");
+    ok("…et elle est plus petite en bas qu'en haut", a0 && a0.scale < 1, a0 ? `×${a0.scale.toFixed(2)}` : "");
+    const aEnd = Q.starJoinAnim(Q.STAR_JOIN_MS - 1);
+    ok("⚠️ et elle finit EXACTEMENT là où le suivi normal la met",
+       aEnd && Math.abs(aEnd.dx) < 0.5 && Math.abs(aEnd.dy) < 0.5 && Math.abs(aEnd.scale - 1) < 0.02,
+       aEnd ? `dx ${aEnd.dx.toFixed(2)} · dy ${aEnd.dy.toFixed(2)}` : "rien");
+    let jump = 0, prev = null, phases = new Set(), signs = 0, prevSign = 0, fronts = new Set();
+    for (let t = 0; t < Q.STAR_JOIN_MS; t += 8) {
+      const a = Q.starJoinAnim(t); if (!a) break;
+      phases.add(a.phase); fronts.add(!!a.front);
+      const sg = Math.sign(a.dx);
+      if (a.phase === "spin" && sg && prevSign && sg !== prevSign) signs++;
+      if (sg) prevSign = sg;
+      if (prev) jump = Math.max(jump, Math.hypot(a.dx - prev.dx, a.dy - prev.dy));
+      prev = a;
+    }
+    ok("⚠️⚠️ le mouvement est CONTINU (aucun saut d'une image à l'autre)",
+       jump < 2.2, `plus grand saut ${jump.toFixed(2)} px pour 8 ms`);
+    ok("⚠️ les trois temps sont tous atteints", phases.size === 3, [...phases].join(" → "));
+    ok("⚠️⚠️ elle fait vraiment le TOUR du fermier (au moins un tour et demi)",
+       signs >= 2, `${signs} passages d'un côté à l'autre`);
+    ok("…et elle passe DERRIÈRE puis DEVANT (sinon le cercle est plat)", fronts.size === 2);
+    ok("⚠️ le tournicotage dure bien « une seconde »", Q.STAR_JOIN_SPIN_MS >= 800 && Q.STAR_JOIN_SPIN_MS <= 1300,
+       `${Q.STAR_JOIN_SPIN_MS} ms`);
+    /* ⚠️ ET ELLE NE DURE PAS PLUS LONGTEMPS QUE LA SUITE DE PHRASES QU'ELLE
+       ACCOMPAGNE : la rencontre déroule sept toasts espacés de 2,6 s, et une
+       animation qui déborderait la première phrase raconterait deux choses en
+       même temps. */
+    ok("…et l'arrivée entière tient dans les premières phrases de la rencontre",
+       Q.STAR_JOIN_MS <= 3000, `${Q.STAR_JOIN_MS} ms`);
   }
   ok("⚠️ la carte de chapitre ne survit pas à sa scène", Q.STAR_CARD_MS < Q.STAR_FALL_MS && Q.STAR_CARD_MS < Q.STAR_TURN_MS);
   /* ⚠️ ZIP 453 — LE TOTAL SE DÉRIVE DE LA TABLE DES MORCEAUX, ET IL N'Y EN A

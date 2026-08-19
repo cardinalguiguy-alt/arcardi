@@ -718,6 +718,118 @@ console.log("\n7. LE CRATÈRE — deux rayons, une profondeur, et un refroidisse
        `plus grand saut ${jump.toFixed(2)} px pour 0,02 case`);
   }
 
+  /* ╔═══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 458 — LA GLISSADE. « il doit un peu glisser vers le bas, et avoir un
+     ║ peu de mal à remonter » (Guillaume).
+     ╚═══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ CE BLOC EST ICI ET PAS DANS `verify-quete` POUR UNE RAISON DE FOND : les
+     trois fonctions sont pures, mais elles ne veulent RIEN DIRE sans le creux
+     réel — `starCraterSlope` prend le sondeur en paramètre exprès. Mesurées sur
+     un faux creux, elles seraient vertes sur une pente qui n'existe pas : c'est
+     la sixième forme du défaut de banc (une grandeur juste, sur un intervalle que
+     le joueur ne regarde pas). Ici, on les balaie sur LE creux du jeu.
+     ⚠️ ET ON BALAIE UN INVARIANT, PAS TROIS EXEMPLES (leçon du 449) : « la pente
+     pointe TOUJOURS vers le centre à l'intérieur du trou », sur toute la cuvette. */
+  {
+    const sink = (a, b) => S.starCraterSink(a, b, 16);
+    let wrong = 0, tested = 0, maxN = 0, maxSlide = 0;
+    for (let ai = 0; ai < 48; ai++) {
+      const a = ai / 48 * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a) * 0.86;
+      for (let r = 0.6; r <= C.STAR_CRATER_DRAW_R; r += 0.1) {
+        const x = ca * r, y = sa * r;
+        if (sink(x, y) <= 0.5) continue;                 // hors de la cuvette : rien à prouver
+        const g = Q.starCraterSlope(sink, x, y);
+        if (g.n < 0.2) continue;
+        tested++;
+        maxN = Math.max(maxN, g.n); maxSlide = Math.max(maxSlide, Q.starSlideSpeed(g.n));
+        /* La descente doit ramener vers le centre : produit scalaire du vecteur
+           de pente avec la direction « vers le milieu » (−x, −y). */
+        if (g.gx * -x + g.gy * -y <= 0) wrong++;
+      }
+    }
+    ok(tested > 400, "⚠️ la pente est balayée sur toute la cuvette, pas sur trois points", `${tested} points`);
+    ok(wrong === 0, "⚠️⚠️ la glissade ramène TOUJOURS vers le fond, jamais vers le bord",
+       `${wrong} contresens sur ${tested}`);
+    ok(maxSlide > 1.2 && maxSlide <= Q.STAR_SLIDE_MAX,
+       "⚠️ elle se sent vraiment, sans dépasser sa borne", `${maxSlide.toFixed(2)} cases/s (marche : ${C.PLAYER_SPEED})`);
+    ok(maxSlide < C.PLAYER_SPEED,
+       "…et elle reste plus lente que la marche (on glisse, on n'est pas éjecté)",
+       `${(maxSlide / C.PLAYER_SPEED * 100).toFixed(0)} % de la marche`);
+    /* ⚠️ LA MONTÉE COÛTE, LA DESCENTE NE RAPPORTE PAS. Une pénalité symétrique
+       aurait compté la glissade deux fois — c'est écrit dans `starClimbMul`, et
+       c'est exactement le genre de chose qu'on croit avoir écrit. */
+    ok(Q.starClimbMul(maxN, 1) === 1, "⚠️ descendre ne donne AUCUN bonus de vitesse");
+    ok(Q.starClimbMul(0, -1) === 1, "…et sur le plat, monter ne coûte rien");
+    const up = Q.starClimbMul(maxN, -1);
+    ok(up <= 0.7 && up >= 0.35, "⚠️⚠️ remonter la paroi coûte vraiment, sans coller au sol",
+       `il reste ${(up * 100).toFixed(0)} % de la marche`);
+    /* ╔═══════════════════════════════════════════════════════════════════════
+       ║ ⚠️⚠️⚠️ L'INVARIANT QUI MANQUAIT, ET IL A COÛTÉ UN MUR (458).
+       ╚═══════════════════════════════════════════════════════════════════════
+       Le premier réglage rendait le cratère IMPOSSIBLE À FRANCHIR : sur le
+       bourrelet, la pénalité de montée (× 0,45) laissait 2,34 cases/s pendant que
+       la glissade en reprenait 3,2. Le fermier reculait en marchant, et rien ne
+       pouvait le voir — `canStandTown` n'est pas consulté (aucun pas n'est
+       refusé), le build compile, et les six contrôles ci-dessus étaient VERTS :
+       ils mesuraient la glissade et la peine SÉPARÉMENT, jamais leur SOMME.
+       ⚠️ C'est la septième forme du défaut de banc de `CLAUDE.md` — « il mesure
+       DEUX réponses et jamais leur ACCORD » — et la parade est celle du 449 :
+       quand on peut énoncer une propriété, on la BALAIE. Ici : *en marchant droit
+       vers le haut, on gagne du terrain, partout, toujours.* */
+    let worst = 99, worstAt = null, swept = 0;
+    for (let ai = 0; ai < 48; ai++) {
+      const a = ai / 48 * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a) * 0.86;
+      for (let r = 0.2; r <= C.STAR_CRATER_DRAW_R + 0.6; r += 0.05) {
+        const x = ca * r, y = sa * r;
+        const g = Q.starCraterSlope(sink, x, y);
+        if (g.n < 0.01) continue;
+        swept++;
+        // On marche EXACTEMENT à contresens de la pente : le pire cas possible.
+        const net = C.PLAYER_SPEED * Q.starClimbMul(g.n, -1) - Q.starSlideSpeed(g.n);
+        if (net < worst) { worst = net; worstAt = r; }
+      }
+    }
+    ok(swept > 2000, "⚠️ l'invariant est balayé sur tout le relief", `${swept} points`);
+    ok(worst >= Q.STAR_CLIMB_NET_MIN,
+       "⚠️⚠️⚠️ EN MARCHANT DROIT VERS LE HAUT, ON GAGNE DU TERRAIN — PARTOUT",
+       `pire cas ${worst.toFixed(2)} case/s à ${worstAt === null ? "?" : worstAt.toFixed(2)} case du centre (plancher ${Q.STAR_CLIMB_NET_MIN})`);
+    /* ⚠️ ET IL ÉCHOUE DANS LES DEUX SENS : une glissade qu'on ne sent pas est une
+       mécanique morte, exactement comme une fenêtre trop large (leçon du 444). */
+    ok(worst <= C.PLAYER_SPEED * 0.55, "…et il en coûte quand même vraiment",
+       `${(worst / C.PLAYER_SPEED * 100).toFixed(0)} % de la marche à plat`);
+  }
+
+  /* ── LA POUSSIÈRE (458). ⚠️ ELLE EST REGARDABLE DÈS LE JOUR DE SON ÉCRITURE,
+     et c'est la leçon du 455 appliquée à l'endroit : un effet né dans la closure
+     de la boucle n'aurait eu aucun banc, donc il aurait vieilli. */
+  {
+    const sur = makeCanvas(120, 120), g4 = sur.ctx;
+    const count = (k) => {
+      g4.clearRect(0, 0, 120, 120);
+      S.drawStarDust(g4, 60, 60, 16, k, 7);
+      let n = 0; for (let i = 3; i < sur.px.length; i += 4) if (sur.px[i] > 8) n++;
+      return n;
+    };
+    const a0 = count(0.15), a1 = count(0.55), a2 = count(0.99), a3 = count(1);
+    ok(a0 > 40, "⚠️ une bouffée neuve se voit", `${a0} px`);
+    ok(a1 > a0, "⚠️⚠️ elle S'OUVRE (une bouffée qui ne grandit pas est une tache)", `${a0} → ${a1} px`);
+    ok(a3 === 0, "⚠️ et à un, elle a totalement disparu", `${a2} px à 0,99 · ${a3} px à 1`);
+    /* ⚠️ LES DEUX TONS DEMANDÉS SE VOIENT, ET C'EST LE MOT MÊME DE LA DEMANDE :
+       « poussière marron / grise ». Un seul ton passerait tous les contrôles
+       ci-dessus. */
+    g4.clearRect(0, 0, 120, 120);
+    for (let sd = 0; sd < 8; sd++) S.drawStarDust(g4, 60, 60, 16, 0.5, sd);
+    let brown = 0, grey = 0;
+    for (let i = 0; i < sur.px.length; i += 4) {
+      if (sur.px[i + 3] < 8) continue;
+      const r = sur.px[i], gg = sur.px[i + 1], b = sur.px[i + 2];
+      if (r > gg + 6 && gg > b + 6) brown++;
+      else if (Math.abs(r - b) <= 12 && r > 90) grey++;
+    }
+    ok(brown > 20 && grey > 20, "⚠️⚠️ il y a du MARRON et du GRIS, pas un ton unique",
+       `${brown} px marron · ${grey} px gris`);
+  }
+
   /* ── ZIP 449 — OÙ ÇA BRÛLE, EN CASES. La moitié GÉOMÉTRIE de la brûlure (la
      moitié CHRONOLOGIE est dans `verify-quete`, qui balaie le temps).
      ⚠️⚠️ CE BLOC MESURE UNE DÉCISION DE GUILLAUME — « seulement le fond du trou »

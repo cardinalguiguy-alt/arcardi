@@ -3442,7 +3442,20 @@ export const STAR_CRATER_Y = TOWN_PARK.y + TOWN_PARK.h + 17;
    PEINT, `STAR_CRATER_R` (dans `quete.js`) est l'anneau où il faut se tenir
    pour que l'étoile sorte. Ils sont proches et ils ne sont pas la même chose ;
    le jour où l'on agrandira le dessin, le jeu ne bougera pas d'un pouce. */
-export const STAR_CRATER_DRAW_R = 4.5;
+/* ⚠️⚠️⚠️ ZIP 458 — 4,5 → 7,0, SUR DEMANDE DE GUILLAUME (« augmente la taille du
+   gros cratère sur valley town »), ET LE NOMBRE N'EST PAS CHOISI À L'ŒIL. Le
+   cratère se place par balayage en spirale sur le premier DISQUE entièrement
+   libre (`starCraterPos`) : plus il est large, plus la place est rare, et un
+   rayon trop ambitieux ne le rend pas « plus gros », il le DÉPLACE — voire le
+   fait disparaître (`starSpiralFree` rend `null` au-delà de vingt cases). Le
+   balayage a donc été rejoué sur la vraie carte, rayon par rayon :
+       4,5 → 5,0 → 6,0 → 7,0  : (128,117), **l'ancre exacte, écart 0**
+       8,0 → 8,5              : (127,118), il commence à glisser
+       9,0 et au-delà         : AUCUNE PLACE — le cratère n'existe plus
+   7,0 est donc le dernier rayon qui garde la position d'origine : × 1,56 de
+   large, × 2,4 de surface, et pas un pixel de déplacement. *Un décor qu'on
+   agrandit se mesure contre la place qu'il exige, jamais contre le goût.* */
+export const STAR_CRATER_DRAW_R = 7.0;
 /* ⚠️⚠️ ET UN TROISIÈME AU 446, POUR LES FISSURES SEULES — LA SEULE CHOSE DU JEU
    QUI DÉBORDE DE SON EMPRISE GARANTIE, ET C'EST NOMMÉ PLUTÔT QUE SUBI. Le modèle
    fourni par Guillaume montre de longues fissures qui courent dans l'herbe bien
@@ -3455,7 +3468,12 @@ export const STAR_CRATER_DRAW_R = 4.5;
    qui déborderait serait le défaut du 440 (« la case d'un décor n'est pas la
    surface qu'il couvre ») ; `render-etoile` mesure les deux rayons séparément
    pour que personne ne confonde les deux cas. */
-export const STAR_CRATER_CRACK_R = 7.6;
+/* ⚠️ ZIP 458 — DÉRIVÉ, PLUS RÉGLÉ. Il valait 7,6 pour un trou de 4,5, soit
+   ×1,69 : le jour où le trou grandit, un nombre écrit à la main aurait laissé les
+   fissures MOINS loin que la terre projetée, c'est-à-dire l'inverse de ce qu'elles
+   racontent. C'est le §8 de `CLAUDE.md` au mot près — « un paramètre qui double un
+   autre est une divergence en attente, il doit être DÉRIVÉ ». */
+export const STAR_CRATER_CRACK_R = Math.round(STAR_CRATER_DRAW_R * 1.69 * 10) / 10;
 /* ⚠️⚠️ LA PROFONDEUR, EN PIXELS D'IMAGE, ET ELLE N'EST QUE ÇA (446, demande de
    Guillaume : « quand on se déplace à l'intérieur, prévoir un déplacement qui
    suggère une profondeur ; pas plat »). C'est un DÉCALAGE DE DESSIN appliqué au
@@ -3464,8 +3482,13 @@ export const STAR_CRATER_CRACK_R = 7.6;
    une falaise que `canStandTown` refuse de franchir (`TOWN_STEP_MAX`), donc un
    trou où l'on ne peut pas entrer. C'est très exactement l'arc du pont ajouté à
    `playerElevTown` que le 439 a évité de justesse. */
-export const STAR_CRATER_SINK_PX = 11;     // au fond du trou
-export const STAR_CRATER_LIP_PX = 3;       // sur le bourrelet, on monte
+/* ⚠️ ZIP 458 — LA PROFONDEUR SUIT LA LARGEUR. Un trou 1,56 fois plus large avec
+   la même profondeur n'est pas un cratère plus grand, c'est une ASSIETTE : la
+   pente s'aplatit d'autant, et c'est justement la pente qui porte la glissade
+   demandée. 11 × (7,0 / 4,5) ≈ 17. */
+export const STAR_CRATER_SINK_PX = 17;     // au fond du trou
+export const STAR_CRATER_LIP_PX = 4;       // sur le bourrelet, on monte
+export const STAR_DUST_MS = 900;           // zip 458 — ce que dure une bouffée de poussière
 /* ╔═════════════════════════════════════════════════════════════════════════════
    ║ ZIP 454 — LE SILLON DÉMÉNAGE, ET IL DEVIENT UN VRAI IMPACT.
    ╚═════════════════════════════════════════════════════════════════════════════

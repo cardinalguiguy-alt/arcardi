@@ -6573,6 +6573,48 @@ export function buildSprites() {
     }
   }
 
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 458 — LA POUSSIÈRE DE LA GLISSADE. « poussière marron / grise derrière
+     ║ le perso quand il glisse dans le cratère » (demande de Guillaume).
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ ELLE EST ICI ET PAS DANS LA BOUCLE DE RENDU, ET C'EST LE PIÈGE N°1 DU
+     PROJET PRIS À L'ENDROIT (§4 de `CLAUDE.md`, deuxième visage) : un effet écrit
+     dans la closure n'est appelable par aucun banc, donc il reste au niveau du
+     jour où il a été écrit pendant que tout ce qui est mesuré monte. Deux
+     paramètres, aucun état : la bouffée ne sait pas d'où elle vient, elle sait
+     seulement quel âge elle a.
+     ⚠️ `k` VA DE 0 (elle vient de naître) À 1 (elle est éteinte). L'appelant tient
+     la liste ; ce dessin n'en garde rien.
+     ⚠️⚠️ DEUX TONS, ET C'EST LA DEMANDE AU MOT : le MARRON est la terre qu'on
+     arrache (elle part avec le pied, elle retombe vite), le GRIS est la cendre
+     sèche du fond, plus légère, qui monte et traîne. Un seul ton aurait fait un
+     nuage de dessin animé ; deux font une matière. */
+  function drawStarDust(g2, cx, cy, T2, k, seed) {
+    const a = Math.max(0, Math.min(1, +k || 0));
+    if (a >= 1) return;
+    const sc = T2 / 16;
+    /* La bouffée s'ouvre vite puis s'éteint doucement : une rampe linéaire se lit
+       comme un fondu d'interface, pas comme de la poussière. */
+    const grow = Math.pow(a, 0.55), fade = Math.pow(1 - a, 1.5);
+    const n = 3;
+    for (let i = 0; i < n; i++) {
+      const h = ((seed | 0) * 2654435761 + i * 40503) >>> 0;
+      const ax = (((h >>> 3) & 255) / 255 - 0.5), ay = (((h >>> 11) & 255) / 255 - 0.5);
+      const grey = (h & 1) === 0;
+      /* Le gris MONTE (cendre), le marron RETOMBE (terre). */
+      const rise = grey ? -grow * 7 : grow * 2.5;
+      const x = cx + (ax * 6 + ax * grow * 13) * sc;
+      const y = cy + (ay * 3 + rise) * sc;
+      const rad = (1.7 + grow * (grey ? 5.2 : 3.6)) * sc;
+      const al = fade * (grey ? 0.34 : 0.46);
+      if (al < 0.02) continue;
+      g2.fillStyle = grey
+        ? `rgba(152,148,140,${al.toFixed(3)})`
+        : `rgba(112,86,58,${al.toFixed(3)})`;
+      g2.beginPath(); g2.arc(x, y, rad, 0, 7); g2.fill();
+    }
+  }
+
   /* LA FUMÉE — L'AUTRE MOITIÉ, ET ELLE PART DANS LA FILE DE TRI (voir le
      chapeau). ⚠️ ELLE NE S'ARRÊTE JAMAIS TOUT À FAIT TANT QUE L'ÉTOILE EST AU
      FOND : la seconde image de Guillaume, cratère refroidi, garde une volute.
@@ -13711,6 +13753,7 @@ house: house(),
     magpie: [magpieSprite(0), magpieSprite(1), magpieSprite(2)],
     drawStarCrater,
     drawStarCraterAir,
+    drawStarDust,
     drawStarShip,          // 450 — le navire des étoiles, sur la grève du lac
     drawStarPlan,          // 454 — la feuille de plan de Kerguélen
     starCraterSink,

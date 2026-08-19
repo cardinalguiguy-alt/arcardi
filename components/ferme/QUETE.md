@@ -338,7 +338,10 @@ praticable, et distincte de la boutique, du bac, du panneau de gare et du seuil 
 **Ce qu'on voit.** Six cases de terre noire retournée, de l'herbe givrée de sel de verre, et au
 bout un morceau **trop brillant pour être regardé**, qui fume.
 
-> `star.s1.tooHot` — « C'est trop brûlant pour regarder. Ça siffle sous la pluie. »
+> `star.s1.tooHot` — « C'est trop brûlant pour qu'on y touche. Une fois froid, ça fera une proue
+> increvable — personne n'a jamais rien vu d'aussi dur. »
+⚠️ **ZIP 457** — la raison (un matériau de construction, pas un mystère gratuit) est dite ICI,
+avant le mini-jeu ; voir le commentaire en tête de `s1` dans `fermeStrings.js`.
 
 **🎮 MINI-JEU 1 — « COOLING » · l'arrosoir · à l'écran : « Fais-le refroidir »**
 Le joueur a déjà l'outil et il l'aime. On arrose **par à-coups** ; une jauge de chaleur doit rester
@@ -361,8 +364,10 @@ personne.
 la cale** (§6) : une coque posée sur ses tins, et quatre fantômes bleus autour d'elle. Le morceau
 penche vers l'est, toujours. → **prendre le train.**
 
-> `star.s1.got` — « Un morceau du bateau. Il chante une note quand on le touche. »
-> `star.s1.east` — « Il penche vers l'est. Toujours vers l'est. »
+> `star.s1.got` — « La première pièce de la coque : froide, dure comme la pierre, de quoi faire
+> une proue increvable. Elle chante une note quand on la touche. »
+> `star.s1.east` — « Il penche vers l'est, du côté de la ville, comme s'il montrait un chemin.
+> Peut-être que c'est ainsi qu'on naviguera, une fois le navire fini. »
 
 ---
 
@@ -966,7 +971,7 @@ minutes, donc personne ne la reverrait.
 | **445 — la chute VUE** (file d'attente, rattrapage, caméra sur l'impact) | ✅ | ✅ | ✅ | ✅ |
 | **445 — le CHEVRON** (repère directionnel de quête) | ✅ | ✅ | ✅ | ✅ |
 | **446 — le cratère refait sur modèle** (relief éclairé, fissures, chaleur, enfoncement) | ✅ | ✅ | ✅ **planche + en jeu** | ✅ |
-| ⚠️ **La quête à DEUX CLIENTS** | ✅ | ✅ | ❌ **RIEN** | ❌ |
+| ⚠️⚠️ **La quête à DEUX CLIENTS** — 458 : deux clients ont enfin tourné ensemble | ✅ | ✅ | ⚠️ **la CHUTE, la connexion, et le CRATÈRE ouvert à un seul** · ❌ le reste de la coopération | ⚠️ |
 | **448 — la comète VISE** (impact daté à l'impact, onde de choc, `drawStarComet`) | ✅ | ✅ | ✅ | ✅ |
 | **449 — le cratère BRÛLE** (fond en fusion, blessure 10 min, retour maison) | ✅ | ✅ | ✅ **en jeu, chaud ET froid** | ✅ |
 | **449 — le bandeau dit l'OBJECTIF** (`starGoalKey`, une source pour le bandeau et le chevron) | ✅ | ✅ | ✅ | ✅ |
@@ -985,6 +990,14 @@ minutes, donc personne ne la reverrait.
 | ⚠️⚠️⚠️ **454 — LE BOIS DE TRISTAN** (5 commandes dans l'ordre, `found ∧ wood`, la fin attend) | ✅ | ✅ | ⚠️ **banc seulement** | ⚠️ |
 | ⚠️⚠️ **454 — LE SILLON DÉMÉNAGE ET A UNE PHYSIQUE** (pré nord, relief éclairé, bourrelet fibreux, enfoncement) | ✅ | ✅ | ✅ **planche + en jeu** (2 défauts trouvés et corrigés) | ✅ |
 | ⚠️⚠️ **454 — LA CHUTE EST TROIS FOIS PLUS LENTE** (sauf à l'absolue fin) | ✅ | ✅ | ✅ **la scène joue** · ⚠️ **la lourdeur reste à juger à l'œil** | ⚠️ |
+| ⚠️⚠️⚠️ **458 — AUCUNE CONFIGURATION DE JOUEURS NE BLOQUE PLUS** (`starAlone` par geste, chemin solo toujours ouvert) | ✅ | ✅ | ✅ **reproduit puis corrigé à DEUX clients** | ✅ |
+| ⚠️⚠️ **458 — les cartes et les scènes attendent un écran libre** (plus de carte par-dessus un mini-jeu) | ✅ | ✅ | ⚠️ **banc + relecture** | ⚠️ |
+| ⚠️⚠️ **458 — LE CRATÈRE EST 1,56× PLUS LARGE, ON Y GLISSE, ON PEINE À EN SORTIR** (+ poussière marron/grise) | ✅ | ✅ | ✅ **en jeu** (un MUR trouvé et corrigé) | ✅ |
+| ⚠️⚠️⚠️ **458 — LA PLONGÉE EST REFAITE** (la flaque est le terrain, les pilotis penchent) | ✅ | ✅ | ✅ **monté isolément** | ⚠️ **jamais joué jusqu'à la victoire** |
+| ⚠️⚠️ **458 — LE REFROIDISSEMENT EST POLI** (arrosoir qui verse, anneau à la couleur visée, fêlure vue) | ✅ | ✅ | ✅ **monté isolément** | ⚠️ **idem** |
+| ⚠️⚠️ **458 — CHAQUE ÉTAPE DIT POURQUOI ELLE SERT LE BATEAU** (6 phrases + leurs lecteurs) | ✅ | ✅ | ✅ `fall.split` et `whyLean` vus en jeu · ⚠️ les autres au banc | ⚠️ |
+| ⚠️⚠️ **458 — LA TRANSACTION DE L'INGÉNIEUR EST EXPLICITE** (3 provenances, Ajouter / Valider, refus chiffré) | ✅ | ✅ | ❌ **pas encore regardée** | ❌ |
+| ⚠️ **458 — L'ÉTOILE GRIMPE, TOURNICOTE, SE POSE** (`starJoinAnim`, courbe pure et continue) | ✅ | ✅ | ⚠️ **banc seulement** | ⚠️ |
 
 ### Ce qui est vérifié à ce stade
 
@@ -993,12 +1006,13 @@ minutes, donc personne ne la reverrait.
 | `npx next build` | ⚠️ **PAS RELANCÉ AU 453 : un `npm run dev` tournait dans le dossier** (§10 de `CLAUDE.md` — les deux écrivent dans le même `.next/`, et le faux négatif coûte une demi-session). `verify-syntax` a servi de contrôle de remplacement. Vert au 452 |
 | `verify-syntax` | tout se parse, JSX compris |
 | `verify-strings` | **1082 clés appariées** — ⚠️ **et depuis le 451 il vérifie aussi les VALEURS** : aucune section identique mot pour mot dans les deux langues. C'est ce contrôle qui manquait, et son absence a laissé passer six zips de quête en anglais des deux côtés |
-| **`verify-quete`** | **345/345** (lancé au 454 ; 294 au 453, 284 au 452, 220 au 446, 207 au 445, 177 pendant la séance du 444) |
-| `verify-vallee` | **205/205** (relancé au 454) |
+| **`verify-quete`** | **433/433** (lancé au 458 ; 413 au 456, 345 au 454, 294 au 453, 284 au 452, 220 au 446, 177 pendant la séance du 444) |
+| `verify-vallee` | **205/205** (relancé au 458) |
 | **`render-beffroi`** | **28/28**, planche `beffroi-plan.png` |
 | `render-etoile` | tous contrôles verts, 3 planches |
 | **`render-navire`** | tout vert, planche `navire.png` (**2176×572**, zéro à cinq morceaux **puis la cale vide**, nuit puis jour) |
-| les **34** bancs du dépôt (16 de contrôle, 18 de rendu) | **tous verts, lancés un par un au 453** |
+| les **35** bancs du dépôt (16 de contrôle, 19 de rendu) | **tous verts, lancés un par un au 458** |
+| `npx next build` | ⚠️ **`✓ Compiled successfully`** au 458 (l'arrêt sur `supabaseUrl is required` est préexistant, §10 de `CLAUDE.md`) |
 | **séance de jeu réelle, un client** | chute · carte de chapitre · pisteur · rappel de reprise · compagne · beffroi · les cinq mini-jeux dessinés · le navire sur sa cale |
 
 ⚠️ **Les chiffres ci-dessus ont été obtenus en LANÇANT les bancs au 452**, jamais recopiés (§14.6
@@ -1051,7 +1065,153 @@ relais qui se repose un message à chaque image tourne en boucle serrée. *Il lu
 
 ⚠️ **Rien n'est committé.** Tout est en fichiers modifiés / non indexés, prêt à relire.
 
-### 12.0 ⚠️⚠️⚠️ ZIP 456 — ON PARLE À QUELQU'UN QUI S'ARRÊTE, ET LE CRATÈRE RÉPOND
+### 12.0 ⚠️⚠️⚠️ ZIP 458 — LA QUÊTE NE SE BLOQUE PLUS QUAND UN AMI SE CONNECTE
+
+**Demande de Guillaume, en cinq points :** vérifier la quête À DEUX JOUEURS et régler
+ce qu'on y trouve ; agrandir le cratère de Valley Town avec une vraie glissade ; polir le
+refroidissement et refaire la plongée, « trop cheap pour le niveau de la quête » ; et
+justifier chaque étape par rapport au bateau. Puis, en cours de route : rendre la
+transaction de l'ingénieur explicite, et dire que ce qui tombe à la ferme n'est qu'un
+éclat.
+
+#### ⚠️⚠️⚠️ LE PLUS GROS DÉFAUT DU CHANTIER ÉTAIT UNE LIGNE, ET IL FALLAIT DEUX CLIENTS POUR LE VOIR
+
+> `starSoloRoom()` répondait **« y a-t-il un autre joueur CONNECTÉ »** et servait à
+> répondre à **« puis-je avancer tout seul »**.
+
+Les deux questions n'ont jamais eu la même réponse. Conséquence, mesurée puis **reproduite
+en jeu à deux clients** : un joueur B qui laboure tranquillement à la ferme rendait, pour A
+resté en ville,
+
+| ce qui cassait | ce que ça coûtait |
+|---|---|
+| **le cratère ne s'ouvrait plus JAMAIS** — `resolveStarCalm` exigeait une seconde tenue qui ne pouvait pas exister | la jauge se remplissait **jusqu'à 100 %** et il ne se passait rien. *Une barre qui promet et ment* — le défaut que le 456 venait de corriger, refait un cran plus haut |
+| **les deux croisements d'ombres devenaient impossibles** — `resolveStarLean` cessait de compter ses propres lectures | **les chapitres 3, 4 et 5 inatteignables**. La quête s'arrêtait au chapitre 2 *parce qu'un ami s'était connecté* |
+| **la flaque de la plongée** se figeait au centre et rétrécissait au rayon « à deux » | le morceau se dessinait **hors du découpage** : invisible dès que la lumière dérivait |
+| **le refroidissement devenait plus FACILE** (bande × 1,4) par la présence d'un joueur à l'autre bout du monde | l'inverse de ce que la bande large veut dire |
+
+**La parade est structurelle, pas un réglage.** Le duo est un **RACCOURCI**, jamais une
+serrure (§4) : le chemin solo reste ouvert en permanence dans les deux résolveurs, et
+`starAlone(kind)` ne décide plus *si l'on peut* mais **quel barème on annonce et quelle
+variante on joue** — par GESTE, et en testant la zone avant les distances.
+⚠️ **Le pire qu'une erreur puisse désormais coûter est une phrase mal choisie**, plus
+jamais une quête arrêtée.
+
+⚠️⚠️ **ET LE BANC ÉTAIT VERT PARTOUT, PARCE QU'IL CHOISISSAIT LUI-MÊME LE PARAMÈTRE
+COMMODE** : il jouait le cratère avec `solo = true` et les ombres avec `solo = false`,
+c'est-à-dire dans les deux seuls mondes où ils marchaient. *Un banc qui choisit son propre
+réglage ne mesure pas une mécanique, il mesure son réglage.* Il balaie maintenant **les deux
+valeurs sur les deux gestes** (`verify-quete`, 413 → **433**).
+
+#### ⚠️⚠️ UNE CARTE DE CHAPITRE N'ARRIVE PLUS SUR L'ÉCRAN DE QUELQU'UN QUI JOUE
+
+A refroidit son morceau à la ferme, le chapitre 1 se ferme — et B, quarante mètres sous le
+lac, mini-jeu ouvert, recevait une **carte plein écran par-dessus**. Le mini-jeu continuait
+de tourner derrière (il a son propre `rAF`) : B perdait la manche sans avoir rien fait.
+**Aucun banc ne peut voir ça — il faudrait deux écrans.** Les cartes ET les scènes
+(retournement, finale) passent maintenant par une file qui attend un écran libre ; quand
+l'écran EST libre, rien ne change (la scène part dans la même image).
+
+#### LE CRATÈRE : PLUS GRAND, ET ON GLISSE DEDANS
+
+- **4,5 → 7,0 cases de rayon**, et le nombre n'est pas choisi à l'œil : le balayage en
+  spirale a été rejoué sur la vraie carte, rayon par rayon. **7,0 est le dernier qui garde
+  l'ancre exacte (128, 117)** ; à 8 il glisse d'une case, à 9 **il n'y a plus de place** et
+  le cratère disparaît. Profondeur portée à 17 px (sinon un trou plus large est une
+  assiette), fissures **dérivées** (× 1,69) au lieu d'être réglées.
+- **La glissade** est une VITESSE, jamais une collision ni une altitude — la leçon du 439 et
+  du 441 réunies, appliquée une quatrième fois. Elle ne s'applique **qu'en marchant** (plus
+  une demi-seconde d'élan) : une pente qui pousse en permanence aurait rendu impossible la
+  seule mécanique du lieu, *se tenir immobile, dos tourné*.
+- ⚠️⚠️ **ET LE PREMIER RÉGLAGE A FAIT UN MUR — TROUVÉ EN JOUANT, PAS AU BANC.** Glissade 3,2
+  contre 45 % de vitesse en montée : le fermier montait à 2,34 cases/s et la pente le
+  reprenait à 3,2. **Il ne pouvait plus entrer dans le cratère du tout.** Un mur fait de
+  vitesse : `canStandTown` n'est jamais consulté, le build compile, et les six contrôles
+  étaient verts — *ils mesuraient la glissade et la peine SÉPARÉMENT, jamais leur SOMME.*
+  C'est la septième forme du défaut de banc de `CLAUDE.md`. L'invariant est écrit et balayé
+  sur 5 326 points : **en marchant droit vers le haut, on gagne du terrain, partout.**
+- **La poussière** (marron = la terre arrachée, qui retombe ; gris = la cendre du fond, qui
+  monte) vit dans `fermeArt.drawStarDust`, donc **regardable dès le jour de son écriture**.
+- ⚠️ **Pas d'élan tant que le trou brûle** : la brûlure commence à 3,5 cases pour une cuvette
+  de 4,9, et un élan d'une demi-seconde pouvait pousser dans le feu quelqu'un qui venait
+  d'arrêter de marcher. *Le jeu ne punit plus un geste qu'on n'a pas fait.*
+
+#### LA PLONGÉE : LA FLAQUE N'EST PLUS UNE FENÊTRE, C'EST LE TERRAIN
+
+Reproche de Guillaume : *« trop cheap »*. Il avait raison, et la cause était précise — **la
+flaque de lumière ne servait qu'à découper une vignette.** On jouait aussi bien les yeux
+fermés sur le côté droit de l'écran, et la moitié coopérative ne changeait rien à ce qu'on
+faisait. Désormais :
+
+- **hors de la flaque : écran noir, souffle × 2,4, et on percute des pilotis qu'on ne pouvait
+  pas voir.** « A éclaire le chemin de B » cesse d'être une image et devient la règle ;
+- **les obstacles cessent d'être des obstacles** : ce sont les pilotis du VIEUX ponton, et
+  dans la lumière ils **penchent vers le morceau** — la grammaire du §4 (« une ombre qui
+  MONTRE ») servie une troisième fois, sans ajouter un seul objet ;
+- une **flèche** ramène vers la lumière quand on en sort (sans elle, sortir est un coup de
+  dés), le morceau se dessine **sur la ligne du plongeur** (il tombait sur le bord du
+  découpage, donc invisible à deux), et on **entre dans l'eau DANS la lumière**.
+
+#### LE REFROIDISSEMENT : L'OUTIL EST À L'ÉCRAN, ET LA CONSIGNE EST UNE COULEUR
+
+- **L'arrosoir apparaît et il verse** — `QUETE.md` disait « le joueur a déjà l'outil et il
+  l'aime », et l'outil n'était nulle part ;
+- **l'anneau autour de l'éclat est peint à la couleur VISÉE** : quand l'éclat a la couleur de
+  son anneau, on est dedans. C'était la contradiction du jeu — sa difficulté voulue est que
+  la vapeur masque la jauge, mais la jauge était la SEULE lecture ;
+- la fêlure **se voit** au lieu de se lire, et le bandeau de message **descend sous le
+  sujet** (il était au milieu, c'est-à-dire pile sur ce qu'on regarde, depuis le 444).
+
+#### LA NARRATION : CHAQUE ÉTAPE DIT POURQUOI ELLE SERT LE BATEAU
+
+Même remède qu'au 457, étendu à toute la quête. Six phrases neuves, chacune avec son chemin
+d'affichage écrit le même jour :
+
+| où | ce qui manquait | ce qui est dit |
+|---|---|---|
+| la chute, à la ferme | rien ne reliait la fracture VUE en vol à ce qu'on trouvait ensuite | `fall.split` — « ce n'est qu'un éclat, le gros est passé au-dessus, vers Valley Town » ⚠️ **jointure sur `starFragmentsOn`, la fonction même qui décide si la comète se fend à l'écran** |
+| le sillon ramassé | on lisait « il penche vers l'est » sans savoir qu'il y avait autre chose ailleurs | `s1.fragment` — le vrai cratère est du côté de Valley Town |
+| l'écoute des ombres | on obéissait à une règle magique sans savoir d'où elle venait | `s2.whyLean` — *elle tombait aussi, elle avait les yeux fermés ; tout ce qui a une ombre les a vus passer* |
+| le lac | **rien ne disait pourquoi ce morceau est dans une eau noire** | `s3.why` (le safran : une coque sans safran ne va nulle part), `s3.whyDark` (le vieux ponton est encore debout là-dessous), `poolHint` réécrite sur la grammaire |
+| la verrerie / le nid | deux morceaux, aucun usage dit — et le nid s'ouvrait **sans un mot** | `s4.whyMast`, `s4.whySail` |
+| la cloche | « un bateau qui ne peut pas sonner » est joli et ne s'explique pas | `s5.whyBell` — *ce qui dit où l'on est quand on n'y voit plus rien* ⚠️ **elle rime avec le lac : le dernier morceau s'explique par le troisième** |
+
+#### LA TRANSACTION DE L'INGÉNIEUR, ET L'ARRIVÉE DE L'ÉTOILE
+
+- ⚠️⚠️ **« Il me dit que je suis short alors que je crois tout avoir »** — et il avait raison
+  de le croire : l'or venait de la **caisse commune**, les récoltes et les poissons de **son
+  sac**, et rien ne le disait. Le refus tenait en une ligne qui ne nommait ni quoi ni combien.
+  Le guichet est maintenant une **transaction** : trois lignes `j'ai / il faut` avec leur
+  provenance, un bouton **Ajouter** par ligne, un **Valider** qui reste gris tant qu'il
+  manque quelque chose — et le refus de l'hôte énumère les manques. ⚠️ **Les poissons puisent
+  aussi dans la réserve commune**, comme le bois de Tristan depuis le 454 : c'est là que le
+  pêcheur dépose sa pêche. ⚠️ La mise est **locale** : poser une pièce ne prélève rien et ne
+  traverse pas le réseau ; l'hôte recompte tout au moment du `Valider`.
+- ⚠️ **L'ÉTOILE ARRIVE AU LIEU D'APPARAÎTRE** (demande de Guillaume) : elle **grimpe le long
+  du dos** depuis le sol (1,1 s), **tournicote une seconde** autour du fermier — un tour et
+  demi, en passant derrière puis devant — puis **se pose**. C'est une courbe PURE
+  (`starJoinAnim`), donc un banc la balaie image par image ; le premier réglage sautait de
+  **cinq pixels** entre la montée et le tour, ce qu'aucune capture fixe ne montre. Les trois
+  temps se raccordent maintenant **par construction** : le tournicotage est écrit une fois,
+  les deux autres LISENT ses bornes.
+
+#### CE QUI A ÉTÉ VU À L'ÉCRAN, ET CE QUI NE L'A PAS ÉTÉ
+
+| vu en jeu, à DEUX clients | vu en jeu, à un client | mesuré au banc seulement |
+|---|---|---|
+| ⚠️⚠️ **le cratère s'ouvre pour A pendant que B est à la ferme** (le blocage n°1, reproduit puis corrigé) | le cratère agrandi, la brûlure, le mur de la glissade puis sa correction | le croisement d'ombres à deux barèmes |
+| deux clients connectés sur la même ferme | `fall.split`, `s2.whyLean`, la rencontre | l'arrivée de l'étoile (la courbe) |
+| | le refroidissement poli (arrosoir, anneau, pastilles) | la file des cartes de chapitre |
+| | la plongée réécrite (flaque, pilotis, fantômes penchés) | la transaction de la mairie |
+
+⚠️ **La séance a aussi rappelé pourquoi la recette du §10 de `CLAUDE.md` existe** : le
+`requestAnimationFrame` remplacé par un puits TUE la boucle définitivement (rien ne la
+rappelle), et le rechargement de page **perd l'état de la quête** — le faux Supabase ne le
+persiste pas. Prévoir de rejouer `▶ Start` après chaque rechargement.
+
+---
+
+### 12.0 bis ⚠️⚠️⚠️ ZIP 456 — ON PARLE À QUELQU'UN QUI S'ARRÊTE, ET LE CRATÈRE RÉPOND
 
 **Trois retours de Guillaume, tous livrés, et le troisième a découvert un défaut de fond.**
 
@@ -1103,7 +1263,7 @@ soigne au menu dev et on se téléporte quand le bandeau dit « le cratère a re
 entier ne changeait pas d'une image à l'autre pendant que le monde bougeait. **Ce sont les CAPTURES
 qu'il faut échantillonner**, pas les pixels du canevas (§10 de `CLAUDE.md`).
 
-### 12.0 bis ⚠️⚠️⚠️ ZIP 455 — L'ANNONCE, LE TAMPON, ET LA CHUTE QU'ON NE VOIT PLUS TOMBER
+### 12.0 ter ⚠️⚠️⚠️ ZIP 455 — L'ANNONCE, LE TAMPON, ET LA CHUTE QU'ON NE VOIT PLUS TOMBER
 
 **Quatre demandes de Guillaume, toutes livrées.** Le détail de fiction est au §3 (le thème coupé en
 deux) et le déroulé au §5 (OUVERTURE). Ce qui suit est ce qu'il faut savoir pour reprendre.
@@ -1171,7 +1331,7 @@ qui juge ce zip.
 
 ---
 
-### 12.0 ter ⚠️⚠️ ZIP 454 — LA CHAÎNE DE CONSTRUCTION, ET CE QUI A ÉTÉ VU À L'ÉCRAN
+### 12.0 quater ⚠️⚠️ ZIP 454 — LA CHAÎNE DE CONSTRUCTION, ET CE QUI A ÉTÉ VU À L'ÉCRAN
 
 **Le déroulé complet, dans l'ordre où le joueur le vit :**
 
@@ -1280,7 +1440,12 @@ navire, un panneau qui ne donne RIEN (§4 de `CLAUDE.md` : la porte n'est jamais
 portée qui va avec — **écrite le jour où on l'écrit, pas gardée en réserve** (c'est ce que le 452
 avait fait avec `STAR_SHIP_NEAR_R`, et le 453 l'a supprimée pour ça).
 
-**A. LA SÉANCE À DEUX CLIENTS. C'est la passe qui manque, et c'est TOUTE la moitié coopérative.**
+**A. LA SÉANCE À DEUX CLIENTS — ⚠️ ELLE A COMMENCÉ AU 458, ET ELLE A PAYÉ TOUT DE SUITE.**
+Deux clients ont tourné ensemble pour la première fois : ils ont trouvé **trois blocages
+durs** (le cratère, les deux croisements d'ombres, la flaque) dont deux rendaient la quête
+**infinissable dès qu'un second joueur se connectait**. Voir §12.0. ⚠️ **Ce qui reste de la
+liste ci-dessous n'a toujours jamais été JOUÉ à deux** — la séance a validé la connexion, la
+chute et l'ouverture du cratère par un seul, pas les postes face à face :
 `node tools/fake-supabase.mjs` + deux onglets (recette du §10 de `CLAUDE.md`). Ce qui n'a jamais
 été vu, pas une fois :
 1. **l'étoile timide du cratère** — deux joueurs dos à dos, immobiles, quatre secondes. C'est la
@@ -1288,15 +1453,18 @@ avait fait avec `STAR_SHIP_NEAR_R`, et le 453 l'a supprimée pour ça).
 2. **le croisement d'ombres** — deux lectures à plus de 30 cases d'écart dans une fenêtre de 20 s
    datée par l'hôte ;
 3. **la flaque de lumière** — A marche sur le ponton, la flaque suit ses pas, B ne voit que
-   dedans. `starMiniLead()` lit la position distante ; elle n'a jamais eu de position distante à
-   lire ;
+   dedans. ⚠️ **Le 458 l'a rendue DÉCISIVE** (hors de la flaque : noir, souffle × 2,4, pilotis
+   invisibles) et a corrigé deux défauts qu'un seul client ne pouvait pas voir — la flaque
+   figée au centre, et le morceau dessiné hors du découpage. **Elle reste à jouer à deux ;**
 4. **le duo** — A à l'orgue, B au beffroi, et le faisceau qui faiblit quand l'autre quitte son
    poste (`starMiniPartner()`) ;
 5. **la chute vue simultanément** par deux clients, chacun sur sa propre horloge.
 ⚠️ Et la ferme PEUPLÉE à deux clients n'a toujours jamais été jouée (§13 de `CLAUDE.md`, réclamé
 depuis le 419) : **cette séance-là peut faire les deux d'un coup.**
 
-**B. LES CINQ MINI-JEUX, JOUÉS JUSQU'À LA VICTOIRE, À CADENCE RÉELLE.** Ils sont dessinés et
+**B. LES CINQ MINI-JEUX, JOUÉS JUSQU'À LA VICTOIRE, À CADENCE RÉELLE.** ⚠️ **Deux d'entre
+eux ont changé au 458** (le refroidissement poli, la plongée refaite) et ont été REGARDÉS
+isolément, jamais gagnés. Ils sont dessinés et
 vérifiés à l'écran, mais le banc de navigateur ne peut pas les JOUER (voir §10). Ce qu'il faut
 juger, et qu'aucun banc ne verra jamais : **est-ce que c'est agréable ?** Les manches sont
 réglées, pas éprouvées. Les nombres à surveiller en premier : `STAR_COOL_BAND` (la bande

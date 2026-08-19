@@ -519,6 +519,173 @@ export function starCraterBurns(e, elapsedMs, sinkK) {
   return !starCraterCool(e, elapsedMs);
 }
 
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 458 — ON GLISSE DEDANS, ET ON PEINE À EN SORTIR. DEMANDE DE GUILLAUME.
+   ╚════════════════════════════════════════════════════════════════════════════
+   « le perso doit un peu glisser maladroitement vers le bas (glissade un peu
+   rapide) et avoir un peu de mal à remonter. »
+
+   ⚠️⚠️ TROIS CHOSES SONT VOLONTAIREMENT SÉPARÉES, ET C'EST LA LEÇON DU 441 (« une
+   grandeur de DESSIN, une grandeur de RANG, une grandeur de COLLISION : trois
+   choses, trois paramètres »), appliquée une quatrième fois :
+     · `starCraterSink` (fermeArt) reste un DÉCALAGE D'IMAGE — ce qu'on voit ;
+     · ce bloc-ci rend une VITESSE — ce qui bouge ;
+     · `canStandTown` n'est pas touché — ce qui bloque. Verser la pente dans
+       l'altitude de case aurait fait du cratère une falaise infranchissable,
+       exactement l'arc du pont que le 439 a évité de justesse.
+   ⚠️⚠️ ET LA PENTE SE DÉRIVE DU CREUX DESSINÉ, elle ne se re-décrit pas. On
+   échantillonne la MÊME fonction que le rendu : deux descriptions du même trou
+   auraient donné « il glisse à côté de la cuvette », défaut invisible en
+   relecture et criant à l'écran (c'est mot pour mot ce que la note de
+   `starCraterSink` reproche à une seconde formule).
+
+   ⚠️⚠️⚠️ ET LA GLISSADE NE S'APPLIQUE QU'EN MARCHANT — C'EST LA CONTRAINTE QUI
+   A DÉCIDÉ DE TOUTE LA FORME. La mécanique du chapitre 2 est *« se tenir
+   IMMOBILE, dos tourné, dans le cratère »* : une pente qui pousse en permanence
+   ferait dévaler quelqu'un qui ne touche à rien, donc rendrait la seule
+   mécanique du lieu impossible à exécuter — on aurait ajouté une jolie physique
+   et retiré le chapitre. On glisse donc quand on a le pied qui part (on marche),
+   et on garde un peu d'élan une demi-seconde après avoir lâché les touches. Au
+   repos complet, on tient debout où qu'on soit.
+   ═════════════════════════════════════════════════════════════════════════════ */
+export const STAR_SLOPE_H = 0.35;        // le pas d'échantillonnage de la pente, en cases
+export const STAR_SLOPE_STEEP = 6.0;     // px d'enfoncement par case = « raide » (mesuré : la paroi monte à ~10)
+/* ⚠️⚠️⚠️ CES TROIS NOMBRES SONT LIÉS PAR UNE INÉGALITÉ, ET ELLE A ÉTÉ TROUVÉE EN
+   JOUANT — PAS AU BANC. Premier réglage : glissade 3,2 et 45 % de vitesse en
+   montée. À l'écran, le fermier posté sur le bourrelet **ne pouvait plus entrer
+   dans le cratère du tout** : il marchait vers le nord à 5,2 × 0,45 = 2,34 cases/s
+   et la pente le repoussait à 3,2. Net : −0,86, c'est-à-dire un MUR — et un mur
+   fait de vitesse, donc invisible pour `canStandTown`, invisible au build, et
+   qu'aucun banc ne cherchait.
+   ⚠️⚠️ C'EST LA LEÇON DU 439 SOUS UN VISAGE NEUF : « une grandeur de dessin ne
+   doit pas entrer dans la collision » — ici elle n'y entrait pas, elle est entrée
+   dans la VITESSE, et le résultat est le même (l'arc du pont, en plus sournois :
+   il n'y a pas de test à écrire sur un pas refusé, puisqu'aucun pas n'est refusé).
+   ⚠️ LA RÈGLE À TENIR, ET `render-etoile` LA BALAIE DÉSORMAIS SUR TOUT LE TROU :
+       PLAYER_SPEED × STAR_CLIMB_MIN − STAR_SLIDE_MAX ≥ 1 case/s
+   soit 5,2 × 0,58 − 1,9 = 1,12. On remonte donc lentement — c'est la demande —
+   mais on remonte TOUJOURS, et en courant (× 1,75) on sort sans peiner. */
+export const STAR_SLIDE_MAX = 1.9;       // cases/s emportées par la pente la plus raide (la marche est à 5,2)
+export const STAR_SLIDE_COAST_MS = 520;  // ce qu'on continue de glisser après avoir lâché les touches
+export const STAR_CLIMB_MIN = 0.58;      // ce qu'il reste de vitesse en remontant droit dans la pente la plus raide
+export const STAR_CLIMB_NET_MIN = 1.0;   // ce qui doit RESTER de progression vers le haut, partout — voir ci-dessus
+
+/* La pente locale, en pixels d'enfoncement par case, sous forme d'un vecteur qui
+   pointe vers le BAS — c'est-à-dire là où l'on tombe. ⚠️ `sink` EST PASSÉ EN
+   PARAMÈTRE et jamais importé : ce fichier ne connaît pas `fermeArt` (il n'a ni
+   canevas ni DOM), et c'est ce qui permet au banc d'appeler cette fonction avec
+   le VRAI creux du jeu. */
+export function starCraterSlope(sink, dx, dy) {
+  const h = STAR_SLOPE_H;
+  const gx = (sink(dx + h, dy) - sink(dx - h, dy)) / (2 * h);
+  const gy = (sink(dx, dy + h) - sink(dx, dy - h)) / (2 * h);
+  return { gx, gy, n: Math.hypot(gx, gy) };
+}
+/* Ce que la pente emporte, en cases/seconde. ⚠️ BORNÉE ET NON PROPORTIONNELLE :
+   la paroi du cratère atteint dix pixels par case, et une glissade proportionnelle
+   y aurait dépassé la course. Ce qu'on veut est « un peu rapide », pas « éjecté ». */
+export function starSlideSpeed(n) {
+  return Math.min(1, (+n || 0) / STAR_SLOPE_STEEP) * STAR_SLIDE_MAX;
+}
+/* Ce qu'il reste de la marche quand on monte. ⚠️ `dot` EST LE PRODUIT SCALAIRE
+   NORMALISÉ entre le pas qu'on tente et la descente : −1 = pleine montée, +1 =
+   pleine descente. On ne ralentit QUE la montée — accélérer la descente serait
+   compter deux fois la glissade, qui s'ajoute déjà. */
+export function starClimbMul(n, dot) {
+  const up = Math.max(0, -(+dot || 0));
+  const steep = Math.min(1, (+n || 0) / STAR_SLOPE_STEEP);
+  return 1 - (1 - STAR_CLIMB_MIN) * up * steep;
+}
+
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 458 — L'ARRIVÉE DE L'ÉTOILE : ELLE GRIMPE, ELLE TOURNICOTE, ELLE SE POSE.
+   ╚════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ DEMANDE DE GUILLAUME : *« une petite animation de l'étoile climbing up on
+   my back […] et puis elle doit ensuite tournicoter autour du fermier pendant une
+   seconde avant de se stabiliser et se comporter comme prévu ensuite. »*
+
+   Jusqu'ici, la rencontre du chapitre 2 était un CHANGEMENT D'ÉTAT : l'étoile
+   n'existait pas, et à l'image suivante elle suivait le joueur comme si elle avait
+   toujours été là. Quatre toasts racontaient une rencontre que le dessin ne
+   montrait pas — c'est la famille du 453 (« un texte affirme »), appliquée au seul
+   moment de la quête qui MÉRITE d'être vu.
+
+   ⚠️⚠️ C'EST UNE COURBE PURE, ET C'EST TOUT CE QU'ELLE EST. Elle rend un décalage
+   en PIXELS (à la tuile de référence 16) et une échelle ; elle ne connaît ni le
+   joueur, ni la caméra, ni le réseau. Trois raisons, et la troisième est la vraie :
+     1. un banc peut la balayer (le piège n°1, §4 de `CLAUDE.md`) ;
+     2. les trois boucles de rendu (ferme, ville, tribunal) l'appellent, donc elle
+        ne peut pas diverger de l'une à l'autre ;
+     3. **elle ne touche pas à la position suivie.** La traîne (`trailFollow`)
+        continue de tourner derrière ; ce qu'on décale, c'est le DESSIN. Le jour où
+        l'animation change, la mécanique de suivi ne bouge pas d'un pouce — une
+        grandeur de dessin, une grandeur de position, deux choses (leçon du 441).
+
+   ⚠️ TROIS TEMPS, ET LE MILIEU EST CELUI QU'ON A DEMANDÉ :
+     · `climb`  — elle part du SOL, derrière les talons, et remonte le dos jusqu'à
+                  l'épaule. Elle grossit un peu en montant (elle vient de loin) ;
+     · `spin`   — une seconde de tournicotage : un tour et demi autour du fermier,
+                  en s'élevant, avec une profondeur simulée (elle passe derrière
+                  puis devant, ce que rend `front`) ;
+     · `settle` — le décalage retombe à zéro et l'on rejoint le comportement normal.
+   ═════════════════════════════════════════════════════════════════════════════ */
+export const STAR_JOIN_CLIMB_MS = 1100;
+export const STAR_JOIN_SPIN_MS = 1000;    // « pendant une seconde » — le mot de la demande
+export const STAR_JOIN_SETTLE_MS = 500;
+export const STAR_JOIN_MS = STAR_JOIN_CLIMB_MS + STAR_JOIN_SPIN_MS + STAR_JOIN_SETTLE_MS;
+export const STAR_JOIN_SPIN_TURNS = 1.5;
+export const STAR_JOIN_RISE_PX = 26;      // du sol à l'épaule, à la tuile de référence
+export const STAR_JOIN_ORBIT_PX = 13;     // le rayon du tournicotage
+
+/* Rend `{ dx, dy, scale, front, phase }` ou `null` une fois l'arrivée finie.
+   ⚠️ `dx`/`dy` SONT DES PIXELS À LA TUILE 16 : l'appelant les met à l'échelle par
+   T/16, comme `starCraterSink`. Un décalage en CASES aurait fait grandir le
+   tournicotage avec le zoom, ce qu'aucun banc n'irait chercher.
+   ⚠️ `front` DIT SI ELLE PASSE DEVANT LE FERMIER (dernière moitié de chaque tour).
+   Sans lui, un tournicotage vu de dessus est un cercle plat : c'est ce seul
+   booléen qui fait qu'on la voit TOURNER AUTOUR au lieu de glisser autour. */
+/* ⚠️⚠️ LES TROIS TEMPS SE RACCORDENT PAR CONSTRUCTION, PAS À L'ŒIL. Le premier
+   jet posait trois formules indépendantes et sautait de CINQ PIXELS entre la
+   montée et le tournicotage — invisible sur toute capture fixe, et parfaitement
+   visible à l'écran (c'est la grandeur que `render-etoile` mesure déjà sur
+   l'enfoncement du cratère depuis le 446 : *la continuité*). La parade n'est pas
+   un réglage : le tournicotage est écrit UNE fois (`starJoinSpin`), et les deux
+   autres temps LISENT ses bornes au lieu de les recopier. Deux nombres recopiés
+   auraient divergé au premier réglage du rayon — le §8 de `CLAUDE.md`, dans une
+   animation de deux secondes et demie. */
+function starJoinSpin(k) {
+  const a = Math.PI / 2 + k * Math.PI * 2 * STAR_JOIN_SPIN_TURNS;   // elle démarre DANS LE DOS
+  const r = STAR_JOIN_ORBIT_PX * (1 - 0.35 * k);                     // la spirale se resserre
+  return { dx: Math.cos(a) * r, dy: -Math.sin(a) * r * 0.38, scale: 1, front: Math.sin(a) < 0, phase: "spin" };
+}
+const STAR_JOIN_A = starJoinSpin(0), STAR_JOIN_B = starJoinSpin(1);
+
+export function starJoinAnim(sinceMs) {
+  const t = +sinceMs || 0;
+  if (t < 0 || t >= STAR_JOIN_MS) return null;
+  if (t < STAR_JOIN_CLIMB_MS) {
+    const k = t / STAR_JOIN_CLIMB_MS;
+    /* Une montée qui accélère puis se pose : elle s'agrippe, elle se hisse. Une
+       rampe linéaire se lit comme un ascenseur. ⚠️ ELLE ARRIVE EXACTEMENT AU
+       POINT DE DÉPART DU TOURNICOTAGE (`STAR_JOIN_A`), voir la note ci-dessus. */
+    const e = k * k * (3 - 2 * k);
+    return {
+      dx: (-3 + Math.sin(k * Math.PI * 2.4) * 2.4) * (1 - e) + STAR_JOIN_A.dx * e,
+      dy: STAR_JOIN_RISE_PX * (1 - e) + STAR_JOIN_A.dy * e,   // + = plus bas ; elle part du sol
+      scale: 0.72 + 0.28 * e,
+      front: false,                                            // dans le DOS, tout le temps
+      phase: "climb",
+    };
+  }
+  if (t < STAR_JOIN_CLIMB_MS + STAR_JOIN_SPIN_MS)
+    return starJoinSpin((t - STAR_JOIN_CLIMB_MS) / STAR_JOIN_SPIN_MS);
+  /* Elle se pose : on revient de la dernière position du tour vers zéro, sans
+     jamais repasser devant (le tour est fini, elle n'a plus rien à montrer). */
+  const k = (t - STAR_JOIN_CLIMB_MS - STAR_JOIN_SPIN_MS) / STAR_JOIN_SETTLE_MS;
+  const e = 1 - (1 - k) * (1 - k);
+  return { dx: STAR_JOIN_B.dx * (1 - e), dy: STAR_JOIN_B.dy * (1 - e), scale: 1, front: false, phase: "settle" };
+}
+
 /* ── LES OMBRES QUI PENCHENT (chapitre 2). Une direction n'est pas un lieu ; il
    en faut deux, et de deux endroits assez éloignés pour que le croisement veuille
    dire quelque chose. */
@@ -597,6 +764,60 @@ export const STAR_DIVE_CURRENT = [0.35, 0.75, 1.25];
 export const STAR_DIVE_PULSE_MS = 1100;             // l'éclat bat ; on l'attrape au battement
 export const STAR_DIVE_SINK = 4.2;                  // mètres par seconde — on coule, on ne nage pas vers le bas
 export const STAR_DIVE_HIT_COST_MS = 1600;          // un choc coûte du souffle, jamais la manche
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 458 — LA PLONGÉE REDEVIENT LA GRAMMAIRE, AU LIEU D'UN JEU D'ARCADE.
+   ╚════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️⚠️ REPROCHE DE GUILLAUME, ET IL EST JUSTE : « le jeu de plongée est trop
+   cheap pour le niveau de la quête ». Ce qu'il faisait : on coulait tout seul, on
+   esquivait des barres marron, on appuyait au bon battement. **La flaque de
+   lumière n'y servait qu'à découper une vignette** — on jouait aussi bien les
+   yeux fermés sur le côté droit de l'écran, et la moitié coopérative du chapitre
+   ne changeait rien à ce qu'on faisait.
+   ⚠️⚠️ LA CORRECTION TIENT EN UNE PHRASE : **la flaque n'est plus une fenêtre,
+   c'est le TERRAIN.** Dehors, on ne voit rien, on manque d'air plus vite, et on
+   percute des pilotis qu'on ne pouvait pas voir. « A éclaire le chemin de B »
+   cesse d'être une jolie image et devient la règle du jeu : sans la lumière de
+   l'autre, on ne descend pas.
+   ⚠️⚠️ ET LES OBSTACLES CESSENT D'ÊTRE DES OBSTACLES : ce sont les pilotis du
+   VIEUX ponton, et dans la lumière ils montrent ce qu'ils se rappellent — ils
+   PENCHENT vers le morceau, exactement comme les ombres de la ville penchent au
+   chapitre 2 (§4 de `QUETE.md`, « une ombre qui MONTRE »). La même idée magique
+   sert donc trois fois au lieu de deux, et le décor du lac raconte enfin pourquoi
+   il est là. *Ce qui était un mur devient un indice, sans qu'on ajoute un objet.*
+   ═════════════════════════════════════════════════════════════════════════════ */
+export const STAR_DIVE_BLIND_MUL = 2.4;   // ce que le souffle coûte HORS de la flaque
+export const STAR_DIVE_EDGE = 0.86;       // fraction du rayon où l'on est encore « dedans » (le bord est doux)
+export const STAR_DIVE_POSTS = [5, 7, 9]; // les pilotis du vieux ponton, par manche
+/* Les pilotis d'une descente. ⚠️ DÉTERMINISTES ET PURS, DONC REGARDABLES : ils
+   étaient dans `FermeGame` (`smDiveObstacles`), c'est-à-dire hors de portée de
+   tout banc — et ils portent maintenant l'INDICE, pas seulement la collision.
+   Une règle qui dit où est le morceau n'a pas le droit de vivre là où personne ne
+   peut l'appeler (piège n°1, §4 de `CLAUDE.md`).
+   ⚠️ `lean` VAUT −1 OU +1 : le pilotis penche DU CÔTÉ du morceau. C'est tout ce
+   qu'un indice doit dire — une direction, jamais une position (c'est la leçon du
+   chapitre 2, et c'est pour ça que le dernier pilotis est le plus bas). */
+export function starDivePosts(round) {
+  const r = Math.max(0, round | 0);
+  const D = STAR_DIVE_DEPTH[Math.min(r, STAR_DIVE_DEPTH.length - 1)];
+  const n = STAR_DIVE_POSTS[Math.min(r, STAR_DIVE_POSTS.length - 1)];
+  const sx = starDiveShardX(r);
+  return Array.from({ length: n }, (_, i) => {
+    const x = 0.5 + Math.sin(i * 2.399 + r * 1.7) * 0.30;
+    return {
+      d: 4 + (D - 7) * (i + 0.5) / n,
+      x,
+      w: 0.075 + ((i * 7 + r * 3) % 5) * 0.012,
+      lean: sx >= x ? 1 : -1,
+    };
+  });
+}
+/* Où le morceau s'est posé. ⚠️ DÉRIVÉE DE LA MANCHE ET DE RIEN D'AUTRE :
+   recommencer une plongée ne doit pas le déplacer, sinon rater n'apprend rien —
+   la règle des étals (426) et des perles (444). */
+export function starDiveShardX(round) {
+  const r = Math.max(0, round | 0);
+  return 0.20 + ((r * 0.41 + 0.17) % 0.60);
+}
 
 /* ── LE BALAYAGE (chapitre 4). ⚠️ LA VITESSE DE BALAYAGE A UNE BONNE ALLURE, ET
    C'EST TOUT LE MINI-JEU : trop vite, l'ombre vraie passe sans qu'on la voie ;
@@ -1833,12 +2054,28 @@ export function resolveStarCalm(e, who, now, soloAllowed) {
   e.calm[who] = now;
   const t0 = +e.calm[who + ":t0"] || now;
   const mine = now - t0;
-  if (soloAllowed) {
-    if (mine >= STAR_CALM_SOLO_MS) return { ...resolveStarFound(e, "crater", who, now), opened: true };
-    return { ok: true, holding: mine, need: STAR_CALM_SOLO_MS, crossed: [] };
-  }
-  /* À deux : il faut que quelqu'un d'autre soit calme MAINTENANT, et que les
-     deux tenues aient duré assez. */
+  /* ╔═══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 458 — LE CHEMIN SOLO N'EST PLUS UNE BRANCHE, C'EST UN PLANCHER.
+     ╚═══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️⚠️ C'ÉTAIT LE BLOCAGE LE PLUS CHER DU DÉPÔT, ET IL NE POUVAIT SE VOIR
+     QU'À DEUX CLIENTS. `soloAllowed` venait de `starSoloRoom()`, c'est-à-dire de
+     « y a-t-il un autre joueur CONNECTÉ » — jamais de « y a-t-il quelqu'un qui
+     peut m'aider ICI ». Un joueur B qui laboure tranquillement à la ferme rendait
+     donc le cratère de la ville **définitivement impossible à ouvrir** pour A :
+     la branche duo exige une seconde tenue, et la seconde tenue ne pouvait pas
+     exister. Pire, la jauge de `starCalmUi` lisait `starCalmNeed(false)` = 4 s :
+     elle se remplissait, elle atteignait 100 %, et il ne se passait rien. **Une
+     barre qui promet et ment**, c'est-à-dire exactement le défaut que le 456
+     venait de corriger, reproduit d'un cran plus haut.
+     ⚠️ LA PARADE EST STRUCTURELLE ET PAS UN RÉGLAGE : le duo est un RACCOURCI,
+     jamais une serrure (§4 de `QUETE.md` : « la coopération n'est pas une
+     serrure, c'est une conséquence »). On tient neuf secondes tout seul, quatre
+     à deux, et **aucune configuration de joueurs ne peut plus bloquer quoi que ce
+     soit**. `soloAllowed` ne décide donc plus si l'on peut, seulement ce qu'on
+     ANNONCE — la durée que l'interface affiche.
+     ⚠️ ET LE PLANCHER SE TESTE APRÈS LE RACCOURCI, pas avant : deux joueurs qui
+     tiennent ensemble depuis dix secondes ouvrent le trou par le chemin court, et
+     c'est le chemin court qui doit être crédité (`both: true` chez les deux). */
   let bestOther = 0;
   for (const k of Object.keys(e.calm)) {
     if (k.endsWith(":t0") || k === who) continue;
@@ -1847,8 +2084,11 @@ export function resolveStarCalm(e, who, now, soloAllowed) {
   }
   const together = Math.min(mine, bestOther);
   if (bestOther && together >= STAR_CALM_MS)
-    return { ...resolveStarFound(e, "crater", who, now), opened: true };
-  return { ok: true, holding: mine, both: bestOther > 0, need: STAR_CALM_MS, crossed: [] };
+    return { ...resolveStarFound(e, "crater", who, now), opened: true, both: true };
+  if (mine >= STAR_CALM_SOLO_MS)
+    return { ...resolveStarFound(e, "crater", who, now), opened: true, both: false };
+  return { ok: true, holding: mine, both: bestOther > 0,
+           need: (bestOther || soloAllowed === false) ? STAR_CALM_MS : STAR_CALM_SOLO_MS, crossed: [] };
 }
 
 /* ⚠️⚠️ LES OMBRES QUI PENCHENT — UNE DIRECTION N'EST PAS UN LIEU. Deux lectures
@@ -1860,26 +2100,44 @@ export function resolveStarCalm(e, who, now, soloAllowed) {
    les deux points d'écoute — la seule chose qui garantisse que les deux joueurs
    se sont vraiment séparés. Le lieu révélé vient de la table, dans l'ordre. */
 export function resolveStarLean(e, who, tx, ty, now, soloAllowed) {
-  const win = soloAllowed ? STAR_LEAN_SOLO_WINDOW_MS : STAR_LEAN_WINDOW_MS;
-  const minD = soloAllowed ? STAR_LEAN_SOLO_MIN_TILES : STAR_LEAN_MIN_TILES;
   const next = STAR_LEAN_MARKS.find(m => !starHas(e, m));
   if (!next) return { ok: true, already: true, crossed: [] };
-  /* On compare à toutes les lectures encore fraîches, la sienne comprise quand
-     on est seul — c'est exactement ce qui rend le solo jouable : on lit, on
-     traverse la ville, on relit. */
+  /* ╔═══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 458 — LES DEUX LECTURES NE SONT PLUS EXCLUSIVES, ELLES COEXISTENT.
+     ╚═══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️⚠️ MÊME CAUSE QUE `resolveStarCalm`, EFFET PIRE. `soloAllowed` venait de
+     la POPULATION du salon : dès qu'un second joueur se connectait — même endormi
+     à la ferme, à cent cases et dans une autre zone — la ligne `if (!soloAllowed
+     && k === who) continue` cessait de compter ses PROPRES lectures. Il fallait
+     donc deux joueurs en ville, et il n'y en avait qu'un : `leanLake` et
+     `leanGlass` devenaient introuvables, et **les chapitres 3, 4 et 5 avec eux**.
+     La quête entière s'arrêtait au chapitre 2 parce qu'un ami s'était connecté.
+     ⚠️ LA PARADE : ce n'est pas la présence d'un joueur qui choisit le barème,
+     c'est **l'origine de la lecture**. Une lecture d'un AUTRE se croise au barème
+     court (20 s / 30 cases) — deux personnes se sont vraiment séparées. Une
+     lecture de SOI se croise au barème long (26 s / 45 cases) — il faut avoir
+     traversé la ville en personne. Les deux chemins sont ouverts en permanence et
+     ne s'excluent plus : à deux on va plus vite, tout seul on y arrive quand même,
+     et **aucune configuration ne bloque**. `soloAllowed` ne sert plus qu'au texte
+     affiché (voir `s2.leanArmed` / `leanSoloArmed`).
+     ⚠️ ON GARDE LE PLUS GRAND ÉCART, pas le premier trouvé : c'est ce qui fait
+     qu'une lecture lointaine d'un partenaire l'emporte sur sa propre lecture
+     tout juste valide, donc que le message dit la vérité sur ce qui a servi. */
   let best = null;
   for (const k of Object.keys(e.lean)) {
-    if (!soloAllowed && k === who) continue;
+    const self = (k === who);
+    const win = self ? STAR_LEAN_SOLO_WINDOW_MS : STAR_LEAN_WINDOW_MS;
+    const minD = self ? STAR_LEAN_SOLO_MIN_TILES : STAR_LEAN_MIN_TILES;
     const p = e.lean[k];
     if (!p || now - p.at > win) continue;
     const d = Math.hypot(tx - p.x, ty - p.y);
-    if (d >= minD && (!best || d > best.d)) best = { d, k };
+    if (d >= minD && (!best || d > best.d)) best = { d, k, self };
   }
   e.lean[who] = { x: tx, y: ty, at: now };
   if (!best) return { ok: true, armed: true, crossed: [] };
   const r = resolveStarFound(e, next, who, now);
   if (r.ok && !r.already && !e.marks.includes(next)) e.marks.push(next);
-  return { ...r, crossed: r.crossed || [], mark: next, spread: Math.round(best.d) };
+  return { ...r, crossed: r.crossed || [], mark: next, spread: Math.round(best.d), duo: !best.self };
 }
 
 /* Le duo. ⚠️ LES DEUX MINI-JEUX SONT LOCAUX ; SEULE LA PHRASE RÉUSSIE REMONTE.
