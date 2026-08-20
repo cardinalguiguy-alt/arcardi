@@ -141,8 +141,12 @@ import * as C from "./fermeConstants.mjs";
    refaire exactement la même chose en silence.
    ─────────────────────────────────────────────────────────────────────────── */
 export const STAR_SITES = [
-  // ── Chapitre 1 : la ferme. Ce qui a dépassé la ville.
-  { id: "furrow",    zone: "farm",  spot: "starFurrow" },
+  // ── Chapitre 1 : cinq petits impacts, dispersés sur la ferme.
+  { id: "farmStarBlue", zone: "farm", spot: "starFarmImpact", impact: 0, content: "star", color: "blue" },
+  { id: "farmEmptyA",   zone: "farm", spot: "starFarmImpact", impact: 1, content: "empty" },
+  { id: "farmMaterial", zone: "farm", spot: "starFarmImpact", impact: 2, content: "material" },
+  { id: "farmStarRose", zone: "farm", spot: "starFarmImpact", impact: 3, content: "star", color: "rose" },
+  { id: "farmEmptyB",   zone: "farm", spot: "starFarmImpact", impact: 4, content: "empty" },
   // ── Chapitre 2 : le cratère. On ne trouve pas un morceau, on trouve QUELQU'UN.
   { id: "crater",    zone: "town",  spot: "starCrater" },
   { id: "leanLake",  zone: "town",  spot: "*lean" },   // révélé par le croisement d'ombres
@@ -157,6 +161,8 @@ export const STAR_SITES = [
   { id: "song",      zone: "court", spot: "starBell",  req: ["belfry"] },
 ];
 export const STAR_SITE = Object.fromEntries(STAR_SITES.map(s => [s.id, s]));
+export const STAR_FARM_IMPACTS = STAR_SITES.filter(s => s.spot === "starFarmImpact");
+export const STAR_FARM_STAR_IDS = STAR_FARM_IMPACTS.filter(s => s.content === "star").map(s => s.id);
 
 /* ╔═════════════════════════════════════════════════════════════════════════════
    ║ ZIP 450 — LE NAVIRE. « CONSTRUIRE QUELQUE CHOSE AVEC LES ÉTOILES. »
@@ -207,7 +213,7 @@ export const STAR_SITE = Object.fromEntries(STAR_SITES.map(s => [s.id, s]));
    jamais deux listes.*
    ───────────────────────────────────────────────────────────────────────────── */
 const SHIP_SITE_OF = {
-  hull: "furrow", rudder: "lakeShard", mast: "beadShard", sail: "nestShard", bell: "song",
+  hull: "farmMaterial", rudder: "lakeShard", mast: "beadShard", sail: "nestShard", bell: "song",
 };
 export const STAR_SHIP_PARTS = C.STAR_SHIP_ORDER.map(key => ({ key, site: SHIP_SITE_OF[key] }));
 export const STAR_SHIP_TOTAL = STAR_SHIP_PARTS.length;   // 5 — jamais écrit en dur ailleurs
@@ -421,7 +427,7 @@ export function starTimberBuilt(e) { return STAR_SHIP_KEYS.filter(k => starTimbe
    numéro de chapitre écrit en dur ailleurs qu'ici.
    ─────────────────────────────────────────────────────────────────────────── */
 export const STAR_CHAPTERS = [
-  { key: "field",  need: ["furrow"] },
+  { key: "field",  need: ["farmStarBlue", "farmEmptyA", "farmMaterial", "farmStarRose", "farmEmptyB"] },
   { key: "crater", need: ["crater", "leanLake", "leanGlass"] },
   { key: "water",  need: ["lakeShard"] },
   { key: "thief",  need: ["beadShard", "nestShard"] },
@@ -454,8 +460,8 @@ export const STAR_CH_DONE = STAR_CHAPTERS.length;
    c'est aussi pour ça qu'elle a été choisie plutôt qu'un contrepoids ou une
    seconde clé, qui auraient demandé un état de plus à arbitrer. */
 export const STAR_CRATER_R = 5.5;          // il faut être DANS l'anneau
-export const STAR_CALM_MS = 4000;          // à deux : quatre secondes de dos tourné
-export const STAR_CALM_SOLO_MS = 9000;     // seul : beaucoup plus long, jamais bloqué
+export const STAR_CALM_MS = 10000;         // deux joueurs ou plus dans la zone
+export const STAR_CALM_SOLO_MS = 60000;    // seul : une vraie minute d'apprivoisement
 export const STAR_CALM_FACE_DOT = -0.15;   // « dos tourné » = produit scalaire négatif
 
 /* ── LE REFROIDISSEMENT DU CRATÈRE (chapitre 2, zip 446). ⚠️⚠️ DEMANDE DE
@@ -1515,7 +1521,7 @@ export function starFallVisibleMs(flightMs, ease) {
    ⚠️ LES ÉCARTS SONT EN RAYONS DE TÊTE, JAMAIS EN PIXELS : la tête grossit d'un
    facteur vingt le long du vol (perspective en `k^2,5`), donc des pixels auraient
    donné des éclats collés au départ et un feu d'artifice à l'arrivée. */
-export const STAR_FRAG_N = 3;             // la coque, plus deux éclats
+export const STAR_FRAG_N = 5;             // les cinq petits impacts de la ferme
 /* ⚠️⚠️ ZIP 455 — ELLE EST DÉRIVÉE, ET LE BANC A EXIGÉ QU'ELLE LE SOIT. Premier
    jet : `0.34`, un nombre qui « avait l'air d'être au début du vol ». Il l'était —
    et la comète n'entre dans le cadre qu'à 0,84 du temps de vol (perspective du
@@ -1767,6 +1773,10 @@ export const STAR_OFF_TABLE_TARGETS = ["townHall", "sawmill"];
 export function starTargetSite(e, ctx) {
   const goal = starGoalKey(e, ctx);
   if (!goal) return null;
+  if (goal === "farmImpacts") {
+    const id = starMissing(e).find(k => STAR_SITE[k] && STAR_SITE[k].spot === "starFarmImpact");
+    return id || null;
+  }
   const id = STAR_GOAL_TARGET[goal] || goal;
   if (STAR_OFF_TABLE_TARGETS.includes(id)) return id;
   const s = STAR_SITE[id];
@@ -1956,10 +1966,11 @@ export function starFacingAway(px, py, dir, tx, ty) {
    (« ne bouge plus » affiché pendant que la tenue monte). Une jointure, jamais
    deux listes. */
 export const STAR_CALM_STEPS = ["away", "far", "moving", "watching", "holding"];
-export function starCalmStep(px, py, dir, moving, cx, cy, ringPad) {
+export function starCalmStep(px, py, dir, moving, cx, cy, ringPad, radius) {
+  const R = radius === undefined ? STAR_CRATER_R : radius;
   const d = Math.hypot(px - cx, py - cy);
-  if (d > STAR_CRATER_R + (ringPad === undefined ? 1 : ringPad)) return "away";
-  if (d > STAR_CRATER_R) return "far";        // au bord : il faut DESCENDRE dedans
+  if (d > R + (ringPad === undefined ? 1 : ringPad)) return "away";
+  if (d > R) return "far";        // au bord : il faut DESCENDRE dedans
   if (moving) return "moving";
   if (!starFacingAway(px, py, dir | 0, cx, cy)) return "watching";
   return "holding";
@@ -2016,6 +2027,20 @@ export function migrateStar(saved) {
       if (!STAR_SITE[id]) continue;                 // un lieu inconnu = une version d'après : on l'ignore
       const v = saved.found[id] || {};
       e.found[id] = { by: String(v.by || "?").slice(0, 24), at: +v.at || 0 };
+    }
+  }
+  /* 461 — compatibilité avec l'ancien chapitre du sillon. La trouvaille qui
+     servait de coque devient la plaque météorique. Une partie déjà passée au
+     chapitre suivant a, par définition, terminé l'ancien chapitre 1 : on coche
+     donc les cinq impacts pour ne pas la renvoyer fouiller un passé réécrit. */
+  const oldFurrow = saved.found && saved.found.furrow;
+  if (oldFurrow && !e.found.farmMaterial) {
+    e.found.farmMaterial = { by: String(oldFurrow.by || "?").slice(0, 24), at: +oldFurrow.at || 0 };
+  }
+  if ((saved.ch | 0) > 0) {
+    const legacy = oldFurrow || { by: "?", at: +saved.fall || 0 };
+    for (const site of STAR_FARM_IMPACTS) if (!e.found[site.id]) {
+      e.found[site.id] = { by: String(legacy.by || "?").slice(0, 24), at: +legacy.at || 0 };
     }
   }
   e.fall = +saved.fall || 0;
@@ -2149,6 +2174,8 @@ export function starGoalKey(e, ctx) {
     if (!starPlanReady(e)) return "engineerWait";
     return starTimberNext(e) ? "timber" : null;
   }
+  if (STAR_FARM_STAR_IDS.includes(first) || (STAR_SITE[first] && STAR_SITE[first].spot === "starFarmImpact"))
+    return "farmImpacts";
   /* ⚠️ L'ORDRE DE LA TABLE FAIT FOI, comme pour `starTargetSite` : le premier qui
      manque est celui qu'on cherche. Aucune liste parallèle. */
   if (first === "crater" && ctx && ctx.craterHot) return "craterHot";
@@ -2163,6 +2190,7 @@ export function starGoalKey(e, ctx) {
 export const STAR_GOAL_KEYS = (() => {
   const out = [];
   for (const s of STAR_SITES) {
+    if (s.spot === "starFarmImpact") { if (!out.includes("farmImpacts")) out.push("farmImpacts"); continue; }
     if (s.id === "leanLake") { out.push("lean"); continue; }
     if (s.id === "leanGlass") { out.push("leanAgain"); continue; }
     out.push(s.id);
@@ -2359,8 +2387,11 @@ export function resolveStarFound(e, id, who, now) {
    ⚠️ `soloAllowed` n'assouplit pas la règle, il en change la DURÉE : seul, il
    faut tenir `STAR_CALM_SOLO_MS` au lieu de `STAR_CALM_MS`. Un jeu qui exige un
    second joueur pour avancer est un jeu qu'on ne finit pas. */
-export function resolveStarCalm(e, who, now, soloAllowed) {
-  if (starHas(e, "crater")) return { ok: true, already: true, crossed: [] };
+export function resolveStarCalm(e, who, now, soloAllowed, siteId) {
+  const target = siteId || "crater";
+  const site = STAR_SITE[target];
+  if (!site || (target !== "crater" && site.content !== "star")) return { ok: false };
+  if (starHas(e, target)) return { ok: true, already: true, crossed: [] };
   /* ⚠️⚠️ ZIP 446 — ON NE SORT PAS UNE ÉTOILE D'UN TROU BRÛLANT. L'hôte compare
      deux dates de SA propre horloge (`now` et `e.fall`), donc la règle du §3
      tient par construction, exactement comme les deux serrures du 442.
@@ -2372,16 +2403,16 @@ export function resolveStarCalm(e, who, now, soloAllowed) {
      À `ok: true`, l'hôte aurait rediffusé la quête entière deux fois par seconde
      pendant qu'un joueur patiente devant un trou qui fume — du trafic pur, et le
      §3 est formel sur ce qui compte : le NOMBRE de `send()`. */
-  if (!starCraterCool(e, now - (e.fall || 0)))
+  if (target === "crater" && !starCraterCool(e, now - (e.fall || 0)))
     return { ok: false, tooHot: true, cool: Math.max(0, STAR_CRATER_COOL_MS - (now - (e.fall || 0))) };
-  const prev = +e.calm[who] || 0;
-  const held = prev && now - prev < 1500 ? now - (e.calm[who + ":t0"] || prev) : 0;
+  const calmKey = target + ":" + who;
+  const prev = +e.calm[calmKey] || 0;
   /* On garde deux marques par joueur : le début de la tenue (`:t0`) et la
      dernière image reçue. Sans le début, une tenue interrompue et reprise
      compterait comme continue — c'est-à-dire qu'il suffirait de marteler. */
-  if (!prev || now - prev > 1500) e.calm[who + ":t0"] = now;
-  e.calm[who] = now;
-  const t0 = +e.calm[who + ":t0"] || now;
+  if (!prev || now - prev > 1500) e.calm[calmKey + ":t0"] = now;
+  e.calm[calmKey] = now;
+  const t0 = +e.calm[calmKey + ":t0"] || now;
   const mine = now - t0;
   /* ╔═══════════════════════════════════════════════════════════════════════════
      ║ ZIP 458 — LE CHEMIN SOLO N'EST PLUS UNE BRANCHE, C'EST UN PLANCHER.
@@ -2405,19 +2436,10 @@ export function resolveStarCalm(e, who, now, soloAllowed) {
      ⚠️ ET LE PLANCHER SE TESTE APRÈS LE RACCOURCI, pas avant : deux joueurs qui
      tiennent ensemble depuis dix secondes ouvrent le trou par le chemin court, et
      c'est le chemin court qui doit être crédité (`both: true` chez les deux). */
-  let bestOther = 0;
-  for (const k of Object.keys(e.calm)) {
-    if (k.endsWith(":t0") || k === who) continue;
-    if (now - (+e.calm[k] || 0) > 1500) continue;         // il a lâché
-    bestOther = Math.max(bestOther, now - (+e.calm[k + ":t0"] || now));
-  }
-  const together = Math.min(mine, bestOther);
-  if (bestOther && together >= STAR_CALM_MS)
-    return { ...resolveStarFound(e, "crater", who, now), opened: true, both: true };
-  if (mine >= STAR_CALM_SOLO_MS)
-    return { ...resolveStarFound(e, "crater", who, now), opened: true, both: false };
-  return { ok: true, holding: mine, both: bestOther > 0,
-           need: (bestOther || soloAllowed === false) ? STAR_CALM_MS : STAR_CALM_SOLO_MS, crossed: [] };
+  const need = soloAllowed === false ? STAR_CALM_MS : STAR_CALM_SOLO_MS;
+  if (mine >= need)
+    return { ...resolveStarFound(e, target, who, now), opened: true, both: soloAllowed === false, site: target };
+  return { ok: true, holding: mine, both: soloAllowed === false, need, site: target, crossed: [] };
 }
 
 /* ⚠️⚠️ LES OMBRES QUI PENCHENT — UNE DIRECTION N'EST PAS UN LIEU. Deux lectures
@@ -2574,7 +2596,7 @@ export function devStar(e, op, now) {
   if (op === "plans") {
     if (!e.warn || !e.warn.at) e.warn = { at: t, by: "🛠️" };
     if (!e.fall) e.fall = t;
-    resolveStarFound(e, "furrow", "🛠️", t);
+    for (const site of STAR_FARM_IMPACTS) resolveStarFound(e, site.id, "🛠️", t);
     resolveStarFound(e, "crater", "🛠️", t);
     e.plan = { at: t - C.STAR_ENG_TRAVEL_MS - C.STAR_ENG_WORK_MS, by: "🛠️", done: t };
     return { star: e, ok: true };

@@ -180,6 +180,9 @@ function board() {
   // L'étoile : 4 poses × 3 états, sur les deux fonds.
   for (let st = 0; st < 3; st++) for (let po = 0; po < 4; po++)
     twice(S.starWisp[st][po], 14 + po * 24 + st * 104, 22);
+  // 461 — mêmes pixels, deux palettes de petites étoiles apprivoisables.
+  twice(S.starWispColors.blue[0][0], 236, 22);
+  twice(S.starWispColors.rose[0][0], 264, 22);
   // Les quatre éclats.
   for (let n = 0; n < 4; n++) twice(S.starShard[n], 330 + n * 20, 20);
   // La pie, trois poses.
@@ -341,6 +344,7 @@ console.log("1. LE BORD DU HAUT — le piège n°1 des sprites\n");
 {
   const all = [];
   for (let st = 0; st < 3; st++) for (let po = 0; po < 4; po++) all.push(["wisp " + st + po, S.starWisp[st][po]]);
+  for (const color of ["blue", "rose"]) all.push(["wisp " + color, S.starWispColors[color][0][0]]);
   for (let n = 0; n < 4; n++) all.push(["shard " + n, S.starShard[n]]);
   for (let p = 0; p < 3; p++) all.push(["magpie " + p, S.magpie[p]]);
   all.push(["kiln", S.starKiln], ["rack", S.starRack], ["shutter", S.starShutter],

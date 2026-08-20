@@ -1,5 +1,50 @@
 # LA QUÊTE DE L'ÉTOILE — « LE BATEAU DES ÉTOILES » / « THE STAR BOAT »
 
+## ⚠️ AUTORITÉ 461 — REFONTE « CONSTELLATION DE LA BREBIS »
+
+La fiction de référence est désormais : **retrouver et apprivoiser sept petites
+étoiles colorées**, puis rendre visible dans le ciel la constellation fictive de
+**la Brebis**. Tout ce qui, plus bas dans ce document, repose sur un chant, des
+notes ou une lyre est **obsolète** et devra être remplacé ou retiré lors des
+missions suivantes. Le mini-jeu de plongée est lui aussi classé à couper ou à
+refondre entièrement ; sa présence historique ne vaut plus validation.
+
+### Mission 1 livrée — les cinq impacts de la ferme
+
+- La chute montre **cinq fragments** frappant d'abord la ferme, puis le gros
+  météore poursuivant sa course jusqu'au cratère de Valley Town.
+- Le chapitre 1 demande de fouiller **cinq mini-cratères fumants**, répartis sur
+  toute la ferme et tous indiqués sur la carte. Le bandeau, ses cinq pastilles et
+  le guide suivent le prochain impact non fouillé.
+- Répartition canonique : **deux étoiles** (bleue et rose), **une plaque de
+  matière météorique**, **deux cratères vides**. Les deux vides ferment seulement
+  une piste et ne donnent rien.
+- La plaque a absorbé le choc sans le transmettre au sol. Associée au bois de
+  Tristan, elle justifie la future coque ; à ce moment, le joueur ignore encore
+  pourquoi il la conserve.
+- L'apprivoisement conserve la posture existante : immobile, dos tourné. Il faut
+  **60 secondes seul** ou **10 secondes dès qu'au moins deux joueurs sont dans la
+  même zone**. Cette règle vaut aux deux petites étoiles et à l'étoile de ville.
+- L'étoile du grand cratère est désormais **l'étoile reine** : jaune, plus grande
+  et plus lumineuse. Après son apprivoisement, elle révèle le navire brisé et
+  devient le guide de sa construction.
+- Les sauvegardes antérieures restent jouables : l'ancien `furrow` migre vers
+  `farmMaterial`, et une partie déjà passée au chapitre 2 ne revient pas en
+  arrière.
+
+Le code de référence est `STAR_FARM_IMPACTS` dans `quete.js`; les positions sont
+ancrées par `STAR_FARM_IMPACT_ANCHORS` et résolues autour des obstacles au
+chargement de la ferme. `verify-quete.mjs` contrôle la distribution 2/1/2,
+l'espacement, le guidage et les durées 60/10 s. `render-etoile.mjs` rend désormais
+les palettes jaune, bleue et rose.
+
+---
+
+## ARCHIVE DE CONCEPTION 444–460
+
+Les sections suivantes décrivent encore les chapitres historiques et servent à
+comprendre le code restant. Elles ne priment jamais sur l'autorité 461 ci-dessus.
+
 **Document de conception, ouvert au zip 444, RELU CONTRE LE CODE AU 452, PUIS AU 453, ÉTENDU AU
 454.** Écrit sur disque exprès (consigne de reprise) : si la session est interrompue, tout est ici,
 y compris l'**état d'avancement** (§10).

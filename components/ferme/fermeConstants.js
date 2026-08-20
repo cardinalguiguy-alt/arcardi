@@ -3532,6 +3532,18 @@ export const STAR_FURROW_LIP_PX = 3;           // sur le bourrelet, on monte
    plus jusqu'à se poser. C'est ce qui a dicté le sens de la chute au 448
    (`starFallAngle`), et les deux se lisent ensemble. */
 export const STAR_FURROW_BOWL_DX = -2.2;       // cases à l'ouest de l'ancre : le point le plus creux
+/* 461 — cinq petits impacts, tous à l'ouest de la rivière pour que la chasse
+   ne dépende jamais de l'état des ponts. Le jeu balaie autour de ces ancres
+   jusqu'à cinq clairières réellement libres. */
+export const STAR_FARM_IMPACT_ANCHORS = [
+  { x: STATION.x + 12, y: STATION.y - 10 },
+  { x: HOUSE.x + 27,  y: HOUSE.y - 14 },
+  { x: WELL.x - 15,   y: WELL.y + 10 },
+  { x: HOUSE.x + 25,  y: HOUSE.y + 57 },
+  { x: WELL.x + 4,    y: MAP_H - 15 },
+];
+export const STAR_FARM_CRATER_DRAW_SCALE = 0.38;
+export const STAR_FARM_CRATER_FREE_R = 3;
 /* LE PONTON. On ne pose rien : il existe depuis le 434. On note juste où se
    tient celui qui éclaire, pour que le jeu et le banc désignent la même case. */
 export const STAR_PIER_X = TOWN_PIER.x + (TOWN_PIER.w >> 1);

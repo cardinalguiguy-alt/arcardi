@@ -73,6 +73,10 @@ const armFall = (e, day, now) => {
   Q.resolveStarWarn(e, "banc", day === undefined ? Q.STAR_FALL_MIN_DAY : day, 1, gateCtx());
   return Q.resolveStarFall(e, day === undefined ? Q.STAR_FALL_MIN_DAY : day, now === undefined ? NIGHT0 + 1 : now, gateCtx());
 };
+const findFarmImpacts = (e, who = "banc", at = 1) => {
+  for (const [i, site] of Q.STAR_FARM_IMPACTS.entries())
+    Q.resolveStarFound(e, site.id, who, at + i);
+};
 
 /* ═══════════════════════════════════════════════════════════════════════════
    1. LA CHAÎNE DES CINQ CHAPITRES.
@@ -115,7 +119,9 @@ section("La chaîne des chapitres");
     for (const id of ["crater", "leanLake", "leanGlass", "lakeShard", "beadShard", "nestShard"])
       Q.resolveStarFound(e3, id, "banc", 1);
     const before = e3.ch;
-    const cr = Q.resolveStarFound(e3, "furrow", "banc", 2);
+    let cr = null;
+    for (const [i, site] of Q.STAR_FARM_IMPACTS.entries())
+      cr = Q.resolveStarFound(e3, site.id, "banc", 2 + i);
     ok("⚠️ une seule trouvaille peut franchir plusieurs chapitres d'un coup",
        e3.ch - before >= 2 && (cr.crossed || []).length >= 2,
        `${before} → ${e3.ch}, ${(cr.crossed || []).length} franchi(s)`);
@@ -129,14 +135,14 @@ section("La chaîne des chapitres");
   /* Idempotence : le geste peut se répéter, il ne compte qu'une fois. */
   {
     const e5 = Q.newStar(); e5.fall = 1;
-    Q.resolveStarFound(e5, "furrow", "a", 1);
-    const again = Q.resolveStarFound(e5, "furrow", "b", 2);
+    Q.resolveStarFound(e5, "farmMaterial", "a", 1);
+    const again = Q.resolveStarFound(e5, "farmMaterial", "b", 2);
     /* ⚠️ ZIP 454 — LE BOIS EST DONNÉ À LA MAIN ICI : ce qu'on mesure est
        l'idempotence de la TROUVAILLE, pas la construction. Sans lui, `starShipBuilt`
        rendrait 0 et le contrôle échouerait pour une raison qui n'est pas la sienne. */
     e5.wood.hull = { at: 1, readyAt: 1, done: true, by: "a" };
     ok("retrouver le même éclat ne le compte pas deux fois",
-       again.already === true && Q.starShipBuilt(e5) === 1 && e5.found.furrow.by === "a");
+       again.already === true && Q.starShipBuilt(e5) === 1 && e5.found.farmMaterial.by === "a");
   }
   /* La chute ne peut pas tomber le premier jour, et elle ne rejoue jamais. */
   {
@@ -277,16 +283,24 @@ if (craterPos) {
   }
 }
 
-/* Le sillon de la ferme : il ne bloque rien, mais il ne doit tomber ni sur le
-   puits, ni sur le bac, ni sur le panneau de gare, ni sur le seuil de la maison. */
+/* 461 — les cinq ancrages de ferme sont publics et espacés. Le placement réel
+   peut glisser autour d'eux pour éviter un arbre, mais il ne doit pas partir
+   d'une grappe que le joueur viderait en trente secondes. */
 {
-  const fx = C.STAR_FURROW_X, fy = C.STAR_FURROW_Y;
-  const others = [["le puits", C.WELL.x, C.WELL.y], ["le panneau de gare", C.STATION_SIGN.x, C.STATION_SIGN.y],
-                  ["la maison", C.SPAWN.x, C.SPAWN.y]];
-  for (const [label, ox, oy] of others)
-    ok(`le sillon est distinct de ${label}`, Math.hypot(fx - ox, fy - oy) >= 2.5, `d = ${Math.hypot(fx - ox, fy - oy).toFixed(1)}`);
-  ok("le sillon tient dans la carte de la ferme",
-     fx - C.STAR_FURROW_LEN >= 1 && fx < C.MAP_W - 1 && fy >= 1 && fy < C.MAP_H - 1, `(${fx},${fy})`);
+  ok("la ferme porte exactement cinq impacts", Q.STAR_FARM_IMPACTS.length === 5, `${Q.STAR_FARM_IMPACTS.length}`);
+  const counts = Object.fromEntries(["star", "material", "empty"].map(k => [k, Q.STAR_FARM_IMPACTS.filter(s => s.content === k).length]));
+  ok("…deux étoiles, une matière, deux fonds vides",
+     counts.star === 2 && counts.material === 1 && counts.empty === 2,
+     `${counts.star}/${counts.material}/${counts.empty}`);
+  ok("les deux petites étoiles ont des couleurs distinctes",
+     new Set(Q.STAR_FARM_IMPACTS.filter(s => s.content === "star").map(s => s.color)).size === 2);
+  ok("les cinq ancrages tiennent dans la carte",
+     C.STAR_FARM_IMPACT_ANCHORS.length === 5 && C.STAR_FARM_IMPACT_ANCHORS.every(p => p.x >= 4 && p.x < C.MAP_W - 4 && p.y >= 4 && p.y < C.MAP_H - 4));
+  let minD = Infinity;
+  for (let i = 0; i < C.STAR_FARM_IMPACT_ANCHORS.length; i++) for (let j = i + 1; j < C.STAR_FARM_IMPACT_ANCHORS.length; j++)
+    minD = Math.min(minD, Math.hypot(C.STAR_FARM_IMPACT_ANCHORS[i].x - C.STAR_FARM_IMPACT_ANCHORS[j].x,
+                                    C.STAR_FARM_IMPACT_ANCHORS[i].y - C.STAR_FARM_IMPACT_ANCHORS[j].y));
+  ok("⚠️ les impacts sont vraiment dispersés", minD >= 18, `écart minimal ${minD.toFixed(1)} cases`);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -431,13 +445,12 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
       }
     }
   }
-  /* ── LE CALME DU CRATÈRE EN SOLO : la fenêtre est une DURÉE de tenue, pas un
-     trajet. Ce qu'on mesure est qu'elle reste plus longue qu'à deux (sinon le
-     solo serait le mode facile) sans devenir une punition. */
+  /* 461 — le barème est la règle de conception elle-même : une minute seul,
+     dix secondes dès qu'un second joueur se trouve dans la zone. */
   ok("⚠️ la tenue solo du cratère est plus longue qu'à deux",
      Q.STAR_CALM_SOLO_MS > Q.STAR_CALM_MS, `${Q.STAR_CALM_SOLO_MS} ms contre ${Q.STAR_CALM_MS} ms`);
-  ok("…sans dépasser le double et demi (au-delà, c'est une punition)",
-     Q.STAR_CALM_SOLO_MS <= Q.STAR_CALM_MS * 2.5, `×${(Q.STAR_CALM_SOLO_MS / Q.STAR_CALM_MS).toFixed(2)}`);
+  ok("…et vaut exactement une minute seul, dix secondes à plusieurs",
+     Q.STAR_CALM_SOLO_MS === 60000 && Q.STAR_CALM_MS === 10000);
   /* ── ZIP 446 — LE REFROIDISSEMENT, ET C'EST UNE PORTE, PAS UN EFFET.
      ⚠️⚠️ CE BLOC EXISTE PARCE QU'AUCUN BANC NE JOUAIT `resolveStarCalm` : la
      mécanique centrale du chapitre 2 n'était vérifiée nulle part, on ne mesurait
@@ -463,7 +476,7 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
     Q.resolveStarCalm(e, "j1", t1 + Q.STAR_CALM_SOLO_MS * 0.5 + 4200, true);
     ok("⚠️ une tenue lâchée puis reprise repart de zéro", !Q.starHas(e, "crater"));
     let t = t1 + Q.STAR_CALM_SOLO_MS * 0.5 + 4200;
-    for (let k = 0; k < 30 && !Q.starHas(e, "crater"); k++) { t += 500; Q.resolveStarCalm(e, "j1", t, true); }
+    for (let k = 0; k < 130 && !Q.starHas(e, "crater"); k++) { t += 500; Q.resolveStarCalm(e, "j1", t, true); }
     ok("⚠️ et en se tenant vraiment tranquille, elle sort", Q.starHas(e, "crater"),
        `${((t - (t1 + Q.STAR_CALM_SOLO_MS * 0.5 + 4200)) / 1000).toFixed(1)} s de tenue`);
     /* ── LA CHALEUR, LA COURBE QU'ON VOIT. Trois bornes, et la troisième est
@@ -534,7 +547,7 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
      identiques ne sont pas un croisement ». */
   {
     const e = Q.devStar(Q.newStar(), "start", 1).star;
-    Q.resolveStarFound(e, "furrow", "a", 1); Q.resolveStarFound(e, "crater", "a", 1);
+    findFarmImpacts(e, "a", 1); Q.resolveStarFound(e, "crater", "a", 10);
     Q.resolveStarLean(e, "j1", 40, 40, 1000, false);
     const tooClose = Q.resolveStarLean(e, "j2", 42, 42, 2000, false);
     ok("⚠️ deux lectures trop proches ne croisent rien", !!tooClose.armed && !tooClose.mark);
@@ -558,7 +571,7 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
   for (const flag of [true, false]) {
     const e = Q.devStar(Q.newStar(), "start", 1).star;
     let t = e.fall + Q.STAR_CRATER_COOL_MS + 500;
-    for (let k = 0; k < 40 && !Q.starHas(e, "crater"); k++) { t += 500; Q.resolveStarCalm(e, "j1", t, flag); }
+    for (let k = 0; k < 130 && !Q.starHas(e, "crater"); k++) { t += 500; Q.resolveStarCalm(e, "j1", t, flag); }
     ok(`⚠️⚠️ le cratère s'ouvre TOUT SEUL, drapeau solo = ${flag}`, Q.starHas(e, "crater"),
        `${((t - (e.fall + Q.STAR_CRATER_COOL_MS + 500)) / 1000).toFixed(1)} s de tenue`);
   }
@@ -568,7 +581,7 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
     const e = Q.devStar(Q.newStar(), "start", 1).star;
     const t0 = e.fall + Q.STAR_CRATER_COOL_MS + 500;
     let t = t0, opened = null;
-    for (let k = 0; k < 12 && !Q.starHas(e, "crater"); k++) {
+    for (let k = 0; k < 30 && !Q.starHas(e, "crater"); k++) {
       t += 400;
       /* ⚠️ ON GARDE LA RÉPONSE QUI OUVRE, PAS LA DERNIÈRE : celui des deux qui
          franchit le seuil le premier reçoit `opened`, l'autre reçoit `already`.
@@ -586,7 +599,7 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
     /* Les ombres : un joueur SEUL en ville doit pouvoir croiser ses deux propres
        lectures, quel que soit le nombre de connectés. */
     const e = Q.devStar(Q.newStar(), "start", 1).star;
-    Q.resolveStarFound(e, "furrow", "a", 1); Q.resolveStarFound(e, "crater", "a", 1);
+    findFarmImpacts(e, "a", 1); Q.resolveStarFound(e, "crater", "a", 10);
     Q.resolveStarLean(e, "j1", 20, 20, 1000, flag);
     const cross = Q.resolveStarLean(e, "j1", 20 + Q.STAR_LEAN_SOLO_MIN_TILES + 2, 20,
                                     1000 + Q.STAR_LEAN_SOLO_WINDOW_MS - 2000, flag);
@@ -597,7 +610,7 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
   {
     /* Et la lecture d'un AUTRE garde le barème court : c'est ça, le raccourci. */
     const e = Q.devStar(Q.newStar(), "start", 1).star;
-    Q.resolveStarFound(e, "furrow", "a", 1); Q.resolveStarFound(e, "crater", "a", 1);
+    findFarmImpacts(e, "a", 1); Q.resolveStarFound(e, "crater", "a", 10);
     Q.resolveStarLean(e, "j1", 20, 20, 1000, false);
     const d = Q.STAR_LEAN_MIN_TILES + 2;
     ok("⚠️ le barème court est réservé à la lecture d'un AUTRE",
@@ -1121,8 +1134,8 @@ section("La chute est vue, et le chevron désigne (445)");
        chevron, et l'étape « va chercher un ingénieur » a sa propre section. Un
        contrôle qui mesure deux choses n'en mesure aucune. */
     e.plan = { at: 1000, by: "banc", done: 1000 };
-    ok("⚠️ au premier chapitre, le chevron pointe le sillon", Q.starTargetSite(e, {}) === "furrow");
-    Q.resolveStarFound(e, "furrow", "banc", 2000);
+    ok("⚠️ au premier chapitre, le chevron pointe le premier impact", Q.starTargetSite(e, {}) === Q.STAR_FARM_IMPACTS[0].id);
+    findFarmImpacts(e, "banc", 2000);
     ok("…puis le cratère", Q.starTargetSite(e, {}) === "crater");
     Q.resolveStarFound(e, "crater", "banc", 3000);
     /* ⚠️⚠️ ET LÀ, RIEN — C'EST VOULU ET C'EST LE CONTRÔLE LE PLUS UTILE DU BLOC.
@@ -1163,7 +1176,10 @@ section("La chute est vue, et le chevron désigne (445)");
     const body = (src.split("function starTargetPos(")[1] || "").split("\n  function ")[0];
     ok("⚠️ `starTargetPos` existe", body.length > 100, `${body.split("\n").length} lignes de corps`);
     const targetable = Q.STAR_SITES.filter(s => s.spot && s.spot[0] !== "*").map(s => s.id);
-    const orphans = targetable.filter(id => !body.includes(`"${id}"`));
+    const orphans = targetable.filter(id => {
+      const site = Q.STAR_SITE[id];
+      return site.spot === "starFarmImpact" ? !body.includes('site.spot === "starFarmImpact"') : !body.includes(`"${id}"`);
+    });
     ok("⚠️⚠️ chaque lieu désignable a sa branche de position",
        orphans.length === 0, orphans.join(",") || `${targetable.length} lieux joints`);
     /* ⚠️ ET LA CAMÉRA EST DÉCRITE UNE SEULE FOIS, LUE PAR LES DEUX MONDES. Deux
@@ -1209,8 +1225,8 @@ section("L'objectif courant (bandeau) et le guide");
   const e = Q.newStar();
   ok("une quête pas tombée n'a pas d'objectif", Q.starGoalKey(e, {}) === null);
   e.fall = 1000;
-  ok("…une fois tombée, l'objectif est le sillon", Q.starGoalKey(e, {}) === "furrow");
-  Q.resolveStarFound(e, "furrow", "j1", 1001);
+  ok("…une fois tombée, l'objectif est la chasse aux impacts", Q.starGoalKey(e, {}) === "farmImpacts");
+  findFarmImpacts(e, "j1", 1001);
   ok("⚠️ le cratère BRÛLANT et le cratère FROID ne disent pas la même chose",
      Q.starGoalKey(e, { craterHot: true }) === "craterHot" && Q.starGoalKey(e, {}) === "crater");
   Q.resolveStarFound(e, "crater", "j1", 1002);
@@ -1249,7 +1265,8 @@ section("L'objectif courant (bandeau) et le guide");
       const tgt = Q.starTargetSite(e2, {});
       const goal = Q.starGoalKey(e2, {});
       const want = goal ? (Q.STAR_GOAL_TARGET[goal] || goal) : null;
-      if (tgt && tgt !== want) bad.push(`${goal || "∅"}→${tgt}`);
+      const groupedImpact = goal === "farmImpacts" && Q.STAR_SITE[tgt] && Q.STAR_SITE[tgt].spot === "starFarmImpact";
+      if (tgt && tgt !== want && !groupedImpact) bad.push(`${goal || "∅"}→${tgt}`);
       if (tgt) checked++;
       const miss = Q.starMissing(e2);
       if (!miss.length) break;
@@ -1266,6 +1283,7 @@ section("L'objectif courant (bandeau) et le guide");
     {
       const NOWHERE = ["lean", "leanAgain", "engineerWait"];
       const orphan = Q.STAR_GOAL_KEYS.filter(k => {
+        if (k === "farmImpacts") return false;
         const id = Q.STAR_GOAL_TARGET[k] || k;
         if (Q.STAR_OFF_TABLE_TARGETS.includes(id)) return false;
         const s = Q.STAR_SITE[id];
@@ -1278,7 +1296,7 @@ section("L'objectif courant (bandeau) et le guide");
        c'est le moment où le joueur n'a rien d'autre (§ `spot: "*lean"`). */
     const e3 = Q.newStar(); e3.fall = 1;
     e3.plan = { at: 1, by: "j1", done: 1 };
-    Q.resolveStarFound(e3, "furrow", "j1", 2); Q.resolveStarFound(e3, "crater", "j1", 3);
+    findFarmImpacts(e3, "j1", 2); Q.resolveStarFound(e3, "crater", "j1", 10);
     ok("⚠️ pas de chevron pendant l'écoute des ombres…", Q.starTargetSite(e3, {}) === null);
     ok("…mais le bandeau, lui, dit quoi faire", Q.starGoalKey(e3, {}) === "lean");
   }
@@ -1377,7 +1395,7 @@ section("La construction du navire (454)");
     const e = Q.newStar(); e.fall = 1;
     ok("on ne demande pas d'ingénieur avant d'avoir vu l'étoile",
        Q.resolveStarPlanAsk(e, "j1", 10).tooEarly === true);
-    Q.resolveStarFound(e, "furrow", "j1", 11);
+    findFarmImpacts(e, "j1", 11);
     Q.resolveStarFound(e, "crater", "j1", 12);
     const r = Q.resolveStarPlanAsk(e, "j1", 20);
     ok("…et la demande annonce ses trois monnaies",
@@ -1449,7 +1467,7 @@ section("La construction du navire (454)");
   /* ── LES DEUX MOITIÉS SONT VRAIMENT DEUX MOITIÉS. */
   {
     const e = Q.newStar(); e.fall = 1;
-    Q.resolveStarFound(e, "furrow", "j1", 2);
+    Q.resolveStarFound(e, "farmMaterial", "j1", 2);
     ok("⚠️⚠️ un morceau trouvé sans bois ne se pose pas sur la cale", Q.starShipBuilt(e) === 0);
     e.plan = { at: 1, by: "j1", done: 1 };
     Q.commitStarTimber(e, "hull", "j1", 3);
@@ -1568,7 +1586,7 @@ section("Les textes de la quête");
   console.log(`         (${goalsRead} phrases de bandeau lues, deux langues)`);
   for (const op of Q.STAR_DEV_OPS) ok(`le bouton dev « ${op} » a son libellé`, typeof st.dev.op(op) === "string" && st.dev.op(op) !== op);
   for (const sc of Q.STAR_DEV_SCENES) ok(`la scène dev « ${sc} » a son libellé`, typeof st.dev.scene(sc) === "string" && st.dev.scene(sc) !== sc);
-  for (const p of ["furrow", "crater", "lean", "dive", "sweep", "lure", "bell", "organ"])
+  for (const p of ["impact", "impactSeen", "material", "tame", "crater", "lean", "dive", "sweep", "lure", "bell", "organ"])
     ok(`l'invite « ${p} » a son texte`, typeof st.prompt(p) === "string" && st.prompt(p) !== "E");
   /* ⚠️⚠️ UN TITRE DE MINI-JEU EST UN NOM, PAS UNE PHRASE, ET LE BANC LE MESURE
      EN CARACTÈRES. Le premier jet passait `rackHint` (« One of these beads used
@@ -2155,8 +2173,9 @@ console.log("\n10. LE PNJ QUI S'ARRÊTE, ET LA POSTURE DU CRATÈRE (456)\n");
      ce sont les deux seuls contrôles de ce banc qui le font. */
   {
     const src = fs.readFileSync(path.join(ROOT, "components", "ferme", "FermeGame.js"), "utf8");
-    const i0 = src.indexOf('if (zone === "town" && !Q.starHas(e, "crater")) {');
-    const i1 = src.indexOf("CE QU'ELLE DIT QUAND ELLE EST LÀ", i0 + 1);
+    const nearby = src.indexOf("function starNearby()");
+    const i0 = src.indexOf('if (zone === "town") {', nearby);
+    const i1 = src.indexOf('if (zone === "court") {', i0 + 1);
     const block = i0 >= 0 && i1 > i0 ? src.slice(i0, i1) : "";
     ok("⚠️⚠️ rien ne parle par la bulle de l'étoile AVANT qu'elle sorte du trou",
        block.length > 400 && !/starSay\(/.test(block),
@@ -2204,7 +2223,7 @@ console.log("\n11. L'OUVRAGE DE TRISTAN (459)\n");
      Q.starTimberBusy(e) === null);
   /* ⚠️ ET UNE SEULE À LA FOIS : l'ordre du plan l'interdit, mais c'est la BULLE qui
      paierait une seconde commande simultanée — deux bulles sur la même tête. */
-  Q.resolveStarFound(e, "furrow", "j1", 2000);
+  Q.resolveStarFound(e, "farmMaterial", "j1", 2000);
   Q.commitStarTimber(e, "rudder", "j1", 3000);
   const w2 = Q.starTimberBusy(e);
   ok("⚠️ et il n'y a jamais qu'UNE pièce en cours", !!w2 && w2.key === "rudder");

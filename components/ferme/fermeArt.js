@@ -5663,7 +5663,7 @@ export function buildSprites() {
      au compas est un pictogramme, pas une créature : on assemble un corps rond
      et QUATRE pointes molles de longueurs différentes, et la silhouette sort
      toute seule, festonnée (438). */
-  function starWispSprite(pose, state) {
+  function starWispSprite(pose, state, color) {
     /* ⚠️⚠️⚠️ QUATRIÈME ÉCRITURE, ET C'EST UN CHANGEMENT DE CONSTRUCTION, PAS UN
        RÉGLAGE DE PLUS. Les trois premières tentatives ont produit, dans l'ordre :
        une ICÔNE de scintillement (quatre branches sur les axes), un BISCUIT À
@@ -5686,11 +5686,18 @@ export function buildSprites() {
        symétrie et redevenir un pictogramme. Les cinq rayons ont des longueurs
        INÉGALES qui changent avec la pose — c'est la respiration. */
     const [c, g] = cv(18, 18);
-    const CORE = ["#fffdf2", "#fff8e4", "#dedad0"][state];
-    const BODY = ["#ffe08a", "#f2ce7e", "#a8a49a"][state];
-    const EDGE = ["#eda43a", "#c98a34", "#6e6a62"][state];
-    const RIM  = ["#7a4a0e", "#66400c", "#33302a"][state];
-    const HALO = ["rgba(255,222,132,0.20)", "rgba(255,210,116,0.11)", "rgba(200,196,186,0.05)"][state];
+    const pal = {
+      yellow: [["#fffdf2", "#ffe08a", "#eda43a", "#7a4a0e", "rgba(255,222,132,0.20)"],
+               ["#fff8e4", "#f2ce7e", "#c98a34", "#66400c", "rgba(255,210,116,0.11)"],
+               ["#dedad0", "#a8a49a", "#6e6a62", "#33302a", "rgba(200,196,186,0.05)"]],
+      blue:   [["#f4fcff", "#8edcff", "#3aa8df", "#174d75", "rgba(100,205,255,0.20)"],
+               ["#edf8ff", "#83c7e8", "#3d86ad", "#183f5a", "rgba(90,185,235,0.11)"],
+               ["#d7e0e4", "#94a8b2", "#536d78", "#29383f", "rgba(170,205,220,0.05)"]],
+      rose:   [["#fff8fc", "#ff9fd1", "#dc5b9f", "#712451", "rgba(255,130,205,0.20)"],
+               ["#fff0f8", "#e895bd", "#aa517e", "#59243e", "rgba(235,120,185,0.11)"],
+               ["#e0d6dc", "#ac929f", "#755363", "#3d2a33", "rgba(220,170,195,0.05)"]],
+    }[color || "yellow"] || null;
+    const [CORE, BODY, EDGE, RIM, HALO] = pal[state];
     const cx = 9, cy = 9.5;   // ⚠️ décalé d'un demi-pixel vers le bas : à cy = 9 la pointe haute touchait le bord du canevas, donc elle était rabotée en silence (piège n°1, 433)
     /* ⚠️ LE RAYON INTÉRIEUR EST CE QUI DÉCIDE DE TOUT. Trop petit, l'étoile est
        une croix maigre et il n'y a plus de place pour un visage ; trop grand,
@@ -13987,7 +13994,9 @@ house: house(),
        note), quatre décors de la verrerie, trois poses de pie. Le cratère, le
        SILLON (454) et le navire ne sont PAS ici : ce sont des fonctions, parce
        qu'ils se peignent sur un fond déjà là (voir leur note). */
-    starWisp: Array.from({ length: 3 }, (_, st) => Array.from({ length: 4 }, (_, po) => starWispSprite(po, st))),
+    starWisp: Array.from({ length: 3 }, (_, st) => Array.from({ length: 4 }, (_, po) => starWispSprite(po, st, "yellow"))),
+    starWispColors: Object.fromEntries(["yellow", "blue", "rose"].map(color => [color,
+      Array.from({ length: 3 }, (_, st) => Array.from({ length: 4 }, (_, po) => starWispSprite(po, st, color))) ])),
     starShard: Array.from({ length: 4 }, (_, n) => starShardSprite(n)),
     /* ⚠️ ZIP 454 — LE SILLON N'EST PLUS UN SPRITE, C'EST UNE FONCTION, exactement
        comme le cratère et pour la même raison : il se peint sur un fond déjà là et

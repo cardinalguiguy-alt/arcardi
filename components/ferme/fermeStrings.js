@@ -92,6 +92,19 @@ const Nfr = (n) => { const s = nfr(n); return s.charAt(0).toUpperCase() + s.slic
 
 const STAR_FR = {
   title: "Le Bateau des Étoiles",
+  farm: {
+    mapImpact: (n) => `Impact ${n}`,
+    seen: "Ce point d'impact a déjà été fouillé.",
+    empty1: "Le fond est encore chaud. Tu écartes la cendre : rien.",
+    empty2: "Toutes les lumières n'abritaient pas quelque chose.",
+    starPeek: "Une petite lumière se tasse au fond dès que tu la regardes.",
+    tameSolo: "Tourne-lui le dos et ne bouge plus. Seul, elle mettra une minute à venir.",
+    tameDuo: "Vous êtes plusieurs dans la ferme. Dix secondes sans la regarder suffiront.",
+    material1: "Sous la cendre : une plaque noire, lisse seulement sur sa cassure.",
+    material2: "Elle a reçu tout le choc sans le transmettre à la terre dessous.",
+    material3: "Le bois sait plier ; cette matière sait tenir. Ensemble, ils résisteraient à bien davantage.",
+    materialKeep: "Tu gardes la plaque. Elle n'a pas encore d'usage, mais elle en aura un.",
+  },
   hud: {
     goal: {
       /* ╔═══════════════════════════════════════════════════════════════════
@@ -108,7 +121,7 @@ const STAR_FR = {
          c'est » — et ça, aucune de ces phrases ne le dit.
          ⚠️ LE PLAFOND DE 80 SIGNES N'A PAS BOUGÉ : le bandeau rabote en silence
          (449), donc c'est le TEXTE qui tient la contrainte, jamais la coupe. */
-      furrow:    "Quelque chose brûle au nord de la ferme. Va voir (E).",
+      farmImpacts: "Cinq impacts fument sur la ferme. Ouvre la carte et fouille-les.",
       craterHot: "À l'est de Valley Town, le trou brûle encore. Attends qu'il refroidisse.",
       crater:    "Le cratère a refroidi. Descends : quelque chose se cache au fond.",
       lean:      "Écoute les ombres ici (E), puis à l'autre bout de la ville. Vite.",
@@ -141,7 +154,7 @@ const STAR_FR = {
     noPet: "Aucun animal avec toi. L'un d'eux connaîtrait le chemin.",
   },
   chapter: {
-    field:  "Chapitre Un — Ce qui est tombé dans le champ",
+    field:  "Chapitre Un — Les cinq impacts",
     crater: "Chapitre Deux — Le cratère",
     water:  "Chapitre Trois — Ce que l'eau gardait",
     thief:  "Chapitre Quatre — Les deux trésors de la voleuse",
@@ -152,7 +165,7 @@ const STAR_FR = {
     /* ⚠️ « d'est en ouest », comme l'anglais depuis le 448 : le sillon est plus
        profond à son bout ouest, donc la course s'y arrête. Le texte suit l'image. */
     line1: "Le ciel se déchire, d'est en ouest.",
-    line2: "Quelque chose s'écrase au loin. Les vitres tremblent.",
+    line2: "Cinq fragments frappent la ferme. Quelque chose de bien plus gros file vers la ville.",
     line3: "Tous les oiseaux de la vallée s'envolent d'un coup.",
     /* ⚠️⚠️ ZIP 455 — CETTE PHRASE ÉTAIT DEVENUE FAUSSE LE JOUR MÊME OÙ ON L'A
        ENFIN AFFICHÉE. Elle disait « Personne ne sort regarder. Personne n'en dit
@@ -177,7 +190,7 @@ const STAR_FR = {
        lui disait. *Une image qui n'est pas nommée ne raconte rien.*
        ⚠️ ELLE SE DIT À LA FERME SEULEMENT : en ville, on voit tomber le gros
        morceau, et lui annoncer qu'il n'a qu'un éclat serait faux. */
-    split: "Elle s'est fendue en tombant. Ça, ce n'est qu'un éclat — le gros est passé au-dessus, vers Valley Town.",
+    split: "Cinq points fument sur la ferme. Le gros météore a continué vers Valley Town.",
   },
   /* ╔═══════════════════════════════════════════════════════════════════════════
      ║ ZIP 455 — LE TAMPON. LA PIERRE EST PUBLIQUE, L'ÉTOILE RESTE SECRÈTE.
@@ -251,20 +264,11 @@ const STAR_FR = {
      navigateur. Un peu de magie, jamais au prix de la clarté — c'est le
      principe demandé. */
   s1: {
-    tooHot: "C'est trop brûlant pour qu'on y touche. Une fois froid, ça fera une proue increvable — personne n'a jamais rien vu d'aussi dur.",
     coolTitle: "Fais-le refroidir",
     coolHint: "Garde la lueur dans le repère. Arrose à petits coups — un grand le fend.",
     coolCrack: "Crac. On recommence, plus doucement.",
     coolWin: "Le blanc devient orange, puis rouge, puis bleu. Ça ne siffle plus.",
-    shadow: "Ton ombre a quelqu'un de tout petit assis sur son épaule. Tu te retournes. Il n'y a personne.",
-    got: "La première pièce de la coque : froide, dure comme la pierre, de quoi faire une proue increvable. Elle chante une note quand on la touche.",
-    /* ⚠️⚠️ ZIP 458 — LA MÊME VÉRITÉ, DITE UNE SECONDE FOIS AU BON MOMENT. La
-       chute le dit dans le fracas (`fall.split`), à un joueur qui regarde le ciel ;
-       celle-ci le redit quand il a l'éclat dans les mains et qu'il se demande où
-       aller. Ce n'est pas un doublon : c'est la même information à deux instants
-       où l'on ne se pose pas la même question. */
-    fragment: "Ce n'est qu'un éclat de ce qui est tombé. Le cratère, le vrai, est quelque part du côté de Valley Town.",
-    east: "Il penche vers l'est, du côté de la ville, comme s'il montrait un chemin. Peut-être que c'est ainsi qu'on naviguera, une fois le navire fini.",
+    got: "La plaque noire et le bois de Tristan forment désormais une coque capable d'encaisser un choc immense.",
   },
   s2: {
     tooHot: "Le trou fume encore. Ce qui est au fond ne remontera pas.",
@@ -300,12 +304,9 @@ const STAR_FR = {
        que marcher (c'est le reproche du 456 à « E : ne plus bouger »). */
     slipHold: "Ça glisse. Garde le même cap, il va trouver une prise.",
     slipClimb: "Il tient. Ne lâche pas la direction.",
-    meet1: "Elle est plus petite qu'une poule. Elle tremble.",
-    meet2: "Tu tends le morceau de ton champ. Elle le reprend.",
-    /* ⚠️ ZIP 453 — « Deux notes, ensemble » DISAIT DEUX MORCEAUX LÀ OÙ LE
-       NAVIRE EN MONTRE UN. Elle chante avec le morceau qu'on vient de lui
-       rendre : c'est ça qu'on entend, et ça ne compte rien. */
-    meet3: "Le morceau chante avec elle. Elle arrête de trembler.",
+    meet1: "Celle-ci est plus grande que les autres. Sa lumière jaune remplit le cratère.",
+    meet2: "Les deux petites étoiles de la ferme se rapprochent d'elle sans hésiter.",
+    meet3: "L'étoile reine trace dans la poussière la silhouette d'un navire brisé.",
     /* ⚠️ « Elle n'en a que … » A ÉTÉ ÉCARTÉ : l'élision (« qu'un », « que deux »)
        demanderait une règle de grammaire dans une table de textes. « Elle en a
        un » dit la même chose et tient dans toutes les langues du fichier. */
@@ -572,7 +573,8 @@ const STAR_FR = {
     start: "Quelque chose est tombé du ciel.",
     found: (who, n, total) => `${who} a trouvé un morceau. ${nfr(n)} sur ${nfr(total)}.`,
     chapter: (t) => `${t}`,
-    crater: (who) => `${who} a fait sortir la petite étoile du cratère.`,
+    crater: (who) => `${who} a apprivoisé l'étoile reine.`,
+    tamed: (who) => `${who} a apprivoisé une petite étoile.`,
     lean: (who) => `${who} a croisé les ombres. Un nouvel endroit est marqué.`,
     duet: (n, total) => `Phrase ${n} sur ${total}.`,
     /* ⚠️ ZIP 453 — « Le bateau a pris la mer » ÉTAIT FAUX : il restait à quai.
@@ -580,7 +582,10 @@ const STAR_FR = {
     done: "Le bateau est fini. L'étoile est rentrée.",
   },
   prompt: (k) => ({
-    furrow: "E : regarder",
+    impact: "E : fouiller le cratère",
+    impactSeen: "E : examiner les débris",
+    material: "E : examiner la matière noire",
+    tame: "Tourne-lui le dos, ne bouge plus (E : pourquoi ?)",
     /* ⚠️⚠️ ZIP 456 — LE CRATÈRE NE PROMET PLUS UNE TOUCHE. « E : ne plus bouger »
        décrivait le seul geste du jeu qui n'A PAS de touche, avec le préfixe de
        toutes celles qui en ont une : le joueur pressait E, lisait deux phrases, et
@@ -613,6 +618,19 @@ const Nen = (n) => { const s = nen(n); return s.charAt(0).toUpperCase() + s.slic
 
 const STAR_EN = {
   title: "The Star Boat",
+  farm: {
+    mapImpact: (n) => `Impact ${n}`,
+    seen: "This impact site has already been searched.",
+    empty1: "The bottom is still warm. You brush the ash aside: nothing.",
+    empty2: "Not every strange light was hiding something.",
+    starPeek: "A little light shrinks into the crater whenever you look at it.",
+    tameSolo: "Turn your back and keep still. Alone, it will take a minute to approach.",
+    tameDuo: "There are several of you on the farm. Ten seconds without looking will do.",
+    material1: "Under the ash: a black plate, smooth only along the break.",
+    material2: "It took the whole impact without passing the blow into the soil beneath.",
+    material3: "Wood knows how to bend; this matter knows how to hold. Together, they could endure far more.",
+    materialKeep: "You keep the plate. It has no use yet, but it will.",
+  },
   /* ── LE PISTEUR. Une icône, des pastilles, UNE phrase. Jamais deux. */
   hud: {
     /* ╔═══════════════════════════════════════════════════════════════════════
@@ -653,7 +671,7 @@ const STAR_EN = {
          c'est » — et ça, aucune de ces phrases ne le dit.
          ⚠️ LE PLAFOND DE 80 SIGNES N'A PAS BOUGÉ : le bandeau rabote en silence
          (449), donc c'est le TEXTE qui tient la contrainte, jamais la coupe. */
-      furrow:    "Something is burning north of the farm. Go and look (E).",
+      farmImpacts: "Five impacts smoke across the farm. Open the map and search them.",
       craterHot: "East of Valley Town the hole still burns. Wait for it to cool.",
       crater:    "The crater has cooled. Climb down: something hides at the bottom.",
       lean:      "Listen to the shadows here (E), then right across town. Be quick.",
@@ -705,7 +723,7 @@ const STAR_EN = {
   /* ── LES CARTES DE CHAPITRE. Le seul endroit du chantier où le jeu prend
      l'écran entier pour dire un titre. */
   chapter: {
-    field:  "Chapter One — What Landed in the Field",
+    field:  "Chapter One — The Five Impacts",
     crater: "Chapter Two — The Crater",
     water:  "Chapter Three — What the Water Kept",
     thief:  "Chapter Four — The Thief's Two Prizes",
@@ -723,12 +741,12 @@ const STAR_EN = {
        il AFFIRME, et une affirmation fausse coûte plus cher qu'un dessin
        approximatif. */
     line1: "The sky tears open, east to west.",
-    line2: "Something hits the ground far away. The windows rattle.",
+    line2: "Five fragments strike the farm. Something much larger keeps flying toward town.",
     line3: "Every bird in the valley goes up at once.",
     quiet: "Everyone saw the stone fall. Nobody will ever see what was inside it.",
     /* ⚠️⚠️ ZIP 458 — voir la note française : ce qui tombe dans le champ n'est
        qu'un éclat, et le gros est passé au-dessus, vers Valley Town. */
-    split: "It broke apart as it fell. This is only a splinter — the big one went over, toward Valley Town.",
+    split: "Five places are smoking across the farm. The big meteor kept going toward Valley Town.",
   },
   /* ╔═══════════════════════════════════════════════════════════════════════════
      ║ ZIP 455 — LE TAMPON. LA PIERRE EST PUBLIQUE, L'ÉTOILE RESTE SECRÈTE.
@@ -784,7 +802,6 @@ const STAR_EN = {
      pourquoi on refroidit (une proue increvable, pas un mystère gratuit), et
      `east` dit clairement où aller tout en plantant le futur navigateur. */
   s1: {
-    tooHot: "It's too hot to touch. Once it's cold, it'll make an unbreakable prow — nobody's ever seen anything this hard.",
     coolTitle: "Cool it down",
     /* ⚠️⚠️ ZIP 449 — LES CONSIGNES DISENT LE BUT, PAS SEULEMENT LE GESTE
        (demande de Guillaume). Celle-ci savait déjà dire « à petits coups » ;
@@ -796,12 +813,7 @@ const STAR_EN = {
     coolHint: "Keep the glow inside the mark. Pour in short bursts — a long one cracks it.",
     coolCrack: "Crack. Start again, gentler.",
     coolWin: "The white goes orange, then red, then blue. It stops hissing.",
-    shadow: "Your shadow has someone small sitting on its shoulder. You turn around. Nothing there.",
-    got: "The first piece of the hull: cold, hard as stone, enough to make an unbreakable prow. It hums a note when you touch it.",
-    /* ⚠️⚠️ ZIP 458 — voir la note française : la même vérité, redite au moment où
-       l'on a l'éclat dans les mains. */
-    fragment: "This is only a splinter of what fell. The crater, the real one, is somewhere over by Valley Town.",
-    east: "It leans east, toward town, as if it's pointing the way. Maybe that's how we'll navigate one day, once the ship is done.",
+    got: "The black plate and Tristan's timber now form a hull able to take an immense impact.",
   },
   /* ── ÉTAPE 2 : LE CRATÈRE. */
   s2: {
@@ -824,11 +836,9 @@ const STAR_EN = {
        l'effort, dites pendant qu'on le fournit. */
     slipHold: "You're sliding. Keep the same heading — he'll find a grip.",
     slipClimb: "He's holding on. Don't let go of the direction.",
-    meet1: "It is smaller than a hen. It is shaking.",
-    meet2: "You hold out the piece from your field. It takes it back.",
-    /* ⚠️ ZIP 453 — voir la note française : « two notes » comptait deux morceaux
-       là où le navire en montre un. */
-    meet3: "The piece sings with it. It stops shaking.",
+    meet1: "This one is larger than the others. Its yellow light fills the crater.",
+    meet2: "The two little farm stars move toward it without hesitation.",
+    meet3: "The queen star traces the outline of a broken ship in the dust.",
     name: (n, total) => `Its boat broke when it fell. ${Nen(total)} pieces. It has ${nen(n)}.`,
     /* ⚠️⚠️ ZIP 449 — C'EST ICI QUE LE JEUNE PUBLIC ABANDONNAIT, ET C'ÉTAIT
        PRÉVISIBLE : l'écoute des ombres est le SEUL moment de la quête sans
@@ -1088,7 +1098,8 @@ const STAR_EN = {
     start: "Something fell out of the sky.",
     found: (who, n, total) => `${who} found a piece. ${nen(n)} of ${nen(total)}.`,
     chapter: (t) => `${t}`,
-    crater: (who) => `${who} coaxed the little star out of the crater.`,
+    crater: (who) => `${who} tamed the queen star.`,
+    tamed: (who) => `${who} tamed a little star.`,
     lean: (who) => `${who} crossed the shadows. A new place is marked.`,
     duet: (n, total) => `Phrase ${n} of ${total}.`,
     /* ⚠️ ZIP 453 — « The boat sailed » était faux : il restait à quai. */
@@ -1099,7 +1110,10 @@ const STAR_EN = {
      pas dire la même chose (c'est la convention posée par `enqPrompt` au 442,
      et c'est la seule chose de l'enquête qui survit telle quelle). */
   prompt: (k) => ({
-    furrow: "E: look at it",
+    impact: "E: search the crater",
+    impactSeen: "E: examine the debris",
+    material: "E: examine the black matter",
+    tame: "Turn your back, stand still (E: why?)",
     crater: "Turn your back, stand still (E: why?)",
     craterHot: "E: wait for it to cool",
     lean: "E: let it sing",

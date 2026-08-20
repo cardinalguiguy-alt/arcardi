@@ -11,57 +11,47 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**Livré au 460 : LES POSES DU CRATÈRE, RESTREINTES À CE QUI SE LIT BIEN.** Jugement de
-Guillaume en jouant : la grimpe (les quatre images bras/jambes contralatéraux) est bonne
-vue de dos, mauvaise dans les trois autres sens. ⚠️ **LA MÉCANIQUE NE CHANGE PAS, SEUL LE
-DESSIN EST RESTREINT** — `starSlipStep` continue de faire sortir du trou à la même vitesse
-dans les quatre directions ; c'est `drawCharacter` (`FermeGame.js`) qui décide, à `p.dir`
-constant (dir 0=bas, 1=haut/dos, 2=gauche, 3=droite — il suit déjà le MOUVEMENT réel pendant
-la glissade et la grimpe, jamais la dernière touche, donc aucun champ de plus à diffuser), si
-la pose spéciale s'affiche ou si le cycle de marche normal reprend. **La grimpe ne se dessine
-plus que de dos** (`p.dir === 1`) ; **la glissade se dessine partout SAUF vers la droite**
-(`p.dir === 3`, le seul sens où même le lean-back a été jugé raté). Vérifié en jeu (scaffold
-temporaire `app/devtest460`, §10) : sortie par le nord (grimpe visible), sortie forcée par le
-sud (grimpe supprimée, marche normale, sortie quand même réussie), glissade forcée vers l'est
-depuis la paroi ouest (glissade supprimée, aucune erreur console) — trois trajets, zéro
-plantage.
+**Livré au 461 : MISSION 1 DE LA REFONTE « CONSTELLATION DE LA BREBIS ».** Le chapitre 1
+n'est plus un sillon ramassé en quelques secondes : cinq mini-cratères fumants sont dispersés
+sur la ferme, tous visibles sur la carte et suivis par le guide. Leur distribution est
+canonique : deux petites étoiles colorées à apprivoiser, une plaque météorique destinée à la
+future coque avec le bois de Tristan, deux impacts vides sans récompense. Le ciel fend cinq
+fragments au-dessus de la ferme avant que le gros météore frappe réellement Valley Town.
 
-⚠️⚠️ **LA PROCHAINE ACTION N'A PAS CHANGÉ, LE 460 NE L'A PAS TOUCHÉE : LA SÉANCE À DEUX
-CLIENTS, SECONDE MOITIÉ.** Rien de ce qui se joue **FACE À FACE** n'a jamais été joué :
-l'étoile timide dos à dos, le croisement d'ombres à deux (barème court, 30 cases / 20 s), la
-flaque que l'un promène pour l'autre sur le ponton, le duo orgue/beffroi. ⚠️ **Et le 459 y
-ajoute la GLISSADE VUE PAR L'AUTRE** : `starSlipSeen` déduit la pose du voisin de sa seule
-vitesse (zéro champ réseau de plus) et le banc la confronte au moteur — **209 images sur
-209** — mais **jamais à deux écrans**. ⚠️ **La même séance doit faire la ferme PEUPLÉE**
-(dette du §13, la plus ancienne du dépôt) : peupler EN PREMIER, et ne plus recharger (le faux
-Supabase ne persiste pas). ⚠️ La **bulle de Tristan** n'a été regardée qu'au banc et sur une
-ferme vide.
+L'apprivoisement est généralisé aux deux étoiles de ferme et à celle du grand cratère : même
+posture et mêmes animations, **60 secondes seul / 10 secondes si au moins deux joueurs sont
+dans la zone**. L'étoile de ville est désormais l'**étoile reine**, jaune, plus grande et plus
+lumineuse ; sa rencontre révèle la silhouette du navire. L'ancien état `furrow` migre vers la
+plaque et les sauvegardes déjà au chapitre 2 ne reculent pas. Bancs : `verify-quete` **443/443**,
+`render-etoile` entièrement vert ; build Next complet avec variables Supabase locales de
+substitution. Il garde l'avertissement antérieur `G_SOIL` non exporté, sans lien avec ce chantier.
 
-⚠️ **CE QUI RESTE OUVERT AILLEURS N'EST PAS OUBLIÉ, C'EST CLASSÉ APRÈS** : les cinq mini-jeux
-joués jusqu'à la VICTOIRE à cadence réelle ; les scènes *turn* et *end*, jamais vues ; le
-**panneau de transaction de la mairie** et l'**arrivée de l'étoile**, jamais regardés à
-l'écran ; le **CHANTIER B, LES MAISONS**, commandé et non commencé (préalables au **§27.5 de
-`components/ferme/README.md`**) ; le SON (`public/sounds/church-organ.mp3` — un fichier, pas
-une ligne de code) ; **la relecture de `components/ferme/README.md` contre le code**, l'ordre
-du 453, reporté une SEPTIÈME fois.
+⚠️ **AUTORITÉ NARRATIVE NOUVELLE : SEPT ÉTOILES FORMERONT LA CONSTELLATION FICTIVE DE LA
+BREBIS, VISIBLE ET MAPPÉE DANS LE CIEL.** Tout le « chant »/les notes/la lyre encore présent
+dans les chapitres historiques est obsolète et doit être remplacé ou retiré. La plongée est
+également à couper ou refondre entièrement. `components/ferme/QUETE.md` ouvre désormais par
+ce bloc d'autorité ; ses sections 444–460 sont une archive utile au code restant, pas une
+direction de conception.
+
+⚠️⚠️ **PROCHAINE ACTION : attendre la mission suivante de Guillaume pour la refonte.** Ne pas
+inventer seul la nouvelle chaîne des quatre étoiles manquantes. Au prochain changement, partir
+de `STAR_FARM_IMPACTS`, du résolveur d'apprivoisement généralisé et du bloc 461 de `QUETE.md`,
+jamais des étapes de chant archivées.
 
 ---
 
-État à jour du **zip 460**. Chantier actif : **rendre Valley Town habitable au regard ET crédible
+État à jour du **zip 461**. Chantier actif : **refondre la quête de l'étoile autour de la
+constellation de la Brebis**, tout en continuant à **rendre Valley Town habitable au regard ET crédible
 au jeu**, et **lui donner une histoire**. Tout ce qui concerne la ville, ses habitants, ses
 bâtiments et **ses pièges** est dans **`components/ferme/README.md`**, qui fait autorité ; les
 règles de DESSIN sont dans **`components/ferme/DESSIN.md`** ; les bancs dans **`tools/README.md`**.
 **`candyluge` et `crystal` sont EN PAUSE.**
 
-⚠️⚠️ **LA QUÊTE DE L'ÉTOILE (444) EST LE CHANTIER VIVANT, ET SON DOCUMENT DE REPRISE EST
-`components/ferme/QUETE.md`. LIS-LE AVANT D'Y TOUCHER.** Il porte les cinq chapitres, la grammaire
-magique dont TOUT découle (« la lumière de l'étoile ne montre pas ce qu'une chose EST, elle montre
-ce qu'une chose SE RAPPELLE »), le tableau §10 qui distingue **codé** et **regardé à l'écran**
-colonne par colonne, et le **§12 — ce qui reste, dans l'ordre**. Elle est jouable de bout en bout
-**par un joueur seul** ; ⚠️ **rien de ce qui se fait à DEUX n'a jamais été joué une seule fois**
-(l'étoile timide, le croisement d'ombres, la flaque de lumière, le duo) — le code lit des
-positions distantes qui n'ont jamais existé. Restent aussi les cinq mini-jeux joués jusqu'à la
-VICTOIRE à cadence réelle, les scènes *turn* et *end*, et la Lyre.
+⚠️⚠️ **LA REFONTE DE LA QUÊTE DE L'ÉTOILE (461) EST LE CHANTIER VIVANT, ET SON DOCUMENT DE
+REPRISE EST `components/ferme/QUETE.md`. LIS SON BLOC D'AUTORITÉ 461 AVANT D'Y TOUCHER.** Le
+chapitre des cinq impacts est livré. Les anciens chapitres restent jouables techniquement mais
+leur chant, leur plongée et leur conclusion ne sont plus une cible de conception ; ils attendent
+les missions suivantes de la refonte Brebis.
 
 ---
 
@@ -357,14 +347,14 @@ de conception qui valent pour n'importe quel morceau du dépôt.
 |---|---|
 | `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **~20 500 l.** |
 | `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** |
-| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE (444) : la table des lieux, les 5 chapitres, les grandeurs de coopération et les résolveurs purs.** Aucun React, aucun dessin — `verify-quete.mjs` l'importe. Depuis le 449 il porte aussi **`starGoalKey`** (l'objectif courant, lu par le bandeau ET par le chevron) et **`starGuidePoint`** (où se place le familier meneur) ; depuis le 451 **`starShipParts`** — les cinq morceaux du NAVIRE, une pure LECTURE des cinq trouvailles, aucun état de plus ; depuis le 453 **`starShipGone`** (le navire prend la mer avec Eduardo) et **plus aucun second compte** (`shard` / `starShards` / `STAR_SHARD_TOTAL` supprimés) ; depuis le 455 **l'ANNONCE et le TAMPON** — `resolveStarWarn`, `starWarnOffer`, `starFallDue` (« la première nuit qui COMMENCE après l'annonce »), les quatre fonctions pures de la vallée nerveuse (`starNerveHas` / `Tic` / `Dir` / `Say`), `starCamTarget` (le point de vue en amont, à la ferme) et `starFragments` ; depuis le 456 **la PAROLE et la POSTURE** — `starNerveNearTo` (⚠️ la ZONE avant les distances, §4), `starNerveFace`, et `starCalmStep` / `starCalmNeed`, **une seule source pour le texte d'aide, la jauge et ce que l'hôte compte** ; depuis le 459 **LA PERTE D'APPUI** — `starSlipStep` (cinq états purs : `foot`, `brace`, `slide`, `recover`, `climb`), `starSlipPose` et `starSlipSeen` (⚠️ la pose de l'AUTRE joueur, DÉDUITE de sa vitesse, zéro champ réseau) — et **`starTimberBusy` / `starTimberProgress`** (ce que Tristan fabrique, et où ça en est) ; depuis le 458 **la PENTE, LA PLONGÉE ET L'ARRIVÉE** — `starCraterSlope` / `starSlideSpeed` / `starClimbMul` (⚠️ liées par une INÉGALITÉ, voir `STAR_CLIMB_NET_MIN` : sans elle, le cratère devient un mur), `starDivePosts` / `starDiveShardX` (les pilotis penchent vers le morceau — une jointure, jamais deux listes) et `starJoinAnim` (elle grimpe, tournicote, se pose — courbe pure et CONTINUE par construction). ⚠️ Remplace `enquete.js`, supprimé au 444 |
+| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE : table, grandeurs et résolveurs purs.** Depuis le 461, `STAR_FARM_IMPACTS` porte les cinq cratères (2 étoiles / 1 matière / 2 vides), le chapitre 1 les exige tous, `starTargetSite` guide le prochain et `resolveStarCalm` apprivoise n'importe quelle étoile déclarée avec le barème 60/10 s. Le reste des chapitres 444–460 demeure techniquement présent mais sa fiction de chant et sa plongée sont obsolètes. Aucun React, aucun dessin — `verify-quete.mjs` l'importe. |
 | `components/ferme/QUETE.md` | **le chantier 444 : déroulé, grammaire magique, avancement, ET CE QUI RESTE À FAIRE (§12) — autorité tant que la quête n'est pas finie** |
 | `components/ferme/README.md` | **Valley Town, le tribunal, l'HÔTEL DE VILLE, l'ÉGLISE, le BEFFROI, les habitants, la VENTE, les OISEAUX, les ÉLECTIONS et les PIÈGES de ces zones — autorité (428-444)** |
 | `components/ferme/DESSIN.md` | **les règles de DESSIN, vraies partout — autorité (441, sorties du §4)** |
 | `tools/README.md` | **les bancs, ce qu'ils attrapent et leurs chiffres — autorité (432-439)** |
 | `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** · depuis le 440 il **importe `planche.js`** : une portée de pont et une emprise de décor sont des grandeurs de DESSIN, on les dérive du sprite au lieu de les recopier |
 | `components/ferme/planche.js` | **GÉNÉRÉ** par `tools/import-planche.mjs` — les sprites de la planche de Guillaume, en données. Ne pas éditer à la main |
-| `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural (aucun bitmap **à ce jour** — voir §9, le principe est tombé au 443) · **`drawSeated()`** · **`drawStarCrater()` (446), `drawStarComet()` (448), `drawStarShip()` (451), `drawStarFurrow()` + `starFurrowSink()` et `drawStarPlan()` (454), `drawEmoteBubble()` (455), `drawCalmMeter()` (456), **`drawStarSlide()` / `drawStarBrace()` / `drawStarClimb()` et `drawWorkBubble()` (459)** : les gros dessins de la quête vivent ICI et pas dans la boucle, exprès — c'est la seule façon qu'un banc les regarde** |
+| `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural. Depuis le 461, `starWispColors` décline le sprite vivant existant en jaune, bleu et rose ; l'étoile reine reste la variante jaune agrandie par le rendu. Les gros dessins de quête (`drawStarCrater`, comète, navire, jauge, poses) vivent ici pour rester regardables par les bancs. |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
 | `public/candyluge/README.md` | **la dette et les 18 règles de la luge — autorité (427)** |
 | `public/candyluge/js/` | `config.js` (tous les nombres) · `slope.js` (la piste) · `sled.js` · `world.js` |

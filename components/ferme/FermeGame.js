@@ -2666,7 +2666,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            circulent depuis toujours — et refuse si elles ne disent pas la même
            chose. Sans ça, la mécanique la plus jolie du chantier serait aussi la
            plus facile à contourner, et le contournement serait invisible. */
-        if (req.pz === "town" && starCalmOk(f.id)) r = Q.resolveStarCalm(e, f.id, now, starAlone("crater"));
+        const calmSite = Q.STAR_SITE[req.site || "crater"];
+        if (calmSite && calmSite.zone === req.pz && starCalmOk(f.id, calmSite.id))
+          r = Q.resolveStarCalm(e, f.id, now, starAlone(calmSite.zone === "farm" ? "farmTame" : "crater"), calmSite.id);
       } else if (req.kind === "starLean") {
         if (req.pz === "town") r = Q.resolveStarLean(e, f.id, +req.tx || 0, +req.ty || 0, now, starAlone("lean"));
       } else if (req.kind === "starDuet") {
@@ -2711,7 +2713,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          séance à deux clients ne le montre. */
       const after = Q.starShipBuilt(e);
       if (after > before) broadcastChat("⭐", L.star.chat.found(who, after, Q.STAR_SHIP_TOTAL));
-      if (req.kind === "starCalm" && r.opened) broadcastChat("⭐", L.star.chat.crater(who));
+      if (req.kind === "starCalm" && r.opened)
+        broadcastChat("⭐", r.site === "crater" ? L.star.chat.crater(who) : L.star.chat.tamed(who));
       if (req.kind === "starLean" && r.mark) broadcastChat("⭐", L.star.chat.lean(who));
       if (req.kind === "starDuet" && r.phrase) broadcastChat("🎹", L.star.chat.duet(r.phrase, Q.STAR_DUET_PHRASES));
       /* ⚠️⚠️ LE FRANCHISSEMENT D'UN CHAPITRE EST UN CHECKPOINT, ET IL S'ÉCRIT
@@ -13467,21 +13470,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          ⚠️⚠️ ET IL N'EXISTE QU'APRÈS L'IMPACT (`starImpactLandedNow`, 448) : sans
          cette garde il était labouré dans le champ dès le premier jour de la
          partie, ce qu'aucun banc n'avait pu voir pendant quatre zips. */
-      if (sprites.drawStarFurrow && starImpactLandedNow()) {
+      if (sprites.drawStarCrater && starFarmImpactsLandedNow()) {
         const stF = sharedRef.current.star;
-        const fp = starFurrowPos();
-        const fmar = C.STAR_FURROW_CRACK_R + 2;
-        if (fp.x >= x0 - fmar && fp.x <= x1 + fmar && fp.y >= y0 - fmar && fp.y <= y1 + fmar) {
-          const cold = !!(stF && (Q.starHas(stF, "furrow") || stF.doneAt));
-          const fcx = (fp.x + 0.5) * T, fcy = (fp.y + 0.5) * T;
-          /* ⚠️ LA CHALEUR EST LA MÊME GRANDEUR QU'AU CRATÈRE, et elle est DÉRIVÉE
-             du temps écoulé depuis la chute chez CE client (§3 : jamais deux
-             horloges). Un sillon qui fumerait pour toujours dirait que rien ne
-             s'est passé depuis. */
-          const fheat = cold ? 0 : starCraterHeatNow();
-          sprites.drawStarFurrow(ctx, fcx, fcy, T, cold ? 1 : 0, now, { heat: fheat });
-          if (!cold && sprites.drawStarFurrowAir && fheat > 0.01)
-            draws.push({ y: (fp.y + 1) * T, fn: () => sprites.drawStarFurrowAir(ctx, fcx, fcy, T, now, { heat: fheat }) });
+        for (const site of starFarmImpactSites()) {
+          const sc = C.STAR_FARM_CRATER_DRAW_SCALE * [0.92, 1.05, 1, 0.96, 1.08][site.impact];
+          const mar = C.STAR_CRATER_CRACK_R * sc + 2;
+          if (site.x < x0 - mar || site.x > x1 + mar || site.y < y0 - mar || site.y > y1 + mar) continue;
+          const cx2 = (site.x + 0.5) * T, cy2 = (site.y + 0.5) * T;
+          const heat = Math.max(0.12, starCraterHeatNow());
+          ctx.save(); ctx.translate(cx2, cy2); ctx.rotate((site.shape - 1) * 0.16);
+          sprites.drawStarCrater(ctx, 0, 0, T * sc, 0, now + site.impact * 311, { heat, star: false });
+          ctx.restore();
+          if (site.content === "star" && !Q.starHas(stF, site.id)) {
+            draws.push({ y: (site.y + 1) * T - 0.02, fn: ((s) => () => drawStarWisp({
+              x: s.x, y: s.y + 0.18, state: 1, pose: Math.floor(now / 230 + s.impact) & 3,
+              color: s.color, scale: 0.88,
+            }))(site) });
+          }
+          draws.push({ y: (site.y + 1) * T, fn: ((s, hh, ss) => () => {
+            ctx.save(); ctx.translate((s.x + 0.5) * T, (s.y + 0.5) * T); ctx.rotate((s.shape - 1) * 0.16);
+            sprites.drawStarCraterAir(ctx, 0, 0, T * ss, now + s.impact * 311, { heat: hh }); ctx.restore();
+          })(site, heat, sc) });
         }
       }
 
@@ -14370,6 +14379,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          relu, compté par le banc — il ne s'exécute simplement jamais. */
         const sb = starBubbleNow();
         if (sb) queueBubble(Math.round((cp ? cp.x : m.x) * T) + 8, Math.round((cp ? cp.y : m.y) * T) - (cp ? 22 : 34), sb, "star");   // zip 455 — la voix qui guide se reconnaît
+        const cm = starCalmUi();
+        if (cm) {
+          const bx = Math.round(m.x * T) + 8, by = Math.round(m.y * T) - 20;
+          if (cm.text) queueBubble(bx, by - 9, cm.text, "star");
+          bubbleQueue.push({ cx: bx, by, meter: cm });
+        }
       }
       // Zip 234 (Guillaume: "when we walk over a certain crop, we can see
       // what they are"): standing on a planted tile floats a small paper tag
@@ -14810,6 +14825,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         try {
           if (bq.emote) spritesRef.current.drawEmoteBubble(ctx, bq.cx, bq.by, bq.emote.a);
           else if (bq.work) spritesRef.current.drawWorkBubble(ctx, bq.cx, bq.by, bq.work.k, performance.now());   // zip 459
+          else if (bq.meter) spritesRef.current.drawCalmMeter(ctx, bq.cx, bq.by, bq.meter.k, bq.meter);
           else drawSpeechBubble(ctx, bq.cx, bq.by, bq.text, bq.major);
         } catch (e) { console.error("[FERME] bulle ignorée", e); }
       }
@@ -16543,11 +16559,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           /* ⚠️ DEUX VALEURS DÉRIVÉES, ZÉRO STOCKÉE (446) : la chaleur se déduit du
              temps écoulé depuis la chute, l'étoile est au fond tant que personne
              ne l'en a fait sortir. Même règle que les cierges de l'église (441). */
-          const copt = { heat: starCraterHeatNow(), star: !Q.starHas(st1, "crater") };
+          const queenWaiting = !Q.starHas(st1, "crater");
+          const copt = { heat: starCraterHeatNow(), star: false };
           ctx.save();
           ctx.translate(0, -ce * EP);
           sprites.drawStarCrater(ctx, ccx, ccy, T, cph, now, copt);
           ctx.restore();
+          if (queenWaiting)
+            pushE((cpos.y + 1) * T - 0.02, ce, () => drawStarWisp({
+              x: cpos.x, y: cpos.y + 0.12, state: 1, pose: Math.floor(now / 210) & 3,
+              color: "yellow", scale: 1.55, queen: true,
+            }));
           /* ⚠️⚠️ LA FUMÉE N'EST PAS UN DÉCAL DE SOL, DONC ELLE NE SE PEINT PAS
              ICI : elle MONTE, jusqu'à une case et demie au-dessus du trou. Peinte
              avec les tuiles, un joueur passant au NORD du cratère se dessinerait
@@ -19123,7 +19145,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        vivrait vieillirait (§2 du piège n°1). */
     function drawStarWisp(cp) {
       const sprites = spritesRef.current;
-      const fam = sprites && sprites.starWisp;
+      const fam = sprites && cp && cp.color && sprites.starWispColors
+        ? sprites.starWispColors[cp.color]
+        : sprites && sprites.starWisp;
       if (!cp || !fam || !fam[cp.state]) return;
       const im = fam[cp.state][cp.pose & 3];
       if (!im) return;
@@ -19136,7 +19160,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          ⚠️ ET IL NE TOUCHE QUE LE DESSIN : `cp.x`/`cp.y` restent la position que
          le reste du jeu lit (la bulle, le tri, la cachette). */
       const jn = cp.join, jk = T / 16;
-      const jdx = jn ? jn.dx * jk : 0, jdy = jn ? jn.dy * jk : 0, jsc = jn ? jn.scale : 1;
+      const jdx = jn ? jn.dx * jk : 0, jdy = jn ? jn.dy * jk : 0;
+      const jsc = (jn ? jn.scale : 1) * (cp.scale || 1);
       const cx = cp.x * T + T / 2 + jdx, cy = (cp.y + 1) * T - 16 + (jn ? 0 : bob) + jdy;
       ctx.save();
       if (cp.hiding) ctx.globalAlpha = 0.22;
@@ -19146,10 +19171,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (jn && !jn.front) ctx.globalAlpha *= 0.55;
       // Le halo, deux couronnes, AUTOUR : la source reste la partie la plus claire.
       const puls = 0.5 + 0.5 * Math.sin(nowB / 700);
-      ctx.fillStyle = `rgba(255,226,148,${(0.10 + 0.05 * puls).toFixed(3)})`;
-      ctx.beginPath(); ctx.arc(cx, cy, 15, 0, 7); ctx.fill();
-      ctx.fillStyle = `rgba(255,240,190,${(0.14 + 0.06 * puls).toFixed(3)})`;
-      ctx.beginPath(); ctx.arc(cx, cy, 8.5, 0, 7); ctx.fill();
+      const halo = cp.color === "blue" ? ["100,205,255", "190,238,255"]
+                 : cp.color === "rose" ? ["255,130,205", "255,205,232"]
+                 : ["255,226,148", "255,240,190"];
+      ctx.fillStyle = `rgba(${halo[0]},${(0.10 + 0.05 * puls).toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(cx, cy, 15 * (cp.scale || 1), 0, 7); ctx.fill();
+      ctx.fillStyle = `rgba(${halo[1]},${(0.14 + 0.06 * puls).toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(cx, cy, 8.5 * (cp.scale || 1), 0, 7); ctx.fill();
       if (jsc !== 1) {
         const w2 = Math.max(1, Math.round(im.width * jsc)), h2 = Math.max(1, Math.round(im.height * jsc));
         ctx.drawImage(im, Math.round(cx - w2 / 2), Math.round(cy - h2 / 2), w2, h2);
@@ -19303,7 +19331,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            elle traîne loin, minuscule, puis fond sur le point en un éclair. C'est
            la seule façon de la voir LONGTEMPS sans la rendre lente, ce que
            Guillaume demande explicitement (« une comète reste rapide »). */
-        const T_IN = Q.STAR_FALL_APPEAR_MS / 1000, T_HIT = Q.STAR_FALL_IMPACT_MS / 1000;
+        const viewZone = (tgt0 && tgt0.zone) || "farm";
+        /* 461 — les cinq petits fragments touchent la ferme avant que le corps
+           principal n'atteigne Valley Town. L'écart est court mais lisible. */
+        const T_IN = Q.STAR_FALL_APPEAR_MS / 1000;
+        const T_HIT = Q.STAR_FALL_IMPACT_MS / 1000 - (viewZone === "farm" ? 0.7 : 0);
         /* ⚠️ ZIP 455 — allouée une fois : la ville la relit soixante fois par
            seconde et elle ne change jamais. */
         const ONE_FRAG = [{ along: 0, side: 0, scale: 1, split: 0 }];
@@ -19596,11 +19628,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          jamais une altitude de case (le cratère aurait été une falaise que
          `canStandTown` refuse ; ici ce serait un fossé infranchissable au milieu
          d'un pré). */
-      if ((meRef.current && (meRef.current.zone || "farm")) === "farm" && sprites.starFurrowSink
-          && starImpactLandedNow()) {
-        const fp1 = starFurrowPos();
-        sinkPx = sprites.starFurrowSink(p.x - fp1.x, p.y - fp1.y, T);
-      }
       const basePx = Math.round(p.x * T), py = Math.round(p.y * T + sinkPx);
       const px = isPassenger ? basePx + (flip ? 9 : -9) : basePx;
       // Correctif retour Guillaume 2026-07 ("assis trop haut, effet
@@ -20193,6 +20220,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       g.clearRect(0, 0, dispW, dispH);
       g.drawImage(base, 0, 0, w.w, w.h, 0, 0, dispW, dispH);
       drawGpsOnMap(g, scale);
+      /* 461 — les cinq impacts sont des objectifs d'exploration publics : la
+         carte les montre tous dès la chute, sans révéler leur contenu. */
+      if (starFarmImpactsLandedNow()) {
+        const st = sharedRef.current.star;
+        for (const p of starFarmImpactSites()) {
+          const px = (p.x + 0.5) * scale, py = (p.y + 0.5) * scale;
+          const seen = Q.starHas(st, p.id);
+          const pulse = seen ? 4 : 5 + Math.sin(performance.now() / 280 + p.impact) * 1.3;
+          g.fillStyle = seen ? "rgba(92,82,76,0.78)" : "rgba(255,116,62,0.90)";
+          g.beginPath(); g.arc(px, py, pulse + 2, 0, 7); g.fill();
+          g.fillStyle = seen ? "#c9beb6" : "#fff0c4";
+          g.beginPath(); g.arc(px, py, 2.4, 0, 7); g.fill();
+          g.font = "bold 9px monospace"; g.textAlign = "center";
+          const label = L.star.farm.mapImpact(p.impact + 1);
+          g.fillStyle = "#19120e"; g.fillText(label, px + 1, py - 9 + 1);
+          g.fillStyle = seen ? "#c9beb6" : "#ffe4b4"; g.fillText(label, px, py - 9);
+        }
+      }
       // Joueurs (moi + distants), point + nom, actualisés en direct.
       const all = [meRef.current, ...playersRef.current.values()];
       for (const p of all) {
@@ -21556,18 +21601,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      l'autre poste — c'est le sens que `solo` a toujours eu dans `quete.js` et
      dans `StarMinigame`, et c'est la première fois qu'il est vrai. */
   function starAlone(kind) {
-    if (kind === "cool") {
+    if (kind === "cool" || kind === "farmTame") {
       /* Le sillon est à la FERME. Un joueur en ville ne peut pas tenir le second
          arrosoir — la bande large lui était pourtant offerte. */
       return !starOtherThere(p => (p.zone || "farm") === "farm");
     }
     if (kind === "crater") {
-      const c = starCraterPos(); if (!c) return true;
-      /* Dans l'anneau, ou en train d'y descendre : on est généreux sur la marge
-         (le barème court ne s'obtient de toute façon que si l'autre TIENT
-         vraiment la posture, ce que l'hôte revérifie). */
-      return !starOtherThere(p => (p.zone || "farm") === "town"
-        && Math.hypot(p.x - c.x, p.y - c.y) <= Q.STAR_CRATER_R + 6);
+      return !starOtherThere(p => (p.zone || "farm") === "town");
     }
     if (kind === "dive") return starMiniLead() == null;   // personne sur le ponton
     if (kind === "duet") return !starOtherThere(p => (p.zone || "farm") === "court");
@@ -21660,6 +21700,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     starCraterRef.current = { w: tw, pos };
     return pos;
   }
+  const starFarmImpactsRef = useRef({ w: null, pos: null });
+  function starFarmImpactSites() {
+    const w = worldRef.current; if (!w) return [];
+    if (starFarmImpactsRef.current.w === w && starFarmImpactsRef.current.pos) return starFarmImpactsRef.current.pos;
+    const used = [];
+    const free = (cx, cy) => {
+      const r = C.STAR_FARM_CRATER_FREE_R;
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+        if (dx * dx + dy * dy > r * r) continue;
+        const x = cx + dx, y = cy + dy;
+        if (x < 2 || y < 2 || x >= w.w - 2 || y >= w.h - 2) return false;
+        const i = y * w.w + x;
+        if (w.ground[i] === C.G_WATER || w.objects[i] !== C.O_NONE || (w.crops && w.crops.has(i))) return false;
+      }
+      return used.every(p => Math.hypot(p.x - cx, p.y - cy) >= 18);
+    };
+    const pos = Q.STAR_FARM_IMPACTS.map((site, i) => {
+      const a = C.STAR_FARM_IMPACT_ANCHORS[i];
+      const p = Q.starSpiralFree(a.x, a.y, free, 14) || { x: a.x, y: a.y };
+      const out = { ...site, x: p.x, y: p.y, shape: i % 3 };
+      used.push(out); return out;
+    });
+    starFarmImpactsRef.current = { w, pos };
+    return pos;
+  }
+  function starFarmImpact(id) { return starFarmImpactSites().find(p => p.id === id) || null; }
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ZIP 446 — LA CHALEUR DU CRATÈRE, SUR UNE HORLOGE LOCALE.
      ╚══════════════════════════════════════════════════════════════════════════
@@ -21735,6 +21801,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!sc) return true;
     return Q.starImpactLanded(sc.key, performance.now() - sc.t0);
   }
+  function starFarmImpactsLandedNow() {
+    const e = sharedRef.current.star;
+    if (!e || !Q.starFallen(e)) return false;
+    const pend = starScenePendRef.current;
+    if (pend && pend.key === "fall") return false;
+    const sc = starSceneRef.current;
+    if (!sc || sc.key !== "fall") return true;
+    return performance.now() - sc.t0 >= Q.STAR_FALL_IMPACT_MS - 700;
+  }
   function starCraterHeatNow() { return Q.starCraterHeat(sharedRef.current.star, starCraterElapsed()); }
   function starCraterCoolNow() { return Q.starCraterCool(sharedRef.current.star, starCraterElapsed()); }
 
@@ -21787,7 +21862,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      borne d'origine du 442. Une case qui change de sens sur une carte que les
      joueurs labourent depuis des mois est un piège, et un sillon qu'on traverse
      ne casse rien puisqu'on ne fait que s'y agenouiller. */
-  function starFurrowPos() { return { x: C.STAR_FURROW_X, y: C.STAR_FURROW_Y }; }
+  function starFurrowPos() {
+    const p = starFarmImpact("farmMaterial");
+    return p ? { x: p.x, y: p.y } : { x: C.STAR_FURROW_X, y: C.STAR_FURROW_Y };
+  }
 
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ZIP 445 — LA CHUTE EST VUE : LA FILE, LA MÉMOIRE LOCALE, ET LA CAMÉRA.
@@ -21809,7 +21887,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function starImpactSpot() {
     const m = meRef.current; if (!m) return null;
     const zone = m.zone || "farm";
-    if (zone === "farm") { const f = starFurrowPos(); return f ? { zone, x: f.x, y: f.y } : null; }
+    if (zone === "farm") {
+      const p = starFarmImpactSites()[0];
+      return p ? { zone, x: p.x, y: p.y } : null;
+    }
     if (zone === "town") { const c = starCraterPos(); return c ? { zone, x: c.x, y: c.y } : null; }
     return null;
   }
@@ -22239,7 +22320,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     const site = Q.STAR_SITE[id];
     if (!site) return null;
-    if (id === "furrow") { const f = starFurrowPos(); return { zone: "farm", x: f.x, y: f.y }; }
+    if (site.spot === "starFarmImpact") {
+      const p = starFarmImpact(id);
+      return p ? { zone: "farm", x: p.x, y: p.y } : null;
+    }
     if (id === "crater") { const c = starCraterPos(); return c ? { zone: "town", x: c.x, y: c.y } : null; }
     if (id === "lakeShard") return { zone: "town", x: C.STAR_PIER_X, y: C.STAR_PIER_Y };
     /* ⚠️ LA VERRERIE ET L'ARBRE DE LA PIE SE CHERCHENT PAR `kind`, JAMAIS PAR
@@ -22446,8 +22530,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        insecte qui tourne dans le vide. La traîne, elle, continue de tourner
        derrière — on ne la coupe pas, on la couvre (voir `starJoinAnim`). */
     const join = Q.starJoinAnim(starJoinT0Ref.current ? nowMs - starJoinT0Ref.current : -1);
-    if (join) return { x: cx, y: cy, state, pose: Math.floor(nowMs / 180) & 3, hiding: false, join };
-    return { x: p.x, y: p.y, state, pose: Math.floor(nowMs / 260) & 3, hiding };
+    if (join) return { x: cx, y: cy, state, pose: Math.floor(nowMs / 180) & 3, hiding: false, join, color: "yellow", scale: 1.35, queen: true };
+    return { x: p.x, y: p.y, state, pose: Math.floor(nowMs / 260) & 3, hiding, color: "yellow", scale: 1.35, queen: true };
   }
   /* Ce qu'elle dit. ⚠️ UNE BULLE, JAMAIS UN PANNEAU : elle parle au-dessus
      d'elle comme les résidents, et une phrase qu'on n'a pas à fermer est une
@@ -22633,11 +22717,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        qui ment dans le sens le plus détestable, celui qui promet. La condition de
        tenue est `starCalmSelf`, la même que celle qui envoie : il n'y en a
        qu'une. */
-    if (!starCalmSelf()) starCalmT0Ref.current = 0;
-    if (zone === "town" && !Q.starHas(e, "crater")) {
-      const c = starCraterPos();
-      if (c) {
-        const near = Math.hypot(m.x - c.x, m.y - c.y) <= Q.STAR_CRATER_R + 1;
+    const tameTarget = starTameTarget(m);
+    if (!starCalmSelf(tameTarget)) starCalmT0Ref.current = 0;
+    if (tameTarget) {
+      const c = tameTarget;
+      {
+        const near = Math.hypot(m.x - c.x, m.y - c.y) <= c.r + 1;
         /* ⚠️⚠️⚠️ ZIP 456 — LES DEUX `starSay` DE CE BLOC ONT ÉTÉ SUPPRIMÉS, ET
            C'EST LE DÉFAUT QUE GUILLAUME A VU SANS POUVOIR LE NOMMER. `starSay`
            écrit dans la bulle de l'ÉTOILE ; cette bulle n'est dessinée qu'à
@@ -22651,8 +22736,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            voit pas. Les deux phrases vivent maintenant l'une dans `starCalmUi`
            (au-dessus du joueur), l'autre dans l'explication du E. Ce bloc ne
            garde que ce qu'il décide vraiment : la cadence d'envoi. */
-        if (near && !starCraterCoolNow()) { starHoldRef.current = 0; }
-        else if (near && starCalmSelf()) {
+        if (near && c.hot) { starHoldRef.current = 0; }
+        else if (near && starCalmSelf(c)) {
           /* ⚠️⚠️ ZIP 456 — LA DATE DE DÉBUT EST POSÉE ICI, AU MÊME ENDROIT QUE
              L'ENVOI, et pas dans la jauge : deux endroits qui décident quand une
              tenue commence, c'est une barre qui monte pendant que l'hôte ne
@@ -22660,7 +22745,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (!starCalmT0Ref.current) starCalmT0Ref.current = nowMs;
           if (nowMs >= (starHoldRef.current || 0)) {
             starHoldRef.current = nowMs + 500;
-            sendReq({ kind: "starCalm" });
+            sendReq({ kind: "starCalm", site: c.id });
           }
         } else if (near) {
           starHoldRef.current = 0;
@@ -22705,16 +22790,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      jamais l'inverse (piège n°1, payé au 430 et au 431). */
   function starCalmUi() {
     const m = meRef.current, e = sharedRef.current.star;
-    if (!m || !e || !Q.starFallen(e) || Q.starHas(e, "crater") || Q.starDone(e)) return null;
-    if ((m.zone || "farm") !== "town") return null;
-    const c = starCraterPos(); if (!c) return null;
-    const step = Q.starCalmStep(m.x, m.y, m.dir | 0, !!m.moving, c.x, c.y);
+    if (!m || !e || !Q.starFallen(e) || Q.starDone(e)) return null;
+    const c = starTameTarget(m); if (!c) return null;
+    const step = Q.starCalmStep(m.x, m.y, m.dir | 0, !!m.moving, c.x, c.y, 1, c.r);
     if (step === "away") return null;
     /* Le trou qui fume passe devant tout : « tourne-toi » pendant que le cratère
        refuse serait « le jeu propose et refuse » (426), au seul endroit du
        chantier où le joueur n'a aucun moyen de deviner qu'il faut attendre. */
-    if (!starCraterCoolNow()) return { k: 0, warn: true, text: L.star.s2.tooHot };
-    const need = Q.starCalmNeed(starAlone("crater"));
+    if (c.hot) return { k: 0, warn: true, text: L.star.s2.tooHot };
+    const need = Q.starCalmNeed(starAlone(c.zone === "farm" ? "farmTame" : "crater"));
     const t0 = starCalmT0Ref.current;
     const held = step === "holding" && t0 ? Math.min(need, performance.now() - t0) : 0;
     return {
@@ -22787,23 +22871,46 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (k < 0.06) return null;
     return { k, warn: false, text: L.star.s2.slipHold };
   }
-  function starCalmSelf() {
-    const m = meRef.current, c = starCraterPos();
-    if (!m || !c || (m.zone || "farm") !== "town" || m.moving) return false;
+  function starTameTarget(who) {
+    const m = who || meRef.current, e = sharedRef.current.star;
+    if (!m || !e) return null;
+    const zone = m.zone || "farm";
+    if (zone === "farm") {
+      let best = null, bd = Infinity;
+      for (const p of starFarmImpactSites()) {
+        if (p.content !== "star" || Q.starHas(e, p.id)) continue;
+        const d = Math.hypot(m.x - p.x, m.y - p.y);
+        if (d <= 4 && d < bd) { best = { ...p, zone: "farm", r: 2.45, hot: false }; bd = d; }
+      }
+      return best;
+    }
+    if (zone === "town" && !Q.starHas(e, "crater")) {
+      const c = starCraterPos();
+      if (c && Math.hypot(m.x - c.x, m.y - c.y) <= Q.STAR_CRATER_R + 1)
+        return { id: "crater", zone: "town", x: c.x, y: c.y, r: Q.STAR_CRATER_R, hot: !starCraterCoolNow() };
+    }
+    return null;
+  }
+  function starCalmSelf(target) {
+    const m = meRef.current, c = target || starTameTarget(meRef.current);
+    if (!m || !c || (m.zone || "farm") !== c.zone || m.moving) return false;
     /* ⚠️ ZIP 446 — TANT QUE ÇA FUME, ON NE DEMANDE MÊME PAS. Voir la note de
        `starCraterElapsed` : notre ancre est toujours plus tardive que celle de
        l'hôte, donc quand nous demandons, il a déjà dit oui. */
-    if (!starCraterCoolNow()) return false;
-    if (Math.hypot(m.x - c.x, m.y - c.y) > Q.STAR_CRATER_R) return false;
+    if (c.hot) return false;
+    if (Math.hypot(m.x - c.x, m.y - c.y) > c.r) return false;
     return Q.starFacingAway(m.x, m.y, m.dir | 0, c.x, c.y);
   }
-  function starCalmOk(id) {
-    const c = starCraterPos(); if (!c) return false;
+  function starCalmOk(id, siteId) {
     const me0 = meRef.current;
-    if (me0 && me0.id === id) return starCalmSelf();
+    if (me0 && me0.id === id) {
+      const c0 = starTameTarget(me0);
+      return !!(c0 && c0.id === siteId && starCalmSelf(c0));
+    }
     const p = playersRef.current && playersRef.current.get(id);
-    if (!p || (p.zone || "farm") !== "town" || p.moving) return false;
-    if (Math.hypot(p.x - c.x, p.y - c.y) > Q.STAR_CRATER_R) return false;
+    const c = starTameTarget(p);
+    if (!p || !c || c.id !== siteId || p.moving) return false;
+    if (Math.hypot(p.x - c.x, p.y - c.y) > c.r) return false;
     return Q.starFacingAway(p.x, p.y, p.dir | 0, c.x, c.y);
   }
 
@@ -22986,13 +23093,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const zone = m.zone || "farm";
 
     if (zone === "farm") {
-      /* Le sillon. ⚠️ IL RESTE VISIBLE ET LISIBLE APRÈS COUP : un décor qui
-         disparaît une fois utilisé se lit comme un bogue, et celui-ci est la
-         seule trace que la ferme garde de toute l'histoire. */
-      const fp = starFurrowPos();
-      if (Math.abs(m.x - fp.x) <= 1.6 && Math.abs(m.y - fp.y) <= 1.6)
-        return { p: "furrow", act: () => starTouchFurrow() };
-      return null;
+      let near = null, best = Infinity;
+      for (const p of starFarmImpactSites()) {
+        const d = Math.hypot(m.x - p.x, m.y - p.y);
+        if (d <= 3.1 && d < best) { near = p; best = d; }
+      }
+      if (!near) return null;
+      if (Q.starHas(e, near.id))
+        return { p: "impactSeen", act: () => pushToast(L.star.farm.seen) };
+      if (near.content === "empty") return { p: "impact", act: () => {
+        sendReq({ kind: "starFound", site: near.id });
+        starTell([L.star.farm.empty1, L.star.farm.empty2], 2200);
+      } };
+      if (near.content === "material") return { p: "material", act: () => starTouchFurrow() };
+      return { p: "tame", act: () => starTell([
+        L.star.farm.starPeek,
+        starAlone("farmTame") ? L.star.farm.tameSolo : L.star.farm.tameDuo,
+      ], 2400) };
     }
 
     if (zone === "town") {
@@ -23121,18 +23238,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        posé à cet instant, donc on aurait annoncé un morceau en pariant) mais
        quand le navire grandit vraiment — voir `starWatch`. */
     if (k === "cool") {
-      sendReq({ kind: "starFound", site: "furrow" });
-      starSay("shadow", L.star.s1.shadow, 7000);
-      /* ⚠️⚠️ ZIP 458 — ET ON DIT ENFIN QUE CE N'EST QU'UN ÉCLAT (demande de
-         Guillaume). C'est le moment exact où le joueur a l'objet dans les mains
-         et se demande « et maintenant ? » : `fragment` répond « le vrai cratère
-         est là-bas », `east` dit dans quelle direction. Les deux étaient
-         séparées d'un geste — on lisait « il penche vers l'est » sans avoir
-         jamais appris qu'il y avait autre chose à trouver ailleurs.
-         ⚠️ ÉCHELONNÉES, PAS EMPILÉES : `starTell` les sépare de trois secondes,
-         sinon elles arrivent en bloc par-dessus l'ombre du champ, qui est la
-         première image magique de toute la quête. */
-      setTimeout(() => starTell([L.star.s1.fragment, L.star.s1.east], 3200), 3600);
+      sendReq({ kind: "starFound", site: "farmMaterial" });
+      pushToast(L.star.farm.materialKeep);
     }
     else if (k === "dive") { sendReq({ kind: "starFound", site: "lakeShard" }); starSay("wings", L.star.s3.wings, 7000); }
     else if (k === "rack") { sendReq({ kind: "starFound", site: "beadShard" }); }
@@ -23194,12 +23301,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      clients qui décideraient chacun de leur côté écriraient deux vérités. */
   function starTouchFurrow() {
     const e = sharedRef.current.star;
-    if (Q.starHas(e, "furrow")) { pushToast(L.star.s1.east); return; }
+    if (Q.starHas(e, "farmMaterial")) { pushToast(L.star.farm.materialKeep); return; }
     /* ⚠️ ZIP 453 — CE QU'ON VOIT AVANT D'AGIR. `s1.tooHot` était écrit,
        traduit, et jamais affiché : le jeu ouvrait le mini-jeu de
        refroidissement sans avoir dit une seule fois POURQUOI il faut refroidir.
        Une consigne qui arrive sans sa raison se lit comme une épreuve. */
-    pushToast(L.star.s1.tooHot);
+    starTell([L.star.farm.material1, L.star.farm.material2, L.star.farm.material3], 2300);
     setStarMini({ kind: "cool", round: 0 });
   }
   /* ⚠️ L'ANTI-RAFALE EST LOCAL ET SILENCIEUX (leçon du pain aux pigeons, 439) :
@@ -24124,7 +24231,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            disaient plus rien. Avec les cinq morceaux, « quatre pleines, une
            vide » dit exactement ce que la cale montre : *une jointure, jamais
            deux listes* (449). Le cas particulier disparaît avec sa cause. */
-        const pips = Q.starShipParts(e);
+        const huntingImpacts = Q.starChapterKey(e) === "field";
+        const pips = huntingImpacts
+          ? Q.STAR_FARM_IMPACTS.map(site => Q.starHas(e, site.id))
+          : Q.starShipParts(e);
         /* ⚠️ LE CRATÈRE QUI FUME EST UN ÉTAT DE TEMPS, ET C'EST LA SEULE CHOSE
            QUE LE BANDEAU NE PEUT PAS DÉDUIRE SEUL : `starCraterCoolNow` lit
            l'horloge de CE client (§3 — jamais deux horloges). Sans lui, le
@@ -24133,7 +24243,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const goal = Q.starGoalKey(e, { craterHot: !starCraterCoolNow() });
         return (
           <div className="ferme-star-hud" data-tick={starTick}>
-            <span className="ico">✦</span>
+            <span className="ico">{huntingImpacts ? "☄" : "✦"}</span>
             <span className="pips">{pips.map((on, i) => <span key={"sp" + i} className={"pip" + (on ? " on" : "")} />)}</span>
             <span className="goal">{(goal && L.star.hud.goal[goal]) || L.star.title}</span>
             {/* ⚠️ ZIP 454 — LE PLAN A UN BOUTON, ET PAS SEULEMENT UNE TOUCHE. Un
