@@ -19665,7 +19665,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         ctx.fillStyle = "#241c14";  // botte
         ctx.fillRect(10, 19, 4, 3);
         ctx.restore();
-      } else if (p.slip) {
+      } else if (p.slip && (p.slip !== "climb" || p.dir === 1) && (p.slip !== "slide" || p.dir !== 3)) {
         /* ╔══════════════════════════════════════════════════════════════════════
            ║ ZIP 459 — LES TROIS POSES DU CRATÈRE.
            ╚══════════════════════════════════════════════════════════════════════
@@ -19676,7 +19676,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            les autres), jamais un booléen inventé au rendu.
            ⚠️ ET LE MIROIR EST FAIT PAR L'APPELANT, comme pour toutes les autres
            poses : les fonctions de `fermeArt` ne connaissent ni `translate` ni
-           `scale` (le faux canevas du banc les ignore, §10 de CLAUDE.md). */
+           `scale` (le faux canevas du banc les ignore, §10 de CLAUDE.md).
+           ⚠️ ZIP 460 — DEUX POSES SONT ÉCARTÉES SELON `p.dir`, SUR JUGEMENT DE
+           GUILLAUME (« l'anim de climb up est un peu nulle »), PAS SUR LA
+           PHYSIQUE : `p.dir` suit déjà le mouvement réel pendant la glissade et
+           la grimpe (ligne ~16034), jamais la dernière touche, donc la condition
+           lit la même direction que celle dessinée. La grimpe ne se dessine que
+           de dos (`p.dir === 1`, « up ») ; la glissade se dessine partout SAUF de
+           face à droite (`p.dir === 3`). Dans les deux cas écartés, on retombe
+           au cycle de marche normal, plus bas dans ce bloc — le moteur continue
+           de faire dévaler ou grimper, seul le DESSIN change. */
         /* ⚠️ LE PENCHÉ SE MIROITE AVEC LE PERSONNAGE. `slipX` est une direction du
            MONDE ; sous le `scale(-1,1)` du profil ouest, la passer telle quelle
            ferait pencher le fermier du mauvais côté — un défaut qui ne se voit que

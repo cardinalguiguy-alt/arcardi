@@ -11,37 +11,31 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**Livré au 459 : ON PERD PIED, ON DÉVALE, ON S'AGRIPPE — ET LA MÉCANIQUE DU CHAPITRE 2 A
-SURVÉCU.** Guillaume a demandé une vraie animation de glissade et de grimpe dans le cratère
-(« lean back and slide », trajectoire difficile à contrôler, puis **3 pleines secondes** de
-direction tenue pour que la grimpe s'active). ⚠️⚠️⚠️ **LA QUESTION QUI A DÉCIDÉ DE TOUT :
-une gravité permanente aurait SUPPRIMÉ le chapitre 2** — la cuvette est un paraboloïde,
-elle n'a pas de fond plat, donc elle entonne jusqu'au point unique du centre, c'est-à-dire à
-distance nulle de l'étoile, là où « dos tourné » est faux par construction. La parade est
-celle des jeux qui ont déjà ce geste : **on ne perd pied que si l'on SOLLICITE la pente** ;
-debout, on plante ses talons, et cette exception se DESSINE (`drawStarBrace`) au lieu de se
-cacher. Comme on ne peut pas entrer dans le trou sans marcher, la glissade se joue quand
-même à **100 % des entrées**.
-⚠️⚠️ **Cinq états purs** (`starSlipStep`), **trois poses découpées dans la feuille du
-personnage** (donc gratuites pour la salopette, l'apiculteur et la garde-robe), et un banc
-qui **JOUE** le moteur sur le vrai creux : 317 départs, **0 bloqué**, pire cas 4,7 s. Le
-premier jet en bloquait **219** — un compteur d'effort gagé sur la pente au lieu de la main.
-⚠️ **Livré aussi** : la **poussière ramenée aux pieds** (elle enveloppait la tête : l'ancre
-d'un sprite tombe à la ceinture, quatorze pixels au-dessus des semelles), et **Tristan qui
-se met visiblement au travail** — il accepte en nommant la pièce, puis une bulle où la scie
-va et vient et où le trait de scie s'enfonce, jusqu'à la livraison. Détail complet au
-**§12.0 de `components/ferme/QUETE.md`**.
+**Livré au 460 : LES POSES DU CRATÈRE, RESTREINTES À CE QUI SE LIT BIEN.** Jugement de
+Guillaume en jouant : la grimpe (les quatre images bras/jambes contralatéraux) est bonne
+vue de dos, mauvaise dans les trois autres sens. ⚠️ **LA MÉCANIQUE NE CHANGE PAS, SEUL LE
+DESSIN EST RESTREINT** — `starSlipStep` continue de faire sortir du trou à la même vitesse
+dans les quatre directions ; c'est `drawCharacter` (`FermeGame.js`) qui décide, à `p.dir`
+constant (dir 0=bas, 1=haut/dos, 2=gauche, 3=droite — il suit déjà le MOUVEMENT réel pendant
+la glissade et la grimpe, jamais la dernière touche, donc aucun champ de plus à diffuser), si
+la pose spéciale s'affiche ou si le cycle de marche normal reprend. **La grimpe ne se dessine
+plus que de dos** (`p.dir === 1`) ; **la glissade se dessine partout SAUF vers la droite**
+(`p.dir === 3`, le seul sens où même le lean-back a été jugé raté). Vérifié en jeu (scaffold
+temporaire `app/devtest460`, §10) : sortie par le nord (grimpe visible), sortie forcée par le
+sud (grimpe supprimée, marche normale, sortie quand même réussie), glissade forcée vers l'est
+depuis la paroi ouest (glissade supprimée, aucune erreur console) — trois trajets, zéro
+plantage.
 
-⚠️⚠️ **LA PROCHAINE ACTION : LA SÉANCE À DEUX CLIENTS, SECONDE MOITIÉ — ET ELLE A MAINTENANT
-UNE RAISON DE PLUS.** Rien de ce qui se joue **FACE À FACE** n'a jamais été joué : l'étoile
-timide dos à dos, le croisement d'ombres à deux (barème court, 30 cases / 20 s), la flaque
-que l'un promène pour l'autre sur le ponton, le duo orgue/beffroi. ⚠️ **Et le 459 y ajoute
-la GLISSADE VUE PAR L'AUTRE** : `starSlipSeen` déduit la pose du voisin de sa seule vitesse
-(zéro champ réseau de plus) et le banc la confronte au moteur — **209 images sur 209** —
-mais **jamais à deux écrans**. ⚠️ **La même séance doit faire la ferme PEUPLÉE** (dette du
-§13, la plus ancienne du dépôt) : peupler EN PREMIER, et ne plus recharger (le faux Supabase
-ne persiste pas). ⚠️ La **bulle de Tristan** n'a été regardée qu'au banc et sur une ferme
-vide.
+⚠️⚠️ **LA PROCHAINE ACTION N'A PAS CHANGÉ, LE 460 NE L'A PAS TOUCHÉE : LA SÉANCE À DEUX
+CLIENTS, SECONDE MOITIÉ.** Rien de ce qui se joue **FACE À FACE** n'a jamais été joué :
+l'étoile timide dos à dos, le croisement d'ombres à deux (barème court, 30 cases / 20 s), la
+flaque que l'un promène pour l'autre sur le ponton, le duo orgue/beffroi. ⚠️ **Et le 459 y
+ajoute la GLISSADE VUE PAR L'AUTRE** : `starSlipSeen` déduit la pose du voisin de sa seule
+vitesse (zéro champ réseau de plus) et le banc la confronte au moteur — **209 images sur
+209** — mais **jamais à deux écrans**. ⚠️ **La même séance doit faire la ferme PEUPLÉE**
+(dette du §13, la plus ancienne du dépôt) : peupler EN PREMIER, et ne plus recharger (le faux
+Supabase ne persiste pas). ⚠️ La **bulle de Tristan** n'a été regardée qu'au banc et sur une
+ferme vide.
 
 ⚠️ **CE QUI RESTE OUVERT AILLEURS N'EST PAS OUBLIÉ, C'EST CLASSÉ APRÈS** : les cinq mini-jeux
 joués jusqu'à la VICTOIRE à cadence réelle ; les scènes *turn* et *end*, jamais vues ; le
@@ -49,11 +43,11 @@ joués jusqu'à la VICTOIRE à cadence réelle ; les scènes *turn* et *end*, ja
 l'écran ; le **CHANTIER B, LES MAISONS**, commandé et non commencé (préalables au **§27.5 de
 `components/ferme/README.md`**) ; le SON (`public/sounds/church-organ.mp3` — un fichier, pas
 une ligne de code) ; **la relecture de `components/ferme/README.md` contre le code**, l'ordre
-du 453, reporté une SIXIÈME fois.
+du 453, reporté une SEPTIÈME fois.
 
 ---
 
-État à jour du **zip 459**. Chantier actif : **rendre Valley Town habitable au regard ET crédible
+État à jour du **zip 460**. Chantier actif : **rendre Valley Town habitable au regard ET crédible
 au jeu**, et **lui donner une histoire**. Tout ce qui concerne la ville, ses habitants, ses
 bâtiments et **ses pièges** est dans **`components/ferme/README.md`**, qui fait autorité ; les
 règles de DESSIN sont dans **`components/ferme/DESSIN.md`** ; les bancs dans **`tools/README.md`**.
@@ -885,6 +879,9 @@ erreur** en choisissant mal.
    du 455 partent, plus deux du 456 — le seuil de banc et la somme des bulles, qui vivent déjà dans
    `render-etoile` §11 et dans `starTalkerPick` — pour laisser entrer les quatre du 459. Six lignes
    retirées, quatre ajoutées : le tableau RÉTRÉCIT, ce qui est la seule preuve que la forme tient.)**.
+
+   **460 (aucun ICI — le delivery est un réglage de pose visible en jeu, pas une leçon de
+   banc ; la relecture de `ferme/README.md` reste reportée, une SEPTIÈME fois)**.
 
    ⚠️⚠️ **LE 451 A EXÉCUTÉ L'ORDRE DU 449 : §13 RELU LIGNE À LIGNE**, huit zips après le 442.
    Quatre entrées parlaient d'un code SUPPRIMÉ au 444 — elles décrivaient l'enquête cadastrale
