@@ -492,7 +492,7 @@ export const STAR_CRATER_EMBER = 0.20;     // ce qui reste quand c'est « froid 
    horloge hôte à une horloge invité (§3 de CLAUDE.md) ; la fonction, elle, ne
    voit qu'un nombre de millisecondes et rend la même chose aux deux. */
 export function starCraterHeat(e, elapsedMs) {
-  if (!e || !starFallen(e)) return 0;
+  if (!e || !starTownFallen(e)) return 0;
   if (starHas(e, "crater")) return 0;                      // elle est sortie : le trou s'éteint
   const k = Math.max(0, Math.min(1, (+elapsedMs || 0) / STAR_CRATER_COOL_MS));
   // Une décroissance en cloche : ça fume fort, puis ça retombe vite, puis ça traîne.
@@ -502,7 +502,7 @@ export function starCraterHeat(e, elapsedMs) {
    CÔTÉS : le client s'en sert pour ne pas demander, l'hôte pour ne pas accorder.
    Deux seuils auraient donné « le jeu propose et refuse » (défaut du 426). */
 export function starCraterCool(e, elapsedMs) {
-  if (!e || !starFallen(e)) return false;
+  if (!e || !starTownFallen(e)) return false;
   return (+elapsedMs || 0) >= STAR_CRATER_COOL_MS;
 }
 
@@ -1560,6 +1560,65 @@ export function starFragments(k) {
   return out;
 }
 
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 462 — CINQ CHUTES, TROIS PLANS ET DEUX IMPACTS ENTENDUS.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   La chronologie est une donnée pure : le rendu, la caméra, la disparition du
+   décor naturel et les bancs lisent les MÊMES instants. Les trois premiers
+   fragments sont vus sur leur site ; après le premier, la caméra rend le fermier
+   pendant dix secondes, puis enchaîne les sites 2 et 3 sans retour intermédiaire.
+   Les deux derniers ne prennent pas la caméra : deux secousses espacées rappellent
+   qu'il reste bien cinq lieux à fouiller. */
+export const STAR_FARM_IMPACT_MS = [3000, 19500, 23800, 30700, 34700];
+export const STAR_FARM_SCENE_MS = 37800;
+export const STAR_FARM_ANIMATED_N = 3;
+export const STAR_FARM_FLIGHT_MS = 1850;
+export const STAR_FARM_CAMERA = [
+  { from: 0, to: 1100, a: "player", b: 0 },
+  { from: 1100, to: 5000, a: 0, b: 0 },
+  { from: 5000, to: 6500, a: 0, b: "player" },
+  { from: 16500, to: 17600, a: "player", b: 1 },
+  { from: 17600, to: 20800, a: 1, b: 1 },
+  { from: 20800, to: 21900, a: 1, b: 2 },
+  { from: 21900, to: 25200, a: 2, b: 2 },
+  { from: 25200, to: 26700, a: 2, b: "player" },
+];
+export function starFarmCameraPhase(elapsedMs) {
+  const t = Math.max(0, +elapsedMs || 0);
+  for (const s of STAR_FARM_CAMERA) if (t >= s.from && t < s.to) {
+    const u = (t - s.from) / Math.max(1, s.to - s.from);
+    return { ...s, k: u * u * (3 - 2 * u) };
+  }
+  return null;
+}
+export function starFarmFlight(elapsedMs) {
+  const t = Math.max(0, +elapsedMs || 0);
+  for (let i = 0; i < STAR_FARM_ANIMATED_N; i++) {
+    const hit = STAR_FARM_IMPACT_MS[i], from = hit - STAR_FARM_FLIGHT_MS;
+    if (t >= from && t < hit) return { impact: i, k: (t - from) / STAR_FARM_FLIGHT_MS };
+  }
+  return null;
+}
+export function starFarmImpactLanded(index, sceneKey, elapsedMs) {
+  if ((index | 0) < 0 || (index | 0) >= STAR_FARM_IMPACT_MS.length) return false;
+  if (sceneKey !== "fall") return true;
+  return (+elapsedMs || 0) >= STAR_FARM_IMPACT_MS[index | 0];
+}
+export function starFarmShake(elapsedMs) {
+  const t = Math.max(0, +elapsedMs || 0);
+  let out = 0;
+  for (const hit of STAR_FARM_IMPACT_MS) {
+    const d = t - hit;
+    if (d >= 170 && d < 1350) out = Math.max(out, 1 - (d - 170) / 1180);
+  }
+  return out;
+}
+
+/* Le gros météore est un second événement, déclenché seulement après deux
+   minutes de présence active à Valley Town. `fall` reste la pluie de fragments
+   de la ferme ; `townFall` ouvre le cratère et les chapitres historiques. */
+export const STAR_TOWN_ACTIVE_MS = 2 * 60 * 1000;
+
 export const STAR_FALL_TAIL_MS = 5800;  // ce qui suit le contact : gerbe, onde, colonne, quatre lignes
 export const STAR_TURN_MS = 7000;      // durée du retournement (fin du chapitre 4)
 export const STAR_END_MS = 14000;      // durée de la résolution
@@ -1657,9 +1716,15 @@ export function starCamTarget(zone, impact, halfDiagTiles) {
    parce qu'il lit le MÊME `STAR_FALL_IMPACT_MS` (une jointure, jamais deux
    listes). Hors cinématique il rend `false` : le monde ne sursaute pas tout seul. */
 export function starBang(sceneKey, elapsedMs) {
-  if (sceneKey !== "fall") return 0;
-  const t = (+elapsedMs || 0) - STAR_FALL_IMPACT_MS;
-  return (t >= 0 && t < C.STAR_BANG_MS) ? 1 - t / C.STAR_BANG_MS : 0;
+  const elapsed = +elapsedMs || 0;
+  const hits = sceneKey === "fall" ? STAR_FARM_IMPACT_MS
+    : sceneKey === "townFall" ? [STAR_FALL_IMPACT_MS] : [];
+  let out = 0;
+  for (const hit of hits) {
+    const t = elapsed - hit;
+    if (t >= 0 && t < C.STAR_BANG_MS) out = Math.max(out, 1 - t / C.STAR_BANG_MS);
+  }
+  return out;
 }
 
 /* ╔═════════════════════════════════════════════════════════════════════════════
@@ -1703,7 +1768,7 @@ export const STAR_CAM_HOLD_MS = STAR_FALL_IMPACT_MS + STAR_CAM_AFTER_MS;       /
    rend `true`. Écrire l'inverse aurait fait disparaître le cratère les
    999 fois sur 1000 où il n'y a pas de cinématique. */
 export function starImpactLanded(sceneKey, elapsedMs) {
-  if (sceneKey !== "fall") return true;
+  if (sceneKey !== "townFall") return true;
   return (+elapsedMs || 0) >= STAR_FALL_IMPACT_MS;
 }
 
@@ -1993,7 +2058,8 @@ export function newStar() {
        indices, l'affiche). Un booléen « annoncée » n'aurait pas suffi — c'est de
        la DATE que se déduisent la nuit qui suit et la phase des tics. */
     warn: { at: 0, by: "" },
-    fall: 0,        // horodatage HÔTE de la chute (0 = elle n'est pas encore tombée)
+    fall: 0,        // horodatage HÔTE des cinq fragments de ferme
+    townFall: 0,    // horodatage HÔTE du gros météore de Valley Town
     calm: {},       // id de joueur -> horodatage HÔTE du dernier « dos tourné »
     lean: {},       // id de joueur -> { x, y, at } — la dernière lecture d'ombres
     marks: [],      // les lieux révélés par les croisements
@@ -2044,6 +2110,12 @@ export function migrateStar(saved) {
     }
   }
   e.fall = +saved.fall || 0;
+  e.townFall = +saved.townFall || 0;
+  /* 462 — compatibilité : avant la séparation des deux événements, `fall`
+     signifiait aussi que le cratère de ville existait. Une sauvegarde déjà au
+     chapitre 2 ou portant sa trouvaille ne doit pas perdre son cratère. */
+  if (!e.townFall && ((saved.ch | 0) > 0 || (saved.found && saved.found.crater)))
+    e.townFall = e.fall;
   /* ── ZIP 455 : l'annonce. ⚠️ UNE SAUVEGARDE D'AVANT CE ZIP N'A PAS LE CHAMP ET
      PEUT AVOIR `fall` — c'est une partie commencée sous l'ancienne règle, et elle
      doit continuer de tourner. On considère donc qu'une chute déjà tombée VAUT
@@ -2101,6 +2173,7 @@ export function migrateStar(saved) {
 }
 
 export function starFallen(e) { return !!(e && e.fall); }
+export function starTownFallen(e) { return !!(e && e.townFall); }
 export function starStarted(e) { return !!(e && (e.ch > 0 || Object.keys(e.found || {}).length)); }
 export function starDone(e) { return !!(e && e.doneAt); }
 export function starHas(e, id) { return !!(e && e.found && e.found[id]); }
@@ -2176,6 +2249,7 @@ export function starGoalKey(e, ctx) {
   }
   if (STAR_FARM_STAR_IDS.includes(first) || (STAR_SITE[first] && STAR_SITE[first].spot === "starFarmImpact"))
     return "farmImpacts";
+  if (first === "crater" && !starTownFallen(e)) return "townWait";
   /* ⚠️ L'ORDRE DE LA TABLE FAIT FOI, comme pour `starTargetSite` : le premier qui
      manque est celui qu'on cherche. Aucune liste parallèle. */
   if (first === "crater" && ctx && ctx.craterHot) return "craterHot";
@@ -2200,9 +2274,16 @@ export const STAR_GOAL_KEYS = (() => {
      `STAR_SITES` parce qu'elles ne sont pas des LIEUX : l'une désigne une attente,
      l'autre un atelier de ferme. Elles sont ici pour que le banc vérifie qu'elles
      ont un texte — c'est tout ce que cette liste sert à faire. */
-  out.push("engineerWait", "timber");
+  out.push("townWait", "engineerWait", "timber");
   return out;
 })();
+
+export function resolveStarTownFall(e, now) {
+  if (!e || !starFallen(e) || e.ch < 1) return { ok: false, locked: true };
+  if (starTownFallen(e)) return { ok: false, already: true };
+  e.townFall = +now || 0;
+  return { ok: true, scene: "townFall" };
+}
 
 /* ⚠️⚠️ LA BASCULE EST UNE BOUCLE, PAS UN `if` — reprise telle quelle du 442, où
    elle avait été écrite pour le désordre et où elle a servi. Un joueur peut
@@ -2403,8 +2484,8 @@ export function resolveStarCalm(e, who, now, soloAllowed, siteId) {
      À `ok: true`, l'hôte aurait rediffusé la quête entière deux fois par seconde
      pendant qu'un joueur patiente devant un trou qui fume — du trafic pur, et le
      §3 est formel sur ce qui compte : le NOMBRE de `send()`. */
-  if (target === "crater" && !starCraterCool(e, now - (e.fall || 0)))
-    return { ok: false, tooHot: true, cool: Math.max(0, STAR_CRATER_COOL_MS - (now - (e.fall || 0))) };
+  if (target === "crater" && !starCraterCool(e, now - (e.townFall || 0)))
+    return { ok: false, tooHot: true, cool: Math.max(0, STAR_CRATER_COOL_MS - (now - (e.townFall || 0))) };
   const calmKey = target + ":" + who;
   const prev = +e.calm[calmKey] || 0;
   /* On garde deux marques par joueur : le début de la tenue (`:t0`) et la
@@ -2559,7 +2640,7 @@ export function resolveStarGift(e, playerIds, now) {
    l'on ajoute un champ. `newStar()` ne peut pas mentir.
    ─────────────────────────────────────────────────────────────────────────── */
 export const STAR_DEV_OPS = ["reset", "warn", "start", "chapter", "skip", "hint", "all", "plans", "timber"];
-export const STAR_DEV_SCENES = ["warn", "fall", "turn", "end"];
+export const STAR_DEV_SCENES = ["warn", "fall", "townFall", "turn", "end"];
 /* ⚠️⚠️ ZIP 454 — LE MENU DEV FRANCHIT LA PORTE DES DEUX HABITANTS, ET C'EST LE
    SEUL ENDROIT QUI EN A LE DROIT. Recruter Eduardo, Tristan et quatre artisans
    avant de pouvoir REGARDER une cinématique de douze secondes, c'est une demi-

@@ -288,6 +288,10 @@ function cometBoard() {
     S.drawStarCometTrail(g, 60 + i * 60, 262, ang, 14, i / 5, 2400, { q: 3 });
   for (let i = 0; i < 4; i++)
     S.drawStarImpactFlash(g, 420 + i * 145, 262, i * 0.30, 15, { q: 3 });
+  /* 462 — les fragments de ferme, volontairement montrés à côté de la grosse
+     tête : la planche doit rendre leur différence jugeable d'un regard. */
+  for (let i = 0; i < 4; i++)
+    S.drawStarFragmentMeteor(g, 690 + i * 55, 285 + (i & 1) * 25, 0.72, 7 + i, 1800 + i * 90, { q: 1 });
   return sur;
 }
 
@@ -1210,6 +1214,29 @@ console.log("\n8. LA COMÈTE — sept couches, un sens de course, et un halo\n")
     const s0 = spread(0.05), s1 = spread(0.55);
     ok(s1 > s0 * 1.5, "⚠️ la gerbe d'impact S'ÉTALE", `${s0.toFixed(0)} px → ${s1.toFixed(0)} px`);
   }
+}
+
+console.log("\n8 bis. LE FRAGMENT DE FERME (462) — caillou instable, pas boule de feu\n");
+{
+  const probeFrag = (t) => {
+    const s = makeCanvas(180, 140), g = s.ctx;
+    g.fillStyle = "#000"; g.fillRect(0, 0, 180, 140);
+    S.drawStarFragmentMeteor(g, 105, 72, 0.72, 12, t, { q: 1 });
+    return s.px;
+  };
+  const a = probeFrag(1800), b = probeFrag(1880);
+  let ink = 0, white = 0, orange = 0, dark = 0, diff = 0;
+  for (let i = 0; i < a.length; i += 4) {
+    if (a[i] + a[i + 1] + a[i + 2] > 35) ink++;
+    if (a[i] > 240 && a[i + 1] > 240 && a[i + 2] > 240) white++;
+    if (a[i] > 150 && a[i] > a[i + 1] * 1.25 && a[i + 2] < 120) orange++;
+    if (a[i] > 25 && a[i] < 100 && a[i + 1] < 80 && a[i + 2] < 80) dark++;
+    if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2]) diff++;
+  }
+  ok(ink > 120, "le petit météore peint une vraie silhouette", `${ink} px`);
+  ok(white < 8, "⚠️ il n'a PAS le cœur blanc de la grosse boule de feu", `${white} px blancs`);
+  ok(orange > 25 && dark > 25, "⚠️⚠️ c'est un caillou sombre et incandescent", `${dark} px roche · ${orange} px braise`);
+  ok(diff > 80, "⚠️⚠️ sa rotation rapide change vraiment sa silhouette", `${diff} px changés en 80 ms`);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

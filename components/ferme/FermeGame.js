@@ -960,6 +960,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      CADRAGE. En ville elles coïncident encore, et c'est très bien ainsi. */
   const starCamRef = useRef(null);                   // { zone, x, y } en CASES — ce que la caméra vise
   const starHitRef = useRef(null);                   // { zone, x, y } en CASES — où la chose touche VRAIMENT
+  const starImpactClearRef = useRef({ fall: 0, mask: 0 }); // 462 — décors naturels déjà soufflés
+  const starTownActiveRef = useRef({ fall: 0, at: 0, ms: 0 }); // 462 — présence active continue en ville
+  const starInputAtRef = useRef(0);                  // 462 — dernier geste local, horloge monotone
   /* ⚠️ LA DERNIÈRE CAMÉRA PEINTE, POUR QUE LA SCÈNE SACHE OÙ EST L'IMPACT À
      L'ÉCRAN. Un ref et pas une variable de closure : `getCam` la remplit et
      `drawStarOverlay` la lit, les deux vivent dans la même closure — mais une
@@ -2056,6 +2059,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       while (r.buf.length > C.POS_BUF_MAX_SAMPLES) r.buf.shift();
       r.px0 = payload.x; r.py0 = payload.y; r.tRecv = _now;
       r.dir = payload.dir; r.moving = payload.moving; r.tool = payload.tool;
+      /* 462 — activité explicite : l'hôte n'assimile pas une simple connexion
+         ou une interpolation de position à deux minutes de jeu à Valley Town. */
+      r.starEngaged = !!payload.starEngaged;
+      r.starEngagedAt = r.starEngaged ? Date.now() : 0;
       // `tx`/`ty` ne sont plus posés ici : ce sont désormais les coordonnées
       // d'AFFICHAGE, calculées par advanceRemote à partir du tampon. Les poser
       // brutalement à la réception réintroduirait exactement le saut que ce
@@ -2667,7 +2674,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            chose. Sans ça, la mécanique la plus jolie du chantier serait aussi la
            plus facile à contourner, et le contournement serait invisible. */
         const calmSite = Q.STAR_SITE[req.site || "crater"];
-        if (calmSite && calmSite.zone === req.pz && starCalmOk(f.id, calmSite.id))
+        if (calmSite && calmSite.zone === req.pz && starCalmOk(f.id, calmSite.id, req))
           r = Q.resolveStarCalm(e, f.id, now, starAlone(calmSite.zone === "farm" ? "farmTame" : "crater"), calmSite.id);
       } else if (req.kind === "starLean") {
         if (req.pz === "town") r = Q.resolveStarLean(e, f.id, +req.tx || 0, +req.ty || 0, now, starAlone("lean"));
@@ -6673,11 +6680,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           };
           const r0 = Q.resolveStarFall(e0, s.day, nowG, gateCtx);
           if (r0.ok) {
+            /* 462 — la géométrie se fige au déclenchement, après avoir relu les
+               constructions actuelles. Elle ne sera plus recalculée quand les
+               arbres/rochers de l'impact auront disparu. */
+            starFarmImpactsRef.current = { w: null, pos: null };
             dirtyRef.current = true;
             hostSend({ type: "broadcast", event: "apply", payload: { star: e0, starScene: { key: "fall" } } });
             persistFnRef.current && persistFnRef.current();
           }
         }
+        starClearDueFarmImpacts(e0, Date.now());
+        starTownActivityTick(e0, Date.now());
         /* ╔══════════════════════════════════════════════════════════════════════
            ║ ZIP 454 — LES DEUX BATTEMENTS DE LA CONSTRUCTION.
            ╚══════════════════════════════════════════════════════════════════════
@@ -6962,6 +6975,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // ci-dessous), qui masque carrément son personnage pendant ce temps.
     const px = m.zone === "evil" ? m.farmX : m.x, py = m.zone === "evil" ? m.farmY : m.y;
     const pub = { id: m.id, name: m.name, gender: m.gender, outfit: m.outfit, x: +px.toFixed(2), y: +py.toFixed(2), dir: m.dir, moving: m.zone === "evil" ? false : m.moving, tool: slotRef.current, sleeping: !!m.sleeping, torch: !!torchOnRef.current, zone: m.zone || "farm", pets: petIdsPub() };
+    pub.starEngaged = starPlayerEngaged();
     // ------------------------------------------------------------------
     // Zip 365 — RÉPLICATION PAR INTENTION (correctif flottement/saccades).
     //
@@ -7047,7 +7061,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      deux, personne n'aurait jamais vu personne s'asseoir. */
   function posKeyOf(m) {
     const seat = m && m.sitOn ? "@" + m.sitOn.x + "," + m.sitOn.y + "," + (m.seat || 0) : "";
-    return m && m.moving ? ("m" + (m.vx || 0).toFixed(1) + "," + (m.vy || 0).toFixed(1)) : "s" + seat;
+    const active = starPlayerEngaged() ? "a" : "i";
+    return (m && m.moving ? ("m" + (m.vx || 0).toFixed(1) + "," + (m.vy || 0).toFixed(1)) : "s" + seat) + active;
   }
   function sendPos() { if (!netCanBroadcast()) return; const _m = meRef.current; if (_m) { lastPosSentRef.current = performance.now(); lastPosKeyRef.current = posKeyOf(_m); } channelRef.current?.send({ type: "broadcast", event: "pos", payload: pubMe() }); }
   // FIX 242 (AOI / zone d'intérêt) : rayon "même zone d'écran" dérivé du viewport réel + marge de pré-chargement.
@@ -7259,6 +7274,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const minGap = 1000 / posSendHz();
     if (key !== lastPosKeyRef.current) { if (now - lastPosSentRef.current >= minGap) sendPos(); }
     else if (m.moving && now - lastPosSentRef.current >= C.POS_KEEPALIVE_MS) sendPos();
+    /* 462 — un invité immobile mais encore actif (il vient d'utiliser E, ouvre
+       la carte puis la referme, etc.) doit renouveler cette preuve auprès de
+       l'hôte. Un keep-alive de cinq secondes coûte 24 paquets sur les deux
+       minutes et évite qu'une pose stationnaire soit prise pour de l'AFK. */
+    else if (key.endsWith("a") && now - lastPosSentRef.current >= 5000) sendPos();
   }
   // ======================================================================
   // Zip 365 — RENDU DES JOUEURS DISTANTS : on relit, on ne devine plus.
@@ -7784,7 +7804,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        ⚠️ ON ÉCHOUE FERMÉ : une requête sans zone est refusée (voir E.atMarket).
        Un client d'avant ce zip ne vendra donc plus jusqu'à ce qu'il recharge —
        c'est le bon sens du refus quand l'or est partagé (§3). */
-    const full = { ...payload, id: me.id, name: m.name, px: +m.x.toFixed(2), py: +m.y.toFixed(2), pz: m.zone || "farm" };
+    /* ⚠️ ZIP 462 — L'APPRIVOISEMENT PORTE AUSSI LA DIRECTION ET L'IMMOBILITÉ.
+       La jauge locale était calculée sur la pose courante, mais l'hôte la
+       revérifiait sur l'ancienne pose interpolée de `playersRef` : après une
+       minute valide il pouvait donc refuser le dernier échantillon et laisser
+       l'étoile en place. On transmet le même instantané qui a déclenché la
+       demande ; l'hôte en redérive toujours la cible et toutes les distances. */
+    const full = { ...payload, id: me.id, name: m.name, px: +m.x.toFixed(2), py: +m.y.toFixed(2), pz: m.zone || "farm", dir: m.dir | 0, moving: !!m.moving };
     // FIX 244b : depuis self:false (zip 243), l'hote ne recoit PLUS l'echo de
     // ses propres broadcasts -> son propre "req" n'atteignait jamais
     // ch.on("req") (garde par isHost) et AUCUNE de ses actions n'etait traitee
@@ -7799,6 +7825,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function isInjured() { return Date.now() < injuredUntilRef.current; }
   function doAction() {
     const m = meRef.current; if (!m || actAnimRef.current > 0 || fishMiniRef.current || m.sleeping || isInjured()) return;
+    starInputAtRef.current = performance.now();
     if (m.zone === "evil") return doActionEvil();
     /* ⚠️ ZIP 404 — EN MODE MARQUAGE, LE CLIC DÉSIGNE, IL N'AGIT PAS.
        Réponse de Guillaume : « Sélection de plusieurs cases au clic, et
@@ -13470,9 +13497,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          ⚠️⚠️ ET IL N'EXISTE QU'APRÈS L'IMPACT (`starImpactLandedNow`, 448) : sans
          cette garde il était labouré dans le champ dès le premier jour de la
          partie, ce qu'aucun banc n'avait pu voir pendant quatre zips. */
-      if (sprites.drawStarCrater && starFarmImpactsLandedNow()) {
+      if (sprites.drawStarCrater && Q.starFallen(sharedRef.current.star)) {
         const stF = sharedRef.current.star;
         for (const site of starFarmImpactSites()) {
+          if (!starFarmImpactLandedNow(site.impact) || site.unavailable) continue;
           const sc = C.STAR_FARM_CRATER_DRAW_SCALE * [0.92, 1.05, 1, 0.96, 1.08][site.impact];
           const mar = C.STAR_CRATER_CRACK_R * sc + 2;
           if (site.x < x0 - mar || site.x > x1 + mar || site.y < y0 - mar || site.y > y1 + mar) continue;
@@ -15958,6 +15986,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (m.sitOn && (dx || dy)) { standUpTown(); return; }
       if (m.sitOn) { m.moving = false; m.animT = 0; m.vx = 0; m.vy = 0; maybeSendPos(); return; }
       const moving = (dx || dy) && actAnimRef.current <= 0;
+      if (moving) starInputAtRef.current = performance.now();
       /* ⚠️ ZIP 458 — LA PENTE SE LIT UNE FOIS PAR IMAGE, AVANT LE PAS, et elle
          sert DEUX fois : à ralentir la montée, puis à emporter la glissade. Deux
          lectures auraient échantillonné le creux à deux positions différentes
@@ -19287,7 +19316,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const sc0 = starSceneRef.current;
       if (!sc0) { if (canvas.style.transform) canvas.style.transform = ""; return; }
       const t = (now - sc0.t0) / 1000;
-      const dur = sc0.key === "fall" ? Q.STAR_FALL_MS : sc0.key === "turn" ? Q.STAR_TURN_MS : Q.STAR_END_MS;
+      const dur = sc0.key === "fall" ? Q.STAR_FARM_SCENE_MS
+        : sc0.key === "townFall" ? Q.STAR_FALL_MS
+        : sc0.key === "turn" ? Q.STAR_TURN_MS : Q.STAR_END_MS;
       if (t * 1000 > dur) { starSceneRef.current = null; canvas.style.transform = ""; return; }
       ctx.save();
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -19300,6 +19331,42 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         ctx.fillText(txt, W / 2, y);
       };
       if (sc0.key === "fall") {
+        /* ⚠️ ZIP 462 — CINQ FRAGMENTS, PAS UNE COMÈTE QUI SE CASSE. Les trois
+           premiers sont de petits cailloux incandescents, instables et rapides ;
+           les deux derniers ne prennent jamais la caméra, ils existent par le
+           tremblement. La grosse boule de feu reste exclusivement à Valley Town. */
+        const ms = t * 1000, sites = starFarmImpactSites();
+        const veil = Math.min(0.36, t * 0.45) * (ms > dur - 1800 ? Math.max(0, (dur - ms) / 1800) : 1);
+        ctx.fillStyle = `rgba(8,10,24,${veil.toFixed(3)})`; ctx.fillRect(0, 0, W, H);
+        const screenOf = p => (p && cam) ? {
+          x: ((p.x + 0.5) * T - cam.x) * (zoom || 1),
+          y: ((p.y + 0.5) * T - cam.y) * (zoom || 1),
+        } : null;
+        const flight = Q.starFarmFlight(ms);
+        if (flight && spr0 && spr0.drawStarFragmentMeteor) {
+          const end = screenOf(sites[flight.impact]);
+          if (end) {
+            const k = Math.pow(flight.k, 1.55), ang = 0.78 + Math.sin(ms / 73) * 0.08;
+            const len = Math.hypot(W, H) * 0.72;
+            const x = end.x - Math.cos(ang) * len * (1 - k);
+            const y = end.y - Math.sin(ang) * len * (1 - k);
+            spr0.drawStarFragmentMeteor(ctx, x, y, ang, 4 + 8 * k, now, { q: 1, unstable: true });
+          }
+        }
+        for (let i = 0; i < Q.STAR_FARM_ANIMATED_N; i++) {
+          const d = ms - Q.STAR_FARM_IMPACT_MS[i], hit = screenOf(sites[i]);
+          if (hit && d >= 0 && d < 760 && spr0 && spr0.drawStarImpactFlash)
+            spr0.drawStarImpactFlash(ctx, hit.x, hit.y, d / 760, 34, { q: 1 });
+          if (d >= 0 && d < 45) { ctx.fillStyle = "rgba(255,246,218,0.76)"; ctx.fillRect(0, 0, W, H); }
+        }
+        const shake = Q.starFarmShake(ms);
+        if (shake > 0) canvas.style.transform = `translate(${(Math.sin(t * 53) * shake * 6).toFixed(2)}px, ${(Math.cos(t * 41) * shake * 5).toFixed(2)}px)`;
+        else if (canvas.style.transform) canvas.style.transform = "";
+        line(L.star.fall.agency, ms > 500 && ms < 2800 ? 1 : 0, H * 0.78);
+        line(L.star.fall.first, ms > 3300 && ms < 5000 ? 1 : 0, H * 0.78);
+        line(L.star.fall.chain, ms > 17600 && ms < 25000 ? 1 : 0, H * 0.78);
+        line(L.star.fall.aftershocks, ms > 30800 && ms < 37100 ? 1 : 0, H * 0.78);
+      } else if (sc0.key === "townFall") {
         /* ⚠️ LE JEU TOURNE DERRIÈRE. On ne coupe pas la simulation pour une
            cinématique : c'est ce qui fait la différence entre « il se passe
            quelque chose dans le monde » et « le jeu s'est arrêté pour me
@@ -20222,9 +20289,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       drawGpsOnMap(g, scale);
       /* 461 — les cinq impacts sont des objectifs d'exploration publics : la
          carte les montre tous dès la chute, sans révéler leur contenu. */
-      if (starFarmImpactsLandedNow()) {
+      if (Q.starFallen(sharedRef.current.star)) {
         const st = sharedRef.current.star;
         for (const p of starFarmImpactSites()) {
+          if (!starFarmImpactLandedNow(p.impact) || p.unavailable) continue;
           const px = (p.x + 0.5) * scale, py = (p.y + 0.5) * scale;
           const seen = Q.starHas(st, p.id);
           const pulse = seen ? 4 : 5 + Math.sin(performance.now() / 280 + p.impact) * 1.3;
@@ -21705,6 +21773,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const w = worldRef.current; if (!w) return [];
     if (starFarmImpactsRef.current.w === w && starFarmImpactsRef.current.pos) return starFarmImpactsRef.current.pos;
     const used = [];
+    const natural = new Set([C.O_NONE, C.O_TREE, C.O_TREE2, C.O_TREE_DEAD, C.O_ROCK, C.O_STUMP]);
+    const blocks = [];
+    /* On relit l'état partagé, pas le miroir de collision rafraîchi par la
+       boucle de ferme : l'hôte peut armer la chute depuis la ville ou un onglet
+       masqué, précisément quand ce miroir n'a aucune raison d'être récent. */
+    const crafts = sharedRef.current.crafts || {};
+    for (const bid of Object.keys(C.ARTISAN_BUILDINGS)) {
+      if (!crafts[bid] || !crafts[bid].built) continue;
+      const def = C.ARTISAN_BUILDINGS[bid], p = artisanPos(bid);
+      blocks.push({ x: Math.round(p.x), y: Math.round(p.y), w: def.w, h: def.h });
+    }
+    const barn = barnBlockRectNow(); if (barn) blocks.push(barn);
+    const inBlock = (x, y) => blocks.some(b => x >= b.x && y >= b.y && x < b.x + b.w && y < b.y + b.h);
     const free = (cx, cy) => {
       const r = C.STAR_FARM_CRATER_FREE_R;
       for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
@@ -21712,13 +21793,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const x = cx + dx, y = cy + dy;
         if (x < 2 || y < 2 || x >= w.w - 2 || y >= w.h - 2) return false;
         const i = y * w.w + x;
-        if (w.ground[i] === C.G_WATER || w.objects[i] !== C.O_NONE || (w.crops && w.crops.has(i))) return false;
+        /* ⚠️ ZIP 462 — HERBE NUE OU DÉCOR NATUREL, RIEN D'AUTRE. Un impact ne
+           choisit jamais un sol labouré, semé, pavé ou bâti. Arbres, souches et
+           rochers sont volontairement admis : l'onde les soufflera au contact,
+           ce qui ancre le cratère dans la carte au lieu de le superposer. */
+        if (w.ground[i] !== C.G_GRASS || !natural.has(w.objects[i])
+            || (w.crops && w.crops.has(i)) || inBlock(x, y)) return false;
       }
       return used.every(p => Math.hypot(p.x - cx, p.y - cy) >= 18);
     };
     const pos = Q.STAR_FARM_IMPACTS.map((site, i) => {
       const a = C.STAR_FARM_IMPACT_ANCHORS[i];
-      const p = Q.starSpiralFree(a.x, a.y, free, 14) || { x: a.x, y: a.y };
+      let p = Q.starSpiralFree(a.x, a.y, free, 30);
+      /* Échec fermé : même sur une ferme extrêmement construite, on cherche
+         toute la carte plutôt que de retomber sur une ancre désormais occupée. */
+      if (!p) {
+        let best = null, bd = Infinity;
+        for (let y = 3; y < w.h - 3; y++) for (let x = 3; x < w.w - 3; x++) if (free(x, y)) {
+          const d = Math.hypot(x - a.x, y - a.y);
+          if (d < bd) { bd = d; best = { x, y }; }
+        }
+        p = best;
+      }
+      if (!p) return { ...site, x: a.x, y: a.y, shape: i % 3, unavailable: true };
       const out = { ...site, x: p.x, y: p.y, shape: i % 3 };
       used.push(out); return out;
     });
@@ -21726,6 +21823,58 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     return pos;
   }
   function starFarmImpact(id) { return starFarmImpactSites().find(p => p.id === id) || null; }
+
+  function starClearDueFarmImpacts(e, now) {
+    if (!isHost || !e || !e.fall) return;
+    const w = worldRef.current; if (!w) return;
+    const memo = starImpactClearRef.current;
+    if (memo.fall !== e.fall) { memo.fall = e.fall; memo.mask = 0; }
+    const elapsed = Math.max(0, now - e.fall), natural = new Set([C.O_TREE, C.O_TREE2, C.O_TREE_DEAD, C.O_ROCK, C.O_STUMP]);
+    const tiles = [];
+    for (const p of starFarmImpactSites()) {
+      const bit = 1 << (p.impact | 0);
+      if ((memo.mask & bit) || elapsed < Q.STAR_FARM_IMPACT_MS[p.impact | 0]) continue;
+      memo.mask |= bit;
+      if (p.unavailable) continue;
+      const r = C.STAR_FARM_CRATER_FREE_R;
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+        if (dx * dx + dy * dy > r * r) continue;
+        const x = p.x + dx, y = p.y + dy, i = y * w.w + x;
+        if (!natural.has(w.objects[i])) continue;
+        w.objects[i] = C.O_NONE; w.objHp.delete(i); recordTileOverride(i);
+        tiles.push({ i, g: w.ground[i], o: C.O_NONE });
+      }
+    }
+    if (tiles.length) {
+      minimapDirtyRef.current = true;
+      hostSend({ type: "broadcast", event: "apply", payload: { tiles } });
+    }
+  }
+
+  function starPlayerEngaged() {
+    const m = meRef.current, at = starInputAtRef.current;
+    return !!(m && (m.zone || "farm") === "town" && !m.sleeping && at > 0
+      && performance.now() - at <= 15000 && !starSceneRef.current && starPanelsClear());
+  }
+  function starTownActivityTick(e, now) {
+    if (!isHost) return;
+    const a = starTownActiveRef.current;
+    if (!e || !e.fall || e.ch < 1 || Q.starTownFallen(e)) { a.fall = 0; a.at = 0; a.ms = 0; return; }
+    if (a.fall !== e.fall) { a.fall = e.fall; a.at = now; a.ms = 0; }
+    let active = starPlayerEngaged();
+    for (const p of playersRef.current.values()) {
+      if (p && (p.zone || "farm") === "town" && p.starEngaged && now - (p.starEngagedAt || 0) <= 16000) { active = true; break; }
+    }
+    if (!active) { a.at = now; a.ms = 0; return; }
+    if (!a.at) a.at = now;
+    a.ms += Math.max(0, Math.min(1500, now - a.at)); a.at = now;
+    if (a.ms < Q.STAR_TOWN_ACTIVE_MS) return;
+    const r = Q.resolveStarTownFall(e, now);
+    if (!r.ok) return;
+    dirtyRef.current = true;
+    hostSend({ type: "broadcast", event: "apply", payload: { star: e, starScene: { key: "townFall" } } });
+    persistFnRef.current && persistFnRef.current();
+  }
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ZIP 446 — LA CHALEUR DU CRATÈRE, SUR UNE HORLOGE LOCALE.
      ╚══════════════════════════════════════════════════════════════════════════
@@ -21752,19 +21901,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function starHeatKey() { return "ferme_star_heat:" + ((sharedRef.current.seed | 0) >>> 0); }
   function starCraterElapsed() {
     const e = sharedRef.current.star;
-    if (!e || !e.fall) return 0;
+    if (!e || !e.townFall) return 0;
     const a = starHeatRef.current;
-    if (a.fall !== e.fall) {
+    if (a.fall !== e.townFall) {
       let at = 0;
       try {
         const bits = String(window.localStorage.getItem(starHeatKey()) || "").split(":");
-        if (+bits[0] === e.fall) at = +bits[1] || 0;
+        if (+bits[0] === e.townFall) at = +bits[1] || 0;
       } catch (err) { /* localStorage indisponible : on repart de maintenant */ }
       if (!at) {
         at = Date.now();
-        try { window.localStorage.setItem(starHeatKey(), e.fall + ":" + at); } catch (err) { /* idem */ }
+        try { window.localStorage.setItem(starHeatKey(), e.townFall + ":" + at); } catch (err) { /* idem */ }
       }
-      a.fall = e.fall; a.at = at;
+      a.fall = e.townFall; a.at = at;
     }
     return Math.max(0, Date.now() - a.at);
   }
@@ -21794,21 +21943,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      cratère avant de lui jouer la scène raconterait l'histoire à l'envers. */
   function starImpactLandedNow() {
     const e = sharedRef.current.star;
-    if (!e || !Q.starFallen(e)) return false;
+    if (!e || !Q.starTownFallen(e)) return false;
     const pend = starScenePendRef.current;
-    if (pend && pend.key === "fall") return false;
+    if (pend && pend.key === "townFall") return false;
     const sc = starSceneRef.current;
     if (!sc) return true;
     return Q.starImpactLanded(sc.key, performance.now() - sc.t0);
   }
-  function starFarmImpactsLandedNow() {
+  function starFarmImpactLandedNow(index) {
     const e = sharedRef.current.star;
     if (!e || !Q.starFallen(e)) return false;
     const pend = starScenePendRef.current;
     if (pend && pend.key === "fall") return false;
     const sc = starSceneRef.current;
     if (!sc || sc.key !== "fall") return true;
-    return performance.now() - sc.t0 >= Q.STAR_FALL_IMPACT_MS - 700;
+    return Q.starFarmImpactLanded(index, sc.key, performance.now() - sc.t0);
   }
   function starCraterHeatNow() { return Q.starCraterHeat(sharedRef.current.star, starCraterElapsed()); }
   function starCraterCoolNow() { return Q.starCraterCool(sharedRef.current.star, starCraterElapsed()); }
@@ -21901,13 +22050,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      correspond plus, la scène se rejoue. Rien à invalider à la main.
      ⚠️ La clé porte la GRAINE de la ferme : deux salons différents sur la même
      machine sont deux histoires différentes. */
-  function starFallSeenKey() { return "ferme_star_fall:" + ((sharedRef.current.seed | 0) >>> 0); }
-  function starFallSeen() {
-    try { return +window.localStorage.getItem(starFallSeenKey()) || 0; } catch (e) { return 0; }
+  function starFallSeenKey(kind) { return "ferme_star_" + (kind === "townFall" ? "town_fall" : "farm_fall") + ":" + ((sharedRef.current.seed | 0) >>> 0); }
+  function starFallSeen(kind) {
+    try { return +window.localStorage.getItem(starFallSeenKey(kind)) || 0; } catch (e) { return 0; }
   }
-  function starMarkFallSeen() {
+  function starMarkFallSeen(kind) {
     const e = sharedRef.current.star;
-    try { window.localStorage.setItem(starFallSeenKey(), String((e && e.fall) || 0)); } catch (err) { /* localStorage indispo */ }
+    const at = e && (kind === "townFall" ? e.townFall : e.fall);
+    try { window.localStorage.setItem(starFallSeenKey(kind), String(at || 0)); } catch (err) { /* localStorage indispo */ }
   }
 
   /* Est-ce que la scène a un sens MAINTENANT ? ⚠️ LA LISTE EST CELLE DE CE QUI
@@ -21938,7 +22088,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function starSceneCanPlay(key) {
     const m = meRef.current;
     if (!m || m.sleeping) return false;
-    if ((key || "fall") === "fall" && !Q.starImpactZone(m.zone || "farm")) return false;
+    if (key === "fall" && (m.zone || "farm") !== "farm") return false;
+    if (key === "townFall" && (m.zone || "farm") !== "town") return false;
     if (starUiOpenRef.current) return false;                 // mini-jeu, carte de chapitre, rappel
     if (zoneTransRef.current && zoneTransRef.current.active) return false;
     if (mapOpenRef.current || shopOpenRef.current || binOpenRef.current || bagOpenRef.current
@@ -21996,42 +22147,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     starSceneRef.current = { key, t0: performance.now() };
     setStarTick(t => t + 1);
     if (key === "fall") {
-      /* ⚠️⚠️ ZIP 458 — « CE N'EST QU'UN ÉCLAT », DIT LÀ OÙ ON L'A VU SE FENDRE.
-         La jointure est `Q.starFragmentsOn`, c'est-à-dire **la fonction même qui
-         décide si la comète se fend à l'écran** : le texte ne peut donc pas
-         annoncer une fracture que le dessin n'a pas jouée, ni se taire là où il
-         l'a jouée. C'est la parade du 449 (« une jointure, jamais deux listes »)
-         appliquée à une phrase.
-         ⚠️ APRÈS LES QUATRE LIGNES DE LA SCÈNE ET AVANT LA CARTE DE CHAPITRE :
-         `line3` s'éteint à IMPACT + 4,0 s et la carte tombe à `STAR_FALL_MS − 3 s`
-         ; on se pose entre les deux, dans le seul trou qui reste. */
-      const zone0 = (meRef.current && (meRef.current.zone || "farm")) || "farm";
-      if (Q.starFragmentsOn(zone0))
-        setTimeout(() => pushToast(L.star.fall.split), Q.STAR_FALL_IMPACT_MS + 4400);
-      /* ⚠️⚠️ ZIP 455 — LE POINT DE VUE SE DÉRIVE DE LA FENÊTRE RÉELLE, PAS D'UN
-         NOMBRE DE CASES. `starViewRef` est écrit à chaque image par la boucle de
-         rendu, donc il porte la demi-diagonale VRAIE de cet écran-ci : un joueur
-         au téléphone et un joueur au grand écran obtiennent tous les deux un
-         impact hors cadre, ce qu'un « 22 cases » réglé à la main n'aurait garanti
-         que sur l'écran de celui qui l'a réglé (§8).
-         ⚠️ ELLE EST FIGÉE À L'OUVERTURE DE LA SCÈNE et pas relue à chaque image :
-         une caméra dont la cible bouge parce qu'on a redimensionné la fenêtre est
-         une caméra qui dérive au milieu d'un plan. */
+      starCamRef.current = null; starHitRef.current = null;
+      starMarkFallSeen("fall");
+      setTimeout(() => setStarCard({ key: Q.starChapterKey(sharedRef.current.star) }), Q.STAR_FARM_SCENE_MS - 2500);
+    } else if (key === "townFall") {
       const hit = starImpactSpot();
       starHitRef.current = hit;
-      /* ⚠️⚠️ `C.TILE` ET PAS `T` — ET C'EST `verify-portee` QUI L'A DIT, À LA
-         PREMIÈRE EXÉCUTION. `T` est déclaré dans la closure de la boucle de rendu ;
-         ici, au niveau du composant, il lève un `ReferenceError` **à l'exécution
-         seulement**, et l'exception emporte tout ce que la frame devait encore
-         dessiner (piège n°1, payé au 430 et au 431). Ni le build ni le lint ne le
-         voient ; un banc de portée, si.
-         ⚠️ LE REPLI EST UNE DEMI-DIAGONALE PLAUSIBLE et pas un zéro : sans fenêtre
-         connue (premier rendu), un `0` collerait la caméra sur l'impact — c'est-à
-         -dire qu'il rejouerait silencieusement le défaut qu'on corrige. */
       const vw1 = starViewRef.current && starViewRef.current.cam;
       const halfDiag = vw1 ? Math.hypot(vw1.vw, vw1.vh) / 2 / C.TILE : 12;
       starCamRef.current = hit ? Q.starCamTarget(hit.zone, hit, halfDiag) : null;
-      starMarkFallSeen();
+      starMarkFallSeen("townFall");
       setTimeout(() => setStarCard({ key: Q.starChapterKey(sharedRef.current.star) }), Q.STAR_FALL_MS - 3000);
     } else {
       starCamRef.current = null; starHitRef.current = null;
@@ -22242,8 +22367,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     starOfferPump();
     const e = sharedRef.current.star;
     if (!e || !Q.starFallen(e)) return;
-    if (!starScenePendRef.current && !starSceneRef.current && !Q.starDone(e) && starFallSeen() !== e.fall)
-      starQueueScene("fall");
+    const zone = (meRef.current && (meRef.current.zone || "farm")) || "farm";
+    if (!starScenePendRef.current && !starSceneRef.current && !Q.starDone(e)) {
+      if (zone === "town" && Q.starTownFallen(e) && starFallSeen("townFall") !== e.townFall) starQueueScene("townFall");
+      else if (zone === "farm" && starFallSeen("fall") !== e.fall) starQueueScene("fall");
+    }
     const pend = starScenePendRef.current;
     /* ⚠️ LA CARTE EN ATTENTE PASSE APRÈS LA SCÈNE EN ATTENTE, et jamais pendant :
        une carte de chapitre est la DERNIÈRE image d'une scène (voir
@@ -22274,9 +22402,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      s'arrête net, ce qui se lit comme un défaut d'affichage. Le vol part doux et
      se pose doux, donc l'œil suit au lieu de sursauter. */
   function starCamNow(zone) {
-    const sc = starSceneRef.current, tgt = starCamRef.current;
-    if (!sc || sc.key !== "fall" || !tgt || tgt.zone !== zone) return null;
+    const sc = starSceneRef.current;
+    if (!sc) return null;
     const t = performance.now() - sc.t0;
+    if (sc.key === "fall") {
+      if (zone !== "farm") return null;
+      const phase = Q.starFarmCameraPhase(t); if (!phase) return null;
+      const sites = starFarmImpactSites();
+      const point = v => typeof v === "number" && sites[v] ? sites[v] : null;
+      const a = point(phase.a), b = point(phase.b);
+      if (!a && b) return { x: b.x, y: b.y, k: phase.k };
+      if (a && !b) return { x: a.x, y: a.y, k: 1 - phase.k };
+      if (a && b) return { x: a.x + (b.x - a.x) * phase.k, y: a.y + (b.y - a.y) * phase.k, k: 1 };
+      return null;
+    }
+    const tgt = starCamRef.current;
+    if (sc.key !== "townFall" || !tgt || tgt.zone !== zone) return null;
     let k;
     if (t <= 0) return null;
     else if (t < Q.STAR_CAM_GO_MS) k = t / Q.STAR_CAM_GO_MS;
@@ -22354,7 +22495,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     /* ⚠️ ZIP 448 — MÊME RAISON QUE `starNearby` : le chevron ne peut pas désigner
        un cratère qui n'est pas encore creusé. Il était déjà masqué PENDANT la
        scène (`starSceneRef`), mais pas pendant qu'elle attendait de se jouer. */
-    if (!e || !starImpactLandedNow() || Q.starDone(e)) return null;
+    if (!e || !Q.starFallen(e) || Q.starDone(e)) return null;
     if (starUiOpenRef.current || starSceneRef.current) return null;
     /* ⚠️ ZIP 454 — LE CONTEXTE EST LE MÊME QUE CELUI DU BANDEAU, et c'est
        obligatoire depuis que le chevron DÉRIVE de l'objectif : lui passer `{}`
@@ -22362,6 +22503,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        source, donc un seul contexte. */
     const id = Q.starTargetSite(e, { craterHot: !starCraterCoolNow() });
     if (!id) return null;
+    const site = Q.STAR_SITE[id];
+    if (site && site.spot === "starFarmImpact" && !starFarmImpactLandedNow(site.impact)) return null;
+    if ((id === "crater" || id === "townHall") && !starImpactLandedNow()) return null;
     const pos = starTargetPos(id);
     return pos ? { ...pos, id } : null;
   }
@@ -22878,13 +23022,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (zone === "farm") {
       let best = null, bd = Infinity;
       for (const p of starFarmImpactSites()) {
-        if (p.content !== "star" || Q.starHas(e, p.id)) continue;
+        if (!starFarmImpactLandedNow(p.impact) || p.unavailable || p.content !== "star" || Q.starHas(e, p.id)) continue;
         const d = Math.hypot(m.x - p.x, m.y - p.y);
         if (d <= 4 && d < bd) { best = { ...p, zone: "farm", r: 2.45, hot: false }; bd = d; }
       }
       return best;
     }
-    if (zone === "town" && !Q.starHas(e, "crater")) {
+    if (zone === "town" && starImpactLandedNow() && !Q.starHas(e, "crater")) {
       const c = starCraterPos();
       if (c && Math.hypot(m.x - c.x, m.y - c.y) <= Q.STAR_CRATER_R + 1)
         return { id: "crater", zone: "town", x: c.x, y: c.y, r: Q.STAR_CRATER_R, hot: !starCraterCoolNow() };
@@ -22901,15 +23045,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (Math.hypot(m.x - c.x, m.y - c.y) > c.r) return false;
     return Q.starFacingAway(m.x, m.y, m.dir | 0, c.x, c.y);
   }
-  function starCalmOk(id, siteId) {
-    const me0 = meRef.current;
-    if (me0 && me0.id === id) {
-      const c0 = starTameTarget(me0);
-      return !!(c0 && c0.id === siteId && starCalmSelf(c0));
+  function starCalmOk(id, siteId, pose) {
+    /* ⚠️ ZIP 462 — UNE SEULE PHOTO POUR LA JAUGE ET SON VERDICT. Les paquets
+       de position distants sont volontairement lissés et moins fréquents à
+       grande distance ; les relire ici faisait parfois diverger l'hôte du
+       client exactement au moment où les 60 s s'achevaient. `px/py/pz`, `dir`
+       et `moving` sont maintenant l'échantillon atomique de la demande. On ne
+       lui fait pas confiance sur le résultat : la cible, l'anneau et le sens
+       sont encore recalculés ici depuis les sites autoritaires. */
+    let p = null;
+    if (pose && Number.isFinite(+pose.px) && Number.isFinite(+pose.py)) {
+      p = { id, x: +pose.px, y: +pose.py, zone: pose.pz || "farm", dir: pose.dir | 0, moving: !!pose.moving };
+    } else {
+      const me0 = meRef.current;
+      p = me0 && me0.id === id ? me0 : (playersRef.current && playersRef.current.get(id));
     }
-    const p = playersRef.current && playersRef.current.get(id);
     const c = starTameTarget(p);
-    if (!p || !c || c.id !== siteId || p.moving) return false;
+    if (!p || !c || c.id !== siteId || p.moving || c.hot) return false;
     if (Math.hypot(p.x - c.x, p.y - c.y) > c.r) return false;
     return Q.starFacingAway(p.x, p.y, p.dir | 0, c.x, c.y);
   }
@@ -23089,12 +23241,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        une seule d'entre elles laissée ouverte suffit à raconter la fin avant le
        début. C'est le pendant exact de « une porte sans chemin de code ment »
        (444) — ici, un chemin de code sans décor. */
-    if (!e || !starImpactLandedNow() || Q.starDone(e)) return null;
+    if (!e || !Q.starFallen(e) || Q.starDone(e)) return null;
     const zone = m.zone || "farm";
 
     if (zone === "farm") {
       let near = null, best = Infinity;
       for (const p of starFarmImpactSites()) {
+        if (!starFarmImpactLandedNow(p.impact) || p.unavailable) continue;
         const d = Math.hypot(m.x - p.x, m.y - p.y);
         if (d <= 3.1 && d < best) { near = p; best = d; }
       }
@@ -23113,6 +23266,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
 
     if (zone === "town") {
+      if (!starImpactLandedNow()) return null;
       /* ⚠️⚠️ ZIP 454 — L'INGÉNIEUR PASSE EN PREMIER, ET C'EST LA RÈGLE DU 427 (du
          plus PRÉCIS au plus large) : il se tient à quatre cases de la cale, donc
          dans une zone où rien d'autre ne se déclenche, et il n'est là que quinze

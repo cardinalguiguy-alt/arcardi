@@ -77,6 +77,11 @@ const findFarmImpacts = (e, who = "banc", at = 1) => {
   for (const [i, site] of Q.STAR_FARM_IMPACTS.entries())
     Q.resolveStarFound(e, site.id, who, at + i);
 };
+const openTownCrater = (e, at = 10) => {
+  findFarmImpacts(e, "banc", at - 6);
+  Q.resolveStarTownFall(e, at);
+  return e.townFall;
+};
 
 /* ═══════════════════════════════════════════════════════════════════════════
    1. LA CHAÎNE DES CINQ CHAPITRES.
@@ -296,11 +301,34 @@ if (craterPos) {
      new Set(Q.STAR_FARM_IMPACTS.filter(s => s.content === "star").map(s => s.color)).size === 2);
   ok("les cinq ancrages tiennent dans la carte",
      C.STAR_FARM_IMPACT_ANCHORS.length === 5 && C.STAR_FARM_IMPACT_ANCHORS.every(p => p.x >= 4 && p.x < C.MAP_W - 4 && p.y >= 4 && p.y < C.MAP_H - 4));
+  ok("⚠️ deux impacts élargissent vraiment la chasse à l'est de la rivière",
+     C.STAR_FARM_IMPACT_ANCHORS.slice(3).every(p => p.x > 120),
+     C.STAR_FARM_IMPACT_ANCHORS.slice(3).map(p => `(${p.x},${p.y})`).join(" · "));
   let minD = Infinity;
   for (let i = 0; i < C.STAR_FARM_IMPACT_ANCHORS.length; i++) for (let j = i + 1; j < C.STAR_FARM_IMPACT_ANCHORS.length; j++)
     minD = Math.min(minD, Math.hypot(C.STAR_FARM_IMPACT_ANCHORS[i].x - C.STAR_FARM_IMPACT_ANCHORS[j].x,
                                     C.STAR_FARM_IMPACT_ANCHORS[i].y - C.STAR_FARM_IMPACT_ANCHORS[j].y));
   ok("⚠️ les impacts sont vraiment dispersés", minD >= 18, `écart minimal ${minD.toFixed(1)} cases`);
+  ok("⚠️ le premier retour fermier dure exactement dix secondes avant le plan suivant",
+     Q.STAR_FARM_CAMERA[2].to === 6500 && Q.STAR_FARM_CAMERA[3].from - Q.STAR_FARM_CAMERA[2].to === 10000);
+  ok("⚠️ les impacts 2 et 3 s'enchaînent sans retour fermier entre eux",
+     Q.STAR_FARM_CAMERA.some(s => s.a === 1 && s.b === 2)
+     && !Q.STAR_FARM_CAMERA.some(s => s.from > Q.STAR_FARM_IMPACT_MS[1] && s.to < Q.STAR_FARM_IMPACT_MS[2] && s.b === "player"));
+  ok("⚠️ seuls les trois premiers fragments ont un vol filmé",
+     [0, 1, 2].every(i => Q.starFarmFlight(Q.STAR_FARM_IMPACT_MS[i] - 1)?.impact === i)
+     && [3, 4].every(i => Q.starFarmFlight(Q.STAR_FARM_IMPACT_MS[i] - 1) === null));
+  ok("…les deux derniers existent bien comme secousses espacées",
+     Q.starFarmShake(Q.STAR_FARM_IMPACT_MS[3] + 200) > 0
+     && Q.starFarmShake(Q.STAR_FARM_IMPACT_MS[4] + 200) > 0
+     && Q.STAR_FARM_IMPACT_MS[4] - Q.STAR_FARM_IMPACT_MS[3] >= 3000);
+  ok("la présence active requise à Valley Town vaut exactement deux minutes", Q.STAR_TOWN_ACTIVE_MS === 120000);
+  {
+    const e = Q.newStar(); e.fall = 1;
+    ok("le gros météore refuse de tomber avant les cinq sites", !Q.resolveStarTownFall(e, 2).ok);
+    findFarmImpacts(e, "banc", 3);
+    ok("…puis tombe une seule fois quand le chapitre ferme", Q.resolveStarTownFall(e, 20).ok && Q.starTownFallen(e));
+    ok("…et ne peut pas être redaté", Q.resolveStarTownFall(e, 30).already === true && e.townFall === 20);
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -451,6 +479,27 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
      Q.STAR_CALM_SOLO_MS > Q.STAR_CALM_MS, `${Q.STAR_CALM_SOLO_MS} ms contre ${Q.STAR_CALM_MS} ms`);
   ok("…et vaut exactement une minute seul, dix secondes à plusieurs",
      Q.STAR_CALM_SOLO_MS === 60000 && Q.STAR_CALM_MS === 10000);
+  /* 462 — le blocage signalé concernait précisément les DEUX étoiles de ferme,
+     pas seulement la reine historique. On joue chacune jusqu'au dernier paquet
+     au lieu d'extrapoler les tests du cratère. */
+  for (const site of Q.STAR_FARM_IMPACTS.filter(s => s.content === "star")) {
+    const e = Q.newStar(); e.fall = 1;
+    let t = 1000;
+    for (let k = 0; k < 130 && !Q.starHas(e, site.id); k++) {
+      t += 500; Q.resolveStarCalm(e, "j1", t, true, site.id);
+    }
+    ok(`⚠️⚠️ la jauge solo retire vraiment l'étoile ${site.id}`, Q.starHas(e, site.id), `${((t - 1000) / 1000).toFixed(1)} s`);
+  }
+  {
+    const site = Q.STAR_FARM_IMPACTS.find(s => s.content === "star"), e = Q.newStar(); e.fall = 1;
+    let t = 1000;
+    for (let k = 0; k < 30 && !Q.starHas(e, site.id); k++) {
+      t += 400;
+      Q.resolveStarCalm(e, "j1", t, false, site.id);
+      Q.resolveStarCalm(e, "j2", t, false, site.id);
+    }
+    ok("⚠️⚠️ à deux, la jauge courte retire vraiment une étoile de ferme", Q.starHas(e, site.id), `${((t - 1000) / 1000).toFixed(1)} s`);
+  }
   /* ── ZIP 446 — LE REFROIDISSEMENT, ET C'EST UNE PORTE, PAS UN EFFET.
      ⚠️⚠️ CE BLOC EXISTE PARCE QU'AUCUN BANC NE JOUAIT `resolveStarCalm` : la
      mécanique centrale du chapitre 2 n'était vérifiée nulle part, on ne mesurait
@@ -458,7 +507,7 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
      mesure la carte, pas l'interaction* — et il aura tenu deux zips. */
   {
     const e = Q.devStar(Q.newStar(), "start", 1).star;
-    const t0 = e.fall;
+    const t0 = openTownCrater(e, e.fall + 10);
     ok("⚠️ tant que ça fume, la tenue ne donne RIEN",
        !Q.resolveStarCalm(e, "j1", t0 + 1000, true).ok && !Q.starHas(e, "crater"));
     ok("…et le refus n'a rien consommé (on ne se tient pas tranquille pour rien)",
@@ -482,7 +531,7 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
     /* ── LA CHALEUR, LA COURBE QU'ON VOIT. Trois bornes, et la troisième est
        celle du modèle : le cratère refroidi FUME ENCORE tant que l'étoile est
        dedans, et il s'éteint quand elle en sort. */
-    const e2 = Q.devStar(Q.newStar(), "start", 1).star;
+    const e2 = Q.devStar(Q.newStar(), "start", 1).star; openTownCrater(e2, e2.fall + 10);
     const h0 = Q.starCraterHeat(e2, 0), hM = Q.starCraterHeat(e2, Q.STAR_CRATER_COOL_MS / 2);
     const hE = Q.starCraterHeat(e2, Q.STAR_CRATER_COOL_MS * 3);
     ok("à l'instant de la chute, la chaleur est pleine", Math.abs(h0 - 1) < 0.001, h0.toFixed(2));
@@ -503,7 +552,7 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
      dernière ligne du bloc vérifie que les deux moitiés ne se sont pas données
      deux seuils au lieu d'un. */
   {
-    const e = Q.devStar(Q.newStar(), "start", 1).star;
+    const e = Q.devStar(Q.newStar(), "start", 1).star; openTownCrater(e, e.fall + 10);
     const FOND = 1, MILIEU = Q.STAR_BURN_DEPTH_K * 0.99, LEVRE = -0.2;
     ok("⚠️ au fond du trou en fusion, on brûle", Q.starCraterBurns(e, 1000, FOND));
     ok("…une seconde avant la fin du refroidissement, encore",
@@ -516,7 +565,7 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
        !Q.starCraterBurns(e, 0, LEVRE));
     ok("⚠️ un trou pas encore creusé ne brûle personne (quête neuve)",
        !Q.starCraterBurns(Q.newStar(), 0, FOND));
-    const e3 = Q.devStar(Q.newStar(), "start", 1).star;
+    const e3 = Q.devStar(Q.newStar(), "start", 1).star; openTownCrater(e3, e3.fall + 10);
     Q.resolveStarFound(e3, "crater", "banc", 9);
     ok("⚠️⚠️ …et le trou s'éteint le jour où l'étoile en sort : on peut y descendre",
        !Q.starCraterBurns(e3, 0, FOND));
@@ -570,16 +619,18 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
      On balaie donc les DEUX valeurs sur les DEUX gestes. */
   for (const flag of [true, false]) {
     const e = Q.devStar(Q.newStar(), "start", 1).star;
-    let t = e.fall + Q.STAR_CRATER_COOL_MS + 500;
+    openTownCrater(e, e.fall + 10);
+    let t = e.townFall + Q.STAR_CRATER_COOL_MS + 500;
     for (let k = 0; k < 130 && !Q.starHas(e, "crater"); k++) { t += 500; Q.resolveStarCalm(e, "j1", t, flag); }
     ok(`⚠️⚠️ le cratère s'ouvre TOUT SEUL, drapeau solo = ${flag}`, Q.starHas(e, "crater"),
-       `${((t - (e.fall + Q.STAR_CRATER_COOL_MS + 500)) / 1000).toFixed(1)} s de tenue`);
+       `${((t - (e.townFall + Q.STAR_CRATER_COOL_MS + 500)) / 1000).toFixed(1)} s de tenue`);
   }
   {
     /* Le raccourci à deux reste un raccourci : deux tenues simultanées ouvrent le
        trou en `STAR_CALM_MS`, c'est-à-dire bien avant le plancher solo. */
     const e = Q.devStar(Q.newStar(), "start", 1).star;
-    const t0 = e.fall + Q.STAR_CRATER_COOL_MS + 500;
+    openTownCrater(e, e.fall + 10);
+    const t0 = e.townFall + Q.STAR_CRATER_COOL_MS + 500;
     let t = t0, opened = null;
     for (let k = 0; k < 30 && !Q.starHas(e, "crater"); k++) {
       t += 400;
@@ -1008,12 +1059,12 @@ section("La chute est vue, et le chevron désigne (445)");
      rien »). Il n'en reste qu'une, `STAR_FALL_IMPACT_MS`, et elle est lue par les
      deux côtés. */
   ok("⚠️⚠️ le décor d'impact n'existe PAS avant l'impact",
-     Q.starImpactLanded("fall", 0) === false
-     && Q.starImpactLanded("fall", Q.STAR_FALL_IMPACT_MS - 1) === false,
+     Q.starImpactLanded("townFall", 0) === false
+     && Q.starImpactLanded("townFall", Q.STAR_FALL_IMPACT_MS - 1) === false,
      `rien jusqu'à ${Q.STAR_FALL_IMPACT_MS} ms`);
   ok("…et il existe à partir de l'instant du contact",
-     Q.starImpactLanded("fall", Q.STAR_FALL_IMPACT_MS) === true
-     && Q.starImpactLanded("fall", Q.STAR_FALL_MS) === true);
+     Q.starImpactLanded("townFall", Q.STAR_FALL_IMPACT_MS) === true
+     && Q.starImpactLanded("townFall", Q.STAR_FALL_MS) === true);
   /* ⚠️ HORS CINÉMATIQUE, L'IMPACT EST DE L'HISTOIRE. Écrire l'inverse aurait fait
      disparaître le cratère les 999 fois sur 1000 où aucune scène ne joue —
      c'est-à-dire pendant toute la partie. */
@@ -1136,7 +1187,9 @@ section("La chute est vue, et le chevron désigne (445)");
     e.plan = { at: 1000, by: "banc", done: 1000 };
     ok("⚠️ au premier chapitre, le chevron pointe le premier impact", Q.starTargetSite(e, {}) === Q.STAR_FARM_IMPACTS[0].id);
     findFarmImpacts(e, "banc", 2000);
-    ok("…puis le cratère", Q.starTargetSite(e, {}) === "crater");
+    ok("…puis l'attente naturelle à Valley Town", Q.starGoalKey(e, {}) === "townWait" && Q.starTargetSite(e, {}) === null);
+    Q.resolveStarTownFall(e, 2500);
+    ok("…puis le cratère après le gros météore", Q.starTargetSite(e, {}) === "crater");
     Q.resolveStarFound(e, "crater", "banc", 3000);
     /* ⚠️⚠️ ET LÀ, RIEN — C'EST VOULU ET C'EST LE CONTRÔLE LE PLUS UTILE DU BLOC.
        Pendant l'écoute des ombres, il n'y a nulle part où aller : la mécanique
@@ -1173,6 +1226,9 @@ section("La chute est vue, et le chevron désigne (445)");
     const src = fs.readFileSync(path.join(SRC, "FermeGame.js"), "utf8");
     const read = src.split("\n").length;
     ok("le scanner a bien lu `FermeGame.js`", read > 20000, `${read} lignes lues`);
+    ok("⚠️⚠️ la fin de jauge transmet sa pose atomique jusqu'au verdict hôte",
+       src.includes('dir: m.dir | 0, moving: !!m.moving')
+       && src.includes('starCalmOk(f.id, calmSite.id, req)'));
     const body = (src.split("function starTargetPos(")[1] || "").split("\n  function ")[0];
     ok("⚠️ `starTargetPos` existe", body.length > 100, `${body.split("\n").length} lignes de corps`);
     const targetable = Q.STAR_SITES.filter(s => s.spot && s.spot[0] !== "*").map(s => s.id);
@@ -1227,6 +1283,9 @@ section("L'objectif courant (bandeau) et le guide");
   e.fall = 1000;
   ok("…une fois tombée, l'objectif est la chasse aux impacts", Q.starGoalKey(e, {}) === "farmImpacts");
   findFarmImpacts(e, "j1", 1001);
+  ok("…après les cinq sites, le bandeau laisse Valley Town venir naturellement",
+     Q.starGoalKey(e, {}) === "townWait" && Q.starTargetSite(e, {}) === null);
+  Q.resolveStarTownFall(e, 1010);
   ok("⚠️ le cratère BRÛLANT et le cratère FROID ne disent pas la même chose",
      Q.starGoalKey(e, { craterHot: true }) === "craterHot" && Q.starGoalKey(e, {}) === "crater");
   Q.resolveStarFound(e, "crater", "j1", 1002);
@@ -1281,7 +1340,7 @@ section("L'objectif courant (bandeau) et le guide");
        (les deux écoutes d'ombres, l'attente de l'ingénieur). Sans ce contrôle, un
        objectif ajouté plus tard pointerait silencieusement dans le vide. */
     {
-      const NOWHERE = ["lean", "leanAgain", "engineerWait"];
+      const NOWHERE = ["townWait", "lean", "leanAgain", "engineerWait"];
       const orphan = Q.STAR_GOAL_KEYS.filter(k => {
         if (k === "farmImpacts") return false;
         const id = Q.STAR_GOAL_TARGET[k] || k;
@@ -2029,17 +2088,17 @@ section("Le tampon d'annonce (455)");
   /* ── LE « ! » DE L'IMPACT. */
   {
     ok("⚠️ le « ! » tombe À L'INSTANT du contact, pas avant",
-       Q.starBang("fall", Q.STAR_FALL_IMPACT_MS - 1) === 0 && Q.starBang("fall", Q.STAR_FALL_IMPACT_MS) > 0);
+       Q.starBang("townFall", Q.STAR_FALL_IMPACT_MS - 1) === 0 && Q.starBang("townFall", Q.STAR_FALL_IMPACT_MS) > 0);
     ok("…et il dure exactement deux secondes",
-       Q.starBang("fall", Q.STAR_FALL_IMPACT_MS + C.STAR_BANG_MS - 1) > 0
-       && Q.starBang("fall", Q.STAR_FALL_IMPACT_MS + C.STAR_BANG_MS) === 0,
+       Q.starBang("townFall", Q.STAR_FALL_IMPACT_MS + C.STAR_BANG_MS - 1) > 0
+       && Q.starBang("townFall", Q.STAR_FALL_IMPACT_MS + C.STAR_BANG_MS) === 0,
        `${C.STAR_BANG_MS} ms`);
     ok("⚠️ …et il ne se déclenche sur AUCUNE autre scène",
        ["turn", "end", "card", "warn", null].every(k => Q.starBang(k, Q.STAR_FALL_IMPACT_MS + 10) === 0));
     /* ⚠️ IL TOMBE AVEC LA SECOUSSE ET AVEC LE DÉCOR, parce que les trois lisent le
        MÊME `STAR_FALL_IMPACT_MS` — une jointure, jamais trois listes (449). */
     ok("…et il coïncide avec l'apparition du décor d'impact",
-       Q.starImpactLanded("fall", Q.STAR_FALL_IMPACT_MS) && !Q.starImpactLanded("fall", Q.STAR_FALL_IMPACT_MS - 1));
+       Q.starImpactLanded("townFall", Q.STAR_FALL_IMPACT_MS) && !Q.starImpactLanded("townFall", Q.STAR_FALL_IMPACT_MS - 1));
   }
 }
 

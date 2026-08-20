@@ -7688,6 +7688,42 @@ export function buildSprites() {
     }
   }
 
+  /* 462 — LE PETIT FRAGMENT DE FERME. Ce n'est pas la tête blanche et bleue du
+     gros météore : un caillou sombre, irrégulier, incandescent dans ses fissures,
+     qui tourne si vite que sa silhouette change à chaque image. La rotation est
+     calculée dans les sommets (aucun `rotate`) afin que le banc et le navigateur
+     regardent exactement le même dessin. */
+  function drawStarFragmentMeteor(g2, cx, cy, ang, R, tMs, opt) {
+    const o = opt || {}, q = Math.max(1, Math.round(o.q || 1));
+    if (R < 1) return;
+    const t = +tMs || 0, spin = t / 72 + Math.sin(t / 39) * 0.22;
+    const ux = Math.cos(ang), uy = Math.sin(ang), nx = -uy, ny = ux;
+    // Traîne courte et orangée : une pierre brûlante, pas une boule de feu.
+    for (let i = 7; i >= 1; i--) {
+      const k = i / 7, wob = Math.sin(t / 47 + i * 2.3) * R * 0.22 * k;
+      qDisc(g2, cx - ux * R * (1.1 + i * 0.8) + nx * wob,
+            cy - uy * R * (1.1 + i * 0.8) + ny * wob,
+            Math.max(1, R * (0.44 - k * 0.28)), `rgba(255,${(150 + 55 * (1 - k)) | 0},58,${(0.58 * (1 - k)).toFixed(3)})`, q);
+    }
+    for (const [mul, al] of [[2.15, 0.08], [1.62, 0.13], [1.28, 0.20]])
+      qDisc(g2, cx, cy, R * mul, `rgba(255,112,48,${al})`, q);
+    const pts = [];
+    for (let i = 0; i < 9; i++) {
+      const a = spin + i * Math.PI * 2 / 9;
+      const rr = R * (0.78 + 0.22 * Math.sin(i * 4.7 + t / 113));
+      pts.push([cx + Math.cos(a) * rr, cy + Math.sin(a) * rr]);
+    }
+    g2.fillStyle = "#3b2928"; g2.beginPath();
+    pts.forEach((p, i) => i ? g2.lineTo(p[0], p[1]) : g2.moveTo(p[0], p[1]));
+    g2.closePath(); g2.fill();
+    g2.strokeStyle = "#e85b2a"; g2.lineWidth = Math.max(1, R * 0.16);
+    g2.beginPath(); g2.moveTo(cx - Math.cos(spin) * R * 0.65, cy - Math.sin(spin) * R * 0.65);
+    g2.lineTo(cx + Math.cos(spin + 0.55) * R * 0.18, cy + Math.sin(spin + 0.55) * R * 0.18);
+    g2.lineTo(cx + Math.cos(spin + 0.08) * R * 0.64, cy + Math.sin(spin + 0.08) * R * 0.64); g2.stroke();
+    qDisc(g2, cx + Math.cos(spin + 2.2) * R * 0.34, cy + Math.sin(spin + 2.2) * R * 0.34,
+          R * 0.18, "rgba(255,205,96,0.9)", q);
+  }
+
   /* ── LA TRAÎNÉE QUI RESTE DANS LE CIEL. Une bouffée, à un âge donné (0 fraîche,
      1 dissipée). ⚠️ ELLE EST UNE FONCTION DE L'ÂGE ET DE RIEN D'AUTRE : la
      cinématique la rappelle le long des positions que la comète a occupées, donc
@@ -14017,6 +14053,7 @@ house: house(),
     drawStarPlan,          // 454 — la feuille de plan de Kerguélen
     starCraterSink,
     drawStarComet,          // zip 448 — la comète, sa queue, sa traînée et son impact
+    drawStarFragmentMeteor, // 462 — petit caillou incandescent des impacts de ferme
     drawStarCometTrail,
     drawStarImpactFlash,
     drawEmoteBubble,        // zip 455 — le « ! » des PNJ : tampon d'annonce et impact

@@ -121,7 +121,8 @@ const STAR_FR = {
          c'est » — et ça, aucune de ces phrases ne le dit.
          ⚠️ LE PLAFOND DE 80 SIGNES N'A PAS BOUGÉ : le bandeau rabote en silence
          (449), donc c'est le TEXTE qui tient la contrainte, jamais la coupe. */
-      farmImpacts: "Cinq impacts fument sur la ferme. Ouvre la carte et fouille-les.",
+      farmImpacts: "Cinq impacts, sur les deux rives. Ouvre la carte et fouille-les.",
+      townWait: "Poursuis l’enquête. Une mission t’attend quelque part à Valley Town.",
       craterHot: "À l'est de Valley Town, le trou brûle encore. Attends qu'il refroidisse.",
       crater:    "Le cratère a refroidi. Descends : quelque chose se cache au fond.",
       lean:      "Écoute les ombres ici (E), puis à l'autre bout de la ville. Vite.",
@@ -162,10 +163,14 @@ const STAR_FR = {
     end:    "Le Bateau des Étoiles",
   },
   fall: {
+    agency: "L’Agence nationale d’astronomie avait prévu cinq sites sur la ferme.",
+    first: "Premier impact. Un site sur cinq.",
+    chain: "Deux autres fragments tombent coup sur coup.",
+    aftershocks: "Deux secousses encore, plus loin. Cinq sites sont à explorer.",
     /* ⚠️ « d'est en ouest », comme l'anglais depuis le 448 : le sillon est plus
        profond à son bout ouest, donc la course s'y arrête. Le texte suit l'image. */
     line1: "Le ciel se déchire, d'est en ouest.",
-    line2: "Cinq fragments frappent la ferme. Quelque chose de bien plus gros file vers la ville.",
+    line2: "Cette fois, ce n’est pas un fragment.",
     line3: "Tous les oiseaux de la vallée s'envolent d'un coup.",
     /* ⚠️⚠️ ZIP 455 — CETTE PHRASE ÉTAIT DEVENUE FAUSSE LE JOUR MÊME OÙ ON L'A
        ENFIN AFFICHÉE. Elle disait « Personne ne sort regarder. Personne n'en dit
@@ -190,7 +195,6 @@ const STAR_FR = {
        lui disait. *Une image qui n'est pas nommée ne raconte rien.*
        ⚠️ ELLE SE DIT À LA FERME SEULEMENT : en ville, on voit tomber le gros
        morceau, et lui annoncer qu'il n'a qu'un éclat serait faux. */
-    split: "Cinq points fument sur la ferme. Le gros météore a continué vers Valley Town.",
   },
   /* ╔═══════════════════════════════════════════════════════════════════════════
      ║ ZIP 455 — LE TAMPON. LA PIERRE EST PUBLIQUE, L'ÉTOILE RESTE SECRÈTE.
@@ -671,7 +675,8 @@ const STAR_EN = {
          c'est » — et ça, aucune de ces phrases ne le dit.
          ⚠️ LE PLAFOND DE 80 SIGNES N'A PAS BOUGÉ : le bandeau rabote en silence
          (449), donc c'est le TEXTE qui tient la contrainte, jamais la coupe. */
-      farmImpacts: "Five impacts smoke across the farm. Open the map and search them.",
+      farmImpacts: "Five impacts lie on both riverbanks. Open the map and search them.",
+      townWait: "Keep investigating. A mission awaits somewhere in Valley Town.",
       craterHot: "East of Valley Town the hole still burns. Wait for it to cool.",
       crater:    "The crater has cooled. Climb down: something hides at the bottom.",
       lean:      "Listen to the shadows here (E), then right across town. Be quick.",
@@ -733,6 +738,10 @@ const STAR_EN = {
   /* ── LA CHUTE. Personne d'autre ne la commente : c'est le thème (§3 de
      QUETE.md). Le silence de la ville EST la première chose étrange. */
   fall: {
+    agency: "The National Astronomy Agency predicted five sites across the farm.",
+    first: "First impact. One site out of five.",
+    chain: "Two more fragments fall one after the other.",
+    aftershocks: "Two more tremors, farther away. Five sites remain to explore.",
     /* ⚠️⚠️ ZIP 448 — « west to east » ÉTAIT FAUX, ET ÇA S'EST VU À L'ÉCRAN AVANT
        DE SE VOIR ICI : la comète descend d'EST EN OUEST (le sillon est plus
        profond à son bout ouest, c'est là que la course s'arrête, et les deux
@@ -741,12 +750,11 @@ const STAR_EN = {
        il AFFIRME, et une affirmation fausse coûte plus cher qu'un dessin
        approximatif. */
     line1: "The sky tears open, east to west.",
-    line2: "Five fragments strike the farm. Something much larger keeps flying toward town.",
+    line2: "This time, it is not a fragment.",
     line3: "Every bird in the valley goes up at once.",
     quiet: "Everyone saw the stone fall. Nobody will ever see what was inside it.",
     /* ⚠️⚠️ ZIP 458 — voir la note française : ce qui tombe dans le champ n'est
        qu'un éclat, et le gros est passé au-dessus, vers Valley Town. */
-    split: "Five places are smoking across the farm. The big meteor kept going toward Valley Town.",
   },
   /* ╔═══════════════════════════════════════════════════════════════════════════
      ║ ZIP 455 — LE TAMPON. LA PIERRE EST PUBLIQUE, L'ÉTOILE RESTE SECRÈTE.
@@ -1087,7 +1095,7 @@ const STAR_EN = {
       plans: "📐 Hand me the plans",
       timber: "🪵 Deliver all the timber",
     }[op] || op),
-    scene: (s) => ({ warn: "🎬 The announcement", fall: "🎬 The fall", turn: "🎬 The turn", end: "🎬 The ending" }[s] || s),
+    scene: (s) => ({ warn: "🎬 The announcement", fall: "🎬 The five farm impacts", townFall: "🎬 The Valley Town meteor", turn: "🎬 The turn", end: "🎬 The ending" }[s] || s),
     sceneLabel: "Replay a scene",
     chat: (who, what) => `${who} touched the star quest: ${what}.`,
   },

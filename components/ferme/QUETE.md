@@ -1,6 +1,6 @@
 # LA QUÊTE DE L'ÉTOILE — « LE BATEAU DES ÉTOILES » / « THE STAR BOAT »
 
-## ⚠️ AUTORITÉ 461 — REFONTE « CONSTELLATION DE LA BREBIS »
+## ⚠️ AUTORITÉ 462 — CINQ IMPACTS, PUIS VALLEY TOWN NATURELLEMENT
 
 La fiction de référence est désormais : **retrouver et apprivoiser sept petites
 étoiles colorées**, puis rendre visible dans le ciel la constellation fictive de
@@ -11,11 +11,20 @@ refondre entièrement ; sa présence historique ne vaut plus validation.
 
 ### Mission 1 livrée — les cinq impacts de la ferme
 
-- La chute montre **cinq fragments** frappant d'abord la ferme, puis le gros
-  météore poursuivant sa course jusqu'au cratère de Valley Town.
+- L'ouverture filme **un premier impact**, revient au fermier, attend exactement
+  **10 secondes**, puis filme **deux impacts enchaînés** sans retour intermédiaire.
+  Deux secousses, quelques secondes plus tard et espacées entre elles, signalent
+  les sites 4 et 5 sans reprendre la caméra.
+- La mise en scène nomme les **cinq sites prédits par l'Agence nationale
+  d'astronomie**. Les trois objets filmés sont de petits cailloux sombres,
+  incandescents, instables et tournoyant vite — jamais la boule de feu du gros
+  météore de Valley Town.
 - Le chapitre 1 demande de fouiller **cinq mini-cratères fumants**, répartis sur
-  toute la ferme et tous indiqués sur la carte. Le bandeau, ses cinq pastilles et
-  le guide suivent le prochain impact non fouillé.
+  toute la ferme, dont **deux à l'est de la rivière**, et tous indiqués sur la
+  carte. Le bandeau, ses cinq pastilles et le guide suivent le prochain impact.
+- Le placement refuse les constructions, les cultures et tous les sols labourés
+  ou aménagés. Il peut retenir arbres, souches et rochers : ils sont détruits au
+  contact, diffusés et persistés comme les autres modifications de tuiles.
 - Répartition canonique : **deux étoiles** (bleue et rose), **une plaque de
   matière météorique**, **deux cratères vides**. Les deux vides ferment seulement
   une piste et ne donnent rien.
@@ -25,6 +34,16 @@ refondre entièrement ; sa présence historique ne vaut plus validation.
 - L'apprivoisement conserve la posture existante : immobile, dos tourné. Il faut
   **60 secondes seul** ou **10 secondes dès qu'au moins deux joueurs sont dans la
   même zone**. Cette règle vaut aux deux petites étoiles et à l'étoile de ville.
+  Le correctif 462 fait porter à chaque demande la pose exacte qui a alimenté la
+  jauge ; l'hôte redérive cible, distance et orientation depuis cette pose, ce qui
+  empêche le refus final causé auparavant par la position réseau interpolée.
+- Après les cinq sites, aucune mission ne force le train. Le guide dit seulement
+  de continuer l'enquête et qu'une mission non précisée attend à Valley Town.
+- Le gros météore tombe après **deux minutes continues d'activité à Valley Town**.
+  Activité signifie : joueur dans la zone, aucun panneau bloquant ni menu
+  développeur, mouvement ou action dans les 15 dernières secondes. Une période
+  AFK remet le compteur à zéro. Cette seconde chute ouvre le cratère, l'étoile
+  reine et la suite historique (ingénieur, constructions, etc.).
 - L'étoile du grand cratère est désormais **l'étoile reine** : jaune, plus grande
   et plus lumineuse. Après son apprivoisement, elle révèle le navire brisé et
   devient le guide de sa construction.
@@ -32,18 +51,19 @@ refondre entièrement ; sa présence historique ne vaut plus validation.
   `farmMaterial`, et une partie déjà passée au chapitre 2 ne revient pas en
   arrière.
 
-Le code de référence est `STAR_FARM_IMPACTS` dans `quete.js`; les positions sont
-ancrées par `STAR_FARM_IMPACT_ANCHORS` et résolues autour des obstacles au
-chargement de la ferme. `verify-quete.mjs` contrôle la distribution 2/1/2,
-l'espacement, le guidage et les durées 60/10 s. `render-etoile.mjs` rend désormais
-les palettes jaune, bleue et rose.
+Le code de référence est `STAR_FARM_IMPACTS` et la chronologie
+`STAR_FARM_IMPACT_MS` dans `quete.js`. Les positions partent de
+`STAR_FARM_IMPACT_ANCHORS`. `verify-quete.mjs` contrôle distribution 2/1/2,
+deux sites à l'est, rythme 1+2+2, déclenchement de ville et handshake de jauge.
+`render-etoile.mjs` mesure le fragment sombre/incandescent séparément de la
+grosse comète.
 
 ---
 
 ## ARCHIVE DE CONCEPTION 444–460
 
 Les sections suivantes décrivent encore les chapitres historiques et servent à
-comprendre le code restant. Elles ne priment jamais sur l'autorité 461 ci-dessus.
+comprendre le code restant. Elles ne priment jamais sur l'autorité 462 ci-dessus.
 
 **Document de conception, ouvert au zip 444, RELU CONTRE LE CODE AU 452, PUIS AU 453, ÉTENDU AU
 454.** Écrit sur disque exprès (consigne de reprise) : si la session est interrompue, tout est ici,

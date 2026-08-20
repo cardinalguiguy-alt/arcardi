@@ -1,4 +1,20 @@
-# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 447
+# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 462
+
+## 462 — La ferme reçoit cinq fragments ; Valley Town garde le vrai météore
+
+Le chapitre du bateau ne téléporte plus son enjeu en ville ni n'ordonne d'y
+partir. Cinq impacts ouvrent l'enquête sur la ferme : le premier est vu seul,
+deux autres tombent coup sur coup après un retour de dix secondes au fermier,
+puis deux tremblements rappellent les sites encore à trouver. Deux cratères sont
+désormais à l'est de la rivière. Ils ne recouvrent ni bâtiments, ni cultures, ni
+sols labourés ; arbres et rochers peuvent être soufflés au contact.
+
+Le vrai météore de Valley Town est un événement séparé. Une fois les cinq sites
+fermés, le guide mentionne seulement une mission en ville. Deux minutes de jeu
+actif sur place — sans panneau bloquant, sans menu développeur et avec une entrée
+récente — déclenchent la boule de feu, le gros cratère et l'étoile reine. La
+jauge d'apprivoisement ne peut plus finir sur un refus réseau silencieux : sa
+pose finale voyage atomiquement jusqu'à l'hôte.
 
 Ce fichier est **l'autorité** sur la seconde carte du jeu et sur ses habitants. Il a été
 extrait de `CLAUDE.md` §6 au zip 428, sur l'ordre laissé par le §14.2 du 427 et sur le modèle
