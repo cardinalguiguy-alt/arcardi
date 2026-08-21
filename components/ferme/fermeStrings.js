@@ -125,8 +125,8 @@ const STAR_FR = {
       townWait: "Poursuis l’enquête. Une mission t’attend quelque part à Valley Town.",
       craterHot: "À l'est de Valley Town, le trou brûle encore. Attends qu'il refroidisse.",
       crater:    "Le cratère a refroidi. Descends : quelque chose se cache au fond.",
-      lean:      "Écoute les ombres ici (E), puis à l'autre bout de la ville. Vite.",
-      leanAgain: "Un endroit marqué. Traverse la ville et réécoute les ombres (E).",
+      lean:      "Observe les ombres ici (E), puis à l'autre bout de la ville. Vite.",
+      leanAgain: "Un endroit marqué. Traverse la ville et relis les ombres (E).",
       lakeShard: "Emmène l'étoile au ponton du lac, et plonge (E).",
       beadShard: "La verrerie, à l'est de la ville. Cherche la perle à la lumière (E).",
       nestShard: "Le nid de la pie, en haut de l'arbre. Éloigne l'oiseau (E).",
@@ -134,7 +134,7 @@ const STAR_FR = {
       /* ⚠️ ZIP 453 — « la cinquième note » → « la dernière note ». L'ordinal
          était vrai tant que le bateau avait cinq morceaux ; « dernière » l'est
          quel que soit leur nombre, et se lit exactement pareil. */
-      song:      "La cloche a la dernière note. Un à l'orgue, un au beffroi (E).",
+      song:      "La cloche complète le bateau. Un à l'orgue, un au beffroi (E).",
       /* ⚠️ ZIP 454 — plus courtes que leurs sœurs : le français gonfle de 15 à
          20 %, et ces deux-là portent un nom propre qu'on ne peut pas raccourcir. */
       engineer:     "Va demander un ingénieur naval à la mairie (E). L'étoile insiste.",
@@ -159,7 +159,7 @@ const STAR_FR = {
     crater: "Chapitre Deux — Le cratère",
     water:  "Chapitre Trois — Ce que l'eau gardait",
     thief:  "Chapitre Quatre — Les deux trésors de la voleuse",
-    note:   "Chapitre Cinq — La cinquième note",
+    note:   "Chapitre Cinq — La pièce manquante",
     end:    "Le Bateau des Étoiles",
   },
   fall: {
@@ -399,9 +399,9 @@ const STAR_FR = {
     /* ⚠️ « le cinquième » DEMANDAIT UN ORDINAL, donc une seconde table de mots à
        tenir juste. « le dernier » est vrai quel que soit le nombre de morceaux,
        et c'est exactement ce que le retournement raconte. */
-    turn1: (n, total) => `${Nfr(n)} morceaux sur ${nfr(total)} chantent ensemble. Le bateau attend le dernier.`,
+    turn1: (n, total) => `${Nfr(n)} morceaux sur ${nfr(total)} brillent ensemble. Le bateau attend le dernier.`,
     turn2: "Il n'y en a pas. Elle est tombée avant que son bateau ait une cloche.",
-    turn3: "Un bateau qui ne peut pas sonner. Une mer qu'il ne peut pas traverser.",
+    turn3: "Un bateau sans cloche. Une mer qu'il ne peut pas traverser.",
     turn4: "Alors, à l'autre bout de la ville, la cloche de l'église sonne. Une fois. Personne ne l'a tirée.",
   },
   s5: {
@@ -420,13 +420,13 @@ const STAR_FR = {
        dernière chose qu'on lit. */
     whyBell: "Une cloche, c'est ce qui dit où l'on est quand on n'y voit plus rien. En pleine mer, sans elle, on ne se retrouve pas.",
     bell4: "Petite. Emmène-moi. J'ai sonné quatre mille fois de la même poutre.",
-    duetTitle: "Le duo",
-    duetOrgan: "Répète les notes qu'elle chante, dans l'ordre. Les tuyaux s'allument quand c'est juste.",
-    duetAim: "Tiens les morceaux dans la lumière jusqu'au bout de la phrase. Le vent tourne sans arrêt.",
+    duetTitle: "L'alignement",
+    duetOrgan: "Reproduis les signaux lumineux dans l'ordre. Les tuyaux s'allument quand c'est juste.",
+    duetAim: "Tiens les morceaux dans la lumière jusqu'au bout de la séquence. Le vent tourne sans arrêt.",
     duetDropped: "La lumière s'est éteinte. On recommence, ensemble.",
-    duetPhrase: (n, total) => `Phrase ${n} sur ${total}`,
-    duetSolo: "Tu cales les touches et tu cours dans l'escalier. La note faiblit déjà.",
-    duetWin: (total) => `${Nfr(total)} notes. Le bateau entier, qui chante d'un coup, pour la première fois.`,
+    duetPhrase: (n, total) => `Séquence ${n} sur ${total}`,
+    duetSolo: "Tu cales les touches et tu cours dans l'escalier. Le signal faiblit déjà.",
+    duetWin: (total) => `${Nfr(total)} signaux. Le bateau entier s'illumine pour la première fois.`,
     /* ╔═══════════════════════════════════════════════════════════════════════
        ║ ZIP 453 — LA FIN NE MENT PLUS SUR CE QU'ELLE MONTRE.
        ╚═══════════════════════════════════════════════════════════════════════
@@ -553,7 +553,7 @@ const STAR_FR = {
     delivered: (part) => `${part} — livrée sur la cale. Le bateau grandit pour de bon.`,
     lastOne: "La dernière pièce est en place. Le bateau est fini.",
     noTristan: "Personne à la ferme ne sait travailler le bois comme ça.",
-    unbuilt: (n, total) => `La cloche a chanté, mais il manque encore du bois : ${n} pièces sur ${total}.`,
+    unbuilt: (n, total) => `La cloche a répondu, mais il manque encore du bois : ${n} pièces sur ${total}.`,
   },
   /* ⚠️ ZIP 453 — LE NAVIRE PREND LA MER AVEC EDUARDO (décision de Guillaume).
      Ces deux phrases REMPLACENT `voyagerDeparted` / `voyagerReturned` une fois
@@ -580,7 +580,7 @@ const STAR_FR = {
     crater: (who) => `${who} a apprivoisé l'étoile reine.`,
     tamed: (who) => `${who} a apprivoisé une petite étoile.`,
     lean: (who) => `${who} a croisé les ombres. Un nouvel endroit est marqué.`,
-    duet: (n, total) => `Phrase ${n} sur ${total}.`,
+    duet: (n, total) => `Séquence ${n} sur ${total}.`,
     /* ⚠️ ZIP 453 — « Le bateau a pris la mer » ÉTAIT FAUX : il restait à quai.
        Il est fini ; il partira avec Eduardo (voir `sail`). */
     done: "Le bateau est fini. L'étoile est rentrée.",
@@ -599,7 +599,7 @@ const STAR_FR = {
        vraiment — expliquer POURQUOI. */
     crater: "Tourne-lui le dos, ne bouge plus (E : pourquoi ?)",
     craterHot: "E : attendre que ça refroidisse",
-    lean: "E : la laisser chanter",
+    lean: "E : lire les ombres",
     dive: "E : plonger",
     sweep: "E : lever l'étoile",
     lure: "E : l'emmener plus loin",
@@ -679,8 +679,8 @@ const STAR_EN = {
       townWait: "Keep investigating. A mission awaits somewhere in Valley Town.",
       craterHot: "East of Valley Town the hole still burns. Wait for it to cool.",
       crater:    "The crater has cooled. Climb down: something hides at the bottom.",
-      lean:      "Listen to the shadows here (E), then right across town. Be quick.",
-      leanAgain: "One place marked. Cross the town and listen to the shadows again (E).",
+      lean:      "Read the shadows here (E), then right across town. Be quick.",
+      leanAgain: "One place marked. Cross the town and read the shadows again (E).",
       lakeShard: "Take the star to the lake pier, then dive (E).",
       beadShard: "The glassworks, east of town. Sweep the beads with the light (E).",
       /* ⚠️ ZIP 449 — « ON THE ROOF » ÉTAIT FAUX, ET IL L'ÉTAIT DÉJÀ DANS `s4.sand`
@@ -694,7 +694,7 @@ const STAR_EN = {
       belfry:    "Carry the star to the top of the church bell tower (E).",
       /* ⚠️ ZIP 453 — « the fifth note » → « the last note » : l'ordinal vieillit
          avec le nombre de morceaux, « last » non. */
-      song:      "The bell knows the last note. One at the organ, one in the belfry (E).",
+      song:      "The bell completes the boat. One at the organ, one in the belfry (E).",
       /* ⚠️⚠️ ZIP 454 — LES DEUX OBJECTIFS DE LA CONSTRUCTION. Ils suivent la même
          règle que les huit autres — OÙ et QUOI, jamais pourquoi — et ils sont plus
          courts que la moyenne parce qu'ils portent un NOM PROPRE, qui ne se coupe
@@ -732,7 +732,7 @@ const STAR_EN = {
     crater: "Chapter Two — The Crater",
     water:  "Chapter Three — What the Water Kept",
     thief:  "Chapter Four — The Thief's Two Prizes",
-    note:   "Chapter Five — The Fifth Note",
+    note:   "Chapter Five — The Missing Piece",
     end:    "The Star Boat",
   },
   /* ── LA CHUTE. Personne d'autre ne la commente : c'est le thème (§3 de
@@ -938,9 +938,9 @@ const STAR_EN = {
     got: (n, total) => `${Nen(n)} of ${nen(total)} pieces. The boat only needs its bell now.`,
     /* Le retournement. ⚠️ ZIP 453 — « the fifth » demandait un ordinal, donc une
        seconde table de mots ; « the last one » est vrai quel que soit le total. */
-    turn1: (n, total) => `${Nen(n)} of ${nen(total)} pieces sing together. The boat waits for the last one.`,
+    turn1: (n, total) => `${Nen(n)} of ${nen(total)} pieces shine together. The boat waits for the last one.`,
     turn2: "There is no fifth. It fell before its boat ever had a bell.",
-    turn3: "A boat that cannot ring. A sea it cannot cross.",
+    turn3: "A boat without a bell. A sea it cannot cross.",
     turn4: "Then, across the town, the church bell rings. Once. Nobody pulled it.",
   },
   /* ── ÉTAPE 5 : LE BEFFROI. */
@@ -953,17 +953,17 @@ const STAR_EN = {
     /* ⚠️⚠️ ZIP 458 — voir la note française : la cloche s'explique par le lac. */
     whyBell: "A bell is what tells you where you are when you can't see anything. Out at sea, without one, you don't find each other again.",
     bell4: "Small one. Take me with you. I have rung four thousand times from the same beam.",
-    duetTitle: "The duet",
+    duetTitle: "The alignment",
     /* ⚠️ ZIP 449 — CHAQUE POSTE DIT CE QU'IL FAIT *ET* CE QU'IL DOIT TENIR : le
        duo est le seul endroit où deux joueurs lisent DEUX consignes différentes
        en même temps, donc le seul où « je croyais que c'était toi » coûte la
        phrase entière. */
-    duetOrgan: "Repeat the notes it sings, in order. The pipes light up when you're right.",
-    duetAim: "Hold the pieces in the light until the phrase goes out. The wind keeps turning.",
+    duetOrgan: "Repeat the light signals in order. The pipes light up when you're right.",
+    duetAim: "Hold the pieces in the light until the sequence ends. The wind keeps turning.",
     duetDropped: "The light died. Again, together.",
-    duetPhrase: (n, total) => `Phrase ${n} of ${total}`,
-    duetSolo: "You wedge the keys down and run for the stairs. The note is already fading.",
-    duetWin: (total) => `${Nen(total)} notes. The whole boat, singing at once, for the first time.`,
+    duetPhrase: (n, total) => `Sequence ${n} of ${total}`,
+    duetSolo: "You wedge the keys down and run for the stairs. The signal is already fading.",
+    duetWin: (total) => `${Nen(total)} signals. The whole boat lights up for the first time.`,
     /* La résolution. ⚠️⚠️ ZIP 453 — voir la note française : `end1` racontait un
        appareillage que le dessin ne montrait pas et que le navire ne faisait
        jamais. Le bateau reste, entier ; Eduardo l'emmènera. */
@@ -1055,7 +1055,7 @@ const STAR_EN = {
     delivered: (part) => `${part} — set on the slipway. The boat is growing for real now.`,
     lastOne: "The last piece is in place. The boat is finished.",
     noTristan: "Nobody on the farm can work timber like that.",
-    unbuilt: (n, total) => `The bell has sung, but the wood is short: ${n} pieces of ${total}.`,
+    unbuilt: (n, total) => `The bell has answered, but the wood is short: ${n} pieces of ${total}.`,
   },
   /* ⚠️ ZIP 453 — voir la note française : elles remplacent `voyagerDeparted` /
      `voyagerReturned` une fois la quête finie, donc zéro `send()` de plus. */
@@ -1110,7 +1110,7 @@ const STAR_EN = {
     crater: (who) => `${who} tamed the queen star.`,
     tamed: (who) => `${who} tamed a little star.`,
     lean: (who) => `${who} crossed the shadows. A new place is marked.`,
-    duet: (n, total) => `Phrase ${n} of ${total}.`,
+    duet: (n, total) => `Sequence ${n} of ${total}.`,
     /* ⚠️ ZIP 453 — « The boat sailed » était faux : il restait à quai. */
     done: "The boat is finished. The star went home.",
   },
@@ -1125,7 +1125,7 @@ const STAR_EN = {
     tame: "Turn your back, stand still (E: why?)",
     crater: "Turn your back, stand still (E: why?)",
     craterHot: "E: wait for it to cool",
-    lean: "E: let it sing",
+    lean: "E: read the shadows",
     dive: "E: dive",
     sweep: "E: hold the star up",
     lure: "E: lead it away",

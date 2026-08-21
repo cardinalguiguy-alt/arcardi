@@ -3867,9 +3867,9 @@ export const TOWN_STAIR_LANDINGS = [
    d'autre. Trois grandeurs, trois paramètres (§4). */
 export const TOWN_RAILS = [
   // Le garde-corps du bord est du palier haut, celui du défaut ci-dessus.
-  { x: 143, y: 29, w: 6, h: 1 },
+  { x: 143, y: 29, w: 6, h: 1, axis: "x" },
   // Le bord ouest du palier, qui surplombe le vide de la même façon.
-  { x: 139, y: 31, w: 4, h: 1 },
+  { x: 139, y: 31, w: 4, h: 1, axis: "x" },
   /* ⚠️⚠️ ZIP 447 — ET LES RAMPES DES DEUX VOLÉES, QUI SONT L'INDICE DE
      PROFONDEUR LE PLUS FORT DE TOUT L'ESCALIER. Elles sont posées SUR les cases
      de marche extérieures, pas à côté : c'est ce qui les fait MONTER avec la
@@ -3882,8 +3882,8 @@ export const TOWN_RAILS = [
      Un escalier dont la rampe ne prend pas de place est un escalier dont la
      rampe est peinte sur le sol. `verify-vallee` a confirmé que les 21 756
      trajets passent toujours. */
-  { x: 143, y: 32, w: 1, h: 2 }, { x: 148, y: 32, w: 1, h: 2 },   // volée basse
-  { x: 139, y: 28, w: 1, h: 2 }, { x: 142, y: 28, w: 1, h: 2 },   // volée haute
+  { x: 143, y: 32, w: 1, h: 2, axis: "y" }, { x: 148, y: 32, w: 1, h: 2, axis: "y" },   // volée basse
+  { x: 139, y: 28, w: 1, h: 2, axis: "y" }, { x: 142, y: 28, w: 1, h: 2, axis: "y" },   // volée haute
 ];
 
 export const TOWN_HOUSES = [                        // door faces south onto a street

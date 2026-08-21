@@ -92,6 +92,24 @@ const ST = S.townStone;
   writePNG(path.join(OUT, "escaliers-surfaces.png"), up.px, up.W, up.H);
 }
 
+/* 465 — les deux axes de rambarde côte à côte. Une rotation de la planche
+   coucherait les montants ; la version N-S garde donc des poteaux verticaux et
+   fait fuir ses lisses dans la profondeur. */
+{
+  const W = 104, H = 48, sh = makeCanvas(W, H);
+  sh.ctx.fillStyle = "#58764b"; sh.ctx.fillRect(0, 0, W, H);
+  sh.ctx.drawImage(S.townRail, 8, 13); sh.ctx.drawImage(S.townRail, 24, 13);
+  sh.ctx.drawImage(S.townRailY, 62, 8); sh.ctx.drawImage(S.townRailY, 70, 20);
+  const up = scale(sh.px, W, H, 4);
+  writePNG(path.join(OUT, "escaliers-rambardes.png"), up.px, up.W, up.H);
+  const a = S.townRail.__px, b = S.townRailY.__px;
+  let diff = 0;
+  for (let i = 0; i < Math.min(a.length, b.length); i++) if (a[i] !== b[i]) diff++;
+  ok(S.townRail.width === 16 && S.townRailY.width === 16,
+     "⚠️ les deux rambardes occupent exactement une case", `${S.townRail.width}/${S.townRailY.width} px`);
+  ok(diff > 500, "⚠️⚠️ la volée N-S ne réemploie plus l'orientation E-O", `${diff} composantes distinctes`);
+}
+
 console.log("\n=== 1. le bouclage du pavé de 4×4 ===\n");
 for (const [name, atlas] of [["marches N-S", ST.stair.v], ["marches E-O", ST.stair.h], ["dallage", S.townRoad.flag]]) {
   const N = atlas.width, px = atlas.__px;

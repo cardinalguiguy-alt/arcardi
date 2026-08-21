@@ -988,8 +988,19 @@ export const STAR_JOIN_SPIN_MS = 1000;    // « pendant une seconde » — le mo
 export const STAR_JOIN_SETTLE_MS = 500;
 export const STAR_JOIN_MS = STAR_JOIN_CLIMB_MS + STAR_JOIN_SPIN_MS + STAR_JOIN_SETTLE_MS;
 export const STAR_JOIN_SPIN_TURNS = 1.5;
-export const STAR_JOIN_RISE_PX = 26;      // du sol à l'épaule, à la tuile de référence
+export const STAR_JOIN_CRATER_LIFT_PX = 2.5; // du centre visuel du cratère au premier pixel animé
 export const STAR_JOIN_ORBIT_PX = 13;     // le rayon du tournicotage
+export const STAR_BUBBLE_FADE_MS = 900;
+
+/* 465 — les conseils ne deviennent pas des pancartes permanentes. Ils restent
+   pleinement lisibles pendant leur durée, s'effacent en douceur, puis le survol
+   de n'importe quelle étoile les rappelle sans relancer leur minuterie. */
+export function starBubbleAlpha(nowMs, untilMs, hovered) {
+  if (hovered) return 1;
+  const d = (+untilMs || 0) - (+nowMs || 0);
+  if (d >= 0) return 1;
+  return Math.max(0, Math.min(1, 1 + d / STAR_BUBBLE_FADE_MS));
+}
 
 /* Rend `{ dx, dy, scale, front, phase }` ou `null` une fois l'arrivée finie.
    ⚠️ `dx`/`dy` SONT DES PIXELS À LA TUILE 16 : l'appelant les met à l'échelle par
@@ -1010,7 +1021,7 @@ export const STAR_JOIN_ORBIT_PX = 13;     // le rayon du tournicotage
 function starJoinSpin(k) {
   const a = Math.PI / 2 + k * Math.PI * 2 * STAR_JOIN_SPIN_TURNS;   // elle démarre DANS LE DOS
   const r = STAR_JOIN_ORBIT_PX * (1 - 0.35 * k);                     // la spirale se resserre
-  return { dx: Math.cos(a) * r, dy: -Math.sin(a) * r * 0.38, scale: 1, front: Math.sin(a) < 0, phase: "spin" };
+  return { dx: Math.cos(a) * r, dy: -Math.sin(a) * r * 0.38, scale: 1, front: Math.sin(a) < 0, phase: "spin", anchor: 1 };
 }
 const STAR_JOIN_A = starJoinSpin(0), STAR_JOIN_B = starJoinSpin(1);
 
@@ -1025,10 +1036,11 @@ export function starJoinAnim(sinceMs) {
     const e = k * k * (3 - 2 * k);
     return {
       dx: (-3 + Math.sin(k * Math.PI * 2.4) * 2.4) * (1 - e) + STAR_JOIN_A.dx * e,
-      dy: STAR_JOIN_RISE_PX * (1 - e) + STAR_JOIN_A.dy * e,   // + = plus bas ; elle part du sol
+      dy: STAR_JOIN_CRATER_LIFT_PX * (1 - e) + STAR_JOIN_A.dy * e,
       scale: 0.72 + 0.28 * e,
       front: false,                                            // dans le DOS, tout le temps
       phase: "climb",
+      anchor: e,                                                // le corps quitte réellement le cratère
     };
   }
   if (t < STAR_JOIN_CLIMB_MS + STAR_JOIN_SPIN_MS)
@@ -1037,7 +1049,20 @@ export function starJoinAnim(sinceMs) {
      jamais repasser devant (le tour est fini, elle n'a plus rien à montrer). */
   const k = (t - STAR_JOIN_CLIMB_MS - STAR_JOIN_SPIN_MS) / STAR_JOIN_SETTLE_MS;
   const e = 1 - (1 - k) * (1 - k);
-  return { dx: STAR_JOIN_B.dx * (1 - e), dy: STAR_JOIN_B.dy * (1 - e), scale: 1, front: false, phase: "settle" };
+  return { dx: STAR_JOIN_B.dx * (1 - e), dy: STAR_JOIN_B.dy * (1 - e), scale: 1, front: false, phase: "settle", anchor: 1 };
+}
+
+/* 465 — Le décollage n'est plus une illusion attachée au joueur. Le point de
+   base interpole depuis le centre vivant du cratère jusqu'au joueur ; la courbe
+   ci-dessus ne fournit que la progression. Garder cette jointure pure permet au
+   banc de prouver les deux extrémités pour la reine comme pour les petites. */
+export function starJoinPoint(origin, player, anim) {
+  if (!origin || !player) return player || origin || null;
+  const k = Math.max(0, Math.min(1, anim && Number.isFinite(anim.anchor) ? anim.anchor : 1));
+  return {
+    x: origin.x + (player.x - origin.x) * k,
+    y: origin.y + (player.y - origin.y) * k,
+  };
 }
 
 /* ── LES OMBRES QUI PENCHENT (chapitre 2). Une direction n'est pas un lieu ; il

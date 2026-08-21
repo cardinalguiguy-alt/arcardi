@@ -938,12 +938,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      de chacun à partir des positions qui circulent déjà (§3 de CLAUDE.md). */
   const craterSlipRef = useRef(null);                // zip 459 — MON état de glissade/grimpe
   const craterSlipOtherRef = useRef(new Map());      // zip 459 — celui des AUTRES, déduit de leur position
-  /* 458/464 — l'étoile que CE client vient de voir franchir sa jauge et l'instant
-     local de ce passage. ⚠️ UNE HORLOGE LOCALE, comme l'ancre de la chaleur du
-     cratère (446) : `found[id].at` est une date de l'HÔTE, la soustraire de la
-     nôtre est la faute du §3. Le couple `{ id, t0 }` est indispensable : un seul
-     temps réservé à `crater` faisait sauter le `climb` des deux petites étoiles. */
-  const starJoinRef = useRef({ id: null, t0: 0 });
+  /* 458/464/465 — une horloge LOCALE, mais désormais PAUSABLE. `elapsed` ne
+     progresse que lorsque le monde est visible : aucun rappel ni menu ne peut
+     consommer le décollage derrière lui. `origin` est le cratère vivant, pas
+     une approximation « derrière les pieds », donc reine et petites se
+     détachent du pixel qu'elles occupaient juste avant la fin de la jauge. */
+  const starJoinRef = useRef({ id: null, origin: null, elapsed: 0, last: 0 });
   const craterDustRef = useRef([]);                  // zip 458 — { x, y, t0, seed } — les bouffées, purement locales
   const craterDustNextRef = useRef(new Map());       // zip 458 — la cadence d'émission, par joueur
   /* ⚠️ LA CAMÉRA DE SCÈNE EST UN REF LU PAR `getCam` ET `getCamTown` — UNE
@@ -983,6 +983,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      `send()`, ce qui se voit comme une barre pleine une demi-seconde avant qu'elle
      sorte — jamais l'inverse, puisque l'hôte démarre son compte AVANT nous. */
   const starCalmT0Ref = useRef(0);
+  const starCalmBubbleRef = useRef({ key: "", until: 0 }); // 465 — texte de posture temporaire, jauge permanente
   /* ⚠️⚠️ ZIP 456 — QUI PARLE, CETTE IMAGE. UN SEUL. Vu à l'écran dès la première
      séance : les vingt résidents apparaissent groupés près de la maison, neuf
      sont nerveux, et neuf bulles se sont ouvertes EN MÊME TEMPS, empilées les
@@ -1000,7 +1001,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      se mélangent pas d'une carte à l'autre, sinon le saut de zone ferait
      traverser la ville en ligne droite (voir LEO_TELEPORT_TILES). */
   const starTrailRef = useRef({ farm: [], town: [], court: [] });
-  const starBubbleRef = useRef({ text: "", until: 0, key: "" });  // ce que l'étoile dit, au-dessus d'elle
+  const starBubbleRef = useRef({ text: "", until: 0, key: "" });  // 465 — le dernier conseil reste rappelable au survol
   const starHideRef = useRef(0);                     // elle se cache : horodatage de fin (§3 — le secret se MONTRE)
   const starSeenRef = useRef({});                    // scènes/bulles déjà vues DANS CETTE SESSION (le rappel, une fois)
   /* ╔══════════════════════════════════════════════════════════════════════════
@@ -1328,12 +1329,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      vit dans un ref de SESSION (`starSeenRef`), pas dans l'état partagé — le
      partager voudrait dire que le rappel de l'un consomme celui de l'autre. */
   useEffect(() => {
-    if (phase !== "playing" || starSeenRef.current.recap) return;
+    if (phase !== "playing" || starSeenRef.current.recap || starSeenRef.current.recapPending) return;
     const e = sharedRef.current.star;
     if (!e || !Q.starStarted(e) || Q.starDone(e)) return;
-    starSeenRef.current.recap = true;
-    const t = setTimeout(() => setStarRecap(true), 1200);
-    return () => clearTimeout(t);
+    /* 465 — le rappel attend la FIN VISIBLE du décollage. Avant, il s'ouvrait
+       1,2 s après la jauge, recouvrait la montée puis le tour, et donnait à la
+       fermeture l'impression que l'étoile n'avait jamais quitté le cratère. */
+    starSeenRef.current.recapPending = true;
+    let t = 0;
+    const open = () => {
+      if (starJoinActive() || !starBlockingPanelsClear()) { t = setTimeout(open, 180); return; }
+      starSeenRef.current.recapPending = false;
+      starSeenRef.current.recap = true;
+      setStarRecap(true);
+    };
+    t = setTimeout(open, 1200);
+    return () => { clearTimeout(t); starSeenRef.current.recapPending = false; };
   }, [phase, starTick]);
   useEffect(() => { devMenuOpenRef.current = devMenuOpen; }, [devMenuOpen]); // zip 392
   useEffect(() => { shopOpenRef.current = shopOpen; }, [shopOpen]);
@@ -13321,7 +13332,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // file ici et rendues dans une dernière passe, APRÈS tout le reste,
       // donc toujours au-dessus (voir bubbleQueue.forEach plus bas).
       const bubbleQueue = [];
-      const queueBubble = (cx, by, text, major) => bubbleQueue.push({ cx, by, text, major });
+      const queueBubble = (cx, by, text, major, alpha) => bubbleQueue.push({ cx, by, text, major, alpha });
 
       // Zip 367 : la case visee est desormais calculee UNE fois par frame, ici,
       // avant la boucle de tuiles. Elle servait deja au lisere blanc du curseur
@@ -14424,12 +14435,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          ⚠️ C'est la leçon du 453 (« une chaîne que personne n'affiche »), d'un
          cran plus bas et plus vicieuse : ici le lecteur EXISTE, il est écrit,
          relu, compté par le banc — il ne s'exécute simplement jamais. */
-        const sb = starBubbleNow();
-        if (sb) queueBubble(Math.round((cp ? cp.x : m.x) * T) + 8, Math.round((cp ? cp.y : m.y) * T) - (cp ? 22 : 34), sb, "star");   // zip 455 — la voix qui guide se reconnaît
+        const sb = starBubbleNow(cps);
+        if (sb) queueBubble(Math.round((cp ? cp.x : m.x) * T) + 8, Math.round((cp ? cp.y : m.y) * T) - (cp ? 22 : 34), sb.text, "star", sb.alpha);   // 465 — fondu, rappel au survol
         const cm = starCalmUi();
         if (cm) {
           const bx = Math.round(m.x * T) + 8, by = Math.round(m.y * T) - 20;
-          if (cm.text) queueBubble(bx, by - 9, cm.text, "star");
+          const ca = Q.starBubbleAlpha(performance.now(), cm.textUntil, starCompanionHovered(cps, true));
+          if (cm.text && ca > 0) queueBubble(bx, by - 9, cm.text, "star", ca);
           bubbleQueue.push({ cx: bx, by, meter: cm });
         }
       }
@@ -14873,7 +14885,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (bq.emote) spritesRef.current.drawEmoteBubble(ctx, bq.cx, bq.by, bq.emote.a);
           else if (bq.work) spritesRef.current.drawWorkBubble(ctx, bq.cx, bq.by, bq.work.k, performance.now());   // zip 459
           else if (bq.meter) spritesRef.current.drawCalmMeter(ctx, bq.cx, bq.by, bq.meter.k, bq.meter);
-          else drawSpeechBubble(ctx, bq.cx, bq.by, bq.text, bq.major);
+          else { ctx.save(); ctx.globalAlpha *= bq.alpha === undefined ? 1 : bq.alpha; drawSpeechBubble(ctx, bq.cx, bq.by, bq.text, bq.major); ctx.restore(); }
         } catch (e) { console.error("[FERME] bulle ignorée", e); }
       }
 
@@ -16181,7 +16193,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          aurait une bulle trente pixels sous ses pieds. Le décalage est appliqué
          par l'appelant, une fois, au moment de la mise en file. */
       const townBubbles = [];
-      const queueTownBubble = (cx, by, text, major) => townBubbles.push({ cx, by, text, major });
+      const queueTownBubble = (cx, by, text, major, alpha) => townBubbles.push({ cx, by, text, major, alpha });
       for (let y = y0; y <= yBot; y++) for (let x = x0; x <= x1; x++) {
         const i = y * tw.w + x, g = tw.ground[i];
         const e = tw.elev[i], oy = -e * EP;
@@ -16616,7 +16628,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (queenWaiting)
             pushE((cpos.y + 1) * T - 0.02, ce, () => drawStarWisp({
               x: cpos.x, y: cpos.y + 0.12, state: 1, pose: Math.floor(now / 210) & 3,
-              color: "yellow", scale: 1.55, queen: true,
+              color: "yellow", scale: 1, queen: true,
             }));
           /* ⚠️⚠️ LA FUMÉE N'EST PAS UN DÉCAL DE SOL, DONC ELLE NE SE PEINT PAS
              ICI : elle MONTE, jusqu'à une case et demie au-dessus du trou. Peinte
@@ -17086,6 +17098,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                      devant ou toujours derrière le fermier. Ici il doit être les
                      DEUX, selon qu'on passe au nord ou au sud de lui. */
                   : pr.kind === "rail" ? sprites.townRail
+                  : pr.kind === "railY" ? sprites.townRailY
                   : pr.kind === "bloomBed" ? pick(sprites.townBloomBed, pr)
                   : pr.kind === "bloomRow" ? sprites.townBloomRow
                   : pr.kind === "rockBed" ? sprites.townRockBed
@@ -17643,7 +17656,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const cm = ef || starCalmUi();
         if (cm) {
           const by = Math.round(m.y * T) - 20 - myE * C.TOWN_ELEV_PX - myLift;
-          if (cm.text) queueTownBubble(Math.round(m.x * T) + 8, by - 8, cm.text, "star");
+          const ca = Q.starBubbleAlpha(performance.now(), cm.textUntil, starCompanionHovered([], true));
+          if (cm.text && ca > 0) queueTownBubble(Math.round(m.x * T) + 8, by - 8, cm.text, "star", ca);
           townBubbles.push({ cx: Math.round(m.x * T) + 8, by, meter: cm });
         }
       }
@@ -17659,11 +17673,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
         const cp = starVoiceCompanion(cps);
         // zip 456 — sans compagnon, la voix se pose au-dessus du joueur (voir la ferme).
-        const sb = starBubbleNow();
+        const sb = starBubbleNow(cps);
         if (sb) {
           const bxp = cp ? cp.x : m.x, byp = cp ? cp.y : m.y;
           const be = cp ? elevTown(tw, bxp, byp) : myE, bl = cp ? archPxTown(tw, bxp, byp) : myLift;
-          queueTownBubble(Math.round(bxp * T) + 8, Math.round(byp * T) - (cp ? 22 : 34) - be * C.TOWN_ELEV_PX - bl, sb, "star");   // zip 455
+          queueTownBubble(Math.round(bxp * T) + 8, Math.round(byp * T) - (cp ? 22 : 34) - be * C.TOWN_ELEV_PX - bl, sb.text, "star", sb.alpha);   // 465
         }
       }
       if (myTaxi) {
@@ -17721,7 +17735,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         try {
           if (bq.emote) spritesRef.current.drawEmoteBubble(ctx, bq.cx, bq.by, bq.emote.a);   // zip 455
           else if (bq.meter) spritesRef.current.drawCalmMeter(ctx, bq.cx, bq.by, bq.meter.k, bq.meter);   // zip 456
-          else drawSpeechBubble(ctx, bq.cx, bq.by, bq.text, bq.major);
+          else { ctx.save(); ctx.globalAlpha *= bq.alpha === undefined ? 1 : bq.alpha; drawSpeechBubble(ctx, bq.cx, bq.by, bq.text, bq.major); ctx.restore(); }
         } catch (e) { console.error("[FERME] bulle ville ignorée", e); }
       }
       /* ╔══════════════════════════════════════════════════════════════════════
@@ -18006,6 +18020,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const cw = courtWorldRef.current, m = meRef.current, sprites = spritesRef.current;
       if (!cw || !sprites) return;
       const cam = getCamCourt();
+      starViewRef.current = { cam, zoom: ZOOM };      // 465 — survol des étoiles à l'intérieur aussi
       const myFloor = E.courtFloorOf(m.y + 0.2);
       const fr = courtFloorRect(myFloor);
       ctx.setTransform(ZOOM, 0, 0, ZOOM, -Math.round(cam.x * ZOOM), -Math.round(cam.y * ZOOM));
@@ -18377,10 +18392,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
         const cp = starVoiceCompanion(cps);
         // zip 456 — sans compagnon, la voix se pose au-dessus du joueur (voir la ferme).
-        const sb = starBubbleNow();
+        const sb = starBubbleNow(cps);
         if (sb) {
           const bxp = cp ? cp.x : m.x, byp = cp ? cp.y : m.y;
-          draws.push({ y: 1e9, fn: () => drawSpeechBubble(ctx, Math.round(bxp * T) + 8, Math.round(byp * T) - (cp ? 22 : 34) - myRz, sb, "star") });   // zip 455
+          draws.push({ y: 1e9, fn: () => { ctx.save(); ctx.globalAlpha *= sb.alpha; drawSpeechBubble(ctx, Math.round(bxp * T) + 8, Math.round(byp * T) - (cp ? 22 : 34) - myRz, sb.text, "star"); ctx.restore(); } });   // 465
         }
       }
       /* ╔══════════════════════════════════════════════════════════════════════
@@ -19189,7 +19204,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        vivrait vieillirait (§2 du piège n°1). */
     function drawStarWisp(cp) {
       const sprites = spritesRef.current;
-      const fam = sprites && cp && cp.color && sprites.starWispColors
+      const fam = sprites && cp && cp.queen && sprites.starWispQueen
+        ? sprites.starWispQueen
+        : sprites && cp && cp.color && sprites.starWispColors
         ? sprites.starWispColors[cp.color]
         : sprites && sprites.starWisp;
       if (!cp || !fam || !fam[cp.state]) return;
@@ -19231,9 +19248,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     /* La bulle de l'étoile : le texte courant, s'il n'a pas expiré. Rendue par
        l'appelant (chaque carte a sa passe de bulles) pour qu'elle passe par-dessus
        le décor comme celles des résidents. */
-    function starBubbleNow() {
+    function starCompanionHovered(cps, includeTame) {
+      if (!canvas) return false;
+      const rect = canvas.getBoundingClientRect();
+      const view = starViewRef.current, cam = view && view.cam, zoom = (view && view.zoom) || 1;
+      if (!cam || !rect.width || !rect.height) return false;
+      const sx = (mouseRef.current.x - rect.left) * canvas.width / rect.width;
+      const sy = (mouseRef.current.y - rect.top) * canvas.height / rect.height;
+      const wx = sx / zoom + cam.x, wy = sy / zoom + cam.y;
+      const points = (cps || []).map(cp => ({ x: cp.x, y: cp.y, queen: cp.queen }));
+      if (includeTame) {
+        const c = starTameTarget(meRef.current);
+        if (c) points.push({ x: c.x, y: c.y + (c.id === "crater" ? 0.12 : 0.18), queen: c.id === "crater" });
+      }
+      return points.some(cp => Math.hypot(wx - (cp.x * T + T / 2), wy - ((cp.y + 1) * T - 16)) <= T * (cp.queen ? 1.2 : 0.9));
+    }
+    function starBubbleNow(cps) {
       const b = starBubbleRef.current;
-      return (b && b.text && performance.now() < b.until) ? b.text : null;
+      if (!b || !b.text) return null;
+      const alpha = Q.starBubbleAlpha(performance.now(), b.until, starCompanionHovered(cps));
+      return alpha > 0 ? { text: b.text, alpha } : null;
     }
 
     /* ╔══════════════════════════════════════════════════════════════════════
@@ -22095,7 +22129,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      ce qui est juste pour une comète et absurde pour un panneau — l'hôte qui
      visite le beffroi n'aurait jamais vu la question. C'est la différence entre
      réutiliser une règle et réutiliser un empilement de règles. */
-  function starPanelsClear() {
+  function starBlockingPanelsClear() {
     if (starUiOpenRef.current) return false;                 // mini-jeu, carte de chapitre, rappel, invite
     if (zoneTransRef.current && zoneTransRef.current.active) return false;
     if (mapOpenRef.current || shopOpenRef.current || binOpenRef.current || bagOpenRef.current
@@ -22104,6 +22138,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (devMenuOpenRef.current) return false;
     return true;
   }
+  function starJoinActive() {
+    const j = starJoinRef.current;
+    if (j && j.id && j.elapsed < Q.STAR_JOIN_MS) return true;
+    /* 465 — la réception réseau ouvre parfois la carte de chapitre AVANT la
+       prochaine image de `starWatch`. On reconnaît aussi cette frame atomique
+       en comparant la formation reçue à celle que le veilleur a vue. */
+    const w = starWatchRef.current, e = sharedRef.current.star;
+    return !!(w && Q.starFollowerAdded(w.followers || [], e));
+  }
+  /* Les scènes et cartes attendent aussi l'arrivée : la priorité visuelle est
+     celle du geste que le joueur vient de réussir. L'horloge d'arrivée, elle,
+     consulte `starBlockingPanelsClear` directement pour ne pas se bloquer sur
+     sa propre présence. */
+  function starPanelsClear() { return starBlockingPanelsClear() && !starJoinActive(); }
   /* ⚠️⚠️ ZIP 458 — ELLE PREND LA CLÉ, ET LA CONDITION DE CIEL NE VAUT QUE POUR
      LA CHUTE. C'est ce qui permet de mettre le RETOURNEMENT et la FINALE dans la
      même file (voir `applyDeltas`) : la finale se joue dans le BEFFROI, donc en
@@ -22114,6 +22162,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!m || m.sleeping) return false;
     if (key === "fall" && (m.zone || "farm") !== "farm") return false;
     if (key === "townFall" && (m.zone || "farm") !== "town") return false;
+    if (starJoinActive()) return false;                      // 465 — ne jamais couvrir le décollage
     if (starUiOpenRef.current) return false;                 // mini-jeu, carte de chapitre, rappel
     if (zoneTransRef.current && zoneTransRef.current.active) return false;
     if (mapOpenRef.current || shopOpenRef.current || binOpenRef.current || bagOpenRef.current
@@ -22173,7 +22222,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (key === "fall") {
       starCamRef.current = null; starHitRef.current = null;
       starMarkFallSeen("fall");
-      setTimeout(() => setStarCard({ key: Q.starChapterKey(sharedRef.current.star) }), Q.STAR_FARM_SCENE_MS - 2500);
+      setTimeout(() => starShowCard(Q.starChapterKey(sharedRef.current.star)), Q.STAR_FARM_SCENE_MS - 2500);
     } else if (key === "townFall") {
       const hit = starImpactSpot();
       starHitRef.current = hit;
@@ -22181,10 +22230,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const halfDiag = vw1 ? Math.hypot(vw1.vw, vw1.vh) / 2 / C.TILE : 12;
       starCamRef.current = hit ? Q.starCamTarget(hit.zone, hit, halfDiag) : null;
       starMarkFallSeen("townFall");
-      setTimeout(() => setStarCard({ key: Q.starChapterKey(sharedRef.current.star) }), Q.STAR_FALL_MS - 3000);
+      setTimeout(() => starShowCard(Q.starChapterKey(sharedRef.current.star)), Q.STAR_FALL_MS - 3000);
     } else {
       starCamRef.current = null; starHitRef.current = null;
-      if (key === "turn" && ch) setTimeout(() => setStarCard({ key: ch }), Q.STAR_TURN_MS - 1500);
+      if (key === "turn" && ch) setTimeout(() => starShowCard(ch), Q.STAR_TURN_MS - 1500);
     }
   }
 
@@ -22681,7 +22730,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (starResidentNear(zone, cx, cy)) starHideRef.current = nowMs + Q.STAR_HIDE_MS;
     const hidden = nowMs < starHideRef.current;
     const joining = starJoinRef.current;
-    const join = Q.starJoinAnim(joining.t0 ? nowMs - joining.t0 : -1);
+    if (joining.id) {
+      const dt = Math.max(0, Math.min(80, nowMs - (joining.last || nowMs)));
+      if ((!joining.origin || joining.origin.zone === zone) && starBlockingPanelsClear())
+        joining.elapsed = Math.min(Q.STAR_JOIN_MS, joining.elapsed + dt);
+      joining.last = nowMs;
+    }
+    const join = Q.starJoinAnim(joining.id ? joining.elapsed : -1);
     const lead = Q.starHas(e, "crater") ? starGuideAim(zone, cx, cy) : null;
     return specs.map((s, i) => {
       const queen = !!s.queen;
@@ -22715,7 +22770,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         pose: Math.floor(nowMs / (queen ? 220 : 260) + i) & 3,
         hiding,
         color: s.color || "yellow",
-        scale: queen ? 1.58 : 0.82,
+        scale: queen ? 1 : 0.82,
         queen,
         guide: !!guide,
       };
@@ -22723,7 +22778,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          SA jauge. La réserver à `queen` laissait les petites disparaître de leur
          cratère puis surgir directement dans la formation, alors que la courbe
          `climb → spin → settle` existait déjà. Les autres gardent leur place. */
-      if (s.id === joining.id && join) return { ...cp, x: cx, y: cy, hiding: false, join };
+      if (s.id === joining.id && join) {
+        const base = Q.starJoinPoint(joining.origin, { x: cx, y: cy }, join);
+        return { ...cp, x: base.x, y: base.y, hiding: false, join };
+      }
       return cp;
     });
   }
@@ -22735,7 +22793,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      phrase qu'on lit. `key` évite qu'une même réplique se répète en boucle. */
   function starSay(key, text, ms) {
     const b = starBubbleRef.current;
-    if (b.key === key && performance.now() < b.until) return;
+    /* 465 — une aide liée au même objectif ne redémarre pas toutes les quatre
+       secondes. Elle a le droit de finir son fondu ; son texte reste ensuite
+       dans le ref et revient seulement quand on survole une étoile. */
+    if (b.key === key) return;
     starBubbleRef.current = { key, text: String(text || ""), until: performance.now() + (ms || 4200) };
   }
   /* ⚠️ ZIP 453 — DIRE UNE SUITE DE PHRASES, ET RIEN DE PLUS. La bulle de
@@ -22781,7 +22842,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        visible, tandis que seule la reine déroule encore le récit du navire. */
     const joined = Q.starFollowerAdded(w.followers, e);
     w.followers = followers;
-    if (joined) starJoinRef.current = { id: joined.id, t0: nowMs };
+    if (joined) {
+      const pos = starTargetPos(joined.id);
+      /* Les sprites en attente flottent légèrement sous l'ancre de leur case.
+         L'origine garde ce même décalage afin que le premier pixel animé soit
+         exactement celui du cratère, sans téléportation préalable. */
+      const oy = joined.id === "crater" ? 0.12 : 0.18;
+      starJoinRef.current = {
+        id: joined.id,
+        origin: pos ? { ...pos, y: pos.y + oy } : null,
+        elapsed: 0,
+        last: nowMs,
+      };
+      /* Une carte pouvait déjà être ouverte (fin de la scène de chute) quand la
+         jauge se terminait. La file empêchait les NOUVELLES cartes, mais pas ce
+         panneau préexistant : on le remet en attente et on rend immédiatement
+         le monde au décollage. Même règle pour le rappel de reprise. */
+      if (starCard) { starCardPendRef.current = { key: starCard.key }; setStarCard(null); }
+      if (starRecap) setStarRecap(false);
+    }
 
     /* ── LE NAVIRE A GRANDI. ⚠️⚠️ C'EST ICI, ET NULLE PART DANS LES MINI-JEUX,
        QUE LE COMPTE SE DIT. Un mini-jeu gagné n'accorde rien : il demande, et
@@ -22997,10 +23076,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     /* Le trou qui fume passe devant tout : « tourne-toi » pendant que le cratère
        refuse serait « le jeu propose et refuse » (426), au seul endroit du
        chantier où le joueur n'a aucun moyen de deviner qu'il faut attendre. */
-    if (c.hot) return { k: 0, warn: true, text: L.star.s2.tooHot };
+    if (c.hot) {
+      const key = c.id + ":hot";
+      if (starCalmBubbleRef.current.key !== key)
+        starCalmBubbleRef.current = { key, until: performance.now() + 4200 };
+      return { k: 0, warn: true, text: L.star.s2.tooHot, textUntil: starCalmBubbleRef.current.until };
+    }
     const need = Q.starCalmNeed(starAlone(c.zone === "farm" ? "farmTame" : "crater"));
     const t0 = starCalmT0Ref.current;
     const held = step === "holding" && t0 ? Math.min(need, performance.now() - t0) : 0;
+    const key = c.id + ":" + step;
+    if (starCalmBubbleRef.current.key !== key)
+      starCalmBubbleRef.current = { key, until: performance.now() + 4200 };
     return {
       k: need > 0 ? held / need : 0,
       warn: step !== "holding",
@@ -23008,6 +23095,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           : step === "moving" ? L.star.s2.calmStill
           : step === "watching" ? L.star.s2.calmTurn
           : L.star.s2.calmHold,
+      textUntil: starCalmBubbleRef.current.until,
     };
   }
   /* ╔══════════════════════════════════════════════════════════════════════════

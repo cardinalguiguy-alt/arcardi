@@ -133,33 +133,6 @@ export function generateWorld(seed) {
       const o = objects[idx(x, y)];
       if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK) { objects[idx(x, y)] = C.O_NONE; objHp.delete(idx(x, y)); }
     }
-  /* ╔═════════════════════════════════════════════════════════════════════════
-     ║ ZIP 454 — LE SILLON DE L'ÉTOILE : ON DÉGAGE CE QU'IL LABOURE.
-     ╚═════════════════════════════════════════════════════════════════════════
-     ⚠️⚠️ IL A DÉMÉNAGÉ DANS LE PRÉ NORD (demande de Guillaume : « il faudrait
-     qu'elle tombe ailleurs sur la map »), c'est-à-dire HORS de la zone dégagée
-     autour de la ferme — donc en plein dans les bosquets semés au hasard. Sans
-     cette passe, la balafre se peindrait sous un chêne et deux rochers : « la
-     passe qui pave dégage ce qu'elle pave » (§15 bis), la règle payée sur le
-     tablier des ponts au 440.
-     ⚠️ ON DÉGAGE LA SURFACE PEINTE, PAS L'EMPRISE BLOQUANTE — le sillon ne bloque
-     rien (c'est tout son intérêt), mais ce qui pousse dedans se VOIT. La fenêtre
-     est donc celle du dessin, dérivée des mêmes constantes que lui.
-     ⚠️ ET C'EST PHYSIQUEMENT JUSTE, ce qui ne gâche rien : quelque chose est
-     tombé du ciel en labourant sept cases. Il ne devrait pas y rester un arbre. */
-  {
-    const fx = C.STAR_FURROW_X, fy = C.STAR_FURROW_Y;
-    const halfW = Math.ceil(C.STAR_FURROW_LEN / 2) + 1;
-    const halfH = Math.ceil(C.STAR_FURROW_W / 2) + 1;
-    for (let dy = -halfH; dy <= halfH; dy++)
-      for (let dx = -halfW - Math.ceil(Math.abs(C.STAR_FURROW_BOWL_DX)); dx <= halfW; dx++) {
-        const x = fx + dx, y = fy + dy;
-        if (!inMap(x, y)) continue;
-        const i = idx(x, y);
-        const o = objects[i];
-        if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK) { objects[i] = C.O_NONE; objHp.delete(i); }
-      }
-  }
   // Dégager les emplacements réservés des leviers de pont (chantier 2026-07) :
   // posés dynamiquement en jeu une fois chaque traversée achevée (voir
   // resolveAct cas "bridge"), on s'assure ici qu'aucun arbre/rocher généré
@@ -4125,7 +4098,8 @@ export function generateTownWorld() {
      ⚠️ `solid` est déjà posé en amont (avec le relief, pour que rues et arbres
      l'évitent) ; on ne le repose pas ici, on ajoute le DESSIN. */
   for (const rl of (C.TOWN_RAILS || [])) {
-    for (let y = rl.y; y < rl.y + rl.h; y++) for (let x = rl.x; x < rl.x + rl.w; x++) addProp(x, y, "rail", true);
+    for (let y = rl.y; y < rl.y + rl.h; y++) for (let x = rl.x; x < rl.x + rl.w; x++)
+      addProp(x, y, rl.axis === "y" ? "railY" : "rail", true);
   }
   /* ⚠️⚠️ ZIP 447 — LA VÉGÉTATION DU DÉNIVELÉ, ET ELLE SE PLACE PAR DÉRIVATION.
      Chaque massif est posé RELATIVEMENT à une volée ou à un palier lus dans les

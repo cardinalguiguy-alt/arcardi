@@ -203,7 +203,7 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   sentier de rive qui épousait chaque encoche de crique, et un buisson enterré sous le parvis
   du kiosque — posé sur de l'herbe, dallé par une passe ultérieure, resté SOLIDE.
 
-- **`tools/verify-vallee.mjs` — 200 contrôles, 200/200 (444 ; 194 au 440, 182 au 438, 172 au 431, 113 au 427).** Il
+- **`tools/verify-vallee.mjs` — 205 contrôles, 205/205 (465 ; 200 au 444, 194 au 440, 182 au 438, 172 au 431, 113 au 427).** Il
   importe le VRAI moteur : circulation, murs invisibles ET décors traversables, géométrie des
   bâtiments, rebords sautables, le tribunal pièce par pièce, la coupe de bois, les familles,
   la garde-robe.
@@ -377,7 +377,7 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   perdu un décor : en poussant les harmoniques du contour d'un cran, l'étang a mangé la case du
   massif taillé (122, 83). Le générateur refuse poliment de poser un décor dans l'eau — donc
   rien n'a levé, il y avait juste **trois massifs au lieu de quatre**. Il les compte.
-- **`tools/render-escaliers.mjs` — 22 contrôles, 22/22 (436).** Les marches, le parement de
+- **`tools/render-escaliers.mjs` — 24 contrôles, 24/24 (465 ; 22 au 436).** Les marches, le parement de
   falaise, le limon et le **dallage d'esplanade** de la Haute-Ville : les quatre matières
   assemblées sur six tuiles de côté **à côté des pavés de rue du 434**, puis les trois vraies
   volées de `generateTownWorld()` dans leur décor.
@@ -482,7 +482,7 @@ donnait pas, d'une rangée.
 
 ---
 
-## `render-etoile.mjs` — les dessins de la quête de l'étoile (444, cratère 446, comète 448, sillon 454, alerte 455, jauge 456, glissade 459, fragment 462, impact physique 463, trajectoire 464)
+## `render-etoile.mjs` — les dessins de la quête de l'étoile (444 à 465)
 
 Le §8 ter appelle le véritable impact de ferme à trois âges. Il exige que la
 chaleur de contact soit brève, que la terre prenne le relais, que la gerbe
@@ -495,6 +495,12 @@ son centre ne zigzague plus : `starFarmFlightPath` fixe une direction légèreme
 différente par impact et impose une avance monotone. La petite irrégularité de la
 traîne est elle aussi stable dans le temps ; le mouvement visible vient de la
 silhouette tournante, pas d'un cap réécrit à chaque image.
+
+Au 465, la planche place la reine native 28×28 à côté des petites 18×18 et exige
+au moins deux fois leur nombre de pixels de matière : une taille obtenue par
+agrandissement ne pourrait pas passer ce contrôle. `render-escaliers` produit en
+plus `escaliers-rambardes.png`, où le tronçon est-ouest et la vraie rampe nord-sud
+sont côte à côte ; il refuse que les deux axes réemploient les mêmes pixels.
 
 ### ⚠️⚠️⚠️ ZIP 459 — LE PREMIER BANC DU DÉPÔT QUI **JOUE** AU LIEU DE MESURER
 
@@ -749,13 +755,18 @@ touche le sol — le défaut même de ce zip — leur est **totalement invisible
 `verify-quete` qui le tient désormais (cinq contrôles purs sur `starImpactLanded` et l'azimut).
 *Un banc de rendu ne peut pas voir un défaut de temps.*
 
-## `verify-quete.mjs` — 476 contrôles, 476/476 (444 à 464 : cinq impacts, apprivoisement, arrivée animée, constellation et reine-guide inclus)
+## `verify-quete.mjs` — 482 contrôles, 482/482 (444 à 465 : cinq impacts, apprivoisement, arrivée visible, constellation et reine-guide inclus)
 
 Le 464 ajoute huit contrôles : cap constant et avance monotone pour chacun des
 trois fragments filmés, extrémités exactes de la course, directions distinctes,
 et détection de la nouvelle compagne bleue, rose ou reine sans rejouer une
 arrivée déjà connue. Deux gardes de source empêchent le retour de l'ancien cap
 oscillant et du branchement réservé à la reine.
+
+Le 465 ajoute les extrémités monde de l'arrivée (centre exact du cratère puis
+joueur) et les quatre états de bulle : opaque, en fondu, expirée, rappelée au
+survol. Le test navigateur reste indispensable : c'est lui qui a trouvé les deux
+panneaux plein écran que la courbe pure, pourtant correcte, ne pouvait pas voir.
 
 ### ⚠️⚠️⚠️ ZIP 456 — LES DEUX SEULS CONTRÔLES DU DÉPÔT QUI LISENT LE SOURCE POUR VOIR SI UN LECTEUR S'EXÉCUTE
 

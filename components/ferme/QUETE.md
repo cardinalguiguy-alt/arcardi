@@ -1,6 +1,6 @@
 # LA QUÊTE DE L'ÉTOILE — « LE BATEAU DES ÉTOILES » / « THE STAR BOAT »
 
-## ⚠️ AUTORITÉ 464 — CINQ IMPACTS, PUIS UNE CONSTELLATION AUTOUR DES JOUEURS
+## ⚠️ AUTORITÉ 465 — CINQ IMPACTS, PUIS UNE CONSTELLATION AUTOUR DES JOUEURS
 
 La fiction de référence est désormais : **retrouver et apprivoiser sept petites
 étoiles colorées**, puis rendre visible dans le ciel la constellation fictive de
@@ -8,6 +8,10 @@ La fiction de référence est désormais : **retrouver et apprivoiser sept petit
 notes ou une lyre est **obsolète** et devra être remplacé ou retiré lors des
 missions suivantes. Le mini-jeu de plongée est lui aussi classé à couper ou à
 refondre entièrement ; sa présence historique ne vaut plus validation.
+Au 465, les textes effectivement montrés au joueur ont déjà cessé de parler de
+chant, de notes et de phrases musicales : ils nomment des pièces manquantes, des
+signaux lumineux et des séquences. Les clés internes historiques (`note`, `song`,
+`duet`) restent seulement pour la compatibilité de l'état et du code archivé.
 
 ### Mission 1 livrée — les cinq impacts de la ferme
 
@@ -47,6 +51,11 @@ refondre entièrement ; sa présence historique ne vaut plus validation.
   puis se pose auprès du joueur avant de rejoindre la formation. Cette transition
   vaut aux deux petites étoiles comme à la reine ; elle est attachée à l'identité
   de la nouvelle compagne, pas au seul cratère de ville.
+- Le temps de cette arrivée est du **temps visible** : il se met en pause derrière
+  tout panneau, carte ou transition, et ces interfaces attendent à leur tour la
+  fin de l'arrivée. Sa base interpole réellement du centre du cratère au joueur ;
+  elle n'est plus un simple décalage dessiné autour de celui-ci. Testé dans le
+  navigateur avec deux petites étoiles et avec la jauge solo de 60 s de la reine.
 - Après les cinq sites, aucune mission ne force le train. Le guide dit seulement
   de continuer l'enquête et qu'une mission non précisée attend à Valley Town.
 - Le gros météore tombe après **deux minutes continues d'activité à Valley Town**.
@@ -58,6 +67,13 @@ refondre entièrement ; sa présence historique ne vaut plus validation.
   plus grande et plus lumineuse que les autres. Après son apprivoisement, elle
   révèle le navire brisé et devient **la seule guide** : la touche G la détache
   de la constellation et la place en tête ; aucun familier ne porte plus ce rôle.
+- Sa grande taille vient d'une famille de sprites **28×28 native**, avec davantage
+  de matière et de détails de visage, et non du 18×18 des petites agrandi à ×1,58.
+- Les bulles d'aide ne restent plus comme des panneaux au-dessus de la formation :
+  elles restent lisibles, fondent en 900 ms, puis reviennent au survol d'une étoile.
+  La même règle vaut au texte de posture près d'une étoile encore au cratère ; la
+  jauge demeure visible pendant toute la tenue. Un même objectif ne relance pas
+  sa bulle à chaque expiration.
 - L'impact des fragments de ferme n'est plus le grand ovale lumineux hérité du
   météore de ville. Il a un point de compression bref, une couronne de terre
   rompue, des mottes en trajectoires paraboliques, une colonne de poussière et
@@ -73,15 +89,16 @@ Le code de référence est `STAR_FARM_IMPACTS` et la chronologie
 deux sites à l'est, rythme 1+2+2, déclenchement de ville et handshake de jauge.
 `render-etoile.mjs` mesure le fragment sombre/incandescent, sa rotation conservée
 sur une trajectoire régulière, et son impact physique séparément de la grosse
-comète. `verify-quete.mjs` contrôle aussi la formation, l'identité de la nouvelle
-arrivée, la reine unique et le transfert du guide depuis les familiers.
+comète. Il mesure aussi la densité native de la reine. `verify-quete.mjs` contrôle
+la formation, l'identité et les extrémités exactes de la nouvelle arrivée, le
+fondu/survol des bulles, la reine unique et le transfert du guide depuis les familiers.
 
 ---
 
 ## ARCHIVE DE CONCEPTION 444–460
 
 Les sections suivantes décrivent encore les chapitres historiques et servent à
-comprendre le code restant. Elles ne priment jamais sur l'autorité 464 ci-dessus.
+comprendre le code restant. Elles ne priment jamais sur l'autorité 465 ci-dessus.
 
 **Document de conception, ouvert au zip 444, RELU CONTRE LE CODE AU 452, PUIS AU 453, ÉTENDU AU
 454.** Écrit sur disque exprès (consigne de reprise) : si la session est interrompue, tout est ici,

@@ -964,8 +964,16 @@ section("Les grandeurs partagées");
     ok("⚠️ hors de sa fenêtre, il n'y a plus d'arrivée",
        Q.starJoinAnim(-1) === null && Q.starJoinAnim(Q.STAR_JOIN_MS) === null && Q.starJoinAnim(Q.STAR_JOIN_MS + 500) === null);
     const a0 = Q.starJoinAnim(0);
-    ok("⚠️⚠️ elle part du SOL (c'est ce qui fait qu'elle GRIMPE)",
-       a0 && a0.dy >= Q.STAR_JOIN_RISE_PX * 0.9, a0 ? `${a0.dy.toFixed(1)} px sous l'épaule` : "rien");
+    ok("⚠️⚠️ elle part du CRATÈRE (c'est ce qui fait qu'elle se DÉTACHE)",
+       a0 && a0.anchor === 0 && a0.dy >= Q.STAR_JOIN_CRATER_LIFT_PX * 0.9,
+       a0 ? `ancre ${a0.anchor} · ${a0.dy.toFixed(1)} px` : "rien");
+    const origin = { x: 128, y: 117.12 }, player = { x: 128.7, y: 119.1 };
+    const p0 = Q.starJoinPoint(origin, player, a0);
+    const p1 = Q.starJoinPoint(origin, player, Q.starJoinAnim(Q.STAR_JOIN_CLIMB_MS));
+    ok("⚠️ le corps commence EXACTEMENT au centre vivant du cratère",
+       p0 && p0.x === origin.x && p0.y === origin.y, p0 ? `${p0.x},${p0.y}` : "rien");
+    ok("…puis rejoint réellement le joueur avant le tournicotage",
+       p1 && p1.x === player.x && p1.y === player.y, p1 ? `${p1.x},${p1.y}` : "rien");
     ok("…et elle est plus petite en bas qu'en haut", a0 && a0.scale < 1, a0 ? `×${a0.scale.toFixed(2)}` : "");
     const aEnd = Q.starJoinAnim(Q.STAR_JOIN_MS - 1);
     ok("⚠️ et elle finit EXACTEMENT là où le suivi normal la met",
@@ -1473,10 +1481,22 @@ section("L'objectif courant (bandeau) et le guide");
        && pets.length > 500 && !/starGuideAim\(/.test(pets),
        `${formation.length} signes de formation · ${pets.length} signes de familiers lus`);
     ok("⚠️ la reine est visiblement plus grande que les petites",
-       /scale: queen \? 1\.58 : 0\.82/.test(formation));
+       /scale: queen \? 1 : 0\.82/.test(formation)
+       && /cp\.queen && sprites\.starWispQueen/.test(src));
     ok("⚠️⚠️ le `climb` vise l'étoile nouvellement apprivoisée, pas seulement la reine",
        /s\.id === joining\.id && join/.test(formation) && !/if \(queen && join\)/.test(formation));
   }
+}
+
+{
+  ok("⚠️ la bulle guidante reste opaque pendant sa lecture",
+     Q.starBubbleAlpha(1000, 2000, false) === 1);
+  const mid = Q.starBubbleAlpha(2450, 2000, false);
+  ok("⚠️ puis elle disparaît par FONDU, pas en une image", mid > 0 && mid < 1, `alpha ${mid.toFixed(2)}`);
+  ok("⚠️ une bulle expirée reste cachée sans interaction",
+     Q.starBubbleAlpha(4000, 2000, false) === 0);
+  ok("⚠️⚠️ le survol d'une étoile rappelle la dernière bulle expirée",
+     Q.starBubbleAlpha(4000, 2000, true) === 1);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -2313,7 +2333,7 @@ console.log("\n10. LE PNJ QUI S'ARRÊTE, ET LA POSTURE DU CRATÈRE (456)\n");
        au-dessus du JOUEUR quand il n'y a pas encore de compagnon. Sans ce repli,
        la moitié des phrases de la quête retombent dans le trou d'où on vient de
        les sortir — et c'est exactement ce qui s'est passé entre le 444 et le 456. */
-    const reads = (src.match(/starBubbleNow\(\)/g) || []).length;
+    const reads = (src.match(/starBubbleNow\(cps\)/g) || []).length;
     const falls = (src.match(/cp \? cp\.x : m\.x/g) || []).length;
     ok("⚠️⚠️ les trois cartes savent parler SANS compagnon",
        reads >= 4 && falls === 3, `${reads} lectures de la bulle, ${falls} replis sur le joueur`);

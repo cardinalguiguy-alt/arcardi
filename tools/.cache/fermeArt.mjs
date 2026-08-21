@@ -5663,7 +5663,7 @@ export function buildSprites() {
      au compas est un pictogramme, pas une créature : on assemble un corps rond
      et QUATRE pointes molles de longueurs différentes, et la silhouette sort
      toute seule, festonnée (438). */
-  function starWispSprite(pose, state, color) {
+  function starWispSprite(pose, state, color, queen) {
     /* ⚠️⚠️⚠️ QUATRIÈME ÉCRITURE, ET C'EST UN CHANGEMENT DE CONSTRUCTION, PAS UN
        RÉGLAGE DE PLUS. Les trois premières tentatives ont produit, dans l'ordre :
        une ICÔNE de scintillement (quatre branches sur les axes), un BISCUIT À
@@ -5685,7 +5685,12 @@ export function buildSprites() {
        pixel. Cinq est premier : la silhouette ne peut pas se replier sur une
        symétrie et redevenir un pictogramme. Les cinq rayons ont des longueurs
        INÉGALES qui changent avec la pose — c'est la respiration. */
-    const [c, g] = cv(18, 18);
+    /* 465 — la reine possède sa propre trame 28 × 28. L'ancienne version
+       agrandissait le 18 × 18 des petites à ×1,58 : même silhouette à l'écran,
+       mais chaque pixel devenait un gros carré et aucune matière nouvelle ne
+       pouvait apparaître. Ici la taille écran reste la même, la définition non. */
+    const S = queen ? 28 : 18;
+    const [c, g] = cv(S, S);
     const pal = {
       yellow: [["#fffdf2", "#ffe08a", "#eda43a", "#7a4a0e", "rgba(255,222,132,0.20)"],
                ["#fff8e4", "#f2ce7e", "#c98a34", "#66400c", "rgba(255,210,116,0.11)"],
@@ -5698,7 +5703,7 @@ export function buildSprites() {
                ["#e0d6dc", "#ac929f", "#755363", "#3d2a33", "rgba(220,170,195,0.05)"]],
     }[color || "yellow"] || null;
     const [CORE, BODY, EDGE, RIM, HALO] = pal[state];
-    const cx = 9, cy = 9.5;   // ⚠️ décalé d'un demi-pixel vers le bas : à cy = 9 la pointe haute touchait le bord du canevas, donc elle était rabotée en silence (piège n°1, 433)
+    const cx = queen ? 14 : 9, cy = queen ? 14.5 : 9.5;   // ⚠️ décalé d'un demi-pixel vers le bas : à cy = 9 la pointe haute touchait le bord du canevas, donc elle était rabotée en silence (piège n°1, 433)
     /* ⚠️ LE RAYON INTÉRIEUR EST CE QUI DÉCIDE DE TOUT. Trop petit, l'étoile est
        une croix maigre et il n'y a plus de place pour un visage ; trop grand,
        les pointes disparaissent et on retombe sur le biscuit. À 0,44 du rayon
@@ -5735,7 +5740,7 @@ export function buildSprites() {
        respire donc de ±12 %, ce qui est de toute façon la bonne animation :
        une bestiole qui respire enfle et se creuse. */
     const BREATH = [1.00, 0.88, 1.12, 0.82][pose & 3];
-    const R = (state === 1 ? 4.4 : 5.6) * BREATH, r = R * 0.44;
+    const R = (state === 1 ? (queen ? 7.1 : 4.4) : (queen ? 9.1 : 5.6)) * BREATH, r = R * (queen ? 0.48 : 0.44);
     /* Les cinq longueurs, par pose : quatre lignes réellement distinctes (le
        piège du jet 1, où deux poses sortaient identiques au pixel près). */
     /* ⚠️ L'ÉCART ENTRE DEUX POSES DOIT SURVIVRE À LA RASTÉRISATION. Premier jet
@@ -5772,7 +5777,7 @@ export function buildSprites() {
     g.beginPath(); g.arc(cx, cy, R + 2.2, 0, 7); g.fill();
     g.beginPath(); g.arc(cx, cy, R * 0.75, 0, 7); g.fill();
     // 2. Le cerne, par DILATATION du masque : impossible d'oublier une branche.
-    for (let y = 0; y < 18; y++) for (let x = 0; x < 18; x++) {
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
       if (inside(x + 0.5, y + 0.5)) continue;
       let touch = false;
       for (let dy = -1; dy <= 1 && !touch; dy++) for (let dx = -1; dx <= 1; dx++)
@@ -5783,7 +5788,7 @@ export function buildSprites() {
        ce qui fait que les branches sont plus chaudes que le cœur, donc qu'elles
        se détachent, donc qu'on les lit comme des branches et pas comme un
        contour. Une étoile peinte d'un seul ton est un autocollant. */
-    for (let y = 0; y < 18; y++) for (let x = 0; x < 18; x++) {
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
       if (!inside(x + 0.5, y + 0.5)) continue;
       const d = Math.hypot(x + 0.5 - (cx - 0.9), y + 0.5 - (cy - 1.0));
       P(g, x, y, 1, 1, d > r + 1.4 ? EDGE : d > r * 0.55 ? BODY : CORE);
@@ -5794,11 +5799,46 @@ export function buildSprites() {
        œil au milieu d'une masse donne un ballon, un œil haut donne un front, et
        un front donne un être. */
     if (state === 2) {
-      P(g, cx - 2, cy, 2, 1, RIM); P(g, cx + 1, cy, 2, 1, RIM);        // fermés
+      P(g, cx - (queen ? 4 : 2), cy, queen ? 3 : 2, 1, RIM);
+      P(g, cx + 1, cy, queen ? 3 : 2, 1, RIM);                          // fermés
     } else {
-      P(g, cx - 2, cy - 2, 1, 2, RIM); P(g, cx + 1, cy - 2, 1, 2, RIM);
-      if (state === 0) P(g, cx - 1, cy + 1, 2, 1, EDGE);               // une bouche, calme seulement
+      P(g, cx - (queen ? 4 : 2), cy - (queen ? 3 : 2), queen ? 2 : 1, queen ? 3 : 2, RIM);
+      P(g, cx + (queen ? 2 : 1), cy - (queen ? 3 : 2), queen ? 2 : 1, queen ? 3 : 2, RIM);
+      if (queen) {                                                      // reflets et pommettes : détail natif, pas pixels gonflés
+        P(g, cx - 3, cy - 3, 1, 1, CORE); P(g, cx + 3, cy - 3, 1, 1, CORE);
+        P(g, cx - 5, cy + 1, 1, 1, EDGE); P(g, cx + 4, cy + 1, 1, 1, EDGE);
+      }
+      if (state === 0) P(g, cx - (queen ? 2 : 1), cy + (queen ? 2 : 1), queen ? 4 : 2, 1, EDGE); // une bouche, calme seulement
     }
+    if (queen && state === 0) {                                        // éclats intérieurs asymétriques
+      P(g, cx - 6, cy - 5, 2, 1, CORE); P(g, cx + 5, cy - 1, 1, 2, CORE);
+      P(g, cx - 1, cy - 7, 1, 2, CORE); P(g, cx + 2, cy + 5, 2, 1, EDGE);
+    }
+    return c;
+  }
+
+  /* 465 — une rampe nord-sud n'est pas un balustre est-ouest tourné de 90° :
+     cette rotation coucherait aussi les poteaux. Elle a donc son dessin natif,
+     avec deux montants verticaux et deux lisses qui fuient dans la profondeur. */
+  function townRailNorthSouthSprite() {
+    const [c, g] = cv(16, 25);
+    const DARK = "#3e3840", EDGE = "#565057", BODY = "#8b8788", LIGHT = "#bcbbb0", TOP = "#efeeee";
+    // ombre au pied, volontairement décentrée vers l'avant
+    P(g, 7, 22, 7, 2, "rgba(38,31,38,0.34)");
+    // lisses en profondeur : arête sombre, masse, reflet continu
+    for (let i = 0; i < 11; i++) {
+      const x = 6 + Math.floor(i * 0.28), y = 3 + i;
+      P(g, x - 1, y, 4, 2, DARK); P(g, x, y, 3, 1, BODY); P(g, x, y, 1, 1, LIGHT);
+      if (i >= 3) { P(g, x - 1, y + 5, 4, 2, EDGE); P(g, x, y + 5, 2, 1, BODY); }
+    }
+    // montant du fond
+    P(g, 4, 1, 5, 3, DARK); P(g, 5, 1, 3, 2, TOP);
+    P(g, 5, 3, 3, 13, DARK); P(g, 6, 4, 1, 11, LIGHT);
+    P(g, 4, 15, 5, 2, DARK); P(g, 5, 15, 3, 1, BODY);
+    // montant de face, plus bas à l'écran : c'est lui qui fixe l'orientation
+    P(g, 8, 10, 5, 3, DARK); P(g, 9, 10, 3, 2, TOP);
+    P(g, 9, 12, 3, 11, DARK); P(g, 10, 13, 1, 9, LIGHT);
+    P(g, 8, 22, 5, 2, DARK); P(g, 9, 22, 3, 1, BODY);
     return c;
   }
 
@@ -13948,6 +13988,7 @@ export function buildSprites() {
        c'est pour ça qu'il est posé dans la file triée (`pushE`) et jamais dans
        la passe de sol. */
     townRail: planche2Sprite("balusterEnd"),
+    townRailY: townRailNorthSouthSprite(),
     /* ⚠️ ZIP 447 — la végétation de la seconde planche. Elle sert à HABILLER un
        dénivelé : au pied d'un mur de soutènement, un massif casse la ligne
        droite et donne une échelle. Sans elle, une falaise de 48 px rencontre
@@ -14131,6 +14172,7 @@ house: house(),
     starWisp: Array.from({ length: 3 }, (_, st) => Array.from({ length: 4 }, (_, po) => starWispSprite(po, st, "yellow"))),
     starWispColors: Object.fromEntries(["yellow", "blue", "rose"].map(color => [color,
       Array.from({ length: 3 }, (_, st) => Array.from({ length: 4 }, (_, po) => starWispSprite(po, st, color))) ])),
+    starWispQueen: Array.from({ length: 3 }, (_, st) => Array.from({ length: 4 }, (_, po) => starWispSprite(po, st, "yellow", true))),
     starShard: Array.from({ length: 4 }, (_, n) => starShardSprite(n)),
     /* ⚠️ ZIP 454 — LE SILLON N'EST PLUS UN SPRITE, C'EST UNE FONCTION, exactement
        comme le cratère et pour la même raison : il se peint sur un fond déjà là et

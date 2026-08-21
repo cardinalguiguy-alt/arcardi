@@ -183,6 +183,7 @@ function board() {
   // 461 — mêmes pixels, deux palettes de petites étoiles apprivoisables.
   twice(S.starWispColors.blue[0][0], 236, 22);
   twice(S.starWispColors.rose[0][0], 264, 22);
+  twice(S.starWispQueen[0][0], 292, 17); // 465 — taille écran native, jamais le 18 px gonflé
   // Les quatre éclats.
   for (let n = 0; n < 4; n++) twice(S.starShard[n], 330 + n * 20, 20);
   // La pie, trois poses.
@@ -355,6 +356,7 @@ console.log("1. LE BORD DU HAUT — le piège n°1 des sprites\n");
   const all = [];
   for (let st = 0; st < 3; st++) for (let po = 0; po < 4; po++) all.push(["wisp " + st + po, S.starWisp[st][po]]);
   for (const color of ["blue", "rose"]) all.push(["wisp " + color, S.starWispColors[color][0][0]]);
+  all.push(["reine native", S.starWispQueen[0][0]]);
   for (let n = 0; n < 4; n++) all.push(["shard " + n, S.starShard[n]]);
   for (let p = 0; p < 3; p++) all.push(["magpie " + p, S.magpie[p]]);
   all.push(["kiln", S.starKiln], ["rack", S.starRack], ["shutter", S.starShutter],
@@ -368,7 +370,7 @@ console.log("1. LE BORD DU HAUT — le piège n°1 des sprites\n");
 console.log("\n2. LA PROPRETÉ — les îlots qui flottent dans un aplat (connexité 8)\n");
 {
   const worst = [];
-  for (const [name, cv] of [["l'étoile calme", S.starWisp[0][0]], ["l'étoile apeurée", S.starWisp[1][0]],
+  for (const [name, cv] of [["l'étoile calme", S.starWisp[0][0]], ["la reine détaillée", S.starWispQueen[0][0]], ["l'étoile apeurée", S.starWisp[1][0]],
                             ["un éclat", S.starShard[0]], ["la pie de dos", S.magpie[0]],
                             ["le four", S.starKiln], ["le râtelier", S.starRack],
                             ["l'arbre au nid", S.starNestTree], ["le sillon chaud", FURROW_HOT],
@@ -385,6 +387,13 @@ console.log("\n3. L'ÉCHELLE — contre le fermier, jamais contre d'autres déco
   const wisp = inkHeight(S.starWisp[0][0]);
   ok(wisp >= 10 && wisp <= 15, "la compagne est « plus petite qu'une poule »",
      `${wisp} px = ×${(wisp / FARMER).toFixed(2)} d'un fermier`);
+  const queen = inkHeight(S.starWispQueen[0][0]);
+  ok(queen >= 21 && queen <= 28, "⚠️ la reine garde sa grande silhouette en pixels NATIFS",
+     `${queen} px natifs contre ${wisp} px pour une petite`);
+  const smallMatter = matter(S.starWisp[0][0]).reduce((a, b) => a + b, 0);
+  const queenMatter = matter(S.starWispQueen[0][0]).reduce((a, b) => a + b, 0);
+  ok(queenMatter >= smallMatter * 2, "⚠️⚠️ la reine contient réellement plus de détail, pas des pixels agrandis",
+     `${queenMatter} pixels de matière contre ${smallMatter}`);
   const shard = inkHeight(S.starShard[0]);
   ok(shard >= 10 && shard <= 18, "un éclat tient dans la main", `${shard} px = ×${(shard / FARMER).toFixed(2)}`);
   const bell = inkHeight(S.courtProps.greatBell);
@@ -424,6 +433,7 @@ console.log("\n4. LE CERNE — il sert AUSSI contre un fond clair (441)\n");
     return dark;
   };
   for (const [name, cv, max] of [["l'étoile calme", S.starWisp[0][0], 110],
+                                 ["la reine", S.starWispQueen[0][0], 110],
                                  ["un éclat", S.starShard[0], 110],
                                  ["la cloche", S.courtProps.greatBell, 90]]) {
     const l = rimDark(cv);

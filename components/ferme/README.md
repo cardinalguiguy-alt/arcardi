@@ -2596,6 +2596,14 @@ Puis le banc a refusé ces garde-corps tant qu'ils étaient **invisibles** (dix 
 que personne ne dessinait) : ils sont devenus des décors. *Ce qui arrête le joueur doit être
 quelque chose qu'il VOIT, et la façon sûre de s'y tenir est que la même liste serve aux deux.*
 
+⚠️ **465 — LE DESSIN AVAIT PERDU L'AXE EN APLATISSANT LA LISTE.** Les rectangles horizontaux
+des paliers et les rectangles verticaux des deux volées devenaient tous `kind:"rail"` dans le
+générateur, donc tous peignaient le `balusterEnd` est-ouest. `TOWN_RAILS` porte maintenant son
+axe jusqu'au décor (`rail` / `railY`). La rampe nord-sud n'est pas le sprite tourné de 90° — ce
+qui coucherait ses poteaux — mais un dessin natif dont les lisses fuient en profondeur et les
+montants restent debout. `render-escaliers` les place côte à côte dans
+`escaliers-rambardes.png` et refuse qu'elles soient pixel pour pixel la même orientation.
+
 ### 27.4 « Tout est condensé et plaqué en 2D » — les trois nombres derrière la phrase
 
 Guillaume, devant le premier jet. Trois causes, toutes chiffrables :

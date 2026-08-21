@@ -4098,7 +4098,8 @@ export function generateTownWorld() {
      ⚠️ `solid` est déjà posé en amont (avec le relief, pour que rues et arbres
      l'évitent) ; on ne le repose pas ici, on ajoute le DESSIN. */
   for (const rl of (C.TOWN_RAILS || [])) {
-    for (let y = rl.y; y < rl.y + rl.h; y++) for (let x = rl.x; x < rl.x + rl.w; x++) addProp(x, y, "rail", true);
+    for (let y = rl.y; y < rl.y + rl.h; y++) for (let x = rl.x; x < rl.x + rl.w; x++)
+      addProp(x, y, rl.axis === "y" ? "railY" : "rail", true);
   }
   /* ⚠️⚠️ ZIP 447 — LA VÉGÉTATION DU DÉNIVELÉ, ET ELLE SE PLACE PAR DÉRIVATION.
      Chaque massif est posé RELATIVEMENT à une volée ou à un palier lus dans les
