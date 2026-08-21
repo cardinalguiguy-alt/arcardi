@@ -482,13 +482,19 @@ donnait pas, d'une rangée.
 
 ---
 
-## `render-etoile.mjs` — les dessins de la quête de l'étoile (444, cratère 446, comète 448, sillon 454, alerte 455, jauge 456, glissade 459, fragment 462, impact physique 463)
+## `render-etoile.mjs` — les dessins de la quête de l'étoile (444, cratère 446, comète 448, sillon 454, alerte 455, jauge 456, glissade 459, fragment 462, impact physique 463, trajectoire 464)
 
 Le §8 ter appelle le véritable impact de ferme à trois âges. Il exige que la
 chaleur de contact soit brève, que la terre prenne le relais, que la gerbe
 s'ouvre et monte, puis qu'elle retombe avant sa coupure. La planche comète montre
 les quatre temps sur une même ligne ; elle a surtout servi à repérer puis casser
 le cerceau doré que les gros pixels reformaient dans le navigateur.
+
+Au 464, le fragment garde une rotation rapide mesurée entre deux images, mais
+son centre ne zigzague plus : `starFarmFlightPath` fixe une direction légèrement
+différente par impact et impose une avance monotone. La petite irrégularité de la
+traîne est elle aussi stable dans le temps ; le mouvement visible vient de la
+silhouette tournante, pas d'un cap réécrit à chaque image.
 
 ### ⚠️⚠️⚠️ ZIP 459 — LE PREMIER BANC DU DÉPÔT QUI **JOUE** AU LIEU DE MESURER
 
@@ -743,7 +749,13 @@ touche le sol — le défaut même de ce zip — leur est **totalement invisible
 `verify-quete` qui le tient désormais (cinq contrôles purs sur `starImpactLanded` et l'azimut).
 *Un banc de rendu ne peut pas voir un défaut de temps.*
 
-## `verify-quete.mjs` — 468 contrôles, 468/468 (444 à 463 : cinq impacts, apprivoisement, constellation et reine-guide inclus)
+## `verify-quete.mjs` — 476 contrôles, 476/476 (444 à 464 : cinq impacts, apprivoisement, arrivée animée, constellation et reine-guide inclus)
+
+Le 464 ajoute huit contrôles : cap constant et avance monotone pour chacun des
+trois fragments filmés, extrémités exactes de la course, directions distinctes,
+et détection de la nouvelle compagne bleue, rose ou reine sans rejouer une
+arrivée déjà connue. Deux gardes de source empêchent le retour de l'ancien cap
+oscillant et du branchement réservé à la reine.
 
 ### ⚠️⚠️⚠️ ZIP 456 — LES DEUX SEULS CONTRÔLES DU DÉPÔT QUI LISENT LE SOURCE POUR VOIR SI UN LECTEUR S'EXÉCUTE
 

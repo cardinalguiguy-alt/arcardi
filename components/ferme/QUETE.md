@@ -1,6 +1,6 @@
 # LA QUÊTE DE L'ÉTOILE — « LE BATEAU DES ÉTOILES » / « THE STAR BOAT »
 
-## ⚠️ AUTORITÉ 463 — CINQ IMPACTS, PUIS UNE CONSTELLATION AUTOUR DES JOUEURS
+## ⚠️ AUTORITÉ 464 — CINQ IMPACTS, PUIS UNE CONSTELLATION AUTOUR DES JOUEURS
 
 La fiction de référence est désormais : **retrouver et apprivoiser sept petites
 étoiles colorées**, puis rendre visible dans le ciel la constellation fictive de
@@ -42,6 +42,11 @@ refondre entièrement ; sa présence historique ne vaut plus validation.
   ferme gardent leurs couleurs bleue et rose. La table `STAR_SITES` est la seule
   source de cette formation : toute future entrée `content:"star"` la rejoint
   automatiquement, sans seconde liste à maintenir.
+- Quand la jauge atteint son terme, **l'étoile qui vient d'être apprivoisée joue
+  d'abord l'arrivée prévue** : elle grimpe depuis le centre du cratère, tourne,
+  puis se pose auprès du joueur avant de rejoindre la formation. Cette transition
+  vaut aux deux petites étoiles comme à la reine ; elle est attachée à l'identité
+  de la nouvelle compagne, pas au seul cratère de ville.
 - Après les cinq sites, aucune mission ne force le train. Le guide dit seulement
   de continuer l'enquête et qu'une mission non précisée attend à Valley Town.
 - Le gros météore tombe après **deux minutes continues d'activité à Valley Town**.
@@ -66,16 +71,17 @@ Le code de référence est `STAR_FARM_IMPACTS` et la chronologie
 `STAR_FARM_IMPACT_MS` dans `quete.js`. Les positions partent de
 `STAR_FARM_IMPACT_ANCHORS`. `verify-quete.mjs` contrôle distribution 2/1/2,
 deux sites à l'est, rythme 1+2+2, déclenchement de ville et handshake de jauge.
-`render-etoile.mjs` mesure le fragment sombre/incandescent et son impact physique
-séparément de la grosse comète. `verify-quete.mjs` contrôle aussi la formation,
-la reine unique et le transfert du guide depuis les familiers.
+`render-etoile.mjs` mesure le fragment sombre/incandescent, sa rotation conservée
+sur une trajectoire régulière, et son impact physique séparément de la grosse
+comète. `verify-quete.mjs` contrôle aussi la formation, l'identité de la nouvelle
+arrivée, la reine unique et le transfert du guide depuis les familiers.
 
 ---
 
 ## ARCHIVE DE CONCEPTION 444–460
 
 Les sections suivantes décrivent encore les chapitres historiques et servent à
-comprendre le code restant. Elles ne priment jamais sur l'autorité 462 ci-dessus.
+comprendre le code restant. Elles ne priment jamais sur l'autorité 464 ci-dessus.
 
 **Document de conception, ouvert au zip 444, RELU CONTRE LE CODE AU 452, PUIS AU 453, ÉTENDU AU
 454.** Écrit sur disque exprès (consigne de reprise) : si la session est interrompue, tout est ici,

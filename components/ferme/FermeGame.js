@@ -938,10 +938,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      de chacun à partir des positions qui circulent déjà (§3 de CLAUDE.md). */
   const craterSlipRef = useRef(null);                // zip 459 — MON état de glissade/grimpe
   const craterSlipOtherRef = useRef(new Map());      // zip 459 — celui des AUTRES, déduit de leur position
-  /* zip 458 — l'instant où CE client a vu l'étoile sortir du trou. ⚠️ UNE HORLOGE
-     LOCALE, comme l'ancre de la chaleur du cratère (446) : `found.crater.at` est
-     une date de l'HÔTE, la soustraire de la nôtre est la faute du §3. */
-  const starJoinT0Ref = useRef(0);
+  /* 458/464 — l'étoile que CE client vient de voir franchir sa jauge et l'instant
+     local de ce passage. ⚠️ UNE HORLOGE LOCALE, comme l'ancre de la chaleur du
+     cratère (446) : `found[id].at` est une date de l'HÔTE, la soustraire de la
+     nôtre est la faute du §3. Le couple `{ id, t0 }` est indispensable : un seul
+     temps réservé à `crater` faisait sauter le `climb` des deux petites étoiles. */
+  const starJoinRef = useRef({ id: null, t0: 0 });
   const craterDustRef = useRef([]);                  // zip 458 — { x, y, t0, seed } — les bouffées, purement locales
   const craterDustNextRef = useRef(new Map());       // zip 458 — la cadence d'émission, par joueur
   /* ⚠️ LA CAMÉRA DE SCÈNE EST UN REF LU PAR `getCam` ET `getCamTown` — UNE
@@ -19363,11 +19365,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (flight && spr0 && spr0.drawStarFragmentMeteor) {
           const end = screenOf(sites[flight.impact]);
           if (end) {
-            const k = Math.pow(flight.k, 1.55), ang = 0.78 + Math.sin(ms / 73) * 0.08;
+            /* 464 — Le CENTRE suit une ligne fixe ; le spin reste dans le sprite.
+               L'ancien angle oscillait très vite et transformait quatre degrés
+               de frémissement en zigzags de plusieurs dizaines de pixels loin
+               de l'impact. Une trajectoire et une rotation sont deux grandeurs. */
+            const path = Q.starFarmFlightPath(flight.impact, flight.k);
+            const k = path.travel, ang = path.angle;
             const len = Math.hypot(W, H) * 0.72;
             const x = end.x - Math.cos(ang) * len * (1 - k);
             const y = end.y - Math.sin(ang) * len * (1 - k);
-            spr0.drawStarFragmentMeteor(ctx, x, y, ang, 4 + 8 * k, now, { q: sceneQ, unstable: true });
+            spr0.drawStarFragmentMeteor(ctx, x, y, ang, 4 + 8 * k, now, { q: sceneQ });
           }
         }
         for (let i = 0; i < Q.STAR_FARM_ANIMATED_N; i++) {
@@ -22673,7 +22680,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!trails[zone]) trails[zone] = [];
     if (starResidentNear(zone, cx, cy)) starHideRef.current = nowMs + Q.STAR_HIDE_MS;
     const hidden = nowMs < starHideRef.current;
-    const join = Q.starJoinAnim(starJoinT0Ref.current ? nowMs - starJoinT0Ref.current : -1);
+    const joining = starJoinRef.current;
+    const join = Q.starJoinAnim(joining.t0 ? nowMs - joining.t0 : -1);
     const lead = Q.starHas(e, "crater") ? starGuideAim(zone, cx, cy) : null;
     return specs.map((s, i) => {
       const queen = !!s.queen;
@@ -22711,10 +22719,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         queen,
         guide: !!guide,
       };
-      /* L'arrivée spectaculaire appartient à la reine : les petites étoiles
-         rejoignent le joueur dès leur propre apprivoisement, sans rejouer la
-         révélation du grand cratère. */
-      if (queen && join) return { ...cp, x: cx, y: cy, hiding: false, join };
+      /* 464 — L'arrivée appartient à l'étoile qui vient réellement de franchir
+         SA jauge. La réserver à `queen` laissait les petites disparaître de leur
+         cratère puis surgir directement dans la formation, alors que la courbe
+         `climb → spin → settle` existait déjà. Les autres gardent leur place. */
+      if (s.id === joining.id && join) return { ...cp, x: cx, y: cy, hiding: false, join };
       return cp;
     });
   }
@@ -22759,11 +22768,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const built = Q.starShipBuilt(e);
     const marks = (e.marks || []).length;
     const crater = Q.starHas(e, "crater");
+    const followers = Q.starFollowers(e).map(s => s.id);
     const mine = m ? m.id : null;
     const gift = !!(mine && e.gift && e.gift[mine]);
     const w = starWatchRef.current;
     if (!w) { starWatchRef.current = { built, marks, crater, gift, sky: false, pool: false, empty: false,
-                                       plan: Q.starPlanReady(e), timber: Q.starTimberBuilt(e) }; return; }
+                                       followers, plan: Q.starPlanReady(e), timber: Q.starTimberBuilt(e) }; return; }
+
+    /* 464 — Le passage de LA liste précédente à LA liste courante arme la même
+       arrivée pour toute étoile vivante. C'est volontairement avant les cas
+       narratifs : la petite bleue, la rose et la reine partagent le geste
+       visible, tandis que seule la reine déroule encore le récit du navire. */
+    const joined = Q.starFollowerAdded(w.followers, e);
+    w.followers = followers;
+    if (joined) starJoinRef.current = { id: joined.id, t0: nowMs };
 
     /* ── LE NAVIRE A GRANDI. ⚠️⚠️ C'EST ICI, ET NULLE PART DANS LES MINI-JEUX,
        QUE LE COMPTE SE DIT. Un mini-jeu gagné n'accorde rien : il demande, et
@@ -22781,12 +22799,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     /* ── LA RENCONTRE. La seule fois de toute la quête où l'histoire s'énonce. */
     if (crater && !w.crater) {
       w.crater = true;
-      /* ⚠️⚠️ ZIP 458 — C'EST ICI QUE L'ARRIVÉE S'ARME, ET NULLE PART AILLEURS.
-         `starWatch` est le seul endroit qui voie le PASSAGE de « elle est dans le
-         trou » à « elle est avec moi » ; l'armer dans le dessin aurait demandé au
-         dessin de se souvenir, c'est-à-dire d'avoir un état. Voir `starJoinAnim`
-         dans `quete.js` pour la courbe. */
-      starJoinT0Ref.current = nowMs;
       /* ⚠️⚠️ ZIP 454 — ET ELLE ENCHAÎNE SUR LE CONSEIL. Demande de Guillaume :
          « sur conseil (guidé) de la première étoile récoltée dans le cratère ».
          C'est la SEULE fois de la quête où l'histoire s'énonce, donc c'est là

@@ -7698,9 +7698,13 @@ export function buildSprites() {
     if (R < 1) return;
     const t = +tMs || 0, spin = t / 72 + Math.sin(t / 39) * 0.22;
     const ux = Math.cos(ang), uy = Math.sin(ang), nx = -uy, ny = ux;
-    // Traîne courte et orangée : une pierre brûlante, pas une boule de feu.
+    /* Traîne courte et orangée : une pierre brûlante, pas une boule de feu.
+       464 — ses petits écarts sont stables le long de la pierre. L'ancien
+       `sin(t / 47)` faisait onduler la traîne en plus du centre et brouillait la
+       trajectoire ; la silhouette, la fissure et le point chaud continuent de
+       tourner avec `spin`, donc le caillou tourne bien sur lui-même. */
     for (let i = 7; i >= 1; i--) {
-      const k = i / 7, wob = Math.sin(t / 47 + i * 2.3) * R * 0.22 * k;
+      const k = i / 7, wob = Math.sin(i * 2.3) * R * 0.10 * k;
       qDisc(g2, cx - ux * R * (1.1 + i * 0.8) + nx * wob,
             cy - uy * R * (1.1 + i * 0.8) + ny * wob,
             Math.max(1, R * (0.44 - k * 0.28)), `rgba(255,${(150 + 55 * (1 - k)) | 0},58,${(0.58 * (1 - k)).toFixed(3)})`, q);

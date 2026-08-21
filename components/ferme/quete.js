@@ -173,6 +173,15 @@ export const STAR_FOLLOWER_SITES = STAR_SITES.filter(s => s.content === "star");
 export function starFollowers(e) {
   return STAR_FOLLOWER_SITES.filter(s => starHas(e, s.id));
 }
+/* 464 — Le veilleur du rendu doit savoir QUELLE étoile vient de franchir la
+   jauge, pas seulement que la reine existe désormais. Cette jointure reste pure
+   afin que le banc puisse balayer les trois créatures : réserver l'arrivée à
+   `crater` avait laissé les deux petites au centre jusqu'à 100 %, puis les avait
+   téléportées directement dans la formation sans jouer leur `climb`. */
+export function starFollowerAdded(previousIds, e) {
+  const before = new Set(Array.isArray(previousIds) ? previousIds : []);
+  return starFollowers(e).find(s => !before.has(s.id)) || null;
+}
 
 /* ╔═════════════════════════════════════════════════════════════════════════════
    ║ ZIP 450 — LE NAVIRE. « CONSTRUIRE QUELQUE CHOSE AVEC LES ÉTOILES. »
@@ -1608,6 +1617,18 @@ export function starFarmFlight(elapsedMs) {
     if (t >= from && t < hit) return { impact: i, k: (t - from) / STAR_FARM_FLIGHT_MS };
   }
   return null;
+}
+/* 464 — Une direction FIXE par fragment et une avance monotone. Avant, l'angle
+   oscillait toutes les 73 ms dans la boucle de rendu : à plusieurs centaines de
+   pixels de l'impact, quatre degrés de variation faisaient zigzaguer le caillou
+   sur des dizaines de pixels. La pierre garde son spin dans `fermeArt`; son
+   centre, lui, suit désormais une vraie ligne. Les trois angles restent un peu
+   différents pour que les chutes ne soient pas des copies superposables. */
+export const STAR_FARM_FLIGHT_ANGLES = [0.75, 0.79, 0.77];
+export function starFarmFlightPath(impact, k) {
+  const i = Math.max(0, Math.min(STAR_FARM_FLIGHT_ANGLES.length - 1, impact | 0));
+  const u = Math.max(0, Math.min(1, +k || 0));
+  return { angle: STAR_FARM_FLIGHT_ANGLES[i], travel: Math.pow(u, 1.55) };
 }
 export function starFarmImpactLanded(index, sceneKey, elapsedMs) {
   if ((index | 0) < 0 || (index | 0) >= STAR_FARM_IMPACT_MS.length) return false;

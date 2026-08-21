@@ -317,6 +317,26 @@ if (craterPos) {
   ok("⚠️ seuls les trois premiers fragments ont un vol filmé",
      [0, 1, 2].every(i => Q.starFarmFlight(Q.STAR_FARM_IMPACT_MS[i] - 1)?.impact === i)
      && [3, 4].every(i => Q.starFarmFlight(Q.STAR_FARM_IMPACT_MS[i] - 1) === null));
+  /* 464 — Régulier ne veut pas dire identique : chaque chute garde un azimut
+     légèrement différent, mais CET azimut ne bouge jamais pendant son vol. La
+     rotation visible est mesurée séparément par `render-etoile` sur le sprite. */
+  let pathMono = true, headingStable = true;
+  for (let i = 0; i < Q.STAR_FARM_ANIMATED_N; i++) {
+    const a0 = Q.starFarmFlightPath(i, 0).angle;
+    let prev = -1;
+    for (let n = 0; n <= 200; n++) {
+      const p = Q.starFarmFlightPath(i, n / 200);
+      if (p.travel < prev - 1e-12) pathMono = false;
+      if (Math.abs(p.angle - a0) > 1e-12) headingStable = false;
+      prev = p.travel;
+    }
+  }
+  ok("⚠️⚠️ chaque fragment garde un cap fixe pendant tout son vol", headingStable);
+  ok("…et il avance continûment vers l'impact, sans retour", pathMono
+     && Q.starFarmFlightPath(0, 0).travel === 0 && Q.starFarmFlightPath(0, 1).travel === 1);
+  ok("…sans rendre les trois chutes strictement superposables",
+     new Set(Q.STAR_FARM_FLIGHT_ANGLES).size === Q.STAR_FARM_ANIMATED_N
+     && Math.max(...Q.STAR_FARM_FLIGHT_ANGLES) - Math.min(...Q.STAR_FARM_FLIGHT_ANGLES) < 0.08);
   ok("…les deux derniers existent bien comme secousses espacées",
      Q.starFarmShake(Q.STAR_FARM_IMPACT_MS[3] + 200) > 0
      && Q.starFarmShake(Q.STAR_FARM_IMPACT_MS[4] + 200) > 0
@@ -1229,6 +1249,9 @@ section("La chute est vue, et le chevron désigne (445)");
     ok("⚠️⚠️ la fin de jauge transmet sa pose atomique jusqu'au verdict hôte",
        src.includes('dir: m.dir | 0, moving: !!m.moving')
        && src.includes('starCalmOk(f.id, calmSite.id, req)'));
+    ok("⚠️ le rendu des petits fragments lit la trajectoire pure et non un angle tremblé",
+       src.includes("Q.starFarmFlightPath(flight.impact, flight.k)")
+       && !src.includes("Math.sin(ms / 73)"));
     const body = (src.split("function starTargetPos(")[1] || "").split("\n  function ")[0];
     ok("⚠️ `starTargetPos` existe", body.length > 100, `${body.split("\n").length} lignes de corps`);
     const targetable = Q.STAR_SITES.filter(s => s.spot && s.spot[0] !== "*").map(s => s.id);
@@ -1287,16 +1310,23 @@ section("L'objectif courant (bandeau) et le guide");
     const f = Q.newStar(); f.fall = 1;
     ok("une quête neuve n'a encore aucune étoile compagne", Q.starFollowers(f).length === 0);
     Q.resolveStarFound(f, "farmStarBlue", "j1", 1);
-    ok("la petite bleue apprivoisée rejoint immédiatement le joueur",
+    ok("la petite bleue apprivoisée entre dans la formation",
        Q.starFollowers(f).map(s => s.id).join(",") === "farmStarBlue");
+    ok("⚠️ la transition désigne bien la petite bleue pour son animation d'arrivée",
+       Q.starFollowerAdded([], f)?.id === "farmStarBlue");
     Q.resolveStarFound(f, "farmStarRose", "j1", 2);
     ok("la petite rose agrandit la constellation sans remplacer la bleue",
        Q.starFollowers(f).map(s => s.id).join(",") === "farmStarBlue,farmStarRose");
+    ok("⚠️ la transition suivante désigne la rose, jamais la première étoile",
+       Q.starFollowerAdded(["farmStarBlue"], f)?.id === "farmStarRose");
     Q.resolveStarFound(f, "crater", "j1", 3);
     const followers = Q.starFollowers(f), queen = followers.filter(s => s.queen);
     ok("la reine rejoint les deux petites et reste la seule guide désignée",
        followers.length === 3 && queen.length === 1 && queen[0].id === "crater",
        followers.map(s => `${s.id}${s.queen ? "★" : ""}`).join(" · "));
+    ok("⚠️ la même transition d'arrivée couvre enfin les TROIS étoiles",
+       Q.starFollowerAdded(["farmStarBlue", "farmStarRose"], f)?.id === "crater"
+       && Q.starFollowerAdded(followers.map(s => s.id), f) === null);
   }
 
   const e = Q.newStar();
@@ -1444,6 +1474,8 @@ section("L'objectif courant (bandeau) et le guide");
        `${formation.length} signes de formation · ${pets.length} signes de familiers lus`);
     ok("⚠️ la reine est visiblement plus grande que les petites",
        /scale: queen \? 1\.58 : 0\.82/.test(formation));
+    ok("⚠️⚠️ le `climb` vise l'étoile nouvellement apprivoisée, pas seulement la reine",
+       /s\.id === joining\.id && join/.test(formation) && !/if \(queen && join\)/.test(formation));
   }
 }
 
