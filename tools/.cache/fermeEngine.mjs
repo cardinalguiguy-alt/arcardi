@@ -4084,9 +4084,9 @@ export function generateTownWorld() {
   /* Le mobilier. Il est posé sur des AXES (les médianes de la place, les bords
      de la rue principale) et jamais au hasard : c'est la différence entre une
      place dessinée et une place saupoudrée. */
-  const addProp = (x, y, kind, blocks) => {
+  const addProp = (x, y, kind, blocks, extra) => {
     if (!inMap(x, y)) return;
-    props.push({ x, y, kind });
+    props.push({ x, y, kind, ...(extra || {}) });
     if (blocks) solid[id(x, y)] = 1;
   };
   /* ⚠️⚠️ ZIP 447 — LES GARDE-CORPS DEVIENNENT DES DÉCORS, ET C'EST `verify-vallee`
@@ -4098,8 +4098,16 @@ export function generateTownWorld() {
      ⚠️ `solid` est déjà posé en amont (avec le relief, pour que rues et arbres
      l'évitent) ; on ne le repose pas ici, on ajoute le DESSIN. */
   for (const rl of (C.TOWN_RAILS || [])) {
-    for (let y = rl.y; y < rl.y + rl.h; y++) for (let x = rl.x; x < rl.x + rl.w; x++)
-      addProp(x, y, rl.axis === "y" ? "railY" : "rail", true);
+    const count = rl.axis === "y" ? rl.h : rl.w;
+    for (let y = rl.y; y < rl.y + rl.h; y++) for (let x = rl.x; x < rl.x + rl.w; x++) {
+      const railIndex = rl.axis === "y" ? y - rl.y : x - rl.x;
+      addProp(x, y, rl.axis === "y" ? "railY" : "rail", true, {
+        railStyle: rl.style || "stone",
+        railSide: rl.side || "west",
+        railIndex,
+        railCount: count,
+      });
+    }
   }
   /* ⚠️⚠️ ZIP 447 — LA VÉGÉTATION DU DÉNIVELÉ, ET ELLE SE PLACE PAR DÉRIVATION.
      Chaque massif est posé RELATIVEMENT à une volée ou à un palier lus dans les
@@ -4129,9 +4137,10 @@ export function generateTownWorld() {
          `verify-compo` les a refusés trois fois de suite. Les abscisses
          ci-dessous sont celles qui laissent leurs CORPS disjoints, mesurées. */
       const pied = vBas.y + vBas.len - 1;
-      addProp(vBas.x - 7, pied, "bloomBed", true);
-      addProp(vBas.x - 5, pied, "rockBed", true);
-      addProp(vBas.x - 1, pied, "bloomRow", true);
+      /* Composition de référence : le pot à droite du palier et le groupe de
+         panneaux/fleurs à gauche du pied sont eux aussi les pixels fournis. */
+      addProp(pal.x + pal.w - 2, pal.y + 1, "courtFlowerPot", true);
+      addProp(vBas.x - 4, pied, "courtSignFlowers", true);
     }
   }
   // Lampadaires : les quatre angles de la place, plus deux paires en garde
@@ -5776,10 +5785,9 @@ export function generateTownWorld() {
       if (solid[id(sx, sy)] || ground[id(sx, sy)] === C.G_PATH) continue;
       addProp(sx, sy, "streetSign", true);
     }
-    // Deux statues sur la terrasse : le belvédère et le parvis du tribunal se
-    // regardent, il fallait quelque chose à regarder.
+    // La statue du belvédère reste ; sous le tribunal, la composition 466 a
+    // autorité et ne contient pas de statue.
     addProp(C.TOWN_BELVEDERE.x + (C.TOWN_BELVEDERE.w >> 1), C.TOWN_BELVEDERE.y + 5, "statue", true);
-    addProp(C.TOWN_COURT.x - 3, C.TOWN_COURT.y + C.TOWN_COURT.h + 3, "statue", true);
   }
   /* ═══ ZIP 427 — LE MOBILIER DE LA VIE SOCIALE ═══
      Trois ajouts, et chacun répond à une mécanique de ce zip plutôt qu'à un
@@ -5806,25 +5814,12 @@ export function generateTownWorld() {
     addProp(bo.x - 2, bo.y + bo.h, "lamp", true);
     addProp(bo.x + bo.w + 1, bo.y + bo.h, "lamp", true);
     addProp(sa.x + sa.w - 1, sa.y + sa.h + 1, "bench", true);
-    addProp(C.TOWN_COURT.x + C.TOWN_COURT.w + 1, C.TOWN_COURT.y + C.TOWN_COURT.h + 4, "bench", true);
     // Le tableau des nouvelles : plein nord de la place, dans l'axe de la
     // fontaine, hors des parterres et hors de la chaussée qui la traverse.
     addProp(C.TOWN_PLAZA.x + 10, C.TOWN_PLAZA.y + 1, "newsBoard", true);
-    /* ⚠️ ET UN PANNEAU AU PIED DES MARCHES. Une boutique qu'on ne découvre
-       qu'en montant par hasard n'existe pas : c'est la version urbaine du
-       principe du 426 (« un bâtiment muet passe pour cassé »). On le pose au
-       bas de la volée la plus fréquentée — celle qui monte au tribunal — en
-       DÉDUISANT sa position de TOWN_STAIRS, jamais en l'écrivant à la main. */
-    const mainStair = C.TOWN_STAIRS[0];
-    if (mainStair) {
-      // Au PIED de la volée, décalé d'une case sur le côté : dans l'axe, il
-      // barrerait l'escalier — et un panneau qu'on doit contourner pour monter
-      // est pire que pas de panneau. La marche la plus BASSE est celle qui
-      // s'éloigne du palier haut, donc la dernière de la boucle du générateur.
-      const sx = mainStair.x - 2;
-      const sy = mainStair.dir === "e" ? mainStair.y + mainStair.w + 1 : mainStair.y + mainStair.len - 1;
-      if (inMap(sx, sy) && !solid[id(sx, sy)] && ground[id(sx, sy)] !== C.G_PATH) addProp(sx, sy, "streetSign", true);
-    }
+    /* Le panneau générique du pied a été remplacé au 466 par le groupe exact
+       `courtSignFlowers` de la planche, posé avec les autres éléments de la
+       composition de référence. */
   }
 
   for (let i = 0; i < W * H; i++) if (hedge[i]) solid[i] = 1;

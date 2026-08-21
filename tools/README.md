@@ -377,7 +377,7 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   perdu un décor : en poussant les harmoniques du contour d'un cran, l'étang a mangé la case du
   massif taillé (122, 83). Le générateur refuse poliment de poser un décor dans l'eau — donc
   rien n'a levé, il y avait juste **trois massifs au lieu de quatre**. Il les compte.
-- **`tools/render-escaliers.mjs` — 24 contrôles, 24/24 (465 ; 22 au 436).** Les marches, le parement de
+- **`tools/render-escaliers.mjs` — 38 contrôles, 38/38 (466 ; 24 au 465, 22 au 436).** Les marches, le parement de
   falaise, le limon et le **dallage d'esplanade** de la Haute-Ville : les quatre matières
   assemblées sur six tuiles de côté **à côté des pavés de rue du 434**, puis les trois vraies
   volées de `generateTownWorld()` dans leur décor.
@@ -389,11 +389,12 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   la **closure de `drawTownFrame`**, donc aucun outil ne pouvait les rastériser. Ils sont restés
   au dessin du 425 pendant que tout le reste du sol de la ville passait au motif de 64 px.
   **Un dessin qu'aucun banc ne peut appeler est un dessin qui vieillit tout seul.**
-  ⚠️ **LA GRANDEUR NEUVE EST LA PARITÉ DE MATIÈRE**, c'est-à-dire la phrase de Guillaume
-  traduite en nombre : on mesure l'écart-type et le nombre de teintes de chaque matière **et
-  des pavés de rue, dans la même passe**, et on exige un rapport ≥ 0,75. Un rapport, pas un
-  seuil absolu — leçon du seuil d'axe du taxi (434). Mesuré aujourd'hui : marches **×0,91**,
-  falaise **×0,90**, limon **×0,88**.
+  ⚠️ **LA GRANDEUR NEUVE DU 436 ÉTAIT LA PARITÉ DE MATIÈRE**, c'est-à-dire la phrase de
+  Guillaume traduite en nombre : mesurer l'écart-type et le nombre de teintes des matières et
+  des pavés dans la même passe, puis exiger un rapport plutôt qu'un seuil absolu. Depuis le 466,
+  la volée N-S et ses parements ont une autorité plus forte : le banc exige que leurs pixels
+  soient **exactement ceux de `ASSETS.jpg`**, même si la référence est moins contrastée que la
+  rue. Les matériaux de service qui ne viennent pas de la planche gardent le contrôle de parité.
   ⚠️ **LE DALLAGE EN EST EXEMPTÉ, AVEC SA RAISON ÉCRITE** (comme `render-rues` exempte le
   goudron du contrôle de continuité) : une esplanade est faite de peu de grandes pierres, sa
   matière tient dans l'écart d'une dalle à l'autre. On le mesure donc **contre ce qu'il
@@ -421,6 +422,13 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
      comptait 49 contre 24**, et il aurait donc « gagné ». Ses deux gris étaient recouverts de
      quatre voiles alpha, et chaque combinaison fabriquait une teinte de plus. **Compter les
      couleurs d'une image composée en alpha, c'est compter des accidents de mélange.**
+- **`tools/import-escaliers-assets.mjs` (466).** Convertit la copie PNG de
+  `refs/ASSETS.jpg` de son agrandissement ×4 au pixel natif, détoure le fond et
+  écrit `components/ferme/plancheEscaliers.js`. Aucune quantification : les
+  couleurs médianes de chaque gros pixel JPEG sont encodées telles quelles en
+  courses RLE. `tools/out/escaliers-assets-importes.png` montre toutes les
+  découpes sur fond vert et doit être regardé après toute modification du
+  catalogue ou du masque.
 - `verify-constants` · `verify-objects` · `verify-strings` · `verify-syntax` · `verify-gates` ·
   `verify-cycle` · `verify-orchards` · `verify-scope` · `verify-vergers` · `render-fruits`.
 
@@ -499,8 +507,13 @@ silhouette tournante, pas d'un cap réécrit à chaque image.
 Au 465, la planche place la reine native 28×28 à côté des petites 18×18 et exige
 au moins deux fois leur nombre de pixels de matière : une taille obtenue par
 agrandissement ne pourrait pas passer ce contrôle. `render-escaliers` produit en
-plus `escaliers-rambardes.png`, où le tronçon est-ouest et la vraie rampe nord-sud
-sont côte à côte ; il refuse que les deux axes réemploient les mêmes pixels.
+plus `escaliers-rambardes.png`, où les deux balustrades et les quatre colonnes
+extraites de `ASSETS.jpg` sont côte à côte. Au 466, il reconstruit chaque
+balustrade et chaque colonne depuis les tranches réellement utilisées par les
+collisions et exige une égalité bit-à-bit avec la source. Il verrouille aussi
+la position du pot et du groupe panneaux/fleurs donnée par
+`Compo à respecter.jpg`, et refuse le retour d'un banc, d'une statue ou d'un
+panneau générique dans cette emprise.
 
 ### ⚠️⚠️⚠️ ZIP 459 — LE PREMIER BANC DU DÉPÔT QUI **JOUE** AU LIEU DE MESURER
 

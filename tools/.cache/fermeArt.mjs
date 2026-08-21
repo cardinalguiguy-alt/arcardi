@@ -23,6 +23,8 @@ import { PLANCHE } from "./planche.mjs";
    maison, arbres). Générée par `tools/import-planche2.mjs` ; voir sa note
    d'en-tête pour l'échelle, qui est DÉRIVÉE et non mesurée. */
 import { PLANCHE2 } from "./planche2.mjs";
+/* ZIP 466 — planche des escaliers du tribunal, importée pixel pour pixel. */
+import { ESCALIER_ASSETS } from "./plancheEscaliers.mjs";
 
 /* ---------------------------------------------------------------- PALETTE ---
    Zip 377. Ces deux constantes vivaient DANS buildSprites(), donc invisibles
@@ -1120,21 +1122,15 @@ export function drawTownCliffFace(ctx, S, tw, x, y, px, py, fh) {
    pouvoir l'appeler. Un dessin que personne ne peut rastériser ne se dégrade
    pas, il VIEILLIT (§ en-tête). */
 export function drawTownStairRiser(ctx, S, tw, x, y, px, py, fh) {
-  if (fh <= 0) return false;
+  const ST = S && S.townStone;
+  if (fh <= 0 || !ST?.riser) return false;
   const T = SPR_T;
   const h = Math.max(1, Math.round(fh));
-  /* Le corps, en deux valeurs : le haut de la contremarche reçoit encore un peu
-     de ciel, le pied est dans l'ombre de la marche. */
-  ctx.fillStyle = "#6e6b64"; ctx.fillRect(px, py, T, h);
-  ctx.fillStyle = "#5d5a54"; ctx.fillRect(px, py + Math.ceil(h * 0.55), T, h - Math.ceil(h * 0.55));
-  /* Le joint vertical, décalé d'une marche à l'autre — c'est ce qui empêche
-     une volée de se lire comme une seule plaque rayée (leçon du 433 sur la
-     brique de l'hôtel de ville). */
-  ctx.fillStyle = "rgba(38,36,32,0.45)";
-  ctx.fillRect(px + (((x * 7 + y * 13) >>> 0) % (T - 2)) + 1, py, 1, h);
-  /* Le liseré clair du sommet : le nez de la marche du dessus vu par la
-     tranche. Un pixel, et c'est lui qui sépare deux marches à l'œil. */
-  ctx.fillStyle = "#b9b5aa"; ctx.fillRect(px, py, T, 1);
+  const sx = (x & 1) * T;
+  for (let yy = 0; yy < h; yy += ST.riser.height) {
+    const sh = Math.min(ST.riser.height, h - yy);
+    ctx.drawImage(ST.riser, sx, 0, T, sh, px, py + yy, T, sh);
+  }
   return true;
 }
 
@@ -1154,24 +1150,31 @@ export function drawTownStairCheek(ctx, S, tw, x, y, px, py, bx, bw, drop) {
   if (!ST) return false;
   const T = SPR_T, sup = ST.sup;
   ctx.drawImage(ST.cheek, 0, (y % sup) * T, 4, T, bx, py, bw, T);
-  if (drop > 0) {
+  if (drop > 0 && ST.wallPanel) {
     const h = Math.round(drop);
-    // La FACE du limon : deux valeurs, la plus sombre au pied. Même logique que
-    // la contremarche, en plus haut et en plus étroit.
-    ctx.fillStyle = "#6a6760"; ctx.fillRect(bx, py + T, bw, h);
-    ctx.fillStyle = "#575550"; ctx.fillRect(bx, py + T + Math.ceil(h * 0.6), bw, h - Math.ceil(h * 0.6));
-    // L'arête éclairée du haut de la face : c'est elle qui sépare le dessus
-    // du limon de sa face, donc qui donne l'angle.
-    ctx.fillStyle = "#b4b0a5"; ctx.fillRect(bx, py + T, bw, 1);
-    // L'ombre portée au sol, au pied de la joue. Elle DÉBORDE d'un pixel de
-    // chaque côté : une ombre exactement large comme l'objet se lit comme sa
-    // continuation, pas comme son ombre.
-    ctx.fillStyle = "rgba(20,26,16,0.30)";
-    ctx.fillRect(bx - 1, py + T + h, bw + 2, 2);
-    ctx.fillStyle = "rgba(20,26,16,0.16)";
-    ctx.fillRect(bx - 1, py + T + h + 2, bw + 2, 2);
+    const sw = Math.min(bw, ST.wallPanel.width);
+    const sx = x & 1 ? 0 : ST.wallPanel.width - sw;
+    for (let yy = 0; yy < h; yy += ST.wallPanel.height) {
+      const sh = Math.min(ST.wallPanel.height, h - yy);
+      ctx.drawImage(ST.wallPanel, sx, 0, sw, sh, bx, py + T + yy, bw, sh);
+    }
   }
   return true;
+}
+
+/* ZIP 466 — une case de collision, une tranche du sprite source. */
+export function townRailSprite(S, pr) {
+  if (!S || !pr) return null;
+  const n = Math.max(1, pr.railCount | 0), i = Math.max(0, Math.min(n - 1, pr.railIndex | 0));
+  if (pr.kind === "railY") {
+    const style = pr.railStyle === "tall" ? "tall" : "short";
+    const side = pr.railSide === "east" ? "east" : "west";
+    const pair = S.townRailY?.[style]?.[side];
+    if (!pair?.length) return null;
+    return pair[i] || null;
+  }
+  const style = pr.railStyle === "iron" ? "iron" : "stone";
+  return S.townRail?.[style]?.[i] || null;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -2916,6 +2919,50 @@ export function buildSprites() {
         g.fillRect(x, y, n, 1);
         x += n;
       }
+    }
+    return c;
+  }
+
+  /* Le format conserve chaque couleur native ; `null` est le fond détouré. */
+  function escalierAssetSprite(name) {
+    const d = ESCALIER_ASSETS[name];
+    if (!d) throw new Error("asset d'escalier inconnu : " + name);
+    const [c, g] = cv(d.w, d.h);
+    for (let y = 0; y < d.h; y++) {
+      let x = 0;
+      for (const [n, col] of d.rows[y]) {
+        if (col) { g.fillStyle = col; g.fillRect(x, y, n, 1); }
+        x += n;
+      }
+    }
+    return c;
+  }
+
+  function escalierAssetSlices(name) {
+    const source = escalierAssetSprite(name);
+    if (source.width !== 96) throw new Error(`${name} doit mesurer exactement 96 px`);
+    return Array.from({ length: 6 }, (_, i) => {
+      const [c, g] = cv(16, source.height);
+      g.drawImage(source, i * 16, 0, 16, source.height, 0, 0, 16, source.height);
+      return c;
+    });
+  }
+
+  /* Une colonne couvre deux cellules en profondeur. On coupe uniquement entre
+     les rangées : le premier morceau finit sur la première ligne de profondeur,
+     le second (16 px) sur la seconde, et les pixels se recollent exactement. */
+  function escalierColumnSlices(name) {
+    const source = escalierAssetSprite(name), cut = source.height - 16;
+    const [top, gt] = cv(source.width, cut), [bottom, gb] = cv(source.width, 16);
+    gt.drawImage(source, 0, 0, source.width, cut, 0, 0, source.width, cut);
+    gb.drawImage(source, 0, cut, source.width, 16, 0, 0, source.width, 16);
+    return [top, bottom];
+  }
+
+  function escalierAssetAtlas(name, w, h) {
+    const source = escalierAssetSprite(name), [c, g] = cv(w, h);
+    for (let y = 0; y < h; y += source.height) for (let x = 0; x < w; x += source.width) {
+      g.drawImage(source, x, y);
     }
     return c;
   }
@@ -5817,30 +5864,18 @@ export function buildSprites() {
     return c;
   }
 
-  /* 465 — une rampe nord-sud n'est pas un balustre est-ouest tourné de 90° :
-     cette rotation coucherait aussi les poteaux. Elle a donc son dessin natif,
-     avec deux montants verticaux et deux lisses qui fuient dans la profondeur. */
-  function townRailNorthSouthSprite() {
-    const [c, g] = cv(16, 25);
-    const DARK = "#3e3840", EDGE = "#565057", BODY = "#8b8788", LIGHT = "#bcbbb0", TOP = "#efeeee";
-    // ombre au pied, volontairement décentrée vers l'avant
-    P(g, 7, 22, 7, 2, "rgba(38,31,38,0.34)");
-    // lisses en profondeur : arête sombre, masse, reflet continu
-    for (let i = 0; i < 11; i++) {
-      const x = 6 + Math.floor(i * 0.28), y = 3 + i;
-      P(g, x - 1, y, 4, 2, DARK); P(g, x, y, 3, 1, BODY); P(g, x, y, 1, 1, LIGHT);
-      if (i >= 3) { P(g, x - 1, y + 5, 4, 2, EDGE); P(g, x, y + 5, 2, 1, BODY); }
-    }
-    // montant du fond
-    P(g, 4, 1, 5, 3, DARK); P(g, 5, 1, 3, 2, TOP);
-    P(g, 5, 3, 3, 13, DARK); P(g, 6, 4, 1, 11, LIGHT);
-    P(g, 4, 15, 5, 2, DARK); P(g, 5, 15, 3, 1, BODY);
-    // montant de face, plus bas à l'écran : c'est lui qui fixe l'orientation
-    P(g, 8, 10, 5, 3, DARK); P(g, 9, 10, 3, 2, TOP);
-    P(g, 9, 12, 3, 11, DARK); P(g, 10, 13, 1, 9, LIGHT);
-    P(g, 8, 22, 5, 2, DARK); P(g, 9, 22, 3, 1, BODY);
-    return c;
-  }
+  /* ZIP 466 — source livrée, sans redessin ni redimensionnement. Les deux
+     balustrades de 96 px deviennent exactement six cellules de collision. */
+  const courtRailStoneSource = escalierAssetSprite("balustradeStone");
+  const courtRailIronSource = escalierAssetSprite("balustradeIron");
+  const courtRailStone = escalierAssetSlices("balustradeStone");
+  const courtRailIron = escalierAssetSlices("balustradeIron");
+  const courtRailShort = { west: escalierColumnSlices("columnShortL"), east: escalierColumnSlices("columnShortR") };
+  const courtRailTall = { west: escalierColumnSlices("columnTallL"), east: escalierColumnSlices("columnTallR") };
+  const courtRailColumnSource = {
+    short: { west: escalierAssetSprite("columnShortL"), east: escalierAssetSprite("columnShortR") },
+    tall: { west: escalierAssetSprite("columnTallL"), east: escalierAssetSprite("columnTallR") },
+  };
 
   /* ── UN ÉCLAT. Quatre couleurs, une par note.
      ⚠️ IL EST ANGULEUX LÀ OÙ L'ÉTOILE EST RONDE, et c'est le sujet : un éclat
@@ -13976,19 +14011,13 @@ export function buildSprites() {
     townReedTuft: plancheSprite("reeds"),
     townReedsWater: plancheSprite("reedsWater"),
     townHedgeRow: plancheSprite("hedgeRow"),
-    /* ⚠️⚠️ ZIP 447 — LE GARDE-CORPS, ET IL FAIT EXACTEMENT UNE CASE DE LARGE.
-       Ce n'est pas une chance : `balusterEnd` est le tronçon court que Guillaume
-       a dessiné accroché à son escalier, et il mesure 16 px natifs une fois la
-       planche ramenée à l'échelle du jeu. Il se répète donc case par case sans
-       une ligne de raccord, comme la haie du 439 — et son motif porte DÉJÀ ses
-       pilastres (deux jours de balustre, puis six pixels pleins), si bien que
-       mis bout à bout il dessine des travées régulières au lieu d'une grille.
-       ⚠️ IL EST HAUT DE 25 PX POUR UNE CASE DE 16 : les 9 px qui dépassent sont
-       ce qui le fait passer DEVANT ou DERRIÈRE le fermier selon la rangée, et
-       c'est pour ça qu'il est posé dans la file triée (`pushE`) et jamais dans
-       la passe de sol. */
-    townRail: planche2Sprite("balusterEnd"),
-    townRailY: townRailNorthSouthSprite(),
+    /* ZIP 466 — crops exacts : 6 × 16 px et quatre colonnes natives de 17 px. */
+    townRail: { stone: courtRailStone, iron: courtRailIron },
+    townRailSource: { stone: courtRailStoneSource, iron: courtRailIronSource },
+    townRailY: { short: courtRailShort, tall: courtRailTall },
+    townRailYSource: courtRailColumnSource,
+    townCourtFlowerPot: escalierAssetSprite("flowerPot"),
+    townCourtSignFlowers: escalierAssetSprite("signFlowers"),
     /* ⚠️ ZIP 447 — la végétation de la seconde planche. Elle sert à HABILLER un
        dénivelé : au pied d'un mur de soutènement, un massif casse la ligne
        droite et donne une échelle. Sans elle, une falaise de 48 px rencontre
@@ -14025,9 +14054,12 @@ export function buildSprites() {
     townStone: {
       sup: ROAD_SUP,
       cliffH: CLIFF_H,
-      stair: { v: townStairSurface(true), h: townStairSurface(false) },
-      cliff: townCliffFace(),
-      cheek: townStairCheek(),
+      stair: { v: escalierAssetAtlas("treadTop", ROAD_N, ROAD_N), h: townStairSurface(false) },
+      cliff: escalierAssetAtlas("wallDark", ROAD_N, CLIFF_H),
+      cheek: escalierAssetAtlas("wallLight", 4, ROAD_N),
+      riser: escalierAssetSprite("treadFace"),
+      treadSource: escalierAssetSprite("treadTop"),
+      wallPanel: escalierAssetSprite("wallPanel"),
     },
     /* ZIP 435 — L'EAU ET SA BERGE. Un seul objet, comme `townRoad` : le rendu
        en a besoin ENSEMBLE, et `depths` voyage avec les tuiles — le jour où la

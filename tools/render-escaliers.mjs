@@ -92,22 +92,67 @@ const ST = S.townStone;
   writePNG(path.join(OUT, "escaliers-surfaces.png"), up.px, up.W, up.H);
 }
 
-/* 465 — les deux axes de rambarde côte à côte. Une rotation de la planche
-   coucherait les montants ; la version N-S garde donc des poteaux verticaux et
-   fait fuir ses lisses dans la profondeur. */
+/* 466 — les pixels exacts de la source, découpés par cellules de collision. */
 {
-  const W = 104, H = 48, sh = makeCanvas(W, H);
+  const W = 200, H = 150, sh = makeCanvas(W, H);
   sh.ctx.fillStyle = "#58764b"; sh.ctx.fillRect(0, 0, W, H);
-  sh.ctx.drawImage(S.townRail, 8, 13); sh.ctx.drawImage(S.townRail, 24, 13);
-  sh.ctx.drawImage(S.townRailY, 62, 8); sh.ctx.drawImage(S.townRailY, 70, 20);
+  const run = (x, y, style) => {
+    for (let i = 0; i < 6; i++) {
+      const pr = { kind: "rail", railStyle: style, railIndex: i, railCount: 6 };
+      sh.ctx.drawImage(A.townRailSprite(S, pr), x + i * 16, y);
+    }
+  };
+  const column = (x, y, style, side) => {
+    for (let i = 0; i < 2; i++) {
+      const pr = { kind: "railY", railStyle: style, railSide: side, railIndex: i, railCount: 2 };
+      const im = A.townRailSprite(S, pr);
+      sh.ctx.drawImage(im, x, y + (i + 1) * 16 - im.height);
+    }
+  };
+  run(5, 3, "stone");
+  run(5, 41, "iron");
+  column(106, 110, "short", "west");
+  column(128, 110, "short", "east");
+  column(150, 110, "tall", "west");
+  column(172, 110, "tall", "east");
   const up = scale(sh.px, W, H, 4);
   writePNG(path.join(OUT, "escaliers-rambardes.png"), up.px, up.W, up.H);
-  const a = S.townRail.__px, b = S.townRailY.__px;
-  let diff = 0;
-  for (let i = 0; i < Math.min(a.length, b.length); i++) if (a[i] !== b[i]) diff++;
-  ok(S.townRail.width === 16 && S.townRailY.width === 16,
-     "⚠️ les deux rambardes occupent exactement une case", `${S.townRail.width}/${S.townRailY.width} px`);
-  ok(diff > 500, "⚠️⚠️ la volée N-S ne réemploie plus l'orientation E-O", `${diff} composantes distinctes`);
+
+  const exact = (parts, source) => {
+    for (let y = 0; y < source.height; y++) for (let x = 0; x < source.width; x++) {
+      const part = parts[(x / 16) | 0], sx = x % 16;
+      const a = (y * part.width + sx) * 4, b = (y * source.width + x) * 4;
+      for (let k = 0; k < 4; k++) if (part.__px[a + k] !== source.__px[b + k]) return false;
+    }
+    return true;
+  };
+  ok(S.townRail.stone.length === 6 && S.townRail.iron.length === 6,
+     "⚠️ chaque balustrade couvre exactement six cellules", "96 px = 6 × 16 px");
+  ok([...S.townRail.stone, ...S.townRail.iron].every(im => im.width === 16),
+     "⚠️ chaque tranche horizontale occupe une seule cellule", "12 tranches de 16 px");
+  ok(exact(S.townRail.stone, S.townRailSource.stone),
+     "⚠️⚠️ la balustrade de pierre est une reconstruction bit-à-bit de la source");
+  ok(exact(S.townRail.iron, S.townRailSource.iron),
+     "⚠️⚠️ la ferronnerie est une reconstruction bit-à-bit de la source");
+  const columnsAll = [S.townRailY.short, S.townRailY.tall]
+    .flatMap(group => Object.values(group)).flat();
+  ok(columnsAll.every(im => im.width === 17),
+     "⚠️ les quatre colonnes natives restent centrables sur une cellule", "largeur source 17 px, débord 0,5 px de chaque côté");
+  const exactColumn = (parts, source) => {
+    const rows = parts[0].height + parts[1].height;
+    if (rows !== source.height) return false;
+    for (let y = 0; y < rows; y++) for (let x = 0; x < source.width; x++) {
+      const part = y < parts[0].height ? parts[0] : parts[1];
+      const py = y < parts[0].height ? y : y - parts[0].height;
+      const a = (py * part.width + x) * 4, b = (y * source.width + x) * 4;
+      for (let k = 0; k < 4; k++) if (part.__px[a + k] !== source.__px[b + k]) return false;
+    }
+    return true;
+  };
+  for (const style of ["short", "tall"]) for (const side of ["west", "east"]) {
+    ok(exactColumn(S.townRailY[style][side], S.townRailYSource[style][side]),
+       `⚠️⚠️ colonne ${style}/${side} recomposée bit-à-bit sur ses deux collisions`);
+  }
 }
 
 console.log("\n=== 1. le bouclage du pavé de 4×4 ===\n");
@@ -145,7 +190,16 @@ for (const [name, atlas] of [["marches N-S", ST.stair.v], ["marches E-O", ST.sta
      qu'un pavé de 64 px, et l'exiger reviendrait à demander du bruit. On lui
      demande le relief, pas la palette. */
   const rel = m.sd / ref.sd;
-  ok(rel >= 0.75, `${name} — relief comparable aux pavés`, `écart-type ${m.sd.toFixed(1)} soit ×${rel.toFixed(2)} du repère`);
+  if (name === "marches N-S") {
+    let same = true;
+    for (let y = 0; y < ST.treadSource.height; y++) for (let x = 0; x < ST.treadSource.width; x++) {
+      const a = (y * atlas.width + x) * 4, b = (y * ST.treadSource.width + x) * 4;
+      for (let k = 0; k < 4; k++) if (atlas.__px[a + k] !== ST.treadSource.__px[b + k]) same = false;
+    }
+    ok(same, `${name} — pixels exacts de la marche source`, `${ST.treadSource.width}×${ST.treadSource.height} px sans altération`);
+  } else {
+    ok(rel >= 0.75, `${name} — relief comparable aux pavés`, `écart-type ${m.sd.toFixed(1)} soit ×${rel.toFixed(2)} du repère`);
+  }
   if (name !== "limon") ok(m.n >= ref.n * 0.6, `${name} — richesse de palette`, `${m.n} couleurs contre ${ref.n} aux pavés`);
 }
 
@@ -381,6 +435,22 @@ console.log("\n=== 4 bis. toutes les marches d'une volée montent dans le même 
    plus PAUVRE que le sol qui l'encadre. */
 const tw = E.generateTownWorld();
 const EP = C.TOWN_ELEV_PX;
+console.log("\n=== 5. la composition de référence est celle de la carte ===\n");
+{
+  const one = (kind) => (tw.props || []).filter(pr => pr.kind === kind);
+  const pot = one("courtFlowerPot"), signs = one("courtSignFlowers");
+  ok(pot.length === 1 && pot[0].x === 147 && pot[0].y === 31,
+     "le pot fleuri est à la place donnée par la composition", pot.length ? `(${pot[0].x},${pot[0].y})` : "absent");
+  ok(signs.length === 1 && signs[0].x === 139 && signs[0].y === 33,
+     "le groupe panneaux/fleurs est à la place donnée par la composition", signs.length ? `(${signs[0].x},${signs[0].y})` : "absent");
+  const contradictions = (tw.props || []).filter(pr => pr.x >= 132 && pr.x <= 153 && pr.y >= 23 && pr.y <= 36
+    && ["bench", "statue", "streetSign"].includes(pr.kind));
+  ok(contradictions.length === 0,
+     "aucun ancien banc, statue ou panneau générique ne contredit la composition", `${contradictions.length} intrus`);
+  ok(S.townCourtFlowerPot.width === 27 && S.townCourtFlowerPot.height === 38
+    && S.townCourtSignFlowers.width === 54 && S.townCourtSignFlowers.height === 37,
+     "les deux accessoires gardent leurs dimensions détourées", "pot 27×38 · panneaux 54×37");
+}
 const stairSpots = [];
 for (const st of C.TOWN_STAIRS) stairSpots.push(st);
 const VIEWS = stairSpots.slice(0, 3).map((st, k) => ["volee" + (k + 1), {
@@ -420,6 +490,21 @@ for (const [name, v] of VIEWS) {
       if (dside <= 0.01) continue;
       A.drawTownStairCheek(sh.ctx, S, tw, x, y, px, py, sd < 0 ? px : px + T - 4, 4, dside * EP);
     }
+  }
+  /* 466 — le banc regarde enfin les garde-corps DANS l'ouvrage. Au 447, la
+     scène s'arrêtait au sol puis prétendait juger un escalier dont les rampes
+     vivaient dans `pushE`. Même sélection que le jeu via `townRailSprite`. */
+  const rails = (tw.props || []).filter(pr => (["rail", "railY", "courtFlowerPot", "courtSignFlowers"].includes(pr.kind)) &&
+    pr.x >= v.x - 1 && pr.x < v.x + v.w + 1 && pr.y >= v.y - 1 && pr.y < v.y + v.h + 1);
+  rails.sort((a, b) => ((a.y + 1) * T - elAt(a.x, a.y) * EP) - ((b.y + 1) * T - elAt(b.x, b.y) * EP));
+  for (const pr of rails) {
+    const img = pr.kind === "courtFlowerPot" ? S.townCourtFlowerPot
+      : pr.kind === "courtSignFlowers" ? S.townCourtSignFlowers
+      : A.townRailSprite(S, pr);
+    if (!img) continue;
+    const cx = (pr.x - v.x) * T + T / 2;
+    const by = (pr.y + 1 - v.y) * T - elAt(pr.x, pr.y) * EP;
+    sh.ctx.drawImage(img, Math.round(cx - img.width / 2), Math.round(by - img.height));
   }
   const up = scale(sh.px, v.w * T, v.h * T, 3);
   writePNG(path.join(OUT, "escaliers-" + name + ".png"), up.px, up.W, up.H);

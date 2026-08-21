@@ -16984,7 +16984,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         "stoneBench", "benchWall", "hangLamp", "stepStones", "chest", "bucket", "rod", "potReeds",
         "flowerTrough", "bonsai", "roseBox", "potPink", "oilLamp", "table", "reedTuft", "reedsWater",
         "hedgeRow", "grassTuft", "flatStone", "goldBush", "lavender", "clump", "lily", "bench",
-        "rail", "bloomBed", "bloomRow", "rockBed", "hedgeAngle"]);   // 447 : le garde-corps vient de la planche 2, il porte son ombre
+        "rail", "railY", "courtFlowerPot", "courtSignFlowers", "bloomBed", "bloomRow", "rockBed", "hedgeAngle"]);   // 466 : les crops exacts portent déjà leur ombre
       /* ZIP 439 — la variante d'un décor à plusieurs dessins. Deux nombres
          premiers différents de ceux du 437 (7/13) : réutiliser les mêmes ferait
          tomber le buisson d'or et le buisson fleuri sur la même variante à
@@ -17097,8 +17097,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                      444 : un décor peint hors de la file triée serait toujours
                      devant ou toujours derrière le fermier. Ici il doit être les
                      DEUX, selon qu'on passe au nord ou au sud de lui. */
-                  : pr.kind === "rail" ? sprites.townRail
-                  : pr.kind === "railY" ? sprites.townRailY
+                  : pr.kind === "rail" || pr.kind === "railY" ? A.townRailSprite(sprites, pr)
+                  : pr.kind === "courtFlowerPot" ? sprites.townCourtFlowerPot
+                  : pr.kind === "courtSignFlowers" ? sprites.townCourtSignFlowers
                   : pr.kind === "bloomBed" ? pick(sprites.townBloomBed, pr)
                   : pr.kind === "bloomRow" ? sprites.townBloomRow
                   : pr.kind === "rockBed" ? sprites.townRockBed

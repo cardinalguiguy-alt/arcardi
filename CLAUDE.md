@@ -11,23 +11,22 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**Livré au 465 : LE DÉCOLLAGE EST ENFIN VISIBLE, Y COMPRIS APRÈS 60 S ET POUR LA REINE.** Le défaut
-n'était plus le verdict : le rappel « Where you were » puis une carte de chapitre consommaient les
-2,6 s de `climb → spin → settle` derrière un panneau. L'arrivée a maintenant une horloge locale
-pausable et prioritaire ; elle part du centre vivant du cratère, rejoint le joueur, tourne, puis se
-pose. Une carte déjà ouverte est remise en file. Le parcours a été rejoué dans le navigateur avec
-les petites étoiles à deux joueurs et avec la vraie jauge solo de **60 secondes** pour la reine :
-centre du cratère → cratère vide → reine à gauche du joueur.
+**Livré au 466 : LES ESCALIERS SOUS LE TRIBUNAL COPIENT LA PLANCHE FOURNIE ET SA COMPOSITION.**
+`refs/ASSETS.jpg` est réduit mécaniquement à ses pixels natifs ×4 puis encodé sans quantification
+dans `plancheEscaliers.js`. Marches, parements, balustrade de pierre, ferronnerie, quatre colonnes,
+pot fleuri et groupe panneaux/fleurs sont les crops de la source, pas des redessins procéduraux.
+`Compo à respecter.jpg` fixe leur montage ; le banc, la statue et l'ancien panneau qui occupaient
+la zone ont été retirés.
 
-La reine n'est plus le sprite 18×18 agrandi : elle possède une famille native 28×28 plus détaillée.
-Les rambardes nord-sud de l'escalier de Haute-Ville ont leur dessin propre et ne réemploient plus
-le tronçon est-ouest. Les bulles d'aide fondent en 900 ms, cessent de se relancer et reviennent au
-survol des étoiles ; la jauge, elle, reste visible. Les textes joueur FR/EN ont été nettoyés des
-références au chant au profit des pièces, signaux et lumières.
+Les collisions suivent la même découpe : chaque balustrade de 96 px couvre six cellules solides de
+16 px ; une colonne de 17 px est coupée puis recomposée bit-à-bit sur ses deux cellules, sans
+duplication. Un premier ancrage du pot coupait l'artère x=150 ; le contrôle de circulation l'a
+refusé et le pot vit maintenant sur le bord du palier. Revue effectuée dans le navigateur sur la
+vraie carte, après suppression des rectangles gris résiduels du détourage des accessoires.
 
-Bancs : `verify-quete` **482/482**, `verify-vallee` **205/205**, `render-etoile`,
-`render-escaliers` et `verify-strings` (**1 090 clés**) verts. **Aucune migration ni modification
-Supabase n'est nécessaire.**
+Bancs : `verify-vallee` **205/205**, `render-escaliers` **38/38**, `verify-compo` et
+`verify-strings` (**1 090 clés**) verts. **Aucune migration ni modification Supabase n'est
+nécessaire.**
 
 ⚠️ **AUTORITÉ NARRATIVE NOUVELLE : SEPT ÉTOILES FORMERONT LA CONSTELLATION FICTIVE DE LA
 BREBIS, VISIBLE ET MAPPÉE DANS LE CIEL.** Tout le « chant »/les notes/la lyre encore présent
@@ -36,15 +35,16 @@ dans les chapitres historiques est obsolète et doit être remplacé ou retiré.
 ce bloc d'autorité ; ses sections 444–460 sont une archive utile au code restant, pas une
 direction de conception.
 
-⚠️⚠️ **PROCHAINE ACTION : poursuivre la refonte Brebis à partir de la prochaine consigne de
-Guillaume.** Pour toute reprise de la quête des étoiles, partir du bloc d'autorité 465 de
-`QUETE.md`, jamais des étapes de chant archivées.
+⚠️⚠️ **PROCHAINE ACTION : attendre la prochaine consigne de Guillaume.** Le débogage de
+l'apprivoisement des étoiles est confié à Claude ; ne pas le reprendre spontanément. Si Guillaume
+redonne ensuite une mission sur les étoiles, repartir du bloc d'autorité 465 de `QUETE.md`, jamais
+des étapes de chant archivées.
 
 ---
 
-État à jour du **zip 465**. Chantier actif : **refondre la quête de l'étoile autour de la
-constellation de la Brebis**, tout en continuant à **rendre Valley Town habitable au regard ET crédible
-au jeu**, et **lui donner une histoire**. Tout ce qui concerne la ville, ses habitants, ses
+État à jour du **zip 466**. Le chantier des étoiles est momentanément confié à Claude ; côté Codex,
+la prochaine action attend une consigne. La direction longue reste de **rendre Valley Town habitable
+au regard ET crédible au jeu**, et **lui donner une histoire**. Tout ce qui concerne la ville, ses habitants, ses
 bâtiments et **ses pièges** est dans **`components/ferme/README.md`**, qui fait autorité ; les
 règles de DESSIN sont dans **`components/ferme/DESSIN.md`** ; les bancs dans **`tools/README.md`**.
 **`candyluge` et `crystal` sont EN PAUSE.**
@@ -129,12 +129,11 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 
 | # | La leçon, en une phrase | Où est le détail |
 |---|---|---|
-| 462 | ⚠️⚠️ **LE VERDICT D'UN GESTE CONTINU DOIT LIRE LE MÊME INSTANTANÉ QUE LA JAUGE.** Une minute locale juste ne vaut rien si l'hôte tranche sur une pose réseau lissée plus ancienne ; position, zone, direction et immobilité voyagent ensemble, puis l'hôte redérive encore la cible. | `sendReq`, `starCalmOk` |
 | 463 | ⚠️⚠️⚠️ **UN ÉTAT RÉUSSI SANS CONSÉQUENCE VISIBLE EST UN ÉCHEC POUR LE JOUEUR.** Les petites étoiles étaient bien marquées trouvées et retirées du cratère, puis disparaissaient du monde : l'apprivoisement semblait donc cassé. Toute trouvaille vivante rejoint désormais la formation depuis la table autoritaire. | `STAR_FOLLOWER_SITES`, `starCompanionsAt` |
 | 464 | ⚠️⚠️⚠️ **UNE ANIMATION CORRECTE BRANCHÉE SUR LA MAUVAISE IDENTITÉ N'EXISTE PAS.** Le `climb → spin → settle` était entier, mais seul le passage de la reine au cratère l'armait ; les petites étaient téléportées dans la formation. Une transition visible doit transporter l'identité de l'entité ajoutée du verdict jusqu'au rendu. | `starFollowerAdded`, `starJoinRef`, `starCompanionsAt` |
 | 464 | ⚠️⚠️ **ROTATION ET TRAJECTOIRE SONT DEUX GRANDEURS INDÉPENDANTES.** Faire osciller le cap pour donner de la vie à un fragment déplace son centre de dizaines de pixels ; le centre suit un cap fixe, tandis que la silhouette et son point chaud tournent sur eux-mêmes. | `starFarmFlightPath`, `drawStarFragmentMeteor` |
 | 465 | ⚠️⚠️⚠️ **UNE ANIMATION QUI CONTINUE DERRIÈRE UN PANNEAU N'EXISTE PAS POUR LE JOUEUR.** Son horloge doit mesurer du temps VISIBLE, et toute interface concurrente doit attendre — y compris la carte déjà ouverte une image avant le verdict. | `starJoinRef`, `starBlockingPanelsClear`, `starWatch` |
-| 465 | ⚠️⚠️ **AGRANDIR UN SPRITE N'AJOUTE AUCUN DÉTAIL.** La reine conserve la même taille écran avec une trame native 28×28 ; de même, tourner une rambarde couche ses poteaux, donc chaque axe possède sa construction. | `starWispQueen`, `townRailNorthSouthSprite` |
+| 466 | ⚠️⚠️⚠️ **UNE RÉFÉRENCE À COPIER N'EST PAS UNE INVITATION À L'INTERPRÉTER.** On importe ses pixels, on découpe le même ouvrage sur les cellules de collision, puis on prouve que leur recomposition est bit-à-bit la source ; la composition fournie verrouille aussi les positions et les anciens décors concurrents disparaissent. | `plancheEscaliers.js`, `townRailSprite`, `render-escaliers.mjs` |
 
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure

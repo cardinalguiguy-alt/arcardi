@@ -1,4 +1,28 @@
-# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 463
+# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 466
+
+## 466 — Les escaliers sous le tribunal reprennent exactement la planche fournie
+
+`refs/ASSETS.jpg` n'est plus une inspiration : `tools/import-escaliers-assets.mjs`
+en extrait les pixels natifs ×4, détoure le fond et génère
+`plancheEscaliers.js` sans quantification de palette. Les marches, les deux
+parements, la balustrade sculptée, la ferronnerie, les quatre colonnes, le pot
+fleuri et le groupe panneaux/fleurs viennent tous de cette planche. Le vieux
+dessin procédural des rambardes a été supprimé.
+
+`Compo à respecter.jpg` est également devenue une contrainte de carte : volée
+haute encadrée par les colonnes longues, balustrade sculptée à sa droite,
+ferronnerie à gauche du palier, colonnes courtes autour de la volée basse, pot
+au bord droit et panneaux/fleurs au pied gauche. L'ancien banc, la statue et le
+panneau générique qui contredisaient ce montage ont été retirés de cette zone.
+
+La collision suit la découpe du dessin. Chaque balustrade de 96 px est formée de
+six cellules solides de 16 px ; chaque colonne de 17 px est reconstruite sur
+deux cellules de profondeur, bit pour bit, au lieu d'être répétée deux fois. Le
+premier placement du pot avait coupé l'artère x=150 : `verify-vallee` l'a refusé,
+le pot a été recalé sur le palier, et les **205/205** contrôles passent. Le banc
+des escaliers verrouille désormais les pixels, les dimensions, les positions et
+l'absence d'anciens décors concurrents ; la composition finale a aussi été
+rejouée dans le navigateur.
 
 ## 463 — Les étoiles apprivoisées restent avec les joueurs ; la reine mène
 
