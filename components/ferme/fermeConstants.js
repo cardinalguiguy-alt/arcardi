@@ -3809,22 +3809,36 @@ export const STAR_NEST_DX = 3, STAR_NEST_DY = -5;
    dénivelé : quatre marches pour une unité, ce qui donne les 0,25 de
    TOWN_STEP_MAX. */
 export const TOWN_STAIRS = [
-  /* ① LA VOLÉE BASSE, LARGE, CELLE QU'ON VOIT DEPUIS LA PLACE. Six cases de
-     large, elle ne monte plus qu'à MI-HAUTEUR : ses marches font donc 0,1 au
-     lieu de 0,2, la montée est deux fois plus douce et le personnage s'élève
-     de trois pixels par case au lieu de six. C'est ce qui fait qu'on la GRAVIT
-     au lieu de la franchir. */
-  { x: 143, y: 32, w: 6, len: 2, dir: "n", from: 0, to: 0.6 },
-  /* ② LA VOLÉE HAUTE, PLUS ÉTROITE ET DÉCALÉE DE SIX CASES À L'EST. Quatre
-     cases de large : une volée qui rétrécit en montant est ce qui donne sa
-     perspective à un escalier monumental — et c'est ce que montre la planche. */
-  { x: 139, y: 28, w: 4, len: 2, dir: "n", from: 0.6, to: 1 },
+  /* ① ZIP 467 — LA VOLÉE BASSE SUIT LE BLOC FOURNI, PAS L'ANCIEN MONTAGE.
+     Huit cases entre les deux bords extérieurs, dont six réellement ouvertes
+     entre les colonnes. Ses six rangées correspondent aux six girons visibles
+     de `ESCALIERDETOURE` : le personnage gagne ou perd 0,6 unité par sept
+     petits intervalles, sans téléportation ni cas particulier. */
+  { x: 142, y: 31, w: 8, len: 6, dir: "n", from: 0, to: 0.6 },
+  /* ② LA VOLÉE HAUTE : six cases hors œuvre, quatre ouvertes. Trois rangées
+     remplacent les deux rangées comprimées du 466 et calent la montée sur la
+     profondeur réellement dessinée par le bloc. */
+  { x: 136, y: 27, w: 6, len: 3, dir: "n", from: 0.6, to: 1 },
   // La volée de service, à l'ouest, pour ne pas obliger à traverser toute la
   // ville quand on arrive de la gare.
   { x: 116, y: 18, w: 4, len: 4, dir: "e", from: 0, to: 1 },
   // La montée du belvédère, courte et étroite.
   { x: 170, y: 21, w: 3, len: 4, dir: "n", from: 1, to: 2 },
 ];
+
+/* Les deux premières volées sont peintes par le bloc 467. La fonction est
+   partagée par le jeu et le banc : elle empêche l'ancien dessus/parement/limon
+   procédural de dépasser derrière les pixels transparents du nouveau visuel. */
+export function townCourtMainStairCell(x, y) {
+  for (let i = 0; i < 2 && i < TOWN_STAIRS.length; i++) {
+    const st = TOWN_STAIRS[i];
+    const inside = st.dir === "e"
+      ? x >= st.x && x < st.x + st.len && y >= st.y && y < st.y + st.w
+      : x >= st.x && x < st.x + st.w && y >= st.y && y < st.y + st.len;
+    if (inside) return true;
+  }
+  return false;
+}
 
 /* LE PALIER. Une plate-forme PLATE à l'altitude de raccord des deux volées.
    ⚠️ IL N'EST PAS EN MARCHES, ET C'EST TOUT SON INTÉRÊT : `G_TOWN_STAIR` y
@@ -3840,7 +3854,10 @@ export const TOWN_STAIRS = [
    lui dessine son parement de falaise tout seul. C'est exactement le muret de
    brique sous la balustrade de la planche. */
 export const TOWN_STAIR_LANDINGS = [
-  { x: 139, y: 30, w: 10, h: 2, elev: 0.6 },
+  /* ZIP 467 — une seule rangée plate entre les deux volées. Le palier est plus
+     large que le passage : le bloc y peint le muret, la ferronnerie et la
+     balustrade ; leurs collisions sont dans TOWN_RAILS, pas dans l'altitude. */
+  { x: 136, y: 30, w: 15, h: 1, elev: 0.6 },
 ];
 
 /* ⚠️⚠️⚠️ ZIP 447 — LA BALUSTRADE, ET ELLE N'EST PAS QU'UN DÉCOR : ELLE EST LA
@@ -3867,11 +3884,11 @@ export const TOWN_STAIR_LANDINGS = [
    d'autre. Trois grandeurs, trois paramètres (§4). */
 export const TOWN_RAILS = [
   // Le garde-corps du bord est du palier haut, celui du défaut ci-dessus.
-  { x: 143, y: 29, w: 6, h: 1, axis: "x", style: "stone" },
-  /* La ferronnerie source mesure elle aussi 96 px : six cellules exactes. Elle
-     se termine en x=142, juste avant la volée basse, au lieu d'en perdre les
-     deux premiers tronçons par une découpe arbitraire. */
-  { x: 137, y: 31, w: 6, h: 1, axis: "x", style: "iron" },
+  { x: 142, y: 29, w: 9, h: 1, axis: "x", style: "stone" },
+  /* La ferronnerie occupe tout le bord gauche donné par le bloc. `style` reste
+     descriptif pour les bancs et le diagnostic ; le rendu n'en fait plus un
+     sprite séparé depuis le 467. */
+  { x: 136, y: 31, w: 6, h: 1, axis: "x", style: "iron" },
   /* ⚠️⚠️ ZIP 447 — ET LES RAMPES DES DEUX VOLÉES, QUI SONT L'INDICE DE
      PROFONDEUR LE PLUS FORT DE TOUT L'ESCALIER. Elles sont posées SUR les cases
      de marche extérieures, pas à côté : c'est ce qui les fait MONTER avec la
@@ -3880,14 +3897,33 @@ export const TOWN_RAILS = [
      restée plate le long d'un escalier qui monte — le contresens exact que le
      zip corrige.
      ⚠️ ELLES COÛTENT DEUX CASES DE LARGEUR À CHAQUE VOLÉE, et c'est le prix
-     juste : la volée basse passe de 6 à 4 cases praticables, la haute de 4 à 2.
+     juste : la volée basse passe de 8 à 6 cases praticables, la haute de 6 à 4.
      Un escalier dont la rampe ne prend pas de place est un escalier dont la
-     rampe est peinte sur le sol. `verify-vallee` a confirmé que les 21 756
-     trajets passent toujours. */
-  { x: 143, y: 32, w: 1, h: 2, axis: "y", style: "short", side: "west" },
-  { x: 148, y: 32, w: 1, h: 2, axis: "y", style: "short", side: "east" },   // volée basse
-  { x: 139, y: 28, w: 1, h: 2, axis: "y", style: "tall", side: "west" },
-  { x: 142, y: 28, w: 1, h: 2, axis: "y", style: "tall", side: "east" },   // volée haute
+     rampe est peinte sur le sol. `verify-vallee` confirme que les quatre volées
+     et tous les lieux de la ville restent atteignables. */
+  { x: 142, y: 31, w: 1, h: 6, axis: "y", style: "short", side: "west" },
+  { x: 149, y: 31, w: 1, h: 6, axis: "y", style: "short", side: "east" },   // volée basse
+  { x: 136, y: 27, w: 1, h: 3, axis: "y", style: "tall", side: "west" },
+  { x: 141, y: 27, w: 1, h: 3, axis: "y", style: "tall", side: "east" },   // volée haute
+];
+
+/* ZIP 467 — LE VISUEL EST UN SEUL BLOC. `x` est son origine dans le monde ;
+   `screenY` est déjà la projection verticale du bitmap, parce que le bloc
+   contient lui-même murs, paliers et dénivelés. Le repasser par une altitude
+   le déformerait une seconde fois. La position est calée par les deux volées :
+   l'escalier haut commence à l'écran en y=392 et le bas en y=469, exactement
+   aux rangées correspondantes du 268×248 natif. */
+export const TOWN_COURT_STAIR_BLOCK = { x: 134, screenY: 343 };
+/* Emprise de nettoyage dans la grille : un panneau générique ou une statue
+   ajoutés par une passe ultérieure dépasseraient du bloc sans appartenir à sa
+   composition. Elle est volontairement plus large de deux cases que le
+   contenu opaque, pour attraper les sprites hauts ancrés juste à côté. */
+export const TOWN_COURT_STAIR_CLEAR = { x: 132, y: 23, w: 23, h: 16 };
+
+/* Le pot est cuit dans le bloc mais reste un volume. Tout le reste de la
+   collision visible est déjà TOWN_RAILS ou un écart d'altitude. */
+export const TOWN_COURT_BLOCK_SOLIDS = [
+  { x: 147, y: 31, w: 1, h: 1, kind: "pot" },
 ];
 
 export const TOWN_HOUSES = [                        // door faces south onto a street
@@ -4684,7 +4720,7 @@ export const TOWN_PROP_ART = {
   hedgeRow: "hedgeRow", grassTuft: "grassTuft", flatStone: "flatStone",
   /* ⚠️ ZIP 447 — les décors de la SECONDE planche. Même table, même mécanique :
      c'est `townPropBox` qui va chercher dans l'une puis l'autre. */
-  rail: "balusterEnd", bloomBed: "flowerBedL", bloomBed2: "flowerBedR",
+  bloomBed: "flowerBedL", bloomBed2: "flowerBedR",
   bloomRow: "flowerRow", rockBed: "rockBed", hedgeAngle: "hedgeCorner",
 };
 /* L'emprise d'un décor, en cases, dans le repère du monde : le sprite est

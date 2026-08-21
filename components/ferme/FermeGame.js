@@ -16196,6 +16196,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const queueTownBubble = (cx, by, text, major, alpha) => townBubbles.push({ cx, by, text, major, alpha });
       for (let y = y0; y <= yBot; y++) for (let x = x0; x <= x1; x++) {
         const i = y * tw.w + x, g = tw.ground[i];
+        const bakedCourtStair = C.townCourtMainStairCell(x, y);
         const e = tw.elev[i], oy = -e * EP;
         const px = x * T, py = y * T + oy;
         // Zip 235: use the real farm sprite tiles for a match with the farm
@@ -16283,7 +16284,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              par aucun banc (§4). Voir `A.drawTownStairTile` et
              `tools/render-escaliers.mjs`. Le repli reste ici, comme pour les
              revêtements : un atlas manquant doit rendre du gris, pas un trou. */
-          if (!A.drawTownStairTile(ctx, sprites, tw, x, y, px, py)) {
+          /* ZIP 467 — sous le bloc unique, aucune ancienne marche. Un dessin
+             d'herbe de repli ne peut pas dépasser comme les nez de marche et
+             les limons du 466 ; les pixels opaques de la source le couvrent. */
+          if (bakedCourtStair) {
+            if (!A.drawTownGrassTile(ctx, sprites, tw, x, y, px, py)) ctx.drawImage(gTiles[(x * 37 + y * 17) % gTiles.length], px, py);
+          } else if (!A.drawTownStairTile(ctx, sprites, tw, x, y, px, py)) {
             const vertical = A.townStairVertical(tw, x, y);
             ctx.fillStyle = "#b8b4ab"; ctx.fillRect(px, py, T, T);
             for (let s = 0; s < 4; s++) {
@@ -16390,7 +16396,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            arête claire au sommet (le nez du rebord, qui accroche la lumière) et
            une ombre portée au pied. */
         const drop = e - elAt(x, y + 1);
-        if (drop > 0.01) {
+        if (drop > 0.01 && !bakedCourtStair) {
           const fh = drop * EP;
           /* ⚠️⚠️ ZIP 436 — LE PAREMENT AUSSI EST PARTI DANS `fermeArt`. Ce
              qu'il y avait : un aplat `#8f8a80`, une ligne sombre PLEINE
@@ -16431,7 +16437,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            escalier a de toute façon : un LIMON, une joue de pierre qui borde la
            volée. Le blocage devient une chose qu'on voit et qu'on comprend. */
         const isStair = g === C.G_TOWN_STAIR;
-        for (const sd of [-1, 1]) {
+        if (!bakedCourtStair) for (const sd of [-1, 1]) {
           const dside = e - elAt(x + sd, y);
           if (dside <= 0.01) continue;
           const bw = isStair ? 4 : 2;
@@ -16803,6 +16809,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
         });
       }
+      /* ZIP 467 — l'escalier monumental est déjà composé dans la source de
+         Guillaume. On le peint une seule fois, après le sol qui doit apparaître
+         dans ses transparences et avant toute la file des bâtiments, décors et
+         personnages. Les anciennes rambardes case par case ont disparu du
+         générateur : aucun doublon ne peut dépasser derrière ce bloc. */
+      A.drawTownCourtStairBlock(ctx, sprites);
       /* ══════════════════════════════════════════════════════════════════════
          LES TROIS MONUMENTS (425) — église, hôtel de ville, tribunal.
          ──────────────────────────────────────────────────────────────────────
@@ -16984,7 +16996,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         "stoneBench", "benchWall", "hangLamp", "stepStones", "chest", "bucket", "rod", "potReeds",
         "flowerTrough", "bonsai", "roseBox", "potPink", "oilLamp", "table", "reedTuft", "reedsWater",
         "hedgeRow", "grassTuft", "flatStone", "goldBush", "lavender", "clump", "lily", "bench",
-        "rail", "railY", "courtFlowerPot", "courtSignFlowers", "bloomBed", "bloomRow", "rockBed", "hedgeAngle"]);   // 466 : les crops exacts portent déjà leur ombre
+        "bloomBed", "bloomRow", "rockBed", "hedgeAngle"]);
       /* ZIP 439 — la variante d'un décor à plusieurs dessins. Deux nombres
          premiers différents de ceux du 437 (7/13) : réutiliser les mêmes ferait
          tomber le buisson d'or et le buisson fleuri sur la même variante à
@@ -17092,14 +17104,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   : pr.kind === "table" ? sprites.townTable
                   : pr.kind === "reedTuft" ? sprites.townReedTuft
                   : pr.kind === "reedsWater" ? sprites.townReedsWater
-                  /* ⚠️ ZIP 447 — le garde-corps du quart tournant. Il est dans
-                     CETTE liste et pas dans une passe à part, pour la raison du
-                     444 : un décor peint hors de la file triée serait toujours
-                     devant ou toujours derrière le fermier. Ici il doit être les
-                     DEUX, selon qu'on passe au nord ou au sud de lui. */
-                  : pr.kind === "rail" || pr.kind === "railY" ? A.townRailSprite(sprites, pr)
-                  : pr.kind === "courtFlowerPot" ? sprites.townCourtFlowerPot
-                  : pr.kind === "courtSignFlowers" ? sprites.townCourtSignFlowers
                   : pr.kind === "bloomBed" ? pick(sprites.townBloomBed, pr)
                   : pr.kind === "bloomRow" ? sprites.townBloomRow
                   : pr.kind === "rockBed" ? sprites.townRockBed

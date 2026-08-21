@@ -174,7 +174,7 @@ title("4. deux décors ne s'interpénètrent pas");
      c'est-à-dire que tout ce que ce contrôle attrapait, il l'attrape encore.
      Ce qu'on retire n'est pas la mesure, c'est un cas dont on peut nommer la
      raison (même geste qu'au 439 sur `archBridge` et les nénuphars). */
-  const CONTINU = new Set(["fence", "lowWall", "hedgeRow", "benchWall", "rail"]);
+  const CONTINU = new Set(["fence", "lowWall", "hedgeRow", "benchWall"]);
   const seen = new Set(), bad = [];
   for (const p of props) {
     if (!C.TOWN_PROP_ART[p.kind]) continue;
@@ -206,7 +206,7 @@ title("4. deux décors ne s'interpénètrent pas");
    rangée de haie. */
 title("5. un ouvrage linéaire court, il ne se pose pas tout seul");
 {
-  const LINEAR = ["fence", "lowWall", "hedgeRow", "benchWall", "rail"];   // 447
+  const LINEAR = ["fence", "lowWall", "hedgeRow", "benchWall"];
   for (const kind of LINEAR) {
     const list = props.filter(p => p.kind === kind);
     if (!list.length) { console.log(`  ····   ${kind} : aucun posé`); continue; }

@@ -11,20 +11,20 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**Livré au 466 : LES ESCALIERS SOUS LE TRIBUNAL COPIENT LA PLANCHE FOURNIE ET SA COMPOSITION.**
-`refs/ASSETS.jpg` est réduit mécaniquement à ses pixels natifs ×4 puis encodé sans quantification
-dans `plancheEscaliers.js`. Marches, parements, balustrade de pierre, ferronnerie, quatre colonnes,
-pot fleuri et groupe panneaux/fleurs sont les crops de la source, pas des redessins procéduraux.
-`Compo à respecter.jpg` fixe leur montage ; le banc, la statue et l'ancien panneau qui occupaient
-la zone ont été retirés.
+**Livré au 467 : L'ESCALIER SOUS LE TRIBUNAL EST LE BLOC DÉTOURÉ FOURNI, SANS RECOMPOSITION.**
+`refs/ESCALIERDETOURE.jpg` est réduit mécaniquement de 1072×992 à 268×248, détouré puis encodé
+sans quantification dans `plancheEscaliers.js`. Le jeu le dessine en un appel : murs, marches,
+rambardes, ferronnerie, colonnes et pot restent exactement les pixels de la source, calés sur
+`Compo à respecter.jpg`. Treize aplats gris sont transparents (12 196 pixels) ; le vrai sol de
+Valley Town apparaît dessous.
 
-Les collisions suivent la même découpe : chaque balustrade de 96 px couvre six cellules solides de
-16 px ; une colonne de 17 px est coupée puis recomposée bit-à-bit sur ses deux cellules, sans
-duplication. Un premier ancrage du pot coupait l'artère x=150 ; le contrôle de circulation l'a
-refusé et le pot vit maintenant sur le bord du palier. Revue effectuée dans le navigateur sur la
-vraie carte, après suppression des rectangles gris résiduels du détourage des accessoires.
+La physique est une carte séparée : volée basse 8×6, volée haute 6×3, palier à 0,60, variations
+de marche toujours sous `TOWN_STEP_MAX`, rectangles solides pour les rampes et le pot. L'ancien
+dessin procédural et ses accessoires ont disparu. La revue dans le vrai jeu a trouvé cinq arbres
+qui passaient devant les pixels opaques ; ils sont maintenant retirés de cette seule emprise. La
+descente complète puis la remontée jusqu'au parvis ont été jouées dans le navigateur.
 
-Bancs : `verify-vallee` **205/205**, `render-escaliers` **38/38**, `verify-compo` et
+Bancs : `verify-vallee` **205/205**, `render-escaliers` **35/35**, `verify-compo` et
 `verify-strings` (**1 090 clés**) verts. **Aucune migration ni modification Supabase n'est
 nécessaire.**
 
@@ -42,7 +42,7 @@ des étapes de chant archivées.
 
 ---
 
-État à jour du **zip 466**. Le chantier des étoiles est momentanément confié à Claude ; côté Codex,
+État à jour du **zip 467**. Le chantier des étoiles est momentanément confié à Claude ; côté Codex,
 la prochaine action attend une consigne. La direction longue reste de **rendre Valley Town habitable
 au regard ET crédible au jeu**, et **lui donner une histoire**. Tout ce qui concerne la ville, ses habitants, ses
 bâtiments et **ses pièges** est dans **`components/ferme/README.md`**, qui fait autorité ; les
@@ -129,11 +129,11 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 
 | # | La leçon, en une phrase | Où est le détail |
 |---|---|---|
-| 463 | ⚠️⚠️⚠️ **UN ÉTAT RÉUSSI SANS CONSÉQUENCE VISIBLE EST UN ÉCHEC POUR LE JOUEUR.** Les petites étoiles étaient bien marquées trouvées et retirées du cratère, puis disparaissaient du monde : l'apprivoisement semblait donc cassé. Toute trouvaille vivante rejoint désormais la formation depuis la table autoritaire. | `STAR_FOLLOWER_SITES`, `starCompanionsAt` |
 | 464 | ⚠️⚠️⚠️ **UNE ANIMATION CORRECTE BRANCHÉE SUR LA MAUVAISE IDENTITÉ N'EXISTE PAS.** Le `climb → spin → settle` était entier, mais seul le passage de la reine au cratère l'armait ; les petites étaient téléportées dans la formation. Une transition visible doit transporter l'identité de l'entité ajoutée du verdict jusqu'au rendu. | `starFollowerAdded`, `starJoinRef`, `starCompanionsAt` |
 | 464 | ⚠️⚠️ **ROTATION ET TRAJECTOIRE SONT DEUX GRANDEURS INDÉPENDANTES.** Faire osciller le cap pour donner de la vie à un fragment déplace son centre de dizaines de pixels ; le centre suit un cap fixe, tandis que la silhouette et son point chaud tournent sur eux-mêmes. | `starFarmFlightPath`, `drawStarFragmentMeteor` |
 | 465 | ⚠️⚠️⚠️ **UNE ANIMATION QUI CONTINUE DERRIÈRE UN PANNEAU N'EXISTE PAS POUR LE JOUEUR.** Son horloge doit mesurer du temps VISIBLE, et toute interface concurrente doit attendre — y compris la carte déjà ouverte une image avant le verdict. | `starJoinRef`, `starBlockingPanelsClear`, `starWatch` |
-| 466 | ⚠️⚠️⚠️ **UNE RÉFÉRENCE À COPIER N'EST PAS UNE INVITATION À L'INTERPRÉTER.** On importe ses pixels, on découpe le même ouvrage sur les cellules de collision, puis on prouve que leur recomposition est bit-à-bit la source ; la composition fournie verrouille aussi les positions et les anciens décors concurrents disparaissent. | `plancheEscaliers.js`, `townRailSprite`, `render-escaliers.mjs` |
+| 466 | ⚠️⚠️⚠️ **UNE RÉFÉRENCE À COPIER N'EST PAS UNE INVITATION À L'INTERPRÉTER.** On importe ses pixels et la composition fournie verrouille les positions ; toute approximation procédurale et tout décor concurrent disparaissent. | `plancheEscaliers.js`, `components/ferme/README.md` §27.3, `render-escaliers.mjs` |
+| 467 | ⚠️⚠️⚠️ **UN BLOC VISUEL N'EST PAS UNE COLLECTION D'OBSTACLES VISUELS.** Le bitmap exact se dessine une fois, sa collision vit séparément, et tout ancien sous-dessin ou premier plan qui traverse ses pixels opaques doit disparaître. | `drawTownCourtStairBlock`, `TOWN_COURT_BLOCK_SOLIDS`, `render-escaliers.mjs` |
 
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
@@ -877,6 +877,9 @@ erreur** en choisissant mal.
    **465 (HUITIÈME passe : les quatre lignes du 459 partent avant les deux leçons du 465 ; leur
    détail reste dans `QUETE.md` et `render-etoile.mjs`. Le tableau couvre exactement 462 à 465,
    avec les zips sans leçon nouvelle naturellement absents.)**.
+
+   **467 (NEUVIÈME passe : la ligne 463 part avant l'ajout du 467. Le tableau couvre les quatre
+   derniers zips 464 à 467 ; le détail retiré reste dans `QUETE.md` et `starCompanionsAt`.)**.
 
    ⚠️⚠️ **LE 451 A EXÉCUTÉ L'ORDRE DU 449 : §13 RELU LIGNE À LIGNE**, huit zips après le 442.
    Quatre entrées parlaient d'un code SUPPRIMÉ au 444 — elles décrivaient l'enquête cadastrale

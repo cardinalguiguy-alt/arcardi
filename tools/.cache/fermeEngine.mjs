@@ -4015,6 +4015,10 @@ export function generateTownWorld() {
      `ground` (une case de garde-corps reste la dalle ou l'herbe qu'elle était,
      et c'est ce qui fait qu'il a l'air POSÉ dessus au lieu de la remplacer). */
   for (const rl of (C.TOWN_RAILS || [])) rect(rl, (x, y, i) => { solid[i] = 1; });
+  /* ZIP 467 — le pot est désormais cuit dans le bloc unique. Il ne peut donc
+     plus être un `prop` sans redessiner une seconde fois les mêmes pixels ; sa
+     seule donnée séparée est cette emprise physique invisible. */
+  for (const ob of (C.TOWN_COURT_BLOCK_SOLIDS || [])) rect(ob, (x, y, i) => { solid[i] = 1; });
 
   /* ------------------------------------------------------------------ RUES
      ⚠️ UNE RUE S'ARRÊTE AU PIED D'UNE FALAISE. `paveRun` refuse toute case
@@ -4089,26 +4093,12 @@ export function generateTownWorld() {
     props.push({ x, y, kind, ...(extra || {}) });
     if (blocks) solid[id(x, y)] = 1;
   };
-  /* ⚠️⚠️ ZIP 447 — LES GARDE-CORPS DEVIENNENT DES DÉCORS, ET C'EST `verify-vallee`
-     QUI L'A EXIGÉ. Marqués seulement `solid` dans la passe de relief, ils
-     sortaient dix « cases bloquantes invisibles » — le contrôle que le 425 a
-     laissé et qui refuse tout blocage que personne ne dessine. La leçon vaut
-     au-delà : *ce qui arrête le joueur doit être quelque chose qu'il VOIT*, et
-     la façon la plus sûre de s'y tenir est que la même liste serve aux deux.
-     ⚠️ `solid` est déjà posé en amont (avec le relief, pour que rues et arbres
-     l'évitent) ; on ne le repose pas ici, on ajoute le DESSIN. */
-  for (const rl of (C.TOWN_RAILS || [])) {
-    const count = rl.axis === "y" ? rl.h : rl.w;
-    for (let y = rl.y; y < rl.y + rl.h; y++) for (let x = rl.x; x < rl.x + rl.w; x++) {
-      const railIndex = rl.axis === "y" ? y - rl.y : x - rl.x;
-      addProp(x, y, rl.axis === "y" ? "railY" : "rail", true, {
-        railStyle: rl.style || "stone",
-        railSide: rl.side || "west",
-        railIndex,
-        railCount: count,
-      });
-    }
-  }
+  /* ZIP 467 — AUCUN `prop` POUR LES GARDE-CORPS. Ils restent les rectangles de
+     collision de TOWN_RAILS, mais leurs pixels sont déjà dans `courtBlock`.
+     Les réémettre case par case recréerait exactement le montage que la source
+     détourée remplace. `verify-vallee` explique ces solides par l'emprise du
+     bloc et `render-escaliers` vérifie que le bloc est réellement dessiné. */
+
   /* ⚠️⚠️ ZIP 447 — LA VÉGÉTATION DU DÉNIVELÉ, ET ELLE SE PLACE PAR DÉRIVATION.
      Chaque massif est posé RELATIVEMENT à une volée ou à un palier lus dans les
      constantes : le jour où l'escalier bouge d'une case, ils suivent. Les
@@ -4117,32 +4107,9 @@ export function generateTownWorld() {
      ⚠️ Ils ne bloquent PAS (`false`) : un massif de fleurs qu'on ne peut pas
      traverser est un mur invisible déguisé en décor, et c'est le contrôle que
      `verify-vallee` fait dans les deux sens. */
-  {
-    const vBas = C.TOWN_STAIRS[0], vHaut = C.TOWN_STAIRS[1], pal = (C.TOWN_STAIR_LANDINGS || [])[0];
-    /* ⚠️⚠️ ILS BLOQUENT TOUS, ET C'EST LA RÈGLE DU DÉPÔT, PAS UN CHOIX : le
-       contrôle inverse de `verify-vallee` refuse tout décor traversable, avec
-       quatre exceptions nommées qui FLOTTENT (le pont, les nénuphars, les
-       roseaux, les pas japonais). Un massif de fleurs qu'on traverse est un
-       décor qui ment sur ce qu'il est. Le prix se paie donc au PLACEMENT :
-       aucun de ces massifs ne tombe sur l'avenue ni sur une marche, sinon on
-       aurait bouché une rue avec des fleurs — et c'est le taxi qui l'aurait
-       découvert, pas nous.
-       ⚠️ La rangée du PIED est `y + len - 1`, la dernière marche, et pas
-       `y + len` qui est l'avenue elle-même. Premier jet : deux massifs plantés
-       au milieu de la chaussée. */
-    if (vBas && pal) {
-      /* ⚠️ L'ESPACEMENT EST DICTÉ PAR L'EMPRISE DES SPRITES, PAS PAR L'ŒIL.
-         Ces massifs font 1 à 2 cases de large une fois dérivés par
-         `townPropBox` ; posés tous les deux, ils s'interpénétraient et
-         `verify-compo` les a refusés trois fois de suite. Les abscisses
-         ci-dessous sont celles qui laissent leurs CORPS disjoints, mesurées. */
-      const pied = vBas.y + vBas.len - 1;
-      /* Composition de référence : le pot à droite du palier et le groupe de
-         panneaux/fleurs à gauche du pied sont eux aussi les pixels fournis. */
-      addProp(pal.x + pal.w - 2, pal.y + 1, "courtFlowerPot", true);
-      addProp(vBas.x - 4, pied, "courtSignFlowers", true);
-    }
-  }
+  /* Le 467 retire aussi les deux accessoires séparés de cette passe : le pot
+     est dans le bloc et le groupe panneaux/fleurs n'existe pas dans la nouvelle
+     source. Les réintroduire ferait dépasser des éléments absents du modèle. */
   // Lampadaires : les quatre angles de la place, plus deux paires en garde
   // d'honneur de part et d'autre de la fontaine et du monument.
   for (const [lx, ly] of [
@@ -5782,10 +5749,15 @@ export function generateTownWorld() {
     for (const ry of C.TOWN_ST_ROWS) for (const cx2 of C.TOWN_ST_COLS) {
       const sx = cx2 - 2, sy = ry - 1;
       if (!inMap(sx, sy)) continue;
+      const cl = C.TOWN_COURT_STAIR_CLEAR;
+      /* ZIP 467 — le croisement (148,33) tombe dans le bloc détouré. L'ancien
+         panneau y dépassait de la volée basse alors qu'il n'existe ni dans la
+         source ni dans la composition modèle. */
+      if (cl && sx >= cl.x && sx < cl.x + cl.w && sy >= cl.y && sy < cl.y + cl.h) continue;
       if (solid[id(sx, sy)] || ground[id(sx, sy)] === C.G_PATH) continue;
       addProp(sx, sy, "streetSign", true);
     }
-    // La statue du belvédère reste ; sous le tribunal, la composition 466 a
+    // La statue du belvédère reste ; sous le tribunal, la composition 467 a
     // autorité et ne contient pas de statue.
     addProp(C.TOWN_BELVEDERE.x + (C.TOWN_BELVEDERE.w >> 1), C.TOWN_BELVEDERE.y + 5, "statue", true);
   }
@@ -5817,9 +5789,9 @@ export function generateTownWorld() {
     // Le tableau des nouvelles : plein nord de la place, dans l'axe de la
     // fontaine, hors des parterres et hors de la chaussée qui la traverse.
     addProp(C.TOWN_PLAZA.x + 10, C.TOWN_PLAZA.y + 1, "newsBoard", true);
-    /* Le panneau générique du pied a été remplacé au 466 par le groupe exact
-       `courtSignFlowers` de la planche, posé avec les autres éléments de la
-       composition de référence. */
+    /* Aucun panneau au pied : la source détourée 467 n'en contient pas. En
+       remettre un ici créerait précisément le dépassement que le bloc unique
+       doit éliminer. */
   }
 
   for (let i = 0; i < W * H; i++) if (hedge[i]) solid[i] = 1;
@@ -5931,6 +5903,21 @@ export function generateTownWorld() {
   // Le semis suit la surface : 70 arbres sur 3 072 cases faisaient un parc,
   // les mêmes 70 sur 27 648 auraient fait un désert.
   for (let i = 0; i < 620; i++) put(rnd() * W, rnd() * H);
+  /* ZIP 467 — le bloc du tribunal est dessiné avant les objets du monde. Un
+     arbre ancré dans son emprise passerait donc PAR-DESSUS ses murs et ses
+     ferronneries, même lorsque le pixel source est opaque. Cinq arbres le
+     faisaient dans la vraie fenêtre du jeu. On retire uniquement les arbres
+     de cette emprise, après le dernier semis ; routes, gazon et haies restent
+     sous le bitmap et apparaissent dans ses pixels réellement transparents. */
+  {
+    const cl = C.TOWN_COURT_STAIR_CLEAR;
+    for (let y = cl.y; y < cl.y + cl.h; y++) for (let x = cl.x; x < cl.x + cl.w; x++) {
+      if (!inMap(x, y)) continue;
+      const i = id(x, y), o = objects[i];
+      if (o !== C.O_TREE && o !== C.O_TREE2) continue;
+      objects[i] = C.O_NONE; objHp.delete(i);
+    }
+  }
   /* ⚠️⚠️ `hedge` FAIT PARTIE DU RETOUR, ET L'OUBLIER A COÛTÉ SIX CENTS MURS
      INVISIBLES. Premier jet : la couche était construite, servait à remplir
      `solid`... et n'était pas rendue. Le jeu recevait donc des centaines de

@@ -1,28 +1,29 @@
-# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 466
+# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 467
 
-## 466 — Les escaliers sous le tribunal reprennent exactement la planche fournie
+## 467 — L'escalier détouré est un seul bloc, conforme à la composition
 
-`refs/ASSETS.jpg` n'est plus une inspiration : `tools/import-escaliers-assets.mjs`
-en extrait les pixels natifs ×4, détoure le fond et génère
-`plancheEscaliers.js` sans quantification de palette. Les marches, les deux
-parements, la balustrade sculptée, la ferronnerie, les quatre colonnes, le pot
-fleuri et le groupe panneaux/fleurs viennent tous de cette planche. Le vieux
-dessin procédural des rambardes a été supprimé.
+`refs/ESCALIERDETOURE.jpg` est l'autorité visuelle donnée par Guillaume, elle-même
+calée sur `refs/Compo à respecter.jpg`. `tools/import-escaliers-assets.mjs` la
+ramène mécaniquement de 1072×992 à ses pixels natifs 268×248 et l'encode sans
+quantification dans `plancheEscaliers.js`. Le jeu fait **un seul appel de dessin** :
+murs, marches, rambardes, colonnes, ferronnerie et pot ne sont plus découpés ni
+recomposés.
 
-`Compo à respecter.jpg` est également devenue une contrainte de carte : volée
-haute encadrée par les colonnes longues, balustrade sculptée à sa droite,
-ferronnerie à gauche du palier, colonnes courtes autour de la volée basse, pot
-au bord droit et panneaux/fleurs au pied gauche. L'ancien banc, la statue et le
-panneau générique qui contredisaient ce montage ont été retirés de cette zone.
+Le gris de détourage est retiré par composantes connexes : treize aplats, soit
+12 196 pixels transparents. Les gris légitimes de la pierre restent intacts. Le
+sol, les rues et les haies existants de Valley Town apparaissent donc dans les
+jours du bloc. Cinq arbres dont le feuillage repassait devant ses pixels opaques
+ont été retirés de cette seule emprise, de même que l'ancien panneau et les
+anciens accessoires concurrents ; aucun élément ne dépasse plus du montage.
 
-La collision suit la découpe du dessin. Chaque balustrade de 96 px est formée de
-six cellules solides de 16 px ; chaque colonne de 17 px est reconstruite sur
-deux cellules de profondeur, bit pour bit, au lieu d'être répétée deux fois. Le
-premier placement du pot avait coupé l'artère x=150 : `verify-vallee` l'a refusé,
-le pot a été recalé sur le palier, et les **205/205** contrôles passent. Le banc
-des escaliers verrouille désormais les pixels, les dimensions, les positions et
-l'absence d'anciens décors concurrents ; la composition finale a aussi été
-rejouée dans le navigateur.
+La physique est indépendante du bitmap. La volée basse occupe 8×6 cases, dont
+6 praticables entre les rampes ; la haute 6×3, dont 4 praticables. Le palier
+reste à 0,60 et les marches parcourent la suite d'altitudes
+0,00 → 0,09 → 0,17 → 0,26 → 0,34 → 0,43 → 0,51 → 0,60 → 0,70 → 0,80 → 0,90 → 1,00,
+toujours sous `TOWN_STEP_MAX`. Les rambardes et le pot ont leurs rectangles
+solides, sans porter d'altitude. La descente des deux volées puis la remontée
+complète ont été jouées dans le navigateur. `render-escaliers` passe **35/35**,
+`verify-vallee` **205/205**, et `verify-compo` est vert.
 
 ## 463 — Les étoiles apprivoisées restent avec les joueurs ; la reine mène
 
@@ -2598,11 +2599,11 @@ différentes, DÉCALÉES, séparées par un palier plat.** Le réflexe aurait é
 descripteur `corner` avec un sens de virage — un second de quelque chose, payé en cas
 particuliers dans les vingt endroits qui lisent `TOWN_STAIRS` (§4). Le moteur ne voit que des
 cases et des altitudes ; il n'a jamais eu besoin de savoir qu'un escalier tourne.
-**C'est le DÉCALAGE qui fait le virage, pas un angle** : volée basse en x 143-148, haute en
-x 139-142. Depuis le palier, le nord n'est ouvert qu'à l'ouest. La contrainte naît de la
+**C'est le DÉCALAGE qui fait le virage, pas un angle** : volée basse praticable en x 143-148,
+haute en x 137-140. Depuis le palier, le nord n'est ouvert qu'à l'ouest. La contrainte naît de la
 CARTE, donc `canStandTown` la fait respecter et `townFindPath` la contourne, sans une ligne.
 
-Onze pas, le plus grand à 0,2 pour un `TOWN_STEP_MAX` de 0,34.
+Onze hausses, la plus grande à 0,10 pour un `TOWN_STEP_MAX` de 0,34.
 
 ⚠️⚠️ **DEUX DÉFAUTS TROUVÉS PAR `verify-vallee`, ET LE SECOND EST UNE FORME NEUVE.**
 1. La volée avait d'abord été posée **au milieu d'une avenue**. Recalée.
@@ -2621,12 +2622,11 @@ que personne ne dessinait) : ils sont devenus des décors. *Ce qui arrête le jo
 quelque chose qu'il VOIT, et la façon sûre de s'y tenir est que la même liste serve aux deux.*
 
 ⚠️ **465 — LE DESSIN AVAIT PERDU L'AXE EN APLATISSANT LA LISTE.** Les rectangles horizontaux
-des paliers et les rectangles verticaux des deux volées devenaient tous `kind:"rail"` dans le
-générateur, donc tous peignaient le `balusterEnd` est-ouest. `TOWN_RAILS` porte maintenant son
-axe jusqu'au décor (`rail` / `railY`). La rampe nord-sud n'est pas le sprite tourné de 90° — ce
-qui coucherait ses poteaux — mais un dessin natif dont les lisses fuient en profondeur et les
-montants restent debout. `render-escaliers` les place côte à côte dans
-`escaliers-rambardes.png` et refuse qu'elles soient pixel pour pixel la même orientation.
+et verticaux devenaient tous un même décor de rambarde. **467 a supprimé ce montage** :
+`TOWN_RAILS` ne sert plus qu'aux collisions, tandis que `courtBlock` porte les deux orientations
+exactement telles qu'elles existent dans `ESCALIERDETOURE`. `render-escaliers` vérifie désormais
+le bloc unique, son masque et son seul appel de dessin ; il n'existe plus de sprite `rail` ou
+`railY` à orienter.
 
 ### 27.4 « Tout est condensé et plaqué en 2D » — les trois nombres derrière la phrase
 

@@ -4,8 +4,8 @@
    Portage FIDÈLE des sprites de la maquette validée. Tout est dessiné sur des
    canvases hors-écran. Comme cela dépend de `document`, on n'exécute rien à
    l'import : `buildSprites()` est appelé côté client une seule fois après le
-   montage (voir FermeGame.js). Aucune image bitmap : signature CSS/canvas pur
-   du site respectée.
+   montage (voir FermeGame.js). Le bloc d'escalier 467 est l'exception voulue :
+   un bitmap source encodé en données, rejoué sans altération dans un canevas.
    ========================================================================== */
 
 import * as C from "./fermeConstants";
@@ -23,7 +23,7 @@ import { PLANCHE } from "./planche";
    maison, arbres). Générée par `tools/import-planche2.mjs` ; voir sa note
    d'en-tête pour l'échelle, qui est DÉRIVÉE et non mesurée. */
 import { PLANCHE2 } from "./planche2";
-/* ZIP 466 — planche des escaliers du tribunal, importée pixel pour pixel. */
+/* ZIP 467 — bloc d'escalier du tribunal, importé pixel pour pixel. */
 import { ESCALIER_ASSETS } from "./plancheEscaliers";
 
 /* ---------------------------------------------------------------- PALETTE ---
@@ -1162,19 +1162,18 @@ export function drawTownStairCheek(ctx, S, tw, x, y, px, py, bx, bw, drop) {
   return true;
 }
 
-/* ZIP 466 — une case de collision, une tranche du sprite source. */
-export function townRailSprite(S, pr) {
-  if (!S || !pr) return null;
-  const n = Math.max(1, pr.railCount | 0), i = Math.max(0, Math.min(n - 1, pr.railIndex | 0));
-  if (pr.kind === "railY") {
-    const style = pr.railStyle === "tall" ? "tall" : "short";
-    const side = pr.railSide === "east" ? "east" : "west";
-    const pair = S.townRailY?.[style]?.[side];
-    if (!pair?.length) return null;
-    return pair[i] || null;
-  }
-  const style = pr.railStyle === "iron" ? "iron" : "stone";
-  return S.townRail?.[style]?.[i] || null;
+/* ZIP 467 — UN SEUL APPEL, UN SEUL BITMAP. Le bloc porte déjà les murs, les
+   deux volées, les quatre colonnes, les balustrades et le pot. `dx/dy` servent
+   uniquement aux bancs qui cadrent une fenêtre locale ; le jeu passe zéro.
+   Aucune altitude n'est appliquée ici : le relief est déjà dessiné dans les
+   248 rangées de la source. */
+export function drawTownCourtStairBlock(ctx, S, dx = 0, dy = 0) {
+  const im = S?.townCourtStairBlock;
+  if (!im) return false;
+  ctx.drawImage(im,
+    C.TOWN_COURT_STAIR_BLOCK.x * C.TILE + dx,
+    C.TOWN_COURT_STAIR_BLOCK.screenY + dy);
+  return true;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -2936,27 +2935,6 @@ export function buildSprites() {
       }
     }
     return c;
-  }
-
-  function escalierAssetSlices(name) {
-    const source = escalierAssetSprite(name);
-    if (source.width !== 96) throw new Error(`${name} doit mesurer exactement 96 px`);
-    return Array.from({ length: 6 }, (_, i) => {
-      const [c, g] = cv(16, source.height);
-      g.drawImage(source, i * 16, 0, 16, source.height, 0, 0, 16, source.height);
-      return c;
-    });
-  }
-
-  /* Une colonne couvre deux cellules en profondeur. On coupe uniquement entre
-     les rangées : le premier morceau finit sur la première ligne de profondeur,
-     le second (16 px) sur la seconde, et les pixels se recollent exactement. */
-  function escalierColumnSlices(name) {
-    const source = escalierAssetSprite(name), cut = source.height - 16;
-    const [top, gt] = cv(source.width, cut), [bottom, gb] = cv(source.width, 16);
-    gt.drawImage(source, 0, 0, source.width, cut, 0, 0, source.width, cut);
-    gb.drawImage(source, 0, cut, source.width, 16, 0, 0, source.width, 16);
-    return [top, bottom];
   }
 
   function escalierAssetAtlas(name, w, h) {
@@ -5863,19 +5841,6 @@ export function buildSprites() {
     }
     return c;
   }
-
-  /* ZIP 466 — source livrée, sans redessin ni redimensionnement. Les deux
-     balustrades de 96 px deviennent exactement six cellules de collision. */
-  const courtRailStoneSource = escalierAssetSprite("balustradeStone");
-  const courtRailIronSource = escalierAssetSprite("balustradeIron");
-  const courtRailStone = escalierAssetSlices("balustradeStone");
-  const courtRailIron = escalierAssetSlices("balustradeIron");
-  const courtRailShort = { west: escalierColumnSlices("columnShortL"), east: escalierColumnSlices("columnShortR") };
-  const courtRailTall = { west: escalierColumnSlices("columnTallL"), east: escalierColumnSlices("columnTallR") };
-  const courtRailColumnSource = {
-    short: { west: escalierAssetSprite("columnShortL"), east: escalierAssetSprite("columnShortR") },
-    tall: { west: escalierAssetSprite("columnTallL"), east: escalierAssetSprite("columnTallR") },
-  };
 
   /* ── UN ÉCLAT. Quatre couleurs, une par note.
      ⚠️ IL EST ANGULEUX LÀ OÙ L'ÉTOILE EST RONDE, et c'est le sujet : un éclat
@@ -14011,13 +13976,9 @@ export function buildSprites() {
     townReedTuft: plancheSprite("reeds"),
     townReedsWater: plancheSprite("reedsWater"),
     townHedgeRow: plancheSprite("hedgeRow"),
-    /* ZIP 466 — crops exacts : 6 × 16 px et quatre colonnes natives de 17 px. */
-    townRail: { stone: courtRailStone, iron: courtRailIron },
-    townRailSource: { stone: courtRailStoneSource, iron: courtRailIronSource },
-    townRailY: { short: courtRailShort, tall: courtRailTall },
-    townRailYSource: courtRailColumnSource,
-    townCourtFlowerPot: escalierAssetSprite("flowerPot"),
-    townCourtSignFlowers: escalierAssetSprite("signFlowers"),
+    /* ZIP 467 — composition fournie, entière. La collision reste dans les
+       constantes ; le visuel ne connaît aucune de ses tranches. */
+    townCourtStairBlock: escalierAssetSprite("courtBlock"),
     /* ⚠️ ZIP 447 — la végétation de la seconde planche. Elle sert à HABILLER un
        dénivelé : au pied d'un mur de soutènement, un massif casse la ligne
        droite et donne une échelle. Sans elle, une falaise de 48 px rencontre

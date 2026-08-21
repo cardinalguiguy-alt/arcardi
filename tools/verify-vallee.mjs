@@ -183,6 +183,12 @@ for (let i = 0; i < W * H; i++) {
 for (const b of [C.TOWN_CHURCH, C.TOWN_HALL, C.TOWN_COURT, C.TOWN_BOUTIQUE, C.TOWN_SALON, C.TOWN_STATION]) markRect(b);
 for (const h of C.TOWN_HOUSES) markRect({ x: h.x, y: h.y }, C.TOWN_HOUSE_W, C.TOWN_HOUSE_H);
 for (const p of tw.props) mark(p.x, p.y);
+/* ZIP 467 — ces obstacles sont visibles dans le bloc unique, pas dans `props`.
+   Les marquer depuis les mêmes rectangles que la collision évite de réinventer
+   une emprise d'image dans le banc. `render-escaliers` prouve séparément que le
+   bloc 268×248 est réellement produit et appelé par le jeu. */
+for (const r of C.TOWN_RAILS || []) markRect(r);
+for (const r of C.TOWN_COURT_BLOCK_SOLIDS || []) markRect(r);
 markRect({ x: C.TOWN_KIOSK.x, y: C.TOWN_KIOSK.y }, 3, 3);
 markRect({ x: C.TOWN_MONUMENT.x, y: C.TOWN_MONUMENT.y }, 2, 2);
 /* ⚠️⚠️ ZIP 450 — LA COQUE DU CHANTIER NAVAL, ET ELLE SE LIT SUR LE MONDE, PAS SUR
