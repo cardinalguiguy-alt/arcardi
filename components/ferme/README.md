@@ -1,4 +1,21 @@
-# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 462
+# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 463
+
+## 463 — Les étoiles apprivoisées restent avec les joueurs ; la reine mène
+
+Une étoile trouvée ne disparaît plus du cratère pour ne laisser qu'une pastille :
+elle rejoint immédiatement son joueur. Les petites bleue et rose forment avec
+la reine une constellation lisible autour du fermier, sur les trois cartes et
+même après la fin de la quête. La reine jaune est nettement la plus grande ;
+elle seule quitte la formation quand le joueur demande le guide avec G. Les
+familiers ordinaires ne guident plus.
+
+Le test solo a été rejoué dans le navigateur pendant la vraie minute : jauge,
+verdict hôte, retrait de l'étoile du cratère puis suivi visible. La formation
+complète et la reine en tête ont également été jugées dans la ferme. L'impact
+des petits fragments a été repris après cette inspection : plus de cerceau
+lumineux régulier, mais une compression brève, de la terre rompue, des mottes
+qui gardent leur trajectoire, de la poussière et des braises au même gros pixel
+que le décor.
 
 ## 462 — La ferme reçoit cinq fragments ; Valley Town garde le vrai météore
 

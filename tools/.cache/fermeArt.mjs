@@ -8072,6 +8072,100 @@ export function buildSprites() {
     }
   }
 
+  /* 463 — L'IMPACT DES PETITS FRAGMENTS DE FERME. Le grand météore produit une
+     lumière surnaturelle ; ces pierres, elles, doivent CREUSER les cratères que
+     le joueur fouille juste après. On dessine donc quatre matières séparées :
+     compression blanche au contact, couronne de terre rompue, éjectas en arcs
+     puis colonne de poussière et de braises. Une grande ellipse cyan disait
+     « sort magique » ; ces masses disent « poids, sol, retombée ».
+     `ageMs` garde les phases exprimées en temps réel afin que le navigateur et
+     le banc puissent échantillonner exactement les mêmes images. */
+  function drawStarFragmentImpact(g2, cx, cy, ageMs, R, opt) {
+    const o = opt || {}, q = Math.max(1, Math.round(o.q || 3));
+    const age = Math.max(0, +ageMs || 0), life = Math.min(1, age / 1180);
+    const out = 1 - Math.pow(1 - life, 2.7), sq = 0.48;
+    const rnd = makeRnd(46319);
+
+    // 1. Le point de compression : violent, local et très bref.
+    const crush = Math.max(0, 1 - age / 150);
+    if (crush > 0) {
+      qDisc(g2, cx, cy - R * 0.08, R * (0.34 + crush * 0.72),
+            `rgba(255,249,224,${(0.92 * crush).toFixed(3)})`, q);
+      qDisc(g2, cx, cy, R * (0.72 + (1 - crush) * 0.55),
+            `rgba(255,154,66,${(0.58 * crush).toFixed(3)})`, q);
+    }
+
+    // 2. L'onde dans la TERRE : un anneau cassé, jamais un disque translucide.
+    const ringR = R * (0.72 + out * 3.7);
+    const ringA = Math.max(0, 1 - life) * 0.82;
+    /* 30 paquets, pas 58 points équidistants : à l'échelle réelle du jeu,
+       58 gros pixels se touchaient et reformaient exactement le cerceau doré
+       que ce dessin devait supprimer. Les ruptures sont suffisamment larges
+       pour rester des ruptures après zoom nearest-neighbour. */
+    for (let i = 0; i < 30; i++) {
+      const a = i * Math.PI * 2 / 30;
+      const broken = Math.sin(i * 2.17 + 0.8) + Math.sin(i * 0.71) * 0.55;
+      if (broken < -0.36 || ringA < 0.025) continue;
+      const rr = ringR * (0.91 + 0.12 * Math.sin(i * 1.91));
+      const warm = i % 7 === 0 && age < 420;
+      const col = warm ? `rgba(224,104,42,${(ringA * 0.72).toFixed(3)})`
+                       : `rgba(${76 + (i % 3) * 16},${51 + (i % 4) * 8},31,${ringA.toFixed(3)})`;
+      qDot(g2, cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * sq,
+           broken > 0.82 ? 2 : 1, col, q);
+      /* Un second éclat seulement sur les gros paquets : il épaissit une motte,
+         pas toute la circonférence. */
+      if (broken > 0.82) qDot(g2, cx + Math.cos(a + 0.045) * rr * 0.91,
+                              cy + Math.sin(a + 0.045) * rr * 0.91 * sq,
+                              1, `rgba(57,38,25,${(ringA * 0.78).toFixed(3)})`, q);
+    }
+
+    // 3. Les mottes suivent des trajectoires paraboliques : elles montent puis
+    // retombent devant et derrière le cratère, au lieu de s'éloigner à plat.
+    for (let i = 0; i < 34; i++) {
+      const a = rnd() * Math.PI * 2, speed = R * (1.35 + rnd() * 3.8);
+      const ph = Math.min(1, life * (0.86 + rnd() * 0.34));
+      const d = speed * ph, h = R * (0.8 + rnd() * 3.1) * Math.sin(ph * Math.PI);
+      const al = Math.max(0, 1 - Math.max(0, ph - 0.68) / 0.32) * 0.9;
+      if (al < 0.04) continue;
+      const n = rnd() > 0.73 ? 2 : 1;
+      /* Les douze plus grosses mottes conservent deux positions passées : le
+         regard lit alors une trajectoire, pas des confettis apparus au hasard. */
+      if (i < 12 && ph > 0.12) for (let j = 1; j <= 2; j++) {
+        const p0 = Math.max(0, ph - j * 0.075);
+        const d0 = speed * p0, h0 = R * (0.8 + (i % 5) * 0.43) * Math.sin(p0 * Math.PI);
+        qDot(g2, cx + Math.cos(a) * d0, cy + Math.sin(a) * d0 * sq - h0,
+             1, `rgba(62,42,27,${(al * (0.48 - j * 0.13)).toFixed(3)})`, q);
+      }
+      qDot(g2, cx + Math.cos(a) * d, cy + Math.sin(a) * d * sq - h,
+           n, `rgba(${54 + (i % 4) * 13},${37 + (i % 3) * 9},25,${al.toFixed(3)})`, q);
+    }
+
+    // 4. La colonne : feu au pied, poussière lourde au-dessus, trois lobes qui
+    // se décalent plutôt qu'un nuage rond posé sur le cratère.
+    const plume = Math.min(1, age / 360), fade = Math.max(0, 1 - Math.max(0, age - 430) / 750);
+    if (fade > 0.02) {
+      for (let i = 0; i < 5; i++) {
+        const ph = Math.max(0, Math.min(1, plume * 1.25 - i * 0.09));
+        if (ph <= 0) continue;
+        const side = Math.sin(i * 2.4 + age / 170) * R * (0.10 + i * 0.07);
+        const y = cy - R * (0.35 + ph * (0.75 + i * 0.42));
+        const rr = R * (0.34 + ph * (0.18 + i * 0.08));
+        const c = i < 2 ? `rgba(255,${142 + i * 34},62,${(fade * (0.62 - i * 0.10)).toFixed(3)})`
+                        : `rgba(${74 + i * 10},${66 + i * 8},58,${(fade * (0.46 - i * 0.045)).toFixed(3)})`;
+        qDisc(g2, cx + side, y, rr, c, q);
+      }
+      // Braises arrachées dans la colonne, peu nombreuses et lisibles.
+      for (let i = 0; i < 9; i++) {
+        const ph = (life * (1.25 + i * 0.025) + i * 0.093) % 1;
+        const al = fade * (1 - ph);
+        if (al < 0.08) continue;
+        qDot(g2, cx + Math.sin(i * 2.7) * R * (0.25 + ph * 1.1),
+             cy - R * (0.5 + ph * 3.8), 1,
+             `rgba(255,${174 + (i % 3) * 22},82,${al.toFixed(3)})`, q);
+      }
+    }
+  }
+
   // ----- 10 façades de maison basiques pour Valley Town (zip 235). Toutes
   // au même canevas 96x96 que la maison de ferme, ancrées par leur bord bas.
   function townHouseVariant(styleIdx) {
@@ -14054,6 +14148,7 @@ house: house(),
     starCraterSink,
     drawStarComet,          // zip 448 — la comète, sa queue, sa traînée et son impact
     drawStarFragmentMeteor, // 462 — petit caillou incandescent des impacts de ferme
+    drawStarFragmentImpact, // 463 — choc physique terre/éjectas/poussière des petits fragments
     drawStarCometTrail,
     drawStarImpactFlash,
     drawEmoteBubble,        // zip 455 — le « ! » des PNJ : tampon d'annonce et impact

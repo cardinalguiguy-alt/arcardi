@@ -147,12 +147,12 @@ const STAR_FR = {
     again: (n, total) => `Tu as ${nfr(n)} morceau${n > 1 ? "x" : ""} sur ${nfr(total)}. La petite étoile est toujours là.`,
   },
   guide: {
-    go: (pet) => `${pet} part devant toi et se retourne.`,
-    offer: (pet) => `${pet} t'attend près de la barrière. Il veut te montrer quelque chose.`,
-    stop: (pet) => `${pet} revient à tes pieds.`,
-    arrived: (pet) => `${pet} s'arrête ici et s'assied. Le reste est à toi.`,
+    go: "L'étoile reine prend la tête. Suis sa lumière.",
+    offer: "L'étoile reine s'écarte du groupe. Elle veut te montrer le chemin.",
+    stop: "L'étoile reine revient dans la constellation.",
+    arrived: "L'étoile reine s'arrête ici. Le reste est à toi.",
     none: "Rien à chercher pour l'instant.",
-    noPet: "Aucun animal avec toi. L'un d'eux connaîtrait le chemin.",
+    noQueen: "La grande étoile jaune n'est pas encore avec toi.",
   },
   chapter: {
     field:  "Chapitre Un — Les cinq impacts",
@@ -718,12 +718,12 @@ const STAR_EN = {
      ⚠️ `offer` EST LE DÉPART SPONTANÉ, et il se lit comme une gentillesse plutôt
      que comme un aveu d'échec : le jeu ne dit jamais « tu es perdu ». */
   guide: {
-    go: (pet) => `${pet} trots out ahead of you and looks back.`,
-    offer: (pet) => `${pet} has been waiting by the gate. It wants to show you something.`,
-    stop: (pet) => `${pet} comes back to your heel.`,
-    arrived: (pet) => `${pet} stops here and sits down. The rest is yours.`,
+    go: "The queen star takes the lead. Follow its light.",
+    offer: "The queen star drifts away from the group. It wants to show you the way.",
+    stop: "The queen star returns to the constellation.",
+    arrived: "The queen star stops here. The rest is yours.",
     none: "Nothing to look for right now.",
-    noPet: "No pet is with you. One of them would know the way.",
+    noQueen: "The large yellow star is not with you yet.",
   },
   /* ── LES CARTES DE CHAPITRE. Le seul endroit du chantier où le jeu prend
      l'écran entier pour dire un titre. */
@@ -1097,6 +1097,7 @@ const STAR_EN = {
     }[op] || op),
     scene: (s) => ({ warn: "🎬 The announcement", fall: "🎬 The five farm impacts", townFall: "🎬 The Valley Town meteor", turn: "🎬 The turn", end: "🎬 The ending" }[s] || s),
     sceneLabel: "Replay a scene",
+    stand: "📍 Stand at the next little star",
     chat: (who, what) => `${who} touched the star quest: ${what}.`,
   },
   /* ── LES ANNONCES DE CHAT. ⚠️ SANS EMOJI EN TÊTE : `broadcastChat` en écrit

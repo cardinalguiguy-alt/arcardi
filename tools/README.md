@@ -482,7 +482,13 @@ donnait pas, d'une rangée.
 
 ---
 
-## `render-etoile.mjs` — les dessins de la quête de l'étoile (444, cratère 446, comète 448, sillon 454, alerte 455, jauge 456, glissade 459, fragment de ferme 462)
+## `render-etoile.mjs` — les dessins de la quête de l'étoile (444, cratère 446, comète 448, sillon 454, alerte 455, jauge 456, glissade 459, fragment 462, impact physique 463)
+
+Le §8 ter appelle le véritable impact de ferme à trois âges. Il exige que la
+chaleur de contact soit brève, que la terre prenne le relais, que la gerbe
+s'ouvre et monte, puis qu'elle retombe avant sa coupure. La planche comète montre
+les quatre temps sur une même ligne ; elle a surtout servi à repérer puis casser
+le cerceau doré que les gros pixels reformaient dans le navigateur.
 
 ### ⚠️⚠️⚠️ ZIP 459 — LE PREMIER BANC DU DÉPÔT QUI **JOUE** AU LIEU DE MESURER
 
@@ -737,7 +743,7 @@ touche le sol — le défaut même de ce zip — leur est **totalement invisible
 `verify-quete` qui le tient désormais (cinq contrôles purs sur `starImpactLanded` et l'azimut).
 *Un banc de rendu ne peut pas voir un défaut de temps.*
 
-## `verify-quete.mjs` — 462 contrôles, 462/462 (444 à 462 : cinq impacts, apprivoisement et déclenchement de Valley Town inclus)
+## `verify-quete.mjs` — 468 contrôles, 468/468 (444 à 463 : cinq impacts, apprivoisement, constellation et reine-guide inclus)
 
 ### ⚠️⚠️⚠️ ZIP 456 — LES DEUX SEULS CONTRÔLES DU DÉPÔT QUI LISENT LE SOURCE POUR VOIR SI UN LECTEUR S'EXÉCUTE
 
@@ -763,8 +769,8 @@ voir un seul** — parce qu'aucun ne mesurait la grandeur en cause :
 ⚠️⚠️⚠️ **ET DEUX CONTRÔLES LISENT `FermeGame.js` COMME UN TEXTE, CE QUE CE BANC NE FAISAIT QU'AU §8-B.**
 La raison est un défaut que le banc des lecteurs **ne pouvait pas voir** : il compte
 `starSay(…, L.star.s2.peek)` comme une lecture, et il a raison sur la lettre. Sauf que `starSay`
-écrit dans la bulle de l'**étoile**, laquelle n'est dessinée que là où `starCompanionAt` rend un
-point — donc **jamais avant que le cratère s'ouvre**. Cinq phrases du premier quart d'heure de jeu
+écrit dans la bulle de l'**étoile**, laquelle n'est dessinée que là où `starCompanionsAt` rend une
+liste non vide — donc **jamais avant la première étoile apprivoisée**. Cinq phrases du premier quart d'heure de jeu
 étaient dans ce cas, dont la seule qui dise pourquoi on se tient immobile devant un trou.
 *Un lecteur qui ne s'exécute jamais vaut zéro lecteur*, et compter des clés ne le voit pas. Les deux
 contrôles : **aucun `starSay` dans le bloc du cratère** (1 891 signes lus, avec témoin positif) et

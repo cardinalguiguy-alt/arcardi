@@ -273,7 +273,7 @@ const FURROW_HOT = furrowProbe(0, 1), FURROW_COLD = furrowProbe(1, 0);
    halo — c'est déjà la règle de la planche principale, cette famille émet de la
    lumière. */
 function cometBoard() {
-  const W = 900, H = 460;
+  const W = 900, H = 620;
   const sur = makeCanvas(W, H), g = sur.ctx;
   // Un ciel de nuit voilé (celui de la scène) et une bande claire : un cœur
   // blanc sur du gris pâle est exactement ce qui disparaît sans cerne (441).
@@ -292,6 +292,12 @@ function cometBoard() {
      tête : la planche doit rendre leur différence jugeable d'un regard. */
   for (let i = 0; i < 4; i++)
     S.drawStarFragmentMeteor(g, 690 + i * 55, 285 + (i & 1) * 25, 0.72, 7 + i, 1800 + i * 90, { q: 1 });
+  /* 463 — le choc des fragments a sa propre ligne de temps. La planche doit
+     montrer en même temps le contact, l'éjection, la colonne et la retombée :
+     une seule capture prise au hasard pourrait flatter un flash d'une image. */
+  const ages = [55, 260, 570, 980];
+  for (let i = 0; i < ages.length; i++)
+    S.drawStarFragmentImpact(g, 135 + i * 210, 550, ages[i], 13, { q: 3 });
   return sur;
 }
 
@@ -1237,6 +1243,30 @@ console.log("\n8 bis. LE FRAGMENT DE FERME (462) — caillou instable, pas boule
   ok(white < 8, "⚠️ il n'a PAS le cœur blanc de la grosse boule de feu", `${white} px blancs`);
   ok(orange > 25 && dark > 25, "⚠️⚠️ c'est un caillou sombre et incandescent", `${dark} px roche · ${orange} px braise`);
   ok(diff > 80, "⚠️⚠️ sa rotation rapide change vraiment sa silhouette", `${diff} px changés en 80 ms`);
+}
+
+console.log("\n8 ter. L'IMPACT DU FRAGMENT (463) — poids, terre, retombée\n");
+{
+  const shot = (age) => {
+    const s = makeCanvas(260, 220), g = s.ctx;
+    g.fillStyle = "#000"; g.fillRect(0, 0, 260, 220);
+    S.drawStarFragmentImpact(g, 130, 145, age, 15, { q: 3 });
+    let ink = 0, dirt = 0, warm = 0, minX = 260, maxX = 0, minY = 220;
+    for (let y = 0; y < 220; y++) for (let x = 0; x < 260; x++) {
+      const i = (y * 260 + x) * 4, r = s.px[i], gg = s.px[i + 1], b = s.px[i + 2];
+      if (r + gg + b < 45) continue;
+      ink++; minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y);
+      if (r > 40 && r < 150 && gg < 110 && b < 80) dirt++;
+      if (r > 170 && gg > 70 && gg < 220 && b < 120) warm++;
+    }
+    return { ink, dirt, warm, width: maxX - minX, rise: 145 - minY };
+  };
+  const contact = shot(60), burst = shot(300), fall = shot(1140);
+  ok(contact.warm > 10, "le contact comprime une chaleur brève", `${contact.warm} px chauds`);
+  ok(burst.dirt > contact.dirt * 1.45, "⚠️ la TERRE prend le relais sur le flash", `${contact.dirt} → ${burst.dirt} px`);
+  ok(burst.width > contact.width * 1.45, "⚠️ la gerbe s'ouvre latéralement", `${contact.width} → ${burst.width} px`);
+  ok(burst.rise > 35, "la poussière monte au-dessus du cratère", `${burst.rise} px`);
+  ok(fall.ink < burst.ink * 0.72, "⚠️ l'impact retombe et s'éteint", `${burst.ink} → ${fall.ink} px`);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

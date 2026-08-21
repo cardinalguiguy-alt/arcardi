@@ -1024,7 +1024,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      un joueur qui rejoint une partie déjà avancée recevrait sinon toute
      l'histoire d'un coup, en toasts, sur trois secondes. */
   const starWatchRef = useRef(null);
-  /* ZIP 449 — LE FAMILIER QUI MÈNE. ⚠️ TOUT EST LOCAL ET RIEN N'EST DIFFUSÉ :
+  /* ZIP 449/463 — L'ÉTOILE REINE QUI MÈNE. ⚠️ TOUT EST LOCAL ET RIEN N'EST DIFFUSÉ :
      demander son chemin est un confort de JOUEUR, pas un fait du MONDE (§3).
      `goal` mémorise l'objectif sur lequel on bute, `since` depuis quand, et
      `offered` interdit au départ spontané de se rejouer sur le même objectif —
@@ -1301,10 +1301,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (key !== g.goal) { g.goal = key; g.since = Date.now(); g.offered = false; }
       if (!key || g.on || !starGuideTarget()) return;
       if (!Q.starGuideAuto(Date.now() - g.since, g.offered)) return;
-      const nm = starGuidePetName();
-      if (!nm) return;                        // aucun familier : on se tait plutôt que de promettre
+      if (!Q.starHas(e, "crater")) return;    // 463 — seule la reine connaît et montre le chemin
       g.on = true; g.offered = true;
-      starSay("guide", L.star.guide.offer(nm), 4200);
+      starSay("guide", L.star.guide.offer, 4200);
     }, 1000);
     return () => clearInterval(t);
   }, [L]);                                                                             // zip 449
@@ -11498,6 +11497,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setDevMenuOpen(false);
     zoneTransRef.current = { active: true, t0: performance.now(), toEvil: false, swapped: false, dest: "dev:" + destKey };
   }
+  /* 463 — UN BOUTON DE TEST QUI PLACE, MAIS N'ACCORDE RIEN. L'apprivoisement
+     solo dure une vraie minute : sans moyen reproductible de retrouver le
+     prochain petit cratère et la posture exacte, le test visuel finit par
+     tester la marche jusqu'au cratère plutôt que la minute de calme. Cette
+     commande ne touche qu'au joueur local ; l'hôte continue de mesurer les
+     mêmes paquets, avec les mêmes 60 s et le même verdict autoritaire. */
+  function devStandAtNextStar() {
+    const m = meRef.current, e = sharedRef.current.star;
+    if (!m || (m.zone || "farm") !== "farm" || !e) return;
+    const p = starFarmImpactSites().find(s => s.content === "star" &&
+      starFarmImpactLandedNow(s.impact) && !s.unavailable && !Q.starHas(e, s.id));
+    if (!p) return;
+    keysRef.current = {};
+    m.x = p.x; m.y = p.y + 1.72; m.dir = 0; m.moving = false;
+    sendPos();
+    setDevMenuOpen(false);
+  }
   /* ======================================================================
      ZIP 392 — LE PANNEAU DE NOTIFICATIONS, EN UN SEUL ENDROIT.
      ======================================================================
@@ -13025,10 +13041,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       if (e.code === "KeyT") { e.preventDefault(); setChatOpen(true); setTimeout(() => chatInputRef.current?.focus(), 0); }
       if (e.code === "KeyM") setMapOpen(o => !o);
-      /* ⚠️ ZIP 449 — G COMME GUIDE : le familier de tête part devant, ou revient
-         au pied. Vérifié sur `e.code` comme tout ce gestionnaire (AZERTY et
+      /* ⚠️ ZIP 449/463 — G COMME GUIDE : la reine part devant, ou revient dans
+         la constellation. Vérifié sur `e.code` comme tout ce gestionnaire (AZERTY et
          QWERTY désignent alors la même touche physique), et sans `repeat` :
-         maintenir la touche ne doit pas faire clignoter le chien.
+         maintenir la touche ne doit pas faire clignoter la reine.
          ⚠️ ET IL NE DONNE RIEN — c'est une aide à s'orienter, pas une trouvaille.
          Tout ce qu'il déplace est un point de rendez-vous. */
       if (e.code === "KeyG" && !e.repeat) starGuideToggle();
@@ -14390,14 +14406,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          quand je descends et devant quand je monte, comme n'importe quel
          suiveur (le principe de Leo). */
       {
-        const cp = starCompanionAt("farm", m.x, m.y, !!m.moving, performance.now());
-        if (cp) draws.push({ y: (cp.y + 1) * T - 0.01, fn: () => drawStarWisp(cp) });
+        const cps = starCompanionsAt("farm", m.x, m.y, !!m.moving, performance.now());
+        for (const cp of cps) draws.push({ y: (cp.y + 1) * T - (cp.queen ? 0.02 : 0.01), fn: () => drawStarWisp(cp) });
+        const cp = starVoiceCompanion(cps);
       /* ⚠️⚠️⚠️ ZIP 456 — ET QUAND ELLE N'EST PAS ENCORE LÀ, C'EST LE JOUEUR QUI
          PORTE SA VOIX. La bulle n'était dessinée QUE sous ce `if (cp)` : avant
-         que l'étoile sorte du cratère, `starCompanionAt` rend `null`, donc TOUT
+         qu'une étoile soit apprivoisée, `starCompanionsAt` rend une liste vide, donc TOUT
          ce que le chantier fait dire avant ce moment-là était affiché nulle part
          — l'ombre du champ (`s1.shadow`, la première image magique de toute la
-         quête) et les trois phrases du familier-guide (449), c'est-à-dire la
+         quête) et les trois phrases de l'ancien familier-guide (449), c'est-à-dire la
          voix qui explique où aller. Quatre phrases mortes, dans le premier quart
          d'heure de jeu, très exactement là où un joueur qui découvre l'histoire
          a besoin qu'on lui parle (retour de Guillaume : « on ne comprend pas ce
@@ -17633,11 +17650,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          une case derrière moi, donc un demi-niveau plus bas, et lui donner mon
          élévation la ferait flotter dans le vide. */
       if (!inCar) {
-        const cp = starCompanionAt("town", m.x, m.y, !!m.moving, performance.now());
-        if (cp) {
+        const cps = starCompanionsAt("town", m.x, m.y, !!m.moving, performance.now());
+        for (const cp of cps) {
           const ce2 = elevTown(tw, cp.x, cp.y), cl2 = archPxTown(tw, cp.x, cp.y);
-          pushE((cp.y + 1) * T - 0.01, ce2, () => drawStarWisp(cp), cl2);
+          pushE((cp.y + 1) * T - (cp.queen ? 0.02 : 0.01), ce2, () => drawStarWisp(cp), cl2);
         }
+        const cp = starVoiceCompanion(cps);
         // zip 456 — sans compagnon, la voix se pose au-dessus du joueur (voir la ferme).
         const sb = starBubbleNow();
         if (sb) {
@@ -18351,10 +18369,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          bulles, et une bulle prise dans le tri se ferait manger par le premier
          meuble plus bas. */
       {
-        const cp = starCompanionAt("court", m.x, m.y, !!m.moving, performance.now());
-        if (cp) {
+        const cps = starCompanionsAt("court", m.x, m.y, !!m.moving, performance.now());
+        for (const cp of cps) {
           draws.push({ y: (cp.y + 1) * T - myRz - 0.01, fn: () => { ctx.save(); ctx.translate(0, -myRz); drawStarWisp(cp); ctx.restore(); } });
         }
+        const cp = starVoiceCompanion(cps);
         // zip 456 — sans compagnon, la voix se pose au-dessus du joueur (voir la ferme).
         const sb = starBubbleNow();
         if (sb) {
@@ -18743,20 +18762,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              ⚠️ ET JAMAIS POUR UN JOUEUR DISTANT : demander son chemin est un
              confort local qui ne traverse pas le réseau, donc rien ne pourrait
              dire aux autres clients que ce chien-là mène. */
-          const lead = (i === 0 && id === me.id) ? starGuideAim((meRef.current && meRef.current.zone) || "farm", m.x, m.y) : null;
+          /* 463 — le familier de tête ne porte plus un rôle qui appartient à
+             l'étoile reine. Les animaux gardent leurs figures et leur place ;
+             la reine se détache elle-même de la constellation dans
+             `starCompanionsAt`, avec le même chemin autoritaire. */
           /* ---------------- ZIP 388 : LA CIBLE PENDANT UNE FIGURE -----------
              Seule la CIBLE change ; le lissage, lui, reste celui d'avant. Un
              familier qui joue est un familier dont on a déplacé le point de
              rendez-vous, pas un familier régi par un second moteur. C'est ce
              qui garantit qu'à la fin du créneau il revient tout seul à sa
              place, sans transition à écrire. */
-          if (lead) {
-            /* ⚠️ IL MÈNE, DONC IL NE JOUE PAS : le guidage passe AVANT les
-               figures du 388, sinon le chien s'arrêterait pour se renifler la
-               patte au milieu du trajet — ce qui, vu de l'écran, ressemble
-               exactement à un guide qui a perdu le fil. */
-            tx = lead.x; ty = lead.y;
-          } else if (play.figure === "chase" && play.partner >= 0) {
+          if (play.figure === "chase" && play.partner >= 0) {
             // Ronde autour du milieu des deux places. Le meneur et le suiveur
             // sont diamétralement opposés : ils se courent après sans jamais
             // se rattraper, ce qui est exactement ce qu'on veut voir.
@@ -18781,13 +18797,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // place habituelle. Une fois suffisamment proche, on retrouve
           // l'easing serré du suivi normal (comme avant ce chantier).
           const d = Math.hypot(tx - f2.x, ty - f2.y);
-          /* ⚠️ ZIP 449 — LE MENEUR EST PLUS VIF QUE LE SUIVEUR, ET C'EST LE
-             SEUL RÉGLAGE QU'IL DEMANDE. À l'aisance du retour de cheval
-             (`dt2 * 1.3`) il traînait derrière son propre point d'avance : on
-             voyait un chien qui court après une position, pas un chien qui
-             mène. Il reste sous la vitesse du fermier, sinon il sort de la
-             laisse (`STAR_GUIDE_LEASH`) qu'il est censé tenir. */
-          ease = lead ? Math.min(1, dt2 * 2.6) : (d > 0.6 ? Math.min(1, dt2 * 1.3) : Math.min(1, dt2 * 6));
+          /* 463 — aucun familier n'a plus de régime de meneur : l'étoile reine
+             porte seule ce rôle. Il ne reste ici que l'aisance historique de
+             retour vers la place du peloton. */
+          ease = d > 0.6 ? Math.min(1, dt2 * 1.3) : Math.min(1, dt2 * 6);
           isMoving = m.moving || d > 0.05;
         }
         const px0 = f2.x, py0 = f2.y;
@@ -19342,6 +19355,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           x: ((p.x + 0.5) * T - cam.x) * (zoom || 1),
           y: ((p.y + 0.5) * T - cam.y) * (zoom || 1),
         } : null;
+        /* 463 — l'effet vit dans le même pixel que le monde. `q:1` dessinait
+           une animation HD très fine par-dessus des tuiles zoomées, d'où son
+           aspect de calque bon marché malgré le détail du cratère. */
+        const sceneQ = Math.max(2, Math.round(zoom || 1));
         const flight = Q.starFarmFlight(ms);
         if (flight && spr0 && spr0.drawStarFragmentMeteor) {
           const end = screenOf(sites[flight.impact]);
@@ -19350,13 +19367,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const len = Math.hypot(W, H) * 0.72;
             const x = end.x - Math.cos(ang) * len * (1 - k);
             const y = end.y - Math.sin(ang) * len * (1 - k);
-            spr0.drawStarFragmentMeteor(ctx, x, y, ang, 4 + 8 * k, now, { q: 1, unstable: true });
+            spr0.drawStarFragmentMeteor(ctx, x, y, ang, 4 + 8 * k, now, { q: sceneQ, unstable: true });
           }
         }
         for (let i = 0; i < Q.STAR_FARM_ANIMATED_N; i++) {
           const d = ms - Q.STAR_FARM_IMPACT_MS[i], hit = screenOf(sites[i]);
-          if (hit && d >= 0 && d < 760 && spr0 && spr0.drawStarImpactFlash)
-            spr0.drawStarImpactFlash(ctx, hit.x, hit.y, d / 760, 34, { q: 1 });
+          if (hit && d >= 0 && d < 1180 && spr0 && spr0.drawStarFragmentImpact)
+            spr0.drawStarFragmentImpact(ctx, hit.x, hit.y, d, 22, { q: sceneQ });
           if (d >= 0 && d < 45) { ctx.fillStyle = "rgba(255,246,218,0.76)"; ctx.fillRect(0, 0, W, H); }
         }
         const shake = Q.starFarmShake(ms);
@@ -22511,17 +22528,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
 
   /* ╔══════════════════════════════════════════════════════════════════════════
-     ║ ZIP 449 — LE FAMILIER QUI MÈNE. « pas tous les pets, seul un prendra le
-     ║ lead » ; « à la demande, et automatique si ça traîne ». (Guillaume)
+     ║ ZIP 449/463 — L'ÉTOILE REINE QUI MÈNE. Une seule guide, à la demande,
+     ║ et automatiquement si ça traîne.
      ╚══════════════════════════════════════════════════════════════════════════
      ⚠️⚠️ TOUT CE BLOC EST AU NIVEAU DU COMPOSANT, JAMAIS DANS LA CLOSURE DE LA
-     BOUCLE, et c'est le piège n°1 de CLAUDE.md pris à l'endroit : `drawPetsFor`
-     (dans la closure) APPELLE `starGuideAim`, ce qui est le sens autorisé ; le
-     gestionnaire de clavier et l'effet de veille l'appellent aussi, ce qui aurait
+     BOUCLE, et c'est le piège n°1 de CLAUDE.md pris à l'endroit :
+     `starCompanionsAt` APPELLE `starGuideAim` au même niveau ; le gestionnaire
+     de clavier et l'effet de veille l'appellent aussi, ce qui aurait
      levé un `ReferenceError` à l'exécution seulement si on l'avait écrit là-bas.
      ⚠️⚠️ ET IL NE DIFFUSE RIEN. « Est-ce que JE demande de l'aide » est un
      confort local, pas un fait du monde : deux joueurs peuvent chercher chacun de
-     leur côté, chacun avec son chien. Un champ de plus, c'est surtout un champ à
+     leur côté, chacun avec sa reine. Un champ de plus, c'est surtout un champ à
      réconcilier (§3 de CLAUDE.md).
      ⚠️ LA CIBLE N'EST PAS TOUJOURS LE LIEU : quand il est sur l'AUTRE carte, le
      guide mène au TRAIN, et quand il est dans un intérieur, il mène à la PORTE.
@@ -22532,30 +22549,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const g = starGuideRef.current;
     if (!g.on) return;
     g.on = false;
-    const nm = starGuidePetName();
-    if (nm) starSay("guide", arrived ? L.star.guide.arrived(nm) : L.star.guide.stop(nm), 3600);
-  }
-  /* Le meneur est l'INDICE 0 — déterministe et stable (voir `STAR_GUIDE_*` dans
-     `quete.js`). Rend son nom lisible, ou "" s'il n'y a aucun familier. */
-  function starGuidePetName() {
-    const pets = walkPetsRef.current;
-    if (!pets || !pets.length) return "";
-    const p0 = pets[0];
-    const pid = typeof p0 === "string" ? p0 : (p0 && p0.id);
-    return pid ? C.petName(pid, lang === "en") : "";
+    starSay("guide", arrived ? L.star.guide.arrived : L.star.guide.stop, 3600);
   }
   function starGuideToggle() {
     const g = starGuideRef.current;
     if (g.on) { starGuideStop(false); return; }
     if (!starGuideTarget()) { pushToast(L.star.guide.none); return; }
-    const nm = starGuidePetName();
-    if (!nm) { pushToast(L.star.guide.noPet); return; }
+    if (!Q.starHas(sharedRef.current.star, "crater")) { pushToast(L.star.guide.noQueen); return; }
     g.on = true; g.offered = true;      // demandé à la main : plus de départ spontané sur cet objectif
-    starSay("guide", L.star.guide.go(nm), 3600);
+    starSay("guide", L.star.guide.go, 3600);
   }
   /* Le chemin, mis en cache. ⚠️ IL SE RECALCULE À LA SECONDE, PAS À L'IMAGE :
      `townFindPath` est un A* sur 224×168 que les résidents se partagent déjà, et
-     l'appeler soixante fois par seconde pour un chien coûterait plus cher que
+     l'appeler soixante fois par seconde pour la reine coûterait plus cher que
      tout le reste de la quête réunie. ⚠️ Et il n'a PAS besoin d'être frais : le
      joueur avance le long du chemin, et `Q.starGuidePoint` repart du nœud le plus
      proche de lui — un chemin d'une seconde d'âge désigne exactement le même
@@ -22570,13 +22576,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     else if (zone === "town") { const tw = townWorldNow(); if (tw) path = E.townFindPath(tw, px, py, gx, gy); }
     /* ⚠️ AUCUN CHEMIN EST UN CAS NORMAL, PAS UN ÉCHEC : les intérieurs n'ont pas
        d'A*, et une cible peut être momentanément inatteignable. L'appelant
-       retombe alors sur le suivi ordinaire — le chien reste au pied, il ne se
+       retombe alors sur la formation ordinaire — la reine reste près du joueur, elle ne se
        fige pas et il ne traverse pas un mur. C'est le corollaire de repli du §4
        (« quand la carte manque, on ACCEPTE, on ne refuse pas »). */
     c.key = key; c.at = now; c.path = path;
     return path;
   }
-  /* Rend `{x, y}` — où le meneur doit se tenir — ou `null` (suivi normal). */
+  /* Rend `{x, y}` — où la reine-guide doit se tenir — ou `null` (formation normale). */
   function starGuideAim(zone, px, py) {
     const g = starGuideRef.current;
     if (!g.on) return null;
@@ -22590,7 +22596,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        une cinématique, un mini-jeu ouvert (`starUiOpenRef`), et l'écoute des
        ombres qui n'a délibérément aucun lieu. Résultat observé en jouant : on
        demande le guide, on franchit un chapitre, la carte s'affiche 3,8 s — et
-       **le chien renonce sans un mot**, alors que le chemin vers le train était
+       **l'ancien familier renonçait sans un mot**, alors que le chemin vers le train était
        calculé et valide (53 pas). Le joueur, lui, voit son guide se dégonfler
        pile au moment où il vient de progresser.
        ⚠️ LA RÈGLE EST DONC : on ne MÈNE pas cette image-ci, on n'ABANDONNE pas.
@@ -22615,7 +22621,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const p = Q.starGuidePoint(path, px, py, Q.STAR_GUIDE_AHEAD);
     if (!p) return null;
     /* La laisse : au-delà, il attend. Un guide qu'on perd de vue ne guide plus,
-       il s'en va — et c'est très exactement ce qui fait dire « mon chien est
+       elle s'en va — et c'est très exactement ce qui ferait dire « mon guide est
        parti tout seul ». */
     const d = Math.hypot(p.x - px, p.y - py);
     if (d > Q.STAR_GUIDE_LEASH) return null;
@@ -22641,7 +22647,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      et ça MONTRE le secret au lieu de l'expliquer. Le délai de sortie
      (`STAR_HIDE_MS`) évite qu'elle clignote quand quelqu'un longe la place. */
   function starWithMe(e) {
-    return !!(e && Q.starFallen(e) && Q.starHas(e, "crater") && !Q.starDone(e));
+    return !!(e && Q.starFallen(e) && Q.starFollowers(e).length);
   }
   function starResidentNear(zone, cx, cy) {
     const st = sharedRef.current.station;
@@ -22651,34 +22657,72 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     return false;
   }
-  /* Rend `{ x, y, state, pose }` ou `null`. ⚠️ APPELÉE DEPUIS LES TROIS BOUCLES
-     DE RENDU, donc écrite ICI et pas dans l'une d'elles : trois copies auraient
-     divergé au premier réglage, et le symptôme aurait été « elle me suit à la
-     ferme et pas en ville » (le §3 du piège n°1). */
-  function starCompanionAt(zone, cx, cy, moving, nowMs) {
+  /* 463 — Rend TOUTES les étoiles apprivoisées. Une étoile qui disparaît de son
+     cratère sans apparaître ici donne exactement le signal d'un apprivoisement
+     raté, même si l'état partagé est juste. La formation relit
+     `Q.starFollowers` : aucune seconde liste de couleurs ou de rangs ne peut
+     oublier la prochaine étoile ajoutée à la constellation.
+     ⚠️ APPELÉE DEPUIS LES TROIS BOUCLES DE RENDU, donc écrite ICI et pas dans
+     l'une d'elles : trois copies donneraient « elles me suivent à la ferme et
+     pas en ville » au premier réglage. */
+  function starCompanionsAt(zone, cx, cy, moving, nowMs) {
     const e = sharedRef.current.star;
-    if (!starWithMe(e)) return null;
+    const specs = e ? Q.starFollowers(e) : [];
+    if (!specs.length) return [];
     const trails = starTrailRef.current;
     if (!trails[zone]) trails[zone] = [];
-    const p = trailFollow(trails[zone], cx, cy, moving, C.LEO_FOLLOW_DIST * 0.7);
     if (starResidentNear(zone, cx, cy)) starHideRef.current = nowMs + Q.STAR_HIDE_MS;
-    const hiding = nowMs < starHideRef.current;
-    /* ⚠️ LES TROIS ÉTATS SE DÉDUISENT DE L'HISTOIRE, ILS NE SONT STOCKÉS NULLE
-       PART. Éteinte pendant le dernier chapitre (elle vient d'apprendre qu'elle
-       n'a pas de nom), apeurée quand elle se cache, calme le reste du temps. */
-    const state = hiding ? 1 : (Q.starChapterKey(e) === "note" && !Q.starHas(e, "song")) ? 2 : 0;
-    /* ⚠️⚠️ ZIP 458 — L'ARRIVÉE SE COLLE AU JOUEUR, PAS À LA TRAÎNE. Pendant les
-       2,6 s de la montée et du tournicotage, l'étoile tourne autour de MOI (`cx`,
-       `cy`) et non autour du point que la traîne lui réserve : une orbite calculée
-       autour d'un suiveur qui est déjà à une case derrière se lirait comme un
-       insecte qui tourne dans le vide. La traîne, elle, continue de tourner
-       derrière — on ne la coupe pas, on la couvre (voir `starJoinAnim`). */
+    const hidden = nowMs < starHideRef.current;
     const join = Q.starJoinAnim(starJoinT0Ref.current ? nowMs - starJoinT0Ref.current : -1);
-    if (join) return { x: cx, y: cy, state, pose: Math.floor(nowMs / 180) & 3, hiding: false, join, color: "yellow", scale: 1.35, queen: true };
-    return { x: p.x, y: p.y, state, pose: Math.floor(nowMs / 260) & 3, hiding, color: "yellow", scale: 1.35, queen: true };
+    const lead = Q.starHas(e, "crater") ? starGuideAim(zone, cx, cy) : null;
+    return specs.map((s, i) => {
+      const queen = !!s.queen;
+      const p = moving
+        ? trailFollow(trails[zone], cx, cy, true,
+                      C.LEO_FOLLOW_DIST * (queen ? 0.52 : 0.72 + i * 0.28))
+        : { x: cx, y: cy };
+      /* Même à l'arrêt, les étoiles forment un petit ciel et ne s'empilent pas
+         dans un seul sprite. En marche l'écart latéral se resserre : elles
+         lisent alors comme une traîne, pas comme un manège porté par le joueur. */
+      /* Des secteurs stables avec un petit balancement, pas un manège complet.
+         Une orbite à 360° finit forcément par mettre une étoile pile derrière
+         le fermier ; dans le navigateur elle disparaissait plusieurs secondes.
+         La reine garde la gauche, les deux petites encadrent la droite. */
+      const a0 = queen ? Math.PI : (i % 2 === 0 ? -0.68 : 0.76);
+      const a = a0 + Math.sin(nowMs / 1350 + i * 1.7) * 0.16;
+      /* 463 — « autour de soi », pas dans le dos du même sprite. À moins d'une
+         demi-case les trois silhouettes se fondaient avec le fermier dans le
+         navigateur (la bleue disparaissait entièrement derrière lui). À
+         l'arrêt, chaque étoile dispose maintenant de son propre secteur ; en
+         marche elles resserrent le cercle pour former une traîne compacte. */
+      const spread = moving ? (queen ? 0.30 : 0.38) : (queen ? 0.84 : 1.04);
+      const guide = queen && lead;
+      const hiding = guide ? false : hidden;
+      const state = hiding ? 1 : (queen && Q.starChapterKey(e) === "note" && !Q.starHas(e, "song")) ? 2 : 0;
+      const cp = {
+        id: s.id,
+        x: guide ? lead.x : p.x + Math.cos(a) * spread,
+        y: guide ? lead.y : p.y + Math.sin(a) * spread * 0.58,
+        state,
+        pose: Math.floor(nowMs / (queen ? 220 : 260) + i) & 3,
+        hiding,
+        color: s.color || "yellow",
+        scale: queen ? 1.58 : 0.82,
+        queen,
+        guide: !!guide,
+      };
+      /* L'arrivée spectaculaire appartient à la reine : les petites étoiles
+         rejoignent le joueur dès leur propre apprivoisement, sans rejouer la
+         révélation du grand cratère. */
+      if (queen && join) return { ...cp, x: cx, y: cy, hiding: false, join };
+      return cp;
+    });
+  }
+  function starVoiceCompanion(cps) {
+    return (cps || []).find(c => c.queen) || (cps && cps[0]) || null;
   }
   /* Ce qu'elle dit. ⚠️ UNE BULLE, JAMAIS UN PANNEAU : elle parle au-dessus
-     d'elle comme les résidents, et une phrase qu'on n'a pas à fermer est une
+     de la reine comme les résidents, et une phrase qu'on n'a pas à fermer est une
      phrase qu'on lit. `key` évite qu'une même réplique se répète en boucle. */
   function starSay(key, text, ms) {
     const b = starBubbleRef.current;
@@ -22686,8 +22730,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     starBubbleRef.current = { key, text: String(text || ""), until: performance.now() + (ms || 4200) };
   }
   /* ⚠️ ZIP 453 — DIRE UNE SUITE DE PHRASES, ET RIEN DE PLUS. La bulle de
-     l'étoile ne se dessine QUE là où elle est visible (`starCompanionAt` rend
-     `null` sinon) : elle ne peut donc pas porter la cloche, qui parle dans le
+     l'étoile ne se dessine QUE là où elle est visible (`starCompanionsAt` rend
+     une liste vide sinon) : elle ne peut donc pas porter la cloche, qui parle dans le
      beffroi, ni la rencontre, qui a lieu au moment précis où l'étoile
      apparaît. Les toasts, eux, s'affichent partout et s'empilent déjà — on les
      ÉCHELONNE pour qu'on les lise dans l'ordre au lieu de les recevoir en bloc.
@@ -22870,8 +22914,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         /* ⚠️⚠️⚠️ ZIP 456 — LES DEUX `starSay` DE CE BLOC ONT ÉTÉ SUPPRIMÉS, ET
            C'EST LE DÉFAUT QUE GUILLAUME A VU SANS POUVOIR LE NOMMER. `starSay`
            écrit dans la bulle de l'ÉTOILE ; cette bulle n'est dessinée qu'à
-           l'endroit rendu par `starCompanionAt`, laquelle rend `null` tant que
-           `starHas(e, "crater")` est faux — c'est-à-dire pendant TOUTE cette
+           l'endroit rendu par `starCompanionsAt`, laquelle rend une liste vide
+           tant qu'aucune étoile n'est apprivoisée — c'est-à-dire pendant cette
            scène. « Le trou fume encore » et « quelque chose bouge au coin de
            l'œil » étaient donc écrits, traduits, comptés comme lus par le banc
            des lecteurs (un `starSay` est une lecture), et affichés NULLE PART.
@@ -28155,6 +28199,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                           {L.star.dev.op(op)}
                         </button>
                       ))}
+                      <button className="ferme-btn" onClick={devStandAtNextStar}>
+                        {L.star.dev.stand}
+                      </button>
                     </div>
                     <div className="ferme-hint" style={{ margin: "8px 0 4px" }}>{L.star.dev.sceneLabel}</div>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>

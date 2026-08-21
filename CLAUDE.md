@@ -11,26 +11,25 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**Livré au 462 : CORRECTIF BLOQUANT + OUVERTURE EN CINQ IMPACTS.** La fin de la jauge
-d'apprivoisement envoie désormais à l'hôte l'instantané atomique qui l'a remplie (position,
-direction, immobilité) : l'hôte redérive la cible sur cette même pose, au lieu d'une position
-distante lissée et en retard. Les étoiles de ferme disparaissent donc bien après **60 secondes
-seul / 10 secondes à plusieurs**.
+**Livré au 463 : LES ÉTOILES RESTENT AUTOUR DES JOUEURS, LA REINE MÈNE.** Toute entrée
+`content:"star"` apprivoisée rejoint automatiquement une formation autour de son joueur, sur les
+trois cartes et même une fois la quête finie. Les deux petites gardent leurs couleurs bleue et
+rose. La reine du grand cratère est jaune, à l'échelle **1,58** contre **0,82**, et elle seule se
+détache en tête quand le joueur active le guide avec **G** ; les familiers ordinaires ne guident
+plus.
 
-La chute de ferme est maintenant une scène de cinq sites : **un impact filmé**, retour au fermier,
-**10 secondes**, puis **deux impacts filmés enchaînés** sans retour intermédiaire ; deux secousses
-espacées annoncent les derniers sites. Deux impacts sont à l'est de la rivière. Le placement
-refuse constructions, cultures et sols labourés ; les arbres, souches et rochers pris dans le
-disque sont soufflés et persistés. Le petit météore est un caillou sombre, incandescent et
-tournoyant, distinct de la grosse boule de feu de Valley Town.
+L'apprivoisement solo a été rejoué dans le navigateur sur la vraie durée : une minute immobile,
+dos tourné, jauge visible, verdict hôte, retrait du cratère puis petite étoile bleue visible autour
+du fermier. La formation complète et la reine-guide ont ensuite été vérifiées à l'écran. Le bouton
+dev « Stand at the next little star » place seulement le joueur dans une posture reproductible ;
+il n'accorde rien et ne raccourcit aucune durée.
 
-Le gros météore ne force plus aucun départ. Après les cinq sites, le bandeau dit seulement de
-poursuivre l'enquête et qu'une mission attend à Valley Town. Le cratère tombe quand au moins un
-joueur y reste **actif deux minutes continues** : zone ville, aucun panneau bloquant ni menu dev,
-et mouvement/action dans les 15 dernières secondes. L'inactivité remet le compteur à zéro.
-Bancs : `verify-quete` **462/462**, `render-etoile`, `verify-strings` et `verify-portee` verts.
-Le build compile, puis l'export reste bloqué par les variables Supabase absentes ; avertissement
-antérieur `G_SOIL` inchangé.
+L'impact de ferme n'utilise plus le grand ovale lumineux : compression brève, couronne de terre
+rompue, mottes avec trajectoires, colonne de poussière et braises, au même gros pixel que le monde.
+La première reprise gardait encore un cerceau doré à l'échelle réelle ; le test navigateur l'a
+fait retirer. Bancs : `verify-quete` **468/468**, `render-etoile`, `verify-strings` (**1 090 clés**)
+et `verify-portee` verts. Le build compile ; l'export reste bloqué par les variables Supabase
+absentes. Avertissement antérieur `G_SOIL` inchangé.
 
 ⚠️ **AUTORITÉ NARRATIVE NOUVELLE : SEPT ÉTOILES FORMERONT LA CONSTELLATION FICTIVE DE LA
 BREBIS, VISIBLE ET MAPPÉE DANS LE CIEL.** Tout le « chant »/les notes/la lyre encore présent
@@ -39,23 +38,23 @@ dans les chapitres historiques est obsolète et doit être remplacé ou retiré.
 ce bloc d'autorité ; ses sections 444–460 sont une archive utile au code restant, pas une
 direction de conception.
 
-⚠️⚠️ **PROCHAINE ACTION : faire juger en jeu les cinq plans d'impact et la destruction du décor,
-puis attendre la mission suivante de Guillaume.** Ne pas inventer seul la nouvelle chaîne des
-quatre étoiles manquantes. Partir de `STAR_FARM_IMPACTS`, de la chronologie 462 et du bloc 462 de `QUETE.md`,
-jamais des étapes de chant archivées.
+⚠️⚠️ **PROCHAINE ACTION : attendre la mission suivante de Guillaume pour les quatre étoiles
+manquantes et la constellation de la Brebis.** Ne pas inventer leur chaîne. Toute nouvelle étoile
+vivante doit entrer dans `STAR_SITES` avec `content:"star"` : elle suivra alors automatiquement.
+Partir du bloc d'autorité 463 de `QUETE.md`, jamais des étapes de chant archivées.
 
 ---
 
-État à jour du **zip 462**. Chantier actif : **refondre la quête de l'étoile autour de la
+État à jour du **zip 463**. Chantier actif : **refondre la quête de l'étoile autour de la
 constellation de la Brebis**, tout en continuant à **rendre Valley Town habitable au regard ET crédible
 au jeu**, et **lui donner une histoire**. Tout ce qui concerne la ville, ses habitants, ses
 bâtiments et **ses pièges** est dans **`components/ferme/README.md`**, qui fait autorité ; les
 règles de DESSIN sont dans **`components/ferme/DESSIN.md`** ; les bancs dans **`tools/README.md`**.
 **`candyluge` et `crystal` sont EN PAUSE.**
 
-⚠️⚠️ **LA REFONTE DE LA QUÊTE DE L'ÉTOILE (462) EST LE CHANTIER VIVANT, ET SON DOCUMENT DE
-REPRISE EST `components/ferme/QUETE.md`. LIS SON BLOC D'AUTORITÉ 462 AVANT D'Y TOUCHER.** Le
-chapitre des cinq impacts est livré. Les anciens chapitres restent jouables techniquement mais
+⚠️⚠️ **LA REFONTE DE LA QUÊTE DE L'ÉTOILE (463) EST LE CHANTIER VIVANT, ET SON DOCUMENT DE
+REPRISE EST `components/ferme/QUETE.md`. LIS SON BLOC D'AUTORITÉ 463 AVANT D'Y TOUCHER.** Le
+chapitre des cinq impacts et la formation des trois étoiles actuelles sont livrés. Les anciens chapitres restent jouables techniquement mais
 leur chant, leur plongée et leur conclusion ne sont plus une cible de conception ; ils attendent
 les missions suivantes de la refonte Brebis.
 
@@ -133,9 +132,6 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 
 | # | La leçon, en une phrase | Où est le détail |
 |---|---|---|
-| 456 | ⚠️⚠️⚠️ **UN LECTEUR QUI NE S'EXÉCUTE JAMAIS VAUT ZÉRO LECTEUR — et compter les lecteurs ne le voit pas.** C'est la leçon 453 d'un cran plus bas, et elle est pire : `starSay` écrit dans la bulle de l'ÉTOILE, qui n'est dessinée que là où le compagnon existe, c'est-à-dire **jamais avant que le cratère s'ouvre**. Cinq phrases du premier quart d'heure — dont celle qui dit *pourquoi* on se tient immobile devant un trou — étaient écrites, traduites, relues et **comptées comme lues par le banc**. Ça ne se mesure pas en comparant des clés : ça se mesure en LISANT LE SOURCE. | §12.0 de `QUETE.md` |
-| 456 | ⚠️⚠️ **UN GESTE CONTINU QUI NE REND RIEN NE SE DISTINGUE PAS D'UN JEU BLOQUÉ.** Le cratère demandait neuf secondes de dos tourné, sans touche, sans animation, sans un pixel qui bouge — et l'invite disait « E : ne plus bouger », c'est-à-dire le préfixe des touches devant le seul geste du jeu qui n'en a pas. *Une posture qu'on demande doit rendre deux choses : ce qui manque, et ce qui avance.* | `drawCalmMeter`, `starCalmStep` |
-| 457 | **UN MINI-JEU AGRÉABLE ET GRATUIT RESTE GRATUIT.** Le refroidissement ne disait pas pourquoi refroidir : la raison (un matériau de construction) est dite AVANT le geste et confirmée après. *Une consigne qui arrive sans sa raison se lit comme une épreuve.* | `s1` dans `fermeStrings.js` |
 | 458 | ⚠️⚠️⚠️ **UNE QUESTION POSÉE AU SALON POUR RÉPONDRE À UNE QUESTION DE LIEU.** `starSoloRoom()` répondait « y a-t-il un autre joueur CONNECTÉ » et servait à répondre « puis-je avancer tout seul ». Un ami qui labourait à la ferme rendait le cratère **inouvrable pour toujours** et les chapitres 3 à 5 **inatteignables**. *Quand une réponse dépend d'un LIEU, la compter en POPULATION est un blocage en attente* — et il ne peut se voir qu'à deux clients. La parade : le duo est un RACCOURCI, jamais une serrure. | §12.0 de `QUETE.md` |
 | 458 | ⚠️⚠️⚠️ **HUITIÈME FORME DU DÉFAUT DE BANC : UN MUR FAIT DE VITESSE.** La glissade du cratère (3,2) dépassait ce qu'un joueur peut remonter (5,2 × 0,45 = 2,34) : **on ne pouvait plus entrer dans le trou.** Aucun pas n'est refusé, donc `canStandTown` n'est jamais consulté, donc rien ne lève ; et les six contrôles étaient verts parce qu'ils mesuraient la glissade et la peine **séparément, jamais leur SOMME**. *Deux grandeurs qui s'opposent se mesurent ensemble ou pas du tout.* | `STAR_SLIDE_MAX`, `render-etoile.mjs` |
 | 458 | ⚠️⚠️ **UN BANC QUI CHOISIT LUI-MÊME LE PARAMÈTRE COMMODE NE MESURE QUE SON RÉGLAGE.** `verify-quete` jouait le cratère avec `solo = true` et les ombres avec `solo = false` — les deux seuls mondes où ils marchaient. Il balaie maintenant **les deux valeurs sur les deux gestes**. *Un drapeau passé en dur par le banc est une hypothèse que personne ne vérifie.* | §4 de `verify-quete.mjs` |
@@ -144,6 +140,8 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 | 459 | ⚠️⚠️⚠️ **UN BANC QUI JOUE TROUVE CE QU'UN BANC QUI CALCULE NE PEUT PAS VOIR.** Le 458 vérifiait une inégalité ; le 459 SIMULE la sortie du trou depuis 317 points de départ, à 60 images/seconde, sur le vrai creux. Le premier jet du moteur : **219 bloqués sur 317**, et aucune relecture n'aurait pu le dire. *La question du §25 — « est-ce qu'on ARRIVE ? » — se pose enfin en dur.* | §7 de `render-etoile.mjs` |
 | 459 | ⚠️⚠️ **UNE GRANDEUR QUI DÉCRIT LE JOUEUR NE DOIT PAS DÉPENDRE DU TERRAIN.** Le compteur d'effort (« 3 s de la même direction ») était gagé sur « est-ce que je monte ? » : en dévalant on dépasse le point bas, la pente s'inverse sous les pieds, et il repartait de zéro à chaque passage au fond — la grimpe n'existait donc pas. | `starSlipStep`, `quete.js` |
 | 459 | ⚠️ **UN BANC QUI LIT UNE FEUILLE DE PERSONNAGE NE VOIT QUE SA RANGÉE 0.** `charSheet` empile ses trois orientations avec `translate`, que le faux canevas IGNORE : une pose demandée de dos y est vide. Quatre contrôles rouges, zéro défaut. *Le stub menteur du §10, huit zips après le dernier.* | §12 de `render-etoile.mjs` |
+| 462 | ⚠️⚠️ **LE VERDICT D'UN GESTE CONTINU DOIT LIRE LE MÊME INSTANTANÉ QUE LA JAUGE.** Une minute locale juste ne vaut rien si l'hôte tranche sur une pose réseau lissée plus ancienne ; position, zone, direction et immobilité voyagent ensemble, puis l'hôte redérive encore la cible. | `sendReq`, `starCalmOk` |
+| 463 | ⚠️⚠️⚠️ **UN ÉTAT RÉUSSI SANS CONSÉQUENCE VISIBLE EST UN ÉCHEC POUR LE JOUEUR.** Les petites étoiles étaient bien marquées trouvées et retirées du cratère, puis disparaissaient du monde : l'apprivoisement semblait donc cassé. Toute trouvaille vivante rejoint désormais la formation depuis la table autoritaire. | `STAR_FOLLOWER_SITES`, `starCompanionsAt` |
 
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
@@ -353,14 +351,14 @@ de conception qui valent pour n'importe quel morceau du dépôt.
 |---|---|
 | `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **~20 500 l.** |
 | `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** |
-| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE : table, chronologies et résolveurs purs.** Depuis le 462, `STAR_FARM_IMPACTS` porte les cinq cratères (2 étoiles / 1 matière / 2 vides), `STAR_FARM_IMPACT_MS` décrit la scène 1+2+2, `resolveStarCalm` tient le barème 60/10 s et `resolveStarTownFall` sépare le gros météore après deux minutes actives en ville. Le reste des chapitres 444–460 demeure techniquement présent mais sa fiction de chant et sa plongée sont obsolètes. Aucun React, aucun dessin — `verify-quete.mjs` l'importe. |
+| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE : table, chronologies et résolveurs purs.** `STAR_FARM_IMPACTS` porte les cinq cratères (2 étoiles / 1 matière / 2 vides), `resolveStarCalm` tient le barème 60/10 s et `resolveStarTownFall` sépare le gros météore. Depuis le 463, `STAR_FOLLOWER_SITES` dérive toutes les compagnes de `content:"star"` et `queen` désigne l'unique reine. Le reste des chapitres 444–460 demeure techniquement présent mais sa fiction de chant et sa plongée sont obsolètes. Aucun React, aucun dessin — `verify-quete.mjs` l'importe. |
 | `components/ferme/QUETE.md` | **le chantier 444 : déroulé, grammaire magique, avancement, ET CE QUI RESTE À FAIRE (§12) — autorité tant que la quête n'est pas finie** |
 | `components/ferme/README.md` | **Valley Town, le tribunal, l'HÔTEL DE VILLE, l'ÉGLISE, le BEFFROI, les habitants, la VENTE, les OISEAUX, les ÉLECTIONS et les PIÈGES de ces zones — autorité (428-444)** |
 | `components/ferme/DESSIN.md` | **les règles de DESSIN, vraies partout — autorité (441, sorties du §4)** |
 | `tools/README.md` | **les bancs, ce qu'ils attrapent et leurs chiffres — autorité (432-439)** |
 | `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** · depuis le 440 il **importe `planche.js`** : une portée de pont et une emprise de décor sont des grandeurs de DESSIN, on les dérive du sprite au lieu de les recopier |
 | `components/ferme/planche.js` | **GÉNÉRÉ** par `tools/import-planche.mjs` — les sprites de la planche de Guillaume, en données. Ne pas éditer à la main |
-| `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural. `starWispColors` décline le vivant en jaune, bleu et rose ; depuis le 462, `drawStarFragmentMeteor` dessine le petit caillou incandescent de ferme sans réutiliser la boule de feu de Valley Town. Les gros dessins de quête (`drawStarCrater`, comète, navire, jauge, poses) vivent ici pour rester regardables par les bancs. |
+| `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural. `starWispColors` décline le vivant en jaune, bleu et rose ; `drawStarFragmentMeteor` dessine le petit caillou incandescent et `drawStarFragmentImpact` son choc de terre/poussière/braises, sans réutiliser la boule de feu de Valley Town. Les gros dessins de quête (`drawStarCrater`, comète, navire, jauge, poses) vivent ici pour rester regardables par les bancs. |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
 | `public/candyluge/README.md` | **la dette et les 18 règles de la luge — autorité (427)** |
 | `public/candyluge/js/` | `config.js` (tous les nombres) · `slope.js` (la piste) · `sled.js` · `world.js` |

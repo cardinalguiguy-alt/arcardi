@@ -1,6 +1,6 @@
 # LA QUÊTE DE L'ÉTOILE — « LE BATEAU DES ÉTOILES » / « THE STAR BOAT »
 
-## ⚠️ AUTORITÉ 462 — CINQ IMPACTS, PUIS VALLEY TOWN NATURELLEMENT
+## ⚠️ AUTORITÉ 463 — CINQ IMPACTS, PUIS UNE CONSTELLATION AUTOUR DES JOUEURS
 
 La fiction de référence est désormais : **retrouver et apprivoiser sept petites
 étoiles colorées**, puis rendre visible dans le ciel la constellation fictive de
@@ -37,6 +37,11 @@ refondre entièrement ; sa présence historique ne vaut plus validation.
   Le correctif 462 fait porter à chaque demande la pose exacte qui a alimenté la
   jauge ; l'hôte redérive cible, distance et orientation depuis cette pose, ce qui
   empêche le refus final causé auparavant par la position réseau interpolée.
+- **Toute étoile apprivoisée suit désormais son joueur autour de lui**, comme
+  les familiers, et reste présente après la fin de la quête. Les deux étoiles de
+  ferme gardent leurs couleurs bleue et rose. La table `STAR_SITES` est la seule
+  source de cette formation : toute future entrée `content:"star"` la rejoint
+  automatiquement, sans seconde liste à maintenir.
 - Après les cinq sites, aucune mission ne force le train. Le guide dit seulement
   de continuer l'enquête et qu'une mission non précisée attend à Valley Town.
 - Le gros météore tombe après **deux minutes continues d'activité à Valley Town**.
@@ -44,9 +49,15 @@ refondre entièrement ; sa présence historique ne vaut plus validation.
   développeur, mouvement ou action dans les 15 dernières secondes. Une période
   AFK remet le compteur à zéro. Cette seconde chute ouvre le cratère, l'étoile
   reine et la suite historique (ingénieur, constructions, etc.).
-- L'étoile du grand cratère est désormais **l'étoile reine** : jaune, plus grande
-  et plus lumineuse. Après son apprivoisement, elle révèle le navire brisé et
-  devient le guide de sa construction.
+- L'étoile du grand cratère est désormais **l'étoile reine** : jaune, nettement
+  plus grande et plus lumineuse que les autres. Après son apprivoisement, elle
+  révèle le navire brisé et devient **la seule guide** : la touche G la détache
+  de la constellation et la place en tête ; aucun familier ne porte plus ce rôle.
+- L'impact des fragments de ferme n'est plus le grand ovale lumineux hérité du
+  météore de ville. Il a un point de compression bref, une couronne de terre
+  rompue, des mottes en trajectoires paraboliques, une colonne de poussière et
+  des braises. Son gros pixel est celui du monde et ses quatre âges sont visibles
+  et mesurés sur la planche de comète.
 - Les sauvegardes antérieures restent jouables : l'ancien `furrow` migre vers
   `farmMaterial`, et une partie déjà passée au chapitre 2 ne revient pas en
   arrière.
@@ -55,8 +66,9 @@ Le code de référence est `STAR_FARM_IMPACTS` et la chronologie
 `STAR_FARM_IMPACT_MS` dans `quete.js`. Les positions partent de
 `STAR_FARM_IMPACT_ANCHORS`. `verify-quete.mjs` contrôle distribution 2/1/2,
 deux sites à l'est, rythme 1+2+2, déclenchement de ville et handshake de jauge.
-`render-etoile.mjs` mesure le fragment sombre/incandescent séparément de la
-grosse comète.
+`render-etoile.mjs` mesure le fragment sombre/incandescent et son impact physique
+séparément de la grosse comète. `verify-quete.mjs` contrôle aussi la formation,
+la reine unique et le transfert du guide depuis les familiers.
 
 ---
 
@@ -1401,11 +1413,11 @@ persiste pas. Prévoir de rejouer `▶ Start` après chaque rechargement.
 ⚠️⚠️⚠️ **ET EN CHERCHANT LE TROISIÈME, ON A TROUVÉ LE DÉFAUT LE PLUS CHER DU CHANTIER DEPUIS LE
 453 : CINQ PHRASES DU PREMIER QUART D'HEURE N'AVAIENT AUCUN CHEMIN D'AFFICHAGE.** `starSay` écrit
 dans la bulle de l'**étoile** ; cette bulle n'est dessinée qu'à l'endroit rendu par
-`starCompanionAt`, laquelle rend `null` tant que l'étoile est au fond du trou. Donc **tout ce que la
+`starCompanionsAt`, laquelle rend une liste vide tant qu'aucune étoile n'est apprivoisée. Donc **tout ce que la
 quête fait dire avant que le cratère s'ouvre était perdu** : `s2.tooHot` (« le trou fume encore »),
 `s2.peek` (« quelque chose bouge au coin de l'œil » — la seule phrase qui dise POURQUOI on se tient
 immobile devant un trou), `s1.shadow` (la première image magique de toute la quête) et **les trois
-phrases du familier-guide du 449**, c'est-à-dire la voix qui dit où aller.
+phrases de l'ancien familier-guide du 449**, c'est-à-dire la voix qui dit où aller.
 ⚠️ **C'est la leçon du 453 d'un cran plus bas, et elle est pire** : là-bas la chaîne n'avait pas de
 lecteur ; ici le lecteur EXISTE, il est écrit, relu, et **compté par le banc** (`starSay` est une
 lecture au sens du §8-B de `verify-quete`) — il ne s'exécute simplement jamais. *Un lecteur qui ne

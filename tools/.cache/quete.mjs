@@ -148,7 +148,7 @@ export const STAR_SITES = [
   { id: "farmStarRose", zone: "farm", spot: "starFarmImpact", impact: 3, content: "star", color: "rose" },
   { id: "farmEmptyB",   zone: "farm", spot: "starFarmImpact", impact: 4, content: "empty" },
   // ── Chapitre 2 : le cratère. On ne trouve pas un morceau, on trouve QUELQU'UN.
-  { id: "crater",    zone: "town",  spot: "starCrater" },
+  { id: "crater",    zone: "town",  spot: "starCrater", content: "star", color: "yellow", queen: true },
   { id: "leanLake",  zone: "town",  spot: "*lean" },   // révélé par le croisement d'ombres
   { id: "leanGlass", zone: "town",  spot: "*lean" },
   // ── Chapitre 3 : le lac.
@@ -163,6 +163,16 @@ export const STAR_SITES = [
 export const STAR_SITE = Object.fromEntries(STAR_SITES.map(s => [s.id, s]));
 export const STAR_FARM_IMPACTS = STAR_SITES.filter(s => s.spot === "starFarmImpact");
 export const STAR_FARM_STAR_IDS = STAR_FARM_IMPACTS.filter(s => s.content === "star").map(s => s.id);
+/* 463 — UNE ÉTOILE APPRIVOISÉE DEVIENT UN COMPAGNON, sans seconde liste.
+   `content:"star"` est déjà la vérité qui distingue les êtres vivants des
+   cratères vides et de la matière météorique ; le rendu relit donc cette même
+   colonne. La reine n'est pas un cas ajouté ailleurs : son rang et sa taille
+   viennent de `queen`, ici, à côté de son identité. Toute future étoile marquée
+   `content:"star"` rejoindra automatiquement la formation. */
+export const STAR_FOLLOWER_SITES = STAR_SITES.filter(s => s.content === "star");
+export function starFollowers(e) {
+  return STAR_FOLLOWER_SITES.filter(s => starHas(e, s.id));
+}
 
 /* ╔═════════════════════════════════════════════════════════════════════════════
    ║ ZIP 450 — LE NAVIRE. « CONSTRUIRE QUELQUE CHOSE AVEC LES ÉTOILES. »
@@ -2019,7 +2029,7 @@ export function starFacingAway(px, py, dir, tx, ty) {
    distingue pas d'un jeu cassé.
    ⚠️⚠️ ET LE PIRE ÉTAIT MESURABLE : les deux phrases qui expliquaient la scène
    (`s2.tooHot`, `s2.peek`) passaient par `starSay`, c'est-à-dire par la bulle de
-   l'ÉTOILE — or `starCompanionAt` rend `null` tant que l'étoile n'est pas sortie
+   l'ÉTOILE — or `starCompanionsAt` rend une liste vide tant qu'aucune étoile n'est sortie
    du trou. Elles étaient écrites, traduites, comptées par le banc des lecteurs
    (`starSay` compte comme une lecture) et **affichées nulle part**, très
    exactement au seul endroit du jeu où elles servaient. C'est la leçon du 453

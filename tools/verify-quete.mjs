@@ -1266,7 +1266,7 @@ section("La chute est vue, et le chevron désigne (445)");
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   8 bis. ZIP 449 — L'OBJECTIF COURANT ET LE FAMILIER QUI MÈNE.
+   8 bis. ZIP 449/463 — L'OBJECTIF COURANT ET L'ÉTOILE REINE QUI MÈNE.
 
    ⚠️⚠️ CE QUE CETTE SECTION MESURE N'AVAIT AUCUN ENDROIT OÙ SE VOIR, et c'est
    la question que CLAUDE.md dit de se poser en premier quand Guillaume voit un
@@ -1278,6 +1278,27 @@ section("La chute est vue, et le chevron désigne (445)");
    ═══════════════════════════════════════════════════════════════════════════ */
 section("L'objectif courant (bandeau) et le guide");
 {
+  /* 463 — UNE TROUVAILLE VIVANTE A UNE CONSÉQUENCE VISIBLE. Avant ce contrôle,
+     `resolveStarFound` réussissait parfaitement alors que les deux petites
+     étoiles disparaissaient du monde : le banc mesurait le registre, pas ce
+     que le joueur emmenait. La formation relit maintenant la table autoritaire
+     et doit grandir exactement dans l'ordre des apprivoisements. */
+  {
+    const f = Q.newStar(); f.fall = 1;
+    ok("une quête neuve n'a encore aucune étoile compagne", Q.starFollowers(f).length === 0);
+    Q.resolveStarFound(f, "farmStarBlue", "j1", 1);
+    ok("la petite bleue apprivoisée rejoint immédiatement le joueur",
+       Q.starFollowers(f).map(s => s.id).join(",") === "farmStarBlue");
+    Q.resolveStarFound(f, "farmStarRose", "j1", 2);
+    ok("la petite rose agrandit la constellation sans remplacer la bleue",
+       Q.starFollowers(f).map(s => s.id).join(",") === "farmStarBlue,farmStarRose");
+    Q.resolveStarFound(f, "crater", "j1", 3);
+    const followers = Q.starFollowers(f), queen = followers.filter(s => s.queen);
+    ok("la reine rejoint les deux petites et reste la seule guide désignée",
+       followers.length === 3 && queen.length === 1 && queen[0].id === "crater",
+       followers.map(s => `${s.id}${s.queen ? "★" : ""}`).join(" · "));
+  }
+
   const e = Q.newStar();
   ok("une quête pas tombée n'a pas d'objectif", Q.starGoalKey(e, {}) === null);
   e.fall = 1000;
@@ -1409,6 +1430,21 @@ section("L'objectif courant (bandeau) et le guide");
      `arrêt à ${Q.STAR_GUIDE_ARRIVE}, laisse à ${Q.STAR_GUIDE_LEASH}`);
   ok("⚠️ l'avance tient dans la laisse", Q.STAR_GUIDE_AHEAD < Q.STAR_GUIDE_LEASH,
      `avance ${Q.STAR_GUIDE_AHEAD} < laisse ${Q.STAR_GUIDE_LEASH}`);
+  {
+    const src = fs.readFileSync(path.join(ROOT, "components", "ferme", "FermeGame.js"), "utf8");
+    const a = src.indexOf("function starCompanionsAt(");
+    const b = src.indexOf("function starVoiceCompanion(", a);
+    const formation = a >= 0 && b > a ? src.slice(a, b) : "";
+    const pets0 = src.indexOf("function drawPetsFor(");
+    const pets1 = src.indexOf("function draw", pets0 + 20);
+    const pets = pets0 >= 0 && pets1 > pets0 ? src.slice(pets0, pets1) : "";
+    ok("⚠️⚠️ le chevron déplace la REINE, jamais un familier",
+       /queen && lead/.test(formation) && /guide \? lead\.x/.test(formation)
+       && pets.length > 500 && !/starGuideAim\(/.test(pets),
+       `${formation.length} signes de formation · ${pets.length} signes de familiers lus`);
+    ok("⚠️ la reine est visiblement plus grande que les petites",
+       /scale: queen \? 1\.58 : 0\.82/.test(formation));
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -2226,7 +2262,7 @@ console.log("\n10. LE PNJ QUI S'ARRÊTE, ET LA POSTURE DU CRATÈRE (456)\n");
      ⚠️⚠️⚠️ LE BANC DES LECTEURS (§8-B) COMPTE UN `starSay(…, L.star.s2.peek)`
      COMME UNE LECTURE. Il a raison sur la lettre et il avait tort sur le fond :
      `starSay` écrit dans la bulle de l'ÉTOILE, laquelle n'est dessinée que là où
-     `starCompanionAt` rend un point — donc jamais avant que le cratère s'ouvre.
+     `starCompanionsAt` rend une liste vide — donc jamais avant la première apprivoisée.
      Cinq phrases du premier quart d'heure étaient dans ce cas. On ne peut pas
      mesurer ça en comptant des clés ; on peut le mesurer en LISANT LE SOURCE, et
      ce sont les deux seuls contrôles de ce banc qui le font. */
