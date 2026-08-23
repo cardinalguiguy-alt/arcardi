@@ -11,38 +11,43 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**Livré au 467 : L'ESCALIER SOUS LE TRIBUNAL EST LE BLOC DÉTOURÉ FOURNI, SANS RECOMPOSITION.**
-`refs/ESCALIERDETOURE.jpg` est réduit mécaniquement de 1072×992 à 268×248, détouré puis encodé
-sans quantification dans `plancheEscaliers.js`. Le jeu le dessine en un appel : murs, marches,
-rambardes, ferronnerie, colonnes et pot restent exactement les pixels de la source, calés sur
-`Compo à respecter.jpg`. Treize aplats gris sont transparents (12 196 pixels) ; le vrai sol de
-Valley Town apparaît dessous.
+**Livré au 468 : L'APPRIVOISEMENT NE PEUT PLUS SE FIGER, ET IL NE BLOQUE PLUS LA QUÊTE.**
+Le bogue d'apprivoisement signalé par Guillaume est reproduit dans le vrai jeu, mesuré, corrigé,
+puis rejoué. L'horloge de l'arrivée de l'étoile (`climb → spin → settle`) mesure du temps VISIBLE
+et n'avait **aucune borne** : elle n'avance que dans la zone de son cratère, or l'origine, elle, ne
+change jamais de carte. Un joueur qui prenait le train pendant les 2,6 s la figeait **pour
+toujours** — mesuré à **1294 ms sur 2600**. La cascade qui suivait n'était visible nulle part :
+`starJoinActive` restait vrai → `starSceneCanPlay` refusait **toute** scène → la chute de Valley
+Town n'était jamais JOUÉE → `starImpactLandedNow` restait faux → **l'étoile reine devenait
+inapprivoisable**, pendant que le bandeau disait « Le cratère a refroidi. Descends. »
 
-La physique est une carte séparée : volée basse 8×6, volée haute 6×3, palier à 0,60, variations
-de marche toujours sous `TOWN_STEP_MAX`, rectangles solides pour les rampes et le pot. L'ancien
-dessin procédural et ses accessoires ont disparu. La revue dans le vrai jeu a trouvé cinq arbres
-qui passaient devant les pixels opaques ; ils sont maintenant retirés de cette seule emprise. La
-descente complète puis la remontée jusqu'au parvis ont été jouées dans le navigateur.
+Trois réparations, toutes rejouées à l'écran : un changement de carte **achève** l'arrivée au lieu
+de la suspendre ; `starJoinStale` la périme au bout de `STAR_JOIN_MS + 20 s` de temps **réel** ;
+`starWatch` ne consomme plus sa liste d'un bloc, donc deux étoiles ajoutées dans la même image
+jouent **chacune** sa montée au lieu d'en perdre une. ⚠️ Le premier jet du correctif s'est
+mordu la queue — `starJoinActive` servait de garde d'armement alors qu'elle est vraie **dès
+l'ajout** — et l'interblocage n'a été vu qu'à l'écran : `starJoinBusy` est né de là.
 
-Bancs : `verify-vallee` **205/205**, `render-escaliers` **35/35**, `verify-compo` et
-`verify-strings` (**1 090 clés**) verts. **Aucune migration ni modification Supabase n'est
-nécessaire.**
+Bancs : `verify-quete` **488/488** (482 avant), les **35** relancés un par un, tous verts,
+`npx next build` **✓ Compiled successfully**. **Aucune migration ni modification Supabase n'est
+nécessaire.** Les échafaudages (`.env.local`, `app/starbug/`) sont supprimés.
 
-⚠️ **AUTORITÉ NARRATIVE NOUVELLE : SEPT ÉTOILES FORMERONT LA CONSTELLATION FICTIVE DE LA
-BREBIS, VISIBLE ET MAPPÉE DANS LE CIEL.** Tout le « chant »/les notes/la lyre encore présent
-dans les chapitres historiques est obsolète et doit être remplacé ou retiré. La plongée est
-également à couper ou refondre entièrement. `components/ferme/QUETE.md` ouvre désormais par
-ce bloc d'autorité ; ses sections 444–460 sont une archive utile au code restant, pas une
-direction de conception.
+⚠️ **AUTORITÉ NARRATIVE : SEPT ÉTOILES FORMERONT LA CONSTELLATION FICTIVE DE LA BREBIS,
+VISIBLE ET MAPPÉE DANS LE CIEL.** Tout le « chant »/les notes/la lyre encore présent dans les
+chapitres historiques est obsolète et doit être remplacé ou retiré. La plongée est également à
+couper ou refondre entièrement. `components/ferme/QUETE.md` ouvre par ce bloc d'autorité ; ses
+sections 444–460 sont une archive utile au code restant, pas une direction de conception.
 
-⚠️⚠️ **PROCHAINE ACTION : attendre la prochaine consigne de Guillaume.** Le débogage de
-l'apprivoisement des étoiles est confié à Claude ; ne pas le reprendre spontanément. Si Guillaume
-redonne ensuite une mission sur les étoiles, repartir du bloc d'autorité 465 de `QUETE.md`, jamais
-des étapes de chant archivées.
+⚠️⚠️ **PROCHAINE ACTION : attendre l'arbitrage de Guillaume sur les SEPT DÉCISIONS
+STRUCTURANTES de la refonte**, listées dans `components/ferme/QUETE.md` §14. Elles sont
+bloquantes : la trame cible (cinq impacts → cratère de ville → pièces de Tristan → matériaux
+d'Eduardo → construction) **supprime les chapitres 3, 4 et 5**, donc quatre des cinq morceaux du
+navire et le retournement. Ne rien réécrire de `STAR_SITES` / `STAR_CHAPTERS` / `STAR_SHIP` avant
+qu'elles soient tranchées.
 
 ---
 
-État à jour du **zip 467**. Le chantier des étoiles est momentanément confié à Claude ; côté Codex,
+État à jour du **zip 468**. Le chantier des étoiles est momentanément confié à Claude ; côté Codex,
 la prochaine action attend une consigne. La direction longue reste de **rendre Valley Town habitable
 au regard ET crédible au jeu**, et **lui donner une histoire**. Tout ce qui concerne la ville, ses habitants, ses
 bâtiments et **ses pièges** est dans **`components/ferme/README.md`**, qui fait autorité ; les
@@ -80,6 +85,12 @@ toutes payées :
   de vitesse. Aucun pas n'est refusé, donc `canStandTown` n'est jamais consulté et rien ne lève ;
   six contrôles étaient verts, tous justes, aucun ne calculait la DIFFÉRENCE. *Deux grandeurs qui
   se combattent se mesurent ensemble ou pas du tout.*
+- ⚠️⚠️ **il balaie une COURBE image par image et ne regarde jamais l'HORLOGE qui l'alimente**
+  (468, neuvième forme, la sœur de la cinquième). Onze contrôles suivaient l'arrivée de l'étoile
+  ms par ms — continuité, phases, tour complet, extrémités exactes — et ils étaient tous verts
+  pendant que l'horloge qui la fait avancer pouvait rester figée **pour toujours**, bloquant la
+  quête entière. Ils mesuraient ce que l'animation EST ; aucun ne mesurait **combien de temps elle
+  a le droit d'attendre**. *Une fonction pure passe le banc ; c'est ce qui l'appelle qui casse.*
 - ⚠️⚠️ **il passe lui-même le drapeau qui l'arrange** (458). `verify-quete` jouait le cratère avec
   `solo = true` et l'écoute des ombres avec `solo = false` — les deux seuls mondes où elles
   marchaient, pendant que le jeu passait la valeur inverse. *Un paramètre écrit en dur par le banc
@@ -129,11 +140,11 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 
 | # | La leçon, en une phrase | Où est le détail |
 |---|---|---|
-| 464 | ⚠️⚠️⚠️ **UNE ANIMATION CORRECTE BRANCHÉE SUR LA MAUVAISE IDENTITÉ N'EXISTE PAS.** Le `climb → spin → settle` était entier, mais seul le passage de la reine au cratère l'armait ; les petites étaient téléportées dans la formation. Une transition visible doit transporter l'identité de l'entité ajoutée du verdict jusqu'au rendu. | `starFollowerAdded`, `starJoinRef`, `starCompanionsAt` |
-| 464 | ⚠️⚠️ **ROTATION ET TRAJECTOIRE SONT DEUX GRANDEURS INDÉPENDANTES.** Faire osciller le cap pour donner de la vie à un fragment déplace son centre de dizaines de pixels ; le centre suit un cap fixe, tandis que la silhouette et son point chaud tournent sur eux-mêmes. | `starFarmFlightPath`, `drawStarFragmentMeteor` |
 | 465 | ⚠️⚠️⚠️ **UNE ANIMATION QUI CONTINUE DERRIÈRE UN PANNEAU N'EXISTE PAS POUR LE JOUEUR.** Son horloge doit mesurer du temps VISIBLE, et toute interface concurrente doit attendre — y compris la carte déjà ouverte une image avant le verdict. | `starJoinRef`, `starBlockingPanelsClear`, `starWatch` |
 | 466 | ⚠️⚠️⚠️ **UNE RÉFÉRENCE À COPIER N'EST PAS UNE INVITATION À L'INTERPRÉTER.** On importe ses pixels et la composition fournie verrouille les positions ; toute approximation procédurale et tout décor concurrent disparaissent. | `plancheEscaliers.js`, `components/ferme/README.md` §27.3, `render-escaliers.mjs` |
 | 467 | ⚠️⚠️⚠️ **UN BLOC VISUEL N'EST PAS UNE COLLECTION D'OBSTACLES VISUELS.** Le bitmap exact se dessine une fois, sa collision vit séparément, et tout ancien sous-dessin ou premier plan qui traverse ses pixels opaques doit disparaître. | `drawTownCourtStairBlock`, `TOWN_COURT_BLOCK_SOLIDS`, `render-escaliers.mjs` |
+| 468 | ⚠️⚠️⚠️ **UNE HORLOGE DE MISE EN SCÈNE SANS BORNE FINIT PAR RETENIR LE JEU ENTIER.** Une arrivée de 2,6 s qui ne compte que du temps VISIBLE se fige dès que sa condition de visibilité cesse d'être atteignable — et ce qui attendait « la fin de l'animation » attend alors pour toujours. Toute pause se borne en temps RÉEL. | `starJoinStale`, `starCompanionsAt`, `verify-quete` §arrivée |
+| 468 | ⚠️⚠️ **UNE FONCTION QUI RÉPOND À DEUX QUESTIONS FINIT PAR RÉPONDRE À LA MAUVAISE.** « L'animation joue-t-elle ? » et « faut-il retarder une carte ? » avaient la même fonction ; s'en servir comme garde d'armement l'a rendue vraie AVANT tout armement, donc éternelle. Deux questions, deux fonctions. | `starJoinBusy` vs `starJoinActive` |
 
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
@@ -499,8 +510,9 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 ⚠️⚠️ **LES BANCS SONT DANS `tools/README.md` DEPUIS LE 432, ET CE CHAPITRE A ÉTÉ ÉLAGUÉ AU 444
 SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 442** (reporté deux fois). **16 bancs de contrôle et 19 bancs
 de rendu**, comptés en listant `tools/` (⚠️ le chiffre disait 15 et 18 : il était périmé, recompté
-au 453 — et **les 35 ont été relancés un par un au 459**, tous verts, `verify-quete` passant de 433
-à **439/439**). ⚠️ **Six d'entre eux existent parce qu'un défaut vu par
+au 453 — et **les 35 ont été relancés un par un au 468**, tous verts, `verify-quete` à
+**488/488** ⚠️ *contre 439/439 écrit ici depuis le 459 : ce chiffre-là avait vieilli sur place
+pendant neuf zips, dans le chapitre même qui interdit d'en écrire un sans l'avoir lancé*). ⚠️ **Six d'entre eux existent parce qu'un défaut vu par
 Guillaume — ou vu à l'écran — n'était mesuré nulle part** : `verify-compo` (440), `verify-pont`
 (441), `verify-portee` (443), et au 444 `render-etoile`, `verify-quete`, `render-beffroi`.
 ⚠️ **Le seul qui touche à de l'ARGENT est `verify-vallee`** (205/205, relancé au 458) : il joue des ventes,
@@ -878,7 +890,15 @@ erreur** en choisissant mal.
    détail reste dans `QUETE.md` et `render-etoile.mjs`. Le tableau couvre exactement 462 à 465,
    avec les zips sans leçon nouvelle naturellement absents.)**.
 
-   **467 (NEUVIÈME passe : la ligne 463 part avant l'ajout du 467. Le tableau couvre les quatre
+   **468 (DIXIÈME passe : les DEUX lignes du 464 partent avant les deux leçons du 468 — deux
+   retirées, deux ajoutées, le tableau reste à sa taille et couvre exactement 465 à 468. Leur
+   détail vit dans `starFollowerAdded`, `starJoinRef`, `starCompanionsAt`, `starFarmFlightPath` et
+   `drawStarFragmentMeteor`, que leur colonne de droite désignait déjà. ⚠️ **Et cette passe a
+   trouvé ce qu'un élagage doit trouver : un CHIFFRE PÉRIMÉ dans le §10** — `verify-quete` y était
+   annoncé à 439/439, il est à **488/488** ; il avait donc menti pendant neuf zips dans le chapitre
+   même qui interdit d'écrire un chiffre de banc sans l'avoir lancé.)**.
+
+      **467 (NEUVIÈME passe : la ligne 463 part avant l'ajout du 467. Le tableau couvre les quatre
    derniers zips 464 à 467 ; le détail retiré reste dans `QUETE.md` et `starCompanionsAt`.)**.
 
    ⚠️⚠️ **LE 451 A EXÉCUTÉ L'ORDRE DU 449 : §13 RELU LIGNE À LIGNE**, huit zips après le 442.

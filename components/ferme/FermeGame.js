@@ -943,7 +943,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      consommer le décollage derrière lui. `origin` est le cratère vivant, pas
      une approximation « derrière les pieds », donc reine et petites se
      détachent du pixel qu'elles occupaient juste avant la fin de la jauge. */
-  const starJoinRef = useRef({ id: null, origin: null, elapsed: 0, last: 0 });
+  /* ⚠️ 468 — `armed` EST LA DATE RÉELLE DE L'ARMEMENT, ET C'EST LA SEULE
+     grandeur du bloc qui ne soit pas du temps visible. `elapsed` peut rester
+     à l'arrêt aussi longtemps qu'un panneau reste ouvert ; `armed` ne le peut
+     pas, et c'est lui qui empêche une arrivée de devenir éternelle. Voir
+     `starJoinStale` dans `quete.js`. */
+  const starJoinRef = useRef({ id: null, origin: null, elapsed: 0, last: 0, armed: 0 });
   const craterDustRef = useRef([]);                  // zip 458 — { x, y, t0, seed } — les bouffées, purement locales
   const craterDustNextRef = useRef(new Map());       // zip 458 — la cadence d'émission, par joueur
   /* ⚠️ LA CAMÉRA DE SCÈNE EST UN REF LU PAR `getCam` ET `getCamTown` — UNE
@@ -22143,9 +22148,34 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (devMenuOpenRef.current) return false;
     return true;
   }
-  function starJoinActive() {
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 468 — DEUX QUESTIONS, DEUX FONCTIONS. NE PAS LES CONFONDRE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️⚠️ CE DÉDOUBLEMENT EST NÉ D'UN INTERBLOCAGE QUE SEUL L'ÉCRAN A MONTRÉ.
+     `starJoinBusy` répond « une arrivée joue-t-elle EN CE MOMENT ? » et ne lit
+     que le ref. `starJoinActive` répond « faut-il retarder une carte ou une
+     scène ? » et ajoute la frame atomique où la formation reçue devance le
+     veilleur (465) — donc elle est vraie DÈS L'AJOUT, avant tout armement.
+     ⚠️ S'en servir comme garde d'armement gelait donc la quête à l'image près :
+     `joined` existait, `starJoinActive()` était déjà vrai, l'armement était
+     reporté à l'infini et plus aucune étoile ne montait de son cratère. Mesuré
+     dans le navigateur : `join.id = null`, `elapsed = 0`, `actif = true`, pour
+     toujours. *Une fonction qui répond à deux questions finit par répondre à la
+     mauvaise* — c'est le §4 de `CLAUDE.md` (« une grandeur de dessin, une
+     grandeur de rang, une grandeur de collision : trois choses »). */
+  function starJoinBusy(nowMs) {
     const j = starJoinRef.current;
-    if (j && j.id && j.elapsed < Q.STAR_JOIN_MS) return true;
+    return !!(j && j.id && j.elapsed < Q.STAR_JOIN_MS
+              && !Q.starJoinStale(j.armed, nowMs === undefined ? performance.now() : nowMs));
+  }
+  function starJoinActive() {
+    /* ⚠️⚠️ 468 — ET ELLE PEUT ÊTRE PÉRIMÉE. Cette fonction ne dit pas seulement
+       « dessine la courbe » : `starSceneCanPlay` et `starPanelsClear` s'en
+       servent pour RETARDER les cartes et les scènes. Sans la borne, une
+       arrivée figée les retardait pour toujours, et la quête ne se terminait
+       plus. Une mise en scène de deux secondes et demie n'a pas le droit de
+       tenir le reste du jeu en otage. */
+    if (starJoinBusy()) return true;
     /* 465 — la réception réseau ouvre parfois la carte de chapitre AVANT la
        prochaine image de `starWatch`. On reconnaît aussi cette frame atomique
        en comparant la formation reçue à celle que le veilleur a vue. */
@@ -22737,8 +22767,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const joining = starJoinRef.current;
     if (joining.id) {
       const dt = Math.max(0, Math.min(80, nowMs - (joining.last || nowMs)));
-      if ((!joining.origin || joining.origin.zone === zone) && starBlockingPanelsClear())
-        joining.elapsed = Math.min(Q.STAR_JOIN_MS, joining.elapsed + dt);
+      /* ╔════════════════════════════════════════════════════════════════════
+         ║ ZIP 468 — DEUX FAÇONS D'ACHEVER UNE ARRIVÉE, ET AUCUNE N'EST UNE PAUSE.
+         ╚════════════════════════════════════════════════════════════════════
+         ⚠️⚠️⚠️ CE `if` NE FAISAIT QUE SUSPENDRE, ET C'EST CE QUI RENDAIT LA QUÊTE
+         INFINISSABLE. Il exigeait `joining.origin.zone === zone` — or l'origine
+         est le CRATÈRE, et un cratère ne change jamais de carte. Un joueur qui
+         prenait le train (ou entrait dans un bâtiment) pendant les 2,6 s gelait
+         l'horloge POUR TOUJOURS : l'étoile restait plantée sur une pose de
+         tournicotage, et `starJoinActive` bloquait ensuite toutes les scènes —
+         donc la chute de Valley Town, donc le cratère, donc la reine. Voir le
+         bloc de `starJoinStale` dans `quete.js` pour la cascade mesurée.
+         · AUTRE CARTE : la montée part d'un trou qui n'est plus à l'écran ; la
+           rejouer n'aurait aucun sens, on pose l'étoile dans sa formation ;
+         · GRÂCE PASSÉE : l'horloge visible n'a pas couru assez vite (un panneau
+           qu'on laisse ouvert, une boucle qui ne tourne pas). On achève plutôt
+           que d'attendre un temps visible qui ne viendra peut-être jamais. */
+      if (joining.origin && joining.origin.zone !== zone) joining.elapsed = Q.STAR_JOIN_MS;
+      else if (Q.starJoinStale(joining.armed, nowMs)) joining.elapsed = Q.STAR_JOIN_MS;
+      else if (starBlockingPanelsClear()) joining.elapsed = Math.min(Q.STAR_JOIN_MS, joining.elapsed + dt);
       joining.last = nowMs;
     }
     const join = Q.starJoinAnim(joining.id ? joining.elapsed : -1);
@@ -22845,9 +22892,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        arrivée pour toute étoile vivante. C'est volontairement avant les cas
        narratifs : la petite bleue, la rose et la reine partagent le geste
        visible, tandis que seule la reine déroule encore le récit du navire. */
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ ZIP 468 — UNE ARRIVÉE À LA FOIS, ET PAS UNE DE PERDUE.
+       ╚══════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ `w.followers` avançait D'UN BLOC, juste avant d'armer. Deux étoiles
+       ajoutées dans la même image — le menu dev le fait à chaque « boucler ce
+       chapitre », et deux `apply` groupés le peuvent — n'en jouaient donc
+       qu'UNE : la seconde surgissait directement dans la formation, sans sa
+       montée. C'est très exactement le défaut que le 464 croyait avoir clos
+       (« une animation correcte branchée sur la mauvaise identité n'existe
+       pas »), reparu un cran plus haut : ici l'identité est bonne, c'est la
+       LISTE qui a sauté un élément. Mesuré à l'écran : `farmStarRose` dans la
+       formation, `join.id` resté sur `farmStarBlue`.
+       ⚠️ ON NE CONSOMME DONC QUE CE QU'ON A RÉELLEMENT ARMÉ. Le reste attend la
+       fin de l'arrivée en cours — attente que `starJoinStale` empêche d'être
+       éternelle, sans quoi on aurait remplacé un blocage par un autre. */
     const joined = Q.starFollowerAdded(w.followers, e);
-    w.followers = followers;
-    if (joined) {
+    if (!joined) {
+      w.followers = followers;
+      /* L'étoile qui arrivait vient de disparaître (menu dev « effacer ») : on
+         désarme tout de suite. Sans ça son horloge reste figée jusqu'à la
+         grâce, et retient les scènes vingt secondes pour rien. */
+      const j = starJoinRef.current;
+      if (j.id && !followers.includes(j.id))
+        starJoinRef.current = { id: null, origin: null, elapsed: 0, last: 0, armed: 0 };
+    } else if (!starJoinBusy(nowMs)) {
+      /* On garde l'ordre d'arrivée et on jette au passage ce qui a disparu :
+         `w.followers` est une file de ce qui a été VU arriver, jamais une copie
+         de l'état partagé. */
+      w.followers = [...(w.followers || []).filter(id => followers.includes(id)), joined.id];
       const pos = starTargetPos(joined.id);
       /* Les sprites en attente flottent légèrement sous l'ancre de leur case.
          L'origine garde ce même décalage afin que le premier pixel animé soit
@@ -22858,6 +22931,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         origin: pos ? { ...pos, y: pos.y + oy } : null,
         elapsed: 0,
         last: nowMs,
+        armed: nowMs,
       };
       /* Une carte pouvait déjà être ouverte (fin de la scène de chute) quand la
          jauge se terminait. La file empêchait les NOUVELLES cartes, mais pas ce

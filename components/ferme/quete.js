@@ -990,6 +990,37 @@ export const STAR_JOIN_MS = STAR_JOIN_CLIMB_MS + STAR_JOIN_SPIN_MS + STAR_JOIN_S
 export const STAR_JOIN_SPIN_TURNS = 1.5;
 export const STAR_JOIN_CRATER_LIFT_PX = 2.5; // du centre visuel du cratère au premier pixel animé
 export const STAR_JOIN_ORBIT_PX = 13;     // le rayon du tournicotage
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 468 — UNE ARRIVÉE NE PEUT PLUS RETENIR LA QUÊTE EN OTAGE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️⚠️ DÉFAUT REPRODUIT À L'ÉCRAN, ET IL RENDAIT LA QUÊTE INFINISSABLE.
+   L'horloge de l'arrivée mesure du temps VISIBLE (465), ce qui est juste : elle
+   n'avance que dans la zone de son cratère et hors de tout panneau. Mais elle
+   n'avait AUCUNE borne, et l'origine, elle, ne change jamais de zone — un joueur
+   qui prenait le train pendant les 2,6 s la figeait DÉFINITIVEMENT. La suite
+   tombait en cascade, et pas un banc ne pouvait la voir :
+     `starJoinActive` reste vrai  →  `starSceneCanPlay` refuse TOUTE scène
+       →  la chute de Valley Town n'est jamais JOUÉE
+       →  `starImpactLandedNow` reste faux
+       →  `starTameTarget` rend `null`  →  **la reine est inapprivoisable.**
+   Mesuré dans le navigateur : arrivée gelée à 1294 ms sur 2600, trou refroidi,
+   cible `null`, plus une seule scène jouable — pendant que le bandeau disait
+   « Le cratère a refroidi. Descends : quelque chose se cache au fond. »
+   ⚠️⚠️ LA PARADE N'EST PAS DE SUPPRIMER LA PAUSE, C'EST DE LA BORNER. Le temps
+   visible reste la règle ; passé cette grâce en temps RÉEL, l'arrivée est
+   déclarée finie et l'étoile rejoint sa formation. On préfère rater une
+   animation que personne ne regardait à bloquer une quête que tout le monde
+   attend — c'est le repli qui ACCEPTE du §4 de `CLAUDE.md`, appliqué au temps.
+   ⚠️ ET C'EST UNE HORLOGE LOCALE, JAMAIS PARTAGÉE : chaque client borne SA
+   propre mise en scène. Rien ne traverse le réseau, rien n'est à réconcilier.
+   ═════════════════════════════════════════════════════════════════════════════ */
+export const STAR_JOIN_GRACE_MS = 20000;
+export function starJoinStale(armedAtMs, nowMs) {
+  const a = +armedAtMs || 0;
+  if (!a) return false;                       // jamais armée : il n'y a rien à périmer
+  return (+nowMs || 0) - a > STAR_JOIN_MS + STAR_JOIN_GRACE_MS;
+}
+
 export const STAR_BUBBLE_FADE_MS = 900;
 
 /* 465 — les conseils ne deviennent pas des pancartes permanentes. Ils restent

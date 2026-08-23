@@ -83,6 +83,54 @@ signaux lumineux et des séquences. Les clés internes historiques (`note`, `son
   `farmMaterial`, et une partie déjà passée au chapitre 2 ne revient pas en
   arrière.
 
+### ⚠️⚠️⚠️ 468 — L'ARRIVÉE NE PEUT PLUS SE FIGER, ET ELLE NE RETIENT PLUS LA QUÊTE
+
+**Défaut signalé par Guillaume, reproduit dans le vrai jeu, corrigé, puis rejoué.** Ce qui suit
+est la LEÇON ; le détail vit dans le bloc de `starJoinStale` (`quete.js`) et dans les trois
+commentaires 468 de `FermeGame.js`.
+
+> **Une horloge de mise en scène qui ne compte que du temps VISIBLE doit être bornée en temps
+> RÉEL. Sinon elle se fige le jour où sa condition de visibilité devient inatteignable — et tout
+> ce qui attendait « la fin de l'animation » attend alors pour toujours.**
+
+L'arrivée (`climb → spin → settle`, 2,6 s) n'avançait que si le joueur se trouvait dans la zone de
+son cratère. Or **l'origine ne change jamais de carte** : prendre le train pendant ces 2,6 s
+figeait l'horloge définitivement — mesuré à **1294 ms sur 2600**, pendant plus de trois minutes.
+La cascade n'était visible d'aucun banc :
+
+    starJoinActive reste vrai → starSceneCanPlay refuse TOUTE scène
+      → la chute de Valley Town n'est jamais JOUÉE → starImpactLandedNow reste faux
+      → starTameTarget rend null → **l'étoile reine est inapprivoisable**
+
+…pendant que le bandeau disait « Le cratère a refroidi. Descends : quelque chose se cache au
+fond. » ⚠️ *Le pire symptôme possible : le jeu invite à faire un geste qu'il refuse ensuite en
+silence.*
+
+**Les trois réparations, toutes rejouées à l'écran :**
+- **un changement de carte ACHÈVE l'arrivée** au lieu de la suspendre — la montée part d'un trou
+  qui n'est plus à l'écran, la rejouer n'aurait aucun sens ;
+- **`starJoinStale` la périme** au bout de `STAR_JOIN_MS + STAR_JOIN_GRACE_MS` (20 s) de temps
+  réel. On préfère rater une animation que personne ne regardait à bloquer une quête que tout le
+  monde attend — c'est le repli qui ACCEPTE du §4 de `CLAUDE.md`, appliqué au temps ;
+- **`starWatch` ne consomme plus sa liste d'un bloc.** Deux étoiles ajoutées dans la même image
+  (le menu dev le fait à chaque « boucler ce chapitre ») n'en jouaient qu'UNE ; la seconde
+  surgissait dans la formation sans sa montée. Vérifié après correctif : `farmStarBlue` 0 → 2600,
+  **puis** `farmStarRose` 0 → 2600.
+
+⚠️⚠️ **ET LE PREMIER JET DU CORRECTIF S'EST MORDU LA QUEUE — SEUL L'ÉCRAN L'A MONTRÉ.**
+`starJoinActive` servait de garde d'armement, or sa seconde branche (465) est vraie **dès l'ajout
+de l'étoile**, avant tout armement : l'armement était donc reporté à l'infini et plus aucune
+étoile ne montait de son cratère (`join.id = null`, `elapsed = 0`, `actif = true`, pour toujours).
+*Une fonction qui répond à deux questions finit par répondre à la mauvaise.* D'où `starJoinBusy`
+(« une arrivée joue-t-elle en ce moment ? », lit le ref seul) à côté de `starJoinActive`
+(« faut-il retarder une carte ou une scène ? », qui ajoute la frame atomique).
+
+⚠️ **LE BANC A APPRIS LA GRANDEUR QUI MANQUAIT.** Les onze contrôles de l'arrivée balayaient la
+courbe ms par ms et étaient **tous verts** pendant que son horloge pouvait être éternelle : ils
+mesuraient ce que l'animation EST, jamais **combien de temps elle a le droit d'attendre**.
+`verify-quete` passe de 482 à **488/488**, et les six nouveaux échouent quand on rend la grâce
+infinie ou trop courte (vérifié par mutation, dans les deux sens).
+
 Le code de référence est `STAR_FARM_IMPACTS` et la chronologie
 `STAR_FARM_IMPACT_MS` dans `quete.js`. Les positions partent de
 `STAR_FARM_IMPACT_ANCHORS`. `verify-quete.mjs` contrôle distribution 2/1/2,
@@ -1833,3 +1881,34 @@ cratère en ville, **et rien à la ferme quand la cible est en ville**.
 
 ⚠️ **Ce qui n'a PAS été vu, et qui reste au §12.2 :** la chute à DEUX clients (chacun sur sa carte,
 chacun sa caméra, chacun son impact) — c'est la même séance qui manque depuis le 444.
+
+---
+
+## 14. ⚠️⚠️⚠️ LES SEPT DÉCISIONS QUI BLOQUENT LA REFONTE — ELLES ATTENDENT GUILLAUME
+
+**Ouvert au 468.** La trame cible transmise par Guillaume est : *cinq impacts à la ferme → le
+grand impact de Valley Town (avec une occupation pendant le refroidissement) → récupérer les
+pièces chez Tristan → demander à Eduardo les matériaux de la voile → construire le bateau.*
+
+⚠️ **Elle ne se pose pas par-dessus le code : elle en RETIRE la moitié.** Les chapitres 3
+(la plongée), 4 (la verrerie et la pie) et 5 (le beffroi, la cloche, le duo) n'y figurent pas —
+c'est-à-dire **quatre des cinq morceaux du navire** (`lakeShard`, `beadShard`, `nestShard`,
+`song`) et **le retournement**, seul moment de bascule de toute la quête. Rien ne doit être
+réécrit dans `STAR_SITES`, `STAR_CHAPTERS` ni `STAR_SHIP` avant que ceci soit tranché — c'est la
+règle du §2 de `CLAUDE.md`, et c'est aussi ce qui a coûté le plus cher au 450 (une fiction changée
+sans que le document qui la porte suive).
+
+| # | ce qui doit être tranché | pourquoi c'est bloquant |
+|---|---|---|
+| **D1** | **Les sept étoiles de la Brebis.** L'autorité 465 en annonce sept et une constellation mappée ; la trame cible n'en produit que **trois** (bleue, rose, reine). | Il manque quatre étoiles, et il faut décider **où** elles se trouvent — ou abandonner les sept. |
+| **D2** | **Le sort des chapitres 3, 4 et 5.** Suppression complète, ou conservation d'un morceau ? | Sans eux la quête n'a plus aucun retournement : elle devient une chaîne logistique. C'est livrable, mais il faut le vouloir. |
+| **D3** | **Les cinq morceaux du navire.** D'où viennent le safran, le mât, la voile et la cloche ? | Le fantôme du bateau a cinq emplacements à l'écran. Un emplacement sans réponse est un trou visible dès le premier chapitre. |
+| **D4** | **Où remettre le squelette du duo** (deux postes, coopération réelle, zéro message). Proposition : la **construction du bateau** — l'un tient la lumière, l'autre pose la pièce. | C'est la seule mécanique à deux qui ne soit pas du commerce, et la trame cible ne lui donne pas de place. |
+| **D5** | **L'occupation pendant le refroidissement.** Proposition : **relever les éclats projetés** autour du cratère (3–4 marques qui racontent la chute). | « Attendre » n'est pas une occupation ; et une activité plaquée serait pire que rien. |
+| **D6** | **La durée du refroidissement.** `STAR_CRATER_COOL_MS` vaut **180 s** ; proposition **240 s**. | « Légèrement plus long » demande un chiffre, et il ne se règle pas à l'œil. |
+| **D7** | **Kerguélen et les quinze minutes de plans** — restent ou sortent ? | La trame cible n'a pas d'architecte naval, mais c'est lui qui fait que le fantôme du bateau est **gagné** et non offert (454). |
+
+⚠️ **ET UNE REMARQUE DE MÉTHODE, DUE À GUILLAUME** : le masterprompt demande de rejouer et de
+refaire les six mini-jeux sans complaisance. Si D2 les supprime, **quatre d'entre eux
+disparaissent** — la passe de réglage doit donc venir APRÈS la refonte de la charpente, sinon on
+polit ce qu'on va jeter.

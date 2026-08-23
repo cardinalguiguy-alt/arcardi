@@ -1003,6 +1003,41 @@ section("Les grandeurs partagées");
        même temps. */
     ok("…et l'arrivée entière tient dans les premières phrases de la rencontre",
        Q.STAR_JOIN_MS <= 3000, `${Q.STAR_JOIN_MS} ms`);
+
+    /* ╔═══════════════════════════════════════════════════════════════════════
+       ║ ZIP 468 — UNE ARRIVÉE PÉRIME. C'EST LA SEULE CHOSE QUI L'EMPÊCHE
+       ║ DE RENDRE LA QUÊTE INFINISSABLE.
+       ╚═══════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ CE QU'ON MESURE ICI N'EST PAS LA COURBE, C'EST SA BORNE — et c'est la
+       grandeur qui manquait. Les onze contrôles ci-dessus balayaient
+       `starJoinAnim` image par image et étaient tous verts pendant que
+       l'horloge qui l'alimente pouvait rester figée pour toujours : ils
+       mesuraient ce que l'arrivée EST, jamais COMBIEN DE TEMPS elle a le droit
+       d'attendre (c'est la cinquième forme du §0 de `CLAUDE.md`, « un banc de
+       rendu ne peut pas voir un défaut de temps »).
+       ⚠️ IL PEUT ÉCHOUER : passer `STAR_JOIN_GRACE_MS` à `Infinity` casse les
+       deux premiers contrôles, et retirer la borne casse le troisième. */
+    ok("⚠️ une arrivée jamais armée ne périme pas", Q.starJoinStale(0, 1e12) === false);
+    ok("⚠️ …ni pendant sa propre durée, grâce comprise",
+       Q.starJoinStale(1000, 1000 + Q.STAR_JOIN_MS + Q.STAR_JOIN_GRACE_MS) === false);
+    ok("⚠️⚠️ …mais elle périme UNE MILLISECONDE plus tard (sinon elle est éternelle)",
+       Q.starJoinStale(1000, 1000 + Q.STAR_JOIN_MS + Q.STAR_JOIN_GRACE_MS + 1) === true);
+    /* ⚠️ LA GRÂCE EST ENCADRÉE DES DEUX CÔTÉS, et les deux bornes ont une raison.
+       Trop courte, elle couperait une arrivée qu'un fondu de zone ou une carte de
+       chapitre suspend légitimement (le temps VISIBLE du 465 resterait la règle
+       mais ne serait plus tenu). Trop longue, elle laisserait la quête bloquée
+       assez longtemps pour qu'un joueur repose la manette. */
+    ok("⚠️ la grâce laisse passer une carte de chapitre entière",
+       Q.STAR_JOIN_GRACE_MS >= Q.STAR_CARD_MS, `${Q.STAR_JOIN_GRACE_MS} ms ≥ ${Q.STAR_CARD_MS} ms`);
+    ok("…et elle ne dépasse pas une demi-minute", Q.STAR_JOIN_GRACE_MS <= 30000,
+       `${Q.STAR_JOIN_GRACE_MS} ms`);
+    /* ⚠️⚠️ ET LA BORNE DOIT ÊTRE PLUS COURTE QUE LA TENUE QU'ELLE PROTÈGE. Une
+       arrivée qui périme plus lentement qu'on ne gagne l'étoile SUIVANTE ferait
+       attendre la seconde derrière la première : la file de `starWatch` ne
+       tiendrait plus, et on retomberait sur le défaut qu'elle corrige. */
+    ok("⚠️⚠️ une arrivée périmée libère la place avant l'apprivoisement suivant",
+       Q.STAR_JOIN_MS + Q.STAR_JOIN_GRACE_MS < Q.STAR_CALM_SOLO_MS,
+       `${Q.STAR_JOIN_MS + Q.STAR_JOIN_GRACE_MS} ms < ${Q.STAR_CALM_SOLO_MS} ms`);
   }
   ok("⚠️ la carte de chapitre ne survit pas à sa scène", Q.STAR_CARD_MS < Q.STAR_FALL_MS && Q.STAR_CARD_MS < Q.STAR_TURN_MS);
   /* ⚠️ ZIP 453 — LE TOTAL SE DÉRIVE DE LA TABLE DES MORCEAUX, ET IL N'Y EN A
