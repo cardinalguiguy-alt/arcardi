@@ -491,7 +491,21 @@ donnait pas, d'une rangée.
 
 ---
 
-## `render-etoile.mjs` — les dessins de la quête de l'étoile (444 à 465)
+## `render-etoile.mjs` — les dessins de la quête de l'étoile (444 à 469)
+
+⚠️⚠️ **ZIP 469 — LE §14 REGARDE LA FOUILLE, ET IL EST NÉ AVEC ELLE** (22 contrôles) : la
+pose accroupie (pieds au sol, quatre images distinctes, les deux mains en OPPOSITION DE
+PHASE, le geste qui suit le côté du cratère), la terre (elle s'ACCUMULE au fil des trois
+secondes, le tas sort du bon côté, la gerbe et le coup de main viennent du même nombre), la
+jauge (elle avance vraiment de 0 à 100 %), le médaillon (l'étoile éclaire plus que le vide,
+le fond est plus sombre que la lèvre, la poussière retombe encore) et la plaque météorique
+(écart-type de luminance > 14 : elle est ÉCLAIRÉE, pas coloriée).
+⚠️ **Il a jeté DEUX jets de la pose et un du médaillon avant que l'écran ne les valide**, et
+il a corrigé DEUX de ses propres mesures : la luminance MOYENNE punissait l'étoile (son halo
+ajoute des pixels faibles) — on somme la lumière ÉMISE, hors de la cuvette ; et le HAUT de
+l'encre trouvait le crâne au lieu de la main — on mesure le BAS, sous la tête.
+*Un banc de rendu se vérifie aussi.*
+
 
 Le §8 ter appelle le véritable impact de ferme à trois âges. Il exige que la
 chaleur de contact soit brève, que la terre prenne le relais, que la gerbe
@@ -767,7 +781,26 @@ touche le sol — le défaut même de ce zip — leur est **totalement invisible
 `verify-quete` qui le tient désormais (cinq contrôles purs sur `starImpactLanded` et l'azimut).
 *Un banc de rendu ne peut pas voir un défaut de temps.*
 
-## `verify-quete.mjs` — 482 contrôles, 482/482 (444 à 465 : cinq impacts, apprivoisement, arrivée visible, constellation et reine-guide inclus)
+## `verify-quete.mjs` — 449 contrôles, 449/449 (444 à 469 : cinq impacts, FOUILLE, apprivoisement, arrivée visible, constellation et reine-guide inclus)
+
+⚠️⚠️⚠️ **ZIP 469 — IL EST PASSÉ DE 488 À 449, ET C'EST UNE BONNE NOUVELLE.** Le déchant a
+supprimé quatre chapitres ; leurs contrôles partent avec eux (les deux fenêtres solo rejouées
+image par image, les trois du croisement d'ombres, les trois de la flaque de plongée, les
+tables de manches des quatre mini-jeux). **Un banc qui rétrécit parce que le code rétrécit est
+un banc en bonne santé** — ce qu'il ne faut pas, c'est qu'il rétrécisse tout seul.
+⚠️⚠️ **ET IL A GAGNÉ LE CONTRÔLE QUI MANQUAIT DEPUIS LE 444, celui qui aurait dû tomber le
+premier jour :** *l'apprivoisement, joué avec un VRAI identifiant et en re-migrant l'état à
+chaque requête, comme l'hôte le fait.* Il jouait `"j1"` quand le jeu passe un UUID de 36
+signes, et gardait un objet d'état quand l'hôte le re-migre deux fois par seconde. Il fallait
+les DEUX écarts pour que la troncature de clé de `calm` fusionne « la tenue » et « son
+départ » — donc **447 contrôles restaient verts sur une quête totalement bloquée**.
+*Un banc qui invente ses identifiants mesure un jeu que personne ne joue.* Il balaie
+maintenant les deux longueurs, comme il balaie les deux valeurs d'un drapeau solo depuis 458.
+⚠️ La FOUILLE ajoute une trentaine de contrôles : la durée bornée dans les deux sens, le seuil
+de déplacement, l'invariant des trois résultats (chacun servi par au moins un cratère, au
+moins un vide, jamais la moitié), l'idempotence, la garde « on n'apprivoise pas ce qu'on n'a
+pas déterré », et la migration d'une sauvegarde d'avant le zip.
+
 
 Le 464 ajoute huit contrôles : cap constant et avance monotone pour chacun des
 trois fragments filmés, extrémités exactes de la course, directions distinctes,

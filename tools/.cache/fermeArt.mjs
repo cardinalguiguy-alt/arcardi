@@ -2715,6 +2715,469 @@ export function drawStarClimb(ctx, sheet, row, px, py, phase) {
   ctx.drawImage(sheet, POSE_ARM_RX, sy + POSE_ARM_Y, POSE_ARM_W, POSE_ARM_H, cbr, top + 1 + AR, POSE_ARM_W, POSE_ARM_H);
 }
 
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 469 — LA POSE DE FOUILLE : IL S'ACCROUPIT ET IL GRATTE.
+   ╚════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ DEMANDE DE GUILLAUME : *« une petite animation du perso qui gratte le sol
+   pendant 3 secondes »*, avec la consigne d'être **hyper exigeant sur le rendu**.
+   Ce qui suit applique donc, sans exception, les quatre règles que les trois poses
+   du 459 ont payées :
+     1. **on redécoupe la feuille, on ne repeint jamais un bras** — sinon la tenue
+        achetée à la Maison Garfield ne se voit pas quand on creuse ;
+     2. **les pieds ne bougent pas** (`py + 16`) : s'accroupir n'est pas rapetisser,
+        et l'ancrage au sol est la première chose que le banc mesure ;
+     3. **aucun `translate`, aucun `rotate`, aucun `roundRect`** — le faux canevas
+        du banc les ignore ou LÈVE, donc une pose qui en dépend cesse d'être
+        regardable, donc elle vieillit (piège n°1, deuxième visage) ;
+     4. **les bras sont CONTRALATÉRAUX du buste** : quand la main gauche plonge, le
+        buste bascule sur la droite. Une main qui descend pendant que le corps
+        descend aussi se lit comme un accroupissement, pas comme un geste.
+   ⚠️⚠️ ET LE GESTE PART EN AVANT, JAMAIS EN BAS. Un fermier qui creuse droit sous
+   lui se lit comme quelqu'un qui a mal au ventre : la main doit sortir de la
+   silhouette côté cratère (`fx`), y descendre, et revenir. C'est le seul endroit
+   du corps où l'amplitude compte plus que la finesse — mesuré à l'écran, deux
+   pixels ne se voyaient pas, quatre se lisent d'un coup d'œil.
+   ════════════════════════════════════════════════════════════════════════════ */
+export const STAR_DIG_FRAMES = 4;
+/* Les quatre temps. ⚠️ UNE TABLE, PAS QUATRE `if` — même raison qu'à la grimpe :
+   c'est ce qui rend le cycle lisible d'un coup d'œil et vérifiable d'une boucle.
+   ⚠️⚠️ ET LES DEUX MAINS DESCENDENT JUSQU'AU SOL, PAS JUSQU'AU NOMBRIL. Le
+   premier jet les faisait osciller à mi-corps : sur la planche du banc, ça se
+   lisait comme un fermier debout qui agite les bras — pas comme quelqu'un qui
+   gratte. `A_DOWN` est mesuré pour que la main touche `py + 16`, c'est-à-dire le
+   sol, exactement là où la terre sort. *Une amplitude qui n'atteint pas la chose
+   qu'elle est censée toucher ne raconte rien.*
+   `AL`/`AR` = descente de chaque main ; `EL`/`ER` = ce qu'elle sort du corps,
+   côté cratère ; `DIP` = ce que les épaules encaissent au moment du coup. */
+/* ⚠️⚠️⚠️ DEUX MAINS À DEUX ABSCISSES FIXES, QUI ALTERNENT EN HAUTEUR — ET LE
+   DEUXIÈME JET A DÛ CORRIGER LE PREMIER SUR CE POINT PRÉCIS. Faire varier
+   l'écartement EN MÊME TEMPS que la hauteur donnait, une image sur deux, deux
+   manches superposées : les deux mains sont le MÊME découpage de la feuille, donc
+   superposées elles n'en font qu'une, et le cycle redevenait un tremblement. Le
+   banc l'a dit en une ligne (« gauche 23→23 · droite 13→13 »).
+   ⚠️ LA MAIN LOINTAINE EST À TROIS PIXELS DU CORPS, LA PROCHE CONTRE LUI, et ça
+   ne bouge jamais. Ce qui bouge est la HAUTEUR, en opposition de phase. */
+const DIG_FAR_X = 3, DIG_NEAR_X = 0;
+const DIG_FAR_Y = [4, 2, 0, 2], DIG_NEAR_Y = [0, 2, 4, 2];
+const DIG_DIP = [1, 0, 1, 0];
+/* ⚠️ LES INSTANTS DE FRAPPE, DÉRIVÉS DE LA MÊME TABLE. Une main touche le sol
+   quand son amplitude est maximale : `f = 0` (gauche) et `f = 2` (droite). Les
+   mottes et la poussière lisent CETTE liste — deux écritures du rythme, et les
+   éclats seraient partis entre deux coups de main. */
+export const STAR_DIG_HIT_FRAMES = [0, 2];
+export function drawStarDig(ctx, sheet, row, px, py, phase, fx) {
+  const sy = row * 24;
+  const f = ((phase | 0) % STAR_DIG_FRAMES + STAR_DIG_FRAMES) % STAR_DIG_FRAMES;
+  const kx = Math.max(-1, Math.min(1, +fx || 0));
+  const dip = DIG_DIP[f];
+  /* Le corps est TASSÉ de huit pixels (16 de haut au lieu de 24) et penché vers
+     le trou. ⚠️ La tête penche PLUS que le buste : un dos qui se plie est une
+     courbe, pas un bloc incliné — règle de cisaillement du 459. */
+  const hx = Math.round(2 * kx), tx = Math.round(1.5 * kx);
+  const top = py - 1 + dip;                        // tête : py−1 … py+9
+  /* ── 1. LES JAMBES D'ABORD, ET C'EST UN CHANGEMENT D'ORDRE VOULU. Accroupi, les
+     cuisses passent DERRIÈRE le buste ; peintes après, elles lui montaient dessus
+     et le personnage avait l'air coupé en deux. Deux moitiés de la tranche basse,
+     écartées d'un pixel et écrasées (8 → 5) : un genou plié se voit en raccourci,
+     et les pieds restent à `py + 16` comme debout. */
+  ctx.drawImage(sheet, 0, sy + POSE_LEG_Y, 8, POSE_LEG_H, px - 1, py + 11, 8, 5);
+  ctx.drawImage(sheet, 8, sy + POSE_LEG_Y, 8, POSE_LEG_H, px + 9, py + 11, 8, 5);
+  // 2. Le buste, écrasé d'un pixel (le dos est rond), penché vers le trou.
+  ctx.drawImage(sheet, 0, sy + POSE_TORSO_Y, 16, POSE_TORSO_H, px + tx, top + 8, 16, POSE_TORSO_H - 1);
+  // 3. La tête, basse et avancée : elle regarde ce que les mains font.
+  ctx.drawImage(sheet, 0, sy, 16, POSE_HEAD_H, px + hx, top, 16, POSE_HEAD_H);
+  /* ── 4. LES DEUX MAINS, découpées dans la manche (x 3..6 et x 10..13), la seule
+     bande de la feuille où la couleur du vêtement et la peau sont déjà l'une sous
+     l'autre. ⚠️ ELLES RESTENT COLLÉES AU CORPS : la silhouette occupe x 3..13
+     dans sa case de seize, et une main « deux pixels à gauche de l'ancre » se
+     retrouve à CINQ du corps — elle flotte, et ça se lit comme un défaut de dessin
+     alors que c'est une erreur d'arithmétique (leçon du 459, payée trois fois).
+     ⚠️ LA MAIN QUI FRAPPE DESCEND JUSQU'À `py + 16` (le sol) ; l'autre remonte au
+     niveau du buste. C'est cette différence de hauteur — pas l'écartement — qui
+     fait lire « il gratte ». */
+  /* ⚠️⚠️⚠️ LES DEUX MAINS SONT DU MÊME CÔTÉ, ET C'EST LA CORRECTION QUI A TOUT
+     CHANGÉ. Le premier jet laissait chaque bras de son côté du corps et n'en
+     sortait qu'un : sur la planche, ça donnait quelqu'un les bras ballants dont
+     une manche descend un peu. **On ne creuse pas avec un bras à gauche et un
+     bras à droite** — les deux mains sont DEVANT, du côté du trou, et elles
+     alternent en HAUTEUR. C'est cette alternance, et pas l'écartement, qui fait
+     lire « il gratte ».
+     ⚠️ ELLES SONT DÉCALÉES D'UN PIXEL EN X : superposées, on n'en voit qu'une, et
+     le geste redevient un tremblement. */
+  /* ⚠️⚠️ L'ÉPAULE EST SOUS LE MENTON, PAS À HAUTEUR DE TÊTE — QUATRIÈME
+     CORRECTION VENUE DE LA PLANCHE. À `top + 7`, le bras partait DERRIÈRE le
+     crâne : accroupi et penché, la tête avance de trois pixels et recouvre très
+     exactement la colonne où le bras descend. On voyait donc une manche bleue
+     posée sur la joue, et le geste devenait illisible. `top + 9` est le premier
+     pixel sous la tête. */
+  const A_BASE = top + 9;                          // le haut de l'épaule
+  const handX = (out) => kx >= 0
+    ? px + tx + POSE_BODY_R + Math.round(out)
+    : px + tx + POSE_BODY_L - POSE_ARM_W - Math.round(out);
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ LE BRAS EST TENDU, ET IL A UN COUDE. C'est le troisième jet, et les deux
+     ║ premiers ont été jetés SUR LA PLANCHE DU BANC, pas en relecture.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ UN SEUL DÉCOUPAGE DE 3×5 POSÉ PLUS BAS NE FAIT PAS UN BRAS TENDU : il
+     fait un rectangle bleu qui flotte à côté du torse, et l'œil y lit « manche
+     détachée », pas « il tend le bras vers le sol ». Il manquait la CONTINUITÉ —
+     un bras se voit parce qu'il RELIE une épaule à une main.
+     ⚠️ LA PARADE NE PEINT AUCUN PIXEL NEUF (règle absolue de cette famille : la
+     couleur d'une tenue est cuite dans la feuille). On étire verticalement la
+     bande de manche, ce que `drawStarSlide` fait déjà dans l'autre sens sur les
+     jambes. Deux segments : l'avant-bras contre le corps, la main SORTIE — c'est
+     le coude, et il coûte un `drawImage` de plus.
+     ⚠️ LA MAIN BASSE SE PEINT EN DERNIER : celle qui frappe passe DEVANT l'autre,
+     et l'ordre de peinture est la seule chose qui le dise à l'intérieur d'un
+     sprite (le tri par ancrage au sol ne s'y applique pas). */
+  const armAt = (sx, out, drop) => {
+    const len = drop + POSE_ARM_H;                 // de l'épaule au bout de la main
+    const up = Math.max(2, len - 3);
+    ctx.drawImage(sheet, sx, sy + POSE_ARM_Y, POSE_ARM_W, 2, handX(0), A_BASE, POSE_ARM_W, up);
+    ctx.drawImage(sheet, sx, sy + POSE_ARM_Y + 2, POSE_ARM_W, 3, handX(out), A_BASE + up, POSE_ARM_W, 3);
+  };
+  if (DIG_FAR_Y[f] <= DIG_NEAR_Y[f]) {
+    armAt(POSE_ARM_LX, DIG_FAR_X, DIG_FAR_Y[f]);
+    armAt(POSE_ARM_RX, DIG_NEAR_X, DIG_NEAR_Y[f]);
+  } else {
+    armAt(POSE_ARM_RX, DIG_NEAR_X, DIG_NEAR_Y[f]);
+    armAt(POSE_ARM_LX, DIG_FAR_X, DIG_FAR_Y[f]);
+  }
+  /* ── 5. L'OMBRE SOUS LE BASSIN. Une VALEUR, pas une forme — sans elle, le buste
+     et les jambes repliées se lisent comme un seul tas. Même rôle que dans la
+     glissade et dans la pose assise. */
+  ctx.fillStyle = "rgba(0,0,0,0.34)";
+  ctx.fillRect(px + 2, py + 11, 12, 1);
+}
+
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 469 — LA TERRE QUI SORT DU TROU. C'EST ELLE QUI FAIT LE GESTE.
+   ╚════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ SANS ELLE, LA POSE NE RACONTE RIEN : un personnage accroupi qui agite les
+   bras devant un cratère intact se lit comme une animation d'attente. Ce qui dit
+   « il creuse » est **la matière qui se déplace** — des mottes qui partent au
+   coup de main, un tas qui grandit à côté du trou, et une poussière qui retombe.
+   C'est la règle du 439 (« un panneau qui s'ouvre à volonté ne doit rien
+   donner ») transposée au dessin : *ce qui coûte trois secondes doit LAISSER une
+   trace pendant les trois secondes.*
+   ⚠️⚠️ ELLE EST PUREMENT FONCTION DU TEMPS ET DE LA GRAINE, sans aucun état :
+   `render-etoile` peut donc l'échantillonner à n'importe quel instant et comparer
+   deux images. Un effet à particules qui garde sa liste dans la closure de la
+   boucle de rendu est exactement le dessin que personne ne peut regarder (§4 de
+   `CLAUDE.md`, deuxième visage du piège n°1).
+   ⚠️ `sq = 0.5` — LE MÊME ÉCRASEMENT QUE `drawStarFragmentImpact` : la vallée est
+   vue de trois quarts, une motte qui s'éloigne parcourt deux fois moins de pixels
+   en Y qu'en X. Deux écrasements différents dans la même scène, et les deux
+   dessins ne sont plus posés sur le même sol.
+   ⚠️ `T` EST LA TAILLE DE CASE : tout est dérivé d'elle, rien n'est en pixels
+   d'écran écrits en dur — sinon le dessin serait juste à un seul niveau de zoom.
+   ════════════════════════════════════════════════════════════════════════════ */
+/* ⚠️⚠️ LA TERRE RETOURNÉE EST PLUS CLAIRE QUE LA TERRE EN PLACE, ET C'EST TOUT CE
+   QUI REND CE DESSIN LISIBLE. Le premier jet peignait des bruns sombres (72,49,30
+   et plus foncé) sur un cratère qui est lui-même brun sombre : la planche du banc
+   a rendu une bouillie où l'on ne distinguait ni tas, ni mottes, ni trou. Une
+   pelletée fraîche accroche la lumière — plus claire, plus rouge, plus contrastée.
+   *Un dessin juste sur fond neutre peut être invisible sur son vrai fond* (441). */
+const DIG_EARTH = ["rgba(138,98,58,", "rgba(112,78,46,", "rgba(168,124,76,", "rgba(198,158,104,"];
+export function drawStarDigDirt(ctx, cx, cy, elapsedMs, digMs, T, fx) {
+  const span = Math.max(1, +digMs || 3000);
+  const age = Math.max(0, Math.min(span, +elapsedMs || 0));
+  const k = age / span;                                  // 0 → 1, l'avancement du geste
+  const t = Math.max(4, +T || 16), sq = 0.5;
+  const kx = (+fx || 0) >= 0 ? 1 : -1;
+  /* ── 1. LE TAS. Il grandit du côté OPPOSÉ au joueur, parce que c'est là qu'on
+     jette ce qu'on sort. ⚠️ IL SE DESSINE EN PREMIER : les mottes en vol doivent
+     passer DEVANT lui, sinon elles ont l'air d'y être déjà. */
+  const heapX = cx + kx * t * 0.62, heapY = cy + t * 0.10;
+  const heapW = t * (0.20 + 0.42 * k), heapH = t * (0.06 + 0.20 * k);
+  /* Quatre bandes de plus en plus étroites, du sombre en bas au clair en haut :
+     c'est le seul relief dont un tas a besoin, et il vient de la VALEUR, pas de la
+     forme. La bande du sommet est la plus claire — c'est là que la lumière frappe. */
+  /* ⚠️⚠️ UN TAS EST UNE MASSE ARRONDIE, PAS QUATRE RECTANGLES EMPILÉS. Le premier
+     jet peignait des `fillRect` : sur la planche, ça donnait une caisse en bois.
+     On empile des BANDES dont la largeur suit un profil de mamelon — c'est
+     exactement ce qu'on ferait à la main en pixel art, et ça ne coûte pas un
+     appel de plus. */
+  {
+    const NB = 6, prof = [1.00, 0.94, 0.84, 0.70, 0.52, 0.30];
+    const bh = Math.max(1, Math.round(heapH * 1.5 / NB));
+    for (let i = 0; i < NB; i++) {
+      const w = heapW * prof[i];
+      ctx.fillStyle = DIG_EARTH[i < 2 ? 1 : i < 4 ? 0 : i === 4 ? 2 : 3] + (0.96 - i * 0.02).toFixed(2) + ")";
+      ctx.fillRect(Math.round(heapX - w / 2), Math.round(heapY - (i + 1) * bh),
+                   Math.max(1, Math.round(w)), bh);
+    }
+  }
+  /* ── 2. LE TROU QUI SE CREUSE, sous les mains. Une ellipse sombre qui s'ouvre
+     avec `k` : c'est la seule chose qui reste vraie quand on relâche, et c'est
+     elle qui empêche « il a gratté pendant trois secondes et rien n'a bougé ». */
+  const holeR = t * (0.15 + 0.22 * k);
+  /* ⚠️ UNE LÈVRE CLAIRE AUTOUR DU TROU, PUIS LE NOIR. Sans elle, le trou est une
+     tache sombre sur une terre sombre — c'est-à-dire rien. Avec elle, l'œil lit
+     un bord, donc un CREUX. Même recette que la lèvre du cratère de la ville. */
+  /* ⚠️ MÊME REMARQUE QUE POUR LE TAS : un trou carré est une trappe. On réutilise
+     l'ellipse par bandes du médaillon (`ovale`), écrasée de `sq` parce que la
+     vallée est vue de trois quarts. */
+  ovale(ctx, cx, cy, holeR + 1, sq, "rgba(184,140,88,0.88)");
+  for (let i = 0; i < 3; i++) {
+    const r2 = holeR * (1 - i * 0.26);
+    ovale(ctx, cx, cy + i, r2, sq, ["rgba(84,57,34,0.94)", "rgba(48,32,19,0.96)", "rgba(24,16,10,0.98)"][i]);
+  }
+  /* ── 3. LES MOTTES. Une gerbe par COUP DE MAIN, jamais un flux continu : le
+     rythme du dessin est celui de la pose (`STAR_DIG_HIT_FRAMES`), donc l'œil lie
+     les deux sans qu'on ait à les synchroniser à la main. Douze coups sur trois
+     secondes = un toutes les 250 ms, la cadence de la pose à 8 images/s.
+     ⚠️ CHAQUE MOTTE EST DÉRIVÉE DE SON NUMÉRO (`hash`), jamais de `Math.random` :
+     un tirage rendrait le dessin non regardable par un banc, et deux clients
+     verraient deux gerbes différentes pour le même geste. */
+  const BEAT = 250, beats = Math.floor(age / BEAT);
+  for (let b = Math.max(0, beats - 3); b <= beats; b++) {
+    const ba = age - b * BEAT;
+    if (ba < 0 || ba > 620) continue;
+    const life = ba / 620;
+    for (let i = 0; i < 5; i++) {
+      const h1 = Math.sin(b * 12.9898 + i * 78.233) * 43758.5453;
+      const r1 = h1 - Math.floor(h1);
+      const h2 = Math.sin(b * 39.346 + i * 11.135) * 24634.6345;
+      const r2 = h2 - Math.floor(h2);
+      /* L'angle reste dans un CÔNE dirigé vers le tas — de la terre projetée en
+         cercle autour de soi, c'est une explosion, pas un coup de main. */
+      const a = (kx > 0 ? 0 : Math.PI) + (r1 - 0.5) * 1.5;
+      const speed = t * (0.35 + r2 * 0.55);
+      const d = speed * life;
+      const hgt = t * (0.22 + r1 * 0.34) * Math.sin(life * Math.PI);
+      const al = Math.max(0, 1 - Math.max(0, life - 0.55) / 0.45) * 0.95;
+      if (al < 0.05) continue;
+      const n = r2 > 0.72 ? 2 : 1;
+      /* ⚠️ UNE MOTTE SUR TROIS EST CLAIRE : c'est ce qui la détache du sol quand
+         elle passe devant. Toutes de la même valeur, elles disparaissent dans la
+         terre au moment précis où elles devraient se voir. */
+      ctx.fillStyle = DIG_EARTH[i === 2 ? 3 : (i % 3)] + al.toFixed(2) + ")";
+      ctx.fillRect(Math.round(cx + Math.cos(a) * d), Math.round(cy + Math.sin(a) * d * sq - hgt), n, n);
+    }
+    /* La bouffée de poussière au pied du coup : basse, large, et elle s'efface
+       deux fois plus vite que les mottes. Sans elle, les mottes ont l'air de
+       sortir de nulle part. */
+    const pa = Math.max(0, 1 - ba / 420) * 0.34;
+    if (pa > 0.03) {
+      const pr = t * (0.16 + 0.30 * (ba / 420));
+      ctx.fillStyle = `rgba(196,176,146,${pa.toFixed(2)})`;
+      ctx.fillRect(Math.round(cx - pr), Math.round(cy - pr * sq * 0.5), Math.max(1, Math.round(pr * 2)), Math.max(1, Math.round(pr * sq)));
+    }
+  }
+}
+
+/* ── LA JAUGE DE FOUILLE. ⚠️⚠️ ELLE EST DANS LE MONDE, PAS DANS UNE INTERFACE,
+   et c'est la leçon du 456 : *un geste continu qui ne rend rien ne se distingue
+   pas d'un jeu bloqué.* Trois secondes sans retour, c'est trois secondes pendant
+   lesquelles on croit que la touche n'a pas pris.
+   ⚠️ UN ARC, PAS UNE BARRE : une barre au-dessus de la tête est un élément
+   d'interface posé sur un décor, et ce dépôt en a déjà une (la jauge
+   d'apprivoisement) — deux barres qui ne veulent pas dire la même chose se
+   confondent. L'arc se dessine par SEGMENTS (aucun `arc()`, aucun `rotate` : le
+   faux canevas du banc ne les rend pas). */
+export function drawStarDigGauge(ctx, cx, cy, k01, T) {
+  const t = Math.max(4, +T || 16), k = Math.max(0, Math.min(1, +k01 || 0));
+  const R = t * 0.62, N = 22;
+  for (let i = 0; i < N; i++) {
+    /* Il part du BAS et remonte des deux côtés : un anneau qui se referme sur le
+       haut se lit comme « ça se remplit », un anneau qui tourne comme « ça
+       charge ». On veut le premier. */
+    const a = -Math.PI / 2 + (i + 0.5) / N * Math.PI * 2;
+    const on = (i + 0.5) / N <= k;
+    const x = Math.round(cx + Math.cos(a) * R), y = Math.round(cy + Math.sin(a) * R * 0.62);
+    ctx.fillStyle = on ? "rgba(255,232,170,0.95)" : "rgba(28,22,16,0.42)";
+    ctx.fillRect(x, y, on ? 2 : 1, on ? 2 : 1);
+  }
+}
+
+/* ╔════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 469 — LE MÉDAILLON DE FOUILLE : CE QUE L'OVERLAY MONTRE.
+   ╚════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ IL EXISTE PARCE QU'UN OVERLAY DE RÉSULTAT QUI DIRAIT SEULEMENT « Rien. » EN
+   TEXTE SERAIT UNE BOÎTE DE DIALOGUE SYSTÈME. Le chapitre entier consiste à mettre
+   les mains dans cinq trous ; le moment où l'on découvre ce qu'il y a dedans est
+   le seul instant de récompense de l'étape, et il doit se REGARDER.
+   ⚠️⚠️ IL VIT ICI ET PAS DANS `FermeGame` — c'est la règle qui gouverne tout ce
+   fichier : un dessin qu'aucun banc ne peut appeler ne se dégrade pas, il reste au
+   niveau du jour où il a été écrit pendant que tout ce qui est mesuré monte (§4 de
+   `CLAUDE.md`, deuxième visage du piège n°1). `render-etoile` appelle ces deux
+   fonctions et mesure ce que le joueur verra.
+   ⚠️ AUCUN `translate`, AUCUN `rotate`, AUCUN `roundRect`, AUCUN `fillText` : le
+   faux canevas des bancs les ignore ou LÈVE (§10 de `CLAUDE.md`). Les arcs passent
+   par des segments, comme la jauge de fouille.
+   ⚠️⚠️ ET IL NE REDESSINE PAS L'ÉTOILE. La compagne a UN seul dessin dans ce
+   dépôt (`starWispSprite`) ; en repeindre une seconde version « juste pour le
+   médaillon » serait la divergence en attente du §8 — deux étoiles qui ne se
+   ressemblent plus au premier réglage de l'une. Le médaillon peint la CUVETTE et
+   la LUMIÈRE ; l'appelant colle le vrai sprite dedans.
+   ════════════════════════════════════════════════════════════════════════════ */
+/* Les trois lumières, par contenu. ⚠️ TROIS AMBIANCES, PAS TROIS COULEURS
+   D'ACCENT : ce qui distingue « une étoile » de « rien », à l'œil et en un
+   quinzième de seconde, c'est la quantité de lumière dans le trou. Le vide est
+   sombre et gris, la matière est chaude et basse, l'étoile déborde. */
+const FIND_LIGHT = {
+  star:     { halo: [255, 236, 168], glow: 0.95, rim: "rgba(255,228,150,0.80)" },
+  material: { halo: [232, 150,  78], glow: 0.42, rim: "rgba(226,158,86,0.62)" },
+  empty:    { halo: [150, 146, 138], glow: 0.14, rim: "rgba(150,146,138,0.34)" },
+};
+export const STAR_FIND_KINDS = Object.keys(FIND_LIGHT);
+export function drawStarFindMedal(ctx, cx, cy, R, kind, tMs) {
+  const L = FIND_LIGHT[kind] || FIND_LIGHT.empty;
+  const t = +tMs || 0, r = Math.max(8, +R || 40);
+  /* ── 1. LE HALO, EN COUCHES CONCENTRIQUES. Il RESPIRE lentement (5,2 s) plutôt
+     que de clignoter : un pictogramme qui clignote se lit comme une alerte
+     système, remarque déjà payée par la comète de l'invite du 455. */
+  /* ⚠️⚠️ LE HALO S'ARRÊTE À 1,3 × R, ET C'EST LE BANC QUI L'A DIT. Le premier jet
+     montait à 1,82 × R : il débordait de son cadre, donc il se faisait DÉCOUPER EN
+     SILENCE par le canevas (§4 de `CLAUDE.md`, le piège payé trois fois dans le
+     seul zip 433). Un halo tronqué au carré est pire que pas de halo. */
+  const breathe = 1 + Math.sin(t / 830) * 0.045;
+  for (let i = 6; i >= 1; i--) {
+    const rr = r * (0.58 + i * 0.12) * breathe;
+    const a = L.glow * (0.15 - i * 0.016);
+    if (a <= 0.004) continue;
+    ctx.fillStyle = `rgba(${L.halo[0]},${L.halo[1]},${L.halo[2]},${a.toFixed(3)})`;
+    disc(ctx, cx, cy, rr);
+  }
+  /* ── 2. LA CUVETTE. ⚠️⚠️ ELLE EST FAITE DE TERRE, PAS D'UN TROU NOIR. Le
+     premier jet empilait quatre disques de plus en plus sombres jusqu'au presque-
+     noir : sur la planche du banc, ça donnait un puits de mine au milieu d'un
+     médaillon, et l'objet qu'on vient d'y trouver s'y perdait. On garde le
+     dégradé — c'est lui qui fait le CREUX — mais on part d'une terre claire et on
+     s'arrête à un brun profond, jamais au noir.
+     ⚠️ ET LA LUMIÈRE VIENT DU HAUT-GAUCHE, comme partout dans la vallée : chaque
+     anneau est décalé d'un pixel vers le BAS par rapport au précédent. C'est ce
+     décalage, et rien d'autre, qui distingue un creux d'un disque plat (§8 : ce
+     qui manque à une image plate est un ÉCART). */
+  const RINGS = [
+    [1.00, "rgba(150,110,68,0.98)"],
+    [0.84, "rgba(112,79,48,1)"],
+    [0.66, "rgba(76,52,32,1)"],
+    [0.46, "rgba(48,32,20,1)"],
+  ];
+  for (let i = 0; i < RINGS.length; i++) {
+    ctx.fillStyle = RINGS[i][1];
+    disc(ctx, cx, cy + r * 0.05 * i, r * RINGS[i][0]);
+  }
+  /* Le grain : quelques cailloux clairs sur la paroi. ⚠️ DÉRIVÉS DE LEUR NUMÉRO
+     et non tirés au sort — un banc doit pouvoir comparer deux images du même
+     instant, et deux clients doivent voir la même cuvette. */
+  for (let i = 0; i < 14; i++) {
+    const a2 = i * 2.399 + 0.4, rr = r * (0.34 + ((i * 37) % 11) / 11 * 0.52);
+    const w = 1 + (i % 3 === 0 ? 1 : 0);
+    ctx.fillStyle = i % 4 === 0 ? "rgba(178,138,92,0.55)" : "rgba(28,19,12,0.45)";
+    ctx.fillRect(Math.round(cx + Math.cos(a2) * rr), Math.round(cy + Math.sin(a2) * rr * 0.72), w, w);
+  }
+  /* La lèvre : un arc de points clairs sur le quart haut-gauche seulement. Un
+     anneau complet rendrait le disque plat — c'est le contraire du but. */
+  for (let i = 0; i < 26; i++) {
+    const a2 = Math.PI * (0.86 + i / 26 * 0.78);
+    const w = Math.max(1, Math.round(r * 0.055));
+    ctx.fillStyle = `rgba(202,162,110,${(0.90 - i / 26 * 0.5).toFixed(2)})`;
+    ctx.fillRect(Math.round(cx + Math.cos(a2) * r * 1.01 - w / 2),
+                 Math.round(cy + Math.sin(a2) * r * 1.01 - w / 2), w, w);
+  }
+  /* ── 3. LE REBORD DU MÉDAILLON, TEINTÉ PAR LE CONTENU. C'est la seule
+     information de couleur qui survive à un coup d'œil d'un quinzième de seconde,
+     donc c'est elle qui porte le verdict avant le texte.
+     ⚠️⚠️ IL EST ROMPU, PAS RÉGULIER — ET C'EST LA CORRECTION QUE LA PLANCHE A
+     EXIGÉE. Quarante-quatre points équidistants qui pulsent en phase donnent un
+     SPINNER DE CHARGEMENT : l'œil y lit « le jeu réfléchit », pas « voilà ce que
+     tu as trouvé ». Un anneau rompu (des trous, des tailles inégales) se lit comme
+     une lumière, ce qui est ce qu'on veut. Même recette que l'onde de choc du
+     fragment : *30 paquets, pas 58 points équidistants.* */
+  const N = 34;
+  for (let i = 0; i < N; i++) {
+    const a2 = i / N * Math.PI * 2;
+    const broken = Math.sin(i * 2.17 + 0.8) + Math.sin(i * 0.71) * 0.55;
+    if (broken < -0.42) continue;
+    const puls = 0.55 + 0.45 * Math.sin(t / 620 + i * 0.31);
+    const w = Math.max(1, Math.round(r * (broken > 0.9 ? 0.09 : 0.05)));
+    const rr = r * (1.20 + 0.05 * Math.sin(i * 1.91));
+    ctx.fillStyle = L.rim.replace(/[\d.]+\)$/, (0.24 + puls * 0.58).toFixed(2) + ")");
+    ctx.fillRect(Math.round(cx + Math.cos(a2) * rr - w / 2),
+                 Math.round(cy + Math.sin(a2) * rr - w / 2), w, w);
+  }
+  /* ── 4. LA POUSSIÈRE QUI RETOMBE ENCORE. Elle monte, elle s'efface, elle
+     recommence — trois secondes de grattage viennent de se terminer, et un trou
+     parfaitement propre trahirait le geste. ⚠️ PURE FONCTION DU TEMPS, comme les
+     mottes : aucune liste, donc regardable par un banc à n'importe quel instant. */
+  for (let i = 0; i < 9; i++) {
+    const ph = ((t / 1900) + i / 9) % 1;
+    const a = i * 2.399;
+    const rr = r * (0.30 + ph * 1.25);
+    const al = Math.max(0, (1 - ph)) * 0.30;
+    if (al < 0.02) continue;
+    ctx.fillStyle = `rgba(178,158,132,${al.toFixed(2)})`;
+    ctx.fillRect(Math.round(cx + Math.cos(a) * rr),
+                 Math.round(cy + Math.sin(a) * rr * 0.55 - ph * r * 0.75), 2, 2);
+  }
+}
+/* Un disque par bandes horizontales. ⚠️ PAS `ctx.arc` : le faux canevas des bancs
+   ne le rasterise pas, et un médaillon qui ne s'y voit pas cesse d'être regardable
+   — c'est-à-dire qu'il vieillit. Douze bandes suffisent à cette échelle et le
+   résultat est plus « pixel » que l'ellipse lissée, ce qui est le bon registre. */
+/* Une ELLIPSE par bandes, écrasée. ⚠️ Même raison que `disc` : pas de `ctx.arc`,
+   parce que le faux canevas des bancs ne le rasterise pas — un dessin qu'ils ne
+   voient pas cesse d'être regardable, donc il vieillit. `sq` est l'écrasement de
+   la vue de trois quarts, le même que celui des mottes et du cratère. */
+function ovale(ctx, cx, cy, r, sq, col) {
+  const N = 9;
+  ctx.fillStyle = col;
+  for (let i = 0; i < N; i++) {
+    const yy = -r + (i + 0.5) * (2 * r / N);
+    const hw = Math.sqrt(Math.max(0, r * r - yy * yy));
+    if (hw < 0.5) continue;
+    ctx.fillRect(Math.round(cx - hw), Math.round(cy + yy * sq - r * sq / N),
+                 Math.max(1, Math.round(hw * 2)), Math.max(1, Math.round(2 * r * sq / N) + 1));
+  }
+}
+function disc(ctx, cx, cy, r) {
+  const N = 13;
+  for (let i = 0; i < N; i++) {
+    const yy = -r + (i + 0.5) * (2 * r / N);
+    const hw = Math.sqrt(Math.max(0, r * r - yy * yy));
+    if (hw < 0.5) continue;
+    ctx.fillRect(Math.round(cx - hw), Math.round(cy + yy - r / N),
+                 Math.max(1, Math.round(hw * 2)), Math.max(1, Math.round(2 * r / N) + 1));
+  }
+}
+
+/* ── LA PLAQUE MÉTÉORIQUE. ⚠️⚠️ ELLE N'AVAIT AUCUN DESSIN HORS DU MINI-JEU DE
+   REFROIDISSEMENT, où elle vit dans `FermeGame` (`smShard`) — donc invisible aux
+   bancs, et introuvable pour tout ce qui voudrait la montrer ailleurs. Le
+   médaillon en avait besoin ; plutôt que d'en recopier une seconde, on en écrit
+   UNE, ici, et c'est celle-là qui sera reprise le jour où la coque se pose.
+   ⚠️ « lisse seulement sur sa cassure » — le texte de la quête décrit une matière
+   MATE, presque noire, avec UNE facette claire. Ce contraste est tout le dessin :
+   sans lui, c'est un caillou. */
+export function drawStarPlate(ctx, cx, cy, R, tMs) {
+  const r = Math.max(6, +R || 20), t = +tMs || 0;
+  const px = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), Math.max(1, Math.round(w)), Math.max(1, Math.round(h))); };
+  // L'ombre portée, écrasée : la plaque est POSÉE au fond du trou.
+  px(cx - r * 0.92, cy + r * 0.62, r * 1.84, r * 0.30, "rgba(0,0,0,0.42)");
+  /* Le corps : un polygone irrégulier peint par bandes. ⚠️ IL N'EST PAS
+     SYMÉTRIQUE — une plaque symétrique se lit comme une pierre précieuse, et
+     celle-ci est un morceau ARRACHÉ. */
+  const prof = [0.30, 0.58, 0.82, 0.96, 1.00, 0.97, 0.88, 0.72, 0.50, 0.26];
+  for (let i = 0; i < prof.length; i++) {
+    const yy = cy - r * 0.72 + i * (r * 1.44 / prof.length);
+    const hw = r * prof[i] * (i < 4 ? 0.92 : 1.0);
+    const sk = r * 0.10 * Math.sin(i * 0.9);           // le gauchissement
+    px(cx - hw + sk, yy, hw * 2, r * 1.44 / prof.length + 1, i < 4 ? "#221d1c" : "#171313");
+  }
+  /* LA CASSURE : la seule facette claire, en haut à droite, avec un liseré
+     spéculaire d'un pixel. C'est elle qui dit « ça vient de se casser ». */
+  px(cx + r * 0.10, cy - r * 0.52, r * 0.62, r * 0.50, "#4a4340");
+  px(cx + r * 0.16, cy - r * 0.46, r * 0.44, r * 0.30, "#6b625c");
+  px(cx + r * 0.20, cy - r * 0.42, r * 0.26, r * 0.12, "#918477");
+  // Deux éclats de mica qui accrochent la lumière, en alternance lente.
+  const sp = (Math.sin(t / 740) + 1) / 2;
+  px(cx - r * 0.44, cy + r * 0.10, 2, 2, `rgba(226,214,196,${(0.35 + sp * 0.5).toFixed(2)})`);
+  px(cx + r * 0.02, cy + r * 0.44, 2, 2, `rgba(226,214,196,${(0.75 - sp * 0.5).toFixed(2)})`);
+}
+
 export function buildSprites() {
   const T = 16;
 

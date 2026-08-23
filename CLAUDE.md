@@ -11,54 +11,71 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**Livré au 468 : L'APPRIVOISEMENT NE PEUT PLUS SE FIGER, ET IL NE BLOQUE PLUS LA QUÊTE.**
-Le bogue d'apprivoisement signalé par Guillaume est reproduit dans le vrai jeu, mesuré, corrigé,
-puis rejoué. L'horloge de l'arrivée de l'étoile (`climb → spin → settle`) mesure du temps VISIBLE
-et n'avait **aucune borne** : elle n'avance que dans la zone de son cratère, or l'origine, elle, ne
-change jamais de carte. Un joueur qui prenait le train pendant les 2,6 s la figeait **pour
-toujours** — mesuré à **1294 ms sur 2600**. La cascade qui suivait n'était visible nulle part :
-`starJoinActive` restait vrai → `starSceneCanPlay` refusait **toute** scène → la chute de Valley
-Town n'était jamais JOUÉE → `starImpactLandedNow` restait faux → **l'étoile reine devenait
-inapprivoisable**, pendant que le bandeau disait « Le cratère a refroidi. Descends. »
+**Livré au 469 : LE DÉCHANT EST FAIT, ON FOUILLE LES CRATÈRES, ET L'APPRIVOISEMENT NE
+BLOQUE PLUS.**
 
-Trois réparations, toutes rejouées à l'écran : un changement de carte **achève** l'arrivée au lieu
-de la suspendre ; `starJoinStale` la périme au bout de `STAR_JOIN_MS + 20 s` de temps **réel** ;
-`starWatch` ne consomme plus sa liste d'un bloc, donc deux étoiles ajoutées dans la même image
-jouent **chacune** sa montée au lieu d'en perdre une. ⚠️ Le premier jet du correctif s'est
-mordu la queue — `starJoinActive` servait de garde d'armement alors qu'elle est vraie **dès
-l'ajout** — et l'interblocage n'a été vu qu'à l'écran : `starJoinBusy` est né de là.
+**1. Le déchant** (décision de Guillaume : simplifier la quête). Sont RETIRÉS du code, pas
+seulement déclarés obsolètes : le duo orgue/beffroi, la plongée du lac, la verrerie, la pie,
+le beffroi et la cloche comme lieux, les croisements d'ombres. Cinq chapitres deviennent
+**trois** (`field`, `crater`, `build`) ; quatre mini-jeux sur cinq disparaissent — **seul le
+refroidissement de la plaque reste**, il n'a jamais eu de rapport avec le chant. Les décors
+restent posés en ville : ils sortent de la QUÊTE, pas de la carte.
 
-Bancs : `verify-quete` **488/488** (482 avant), les **35** relancés un par un, tous verts,
-`npx next build` **✓ Compiled successfully**. **Aucune migration ni modification Supabase n'est
-nécessaire.** Les échafaudages (`.env.local`, `app/starbug/`) sont supprimés.
+**2. La fouille** (demande de Guillaume). ⌨ E → trois secondes de grattage immobile, pose
+accroupie à huit images/s, terre qui sort du trou au rythme des mains, jauge en anneau, puis
+un overlay qui dit ce qu'on a trouvé. ⚠️⚠️ **Ce qu'elle répare est plus grand que
+l'animation : le jeu DISAIT le contenu d'un cratère avant qu'on l'ouvre** — trois fuites
+(l'invite, le dessin de l'étoile au fond, la jauge d'apprivoisement), toutes les trois
+fermées, parce qu'une seule laissée ouverte suffit à raconter la fin avant le début (448).
+Deux cratères sur cinq ne donnent rien, et c'est ce qui fait la chasse.
 
-⚠️ **AUTORITÉ NARRATIVE : SEPT ÉTOILES FORMERONT LA CONSTELLATION FICTIVE DE LA BREBIS,
-VISIBLE ET MAPPÉE DANS LE CIEL.** Tout le « chant »/les notes/la lyre encore présent dans les
-chapitres historiques est obsolète et doit être remplacé ou retiré. La plongée est également à
-couper ou refondre entièrement. `components/ferme/QUETE.md` ouvre par ce bloc d'autorité ; ses
-sections 444–460 sont une archive utile au code restant, pas une direction de conception.
+**3. ⚠️⚠️⚠️ LE BLOCAGE D'APPRIVOISEMENT SIGNALÉ PAR GUILLAUME — REPRODUIT, MESURÉ, CORRIGÉ,
+REJOUÉ À L'ÉCRAN.** `migrateStar` tronquait les clés de `calm` à 40 signes ; avec un
+`profile_id` de 36, `<lieu>:<id>` et `<lieu>:<id>:t0` **tombaient sur la même clé**, l'hôte
+re-migre à chaque requête, `t0` écrasait la dernière marque, et la tenue repartait de zéro
+**pour toujours** pendant que la jauge du client — qui compte en local — se remplissait
+jusqu'au bout. *Une barre qui promet et ment.* Quatre cent quarante-sept contrôles étaient
+verts par-dessus, parce que le banc jouait `"j1"` et ne re-migrait jamais.
 
-⚠️⚠️ **PROCHAINE ACTION : attendre l'arbitrage de Guillaume sur les SEPT DÉCISIONS
-STRUCTURANTES de la refonte**, listées dans `components/ferme/QUETE.md` §14. Elles sont
-bloquantes : la trame cible (cinq impacts → cratère de ville → pièces de Tristan → matériaux
-d'Eduardo → construction) **supprime les chapitres 3, 4 et 5**, donc quatre des cinq morceaux du
-navire et le retournement. Ne rien réécrire de `STAR_SITES` / `STAR_CHAPTERS` / `STAR_SHIP` avant
-qu'elles soient tranchées.
+Bancs : `verify-quete` **449/449**, les **35** relancés un par un, tous verts,
+`npx next build` **✓ Compiled successfully**. Un banc de rendu neuf (`render-etoile` §14,
+22 contrôles) regarde la pose, la terre, la jauge, le médaillon et la plaque.
+**Aucune migration ni modification Supabase n'est nécessaire.** Les échafaudages
+(`.env.local`, `app/digbug/`) sont supprimés.
+
+⚠️ **Le banc a attrapé, avant l'écran, un `ReferenceError` de piège n°1** (`now` utilisé
+dans `drawCharacter`, où il n'existe pas) : `verify-portee` reste le seul outil du dépôt qui
+sache voir ça, et il vient de le prouver une fois de plus.
+
+⚠️⚠️ **AUTORITÉ NARRATIVE : SEPT ÉTOILES FORMERONT LA CONSTELLATION FICTIVE DE LA BREBIS,
+VISIBLE ET MAPPÉE DANS LE CIEL.** La trame n'en produit que TROIS : il manque quatre étoiles,
+ou il faut abandonner les sept — **c'est la seule décision de fiction encore ouverte**
+(§15 de `components/ferme/QUETE.md`). Les PNJ, eux, ne savent RIEN des étoiles et n'y font
+aucune référence (décision du 469).
+
+⚠️⚠️ **PROCHAINE ACTION : LA DISCUSSION AVEC LE MAIRE, À TRAVAILLER AVEC GUILLAUME EN PASSE
+DÉDIÉE** (« discussion avec le maire que je veux travailler avec toi dans une autre passe »).
+C'est la charnière de toute la seconde moitié : le maire doit **valider le projet de bateau**,
+et cette validation est ce qui autorise les habitants à en parler dans les rues. **Ne rien
+réécrire de la mairie avant.** Le détail est au **§15.0 de `components/ferme/QUETE.md`**, et
+la liste complète de ce qui reste au §15.3 — dont les **trois chutes d'astéroïdes et leurs
+familiers shiny** (§15.2), demandés au 469 et pas encore construits.
 
 ---
 
-État à jour du **zip 468**. Le chantier des étoiles est momentanément confié à Claude ; côté Codex,
+État à jour du **zip 469**. Le chantier des étoiles est momentanément confié à Claude ; côté Codex,
 la prochaine action attend une consigne. La direction longue reste de **rendre Valley Town habitable
 au regard ET crédible au jeu**, et **lui donner une histoire**. Tout ce qui concerne la ville, ses habitants, ses
 bâtiments et **ses pièges** est dans **`components/ferme/README.md`**, qui fait autorité ; les
 règles de DESSIN sont dans **`components/ferme/DESSIN.md`** ; les bancs dans **`tools/README.md`**.
 **`candyluge` et `crystal` sont EN PAUSE.**
 
-⚠️⚠️ **LA REFONTE DE LA QUÊTE DE L'ÉTOILE (465) EST LE CHANTIER VIVANT, ET SON DOCUMENT DE
-REPRISE EST `components/ferme/QUETE.md`. LIS SON BLOC D'AUTORITÉ 465 AVANT D'Y TOUCHER.** Le
-chapitre des cinq impacts et la formation des trois étoiles actuelles sont livrés. Les anciens chapitres restent jouables techniquement mais
-leur chant, leur plongée et leur conclusion ne sont plus une cible de conception ; ils attendent
-les missions suivantes de la refonte Brebis.
+⚠️⚠️ **LA REFONTE DE LA QUÊTE DE L'ÉTOILE EST LE CHANTIER VIVANT, ET SON DOCUMENT DE REPRISE
+EST `components/ferme/QUETE.md`. LIS SON BLOC D'AUTORITÉ 469 AVANT D'Y TOUCHER — il remplace
+celui du 465 partout où les deux se contredisent.** Les chapitres du chant, de la plongée, de
+la verrerie et de la pie ne sont plus « techniquement jouables » : ils sont **supprimés**. Ce
+qui reste : cinq impacts qu'on FOUILLE, le grand cratère, l'étoile reine, le chantier naval.
+La liste de ce qui manque est au **§15**, la prochaine action au **§15.0**.
 
 ---
 
@@ -85,6 +102,13 @@ toutes payées :
   de vitesse. Aucun pas n'est refusé, donc `canStandTown` n'est jamais consulté et rien ne lève ;
   six contrôles étaient verts, tous justes, aucun ne calculait la DIFFÉRENCE. *Deux grandeurs qui
   se combattent se mesurent ensemble ou pas du tout.*
+- ⚠️⚠️⚠️ **il invente ses IDENTIFIANTS et son cycle de vie d'état** (469, onzième forme, et
+  c'est la plus chère jamais mesurée : **447 contrôles verts sur une quête bloquée**). Le banc
+  jouait l'apprivoisement avec `"j1"` ; le jeu passe un `profile_id` de 36 signes. Le banc
+  gardait un objet d'état ; l'hôte le re-migre à CHAQUE requête. Il fallait les DEUX écarts
+  pour que la troncature de clé fusionne « la tenue » et « son départ » — donc aucun contrôle
+  ne pouvait tomber. *Un banc qui invente ses données mesure un jeu que personne ne joue :
+  on rejoue avec les vraies valeurs ET le vrai cycle de vie de l'état.*
 - ⚠️⚠️ **il balaie une COURBE image par image et ne regarde jamais l'HORLOGE qui l'alimente**
   (468, neuvième forme, la sœur de la cinquième). Onze contrôles suivaient l'arrivée de l'étoile
   ms par ms — continuité, phases, tour complet, extrémités exactes — et ils étaient tous verts
@@ -140,11 +164,12 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 
 | # | La leçon, en une phrase | Où est le détail |
 |---|---|---|
-| 465 | ⚠️⚠️⚠️ **UNE ANIMATION QUI CONTINUE DERRIÈRE UN PANNEAU N'EXISTE PAS POUR LE JOUEUR.** Son horloge doit mesurer du temps VISIBLE, et toute interface concurrente doit attendre — y compris la carte déjà ouverte une image avant le verdict. | `starJoinRef`, `starBlockingPanelsClear`, `starWatch` |
-| 466 | ⚠️⚠️⚠️ **UNE RÉFÉRENCE À COPIER N'EST PAS UNE INVITATION À L'INTERPRÉTER.** On importe ses pixels et la composition fournie verrouille les positions ; toute approximation procédurale et tout décor concurrent disparaissent. | `plancheEscaliers.js`, `components/ferme/README.md` §27.3, `render-escaliers.mjs` |
 | 467 | ⚠️⚠️⚠️ **UN BLOC VISUEL N'EST PAS UNE COLLECTION D'OBSTACLES VISUELS.** Le bitmap exact se dessine une fois, sa collision vit séparément, et tout ancien sous-dessin ou premier plan qui traverse ses pixels opaques doit disparaître. | `drawTownCourtStairBlock`, `TOWN_COURT_BLOCK_SOLIDS`, `render-escaliers.mjs` |
 | 468 | ⚠️⚠️⚠️ **UNE HORLOGE DE MISE EN SCÈNE SANS BORNE FINIT PAR RETENIR LE JEU ENTIER.** Une arrivée de 2,6 s qui ne compte que du temps VISIBLE se fige dès que sa condition de visibilité cesse d'être atteignable — et ce qui attendait « la fin de l'animation » attend alors pour toujours. Toute pause se borne en temps RÉEL. | `starJoinStale`, `starCompanionsAt`, `verify-quete` §arrivée |
 | 468 | ⚠️⚠️ **UNE FONCTION QUI RÉPOND À DEUX QUESTIONS FINIT PAR RÉPONDRE À LA MAUVAISE.** « L'animation joue-t-elle ? » et « faut-il retarder une carte ? » avaient la même fonction ; s'en servir comme garde d'armement l'a rendue vraie AVANT tout armement, donc éternelle. Deux questions, deux fonctions. | `starJoinBusy` vs `starJoinActive` |
+| 469 | ⚠️⚠️⚠️ **UNE TRONCATURE DE SÉCURITÉ QUI FAIT TOMBER DEUX CLÉS DISTINCTES SUR LA MÊME NE PROTÈGE RIEN : ELLE CORROMPT.** Une clé composite se borne à la SOMME de ses parties, jamais à un nombre rond. `calm` coupait à 40 : avec un UUID de 36, la tenue et son départ devenaient la même clé, et l'étoile ne sortait jamais. | `CALM_KEY_MAX`, `migrateStar`, `verify-quete` §fouille |
+| 469 | ⚠️⚠️⚠️ **UN BANC QUI INVENTE SES IDENTIFIANTS MESURE UN JEU QUE PERSONNE NE JOUE** (onzième forme). Il jouait `"j1"` quand le jeu passe un UUID, et gardait un état que l'hôte, lui, re-migre à CHAQUE requête. Il fallait les deux écarts pour reproduire — donc 447 contrôles verts sur un blocage total. **On rejoue avec les vraies données et le vrai cycle de vie de l'état.** | `verify-quete` §fouille |
+| 469 | ⚠️⚠️ **UNE PORTÉE D'INTERACTION SE RÈGLE SUR CE QUE LE GESTE MONTRE, PAS SUR CE QU'IL EST COMMODE D'ATTEINDRE.** 3,1 cases convenaient à une invite qui affichait du texte ; dès qu'elle a déclenché une ANIMATION, elle faisait creuser le fermier dans l'herbe à deux cases du trou. Le geste et sa trace partent du même point ou ne racontent rien. | `starDigStart`, `starNearby` |
 
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
@@ -354,7 +379,7 @@ de conception qui valent pour n'importe quel morceau du dépôt.
 |---|---|
 | `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **~20 500 l.** |
 | `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** |
-| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE : table, chronologies et résolveurs purs.** `STAR_FARM_IMPACTS` porte les cinq cratères (2 étoiles / 1 matière / 2 vides), `resolveStarCalm` tient le barème 60/10 s et `resolveStarTownFall` sépare le gros météore. `STAR_FOLLOWER_SITES` dérive toutes les compagnes de `content:"star"`, `starFollowerAdded` identifie celle qui doit jouer son arrivée, `starFarmFlightPath` tient le cap stable des fragments et `queen` désigne l'unique reine. Le reste des chapitres 444–460 demeure techniquement présent mais sa fiction de chant et sa plongée sont obsolètes. Aucun React, aucun dessin — `verify-quete.mjs` l'importe. |
+| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE : table, chronologies et résolveurs purs.** ⚠️ **469 — la FOUILLE (`STAR_DIG_MS`, `starDug`, `resolveStarDig`, `starDigResult`) et TROIS chapitres au lieu de cinq.** `STAR_FARM_IMPACTS` porte les cinq cratères (2 étoiles / 1 matière / 2 vides), `resolveStarCalm` tient le barème 60/10 s et `resolveStarTownFall` sépare le gros météore. `STAR_FOLLOWER_SITES` dérive toutes les compagnes de `content:"star"`, `starFollowerAdded` identifie celle qui doit jouer son arrivée, `starFarmFlightPath` tient le cap stable des fragments et `queen` désigne l'unique reine. Le reste des chapitres 444–460 demeure techniquement présent mais sa fiction de chant et sa plongée sont obsolètes. Aucun React, aucun dessin — `verify-quete.mjs` l'importe. |
 | `components/ferme/QUETE.md` | **le chantier 444 : déroulé, grammaire magique, avancement, ET CE QUI RESTE À FAIRE (§12) — autorité tant que la quête n'est pas finie** |
 | `components/ferme/README.md` | **Valley Town, le tribunal, l'HÔTEL DE VILLE, l'ÉGLISE, le BEFFROI, les habitants, la VENTE, les OISEAUX, les ÉLECTIONS et les PIÈGES de ces zones — autorité (428-444)** |
 | `components/ferme/DESSIN.md` | **les règles de DESSIN, vraies partout — autorité (441, sorties du §4)** |
@@ -510,9 +535,10 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 ⚠️⚠️ **LES BANCS SONT DANS `tools/README.md` DEPUIS LE 432, ET CE CHAPITRE A ÉTÉ ÉLAGUÉ AU 444
 SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 442** (reporté deux fois). **16 bancs de contrôle et 19 bancs
 de rendu**, comptés en listant `tools/` (⚠️ le chiffre disait 15 et 18 : il était périmé, recompté
-au 453 — et **les 35 ont été relancés un par un au 468**, tous verts, `verify-quete` à
-**488/488** ⚠️ *contre 439/439 écrit ici depuis le 459 : ce chiffre-là avait vieilli sur place
-pendant neuf zips, dans le chapitre même qui interdit d'en écrire un sans l'avoir lancé*). ⚠️ **Six d'entre eux existent parce qu'un défaut vu par
+au 453 — et **les 35 ont été relancés un par un au 469**, tous verts, `verify-quete` à
+**449/449** ⚠️ *il était à 488 au 468 : le déchant a retiré les contrôles des quatre chapitres
+supprimés et en a ajouté une trentaine sur la fouille. **Un banc qui rétrécit parce que le code
+rétrécit est un banc en bonne santé** — ce qu'il ne faut pas, c'est qu'il rétrécisse tout seul*). ⚠️ **Six d'entre eux existent parce qu'un défaut vu par
 Guillaume — ou vu à l'écran — n'était mesuré nulle part** : `verify-compo` (440), `verify-pont`
 (441), `verify-portee` (443), et au 444 `render-etoile`, `verify-quete`, `render-beffroi`.
 ⚠️ **Le seul qui touche à de l'ARGENT est `verify-vallee`** (205/205, relancé au 458) : il joue des ventes,
@@ -897,6 +923,15 @@ erreur** en choisissant mal.
    trouvé ce qu'un élagage doit trouver : un CHIFFRE PÉRIMÉ dans le §10** — `verify-quete` y était
    annoncé à 439/439, il est à **488/488** ; il avait donc menti pendant neuf zips dans le chapitre
    même qui interdit d'écrire un chiffre de banc sans l'avoir lancé.)**.
+
+   **469 (ONZIÈME passe : les DEUX lignes du 465 et celle du 466 partent avant les TROIS
+   leçons du 469 — trois retirées, trois ajoutées, le tableau reste à sa taille et couvre
+   exactement 467 à 469. Leur détail vit dans `starJoinRef`, `plancheEscaliers.js` et
+   `render-escaliers.mjs`, que leur colonne de droite désignait déjà. ⚠️ **Et cette passe a
+   trouvé ce qu'un élagage doit trouver : un CHAPITRE QUI MENTAIT PAR SA FORME** — le §14 de
+   `QUETE.md` s'intitulait « les sept décisions qui BLOQUENT la refonte », quatre étaient
+   tranchées, et il se lisait encore comme une consigne d'attendre. Il est marqué ARCHIVE et
+   la liste vivante est au §15.)**.
 
       **467 (NEUVIÈME passe : la ligne 463 part avant l'ajout du 467. Le tableau couvre les quatre
    derniers zips 464 à 467 ; le détail retiré reste dans `QUETE.md` et `starCompanionsAt`.)**.

@@ -7258,6 +7258,83 @@ div.ferme-usage{ margin-bottom:10px; }
 }
 @keyframes fermeStarTwinkle{ 0%,100%{ opacity:.55; } 50%{ opacity:1; } }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   ZIP 469 — L'OVERLAY DE FOUILLE.
+   ──────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ IL N'EST PAS PLEIN ÉCRAN, ET C'EST LA DIFFÉRENCE AVEC LA CARTE DE
+   CHAPITRE. Une carte marque un DÉBUT — elle a le droit de prendre l'écran. Un
+   résultat de fouille arrive cinq fois dans le même quart d'heure : prendre
+   l'écran cinq fois transformerait le chapitre en diaporama. Il se pose en bas,
+   au-dessus de la barre d'invite, et le monde reste visible derrière.
+   ⚠️ `pointer-events:none` — il couvre une bande de l'écran pendant que le jeu
+   tourne derrière ; un clic destiné au monde ne doit pas s'y perdre.
+   ⚠️ IL ENTRE PAR LE BAS ET SORT EN FONDU, sur la même durée que `STAR_FIND_MS`
+   (5,2 s). ⚠️ LES DEUX DURÉES SE DOUBLENT — c'est le §8 de `CLAUDE.md`, et c'est
+   assumé faute d'un pont CSS↔JS : si l'une bouge, l'autre doit bouger, et le
+   symptôme serait un panneau qui reste blanc une seconde ou qui saute.
+   ══════════════════════════════════════════════════════════════════════════ */
+.ferme-star-find{
+  /* ⚠️ 128 px ET PAS 78 : vu à l'écran, le panneau recouvrait la barre d'outils.
+     Un overlay qui cache les outils pendant cinq secondes fait douter d'un jeu
+     bloqué — la leçon du 456, transposée à la mise en page. */
+  position:fixed; left:50%; bottom:128px; transform:translateX(-50%); z-index:58;
+  pointer-events:none; animation:fermeStarFind 5.2s cubic-bezier(.2,.9,.3,1) forwards;
+  max-width:min(400px, 92vw);
+}
+.ferme-star-find-in{
+  padding:14px 20px 16px; text-align:center;
+  border-radius:16px;
+  background:linear-gradient(rgba(20,17,30,.94), rgba(8,7,14,.97));
+  box-shadow:0 12px 40px rgba(0,0,0,.62), 0 0 0 1px rgba(255,228,164,.16) inset;
+}
+/* Le canevas du médaillon. ⚠️ `image-rendering:pixelated` EST OBLIGATOIRE : la
+   compagne fait 18 px de haut et monte à ×5 — lissée par le navigateur, elle
+   devient une tache de couleur. Le canevas est déjà en `imageSmoothingEnabled
+   = false` côté JS ; c'est la mise à l'échelle CSS de l'élément qui reste à
+   brider, et les deux sont nécessaires. */
+.ferme-star-find-cv{
+  display:block; margin:0 auto 2px; width:220px; height:168px;
+  image-rendering:pixelated; image-rendering:crisp-edges;
+}
+.ferme-star-find-title{
+  font-family:var(--font-mono, monospace); font-weight:700;
+  font-size:clamp(16px, 3.2vw, 22px); letter-spacing:.03em; color:#fff6dc;
+  text-shadow:0 0 16px rgba(255,220,140,.30);
+}
+.ferme-star-find-body{
+  margin-top:6px; font-size:clamp(11px, 2.1vw, 13.5px); line-height:1.42;
+  color:rgba(240,232,220,.86);
+}
+/* ⚠️ « CE QU'IL FAUT FAIRE MAINTENANT » EST TYPOGRAPHIQUEMENT DISTINCT du récit :
+   c'est la seule ligne actionnable des quatre, et un joueur qui survole doit
+   pouvoir ne lire QUE celle-là. Règle du 455 sur les objectifs (« OÙ, QUOI et
+   COMMENT ») appliquée à la mise en page. */
+.ferme-star-find-next{
+  margin-top:9px; font-family:var(--font-mono, monospace);
+  font-size:clamp(10.5px, 2vw, 12.5px); letter-spacing:.02em;
+}
+.ferme-star-find-left{
+  margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,.09);
+  font-size:clamp(10px, 1.9vw, 11.5px); color:rgba(255,236,196,.50);
+}
+/* ⚠️⚠️ LES TROIS RÉSULTATS N'ONT PAS LA MÊME TEMPÉRATURE, et c'est ce qui rend le
+   verdict lisible avant le texte — même rôle que le rebord du médaillon côté
+   canevas. Le vide n'est pas ROUGE : ce n'est pas un échec, c'est une piste
+   fermée (voir la note de `dig` dans fermeStrings.js). */
+.ferme-star-find.k-star .ferme-star-find-in{ box-shadow:0 12px 40px rgba(0,0,0,.62), 0 0 0 1px rgba(255,226,150,.42) inset; }
+.ferme-star-find.k-star .ferme-star-find-next{ color:#ffe08a; }
+.ferme-star-find.k-material .ferme-star-find-in{ box-shadow:0 12px 40px rgba(0,0,0,.62), 0 0 0 1px rgba(226,158,86,.34) inset; }
+.ferme-star-find.k-material .ferme-star-find-next{ color:#e8a45e; }
+.ferme-star-find.k-empty .ferme-star-find-title{ color:rgba(232,228,220,.80); text-shadow:none; }
+.ferme-star-find.k-empty .ferme-star-find-next{ color:rgba(200,196,190,.72); }
+@keyframes fermeStarFind{
+  0%{ opacity:0; transform:translateX(-50%) translateY(16px); }
+  9%{ opacity:1; transform:translateX(-50%) translateY(0); }
+  86%{ opacity:1; transform:translateX(-50%) translateY(0); }
+  100%{ opacity:0; transform:translateX(-50%) translateY(-8px); }
+}
+@media (max-width:520px){ .ferme-star-find{ bottom:140px; } .ferme-star-find-cv{ width:176px; height:134px; } }
+
 /* ---- ZIP 455 — LE SOUS-TITRE DE LA CARTE D'ANNONCE. ⚠️ La carte de chapitre
    n'en a jamais eu, et n'en aura jamais : un titre de chapitre qui s'explique
    n'est plus un titre. L'annonce, elle, dit une NOUVELLE — le titre nomme, la

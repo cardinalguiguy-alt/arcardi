@@ -1755,6 +1755,296 @@ console.log("\n11. LA JAUGE DE LA POSTURE (456) — « est-ce que je fais bien ?
     writePNG(path.join(OUT, "etoile-tristan.png"), up.px, up.W, up.H);
   }
 }
-console.log(`\nPlanches : tools/out/etoile-planche.png · tools/out/etoile-cratere.png · tools/out/etoile-comete.png · tools/out/etoile-alerte.png · tools/out/etoile-jauge.png · tools/out/etoile-poses.png · tools/out/etoile-tristan.png`);
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 14. ZIP 469 — LA FOUILLE : LA POSE, LA TERRE, LA JAUGE, LE MÉDAILLON.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ CETTE SECTION EXISTE PARCE QUE GUILLAUME A DEMANDÉ D'ÊTRE **HYPER EXIGEANT
+   SUR LA QUALITÉ DU RENDU**, et la seule façon de tenir ça dans ce dépôt est
+   d'écrire le banc LE JOUR MÊME où le dessin naît (leçon du 455 : la bulle « ! »
+   est née avec ses treize contrôles, et le banc a immédiatement supprimé un dessin
+   mort). Les quatre dessins de la fouille sont donc regardables dès leur premier
+   `fillRect`.
+   ⚠️⚠️ ET ELLE MESURE CE QUE LES BANCS DE CE DÉPÔT NE SAVENT HISTORIQUEMENT PAS
+   VOIR — les deux formes payées le plus cher :
+     · **le temps** (5ᵉ et 9ᵉ formes, 448 et 468) : la terre s'accumule-t-elle
+       VRAIMENT au fil des trois secondes, ou est-ce une image fixe qui vibre ?
+     · **l'accord de deux grandeurs** (7ᵉ forme, 449) : la cadence des mottes et
+       celle de la pose viennent-elles du MÊME nombre ? Deux rythmes proches mais
+       distincts donnent des éclats qui partent entre deux coups de main, et c'est
+       invisible sur une image fixe.
+   ═════════════════════════════════════════════════════════════════════════════ */
+{
+  console.log("\n14. la fouille — pose, terre, jauge, médaillon (469)\n");
+  const sh0 = S.getChar("m", 0, false, false, false, false, false, false, null);
+  const extent = (v, b) => {
+    let top = 1e9, bot = -1, left = 1e9, right = -1, n = 0;
+    for (let y = 0; y < b; y++) for (let x = 0; x < b; x++)
+      if (v.px[(y * b + x) * 4 + 3] > 8) { n++; if (y < top) top = y; if (y > bot) bot = y; if (x < left) left = x; if (x > right) right = x; }
+    return { top, bot, left, right, n, h: bot - top + 1, w: right - left + 1 };
+  };
+
+  /* ── A. LA POSE. Elle doit tenir les trois règles des poses du 459 : pieds au
+     sol, plus basse que debout, et quatre images vraiment différentes. */
+  {
+    const POSE = 40;
+    const pose = (f, fx) => {
+      const v = makeCanvas(POSE, POSE);
+      A.drawStarDig(v.ctx, sh0, 0, 12, 12, f, fx === undefined ? 1 : fx);
+      return v;
+    };
+    const stand = (() => {
+      const v = makeCanvas(POSE, POSE);
+      v.ctx.drawImage(sh0, 0, 0, 16, 24, 12, 12 - 8, 16, 24);
+      return v;
+    })();
+    const eStand = extent(stand, POSE);
+    let anchorBad = 0, edgeBad = 0, hMax = 0;
+    for (let f = 0; f < A.STAR_DIG_FRAMES; f++) {
+      const e = extent(pose(f), POSE);
+      hMax = Math.max(hMax, e.h);
+      /* ⚠️ L'ANCRAGE AU SOL, ET C'EST LA PREMIÈRE MESURE DE TOUTE POSE DE CE
+         DÉPÔT : s'accroupir n'est pas rapetisser. Une pose qui flotte est le seul
+         défaut de cette famille qu'on ne voit pas en relecture. */
+      if (Math.abs(e.bot - eStand.bot) > 2) { anchorBad++; console.log(`      ⚠️ image ${f} : bas à ${e.bot} contre ${eStand.bot} debout`); }
+      if (e.top <= 0 || e.left <= 0 || e.bot >= POSE - 1 || e.right >= POSE - 1) edgeBad++;
+    }
+    ok(anchorBad === 0, "⚠️⚠️ LA POSE DE FOUILLE GARDE LES PIEDS AU SOL", `${anchorBad} écart(s) sur ${A.STAR_DIG_FRAMES} images`);
+    ok(edgeBad === 0, "⚠️ …et aucune image ne touche le bord (le canevas découpe en silence)", `${edgeBad} débordement(s)`);
+    /* ⚠️⚠️ IL S'ACCROUPIT VRAIMENT. Sans cette mesure, une « pose de fouille » qui
+       serait le sprite debout avec deux bras qui bougent passerait tous les autres
+       contrôles — et c'est exactement ce qu'on ne veut pas livrer. */
+    ok(hMax < eStand.h - 3, "⚠️⚠️ IL S'ACCROUPIT (une fouille debout n'est pas une fouille)",
+       `${hMax} px au plus haut contre ${eStand.h} debout`);
+    /* ⚠️ QUATRE IMAGES VRAIMENT QUATRE — leçon du 449 : deux poses de la compagne
+       sortaient identiques au pixel près et personne ne l'avait vu à l'œil. */
+    const sig = [];
+    for (let f = 0; f < A.STAR_DIG_FRAMES; f++) sig.push(Array.from(pose(f).px).join(","));
+    ok(new Set(sig).size >= 3, "⚠️⚠️ LES QUATRE IMAGES NE SONT PAS LA MÊME IMAGE",
+       `${new Set(sig).size} images distinctes sur ${A.STAR_DIG_FRAMES}`);
+    /* ⚠️⚠️ LE GESTE PART EN AVANT, ET IL SUIT `fx`. C'est le contrôle qui attrape
+       le défaut le plus probable de cette pose : une main qui descend sans sortir
+       du corps se lit comme un mal de ventre, et un `fx` ignoré ferait creuser du
+       mauvais côté dans une des deux directions — donc une image sur deux, donc
+       jamais en relecture (c'est le miroir de `slipX`, payé au 459). */
+    const handX = (fx) => {
+      const v = pose(0, fx);
+      let sum = 0, n = 0;
+      for (let y = 14; y < 26; y++) for (let x = 0; x < POSE; x++)
+        if (v.px[(y * POSE + x) * 4 + 3] > 8) { sum += x; n++; }
+      return n ? sum / n : 0;
+    };
+    const east = handX(1), west = handX(-1);
+    ok(Math.abs(east - west) >= 1.2, "⚠️⚠️ LE GESTE SUIT LE CRATÈRE (il ne creuse pas toujours du même côté)",
+       `centre des mains à ${east.toFixed(2)} px vers l'est, ${west.toFixed(2)} vers l'ouest`);
+    /* ⚠️ ET LES DEUX MAINS ALTERNENT. Le contrôle compare la hauteur de chaque
+       main entre l'image 0 et l'image 2 : si elle ne bouge pas, on n'a pas un
+       cycle, on a un tremblement. */
+    /* ⚠️⚠️ ON MESURE LE BAS DE LA MAIN, ET SOUS LA TÊTE — DEUX CORRECTIONS QUE LA
+       GÉOMÉTRIE A IMPOSÉES, ET LA SECONDE EST UN PIÈGE CLASSIQUE. La tête est
+       AVANCÉE de trois pixels vers le cratère : sa silhouette recouvre les deux
+       fenêtres des mains sur toute leur moitié haute. Un contrôle qui cherchait le
+       HAUT de l'encre y trouvait donc le crâne, immobile, et concluait « les mains
+       ne bougent pas » sur un cycle parfaitement correct. On scanne sous la tête
+       (y ≥ 22) et on prend le BAS : c'est la main, et rien d'autre. */
+    const handBot = (f, x0, x1) => {
+      const v = pose(f);
+      let bot = -1;
+      for (let y = 22; y < POSE; y++) for (let x = x0; x < x1; x++)
+        if (v.px[(y * POSE + x) * 4 + 3] > 8) bot = Math.max(bot, y);
+      return bot;
+    };
+    /* ⚠️⚠️ LES DEUX FENÊTRES SUIVENT LA GÉOMÉTRIE RÉELLE, ET C'EST TOUT L'ENJEU :
+       les deux mains sont DEVANT le corps, du côté du cratère (voir la note de
+       `handX`). Ancre à 12, corps x 15..25, main proche à x 25..28, main lointaine
+       à x 28..31. Une fenêtre à côté ne trouve rien, rend `1e9`, et le contrôle
+       passe au vert en comparant deux infinis (441) — d'où le contrôle témoin
+       juste au-dessus, qui vérifie qu'on a bien trouvé quelque chose. */
+    /* ⚠️ LES DEUX FENÊTRES SONT DÉRIVÉES DE LA GÉOMÉTRIE, PAS DEVINÉES : ancre à
+       12, penché de `tx` = 2 vers l'est, bord droit du corps à `POSE_BODY_R` = 13,
+       main proche à `DIG_NEAR_X` = 0 et lointaine à `DIG_FAR_X` = 3, largeur 3.
+       → proche x 27..29, lointaine x 30..32. Une fenêtre calée à l'œil ne trouve
+       rien et le contrôle passe au vert en comparant deux absences (441). */
+    const nr0 = handBot(0, 27, 30), nr2 = handBot(2, 27, 30);
+    const fr0 = handBot(0, 30, 33), fr2 = handBot(2, 30, 33);
+    ok(nr0 > 0 && nr2 > 0 && fr0 > 0 && fr2 > 0,
+       "⚠️ les deux mains sont là où le contrôle les cherche", `proche ${nr0}/${nr2} · lointaine ${fr0}/${fr2}`);
+    /* ⚠️⚠️ ET ELLES ALTERNENT EN OPPOSITION DE PHASE : quand l'une descend, l'autre
+       remonte. Deux mains qui descendraient ensemble, c'est un plongeon ; deux mains
+       immobiles, c'est un tremblement. Le contrôle exige le SIGNE opposé. */
+    ok((nr2 - nr0) * (fr2 - fr0) < 0, "⚠️⚠️ LES DEUX MAINS ALTERNENT EN OPPOSITION DE PHASE",
+       `proche ${nr0}→${nr2} · lointaine ${fr0}→${fr2}`);
+  }
+
+  /* ── B. LA TERRE. ⚠️⚠️ C'EST LA MESURE DE TEMPS, ET C'EST CELLE QUI MANQUE À
+     TOUS LES BANCS DE CE DÉPÔT (5ᵉ et 9ᵉ formes du défaut de banc). On échantillonne
+     le dessin à plusieurs instants des trois secondes et on vérifie que la matière
+     s'ACCUMULE — une image qui vibre sans rien construire passerait un contrôle
+     « des pixels sont peints ». */
+  {
+    const T = 16, B = 64;
+    const inkAt = (ms) => {
+      const v = makeCanvas(B, B);
+      A.drawStarDigDirt(v.ctx, B / 2, B / 2, ms, Q.STAR_DIG_MS, T, 1);
+      let n = 0;
+      for (let i = 3; i < v.px.length; i += 4) if (v.px[i] > 8) n++;
+      return { n, v };
+    };
+    const a = inkAt(120), b = inkAt(Q.STAR_DIG_MS * 0.5), c = inkAt(Q.STAR_DIG_MS - 20);
+    ok(a.n > 20 && c.n > a.n, "⚠️⚠️ LA TERRE S'ACCUMULE VRAIMENT AU FIL DES TROIS SECONDES",
+       `${a.n} px au départ → ${b.n} à mi-course → ${c.n} à la fin`);
+    /* ⚠️ ET LE TAS EST DU CÔTÉ OPPOSÉ AU JOUEUR : on jette ce qu'on sort. Sans ce
+       contrôle, un tas centré passerait — et il donnerait un fermier qui creuse
+       dans sa propre pelletée. */
+    const heapSide = (fx) => {
+      const v = makeCanvas(B, B);
+      A.drawStarDigDirt(v.ctx, B / 2, B / 2, Q.STAR_DIG_MS - 20, Q.STAR_DIG_MS, T, fx);
+      let sum = 0, n = 0;
+      for (let y = 0; y < B; y++) for (let x = 0; x < B; x++)
+        if (v.px[(y * B + x) * 4 + 3] > 8) { sum += x; n++; }
+      return n ? sum / n : B / 2;
+    };
+    const hE = heapSide(1), hW = heapSide(-1);
+    ok(hE > hW + 2, "⚠️⚠️ LE TAS SORT DU TROU DU BON CÔTÉ (et il suit le cap)",
+       `centre de masse à ${hE.toFixed(1)} px vers l'est, ${hW.toFixed(1)} vers l'ouest`);
+    /* ⚠️⚠️ LA CADENCE DES MOTTES VIENT DU MÊME NOMBRE QUE CELLE DE LA POSE, ET
+       C'EST LA 7ᵉ FORME DU DÉFAUT DE BANC PRISE À L'AVANCE (449 : *il mesure deux
+       réponses séparément et jamais leur ACCORD*). La pose tourne à 8 images/s
+       (125 ms) et frappe deux fois par cycle → une gerbe toutes les 250 ms. Deux
+       rythmes proches mais distincts donneraient des éclats qui partent entre deux
+       coups de main : personne ne saurait dire pourquoi « ça ne va pas ». */
+    const BEAT = 250;
+    ok(A.STAR_DIG_HIT_FRAMES.length === 2 && 125 * A.STAR_DIG_FRAMES / A.STAR_DIG_HIT_FRAMES.length === BEAT,
+       "⚠️⚠️ LA GERBE ET LE COUP DE MAIN SONT SUR LE MÊME RYTHME",
+       `${A.STAR_DIG_FRAMES} images x 125 ms / ${A.STAR_DIG_HIT_FRAMES.length} frappes = ${125 * A.STAR_DIG_FRAMES / A.STAR_DIG_HIT_FRAMES.length} ms`);
+    /* ⚠️ RIEN NE TOUCHE LE BORD : le canevas découpe en silence (§4, payé trois
+       fois dans le seul zip 433). */
+    let edge = 0;
+    for (let x = 0; x < B; x++) { if (c.v.px[x * 4 + 3] > 8) edge++; if (c.v.px[((B - 1) * B + x) * 4 + 3] > 8) edge++; }
+    for (let y = 0; y < B; y++) { if (c.v.px[(y * B) * 4 + 3] > 8) edge++; if (c.v.px[(y * B + B - 1) * 4 + 3] > 8) edge++; }
+    ok(edge === 0, "⚠️ la terre tient dans son cadre", `${edge} px sur le bord`);
+  }
+
+  /* ── C. LA JAUGE. ⚠️ ELLE EXISTE À CAUSE DU 456 (*un geste continu qui ne rend
+     rien ne se distingue pas d'un jeu bloqué*), donc ce qu'on mesure est qu'elle
+     AVANCE — pas qu'elle est jolie. */
+  {
+    const G = 40, T = 16;
+    const lit = (k) => {
+      const v = makeCanvas(G, G);
+      A.drawStarDigGauge(v.ctx, G / 2, G / 2, k, T);
+      let n = 0;
+      /* On ne compte que les points ALLUMÉS : les éteints sont peints eux aussi
+         (ils dessinent le tour), et les compter rendrait la jauge « pleine » dès
+         la première image — un banc qui mesure l'inverse de ce qu'on veut (4ᵉ
+         forme, 438). */
+      for (let i = 0; i < v.px.length; i += 4)
+        if (v.px[i + 3] > 8 && v.px[i] > 200 && v.px[i + 1] > 180) n++;
+      return n;
+    };
+    const g0 = lit(0), g5 = lit(0.5), g1 = lit(1);
+    ok(g0 === 0, "⚠️ à zéro, aucun point n'est allumé", `${g0} px`);
+    ok(g5 > g0 && g1 > g5, "⚠️⚠️ LA JAUGE AVANCE VRAIMENT (0 → 50 % → 100 %)", `${g0} → ${g5} → ${g1} px allumés`);
+    ok(Math.abs(g5 - g1 / 2) <= g1 * 0.25, "…et à moitié elle est à peu près à moitié",
+       `${g5} px contre ${(g1 / 2).toFixed(0)} attendus`);
+  }
+
+  /* ── D. LE MÉDAILLON. ⚠️⚠️ CE QU'ON MESURE EST LA CHOSE QUI PORTE LE VERDICT
+     AVANT LE TEXTE : la quantité de lumière. Le vide doit être NETTEMENT plus
+     sombre que l'étoile, sinon les trois résultats se ressemblent et l'overlay ne
+     dit rien en un coup d'œil — ce qui est tout ce qu'on lui demande. */
+  {
+    const M = 160;
+    const shot = (kind, t) => {
+      const v = makeCanvas(M, M);
+      A.drawStarFindMedal(v.ctx, M / 2, M / 2, 44, kind, t || 0);
+      return v;
+    };
+    /* ⚠️⚠️ ON MESURE LA LUMIÈRE ÉMISE, PAS LA LUMINANCE MOYENNE — ET LE PREMIER
+       JET DE CE BANC A MESURÉ L'INVERSE DE CE QU'IL VOULAIT (4ᵉ forme du défaut de
+       banc, 438). La moyenne sur les pixels non transparents PUNISSAIT l'étoile :
+       son halo ajoute des centaines de pixels faibles, qui font baisser la moyenne
+       pendant qu'ils augmentent la lumière. Verdict du banc : « le vide éclaire
+       plus que l'étoile », sur un dessin parfaitement juste. Ce qu'un œil voit est
+       la SOMME (luminance × couverture), et c'est elle qu'on somme maintenant. */
+    /* ⚠️⚠️ ET ON NE COMPTE QUE CE QUI EST HORS DE LA CUVETTE — SECOND CORRECTIF DU
+       MÊME CONTRÔLE, ET IL EST DE LA MÊME FAMILLE. La cuvette de terre est
+       STRICTEMENT IDENTIQUE dans les trois résultats : la compter, c'est ajouter
+       la même grosse constante aux trois nombres, donc écraser l'écart qu'on
+       cherche à mesurer (287 contre 271, soit 6 % — un banc qui aurait dit « c'est
+       pareil » sur un dessin où ça ne l'est pas du tout). Ce qui porte le verdict
+       est le HALO et le REBORD, c'est-à-dire tout ce qui déborde du trou. */
+    const light = (v) => {
+      let sum = 0;
+      for (let y = 0; y < M; y++) for (let x = 0; x < M; x++) {
+        if (Math.hypot(x - M / 2, y - M / 2) < 46) continue;    // 44 = R, +2 de lèvre
+        const i = (y * M + x) * 4, a = v.px[i + 3]; if (a <= 8) continue;
+        sum += (0.2126 * v.px[i] + 0.7152 * v.px[i + 1] + 0.0722 * v.px[i + 2]) * (a / 255);
+      }
+      return sum / 1000;
+    };
+    const lS = light(shot("star")), lM = light(shot("material")), lE = light(shot("empty"));
+    ok(lS > lE * 1.15, "⚠️⚠️ L'ÉTOILE ÉCLAIRE PLUS QUE LE VIDE (le verdict se lit avant le texte)",
+       `étoile ${lS.toFixed(1)} · matière ${lM.toFixed(1)} · vide ${lE.toFixed(1)} (klux)`);
+    ok(lS > lM && lM > lE, "…et les trois s'ordonnent (étoile > matière > vide)",
+       `${lS.toFixed(1)} > ${lM.toFixed(1)} > ${lE.toFixed(1)}`);
+    /* ⚠️⚠️ LE MÉDAILLON EST UN CREUX, PAS UNE TACHE. Le fond du trou doit être
+       nettement plus sombre que sa lèvre — c'est la mesure du §8 (« ce qui manque
+       à une image plate est un ÉCART, pas un décalage »), la même que celle qui a
+       validé le cratère de la ville. */
+    {
+      const v = shot("empty");
+      const at = (x, y) => {
+        const i = (y * M + x) * 4;
+        return 0.2126 * v.px[i] + 0.7152 * v.px[i + 1] + 0.0722 * v.px[i + 2];
+      };
+      const deep = at(M / 2, M / 2 + 8), rim = at(M / 2 - 40, M / 2 - 22);
+      ok(deep < rim * 0.75, "⚠️⚠️ LE MÉDAILLON EST UN CREUX (le fond est bien plus sombre que la lèvre)",
+         `fond L ${deep.toFixed(0)} · lèvre L ${rim.toFixed(0)}`);
+    }
+    /* ⚠️ IL VIT : la poussière retombe encore. Deux instants doivent différer,
+       sinon on a une vignette fixe posée sur un geste qui vient de finir. */
+    const s1 = Array.from(shot("star", 0).px).join(",");
+    const s2 = Array.from(shot("star", 900).px).join(",");
+    ok(s1 !== s2, "⚠️ le médaillon VIT (la poussière retombe encore)");
+    /* ⚠️ ET IL NE TOUCHE PAS SON BORD. */
+    let edge = 0;
+    const v0 = shot("star");
+    for (let x = 0; x < M; x++) { if (v0.px[x * 4 + 3] > 8) edge++; if (v0.px[((M - 1) * M + x) * 4 + 3] > 8) edge++; }
+    ok(edge === 0, "⚠️ le médaillon tient dans son cadre", `${edge} px sur le bord`);
+    /* ── LA PLAQUE. ⚠️ SON DESSIN TIENT SUR UN SEUL CONTRASTE (« lisse seulement
+       sur sa cassure ») : sans facette claire, c'est un caillou. On mesure donc
+       l'ÉCART-TYPE, pas la moyenne — §8 de `CLAUDE.md`, la statistique qui compte. */
+    {
+      const P = 80, v = makeCanvas(P, P);
+      A.drawStarPlate(v.ctx, P / 2, P / 2, 26, 0);
+      const vals = [];
+      for (let i = 0; i < v.px.length; i += 4)
+        if (v.px[i + 3] > 8) vals.push(0.2126 * v.px[i] + 0.7152 * v.px[i + 1] + 0.0722 * v.px[i + 2]);
+      const mean = vals.reduce((x, y) => x + y, 0) / Math.max(1, vals.length);
+      const sd = Math.sqrt(vals.reduce((x, y) => x + (y - mean) * (y - mean), 0) / Math.max(1, vals.length));
+      ok(vals.length > 400, "⚠️ la plaque est bien peinte", `${vals.length} px`);
+      ok(sd > 14, "⚠️⚠️ LA PLAQUE A UNE CASSURE CLAIRE (elle est ÉCLAIRÉE, pas coloriée)",
+         `écart-type de luminance ${sd.toFixed(1)}`);
+      ok(mean < 90, "…et elle reste une matière SOMBRE", `L moyenne ${mean.toFixed(0)}`);
+    }
+  }
+
+  /* ── LA PLANCHE. ⚠️ SUR LA TERRE, PAS SUR DU BLANC : un cerne clair sur fond
+     clair disparaît (441), et c'est là que ces dessins vivent. */
+  {
+    const CW = 5, W6 = CW * 40, H6 = 40 + 44;
+    const sur = makeCanvas(W6, H6), gg = sur.ctx;
+    gg.fillStyle = "#3a2e1e"; gg.fillRect(0, 0, W6, H6);
+    for (let f = 0; f < A.STAR_DIG_FRAMES; f++) A.drawStarDig(gg, sh0, 0, 8 + f * 40, 16, f, 1);
+    A.drawStarDigDirt(gg, 8 + 4 * 40 + 8, 24, Q.STAR_DIG_MS - 20, Q.STAR_DIG_MS, 16, 1);
+    ["star", "material", "empty"].forEach((k, i) => A.drawStarFindMedal(gg, 20 + i * 40, 62, 15, k, 300));
+    A.drawStarPlate(gg, 20 + 3 * 40, 62, 11, 0);
+    A.drawStarDigGauge(gg, 20 + 4 * 40, 62, 0.5, 16);
+    const up = scale(sur.px, W6, H6, 5);
+    writePNG(path.join(OUT, "etoile-fouille.png"), up.px, up.W, up.H);
+  }
+}
+
+console.log(`\nPlanches : tools/out/etoile-planche.png · tools/out/etoile-cratere.png · tools/out/etoile-comete.png · tools/out/etoile-alerte.png · tools/out/etoile-jauge.png · tools/out/etoile-poses.png · tools/out/etoile-tristan.png · tools/out/etoile-fouille.png`);
 console.log(fails === 0 ? `\n✅ tous les contrôles passés.\n` : `\n❌ ${fails} contrôle(s) en échec.\n`);
 process.exit(fails ? 1 : 0);

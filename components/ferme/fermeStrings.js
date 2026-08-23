@@ -95,8 +95,9 @@ const STAR_FR = {
   farm: {
     mapImpact: (n) => `Impact ${n}`,
     seen: "Ce point d'impact a déjà été fouillé.",
-    empty1: "Le fond est encore chaud. Tu écartes la cendre : rien.",
-    empty2: "Toutes les lumières n'abritaient pas quelque chose.",
+    /* ⚠️ ZIP 469 — `empty1`/`empty2` SONT PARTIES DANS `dig.bodyEmpty` : le vide
+       ne se raconte plus en deux bulles après coup, il s'annonce dans l'overlay de
+       fouille, au moment exact où l'on découvre qu'il n'y a rien. */
     starPeek: "Une petite lumière se tasse au fond dès que tu la regardes.",
     tameSolo: "Tourne-lui le dos et ne bouge plus. Seul, elle mettra une minute à venir.",
     tameDuo: "Vous êtes plusieurs dans la ferme. Dix secondes sans la regarder suffiront.",
@@ -104,6 +105,33 @@ const STAR_FR = {
     material2: "Elle a reçu tout le choc sans le transmettre à la terre dessous.",
     material3: "Le bois sait plier ; cette matière sait tenir. Ensemble, ils résisteraient à bien davantage.",
     materialKeep: "Tu gardes la plaque. Elle n'a pas encore d'usage, mais elle en aura un.",
+  },
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 469 — LA FOUILLE. TROIS RÉSULTATS, ET LE VIDE EN EST UN.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ AUCUNE DE CES PHRASES NE DIT « TU AS PERDU ». Deux cratères sur cinq ne
+     donnent rien, et c'est ce qui fait de la chasse une chasse (décision de
+     Guillaume) : le texte du vide doit donc RÉCOMPENSER la fouille par autre chose
+     qu'un objet — ici par ce qu'on apprend du ciel. Un « raté » écrit noir sur
+     blanc apprendrait au joueur à ne plus creuser.
+     ⚠️ ELLES NE NOMMENT PAS L'ÉTOILE AVANT DE L'AVOIR VUE. `title` est ce que
+     l'overlay écrit en grand : « Une étoile. » n'apparaît qu'après le grattage,
+     jamais dans une invite (voir la note de `prompt.impact`). */
+  dig: {
+    hint: "Reste appuyé : il gratte la cendre.",
+    stopped: "Tu t'es relevé. Le cratère est toujours là.",
+    titleStar: "Une étoile.",
+    titleMaterial: "Une plaque noire.",
+    titleEmpty: "Rien.",
+    bodyStar: "Une petite lumière se tasse au fond du trou dès que tu la regardes.",
+    bodyMaterial: "Sous la cendre : lisse seulement sur sa cassure, et froide, déjà.",
+    bodyEmpty: "De la cendre tiède, du sable vitrifié, et rien dedans. Toutes les lumières n'abritaient pas quelque chose.",
+    nextStar: "Elle ne sortira pas tant qu'on la regarde.",
+    nextMaterial: "Il faut la faire refroidir avant d'y toucher.",
+    nextEmpty: "Un site de moins à écarter.",
+    left: (n) => n > 0
+      ? `Il reste ${nfr(n)} cratère${n > 1 ? "s" : ""} à fouiller sur la ferme.`
+      : "Les cinq sites de la ferme sont fouillés.",
   },
   hud: {
     goal: {
@@ -125,16 +153,10 @@ const STAR_FR = {
       townWait: "Poursuis l’enquête. Une mission t’attend quelque part à Valley Town.",
       craterHot: "À l'est de Valley Town, le trou brûle encore. Attends qu'il refroidisse.",
       crater:    "Le cratère a refroidi. Descends : quelque chose se cache au fond.",
-      lean:      "Observe les ombres ici (E), puis à l'autre bout de la ville. Vite.",
-      leanAgain: "Un endroit marqué. Traverse la ville et relis les ombres (E).",
-      lakeShard: "Emmène l'étoile au ponton du lac, et plonge (E).",
-      beadShard: "La verrerie, à l'est de la ville. Cherche la perle à la lumière (E).",
-      nestShard: "Le nid de la pie, en haut de l'arbre. Éloigne l'oiseau (E).",
-      belfry:    "Monte l'étoile en haut du clocher de l'église (E).",
-      /* ⚠️ ZIP 453 — « la cinquième note » → « la dernière note ». L'ordinal
-         était vrai tant que le bateau avait cinq morceaux ; « dernière » l'est
-         quel que soit leur nombre, et se lit exactement pareil. */
-      song:      "La cloche complète le bateau. Un à l'orgue, un au beffroi (E).",
+      /* ⚠️ ZIP 469 — SIX OBJECTIFS SONT PARTIS AVEC LE DÉCHANT (`lean`,
+         `leanAgain`, `lakeShard`, `beadShard`, `nestShard`, `belfry`, `song`).
+         `STAR_GOAL_KEYS` les dérive de la table : le banc échouerait sur une clé
+         orpheline de texte, il échoue aussi sur un texte orphelin de clé. */
       /* ⚠️ ZIP 454 — plus courtes que leurs sœurs : le français gonfle de 15 à
          20 %, et ces deux-là portent un nom propre qu'on ne peut pas raccourcir. */
       engineer:     "Va demander un ingénieur naval à la mairie (E). L'étoile insiste.",
@@ -157,9 +179,9 @@ const STAR_FR = {
   chapter: {
     field:  "Chapitre Un — Les cinq impacts",
     crater: "Chapitre Deux — Le cratère",
-    water:  "Chapitre Trois — Ce que l'eau gardait",
-    thief:  "Chapitre Quatre — Les deux trésors de la voleuse",
-    note:   "Chapitre Cinq — La pièce manquante",
+    /* ⚠️ ZIP 469 — trois chapitres au lieu de cinq. `build` remplace `note` :
+       ce qui ferme la quête n'est plus une note trouvée, c'est un bateau fini. */
+    build:  "Chapitre Trois — Le chantier",
     end:    "Le Bateau des Étoiles",
   },
   fall: {
@@ -315,147 +337,28 @@ const STAR_FR = {
        demanderait une règle de grammaire dans une table de textes. « Elle en a
        un » dit la même chose et tient dans toutes les langues du fichier. */
     name: (n, total) => `Son bateau s'est cassé en tombant. ${Nfr(total)} morceaux. Elle en a ${nfr(n)}.`,
-    /* ⚠️⚠️ ZIP 458 — POURQUOI DES OMBRES, ET PAS ELLE QUI DIT L'ENDROIT. C'est la
-       question qu'un enfant pose en trois secondes, et rien n'y répondait : on
-       obéissait à une consigne magique sans savoir pourquoi elle existait. La
-       réponse tient en deux phrases et elle RENFORCE la grammaire du §4 (« la
-       lumière montre ce qu'une chose se rappelle ») au lieu de la commenter :
-       elle tombait, elle n'a rien vu ; tout ce qui a une ombre, si. */
-    whyLean: "Elle ne sait pas où ils sont tombés — elle tombait aussi, et elle avait les yeux fermés.",
-    whyLean2: "Mais tout ce qui a une ombre les a vus passer. Il suffit de demander aux ombres.",
-    leanHint: "Une ombre est une direction. Deux font un endroit. Écoute ici, puis tout à l'autre bout de la ville.",
-    leanArmed: "Les ombres penchent. D'ici, c'est tout ce qu'on peut dire.",
-    leanSoloArmed: "Retiens la direction. Traverse la ville et réécoute, avant que ça s'efface.",
-    leanTooClose: "Trop près l'une de l'autre. Les deux directions n'en font qu'une.",
-    leanFound: "Deux traits se croisent. Tu sais où chercher maintenant.",
-    markLake: "Sous le ponton, dans le lac.",
-    markGlass: "La verrerie, à l'est de la ville.",
   },
-  s3: {
-    /* ╔═══════════════════════════════════════════════════════════════════════
-       ║ ZIP 458 — LE CHAPITRE DU LAC DIT ENFIN POURQUOI IL EXISTE.
-       ╚═══════════════════════════════════════════════════════════════════════
-       ⚠️⚠️ REPROCHE REPRIS À GUILLAUME : « rien ne dit pourquoi ce morceau est
-       dans un lac noir plutôt qu'ailleurs, ni pourquoi plonger à l'aveugle a un
-       sens ». C'était vrai, et c'était le même défaut que le 457 vient de
-       corriger au chapitre 1 : une épreuve sans sa raison se lit comme une
-       épreuve. Trois phrases répondent aux trois questions, dans l'ordre où on
-       les pose :
-         · `why`     — à quoi sert CETTE pièce pour le bateau (le safran) ;
-         · `whyDark` — pourquoi ici, et pas ailleurs (le vieux ponton) ;
-         · `poolHint` — pourquoi SA lumière et pas une lampe (la grammaire du §4).
-       ⚠️ Aucune n'ajoute de mystère : chacune referme une question. */
-    why: "Le safran. Une coque sans safran flotte, mais elle ne va nulle part.",
-    dark: "L'eau est noire. Tu ne vois même pas tes mains.",
-    whyDark: "Il y avait un ponton avant celui-là. Ses pilotis sont encore debout là-dessous, dans le noir.",
-    poolHint: "Sa lumière ne montre pas ce qu'il y a. Elle montre ce que le vieux bois se rappelle.",
-    poolLead: "Celui qui tient l'étoile marche sur le ponton. La flaque suit. Le plongeur ne voit que dedans.",
-    poolSolo: "Tu cales l'étoile sur la bitte. La flaque ne bouge plus. Il faudra plonger en biais.",
-    diveTitle: (n) => `Plongée ${n}`,
-    /* ⚠️⚠️ ZIP 458 — LA CONSIGNE A CHANGÉ PARCE QUE LE JEU A CHANGÉ. Elle disait
-       « tu ne fais que diriger », ce qui était vrai quand la flaque n'était qu'une
-       vignette ; la flaque est maintenant le TERRAIN. Une consigne qui survit à la
-       mécanique qu'elle décrit est le pire des textes morts : elle s'affiche, donc
-       personne ne la soupçonne. */
-    diveHint: "Reste dans la flaque : dehors, tu ne vois plus les pilotis et tu manques d'air. Ils penchent vers ce qu'ils se rappellent.",
-    diveBlind: "Hors de la lumière. Tu ne vois plus rien, et tu respires mal.",
-    diveHitDark: "Tu as heurté quelque chose que tu n'as pas vu venir.",
-    diveFar: "Trop loin. Il faut être juste dessus.",
-    diveBeat: "Pas au bon moment. Attends qu'il batte.",
-    diveDeeper: "Il a glissé plus bas.",
-    diveUp: "Tu remontes les mains vides. Respire. Replonge.",
-    /* ⚠️⚠️ ZIP 453 — CETTE PHRASE SERVAIT DE MESSAGE DE FIN DE MANCHE, donc elle
-       s'affichait APRÈS CHAQUE plongée, y compris la première : « Trois
-       morceaux » alors qu'on n'en avait aucun de plus. Elle ne se dit plus qu'au
-       moment où le morceau est vraiment posé sur le navire (voir `starWatch`),
-       et c'est `diveDeeper` qui ferme les manches — ce qu'elle décrit. */
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 469 — CE QUI SURVIT DE `s3`, `s4` ET `s5` : LE COMPTE ET LA FIN.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ TROIS BLOCS DE TEXTE SONT PARTIS AVEC LE DÉCHANT, ET ILS PORTAIENT DEUX
+     PHRASES QUI N'ONT RIEN À VOIR AVEC LE CHANT : le compte de morceaux qui monte
+     (`got`), et **la résolution** — la seule scène de fin de toute la quête. Les
+     laisser partir aurait rendu la fin MUETTE, ce qui est le défaut du 453 pris à
+     l'envers : une scène sans texte au lieu d'un texte sans scène.
+     ⚠️ `turn1..4` NE SONT PAS RESTÉES : elles racontaient le retournement (« il
+     n'y a pas de cinquième, elle est tombée avant que son bateau ait une cloche »),
+     qui n'existe plus. La scène `turn` est retirée avec elles. */
+  ship: {
     got: (n, total) => `${Nfr(n)} morceaux sur ${nfr(total)}. Le bateau grandit.`,
-    wings: "Une ombre traverse l'eau. Des ailes. Quelque chose de petit et brillant part vers l'est.",
+    last: (n, total) => `${Nfr(n)} morceaux sur ${nfr(total)}. Il ne manque plus qu'une pièce.`,
   },
-  s4: {
-    shut: "La verrerie est fermée pour la nuit. Le four est froid. Il n'y a personne.",
-    rackTitle: "Une ombre qui ment",
-    lureTitle: "Le leurre",
-    sand: "Il y a un nid de pie dans l'arbre dehors. Et un caillou brillant fondu dans des perles.",
-    rackHint: "Une de ces perles était une étoile. Son ombre s'en souvient ; le verre, non.",
-    /* ⚠️ ZIP 458 — CE QUE CHAQUE MORCEAU DEVIENT. Le chapitre 4 en donne DEUX et
-       ne disait ce qu'aucun des deux servirait : on ramassait deux cailloux
-       brillants. Une pièce dont on ignore l'usage ne construit rien. */
-    whyMast: "Fondu dans le verre, le morceau a gardé sa forme. Une fois sorti du sable, c'est un mât : droit, et qui ne pourrira jamais.",
-    whySail: "La pie a pris le plus léger des cinq. C'est la voile — pliée, elle tient dans un nid ; ouverte, elle prend tout le vent du lac.",
-    sweepHint: "Promène la lumière le long du râtelier et regarde le mur. Ni trop vite, ni trop lentement.",
-    sweepTooFast: "Trop vite. Les ombres passent sans qu'on les voie.",
-    sweepTooSlow: "Trop lentement. Le verre chauffe et l'ombre se brouille.",
-    watchHint: "Regarde le mur. Une ombre ne sera pas une perle.",
-    rackWrong: "Juste une perle. Essaie le râtelier suivant.",
-    rackWin: "Là. Une ombre avec des pointes.",
-    rackSolo: "Tu coinces l'étoile dans la fenêtre et tu tournes le râtelier. Un cran à la fois.",
-    lureHint: "Elle suit la lumière. Continue d'avancer, sans à-coups, et éloigne-la du nid.",
-    lureLost: "Elle s'est lassée et elle est remontée.",
-    lureSolo: "Tu poses l'étoile. La pie descend. Elle ne restera pas longtemps.",
-    climbHint: "Grimpe pendant que la pie est loin. Arrête-toi si elle lève la tête.",
-    climbSeen: "Elle a levé la tête. Redescends.",
-    got: (n, total) => `${Nfr(n)} morceaux sur ${nfr(total)}. Il ne manque plus que la cloche.`,
-    /* ⚠️ « le cinquième » DEMANDAIT UN ORDINAL, donc une seconde table de mots à
-       tenir juste. « le dernier » est vrai quel que soit le nombre de morceaux,
-       et c'est exactement ce que le retournement raconte. */
-    turn1: (n, total) => `${Nfr(n)} morceaux sur ${nfr(total)} brillent ensemble. Le bateau attend le dernier.`,
-    turn2: "Il n'y en a pas. Elle est tombée avant que son bateau ait une cloche.",
-    turn3: "Un bateau sans cloche. Une mer qu'il ne peut pas traverser.",
-    turn4: "Alors, à l'autre bout de la ville, la cloche de l'église sonne. Une fois. Personne ne l'a tirée.",
-  },
-  s5: {
-    stair1: "Gravé dans la pierre : « J.M. a sonné pour la crue. 1889. »",
-    stair2: "Plus bas, en plus petit : « et pour rien du tout, certains jours. »",
-    bell1: "Je suis tombée aussi. Il y a très longtemps. Avant que la ville ait un nom.",
-    bell2: "On m'a trouvée tiède dans un champ, et on m'a coulée dans cette forme.",
-    bell3: "Je suis trop lourde pour rentrer. Mais je ne suis jamais allée en mer.",
-    /* ⚠️⚠️ ZIP 458 — POURQUOI UNE CLOCHE, ET C'EST LA PHRASE QUI RIME AVEC LE LAC.
-       Le retournement disait « un bateau qui ne peut pas sonner ne traverse pas »,
-       ce qui est joli et ne s'explique pas. Une cloche est ce qui dit où l'on est
-       quand on n'y voit plus rien — très exactement ce que le chapitre 3 vient de
-       faire vivre au joueur, au fond de l'eau noire. Le dernier morceau s'explique
-       donc par le troisième, et l'histoire se referme sur elle-même.
-       ⚠️ ELLE EST DITE AVANT `bell4`, jamais après : « emmène-moi » doit rester la
-       dernière chose qu'on lit. */
-    whyBell: "Une cloche, c'est ce qui dit où l'on est quand on n'y voit plus rien. En pleine mer, sans elle, on ne se retrouve pas.",
-    bell4: "Petite. Emmène-moi. J'ai sonné quatre mille fois de la même poutre.",
-    duetTitle: "L'alignement",
-    duetOrgan: "Reproduis les signaux lumineux dans l'ordre. Les tuyaux s'allument quand c'est juste.",
-    duetAim: "Tiens les morceaux dans la lumière jusqu'au bout de la séquence. Le vent tourne sans arrêt.",
-    duetDropped: "La lumière s'est éteinte. On recommence, ensemble.",
-    duetPhrase: (n, total) => `Séquence ${n} sur ${total}`,
-    duetSolo: "Tu cales les touches et tu cours dans l'escalier. Le signal faiblit déjà.",
-    duetWin: (total) => `${Nfr(total)} signaux. Le bateau entier s'illumine pour la première fois.`,
-    /* ╔═══════════════════════════════════════════════════════════════════════
-       ║ ZIP 453 — LA FIN NE MENT PLUS SUR CE QU'ELLE MONTRE.
-       ╚═══════════════════════════════════════════════════════════════════════
-       ⚠️⚠️ `end1` DÉCRIVAIT LE BATEAU QUI LARGUE LES AMARRES ; le dessin de la
-       scène, lui, montre L'ÉTOILE qui monte, et le navire — six cents pixels
-       plus bas, au bord du lac — ne bougeait jamais. Deux affirmations fausses
-       dans deux phrases sur trois. Décision de Guillaume : **le bateau reste,
-       entier et réel, et c'est Eduardo Da Fonseca qui le prendra** pour aller
-       voir le large. Les deux phrases disent donc ce qu'on voit : elle rentre,
-       le bateau attend. Le départ a maintenant un porteur et une suite. */
+  end: {
     end1: "Elle monte comme un ballon qu'on lâche. Doucement. Comme si elle avait toute la nuit.",
     end2: "En bas, le bateau est entier. Il flotte enfin. Il attend quelqu'un qui sache partir.",
-    end3: "La cloche ne dit rien d'autre.",
+    end3: "Le vent tombe. Plus personne ne dit rien.",
     gift: "Quelque chose d'elle est resté avec toi.",
   },
-  /* ╔═══════════════════════════════════════════════════════════════════════════
-     ║ ZIP 454 — LES PLANS, L'INGÉNIEUR ET LE BOIS. « ON NE CONSTRUIT PAS UN
-     ║ BATEAU EN LE REGARDANT. »
-     ╚═══════════════════════════════════════════════════════════════════════════
-     ⚠️⚠️ CES PHRASES SONT LE SEUL ENDROIT DE LA QUÊTE OÙ QUELQU'UN D'AUTRE EST AU
-     COURANT, et c'est une entorse ASSUMÉE au thème du secret (§3 de `QUETE.md`).
-     Elle est possible parce qu'elle ne trahit rien : l'hôtesse de mairie et
-     l'ingénieur entendent parler d'un BATEAU, pas d'une étoile. Kerguélen dessine
-     une coque pour des fermiers fortunés et repart ; Tristan scie des bordages. Le
-     secret tient, et la vallée cesse d'être un endroit où personne ne remarque
-     jamais rien — ce qui, à force, était devenu invraisemblable plutôt que
-     mystérieux.
-     ⚠️ ET AUCUNE NE DIT « L'ÉTOILE » À UN PNJ. C'est la règle de ce bloc, et elle
-     se vérifie en le relisant : le joueur sait, les habitants non. */
   plan: {
     /* ── LE CONSEIL DE L'ÉTOILE. Demande de Guillaume : « sur conseil (guidé) de
        la première étoile récoltée dans le cratère ». C'est elle qui envoie, et
@@ -579,14 +482,24 @@ const STAR_FR = {
     chapter: (t) => `${t}`,
     crater: (who) => `${who} a apprivoisé l'étoile reine.`,
     tamed: (who) => `${who} a apprivoisé une petite étoile.`,
-    lean: (who) => `${who} a croisé les ombres. Un nouvel endroit est marqué.`,
-    duet: (n, total) => `Séquence ${n} sur ${total}.`,
+    /* ⚠️ ZIP 469 — `dug` REMPLACE `lean` ET `duet`. C'est la seule annonce de chat
+       que la fouille produise, et elle ne dit JAMAIS ce qu'il y avait dedans :
+       l'autre joueur apprend qu'un trou est retourné, il va voir lui-même. */
+    dug: (who, left) => left > 0
+      ? `${who} a fouillé un cratère. Il en reste ${nfr(left)}.`
+      : `${who} a fouillé le dernier cratère de la ferme.`,
     /* ⚠️ ZIP 453 — « Le bateau a pris la mer » ÉTAIT FAUX : il restait à quai.
        Il est fini ; il partira avec Eduardo (voir `sail`). */
     done: "Le bateau est fini. L'étoile est rentrée.",
   },
   prompt: (k) => ({
+    /* ⚠️⚠️ ZIP 469 — `impact` EST LA MÊME INVITE SUR LES CINQ CRATÈRES, ET C'EST
+       LA CORRECTION DE FOND DE CETTE PASSE. Avant, `tame` et `material`
+       s'affichaient AVANT la fouille : les deux cratères vides se reconnaissaient
+       donc à leur invite, et on ne les ouvrait jamais. Elles ne servent plus qu'une
+       fois le trou retourné. */
     impact: "E : fouiller le cratère",
+    impactDig: "Fouille en cours…",
     impactSeen: "E : examiner les débris",
     material: "E : examiner la matière noire",
     tame: "Tourne-lui le dos, ne bouge plus (E : pourquoi ?)",
@@ -599,13 +512,6 @@ const STAR_FR = {
        vraiment — expliquer POURQUOI. */
     crater: "Tourne-lui le dos, ne bouge plus (E : pourquoi ?)",
     craterHot: "E : attendre que ça refroidisse",
-    lean: "E : lire les ombres",
-    dive: "E : plonger",
-    sweep: "E : lever l'étoile",
-    lure: "E : l'emmener plus loin",
-    climb: "E : grimper",
-    bell: "E : écouter",
-    organ: "E : s'asseoir à l'orgue",
     engineer: "E : parler à l'ingénieur",
   })[k] || "E",
 };
@@ -625,8 +531,6 @@ const STAR_EN = {
   farm: {
     mapImpact: (n) => `Impact ${n}`,
     seen: "This impact site has already been searched.",
-    empty1: "The bottom is still warm. You brush the ash aside: nothing.",
-    empty2: "Not every strange light was hiding something.",
     starPeek: "A little light shrinks into the crater whenever you look at it.",
     tameSolo: "Turn your back and keep still. Alone, it will take a minute to approach.",
     tameDuo: "There are several of you on the farm. Ten seconds without looking will do.",
@@ -636,6 +540,22 @@ const STAR_EN = {
     materialKeep: "You keep the plate. It has no use yet, but it will.",
   },
   /* ── LE PISTEUR. Une icône, des pastilles, UNE phrase. Jamais deux. */
+  dig: {
+    hint: "Hold it: he's scraping the ash away.",
+    stopped: "You stood back up. The crater is still there.",
+    titleStar: "A star.",
+    titleMaterial: "A black plate.",
+    titleEmpty: "Nothing.",
+    bodyStar: "A small light huddles at the bottom of the hole the moment you look at it.",
+    bodyMaterial: "Under the ash: smooth only where it broke, and cold already.",
+    bodyEmpty: "Warm ash, glassed sand, and nothing inside. Not every light was hiding something.",
+    nextStar: "It won't come out while anyone is watching.",
+    nextMaterial: "It has to cool down before you can touch it.",
+    nextEmpty: "One site fewer to rule out.",
+    left: (n) => n > 0
+      ? `${Nen(n)} crater${n > 1 ? "s" : ""} left to search on the farm.`
+      : "All five farm sites have been searched.",
+  },
   hud: {
     /* ╔═══════════════════════════════════════════════════════════════════════
        ║ ZIP 449 — UNE PHRASE PAR OBJECTIF, PLUS UNE PAR CHAPITRE.
@@ -679,22 +599,7 @@ const STAR_EN = {
       townWait: "Keep investigating. A mission awaits somewhere in Valley Town.",
       craterHot: "East of Valley Town the hole still burns. Wait for it to cool.",
       crater:    "The crater has cooled. Climb down: something hides at the bottom.",
-      lean:      "Read the shadows here (E), then right across town. Be quick.",
-      leanAgain: "One place marked. Cross the town and read the shadows again (E).",
-      lakeShard: "Take the star to the lake pier, then dive (E).",
-      beadShard: "The glassworks, east of town. Sweep the beads with the light (E).",
-      /* ⚠️ ZIP 449 — « ON THE ROOF » ÉTAIT FAUX, ET IL L'ÉTAIT DÉJÀ DANS `s4.sand`
-         (corrigé là-bas aussi). Le nid est dans un ARBRE planté contre la
-         verrerie (`starNestTree`, posé à `STAR_NEST_DX/DY` du four) : le sprite
-         est un arbre dégagé dont la boule de brindilles est le seul détail qu'on
-         doive lire de loin. Envoyer le joueur sur un toit qui n'existe pas est la
-         faute du 448 — un dessin approximatif se pardonne, une phrase fausse
-         sous l'image, non. */
-      nestShard: "The magpie's nest, up the tree by the glassworks. Lure the bird off (E).",
-      belfry:    "Carry the star to the top of the church bell tower (E).",
-      /* ⚠️ ZIP 453 — « the fifth note » → « the last note » : l'ordinal vieillit
-         avec le nombre de morceaux, « last » non. */
-      song:      "The bell completes the boat. One at the organ, one in the belfry (E).",
+      /* ⚠️ ZIP 469 — voir la note française : sept objectifs partent avec le déchant. */
       /* ⚠️⚠️ ZIP 454 — LES DEUX OBJECTIFS DE LA CONSTRUCTION. Ils suivent la même
          règle que les huit autres — OÙ et QUOI, jamais pourquoi — et ils sont plus
          courts que la moyenne parce qu'ils portent un NOM PROPRE, qui ne se coupe
@@ -730,9 +635,7 @@ const STAR_EN = {
   chapter: {
     field:  "Chapter One — The Five Impacts",
     crater: "Chapter Two — The Crater",
-    water:  "Chapter Three — What the Water Kept",
-    thief:  "Chapter Four — The Thief's Two Prizes",
-    note:   "Chapter Five — The Missing Piece",
+    build:  "Chapter Three — The Slipway",
     end:    "The Star Boat",
   },
   /* ── LA CHUTE. Personne d'autre ne la commente : c'est le thème (§3 de
@@ -848,147 +751,18 @@ const STAR_EN = {
     meet2: "The two little farm stars move toward it without hesitation.",
     meet3: "The queen star traces the outline of a broken ship in the dust.",
     name: (n, total) => `Its boat broke when it fell. ${Nen(total)} pieces. It has ${nen(n)}.`,
-    /* ⚠️⚠️ ZIP 449 — C'EST ICI QUE LE JEUNE PUBLIC ABANDONNAIT, ET C'ÉTAIT
-       PRÉVISIBLE : l'écoute des ombres est le SEUL moment de la quête sans
-       chevron (`spot: "*lean"` ne rend aucune position, et c'est délibéré). Le
-       texte expliquait joliment la magie — « une ombre est une direction, deux
-       sont un lieu » — sans jamais dire les trois choses qu'il faut FAIRE :
-       écouter, s'éloigner beaucoup, réécouter vite. Trente cases et vingt-six
-       secondes sont mesurées par le banc ; elles n'étaient écrites nulle part.
-       ⚠️ On dit « the far side of town » plutôt que « 30 tiles » : la grandeur
-       exacte est un réglage (elle a déjà bougé de 45 à 30), la consigne est une
-       phrase. Recopier le nombre ici serait le doublon du §8 de CLAUDE.md. */
-    /* ⚠️⚠️ ZIP 458 — voir la note française : pourquoi des ombres, et pas elle. */
-    whyLean: "It doesn't know where they fell — it was falling too, with its eyes shut.",
-    whyLean2: "But everything with a shadow saw them go past. You only have to ask the shadows.",
-    leanHint: "One shadow is a direction. Two are a place. Listen here, then again from the far side of town.",
-    leanArmed: "The shadows lean. From here, that's all you can tell.",
-    leanSoloArmed: "Remember which way. Now cross town and listen again, before it fades.",
-    leanTooClose: "Too close together. The two directions are the same direction.",
-    leanFound: "Two lines cross. You know where to look now.",
-    markLake: "Under the pier, in the lake.",
-    markGlass: "The glassworks, east of town.",
   },
   /* ── ÉTAPE 3 : LE LAC. */
-  s3: {
-    /* ⚠️⚠️ ZIP 458 — voir la note française : les trois questions du chapitre du
-       lac (à quoi sert cette pièce, pourquoi ici, pourquoi SA lumière). */
-    why: "The rudder. A hull without a rudder floats, but it goes nowhere.",
-    dark: "The water is black. You can't see your own hands.",
-    whyDark: "There was a pier here before this one. Its pilings are still standing down there, in the dark.",
-    poolHint: "Its light doesn't show what is there. It shows what the old wood remembers.",
-    poolLead: "Whoever holds the star walks the pier. The pool follows. The diver can only see inside it.",
-    poolSolo: "You wedge the star on the bollard. The pool stops moving. You'll have to dive at an angle.",
-    diveTitle: (n) => `Dive ${n}`,
-    /* ⚠️ ZIP 449 — TROIS CHOSES EN UNE LIGNE, ET LA TROISIÈME MANQUAIT : on
-       coule tout seul (`STAR_DIVE_SINK`), on ne pilote que la dérive, et l'éclat
-       BAT (`STAR_DIVE_PULSE_MS`) — c'est au battement qu'on le voit. Un joueur
-       qui ignore le battement croit que le fond est vide et remonte. */
-    /* ⚠️⚠️ ZIP 458 — voir la note française : la consigne d'avant décrivait une
-       mécanique qui n'existe plus. */
-    diveHint: "Stay in the pool: outside it you can't see the pilings, and you run out of air. They lean toward what they remember.",
-    diveBlind: "Out of the light. You can't see, and you can't breathe well.",
-    diveHitDark: "You hit something you never saw coming.",
-    diveFar: "Too far. You have to be right on it.",
-    diveBeat: "Wrong moment. Wait for the beat.",
-    diveDeeper: "It slid deeper.",
-    diveUp: "You come up empty. Breathe. Go again.",
-    /* ⚠️⚠️ ZIP 453 — voir la note française : elle servait de message de FIN DE
-       MANCHE et s'affichait donc après chaque plongée, y compris la première. */
+  ship: {
     got: (n, total) => `${Nen(n)} of ${nen(total)} pieces. The boat is growing.`,
-    wings: "A shadow crosses the water. Wings. Something small and bright goes east with it.",
+    last: (n, total) => `${Nen(n)} of ${nen(total)} pieces. Only one piece left.`,
   },
-  /* ── ÉTAPE 4 : LA VERRERIE ET LA PIE. */
-  s4: {
-    shut: "The glassworks is shut for the night. The furnace is cold. Nobody's here.",
-    /* ⚠️ DEUX TITRES COURTS, ET ILS ONT ÉTÉ AJOUTÉS EN REGARDANT L'ÉCRAN. Le
-       premier jet prenait `rackHint` et `lureHint` comme titres de mini-jeu :
-       ce sont des PHRASES, elles débordaient du canevas et se faisaient couper
-       en plein mot. Un titre est un nom, une consigne est une phrase — les
-       confondre ne lève rien et se voit tout de suite. */
-    rackTitle: "A shadow that lies",
-    lureTitle: "The lure",
-    /* ⚠️ ZIP 449 — « ON THE ROOF » CORRIGÉ : le nid est dans l'ARBRE planté
-       contre la verrerie (`starNestTree`). Voir la note de `hud.goal.nestShard`. */
-    sand: "There's a magpie's nest in the tree outside. And a bright pebble melted into somebody's beads.",
-    rackHint: "One of these beads used to be a star. Its shadow remembers; the glass doesn't.",
-    /* ⚠️ ZIP 458 — voir la note française : ce que chaque morceau DEVIENT. */
-    whyMast: "Melted into the glass, the piece kept its shape. Out of the sand it's a mast: straight, and it will never rot.",
-    whySail: "The magpie took the lightest of the five. That's the sail — folded, it fits in a nest; open, it takes the whole lake wind.",
-    /* ⚠️ ZIP 449 — LE BUT AVANT LE GESTE. « Sweep the light » ne disait pas ce
-       qu'on cherche : c'est l'OMBRE au mur qui trahit, jamais la perle. */
-    sweepHint: "Sweep the light along the rack and watch the wall. Not too fast, not too slow.",
-    sweepTooFast: "Too fast. The shadows blur past.",
-    sweepTooSlow: "Too slow. The glass warms up and the shadow goes soft.",
-    watchHint: "Watch the wall. One shadow won't be a bead.",
-    rackWrong: "Just a bead. Try the next rack.",
-    rackWin: "There. A shadow with points on it.",
-    rackSolo: "You wedge the star in the window frame and turn the rack instead. One notch at a time.",
-    /* ⚠️ ZIP 449 — LES TROIS FAÇONS DE PERDRE LA PIE SONT DES RÈGLES ÉCRITES
-       (`STAR_MAGPIE_PATIENCE_MS`, `_JUMP_TILES`, `_NEST_R`) et aucune n'était
-       dite. « Lead it — don't yank it » est joli et ne s'enseigne pas ; un joueur
-       qui s'arrête deux secondes la perd sans comprendre pourquoi. */
-    lureHint: "It follows light. Keep moving, keep it smooth, and take it away from the nest.",
-    lureLost: "It lost interest and went back up.",
-    lureSolo: "You set the star down. The magpie comes. It won't stay long.",
-    /* ⚠️ « Up while it's down » est une devinette de quatre mots pour un geste
-       qui a une fenêtre : on grimpe PENDANT que l'autre tient l'oiseau à l'écart. */
-    climbHint: "Climb while the magpie is away. Stop if it looks up.",
-    climbSeen: "It looked up. Down you go.",
-    got: (n, total) => `${Nen(n)} of ${nen(total)} pieces. The boat only needs its bell now.`,
-    /* Le retournement. ⚠️ ZIP 453 — « the fifth » demandait un ordinal, donc une
-       seconde table de mots ; « the last one » est vrai quel que soit le total. */
-    turn1: (n, total) => `${Nen(n)} of ${nen(total)} pieces shine together. The boat waits for the last one.`,
-    turn2: "There is no fifth. It fell before its boat ever had a bell.",
-    turn3: "A boat without a bell. A sea it cannot cross.",
-    turn4: "Then, across the town, the church bell rings. Once. Nobody pulled it.",
-  },
-  /* ── ÉTAPE 5 : LE BEFFROI. */
-  s5: {
-    stair1: "Scratched in the stone: \"J.M. rang for the flood. 1889.\"",
-    stair2: "Lower down, smaller: \"and for nothing at all, some days.\"",
-    bell1: "I fell too. A long time ago. Before the town had a name.",
-    bell2: "They found me warm in a field and they poured me into this shape.",
-    bell3: "I am too heavy to go home now. But I have never been to sea.",
-    /* ⚠️⚠️ ZIP 458 — voir la note française : la cloche s'explique par le lac. */
-    whyBell: "A bell is what tells you where you are when you can't see anything. Out at sea, without one, you don't find each other again.",
-    bell4: "Small one. Take me with you. I have rung four thousand times from the same beam.",
-    duetTitle: "The alignment",
-    /* ⚠️ ZIP 449 — CHAQUE POSTE DIT CE QU'IL FAIT *ET* CE QU'IL DOIT TENIR : le
-       duo est le seul endroit où deux joueurs lisent DEUX consignes différentes
-       en même temps, donc le seul où « je croyais que c'était toi » coûte la
-       phrase entière. */
-    duetOrgan: "Repeat the light signals in order. The pipes light up when you're right.",
-    duetAim: "Hold the pieces in the light until the sequence ends. The wind keeps turning.",
-    duetDropped: "The light died. Again, together.",
-    duetPhrase: (n, total) => `Sequence ${n} of ${total}`,
-    duetSolo: "You wedge the keys down and run for the stairs. The signal is already fading.",
-    duetWin: (total) => `${Nen(total)} signals. The whole boat lights up for the first time.`,
-    /* La résolution. ⚠️⚠️ ZIP 453 — voir la note française : `end1` racontait un
-       appareillage que le dessin ne montrait pas et que le navire ne faisait
-       jamais. Le bateau reste, entier ; Eduardo l'emmènera. */
+  end: {
     end1: "It goes up the way a balloon does. Slowly. Like it has all night.",
     end2: "Down by the water, the boat is whole. It floats at last. It is waiting for someone who can sail.",
-    end3: "The bell doesn't say anything else.",
-    /* ⚠️ LE CROCHET COSMÉTIQUE. Il ne donne encore RIEN — l'arbitrage est posé,
-       le contenu viendra (voir `resolveStarGift`). La phrase est donc vraie
-       aujourd'hui et le restera quand l'objet existera. */
+    end3: "The wind drops. Nobody says anything else.",
     gift: "Something of it stayed with you.",
   },
-  /* ╔═══════════════════════════════════════════════════════════════════════════
-     ║ ZIP 454 — LES PLANS, L'INGÉNIEUR ET LE BOIS. « ON NE CONSTRUIT PAS UN
-     ║ BATEAU EN LE REGARDANT. »
-     ╚═══════════════════════════════════════════════════════════════════════════
-     ⚠️⚠️ CES PHRASES SONT LE SEUL ENDROIT DE LA QUÊTE OÙ QUELQU'UN D'AUTRE EST AU
-     COURANT, et c'est une entorse ASSUMÉE au thème du secret (§3 de `QUETE.md`).
-     Elle est possible parce qu'elle ne trahit rien : l'hôtesse de mairie et
-     l'ingénieur entendent parler d'un BATEAU, pas d'une étoile. Kerguélen dessine
-     une coque pour des fermiers fortunés et repart ; Tristan scie des bordages. Le
-     secret tient, et la vallée cesse d'être un endroit où personne ne remarque
-     jamais rien — ce qui, à force, était devenu invraisemblable plutôt que
-     mystérieux.
-     ⚠️ ET AUCUNE NE DIT « L'ÉTOILE » À UN PNJ. C'est la règle de ce bloc, et elle
-     se vérifie en le relisant : le joueur sait, les habitants non. */
   plan: {
     advise1: "It looks at the empty slipway by the lake. It shakes its head.",
     advise2: "It doesn't know how boats are built. It only knows what this one looked like.",
@@ -1086,8 +860,10 @@ const STAR_EN = {
       warn: "📣 Announce it (the buffer)",
       chapter: "⏭ Finish this chapter",
       skip: "⏩ Skip ahead one",
-      hint: "💡 Mark the next place",
-      all: "⏭⏭ All but the duet",
+      /* ⚠️ ZIP 469 — `hint` (le croisement d'ombres) est sorti de STAR_DEV_OPS.
+         « All but the duet » devient « All but the ending » : il n'y a plus de duo,
+         et ce que le bouton laisse à jouer est bien la scène finale. */
+      all: "⏭⏭ All but the ending",
       /* ⚠️ ZIP 454 — les deux étapes qui se comptent en MINUTES RÉELLES (15 pour
          les plans, 24 pour les cinq pièces de bois). Sans ces boutons, on ne
          regarderait le plan et le fantôme qu'une fois, donc on ne les jugerait
@@ -1095,7 +871,7 @@ const STAR_EN = {
       plans: "📐 Hand me the plans",
       timber: "🪵 Deliver all the timber",
     }[op] || op),
-    scene: (s) => ({ warn: "🎬 The announcement", fall: "🎬 The five farm impacts", townFall: "🎬 The Valley Town meteor", turn: "🎬 The turn", end: "🎬 The ending" }[s] || s),
+    scene: (s) => ({ warn: "🎬 The announcement", fall: "🎬 The five farm impacts", townFall: "🎬 The Valley Town meteor", end: "🎬 The ending" }[s] || s),
     sceneLabel: "Replay a scene",
     stand: "📍 Stand at the next little star",
     chat: (who, what) => `${who} touched the star quest: ${what}.`,
@@ -1109,8 +885,9 @@ const STAR_EN = {
     chapter: (t) => `${t}`,
     crater: (who) => `${who} tamed the queen star.`,
     tamed: (who) => `${who} tamed a little star.`,
-    lean: (who) => `${who} crossed the shadows. A new place is marked.`,
-    duet: (n, total) => `Sequence ${n} of ${total}.`,
+    dug: (who, left) => left > 0
+      ? `${who} searched a crater. ${Nen(left)} left.`
+      : `${who} searched the last crater on the farm.`,
     /* ⚠️ ZIP 453 — « The boat sailed » était faux : il restait à quai. */
     done: "The boat is finished. The star went home.",
   },
@@ -1120,18 +897,12 @@ const STAR_EN = {
      et c'est la seule chose de l'enquête qui survit telle quelle). */
   prompt: (k) => ({
     impact: "E: search the crater",
+    impactDig: "Searching…",
     impactSeen: "E: examine the debris",
     material: "E: examine the black matter",
     tame: "Turn your back, stand still (E: why?)",
     crater: "Turn your back, stand still (E: why?)",
     craterHot: "E: wait for it to cool",
-    lean: "E: read the shadows",
-    dive: "E: dive",
-    sweep: "E: hold the star up",
-    lure: "E: lead it away",
-    climb: "E: climb",
-    bell: "E: listen",
-    organ: "E: sit at the organ",
     engineer: "E: talk to the shipwright",
   })[k] || "E",
 };
@@ -1464,8 +1235,7 @@ export const FERME_STR = {
       land: "🗺️ Le cadastre",
       ballot: "🗳️ Le scrutin",
       fonds: "📜 Le fonds de la halle",
-      engineer: "📐 L'architecte naval",
-      engineer: "📐 L'architecte naval",
+      engineer: "📐 L'architecte naval",   // 469 — la ligne était écrite DEUX fois (préexistant)
     }[k] || k),
     hallMayorNow: (e, n) => `Le maire en exercice est ${e} ${n}.`,
     hallMayorAudience: (d, k) => k === 0

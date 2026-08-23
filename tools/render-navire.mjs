@@ -177,21 +177,35 @@ console.log(`  morceaux        : ${C.STAR_SHIP_ORDER.join(", ")}\n`);
   ok(fromQ.length === N && fromQ.every((k, i) => k === C.STAR_SHIP_ORDER[i]),
      "la table de quete.js suit C.STAR_SHIP_ORDER, dans l'ordre",
      `${fromQ.length} clés lues`);
+  /* ╔═══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 469 — UN MORCEAU PEUT N'AVOIR AUCUN LIEU, ET C'EST DÉSORMAIS LE CAS DE
+     ║ QUATRE SUR CINQ.
+     ╚═══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ CE CONTRÔLE EXIGEAIT « chaque morceau s'accroche à un lieu qui existe » et
+     « chaque morceau vient d'un lieu DISTINCT ». Les deux étaient justes tant que
+     les cinq morceaux se TROUVAIENT dehors. Le déchant retire les chapitres 3, 4 et
+     5 : le safran, le mât, la voile et la cloche ne se ramassent plus, ils se
+     FABRIQUENT (voir `SHIP_SITE_OF` dans `quete.js`). Un `site: null` n'est plus
+     une erreur, c'est la règle.
+     ⚠️ CE QUI RESTE VRAI, ET QU'ON MESURE MAINTENANT : un morceau qui NOMME un lieu
+     doit nommer un lieu qui existe (sinon la cale attend pour toujours un éclat
+     introuvable — la cascade silencieuse du 468), et deux morceaux ne peuvent pas
+     se partager le même lieu (l'un des deux ne se poserait jamais). */
   const siteIds = new Set(Q.STAR_SITES.map(s => s.id));
-  const orphans = Q.STAR_SHIP_PARTS.filter(p => !siteIds.has(p.site));
-  ok(orphans.length === 0, "chaque morceau s'accroche à un lieu qui existe",
-     `${Q.STAR_SHIP_PARTS.length} morceaux lus, ${orphans.length} orphelins`);
-  /* ⚠️ DANS LES DEUX SENS : les quatre éclats ET le chant doivent tous porter un
-     morceau. Un éclat qui ne bâtirait rien serait une trouvaille sans effet
-     visible — c'est-à-dire le défaut que cette passe corrige. */
-  /* ⚠️ ZIP 453 — `STAR_SHARD_IDS` A ÉTÉ SUPPRIMÉE (le second compte). Ce qui
-     doit bâtir un morceau, c'est tout lieu qui donne quelque chose de MATÉRIEL :
-     les cinq trouvailles portées par `STAR_SHIP_PARTS`. Le sens du contrôle ne
-     change pas — aucune trouvaille sans effet visible sur la cale — mais il ne
-     s'appuie plus sur une liste parallèle. */
-  const carried = new Set(Q.STAR_SHIP_PARTS.map(p => p.site));
-  ok(carried.size === Q.STAR_SHIP_TOTAL, "chaque morceau vient d'un lieu DISTINCT",
-     `${carried.size} lieux pour ${Q.STAR_SHIP_TOTAL} morceaux`);
+  const named = Q.STAR_SHIP_PARTS.filter(p => p.site);
+  const orphans = named.filter(p => !siteIds.has(p.site));
+  ok(orphans.length === 0, "⚠️ tout morceau qui NOMME un lieu nomme un lieu qui existe",
+     `${named.length} morceau(x) à ramasser sur ${Q.STAR_SHIP_PARTS.length}, ${orphans.length} orphelin(s)`);
+  const carried = new Set(named.map(p => p.site));
+  ok(carried.size === named.length, "⚠️ …et deux morceaux ne se partagent pas le même lieu",
+     `${carried.size} lieux pour ${named.length} morceau(x) ramassé(s)`);
+  /* ⚠️⚠️ ET IL EN RESTE AU MOINS UN QUI SE RAMASSE. Sans ce plancher, le contrôle
+     ci-dessus passerait au vert sur un navire dont AUCUN morceau ne vient du monde
+     — c'est-à-dire un bateau entièrement offert par un panneau de commande, et la
+     fin de la quête n'aurait plus rien à voir avec l'étoile. C'est le garde-fou
+     qui empêche le pansement du 469 de devenir la charpente définitive. */
+  ok(named.length >= 1, "⚠️⚠️ au moins un morceau se RAMASSE dans le monde (la coque)",
+     named.map(p => `${p.key}←${p.site}`).join(" ") || "AUCUN");
   ok(Q.STAR_SHIP_TOTAL === N, "STAR_SHIP_TOTAL est dérivé, pas écrit", `${Q.STAR_SHIP_TOTAL}`);
 }
 

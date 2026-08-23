@@ -1,5 +1,111 @@
 # LA QUÊTE DE L'ÉTOILE — « LE BATEAU DES ÉTOILES » / « THE STAR BOAT »
 
+## ⚠️⚠️⚠️ AUTORITÉ 469 — LE DÉCHANT EST FAIT. TROIS CHAPITRES, ET ON FOUILLE.
+
+**Décision de Guillaume, et elle est structurante : la quête est SIMPLIFIÉE.** Ce qui
+suit remplace l'autorité 465 sur tous les points où les deux se contredisent.
+
+### Ce qui a été RETIRÉ du code (pas seulement déclaré obsolète)
+
+| ce qui part | ce qu'il en reste |
+|---|---|
+| le duo orgue/beffroi (`STAR_DUET_*`, mini-jeu 6, la scène du retournement) | rien — le lieu (beffroi, orgue, grande cloche) reste dans le monde, il sort de la QUÊTE |
+| la plongée du lac (`STAR_DIVE_*`, `STAR_POOL_*`, `lakeShard`) | rien — le ponton et le lac restent |
+| la verrerie et la pie (`STAR_RACK_*`, `STAR_MAGPIE_*`, `beadShard`, `nestShard`) | rien — le four, le râtelier et l'arbre au nid restent posés |
+| le beffroi et la cloche comme LIEUX (`belfry`, `song`) | rien |
+| les croisements d'ombres (`STAR_LEAN_*`, `resolveStarLean`, `leanLake`, `leanGlass`) | rien |
+| les chapitres `water`, `thief`, `note` | `field`, `crater`, `build` |
+| les champs d'état `lean`, `marks`, `duet` | `dug` les remplace en nombre |
+
+⚠️ **Le mini-jeu de REFROIDISSEMENT (`cool`) reste**, et c'est le seul : il n'a jamais eu
+de rapport avec le chant. C'est celui de la **plaque météorique**, troisième cratère de la
+ferme, et il est désormais la seule chose qu'une fouille puisse ouvrir.
+
+### La trame, en trois lignes
+
+**Cinq impacts à la ferme → on les FOUILLE → le grand impact de Valley Town → l'étoile
+reine → le chantier naval (mairie, puis Tristan) → le navire part.**
+
+### ⚠️⚠️ LA FOUILLE — LA MÉCANIQUE NEUVE DU 469
+
+**Demande de Guillaume, mot pour mot :** *« ajoutons à la mécanique de fouille une action
+sur les cratères : fouiller (déclenchable avec un bouton, et activant une petite animation
+du perso qui gratte le sol pendant 3 secondes). Au bout de l'animation, un overlay nous
+indique si on a trouvé quelque chose ou non. Et s'il y a quelque chose alors on peut
+commencer le travail d'apprivoisement de l'étoile si c'est une étoile ou le mini jeu si
+c'est un matériau. »* Et, sur les cratères vides : *« il faut effectivement que certains
+cratères ne donnent rien pour que la chasse soit intéressante. »*
+
+⚠️⚠️⚠️ **CE QU'ELLE RÉPARE EST PLUS GRAND QUE L'ANIMATION : jusqu'au 469, le jeu DISAIT
+LE CONTENU D'UN CRATÈRE AVANT QU'ON L'OUVRE.** Trois fuites, toutes fermées, et il fallait
+fermer les trois — c'est le défaut du 448 (*le décor, l'enfoncement et l'interaction sont
+trois portes sur le même trou*) dans sa quatrième occurrence :
+1. **l'invite** : « ⌨ E : apprivoiser » sur une étoile, « ⌨ E : la matière noire » sur la
+   plaque, « ⌨ E : fouiller » sur les vides — les deux vides se reconnaissaient de loin ;
+2. **le dessin** : la petite étoile apeurée se peignait au fond du trou dès l'impact ;
+3. **la posture** : la jauge d'apprivoisement et sa bulle s'armaient sur un cratère intact.
+*Un échec qui s'annonce n'est pas un échec, c'est une étiquette.*
+
+**Le geste :** trois secondes (`STAR_DIG_MS`), immobile (`STAR_DIG_MOVE_TILES` = 0,6 case),
+une jauge en anneau au-dessus de la tête, une pose accroupie qui gratte à huit images par
+seconde, de la terre qui sort du trou au rythme des mains, un tas qui grandit. Puis un
+overlay : un médaillon dessiné, un titre, ce qu'on a trouvé, ce qu'il faut faire, et
+combien de cratères restent. Il se ferme tout seul.
+
+**Ce qu'il donne, par contenu :** `empty` → le lieu est TROUVÉ dans le même geste (sinon le
+pisteur le réclamerait pour toujours) · `material` → fouillé seulement, le morceau se gagne
+au mini-jeu · `star` → fouillé seulement, l'apprivoisement reste entier derrière.
+
+⚠️ **Arbitré par l'hôte** (`resolveStarDig`), idempotent, **zéro message supplémentaire** :
+`star` voyage déjà dans l'`apply`. Le chat annonce qu'un trou est retourné et combien il en
+reste — **jamais ce qu'il y avait dedans.**
+
+### ⚠️⚠️⚠️ LE BLOCAGE D'APPRIVOISEMENT — SIGNALÉ, REPRODUIT, CORRIGÉ, REJOUÉ
+
+**Guillaume :** *« l'apprivoisement de l'étoile bleue bloque… au bout de la jauge, l'étoile
+ne bouge pas. »* Il avait raison, c'était général (les trois étoiles), et **quatre cent
+quarante-sept contrôles étaient verts par-dessus.**
+
+> **Une troncature de sécurité qui fait tomber deux clés DISTINCTES sur la même ne protège
+> rien : elle corrompt.**
+
+`migrateStar` coupait les clés de `calm` à **40 signes**. La tenue en écrit DEUX par joueur
+et par lieu — `farmStarBlue:<id>` (la dernière marque) et `farmStarBlue:<id>:t0` (le début
+de la tenue) — et l'identifiant est un `profile_id` Supabase, donc un **UUID de 36 signes**.
+13 + 36 = 49 et 52 : **les deux tombaient sur la même clé de 40**. L'hôte re-migre l'état à
+**chaque requête**, deux fois par seconde pendant toute la tenue ; à chaque migration `t0`
+écrasait la dernière marque, `mine = now − t0` retombait à zéro, **pour toujours**.
+
+⚠️ **Et le symptôme était le pire possible** : la jauge du client compte en LOCAL
+(`starCalmT0Ref`). Elle se remplissait normalement, jusqu'au bout, devant une étoile qui ne
+sortirait jamais. *Une barre qui promet et ment.*
+
+⚠️⚠️ **POURQUOI AUCUN BANC NE POUVAIT LE VOIR — ET C'EST UNE FORME NEUVE DU DÉFAUT DE
+BANC.** Il en fallait DEUX pour reproduire, et le banc n'avait ni l'un ni l'autre :
+- il jouait `resolveStarCalm` avec `"j1"` comme identifiant ; le jeu passe un UUID ;
+- il gardait le même objet d'état d'un bout à l'autre ; l'hôte le re-migre à chaque requête.
+
+> **Un banc qui invente ses identifiants mesure un jeu que personne ne joue.**
+
+`verify-quete` balaie maintenant les DEUX longueurs d'identifiant et re-migre entre chaque
+tick, comme on balaie les deux valeurs d'un drapeau solo depuis le 458.
+
+### La charpente : ce qui a été touché, et ce qui ne l'a pas été
+
+⚠️ **Quatre des cinq morceaux du navire n'ont plus de lieu** (`SHIP_SITE_OF` : `rudder`,
+`mast`, `sail`, `bell` → `null`). Ils venaient des chapitres supprimés ; les laisser
+pointer vers des lieux morts aurait rendu le navire **impossible à finir en silence** — la
+cascade du 468, à l'identique. Ils ne dépendent plus que du bois de Tristan, qui existe et
+qui marche depuis le 454. **La coque garde son lieu** : la plaque météorique est la seule
+pièce qu'on RAMASSE, et `render-navire` a un contrôle qui l'exige.
+
+⚠️⚠️ **CE N'EST PAS LA CHARPENTE DÉFINITIVE, c'est le pansement qui garde la quête
+finissable.** Ce qui manque est la FICTION — d'où vient la voile, d'où vient la cloche.
+Voir la liste de reprise §15.
+
+
+---
+
 ## ⚠️ AUTORITÉ 465 — CINQ IMPACTS, PUIS UNE CONSTELLATION AUTOUR DES JOUEURS
 
 La fiction de référence est désormais : **retrouver et apprivoiser sept petites
@@ -1884,7 +1990,18 @@ chacun sa caméra, chacun son impact) — c'est la même séance qui manque depu
 
 ---
 
-## 14. ⚠️⚠️⚠️ LES SEPT DÉCISIONS QUI BLOQUENT LA REFONTE — ELLES ATTENDENT GUILLAUME
+## 14. ~~LES SEPT DÉCISIONS QUI BLOQUENT LA REFONTE~~ — ARCHIVE, TRANCHÉES AU 469
+
+⚠️⚠️ **CE CHAPITRE EST UNE ARCHIVE DEPUIS LE 469 : QUATRE DE SES SEPT DÉCISIONS SONT
+TRANCHÉES, ET LA LISTE VIVANTE EST AU §15.** D2 (le sort des chapitres 3-4-5) : supprimés.
+D3 (les cinq morceaux) : quatre n'ont plus de lieu, ils se fabriquent. D4 (le squelette du
+duo) : retiré, pas replacé — c'est la dette n°11 du §15. D7 (Kerguélen) : il RESTE, c'est
+lui qui rend le fantôme du bateau. D1 (les sept étoiles), D5 (l'attente habitée) et D6 (la
+durée du refroidissement) sont ouvertes et vivent désormais au §15.
+⚠️ *Un chapitre de décisions à prendre qui survit à leur arbitrage est un document qui ment
+— on le marque, on ne le laisse pas se lire comme une consigne.*
+
+### 14 bis (archive) — le texte d'origine
 
 **Ouvert au 468.** La trame cible transmise par Guillaume est : *cinq impacts à la ferme → le
 grand impact de Valley Town (avec une occupation pendant le refroidissement) → récupérer les
@@ -1912,3 +2029,102 @@ sans que le document qui la porte suive).
 refaire les six mini-jeux sans complaisance. Si D2 les supprime, **quatre d'entre eux
 disparaissent** — la passe de réglage doit donc venir APRÈS la refonte de la charpente, sinon on
 polit ce qu'on va jeter.
+
+---
+
+## 15. ⚠️⚠️⚠️ CE QU'IL RESTE À FAIRE — LA LISTE DE LA QUÊTE SIMPLIFIÉE (469)
+
+⚠️ **Cette section remplace le §14 (« les sept décisions »), dont quatre sont tranchées.**
+Ce qui suit est la liste de travail de la quête telle qu'elle est MAINTENANT, dans l'ordre
+où elle se joue — pas dans l'ordre où c'est commode à écrire.
+
+### 15.0 ⚠️⚠️ LA PROCHAINE PASSE EST DÉCIDÉE : **LA DISCUSSION AVEC LE MAIRE**
+
+**Demande de Guillaume, à traiter dans une passe dédiée, avec lui :** *« discussion avec le
+maire que je veux travailler avec toi dans une autre passe ».*
+
+C'est la charnière de toute la seconde moitié : aujourd'hui, on sort du cratère et le
+bandeau dit « va demander un ingénieur naval à la mairie », où **Léonie Sarrazin** tient un
+guichet qui prend 24 000 or, 60 récoltes et 12 poissons contre les plans de Kerguélen. Le
+MAIRE, lui, ne dit rien — alors que c'est lui qui devrait **valider le projet de bateau**,
+et que cette validation est ce qui débloque tout le reste (voir 15.1 : les habitants ne
+peuvent parler du bateau qu'une fois le chantier lancé). ⚠️ **Rien de la mairie ne doit
+être réécrit avant cette passe.**
+
+Ce qu'il faudra trancher avec lui : qui parle (le maire, Léonie, les deux), quand (jour
+d'audience — il en a déjà un, `hallMayorAudience`), ce qu'il DEMANDE avant d'accepter, et
+ce que l'acceptation change dans le monde. Le patron existe déjà et il est mesuré : une
+`req` arbitrée par l'hôte, un état dans `shared.star`, **aucune migration SQL**.
+
+### 15.1 ✅ CE QUE GUILLAUME A TRANCHÉ AU 469, ET QUI EST DÉJÀ ÉCRIT ICI
+
+| question | sa réponse |
+|---|---|
+| Les PNJ peuvent-ils parler du bateau ? | **Oui** — occasionnellement, en se promenant dans Valley Town, **une fois le projet validé par le maire et lancé**. |
+| Savent-ils quelque chose des étoiles ? | **Non, rien.** Ils ne les voient pas et n'y font aucune référence. La constellation de la Brebis est une licence poétique : les futurs matelots s'orienteront grâce à elle, ils ne le savent pas encore. |
+| Faut-il des cratères qui ne donnent rien ? | **Oui** — « pour que la chasse soit intéressante ». Deux vides sur cinq, mesuré par le banc. |
+| Le sort des chapitres 3, 4 et 5 | **Supprimés** (fait). |
+
+⚠️ **LE SECRET SURVIT, ET IL EST MÊME PLUS PROPRE QU'AVANT** : les habitants parleront d'un
+BATEAU — un chantier public, financé, validé par le maire — et jamais de l'ÉTOILE.
+`verify-quete` refuse déjà qu'une réplique de PNJ nomme l'étoile ou dise où chercher ; la
+règle ne change pas d'un mot, elle gagne un sujet de conversation.
+
+### 15.2 ⚠️⚠️ LA DEMANDE QUI N'EST PAS ENCORE CONSTRUITE : LES TROIS CHUTES D'ASTÉROÏDES
+
+**Demande de Guillaume, mot pour mot :** *« On ajoutera 3 chutes d'astéroïdes sur la ferme,
+mais faut les faire tomber de manière aléatoire sur une fenêtre de 7 minutes après
+l'apprivoisement de la première étoile. Elles auront des pets collectors shiny que l'on
+pourra garder, sortir etc. comme les pets actuels. »*
+
+⚠️ **RIEN N'EN EST FAIT.** Ce qu'il faudra, et dans cet ordre :
+1. **L'horloge.** Trois dates tirées dans une fenêtre de 7 min à partir de
+   `e.found[<première étoile>].at`. ⚠️ **Elles se DÉRIVENT, elles ne se stockent pas** — une
+   fonction pure du tampon de la première trouvaille, comme le jour de marché (431) et
+   toutes les échéances de ce chantier. Trois dates persistées seraient trois champs à
+   réconcilier, et une fenêtre qui se fige au premier rechargement.
+   ⚠️⚠️ **ET ELLE SE BORNE EN TEMPS RÉEL** (leçon du 468) : sept minutes de temps réel,
+   jamais de temps visible, sinon un joueur parti en ville les rate définitivement.
+2. **Le placement.** `starFarmImpactSites` sait déjà poser un cratère sur une ferme sans
+   écraser une construction ni une culture : trois sites de plus, même règle, même
+   persistance de tuiles.
+3. **La fouille.** Elle marche déjà — ce sont des cratères comme les autres. ⚠️ Il faudra un
+   **quatrième contenu** dans `STAR_DIG_RESULTS` (`pet`), donc une quatrième branche
+   d'overlay, un quatrième médaillon, et un quatrième texte. Le banc du 469 vérifie déjà que
+   *chaque résultat annoncé est servi par au moins un cratère* : il tombera au rouge tant que
+   la branche n'existera pas, ce qui est exactement ce qu'on veut.
+4. **Les familiers.** ⚠️ **C'est le seul vrai chantier des quatre** : il faut brancher les
+   trois nouveaux sur la garde-robe de familiers existante (garder, sortir, ranger), avec
+   trois sprites « shiny » à dessiner. ⚠️ `render-etoile` doit les regarder le jour où ils
+   naissent, pas trois zips plus tard (leçon du 455).
+
+### 15.3 La liste de travail, dans l'ordre où ça se joue
+
+| # | ce qu'il reste | état |
+|---|---|---|
+| 1 | **Le déchant** — retirer duo, plongée, verrerie, pie, cloche | ✅ **fait au 469** |
+| 2 | **La fouille** — geste, pose, terre, jauge, overlay, arbitrage | ✅ **fait au 469** |
+| 3 | **La discussion avec le maire** — validation du projet | ⏭️ **passe suivante, avec Guillaume** (15.0) |
+| 4 | **Les PNJ parlent du bateau** dans les rues de Valley Town, après validation | à faire — court, et le patron des rumeurs existe (`starNerveSay`) |
+| 5 | **Les trois chutes + familiers shiny** | à faire (15.2) — le point 4 est le seul gros |
+| 6 | **L'attente habitée du grand cratère** — 3 min à ne rien faire pendant qu'il refroidit | à faire. ⚠️ « Attendre » n'est pas une occupation, et une activité plaquée serait pire que rien. Proposition qui tient toujours : **relever les éclats projetés** autour du trou. |
+| 7 | **La constellation de la Brebis** — sept places dans le ciel, allumées une à une | à faire, et **personne ne l'a jamais vue**. ⚠️ La trame n'en produit que TROIS ; il manque quatre étoiles, ou il faut abandonner les sept. **C'est la seule décision de fiction encore ouverte.** |
+| 8 | **La fiction des quatre morceaux sans lieu** (safran, mât, voile, cloche) | à faire — voir l'autorité 469. Techniquement finissable, narrativement muet. |
+| 9 | **Le sciage à deux chez Tristan** | l'atelier existe, le geste non |
+| 10 | **Le voyage d'Eduardo pour la voile** | le système de voyage existe, la commande non |
+| 11 | **Le retournement** — la quête n'a plus AUCUN moment de bascule | à concevoir. ⚠️ C'est ce que le déchant a coûté, et il faut le dire : la quête est devenue une chaîne logistique propre. Elle est livrable ; elle n'a plus de surprise. |
+| 12 | **Rejouer le mini-jeu survivant jusqu'à la victoire** (le refroidissement) | ⚠️ **jamais fait, pas une fois, depuis le 444** |
+| 13 | **Une séance à DEUX clients sur toute la chaîne** | ⚠️ **jamais faite face à face** — et depuis le déchant, il ne reste qu'UN geste coopératif : la tenue du cratère à deux. C'est peu. |
+
+### 15.4 ⚠️ CE QUE LE 469 A LAISSÉ EN DETTE, ET QU'IL FAUT LIRE AVANT DE ROUVRIR
+
+- ⚠️⚠️ **`starSay` n'a plus rien à dire pendant les chapitres.** Le bloc « ce qu'elle dit
+  quand elle est là » (`starFrame`) est VIDE et documenté : ses quatre phrases parlaient
+  toutes des chapitres supprimés. C'est le seul endroit du jeu où l'étoile commente ce qu'on
+  est en train de faire — **un poste sans texte, pas du code mort.**
+- ⚠️ **Le mini-jeu de refroidissement est le dernier**, et `StarMinigame` garde sa forme en
+  branches exprès : la refonte ajoutera des gestes (les cinq de la construction), et un
+  composant réécrit « pour un seul jeu » devrait être rouvert.
+- ⚠️ **Le décor des chapitres supprimés est toujours posé en ville** : le râtelier de la
+  verrerie, l'arbre au nid, le ponton, le beffroi, la grande cloche, le banc d'orgue. Ils
+  sortent de la quête, pas de la carte. Rien à nettoyer — mais rien ne les explique non plus.
