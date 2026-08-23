@@ -159,9 +159,15 @@ const STAR_FR = {
          orpheline de texte, il échoue aussi sur un texte orphelin de clé. */
       /* ⚠️ ZIP 454 — plus courtes que leurs sœurs : le français gonfle de 15 à
          20 %, et ces deux-là portent un nom propre qu'on ne peut pas raccourcir. */
-      engineer:     "Va demander un ingénieur naval à la mairie (E). L'étoile insiste.",
-      engineerWait: "Kerguélen dessine sur la grève du lac. Reviens dans quelques minutes.",
-      timber:       "Commande la pièce suivante à Tristan, à la ferme. Le plan : touche P.",
+      engineer:       "Va demander un ingénieur naval à la mairie (E). L'étoile insiste.",
+      /* ⚠️⚠️ ZIP 470 — `engineerWait` DEVIENT DEUX PHRASES, UNE PAR PHASE. Avant,
+         la même phrase ("il dessine") couvrait le train ET le dessin, donc elle
+         mentait pendant les trois premières minutes. Demande de Guillaume : dire
+         d'abord qu'il est contacté et arrive bientôt, puis qu'il travaille près
+         du pier et rendra son plan bientôt. */
+      engineerTravel: "Kerguélen a été prévenu. Il arrive bientôt à Valley Town.",
+      engineerWork:   "Kerguélen dessine près du ponton. Il rendra ses plans bientôt.",
+      timber:         "Commande la pièce suivante à Tristan, à la ferme. Le plan : touche P.",
     },
     againTitle: "Où tu en étais",
     /* ⚠️ ZIP 453 — LE PLURIEL EST DÉRIVÉ, LUI AUSSI : cette phrase écrivait
@@ -604,9 +610,10 @@ const STAR_EN = {
          règle que les huit autres — OÙ et QUOI, jamais pourquoi — et ils sont plus
          courts que la moyenne parce qu'ils portent un NOM PROPRE, qui ne se coupe
          pas sans devenir illisible (le bandeau rabote en silence, 449). */
-      engineer:     "Ask the town hall for a naval engineer (E). The star insists.",
-      engineerWait: "Kerguélen is drawing on the lake shore. Come back in a few minutes.",
-      timber:       "Order the next piece from Tristan, at the farm. The plan: press P.",
+      engineer:       "Ask the town hall for a naval engineer (E). The star insists.",
+      engineerTravel: "Kerguélen has been notified. He'll reach Valley Town shortly.",
+      engineerWork:   "Kerguélen is drawing by the pier. He'll hand over his plans soon.",
+      timber:         "Order the next piece from Tristan, at the farm. The plan: press P.",
     },
     /* Le rappel de reprise. ⚠️ UNE FOIS PAR SESSION, jamais deux — un « où en
        étions-nous » qui revient à chaque écran est une notification. */

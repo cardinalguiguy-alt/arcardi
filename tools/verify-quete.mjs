@@ -1436,6 +1436,21 @@ section("L'objectif courant (bandeau) et le guide");
   Q.resolveStarTownFall(e, 1010);
   ok("⚠️ le cratère BRÛLANT et le cratère FROID ne disent pas la même chose",
      Q.starGoalKey(e, { craterHot: true }) === "craterHot" && Q.starGoalKey(e, {}) === "crater");
+  /* ⚠️⚠️ ZIP 471 — « TOMBÉ CHEZ L'HÔTE » ≠ « TOMBÉ CHEZ CE CLIENT ». Vu à l'écran
+     par Guillaume : le bandeau annonçait « le trou brûle à l'est de Valley
+     Town » à un joueur resté à la ferme, qui n'avait donc rien vu tomber — la
+     chute de `e.townFall` ci-dessus se diffuse à tout le monde instantanément,
+     mais `starScenePump` (FermeGame.js) ne met la scène en file que pour un
+     client physiquement en ville. `ctx.landed` est CE que ce client a vu ; sans
+     lui (ancien appelant), le repli reste le fait brut de l'hôte — c'est
+     `craterHot` juste au-dessus, qui n'en fournit pas et doit donc continuer de
+     suivre `e.townFall`. */
+  ok("⚠️⚠️ un joueur qui n'a pas vu la chute lit toujours « poursuis l'enquête », jamais « ça brûle »",
+     Q.starGoalKey(e, { craterHot: true, landed: false }) === "townWait"
+     && Q.starTargetSite(e, { craterHot: true, landed: false }) === null);
+  ok("…et dès que ce client a vu l'impact, il retrouve le cratère brûlant",
+     Q.starGoalKey(e, { craterHot: true, landed: true }) === "craterHot"
+     && Q.starGoalKey(e, { landed: true }) === "crater");
   Q.resolveStarFound(e, "crater", "j1", 1002);
   /* ⚠️⚠️ ZIP 454 — LA RENCONTRE ENVOIE À LA MAIRIE, ET LE BANDEAU LE DIT AVANT
      TOUT LE RESTE. C'est la consigne « le rôle des étoiles est de nous guider dans
@@ -1448,9 +1463,21 @@ section("L'objectif courant (bandeau) et le guide");
      écoutes d'ombres, supprimées ; la même propriété se mesure maintenant sur les
      DEUX états de la construction, et c'est plus utile — c'est là que se joue
      désormais toute la seconde moitié de la quête. */
+  /* ⚠️⚠️⚠️ ZIP 470 — `engineerWait` ÉTAIT UNE SEULE PHRASE POUR DEUX PHASES, ET
+     C'ÉTAIT LE DÉFAUT SIGNALÉ PAR GUILLAUME : le bandeau disait « il dessine sur
+     la grève » pendant les trois minutes où l'ingénieur est encore dans le
+     train. `engineerHere` vient de `Q.starEngineerHere`, exactement comme le
+     vrai appelant (`FermeGame.js`) le calcule — jamais une horloge inventée ici
+     (§10 : un banc qui invente son cycle de vie mesure un jeu que personne ne
+     joue). */
   e.plan = { at: 1002, by: "j1", done: 0 };
-  ok("⚠️ l'objectif SUIT l'état à l'intérieur d'un chapitre (le défaut du 448 pris ailleurs)",
-     Q.starGoalKey(e, {}) === "engineerWait", String(Q.starGoalKey(e, {})));
+  ok("⚠️ pendant le train, le bandeau dit qu'il est en route, pas qu'il dessine",
+     Q.starGoalKey(e, { engineerHere: Q.starEngineerHere(e, 1002) }) === "engineerTravel",
+     String(Q.starGoalKey(e, { engineerHere: Q.starEngineerHere(e, 1002) })));
+  const engArrived = 1002 + C.STAR_ENG_TRAVEL_MS + 1;
+  ok("⚠️ une fois arrivé, le bandeau dit qu'il travaille près du pier",
+     Q.starGoalKey(e, { engineerHere: Q.starEngineerHere(e, engArrived) }) === "engineerWork",
+     String(Q.starGoalKey(e, { engineerHere: Q.starEngineerHere(e, engArrived) })));
   e.plan = { at: 1002, by: "j1", done: 1002 };
   ok("…et les plans rendus renvoient chez le bûcheron", Q.starGoalKey(e, {}) === "timber");
 
@@ -1497,7 +1524,7 @@ section("L'objectif courant (bandeau) et le guide");
        (les deux écoutes d'ombres, l'attente de l'ingénieur). Sans ce contrôle, un
        objectif ajouté plus tard pointerait silencieusement dans le vide. */
     {
-      const NOWHERE = ["townWait", "engineerWait"];   // 469 — les deux écoutes d'ombres sont parties
+      const NOWHERE = ["townWait", "engineerTravel", "engineerWork"];   // 469 — les deux écoutes d'ombres sont parties ; 470 — une clé d'attente devient deux
       const orphan = Q.STAR_GOAL_KEYS.filter(k => {
         if (k === "farmImpacts") return false;
         const id = Q.STAR_GOAL_TARGET[k] || k;
@@ -1518,7 +1545,8 @@ section("L'objectif courant (bandeau) et le guide");
     e3.plan = { at: 1, by: "j1", done: 0 };
     findFarmImpacts(e3, "j1", 2); Q.resolveStarTownFall(e3, 5); Q.resolveStarFound(e3, "crater", "j1", 10);
     ok("⚠️ pas de chevron pendant que l'ingénieur voyage…", Q.starTargetSite(e3, {}) === null);
-    ok("…mais le bandeau, lui, dit quoi faire", Q.starGoalKey(e3, {}) === "engineerWait");
+    ok("…mais le bandeau, lui, dit quoi faire",
+       Q.starGoalKey(e3, { engineerHere: Q.starEngineerHere(e3, 10) }) === "engineerTravel");
   }
 
   /* ── LE POINT DU MENEUR. Pure, donc mesurable — c'est la raison pour laquelle

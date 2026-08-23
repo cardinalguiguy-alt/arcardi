@@ -2330,19 +2330,44 @@ export function starGoalKey(e, ctx) {
        C'est la seule chose à faire à cet instant, elle passe donc avant le reste ;
      · `timber` — tout est trouvé, il ne manque que du bois. Sans cette clé, le
        bandeau n'aurait plus rien à dire pendant toute la fin de la construction.
-     ⚠️⚠️ ET L'ATTENTE DE L'INGÉNIEUR N'EST **PAS** UN OBJECTIF, exprès : pendant
-     ses quinze minutes il y a les deux croisements d'ombres à faire. Un bandeau qui
-     dirait « attends » pendant qu'on peut jouer transformerait du rythme en temps
-     mort — c'est le défaut du 426 par l'autre bout (le jeu propose de ne rien
-     faire). Il ne le dit QUE s'il ne reste vraiment rien d'autre. */
+     ⚠️⚠️⚠️ ZIP 470 — L'ATTENTE DE L'INGÉNIEUR ÉTAIT UN OBJECTIF UNIQUE
+     (`engineerWait`), ET C'ÉTAIT FAUX DEPUIS LE DÉCHANT (469). L'ancien
+     commentaire disait qu'attendre n'était « pas un objectif » parce qu'il
+     restait les deux croisements d'ombres à jouer pendant les quinze minutes de
+     dessin — sauf que le déchant les a SUPPRIMÉS, et que la clé unique couvrait
+     pourtant encore les DEUX phases (`travel` : trois minutes de train,
+     `work` : quinze minutes de dessin) sous la seule phrase du dessin. Un joueur
+     qui venait de payer Kerguélen lisait donc « Kerguélen dessine près du
+     ponton » pendant qu'il était encore dans le train — *un texte n'est pas un
+     décor : il AFFIRME* (448), et pendant trois minutes il affirmait faux.
+     Signalé par Guillaume : il fallait un indicateur qui dise d'abord
+     « contacté, arrive bientôt », puis « travaille près du pier, rendra le plan
+     bientôt ». Deux phases, deux clés, comme `starPlanPhase` les distingue déjà
+     pour le panneau de la mairie (`hallTravel` / `hallWork`) — le bandeau
+     permanent leur emboîte le pas, via `ctx.engineerHere` (dérivé par l'appelant
+     de `starEngineerHere`, jamais recalculé ici sur une seconde horloge). */
   if (starHas(e, "crater") && !starPlanAsked(e)) return "engineer";
   if (!first) {
-    if (!starPlanReady(e)) return "engineerWait";
+    if (!starPlanReady(e)) return (ctx && ctx.engineerHere) ? "engineerWork" : "engineerTravel";
     return starTimberNext(e) ? "timber" : null;
   }
   if (STAR_FARM_STAR_IDS.includes(first) || (STAR_SITE[first] && STAR_SITE[first].spot === "starFarmImpact"))
     return "farmImpacts";
-  if (first === "crater" && !starTownFallen(e)) return "townWait";
+  /* ⚠️⚠️ ZIP 471 — « TOMBÉ » CÔTÉ HÔTE N'EST PAS « TOMBÉ » CÔTÉ CE CLIENT.
+     `starTownFallen(e)` ne regarde que l'horodatage de l'hôte : il devient vrai
+     dès la diffusion, AVANT que la scène de chute n'ait fini de jouer — ou même
+     avant qu'elle ait commencé, pour un joueur resté à la ferme pendant qu'un
+     autre déclenchait la chute en ville (`starScenePump` ne met la scène en
+     file que pour un client physiquement EN VILLE). Vu par Guillaume : le
+     bandeau annonçait « le trou brûle à l'est de Valley Town » à un joueur qui
+     n'avait pourtant rien vu tomber. C'est le défaut du bandeau de l'ingénieur
+     (470) rejoué sur le météore : une clé qui affirme un fait sur l'horloge de
+     l'HÔTE au lieu de celle de CE client. `ctx.landed` est fourni par
+     l'appelant (`starImpactLandedNow`, la même garde qui retient déjà le décor
+     du cratère et son panache) — jamais recalculé ici, qui n'a pas de scène à
+     interroger. Un `ctx` sans `landed` retombe sur le fait brut de l'hôte, pour
+     ne pas casser un appelant qui ne le fournirait pas encore. */
+  if (first === "crater" && !(ctx && ("landed" in ctx) ? ctx.landed : starTownFallen(e))) return "townWait";
   /* ⚠️ L'ORDRE DE LA TABLE FAIT FOI, comme pour `starTargetSite` : le premier qui
      manque est celui qu'on cherche. Aucune liste parallèle. */
   if (first === "crater" && ctx && ctx.craterHot) return "craterHot";
@@ -2359,11 +2384,14 @@ export const STAR_GOAL_KEYS = (() => {
     out.push(s.id);
     if (s.id === "crater") out.push("craterHot", "engineer");
   }
-  /* ⚠️ ZIP 454 — les deux clés de la construction. Elles ne sont pas dérivées de
-     `STAR_SITES` parce qu'elles ne sont pas des LIEUX : l'une désigne une attente,
-     l'autre un atelier de ferme. Elles sont ici pour que le banc vérifie qu'elles
-     ont un texte — c'est tout ce que cette liste sert à faire. */
-  out.push("townWait", "engineerWait", "timber");
+  /* ⚠️ ZIP 454 — les clés de la construction. Elles ne sont pas dérivées de
+     `STAR_SITES` parce qu'elles ne sont pas des LIEUX : deux désignent une
+     attente, l'autre un atelier de ferme. Elles sont ici pour que le banc
+     vérifie qu'elles ont un texte — c'est tout ce que cette liste sert à faire.
+     ⚠️ ZIP 470 — `engineerWait` DEVIENT DEUX CLÉS, `engineerTravel` et
+     `engineerWork` : la même attente, mais plus la même phrase (voir la note
+     de `starGoalKey`). */
+  out.push("townWait", "engineerTravel", "engineerWork", "timber");
   return out;
 })();
 

@@ -1331,7 +1331,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const t = setInterval(() => {
       const e = sharedRef.current.star;
       const g = starGuideRef.current;
-      const key = e ? Q.starGoalKey(e, { craterHot: !starCraterCoolNow() }) : null;
+      const key = e ? Q.starGoalKey(e, { craterHot: !starCraterCoolNow(), landed: starImpactLandedNow() }) : null;
       if (key !== g.goal) { g.goal = key; g.since = Date.now(); g.offered = false; }
       if (!key || g.on || !starGuideTarget()) return;
       if (!Q.starGuideAuto(Date.now() - g.since, g.offered)) return;
@@ -22746,7 +22746,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        obligatoire depuis que le chevron DÉRIVE de l'objectif : lui passer `{}`
        ferait pointer le cratère brûlant au lieu de dire d'attendre. Une seule
        source, donc un seul contexte. */
-    const id = Q.starTargetSite(e, { craterHot: !starCraterCoolNow() });
+    const id = Q.starTargetSite(e, { craterHot: !starCraterCoolNow(), landed: starImpactLandedNow() });
     if (!id) return null;
     const site = Q.STAR_SITE[id];
     if (site && site.spot === "starFarmImpact" && !starFarmImpactLandedNow(site.impact)) return null;
@@ -24750,8 +24750,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            QUE LE BANDEAU NE PEUT PAS DÉDUIRE SEUL : `starCraterCoolNow` lit
            l'horloge de CE client (§3 — jamais deux horloges). Sans lui, le
            bandeau enverrait dans un trou en fusion pendant que `starCraterBurns`
-           punit d'y descendre — « le jeu propose et refuse » (426). */
-        const goal = Q.starGoalKey(e, { craterHot: !starCraterCoolNow() });
+           punit d'y descendre — « le jeu propose et refuse » (426).
+           ⚠️⚠️ ZIP 470 — MÊME RAISON POUR `engineerHere` : `starEngineerHere`
+           compare `Date.now()` à `e.plan.at`, donc c'est ICI qu'on la lit, sur
+           l'horloge de ce client — jamais recalculée dans `quete.js`, qui n'a
+           pas d'horloge (§3 de CLAUDE.md, encore). */
+        const goal = Q.starGoalKey(e, { craterHot: !starCraterCoolNow(), engineerHere: Q.starEngineerHere(e, Date.now()), landed: starImpactLandedNow() });
         return (
           <div className="ferme-star-hud" data-tick={starTick}>
             <span className="ico">{huntingImpacts ? "☄" : "✦"}</span>
@@ -28235,7 +28239,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   jours plus tard et le jeu redisait un objectif déjà atteint,
                   c'est-à-dire exactement l'inverse de ce que ce panneau promet. */}
               <div style={{ marginTop: 8, opacity: 0.85 }}>
-                {(() => { const g = Q.starGoalKey(e, { craterHot: !starCraterCoolNow() }); return (g && L.star.hud.goal[g]) || L.star.title; })()}
+                {(() => { const g = Q.starGoalKey(e, { craterHot: !starCraterCoolNow(), landed: starImpactLandedNow() }); return (g && L.star.hud.goal[g]) || L.star.title; })()}
               </div>
               <div style={{ marginTop: 12 }}><button className="ferme-btn" onClick={close}>✦</button></div>
             </div>
