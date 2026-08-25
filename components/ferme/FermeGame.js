@@ -44,6 +44,11 @@ import * as A from "./fermeArt";
    le crochet de persistance) avaient été trouvés un par un, souvent en jouant.
    On les REMPLIT autrement, on ne les redécouvre pas. */
 import * as Q from "./quete";
+/* ⚠️ ZIP 480 — L'AUDIENCE CHEZ LE MAIRE. Table pure et résolveurs dans
+   `maire.js`, vue 3D dans `MaireScene.js` : ce fichier ne fait que la porte et
+   l'arbitrage. Voir l'en-tête de `maire.js` pour le contrat réseau. */
+import * as MR from "./maire";
+import { MayorAudience, mayorCtxOf } from "./MaireScene";
 import { buildSprites, charPalette, drawBridgeTile, drawBridgeOverlay, drawCandyGroundTile, candySyrupColor } from "./fermeArt";
 import { fstr } from "./fermeStrings";
 // ZIP 441 — l'orgue de l'église. Le lecteur de fichiers existe depuis longtemps
@@ -604,6 +609,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      réponses et la réponse elle-même ne sont pas deux panneaux, c'est le
      même panneau à deux profondeurs, et on revient toujours au menu. */
   const [hallTalk, setHallTalk] = useState(null);
+  /* ⚠️ ZIP 480 — l'audience est une SÉANCE LOCALE : rien ne circule pendant
+     qu'on négocie (§3 de `CLAUDE.md`), et seule la transcription part à la fin.
+     Elle compte comme une interface ouverte, donc le monde ne tourne pas
+     derrière — un maire qu'on écoute pendant qu'un sanglier mange les carottes
+     ne serait pas une scène, ce serait une fenêtre. */
+  const [mayorTalk, setMayorTalk] = useState(null);
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ZIP 444 — LES ÉTATS D'INTERFACE DE LA QUÊTE DE L'ÉTOILE.
      ╚══════════════════════════════════════════════════════════════════════════
@@ -1082,6 +1093,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const starTrailRef = useRef({ farm: [], town: [], court: [] });
   const starBubbleRef = useRef({ text: "", until: 0, key: "" });  // 465 — le dernier conseil reste rappelable au survol
   const starHideRef = useRef(0);                     // elle se cache : horodatage de fin (§3 — le secret se MONTRE)
+  /* ⚠️ ZIP 479 (défaut 10) — LE DEGRÉ DE CACHETTE, ENTRE 0 ET 1, ET SA DERNIÈRE
+     IMAGE. Il ne remplace pas `starHideRef` (qui dit COMBIEN DE TEMPS elle reste
+     planquée après le passage d'un résident) : il dit OÙ elle en est de son
+     mouvement. Deux grandeurs, deux champs — un seul aurait forcé à dériver une
+     animation d'une échéance, c'est-à-dire à recalculer la même chose deux fois. */
+  const starHideKRef = useRef({ k: 0, last: 0 });
+  const starHideSaidRef = useRef(false);             // la phrase « elle n'existe que pour toi », une fois
   const starSeenRef = useRef({});                    // scènes/bulles déjà vues DANS CETTE SESSION (le rappel, une fois)
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ZIP 453 — CE QUI SE DIT QUAND LE MONDE CHANGE. LE VEILLEUR.
@@ -1359,8 +1377,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      l'overlay de résultat doit suspendre l'arrivée d'une étoile (468) et empêcher
      qu'on relance une fouille par-dessus. Il n'y est PAS pour bloquer les
      déplacements — voir la note de `starDigStep`. */
-  useEffect(() => { starUiOpenRef.current = !!(starMini || starCard || starRecap || starOffer || starFind); },
-            [starMini, starCard, starRecap, starOffer, starFind]);                     // zip 444/469
+  useEffect(() => { starUiOpenRef.current = !!(starMini || starCard || starRecap || starOffer || starFind || mayorTalk); },
+            [starMini, starCard, starRecap, starOffer, starFind, mayorTalk]);          // zip 444/469/480
   useEffect(() => { planOpenRef.current = planOpen; }, [planOpen]);                     // zip 454
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ZIP 449 — LE DÉPART SPONTANÉ DU GUIDE. Une veille d'une seconde, et elle
@@ -2878,6 +2896,42 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        ⚠️ Le nom du trouveur est celui que la requête PORTE (`req.name`) : il
        s'affichera chez l'autre joueur, donc il vient du réseau, donc il n'est pas
        de confiance — le résolveur le tronque. */
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ ZIP 480 — L'AUDIENCE CHEZ LE MAIRE, CÔTÉ HÔTE : UNE `req`, ET IL REJOUE.
+       ╚══════════════════════════════════════════════════════════════════════
+       ⚠️⚠️⚠️ LE CLIENT N'ANNONCE JAMAIS « J'AI GAGNÉ ». Il envoie sa
+       TRANSCRIPTION — la clé de chaque réponse et le temps de réflexion qu'elle a
+       coûté — et l'hôte la rejoue par `MR.resolveMayor`, avec les mêmes résolveurs
+       purs que `verify-maire.mjs` en fait tourner quatre cents. C'est la seule
+       forme d'arbitrage possible pour une conversation : l'hôte ne peut pas la
+       regarder se dérouler, mais il peut la REFAIRE.
+       ⚠️⚠️ ET LE CONTEXTE EST RECONSTRUIT ICI, JAMAIS REÇU. Qui est maire, quel
+       jour, les plans sont-ils rendus, quel capital de confiance : tout se déduit
+       de `shared` chez l'hôte. Le laisser voyager dans la requête aurait donné au
+       client le pouvoir de choisir son maire et sa confiance — c'est-à-dire de
+       gagner sans jouer. `mayorCtxOf` est la MÊME fonction des deux côtés, donc
+       les deux tombent sur le même contexte par construction, jamais par accord.
+       ⚠️ La séance elle-même ne diffuse RIEN : négocier ne coûte pas un message.
+       Un `apply` part à la fin, et il portait déjà `star`. */
+    if (req.kind === "mayorTalk") {
+      const sM = sharedRef.current;
+      const eM = (sM.star = Q.migrateStar(sM.star));
+      const whoM = String(req.name || f.name || "?");
+      const ctxM = mayorCtxOf(sM, eM, E);
+      const log = Array.isArray(req.log) ? req.log.slice(0, 64) : [];
+      const rM = MR.resolveMayor(eM, f.id, whoM, log, ctxM, Date.now());
+      if (!rM) return;                       // déjà signé : rien à rejouer, rien à diffuser
+      out.star = eM;
+      dirtyRef.current = true;
+      if (rM === "mayorSigned") broadcastChat("🎩", L.maire.chat.signed(whoM));
+      else if (rM === "mayorThrown") broadcastChat("🎩", L.maire.chat.thrown(whoM));
+      else broadcastChat("🎩", L.maire.chat.failed(whoM));
+      /* ⚠️ UNE SIGNATURE EST UN POINT DE REPRISE : elle ouvre tout le chantier
+         naval. On force l'écriture, comme au franchissement d'un chapitre. */
+      if (rM === "mayorSigned") persistFnRef.current && persistFnRef.current();
+      hostFlushOut(out, f, null);
+      return;
+    }
     if (req.kind === "starFound" || req.kind === "starCalm" || req.kind === "starDig"
      || req.kind === "starGift") {
       const s2 = sharedRef.current;
@@ -2905,13 +2959,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            chose. Sans ça, la mécanique la plus jolie du chantier serait aussi la
            plus facile à contourner, et le contournement serait invisible. */
         const calmSite = Q.STAR_SITE[req.site || "crater"];
-        if (calmSite && calmSite.zone === req.pz && starCalmOk(f.id, calmSite.id, req))
+        const pose = calmSite && calmSite.zone === req.pz ? starCalmOk(f.id, calmSite.id, req) : null;
+        if (pose)
           /* ⚠️⚠️⚠️ ZIP 473 — DÉFAUT #3 : `f` EST LE DEMANDEUR DISTANT, DONC IL EST
              DANS `playersRef` CÔTÉ HÔTE. Sans `excludeId`, un invité seul en
              ville se comptait lui-même comme « l'autre joueur » et recevait le
              barème à deux (10 s) au lieu du solo (60 s) qu'affichait sa propre
              jauge locale. Voir le commentaire de `starAlone`. */
-          r = Q.resolveStarCalm(e, f.id, now, starAlone(calmSite.zone === "farm" ? "farmTame" : "crater", f.id), calmSite.id);
+          /* ⚠️⚠️ ZIP 479 — LE CONTEXTE REMPLACE LE DRAPEAU, ET IL PORTE DEUX
+             GRANDEURS QUI NE SE DÉDUISENT PAS L'UNE DE L'AUTRE : « y a-t-il
+             quelqu'un sur cette carte » (le raccourci de la bleue) et « qui tient
+             l'autre bord » (celui de la reine). Un ami qui laboure à la ferme
+             n'aide pas à la reine ; un ami au mauvais bord non plus. */
+          r = Q.resolveStarCalm(e, f.id, now, {
+            alone: starAlone(calmSite.zone === "farm" ? "farmTame" : "crater", f.id),
+            partner: pose.partner, mate: pose.mate,
+            /* ⚠️ ZIP 479 — LE NOM VA DANS LE CONTEXTE, L'IDENTIFIANT RESTE
+               L'ARBITRE (voir la note de `resolveStarCalm`). Il vient de la requête
+               comme partout ailleurs dans ce bloc, donc du réseau, donc le
+               résolveur le tronque. */
+            name: who,
+          }, calmSite.id);
       } else if (req.kind === "starDig") {
         /* ⚠️⚠️ ZIP 469 — LA ZONE AVANT LA DISTANCE, comme partout (§4 de
            `CLAUDE.md`, le piège des deux cartes) : un cratère de FERME ne se
@@ -2979,8 +3047,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          séance à deux clients ne le montre. */
       const after = Q.starShipBuilt(e);
       if (after > before) broadcastChat("⭐", L.star.chat.found(who, after, Q.STAR_SHIP_TOTAL));
-      if (req.kind === "starCalm" && r.opened)
-        broadcastChat("⭐", r.site === "crater" ? L.star.chat.crater(who) : L.star.chat.tamed(who));
+      /* ⚠️⚠️ ZIP 479 — LE SECOND JOUEUR EST NOMMÉ QUAND IL Y EN A UN. C'est la
+         moitié visible du défaut « le second joueur ne reçoit rien » : il a tenu le
+         bord opposé pendant vingt secondes et le chat créditait l'autre tout seul.
+         `r.mate` vient de l'hôte (`starQueenView`), jamais de la requête. */
+      if (req.kind === "starCalm" && r.opened) {
+        const mate = r.mate ? String(r.mate) : "";
+        broadcastChat("⭐", r.site === "crater"
+          ? (mate ? L.star.chat.craterBoth(who, mate) : L.star.chat.crater(who))
+          : (mate ? L.star.chat.tamedBoth(who, mate) : L.star.chat.tamed(who)));
+      }
       /* ⚠️ ZIP 469 — L'ANNONCE DE FOUILLE NE DIT PAS CE QU'IL Y AVAIT DEDANS. Le
          second joueur apprend qu'un trou est retourné et combien il en reste ; il
          va voir. Dire « une étoile ! » dans le chat lui volerait le seul moment
@@ -3014,6 +3090,88 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         out.starScene = { key: "card", ch: nowCh.key };
       }
       if (r.scene === "end") { out.starScene = { key: "end" }; broadcastChat("⭐", L.star.chat.done); }
+      persistFnRef.current && persistFnRef.current();
+      hostFlushOut(out, f, null);
+      return;
+    }
+    /* ╔══════════════════════════════════════════════════════════════════════════
+       ║ ZIP 479 — LES SIX GESTES DES DEUX NOUVEAUX VERBES, ARBITRÉS.
+       ╚══════════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ ILS SONT DANS UN BLOC À PART DE `starFound`/`starCalm`/`starDig`, ET
+       C'EST DÉLIBÉRÉ : ceux-là partagent une chaîne (trouvaille → chapitre →
+       carte), ceux-ci non. Les fondre dans le même `if` aurait obligé chaque geste
+       à traverser cinq conditions qui ne le concernent pas — c'est exactement ce
+       qui a rendu `timber` illisible avant le 478.
+       ⚠️⚠️ AUCUN NE FAIT CONFIANCE AU CLIENT SUR CE QU'IL POSSÈDE : les bonbons et
+       l'épouvantail sont relus dans `f.inv` côté hôte, et les résolveurs rendent ce
+       qu'il faut PRÉLEVER au lieu de le prélever eux-mêmes (voir leur en-tête dans
+       `quete.js`). C'est ce qui rend le seul geste payant de la quête rejouable
+       dans un banc.
+       ⚠️ LA DISTANCE, ELLE, EST VÉRIFIÉE PAR LE CLIENT — même contrat qu'au 469
+       pour la fouille : l'hôte n'a pas la carte de la ferme du demandeur sous la
+       main, et refuser faute de carte est le repli qu'interdit le §4 de
+       `CLAUDE.md`. Ce qui compte est que l'arbitrage soit UNIQUE, et l'idempotence
+       des résolveurs le tient. */
+    if (req.kind === "starLight" || req.kind === "starCook" || req.kind === "starDishTake"
+     || req.kind === "starDishPass" || req.kind === "starDishGive" || req.kind === "starEffigy") {
+      const s3 = sharedRef.current;
+      const e = (s3.star = Q.migrateStar(s3.star));
+      const now = Date.now();
+      const who = String(req.name || f.name || "?");
+      let r = { ok: false };
+      if (req.kind === "starLight") {
+        /* ⚠️ LA ZONE AVANT TOUT (§4 de `CLAUDE.md`, le piège des deux cartes) : les
+           cinq impacts sont à la FERME, et le rectangle du marché de la ville tombe
+           au milieu des champs. */
+        if (req.pz === "farm") r = Q.resolveStarLight(e, f.id, String(req.site || ""), f.inv.candies | 0, now);
+        if (r.ok) {
+          f.inv.candies = Math.max(0, (f.inv.candies | 0) - (r.spend | 0));
+          out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+        } else if (r.short) out.toast = { id: f.id, key: "starLightShort", n: { have: r.have | 0, need: r.need | 0 } };
+      } else if (req.kind === "starCook") {
+        if (req.pz === "farm") r = Q.resolveStarCook(e, f.id, now);
+      } else if (req.kind === "starDishTake") {
+        if (req.pz === "farm") r = Q.resolveStarDishTake(e, f.id, now);
+      } else if (req.kind === "starDishPass") {
+        if (req.pz === "farm") r = Q.resolveStarDishPass(e, f.id, now);
+      } else if (req.kind === "starDishGive") {
+        /* ⚠️⚠️ LE SECOND JOUEUR EST NOMMÉ ICI, ET SON NOM VIENT DE L'HÔTE, PAS DU
+           CLIENT : `req.mate` serait un nom choisi par le demandeur. On relit celui
+           qui a CUIT ou porté le plat avant le relais (`e.dish.by` est un
+           identifiant, `farmerName` le résout côté hôte). Sans ça, « la scène le
+           nomme » serait une promesse tenue par le réseau. */
+        const handedBy = req.pz === "farm" ? starDishMate(e, f.id) : "";
+        if (req.pz === "farm") r = Q.resolveStarDishServe(e, f.id, now, who, handedBy || null);
+      } else {
+        /* ⚠️ L'ÉPOUVANTAIL : LA GÉOMÉTRIE DU CRATÈRE EST CELLE DE L'HÔTE. Il la
+           dérive de SA carte de ville — la même graine partout, donc la même
+           position — au lieu de croire les coordonnées du demandeur. */
+        const c = starCraterPos();
+        if (req.pz === "town" && c && (f.inv.scarecrow | 0) > 0)
+          r = Q.resolveStarEffigy(e, f.id, +req.x, +req.y, c.x, c.y, Q.STAR_CRATER_R, now);
+        else if (req.pz === "town" && c) out.toast = { id: f.id, key: "starNoScarecrow" };
+        if (r.ok && r.spend) {
+          f.inv.scarecrow = Math.max(0, (f.inv.scarecrow | 0) - r.spend);
+          out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+        }
+      }
+      if (!r.ok) { if (out.toast) hostFlushOut(out, f, null); return; }
+      out.star = e;
+      dirtyRef.current = true;
+      /* ⚠️ CE QUI SE DIT AU CHAT EST CE QUE L'AUTRE JOUEUR A BESOIN DE SAVOIR POUR
+         AGIR, jamais un journal. Le plat qui sort du chaudron le concerne (il peut
+         courir le chercher) ; l'offrande de lumière, non — c'est un geste privé
+         entre un joueur et une étoile. */
+      if (req.kind === "starCook") broadcastChat("\u{1F372}", L.star.chat.cooking(who));
+      if (req.kind === "starDishGive") {
+        const mate = e.found[Q.STAR_WARM_SITE] && e.found[Q.STAR_WARM_SITE].with;
+        broadcastChat("⭐", mate ? L.star.chat.tamedBoth(who, mate) : L.star.chat.tamed(who));
+      }
+      if ((r.crossed || []).length) {
+        const nowCh = Q.STAR_CHAPTERS[Math.min(e.ch, Q.STAR_CH_DONE - 1)];
+        broadcastChat("\u{1F4D6}", L.star.chat.chapter(L.star.chapter[nowCh.key] || nowCh.key));
+        out.starScene = { key: "card", ch: nowCh.key };
+      }
       persistFnRef.current && persistFnRef.current();
       hostFlushOut(out, f, null);
       return;
@@ -3077,7 +3235,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         return;
       }
       const e = Q.migrateStar(s2.star);
-      const r = Q.devStar(e, op, Date.now());
+      /* ⚠️ ZIP 479 — `f.id` EST LE QUATRIÈME ARGUMENT, ET UN SEUL BOUTON S'EN SERT :
+         la bourse de lumière bleue est indexée par joueur. Le passer ici plutôt que
+         de laisser `devStar` deviner évite qu'un raccourci remplisse la poche de
+         l'hôte quand c'est l'invité qui clique. */
+      const r = Q.devStar(e, op, Date.now(), f.id);
       if (!r.ok) { hostFlushOut(out, f, null); return; }
       s2.star = r.star;
       out.star = s2.star;
@@ -3349,6 +3511,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       f.injuryKind = "run"; // même famille que "evil" : soignable par pansements
       const gained = Math.max(0, Math.min(C.RUN_MAX_CANDIES_PER_RUN, req.candies | 0));
       f.inv.candies = (f.inv.candies | 0) + gained;
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ ZIP 479 — LA COURSE ALIMENTE LA LUMIÈRE BLEUE, ET ELLE LE FAIT ICI.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️⚠️ C'EST LE SEUL ENDROIT OÙ « RAPPORTÉ DEPUIS LA CHUTE » PEUT S'ÉCRIRE
+         HONNÊTEMENT : au moment exact où l'hôte crédite les bonbons. Le déduire
+         plus tard, en comparant deux instantanés du sac, aurait confondu « ce que
+         j'ai rapporté » et « ce que je n'ai pas encore dépensé » — or l'offrande
+         dépense, donc les deux divergent au premier paiement.
+         ⚠️ AVANT LA CHUTE, `resolveStarCandy` REFUSE tout seul (« la lumière bleue
+         s'éteint en dormant ») : rien à tester ici, la règle vit dans `quete.js`
+         avec le reste de la quête.
+         ⚠️⚠️ ET ÇA NE COÛTE PAS UN MESSAGE : `star` part dans l'`apply` qui partait
+         déjà pour l'inventaire (§3 de `CLAUDE.md` — seul le NOMBRE de `send()`
+         compte). Sans cette ligne, le second joueur ne verrait la bourse fraîche
+         qu'à la prochaine diffusion de la quête, c'est-à-dire peut-être jamais. */
+      const starRun = (sharedRef.current.star = Q.migrateStar(sharedRef.current.star));
+      const freshRun = Q.resolveStarCandy(starRun, f.id, gained, nowR).ok;
       const sc = Math.max(0, Math.min(C.RUN_MAX_SCORE, req.score | 0));
       if (sc > (f.inv.runBest | 0)) f.inv.runBest = sc;
       dirtyRef.current = true;
@@ -3360,6 +3539,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // jour ses bonbons et son record chez lui (setMyInv), exactement
           // comme le fait "heal" pour l'énergie et les outils.
           farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, injuredUntil: f.injuredUntil },
+          star: freshRun ? starRun : undefined,        // 479 — voir la note ci-dessus
           chat: { from: "\u{1F36C}", msg: L.runLostChat(f.name, gained) },
         },
       });
@@ -3379,6 +3559,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          reste blessé du temps qu'il lui restait. */
       const gainedE = Math.max(0, Math.min(C.RUN_MAX_CANDIES_PER_RUN, req.candies | 0));
       f.inv.candies = (f.inv.candies | 0) + gainedE;
+      /* ⚠️ ZIP 479 — MÊME LIGNE QUE DANS `runFailed`, ET C'EST VOULU : les deux
+         sorties de la course créditent des bonbons, donc les deux alimentent la
+         lumière bleue. En oublier une aurait fait de la sortie offroad un chemin
+         « qui ne compte pas », sans qu'aucun texte ne le dise. */
+      const starRunE = (sharedRef.current.star = Q.migrateStar(sharedRef.current.star));
+      const freshRunE = Q.resolveStarCandy(starRunE, f.id, gainedE, Date.now()).ok;
       const scE = Math.max(0, Math.min(C.RUN_MAX_SCORE, req.score | 0));
       if (scE > (f.inv.runBest | 0)) f.inv.runBest = scE;
       dirtyRef.current = true;
@@ -3386,6 +3572,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         type: "broadcast", event: "apply",
         payload: {
           farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, injuredUntil: f.injuredUntil },
+          star: freshRunE ? starRunE : undefined,      // 479 — voir la note dans `runFailed`
           chat: { from: "\u{1F6E4}", msg: L.runEscapedChat(f.name, gainedE) },
         },
       });
@@ -6806,6 +6993,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     /* ⚠️ ZIP 478 — `n` PORTE ICI UN OBJET, comme `starShort` juste au-dessus : le
        refus doit nommer CE QUI manque, pas seulement combien. */
     if (key === "starNoExtra") { const t = n || {}; return L.star.plan.orderPoorExtra(t.n | 0, t.what || ""); }
+    /* ⚠️ ZIP 479 — LES DEUX REFUS DES NOUVEAUX VERBES DISENT QUOI ET COMBIEN, comme
+       `starShort` juste au-dessus : un refus qui n'apprend rien est un refus qu'on
+       relance en boucle sans comprendre (426). */
+    if (key === "starLightShort") { const t = n || {}; return L.star.s2.lightShort(t.have | 0, t.need | 0); }
+    if (key === "starNoScarecrow") return L.star.s2.noScarecrow;
     if (key === "starNoTristan") return L.star.plan.noTristan;
     if (key === "starUnbuilt") { const t = n || {}; return L.star.plan.unbuilt(t.n | 0, t.total | 0); }
     return { tired: L.toastTired, farShop: L.toastFarShop, farMarket: L.toastFarMarket, marketNothing: L.toastMarketNothing, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, millPlaced: L.toastMillPlaced, millTaken: L.toastMillTaken, millGround: L.toastMillGround, millOccupied: L.toastMillOccupied, millOnCrop: L.toastMillOnCrop, noMillBuilt: L.toastNoMillBuilt, millBuilding: L.toastMillBuilding, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, noSucrerieStock: L.toastNoSucrerieStock, sucrerieNotEmpty: L.toastSucrerieNotEmpty, noCaneToDeposit: L.toastNoCaneToDeposit, sucrerieFull: L.toastSucrerieFull, actionFailed: L.toastActionFailed, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, reneCoffeeCooldown: L.toastReneCoffeeCooldown, tristanNotHere: L.toastTristanNotHere, tristanCoffeeCooldown: L.toastTristanCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, kickRefused: L.kickRefused, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy, balloonNotBoarding: L.toastBalloonNotBoarding, balloonFull: L.toastBalloonFull,
@@ -7115,6 +7307,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             dirtyRef.current = true;
             hostSend({ type: "broadcast", event: "apply", payload: { star: e0 } });
             for (const k of rt.keys) broadcastChat("\u{1FAB5}", L.star.plan.delivered(L.star.plan.part(k)));
+            persistFnRef.current && persistFnRef.current();
+          }
+          /* ╔══════════════════════════════════════════════════════════════════
+             ║ ZIP 479 — LE PLAT FROID DISPARAÎT, ET C'EST UN GESTE D'ARBITRE.
+             ╚══════════════════════════════════════════════════════════════════
+             ⚠️ `starDishPhase` se contente de dire « cold » : la LECTURE ne
+             modifie rien (sans quoi un banc mesurerait un monde que son propre
+             appel vient de changer). C'est ici, chez l'hôte, une fois, que l'objet
+             s'efface — et la phrase qui l'annonce, elle, se déduit de la phase chez
+             chaque client (voir `starWatch`), donc elle ne coûte pas un message.
+             ⚠️⚠️ ET ON NE DIFFUSE QUE SI QUELQUE CHOSE A CHANGÉ : ce battement
+             tourne en boucle, et un `apply` inconditionnel ici aurait rediffusé la
+             ferme entière pour un plat qui n'existe pas (§3 — seul le NOMBRE de
+             `send()` est facturé). */
+          if (Q.resolveStarDishTick(e0, nowT).ok) {
+            dirtyRef.current = true;
+            hostSend({ type: "broadcast", event: "apply", payload: { star: e0 } });
             persistFnRef.current && persistFnRef.current();
           }
         }
@@ -14337,8 +14546,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const scNow = sharedRef.current.salveCraft || { trout: 0, pike: 0 };
             const gemsNow = (sharedRef.current.gems && sharedRef.current.gems[0]) || 0;
             const rec = C.SALVE_RECIPE;
+            /* ╔══════════════════════════════════════════════════════════════════
+               ║ ZIP 479 — LE PLAT DE L'ÉTOILE FUME SUR LE CHAUDRON.
+               ╚══════════════════════════════════════════════════════════════════
+               ⚠️⚠️ SANS LUI, CUISINER NE SE VOIT NULLE PART : on clique un bouton
+               dans un menu, le menu se ferme, et il ne se passe rien pendant vingt
+               secondes. C'est le défaut du 453 (« un texte affirme, le monde ne
+               montre pas ») et celui du 459 sur Tristan — le même, deux fois payé,
+               qu'on ne repaie pas une troisième.
+               ⚠️ IL EST DESSINÉ AU-DESSUS DU CHAUDRON ET PAS DEVANT : c'est ce qui
+               mijote DEDANS. `drawStarDish` vit dans `fermeArt`, donc `render-etoile`
+               le regarde (§13 là-bas). */
+            const dishPh = starDishNow();
             draws.push({ y: (y + 1) * T, fn: () => {
               ctx.drawImage(sprites.cauldron, x * T - 2, (y + 1) * T - 24);
+              if ((dishPh === "cook" || dishPh === "ready") && sprites.drawStarDish)
+                sprites.drawStarDish(ctx, x * T + 8, (y + 1) * T - 30, T, dishPh === "ready" ? 1 : 0.55, performance.now());
               const barW = 20, bx = x * T + 8 - barW / 2;
               const rows = [
                 { got: gemsNow, target: rec.amethyst, color: "#b46ee0" },
@@ -14874,9 +15097,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          relu, compté par le banc — il ne s'exécute simplement jamais. */
         const sb = starBubbleNow(cps);
         if (sb) queueBubble(Math.round((cp ? cp.x : m.x) * T) + 8, Math.round((cp ? cp.y : m.y) * T) - (cp ? 22 : 34), sb.text, "star", sb.alpha);   // 465 — fondu, rappel au survol
-        const cm = starCalmUi();
+        /* ⚠️ ZIP 479 — LE PLAT PASSE DEVANT LA TENUE, même règle que l'effort en
+           ville (`ef || starCalmUi()`, 459) : une seule barre à la fois au-dessus
+           du fermier. */
+        const cm = starDishUi() || starCalmUi();
         if (cm) {
           const bx = Math.round(m.x * T) + 8, by = Math.round(m.y * T) - 20;
+          /* ⚠️⚠️ ET LE PLAT SE VOIT DANS SES MAINS, pas seulement dans une barre :
+             c'est ce qui fait que l'AUTRE joueur sait qui le porte (la barre, elle,
+             n'est que chez le porteur). Il est mis en file à la rangée du fermier
+             avec un epsilon POSITIF pour passer devant lui — on porte un plat
+             devant soi, pas derrière (431 : ce qui doit passer devant le dit avec
+             un epsilon, on ne se fie jamais à la stabilité du tri). */
+          if (cm.dish !== undefined && sprites.drawStarDish)
+            draws.push({ y: (m.y + 1) * T + 0.02, fn: () =>
+              sprites.drawStarDish(ctx, Math.round(m.x * T) + 8, Math.round(m.y * T) - 4, T, cm.dish, performance.now()) });
           const ca = Q.starBubbleAlpha(performance.now(), cm.textUntil, starCompanionHovered(cps, true));
           if (cm.text && ca > 0) queueBubble(bx, by - 9, cm.text, "star", ca);
           bubbleQueue.push({ cx: bx, by, meter: cm });
@@ -14914,6 +15149,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
       for (const p of playersRef.current.values()) if (!p.sleeping && (p.zone || "farm") === "farm") { draws.push({ y: (p.y + 0.9) * T, fn: () => drawRemotePets(p, dt) }); draws.push({ y: (p.y + 1) * T, fn: () => drawRemote(p) }); } // zip 234: town players are drawn on the town map, not here — zip 247: their pets follow them here too
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ ZIP 479 — LE PLAT SE VOIT DANS LES MAINS DE L'AUTRE, ET IL LE FAUT.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️⚠️ SANS ÇA, LE RELAIS EST AVEUGLE : « l'un cuisine, l'autre porte »
+         demande de savoir QUI porte, et la jauge n'est affichée que chez le
+         porteur (une jauge répond à « est-ce que je fais bien », et la question ne
+         se pose qu'à une personne). Le plat au-dessus de la tête est la seule
+         chose que les DEUX joueurs voient — c'est donc lui qui porte la
+         coopération, pas la barre.
+         ⚠️ IL EST DÉRIVÉ DE L'ÉTAT PARTAGÉ (`starDishHolder`), pas d'un champ de
+         plus dans le paquet de position : §3 de `CLAUDE.md`, ce qui peut se
+         déduire ne se diffuse pas. Zéro octet, zéro `send()`.
+         ⚠️ EPSILON POSITIF, comme pour le mien : on porte un plat devant soi. */
+      {
+        const dishHolder = starDishNow() === "carry" ? Q.starDishHolder(sharedRef.current.star) : null;
+        if (dishHolder && sprites.drawStarDish) {
+          const hp = playersRef.current.get(dishHolder);
+          if (hp && !hp.sleeping && (hp.zone || "farm") === "farm")
+            draws.push({ y: (hp.y + 1) * T + 0.02, fn: () => sprites.drawStarDish(
+              ctx, Math.round(hp.x * T) + 8, Math.round(hp.y * T) - 4, T,
+              Q.starDishHeat(sharedRef.current.star, Date.now()), performance.now()) });
+        }
+      }
       // Sommeil : aucune animation d'entrée, le dormeur disparaît juste de la
       // carte (voir ci-dessus, non ajouté à `draws`) ; des "Zzz" flottent
       // au-dessus des fenêtres de la maison tant qu'AU MOINS un joueur dort
@@ -15454,7 +15712,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // complète + torche déjà allumée), ou ouvrir le menu de dépôt sinon.
       else if (!pk && cauldronTile && nearTile(cauldronTile)) {
         const cst = salveRecipeStatus();
-        pk = cst.brewReady ? "cauldronCollect" : cst.brewing ? "cauldronBrewing" : (cst.ready && torchOnRef.current) ? "cauldronIgnite" : "cauldron";
+        /* ⚠️⚠️ ZIP 479 — LE PLAT DE L'ÉTOILE PASSE DEVANT LA POMMADE, ET SEULEMENT
+           QUAND IL Y A QUELQUE CHOSE À FAIRE POUR LUI. Deux états seulement le
+           prennent : « c'est prêt » (chaque seconde compte, l'invite doit dire
+           PRENDS) et « ça mijote » (un CONSTAT, sans touche — voir `prompt.dishWait`).
+           Le reste du temps le chaudron redevient le chaudron : la pommade garde
+           ses quatre états, et cuisiner passe par son menu, comme déposer un
+           poisson. *Une invite qui vole la place d'une autre est un bâtiment qu'on
+           ne peut plus utiliser* (règle du 427, du plus précis au plus large). */
+        const sdish = starDishNow();
+        if (sdish === "ready") pk = "star:dishTake";
+        else if (sdish === "cook") pk = "star:dishWait";
+        else pk = cst.brewReady ? "cauldronCollect" : cst.brewing ? "cauldronBrewing" : (cst.ready && torchOnRef.current) ? "cauldronIgnite" : "cauldron";
         // Compte à rebours de concoction (correctif audit 2026-07) : mis à
         // jour au plus une fois par seconde (setState seulement au changement).
         const secs = cst.brewing && !cst.brewReady ? Math.max(1, Math.ceil((cst.brewingUntil - Date.now()) / 1000)) : 0;
@@ -17080,6 +17349,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               x: cpos.x, y: cpos.y + 0.12, state: 1, pose: Math.floor(now / 210) & 3,
               color: "yellow", scale: 1, queen: true,
             }));
+          /* ╔══════════════════════════════════════════════════════════════════
+             ║ ZIP 479 — LE FIGURANT. « ON PLANTE SON ÉPOUVANTAIL EN FACE. »
+             ╚══════════════════════════════════════════════════════════════════
+             ⚠️⚠️ IL FALLAIT LE VOIR, SINON LE GESTE N'EXISTE PAS : planter quelque
+             chose et ne rien voir apparaître est le pire retour possible — le
+             joueur conclut que la touche n'a rien fait et recommence ailleurs.
+             ⚠️ C'EST LE SPRITE DE LA FERME (`sprites.scarecrow`), pas un second
+             dessin : deux épouvantails divergeraient au premier réglage, et
+             celui-ci est déjà regardé par le jeu depuis le zip 2026-07. C'est aussi
+             ce qui rend la fiction juste — c'est bien CELUI de ta ferme que tu as
+             porté jusqu'ici.
+             ⚠️⚠️ ET IL PASSE PAR `pushE`, PAS PAR UN DÉCAL DE SOL : il fait deux
+             cases de haut et se tient sur la lèvre du cratère, donc un joueur qui
+             passe au nord doit se dessiner DERRIÈRE lui. Peint avec les tuiles, il
+             aurait avalé tout ce qui passe devant (§4, le sprite haut contre le mur
+             du fond). */
+          if (queenWaiting && st1.effigy && sprites.scarecrow) {
+            const ef0 = st1.effigy, efE = elAt(Math.floor(ef0.x), Math.floor(ef0.y));
+            pushE((ef0.y + 1) * T, efE, () => ctx.drawImage(
+              sprites.scarecrow, Math.round(ef0.x * T), Math.round((ef0.y + 1) * T - 32)));
+          }
           /* ⚠️⚠️ LA FUMÉE N'EST PAS UN DÉCAL DE SOL, DONC ELLE NE SE PEINT PAS
              ICI : elle MONTE, jusqu'à une case et demie au-dessus du trou. Peinte
              avec les tuiles, un joueur passant au NORD du cratère se dessinerait
@@ -19695,10 +19985,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          le reste du jeu lit (la bulle, le tri, la cachette). */
       const jn = cp.join, jk = T / 16;
       const jdx = jn ? jn.dx * jk : 0, jdy = jn ? jn.dy * jk : 0;
-      const jsc = (jn ? jn.scale : 1) * (cp.scale || 1);
+      /* ⚠️ ZIP 479 — LA CACHETTE SE TASSE AUSSI (`hide.scale`) : une chose qui
+         pâlit sans rétrécir a l'air d'un calque qu'on baisse, pas d'un animal qui
+         se fait petit. Les deux échelles se MULTIPLIENT — l'arrivée et la cachette
+         ne peuvent pas jouer en même temps, mais écrire un `??` entre elles aurait
+         été une règle de plus à tenir pour rien. */
+      const jsc = (jn ? jn.scale : 1) * (cp.scale || 1) * (cp.hide ? cp.hide.scale : 1);
       const cx = cp.x * T + T / 2 + jdx, cy = (cp.y + 1) * T - 16 + (jn ? 0 : bob) + jdy;
       ctx.save();
-      if (cp.hiding) ctx.globalAlpha = 0.22;
+      if (cp.hide) ctx.globalAlpha = cp.hide.alpha;
       /* ⚠️ ELLE PASSE DERRIÈRE LE FERMIER PENDANT LA MOITIÉ DU TOUR, et c'est ce
          seul détail qui fait qu'on la voit TOURNER AUTOUR plutôt que glisser
          autour. Vu de dessus, un cercle sans profondeur est un cercle plat. */
@@ -22598,9 +22893,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      grandeur décrite deux fois dans la closure diverge) : une seule
      fonction, appelée aux trois endroits, ne peut plus l'oublier une
      quatrième fois. */
+  /* ⚠️⚠️ ZIP 479 — TROIS ENTRÉES DE PLUS, ET C'EST ICI QU'ELLES DOIVENT ÊTRE. Le
+     bandeau demande maintenant sept phrases différentes pour deux trous d'étoile
+     (`starTameGoalKey`), et les trois grandeurs qui les départagent ne peuvent PAS
+     vivre dans `quete.js` : la bourse est celle de CE joueur, l'horloge est celle
+     de CE client, et « suis-je seul en ville » se lit dans la liste des joueurs.
+     ⚠️ UNE SEULE CONSTRUCTION DU CONTEXTE, LUE PAR LE BANDEAU **ET** PAR LE
+     CHEVRON. C'est la parade du 449 dans sa forme la plus littérale : deux
+     contextes différents, ce sont deux réponses à « où vais-je », et elles seraient
+     vertes toutes les deux. */
   function starGoalCtx() {
     const e = sharedRef.current.star;
-    return { craterHot: !starCraterCoolNow(), engineerHere: Q.starEngineerHere(e, Date.now()), landed: starImpactLandedNow() };
+    const m = meRef.current;
+    return {
+      craterHot: !starCraterCoolNow(), engineerHere: Q.starEngineerHere(e, Date.now()),
+      landed: starImpactLandedNow(),
+      candy: m ? Q.starCandyFresh(e, m.id) : 0,
+      now: Date.now(),
+      alone: starAlone("crater"),
+    };
   }
 
   /* ╔══════════════════════════════════════════════════════════════════════════
@@ -23141,6 +23452,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const tw = townWorldNow();
       return tw && tw.shipX ? { zone: "town", x: tw.shipX, y: tw.shipY } : null;
     }
+    /* ⚠️⚠️ ZIP 479 — LE CHAUDRON. Même contrat que la scierie juste en dessous : il
+       peut ne pas exister (il se ramasse dans le monde maléfique), il est
+       DÉPLAÇABLE, donc sa position se lit VIVANTE sur les objets du monde et jamais
+       dans une constante. `null` s'il n'est pas posé — pas de chevron vaut mieux
+       qu'un chevron qui pointe un pré. */
+    if (id === "cauldron") {
+      /* ⚠️ ON PASSE PAR `findCauldronTile`, QUI GARDE SON CACHE : le chevron se
+         redessine à chaque image, et un scan complet de la carte par image serait
+         le coût que ce cache a justement été écrit pour éviter (audit 2026-07). */
+      const ct = findCauldronTile();
+      return ct ? { zone: "farm", x: ct.x, y: ct.y } : null;
+    }
     if (id === "sawmill") {
       const cb = (sharedRef.current.crafts || {}).sawmill;
       if (!cb || !cb.built) return null;
@@ -23175,7 +23498,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        obligatoire depuis que le chevron DÉRIVE de l'objectif : lui passer `{}`
        ferait pointer le cratère brûlant au lieu de dire d'attendre. Une seule
        source, donc un seul contexte. */
-    const id = Q.starTargetSite(e, { craterHot: !starCraterCoolNow(), landed: starImpactLandedNow() });
+    /* ╔══════════════════════════════════════════════════════════════════════════
+       ║ ZIP 479 — LE COMMENTAIRE CI-DESSUS DISAIT « UN SEUL CONTEXTE » ET IL Y EN
+       ║ AVAIT DEUX.
+       ╚══════════════════════════════════════════════════════════════════════════
+       ⚠️⚠️⚠️ Cette ligne recopiait à la main `{ craterHot, landed }` pendant que le
+       bandeau appelait `starGoalCtx()` : deux objets, deux contenus, sous une note
+       qui promettait le contraire. Tant que le contexte n'avait que deux champs,
+       les deux copies disaient la même chose et rien ne pouvait le voir. Le 479 en
+       ajoute trois (la bourse, l'horloge, « suis-je seul ») — et le chevron aurait
+       continué de pointer le CRATÈRE ROSE pendant que le bandeau envoie au
+       CHAUDRON. C'est le défaut du 449 mot pour mot, sur le couple exact qui l'a
+       inventé, et il attendait depuis vingt-cinq zips derrière un commentaire
+       rassurant. *Une phrase qui dit « une seule source » n'en fait pas une.* */
+    const id = Q.starTargetSite(e, starGoalCtx());
     if (!id) return null;
     const site = Q.STAR_SITE[id];
     if (site && site.spot === "starFarmImpact" && !starFarmImpactLandedNow(site.impact)) return null;
@@ -23330,6 +23666,36 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!trails[zone]) trails[zone] = [];
     if (starResidentNear(zone, cx, cy)) starHideRef.current = nowMs + Q.STAR_HIDE_MS;
     const hidden = nowMs < starHideRef.current;
+    /* ╔══════════════════════════════════════════════════════════════════════════
+       ║ ZIP 479 (défaut 10) — ELLE NE S'EFFACE PLUS, ELLE SE CACHE.
+       ╚══════════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ LE RAYON N'A PAS BOUGÉ (`STAR_HIDE_R` = 4,5) : le reproche de l'audit
+       n'était pas qu'elle disparaisse trop tôt, c'est qu'elle passait à 22 %
+       d'opacité EN UNE IMAGE — ce qui se lit comme un bug d'affichage et non comme
+       une intention. La correction est donc un COMPORTEMENT, pas un réglage.
+       ⚠️ LA COURBE VIT DANS `quete.js` (`starHideK`/`starHideAnim`), donc
+       `render-etoile` la regarde. Écrite ici, dans la closure de la boucle, elle
+       aurait été le deuxième visage du piège n°1 : elle vieillirait sans que rien
+       ne le dise.
+       ⚠️⚠️ ET L'HORLOGE EST BORNÉE À 80 ms PAR IMAGE, comme celle de l'arrivée
+       (468) : un onglet qu'on laisse en arrière-plan revient avec plusieurs
+       secondes de retard, et sans borne l'étoile ferait un saut au lieu d'un
+       mouvement. */
+    {
+      const hk = starHideKRef.current;
+      const dt = Math.max(0, Math.min(80, nowMs - (hk.last || nowMs)));
+      hk.k = Q.starHideK(hk.k, dt, hidden);
+      hk.last = nowMs;
+    }
+    const hideK = starHideKRef.current.k;
+    const hideAnim = hideK > 0.001 ? Q.starHideAnim(hideK) : null;
+    /* ⚠️ LA PHRASE UNE SEULE FOIS PAR SESSION, jamais deux — même règle que le
+       rappel de reprise. Elle transforme une absence en raison, et une raison
+       répétée toutes les trente secondes redeviendrait du bruit. */
+    if (hidden && !starHideSaidRef.current && specs.length) {
+      starHideSaidRef.current = true;
+      pushToast(L.star.s2.hideOnly);
+    }
     const joining = starJoinRef.current;
     if (joining.id) {
       const dt = Math.max(0, Math.min(80, nowMs - (joining.last || nowMs)));
@@ -23378,7 +23744,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          marche elles resserrent le cercle pour former une traîne compacte. */
       const spread = moving ? (queen ? 0.30 : 0.38) : (queen ? 0.84 : 1.04);
       const guide = queen && lead;
-      const hiding = guide ? false : hidden;
+      /* ⚠️ LE MENEUR NE SE CACHE PAS : il est en train de montrer un chemin, et une
+         aide qui s'évanouit à mi-parcours est pire que pas d'aide. */
+      const hide = guide ? null : hideAnim;
+      const hiding = !!hide;
       /* ⚠️ ZIP 469 — L'ÉTAT « ELLE ATTEND QUELQUE CHOSE » (2) SE LIT MAINTENANT
          SUR LE CHANTIER, pas sur un lieu supprimé. Il valait « chapitre `note` et
          pas encore de chant » ; il vaut « dernier chapitre et navire inachevé ».
@@ -23386,13 +23755,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          elle survit au déchant sans qu'on ait à inventer un second état. */
       const state = hiding ? 1
         : (queen && Q.starChapterKey(e) === "build" && !Q.starShipComplete(e)) ? 2 : 0;
+      /* ⚠️⚠️ PREMIER TEMPS : ELLE RENTRE VERS LE JOUEUR. `tuck` est une FRACTION du
+         chemin qui la sépare de lui, jamais des pixels — les trois cartes n'ont pas
+         la même taille de tuile, et un décalage en pixels l'aurait fait rentrer plus
+         loin en ville qu'à la ferme. `dip` la fait plonger dans l'herbe. */
+      const bx = guide ? lead.x : p.x + Math.cos(a) * spread;
+      const by = guide ? lead.y : p.y + Math.sin(a) * spread * 0.58;
       const cp = {
         id: s.id,
-        x: guide ? lead.x : p.x + Math.cos(a) * spread,
-        y: guide ? lead.y : p.y + Math.sin(a) * spread * 0.58,
+        x: hide ? bx + (cx - bx) * hide.tuck : bx,
+        y: hide ? by + (cy - by) * hide.tuck + hide.dip : by,
         state,
         pose: Math.floor(nowMs / (queen ? 220 : 260) + i) & 3,
         hiding,
+        hide,                                    // 479 — { tuck, dip, alpha, scale } ou null
         color: s.color || "yellow",
         scale: queen ? 1 : 0.82,
         queen,
@@ -23404,7 +23780,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          `climb → spin → settle` existait déjà. Les autres gardent leur place. */
       if (s.id === joining.id && join) {
         const base = Q.starJoinPoint(joining.origin, { x: cx, y: cy }, join);
-        return { ...cp, x: base.x, y: base.y, hiding: false, join };
+        return { ...cp, x: base.x, y: base.y, hiding: false, hide: null, join };
       }
       return cp;
     });
@@ -23460,9 +23836,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        lieu pour nommer ce qu'on a trouvé. C'est la même faute que le compte de
        marques qu'on vient de supprimer d'ici : *un compteur ne se souvient pas.* */
     const dug = Q.STAR_FARM_IMPACTS.filter(st => Q.starDug(e, st.id)).map(st => st.id);
+    /* ⚠️ ZIP 479 — LE PLAT SE SUIT SUR DEUX GRANDEURS, ET IL EN FAUT BIEN DEUX :
+       sa PHASE (qui change toute seule, à l'horloge) et sa MAIN (qui change parce
+       que quelqu'un l'a prise). Une seule aurait raté la moitié des transitions —
+       le passage cuisson → prêt ne touche pas l'état partagé, et le relais ne
+       change pas la phase. */
+    const dishPh = Q.starDishPhase(e, Date.now());
+    const dishBy = (e.dish && e.dish.by) || "";
     const w = starWatchRef.current;
     if (!w) { starWatchRef.current = { built, crater, gift, sky: false, pool: false, empty: false,
-                                       followers, dug, plan: Q.starPlanReady(e), timber: Q.starTimberBuilt(e) }; return; }
+                                       followers, dug, plan: Q.starPlanReady(e), timber: Q.starTimberBuilt(e),
+                                       dishPh, dishBy }; return; }
+    /* ⚠️⚠️ TROIS PHRASES, ET AUCUNE N'EST UN ÉVÉNEMENT RÉSEAU : elles se déduisent
+       de l'état partagé, comme tout ce bloc. Un joueur qui se connecte au milieu
+       d'un trajet reçoit l'ÉTAT (un plat en main) et non les toasts qui l'ont
+       précédé — c'est le même garde que pour les plans et le navire.
+       ⚠️ LE PLAT PERDU NE SE DIT QUE S'IL EST VRAIMENT PERDU : servi, il disparaît
+       aussi, et annoncer « il a refroidi » au moment de la victoire serait le pire
+       texte du chantier. */
+    if (dishPh !== w.dishPh || dishBy !== w.dishBy) {
+      if (dishPh === "ready" && w.dishPh === "cook") pushToast(L.star.s2.dishReady);
+      else if (dishPh === "carry" && w.dishPh === "carry" && dishBy !== w.dishBy)
+        pushToast(L.star.s2.dishPass(starNameOf(dishBy) || "?"));
+      /* ⚠️ « FROID » SE LIT CHEZ TOUT LE MONDE À LA MÊME SECONDE (c'est une
+         soustraction sur `dish.at`, pas un message), donc la phrase part ici et pas
+         chez l'hôte. Elle se dit AVANT que l'arbitre efface l'objet : à `null`, on
+         ne saurait plus s'il a refroidi ou s'il vient d'être servi. */
+      else if (dishPh === "cold" && w.dishPh === "carry") pushToast(L.star.s2.dishCold);
+      w.dishPh = dishPh; w.dishBy = dishBy;
+    }
 
     /* ╔══════════════════════════════════════════════════════════════════════
        ║ ZIP 469 — L'OVERLAY DE RÉSULTAT S'OUVRE ICI, ET NULLE PART AILLEURS.
@@ -23603,7 +24005,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     /* ⚠️ ZIP 469 — LE BLOC DU CROISEMENT D'OMBRES EST PARTI D'ICI (le compte de
        marques, la phrase de découverte et les trois phrases du « pourquoi des
        ombres »). Il n'avait plus de mécanique derrière lui. */
-    if (gift && !w.gift) { w.gift = true; pushToast(L.star.end.gift); }
+    /* ╔══════════════════════════════════════════════════════════════════════════
+       ║ ZIP 479 — LA TRACE DE FIN NOMME CEUX QUI ÉTAIENT DEUX.
+       ╚══════════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ C'EST LA DERNIÈRE MOITIÉ DU DÉFAUT « le second joueur ne reçoit rien »
+       (audit 477). Il recevait déjà le don (`resolveStarGift` écrit pour tous les
+       joueurs présents, et cette ligne le lui dit) ; ce qui manquait est qu'aucune
+       trace ne gardait son NOM. Une soirée de jeu laisse une phrase ; celle-ci en
+       laisse deux, et la seconde dit qui était là.
+       ⚠️ ELLE SE DÉDUIT DE `found[*].with`, écrit à l'instant de l'apprivoisement
+       par l'hôte : rien n'est diffusé pour elle, rien n'est à réconcilier. Un seul
+       joueur du bout à l'autre n'a aucun `with`, donc pas de seconde phrase — on ne
+       félicite personne d'être venu à deux quand on était seul. */
+    if (gift && !w.gift) {
+      w.gift = true;
+      const mates = [];
+      for (const id of Object.keys(e.found || {})) {
+        const f0 = e.found[id];
+        if (!f0 || !f0.with) continue;
+        for (const n of [f0.by, f0.with]) if (n && !mates.includes(n)) mates.push(n);
+      }
+      starTell([L.star.end.gift, mates.length ? L.star.end.together(mates.join(" · ")) : null], 3000);
+    }
 
     /* ── LE CRATÈRE, UNE FOIS VIDE puis une fois la quête finie. ⚠️ DEUX
        PHRASES DIFFÉRENTES POUR DEUX ÉTATS DIFFÉRENTS du même trou, et c'est le
@@ -23750,11 +24173,48 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      survivrait à la sortie serait une interface qui commente une scène finie.
      ⚠️ ET ELLE VIT AU NIVEAU DU COMPOSANT, appelée par la boucle de la ville —
      jamais l'inverse (piège n°1, payé au 430 et au 431). */
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 479 — LA JAUGE DU PLAT. ELLE DESCEND, ET C'EST TOUT LE VERBE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ ELLE PASSE DEVANT LA JAUGE DE TENUE, comme celle de la glissade (459) :
+     deux barres empilées au-dessus du même fermier, c'est la faute du 456 sur les
+     neuf bulles (« chaque bulle juste, leur somme fausse »). Elles ne se disputent
+     jamais vraiment — porter un plat et se tenir immobile dos tourné sont deux
+     endroits différents de la ferme.
+     ⚠️ ELLE NE S'AFFICHE QUE CHEZ CELUI QUI PORTE : l'autre joueur voit le plat
+     au-dessus de sa tête, pas sa barre. Une jauge est une réponse à « est-ce que je
+     fais bien », et il n'y a qu'une personne à qui la question se pose.
+     ⚠️⚠️ ET LA PHRASE NE VIENT QU'À LA FIN. Un texte permanent pendant deux minutes
+     et demie de course serait du bruit ; sous 30 % il devient une alerte, ce qui est
+     le seul moment où il apprend quelque chose. */
+  function starDishUi() {
+    const m = meRef.current, e = sharedRef.current.star;
+    if (!m || (m.zone || "farm") !== "farm") return null;
+    if (!starDishMine() || starDishNow() !== "carry") return null;
+    const k = Q.starDishHeat(e, Date.now());
+    const low = k < 0.30;
+    return {
+      k, dish: k, warn: low,
+      text: low ? L.star.s2.dishCooling : "",
+      textUntil: performance.now() + 1200,
+    };
+  }
   function starCalmUi() {
     const m = meRef.current, e = sharedRef.current.star;
     if (!m || !e || !Q.starFallen(e) || Q.starDone(e)) return null;
     const c = starTameTarget(m); if (!c) return null;
-    const step = Q.starCalmStep(m.x, m.y, m.dir | 0, !!m.moving, c.x, c.y, 1, c.r);
+    /* ⚠️⚠️⚠️ ZIP 479 — DEUX VERBES DE POSTURE, DEUX ÉTATS, UNE SEULE FONCTION QUI
+       RÉPOND. La reine ne se juge pas sur `starCalmStep` (« suis-je immobile, dos
+       tourné ») : il lui faut deux présences aux bords opposés, donc trois états de
+       plus. Les deux jeux d'états se rejoignent sur les trois derniers
+       (`moving`/`watching`/`holding`), et c'est pour ça qu'ils partagent leurs
+       phrases — un geste, un texte.
+       ⚠️ ON GARDE `c.pair` SUR LA CIBLE plutôt que de rappeler `starQueenView` plus
+       bas : deux appels dans la même image pourraient déjà répondre deux choses si
+       un paquet de position arrive entre les deux. Une photo, un verdict (462). */
+    const pair = Q.starVerbOf(c.id) === "pair" ? starQueenView(m, c) : null;
+    if (pair) c.pair = pair;
+    const step = pair ? pair.step : Q.starCalmStep(m.x, m.y, m.dir | 0, !!m.moving, c.x, c.y, 1, c.r);
     if (step === "away") return null;
     /* Le trou qui fume passe devant tout : « tourne-toi » pendant que le cratère
        refuse serait « le jeu propose et refuse » (426), au seul endroit du
@@ -23765,7 +24225,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         starCalmBubbleRef.current = { key, until: performance.now() + 4200 };
       return { k: 0, warn: true, text: L.star.s2.tooHot, textUntil: starCalmBubbleRef.current.until };
     }
-    const need = Q.starCalmNeed(starAlone(c.zone === "farm" ? "farmTame" : "crater"));
+    /* ⚠️⚠️ ZIP 479 — LA JAUGE LIT LE MÊME CONTEXTE QUE L'ARBITRE, sinon elle
+       promet vingt secondes là où l'hôte en compte soixante. C'est le défaut du
+       458 dans sa forme exacte, et il ne peut se voir qu'en jouant. */
+    const need = Q.starTameNeed(c.id, {
+      alone: starAlone(c.zone === "farm" ? "farmTame" : "crater"),
+      partner: c.pair ? c.pair.partner : null,
+    });
     const t0 = starCalmT0Ref.current;
     const held = step === "holding" && t0 ? Math.min(need, performance.now() - t0) : 0;
     const key = c.id + ":" + step;
@@ -23788,7 +24254,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       k: need > 0 ? held / need : 0,
       site: c,
       warn: step !== "holding",
+      /* ⚠️ ZIP 479 — TROIS ENTRÉES DE PLUS, ET AUCUNE PHRASE EN DOUBLE : les trois
+         états propres à la reine ont leur texte, les quatre partagés gardent celui
+         de la posture (voir la note de `s2.queenAlone`). */
       text: step === "far" ? (c.zone === "farm" ? L.star.s2.calmNear : L.star.s2.calmIn)
+          : step === "alone" ? L.star.s2.queenAlone
+          : step === "edge" ? L.star.s2.queenEdge
+          : step === "side" ? L.star.s2.queenSide
           : step === "moving" ? L.star.s2.calmStill
           : step === "watching" ? L.star.s2.calmTurn
           : L.star.s2.calmHold,
@@ -23883,7 +24355,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            trou ; une seule laissée ouverte suffit à raconter la fin avant le
            début.* */
         const landed = real ? starFarmImpactLandedReal(p.impact) : starFarmImpactLandedNow(p.impact);
+        /* ⚠️⚠️⚠️ ZIP 479 — LA POSTURE N'APPARTIENT PLUS QU'À LA BLEUE, ET ELLE NE
+           COMMENCE QU'APRÈS L'OFFRANDE. Deux portes de plus sur le même trou (c'est
+           la sixième, voir la note du 448 juste en dessous) :
+             · `verb !== "light"` — la rose vient au plat, pas au calme. Sans cette
+               ligne, la jauge d'apprivoisement se serait affichée sur SON trou et
+               le joueur aurait tourné le dos pendant une minute à une étoile qui
+               n'en a rien à faire ;
+             · `!starLit` — la bleue veut sa lumière d'abord. L'hôte refuse déjà
+               (`unlit`), mais en SILENCE : afficher la jauge par-dessus un refus
+               silencieux, c'est *une barre qui promet et ment* (458). */
         if (!landed || p.unavailable || p.content !== "star"
+            || Q.starVerbOf(p.id) !== "light" || !Q.starLit(e, p.id)
             || !Q.starDug(e, p.id) || Q.starHas(e, p.id)) continue;
         const d = Math.hypot(m.x - p.x, m.y - p.y);
         if (d <= 4 && d < bd) { best = { ...p, zone: "farm", r: 2.45, hot: false }; bd = d; }
@@ -23897,6 +24380,81 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     return null;
   }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 479 — QUI TIENT L'AUTRE BORD. « DEUX JOUEURS, VRAIMENT. »
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ UNE SEULE RÉPONSE POUR LA JAUGE, L'INVITE ET L'ARBITRE (leçon 449, et
+     c'est la troisième fois qu'elle sert dans ce chantier). Elle rend l'état de la
+     posture, QUI le tient en face, et de quelle nature il est — parce que la durée
+     en dépend : vingt secondes avec un joueur, soixante avec un épouvantail.
+     ⚠️⚠️ ELLE CHOISIT LE MEILLEUR CANDIDAT, PAS LE PREMIER. Deux amis en ville et
+     un épouvantail planté : prendre « le premier de la liste » aurait pu répondre
+     « vous êtes du même côté » alors que quelqu'un d'autre tenait parfaitement le
+     bord opposé. On classe donc par avancement dans `STAR_QUEEN_STEPS`, dont
+     l'ordre EST celui de l'action la plus proche.
+     ⚠️ ET LE FIGURANT NE PASSE JAMAIS DEVANT UNE PERSONNE À ÉGALITÉ : à rang égal
+     on garde le joueur (`>` et non `>=`, la liste commençant par les humains). Un
+     épouvantail qui volerait la place d'un ami ferait tenir soixante secondes à
+     deux personnes qui font tout juste — le pire barème possible, celui qui punit
+     la coopération.
+     ⚠️⚠️ ELLE VIT AU NIVEAU DU COMPOSANT, jamais dans la closure de la boucle :
+     l'hôte l'appelle depuis `starCalmOk` pour arbitrer, et le rendu depuis
+     `starCalmUi` (piège n°1, premier visage — payé au 430 et au 431). */
+  /* ⚠️ ZIP 479 — L'IDENTIFIANT DE LA MAIN PRÉCÉDENTE, RENDU EN NOM. `quete.js` ne
+     connaît que des identifiants (il n'a pas de roster) ; le nom vit ici, où l'hôte
+     tient déjà `farmersRef` et `playersRef`. On rend `""` plutôt qu'un repli poli :
+     un « ? » dans une phrase de fin serait pire que pas de second nom du tout. */
+  /* ⚠️ ZIP 479 — L'ÉTAT DU PLAT, VU DE CE CLIENT. Rend `null` dès que la
+     gourmande est apprivoisée : un plat qui traînerait après coup afficherait des
+     invites pour une étoile qui n'a plus faim. Elle vit au niveau du composant
+     parce que la boucle de rendu ET les invites la lisent (piège n°1). */
+  function starDishNow() {
+    const e = sharedRef.current.star;
+    if (!e || !Q.starFallen(e) || Q.starDone(e)) return null;
+    if (Q.starHas(e, Q.STAR_WARM_SITE)) return null;
+    return Q.starDishPhase(e, Date.now());
+  }
+  /* Est-ce MOI qui le porte ? ⚠️ La question n'a de sens qu'en phase `carry` —
+     pendant la cuisson, personne ne porte rien (`starDishHolder` rend `null`). */
+  function starDishMine() {
+    const m = meRef.current, e = sharedRef.current.star;
+    return !!(m && e && Q.starDishHolder(e) === m.id);
+  }
+  function starNameOf(id) {
+    if (!id) return "";
+    const f0 = farmersRef.current && farmersRef.current[id];
+    if (f0 && f0.name) return String(f0.name);
+    const p0 = playersRef.current && playersRef.current.get(id);
+    if (p0 && p0.name) return String(p0.name);
+    const m0 = meRef.current;
+    return m0 && m0.id === id ? String(m0.name || "") : "";
+  }
+  function starDishMate(e, who) { return starNameOf(Q.starDishMate(e, who)); }
+  function starQueenView(me, c) {
+    const e = sharedRef.current.star;
+    const cands = [];
+    const mine = me && me.id;
+    const push = (p, kind, name) => {
+      if (p && Number.isFinite(+p.x) && Number.isFinite(+p.y)) cands.push({ p, kind, name: name || "" });
+    };
+    const m0 = meRef.current;
+    if (m0 && m0.id !== mine && (m0.zone || "farm") === "town") push(m0, "player", m0.name);
+    const ps = playersRef.current;
+    if (ps) for (const [pid, p] of ps.entries()) {
+      if (!p || pid === mine || (p.zone || "farm") !== "town") continue;
+      push(p, "player", p.name);
+    }
+    if (e && e.effigy) push(e.effigy, "effigy", "");
+    if (!cands.length)
+      return { step: Q.starQueenStep(me, null, c.x, c.y, c.r), partner: null, mate: "" };
+    let best = null;
+    for (const cd of cands) {
+      const step = Q.starQueenStep(me, cd.p, c.x, c.y, c.r);
+      const rank = Q.STAR_QUEEN_STEPS.indexOf(step);
+      if (!best || rank > best.rank) best = { step, partner: cd.kind, mate: cd.name, rank };
+    }
+    return best;
+  }
   function starCalmSelf(target) {
     const m = meRef.current, c = target || starTameTarget(meRef.current);
     if (!m || !c || (m.zone || "farm") !== c.zone || m.moving) return false;
@@ -23904,6 +24462,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        `starCraterElapsed` : notre ancre est toujours plus tardive que celle de
        l'hôte, donc quand nous demandons, il a déjà dit oui. */
     if (c.hot) return false;
+    /* ⚠️ ZIP 479 — LA REINE A SA PROPRE CONDITION, et c'est la MÊME fonction que
+       celle qui remplit la jauge : deux écritures de « ça compte » donneraient une
+       barre qui monte pendant que l'hôte ne compte rien (défaut du 456). */
+    if (Q.starVerbOf(c.id) === "pair") return starQueenView(m, c).step === "holding";
     if (Math.hypot(m.x - c.x, m.y - c.y) > c.r) return false;
     return Q.starFacingAway(m.x, m.y, m.dir | 0, c.x, c.y);
   }
@@ -23923,9 +24485,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       p = me0 && me0.id === id ? me0 : (playersRef.current && playersRef.current.get(id));
     }
     const c = starTameTarget(p, true);
-    if (!p || !c || c.id !== siteId || p.moving || c.hot) return false;
-    if (Math.hypot(p.x - c.x, p.y - c.y) > c.r) return false;
-    return Q.starFacingAway(p.x, p.y, p.dir | 0, c.x, c.y);
+    if (!p || !c || c.id !== siteId || p.moving || c.hot) return null;
+    /* ⚠️⚠️⚠️ ZIP 479 — ELLE NE REND PLUS UN BOOLÉEN, ELLE REND LE CONTEXTE. La
+       reine se tient à DEUX bords : savoir « oui, il est bien placé » ne suffit
+       plus, il faut savoir QUI tient l'autre — c'est ce qui choisit entre vingt et
+       soixante secondes, et c'est ce qui nomme le second joueur dans la trace.
+       ⚠️ L'HÔTE RECALCULE TOUT, il ne croit toujours pas le client : `starQueenView`
+       relit les positions qu'il a déjà et l'épouvantail de l'état partagé. Un
+       client qui annoncerait « j'ai un partenaire » n'obtiendrait rien de plus. */
+    if (Q.starVerbOf(c.id) === "pair") {
+      const v = starQueenView(p, c);
+      return v.step === "holding" ? { partner: v.partner, mate: v.mate } : null;
+    }
+    if (Math.hypot(p.x - c.x, p.y - c.y) > c.r) return null;
+    if (!Q.starFacingAway(p.x, p.y, p.dir | 0, c.x, c.y)) return null;
+    return { partner: null, mate: "" };
   }
 
   /* ╔══════════════════════════════════════════════════════════════════════════
@@ -24087,6 +24661,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const zone = m.zone || "farm";
 
     if (zone === "farm") {
+      /* ╔════════════════════════════════════════════════════════════════════════
+         ║ ZIP 479 — LE RELAIS PASSE DEVANT TOUT, ET IL LE DOIT.
+         ╚════════════════════════════════════════════════════════════════════════
+         ⚠️⚠️ RÈGLE DU 427 (du plus PRÉCIS au plus large) : un joueur qui te tend un
+         plat est à une case et demie, un cratère fait quatre cases de large. Testé
+         après les impacts, le passage de main aurait été impossible au bord d'un
+         trou — c'est-à-dire très exactement à l'endroit où l'on se relaie.
+         ⚠️ ET IL NE S'AFFICHE QUE S'IL Y A QUELQUE CHOSE À REPRENDRE : quelqu'un
+         d'AUTRE porte le plat, il est encore chaud, et il est à portée. */
+      {
+        const holder = Q.starDishHolder(e);
+        if (holder && holder !== m.id && starDishNow() === "carry") {
+          const ps = playersRef.current, hp = ps && ps.get(holder);
+          if (hp && (hp.zone || "farm") === "farm" && Math.hypot(m.x - hp.x, m.y - hp.y) <= 1.8)
+            return { p: "dishPass", act: () => sendReq({ kind: "starDishPass" }) };
+        }
+      }
       let near = null, best = Infinity;
       for (const p of starFarmImpactSites()) {
         if (!starFarmImpactLandedNow(p.impact) || p.unavailable) continue;
@@ -24130,10 +24721,46 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (Q.starHas(e, near.id))
         return { p: "impactSeen", act: () => pushToast(L.star.farm.seen) };
       if (near.content === "material") return { p: "material", act: () => starTouchFurrow() };
-      if (near.content === "star") return { p: "tame", act: () => starTell([
-        L.star.farm.starPeek,
-        starAlone("farmTame") ? L.star.farm.tameSolo : L.star.farm.tameDuo,
-      ], 2400) };
+      /* ╔════════════════════════════════════════════════════════════════════════
+         ║ ZIP 479 — UNE ÉTOILE FOUILLÉE NE PROPOSE PLUS LE MÊME GESTE À TOUTES.
+         ╚════════════════════════════════════════════════════════════════════════
+         ⚠️⚠️⚠️ C'EST LE DÉFAUT 9 DE L'AUDIT, DANS SON ENDROIT D'ORIGINE : cette
+         branche unique disait « tourne-lui le dos » aux DEUX petites étoiles, donc
+         les deux racontaient la même histoire — non pas parce que le texte était
+         paresseux, mais parce que le GESTE l'était. Trois branches, trois verbes,
+         et les textes se distinguent tout seuls.
+         ⚠️ CHACUNE DIT SON POURQUOI AVEC LES PHRASES DE L'OVERLAY DE FOUILLE
+         (`dig.bodyStar*` / `dig.nextStar*`), et c'est une JOINTURE, pas une copie :
+         l'overlay est l'endroit où l'on apprend la règle, E est l'endroit où on la
+         redemande. Deux écritures auraient divergé au premier réglage (§8). */
+      if (near.content === "star") {
+        const verb = Q.starVerbOf(near.id);
+        if (verb === "warm") {
+          /* Je porte le plat et je suis à son bord : c'est le geste. */
+          if (starDishMine() && starDishNow() === "carry")
+            return { p: "dishGive", act: () => sendReq({ kind: "starDishGive" }) };
+          return { p: "warm", act: () => starTell([L.star.dig.bodyStarWarm, L.star.dig.nextStarWarm], 2600) };
+        }
+        if (verb === "light" && !Q.starLit(e, near.id)) {
+          /* ⚠️ L'INVITE PROPOSE, ELLE NE PRÉLÈVE PAS : la `req` part, l'hôte relit
+             la bourse et refuse en le DISANT (`starLightShort`). Tester ici la
+             quantité pour masquer l'invite aurait caché le prix à qui ne l'a pas —
+             c'est-à-dire à la seule personne qui a besoin de le connaître. */
+          return { p: "light", act: () => {
+            const fresh = Q.starCandyFresh(e, m.id);
+            if (fresh < Q.STAR_CANDY_PRICE) {
+              starTell([L.star.dig.nextStarLight, L.star.s2.lightShort(fresh, Q.STAR_CANDY_PRICE)], 2600);
+              return;
+            }
+            sendReq({ kind: "starLight", site: near.id });
+            pushToast(L.star.s2.lightGiven);
+          } };
+        }
+        return { p: "tame", act: () => starTell([
+          L.star.farm.starPeek,
+          starAlone("farmTame") ? L.star.farm.tameSolo : L.star.farm.tameDuo,
+        ], 2400) };
+      }
       /* ⚠️ UN VIDE FOUILLÉ EST DÉJÀ `found` (voir `resolveStarDig`), donc il tombe
          dans `impactSeen` juste au-dessus. Ce `null` n'est atteint que si l'hôte a
          refusé la trouvaille — on rend la main plutôt que d'inventer une invite. */
@@ -24194,6 +24821,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            posture et pas une touche. */
         if (!starCraterCoolNow())
           return { p: "craterHot", act: () => pushToast(L.star.s2.tooHot) };
+        /* ╔══════════════════════════════════════════════════════════════════════
+           ║ ZIP 479 — PLANTER LE FIGURANT. LA SORTIE SOLO DE LA REINE.
+           ╚══════════════════════════════════════════════════════════════════════
+           ⚠️⚠️ ELLE PASSE DEVANT L'EXPLICATION (« E : pourquoi ? ») PARCE QU'ELLE
+           EST UN GESTE, et qu'une explication qui vole la place d'un geste est le
+           défaut du 456 à l'envers. Elle ne s'affiche QUE là où l'épouvantail peut
+           réellement se planter — sur la lèvre, jamais au fond — donc l'invite ne
+           promet rien que l'hôte va refuser (426).
+           ⚠️ ET SEULEMENT S'IL EN RESTE UN DANS LE SAC : sans épouvantail, l'invite
+           « planter l'épouvantail » enverrait presser une touche qui répond « il
+           t'en faut un ». Le bandeau, lui, continue de dire où en trouver
+           (`hud.goal.craterAlone` + le toast `starNoScarecrow`) : *l'invite montre
+           ce qu'on peut faire, le bandeau dit ce qu'il faut aller chercher.* */
+        {
+          const dEff = Math.hypot(m.x - c.x, m.y - c.y);
+          const onRim = dEff >= Q.STAR_CRATER_R * Q.STAR_QUEEN_EDGE_K && dEff <= Q.STAR_CRATER_R + 1;
+          /* ⚠️⚠️ ON NE TESTE PAS LE SAC ICI, ET C'EST UN CHOIX MESURÉ CONTRE LE
+             PIÈGE N°1. `myInv` est un ÉTAT React ; cette fonction est appelée
+             depuis la closure de la boucle de rendu (l'invite, ligne ~15567), donc
+             elle y lirait un inventaire figé à l'image où la boucle a été montée.
+             Un test « as-tu un épouvantail » qui répond faux sur un sac qui en
+             contient un est pire que pas de test du tout.
+             ⚠️ ET L'AUTORITÉ EST DE TOUTE FAÇON CHEZ L'HÔTE, qui relit `f.inv` :
+             sans épouvantail il répond par un toast qui DIT où en trouver. La
+             touche fait donc toujours quelque chose — c'est la seule chose qu'on
+             lui demande (426). */
+          if (onRim && starQueenView(m, { id: "crater", x: c.x, y: c.y, r: Q.STAR_CRATER_R }).partner !== "player")
+            return { p: "effigy", act: () => sendReq({ kind: "starEffigy", x: m.x, y: m.y }) };
+        }
         /* ⚠️ ZIP 453 — `s2.calmHint` DIT LA RÈGLE, `calmBoth`/`calmSolo` DIT LE
            GESTE. La première n'était affichée nulle part : on lisait « dos
            tourné, ne bougez plus » sans jamais savoir qu'elle ne sort pas tant
@@ -25034,6 +25690,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // allume si recette complète + torche allumée, sinon ouvre le menu.
   function cauldronInteract() {
     const st = salveRecipeStatus();
+    /* ⚠️ ZIP 479 — MÊME ORDRE QUE L'INVITE JUSTE AU-DESSUS, et il FAUT que ce soit
+       le même : une invite qui dit « prends le plat » sous une touche qui dépose un
+       poisson est le « le jeu propose et refuse » du 426, sur un geste minuté. */
+    const sdish = starDishNow();
+    if (sdish === "ready") { sendReq({ kind: "starDishTake" }); pushToast(L.star.s2.dishTaken); return; }
+    if (sdish === "cook") { pushToast(L.star.s2.dishSimmer); return; }
     if (st.brewReady) salveCollect();
     else if (st.brewing) pushToast(L.toastCauldronBrewing);
     else if (st.ready && torchOnRef.current) igniteCauldron();
@@ -26062,6 +26724,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                             : why === "raise" ? L.star.plan.blockRaise
                             : why === "busy" ? L.star.plan.orderWait(fmtDuration((ord || {}).readyAt - Date.now()))
                             : why === "noShard" ? L.star.plan.blockNoShard
+                            : why === "noMayor" ? L.star.plan.blockNoMayor
                             : L.star.plan.blockNoPlan}
                         </span>}
                   </div>
@@ -26668,6 +27331,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <button className="ferme-close-x" onClick={() => setCauldronMenuOpen(false)}>✕</button>
               <h2>{L.cauldronMenuTitle}</h2>
               <div className="ferme-hint">{L.cauldronMenuHint}</div>
+              {/* ╔══════════════════════════════════════════════════════════════
+                  ║ ZIP 479 — LE PLAT DE L'ÉTOILE, DEUXIÈME RECETTE DU CHAUDRON.
+                  ╚══════════════════════════════════════════════════════════════
+                  ⚠️⚠️ IL EST EN TÊTE DU MENU ET IL N'Y APPARAÎT QUE QUAND IL SERT :
+                  la gourmande a été déterrée, elle n'est pas encore apprivoisée, et
+                  rien ne mijote. Le reste du temps le chaudron est exactement ce
+                  qu'il était — la pommade n'a pas bougé d'une ligne, et c'est la
+                  contrainte du chantier (« ne rien casser pour les autres », §0).
+                  ⚠️ IL NE COÛTE AUCUN INGRÉDIENT, et c'est une décision, pas un
+                  oubli : le prix de la rose est le TRAJET (voir `STAR_DISH_HOT_MS`).
+                  Lui ajouter une récolte aurait fait payer deux fois le même geste.
+                  ⚠️ ET IL N'ACCORDE RIEN LUI-MÊME : il envoie une `req`, l'hôte
+                  tranche (règle du 439 — un panneau qui s'ouvre à volonté ne donne
+                  jamais rien). */}
+              {(() => {
+                const e0 = sharedRef.current.star;
+                const ready = e0 && Q.starFallen(e0) && !Q.starDone(e0)
+                  && Q.starDug(e0, Q.STAR_WARM_SITE) && !Q.starHas(e0, Q.STAR_WARM_SITE)
+                  && !starDishNow();
+                if (!ready) return null;
+                return (
+                  <button className="ferme-cauldron-ready-btn"
+                          onClick={() => { setCauldronMenuOpen(false); sendReq({ kind: "starCook" }); pushToast(L.star.s2.dishCook); }}>
+                    {L.star.cauldronBtn}
+                  </button>
+                );
+              })()}
               {/* Recette en vieux parchemin (demande Guillaume 2026-07) : nom
                   de la concoction en haut, liste des ingrédients dessous
                   (avec l'avancement de l'équipe), effet en bas dans une
@@ -28432,6 +29122,50 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                       <div className="ferme-hint" style={{ marginTop: 4 }}>{L.candPlatform(ballot.winner.key)}</div>
                       <div style={{ marginTop: 8 }}>{L.hallMayorAudience(ballot.audienceDay, days(ballot.audienceDay))}</div>
                       <div className="ferme-hint" style={{ marginTop: 8 }}>{L.hallMayorHint}</div>
+                      {/* ╔══════════════════════════════════════════════════════
+                          ║ ZIP 480 — LA PORTE DE L'AUDIENCE EST ICI, ET NULLE
+                          ║ PART AILLEURS.
+                          ╚══════════════════════════════════════════════════════
+                          ⚠️⚠️ ELLE N'OUVRE PAS UN SUJET DE PLUS DANS `HALL_TOPICS` :
+                          le sujet « le maire » existe depuis le 439, il dit déjà qui
+                          il est et quand il reçoit, et c'est là qu'un joueur va
+                          chercher. Un second sujet aurait été une deuxième réponse à
+                          la même question — la forme exacte du défaut du 449.
+                          ⚠️⚠️ ET LE BOUTON NE DONNE RIEN (règle du 439) : il ouvre une
+                          conversation. Ce qui récompense passe par la `req` arbitrée
+                          à la fin, comme la vente au marché. La porte n'est pas la
+                          caisse.
+                          ⚠️ La garde est l'état de la quête, exactement comme le sujet
+                          de l'ingénieur : un joueur qui n'a rien commencé ne voit
+                          jamais ce bouton, donc le secret tient même à deux. */}
+                      {(() => {
+                        const eA = Q.migrateStar(sharedRef.current.star);
+                        if (!Q.starHas(eA, "crater")) return null;
+                        const signed = MR.mayorSigned(eA);
+                        const trust = MR.mayorTrust(eA);
+                        const tries = MR.mayorTries(eA);
+                        const cA = mayorCtxOf(sharedRef.current, eA, E);
+                        return (
+                          <div style={{ marginTop: 12, borderTop: "1px solid rgba(255,255,255,.15)", paddingTop: 10 }}>
+                            {signed ? (
+                              <>
+                                <div>{L.maire.after.signed}</div>
+                                {trust > 0 && <div className="ferme-hint" style={{ marginTop: 4 }}>{L.maire.after["trust" + trust]}</div>}
+                              </>
+                            ) : (
+                              <>
+                                <div className="ferme-hint">{cA.audience ? L.maire.audienceDay : L.maire.busyDay}</div>
+                                {!cA.plans && <div className="ferme-hint" style={{ marginTop: 4 }}>{L.maire.bare}</div>}
+                                {tries > 0 && <div className="ferme-hint" style={{ marginTop: 4 }}>{L.maire.triesAt(tries)}</div>}
+                                <button className="ferme-btn" style={{ marginTop: 8 }}
+                                        onClick={() => { setHallTalk(null); setMayorTalk({ ctx: cA }); }}>
+                                  {L.hallTopicTitle("mayor")} ›
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                   {t.panel === "election" && (
@@ -28617,6 +29351,37 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {/* ── ZIP 469 — L'OVERLAY DE FOUILLE. Voir la note de `StarFindCard`. */}
       {starFind && <StarFindCard find={starFind} sprites={spritesRef.current} L={L} tick={starTick} />}
 
+      {/* ╔════════════════════════════════════════════════════════════════════
+          ║ ZIP 480 — L'AUDIENCE CHEZ LE MAIRE.
+          ╚════════════════════════════════════════════════════════════════════
+          ⚠️⚠️ ELLE NE DIFFUSE RIEN PENDANT QU'ELLE SE JOUE. Une conversation
+          appartient à un client : la scène tourne en local, la jauge est locale,
+          et SEULE la transcription part à la fin — un tableau de clés courtes et
+          de délais, dans une `req` unique. Le §3 est formel : seul le NOMBRE de
+          `send()` est facturé, et celui-ci en coûte un pour toute la négociation.
+          ⚠️⚠️⚠️ ET L'HÔTE REJOUE AU LIEU DE CROIRE (voir le bloc `mayorTalk` plus
+          haut). Le client n'annonce jamais son résultat ; il raconte ce qu'il a
+          dit, et l'arbitre refait l'entretien avec les mêmes résolveurs purs.
+          ⚠️ On envoie la transcription MÊME quand elle perd : c'est elle qui
+          nourrit `burnt` (il se souvient de ce qu'on lui a déjà servi) et le
+          compteur de tentatives. Un échec qui ne remonterait pas ferait d'une
+          deuxième visite une première. */}
+      {mayorTalk && (
+        <MayorAudience
+          ctx={mayorTalk.ctx}
+          L={L}
+          onDone={(log, over) => {
+            setMayorTalk(null);
+            /* ⚠️ Une audience quittée sans le moindre échange n'a rien à
+               raconter : on ne dépense pas un message pour dire « je suis entré
+               puis ressorti », et `resolveMayor` compterait une tentative pour
+               rien. */
+            if (Array.isArray(log) && log.length) sendReq({ kind: "mayorTalk", log });
+            void over;
+          }}
+        />
+      )}
+
       {/* ── LA CARTE DE CHAPITRE. Le seul moment où le jeu prend l'écran entier
           pour dire un titre, et c'est la mise en scène qui découpe l'heure de
           jeu en cinq soirées possibles. ⚠️ ELLE SE FERME TOUTE SEULE : une carte
@@ -28725,6 +29490,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                           : ord ? L.star.plan.orderWait(fmtDuration(ord.readyAt - Date.now()))
                           : why === "noShard" ? L.star.plan.blockNoShard
                           : why === "raise" ? L.star.plan.blockRaise
+                          : why === "noMayor" ? L.star.plan.blockNoMayor
                           : L.star.plan.orderCost(C.STAR_TIMBER[k].wood, fmtDuration(C.STAR_TIMBER[k].ms), L.star.plan.extraName(C.STAR_TIMBER[k].extra))}
                       </span>
                     </div>
@@ -29402,7 +30168,24 @@ function StarFindCard({ find, sprites, L, tick }) {
   }, [find, sprites]);
   if (!find) return null;
   const kind = find.found || "empty";
-  const K = kind.charAt(0).toUpperCase() + kind.slice(1);
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 479 — L'OVERLAY EXPLIQUE COMMENT L'APPRIVOISER, ET IL LE FAIT PAR
+     ║ COULEUR.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ C'EST LE SEUL MOMENT DU JEU OÙ L'ON REGARDE UNE ÉTOILE SANS AVOIR ENCORE
+     À AGIR : c'est donc là que la règle s'apprend. Avant ce zip, les deux petites
+     lisaient la MÊME fiche — « elle ne sortira pas tant qu'on la regarde » — et
+     c'était faux pour la rose, qui vient à la chaleur. Un joueur pouvait passer un
+     quart d'heure à tourner le dos à un trou qui n'attendait rien de lui.
+     ⚠️ LE SUFFIXE VIENT DU VERBE, PAS DE LA COULEUR, bien que le texte parle de
+     couleur : `verb` est ce que la table dit du GESTE, `color` ce qu'elle dit du
+     dessin. Les faire coïncider ici aurait recopié la jointure de `STAR_SITES`
+     dans un composant d'affichage — deux listes au lieu d'une (449).
+     ⚠️ ET LE REPLI EST LE VERBE DE LA POSTURE : une étoile sans verbe (impossible
+     par construction, tenue par le banc) affiche la fiche de la bleue plutôt qu'un
+     `undefined` en grand au milieu de l'écran. */
+  const verbK = kind === "star" ? (Q.starVerbOf(find.id) === "warm" ? "StarWarm" : "StarLight") : null;
+  const K = verbK || (kind.charAt(0).toUpperCase() + kind.slice(1));
   return (
     /* ⚠️⚠️ ZIP 476 (audit 2026-08-24, défaut #31) — `animationDuration` VIENT
        D'ICI, PAS DE LA FEUILLE DE STYLE : `STAR_FIND_MS` est déjà la constante

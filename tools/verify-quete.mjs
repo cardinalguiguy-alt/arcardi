@@ -46,11 +46,51 @@ const copy = (n) => {
 };
 copy("fermeEngine");
 copy("quete");
+copy("maire");
 copy("fermeStrings");   // §9 : chaque clé que le jeu lit doit exister
 
 const C = await import(pathToFileURL(path.join(tmp, "fermeConstants.js")).href);
 const E = await import(pathToFileURL(path.join(tmp, "fermeEngine.js")).href);
 const Q = await import(pathToFileURL(path.join(tmp, "quete.js")).href);
+
+/* ⚠️⚠️ ZIP 479 — LE BANC REJOUE LE VRAI GESTE, PAS SA MOITIÉ. C'est la leçon 469
+   (« un banc qui invente ses données mesure un jeu que personne ne joue »)
+   appliquée au lot des trois verbes : depuis ce zip, la bleue veut son OFFRANDE
+   avant la posture, et la rose ne veut PAS de posture du tout. Un banc qui aurait
+   continué d'appeler `resolveStarCalm` sur les trois aurait été vert sur deux
+   étoiles inatteignables. */
+const payBlue = (e, who, at) => {
+  Q.resolveStarCandy(e, who, Q.STAR_CANDY_PRICE, at);
+  return Q.resolveStarLight(e, who, Q.STAR_LIGHT_SITE, Q.STAR_CANDY_PRICE, at);
+};
+
+/* ⚠️⚠️⚠️ ZIP 480 — LA CHAÎNE A UNE ÉTAPE DE PLUS, ET LE BANC DOIT LA JOUER. La
+   cale est sur le quai municipal : depuis cette passe, `starTimberBlock` rend
+   `noMayor` tant que l'audience n'a pas abouti. Un banc qui aurait continué à
+   poser `e.plan.done = 1` et rien d'autre aurait mesuré une chaîne que plus
+   personne ne peut jouer — c'est la leçon 469 mot pour mot (« on rejoue avec les
+   vraies données ET le vrai cycle de vie de l'état »), et le 472 a montré qu'une
+   discipline ajoutée à UNE section ne protège que cette section. On passe donc
+   par le VRAI résolveur d'audience, jamais par un champ posé à la main : le jour
+   où signer demandera autre chose, ce banc le saura.
+   ⚠️ La négociation elle-même est mesurée par `tools/verify-maire.mjs`, qui en
+   joue quatre cents. Ici on ne fait que la GAGNER. */
+const MA = await import(pathToFileURL(path.join(tmp, "maire.js")).href);
+const signMayor = (e, at = 1) => {
+  const ctx = { mayorKey: "vasseur", day: 12, nextElection: 30, plans: true, trust: 0, audience: false };
+  const s = MA.mayorOpen(ctx);
+  let guard = 0;
+  while (!s.over && guard++ < 40) {
+    const cs = MA.mayorChoices(s);
+    if (!cs.length) break;
+    if (s.node === "m5" && cs.some(c => c.kind === "plans")) { MA.mayorPlay(s, "__plans", 0); continue; }
+    const best = cs.find(c => c.kind === "say" && c.grade === "ideal");
+    if (!best) break;
+    MA.mayorPlay(s, best.k, 0);
+  }
+  MA.resolveMayor(e, "j1", "j1", s.log, ctx, at);
+  return e;
+};
 
 let fails = 0, total = 0;
 const ok = (n, c, x) => { total++; console.log(`${c ? "  OK  " : "ÉCHEC "} ${n}${x ? "  —  " + x : ""}`); if (!c) fails++; };
@@ -149,11 +189,18 @@ section("La chaîne des chapitres");
   {
     const e4 = Q.newStar(); e4.fall = 1;
     const blue = Q.STAR_FARM_STAR_IDS[0];
-    const r4 = Q.resolveStarCalm(e4, "j1", 1, true, blue);
+    const r4 = Q.resolveStarCalm(e4, "j1", 1, { alone: true }, blue);
     ok("⚠️ on n'apprivoise pas une étoile qu'on n'a pas déterrée", !r4.ok && r4.unDug === true);
     Q.resolveStarDig(e4, blue, "j1", 2);
-    const r4b = Q.resolveStarCalm(e4, "j1", 3, true, blue);
-    ok("…et la fouille l'ouvre vraiment", r4b.ok === true);
+    /* ⚠️⚠️ ZIP 479 — LA FOUILLE NE SUFFIT PLUS POUR LA BLEUE, ET C'EST LE VERBE :
+       elle veut sa lumière. Le contrôle mesure les DEUX portes dans l'ordre, sinon
+       il dirait « ouvert » sur un trou qui refuse encore. */
+    const r4b = Q.resolveStarCalm(e4, "j1", 3, { alone: true }, blue);
+    ok("⚠️⚠️ ZIP 479 — …mais la fouille seule ne suffit pas : la bleue veut son offrande",
+       !r4b.ok && r4b.unlit === true);
+    payBlue(e4, "j1", 4);
+    const r4c = Q.resolveStarCalm(e4, "j1", 5, { alone: true }, blue);
+    ok("…et l'offrande faite, la posture compte enfin", r4c.ok === true);
   }
   /* Idempotence : le geste peut se répéter, il ne compte qu'une fois. */
   {
@@ -518,27 +565,34 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
   /* 462 — le blocage signalé concernait précisément les DEUX étoiles de ferme,
      pas seulement la reine historique. On joue chacune jusqu'au dernier paquet
      au lieu d'extrapoler les tests du cratère. */
-  for (const site of Q.STAR_FARM_IMPACTS.filter(s => s.content === "star")) {
+  /* ⚠️⚠️ ZIP 479 — LA POSTURE N'APPARTIENT PLUS QU'À LA BLEUE. Ce bloc balayait
+     « toutes les étoiles de ferme » ; il balaie maintenant celles dont le VERBE est
+     la posture, et il y en a une. Le balayage reste (c'est ce qui fait qu'une
+     quatrième étoile en `light` serait couverte gratuitement), la LISTE change de
+     source : `verb`, plus `content`. */
+  for (const site of Q.STAR_FARM_IMPACTS.filter(s => s.verb === "light")) {
     const e = Q.newStar(); e.fall = 1;
     /* ⚠️ ZIP 469 — ON FOUILLE D'ABORD. `resolveStarCalm` refuse une étoile qu'on
        n'a pas déterrée : sans cette ligne, ce contrôle échouerait pour une raison
        qui n'est pas la sienne — c'est le défaut « un contrôle qui échoue pour deux
        raisons ne dit rien quand il échoue », déjà écrit deux fois dans ce fichier. */
     Q.resolveStarDig(e, site.id, "j1", 900);
+    payBlue(e, "j1", 950);                          // 479 — et on paie sa lumière
     let t = 1000;
     for (let k = 0; k < 130 && !Q.starHas(e, site.id); k++) {
-      t += 500; Q.resolveStarCalm(e, "j1", t, true, site.id);
+      t += 500; Q.resolveStarCalm(e, "j1", t, { alone: true }, site.id);
     }
     ok(`⚠️⚠️ la jauge solo retire vraiment l'étoile ${site.id}`, Q.starHas(e, site.id), `${((t - 1000) / 1000).toFixed(1)} s`);
   }
   {
-    const site = Q.STAR_FARM_IMPACTS.find(s => s.content === "star"), e = Q.newStar(); e.fall = 1;
+    const site = Q.STAR_SITE[Q.STAR_LIGHT_SITE], e = Q.newStar(); e.fall = 1;
     Q.resolveStarDig(e, site.id, "j1", 900);       // 469 — voir juste au-dessus
+    payBlue(e, "j1", 950);                          // 479 — voir juste au-dessus
     let t = 1000;
     for (let k = 0; k < 30 && !Q.starHas(e, site.id); k++) {
       t += 400;
-      Q.resolveStarCalm(e, "j1", t, false, site.id);
-      Q.resolveStarCalm(e, "j2", t, false, site.id);
+      Q.resolveStarCalm(e, "j1", t, { alone: false }, site.id);
+      Q.resolveStarCalm(e, "j2", t, { alone: false }, site.id);
     }
     ok("⚠️⚠️ à deux, la jauge courte retire vraiment une étoile de ferme", Q.starHas(e, site.id), `${((t - 1000) / 1000).toFixed(1)} s`);
   }
@@ -653,7 +707,11 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
     const e = Q.devStar(Q.newStar(), "start", 1).star;
     openTownCrater(e, e.fall + 10);
     let t = e.townFall + Q.STAR_CRATER_COOL_MS + 500;
-    for (let k = 0; k < 130 && !Q.starHas(e, "crater"); k++) { t += 500; Q.resolveStarCalm(e, "j1", t, flag); }
+    /* ⚠️ ZIP 479 — LE DRAPEAU DEVIENT UN CONTEXTE, et le balayage garde son sens :
+       ce qu'on mesure est qu'AUCUNE des deux valeurs ne peut bloquer le cratère.
+       La boucle est allongée parce que le barème solo de la reine est passé de
+       30 s à 60 s — 200 × 500 ms = 100 s, soit la marge d'avant. */
+    for (let k = 0; k < 200 && !Q.starHas(e, "crater"); k++) { t += 500; Q.resolveStarCalm(e, "j1", t, { alone: flag }); }
     ok(`⚠️⚠️ le cratère s'ouvre TOUT SEUL, drapeau solo = ${flag}`, Q.starHas(e, "crater"),
        `${((t - (e.townFall + Q.STAR_CRATER_COOL_MS + 500)) / 1000).toFixed(1)} s de tenue`);
   }
@@ -664,19 +722,27 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
     openTownCrater(e, e.fall + 10);
     const t0 = e.townFall + Q.STAR_CRATER_COOL_MS + 500;
     let t = t0, opened = null;
-    for (let k = 0; k < 30 && !Q.starHas(e, "crater"); k++) {
+    /* ⚠️ ZIP 479 — 60 × 400 ms = 24 s, juste au-dessus des 20 s du raccourci de la
+       reine. La borne suit le barème : trop courte, elle ferait échouer le contrôle
+       pour une raison qui n'est pas la sienne ; trop longue, elle laisserait passer
+       un raccourci qui aurait cessé d'en être un. */
+    for (let k = 0; k < 60 && !Q.starHas(e, "crater"); k++) {
       t += 400;
       /* ⚠️ ON GARDE LA RÉPONSE QUI OUVRE, PAS LA DERNIÈRE : celui des deux qui
          franchit le seuil le premier reçoit `opened`, l'autre reçoit `already`.
          Lire la dernière, c'est mesurer le perdant de la course. */
       for (const who of ["j2", "j1"]) {
-        const r0 = Q.resolveStarCalm(e, who, t, false);
+        /* ⚠️ ZIP 479 — LE RACCOURCI DE LA REINE N'EST PLUS « QUELQU'UN EST EN
+           LIGNE », C'EST « QUELQU'UN TIENT L'AUTRE BORD » (`partner: "player"`).
+           Le contexte le dit maintenant explicitement, et c'est bien lui que
+           l'hôte remplit depuis `starQueenStep`. */
+        const r0 = Q.resolveStarCalm(e, who, t, { alone: false, partner: "player", mate: who === "j1" ? "j2" : "j1" });
         if (r0.opened) opened = opened || r0;
       }
     }
     ok("⚠️ à deux, le trou s'ouvre par le chemin COURT", Q.starHas(e, "crater") && !!(opened && opened.both),
-       `${((t - t0) / 1000).toFixed(1)} s, soit moins que le plancher solo (${(Q.STAR_CALM_SOLO_MS / 1000).toFixed(1)} s)`);
-    ok("…et c'est bien plus rapide que tout seul", t - t0 < Q.STAR_CALM_SOLO_MS);
+       `${((t - t0) / 1000).toFixed(1)} s, soit moins que le plancher solo (${(Q.STAR_QUEEN_SOLO_MS / 1000).toFixed(1)} s)`);
+    ok("…et c'est bien plus rapide que tout seul", t - t0 < Q.STAR_QUEEN_SOLO_MS);
   }
   /* ⚠️⚠️ ZIP 469 — CE QUI RESTE DU BLOC 458, ET CE QU'IL FAUT NE PAS PERDRE. Il
      mesurait DEUX gestes coopératifs (la tenue du cratère et le croisement
@@ -1008,11 +1074,16 @@ section("Les grandeurs partagées");
     const site = Q.STAR_FARM_STAR_IDS[0];
     let e = Q.newStar(); e.fall = 1;
     Q.resolveStarDig(e, site, who, 900);
+    payBlue(e, who, 950);                      // 479 — la bleue veut sa lumière avant la posture
     let t = 1000;
     for (let k = 0; k < 200 && !Q.starHas(e, site); k++) {
       t += 500;
       e = Q.migrateStar(e);                    // ⚠️ exactement ce que fait `hostHandleReq`
-      Q.resolveStarCalm(e, who, t, true, site);
+      /* ⚠️ ZIP 479 — L'OFFRANDE AUSSI TRAVERSE LA MIGRATION, ET C'EST UN CONTRÔLE
+         DE PLUS SANS UNE LIGNE DE PLUS : elle est payée une fois, avant la boucle,
+         et l'état est re-migré à chaque tour. Si `offer` ne survivait pas au
+         voyage, la posture cesserait de compter dès le second tour. */
+      Q.resolveStarCalm(e, who, t, { alone: true }, site);
     }
     ok(`⚠️⚠️ la jauge sort vraiment l'étoile avec un identifiant de ${who.length} signes`,
        Q.starHas(e, site), `${((t - 1000) / 1000).toFixed(1)} s de tenue`);
@@ -1362,6 +1433,9 @@ section("La chute est vue, et le chevron désigne (445)");
        qu'un seul autre contrôle ne bouge. */
     ok("⚠️ après le cratère, plus aucun LIEU de la table n'est visé",
        !Q.STAR_SITE[Q.starTargetSite(e, {}) || ""], String(Q.starTargetSite(e, {})));
+    /* ⚠️ ZIP 480 — le chantier commence par une signature : on gagne l'audience
+       ici comme le joueur la gagne, par le vrai résolveur. */
+    signMayor(e, 5);
     ok("⚠️⚠️ …mais le chantier prend le relais, et il a une adresse",
        Q.starGoalKey(e, {}) === "timberOrder" && Q.starTargetSite(e, {}) === "sawmill",
        `${Q.starGoalKey(e, {})} → ${Q.starTargetSite(e, {})}`);
@@ -1485,14 +1559,24 @@ section("L'objectif courant (bandeau) et le guide");
      intermédiaire qu'on veut mesurer — et on vérifie que le bandeau change
      ET que le chevron continue de désigner le même trou. */
   {
-    const starSite = Q.STAR_FARM_IMPACTS.find(s => s.content === "star");
+    const starSite = Q.STAR_SITE[Q.STAR_LIGHT_SITE];   // 479 — celle dont le verbe est la posture
     const matSite = Q.STAR_FARM_IMPACTS.find(s => s.content === "material");
     const emptySite = Q.STAR_FARM_IMPACTS.find(s => s.content === "empty");
 
     const eTame = Q.newStar(); eTame.fall = 1;
     ok("⚠️ un trou intact reste générique", Q.starGoalKey(eTame, {}) === "farmImpacts");
     Q.resolveStarDig(eTame, starSite.id, "j1", 1);
-    ok("⚠️⚠️ une étoile fouillée mais pas apprivoisée dit « tourne-lui le dos »",
+    Q.resolveStarCandy(eTame, "j1", Q.STAR_CANDY_PRICE, 1);   // 479 — la bourse, pas encore l'offrande
+    /* ⚠️⚠️ ZIP 479 — LE TROU FOUILLÉ NE DIT PLUS « TOURNE-LUI LE DOS » AVANT
+       L'OFFRANDE : la bleue veut sa lumière d'abord, et le bandeau doit dire ÇA.
+       Ce contrôle mesure donc les trois états dans l'ordre du joueur, au lieu d'un
+       seul — c'est le même geste qu'au 475 sur `farmImpacts`, un cran plus bas. */
+    ok("⚠️⚠️ ZIP 479 — une bleue fouillée réclame d'abord sa lumière",
+       Q.starGoalKey(eTame, {}) === "farmImpactLight");
+    ok("…et dès qu'on a de quoi payer, elle dit d'aller la lui offrir",
+       Q.starGoalKey(eTame, { candy: Q.STAR_CANDY_PRICE }) === "farmImpactLightPay");
+    payBlue(eTame, "j1", 1);
+    ok("⚠️⚠️ …et l'offrande faite, ALORS elle dit « tourne-lui le dos »",
        Q.starGoalKey(eTame, {}) === "farmImpactTame");
     ok("…et le chevron pointe toujours ce même trou, pas un autre",
        Q.starTargetSite(eTame, {}) === starSite.id);
@@ -1585,6 +1669,17 @@ section("L'objectif courant (bandeau) et le guide");
      Q.starGoalKey(e, { engineerHere: Q.starEngineerHere(e, engArrived) }) === "engineerWork",
      String(Q.starGoalKey(e, { engineerHere: Q.starEngineerHere(e, engArrived) })));
   e.plan = { at: 1002, by: "j1", done: 1002 };
+  /* ⚠️⚠️⚠️ ZIP 480 — ET LE BANDEAU PASSE PAR LA MAIRIE AVANT TRISTAN. Les plans
+     rendus ne suffisent plus : la cale est sur le quai municipal, donc l'étape
+     suivante est l'audience. On le VÉRIFIE au lieu de le contourner — c'était
+     exactement le piège du 472 (une chaîne dont le banc saute un maillon ne peut
+     plus voir ce que ce maillon casse). */
+  ok("⚠️⚠️ ZIP 480 — les plans rendus renvoient d'abord à la MAIRIE, pas chez Tristan",
+     Q.starGoalKey(e, {}) === "mayor" && Q.starTargetSite(e, {}) === "townHall",
+     `${Q.starGoalKey(e, {})} → ${Q.starTargetSite(e, {})}`);
+  ok("…et aucune pièce n'est commandable tant que personne n'a signé",
+     Q.STAR_SHIP_KEYS.every(k => Q.starTimberBlock(e, k) === "noMayor"));
+  signMayor(e, 1003);
   /* ⚠️⚠️ ZIP 478 — TROIS ÉTATS, TROIS CLÉS, ET ON LES REJOUE DANS L'ORDRE OÙ ELLES
      ARRIVENT plutôt que d'en tester une seule : c'est le contrôle qui aurait manqué
      au 475 si `farmImpacts` avait été scindé sans rejouer la suite. */
@@ -1831,6 +1926,7 @@ section("La construction du navire (454)");
        tous les états que la quête traverse au lieu de trois exemples choisis. */
     const e = Q.newStar(); e.fall = 1;
     e.plan = { at: 1, by: "j1", done: 1 };
+    signMayor(e, 2);          // 480 — la cale est autorisée, comme dans le vrai jeu
     let stuck = [], steps = 0, ordered = 0;
     for (let guard = 0; guard < 60; guard++) {
       /* On livre tout ce qui est commandable avant d'avancer d'un cran : c'est ce
@@ -1866,7 +1962,7 @@ section("La construction du navire (454)");
       const blocked = Q.STAR_SHIP_KEYS.filter((kk) => {
         if (Q.starTimberDone(e, kk) || Q.starTimberReady(e, kk) || Q.starTimberOrder(e, kk)) return false;
         const why = Q.starTimberBlock(e, kk);
-        return why !== null && why !== "noShard" && why !== "noPlan";
+        return why !== null && why !== "noShard" && why !== "noPlan" && why !== "noMayor";
       });
       if (blocked.length) stuck.push("bloqué " + blocked.join());
       Q.resolveStarFound(e, miss[0], "j1", 200 + guard);
@@ -2577,12 +2673,33 @@ console.log("\n10. LE PNJ QUI S'ARRÊTE, ET LA POSTURE DU CRATÈRE (456)\n");
        Q.STAR_CALM_STEPS.every(k => got.has(k)), [...got].join(", "));
   }
 
-  /* ── LA DURÉE À TENIR : UNE SOURCE, PAS DEUX. */
+  /* ── LA DURÉE À TENIR : UNE SOURCE, PAS DEUX.
+     ⚠️ ZIP 479 — `starCalmNeed(soloAllowed)` EST DEVENUE `starTameNeed(site, ctx)` :
+     le besoin dépend maintenant du VERBE de l'étoile, pas seulement du nombre de
+     joueurs. Le contrôle mesure la même chose qu'avant (une seule écriture de la
+     durée) et il en mesure une de plus : la reine a son propre barème. */
   {
+    const BLUE = Q.STAR_LIGHT_SITE;
     ok("⚠️ la jauge et le résolveur lisent la MÊME durée",
-       Q.starCalmNeed(true) === Q.STAR_CALM_SOLO_MS && Q.starCalmNeed(false) === Q.STAR_CALM_MS,
-       `${Q.starCalmNeed(true)} ms seul, ${Q.starCalmNeed(false)} ms à deux`);
-    ok("…et seul, c'est plus long (jamais bloqué, juste long)", Q.starCalmNeed(true) > Q.starCalmNeed(false));
+       Q.starTameNeed(BLUE, { alone: true }) === Q.STAR_CALM_SOLO_MS
+       && Q.starTameNeed(BLUE, { alone: false }) === Q.STAR_CALM_MS,
+       `${Q.starTameNeed(BLUE, { alone: true })} ms seul, ${Q.starTameNeed(BLUE, { alone: false })} ms à deux`);
+    ok("…et seul, c'est plus long (jamais bloqué, juste long)",
+       Q.starTameNeed(BLUE, { alone: true }) > Q.starTameNeed(BLUE, { alone: false }));
+    ok("⚠️⚠️ ZIP 479 — la reine a son PROPRE barème, et l'épouvantail n'est pas un joueur",
+       Q.starTameNeed("crater", { partner: "player" }) === Q.STAR_QUEEN_MS
+       && Q.starTameNeed("crater", { partner: "effigy" }) === Q.STAR_QUEEN_SOLO_MS
+       && Q.starTameNeed("crater", {}) === Q.STAR_QUEEN_SOLO_MS,
+       `${Q.STAR_QUEEN_MS} ms à deux, ${Q.STAR_QUEEN_SOLO_MS} ms avec le figurant`);
+    /* ⚠️⚠️ ET UN CONTEXTE VIDE NE DOIT JAMAIS RENDRE LE BARÈME COURT : c'est le
+       défaut du 458 pris à l'envers. Un appelant qui oublie son contexte doit
+       obtenir la durée LONGUE (donc jouable seul), jamais la courte (qui exigerait
+       un second joueur inexistant et bloquerait pour toujours). */
+    ok("…et un contexte absent retombe toujours sur le barème SOLO, jamais sur le duo",
+       Q.STAR_VERBS.every(v => {
+         const id = Q.STAR_VERB_SITE[v];
+         return Q.starTameNeed(id) >= Q.starTameNeed(id, { alone: false, partner: "player" });
+       }));
   }
 
   /* ── LES QUATRE PHRASES DE LA POSTURE, DANS LES DEUX LANGUES. */
@@ -2717,6 +2834,335 @@ console.log("\n11. L'OUVRAGE DE TRISTAN (459)\n");
     ok("⚠️⚠️ un seul battement livre TOUTES les pièces échues, pas la première",
        rt.ok && rt.keys.length === Q.STAR_SHIP_TOTAL, `${(rt.keys || []).length} livrées d'un coup`);
     ok("…et le rejouer ne relivre rien (idempotent)", Q.resolveStarTimberTick(f, 9e9).ok === false);
+  }
+}
+
+/* ╔═══════════════════════════════════════════════════════════════════════════════
+   ║ 12. ZIP 479 — LES TROIS VERBES. « DEUX ÉTOILES NE PARTAGENT JAMAIS LE MÊME
+   ║ GESTE. »
+   ╚═══════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️⚠️ CE §  EXISTE POUR TENIR UNE PROMESSE DE CONCEPTION DANS DU CODE, et c'est
+   la seule façon connue de l'empêcher de se périmer. L'audit 477 reprochait aux
+   trois étoiles de « dire la même chose » ; la cause n'était pas le texte, c'était
+   qu'on leur demandait le MÊME geste. Une consigne écrite dans un document se
+   contourne sans le savoir ; un contrôle qui échoue, non.
+   ⚠️⚠️ ET IL MESURE AUSSI LA RÈGLE QUI COMPTE PLUS QUE LES TROIS : **aucune
+   configuration de joueurs ne peut bloquer une étoile** (leçon 458). On la rejoue
+   verbe par verbe, tout seul, jusqu'au bout.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+section("12. LES TROIS VERBES (479)");
+{
+  /* ── LA TABLE : UN VERBE PAR ÉTOILE, ET JAMAIS DEUX FOIS LE MÊME. */
+  {
+    const stars = Q.STAR_SITES.filter(s => s.content === "star");
+    const verbs = stars.map(s => s.verb);
+    ok("⚠️⚠️ chaque étoile a un verbe, et il est connu",
+       stars.length > 0 && verbs.every(v => Q.STAR_VERBS.includes(v)),
+       stars.map(s => `${s.id}=${s.verb}`).join(", "));
+    ok("⚠️⚠️⚠️ deux étoiles ne partagent JAMAIS le même verbe",
+       new Set(verbs).size === verbs.length, `${new Set(verbs).size} verbes pour ${verbs.length} étoiles`);
+    ok("…et rien d'autre qu'une étoile n'en porte un",
+       Q.STAR_SITES.filter(s => s.verb).every(s => s.content === "star"));
+    /* ⚠️ ET LA JOINTURE MARCHE DANS LES DEUX SENS : `STAR_VERB_SITE` est ce que
+       les résolveurs du plat lisent au lieu d'écrire « farmStarRose » en dur. */
+    ok("⚠️ la jointure verbe → lieu est juste dans les deux sens",
+       Q.STAR_VERBS.every(v => Q.starVerbOf(Q.STAR_VERB_SITE[v]) === v),
+       Q.STAR_VERBS.map(v => `${v}→${Q.STAR_VERB_SITE[v]}`).join(", "));
+  }
+
+  /* ── LA BLEUE : LA LUMIÈRE SE PAIE, ET ELLE SE PAIE EN FRAIS. */
+  {
+    const BLUE = Q.STAR_LIGHT_SITE;
+    const e = Q.newStar();
+    /* ⚠️⚠️ AVANT LA CHUTE, RIEN NE S'ACCUMULE — « la lumière bleue s'éteint en
+       dormant ». C'est la règle qui empêche un vieux stock d'acheter le chapitre
+       d'avance, et c'est le seul contrôle qui puisse la voir. */
+    ok("⚠️⚠️ avant la chute, une course ne rapporte AUCUNE lumière",
+       Q.resolveStarCandy(e, "j1", 500, 10).ok === false && Q.starCandyFresh(e, "j1") === 0);
+    e.fall = 100;
+    Q.resolveStarCandy(e, "j1", 40, 200);
+    ok("…après la chute, elle compte", Q.starCandyFresh(e, "j1") === 40, `${Q.starCandyFresh(e, "j1")} bonbons frais`);
+    Q.resolveStarDig(e, BLUE, "j1", 210);
+    const short = Q.resolveStarLight(e, "j1", BLUE, 9999, 220);
+    ok("⚠️ quarante bonbons ne suffisent pas, et le refus DIT ce qui manque",
+       !short.ok && short.short === true && short.need === Q.STAR_CANDY_PRICE,
+       `${short.have}/${short.need}`);
+    Q.resolveStarCandy(e, "j1", 40, 230);
+    /* ⚠️⚠️ LE PRIX EST LE FLUX, ET LE SAC N'EST QUE CE QU'ON DÉBITE (voir la note
+       de `resolveStarLight`). Un sac plus maigre que le flux ne peut pas exister en
+       jeu — les deux grandissent ensemble et rien d'autre ne dépense de bonbons —
+       mais le BOUTON DEV le produit, et il ne doit pas rendre le geste injugeable.
+       On mesure donc les deux moitiés : l'offrande passe, et elle ne débite que ce
+       qui est là. */
+    {
+      const eDev = Q.newStar(); eDev.fall = 100;
+      Q.resolveStarDig(eDev, BLUE, "j1", 110);
+      Q.resolveStarCandy(eDev, "j1", Q.STAR_CANDY_PRICE, 120);
+      const rDev = Q.resolveStarLight(eDev, "j1", BLUE, 0, 130);
+      ok("⚠️⚠️ le flux suffit à payer, et le sac ne borne QUE le prélèvement",
+         rDev.ok === true && rDev.spend === 0 && Q.starLit(eDev, BLUE),
+         `prélève ${rDev.spend} sur un sac vide`);
+    }
+    const paid = Q.resolveStarLight(e, "j1", BLUE, 9999, 250);
+    ok("⚠️⚠️ l'offrande passe, et elle dit exactement ce qu'il faut prélever",
+       paid.ok === true && paid.spend === Q.STAR_CANDY_PRICE && Q.starLit(e, BLUE),
+       `${paid.spend} bonbons, il en reste ${paid.left} de frais`);
+    ok("…elle ne se paie pas deux fois", Q.resolveStarLight(e, "j1", BLUE, 9999, 260).ok === false);
+    ok("…et elle a bien débité le flux", Q.starCandyFresh(e, "j1") === 80 - Q.STAR_CANDY_PRICE);
+    /* ⚠️⚠️ CE QUE CE CONTRÔLE MESURE VRAIMENT, ET IL NE FAUT PAS LUI EN PRÊTER
+       PLUS : `RUN_MAX_CANDIES_PER_RUN` est un plafond de CONFIANCE (l'hôte se
+       protège d'un message aberrant), pas un rendement. Un prix au-dessus de lui
+       serait littéralement impayable — deux courses obligatoires, sans qu'aucun
+       texte ne le dise. Le CALIBRAGE, lui, vient du commentaire qui accompagne ce
+       plafond (« ≈ 140 bonbons sur 3 minutes en simulation ») : 60 = une course
+       moyenne. Ce chiffre-là n'est pas une constante, donc aucun banc ne peut le
+       tenir — on le dit plutôt que de faire semblant de le mesurer. */
+    ok("⚠️⚠️ le prix reste payable en UNE course (sous le plafond de confiance de l'hôte)",
+       Q.STAR_CANDY_PRICE < C.RUN_MAX_CANDIES_PER_RUN,
+       `${Q.STAR_CANDY_PRICE} contre ${C.RUN_MAX_CANDIES_PER_RUN} au plafond`);
+  }
+
+  /* ── LA ROSE : LE GESTE EST LE CHEMIN. */
+  {
+    const ROSE = Q.STAR_WARM_SITE;
+    ok("⚠️⚠️ la posture ne marche PAS sur la gourmande (sinon personne ne cuisinerait)",
+       (() => { const e = Q.newStar(); e.fall = 1; Q.resolveStarDig(e, ROSE, "j1", 2);
+                const r = Q.resolveStarCalm(e, "j1", 3, { alone: true }, ROSE);
+                return !r.ok && r.wrongVerb === true; })());
+    const e = Q.newStar(); e.fall = 1;
+    ok("⚠️ on ne cuisine pas pour un trou qu'on n'a pas ouvert", Q.resolveStarCook(e, "j1", 10).ok === false);
+    Q.resolveStarDig(e, ROSE, "j1", 20);
+    const cook = Q.resolveStarCook(e, "j1", 100);
+    ok("⚠️ le chaudron accepte, et il dit quand ce sera prêt",
+       cook.ok === true && cook.readyAt === 100 + Q.STAR_DISH_COOK_MS);
+    ok("…et il n'accepte pas deux plats à la fois", Q.resolveStarCook(e, "j1", 200).ok === false);
+    ok("…pendant la cuisson, il n'y a rien à porter", Q.starDishPhase(e, 200) === "cook" && Q.resolveStarDishTake(e, "j1", 200).ok === false);
+    ok("⚠️ cuit, il devient prenable", Q.starDishPhase(e, 100 + Q.STAR_DISH_COOK_MS) === "ready");
+    const t0 = 100 + Q.STAR_DISH_COOK_MS + 10;
+    ok("⚠️⚠️ n'importe qui peut le prendre (l'un cuisine, l'autre court)",
+       Q.resolveStarDishTake(e, "j2", t0).ok === true && Q.starDishHolder(e) === "j2");
+    /* ⚠️⚠️ LA JAUGE DESCEND VRAIMENT, ET C'EST TOUT LE VERBE. Trois bornes plutôt
+       qu'un exemple : pleine au départ, à moitié à mi-parcours, nulle à la fin. */
+    ok("⚠️⚠️ le plat refroidit pendant le trajet",
+       Math.abs(Q.starDishHeat(e, t0) - 1) < 0.01
+       && Math.abs(Q.starDishHeat(e, t0 + Q.STAR_DISH_HOT_MS / 2) - 0.5) < 0.01
+       && Q.starDishHeat(e, t0 + Q.STAR_DISH_HOT_MS) === 0,
+       `1 → ${Q.starDishHeat(e, t0 + Q.STAR_DISH_HOT_MS / 2).toFixed(2)} → 0`);
+    /* ⚠️⚠️⚠️ LE RELAIS REMET LA JAUGE À PLEIN : c'est la décision de conception du
+       verbe, donc c'est un contrôle et pas un commentaire. */
+    const tp = t0 + Q.STAR_DISH_HOT_MS * 0.8;
+    ok("⚠️ le porteur ne peut pas se passer le plat à lui-même", Q.resolveStarDishPass(e, "j2", tp).ok === false);
+    /* ⚠️ ON LIT LA CHALEUR **AVANT** DE PASSER LE PLAT : la lire après le relais
+       aurait affiché « 100 % avant, 100 % après », c'est-à-dire un contrôle vert
+       qui ne montre rien. C'est le premier visage du défaut de `CLAUDE.md` à
+       l'échelle d'une ligne de journal. */
+    const before = Q.starDishHeat(e, tp);
+    const pass = Q.resolveStarDishPass(e, "j1", tp);
+    ok("⚠️⚠️⚠️ le passage de main remet la jauge à PLEIN (le duo est un raccourci, pas une serrure)",
+       pass.ok === true && pass.from === "j2" && before < 0.25 && Math.abs(Q.starDishHeat(e, tp) - 1) < 0.01,
+       `${(before * 100).toFixed(0)} % avant le relais, ${(Q.starDishHeat(e, tp) * 100).toFixed(0)} % après`);
+    ok("⚠️ un plat servi par quelqu'un qui ne le porte pas est refusé",
+       Q.resolveStarDishServe(e, "j2", tp + 10, "Bob").ok === false);
+    const served = Q.resolveStarDishServe(e, "j1", tp + 20, "Alice", "Bob");
+    ok("⚠️⚠️ servi chaud, il apprivoise la gourmande — et il NOMME le second",
+       served.ok === true && Q.starHas(e, ROSE) && e.found[ROSE].with === "Bob"
+       && Q.starDishPhase(e, tp + 30) === null,
+       `${e.found[ROSE].by} avec ${e.found[ROSE].with}`);
+    /* ── ET LE PLAT FROID SE PERD, UNE FOIS, CHEZ L'ARBITRE. */
+    const e2 = Q.newStar(); e2.fall = 1; Q.resolveStarDig(e2, ROSE, "j1", 20);
+    Q.resolveStarCook(e2, "j1", 100); Q.resolveStarDishTake(e2, "j1", 100 + Q.STAR_DISH_COOK_MS);
+    const cold = 100 + Q.STAR_DISH_COOK_MS + Q.STAR_DISH_HOT_MS + 1;
+    ok("⚠️ un plat froid ne sert plus", Q.resolveStarDishServe(e2, "j1", cold, "Alice").ok === false);
+    ok("⚠️ …et l'arbitre l'efface une seule fois",
+       Q.resolveStarDishTick(e2, cold).lost === true && Q.resolveStarDishTick(e2, cold + 1).ok === false && e2.dish === null);
+    ok("…et on peut recommencer immédiatement (pas de corvée de nettoyage)",
+       Q.resolveStarCook(e2, "j1", cold + 2).ok === true);
+    /* ⚠️⚠️ LA MARGE EST MESURÉE CONTRE LA CARTE, PAS SENTIE. La pire traversée de
+       la ferme en ligne droite est sa diagonale ; la jauge doit en valoir au moins
+       trois. Sans ce contrôle, agrandir la carte tuerait le plat en silence. */
+    const diag = Math.hypot(C.MAP_W, C.MAP_H) / C.PLAYER_SPEED * 1000;
+    ok("⚠️⚠️ la jauge est GÉNÉREUSE : au moins trois fois la diagonale de la ferme",
+       Q.STAR_DISH_HOT_MS >= diag * 3,
+       `${(Q.STAR_DISH_HOT_MS / 1000).toFixed(0)} s contre ${(diag / 1000).toFixed(0)} s de traversée`);
+    ok("…et la cuisson reste courte devant le trajet (ce n'est pas un second sablier)",
+       Q.STAR_DISH_COOK_MS * 4 <= Q.STAR_DISH_HOT_MS,
+       `${Q.STAR_DISH_COOK_MS / 1000} s de cuisson pour ${Q.STAR_DISH_HOT_MS / 1000} s de chaleur`);
+  }
+
+  /* ── LA REINE : DEUX BORDS OPPOSÉS. */
+  {
+    const R = Q.STAR_CRATER_R, CX = 40, CY = 40;
+    const at = (ang, rad) => ({ x: CX + Math.cos(ang) * rad, y: CY + Math.sin(ang) * rad });
+    const me = (ang, rad, dir) => ({ ...at(ang, rad), dir, moving: false });
+    /* Dos tourné = regarder vers l'extérieur. Au nord du centre (ang = −π/2), le
+       dos tourné est la direction 1 (nord). */
+    const north = me(-Math.PI / 2, R * 0.9, 1), south = at(Math.PI / 2, R * 0.9);
+    ok("⚠️⚠️ deux présences aux bords OPPOSÉS, dos tourné : ça compte",
+       Q.starQueenStep(north, south, CX, CY, R) === "holding");
+    ok("⚠️ tout seul, ça ne compte pas — et le jeu DIT que c'est ça qui manque",
+       Q.starQueenStep(north, null, CX, CY, R) === "alone");
+    ok("⚠️⚠️ au FOND du trou, ça ne compte pas (le fond met les deux côte à côte)",
+       Q.starQueenStep(me(-Math.PI / 2, R * 0.2, 1), south, CX, CY, R) === "edge");
+    ok("⚠️⚠️ …et le partenaire au fond non plus", Q.starQueenStep(north, at(Math.PI / 2, R * 0.2), CX, CY, R) === "side");
+    ok("⚠️ le même bord ne compte pas", Q.starQueenStep(north, at(-Math.PI / 2 + 0.2, R * 0.9), CX, CY, R) === "side");
+    ok("…marcher ne compte pas", Q.starQueenStep({ ...north, moving: true }, south, CX, CY, R) === "moving");
+    ok("…la regarder non plus", Q.starQueenStep({ ...north, dir: 0 }, south, CX, CY, R) === "watching");
+    ok("…et loin du cratère, il n'y a rien à dire", Q.starQueenStep({ x: CX + R + 8, y: CY, dir: 3, moving: false }, south, CX, CY, R) === "away");
+    /* ⚠️⚠️⚠️ UN CONTRÔLE DE CAS NE VAUT PAS UN INVARIANT (leçon 449). On balaie
+       tout le tour : deux présences ne peuvent JAMAIS compter si l'angle qui les
+       sépare est inférieur à un quart de tour. */
+    {
+      let bad = 0, swept = 0, held = 0;
+      for (let a = 0; a < Math.PI * 2; a += Math.PI / 24) {
+        for (let b = 0; b < Math.PI * 2; b += Math.PI / 24) {
+          swept++;
+          /* Le dos tourné se dérive de l'angle : on prend la direction cardinale
+             la plus proche du rayon sortant. `dir` : 0 sud, 1 nord, 2 ouest, 3 est. */
+          const dx = Math.cos(a), dy = Math.sin(a);
+          const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 3 : 2) : (dy > 0 ? 0 : 1);
+          const st = Q.starQueenStep(me(a, R * 0.9, dir), at(b, R * 0.9), CX, CY, R);
+          if (st === "holding") held++;
+          let d = Math.abs(a - b) % (Math.PI * 2);
+          if (d > Math.PI) d = Math.PI * 2 - d;
+          if (st === "holding" && d < Math.PI / 2) bad++;
+        }
+      }
+      ok("⚠️⚠️⚠️ INVARIANT : deux présences à moins d'un quart de tour ne comptent jamais",
+         bad === 0 && held > 0, `${swept} couples balayés, ${held} qui comptent, ${bad} faux`);
+    }
+    /* ── LE FIGURANT. */
+    {
+      const e = Q.devStar(Q.newStar(), "start", 1).star;
+      ok("⚠️ on ne plante pas l'épouvantail au fond du trou",
+         Q.resolveStarEffigy(e, "j1", CX, CY, CX, CY, R, 10).offEdge === true);
+      ok("…ni à trois cases du cratère",
+         Q.resolveStarEffigy(e, "j1", CX + R + 6, CY, CX, CY, R, 10).offEdge === true);
+      const put = Q.resolveStarEffigy(e, "j1", CX, CY + R * 0.9, CX, CY, R, 20);
+      ok("⚠️⚠️ planté au bord, il coûte UN épouvantail", put.ok === true && put.spend === 1);
+      const again = Q.resolveStarEffigy(e, "j1", CX + R * 0.9, CY, CX, CY, R, 30);
+      ok("⚠️ le déplacer ne coûte rien (on ne punit pas un mauvais visé)",
+         again.ok === true && again.spend === 0 && again.moved === true);
+      /* ⚠️⚠️ ET LE SOLO VA JUSQU'AU BOUT : soixante secondes avec le figurant, et
+         la reine sort. C'est la règle 458 rejouée sur le geste le plus exigeant du
+         chantier — aucune configuration de joueurs ne peut bloquer. */
+      let e2 = Q.devStar(Q.newStar(), "start", 1).star;
+      e2.townFall = e2.fall + 10;
+      Q.resolveStarEffigy(e2, "j1", CX, CY + R * 0.9, CX, CY, R, 20);
+      let t = e2.townFall + Q.STAR_CRATER_COOL_MS + 500;
+      const start = t;
+      for (let k = 0; k < 200 && !Q.starHas(e2, "crater"); k++) {
+        t += 500;
+        e2 = Q.migrateStar(e2);                 // ⚠️ exactement ce que fait l'hôte
+        Q.resolveStarCalm(e2, "j1", t, { alone: true, partner: "effigy" }, "crater");
+      }
+      ok("⚠️⚠️⚠️ SEUL, AVEC SON ÉPOUVANTAIL, LA REINE SORT QUAND MÊME",
+         Q.starHas(e2, "crater"), `${((t - start) / 1000).toFixed(0)} s de tenue`);
+      ok("…et elle ne sort qu'à MOITIÉ (c'est de la fiction, pas un barème caché)",
+         Q.STAR_QUEEN_HALF > 0 && Q.STAR_QUEEN_HALF < 1, `${Q.STAR_QUEEN_HALF}`);
+      ok("⚠️ …et l'épouvantail traverse la migration (sinon il disparaît à la première requête)",
+         !!e2.effigy && Math.abs(e2.effigy.y - (CY + R * 0.9)) < 0.001);
+    }
+    /* ⚠️ À DEUX, ELLE SORT ENTIÈRE, ET LE SECOND EST NOMMÉ. */
+    {
+      const e = Q.devStar(Q.newStar(), "start", 1).star;
+      e.townFall = e.fall + 10;
+      let t = e.townFall + Q.STAR_CRATER_COOL_MS + 500, opened = null;
+      for (let k = 0; k < 80 && !opened; k++) {
+        t += 400;
+        const r = Q.resolveStarCalm(e, "j1", t, { alone: false, partner: "player", mate: "Bob" }, "crater");
+        if (r.opened) opened = r;
+      }
+      ok("⚠️⚠️ à deux, elle sort ENTIÈRE, et la trouvaille porte le nom du second",
+         !!opened && opened.half === false && e.found.crater.with === "Bob",
+         `${((t - (e.townFall + Q.STAR_CRATER_COOL_MS + 500)) / 1000).toFixed(1)} s`);
+      /* ⚠️⚠️⚠️ ET LES DEUX NOMS SONT DES NOMS, PAS DES IDENTIFIANTS. C'était un
+         défaut hérité et invisible : `resolveStarCalm` reçoit un `profile_id`
+         (il lui faut une clé de tenue stable) et le passait tel quel à la
+         trouvaille, donc `found.by` portait un UUID de 36 signes. Personne ne
+         l'affichait — jusqu'à la trace de fin, qui nomme les deux joueurs. Le
+         contrôle rejoue donc avec un VRAI identifiant Supabase, comme le §fouille
+         depuis le 469 : avec « j1 » des deux côtés, il ne pouvait pas tomber. */
+      {
+        const uuid = "3f2b9c14-7a5e-4d0b-8c61-9e2af4d17b05";
+        const e3 = Q.devStar(Q.newStar(), "start", 1).star;
+        e3.townFall = e3.fall + 10;
+        let t3 = e3.townFall + Q.STAR_CRATER_COOL_MS + 500, op3 = null;
+        for (let k = 0; k < 80 && !op3; k++) {
+          t3 += 400;
+          const r = Q.resolveStarCalm(e3, uuid, t3, { alone: false, partner: "player", mate: "Bob", name: "Alice" }, "crater");
+          if (r.opened) op3 = r;
+        }
+        ok("⚠️⚠️⚠️ la trace de fin porte DEUX NOMS, jamais un identifiant",
+           !!op3 && e3.found.crater.by === "Alice" && e3.found.crater.with === "Bob",
+           `${e3.found.crater.by} · ${e3.found.crater.with}`);
+        /* ⚠️ ET LA CLÉ DE TENUE, ELLE, RESTE L'IDENTIFIANT : c'est ce qui distingue
+           deux fermiers qui portent le même nom. Les deux grandeurs cohabitent, et
+           ce contrôle est là pour qu'on ne « simplifie » pas l'une dans l'autre. */
+        ok("…pendant que la tenue continue de compter sur l'IDENTIFIANT",
+           Object.keys(e3.calm).some(k => k.includes(uuid)));
+      }
+    }
+  }
+
+  /* ╔════════════════════════════════════════════════════════════════════════════
+     ║ ⚠️⚠️⚠️ UNE JOINTURE, JAMAIS DEUX LISTES (449) — ET ICI ON MESURE L'ACCORD.
+     ╚════════════════════════════════════════════════════════════════════════════
+     Le bandeau et le chevron dérivent tous les deux de `starGoalKey`, mais chacun
+     lui passe un CONTEXTE — et c'est le contexte qui décide, depuis ce zip, si l'on
+     envoie au chaudron ou au cratère. Deux constructions de ce contexte, ce sont
+     deux réponses à « où vais-je », et elles seraient vertes toutes les deux : le
+     défaut du 449, exactement.
+     ⚠️ IL AVAIT DÉJÀ EU LIEU, ET UN COMMENTAIRE RASSURANT LE CACHAIT : le chevron
+     recopiait `{ craterHot, landed }` à la main sous une note qui affirmait « une
+     seule source, donc un seul contexte » — vrai tant que le contexte n'avait que
+     deux champs, faux à la seconde où il en a eu cinq. On ne mesure donc plus la
+     promesse, on mesure le SOURCE.
+     ⚠️ ET IL PUBLIE COMBIEN D'APPELS IL A LUS (leçon du 441) : un scanner qui ne
+     scanne rien passe toujours au vert. */
+  {
+    const src = fs.readFileSync(path.join(ROOT, "components", "ferme", "FermeGame.js"), "utf8");
+    /* ⚠️ ON LIT UNE FENÊTRE FIXE APRÈS CHAQUE APPEL PLUTÔT QUE D'ÉQUILIBRER LES
+       PARENTHÈSES : un `([^;]*?)\)` s'arrête à la PREMIÈRE parenthèse fermante, donc
+       sur `Q.starGoalKey(e, starGoalCtx())` il ne lit que « e, starGoalCtx( ». Le
+       premier jet de ce contrôle échouait sur les quatre appels justes — un banc qui
+       échoue à tort est aussi inutile qu'un banc qui passe à tort. */
+    const calls = [...src.matchAll(/Q\.(starGoalKey|starTargetSite)\(/g)]
+      .map(m => ({ name: m[1], args: src.slice(m.index, m.index + 90) }));
+    const bad = calls.filter(c => !c.args.includes("starGoalCtx()"));
+    ok("⚠️⚠️⚠️ le bandeau et le chevron construisent UN SEUL contexte",
+       calls.length >= 3 && bad.length === 0,
+       `${calls.length} appels lus, ${bad.length} avec un contexte à la main`);
+    ok("…et ce contrôle sait reconnaître un appel (témoin positif)",
+       calls.length > 0 && calls.some(c => c.name === "starTargetSite"),
+       calls.map(c => c.name).join(", "));
+  }
+
+  /* ── DÉFAUT 10 : ELLE SE CACHE, ELLE NE S'EFFACE PAS. */
+  {
+    ok("⚠️ le rayon de cachette n'a pas bougé (ce n'était pas lui, le défaut)", Q.STAR_HIDE_R === 4.5);
+    /* ⚠️⚠️ DEUX TEMPS : elle BOUGE d'abord, elle PÂLIT ensuite. Un fondu seul se
+       lit comme un défaut d'affichage — c'est très exactement le reproche. */
+    const a0 = Q.starHideAnim(0), aH = Q.starHideAnim(0.5), a1 = Q.starHideAnim(1);
+    ok("⚠️⚠️ premier temps : elle se RANGE (elle rentre vers le joueur avant de pâlir)",
+       aH.tuck === 1 && aH.alpha > a1.alpha && aH.alpha > 0.4,
+       `tuck ${a0.tuck} → ${aH.tuck}, alpha ${a0.alpha.toFixed(2)} → ${aH.alpha.toFixed(2)} → ${a1.alpha.toFixed(2)}`);
+    ok("⚠️⚠️ second temps : elle s'éteint, mais elle ne DISPARAÎT jamais",
+       a1.alpha > 0.05 && a1.alpha < 0.2 && a1.scale < 0.7,
+       `alpha ${a1.alpha.toFixed(2)}, échelle ${a1.scale.toFixed(2)}`);
+    ok("…et à découvert, elle est intacte", a0.alpha === 1 && a0.scale === 1 && a0.dip === 0);
+    /* Monotone dans les deux sens, et bornée : une courbe qui dépasse 1 ferait
+       remonter l'opacité au milieu du fondu. */
+    {
+      let k = 0, mono = true, prev = 0;
+      for (let i = 0; i < 40; i++) { k = Q.starHideK(k, 33, true); if (k < prev) mono = false; prev = k; }
+      const full = k;
+      for (let i = 0; i < 40; i++) { k = Q.starHideK(k, 33, false); if (k > prev) mono = false; prev = k; }
+      ok("⚠️ la courbe monte puis redescend, sans jamais sortir de [0, 1]",
+         mono && full === 1 && k === 0);
+    }
+    ok("⚠️⚠️ elle se cache VITE et ressort DOUCEMENT (on se planque, on ne se montre pas)",
+       Q.STAR_HIDE_OUT_MS > Q.STAR_HIDE_IN_MS,
+       `${Q.STAR_HIDE_IN_MS} ms pour rentrer, ${Q.STAR_HIDE_OUT_MS} ms pour ressortir`);
   }
 }
 

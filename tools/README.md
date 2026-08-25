@@ -9,7 +9,9 @@ Le 433 en ajoute trois (`verify-taxi`, `render-taxi`, `render-oiseaux`), le 434 
 (`verify-compo`), le 441 une (`verify-pont`), le 443 une (`verify-portee`), et le **444 trois**
 (`render-etoile`, `verify-quete`, `render-beffroi`) contre deux supprimés (`verify-enquete`,
 `render-enquete`, partis avec l'enquête qu'ils mesuraient), et le **451 une**
-(`render-navire`, le navire des étoiles).
+(`render-navire`, le navire des étoiles), et le **480 une** (`verify-maire`, l'audience chez le
+maire). **Total à ce jour : 17 bancs de contrôle et 19 bancs de rendu, les 36 relancés un par un
+au 480, tous verts.**
 
 ⚠️⚠️ **ET LE 444 A APPRIS QUELQUE CHOSE QUI VAUT POUR TOUS LES BANCS DE CE DOSSIER : SIX BANCS AU
 VERT N'ONT PAS VU DIX DÉFAUTS QU'UNE SEULE SÉANCE DE JEU A TROUVÉS EN VINGT MINUTES**, dont cinq
@@ -107,6 +109,31 @@ grille est une grille dans les deux sens, donc c'est une mesure plus complète E
 d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
 
 ## Ce qui existe
+
+- **`tools/verify-maire.mjs` — 72 contrôles, 72/72 (480).** L'AUDIENCE CHEZ LE MAIRE, JOUÉE.
+  ⚠️⚠️⚠️ **C'est le premier banc du dépôt qui JOUE une mécanique de bout en bout au lieu de la
+  relire** — quatre cents entretiens par propriété, balayés sur cinq maires × deux mondes (plans en
+  main / mains vides) × quatre crans de confiance × dix vitesses de réflexion, de zéro à neuf
+  secondes. Un banc qui aurait vérifié « chaque nœud a trois réponses » et « l'idéale rapporte plus
+  que la tiède » aurait été **vert sur une négociation ingagnable**, et il l'a été : trois
+  réétalonnages ont été nécessaires, tous imposés par des entretiens joués.
+  Il mesure : la table (trois réponses jouables par nœud dans les DEUX mondes, une idéale / une
+  tiède / une faute, une seule faute caricaturale, une seule fin immédiate, aucune famille
+  d'argument gagnante plus d'un tiers du temps) · les textes par JOINTURE dans les deux langues,
+  **justification comprise** (une réplique sans son « pourquoi » échoue) · **la négociation elle-même**
+  (le jeu parfait gagne toujours, le jeu tiède ne gagne JAMAIS même en martelant à zéro seconde,
+  une faute se rattrape et trois non, enchaîner paie plus que le même nombre de bonnes réponses
+  dispersées) · **la rejouabilité hôte = client au dixième de point près** sur soixante
+  transcriptions · l'état persisté · la posture, balayée sur toute la jauge et monotone.
+  ⚠️⚠️ **ET IL IMPRIME CINQ ENTRETIENS EN CLAIR À LA FIN.** C'est ce qui a trouvé le seul défaut que
+  soixante-dix contrôles verts ne voyaient pas : le sans-faute atteignait le plafond au SEPTIÈME
+  nœud sur treize, donc la seconde moitié de la « vraie discussion longue » ne pouvait plus rien
+  changer. *Un banc de dialogue qui ne montre jamais un dialogue mesure des nombres sur un texte
+  que personne n'a relu* (§25 de `components/ferme/README.md`, transposé au terminal).
+  ⚠️ Il tient aussi un lien entre deux nombres réglés à la main de deux côtés différents : le
+  plafond de fuite (`MAYOR_DRAIN_CAP`) doit rester SOUS la plus faible des répliques idéales, sinon
+  la promesse « aucune hésitation ne coûte plus qu'une bonne réponse ne rapporte » devient fausse
+  chez le maire le plus hostile — et ça se croise en changeant un seul des deux (§8 de `CLAUDE.md`).
 
 - **`tools/verify-compo.mjs` — 13 contrôles, 13/13 (440).** LA COMPOSITION DES DÉCORS, sur toute la carte.
   ⚠️ Il existe parce que Guillaume a vu « un arbre sur un pont » et qu'aucun des quinze autres
@@ -491,7 +518,23 @@ donnait pas, d'une rangée.
 
 ---
 
-## `render-etoile.mjs` — les dessins de la quête de l'étoile (444 à 469)
+## `render-etoile.mjs` — 161 contrôles, 161/161 (relancé au 480) — les dessins de la quête de l'étoile (444 à 479)
+
+⚠️⚠️ **ZIP 479 — LE §13 REGARDE LE PLAT DE L'ÉTOILE ROSE, ET IL EST NÉ AVEC LUI** (5 contrôles,
+troisième dessin de ce chantier à naître avec son banc après la bulle « ! » du 455 et la lueur
+du 478). Ce qu'il mesure n'est pas « est-il joli » — aucun banc ne sait le dire — mais la seule
+chose dont la MÉCANIQUE dépend : *lit-on la chaleur sans regarder la jauge ?* Donc la couleur de
+la soupe (écart rouge/bleu : 105 à chaud, 12 à froid), la hauteur du filet de vapeur, et le fait
+que le bol EXISTE encore une fois froid.
+⚠️⚠️⚠️ **ET IL A CHANGÉ DE GRANDEUR EN COURS DE ROUTE, APRÈS AVOIR REGARDÉ LA PLANCHE.** Il
+comptait les PIXELS de vapeur : 15 à chaud contre 14 à mi-chaleur — vert, et rigoureusement
+aveugle, puisque le nombre de points est constant par construction (deux colonnes de cinq) et
+que c'est la HAUTEUR qui double. *Un rapport de 1,07 entre deux extrêmes n'est pas un contrôle,
+c'est un tirage au sort.* Treizième forme du « banc qui passe » de `CLAUDE.md`.
+⚠️ **Le dessin lui-même a été refait pour la même raison** : le premier jet passait les cinq
+contrôles et se lisait comme une GÉLULE surmontée de trois ballons. Une écuelle a une lèvre, un
+creux et un cerne ; la vapeur est un filet, pas des bulles.
+
 
 ⚠️⚠️ **ZIP 469 — LE §14 REGARDE LA FOUILLE, ET IL EST NÉ AVEC ELLE** (22 contrôles) : la
 pose accroupie (pieds au sol, quatre images distinctes, les deux mains en OPPOSITION DE
@@ -665,7 +708,8 @@ qui change vraiment.
 est la PAIRE, pas l'image) · `etoile-comete.png` (448) · `etoile-alerte.png` (455) ·
 `etoile-jauge.png` (456 : cinq remplissages et deux états d'attente sur la terre du cratère) ·
 `etoile-poses.png` (459 : les trois poses du cratère sur quatre tenues) · `etoile-tristan.png`
-(459 : la bulle d'ouvrage à cinq avancements).
+(459 : la bulle d'ouvrage à cinq avancements) · `etoile-plat.png` (479 : la chaleur qui tombe de
+gauche à droite, cinq bols).
 
 ⚠️⚠️ **IL REMPLACE `verify-enquete.mjs` ET `render-enquete.mjs`, SUPPRIMÉS AU 444 AVEC L'ENQUÊTE
 QU'ILS MESURAIENT.** Un banc qui mesure du contenu disparu est pire qu'un banc absent : il passe
@@ -781,7 +825,32 @@ touche le sol — le défaut même de ce zip — leur est **totalement invisible
 `verify-quete` qui le tient désormais (cinq contrôles purs sur `starImpactLanded` et l'azimut).
 *Un banc de rendu ne peut pas voir un défaut de temps.*
 
-## `verify-quete.mjs` — 449 contrôles, 449/449 (444 à 469 : cinq impacts, FOUILLE, apprivoisement, arrivée visible, constellation et reine-guide inclus)
+## `verify-quete.mjs` — 585 contrôles, 585/585 (444 à 479 : cinq impacts, FOUILLE, LES TROIS VERBES, arrivée visible, constellation et reine-guide inclus)
+
+⚠️⚠️⚠️ **ZIP 479 — LE §12 TIENT UNE PROMESSE DE CONCEPTION DANS DU CODE, ET C'EST SA RAISON
+D'ÊTRE.** L'audit 477 reprochait aux trois étoiles de « dire la même chose » ; la cause n'était
+pas le texte, c'était qu'on leur demandait le même GESTE. Le §12 refuse donc que deux étoiles
+partagent un `verb`, rejoue les trois chaînes de bout en bout (l'offrande de bonbons, le plat
+qu'on cuit / porte / passe / sert, les deux bords du cratère), et balaie 2 401 couples de
+positions pour tenir l'INVARIANT de la reine — *deux présences à moins d'un quart de tour ne
+comptent jamais*. **Une consigne écrite dans un document se périme sans bruit ; un contrôle qui
+échoue, non.**
+⚠️⚠️ **ET IL A DÛ RÉAPPRENDRE LE VRAI GESTE, comme au 469 :** huit contrôles verts sont tombés
+d'un coup en ajoutant les verbes, parce qu'ils jouaient encore `resolveStarCalm` sur les trois
+étoiles. *Un banc qui rejoue le geste d'avant est vert sur deux étoiles devenues
+inatteignables.*
+⚠️⚠️⚠️ **UN CONTRÔLE DE SOURCE EST NÉ AVEC CE ZIP, ET IL A TROUVÉ UN DÉFAUT DE VINGT-CINQ
+ZIPS** : le bandeau et le chevron dérivent tous deux de `starGoalKey`, et chacun lui passe un
+CONTEXTE. Le chevron recopiait le sien à la main — `{ craterHot, landed }` — **sous un
+commentaire qui affirmait « une seule source, donc un seul contexte »**. C'était vrai tant que
+le contexte avait deux champs ; le 479 lui en donne cinq, et le chevron aurait pointé le cratère
+rose pendant que le bandeau envoie au chaudron. *Une phrase qui dit « une seule source » n'en
+fait pas une — c'est le SOURCE qu'il faut mesurer, pas la promesse.* (Et il publie combien
+d'appels il a lus : leçon du 441, un scanner qui ne scanne rien passe toujours au vert.)
+⚠️ **Son premier jet échouait sur les quatre appels JUSTES** — un `\)` non équilibré s'arrêtait
+à la première parenthèse fermante. *Un banc qui échoue à tort est aussi inutile qu'un banc qui
+passe à tort*, et on ne s'en aperçoit qu'en lisant ce qu'il imprime.
+
 
 ⚠️⚠️⚠️ **ZIP 469 — IL EST PASSÉ DE 488 À 449, ET C'EST UNE BONNE NOUVELLE.** Le déchant a
 supprimé quatre chapitres ; leurs contrôles partent avec eux (les deux fenêtres solo rejouées

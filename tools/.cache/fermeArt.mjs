@@ -7398,6 +7398,103 @@ export function buildSprites() {
     g2.restore();
   }
 
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 479 — LE PLAT DE L'ÉTOILE ROSE. « ELLE VIENT À LA CHALEUR. »
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ IL EST ICI ET PAS DANS LA CLOSURE DE LA BOUCLE, parce qu'il sert à TROIS
+     endroits (le chaudron qui mijote, le fermier qui court, la fiche de fouille) et
+     que `render-etoile` doit pouvoir le regarder. Écrit dans la boucle, il aurait
+     été le dessin qui « ne se dégrade pas : il reste au niveau du jour où il a été
+     écrit » (§4 de `CLAUDE.md`, deuxième visage du piège n°1).
+     ⚠️⚠️ AUCUN DÉGRADÉ : le faux canevas des bancs ne connaît pas
+     `createRadialGradient` (leçon payée au 478 sur `drawStarCalmGlow`). La vapeur
+     est faite de disques d'alpha faible, ce qui se mesure.
+     ⚠️⚠️ ET C'EST LA CHALEUR QUI PORTE TOUTE L'INFORMATION : `k` = 1 fume à trois
+     panaches, `k` = 0 ne fume plus du tout et le bol vire au gris. Le joueur doit
+     pouvoir lire « ça refroidit » SANS regarder la jauge — un objet qui ne dit rien
+     de son état oblige à lire une barre, et on ne lit pas une barre en courant. */
+  const STAR_DISH_HOT = ["rgba(255,214,142,", "rgba(255,164,120,"];
+  function drawStarDish(g2, cx, cy, T2, k01, tMs) {
+    const k = Math.max(0, Math.min(1, k01 === undefined ? 1 : k01));
+    const t = tMs || 0;
+    const w = Math.max(6, Math.round(T2 * 0.62));      // le bol tient dans deux tiers de case
+    const h = Math.max(4, Math.round(w * 0.46));
+    const x0 = Math.round(cx - w / 2), y0 = Math.round(cy - h / 2);
+    g2.save();
+    /* ╔════════════════════════════════════════════════════════════════════════
+       ║ ⚠️⚠️ CE DESSIN A ÉTÉ REFAIT APRÈS L'AVOIR REGARDÉ, ET LE BANC ÉTAIT VERT
+       ║ DANS LES DEUX CAS.
+       ╚════════════════════════════════════════════════════════════════════════
+       Premier jet : trois masses plates et trois gros disques de vapeur. Tous les
+       contrôles passaient (elle fume plus à chaud, la soupe est orange, ça tient
+       dans la case) — et sur la planche, ça se lisait comme une GÉLULE surmontée
+       de trois ballons. Les contrôles mesuraient la MÉCANIQUE (lit-on la chaleur ?)
+       et rien ne mesurait la silhouette, ce qu'aucun banc ne sait faire (§25 du
+       README de la ferme). Ce qui manquait : une écuelle a une LÈVRE et un
+       CREUX — deux ellipses décalées, pas une —, un cerne pour exister sur la
+       terre brune, et une vapeur en FILET plutôt qu'en bulles. */
+    /* La vapeur AVANT le bol : elle monte derrière lui, jamais par-dessus son bord
+       — sinon le panache mange la seule silhouette qui dise « c'est un plat ».
+       ⚠️ UN FILET, PAS DES BULLES : deux colonnes de points d'un pixel qui ondulent.
+       Des disques de trois pixels font des ballons de bande dessinée ; à cette
+       taille, la vapeur est une SUITE, pas une forme. */
+    if (k > 0.02) {
+      for (let i = 0; i < 2; i++) {
+        const per = 1300 + i * 380;
+        for (let j = 0; j < 5; j++) {
+          const age = ((t / per) + j / 5 + i * 0.27) % 1;
+          const sx = cx + (i ? 1 : -1) * w * 0.17 + Math.sin(age * 5.2 + i * 2.1) * w * 0.13;
+          const sy = y0 - 1 - age * h * (1.5 + k * 2.6);
+          const al = k * 0.55 * Math.sin(Math.pow(age, 0.7) * Math.PI);
+          if (al < 0.03) continue;
+          g2.fillStyle = `rgba(240,238,232,${al.toFixed(3)})`;
+          g2.fillRect(Math.round(sx), Math.round(sy), 1, 1);
+          if (age > 0.45) g2.fillRect(Math.round(sx) + 1, Math.round(sy), 1, 1);
+        }
+      }
+    }
+    /* ⚠️ LE CERNE D'ABORD, ET IL SERT SUR FOND CLAIR COMME SUR FOND SOMBRE
+       (DESSIN.md) : le plat se porte au-dessus d'un fermier, au-dessus de l'herbe,
+       au-dessus de la terre du cratère. Sans lui il fond dans deux des trois. */
+    g2.fillStyle = "rgba(24,16,12,0.85)";
+    g2.beginPath(); g2.ellipse(cx, y0 + h * 0.60, w / 2 + 1, h * 0.52, 0, 0, 7); g2.fill();
+    /* Le CREUX de l'écuelle : la masse basse, en terre cuite sombre. */
+    g2.fillStyle = "#6b4128";
+    g2.beginPath(); g2.ellipse(cx, y0 + h * 0.62, w / 2, h * 0.48, 0, 0, 7); g2.fill();
+    /* ⚠️ LA COULEUR DE LA SOUPE EST CELLE DE LA CHALEUR, et elle va jusqu'au GRIS :
+       « le plat a refroidi » doit se voir sur l'objet avant de se lire dans un
+       texte. On interpole à la main plutôt qu'avec un dégradé, pour la raison
+       ci-dessus.
+       ⚠️ ELLE REMPLIT PRESQUE TOUTE LA LÈVRE : une pastille au centre faisait un
+       comprimé dans une soucoupe. Une écuelle pleine se lit à quinze pixels. */
+    const warm = Math.round(120 + 118 * k), g0 = Math.round(112 + 62 * k), b0 = Math.round(112 + 12 * k);
+    g2.fillStyle = `rgb(${warm},${g0},${b0})`;
+    g2.beginPath(); g2.ellipse(cx, y0 + h * 0.36, w * 0.42, h * 0.30, 0, 0, 7); g2.fill();
+    /* La LÈVRE : un arc clair sur le bord du haut, et c'est lui qui creuse l'objet.
+       Sans cet arc, les deux ellipses se lisent comme un galet posé à plat. */
+    g2.fillStyle = "#c09468";
+    g2.beginPath(); g2.ellipse(cx, y0 + h * 0.30, w * 0.50, h * 0.22, 0, 0, 7); g2.fill();
+    g2.fillStyle = `rgb(${warm},${g0},${b0})`;
+    g2.beginPath(); g2.ellipse(cx, y0 + h * 0.34, w * 0.40, h * 0.17, 0, 0, 7); g2.fill();
+    /* Le reflet, une seule touche, en haut à gauche — la lumière vient de là dans
+       tout le dépôt. */
+    g2.fillStyle = "rgba(255,246,228,0.60)";
+    g2.beginPath(); g2.ellipse(cx - w * 0.14, y0 + h * 0.28, w * 0.13, h * 0.07, 0, 0, 7); g2.fill();
+    /* Le halo tiède : deux ellipses AUTOUR, jamais par-dessus la source (même règle
+       que le halo des étoiles). Il s'éteint avec la chaleur. */
+    if (k > 0.25) {
+      const kk = (k - 0.25) / 0.75;
+      g2.globalAlpha = 0.16 * kk;
+      g2.fillStyle = STAR_DISH_HOT[0] + "1)";
+      g2.beginPath(); g2.ellipse(cx, y0 + h * 0.5, w * 0.92, h * 0.86, 0, 0, 7); g2.fill();
+      g2.globalAlpha = 0.20 * kk;
+      g2.fillStyle = STAR_DISH_HOT[1] + "1)";
+      g2.beginPath(); g2.ellipse(cx, y0 + h * 0.5, w * 0.66, h * 0.60, 0, 0, 7); g2.fill();
+      g2.globalAlpha = 1;
+    }
+    g2.restore();
+  }
+
   function drawStarCraterAir(g2, cx, cy, T2, tMs, opt) {
     const o = opt || {};
     const heat = Math.max(0, Math.min(1, o.heat === undefined ? 1 : o.heat));
@@ -14740,6 +14837,7 @@ house: house(),
     magpie: [magpieSprite(0), magpieSprite(1), magpieSprite(2)],
     drawStarCrater,
     drawStarCalmGlow,   // 478 — la lumière qui monte pendant la tenue
+    drawStarDish,       // 479 — le plat de l'étoile rose, et sa chaleur qui tombe
     drawStarCraterAir,
     drawStarDust,
     drawStarShip,          // 450 — le navire des étoiles, sur la grève du lac

@@ -5925,3 +5925,190 @@ export const TOWN_KIOSK_NOTE_MS = 380;         // cadence des notes de musique a
    ne bloque pas, c'est la réciproque du mur invisible du 425 — on traverse une
    gare. Le banc de contrôle teste les deux sens. */
 export const TOWN_STATION = { x: 6, y: 62, w: 4, h: 3 };   // même gabarit que STATION (ferme)
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 480 — L'AUDIENCE CHEZ LE MAIRE : LES NOMBRES DE LA NÉGOCIATION.
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume, mot pour mot : « une vraie discussion longue, avec un
+   maire réticent au départ qu'on devra convaincre en choisissant les bonnes
+   réactions », « une jauge de persuasion », et — c'est ce qui décide de toute
+   la forme — « si l'on ne fait rien, la jauge de patience/persuasion descend
+   continûment. D'où l'intérêt de trouver les bonnes réponses et de LES
+   ENCHAÎNER ».
+
+   ⚠️⚠️⚠️ UNE SEULE GRANDEUR, DEUX SENS, ET C'EST LE CŒUR DU RÉGLAGE. Le premier
+   jet avait DEUX ressources : une jauge d'adhésion et un quart d'heure décompté
+   en tours. Guillaume l'a refusé, et il a eu raison pour une raison qui est
+   écrite en tête de CLAUDE.md : « deux grandeurs qui s'opposent se mesurent
+   ensemble ou pas du tout » (458). Ici, la FUITE EST L'HORLOGE — hésiter coûte
+   littéralement des points, il n'y a rien de plus à afficher, et le banc n'a
+   qu'une différence à calculer au lieu de deux courbes à croiser.
+
+   ⚠️⚠️ CE QUE LA FUITE NE DOIT SURTOUT PAS PUNIR, C'EST LA LECTURE. Une jauge
+   qui descend pendant qu'on lit trois répliques transforme un dialogue en test
+   de vitesse de lecture, et pénalise d'autant plus le joueur anglophone que le
+   français gonfle de 15 à 20 %. La grâce est donc DÉRIVÉE DU TEXTE LUI-MÊME
+   (`MAYOR_READ_MS_CHAR` × le nombre de signes réellement affichés), jamais
+   réglée à la main — §8 de CLAUDE.md : un paramètre qui double un autre
+   paramètre est une divergence en attente.
+
+   ⚠️ AUCUN DE CES NOMBRES N'EST ÉCRIT DEUX FOIS. `maire.js` les lit, le banc
+   `verify-maire.mjs` les lit, la vue 3D ne lit que la jauge résolue.
+   ═══════════════════════════════════════════════════════════════════════════ */
+export const MAYOR_ADH_MAX = 100;          // le haut de la jauge d'adhésion
+export const MAYOR_ADH_WIN = 75;           // à partir d'ici il PEUT signer
+export const MAYOR_ADH_FLOOR = 0;          // en dessous, il met fin à l'entretien
+
+/* ⚠️⚠️ LES DEUX DÉPARTS, ET C'EST TOUTE LA RÉPONSE DE GUILLAUME SUR LES PLANS :
+   « si l'on n'a pas encore les plans du bateau délivrés par l'ingénieur, le
+   maire sera très difficile à convaincre. Si l'on a déjà les plans alors il
+   sera toujours un peu radin et réticent mais ce sera moins difficile ».
+   Les plans ne sont donc PAS une serrure — on peut monter le voir sans eux, et
+   gagner. Ils changent le DÉPART, la FUITE et la valeur des arguments qui
+   demandent une preuve. Une porte fermée aurait été plus courte à écrire et
+   aurait retiré au joueur la seule décision intéressante de tout le chapitre :
+   y aller tout de suite, ou attendre d'avoir de quoi montrer. */
+export const MAYOR_START_PLANS = 24;       // plans en main : réticent, pas hostile
+export const MAYOR_START_BARE = 18;        // les mains vides : très difficile
+
+/* La fuite nue, en points par seconde. À 2,0 la jauge pleine se vide en
+   cinquante secondes : c'est court, et c'est voulu — on ne rêvasse pas devant
+   un maire qui vous a donné un quart d'heure. */
+export const MAYOR_DRAIN_PER_S = 2.0;
+/* ⚠️ LE JOUR D'AUDIENCE EST UN BONUS, PAS UNE ATTENTE. `mayorAudienceDay` existe
+   depuis le 439 et n'était jusqu'ici qu'une DATE AFFICHÉE : rien dans le jeu ne
+   se comportait différemment ce jour-là. Le rendez-vous officiel ne barre donc
+   aucune porte (on monte le voir n'importe quand, l'accueil fait monter) — mais
+   ce jour-là il est préparé, il n'est pas interrompu, et il décroche moins vite.
+   Une date qui ne change rien est une date qui ment. */
+export const MAYOR_DRAIN_AUDIENCE_K = 0.7;
+/* Après une faute, il décroche vite pendant quelques secondes : c'est le moment
+   où l'on sent qu'on vient de perdre la salle, et il faut qu'il se sente.
+   ⚠️⚠️⚠️ MAIS LE GLISSEMENT ACCOMPAGNE LA FAUTE, IL NE LA DOUBLE PAS. Réglé à
+   4 s × 2,2, il coûtait à lui seul quatorze points de plus que la fuite
+   ordinaire, c'est-à-dire PLUS que la bourde qui l'avait déclenché : une seule
+   maladresse d'accueil fermait l'entretien chez Bonnefoy, et le joueur n'avait
+   aucun moyen d'attribuer les dégâts à la bonne cause. *Une pénalité invisible
+   plus grosse que la pénalité visible n'est pas une pénalité, c'est un piège.*
+   Le banc tient maintenant l'invariant : le glissement ne coûte jamais plus que
+   la faute elle-même. */
+export const MAYOR_SLIP_MS = 3000;
+export const MAYOR_SLIP_K = 1.7;
+
+/* ⚠️⚠️ L'ÉLAN — « d'où l'intérêt de trouver les bonnes réponses et de les
+   ENCHAÎNER ». Deux réponses idéales de suite ARRÊTENT la fuite ; trois
+   l'INVERSENT (il s'anime tout seul, il vous coupe la parole pour finir votre
+   phrase). Une réponse tiède ramène l'élan à un, une faute le casse à zéro.
+   C'est la seule règle du système qui récompense la SUITE plutôt que le coup,
+   et c'est elle qui distingue une négociation d'un questionnaire. */
+export const MAYOR_STREAK_HOLD = 2;        // la fuite se réduit
+export const MAYOR_STREAK_GAIN = 3;        // elle s'inverse
+export const MAYOR_STREAK_RISE_PER_S = 0.8;
+/* ⚠️⚠️ L'ÉLAN RÉDUIT LA FUITE, IL NE L'ANNULE PAS — CORRIGÉ APRÈS LECTURE DES
+   TRANSCRIPTIONS DU BANC, ET C'EST LE MEILLEUR ARGUMENT POUR §7 DE
+   `verify-maire.mjs`. À l'annulation pure, un sans-faute ne payait plus rien à
+   partir du troisième échange : il plafonnait à 100 au SEPTIÈME nœud et les six
+   derniers ne servaient plus à rien. Aucun contrôle numérique ne l'aurait dit
+   (tout était vert : le jeu parfait gagnait, le jeu tiède perdait) ; ça se voit
+   en lisant la colonne de gauche d'un entretien imprimé. *Une négociation dont
+   la seconde moitié ne peut plus rien changer n'est pas longue, elle est finie
+   depuis un moment.* */
+export const MAYOR_STREAK_HOLD_K = 0.3;
+
+/* ⚠️⚠️⚠️ AUCUNE HÉSITATION NE PEUT COÛTER PLUS QU'UNE BONNE RÉPONSE NE RAPPORTE.
+   C'est l'invariant qui décide si ce jeu récompense de répondre BIEN ou de
+   répondre VITE, et le premier passage du banc l'a montré cru : à 2 points par
+   seconde, neuf secondes de réflexion coûtaient dix-huit points, c'est-à-dire
+   plus que la meilleure réplique de l'arbre. Un joueur qui LIT et qui pèse
+   perdait contre un joueur qui martèle, ce qui est très exactement l'inverse de
+   la mécanique demandée. La fuite est donc BORNÉE par échange.
+   ⚠️ Et elle ne court pas AVANT le premier échange : il vous a reçu, il vous a
+   donné un quart d'heure, il ne se lève pas parce que vous avez marqué un temps
+   avant votre première phrase. */
+export const MAYOR_DRAIN_CAP = 4;
+/* ⚠️⚠️ SA VALEUR N'EST PAS LIBRE : elle doit rester SOUS la plus faible des
+   répliques idéales de la table, sinon la phrase ci-dessus devient fausse chez
+   le maire le plus hostile — c'est ce qui arrivait à 9, où deux hésitations
+   longues d'affilée effaçaient plus que deux bonnes réponses ne rapportaient.
+   ⚠️ Le lien est tenu par `verify-maire.mjs`, qui lit les deux et refuse qu'ils
+   se croisent : un nombre qui en double un autre se DÉRIVE ou se MESURE, il ne
+   se règle pas à la main des deux côtés (§8 de CLAUDE.md). */
+
+/* La grâce de lecture : dérivée du texte affiché, bornée par le bas pour qu'une
+   réplique très courte laisse quand même le temps de la voir arriver. */
+export const MAYOR_READ_MS_CHAR = 26;
+export const MAYOR_READ_MS_MIN = 1600;
+export const MAYOR_READ_MS_MAX = 14000;
+
+/* ⚠️⚠️ SANS LES PLANS, ON NE PEUT RIEN PROUVER — ET C'EST UNE RÈGLE, PAS
+   QUARANTE VARIANTES DE RÉPLIQUES. Tout argument de la famille `risk` (la
+   sûreté, la responsabilité, le devis) perd la moitié de sa valeur quand on n'a
+   rien à poser sur le bureau, et les répliques qui NOMMENT les plans sont
+   simplement remplacées par leur version les mains vides (`when`). Écrire deux
+   arbres complets aurait été le doublon du §8, avec la divergence garantie au
+   premier réglage. */
+export const MAYOR_BARE_RISK_K = 0.5;
+/* ⚠️⚠️⚠️ IL Y AVAIT ICI UN SECOND MALUS, `MAYOR_BARE_IDEAL_K`, ET IL EST
+   SUPPRIMÉ PLUTÔT QUE MIS À 1 (leçon 448/453 : une constante que plus personne
+   ne lit est une constante débranchée, et elle repasse au vert dans les bancs
+   sans rien tenir). Il rabotait TOUTES les répliques idéales de 30 % quand on
+   n'avait pas les plans — c'est-à-dire qu'il comptait une quatrième fois une
+   difficulté déjà comptée trois : la carte des plans n'existe pas (−15), les
+   trois répliques qui les nomment sont remplacées par des versions faibles
+   (−13), la sûreté vaut moitié (−9), le départ est plus bas et la fuite plus
+   rapide. La négociation était devenue arithmétiquement ingagnable les mains
+   vides, ce qui contredit la décision de Guillaume (« très difficile », pas
+   « impossible ») — et c'est le banc qui l'a dit, en la jouant.
+   ⚠️ *Une difficulté empilée quatre fois n'est pas quatre fois plus difficile :
+   c'est un mur, et un mur ne se règle pas, il se retire.* */
+
+/* La carte « poser les plans » : elle ne se joue qu'UNE fois, et sa valeur
+   dépend entièrement du moment. Posée quand il demande ce qu'on veut construire
+   au juste, c'est le plus gros gain de la partie ; posée pour meubler, il ne les
+   déroule même pas. Le détail par nœud est dans `maire.js` (`plansValue`). */
+export const MAYOR_PLANS_LATE = 4;         // le repli, quand ce n'est pas le moment
+
+/* ⚠️⚠️⚠️ LE CAPITAL DE CONFIANCE — RÉPONSE DE GUILLAUME SUR CE QUE RAPPORTE UN
+   ENTRETIEN PARFAIT : « on gagne la confiance du maire dans les prochains
+   projets : plus facile de le convaincre pour les futures missions que nous
+   implémenterons ». C'est ce qui oblige ce module à être un système de
+   NÉGOCIATION dès le premier jour et pas une scène unique : la confiance est un
+   départ plus haut pour toute audience future, quelle qu'elle soit. */
+export const MAYOR_TRUST_MAX = 3;
+export const MAYOR_TRUST_START_BONUS = 6;  // points de départ par cran gagné
+export const MAYOR_TRUST_DRAIN_K = 0.9;    // et il s'énerve un peu moins vite
+/* ⚠️⚠️⚠️ CE QUE LA CONFIANCE ACHÈTE VRAIMENT, C'EST LE PARDON — ET C'EST LE BANC
+   QUI A IMPOSÉ CETTE FORME. Le premier réglage donnait un simple bonus de
+   départ ; mesuré, il n'achetait un rattrapage de trois bourdes que chez UN
+   maire sur cinq, c'est-à-dire que la récompense promise par Guillaume (« plus
+   facile de le convaincre pour les futures missions ») ne se sentait nulle part.
+   ⚠️ Le monter aurait cassé l'autre moitié : à confiance pleine, un joueur tiède
+   franchissait les 75 sans avoir rien dit de bon. Un capital qui gonfle la jauge
+   rend la négociation FACILE ; un capital qui raccourcit le glissement après une
+   maladresse rend la négociation INDULGENTE, et c'est ça qu'on voulait dire.
+   ⚠️ Diégétique, en plus : quelqu'un qui vous fait confiance ne vous tient pas
+   rigueur d'une phrase mal tournée. Il ne vous écoute pas moins bien pour
+   autant, et il ne pardonne toujours pas l'insulte (`fatal` reste fatal). */
+export const MAYOR_TRUST_FORGIVE = 0.25;   // par cran : le glissement raccourcit d'autant
+
+/* Ce qu'un échec laisse derrière lui. Il ne referme pas la porte — on revient —
+   mais il se souvient des répliques déjà servies (`burnt`), et une réplique
+   resservie ne vaut plus qu'une fraction, en le lui faisant DIRE. */
+export const MAYOR_BURNT_K = 0.35;
+
+/* ⚠️⚠️⚠️ ZIP 480 — LE BATTEMENT DU MAIRE, ET IL FERME UN TROU QU'AUCUN TEXTE
+   N'AURAIT FERMÉ. Trouvé en calculant les bornes AVANT d'écrire le banc : un
+   joueur qui répond instantanément (`dt = 0`) ne paie aucune fuite, donc douze
+   réponses TIÈDES plus les plans posés au bon moment franchissaient les 75. La
+   mécanique se battait à mains nues contre le martèlement de touche.
+   ⚠️ La sortie n'est pas de baisser les réponses tièdes (Guillaume les veut
+   « stagnantes, ou en progrès un peu ») ni d'inventer un anti-martèlement : le
+   maire NE RÉPOND PAS INSTANTANÉMENT. Il finit sa phrase, il réfléchit, il
+   repose son stylo. Ce battement-là s'écoule que le joueur hésite ou non, donc
+   `dt` effectif vaut au moins ça.
+   ⚠️⚠️ ET IL REND L'ÉLAN ENCORE PLUS PAYANT, ce qui est exactement la demande :
+   à deux réponses idéales d'affilée la fuite s'arrête, donc le battement cesse
+   de coûter quoi que ce soit. Enchaîner ne rapporte pas seulement des points,
+   ça arrête l'hémorragie. C'est la même grandeur qui porte les deux, et elle
+   est diégétique : rien à afficher, rien à expliquer. */
+export const MAYOR_BEAT_MS = 2600;

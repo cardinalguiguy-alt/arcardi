@@ -2137,6 +2137,109 @@ console.log("\n12. LA LUMIÈRE DE LA TENUE (478) — on ne la voit jamais, on vo
   }
 }
 
-console.log(`\nPlanches : tools/out/etoile-planche.png · tools/out/etoile-cratere.png · tools/out/etoile-comete.png · tools/out/etoile-alerte.png · tools/out/etoile-jauge.png · tools/out/etoile-poses.png · tools/out/etoile-tristan.png · tools/out/etoile-fouille.png · tools/out/etoile-lueur.png`);
+console.log("\n13. LE PLAT DE L'ÉTOILE ROSE (479) — la chaleur se voit sur l'objet\n");
+{
+  /* ⚠️⚠️ CE DESSIN NAÎT AVEC SON BANC, troisième fois (455 pour la bulle « ! »,
+     478 pour la lueur). Ce qu'on mesure n'est pas « est-il joli » — aucun banc ne
+     sait le dire — mais la seule chose dont la MÉCANIQUE dépend : *est-ce qu'on lit
+     la chaleur sans regarder la jauge ?* Un joueur qui court ne lit pas une barre.
+     ⚠️ FOND VERT PUR : le bol est brun, la soupe orange, la vapeur grise ; aucune
+     des trois n'a le vert dominant. Le fond d'une mesure est un réactif (455). */
+  const S8 = 64, T8 = 24;
+  const shot = (k, t) => {
+    const sur = makeCanvas(S8, S8), gg = sur.ctx;
+    gg.fillStyle = "#00ff00"; gg.fillRect(0, 0, S8, S8);
+    S.drawStarDish(gg, S8 / 2, S8 / 2, T8, k, t === undefined ? 0 : t);
+    return sur;
+  };
+  const painted = (sur) => {
+    const d = sur.px; let n = 0;
+    for (let i = 0; i < S8 * S8; i++) {
+      const o = i * 4;
+      if (!(d[o] === 0 && d[o + 1] === 255 && d[o + 2] === 0)) n++;
+    }
+    return n;
+  };
+  /* ⚠️ LE BOL EXISTE MÊME FROID : un plat qui disparaîtrait à zéro ferait croire
+     qu'on l'a perdu avant que le jeu le dise. */
+  ok(painted(shot(0)) > 40, "⚠️ froid, le plat est toujours là (il ne s'efface pas)",
+     `${painted(shot(0))} px peints`);
+  /* La vapeur : on la compte AU-DESSUS du bol, sinon on mesure le bol. */
+  const steam = (k, t) => {
+    const sur = shot(k, t), d = sur.px; let n = 0;
+    for (let y = 0; y < S8 / 2 - 8; y++) for (let x = 0; x < S8; x++) {
+      const o = (y * S8 + x) * 4;
+      if (!(d[o] === 0 && d[o + 1] === 255 && d[o + 2] === 0)) n++;
+    }
+    return n;
+  };
+  /* ⚠️⚠️ ON BALAIE LE TEMPS : la vapeur est une boucle de trois panaches, et une
+     seule image peut tomber entre deux bouffées. Un contrôle sur un instant unique
+     aurait été le « il balaie une courbe et ne regarde jamais l'horloge » du 468,
+     à l'envers — ici c'est l'instant qui ment, pas l'horloge. */
+  const steamMax = (k) => { let m = 0; for (let t = 0; t < 1800; t += 120) m = Math.max(m, steam(k, t)); return m; };
+  /* ⚠️⚠️⚠️ CE CONTRÔLE A ÉTÉ CHANGÉ APRÈS AVOIR REGARDÉ LA PLANCHE, ET C'EST LA
+     LEÇON DU §« un banc qui passe ne veut pas dire que la chose est bonne ». Il
+     comptait les PIXELS de vapeur : 15 à chaud contre 14 à mi-chaleur — vert, et
+     incapable de distinguer quoi que ce soit. La grandeur qui porte vraiment
+     l'information est la HAUTEUR à laquelle le filet monte (elle double), pas le
+     nombre de points (constant par construction : deux colonnes de cinq). *On
+     mesure la grandeur que l'œil lit, pas celle qui est commode à compter.* */
+  const steamRise = (k) => {
+    let top = S8;
+    for (let t = 0; t < 1800; t += 120) {
+      const sur = shot(k, t), d = sur.px;
+      for (let y = 0; y < S8 / 2 - 8; y++) for (let x = 0; x < S8; x++) {
+        const o = (y * S8 + x) * 4;
+        if (!(d[o] === 0 && d[o + 1] === 255 && d[o + 2] === 0)) { if (y < top) top = y; }
+      }
+    }
+    return S8 / 2 - 8 - top;      // hauteur atteinte au-dessus du bol, en px
+  };
+  const rHot = steamRise(1), rMid = steamRise(0.5), rCold = steamRise(0);
+  ok(rHot > rMid * 1.3 && rMid > 0 && rCold <= 0,
+     "⚠️⚠️ le filet monte d'autant plus haut qu'elle est chaude, et plus du tout à froid",
+     `${rHot} → ${rMid} → ${Math.max(0, rCold)} px de montée`);
+  ok(steamMax(1) > 0 && steamMax(0) === 0, "…et à froid, plus un seul point de vapeur",
+     `${steamMax(1)} px à chaud, ${steamMax(0)} à froid`);
+  /* ⚠️⚠️⚠️ LA COULEUR DE LA SOUPE EST LE VRAI SIGNAL. C'est elle qu'on voit du coin
+     de l'œil en courant ; la vapeur, on la regarde quand on s'arrête. Chaud = franc
+     orangé, froid = gris. On mesure l'écart rouge/bleu au centre du bol. */
+  const soup = (k) => {
+    const sur = shot(k, 0), d = sur.px;
+    let r = 0, b = 0, n = 0;
+    for (let y = S8 / 2 - 3; y < S8 / 2 + 1; y++) for (let x = S8 / 2 - 4; x < S8 / 2 + 4; x++) {
+      const o = (y * S8 + x) * 4; r += d[o]; b += d[o + 2]; n++;
+    }
+    return { r: r / n, b: b / n };
+  };
+  const hot = soup(1), cold = soup(0);
+  ok(hot.r - hot.b > 60 && cold.r - cold.b < 25,
+     "⚠️⚠️⚠️ on lit la chaleur sur le PLAT, sans regarder la jauge",
+     `chaud r−b = ${(hot.r - hot.b).toFixed(0)} · froid r−b = ${(cold.r - cold.b).toFixed(0)}`);
+  ok(hot.r > cold.r, "…et le froid est plus terne que le chaud",
+     `${hot.r.toFixed(0)} contre ${cold.r.toFixed(0)} de rouge`);
+  /* ⚠️ IL TIENT DANS SA CASE : dessiné plus large, il déborderait sur le fermier
+     qui le porte (§4 — un canevas découpe en silence ce qui dépasse). */
+  {
+    const sur = shot(1, 0), d = sur.px; let x0 = S8, x1 = 0;
+    for (let y = 0; y < S8; y++) for (let x = 0; x < S8; x++) {
+      const o = (y * S8 + x) * 4;
+      if (!(d[o] === 0 && d[o + 1] === 255 && d[o + 2] === 0)) { if (x < x0) x0 = x; if (x > x1) x1 = x; }
+    }
+    ok((x1 - x0 + 1) <= T8 * 1.2, "⚠️ le plat tient dans sa case", `${x1 - x0 + 1} px de large pour une case de ${T8}`);
+  }
+  /* ── LA PLANCHE : la chaleur qui tombe, de gauche à droite. */
+  {
+    const CW = 5, W8 = CW * S8, H8 = S8;
+    const sur = makeCanvas(W8, H8), gg = sur.ctx;
+    gg.fillStyle = "#3a2e1e"; gg.fillRect(0, 0, W8, H8);
+    [1, 0.75, 0.5, 0.25, 0].forEach((k, i) => S.drawStarDish(gg, i * S8 + S8 / 2, S8 / 2, T8, k, 300 + i * 170));
+    const up = scale(sur.px, W8, H8, 3);
+    writePNG(path.join(OUT, "etoile-plat.png"), up.px, up.W, up.H);
+  }
+}
+
+console.log(`\nPlanches : tools/out/etoile-planche.png · tools/out/etoile-cratere.png · tools/out/etoile-comete.png · tools/out/etoile-alerte.png · tools/out/etoile-jauge.png · tools/out/etoile-poses.png · tools/out/etoile-tristan.png · tools/out/etoile-fouille.png · tools/out/etoile-lueur.png · tools/out/etoile-plat.png`);
 console.log(fails === 0 ? `\n✅ tous les contrôles passés.\n` : `\n❌ ${fails} contrôle(s) en échec.\n`);
 process.exit(fails ? 1 : 0);

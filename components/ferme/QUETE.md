@@ -1991,10 +1991,12 @@ polit ce qu'on va jeter.
 Ce qui suit est la liste de travail de la quête telle qu'elle est MAINTENANT, dans l'ordre
 où elle se joue — pas dans l'ordre où c'est commode à écrire.
 
-### 15.0 ⚠️⚠️ LA PROCHAINE PASSE EST DÉCIDÉE : **LA DISCUSSION AVEC LE MAIRE**
+### 15.0 ✅ **LA DISCUSSION AVEC LE MAIRE — LIVRÉE AU 480**
 
 **Demande de Guillaume, à traiter dans une passe dédiée, avec lui :** *« discussion avec le
-maire que je veux travailler avec toi dans une autre passe ».*
+maire que je veux travailler avec toi dans une autre passe ».* **C'est fait — le détail est au
+§16, et les quatre arbitrages qu'il a tranchés y sont recopiés mot pour mot.** Ce qui suit
+décrit l'état d'AVANT, gardé parce qu'il énonce le problème mieux que la solution ne le fait.
 
 C'est la charnière de toute la seconde moitié : aujourd'hui, on sort du cratère et le
 bandeau dit « va demander un ingénieur naval à la mairie », où **Léonie Sarrazin** tient un
@@ -2053,12 +2055,32 @@ pourra garder, sortir etc. comme les pets actuels. »*
 
 ### 15.3 La liste de travail, dans l'ordre où ça se joue
 
+⚠️⚠️⚠️ **LE LOT 3b EST LIVRÉ AU 479 : LES TROIS VERBES SONT DISTINCTS.** Les défauts 3,
+9 et 10 de l'audit 477 sont fermés, et ils le sont **par construction plutôt que par du
+texte** — la colonne `verb` de `STAR_SITES` interdit à deux étoiles de partager un geste,
+et `verify-quete` §12 le tient. Ce qui a changé :
+
+| étoile | verbe | ce qu'on fait |
+|---|---|---|
+| bleue (`farmStarBlue`) | `light` | **60 bonbons de Temple Run rapportés DEPUIS LA CHUTE** (`e.candy`, un FLUX et non le stock de `f.inv.candies`), puis le dos tourné — le geste du 3a, qui n'appartient plus qu'à elle |
+| rose (`farmStarRose`) | `warm` | **on cuisine au chaudron** (2e recette, la pommade n'a pas bougé) **et on PORTE le plat** jusqu'à son trou, jauge de 3 min qui descend. À deux c'est un RELAIS : le passage de main remet la jauge à plein |
+| reine (`crater`) | `pair` | **deux présences aux bords OPPOSÉS, dos à dos, 20 s.** Seul : on plante son ÉPOUVANTAIL en face (`e.effigy`, un objet à 400 or qui ne servait à rien) et on tient 60 s |
+
+⚠️ **AUCUNE MIGRATION SUPABASE** : quatre champs de plus dans `shared.star`
+(`offer`, `candy`, `dish`, `effigy`), portés par `migrateStar`, dans un `apply` qui partait
+déjà. ⚠️ **Et le second joueur reçoit enfin quelque chose** : `found[*].with` garde son NOM,
+le chat le nomme (`chat.craterBoth`/`tamedBoth`), la trace de fin le nomme
+(`end.together`), et `resolveStarGift` écrivait déjà pour tous les joueurs présents.
+⚠️ **Défaut 10** : la compagne ne s'efface plus en une image — elle RENTRE vers le joueur
+puis s'éteint, en deux temps (`starHideAnim`), et une phrase le dit une fois par session
+(`s2.hideOnly`). `STAR_HIDE_R` = 4,5 n'a pas bougé : ce n'était pas lui, le défaut.
+
 | # | ce qu'il reste | état |
 |---|---|---|
 | 1 | **Le déchant** — retirer duo, plongée, verrerie, pie, cloche | ✅ **fait au 469** |
 | 2 | **La fouille** — geste, pose, terre, jauge, overlay, arbitrage | ✅ **fait au 469** |
-| 3 | **La discussion avec le maire** — validation du projet | ⏭️ **passe suivante, avec Guillaume** (15.0) |
-| 4 | **Les PNJ parlent du bateau** dans les rues de Valley Town, après validation | à faire — court, et le patron des rumeurs existe (`starNerveSay`) |
+| 3 | **La discussion avec le maire** — validation du projet | ✅ **LIVRÉE AU 480** — voir §16 |
+| 4 | **Les PNJ parlent du bateau** dans les rues de Valley Town, après validation | ⏭️ **DÉBLOQUÉ AU 480 : la condition qu'il attendait existe enfin** (`MR.mayorSigned`). Court, et le patron des rumeurs existe (`starNerveSay`) |
 | 5 | **Les trois chutes + familiers shiny** | à faire (15.2) — le point 4 est le seul gros |
 | 6 | **L'attente habitée du grand cratère** — 3 min à ne rien faire pendant qu'il refroidit | à faire. ⚠️ « Attendre » n'est pas une occupation, et une activité plaquée serait pire que rien. Proposition qui tient toujours : **relever les éclats projetés** autour du trou. |
 | 7 | **La constellation de la Brebis** — sept places dans le ciel, allumées une à une | à faire, et **personne ne l'a jamais vue**. ⚠️ La trame n'en produit que TROIS ; il manque quatre étoiles, ou il faut abandonner les sept. **C'est la seule décision de fiction encore ouverte.** |
@@ -2067,7 +2089,8 @@ pourra garder, sortir etc. comme les pets actuels. »*
 | 10 | **Le voyage d'Eduardo pour la voile** | le système de voyage existe, la commande non |
 | 11 | **Le retournement** — la quête n'a plus AUCUN moment de bascule | à concevoir. ⚠️ C'est ce que le déchant a coûté, et il faut le dire : la quête est devenue une chaîne logistique propre. Elle est livrable ; elle n'a plus de surprise. |
 | 12 | **Rejouer le mini-jeu survivant jusqu'à la victoire** (le refroidissement) | ✅ **fait à l'audit 477** — gagné jusqu'à la manche 3, première fois depuis le 444. Il en est sorti le défaut #6 (les deux échecs par le haut rappelaient la CONSIGNE au lieu de dire la faute), corrigé au 478. |
-| 13 | **Une séance à DEUX clients sur toute la chaîne** | ⚠️ **toujours jamais faite face à face.** L'audit 477 a mené un apprivoisement de ferme à deux (~24 s au lieu de 60) et y a trouvé le défaut #8 (l'invité recevait « Où tu en étais » à la place de la chute, corrigé au 478) — mais la CHAÎNE ENTIÈRE à deux reste à jouer. |
+| 3b | **Les trois verbes distincts** (défauts 3, 9, 10 de l'audit 477) | ✅ **fait au 479** — voir le tableau ci-dessus |
+| 13 | **Une séance à DEUX clients sur toute la chaîne** | ⚠️ **toujours jamais faite face à face**, et le 479 vient d'AJOUTER deux postes à deux qui n'ont jamais été tenus : le RELAIS du plat (l'un cuisine, l'autre court) et les DEUX BORDS du cratère. Le code est là, mesuré par `verify-quete` §12 ; les postes, non. L'audit 477 a mené un apprivoisement de ferme à deux (~24 s au lieu de 60) et y a trouvé le défaut #8 (l'invité recevait « Où tu en étais » à la place de la chute, corrigé au 478) — mais la CHAÎNE ENTIÈRE à deux reste à jouer. |
 | 14 | **La constellation de cinq points peinte en haut à droite dès la première nuit** | à faire. ⚠️ C'est le reste de la LYRE (453) : elle n'est nommée nulle part, elle n'a pas le bon compte (cinq, pour une trame qui produit trois étoiles et une fiction qui en promet sept), et **elle se peint aussi À L'INTÉRIEUR de la mairie et du tribunal** — c'est-à-dire un ciel sous un plafond. Défaut relevé au 476, jamais corrigé ; sorti de `CLAUDE.md` au 478 pour vivre à côté de ce qu'il décrit. |
 
 ### 15.4 ⚠️ CE QUE LE 469 A LAISSÉ EN DETTE, ET QU'IL FAUT LIRE AVANT DE ROUVRIR
@@ -2082,3 +2105,98 @@ pourra garder, sortir etc. comme les pets actuels. »*
 - ⚠️ **Le décor des chapitres supprimés est toujours posé en ville** : le râtelier de la
   verrerie, l'arbre au nid, le ponton, le beffroi, la grande cloche, le banc d'orgue. Ils
   sortent de la quête, pas de la carte. Rien à nettoyer — mais rien ne les explique non plus.
+
+
+---
+
+## 16. ⚠️⚠️⚠️ ZIP 480 — L'AUDIENCE CHEZ LE MAIRE
+
+**Ce que Guillaume a demandé, mot pour mot :** *« un mécanisme de discussion en face à face avec
+le maire, dans son bureau […] Je veux une vraie discussion longue, avec un maire réticent au
+départ qu'on devra convaincre en choisissant les bonnes réactions (2 sur trois permettent de
+continuer la discussion (une de ces deux est la réponse idéale), une troisième est outrageusement
+vexante ou fout tout en l'air) […] Concevoir une jauge de persuasion pour le maire. »* Et sur le
+ton : *« si les arguments sont drôles c'est encore mieux, mais faut garder à l'esprit que le ton
+est celui d'une réunion avec un élu. »*
+
+### 16.1 Les quatre arbitrages de Guillaume, recopiés
+
+| question | sa réponse |
+|---|---|
+| Le rendu de la scène | **three.js embarqué**, sur le blocage Blender exporté en glTF |
+| L'accès | *« On doit demander à l'accueil l'audience avec le maire. Si l'on n'a pas encore les plans du bateau délivrés par l'ingénieur, le maire sera très difficile à convaincre. Si l'on a déjà les plans alors il sera toujours un peu radin et réticent mais ce sera moins difficile. »* |
+| Les ressources | *« La patience du maire : temps de réponse et mauvaises réponses. Une réponse tiède peut faire stagner sa persuasion, ou la faire progresser un peu. […] Et si l'on ne fait rien, la jauge descend continûment. D'où l'intérêt de trouver les bonnes réponses et de les ENCHAÎNER. »* |
+| Ce que rapporte un entretien parfait | *« On gagne la confiance du maire dans les prochains projets : plus facile de le convaincre pour les futures missions que nous implémenterons. »* |
+
+⚠️⚠️ **LA TROISIÈME RÉPONSE A DÉCIDÉ DE TOUTE LA FORME.** Le premier jet comptait DEUX ressources
+(une jauge d'adhésion et un quart d'heure décompté en tours) ; Guillaume l'a refusé, et il avait
+raison pour une raison écrite en tête de `CLAUDE.md` : *deux grandeurs qui s'opposent se mesurent
+ensemble ou pas du tout* (458). **La fuite EST l'horloge** — hésiter coûte des points, il n'y a
+qu'une jauge à lire, et le banc n'a qu'une différence à calculer.
+
+⚠️⚠️ **ET LA QUATRIÈME A DÉCIDÉ DE L'ARCHITECTURE.** Une récompense qui se dépense dans une
+audience FUTURE interdit d'écrire celle-ci comme un cas particulier : `components/ferme/maire.js`
+est un **système de négociation**, pas une scène. Une commission, le cadastre ou l'officier d'état
+civil s'y ajouteront en une table de plus et zéro ligne de mécanique.
+
+### 16.2 Ce qui a été construit
+
+| fichier | ce qu'il porte |
+|---|---|
+| `components/ferme/maire.js` | **la table et les résolveurs purs** — douze battements, cinq actes, cinq familles d'argument, la jauge, la fuite, l'élan, la rejouabilité hôte, `migrateMayor`/`resolveMayor`. Aucun React, aucun dessin. |
+| `components/ferme/MaireScene.js` | **la vue** — three.js r128 (déjà vendorisé) sur `public/models/maire-bureau.glb`, sept postures interpolées, et `mayorCtxOf`, la fonction de contexte que le CLIENT et l'HÔTE appellent tous les deux |
+| `public/models/maire-bureau.glb` | le blocage Blender, 365 Ko, 158 objets `part_*`, cinq pivots `rig_*`, trois caméras |
+| `tools/verify-maire.mjs` | **72 contrôles, 72/72** — il JOUE des entretiers entiers, il ne relit pas la table |
+| `fermeStrings.js` | `MAIRE_FR` / `MAIRE_EN`, **bilingues le jour de leur naissance** (le banc de parité a refusé l'exemption) |
+
+**Aucune migration Supabase** : tout tient dans `shared.star.mayor`, porté par `migrateMayor`,
+dans un `apply` qui partait déjà. **Un seul `send()` pour toute la négociation.**
+
+### 16.3 La mécanique, en six lignes
+
+**Jauge d'adhésion 0-100, départ à 24 (18 les mains vides), et elle FUIT.** À 75 il peut signer,
+et un quatrième bouton apparaît (*« Je crois qu'on s'est compris »*) : empocher, ou pousser pour
+la confiance en risquant tout. Cinq familles d'argument, et **quatre règles qui font que la bonne
+réponse dépend du moment** : se répéter divise le gain par deux (et il le dit), le cœur ne se joue
+qu'une fois, la flatterie n'est juste qu'à **un seul endroit** de l'arbre, et les plans de
+Kerguélen sont une **carte** qu'on pose une fois — au nœud où il demande à voir, c'est le plus gros
+coup de la partie ; ailleurs il ne les déroule même pas. **L'élan** : deux réponses idéales de
+suite réduisent la fuite à 30 %, trois l'inversent. **Le maire élu change la partie** (cinq jeux
+d'affinités, un argument vaut du simple au double), **et l'échéance électorale aussi** — c'est la
+première conséquence de JEU qu'ait jamais eue une élection municipale dans ce dépôt.
+
+### 16.4 ⚠️⚠️ CE QUE LE BANC A TROUVÉ, ET QUE LES CHIFFRES NE DISAIENT PAS
+
+Cinq entretiens sont imprimés en clair à la fin de `verify-maire`. **C'est en les LISANT qu'on a vu
+le seul vrai défaut de conception de la passe** : le sans-faute atteignait le plafond au septième
+nœud sur treize, donc les six derniers échanges de la « vraie discussion longue » étaient écrits,
+joués, lus, et ne pouvaient plus rien changer. Tout était vert — le jeu parfait gagnait, le jeu
+tiède perdait. *Une discussion dont la seconde moitié est décorative n'est pas longue, elle est
+lente.* Trois autres défauts sont sortis du même banc, chacun d'une famille connue :
+
+| ce qu'il a trouvé | la famille |
+|---|---|
+| douze réponses TIÈDES martelées à zéro seconde franchissaient les 75 | une mécanique sans plancher se bat à mains nues contre le martèlement → `MAYOR_BEAT_MS` |
+| neuf secondes de réflexion coûtaient plus que la meilleure réplique ne rapporte | le jeu récompensait de répondre VITE, pas BIEN → `MAYOR_DRAIN_CAP`, borné SOUS la plus faible idéale |
+| le glissement après une faute coûtait quatorze points de plus que la faute affichée | *une pénalité invisible plus grosse que la pénalité visible n'est pas une pénalité, c'est un piège* |
+| les mains vides, quatre malus s'empilaient et l'entretien était arithmétiquement ingagnable | *une difficulté empilée quatre fois n'est pas quatre fois plus difficile, c'est un mur* |
+
+⚠️ **Réglage actuel, mesuré :** un premier essai ordinaire (une faute de tact au milieu, quatre à
+six secondes de réflexion) culmine à **69,9** contre un seuil à 75 — il échoue de cinq points. Un
+sans-faute **les mains vides** signe à **94,7** sans décrocher la confiance pleine. C'est la
+tension qu'on voulait ; elle n'a jamais été jouée par un humain.
+
+### 16.5 ⚠️ CE QUI RESTE, ET IL FAUT LE LIRE AVANT DE ROUVRIR
+
+- ⚠️⚠️ **PERSONNE N'A JOUÉ CETTE AUDIENCE.** Le banc en joue quatre cents ; aucune n'a été menée
+  par quelqu'un qui lisait les répliques. Ce qui s'y juge — *est-ce que c'est agréable, est-ce que
+  les fautes de tact se voient venir, est-ce que la fuite stresse ou agace* — n'est mesuré nulle
+  part et ne le sera jamais (§25 de `ferme/README.md`).
+- ⚠️ **La scène 3D n'a jamais été affichée dans un navigateur.** Le glTF charge, le code est écrit,
+  le repli existe si WebGL manque — mais aucun banc ne regarde un canevas three.js, et c'est très
+  exactement le prix annoncé au §9 de `CLAUDE.md` pour un asset importé.
+- ⚠️ **Le maire n'est pas DANS son bureau.** L'audience s'ouvre depuis le panneau de l'accueil
+  (Léonie), pas en montant le voir : la pièce existe et elle est meublée depuis le 439, personne
+  ne s'y tient. C'est la même dette que « aucun résident n'ENTRE dans les deux bâtiments ».
+- ⚠️ **Le point 4 du §15.3 est débloqué et pas fait** : les PNJ peuvent enfin parler du bateau,
+  puisque la condition qu'ils attendaient (`MR.mayorSigned`) existe.

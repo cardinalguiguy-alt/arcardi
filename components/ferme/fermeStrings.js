@@ -109,7 +109,11 @@ const STAR_FR = {
        ne se raconte plus en deux bulles après coup, il s'annonce dans l'overlay de
        fouille, au moment exact où l'on découvre qu'il n'y a rien. */
     starPeek: "Une petite lumière se tasse au fond dès que tu la regardes.",
-    tameSolo: "Tourne-lui le dos et ne bouge plus. Seul, elle mettra une minute à venir.",
+    /* ⚠️ ZIP 479 — « une minute » DATAIT D'AVANT LE 478, qui a ramené la tenue solo
+       à trente secondes (`STAR_CALM_SOLO_MS`). Un texte qui annonce le double de ce
+       que le code demande fait attendre pour rien celui qui le croit — c'est la
+       famille « un texte affirme » (448), sur un chiffre. */
+    tameSolo: "Tourne-lui le dos et ne bouge plus. Seul, compte une demi-minute.",
     tameDuo: "Vous êtes plusieurs dans la ferme. Dix secondes sans la regarder suffiront.",
     material1: "Sous la cendre : une plaque noire, lisse seulement sur sa cassure.",
     material2: "Elle a reçu tout le choc sans le transmettre à la terre dessous.",
@@ -141,7 +145,8 @@ const STAR_FR = {
        avant, cette interruption était totalement silencieuse. */
     blocked: "La fouille s'arrête : une annonce est affichée. Ferme-la (Échap) pour recommencer.",
     stopped: "Tu t'es relevé. Le cratère est toujours là.",
-    titleStar: "Une étoile.",
+    titleStarLight: "Une étoile bleue.",
+    titleStarWarm: "Une étoile rose.",
     /* ⚠️⚠️ ZIP 478 (audit 477, défaut #5) — LA PLAQUE ÉTAIT « FROIDE, DÉJÀ » ET
        « À FAIRE REFROIDIR » DANS LE MÊME PANNEAU. Les deux phrases s'affichent
        ensemble, et c'est le panneau qui ENSEIGNE le seul mini-jeu restant : le
@@ -152,10 +157,22 @@ const STAR_FR = {
        une seule vérité, et elle explique enfin le geste qu'on va demander. */
     titleMaterial: "Une plaque noire.",
     titleEmpty: "Rien.",
-    bodyStar: "Une petite lumière se tasse au fond du trou dès que tu la regardes.",
+    bodyStarLight: "Une petite lumière bleue se tasse au fond dès que tu la regardes.",
+    bodyStarWarm: "Une petite lumière rose. Elle ne recule pas : elle renifle vers toi.",
     bodyMaterial: "Sous la cendre : lisse seulement sur sa cassure. La croûte a pris ; le cœur brûle encore.",
     bodyEmpty: "De la cendre tiède, du sable vitrifié, et rien dedans. Toutes les lumières n'abritaient pas quelque chose.",
-    nextStar: "Elle ne sortira pas tant qu'on la regarde.",
+    /* ╔═══════════════════════════════════════════════════════════════════════
+       ║ ZIP 479 — L'OVERLAY DIT COMMENT L'APPRIVOISER, ET IL LE DIT PAR COULEUR.
+       ╚═══════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ C'EST LE SEUL ENDROIT DU JEU OÙ L'ON REGARDE UNE ÉTOILE AVANT D'AVOIR
+       À AGIR, donc c'est là que la règle doit s'apprendre. Avant ce zip il disait
+       « elle ne sortira pas tant qu'on la regarde » sur les DEUX — vrai pour une
+       seule, et le joueur passait vingt minutes à tourner le dos à la rose.
+       ⚠️ CHACUNE NOMME SA MONNAIE : la bleue veut ce qu'on rapporte du défi de
+       fuite, la rose veut ce qui sort du chaudron. Le bandeau redira le geste ;
+       ici on donne la RAISON, ce que le bandeau n'a pas la place de faire. */
+    nextStarLight: "Elle ne sortira pas tant qu'on la regarde — et elle a froid. Offre-lui de la lumière bleue : 60 bonbons du défi de fuite, rapportés depuis la chute.",
+    nextStarWarm: "Le calme ne l'intéresse pas. Elle vient à la chaleur : cuisine-lui quelque chose au chaudron et porte-le-lui avant que ça refroidisse.",
     nextMaterial: "Il faut la refroidir à cœur avant d'y toucher.",
     nextEmpty: "Un site de moins à écarter.",
     left: (n) => n > 0
@@ -185,11 +202,36 @@ const STAR_FR = {
          attendait déjà qu'on lui tourne le dos, ou sur une plaque qui
          attendait déjà d'être retravaillée. Voir la note de `starGoalKey`
          dans `quete.js`. */
+      /* ╔═════════════════════════════════════════════════════════════════
+         ║ ZIP 479 — SEPT PHRASES POUR DEUX ÉTOILES, ET C'EST LE LOT ENTIER.
+         ╚═════════════════════════════════════════════════════════════════
+         ⚠️⚠️⚠️ `farmImpactTame` COUVRAIT LES DEUX PETITES ÉTOILES, parce qu'on
+         leur demandait la même chose. Elles ne font plus le même geste : la bleue
+         veut de la LUMIÈRE (des bonbons rapportés depuis la chute), la rose veut
+         de la CHALEUR (un plat cuisiné et porté). *Deux gestes différents donnent
+         deux textes différents tout seuls* — c'est la seule façon de régler le
+         défaut 9 de l'audit sans écrire trois variations sur la même phrase.
+         ⚠️ CHAQUE ÉTAT A LA SIENNE (475, 478) : « ça mijote » n'est pas « c'est
+         prêt », qui n'est pas « cours ». Un bandeau répond à *qu'est-ce que je
+         peux faire MAINTENANT*, jamais à *où en est-on*.
+         ⚠️ PLAFOND DE 80 SIGNES, tenu par le TEXTE (le bandeau rabote en silence). */
+      farmImpactLight: "Elle veut de la lumière bleue : 60 bonbons rapportés depuis la chute.",
+      farmImpactLightPay: "Tu as ses 60 bonbons. Va les lui offrir au bord du trou (E).",
       farmImpactTame: "Une étoile guette dans ce trou fouillé. Tourne-lui le dos et attends.",
+      farmImpactWarm: "La rose vient à la chaleur. Cuisine-lui un plat au chaudron (E).",
+      farmImpactSimmer: "Ça mijote au chaudron. Ne va pas trop loin, ce sera vite prêt.",
+      farmImpactTake: "Le plat est prêt au chaudron. Prends-le (E) et ne traîne pas.",
+      farmImpactCarry: "Porte le plat à son cratère avant qu'il refroidisse (E).",
       farmImpactCool: "Une plaque noire attend d'être refroidie. Reviens l'examiner (E).",
       townWait: "Prends le train pour Valley Town. Reste-y, occupe-toi : l’étoile insiste.",
       craterHot: "À l'est de Valley Town, le trou brûle encore. Attends qu'il refroidisse.",
-      crater:    "Le cratère a refroidi. Descends : quelque chose se cache au fond.",
+      /* ⚠️⚠️ ZIP 479 — LA REINE NE SE PREND PLUS EN DESCENDANT. « Descends :
+         quelque chose se cache au fond » décrivait le geste d'avant ce lot, et le
+         fond est très exactement l'endroit où le nouveau geste ne marche PAS (deux
+         joueurs au fond sont côte à côte, jamais dos à dos). Un texte n'est pas un
+         décor : il AFFIRME (448), et celui-ci aurait envoyé au mauvais endroit. */
+      crater:    "Le cratère a refroidi. Un à chaque bord, dos à dos : elle sortira.",
+      craterAlone: "Personne en face ? Plante ton épouvantail au bord opposé (E).",
       /* ⚠️ ZIP 469 — SIX OBJECTIFS SONT PARTIS AVEC LE DÉCHANT (`lean`,
          `leanAgain`, `lakeShard`, `beadShard`, `nestShard`, `belfry`, `song`).
          `STAR_GOAL_KEYS` les dérive de la table : le banc échouerait sur une clé
@@ -204,6 +246,9 @@ const STAR_FR = {
          du pier et rendra son plan bientôt. */
       engineerTravel: "Kerguélen a été prévenu. Il arrive bientôt à Valley Town.",
       engineerWork:   "Kerguélen dessine près du ponton. Il rendra ses plans bientôt.",
+      /* ⚠️ ZIP 480 — LA PASSE MAIRE. Le bandeau désigne l'action la plus proche :
+         les plans sont rendus, la cale attend une signature. */
+      mayor:          "Les plans sont prêts. Demande une audience au maire (mairie).",
       /* ⚠️⚠️ ZIP 475 (audit 472, défaut #20) — LA COMMANDE N'EST PAS UN
          DÉPLACEMENT. Cette phrase disait « à la ferme », ce qui laisse croire
          qu'un lieu existe à rejoindre — or la commande passe par le bouton
@@ -418,6 +463,41 @@ const STAR_FR = {
     calmHold: "Quelque chose remonte derrière toi.",
     calmBoth: "Tous les deux. Dos tourné. Ne bougez plus.",
     calmSolo: "Tout seul, c'est long. Reste retourné.",
+    /* ╔═════════════════════════════════════════════════════════════════════
+       ║ ZIP 479 — LES TROIS ÉTATS PROPRES À LA REINE (lot 3b, défaut 3).
+       ╚═════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ SON GESTE N'EST PLUS CELUI DES PETITES : il faut DEUX présences, aux
+       bords OPPOSÉS. Les trois états qui manquaient sont donc « il n'y a personne
+       en face », « tu es au fond » et « vous êtes du même côté » — les trois seules
+       façons de tout faire bien et de n'obtenir aucun résultat, c'est-à-dire les
+       trois seules qui donneraient « le jeu est cassé ».
+       ⚠️ LES QUATRE AUTRES ÉTATS RÉUTILISENT LES PHRASES DE LA POSTURE
+       (`calmStill`, `calmTurn`, `calmHold`) : le geste est le même une fois qu'on
+       est placé, et deux textes pour une seule chose auraient été deux textes à
+       faire vieillir. */
+    queenAlone: "Il faut quelqu'un en face. Un joueur — ou un épouvantail.",
+    queenEdge: "Pas au fond : remonte sur la lèvre du cratère.",
+    queenSide: "Du même côté, elle vous voit tous les deux. Va au bord d'en face.",
+    /* ── LA LUMIÈRE BLEUE. ⚠️ ELLE DIT LE PRIX EN CHIFFRES : c'est le seul geste
+       de la quête qui retire quelque chose au joueur, et un prix qu'on découvre en
+       le payant est la définition du « le jeu propose et refuse » (426). */
+    lightShort: (have, need) => `Il t'en faut ${nfr(need)} rapportés depuis la chute. Tu en as ${nfr(have)}.`,
+    lightGiven: "La lumière bleue coule au fond du trou. Maintenant, tourne-toi.",
+    /* ── LE PLAT. ⚠️⚠️ AUCUNE NE NOMME UNE RECETTE : ce qu'on cuisine ne regarde
+       personne, et l'inventer aurait demandé un ingrédient, donc un prix, donc un
+       arbitrage que Guillaume n'a pas tranché. Le geste est le CHEMIN. */
+    dishCook: "Le chaudron chauffe. Ça sent quelque chose qu'aucun livre ne donne.",
+    dishSimmer: "Ça mijote.",
+    dishReady: "C'est prêt, et ça fume.",
+    dishTaken: "Tu portes le plat. Il refroidit à chaque pas.",
+    dishPass: (who) => `${who} reprend le plat. Il est brûlant à nouveau.`,
+    dishCooling: "Il refroidit. Presse le pas.",
+    dishCold: "Le plat a refroidi. Elle n'a même pas levé la tête. Recommence.",
+    /* ── DÉFAUT 10 : ELLE SE CACHE, ET LE JEU LE DIT UNE FOIS. ⚠️ « Elle
+       disparaît » aurait été un constat d'affichage ; celle-ci est une raison, et
+       c'est ce qui transforme une absence en intention. */
+    hideOnly: "Elle glisse dans ton dos et s'éteint. Elle ne veut exister que pour toi.",
+    noScarecrow: "Il te faut un épouvantail à planter. Il s'en achète un à la boutique.",
     /* ⚠️⚠️ ZIP 459 — LES DEUX PHRASES DE L'EFFORT, ET ELLES EXISTENT À CAUSE DU
        456 : *un geste continu qui ne rend rien ne se distingue pas d'un jeu
        bloqué.* Tenir une direction trois secondes en dérapant, c'est exactement
@@ -456,6 +536,10 @@ const STAR_FR = {
     end2: "En bas, le bateau est entier. Il flotte enfin. Il attend quelqu'un qui sache partir.",
     end3: "Le vent tombe. Plus personne ne dit rien.",
     gift: "Quelque chose d'elle est resté avec toi.",
+    /* ⚠️ ZIP 479 — LA SEULE PHRASE DU JEU QUI NOMME DEUX JOUEURS. Elle ne se dit
+       que si quelqu'un a vraiment tenu l'autre bord (ou porté le plat la moitié du
+       chemin) : voir `found[*].with`. */
+    together: (names) => `Ce qu'elle a reçu, elle l'a reçu à plusieurs mains : ${names}.`,
   },
   plan: {
     /* ── LE CONSEIL DE L'ÉTOILE. Demande de Guillaume : « sur conseil (guidé) de
@@ -576,6 +660,10 @@ const STAR_FR = {
     /* ⚠️ CHAQUE REFUS DIT SA RAISON. Un bouton grisé sans explication, c'est « le
        jeu propose et refuse » (426) avec un pas d'avance. */
     blockNoPlan: "🔒 Il faut d'abord les plans",
+    /* ⚠️ ZIP 480 — sans ce libellé, `noMayor` retombait sur `blockNoPlan` et le
+       panneau réclamait des plans qu'on a déjà dans la poche. Un repli poli qui
+       affirme une chose fausse est pire qu'un bouton muet (448). */
+    blockNoMayor: "🔒 Le quai est public : il faut l'accord du maire",
     /* ⚠️⚠️ ZIP 478 — `blockPrev` (« la pièce précédente d'abord ») EST SUPPRIMÉE
        AVEC LA RÈGLE QU'ELLE EXPLIQUAIT, et pas laissée « au cas où » : une phrase
        sans chemin d'affichage est un lecteur qui ne s'exécute jamais (leçon 453).
@@ -623,6 +711,18 @@ const STAR_FR = {
     chapter: (t) => `${t}`,
     crater: (who) => `${who} a apprivoisé l'étoile reine.`,
     tamed: (who) => `${who} a apprivoisé une petite étoile.`,
+    /* ⚠️⚠️ ZIP 479 — LE SECOND JOUEUR EST NOMMÉ, ET C'EST LA MOITIÉ DU DÉFAUT
+       « il ne reçoit rien » de l'audit 477. Il a tenu l'autre bord du cratère (ou
+       porté le plat la moitié du chemin) et le chat annonçait le geste sous le
+       seul nom de l'autre. Une variante à deux noms coûte une ligne ; ne pas
+       l'écrire coûtait la seule chose qu'un second joueur emportait de la scène. */
+    /* ⚠️ ZIP 479 — LE CHAUDRON SE DIT, L'OFFRANDE NON. Ce qui part au chat est ce
+       dont l'AUTRE joueur a besoin pour agir : un plat qui mijote, il peut aller le
+       chercher. La lumière bleue est un geste privé entre un joueur et une étoile,
+       et l'annoncer aurait volé la seule scène intime de la quête. */
+    cooking: (who) => `${who} met quelque chose au chaudron. Ça sent l'étoile.`,
+    craterBoth: (a, b) => `${a} et ${b} ont apprivoisé l'étoile reine, chacun d'un bord.`,
+    tamedBoth: (a, b) => `${a} et ${b} ont apprivoisé une petite étoile, à eux deux.`,
     /* ⚠️ ZIP 469 — `dug` REMPLACE `lean` ET `duet`. C'est la seule annonce de chat
        que la fouille produise, et elle ne dit JAMAIS ce qu'il y avait dedans :
        l'autre joueur apprend qu'un trou est retourné, il va voir lui-même. */
@@ -633,6 +733,10 @@ const STAR_FR = {
        Il est fini ; il partira avec Eduardo (voir `sail`). */
     done: "Le bateau est fini. L'étoile est rentrée.",
   },
+  /* ⚠️ ZIP 479 — LE BOUTON DU CHAUDRON. Il nomme le plat sans donner de recette :
+     ce qu'on met dedans ne regarde personne, et l'inventer aurait demandé un
+     ingrédient, donc un prix, donc un arbitrage qui n'a pas été tranché. */
+  cauldronBtn: "🍲 Cuisiner le plat de l'étoile",
   prompt: (k) => ({
     /* ⚠️⚠️ ZIP 469 — `impact` EST LA MÊME INVITE SUR LES CINQ CRATÈRES, ET C'EST
        LA CORRECTION DE FOND DE CETTE PASSE. Avant, `tame` et `material`
@@ -651,6 +755,21 @@ const STAR_FR = {
     impactSeen: "Site déjà fouillé",
     material: "E : examiner la matière noire",
     tame: "Tourne-lui le dos, ne bouge plus (E : pourquoi ?)",
+    /* ╔═══════════════════════════════════════════════════════════════════════
+       ║ ZIP 479 — LES SIX INVITES DES DEUX NOUVEAUX VERBES.
+       ╚═══════════════════════════════════════════════════════════════════════
+       ⚠️ MÊME RÈGLE QU'AU 456 : une invite nomme la TOUCHE quand il y en a une, et
+       n'en nomme pas quand le geste est une posture ou une attente. `dishWait` est
+       un CONSTAT, comme `impactDig` — sans « E : », parce qu'il n'y a rien à
+       presser et qu'un joueur qui presse pour rien croit sa touche cassée. */
+    light: "E : lui offrir de la lumière bleue",
+    warm: "Elle attend quelque chose de chaud (E : pourquoi ?)",
+    cook: "E : cuisiner le plat de l'étoile",
+    dishWait: "Ça mijote…",
+    dishTake: "E : prendre le plat encore fumant",
+    dishPass: "E : reprendre le plat",
+    dishGive: "E : lui donner le plat",
+    effigy: "E : planter l'épouvantail au bord",
     /* ⚠️⚠️ ZIP 456 — LE CRATÈRE NE PROMET PLUS UNE TOUCHE. « E : ne plus bouger »
        décrivait le seul geste du jeu qui n'A PAS de touche, avec le préfixe de
        toutes celles qui en ont une : le joueur pressait E, lisait deux phrases, et
@@ -658,7 +777,12 @@ const STAR_FR = {
        426 (« le jeu propose et refuse ») retourné : ici il proposait la mauvaise
        CHOSE. L'invite dit maintenant la posture, et garde E pour ce que E fait
        vraiment — expliquer POURQUOI. */
-    crater: "Tourne-lui le dos, ne bouge plus (E : pourquoi ?)",
+    /* ⚠️⚠️ ZIP 479 — LE CRATÈRE DEMANDE DEUX BORDS, DONC SON INVITE LE DIT. Elle
+       disait la posture d'une seule personne, ce qui reste vrai et ne suffit plus :
+       tout faire juste, tout seul, au même bord, ne donnait RIEN et n'expliquait
+       rien — le « le jeu propose et refuse » du 426 sur la scène finale du
+       chapitre 2. */
+    crater: "Chacun un bord, dos à dos (E : pourquoi ?)",
     craterHot: "E : attendre que ça refroidisse",
     engineer: "E : parler à l'ingénieur",
     /* ⚠️ ZIP 478 — LA CALE. Elle nomme la TOUCHE et le GESTE (règle du 455 :
@@ -688,7 +812,8 @@ const STAR_EN = {
     mapImpact: (n) => `Impact ${n}`,
     seen: "This impact site has already been searched.",
     starPeek: "A little light shrinks into the crater whenever you look at it.",
-    tameSolo: "Turn your back and keep still. Alone, it will take a minute to approach.",
+    /* ⚠️ ZIP 479 — voir la note française : c'est une demi-minute depuis le 478. */
+    tameSolo: "Turn your back and keep still. Alone, count half a minute.",
     tameDuo: "There are several of you on the farm. Ten seconds without looking will do.",
     material1: "Under the ash: a black plate, smooth only along the break.",
     material2: "It took the whole impact without passing the blow into the soil beneath.",
@@ -700,13 +825,18 @@ const STAR_EN = {
     hint: "Stay still: he's scraping the ash away.",
     blocked: "The search stops: an announcement is on screen. Close it (Esc) to start again.",
     stopped: "You stood back up. The crater is still there.",
-    titleStar: "A star.",
+    titleStarLight: "A blue star.",
+    titleStarWarm: "A pink star.",
     titleMaterial: "A black plate.",
     titleEmpty: "Nothing.",
-    bodyStar: "A small light huddles at the bottom of the hole the moment you look at it.",
+    bodyStarLight: "A small blue light huddles at the bottom the moment you look at it.",
+    bodyStarWarm: "A small pink light. It does not shrink back: it sniffs towards you.",
     bodyMaterial: "Under the ash: smooth only where it broke. The crust has set; the core still burns.",
     bodyEmpty: "Warm ash, glassed sand, and nothing inside. Not every light was hiding something.",
-    nextStar: "It won't come out while anyone is watching.",
+    /* ⚠️ ZIP 479 — voir la note française : l'overlay enseigne le geste, et il
+       n'est pas le même selon la couleur. */
+    nextStarLight: "It will not come out while anyone watches — and it is cold. Offer it blue light: 60 candies from the escape run, brought back since the fall.",
+    nextStarWarm: "Quiet does nothing for this one. It comes to heat: cook something at the cauldron and carry it over before it goes cold.",
     nextMaterial: "It has to cool all the way through before you can touch it.",
     nextEmpty: "One site fewer to rule out.",
     left: (n) => n > 0
@@ -756,11 +886,22 @@ const STAR_EN = {
       /* ⚠️ ZIP 475 — voir la note française : un trou déjà fouillé n'a plus
          « fouille-les » à dire, qu'il attende un apprivoisement ou un
          refroidissement. */
+      /* ⚠️ ZIP 479 — voir la note française : sept phrases pour deux étoiles, une
+         par ÉTAT, parce qu'elles ne font plus le même geste. */
+      farmImpactLight: "It wants blue light: 60 candies, brought back since the fall.",
+      farmImpactLightPay: "You have its 60 candies. Go and offer them at the hole (E).",
       farmImpactTame: "A star is hiding in that dug-up hole. Turn your back and wait.",
+      farmImpactWarm: "The pink one comes to heat. Cook it a dish at the cauldron (E).",
+      farmImpactSimmer: "It is simmering. Do not wander off, it will be ready soon.",
+      farmImpactTake: "The dish is ready at the cauldron. Take it (E) and get going.",
+      farmImpactCarry: "Carry the dish to its crater before it goes cold (E).",
       farmImpactCool: "A black plate is waiting to cool down. Come back and examine it (E).",
       townWait: "Take the train to Valley Town. Stay there, keep busy: the star insists.",
       craterHot: "East of Valley Town the hole still burns. Wait for it to cool.",
-      crater:    "The crater has cooled. Climb down: something hides at the bottom.",
+      /* ⚠️ ZIP 479 — voir la note française : le fond du trou est l'endroit où le
+         nouveau geste ne marche pas, ce texte y envoyait. */
+      crater:    "The crater has cooled. One on each rim, backs turned: it will rise.",
+      craterAlone: "Nobody across from you? Plant your scarecrow on the far rim (E).",
       /* ⚠️ ZIP 469 — voir la note française : sept objectifs partent avec le déchant. */
       /* ⚠️⚠️ ZIP 454 — LES DEUX OBJECTIFS DE LA CONSTRUCTION. Ils suivent la même
          règle que les huit autres — OÙ et QUOI, jamais pourquoi — et ils sont plus
@@ -769,6 +910,7 @@ const STAR_EN = {
       engineer:       "Ask the town hall for a naval engineer (E). The star insists.",
       engineerTravel: "Kerguélen has been notified. He'll reach Valley Town shortly.",
       engineerWork:   "Kerguélen is drawing by the pier. He'll hand over his plans soon.",
+      mayor:          "The plans are ready. Ask the town hall for an audience with the mayor.",
       /* ⚠️ ZIP 475 — voir la note française : la commande passe par le menu
          Employés, pas par un lieu. */
       timberOrder:    "Order the pieces from Tristan (Employees menu). He can run all five.",
@@ -914,6 +1056,22 @@ const STAR_EN = {
     calmHold: "Something is climbing up behind you.",
     calmBoth: "Both of you. Backs turned. Don't move.",
     calmSolo: "Alone, this takes a while. Stay turned around.",
+    /* ⚠️ ZIP 479 — voir la note française : les trois états propres à la reine, et
+       les quatre autres réutilisent les phrases de la posture. */
+    queenAlone: "Someone has to stand across. A player — or a scarecrow.",
+    queenEdge: "Not at the bottom: climb back up to the rim.",
+    queenSide: "Same side, and it sees you both. Go to the far rim.",
+    lightShort: (have, need) => `You need ${nen(need)} brought back since the fall. You have ${nen(have)}.`,
+    lightGiven: "Blue light pools at the bottom of the hole. Now turn around.",
+    dishCook: "The cauldron heats up. It smells of something no book ever wrote down.",
+    dishSimmer: "It is simmering.",
+    dishReady: "It is ready, and steaming.",
+    dishTaken: "You are carrying the dish. It cools with every step.",
+    dishPass: (who) => `${who} takes the dish over. It is scalding again.`,
+    dishCooling: "It is cooling. Pick up the pace.",
+    dishCold: "The dish went cold. It did not even look up. Start again.",
+    hideOnly: "It slips behind you and goes out. It only wants to exist for you.",
+    noScarecrow: "You need a scarecrow to plant. The shop sells them.",
     /* ⚠️ ZIP 459 — voir la note en face, côté français : les deux moitiés de
        l'effort, dites pendant qu'on le fournit. */
     slipHold: "You're sliding. Keep the same heading — he'll find a grip.",
@@ -933,6 +1091,8 @@ const STAR_EN = {
     end2: "Down by the water, the boat is whole. It floats at last. It is waiting for someone who can sail.",
     end3: "The wind drops. Nobody says anything else.",
     gift: "Something of it stayed with you.",
+    /* ⚠️ ZIP 479 — voir la note française : la seule phrase qui nomme deux joueurs. */
+    together: (names) => `What it was given, it was given by more than one pair of hands: ${names}.`,
   },
   plan: {
     advise1: "It looks at the empty slipway by the lake. It shakes its head.",
@@ -1006,6 +1166,7 @@ const STAR_EN = {
     orderWait: (d) => `under way — ${d}`,
     orderDone: "✅ delivered",
     blockNoPlan: "🔒 You need the plans first",
+    blockNoMayor: "🔒 The quay is public: you need the mayor's approval",
     blockRaise: "🔨 Delivered — go raise it on the slipway",
     blockNoShard: "🔒 This piece isn't available yet",
     delivered: (part) => `${part} — the timber is on the slipway. All it needs is a hammer.`,
@@ -1062,6 +1223,11 @@ const STAR_EN = {
          minutes de scie), « timber » pose les cinq pièces. */
       deliver: "🔨 Timber delivered, not yet raised",
       timber: "🪵 Deliver all the timber",
+      /* ⚠️ ZIP 479 — les deux raccourcis des nouveaux verbes. Ils sautent la
+         PRÉPARATION (une course de trois minutes, vingt secondes de cuisson) et
+         jamais la scène : l'offrande reste à faire, le trajet reste à courir. */
+      candy: "🍬 60 candies of blue light (the purse only)",
+      dish: "🍲 A hot dish, ready to pick up",
     }[op] || op),
     scene: (s) => ({ warn: "🎬 The announcement", fall: "🎬 The five farm impacts", townFall: "🎬 The Valley Town meteor", end: "🎬 The ending" }[s] || s),
     sceneLabel: "Replay a scene",
@@ -1077,6 +1243,11 @@ const STAR_EN = {
     chapter: (t) => `${t}`,
     crater: (who) => `${who} tamed the queen star.`,
     tamed: (who) => `${who} tamed a little star.`,
+    /* ⚠️ ZIP 479 — voir la note française : le second joueur est nommé. */
+    /* ⚠️ ZIP 479 — voir la note française : le chaudron se dit, l'offrande non. */
+    cooking: (who) => `${who} puts something in the cauldron. It smells of star.`,
+    craterBoth: (a, b) => `${a} and ${b} tamed the queen star, one on each rim.`,
+    tamedBoth: (a, b) => `${a} and ${b} tamed a little star between them.`,
     dug: (who, left) => left > 0
       ? `${who} searched a crater. ${Nen(left)} left.`
       : `${who} searched the last crater on the farm.`,
@@ -1087,13 +1258,26 @@ const STAR_EN = {
      fois, ici — six `if` répartis dans trois boucles de rendu finiraient par ne
      pas dire la même chose (c'est la convention posée par `enqPrompt` au 442,
      et c'est la seule chose de l'enquête qui survit telle quelle). */
+  /* ⚠️ ZIP 479 — voir la note française. */
+  cauldronBtn: "🍲 Cook the star's dish",
   prompt: (k) => ({
     impact: "E: search the crater",
     impactDig: "Searching…",
     impactSeen: "Site already searched",
     material: "E: examine the black matter",
+    /* ⚠️ ZIP 479 — voir la note française : `dishWait` est un CONSTAT, pas une
+       invite, donc il ne nomme aucune touche. */
+    light: "E: offer it blue light",
+    warm: "It is waiting for something warm (E: why?)",
+    cook: "E: cook the star's dish",
+    dishWait: "Simmering…",
+    dishTake: "E: take the steaming dish",
+    dishPass: "E: take the dish over",
+    dishGive: "E: give it the dish",
+    effigy: "E: plant the scarecrow on the rim",
     tame: "Turn your back, stand still (E: why?)",
-    crater: "Turn your back, stand still (E: why?)",
+    /* ⚠️ ZIP 479 — voir la note française : deux bords, pas une posture solitaire. */
+    crater: "One on each rim, backs turned (E: why?)",
     craterHot: "E: wait for it to cool",
     engineer: "E: talk to the shipwright",
     raise: "E: raise the piece on the slipway",
@@ -1104,12 +1288,474 @@ const STAR_EN = {
    clés : il voit `dev` des deux côtés, et il a raison, c'est le même objet. */
 STAR_FR.dev = STAR_EN.dev;
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 480 — LES TEXTES DE L'AUDIENCE, EN FRANÇAIS, UNE SEULE FOIS.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ CETTE TABLE EST DÉFINIE UNE FOIS ET RÉFÉRENCÉE PAR LES DEUX LANGUES,
+   exactement comme `STAR_EN` l'a été au 444 (dans l'autre sens). C'est la façon
+   la moins dangereuse de livrer une passe « français seulement » : la clé
+   `maire` existe des deux côtés, `verify-strings` l'apparie, le jeu ne plante
+   pas chez un anglophone, il n'existe qu'UN texte donc il ne peut pas diverger,
+   et l'état « pas encore traduit » se voit d'un coup d'œil au lieu de se cacher
+   dans deux cents lignes qui se ressemblent.
+   ⚠️ LA TRADUCTION FUTURE : dupliquer cette table, la traduire, remplacer
+   `maire: MAIRE_FR` par `maire: MAIRE_EN` dans le bloc `en`. Une ligne.
+
+   ⚠️⚠️⚠️ AUCUN TIRET QUADRATIN DANS LE TEXTE FRANÇAIS (règle du site). Les
+   répliques sont donc entre guillemets français, et la didascalie qui les
+   précède est une phrase à part entière.
+
+   ⚠️⚠️ LE TON, ET C'EST UNE CONSIGNE DE GUILLAUME : « si les arguments sont
+   drôles c'est encore mieux, mais faut garder à l'esprit que le ton est celui
+   d'une réunion avec un élu ». Le comique est donc TOUJOURS dans le fond et
+   jamais dans la forme : personne ne fait de mot d'esprit, tout le monde est
+   poli, et c'est la situation qui est drôle. Un maire qui dit « j'ai un tiroir
+   entier de choses qu'on verrait le moment venu » ne plaisante pas ; c'est nous
+   qui rions. La seule réplique franchement énorme de l'arbre (« Dites votre
+   prix ») est aussi la seule qui mette fin à l'entretien sur-le-champ, et c'est
+   voulu : on paie ce qu'on s'est permis.
+
+   ⚠️ CHAQUE RÉPLIQUE A SA JUSTIFICATION (`tell`), SANS EXCEPTION. Demande de
+   Guillaume : « toujours avoir une justification de la réaction du maire ». Le
+   banc refuse une clé de réplique sans `tell` ; c'est ce qui empêche d'écrire
+   une bonne vanne dont personne ne comprend pourquoi elle marche.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const MAIRE_FR = {
+  /* ── le cadre ──────────────────────────────────────────────────────────── */
+  title: "Audience",
+  who: (e, n) => `${e} ${n}, maire de Valley Town`,
+  gauge: "Adhésion",
+  streakHold: "Il ne décroche plus.",
+  streakGain: "Il finit vos phrases.",
+  slip: "Vous venez de perdre la salle.",
+  bare: "Vous n'avez rien à poser sur ce bureau.",
+  audienceDay: "C'est son jour d'audience. Il est préparé, et il a le temps.",
+  busyDay: "Ce n'est pas son jour d'audience. Vous le prenez entre deux dossiers.",
+  race: (d) => `Élections municipales dans ${d} jours.`,
+  trustAt: (n) => n >= 3 ? "Il vous fait entièrement confiance." : n === 2 ? "Il vous connaît, et ça se sent." : "Il se souvient de vous en bien.",
+  triesAt: (n) => n === 1 ? "Vous êtes déjà venu une fois." : `Vous êtes déjà venu ${n} fois.`,
+
+  /* ── les boutons ───────────────────────────────────────────────────────── */
+  layPlans: "📐 Dérouler les plans sur le bureau",
+  settle: "🤝 « Je crois qu'on s'est compris. »",
+  settleHint: "Signer maintenant. Vous ne saurez jamais jusqu'où il serait allé.",
+  leave: "Se lever et partir",
+  waitRead: "Il finit sa phrase.",
+
+  /* ── les familles d'argument ───────────────────────────────────────────── */
+  type: { money: "L'argent", risk: "La sûreté", town: "La ville", self: "Lui", heart: "Le fond" },
+
+  /* ── les raisons, affichées à chaque coup ──────────────────────────────── */
+  why: {
+    "affinity+": (t) => `${t} : c'est son terrain. Il écoute autrement.`,
+    "affinity-": (t) => `${t} : ce n'est pas son sujet, et ça s'entend.`,
+    "race+": (d) => `Scrutin dans ${d} jours. Tout ce qui se verra pèse double.`,
+    "race-": (d) => `Scrutin dans ${d} jours. Il ne veut surtout pas passer pour dépensier.`,
+    again: "Deuxième fois de suite sur le même terrain. Il l'a remarqué, et il le montre.",
+    heartAgain: "On ne se confie qu'une fois. La seconde, c'est un procédé.",
+    burnt: "Il vous a déjà entendu dire ça, la dernière fois.",
+    bareRisk: "Sans un plan sur la table, la sûreté n'est qu'une opinion.",
+    plansNow: "Vous déroulez les plans à la seconde où il demandait à voir. Il se penche.",
+    plansLate: "Il jette un œil au rouleau et ne le déroule pas. Ce n'était pas la question.",
+  },
+
+  /* ── ce qu'il demande ──────────────────────────────────────────────────── */
+  ask: {
+    m1: "Il ne lève pas les yeux tout de suite. Il finit sa ligne, repose son stylo, se cale en arrière. « Vous êtes le fermier du nord. On m'a annoncé un quart d'heure. Je vous écoute. »",
+    m2: "« Avant qu'on aille plus loin. Pourquoi vous ? Pourquoi pas un armateur, un chantier, quelqu'un dont c'est le métier ? »",
+    m3: "Du bout de l'index, il tapote la pile de dossiers ficelés posée à sa droite. « Un navire. Bien. Vous voyez ce tas ? C'est l'entretien du pont sud. On le repousse depuis deux ans, faute de six mille. Alors dites-moi qui paie le vôtre, et dites-le vite. »",
+    m4: "« Admettons. Et après ? Un bateau, ça se répare, ça se cale, ça se garde, et ça se paie encore quand ça ne sert plus. Vous comptez laisser ça sur mon quai et rentrer chez vous ? »",
+    m5: "« Qu'est-ce que vous voulez construire, au juste ? Une barque ? Un chalutier ? Vous me parlez d'un navire depuis dix minutes et je ne sais toujours pas de quoi il s'agit. »",
+    m6: "Il repose son stylo pour de bon. « Kerguélen. Célestin Kerguélen ? Celui-là ne se dérange pas pour rien. »",
+    m7: "Il tapote le sous-main, deux fois, du plat de la main. « Et si ça coule ? Qui signe, en bas de la page ? »",
+    m8: "« Le quai est public. Vous savez ce que ça veut dire ? Que si quelqu'un se casse une jambe sur vos madriers, c'est la commune qui paie l'avocat. »",
+    m9: "« Et qui va le mener en mer, votre navire ? Vous ? »",
+    m10: "« Bon. Admettons que je signe. Qu'est-ce que la ville y gagne, elle ? »",
+    m11: "Il ne sourit pas. « Et moi ? Vous n'avez pas fait la route pour le bien de Valley Town. Qu'est-ce que vous voulez de moi, exactement ? »",
+    m12: "Il se lève, va à la fenêtre, et reste là, dos à vous. « Vous voyez le quai, d'ici ? »",
+  },
+
+  /* ── la phrase que le maire élu ajoute, et lui seul ────────────────────── */
+  tint: {
+    m2: {
+      vasseur:   "Il regarde vos mains avant de regarder votre visage. « Bon. »",
+      lantier:   "« Le nord. Vous passez par le pont est, alors. Il tient toujours ? »",
+      bonnefoy:  "Il ouvre un registre, y note quelque chose, le referme. « Bien. »",
+      delaunay:  "« Le nord. Vous descendez au lac, quelquefois ? »",
+      toussaint: "« La ferme Vallée. Nous avons des relevés de chez vous qui datent de 1890. Personne ne les a jamais demandés. »",
+    },
+    m7: {
+      vasseur:   "« J'ai signé pour un fossé de drainage, il y a vingt ans. Il a emporté trois hectares. J'y pense tous les matins. »",
+      lantier:   "« J'ai fait construire deux ponts. Le premier, je l'ai signé sans le lire. »",
+      bonnefoy:  "« Ma signature engage la commune. C'est écrit dans le code, pas dans ma tête. »",
+      delaunay:  "« Il y a eu un noyé sur ce lac il y a onze ans. Vous ne le savez pas. Moi, si. »",
+      toussaint: "« Tout est archivé, vous savez. Les bonnes décisions et les autres. Surtout les autres. »",
+    },
+    m12: {
+      vasseur:   "« Mon père y a débarqué des betteraves pendant quarante ans. Il n'y a plus de betteraves. »",
+      lantier:   "« Je l'ai fait repaver en première année. Vingt-deux mille. Pour quatre barques. »",
+      bonnefoy:  "« Il figure à l'inventaire comme équipement portuaire. Il n'y a pas de port. »",
+      delaunay:  "« Quand j'étais petit, il y avait des voiles. Trois, quatre. Plus maintenant. »",
+      toussaint: "« Il existe une photo de 1911 aux archives. On y voit un mât. Un seul, mais un mât. »",
+    },
+  },
+
+  /* ── ce qu'on répond ───────────────────────────────────────────────────── */
+  say: {
+    m1a: "« Je viens vous proposer un chantier. Pas vous demander une faveur. »",
+    m1b: "« Honnêtement, je ne sais pas par où commencer. Il faudrait que je vous montre. »",
+    m1c: "« Un quart d'heure ? J'ai fait deux heures de route pour venir vous voir. »",
+
+    m2a: "« Parce que personne d'autre ne l'a proposé. Vous en avez vu passer beaucoup, des armateurs, ces dix dernières années ? »",
+    m2b: "« Parce que j'ai le bois, les bras et le temps. C'est déjà plus que ce qu'a la commune. »",
+    m2c: "« Parce que vous n'avez personne d'autre sous la main. »",
+
+    m3a:  "« J'ai déjà payé. Vingt-quatre mille à Kerguélen, de ma poche. Le reste, c'est du bois et des bras. »",
+    m3a0: "« Moi. Je n'ai pas encore le chiffre exact, mais la commune ne sortira pas un centime. »",
+    m3b:  "« Votre pont sud tiendra bien deux ans de plus. Le mien, non. »",
+    m3c:  "« Moi. Tout. La commune ne sortira pas un sou, jamais. »",
+
+    m4a: "« Il ne restera pas sur votre quai. Il part. C'est même toute l'idée. »",
+    m4b: "« Je l'entretiendrai. Vous pouvez l'écrire dans l'arrêté. »",
+    m4c: "« On verra ça le moment venu. »",
+
+    m5a:  "« Trente-deux pieds, coque de chêne, gréement aurique. Tout est chiffré, planche par planche. »",
+    m5a0: "« Quelque chose capable de sortir du lac. C'est la seule chose qui compte. »",
+    m5b:  "« Quelque chose qui tienne la mer. Je ne sais pas mieux le dire. »",
+    m5c:  "« Ça, c'est mon affaire. Vous, vous signez. »",
+
+    m6a:  "« Non. Il ne se dérange pas pour rien. Il s'est dérangé. »",
+    m6a0: "« C'est à lui que je compte m'adresser. »",
+    m6b:  "« Il a passé quinze jours sur la grève à mesurer votre lac. »",
+    m6c:  "« Vous le connaissez ? Ça tombe bien : il a parlé de vous en très bons termes. »",
+
+    m7a: "« Vous. Et c'est exactement pour ça que je suis venu avant d'abattre le premier arbre. »",
+    m7b: "« Ça ne coulera pas. »",
+    m7c: "« Personne n'a besoin de signer. On dira que le chantier était là avant vous. »",
+
+    m8a: "« Alors faites-en un chantier de la commune. Barrières, panneau, arrêté, horaires. Je m'y plie. »",
+    m8b: "« J'assurerai le chantier à mes frais. »",
+    m8c: "« Franchement, personne ne va sur ce quai. Il n'y a rien à y voir. »",
+
+    m9a: "« Eduardo Da Fonseca. Demandez-lui vous-même, il ne vous dira pas autre chose. »",
+    m9b: "« Quelqu'un qui a déjà navigué. Pas moi. »",
+    m9c: "« Est-ce que ça vous regarde ? »",
+
+    m10a: "« Un chantier. Tristan occupé tout l'hiver, du monde sur le quai le dimanche, et quelque chose à regarder. »",
+    m10b: "« Du commerce. Ce qui part d'ici finit toujours par revenir. »",
+    m10c: "« Une belle ligne dans votre bilan de mandat. »",
+
+    m11a: "« Votre nom en bas d'un arrêté que personne n'a osé prendre avant vous. »",
+    m11b: "« Une signature. Rien d'autre. »",
+    m11c: "« Dites votre prix. »",
+
+    m12a: "« Je le vois. C'est pour ça que j'ai demandé ce rendez-vous, et pas un autre. »",
+    m12b: "« On le verrait de la place, un mât. Même de loin. »",
+    m12c: "« De là, on doit bien voir le pont sud, aussi. »",
+  },
+
+  /* ── pourquoi il réagit comme ça. Une par réplique, sans exception. ────── */
+  tell: {
+    m1a: "Vous êtes le premier de la matinée à ne pas demander une faveur. Il en a refusé quatre avant vous.",
+    m1b: "Ça ne le braque pas. Mais il vous a donné un quart d'heure, et vous venez d'en dépenser une partie à annoncer que vous alliez parler.",
+    m1c: "Vous lui présentez une facture avant d'avoir dit bonjour. Il reçoit soixante personnes par semaine, et toutes ont fait de la route.",
+
+    m2a: "Il ne répond pas tout de suite. Non, il n'en a pas vu passer. Vous ne lui avez pas dit qu'il était démuni : vous lui avez dit que la ville l'était.",
+    m2b: "C'est vrai, et c'est utile. Ça reste un inventaire. Il attendait une raison.",
+    m2c: "Un mot d'écart avec ce qu'il fallait dire. « Personne ne l'a proposé » parle de la ville. « Vous n'avez personne » parle de lui, et c'est comme ça qu'il l'entend.",
+
+    m3a:  "Vingt-quatre mille. Quatre fois son pont. Il ne demandait pas une promesse, il demandait une preuve, et la vôtre est plus grosse que son problème.",
+    m3a0: "« Pas encore le chiffre exact » est la formule qu'il entend chaque fois qu'un chantier va coûter le double. Il vous croit. Pas assez.",
+    m3b:  "C'est exact, et il le sait mieux que vous. On ne dit pas à un maire que ses priorités peuvent attendre. Surtout quand c'est vrai.",
+    m3c:  "Vous venez de lui décrire un chantier privé sur un quai public. C'est l'objection qu'il cherchait depuis dix minutes, et vous la lui avez apportée vous-même.",
+
+    m4a: "Il n'avait pas envisagé qu'on lui propose quelque chose qui s'en aille. Tout ce qu'on lui demande, d'habitude, reste, et il faut l'entretenir.",
+    m4b: "Il note. Une promesse qu'on accepte de voir écrite vaut mieux qu'une promesse. Il ne signe pas des arrêtés pour se rassurer.",
+    m4c: "C'est mot pour mot ce qu'on lui répond toute la journée. Il a un tiroir entier de choses qu'on verrait le moment venu.",
+
+    m5a:  "Trois chiffres et un mot de métier. Il ignore ce qu'est un gréement aurique, et c'est précisément pour ça que ça marche : quelqu'un, quelque part, a fait le travail.",
+    m5a0: "C'est une intention, pas un bateau. Assez pour qu'il ne vous mette pas dehors. Pas assez pour qu'il prenne un crayon.",
+    m5b:  "Il apprécie qu'on n'invente pas. Il aurait quand même préféré une longueur.",
+    m5c:  "Vous venez de lui expliquer son métier. Sa signature engage la commune sur un objet dont il ne connaît pas la taille, et c'est exactement ce qu'un maire n'a pas le droit de faire.",
+
+    m6a:  "Sept mots. Il regarde le rouleau, puis vous. Il connaît les honoraires de Kerguélen : vous venez de lui dire ce que vaut votre sérieux sans prononcer un chiffre.",
+    m6a0: "« Compter s'adresser » n'est pas « s'être adressé ». Il en a reçu, des projets au conditionnel.",
+    m6b:  "Il ignorait qu'on mesurait son lac. Ça le flatte un peu et ça l'inquiète un peu, ce qui, au total, ne fait pas grand-chose.",
+    m6c:  "Kerguélen n'a parlé de personne. Un maire reconnaît un compliment inventé à la même chose que tout le monde : il est trop bien tourné.",
+
+    m7a: "Il se cale en arrière. Vous venez demander avant, pas après. C'est la première fois de la semaine, et il n'a rien à répondre à ça.",
+    m7b: "Il aimerait vous croire. Ce n'est pas une réponse à la question qu'il a posée.",
+    m7c: "Vous lui proposez de se couvrir. Autrement dit, vous venez de supposer qu'il a quelque chose à cacher, et vous l'avez dit à voix haute dans son bureau.",
+
+    m8a: "Vous venez de lui rendre le quai. Un chantier qu'il encadre est un chantier qu'il contrôle, et un maire préfère toujours contrôler que subir.",
+    m8b: "Correct. Une assurance règle un accident. Elle ne règle pas le conseil municipal.",
+    m8c: "C'est vrai. C'est son quai, dans sa ville, et vous venez de lui expliquer que personne n'y va. Un fait exact peut être une insulte.",
+
+    m9a: "Un nom, et quelqu'un à qui vérifier. Il note le nom. C'est la première chose de tout l'entretien qu'il peut contrôler sans vous.",
+    m9b: "Il apprécie que vous ne vous imaginiez pas capitaine. Ça reste quelqu'un sans nom.",
+    m9c: "Oui. Il délivre l'autorisation d'un navire qui partira de sa commune. Savoir qui le mène est très exactement son travail.",
+
+    m10a: "Du travail, une promenade et un spectacle en une seule phrase. Il refait le calcul dans sa tête et ne trouve rien à retirer.",
+    m10b: "Vrai à long terme. Un mandat dure trente jours.",
+    m10c: "Il l'avait pensé. Il n'aime pas qu'on le pense à sa place, et encore moins qu'on le dise avant lui.",
+
+    m11a: "Il a demandé. C'est le seul moment de l'entretien où lui parler de lui répond à sa question, et vous ne lui promettez pas une statue : vous lui promettez un risque.",
+    m11b: "Sobre, et un peu court. Il vous tendait une perche.",
+    m11c: "Il ne dit rien pendant trois secondes. Puis il se lève, ouvre la porte, et attend. Vous ne saurez jamais ce qu'il allait répondre.",
+
+    m12a: "Il ne se retourne pas tout de suite. Vous venez de lui dire que vous étiez venu le voir lui, pour ça, et il n'a aucune raison d'en douter.",
+    m12b: "Il aime l'image. Il aimerait aussi savoir combien elle coûte.",
+    m12c: "Il rêvait. Vous venez de lui rappeler, au mot près, la seule chose qu'il n'a pas réussi à faire en deux ans.",
+  },
+
+  /* ── comment ça finit ──────────────────────────────────────────────────── */
+  end: {
+    plain: "Il tire le tampon vers lui, souffle dessus par habitude, et l'abat sur le coin de la feuille. « C'est un chantier de la commune. Ne me le faites pas regretter. »",
+    good: "Il tamponne, signe, puis relit ce qu'il vient de signer, ce qu'il ne fait jamais. « Tenez-moi au courant. Vraiment. »",
+    full: "Il tamponne sans regarder la feuille, parce qu'il vous regarde vous. « Quand vous aurez autre chose à me demander, prenez rendez-vous directement. Pas la peine de passer par l'accueil. »",
+    out: "Il consulte l'horloge de la cheminée, se lève, et vous tend la main. « J'ai un conseil dans dix minutes. Repassez me voir. Je ne dis pas non, je dis pas aujourd'hui. »",
+    walked: "Il ne dit plus rien depuis un moment. Il repousse le rouleau vers vous, du bout des doigts, et rouvre son dossier. L'entretien est fini, personne ne l'a annoncé.",
+    thrown: "Il se lève, ouvre la porte de son bureau, et attend, la main sur la poignée, sans un mot.",
+  },
+  /* ⚠️ CE QUE LE JEU DIT APRÈS, ET C'EST LÀ QUE LA CONFIANCE DEVIENT VISIBLE.
+     Une récompense qui ne se lit nulle part n'existe pas (leçon du 453 : chaque
+     chose qu'un document dit visible doit avoir un chemin de code qui l'affiche). */
+  after: {
+    signed: "Le chantier naval est autorisé. Tristan peut commencer à débiter.",
+    trust1: "Le maire se souviendra de vous.",
+    trust2: "Le maire vous a à la bonne. La prochaine fois sera plus courte.",
+    trust3: "Vous avez ses coudées franches. La prochaine fois, il écoutera avant de compter.",
+    again: "Vous pouvez redemander une audience à l'accueil. Il se souvient de ce que vous lui avez déjà dit.",
+  },
+  chat: {
+    signed: (n) => `${n} a obtenu la signature du maire : le chantier naval est autorisé.`,
+    failed: (n) => `${n} sort de la mairie sans signature.`,
+    thrown: (n) => `${n} s'est fait raccompagner à la porte du bureau du maire.`,
+  },
+};
+
+/* ⚠️⚠️ ZIP 480 — L'AUDIENCE EST BILINGUE LE JOUR DE SA NAISSANCE, ET C'EST LE
+   BANC QUI L'A EXIGÉ. Le premier jet référençait `MAIRE_FR` des deux côtés,
+   sous une note qui expliquait bien pourquoi c'était acceptable ; `verify-strings`
+   a refusé, et il avait raison : c'est très exactement le défaut qu'il a été
+   écrit pour attraper (la quête est restée anglaise des deux côtés pendant six
+   zips sous une note tout aussi bien tournée). *Une exception qu'on s'accorde à
+   soi-même dans le zip où on écrit le texte est une exception qu'on n'écrira
+   jamais.* Quatre-vingt-dix phrases traduites le jour même coûtent une heure ;
+   traduites six zips plus tard, elles coûtent une relecture complète.
+   ⚠️ Le comique reste dans le FOND, jamais dans la forme : personne ne fait de
+   mot d'esprit, tout le monde est poli, c'est la situation qui est drôle. */
+const MAIRE_EN = {
+  title: "Audience",
+  who: (e, n) => `${e} ${n}, Mayor of Valley Town`,
+  gauge: "Support",
+  streakHold: "He has stopped drifting.",
+  streakGain: "He is finishing your sentences.",
+  slip: "You have just lost the room.",
+  bare: "You have nothing to put on that desk.",
+  audienceDay: "It is his audience day. He is prepared, and he has time.",
+  busyDay: "This is not his audience day. You are catching him between two files.",
+  race: (d) => `Municipal elections in ${d} days.`,
+  trustAt: (n) => n >= 3 ? "He trusts you completely." : n === 2 ? "He knows you, and it shows." : "He remembers you kindly.",
+  triesAt: (n) => n === 1 ? "You have been here once before." : `You have been here ${n} times before.`,
+
+  layPlans: "📐 Unroll the plans on the desk",
+  settle: "🤝 \"I think we understand each other.\"",
+  settleHint: "Sign now. You will never know how far he would have gone.",
+  leave: "Stand up and leave",
+  waitRead: "He is finishing his sentence.",
+
+  type: { money: "Money", risk: "Liability", town: "The town", self: "Himself", heart: "The truth" },
+
+  why: {
+    "affinity+": (t) => `${t}: that is his ground. He listens differently.`,
+    "affinity-": (t) => `${t}: not his subject, and you can hear it.`,
+    "race+": (d) => `Election in ${d} days. Anything that will be seen counts double.`,
+    "race-": (d) => `Election in ${d} days. The last thing he wants is to look like a spender.`,
+    again: "Second time running on the same ground. He noticed, and he lets you see that he noticed.",
+    heartAgain: "You only confide once. The second time it is a technique.",
+    burnt: "He has heard you say that before, last time.",
+    bareRisk: "With no drawing on the table, safety is just an opinion.",
+    plansNow: "You unroll the plans the very second he asked to see. He leans in.",
+    plansLate: "He glances at the roll and does not unroll it. That was not the question.",
+  },
+
+  ask: {
+    m1: "He does not look up right away. He finishes his line, puts down his pen, leans back. \"You are the farmer from the north. I was told a quarter of an hour. I am listening.\"",
+    m2: "\"Before we go any further. Why you? Why not a shipowner, a yard, someone who does this for a living?\"",
+    m3: "With one fingertip he taps the stack of tied folders at his right. \"A ship. Fine. You see that pile? That is the south bridge maintenance. We have been putting it off for two years for want of six thousand. So tell me who pays for yours, and tell me quickly.\"",
+    m4: "\"Say I grant that. And then? A boat gets repaired, chocked, guarded, and it still costs money once it is no use to anyone. Do you intend to leave that on my quay and go home?\"",
+    m5: "\"What is it you want to build, exactly? A dinghy? A trawler? You have been saying the word ship for ten minutes and I still do not know what we are talking about.\"",
+    m6: "He puts his pen down for good. \"Kerguélen. Célestin Kerguélen? That one does not travel for nothing.\"",
+    m7: "He taps the desk pad twice, flat-handed. \"And if it sinks? Who signs, at the bottom of the page?\"",
+    m8: "\"The quay is public. Do you know what that means? It means that if somebody breaks a leg on your timbers, the commune pays the lawyer.\"",
+    m9: "\"And who is going to take it to sea, this ship of yours? You?\"",
+    m10: "\"Right. Say I sign. What does the town get out of it?\"",
+    m11: "He does not smile. \"And me? You did not make that journey for the good of Valley Town. What is it you want from me, exactly?\"",
+    m12: "He stands, walks to the window, and stays there with his back to you. \"Can you see the quay from here?\"",
+  },
+
+  tint: {
+    m2: {
+      vasseur:   "He looks at your hands before he looks at your face. \"Right.\"",
+      lantier:   "\"The north. So you come over the east bridge. Is it still holding?\"",
+      bonnefoy:  "He opens a register, writes something in it, closes it again. \"Good.\"",
+      delaunay:  "\"The north. Do you ever come down to the lake?\"",
+      toussaint: "\"Valley Farm. We hold survey records of your land going back to 1890. Nobody has ever asked for them.\"",
+    },
+    m7: {
+      vasseur:   "\"I signed for a drainage ditch, twenty years ago. It took three hectares with it. I think about it every morning.\"",
+      lantier:   "\"I have had two bridges built. The first one I signed without reading it.\"",
+      bonnefoy:  "\"My signature binds the commune. That is written in the code, not in my head.\"",
+      delaunay:  "\"A man drowned in that lake eleven years ago. You do not know that. I do.\"",
+      toussaint: "\"Everything is archived, you know. The good decisions and the other kind. Especially the other kind.\"",
+    },
+    m12: {
+      vasseur:   "\"My father landed beet on it for forty years. There is no beet any more.\"",
+      lantier:   "\"I had it repaved in my first year. Twenty-two thousand. For four rowing boats.\"",
+      bonnefoy:  "\"It is listed in the inventory as harbour equipment. There is no harbour.\"",
+      delaunay:  "\"When I was small there were sails on it. Three, four of them. Not any more.\"",
+      toussaint: "\"There is a photograph from 1911 in the archive. You can see a mast in it. One mast, but a mast.\"",
+    },
+  },
+
+  say: {
+    m1a: "\"I have come to offer you a public works project. Not to ask you a favour.\"",
+    m1b: "\"Honestly, I do not know where to start. I would rather show you.\"",
+    m1c: "\"A quarter of an hour? I travelled two hours to come and see you.\"",
+
+    m2a: "\"Because nobody else has offered. How many shipowners have you seen come through here in the last ten years?\"",
+    m2b: "\"Because I have the timber, the hands and the time. That is already more than the commune has.\"",
+    m2c: "\"Because you have got nobody else to hand.\"",
+
+    m3a:  "\"I have already paid. Twenty-four thousand to Kerguélen, out of my own pocket. The rest is timber and labour.\"",
+    m3a0: "\"I do. I do not have the exact figure yet, but the commune will not put in a penny.\"",
+    m3b:  "\"Your south bridge will hold another two years. Mine will not.\"",
+    m3c:  "\"I do. All of it. The commune will not pay a single coin, ever.\"",
+
+    m4a: "\"It will not stay on your quay. It leaves. That is the entire point of it.\"",
+    m4b: "\"I will maintain it. You can put that in the order.\"",
+    m4c: "\"We will deal with that when the time comes.\"",
+
+    m5a:  "\"Thirty-two feet, oak hull, gaff rig. Every plank is costed.\"",
+    m5a0: "\"Something that can get out of the lake. That is the only thing that matters.\"",
+    m5b:  "\"Something that will hold the sea. I cannot put it better than that.\"",
+    m5c:  "\"That is my business. Yours is to sign.\"",
+
+    m6a:  "\"No. He does not travel for nothing. He travelled.\"",
+    m6a0: "\"He is the man I intend to approach.\"",
+    m6b:  "\"He spent a fortnight on the shore measuring your lake.\"",
+    m6c:  "\"You know him? That is lucky: he spoke very warmly of you.\"",
+
+    m7a: "\"You do. And that is exactly why I came before felling the first tree.\"",
+    m7b: "\"It will not sink.\"",
+    m7c: "\"Nobody needs to sign. We will say the yard was there before you.\"",
+
+    m8a: "\"Then make it a commune works site. Barriers, a notice, an order, opening hours. I will comply.\"",
+    m8b: "\"I will insure the site at my own expense.\"",
+    m8c: "\"Frankly, nobody goes on that quay. There is nothing to see.\"",
+
+    m9a: "\"Eduardo Da Fonseca. Ask him yourself, he will tell you the same.\"",
+    m9b: "\"Somebody who has sailed before. Not me.\"",
+    m9c: "\"Is that any of your business?\"",
+
+    m10a: "\"A works site. Tristan busy all winter, people on the quay on Sundays, and something to look at.\"",
+    m10b: "\"Trade. What leaves this place always comes back to it.\"",
+    m10c: "\"A very good line in your record of office.\"",
+
+    m11a: "\"Your name at the bottom of an order nobody before you dared to sign.\"",
+    m11b: "\"A signature. Nothing else.\"",
+    m11c: "\"Name your price.\"",
+
+    m12a: "\"I can see it. That is why I asked for this meeting and not another one.\"",
+    m12b: "\"You would see a mast from the square. Even from that far.\"",
+    m12c: "\"You must be able to see the south bridge from up here too.\"",
+  },
+
+  tell: {
+    m1a: "You are the first person this morning not to ask him for a favour. He turned down four before you.",
+    m1b: "It does not put him off. But he gave you a quarter of an hour, and you have just spent part of it announcing that you were about to speak.",
+    m1c: "You have handed him an invoice before saying good morning. He receives sixty people a week, and every one of them travelled.",
+
+    m2a: "He does not answer straight away. No, he has not seen any. You did not tell him he was helpless: you told him the town was.",
+    m2b: "True, and useful. It is still an inventory. He was waiting for a reason.",
+    m2c: "One word away from the right answer. \"Nobody has offered\" is about the town. \"You have nobody\" is about him, and that is how he hears it.",
+
+    m3a:  "Twenty-four thousand. Four times his bridge. He was not asking for a promise, he was asking for proof, and yours is bigger than his problem.",
+    m3a0: "\"Not the exact figure yet\" is the phrase he hears every time a project is about to cost double. He believes you. Not enough.",
+    m3b:  "It is accurate, and he knows it better than you do. You do not tell a mayor his priorities can wait. Least of all when it is true.",
+    m3c:  "You have just described a private yard on a public quay. That is the objection he has been hunting for ten minutes, and you brought it to him yourself.",
+
+    m4a: "It had not occurred to him that anyone might offer him something that leaves. Everything people ask him for stays, and has to be maintained.",
+    m4b: "He makes a note. A promise you are willing to see written down beats a promise. He does not sign orders to reassure himself.",
+    m4c: "That is word for word what people answer him all day long. He has an entire drawer of things to be dealt with when the time comes.",
+
+    m5a:  "Three figures and one word of trade. He has no idea what a gaff rig is, and that is precisely why it works: somebody, somewhere, did the work.",
+    m5a0: "That is an intention, not a boat. Enough not to be shown the door. Not enough for him to pick up a pen.",
+    m5b:  "He appreciates that you are not making things up. He would still have preferred a length.",
+    m5c:  "You have just explained his own job to him. His signature binds the commune to an object whose size he does not know, which is exactly what a mayor is not allowed to do.",
+
+    m6a:  "Seven words. He looks at the roll, then at you. He knows what Kerguélen charges: you have just told him what your seriousness is worth without naming a figure.",
+    m6a0: "\"Intend to approach\" is not \"have approached\". He has had his share of projects in the conditional.",
+    m6b:  "He did not know anyone was measuring his lake. It flatters him slightly and worries him slightly, which on balance comes to very little.",
+    m6c:  "Kerguélen spoke of nobody. A mayor recognises an invented compliment the same way everyone else does: it is too well turned.",
+
+    m7a: "He leans back. You are here to ask before, not after. That is a first this week, and he has nothing to say to it.",
+    m7b: "He would like to believe you. It is not an answer to the question he asked.",
+    m7c: "You are offering to cover for him. Which is to say you have just assumed he has something to hide, and said so out loud in his office.",
+
+    m8a: "You have just handed him back the quay. A site he supervises is a site he controls, and a mayor would always rather control than endure.",
+    m8b: "Correct. Insurance settles an accident. It does not settle the town council.",
+    m8c: "It is true. It is his quay, in his town, and you have just explained to him that nobody goes there. An accurate fact can be an insult.",
+
+    m9a: "A name, and somebody he can check with. He writes the name down. It is the first thing in the whole meeting he can verify without you.",
+    m9b: "He appreciates that you do not imagine yourself a captain. It is still somebody without a name.",
+    m9c: "Yes. He grants clearance for a ship leaving his commune. Knowing who takes it out is precisely his job.",
+
+    m10a: "Work, a walk and a spectacle in a single sentence. He runs the sum again in his head and cannot find anything to take out of it.",
+    m10b: "True in the long run. A term of office lasts thirty days.",
+    m10c: "He had thought it himself. He does not care for having it thought on his behalf, and still less for hearing it said before he says it.",
+
+    m11a: "He asked. This is the one moment in the meeting when talking about him answers his question, and you are not promising him a statue: you are promising him a risk.",
+    m11b: "Plain, and a little short. He was holding out a hand.",
+    m11c: "He says nothing for three seconds. Then he stands, opens the door, and waits. You will never know what he was about to say.",
+
+    m12a: "He does not turn round straight away. You have just told him you came to see him, for this, and he has no reason to doubt it.",
+    m12b: "He likes the picture. He would also like to know what it costs.",
+    m12c: "He was daydreaming. You have just reminded him, word for word, of the one thing he failed to do in two years.",
+  },
+
+  end: {
+    plain: "He pulls the stamp towards him, blows on it out of habit, and brings it down on the corner of the sheet. \"It is a commune works site. Do not make me regret it.\"",
+    good: "He stamps, signs, then rereads what he has just signed, which he never does. \"Keep me informed. I mean that.\"",
+    full: "He stamps without looking at the sheet, because he is looking at you. \"Next time you need something from me, book with me directly. No need to go through the front desk.\"",
+    out: "He checks the mantel clock, stands, and holds out his hand. \"I have a council meeting in ten minutes. Come back and see me. I am not saying no, I am saying not today.\"",
+    walked: "He has not said anything for a while. He pushes the roll back across to you with his fingertips and reopens his file. The meeting is over; nobody announced it.",
+    thrown: "He stands, opens his office door, and waits with his hand on the handle, without a word.",
+  },
+  after: {
+    signed: "The shipyard is authorised. Tristan can start cutting.",
+    trust1: "The mayor will remember you.",
+    trust2: "The mayor has taken to you. Next time will be shorter.",
+    trust3: "You have a free hand with him. Next time he will listen before he counts.",
+    again: "You can ask the front desk for another audience. He remembers what you have already told him.",
+  },
+  chat: {
+    signed: (n) => `${n} secured the mayor's signature: the shipyard is authorised.`,
+    failed: (n) => `${n} leaves the town hall without a signature.`,
+    thrown: (n) => `${n} was shown the door of the mayor's office.`,
+  },
+};
+
 export const FERME_STR = {
   fr: {
     /* ⚠️⚠️ ZIP 450 — LA QUÊTE EST TRADUITE. Cette ligne disait `star: STAR_EN`, et
        c'était la seule des 1 081 clés du fichier à ne pas être bilingue : le public
        visé ne pouvait lire aucune ligne de la seule histoire du jeu. */
     star: STAR_FR,
+    /* ⚠️ ZIP 480 — l audience chez le maire. Une seule table, deux langues : voir
+       la note au-dessus de MAIRE_FR. */
+    maire: MAIRE_FR,
     // --- Mise à jour gare 2026-07 (créatures marines, canards, gare, visiteurs, saisons) ---
     seaCaught: (n) => `Prise rare : ${n} !`,
     seaBite: (n) => `Quelque chose d'inhabituel mord... ${n} ?!`,
@@ -3052,6 +3698,7 @@ export const FERME_STR = {
   },
   en: {
     star: STAR_EN,
+    maire: MAIRE_EN,
     // --- 2026-07 station update (sea creatures, ducks, station, visitors, seasons) ---
     seaCaught: (n) => `Rare catch: ${n}!`,
     seaBite: (n) => `Something unusual bites... ${n}?!`,

@@ -105,6 +105,13 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as C from "./fermeConstants";
+/* ⚠️ ZIP 480 — LA NÉGOCIATION VIT DANS SON PROPRE FICHIER, ET C'EST DÉLIBÉRÉ.
+   `maire.js` est un système d'audience réutilisable (la confiance gagnée sert
+   « les prochaines missions », demande de Guillaume) : le fondre ici en aurait
+   fait un morceau de la quête de l'étoile, donc quelque chose à découper le jour
+   où une commission ou le cadastre voudront la même mécanique. La quête n'en lit
+   que deux choses : l'état migré et « a-t-il signé ». */
+import * as MA from "./maire";
 
 /* ───────────────────────────────────────────────────────────────────────────
    1. LES LIEUX. Un lieu = un endroit du monde où il se passe quelque chose et
@@ -155,16 +162,56 @@ import * as C from "./fermeConstants";
    `migrateStar` (« un lieu inconnu = une version d'après ») — donc une partie
    d'avant le 469 se recharge sans planter.
    ───────────────────────────────────────────────────────────────────────────── */
+/* ╔════════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 479 — `verb` : CHAQUE ÉTOILE A SON VERBE, ET DEUX N'ONT JAMAIS LE MÊME.
+   ╚════════════════════════════════════════════════════════════════════════════════
+   ⚠⚠⚠ C'EST LA COLONNE QUI RÈGLE LE DÉFAUT 9 DE L'AUDIT 477, ET ELLE LE RÈGLE PAR
+   CONSTRUCTION PLUTÔT QUE PAR DU TEXTE. Le reproche était : « les trois étoiles
+   disent la même chose parce qu'on leur demande la même chose ». Écrire trois
+   phrases différentes sur un geste unique aurait été le remède du 453 pris à
+   l'envers (*un texte affirme*) : trois mensonges au lieu d'un. **Deux gestes
+   différents donnent deux textes différents tout seuls.**
+     · `light` — LA TIMIDE (bleue). On lui offre de la lumière bleue : les bonbons
+       de Temple Run (`STAR_CANDY_PRICE`), rapportés DEPUIS LA CHUTE. Puis on lui
+       tourne le dos — le geste du 3a, et il n'appartient plus qu'à elle.
+     · `warm`  — LA GOURMANDE (rose). Elle ne vient pas au calme, elle vient à la
+       CHALEUR : on cuisine au chaudron et on PORTE le plat jusqu'à son trou. Le
+       geste, c'est le CHEMIN (`starDishHeat`).
+     · `pair`  — LA REINE. Deux présences aux bords OPPOSÉS du grand cratère, dos
+       à dos (`starQueenStep`). Seul, on plante son épouvantail en face.
+   ⚠⚠ LE BANC TIENT L'UNICITÉ (§verbes de `verify-quete`) : le jour où une
+   quatrième étoile recopierait le verbe d'une autre, il échoue. C'est la seule
+   façon de garder une promesse de CONCEPTION dans une table de données — une
+   consigne écrite dans un document se périme, un contrôle non. */
 export const STAR_SITES = [
   // ── Chapitre 1 : cinq petits impacts, dispersés sur la ferme. On les FOUILLE.
-  { id: "farmStarBlue", zone: "farm", spot: "starFarmImpact", impact: 0, content: "star", color: "blue" },
+  { id: "farmStarBlue", zone: "farm", spot: "starFarmImpact", impact: 0, content: "star", color: "blue", verb: "light" },
   { id: "farmEmptyA",   zone: "farm", spot: "starFarmImpact", impact: 1, content: "empty" },
   { id: "farmMaterial", zone: "farm", spot: "starFarmImpact", impact: 2, content: "material" },
-  { id: "farmStarRose", zone: "farm", spot: "starFarmImpact", impact: 3, content: "star", color: "rose" },
+  { id: "farmStarRose", zone: "farm", spot: "starFarmImpact", impact: 3, content: "star", color: "rose", verb: "warm" },
   { id: "farmEmptyB",   zone: "farm", spot: "starFarmImpact", impact: 4, content: "empty" },
   // ── Chapitre 2 : le cratère. On ne trouve pas un morceau, on trouve QUELQU'UN.
-  { id: "crater",    zone: "town",  spot: "starCrater", content: "star", color: "yellow", queen: true },
+  { id: "crater",    zone: "town",  spot: "starCrater", content: "star", color: "yellow", queen: true, verb: "pair" },
 ];
+/* Les trois verbes connus, écrits UNE fois. ⚠⚠ Une étoile sans verbe est une
+   erreur de table et non un cas à rattraper à l'exécution : `starVerbOf` rend
+   `null`, `starTameTarget` ne la propose pas, et le banc le dit tout de suite.
+   Un repli silencieux sur « dos tourné » aurait redonné le même geste à tout le
+   monde, c'est-à-dire exactement le défaut qu'on vient de corriger. */
+export const STAR_VERBS = ["light", "warm", "pair"];
+export function starVerbOf(id) {
+  const s = STAR_SITE[id];
+  return s && STAR_VERBS.includes(s.verb) ? s.verb : null;
+}
+/* ⚠️⚠️ QUEL TROU PORTE QUEL VERBE — DÉRIVÉ DE LA TABLE, JAMAIS ÉCRIT EN DUR. Les
+   résolveurs du plat n'ont pas à savoir que l'étoile gourmande s'appelle
+   `farmStarRose` : le jour où elle change de cratère (ou de couleur), la cuisine
+   suit toute seule. C'est la parade du 449 — *une jointure, jamais deux listes* —
+   sur la seule chose qui, sinon, serait recopiée dans cinq fonctions. */
+export const STAR_VERB_SITE = Object.fromEntries(
+  STAR_VERBS.map(v => [v, (STAR_SITES.find(s => s.verb === v) || {}).id || null]));
+export const STAR_LIGHT_SITE = STAR_VERB_SITE.light;
+export const STAR_WARM_SITE = STAR_VERB_SITE.warm;
 export const STAR_SITE = Object.fromEntries(STAR_SITES.map(s => [s.id, s]));
 export const STAR_FARM_IMPACTS = STAR_SITES.filter(s => s.spot === "starFarmImpact");
 export const STAR_FARM_STAR_IDS = STAR_FARM_IMPACTS.filter(s => s.content === "star").map(s => s.id);
@@ -478,6 +525,17 @@ export function starTimberBlock(e, key) {
   const idx = STAR_SHIP_KEYS.indexOf(key);
   if (idx < 0) return "unknown";
   if (!starPlanReady(e)) return "noPlan";
+  /* ⚠️⚠️⚠️ ZIP 480 — LA CALE EST SUR LE QUAI MUNICIPAL, ET C'EST TOUT LE SENS DE
+     LA PASSE MAIRE (§15.0 de `QUETE.md` : « c'est lui qui devrait valider le
+     projet de bateau, et cette validation est ce qui débloque tout le reste »).
+     La justification n'est pas décorative : on ne monte pas une coque sur un quai
+     public sans arrêté, et Tristan ne débite pas 395 unités de bois pour un
+     chantier qui n'a pas de papier. C'est la même forme que `noPlan`, un cran
+     plus loin — une lecture, jamais un état de plus.
+     ⚠️ ELLE ARRIVE APRÈS `noPlan` ET PAS AVANT : on PEUT aller voir le maire les
+     mains vides (décision de Guillaume), mais le bandeau doit désigner l'action la
+     plus proche, et tant qu'il n'y a pas de plans c'est l'ingénieur qu'on attend. */
+  if (!MA.mayorSigned(e)) return "noMayor";
   if (starTimberDone(e, key)) return "done";
   if (starTimberReady(e, key)) return "raise";  // 478 — le bois est là, il manque le marteau
   if (starTimberOrder(e, key)) return "busy";
@@ -1883,9 +1941,17 @@ export function starFallAngle(zone) {
    adresse aurait fait pointer le chevron vers la ferme pendant que la pièce
    attend un marteau à Valley Town — c'est-à-dire deux réponses à « où vais-je »,
    le défaut du 449, sur la seule étape que la refonte vient d'ouvrir. */
-export const STAR_GOAL_TARGET = { craterHot: "crater", engineer: "townHall",
-  timberOrder: "sawmill", timberWait: "sawmill", timberRaise: "shipyard" };
-export const STAR_OFF_TABLE_TARGETS = ["townHall", "sawmill", "shipyard"];
+/* ⚠️ ZIP 479 — LE CHAUDRON EST UNE QUATRIÈME ADRESSE HORS TABLE, pour la même
+   raison que la scierie : c'est un endroit où l'on VA, pas une chose qu'on trouve.
+   Et comme elle, il peut ne pas exister (il se ramasse dans le monde maléfique) et
+   il est DÉPLAÇABLE — sa position se lit donc vivante, côté jeu. */
+export const STAR_GOAL_TARGET = { craterHot: "crater", craterAlone: "crater", engineer: "townHall",
+  /* ⚠️ ZIP 480 — l'audience se tient à la MAIRIE, comme la commande des plans :
+     le chevron y mène déjà, il n'y a pas d'adresse neuve à inventer. */
+  mayor: "townHall",
+  timberOrder: "sawmill", timberWait: "sawmill", timberRaise: "shipyard",
+  farmImpactWarm: "cauldron", farmImpactSimmer: "cauldron", farmImpactTake: "cauldron" };
+export const STAR_OFF_TABLE_TARGETS = ["townHall", "sawmill", "shipyard", "cauldron"];
 export function starTargetSite(e, ctx) {
   const goal = starGoalKey(e, ctx);
   if (!goal) return null;
@@ -1893,7 +1959,14 @@ export function starTargetSite(e, ctx) {
      `farmImpacts`, JUSTE À UN AUTRE INSTANT (voir `starGoalKey`) : le chevron
      continue de pointer le premier impact manquant, qu'il soit encore intact
      ou déjà fouillé et en attente. */
-  if (goal === "farmImpacts" || goal === "farmImpactTame" || goal === "farmImpactCool") {
+  /* ⚠️ ZIP 479 — LES TROIS CLÉS QUI ENVOIENT AU CHAUDRON SONT TRAITÉES AVANT :
+     elles désignent un ATELIER, pas le trou. Sans cette sortie, le chevron aurait
+     pointé le cratère rose pendant qu'on demande d'aller cuisiner ailleurs — deux
+     réponses à « où vais-je », le défaut du 449. */
+  if (STAR_GOAL_TARGET[goal] === "cauldron") return "cauldron";
+  if (goal === "farmImpacts" || goal === "farmImpactCool"
+      || goal === "farmImpactTame" || goal === "farmImpactLight"
+      || goal === "farmImpactLightPay" || goal === "farmImpactCarry") {
     const id = starMissing(e).find(k => STAR_SITE[k] && STAR_SITE[k].spot === "starFarmImpact");
     return id || null;
   }
@@ -2095,11 +2168,181 @@ export function starCalmStep(px, py, dir, moving, cx, cy, ringPad, radius) {
   if (!starFacingAway(px, py, dir | 0, cx, cy)) return "watching";
   return "holding";
 }
-/* ⚠️ LE BESOIN EST DÉRIVÉ DU NOMBRE DE JOUEURS, PAS RECOPIÉ : la jauge et
-   `resolveStarCalm` liraient sinon deux durées différentes, et la barre serait
-   pleine avant (ou après) que l'étoile sorte. C'est le §14 de `CLAUDE.md` — un
-   paramètre qui double un autre paramètre est une divergence en attente. */
-export function starCalmNeed(soloAllowed) { return soloAllowed ? STAR_CALM_SOLO_MS : STAR_CALM_MS; }
+/* ╔══════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 479 — LES TROIS VERBES, EN NOMBRES. (lot 3b, défauts 3, 9 et 10 de
+   ║ l'audit 477)
+   ╚══════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ TOUT CE BLOC EST PUR ET VIT ICI POUR LA MÊME RAISON QUE `starFacingAway` :
+   le jeu ET le banc doivent lire la MÊME règle. Une seconde écriture du « bord
+   opposé » ou du « plat encore chaud » donnerait l'ambiguïté la plus détestable
+   du dépôt — « chez moi elle sort, chez toi non » (444). */
+
+/* ── LA BLEUE. LE PRIX EST LU DANS LE CODE, PAS DEVINÉ.
+   ⚠️⚠️ DÉCISION DE GUILLAUME : l'offrande se paie en BONBONS de Temple Run.
+   Ils existent depuis le zip 372 (`f.inv.candies`), ils sont persistés, plafonnés
+   par course, arbitrés par l'hôte — et ils n'ont **aucun usage** depuis. C'est
+   leur premier.
+   ⚠️ 60 EST CALIBRÉ SUR `RUN_MAX_CANDIES_PER_RUN` ET SUR CE QUE LE CODE DIT D'UNE
+   TRÈS BONNE COURSE (≈ 140 bonbons en trois minutes, voir `fermeConstants.js`) :
+   60 = une course moyenne, un détour de trois minutes, jamais un grind.
+   ⚠️⚠️ ET ILS DOIVENT AVOIR ÉTÉ RAPPORTÉS **DEPUIS LA CHUTE** (« la lumière bleue
+   s'éteint en dormant »). C'est ce qui empêche le stock dormant d'une vieille
+   ferme d'acheter le chapitre d'avance — et c'est aussi ce qui fait du geste un
+   VOYAGE et pas une ligne d'inventaire. Le compteur frais est `e.candy`, un FLUX ;
+   `f.inv.candies` reste le STOCK. Deux grandeurs différentes, donc deux champs :
+   ce n'est pas le doublon du §8 de `CLAUDE.md`, c'est son contraire (dériver le
+   flux du stock est impossible — le stock ne se souvient pas d'où il vient). */
+export const STAR_CANDY_PRICE = 60;
+/* Ce qu'un joueur a rapporté depuis la chute. ⚠️ PAR JOUEUR ET PAS COMMUN, comme
+   les bonbons eux-mêmes (`fermeEngine.js` : « le défi est individuel, personne ne
+   court à deux »). Mettre l'offrande en commun aurait fait payer la course d'un
+   seul par la poche de l'autre. */
+export function starCandyFresh(e, who) { return Math.max(0, (e && e.candy && +e.candy[who]) || 0); }
+/* L'offrande a-t-elle été faite sur CE trou ? ⚠️ UN DICTIONNAIRE PAR LIEU, pas un
+   booléen : le jour où une seconde étoile se paierait en lumière, rien à changer. */
+export function starLit(e, id) { return !!(e && e.offer && e.offer[id]); }
+
+/* ── LA ROSE. « ELLE NE VIENT PAS AU CALME, ELLE VIENT À LA CHALEUR. »
+   ⚠️⚠️ LE GESTE EST LE CHEMIN, et c'est la seule mécanique de la quête où le
+   monde entre en jeu : la distance entre le chaudron (que les joueurs ont posé
+   où ils voulaient) et le trou rose est une donnée de LEUR ferme, pas du code.
+   ⚠️⚠️ LA JAUGE EST GÉNÉREUSE, ET LE CHIFFRE EST MESURÉ CONTRE LA CARTE : la
+   diagonale de la ferme fait √(180² + 140²) ≈ 228 cases, soit ≈ 44 s à
+   `PLAYER_SPEED` (5,2 cases/s). Trois minutes laissent donc **quatre fois** le
+   pire trajet en ligne droite : le plat passe avec de la marge même en
+   contournant, et il ne refroidit que si l'on s'arrête vraiment. Le banc tient ce
+   rapport (§plat) — sans lui, agrandir la carte ferait mourir le plat en silence.
+   ⚠️ CUIRE EST COURT EXPRÈS : vingt secondes, le temps que l'autre joueur se
+   place pour le relais. Un second sablier de plusieurs minutes aurait refait le
+   chantier naval d'avant le 478, à l'échelle d'un plat. */
+export const STAR_DISH_COOK_MS = 20000;
+export const STAR_DISH_HOT_MS = 180000;
+/* Où en est le plat. ⚠️ TROIS RÉPONSES ET UNE SEULE FONCTION (leçon 449) : la
+   jauge, l'invite et l'arbitre lisent la même. Rend `null` s'il n'y a pas de plat.
+     · `cook`  — il mijote au chaudron, personne ne le porte encore ;
+     · `carry` — quelqu'un le porte, il refroidit ;
+     · `cold`  — il est perdu. On ne l'efface PAS ici : effacer est un geste
+       d'arbitre (`resolveStarDishTick`), et une fonction de lecture qui modifie
+       l'état est la pire chose qu'on puisse donner à un banc. */
+export function starDishPhase(e, now) {
+  const d = e && e.dish;
+  if (!d || !d.at) return null;
+  const t = (+now || 0) - d.at;
+  if (d.phase === "cook") return t >= STAR_DISH_COOK_MS ? "ready" : "cook";
+  return t >= STAR_DISH_HOT_MS ? "cold" : "carry";
+}
+/* La chaleur qui reste, de 1 à 0. ⚠️ ELLE SE DÉRIVE DE LA DATE, elle n'est jamais
+   stockée : un troisième champ à faire vieillir pour une barre qui se recalcule en
+   une soustraction, c'est le §3 pris à l'envers (même raison que
+   `starTimberProgress`). Pendant la cuisson elle vaut 1 — rien ne refroidit encore. */
+export function starDishHeat(e, now) {
+  const ph = starDishPhase(e, now);
+  if (!ph || ph === "cold") return 0;
+  if (ph !== "carry") return 1;
+  return Math.max(0, Math.min(1, 1 - ((+now || 0) - e.dish.at) / STAR_DISH_HOT_MS));
+}
+export function starDishHolder(e) { return (e && e.dish && e.dish.phase === "carry" && e.dish.by) || null; }
+/* Qui a tenu le plat AVANT celui qui le porte. ⚠️ Rend `""` quand il n'y a
+   personne — un plat cuisiné et porté par la même personne n'a pas de second, et
+   inventer un nom serait pire que de n'en dire aucun. */
+export function starDishMate(e, who) {
+  const f = e && e.dish && e.dish.from;
+  return f && f !== who ? f : "";
+}
+
+/* ── LA REINE. DEUX PRÉSENCES, AUX BORDS OPPOSÉS, DOS À DOS.
+   ⚠️⚠️ « AU BORD » N'EST PAS « DANS LE TROU » : le grand cratère se DESCEND (c'est
+   tout le mini-jeu de la glissade, 458/459), donc deux joueurs qui tombent au fond
+   se retrouvent côte à côte quoi qu'ils fassent. Le fond ne peut pas porter ce
+   geste ; la lèvre, si. `STAR_QUEEN_EDGE_K` est la fraction de rayon au-delà de
+   laquelle on est « au bord ».
+   ⚠️⚠️ ET LE SOLO N'EST PAS UNE BRANCHE, C'EST UN FIGURANT. On plante son
+   ÉPOUVANTAIL en face (`e.effigy`) et on tient soixante secondes au lieu de vingt.
+   Le duo reste un RACCOURCI, jamais une serrure (458) : aucune configuration de
+   joueurs ne peut bloquer la reine, et « moins satisfaisant en solo » devient de
+   la FICTION — elle ne sort qu'à moitié (`STAR_QUEEN_HALF`) — au lieu d'un barème
+   qu'on subit sans le comprendre.
+   ⚠️ UN ÉPOUVANTAIL N'A PAS DE REGARD, DONC IL EST TOUJOURS « DOS TOURNÉ » : on le
+   plante face au large, c'est ce qu'un épouvantail fait. Écrire l'inverse aurait
+   demandé une direction à un objet qui n'en a pas, et le joueur n'aurait eu aucun
+   moyen de la corriger. */
+export const STAR_QUEEN_MS = 20000;        // à deux joueurs
+export const STAR_QUEEN_SOLO_MS = 60000;   // seul, avec l'épouvantail en face
+export const STAR_QUEEN_EDGE_K = 0.55;     // fraction du rayon : au-delà, on est « au bord »
+export const STAR_QUEEN_OPP_DOT = -0.45;   // les deux écarts au centre doivent s'opposer (≈ 117°)
+export const STAR_QUEEN_HALF = 0.5;        // seul : elle ne sort qu'à moitié du trou (fiction, pas barème)
+/* ⚠️⚠️ UNE SEULE RÉPONSE POUR LA JAUGE, LE TEXTE ET L'ARBITRE — la discipline du
+   456, tenue dès l'écriture cette fois. Sept états, dans l'ordre de L'ACTION LA
+   PLUS PROCHE (478) : ce qui manque d'abord se dit d'abord.
+   `other` peut être un joueur (`{x, y}`) ou l'épouvantail ; il n'a pas besoin de
+   `dir`, voir la note ci-dessus. */
+export const STAR_QUEEN_STEPS = ["away", "alone", "edge", "side", "moving", "watching", "holding"];
+export function starQueenStep(me, other, cx, cy, radius, ringPad) {
+  const R = radius === undefined ? STAR_CRATER_R : radius;
+  const pad = ringPad === undefined ? 1 : ringPad;
+  const dm = Math.hypot(me.x - cx, me.y - cy);
+  if (dm > R + pad) return "away";
+  if (!other) return "alone";
+  if (dm < R * STAR_QUEEN_EDGE_K) return "edge";
+  const dOther = Math.hypot(other.x - cx, other.y - cy);
+  if (dOther < R * STAR_QUEEN_EDGE_K || dOther > R + pad) return "side";
+  const ax = (me.x - cx) / (dm || 1), ay = (me.y - cy) / (dm || 1);
+  const bx = (other.x - cx) / (dOther || 1), by = (other.y - cy) / (dOther || 1);
+  if (ax * bx + ay * by > STAR_QUEEN_OPP_DOT) return "side";
+  if (me.moving) return "moving";
+  if (!starFacingAway(me.x, me.y, me.dir | 0, cx, cy)) return "watching";
+  return "holding";
+}
+
+/* ⚠️⚠️ LE BESOIN EST ÉCRIT UNE SEULE FOIS, POUR LES TROIS VERBES. La jauge et
+   l'arbitre liraient sinon deux durées différentes, et la barre serait pleine
+   avant (ou après) que l'étoile sorte — le paramètre-qui-en-double-un-autre du §8
+   de `CLAUDE.md`, sur la seule grandeur que le joueur REGARDE monter.
+   ⚠️ ZIP 479 — ELLE REMPLACE `starCalmNeed(soloAllowed)`, dont le paramètre
+   portait `starAlone(...)` sous un nom qui disait le contraire. Le nouveau est
+   explicite : `{ alone, partner }`. `partner` vaut `"player"`, `"effigy"` ou rien. */
+export function starTameNeed(siteId, ctx) {
+  const verb = starVerbOf(siteId) || (siteId === "crater" ? "pair" : "light");
+  if (verb === "pair") return (ctx && ctx.partner === "player") ? STAR_QUEEN_MS : STAR_QUEEN_SOLO_MS;
+  return (ctx && ctx.alone === false) ? STAR_CALM_MS : STAR_CALM_SOLO_MS;
+}
+
+/* ╔══════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 479 — DÉFAUT 10 : ELLE NE S'EFFACE PLUS, ELLE SE CACHE.
+   ╚══════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ LE REPROCHE DE L'AUDIT N'ÉTAIT PAS LE RAYON (`STAR_HIDE_R` = 4,5 ne bouge
+   pas) : c'est que la compagne passait à 22 % d'opacité EN UNE IMAGE, ce qui se
+   lit comme un défaut d'affichage et pas comme une intention. *Une chose qui
+   s'éteint d'un coup a l'air cassée ; une chose qui se range a l'air vivante.*
+   ⚠️⚠️ DEUX TEMPS, ET LE PREMIER EST UN DÉPLACEMENT : elle RENTRE d'abord vers le
+   joueur (`tuck`, elle glisse dans son dos et plonge dans l'herbe), ELLE PÂLIT
+   ENSUITE. Un fondu seul ne raconte rien ; un mouvement suivi d'un fondu raconte
+   « elle se planque ». Et elle ressort plus lentement qu'elle n'est rentrée — on
+   se cache vite, on se montre prudemment.
+   ⚠️ ELLE EST PURE ET RETOURNE DES NOMBRES, DONC `render-etoile` LA MESURE : une
+   courbe écrite dans la closure de la boucle de rendu serait le deuxième visage du
+   piège n°1 (elle vieillirait sans que rien ne le dise). */
+export const STAR_HIDE_IN_MS = 380;
+export const STAR_HIDE_OUT_MS = 620;
+export function starHideK(prev, dt, hidden) {
+  const p = Math.max(0, Math.min(1, +prev || 0));
+  const step = (Math.max(0, +dt || 0)) / (hidden ? STAR_HIDE_IN_MS : STAR_HIDE_OUT_MS);
+  return Math.max(0, Math.min(1, hidden ? p + step : p - step));
+}
+export function starHideAnim(k) {
+  const t = Math.max(0, Math.min(1, +k || 0));
+  /* Premier temps (t < ½) : elle se range. Second temps : elle s'éteint.
+     ⚠️ `tuck` est une FRACTION du chemin vers le joueur, jamais des pixels : les
+     trois cartes n'ont pas la même taille de tuile, et un décalage en pixels aurait
+     fait rentrer l'étoile plus loin en ville qu'à la ferme. */
+  const a = Math.min(1, t / 0.5), b = Math.max(0, (t - 0.5) / 0.5);
+  return {
+    tuck: a,                                   // 0 = à sa place ; 1 = dans le col du joueur
+    dip: a * 0.42,                             // elle plonge dans l'herbe, en cases
+    alpha: 1 - a * 0.45 - b * 0.43,            // 1 → 0,55 → 0,12
+    scale: 1 - a * 0.14 - b * 0.24,            // elle se tasse : 1 → 0,86 → 0,62
+  };
+}
 
 /* ───────────────────────────────────────────────────────────────────────────
    5. L'ÉTAT PARTAGÉ ET SES RÈGLES PURES.
@@ -2131,7 +2374,36 @@ export function newStar() {
        commandes du bûcheron, indexées par les clés du NAVIRE — jamais par un
        numéro d'étape, qui aurait été une seconde liste. */
     plan: { at: 0, by: "", done: 0 },
+    /* ⚠️⚠️ ZIP 480 — L'AUDIENCE CHEZ LE MAIRE. Sa forme est tenue par
+       `migrateMayor` (`components/ferme/maire.js`), jamais recopiée ici : un
+       second endroit qui décrirait les mêmes champs serait la divergence en
+       attente du §8. AUCUNE MIGRATION SUPABASE — il voyage dans `shared.star`,
+       dans un `apply` qui partait déjà. */
+    mayor: MA.migrateMayor({}).mayor,
     wood: {},       // clé de morceau -> { at, readyAt, done, by }
+    /* ╔══════════════════════════════════════════════════════════════════════════
+       ║ ZIP 479 — TROIS CHAMPS DE PLUS, UN PAR VERBE, ET PAS UN DE TROP.
+       ╚══════════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ AUCUNE MIGRATION SUPABASE : tout `shared.star` est déjà UN champ du
+       JSON de `ferme_saves` (voir l'en-tête). Trois clés courtes de plus dans un
+       `apply` qui partait déjà, c'est-à-dire zéro `send()` et zéro octet facturé
+       (§3 de `CLAUDE.md` : seul le NOMBRE de messages compte).
+       ⚠️ ET AUCUN NE PEUT SE DÉDUIRE, C'EST POURQUOI ILS EXISTENT :
+         · `offer`  — l'offrande de lumière bleue a été faite sur ce trou. On ne
+           peut pas la lire dans `f.inv.candies` : un stock ne se souvient pas
+           d'avoir été dépensé ;
+         · `candy`  — ce que CHAQUE joueur a rapporté DEPUIS LA CHUTE. Un flux,
+           pas un stock (voir `STAR_CANDY_PRICE`) ;
+         · `dish`   — le plat de la rose. Il est PARTAGÉ parce que le relais l'est :
+           « l'un cuisine, l'autre porte », et un plat local ne se passerait pas de
+           main en main ;
+         · `effigy` — l'épouvantail planté au bord du cratère. Il ne peut pas être
+           un objet de la carte de ville (celle-ci n'est jamais persistée, §6 de
+           `CLAUDE.md`), donc il vit ici, avec ce qui lui donne un sens. */
+    offer: {},      // id de lieu -> { by, at } — la lumière bleue a été offerte
+    candy: {},      // id de joueur -> bonbons rapportés depuis la chute
+    dish: null,     // { by, at, phase } — le plat chaud de l'étoile rose
+    effigy: null,   // { by, at, x, y } — le figurant de la reine, en solo
     gift: {},       // id de joueur -> { at, kind } — le crochet cosmétique (§8)
     seen: {},       // scènes déjà jouées : cartes de chapitre, « previously »
     doneAt: 0,
@@ -2153,7 +2425,13 @@ export function migrateStar(saved) {
     for (const id of Object.keys(saved.found)) {
       if (!STAR_SITE[id]) continue;                 // un lieu inconnu = une version d'après : on l'ignore
       const v = saved.found[id] || {};
+      /* ⚠️ ZIP 479 — `with` : LE SECOND JOUEUR EST NOMMÉ DANS LA TRACE, PAS
+         SEULEMENT REMERCIÉ DANS L'INSTANT. C'est ce que l'audit 477 reprochait au
+         duo : celui qui tient l'autre bord ne recevait rien, pas même son nom. Il
+         est facultatif (un apprivoisement solo n'en a pas) et il traverse la
+         migration comme `by`, tronqué de la même façon — il vient du réseau. */
       e.found[id] = { by: String(v.by || "?").slice(0, 24), at: +v.at || 0 };
+      if (v.with) e.found[id].with = String(v.with).slice(0, 24);
     }
   }
   /* 461 — compatibilité avec l'ancien chapitre du sillon. La trouvaille qui
@@ -2258,6 +2536,36 @@ export function migrateStar(saved) {
   if (saved.seen && typeof saved.seen === "object")
     for (const k of Object.keys(saved.seen)) if (saved.seen[k]) e.seen[String(k).slice(0, 32)] = true;
   e.doneAt = +saved.doneAt || 0;
+  /* ── ZIP 479 : les trois verbes. ⚠️⚠️ MÊME DISCIPLINE QUE PARTOUT AILLEURS ICI —
+     on RECONSTRUIT chaque sous-objet au lieu de faire confiance à sa forme, et un
+     lieu inconnu est « une version d'après » qu'on ignore. Une sauvegarde d'avant
+     ce zip n'a aucun des trois champs : offrande jamais faite, aucun bonbon frais,
+     pas de plat, pas d'épouvantail. C'est le bon comportement, et c'est le même
+     qu'au 469 pour `dug`.
+     ⚠️⚠️ ET LE PLAFOND D'IDENTIFIANT EST CELUI DE LA TENUE (`CALM_ID_MAX` = 64,
+     pour un `profile_id` de 36 signes), jamais un nombre rond : c'est très
+     exactement la troncature qui a fusionné deux clés au 469 et bloqué la quête. */
+  if (saved.offer && typeof saved.offer === "object") {
+    for (const id of Object.keys(saved.offer)) {
+      if (!STAR_SITE[id]) continue;
+      const v = saved.offer[id] || {};
+      e.offer[id] = { by: String(v.by || "?").slice(0, 24), at: +v.at || 0 };
+    }
+  }
+  if (saved.candy && typeof saved.candy === "object")
+    for (const k of Object.keys(saved.candy)) e.candy[String(k).slice(0, CALM_ID_MAX)] = Math.max(0, saved.candy[k] | 0);
+  /* ⚠️ UN PLAT SANS DATE N'EST PAS UN PLAT : `starDishPhase` rendrait `null` de
+     toute façon, mais un objet à moitié écrit se traînerait dans l'état persisté
+     et dans chaque `apply`. On le jette au chargement. */
+  if (saved.dish && typeof saved.dish === "object" && +saved.dish.at) {
+    e.dish = { by: String(saved.dish.by || "").slice(0, CALM_ID_MAX), at: +saved.dish.at || 0,
+               phase: saved.dish.phase === "cook" ? "cook" : "carry",
+               from: String(saved.dish.from || "").slice(0, CALM_ID_MAX) };
+  }
+  if (saved.effigy && typeof saved.effigy === "object" && Number.isFinite(+saved.effigy.x)) {
+    e.effigy = { by: String(saved.effigy.by || "").slice(0, CALM_ID_MAX), at: +saved.effigy.at || 0,
+                 x: +saved.effigy.x || 0, y: +saved.effigy.y || 0 };
+  }
   /* ── ZIP 454 : les plans et le bois. */
   if (saved.plan && typeof saved.plan === "object") {
     e.plan = { at: +saved.plan.at || 0, by: String(saved.plan.by || "").slice(0, 24), done: +saved.plan.done || 0 };
@@ -2293,8 +2601,18 @@ export function migrateStar(saved) {
      ⚠️ Une partie EN COURS, elle, n'est pas rattrapée : la chaîne du bûcheron
      commence là où elle en est, ce qui est le comportement voulu (on ne construit
      pas un bateau rétroactivement). */
+  /* ⚠️ ZIP 480 — l'audience se remigre par son propre fichier. Une sauvegarde
+     d'avant ce zip n'a rien : `migrateMayor` rend l'état vierge, donc le maire
+     n'a pas signé, donc la chaîne du bois attend une audience — ce qui est
+     exactement le comportement voulu pour une partie en cours. */
+  MA.migrateMayor(Object.assign(e, { mayor: saved.mayor }));
   if (e.doneAt) {
     e.plan.at = e.plan.at || e.doneAt; e.plan.done = e.plan.done || e.doneAt;
+    /* ⚠️⚠️ UNE PARTIE DÉJÀ FINIE A FORCÉMENT EU SON AUTORISATION : sans cette
+       ligne, la règle neuve REPRENDRAIT un navire achevé il y a trois semaines,
+       exactement le défaut que le bloc ci-dessous corrige pour le bois. Une
+       règle qui réécrit le passé n'est pas une règle, c'est un bogue daté. */
+    if (!e.mayor.ok) { e.mayor.ok = e.doneAt; e.mayor.grade = e.mayor.grade || "plain"; }
     for (const k of STAR_SHIP_KEYS)
       if (!e.wood[k]) e.wood[k] = { at: e.doneAt, readyAt: e.doneAt, done: true, by: "?" };
   }
@@ -2454,6 +2772,10 @@ export function starGoalKey(e, ctx) {
   if (starHas(e, "crater") && !starPlanAsked(e)) return "engineer";
   if (!first) {
     if (!starPlanReady(e)) return (ctx && ctx.engineerHere) ? "engineerWork" : "engineerTravel";
+    /* ⚠️ ZIP 480 — LA PASSE MAIRE PREND SA PLACE DANS LE BANDEAU, entre les plans
+       rendus et la première commande de bois. Sans cette clé, le joueur lirait
+       « commande la première pièce à Tristan » devant un bouton qui refuse. */
+    if (!MA.mayorSigned(e)) return "mayor";
     /* ╔══════════════════════════════════════════════════════════════════════════
        ║ ZIP 478 — `timber` COUVRAIT TROIS ÉTATS. C'EST LE DÉFAUT DU 475, REJOUÉ
        ║ PAR LA PASSE QUI L'AVAIT CORRIGÉ.
@@ -2484,8 +2806,13 @@ export function starGoalKey(e, ctx) {
      même geste que la fouille, donc il n'est plus « manquant » une fois
      fouillé (voir `starDug`, `resolveStarDig`). */
   if (STAR_FARM_STAR_IDS.includes(first) || (STAR_SITE[first] && STAR_SITE[first].spot === "starFarmImpact")) {
-    if (starDug(e, first) && STAR_SITE[first].content === "star") return "farmImpactTame";
     if (starDug(e, first) && STAR_SITE[first].content === "material") return "farmImpactCool";
+    /* ⚠️⚠️⚠️ ZIP 479 — `farmImpactTame` COUVRAIT DEUX ÉTOILES QUI NE FONT PLUS LE
+       MÊME GESTE. C'est le défaut du 475 une troisième fois, et il se rejoue
+       toujours de la même façon : une clé qui avait l'air homogène cesse de l'être
+       le jour où le code sous elle se dédouble. La sortie est la même qu'au 475 et
+       au 478 — on descend d'un cran, et c'est le VERBE qui décide. */
+    if (starDug(e, first) && STAR_SITE[first].content === "star") return starTameGoalKey(e, first, ctx);
     return "farmImpacts";
   }
   /* ⚠️⚠️ ZIP 471 — « TOMBÉ » CÔTÉ HÔTE N'EST PAS « TOMBÉ » CÔTÉ CE CLIENT.
@@ -2506,7 +2833,38 @@ export function starGoalKey(e, ctx) {
   /* ⚠️ L'ORDRE DE LA TABLE FAIT FOI, comme pour `starTargetSite` : le premier qui
      manque est celui qu'on cherche. Aucune liste parallèle. */
   if (first === "crater" && ctx && ctx.craterHot) return "craterHot";
+  /* ⚠️⚠️ ZIP 479 — LA REINE DEMANDE DEUX BORDS, DONC LE BANDEAU DOIT LE DIRE, et
+     il doit dire AUTRE CHOSE au joueur qui est seul et n'a pas encore planté son
+     figurant : celui-là n'a rien à tenir, il a un épouvantail à aller chercher.
+     Une seule phrase pour les deux aurait demandé de « se placer au bord opposé »
+     à quelqu'un qui n'a personne en face — la définition même de l'objectif qui
+     ment. `ctx.effigy` et `ctx.alone` viennent de l'appelant : la position du
+     cratère et la liste des joueurs ne sont pas des données de cette table. */
+  if (first === "crater" && !e.effigy && ctx && ctx.alone) return "craterAlone";
   return first;
+}
+/* ⚠️ LA CLÉ D'UN TROU D'ÉTOILE DÉJÀ FOUILLÉ — UNE PAR ÉTAT, ET C'EST LE POINT.
+   Sept états pour deux étoiles : la bleue en a trois (il me manque des bonbons /
+   je peux payer / c'est payé, à moi de me retourner), la gourmande en a quatre
+   (rien sur le feu / ça mijote / c'est prêt / je cours). Chacun demande un geste
+   DIFFÉRENT, donc chacun a sa phrase — c'est très exactement ce que l'audit
+   reprochait au chantier naval avant le 478.
+   ⚠️ ELLE EST EXPORTÉE POUR QUE LE BANC L'APPELLE SUR CHAQUE ÉTAT, plutôt que de
+   la deviner à travers `starGoalKey`. */
+export function starTameGoalKey(e, id, ctx) {
+  const verb = starVerbOf(id);
+  if (verb === "light") {
+    if (starLit(e, id)) return "farmImpactTame";
+    return (ctx && (ctx.candy | 0) >= STAR_CANDY_PRICE) ? "farmImpactLightPay" : "farmImpactLight";
+  }
+  if (verb === "warm") {
+    const ph = starDishPhase(e, ctx && ctx.now);
+    if (ph === "carry") return "farmImpactCarry";
+    if (ph === "ready") return "farmImpactTake";
+    if (ph === "cook") return "farmImpactSimmer";
+    return "farmImpactWarm";
+  }
+  return "farmImpactTame";
 }
 /* Toutes les clés que `starGoalKey` peut rendre — DÉRIVÉES de la table, pour que
    le banc vérifie qu'aucune n'est orpheline de texte. ⚠️ C'est le contrôle qui
@@ -2519,9 +2877,18 @@ export const STAR_GOAL_KEYS = (() => {
        `farmImpacts`, POUR LA MÊME RAISON QUE `craterHot`/`engineer` naissent à
        côté de `crater` : elles ne sont pas des lieux de plus, elles sont des
        ÉTATS du même lieu (voir `starGoalKey`). */
-    if (s.spot === "starFarmImpact") { if (!out.includes("farmImpacts")) out.push("farmImpacts", "farmImpactTame", "farmImpactCool"); continue; }
+    /* ⚠️ ZIP 479 — SEPT CLÉS POUR LES TROUS D'ÉTOILE (voir `starTameGoalKey`) : le
+       banc vérifie ici qu'aucune n'est orpheline de texte, ce qui est le seul
+       moyen d'ajouter un état sans afficher `undefined` dans le bandeau. */
+    if (s.spot === "starFarmImpact") {
+      if (!out.includes("farmImpacts"))
+        out.push("farmImpacts", "farmImpactCool", "farmImpactTame",
+                 "farmImpactLight", "farmImpactLightPay",
+                 "farmImpactWarm", "farmImpactSimmer", "farmImpactTake", "farmImpactCarry");
+      continue;
+    }
     out.push(s.id);
-    if (s.id === "crater") out.push("craterHot", "engineer");
+    if (s.id === "crater") out.push("craterHot", "craterAlone", "engineer");
   }
   /* ⚠️ ZIP 454 — les clés de la construction. Elles ne sont pas dérivées de
      `STAR_SITES` parce qu'elles ne sont pas des LIEUX : deux désignent une
@@ -2533,7 +2900,12 @@ export const STAR_GOAL_KEYS = (() => {
   /* ⚠️ ZIP 478 — `timber` DEVIENT TROIS CLÉS, même geste qu'au 470 pour l'attente
      de l'ingénieur et qu'au 475 pour le trou fouillé : la même étape, mais plus la
      même phrase selon ce qu'on peut faire. */
-  out.push("townWait", "engineerTravel", "engineerWork", "timberOrder", "timberWait", "timberRaise");
+  /* ⚠️ ZIP 480 — `mayor` s'ajoute ici pour la même raison que les trois du 478 :
+     ce n'est pas un LIEU (l'audience se tient à la mairie, qui a déjà son
+     adresse), c'est une ÉTAPE, et cette liste ne sert qu'à obliger le banc à
+     réclamer sa phrase de bandeau dans les deux langues. */
+  out.push("townWait", "engineerTravel", "engineerWork", "mayor",
+           "timberOrder", "timberWait", "timberRaise");
   return out;
 })();
 
@@ -2744,12 +3116,18 @@ export function resolveStarTimberRaise(e, key, who, now) {
    sans jamais compter deux fois — la règle du 439 (« un panneau qui s'ouvre à
    volonté ne doit rien donner ») tenue par la forme de la donnée et non par un
    garde-fou qu'on peut oublier. */
-export function resolveStarFound(e, id, who, now) {
+/* ⚠️ ZIP 479 — `withWho` EST LE SECOND JOUEUR, ET IL EST FACULTATIF. Il ne change
+   RIEN à ce que la trouvaille accorde : il l'ÉCRIT, pour que la scène et la trace
+   de fin puissent le nommer (défaut de l'audit 477 : « le second joueur ne reçoit
+   rien »). Un paramètre absent laisse `found[id]` exactement tel qu'il était avant
+   ce zip — c'est ce qui rend la passe sûre pour les onze appelants existants. */
+export function resolveStarFound(e, id, who, now, withWho) {
   const site = STAR_SITE[id];
   if (!site) return { ok: false };
   if (site.req && !site.req.every(r => starHas(e, r))) return { ok: false, locked: true };
   if (starHas(e, id)) return { ok: true, already: true, crossed: [] };
   e.found[id] = { by: String(who || "?").slice(0, 24), at: now };
+  if (withWho) e.found[id].with = String(withWho).slice(0, 24);
   /* ⚠️⚠️ ZIP 469 — TROUVER IMPLIQUE AVOIR FOUILLÉ, ET C'EST ÉCRIT ICI UNE SEULE
      FOIS. Le menu dev, les migrations et le résolveur d'apprivoisement passent
      tous par cette porte : sans cette ligne, un raccourci de développeur laisserait
@@ -2779,11 +3157,36 @@ export function resolveStarFound(e, id, who, now) {
    vient de coûter un blocage. */
 export const CALM_ID_MAX = 64;                                   // un UUID en fait 36
 export const CALM_KEY_MAX = 40 + 1 + CALM_ID_MAX + 3;            // lieu + « : » + joueur + « :t0 »
-export function resolveStarCalm(e, who, now, soloAllowed, siteId) {
+/* ⚠️⚠️⚠️ ZIP 479 — LE QUATRIÈME PARAMÈTRE CHANGE DE FORME, ET C'EST DÉLIBÉRÉ. Il
+   s'appelait `soloAllowed` et portait `starAlone(...)`, c'est-à-dire l'INVERSE de
+   ce que son nom disait ; il porte maintenant un contexte explicite
+   `{ alone, partner }`. Un paramètre dont le nom ment est une divergence en
+   attente qui se paie au premier lecteur — celui-ci a tenu quatre zips.
+   ⚠️ `partner` vaut `"player"`, `"effigy"` ou rien : c'est ce que la reine lit
+   pour choisir entre vingt et soixante secondes (`starTameNeed`). */
+export function resolveStarCalm(e, who, now, ctx, siteId) {
   const target = siteId || "crater";
   const site = STAR_SITE[target];
   if (!site || (target !== "crater" && site.content !== "star")) return { ok: false };
   if (starHas(e, target)) return { ok: true, already: true, crossed: [] };
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 479 — CHAQUE ÉTOILE SON VERBE, ET L'ARBITRE LE TIENT.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ LA ROSE NE S'APPRIVOISE PAS EN LUI TOURNANT LE DOS, elle vient au plat
+     chaud (`resolveStarDishServe`). Sans cette ligne, les deux gestes ouvriraient
+     le même trou et le lot entier ne servirait à rien : le joueur découvrirait par
+     hasard que la vieille posture marche encore, donc il ne cuisinerait jamais.
+     ⚠️ ET LA BLEUE DEMANDE SON OFFRANDE D'ABORD. Le refus est SILENCIEUX (`ok:
+     false`, donc sans diffusion, §3) : le client ne demande pas tant que l'invite
+     n'est pas passée (`starTameTarget`), c'est la ceinture et non la bretelle —
+     un second client d'une version d'avant ne doit pas pouvoir sauter le geste. */
+  const verb = starVerbOf(target);
+  /* ⚠️ LA ROSE SE REFUSE TOUT DE SUITE (son geste est ailleurs) ; LA BLEUE, ELLE,
+     SE REFUSE **APRÈS** LA FOUILLE. L'ordre est celui du joueur : on gratte, on
+     découvre une lumière bleue, et ALORS on apprend qu'elle veut une offrande. Un
+     refus « il lui faut des bonbons » sur un trou intact annoncerait ce qu'il y a
+     dedans avant de l'avoir ouvert — la cinquième porte du 448, encore. */
+  if (verb === "warm") return { ok: false, wrongVerb: true, verb };
   /* ⚠️⚠️ ZIP 469 — ON N'APPRIVOISE PAS UNE ÉTOILE QU'ON N'A PAS DÉTERRÉE. L'ordre
      du geste est celui de la demande de Guillaume : on fouille, l'overlay dit ce
      qu'il y a, ET ALORS l'apprivoisement commence. Sans cette garde, un joueur qui
@@ -2794,6 +3197,7 @@ export function resolveStarCalm(e, who, now, soloAllowed, siteId) {
      Cette ligne est la ceinture, pas la bretelle — un second client d'une version
      d'avant ne doit pas pouvoir sauter le chapitre. */
   if (site.spot === "starFarmImpact" && !starDug(e, target)) return { ok: false, unDug: true };
+  if (verb === "light" && !starLit(e, target)) return { ok: false, unlit: true, verb };
   /* ⚠️⚠️ ZIP 446 — ON NE SORT PAS UNE ÉTOILE D'UN TROU BRÛLANT. L'hôte compare
      deux dates de SA propre horloge (`now` et `e.fall`), donc la règle du §3
      tient par construction, exactement comme les deux serrures du 442.
@@ -2838,10 +3242,177 @@ export function resolveStarCalm(e, who, now, soloAllowed, siteId) {
      ⚠️ ET LE PLANCHER SE TESTE APRÈS LE RACCOURCI, pas avant : deux joueurs qui
      tiennent ensemble depuis dix secondes ouvrent le trou par le chemin court, et
      c'est le chemin court qui doit être crédité (`both: true` chez les deux). */
-  const need = soloAllowed === false ? STAR_CALM_MS : STAR_CALM_SOLO_MS;
-  if (mine >= need)
-    return { ...resolveStarFound(e, target, who, now), opened: true, both: soloAllowed === false, site: target };
-  return { ok: true, holding: mine, both: soloAllowed === false, need, site: target, crossed: [] };
+  /* ⚠️⚠️ ZIP 479 — LE BESOIN VIENT DE `starTameNeed`, ET DE NULLE PART AILLEURS.
+     Il était écrit ICI **et** dans `starCalmNeed` : deux écritures de la même
+     durée, à cinq cents lignes l'une de l'autre, dont l'une servait la jauge et
+     l'autre le verdict. Elles disaient la même chose — jusqu'au jour où la reine
+     a eu son propre barème, c'est-à-dire aujourd'hui. */
+  const both = (verb === "pair") ? (ctx && ctx.partner === "player") : (ctx && ctx.alone === false);
+  const need = starTameNeed(target, ctx);
+  if (mine >= need) {
+    /* ⚠️ LE SECOND JOUEUR EST NOMMÉ DANS LA TROUVAILLE, pas seulement dans le
+       chat : c'est ce qui permet à la trace de fin de le nommer une heure plus
+       tard (voir `resolveStarFound`). Un épouvantail n'est pas un nom — il n'a
+       tenu personne compagnie, il a tenu un bord. */
+    const mate = (ctx && ctx.partner === "player" && ctx.mate) ? ctx.mate : null;
+    /* ⚠️⚠️ ZIP 479 — `who` EST UN IDENTIFIANT, PAS UN NOM, ET LA TROUVAILLE VEUT UN
+       NOM. C'est un défaut hérité qui ne se voyait pas : `resolveStarCalm` reçoit
+       `f.id` (il lui faut une clé de tenue STABLE, un nom ne l'est pas — deux
+       fermiers peuvent porter le même), et il le passait tel quel à
+       `resolveStarFound`, donc `found.by` contenait un UUID pour toute étoile
+       apprivoisée. Personne ne l'affichait — jusqu'à ce que la trace de fin veuille
+       nommer les deux joueurs. `ctx.name` porte donc le nom, et l'identifiant reste
+       ce qui arbitre. */
+    const byName = (ctx && ctx.name) ? ctx.name : who;
+    return { ...resolveStarFound(e, target, byName, now, mate), opened: true, both: !!both,
+             site: target, half: verb === "pair" && !both, mate };
+  }
+  return { ok: true, holding: mine, both: !!both, need, site: target, crossed: [] };
+}
+
+/* ╔══════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 479 — LES TROIS VERBES, ARBITRÉS. (lot 3b)
+   ╚══════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ AUCUN DE CES RÉSOLVEURS N'APPLIQUE QUOI QUE CE SOIT AU FERMIER : ils
+   rendent ce qu'il faut PRÉLEVER (`spend`) et l'hôte le prélève. C'est la forme du
+   442 tenue partout dans ce fichier, et elle vaut ici plus qu'ailleurs — un
+   résolveur qui toucherait `f.inv` serait impossible à rejouer dans un banc, donc
+   le seul geste de la quête qui coûte quelque chose serait aussi le seul qu'aucun
+   contrôle ne regarde. */
+
+/* ── LA BLEUE, 1/2 : LE FLUX DE BONBONS.
+   ⚠️⚠️ APPELÉ PAR L'HÔTE AU MOMENT MÊME OÙ IL CRÉDITE `f.inv.candies` (fin de
+   course, réussie ou ratée), et jamais ailleurs : c'est ce qui rend le compteur
+   HONNÊTE. Le lire après coup en comparant deux instantanés du stock aurait
+   confondu « rapporté » et « pas encore dépensé ».
+   ⚠️ AVANT LA CHUTE, IL N'ACCUMULE RIEN — « la lumière bleue s'éteint en dormant ».
+   Une course faite la veille de l'annonce ne compte pas, et c'est la règle qui
+   empêche une vieille ferme d'acheter le chapitre d'avance. */
+export function resolveStarCandy(e, who, n, now) {
+  const add = Math.max(0, n | 0);
+  if (!e || !starFallen(e) || !who || !add) return { ok: false };
+  if (now !== undefined && +now < e.fall) return { ok: false, tooEarly: true };
+  const k = String(who).slice(0, CALM_ID_MAX);
+  e.candy[k] = starCandyFresh(e, k) + add;
+  return { ok: true, fresh: e.candy[k], need: STAR_CANDY_PRICE };
+}
+/* ── LA BLEUE, 2/2 : L'OFFRANDE.
+   ⚠️⚠️ LE PRIX EST LE FLUX, ET LE SAC N'EST QUE CE QU'ON DÉBITE. Le premier jet
+   exigeait les deux (`fresh >= 60` ET `purse >= 60`) au nom de la ceinture et de la
+   bretelle ; c'était du poids mort et c'était nuisible. **Du poids mort**, parce
+   que le stock est toujours supérieur ou égal au flux par construction : les deux
+   grandissent ensemble (`resolveStarCandy` est appelé à l'instant même où l'hôte
+   crédite `f.inv.candies`) et rien d'autre au monde ne dépense de bonbons.
+   **Nuisible**, parce que le bouton dev qui remplit le flux ne peut pas remplir le
+   sac sans devenir une troisième exception à la règle « aucun bouton de quête ne
+   donne rien » (§10 de `CLAUDE.md`) — donc le geste serait devenu injugeable.
+   ⚠️ `spend` EST DONC BORNÉ PAR CE QUI EST VRAIMENT LÀ : l'hôte retire ce qu'il
+   peut, jamais plus. Une soustraction qui passerait sous zéro serait invisible
+   jusqu'au prochain ramassage, et c'est le seul risque réel qu'il fallait fermer. */
+export function resolveStarLight(e, who, siteId, purse, now) {
+  const id = String(siteId || "");
+  if (starVerbOf(id) !== "light") return { ok: false };
+  if (!starDug(e, id)) return { ok: false, unDug: true };
+  if (starHas(e, id)) return { ok: false, already: true };
+  if (starLit(e, id)) return { ok: false, already: true, lit: true };
+  const k = String(who || "").slice(0, CALM_ID_MAX);
+  const fresh = starCandyFresh(e, k);
+  if (fresh < STAR_CANDY_PRICE) return { ok: false, short: true, have: fresh, need: STAR_CANDY_PRICE };
+  e.candy[k] = fresh - STAR_CANDY_PRICE;
+  e.offer[id] = { by: k, at: +now || 0 };
+  return { ok: true, spend: Math.min(STAR_CANDY_PRICE, Math.max(0, purse | 0)), site: id, left: e.candy[k] };
+}
+
+/* ── LA ROSE : CUIRE, PORTER, PASSER, SERVIR.
+   ⚠️⚠️ QUATRE GESTES ET UN SEUL CHAMP (`e.dish`), parce qu'il n'y a jamais qu'UN
+   plat. Un dictionnaire par joueur aurait permis de cuisiner chacun dans son coin,
+   c'est-à-dire de supprimer le relais qui est toute la raison de cette mécanique.
+   ⚠️ ET LE PLAT N'EST PAS UN OBJET D'INVENTAIRE : le mettre dans `f.inv` l'aurait
+   rendu INVISIBLE à l'autre joueur, donc impossible à passer de main en main sans
+   inventer un échange. Ici, « qui le porte » est une donnée du monde. */
+export function resolveStarCook(e, who, now) {
+  const id = STAR_WARM_SITE;
+  if (!id) return { ok: false };
+  if (!starDug(e, id)) return { ok: false, unDug: true };
+  if (starHas(e, id)) return { ok: false, already: true };
+  const ph = starDishPhase(e, now);
+  /* ⚠️ UN PLAT FROID NE BLOQUE PAS LE CHAUDRON : il est perdu, on recommence. Le
+     refuser aurait demandé au joueur d'aller « jeter » quelque chose qu'il ne voit
+     plus, c'est-à-dire une corvée pour rien. */
+  if (ph && ph !== "cold") return { ok: false, busy: true, phase: ph };
+  e.dish = { by: String(who || "").slice(0, CALM_ID_MAX), at: +now || 0, phase: "cook", from: "" };
+  return { ok: true, readyAt: (+now || 0) + STAR_DISH_COOK_MS };
+}
+/* Prendre le plat au chaudron. ⚠️ N'IMPORTE QUI PEUT LE PRENDRE, et c'est le
+   relais dans sa forme la plus simple : celui qui cuisine n'est pas forcément
+   celui qui court. */
+export function resolveStarDishTake(e, who, now) {
+  if (starDishPhase(e, now) !== "ready") return { ok: false };
+  const k = String(who || "").slice(0, CALM_ID_MAX);
+  /* ⚠️⚠️ `from` GARDE LA MAIN PRÉCÉDENTE, ET C'EST LUI QUI NOMMERA LE SECOND
+     JOUEUR À L'ARRIVÉE. Sans ce champ, « l'un cuisine, l'autre porte » se
+     terminerait par une trace au nom du seul porteur — très exactement le défaut
+     « le second joueur ne reçoit rien » de l'audit 477, reproduit sur le verbe
+     qu'on écrit pour le corriger. */
+  e.dish = { by: k, at: +now || 0, phase: "carry", from: e.dish.by !== k ? e.dish.by : "" };
+  return { ok: true };
+}
+/* ⚠️⚠️ LE PASSAGE DE MAIN REMET LA JAUGE À PLEIN, ET C'EST LA DÉCISION DE
+   CONCEPTION DE TOUT LE VERBE : à deux, le trajet se fait en deux moitiés fraîches
+   au lieu d'une longue. Le duo n'est donc pas une serrure (458), c'est une façon
+   plus SÛRE de faire la même chose — exactement ce qu'on veut d'une coopération. */
+export function resolveStarDishPass(e, who, now) {
+  if (starDishPhase(e, now) !== "carry") return { ok: false };
+  const k = String(who || "").slice(0, CALM_ID_MAX);
+  if (!k || e.dish.by === k) return { ok: false, mine: true };
+  const from = e.dish.by;
+  e.dish = { by: k, at: +now || 0, phase: "carry", from };
+  return { ok: true, from };
+}
+/* Servir. ⚠️ `name`/`mate` NE SERVENT QU'À LA TRACE : ce sont des noms de fermier,
+   donc ils viennent du réseau et `resolveStarFound` les tronque. L'identité qui
+   ARBITRE reste `who`, l'identifiant. */
+export function resolveStarDishServe(e, who, now, name, mate) {
+  const id = STAR_WARM_SITE;
+  const k = String(who || "").slice(0, CALM_ID_MAX);
+  if (starDishPhase(e, now) !== "carry" || e.dish.by !== k) return { ok: false };
+  if (!starDug(e, id)) return { ok: false, unDug: true };
+  if (starHas(e, id)) return { ok: false, already: true };
+  e.dish = null;
+  return { ...resolveStarFound(e, id, name || k, now, mate), opened: true, site: id, mate: mate || null };
+}
+/* Le plat a refroidi. ⚠️ C'EST UN GESTE D'ARBITRE, PAS UNE LECTURE : `starDishPhase`
+   se contente de dire « cold », et c'est ici — une fois, chez l'hôte — que l'objet
+   disparaît. Une fonction de lecture qui efface est la pire chose qu'on puisse
+   donner à un banc : il mesurerait un monde que son propre appel vient de changer. */
+export function resolveStarDishTick(e, now) {
+  if (starDishPhase(e, now) !== "cold") return { ok: false };
+  const by = e.dish.by;
+  e.dish = null;
+  return { ok: true, lost: true, by };
+}
+
+/* ── LA REINE : LE FIGURANT.
+   ⚠️⚠️ IL COÛTE UN ÉPOUVANTAIL DU SAC (`SCARECROW_COST` = 400 or à la boutique),
+   et c'est le second objet décoratif que ce lot remet en service après les
+   bonbons. Ce n'est PAS une serrure : l'épouvantail s'achète, l'or se gagne, et le
+   texte de l'objectif le dit — aucune configuration de joueurs, ni de sac, ne peut
+   fermer la reine définitivement.
+   ⚠️ LE REPLANTER NE COÛTE RIEN (`spend: 0`) : on le déterre et on le repique
+   trois cases plus loin. Faire payer un ajustement de position aurait puni le
+   joueur pour avoir mal visé un bord qu'aucune ligne ne dessine.
+   ⚠️⚠️ ET LA GÉOMÉTRIE VIENT DE L'APPELANT (`cx`, `cy`, `R`) : le cratère est une
+   position dérivée de la CARTE DE VILLE, laquelle n'est jamais persistée (§6 de
+   `CLAUDE.md`). La recalculer ici obligerait `quete.js` à importer le générateur —
+   une arête de plus entre le moteur et une histoire, celle-là même que le 444 a
+   coupée. */
+export function resolveStarEffigy(e, who, x, y, cx, cy, R, now) {
+  if (starHas(e, "crater")) return { ok: false, already: true };
+  const d = Math.hypot(x - cx, y - cy);
+  if (d < R * STAR_QUEEN_EDGE_K || d > R + 1) return { ok: false, offEdge: true };
+  const moved = !!e.effigy;
+  e.effigy = { by: String(who || "").slice(0, CALM_ID_MAX), at: +now || 0, x: +x, y: +y };
+  return { ok: true, spend: moved ? 0 : 1, moved };
 }
 
 /* ⚠️⚠️ LE CROCHET COSMÉTIQUE — L'ARBITRAGE MAINTENANT, LE CONTENU PLUS TARD.
@@ -2907,7 +3478,11 @@ export function resolveStarGift(e, playerIds, now) {
 /* ⚠️ ZIP 478 — « deliver » S'INSÈRE AVANT « timber », dans l'ordre où ça se joue :
    les plans, puis le bois livré (à monter), puis le bois posé. Un menu rangé dans
    l'ordre du jeu se lit sans le connaître. */
-export const STAR_DEV_OPS = ["reset", "warn", "start", "chapter", "skip", "all", "plans", "deliver", "timber"];
+/* ⚠️ ZIP 479 — DEUX OPS DE PLUS, UNE PAR VERBE COÛTEUX. Le troisième (l'épouvantail
+   de la reine) n'en a PAS besoin et c'est délibéré : il ne coûte qu'un objet à 400
+   or, que le bouton « Argent » du menu dev sait déjà donner. Un bouton par geste
+   aurait été un bouton de plus à tenir pour rien. */
+export const STAR_DEV_OPS = ["reset", "warn", "start", "candy", "dish", "chapter", "skip", "all", "plans", "deliver", "timber"];
 /* ⚠️ ZIP 469 — `turn` (le retournement) sort de la liste : sa scène est supprimée
    dans `FermeGame`, et un bouton qui rejoue une scène qui n'existe plus ouvre un
    voile noir de sept secondes sur rien. */
@@ -2921,7 +3496,11 @@ export const STAR_DEV_SCENES = ["warn", "fall", "townFall", "end"];
    reste entière pour tout le monde, y compris pour l'hôte qui arme la chute. */
 const DEV_GATE = { skills: C.STAR_GATE_SKILLS, artisans: C.STAR_GATE_ARTISANS };
 
-export function devStar(e, op, now) {
+/* ⚠️ ZIP 479 — UN QUATRIÈME PARAMÈTRE, `who`, ET UN SEUL BOUTON S'EN SERT. La
+   bourse de lumière bleue est indexée PAR JOUEUR (`e.candy`, comme
+   `f.inv.candies`) : un raccourci de développeur qui ne saurait pas qui clique
+   remplirait la poche de personne. Les autres opérations l'ignorent. */
+export function devStar(e, op, now, who) {
   const t = now || Date.now();
   if (op === "reset") return { star: newStar(), ok: true };
   /* ⚠️⚠️ ZIP 455 — « ▶ START » SAUTE LE TAMPON, ET C'EST SA RAISON D'ÊTRE. Il
@@ -2979,6 +3558,39 @@ export function devStar(e, op, now) {
     if (!e.fall) e.fall = t;
     if (!starPlanAsked(e)) e.plan = { at: t, by: "\u{1F6E0}\uFE0F", done: t };
     for (const k of STAR_SHIP_KEYS) e.wood[k] = { at: t, readyAt: t, done: false, ready: true, by: "\u{1F6E0}\uFE0F" };
+    return { star: e, ok: true };
+  }
+  /* ╔═════════════════════════════════════════════════════════════════════════════
+     ║ ZIP 479 — TROIS BOUTONS POUR TROIS VERBES, ET C'EST LA MÊME RAISON QU'AU 478.
+     ╚═════════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ SANS EUX, CHACUN DES TROIS GESTES COÛTE UNE COURSE, UNE CUISSON OU UN
+     ACHAT AVANT LA PREMIÈRE SECONDE DE JEU — c'est-à-dire qu'on ne les jugerait
+     qu'une fois, ce qui est exactement ce qui est arrivé au mini-jeu de
+     refroidissement pendant vingt-cinq zips (§15.3 de `QUETE.md`).
+     ⚠️⚠️ ET AUCUN NE SAUTE LE GESTE QU'IL SERT À JUGER : `candy` remplit la bourse
+     et laisse l'offrande à faire ; `dish` pose un plat chaud dans les mains et
+     laisse tout le TRAJET, qui est le verbe ; `effigy` plante le figurant et laisse
+     la minute de tenue. On saute la préparation, jamais la scène — c'est la ligne
+     que le menu dev tient depuis le 444 (« on saute la lecture, on ne gagne rien »).
+     ⚠️ LES TROUS SONT FOUILLÉS AU PASSAGE parce que les trois résolveurs le
+     réclament : un bouton qui rendrait un état impossible (une bourse pleine devant
+     un cratère intact) ferait juger un jeu que personne ne peut atteindre. */
+  if (op === "candy") {
+    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "\u{1F6E0}️" };
+    if (!e.fall) e.fall = t;
+    if (STAR_LIGHT_SITE) resolveStarDig(e, STAR_LIGHT_SITE, "\u{1F6E0}️", t);
+    /* ⚠️ ET IL NE DONNE PAS DE BONBONS AU FERMIER : il remplit le FLUX (« rapporté
+       depuis la chute »), pas le stock. Le sac reste ce qu'il est, donc l'offrande
+       échouera si le joueur n'a vraiment rien — ce qui est le bon comportement, et
+       ce qui permet de juger le refus autant que la réussite. */
+    resolveStarCandy(e, String(who || ""), STAR_CANDY_PRICE, t);
+    return { star: e, ok: true };
+  }
+  if (op === "dish") {
+    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "\u{1F6E0}️" };
+    if (!e.fall) e.fall = t;
+    if (STAR_WARM_SITE) resolveStarDig(e, STAR_WARM_SITE, "\u{1F6E0}️", t);
+    e.dish = { by: "", at: t - STAR_DISH_COOK_MS, phase: "cook", from: "" };
     return { star: e, ok: true };
   }
   if (op === "chapter") {
