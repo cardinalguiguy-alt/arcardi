@@ -4782,6 +4782,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         out.chat = { from: "⚗️", msg: L.evilCauldronPickedToast };
         dirtyRef.current = true;
       }
+    } else if (req.kind === "evilShardsPickup") {
+      // Éclats de comète (hors-zip, demande Guillaume) : même esprit que
+      // evilCauldronPickup juste au-dessus — la carte maléfique n'existe pas
+      // côté hôte, mais l'unicité du tas pour TOUTE la ferme exige une
+      // décision arbitrée par l'hôte.
+      const r = E.resolveEvilShardsPickup(f, s.salveCraft);
+      if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+      if (r.toast) out.toast = { id: f.id, key: r.toast };
+      if (r.taken) {
+        out.salveCraft = s.salveCraft;
+        out.chat = { from: "✨", msg: L.evilShardsPickedToast };
+        dirtyRef.current = true;
+      }
     } else if (req.kind === "cauldronPlace") {
       // Pose/retrait du chaudron ramené (outil Construction, variante
       // "cauldron", chantier 2026-07) — même mécanique que "act"/"mill",
@@ -7118,7 +7131,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (key === "starNoScarecrow") return L.star.s2.noScarecrow;
     if (key === "starNoTristan") return L.star.plan.noTristan;
     if (key === "starUnbuilt") { const t = n || {}; return L.star.plan.unbuilt(t.n | 0, t.total | 0); }
-    return { tired: L.toastTired, farShop: L.toastFarShop, farMarket: L.toastFarMarket, marketNothing: L.toastMarketNothing, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, millPlaced: L.toastMillPlaced, millTaken: L.toastMillTaken, millGround: L.toastMillGround, millOccupied: L.toastMillOccupied, millOnCrop: L.toastMillOnCrop, noMillBuilt: L.toastNoMillBuilt, millBuilding: L.toastMillBuilding, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, noSucrerieStock: L.toastNoSucrerieStock, sucrerieNotEmpty: L.toastSucrerieNotEmpty, noCaneToDeposit: L.toastNoCaneToDeposit, sucrerieFull: L.toastSucrerieFull, actionFailed: L.toastActionFailed, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, reneCoffeeCooldown: L.toastReneCoffeeCooldown, tristanNotHere: L.toastTristanNotHere, tristanCoffeeCooldown: L.toastTristanCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, kickRefused: L.kickRefused, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy, balloonNotBoarding: L.toastBalloonNotBoarding, balloonFull: L.toastBalloonFull,
+    return { tired: L.toastTired, farShop: L.toastFarShop, farMarket: L.toastFarMarket, marketNothing: L.toastMarketNothing, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, millPlaced: L.toastMillPlaced, millTaken: L.toastMillTaken, millGround: L.toastMillGround, millOccupied: L.toastMillOccupied, millOnCrop: L.toastMillOnCrop, noMillBuilt: L.toastNoMillBuilt, millBuilding: L.toastMillBuilding, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, noSucrerieStock: L.toastNoSucrerieStock, sucrerieNotEmpty: L.toastSucrerieNotEmpty, noCaneToDeposit: L.toastNoCaneToDeposit, sucrerieFull: L.toastSucrerieFull, actionFailed: L.toastActionFailed, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, reneCoffeeCooldown: L.toastReneCoffeeCooldown, tristanNotHere: L.toastTristanNotHere, tristanCoffeeCooldown: L.toastTristanCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, shardsAlreadyTaken: L.toastShardsAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, kickRefused: L.kickRefused, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy, balloonNotBoarding: L.toastBalloonNotBoarding, balloonFull: L.toastBalloonFull,
       /* zip 398 — vergers et produits */
       orchardBusy: L.toastOrchardBusy, orchardGround: L.toastOrchardGround, orchardMax: L.toastOrchardMax,
       orchardNoSapling: L.toastOrchardNoSapling, orchardYoung: L.toastOrchardYoung,
@@ -16203,6 +16216,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           } });
         }
       }
+      // Éclats de comète (hors-zip, demande Guillaume) : même mécanique que le
+      // chaudron-artéfact juste au-dessus — point fixe (EVIL_SHARDS_SPAWN),
+      // PAS un objet de ew.objects, disparaît pour tout le monde une fois pris
+      // (s.salveCraft.shardsTaken). ⚠️ SEULEMENT AU MONDE "evil" : contrairement
+      // au chaudron, sa case n'est garantie dégagée QUE dans generateEvilWorld
+      // (voir mustClear, fermeEngine.js) — les quatre autres mondes du passage
+      // (candy/maze/crystal/meadow) n'ont jamais besoin de la dégager, puisque
+      // le chapitre "lure" force déjà le passage sur "evil" pendant toute sa
+      // durée (voir applyForcedWorld, `needsEvil`). Dessiné inline plutôt qu'un
+      // sprite fermeArt dédié : un point d'intérêt unique de plus n'a pas à
+      // grossir le compte de canevas retenus (§10 de CLAUDE.md).
+      if (ew.spec && ew.spec.key === "evil" && !(sharedRef.current.salveCraft && sharedRef.current.salveCraft.shardsTaken)) {
+        const sx = C.EVIL_SHARDS_SPAWN.x, sy = C.EVIL_SHARDS_SPAWN.y;
+        if (sx >= x0 - 1 && sx <= x1 + 1 && sy >= y0 - 1 && sy <= y1 + 1) {
+          draws.push({ y: (sy + 1) * T, fn: () => {
+            const glow = 0.45 + Math.sin(now / 300) * 0.25;
+            const px = sx * T, py = sy * T;
+            ctx.save();
+            ctx.shadowBlur = 14;
+            const pebbles = [[3, 10, 5, false], [8, 11, 4, true], [11, 9, 4.5, false], [7, 7, 3.5, true]];
+            for (const [dx, dy, r, violet] of pebbles) {
+              ctx.shadowColor = violet ? `rgba(180, 110, 230, ${glow})` : `rgba(240, 230, 255, ${glow})`;
+              ctx.fillStyle = violet ? "#b46ee0" : "#f4ecff";
+              ctx.beginPath(); ctx.arc(px + dx, py + dy, r, 0, 7); ctx.fill();
+            }
+            ctx.restore();
+          } });
+        }
+      }
       draws.push({ y: (m.y + 1) * T, fn: () => drawSelf(m) });
       // Créatures maléfiques (chantier 2026-07, demande Guillaume) : réutilise
       // le sprite loup (mêmes 4 frames de marche, même mécanique d'animT que
@@ -16430,6 +16472,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // marchant sur la porte du pont, comme le défi de fuite sur la sienne —
       // une seule porte d'entrée au lieu de deux.
       if (!ppk && !cauldronDone && nearTile(C.EVIL_CAULDRON_SPAWN) && passSpec && passSpec.key === "evil") ppk = "evilCauldronPickup";
+      // Éclats de comète (hors-zip) : même invite que le chaudron juste au-dessus.
+      const shardsDone = sharedRef.current.salveCraft && sharedRef.current.salveCraft.shardsTaken;
+      if (!ppk && !shardsDone && nearTile(C.EVIL_SHARDS_SPAWN) && passSpec && passSpec.key === "evil") ppk = "evilShardsPickup";
       setPromptKeyThrottled(ppk);
     }
     function blockedEvil(ew, x, y) {
@@ -19053,8 +19098,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const gl = 0.30 + Math.sin(now / 1400) * 0.05;
           ctx.fillStyle = `rgba(255,244,210,${gl})`; ctx.fillRect(px, py, T, T);
         } else if (t === C.CT_DOOR) {
-          ctx.fillStyle = "#a89880"; ctx.fillRect(px, py, T, T);
-          ctx.fillStyle = "rgba(60,50,36,0.25)"; ctx.fillRect(px, py, T, 2); ctx.fillRect(px, py + T - 2, T, 2);
+          /* HORS-ZIP — LE TAPIS DE SEUIL, SENSIBLE À SES VOISINS. Une porte
+             fait désormais `COURT_DOOR_W` cases (voir fermeConstants.js) :
+             peindre l'ombre de seuil sur CHAQUE case, comme avant, dessinait
+             une COUTURE au milieu de l'ouverture — une ligne sombre entre
+             les deux cases, là où il n'y a ni mur ni seuil réel. Même
+             principe que les haies de Valley Town (`townHedge`, voir
+             FermeGame.js) : on ne peint l'ombre qu'aux bords qui touchent
+             vraiment autre chose qu'une case de porte. */
+          ctx.fillStyle = "#b2a186"; ctx.fillRect(px, py, T, T);
+          ctx.fillStyle = "rgba(255,244,214,0.16)"; ctx.fillRect(px + 2, py + 2, T - 4, T - 4); // le tapis
+          if (tileAt(x, y - 1) !== C.CT_DOOR) { ctx.fillStyle = "rgba(60,50,36,0.28)"; ctx.fillRect(px, py, T, 2); }
+          if (tileAt(x, y + 1) !== C.CT_DOOR) { ctx.fillStyle = "rgba(60,50,36,0.28)"; ctx.fillRect(px, py + T - 2, T, 2); }
         } else {
           ctx.fillStyle = "#5a5b62"; ctx.fillRect(px, py, T, T);   // sous un mur : jamais vu, jamais noir
         }
@@ -19146,19 +19201,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          BÂTIMENT : sans elle, dix-sept pièces meublées ne se distinguent que par
          leur mobilier, et le joueur ne peut pas savoir que ce bureau-ci sera le
          cadastre. C'est aussi ce qui rend l'ensemble lisible sur une capture. */
-      for (const d of cw.doors) {
-        if (d.floor !== myFloor || d.x < x0 - 2 || d.x > x1 + 2 || d.y < y0 - 2 || d.y > y1 + 2) continue;
-        const px = d.x * T, py = d.y * T;
-        // L'encadrement de la porte, dessiné par-dessus le mur : montants,
-        // linteau, et l'ombre du chambranle.
-        ctx.fillStyle = "#5a4230"; ctx.fillRect(px - 1, py - 14, T + 2, 14);
-        ctx.fillStyle = "#3a2a1c"; ctx.fillRect(px + 1, py - 11, T - 2, 11);
-        ctx.fillStyle = "#7a5232"; ctx.fillRect(px - 1, py - 14, T + 2, 2);
-        const label = L.courtRoomName(d.room);
-        draws.push({ y: (d.y + 0.6) * T, fn: () => {
+      /* HORS-ZIP — UN CHAMBRANLE PAR PORTE, PAS PAR CASE. Depuis que chaque
+         porte fait `COURT_DOOR_W` cases (demande de Guillaume : les portes
+         du tribunal/mairie étaient « visuellement quasiment injouables »),
+         reprendre `cw.doors` case par case aurait collé deux petits
+         chambranles et empilé deux plaques identiques sur la même pièce —
+         `E.courtDoorGroups` fusionne les cases contiguës d'une même porte en
+         UNE ouverture, et c'est elle qui fait autorité (aussi utilisée par
+         `render-mairie.mjs`, jamais deux lectures de la même donnée). Le
+         cadre couvre maintenant toute la hauteur de l'ouverture — montants
+         pleine hauteur, linteau en haut — ce qui le fait lire comme UNE
+         porte large plutôt que deux portes étroites côte à côte. */
+      for (const g of E.courtDoorGroups(cw.doors)) {
+        if (g.floor !== myFloor || g.x < x0 - 2 || g.x > x1 + 2 || g.y1 < y0 - 2 || g.y0 > y1 + 2) continue;
+        const px = g.x * T, pyTop = g.y0 * T, spanH = (g.y1 - g.y0 + 1) * T;
+        // L'encadrement de la porte, dessiné par-dessus le mur : montants
+        // pleine hauteur, linteau, et l'ombre du chambranle.
+        ctx.fillStyle = "#5a4230"; ctx.fillRect(px - 1, pyTop - 14, T + 2, spanH + 14);
+        ctx.fillStyle = "#3a2a1c"; ctx.fillRect(px + 1, pyTop - 11, T - 2, spanH + 11);
+        ctx.fillStyle = "#7a5232"; ctx.fillRect(px - 1, pyTop - 14, T + 2, 2);
+        const label = L.courtRoomName(g.room);
+        draws.push({ y: (g.y0 + 0.6) * T, fn: () => {
           ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
           const wpx = ctx.measureText(label).width + 8;
-          const tx = px + T / 2, ty = py - 16;
+          const tx = px + T / 2, ty = pyTop - 16;
           ctx.fillStyle = "#f5eeda"; ctx.fillRect(tx - wpx / 2, ty - 8, wpx, 11);
           ctx.strokeStyle = "#6b4a2e"; ctx.lineWidth = 1; ctx.strokeRect(tx - wpx / 2 + 0.5, ty - 7.5, wpx - 1, 10);
           ctx.fillStyle = "#1d1d1d"; ctx.fillText(label, tx, ty);
@@ -23660,7 +23726,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          redessine à chaque image, et un scan complet de la carte par image serait
          le coût que ce cache a justement été écrit pour éviter (audit 2026-07). */
       const ct = findCauldronTile();
-      return ct ? { zone: "farm", x: ct.x, y: ct.y } : null;
+      if (ct) return { zone: "farm", x: ct.x, y: ct.y };
+      /* ⚠️⚠️ HORS-ZIP — REPLI VERS LE PASSAGE SOMBRE, SIGNALÉ PAR GUILLAUME.
+         Avant ce repli, `starTargetPos` rendait `null` tant que le chaudron
+         n'avait pas encore été ramassé côté maléfique : le chevron ne
+         désignait donc RIEN pendant toute la première moitié de ce chapitre —
+         « pas de chevron vaut mieux qu'un chevron qui pointe un pré » (479)
+         valait pour un pré, pas pour une absence totale de guidage. Le
+         chaudron se ramasse dans le monde maléfique, atteint UNIQUEMENT par
+         le passage sombre (`world.darkPassage`, posé par generateWorld,
+         jamais un point fixe en dur — voir G_DARK_PASSAGE) : c'est donc là,
+         et nulle part ailleurs sur la ferme, que le chevron doit mener.
+         `starGoalText` (plus bas) montre le texte d'accompagnement pendant
+         cet état — la MÊME condition (`!findCauldronTile()`), jamais une
+         seconde lecture. */
+      const w = worldRef.current;
+      return (w && w.darkPassage) ? { zone: "farm", x: w.darkPassage.x, y: w.darkPassage.y } : null;
     }
     if (id === "sawmill") {
       const cb = (sharedRef.current.crafts || {}).sawmill;
@@ -23716,6 +23797,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if ((id === "crater" || id === "townHall") && !starImpactLandedNow()) return null;
     const pos = starTargetPos(id);
     return pos ? { ...pos, id } : null;
+  }
+  /* Le texte du bandeau permanent — UNE JOINTURE AVEC LE CHEVRON, comme
+     `starGuideTarget` juste au-dessus, pas une seconde lecture. ⚠️⚠️ HORS-ZIP :
+     `starTargetPos("cauldron")` peut désormais renvoyer le PASSAGE SOMBRE au
+     lieu du chaudron (celui-ci n'a pas encore été ramassé côté maléfique) —
+     le texte doit le dire, sous peine de pointer vers un lieu que sa propre
+     phrase ne prépare pas (le défaut « chevron et bandeau en désaccord » du
+     449/479, rejoué si on les laissait diverger ici). `Q.STAR_GOAL_TARGET` est
+     la MÊME table que `starTargetSite` : jamais une liste écrite à la main.
+     ⚠️ `starGoalCtx()` EST APPELÉ ICI, EN LIGNE — jamais reçu en paramètre :
+     `verify-quete` (§« une jointure, jamais deux listes ») scanne le SOURCE de
+     ce fichier et exige `starGoalCtx()` littéralement après chaque appel à
+     `Q.starGoalKey`/`Q.starTargetSite`, précisément pour empêcher un contexte
+     construit à la main de se glisser derrière un nom de variable. */
+  function starGoalText(e) {
+    const goal = Q.starGoalKey(e, starGoalCtx());
+    if (!goal) return L.star.title;
+    if (Q.STAR_GOAL_TARGET[goal] === "cauldron" && !findCauldronTile()) return L.star.hud.cauldronPassage;
+    return L.star.hud.goal[goal] || L.star.title;
   }
 
   /* ╔══════════════════════════════════════════════════════════════════════════
@@ -25341,7 +25441,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // la ferme (SHOP/BIN/etc.) n'ont aucun sens en zone maléfique, on sort
       // donc tôt plutôt que de risquer une fausse coïncidence de coordonnées.
       const already = sharedRef.current.salveCraft && sharedRef.current.salveCraft.cauldronUnlocked;
-      if (!already && nearTile(C.EVIL_CAULDRON_SPAWN) && ew && ew.spec && ew.spec.key === "evil") evilCauldronPickup();
+      if (!already && nearTile(C.EVIL_CAULDRON_SPAWN) && ew && ew.spec && ew.spec.key === "evil") { evilCauldronPickup(); return; }
+      // Éclats de comète (hors-zip) : même mécanique que le chaudron juste au-dessus.
+      const shardsAlready = sharedRef.current.salveCraft && sharedRef.current.salveCraft.shardsTaken;
+      if (!shardsAlready && nearTile(C.EVIL_SHARDS_SPAWN) && ew && ew.spec && ew.spec.key === "evil") evilShardsPickup();
       return;
     }
     // Vendre l'animal porté (outil "déplacer") est prioritaire sur toute
@@ -25977,6 +26080,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     selectSlot(SLOT.build);
     buildKindRef.current = "cauldron"; setBuildKind("cauldron");
   };
+  // Éclats de comète (hors-zip, demande Guillaume) : même mécanique que
+  // evilCauldronPickup juste au-dessus, mais crédite directement l'inventaire
+  // (voir resolveEvilShardsPickup) — pas d'outil à sélectionner ensuite.
+  const evilShardsPickup = () => { sendReq({ kind: "evilShardsPickup" }); };
   // Usage de la pommade (inchangé) : applique l'immunité IMMÉDIATEMENT en
   // local (ressenti instantané, comme caughtByMonster) puis envoie la
   // requête à l'hôte pour décompter le stock côté serveur (persistance/
@@ -26173,12 +26280,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            compare `Date.now()` à `e.plan.at`, donc c'est ICI qu'on la lit, sur
            l'horloge de ce client — jamais recalculée dans `quete.js`, qui n'a
            pas d'horloge (§3 de CLAUDE.md, encore). */
-        const goal = Q.starGoalKey(e, starGoalCtx());
         return (
           <div className="ferme-star-hud" data-tick={starTick}>
             <span className="ico">{huntingImpacts ? "☄" : "✦"}</span>
             <span className="pips">{pips.map((on, i) => <span key={"sp" + i} className={"pip" + (on ? " on" : "")} />)}</span>
-            <span className="goal">{(goal && L.star.hud.goal[goal]) || L.star.title}</span>
+            <span className="goal">{starGoalText(e)}</span>
             {/* ⚠️ ZIP 454 — LE PLAN A UN BOUTON, ET PAS SEULEMENT UNE TOUCHE. Un
                 raccourci clavier qu'on n'a pas lu n'existe pas (et le jeu se joue
                 aussi au doigt depuis le 430) ; il n'apparaît qu'une fois les plans
@@ -26190,6 +26296,53 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             )}
           </div>
         );
+      })()}
+
+      {/* ╔══════════════════════════════════════════════════════════════════
+          ║ HORS-ZIP — DEUX COMPTES À REBOURS, DEMANDÉS PAR GUILLAUME.
+          ╚══════════════════════════════════════════════════════════════════
+          ⚠️ « le gros météore semble ne jamais tomber, c'est frustrant » : le
+          mécanisme (deux minutes de présence active en ville, voir
+          `STAR_TOWN_ACTIVE_MS` dans quete.js) était déjà correct, il ne
+          manquait qu'un affichage — un joueur qui ne voit rien progresser
+          conclut « ça ne marche pas », même quand ça marche.
+          ⚠️ CÔTÉ HÔTE SEULEMENT pour le météore : lui seul tient l'horloge
+          réelle de présence (`starTownActiveRef`), et le §3 de CLAUDE.md est
+          formel — on ne montre jamais un nombre qu'on ne peut pas garantir.
+          ⚠️ Le rendez-vous du maire, lui, vit dans l'état PARTAGÉ
+          (`e.mayor.appt`) : les deux écrans le voient dès la réservation,
+          sans attendre qu'on rouvre le guichet de la mairie — c'est
+          exactement ce que « affiché dès que la rencontre est demandée »
+          demande. Les deux sont mutuellement exclusifs dans la chronologie
+          de la quête (le maire ne se demande qu'après la chute du météore),
+          d'où la même pastille pour les deux. */}
+      {(() => {
+        if (starMini || starCard) return null;
+        const e = sharedRef.current.star;
+        if (isHost && e && Q.starFallen(e) && !Q.starTownFallen(e) && e.ch >= 1) {
+          const remain = Math.max(0, Q.STAR_TOWN_ACTIVE_MS - (starTownActiveRef.current.ms || 0));
+          return (
+            <div className="ferme-wait-pill">
+              <span className="ico">☄</span>
+              <span>{L.star.hud.townFallCountdown(msClock(remain))}</span>
+            </div>
+          );
+        }
+        const eA = Q.migrateStar(e);
+        const appt = MR.mayorAppt(eA);
+        if (appt && appt.due && String(appt.by) === String(me.id)
+            && !MR.mayorSigned(eA) && !MR.mayorApptStale(eA, Date.now())) {
+          const wait = MR.mayorApptWaitMs(eA, Date.now());
+          if (wait > 0) {
+            return (
+              <div className="ferme-wait-pill">
+                <span className="ico">🎩</span>
+                <span>{L.maire.bookedWhen(msClock(wait))}</span>
+              </div>
+            );
+          }
+        }
+        return null;
       })()}
 
       {/* HUD (chantier notif/HUD, demande utilisateur) : minimisé par défaut
@@ -26330,7 +26483,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           expression que le bandeau, et pas ailleurs. Deux traductions du même
           `promptKey` finiraient par diverger d'un libellé, et la divergence
           tomberait sur l'appareil du joueur qui n'a QUE ce bouton. */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "evilShardsPickup" ? L.promptEvilShardsPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (
@@ -29895,7 +30048,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   jours plus tard et le jeu redisait un objectif déjà atteint,
                   c'est-à-dire exactement l'inverse de ce que ce panneau promet. */}
               <div style={{ marginTop: 8, opacity: 0.85 }}>
-                {(() => { const g = Q.starGoalKey(e, starGoalCtx()); return (g && L.star.hud.goal[g]) || L.star.title; })()}
+                {starGoalText(e)}
               </div>
               <div style={{ marginTop: 12 }}><button className="ferme-btn" onClick={close}>✦</button></div>
             </div>

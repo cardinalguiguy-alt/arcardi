@@ -782,14 +782,36 @@ function buildMayor(THREE, K) {
   box(0.155, 0.40, 0.05, lam(COL.shirt), 0, 0.38, 0.145, 0, 0, 0, torso);
   box(0.062, 0.30, 0.03, lam(COL.tie), 0, 0.33, 0.168, 0, 0, 0, torso);
   box(0.075, 0.055, 0.035, lam(COL.tie), 0, 0.50, 0.168, 0, 0, 0, torso);
-  box(0.20, 0.075, 0.06, lam(COL.shirt), 0, 0.545, 0.128, 0, 0, 0, torso); // le col
-  /* les revers */
-  for (const sx of [-1, 1]) box(0.13, 0.34, 0.035, mSuitD, sx * 0.135, 0.40, 0.150, 0, 0, sx * 0.20, torso);
+  /* HORS-ZIP — LE COL EN DEUX POINTES, PAS UNE PLAQUE. Une seule boîte de
+     20 cm lisait comme une planchette collée sous le menton ; deux pointes
+     qui s'écartent légèrement dessinent l'ouverture d'un vrai col de
+     chemise, pour le même nombre de faces qu'avant (deux boîtes au lieu
+     d'une, aucun coût de plus). */
+  for (const sx of [-1, 1]) box(0.11, 0.075, 0.06, lam(COL.shirt), sx * 0.050, 0.545, 0.128, 0, 0, sx * 0.16, torso);
+  /* HORS-ZIP — LE REVERS EN DEUX PANS, PAS UNE PLAQUE INCLINÉE. Signalé par
+     Guillaume : « les revers de col sont trop grossiers ». Un revers de
+     costume a une pliure visible — un dessous presque plat contre la
+     chemise, et un rabat extérieur qui s'écarte franchement — et une seule
+     boîte tiltée ne peut montrer que l'un des deux plans. Le second pan est
+     légèrement PLUS PROFOND (z) et PLUS TOURNÉ : c'est la cassure qui
+     manquait, sans ajouter de pivot ni de matière nouvelle. */
+  for (const sx of [-1, 1]) {
+    box(0.115, 0.30, 0.03, mSuitD, sx * 0.150, 0.395, 0.140, 0, 0, sx * 0.09, torso);
+    box(0.120, 0.34, 0.032, mSuitD, sx * 0.128, 0.405, 0.158, 0, 0, sx * 0.26, torso);
+  }
   /* ── L'ÉCHARPE TRICOLORE. C'est le seul objet du personnage qui dise « maire »
      sans un mot, et c'est pour ça qu'elle est là plutôt qu'une cravate de plus.
      Trois bandes, de l'épaule gauche à la hanche droite, comme sur les deux
      références. ── */
-  const sash = grp(0, 0.33, 0.152, torso);
+  /* HORS-ZIP — z REMONTÉ DE 0,152 À 0,178. Signalé par Guillaume : « l'écharpe
+     est parfois coupée ». Elle vivait presque au même plan que les revers
+     (z ∈ [0,1325 ; 0,1675] contre son propre [0,142 ; 0,162]) : deux boîtes
+     opaques quasi coplanaires, ce que le moteur ne peut trancher qu'au hasard
+     du pixel — un scintillement en Z, qui « coupe » la matière selon l'angle
+     de caméra. Une écharpe se porte PAR-DESSUS la veste, jamais dans son
+     épaisseur : elle doit donc être l'élément le plus avancé du buste, pas un
+     concurrent à la même profondeur. */
+  const sash = grp(0, 0.33, 0.178, torso);
   /* ⚠️ ELLE DESCEND DE SON ÉPAULE DROITE — donc de NOTRE GAUCHE — vers sa hanche
      gauche, comme la portent les maires. Le premier jet la penchait dans l'autre
      sens : personne n'aurait su dire pourquoi ça n'allait pas, et tout le monde
@@ -797,7 +819,13 @@ function buildMayor(THREE, K) {
   sash.rotation.z = 0.70;
   for (let i = 0; i < 3; i++)
     box(0.042, 0.60, 0.020, lam([COL.sashB, COL.sashW, COL.sashR][i]), (i - 1) * 0.043, 0, 0, 0, 0, 0, sash);
-  sph(0.020, pho(0xc02a2a, 90), 0.115, 0.455, 0.166, torso, 8);           // la rosette
+  /* HORS-ZIP — LA ROSETTE EST DÉSORMAIS L'ENFANT DE L'ÉCHARPE, PAS DU BUSTE.
+     Elle vivait à une position `torso` fixe, calculée à la main pour tomber
+     « à peu près » au bout des bandes — vraie tant que `sash` ne bougeait
+     jamais, fausse dès qu'on retouche sa position ou (plus tard) qu'une pose
+     l'anime. Coordonnées reprojetées dans le repère de `sash` (rotation
+     inverse de 0,70 rad) pour un rendu identique au pixel près. */
+  sph(0.020, pho(0xc02a2a, 90), 0.168, 0.022, 0.014, sash, 8);           // la rosette
 
   /* ── LES BRAS. Trois pivots par bras — épaule, coude, main — et pas un de
      plus : à cette taille un poignet ne se voit pas, et un pivot qu'on ne voit
@@ -805,9 +833,14 @@ function buildMayor(THREE, K) {
   const arm = (sx) => {
     const sh = grp(sx * 0.208, 0.50, 0.01, torso);
     box(0.135, 0.150, 0.19, mSuit, 0, 0.02, 0, 0, 0, 0, sh);              // l'épaule
-    cyl(0.062, 0.058, 0.30, mSuit, 0, -0.15, 0, 0, 0, 0, sh, 10);
+    /* HORS-ZIP — 10 → 16 SEGMENTS. Les bras sont ce qui bouge le plus et ce
+       qu'on regarde de le plus près (ils viennent jusqu'au premier plan sur
+       le bureau) : un cylindre à 10 faces s'y voit facettée, surtout de
+       profil sous la lampe du bureau. Le tronc et la tête restent des
+       boîtes — eux ne roulent jamais sous l'œil de la même façon. */
+    cyl(0.062, 0.058, 0.30, mSuit, 0, -0.15, 0, 0, 0, 0, sh, 16);
     const el = grp(0, -0.30, 0, sh);
-    cyl(0.055, 0.050, 0.29, mSuit, 0, -0.145, 0, 0, 0, 0, el, 10);
+    cyl(0.055, 0.050, 0.29, mSuit, 0, -0.145, 0, 0, 0, 0, el, 16);
     box(0.10, 0.045, 0.10, lam(COL.shirt), 0, -0.275, 0, 0, 0, 0, el);    // la manchette
     const hd = grp(0, -0.30, 0, el);
     box(0.072, 0.046, 0.100, mSkin, 0, -0.018, 0.018, 0, 0, 0, hd);
@@ -1101,7 +1134,16 @@ export function solveArm(rig, arm, target, out, side) {
   const dir = T.d.copy(T.v).normalize();
   T.hint.set(side * (out >= 0 ? 1 : -1), 0.15, out >= 0 ? -0.55 : 0.75).normalize();
   T.x.copy(dir).cross(T.hint);
-  if (T.x.lengthSq() < 1e-6) T.x.set(1, 0, 0);
+  /* HORS-ZIP — LE REPLI DÉGÉNÉRÉ OUBLIAIT `side`. Quand la cible est presque
+     alignée avec `T.hint` (ça arrive pour le bras GAUCHE dans certaines
+     poses, p.ex. les mains dans le dos), le produit vectoriel s'effondre et
+     ce repli choisissait tout le temps +X MONDE — c'est-à-dire le côté du
+     bras DROIT. Le coude gauche se pliait alors dans le plan du bras droit :
+     un bras « inversé », mais seulement quand la géométrie tombait dans ce
+     cas précis — d'où le « parfois » signalé par Guillaume, jamais un défaut
+     systématique qu'une seule pose aurait suffi à voir. Le repli doit
+     mirrorer comme tout le reste de la fonction. */
+  if (T.x.lengthSq() < 1e-6) T.x.set(side, 0, 0);
   T.x.normalize();
   T.y.copy(dir).multiplyScalar(-1);                 // le bras pointe vers −Y
   T.z.copy(T.x).cross(T.y).normalize();

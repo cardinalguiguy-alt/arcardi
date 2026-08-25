@@ -11,50 +11,76 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**HORS-ZIP — PASSE DE COLLISIONS SUR VALLEY TOWN, DEMANDÉE PAR GUILLAUME EN SESSION DIRECTE (pas
-par upload de zip, donc pas de numéro).** Cinq zones passées en revue une par une, code ET jeu :
+**HORS-ZIP — QUATRE DEMANDES DE GUILLAUME EN SESSION DIRECTE SUR L'AUDIENCE DU MAIRE ET LE
+TRIBUNAL/MAIRIE (pas d'upload de zip, donc pas de numéro).** La passe de collisions précédente
+(portes, ponts, escaliers, haies, seuils) est TERMINÉE et ses trouvailles vivent dans le tableau
+des leçons ; ce bloc la remplace entièrement, comme le veut la règle du §14.
 
-- **⚖️ Le bel escalier sous le tribunal** — rejoué à l'écran (les deux volées, le palier, le
-  garde-corps de pierre, la ferronnerie). **Rien à corriger** : `TOWN_STAIRS`/`TOWN_RAILS`/
-  `TOWN_STAIR_LANDINGS` sont déjà la refonte du 467, `verify-vallee` les rejoue avec le vrai
-  `canStandTown` et passe.
-- **🌉 Les deux ponts** — inspectés au générateur (arbres/décors sur le tablier, altitude de
-  collision). **Rien à corriger**, `verify-compo`/`verify-vallee` confirment 0 cas.
-- **🏞️ Le ponton du lac — UN VRAI BUG TROUVÉ ET CORRIGÉ.** Le ponton fait 4 cases de large
-  (`TOWN_PIER.w`) et était censé s'aborder de face ; en jeu, on restait bloqué pile devant, sans
-  la moindre erreur. Deux causes indépendantes, toutes deux dans la rangée d'herbe juste au nord
-  de son embouchure : (1) le semis de fleurs du quai (« Floral Haven », pas de 4) tombe pile sur
-  la largeur du ponton (aussi 4) et y plantait un buisson d'or ET un bonsaï, un sur chaque colonne
-  de rive ; (2) le semis d'arbres de la ceinture, lui, y plantait un vrai arbre en (100,155) —
-  la colonne OUEST du ponton. Aucun banc ne pouvait le voir : `verify-compo` vérifie que rien ne
-  pousse SUR le tablier (0, toujours vrai), jamais sur sa rangée d'APPROCHE. Trouvé en marchant
-  droit vers le ponton en jeu, pas en relisant. Corrigé par deux gardes dans `fermeEngine.js`
-  (`nearPierMouth` pour le semis floral, une emprise dédiée pour le semis d'arbres, sur le modèle
-  exact du nettoyage déjà fait pour le bloc du tribunal au 467) — voir la ligne de ce jour dans
-  le tableau des leçons. `verify-vallee` 205/205, `verify-compo` et `verify-syntax` inchangés,
-  bundle esbuild ✅, rejoué en jeu : on marche maintenant droit jusqu'au bout du ponton.
-- **🌿 Les haies** — vérifiées par le même mécanisme (les allées/portails forcent leur case en
-  `G_PATH` avant que la haie ne se pose, donc un semis ne peut plus y planter quoi que ce soit
-  après coup — contrairement au ponton, qui n'avait pas cette garde). **Rien à corriger.**
-- **🏛️ Les bâtiments principaux** — les 60 seuils (24 maisons + tribunal, mairie, église,
-  boutique, salon, gare) rejoués un par un contre le monde généré : aucun n'a de case solide ni
-  d'arbre à moins d'une case de sa porte. **Rien à corriger.**
+1. **☄️ Le compte à rebours du gros météore — LIVRÉ.** Il « semblait ne jamais tomber » : le
+   mécanisme (`STAR_TOWN_ACTIVE_MS`, deux minutes de présence active en ville) était déjà juste,
+   il n'avait aucun affichage. Une pastille `.ferme-wait-pill` (haut-droite, à côté du pisteur
+   d'étoile qui reste seul autorisé à parler en haut-centre) montre désormais le compte à rebours
+   en direct — **côté hôte seulement**, lui seul tenant l'horloge réelle de présence
+   (`starTownActiveRef`) ; un invité verrait un nombre qu'il ne peut pas garantir, ce que le §3
+   de CLAUDE.md interdit.
+2. **🎩 Le rendez-vous chez le maire, affiché dès la demande — LIVRÉ.** Même pastille, réutilisée :
+   dès que `e.mayor.appt.due` existe pour SOI (état déjà partagé, aucun message de plus), le
+   compte à rebours s'affiche sur LES DEUX écrans — plus besoin de rouvrir le guichet de la mairie
+   pour le voir. Les deux comptes à rebours ne se recouvrent jamais : le maire ne se demande qu'
+   après la chute du météore, jamais avant.
+3. **🧑‍💼 La pose du maire, plus réaliste — LIVRÉ, avec UN VRAI BUG TROUVÉ.** Signalé : bras
+   parfois inversés, écharpe parfois coupée, revers trop grossiers. `solveArm` (`maireBureau.js`)
+   mirroir le bras gauche du droit sur toute sa longueur SAUF dans son repli anti-`NaN` (le
+   produit vectoriel presque nul), qui retombait sur +X MONDE sans jamais multiplier par `side` —
+   c'est-à-dire le côté du bras DROIT, appliqué de temps en temps au bras GAUCHE. **C'est un vrai
+   bug, corrigé** (voir le tableau des leçons). L'écharpe vivait presque au même plan que les
+   revers (z ∈ [0,1325 ; 0,1675] contre [0,142 ; 0,162]) : remontée à 0,178 (au-dessus de tout,
+   comme une écharpe se porte réellement) et sa rosette reparentée dessus au lieu d'une position
+   `torso` figée. Le col et les revers sont passés d'une plaque unique inclinée à deux pans
+   (pliure visible) ; les cylindres de bras sont passés de 10 à 16 segments. **Non touché** :
+   le vocabulaire de poses (7 clés, 8 visages) et la vitesse d'`ease()`, que Guillaume dit
+   apprécier telles quelles.
+4. **⚖️🏛️ Les portes du tribunal et de la mairie, repensées — LIVRÉ, LE PLUS GROS DU LOT.**
+   `COURT_DOOR_W` passe de 1 à 2 cases (nouvelle constante, `fermeConstants.js`) : le générateur
+   perce désormais deux cases par porte au lieu d'une, sur le modèle EXACT des portails de haie de
+   Valley Town (déjà à deux cases, déjà éprouvés) plutôt que d'inventer une seconde règle. Le
+   rendu suit : `E.courtDoorGroups` (nouvelle fonction pure, `fermeEngine.js`) fusionne les cases
+   contiguës d'une même porte pour dessiner UN chambranle pleine hauteur et UNE plaque — sans
+   elle, deux cases auraient donné deux petites portes collées avec deux plaques superposées.
+   Même fusion appliquée à `render-mairie.mjs` (banc de rendu), qui dessinait sa propre copie du
+   chambranle. Élargir a débusqué deux meubles que le garde-fou des portes (`doorGuard`) s'est mis
+   à refuser en silence (un fauteuil aux cellules, un cartonnier au cadastre — tous deux posés
+   trop près de leur porte du temps où elle ne faisait qu'une case) : déplacés de quelques cases,
+   sans toucher à la porte elle-même. `verify-vallee` 205/205, `render-mairie`/`render-tribunal`
+   « tout est bon », zéro refus. ⚠️ **CE QUI N'A PAS ÉTÉ SENTI À LA MANETTE** : l'automatisation du
+   déplacement a coincé en session (les touches fléchées scriptées cessaient de répondre après un
+   moment sans qu'on sache pourquoi), donc la tolérance de centrage n'a été que CALCULÉE contre le
+   modèle des haies, jamais MARCHÉE case par case dans le nouveau seuil. Vu à l'écran : un cadre
+   fusionné, une plaque, un tapis de seuil sans couture au milieu — mais la sensation au clavier
+   reste à confirmer par une vraie session de jeu.
+5. **🎭 Les didascalies et les répliques du maire, styles distincts — LIVRÉ, SURGI EN COURS DE
+   SESSION.** Guillaume, en regardant la scène : « styles différents entre ce que dit
+   effectivement le maire et les didascalies / descriptions de son comportement ». Les deux
+   vivaient dans LA MÊME chaîne à la main dans `fermeStrings.js` (`maire.ask`, `maire.tint`) —
+   narration à la troisième personne puis réplique entre guillemets, affichées d'un bloc, même
+   graisse, même couleur. **Aucun texte réécrit** : les deux registres sont déjà marqués par la
+   ponctuation que le fichier porte depuis toujours (« » en français, `"…"` en anglais).
+   `MayorLine` (nouveau composant pur, `MaireScene.js`) découpe chaque chaîne à cette ponctuation
+   et applique deux styles CSS (`.maire-line-stage` italique et sourd, `.maire-line-say` normal et
+   clair) — exactement le geste que `.maire-bubble-tint` faisait déjà pour la phrase du maire élu,
+   étendu à l'intérieur de chaque bulle. Vu à l'écran sur le nœud `m1` : ça marche. **Pas rejoué
+   sur les onze autres nœuds ni sur les cinq maires** — la regex est générique, mais seul `m1` a
+   été vu au rendu.
 
-⚠️ **ET GUILLAUME A SIGNALÉ EN COURS DE ROUTE : LES INTÉRIEURS SE LISENT MAL ET LEURS COLLISIONS
-SONT PÉNIBLES.** Vérifié : chaque porte du tribunal (29 sur 5 étages) est bien percée dans son mur,
-`doorGuard` l'entoure correctement — **ce n'est pas un bug de génération**. C'est un choix qui se
-paie : une porte fait UNE case (`COURT_ROOMS[].doors`), la boîte du joueur en fait 0,56
-(`COURT_BOX`), donc il faut être centré à ±0,22 case près pour passer sans frotter le chambranle —
-strictement plus serré que les portails de haie en ville, qui eux ont appris à faire deux cases de
-large. **Décision à prendre par Guillaume, pas tranchée ici** : élargir les portes intérieures (ou
-assouplir la boîte à leur seuil) est un changement de plan qui touche le rendu, `doorGuard` et les
-bancs `render-tribunal`/`render-mairie` — donc une vraie décision de conception, pas un correctif.
-
-⚠️⚠️⚠️ **LA PROCHAINE ACTION REDEVIENT CELLE DU 481, INCHANGÉE : JOUER L'AUDIENCE CHEZ LE MAIRE EN
-ENTIER JUSQU'À LA SIGNATURE.** Cette passe de collisions ne l'a pas touchée. Rappel du chemin le
-plus court : menu dev (⌘⇧X) → ⭐ Star → « 📐 Hand me the plans », puis
-« 🎩 An appointment with the Mayor, right now », puis « Se téléporter → Mairie — l'étage », puis
-« 🎩 Stand at the Mayor's desk », puis **E**.
+⚠️⚠️⚠️ **LA PROCHAINE ACTION : JOUER L'AUDIENCE CHEZ LE MAIRE EN ENTIER JUSQU'À LA SIGNATURE, ET
+CETTE FOIS EN SENTANT LES PORTES.** Rappel du chemin le plus court : menu dev (⌘⇧X) → ⭐ Star →
+« 📐 Hand me the plans », puis « 🎩 An appointment with the Mayor, right now », puis
+« Se téléporter → Mairie — l'étage », puis « 🎩 Stand at the Mayor's desk », puis **E**. En
+marchant à pied (pas en téléportant) jusqu'au bureau, vérifier au passage : la nouvelle largeur de
+porte se sent-elle vraiment plus généreuse ou seulement sur le papier ? le style
+didascalie/réplique tient-il sur les douze nœuds et les cinq maires, ou seul `m1` avait cette
+forme ? et une fois signé : les deux pastilles de compte à rebours ont-elles bien disparu au bon
+moment (météore : à la chute ; maire : à la signature) ?
 
 ⚠️⚠️ **ET LA DETTE DU 479 N'A TOUJOURS PAS BOUGÉ : DEUX POSTES À DEUX QUI N'ONT JAMAIS ÉTÉ TENUS** —
 le relais du plat (l'un cuisine, l'autre court) et les deux bords du cratère.
@@ -207,8 +233,8 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 |---|---|---|
 | hors-zip | ⚠️⚠️⚠️ **UN BANC QUI VÉRIFIE L'EMPRISE D'UN OUVRAGE NE VÉRIFIE PAS SON APPROCHE, ET C'EST UN ANGLE MORT DIFFÉRENT DE CELUI DU 467.** `verify-compo` garantit depuis longtemps qu'aucun arbre ni décor ne pousse SUR le tablier d'un pont ou du ponton — et c'était toujours vrai. Mais le semis de fleurs du quai (pas de 4) et le semis d'arbres de la ceinture ignorent tous deux l'existence du ponton (large de 4 lui aussi) et plantaient librement sur la rangée d'herbe juste au nord de son embouchure — jamais SUR l'ouvrage, toujours à son SEUIL. Deux objets bloquants, chacun sur une colonne de rive différente, resserraient l'entrée de 4 à 2 cases sans qu'aucun contrôle existant ne le voie. *Le nettoyage après coup du bloc du tribunal (467) protège une emprise ; il fallait le même geste pour un seuil.* | `nearPierMouth`, la garde `TOWN_PIER` dans le semis d'arbres, `fermeEngine.js` |
 | 480 bis | ⚠️⚠️ **UN TABLEAU ANONYME INDEXÉ PAR UN COMPTEUR QUI GRANDIT NE PLANTE PAS QUAND ON OUBLIE DE L'AGRANDIR — IL REND `NaN`, EN SILENCE.** `[0.92, 1.05, 1, 0.96, 1.08][site.impact]` valait `undefined` dès le sixième impact, donc une échelle `NaN`, donc un cratère qui ne se dessine plus — sans la moindre exception à chercher, contrairement au piège n°1 habituel de ce fichier (une fonction absente, elle, lève une erreur). Trouvé en RELISANT avant d'ajouter, pas en jouant. *Un tableau littéral qui suit la longueur d'une table de données doit porter son NOM et sa GARDE (`|| 1`), jamais rester anonyme dans la boucle de rendu qui le lit.* | `STAR_FARM_CRATER_DRAW_SCALES`, `fermeConstants.js` |
-| 481 | ⚠️⚠️⚠️ **UN DÉCOR QU'AUCUN BANC NE SAIT RELIRE DOIT ÊTRE REGARDÉ LE JOUR OÙ IL EST LIVRÉ — SINON IL NAÎT VIEUX.** `public/models/maire-bureau.glb` a été livré au 480, chargé par le jeu, documenté sur deux lignes de tableau, et jamais ouvert : les nœuds `rig_*` y portaient une translation monde que leurs enfants portaient une SECONDE fois, si bien que la tête, le torse, les bras et le fauteuil du maire flottaient deux mètres derrière le mur du fond. Ni le build, ni `verify-syntax`, ni `verify-maire` (qui joue la mécanique et ne dessine rien), ni le bundle ne pouvaient le dire — **un glTF est de la DONNÉE, et aucun banc de ce dépôt ne relit une donnée importée.** C'est le §9 (pipeline C) pris par l'autre bout : on connaissait le risque qu'un asset *vieillisse*, pas celui qu'il naisse faux. Le bureau est refait en canevas 3D procédural (`maireBureau.js`), qui se règle au nombre près et qu'un banc peut au moins JOINDRE à la mécanique. | `maireBureau.js`, `verify-maire` §11 |
-| 481 | ⚠️⚠️⚠️ **`\| 0` SUR UN HORODATAGE TRONQUE À 32 BITS SIGNÉS, ET LE RÉSULTAT N'EST PAS APPROXIMATIF : IL EST ARBITRAIRE.** `Date.now()` vaut 1,78 × 10¹² ; la secrétaire annonçait « il vous reçoit dans 29778439:55 ». L'idiome est écrit partout dans ce dépôt (`m.trust \| 0`, `req.dt \| 0`) et il est JUSTE partout ailleurs, parce que partout ailleurs il s'applique à de petits entiers. *Un idiome qu'on écrit sans y penser cesse d'être un idiome le jour où on change ce qu'il mesure.* ⚠️ Et aucun banc ne pouvait le voir tant qu'il jouait avec `at: 1000` : **un banc qui manipule des dates doit manipuler de VRAIES dates.** | `msOf` dans `maire.js`, `verify-maire` §9 |
+| hors-zip | ⚠️⚠️ **UN MÉCANISME EXACT SANS AUCUN AFFICHAGE SE JOUE COMME UN MÉCANISME CASSÉ.** Les deux minutes de présence active qui déclenchent le gros météore (`STAR_TOWN_ACTIVE_MS`) étaient justes depuis toujours, et invisibles depuis toujours : aucun compte à rebours, aucune barre, rien qui dise au joueur qu'il progresse. Guillaume l'a signalé comme un bug (« semble ne jamais tomber ») alors que c'était un défaut de FEEDBACK, pas de logique. *Un mécanisme qu'on ne peut pas voir progresser est indiscernable, pour le joueur, d'un mécanisme qui ne marche pas.* | `starTownActiveRef`, `.ferme-wait-pill`, FermeGame.js |
+| hors-zip | ⚠️⚠️⚠️ **UN REPLI ANTI-`NaN` DANS UNE FONCTION MIROIR (GAUCHE/DROITE PAR UN PARAMÈTRE `side`) QUI OUBLIE DE MULTIPLIER PAR `side` CASSE UN SEUL CÔTÉ, ET SEULEMENT QUAND LA CIBLE TOMBE DANS LE CAS DÉGÉNÉRÉ.** `solveArm` mirroir le bras gauche du droit sur tout son calcul SAUF sur son repli (produit vectoriel presque nul), qui retombait sur +X MONDE en dur — le côté du bras DROIT, appliqué de temps en temps au bras GAUCHE. D'où le « parfois » signalé par Guillaume plutôt qu'un défaut systématique qu'une seule pose aurait suffi à voir. *Un invariant tenu partout dans une fonction doit être vérifié aussi dans son cas limite, pas seulement dans son chemin normal.* | `solveArm`, `maireBureau.js` |
 
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
@@ -590,8 +616,12 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 ⚠️⚠️ **LES BANCS SONT DANS `tools/README.md` DEPUIS LE 432, ET CE CHAPITRE A ÉTÉ ÉLAGUÉ AU 444
 SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 442** (reporté deux fois). **17 bancs de contrôle et 19 bancs
 de rendu**, comptés en listant `tools/` (⚠️ **le 480 en ajoute un, `verify-maire`, et les 36 ont
-été relancés un par un**, tous verts : `verify-quete` **585/585**, `verify-maire` **72/72**,
+été relancés un par un**, tous verts : `verify-quete` **596/596**, `verify-maire` **113/113**,
 `render-etoile` **161/161**
+⚠️ *ces deux premiers chiffres mentaient depuis un moment : `verify-maire` était resté à 72/72 ici
+alors que le 481 l'annonce correctement à 113/113 plus bas dans ce même fichier — même défaut que
+celui déjà daté ailleurs dans ce chapitre (« un chiffre corrigé à un seul endroit n'est pas
+corrigé »), retrouvé hors-zip en relançant les bancs pour cette livraison.*
 ⚠️ *il était à 488 au 468 : le déchant a retiré les contrôles des quatre chapitres
 supprimés et en a ajouté une trentaine sur la fouille. **Un banc qui rétrécit parce que le code
 rétrécit est un banc en bonne santé** — ce qu'il ne faut pas, c'est qu'il rétrécisse tout seul*). ⚠️ **Six d'entre eux existent parce qu'un défaut vu par
@@ -1101,6 +1131,19 @@ erreur** en choisissant mal.
    détail reste dans `nearPierMouth` et la garde du semis d'arbres, `fermeEngine.js`, que sa
    colonne de droite désignait déjà. Cette passe n'est pas un zip numéroté — c'est une session de
    correction de collisions demandée directement, sans upload — d'où l'étiquette.)**.
+
+   **hors-zip, séance suivante (VINGT-QUATRIÈME passe : les DEUX lignes « 481 » partent — le glTF
+   du bureau et le `msOf` de l'horodatage — avant les deux leçons de cette séance (compte à rebours
+   du météore sans affichage, repli `solveArm` qui oublie `side`) : deux retirées, deux ajoutées,
+   le tableau reste à sa taille et couvre exactement 480 bis à aujourd'hui. Leur détail reste dans
+   `maireBureau.js` (le bureau procédural qui a remplacé le glTF) et `msOf`/`verify-maire` §9, que
+   leur colonne de droite désignait déjà — rien n'est perdu, ces deux défauts restent corrigés et
+   documentés à leur code, seule la ligne de rappel s'efface. ⚠️ Et cette passe a trouvé ce qu'un
+   élagage doit trouver : le §10 annonçait encore `verify-maire` **72/72**, chiffre du 480, alors
+   que le 481 l'avait déjà corrigé à 113/113 quelques paragraphes plus loin dans CE MÊME fichier —
+   cinquième occurrence de ce défaut précis (468, 470, 479, 480, et maintenant ici), toujours la
+   même leçon : *un chiffre recopié à deux endroits n'a pas deux chances d'être juste, il a deux
+   endroits où mentir.*)**.
 
    **480 bis (VINGT-ET-UNIÈME passe : la ligne 478 part avant la leçon de ce zip — une retirée,
    une ajoutée, le tableau reste à sa taille et couvre exactement 479 à 480 bis. Son détail reste

@@ -536,7 +536,10 @@ export function generateEvilWorld() {
   // c'est un point d'intérêt purement CLIENT, rendu/interactif tant que
   // s.salveCraft.cauldronUnlocked est faux (voir FermeGame.js), donc seule
   // sa case doit rester dégagée ici.
-  for (const p of [C.EVIL_SPAWN, C.EVIL_RETURN_PASSAGE, C.EVIL_CAULDRON_SPAWN]) {
+  // Hors-zip — EVIL_SHARDS_SPAWN rejoint la liste : le tas d'éclats de comète
+  // doit être garanti trouvable (jamais un arbre/rocher dessus, jamais dans
+  // l'eau), exactement comme le chaudron-artéfact juste avant lui.
+  for (const p of [C.EVIL_SPAWN, C.EVIL_RETURN_PASSAGE, C.EVIL_CAULDRON_SPAWN, C.EVIL_SHARDS_SPAWN]) {
     for (let y = p.y - 1; y <= p.y + 1; y++) for (let x = p.x - 1; x <= p.x + 1; x++) {
       if (x < 0 || y < 0 || x >= W || y >= H) continue;
       const i = y * W + x;
@@ -2124,7 +2127,10 @@ export function soanCatchFish(rnd) {
 // distincts (trout/pike vs magicOre) ; seule l'améthyste est partagée, mais
 // elle vient de la réserve commune au moment même de l'allumage, jamais
 // stockée ici.
-export function newSalveCraftState() { return { trout: 0, pike: 0, magicOre: 0, cauldronUnlocked: false, brewingUntil: 0, product: null }; }
+// `shardsTaken` (hors-zip) : même rôle que `cauldronUnlocked` juste au-dessus,
+// pour le tas d'éclats de comète (EVIL_SHARDS_SPAWN) — unique pour toute la
+// ferme, voir resolveEvilShardsPickup.
+export function newSalveCraftState() { return { trout: 0, pike: 0, magicOre: 0, cauldronUnlocked: false, shardsTaken: false, brewingUntil: 0, product: null }; }
 
 // Position du chaudron posé sur la carte (s'il l'est), dérivée de
 // world.objects — un seul chaudron possible pour toute la ferme (voir
@@ -2151,6 +2157,24 @@ export function resolveEvilCauldronPickup(f, salveCraft) {
   salveCraft.cauldronUnlocked = true;
   f.inv.cauldron = (f.inv.cauldron || 0) + 1;
   res.invChanged = true; res.unlocked = true;
+  return res;
+}
+
+// Ramassage du tas d'éclats de comète (touche E à proximité d'EVIL_SHARDS_
+// SPAWN, hors-zip, demande Guillaume) — même mécanique que
+// resolveEvilCauldronPickup juste au-dessus : artéfact purement CLIENT (pas
+// dans world.objects), unique pour toute la ferme. Crédite directement
+// l'ingrédient de l'Essence d'étoile, en quantité DÉRIVÉE de
+// STAR_LURE_RECIPE (jamais recopiée en dur) — un minage aléatoire de rocher
+// maléfique (EVIL_ORE_CHANCE) peut toujours en donner en bonus, mais ce tas
+// est la façon GUIDÉE et garantie de compléter la recette.
+export function resolveEvilShardsPickup(f, salveCraft) {
+  normalizeFarmer(f);
+  const res = { invChanged: false, toast: null, taken: false };
+  if (salveCraft.shardsTaken) { res.toast = "shardsAlreadyTaken"; return res; }
+  salveCraft.shardsTaken = true;
+  f.inv.magicOre = (f.inv.magicOre || 0) + (C.STAR_LURE_RECIPE.magicOre || 0);
+  res.invChanged = true; res.taken = true;
   return res;
 }
 
@@ -8194,6 +8218,28 @@ export function courtBoxFree(cw, x, y) {
   }
   return true;
 }
+/* HORS-ZIP — REGROUPE LES CASES D'UNE MÊME PORTE POUR LE DESSIN. Depuis que
+   `generateCourtWorld` perce `COURT_DOOR_W` cases par porte, `cw.doors`
+   contient plusieurs entrées contiguës (même étage, même pièce, même x, des
+   y qui se suivent) pour une seule ouverture physique. Un dessin qui les
+   reprend une à une donnerait DEUX chambranles collés et DEUX plaques
+   superposées pour la même pièce — la même faute que « décrire un escalier
+   en deux volées séparées » (voir la note de `COURT_STAIRWELLS`), rejouée
+   sur les portes. Cette fonction est la jointure unique : le rendu du jeu
+   (`FermeGame.js`) et les bancs de rendu (`render-mairie.mjs`) l'appellent
+   tous les deux au lieu de relire `cw.doors` case par case chacun de son
+   côté (449 — une jointure, jamais deux listes). Pure, ne dessine rien. */
+export function courtDoorGroups(doors) {
+  const list = (doors || []).slice().sort((a, b) =>
+    a.floor - b.floor || a.x - b.x || (a.room < b.room ? -1 : a.room > b.room ? 1 : 0) || a.y - b.y);
+  const out = [];
+  for (const d of list) {
+    const last = out[out.length - 1];
+    if (last && last.floor === d.floor && last.room === d.room && last.x === d.x && d.y === last.y1 + 1) last.y1 = d.y;
+    else out.push({ floor: d.floor, room: d.room, x: d.x, y0: d.y, y1: d.y });
+  }
+  return out;
+}
 /* La cage d'escalier qui contient cette case, ou `null`. ⚠️ MÊME RAISON : le
    jeu la retrouvait dans sa closure (`checkCourtStairs`), donc un banc qui veut
    rejouer un trajet à travers deux niveaux devait réinventer la recherche. Une
@@ -8284,7 +8330,15 @@ export function generateCourtWorld() {
   for (const r of C.COURT_ROOMS) {
     const fy = courtFloorY0(r.floor);
     for (const d of r.doors) {
-      for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) doorGuard.add(`${d.x + dx},${fy + d.y + dy}`);
+      /* HORS-ZIP — LA GARDE SUIT LA PORTE SUR SES `COURT_DOOR_W` CASES,
+         PAS UNE SEULE. Sans cette boucle, la seconde case de chaque porte
+         élargie n'aurait aucune garde : un meuble pourrait s'y poser et la
+         porte redeviendrait borgne d'un côté, exactement le défaut que ce
+         garde-fou existe pour empêcher. */
+      for (let k = 0; k < C.COURT_DOOR_W; k++) {
+        const dyk = d.y + k;
+        for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) doorGuard.add(`${d.x + dx},${fy + dyk + dy}`);
+      }
     }
   }
   /* ⚠️⚠️⚠️ ZIP 439 — UNE CAGE NE PROTÈGE QUE LES DEUX NIVEAUX QU'ELLE RELIE, et
@@ -8406,9 +8460,19 @@ export function generateCourtWorld() {
          comptent, sans une plaque. */
       const POSH = { courtroom: 1, council: 1, mayor: 1, civil: 1 };
       fill(rx + 1, ry + 1, r.w - 2, r.h - 2, basement ? C.CT_STONE : (POSH[r.kind] ? C.CT_CARPET : C.CT_WOOD));
+      /* HORS-ZIP — LA PORTE OCCUPE `COURT_DOOR_W` CASES, PAS UNE. Signalé
+         par Guillaume : une porte d'une case contre la boîte du joueur
+         (`COURT_BOX`, 0,56 case) ne laissait que ±0,22 case de centrage —
+         on adopte la largeur des portails de haie de Valley Town (2 cases,
+         ±0,7 case de tolérance), au lieu d'inventer une seconde règle. Le
+         mur pierce en Y (les portes sont toutes sur un mur qui court le
+         long du couloir, à x = 18 ou 27) : élargir revient à percer une
+         case DE PLUS au sud de l'ancre, jamais à toucher `x`. */
       for (const d of r.doors) {
-        set(d.x, y0 + d.y, C.CT_DOOR);
-        doors.push({ x: d.x, y: y0 + d.y, floor: f, room: r.key });
+        for (let k = 0; k < C.COURT_DOOR_W; k++) {
+          set(d.x, y0 + d.y + k, C.CT_DOOR);
+          doors.push({ x: d.x, y: y0 + d.y + k, floor: f, room: r.key });
+        }
       }
       courtFurnish(r, rx, ry, addProp, set, fill, place);
     }
@@ -8851,7 +8915,14 @@ function courtFurnish(r, rx, ry, addProp, set, fill, place) {
       for (let x = ix + 3; x < ix + iw - 1; x++) addProp(x, iy + 6, "counter", true);
       addProp(ix + 2, iy + 6, "chair", true);
       for (let k = 0; k < 4; k++) addProp(ix + 2 + k * 3, iy, "wallMap", true);
-      for (let k = 0; k < 3; k++) addProp(ix + iw - 1, iy + 2 + k * 3, "planChest", true);
+      /* HORS-ZIP — RÉÉCARTÉS. Le cadastre a DEUX portes (voir COURT_ROOMS),
+         chacune passée à deux cases (`COURT_DOOR_W`) : les cases gardées en
+         plus tombaient sur le premier ET le troisième cartonnier, tous deux
+         collés au mur de la porte (`ix + iw - 1`). `iy+1+k*5` place les
+         trois à l'écart des DEUX portes et du pot de fleurs du coin
+         (`iy+ih-1`) — vérifié par `render-mairie.mjs` §2, qui exige zéro
+         meuble refusé dans tout le bâtiment. */
+      for (let k = 0; k < 3; k++) addProp(ix + iw - 1, iy + 1 + k * 5, "planChest", true);
       addProp(ix, iy + 1, "planChest", true);
       addProp(ix + 1, iy + ih - 1, "plant", true);
       addProp(ix + iw - 1, iy + ih - 1, "plant", true);
@@ -9176,8 +9247,14 @@ function courtFurnish(r, rx, ry, addProp, set, fill, place) {
         addProp(bx, iy + 1, "bunk", true);
         addProp(bx + cw - 1, iy + 4, "stoolC", true);
       }
-      addProp(ix, iy + ih - 2, "desk", true);                 // le poste de garde
-      addProp(ix, iy + ih - 3, "chair", true);
+      /* HORS-ZIP — REMONTÉS DE TROIS RANGS. Même cause qu'au cadastre : la
+         porte de cette pièce fait maintenant deux cases, et sa seconde case
+         gardée tombait pile sur la chaise du poste de garde (colonne `ix`,
+         collée au mur de la porte). Le bureau et la chaise gardent leur
+         écart d'une case l'un de l'autre — rien d'autre ne change dans la
+         pièce — ils sont juste posés un peu plus loin de la porte. */
+      addProp(ix, iy + ih - 5, "desk", true);                 // le poste de garde
+      addProp(ix, iy + ih - 6, "chair", true);
       // La colonne qui reste à l'est des trois cages : trois cellules de quatre
       // cases et leurs cloisons laissent une case de rab. On la MEUBLE plutôt
       // que de la laisser en alcôve borgne — un recoin vide dans une prison se

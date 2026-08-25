@@ -914,7 +914,20 @@ export const SALVE_BREW_MS = 60 * 1000; // 1 minute de concoction réelle (chant
    recettes est en cours (voir `newSalveCraftState`, fermeEngine.js). */
 export const STAR_LURE_RECIPE = { magicOre: 2, amethyst: 1 };
 export const STAR_LURE_BREW_MS = 90 * 1000;
-
+/* Éclats de comète (hors-zip, demande Guillaume : "je ne sais pas comment
+   trouver la ressource pour charmer l'étoile blanche [...] la transformer en
+   petit tas de cailloux blancs/violets luisants à ramasser") : même mécanique
+   que EVIL_CAULDRON_SPAWN juste au-dessus — point d'intérêt FIXE et purement
+   CLIENT (pas un objet de world.objects), ramassable une seule fois pour
+   toute la ferme (voir s.salveCraft.shardsTaken, fermeEngine.js), en un lieu
+   qu'il faut chercher ("fouillez les moindres recoins de cette forêt
+   maudite"). Crédite directement STAR_LURE_RECIPE.magicOre — DÉRIVÉ, jamais
+   recopié, pour que le tas suive tout seul si la recette change un jour.
+   Position choisie à l'écart de tout le reste de la carte maléfique (le lac
+   à 47/30, EVIL_SPAWN au sud, EVIL_RETURN_PASSAGE au nord-ouest,
+   EVIL_CAULDRON_SPAWN au nord-est, la rive est du défi de fuite à partir de
+   EAST_LAKE_X=57) : un vrai recoin, au sud-ouest. */
+export const EVIL_SHARDS_SPAWN = { x: 14, y: 50 };
 
 // --- Clôture (posée librement par les joueurs, section par section) ---
 export const FENCE_COST = 15; // prix d'une section de clôture à la boutique (payée en or, inchangé)
@@ -4217,10 +4230,24 @@ export const CT_BARS = 12;      // grille de cellule (bloque, se voit au travers
 
 /* LES PIÈCES. `x,y,w,h` est le rectangle MURS COMPRIS — deux pièces mitoyennes
    partagent donc leur cloison, et le générateur n'a aucun cas particulier à
-   traiter. `doors` donne les cases de porte, TOUJOURS sur le mur qui touche le
-   couloir central (x = 18 à l'ouest, x = 27 à l'est).
+   traiter. `doors` donne la case D'ANCRAGE de chaque porte (son coin
+   nord/ouest), TOUJOURS sur le mur qui touche le couloir central (x = 18 à
+   l'ouest, x = 27 à l'est) — c'est `generateCourtWorld` qui l'étend ensuite
+   sur `COURT_DOOR_W` cases, jamais la table elle-même (une seule largeur à
+   changer, jamais dix-neuf paires de coordonnées à réécrire).
    ⚠️ `kind` PILOTE LE MOBILIER (voir courtFurnish) : c'est ce qui évite d'écrire
    quatre cents positions de meubles à la main et de les voir dériver du plan. */
+/* HORS-ZIP — LES PORTES PASSENT DE 1 À 2 CASES DE LARGE, DEMANDÉ PAR
+   GUILLAUME (« visuellement quasiment injouable »). Une porte d'une case
+   contre une boîte de joueur de 0,56 case (`COURT_BOX`) ne tolérait qu'un
+   centrage à ±0,22 case près — plus strict que n'importe quel portail de
+   Valley Town, où le plus étroit fait déjà deux cases (les portails de haie,
+   `fermeEngine.js`, ±0,7 case de tolérance). On copie exactement ce modèle
+   au lieu d'en inventer un nouveau : le confort d'un portail de haie est
+   devenu la référence de toutes les portes intérieures. Le générateur fait
+   tout le travail (voir la boucle des portes et `doorGuard` dans
+   `generateCourtWorld`) ; cette table n'a rien à savoir de la largeur. */
+export const COURT_DOOR_W = 2;
 export const COURT_CORRIDOR = { x: 18, y: 0, w: 10, h: 28 };
 export const COURT_ROOMS = [
   // ---------------- REZ-DE-CHAUSSÉE : ce qui se passe en public.

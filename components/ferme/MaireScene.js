@@ -77,6 +77,52 @@ export function mayorCtxOf(shared, star, E) {
    nombre réglé à la main : le français gonfle de 15 à 20 % sur l'anglais) ── */
 const lenOf = (...xs) => xs.reduce((n, x) => n + (typeof x === "string" ? x.length : 0), 0);
 
+/* HORS-ZIP — SÉPARER LA DIDASCALIE DE LA RÉPLIQUE, DANS LA MÊME BULLE.
+   Signalé par Guillaume en regardant la scène : « styles différents entre ce
+   que dit effectivement le maire et les didascalies / descriptions de son
+   comportement ». Les deux vivent dans LA MÊME chaîne, écrite à la main dans
+   `fermeStrings.js` (`maire.ask`, `maire.tint`) : « Il ne lève pas les yeux
+   tout de suite. […] « Vous êtes le fermier du nord. […] » » — de la
+   narration à la troisième personne, puis la réplique entre guillemets — et
+   la bulle les affichait d'un seul bloc, dans la même graisse, la même
+   couleur : rien ne disait au lecteur qu'il changeait de registre au milieu
+   de la phrase.
+   ⚠️ ON NE RÉÉCRIT AUCUN TEXTE. Les deux registres existent déjà, marqués par
+   la ponctuation que `fermeStrings.js` porte depuis toujours (« » en
+   français, `"…"` en anglais) — il manquait seulement de leur donner deux
+   styles au rendu, exactement comme `.maire-bubble-tint` le fait déjà pour la
+   phrase du maire élu. Un texte qu'on ne peut pas changer dans les deux
+   langues à la fois (§ CLAUDE.md) se corrige au rendu, pas dans la donnée.
+   ⚠️ PURE, ZÉRO ÉTAT : un simple découpage par expression régulière, appelé à
+   chaque rendu de bulle — rien à mémoriser, rien à invalider. */
+function mayorLineParts(str) {
+  if (typeof str !== "string" || !str) return [];
+  const re = /«[^»]*»|"[^"]*"/g;
+  const out = [];
+  let last = 0, m;
+  while ((m = re.exec(str))) {
+    if (m.index > last) {
+      const stage = str.slice(last, m.index).trim();
+      if (stage) out.push({ k: "stage", t: stage });
+    }
+    out.push({ k: "say", t: m[0] });
+    last = re.lastIndex;
+  }
+  if (last < str.length) {
+    const rest = str.slice(last).trim();
+    if (rest) out.push({ k: last === 0 ? "say" : "stage", t: rest });
+  }
+  return out;
+}
+function MayorLine({ text }) {
+  const parts = mayorLineParts(text);
+  return parts.map((p, i) => (
+    <span key={i} className={p.k === "stage" ? "maire-line-stage" : "maire-line-say"}>
+      {(i > 0 ? " " : "") + p.t}
+    </span>
+  ));
+}
+
 /* ⚠️ L'ORDRE DES TROIS RÉPONSES EST TIRÉ, ET IL LE FAUT : à position fixe, on
    apprend en deux entretiens que l'idéale est la première et on cesse de lire.
    ⚠️ Le tirage n'a AUCUN effet sur l'arbitrage — la transcription porte des
@@ -398,8 +444,8 @@ function Stage({ L, cand, view, opts, head, foot, bubble, onClose, closeLabel })
                                     opacity: bubble ? 1 : 0 }}>
         {bubble && (
           <div className="maire-bubble">
-            {bubble.tint && <div className="maire-bubble-tint">{bubble.tint}</div>}
-            <div>{bubble.text}</div>
+            {bubble.tint && <div className="maire-bubble-tint"><MayorLine text={bubble.tint} /></div>}
+            <div><MayorLine text={bubble.text} /></div>
             <span className="maire-bubble-tail" />
           </div>
         )}

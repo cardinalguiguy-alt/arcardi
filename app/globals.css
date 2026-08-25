@@ -7456,6 +7456,24 @@ div.ferme-usage{ margin-bottom:10px; }
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
 }
 
+/* ---- LA PASTILLE D'ATTENTE (hors-zip). Le compte à rebours du gros météore
+   et celui de l'audience du maire : même forme que le pisteur, en haut à
+   droite pour ne jamais recouvrir sa phrase — les deux ne se produisent
+   jamais ensemble dans la chronologie de la quête. */
+.ferme-wait-pill{
+  position:fixed; right:calc(env(safe-area-inset-right, 0px) + 10px);
+  top:calc(env(safe-area-inset-top, 0px) + 8px); z-index:22;
+  display:flex; align-items:center; gap:8px; max-width:min(280px, 46vw);
+  padding:6px 12px; border-radius:14px; pointer-events:none;
+  background:rgba(10,14,30,.72); border:2px solid rgba(255,228,164,.30);
+  box-shadow:0 3px 14px rgba(0,0,0,.45);
+  color:#f4ecd6; font-size:12px; line-height:1.25;
+}
+.ferme-wait-pill .ico{ font-size:15px; filter:drop-shadow(0 0 6px rgba(255,220,140,.6)); flex:0 0 auto; }
+@media (max-width: 560px){
+  .ferme-wait-pill{ font-size:11px; padding:5px 9px; gap:6px; max-width:56vw; }
+}
+
 /* ---- LE MINI-JEU. Plein écran, canevas au centre. ⚠️ `touch-action:none` :
    sans lui, glisser le doigt pour mener la lumière fait défiler la page. */
 .ferme-star-mini{
@@ -7492,6 +7510,15 @@ div.ferme-usage{ margin-bottom:10px; }
   box-shadow:0 10px 30px rgba(0,0,0,.55); position:relative;
 }
 .maire-bubble-tint{ color:#c9bda0; font-style:italic; font-size:13.5px; margin-bottom:6px; }
+/* HORS-ZIP — LA DIDASCALIE ET LA RÉPLIQUE, DEUX STYLES DANS LA MÊME BULLE.
+   `MayorLine` (MaireScene.js) sépare chaque texte du maire en segments à la
+   ponctuation qu'il porte déjà (« » / "…") : ceci est ce qui les distingue à
+   l'écran, sans toucher un mot de `fermeStrings.js`. `.maire-line-say`
+   reprend la couleur normale de la bulle même à l'intérieur de
+   `.maire-bubble-tint` (qui, elle, est italique en bloc) — c'est la réplique
+   qui doit rester lisible comme une réplique, où qu'elle apparaisse. */
+.maire-line-stage{ font-style:italic; color:#c9bda0; }
+.maire-line-say{ font-style:normal; color:#f2eee4; }
 .maire-bubble-tail{
   position:absolute; left:50%; bottom:-9px; width:16px; height:16px; margin-left:-8px;
   background:rgba(20,22,28,.93); border-right:1px solid rgba(212,186,120,.42);

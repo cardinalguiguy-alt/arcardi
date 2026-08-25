@@ -175,7 +175,12 @@ const STAR_FR = {
        ici on donne la RAISON, ce que le bandeau n'a pas la place de faire. */
     nextStarLight: "Elle ne sortira pas tant qu'on la regarde — et elle a froid. Offre-lui de la lumière bleue : 60 bonbons du défi de fuite, rapportés depuis la chute.",
     nextStarWarm: "Le calme ne l'intéresse pas. Elle vient à la chaleur : cuisine-lui quelque chose au chaudron et porte-le-lui avant que ça refroidisse.",
-    nextStarLure: "Elle fuit à mains nues. Prépare une Essence d'étoile au chaudron — minerai magique du monde maléfique et améthyste — et reviens : avec la fiole, elle viendra d'elle-même.",
+    // Hors-zip — RESKIN (demande Guillaume) : la ressource se nomme désormais
+    // les éclats de comète (petit tas de cailloux blancs et violets luisants,
+    // ramassable en un point fixe du monde maléfique) plutôt que du "minerai
+    // magique" générique. La phrase dit où chercher, comme le texte du
+    // passage sombre pour le chaudron (voir hud.cauldronPassage).
+    nextStarLure: "Elle fuit à mains nues. Il lui faut une Essence d'étoile : fouille les recoins du monde maléfique, tu y trouveras un tas d'éclats de comète — blancs et violets, luisants. Ramène-les avec une améthyste au chaudron pour les préparer, et reviens : avec la fiole, elle viendra d'elle-même. Reste vigilant.",
     nextMaterial: "Il faut la refroidir à cœur avant d'y toucher.",
     nextEmpty: "Un site de moins à écarter.",
     left: (n) => n > 0
@@ -279,6 +284,21 @@ const STAR_FR = {
       timberWait:     "Tristan scie. Le bois ira sur la cale du lac, à Valley Town.",
       timberRaise:    "Une pièce t'attend sur la cale du lac. Va la monter (E).",
     },
+    /* Hors-zip — REPLI DU CHEVRON QUAND LE CHAUDRON N'EST PAS ENCORE RAMASSÉ
+       (demande de Guillaume, dictée mot pour mot). ⚠️ SEULE PHRASE DE `goal`
+       QUI DÉPASSE VOLONTAIREMENT LE PLAFOND DE 80 SIGNES DES AUTRES : elle ne
+       s'affiche qu'un temps, avant la toute première fois où le chaudron est
+       ramassé dans le monde maléfique — jamais en régime permanent une fois
+       la ferme équipée. Voir `starGoalText`, FermeGame.js. */
+    cauldronPassage: "Fouillez les moindres recoins de cette forêt maudite et vous y trouverez un chaudron magique, mais restez vigilant.",
+    /* HORS-ZIP — LE COMPTE À REBOURS DU GROS MÉTÉORE. Signalé par Guillaume :
+       la chute semblait ne jamais arriver, faute d'affichage — le mécanisme
+       (deux minutes de présence active en ville, voir STAR_TOWN_ACTIVE_MS
+       dans quete.js) était déjà correct, il manquait juste d'être VU. Cette
+       pastille ne s'affiche que côté hôte (lui seul tient l'horloge réelle,
+       §3 de CLAUDE.md : on ne diffuse pas ce qui se déduit, mais ici rien ne
+       se déduit chez l'invité, qui n'a pas cette horloge). */
+    townFallCountdown: (mmss) => `Ça gronde. Encore ${mmss} d'activité en ville et le ciel cède.`,
     againTitle: "Où tu en étais",
     /* ⚠️ ZIP 453 — LE PLURIEL EST DÉRIVÉ, LUI AUSSI : cette phrase écrivait
        « Tu as 1 morceaux » au premier morceau, ce qu'aucun banc ne regardait. */
@@ -855,7 +875,7 @@ const STAR_EN = {
        n'est pas le même selon la couleur. */
     nextStarLight: "It will not come out while anyone watches — and it is cold. Offer it blue light: 60 candies from the escape run, brought back since the fall.",
     nextStarWarm: "Quiet does nothing for this one. It comes to heat: cook something at the cauldron and carry it over before it goes cold.",
-    nextStarLure: "It flees bare-handed. Brew a Star Essence at the cauldron — magic ore from the evil world and an amethyst — and come back: with the vial, it will come on its own.",
+    nextStarLure: "It flees bare-handed. It needs a Star Essence: search the corners of the evil world, you'll find a pile of comet shards there — white and violet, glowing. Bring them with an amethyst to the cauldron to prepare it, then come back: with the vial, it will come on its own. Stay alert.",
     nextMaterial: "It has to cool all the way through before you can touch it.",
     nextEmpty: "One site fewer to rule out.",
     left: (n) => n > 0
@@ -937,6 +957,11 @@ const STAR_EN = {
       timberWait:     "Tristan is sawing. The timber goes to the lake slipway, Valley Town.",
       timberRaise:    "A piece is waiting on the lake slipway. Go raise it (E).",
     },
+    // Chevron fallback while the cauldron hasn't been picked up yet — see the
+    // FR block for why this one line is allowed to run past the usual 80-char cap.
+    cauldronPassage: "Search every corner of this cursed forest and you'll find a magic cauldron there — but stay alert.",
+    // The big meteor's countdown — host-side only, see the FR block for why.
+    townFallCountdown: (mmss) => `It's rumbling. ${mmss} more of activity in town and the sky gives way.`,
     /* Le rappel de reprise. ⚠️ UNE FOIS PAR SESSION, jamais deux — un « où en
        étions-nous » qui revient à chaque écran est une notification. */
     againTitle: "Where you were",
@@ -3183,12 +3208,12 @@ export const FERME_STR = {
     salveIgnited: (who) => `🔥 ${who} allume le feu sous le chaudron ! Concoction en cours (1 min)...`,
     salveBrewed: (who) => `⚗️ ${who} récupère une pommade de protection au chaudron !`,
     // 480 bis — l'Essence d'étoile, même trio de phrases que la pommade.
-    oreDeposited: (who, n) => `${who} dépose ${n} minerai magique au chaudron.`,
+    oreDeposited: (who, n) => `${who} dépose ${n} éclat${n > 1 ? "s" : ""} de comète au chaudron.`,
     lureIgnited: (who) => `🔥 ${who} allume le feu sous le chaudron ! Essence d'étoile en cours (1 min 30)...`,
     lureBrewed: (who) => `⚗️ ${who} récupère une Essence d'étoile au chaudron !`,
     toastFarCauldron: "Approche-toi du chaudron pour déposer ou concocter.",
     toastNoFishToDeposit: "Tu ne portes ni truite ni brochet à déposer.",
-    toastNoOreToDeposit: "Tu ne portes pas de minerai magique à déposer.",
+    toastNoOreToDeposit: "Tu ne portes pas d'éclats de comète à déposer.",
     toastCauldronMissing: "Il manque des ingrédients (1 améthyste, 2 truites, 1 brochet), ou le chaudron n'est pas encore posé.",
     toastCauldronBrewing: "⏳ La concoction est déjà en cours, reviens dans un instant.",
     toastCauldronNothingToCollect: "Rien à récupérer au chaudron pour l'instant.",
@@ -3209,7 +3234,7 @@ export const FERME_STR = {
     cauldronMenuTitle: "⚗️ Que voulez-vous concocter ?",
     cauldronMenuHint: "Réunis les ingrédients du parchemin, puis va allumer ta torche et clique sur le chaudron pour lancer le feu.",
     cauldronProductSalveName: "🧴 Pommade magique",
-    // 480 bis — nouvelle concoction, ingrédients rares (minerai magique du
+    // 480 bis — nouvelle concoction, ingrédients rares (éclats de comète du
     // monde maléfique + améthyste) : voir STAR_LURE_RECIPE, fermeConstants.js.
     cauldronProductLureName: "✨ Essence d'étoile",
     // Parchemin de recette (demande Guillaume 2026-07) : nom en haut, liste
@@ -3218,7 +3243,7 @@ export const FERME_STR = {
     scrollIngAmethyst: (have, need) => `${need} améthyste de la réserve commune (${have}/${need})`,
     scrollIngTrout: (dep, need) => `${need} truites versées au chaudron (${dep}/${need})`,
     scrollIngPike: (dep, need) => `${need} brochet versé au chaudron (${dep}/${need})`,
-    scrollIngOre: (dep, need) => `${need} minerai magique du monde maléfique (${dep}/${need})`,
+    scrollIngOre: (dep, need) => `${need} éclat${need > 1 ? "s" : ""} de comète du monde maléfique (${dep}/${need})`,
     cauldronScrollEffect: "« Qui s'en oint la peau chemine un temps parmi les ombres, et les créatures de la nuit se détournent de son passage. »",
     cauldronLureScrollEffect: "« Ce que la fiole retient, nulle étoile ne le fuit plus : elle vient d'elle-même, à pas comptés. »",
     cauldronAddBtn: "🫗 Ajouter les ingrédients",
@@ -3238,6 +3263,11 @@ export const FERME_STR = {
     promptPassagePickup: "[E] Ramasser la breloque",
     evilCauldronPickedToast: "⚗️ Tu as récupéré le chaudron ! Ramène-le côté ferme et pose-le où tu veux (outil Construction).",
     toastCauldronAlreadyTaken: "Ce chaudron a déjà été récupéré.",
+    // Éclats de comète (hors-zip, demande Guillaume) : même trio que le
+    // chaudron-artéfact juste au-dessus.
+    promptEvilShardsPickup: "[E] Ramasser les éclats de comète",
+    evilShardsPickedToast: "✨ Tu as ramassé un tas d'éclats de comète ! Prépare-les avec une améthyste au chaudron pour l'Essence d'étoile.",
+    toastShardsAlreadyTaken: "Ce tas d'éclats de comète a déjà été ramassé.",
     toastNoCauldronStock: "Tu ne portes pas de chaudron à poser.",
     toastCauldronNotEmpty: "Vide le chaudron (poisson déposé) avant de le déplacer.",
     cauldronRowTitle: "⚗️ Chaudron",
@@ -3296,7 +3326,7 @@ export const FERME_STR = {
     // Effets flottants
     fxWood: (n) => `+${n} bois`,
     fxStone: (n) => `+${n} pierre`,
-    fxMagicOre: (n) => `+${n} minerai magique`,
+    fxMagicOre: (n) => `+${n} éclat${n > 1 ? "s" : ""} de comète`,
     fxHarvest: (name, n) => `+${n || 1} ${name.toLowerCase()}`,
     fxGold: (n) => `+${n} or`,
     fxEat: "Miam !",
@@ -4855,7 +4885,7 @@ export const FERME_STR = {
     salveIgnited: (who) => `🔥 ${who} lights the fire under the cauldron! Brewing in progress (1 min)...`,
     salveBrewed: (who) => `⚗️ ${who} collects a protection salve at the cauldron!`,
     // 480 bis — Star Essence, same trio of lines as the salve.
-    oreDeposited: (who, n) => `${who} deposits ${n} magic ore at the cauldron.`,
+    oreDeposited: (who, n) => `${who} deposits ${n} comet shard${n > 1 ? "s" : ""} at the cauldron.`,
     lureIgnited: (who) => `🔥 ${who} lights the fire under the cauldron! Star Essence brewing (1 min 30)...`,
     lureBrewed: (who) => `⚗️ ${who} collects a Star Essence at the cauldron!`,
     toastFarCauldron: "Get closer to the cauldron to deposit or brew.",
@@ -4877,7 +4907,7 @@ export const FERME_STR = {
     scrollIngAmethyst: (have, need) => `${need} amethyst from the common reserve (${have}/${need})`,
     scrollIngTrout: (dep, need) => `${need} trout poured into the cauldron (${dep}/${need})`,
     scrollIngPike: (dep, need) => `${need} pike poured into the cauldron (${dep}/${need})`,
-    scrollIngOre: (dep, need) => `${need} magic ore from the evil world (${dep}/${need})`,
+    scrollIngOre: (dep, need) => `${need} comet shard${need > 1 ? "s" : ""} from the evil world (${dep}/${need})`,
     cauldronScrollEffect: "“Who anoints their skin with it walks a while among the shadows, and the creatures of the night turn away from their path.”",
     cauldronLureScrollEffect: "“What the vial holds, no star flees any longer: it comes on its own, in measured steps.”",
     cauldronAddBtn: "🫗 Add the ingredients",
@@ -4892,12 +4922,15 @@ export const FERME_STR = {
     promptPassagePickup: "[E] Pick up the trinket",
     evilCauldronPickedToast: "⚗️ You picked up the cauldron! Bring it back to the farm and place it anywhere (Build tool).",
     toastCauldronAlreadyTaken: "This cauldron has already been picked up.",
+    promptEvilShardsPickup: "[E] Pick up the comet shards",
+    evilShardsPickedToast: "✨ You picked up a pile of comet shards! Prepare them with an amethyst at the cauldron for the Star Essence.",
+    toastShardsAlreadyTaken: "This pile of comet shards has already been picked up.",
     toastNoCauldronStock: "You aren't carrying a cauldron to place.",
     toastCauldronNotEmpty: "Empty the cauldron (deposited fish) before moving it.",
     cauldronRowTitle: "⚗️ Cauldron",
     cauldronRowSub: "Brought back from the evil world. Place it anywhere with the Build tool: it's then used to craft the protection salve or the Star Essence.",
     toastNoFishToDeposit: "You're not carrying any trout or pike to deposit.",
-    toastNoOreToDeposit: "You're not carrying any magic ore to deposit.",
+    toastNoOreToDeposit: "You're not carrying any comet shards to deposit.",
     toastCauldronMissing: "Missing ingredients (1 amethyst, 2 trout, 1 pike), or the cauldron isn't placed yet.",
     troutLabel: "trout",
     pikeLabel: "pike",
@@ -4946,7 +4979,7 @@ export const FERME_STR = {
     chatLeave: (name) => `${name} left the farm.`,
     fxWood: (n) => `+${n} wood`,
     fxStone: (n) => `+${n} stone`,
-    fxMagicOre: (n) => `+${n} magic ore`,
+    fxMagicOre: (n) => `+${n} comet shard${n > 1 ? "s" : ""}`,
     fxHarvest: (name, n) => `+${n || 1} ${name.toLowerCase()}`,
     fxGold: (n) => `+${n} gold`,
     fxEat: "Yum!",

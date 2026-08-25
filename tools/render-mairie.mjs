@@ -100,14 +100,19 @@ function shot(name, f, k) {
      masse. On ne peut pas écrire le libellé (le faux canvas n'a pas `fillText`,
      §4), donc on peint le CARTOUCHE : sa présence et sa place se vérifient,
      et c'est ce qui manquait. */
-  for (const d of cw.doors) {
-    if (d.floor !== f) continue;
-    const px = d.x * T, py = (d.y - y0) * T;
-    q.push({ by: (d.y - y0 + 0.6) * T, fn: () => {
-      sh.ctx.fillStyle = "#5a4230"; sh.ctx.fillRect(px - 1, py - 14, T + 2, 14);
-      sh.ctx.fillStyle = "#3a2a1c"; sh.ctx.fillRect(px + 1, py - 11, T - 2, 11);
-      sh.ctx.fillStyle = "#f5eeda"; sh.ctx.fillRect(px - 6, py - 24, T + 12, 11);
-      sh.ctx.fillStyle = "#6b4a2e"; sh.ctx.fillRect(px - 6, py - 24, T + 12, 1); sh.ctx.fillRect(px - 6, py - 14, T + 12, 1);
+  /* HORS-ZIP — UN CARTOUCHE PAR PORTE, PAS PAR CASE. Même raison que dans
+     FermeGame.js : `E.courtDoorGroups` est la seule jointure entre « les
+     cases de porte » et « les portes » depuis que chacune en fait
+     `COURT_DOOR_W` — le relire case par case aurait empilé deux cartouches
+     identiques sur la même pièce. */
+  for (const g of E.courtDoorGroups(cw.doors)) {
+    if (g.floor !== f) continue;
+    const px = g.x * T, pyTop = (g.y0 - y0) * T, spanH = (g.y1 - g.y0 + 1) * T;
+    q.push({ by: (g.y0 - y0 + 0.6) * T, fn: () => {
+      sh.ctx.fillStyle = "#5a4230"; sh.ctx.fillRect(px - 1, pyTop - 14, T + 2, spanH + 14);
+      sh.ctx.fillStyle = "#3a2a1c"; sh.ctx.fillRect(px + 1, pyTop - 11, T - 2, spanH + 11);
+      sh.ctx.fillStyle = "#f5eeda"; sh.ctx.fillRect(px - 6, pyTop - 24, T + 12, 11);
+      sh.ctx.fillStyle = "#6b4a2e"; sh.ctx.fillRect(px - 6, pyTop - 24, T + 12, 1); sh.ctx.fillRect(px - 6, pyTop - 14, T + 12, 1);
     } });
   }
   q.sort((a, b) => a.by - b.by);

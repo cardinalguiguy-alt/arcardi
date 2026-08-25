@@ -1963,7 +1963,15 @@ export const STAR_GOAL_TARGET = { craterHot: "crater", craterAlone: "crater", en
      le chevron y mène déjà, il n'y a pas d'adresse neuve à inventer. */
   mayor: "townHall",
   timberOrder: "sawmill", timberWait: "sawmill", timberRaise: "shipyard",
-  farmImpactWarm: "cauldron", farmImpactSimmer: "cauldron", farmImpactTake: "cauldron" };
+  /* ⚠️ HORS-ZIP — `farmImpactLure` REJOINT LE TRIO CI-DESSOUS. Il était classé
+     avec les objectifs qui pointent vers le TROU de l'impact (voir plus bas
+     dans `starTargetSite`), alors que le geste qu'il demande — préparer
+     l'Essence d'étoile — se passe au CHAUDRON, exactement comme warm/simmer/
+     take. Le bandeau le disait déjà ("Prépare une Essence d'étoile au
+     chaudron") ; le chevron pointait pourtant ailleurs — deux réponses à « où
+     vais-je », le défaut du 449, trouvé par Guillaume en jouant. */
+  farmImpactWarm: "cauldron", farmImpactSimmer: "cauldron", farmImpactTake: "cauldron",
+  farmImpactLure: "cauldron" };
 export const STAR_OFF_TABLE_TARGETS = ["townHall", "sawmill", "shipyard", "cauldron"];
 export function starTargetSite(e, ctx) {
   const goal = starGoalKey(e, ctx);
@@ -1972,15 +1980,15 @@ export function starTargetSite(e, ctx) {
      `farmImpacts`, JUSTE À UN AUTRE INSTANT (voir `starGoalKey`) : le chevron
      continue de pointer le premier impact manquant, qu'il soit encore intact
      ou déjà fouillé et en attente. */
-  /* ⚠️ ZIP 479 — LES TROIS CLÉS QUI ENVOIENT AU CHAUDRON SONT TRAITÉES AVANT :
-     elles désignent un ATELIER, pas le trou. Sans cette sortie, le chevron aurait
-     pointé le cratère rose pendant qu'on demande d'aller cuisiner ailleurs — deux
-     réponses à « où vais-je », le défaut du 449. */
+  /* ⚠️ ZIP 479 (+1 clé hors-zip) — LES QUATRE CLÉS QUI ENVOIENT AU CHAUDRON
+     SONT TRAITÉES AVANT : elles désignent un ATELIER, pas le trou. Sans cette
+     sortie, le chevron aurait pointé le cratère rose (ou blanc) pendant qu'on
+     demande d'aller cuisiner ailleurs — deux réponses à « où vais-je », le
+     défaut du 449. */
   if (STAR_GOAL_TARGET[goal] === "cauldron") return "cauldron";
   if (goal === "farmImpacts" || goal === "farmImpactCool"
       || goal === "farmImpactTame" || goal === "farmImpactLight"
-      || goal === "farmImpactLightPay" || goal === "farmImpactCarry"
-      || goal === "farmImpactLure") {
+      || goal === "farmImpactLightPay" || goal === "farmImpactCarry") {
     const id = starMissing(e).find(k => STAR_SITE[k] && STAR_SITE[k].spot === "starFarmImpact");
     return id || null;
   }
