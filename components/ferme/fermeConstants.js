@@ -6135,3 +6135,89 @@ export const MAYOR_BURNT_K = 0.35;
    ça arrête l'hémorragie. C'est la même grandeur qui porte les deux, et elle
    est diégétique : rien à afficher, rien à expliquer. */
 export const MAYOR_BEAT_MS = 2600;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 481 — LE RENDEZ-VOUS, L'HUMEUR, ET LA PORTE QU'ON CLAQUE.
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume, en trois morceaux : on demande l'audience à l'accueil,
+   la secrétaire dit l'HUMEUR du maire (elle EST la difficulté), et on attend
+   trois, quatre ou cinq minutes réelles avant de pouvoir monter.
+
+   ⚠️⚠️ L'HUMEUR EST LA SEULE DIFFICULTÉ VISIBLE DE TOUT LE SYSTÈME, ET C'EST
+   POUR ÇA QU'ELLE VAUT MIEUX QU'UN RÉGLAGE. Le 480 a payé la leçon inverse en
+   entier : trois malus empilés (la carte des plans, les répliques de repli, une
+   fuite majorée) rendaient l'entretien arithmétiquement ingagnable sans que
+   personne ne puisse faire la somme, parce qu'aucun des trois ne s'affichait.
+   Ici il n'y a qu'un levier, il porte un nom, une secrétaire le prononce à voix
+   haute avant qu'on monte, et le joueur peut décider de revenir demain.
+   *La difficulté d'un monde se règle sur UN levier qu'on peut lire.*
+
+   ⚠️ DEUX GRANDEURS, PAS UNE : le DÉPART (ce qu'il vous accorde d'avance) et la
+   FUITE (la vitesse à laquelle il décroche). Une humeur qui ne bougerait que le
+   départ se rattraperait en deux répliques ; une humeur qui ne bougerait que la
+   fuite ne se verrait pas avant la vingtième seconde. Les deux ensemble se
+   sentent au premier échange et tiennent jusqu'au dernier.
+   ═══════════════════════════════════════════════════════════════════════════ */
+export const MAYOR_MOODS = ["great", "good", "mid", "bad", "awful"];
+/* Ce qu'il vous accorde d'avance, en points, par-dessus le départ du monde. */
+export const MAYOR_MOOD_START = { great: 12, good: 6, mid: 0, bad: -4, awful: -7 };
+/* Et la vitesse à laquelle il décroche. ⚠️ BORNÉ EN HAUT À 1,45 : au-delà, la
+   fuite d'une humeur exécrable dépasse à elle seule ce que la meilleure réplique
+   de l'arbre rapporte, et on retombe sur le mur du 480. */
+export const MAYOR_MOOD_DRAIN = { great: 0.70, good: 0.85, mid: 1, bad: 1.22, awful: 1.45 };
+/* ⚠️ LE TIRAGE EST EN CLOCHE : le milieu est le cas ordinaire, les extrêmes
+   sont des soirées. Un tirage uniforme aurait fait de « très favorable » un
+   cinquième des visites, c'est-à-dire une routine. */
+export const MAYOR_MOOD_WEIGHT = { great: 1, good: 3, mid: 4, bad: 3, awful: 1 };
+/* ⚠️⚠️ LE JOUR D'AUDIENCE PENCHE LE TIRAGE, IL NE LE DÉCIDE PAS. `mayorAudienceDay`
+   existait depuis le 439 comme une date affichée ; depuis le 480 elle ralentit la
+   fuite, depuis celui-ci elle vous donne aussi une chance de plus de bien tomber.
+   Une date qui ne change rien est une date qui ment — et une date qui décide tout
+   supprime la raison de venir les autres jours. */
+export const MAYOR_MOOD_AUDIENCE_LIFT = 1;   // d'un cran vers le haut, une fois sur deux
+
+/* L'attente avant de pouvoir monter. Trois, quatre ou cinq minutes RÉELLES.
+   ⚠️ C'est le chiffre de Guillaume, et il n'est pas décoratif : c'est ce qui
+   transforme « ouvrir un panneau » en « avoir rendez-vous ». On redescend faire
+   autre chose, et on remonte. */
+export const MAYOR_WAIT_CHOICES_MS = [3 * 60000, 4 * 60000, 5 * 60000];
+/* ⚠️⚠️ ET LE RENDEZ-VOUS NE PÉRIME PAS À LA SECONDE. Un créneau d'une minute
+   ferait rater l'audience à qui traverse la ville à pied, et rater un rendez-vous
+   qu'on a attendu quatre minutes est la définition d'une corvée. Une demi-heure
+   de grâce : il est en retard, comme tout le monde. */
+export const MAYOR_APPT_GRACE_MS = 30 * 60000;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LA PORTE QU'ON CLAQUE — ET LE SEUL ENDROIT DU JEU OÙ PARTIR SE PAIE.
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume, mot pour mot : « Ajouter une option quitter la séance en
+   claquant la porte ! le maire aura un "!" sur la tête si on fait ça. Et on ne
+   pourra pas le contacter avant 15 minutes réelles si l'on quitte. Il sera de
+   mauvaise humeur à la prochaine audience. »
+   ⚠️⚠️ CE N'EST PAS LA MÊME CHOSE QUE PERDRE. Perdre (`out`, `walked`) coûte une
+   tentative et des répliques brûlées ; claquer la porte coûte un quart d'heure
+   RÉEL et l'humeur de la fois suivante. C'est la seule sortie du jeu qui ait un
+   prix, et c'est ce qui la rend intéressante à proposer.
+   ⚠️ TOUT SE REMET À ZÉRO AVEC LA QUÊTE (menu développeur → ⭐ Star → effacer) :
+   `newStar()` reconstruit `mayor`, donc le blocage et la rancune partent avec.
+   C'est la demande de Guillaume, et c'est gratuit — il n'y avait rien à écrire. */
+export const MAYOR_SLAM_BLOCK_MS = 15 * 60000;
+/* Le « ! » au-dessus de sa tête, en secondes de scène avant le fondu au noir. */
+export const MAYOR_SLAM_HOLD_MS = 2600;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LA SCÈNE, ET CE QU'ELLE DIFFUSE — ⚠️ UNE FOIS PAR BATTEMENT, JAMAIS PAR IMAGE.
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume : « en multi si un joueur entre dans la négo, les autres
+   joueurs doivent avoir un bouton "voir la scène de (autre joueur)" ».
+   ⚠️⚠️ LE §3 EST FORMEL : dix messages par seconde et par client, et seul le
+   NOMBRE de `send()` compte. Une scène diffusée image par image, c'est soixante
+   messages par seconde — le plafond est dépassé en silence et TOUT le reste du
+   jeu (positions, récoltes) tombe avec. On ne diffuse donc que ce qui CHANGE :
+   une réponse, un nœud, une fin. Un entretien complet coûte une quinzaine de
+   messages, et le spectateur voit exactement la même scène parce qu'il rejoue
+   les mêmes interpolations à partir du même état.
+   ⚠️ Une relance périodique existe quand même, très lente : sans elle, un joueur
+   qui ouvre la fenêtre pendant que l'autre LIT n'aurait rien à afficher jusqu'au
+   battement suivant. */
+export const MAYOR_LIVE_KEEPALIVE_MS = 4000;

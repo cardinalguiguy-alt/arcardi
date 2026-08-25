@@ -48,7 +48,7 @@ import * as Q from "./quete";
    `maire.js`, vue 3D dans `MaireScene.js` : ce fichier ne fait que la porte et
    l'arbitrage. Voir l'en-tête de `maire.js` pour le contrat réseau. */
 import * as MR from "./maire";
-import { MayorAudience, mayorCtxOf } from "./MaireScene";
+import { MayorAudience, MayorWatch, mayorCtxOf } from "./MaireScene";
 import { buildSprites, charPalette, drawBridgeTile, drawBridgeOverlay, drawCandyGroundTile, candySyrupColor } from "./fermeArt";
 import { fstr } from "./fermeStrings";
 // ZIP 441 — l'orgue de l'église. Le lecteur de fichiers existe depuis longtemps
@@ -615,6 +615,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      derrière — un maire qu'on écoute pendant qu'un sanglier mange les carottes
      ne serait pas une scène, ce serait une fenêtre. */
   const [mayorTalk, setMayorTalk] = useState(null);
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 481 — TROIS ÉTATS DE PLUS POUR L'AUDIENCE, ET AUCUN N'EST PARTAGÉ.
+     ╚══════════════════════════════════════════════════════════════════════════
+     · `mayorFade` : le fondu au noir qui ouvre la scène. Demande de Guillaume
+       (« un fondu enchaîné qui ouvrira l'audience en 3D ») ; il est LOCAL parce
+       qu'une transition est un geste de caméra, pas un fait du monde.
+     · `mayorLive` : le dernier battement reçu de l'audience d'un AUTRE joueur.
+       C'est lui qui fait apparaître le bouton « voir la scène de… ». Il ne
+       transite pas par `shared` : il est éphémère, il ne se persiste pas, et une
+       audience abandonnée doit s'oublier toute seule au rechargement.
+     · `mayorWatch` : est-ce que JE regarde. Purement local, par construction. */
+  const [mayorFade, setMayorFade] = useState(0);
+  const [mayorLive, setMayorLive] = useState(null);
+  const [mayorWatch, setMayorWatch] = useState(false);
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ZIP 444 — LES ÉTATS D'INTERFACE DE LA QUÊTE DE L'ÉTOILE.
      ╚══════════════════════════════════════════════════════════════════════════
@@ -1381,8 +1395,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      l'overlay de résultat doit suspendre l'arrivée d'une étoile (468) et empêcher
      qu'on relance une fouille par-dessus. Il n'y est PAS pour bloquer les
      déplacements — voir la note de `starDigStep`. */
-  useEffect(() => { starUiOpenRef.current = !!(starMini || starCard || starRecap || starOffer || starFind || mayorTalk); },
-            [starMini, starCard, starRecap, starOffer, starFind, mayorTalk]);          // zip 444/469/480
+  useEffect(() => { starUiOpenRef.current = !!(starMini || starCard || starRecap || starOffer || starFind || mayorTalk || mayorWatch); },
+            [starMini, starCard, starRecap, starOffer, starFind, mayorTalk, mayorWatch]);   // zip 444/469/480/481
   useEffect(() => { planOpenRef.current = planOpen; }, [planOpen]);                     // zip 454
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ZIP 449 — LE DÉPART SPONTANÉ DU GUIDE. Une veille d'une seconde, et elle
@@ -2349,6 +2363,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     ch.on("broadcast", { event: "apply" }, ({ payload }) => applyDeltas(payload));
     ch.on("broadcast", { event: "newday" }, ({ payload }) => applyNewDay(payload));
     ch.on("broadcast", { event: "chat" }, ({ payload }) => addChat(payload.from, payload.msg));
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ ZIP 481 — LE BATTEMENT DE L'AUDIENCE, POUR « VOIR LA SCÈNE DE… ».
+       ╚══════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ IL NE PASSE PAS PAR `apply`, ET C'EST DÉLIBÉRÉ. `apply` porte l'état
+       PARTAGÉ, celui qui se persiste et que l'hôte arbitre ; une conversation en
+       cours n'est ni l'un ni l'autre — elle est éphémère, elle appartient à un
+       client, et elle doit s'oublier toute seule si celui-ci ferme son onglet.
+       Un canal à part coûte exactement zéro (le §3 facture les `send()`, pas les
+       événements) et évite qu'un battement de dialogue traverse `applyDeltas`,
+       qui écrit dans le monde.
+       ⚠️ ON IGNORE SON PROPRE ÉCHO : la ferme est en `self:false`, mais l'hôte
+       traite ses requêtes en local (voir `sendReq`) et rien ne garantit qu'un
+       jour ce ne soit pas le cas ici. */
+    ch.on("broadcast", { event: "mayorLive" }, ({ payload }) => {
+      if (!payload || payload.id === me.id) return;
+      setMayorLive({ id: payload.id, name: String(payload.name || "?").slice(0, 24),
+                     mayorKey: payload.mayorKey, state: payload.state || {}, at: Date.now() });
+    });
     // Zip 235: town façade style broadcast — everyone sees each other's
     // choice without any host arbitration (client-only preference).
     ch.on("broadcast", { event: "facadeStyle" }, ({ payload }) => {
@@ -2928,6 +2960,39 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        les deux tombent sur le même contexte par construction, jamais par accord.
        ⚠️ La séance elle-même ne diffuse RIEN : négocier ne coûte pas un message.
        Un `apply` part à la fin, et il portait déjà `star`. */
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ ZIP 481 — LA DEMANDE D'AUDIENCE, ET C'EST L'HÔTE QUI TIRE L'HUMEUR.
+       ╚══════════════════════════════════════════════════════════════════════
+       ⚠️⚠️⚠️ LE TIRAGE NE PEUT PAS ÊTRE AILLEURS. Une humeur tirée par le client
+       serait CHOISIE : il suffirait de recharger jusqu'à « très favorable ». Une
+       humeur dérivée du jour (comme le maire élu) serait la même toute la
+       journée, donc redemander une audience ne servirait à rien. Elle est donc
+       tirée UNE FOIS par l'arbitre, écrite dans l'état partagé, et lue par les
+       deux côtés — c'est ce qui fait que la secrétaire ne peut pas annoncer
+       autre chose que ce qu'on trouve en montant (défaut du 449 : deux réponses
+       à la même question).
+       ⚠️ ET C'EST LE PREMIER RENDEZ-VOUS DU JEU QUI SE COMPTE EN MINUTES RÉELLES
+       plutôt qu'en jours de ferme. Le §13 de `CLAUDE.md` réclame des « rendez-vous
+       datés » depuis cinq zips : celui-ci en est un, en très court. */
+    if (req.kind === "mayorAsk") {
+      const sA = sharedRef.current;
+      const eA = (sA.star = Q.migrateStar(sA.star));
+      const whoA = String(req.name || f.name || "?");
+      const dayA = sA.day || 1;
+      const rA = MR.resolveMayorAsk(eA, f.id, whoA, Date.now(), Math.random,
+                                    E.mayorAudienceDay(dayA) === dayA);
+      if (!rA) return;
+      /* ⚠️ ON NE DIFFUSE QUE QUAND QUELQUE CHOSE A CHANGÉ. « déjà pris », « déjà
+         signé » et « il ne veut pas vous voir » n'écrivent rien : les rediffuser
+         coûterait un message par clic sur un bouton qui s'ouvre à volonté. */
+      if (rA === "mayorBooked") {
+        out.star = eA;
+        dirtyRef.current = true;
+        broadcastChat("🎩", L.maire.chat.booked(whoA));
+        hostFlushOut(out, f, null);
+      }
+      return;
+    }
     if (req.kind === "mayorTalk") {
       const sM = sharedRef.current;
       const eM = (sM.star = Q.migrateStar(sM.star));
@@ -2940,6 +3005,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       dirtyRef.current = true;
       if (rM === "mayorSigned") broadcastChat("🎩", L.maire.chat.signed(whoM));
       else if (rM === "mayorThrown") broadcastChat("🎩", L.maire.chat.thrown(whoM));
+      else if (rM === "mayorSlam") broadcastChat("🎩", L.maire.chat.slam(whoM));
       else broadcastChat("🎩", L.maire.chat.failed(whoM));
       /* ⚠️ UNE SIGNATURE EST UN POINT DE REPRISE : elle ouvre tout le chantier
          naval. On force l'écriture, comme au franchissement d'un chapitre. */
@@ -12175,6 +12241,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     sendPos();
     setDevMenuOpen(false);
   }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 481 — SE PLANTER DEVANT LE BUREAU DU MAIRE. MÊME RAISON QUE LE 463.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ SANS LUI, CHAQUE ESSAI DE LA SCÈNE COÛTE LA TRAVERSÉE DE L'ÉTAGE. Le
+     téléport « Mairie — l'étage » dépose dans le couloir ; le bureau est deux
+     pièces plus loin, derrière une porte, et il faut le retrouver à pied à
+     chaque rechargement. C'est exactement ce qui vient de se passer en essayant
+     cette passe, et c'est la neuvième leçon de `CLAUDE.md` : *un banc vert sur la
+     logique ne dit rien de savoir si on peut PHYSIQUEMENT arriver.*
+     ⚠️ IL NE DONNE RIEN ET NE TOUCHE QUE LE JOUEUR LOCAL, comme `devStandAtNextStar` :
+     le rendez-vous, l'humeur et l'entretien restent entiers. On saute la MARCHE. */
+  function devStandAtMayorDesk() {
+    const m = meRef.current, cw = courtWorldRef.current;
+    if (!m || !cw || (m.zone || "farm") !== "court") { pushToast(L.maire.doorNotYet); return; }
+    const d = (cw.props || []).find(p => p.of === "mayorDesk");
+    if (!d) return;
+    keysRef.current = {};
+    m.x = d.x + 0.5; m.y = d.y + 2; m.dir = 0; m.moving = false;
+    sendPos();
+    setDevMenuOpen(false);
+  }
+
   /* ======================================================================
      ZIP 392 — LE PANNEAU DE NOTIFICATIONS, EN UN SEUL ENDROIT.
      ======================================================================
@@ -15172,7 +15260,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              fermier serait un voile, pas un éclairage. Voir `drawStarCalmGlow`. */
           if (cm.site && cm.k > 0) {
             const gx = (cm.site.x + 0.5) * T, gy = (cm.site.y + 0.6) * T, gk = cm.k, gc = cm.site.color || "yellow";
-            draws.push({ y: -1e9, fn: () => A.drawStarCalmGlow(ctx, gx, gy, T, gk, gc, performance.now()) });
+            /* ⚠️⚠️⚠️ ZIP 481 — `sprites.`, PAS `A.`. `drawStarCalmGlow` n'existe QUE
+               comme membre de l'objet rendu par `buildSprites()` : appelée par
+               l'espace de noms du module, elle levait un `TypeError` DANS LA
+               BOUCLE DE RENDU, dès la première image d'un apprivoisement, et
+               l'exception emportait tout ce que l'image devait encore dessiner.
+               Le piège n°1 de `CLAUDE.md`, non corrigé depuis le zip qui livrait
+               la fonctionnalité (478), signalé par un bundle esbuild au 480, et
+               réparé ici. Le bon motif est trois lignes plus haut
+               (`sprites.drawStarDish`). */
+            draws.push({ y: -1e9, fn: () => sprites.drawStarCalmGlow(ctx, gx, gy, T, gk, gc, performance.now()) });
           }
         }
       }
@@ -18460,7 +18557,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (cm.site && cm.k > 0 && cm.site.zone === "town") {
             const gx = (cm.site.x + 0.5) * T, gy = (cm.site.y + 0.6) * T, gk = cm.k, gc = cm.site.color || "yellow";
             const ge = elevTown(tw, cm.site.x, cm.site.y), gl = archPxTown(tw, cm.site.x, cm.site.y);
-            pushE(gy - 1e6, ge, () => A.drawStarCalmGlow(ctx, gx, gy, T, gk, gc, performance.now()), gl);
+            pushE(gy - 1e6, ge, () => sprites.drawStarCalmGlow(ctx, gx, gy, T, gk, gc, performance.now()), gl);   // 481 — voir la note du même appel côté ferme
           }
         }
       }
@@ -19293,6 +19390,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          — est le plus déroutant qu'une touche unique puisse produire. */
       else if (starNearby()) cpk = "star:" + starNearby().p;   // zip 444
       else if (nearHallClerk()) cpk = "hallClerk";
+      else if (nearMayorDesk()) cpk = "mayorDoor";     // zip 481 — même ordre que la touche
       else if (nearestCourtBoard()) cpk = "courtBoard";
       else if (nearPriceBoard()) cpk = "priceBoard";
       else {
@@ -22397,6 +22495,54 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     return false;
   }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 481 — DEVANT LE BUREAU DU MAIRE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️ ON TESTE L'IDENTITÉ DU MEUBLE (`of === "mayorDesk"`), PAS SON TYPE. Il y a
+     sept `desk` dans les deux bâtiments ; « le plus proche » aurait ouvert
+     l'audience depuis le bureau du géomètre, c'est-à-dire le piège des deux
+     cartes du §4 en plus petit. La marque est posée par le générateur, une fois.
+     ⚠️ Deux cases et demie, pas une : le plateau fait deux cases de large et on
+     lui parle par-dessus, on ne le touche pas — même règle que l'hôtesse. */
+  function nearMayorDesk() {
+    const m = meRef.current, cw = courtWorldRef.current;
+    if (!m || !cw || m.zone !== "court") return false;
+    return (cw.props || []).some(p => p.of === "mayorDesk"
+      && Math.abs(m.x - p.x) <= 2.2 && Math.abs(m.y - p.y) <= 2.2);
+  }
+
+  /* ⚠️⚠️ CE QUE FAIT LA TOUCHE E DEVANT SON BUREAU, ET IL Y A CINQ RÉPONSES.
+     Chacune existe parce qu'elle s'est présentée en jouant : c'est signé, c'est
+     l'heure, c'est trop tôt, c'est le rendez-vous d'un autre, il n'y en a pas.
+     ⚠️ AUCUNE NE DONNE RIEN — la porte n'est pas la caisse (§4). Elle ouvre une
+     conversation ; tout ce qui compte part en `req` à la fin. */
+  function tryMayorDoor() {
+    const eA = Q.migrateStar(sharedRef.current.star);
+    if (MR.mayorSigned(eA)) { pushToast(L.maire.after.signed); return; }
+    const now = Date.now();
+    if (MR.mayorApptReady(eA, me.id, now)) { openAudience(eA); return; }
+    const a = MR.mayorAppt(eA);
+    if (a && a.due && String(a.by) !== String(me.id)) { pushToast(L.maire.doorOther(a.name || "?")); return; }
+    const w = MR.mayorApptWaitMs(eA, now);
+    if (w > 0) { pushToast(L.maire.doorWait(msClock(w))); return; }
+    pushToast(L.maire.doorNotYet);
+  }
+  /* ⚠️⚠️ LE FONDU ENCHAÎNÉ EST EN DEUX TEMPS, ET LE SECOND EST DANS LA SCÈNE.
+     Ici on noircit le MONDE ; c'est `MaireScene` qui lève le noir quand son
+     bureau est prêt. Le faire d'un seul côté aurait donné soit une coupure sèche
+     (on monte, et paf, un autre décor), soit un écran noir qui dure le temps
+     d'un chargement WebGL — et Guillaume a demandé un fondu enchaîné, c'est-à-dire
+     que les deux se recouvrent. */
+  function openAudience(eA) {
+    setMayorFade(1);
+    const cA = mayorCtxOf(sharedRef.current, eA, E);
+    setTimeout(() => { setMayorTalk({ ctx: cA }); setMayorFade(0); }, 520);
+  }
+  const msClock = (ms) => {
+    const t = Math.max(0, Math.ceil(ms / 1000));
+    return `${(t / 60) | 0}:${String(t % 60).padStart(2, "0")}`;
+  };
+
   /* ⚠️ ZIP 438 — LE TABLEAU DES COURS. Il y en a QUATRE dans la mairie (un dans
      le hall, trois dans la salle des cours) : on cherche donc le plus proche
      plutôt que « le » tableau, sinon trois d'entre eux seraient du décor muet —
@@ -25140,6 +25286,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // panneau à une et demie, et il y a un annuaire dans sa salle. Sans cette
       // priorité, parler à quelqu'un ouvrirait un tableau.
       if (nearHallClerk()) { setHallTalk({ topic: null }); return; }
+      /* ⚠️ ZIP 481 — APRÈS L'HÔTESSE, AVANT LES PANNEAUX : son bureau est à deux
+         cases et il n'y a pas de panneau dans la pièce, mais il y a une porte —
+         et une porte est testée en dernier. Même ordre que l'invite. */
+      if (nearMayorDesk()) { tryMayorDoor(); return; }
       const bd = nearestCourtBoard();
       if (bd) { setCourtBoardOpen(E.courtBuildingOf(bd.y).key); return; }
       if (nearPriceBoard()) { setPriceBoardOpen(true); return; }
@@ -26180,7 +26330,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           expression que le bandeau, et pas ailleurs. Deux traductions du même
           `promptKey` finiraient par diverger d'un libellé, et la divergence
           tomberait sur l'appareil du joueur qui n'a QUE ce bouton. */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (
@@ -29276,6 +29426,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                           ⚠️ La garde est l'état de la quête, exactement comme le sujet
                           de l'ingénieur : un joueur qui n'a rien commencé ne voit
                           jamais ce bouton, donc le secret tient même à deux. */}
+                      {/* ╔══════════════════════════════════════════════════════
+                          ║ ZIP 481 — ON NE MONTE PLUS D'ICI : ON PREND RENDEZ-VOUS.
+                          ╚══════════════════════════════════════════════════════
+                          ⚠️⚠️ C'EST LE CHANGEMENT DE FOND DE CETTE PASSE, ET IL EST
+                          DEMANDÉ MOT POUR MOT : « il faudra d'abord demander
+                          l'audience à l'accueil, puis la secrétaire nous dira
+                          l'humeur du maire […] et un temps d'attente avant de
+                          pouvoir aller dans le bureau du maire ». Le bouton du 480
+                          ouvrait la négociation depuis le hall, deux étages plus
+                          bas et sans un pas de plus — l'audience était un panneau.
+                          ⚠️ CE QUE ÇA ACHÈTE, ET C'EST PLUS QU'UNE MISE EN SCÈNE :
+                          l'humeur est ANNONCÉE avant qu'on monte, donc le joueur
+                          peut décider de revenir demain. C'est la seule difficulté
+                          du système qui se lise (voir `MAYOR_MOOD_*`), et une
+                          difficulté qu'on choisit d'affronter n'est pas la même
+                          chose qu'une difficulté qu'on découvre.
+                          ⚠️ ET LE BOUTON NE DONNE RIEN (règle du 439) : il envoie
+                          une `req`, l'hôte tire l'humeur et écrit le rendez-vous.
+                          La porte n'est pas la caisse. */}
                       {(() => {
                         const eA = Q.migrateStar(sharedRef.current.star);
                         if (!Q.starHas(eA, "crater")) return null;
@@ -29283,6 +29452,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                         const trust = MR.mayorTrust(eA);
                         const tries = MR.mayorTries(eA);
                         const cA = mayorCtxOf(sharedRef.current, eA, E);
+                        const now = Date.now();
+                        const appt = MR.mayorAppt(eA);
+                        const blocked = MR.mayorBlockedMs(eA, now);
+                        const mine = appt && String(appt.by) === String(me.id);
+                        const wait = MR.mayorApptWaitMs(eA, now);
+                        const ready = MR.mayorApptReady(eA, me.id, now);
+                        const stale = MR.mayorApptStale(eA, now);
                         return (
                           <div style={{ marginTop: 12, borderTop: "1px solid rgba(255,255,255,.15)", paddingTop: 10 }}>
                             {signed ? (
@@ -29290,14 +29466,31 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                                 <div>{L.maire.after.signed}</div>
                                 {trust > 0 && <div className="ferme-hint" style={{ marginTop: 4 }}>{L.maire.after["trust" + trust]}</div>}
                               </>
+                            ) : blocked > 0 ? (
+                              /* il a claqué la porte, et il paie : un quart d'heure
+                                 RÉEL, compté par l'horloge de l'hôte. */
+                              <div style={{ fontStyle: "italic" }}>{L.maire.blockedFor(msClock(blocked))}</div>
+                            ) : appt && appt.due && !stale ? (
+                              <>
+                                <div style={{ fontStyle: "italic" }}>
+                                  {eA.mayor.sour ? L.maire.moodSour : L.maire.moodSay[appt.mood]}
+                                </div>
+                                <div style={{ marginTop: 6 }}>
+                                  {L.maire.mood[appt.mood]} · {mine ? (wait > 0 ? L.maire.bookedWhen(msClock(wait))
+                                                                     : ready ? L.maire.bookedNow : L.maire.bookedStale)
+                                                                  : L.maire.bookedBy(appt.name || "?")}
+                                </div>
+                                {!cA.plans && <div className="ferme-hint" style={{ marginTop: 4 }}>{L.maire.bare}</div>}
+                              </>
                             ) : (
                               <>
                                 <div className="ferme-hint">{cA.audience ? L.maire.audienceDay : L.maire.busyDay}</div>
                                 {!cA.plans && <div className="ferme-hint" style={{ marginTop: 4 }}>{L.maire.bare}</div>}
                                 {tries > 0 && <div className="ferme-hint" style={{ marginTop: 4 }}>{L.maire.triesAt(tries)}</div>}
+                                {stale && <div className="ferme-hint" style={{ marginTop: 4 }}>{L.maire.bookedStale}</div>}
                                 <button className="ferme-btn" style={{ marginTop: 8 }}
-                                        onClick={() => { setHallTalk(null); setMayorTalk({ ctx: cA }); }}>
-                                  {L.hallTopicTitle("mayor")} ›
+                                        onClick={() => sendReq({ kind: "mayorAsk" })}>
+                                  {L.maire.clerkAsk}
                                 </button>
                               </>
                             )}
@@ -29504,18 +29697,61 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           nourrit `burnt` (il se souvient de ce qu'on lui a déjà servi) et le
           compteur de tentatives. Un échec qui ne remonterait pas ferait d'une
           deuxième visite une première. */}
+      {/* ── LE FONDU AU NOIR DU MONDE. Il ne dure qu'un demi-clin d'œil et il
+          n'existe que pour recouvrir celui de la scène : c'est ce recouvrement
+          qui fait un fondu ENCHAÎNÉ plutôt que deux coupures. ── */}
+      {mayorFade > 0 && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 89, background: "#07080b",
+                      opacity: 1, transition: "opacity .5s ease", pointerEvents: "none" }} />
+      )}
+
+      {/* ╔════════════════════════════════════════════════════════════════════
+          ║ ZIP 481 — « VOIR LA SCÈNE DE (AUTRE JOUEUR) ».
+          ╚════════════════════════════════════════════════════════════════════
+          Demande de Guillaume, mot pour mot. ⚠️⚠️ LE BOUTON EST DÉRIVÉ DU DERNIER
+          BATTEMENT REÇU, pas d'un état partagé : il apparaît quand quelqu'un
+          parle et il disparaît tout seul quand plus rien n'arrive. Une audience
+          dont le joueur ferme l'onglet ne laisse donc pas un bouton mort dans
+          l'interface de l'autre — et il n'y avait rien à écrire pour ça.
+          ⚠️ Il ne s'affiche pas pendant qu'on négocie soi-même : deux scènes
+          plein écran, ce sont deux contextes WebGL, et le second s'ouvre sur du
+          noir (voir la note de `dispose` dans `MaireScene.js`). */}
+      {!mayorTalk && !mayorWatch && mayorLive && !mayorLive.state.over
+        && Date.now() - mayorLive.at < C.MAYOR_LIVE_KEEPALIVE_MS * 3 && (
+        <button className="ferme-btn ferme-maire-watch" onClick={() => setMayorWatch(true)}>
+          {L.maire.watch(mayorLive.name)}
+        </button>
+      )}
+      {mayorWatch && mayorLive && <MayorWatch live={mayorLive} L={L} onClose={() => setMayorWatch(false)} />}
+
       {mayorTalk && (
         <MayorAudience
           ctx={mayorTalk.ctx}
           L={L}
+          /* ⚠️ UN `send()` PAR BATTEMENT, JAMAIS PAR IMAGE (§3). Voir la note de
+             `MAYOR_LIVE_KEEPALIVE_MS` : une scène diffusée image par image, c'est
+             soixante messages par seconde, le plafond de dix saute en silence, et
+             TOUT le reste du jeu tombe avec — positions comprises. */
+          onLive={(st) => {
+            if (!netCanBroadcast()) return;
+            channelRef.current?.send({ type: "broadcast", event: "mayorLive",
+              payload: { id: me.id, name: (meRef.current || {}).name || "?",
+                         mayorKey: mayorTalk.ctx.mayorKey, state: st } });
+          }}
           onDone={(log, over) => {
             setMayorTalk(null);
             /* ⚠️ Une audience quittée sans le moindre échange n'a rien à
                raconter : on ne dépense pas un message pour dire « je suis entré
                puis ressorti », et `resolveMayor` compterait une tentative pour
                rien. */
+            /* ⚠️ ON ANNONCE LA FIN AUX SPECTATEURS, ET C'EST LE SEUL MESSAGE
+               DE COURTOISIE DU FICHIER. Sans lui, celui qui regardait resterait
+               devant un bureau figé jusqu'à ce que la relance lente expire — et
+               il conclurait que le jeu a planté, pas que l'entretien est fini. */
+            if (netCanBroadcast()) channelRef.current?.send({ type: "broadcast", event: "mayorLive",
+              payload: { id: me.id, name: (meRef.current || {}).name || "?",
+                         mayorKey: mayorTalk.ctx.mayorKey, state: { over: over || "out" } } });
             if (Array.isArray(log) && log.length) sendReq({ kind: "mayorTalk", log });
-            void over;
           }}
         />
       )}
@@ -29936,6 +30172,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                       ))}
                       <button className="ferme-btn" onClick={devStandAtNextStar}>
                         {L.star.dev.stand}
+                      </button>
+                      <button className="ferme-btn" onClick={devStandAtMayorDesk}>
+                        {L.star.dev.standMayor}
                       </button>
                     </div>
                     <div className="ferme-hint" style={{ margin: "8px 0 4px" }}>{L.star.dev.sceneLabel}</div>

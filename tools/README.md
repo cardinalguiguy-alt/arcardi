@@ -110,7 +110,7 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
 
 ## Ce qui existe
 
-- **`tools/verify-maire.mjs` — 72 contrôles, 72/72 (480).** L'AUDIENCE CHEZ LE MAIRE, JOUÉE.
+- **`tools/verify-maire.mjs` — 113 contrôles, 113/113 (480, étendu au 481).** L'AUDIENCE CHEZ LE MAIRE, JOUÉE.
   ⚠️⚠️⚠️ **C'est le premier banc du dépôt qui JOUE une mécanique de bout en bout au lieu de la
   relire** — quatre cents entretiens par propriété, balayés sur cinq maires × deux mondes (plans en
   main / mains vides) × quatre crans de confiance × dix vitesses de réflexion, de zéro à neuf
@@ -134,6 +134,47 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   plafond de fuite (`MAYOR_DRAIN_CAP`) doit rester SOUS la plus faible des répliques idéales, sinon
   la promesse « aucune hésitation ne coûte plus qu'une bonne réponse ne rapporte » devient fausse
   chez le maire le plus hostile — et ça se croise en changeant un seul des deux (§8 de `CLAUDE.md`).
+
+  ### ⚠️⚠️ ZIP 481 — QUARANTE ET UN CONTRÔLES DE PLUS, ET DEUX D'ENTRE EUX SONT NÉS D'UN DÉFAUT VU EN JOUANT
+
+  **§8 l'humeur.** Cinq crans annoncés par la secrétaire avant qu'on monte. Deux contrôles qui
+  s'OPPOSENT, et c'est le point : l'humeur doit se sentir (l'écart entre la meilleure et la pire
+  n'est pas cosmétique) **et** « très mauvaise » doit rester gagnable en jouant sans faute, sur les
+  dix combinaisons maire × monde. Sans le second, on aurait refait le mur du 480 — une difficulté
+  empilée n'est pas plus difficile, c'est un mur, et un mur ne se règle pas, il se retire.
+  Symétriquement, « très favorable » ne doit pas signer toute seule sur des réponses tièdes.
+
+  **§9 le rendez-vous.** ⚠️⚠️⚠️ **IL JOUE AVEC DE VRAIES DATES (`Date.now()`), ET C'EST TOUT LE
+  SUJET.** Le défaut qu'il attrape a été trouvé EN JEU, pas ici : `mayorApptWaitMs` écrivait
+  `now | 0` sur un horodatage de 1,78 × 10¹², l'opérateur tronque à 32 bits signés, et la secrétaire
+  annonçait « il vous reçoit dans 29778439:55 ». Un banc qui passe `at: 1000` ne peut PAS voir ça —
+  et c'est un idiome juste partout ailleurs dans ce dépôt, parce que partout ailleurs il s'applique
+  à de petits entiers. *Un idiome qu'on écrit sans y penser cesse d'être un idiome le jour où on
+  change ce qu'il mesure.* Le banc mesure aussi que le tirage d'humeur atteint les cinq crans et
+  reste en cloche, que l'attente vaut 3, 4 ou 5 minutes et jamais autre chose, qu'un rendez-vous ne
+  se re-tire pas (sans quoi on redemanderait jusqu'à « très favorable »), qu'il se périme mais se
+  remplace, qu'il n'est jamais celui d'un autre, et **que l'humeur annoncée est celle de
+  l'entretien** — la secrétaire ne ment pas.
+
+  **§10 la porte claquée.** Trois choses distinctes, donc trois champs : la fin de l'entretien, le
+  quart d'heure réel, la rancune. Le banc vérifie qu'elle est offerte à TOUS les nœuds sans jamais
+  entrer dans les « exactement trois réponses », que l'hôte la rejoue et arbitre lui-même la
+  sanction, que l'accueil refuse pendant quinze minutes puis rouvre **sur une humeur exécrable, une
+  seule fois**, et que le menu développeur (« effacer ») emporte le blocage ET la rancune.
+
+  **§11 la vue, remplie pour de vrai.** ⚠️⚠️⚠️ **CE CHAPITRE EXISTE PARCE QU'UN DÉFAUT A ÉTÉ TROUVÉ
+  EN JOUANT ET QU'AUCUN DES 72 CONTRÔLES DU 480 NE POUVAIT LE VOIR** : l'interface affichait
+  « Scrutin dans **Lui** jours. » Elle DEVINAIT quel argument passer à chaque justification (« s'il
+  y a un type, c'est une affinité ; sinon c'est un scrutin ») et les deux raisons de scrutin en
+  portent un. Tout était apparié, tout était affiché, tout comptait pour lu. *Un texte à trous ne se
+  vérifie pas en comptant ses clés : il se vérifie en le REMPLISSANT.* Le banc rend donc toutes les
+  justifications que le résolveur sait produire, dans les deux langues, et refuse « undefined »
+  comme il refuse un mot là où il faut un nombre. **Vérifié : il ÉCHOUE quand on retire la
+  correction** (§10 de `CLAUDE.md` — un banc qui n'a jamais pu échouer ne vaut rien).
+  ⚠️ Il importe aussi `components/ferme/maireBureau.js` — le décor 3D — pour tenir la jointure que
+  le §7 de `maire.js` promet depuis le 480 : les **sept** postures de la mécanique sont les sept
+  postures dessinables, les **huit** visages aussi, aucune pose n'oublie un canal (une pose
+  incomplète fige un membre), et le visage ne se ferme jamais pendant que la jauge monte.
 
 - **`tools/verify-compo.mjs` — 13 contrôles, 13/13 (440).** LA COMPOSITION DES DÉCORS, sur toute la carte.
   ⚠️ Il existe parce que Guillaume a vu « un arbre sur un pont » et qu'aucun des quinze autres

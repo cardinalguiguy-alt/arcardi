@@ -42,11 +42,22 @@ const copy = (n) => {
 copy("maire");
 copy("fermeStrings");
 copy("fermeEngine");
+/* ⚠️⚠️ ZIP 481 — LE BANC IMPORTE LA VUE 3D, ET C'EST NOUVEAU. `maireBureau.js`
+   ne touche au DOM que DANS ses fonctions de texture : ses tables (`POSE`,
+   `FACE`, `ROOM`) sont du JavaScript ordinaire, et c'est très exactement ce
+   qu'il faut vérifier ici — que les sept postures de la mécanique sont les sept
+   postures dessinables. Le §7 de `maire.js` promet depuis le 480 que « son corps
+   est le second affichage » ; sans cette jointure, la promesse tenait par
+   coïncidence de nommage. */
+copy("maireBureau");
+copy("quete");
 
 const C = await import(pathToFileURL(path.join(tmp, "fermeConstants.js")).href);
 const M = await import(pathToFileURL(path.join(tmp, "maire.js")).href);
 const E = await import(pathToFileURL(path.join(tmp, "fermeEngine.js")).href);
 const { FERME_STR } = await import(pathToFileURL(path.join(tmp, "fermeStrings.js")).href);
+const B = await import(pathToFileURL(path.join(tmp, "maireBureau.js")).href);
+const Q = await import(pathToFileURL(path.join(tmp, "quete.js")).href);
 
 let fails = 0, total = 0;
 const ok = (n, c, x) => { total++; console.log(`${c ? "  OK  " : "ÉCHEC "} ${n}${x ? "  —  " + x : ""}`); if (!c) fails++; };
@@ -68,6 +79,10 @@ const WORLDS = [true, false];      // plans en main / mains vides
    banc de CLAUDE.md — mesurer une grandeur juste à un endroit où elle ne
    discrimine plus. La somme des gains, elle, ne sature jamais. */
 const gained = (trail) => Math.round(trail.reduce((a, t) => a + Math.max(0, t.delta), 0) * 10) / 10;
+/* La transcription qu'un client enverrait pour un entretien donné : c'est elle
+   que l'hôte rejoue, donc c'est elle qu'on doit fabriquer quand on veut mesurer
+   l'arbitrage plutôt que la partie. */
+const logOf = (ctx, pick, dt = 2600) => play(ctx, pick, dt).s.log;
 
 function play(ctx, pick, dt = 3000) {
   const s = M.mayorOpen(ctx);
@@ -99,8 +114,15 @@ const ctxOf = (o = {}) => ({
   mayorKey: o.mayorKey || "vasseur", day: o.day == null ? 12 : o.day,
   nextElection: o.nextElection == null ? 30 : o.nextElection,
   audience: !!o.audience, plans: o.plans !== false, trust: o.trust | 0,
+  /* ⚠️ ZIP 481 — L'HUMEUR PAR DÉFAUT EST « MOYENNE », comme dans le jeu quand un
+     rendez-vous est absent ou abîmé. Un banc qui ouvrirait par défaut sur la plus
+     facile mesurerait un monde que personne ne joue. */
+  mood: o.mood || "mid",
   burnt: o.burnt || [],
 });
+/* Un générateur reproductible : un banc qui tire au hasard mesure un jeu
+   différent à chaque exécution, donc il ne mesure rien. */
+const seq = (list) => { let i = 0; return () => list[i++ % list.length]; };
 
 /* ╔═════════════════════════════════════════════════════════════════════════════
    ║ §1 — LA TABLE : CE QUE GUILLAUME A DEMANDÉ, MOT POUR MOT
@@ -701,6 +723,271 @@ section("§7 trois entretiens joués, en clair");
   ok("⚠️⚠️ …et le premier essai ordinaire se joue PRÈS du seuil, des deux côtés",
      Math.abs(d.peak - C.MAYOR_ADH_WIN) <= 25,
      `sommet ${d.peak} contre un seuil à ${C.MAYOR_ADH_WIN} (${d.over})`);
+}
+
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ §8 — L'HUMEUR (481) : ELLE DOIT SE SENTIR, ET ELLE NE DOIT PAS ÊTRE UN MUR
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ DEUX CONTRÔLES, ET ILS S'OPPOSENT — c'est très exactement la leçon du 458
+   (« deux grandeurs qui se combattent se mesurent ensemble ou pas du tout ») et
+   celle du 480 (une difficulté empilée n'est pas plus difficile, c'est un mur).
+   L'humeur doit DÉPLACER le résultat, sinon elle est décorative comme l'affinité
+   l'était à 0,18 ; et la pire humeur doit rester GAGNABLE en jouant bien, sinon
+   la secrétaire annonce une soirée perdue et le joueur n'a plus qu'à recharger.
+   ⚠️ On balaie les cinq maires × les deux mondes : « ça marche chez Vasseur avec
+   les plans » n'est pas une mesure. */
+section("§8 l'humeur");
+{
+  let mono = 0, tries = 0, worstWinnable = 0, worstTotal = 0, bestGain = -1e9, worstGain = 1e9;
+  for (const mk of MAIRES) {
+    for (const plans of WORLDS) {
+      const peaks = C.MAYOR_MOODS.map(mood => play(ctxOf({ mayorKey: mk, plans, mood }), pickIdeal, 2600).s.peak);
+      tries++;
+      /* du meilleur au pire : jamais un cran à l'envers */
+      let okMono = true;
+      for (let i = 1; i < peaks.length; i++) if (peaks[i] > peaks[i - 1] + 0.01) okMono = false;
+      if (okMono) mono++;
+      bestGain = Math.max(bestGain, peaks[0]); worstGain = Math.min(worstGain, peaks[peaks.length - 1]);
+      worstTotal++;
+      const worst = play(ctxOf({ mayorKey: mk, plans, mood: "awful" }), pickIdeal, 2600).s;
+      if (worst.over === "signed") worstWinnable++;
+    }
+  }
+  ok("⚠️ l'humeur ne fait JAMAIS marche arrière : mieux luné = jamais moins loin",
+     mono === tries, `${mono}/${tries} combinaisons`);
+  ok("⚠️⚠️ …et elle se SENT : l'écart entre la meilleure et la pire n'est pas cosmétique",
+     bestGain - worstGain >= 6, `${bestGain.toFixed(1)} contre ${worstGain.toFixed(1)}`);
+  /* ⚠️⚠️⚠️ LE CONTRÔLE QUI EMPÊCHE LE MUR DU 480. « Très mauvaise » est une
+     soirée difficile, pas une soirée perdue : un sans-faute doit passer. */
+  ok("⚠️⚠️⚠️ « très mauvaise » reste GAGNABLE en jouant sans faute, partout",
+     worstWinnable === worstTotal, `${worstWinnable}/${worstTotal}`);
+  /* …et symétriquement, la meilleure humeur ne doit pas dispenser de jouer. */
+  let freebies = 0;
+  for (const mk of MAIRES) {
+    const s = play(ctxOf({ mayorKey: mk, mood: "great" }), pickGrade("warm"), 3200).s;
+    if (s.over === "signed") freebies++;
+  }
+  ok("⚠️ …et « très favorable » ne signe pas toute seule sur des réponses tièdes",
+     freebies === 0, `${freebies}/5 maires signeraient sans effort`);
+  ok("les cinq humeurs sont toutes décrites, dans les deux langues",
+     ["fr", "en"].every(l => C.MAYOR_MOODS.every(m => FERME_STR[l].maire.mood[m] && FERME_STR[l].maire.moodSay[m])));
+}
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ §9 — LE RENDEZ-VOUS (481)
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ ON JOUE LE CYCLE ENTIER — demander, attendre, monter, mener, ressortir —
+   au lieu de relire les champs. C'est ce que le 480 a appris en écrivant
+   `verify-maire` : un banc qui vérifie la FORME est vert sur une mécanique
+   ingagnable. Ici la forme est triviale ; ce qui peut casser, c'est l'enchaînement.
+   ⚠️ ET LES DATES SONT DE VRAIES DATES (`Date.now()`), jamais des petits nombres
+   choisis pour arranger le banc. C'est ce qui a manqué au premier jet, et le
+   défaut correspondant s'est vu en JEU : `mayorApptWaitMs` tronquait l'horodatage
+   à 32 bits (`| 0`) et la secrétaire annonçait « dans 29778439:55 ». Un banc qui
+   passe `at: 1000` ne peut pas voir ça. */
+section("§9 le rendez-vous");
+{
+  const NOW = Date.now();
+  const fresh = () => { const e = {}; M.migrateMayor(e); return e; };
+
+  /* — le tirage — */
+  const many = [];
+  for (let i = 0; i < 4000; i++) many.push(M.mayorPickMood(Math.random, false, false));
+  const seen = new Set(many);
+  ok("⚠️ le tirage d'humeur atteint les CINQ crans", seen.size === 5, [...seen].join(", "));
+  const mid = many.filter(m => m === "mid").length / many.length;
+  const ext = many.filter(m => m === "great" || m === "awful").length / many.length;
+  ok("⚠️ …et il est en cloche : le milieu est le cas ordinaire, les extrêmes des soirées",
+     mid > ext, `moyenne ${(mid * 100) | 0} % contre ${(ext * 100) | 0} % d'extrêmes`);
+  ok("⚠️⚠️ la rancune n'est pas un POIDS, elle est CERTAINE",
+     Array.from({ length: 200 }, () => M.mayorPickMood(Math.random, false, true)).every(m => m === "awful"));
+  const lift = Array.from({ length: 2000 }, () => M.mayorPickMood(Math.random, true, false));
+  const liftGood = lift.filter(m => m === "great" || m === "good").length / lift.length;
+  const flatGood = many.filter(m => m === "great" || m === "good").length / many.length;
+  ok("⚠️ son jour d'audience penche le tirage sans le décider",
+     liftGood > flatGood && liftGood < 0.8, `${(liftGood * 100) | 0} % contre ${(flatGood * 100) | 0} %`);
+
+  /* — l'attente — */
+  const waits = new Set(Array.from({ length: 300 }, () => M.mayorPickWait(Math.random)));
+  ok("⚠️ l'attente est de 3, 4 ou 5 minutes RÉELLES, jamais autre chose",
+     [...waits].every(w => C.MAYOR_WAIT_CHOICES_MS.includes(w)) && waits.size === 3,
+     [...waits].map(w => w / 60000 + " min").join(" / "));
+
+  /* — demander — */
+  {
+    const e = fresh();
+    const r1 = M.resolveMayorAsk(e, "j1", "Guillaume", NOW, seq([0.5, 0.9]), false);
+    ok("demander une audience pose un rendez-vous", r1 === "mayorBooked" && !!M.mayorAppt(e));
+    const r2 = M.resolveMayorAsk(e, "j1", "Guillaume", NOW, Math.random, false);
+    ok("⚠️⚠️ …et on ne le RE-TIRE pas : sans ça on redemanderait jusqu'à « très favorable »",
+       r2 === "mayorAlreadyBooked");
+    const a = M.mayorAppt(e);
+    ok("⚠️⚠️⚠️ le délai annoncé est un vrai délai, pas un horodatage tronqué à 32 bits",
+       M.mayorApptWaitMs(e, NOW) === a.due - NOW && M.mayorApptWaitMs(e, NOW) <= 5 * 60000
+       && M.mayorApptWaitMs(e, NOW) >= 3 * 60000,
+       `${Math.round(M.mayorApptWaitMs(e, NOW) / 1000)} s`);
+    ok("avant l'heure, la porte est fermée", !M.mayorApptReady(e, "j1", NOW));
+    ok("à l'heure, elle s'ouvre", M.mayorApptReady(e, "j1", a.due + 5));
+    ok("⚠️ et elle reste ouverte le temps de traverser la ville",
+       M.mayorApptReady(e, "j1", a.due + C.MAYOR_APPT_GRACE_MS - 1000));
+    ok("⚠️⚠️ mais le rendez-vous d'un AUTRE n'est jamais le nôtre",
+       !M.mayorApptReady(e, "j2", a.due + 5));
+    ok("passé la grâce, il est périmé", M.mayorApptStale(e, a.due + C.MAYOR_APPT_GRACE_MS + 1000));
+    const r3 = M.resolveMayorAsk(e, "j1", "Guillaume", a.due + C.MAYOR_APPT_GRACE_MS + 2000, Math.random, false);
+    ok("⚠️ …et un rendez-vous périmé se REMPLACE, il ne bloque pas la mairie pour toujours",
+       r3 === "mayorBooked");
+  }
+
+  /* — l'humeur annoncée est celle qu'on trouve en montant — */
+  {
+    const e = fresh();
+    M.resolveMayorAsk(e, "j1", "G", NOW, seq([0.99, 0.99]), false);   // le dernier cran : « très mauvaise »
+    const said = M.mayorAppt(e).mood;
+    const s = M.mayorOpen({ ...ctxOf({}), mood: said });
+    ok("⚠️⚠️ LA SECRÉTAIRE NE MENT PAS : l'humeur annoncée est celle de l'entretien",
+       s.mood === said, said);
+  }
+
+  /* — le rendez-vous se CONSOMME, quoi qu'il arrive — */
+  for (const kind of [["une victoire", (c) => M.mayorReplay(logOf(c, pickIdeal), c)],
+                      ["un échec", (c) => M.mayorReplay(logOf(c, pickGrade("fault")), c)]]) {
+    const e = fresh();
+    M.resolveMayorAsk(e, "j1", "G", NOW, seq([0.5, 0.5]), false);
+    const c = ctxOf({ mood: M.mayorAppt(e).mood });
+    M.resolveMayor(e, "j1", "G", logOf(c, kind[0] === "une victoire" ? pickIdeal : pickGrade("fault")), c, NOW);
+    ok(`⚠️ ${kind[0]} consomme le rendez-vous : on ne rentre pas deux fois sur le même`,
+       !M.mayorAppt(e));
+  }
+}
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ §10 — LA PORTE CLAQUÉE (481)
+   ╚═════════════════════════════════════════════════════════════════════════════
+   Demande de Guillaume : « on ne pourra pas le contacter avant 15 minutes réelles
+   si l'on quitte. Il sera de mauvaise humeur à la prochaine audience. »
+   ⚠️⚠️ TROIS CHOSES DISTINCTES, ET C'EST POURQUOI IL Y A TROIS CHAMPS : la fin de
+   l'entretien, le quart d'heure, et la rancune. Les confondre — par exemple faire
+   durer la rancune exactement quinze minutes — l'effacerait pour qui prend son
+   temps, alors que c'est la prochaine FOIS qui se paie, pas la prochaine minute. */
+section("§10 la porte claquée");
+{
+  const NOW = Date.now();
+  const e = {}; M.migrateMayor(e);
+  M.resolveMayorAsk(e, "j1", "G", NOW, seq([0.5, 0.5]), false);
+  const c = ctxOf({ mood: M.mayorAppt(e).mood });
+
+  const s = M.mayorOpen(c);
+  const before = s.adh;
+  const r = M.mayorPlay(s, "__slam", 0);
+  ok("claquer la porte met fin à l'entretien sur-le-champ", s.over === "slam" && r.grade === "slam");
+  ok("⚠️ …et ce n'est PAS une victoire", M.mayorTrustGain(s) === 0);
+  ok("⚠️ elle est proposée à tous les nœuds, même quand tout va bien",
+     M.MAYOR_NODE_IDS.every(id => { const t = M.mayorOpen(c); t.node = id; return M.mayorChoices(t).some(x => x.kind === "slam"); }));
+  ok("⚠️⚠️ …et elle n'entre PAS dans les « exactement trois réponses »",
+     M.MAYOR_NODE_IDS.every(id => { const t = M.mayorOpen(c); t.node = id; return M.mayorChoices(t).filter(x => x.kind === "say").length === 3; }));
+  void before;
+
+  const verdict = M.resolveMayor(e, "j1", "G", s.log, c, NOW);
+  ok("l'hôte la REJOUE et arbitre lui-même la sanction", verdict === "mayorSlam");
+  ok("⚠️⚠️ quinze minutes RÉELLES, comptées par l'horloge de l'hôte",
+     Math.abs(M.mayorBlockedMs(e, NOW) - C.MAYOR_SLAM_BLOCK_MS) < 50,
+     `${Math.round(M.mayorBlockedMs(e, NOW) / 60000)} min`);
+  ok("…pendant lesquelles l'accueil refuse",
+     M.resolveMayorAsk(e, "j1", "G", NOW + 60000, Math.random, false) === "mayorBlocked");
+  ok("…et rouvre après", M.resolveMayorAsk(e, "j1", "G", NOW + C.MAYOR_SLAM_BLOCK_MS + 1000, Math.random, false) === "mayorBooked");
+  ok("⚠️⚠️⚠️ …sur une humeur EXÉCRABLE, et une seule fois",
+     M.mayorAppt(e).mood === "awful" && !e.mayor.sour);
+  {
+    /* la fois d'après, le tirage redevient un tirage */
+    const e2 = { mayor: { ...e.mayor, appt: null } }; M.migrateMayor(e2);
+    const moods = new Set(Array.from({ length: 200 }, () => {
+      const x = { mayor: { ...e2.mayor, appt: null, block: 0 } }; M.migrateMayor(x);
+      M.resolveMayorAsk(x, "j1", "G", NOW + 3e6, Math.random, false);
+      return M.mayorAppt(x).mood;
+    }));
+    ok("⚠️ …la rancune ne dure pas : la fois suivante, le tirage redevient un tirage", moods.size > 1);
+  }
+  /* ⚠️ ET TOUT SE REMET À ZÉRO AVEC LA QUÊTE : c'est la demande de Guillaume, et
+     c'est gratuit — `newStar()` reconstruit `mayor` de zéro. On le vérifie ici
+     plutôt que de le croire, parce que « c'est gratuit » est exactement ce qu'on
+     se dit avant d'oublier un champ. */
+  {
+    const wiped = Q.devStar({ mayor: e.mayor }, "reset", NOW, "j1").star;
+    ok("⚠️⚠️ le menu développeur (« effacer ») emporte le blocage ET la rancune",
+       !M.mayorBlockedMs(wiped, NOW) && !wiped.mayor.sour && !M.mayorAppt(wiped));
+  }
+}
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ §11 — LA VUE EST UNE JOINTURE, PAS UNE SECONDE LISTE (481)
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️⚠️ CE CHAPITRE EXISTE PARCE QU'UN DÉFAUT A ÉTÉ TROUVÉ EN JOUANT ET QU'AUCUN
+   DES 72 CONTRÔLES DU 480 NE POUVAIT LE VOIR : l'interface lisait « Scrutin dans
+   Lui jours. » Elle DEVINAIT quel argument passer à chaque justification (« s'il
+   y a un type, c'est une affinité ; sinon c'est un scrutin ») et les deux raisons
+   de scrutin en portent un. Tout était apparié, tout était affiché, tout comptait
+   pour lu. *Un texte à trous ne se vérifie pas en comptant ses clés : il se
+   vérifie en le REMPLISSANT.*
+   ⚠️ On rend donc ici, pour de vrai, toutes les justifications que le résolveur
+   sait produire, dans les deux langues, et on refuse « undefined » comme on
+   refuse un mot là où il faut un nombre. */
+section("§11 la vue, remplie pour de vrai");
+{
+  ok("⚠️ les sept postures de `maire.js` sont les sept postures dessinables",
+     B.POSE_KEYS.length === M.MAYOR_POSES.length && M.MAYOR_POSES.every(p => B.POSE[p]),
+     B.POSE_KEYS.join(", "));
+  ok("⚠️ les huit visages aussi",
+     B.FACE_KEYS.length === M.MAYOR_EMOTES.length && M.MAYOR_EMOTES.every(f => B.FACE[f]),
+     B.FACE_KEYS.join(", "));
+  ok("⚠️ toutes les poses portent les MÊMES canaux (une pose incomplète fige un membre)",
+     B.POSE_KEYS.every(k => B.POSE_CHANNELS.every(c => typeof B.POSE[k][c] === "number")
+                         && B.POSE_VECS.every(v => Array.isArray(B.POSE[k][v]) && B.POSE[k][v].length === 3)));
+  ok("⚠️ et tous les visages aussi",
+     B.FACE_KEYS.every(k => B.FACE_CHANNELS.every(c => typeof B.FACE[k][c] === "number")));
+  /* ⚠️ LE VISAGE NE FAIT PAS MARCHE ARRIÈRE : `MAYOR_EMOTES` est ordonné du pire
+     au meilleur, et `mayorEmote` doit respecter cet ordre quand la jauge monte —
+     un maire qui se ferme en gagnant apprend au joueur à ne plus le regarder,
+     c'est-à-dire retire à la 3D sa seule raison d'être. */
+  {
+    const rank = {}; M.MAYOR_EMOTES.forEach((f, i) => rank[f] = i);
+    const s = M.mayorOpen(ctxOf({}));
+    let mono = true, prev = -1, seen = new Set();
+    for (let a = 0; a <= 100; a++) { s.adh = a; s.streak = 0; s.over = null;
+      const f = M.mayorEmote(s, null); seen.add(f);
+      if (rank[f] < prev) mono = false; prev = rank[f]; }
+    ok("⚠️⚠️ le visage ne se ferme jamais pendant que la jauge monte", mono);
+    ok("…et il balaie au moins cinq états sur la plage", seen.size >= 5, [...seen].join(", "));
+  }
+
+  /* — LES JUSTIFICATIONS, RENDUES — */
+  const produced = new Map();
+  for (const mk of MAIRES) for (const plans of WORLDS) for (const mood of C.MAYOR_MOODS)
+    for (const race of [2, 12, 40]) {
+      const s = M.mayorOpen(ctxOf({ mayorKey: mk, plans, mood, day: 1, nextElection: 1 + race }));
+      s.burnt = M.MAYOR_SAY_KEYS.slice();
+      for (const id of M.MAYOR_NODE_IDS) for (const a of M.mayorPlayable(id, plans)) {
+        s.lastType = a.type; s.used = { heart: 1 };
+        for (const w of M.mayorDelta(s, a).why) if (!produced.has(w.why)) produced.set(w.why, w);
+      }
+    }
+  const withGesture = [...produced.keys()].concat(["plansNow", "plansLate"]);
+  ok("⚠️ toute justification que le résolveur sait produire a un texte, dans les deux langues",
+     ["fr", "en"].every(l => withGesture.every(k => FERME_STR[l].maire.why[k])),
+     withGesture.join(", "));
+  let bad = [];
+  for (const l of ["fr", "en"]) for (const [k, w] of produced) {
+    const t = FERME_STR[l].maire.why[k];
+    if (typeof t !== "function") continue;
+    const arg = w.days != null ? w.days : FERME_STR[l].maire.type[w.type];
+    const out = String(t(arg));
+    if (/undefined|NaN|\[object/.test(out)) bad.push(l + ":" + k + " → " + out);
+    /* ⚠️ LE CONTRÔLE QUI AURAIT ATTRAPÉ « Scrutin dans Lui jours » : là où la
+       phrase attend un NOMBRE, il doit y avoir un nombre. */
+    if (k.startsWith("race") && !/\d/.test(out)) bad.push(l + ":" + k + " → " + out);
+  }
+  ok("⚠️⚠️⚠️ …et remplie, elle ne dit ni « undefined » ni un mot là où il faut un nombre",
+     bad.length === 0, bad.slice(0, 3).join(" | ") || `${produced.size} raisons rendues`);
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

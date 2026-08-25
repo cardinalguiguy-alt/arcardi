@@ -11,51 +11,63 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**Livré au 480 bis : L'ÉTOILE BLANCHE — trois chutes de plus (5 → 8), une concoction neuve, le
-monde maléfique forcé quand la quête l'exige.** Demande de Guillaume, en trois morceaux : (1) un
-guidage du chaudron qui, en creusant, s'est révélé viser une concoction qui n'existait pas encore ;
-(2) une nouvelle étoile CAPRICIEUSE (blanche, verbe `lure` — quatrième verbe après
-light/warm/pair) qui refuse la tenue tant qu'on n'a pas l'**Essence d'étoile** (2 minerai magique +
-1 améthyste, chaudron) en poche — arbitré par l'hôte via `ctx.potion` (lu dans `f.inv.starLure`,
-jamais confié au client), et qui réutilise **telle quelle** la tenue générique de `resolveStarCalm`
-(une seule garde neuve, `notLured`) sans exiger le dos tourné ; (3) le monde maléfique **forcé**
-(`applyForcedWorld`, déjà construit pour le menu développeur) tant que le bandeau demande la lumière
-bleue OU l'Essence d'étoile — une seule jointure sur `starGoalKey`, pas un forçage par étoile.
-**Aucun fichier neuf, aucune migration Supabase** — `salveCraft` gagne un champ `product`
-(`fermeEngine.js`) qui dit quelle recette est en train de brûler et quel inventaire créditer à la
-collecte ; le reste est la même mécanique que la pommade, dupliquée une fois.
-⚠️ **DÉCISION DE GUILLAUME, EXPLICITE : LE BUG DU CHAUDRON-ARTÉFACT VISIBLE SUR 4 TERRES/5 (TROUVÉ
-EN JOUANT CE MÊME ZIP) N'EST PAS CORRIGÉ ICI.** Le sprite scintillant (`FermeGame.js:16046`) reste
-sans la garde `spec.key==="evil"` que l'interaction a déjà : il continue de s'afficher sans pouvoir
-être ramassé sur Bonbons/Labyrinthe/Cristal/Prairie. Vérifié en jeu : ramassage fonctionnel sur
-Terres Maléfiques. **Ne pas le corriger avant d'en avoir reçu l'ordre.**
-Les 36 bancs relancés un par un, tous verts : `verify-quete` **594/594** (+9, dont une section
-neuve « LA BLANCHE » qui rejoue la garde `notLured` et la tenue continue comme le fait vraiment le
-client — pas un exemple isolé), `verify-strings` **1 098 clés appariées**, `render-etoile`
-**161/161**, `verify-maire` 72/72, `verify-vallee` 205/205, `verify-taxi` 15/15, les 17 bancs de
-contrôle et 19 bancs de rendu au complet, `verify-syntax` ✅, `npx next build` ✅ (**lancé dans un
-worktree isolé** — une autre session tournait dans le dépôt principal, voir §10), plus un bundle
-esbuild complet de `FermeGame.js`.
+**Livré au 481 : L'AUDIENCE CHEZ LE MAIRE DEVIENT UNE SCÈNE, ET LE BUREAU EST REFAIT EN CODE.**
+Demande de Guillaume, en cinq morceaux, tous livrés : (1) la 3D n'est plus un panneau posé sur le
+jeu mais un **écran plein**, à la **première personne** (« ce sera un 1st person cet entretien »),
+caméra libre dans la pièce — on glisse pour regarder autour, molette pour approcher, trois attitudes
+(ma chaise · le bureau · debout) ; (2) le maire **bouge, parle, réfléchit, joue avec son stylo et
+change d'émotion** — sept postures, huit visages, sourcils/paupières/bouche articulés, respiration,
+clignement, cinématique inverse des bras ; (3) on **prend rendez-vous à l'accueil**, la secrétaire
+annonce l'**humeur** (cinq crans, c'est la difficulté) et **3, 4 ou 5 minutes réelles** d'attente,
+puis on monte et on entre par la **porte du bureau** (touche E, fondu enchaîné) ; (4) on peut
+**claquer la porte** — un « ! » lui pousse sur la tête, le battant rebondit, et ça coûte **un quart
+d'heure réel** plus l'humeur de la fois suivante (tout se remet à zéro avec la quête) ; (5) en
+multijoueur, les autres ont un bouton **« 👀 Voir la scène de (nom) »** et regardent la même scène,
+sans pouvoir répondre.
 
-⚠️⚠️⚠️ **LA PROCHAINE ACTION EST DE LA JOUER, ET PERSONNE NE L'A ENCORE VUE.** Le banc rejoue la
-garde et la tenue avec la vraie continuité de requêtes (toutes les 500 ms, comme le client) — ça
-n'est pas rien, c'est plus que d'habitude. Mais **la blanche elle-même n'a pas été vue à l'écran** :
-la session de jeu a confirmé le texte du chapitre (« Huit impacts »), le raccourci développeur
-« ✨ A Star Essence vial » (fouille son trou + crédite la fiole sans planter), et s'est arrêtée là —
-la retrouver sur la carte (ancre `{x:60,y:120}`, `STAR_FARM_IMPACT_ANCHORS[6]`) a pris plus de temps
-à pied que toute l'écriture du code, et n'a pas abouti dans cette passe. **C'est exactement la
-neuvième leçon de ce fichier (§10, « aucun banc ne mesure l'ARRIVÉE ») qui se repaie ici, en direct :
-un banc vert sur la logique ne dit rien de savoir si on peut PHYSIQUEMENT la trouver.** À la
-reprise : menu développeur → ⭐ Star → « ✨ A Star Essence vial » puis se rendre à l'ancre ci-dessus
-(ou téléporter par la carte, clic pour poser un repère) et juger à l'œil — la tenue sans dos tourné,
-le forçage du monde pendant l'étape bleue ET blanche, le texte reskinné de la bleue.
-⚠️⚠️ **ET LE PRÉALABLE DU 480 EST TOUJOURS LÀ, INTACT : `A.drawStarCalmGlow` N'EXISTE PAS.** Elle
-est déclarée dans `buildSprites()` (`fermeArt.js:7334`) et n'est exposée que comme MEMBRE de l'objet
-retourné ; `FermeGame.js` l'appelle par l'espace de noms du module et lève un `TypeError` **dans la
-boucle de rendu**, dès la première image d'un apprivoisement — l'exception emporte tout ce que la
-frame devait encore dessiner. **C'est le piège n°1 de ce fichier, non corrigé depuis le zip qui
-livrait la fonctionnalité (478), reconfirmé par bundle à ce zip.** Le bon motif est trois lignes
-plus haut (`sprites.drawStarDish`).
+⚠️⚠️⚠️ **ET LE PLUS IMPORTANT DE CE ZIP N'EST PAS DANS LA LISTE : `public/models/maire-bureau.glb`
+A ÉTÉ SUPPRIMÉ PARCE QU'IL ÉTAIT FAUX DEPUIS SA LIVRAISON.** Ouvert dans un canevas pour la
+première fois, il montrait un maire dont la tête, le torse, les bras et le fauteuil flottaient deux
+mètres derrière le mur du fond. Voir la ligne 481 du tableau des leçons. Le bureau entier est refait
+en **`components/ferme/maireBureau.js`** — procédural, textures peintes au canevas 2D, aucun fichier
+à charger, réglable au nombre près, et **relu par un banc** (jointure postures/visages).
+
+**Fichiers neufs : UN** (`components/ferme/maireBureau.js`). **Aucune migration Supabase** —
+`shared.star.mayor` gagne trois champs (`appt`, `block`, `sour`) dans un `apply` qui partait déjà, et
+la scène ne diffuse qu'**un `send()` par battement**, jamais par image (§3).
+Bancs relancés un par un, tous verts : `verify-maire` **113/113** (+41 : humeur, rendez-vous, porte
+claquée, et la vue REMPLIE pour de vrai), `verify-quete` **596/596**, `verify-strings` **1 099 clés
+appariées**, `render-etoile` 161/161, `verify-vallee` 205/205, `verify-taxi` 15/15, `verify-syntax`
+✅, bundle esbuild de `FermeGame.js` ✅.
+
+⚠️⚠️ **ET LE PIÈGE N°1 DU FICHIER EST CORRIGÉ : `A.drawStarCalmGlow` EST DEVENU
+`sprites.drawStarCalmGlow`**, aux deux appels (ferme et ville). Il levait un `TypeError` dans la
+boucle de rendu dès la première image d'un apprivoisement, depuis le zip qui livrait la
+fonctionnalité (478). Le bundle ne le signale plus.
+
+⚠️⚠️⚠️ **LA PROCHAINE ACTION EST DE LA JOUER EN ENTIER, ET UNE SEULE CHOSE N'A PAS ÉTÉ VUE :
+L'ENTRETIEN MENÉ JUSQU'À LA SIGNATURE.** Ce qui A été joué et vu à l'écran cette passe : la demande
+d'audience, l'humeur annoncée, l'attente, la montée, la touche E devant le bureau, le fondu, la
+scène plein écran dans les trois vues, les réponses en jaune, la justification affichée, la porte
+claquée avec son « ! » et son quart d'heure, le refus qui suit, et **le mode spectateur à DEUX
+clients** (le bouton apparaît, la scène suit la jauge et les répliques en direct). Ce qui reste :
+aller au bout des douze battements, voir le **tampon** s'abattre et lire les trois fins.
+⚠️ **Le chemin le plus court** : menu dev (⌘⇧X) → ⭐ Star → « 📐 Hand me the plans », puis
+« 🎩 An appointment with the Mayor, right now », puis « Se téléporter → Mairie — l'étage », puis
+« 🎩 Stand at the Mayor's desk », puis **E**.
+
+⚠️⚠️ **ET LA DETTE DU 479 N'A TOUJOURS PAS BOUGÉ : DEUX POSTES À DEUX QUI N'ONT JAMAIS ÉTÉ TENUS** —
+le relais du plat (l'un cuisine, l'autre court) et les deux bords du cratère.
+
+⚠️ **DÉCISION DE GUILLAUME, TOUJOURS EN VIGUEUR : LE BUG DU CHAUDRON-ARTÉFACT VISIBLE SUR 4 TERRES/5
+N'EST PAS CORRIGÉ.** Le sprite scintillant (`FermeGame.js`) reste sans la garde `spec.key==="evil"`
+que l'interaction a déjà. **Ne pas le corriger avant d'en avoir reçu l'ordre.**
+
+⚠️⚠️ **UNE MESURE À PART, DEMANDÉE PAR GUILLAUME (« un ami qui joue sur tablette me dit qu'arcardi ne
+fonctionne plus ») : LE CHIFFRE EST 1 829 CANEVAS 2D RETENUS AU CHARGEMENT** (2 722 créés,
+2,6 millions de pixels), dont `townWater` **636** et `petFrames` **468** à eux deux. Le détail et ce
+qu'il faut en faire sont au §10, « ce qui n'existe pas » — **ce n'est PAS corrigé dans cette
+livraison** (règle du 424 : on ne mêle pas deux changements visuels), c'est mesuré et daté.
 
 | Lot | Ce que c'est | État |
 |---|---|---|
@@ -194,9 +206,9 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 | # | La leçon, en une phrase | Où est le détail |
 |---|---|---|
 | 479 | ⚠️⚠️⚠️ **DEUX TEXTES QUI SE RESSEMBLENT NE SE CORRIGENT PAS EN ÉCRIVANT DEUX TEXTES : ILS SE CORRIGENT EN DONNANT DEUX GESTES.** L'audit reprochait aux trois étoiles de « dire la même chose » ; elles le disaient parce qu'on leur demandait la MÊME chose, et trois variations sur une phrase auraient été trois mensonges (famille du 453, *un texte AFFIRME*). La sortie est une colonne de table (`verb`) et un contrôle qui refuse deux étoiles au même verbe. *Une promesse de CONCEPTION ne tient que si un banc peut la faire échouer — écrite dans un document, elle se périme sans bruit.* | `STAR_SITES.verb`, `starVerbOf`, `verify-quete` §12 |
-| 480 | ⚠️⚠️⚠️ **UNE PROMESSE DE MÉCANIQUE NE TIENT QUE SI UN BANC PEUT LA JOUER — ET « JOUER » VEUT DIRE DE BOUT EN BOUT, PAS RELIRE LA TABLE.** `verify-maire` vérifiait la forme (trois réponses par nœud, l'idéale rapporte plus que la tiède) et il aurait été **vert sur une négociation ingagnable** : les malus des « mains vides » s'empilaient quatre fois sans que personne ne fasse la somme. Il a fallu JOUER quatre cents entretiens, balayés sur cinq maires × deux mondes × dix vitesses de réflexion, pour que la contradiction sorte. *Deux grandeurs qui s'opposent — ce qu'on gagne et ce qui fuit — se mesurent ensemble ou pas du tout* (458), et une difficulté empilée quatre fois n'est pas quatre fois plus difficile : c'est un mur, et un mur ne se règle pas, il se retire. | `MAYOR_BARE_RISK_K`, `verify-maire` §3 |
-| 480 | ⚠️⚠️⚠️ **UN BANC DE DIALOGUE QUI NE MONTRE JAMAIS UN DIALOGUE MESURE DES NOMBRES SUR UN TEXTE QUE PERSONNE N'A RELU — QUATORZIÈME FORME.** Soixante-dix contrôles étaient verts pendant que le sans-faute atteignait le plafond au SEPTIÈME nœud sur treize : les six derniers échanges de la « vraie discussion longue » étaient écrits, joués, lus, et ne pouvaient plus rien changer. Aucun contrôle numérique ne pouvait le dire — le jeu parfait gagnait, le jeu tiède perdait. **Ça se voit en lisant la colonne de gauche d'un entretien IMPRIMÉ.** C'est le §25 de `ferme/README.md` (regarder l'écran) transposé à ce qu'un terminal sait montrer. ⚠️ Corollaire payé le même jour : `verify-syntax` analyse **fichier par fichier**, donc il ne peut pas voir un import qui ne résout pas ; c'est un **bundle** (`npx esbuild --bundle`) qui a sorti `A.drawStarCalmGlow`, un crash de frame vieux de deux zips. | `verify-maire` §7, `MAYOR_STREAK_HOLD_K` |
 | 480 bis | ⚠️⚠️ **UN TABLEAU ANONYME INDEXÉ PAR UN COMPTEUR QUI GRANDIT NE PLANTE PAS QUAND ON OUBLIE DE L'AGRANDIR — IL REND `NaN`, EN SILENCE.** `[0.92, 1.05, 1, 0.96, 1.08][site.impact]` valait `undefined` dès le sixième impact, donc une échelle `NaN`, donc un cratère qui ne se dessine plus — sans la moindre exception à chercher, contrairement au piège n°1 habituel de ce fichier (une fonction absente, elle, lève une erreur). Trouvé en RELISANT avant d'ajouter, pas en jouant. *Un tableau littéral qui suit la longueur d'une table de données doit porter son NOM et sa GARDE (`|| 1`), jamais rester anonyme dans la boucle de rendu qui le lit.* | `STAR_FARM_CRATER_DRAW_SCALES`, `fermeConstants.js` |
+| 481 | ⚠️⚠️⚠️ **UN DÉCOR QU'AUCUN BANC NE SAIT RELIRE DOIT ÊTRE REGARDÉ LE JOUR OÙ IL EST LIVRÉ — SINON IL NAÎT VIEUX.** `public/models/maire-bureau.glb` a été livré au 480, chargé par le jeu, documenté sur deux lignes de tableau, et jamais ouvert : les nœuds `rig_*` y portaient une translation monde que leurs enfants portaient une SECONDE fois, si bien que la tête, le torse, les bras et le fauteuil du maire flottaient deux mètres derrière le mur du fond. Ni le build, ni `verify-syntax`, ni `verify-maire` (qui joue la mécanique et ne dessine rien), ni le bundle ne pouvaient le dire — **un glTF est de la DONNÉE, et aucun banc de ce dépôt ne relit une donnée importée.** C'est le §9 (pipeline C) pris par l'autre bout : on connaissait le risque qu'un asset *vieillisse*, pas celui qu'il naisse faux. Le bureau est refait en canevas 3D procédural (`maireBureau.js`), qui se règle au nombre près et qu'un banc peut au moins JOINDRE à la mécanique. | `maireBureau.js`, `verify-maire` §11 |
+| 481 | ⚠️⚠️⚠️ **`\| 0` SUR UN HORODATAGE TRONQUE À 32 BITS SIGNÉS, ET LE RÉSULTAT N'EST PAS APPROXIMATIF : IL EST ARBITRAIRE.** `Date.now()` vaut 1,78 × 10¹² ; la secrétaire annonçait « il vous reçoit dans 29778439:55 ». L'idiome est écrit partout dans ce dépôt (`m.trust \| 0`, `req.dt \| 0`) et il est JUSTE partout ailleurs, parce que partout ailleurs il s'applique à de petits entiers. *Un idiome qu'on écrit sans y penser cesse d'être un idiome le jour où on change ce qu'il mesure.* ⚠️ Et aucun banc ne pouvait le voir tant qu'il jouait avec `at: 1000` : **un banc qui manipule des dates doit manipuler de VRAIES dates.** | `msOf` dans `maire.js`, `verify-maire` §9 |
 
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
@@ -408,7 +420,8 @@ de conception qui valent pour n'importe quel morceau du dépôt.
 | `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** |
 | `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE : table, chronologies et résolveurs purs.** ⚠️ **469 — la FOUILLE (`STAR_DIG_MS`, `starDug`, `resolveStarDig`, `starDigResult`) et TROIS chapitres au lieu de cinq.** `STAR_FARM_IMPACTS` porte les cinq cratères (2 étoiles / 1 matière / 2 vides), `resolveStarCalm` tient le barème 60/10 s et `resolveStarTownFall` sépare le gros météore. `STAR_FOLLOWER_SITES` dérive toutes les compagnes de `content:"star"`, `starFollowerAdded` identifie celle qui doit jouer son arrivée, `starFarmFlightPath` tient le cap stable des fragments et `queen` désigne l'unique reine. Le reste des chapitres 444–460 demeure techniquement présent mais sa fiction de chant et sa plongée sont obsolètes. Aucun React, aucun dessin — `verify-quete.mjs` l'importe. |
 | `components/ferme/maire.js` | **L'AUDIENCE CHEZ LE MAIRE (480) : la table des battements et les résolveurs purs.** Douze nœuds, cinq actes, cinq familles d'argument, la jauge d'adhésion qui FUIT, l'élan, la rejouabilité côté hôte (`mayorReplay` : le client envoie sa TRANSCRIPTION, l'hôte la rejoue). Aucun React, aucun dessin — `verify-maire.mjs` l'importe. ⚠️ **C'est un système de NÉGOCIATION, pas une scène** : la confiance gagnée sert les audiences futures, donc une commission ou le cadastre s'y ajouteront en une table de plus. |
-| `components/ferme/MaireScene.js` | **la VUE de l'audience — le seul morceau de 3D du monde partagé.** three.js r128 (vendorisé) sur `public/models/maire-bureau.glb`, sept postures interpolées, repli plat si WebGL manque. ⚠️ Il porte `mayorCtxOf`, **la fonction de contexte que le CLIENT et l'HÔTE appellent tous les deux** : leur accord est une propriété du code, pas une coïncidence. |
+| `components/ferme/MaireScene.js` | **la VUE de l'audience — le seul morceau de 3D du monde partagé.** Écran PLEIN, à la PREMIÈRE PERSONNE, caméra libre dans la pièce, bulles projetées, réponses en jaune, **mode spectateur** (`MayorWatch`), repli plat si WebGL manque. ⚠️ Il porte `mayorCtxOf`, **la fonction de contexte que le CLIENT et l'HÔTE appellent tous les deux** : leur accord est une propriété du code, pas une coïncidence. |
+| `components/ferme/maireBureau.js` | **LE BUREAU DU MAIRE, EN CODE (481).** La pièce entière (parquet, boiseries, pilastres, fenêtre sur la place, bibliothèque, buste, lustre, porte qui claque), le meuble et ses objets — *chacun est une réplique de l'arbre* —, et le maire : sept postures, huit visages, sourcils/paupières/bouche, cinématique inverse des bras. ⚠️ **PROCÉDURAL, comme `fermeArt.js` mais en 3D** : aucun fichier à charger, textures peintes au canevas 2D, `THREE` passé en paramètre (jamais importé — deux copies de three.js dans une page ne ressemblent à rien). ⚠️ Rien n'y vit dans la closure de la boucle de rendu : `buildOffice` rend un objet, `applyPose`/`applyFace`/`solveArm` sont des fonctions de module. |
 | `components/ferme/QUETE.md` | **le chantier 444 : déroulé, grammaire magique, avancement, ET CE QUI RESTE À FAIRE (§12) — autorité tant que la quête n'est pas finie** |
 | `components/ferme/README.md` | **Valley Town, le tribunal, l'HÔTEL DE VILLE, l'ÉGLISE, le BEFFROI, les habitants, la VENTE, les OISEAUX, les ÉLECTIONS et les PIÈGES de ces zones — autorité (428-444)** |
 | `components/ferme/DESSIN.md` | **les règles de DESSIN, vraies partout — autorité (441, sorties du §4)** |
@@ -508,6 +521,19 @@ pertinent d'obtenir le résultat visé.
 la voie par défaut partout ailleurs et n'est pas en sursis : les deux approches **coexistent**,
 l'arbitrage se fait **au cas par cas**, module par module, contre le §0 (est-ce que ça rend le
 jeu plus fini ?) et non contre une doctrine.
+⚠️⚠️⚠️ **LE PIPELINE C A EU SON PREMIER USAGE AU 480, ET IL A ÉCHOUÉ — C'EST LA LEÇON LA PLUS
+CHÈRE DU 481.** Le bureau du maire a été bloqué sous Blender et exporté en glTF ; le fichier est
+arrivé dans le dépôt avec ses nœuds `rig_*` doublement décalés, il a été chargé par le jeu, décrit
+sur deux lignes de documentation, et **jamais ouvert dans un canevas pendant un zip entier**. Le
+maire flottait deux mètres derrière le mur du fond. **Aucun outil du dépôt ne pouvait le dire** :
+un glTF est de la DONNÉE, `verify-syntax` lit du JavaScript, le bundle lit des imports, et les
+bancs de rendu appellent du CODE. Le bureau est aujourd'hui procédural (`maireBureau.js`).
+⚠️ **CE QU'IL FAUT EN RETENIR AVANT LE PROCHAIN IMPORT** : le §9 disait qu'un asset importé
+« vieillit » ; il peut aussi **naître faux**, et c'est pire, parce qu'on croit avoir livré. *Un
+asset importé se REGARDE le jour de sa livraison, dans le jeu, ou il n'est pas livré.* Le
+chargeur, le cache, la convention de nommage et le banc que le premier usage devait poser n'ont
+jamais été posés — le chantier reste donc entier.
+
 ⚠️ **Ce que le basculement ne change PAS, et qu'il faut lire avant d'ouvrir Blender :** les
 raisons TECHNIQUES du choix procédural restent vraies et se paient toujours — un bitmap apporte
 un chargement, un cache, une palette hors-fichier, une échelle à tenir, et **il sort du champ
@@ -576,6 +602,15 @@ bout en bout** — quatre cents entretiens par propriété, cinq maires × deux 
 de réflexion — au lieu de relire une table. Il a sorti quatre défauts de RÉGLAGE qu'aucune
 relecture n'aurait vus, dont une négociation arithmétiquement ingagnable et une seconde moitié de
 discussion devenue décorative. **C'est le premier banc du dépôt qui joue.**
+⚠️⚠️⚠️ **ET LE 481 LUI A APPRIS DEUX CHOSES QUE 72 CONTRÔLES VERTS NE POUVAIENT PAS VOIR, ET LES
+DEUX ONT ÉTÉ TROUVÉES EN JOUANT** (il est à **113/113**) : (1) **un banc qui manipule des dates doit
+manipuler de VRAIES dates** — avec `at: 1000`, rien ne dit que `now | 0` tronque un horodatage de
+1,78 × 10¹² à 32 bits, et la secrétaire annonçait « il vous reçoit dans 29778439:55 » ; (2) **un
+texte à trous ne se vérifie pas en comptant ses clés, il se vérifie en le REMPLISSANT** — la vue
+DEVINAIT quel argument passer à chaque justification, et le joueur lisait « Scrutin dans Lui
+jours. » Toutes les clés étaient appariées, tous les textes affichés, tout comptait pour lu.
+⚠️ Il importe désormais `maireBureau.js` pour tenir la jointure « sept postures de la mécanique =
+sept postures dessinables » : c'est le seul contrôle du dépôt qui relie une règle à son DESSIN.
 ⚠️⚠️⚠️ **ET IL A APPRIS UNE LIMITE DE `verify-syntax` QU'IL FAUT CONNAÎTRE : IL ANALYSE FICHIER PAR
 FICHIER, DONC IL NE PEUT PAS VOIR UN IMPORT QUI NE RÉSOUT PAS.** Un **bundle** —
 `npx --yes esbuild@0.21.5 --bundle --loader:.js=jsx --format=esm --outfile=/dev/null
@@ -607,6 +642,20 @@ vérifie jamais — c'est elle, et elle seule, qui protège du banc imaginaire (
 
 - ⚠️ **`verify-luge`, `verify-boot`, `preview-luge`, `preview.mjs`, `verify-perf` et
   `preview-fps` N'EXISTENT PAS** dans `tools/`.
+- ⚠️⚠️⚠️ **ET AUCUN BANC NE COMPTE CE QUE LE CHARGEMENT COÛTE À LA MACHINE — MESURÉ AU 481 PARCE
+  QU'UN AMI DE GUILLAUME NE PEUT PLUS JOUER SUR TABLETTE.** `buildSprites()` **crée 2 722 canevas
+  2D et en RETIENT 1 829** (2,6 millions de pixels), dont `townWater` **636** (16 configurations ×
+  2 variantes × 16 crans de profondeur, plus la berge et le tramage) et `petFrames` **468**
+  (39 familiers × 4 directions × 3 images) — soit **60 % à eux deux**. En octets ce n'est rien
+  (≈ 6 Mo) ; **ce qui compte n'est pas la taille, c'est le NOMBRE** : WebKit sur iPad alloue une
+  surface minimale par canevas et plafonne le total, et le symptôme d'un dépassement n'est pas une
+  erreur — c'est un onglet qui se ferme ou un canevas qui rend du blanc.
+  ⚠️ **Ce n'est pas corrigé au 481** (règle du 424 : on ne mêle pas deux changements visuels dans
+  une livraison) et la parade est connue : **paver** ces deux familles en quelques atlas et découper
+  au `drawImage` — le rendu appelle déjà `drawImage` partout, seule la source change.
+  ⚠️ **Le chiffre se remesure en trois lignes** : encadrer `cv(w, h)` dans `fermeArt.js` d'un
+  compteur sur `window`, recharger, lire. *Une grandeur qu'aucun banc ne mesure se mesure à la main,
+  et on écrit le chiffre avec sa date.*
 - ⚠️ **AUCUN BANC NE REGARDE LA FERME EN IMAGE** : les dix-huit bancs de rendu ne dessinent que
   Valley Town, ses intérieurs, ses habitants et sa quête. Un décor de la ferme mal proportionné
   n'a, à ce jour, aucun endroit où se voir. ⚠️ **Et le SOL de la ferme non plus** : `render-rues`
@@ -1037,6 +1086,15 @@ erreur** en choisissant mal.
    (468, 470, 479, 480) — et cette fois il a été corrigé aux DEUX endroits du même coup, ce que le
    470 avait manqué. *Un chiffre de banc recopié à deux endroits n'a pas deux chances d'être juste,
    il a deux endroits où mentir.*)**.
+
+   **481 (VINGT-DEUXIÈME passe : les DEUX lignes du 480 partent avant les deux leçons de ce zip —
+   deux retirées, deux ajoutées, le tableau reste à sa taille et couvre exactement 479 à 481. Leur
+   détail vit dans `MAYOR_BARE_RISK_K`, `MAYOR_STREAK_HOLD_K` et les §3 et §7 de `verify-maire`,
+   que leur colonne de droite désignait déjà. ⚠️ Et cette passe a trouvé ce qu'un élagage doit
+   trouver : **le §5 et le §16 de `QUETE.md` décrivaient tous les deux un fichier de 365 Ko qui
+   venait d'être supprimé parce qu'il était faux** — c'est le pendant exact de la leçon du 478
+   (« un rapport d'audit recopié hérite de ses erreurs »), appliqué cette fois à un ASSET : *une
+   ligne de tableau qui décrit un fichier ne dit pas qu'il marche, elle dit qu'il existe.*)**.
 
    **480 bis (VINGT-ET-UNIÈME passe : la ligne 478 part avant la leçon de ce zip — une retirée,
    une ajoutée, le tableau reste à sa taille et couvre exactement 479 à 480 bis. Son détail reste

@@ -3510,7 +3510,7 @@ export function resolveStarGift(e, playerIds, now) {
    de la reine) n'en a PAS besoin et c'est délibéré : il ne coûte qu'un objet à 400
    or, que le bouton « Argent » du menu dev sait déjà donner. Un bouton par geste
    aurait été un bouton de plus à tenir pour rien. */
-export const STAR_DEV_OPS = ["reset", "warn", "start", "candy", "dish", "lure", "chapter", "skip", "all", "plans", "deliver", "timber"];
+export const STAR_DEV_OPS = ["reset", "warn", "start", "candy", "dish", "lure", "chapter", "skip", "all", "plans", "deliver", "timber", "appt", "unslam"];
 /* ⚠️ ZIP 469 — `turn` (le retournement) sort de la liste : sa scène est supprimée
    dans `FermeGame`, et un bouton qui rejoue une scène qui n'existe plus ouvre un
    voile noir de sept secondes sur rien. */
@@ -3581,6 +3581,33 @@ export function devStar(e, op, now, who) {
      ⚠️ IL S'ARRÊTE EXACTEMENT OÙ LE JEU S'ARRÊTE : les cinq pièces livrées, aucune
      posée. Un raccourci qui poserait aussi les pièces, c'est « timber » ; celui-ci
      existe pour l'ÉTAT D'AVANT, le seul qu'aucun autre bouton ne sait produire. */
+  /* ╔═════════════════════════════════════════════════════════════════════════════
+     ║ ZIP 481 — DEUX BOUTONS POUR L'AUDIENCE, ET C'EST LA MÊME RAISON QUE TOUS LES
+     ║ AUTRES : sans eux, chaque essai de la scène du maire coûte TROIS À CINQ
+     ║ MINUTES RÉELLES d'attente, ou un quart d'heure si on vient de claquer la
+     ║ porte pour voir ce que ça fait.
+     ╚═════════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ ET ILS NE SAUTENT PAS LA SCÈNE — c'est la ligne rouge de ce menu depuis le
+     444. `appt` pose un rendez-vous DÛ MAINTENANT : il reste à monter à l'étage, à
+     trouver le bureau, à appuyer sur E et à mener l'entretien en entier. `unslam`
+     lève la punition, il ne signe rien. On saute l'ATTENTE, jamais le geste.
+     ⚠️ `appt` tire l'humeur comme l'hôte le ferait, par `mayorPickMood` : un
+     raccourci qui poserait « moyenne » en dur ferait juger la scène dans un seul
+     des cinq mondes — c'est-à-dire qu'on ne jugerait jamais la difficulté, qui est
+     très exactement ce que cette passe ajoute. */
+  if (op === "appt") {
+    MA.migrateMayor(e);
+    e.mayor.block = 0;
+    e.mayor.appt = { by: String(who || ""), name: "\u{1F6E0}\uFE0F", at: t, due: t,
+                     mood: MA.mayorPickMood(Math.random, false, !!e.mayor.sour) };
+    e.mayor.sour = 0;
+    return { star: e, ok: true };
+  }
+  if (op === "unslam") {
+    MA.migrateMayor(e);
+    e.mayor.block = 0; e.mayor.sour = 0;
+    return { star: e, ok: true };
+  }
   if (op === "deliver") {
     if (!e.warn || !e.warn.at) e.warn = { at: t, by: "\u{1F6E0}\uFE0F" };
     if (!e.fall) e.fall = t;

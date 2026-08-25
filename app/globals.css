@@ -7475,3 +7475,118 @@ div.ferme-usage{ margin-bottom:10px; }
 @media (max-width: 560px){
   .ferme-star-hud{ font-size:11px; padding:5px 9px; gap:7px; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 481 — L'AUDIENCE CHEZ LE MAIRE, PLEIN ÉCRAN.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️ TOUT EST EN `position:fixed` DANS UN CONTENEUR `inset:0` : la scène prend
+   l'écran, elle n'est plus un panneau posé sur le jeu (demande de Guillaume).
+   ⚠️⚠️ ET UNE SEULE COULEUR SE CLIQUE. Le jaune est réservé aux répliques ; le
+   reste de l'écran est en gris de vitre. C'est ce qui permet de ne mettre aucune
+   bordure ni aucune icône sur les boutons de dialogue — la couleur EST
+   l'affordance, et une affordance de moins est une phrase de plus qu'on lit.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.maire-bubble{
+  background:rgba(20,22,28,.93); color:#f2eee4; border:1px solid rgba(212,186,120,.42);
+  border-radius:12px; padding:12px 15px; font-size:15px; line-height:1.46;
+  box-shadow:0 10px 30px rgba(0,0,0,.55); position:relative;
+}
+.maire-bubble-tint{ color:#c9bda0; font-style:italic; font-size:13.5px; margin-bottom:6px; }
+.maire-bubble-tail{
+  position:absolute; left:50%; bottom:-9px; width:16px; height:16px; margin-left:-8px;
+  background:rgba(20,22,28,.93); border-right:1px solid rgba(212,186,120,.42);
+  border-bottom:1px solid rgba(212,186,120,.42); transform:rotate(45deg);
+}
+[data-off="1"] .maire-bubble-tail{ display:none; }
+
+.maire-top{ position:absolute; top:12px; left:14px; pointer-events:none; max-width:44vw;
+  background:linear-gradient(180deg, rgba(8,9,12,.55), rgba(8,9,12,0));
+  padding:6px 12px 16px 4px; border-radius:10px; }
+.maire-who{ color:#f4efe2; font-size:15.5px; text-shadow:0 2px 8px rgba(0,0,0,.9); }
+.maire-sub{ color:#bdb6a8; font-size:12px; margin-top:2px; text-shadow:0 2px 8px rgba(0,0,0,.9); }
+.maire-mood{ display:inline-block; margin-top:6px; padding:2px 9px; border-radius:99px; font-size:12px;
+  background:rgba(0,0,0,.45); border:1px solid rgba(255,255,255,.18); color:#e6e0d2; }
+.maire-mood.m-great{ border-color:#6fc07f; color:#a8e6b4; }
+.maire-mood.m-good { border-color:#9ec06f; color:#cbe6a8; }
+.maire-mood.m-mid  { border-color:#c0b26f; color:#e6dda8; }
+.maire-mood.m-bad  { border-color:#c08a6f; color:#e6c0a8; }
+.maire-mood.m-awful{ border-color:#c06f6f; color:#e6a8a8; }
+
+.maire-cams{ position:absolute; top:14px; right:16px; display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+.maire-cam{
+  background:rgba(16,18,24,.72); border:1px solid rgba(255,255,255,.16); color:#ded7c8;
+  border-radius:8px; padding:5px 10px; font-size:12.5px; cursor:pointer;
+}
+.maire-cam:hover{ background:rgba(36,40,50,.88); }
+.maire-cam.on{ border-color:rgba(212,186,120,.75); color:#f2e4bc; }
+/* ⚠️ SOUS les boutons de vue, jamais derrière : ils passent à la ligne dès que la
+   fenêtre rétrécit, et une aide qui chevauche ce qu'elle explique n'aide pas. */
+.maire-camhint{ position:absolute; top:52px; right:16px; color:#8e887e; font-size:11px;
+  text-shadow:0 2px 8px rgba(0,0,0,.9); pointer-events:none; max-width:46vw; text-align:right; }
+
+/* ⚠️ LE BANDEAU EST AUSSI MINCE QUE POSSIBLE : c'est de la scène qu'il mange, et
+   la scène est ce qu'on est venu voir. Tout ce qui pouvait tenir sur une ligne y
+   tient. */
+.maire-foot{
+  position:absolute; left:0; right:0; bottom:0; padding:9px clamp(12px,4vw,40px) 12px;
+  /* ⚠️ LE DÉGRADÉ MONTE VITE : la jauge est la première chose du bandeau, et sur
+     un fond clair (une manche grise, un mur crème) une barre de douze pixels
+     sur un voile à 30 % ne se lit pas du tout. */
+  background:linear-gradient(180deg, rgba(8,9,12,0), rgba(8,9,12,.88) 22%, rgba(8,9,12,.96));
+}
+.maire-gauge{ position:relative; height:12px; border-radius:6px; background:rgba(0,0,0,.55);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.14); overflow:hidden; max-width:760px; margin:0 auto; }
+.maire-gauge .fill{ position:absolute; inset:0 auto 0 0; border-radius:6px; transition:width .12s linear; }
+.maire-gauge .mark{ position:absolute; top:0; bottom:0; width:2px; background:rgba(255,255,255,.7); }
+.maire-gaugerow{ display:flex; justify-content:space-between; max-width:760px; margin:5px auto 0;
+  color:#cfc8ba; font-size:12px; text-shadow:0 1px 4px rgba(0,0,0,.9); }
+.maire-wait{ max-width:760px; margin:10px auto 0; color:#9a948a; font-size:13px; font-style:italic; }
+.maire-why{ max-width:760px; margin:8px auto 0; display:flex; flex-wrap:wrap; gap:4px 14px;
+  align-items:baseline; color:#b7b0a3; font-size:12.5px; }
+.maire-why b{ font-size:15px; }
+
+.maire-says{ max-width:760px; margin:8px auto 0; display:flex; flex-direction:column; gap:5px; }
+/* ⚠️ LA RÉPLIQUE EST JAUNE, ET C'EST TOUT CE QUI L'EST (demande de Guillaume). */
+.maire-say{
+  display:block; width:100%; text-align:left; cursor:pointer;
+  background:rgba(28,26,18,.72); border:1px solid rgba(214,178,86,.40); border-radius:9px;
+  color:#f0cf6a; font-size:14px; line-height:1.34; padding:8px 12px; transition:background .12s, border-color .12s;
+}
+.maire-say:hover{ background:rgba(58,50,24,.86); border-color:rgba(240,207,106,.85); color:#ffe08a; }
+.maire-gestures{ display:flex; gap:7px; flex-wrap:wrap; margin-top:1px; }
+.maire-gesture{
+  flex:1 1 220px; text-align:left; cursor:pointer;
+  background:rgba(18,20,26,.70); border:1px solid rgba(255,255,255,.16); border-radius:9px;
+  color:#ded7c8; font-size:12.5px; padding:6px 11px;
+}
+.maire-gesture:hover{ background:rgba(34,38,48,.9); }
+.maire-gesture span{ display:block; color:#8f887c; font-size:11.5px; margin-top:2px; }
+.maire-gesture.slam{ border-color:rgba(190,90,70,.45); color:#e2b3a4; }
+.maire-gesture.slam:hover{ background:rgba(54,26,22,.9); border-color:rgba(220,110,88,.8); }
+.maire-end{ max-width:760px; margin:10px auto 0; color:#ece5d6; font-size:14px; }
+.maire-dim{ color:#a49d90; font-size:13px; margin-top:4px; }
+
+@media (max-width:760px){
+  .maire-bubble{ font-size:13.5px; padding:10px 12px; }
+  .maire-say{ font-size:13.5px; padding:9px 11px; }
+  .maire-camhint{ display:none; }
+}
+
+/* ⚠️ ZIP 481 — LE BOUTON « VOIR LA SCÈNE DE… ». Il est en bas à gauche, au-dessus
+   du chat : c'est le seul endroit de l'écran de ferme qui ne porte rien d'autre,
+   et une proposition qui recouvrirait la barre d'outils serait refusée par le
+   pouce d'un joueur sur tablette avant d'être lue. */
+.ferme-maire-watch{
+  position:fixed; left:12px; bottom:96px; z-index:40;
+  background:rgba(28,26,18,.86); border:1px solid rgba(214,178,86,.55); color:#f0cf6a;
+  border-radius:9px; padding:8px 12px; font-size:13px; cursor:pointer;
+  box-shadow:0 6px 18px rgba(0,0,0,.5);
+}
+.ferme-maire-watch:hover{ background:rgba(58,50,24,.94); color:#ffe08a; }
+
+/* ⚠️ ZIP 481 — PENDANT LA GRÂCE DE LECTURE, LES RÉPONSES SONT LÀ MAIS LA JAUGE NE
+   FUIT PAS ENCORE. On le dit par le liseré, jamais en retirant les boutons : une
+   interface qui fait disparaître ce qu'on allait cliquer est la seule chose qui
+   se remarque plus qu'un décor raté. */
+.maire-says.grace .maire-say{ border-color:rgba(214,178,86,.18); }
+.maire-says.grace .maire-say:hover{ border-color:rgba(240,207,106,.85); }

@@ -8933,7 +8933,14 @@ function courtFurnish(r, rx, ry, addProp, set, fill, place) {
       /* LE BUREAU DU MAIRE. Même triangle que les bureaux du tribunal (bureau,
          fauteuil, deux chaises), mais en GRAND et avec ce qui distingue un élu
          d'un fonctionnaire : le globe, le portrait, la bibliothèque pleine. */
-      addProp(cx, iy + 3, "desk", true); addProp(cx + 1, iy + 3, "desk", true);
+      /* ⚠️ ZIP 481 — LE PLATEAU PORTE UNE MARQUE (`of: "mayorDesk"`), et c'est ce
+         qui permet à la touche E de savoir qu'on est DEVANT LUI plutôt que devant
+         « un bureau ». Le tribunal en a six autres : chercher « le meuble de type
+         desk le plus proche » aurait ouvert l'audience depuis le bureau du
+         géomètre. C'est le piège des deux cartes du §4 de `CLAUDE.md`, en plus
+         petit — *on teste l'identité avant la distance.* */
+      addProp(cx, iy + 3, "desk", true, { of: "mayorDesk" });
+      addProp(cx + 1, iy + 3, "desk", true, { of: "mayorDesk" });
       /* ⚠️ ZIP 439 — LE FAUTEUIL EXISTE ENFIN. La description de la pièce promet
          depuis le 438 que « le fauteuil est tourné vers la fenêtre, comme s'il
          venait de sortir » — et il n'y avait dans la pièce qu'une `chair`, le

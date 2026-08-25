@@ -2144,13 +2144,44 @@ civil s'y ajouteront en une table de plus et zéro ligne de mécanique.
 | fichier | ce qu'il porte |
 |---|---|
 | `components/ferme/maire.js` | **la table et les résolveurs purs** — douze battements, cinq actes, cinq familles d'argument, la jauge, la fuite, l'élan, la rejouabilité hôte, `migrateMayor`/`resolveMayor`. Aucun React, aucun dessin. |
-| `components/ferme/MaireScene.js` | **la vue** — three.js r128 (déjà vendorisé) sur `public/models/maire-bureau.glb`, sept postures interpolées, et `mayorCtxOf`, la fonction de contexte que le CLIENT et l'HÔTE appellent tous les deux |
-| `public/models/maire-bureau.glb` | le blocage Blender, 365 Ko, 158 objets `part_*`, cinq pivots `rig_*`, trois caméras |
-| `tools/verify-maire.mjs` | **72 contrôles, 72/72** — il JOUE des entretiers entiers, il ne relit pas la table |
+| `components/ferme/MaireScene.js` | **la vue** — l'écran plein, la caméra à la première personne, les bulles, les réponses en jaune, le spectateur, et `mayorCtxOf`, la fonction de contexte que le CLIENT et l'HÔTE appellent tous les deux |
+| `components/ferme/maireBureau.js` | **le DÉCOR, en code** (481) — la pièce, le bureau, le maire, son visage, les sept postures, les huit visages, la cinématique inverse des bras. Aucun React, aucun fichier à charger. |
+| ~~`public/models/maire-bureau.glb`~~ | **SUPPRIMÉ AU 481, ET C'EST LA LEÇON DE CE ZIP.** Livré au 480, chargé, jamais REGARDÉ : ouvert dans un canevas, il montrait un maire dont la tête, le torse, les bras et le fauteuil flottaient deux mètres derrière le mur du fond (les nœuds `rig_*` portaient une translation monde que leurs enfants portaient une seconde fois). Ni le build, ni `verify-syntax`, ni `verify-maire`, ni le bundle ne pouvaient le dire : **un glTF est de la DONNÉE, et aucun banc de ce dépôt ne relit une donnée importée.** |
+| `tools/verify-maire.mjs` | **113 contrôles, 113/113** — il JOUE des entretiens entiers, il ne relit pas la table. Depuis le 481 il importe aussi `maireBureau.js` pour tenir la jointure « sept postures de la mécanique = sept postures dessinables ». |
 | `fermeStrings.js` | `MAIRE_FR` / `MAIRE_EN`, **bilingues le jour de leur naissance** (le banc de parité a refusé l'exemption) |
 
 **Aucune migration Supabase** : tout tient dans `shared.star.mayor`, porté par `migrateMayor`,
 dans un `apply` qui partait déjà. **Un seul `send()` pour toute la négociation.**
+
+### 16.2 bis ⚠️⚠️ CE QUE LE 481 A CHANGÉ — L'AUDIENCE DEVIENT UN RENDEZ-VOUS
+
+Quatre demandes de Guillaume, et elles se tiennent :
+
+1. **Ce n'est plus un panneau, c'est une scène.** Plein écran, à la **première personne** (« ce sera
+   un 1st person cet entretien »), caméra libre **dans** le bureau — on glisse pour regarder autour,
+   on se penche sur le sous-main, on se lève. D'où le décor complet du §16.2.
+2. **On prend rendez-vous à l'accueil.** La secrétaire annonce l'**humeur** du maire (cinq crans,
+   de « très favorable » à « très mauvaise ») et une **attente de 3, 4 ou 5 minutes RÉELLES**. Le
+   bouton du 480 ouvrait la négociation depuis le hall, deux étages plus bas et sans un pas de plus.
+   ⚠️⚠️ **L'humeur est la seule difficulté du système qui se LISE**, et c'est tout son intérêt :
+   annoncée avant qu'on monte, elle permet de décider de revenir demain. C'est la parade au mur du
+   480 (trois malus empilés que personne ne pouvait additionner) — *la difficulté d'un monde se
+   règle sur UN levier qu'on peut lire.*
+3. **On monte, et on entre par la porte.** Une touche E devant SON bureau (`of: "mayorDesk"`, posé
+   par le générateur — il y a sept autres `desk` dans les deux bâtiments), un fondu enchaîné en deux
+   temps : le monde noircit, la scène lève son noir quand elle est prête.
+4. **On peut claquer la porte.** Offerte à tous les nœuds, même quand tout va bien. Un « ! » lui
+   pousse sur la tête, le battant rebondit, et ça coûte **un quart d'heure réel** plus l'humeur de la
+   fois suivante — arbitré par l'hôte, jamais par le client. C'est la seule sortie du jeu qui ait un
+   prix. ⚠️ Tout se remet à zéro avec la quête (menu dev → ⭐ Star → effacer), et c'était gratuit :
+   `newStar()` reconstruit `mayor`.
+
+**Et en multijoueur, les autres voient la scène.** Un bouton « 👀 Voir la scène de (nom) » apparaît
+chez eux tant que quelqu'un négocie. ⚠️⚠️ **Un `send()` par BATTEMENT, jamais par image** : diffuser
+la scène image par image, c'est soixante messages par seconde, le plafond de dix saute en silence, et
+tout le reste du jeu tombe avec (§3 de `CLAUDE.md`). Le spectateur reçoit un ÉTAT — nœud, posture,
+visage, jauge — et rejoue les mêmes interpolations, donc il voit la même scène. Il ne peut pas
+répondre à la place de l'autre : il n'a pas d'état de négociation du tout.
 
 ### 16.3 La mécanique, en six lignes
 

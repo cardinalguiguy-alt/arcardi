@@ -362,7 +362,16 @@ export function mayorDelta(s, a) {
   const ek = mayorElectionK(a.type, s.race);
   if (ek !== 1) {
     v *= 1 + sign * (ek - 1);
-    why.push({ why: ek > 1 ? "race+" : "race-", type: a.type });
+    /* ⚠️⚠️ ZIP 481 — `days` EST PORTÉ PAR LA RAISON, IL N'EST PLUS DEVINÉ PAR LA
+       VUE. L'affichage du 480 choisissait son argument sur la PRÉSENCE d'un
+       `type` (« s'il y a un type, c'est une affinité ; sinon c'est un scrutin »),
+       et les deux raisons de scrutin en portent un : le joueur lisait donc, en
+       jeu, « Scrutin dans Lui jours. » Aucun banc ne pouvait le voir — la
+       justification était bien présente, bien appariée, et le texte comptait pour
+       lu. *Une vue qui DÉDUIT quel argument passer finira par se tromper ; c'est
+       le résolveur qui sait, donc c'est lui qui le dit.* (449 : une jointure,
+       jamais deux listes.) */
+    why.push({ why: ek > 1 ? "race+" : "race-", type: a.type, days: s.race });
   }
   /* — se répéter, et il le DIT — */
   if (gain && s.lastType === a.type) { v *= 0.5; why.push({ why: "again", type: a.type }); }
@@ -429,6 +438,11 @@ export function mayorRate(s, reading) {
      somme.* Ce qui reste, et qui suffit : moins à dire, et aucun droit à
      l'erreur (mesuré par le banc, §3). */
   if (s.audience) k *= C.MAYOR_DRAIN_AUDIENCE_K;
+  /* ⚠️⚠️ ZIP 481 — L'HUMEUR AGIT ICI *AUSSI*, et c'est délibéré : elle bouge le
+     DÉPART et la FUITE. Un seul des deux ne se sentirait pas — le départ se
+     rattrape en deux répliques, la fuite ne se voit pas avant vingt secondes.
+     Voir la note de `MAYOR_MOOD_DRAIN`. */
+  k *= C.MAYOR_MOOD_DRAIN[s.mood] || 1;
   if (s.trust > 0) k *= Math.pow(C.MAYOR_TRUST_DRAIN_K, s.trust);
   if (s.slipMs > 0) k *= C.MAYOR_SLIP_K;
   return -(C.MAYOR_DRAIN_PER_S * k);
@@ -466,14 +480,22 @@ export function mayorAdvance(s, ms) {
 export function mayorOpen(ctx) {
   const trust = Math.max(0, Math.min(C.MAYOR_TRUST_MAX, ctx.trust | 0));
   const plans = !!ctx.plans;
+  /* ⚠️⚠️ ZIP 481 — L'HUMEUR EST BORNÉE PAR LA TABLE, JAMAIS CRUE SUR PAROLE.
+     Elle vient de l'état partagé, donc du réseau, donc elle n'est pas de
+     confiance : une humeur inconnue retombe sur « moyenne », qui est le cas
+     ordinaire — jamais sur la plus facile, qui serait la valeur qu'un client
+     modifié choisirait. *On échoue fermé, comme `atMarket` depuis le 431.* */
+  const mood = C.MAYOR_MOODS.includes(ctx.mood) ? ctx.mood : "mid";
   const s = {
     mayorKey: ctx.mayorKey || "vasseur",
     day: ctx.day | 0,
     race: mayorRaceDays(ctx.day, ctx.nextElection),
     audience: !!ctx.audience,
+    mood,
     plans, trust,
     burnt: Array.isArray(ctx.burnt) ? ctx.burnt.slice() : [],
-    adh: (plans ? C.MAYOR_START_PLANS : C.MAYOR_START_BARE) + trust * C.MAYOR_TRUST_START_BONUS,
+    adh: (plans ? C.MAYOR_START_PLANS : C.MAYOR_START_BARE) + trust * C.MAYOR_TRUST_START_BONUS
+         + (C.MAYOR_MOOD_START[mood] || 0),
     node: MAYOR_NODE_IDS[0],
     streak: 0,
     lastType: null,
@@ -484,6 +506,11 @@ export function mayorOpen(ctx) {
     over: null,      // null | "signed" | "walked" | "out" | "thrown"
     peak: 0,
   };
+  /* ⚠️ ET LE DÉPART NE PEUT PAS OUVRIR SOUS LE PLANCHER. Les mains vides (18)
+     avec une humeur exécrable (−7) tombe à 11 : ça tient. Le jour où l'un des
+     deux nombres bouge, cette borne est ce qui empêche une audience de se
+     terminer AVANT la première question, ce qui ne ressemblerait à rien. */
+  s.adh = Math.max(C.MAYOR_ADH_FLOOR + 1, Math.min(C.MAYOR_ADH_MAX, Math.round(s.adh * 10) / 10));
   s.peak = s.adh;
   return s;
 }
@@ -498,6 +525,13 @@ export function mayorChoices(s) {
   const out = mayorPlayable(s.node, s.plans).map(a => ({ ...a, kind: "say" }));
   if (s.plans && !s.plansLaid) out.push({ k: "__plans", kind: "plans" });
   if (s.adh >= C.MAYOR_ADH_WIN) out.push({ k: "__settle", kind: "settle" });
+  /* ⚠️⚠️ ZIP 481 — CLAQUER LA PORTE EST TOUJOURS OFFERT, ET C'EST TOUT
+     L'INTÉRÊT. Une sortie qui n'apparaîtrait qu'en train de perdre serait un
+     bouton d'abandon ; offerte au meilleur moment de l'entretien, c'est une
+     décision. Elle ne fait pas partie des « exactement trois réponses » (elle
+     n'a ni famille ni justification écrite d'avance) : l'interface la met à
+     part, sous les autres, comme les deux autres GESTES. */
+  out.push({ k: "__slam", kind: "slam" });
   return out;
 }
 
@@ -537,6 +571,18 @@ export function mayorPlay(s, key, dtMs) {
      martelées instantanément franchissaient les 75. */
   mayorAdvance(s, Math.max(dtMs | 0, C.MAYOR_BEAT_MS));
   if (s.over) return { s, delta: 0, why: [], grade: null };
+
+  /* ⚠️⚠️⚠️ ZIP 481 — LA PORTE CLAQUÉE EST UNE FIN À PART, PAS UN ÉCHEC DE PLUS.
+     `walked` (la jauge est tombée), `out` (il n'a plus de question), `thrown`
+     (il vous met dehors) coûtent une tentative ; `slam` coûte un quart d'heure
+     RÉEL et l'humeur de la fois suivante. Elle est consignée dans la
+     transcription comme tout le reste, donc l'hôte la rejoue et arbitre la
+     sanction lui-même — un client ne peut pas s'infliger une punition qu'il
+     n'a pas prise, ni s'en dispenser. */
+  if (key === "__slam") {
+    s.over = "slam";
+    return { s, delta: 0, why: [], grade: "slam" };
+  }
 
   if (key === "__settle") {
     /* « Je crois qu'on s'est compris. » ⚠️ C'EST LE MEILLEUR BOUTON DU SYSTÈME,
@@ -597,6 +643,7 @@ export function mayorPlay(s, key, dtMs) {
 export const MAYOR_POSES = ["push", "closed", "clock", "flat", "lean", "stamp", "window"];
 export function mayorPose(s, lastGrade) {
   if (!s) return "closed";
+  if (s.over === "slam") return "push";          // 481 — il s'est levé, il regarde la porte
   if (s.over === "thrown" || s.over === "walked") return "push";
   if (lastGrade === "fault") return "push";
   if (s.streak >= C.MAYOR_STREAK_GAIN) return "window";
@@ -605,6 +652,43 @@ export function mayorPose(s, lastGrade) {
   if (s.adh >= 36) return "flat";
   if (s.adh >= 16) return "clock";
   return "closed";
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   7 bis. SON VISAGE — ZIP 481, ET C'EST LA DEMANDE DE GUILLAUME
+   ───────────────────────────────────────────────────────────────────────────
+   « on doit voir le maire bouger, parler, réfléchir, jouer avec son stylo etc,
+   changer d'émotions en fonction de nos réponses ».
+
+   ⚠️⚠️ POURQUOI CETTE FONCTION EST *ICI* ET PAS DANS LA VUE. Exactement la
+   raison du §7 : une émotion dérivée de la jauge et du dernier coup est une
+   RÈGLE, donc un banc doit pouvoir la balayer sur toute la plage sans ouvrir un
+   canevas. Écrite dans `MaireScene.js`, elle serait tombée dans la closure de la
+   boucle de rendu — le piège n°1 de `CLAUDE.md`, quatrième visage : *elle ne se
+   dégraderait pas, elle vieillirait*, parce qu'aucun banc ne pourrait la lire.
+   ⚠️ ET ELLE EST DÉRIVÉE, JAMAIS ENTRETENUE. Un état d'émotion tenu à côté de la
+   jauge divergerait au premier réglage (§8) : ici, deux appels au même état
+   rendent la même chose, toujours.
+
+   ⚠️ L'ORDRE DE LA LISTE EST L'ORDRE DE L'HUMEUR, du pire au meilleur. Le banc
+   s'en sert pour exiger que le visage ne fasse jamais marche arrière quand la
+   jauge monte — un visage qui se ferme en gagnant apprend au joueur à ne plus
+   le regarder, ce qui retire à la 3D sa seule raison d'être.
+   ═══════════════════════════════════════════════════════════════════════════ */
+export const MAYOR_EMOTES = ["angry", "annoyed", "cold", "weary", "doubt", "listen", "warm", "won"];
+export function mayorEmote(s, lastGrade) {
+  if (!s) return "cold";
+  if (s.over === "slam" || s.over === "thrown") return "angry";
+  if (lastGrade === "fault") return "annoyed";
+  if (s.over === "signed" || s.over === "walked" || s.over === "out") {
+    return s.over === "signed" ? "won" : "cold";
+  }
+  if (s.streak >= C.MAYOR_STREAK_GAIN) return "won";
+  if (s.adh >= C.MAYOR_ADH_WIN) return "warm";
+  if (s.adh >= 56) return "listen";
+  if (s.adh >= 36) return "doubt";
+  if (s.adh >= 16) return "weary";
+  return "cold";
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -644,7 +728,7 @@ export function migrateMayor(e) {
   if (!e || typeof e !== "object") return e;
   const m = e.mayor && typeof e.mayor === "object" ? e.mayor : {};
   e.mayor = {
-    ok: m.ok | 0,
+    ok: Math.max(0, +m.ok || 0),   // 481 — c'est une DATE, pas un compteur (voir `ms`)
     by: typeof m.by === "string" ? m.by.slice(0, 24) : "",
     grade: typeof m.grade === "string" ? m.grade.slice(0, 8) : "",
     trust: Math.max(0, Math.min(C.MAYOR_TRUST_MAX, m.trust | 0)),
@@ -660,8 +744,162 @@ export function migrateMayor(e) {
     burnt: Array.isArray(m.burnt)
       ? m.burnt.filter(k => MAYOR_SAY_KEYS.includes(k)).slice(0, MAYOR_SAY_KEYS.length)
       : [],
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ ZIP 481 — TROIS CHAMPS DE PLUS, ET PAS UN DE TROP.
+       ╚══════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ AUCUNE MIGRATION SUPABASE : `mayor` est déjà une clé de `shared.star`,
+       qui est déjà UN champ du JSON de `ferme_saves`. Trois clés courtes de plus
+       dans un `apply` qui partait déjà, c'est-à-dire zéro `send()` (§3).
+       ⚠️ ET AUCUN NE PEUT SE DÉDUIRE, C'EST POURQUOI ILS EXISTENT :
+         · `appt`  — le rendez-vous pris à l'accueil : QUI l'a pris, POUR QUAND,
+           et dans quelle HUMEUR la secrétaire a trouvé le maire. Il est PARTAGÉ
+           parce qu'il est arbitré : l'humeur est tirée par l'hôte une fois pour
+           toutes, sinon le client la choisirait, c'est-à-dire qu'il choisirait sa
+           difficulté ;
+         · `block` — l'instant HÔTE avant lequel on ne peut plus rien demander,
+           écrit quand on a claqué la porte. Il ne peut pas se déduire d'`appt` :
+           un rendez-vous annulé et un quart d'heure de purge sont deux choses ;
+         · `sour`  — il vous en veut ENCORE, une fois. Un booléen, consommé à
+           l'audience suivante. Le déduire de `block` aurait fait durer la
+           rancune exactement quinze minutes, c'est-à-dire l'aurait effacée pour
+           qui prend son temps — or c'est la prochaine FOIS qui se paie, pas la
+           prochaine minute. */
+    appt: m.appt && typeof m.appt === "object" ? {
+      by: typeof m.appt.by === "string" ? m.appt.by.slice(0, 40) : "",
+      name: typeof m.appt.name === "string" ? m.appt.name.slice(0, 24) : "",
+      at: Math.max(0, +m.appt.at || 0),
+      due: Math.max(0, +m.appt.due || 0),
+      mood: MAYOR_MOODS_SAFE(m.appt.mood),
+    } : null,
+    block: Math.max(0, +m.block || 0),
+    sour: m.sour ? 1 : 0,
   };
   return e;
+}
+/* ⚠️ UNE HUMEUR QUI VIENT DU RÉSEAU RETOMBE SUR « MOYENNE », JAMAIS SUR LA PLUS
+   FACILE : c'est la règle du 431 (on échoue fermé) appliquée à une difficulté. */
+function MAYOR_MOODS_SAFE(v) { return C.MAYOR_MOODS.includes(v) ? v : "mid"; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   9. LE RENDEZ-VOUS — ZIP 481
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume : « il faudra d'abord demander l'audience à l'accueil,
+   puis la secrétaire nous dira l'humeur du maire (difficulté de la négo indexée
+   sur l'humeur), et un temps d'attente avant de pouvoir aller dans le bureau du
+   maire de 3, 4 ou 5 minutes tiré au hasard ».
+
+   ⚠️⚠️⚠️ L'HUMEUR EST TIRÉE UNE FOIS, PAR L'HÔTE, ET ELLE EST ÉCRITE. C'est le
+   seul arrangement possible, et la raison est la même que pour `mayorCtxOf` :
+   une humeur re-tirée à l'ouverture de la scène serait tirée par le CLIENT,
+   c'est-à-dire choisie ; une humeur dérivée du jour (comme le maire élu) serait
+   la même toute la journée, donc redemander une audience ne servirait à rien.
+   Elle est donc un ÉTAT, le premier de ce système à en être un — et c'est
+   précisément ce qui la rend annonçable par une secrétaire avant qu'on monte.
+   ⚠️ ET LA SECRÉTAIRE NE MENT PAS. Ce qu'elle annonce est exactement ce que
+   `mayorOpen` lira : une seule valeur, écrite une fois, lue par les deux. Le
+   défaut du 449 (deux réponses à la même question) n'a pas d'endroit où naître.
+
+   ⚠️ `rnd` est passé plutôt qu'appelé : l'hôte passe `Math.random`, le banc
+   passe une suite qu'il choisit. Une fonction pure qui irait chercher le hasard
+   toute seule n'est pas rejouable, donc pas mesurable.
+   ═══════════════════════════════════════════════════════════════════════════ */
+export function mayorPickMood(rnd, audienceDay, sour) {
+  /* ⚠️⚠️ LA RANCUNE PASSE AVANT LE TIRAGE, ET ELLE N'EST PAS UN POIDS DE PLUS :
+     claquer la porte ne rend pas la mauvaise humeur « plus probable », il la
+     rend CERTAINE. Une sanction probabiliste ne s'apprend pas — le joueur qui
+     tombe sur « favorable » après avoir claqué la porte conclut que le jeu ne
+     l'a pas vu. */
+  if (sour) return "awful";
+  const w = C.MAYOR_MOOD_WEIGHT;
+  const tot = C.MAYOR_MOODS.reduce((a, k) => a + (w[k] || 0), 0);
+  let r = (rnd() || 0) * tot, out = "mid";
+  for (const k of C.MAYOR_MOODS) { r -= (w[k] || 0); if (r <= 0) { out = k; break; } }
+  /* Son jour d'audience : il est préparé, il a le temps. Une chance sur deux
+     d'être trouvé d'un cran meilleur — jamais plus, sinon les autres jours
+     n'existent plus. */
+  if (audienceDay && rnd() < 0.5) {
+    const i = C.MAYOR_MOODS.indexOf(out);
+    if (i > 0) out = C.MAYOR_MOODS[Math.max(0, i - C.MAYOR_MOOD_AUDIENCE_LIFT)];
+  }
+  return out;
+}
+
+/* L'attente, en millisecondes. Trois, quatre ou cinq minutes réelles. */
+export function mayorPickWait(rnd) {
+  const list = C.MAYOR_WAIT_CHOICES_MS;
+  return list[Math.min(list.length - 1, Math.floor((rnd() || 0) * list.length))];
+}
+
+/* ⚠️⚠️⚠️ ON N'ÉCRIT JAMAIS `| 0` SUR UN HORODATAGE, ET C'EST UN DÉFAUT TROUVÉ EN
+   JOUANT, PAS EN LISANT. `Date.now()` vaut aujourd'hui 1,78 × 10¹², l'opérateur
+   `| 0` de JavaScript tronque à 32 bits SIGNÉS, et le résultat n'est pas
+   « approximatif » : il est arbitraire, il peut être NÉGATIF, et il change de
+   signe toutes les 24 jours. Le symptôme, à l'écran, était une secrétaire qui
+   annonçait un rendez-vous « dans 29778439:55 ».
+   ⚠️ C'est le motif dominant de tout ce dépôt (`m.trust | 0`, `req.dt | 0`,
+   `s.streak | 0`…) et il est JUSTE partout ailleurs, parce que partout ailleurs
+   il s'applique à des petits entiers. Il devient faux à la seule ligne où la
+   grandeur est une DATE. *Un idiome qu'on écrit sans y penser cesse d'être un
+   idiome le jour où on change ce qu'il mesure.*
+   ⚠️ Le seul endroit qui doit borner une date est la MIGRATION, et elle le fait
+   déjà comme il faut : `Math.max(0, +v || 0)`. */
+/* ⚠️ NOMMÉE `msOf` ET PAS `ms` : `mayorAdvance(s, ms)` a déjà un paramètre de
+   ce nom, et une fonction de module masquée par un paramètre dans une seule
+   fonction du fichier est un piège qui attend son tour. */
+const msOf = (v) => { const n = +v; return Number.isFinite(n) ? n : 0; };
+
+export function mayorAppt(e) { return e && e.mayor ? e.mayor.appt : null; }
+export function mayorBlockedMs(e, now) {
+  const b = e && e.mayor ? msOf(e.mayor.block) : 0;
+  const t = msOf(now);
+  return b > t ? b - t : 0;
+}
+/* Le rendez-vous est-il À MOI, et est-ce l'heure ?
+   ⚠️ TROIS CONDITIONS, ET LA TROISIÈME EST LA GRÂCE. Un créneau qui se fermerait
+   à la seconde ferait rater l'audience à qui traverse la ville à pied. */
+export function mayorApptReady(e, who, now) {
+  const a = mayorAppt(e);
+  if (!a || !a.due) return false;
+  if (String(a.by) !== String(who)) return false;
+  const t = msOf(now);
+  return t >= a.due && t <= a.due + C.MAYOR_APPT_GRACE_MS;
+}
+export function mayorApptWaitMs(e, now) {
+  const a = mayorAppt(e);
+  if (!a || !a.due) return 0;
+  const t = msOf(now);
+  return a.due > t ? a.due - t : 0;
+}
+export function mayorApptStale(e, now) {
+  const a = mayorAppt(e);
+  return !!(a && a.due && msOf(now) > a.due + C.MAYOR_APPT_GRACE_MS);
+}
+
+/* ⚠️⚠️ L'ARBITRAGE DE LA DEMANDE. Hôte seulement, comme `resolveMayor`, et il
+   rend une CLÉ — il n'affiche rien lui-même, donc le chemin du menu développeur
+   peut jeter ce qu'il rend (règle du 398). */
+export function resolveMayorAsk(e, who, name, at, rnd, audienceDay) {
+  if (!e) return null;
+  migrateMayor(e);
+  if (e.mayor.ok) return "mayorAlready";
+  const t = msOf(at);
+  if (mayorBlockedMs(e, t) > 0) return "mayorBlocked";
+  /* Un rendez-vous en cours ne se re-tire pas : sans ça, on redemanderait
+     jusqu'à tomber sur « très favorable », et l'humeur cesserait d'être une
+     donnée pour devenir un bouton. ⚠️ Un rendez-vous PÉRIMÉ, lui, se remplace. */
+  const a = e.mayor.appt;
+  if (a && a.due && !mayorApptStale(e, t)) return "mayorAlreadyBooked";
+  const r = typeof rnd === "function" ? rnd : Math.random;
+  const mood = mayorPickMood(r, !!audienceDay, !!e.mayor.sour);
+  e.mayor.sour = 0;                       // la rancune se consomme au rendez-vous suivant
+  e.mayor.appt = {
+    by: String(who || "").slice(0, 40),
+    name: typeof name === "string" ? name.slice(0, 24) : "",
+    at: t,
+    due: t + mayorPickWait(r),
+    mood,
+  };
+  return "mayorBooked";
 }
 
 export function mayorSigned(e) { return !!(e && e.mayor && e.mayor.ok); }
@@ -681,8 +919,21 @@ export function resolveMayor(e, who, name, log, ctx, at) {
   e.mayor.tries = Math.min(999, e.mayor.tries + 1);
   e.mayor.best = Math.max(e.mayor.best, Math.round(s.peak));
   for (const l of s.log) if (l.k[0] !== "_" && !e.mayor.burnt.includes(l.k)) e.mayor.burnt.push(l.k);
+  /* ⚠️⚠️ ZIP 481 — LE RENDEZ-VOUS EST CONSOMMÉ PAR L'ENTRETIEN, QUOI QU'IL
+     ARRIVE. Le laisser en place ferait d'une audience ratée un droit de rentrer
+     aussitôt, et l'attente de trois minutes n'aurait plus lieu d'être. */
+  e.mayor.appt = null;
+  /* ⚠️⚠️⚠️ ET LA PORTE CLAQUÉE EST ARBITRÉE ICI, PAS CHEZ LE CLIENT. C'est la
+     seule façon que la sanction existe pour les DEUX joueurs : quinze minutes
+     d'horloge HÔTE (§3 — jamais l'horloge de celui qui a claqué) et une rancune
+     qui attend la fois suivante. */
+  if (s.over === "slam") {
+    e.mayor.block = Math.max(msOf(e.mayor.block), msOf(at) + C.MAYOR_SLAM_BLOCK_MS);
+    e.mayor.sour = 1;
+    return "mayorSlam";
+  }
   if (s.over !== "signed") return s.over === "thrown" ? "mayorThrown" : "mayorFailed";
-  e.mayor.ok = at | 0;
+  e.mayor.ok = msOf(at);          // 481 — voir la note de `msOf` : jamais `| 0` sur une date
   e.mayor.by = typeof name === "string" ? name.slice(0, 24) : "";
   e.mayor.grade = mayorGrade(s);
   e.mayor.trust = Math.max(e.mayor.trust, mayorTrustGain(s));

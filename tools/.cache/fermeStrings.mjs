@@ -1243,6 +1243,8 @@ const STAR_EN = {
          minutes de scie), « timber » pose les cinq pièces. */
       deliver: "🔨 Timber delivered, not yet raised",
       timber: "🪵 Deliver all the timber",
+      appt: "🎩 An appointment with the Mayor, right now",
+      unslam: "🚪 Make him forget the slammed door",
       /* ⚠️ ZIP 479 — les deux raccourcis des nouveaux verbes. Ils sautent la
          PRÉPARATION (une course de trois minutes, vingt secondes de cuisson) et
          jamais la scène : l'offrande reste à faire, le trajet reste à courir. */
@@ -1254,6 +1256,10 @@ const STAR_EN = {
     scene: (s) => ({ warn: "🎬 The announcement", fall: "🎬 The eight farm impacts", townFall: "🎬 The Valley Town meteor", end: "🎬 The ending" }[s] || s),
     sceneLabel: "Replay a scene",
     stand: "📍 Stand at the next little star",
+    /* ⚠️ ZIP 481 — le téléport « Mairie — l'étage » dépose dans le COULOIR ; le
+       bureau est deux pièces plus loin, derrière une porte. Sans ce bouton, chaque
+       essai de l'audience commence par une promenade. */
+    standMayor: "🎩 Stand at the Mayor's desk",
     chat: (who, what) => `${who} touched the star quest: ${what}.`,
   },
   /* ── LES ANNONCES DE CHAT. ⚠️ SANS EMOJI EN TÊTE : `broadcastChat` en écrit
@@ -1358,6 +1364,56 @@ const MAIRE_FR = {
   trustAt: (n) => n >= 3 ? "Il vous fait entièrement confiance." : n === 2 ? "Il vous connaît, et ça se sent." : "Il se souvient de vous en bien.",
   triesAt: (n) => n === 1 ? "Vous êtes déjà venu une fois." : `Vous êtes déjà venu ${n} fois.`,
 
+  /* ── ZIP 481 — LE RENDEZ-VOUS, L'HUMEUR, ET LA PORTE ─────────────────────
+     ⚠️ LA SECRÉTAIRE NE DIT PAS UN NIVEAU DE DIFFICULTÉ, ELLE DIT CE QU'ELLE A
+     VU. « Il a ri au téléphone tout à l'heure » et « difficulté : facile » sont
+     la même information ; une seule des deux est une mairie. */
+  mood: {
+    great: "Très favorable",
+    good:  "Favorable",
+    mid:   "Moyenne",
+    bad:   "Mauvaise",
+    awful: "Très mauvaise",
+  },
+  moodSay: {
+    great: "« Vous tombez bien. Il a ri au téléphone il y a dix minutes, ça n'arrive pas tous les jours. »",
+    good:  "« Il est de bonne composition ce matin. Le conseil s'est bien passé. »",
+    mid:   "« Comme d'habitude. Ni bien ni mal. Il vous écoutera. »",
+    bad:   "« Je vous préviens : la réunion de dix heures s'est mal terminée. Il n'est pas commode. »",
+    awful: "« Franchement, je ne vous le conseille pas. Mais c'est vous qui voyez. »",
+  },
+  moodSour: "« Ah. C'est vous. » Elle ne dit rien de plus, et note quelque chose.",
+  clerkAsk: "🎩 Demander une audience au maire",
+  booked: (mn) => `Rendez-vous pris. Montez à son bureau dans ${mn} minutes.`,
+  bookedWhen: (mmss) => `Il vous reçoit dans ${mmss}.`,
+  bookedNow: "C'est l'heure. Son bureau est à l'étage, au fond du couloir.",
+  bookedStale: "Vous avez laissé passer l'heure. Il faudra en redemander une.",
+  bookedBy: (n) => `${n} a rendez-vous avec le maire.`,
+  alreadyBooked: "Un rendez-vous est déjà pris. On ne prend pas deux fois la file.",
+  blockedFor: (mmss) => `Il ne vous recevra pas avant ${mmss}. « Il a demandé à ne pas être dérangé. »`,
+  doorHere: "🎩 Entrer en audience",
+  doorNotYet: "Le maire n'est pas disponible. Prenez rendez-vous à l'accueil.",
+  doorWait: (mmss) => `Vous avez rendez-vous dans ${mmss}. Sa porte est encore fermée.`,
+  doorOther: (n) => `C'est ${n} qui a rendez-vous, pas vous.`,
+
+  slam: "🚪 Se lever et claquer la porte",
+  slamHint: "Vous ne pourrez plus le voir avant un quart d'heure, et il s'en souviendra.",
+  slamBang: "!",
+
+  /* ── la caméra, et c'est la seule chose du jeu qui s'explique en un mot ── */
+  camHint: "Glissez pour regarder autour de vous · molette pour approcher",
+  camSeat: "🪑 Ma chaise",
+  camWide: "🖼️ La pièce",
+  camDesk: "📄 Le bureau",
+  camFree: "🎥 Libre",
+
+  /* ── le spectateur ────────────────────────────────────────────────────── */
+  watch: (n) => `👀 Voir la scène de ${n}`,
+  watching: (n) => `Vous regardez l'audience de ${n}.`,
+  watchEnd: "L'audience est terminée.",
+  watchLeave: "Fermer",
+  watchNoSay: "Vous regardez. C'est lui qui parle.",
+
   /* ── les boutons ───────────────────────────────────────────────────────── */
   layPlans: "📐 Dérouler les plans sur le bureau",
   settle: "🤝 « Je crois qu'on s'est compris. »",
@@ -1375,6 +1431,7 @@ const MAIRE_FR = {
     "race+": (d) => `Scrutin dans ${d} jours. Tout ce qui se verra pèse double.`,
     "race-": (d) => `Scrutin dans ${d} jours. Il ne veut surtout pas passer pour dépensier.`,
     again: "Deuxième fois de suite sur le même terrain. Il l'a remarqué, et il le montre.",
+    slam: "Il ne vous recevra pas avant un quart d'heure, et il sera d'une humeur de chien.",
     heartAgain: "On ne se confie qu'une fois. La seconde, c'est un procédé.",
     burnt: "Il vous a déjà entendu dire ça, la dernière fois.",
     bareRisk: "Sans un plan sur la table, la sûreté n'est qu'une opinion.",
@@ -1538,6 +1595,7 @@ const MAIRE_FR = {
     full: "Il tamponne sans regarder la feuille, parce qu'il vous regarde vous. « Quand vous aurez autre chose à me demander, prenez rendez-vous directement. Pas la peine de passer par l'accueil. »",
     out: "Il consulte l'horloge de la cheminée, se lève, et vous tend la main. « J'ai un conseil dans dix minutes. Repassez me voir. Je ne dis pas non, je dis pas aujourd'hui. »",
     walked: "Il ne dit plus rien depuis un moment. Il repousse le rouleau vers vous, du bout des doigts, et rouvre son dossier. L'entretien est fini, personne ne l'a annoncé.",
+    slam: "Vous vous levez au milieu de sa phrase. La porte claque assez fort pour que la vitre du trumeau tremble. Dans le couloir, on a entendu.",
     thrown: "Il se lève, ouvre la porte de son bureau, et attend, la main sur la poignée, sans un mot.",
   },
   /* ⚠️ CE QUE LE JEU DIT APRÈS, ET C'EST LÀ QUE LA CONFIANCE DEVIENT VISIBLE.
@@ -1554,6 +1612,8 @@ const MAIRE_FR = {
     signed: (n) => `${n} a obtenu la signature du maire : le chantier naval est autorisé.`,
     failed: (n) => `${n} sort de la mairie sans signature.`,
     thrown: (n) => `${n} s'est fait raccompagner à la porte du bureau du maire.`,
+    slam: (n) => `${n} a claqué la porte du bureau du maire.`,
+    booked: (n) => `${n} a obtenu un rendez-vous avec le maire.`,
   },
 };
 
@@ -1582,6 +1642,50 @@ const MAIRE_EN = {
   trustAt: (n) => n >= 3 ? "He trusts you completely." : n === 2 ? "He knows you, and it shows." : "He remembers you kindly.",
   triesAt: (n) => n === 1 ? "You have been here once before." : `You have been here ${n} times before.`,
 
+  mood: {
+    great: "Very favourable",
+    good:  "Favourable",
+    mid:   "Average",
+    bad:   "Poor",
+    awful: "Very poor",
+  },
+  moodSay: {
+    great: "\"You have picked your day. He laughed on the telephone ten minutes ago, and that does not happen often.\"",
+    good:  "\"He is in a good frame of mind this morning. The council went well.\"",
+    mid:   "\"The usual. Neither one thing nor the other. He will hear you out.\"",
+    bad:   "\"Fair warning: the ten o'clock meeting ended badly. He is not easy today.\"",
+    awful: "\"Frankly, I would not advise it. But that is your business.\"",
+  },
+  moodSour: "\"Ah. It is you.\" She says nothing more, and writes something down.",
+  clerkAsk: "🎩 Request an audience with the Mayor",
+  booked: (mn) => `Appointment made. Go up to his office in ${mn} minutes.`,
+  bookedWhen: (mmss) => `He will see you in ${mmss}.`,
+  bookedNow: "It is time. His office is upstairs, at the end of the corridor.",
+  bookedStale: "You let the hour go by. You will have to ask for another one.",
+  bookedBy: (n) => `${n} has an appointment with the Mayor.`,
+  alreadyBooked: "An appointment has already been made. One does not queue twice.",
+  blockedFor: (mmss) => `He will not see you before ${mmss}. \"He asked not to be disturbed.\"`,
+  doorHere: "🎩 Go in for the audience",
+  doorNotYet: "The Mayor is not available. Make an appointment at the front desk.",
+  doorWait: (mmss) => `Your appointment is in ${mmss}. His door is still shut.`,
+  doorOther: (n) => `It is ${n} who has the appointment, not you.`,
+
+  slam: "🚪 Stand up and slam the door",
+  slamHint: "He will not see you for a quarter of an hour, and he will remember.",
+  slamBang: "!",
+
+  camHint: "Drag to look around · wheel to move closer",
+  camSeat: "🪑 My chair",
+  camWide: "🖼️ The room",
+  camDesk: "📄 The desk",
+  camFree: "🎥 Free",
+
+  watch: (n) => `👀 Watch ${n}'s audience`,
+  watching: (n) => `You are watching ${n}'s audience.`,
+  watchEnd: "The audience is over.",
+  watchLeave: "Close",
+  watchNoSay: "You are watching. He is the one talking.",
+
   layPlans: "📐 Unroll the plans on the desk",
   settle: "🤝 \"I think we understand each other.\"",
   settleHint: "Sign now. You will never know how far he would have gone.",
@@ -1596,6 +1700,7 @@ const MAIRE_EN = {
     "race+": (d) => `Election in ${d} days. Anything that will be seen counts double.`,
     "race-": (d) => `Election in ${d} days. The last thing he wants is to look like a spender.`,
     again: "Second time running on the same ground. He noticed, and he lets you see that he noticed.",
+    slam: "He will not see you for a quarter of an hour, and he will be in a foul temper.",
     heartAgain: "You only confide once. The second time it is a technique.",
     burnt: "He has heard you say that before, last time.",
     bareRisk: "With no drawing on the table, safety is just an opinion.",
@@ -1754,6 +1859,7 @@ const MAIRE_EN = {
     full: "He stamps without looking at the sheet, because he is looking at you. \"Next time you need something from me, book with me directly. No need to go through the front desk.\"",
     out: "He checks the mantel clock, stands, and holds out his hand. \"I have a council meeting in ten minutes. Come back and see me. I am not saying no, I am saying not today.\"",
     walked: "He has not said anything for a while. He pushes the roll back across to you with his fingertips and reopens his file. The meeting is over; nobody announced it.",
+    slam: "You stand up in the middle of his sentence. The door slams hard enough to rattle the glass in the pier mirror. They heard it in the corridor.",
     thrown: "He stands, opens his office door, and waits with his hand on the handle, without a word.",
   },
   after: {
@@ -1767,6 +1873,8 @@ const MAIRE_EN = {
     signed: (n) => `${n} secured the mayor's signature: the shipyard is authorised.`,
     failed: (n) => `${n} leaves the town hall without a signature.`,
     thrown: (n) => `${n} was shown the door of the mayor's office.`,
+    slam: (n) => `${n} slammed the door of the Mayor's office.`,
+    booked: (n) => `${n} got an appointment with the Mayor.`,
   },
 };
 
@@ -2071,6 +2179,7 @@ export const FERME_STR = {
     hallClerkName: "Léonie Sarrazin",
     hallClerkRole: "hôtesse d'accueil",
     promptHallClerk: "Parler à l'accueil",
+    promptMayorDoor: "E : entrer dans le bureau du maire",
     hallClerkHello: "Bonjour ! Que puis-je faire pour vous ?",
     hallClerkAgain: "Autre chose ?",
     hallClerkClose: "Merci, au revoir",
@@ -3978,6 +4087,7 @@ export const FERME_STR = {
     hallClerkName: "Léonie Sarrazin",
     hallClerkRole: "front desk",
     promptHallClerk: "Talk to the front desk",
+    promptMayorDoor: "E: enter the Mayor's office",
     hallClerkHello: "Good morning! What can I do for you?",
     hallClerkAgain: "Anything else?",
     hallClerkClose: "Thank you, goodbye",
