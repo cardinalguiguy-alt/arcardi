@@ -6762,6 +6762,20 @@ body.ferme-active .wrap-room > .brand{ display:none !important; }
 .ferme-quest-reward{ flex:none; font-weight:bold; color:#b06a00; }
 .ferme-quest-alldone{ margin-top:6px; font-weight:bold; text-align:center; color:#2f7a2f; }
 .ferme-quests-fab{ position:fixed; bottom:270px; left:12px; z-index:11; padding:5px 10px; font-size:12px; }
+/* ⚠️⚠️ ZIP 478 (audit 477, défaut #11) — LE PANNEAU S'EFFACE QUAND LE FERMIER
+   PASSE DESSOUS. Au bord OUEST de la carte la caméra se bride : le personnage
+   continue de glisser vers la gauche de l'écran et finit ENTIÈREMENT caché par
+   cette colonne — deux captures de suite sans personnage, on croit à un rendu
+   cassé. Or l'impact 3 de la quête est à x = 15, donc ce n'est pas un cas limite.
+   ⚠️ POURQUOI PAS UNE BASCULE GAUCHE/DROITE (la parade évidente) : un panneau qui
+   se téléporte pendant qu'on marche est PIRE que le défaut — on perd l'endroit où
+   on savait le trouver, et il reviendrait sauter à chaque aller-retour. Une seule
+   règle, sans saut de mise en page : il devient transparent, et il laisse passer
+   la souris tant qu'il l'est (sinon on cliquerait un panneau qu'on ne voit plus).
+   ⚠️ LA TRANSITION EST SUR LA RÈGLE DE BASE, pas seulement sur la classe : sans
+   elle le retour à l'opacité pleine serait sec d'un côté et doux de l'autre. */
+.ferme-quests, .ferme-quests-fab{ transition:opacity .2s ease; }
+.ferme-quests.ferme-behind-player, .ferme-quests-fab.ferme-behind-player{ opacity:.15; pointer-events:none; }
 
 /* Zip 443 : le bouton du carnet d'enquête (ex-bottom:300 en `ferme-quests-fab`,
    colonne gauche) coïncidait avec `.ferme-torch-btn` (left:10, top:calc(50% + 64px))
@@ -7269,16 +7283,21 @@ div.ferme-usage{ margin-bottom:10px; }
    ⚠️ `pointer-events:none` — il couvre une bande de l'écran pendant que le jeu
    tourne derrière ; un clic destiné au monde ne doit pas s'y perdre.
    ⚠️ IL ENTRE PAR LE BAS ET SORT EN FONDU, sur la même durée que `STAR_FIND_MS`
-   (5,2 s). ⚠️ LES DEUX DURÉES SE DOUBLENT — c'est le §8 de `CLAUDE.md`, et c'est
-   assumé faute d'un pont CSS↔JS : si l'une bouge, l'autre doit bouger, et le
-   symptôme serait un panneau qui reste blanc une seconde ou qui saute.
+   (5,2 s). ⚠️⚠️ ZIP 476 (audit 2026-08-24, défaut #31) — LA DURÉE N'EST PLUS
+   RECOPIÉE ICI : `animation-duration` arrive en style inline depuis
+   `StarFindCard` (`FermeGame.js`), calculé directement à partir de
+   `STAR_FIND_MS`. Ce fichier ne fixe plus que la courbe et le maintien final —
+   la seule source de la durée est la constante JS qui ferme aussi l'overlay
+   (`setTimeout(…, STAR_FIND_MS)`) : les deux ne peuvent plus diverger.
    ══════════════════════════════════════════════════════════════════════════ */
 .ferme-star-find{
   /* ⚠️ 128 px ET PAS 78 : vu à l'écran, le panneau recouvrait la barre d'outils.
      Un overlay qui cache les outils pendant cinq secondes fait douter d'un jeu
      bloqué — la leçon du 456, transposée à la mise en page. */
   position:fixed; left:50%; bottom:128px; transform:translateX(-50%); z-index:58;
-  pointer-events:none; animation:fermeStarFind 5.2s cubic-bezier(.2,.9,.3,1) forwards;
+  pointer-events:none;
+  animation-name:fermeStarFind; animation-timing-function:cubic-bezier(.2,.9,.3,1);
+  animation-fill-mode:forwards; /* animation-duration : voir la note ci-dessus */
   max-width:min(400px, 92vw);
 }
 .ferme-star-find-in{

@@ -7302,6 +7302,102 @@ export function buildSprites() {
      chapeau). ⚠️ ELLE NE S'ARRÊTE JAMAIS TOUT À FAIT TANT QUE L'ÉTOILE EST AU
      FOND : la seconde image de Guillaume, cratère refroidi, garde une volute.
      C'est `starCraterHeat` qui tient ce plancher, pas ce dessin. */
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 478 (audit 477, défaut #2) — ON NE LA VOIT JAMAIS, ON VOIT SA LUMIÈRE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️⚠️ LE DÉFAUT MESURÉ N'ÉTAIT PAS LA DURÉE, C'ÉTAIT LE VIDE : pendant la
+     tenue, « le personnage ne bouge pas, la caméra ne bouge pas, l'étoile n'est
+     pas dessinée (c'est le principe), et le seul retour est une barre de 30 px
+     au-dessus de la tête ». Une jauge n'est pas une scène.
+     ⚠️⚠️ LA FICTION INTERDIT DE LA MONTRER — elle se tasse au fond dès qu'on la
+     regarde — et c'est justement ce qui donne la sortie : **sa lumière, elle, n'a
+     pas besoin qu'on se retourne.** Le sol autour du trou prend sa couleur, la
+     flaque grandit, elle bat de plus en plus vite, et trois lucioles montent sur
+     la fin. Le dos tourné cesse d'être une privation d'image : il devient le seul
+     moyen de la voir. *On ne remplit pas une attente en la raccourcissant, on la
+     remplit en lui donnant quelque chose à regarder.*
+     ⚠️ ELLE VIT DANS `fermeArt` ET PAS DANS LA BOUCLE, exprès : un dessin qu'aucun
+     banc ne peut appeler « ne se dégrade pas, il reste au niveau du jour où il a
+     été écrit » (§4 de CLAUDE.md). `render-etoile` peut l'appeler telle quelle.
+     ⚠️ ELLE SE PEINT SUR LE SOL, AVANT LES SPRITES, et n'utilise que `globalAlpha`
+     — jamais un `fillRect` teinté (§DESSIN : un rectangle de teinte dessine une
+     boîte). Le battement est en `sin`, borné, et il ACCÉLÈRE avec `k` : c'est ce
+     qui fait qu'on sent la fin approcher sans lire un nombre.
+     ⚠️ `k` EST BORNÉ ICI ET PAS CHEZ L'APPELANT : deux clients, deux horloges, et
+     un `k` de 1,04 peindrait une flaque plus large que le cratère pendant deux
+     images. */
+  const STAR_CALM_GLOW = {
+    blue:   ["rgba(150,205,255,", "rgba(215,240,255,"],
+    rose:   ["rgba(255,175,215,", "rgba(255,225,242,"],
+    yellow: ["rgba(255,225,150,", "rgba(255,245,210,"],
+  };
+  function drawStarCalmGlow(g2, cx, cy, T2, k01, color, tMs) {
+    const k = Math.max(0, Math.min(1, k01 || 0));
+    if (k <= 0) return;
+    const col = STAR_CALM_GLOW[color] || STAR_CALM_GLOW.yellow;
+    const t = tMs || 0;
+    /* Le battement : lent au début (une respiration), pressé à la fin. */
+    const bpm = 0.9 + k * 2.6;
+    const pulse = 0.5 + 0.5 * Math.sin((t / 1000) * bpm * Math.PI);
+    /* La flaque. Elle part d'un demi-carreau et monte à deux carreaux et demi. */
+    const R = T2 * (0.5 + k * 2.0) * (0.94 + 0.06 * pulse);
+    const a = (0.10 + k * 0.34) * (0.82 + 0.18 * pulse);
+    g2.save();
+    /* ⚠️⚠️ SIX ELLIPSES EMPILÉES, PAS UN `createRadialGradient` — ET CE N'EST PAS
+       UN PIS-ALLER. Le faux canevas de `tools/lib-canvas.mjs` ne connaît pas les
+       dégradés : écrit avec un `createRadialGradient`, ce dessin aurait été le
+       seul de la quête qu'aucun banc ne peut regarder, c'est-à-dire celui qui
+       « ne se dégrade pas, il reste au niveau du jour où il a été écrit » (§4 de
+       CLAUDE.md, deuxième visage du piège n°1). Six passes d'alpha faible donnent
+       le même dégradé à 16 px, et elles sont mesurables.
+       ⚠️ ON PEINT DE L'EXTÉRIEUR VERS LE CENTRE : l'accumulation fait la courbe
+       toute seule, et le cœur reste le point le plus clair sans qu'on l'écrive.
+       ⚠️ ELLIPSE ET PAS CERCLE : le jeu est vu de trois quarts, une flaque ronde
+       se lit comme une boule posée debout. Le rapport 0,52 est celui des ombres
+       du dépôt. */
+    /* ⚠️ DIX ANNEAUX ET PAS SIX : à six, la planche du banc montrait des CERCLES
+       CONCENTRIQUES — une cible, pas une lumière. Le nombre d'anneaux est ce qui
+       fait la douceur, pas leur opacité ; on monte le compte et on baisse l'alpha
+       d'autant. ⚠️ Le rayon suit une courbe et non une droite (`^1.35`) : réparti
+       linéairement, l'anneau extérieur est trop épais et la bordure se voit. */
+    const RINGS = 10;
+    for (let i = RINGS; i >= 1; i--) {
+      const rr = R * Math.pow(i / RINGS, 1.35);
+      g2.globalAlpha = a * 0.19;
+      g2.fillStyle = (i > RINGS * 0.5 ? col[0] : col[1]) + "1)";
+      g2.beginPath(); g2.ellipse(cx, cy, rr, rr * 0.52, 0, 0, 7); g2.fill();
+    }
+    g2.globalAlpha = 1;
+    /* Le liseré : il n'apparaît qu'au-delà de la moitié, et c'est lui qui dit que
+       quelque chose est en train de MONTER plutôt que de simplement briller. */
+    if (k > 0.5) {
+      const kk = (k - 0.5) / 0.5;
+      g2.globalAlpha = 0.30 * kk * (0.5 + 0.5 * pulse);
+      g2.strokeStyle = col[1] + "1)";
+      g2.lineWidth = 1;
+      g2.beginPath(); g2.ellipse(cx, cy, R * 0.72, R * 0.72 * 0.52, 0, 0, 7); g2.stroke();
+      g2.globalAlpha = 1;
+    }
+    /* Les trois lucioles du dernier tiers : elles montent, elles ne tournent pas.
+       Une orbite ferait un objet ; une montée fait quelque chose qui s'échappe. */
+    if (k > 0.66) {
+      const kk = (k - 0.66) / 0.34;
+      for (let i = 0; i < 3; i++) {
+        const ph = ((t / 1400) + i * 0.37) % 1;
+        const fx = cx + Math.sin((i * 2.1) + ph * 3.0) * T2 * 0.9;
+        const fy = cy - ph * T2 * (1.2 + kk * 1.4);
+        g2.globalAlpha = 0.85 * kk * (1 - ph);
+        g2.fillStyle = col[1] + "1)";
+        g2.fillRect(Math.round(fx), Math.round(fy), 1, 1);
+        g2.globalAlpha = 0.35 * kk * (1 - ph);
+        g2.fillRect(Math.round(fx) - 1, Math.round(fy), 3, 1);
+        g2.fillRect(Math.round(fx), Math.round(fy) - 1, 1, 3);
+      }
+      g2.globalAlpha = 1;
+    }
+    g2.restore();
+  }
+
   function drawStarCraterAir(g2, cx, cy, T2, tMs, opt) {
     const o = opt || {};
     const heat = Math.max(0, Math.min(1, o.heat === undefined ? 1 : o.heat));
@@ -14643,6 +14739,7 @@ house: house(),
     starNestTree: starNestTreeSprite(),
     magpie: [magpieSprite(0), magpieSprite(1), magpieSprite(2)],
     drawStarCrater,
+    drawStarCalmGlow,   // 478 — la lumière qui monte pendant la tenue
     drawStarCraterAir,
     drawStarDust,
     drawStarShip,          // 450 — le navire des étoiles, sur la grève du lac

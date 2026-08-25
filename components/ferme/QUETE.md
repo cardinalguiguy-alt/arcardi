@@ -320,8 +320,8 @@ citations de ce document sont désormais les phrases **françaises réelles**, r
 chantier : *« ne t'embête pas à recopier les mécaniques des autres jeux coopératifs, il faut
 quelque chose de très bien intégré… il faut un thème type quête magique secrète ».* Le premier
 jet posait un **bonneteau** et un **« 1, 2, 3, soleil »** — deux jeux de kermesse repeints en
-magie. Ils sont sortis. **Toute la quête tient désormais sur UNE seule idée magique** (§4), et
-elle est secrète (§3).
+magie. Ils sont sortis. **Toute la quête tient désormais sur un thème intégré plutôt que sur des
+mécaniques empruntées**, et elle est secrète (§3).
 
 ---
 
@@ -449,53 +449,6 @@ restée intacte parce qu'on a séparé deux choses qui n'en faisaient qu'une :
   ça se voit tout de suite, et ça **montre** le secret au lieu de l'expliquer.
 - **La seule chose que la ville partagera** est la cloche à l'aube, à la fin — sans jamais savoir
   pourquoi. Deux joueurs le sauront.
-
----
-
-## 4. ⚠️⚠️⚠️ LA GRAMMAIRE MAGIQUE — UNE SEULE IDÉE, ET TOUT EN DÉCOULE
-
-> **La lumière de l'étoile ne montre pas ce qu'une chose EST. Elle montre ce qu'une chose SE
-> RAPPELLE.**
-
-Une phrase. Un enfant de huit ans la comprend, et elle explique **les six mini-jeux, la
-coopération, et pourquoi il faut être deux**. Il n'y a rien d'autre à retenir.
-
-Trois usages, de plus en plus forts :
-
-| | ce que fait la lumière | où |
-|---|---|---|
-| **une ombre qui MONTRE** | ton ombre au sol n'est pas ta forme : il y a quelqu'un de petit dessus | étape 1 |
-| **une ombre qui PENCHE** | toutes les ombres de la ville se tournent vers les morceaux perdus | étape 2 |
-| **une lumière qui PORTE** | elle descend dans l'eau noire, elle monte dans les tuyaux d'orgue | étapes 3 et 5 |
-| **une ombre qui MENT** | sur cent perles de verre, une seule projette l'ombre d'une étoile | étape 4 |
-
-### ⚠️⚠️ ET LA COOPÉRATION N'EST PAS UNE SERRURE, C'EST UNE CONSÉQUENCE
-
-**On ne peut pas tenir la lumière ET lire l'ombre.** Celui qui la tient est ébloui et a l'ombre
-dans le dos ; celui qui lit est dans le noir et n'a pas de lampe. Deux personnes, deux postes,
-**toujours** — et jamais parce qu'une porte a deux serrures.
-
-C'est ce que le premier jet ratait : il **empruntait** des verrous coopératifs (deux clés, un
-contrepoids, un guetteur). Ici la coopération **sort de la magie elle-même**, elle n'est ajoutée
-nulle part. Et les deux joueurs **ne voient pas le même écran** — l'un a un écran ébloui, l'autre
-un écran noir où quelque chose bouge.
-
-### Ce que ça coûte au réseau : rien
-
-⚠️ **La coopération se construit sur les POSITIONS, qui circulent déjà.** Qui est où, qui bouge,
-qui est assis, dans quelle zone : tout est dans le paquet de `pubMe` depuis toujours. Une
-mécanique fondée là-dessus coûte **zéro message** (§3 de `CLAUDE.md` : ce qui peut se déduire ne
-se diffuse pas). Chaque client lit les positions distantes qu'il a déjà ; **l'hôte revérifie à sa
-propre horloge** au moment du `req`. Un client qui mentirait ne serait pas cru.
-
-### Le solo n'est jamais bloqué
-
-Contrainte dure héritée du 442 : *un jeu qui exige un second joueur pour finir est un jeu qu'on
-ne finit pas.* Partout, la parade solo est **de poser la lumière** — on la cale quelque part, elle
-ne bouge plus, et il faut faire avec un faisceau fixe. C'est plus long et plus tendu, jamais
-impossible. ⚠️ **Chaque fenêtre solo est MESURÉE par `verify-quete`** en rejouant le vrai trajet
-avec la vraie collision et la vraie course — jamais réglée à l'œil (leçon du seuil d'axe du taxi,
-434).
 
 ---
 
@@ -1304,7 +1257,8 @@ relais qui se repose un message à chaque image tourne en boucle serrée. *Il lu
 3. ✅ **Le beffroi est un troisième niveau d'église** (`churchTower`, alt 2).
 4. ✅ **Le cratère est dans le pré**, dérivé du parc, en (128,117) — mesuré, disque entier libre.
 5. ✅ **Blender : non** pour cette passe (§7), essai calibré possible en chantier séparé.
-6. ✅ **Aucune mécanique coopérative empruntée.** Tout sort de la grammaire du §4.
+6. ✅ **Aucune mécanique coopérative empruntée.** La coopération sort de la mécanique elle-même,
+   pas d'un verrou copié sur un autre jeu.
 7. ✅ **Thème : quête magique SECRÈTE** (§3). Aucun nouveau PNJ, aucun panneau d'annonce.
 8. ✅ **Pendant le duo, ce qui traverse le réseau est la PRÉSENCE, pas la performance**
    (`STAR_DUET_ALONE_MUL`). Une visée image par image coûterait un message par image, c'est-à-dire
@@ -1457,7 +1411,7 @@ resté en ville,
 | **le refroidissement devenait plus FACILE** (bande × 1,4) par la présence d'un joueur à l'autre bout du monde | l'inverse de ce que la bande large veut dire |
 
 **La parade est structurelle, pas un réglage.** Le duo est un **RACCOURCI**, jamais une
-serrure (§4) : le chemin solo reste ouvert en permanence dans les deux résolveurs, et
+serrure : le chemin solo reste ouvert en permanence dans les deux résolveurs, et
 `starAlone(kind)` ne décide plus *si l'on peut* mais **quel barème on annonce et quelle
 variante on joue** — par GESTE, et en testant la zone avant les distances.
 ⚠️ **Le pire qu'une erreur puisse désormais coûter est une phrase mal choisie**, plus
@@ -1512,8 +1466,7 @@ faisait. Désormais :
 - **hors de la flaque : écran noir, souffle × 2,4, et on percute des pilotis qu'on ne pouvait
   pas voir.** « A éclaire le chemin de B » cesse d'être une image et devient la règle ;
 - **les obstacles cessent d'être des obstacles** : ce sont les pilotis du VIEUX ponton, et
-  dans la lumière ils **penchent vers le morceau** — la grammaire du §4 (« une ombre qui
-  MONTRE ») servie une troisième fois, sans ajouter un seul objet ;
+  dans la lumière ils **penchent vers le morceau**, sans ajouter un seul objet ;
 - une **flèche** ramène vers la lumière quand on en sort (sans elle, sortir est un coup de
   dés), le morceau se dessine **sur la ligne du plongeur** (il tombait sur le bord du
   découpage, donc invisible à deux), et on **entre dans l'eau DANS la lumière**.
@@ -2113,8 +2066,9 @@ pourra garder, sortir etc. comme les pets actuels. »*
 | 9 | **Le sciage à deux chez Tristan** | l'atelier existe, le geste non |
 | 10 | **Le voyage d'Eduardo pour la voile** | le système de voyage existe, la commande non |
 | 11 | **Le retournement** — la quête n'a plus AUCUN moment de bascule | à concevoir. ⚠️ C'est ce que le déchant a coûté, et il faut le dire : la quête est devenue une chaîne logistique propre. Elle est livrable ; elle n'a plus de surprise. |
-| 12 | **Rejouer le mini-jeu survivant jusqu'à la victoire** (le refroidissement) | ⚠️ **jamais fait, pas une fois, depuis le 444** |
-| 13 | **Une séance à DEUX clients sur toute la chaîne** | ⚠️ **jamais faite face à face** — et depuis le déchant, il ne reste qu'UN geste coopératif : la tenue du cratère à deux. C'est peu. |
+| 12 | **Rejouer le mini-jeu survivant jusqu'à la victoire** (le refroidissement) | ✅ **fait à l'audit 477** — gagné jusqu'à la manche 3, première fois depuis le 444. Il en est sorti le défaut #6 (les deux échecs par le haut rappelaient la CONSIGNE au lieu de dire la faute), corrigé au 478. |
+| 13 | **Une séance à DEUX clients sur toute la chaîne** | ⚠️ **toujours jamais faite face à face.** L'audit 477 a mené un apprivoisement de ferme à deux (~24 s au lieu de 60) et y a trouvé le défaut #8 (l'invité recevait « Où tu en étais » à la place de la chute, corrigé au 478) — mais la CHAÎNE ENTIÈRE à deux reste à jouer. |
+| 14 | **La constellation de cinq points peinte en haut à droite dès la première nuit** | à faire. ⚠️ C'est le reste de la LYRE (453) : elle n'est nommée nulle part, elle n'a pas le bon compte (cinq, pour une trame qui produit trois étoiles et une fiction qui en promet sept), et **elle se peint aussi À L'INTÉRIEUR de la mairie et du tribunal** — c'est-à-dire un ciel sous un plafond. Défaut relevé au 476, jamais corrigé ; sorti de `CLAUDE.md` au 478 pour vivre à côté de ce qu'il décrit. |
 
 ### 15.4 ⚠️ CE QUE LE 469 A LAISSÉ EN DETTE, ET QU'IL FAUT LIRE AVANT DE ROUVRIR
 

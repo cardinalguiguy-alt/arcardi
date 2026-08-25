@@ -11,55 +11,89 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**Livré au 471 : LE BANDEAU NE FAIT PLUS TOMBER LE MÉTÉORE POUR UN JOUEUR QUI N'A RIEN VU TOMBER.**
+**Livré au 478 : LES LOTS 1, 2 ET 3a DE LA REFONTE DE LA QUÊTE.** Le lot 1 (« ce qui ment ») corrige
+six défauts de texte, d'invité et de HUD ; le lot 2 rend le chantier naval jouable ; le lot 3a remplit la minute d'apprivoisement. **Un seul
+champ d'état nouveau (`wood[k].ready`), porté par `migrateStar`, AUCUNE migration Supabase.** Les
+16 bancs sont verts, relancés un par un : `verify-quete` **497/497** (+19 depuis le 477), `render-etoile` **155/155** (+6),
+`verify-vallee` 205/205, `verify-taxi` 15/15, `verify-portee` (⚠️ **il a attrapé le piège n°1** :
+`starExtraShort` écrite dans la closure de l'hôte et lue depuis le JSX — remontée au niveau du
+composant), `verify-strings` (feuilles appariées, vérifiées à la main : le compteur de tête du
+banc ne compte pas les mêmes choses).
+⚠️ **`next build` N'A PAS ÉTÉ LANCÉ : un `next dev` tournait** (§10 l'interdit). `verify-syntax`
+compile bien `FermeGame.js` par esbuild, JSX compris.
 
-**Signalé par Guillaume, mot pour mot en substance** : « l'overlay dit que quelque chose brûle à
-l'est de Valley Town alors que le météore n'est pas tombé (il ne tombe que quand on est sur
-Valley Town) ».
+⚠️⚠️⚠️ **LA PROCHAINE ACTION EST LE LOT 2 : LE CHANTIER NAVAL DEVIENT UN CHANTIER.** La feuille
+de route en cinq lots est arbitrée par Guillaume et se lit comme une CHECKLIST :
 
-⚠️⚠️ **MÊME DÉFAUT QUE LE 470, UNE HORLOGE PLUS LOIN.** `e.townFall` est un horodatage de
-l'HÔTE : il devient vrai pour TOUT LE MONDE dès la diffusion, y compris pour un joueur resté à
-la ferme — or `starScenePump` ne met la scène de chute en file que pour un client physiquement
-EN VILLE (`zone === "town"`). Le bandeau (`Q.starGoalKey`) lisait directement `starTownFallen(e)`
-pour choisir entre « poursuis l'enquête » (`townWait`) et « le trou brûle » (`craterHot`), donc
-il pouvait affirmer la seconde à un joueur qui n'avait pas quitté la ferme. Le décor du cratère,
-lui, se protégeait déjà de ce cas (`starImpactLandedNow`, zip 448) — **deux fonctions répondaient
-à « le météore est-il tombé ? », une seule regardait CE client, et personne ne les avait
-comparées** (huitième leçon du fichier, forme la plus payée : deux réponses jamais mises côte à
-côte).
+| Lot | Ce que c'est | État |
+|---|---|---|
+| 0 | La rivière | ✅ **CLASSÉ SANS SUITE — le défaut 1 de l'audit est FAUX.** On traverse à cheval depuis 2026-07 (`HORSE_WATER_SLOW`, `fermeConstants.js:619`), premier cheval 800 or. *L'audit avait mesuré le prix d'un pont sans chercher s'il existait une autre traversée.* |
+| 1 | Ce qui ment (textes, invité, HUD) | ✅ **LIVRÉ AU 478** — défauts 5, 6, 7, 8, 11, 13 |
+| 2 | Le chantier naval devient un chantier | ✅ **LIVRÉ AU 478** — défaut 4 |
+| 3a | La tenue devient une scène | ✅ **LIVRÉ AU 478** — défaut 2 (30 s + **on voit sa LUMIÈRE**) |
+| 3b | Les trois verbes distincts | ⬜ **PROCHAINE ACTION** — défauts 3, 9, 10 : la lumière bleue, le plat chaud, la reine à deux |
+| 4 | La passe maire et la fourche de fin | ⬜ **RÉSERVÉE À GUILLAUME — À LUI RAPPELER** (il l'a demandé mot pour mot) |
+| 5 | Les sept sœurs | ⬜ en réserve, après 1–4, jamais obligatoire |
 
-**Le correctif** : `Q.starGoalKey` accepte maintenant `ctx.landed` — fourni par l'appelant avec
-`starImpactLandedNow()`, la même garde qui retenait déjà le décor — et ne bascule sur
-`craterHot` qu'une fois CE client passé par là. Sans `landed` dans `ctx` (repli), le comportement
-d'avant est conservé à l'identique pour ne rien casser côté appelants non mis à jour ; les quatre
-appelants réels (`FermeGame.js` : bandeau permanent, chevron, panneau de reprise, minuteur du
-guide auto) le fournissent tous désormais.
+⚠️⚠️ **CE QUE LE LOT 2 A CHANGÉ, ET LE PREMIER GESTE ÉTAIT GRATUIT.** (1) **Les cinq commandes de
+bois sont PARALLÈLES** — la garde séquentielle de `starTimberBlock` est supprimée : **24 minutes
+deviennent 8** (la plus longue pièce), sans qu'un seul des cinq nombres ait bougé. Le banc le
+mesure en minutes, pas en booléens. (2) **Une commande a TROIS états** — commandée (`w.at`),
+livrée par Tristan (`w.ready`), **posée par le joueur au marteau** (`w.done`, inchangé, ce qui
+rend la passe sûre : les quinze appelants qui dessinent et comptent le navire lisent `done`).
+(3) **Chaque berceau demande une chose de plus que du bois**, jamais deux : 40 pierre (le lest),
+8 poissons (l'huile), rien pour le mât (c'est un arbre), **24 laine** (la toile — la BREBIS, comme
+la constellation), 16 œufs (la colle). Elles se prennent au dépôt commun d'abord, puis dans le sac :
+**le chantier devient coopératif sans une ligne de règle.**
 
-Bancs : `verify-quete` **455/455** (+2 : un joueur `landed: false` lit toujours « poursuis
-l'enquête » malgré `e.townFall` posé, un joueur `landed: true` retrouve le cratère brûlant),
-`npx next build` **✓ Compiled successfully**. **Aucune migration ni modification Supabase n'est
-nécessaire.** ⚠️ Pas de session manuelle à deux clients sur ce delivery : `ctx.landed` est dérivé
-d'un état déjà diffusé (`e.townFall`, `starScenePendRef` local), sans nouveau champ ni nouveau
-message réseau.
+⚠️ **ET LE DÉFAUT DU 475 S'EST REJOUÉ DANS LA MÊME PASSE QUI LE CORRIGEAIT** : `timber` couvrait
+désormais trois états (commander / attendre / monter) sous une phrase qui disait « la pièce
+suivante » et envoyait au menu Employés quelqu'un dont la pièce attendait déjà sur la cale. Trois
+clés, **deux adresses** (`sawmill` à la ferme, `shipyard` en ville — sinon le chevron pointe la
+ferme pendant qu'il faut aller à Valley Town, défaut du 449).
 
-⚠️⚠️ **AUTORITÉ NARRATIVE : SEPT ÉTOILES FORMERONT LA CONSTELLATION FICTIVE DE LA BREBIS,
-VISIBLE ET MAPPÉE DANS LE CIEL.** La trame n'en produit que TROIS : il manque quatre étoiles,
-ou il faut abandonner les sept — **c'est la seule décision de fiction encore ouverte**
-(§15 de `components/ferme/QUETE.md`). Les PNJ, eux, ne savent RIEN des étoiles et n'y font
-aucune référence (décision du 469).
+⚠️ **UN BOUTON DEV NEUF : « 🔨 Timber delivered, not yet raised »** (`devStar` op `deliver`). Sans
+lui le mini-jeu de montage n'est atteignable qu'après huit minutes de scie — donc on ne le jugerait
+qu'une fois, ce qui est exactement ce qui est arrivé au mini-jeu de refroidissement pendant
+vingt-cinq zips.
 
-⚠️⚠️ **PROCHAINE ACTION, INCHANGÉE : LA DISCUSSION AVEC LE MAIRE, À TRAVAILLER AVEC GUILLAUME EN
-PASSE DÉDIÉE** (« discussion avec le maire que je veux travailler avec toi dans une autre
-passe »). C'est la charnière de toute la seconde moitié : le maire doit **valider le projet de
-bateau**, et cette validation est ce qui autorise les habitants à en parler dans les rues.
-**Ne rien réécrire de la mairie avant.** Le détail est au **§15.0 de `components/ferme/QUETE.md`**,
-et la liste complète de ce qui reste au §15.3 — dont les **trois chutes d'astéroïdes et leurs
-familiers shiny** (§15.2), demandés au 469 et pas encore construits.
+⚠️⚠️⚠️ **LE LOT 3a, ET C'EST LA LEÇON DE CONCEPTION DE LA PASSE.** L'audit reprochait « soixante
+secondes d'immobilité, trois fois, sans rien à regarder » ; **couper la durée ne réglait rien** —
+15 s devant un écran vide se lisent plus longues que 30 s où quelque chose monte. La fiction
+interdit de montrer l'étoile (elle se tasse dès qu'on la regarde), et **c'est exactement ce qui
+donne la sortie : sa LUMIÈRE, elle, n'a pas besoin qu'on se retourne.** Le sol autour du trou prend
+sa couleur, la flaque grandit, elle bat de plus en plus vite, un liseré se referme au-delà de la
+moitié, trois lucioles montent sur le dernier tiers. *Le dos tourné cesse d'être une privation
+d'image : il devient le seul moyen de la voir.* Durée : **60 s → 30 s** (chiffre de Guillaume), le
+raccourci à deux reste à 10 s — un RACCOURCI, jamais une serrure (458).
+⚠️ **`drawStarCalmGlow` EST NÉE DANS `fermeArt` AVEC SES SIX CONTRÔLES** (`render-etoile` §12), et
+elle a payé tout de suite : écrite avec un `createRadialGradient`, elle aurait été **le seul dessin
+de la quête qu'aucun banc ne peut regarder** (le faux canevas ne connaît pas les dégradés). Dix
+ellipses empilées donnent la même chose et se mesurent — et le banc a montré que six faisaient une
+CIBLE au lieu d'une lumière.
 
----
+⚠️⚠️ **LA LUMIÈRE BLEUE — DÉCISION PRISE AU 478, ELLE S'APPLIQUE AU LOT 3.** L'offrande de
+l'étoile bleue se paie en **bonbons de Temple Run**, qui existent déjà comme objet de l'inventaire
+**du joueur** (`f.inv.candies` — ⚠️ PAR JOUEUR et pas commun, c'est écrit noir sur blanc à
+`fermeEngine.js:938` : « le défi est individuel, personne ne court à deux »), arbitré par l'hôte,
+plafonné par course, persisté, affiché dans le sac
+— et qui **n'ont AUCUN usage depuis le zip 372**. **Prix : 60 bonbons, et ils doivent avoir été
+rapportés DEPUIS LA CHUTE** (« la lumière bleue s'éteint en dormant »). Calibrage lu dans le code,
+pas deviné : `fermeConstants.js:818` chiffre une TRÈS BONNE course à **≈ 140 bonbons en 3 min**,
+donc 60 = une course moyenne, un détour de trois minutes, jamais un grind — et le stock dormant
+d'une vieille ferme ne peut pas l'acheter d'avance.
 
-État à jour du **zip 471**. Le chantier des étoiles est momentanément confié à Claude ; côté Codex,
-la prochaine action attend une consigne. La direction longue reste de **rendre Valley Town habitable
+⚠️ **CE QUE LE LOT 1 A TROUVÉ ET QUI N'ÉTAIT DANS AUCUN RAPPORT** : l'audit disait la consigne du
+mini-jeu de refroidissement affichée **trois** fois simultanément ; elle l'est **deux** fois
+(sous-titre du canevas + pied de l'écran), et le pied fait déjà `msg || help`. Le vrai défaut
+n'était pas le nombre, c'était que les deux échecs par le haut RAPPELAIENT LA CONSIGNE — donc
+l'écran ne changeait pas quand on ratait.
+
+
+État à jour du **zip 478** (le lot 1 de la refonte de la quête — voir §reprise). Le
+chantier des étoiles est momentanément confié à Claude ; côté Codex, la prochaine action attend
+une consigne. La
+direction longue reste de **rendre Valley Town habitable
 au regard ET crédible au jeu**, et **lui donner une histoire**. Tout ce qui concerne la ville, ses habitants, ses
 bâtiments et **ses pièges** est dans **`components/ferme/README.md`**, qui fait autorité ; les
 règles de DESSIN sont dans **`components/ferme/DESSIN.md`** ; les bancs dans **`tools/README.md`**.
@@ -70,7 +104,10 @@ EST `components/ferme/QUETE.md`. LIS SON BLOC D'AUTORITÉ 469 AVANT D'Y TOUCHER 
 celui du 465 partout où les deux se contredisent.** Les chapitres du chant, de la plongée, de
 la verrerie et de la pie ne sont plus « techniquement jouables » : ils sont **supprimés**. Ce
 qui reste : cinq impacts qu'on FOUILLE, le grand cratère, l'étoile reine, le chantier naval.
-La liste de ce qui manque est au **§15**, la prochaine action au **§15.0**.
+La liste de ce qui manque est au **§15.3** — elle a une ligne par chose, et elle est tenue à jour.
+⚠️ **La prochaine action, elle, est dans le bloc ⏭️ REPRISE en tête de CE fichier** (la feuille de
+route en cinq lots du 478), plus au §15.0 : celui-ci décrit la passe MAIRE, qui est réservée à
+Guillaume et devenue le lot 4.
 
 ---
 
@@ -114,6 +151,13 @@ toutes payées :
   `solo = true` et l'écoute des ombres avec `solo = false` — les deux seuls mondes où elles
   marchaient, pendant que le jeu passait la valeur inverse. *Un paramètre écrit en dur par le banc
   est une hypothèse que personne ne vérifie ; on balaie les deux valeurs.*
+- ⚠️⚠️⚠️ **une discipline de banc ajoutée à UNE section ne protège que cette section** (472,
+  douzième forme, et c'est la plus vicieuse parce qu'elle se déguise en leçon déjà apprise).
+  Le 469 avait écrit noir sur blanc *« on rejoue avec les vraies données ET le vrai cycle de vie
+  de l'état »* — et l'a appliqué au seul §fouille. Le §objectif, lui, appelle encore
+  `starGoalKey` sur un état que personne ne re-migre : il n'a donc JAMAIS pu voir que l'hôte,
+  qui re-migre à chaque requête, fait tomber le météore de Valley Town à la fermeture du
+  chapitre 1. **Une règle de banc s'applique au banc ENTIER, ou elle ne s'applique pas.**
 ⚠️⚠️ **ET UN CONTRÔLE DE CAS NE VAUT PAS UN INVARIANT** (449). Trois contrôles « est-ce que ça
 marche » étaient verts sur le placement du familier meneur ; l'invariant — *il n'est JAMAIS plus
 loin du but que le joueur*, balayé sur toutes les positions — a échoué **20 fois sur 164** et a
@@ -159,13 +203,10 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 
 | # | La leçon, en une phrase | Où est le détail |
 |---|---|---|
-| 468 | ⚠️⚠️⚠️ **UNE HORLOGE DE MISE EN SCÈNE SANS BORNE FINIT PAR RETENIR LE JEU ENTIER.** Une arrivée de 2,6 s qui ne compte que du temps VISIBLE se fige dès que sa condition de visibilité cesse d'être atteignable — et ce qui attendait « la fin de l'animation » attend alors pour toujours. Toute pause se borne en temps RÉEL. | `starJoinStale`, `starCompanionsAt`, `verify-quete` §arrivée |
-| 468 | ⚠️⚠️ **UNE FONCTION QUI RÉPOND À DEUX QUESTIONS FINIT PAR RÉPONDRE À LA MAUVAISE.** « L'animation joue-t-elle ? » et « faut-il retarder une carte ? » avaient la même fonction ; s'en servir comme garde d'armement l'a rendue vraie AVANT tout armement, donc éternelle. Deux questions, deux fonctions. | `starJoinBusy` vs `starJoinActive` |
-| 469 | ⚠️⚠️⚠️ **UNE TRONCATURE DE SÉCURITÉ QUI FAIT TOMBER DEUX CLÉS DISTINCTES SUR LA MÊME NE PROTÈGE RIEN : ELLE CORROMPT.** Une clé composite se borne à la SOMME de ses parties, jamais à un nombre rond. `calm` coupait à 40 : avec un UUID de 36, la tenue et son départ devenaient la même clé, et l'étoile ne sortait jamais. | `CALM_KEY_MAX`, `migrateStar`, `verify-quete` §fouille |
-| 469 | ⚠️⚠️⚠️ **UN BANC QUI INVENTE SES IDENTIFIANTS MESURE UN JEU QUE PERSONNE NE JOUE** (onzième forme). Il jouait `"j1"` quand le jeu passe un UUID, et gardait un état que l'hôte, lui, re-migre à CHAQUE requête. Il fallait les deux écarts pour reproduire — donc 447 contrôles verts sur un blocage total. **On rejoue avec les vraies données et le vrai cycle de vie de l'état.** | `verify-quete` §fouille |
-| 469 | ⚠️⚠️ **UNE PORTÉE D'INTERACTION SE RÈGLE SUR CE QUE LE GESTE MONTRE, PAS SUR CE QU'IL EST COMMODE D'ATTEINDRE.** 3,1 cases convenaient à une invite qui affichait du texte ; dès qu'elle a déclenché une ANIMATION, elle faisait creuser le fermier dans l'herbe à deux cases du trou. Le geste et sa trace partent du même point ou ne racontent rien. | `starDigStart`, `starNearby` |
-| 470 | ⚠️⚠️ **UNE SEULE CLÉ DE BANDEAU PEUT CACHER DEUX ÉTATS QUI NE SE RESSEMBLENT PAS.** `engineerWait` couvrait à la fois le TRAJET (personne au chantier) et le TRAVAIL (l'ingénieur est là) sous la phrase du travail — pendant le trajet, le bandeau affirmait un fait faux. Le panneau de la mairie distinguait déjà les deux phases ; le bandeau permanent, non. | `starGoalKey`, `starEngineerHere`, `verify-quete` §objectif |
-| 471 | ⚠️⚠️ **« TOMBÉ CHEZ L'HÔTE » N'EST PAS « TOMBÉ CHEZ CE CLIENT ».** `e.townFall` se diffuse à tout le monde instantanément, mais la scène ne se met en file que pour un client physiquement en ville — un joueur resté à la ferme lisait donc « le trou brûle » sans avoir rien vu tomber. Le décor du cratère se protégeait déjà (`starImpactLandedNow`) ; le bandeau, non : deux réponses à « le météore est-il tombé ? », jamais comparées. | `starGoalKey` (`ctx.landed`), `starImpactLandedNow`, `verify-quete` §objectif |
+| 475 | ⚠️⚠️⚠️ **UNE SEULE PHRASE POUR PLUSIEURS ÉTATS SE REPRODUIT À UNE ÉCHELLE PLUS FINE : PAS SEULEMENT ENTRE CHAPITRES (449), AUSSI À L'INTÉRIEUR D'UN SEUL OBJECTIF.** `farmImpacts` couvrait pas-fouillé, fouillé-étoile et fouillé-matière sous une seule phrase — exactement le défaut du bandeau-par-chapitre du 449, rejoué un cran plus bas. *Un découpage qui a l'air fini au premier niveau peut cacher plusieurs états au niveau d'en dessous ; on ne s'arrête pas à la première clé qui semble homogène.* | `starGoalKey`, `farmImpactTame`, `farmImpactCool` |
+| 476 | ⚠️⚠️⚠️ **UN COMMENTAIRE QUI JUSTIFIE UN `\|\|` DE CONDITIONS NE VAUT QUE SI CHAQUE CONDITION GARDE SA RAISON.** `starDigStep` annulait en silence sur `starUiOpenRef.current \|\| devMenuOpenRef.current \|\| starSceneRef.current`, sous une seule justification : « le joueur sait qu'il vient d'ouvrir quelque chose ». Vraie pour les deux dernières, qu'il déclenche lui-même ; fausse pour la première, qui peut devenir vraie TOUTE SEULE (l'overlay d'un autre trou qui s'ouvre pendant qu'on en gratte un second). *Un `\|\|` qui protège plusieurs raisons différentes se relit raison par raison, jamais comme un bloc.* | `starUiOpenRef`, `starDigStep`, `L.star.dig.blocked` |
+| 478 | ⚠️⚠️⚠️ **UNE GARDE QUI SE FIGE « À LA PREMIÈRE LECTURE » SUPPOSE QU'ON A DÉJÀ LU AVANT L'ÉVÉNEMENT — CE QUI EST FAUX POUR QUI ARRIVE AVEC LUI.** Le 475 figeait `resume` à la première lecture de `e` « avant qu'aucune action locale n'ait pu changer `starStarted` ». Chez l'INVITÉ, `e` est absent tant que la quête n'a pas commencé : sa première lecture EST l'`apply` de la chute, où `e.ch` vaut déjà 1 — le rappel « Où tu en étais » s'ouvrait donc par-dessus la cinématique d'ouverture, avec une phrase fausse. *La bonne grandeur n'était pas « la quête avait-elle commencé » mais « ai-je déjà vu la chute », et elle était déjà écrite (`starFallSeen`).* | `starFallSeen`, `starSeenRef.resume`, `starQueueScene` |
+| 478 | ⚠️⚠️⚠️ **UN « CE CAS NE PEUT PAS EXISTER » EST TOUJOURS DATÉ PAR LA RÈGLE QUI L'EMPÊCHE.** `resolveStarTimberTick` ne rendait qu'une clé, sous un commentaire qui l'argumentait bien : « deux pièces ne peuvent pas être en cours en même temps (l'ordre l'interdit), donc une boucle serait du code pour un cas qui ne peut pas exister ». Juste — et devenu faux dans la seconde où la garde `prev` est tombée : deux commandes parallèles échoient dans le même battement, et le `return` au premier aurait fait attendre la seconde un tic de plus, sans que rien ne le dise. *Quand on retire une règle, on va relire tout ce qu'elle justifiait — et un `verify-portee`/`verify-quete` ne le trouve que si le banc rejoue le geste neuf.* | `resolveStarTimberTick`, `starTimberBlock`, `verify-quete` §11 |
 
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
@@ -532,7 +573,7 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 442** (reporté deux fois). **16 bancs de contrôle et 19 bancs
 de rendu**, comptés en listant `tools/` (⚠️ le chiffre disait 15 et 18 : il était périmé, recompté
 au 453 — et **les 35 ont été relancés un par un au 469**, tous verts, `verify-quete` à
-**455/455** (relancé au 471, +2 depuis le 470 — un joueur qui n'a pas vu la chute, §objectif)
+**478/478** (relancé au 475, +17 depuis le 473/474 — les trois états d'un impact fouillé, §reprise)
 ⚠️ *il était à 488 au 468 : le déchant a retiré les contrôles des quatre chapitres
 supprimés et en a ajouté une trentaine sur la fouille. **Un banc qui rétrécit parce que le code
 rétrécit est un banc en bonne santé** — ce qu'il ne faut pas, c'est qu'il rétrécisse tout seul*). ⚠️ **Six d'entre eux existent parce qu'un défaut vu par
@@ -942,6 +983,42 @@ erreur** en choisissant mal.
 
    **471 (aucun élagage ICI — le tableau ajoute la leçon du 471 et couvre encore exactement
    468 à 471, quatre zips, sans qu'aucune ligne n'ait besoin de partir.)**.
+
+   **472 (TREIZIÈME passe : les DEUX lignes du 468 partent avant les deux leçons de l'audit 472 —
+   deux retirées, deux ajoutées, le tableau reste à sa taille et couvre exactement 469 à 472. Leur
+   détail vit dans `starJoinStale`, `starJoinBusy`/`starJoinActive` et `verify-quete` §arrivée, que
+   leur colonne de droite désignait déjà. ⚠️ Et cette passe a trouvé ce qu'un élagage doit trouver :
+   **le bloc ⏭️ REPRISE annonçait un défaut CORRIGÉ (471) que la séance de jeu venait de reproduire
+   à l'identique**. Un bloc de reprise qui déclare une victoire est le seul endroit du fichier où
+   personne ne pense à revérifier.)**.
+
+   **473 (QUATORZIÈME passe : les TROIS lignes du 469 partent avant la leçon de ce zip — trois
+   retirées, une ajoutée, le tableau RÉTRÉCIT et couvre exactement 470 à 473. Leur détail reste
+   dans `CALM_KEY_MAX`, `migrateStar`, `verify-quete` §fouille, `starDigStart` et `starNearby`, que
+   leur colonne de droite désignait déjà.)**.
+
+   **474 (QUINZIÈME passe : les DEUX lignes du 470 et du 471 partent avant la leçon de ce zip —
+   deux retirées, une ajoutée, le tableau RÉTRÉCIT ENCORE et couvre exactement 472 à 474. Leur
+   détail reste dans `starGoalKey`, `starEngineerHere`, `starImpactLandedNow` et `verify-quete`
+   §objectif, que leur colonne de droite désignait déjà.)**.
+
+   **475 (SEIZIÈME passe : la ligne « migrateStar/townFall » du 472 part avant la leçon de ce
+   zip — une retirée, une ajoutée, le tableau reste à sa taille et couvre exactement 472 à 475.
+   Son détail reste dans `migrateStar` et `starTownActivityTick`, que sa colonne de droite
+   désignait déjà.)**.
+
+   **476 (DIX-SEPTIÈME passe : la ligne 472 part avant la leçon de ce zip — une retirée, une
+   ajoutée, le tableau reste à sa taille et couvre exactement 473 à 476. Son détail reste dans
+   `starAlone`, `starOtherThere` et `resolveStarCalm`, que sa colonne de droite désignait déjà.)**.
+
+   **478 (DIX-HUITIÈME passe : la ligne 473 part avant la leçon de ce zip — une retirée, une
+   ajoutée, le tableau reste à sa taille et couvre exactement 474 à 478. Son détail reste dans
+   `starFarmImpactLandedReal`, `starImpactLandedReal` et `starCalmOk`, que sa colonne de droite
+   désignait déjà. ⚠️ Et cette passe a trouvé ce qu'un élagage doit trouver : **le bloc ⏭️ REPRISE
+   annonçait comme BLOQUANT un défaut qui n'existe pas** — « deux impacts derrière une rivière
+   qu'on ne peut pas traverser » — alors qu'on traverse à cheval depuis 2026-07, et que le
+   commentaire qui le dit est dans `fermeConstants.js` depuis. *Un rapport d'audit recopié dans ce
+   fichier hérite de ses erreurs, et il les garde plus longtemps que lui.*)**.
 
       **467 (NEUVIÈME passe : la ligne 463 part avant l'ajout du 467. Le tableau couvre les quatre
    derniers zips 464 à 467 ; le détail retiré reste dans `QUETE.md` et `starCompanionsAt`.)**.

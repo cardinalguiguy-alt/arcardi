@@ -264,6 +264,48 @@ section("La reprise (migrateStar)");
     ok("…et le compte restant le dit", Q.starDigLeft(eOld) === 0,
        `${Q.starDigLeft(eOld)} restant(s)`);   // ch:1 coche les cinq impacts (compat 461)
   }
+  /* ╔═════════════════════════════════════════════════════════════════════════
+     ║ ZIP 472 (audit) — LA FERMETURE DU CHAPITRE 1 NE DOIT PAS FAIRE TOMBER LE
+     ║ MÉTÉORE DE VILLE TOUTE SEULE.
+     ╚═════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️⚠️ `(saved.ch | 0) > 0` DEVIENT VRAI DÈS QUE LES CINQ IMPACTS DE FERME
+     SONT TROUVÉS — avant ce correctif, la ligne de compatibilité du 462 lisait
+     ça comme « une vieille sauvegarde qui avait déjà son cratère » et posait
+     `e.townFall = e.fall`, sautant les deux minutes de présence active que
+     `starTownActivityTick` est censé compter. REJOUÉ AVEC LE VRAI CYCLE DE
+     VIE : l'hôte re-migre `s2.star` À CHAQUE REQUÊTE, donc on migre après
+     CHAQUE trouvaille et pas une seule fois à la fin — sans ça, ce contrôle
+     ne pourrait pas voir le défaut qu'il vérifie (leçon du 469). `who` est un
+     UUID de 36 signes, comme un vrai `profile_id` Supabase, jamais `"j1"`
+     (même leçon, onzième forme). */
+  {
+    const uuid = "3fa0c1e2-9b7a-4c2d-8e3f-6a1b2c3d4e5f";
+    let e = Q.migrateStar(undefined);           // une partie neuve, comme au tout premier chargement
+    armFall(e);                                 // les cinq impacts n'existent qu'une fois la chute armée
+    e = Q.migrateStar(e);
+    const fallAt = e.fall;
+    for (const [i, site] of Q.STAR_FARM_IMPACTS.entries()) {
+      Q.resolveStarFound(e, site.id, uuid, fallAt + 1000 + i);
+      e = Q.migrateStar(e);                      // l'hôte re-migre après CHAQUE requête
+    }
+    ok("⚠️⚠️⚠️ les cinq impacts de ferme trouvés ferment le chapitre 1", e.ch === 1, `ch=${e.ch}`);
+    ok("⚠️⚠️⚠️ …et le météore de ville N'EST PAS tombé tout seul", e.townFall === 0, `townFall=${e.townFall}`);
+    for (let i = 0; i < 5; i++) e = Q.migrateStar(e);   // le battement d'une seconde re-migre aussi
+    ok("…même rejoué plusieurs secondes sans que personne n'aille en ville", e.townFall === 0, `townFall=${e.townFall}`);
+    const r = Q.resolveStarTownFall(e, fallAt + 500000);
+    ok("…et le vrai déclencheur (deux minutes de présence) fonctionne toujours",
+       r.ok && e.townFall === fallAt + 500000, `ok=${r.ok} townFall=${e.townFall}`);
+  }
+  /* ⚠️ ET LA COMPATIBILITÉ D'AVANT LE 462 TIENT TOUJOURS : une sauvegarde qui
+     n'a JAMAIS connu `townFall` (le champ est ABSENT, pas à 0) doit encore
+     hériter du cratère existant. C'est la PRÉSENCE du champ que la migration
+     mesure désormais, jamais `ch` seul — voir `legacyPreTownFall`. */
+  {
+    const legacy = { ch: 1, fall: 42, found: { crater: { by: "a", at: 50 } } };
+    ok("⚠️ le témoin n'a PAS de champ townFall (comme avant le 462)", !("townFall" in legacy));
+    const e = Q.migrateStar(legacy);
+    ok("…et elle hérite bien du cratère existant", e.townFall === 42, `townFall=${e.townFall}`);
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -464,8 +506,15 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
      dix secondes dès qu'un second joueur se trouve dans la zone. */
   ok("⚠️ la tenue solo du cratère est plus longue qu'à deux",
      Q.STAR_CALM_SOLO_MS > Q.STAR_CALM_MS, `${Q.STAR_CALM_SOLO_MS} ms contre ${Q.STAR_CALM_MS} ms`);
-  ok("…et vaut exactement une minute seul, dix secondes à plusieurs",
-     Q.STAR_CALM_SOLO_MS === 60000 && Q.STAR_CALM_MS === 10000);
+  /* ⚠️ ZIP 478 — 30 s / 10 s (décision de Guillaume). Le contrôle garde sa forme :
+     il fige le barème pour qu'un réglage distrait se voie, et il vérifie que
+     l'ÉCART reste assez grand pour que le raccourci à deux se remarque — trois fois
+     plus court, c'est ce qui fait qu'on le sent sans qu'on l'explique. */
+  ok("…et vaut exactement trente secondes seul, dix secondes à plusieurs",
+     Q.STAR_CALM_SOLO_MS === 30000 && Q.STAR_CALM_MS === 10000);
+  ok("…et le raccourci à deux reste franc (au moins trois fois plus court)",
+     Q.STAR_CALM_SOLO_MS >= Q.STAR_CALM_MS * 3,
+     `${Q.STAR_CALM_SOLO_MS / 1000} s contre ${Q.STAR_CALM_MS / 1000} s`);
   /* 462 — le blocage signalé concernait précisément les DEUX étoiles de ferme,
      pas seulement la reine historique. On joue chacune jusqu'au dernier paquet
      au lieu d'extrapoler les tests du cratère. */
@@ -1314,7 +1363,7 @@ section("La chute est vue, et le chevron désigne (445)");
     ok("⚠️ après le cratère, plus aucun LIEU de la table n'est visé",
        !Q.STAR_SITE[Q.starTargetSite(e, {}) || ""], String(Q.starTargetSite(e, {})));
     ok("⚠️⚠️ …mais le chantier prend le relais, et il a une adresse",
-       Q.starGoalKey(e, {}) === "timber" && Q.starTargetSite(e, {}) === "sawmill",
+       Q.starGoalKey(e, {}) === "timberOrder" && Q.starTargetSite(e, {}) === "sawmill",
        `${Q.starGoalKey(e, {})} → ${Q.starTargetSite(e, {})}`);
     /* ⚠️ ET SANS LES PLANS, C'EST LA MAIRIE. Deux états, deux adresses : c'est la
        seule chose qui empêche le bandeau de dire « va scier » à quelqu'un qui n'a
@@ -1426,6 +1475,63 @@ section("L'objectif courant (bandeau) et le guide");
        && Q.starFollowerAdded(followers.map(s => s.id), f) === null);
   }
 
+  /* ╔═══════════════════════════════════════════════════════════════════════
+     ║ ZIP 475 (audit 472, défaut #8) — LES TROIS ÉTATS D'UN IMPACT DE FERME.
+     ╚═══════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ `farmImpacts` COUVRAIT PAS-FOUILLÉ, FOUILLÉ-ÉTOILE ET
+     FOUILLÉ-MATIÈRE SOUS LA MÊME PHRASE (« fouille-les », sur un trou déjà
+     ouvert). On rejoue les trois CONTENUS séparément — via `resolveStarDig`,
+     jamais `resolveStarFound` en direct, sinon on saute exactement l'état
+     intermédiaire qu'on veut mesurer — et on vérifie que le bandeau change
+     ET que le chevron continue de désigner le même trou. */
+  {
+    const starSite = Q.STAR_FARM_IMPACTS.find(s => s.content === "star");
+    const matSite = Q.STAR_FARM_IMPACTS.find(s => s.content === "material");
+    const emptySite = Q.STAR_FARM_IMPACTS.find(s => s.content === "empty");
+
+    const eTame = Q.newStar(); eTame.fall = 1;
+    ok("⚠️ un trou intact reste générique", Q.starGoalKey(eTame, {}) === "farmImpacts");
+    Q.resolveStarDig(eTame, starSite.id, "j1", 1);
+    ok("⚠️⚠️ une étoile fouillée mais pas apprivoisée dit « tourne-lui le dos »",
+       Q.starGoalKey(eTame, {}) === "farmImpactTame");
+    ok("…et le chevron pointe toujours ce même trou, pas un autre",
+       Q.starTargetSite(eTame, {}) === starSite.id);
+    /* ⚠️ LE COMPTEUR DE PASTILLES SUIT LA MÊME RÈGLE QUE LE BANDEAU : la
+       fouille remplit la pastille, pas la trouvaille (voir la note du pip
+       dans `FermeGame.js`). Ce banc n'importe pas `FermeGame.js` (il est
+       React), mais `starDug` est la fonction que le pip appelle désormais —
+       la vérifier ICI, à l'instant précis où `dug` est vrai et `has` encore
+       faux, c'est vérifier ce que le pip va lire pendant toute l'attente. */
+    ok("⚠️⚠️ un trou fouillé compte déjà pour la pastille, avant même la taming",
+       Q.starDug(eTame, starSite.id) === true && Q.starHas(eTame, starSite.id) === false);
+    Q.resolveStarFound(eTame, starSite.id, "j1", 2);
+    ok("…et l'apprivoisement referme l'objectif « tame »",
+       Q.starGoalKey(eTame, {}) !== "farmImpactTame");
+
+    const eCool = Q.newStar(); eCool.fall = 1;
+    /* ⚠️ L'ORDRE DE LA TABLE FAIT FOI (même règle que le chevron) : la plaque
+       n'est le PREMIER manquant que si les sites qui la précèdent dans
+       `STAR_FARM_IMPACTS` sont déjà trouvés. On les règle donc d'abord. */
+    for (const s of Q.STAR_FARM_IMPACTS) { if (s.id === matSite.id) break; Q.resolveStarFound(eCool, s.id, "j1", 1); }
+    Q.resolveStarDig(eCool, matSite.id, "j1", 1);
+    ok("⚠️⚠️ une plaque fouillée mais pas retravaillée dit « reviens l'examiner »",
+       Q.starGoalKey(eCool, {}) === "farmImpactCool");
+    ok("…et le chevron pointe toujours ce même trou, pas un autre",
+       Q.starTargetSite(eCool, {}) === matSite.id);
+    ok("⚠️ …et la pastille compte déjà cette plaque, avant le mini-jeu de la cendre",
+       Q.starDug(eCool, matSite.id) === true && Q.starHas(eCool, matSite.id) === false);
+    Q.resolveStarFound(eCool, matSite.id, "j1", 2);
+    ok("…et le mini-jeu de la cendre referme l'objectif « cool »",
+       Q.starGoalKey(eCool, {}) !== "farmImpactCool");
+
+    const eEmpty = Q.newStar(); eEmpty.fall = 1;
+    const rDig = Q.resolveStarDig(eEmpty, emptySite.id, "j1", 1);
+    ok("⚠️ un cratère vide est `dug` ET `has` dans le MÊME geste (resolveStarDig)",
+       Q.starDug(eEmpty, emptySite.id) && Q.starHas(eEmpty, emptySite.id) && rDig.found === "empty");
+    ok("…donc il ne peut jamais faire retomber l'objectif sur « tame »/« cool »",
+       Q.starGoalKey(eEmpty, {}) !== "farmImpactTame" && Q.starGoalKey(eEmpty, {}) !== "farmImpactCool");
+  }
+
   const e = Q.newStar();
   ok("une quête pas tombée n'a pas d'objectif", Q.starGoalKey(e, {}) === null);
   e.fall = 1000;
@@ -1479,7 +1585,19 @@ section("L'objectif courant (bandeau) et le guide");
      Q.starGoalKey(e, { engineerHere: Q.starEngineerHere(e, engArrived) }) === "engineerWork",
      String(Q.starGoalKey(e, { engineerHere: Q.starEngineerHere(e, engArrived) })));
   e.plan = { at: 1002, by: "j1", done: 1002 };
-  ok("…et les plans rendus renvoient chez le bûcheron", Q.starGoalKey(e, {}) === "timber");
+  /* ⚠️⚠️ ZIP 478 — TROIS ÉTATS, TROIS CLÉS, ET ON LES REJOUE DANS L'ORDRE OÙ ELLES
+     ARRIVENT plutôt que d'en tester une seule : c'est le contrôle qui aurait manqué
+     au 475 si `farmImpacts` avait été scindé sans rejouer la suite. */
+  ok("…et les plans rendus renvoient chez le bûcheron", Q.starGoalKey(e, {}) === "timberOrder");
+  Q.commitStarTimber(e, "hull", "j1", 1100);
+  ok("⚠️ …puis le bandeau dit qu'il scie, et il ne renvoie plus commander",
+     Q.starGoalKey(e, {}) === "timberWait");
+  Q.resolveStarTimberTick(e, 1100 + C.STAR_TIMBER.hull.ms);
+  ok("⚠️⚠️ …et dès qu'une pièce est livrée, il envoie sur la CALE, pas chez Tristan",
+     Q.starGoalKey(e, {}) === "timberRaise" && Q.STAR_GOAL_TARGET.timberRaise === "shipyard",
+     `${Q.starGoalKey(e, {})} -> ${Q.STAR_GOAL_TARGET[Q.starGoalKey(e, {})]}`);
+  Q.resolveStarTimberRaise(e, "hull", "j1", 1200 + C.STAR_TIMBER.hull.ms);
+  ok("…et une fois posée, il renvoie commander la suite", Q.starGoalKey(e, {}) === "timberOrder");
 
   /* ⚠️⚠️ LA JOINTURE, ET C'EST LE CONTRÔLE QUI JUSTIFIE TOUTE LA SECTION : quand
      le chevron désigne un lieu, le bandeau doit parler DE CE LIEU. Deux sources
@@ -1526,7 +1644,11 @@ section("L'objectif courant (bandeau) et le guide");
     {
       const NOWHERE = ["townWait", "engineerTravel", "engineerWork"];   // 469 — les deux écoutes d'ombres sont parties ; 470 — une clé d'attente devient deux
       const orphan = Q.STAR_GOAL_KEYS.filter(k => {
-        if (k === "farmImpacts") return false;
+        /* ⚠️ ZIP 475 — `farmImpactTame`/`farmImpactCool` DÉSIGNENT LE MÊME
+           TROU QUE `farmImpacts` (voir `starTargetSite`) : les trois clés
+           passent par la même jointure groupée, aucune des trois n'est
+           orpheline. */
+        if (k.startsWith("farmImpact")) return false;
         const id = Q.STAR_GOAL_TARGET[k] || k;
         if (Q.STAR_OFF_TABLE_TARGETS.includes(id)) return false;
         const s = Q.STAR_SITE[id];
@@ -1720,16 +1842,31 @@ section("La construction du navire (454)");
         if (!ro.ok || ro.wood <= 0 || ro.ms <= 0) { stuck.push("commande " + k); break; }
         Q.commitStarTimber(e, k, "j1", 100 + guard);
         ordered++;
+        /* ⚠️⚠️ ZIP 478 — DEUX GESTES, PAS UN. Tristan LIVRE (`resolveStarTimberTick`
+           pose `ready`) et le joueur MONTE (`resolveStarTimberRaise` pose `done`).
+           Le banc doit rejouer les DEUX, sinon il mesure une chaîne qui s'arrête au
+           milieu — et c'est exactement ce qu'il a fait la première fois qu'on l'a
+           relancé après la refonte, ce qui est le comportement voulu : un banc qui
+           ne voit pas qu'un geste est apparu est un banc qui ment. */
         Q.resolveStarTimberTick(e, 100 + guard + C.STAR_TIMBER[k].ms);
+        const raise = Q.starTimberToRaise(e);
+        if (raise) Q.resolveStarTimberRaise(e, raise, "j1", 100 + guard + C.STAR_TIMBER[k].ms + 1);
       }
       steps++;
       const miss = Q.starMissing(e);
       if (!miss.length) break;
       /* Un morceau trouvé mais dont la pièce n'est pas commandable ET dont la
          précédente est livrée serait le blocage : on le note. */
-      const blocked = Q.STAR_SHIP_KEYS.filter((kk, i) => {
+      /* ⚠️⚠️ ZIP 478 — `prev` N'EXISTE PLUS (les commandes sont parallèles), donc ce
+         contrôle ne pouvait plus rien attraper : il aurait été VERT pour toujours,
+         c'est-à-dire un banc qui n'a jamais pu échouer (§10 de CLAUDE.md). Le
+         blocage à guetter est désormais l'inverse d'une raison légitime : une pièce
+         dont le morceau d'étoile est trouvé et qui n'est pourtant ni commandable,
+         ni chez Tristan, ni sur la cale, ni posée. */
+      const blocked = Q.STAR_SHIP_KEYS.filter((kk) => {
+        if (Q.starTimberDone(e, kk) || Q.starTimberReady(e, kk) || Q.starTimberOrder(e, kk)) return false;
         const why = Q.starTimberBlock(e, kk);
-        return why === "prev" && Q.starTimberDone(e, Q.STAR_SHIP_KEYS[i - 1] || kk);
+        return why !== null && why !== "noShard" && why !== "noPlan";
       });
       if (blocked.length) stuck.push("bloqué " + blocked.join());
       Q.resolveStarFound(e, miss[0], "j1", 200 + guard);
@@ -1749,7 +1886,14 @@ section("La construction du navire (454)");
     Q.commitStarTimber(e, "hull", "j1", 3);
     ok("…ni pendant que Tristan scie", Q.starShipBuilt(e) === 0);
     Q.resolveStarTimberTick(e, 3 + C.STAR_TIMBER.hull.ms);
+    /* ⚠️ ZIP 478 — LIVRÉE N'EST PLUS POSÉE, et c'est la moitié de la passe : une
+       pièce livrée attend un marteau sur la cale. Le navire ne grandit pas tout
+       seul pendant que le joueur est ailleurs. */
+    ok("⚠️⚠️ livrée par Tristan, la pièce n'est PAS encore sur le navire", Q.starShipBuilt(e) === 0);
+    ok("…et elle attend bien le marteau", Q.starTimberToRaise(e) === "hull");
+    Q.resolveStarTimberRaise(e, "hull", "j1", 4 + C.STAR_TIMBER.hull.ms);
     ok("…et il se pose quand les deux sont là", Q.starShipBuilt(e) === 1);
+    ok("…et monter deux fois la même pièce ne fait rien", Q.resolveStarTimberRaise(e, "hull", "j1", 9e9).ok === false);
     /* ⚠️ ET L'INVERSE EST VRAI AUSSI : du bois sans souvenir ne construit rien. Sans
        ce contrôle, un `||` écrit à la place d'un `&&` passerait inaperçu — les deux
        expressions ont raison une fois sur deux. */
@@ -2521,12 +2665,59 @@ console.log("\n11. L'OUVRAGE DE TRISTAN (459)\n");
   Q.resolveStarTimberTick(e, 1000 + C.STAR_TIMBER.hull.ms);
   ok("⚠️⚠️ pièce livrée = plus personne à l'ouvrage (la bulle disparaît)",
      Q.starTimberBusy(e) === null);
-  /* ⚠️ ET UNE SEULE À LA FOIS : l'ordre du plan l'interdit, mais c'est la BULLE qui
-     paierait une seconde commande simultanée — deux bulles sur la même tête. */
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 478 — CE CONTRÔLE DISAIT L'INVERSE DE CE QU'ON MESURE MAINTENANT.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ IL S'APPELAIT « et il n'y a jamais qu'UNE pièce en cours » et sa note
+     disait « l'ordre du plan l'interdit ». Les deux étaient vrais, et les deux
+     décrivaient les 24 minutes de file d'attente que la refonte vient de démonter.
+     ⚠️⚠️ LA GRANDEUR À MESURER A CHANGÉ DE SIGNE, PAS DE NATURE : ce que la BULLE
+     ne peut pas faire, c'est afficher DEUX ouvrages sur la même tête. Elle doit
+     donc en désigner exactement un — celui qui finit LE PLUS TÔT, sinon le joueur
+     lit une barre qui n'est pas celle qui va aboutir. C'est le seul invariant que
+     le parallélisme laisse debout, et il est plus fort que l'ancien. */
   Q.resolveStarFound(e, "farmMaterial", "j1", 2000);
   Q.commitStarTimber(e, "rudder", "j1", 3000);
+  Q.commitStarTimber(e, "mast", "j1", 3000);
+  ok("⚠️⚠️ ZIP 478 — plusieurs pièces peuvent être en cours EN MÊME TEMPS",
+     Q.starTimberBusyCount(e) === 2, `${Q.starTimberBusyCount(e)} sur l'établi`);
   const w2 = Q.starTimberBusy(e);
-  ok("⚠️ et il n'y a jamais qu'UNE pièce en cours", !!w2 && w2.key === "rudder");
+  ok("⚠️⚠️ …mais la bulle n'en montre qu'UNE : celle qui finit le plus tôt",
+     !!w2 && w2.key === "rudder", w2 ? `${w2.key} (rudder ${C.STAR_TIMBER.rudder.ms} ms < mast ${C.STAR_TIMBER.mast.ms} ms)` : "aucune");
+  /* ⚠️ ET L'ORDRE DE LA CALE TIENT MALGRÉ LE PARALLÉLISME : `starTimberToRaise`
+     balaie STAR_SHIP_KEYS, donc on monte de la quille vers la cloche même si le
+     mât a été livré le premier. C'est ce qui remplace la garde `prev` supprimée —
+     et l'invariant est plus honnête, parce qu'il porte sur ce qu'on VOIT (la cale)
+     et non sur ce qu'on peut commander. */
+  Q.resolveStarTimberTick(e, 3000 + C.STAR_TIMBER.mast.ms);
+  /* ⚠️ TROIS LIVRÉES ICI (le bordé plus haut, puis le safran et le mât), et c'est
+     le BORDÉ qu'on monte : il est premier dans `STAR_SHIP_KEYS`. La démonstration
+     est plus nette que prévu — le mât a été commandé après et livré en même temps,
+     il attendra quand même son tour sur la cale. */
+  ok("⚠️⚠️ …et la cale se remplit dans l'ordre du navire, pas dans l'ordre des livraisons",
+     Q.starTimberReadyCount(e) === 3 && Q.starTimberToRaise(e) === Q.STAR_SHIP_KEYS[0],
+     `${Q.starTimberReadyCount(e)} livrées, on monte ${Q.starTimberToRaise(e)}`);
+  /* ⚠️⚠️ LE PARALLÉLISME SE MESURE EN MINUTES, PAS EN BOOLÉENS — c'est le chiffre
+     que l'audit 477 a reproché au chantier, donc c'est celui qu'un banc doit tenir.
+     En série on additionne les cinq durées ; en parallèle on prend la plus longue. */
+  {
+    const ms = Q.STAR_SHIP_KEYS.map(k => C.STAR_TIMBER[k].ms);
+    const serie = ms.reduce((a, b) => a + b, 0), para = Math.max(...ms);
+    ok("⚠️⚠️⚠️ ZIP 478 — le chantier tient dans la plus longue pièce, pas dans leur somme",
+       para <= serie / 2.5,
+       `parallèle ${(para / 60000).toFixed(0)} min contre ${(serie / 60000).toFixed(0)} min en série`);
+  }
+  /* ⚠️ ET DEUX LIVRAISONS PEUVENT ÉCHOIR DANS LE MÊME BATTEMENT : c'est le cas que
+     l'ancien `return` au premier aurait laissé traîner un tic de plus (voir la note
+     de `resolveStarTimberTick`). On le rejoue, plutôt que de le croire. */
+  {
+    const f = Q.newStar(); f.fall = 1; f.plan = { at: 1, by: "j1", done: 1 };
+    for (const k of Q.STAR_SHIP_KEYS) { Q.resolveStarFound(f, "farmMaterial", "j1", 2); Q.commitStarTimber(f, k, "j1", 10); }
+    const rt = Q.resolveStarTimberTick(f, 10 + Math.max(...Q.STAR_SHIP_KEYS.map(k => C.STAR_TIMBER[k].ms)));
+    ok("⚠️⚠️ un seul battement livre TOUTES les pièces échues, pas la première",
+       rt.ok && rt.keys.length === Q.STAR_SHIP_TOTAL, `${(rt.keys || []).length} livrées d'un coup`);
+    ok("…et le rejouer ne relivre rien (idempotent)", Q.resolveStarTimberTick(f, 9e9).ok === false);
+  }
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

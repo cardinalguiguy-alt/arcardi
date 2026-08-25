@@ -42,17 +42,11 @@
    repartie, trop lourde pour rentrer, jamais allée en mer — demande à embarquer.
 
    ───────────────────────────────────────────────────────────────────────────
-   ⚠️⚠️⚠️ LA GRAMMAIRE MAGIQUE, ET C'EST LA SEULE CHOSE À RETENIR DE CE FICHIER
-
-       « La lumière de l'étoile ne montre pas ce qu'une chose EST.
-         Elle montre ce qu'une chose SE RAPPELLE. »
-
-   Une phrase, et elle explique les six mini-jeux, la coopération, et pourquoi
-   il faut être deux. ⚠️ **LA COOPÉRATION N'EST PAS UNE SERRURE, C'EST UNE
-   CONSÉQUENCE : on ne peut pas tenir la lumière ET lire l'ombre.** Celui qui la
-   tient est ébloui et a l'ombre dans le dos ; celui qui lit est dans le noir et
-   n'a pas de lampe. Deux personnes, deux postes, toujours — et jamais parce
-   qu'une porte a deux serrures. Le premier jet EMPRUNTAIT ses verrous (deux
+   ⚠️ LA COOPÉRATION N'EST PAS UNE SERRURE, C'EST UNE CONSÉQUENCE : on ne peut
+   pas tenir la lumière ET lire l'ombre. Celui qui la tient est ébloui et a
+   l'ombre dans le dos ; celui qui lit est dans le noir et n'a pas de lampe.
+   Deux personnes, deux postes, toujours — et jamais parce qu'une porte a deux
+   serrures. Le premier jet EMPRUNTAIT ses verrous (deux
    clés, un contrepoids, un guetteur) ; Guillaume l'a refusé en une phrase
    (« ne t'embête pas à recopier les mécaniques des autres jeux coopératifs »).
    Ce qui a suivi est meilleur ET plus court.
@@ -293,19 +287,43 @@ export const STAR_SHIP_KEYS = C.STAR_SHIP_ORDER;
    une deuxième fois. `wood` n'est pas « combien de morceaux », c'est « quelles
    pièces Tristan a livrées », indexé par les MÊMES clés que le navire. Rien ne
    peut afficher quatre morceaux pour trois pièces : il n'y a qu'un `ET` entre
-   deux lectures, jamais une addition tenue à part.
-   ⚠️ LA GRAMMAIRE MAGIQUE EST INTACTE, ET ELLE S'EN TROUVE MIEUX : la lumière de
-   l'étoile montre ce qu'une chose SE RAPPELLE — elle se rappelle la forme du
-   safran, pas le chêne dont on le taille. Il fallait bien que quelqu'un aille
-   couper le chêne. */
+   deux lectures, jamais une addition tenue à part. */
 export function starTimberDone(e, key) {
   const w = e && e.wood && e.wood[key];
   return !!(w && w.done);
 }
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 478 — UNE COMMANDE A MAINTENANT TROIS ÉTATS, PAS DEUX.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ AVANT : commandée / posée. Le minuteur de Tristan finissait et la pièce
+   apparaissait toute seule sur la cale, où que soit le joueur. L'audit 477 l'a
+   chiffré : cinq clics et 24 minutes de sablier, « rien pendant ces 24 minutes ne
+   le ramène au bateau ». Le troisième état est le MONTAGE : Tristan livre le bois
+   (`ready`), et c'est le joueur qui pose la pièce, au marteau, sur la cale
+   (`done`). La livraison redevient un rendez-vous.
+   ⚠️⚠️⚠️ `done` N'A PAS CHANGÉ DE SENS, ET C'EST CE QUI REND LA PASSE SÛRE : tout
+   ce qui dessine le navire, compte les pièces et déclenche la fin (`starShipHas`,
+   `starShipParts`, `starShipBuilt`, `starShipComplete`) lit `starTimberDone`, donc
+   « posée ». Ajouter le nouvel état SOUS l'ancien plutôt qu'à côté évite d'aller
+   relire quinze appelants — et une sauvegarde d'avant ce zip, où `ready` n'existe
+   pas, se comporte exactement comme avant pour tout ce qui est déjà `done`. */
 export function starTimberOrder(e, key) {
   const w = e && e.wood && e.wood[key];
-  return w && !w.done ? w : null;
+  return w && !w.done && !w.ready ? w : null;   // 478 — chez Tristan, et pas encore livrée
 }
+/* Livrée par Tristan, pas encore posée : c'est ce qui attend un marteau. */
+export function starTimberReady(e, key) {
+  const w = e && e.wood && e.wood[key];
+  return !!(w && w.ready && !w.done);
+}
+/* La première pièce à monter. ⚠️ UNE JOINTURE, PAS UNE SECONDE LISTE (449) : elle
+   balaie `STAR_SHIP_KEYS` dans l'ordre du navire, donc la cale se remplit de la
+   quille vers la cloche même quand les cinq commandes ont couru en parallèle. */
+export function starTimberToRaise(e) {
+  for (const k of STAR_SHIP_KEYS) if (starTimberReady(e, k)) return k;
+  return null;
+}
+export function starTimberReadyCount(e) { return STAR_SHIP_KEYS.filter(k => starTimberReady(e, k)).length; }
 /* ╔════════════════════════════════════════════════════════════════════════════
    ║ ZIP 459 — CE QUE TRISTAN EST EN TRAIN DE FAIRE, ET OÙ ÇA EN EST.
    ╚════════════════════════════════════════════════════════════════════════════
@@ -322,13 +340,23 @@ export function starTimberOrder(e, key) {
    ⚠️ ET LE PROGRÈS SE DÉRIVE DES DEUX DATES DÉJÀ ÉCRITES (`at`, `readyAt`), il
    n'est jamais stocké : un troisième champ à faire vieillir pour une barre qui se
    recalcule en une soustraction, c'est le §3 pris à l'envers. */
+/* ⚠️⚠️ ZIP 478 — LA BULLE MONTRE CELLE QUI FINIT LE PLUS TÔT, PAS LA PREMIÈRE DE
+   LA LISTE. Depuis que les cinq commandes courent en PARALLÈLE, « la première clé
+   non livrée » aurait affiché une barre à 5 % pendant qu'une autre pièce se posait
+   à côté : le joueur aurait lu une progression qui n'est pas celle qui va se
+   passer. La bulle répond à « qu'est-ce qui arrive ensuite », donc elle prend le
+   `readyAt` le plus petit. */
 export function starTimberBusy(e) {
+  let best = null;
   for (const k of STAR_SHIP_KEYS) {
     const w = starTimberOrder(e, k);
-    if (w) return { key: k, at: w.at, readyAt: w.readyAt, by: w.by || "" };
+    if (!w) continue;
+    if (!best || w.readyAt < best.readyAt) best = { key: k, at: w.at, readyAt: w.readyAt, by: w.by || "" };
   }
-  return null;
+  return best;
 }
+/* Combien de pièces Tristan a-t-il sur l'établi ? ⚠️ SE DÉRIVE, ne se stocke pas. */
+export function starTimberBusyCount(e) { return STAR_SHIP_KEYS.filter(k => !!starTimberOrder(e, k)).length; }
 export function starTimberProgress(e, now) {
   const w = starTimberBusy(e);
   if (!w) return 0;
@@ -451,10 +479,25 @@ export function starTimberBlock(e, key) {
   if (idx < 0) return "unknown";
   if (!starPlanReady(e)) return "noPlan";
   if (starTimberDone(e, key)) return "done";
+  if (starTimberReady(e, key)) return "raise";  // 478 — le bois est là, il manque le marteau
   if (starTimberOrder(e, key)) return "busy";
   const part = STAR_SHIP_PARTS[idx];
   if (!shipSiteOk(e, part)) return "noShard";   // 469 — un morceau sans lieu n'a rien à attendre
-  if (idx > 0 && !starTimberDone(e, STAR_SHIP_KEYS[idx - 1])) return "prev";
+  /* ⚠️⚠️⚠️ ZIP 478 — LA GARDE « LA PIÈCE PRÉCÉDENTE DOIT ÊTRE LIVRÉE » EST PARTIE,
+     ET C'EST LE PLUS GROS GAIN DE TOUTE LA REFONTE POUR LE PLUS PETIT GESTE.
+     Elle sérialisait 8 + 3 + 6 + 4 + 3 minutes : **24 minutes d'horloge réelle
+     pour cinq clics**, mesurées par l'audit 477, sur une quête qui en dure 56.
+     Les cinq commandes courant EN PARALLÈLE, le même chantier prend **8 minutes**
+     — la plus longue pièce — sans qu'un seul des cinq nombres ait bougé.
+     ⚠️ ET ELLE NE PROTÉGEAIT RIEN : l'ORDRE DE LA CALE est tenu ailleurs, par
+     `starTimberToRaise`, qui balaie `STAR_SHIP_KEYS` dans l'ordre du navire. On
+     construit toujours de la quille vers la cloche ; on n'ATTEND plus pour
+     commander. *Une contrainte de présentation déguisée en règle de jeu se
+     reconnaît à ceci : la retirer ne casse rien et rend une demi-heure.*
+     ⚠️ CE QUE ÇA COÛTE, ET C'EST ASSUMÉ : il faut désormais avoir les 395 bois
+     (et les quatre lignes de `extra`) pour tout commander d'un coup. La file
+     d'attente devient une question de STOCK, c'est-à-dire une question qu'on pose
+     à la ferme au lieu de la poser à l'horloge. */
   return null;
 }
 export function starTimberCan(e, key) { return starTimberBlock(e, key) === null; }
@@ -523,7 +566,23 @@ export const STAR_CH_DONE = STAR_CHAPTERS.length;
    seconde clé, qui auraient demandé un état de plus à arbitrer. */
 export const STAR_CRATER_R = 5.5;          // il faut être DANS l'anneau
 export const STAR_CALM_MS = 10000;         // deux joueurs ou plus dans la zone
-export const STAR_CALM_SOLO_MS = 60000;    // seul : une vraie minute d'apprivoisement
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 478 (audit 477, défaut #2) — 60 s → 30 s, ET LE NOMBRE N'ÉTAIT PAS LE
+   ║ VRAI PROBLÈME.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️⚠️ CE QUE L'AUDIT A MESURÉ EN LE JOUANT DEUX FOIS JUSQU'AU BOUT : pendant
+   cette minute, « le personnage ne bouge pas, la caméra ne bouge pas, l'étoile
+   n'est pas dessinée (c'est le principe), et le seul retour est une barre de 30 px
+   au-dessus de la tête ». Le jeu ne demandait pas de TENIR quelque chose — il
+   demandait de ne rien faire.
+   ⚠️⚠️ COUPER LA DURÉE NE SUFFIT DONC PAS, ET C'EST LE POINT : 15 s sans rien à
+   regarder se lisent plus longues que 30 s où quelque chose monte. Le vrai
+   correctif est à côté (`starCalmGlow`) — on VOIT sa lumière, jamais elle. Le dos
+   tourné cesse d'être une privation d'image ; il devient le seul moyen de la voir.
+   ⚠️ 30 s est le chiffre de Guillaume, mot pour mot (« Réduire l'attente à 30
+   secondes approuvé »). Le raccourci à deux ne bouge pas : il reste un RACCOURCI et
+   jamais une serrure (458), et l'écart 3× est ce qui le rend lisible. */
+export const STAR_CALM_SOLO_MS = 30000;    // seul : une demi-minute, et il s'y passe quelque chose
 export const STAR_CALM_FACE_DOT = -0.15;   // « dos tourné » = produit scalaire négatif
 
 /* ── LE REFROIDISSEMENT DU CRATÈRE (chapitre 2, zip 446). ⚠️⚠️ DEMANDE DE
@@ -1819,12 +1878,22 @@ export function starFallAngle(zone) {
    surtout pas les y mettre : un lieu de la table est une chose qu'on TROUVE et qui
    coche une case. Ceux-ci sont des adresses. `FermeGame` sait où ils sont ; ce
    fichier sait seulement qu'on y va. */
-export const STAR_GOAL_TARGET = { craterHot: "crater", engineer: "townHall", timber: "sawmill" };
-export const STAR_OFF_TABLE_TARGETS = ["townHall", "sawmill"];
+/* ⚠️ ZIP 478 — LE CHANTIER A DEUX ADRESSES, PAS UNE. Commander et attendre se
+   passent à la SCIERIE (ferme) ; monter se passe sur la CALE (ville). Une seule
+   adresse aurait fait pointer le chevron vers la ferme pendant que la pièce
+   attend un marteau à Valley Town — c'est-à-dire deux réponses à « où vais-je »,
+   le défaut du 449, sur la seule étape que la refonte vient d'ouvrir. */
+export const STAR_GOAL_TARGET = { craterHot: "crater", engineer: "townHall",
+  timberOrder: "sawmill", timberWait: "sawmill", timberRaise: "shipyard" };
+export const STAR_OFF_TABLE_TARGETS = ["townHall", "sawmill", "shipyard"];
 export function starTargetSite(e, ctx) {
   const goal = starGoalKey(e, ctx);
   if (!goal) return null;
-  if (goal === "farmImpacts") {
+  /* ⚠️ ZIP 475 — `farmImpactTame`/`farmImpactCool` DÉSIGNENT LE MÊME TROU QUE
+     `farmImpacts`, JUSTE À UN AUTRE INSTANT (voir `starGoalKey`) : le chevron
+     continue de pointer le premier impact manquant, qu'il soit encore intact
+     ou déjà fouillé et en attente. */
+  if (goal === "farmImpacts" || goal === "farmImpactTame" || goal === "farmImpactCool") {
     const id = starMissing(e).find(k => STAR_SITE[k] && STAR_SITE[k].spot === "starFarmImpact");
     return id || null;
   }
@@ -2102,11 +2171,32 @@ export function migrateStar(saved) {
     }
   }
   e.fall = +saved.fall || 0;
+  /* ╔═══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 472 (audit) — LA COMPATIBILITÉ DU 462 NE DOIT VALOIR QUE POUR UNE
+     ║ SAUVEGARDE D'AVANT CE ZIP, JAMAIS POUR UNE PARTIE NEUVE QUI VIENT DE
+     ║ FERMER LE CHAPITRE 1.
+     ╚═══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️⚠️ `(saved.ch | 0) > 0` DEVIENT VRAI DÈS QUE `starAdvance` FERME LE
+     CHAPITRE 1 (les cinq impacts de FERME trouvés) — ce qui n'a rien à voir
+     avec le gros météore de VILLE (`townFall`), qui n'arrive que deux minutes
+     de présence active plus tard (`starTownActivityTick`). L'hôte re-migre
+     `s2.star` à CHAQUE requête ET une fois par seconde : la toute première
+     migration qui suivait la fermeture du chapitre 1 posait donc
+     `e.townFall = e.fall` avant que le compte à rebours ait eu la moindre
+     chance de tourner — le chapitre 2 se fermait tout seul, sans attente,
+     sans fumée, sans que personne n'ait vu tomber le météore.
+     ⚠️ LA PARADE N'EST PAS UN NOUVEAU CHAMP DE VERSION : `newStar()` écrit
+     `townFall: 0` dans TOUT objet qu'elle produit, et cette fonction fait de
+     même à chaque passage (`e.townFall = +saved.townFall || 0`, juste
+     en dessous). Donc dès la PREMIÈRE migration sous ce code, l'objet
+     persisté porte le CHAMP `townFall` — même à 0 — et une partie neuve ne
+     peut plus jamais présenter `saved.townFall === undefined`. Seule une
+     sauvegarde écrite avant le 462, jamais encore repassée par cette
+     fonction, peut avoir le champ ABSENT : c'est ce qu'on teste — la
+     PRÉSENCE du champ, pas la valeur de `ch`. */
+  const legacyPreTownFall = saved.townFall === undefined;
   e.townFall = +saved.townFall || 0;
-  /* 462 — compatibilité : avant la séparation des deux événements, `fall`
-     signifiait aussi que le cratère de ville existait. Une sauvegarde déjà au
-     chapitre 2 ou portant sa trouvaille ne doit pas perdre son cratère. */
-  if (!e.townFall && ((saved.ch | 0) > 0 || (saved.found && saved.found.crater)))
+  if (legacyPreTownFall && !e.townFall && ((saved.ch | 0) > 0 || (saved.found && saved.found.crater)))
     e.townFall = e.fall;
   /* ── ZIP 455 : l'annonce. ⚠️ UNE SAUVEGARDE D'AVANT CE ZIP N'A PAS LE CHAMP ET
      PEUT AVOIR `fall` — c'est une partie commencée sous l'ancienne règle, et elle
@@ -2176,7 +2266,22 @@ export function migrateStar(saved) {
     for (const k of Object.keys(saved.wood)) {
       if (!STAR_SHIP_KEYS.includes(k)) continue;      // une clé inconnue = une version d'après : on l'ignore
       const v = saved.wood[k] || {};
-      e.wood[k] = { at: +v.at || 0, readyAt: +v.readyAt || 0, done: !!v.done, by: String(v.by || "?").slice(0, 24) };
+      /* ⚠️⚠️ ZIP 478 — `ready` TRAVERSE LA MIGRATION, ET IL EST FORCÉ À FAUX QUAND
+         LA PIÈCE EST DÉJÀ POSÉE. L'hôte re-migre à CHAQUE requête (leçon 469) :
+         un `ready` qui survivrait à `done` ferait rouvrir l'invite de montage sur
+         une pièce déjà sur la cale, à chaque tour de boucle. Les deux ne peuvent
+         jamais être vrais ensemble, et c'est ici qu'on le garantit — pas chez les
+         appelants, qui sont sept.
+         ⚠️ UNE SAUVEGARDE D'AVANT CE ZIP N'A PAS DE `ready` : elle arrive donc à
+         faux, ce qui est juste. Une commande alors en cours reprend son minuteur
+         là où il en était et se fera livrer normalement. */
+      const done = !!v.done;
+      e.wood[k] = {
+        at: +v.at || 0, readyAt: +v.readyAt || 0, done,
+        ready: !done && !!v.ready,
+        by: String(v.by || "?").slice(0, 24),
+        raisedBy: String(v.raisedBy || "").slice(0, 24), raisedAt: +v.raisedAt || 0,
+      };
     }
   }
   /* ⚠️⚠️ UNE PARTIE FINIE AVANT CE ZIP A UN BATEAU CONSTRUIT, ET IL DOIT LE
@@ -2349,10 +2454,40 @@ export function starGoalKey(e, ctx) {
   if (starHas(e, "crater") && !starPlanAsked(e)) return "engineer";
   if (!first) {
     if (!starPlanReady(e)) return (ctx && ctx.engineerHere) ? "engineerWork" : "engineerTravel";
-    return starTimberNext(e) ? "timber" : null;
+    /* ╔══════════════════════════════════════════════════════════════════════════
+       ║ ZIP 478 — `timber` COUVRAIT TROIS ÉTATS. C'EST LE DÉFAUT DU 475, REJOUÉ
+       ║ PAR LA PASSE QUI L'AVAIT CORRIGÉ.
+       ╚══════════════════════════════════════════════════════════════════════════
+       ⚠️⚠️⚠️ Le 475 avait scindé `farmImpacts` parce qu'une seule phrase couvrait
+       « pas fouillé », « fouillé-étoile » et « fouillé-matière ». Le chantier naval
+       vient de gagner exactement la même profondeur : commander, attendre, MONTER.
+       Et l'ancienne phrase — « Commande la pièce suivante à Tristan » — devenait
+       fausse DEUX FOIS : elle dit « la suivante » alors que les cinq se commandent
+       ensemble, et elle envoie au menu Employés quelqu'un dont la pièce est déjà
+       posée au pied de la cale, à attendre un marteau.
+       ⚠️⚠️ L'ORDRE EST CELUI DE L'ACTION LA PLUS PROCHE, pas celui du déroulé : ce
+       qui attend un geste passe devant ce qui attend une horloge, qui passe devant
+       ce qui attend une décision. Un bandeau doit répondre à « qu'est-ce que je
+       peux faire MAINTENANT », jamais à « où en est le chantier ». */
+    if (starTimberToRaise(e)) return "timberRaise";
+    if (starTimberBusyCount(e) > 0) return "timberWait";
+    return starTimberNext(e) ? "timberOrder" : null;
   }
-  if (STAR_FARM_STAR_IDS.includes(first) || (STAR_SITE[first] && STAR_SITE[first].spot === "starFarmImpact"))
+  /* ⚠️⚠️ ZIP 475 (audit 472, défaut #8) — « farmImpacts » COUVRAIT TROIS ÉTATS
+     SOUS UNE SEULE PHRASE. Le premier impact manquant peut être : pas encore
+     fouillé (rien à dire de plus que « cherche ») ; fouillé et c'est une
+     ÉTOILE, qui attend qu'on lui tourne le dos (`resolveStarCalm`) ; fouillé
+     et c'est une PLAQUE MÉTÉORIQUE, qui attend de refroidir puis le mini-jeu
+     de la cendre (`starTouchFurrow` → `resolveStarFound`). `starDug` distingue
+     les deux premiers cas du troisième — un impact VIDE, lui, n'atteint jamais
+     cette branche : `resolveStarDig` l'accorde (`resolveStarFound`) dans le
+     même geste que la fouille, donc il n'est plus « manquant » une fois
+     fouillé (voir `starDug`, `resolveStarDig`). */
+  if (STAR_FARM_STAR_IDS.includes(first) || (STAR_SITE[first] && STAR_SITE[first].spot === "starFarmImpact")) {
+    if (starDug(e, first) && STAR_SITE[first].content === "star") return "farmImpactTame";
+    if (starDug(e, first) && STAR_SITE[first].content === "material") return "farmImpactCool";
     return "farmImpacts";
+  }
   /* ⚠️⚠️ ZIP 471 — « TOMBÉ » CÔTÉ HÔTE N'EST PAS « TOMBÉ » CÔTÉ CE CLIENT.
      `starTownFallen(e)` ne regarde que l'horodatage de l'hôte : il devient vrai
      dès la diffusion, AVANT que la scène de chute n'ait fini de jouer — ou même
@@ -2380,7 +2515,11 @@ export function starGoalKey(e, ctx) {
 export const STAR_GOAL_KEYS = (() => {
   const out = [];
   for (const s of STAR_SITES) {
-    if (s.spot === "starFarmImpact") { if (!out.includes("farmImpacts")) out.push("farmImpacts"); continue; }
+    /* ⚠️ ZIP 475 — LES DEUX CLÉS DU TROU FOUILLÉ NAISSENT ICI, À CÔTÉ DE
+       `farmImpacts`, POUR LA MÊME RAISON QUE `craterHot`/`engineer` naissent à
+       côté de `crater` : elles ne sont pas des lieux de plus, elles sont des
+       ÉTATS du même lieu (voir `starGoalKey`). */
+    if (s.spot === "starFarmImpact") { if (!out.includes("farmImpacts")) out.push("farmImpacts", "farmImpactTame", "farmImpactCool"); continue; }
     out.push(s.id);
     if (s.id === "crater") out.push("craterHot", "engineer");
   }
@@ -2391,7 +2530,10 @@ export const STAR_GOAL_KEYS = (() => {
      ⚠️ ZIP 470 — `engineerWait` DEVIENT DEUX CLÉS, `engineerTravel` et
      `engineerWork` : la même attente, mais plus la même phrase (voir la note
      de `starGoalKey`). */
-  out.push("townWait", "engineerTravel", "engineerWork", "timber");
+  /* ⚠️ ZIP 478 — `timber` DEVIENT TROIS CLÉS, même geste qu'au 470 pour l'attente
+     de l'ingénieur et qu'au 475 pour le trou fouillé : la même étape, mais plus la
+     même phrase selon ce qu'on peut faire. */
+  out.push("townWait", "engineerTravel", "engineerWork", "timberOrder", "timberWait", "timberRaise");
   return out;
 })();
 
@@ -2544,19 +2686,57 @@ export function commitStarTimber(e, key, who, now) {
   e.wood[key] = { at: now, readyAt: now + t.ms, done: false, by: String(who || "?").slice(0, 24) };
   return { ok: true };
 }
-/* Le battement : Tristan livre. ⚠️ IL NE REND QU'UNE CLÉ À LA FOIS, et c'est
-   voulu — deux pièces ne peuvent pas être en cours en même temps (l'ordre l'
-   interdit), donc une boucle qui en livrerait plusieurs serait du code pour un cas
-   qui ne peut pas exister. */
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 478 — LE BATTEMENT LIVRE, IL NE POSE PLUS. ET IL REND UNE LISTE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️⚠️ SON COMMENTAIRE D'AVANT DISAIT : « il ne rend qu'une clé à la fois, et
+   c'est voulu — deux pièces ne peuvent pas être en cours en même temps (l'ordre
+   l'interdit), donc une boucle qui en livrerait plusieurs serait du code pour un
+   cas qui ne peut pas exister ». **Ce raisonnement était juste et il est devenu
+   faux dans la seconde où la garde `prev` est tombée** : en parallèle, deux
+   commandes lancées ensemble peuvent échoir dans le même battement, et un `return`
+   au premier aurait laissé la seconde attendre le tic suivant — sans que rien ne
+   le dise, puisque son `readyAt` était déjà passé.
+   *Un « ce cas ne peut pas exister » est toujours daté par la règle qui l'empêche ;
+   quand on retire la règle, il faut aller relire ce qu'elle justifiait.* C'est la
+   raison pour laquelle cette note reste ici en entier.
+   ⚠️ IL POSE `ready`, PAS `done` : ce qui suit la livraison est un GESTE du joueur
+   sur la cale (`resolveStarTimberRaise`), pas la fin d'un compte à rebours.
+   ⚠️ IL EST IDEMPOTENT : `ready` déjà vrai est ignoré, donc un battement rejoué —
+   ou deux hôtes qui se relaient — ne redit pas deux fois la même livraison. */
 export function resolveStarTimberTick(e, now) {
+  const keys = [];
   for (const k of STAR_SHIP_KEYS) {
     const w = e.wood && e.wood[k];
-    if (!w || w.done) continue;
+    if (!w || w.done || w.ready) continue;
     if ((+now || 0) < w.readyAt) continue;
-    w.done = true;
-    return { ok: true, key: k, complete: starShipComplete(e) };
+    w.ready = true;
+    keys.push(k);
   }
-  return { ok: false };
+  return keys.length ? { ok: true, keys } : { ok: false, keys: [] };
+}
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 478 — LE MONTAGE. Demande de Guillaume, mot pour mot : « Il faut ajouter
+   ║ aussi le même mini jeu marteau que pour l'amélioration de la grange. »
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ C'EST LE PREMIER GESTE DU CHAPITRE 3, ET IL N'Y EN AVAIT AUCUN : le joueur
+   cliquait cinq fois dans un menu et regardait un sablier. La pièce apparaît
+   maintenant sur la cale SOUS SON MARTEAU, ce qui fait de chaque livraison un
+   jalon qu'on va voir — le geste que Stardew appelle « le Junimo emporte le lot ».
+   ⚠️ IL N'ACCORDE RIEN PAR LUI-MÊME (§3, règle du 439) : le mini-jeu rend `onWin`,
+   le client envoie une `req`, et c'est CETTE fonction, chez l'hôte, qui tranche.
+   ⚠️ ET C'EST ELLE QUI PORTE LA FIN, MAINTENANT : `resolveStarGift` ne peut plus
+   vivre dans le battement, puisque le battement ne finit plus le navire. Leçon 474
+   — un résolveur appelé d'un seul endroit ne s'exécute que si cet endroit est
+   atteint —, appliquée d'avance en déplaçant l'appel avec le fait qu'il observe. */
+export function resolveStarTimberRaise(e, key, who, now) {
+  if (!starTimberReady(e, key)) return { ok: false, why: starTimberBlock(e, key) || "notReady" };
+  const w = e.wood[key];
+  w.done = true;
+  w.ready = false;
+  w.raisedBy = String(who || "?").slice(0, 24);
+  w.raisedAt = +now || 0;
+  return { ok: true, key, complete: starShipComplete(e) };
 }
 
 /* Une trouvaille. ⚠️ IDEMPOTENT PAR CONSTRUCTION : `found` est un dictionnaire,
@@ -2724,7 +2904,10 @@ export function resolveStarGift(e, playerIds, now) {
 /* ⚠️ ZIP 469 — `hint` EST SORTI DE LA LISTE : il rejouait le croisement d'ombres,
    qui n'existe plus. Un bouton de menu dev qui appelle un résolveur supprimé ne
    plante pas, il ne fait RIEN — et on cherche le bogue ailleurs. */
-export const STAR_DEV_OPS = ["reset", "warn", "start", "chapter", "skip", "all", "plans", "timber"];
+/* ⚠️ ZIP 478 — « deliver » S'INSÈRE AVANT « timber », dans l'ordre où ça se joue :
+   les plans, puis le bois livré (à monter), puis le bois posé. Un menu rangé dans
+   l'ordre du jeu se lit sans le connaître. */
+export const STAR_DEV_OPS = ["reset", "warn", "start", "chapter", "skip", "all", "plans", "deliver", "timber"];
 /* ⚠️ ZIP 469 — `turn` (le retournement) sort de la liste : sa scène est supprimée
    dans `FermeGame`, et un bouton qui rejoue une scène qui n'existe plus ouvre un
    voile noir de sept secondes sur rien. */
@@ -2777,7 +2960,25 @@ export function devStar(e, op, now) {
     if (!e.warn || !e.warn.at) e.warn = { at: t, by: "🛠️" };
     if (!e.fall) e.fall = t;
     if (!starPlanAsked(e)) e.plan = { at: t, by: "🛠️", done: t };
-    for (const k of STAR_SHIP_KEYS) e.wood[k] = { at: t, readyAt: t, done: true, by: "🛠️" };
+    for (const k of STAR_SHIP_KEYS) e.wood[k] = { at: t, readyAt: t, done: true, ready: false, by: "🛠️" };
+    return { star: e, ok: true };
+  }
+  /* ╔═════════════════════════════════════════════════════════════════════════════
+     ║ ZIP 478 — « LIVRER SANS MONTER », POUR POUVOIR JUGER LE MARTEAU.
+     ╚═════════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ SANS CE BOUTON, LE MINI-JEU DE MONTAGE N'EST ATTEIGNABLE QU'APRÈS HUIT
+     MINUTES DE SCIE — c'est-à-dire qu'on ne le jugerait qu'une fois, et le §15.3 de
+     QUETE.md dit depuis le 444 ce que ça coûte (le mini-jeu de refroidissement n'a
+     jamais été joué jusqu'à la victoire pendant vingt-cinq zips, faute d'un moyen
+     de le rejouer).
+     ⚠️ IL S'ARRÊTE EXACTEMENT OÙ LE JEU S'ARRÊTE : les cinq pièces livrées, aucune
+     posée. Un raccourci qui poserait aussi les pièces, c'est « timber » ; celui-ci
+     existe pour l'ÉTAT D'AVANT, le seul qu'aucun autre bouton ne sait produire. */
+  if (op === "deliver") {
+    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "\u{1F6E0}\uFE0F" };
+    if (!e.fall) e.fall = t;
+    if (!starPlanAsked(e)) e.plan = { at: t, by: "\u{1F6E0}\uFE0F", done: t };
+    for (const k of STAR_SHIP_KEYS) e.wood[k] = { at: t, readyAt: t, done: false, ready: true, by: "\u{1F6E0}\uFE0F" };
     return { star: e, ok: true };
   }
   if (op === "chapter") {

@@ -59,8 +59,7 @@
    en français qu'en anglais parce que la langue est plus longue :
      · six à huit mots par phrase, présent, mots d'enfant ;
      · **une action visible plutôt qu'une image poétique** — « écoute les ombres »
-       se joue, « la lumière montre ce dont une chose se souvient » se relit trois
-       fois ;
+       se joue, une tournure abstraite se relit trois fois ;
      · pas un mot d'administration (le reproche exact fait à l'enquête du 442) ;
      · ⚠️ ET LES PHRASES DE BANDEAU RESTENT COURTES : 520 px, deux lignes de 12 px,
        et au-delà `text-overflow` les coupe EN SILENCE (449). Le français gonfle de
@@ -92,6 +91,17 @@ const Nfr = (n) => { const s = nfr(n); return s.charAt(0).toUpperCase() + s.slic
 
 const STAR_FR = {
   title: "Le Bateau des Étoiles",
+  /* ⚠️⚠️ ZIP 472 (audit host-focus) — `hostAway` EST LE SEUL TEXTE DE CE BLOC.
+     Masquer l'onglet de l'hôte arrête sa boucle de rendu (mesuré en Chrome
+     réel) : ses IA autoritaires, dont l'arbitrage de la quête de l'étoile,
+     cessent d'avancer tant qu'il reste masqué. Rien ne le disait — le
+     bandeau de présence dépend de Presence, qui le voit « en ligne » quand
+     même. Le message reste GÉNÉRAL (« certains habitants ») plutôt que de
+     nommer la quête : le signal (`hostActivity`) est diffusé par la boucle
+     réseau, pas par `quete.js`, et vaut pour toute IA simulée côté hôte. */
+  net: {
+    hostAway: "L'hôte est en arrière-plan, certains habitants peuvent ralentir.",
+  },
   farm: {
     mapImpact: (n) => `Impact ${n}`,
     seen: "Ce point d'impact a déjà été fouillé.",
@@ -118,16 +128,35 @@ const STAR_FR = {
      l'overlay écrit en grand : « Une étoile. » n'apparaît qu'après le grattage,
      jamais dans une invite (voir la note de `prompt.impact`). */
   dig: {
-    hint: "Reste appuyé : il gratte la cendre.",
+    /* ⚠️⚠️ ZIP 476 (audit 2026-08-24, défaut #7) — « RESTE APPUYÉ » DÉCRIVAIT UN
+       GESTE QUE LE JEU NE DEMANDE PAS. `starDigStep` ne relit jamais si la
+       touche est tenue : une seule pression lance la fouille (`starDigStart`),
+       puis il suffit de ne pas s'éloigner pendant les trois secondes de
+       `Q.STAR_DIG_MS` — exactement le même geste que « E : fouiller » promet
+       déjà (une pression, pas un maintien). Le texte dit maintenant l'immobilité
+       qu'on demande vraiment, dans le même vocabulaire que `s2.calmStill`. */
+    hint: "Ne bouge plus : il gratte la cendre.",
+    /* ⚠️⚠️ ZIP 476 (défaut #6) — SEUL MESSAGE QUAND UNE FOUILLE EN COURS EST
+       COUPÉE PAR L'OUVERTURE DE L'OVERLAY D'UN AUTRE TROU (voir `starDigStep`) :
+       avant, cette interruption était totalement silencieuse. */
+    blocked: "La fouille s'arrête : une annonce est affichée. Ferme-la (Échap) pour recommencer.",
     stopped: "Tu t'es relevé. Le cratère est toujours là.",
     titleStar: "Une étoile.",
+    /* ⚠️⚠️ ZIP 478 (audit 477, défaut #5) — LA PLAQUE ÉTAIT « FROIDE, DÉJÀ » ET
+       « À FAIRE REFROIDIR » DANS LE MÊME PANNEAU. Les deux phrases s'affichent
+       ensemble, et c'est le panneau qui ENSEIGNE le seul mini-jeu restant : le
+       joueur y lisait donc, au même instant, qu'il n'y a rien à faire et qu'il
+       faut faire quelque chose. La sortie ne demandait pas d'inventer : le
+       mini-jeu de l'arrosoir refroidit à PETITS COUPS en visant une bande, ce qui
+       n'a de sens que si la chaleur est DEDANS. La croûte a pris, le cœur brûle —
+       une seule vérité, et elle explique enfin le geste qu'on va demander. */
     titleMaterial: "Une plaque noire.",
     titleEmpty: "Rien.",
     bodyStar: "Une petite lumière se tasse au fond du trou dès que tu la regardes.",
-    bodyMaterial: "Sous la cendre : lisse seulement sur sa cassure, et froide, déjà.",
+    bodyMaterial: "Sous la cendre : lisse seulement sur sa cassure. La croûte a pris ; le cœur brûle encore.",
     bodyEmpty: "De la cendre tiède, du sable vitrifié, et rien dedans. Toutes les lumières n'abritaient pas quelque chose.",
     nextStar: "Elle ne sortira pas tant qu'on la regarde.",
-    nextMaterial: "Il faut la faire refroidir avant d'y toucher.",
+    nextMaterial: "Il faut la refroidir à cœur avant d'y toucher.",
     nextEmpty: "Un site de moins à écarter.",
     left: (n) => n > 0
       ? `Il reste ${nfr(n)} cratère${n > 1 ? "s" : ""} à fouiller sur la ferme.`
@@ -150,7 +179,15 @@ const STAR_FR = {
          ⚠️ LE PLAFOND DE 80 SIGNES N'A PAS BOUGÉ : le bandeau rabote en silence
          (449), donc c'est le TEXTE qui tient la contrainte, jamais la coupe. */
       farmImpacts: "Cinq impacts, sur les deux rives. Ouvre la carte et fouille-les.",
-      townWait: "Poursuis l’enquête. Une mission t’attend quelque part à Valley Town.",
+      /* ⚠️⚠️ ZIP 475 (audit 472, défaut #8) — DEUX PHRASES DE PLUS POUR UN
+         TROU DÉJÀ FOUILLÉ. `farmImpacts` ne disait plus rien de vrai une fois
+         le trou ouvert : il répétait « fouille-les » sur une étoile qui
+         attendait déjà qu'on lui tourne le dos, ou sur une plaque qui
+         attendait déjà d'être retravaillée. Voir la note de `starGoalKey`
+         dans `quete.js`. */
+      farmImpactTame: "Une étoile guette dans ce trou fouillé. Tourne-lui le dos et attends.",
+      farmImpactCool: "Une plaque noire attend d'être refroidie. Reviens l'examiner (E).",
+      townWait: "Prends le train pour Valley Town. Reste-y, occupe-toi : l’étoile insiste.",
       craterHot: "À l'est de Valley Town, le trou brûle encore. Attends qu'il refroidisse.",
       crater:    "Le cratère a refroidi. Descends : quelque chose se cache au fond.",
       /* ⚠️ ZIP 469 — SIX OBJECTIFS SONT PARTIS AVEC LE DÉCHANT (`lean`,
@@ -167,7 +204,22 @@ const STAR_FR = {
          du pier et rendra son plan bientôt. */
       engineerTravel: "Kerguélen a été prévenu. Il arrive bientôt à Valley Town.",
       engineerWork:   "Kerguélen dessine près du ponton. Il rendra ses plans bientôt.",
-      timber:         "Commande la pièce suivante à Tristan, à la ferme. Le plan : touche P.",
+      /* ⚠️⚠️ ZIP 475 (audit 472, défaut #20) — LA COMMANDE N'EST PAS UN
+         DÉPLACEMENT. Cette phrase disait « à la ferme », ce qui laisse croire
+         qu'un lieu existe à rejoindre — or la commande passe par le bouton
+         de Tristan dans le menu Employés (👥), utilisable de n'importe où, et
+         `starTargetPos("sawmill")` rend `null` tant que la scierie n'est pas
+         bâtie : il n'y a jamais eu de chevron ici pour tenir la promesse.
+         Le texte nomme donc le VRAI geste — ouvrir le menu Employés —
+         au lieu d'une adresse que rien ne dessine. */
+      /* ⚠️⚠️ ZIP 478 — TROIS PHRASES POUR TROIS ÉTATS (voir `starGoalKey`).
+         L'ancienne disait « la pièce SUIVANTE » — vrai tant que Tristan travaillait
+         dans l'ordre, faux depuis que les cinq se commandent ensemble — et elle
+         envoyait au menu Employés un joueur dont la pièce attendait déjà sur la cale.
+         ⚠️ PLAFOND DE 80 SIGNES, tenu par le TEXTE (le bandeau rabote en silence). */
+      timberOrder:    "Commande les pièces à Tristan (menu Employés). Il peut tout mener.",
+      timberWait:     "Tristan scie. Le bois ira sur la cale du lac, à Valley Town.",
+      timberRaise:    "Une pièce t'attend sur la cale du lac. Va la monter (E).",
     },
     againTitle: "Où tu en étais",
     /* ⚠️ ZIP 453 — LE PLURIEL EST DÉRIVÉ, LUI AUSSI : cette phrase écrivait
@@ -245,8 +297,14 @@ const STAR_FR = {
   warn: {
     /* L'INVITE DE L'HÔTE. ⚠️ ELLE EST À LUI SEUL — c'est le seul panneau du jeu
        qui décide de quelque chose pour tout le monde, et le §3 est formel sur qui
-       arbitre. Le libellé est celui de Guillaume, mot pour mot. */
-    askTitle: "Démarrer l'enquête « La Belle Étoile » ?",
+       arbitre.
+       ⚠️⚠️ ZIP 478 (audit 477, défaut #13) — « ENQUÊTE » DEVIENT « QUÊTE », ET CE
+       N'EST PAS UN SYNONYME. Le libellé d'origine était celui de Guillaume mot pour
+       mot, mais il datait de la quête CADASTRALE du 442, supprimée au 444 : on
+       n'enquête sur rien ici, on répare un bateau. Un mot qui survit à la mécanique
+       qu'il nommait ne décrit plus le jeu — il décrit le jeu d'avant, et le joueur
+       est le seul à ne pas savoir lequel des deux il joue. */
+    askTitle: "Commencer la quête « La Belle Étoile » ?",
     askBody: "Des astronomes annoncent une pluie d'astéroïdes au-dessus de la vallée. Si tu dis oui, la nouvelle se répand ce soir — et la nuit qui suit, quelque chose tombera.",
     askNote: "Tu peux dire non. On te le redemandera au crépuscule.",
     yes: "Oui",
@@ -274,13 +332,26 @@ const STAR_FR = {
       "Cette nuit, très loin, il y a eu un bruit. Personne n'a rien vu.",
       "Et si ça tombe sur les champs ? On recommencera, voilà tout.",
     ],
-    /* LES INDICES. ⚠️ Chacun annonce une étape à venir, aucun ne le sait. */
+    /* LES INDICES. ⚠️ Chacun annonce une étape à venir, aucun ne le sait.
+       ⚠️⚠️ ZIP 478 (audit 477, défaut #7) — TROIS DES SIX ENVOYAIENT VERS DES
+       CHAPITRES SUPPRIMÉS AU 469 (la cloche fondue, la pie du verrier, le fond du
+       lac). Un indice qui survit à son chapitre ne devient pas inoffensif : il
+       envoie le joueur CURIEUX — celui qu'on veut — vers du décor muet, et c'est le
+       seul joueur qui écoute les PNJ. Ils repartent vers les trois étapes encore
+       vivantes qui n'avaient pas d'indice : la PLAQUE qu'on arrose, la CALE du lac,
+       et TRISTAN. ⚠️ Les trois qui restent sont vérifiés vivants, pas supposés :
+       l'ingénieur (chapitre 3), les lumières qui bougent (la chute), et le verre
+       vert — qui décrit le bassin du grand cratère (s2.empty, craterPool), donc
+       il annonce toujours quelque chose.
+       ⚠️ ILS DISENT « BATEAU » ET JAMAIS « NAVIRE » : le mot de charpentier est
+       banni par le banc du secret, celui du village ne l'est pas — et c'est le bon
+       registre de toute façon. La pierre est publique, l'étoile reste secrète. */
     hint: [
       "Il paraît qu'un brillant ingénieur breton a posé ses valises à Valley Town.",
       "J'ai vu des étoiles bizarres dans le ciel, les nuits d'avant. Elles bougeaient.",
-      "La cloche de l'église a été fondue dans une pierre du ciel. Il y a cent ans.",
-      "La pie du verrier vole tout ce qui brille. Son nid est dans le grand arbre.",
-      "Sous le ponton, le lac est très profond. Personne n'est allé au fond.",
+      "Mon grand-père arrosait les pierres tombées du ciel. Elles durcissaient noir.",
+      "La cale du lac n'a pas vu une quille depuis vingt ans. Elle attend encore.",
+      "Tristan dit qu'il saurait bâtir un bateau. Personne ne le lui a demandé.",
       "Quand une pierre brûlante tombe dans le sable, le sable devient du verre vert.",
     ],
   },
@@ -299,6 +370,22 @@ const STAR_FR = {
     coolTitle: "Fais-le refroidir",
     coolHint: "Garde la lueur dans le repère. Arrose à petits coups — un grand le fend.",
     coolCrack: "Crac. On recommence, plus doucement.",
+    /* ⚠️⚠️ ZIP 478 (audit 477, défaut #6) — DEUX FAÇONS DE PERDRE, DEUX PHRASES.
+       Les DEUX échecs par le haut (la surchauffe, et la manche qui s'achève hors
+       du repère) rappelaient `coolHint`, c'est-à-dire LA CONSIGNE DE DÉPART. Or
+       le cadre du canevas peint déjà `coolHint` en sous-titre en permanence : le
+       joueur qui ratait voyait donc la MÊME phrase apparaître au pied de l'écran,
+       à l'endroit où le jeu est censé lui dire ce qui vient de se passer. Il
+       n'avait aucun moyen de savoir laquelle des deux fautes il faisait —
+       mesuré : quatre manches d'affilée sans comprendre.
+       ⚠️ LE PARTAGE EST MAINTENANT NET, ET C'EST LUI QUI COMPTE : le SOUS-TITRE
+       porte la règle (permanente, on peut la relire), le PIED porte ce qui vient
+       d'arriver (fugace). Une seule consigne à l'écran, jamais deux fois la même.
+       ⚠️ ET CHAQUE FAUTE A AUSSI SON DESSIN : la fêlure avait déjà ses deux traits
+       (458), la surchauffe a maintenant sa bouffée blanche — parce qu'un joueur
+       qui regarde l'éclat ne lit pas le pied de l'écran au même instant. */
+    coolBurn: "Elle repasse au blanc : tu n'arroses pas assez. Verse plus souvent.",
+    coolMiss: "La manche s'achève hors du repère. Termine la descente dans l'anneau.",
     coolWin: "Le blanc devient orange, puis rouge, puis bleu. Ça ne siffle plus.",
     got: "La plaque noire et le bois de Tristan forment désormais une coque capable d'encaisser un choc immense.",
   },
@@ -321,6 +408,11 @@ const STAR_FR = {
        « qu'est-ce que c'est » (§3 de `QUETE.md`). */
     calmHint: "Elle ne sort pas tant qu'on la regarde.",
     calmIn: "Descends jusqu'au fond du trou.",
+    /* ⚠️⚠️ ZIP 476 (audit 2026-08-24, défaut #18) — `calmIn` NE VAUT QUE POUR LE
+       CRATÈRE DE VALLEY TOWN, un vrai creux qu'on descend. `starCalmUi` sert
+       aussi les cinq impacts de la FERME, de simples marques au sol : ce sont
+       les mêmes états (« far » = pas encore assez près), pas le même décor. */
+    calmNear: "Approche-toi de l'impact.",
     calmStill: "Ne bouge plus.",
     calmTurn: "Tourne-lui le dos.",
     calmHold: "Quelque chose remonte derrière toi.",
@@ -420,13 +512,18 @@ const STAR_FR = {
        « cinq pièces », elles auraient été la faute du 452 commise par le zip qui
        vient d'écrire la règle : un compteur ajouté ne recompte pas les phrases déjà
        écrites. `verify-quete` les a refusées à la première exécution. */
-    engDone: (total) => `Voilà. ${Nfr(total)} pièces, dans cet ordre. Trouvez-vous un bon bûcheron.`,
+    /* ⚠️⚠️ ZIP 478 — « DANS CET ORDRE » DÉCRIVAIT LA FILE D'ATTENTE SUPPRIMÉE.
+       Kerguélen ne dicte plus une séquence : il rend une LISTE, et chaque pièce
+       demande du bois plus une chose que la ferme produit. C'est ce qui remplace
+       les sabliers — la durée du chantier devient une fonction de la ferme, pas
+       une constante (audit 477, écart n°1). */
+    engDone: (total) => `Voilà. ${Nfr(total)} pièces, et ce qu'il faut pour chacune. Trouvez-vous un bon bûcheron.`,
     engGone: "Il a plié ses feuilles et il est parti sans se retourner.",
     /* ── LE PLAN. */
     ready: "Les plans sont à toi. Ouvre-les (P) pour voir le bateau.",
     openBtn: "📐 Le plan",
     panelTitle: (name) => `📐 Plans de construction — ${name}`,
-    panelHint: (total) => `${Nfr(total)} pièces, dans l'ordre. L'étoile se souvient de la forme ; le bois, il faut le tailler.`,
+    panelHint: (total) => `${Nfr(total)} pièces, cinq listes. Fais tailler le bois, puis monte-les ici.`,
     panelAtLake: "Déplie-le au bord du lac : le bateau apparaîtra sur sa cale.",
     lakeToast: "Tu déplies le plan devant la cale. Le bateau se dessine dans l'air, en entier.",
     lakeClose: "Tu replies le plan. Le bateau s'efface.",
@@ -439,8 +536,30 @@ const STAR_FR = {
     }[k] || k),
     /* ── TRISTAN. */
     orderTitle: (name) => `🪵 Le chantier de ${name}`,
-    orderHint: "Il travaille dans l'ordre du plan. Une pièce à la fois, et il ne commence pas la suivante avant d'avoir fini.",
-    orderCost: (wood, d) => `${wood} bois · ${d} de travail`,
+    /* ⚠️⚠️ ZIP 478 — CETTE PHRASE DÉCRIVAIT LA RÈGLE QU'ON VIENT DE SUPPRIMER.
+       « Une pièce à la fois, et il ne commence pas la suivante avant d'avoir fini »
+       était vrai, et c'était très exactement les 24 minutes de file d'attente que
+       l'audit 477 a chiffrées. Les cinq berceaux se commandent maintenant ensemble ;
+       ce qui limite n'est plus l'horloge, c'est la réserve. */
+    orderHint: "Il peut mener les cinq de front. Ce qui manque, ce n'est plus le temps : c'est la réserve.",
+    /* ⚠️ ZIP 478 — TROIS LIGNES, JAMAIS QUATRE (voir `STAR_TIMBER`). Le troisième
+       terme est vide pour le mât, qui n'est que du bois — et la phrase le supporte
+       sans cas particulier parce que l'appelant ne passe rien. */
+    orderCost: (wood, d, extra) => `${wood} bois${extra ? ` · ${extra}` : ""} · ${d} de travail`,
+    /* ⚠️ LE NOM DE LA CHOSE EN PLUS SE DÉRIVE DE LA TABLE, il n'est pas recopié :
+       `STAR_TIMBER` porte `{kind, idx, n}`, cette fonction porte les mots. Deux
+       listes auraient divergé au premier réglage (§8 de CLAUDE.md). */
+    extraName: (ex) => !ex ? "" :
+      ex.kind === "stone" ? `${ex.n} pierre`
+      : ex.kind === "fish" ? `${ex.n} poissons`
+      : ex.kind === "product" ? `${ex.n} ${["œufs", "laits de chèvre", "laine", "truffes", "laits"][ex.idx | 0] || "produits"}`
+      : "",
+    extraWhy: (ex) => !ex ? "" :
+      ex.kind === "stone" ? "le lest, au fond de la coque"
+      : ex.kind === "fish" ? "l'huile qui graisse la barre"
+      : (ex.idx | 0) === 2 ? "la toile de la voile"
+      : "la colle et le vernis",
+    orderPoorExtra: (n, what) => `Il manque ${what}. ${n} en tout, dans la réserve ou dans ton sac.`,
     orderBtn: "Commander",
     orderSent: (part, d) => `${part} : Tristan s'y met. Ce sera prêt dans ${d}.`,
     /* ⚠️⚠️ ZIP 459 — CE QU'IL DIT EN RECEVANT LA COMMANDE, au-dessus de sa tête et
@@ -457,9 +576,25 @@ const STAR_FR = {
     /* ⚠️ CHAQUE REFUS DIT SA RAISON. Un bouton grisé sans explication, c'est « le
        jeu propose et refuse » (426) avec un pas d'avance. */
     blockNoPlan: "🔒 Il faut d'abord les plans",
-    blockPrev: "🔒 La pièce précédente d'abord",
-    blockNoShard: "🔒 L'étoile ne se rappelle pas encore cette pièce",
-    delivered: (part) => `${part} — livrée sur la cale. Le bateau grandit pour de bon.`,
+    /* ⚠️⚠️ ZIP 478 — `blockPrev` (« la pièce précédente d'abord ») EST SUPPRIMÉE
+       AVEC LA RÈGLE QU'ELLE EXPLIQUAIT, et pas laissée « au cas où » : une phrase
+       sans chemin d'affichage est un lecteur qui ne s'exécute jamais (leçon 453).
+       Sa place est prise par l'état qui la remplace : le bois est arrivé, il attend
+       un marteau sur la cale. */
+    blockRaise: "🔨 Livrée — va la monter sur la cale",
+    blockNoShard: "🔒 Cette pièce n'est pas encore disponible",
+    /* ⚠️ ZIP 478 — LIVRER N'EST PLUS POSER. Tristan dépose le bois au pied de la
+       cale ; c'est le joueur qui monte la pièce, au marteau. Les deux phrases sont
+       donc deux ÉVÉNEMENTS distincts, à deux moments différents et souvent par deux
+       personnes — écrire une seule phrase pour les deux serait le défaut du 475
+       (une phrase pour plusieurs états) rejoué sur le chantier. */
+    delivered: (part) => `${part} — le bois est sur la cale. Il ne manque qu'un marteau.`,
+    raised: (part, who) => `${part} — ${who} vient de la poser. Le bateau grandit pour de bon.`,
+    raiseTitle: (part) => `🔨 Monter ${part}`,
+    raiseSub: (n, total) => `coup ${n} sur ${total}`,
+    raiseHint: "Frappe quand le maillet passe sur la zone claire. Un coup à côté ne compte pas.",
+    raiseWin: "La pièce est en place. Elle ne bougera plus.",
+    raiseFail: "Le bois a glissé. Reprends-le calmement.",
     lastOne: "La dernière pièce est en place. Le bateau est fini.",
     noTristan: "Personne à la ferme ne sait travailler le bois comme ça.",
     unbuilt: (n, total) => `La cloche a répondu, mais il manque encore du bois : ${n} pièces sur ${total}.`,
@@ -506,7 +641,14 @@ const STAR_FR = {
        fois le trou retourné. */
     impact: "E : fouiller le cratère",
     impactDig: "Fouille en cours…",
-    impactSeen: "E : examiner les débris",
+    /* ⚠️⚠️ ZIP 476 (audit 2026-08-24, défaut #19) — CETTE INVITE S'AFFICHE UNE
+       FOIS L'IMPACT VIDÉ (voir `starNearby`, la branche `Q.starHas` juste après
+       `Q.starDug`) : il n'y a plus rien à examiner, `E` ne fait plus que répéter
+       `farm.seen`. « E : examiner les débris » promettait un geste que le trou
+       ne peut plus rendre — même défaut que `impact`/`material` avant le 469,
+       sur l'état d'après plutôt que d'avant. Sans « E : », comme `impactDig`
+       juste au-dessus : les deux sont des CONSTATS, pas des invites. */
+    impactSeen: "Site déjà fouillé",
     material: "E : examiner la matière noire",
     tame: "Tourne-lui le dos, ne bouge plus (E : pourquoi ?)",
     /* ⚠️⚠️ ZIP 456 — LE CRATÈRE NE PROMET PLUS UNE TOUCHE. « E : ne plus bouger »
@@ -519,6 +661,11 @@ const STAR_FR = {
     crater: "Tourne-lui le dos, ne bouge plus (E : pourquoi ?)",
     craterHot: "E : attendre que ça refroidisse",
     engineer: "E : parler à l'ingénieur",
+    /* ⚠️ ZIP 478 — LA CALE. Elle nomme la TOUCHE et le GESTE (règle du 455 :
+       OÙ, QUOI, COMMENT), et pas la pièce : le mini-jeu la nomme deux dixièmes de
+       seconde plus tard, et une invite qui changerait de mot à chaque pièce
+       clignoterait pendant qu'on tourne autour du chantier. */
+    raise: "E : monter la pièce sur la cale",
   })[k] || "E",
 };
 
@@ -534,6 +681,9 @@ const Nen = (n) => { const s = nen(n); return s.charAt(0).toUpperCase() + s.slic
 
 const STAR_EN = {
   title: "The Star Boat",
+  net: {
+    hostAway: "The host is in the background, some residents may slow down.",
+  },
   farm: {
     mapImpact: (n) => `Impact ${n}`,
     seen: "This impact site has already been searched.",
@@ -547,16 +697,17 @@ const STAR_EN = {
   },
   /* ── LE PISTEUR. Une icône, des pastilles, UNE phrase. Jamais deux. */
   dig: {
-    hint: "Hold it: he's scraping the ash away.",
+    hint: "Stay still: he's scraping the ash away.",
+    blocked: "The search stops: an announcement is on screen. Close it (Esc) to start again.",
     stopped: "You stood back up. The crater is still there.",
     titleStar: "A star.",
     titleMaterial: "A black plate.",
     titleEmpty: "Nothing.",
     bodyStar: "A small light huddles at the bottom of the hole the moment you look at it.",
-    bodyMaterial: "Under the ash: smooth only where it broke, and cold already.",
+    bodyMaterial: "Under the ash: smooth only where it broke. The crust has set; the core still burns.",
     bodyEmpty: "Warm ash, glassed sand, and nothing inside. Not every light was hiding something.",
     nextStar: "It won't come out while anyone is watching.",
-    nextMaterial: "It has to cool down before you can touch it.",
+    nextMaterial: "It has to cool all the way through before you can touch it.",
     nextEmpty: "One site fewer to rule out.",
     left: (n) => n > 0
       ? `${Nen(n)} crater${n > 1 ? "s" : ""} left to search on the farm.`
@@ -602,7 +753,12 @@ const STAR_EN = {
          ⚠️ LE PLAFOND DE 80 SIGNES N'A PAS BOUGÉ : le bandeau rabote en silence
          (449), donc c'est le TEXTE qui tient la contrainte, jamais la coupe. */
       farmImpacts: "Five impacts lie on both riverbanks. Open the map and search them.",
-      townWait: "Keep investigating. A mission awaits somewhere in Valley Town.",
+      /* ⚠️ ZIP 475 — voir la note française : un trou déjà fouillé n'a plus
+         « fouille-les » à dire, qu'il attende un apprivoisement ou un
+         refroidissement. */
+      farmImpactTame: "A star is hiding in that dug-up hole. Turn your back and wait.",
+      farmImpactCool: "A black plate is waiting to cool down. Come back and examine it (E).",
+      townWait: "Take the train to Valley Town. Stay there, keep busy: the star insists.",
       craterHot: "East of Valley Town the hole still burns. Wait for it to cool.",
       crater:    "The crater has cooled. Climb down: something hides at the bottom.",
       /* ⚠️ ZIP 469 — voir la note française : sept objectifs partent avec le déchant. */
@@ -613,7 +769,11 @@ const STAR_EN = {
       engineer:       "Ask the town hall for a naval engineer (E). The star insists.",
       engineerTravel: "Kerguélen has been notified. He'll reach Valley Town shortly.",
       engineerWork:   "Kerguélen is drawing by the pier. He'll hand over his plans soon.",
-      timber:         "Order the next piece from Tristan, at the farm. The plan: press P.",
+      /* ⚠️ ZIP 475 — voir la note française : la commande passe par le menu
+         Employés, pas par un lieu. */
+      timberOrder:    "Order the pieces from Tristan (Employees menu). He can run all five.",
+      timberWait:     "Tristan is sawing. The timber goes to the lake slipway, Valley Town.",
+      timberRaise:    "A piece is waiting on the lake slipway. Go raise it (E).",
     },
     /* Le rappel de reprise. ⚠️ UNE FOIS PAR SESSION, jamais deux — un « où en
        étions-nous » qui revient à chaque écran est une notification. */
@@ -685,7 +845,7 @@ const STAR_EN = {
      toujours la même chose, donc on peut retourner le voir. Un tirage à chaque
      approche aurait fait une machine à phrases dont personne ne retient rien. */
   warn: {
-    askTitle: "Start the “Beautiful Star” investigation?",
+    askTitle: "Begin the “Beautiful Star” quest?",
     askBody: "Astronomers are announcing a shower of asteroids over the valley. Say yes and the news spreads tonight — and the night after that, something will fall.",
     askNote: "You can say no. We'll ask again at dusk.",
     yes: "Yes",
@@ -709,9 +869,9 @@ const STAR_EN = {
     hint: [
       "They say a brilliant engineer from Brittany has moved into Valley Town.",
       "I saw odd stars in the sky, the nights before. They were moving.",
-      "The church bell was cast from a stone that fell from the sky. A hundred years ago.",
-      "The glassblower's magpie steals anything that shines. Its nest is up the big tree.",
-      "Under the pier the lake is very deep. Nobody has ever reached the bottom.",
+      "My grandfather watered stones fallen from the sky. They hardened black.",
+      "The lake slipway hasn't seen a keel in twenty years. It's still waiting.",
+      "Tristan says he could build a boat. Nobody has ever asked him.",
       "When a burning stone lands in sand, the sand turns to green glass.",
     ],
   },
@@ -730,6 +890,9 @@ const STAR_EN = {
        comme un didacticiel collé sur un conte. */
     coolHint: "Keep the glow inside the mark. Pour in short bursts — a long one cracks it.",
     coolCrack: "Crack. Start again, gentler.",
+    /* ⚠️⚠️ ZIP 478 — voir la note française : deux façons de perdre, deux phrases. */
+    coolBurn: "It flares back to white: you're not pouring enough. Pour more often.",
+    coolMiss: "The round ended outside the mark. Finish the descent inside the ring.",
     coolWin: "The white goes orange, then red, then blue. It stops hissing.",
     got: "The black plate and Tristan's timber now form a hull able to take an immense impact.",
   },
@@ -745,6 +908,7 @@ const STAR_EN = {
     /* ⚠️ ZIP 456 — voir la note en face, côté français : les quatre états de la
        posture, dits au-dessus du joueur pendant qu'il les tient. */
     calmIn: "Climb down to the bottom.",
+    calmNear: "Get closer to the impact.",
     calmStill: "Stop moving.",
     calmTurn: "Turn your back on it.",
     calmHold: "Something is climbing up behind you.",
@@ -805,12 +969,12 @@ const STAR_EN = {
     engHello: "Don't tell me anything. Show me the slipway and let me work.",
     engWork: (d) => `He measures, crosses out, starts again. ${d} to go.`,
     engBubble: "…and if the keel holds, the rest follows.",
-    engDone: (total) => `There. ${Nen(total)} pieces, in that order. Go and find yourself a good lumberjack.`,
+    engDone: (total) => `There. ${Nen(total)} pieces, and what each one needs. Go and find yourself a good lumberjack.`,
     engGone: "He folded his sheets and left without looking back.",
     ready: "The plans are yours. Open them (P) to see the boat.",
     openBtn: "📐 The plan",
     panelTitle: (name) => `📐 Building plans — ${name}`,
-    panelHint: (total) => `${Nen(total)} pieces, in order. The star remembers the shape; the wood still has to be cut.`,
+    panelHint: (total) => `${Nen(total)} pieces, five lists. Have the wood cut, then raise them here.`,
     panelAtLake: "Unfold it by the lake and the boat will stand on its slipway.",
     lakeToast: "You unfold the plan in front of the slipway. The whole boat draws itself in the air.",
     lakeClose: "You fold the plan away. The boat fades out.",
@@ -820,8 +984,19 @@ const STAR_EN = {
       mast: "The mast", sail: "The yard", bell: "The bell cradle",
     }[k] || k),
     orderTitle: (name) => `🪵 ${name}'s workshop`,
-    orderHint: "He works in the order of the plan. One piece at a time, and he won't start the next before he's done.",
-    orderCost: (wood, d) => `${wood} wood · ${d} of work`,
+    orderHint: "He can run all five at once. What's short isn't time any more: it's the stock.",
+    orderCost: (wood, d, extra) => `${wood} wood${extra ? ` · ${extra}` : ""} · ${d} of work`,
+    extraName: (ex) => !ex ? "" :
+      ex.kind === "stone" ? `${ex.n} stone`
+      : ex.kind === "fish" ? `${ex.n} fish`
+      : ex.kind === "product" ? `${ex.n} ${["eggs", "goat milk", "wool", "truffles", "milk"][ex.idx | 0] || "produce"}`
+      : "",
+    extraWhy: (ex) => !ex ? "" :
+      ex.kind === "stone" ? "ballast, down in the hull"
+      : ex.kind === "fish" ? "oil for the tiller"
+      : (ex.idx | 0) === 2 ? "cloth for the sail"
+      : "glue and varnish",
+    orderPoorExtra: (n, what) => `${what} missing. ${n} in all, from the store or your bag.`,
     orderBtn: "Order it",
     orderSent: (part, d) => `${part}: Tristan gets to it. Ready in ${d}.`,
     /* ⚠️ ZIP 459 — voir la note en face, côté français : ce qu'il dit en recevant
@@ -831,9 +1006,15 @@ const STAR_EN = {
     orderWait: (d) => `under way — ${d}`,
     orderDone: "✅ delivered",
     blockNoPlan: "🔒 You need the plans first",
-    blockPrev: "🔒 The previous piece first",
-    blockNoShard: "🔒 The star doesn't remember that piece yet",
-    delivered: (part) => `${part} — set on the slipway. The boat is growing for real now.`,
+    blockRaise: "🔨 Delivered — go raise it on the slipway",
+    blockNoShard: "🔒 This piece isn't available yet",
+    delivered: (part) => `${part} — the timber is on the slipway. All it needs is a hammer.`,
+    raised: (part, who) => `${part} — ${who} just raised it. The boat is growing for real now.`,
+    raiseTitle: (part) => `🔨 Raise ${part}`,
+    raiseSub: (n, total) => `blow ${n} of ${total}`,
+    raiseHint: "Strike when the mallet crosses the bright band. A blow off the mark doesn't count.",
+    raiseWin: "The piece is home. It won't move again.",
+    raiseFail: "The timber slipped. Take it up again, calmly.",
     lastOne: "The last piece is in place. The boat is finished.",
     noTristan: "Nobody on the farm can work timber like that.",
     unbuilt: (n, total) => `The bell has answered, but the wood is short: ${n} pieces of ${total}.`,
@@ -876,6 +1057,10 @@ const STAR_EN = {
          regarderait le plan et le fantôme qu'une fois, donc on ne les jugerait
          qu'une fois — la raison d'être de tout ce menu. */
       plans: "📐 Hand me the plans",
+      /* ⚠️ ZIP 478 — deux boutons pour deux états : « deliver » s'arrête AVANT le
+         marteau (c'est le seul moyen de juger le mini-jeu de montage sans huit
+         minutes de scie), « timber » pose les cinq pièces. */
+      deliver: "🔨 Timber delivered, not yet raised",
       timber: "🪵 Deliver all the timber",
     }[op] || op),
     scene: (s) => ({ warn: "🎬 The announcement", fall: "🎬 The five farm impacts", townFall: "🎬 The Valley Town meteor", end: "🎬 The ending" }[s] || s),
@@ -905,12 +1090,13 @@ const STAR_EN = {
   prompt: (k) => ({
     impact: "E: search the crater",
     impactDig: "Searching…",
-    impactSeen: "E: examine the debris",
+    impactSeen: "Site already searched",
     material: "E: examine the black matter",
     tame: "Turn your back, stand still (E: why?)",
     crater: "Turn your back, stand still (E: why?)",
     craterHot: "E: wait for it to cool",
     engineer: "E: talk to the shipwright",
+    raise: "E: raise the piece on the slipway",
   })[k] || "E",
 };
 /* ⚠️ LE MENU DÉVELOPPEUR EST LA MÊME TABLE DES DEUX CÔTÉS — pointée, jamais

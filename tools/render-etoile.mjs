@@ -2045,6 +2045,98 @@ console.log("\n11. LA JAUGE DE LA POSTURE (456) — « est-ce que je fais bien ?
   }
 }
 
-console.log(`\nPlanches : tools/out/etoile-planche.png · tools/out/etoile-cratere.png · tools/out/etoile-comete.png · tools/out/etoile-alerte.png · tools/out/etoile-jauge.png · tools/out/etoile-poses.png · tools/out/etoile-tristan.png · tools/out/etoile-fouille.png`);
+console.log("\n12. LA LUMIÈRE DE LA TENUE (478) — on ne la voit jamais, on voit sa lumière\n");
+{
+  /* ⚠️⚠️ CE DESSIN NAÎT AVEC SON BANC, comme la bulle « ! » du 455 : c'est la
+     règle la plus rentable du §4 (« ce dessin est-il regardable par un banc ? »
+     est une question de QUALITÉ, et elle se pose avant le premier fillRect »).
+     ⚠️ FOND VERT PUR : la flaque est bleue, rose ou jaune ; aucune de ses trois
+     palettes n'a le vert dominant. Le fond d'une mesure est un réactif (455). */
+  const S5 = 96, T5 = 16;
+  const shot = (k, color, t) => {
+    const sur = makeCanvas(S5, S5), gg = sur.ctx;
+    gg.fillStyle = "#00ff00"; gg.fillRect(0, 0, S5, S5);
+    S.drawStarCalmGlow(gg, S5 / 2, S5 / 2, T5, k, color, t === undefined ? 0 : t);
+    return sur;
+  };
+  /* Tout pixel qui n'est plus le vert pur du fond a été peint. */
+  const litPx = (sur) => {
+    const d = sur.px; let n = 0;
+    for (let i = 0; i < S5 * S5; i++) {
+      const o = i * 4;
+      if (!(d[o] === 0 && d[o + 1] === 255 && d[o + 2] === 0)) n++;
+    }
+    return n;
+  };
+  ok(litPx(shot(0, "blue")) === 0, "⚠️ à zéro, rien n'est peint",
+     `${litPx(shot(0, "blue"))} px`);
+  const k25 = litPx(shot(0.25, "blue")), k60 = litPx(shot(0.6, "blue")), k100 = litPx(shot(1, "blue"));
+  ok(k25 > 0 && k60 > k25 && k100 > k60, "⚠️⚠️ la flaque grandit avec la tenue",
+     `${k25} → ${k60} → ${k100} px`);
+  /* ⚠️ L'INVARIANT SE BALAIE, il ne s'échantillonne pas (leçon 449). Vingt pas,
+     et la surface ne doit JAMAIS reculer — c'est ce qu'un arrondi casse en
+     premier, et c'est aussi ce qui trahirait un battement mal borné. */
+  {
+    let last = -1, bad = 0;
+    for (let i = 0; i <= 20; i++) { const n = litPx(shot(i / 20, "blue")); if (n < last) bad++; last = n; }
+    ok(bad === 0, "⚠️⚠️ …et elle ne recule à aucun des vingt pas", `${bad} reculs`);
+  }
+  /* ⚠️⚠️ LE BATTEMENT NE DOIT JAMAIS LA FAIRE DISPARAÎTRE NI DÉBORDER. C'est très
+     exactement le défaut que le §8 de CLAUDE.md appelle « un effet à bouffées ne
+     s'éteint pas en mettant son taux à zéro » : on balaie une seconde entière de
+     phases, à `k` plein, et on exige que la surface reste dans une fourchette. */
+  {
+    let lo = 1e9, hi = 0;
+    for (let ms = 0; ms < 2000; ms += 40) { const n = litPx(shot(1, "blue", ms)); lo = Math.min(lo, n); hi = Math.max(hi, n); }
+    ok(lo > 0 && hi < S5 * S5 * 0.9 && hi / lo < 1.6,
+       "⚠️⚠️ le battement respire sans clignoter ni déborder",
+       `${lo} → ${hi} px sur 50 phases`);
+  }
+  /* ⚠️ ELLE NE TOUCHE PAS LE BORD DU CANEVAS. C'est le contrôle en une ligne du
+     §4 (« un canevas découpe en silence ce qui dépasse ») : à `k` = 1 la flaque
+     fait deux carreaux et demi de rayon, le canevas en fait six — si un pixel
+     atteint le bord, c'est que le rayon a été réglé sans regarder l'emprise. */
+  {
+    const sur = shot(1, "yellow", 500), d = sur.px; let edge = 0;
+    for (let x = 0; x < S5; x++) for (const y of [0, S5 - 1]) {
+      const o = (y * S5 + x) * 4; if (!(d[o] === 0 && d[o + 1] === 255 && d[o + 2] === 0)) edge++;
+    }
+    for (let y = 0; y < S5; y++) for (const x of [0, S5 - 1]) {
+      const o = (y * S5 + x) * 4; if (!(d[o] === 0 && d[o + 1] === 255 && d[o + 2] === 0)) edge++;
+    }
+    ok(edge === 0, "⚠️ et aucun pixel ne touche le bord du canevas", `${edge} px sur le bord`);
+  }
+  /* ⚠️⚠️ TROIS COULEURS, TROIS LUMIÈRES — et c'est le point du défaut #9 : deux
+     étoiles qui rendraient la même image seraient la même créature. On compare la
+     teinte dominante, pas la surface (elles ont la même taille, exprès). */
+  {
+    const dom = (color) => {
+      const d = shot(1, color, 500).px; let r = 0, g = 0, b = 0;
+      for (let i = 0; i < S5 * S5; i++) {
+        const o = i * 4;
+        if (d[o] === 0 && d[o + 1] === 255 && d[o + 2] === 0) continue;
+        r += d[o]; g += d[o + 1]; b += d[o + 2];
+      }
+      return { r, g, b };
+    };
+    const B = dom("blue"), R = dom("rose"), Y = dom("yellow");
+    ok(B.b > B.r && R.r > R.b && Y.r > Y.b && Y.g > Y.b,
+       "⚠️⚠️ la bleue tire au bleu, la rose au rouge, la reine au jaune",
+       `bleue ${(B.b / B.r).toFixed(2)} b/r · rose ${(R.r / R.b).toFixed(2)} r/b · reine ${(Y.g / Y.b).toFixed(2)} v/b`);
+  }
+  /* ── LA PLANCHE. ⚠️ SUR LA TERRE, pas sur du blanc : c'est là qu'elle vit. */
+  {
+    const CW = 5, W7 = CW * S5, H7 = S5;
+    const sur = makeCanvas(W7, H7), gg = sur.ctx;
+    gg.fillStyle = "#3a2e1e"; gg.fillRect(0, 0, W7, H7);
+    [0.15, 0.4, 0.7, 1, 1].forEach((k, i) => {
+      S.drawStarCalmGlow(gg, i * S5 + S5 / 2, S5 / 2, T5, k, i === 4 ? "rose" : i === 3 ? "yellow" : "blue", 400 + i * 260);
+    });
+    const up = scale(sur.px, W7, H7, 3);
+    writePNG(path.join(OUT, "etoile-lueur.png"), up.px, up.W, up.H);
+  }
+}
+
+console.log(`\nPlanches : tools/out/etoile-planche.png · tools/out/etoile-cratere.png · tools/out/etoile-comete.png · tools/out/etoile-alerte.png · tools/out/etoile-jauge.png · tools/out/etoile-poses.png · tools/out/etoile-tristan.png · tools/out/etoile-fouille.png · tools/out/etoile-lueur.png`);
 console.log(fails === 0 ? `\n✅ tous les contrôles passés.\n` : `\n❌ ${fails} contrôle(s) en échec.\n`);
 process.exit(fails ? 1 : 0);

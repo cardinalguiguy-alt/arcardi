@@ -3756,12 +3756,36 @@ export const STAR_PLAN_LAKE_R = 12;
    morceau d'étoile correspondant arrive dans exactement le même ordre (coque au
    chapitre 1, safran au 3, mât et voile au 4, cloche au 5), la chaîne ne peut pas
    se bloquer. Vérifié par le banc plutôt que par la confiance. */
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ ZIP 478 — CHAQUE BERCEAU DEMANDE UNE CHOSE DE PLUS QUE DU BOIS, ET JAMAIS
+   ║ PLUS D'UNE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ L'AUDIT 477 A MESURÉ LE VRAI DÉFAUT DU CHANTIER : **une seule dépense
+   branchée sur l'économie en 56 minutes**. La ferme a des carrières, des lignes de
+   pêche, des brebis, des poules — et le navire ne leur demandait rien. Un chantier
+   qui n'a besoin de rien de ce qu'on produit n'est pas un chantier, c'est une
+   horloge.
+   ⚠️⚠️ LA RÈGLE DURE EST « TROIS LIGNES PAR BERCEAU, JAMAIS QUATRE » : le bois, la
+   chose en plus, et rien d'autre. C'est ce qui sépare ce chantier du lot du Community
+   Center qui réclame un poisson de légende — la longueur d'une liste est ce qui la
+   transforme en corvée, et elle doit être bornée par le CODE, pas par une intention.
+   ⚠️ LE MÂT N'A DÉLIBÉRÉMENT RIEN EN PLUS. Un mât, c'est un arbre : lui inventer un
+   ingrédient aurait été de la symétrie, et la symétrie apprend au joueur que la
+   liste est décorative. Quatre sources différentes sur cinq pièces, et une pièce
+   qui n'est que du bois : c'est ce qui fait que les cinq ne se ressemblent pas.
+   ⚠️ ET LA VOILE DEMANDE DE LA LAINE, C'EST-À-DIRE UNE **BREBIS** — la constellation
+   que la quête doit finir par dessiner porte ce nom depuis le 465. Ce n'est pas une
+   coïncidence qu'on exploite, c'est une rime qu'on ne paie pas.
+   `extra` : `{ kind:"stone"|"fish"|"product", idx?:<index C.ANIMALS>, n }`.
+   `kind:"fish"` ne nomme AUCUNE espèce (toutes comptent) : le chantier a besoin
+   d'huile, pas d'un poisson précis, et exiger une espèce rendrait la ligne
+   dépendante d'un tirage. */
 export const STAR_TIMBER = {
-  hull:   { wood: 140, ms: 8 * 60 * 1000 },   // le bordé
-  rudder: { wood:  45, ms: 3 * 60 * 1000 },   // le safran et sa barre
-  mast:   { wood: 110, ms: 6 * 60 * 1000 },   // le mât
-  sail:   { wood:  60, ms: 4 * 60 * 1000 },   // la vergue
-  bell:   { wood:  40, ms: 3 * 60 * 1000 },   // la chaise de cloche
+  hull:   { wood: 140, ms: 8 * 60 * 1000, extra: { kind: "stone", n: 40 } },              // le bordé — 40 pierre : le lest
+  rudder: { wood:  45, ms: 3 * 60 * 1000, extra: { kind: "fish", n: 8 } },                // le safran — 8 poissons : l'huile de la barre
+  mast:   { wood: 110, ms: 6 * 60 * 1000 },                                               // le mât — rien de plus : c'est un arbre
+  sail:   { wood:  60, ms: 4 * 60 * 1000, extra: { kind: "product", idx: 2, n: 24 } },     // la vergue — 24 laine : la toile
+  bell:   { wood:  40, ms: 3 * 60 * 1000, extra: { kind: "product", idx: 0, n: 16 } },     // la chaise de cloche — 16 œufs : la colle et le vernis
 };
 /* Le nom du bateau. ⚠️ IL NE SE TRADUIT PAS (consigne de Guillaume, mot pour
    mot : « nom français pas à traduire ») : un bateau porte son nom peint sur son

@@ -2283,13 +2283,8 @@ tombe du ciel pendant qu'on fait autre chose. Le 442 s'était reproché qu'« un
 n'existe que pour qui ouvre le bon panneau n'existe pas » et avait répondu en ajoutant un SECOND
 panneau ; le 444 répond en n'en demandant AUCUN.
 
-### ⚠️⚠️ LA GRAMMAIRE MAGIQUE — UNE SEULE IDÉE, ET LA COOPÉRATION EN DÉCOULE
-
-> **La lumière de l'étoile ne montre pas ce qu'une chose EST. Elle montre ce qu'une chose SE
-> RAPPELLE.**
-
-Une phrase, et elle explique les six mini-jeux et pourquoi il faut être deux. ⚠️ **La coopération
-n'est pas une serrure, c'est une conséquence : on ne peut pas tenir la lumière ET lire l'ombre.**
+⚠️⚠️ **LA COOPÉRATION N'EST PAS UNE SERRURE, C'EST UNE CONSÉQUENCE : on ne peut pas tenir la
+lumière ET lire l'ombre.**
 Celui qui la tient est ébloui et a l'ombre dans le dos ; celui qui lit est dans le noir et n'a pas
 de lampe. Le premier jet du chantier EMPRUNTAIT ses verrous coopératifs (deux clés, un
 contrepoids, un guetteur) et Guillaume l'a refusé en une phrase — « ne t'embête pas à recopier les
@@ -3112,8 +3107,8 @@ de banc, 448 : *il mesure ce qu'une chose EST et jamais QUAND elle est*).
 
 ### 31.3 Le bois de Tristan : un morceau demande DEUX choses
 
-`starShipParts` rendait « les cinq trouvailles ». Il rend maintenant **`found ∧ wood`** : l'étoile
-se rappelle la forme, le bûcheron taille la pièce. ⚠️ **Ce n'est pas un second compteur** — c'est un
+`starShipParts` rendait « les cinq trouvailles ». Il rend maintenant **`found ∧ wood`** : le plan
+est trouvé, le bûcheron taille la pièce. ⚠️ **Ce n'est pas un second compteur** — c'est un
 `ET` entre deux lectures, indexé par les MÊMES clés que le navire (`STAR_SHIP_ORDER`), donc rien ne
 peut afficher quatre morceaux pour trois pièces. C'est la leçon du 452 tenue une seconde fois.
 
