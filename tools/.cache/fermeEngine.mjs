@@ -5549,9 +5549,25 @@ export function generateTownWorld() {
          voisine de droite, puis celle de gauche. Le refus reste possible (près
          du ponton, tout est pris) : ce qui compte est qu'il devienne rare. */
       const sow = (x, y, kind) => addGarden(x, y, kind) || addGarden(x + 1, y, kind) || addGarden(x - 1, y, kind);
+      /* ⚠️⚠️ CORRECTIF COLLISION — LE PAS DE 4 DE CETTE ROUE TOMBE PILE SUR LA
+         LARGEUR DE 4 DU PONTON (TOWN_PIER.w) : sur toute génération, un semis
+         atterrissait en x = TOWN_PIER.x ET un autre en x = TOWN_PIER.x+3, les
+         deux colonnes de RIVE du ponton — jamais sur le ponton lui-même
+         (`addGarden` refuse déjà le G_BRIDGE), mais sur la rangée d'herbe
+         juste au nord de son embouchure, là où tout marcheur doit passer pour
+         y descendre. Un buisson d'or et un bonsaï, plantés bloquants, y
+         resserraient donc l'entrée du ponton de 4 à 2 cases de large — la
+         même famille de défaut que les lampadaires du 434 retombant sur la
+         chaussée (« un décor posé sur une trame régulière rencontrera un jour
+         une AUTRE trame régulière »), payée ici contre la trame du ponton
+         plutôt que contre une rue. Le coin du pêcheur (canne/seau/coffre,
+         juste au-dessus) flanque déjà le ponton à x0-2..x0-1 et x0+w : rien
+         de floral n'y manque à l'œil en sautant ces colonnes. */
+      const nearPierMouth = (px) => px >= C.TOWN_PIER.x - 1 && px < C.TOWN_PIER.x + C.TOWN_PIER.w + 1;
       let k = 0;
       for (let x = x0 + 3; x < x1 - 3; x += 4) {
         if (quayMix(x) <= 0.5 || tops[x] === null) continue;
+        if (nearPierMouth(x)) continue;
         const by = tops[x] - C.TOWN_QUAY_H - 1;
         if (by <= AVE) continue;
         sow(x, by, FLORAL[k++ % FLORAL.length]);
@@ -5974,6 +5990,26 @@ export function generateTownWorld() {
   {
     const cl = C.TOWN_COURT_STAIR_CLEAR;
     for (let y = cl.y; y < cl.y + cl.h; y++) for (let x = cl.x; x < cl.x + cl.w; x++) {
+      if (!inMap(x, y)) continue;
+      const i = id(x, y), o = objects[i];
+      if (o !== C.O_TREE && o !== C.O_TREE2) continue;
+      objects[i] = C.O_NONE; objHp.delete(i);
+    }
+  }
+  /* ⚠️⚠️ CORRECTIF COLLISION — MÊME DÉFAUT QUE LE BLOC DU TRIBUNAL CI-DESSUS,
+     UNE LIGNE PLUS BAS SUR LA CARTE : le ponton (TOWN_PIER) est peint AVANT ce
+     semis, mais seulement sur SON emprise (le bois et le quai maçonné) ; la
+     rangée d'herbe juste au nord de son embouchure — celle où le mobilier
+     fleuri est déjà tenu à l'écart (voir « nearPierMouth » plus bas) — reste
+     de la pelouse ordinaire à cet instant, donc plantable. Sur la graine fixe
+     de cette carte, le semis y pose bel et bien un arbre en (100,155),
+     exactement la colonne OUEST du ponton (large de 4, TOWN_PIER.w) : la
+     seule voie d'accès à un lieu que `verify-vallee.mjs` vérifie pourtant
+     atteignable se retrouvait resserrée à 3 cases sur 4. Même remède que le
+     tribunal : on retire, après coup, les arbres tombés dans l'embouchure. */
+  {
+    const px0 = C.TOWN_PIER.x - 1, px1 = C.TOWN_PIER.x + C.TOWN_PIER.w + 1;
+    for (let y = C.TOWN_PIER.y - 6; y < C.TOWN_PIER.y + 2; y++) for (let x = px0; x < px1; x++) {
       if (!inMap(x, y)) continue;
       const i = id(x, y), o = objects[i];
       if (o !== C.O_TREE && o !== C.O_TREE2) continue;
