@@ -6189,6 +6189,12 @@ export function buildSprites() {
       rose:   [["#fff8fc", "#ff9fd1", "#dc5b9f", "#712451", "rgba(255,130,205,0.20)"],
                ["#fff0f8", "#e895bd", "#aa517e", "#59243e", "rgba(235,120,185,0.11)"],
                ["#e0d6dc", "#ac929f", "#755363", "#3d2a33", "rgba(220,170,195,0.05)"]],
+      /* 480 bis — LA BLANCHE (verbe `lure`). Froide et argentée, pour se
+         distinguer de la jaune (chaude/dorée) au premier coup d'œil : même
+         construction à trois états que les trois autres. */
+      white:  [["#ffffff", "#eaf3ff", "#a8b8c8", "#46505c", "rgba(220,235,255,0.20)"],
+               ["#f6f9fc", "#d6dee6", "#8a97a4", "#3a424c", "rgba(210,222,238,0.11)"],
+               ["#dde1e4", "#a6acb2", "#6c7278", "#34383c", "rgba(200,206,212,0.05)"]],
     }[color || "yellow"] || null;
     const [CORE, BODY, EDGE, RIM, HALO] = pal[state];
     const cx = queen ? 14 : 9, cy = queen ? 14.5 : 9.5;   // ⚠️ décalé d'un demi-pixel vers le bas : à cy = 9 la pointe haute touchait le bord du canevas, donc elle était rabotée en silence (piège n°1, 433)
@@ -14819,7 +14825,7 @@ house: house(),
        SILLON (454) et le navire ne sont PAS ici : ce sont des fonctions, parce
        qu'ils se peignent sur un fond déjà là (voir leur note). */
     starWisp: Array.from({ length: 3 }, (_, st) => Array.from({ length: 4 }, (_, po) => starWispSprite(po, st, "yellow"))),
-    starWispColors: Object.fromEntries(["yellow", "blue", "rose"].map(color => [color,
+    starWispColors: Object.fromEntries(["yellow", "blue", "rose", "white"].map(color => [color,
       Array.from({ length: 3 }, (_, st) => Array.from({ length: 4 }, (_, po) => starWispSprite(po, st, color))) ])),
     starWispQueen: Array.from({ length: 3 }, (_, st) => Array.from({ length: 4 }, (_, po) => starWispSprite(po, st, "yellow", true))),
     starShard: Array.from({ length: 4 }, (_, n) => starShardSprite(n)),

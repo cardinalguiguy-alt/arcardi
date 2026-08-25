@@ -1130,6 +1130,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      `offered` interdit au départ spontané de se rejouer sur le même objectif —
      une aide qui revient toutes les deux minutes est une notification. */
   const starGuideRef = useRef({ on: false, goal: null, since: 0, offered: false });
+  // 480 bis — vrai tant que CE forçage du monde a été posé par la quête (pas par
+  // le menu développeur), pour savoir quand le relâcher sans écraser un choix
+  // manuel de Guillaume.
+  const starForcedByQuestRef = useRef(false);
   const starGuidePathRef = useRef({ at: 0, key: "", path: null });
   const [taxiMenu, setTaxiMenu] = useState(false);   // le panneau « Où allez-vous ? »
   const taxiMenuRef = useRef(false);
@@ -1403,6 +1407,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const g = starGuideRef.current;
       const key = e ? Q.starGoalKey(e, starGoalCtx()) : null;
       if (key !== g.goal) { g.goal = key; g.since = Date.now(); g.offered = false; }
+      /* 480 bis — LE MONDE MALÉFIQUE EST FORCÉ TANT QUE L'ÉTAPE EN COURS L'EXIGE
+         (demande de Guillaume : la bleue veut sa lumière côté maléfique, la
+         blanche sa concoction). Seul l'hôte écrit (même discipline que
+         `devSetWorld`), et il ne touche jamais un forçage qu'il n'a pas
+         lui-même posé — `starForcedByQuestRef` ne suit que ça. */
+      if (isHost) {
+        const needsEvil = key === "farmImpactLight" || key === "farmImpactLure";
+        const forced = sharedRef.current.forcedWorld;
+        if (needsEvil && forced !== "evil") { applyForcedWorld("evil"); starForcedByQuestRef.current = true; }
+        else if (!needsEvil && forced === "evil" && starForcedByQuestRef.current) { applyForcedWorld(null); starForcedByQuestRef.current = false; }
+      }
       if (!key || g.on || !starGuideTarget()) return;
       if (!Q.starGuideAuto(Date.now() - g.since, g.offered)) return;
       if (!Q.starHas(e, "crater")) return;    // 463 — seule la reine connaît et montre le chemin
@@ -2979,7 +2994,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                comme partout ailleurs dans ce bloc, donc du réseau, donc le
                résolveur le tronque. */
             name: who,
+            // 480 bis — LA FIOLE, LUE DANS L'INVENTAIRE AUTORITAIRE, JAMAIS
+            // DANS LA REQUÊTE : c'est ce qui rend le refus `notLured` infalsifiable.
+            potion: !!(f.inv && (f.inv.starLure | 0) > 0),
           }, calmSite.id);
+        // 480 bis — LA FIOLE SE CONSOMME UNE FOIS, QUAND ELLE A VRAIMENT SERVI
+        // (le trou s'ouvre). Pas avant : un essai qui échoue encore (`holding`)
+        // ne doit rien coûter.
+        if (r && r.ok && r.opened && Q.starVerbOf(calmSite.id) === "lure" && f.inv)
+          f.inv.starLure = Math.max(0, (f.inv.starLure | 0) - 1);
       } else if (req.kind === "starDig") {
         /* ⚠️⚠️ ZIP 469 — LA ZONE AVANT LA DISTANCE, comme partout (§4 de
            `CLAUDE.md`, le piège des deux cartes) : un cratère de FERME ne se
@@ -3243,6 +3266,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!r.ok) { hostFlushOut(out, f, null); return; }
       s2.star = r.star;
       out.star = s2.star;
+      // 480 bis — "lure" saute la préparation (mine + chaudron), pas la
+      // scène : il crédite directement la fiole, comme "candy" remplit la
+      // bourse au lieu de faire miner des bonbons.
+      if (r.grantLure) {
+        f.inv.starLure = (f.inv.starLure || 0) + 1;
+        out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+      }
       if (r.scene) out.starScene = { key: r.scene };
       /* ⚠️⚠️⚠️ ZIP 473 — DÉFAUT #4 : « ⏭⏭ All but the ending » et « 🪵 Deliver
          all the timber » posent `wood[k].done = true` directement dans
@@ -4619,6 +4649,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         out.chat = { from: "🧪", msg: L.salveDeposited(f.name, r.deposited, r.fish === "trout" ? L.troutLabel : L.pikeLabel) };
         dirtyRef.current = true;
       }
+    } else if (req.kind === "lureDeposit") {
+      // 480 bis — dépôt du minerai magique pour l'Essence d'étoile, même
+      // esprit que salveDeposit, un seul ingrédient à déposer.
+      const r = E.resolveLureDeposit(f, s.salveCraft, w);
+      if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+      if (r.toast) out.toast = { id: f.id, key: r.toast };
+      if (r.deposited > 0) {
+        out.salveCraft = s.salveCraft;
+        out.chat = { from: "🧪", msg: L.oreDeposited(f.name, r.deposited) };
+        dirtyRef.current = true;
+      }
+    } else if (req.kind === "lureBrew") {
+      // 480 bis — allumage de l'Essence d'étoile, même geste que salveBrew.
+      const r = E.resolveLureBrew(f, s.salveCraft, s.gems, w);
+      if (r.toast) out.toast = { id: f.id, key: r.toast };
+      if (r.ignited) {
+        out.salveCraft = s.salveCraft; out.gems = s.gems;
+        broadcastChat("🔥", L.lureIgnited(f.name));
+        dirtyRef.current = true;
+      }
     } else if (req.kind === "salveBrew") {
       // Allumage du feu / lancement de la concoction (chantier 2026-07,
       // refonte "menu déposer/prêt/allumer" : déclenché par un clic/E sur le
@@ -4646,7 +4696,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (r.toast) out.toast = { id: f.id, key: r.toast };
       if (r.collected) {
         out.salveCraft = s.salveCraft;
-        broadcastChat("🧴", L.salveBrewed(f.name));
+        // 480 bis — LE PRODUIT DÉCIDE DE L'ANNONCE : une pommade et une
+        // Essence d'étoile ne se fêtent pas de la même phrase.
+        broadcastChat("🧴", r.product === "lure" ? L.lureBrewed(f.name) : L.salveBrewed(f.name));
         dirtyRef.current = true;
       }
     } else if (req.kind === "evilCauldronPickup") {
@@ -14132,7 +14184,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const stF = sharedRef.current.star;
         for (const site of starFarmImpactSites()) {
           if (!starFarmImpactLandedNow(site.impact) || site.unavailable) continue;
-          const sc = C.STAR_FARM_CRATER_DRAW_SCALE * [0.92, 1.05, 1, 0.96, 1.08][site.impact];
+          const sc = C.STAR_FARM_CRATER_DRAW_SCALE * (C.STAR_FARM_CRATER_DRAW_SCALES[site.impact] || 1);
           const mar = C.STAR_CRATER_CRACK_R * sc + 2;
           if (site.x < x0 - mar || site.x > x1 + mar || site.y < y0 - mar || site.y > y1 + mar) continue;
           const cx2 = (site.x + 0.5) * T, cy2 = (site.y + 0.5) * T;
@@ -24365,8 +24417,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              · `!starLit` — la bleue veut sa lumière d'abord. L'hôte refuse déjà
                (`unlit`), mais en SILENCE : afficher la jauge par-dessus un refus
                silencieux, c'est *une barre qui promet et ment* (458). */
+        /* 480 bis — LA BLANCHE (verbe `lure`) REJOINT LA JAUGE, SANS `starLit` :
+           sa condition à elle (la fiole en poche) est vérifiée par l'HÔTE seul,
+           dans `resolveStarCalm` — jamais ici, où `myInv` n'existe pas sans
+           tomber dans le piège n°1 (état React lu dans la closure de la
+           boucle). Le geste est donc toujours TENTÉ, comme pour l'épouvantail
+           (voir la note juste au-dessus) ; l'hôte dit non tant que la fiole
+           manque. */
+        const pv = Q.starVerbOf(p.id);
         if (!landed || p.unavailable || p.content !== "star"
-            || Q.starVerbOf(p.id) !== "light" || !Q.starLit(e, p.id)
+            || (pv !== "light" && pv !== "lure")
+            || (pv === "light" && !Q.starLit(e, p.id))
             || !Q.starDug(e, p.id) || Q.starHas(e, p.id)) continue;
         const d = Math.hypot(m.x - p.x, m.y - p.y);
         if (d <= 4 && d < bd) { best = { ...p, zone: "farm", r: 2.45, hot: false }; bd = d; }
@@ -24467,6 +24528,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        barre qui monte pendant que l'hôte ne compte rien (défaut du 456). */
     if (Q.starVerbOf(c.id) === "pair") return starQueenView(m, c).step === "holding";
     if (Math.hypot(m.x - c.x, m.y - c.y) > c.r) return false;
+    /* 480 bis — LA BLANCHE NE DEMANDE PAS QU'ON LUI TOURNE LE DOS : on
+       l'apprivoise en s'approchant, fiole en main, pas en la boudant comme la
+       bleue. Seule la proximité compte, l'hôte arbitre le reste (la fiole). */
+    if (Q.starVerbOf(c.id) === "lure") return true;
     return Q.starFacingAway(m.x, m.y, m.dir | 0, c.x, c.y);
   }
   function starCalmOk(id, siteId, pose) {
@@ -24498,7 +24563,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       return v.step === "holding" ? { partner: v.partner, mate: v.mate } : null;
     }
     if (Math.hypot(p.x - c.x, p.y - c.y) > c.r) return null;
-    if (!Q.starFacingAway(p.x, p.y, p.dir | 0, c.x, c.y)) return null;
+    // 480 bis — même dispense que côté client (`starCalmSelf`) : la blanche ne
+    // demande que la proximité, jamais la posture dos tourné.
+    if (Q.starVerbOf(c.id) !== "lure" && !Q.starFacingAway(p.x, p.y, p.dir | 0, c.x, c.y)) return null;
     return { partner: null, mate: "" };
   }
 
@@ -24756,6 +24823,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             pushToast(L.star.s2.lightGiven);
           } };
         }
+        /* 480 bis — LA BLANCHE NE SE TIENT PAS EN LA BOUDANT, elle fuit tant
+           qu'on n'a pas la fiole en poche. Une branche à elle, sinon la
+           branche générique ci-dessous lui aurait prêté "tourne-lui le dos",
+           faux pour ce verbe. */
+        if (verb === "lure") return { p: "lure", act: () => starTell([L.star.dig.bodyStarLure, L.star.dig.nextStarLure], 2600) };
         return { p: "tame", act: () => starTell([
           L.star.farm.starPeek,
           starAlone("farmTame") ? L.star.farm.tameSolo : L.star.farm.tameDuo,
@@ -25677,6 +25749,42 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     salveBrew();
     setCauldronMenuOpen(false);
   }
+  /* 480 bis — SECONDE RECETTE, MÊME CHAUDRON. Pendant de salveRecipeStatus /
+     cauldronPlaceIngredients / igniteCauldron pour l'Essence d'étoile — un
+     seul ingrédient à déposer (le minerai magique) au lieu de deux poissons,
+     sinon même forme exactement. */
+  function lureRecipeStatus() {
+    const sc = sharedRef.current.salveCraft || { magicOre: 0, brewingUntil: 0 };
+    const rec = C.STAR_LURE_RECIPE;
+    const gemsNow = (sharedRef.current.gems && sharedRef.current.gems[0]) || 0;
+    const carryOre = (myInv && myInv.magicOre) || 0;
+    const brewingUntil = sc.brewingUntil || 0;
+    const brewing = brewingUntil > 0;
+    return {
+      rec, deposited: { magicOre: sc.magicOre || 0 }, amethyst: gemsNow,
+      carrying: { magicOre: carryOre },
+      ready: (sc.magicOre || 0) >= rec.magicOre && gemsNow >= rec.amethyst,
+      canPlace: carryOre > 0 && (sc.magicOre || 0) < rec.magicOre,
+      started: (sc.magicOre || 0) > 0,
+      brewing, brewingUntil,
+      brewReady: brewing && Date.now() >= brewingUntil,
+    };
+  }
+  const lureDeposit = () => sendReq({ kind: "lureDeposit" });
+  const lureBrew = () => sendReq({ kind: "lureBrew" });
+  function cauldronPlaceOre() {
+    const st = lureRecipeStatus();
+    if (!st.canPlace) { pushToast(L.toastNoOreToDeposit); return; }
+    lureDeposit();
+  }
+  function igniteLure() {
+    const st = lureRecipeStatus();
+    if (st.brewing) { pushToast(L.toastCauldronBrewing); return; }
+    if (!st.ready) { pushToast(L.toastCauldronMissing); return; }
+    if (!torchOnRef.current) { pushToast(L.toastCauldronNeedTorch); return; }
+    lureBrew();
+    setCauldronMenuOpen(false);
+  }
   // Retrait du produit fini une fois la minuterie de concoction écoulée
   // (chantier 2026-07, demande Guillaume : "à la fin de la concoction, le
   // produit est récupérable directement au chaudron et apparaîtra dans
@@ -25690,15 +25798,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // allume si recette complète + torche allumée, sinon ouvre le menu.
   function cauldronInteract() {
     const st = salveRecipeStatus();
+    const lst = lureRecipeStatus();
     /* ⚠️ ZIP 479 — MÊME ORDRE QUE L'INVITE JUSTE AU-DESSUS, et il FAUT que ce soit
        le même : une invite qui dit « prends le plat » sous une touche qui dépose un
        poisson est le « le jeu propose et refuse » du 426, sur un geste minuté. */
     const sdish = starDishNow();
     if (sdish === "ready") { sendReq({ kind: "starDishTake" }); pushToast(L.star.s2.dishTaken); return; }
     if (sdish === "cook") { pushToast(L.star.s2.dishSimmer); return; }
+    // 480 bis — `brewingUntil` EST PARTAGÉ ENTRE LES DEUX RECETTES (un seul feu
+    // à la fois) : `st.brewing`/`brewReady` disent donc déjà tout, quel que
+    // soit le produit en cours ; `salveCollect()` relit lui-même lequel créditer.
     if (st.brewReady) salveCollect();
     else if (st.brewing) pushToast(L.toastCauldronBrewing);
     else if (st.ready && torchOnRef.current) igniteCauldron();
+    else if (lst.ready && torchOnRef.current) igniteLure();
     else setCauldronMenuOpen(true);
   }
   // Chaudron ramené du monde maléfique (chantier 2026-07, demande Guillaume).
@@ -27325,6 +27438,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           tryOpenNearby : E gère alors directement attente/récupération). */}
       {cauldronMenuOpen && (() => {
         const st = salveRecipeStatus();
+        const lst = lureRecipeStatus();
         return (
           <div className="ferme-modal open" onClick={() => setCauldronMenuOpen(false)}>
             <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
@@ -27391,6 +27505,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <div className="ferme-hint">{L.cauldronNeedAmethyst}</div>
               )}
               {st.ready && (
+                <div className="ferme-hint">
+                  <Sprite img={spritesReady ? spritesRef.current.torch : null} w={16} h={22} /> {L.cauldronIgniteHint}
+                </div>
+              )}
+              {/* 480 bis — SECONDE RECETTE DU MÊME CHAUDRON, MÊME FORME EXACTEMENT
+                  que la pommade juste au-dessus (parchemin, bouton Ajouter/Prêt,
+                  rappel torche) — un seul ingrédient déposable au lieu de deux. */}
+              <div className="ferme-parchment">
+                <div className="ferme-parchment-title">{L.cauldronProductLureName}</div>
+                <ul className="ferme-parchment-ing">
+                  <li>{L.scrollIngAmethyst(lst.amethyst, lst.rec.amethyst)}{lst.amethyst >= lst.rec.amethyst ? " ✓" : ""}</li>
+                  <li>{L.scrollIngOre(lst.deposited.magicOre, lst.rec.magicOre)}{lst.deposited.magicOre >= lst.rec.magicOre ? " ✓" : ""}</li>
+                </ul>
+                <div className="ferme-parchment-effect">{L.cauldronLureScrollEffect}</div>
+              </div>
+              {!lst.ready ? (
+                <button className="ferme-cauldron-ready-btn" disabled={!lst.canPlace} onClick={cauldronPlaceOre}>{L.cauldronAddBtn}</button>
+              ) : (
+                <button className="ferme-cauldron-ready-btn" onClick={() => { setCauldronMenuOpen(false); pushToast(L.cauldronReadyHint); }}>{L.cauldronReadyBtn}</button>
+              )}
+              {!lst.ready && lst.deposited.magicOre >= lst.rec.magicOre && lst.amethyst < lst.rec.amethyst && (
+                <div className="ferme-hint">{L.cauldronNeedAmethyst}</div>
+              )}
+              {lst.ready && (
                 <div className="ferme-hint">
                   <Sprite img={spritesReady ? spritesRef.current.torch : null} w={16} h={22} /> {L.cauldronIgniteHint}
                 </div>
@@ -30184,7 +30322,13 @@ function StarFindCard({ find, sprites, L, tick }) {
      ⚠️ ET LE REPLI EST LE VERBE DE LA POSTURE : une étoile sans verbe (impossible
      par construction, tenue par le banc) affiche la fiche de la bleue plutôt qu'un
      `undefined` en grand au milieu de l'écran. */
-  const verbK = kind === "star" ? (Q.starVerbOf(find.id) === "warm" ? "StarWarm" : "StarLight") : null;
+  /* 480 bis — TROISIÈME VERBE, TROISIÈME SUFFIXE : un ternaire à deux branches
+     recopiait "StarLight" pour tout ce qui n'était pas "warm" — juste tant
+     qu'il n'existait que deux verbes d'étoile, faux dès que la blanche
+     (`lure`) attrapait la fiche de la bleue. Une table, pas un empilement de
+     ternaires : le prochain verbe n'aura qu'une ligne à ajouter ici. */
+  const STAR_FIND_VERB_K = { warm: "StarWarm", light: "StarLight", lure: "StarLure" };
+  const verbK = kind === "star" ? (STAR_FIND_VERB_K[Q.starVerbOf(find.id)] || "StarLight") : null;
   const K = verbK || (kind.charAt(0).toUpperCase() + kind.slice(1));
   return (
     /* ⚠️⚠️ ZIP 476 (audit 2026-08-24, défaut #31) — `animationDuration` VIENT

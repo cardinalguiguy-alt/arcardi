@@ -184,12 +184,20 @@ import * as MA from "./maire";
    façon de garder une promesse de CONCEPTION dans une table de données — une
    consigne écrite dans un document se périme, un contrôle non. */
 export const STAR_SITES = [
-  // ── Chapitre 1 : cinq petits impacts, dispersés sur la ferme. On les FOUILLE.
+  // ── Chapitre 1 : huit petits impacts, dispersés sur la ferme. On les FOUILLE.
   { id: "farmStarBlue", zone: "farm", spot: "starFarmImpact", impact: 0, content: "star", color: "blue", verb: "light" },
   { id: "farmEmptyA",   zone: "farm", spot: "starFarmImpact", impact: 1, content: "empty" },
   { id: "farmMaterial", zone: "farm", spot: "starFarmImpact", impact: 2, content: "material" },
   { id: "farmStarRose", zone: "farm", spot: "starFarmImpact", impact: 3, content: "star", color: "rose", verb: "warm" },
   { id: "farmEmptyB",   zone: "farm", spot: "starFarmImpact", impact: 4, content: "empty" },
+  /* 480 bis — TROIS CHUTES DE PLUS (demande de Guillaume), dont une nouvelle
+     étoile : l'étoile BLANCHE, capricieuse, verbe `lure`. Elle ne se calme pas
+     dos tourné (light/pair) ni en cuisine (warm) : elle faut lui apporter une
+     concoction du chaudron (`Essence d'étoile`, ingrédients rares miné dans le
+     monde maléfique) avant de pouvoir la tenir — voir `resolveStarCalm`. */
+  { id: "farmEmptyC",    zone: "farm", spot: "starFarmImpact", impact: 5, content: "empty" },
+  { id: "farmStarWhite", zone: "farm", spot: "starFarmImpact", impact: 6, content: "star", color: "white", verb: "lure" },
+  { id: "farmMaterialB", zone: "farm", spot: "starFarmImpact", impact: 7, content: "material" },
   // ── Chapitre 2 : le cratère. On ne trouve pas un morceau, on trouve QUELQU'UN.
   { id: "crater",    zone: "town",  spot: "starCrater", content: "star", color: "yellow", queen: true, verb: "pair" },
 ];
@@ -198,7 +206,7 @@ export const STAR_SITES = [
    `null`, `starTameTarget` ne la propose pas, et le banc le dit tout de suite.
    Un repli silencieux sur « dos tourné » aurait redonné le même geste à tout le
    monde, c'est-à-dire exactement le défaut qu'on vient de corriger. */
-export const STAR_VERBS = ["light", "warm", "pair"];
+export const STAR_VERBS = ["light", "warm", "pair", "lure"];
 export function starVerbOf(id) {
   const s = STAR_SITE[id];
   return s && STAR_VERBS.includes(s.verb) ? s.verb : null;
@@ -596,7 +604,8 @@ export function starTimberBuilt(e) { return STAR_SHIP_KEYS.filter(k => starTimbe
    façon avant un chapitre `final` — il ne peut donc pas se refermer tout seul sur
    une liste vide, et le garde du 442 tient encore. */
 export const STAR_CHAPTERS = [
-  { key: "field",  need: ["farmStarBlue", "farmEmptyA", "farmMaterial", "farmStarRose", "farmEmptyB"] },
+  { key: "field",  need: ["farmStarBlue", "farmEmptyA", "farmMaterial", "farmStarRose", "farmEmptyB",
+                          "farmEmptyC", "farmStarWhite", "farmMaterialB"] },
   { key: "crater", need: ["crater"] },
   { key: "build",  need: [], final: true },
 ];
@@ -1658,8 +1667,12 @@ export function starFragments(k) {
    pendant dix secondes, puis enchaîne les sites 2 et 3 sans retour intermédiaire.
    Les deux derniers ne prennent pas la caméra : deux secousses espacées rappellent
    qu'il reste bien cinq lieux à fouiller. */
-export const STAR_FARM_IMPACT_MS = [3000, 19500, 23800, 30700, 34700];
-export const STAR_FARM_SCENE_MS = 37800;
+export const STAR_FARM_IMPACT_MS = [3000, 19500, 23800, 30700, 34700, 39500, 44300, 49000];
+/* 480 bis — trois secousses de plus, mêmes règles que les deux dernières
+   d'avant (170-1350 ms après l'impact, voir `starFarmShake`, générique sur
+   tout `STAR_FARM_IMPACT_MS`) : hors mise en scène caméra (`STAR_FARM_ANIMATED_N`
+   reste à 3, aucun des 8 segments de `STAR_FARM_CAMERA` n'est touché). */
+export const STAR_FARM_SCENE_MS = 52100;
 export const STAR_FARM_ANIMATED_N = 3;
 export const STAR_FARM_FLIGHT_MS = 1850;
 export const STAR_FARM_CAMERA = [
@@ -1966,7 +1979,8 @@ export function starTargetSite(e, ctx) {
   if (STAR_GOAL_TARGET[goal] === "cauldron") return "cauldron";
   if (goal === "farmImpacts" || goal === "farmImpactCool"
       || goal === "farmImpactTame" || goal === "farmImpactLight"
-      || goal === "farmImpactLightPay" || goal === "farmImpactCarry") {
+      || goal === "farmImpactLightPay" || goal === "farmImpactCarry"
+      || goal === "farmImpactLure") {
     const id = starMissing(e).find(k => STAR_SITE[k] && STAR_SITE[k].spot === "starFarmImpact");
     return id || null;
   }
@@ -2864,6 +2878,12 @@ export function starTameGoalKey(e, id, ctx) {
     if (ph === "cook") return "farmImpactSimmer";
     return "farmImpactWarm";
   }
+  /* 480 bis — UNE SEULE PHRASE POUR TOUTE LA BLANCHE, VOLONTAIREMENT. Elle ne
+     dépend pas de `f.inv.starLure` (donnée personnelle, jamais lue par ce
+     fichier ni par le bandeau côté client — piège n°1, myInv est un état React
+     qui vieillirait dans la boucle) : le bandeau dit d'aller préparer la
+     concoction, l'hôte reste seul juge de si elle est en poche. */
+  if (verb === "lure") return "farmImpactLure";
   return "farmImpactTame";
 }
 /* Toutes les clés que `starGoalKey` peut rendre — DÉRIVÉES de la table, pour que
@@ -2884,7 +2904,8 @@ export const STAR_GOAL_KEYS = (() => {
       if (!out.includes("farmImpacts"))
         out.push("farmImpacts", "farmImpactCool", "farmImpactTame",
                  "farmImpactLight", "farmImpactLightPay",
-                 "farmImpactWarm", "farmImpactSimmer", "farmImpactTake", "farmImpactCarry");
+                 "farmImpactWarm", "farmImpactSimmer", "farmImpactTake", "farmImpactCarry",
+                 "farmImpactLure");
       continue;
     }
     out.push(s.id);
@@ -3198,6 +3219,13 @@ export function resolveStarCalm(e, who, now, ctx, siteId) {
      d'avant ne doit pas pouvoir sauter le chapitre. */
   if (site.spot === "starFarmImpact" && !starDug(e, target)) return { ok: false, unDug: true };
   if (verb === "light" && !starLit(e, target)) return { ok: false, unlit: true, verb };
+  /* 480 bis — LA BLANCHE NE SE LAISSE APPROCHER QU'AVEC LA CONCOCTION EN
+     POCHE. `ctx.potion` est calculé par l'hôte, jamais fourni tel quel par le
+     client (voir l'appel dans `FermeGame.js`, qui le lit dans `f.inv.starLure`
+     au moment même de la requête) — même discipline que `partner`/`mate` pour
+     la reine. Sans la fiole, le refus est silencieux, comme `unlit` : le
+     bandeau dit déjà d'aller la préparer (`farmImpactLure`). */
+  if (verb === "lure" && !(ctx && ctx.potion)) return { ok: false, notLured: true, verb };
   /* ⚠️⚠️ ZIP 446 — ON NE SORT PAS UNE ÉTOILE D'UN TROU BRÛLANT. L'hôte compare
      deux dates de SA propre horloge (`now` et `e.fall`), donc la règle du §3
      tient par construction, exactement comme les deux serrures du 442.
@@ -3482,7 +3510,7 @@ export function resolveStarGift(e, playerIds, now) {
    de la reine) n'en a PAS besoin et c'est délibéré : il ne coûte qu'un objet à 400
    or, que le bouton « Argent » du menu dev sait déjà donner. Un bouton par geste
    aurait été un bouton de plus à tenir pour rien. */
-export const STAR_DEV_OPS = ["reset", "warn", "start", "candy", "dish", "chapter", "skip", "all", "plans", "deliver", "timber"];
+export const STAR_DEV_OPS = ["reset", "warn", "start", "candy", "dish", "lure", "chapter", "skip", "all", "plans", "deliver", "timber"];
 /* ⚠️ ZIP 469 — `turn` (le retournement) sort de la liste : sa scène est supprimée
    dans `FermeGame`, et un bouton qui rejoue une scène qui n'existe plus ouvre un
    voile noir de sept secondes sur rien. */
@@ -3592,6 +3620,17 @@ export function devStar(e, op, now, who) {
     if (STAR_WARM_SITE) resolveStarDig(e, STAR_WARM_SITE, "\u{1F6E0}️", t);
     e.dish = { by: "", at: t - STAR_DISH_COOK_MS, phase: "cook", from: "" };
     return { star: e, ok: true };
+  }
+  /* 480 bis — MÊME FAMILLE QUE `candy`/`dish` : on fouille son trou et on
+     saute la préparation (mine + chaudron), jamais la scène (le geste de la
+     tenue). `grantLure` est lu par l'appelant côté FermeGame.js, seul endroit
+     qui touche à l'inventaire personnel — `devStar` ne touche jamais à `f`. */
+  if (op === "lure") {
+    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "\u{1F6E0}️" };
+    if (!e.fall) e.fall = t;
+    const site = STAR_VERB_SITE.lure;
+    if (site) resolveStarDig(e, site, "\u{1F6E0}️", t);
+    return { star: e, ok: true, grantLure: true };
   }
   if (op === "chapter") {
     /* On donne exactement ce qui manque au chapitre COURANT, pas un de plus.

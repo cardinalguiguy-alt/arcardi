@@ -905,6 +905,15 @@ export const SALVE_IMMUNITY_MS = 10 * 60 * 1000; // 10 minutes d'immunité/répu
 export const SALVE_BREW_MS = 60 * 1000; // 1 minute de concoction réelle (chantier 2026-07, demande Guillaume : menu
                                          // "déposer/prêt/allumer" + minuterie + retrait dédié au chaudron, voir
                                          // resolveSalveBrew/resolveSalveCollect, fermeEngine.js)
+/* 480 bis — SECONDE RECETTE DU MÊME CHAUDRON (demande de Guillaume : "trouver
+   une nouvelle concoction avec des ingrédients rares pour réveiller
+   l'étoile"). `magicOre` — miné dans le monde maléfique, `inv.magicOre`,
+   jamais consommé nulle part avant ce zip — devient l'ingrédient rare ; une
+   améthyste de la réserve commune, comme la pommade, pour rester cohérent
+   avec le geste déjà connu. `salveCraft.product` choisit laquelle des deux
+   recettes est en cours (voir `newSalveCraftState`, fermeEngine.js). */
+export const STAR_LURE_RECIPE = { magicOre: 2, amethyst: 1 };
+export const STAR_LURE_BREW_MS = 90 * 1000;
 
 
 // --- Clôture (posée librement par les joueurs, section par section) ---
@@ -3542,8 +3551,22 @@ export const STAR_FARM_IMPACT_ANCHORS = [
   { x: WELL.x - 15,   y: WELL.y + 10 },
   { x: 146,            y: 30 },
   { x: 150,            y: MAP_H - 24 },
+  /* 480 bis — trois ancres de plus (demande de Guillaume : 5 → 8 chutes,
+     "toujours à des endroits bien dispersés"), dans les trois quadrants encore
+     libres — `starSpiralFree` cherche de toute façon la case libre la plus
+     proche, ces points ne sont que des points de départ dispersés. */
+  { x: 100,            y: 20 },
+  { x: 60,             y: MAP_H - 20 },
+  { x: 130,            y: 70 },
 ];
 export const STAR_FARM_CRATER_DRAW_SCALE = 0.38;
+/* 480 bis — LE FACTEUR PAR IMPACT EST NOMMÉ, ET IL EST DE LA MÊME LONGUEUR QUE
+   `STAR_FARM_IMPACT_ANCHORS`/`Q.STAR_FARM_IMPACTS` : un tableau anonyme indexé
+   par `site.impact` sans garde de borne est le défaut n°1 du dépôt (une
+   fonction absente ne lève une erreur qu'à l'exécution) — ici c'était pire,
+   silencieux : un impact au-delà de la longueur du tableau rendait `sc`
+   NaN, donc un cratère qui ne se dessine jamais, sans la moindre exception. */
+export const STAR_FARM_CRATER_DRAW_SCALES = [0.92, 1.05, 1, 0.96, 1.08, 1.00, 0.94, 1.06];
 export const STAR_FARM_CRATER_FREE_R = 3;
 /* LE PONTON. On ne pose rien : il existe depuis le 434. On note juste où se
    tient celui qui éclaire, pour que le jeu et le banc désignent la même case. */

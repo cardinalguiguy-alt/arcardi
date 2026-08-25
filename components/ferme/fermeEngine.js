@@ -2116,7 +2116,15 @@ export function soanCatchFish(rnd) {
 // nécessaire pour faire avancer la minuterie, les clients comparent
 // simplement à Date.now()). Remis à 0 par resolveSalveCollect une fois le
 // produit récupéré.
-export function newSalveCraftState() { return { trout: 0, pike: 0, cauldronUnlocked: false, brewingUntil: 0 }; }
+// 480 bis — `magicOre`/`product` : SECONDE RECETTE DU MÊME CHAUDRON (l'Essence
+// d'étoile, voir STAR_LURE_RECIPE). `product` ne se choisit pas à l'avance :
+// il est posé au moment de l'allumage (resolveSalveBrew/resolveLureBrew) et
+// dit à resolveSalveCollect QUEL inventaire créditer. Les deux recettes
+// coexistent sans conflit car leurs ingrédients DÉPOSÉS sont des champs
+// distincts (trout/pike vs magicOre) ; seule l'améthyste est partagée, mais
+// elle vient de la réserve commune au moment même de l'allumage, jamais
+// stockée ici.
+export function newSalveCraftState() { return { trout: 0, pike: 0, magicOre: 0, cauldronUnlocked: false, brewingUntil: 0, product: null }; }
 
 // Position du chaudron posé sur la carte (s'il l'est), dérivée de
 // world.objects — un seul chaudron possible pour toute la ferme (voir
@@ -2232,6 +2240,53 @@ export function resolveSalveBrew(f, salveCraft, gems, world) {
   salveCraft.trout -= rec.trout; salveCraft.pike -= rec.pike;
   gems[0] -= rec.amethyst; res.gemsChanged = true;
   salveCraft.brewingUntil = Date.now() + C.SALVE_BREW_MS;
+  salveCraft.product = "salve";
+  res.ignited = true;
+  return res;
+}
+
+// 480 bis — DÉPÔT DU MINERAI MAGIQUE, pendant de resolveSalveDeposit pour la
+// seconde recette. Plus simple que le poisson : un seul ingrédient déposable,
+// pas de sélecteur `m.fish` — le fermier dépose tout ce qu'il porte, plafonné
+// à ce qu'il manque pour STAR_LURE_RECIPE (même prudence anti-gaspillage que
+// resolveSalveDeposit : l'éventuel surplus reste dans le sac).
+export function resolveLureDeposit(f, salveCraft, world) {
+  normalizeFarmer(f);
+  const res = { invChanged: false, toast: null, deposited: 0 };
+  const pos = findCauldronPos(world);
+  if (!pos || !buildReady(world.objHp.get(pos.i), Date.now())) { res.toast = "cauldronMissing"; return res; }
+  if (!nearT(f, pos)) { res.toast = "farCauldron"; return res; }
+  const have = f.inv.magicOre || 0;
+  if (have <= 0) { res.toast = "noOreToDeposit"; return res; }
+  const needed = Math.max(0, (C.STAR_LURE_RECIPE.magicOre || 0) - (salveCraft.magicOre || 0));
+  if (needed <= 0) { res.toast = "cauldronHasEnough"; return res; }
+  const take = Math.min(have, needed);
+  f.inv.magicOre -= take;
+  salveCraft.magicOre = (salveCraft.magicOre || 0) + take;
+  res.invChanged = true; res.deposited = take;
+  return res;
+}
+
+// 480 bis — ALLUMAGE DE L'ESSENCE D'ÉTOILE, même geste que resolveSalveBrew
+// (torche + E sur le chaudron), recette différente. `salveCraft.product` est
+// posé ICI, à l'allumage — c'est lui que resolveSalveCollect relit pour
+// savoir quel inventaire créditer, une seule concoction pouvant brûler à la
+// fois (même `brewingUntil` partagé que la pommade).
+export function resolveLureBrew(f, salveCraft, gems, world) {
+  normalizeFarmer(f);
+  const res = { invChanged: false, gemsChanged: false, toast: null, ignited: false };
+  const pos = findCauldronPos(world);
+  if (!pos || !buildReady(world.objHp.get(pos.i), Date.now())) { res.toast = "cauldronMissing"; return res; }
+  if (!nearT(f, pos)) { res.toast = "farCauldron"; return res; }
+  if (salveCraft.brewingUntil > 0) { res.toast = "cauldronBrewing"; return res; }
+  const rec = C.STAR_LURE_RECIPE;
+  const haveAmethyst = (gems && gems[0]) || 0;
+  const ready = (salveCraft.magicOre || 0) >= rec.magicOre && haveAmethyst >= rec.amethyst;
+  if (!ready) { res.toast = "cauldronMissing"; return res; }
+  salveCraft.magicOre -= rec.magicOre;
+  gems[0] -= rec.amethyst; res.gemsChanged = true;
+  salveCraft.brewingUntil = Date.now() + C.STAR_LURE_BREW_MS;
+  salveCraft.product = "lure";
   res.ignited = true;
   return res;
 }
@@ -2247,14 +2302,21 @@ export function resolveSalveBrew(f, salveCraft, gems, world) {
 // prochaine concoction (dépôt à nouveau possible).
 export function resolveSalveCollect(f, salveCraft, world) {
   normalizeFarmer(f);
-  const res = { invChanged: false, toast: null, collected: false };
+  const res = { invChanged: false, toast: null, collected: false, product: null };
   const pos = findCauldronPos(world);
   if (!pos || !buildReady(world.objHp.get(pos.i), Date.now())) { res.toast = "cauldronMissing"; return res; }
   if (!nearT(f, pos)) { res.toast = "farCauldron"; return res; }
   if (!(salveCraft.brewingUntil > 0)) { res.toast = "cauldronNothingToCollect"; return res; }
   if (Date.now() < salveCraft.brewingUntil) { res.toast = "cauldronBrewing"; return res; }
   salveCraft.brewingUntil = 0;
-  f.inv.salve = (f.inv.salve || 0) + 1;
+  // 480 bis — LE PRODUIT DÉCIDE DE L'INVENTAIRE CRÉDITÉ, posé à l'allumage
+  // (resolveSalveBrew/resolveLureBrew) : une seule ligne suffit pour que la
+  // seconde recette existe sans dupliquer tout ce résolveur. Rendu dans `res`
+  // AVANT d'être effacé, pour que l'appelant sache quoi annoncer dans le chat.
+  res.product = salveCraft.product === "lure" ? "lure" : "salve";
+  if (res.product === "lure") f.inv.starLure = (f.inv.starLure || 0) + 1;
+  else f.inv.salve = (f.inv.salve || 0) + 1;
+  salveCraft.product = null;
   res.invChanged = true; res.collected = true;
   return res;
 }

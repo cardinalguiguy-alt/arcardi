@@ -147,6 +147,7 @@ const STAR_FR = {
     stopped: "Tu t'es relevé. Le cratère est toujours là.",
     titleStarLight: "Une étoile bleue.",
     titleStarWarm: "Une étoile rose.",
+    titleStarLure: "Une étoile blanche.",
     /* ⚠️⚠️ ZIP 478 (audit 477, défaut #5) — LA PLAQUE ÉTAIT « FROIDE, DÉJÀ » ET
        « À FAIRE REFROIDIR » DANS LE MÊME PANNEAU. Les deux phrases s'affichent
        ensemble, et c'est le panneau qui ENSEIGNE le seul mini-jeu restant : le
@@ -159,6 +160,7 @@ const STAR_FR = {
     titleEmpty: "Rien.",
     bodyStarLight: "Une petite lumière bleue se tasse au fond dès que tu la regardes.",
     bodyStarWarm: "Une petite lumière rose. Elle ne recule pas : elle renifle vers toi.",
+    bodyStarLure: "Une petite lumière blanche. Elle bondit hors de portée dès que tu approches.",
     bodyMaterial: "Sous la cendre : lisse seulement sur sa cassure. La croûte a pris ; le cœur brûle encore.",
     bodyEmpty: "De la cendre tiède, du sable vitrifié, et rien dedans. Toutes les lumières n'abritaient pas quelque chose.",
     /* ╔═══════════════════════════════════════════════════════════════════════
@@ -173,11 +175,12 @@ const STAR_FR = {
        ici on donne la RAISON, ce que le bandeau n'a pas la place de faire. */
     nextStarLight: "Elle ne sortira pas tant qu'on la regarde — et elle a froid. Offre-lui de la lumière bleue : 60 bonbons du défi de fuite, rapportés depuis la chute.",
     nextStarWarm: "Le calme ne l'intéresse pas. Elle vient à la chaleur : cuisine-lui quelque chose au chaudron et porte-le-lui avant que ça refroidisse.",
+    nextStarLure: "Elle fuit à mains nues. Prépare une Essence d'étoile au chaudron — minerai magique du monde maléfique et améthyste — et reviens : avec la fiole, elle viendra d'elle-même.",
     nextMaterial: "Il faut la refroidir à cœur avant d'y toucher.",
     nextEmpty: "Un site de moins à écarter.",
     left: (n) => n > 0
       ? `Il reste ${nfr(n)} cratère${n > 1 ? "s" : ""} à fouiller sur la ferme.`
-      : "Les cinq sites de la ferme sont fouillés.",
+      : "Les huit sites de la ferme sont fouillés.",
   },
   hud: {
     goal: {
@@ -195,7 +198,7 @@ const STAR_FR = {
          c'est » — et ça, aucune de ces phrases ne le dit.
          ⚠️ LE PLAFOND DE 80 SIGNES N'A PAS BOUGÉ : le bandeau rabote en silence
          (449), donc c'est le TEXTE qui tient la contrainte, jamais la coupe. */
-      farmImpacts: "Cinq impacts, sur les deux rives. Ouvre la carte et fouille-les.",
+      farmImpacts: "Huit impacts, sur les deux rives. Ouvre la carte et fouille-les.",
       /* ⚠️⚠️ ZIP 475 (audit 472, défaut #8) — DEUX PHRASES DE PLUS POUR UN
          TROU DÉJÀ FOUILLÉ. `farmImpacts` ne disait plus rien de vrai une fois
          le trou ouvert : il répétait « fouille-les » sur une étoile qui
@@ -215,13 +218,23 @@ const STAR_FR = {
          prêt », qui n'est pas « cours ». Un bandeau répond à *qu'est-ce que je
          peux faire MAINTENANT*, jamais à *où en est-on*.
          ⚠️ PLAFOND DE 80 SIGNES, tenu par le TEXTE (le bandeau rabote en silence). */
-      farmImpactLight: "Elle veut de la lumière bleue : 60 bonbons rapportés depuis la chute.",
-      farmImpactLightPay: "Tu as ses 60 bonbons. Va les lui offrir au bord du trou (E).",
+      /* 480 bis — RESKIN (demande de Guillaume) : le geste reste le même (60
+         bonbons du défi de fuite, voir dig.nextStarLight qui garde le détail),
+         mais le bandeau court parle de la LUMIÈRE, pas des bonbons — et dit où
+         chercher : le monde maléfique, forcé pendant toute cette étape (voir
+         starGoalKey/applyForcedWorld, FermeGame.js). */
+      farmImpactLight: "Elle veut de la lumière bleue. Traverse le monde maléfique pour la trouver.",
+      farmImpactLightPay: "Tu as sa lumière. Va la lui offrir au bord du trou (E).",
       farmImpactTame: "Une étoile guette dans ce trou fouillé. Tourne-lui le dos et attends.",
       farmImpactWarm: "La rose vient à la chaleur. Cuisine-lui un plat au chaudron (E).",
       farmImpactSimmer: "Ça mijote au chaudron. Ne va pas trop loin, ce sera vite prêt.",
       farmImpactTake: "Le plat est prêt au chaudron. Prends-le (E) et ne traîne pas.",
       farmImpactCarry: "Porte le plat à son cratère avant qu'il refroidisse (E).",
+      /* 480 bis — LA BLANCHE : une seule phrase pour toute l'étape (voir la
+         note de `starTameGoalKey`, quete.js) — elle fuit tant que la fiole
+         n'est pas prête, et le chaudron est dans le monde maléfique, forcé
+         pendant cette étape. */
+      farmImpactLure: "Elle fuit à mains nues. Prépare une Essence d'étoile au chaudron (E).",
       farmImpactCool: "Une plaque noire attend d'être refroidie. Reviens l'examiner (E).",
       townWait: "Prends le train pour Valley Town. Reste-y, occupe-toi : l’étoile insiste.",
       craterHot: "À l'est de Valley Town, le trou brûle encore. Attends qu'il refroidisse.",
@@ -280,7 +293,7 @@ const STAR_FR = {
     noQueen: "La grande étoile jaune n'est pas encore avec toi.",
   },
   chapter: {
-    field:  "Chapitre Un — Les cinq impacts",
+    field:  "Chapitre Un — Les huit impacts",
     crater: "Chapitre Deux — Le cratère",
     /* ⚠️ ZIP 469 — trois chapitres au lieu de cinq. `build` remplace `note` :
        ce qui ferme la quête n'est plus une note trouvée, c'est un bateau fini. */
@@ -288,10 +301,10 @@ const STAR_FR = {
     end:    "Le Bateau des Étoiles",
   },
   fall: {
-    agency: "L’Agence nationale d’astronomie avait prévu cinq sites sur la ferme.",
-    first: "Premier impact. Un site sur cinq.",
+    agency: "L’Agence nationale d’astronomie avait prévu huit sites sur la ferme.",
+    first: "Premier impact. Un site sur huit.",
     chain: "Deux autres fragments tombent coup sur coup.",
-    aftershocks: "Deux secousses encore, plus loin. Cinq sites sont à explorer.",
+    aftershocks: "Cinq secousses encore, plus loin. Huit sites sont à explorer.",
     /* ⚠️ « d'est en ouest », comme l'anglais depuis le 448 : le sillon est plus
        profond à son bout ouest, donc la course s'y arrête. Le texte suit l'image. */
     line1: "Le ciel se déchire, d'est en ouest.",
@@ -764,6 +777,9 @@ const STAR_FR = {
        presser et qu'un joueur qui presse pour rien croit sa touche cassée. */
     light: "E : lui offrir de la lumière bleue",
     warm: "Elle attend quelque chose de chaud (E : pourquoi ?)",
+    // 480 bis — la blanche : pas de touche non plus (une posture, la
+    // proximité), même discipline que `tame`/`warm`.
+    lure: "Elle se sauve sans la fiole (E : pourquoi ?)",
     cook: "E : cuisiner le plat de l'étoile",
     dishWait: "Ça mijote…",
     dishTake: "E : prendre le plat encore fumant",
@@ -827,21 +843,24 @@ const STAR_EN = {
     stopped: "You stood back up. The crater is still there.",
     titleStarLight: "A blue star.",
     titleStarWarm: "A pink star.",
+    titleStarLure: "A white star.",
     titleMaterial: "A black plate.",
     titleEmpty: "Nothing.",
     bodyStarLight: "A small blue light huddles at the bottom the moment you look at it.",
     bodyStarWarm: "A small pink light. It does not shrink back: it sniffs towards you.",
+    bodyStarLure: "A small white light. It hops out of reach the moment you approach.",
     bodyMaterial: "Under the ash: smooth only where it broke. The crust has set; the core still burns.",
     bodyEmpty: "Warm ash, glassed sand, and nothing inside. Not every light was hiding something.",
     /* ⚠️ ZIP 479 — voir la note française : l'overlay enseigne le geste, et il
        n'est pas le même selon la couleur. */
     nextStarLight: "It will not come out while anyone watches — and it is cold. Offer it blue light: 60 candies from the escape run, brought back since the fall.",
     nextStarWarm: "Quiet does nothing for this one. It comes to heat: cook something at the cauldron and carry it over before it goes cold.",
+    nextStarLure: "It flees bare-handed. Brew a Star Essence at the cauldron — magic ore from the evil world and an amethyst — and come back: with the vial, it will come on its own.",
     nextMaterial: "It has to cool all the way through before you can touch it.",
     nextEmpty: "One site fewer to rule out.",
     left: (n) => n > 0
       ? `${Nen(n)} crater${n > 1 ? "s" : ""} left to search on the farm.`
-      : "All five farm sites have been searched.",
+      : "All eight farm sites have been searched.",
   },
   hud: {
     /* ╔═══════════════════════════════════════════════════════════════════════
@@ -882,19 +901,20 @@ const STAR_EN = {
          c'est » — et ça, aucune de ces phrases ne le dit.
          ⚠️ LE PLAFOND DE 80 SIGNES N'A PAS BOUGÉ : le bandeau rabote en silence
          (449), donc c'est le TEXTE qui tient la contrainte, jamais la coupe. */
-      farmImpacts: "Five impacts lie on both riverbanks. Open the map and search them.",
+      farmImpacts: "Eight impacts lie on both riverbanks. Open the map and search them.",
       /* ⚠️ ZIP 475 — voir la note française : un trou déjà fouillé n'a plus
          « fouille-les » à dire, qu'il attende un apprivoisement ou un
          refroidissement. */
       /* ⚠️ ZIP 479 — voir la note française : sept phrases pour deux étoiles, une
          par ÉTAT, parce qu'elles ne font plus le même geste. */
-      farmImpactLight: "It wants blue light: 60 candies, brought back since the fall.",
-      farmImpactLightPay: "You have its 60 candies. Go and offer them at the hole (E).",
+      farmImpactLight: "It wants blue light. Cross the evil world to find it.",
+      farmImpactLightPay: "You have its light. Go and offer it at the hole (E).",
       farmImpactTame: "A star is hiding in that dug-up hole. Turn your back and wait.",
       farmImpactWarm: "The pink one comes to heat. Cook it a dish at the cauldron (E).",
       farmImpactSimmer: "It is simmering. Do not wander off, it will be ready soon.",
       farmImpactTake: "The dish is ready at the cauldron. Take it (E) and get going.",
       farmImpactCarry: "Carry the dish to its crater before it goes cold (E).",
+      farmImpactLure: "It flees bare-handed. Brew a Star Essence at the cauldron (E).",
       farmImpactCool: "A black plate is waiting to cool down. Come back and examine it (E).",
       townWait: "Take the train to Valley Town. Stay there, keep busy: the star insists.",
       craterHot: "East of Valley Town the hole still burns. Wait for it to cool.",
@@ -942,7 +962,7 @@ const STAR_EN = {
   /* ── LES CARTES DE CHAPITRE. Le seul endroit du chantier où le jeu prend
      l'écran entier pour dire un titre. */
   chapter: {
-    field:  "Chapter One — The Five Impacts",
+    field:  "Chapter One — The Eight Impacts",
     crater: "Chapter Two — The Crater",
     build:  "Chapter Three — The Slipway",
     end:    "The Star Boat",
@@ -950,10 +970,10 @@ const STAR_EN = {
   /* ── LA CHUTE. Personne d'autre ne la commente : c'est le thème (§3 de
      QUETE.md). Le silence de la ville EST la première chose étrange. */
   fall: {
-    agency: "The National Astronomy Agency predicted five sites across the farm.",
-    first: "First impact. One site out of five.",
+    agency: "The National Astronomy Agency predicted eight sites across the farm.",
+    first: "First impact. One site out of eight.",
     chain: "Two more fragments fall one after the other.",
-    aftershocks: "Two more tremors, farther away. Five sites remain to explore.",
+    aftershocks: "Five more tremors, farther away. Eight sites remain to explore.",
     /* ⚠️⚠️ ZIP 448 — « west to east » ÉTAIT FAUX, ET ÇA S'EST VU À L'ÉCRAN AVANT
        DE SE VOIR ICI : la comète descend d'EST EN OUEST (le sillon est plus
        profond à son bout ouest, c'est là que la course s'arrête, et les deux
@@ -1228,8 +1248,10 @@ const STAR_EN = {
          jamais la scène : l'offrande reste à faire, le trajet reste à courir. */
       candy: "🍬 60 candies of blue light (the purse only)",
       dish: "🍲 A hot dish, ready to pick up",
+      // 480 bis — same family: skips the mining + brewing, never the hold.
+      lure: "✨ A Star Essence vial (the taming stays)",
     }[op] || op),
-    scene: (s) => ({ warn: "🎬 The announcement", fall: "🎬 The five farm impacts", townFall: "🎬 The Valley Town meteor", end: "🎬 The ending" }[s] || s),
+    scene: (s) => ({ warn: "🎬 The announcement", fall: "🎬 The eight farm impacts", townFall: "🎬 The Valley Town meteor", end: "🎬 The ending" }[s] || s),
     sceneLabel: "Replay a scene",
     stand: "📍 Stand at the next little star",
     chat: (who, what) => `${who} touched the star quest: ${what}.`,
@@ -1269,6 +1291,7 @@ const STAR_EN = {
        invite, donc il ne nomme aucune touche. */
     light: "E: offer it blue light",
     warm: "It is waiting for something warm (E: why?)",
+    lure: "It flees without the vial (E: why?)",
     cook: "E: cook the star's dish",
     dishWait: "Simmering…",
     dishTake: "E: take the steaming dish",
@@ -3050,8 +3073,13 @@ export const FERME_STR = {
     salveDeposited: (who, n, res) => `${who} dépose ${n} ${res} au chaudron.`,
     salveIgnited: (who) => `🔥 ${who} allume le feu sous le chaudron ! Concoction en cours (1 min)...`,
     salveBrewed: (who) => `⚗️ ${who} récupère une pommade de protection au chaudron !`,
+    // 480 bis — l'Essence d'étoile, même trio de phrases que la pommade.
+    oreDeposited: (who, n) => `${who} dépose ${n} minerai magique au chaudron.`,
+    lureIgnited: (who) => `🔥 ${who} allume le feu sous le chaudron ! Essence d'étoile en cours (1 min 30)...`,
+    lureBrewed: (who) => `⚗️ ${who} récupère une Essence d'étoile au chaudron !`,
     toastFarCauldron: "Approche-toi du chaudron pour déposer ou concocter.",
     toastNoFishToDeposit: "Tu ne portes ni truite ni brochet à déposer.",
+    toastNoOreToDeposit: "Tu ne portes pas de minerai magique à déposer.",
     toastCauldronMissing: "Il manque des ingrédients (1 améthyste, 2 truites, 1 brochet), ou le chaudron n'est pas encore posé.",
     toastCauldronBrewing: "⏳ La concoction est déjà en cours, reviens dans un instant.",
     toastCauldronNothingToCollect: "Rien à récupérer au chaudron pour l'instant.",
@@ -3072,13 +3100,18 @@ export const FERME_STR = {
     cauldronMenuTitle: "⚗️ Que voulez-vous concocter ?",
     cauldronMenuHint: "Réunis les ingrédients du parchemin, puis va allumer ta torche et clique sur le chaudron pour lancer le feu.",
     cauldronProductSalveName: "🧴 Pommade magique",
+    // 480 bis — nouvelle concoction, ingrédients rares (minerai magique du
+    // monde maléfique + améthyste) : voir STAR_LURE_RECIPE, fermeConstants.js.
+    cauldronProductLureName: "✨ Essence d'étoile",
     // Parchemin de recette (demande Guillaume 2026-07) : nom en haut, liste
     // des ingrédients (avec avancement), effet en bas dans une formulation
     // voilée, sans chiffres de gameplay.
     scrollIngAmethyst: (have, need) => `${need} améthyste de la réserve commune (${have}/${need})`,
     scrollIngTrout: (dep, need) => `${need} truites versées au chaudron (${dep}/${need})`,
     scrollIngPike: (dep, need) => `${need} brochet versé au chaudron (${dep}/${need})`,
+    scrollIngOre: (dep, need) => `${need} minerai magique du monde maléfique (${dep}/${need})`,
     cauldronScrollEffect: "« Qui s'en oint la peau chemine un temps parmi les ombres, et les créatures de la nuit se détournent de son passage. »",
+    cauldronLureScrollEffect: "« Ce que la fiole retient, nulle étoile ne le fuit plus : elle vient d'elle-même, à pas comptés. »",
     cauldronAddBtn: "🫗 Ajouter les ingrédients",
     cauldronReadyBtn: "✅ Prêt !",
     cauldronReadyHint: "Recette complète — va allumer ta torche puis clique sur le chaudron pour lancer la concoction !",
@@ -3099,7 +3132,7 @@ export const FERME_STR = {
     toastNoCauldronStock: "Tu ne portes pas de chaudron à poser.",
     toastCauldronNotEmpty: "Vide le chaudron (poisson déposé) avant de le déplacer.",
     cauldronRowTitle: "⚗️ Chaudron",
-    cauldronRowSub: "Ramené du monde maléfique. Pose-le où tu veux avec l'outil Construction : il sert alors à fabriquer la pommade de protection.",
+    cauldronRowSub: "Ramené du monde maléfique. Pose-le où tu veux avec l'outil Construction : il sert alors à fabriquer la pommade de protection ou l'Essence d'étoile.",
     // Aide
     help1: "ZQSD/WASD/Flèches : bouger (8 directions) · Espace/Clic : utiliser l'outil",
     help2: "1-8 : outils (5 = canne, 6 = construire) · E : interagir · Q : parler · F : cheval · T : chat · M : carte",
@@ -4711,6 +4744,10 @@ export const FERME_STR = {
     salveDeposited: (who, n, res) => `${who} deposits ${n} ${res} at the cauldron.`,
     salveIgnited: (who) => `🔥 ${who} lights the fire under the cauldron! Brewing in progress (1 min)...`,
     salveBrewed: (who) => `⚗️ ${who} collects a protection salve at the cauldron!`,
+    // 480 bis — Star Essence, same trio of lines as the salve.
+    oreDeposited: (who, n) => `${who} deposits ${n} magic ore at the cauldron.`,
+    lureIgnited: (who) => `🔥 ${who} lights the fire under the cauldron! Star Essence brewing (1 min 30)...`,
+    lureBrewed: (who) => `⚗️ ${who} collects a Star Essence at the cauldron!`,
     toastFarCauldron: "Get closer to the cauldron to deposit or brew.",
     toastCauldronBrewing: "⏳ Already brewing, come back in a moment.",
     toastCauldronNothingToCollect: "Nothing to collect at the cauldron right now.",
@@ -4726,10 +4763,13 @@ export const FERME_STR = {
     cauldronMenuTitle: "⚗️ What would you like to brew?",
     cauldronMenuHint: "Gather the ingredients on the scroll, then go light your torch and click the cauldron to start the fire.",
     cauldronProductSalveName: "🧴 Magic salve",
+    cauldronProductLureName: "✨ Star Essence",
     scrollIngAmethyst: (have, need) => `${need} amethyst from the common reserve (${have}/${need})`,
     scrollIngTrout: (dep, need) => `${need} trout poured into the cauldron (${dep}/${need})`,
     scrollIngPike: (dep, need) => `${need} pike poured into the cauldron (${dep}/${need})`,
+    scrollIngOre: (dep, need) => `${need} magic ore from the evil world (${dep}/${need})`,
     cauldronScrollEffect: "“Who anoints their skin with it walks a while among the shadows, and the creatures of the night turn away from their path.”",
+    cauldronLureScrollEffect: "“What the vial holds, no star flees any longer: it comes on its own, in measured steps.”",
     cauldronAddBtn: "🫗 Add the ingredients",
     cauldronReadyBtn: "✅ Ready!",
     cauldronReadyHint: "Recipe complete — go light your torch, then click the cauldron to start brewing!",
@@ -4745,8 +4785,9 @@ export const FERME_STR = {
     toastNoCauldronStock: "You aren't carrying a cauldron to place.",
     toastCauldronNotEmpty: "Empty the cauldron (deposited fish) before moving it.",
     cauldronRowTitle: "⚗️ Cauldron",
-    cauldronRowSub: "Brought back from the evil world. Place it anywhere with the Build tool: it's then used to craft the protection salve.",
+    cauldronRowSub: "Brought back from the evil world. Place it anywhere with the Build tool: it's then used to craft the protection salve or the Star Essence.",
     toastNoFishToDeposit: "You're not carrying any trout or pike to deposit.",
+    toastNoOreToDeposit: "You're not carrying any magic ore to deposit.",
     toastCauldronMissing: "Missing ingredients (1 amethyst, 2 trout, 1 pike), or the cauldron isn't placed yet.",
     troutLabel: "trout",
     pikeLabel: "pike",

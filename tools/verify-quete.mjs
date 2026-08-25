@@ -437,18 +437,20 @@ if (craterPos) {
    peut glisser autour d'eux pour éviter un arbre, mais il ne doit pas partir
    d'une grappe que le joueur viderait en trente secondes. */
 {
-  ok("la ferme porte exactement cinq impacts", Q.STAR_FARM_IMPACTS.length === 5, `${Q.STAR_FARM_IMPACTS.length}`);
+  // 480 bis — trois chutes de plus (demande de Guillaume), dont l'étoile
+  // blanche : 5 → 8 impacts, 2 → 3 étoiles.
+  ok("la ferme porte exactement huit impacts", Q.STAR_FARM_IMPACTS.length === 8, `${Q.STAR_FARM_IMPACTS.length}`);
   const counts = Object.fromEntries(["star", "material", "empty"].map(k => [k, Q.STAR_FARM_IMPACTS.filter(s => s.content === k).length]));
-  ok("…deux étoiles, une matière, deux fonds vides",
-     counts.star === 2 && counts.material === 1 && counts.empty === 2,
+  ok("…trois étoiles, deux matières, trois fonds vides",
+     counts.star === 3 && counts.material === 2 && counts.empty === 3,
      `${counts.star}/${counts.material}/${counts.empty}`);
-  ok("les deux petites étoiles ont des couleurs distinctes",
-     new Set(Q.STAR_FARM_IMPACTS.filter(s => s.content === "star").map(s => s.color)).size === 2);
-  ok("les cinq ancrages tiennent dans la carte",
-     C.STAR_FARM_IMPACT_ANCHORS.length === 5 && C.STAR_FARM_IMPACT_ANCHORS.every(p => p.x >= 4 && p.x < C.MAP_W - 4 && p.y >= 4 && p.y < C.MAP_H - 4));
+  ok("les trois petites étoiles ont des couleurs distinctes",
+     new Set(Q.STAR_FARM_IMPACTS.filter(s => s.content === "star").map(s => s.color)).size === 3);
+  ok("les huit ancrages tiennent dans la carte",
+     C.STAR_FARM_IMPACT_ANCHORS.length === 8 && C.STAR_FARM_IMPACT_ANCHORS.every(p => p.x >= 4 && p.x < C.MAP_W - 4 && p.y >= 4 && p.y < C.MAP_H - 4));
   ok("⚠️ deux impacts élargissent vraiment la chasse à l'est de la rivière",
-     C.STAR_FARM_IMPACT_ANCHORS.slice(3).every(p => p.x > 120),
-     C.STAR_FARM_IMPACT_ANCHORS.slice(3).map(p => `(${p.x},${p.y})`).join(" · "));
+     C.STAR_FARM_IMPACT_ANCHORS.slice(3, 5).every(p => p.x > 120),
+     C.STAR_FARM_IMPACT_ANCHORS.slice(3, 5).map(p => `(${p.x},${p.y})`).join(" · "));
   let minD = Infinity;
   for (let i = 0; i < C.STAR_FARM_IMPACT_ANCHORS.length; i++) for (let j = i + 1; j < C.STAR_FARM_IMPACT_ANCHORS.length; j++)
     minD = Math.min(minD, Math.hypot(C.STAR_FARM_IMPACT_ANCHORS[i].x - C.STAR_FARM_IMPACT_ANCHORS[j].x,
@@ -461,7 +463,7 @@ if (craterPos) {
      && !Q.STAR_FARM_CAMERA.some(s => s.from > Q.STAR_FARM_IMPACT_MS[1] && s.to < Q.STAR_FARM_IMPACT_MS[2] && s.b === "player"));
   ok("⚠️ seuls les trois premiers fragments ont un vol filmé",
      [0, 1, 2].every(i => Q.starFarmFlight(Q.STAR_FARM_IMPACT_MS[i] - 1)?.impact === i)
-     && [3, 4].every(i => Q.starFarmFlight(Q.STAR_FARM_IMPACT_MS[i] - 1) === null));
+     && [3, 4, 5, 6, 7].every(i => Q.starFarmFlight(Q.STAR_FARM_IMPACT_MS[i] - 1) === null));
   /* 464 — Régulier ne veut pas dire identique : chaque chute garde un azimut
      légèrement différent, mais CET azimut ne bouge jamais pendant son vol. La
      rotation visible est mesurée séparément par `render-etoile` sur le sprite. */
@@ -983,8 +985,10 @@ section("Les grandeurs partagées");
   ok("⚠️ la fouille dure exactement les trois secondes demandées", Q.STAR_DIG_MS === 3000, `${Q.STAR_DIG_MS} ms`);
   ok("…assez longtemps pour que l'animation se VOIE (quatre coups de main au moins)",
      Q.STAR_DIG_MS >= 4 * 250, `${(Q.STAR_DIG_MS / 250).toFixed(1)} coups`);
-  ok("…et assez court pour qu'on en fasse cinq sans s'ennuyer",
-     Q.STAR_DIG_MS * Q.STAR_FARM_IMPACTS.length <= 20000,
+  // 480 bis — huit impacts au lieu de cinq : le budget grandit avec eux
+  // (25 s au lieu de 20), la règle elle-même (< 8 s/impact) ne bouge pas.
+  ok("…et assez court pour qu'on en fasse huit sans s'ennuyer",
+     Q.STAR_DIG_MS * Q.STAR_FARM_IMPACTS.length <= 25000,
      `${(Q.STAR_DIG_MS * Q.STAR_FARM_IMPACTS.length / 1000).toFixed(0)} s de grattage pour toute l'étape`);
   ok("⚠️ le seuil de déplacement annule un PAS, jamais un frémissement",
      Q.STAR_DIG_MOVE_TILES > 0.1 && Q.STAR_DIG_MOVE_TILES < 1, `${Q.STAR_DIG_MOVE_TILES} case`);
@@ -2850,7 +2854,7 @@ console.log("\n11. L'OUVRAGE DE TRISTAN (459)\n");
    configuration de joueurs ne peut bloquer une étoile** (leçon 458). On la rejoue
    verbe par verbe, tout seul, jusqu'au bout.
    ═══════════════════════════════════════════════════════════════════════════════ */
-section("12. LES TROIS VERBES (479)");
+section("12. LES QUATRE VERBES (479, 480 bis)");
 {
   /* ── LA TABLE : UN VERBE PAR ÉTOILE, ET JAMAIS DEUX FOIS LE MÊME. */
   {
@@ -2987,6 +2991,44 @@ section("12. LES TROIS VERBES (479)");
     ok("…et la cuisson reste courte devant le trajet (ce n'est pas un second sablier)",
        Q.STAR_DISH_COOK_MS * 4 <= Q.STAR_DISH_HOT_MS,
        `${Q.STAR_DISH_COOK_MS / 1000} s de cuisson pour ${Q.STAR_DISH_HOT_MS / 1000} s de chaleur`);
+  }
+
+  /* ── LA BLANCHE (480 bis) : PAS DE FIOLE, PAS DE TENUE — ET PAS DE POSTURE
+     NON PLUS, CONTRAIREMENT À LA BLEUE. `ctx.potion` est ce que l'hôte calcule
+     depuis `f.inv.starLure` (voir FermeGame.js) ; ce banc, qui n'a pas de
+     farmer, le passe directement dans le contexte comme un fait déjà établi —
+     exactement ce que `resolveStarCalm` reçoit en jeu. */
+  {
+    const WHITE = Q.STAR_VERB_SITE.lure;
+    ok("⚠️ un verbe `lure` existe et pointe une étoile", !!WHITE && Q.starVerbOf(WHITE) === "lure");
+    const e = Q.newStar(); e.fall = 1;
+    ok("⚠️ sans fouille, la tenue est refusée",
+       Q.resolveStarCalm(e, "j1", 10, { alone: true, potion: true }, WHITE).ok === false);
+    Q.resolveStarDig(e, WHITE, "j1", 20);
+    const noPotion = Q.resolveStarCalm(e, "j1", 30, { alone: true, potion: false }, WHITE);
+    ok("⚠️⚠️ sans la fiole, le refus est explicite (`notLured`), pas un plantage silencieux",
+       noPotion.ok === false && noPotion.notLured === true);
+    /* ⚠️⚠️ ELLE NE DEMANDE PAS LE DOS TOURNÉ : le contexte ne porte ni `dir` ni
+       aucune notion de posture, et la tenue avance quand même — c'est la
+       promesse de conception ("elle vient, pas de posture à tenir"), tenue par
+       un contrôle plutôt que par un commentaire.
+       ⚠️ LA CONTINUITÉ EST REJOUÉE, PAS SUPPOSÉE : `resolveStarCalm` ne garde
+       le point de départ (`t0`) que si les appels se suivent à moins de
+       1500 ms (voir sa note) — comme le fait vraiment le client, toutes les
+       500 ms. Deux appels espacés de plusieurs secondes auraient réinitialisé
+       la tenue à zéro et fait passer ce contrôle pour de mauvaises raisons. */
+    const solo = Q.STAR_CALM_SOLO_MS;
+    let now = 100, mid = null, last = null;
+    Q.resolveStarCalm(e, "j1", now, { alone: true, potion: true }, WHITE);
+    while (now < 100 + solo + 10) {
+      now += 500;
+      last = Q.resolveStarCalm(e, "j1", now, { alone: true, potion: true }, WHITE);
+      if (mid === null && now >= 100 + solo / 2) mid = last;
+    }
+    ok("⚠️ la tenue avance sans posture, comme une présence simple",
+       !!mid && mid.ok === true && mid.holding > 0 && mid.holding < solo, `${mid && mid.holding} ms`);
+    ok("⚠️⚠️ la fiole en poche assez longtemps l'apprivoise",
+       last.ok === true && Q.starHas(e, WHITE));
   }
 
   /* ── LA REINE : DEUX BORDS OPPOSÉS. */

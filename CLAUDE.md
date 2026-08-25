@@ -11,35 +11,51 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**Livré au 480 : LE LOT 4 — L'AUDIENCE CHEZ LE MAIRE.** Une négociation face à face, en 3D, dans
-son bureau : douze battements, cinq actes, une jauge d'adhésion qui FUIT, et un maire qu'on perd
-en hésitant. **Quatre fichiers neufs** (`components/ferme/maire.js`, `components/ferme/MaireScene.js`,
-`public/models/maire-bureau.glb`, `tools/verify-maire.mjs`), **AUCUNE migration Supabase** — tout
-tient dans `shared.star.mayor`, dans un `apply` qui partait déjà, et toute la négociation coûte
-**un seul `send()`**. Le détail de conception est au **§16 de `QUETE.md`**.
-Les 36 bancs sont verts, relancés un par un : `verify-maire` **72/72** (neuf), `verify-quete`
-**585/585** (+5), `render-etoile` 161/161, `verify-vallee` 205/205, `verify-taxi` 15/15,
-`verify-strings` (1 091 clés appariées, **l'audience est bilingue le jour de sa naissance**),
-`verify-syntax` ✅, plus un **bundle esbuild complet** de `FermeGame.js`.
-⚠️ **`next build` N'A PAS ÉTÉ LANCÉ : un `next dev` tourne** (§10 l'interdit).
+**Livré au 480 bis : L'ÉTOILE BLANCHE — trois chutes de plus (5 → 8), une concoction neuve, le
+monde maléfique forcé quand la quête l'exige.** Demande de Guillaume, en trois morceaux : (1) un
+guidage du chaudron qui, en creusant, s'est révélé viser une concoction qui n'existait pas encore ;
+(2) une nouvelle étoile CAPRICIEUSE (blanche, verbe `lure` — quatrième verbe après
+light/warm/pair) qui refuse la tenue tant qu'on n'a pas l'**Essence d'étoile** (2 minerai magique +
+1 améthyste, chaudron) en poche — arbitré par l'hôte via `ctx.potion` (lu dans `f.inv.starLure`,
+jamais confié au client), et qui réutilise **telle quelle** la tenue générique de `resolveStarCalm`
+(une seule garde neuve, `notLured`) sans exiger le dos tourné ; (3) le monde maléfique **forcé**
+(`applyForcedWorld`, déjà construit pour le menu développeur) tant que le bandeau demande la lumière
+bleue OU l'Essence d'étoile — une seule jointure sur `starGoalKey`, pas un forçage par étoile.
+**Aucun fichier neuf, aucune migration Supabase** — `salveCraft` gagne un champ `product`
+(`fermeEngine.js`) qui dit quelle recette est en train de brûler et quel inventaire créditer à la
+collecte ; le reste est la même mécanique que la pommade, dupliquée une fois.
+⚠️ **DÉCISION DE GUILLAUME, EXPLICITE : LE BUG DU CHAUDRON-ARTÉFACT VISIBLE SUR 4 TERRES/5 (TROUVÉ
+EN JOUANT CE MÊME ZIP) N'EST PAS CORRIGÉ ICI.** Le sprite scintillant (`FermeGame.js:16046`) reste
+sans la garde `spec.key==="evil"` que l'interaction a déjà : il continue de s'afficher sans pouvoir
+être ramassé sur Bonbons/Labyrinthe/Cristal/Prairie. Vérifié en jeu : ramassage fonctionnel sur
+Terres Maléfiques. **Ne pas le corriger avant d'en avoir reçu l'ordre.**
+Les 36 bancs relancés un par un, tous verts : `verify-quete` **594/594** (+9, dont une section
+neuve « LA BLANCHE » qui rejoue la garde `notLured` et la tenue continue comme le fait vraiment le
+client — pas un exemple isolé), `verify-strings` **1 098 clés appariées**, `render-etoile`
+**161/161**, `verify-maire` 72/72, `verify-vallee` 205/205, `verify-taxi` 15/15, les 17 bancs de
+contrôle et 19 bancs de rendu au complet, `verify-syntax` ✅, `npx next build` ✅ (**lancé dans un
+worktree isolé** — une autre session tournait dans le dépôt principal, voir §10), plus un bundle
+esbuild complet de `FermeGame.js`.
 
-⚠️⚠️⚠️ **LA PROCHAINE ACTION EST DE LA JOUER, ET RIEN D'AUTRE. PERSONNE N'A MENÉ CETTE AUDIENCE.**
-Le banc en joue quatre cents ; aucune n'a été conduite par quelqu'un qui LISAIT les répliques. Ce
-qui s'y juge — *est-ce que c'est agréable, est-ce que les fautes de tact se voient venir, est-ce
-que la fuite stresse ou agace, est-ce que la scène 3D s'affiche seulement* — n'est mesuré nulle
-part et ne le sera jamais. Le réglage mesuré : un premier essai ordinaire culmine à **69,9** contre
-un seuil à **75**, il échoue de cinq points. **Aucun de ces nombres ne doit bouger avant d'avoir
-joué** (règle du voyage en train, 431, qui a eu raison deux fois).
-⚠️⚠️ **ET IL Y A UN PRÉALABLE D'UNE LIGNE, TROUVÉ AU 480 ET NON CORRIGÉ (décision du 424 : ne pas
-mêler deux changements) : `A.drawStarCalmGlow` N'EXISTE PAS.** Elle est déclarée dans
-`buildSprites()` (`fermeArt.js:7334`) et n'est exposée que comme MEMBRE de l'objet retourné ;
-`FermeGame.js:15123` et `:18411` l'appellent par l'espace de noms du module. Elle lève donc un
-`TypeError` **dans la boucle de rendu**, dès la première image d'un apprivoisement — et
-l'exception emporte tout ce que la frame devait encore dessiner. **C'est le piège n°1 de ce
-fichier, dans le zip même qui livrait la fonctionnalité (478).** Le bon motif est trois lignes
-plus haut (`sprites.drawStarDish`). ⚠️ Trouvé en BUNDLANT (`npx esbuild --bundle`), pas en
-relisant : *`verify-syntax` analyse fichier par fichier, donc il ne peut pas voir un import qui ne
-résout pas.*
+⚠️⚠️⚠️ **LA PROCHAINE ACTION EST DE LA JOUER, ET PERSONNE NE L'A ENCORE VUE.** Le banc rejoue la
+garde et la tenue avec la vraie continuité de requêtes (toutes les 500 ms, comme le client) — ça
+n'est pas rien, c'est plus que d'habitude. Mais **la blanche elle-même n'a pas été vue à l'écran** :
+la session de jeu a confirmé le texte du chapitre (« Huit impacts »), le raccourci développeur
+« ✨ A Star Essence vial » (fouille son trou + crédite la fiole sans planter), et s'est arrêtée là —
+la retrouver sur la carte (ancre `{x:60,y:120}`, `STAR_FARM_IMPACT_ANCHORS[6]`) a pris plus de temps
+à pied que toute l'écriture du code, et n'a pas abouti dans cette passe. **C'est exactement la
+neuvième leçon de ce fichier (§10, « aucun banc ne mesure l'ARRIVÉE ») qui se repaie ici, en direct :
+un banc vert sur la logique ne dit rien de savoir si on peut PHYSIQUEMENT la trouver.** À la
+reprise : menu développeur → ⭐ Star → « ✨ A Star Essence vial » puis se rendre à l'ancre ci-dessus
+(ou téléporter par la carte, clic pour poser un repère) et juger à l'œil — la tenue sans dos tourné,
+le forçage du monde pendant l'étape bleue ET blanche, le texte reskinné de la bleue.
+⚠️⚠️ **ET LE PRÉALABLE DU 480 EST TOUJOURS LÀ, INTACT : `A.drawStarCalmGlow` N'EXISTE PAS.** Elle
+est déclarée dans `buildSprites()` (`fermeArt.js:7334`) et n'est exposée que comme MEMBRE de l'objet
+retourné ; `FermeGame.js` l'appelle par l'espace de noms du module et lève un `TypeError` **dans la
+boucle de rendu**, dès la première image d'un apprivoisement — l'exception emporte tout ce que la
+frame devait encore dessiner. **C'est le piège n°1 de ce fichier, non corrigé depuis le zip qui
+livrait la fonctionnalité (478), reconfirmé par bundle à ce zip.** Le bon motif est trois lignes
+plus haut (`sprites.drawStarDish`).
 
 | Lot | Ce que c'est | État |
 |---|---|---|
@@ -180,7 +196,7 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 | 479 | ⚠️⚠️⚠️ **DEUX TEXTES QUI SE RESSEMBLENT NE SE CORRIGENT PAS EN ÉCRIVANT DEUX TEXTES : ILS SE CORRIGENT EN DONNANT DEUX GESTES.** L'audit reprochait aux trois étoiles de « dire la même chose » ; elles le disaient parce qu'on leur demandait la MÊME chose, et trois variations sur une phrase auraient été trois mensonges (famille du 453, *un texte AFFIRME*). La sortie est une colonne de table (`verb`) et un contrôle qui refuse deux étoiles au même verbe. *Une promesse de CONCEPTION ne tient que si un banc peut la faire échouer — écrite dans un document, elle se périme sans bruit.* | `STAR_SITES.verb`, `starVerbOf`, `verify-quete` §12 |
 | 480 | ⚠️⚠️⚠️ **UNE PROMESSE DE MÉCANIQUE NE TIENT QUE SI UN BANC PEUT LA JOUER — ET « JOUER » VEUT DIRE DE BOUT EN BOUT, PAS RELIRE LA TABLE.** `verify-maire` vérifiait la forme (trois réponses par nœud, l'idéale rapporte plus que la tiède) et il aurait été **vert sur une négociation ingagnable** : les malus des « mains vides » s'empilaient quatre fois sans que personne ne fasse la somme. Il a fallu JOUER quatre cents entretiens, balayés sur cinq maires × deux mondes × dix vitesses de réflexion, pour que la contradiction sorte. *Deux grandeurs qui s'opposent — ce qu'on gagne et ce qui fuit — se mesurent ensemble ou pas du tout* (458), et une difficulté empilée quatre fois n'est pas quatre fois plus difficile : c'est un mur, et un mur ne se règle pas, il se retire. | `MAYOR_BARE_RISK_K`, `verify-maire` §3 |
 | 480 | ⚠️⚠️⚠️ **UN BANC DE DIALOGUE QUI NE MONTRE JAMAIS UN DIALOGUE MESURE DES NOMBRES SUR UN TEXTE QUE PERSONNE N'A RELU — QUATORZIÈME FORME.** Soixante-dix contrôles étaient verts pendant que le sans-faute atteignait le plafond au SEPTIÈME nœud sur treize : les six derniers échanges de la « vraie discussion longue » étaient écrits, joués, lus, et ne pouvaient plus rien changer. Aucun contrôle numérique ne pouvait le dire — le jeu parfait gagnait, le jeu tiède perdait. **Ça se voit en lisant la colonne de gauche d'un entretien IMPRIMÉ.** C'est le §25 de `ferme/README.md` (regarder l'écran) transposé à ce qu'un terminal sait montrer. ⚠️ Corollaire payé le même jour : `verify-syntax` analyse **fichier par fichier**, donc il ne peut pas voir un import qui ne résout pas ; c'est un **bundle** (`npx esbuild --bundle`) qui a sorti `A.drawStarCalmGlow`, un crash de frame vieux de deux zips. | `verify-maire` §7, `MAYOR_STREAK_HOLD_K` |
-| 478 | ⚠️⚠️⚠️ **UN « CE CAS NE PEUT PAS EXISTER » EST TOUJOURS DATÉ PAR LA RÈGLE QUI L'EMPÊCHE.** `resolveStarTimberTick` ne rendait qu'une clé, sous un commentaire qui l'argumentait bien : « deux pièces ne peuvent pas être en cours en même temps (l'ordre l'interdit), donc une boucle serait du code pour un cas qui ne peut pas exister ». Juste — et devenu faux dans la seconde où la garde `prev` est tombée : deux commandes parallèles échoient dans le même battement, et le `return` au premier aurait fait attendre la seconde un tic de plus, sans que rien ne le dise. *Quand on retire une règle, on va relire tout ce qu'elle justifiait — et un `verify-portee`/`verify-quete` ne le trouve que si le banc rejoue le geste neuf.* | `resolveStarTimberTick`, `starTimberBlock`, `verify-quete` §11 |
+| 480 bis | ⚠️⚠️ **UN TABLEAU ANONYME INDEXÉ PAR UN COMPTEUR QUI GRANDIT NE PLANTE PAS QUAND ON OUBLIE DE L'AGRANDIR — IL REND `NaN`, EN SILENCE.** `[0.92, 1.05, 1, 0.96, 1.08][site.impact]` valait `undefined` dès le sixième impact, donc une échelle `NaN`, donc un cratère qui ne se dessine plus — sans la moindre exception à chercher, contrairement au piège n°1 habituel de ce fichier (une fonction absente, elle, lève une erreur). Trouvé en RELISANT avant d'ajouter, pas en jouant. *Un tableau littéral qui suit la longueur d'une table de données doit porter son NOM et sa GARDE (`|| 1`), jamais rester anonyme dans la boucle de rendu qui le lit.* | `STAR_FARM_CRATER_DRAW_SCALES`, `fermeConstants.js` |
 
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
@@ -1021,6 +1037,10 @@ erreur** en choisissant mal.
    (468, 470, 479, 480) — et cette fois il a été corrigé aux DEUX endroits du même coup, ce que le
    470 avait manqué. *Un chiffre de banc recopié à deux endroits n'a pas deux chances d'être juste,
    il a deux endroits où mentir.*)**.
+
+   **480 bis (VINGT-ET-UNIÈME passe : la ligne 478 part avant la leçon de ce zip — une retirée,
+   une ajoutée, le tableau reste à sa taille et couvre exactement 479 à 480 bis. Son détail reste
+   dans `resolveStarTimberTick`/`starTimberBlock`, que sa colonne de droite désignait déjà.)**.
 
    **478 (DIX-HUITIÈME passe : la ligne 473 part avant la leçon de ce zip — une retirée, une
    ajoutée, le tableau reste à sa taille et couvre exactement 474 à 478. Son détail reste dans
