@@ -5505,6 +5505,24 @@ export function generateTownWorld() {
         const i = id(ax + k, y);
         ground[i] = C.G_BRIDGE; solid[i] = 0; objects[i] = C.O_NONE; objHp.delete(i);
       }
+      /* 2bis. hors-zip — LES DEUX RAMBARDES DU TABLIER, ENFIN EN COLLISION.
+         Le tablier n'avait AUCUNE solidité sur ses bords : `archBridge`
+         (fermeArt.js) peint bien une balustrade en bois des deux côtés, mais
+         rien n'empêchait de marcher à travers elle, droit dans l'eau —
+         signalé par Guillaume, même défaut que la ferronnerie de l'escalier
+         du tribunal. On solidifie seulement les DEUX rangées d'eau qui
+         bordent IMMÉDIATEMENT le tablier (nord à `rb-1`, sud à `rb+2`),
+         jamais le tablier lui-même : même principe que `TOWN_RAILS` pour
+         l'escalier — un garde-corps vit à côté de la surface qu'il borde,
+         pas dessus. `deep >= 2` (garde du choix de site, plus haut) garantit
+         que ces deux rangées sont bien de l'eau dans tous les cas : `rb-1`
+         fait toujours partie de l'anse creusée par ce pont, et `rb+2` est au
+         pire la rive naturelle du lac (`tops[x+k]`), jamais un chemin. */
+      for (let k = 1; k <= BSPAN; k++) {
+        const x = ax + k;
+        if (inMap(x, rb - 1)) solid[id(x, rb - 1)] = 1;
+        if (inMap(x, rb + 2)) solid[id(x, rb + 2)] = 1;
+      }
       /* 3. LES DEUX APPROCHES. ⚠️ LE SENTIER N'ARRIVE PAS TOUT SEUL AU TABLIER :
          il ondule pour son compte (`TOWN_TRAIL_WAVE`), donc sa rangée diffère
          d'une ou deux cases de part et d'autre de l'anse. Sans ce raccord, on

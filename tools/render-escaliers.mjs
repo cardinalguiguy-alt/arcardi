@@ -438,7 +438,7 @@ console.log("\n=== 5. la composition de référence est celle de la carte ===\n"
      "aucun arbre ne repasse devant les pixels opaques du bloc", `${treeIntruders.length} arbre(s)`);
 
   const [low, high] = C.TOWN_STAIRS;
-  ok(low.x === 142 && low.y === 31 && low.w === 8 && low.len === 6,
+  ok(low.x === 141 && low.y === 31 && low.w === 8 && low.len === 6,
      "la volée basse suit les 8×6 cases du bloc", `${low.w}×${low.len} en (${low.x},${low.y})`);
   ok(high.x === 136 && high.y === 27 && high.w === 6 && high.len === 3,
      "la volée haute suit les 6×3 cases du bloc", `${high.w}×${high.len} en (${high.x},${high.y})`);

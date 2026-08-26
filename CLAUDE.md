@@ -11,76 +11,75 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**HORS-ZIP — QUATRE DEMANDES DE GUILLAUME EN SESSION DIRECTE SUR L'AUDIENCE DU MAIRE ET LE
-TRIBUNAL/MAIRIE (pas d'upload de zip, donc pas de numéro).** La passe de collisions précédente
-(portes, ponts, escaliers, haies, seuils) est TERMINÉE et ses trouvailles vivent dans le tableau
-des leçons ; ce bloc la remplace entièrement, comme le veut la règle du §14.
+**HORS-ZIP — CINQ DEMANDES DE GUILLAUME EN SESSION DIRECTE SUR LES COLLISIONS, LES LABELS DE
+SALLE ET LE MAIRE (pas d'upload de zip, donc pas de numéro).** Les passes précédentes (portes du
+tribunal, comptes à rebours, pose du maire, didascalies) sont TERMINÉES et leurs trouvailles
+vivent dans le tableau des leçons ; ce bloc les remplace entièrement, comme le veut la règle du §14.
 
-1. **☄️ Le compte à rebours du gros météore — LIVRÉ.** Il « semblait ne jamais tomber » : le
-   mécanisme (`STAR_TOWN_ACTIVE_MS`, deux minutes de présence active en ville) était déjà juste,
-   il n'avait aucun affichage. Une pastille `.ferme-wait-pill` (haut-droite, à côté du pisteur
-   d'étoile qui reste seul autorisé à parler en haut-centre) montre désormais le compte à rebours
-   en direct — **côté hôte seulement**, lui seul tenant l'horloge réelle de présence
-   (`starTownActiveRef`) ; un invité verrait un nombre qu'il ne peut pas garantir, ce que le §3
-   de CLAUDE.md interdit.
-2. **🎩 Le rendez-vous chez le maire, affiché dès la demande — LIVRÉ.** Même pastille, réutilisée :
-   dès que `e.mayor.appt.due` existe pour SOI (état déjà partagé, aucun message de plus), le
-   compte à rebours s'affiche sur LES DEUX écrans — plus besoin de rouvrir le guichet de la mairie
-   pour le voir. Les deux comptes à rebours ne se recouvrent jamais : le maire ne se demande qu'
-   après la chute du météore, jamais avant.
-3. **🧑‍💼 La pose du maire, plus réaliste — LIVRÉ, avec UN VRAI BUG TROUVÉ.** Signalé : bras
-   parfois inversés, écharpe parfois coupée, revers trop grossiers. `solveArm` (`maireBureau.js`)
-   mirroir le bras gauche du droit sur toute sa longueur SAUF dans son repli anti-`NaN` (le
-   produit vectoriel presque nul), qui retombait sur +X MONDE sans jamais multiplier par `side` —
-   c'est-à-dire le côté du bras DROIT, appliqué de temps en temps au bras GAUCHE. **C'est un vrai
-   bug, corrigé** (voir le tableau des leçons). L'écharpe vivait presque au même plan que les
-   revers (z ∈ [0,1325 ; 0,1675] contre [0,142 ; 0,162]) : remontée à 0,178 (au-dessus de tout,
-   comme une écharpe se porte réellement) et sa rosette reparentée dessus au lieu d'une position
-   `torso` figée. Le col et les revers sont passés d'une plaque unique inclinée à deux pans
-   (pliure visible) ; les cylindres de bras sont passés de 10 à 16 segments. **Non touché** :
-   le vocabulaire de poses (7 clés, 8 visages) et la vitesse d'`ease()`, que Guillaume dit
-   apprécier telles quelles.
-4. **⚖️🏛️ Les portes du tribunal et de la mairie, repensées — LIVRÉ, LE PLUS GROS DU LOT.**
-   `COURT_DOOR_W` passe de 1 à 2 cases (nouvelle constante, `fermeConstants.js`) : le générateur
-   perce désormais deux cases par porte au lieu d'une, sur le modèle EXACT des portails de haie de
-   Valley Town (déjà à deux cases, déjà éprouvés) plutôt que d'inventer une seconde règle. Le
-   rendu suit : `E.courtDoorGroups` (nouvelle fonction pure, `fermeEngine.js`) fusionne les cases
-   contiguës d'une même porte pour dessiner UN chambranle pleine hauteur et UNE plaque — sans
-   elle, deux cases auraient donné deux petites portes collées avec deux plaques superposées.
-   Même fusion appliquée à `render-mairie.mjs` (banc de rendu), qui dessinait sa propre copie du
-   chambranle. Élargir a débusqué deux meubles que le garde-fou des portes (`doorGuard`) s'est mis
-   à refuser en silence (un fauteuil aux cellules, un cartonnier au cadastre — tous deux posés
-   trop près de leur porte du temps où elle ne faisait qu'une case) : déplacés de quelques cases,
-   sans toucher à la porte elle-même. `verify-vallee` 205/205, `render-mairie`/`render-tribunal`
-   « tout est bon », zéro refus. ⚠️ **CE QUI N'A PAS ÉTÉ SENTI À LA MANETTE** : l'automatisation du
-   déplacement a coincé en session (les touches fléchées scriptées cessaient de répondre après un
-   moment sans qu'on sache pourquoi), donc la tolérance de centrage n'a été que CALCULÉE contre le
-   modèle des haies, jamais MARCHÉE case par case dans le nouveau seuil. Vu à l'écran : un cadre
-   fusionné, une plaque, un tapis de seuil sans couture au milieu — mais la sensation au clavier
-   reste à confirmer par une vraie session de jeu.
-5. **🎭 Les didascalies et les répliques du maire, styles distincts — LIVRÉ, SURGI EN COURS DE
-   SESSION.** Guillaume, en regardant la scène : « styles différents entre ce que dit
-   effectivement le maire et les didascalies / descriptions de son comportement ». Les deux
-   vivaient dans LA MÊME chaîne à la main dans `fermeStrings.js` (`maire.ask`, `maire.tint`) —
-   narration à la troisième personne puis réplique entre guillemets, affichées d'un bloc, même
-   graisse, même couleur. **Aucun texte réécrit** : les deux registres sont déjà marqués par la
-   ponctuation que le fichier porte depuis toujours (« » en français, `"…"` en anglais).
-   `MayorLine` (nouveau composant pur, `MaireScene.js`) découpe chaque chaîne à cette ponctuation
-   et applique deux styles CSS (`.maire-line-stage` italique et sourd, `.maire-line-say` normal et
-   clair) — exactement le geste que `.maire-bubble-tint` faisait déjà pour la phrase du maire élu,
-   étendu à l'intérieur de chaque bulle. Vu à l'écran sur le nœud `m1` : ça marche. **Pas rejoué
-   sur les onze autres nœuds ni sur les cinq maires** — la regex est générique, mais seul `m1` a
-   été vu au rendu.
+1. **🪧 Les labels de salle, repensés — LIVRÉ, AVEC UN VRAI BUG DE TRI TROUVÉ.** Signalés
+   « inélégants et ils déconnent ». La plaque de porte (`FermeGame.js`, bloc PORTES & PLAQUES)
+   vivait dans la file de tri `draws` avec une clé `(g.y0+0.6)*T` — la rangée de la PORTE — alors
+   qu'elle se peignait 16px plus haut : son ordre de superposition avec les personnages ne
+   correspondait jamais à sa position réelle. **Corrigé en la sortant de `draws`** : elle rejoint
+   désormais le même bloc immédiat que le chambranle, donc il n'y a plus de clé à faire
+   correspondre. Le style change aussi : plus de boîte crème façon post-it (copiée des enseignes
+   de rue) — une plaque gravée encastrée dans le linteau, texte en léger relief. Même geste sur la
+   mini-carte du tribunal : `label.split(" ")[0]` pouvait ne laisser que l'emoji d'une salle
+   étroite (« 🔒 Cellules de garde à vue » → juste 🔒) ; remplacé par un repli sur deux lignes.
+   **Vu en jeu** (téléporté à « Mairie — l'étage », sans marcher) : la plaque « Archives
+   municipales » s'affiche correctement, lisible, intégrée au chambranle.
+2. **🪜 L'intégration visuelle de l'escalier du tribunal — LIVRÉ.** Le bloc importé (photo
+   découpée, zip 467) creusait ses joints jusqu'au quasi-noir (L≈13-40) contre un parvis pavé qui
+   ne descend pas sous L≈150 — l'écart signalé. `liftShadowFloor` (`fermeArt.js`) relève les tons
+   sous 100 vers un plancher de 55, en rampe (pas un plafond plat) et STRICTEMENT identité au-delà
+   de 100. ⚠️ **Le premier jet touchait tout le canevas d'un seul coup** et a fait passer le
+   contrôle de détourage de `render-escaliers.mjs` (§0, l'aplat gris résiduel) de 9 à 46 px — un
+   vraie régression trouvée en relançant le banc, pas en la devinant. Voir le tableau des leçons.
+3. **🧱 Les collisions des rambardes de l'escalier, gauche/droite — LIVRÉ, TROUVÉ AU PIXEL PRÈS.**
+   Guillaume : contact possible à gauche, chevauchement visible à droite. `TOWN_STAIRS`/
+   `TOWN_RAILS` (zip 447) n'avaient jamais été revérifiés contre le bitmap qui les a remplacés
+   visuellement (zip 467). Un script d'appoint a superposé les rectangles de collision sur le
+   vrai bloc importé (`tools/lib-canvas.mjs`) : les DEUX poteaux de la volée basse sont peints une
+   case plus à l'OUEST que leur collision. Corrigé (x 142→141 et 149→148, toute la volée basse y
+   compris `TOWN_STAIRS`) et revérifié visuellement — les poteaux tombent maintenant au centre de
+   leur case. `render-escaliers`, `verify-vallee` (205/205) intacts.
+4. **🚧 La rambarde 'iron' de l'escalier — LIVRÉ.** Demande : pouvoir marcher DERRIÈRE la
+   ferronnerie décorative, motifs découpés correctement. Le bloc entier se peignait d'un bloc,
+   toujours avant le joueur : celui-ci ne pouvait donc jamais passer derrière. Un calque
+   (`courtStairIronRailLayer`, `fermeArt.js`) découpe cette seule bande et n'y garde opaque que le
+   tracé sombre (le reste devient transparent) ; il rejoint la file de tri (`pushE`) au lieu du
+   bloc immédiat, exactement le principe déjà éprouvé sur le pont (`townBridgeDepthKeys`).
+5. **🌉 La rambarde du pont du jardin — LIVRÉ.** Le tablier (deux rangées de bois) n'avait AUCUNE
+   collision sur ses bords : la balustrade peinte n'empêchait rien, on marchait dedans, droit vers
+   l'eau. Solidifié les deux rangées d'eau qui bordent immédiatement le tablier (nord et sud),
+   jamais le tablier lui-même — même principe que `TOWN_RAILS`. `verify-vallee` 205/205 (aucune
+   destination rendue inatteignable).
+6. **🎩 Une reprise chez le maire — LIVRÉ, EN DÉROGATION ASSUMÉE À UNE DÉCISION DE GUILLAUME.**
+   Demande : bouton « vous avez contrarié le maire, voulez-vous vous reprendre ? ». Ça contredit
+   noir sur blanc la décision du 480 (« sans aucun droit à l'erreur, la seule vraie décision du
+   chapitre ») — signalé avant d'écrire une ligne, et Guillaume a choisi explicitement l'UNDO
+   CIBLÉ (annuler juste la dernière réponse fautive), une fois par audience. Implémenté
+   entièrement côté VUE (`MaireScene.js`) : `MR.mayorPlay` n'est appelé qu'après confirmation, donc
+   `maire.js` et `verify-maire` (113/113) n'ont pas bougé d'une ligne — décliner l'offre ne
+   consomme rien, le jeton ne part qu'en servant vraiment.
 
-⚠️⚠️⚠️ **LA PROCHAINE ACTION : JOUER L'AUDIENCE CHEZ LE MAIRE EN ENTIER JUSQU'À LA SIGNATURE, ET
-CETTE FOIS EN SENTANT LES PORTES.** Rappel du chemin le plus court : menu dev (⌘⇧X) → ⭐ Star →
-« 📐 Hand me the plans », puis « 🎩 An appointment with the Mayor, right now », puis
-« Se téléporter → Mairie — l'étage », puis « 🎩 Stand at the Mayor's desk », puis **E**. En
-marchant à pied (pas en téléportant) jusqu'au bureau, vérifier au passage : la nouvelle largeur de
-porte se sent-elle vraiment plus généreuse ou seulement sur le papier ? le style
-didascalie/réplique tient-il sur les douze nœuds et les cinq maires, ou seul `m1` avait cette
-forme ? et une fois signé : les deux pastilles de compte à rebours ont-elles bien disparu au bon
-moment (météore : à la chute ; maire : à la signature) ?
+⚠️⚠️⚠️ **CE QUI N'A PU ÊTRE JOUÉ EN AUTOMATIQUE, ET C'EST REDEVENU LE MÊME OBSTACLE QUE LA
+DERNIÈRE FOIS.** L'automatisation du déplacement (flèches scriptées) s'est de nouveau bloquée en
+session — parfois un mouvement passe, la plupart du temps aucun, sans schéma trouvé, exactement le
+symptôme déjà rencontré lors de la passe des portes du tribunal. Seul le label de salle a pu être
+confirmé À L'ÉCRAN (téléportation directe, sans marche). **LA PROCHAINE ACTION : JOUER CES CINQ
+CHOSES EN VRAI, AU CLAVIER.** Dans l'ordre le plus rentable : (a) à l'escalier du tribunal
+(Haute-Ville), marcher contre le poteau ouest de chaque volée — contact franc attendu — puis contre
+l'est — blocage net, sans chevauchement ; (b) longer la rambarde 'iron' en s'approchant par le
+nord : le joueur doit disparaître derrière son tracé, pas rester devant ; (c) traverser le pont du
+jardin et essayer de sortir par les côtés — bloqué désormais, plus de passage à travers ; (d) lire
+au moins trois plaques de salle différentes des DEUX bâtiments (mairie et tribunal), une avec un
+nom long ; (e) en audience chez le maire, choisir DÉLIBÉRÉMENT une réponse fautive : l'offre de
+reprise doit apparaître, marche dans les deux sens (accepter/décliner), et une SECONDE faute plus
+loin dans la même audience ne doit PLUS l'offrir (jeton dépensé). ⚠️ **ET DEUX POINTS DE LA PASSE
+D'AVANT RESTENT EUX AUSSI NON CONFIRMÉS, POUR LA MÊME RAISON** : la largeur de porte du
+tribunal/mairie sentie à la marche, et le style didascalie/réplique sur les onze nœuds et quatre
+maires jamais vus (seul `m1` l'a été).
 
 ⚠️⚠️ **ET LA DETTE DU 479 N'A TOUJOURS PAS BOUGÉ : DEUX POSTES À DEUX QUI N'ONT JAMAIS ÉTÉ TENUS** —
 le relais du plat (l'un cuisine, l'autre court) et les deux bords du cratère.
@@ -231,10 +230,10 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 
 | # | La leçon, en une phrase | Où est le détail |
 |---|---|---|
-| hors-zip | ⚠️⚠️⚠️ **UN BANC QUI VÉRIFIE L'EMPRISE D'UN OUVRAGE NE VÉRIFIE PAS SON APPROCHE, ET C'EST UN ANGLE MORT DIFFÉRENT DE CELUI DU 467.** `verify-compo` garantit depuis longtemps qu'aucun arbre ni décor ne pousse SUR le tablier d'un pont ou du ponton — et c'était toujours vrai. Mais le semis de fleurs du quai (pas de 4) et le semis d'arbres de la ceinture ignorent tous deux l'existence du ponton (large de 4 lui aussi) et plantaient librement sur la rangée d'herbe juste au nord de son embouchure — jamais SUR l'ouvrage, toujours à son SEUIL. Deux objets bloquants, chacun sur une colonne de rive différente, resserraient l'entrée de 4 à 2 cases sans qu'aucun contrôle existant ne le voie. *Le nettoyage après coup du bloc du tribunal (467) protège une emprise ; il fallait le même geste pour un seuil.* | `nearPierMouth`, la garde `TOWN_PIER` dans le semis d'arbres, `fermeEngine.js` |
-| 480 bis | ⚠️⚠️ **UN TABLEAU ANONYME INDEXÉ PAR UN COMPTEUR QUI GRANDIT NE PLANTE PAS QUAND ON OUBLIE DE L'AGRANDIR — IL REND `NaN`, EN SILENCE.** `[0.92, 1.05, 1, 0.96, 1.08][site.impact]` valait `undefined` dès le sixième impact, donc une échelle `NaN`, donc un cratère qui ne se dessine plus — sans la moindre exception à chercher, contrairement au piège n°1 habituel de ce fichier (une fonction absente, elle, lève une erreur). Trouvé en RELISANT avant d'ajouter, pas en jouant. *Un tableau littéral qui suit la longueur d'une table de données doit porter son NOM et sa GARDE (`|| 1`), jamais rester anonyme dans la boucle de rendu qui le lit.* | `STAR_FARM_CRATER_DRAW_SCALES`, `fermeConstants.js` |
 | hors-zip | ⚠️⚠️ **UN MÉCANISME EXACT SANS AUCUN AFFICHAGE SE JOUE COMME UN MÉCANISME CASSÉ.** Les deux minutes de présence active qui déclenchent le gros météore (`STAR_TOWN_ACTIVE_MS`) étaient justes depuis toujours, et invisibles depuis toujours : aucun compte à rebours, aucune barre, rien qui dise au joueur qu'il progresse. Guillaume l'a signalé comme un bug (« semble ne jamais tomber ») alors que c'était un défaut de FEEDBACK, pas de logique. *Un mécanisme qu'on ne peut pas voir progresser est indiscernable, pour le joueur, d'un mécanisme qui ne marche pas.* | `starTownActiveRef`, `.ferme-wait-pill`, FermeGame.js |
 | hors-zip | ⚠️⚠️⚠️ **UN REPLI ANTI-`NaN` DANS UNE FONCTION MIROIR (GAUCHE/DROITE PAR UN PARAMÈTRE `side`) QUI OUBLIE DE MULTIPLIER PAR `side` CASSE UN SEUL CÔTÉ, ET SEULEMENT QUAND LA CIBLE TOMBE DANS LE CAS DÉGÉNÉRÉ.** `solveArm` mirroir le bras gauche du droit sur tout son calcul SAUF sur son repli (produit vectoriel presque nul), qui retombait sur +X MONDE en dur — le côté du bras DROIT, appliqué de temps en temps au bras GAUCHE. D'où le « parfois » signalé par Guillaume plutôt qu'un défaut systématique qu'une seule pose aurait suffi à voir. *Un invariant tenu partout dans une fonction doit être vérifié aussi dans son cas limite, pas seulement dans son chemin normal.* | `solveArm`, `maireBureau.js` |
+| hors-zip | ⚠️⚠️⚠️ **UN VISUEL BAKÉ IMPORTÉ APRÈS SA COLLISION N'HÉRITE JAMAIS AUTOMATIQUEMENT DE SA POSITION, ET RIEN NE LE VÉRIFIE.** `TOWN_RAILS`/`TOWN_STAIRS` (zip 447, rambarde encore procédurale) n'ont jamais été recalés quand le zip 467 a remplacé tout le visuel par une photo découpée : les deux poteaux de la volée basse étaient peints une case à l'ouest de leur collision, jamais vu parce qu'aucun banc ne compare les pixels du bitmap aux cases logiques qui le bordent — seulement sa taille et son détourage. *Un import bitmap qui remplace un dessin procédural doit revérifier au pixel les collisions écrites POUR l'ancien dessin, pas les supposer encore justes.* | `TOWN_RAILS`, `TOWN_STAIRS`, `fermeConstants.js` |
+| hors-zip | ⚠️⚠️ **UN FILTRE DE TEINTE APPLIQUÉ À TOUT UN CANEVAS PEUT FAIRE GLISSER UN CONTRÔLE QUI SURVEILLE UNE BANDE DE COULEUR PRÉCISE, MÊME QUAND LA GÉOMÉTRIE NE BOUGE PAS.** Relever le point noir de l'escalier importé (`liftShadowFloor`) a fait passer le détecteur d'aplat gris résiduel de `render-escaliers.mjs` de 9 à 46 px : la compression de teinte rapprochait des pixels auparavant distincts dans la bande `[114,150]` que ce banc surveille. Corrigé en rendant la fonction IDENTITÉ stricte au-delà d'un seuil, jamais en désactivant le contrôle. *Un banc de structure et un filtre de couleur peuvent lire le même canevas sans le savoir l'un de l'autre — relancer le banc après un simple changement de teinte n'est pas optionnel.* | `liftShadowFloor`, `fermeArt.js` |
 
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
@@ -1144,6 +1143,15 @@ erreur** en choisissant mal.
    cinquième occurrence de ce défaut précis (468, 470, 479, 480, et maintenant ici), toujours la
    même leçon : *un chiffre recopié à deux endroits n'a pas deux chances d'être juste, il a deux
    endroits où mentir.*)**.
+
+   **hors-zip, collisions & maire (VINGT-CINQUIÈME passe : les DEUX lignes du hors-zip
+   `nearPierMouth`/`TOWN_PIER` et du 480 bis `STAR_FARM_CRATER_DRAW_SCALES` partent avant les deux
+   leçons de cette session (le décalage d'une case entre bitmap et collision de l'escalier, et le
+   filtre de teinte qui fait glisser un banc de structure) : deux retirées, deux ajoutées, le
+   tableau reste à sa taille. Leur détail retiré reste dans `nearPierMouth`/`fermeEngine.js` et
+   `STAR_FARM_CRATER_DRAW_SCALES`/`fermeConstants.js`, que leur colonne de droite désignait déjà —
+   rien n'est perdu, ces deux défauts restent corrigés à leur code. Session directe, sans upload —
+   d'où l'étiquette.)**.
 
    **480 bis (VINGT-ET-UNIÈME passe : la ligne 478 part avant la leçon de ce zip — une retirée,
    une ajoutée, le tableau reste à sa taille et couvre exactement 479 à 480 bis. Son détail reste

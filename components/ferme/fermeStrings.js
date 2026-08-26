@@ -1446,6 +1446,15 @@ const MAIRE_FR = {
   leave: "Se lever et partir",
   waitRead: "Il finit sa phrase.",
 
+  /* ── hors-zip — LA REPRISE, UNE FOIS PAR AUDIENCE. Demande de Guillaume :
+     « si on déconne et on le vexe, permettre une seconde chance ». Offerte
+     seulement sur une réponse qui casse quelque chose (`grade==="fault"`),
+     avant qu'elle ne parte — décliner ne coûte rien, le budget ne se dépense
+     qu'en la prenant. ── */
+  redoOffer: "Vous avez contrarié le maire. Voulez-vous vous reprendre ?",
+  redoYes: "↩️ Oui, je me reprends",
+  redoNo: "Non, j'assume",
+
   /* ── les familles d'argument ───────────────────────────────────────────── */
   type: { money: "L'argent", risk: "La sûreté", town: "La ville", self: "Lui", heart: "Le fond" },
 
@@ -1716,6 +1725,10 @@ const MAIRE_EN = {
   settleHint: "Sign now. You will never know how far he would have gone.",
   leave: "Stand up and leave",
   waitRead: "He is finishing his sentence.",
+
+  redoOffer: "You've upset the mayor. Do you want to take that back?",
+  redoYes: "↩️ Yes, take it back",
+  redoNo: "No, I'll own it",
 
   type: { money: "Money", risk: "Liability", town: "The town", self: "Himself", heart: "The truth" },
 

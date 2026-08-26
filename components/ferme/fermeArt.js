@@ -3408,6 +3408,66 @@ export function buildSprites() {
     return c;
   }
 
+  /* hors-zip — RELÈVE LE POINT NOIR DU BLOC D'ESCALIER IMPORTÉ (zip 467), POUR
+     L'INTÉGRER AU GRIS DU PARVIS PAVÉ. Guillaume : « écart flagrant entre le
+     sol pavé et les escaliers ». La photo découpée (plancheEscaliers.js,
+     généré — on n'y touche jamais à la main) creuse ses joints jusqu'au
+     quasi-noir (L≈26) alors que le pavé le plus sombre reste à L≈152 : la
+     fissure d'encre jurait au milieu de pierre claire. On ne peut pas
+     retoucher les données générées : on relève donc le point noir du canevas
+     déjà construit — un lift linéaire (`floor + c×(255−floor)/255`) qui
+     préserve le RELIEF (les creux restent plus sombres que les faces) sans
+     laisser aucun canal retomber sous `floor`, plutôt qu'un simple
+     assombrissement qui aurait aplati le modelé au lieu de le remonter. */
+  function liftShadowFloor(canvas, floor, ceil) {
+    /* ⚠️ hors-zip — LE LIFT S'ARRÊTE NET À `ceil`, ET C'EST CE QUI A FAILLI
+       CASSER LE BANC. Un premier jet relevait TOUT le canevas (même les tons
+       déjà corrects) avec une seule pente : ça compressait aussi la bande de
+       gris ~114-150 que `render-escaliers.mjs` §0 surveille pour détecter un
+       aplat de détourage resté trop grand (elle est passée de 9 à 46 px de
+       blob). Au-delà de `ceil`, la fonction est l'IDENTITÉ stricte — rien n'y
+       entre, rien n'en sort, le banc revoit exactement les mêmes pixels qu'avant.
+       Seuls les tons VRAIMENT sombres (creux de joints, L≈13 à 90) sont
+       remontés, en gardant leur relief relatif (une rampe, pas un plafond
+       plat) au lieu du gris uniforme qu'un `Math.max(c,floor)` aurait peint. */
+    const g = canvas.getContext("2d");
+    const id = g.getImageData(0, 0, canvas.width, canvas.height);
+    const d = id.data, k = (ceil - floor) / ceil;
+    const lift = (c) => c >= ceil ? c : floor + c * k;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] === 0) continue; // pixel détouré : la transparence ne se relève pas
+      d[i] = lift(d[i]); d[i + 1] = lift(d[i + 1]); d[i + 2] = lift(d[i + 2]);
+    }
+    g.putImageData(id, 0, 0);
+    return canvas;
+  }
+
+  /* hors-zip — LA RAMBARDE 'IRON' EN CALQUE DE PREMIER PLAN, POUR QUE LE
+     JOUEUR PASSE DERRIÈRE. Le bloc entier se peint une seule fois, avant
+     toute la file de tri (voir son appel dans FermeGame.js) : le joueur est
+     donc TOUJOURS devant lui, jamais derrière — signalé par Guillaume sur la
+     ferronnerie de la volée basse. On ne repeint pas le bloc : on en découpe
+     une copie de la SEULE bande de cette rambarde (dérivée de `TOWN_RAILS`,
+     pas recopiée en dur — si la rambarde bouge, le calque suit), et on n'y
+     garde OPAQUE que son tracé sombre. Le mur qu'on aperçoit entre ses
+     volutes, lui, s'efface : c'est ce qui laisse le joueur s'y découper
+     comme derrière une vraie grille plutôt que sous un rectangle plein. */
+  function courtStairIronRailLayer(block) {
+    const rail = C.TOWN_RAILS.find(r => r.style === "iron");
+    const T = 16, ORG = C.TOWN_COURT_STAIR_BLOCK.x;
+    const x = (rail.x - ORG) * T, w = rail.w * T;
+    const y = 136, h = 24; // bande mesurée dans le bitmap : là où le tracé plonge vers L≈0
+    const [c, g] = cv(w, h);
+    g.drawImage(block, x, y, w, h, 0, 0, w, h);
+    const id = g.getImageData(0, 0, w, h), d = id.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const L = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      if (L > 95) d[i + 3] = 0; // le fond entre les volutes disparaît, le tracé sombre reste
+    }
+    g.putImageData(id, 0, 0);
+    return c;
+  }
+
   // Zip 388 : outlineSprite et petSprite sont passés au NIVEAU DU MODULE
   // (voir en tête de fichier). petSprite prend désormais (petId, dir, frame).
 
@@ -14639,8 +14699,11 @@ export function buildSprites() {
     townReedsWater: plancheSprite("reedsWater"),
     townHedgeRow: plancheSprite("hedgeRow"),
     /* ZIP 467 — composition fournie, entière. La collision reste dans les
-       constantes ; le visuel ne connaît aucune de ses tranches. */
-    townCourtStairBlock: escalierAssetSprite("courtBlock"),
+       constantes ; le visuel ne connaît aucune de ses tranches.
+       ⚠️ hors-zip — `liftShadowFloor` recolore SES ombres les plus sombres
+       vers le gris du parvis (voir la fonction, plus haut) ; ça ne change
+       rien à la géométrie que `render-escaliers.mjs` mesure. */
+    townCourtStairBlock: liftShadowFloor(escalierAssetSprite("courtBlock"), 55, 100),
     /* ⚠️ ZIP 447 — la végétation de la seconde planche. Elle sert à HABILLER un
        dénivelé : au pied d'un mur de soutènement, un massif casse la ligne
        droite et donne une échelle. Sans elle, une falaise de 48 px rencontre
@@ -14890,6 +14953,9 @@ house: house(),
     animals: [],
     products: [],
   };
+  // hors-zip — le calque de premier plan de la rambarde 'iron' (voir la
+  // fonction), découpé dans le bloc UNE FOIS ici plutôt qu'à chaque frame.
+  S.townCourtStairIronRail = courtStairIronRailLayer(S.townCourtStairBlock);
   for (let t = 0; t < C.CROPS.length; t++) {
     S.crops[t] = [];
     for (let s = 0; s < C.CROP_STAGES; s++) S.crops[t][s] = cropSprite(t, s);

@@ -3874,7 +3874,15 @@ export const TOWN_STAIRS = [
      entre les colonnes. Ses six rangées correspondent aux six girons visibles
      de `ESCALIERDETOURE` : le personnage gagne ou perd 0,6 unité par sept
      petits intervalles, sans téléportation ni cas particulier. */
-  { x: 142, y: 31, w: 8, len: 6, dir: "n", from: 0, to: 0.6 },
+  /* hors-zip — X CORRIGÉ DE 142 À 141. Guillaume a signalé, captures à
+     l'appui, qu'on pouvait chevaucher la rambarde de droite et qu'on restait
+     bloqué avant de toucher celle de gauche. Mesuré au pixel (crop du bloc
+     importé, comparé colonne par colonne à TOWN_RAILS) : les deux poteaux de
+     la volée basse sont peints UNE case plus à l'ouest que ce que review
+     laissait supposer — la volée entière suit, rambardes comprises, pour que
+     les deux continuent à border exactement ses deux bords. Largeur et compte
+     de marches inchangés, seule l'ancre bouge. */
+  { x: 141, y: 31, w: 8, len: 6, dir: "n", from: 0, to: 0.6 },
   /* ② LA VOLÉE HAUTE : six cases hors œuvre, quatre ouvertes. Trois rangées
      remplacent les deux rangées comprimées du 466 et calent la montée sur la
      profondeur réellement dessinée par le bloc. */
@@ -3961,8 +3969,12 @@ export const TOWN_RAILS = [
      Un escalier dont la rampe ne prend pas de place est un escalier dont la
      rampe est peinte sur le sol. `verify-vallee` confirme que les quatre volées
      et tous les lieux de la ville restent atteignables. */
-  { x: 142, y: 31, w: 1, h: 6, axis: "y", style: "short", side: "west" },
-  { x: 149, y: 31, w: 1, h: 6, axis: "y", style: "short", side: "east" },   // volée basse
+  /* hors-zip — MÊME CORRECTION D'UNE CASE QUE TOWN_STAIRS[0] (x 142→141,
+     149→148) : ces deux rambardes bordent la même volée, elles bougent avec
+     elle pour rester exactement sur ses poteaux peints, ni chevauchement à
+     l'est ni vide avant contact à l'ouest. */
+  { x: 141, y: 31, w: 1, h: 6, axis: "y", style: "short", side: "west" },
+  { x: 148, y: 31, w: 1, h: 6, axis: "y", style: "short", side: "east" },   // volée basse
   { x: 136, y: 27, w: 1, h: 3, axis: "y", style: "tall", side: "west" },
   { x: 141, y: 27, w: 1, h: 3, axis: "y", style: "tall", side: "east" },   // volée haute
 ];

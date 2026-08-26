@@ -493,6 +493,12 @@ export function MayorAudience({ ctx, L, onDone, onLive }) {
   const viewRef = useRef({ pose: "closed", emote: "cold", talking: true, bang: false });
   const liveAtRef = useRef(0);
   const sentRef = useRef(false);
+  /* hors-zip — LA REPRISE : UN JETON, DÉPENSÉ SEULEMENT S'IL SERT. `s` n'est
+     jamais touché tant que le joueur n'a pas confirmé qu'il GARDE sa réponse
+     fautive — décliner l'offre ne consomme rien, exactement comme poser puis
+     ranger les plans ne consomme personne question de plus. */
+  const redoLeftRef = useRef(1);
+  const [pendingFault, setPendingFault] = useState(null);
 
   const cand = C.TOWN_CANDIDATES.find(c => c.key === ctx.mayorKey) || C.TOWN_CANDIDATES[0];
   const node = s.node;
@@ -611,6 +617,28 @@ export function MayorAudience({ ctx, L, onDone, onLive }) {
      *Une grâce qui empêche de jouer n'est plus une grâce, c'est une attente.* */
   function answer(key) {
     if (phase !== "live" && phase !== "ask") return;
+    /* ⚠️ hors-zip — LE GESTE (plans/settle/slam) N'EST JAMAIS UNE « RÉPONSE
+       FAUTIVE » : seul `choices` porte un `grade`, et seule une réponse de
+       la table (`kind==="say"`) peut valoir "fault". `chosen` est `undefined`
+       pour les gestes, donc la garde ci-dessous ne les voit jamais. */
+    const chosen = choices.find(c => c.k === key);
+    if (chosen && chosen.grade === "fault" && redoLeftRef.current > 0) {
+      setPendingFault(key);
+      return;
+    }
+    commitAnswer(key);
+  }
+  function confirmRedo() {
+    // La réponse n'a jamais été jouée : rien à défaire dans `s`, seul le jeton part.
+    redoLeftRef.current -= 1;
+    setPendingFault(null);
+  }
+  function declineRedo() {
+    const key = pendingFault;
+    setPendingFault(null);
+    commitAnswer(key);
+  }
+  function commitAnswer(key) {
     const dt = phase === "ask" ? 0 : Math.max(0, performance.now() - liveAtRef.current);
     const r = MR.mayorPlay(s, key, dt);
     viewRef.current.pose = MR.mayorPose(s, r.grade);
@@ -699,7 +727,18 @@ export function MayorAudience({ ctx, L, onDone, onLive }) {
               après. Le liseré s'allume quand la jauge se met à fuir : c'est la
               seule chose que la grâce a besoin de dire, et elle le dit sans
               retirer un bouton. ── */}
-          {(phase === "live" || phase === "ask") && (
+          {/* hors-zip — L'OFFRE DE REPRISE REMPLACE LES RÉPONSES, ELLE NE
+              S'AJOUTE PAS DESSUS : tant qu'on n'a pas tranché, la réponse
+              fautive n'est PAS partie (voir `answer`), donc rien d'autre ne
+              doit rester cliquable. */}
+          {pendingFault && (phase === "live" || phase === "ask") && (
+            <div className="maire-says">
+              <div className="maire-why">{L.maire.redoOffer}</div>
+              <button className="maire-say" onClick={confirmRedo}>{L.maire.redoYes}</button>
+              <button className="maire-say" onClick={declineRedo}>{L.maire.redoNo}</button>
+            </div>
+          )}
+          {!pendingFault && (phase === "live" || phase === "ask") && (
             <div className={"maire-says" + (phase === "ask" ? " grace" : "")}>
               {says.map(c => (
                 <button className="maire-say" key={c.k} onClick={() => answer(c.k)}>{L.maire.say[c.k]}</button>

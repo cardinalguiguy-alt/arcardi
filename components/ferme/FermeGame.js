@@ -17743,6 +17743,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          personnages. Les anciennes rambardes case par case ont disparu du
          générateur : aucun doublon ne peut dépasser derrière ce bloc. */
       A.drawTownCourtStairBlock(ctx, sprites);
+      /* hors-zip — LA RAMBARDE 'IRON', ELLE, REJOINT LA FILE DE TRI. Peinte
+         ici, dans le bloc ci-dessus, le joueur serait TOUJOURS devant elle
+         (le bloc entier se peint avant tout le reste, sans exception) — signalé
+         par Guillaume : on veut pouvoir marcher DERRIÈRE cette ferronnerie,
+         comme derrière une vraie grille. `townCourtStairIronRail` est un
+         calque découpé de ce même bloc où seul le tracé sombre est resté
+         opaque (voir sa fabrication, fermeArt.js) ; on le repousse dans
+         `draws` à la rangée du monde que sa collision (`TOWN_RAILS`, style
+         "iron") occupe déjà, pour que le tri décide seul, image par image,
+         si le joueur passe devant ou derrière — exactement le principe déjà
+         éprouvé sur le pont (`townBridgeDepthKeys`). */
+      if (sprites.townCourtStairIronRail) {
+        const railWorldY = 31; // C.TOWN_RAILS, style "iron"
+        pushE((railWorldY + 1) * T, elAt(136, railWorldY), () => {
+          const im = sprites.townCourtStairIronRail;
+          ctx.drawImage(im, C.TOWN_COURT_STAIR_BLOCK.x * T + 32, C.TOWN_COURT_STAIR_BLOCK.screenY + 136);
+        });
+      }
       /* ══════════════════════════════════════════════════════════════════════
          LES TROIS MONUMENTS (425) — église, hôtel de ville, tribunal.
          ──────────────────────────────────────────────────────────────────────
@@ -19220,16 +19238,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         ctx.fillStyle = "#5a4230"; ctx.fillRect(px - 1, pyTop - 14, T + 2, spanH + 14);
         ctx.fillStyle = "#3a2a1c"; ctx.fillRect(px + 1, pyTop - 11, T - 2, spanH + 11);
         ctx.fillStyle = "#7a5232"; ctx.fillRect(px - 1, pyTop - 14, T + 2, 2);
+        /* hors-zip — LA PLAQUE EST GRAVÉE DANS LE LINTEAU, PAS POSÉE DEVANT.
+           Guillaume : les labels de salles sont « inélégants et déconnent ».
+           Le déconnage était réel : cette plaque vivait dans `draws` avec une
+           clé de tri `(g.y0+0.6)*T` — la rangée de la PORTE — alors qu'elle se
+           peignait 16px plus haut ; son ordre de superposition avec les
+           personnages ne correspondait donc jamais à sa position réelle à
+           l'écran. Ici elle rejoint le MÊME bloc immédiat que le chambranle
+           (jamais dans `draws`) : il n'y a plus de clé à faire correspondre,
+           elle est là où elle est peinte, comme le linteau et les montants.
+           Le style change aussi : plus de boîte crème façon post-it (identique
+           aux enseignes de boutiques de rue, pensées pour l'extérieur) — un
+           fond bois sombre encastré, un texte en léger relief (une passe
+           d'ombre, une passe claire, pas de bordure), à la largeur du texte
+           mesuré une fois pour centrer, jamais pour cadrer une boîte : un
+           emoji en police monospace ne rend pas une largeur fiable, ce qui
+           déformait la boîte avant. */
         const label = L.courtRoomName(g.room);
-        draws.push({ y: (g.y0 + 0.6) * T, fn: () => {
-          ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
-          const wpx = ctx.measureText(label).width + 8;
-          const tx = px + T / 2, ty = pyTop - 16;
-          ctx.fillStyle = "#f5eeda"; ctx.fillRect(tx - wpx / 2, ty - 8, wpx, 11);
-          ctx.strokeStyle = "#6b4a2e"; ctx.lineWidth = 1; ctx.strokeRect(tx - wpx / 2 + 0.5, ty - 7.5, wpx - 1, 10);
-          ctx.fillStyle = "#1d1d1d"; ctx.fillText(label, tx, ty);
-          ctx.textAlign = "left";
-        } });
+        ctx.font = "bold 7px monospace"; ctx.textAlign = "center";
+        const wpx = Math.max(T, ctx.measureText(label).width + 6);
+        const tx = px + T / 2, plateTop = pyTop - 12, plateH = 8;
+        ctx.fillStyle = "#2e2013"; ctx.fillRect(tx - wpx / 2, plateTop, wpx, plateH);
+        ctx.fillStyle = "#140d07"; ctx.fillText(label, tx, plateTop + plateH - 1.5);
+        ctx.fillStyle = "#c9a961"; ctx.fillText(label, tx, plateTop + plateH - 2.5);
+        ctx.textAlign = "left";
       }
 
       /* ══════════════════════════════════════════════════════════════════════
@@ -21562,11 +21594,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         g.fillRect(rx, ry, rw, rh);
         g.strokeStyle = "#20222a"; g.lineWidth = 2; g.strokeRect(rx + 1, ry + 1, rw - 2, rh - 2);
         g.fillStyle = "#f7f1e0"; g.font = "bold 10px monospace"; g.textAlign = "center";
-        // Le nom, coupé au premier espace après l'emoji si la pièce est étroite :
-        // un libellé qui déborde sur la pièce voisine désigne la mauvaise porte.
+        /* hors-zip — DEUX LIGNES PLUTÔT QU'UNE TRONCATURE. `label.split(" ")[0]`
+           coupait au premier espace après l'emoji : une pièce étroite ("🔒
+           Cellules de garde à vue") ne montrait donc que l'emoji, seul, sans
+           nom du tout — signalé par Guillaume dans le même lot que la plaque
+           de porte. Un plan de bâtiment a de la hauteur libre sous le nom ;
+           on replie le libellé sur deux lignes avant de sacrifier un mot. */
         const label = L.courtRoomName(r.key);
-        const fit = g.measureText(label).width <= rw - 8 ? label : label.split(" ")[0];
-        g.fillText(fit, rx + rw / 2, ry + rh / 2 + 3);
+        const words = label.split(" ");
+        const lines = []; let cur = "";
+        for (const w2 of words) {
+          const cand = cur ? cur + " " + w2 : w2;
+          if (!cur || g.measureText(cand).width <= rw - 8) cur = cand;
+          else { lines.push(cur); cur = w2; }
+        }
+        if (cur) lines.push(cur);
+        if (lines.length > 2) lines.length = 2; // reste un plan, pas une notice
+        const lh = 11, y0 = ry + rh / 2 + 3 - (lines.length - 1) * lh / 2;
+        lines.forEach((ln, i) => g.fillText(ln, rx + rw / 2, y0 + i * lh));
         for (const d of r.doors) {
           g.fillStyle = "#f2c85a";
           g.fillRect(d.x * scale, OY + d.y * scale, scale, scale);
