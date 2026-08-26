@@ -1129,6 +1129,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      pas à chaque image. */
   const starLureDiveRef = useRef({ k: 0, last: 0, wasHidden: false });
   const starLurePoofUntilRef = useRef(0);
+  /* hors-zip — LA PREMIÈRE PLONGÉE S'EXPLIQUE TOUTE SEULE. Signalé par
+     Guillaume : le dessin (ci-dessus) dit QUE l'étoile plonge, jamais
+     POURQUOI ni COMMENT y remédier — ça, seule l'invite E le disait
+     (`bodyStarLure`/`nextStarLure`, plus bas dans ce fichier), donc un joueur
+     qui ne pense pas à appuyer sur E la voit s'enfoncer sans un mot. Ce ref
+     déclenche la MÊME paire de phrases, une seule fois par partie, sur le même
+     front montant que la bouffée de terre — jamais une par image, et jamais
+     deux textes différents qui pourraient finir par ne plus s'accorder. */
+  const starLureAutoToldRef = useRef(false);
   const starSeenRef = useRef({});                    // scènes/bulles déjà vues DANS CETTE SESSION (le rappel, une fois)
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ZIP 453 — CE QUI SE DIT QUAND LE MONDE CHANGE. LE VEILLEUR.
@@ -1181,6 +1190,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      redéclencher le rendu JSX du bandeau quand on clique une puce. */
   const myStarFocusRef = useRef(null);
   const [myStarFocus, setMyStarFocusState] = useState(null);
+  /* hors-zip — L'ANNONCE DES PUCES CLIQUABLES, À PLUSIEURS SEULEMENT. Demande
+     de Guillaume : la fonctionnalité ci-dessus n'avait qu'une infobulle au
+     survol (`focusTip`) pour se faire connaître — invisible au doigt, et
+     invisible à qui ne pense pas à survoler une puce déjà pleine. Un toast,
+     une fois par partie (voir l'intervalle du guide plus bas, qui le
+     déclenche dès que le chapitre 1 est actif et qu'un camarade est là). */
+  const starFocusHintRef = useRef(false);
   function toggleMyStarFocus(siteId) {
     const next = myStarFocusRef.current === siteId ? null : siteId;
     myStarFocusRef.current = next;
@@ -1474,10 +1490,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          `devSetWorld`), et il ne touche jamais un forçage qu'il n'a pas
          lui-même posé — `starForcedByQuestRef` ne suit que ça. */
       if (isHost) {
+        /* hors-zip — `farmImpactLureGive` (la fiole prête) SORT VOLONTAIREMENT
+           DE CETTE LISTE, ET C'EST LA MOITIÉ DU CORRECTIF SIGNALÉ PAR
+           GUILLAUME. Le chevron planté sur le chaudron n'était que le
+           symptôme visible : tant que `key` valait encore "farmImpactLure"
+           après la préparation, le monde restait forcé sur "evil" — le
+           passage refusait alors de ramener à la ferme, où le trou blanc
+           attend. Scinder la clé (voir `starTameGoalKey`, quete.js) corrige
+           les deux d'un coup, parce que ce forçage lit la MÊME clé que le
+           chevron : deux symptômes, une seule cause. */
         const needsEvil = key === "farmImpactLight" || key === "farmImpactLure";
         const forced = sharedRef.current.forcedWorld;
         if (needsEvil && forced !== "evil") { applyForcedWorld("evil"); starForcedByQuestRef.current = true; }
         else if (!needsEvil && forced === "evil" && starForcedByQuestRef.current) { applyForcedWorld(null); starForcedByQuestRef.current = false; }
+      }
+      /* hors-zip — L'ANNONCE DES PUCES CLIQUABLES, UNE FOIS, DÈS QU'ELLE EST
+         UTILE. « Utile » veut dire deux choses à la fois : le chapitre 1 est
+         actif (les puces existent) ET un camarade est là (choisir un trou
+         différent du sien n'a de sens qu'à plusieurs — en solo la question ne
+         se pose pas). Local et cosmétique, comme le focus lui-même : rien
+         n'est arbitré, rien n'est diffusé, juste indépendant de la boucle du
+         guide plus bas (qui ne tourne que si un objectif chevron existe). */
+      if (!starFocusHintRef.current && e && Q.starChapterKey(e) === "field" && playersRef.current.size > 0) {
+        starFocusHintRef.current = true;
+        pushToast(L.star.hud.focusHint);
       }
       if (!key || g.on || !starGuideTarget()) return;
       if (!Q.starGuideAuto(Date.now() - g.since, g.offered)) return;
@@ -14365,7 +14401,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               const hasPotion = !!(myInvRef.current && (myInvRef.current.starLure | 0) > 0);
               const hidden = near && !hasPotion;
               const dv = starLureDiveRef.current;
-              if (hidden && !dv.wasHidden) starLurePoofUntilRef.current = now + 550;   // front montant : une bouffée, pas une par image
+              if (hidden && !dv.wasHidden) {
+                starLurePoofUntilRef.current = now + 550;   // front montant : une bouffée, pas une par image
+                /* hors-zip — MÊME FRONT, UNE SEULE FOIS PAR PARTIE : le joueur
+                   qui voit plonger l'étoile sans avoir pensé à presser E lit
+                   ici pourquoi (les mains vides) et comment y remédier — les
+                   deux mêmes phrases que l'invite E, jamais un second texte
+                   qui pourrait diverger (voir starLureAutoToldRef). */
+                if (!starLureAutoToldRef.current) {
+                  starLureAutoToldRef.current = true;
+                  starTell([L.star.dig.bodyStarLure, L.star.dig.nextStarLure], 2600);
+                }
+              }
               dv.wasHidden = hidden;
               const dt2 = Math.max(0, Math.min(80, now - (dv.last || now)));
               dv.k = Q.starHideK(dv.k, dt2, hidden);
@@ -20881,6 +20928,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const wSwim = worldRef.current;
       const swimmingHere = riding && wSwim && p.zone !== "evil" && E.isWaterTile(wSwim, p.x, p.y);
       if (!swimmingHere) { ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(px + 8, py + 15, riding ? 9 : 6, riding ? 3 : 2.5, 0, 0, 7); ctx.fill(); }
+      /* hors-zip — LA LUEUR BLEUE DU DÉFI DE FUITE, VISIBLE 5 MINUTES APRÈS LA
+         COURSE. Demande de Guillaume : indiquer SANS ouvrir un panneau si on a
+         encore la lumière en réserve. `Q.starCandyFresh` porte déjà toute la
+         règle (voir sa note, quete.js) — ce bloc ne fait QUE la lire, sur MOI
+         comme sur les autres, puisque `e.candy`/`e.candyUntil` sont déjà dans
+         l'état partagé de la quête : rien de neuf à diffuser (§3 de
+         CLAUDE.md, « ce qui se déduit ne se diffuse pas »).
+         ⚠️ MÊME COURBE QUE LA TENUE D'UNE ÉTOILE BLEUE (`sprites.drawStarCalmGlow`,
+         fermeArt.js), réutilisée telle quelle plutôt que réécrite : on ne
+         connaît qu'une seule façon de dessiner une lueur bleue qui pulse dans
+         ce jeu. `k` est FIXE (pas de tenue en cours ici), et volontairement
+         SOUS le seuil des lucioles/du liseré (0.5) — ceux-là racontent
+         « ça va éclore », faux ici : on porte juste la lumière, rien n'éclot.
+         ⚠️ `sprites.`, PAS `A.` : la leçon du 481 sur ce même appel (voir la
+         note de `drawStarCalmGlow` plus bas dans ce fichier) — la fonction
+         n'existe que sur l'objet rendu par `buildSprites()`. */
+      if (sprites.drawStarCalmGlow) {
+        const starHere = sharedRef.current.star;
+        if (starHere && Q.starFallen(starHere) && Q.starCandyFresh(starHere, p.id, Date.now()) > 0) {
+          sprites.drawStarCalmGlow(ctx, px + 8, py + 4 - lift, T, 0.42, "blue", performance.now());
+        }
+      }
       // Galop (chantier 2026-07, demande Guillaume : "le cheval doit décrire
       // une action de galop quand il se déplace") : 4 frames (horseRun,
       // fermeArt.js) cadencées par l'animT du cavalier — déjà ralenti à la
@@ -23308,6 +23377,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       craterHot: !starCraterCoolNow(), engineerHere: Q.starEngineerHere(e, Date.now()),
       landed: starImpactLandedNow(),
       candy: m ? Q.starCandyFresh(e, m.id) : 0,
+      /* hors-zip — LE MIROIR EXACT DE `candy`, POUR LA BLANCHE. `myInvRef` est
+         le ref synchrone de l'inventaire (piège n°1 : un state React lu ici
+         vieillirait dans la closure du chevron) ; le CONTEXTE est la seule
+         porte par laquelle une donnée personnelle entre dans `quete.js`, comme
+         `candy` déjà — jamais une lecture directe de `f.inv` par ce fichier. */
+      potion: !!(myInvRef.current && (myInvRef.current.starLure | 0) > 0),
       now: Date.now(),
       alone: starAlone("crater"),
       focus: myStarFocusRef.current,   // hors-zip — le choix personnel du chapitre 1, voir myStarFocusRef

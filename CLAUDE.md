@@ -11,66 +11,53 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**HORS-ZIP — SESSION DIRECTE : TROIS BUGS DE COLLISION/LUMIÈRE SIGNALÉS PAR GUILLAUME EN JOUANT,
-PLUS DEUX DEMANDES SUR LA QUÊTE DE L'ÉTOILE (pas d'upload de zip, donc pas de numéro).** La passe
-précédente (labels de salle, escalier du tribunal, rambardes, maire) est TERMINÉE et sa trouvaille
-la plus utile a rejoint le tableau des leçons ; ce bloc la remplace entièrement, comme le veut la
-règle du §14.
+**HORS-ZIP — SESSION DIRECTE : QUATRE DEMANDES DE GUILLAUME EN JOUANT, TOUTES SUR LA QUÊTE DE
+L'ÉTOILE (pas d'upload de zip, donc pas de numéro).** La passe précédente (pont du parc, torche,
+focus personnel du chapitre 1, plongée de l'étoile blanche) est TERMINÉE et sa leçon la plus utile
+a rejoint le tableau ; ce bloc la remplace entièrement, comme le veut la règle du §14.
 
-1. **🌉 Le pont du PARC (l'arche japonaise de l'étang) — LIVRÉ.** Guillaume, après la passe
-   précédente sur le pont du jardin : « le pont n'est pas corrigé ». Il avait raison : ce sont DEUX
-   ponts distincts (`fermeEngine.js`), et le correctif de rambarde n'avait été posé QUE sur celui de
-   l'anse sud — celui du parc n'avait jamais reçu la même solidité. Même principe copié à
-   l'identique : les deux rangées d'eau qui bordent IMMÉDIATEMENT le tablier deviennent solides
-   (`ground===G_WATER` en garde, à cause de l'encroachement des culées), jamais le tablier
-   lui-même. `verify-vallee` 205/205 (aucune destination rendue inatteignable).
-2. **🔦 Le rayon de la torche au dézoom — LIVRÉ, CAUSE TROUVÉE.** Un lampadaire suit déjà l'altitude
-   de sa case (`elAt(pr.x,pr.y)*EP/T`, écrit de longue date) ; la torche PORTÉE — la mienne ou celle
-   d'un camarade — ne l'a jamais fait, alors que le personnage, lui, monte bien avec la case
-   (`myE`/`pushE`). Le halo restait donc au sol pendant que le porteur montait, un écart qui grandit
-   avec l'altitude et n'est visible qu'aux seuls endroits où il y a des marches — c'est-à-dire
-   exactement où le dézoom de proximité (`TOWN_ZOOM_NEAR`) se déclenche. Les deux symptômes
-   n'étaient qu'un seul défaut, vu au même endroit. Corrigé dans `FermeGame.js` (les deux lumières
-   de torche réutilisent `playerElevTown`, comme les lampadaires).
-3. **🪜 « D'autres zones des escaliers n'ont pas été corrigées » — PAS RETROUVÉ, ET C'EST DIT
-   FRANCHEMENT PLUTÔT QUE DEVINÉ.** La passe précédente n'avait revérifié que la VOLÉE BASSE du
-   tribunal. Un script de diagnostic a superposé, poteau par poteau, la volée HAUTE et les deux
-   rambardes horizontales contre le bloc importé (même méthode qui avait trouvé le défaut de la
-   volée basse) : les quatre s'alignent correctement, aucun décalage d'une case comme celui déjà
-   corrigé. **Rien n'a donc été touché ici** — modifier des nombres sans preuve aurait été le
-   défaut inverse (« corriger ce qu'on n'a pas vu casser »). Voir la prochaine action.
-4. **⭐ Le chapitre 1 se répartit enfin à plusieurs — LIVRÉ.** Demande : à deux joueurs, pouvoir
-   viser des trous différents plutôt que suivre le même chevron figé sur le premier de la table.
-   Chaque puce du bandeau (les huit déjà affichées, `Q.STAR_FARM_IMPACTS`) devient cliquable :
-   cliquer en fait SON objectif personnel, recliquer l'annule. Un unique point de jointure
-   (`ctx.focus`, lu par `starGoalKey` ET `starTargetSite`, jamais deux listes) fait que le chevron
-   et le bandeau de CE joueur suivent son choix sans toucher à l'ordre par défaut de l'autre. Rien
-   n'est arbitré ni récompensé (confort de lecture, comme le familier-guide) ; le choix est
-   diffusé avec la position (`pub.starFocus`, zéro message neuf) pour qu'un indice discret
-   (pointillé) apparaisse si un camarade vise le même trou — décision de Guillaume : autorisé,
-   jamais bloqué. `verify-quete` 596/596 intact.
-5. **⭐ L'étoile blanche plonge — LIVRÉ.** Décrite comme « fuyante » dans le texte, elle se
-   comportait pourtant comme les deux autres. Option retenue (la plus sûre mécaniquement, sur les
-   deux proposées) : sans la fiole d'Essence en poche, elle replonge dans la terre dès qu'on
-   l'approche — pas de nouvelle IA de fuite ni de nouvel objet à fabriquer. Réutilise la courbe déjà
-   éprouvée de la cachette devant un résident (`Q.starHideK`/`Q.starHideAnim`, §3 de QUETE.md),
-   appliquée à la verticale (elle s'enfonce sur place) plutôt qu'au col du joueur, plus une bouffée
-   de terre (`drawStarDust`, déjà utilisé sur la fouille). `render-etoile`/`verify-quete` intacts.
+1. **⭐ Pourquoi la blanche plonge, et comment y remédier — LIVRÉ.** Le dessin de la plongée
+   (livré hors-zip précédent) ne disait ni le POURQUOI ni le COMMENT y remédier à qui ne pense pas
+   à presser E. `dig.bodyStarLure` décrit maintenant ce que l'écran montre vraiment (« plonge sous
+   la terre », plus « bondit hors de portée », un texte qui suivait un ancien visuel) ; un toast
+   AUTOMATIQUE, une seule fois par partie (`starLureAutoToldRef`), redit les deux mêmes phrases
+   que l'invite E (`bodyStarLure`/`nextStarLure`) au premier front montant de la plongée — jamais
+   un second texte qui pourrait diverger.
+2. **⭐ L'annonce des puces cliquables, à plusieurs — LIVRÉ.** La fonctionnalité du focus personnel
+   (livrée hors-zip précédent) n'avait qu'une infobulle au survol pour se faire connaître —
+   invisible au doigt. Un toast, une fois par partie (`starFocusHintRef`), dès que le chapitre 1
+   est actif ET qu'un camarade est là (jamais en solo).
+3. **🔵 La lueur bleue expire pour de vrai, 5 minutes après le défi de fuite — LIVRÉ, DÉCISION DE
+   GUILLAUME.** Deux options posées (extinction réelle, ou simple rappel cosmétique) : la première
+   choisie. `e.candy` n'est plus un flux éternel depuis la chute ; `candyUntil` (échéance ABSOLUE
+   posée par l'hôte, §3 de CLAUDE.md) le borne à `STAR_CANDY_FRESH_MS` après le DERNIER ramassage,
+   relu par `starCandyFresh(e, who, now)` — jamais par une horloge comparée à une autre. Un halo
+   bleu pulsant (`sprites.drawStarCalmGlow`, réutilisé tel quel, k fixe sous le seuil des
+   lucioles) indique sur le fermier, self ET distant, s'il porte encore la lumière — rien de neuf
+   à diffuser, la donnée est déjà dans `star.candy`/`star.candyUntil`. `verify-quete` 609/609
+   (8 contrôles neufs sur l'échéance).
+4. **⭐ Le chevron de la blanche pointait encore le chaudron après la fiole prête — LIVRÉ, CAUSE À
+   DEUX VISAGES.** `farmImpactLure` pilotait À LA FOIS le texte/chevron ET le forçage du monde
+   maléfique (`needsEvil`) : scindée en deux clés (`farmImpactLure` sans fiole, `farmImpactLureGive`
+   avec, décidées par `ctx.potion` — même patron que `ctx.candy` pour la bleue), la correction
+   répare le chevron ET libère le monde forcé du même coup, puisque `needsEvil` lit la même clé.
+   Sans la seconde moitié, le trou blanc (à la ferme) serait resté inatteignable même une fois le
+   chevron correct. Voir le tableau des leçons, nouvelle entrée.
 
 ⚠️⚠️⚠️ **RIEN DE CE QUI PRÉCÈDE N'A ÉTÉ CONFIRMÉ À L'ÉCRAN — MÊME OBSTACLE QUE LES PASSES
-PRÉCÉDENTES.** Les cinq points ci-dessus sont vérifiés par les bancs (`verify-vallee` 205/205,
-`verify-quete` 596/596, bundle esbuild, `next build`) et par lecture de code, jamais par une
-session jouée : l'automatisation du déplacement reste le blocage documenté depuis plusieurs
-sessions. **LA PROCHAINE ACTION : JOUER CES CINQ CHOSES EN VRAI.** Dans l'ordre le plus rentable :
-(a) le pont du parc (l'étang, pas celui du jardin) — essayer de sortir par les côtés du tablier,
-bloqué désormais ; (b) porter la torche de nuit et monter n'importe quel escalier de la
-Haute-Ville en dézoomant — le halo doit rester SOUS soi, plus à côté ; (c) **redemander à
-Guillaume, capture à l'appui, OÙ EXACTEMENT le chevauchement des escaliers se produit encore** —
-le point 3 ci-dessus n'a rien changé faute d'avoir pu le reproduire ; (d) à deux clients, cliquer
-deux puces différentes du bandeau et vérifier que les deux chevrons divergent, puis cliquer la
-même puce sur les deux et vérifier l'indice discret ; (e) approcher l'étoile blanche sans fiole
-(elle doit plonger, pas rester immobile), puis revenir avec une fiole en poche et vérifier qu'elle
-se laisse enfin approcher.
+PRÉCÉDENTES.** Les quatre points ci-dessus sont vérifiés par les bancs (`verify-quete` 609/609,
+`verify-strings`, `verify-syntax`, bundle esbuild, `next build`, `render-etoile`, `verify-vallee`
+205/205) et par lecture de code, jamais par une session jouée : l'automatisation du déplacement
+reste le blocage documenté depuis plusieurs sessions. **LA PROCHAINE ACTION : JOUER CES QUATRE
+CHOSES EN VRAI.** Dans l'ordre le plus rentable : (a) creuser le trou blanc sans la fiole et
+laisser l'étoile plonger SANS presser E — le toast doit apparaître de lui-même, une seule fois ;
+(b) préparer l'Essence au chaudron puis revenir au trou — le chevron doit désormais pointer LE
+TROU, plus le chaudron, et le monde ne doit plus forcer le passage maléfique ; (c) courir le défi
+de fuite, vérifier le halo bleu pulsant sur son propre fermier PUIS le laisser s'éteindre après
+5 minutes sans payer l'offrande — la lueur doit disparaître et l'offrande doit être refusée si on
+arrive trop tard ; (d) à deux clients dans le chapitre 1, vérifier que le second voit apparaître le
+toast d'annonce des puces cliquables, et que le halo bleu du premier reste visible chez le second
+tant que sa lumière n'a pas expiré.
 
 ⚠️ **DÉCISION DE GUILLAUME, TOUJOURS EN VIGUEUR : LE BUG DU CHAUDRON-ARTÉFACT VISIBLE SUR 4 TERRES/5
 N'EST PAS CORRIGÉ.** Le sprite scintillant (`FermeGame.js`) reste sans la garde `spec.key==="evil"`
@@ -218,10 +205,10 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 
 | # | La leçon, en une phrase | Où est le détail |
 |---|---|---|
-| hors-zip | ⚠️⚠️⚠️ **UN REPLI ANTI-`NaN` DANS UNE FONCTION MIROIR (GAUCHE/DROITE PAR UN PARAMÈTRE `side`) QUI OUBLIE DE MULTIPLIER PAR `side` CASSE UN SEUL CÔTÉ, ET SEULEMENT QUAND LA CIBLE TOMBE DANS LE CAS DÉGÉNÉRÉ.** `solveArm` mirroir le bras gauche du droit sur tout son calcul SAUF sur son repli (produit vectoriel presque nul), qui retombait sur +X MONDE en dur — le côté du bras DROIT, appliqué de temps en temps au bras GAUCHE. D'où le « parfois » signalé par Guillaume plutôt qu'un défaut systématique qu'une seule pose aurait suffi à voir. *Un invariant tenu partout dans une fonction doit être vérifié aussi dans son cas limite, pas seulement dans son chemin normal.* | `solveArm`, `maireBureau.js` |
 | hors-zip | ⚠️⚠️⚠️ **UN VISUEL BAKÉ IMPORTÉ APRÈS SA COLLISION N'HÉRITE JAMAIS AUTOMATIQUEMENT DE SA POSITION, ET RIEN NE LE VÉRIFIE.** `TOWN_RAILS`/`TOWN_STAIRS` (zip 447, rambarde encore procédurale) n'ont jamais été recalés quand le zip 467 a remplacé tout le visuel par une photo découpée : les deux poteaux de la volée basse étaient peints une case à l'ouest de leur collision, jamais vu parce qu'aucun banc ne compare les pixels du bitmap aux cases logiques qui le bordent — seulement sa taille et son détourage. *Un import bitmap qui remplace un dessin procédural doit revérifier au pixel les collisions écrites POUR l'ancien dessin, pas les supposer encore justes.* | `TOWN_RAILS`, `TOWN_STAIRS`, `fermeConstants.js` |
 | hors-zip | ⚠️⚠️ **UN FILTRE DE TEINTE APPLIQUÉ À TOUT UN CANEVAS PEUT FAIRE GLISSER UN CONTRÔLE QUI SURVEILLE UNE BANDE DE COULEUR PRÉCISE, MÊME QUAND LA GÉOMÉTRIE NE BOUGE PAS.** Relever le point noir de l'escalier importé (`liftShadowFloor`) a fait passer le détecteur d'aplat gris résiduel de `render-escaliers.mjs` de 9 à 46 px : la compression de teinte rapprochait des pixels auparavant distincts dans la bande `[114,150]` que ce banc surveille. Corrigé en rendant la fonction IDENTITÉ stricte au-delà d'un seuil, jamais en désactivant le contrôle. *Un banc de structure et un filtre de couleur peuvent lire le même canevas sans le savoir l'un de l'autre — relancer le banc après un simple changement de teinte n'est pas optionnel.* | `liftShadowFloor`, `fermeArt.js` |
 | hors-zip | ⚠️⚠️⚠️ **UN CORRECTIF POSÉ SUR UNE SEULE INSTANCE D'UN MOTIF RÉPÉTÉ NE COUVRE PAS SA SŒUR.** La rambarde du pont de l'anse sud a reçu sa collision ; le pont du PARC, un second bloc de génération pour le même geste visuel, ne l'avait jamais reçue — personne n'avait pensé à relire l'autre pont. Même défaut sur la lumière, le même jour : le lampadaire suit l'altitude de sa case depuis longtemps, la torche PORTÉE ne l'a jamais fait, alors que les deux dessinent la même mécanique de halo perçant le voile nocturne. *Une correction trouvée sur UN exemplaire d'un motif qui existe ailleurs dans le code ne se généralise pas toute seule — il faut aller vérifier expressément les autres exemplaires, jamais supposer qu'ils partagent le correctif.* | `fermeEngine.js` (pont du parc), `FermeGame.js` (torche, `playerElevTown`) |
+| hors-zip | ⚠️⚠️⚠️ **UNE MÊME CLÉ D'OBJECTIF QUI PILOTE DEUX MÉCANISMES INDÉPENDANTS NE SE SCINDE PAS POUR UN SEUL DES DEUX.** `farmImpactLure` désignait à la fois la phrase du bandeau/chevron ET la condition qui force le monde maléfique (`needsEvil`, FermeGame.js). Une fois l'Essence d'étoile prête, le chevron restait planté sur le chaudron déjà quitté ET le monde restait forcé sur « evil » — deux symptômes vus séparément par Guillaume (l'un en jouant cette session, l'autre aurait rendu le trou blanc littéralement inatteignable), une seule cause. Scinder la clé en deux (`farmImpactLure` / `farmImpactLureGive`, décidées par `ctx.potion`, même patron que `ctx.candy` pour la bleue) a corrigé les deux d'un coup, parce que `needsEvil` lit la MÊME clé que le chevron. *Avant de scinder une clé qui a l'air de ne servir qu'à un texte, chercher qui d'autre la lit — un verrou de monde peut se cacher derrière un `===` anodin.* | `starTameGoalKey`, `needsEvil`, `quete.js`/`FermeGame.js` |
 
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
@@ -1154,6 +1141,22 @@ erreur** en choisissant mal.
    **480 bis (VINGT-ET-UNIÈME passe : la ligne 478 part avant la leçon de ce zip — une retirée,
    une ajoutée, le tableau reste à sa taille et couvre exactement 479 à 480 bis. Son détail reste
    dans `resolveStarTimberTick`/`starTimberBlock`, que sa colonne de droite désignait déjà.)**.
+
+   **hors-zip, textes de quête & lueur bleue (VINGT-SEPTIÈME passe : la ligne `solveArm` part
+   avant la leçon de cette session (une même clé d'objectif qui pilote deux mécanismes — le
+   chevron ET le forçage du monde maléfique — doit se scinder pour les deux, jamais un seul) :
+   une retirée, une ajoutée, le tableau reste à sa taille. Son détail retiré reste dans
+   `solveArm`/`maireBureau.js`, que sa colonne de droite désignait déjà. Session directe, sans
+   upload — quatre demandes de Guillaume en jouant : le texte de la plongée de l'étoile blanche
+   (pourquoi elle plonge, comment y remédier — `dig.bodyStarLure` corrigé, toast automatique une
+   fois), l'annonce des puces cliquables à plusieurs (`hud.focusHint`, toast une fois), la lueur
+   bleue du défi de fuite qui expire pour de vrai 5 minutes après la course
+   (`STAR_CANDY_FRESH_MS`, `candyUntil`, halo pulsant sur le fermier — `drawStarCalmGlow`
+   réutilisé), et le chevron de la blanche qui pointait encore le chaudron une fois la fiole
+   prête (`farmImpactLureGive`, `ctx.potion`). Vérifié par les bancs (`verify-quete` 609/609,
+   `verify-strings`, `verify-syntax`, bundle esbuild, `next build`, `render-etoile`,
+   `verify-vallee`), jamais à l'écran — même blocage d'automatisation du déplacement que les
+   sessions précédentes.)**.
 
    **478 (DIX-HUITIÈME passe : la ligne 473 part avant la leçon de ce zip — une retirée, une
    ajoutée, le tableau reste à sa taille et couvre exactement 474 à 478. Son détail reste dans

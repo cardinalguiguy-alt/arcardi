@@ -1986,9 +1986,17 @@ export function starTargetSite(e, ctx) {
      demande d'aller cuisiner ailleurs — deux réponses à « où vais-je », le
      défaut du 449. */
   if (STAR_GOAL_TARGET[goal] === "cauldron") return "cauldron";
+  /* hors-zip — `farmImpactLureGive` REJOINT LE GROUPE QUI POINTE LE TROU, PAS
+     LE CHAUDRON. Signalé par Guillaume en jouant : une fois la fiole
+     préparée, le chevron restait planté sur l'atelier déjà quitté au lieu de
+     désigner le trou blanc où elle attend. `farmImpactLure` (sans la fiole)
+     reste seul dans le groupe « chaudron » juste au-dessus — c'est la
+     PHRASE, dérivée de `ctx.potion` par `starTameGoalKey`, qui fait basculer
+     le chevron d'un groupe à l'autre, jamais un test répété ici. */
   if (goal === "farmImpacts" || goal === "farmImpactCool"
       || goal === "farmImpactTame" || goal === "farmImpactLight"
-      || goal === "farmImpactLightPay" || goal === "farmImpactCarry") {
+      || goal === "farmImpactLightPay" || goal === "farmImpactCarry"
+      || goal === "farmImpactLureGive") {
     /* hors-zip — MÊME CONDITION DE FOCUS QUE `starGoalKey`, LIGNE POUR LIGNE.
        `goal` a déjà été dérivé du site personnel s'il y en a un ; cette branche
        doit désigner CE MÊME site, pas rejouer sa propre recherche du premier de
@@ -2223,11 +2231,34 @@ export function starCalmStep(px, py, dir, moving, cx, cy, ringPad, radius) {
    ce n'est pas le doublon du §8 de `CLAUDE.md`, c'est son contraire (dériver le
    flux du stock est impossible — le stock ne se souvient pas d'où il vient). */
 export const STAR_CANDY_PRICE = 60;
-/* Ce qu'un joueur a rapporté depuis la chute. ⚠️ PAR JOUEUR ET PAS COMMUN, comme
-   les bonbons eux-mêmes (`fermeEngine.js` : « le défi est individuel, personne ne
-   court à deux »). Mettre l'offrande en commun aurait fait payer la course d'un
-   seul par la poche de l'autre. */
-export function starCandyFresh(e, who) { return Math.max(0, (e && e.candy && +e.candy[who]) || 0); }
+/* hors-zip — LA LUEUR S'ÉTEINT POUR DE VRAI, CINQ MINUTES APRÈS LA FIN DE LA
+   COURSE. Décision de Guillaume (deux options posées, celle-ci choisie) :
+   « la lumière bleue s'éteint en dormant » ci-dessus ne décrivait jusqu'ici
+   que « avant la chute » (voir `resolveStarCandy`) — le flux, lui, était
+   éternel une fois la chute passée. Il ne l'est plus : `STAR_CANDY_FRESH_MS`
+   borne combien de temps `candy` reste utilisable APRÈS le dernier ramassage,
+   pas depuis la chute. */
+export const STAR_CANDY_FRESH_MS = 5 * 60 * 1000;
+/* Ce qu'un joueur a rapporté depuis la chute, ET qui n'est pas encore périmé.
+   ⚠️ PAR JOUEUR ET PAS COMMUN, comme les bonbons eux-mêmes (`fermeEngine.js` :
+   « le défi est individuel, personne ne court à deux »). Mettre l'offrande en
+   commun aurait fait payer la course d'un seul par la poche de l'autre.
+   ⚠️⚠️ `now` EST L'HORLOGE DE QUI LIT, JAMAIS CELLE QUI A ÉCRIT `candyUntil`
+   (§3 de CLAUDE.md) : `resolveStarCandy` pose une échéance ABSOLUE avec SA
+   propre horloge (celle de l'hôte) ; ce lecteur compare cette échéance à la
+   sienne, hôte ou invité, sans jamais comparer deux horloges entre elles.
+   ⚠️ SANS ÉCHÉANCE VALIDE (sauvegarde d'avant cette décision, ou candy jamais
+   ramassé depuis), ON TRAITE COMME PÉRIMÉ, PAS COMME ÉTERNEL — c'est le
+   changement de contrat : avant, l'absence de champ voulait dire « toujours
+   frais » ; maintenant, une lueur ne peut plus être frais sans un ticket
+   d'échéance qui le prouve. */
+export function starCandyFresh(e, who, now) {
+  const raw = Math.max(0, (e && e.candy && +e.candy[who]) || 0);
+  if (!raw) return 0;
+  if (now === undefined) return raw;   // repli seulement pour un appelant qui ne date pas encore sa lecture
+  const until = (e && e.candyUntil && +e.candyUntil[who]) || 0;
+  return (+now < until) ? raw : 0;
+}
 /* L'offrande a-t-elle été faite sur CE trou ? ⚠️ UN DICTIONNAIRE PAR LIEU, pas un
    booléen : le jour où une seconde étoile se paierait en lumière, rien à changer. */
 export function starLit(e, id) { return !!(e && e.offer && e.offer[id]); }
@@ -2432,6 +2463,14 @@ export function newStar() {
            `CLAUDE.md`), donc il vit ici, avec ce qui lui donne un sens. */
     offer: {},      // id de lieu -> { by, at } — la lumière bleue a été offerte
     candy: {},      // id de joueur -> bonbons rapportés depuis la chute
+    /* hors-zip — LA LUEUR S'ÉTEINT POUR DE VRAI. Décision de Guillaume : la
+       lumière bleue reste disponible 5 minutes après la fin du défi de fuite,
+       pas éternellement. `candyUntil` est l'ÉCHÉANCE ABSOLUE posée par l'hôte
+       au moment de `resolveStarCandy` (§3 de CLAUDE.md : une horloge, jamais
+       deux) ; `candy`, lui, n'est plus lu qu'à travers `starCandyFresh`, qui
+       compare l'échéance à l'horloge de QUI LIT, jamais à celle qui l'a
+       écrite. */
+    candyUntil: {}, // id de joueur -> horodatage au-delà duquel `candy` est périmé
     dish: null,     // { by, at, phase } — le plat chaud de l'étoile rose
     effigy: null,   // { by, at, x, y } — le figurant de la reine, en solo
     gift: {},       // id de joueur -> { at, kind } — le crochet cosmétique (§8)
@@ -2584,6 +2623,12 @@ export function migrateStar(saved) {
   }
   if (saved.candy && typeof saved.candy === "object")
     for (const k of Object.keys(saved.candy)) e.candy[String(k).slice(0, CALM_ID_MAX)] = Math.max(0, saved.candy[k] | 0);
+  /* hors-zip — une sauvegarde d'avant cette décision n'a pas `candyUntil` :
+     `starCandyFresh` la traite alors comme périmée (`until` absent), jamais
+     comme éternelle — c'est le AND, pas le OR, qui protège une reprise après
+     redémarrage du serveur (voir la note de `starCandyFresh`). */
+  if (saved.candyUntil && typeof saved.candyUntil === "object")
+    for (const k of Object.keys(saved.candyUntil)) e.candyUntil[String(k).slice(0, CALM_ID_MAX)] = Math.max(0, saved.candyUntil[k] | 0);
   /* ⚠️ UN PLAT SANS DATE N'EST PAS UN PLAT : `starDishPhase` rendrait `null` de
      toute façon, mais un objet à moitié écrit se traînerait dans l'état persisté
      et dans chaque `apply`. On le jette au chargement. */
@@ -2904,12 +2949,15 @@ export function starTameGoalKey(e, id, ctx) {
     if (ph === "cook") return "farmImpactSimmer";
     return "farmImpactWarm";
   }
-  /* 480 bis — UNE SEULE PHRASE POUR TOUTE LA BLANCHE, VOLONTAIREMENT. Elle ne
-     dépend pas de `f.inv.starLure` (donnée personnelle, jamais lue par ce
-     fichier ni par le bandeau côté client — piège n°1, myInv est un état React
-     qui vieillirait dans la boucle) : le bandeau dit d'aller préparer la
-     concoction, l'hôte reste seul juge de si elle est en poche. */
-  if (verb === "lure") return "farmImpactLure";
+  /* hors-zip — DEUX PHRASES, PAS UNE : signalé par Guillaume en jouant, le
+     chevron restait planté sur le chaudron après la fiole préparée — la même
+     étoile pointant vers un atelier déjà quitté. Le 480 bis avait choisi une
+     seule phrase EXPRÈS pour ne pas faire lire `f.inv.starLure` (un état
+     React personnel) par ce fichier ; la sortie n'est pas d'y renoncer, c'est
+     celle déjà en place pour la bleue (`ctx.candy` ci-dessus) : la donnée
+     personnelle voyage dans le CONTEXTE que l'appelant construit, jamais lue
+     ici directement. `ctx.potion` est le miroir exact de `ctx.candy`. */
+  if (verb === "lure") return (ctx && ctx.potion) ? "farmImpactLureGive" : "farmImpactLure";
   return "farmImpactTame";
 }
 /* Toutes les clés que `starGoalKey` peut rendre — DÉRIVÉES de la table, pour que
@@ -2931,7 +2979,7 @@ export const STAR_GOAL_KEYS = (() => {
         out.push("farmImpacts", "farmImpactCool", "farmImpactTame",
                  "farmImpactLight", "farmImpactLightPay",
                  "farmImpactWarm", "farmImpactSimmer", "farmImpactTake", "farmImpactCarry",
-                 "farmImpactLure");
+                 "farmImpactLure", "farmImpactLureGive");
       continue;
     }
     out.push(s.id);
@@ -3341,14 +3389,20 @@ export function resolveStarCalm(e, who, now, ctx, siteId) {
    confondu « rapporté » et « pas encore dépensé ».
    ⚠️ AVANT LA CHUTE, IL N'ACCUMULE RIEN — « la lumière bleue s'éteint en dormant ».
    Une course faite la veille de l'annonce ne compte pas, et c'est la règle qui
-   empêche une vieille ferme d'acheter le chapitre d'avance. */
+   empêche une vieille ferme d'acheter le chapitre d'avance.
+   ⚠️⚠️ hors-zip — ET IL REPOUSSE L'ÉCHÉANCE À CHAQUE COURSE. `starCandyFresh(e,
+   k, now)` rend 0 si la lumière précédente est déjà périmée : ajouter par-dessus
+   repart donc de zéro, jamais d'un flux qui aurait dû s'éteindre. `candyUntil`
+   est réécrit à CHAQUE ramassage, pas seulement au premier — courir deux fois
+   de suite prolonge la fenêtre plutôt que de la couper à la première échéance. */
 export function resolveStarCandy(e, who, n, now) {
   const add = Math.max(0, n | 0);
   if (!e || !starFallen(e) || !who || !add) return { ok: false };
   if (now !== undefined && +now < e.fall) return { ok: false, tooEarly: true };
   const k = String(who).slice(0, CALM_ID_MAX);
-  e.candy[k] = starCandyFresh(e, k) + add;
-  return { ok: true, fresh: e.candy[k], need: STAR_CANDY_PRICE };
+  e.candy[k] = starCandyFresh(e, k, now) + add;
+  e.candyUntil[k] = (+now || 0) + STAR_CANDY_FRESH_MS;
+  return { ok: true, fresh: e.candy[k], need: STAR_CANDY_PRICE, until: e.candyUntil[k] };
 }
 /* ── LA BLEUE, 2/2 : L'OFFRANDE.
    ⚠️⚠️ LE PRIX EST LE FLUX, ET LE SAC N'EST QUE CE QU'ON DÉBITE. Le premier jet
@@ -3370,7 +3424,7 @@ export function resolveStarLight(e, who, siteId, purse, now) {
   if (starHas(e, id)) return { ok: false, already: true };
   if (starLit(e, id)) return { ok: false, already: true, lit: true };
   const k = String(who || "").slice(0, CALM_ID_MAX);
-  const fresh = starCandyFresh(e, k);
+  const fresh = starCandyFresh(e, k, now);
   if (fresh < STAR_CANDY_PRICE) return { ok: false, short: true, have: fresh, need: STAR_CANDY_PRICE };
   e.candy[k] = fresh - STAR_CANDY_PRICE;
   e.offer[id] = { by: k, at: +now || 0 };

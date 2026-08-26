@@ -2926,6 +2926,53 @@ section("12. LES QUATRE VERBES (479, 480 bis)");
        `${Q.STAR_CANDY_PRICE} contre ${C.RUN_MAX_CANDIES_PER_RUN} au plafond`);
   }
 
+  /* hors-zip — LA LUEUR S'ÉTEINT POUR DE VRAI, CINQ MINUTES APRÈS LA COURSE.
+     Décision de Guillaume (deux options posées : elle s'éteint vraiment, ou
+     ce n'est qu'un rappel cosmétique — la première a été choisie). Ce bloc
+     mesure exactement ce que « `now` est l'horloge de qui lit, jamais celle
+     qui a écrit » (§3 de CLAUDE.md) veut dire ici : `candyUntil` est posé une
+     fois par l'hôte, et lu à plusieurs instants différents. */
+  {
+    const BLUE = Q.STAR_LIGHT_SITE;
+    const e = Q.newStar(); e.fall = 1;
+    Q.resolveStarCandy(e, "j1", 40, 1000);
+    ok("⚠️ juste après la course, la lumière est fraîche",
+       Q.starCandyFresh(e, "j1", 1000) === 40);
+    ok("…et le reste À UNE SECONDE de l'échéance",
+       Q.starCandyFresh(e, "j1", 1000 + Q.STAR_CANDY_FRESH_MS - 1000) === 40);
+    ok("⚠️⚠️ PASSÉ LES CINQ MINUTES, ELLE S'ÉTEINT — POUR DE VRAI",
+       Q.starCandyFresh(e, "j1", 1000 + Q.STAR_CANDY_FRESH_MS) === 0,
+       `échéance à ${1000 + Q.STAR_CANDY_FRESH_MS}`);
+    /* ⚠️⚠️⚠️ ET `e.candy["j1"]` LUI-MÊME NE BOUGE PAS : L'EXTINCTION EST LUE, PAS
+       ÉCRITE. Un lecteur qui n'a pas d'horloge (repli `now === undefined`, pour
+       un appelant qui ne date pas encore sa lecture) doit continuer de voir le
+       chiffre brut, sinon l'expiration deviendrait invisible à qui l'oublie. */
+    ok("⚠️ …et pourtant le nombre brut n'a pas été remis à zéro dans l'état",
+       e.candy["j1"] === 40 && Q.starCandyFresh(e, "j1") === 40);
+    /* Repartir de zéro, pas de la stagnation : courir À NOUVEAU après
+       l'extinction ne doit PAS additionner sur un flux déjà mort. */
+    Q.resolveStarCandy(e, "j1", 25, 1000 + Q.STAR_CANDY_FRESH_MS + 500);
+    ok("⚠️⚠️ une course après extinction repart de ZÉRO, pas du vieux total",
+       Q.starCandyFresh(e, "j1", 1000 + Q.STAR_CANDY_FRESH_MS + 500) === 25,
+       `${Q.starCandyFresh(e, "j1", 1000 + Q.STAR_CANDY_FRESH_MS + 500)} bonbons`);
+    /* Deux courses rapprochées PROLONGENT la fenêtre, elles ne la coupent pas
+       à la première échéance. */
+    const t2 = 1000 + Q.STAR_CANDY_FRESH_MS + 500;
+    Q.resolveStarCandy(e, "j1", 25, t2 + 1000);
+    ok("⚠️ courir deux fois de suite REPOUSSE l'échéance (elle ne se fige pas à la 1re course)",
+       Q.starCandyFresh(e, "j1", t2 + 1000 + Q.STAR_CANDY_FRESH_MS - 1) === 50);
+    /* Et l'offrande elle-même doit refuser une lumière périmée, même si le
+       joueur croit encore l'avoir (le sac de bonbons, lui, ne s'éteint pas —
+       seule la fraîcheur compte pour payer l'étoile). */
+    const e2 = Q.newStar(); e2.fall = 1;
+    Q.resolveStarDig(e2, BLUE, "j1", 5);
+    Q.resolveStarCandy(e2, "j1", Q.STAR_CANDY_PRICE, 10);
+    const tooLate = Q.resolveStarLight(e2, "j1", BLUE, 9999, 10 + Q.STAR_CANDY_FRESH_MS + 1);
+    ok("⚠️⚠️⚠️ arriver au trou APRÈS l'extinction refuse l'offrande, même avec le compte juste",
+       tooLate.ok === false && tooLate.short === true && tooLate.have === 0,
+       `${tooLate.have}/${tooLate.need}`);
+  }
+
   /* ── LA ROSE : LE GESTE EST LE CHEMIN. */
   {
     const ROSE = Q.STAR_WARM_SITE;
@@ -3029,6 +3076,40 @@ section("12. LES QUATRE VERBES (479, 480 bis)");
        !!mid && mid.ok === true && mid.holding > 0 && mid.holding < solo, `${mid && mid.holding} ms`);
     ok("⚠️⚠️ la fiole en poche assez longtemps l'apprivoise",
        last.ok === true && Q.starHas(e, WHITE));
+  }
+
+  /* hors-zip — LE CHEVRON DE LA BLANCHE SUIT LA FIOLE, PAS UN ATELIER FIGÉ.
+     Signalé par Guillaume en jouant : une fois l'Essence préparée, le chevron
+     restait planté sur le chaudron déjà quitté au lieu de désigner le trou
+     blanc. Ce bloc rejoue `starTameGoalKey` ET `starTargetSite` (jamais l'un
+     sans l'autre, la leçon du 449 : deux réponses à « où vais-je » doivent
+     être mesurées ensemble ou pas du tout) dans les deux états de `ctx.potion`. */
+  {
+    const WHITE = Q.STAR_VERB_SITE.lure;
+    const e = Q.newStar(); e.fall = 1;
+    Q.resolveStarDig(e, WHITE, "j1", 5);
+    /* ⚠️ `focus: WHITE` FIXE LE TROU VISÉ, COMME LE FAIT LE JOUEUR EN CLIQUANT
+       UNE PUCE (§4 de `QUETE.md`, hors-zip) : sans lui, `starGoalKey` retombe
+       sur `missing[0]`, le premier trou manquant de la TABLE, qui n'est pas
+       forcément la blanche — le contrôle aurait mesuré un autre trou par
+       accident selon l'ordre de `STAR_FARM_IMPACTS`. */
+    const ctxNoPotion = { potion: false, focus: WHITE };
+    const ctxPotion = { potion: true, focus: WHITE };
+    ok("⚠️ sans la fiole, la phrase et le chevron pointent le CHAUDRON",
+       Q.starTameGoalKey(e, WHITE, ctxNoPotion) === "farmImpactLure"
+       && Q.starTargetSite(e, ctxNoPotion) === "cauldron");
+    ok("⚠️⚠️ AVEC la fiole, la phrase et le chevron pointent LE TROU BLANC, plus le chaudron",
+       Q.starTameGoalKey(e, WHITE, ctxPotion) === "farmImpactLureGive"
+       && Q.starTargetSite(e, ctxPotion) === WHITE);
+    /* ⚠️⚠️⚠️ ET C'EST LA MOITIÉ CACHÉE DU MÊME CORRECTIF : la clé qui bascule le
+       chevron est la MÊME que celle qui force le monde maléfique (voir
+       `needsEvil`, FermeGame.js) — sans cette sortie, le monde restait forcé
+       et le trou, à la ferme, devenait inatteignable même avec le bon
+       chevron. Un banc de texte ne peut pas voir un forçage de monde ; on
+       vérifie donc directement que la clé qui déverrouille EST bien celle
+       que `starTameGoalKey` rend une fois la fiole prête. */
+    ok("⚠️⚠️⚠️ la clé « fiole prête » n'est plus celle qui force le monde maléfique",
+       Q.starTameGoalKey(e, WHITE, ctxPotion) !== "farmImpactLure");
   }
 
   /* ── LA REINE : DEUX BORDS OPPOSÉS. */

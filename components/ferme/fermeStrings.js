@@ -160,7 +160,13 @@ const STAR_FR = {
     titleEmpty: "Rien.",
     bodyStarLight: "Une petite lumière bleue se tasse au fond dès que tu la regardes.",
     bodyStarWarm: "Une petite lumière rose. Elle ne recule pas : elle renifle vers toi.",
-    bodyStarLure: "Une petite lumière blanche. Elle bondit hors de portée dès que tu approches.",
+    /* hors-zip — LE TEXTE SUIT LE DESSIN. Elle ne bondit plus latéralement (ancien
+       texte, ancien visuel) : elle plonge sous la terre sur place dès qu'on
+       l'approche à mains nues (`Q.starHideK`/`Q.starHideAnim` appliqués à la
+       verticale, voir FermeGame.js). Un texte qui décrit un mouvement que
+       l'écran ne montre plus dit d'emblée le POURQUOI (les mains vides), pas
+       seulement le symptôme. */
+    bodyStarLure: "Une petite lumière blanche. Elle plonge sous la terre dès que tu approches à mains nues.",
     bodyMaterial: "Sous la cendre : lisse seulement sur sa cassure. La croûte a pris ; le cœur brûle encore.",
     bodyEmpty: "De la cendre tiède, du sable vitrifié, et rien dedans. Toutes les lumières n'abritaient pas quelque chose.",
     /* ╔═══════════════════════════════════════════════════════════════════════
@@ -235,11 +241,18 @@ const STAR_FR = {
       farmImpactSimmer: "Ça mijote au chaudron. Ne va pas trop loin, ce sera vite prêt.",
       farmImpactTake: "Le plat est prêt au chaudron. Prends-le (E) et ne traîne pas.",
       farmImpactCarry: "Porte le plat à son cratère avant qu'il refroidisse (E).",
-      /* 480 bis — LA BLANCHE : une seule phrase pour toute l'étape (voir la
-         note de `starTameGoalKey`, quete.js) — elle fuit tant que la fiole
-         n'est pas prête, et le chaudron est dans le monde maléfique, forcé
-         pendant cette étape. */
+      /* hors-zip — DEUX PHRASES, PAS UNE (voir la note de `starTameGoalKey`,
+         quete.js) : celle-ci tant que la fiole n'est pas prête (le chaudron
+         est dans le monde maléfique, forcé pendant cette étape), l'autre
+         (`farmImpactLureGive`) dès qu'elle l'est — signalé par Guillaume, le
+         chevron restait planté sur le chaudron une fois la fiole en poche. */
       farmImpactLure: "Elle fuit à mains nues. Prépare une Essence d'étoile au chaudron (E).",
+      /* hors-zip — AUCUN « (E) » : le geste est une simple approche, tenue
+         immobile près du trou (voir `starCalmSelf`, FermeGame.js — la blanche
+         ne demande pas qu'on lui tourne le dos, juste la proximité), pas une
+         touche à presser. Même famille que `farmImpactTame`, qui ne mentionne
+         pas non plus de touche pour la même raison. */
+      farmImpactLureGive: "Tu as l'Essence d'étoile. Approche du trou blanc, elle viendra d'elle-même.",
       farmImpactCool: "Une plaque noire attend d'être refroidie. Reviens l'examiner (E).",
       townWait: "Prends le train pour Valley Town. Reste-y, occupe-toi : l’étoile insiste.",
       craterHot: "À l'est de Valley Town, le trou brûle encore. Attends qu'il refroidisse.",
@@ -296,6 +309,15 @@ const STAR_FR = {
        par ne plus s'accorder (voir myStarFocusRef, FermeGame.js). */
     focusTip: (mine, shared) => (mine ? "Ton objectif personnel — reclique pour l'annuler" : "Viser ce trou en priorité, sans attendre les autres")
       + (shared ? " · un camarade vise le même" : ""),
+    /* hors-zip — LE TOAST QUI ANNONCE LES PUCES CLIQUABLES, À PLUSIEURS
+       SEULEMENT. Demande de Guillaume : sans lui, la fonctionnalité entière
+       (myStarFocusRef, la puce cliquable ci-dessus) tenait sur une infobulle
+       qu'il faut SURVOLER pour découvrir — donc jamais vue au doigt, et jamais
+       vue par quelqu'un qui ne pense pas à passer la souris sur une puce déjà
+       pleine. Un seul toast, une seule fois par partie (voir starFocusHintRef,
+       FermeGame.js), déclenché dès que le chapitre 1 est actif ET qu'un
+       camarade est là — jamais en solo, où la question ne se pose pas. */
+    focusHint: "Vous êtes plusieurs. Clique une puce pour viser un trou en particulier.",
     /* HORS-ZIP — LE COMPTE À REBOURS DU GROS MÉTÉORE. Signalé par Guillaume :
        la chute semblait ne jamais arriver, faute d'affichage — le mécanisme
        (deux minutes de présence active en ville, voir STAR_TOWN_ACTIVE_MS
@@ -873,7 +895,8 @@ const STAR_EN = {
     titleEmpty: "Nothing.",
     bodyStarLight: "A small blue light huddles at the bottom the moment you look at it.",
     bodyStarWarm: "A small pink light. It does not shrink back: it sniffs towards you.",
-    bodyStarLure: "A small white light. It hops out of reach the moment you approach.",
+    // hors-zip — see the FR block: she dives underground on the spot now, not sideways.
+    bodyStarLure: "A small white light. It dives underground the moment you approach empty-handed.",
     bodyMaterial: "Under the ash: smooth only where it broke. The crust has set; the core still burns.",
     bodyEmpty: "Warm ash, glassed sand, and nothing inside. Not every light was hiding something.",
     /* ⚠️ ZIP 479 — voir la note française : l'overlay enseigne le geste, et il
@@ -940,6 +963,8 @@ const STAR_EN = {
       farmImpactTake: "The dish is ready at the cauldron. Take it (E) and get going.",
       farmImpactCarry: "Carry the dish to its crater before it goes cold (E).",
       farmImpactLure: "It flees bare-handed. Brew a Star Essence at the cauldron (E).",
+      // hors-zip — see the FR block: no "(E)", the gesture is a plain hold, not a keypress.
+      farmImpactLureGive: "You have the Star Essence. Go near the white hole — she will come on her own.",
       farmImpactCool: "A black plate is waiting to cool down. Come back and examine it (E).",
       townWait: "Take the train to Valley Town. Stay there, keep busy: the star insists.",
       craterHot: "East of Valley Town the hole still burns. Wait for it to cool.",
@@ -968,6 +993,8 @@ const STAR_EN = {
     // hors-zip — tooltip for the clickable chapter-1 pips, see the FR block.
     focusTip: (mine, shared) => (mine ? "Your personal target — click again to clear it" : "Aim for this hole first, without waiting on the others")
       + (shared ? " · a friend is aiming for the same one" : ""),
+    // hors-zip — the multiplayer toast that announces the clickable pips, see the FR block.
+    focusHint: "There's more than one of you. Click a dot to pick a hole of your own.",
     // The big meteor's countdown — host-side only, see the FR block for why.
     townFallCountdown: (mmss) => `It's rumbling. ${mmss} more of activity in town and the sky gives way.`,
     /* Le rappel de reprise. ⚠️ UNE FOIS PAR SESSION, jamais deux — un « où en
