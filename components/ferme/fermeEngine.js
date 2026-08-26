@@ -4778,6 +4778,28 @@ export function generateTownWorld() {
               ground[i] = C.G_BRIDGE; solid[i] = 0; objects[i] = C.O_NONE; objHp.delete(i);
             }
           }
+          /* hors-zip — LES DEUX RAMBARDES DU PONT DU PARC, ENFIN EN COLLISION.
+             Signalé par Guillaume après le pont de l'anse sud (déjà corrigé,
+             voir plus bas) : « le pont n'est pas corrigé », et de fait ce
+             SECOND pont — l'arche japonaise de l'étang — n'avait jamais reçu
+             le même traitement. `archBridge` (fermeArt.js) peint une
+             balustrade des deux côtés du tablier ; rien ne la rendait solide,
+             donc on marchait à travers, droit dans l'étang. Même principe que
+             la rive sud : on solidifie seulement les DEUX rangées d'eau qui
+             bordent IMMÉDIATEMENT le tablier (`br-1` au nord, `br+2` au sud),
+             jamais le tablier lui-même — un garde-corps vit à côté de la
+             surface qu'il borde, pas dessus. Le test `ground===G_WATER` est
+             nécessaire ici (contrairement à la rive sud) : l'encroachment des
+             culées (juste au-dessus) a déjà changé certaines de ces cases en
+             pelouse ou en gravier près des deux têtes, et ce sol-là doit
+             rester praticable. */
+          for (let x = bA; x <= bB; x++) {
+            for (const y of [br - 1, br + 2]) {
+              if (!inMap(x, y)) continue;
+              const i = id(x, y);
+              if (ground[i] === C.G_WATER) solid[i] = 1;
+            }
+          }
           /* LES DEUX APPROCHES. ⚠️ SANS ELLES LE PONT NE MÈNE NULLE PART : la
              promenade de l'étang ne longe que la rive sud-est, donc la rive
              OUEST n'a aucun chemin. On tire l'allée de chaque tête jusqu'à ce

@@ -11,78 +11,66 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**HORS-ZIP — CINQ DEMANDES DE GUILLAUME EN SESSION DIRECTE SUR LES COLLISIONS, LES LABELS DE
-SALLE ET LE MAIRE (pas d'upload de zip, donc pas de numéro).** Les passes précédentes (portes du
-tribunal, comptes à rebours, pose du maire, didascalies) sont TERMINÉES et leurs trouvailles
-vivent dans le tableau des leçons ; ce bloc les remplace entièrement, comme le veut la règle du §14.
+**HORS-ZIP — SESSION DIRECTE : TROIS BUGS DE COLLISION/LUMIÈRE SIGNALÉS PAR GUILLAUME EN JOUANT,
+PLUS DEUX DEMANDES SUR LA QUÊTE DE L'ÉTOILE (pas d'upload de zip, donc pas de numéro).** La passe
+précédente (labels de salle, escalier du tribunal, rambardes, maire) est TERMINÉE et sa trouvaille
+la plus utile a rejoint le tableau des leçons ; ce bloc la remplace entièrement, comme le veut la
+règle du §14.
 
-1. **🪧 Les labels de salle, repensés — LIVRÉ, AVEC UN VRAI BUG DE TRI TROUVÉ.** Signalés
-   « inélégants et ils déconnent ». La plaque de porte (`FermeGame.js`, bloc PORTES & PLAQUES)
-   vivait dans la file de tri `draws` avec une clé `(g.y0+0.6)*T` — la rangée de la PORTE — alors
-   qu'elle se peignait 16px plus haut : son ordre de superposition avec les personnages ne
-   correspondait jamais à sa position réelle. **Corrigé en la sortant de `draws`** : elle rejoint
-   désormais le même bloc immédiat que le chambranle, donc il n'y a plus de clé à faire
-   correspondre. Le style change aussi : plus de boîte crème façon post-it (copiée des enseignes
-   de rue) — une plaque gravée encastrée dans le linteau, texte en léger relief. Même geste sur la
-   mini-carte du tribunal : `label.split(" ")[0]` pouvait ne laisser que l'emoji d'une salle
-   étroite (« 🔒 Cellules de garde à vue » → juste 🔒) ; remplacé par un repli sur deux lignes.
-   **Vu en jeu** (téléporté à « Mairie — l'étage », sans marcher) : la plaque « Archives
-   municipales » s'affiche correctement, lisible, intégrée au chambranle.
-2. **🪜 L'intégration visuelle de l'escalier du tribunal — LIVRÉ.** Le bloc importé (photo
-   découpée, zip 467) creusait ses joints jusqu'au quasi-noir (L≈13-40) contre un parvis pavé qui
-   ne descend pas sous L≈150 — l'écart signalé. `liftShadowFloor` (`fermeArt.js`) relève les tons
-   sous 100 vers un plancher de 55, en rampe (pas un plafond plat) et STRICTEMENT identité au-delà
-   de 100. ⚠️ **Le premier jet touchait tout le canevas d'un seul coup** et a fait passer le
-   contrôle de détourage de `render-escaliers.mjs` (§0, l'aplat gris résiduel) de 9 à 46 px — un
-   vraie régression trouvée en relançant le banc, pas en la devinant. Voir le tableau des leçons.
-3. **🧱 Les collisions des rambardes de l'escalier, gauche/droite — LIVRÉ, TROUVÉ AU PIXEL PRÈS.**
-   Guillaume : contact possible à gauche, chevauchement visible à droite. `TOWN_STAIRS`/
-   `TOWN_RAILS` (zip 447) n'avaient jamais été revérifiés contre le bitmap qui les a remplacés
-   visuellement (zip 467). Un script d'appoint a superposé les rectangles de collision sur le
-   vrai bloc importé (`tools/lib-canvas.mjs`) : les DEUX poteaux de la volée basse sont peints une
-   case plus à l'OUEST que leur collision. Corrigé (x 142→141 et 149→148, toute la volée basse y
-   compris `TOWN_STAIRS`) et revérifié visuellement — les poteaux tombent maintenant au centre de
-   leur case. `render-escaliers`, `verify-vallee` (205/205) intacts.
-4. **🚧 La rambarde 'iron' de l'escalier — LIVRÉ.** Demande : pouvoir marcher DERRIÈRE la
-   ferronnerie décorative, motifs découpés correctement. Le bloc entier se peignait d'un bloc,
-   toujours avant le joueur : celui-ci ne pouvait donc jamais passer derrière. Un calque
-   (`courtStairIronRailLayer`, `fermeArt.js`) découpe cette seule bande et n'y garde opaque que le
-   tracé sombre (le reste devient transparent) ; il rejoint la file de tri (`pushE`) au lieu du
-   bloc immédiat, exactement le principe déjà éprouvé sur le pont (`townBridgeDepthKeys`).
-5. **🌉 La rambarde du pont du jardin — LIVRÉ.** Le tablier (deux rangées de bois) n'avait AUCUNE
-   collision sur ses bords : la balustrade peinte n'empêchait rien, on marchait dedans, droit vers
-   l'eau. Solidifié les deux rangées d'eau qui bordent immédiatement le tablier (nord et sud),
-   jamais le tablier lui-même — même principe que `TOWN_RAILS`. `verify-vallee` 205/205 (aucune
-   destination rendue inatteignable).
-6. **🎩 Une reprise chez le maire — LIVRÉ, EN DÉROGATION ASSUMÉE À UNE DÉCISION DE GUILLAUME.**
-   Demande : bouton « vous avez contrarié le maire, voulez-vous vous reprendre ? ». Ça contredit
-   noir sur blanc la décision du 480 (« sans aucun droit à l'erreur, la seule vraie décision du
-   chapitre ») — signalé avant d'écrire une ligne, et Guillaume a choisi explicitement l'UNDO
-   CIBLÉ (annuler juste la dernière réponse fautive), une fois par audience. Implémenté
-   entièrement côté VUE (`MaireScene.js`) : `MR.mayorPlay` n'est appelé qu'après confirmation, donc
-   `maire.js` et `verify-maire` (113/113) n'ont pas bougé d'une ligne — décliner l'offre ne
-   consomme rien, le jeton ne part qu'en servant vraiment.
+1. **🌉 Le pont du PARC (l'arche japonaise de l'étang) — LIVRÉ.** Guillaume, après la passe
+   précédente sur le pont du jardin : « le pont n'est pas corrigé ». Il avait raison : ce sont DEUX
+   ponts distincts (`fermeEngine.js`), et le correctif de rambarde n'avait été posé QUE sur celui de
+   l'anse sud — celui du parc n'avait jamais reçu la même solidité. Même principe copié à
+   l'identique : les deux rangées d'eau qui bordent IMMÉDIATEMENT le tablier deviennent solides
+   (`ground===G_WATER` en garde, à cause de l'encroachement des culées), jamais le tablier
+   lui-même. `verify-vallee` 205/205 (aucune destination rendue inatteignable).
+2. **🔦 Le rayon de la torche au dézoom — LIVRÉ, CAUSE TROUVÉE.** Un lampadaire suit déjà l'altitude
+   de sa case (`elAt(pr.x,pr.y)*EP/T`, écrit de longue date) ; la torche PORTÉE — la mienne ou celle
+   d'un camarade — ne l'a jamais fait, alors que le personnage, lui, monte bien avec la case
+   (`myE`/`pushE`). Le halo restait donc au sol pendant que le porteur montait, un écart qui grandit
+   avec l'altitude et n'est visible qu'aux seuls endroits où il y a des marches — c'est-à-dire
+   exactement où le dézoom de proximité (`TOWN_ZOOM_NEAR`) se déclenche. Les deux symptômes
+   n'étaient qu'un seul défaut, vu au même endroit. Corrigé dans `FermeGame.js` (les deux lumières
+   de torche réutilisent `playerElevTown`, comme les lampadaires).
+3. **🪜 « D'autres zones des escaliers n'ont pas été corrigées » — PAS RETROUVÉ, ET C'EST DIT
+   FRANCHEMENT PLUTÔT QUE DEVINÉ.** La passe précédente n'avait revérifié que la VOLÉE BASSE du
+   tribunal. Un script de diagnostic a superposé, poteau par poteau, la volée HAUTE et les deux
+   rambardes horizontales contre le bloc importé (même méthode qui avait trouvé le défaut de la
+   volée basse) : les quatre s'alignent correctement, aucun décalage d'une case comme celui déjà
+   corrigé. **Rien n'a donc été touché ici** — modifier des nombres sans preuve aurait été le
+   défaut inverse (« corriger ce qu'on n'a pas vu casser »). Voir la prochaine action.
+4. **⭐ Le chapitre 1 se répartit enfin à plusieurs — LIVRÉ.** Demande : à deux joueurs, pouvoir
+   viser des trous différents plutôt que suivre le même chevron figé sur le premier de la table.
+   Chaque puce du bandeau (les huit déjà affichées, `Q.STAR_FARM_IMPACTS`) devient cliquable :
+   cliquer en fait SON objectif personnel, recliquer l'annule. Un unique point de jointure
+   (`ctx.focus`, lu par `starGoalKey` ET `starTargetSite`, jamais deux listes) fait que le chevron
+   et le bandeau de CE joueur suivent son choix sans toucher à l'ordre par défaut de l'autre. Rien
+   n'est arbitré ni récompensé (confort de lecture, comme le familier-guide) ; le choix est
+   diffusé avec la position (`pub.starFocus`, zéro message neuf) pour qu'un indice discret
+   (pointillé) apparaisse si un camarade vise le même trou — décision de Guillaume : autorisé,
+   jamais bloqué. `verify-quete` 596/596 intact.
+5. **⭐ L'étoile blanche plonge — LIVRÉ.** Décrite comme « fuyante » dans le texte, elle se
+   comportait pourtant comme les deux autres. Option retenue (la plus sûre mécaniquement, sur les
+   deux proposées) : sans la fiole d'Essence en poche, elle replonge dans la terre dès qu'on
+   l'approche — pas de nouvelle IA de fuite ni de nouvel objet à fabriquer. Réutilise la courbe déjà
+   éprouvée de la cachette devant un résident (`Q.starHideK`/`Q.starHideAnim`, §3 de QUETE.md),
+   appliquée à la verticale (elle s'enfonce sur place) plutôt qu'au col du joueur, plus une bouffée
+   de terre (`drawStarDust`, déjà utilisé sur la fouille). `render-etoile`/`verify-quete` intacts.
 
-⚠️⚠️⚠️ **CE QUI N'A PU ÊTRE JOUÉ EN AUTOMATIQUE, ET C'EST REDEVENU LE MÊME OBSTACLE QUE LA
-DERNIÈRE FOIS.** L'automatisation du déplacement (flèches scriptées) s'est de nouveau bloquée en
-session — parfois un mouvement passe, la plupart du temps aucun, sans schéma trouvé, exactement le
-symptôme déjà rencontré lors de la passe des portes du tribunal. Seul le label de salle a pu être
-confirmé À L'ÉCRAN (téléportation directe, sans marche). **LA PROCHAINE ACTION : JOUER CES CINQ
-CHOSES EN VRAI, AU CLAVIER.** Dans l'ordre le plus rentable : (a) à l'escalier du tribunal
-(Haute-Ville), marcher contre le poteau ouest de chaque volée — contact franc attendu — puis contre
-l'est — blocage net, sans chevauchement ; (b) longer la rambarde 'iron' en s'approchant par le
-nord : le joueur doit disparaître derrière son tracé, pas rester devant ; (c) traverser le pont du
-jardin et essayer de sortir par les côtés — bloqué désormais, plus de passage à travers ; (d) lire
-au moins trois plaques de salle différentes des DEUX bâtiments (mairie et tribunal), une avec un
-nom long ; (e) en audience chez le maire, choisir DÉLIBÉRÉMENT une réponse fautive : l'offre de
-reprise doit apparaître, marche dans les deux sens (accepter/décliner), et une SECONDE faute plus
-loin dans la même audience ne doit PLUS l'offrir (jeton dépensé). ⚠️ **ET DEUX POINTS DE LA PASSE
-D'AVANT RESTENT EUX AUSSI NON CONFIRMÉS, POUR LA MÊME RAISON** : la largeur de porte du
-tribunal/mairie sentie à la marche, et le style didascalie/réplique sur les onze nœuds et quatre
-maires jamais vus (seul `m1` l'a été).
-
-⚠️⚠️ **ET LA DETTE DU 479 N'A TOUJOURS PAS BOUGÉ : DEUX POSTES À DEUX QUI N'ONT JAMAIS ÉTÉ TENUS** —
-le relais du plat (l'un cuisine, l'autre court) et les deux bords du cratère.
+⚠️⚠️⚠️ **RIEN DE CE QUI PRÉCÈDE N'A ÉTÉ CONFIRMÉ À L'ÉCRAN — MÊME OBSTACLE QUE LES PASSES
+PRÉCÉDENTES.** Les cinq points ci-dessus sont vérifiés par les bancs (`verify-vallee` 205/205,
+`verify-quete` 596/596, bundle esbuild, `next build`) et par lecture de code, jamais par une
+session jouée : l'automatisation du déplacement reste le blocage documenté depuis plusieurs
+sessions. **LA PROCHAINE ACTION : JOUER CES CINQ CHOSES EN VRAI.** Dans l'ordre le plus rentable :
+(a) le pont du parc (l'étang, pas celui du jardin) — essayer de sortir par les côtés du tablier,
+bloqué désormais ; (b) porter la torche de nuit et monter n'importe quel escalier de la
+Haute-Ville en dézoomant — le halo doit rester SOUS soi, plus à côté ; (c) **redemander à
+Guillaume, capture à l'appui, OÙ EXACTEMENT le chevauchement des escaliers se produit encore** —
+le point 3 ci-dessus n'a rien changé faute d'avoir pu le reproduire ; (d) à deux clients, cliquer
+deux puces différentes du bandeau et vérifier que les deux chevrons divergent, puis cliquer la
+même puce sur les deux et vérifier l'indice discret ; (e) approcher l'étoile blanche sans fiole
+(elle doit plonger, pas rester immobile), puis revenir avec une fiole en poche et vérifier qu'elle
+se laisse enfin approcher.
 
 ⚠️ **DÉCISION DE GUILLAUME, TOUJOURS EN VIGUEUR : LE BUG DU CHAUDRON-ARTÉFACT VISIBLE SUR 4 TERRES/5
 N'EST PAS CORRIGÉ.** Le sprite scintillant (`FermeGame.js`) reste sans la garde `spec.key==="evil"`
@@ -230,10 +218,10 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 
 | # | La leçon, en une phrase | Où est le détail |
 |---|---|---|
-| hors-zip | ⚠️⚠️ **UN MÉCANISME EXACT SANS AUCUN AFFICHAGE SE JOUE COMME UN MÉCANISME CASSÉ.** Les deux minutes de présence active qui déclenchent le gros météore (`STAR_TOWN_ACTIVE_MS`) étaient justes depuis toujours, et invisibles depuis toujours : aucun compte à rebours, aucune barre, rien qui dise au joueur qu'il progresse. Guillaume l'a signalé comme un bug (« semble ne jamais tomber ») alors que c'était un défaut de FEEDBACK, pas de logique. *Un mécanisme qu'on ne peut pas voir progresser est indiscernable, pour le joueur, d'un mécanisme qui ne marche pas.* | `starTownActiveRef`, `.ferme-wait-pill`, FermeGame.js |
 | hors-zip | ⚠️⚠️⚠️ **UN REPLI ANTI-`NaN` DANS UNE FONCTION MIROIR (GAUCHE/DROITE PAR UN PARAMÈTRE `side`) QUI OUBLIE DE MULTIPLIER PAR `side` CASSE UN SEUL CÔTÉ, ET SEULEMENT QUAND LA CIBLE TOMBE DANS LE CAS DÉGÉNÉRÉ.** `solveArm` mirroir le bras gauche du droit sur tout son calcul SAUF sur son repli (produit vectoriel presque nul), qui retombait sur +X MONDE en dur — le côté du bras DROIT, appliqué de temps en temps au bras GAUCHE. D'où le « parfois » signalé par Guillaume plutôt qu'un défaut systématique qu'une seule pose aurait suffi à voir. *Un invariant tenu partout dans une fonction doit être vérifié aussi dans son cas limite, pas seulement dans son chemin normal.* | `solveArm`, `maireBureau.js` |
 | hors-zip | ⚠️⚠️⚠️ **UN VISUEL BAKÉ IMPORTÉ APRÈS SA COLLISION N'HÉRITE JAMAIS AUTOMATIQUEMENT DE SA POSITION, ET RIEN NE LE VÉRIFIE.** `TOWN_RAILS`/`TOWN_STAIRS` (zip 447, rambarde encore procédurale) n'ont jamais été recalés quand le zip 467 a remplacé tout le visuel par une photo découpée : les deux poteaux de la volée basse étaient peints une case à l'ouest de leur collision, jamais vu parce qu'aucun banc ne compare les pixels du bitmap aux cases logiques qui le bordent — seulement sa taille et son détourage. *Un import bitmap qui remplace un dessin procédural doit revérifier au pixel les collisions écrites POUR l'ancien dessin, pas les supposer encore justes.* | `TOWN_RAILS`, `TOWN_STAIRS`, `fermeConstants.js` |
 | hors-zip | ⚠️⚠️ **UN FILTRE DE TEINTE APPLIQUÉ À TOUT UN CANEVAS PEUT FAIRE GLISSER UN CONTRÔLE QUI SURVEILLE UNE BANDE DE COULEUR PRÉCISE, MÊME QUAND LA GÉOMÉTRIE NE BOUGE PAS.** Relever le point noir de l'escalier importé (`liftShadowFloor`) a fait passer le détecteur d'aplat gris résiduel de `render-escaliers.mjs` de 9 à 46 px : la compression de teinte rapprochait des pixels auparavant distincts dans la bande `[114,150]` que ce banc surveille. Corrigé en rendant la fonction IDENTITÉ stricte au-delà d'un seuil, jamais en désactivant le contrôle. *Un banc de structure et un filtre de couleur peuvent lire le même canevas sans le savoir l'un de l'autre — relancer le banc après un simple changement de teinte n'est pas optionnel.* | `liftShadowFloor`, `fermeArt.js` |
+| hors-zip | ⚠️⚠️⚠️ **UN CORRECTIF POSÉ SUR UNE SEULE INSTANCE D'UN MOTIF RÉPÉTÉ NE COUVRE PAS SA SŒUR.** La rambarde du pont de l'anse sud a reçu sa collision ; le pont du PARC, un second bloc de génération pour le même geste visuel, ne l'avait jamais reçue — personne n'avait pensé à relire l'autre pont. Même défaut sur la lumière, le même jour : le lampadaire suit l'altitude de sa case depuis longtemps, la torche PORTÉE ne l'a jamais fait, alors que les deux dessinent la même mécanique de halo perçant le voile nocturne. *Une correction trouvée sur UN exemplaire d'un motif qui existe ailleurs dans le code ne se généralise pas toute seule — il faut aller vérifier expressément les autres exemplaires, jamais supposer qu'ils partagent le correctif.* | `fermeEngine.js` (pont du parc), `FermeGame.js` (torche, `playerElevTown`) |
 
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
@@ -1152,6 +1140,16 @@ erreur** en choisissant mal.
    `STAR_FARM_CRATER_DRAW_SCALES`/`fermeConstants.js`, que leur colonne de droite désignait déjà —
    rien n'est perdu, ces deux défauts restent corrigés à leur code. Session directe, sans upload —
    d'où l'étiquette.)**.
+
+   **hors-zip, pont/torche/quête (VINGT-SIXIÈME passe : la ligne « mécanisme sans affichage » du
+   hors-zip précédent part avant la leçon de cette session (un correctif posé sur un pont ou un
+   porteur de lumière ne couvre pas son double ailleurs dans le code) : une retirée, une ajoutée, le
+   tableau reste à sa taille. Son détail retiré reste dans `starTownActiveRef`/`.ferme-wait-pill`,
+   que sa colonne de droite désignait déjà. Le bloc ⏭️ REPRISE a été remplacé en entier (pont du
+   parc, torche, escaliers non retrouvés, focus personnel du chapitre 1, plongeon de l'étoile
+   blanche) — aucun des cinq n'a pu être rejoué à l'écran, l'automatisation du déplacement restant
+   bloquée ; seuls les bancs (`verify-vallee` 205/205, `verify-quete` 596/596), le bundle esbuild et
+   `next build` ont vérifié cette livraison.)**.
 
    **480 bis (VINGT-ET-UNIÈME passe : la ligne 478 part avant la leçon de ce zip — une retirée,
    une ajoutée, le tableau reste à sa taille et couvre exactement 479 à 480 bis. Son détail reste

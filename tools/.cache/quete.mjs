@@ -1989,7 +1989,15 @@ export function starTargetSite(e, ctx) {
   if (goal === "farmImpacts" || goal === "farmImpactCool"
       || goal === "farmImpactTame" || goal === "farmImpactLight"
       || goal === "farmImpactLightPay" || goal === "farmImpactCarry") {
-    const id = starMissing(e).find(k => STAR_SITE[k] && STAR_SITE[k].spot === "starFarmImpact");
+    /* hors-zip — MÊME CONDITION DE FOCUS QUE `starGoalKey`, LIGNE POUR LIGNE.
+       `goal` a déjà été dérivé du site personnel s'il y en a un ; cette branche
+       doit désigner CE MÊME site, pas rejouer sa propre recherche du premier de
+       la table — sinon le chevron pointerait un trou pendant que le bandeau
+       parle d'un autre, exactement le défaut du 449/479 qu'un commentaire plus
+       haut promet déjà d'éviter. */
+    const missing = starMissing(e);
+    const id = (ctx && ctx.focus && missing.includes(ctx.focus)) ? ctx.focus
+      : missing.find(k => STAR_SITE[k] && STAR_SITE[k].spot === "starFarmImpact");
     return id || null;
   }
   const id = STAR_GOAL_TARGET[goal] || goal;
@@ -2767,7 +2775,17 @@ export function starChapterKey(e) {
 export function starGoalKey(e, ctx) {
   if (!e || !starFallen(e) || starDone(e)) return null;
   const missing = starMissing(e);
-  const first = missing[0];
+  /* hors-zip — LE FOCUS PERSONNEL, ET C'EST LE SEUL ENDROIT OÙ IL JOUE. Demande
+     de Guillaume : le chapitre 1 ne suit aucun ordre imposé, donc un joueur qui
+     a choisi de creuser le SEPTIÈME trou de la table ne doit pas se voir répéter
+     « il en reste un » pointé sur le PREMIER — c'est très exactement le défaut
+     qu'il a signalé (le chevron restait rivé au trou de la table pendant qu'on
+     visait le passage sombre pour l'étoile blanche). `ctx.focus` ne peut désigner
+     qu'un lieu ENCORE manquant du chapitre EN COURS (`missing.includes`) : un
+     choix périmé (le lieu vient d'être résolu, ou appartient à un autre chapitre)
+     retombe silencieusement sur `missing[0]`, jamais sur une clé inventée — la
+     même discipline de repli que le reste de cette table (§4 de CLAUDE.md). */
+  const first = (ctx && ctx.focus && missing.includes(ctx.focus)) ? ctx.focus : missing[0];
   /* ⚠️⚠️ ZIP 454 — LES DEUX NOUVELLES ÉTAPES PASSENT DEVANT, ET SEULEMENT QUAND
      ELLES SONT ACTIONNABLES. C'est le sens de « le rôle des étoiles est de nous
      guider dans le projet » : le bandeau est la voix de l'étoile.

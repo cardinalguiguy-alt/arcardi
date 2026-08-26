@@ -384,6 +384,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [myEnergy, setMyEnergy] = useState(C.MAX_ENERGY);
   const [myTools, setMyTools] = useState({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const [myInv, setMyInv] = useState(null);
+  const myInvRef = useRef(null);   // hors-zip — miroir pour la boucle de rendu (piège n°1, on n'y lit jamais un state React)
+  useEffect(() => { myInvRef.current = myInv; }, [myInv]);
   const [myQuests, setMyQuests] = useState(null); // {questId: true}
   const [questOpen, setQuestOpen] = useState(true);
   const [questsHidden, setQuestsHidden] = useState(false); // true = checklist remplie depuis plus de 30 min -> disparition définitive
@@ -1114,6 +1116,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      animation d'une échéance, c'est-à-dire à recalculer la même chose deux fois. */
   const starHideKRef = useRef({ k: 0, last: 0 });
   const starHideSaidRef = useRef(false);             // la phrase « elle n'existe que pour toi », une fois
+  /* hors-zip — L'ÉTOILE BLANCHE PLONGE, ELLE NE FUIT PAS. Demande de Guillaume :
+     décrite comme « fuyante », elle se comportait pourtant exactement comme les
+     deux autres (immobile, même pose). Option retenue (la plus sûre
+     mécaniquement) : sans la fiole en poche, elle replonge dans la terre dès
+     qu'on l'approche, au lieu de se déplacer — aucune IA de fuite à écrire,
+     aucun nouvel objet, et ça réutilise la MÊME courbe déjà éprouvée que la
+     cachette devant un résident (`Q.starHideK`/`Q.starHideAnim`, §3 de
+     QUETE.md) : on ne réécrit pas un geste qui existe déjà, on l'applique à la
+     verticale plutôt qu'au col du joueur. `wasHidden` sert uniquement à
+     détecter le FRONT montant pour déclencher la bouffée de terre une fois,
+     pas à chaque image. */
+  const starLureDiveRef = useRef({ k: 0, last: 0, wasHidden: false });
+  const starLurePoofUntilRef = useRef(0);
   const starSeenRef = useRef({});                    // scènes/bulles déjà vues DANS CETTE SESSION (le rappel, une fois)
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ZIP 453 — CE QUI SE DIT QUAND LE MONDE CHANGE. LE VEILLEUR.
@@ -1149,6 +1164,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // manuel de Guillaume.
   const starForcedByQuestRef = useRef(false);
   const starGuidePathRef = useRef({ at: 0, key: "", path: null });
+  /* hors-zip — LE FOCUS PERSONNEL DU CHAPITRE 1. Demande de Guillaume : à
+     plusieurs, chacun doit pouvoir viser un impact DIFFÉRENT plutôt que de
+     suivre tous le même chevron figé sur le premier trou de la table. On
+     clique une puce du bandeau (les mêmes huit puces déjà affichées) pour en
+     faire SON objectif personnel ; recliquer la même l'annule. ⚠️ RIEN N'EST
+     ARBITRÉ NI RÉCOMPENSÉ : c'est un confort de lecture, exactement comme le
+     familier-guide (`starGuideRef` juste au-dessus) — donc rien à envoyer à
+     l'hôte, juste une diffusion informative pour que les DEUX joueurs se
+     voient viser des choses différentes (§3 : ce qui ne s'arbitre pas ne
+     passe pas par un `req`).
+     ⚠️ LA PAIRE REF+STATE EST OBLIGATOIRE, PAS UNE COMMODITÉ : `myStarFocusRef`
+     est ce que lit la boucle de rendu (`starGoalCtx`, appelée depuis la
+     closure du chevron — piège n°1 de CLAUDE.md, on EXPOSE par un ref, on ne
+     lit jamais un state React depuis là-bas) ; `myStarFocus` ne sert qu'à
+     redéclencher le rendu JSX du bandeau quand on clique une puce. */
+  const myStarFocusRef = useRef(null);
+  const [myStarFocus, setMyStarFocusState] = useState(null);
+  function toggleMyStarFocus(siteId) {
+    const next = myStarFocusRef.current === siteId ? null : siteId;
+    myStarFocusRef.current = next;
+    setMyStarFocusState(next);
+  }
+  // hors-zip — un camarade (même monde) vise-t-il déjà ce même trou ? Rien
+  // qu'un indice discret, jamais un blocage (décision de Guillaume : autorisé,
+  // avec un indice discret plutôt qu'interdit).
+  function starFocusOtherHas(siteId) {
+    const m = meRef.current, zone = (m && m.zone) || "farm";
+    for (const p of playersRef.current.values()) {
+      if (p.id !== (m && m.id) && p.starFocus === siteId && (p.zone || "farm") === zone) return true;
+    }
+    return false;
+  }
   const [taxiMenu, setTaxiMenu] = useState(false);   // le panneau « Où allez-vous ? »
   const taxiMenuRef = useRef(false);
   const [taxiPhase, setTaxiPhase] = useState(null);  // miroir React, pour le bouton
@@ -2316,6 +2363,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (r.tx === undefined) { r.tx = payload.x; r.ty = payload.y; r.x = payload.x; r.y = payload.y; }
       r.gender = payload.gender; r.outfit = payload.outfit; r.name = payload.name; r.sleeping = !!payload.sleeping;
       r.torch = !!payload.torch; r.zone = payload.zone || "farm";
+      r.starFocus = payload.starFocus || null;   // hors-zip — le focus personnel de CE camarade, pour l'indice discret de chevauchement
       /* ⚠️ ZIP SUIVANT — L'ASSISE ÉTAIT ÉMISE ET JAMAIS LUE. `pubMe` pose
          `pub.sit = [x, y, place]` depuis le 428 (« à deux, personne n'aurait
          jamais vu personne s'asseoir », dit sa note) — mais ce handler ne la
@@ -2550,7 +2598,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function ensureRemote(p) {
     if (p.id === me.id) return;
     if (!playersRef.current.has(p.id)) {
-      playersRef.current.set(p.id, { id: p.id, name: p.name, gender: p.gender || "m", outfit: p.outfit || 0, x: p.x ?? C.SPAWN.x, y: p.y ?? C.SPAWN.y, tx: p.x ?? C.SPAWN.x, ty: p.y ?? C.SPAWN.y, dir: p.dir || 0, moving: false, tool: 0, animT: 0, sleeping: false, torch: false, hatUntil: (farmersRef.current[p.id] && farmersRef.current[p.id].hatUntil) || 0, pets: (p.pets) || (farmersRef.current[p.id] && farmersRef.current[p.id].pets) || [], zone: "farm", lastSeenAt: Date.now() });
+      playersRef.current.set(p.id, { id: p.id, name: p.name, gender: p.gender || "m", outfit: p.outfit || 0, x: p.x ?? C.SPAWN.x, y: p.y ?? C.SPAWN.y, tx: p.x ?? C.SPAWN.x, ty: p.y ?? C.SPAWN.y, dir: p.dir || 0, moving: false, tool: 0, animT: 0, sleeping: false, torch: false, starFocus: null, hatUntil: (farmersRef.current[p.id] && farmersRef.current[p.id].hatUntil) || 0, pets: (p.pets) || (farmersRef.current[p.id] && farmersRef.current[p.id].pets) || [], zone: "farm", lastSeenAt: Date.now() });
     }
     // Zip 364 : toute preuve de vie (join/pos/ping) repousse l'expiration —
     // voir le balayage TTL plus haut.
@@ -7699,6 +7747,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const px = m.zone === "evil" ? m.farmX : m.x, py = m.zone === "evil" ? m.farmY : m.y;
     const pub = { id: m.id, name: m.name, gender: m.gender, outfit: m.outfit, x: +px.toFixed(2), y: +py.toFixed(2), dir: m.dir, moving: m.zone === "evil" ? false : m.moving, tool: slotRef.current, sleeping: !!m.sleeping, torch: !!torchOnRef.current, zone: m.zone || "farm", pets: petIdsPub() };
     pub.starEngaged = starPlayerEngaged();
+    pub.starFocus = myStarFocusRef.current || null;   // hors-zip — confort de lecture, jamais arbitré
     // ------------------------------------------------------------------
     // Zip 365 — RÉPLICATION PAR INTENTION (correctif flottement/saccades).
     //
@@ -14302,10 +14351,37 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              et l'interaction sont trois portes sur le même trou : une seule laissée
              ouverte suffit à raconter la fin avant le début »). */
           if (site.content === "star" && Q.starDug(stF, site.id) && !Q.starHas(stF, site.id)) {
-            draws.push({ y: (site.y + 1) * T - 0.02, fn: ((s) => () => drawStarWisp({
-              x: s.x, y: s.y + 0.18, state: 1, pose: Math.floor(now / 230 + s.impact) & 3,
-              color: s.color, scale: 0.88,
-            }))(site) });
+            /* hors-zip — LA BLANCHE (`lure`) PLONGE QUAND ON L'APPROCHE SANS
+               FIOLE. Voir la note de `starLureDiveRef` : même courbe que la
+               cachette devant un résident (`Q.starHideK`/`Q.starHideAnim`),
+               appliquée à la verticale — `hide.dip` fait plonger `y`, jamais
+               de composante latérale (elle ne glisse vers personne, elle
+               s'enfonce sur place). `myInvRef` est le miroir ref de `myInv`
+               (piège n°1 : un state React lu ici vieillirait dans la
+               closure). */
+            let hide = null;
+            if (Q.starVerbOf(site.id) === "lure") {
+              const near = Math.hypot(m.x - site.x, m.y - site.y) <= Q.STAR_HIDE_R;
+              const hasPotion = !!(myInvRef.current && (myInvRef.current.starLure | 0) > 0);
+              const hidden = near && !hasPotion;
+              const dv = starLureDiveRef.current;
+              if (hidden && !dv.wasHidden) starLurePoofUntilRef.current = now + 550;   // front montant : une bouffée, pas une par image
+              dv.wasHidden = hidden;
+              const dt2 = Math.max(0, Math.min(80, now - (dv.last || now)));
+              dv.k = Q.starHideK(dv.k, dt2, hidden);
+              dv.last = now;
+              if (dv.k > 0.001) hide = Q.starHideAnim(dv.k);
+            }
+            draws.push({ y: (site.y + 1) * T - 0.02, fn: ((s, hd) => () => drawStarWisp({
+              x: s.x, y: s.y + 0.18 + (hd ? hd.dip : 0), state: 1, pose: Math.floor(now / 230 + s.impact) & 3,
+              color: s.color, scale: 0.88, hide: hd,
+            }))(site, hide) });
+            // La bouffée de terre au moment où elle s'enfonce — poussée, goofy,
+            // brève : elle réutilise `drawStarDust`, déjà éprouvé sur la fouille.
+            if (sprites.drawStarDust && starLurePoofUntilRef.current > now) {
+              const kPoof = 1 - Math.max(0, Math.min(1, (starLurePoofUntilRef.current - now) / 550));
+              sprites.drawStarDust(ctx, cx2, cy2 + T * 0.32, T, kPoof, site.impact);
+            }
           }
           /* ╔══════════════════════════════════════════════════════════════════
              ║ ZIP 469 — LA TERRE QUI SORT DU TROU PENDANT QU'ON GRATTE.
@@ -18749,9 +18825,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       {
         const lights = [];
-        if (torchOnRef.current) lights.push({ x: m.x + 0.5, y: m.y + 0.5, r: C.TORCH_LIGHT_RADIUS });
+        /* hors-zip — LA TORCHE PORTÉE SUIT AUSSI LA CASE EN HAUTEUR. Signalé
+           par Guillaume : « le rayon de la zone éclairée par la torche bug
+           quand il y a le dézoom ». Le halo d'un lampadaire est déjà corrigé de
+           `elev × TOWN_ELEV_PX` (note ci-dessous) depuis son écriture ; celui
+           du PORTEUR de la torche — soi-même ou un camarade — ne l'a jamais
+           été, alors que son sprite, lui, est dessiné plus haut sur toute case
+           élevée (`myE`/`pushE`, voir plus haut). Le halo restait donc posé au
+           sol tandis que le porteur montait avec la case, un écart qui grandit
+           avec l'altitude — invisible sur le plat de la rue, flagrant au pied
+           des marches d'un monument, c'est-à-dire très exactement là où le
+           dézoom de proximité (`TOWN_ZOOM_NEAR`) se déclenche : les deux
+           défauts ne se voient qu'au même endroit, ce qui les a fait passer
+           pour un seul. */
+        if (torchOnRef.current) lights.push({ x: m.x + 0.5, y: m.y + 0.5 - myE * EP / T, r: C.TORCH_LIGHT_RADIUS });
         for (const p of playersRef.current.values()) {
-          if (p.torch && (p.zone || "farm") === "town") lights.push({ x: p.x + 0.5, y: p.y + 0.5, r: C.TORCH_LIGHT_RADIUS });
+          if (p.torch && (p.zone || "farm") === "town")
+            lights.push({ x: p.x + 0.5, y: p.y + 0.5 - playerElevTown(tw, p) * EP / T, r: C.TORCH_LIGHT_RADIUS });
         }
         for (const pr of (tw.props || [])) {
           if (pr.kind !== "lamp") continue;
@@ -23220,6 +23310,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       candy: m ? Q.starCandyFresh(e, m.id) : 0,
       now: Date.now(),
       alone: starAlone("crater"),
+      focus: myStarFocusRef.current,   // hors-zip — le choix personnel du chapitre 1, voir myStarFocusRef
     };
   }
 
@@ -26328,7 +26419,43 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         return (
           <div className="ferme-star-hud" data-tick={starTick}>
             <span className="ico">{huntingImpacts ? "☄" : "✦"}</span>
-            <span className="pips">{pips.map((on, i) => <span key={"sp" + i} className={"pip" + (on ? " on" : "")} />)}</span>
+            {/* hors-zip — LES PUCES DU CHAPITRE 1 DEVIENNENT CLIQUABLES.
+                Demande de Guillaume : à plusieurs, viser des trous différents
+                plutôt que suivre tous le même chevron. ⚠️ « CLAIMABLE » SE LIT
+                SUR `starHas`, PAS SUR LA PUCE (`on` = `starDug`, zip 475) : un
+                trou fouillé qui a révélé une étoile est déjà `on` — plein —
+                pendant qu'il reste entièrement à apprivoiser, et c'est très
+                exactement l'état qu'un joueur veut pouvoir garder en focus. Se
+                caler sur `on` aurait fait disparaître le focus au moment même
+                où il devient le plus utile — une jointure ratée avec
+                `starGoalKey`, qui lit `starHas` via `starMissing` (voir
+                quete.js). Une puce vraiment terminée (`starHas`) ne se clique
+                plus : il n'y a plus rien à y viser, et un clic qui ne ferait
+                rien serait le panneau qui s'ouvre pour rien (§4). Le style de
+                puce « mine »/« shared » ne change que l'AFFICHAGE : rien ici
+                n'arbitre, rien ne se gagne (voir myStarFocusRef). */}
+            <span className="pips">{pips.map((on, i) => {
+              if (!huntingImpacts) return <span key={"sp" + i} className={"pip" + (on ? " on" : "")} />;
+              const site = Q.STAR_FARM_IMPACTS[i];
+              const claimable = !Q.starHas(e, site.id);
+              const mine = claimable && myStarFocus === site.id;
+              const otherHas = claimable && starFocusOtherHas(site.id);
+              const cls = "pip" + (on ? " on" : "") + (mine ? " mine" : "") + (otherHas ? " shared" : "");
+              return (
+                <span key={"sp" + i} className={cls}
+                      title={claimable ? L.star.hud.focusTip(mine, otherHas) : undefined}
+                      role={claimable ? "button" : undefined}
+                      /* ⚠️ `.ferme-star-hud` a `pointer-events:none` (c'est un
+                         survol d'interface qui ne doit jamais voler un clic au
+                         monde en dessous) : SANS ce `pointerEvents:"auto"` posé
+                         ICI, sur la puce elle-même, `onClick` ne recevrait
+                         jamais rien — la propriété est héritée, pas un simple
+                         style visuel. Les puces déjà résolues gardent le
+                         comportement d'avant (le clic les traverse). */
+                      style={claimable ? { cursor: "pointer", pointerEvents: "auto" } : undefined}
+                      onClick={claimable ? () => toggleMyStarFocus(site.id) : undefined} />
+              );
+            })}</span>
             <span className="goal">{starGoalText(e)}</span>
             {/* ⚠️ ZIP 454 — LE PLAN A UN BOUTON, ET PAS SEULEMENT UNE TOUCHE. Un
                 raccourci clavier qu'on n'a pas lu n'existe pas (et le jeu se joue

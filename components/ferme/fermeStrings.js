@@ -291,6 +291,11 @@ const STAR_FR = {
        ramassé dans le monde maléfique — jamais en régime permanent une fois
        la ferme équipée. Voir `starGoalText`, FermeGame.js. */
     cauldronPassage: "Fouillez les moindres recoins de cette forêt maudite et vous y trouverez un chaudron magique, mais restez vigilant.",
+    /* hors-zip — L'INFOBULLE DES PUCES CLIQUABLES DU CHAPITRE 1. Une seule
+       fonction, composée, jamais deux chaînes séparées qui pourraient finir
+       par ne plus s'accorder (voir myStarFocusRef, FermeGame.js). */
+    focusTip: (mine, shared) => (mine ? "Ton objectif personnel — reclique pour l'annuler" : "Viser ce trou en priorité, sans attendre les autres")
+      + (shared ? " · un camarade vise le même" : ""),
     /* HORS-ZIP — LE COMPTE À REBOURS DU GROS MÉTÉORE. Signalé par Guillaume :
        la chute semblait ne jamais arriver, faute d'affichage — le mécanisme
        (deux minutes de présence active en ville, voir STAR_TOWN_ACTIVE_MS
@@ -960,6 +965,9 @@ const STAR_EN = {
     // Chevron fallback while the cauldron hasn't been picked up yet — see the
     // FR block for why this one line is allowed to run past the usual 80-char cap.
     cauldronPassage: "Search every corner of this cursed forest and you'll find a magic cauldron there — but stay alert.",
+    // hors-zip — tooltip for the clickable chapter-1 pips, see the FR block.
+    focusTip: (mine, shared) => (mine ? "Your personal target — click again to clear it" : "Aim for this hole first, without waiting on the others")
+      + (shared ? " · a friend is aiming for the same one" : ""),
     // The big meteor's countdown — host-side only, see the FR block for why.
     townFallCountdown: (mmss) => `It's rumbling. ${mmss} more of activity in town and the sky gives way.`,
     /* Le rappel de reprise. ⚠️ UNE FOIS PAR SESSION, jamais deux — un « où en

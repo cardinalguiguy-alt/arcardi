@@ -7440,6 +7440,12 @@ div.ferme-usage{ margin-bottom:10px; }
 .ferme-star-hud .pips{ display:flex; gap:4px; flex:0 0 auto; }
 .ferme-star-hud .pip{ width:9px; height:9px; border-radius:50%; border:1px solid rgba(255,228,164,.55); }
 .ferme-star-hud .pip.on{ background:#ffd868; box-shadow:0 0 7px rgba(255,216,104,.85); }
+/* hors-zip — le focus personnel du chapitre 1 (myStarFocusRef, FermeGame.js).
+   `.mine` distingue MON choix ; `.shared` est l'indice discret qu'un camarade
+   vise le même trou — jamais un blocage, juste une teinte de plus, cohérent
+   avec la décision de Guillaume (« autorisé, avec un indice discret »). */
+.ferme-star-hud .pip.mine{ border-color:#eaf4ff; box-shadow:0 0 0 2px rgba(234,244,255,.55); }
+.ferme-star-hud .pip.shared{ border-style:dashed; }
 /* ⚠️⚠️ ZIP 449 — DEUX LIGNES, PLUS UNE SEULE TRONQUÉE. Le bandeau était en
    `white-space:nowrap` + `text-overflow:ellipsis` : toute consigne un peu plus
    guidante que « A magpie took two of them. » se faisait **couper en silence**,
