@@ -94,25 +94,29 @@ function shot(name, f, k) {
     const img = S.courtProps[p.kind]; if (!img) continue;
     q.push({ by: (p.y - y0 + 1) * T, fn: () => sh.ctx.drawImage(img, p.x * T + T / 2 - img.width / 2, (p.y - y0 + 1) * T - img.height) });
   }
-  /* ⚠️ 439 — LES PLAQUES DE PORTE SONT DESSINÉES, ET ELLES MANQUAIENT. Elles
-     sont « le mode d'emploi du bâtiment » d'après le commentaire qui les pose ;
-     un banc qui juge la lisibilité d'un intérieur sans elles juge un plan de
-     masse. On ne peut pas écrire le libellé (le faux canvas n'a pas `fillText`,
-     §4), donc on peint le CARTOUCHE : sa présence et sa place se vérifient,
-     et c'est ce qui manquait. */
+  /* hors-zip (Codex, 2026-08-26) — UNE SEULE PLAQUE TÉMOIN, POUR UNE SEULE
+     PORTE CIBLÉE. Depuis que les labels n'apparaissent qu'au survol (avec repli
+     clavier/tactile), les peindre tous dans cette planche ferait précisément
+     revivre l'état permanent que le jeu vient de supprimer. Le faux canvas ne
+     connaît pas `fillText` (§4) : le cartouche sombre suffit à montrer l'état
+     ciblé, les autres portes ne gardent que leur chambranle. */
   /* HORS-ZIP — UN CARTOUCHE PAR PORTE, PAS PAR CASE. Même raison que dans
      FermeGame.js : `E.courtDoorGroups` est la seule jointure entre « les
      cases de porte » et « les portes » depuis que chacune en fait
      `COURT_DOOR_W` — le relire case par case aurait empilé deux cartouches
      identiques sur la même pièce. */
-  for (const g of E.courtDoorGroups(cw.doors)) {
+  const doorGroups = E.courtDoorGroups(cw.doors);
+  const targetedDoor = doorGroups.find(g => g.floor === f);
+  for (const g of doorGroups) {
     if (g.floor !== f) continue;
     const px = g.x * T, pyTop = (g.y0 - y0) * T, spanH = (g.y1 - g.y0 + 1) * T;
     q.push({ by: (g.y0 - y0 + 0.6) * T, fn: () => {
       sh.ctx.fillStyle = "#5a4230"; sh.ctx.fillRect(px - 1, pyTop - 14, T + 2, spanH + 14);
       sh.ctx.fillStyle = "#3a2a1c"; sh.ctx.fillRect(px + 1, pyTop - 11, T - 2, spanH + 11);
-      sh.ctx.fillStyle = "#f5eeda"; sh.ctx.fillRect(px - 6, pyTop - 24, T + 12, 11);
-      sh.ctx.fillStyle = "#6b4a2e"; sh.ctx.fillRect(px - 6, pyTop - 24, T + 12, 1); sh.ctx.fillRect(px - 6, pyTop - 14, T + 12, 1);
+      if (g === targetedDoor) {
+        sh.ctx.fillStyle = "#2e2013"; sh.ctx.fillRect(px - 6, pyTop - 12, T + 12, 8);
+        sh.ctx.fillStyle = "#c9a961"; sh.ctx.fillRect(px - 3, pyTop - 9, T + 6, 2);
+      }
     } });
   }
   q.sort((a, b) => a.by - b.by);

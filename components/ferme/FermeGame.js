@@ -58,6 +58,11 @@ import { playFile as sfxPlayFile, stopSound as sfxStopSound } from "@/lib/sfx";
 
 const GAME_ID = "ferme";
 const ZOOM = 3;
+/* hors-zip (Codex, 2026-08-26) — DÉCISION EN ATTENTE DE GUILLAUME : sans
+   pointeur à portée, le label de salle suit pour l'instant la case devant le
+   joueur, comme les pips de graines. La constante isole ce repli pour qu'un
+   arbitrage clavier/tactile différent ne réécrive pas le chemin souris. */
+const COURT_LABEL_FALLBACK_TO_FACING_TILE = true;
 
 /* ⚠️ ZIP 444 — L'ARRÊT DE TÉLÉPORT ↔ LE NIVEAU : la jointure vit dans
    `fermeConstants.js` (`C.DEV_FLOOR_OF`), pas ici, pour que `verify-quete.mjs`
@@ -19120,6 +19125,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const cw = courtWorldRef.current, m = meRef.current, sprites = spritesRef.current;
       if (!cw || !sprites) return;
       const cam = getCamCourt();
+      /* hors-zip (Codex, 2026-08-26) — UNE SEULE réponse à « quelle case est
+         visée » : `pointerTargetTile` est le même calcul que celui des pips de
+         graines. Aucun écouteur ni état de survol parallèle ; le repli sans
+         pointeur reste la décision isolée en tête de fichier. */
+      const pointerTile = pointerTargetTile(m, cw.w, cw.h, cam, ZOOM);
+      const roomLabelTile = pointerTile || (COURT_LABEL_FALLBACK_TO_FACING_TILE ? facingTile() : null);
       starViewRef.current = { cam, zoom: ZOOM };      // 465 — survol des étoiles à l'intérieur aussi
       const myFloor = E.courtFloorOf(m.y + 0.2);
       const fr = courtFloorRect(myFloor);
@@ -19352,10 +19363,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
 
       // ----------------------------------------------------- PORTES & PLAQUES
-      /* La plaque au-dessus de chaque porte. ⚠️ ELLE EST LE MODE D'EMPLOI DU
-         BÂTIMENT : sans elle, dix-sept pièces meublées ne se distinguent que par
-         leur mobilier, et le joueur ne peut pas savoir que ce bureau-ci sera le
-         cadastre. C'est aussi ce qui rend l'ensemble lisible sur une capture. */
+      /* hors-zip (Codex, 2026-08-26) — LE CHAMBRANLE RESTE, LA PLAQUE RÉPOND À
+         LA CASE VISÉE. Les dix-sept noms restent consultables sans concurrencer
+         le décor en permanence : souris à portée, ou case devant le joueur au
+         clavier/tactile selon la décision isolée plus haut. Ce choix est du
+         rendu local pur ; la salle regardée ne quitte jamais cet onglet. */
       /* HORS-ZIP — UN CHAMBRANLE PAR PORTE, PAS PAR CASE. Depuis que chaque
          porte fait `COURT_DOOR_W` cases (demande de Guillaume : les portes
          du tribunal/mairie étaient « visuellement quasiment injouables »),
@@ -19367,7 +19379,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          cadre couvre maintenant toute la hauteur de l'ouverture — montants
          pleine hauteur, linteau en haut — ce qui le fait lire comme UNE
          porte large plutôt que deux portes étroites côte à côte. */
-      for (const g of E.courtDoorGroups(cw.doors)) {
+      const doorGroups = E.courtDoorGroups(cw.doors);
+      const labelledDoor = roomLabelTile && doorGroups.find(g =>
+        g.floor === myFloor && g.x === roomLabelTile.x && roomLabelTile.y >= g.y0 && roomLabelTile.y <= g.y1);
+      for (const g of doorGroups) {
         if (g.floor !== myFloor || g.x < x0 - 2 || g.x > x1 + 2 || g.y1 < y0 - 2 || g.y0 > y1 + 2) continue;
         const px = g.x * T, pyTop = g.y0 * T, spanH = (g.y1 - g.y0 + 1) * T;
         // L'encadrement de la porte, dessiné par-dessus le mur : montants
@@ -19391,14 +19406,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            mesuré une fois pour centrer, jamais pour cadrer une boîte : un
            emoji en police monospace ne rend pas une largeur fiable, ce qui
            déformait la boîte avant. */
-        const label = L.courtRoomName(g.room);
-        ctx.font = "bold 7px monospace"; ctx.textAlign = "center";
-        const wpx = Math.max(T, ctx.measureText(label).width + 6);
-        const tx = px + T / 2, plateTop = pyTop - 12, plateH = 8;
-        ctx.fillStyle = "#2e2013"; ctx.fillRect(tx - wpx / 2, plateTop, wpx, plateH);
-        ctx.fillStyle = "#140d07"; ctx.fillText(label, tx, plateTop + plateH - 1.5);
-        ctx.fillStyle = "#c9a961"; ctx.fillText(label, tx, plateTop + plateH - 2.5);
-        ctx.textAlign = "left";
+        if (g === labelledDoor) {
+          const label = L.courtRoomName(g.room);
+          ctx.font = "bold 7px monospace"; ctx.textAlign = "center";
+          const wpx = Math.max(T, ctx.measureText(label).width + 6);
+          const tx = px + T / 2, plateTop = pyTop - 12, plateH = 8;
+          ctx.fillStyle = "#2e2013"; ctx.fillRect(tx - wpx / 2, plateTop, wpx, plateH);
+          ctx.fillStyle = "#140d07"; ctx.fillText(label, tx, plateTop + plateH - 1.5);
+          ctx.fillStyle = "#c9a961"; ctx.fillText(label, tx, plateTop + plateH - 2.5);
+          ctx.textAlign = "left";
+        }
       }
 
       /* ══════════════════════════════════════════════════════════════════════
@@ -21871,6 +21888,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const fx = [0, 0, -1, 1][m.dir], fy = [1, -1, 0, 0][m.dir];
     return { x: Math.floor(m.x + fx), y: Math.floor(m.y + 0.2 + fy) };
   }
+  /* hors-zip (Codex, 2026-08-26) — LA SOURCE UNIQUE DU CIBLAGE POINTEUR.
+     Les pips, la ville et les labels d'intérieur doivent convertir le pointeur
+     avec exactement la même portée ; seule leur politique de repli sans souris
+     peut différer. `null` signifie donc « aucun pointeur à portée », jamais une
+     case de remplacement inventée par l'appelant. */
+  function pointerTargetTile(m, mapW, mapH, cam, zoom) {
+    const wx = (mouseRef.current.x / zoom + cam.x) / C.TILE;
+    const wy = (mouseRef.current.y / zoom + cam.y) / C.TILE;
+    const tx = Math.floor(wx), ty = Math.floor(wy);
+    if (tx >= 0 && ty >= 0 && tx < mapW && ty < mapH
+      && Math.abs(wx - (m.x + 0.5)) <= C.ACT_RANGE + 0.5
+      && Math.abs(wy - (m.y + 0.2)) <= C.ACT_RANGE + 0.5) return { x: tx, y: ty };
+    return null;
+  }
   function targetTile() {
     const m = meRef.current, w = worldRef.current; if (!m || !w) return { x: 0, y: 0 };
     const cam = { x: 0, y: 0 };
@@ -21879,10 +21910,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     let cx = (m.x + 0.5) * C.TILE - vw / 2, cy = (m.y + 0.5) * C.TILE - vh / 2;
     cx = Math.max(0, Math.min(w.w * C.TILE - vw, cx)); cy = Math.max(0, Math.min(w.h * C.TILE - vh, cy));
     cam.x = cx; cam.y = cy;
-    const wx = (mouseRef.current.x / ZOOM + cam.x) / C.TILE, wy = (mouseRef.current.y / ZOOM + cam.y) / C.TILE;
-    const tx = Math.floor(wx), ty = Math.floor(wy);
-    if (inMap(tx, ty) && Math.abs(wx - (m.x + 0.5)) <= C.ACT_RANGE + 0.5 && Math.abs(wy - (m.y + 0.2)) <= C.ACT_RANGE + 0.5) return { x: tx, y: ty };
-    return facingTile();
+    return pointerTargetTile(m, w.w, w.h, cam, ZOOM) || facingTile();
   }
   /* ---- LA BOUSSOLE GPS, CÔTÉ JEU (429) --------------------------------------
      ⚠️ L'ÉCHELLE DE LA CARTE EST RELUE SUR LE CANEVAS, PAS RECOPIÉE. Les trois
@@ -22067,10 +22095,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     let cx = (m.x + 0.5) * C.TILE - vw / 2, cy = (m.y + 0.5) * C.TILE - vh / 2;
     cx = tw.w * C.TILE <= vw ? (tw.w * C.TILE - vw) / 2 : Math.max(0, Math.min(tw.w * C.TILE - vw, cx));
     cy = tw.h * C.TILE <= vh ? (tw.h * C.TILE - vh) / 2 : Math.max(0, Math.min(tw.h * C.TILE - vh, cy));
-    const wx = (mouseRef.current.x / zm + cx) / C.TILE, wy = (mouseRef.current.y / zm + cy) / C.TILE;
-    const tx = Math.floor(wx), ty = Math.floor(wy);
-    if (tx >= 0 && ty >= 0 && tx < tw.w && ty < tw.h && Math.abs(wx - (m.x + 0.5)) <= C.ACT_RANGE + 0.5 && Math.abs(wy - (m.y + 0.2)) <= C.ACT_RANGE + 0.5) return { x: tx, y: ty };
-    return facingTile();
+    return pointerTargetTile(m, tw.w, tw.h, { x: cx, y: cy }, zm) || facingTile();
   }
   // Case posable pour une déco selon la zone (le client connaît sa carte).
   function farmPlaceable(x, y) { const w = worldRef.current; return inMap(x, y) && w && canStand(w, x + 0.5, y + 0.5); }

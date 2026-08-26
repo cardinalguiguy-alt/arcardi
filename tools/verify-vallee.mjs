@@ -379,7 +379,7 @@ section("Tribunal — le bâtiment sort-il complet ?");
 const cw = E.generateCourtWorld();
 ok("dimensions", cw.w === C.COURT_MAP_W && cw.h === C.COURT_MAP_H, `${cw.w}×${cw.h}`);
 ok("une porte par pièce au minimum", cw.doors.length >= C.COURT_ROOMS.length, `${cw.doors.length} portes pour ${C.COURT_ROOMS.length} pièces`);
-ok("chaque pièce a sa plaque", C.COURT_ROOMS.every(r => cw.doors.some(d => d.room === r.key)));
+ok("chaque pièce a un libellé de porte disponible", C.COURT_ROOMS.every(r => cw.doors.some(d => d.room === r.key)));
 {
   const dup = C.COURT_ROOMS.map(r => r.key).filter((k, i, a) => a.indexOf(k) !== i);
   ok("aucune clé de pièce en double", dup.length === 0, dup.join(" "));

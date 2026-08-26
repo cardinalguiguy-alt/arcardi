@@ -11,51 +11,22 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**PASSATION À CODEX — LA SUITE DE CE CHANTIER N'EST PLUS TENUE PAR CLAUDE.** Guillaume fait
-travailler Codex sur les deux points ci-dessous ; ce bloc lui sert de point de départ (voir aussi
-la note « PASSATION MULTI-AGENT » au §2, qui explique le protocole `AGENTS.md` ⇄ `CLAUDE.md`). La
-passe précédente (retrait de « l'étoile insiste », désambiguïsation du bandeau du train, compteur
-d'activité qui n'efface plus sa progression) est TERMINÉE côté code et bancs, sa leçon la plus
-utile a rejoint le tableau ; **elle n'a toujours pas été confirmée à l'écran**, voir le rappel
-juste en dessous — ce chantier-ci ne l'annule pas, il s'ajoute devant.
-
-1. **Les labels de salles sont masqués par le décor — refonte en cours.** Demande de Guillaume :
-   les faire apparaître **au survol**, pour que décor et texte ne soient plus en concurrence
-   visuelle en permanence. Point de départ : `drawCourtFrame` dans `FermeGame.js` (~l.19370-19402),
-   qui peint la plaque `L.courtRoomName(g.room)` gravée dans le linteau de chaque porte — **cette
-   fonction est PARTAGÉE par le tribunal, la mairie et les étages de l'église** (voir §6 : « la
-   mairie et le tribunal se partagent une grille ») ; une correction qui n'y toucherait qu'une fois
-   couvre donc les trois d'un coup, mais une réécriture dupliquée par bâtiment rejouerait le piège
-   déjà payé deux fois dans ce fichier (« un correctif posé sur une seule instance d'un motif
-   répété ne couvre pas sa sœur », tableau des leçons). ⚠️ **UN PRÉCÉDENT EXISTE DÉJÀ DANS CE MÊME
-   FICHIER POUR « visible seulement au survol, ET accessible sans souris »** : les pips de graines
-   plantées (`FermeGame.js` ~l.14260-14310, zip 367) ne se dessinent que sur la case CIBLÉE (`tt`),
-   c'est-à-dire la case sous la souris **quand elle est à portée**, sinon la case devant le joueur
-   — pour que le tactile et le clavier gardent l'information alors qu'ils n'ont pas de survol. Un
-   hover purement souris exclurait ces deux entrées, qui sont de vraies façons de jouer ici (§13 :
-   le tactile est un mode de jeu à part entière). ⚠️ Purement local, comme les pips : rien à
-   diffuser (§3) — la salle survolée par un joueur n'a aucune raison d'exister chez l'autre.
-   ⚠️ Vérifier ensuite quels bancs lisent ce chemin (`render-mairie.mjs`, `render-beffroi.mjs`,
-   `verify-vallee.mjs` a minima) : s'ils supposent la plaque toujours dessinée, ils devront changer
-   de condition, pas être contournés.
-2. **Escaliers du nord de Valley Town : intégration texturale — Guillaume fournira les photos à
-   Codex directement.** Cible probable : `TOWN_STAIRS[3]` (`fermeConstants.js` ~l.3894, « la montée
-   du belvédère, courte et étroite »), restée procédurale pendant que la volée monumentale
-   (`TOWN_STAIRS[0]`/`[1]`) a déjà reçu ce traitement — voir le pipeline déjà posé et rejouable tel
-   quel : `tools/import-escaliers-assets.mjs` → `components/ferme/plancheEscaliers.js`
-   (`ESCALIER_ASSETS`, lu par `fermeArt.js`) → vérifié par `tools/render-escaliers.mjs`. **Deux
-   pièges déjà payés sur ce SOUS-SYSTÈME EXACT, donc à revérifier explicitement plutôt qu'à
-   supposer réglés** : (a) un bitmap importé après que sa collision a été écrite n'hérite jamais
-   automatiquement de sa position — comparer au pixel le nouvel asset aux cases logiques qui le
-   bordent (`TOWN_RAILS`, `TOWN_STAIR_LANDINGS`), comme la correction x:142→141 déjà loggée l'a
-   fait ; (b) un simple passage de teinte sur le nouvel asset peut faire glisser le détecteur
-   d'aplat gris de `render-escaliers.mjs` **même sans changement de géométrie** — relancer ce banc
-   après toute passe de couleur, pas seulement après une passe de forme. Pour accorder le ton de la
-   photo au reste du décor procédural, utiliser la méthode du §8 (réduire à 480×270, comparer
-   moyenne/écart-type/saturation aux repères déjà écrits), pas le jugement à l'œil. Et la leçon du
-   §9 (bureau du maire) s'applique mot pour mot à un asset bitmap : **un import se regarde dans le
-   jeu ou le rendu le jour de sa livraison, ou il n'est pas livré** — aucun banc de syntaxe ne peut
-   voir un asset qui charge sans erreur mais tombe faux.
+**ACTION SUIVANTE UNIQUE — TRANCHER LE REPLI CLAVIER/TACTILE DES LABELS DE SALLE.** Le chantier est
+livré côté code. `drawCourtFrame`, commun au tribunal, à la mairie et à l'église, garde tous les
+chambranles mais ne peint plus que la plaque du groupe de
+porte correspondant à la case ciblée. `pointerTargetTile` est désormais la source unique du
+ciblage pointeur pour les pips, la ville et ces labels ; rien n'est diffusé. Sans pointeur à portée,
+la recommandation provisoire « case devant le joueur » est isolée derrière
+`COURT_LABEL_FALLBACK_TO_FACING_TILE = true` : **Guillaume doit encore confirmer ce choix**, ou lui
+préférer la seule porte interagissable / la porte la plus proche. `render-mairie` ne peint plus
+qu'une plaque témoin ciblée ; `verify-vallee` parle d'un libellé disponible, plus d'une plaque
+permanente. Vérifié réellement : `verify-vallee` **205/205**, `render-mairie` et
+`render-beffroi` verts, compilation Next réussie avant l'échec de pré-rendu attendu sans variables
+Supabase ; `verify-syntax` parse ses modules mais n'a pas vérifié `FermeGame.js`, faute d'esbuild
+local et de réseau. **VU EN JEU LOCAL** dans le hall de la mairie : aucune plaque permanente, puis
+« Salle des mariages » seule quand la porte est ciblée par le repli clavier. Le ciblage souris a
+produit la bonne case pendant l'essai, mais l'automatisation n'a pas conservé le pointeur assez
+longtemps pour une capture stable de cet état précis.
 
 ⚠️⚠️⚠️ **LA PASSE PRÉCÉDENTE (RETRAIT DE « L'ÉTOILE INSISTE », BANDEAU DU TRAIN, COMPTEUR
 D'ACTIVITÉ) N'A TOUJOURS PAS ÉTÉ CONFIRMÉE À L'ÉCRAN.** Vérifiée par les bancs (`verify-quete`
