@@ -23199,18 +23199,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     return !!(m && (m.zone || "farm") === "town" && !m.sleeping && at > 0
       && performance.now() - at <= 15000 && !starSceneRef.current && starPanelsClear());
   }
+  /* ⚠️⚠️⚠️ HORS-ZIP — LE COMPTEUR NE REMET PLUS `a.ms` À ZÉRO. Signalé par
+     Guillaume en jouant : aucun joueur ne reste « engagé » (mouvement dans les
+     15 dernières secondes, aucun panneau ouvert) en continu pendant deux
+     minutes complètes — lire une bulle, ouvrir l'inventaire ou simplement
+     s'arrêter cinq secondes suffisait à tout remettre à zéro, et la chute du
+     gros météore devenait donc PRATIQUEMENT impossible à atteindre. `a.ms` est
+     maintenant un compteur CUMULATIF, jamais reculé : l'inactivité met la
+     PROGRESSION EN PAUSE (elle n'avance plus) au lieu de l'effacer, si bien que
+     deux minutes d'activité réparties sur toute la visite suffisent — la chute
+     finit donc TOUJOURS par arriver, ce qui est le point du countdown explicite
+     de `townFallCountdown` juste en dessous : un nombre qui ne remonte jamais
+     tient sa promesse. Seul un nouveau chapitre (`a.fall !== e.fall`) repart de
+     zéro, ce qui reste juste : c'est une nouvelle chute à attendre. */
   function starTownActivityTick(e, now) {
     if (!isHost) return;
     const a = starTownActiveRef.current;
     if (!e || !e.fall || e.ch < 1 || Q.starTownFallen(e)) { a.fall = 0; a.at = 0; a.ms = 0; return; }
     if (a.fall !== e.fall) { a.fall = e.fall; a.at = now; a.ms = 0; }
+    if (!a.at) a.at = now;
+    const dt = Math.max(0, Math.min(1500, now - a.at));
+    a.at = now;
     let active = starPlayerEngaged();
     for (const p of playersRef.current.values()) {
       if (p && (p.zone || "farm") === "town" && p.starEngaged && now - (p.starEngagedAt || 0) <= 16000) { active = true; break; }
     }
-    if (!active) { a.at = now; a.ms = 0; return; }
-    if (!a.at) a.at = now;
-    a.ms += Math.max(0, Math.min(1500, now - a.at)); a.at = now;
+    if (active) a.ms += dt;
     if (a.ms < Q.STAR_TOWN_ACTIVE_MS) return;
     const r = Q.resolveStarTownFall(e, now);
     if (!r.ok) return;
@@ -23376,6 +23390,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     return {
       craterHot: !starCraterCoolNow(), engineerHere: Q.starEngineerHere(e, Date.now()),
       landed: starImpactLandedNow(),
+      /* hors-zip — signalé par Guillaume : le bandeau redisait « prends le
+         train pour Valley Town » à un joueur déjà arrivé et qui attendait sur
+         place. `inTown` fait basculer `townWait` sur `townWaitThere`, la même
+         attente sans reparler d'un trajet déjà fait (voir `starGoalKey`,
+         quete.js). */
+      inTown: !!(m && (m.zone || "farm") === "town"),
       candy: m ? Q.starCandyFresh(e, m.id) : 0,
       /* hors-zip — LE MIROIR EXACT DE `candy`, POUR LA BLANCHE. `myInvRef` est
          le ref synchrone de l'inventaire (piège n°1 : un state React lu ici

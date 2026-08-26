@@ -1741,7 +1741,7 @@ section("L'objectif courant (bandeau) et le guide");
        (les deux écoutes d'ombres, l'attente de l'ingénieur). Sans ce contrôle, un
        objectif ajouté plus tard pointerait silencieusement dans le vide. */
     {
-      const NOWHERE = ["townWait", "engineerTravel", "engineerWork"];   // 469 — les deux écoutes d'ombres sont parties ; 470 — une clé d'attente devient deux
+      const NOWHERE = ["townWait", "townWaitThere", "engineerTravel", "engineerWork"];   // 469 — les deux écoutes d'ombres sont parties ; 470 — une clé d'attente devient deux ; hors-zip — townWait se scinde en deux phrases, ni l'une ni l'autre n'a de lieu
       const orphan = Q.STAR_GOAL_KEYS.filter(k => {
         /* ⚠️ ZIP 475 — `farmImpactTame`/`farmImpactCool` DÉSIGNENT LE MÊME
            TROU QUE `farmImpacts` (voir `starTargetSite`) : les trois clés

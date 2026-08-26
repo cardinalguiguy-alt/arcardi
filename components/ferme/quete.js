@@ -2914,7 +2914,13 @@ export function starGoalKey(e, ctx) {
      du cratère et son panache) — jamais recalculé ici, qui n'a pas de scène à
      interroger. Un `ctx` sans `landed` retombe sur le fait brut de l'hôte, pour
      ne pas casser un appelant qui ne le fournirait pas encore. */
-  if (first === "crater" && !(ctx && ("landed" in ctx) ? ctx.landed : starTownFallen(e))) return "townWait";
+  /* ⚠️ hors-zip — DEUX PHRASES, PAS UNE, MÊME PATRON QUE `engineerTravel`/
+     `engineerWork` (470) : `townWait` dit d'aller prendre le train, ce qui est
+     faux pour qui l'a déjà pris — signalé par Guillaume, le bandeau continuait
+     de demander le trajet à un joueur arrivé et qui attendait sur place.
+     `ctx.inTown` (starGoalCtx, FermeGame.js) fait le partage. */
+  if (first === "crater" && !(ctx && ("landed" in ctx) ? ctx.landed : starTownFallen(e)))
+    return (ctx && ctx.inTown) ? "townWaitThere" : "townWait";
   /* ⚠️ L'ORDRE DE LA TABLE FAIT FOI, comme pour `starTargetSite` : le premier qui
      manque est celui qu'on cherche. Aucune liste parallèle. */
   if (first === "crater" && ctx && ctx.craterHot) return "craterHot";
@@ -2999,7 +3005,7 @@ export const STAR_GOAL_KEYS = (() => {
      ce n'est pas un LIEU (l'audience se tient à la mairie, qui a déjà son
      adresse), c'est une ÉTAPE, et cette liste ne sert qu'à obliger le banc à
      réclamer sa phrase de bandeau dans les deux langues. */
-  out.push("townWait", "engineerTravel", "engineerWork", "mayor",
+  out.push("townWait", "townWaitThere", "engineerTravel", "engineerWork", "mayor",
            "timberOrder", "timberWait", "timberRaise");
   return out;
 })();

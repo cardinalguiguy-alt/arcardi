@@ -254,7 +254,14 @@ const STAR_FR = {
          pas non plus de touche pour la même raison. */
       farmImpactLureGive: "Tu as l'Essence d'étoile. Approche du trou blanc, elle viendra d'elle-même.",
       farmImpactCool: "Une plaque noire attend d'être refroidie. Reviens l'examiner (E).",
-      townWait: "Prends le train pour Valley Town. Reste-y, occupe-toi : l’étoile insiste.",
+      /* ⚠️ hors-zip — « l'étoile insiste » retiré (Guillaume : la personnification
+         était de trop) et « occupe-toi » remplacé par une suggestion CONCRÈTE —
+         un bandeau qui dit quoi faire, pas seulement d'attendre (même exigence
+         que la note du 455 juste au-dessus). Et DEUX phrases, pas une : celle-ci
+         suppose qu'on n'est pas encore parti, `townWaitThere` (juste en dessous)
+         parle à qui a déjà pris le train — voir la note de `starGoalKey`. */
+      townWait: "Prends le train pour Valley Town. Fais un tour au marché en attendant.",
+      townWaitThere: "Tu es à Valley Town. Fais un tour au marché en attendant.",
       craterHot: "À l'est de Valley Town, le trou brûle encore. Attends qu'il refroidisse.",
       /* ⚠️⚠️ ZIP 479 — LA REINE NE SE PREND PLUS EN DESCENDANT. « Descends :
          quelque chose se cache au fond » décrivait le geste d'avant ce lot, et le
@@ -269,7 +276,7 @@ const STAR_FR = {
          orpheline de texte, il échoue aussi sur un texte orphelin de clé. */
       /* ⚠️ ZIP 454 — plus courtes que leurs sœurs : le français gonfle de 15 à
          20 %, et ces deux-là portent un nom propre qu'on ne peut pas raccourcir. */
-      engineer:       "Va demander un ingénieur naval à la mairie (E). L'étoile insiste.",
+      engineer:       "Va demander un ingénieur naval à la mairie (E).",
       /* ⚠️⚠️ ZIP 470 — `engineerWait` DEVIENT DEUX PHRASES, UNE PAR PHASE. Avant,
          la même phrase ("il dessine") couvrait le train ET le dessin, donc elle
          mentait pendant les trois premières minutes. Demande de Guillaume : dire
@@ -966,7 +973,11 @@ const STAR_EN = {
       // hors-zip — see the FR block: no "(E)", the gesture is a plain hold, not a keypress.
       farmImpactLureGive: "You have the Star Essence. Go near the white hole — she will come on her own.",
       farmImpactCool: "A black plate is waiting to cool down. Come back and examine it (E).",
-      townWait: "Take the train to Valley Town. Stay there, keep busy: the star insists.",
+      // hors-zip — see the FR block: no more "the star insists", and a concrete
+      // suggestion instead of vague "keep busy"; two lines, one for before the
+      // train, one for a player already there (see starGoalKey, quete.js).
+      townWait: "Take the train to Valley Town. Look around the market while you wait.",
+      townWaitThere: "You're in Valley Town. Look around the market while you wait.",
       craterHot: "East of Valley Town the hole still burns. Wait for it to cool.",
       /* ⚠️ ZIP 479 — voir la note française : le fond du trou est l'endroit où le
          nouveau geste ne marche pas, ce texte y envoyait. */
@@ -977,7 +988,7 @@ const STAR_EN = {
          règle que les huit autres — OÙ et QUOI, jamais pourquoi — et ils sont plus
          courts que la moyenne parce qu'ils portent un NOM PROPRE, qui ne se coupe
          pas sans devenir illisible (le bandeau rabote en silence, 449). */
-      engineer:       "Ask the town hall for a naval engineer (E). The star insists.",
+      engineer:       "Ask the town hall for a naval engineer (E).",
       engineerTravel: "Kerguélen has been notified. He'll reach Valley Town shortly.",
       engineerWork:   "Kerguélen is drawing by the pier. He'll hand over his plans soon.",
       mayor:          "The plans are ready. Ask the town hall for an audience with the mayor.",

@@ -11,53 +11,62 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**HORS-ZIP — SESSION DIRECTE : QUATRE DEMANDES DE GUILLAUME EN JOUANT, TOUTES SUR LA QUÊTE DE
-L'ÉTOILE (pas d'upload de zip, donc pas de numéro).** La passe précédente (pont du parc, torche,
-focus personnel du chapitre 1, plongée de l'étoile blanche) est TERMINÉE et sa leçon la plus utile
-a rejoint le tableau ; ce bloc la remplace entièrement, comme le veut la règle du §14.
+**PASSATION À CODEX — LA SUITE DE CE CHANTIER N'EST PLUS TENUE PAR CLAUDE.** Guillaume fait
+travailler Codex sur les deux points ci-dessous ; ce bloc lui sert de point de départ (voir aussi
+la note « PASSATION MULTI-AGENT » au §2, qui explique le protocole `AGENTS.md` ⇄ `CLAUDE.md`). La
+passe précédente (retrait de « l'étoile insiste », désambiguïsation du bandeau du train, compteur
+d'activité qui n'efface plus sa progression) est TERMINÉE côté code et bancs, sa leçon la plus
+utile a rejoint le tableau ; **elle n'a toujours pas été confirmée à l'écran**, voir le rappel
+juste en dessous — ce chantier-ci ne l'annule pas, il s'ajoute devant.
 
-1. **⭐ Pourquoi la blanche plonge, et comment y remédier — LIVRÉ.** Le dessin de la plongée
-   (livré hors-zip précédent) ne disait ni le POURQUOI ni le COMMENT y remédier à qui ne pense pas
-   à presser E. `dig.bodyStarLure` décrit maintenant ce que l'écran montre vraiment (« plonge sous
-   la terre », plus « bondit hors de portée », un texte qui suivait un ancien visuel) ; un toast
-   AUTOMATIQUE, une seule fois par partie (`starLureAutoToldRef`), redit les deux mêmes phrases
-   que l'invite E (`bodyStarLure`/`nextStarLure`) au premier front montant de la plongée — jamais
-   un second texte qui pourrait diverger.
-2. **⭐ L'annonce des puces cliquables, à plusieurs — LIVRÉ.** La fonctionnalité du focus personnel
-   (livrée hors-zip précédent) n'avait qu'une infobulle au survol pour se faire connaître —
-   invisible au doigt. Un toast, une fois par partie (`starFocusHintRef`), dès que le chapitre 1
-   est actif ET qu'un camarade est là (jamais en solo).
-3. **🔵 La lueur bleue expire pour de vrai, 5 minutes après le défi de fuite — LIVRÉ, DÉCISION DE
-   GUILLAUME.** Deux options posées (extinction réelle, ou simple rappel cosmétique) : la première
-   choisie. `e.candy` n'est plus un flux éternel depuis la chute ; `candyUntil` (échéance ABSOLUE
-   posée par l'hôte, §3 de CLAUDE.md) le borne à `STAR_CANDY_FRESH_MS` après le DERNIER ramassage,
-   relu par `starCandyFresh(e, who, now)` — jamais par une horloge comparée à une autre. Un halo
-   bleu pulsant (`sprites.drawStarCalmGlow`, réutilisé tel quel, k fixe sous le seuil des
-   lucioles) indique sur le fermier, self ET distant, s'il porte encore la lumière — rien de neuf
-   à diffuser, la donnée est déjà dans `star.candy`/`star.candyUntil`. `verify-quete` 609/609
-   (8 contrôles neufs sur l'échéance).
-4. **⭐ Le chevron de la blanche pointait encore le chaudron après la fiole prête — LIVRÉ, CAUSE À
-   DEUX VISAGES.** `farmImpactLure` pilotait À LA FOIS le texte/chevron ET le forçage du monde
-   maléfique (`needsEvil`) : scindée en deux clés (`farmImpactLure` sans fiole, `farmImpactLureGive`
-   avec, décidées par `ctx.potion` — même patron que `ctx.candy` pour la bleue), la correction
-   répare le chevron ET libère le monde forcé du même coup, puisque `needsEvil` lit la même clé.
-   Sans la seconde moitié, le trou blanc (à la ferme) serait resté inatteignable même une fois le
-   chevron correct. Voir le tableau des leçons, nouvelle entrée.
+1. **Les labels de salles sont masqués par le décor — refonte en cours.** Demande de Guillaume :
+   les faire apparaître **au survol**, pour que décor et texte ne soient plus en concurrence
+   visuelle en permanence. Point de départ : `drawCourtFrame` dans `FermeGame.js` (~l.19370-19402),
+   qui peint la plaque `L.courtRoomName(g.room)` gravée dans le linteau de chaque porte — **cette
+   fonction est PARTAGÉE par le tribunal, la mairie et les étages de l'église** (voir §6 : « la
+   mairie et le tribunal se partagent une grille ») ; une correction qui n'y toucherait qu'une fois
+   couvre donc les trois d'un coup, mais une réécriture dupliquée par bâtiment rejouerait le piège
+   déjà payé deux fois dans ce fichier (« un correctif posé sur une seule instance d'un motif
+   répété ne couvre pas sa sœur », tableau des leçons). ⚠️ **UN PRÉCÉDENT EXISTE DÉJÀ DANS CE MÊME
+   FICHIER POUR « visible seulement au survol, ET accessible sans souris »** : les pips de graines
+   plantées (`FermeGame.js` ~l.14260-14310, zip 367) ne se dessinent que sur la case CIBLÉE (`tt`),
+   c'est-à-dire la case sous la souris **quand elle est à portée**, sinon la case devant le joueur
+   — pour que le tactile et le clavier gardent l'information alors qu'ils n'ont pas de survol. Un
+   hover purement souris exclurait ces deux entrées, qui sont de vraies façons de jouer ici (§13 :
+   le tactile est un mode de jeu à part entière). ⚠️ Purement local, comme les pips : rien à
+   diffuser (§3) — la salle survolée par un joueur n'a aucune raison d'exister chez l'autre.
+   ⚠️ Vérifier ensuite quels bancs lisent ce chemin (`render-mairie.mjs`, `render-beffroi.mjs`,
+   `verify-vallee.mjs` a minima) : s'ils supposent la plaque toujours dessinée, ils devront changer
+   de condition, pas être contournés.
+2. **Escaliers du nord de Valley Town : intégration texturale — Guillaume fournira les photos à
+   Codex directement.** Cible probable : `TOWN_STAIRS[3]` (`fermeConstants.js` ~l.3894, « la montée
+   du belvédère, courte et étroite »), restée procédurale pendant que la volée monumentale
+   (`TOWN_STAIRS[0]`/`[1]`) a déjà reçu ce traitement — voir le pipeline déjà posé et rejouable tel
+   quel : `tools/import-escaliers-assets.mjs` → `components/ferme/plancheEscaliers.js`
+   (`ESCALIER_ASSETS`, lu par `fermeArt.js`) → vérifié par `tools/render-escaliers.mjs`. **Deux
+   pièges déjà payés sur ce SOUS-SYSTÈME EXACT, donc à revérifier explicitement plutôt qu'à
+   supposer réglés** : (a) un bitmap importé après que sa collision a été écrite n'hérite jamais
+   automatiquement de sa position — comparer au pixel le nouvel asset aux cases logiques qui le
+   bordent (`TOWN_RAILS`, `TOWN_STAIR_LANDINGS`), comme la correction x:142→141 déjà loggée l'a
+   fait ; (b) un simple passage de teinte sur le nouvel asset peut faire glisser le détecteur
+   d'aplat gris de `render-escaliers.mjs` **même sans changement de géométrie** — relancer ce banc
+   après toute passe de couleur, pas seulement après une passe de forme. Pour accorder le ton de la
+   photo au reste du décor procédural, utiliser la méthode du §8 (réduire à 480×270, comparer
+   moyenne/écart-type/saturation aux repères déjà écrits), pas le jugement à l'œil. Et la leçon du
+   §9 (bureau du maire) s'applique mot pour mot à un asset bitmap : **un import se regarde dans le
+   jeu ou le rendu le jour de sa livraison, ou il n'est pas livré** — aucun banc de syntaxe ne peut
+   voir un asset qui charge sans erreur mais tombe faux.
 
-⚠️⚠️⚠️ **RIEN DE CE QUI PRÉCÈDE N'A ÉTÉ CONFIRMÉ À L'ÉCRAN — MÊME OBSTACLE QUE LES PASSES
-PRÉCÉDENTES.** Les quatre points ci-dessus sont vérifiés par les bancs (`verify-quete` 609/609,
-`verify-strings`, `verify-syntax`, bundle esbuild, `next build`, `render-etoile`, `verify-vallee`
-205/205) et par lecture de code, jamais par une session jouée : l'automatisation du déplacement
-reste le blocage documenté depuis plusieurs sessions. **LA PROCHAINE ACTION : JOUER CES QUATRE
-CHOSES EN VRAI.** Dans l'ordre le plus rentable : (a) creuser le trou blanc sans la fiole et
-laisser l'étoile plonger SANS presser E — le toast doit apparaître de lui-même, une seule fois ;
-(b) préparer l'Essence au chaudron puis revenir au trou — le chevron doit désormais pointer LE
-TROU, plus le chaudron, et le monde ne doit plus forcer le passage maléfique ; (c) courir le défi
-de fuite, vérifier le halo bleu pulsant sur son propre fermier PUIS le laisser s'éteindre après
-5 minutes sans payer l'offrande — la lueur doit disparaître et l'offrande doit être refusée si on
-arrive trop tard ; (d) à deux clients dans le chapitre 1, vérifier que le second voit apparaître le
-toast d'annonce des puces cliquables, et que le halo bleu du premier reste visible chez le second
-tant que sa lumière n'a pas expiré.
+⚠️⚠️⚠️ **LA PASSE PRÉCÉDENTE (RETRAIT DE « L'ÉTOILE INSISTE », BANDEAU DU TRAIN, COMPTEUR
+D'ACTIVITÉ) N'A TOUJOURS PAS ÉTÉ CONFIRMÉE À L'ÉCRAN.** Vérifiée par les bancs (`verify-quete`
+**612/612**, `verify-strings` 1102/1102, `verify-syntax`, bundle esbuild, `next build`), jamais par
+une session jouée — même blocage d'automatisation du déplacement que les passes précédentes. À
+tester dès l'occasion, dans l'ordre le plus rentable : (a) chercher « insiste »/« insists » nulle
+part sur les deux bandeaux concernés ; (b) à l'arrivée en ville APRÈS avoir pris le train, vérifier
+que le bandeau dit « Tu es à Valley Town » et non plus « Prends le train » ; (c) le vrai test —
+rester en ville plusieurs minutes en alternant présence active et pauses franches (menu ouvert,
+lecture d'une bulle, ne pas bouger), et vérifier que la pastille ☄ ne remonte JAMAIS et finit par
+tomber à 0, en déclenchant la scène de chute.
 
 ⚠️ **DÉCISION DE GUILLAUME, TOUJOURS EN VIGUEUR : LE BUG DU CHAUDRON-ARTÉFACT VISIBLE SUR 4 TERRES/5
 N'EST PAS CORRIGÉ.** Le sprite scintillant (`FermeGame.js`) reste sans la garde `spec.key==="evil"`
@@ -205,10 +214,10 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 
 | # | La leçon, en une phrase | Où est le détail |
 |---|---|---|
-| hors-zip | ⚠️⚠️⚠️ **UN VISUEL BAKÉ IMPORTÉ APRÈS SA COLLISION N'HÉRITE JAMAIS AUTOMATIQUEMENT DE SA POSITION, ET RIEN NE LE VÉRIFIE.** `TOWN_RAILS`/`TOWN_STAIRS` (zip 447, rambarde encore procédurale) n'ont jamais été recalés quand le zip 467 a remplacé tout le visuel par une photo découpée : les deux poteaux de la volée basse étaient peints une case à l'ouest de leur collision, jamais vu parce qu'aucun banc ne compare les pixels du bitmap aux cases logiques qui le bordent — seulement sa taille et son détourage. *Un import bitmap qui remplace un dessin procédural doit revérifier au pixel les collisions écrites POUR l'ancien dessin, pas les supposer encore justes.* | `TOWN_RAILS`, `TOWN_STAIRS`, `fermeConstants.js` |
 | hors-zip | ⚠️⚠️ **UN FILTRE DE TEINTE APPLIQUÉ À TOUT UN CANEVAS PEUT FAIRE GLISSER UN CONTRÔLE QUI SURVEILLE UNE BANDE DE COULEUR PRÉCISE, MÊME QUAND LA GÉOMÉTRIE NE BOUGE PAS.** Relever le point noir de l'escalier importé (`liftShadowFloor`) a fait passer le détecteur d'aplat gris résiduel de `render-escaliers.mjs` de 9 à 46 px : la compression de teinte rapprochait des pixels auparavant distincts dans la bande `[114,150]` que ce banc surveille. Corrigé en rendant la fonction IDENTITÉ stricte au-delà d'un seuil, jamais en désactivant le contrôle. *Un banc de structure et un filtre de couleur peuvent lire le même canevas sans le savoir l'un de l'autre — relancer le banc après un simple changement de teinte n'est pas optionnel.* | `liftShadowFloor`, `fermeArt.js` |
 | hors-zip | ⚠️⚠️⚠️ **UN CORRECTIF POSÉ SUR UNE SEULE INSTANCE D'UN MOTIF RÉPÉTÉ NE COUVRE PAS SA SŒUR.** La rambarde du pont de l'anse sud a reçu sa collision ; le pont du PARC, un second bloc de génération pour le même geste visuel, ne l'avait jamais reçue — personne n'avait pensé à relire l'autre pont. Même défaut sur la lumière, le même jour : le lampadaire suit l'altitude de sa case depuis longtemps, la torche PORTÉE ne l'a jamais fait, alors que les deux dessinent la même mécanique de halo perçant le voile nocturne. *Une correction trouvée sur UN exemplaire d'un motif qui existe ailleurs dans le code ne se généralise pas toute seule — il faut aller vérifier expressément les autres exemplaires, jamais supposer qu'ils partagent le correctif.* | `fermeEngine.js` (pont du parc), `FermeGame.js` (torche, `playerElevTown`) |
 | hors-zip | ⚠️⚠️⚠️ **UNE MÊME CLÉ D'OBJECTIF QUI PILOTE DEUX MÉCANISMES INDÉPENDANTS NE SE SCINDE PAS POUR UN SEUL DES DEUX.** `farmImpactLure` désignait à la fois la phrase du bandeau/chevron ET la condition qui force le monde maléfique (`needsEvil`, FermeGame.js). Une fois l'Essence d'étoile prête, le chevron restait planté sur le chaudron déjà quitté ET le monde restait forcé sur « evil » — deux symptômes vus séparément par Guillaume (l'un en jouant cette session, l'autre aurait rendu le trou blanc littéralement inatteignable), une seule cause. Scinder la clé en deux (`farmImpactLure` / `farmImpactLureGive`, décidées par `ctx.potion`, même patron que `ctx.candy` pour la bleue) a corrigé les deux d'un coup, parce que `needsEvil` lit la MÊME clé que le chevron. *Avant de scinder une clé qui a l'air de ne servir qu'à un texte, chercher qui d'autre la lit — un verrou de monde peut se cacher derrière un `===` anodin.* | `starTameGoalKey`, `needsEvil`, `quete.js`/`FermeGame.js` |
+| hors-zip | ⚠️⚠️⚠️ **UN COMPTEUR CUMULATIF QUI SE REMET À ZÉRO SUR LA MOINDRE PAUSE N'EST PLUS CUMULATIF — IL EST BINAIRE, ET ÇA REND CE QU'IL GARDE PRATIQUEMENT INATTEIGNABLE.** Le gros météore n'attendait que deux minutes de présence active en ville, mais `starTownActivityTick` remettait `a.ms` à zéro à la moindre coupure (lire une bulle, ouvrir l'inventaire, s'arrêter cinq secondes) : aucun joueur ne reste « engagé » en continu deux minutes pleines, donc la chute était pratiquement inatteignable — signalé par Guillaume en jouant. L'inactivité doit mettre la progression EN PAUSE, jamais l'effacer ; seul un nouveau chapitre a le droit de repartir de zéro. *Un compteur qui garde un objectif accessible doit accumuler, pas redémarrer.* | `starTownActiveRef`, `STAR_TOWN_ACTIVE_MS`, `FermeGame.js`/`quete.js` |
 
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
@@ -270,6 +279,32 @@ tribunal** en est la troisième. **`candyluge`** est une descente 3D solo en thr
 | Objectif, contraintes, pièges globaux, avancement | **ce fichier** |
 
 Jamais de fichier de doc autonome à la racine (`AUDIT-X.md`, `NOTES.md`…).
+
+⚠️⚠️ **EXCEPTION DATÉE À LA RÈGLE CI-DESSUS : `AGENTS.md`, À LA RACINE, N'EST PAS UN DOC DE PLUS —
+C'EST LE POINT D'ENTRÉE DE CODEX, L'AGENT QUI PREND LE RELAIS SUR CE DÉPÔT QUAND CE N'EST PAS
+CLAUDE CODE.** Guillaume l'a déjà posé, volontairement vide de contenu projet : il dit seulement
+« lis `CLAUDE.md` en entier avant toute action, applique ses instructions » et « n'ajoute aucun
+contexte projet ici ». **Ne JAMAIS l'étoffer** — le jour où `AGENTS.md` porterait sa propre
+version des pièges/leçons/état d'avancement, ce fichier-ci cesserait d'être la source unique, et
+les deux divergeraient exactement comme le §4 le décrit pour deux cartes sans repère commun. Trois
+règles, symétriques dans les deux sens :
+1. **Codex lit CE fichier en entier avant d'agir**, exactement comme le demande la première ligne
+   de ce document — `AGENTS.md` ne fait que le rediriger ici, il ne le remplace pas.
+2. **Codex met CE fichier à jour en fin de livraison, EN SUIVANT SON PROPRE §14** — français,
+   dense, le bloc ⏭️ REPRISE qui se REMPLACE et ne s'empile jamais, la passe d'élagage avant
+   d'ajouter, la LEÇON seule (jamais son histoire). Rien de spécifique à Codex (nom d'un outil,
+   d'un mode d'exécution, d'un détail de sandbox) n'a sa place ici : ce fichier reste lisible et
+   actionnable par n'importe quel agent, Claude compris à la reprise suivante.
+3. **Une session Claude qui reprend après Codex ignore `AGENTS.md`** — il n'est jamais lu
+   automatiquement par Claude Code, et il ne contient de toute façon aucun fait projet à perdre.
+   Seul CE fichier fait foi, pour Claude comme pour Codex, dans les deux sens de la passation.
+
+⚠️ **UN AUTRE RISQUE, PUREMENT MÉCANIQUE : DEUX AGENTS SUR LE MÊME ARBRE DE TRAVAIL NON COMMITÉ.**
+Ni Claude ni Codex ne commit ni ne push de sa propre initiative (règle ci-dessus, inchangée) — donc
+un arbre de travail peut rester durablement modifié entre deux sessions. **Avant de faire démarrer
+l'un après l'autre, vérifier `git status`/`git diff`** : l'agent qui commence une session doit
+comprendre ce qui est déjà là (souvent le travail non revu de l'agent précédent, décrit dans le
+bloc ⏭️ REPRISE) avant d'y toucher, jamais le nettoyer ou l'écraser sans le comprendre.
 
 ---
 
