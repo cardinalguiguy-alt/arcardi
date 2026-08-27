@@ -882,7 +882,7 @@ touche le sol — le défaut même de ce zip — leur est **totalement invisible
 `verify-quete` qui le tient désormais (cinq contrôles purs sur `starImpactLanded` et l'azimut).
 *Un banc de rendu ne peut pas voir un défaut de temps.*
 
-## `verify-quete.mjs` — 616 contrôles, 616/616 (444 à 480 bis : cinq impacts, FOUILLE, LES QUATRE VERBES, chantier et maire inclus)
+## `verify-quete.mjs` — 619 contrôles, 619/619 (444 à 480 bis : cinq impacts, FOUILLE, LES QUATRE VERBES, chantier et maire inclus)
 
 Le contrôle de l'ouvrage de Tristan vérifie aussi la lecture utilisée par le panneau `P` : cinq
 segments dans l'ordre de `STAR_SHIP_ORDER`, une fabrication à 50 % lue à 50 %, puis l'état

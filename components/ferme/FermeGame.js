@@ -1074,7 +1074,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const starCamRef = useRef(null);                   // { zone, x, y } en CASES — ce que la caméra vise
   const starHitRef = useRef(null);                   // { zone, x, y } en CASES — où la chose touche VRAIMENT
   const starImpactClearRef = useRef({ fall: 0, mask: 0 }); // 462 — décors naturels déjà soufflés
-  const starTownActiveRef = useRef({ fall: 0, at: 0, ms: 0 }); // 462 — présence active continue en ville
+  const starTownActiveRef = useRef({ fall: 0, at: 0, ms: 0 }); // 462 — présence active cumulée en ville
   const starInputAtRef = useRef(0);                  // 462 — dernier geste local, horloge monotone
   /* ⚠️ LA DERNIÈRE CAMÉRA PEINTE, POUR QUE LA SCÈNE SACHE OÙ EST L'IMPACT À
      L'ÉCRAN. Un ref et pas une variable de closure : `getCam` la remplit et
@@ -23242,17 +23242,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function starTownActivityTick(e, now) {
     if (!isHost) return;
     const a = starTownActiveRef.current;
-    if (!Q.starTownWaiting(e)) { a.fall = 0; a.at = 0; a.ms = 0; return; }
-    if (a.fall !== e.fall) { a.fall = e.fall; a.at = now; a.ms = 0; }
-    if (!a.at) a.at = now;
-    const dt = Math.max(0, Math.min(1500, now - a.at));
-    a.at = now;
+    if (!Q.starTownWaiting(e)) { Q.starTownActivityStep(a, e, now, false); return; }
     let active = starPlayerEngaged();
     for (const p of playersRef.current.values()) {
       if (p && (p.zone || "farm") === "town" && p.starEngaged && now - (p.starEngagedAt || 0) <= 16000) { active = true; break; }
     }
-    if (active) a.ms += dt;
-    if (a.ms < Q.STAR_TOWN_ACTIVE_MS) return;
+    if (Q.starTownActivityStep(a, e, now, active) < Q.STAR_TOWN_ACTIVE_MS) return;
     const r = Q.resolveStarTownFall(e, now);
     if (!r.ok) return;
     dirtyRef.current = true;
@@ -23522,9 +23517,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      DE LA CHUTE ELLE-MÊME. Un booléen aurait suffi jusqu'au jour où l'on remet
      la quête à zéro depuis le menu dev : `e.fall` change, la marque ne
      correspond plus, la scène se rejoue. Rien à invalider à la main.
-     ⚠️ La clé porte la GRAINE de la ferme : deux salons différents sur la même
-     machine sont deux histoires différentes. */
-  function starFallSeenKey(kind) { return "ferme_star_" + (kind === "townFall" ? "town_fall" : "farm_fall") + ":" + ((sharedRef.current.seed | 0) >>> 0); }
+     ⚠️ La clé porte la GRAINE de la ferme ET LE JOUEUR : deux salons différents
+     sont deux histoires différentes, et deux profils ouverts dans le même
+     navigateur ne doivent pas se voler leur scène. */
+  function starFallSeenKey(kind) {
+    const m = meRef.current;
+    return Q.starFallSeenStorageKey(kind, sharedRef.current.seed, m && m.id);
+  }
   function starFallSeen(kind) {
     try { return +window.localStorage.getItem(starFallSeenKey(kind)) || 0; } catch (e) { return 0; }
   }

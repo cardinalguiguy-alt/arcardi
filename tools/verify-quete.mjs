@@ -494,9 +494,24 @@ if (craterPos) {
     ok("le gros météore refuse de tomber avant les huit sites", !Q.resolveStarTownFall(e, 2).ok);
     findFarmImpacts(e, "banc", 3);
     ok("le compteur urbain n'existe que pendant le chapitre du cratère", Q.starTownWaiting(e));
+    const a = { fall: 0, at: 0, ms: 0 };
+    let now = 1000;
+    Q.starTownActivityStep(a, e, now, true);
+    for (let i = 0; i < 60; i++) Q.starTownActivityStep(a, e, now += 1000, true);
+    const beforePause = a.ms;
+    for (let i = 0; i < 30; i++) Q.starTownActivityStep(a, e, now += 1000, false);
+    ok("⚠️ l'inactivité met le compteur urbain en pause sans effacer son cumul",
+       beforePause === 60000 && a.ms === beforePause);
+    for (let i = 0; i < 60; i++) Q.starTownActivityStep(a, e, now += 1000, true);
+    ok("…et deux plages actives séparées atteignent bien les deux minutes", a.ms === Q.STAR_TOWN_ACTIVE_MS);
+    const seenA = Q.starFallSeenStorageKey("townFall", 123, "joueur-a");
+    const seenB = Q.starFallSeenStorageKey("townFall", 123, "joueur-b");
+    ok("⚠️ deux joueurs d'un même navigateur ont des marques de chute distinctes",
+       seenA !== seenB && seenA === Q.starFallSeenStorageKey("townFall", 123, "joueur-a"));
     const craterChapter = e.ch;
     e.ch = 2;
-    ok("⚠️ une avance dev vers le chantier ne garde pas l'ancien compteur", !Q.starTownWaiting(e));
+    Q.starTownActivityStep(a, e, now += 1000, true);
+    ok("⚠️ une avance dev vers le chantier ne garde pas l'ancien compteur", !Q.starTownWaiting(e) && a.ms === 0);
     e.ch = craterChapter;
     ok("…puis tombe une seule fois quand le chapitre ferme", Q.resolveStarTownFall(e, 20).ok && Q.starTownFallen(e));
     ok("…et le compteur disparaît dès la chute", !Q.starTownWaiting(e));

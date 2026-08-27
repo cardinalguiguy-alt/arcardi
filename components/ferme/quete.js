@@ -2727,6 +2727,29 @@ export function starTownFallen(e) { return !!(e && e.townFall); }
 export function starTownWaiting(e) {
   return !!(e && starFallen(e) && starChapterKey(e) === "crater" && !starTownFallen(e));
 }
+/* Le ref reste volontairement mutable : ce helper pur côté horloge rend
+   vérifiable l'invariant important — une pause conserve `ms`; seul le passage
+   hors du chapitre d'attente, ou une nouvelle chute initiale, le remet à zéro. */
+export function starTownActivityStep(a, e, now, active) {
+  if (!a || typeof a !== "object") return 0;
+  if (!starTownWaiting(e)) { a.fall = 0; a.at = 0; a.ms = 0; return 0; }
+  const fall = +e.fall || 0;
+  if (a.fall !== fall) { a.fall = fall; a.at = now; a.ms = 0; }
+  if (!a.at) a.at = now;
+  const dt = Math.max(0, Math.min(1500, now - a.at));
+  a.at = now;
+  a.ms = Math.max(0, +a.ms || 0);
+  if (active) a.ms += dt;
+  return a.ms;
+}
+
+/* ⚠️⚠️ HORS-ZIP — UNE MARQUE « VUE » APPARTIENT AU JOUEUR, PAS AU NAVIGATEUR.
+   Le faux Supabase rejoue volontairement deux profils dans deux onglets du même
+   navigateur : sans `who`, le premier qui voyait la chute la masquait au second. */
+export function starFallSeenStorageKey(kind, seed, who) {
+  return "ferme_star_" + (kind === "townFall" ? "town_fall" : "farm_fall")
+    + ":" + ((seed | 0) >>> 0) + ":" + String(who || "?").slice(0, 128);
+}
 export function starStarted(e) { return !!(e && (e.ch > 0 || Object.keys(e.found || {}).length)); }
 export function starDone(e) { return !!(e && e.doneAt); }
 export function starHas(e, id) { return !!(e && e.found && e.found[id]); }
