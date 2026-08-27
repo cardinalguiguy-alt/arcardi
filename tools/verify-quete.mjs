@@ -491,9 +491,15 @@ if (craterPos) {
   ok("la présence active requise à Valley Town vaut exactement deux minutes", Q.STAR_TOWN_ACTIVE_MS === 120000);
   {
     const e = Q.newStar(); e.fall = 1;
-    ok("le gros météore refuse de tomber avant les cinq sites", !Q.resolveStarTownFall(e, 2).ok);
+    ok("le gros météore refuse de tomber avant les huit sites", !Q.resolveStarTownFall(e, 2).ok);
     findFarmImpacts(e, "banc", 3);
+    ok("le compteur urbain n'existe que pendant le chapitre du cratère", Q.starTownWaiting(e));
+    const craterChapter = e.ch;
+    e.ch = 2;
+    ok("⚠️ une avance dev vers le chantier ne garde pas l'ancien compteur", !Q.starTownWaiting(e));
+    e.ch = craterChapter;
     ok("…puis tombe une seule fois quand le chapitre ferme", Q.resolveStarTownFall(e, 20).ok && Q.starTownFallen(e));
+    ok("…et le compteur disparaît dès la chute", !Q.starTownWaiting(e));
     ok("…et ne peut pas être redaté", Q.resolveStarTownFall(e, 30).already === true && e.townFall === 20);
   }
 }
@@ -2775,8 +2781,12 @@ console.log("\n11. L'OUVRAGE DE TRISTAN (459)\n");
   ok("⚠️⚠️ dès la commande, il fabrique LA pièce commandée",
      !!w && w.key === "hull" && w.at === 1000 && w.readyAt === 1000 + C.STAR_TIMBER.hull.ms);
   const mid = 1000 + C.STAR_TIMBER.hull.ms / 2;
+  const planMid = Q.starShipProgress(e, mid);
   ok("…et l'avancement se lit sur les deux dates, sans troisième champ",
-     Math.abs(Q.starTimberProgress(e, mid) - 0.5) < 0.001,
+     Math.abs(Q.starTimberProgress(e, mid) - 0.5) < 0.001
+       && planMid.length === Q.STAR_SHIP_TOTAL
+       && planMid[0].state === "building"
+       && Math.abs(planMid[0].work - 0.5) < 0.001,
      `${(Q.starTimberProgress(e, mid) * 100).toFixed(0)} % à mi-parcours`);
   /* ⚠️ BORNÉ AUX DEUX BOUTS : une bulle qui afficherait un trait de scie négatif
      avant l'heure, ou plus profond que la bille après, dirait n'importe quoi
@@ -2785,7 +2795,19 @@ console.log("\n11. L'OUVRAGE DE TRISTAN (459)\n");
      Q.starTimberProgress(e, 0) === 0 && Q.starTimberProgress(e, 1e12) === 1);
   Q.resolveStarTimberTick(e, 1000 + C.STAR_TIMBER.hull.ms);
   ok("⚠️⚠️ pièce livrée = plus personne à l'ouvrage (la bulle disparaît)",
-     Q.starTimberBusy(e) === null);
+     Q.starTimberBusy(e) === null
+       && Q.starShipProgress(e, 1000 + C.STAR_TIMBER.hull.ms)[0].state === "ready");
+  {
+    const src = fs.readFileSync(path.join(ROOT, "components", "ferme", "FermeGame.js"), "utf8");
+    const i0 = src.indexOf('<div className="ferme-ship-progress"');
+    const i1 = src.indexOf('<div className="ferme-ship-progress-next">', i0);
+    const panel = i0 >= 0 && i1 > i0 ? src.slice(i0, i1) : "";
+    ok("⚠️ le panneau P dérive ses cinq segments et n'y remet aucun pictogramme",
+       /progress\.map\(step/.test(panel)
+         && /progressState\(step\.state\)/.test(panel)
+         && !/[✅🪚◻🔒🔨]/u.test(panel),
+       `${panel.length} signes lus dans la barre`);
+  }
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ZIP 478 — CE CONTRÔLE DISAIT L'INVERSE DE CE QU'ON MESURE MAINTENANT.
      ╚══════════════════════════════════════════════════════════════════════════

@@ -11,33 +11,38 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**ACTION SUIVANTE UNIQUE — TRANCHER LE REPLI CLAVIER/TACTILE DES LABELS DE SALLE.** Le chantier est
-livré côté code. `drawCourtFrame`, commun au tribunal, à la mairie et à l'église, garde tous les
-chambranles mais ne peint plus que la plaque du groupe de
-porte correspondant à la case ciblée. `pointerTargetTile` est désormais la source unique du
-ciblage pointeur pour les pips, la ville et ces labels ; rien n'est diffusé. Sans pointeur à portée,
-la recommandation provisoire « case devant le joueur » est isolée derrière
-`COURT_LABEL_FALLBACK_TO_FACING_TILE = true` : **Guillaume doit encore confirmer ce choix**, ou lui
-préférer la seule porte interagissable / la porte la plus proche. `render-mairie` ne peint plus
-qu'une plaque témoin ciblée ; `verify-vallee` parle d'un libellé disponible, plus d'une plaque
-permanente. Vérifié réellement : `verify-vallee` **205/205**, `render-mairie` et
-`render-beffroi` verts, compilation Next réussie avant l'échec de pré-rendu attendu sans variables
-Supabase ; `verify-syntax` parse ses modules mais n'a pas vérifié `FermeGame.js`, faute d'esbuild
-local et de réseau. **VU EN JEU LOCAL** dans le hall de la mairie : aucune plaque permanente, puis
-« Salle des mariages » seule quand la porte est ciblée par le repli clavier. Le ciblage souris a
-produit la bonne case pendant l'essai, mais l'automatisation n'a pas conservé le pointeur assez
-longtemps pour une capture stable de cet état précis.
+**ACTION SUIVANTE UNIQUE — REJOUER LA CHAÎNE EXISTANTE AVEC DEUX VRAIS CLIENTS.** Valider le relais
+du plat chaud et les deux positions opposées autour du cratère sans raccourci développeur entre les
+postes. ⚠️ Les autres propositions du dossier « Port des Sept Sœurs » ne sont pas autorisées à
+l'implémentation par cette livraison ; ne pas commencer les lots A–G sans une nouvelle demande.
 
-⚠️⚠️⚠️ **LA PASSE PRÉCÉDENTE (RETRAIT DE « L'ÉTOILE INSISTE », BANDEAU DU TRAIN, COMPTEUR
-D'ACTIVITÉ) N'A TOUJOURS PAS ÉTÉ CONFIRMÉE À L'ÉCRAN.** Vérifiée par les bancs (`verify-quete`
-**612/612**, `verify-strings` 1102/1102, `verify-syntax`, bundle esbuild, `next build`), jamais par
-une session jouée — même blocage d'automatisation du déplacement que les passes précédentes. À
-tester dès l'occasion, dans l'ordre le plus rentable : (a) chercher « insiste »/« insists » nulle
-part sur les deux bandeaux concernés ; (b) à l'arrivée en ville APRÈS avoir pris le train, vérifier
-que le bandeau dit « Tu es à Valley Town » et non plus « Prends le train » ; (c) le vrai test —
-rester en ville plusieurs minutes en alternant présence active et pauses franches (menu ouvert,
-lecture d'une bulle, ne pas bouger), et vérifier que la pastille ☄ ne remonte JAMAIS et finit par
-tomber à 0, en déclenchant la scène de chute.
+**DOSSIER DE CONCEPTION ET LUDO SOLO LIVRÉS LE 2026-08-27.** `QUETE.md` §17 tient désormais une
+soirée de 55–65 minutes : quatre étoiles dans la première figure, trois chasses tardives, attente
+active au cratère, plans de Kerguélen en cinq jalons, rendez-vous du maire en parallèle, lac révélé
+comme ancien port, sciage et feux du port en coopération avec substitutions PNJ en solo, puis bateau
+ouvrant la future route des îles. **C'est une cible documentée, pas une implémentation de quête.**
+Seule exception livrée : le panneau ouvert avec `P` remplace ses cinq lignes à pictogrammes par une
+progression segmentée sans icône. `starShipProgress` dérive `À VENIR`, `À COMMANDER`,
+`EN FABRICATION`, `À MONTER` et `ASSEMBLÉ` des commandes et de la cale existantes ; aucun état
+persisté n'est ajouté. La maquette HTML ne montre plus que ce panneau. Vérifié par `verify-quete`
+**616/616**, `verify-strings` **1 102**, compilation Next réussie (pré-rendu arrêté ensuite par
+les variables Supabase absentes, défaut d'environnement connu) et maquette contrôlée à 1280/360 px.
+
+Le Ludo est, lui, modifié : un humain choisit 1, 2 ou 3 bots avant le départ ; 2–4 humains gardent
+le flux historique. Les bots choisissent uniquement dans le plan légal du vrai arbitre de l'hôte
+et passent par les mêmes cinq actions que les humains. Vérifié : `verify-ludo` **30/30**, 1 000 plans balayés,
+syntaxe, bundle esbuild et `git diff --check` verts. Vu dans le navigateur : choix exclusifs 1/2/3,
+compositions exactes à 2/3/4 camps, lancer humain et tour du bot dans le duel. La page jetable a
+été supprimée. Le build Next compile puis bute comme prévu sur les variables Supabase absentes au
+pré-rendu ; aucun
+schéma, donnée Supabase ni quota de production n'a été touché.
+
+**CORRECTIF DE LISIBILITÉ DES PORTES LIVRÉ.** Les noms de salle de la mairie, du tribunal et de
+l'église passent maintenant dans la dernière couche du monde : comptoirs, plantes, PNJ et joueurs
+ne peuvent plus les masquer. Leur survol déborde de **0,85 case sur les quatre côtés** de
+l'ouverture et choisit la porte la plus proche si deux marges se rencontrent. Rejoué dans le
+navigateur au guichet d'accueil, sur la porte et dans sa marge ; `verify-vallee` est à **208/208**.
+Aucun état partagé, message réseau, migration ou manipulation Supabase.
 
 ⚠️ **DÉCISION DE GUILLAUME, TOUJOURS EN VIGUEUR : LE BUG DU CHAUDRON-ARTÉFACT VISIBLE SUR 4 TERRES/5
 N'EST PAS CORRIGÉ.** Le sprite scintillant (`FermeGame.js`) reste sans la garde `spec.key==="evil"`
@@ -56,8 +61,8 @@ livraison** (règle du 424 : on ne mêle pas deux changements visuels), c'est me
 | 2 | Le chantier naval devient un chantier | ✅ **LIVRÉ AU 478** — défaut 4 |
 | 3a | La tenue devient une scène | ✅ **LIVRÉ AU 478** — défaut 2 ⚠️ *et sa lumière ne s'est jamais affichée : voir le préalable ci-dessus* |
 | 3b | Les trois verbes distincts | ✅ **LIVRÉ AU 479** — défauts 3, 9, 10 |
-| 4 | **La passe maire** | ✅ **LIVRÉE AU 480** — §16 de `QUETE.md`. ⚠️ **La FOURCHE DE FIN reste ouverte et RÉSERVÉE À GUILLAUME** : le navire part avec Eduardo (453), mais pour la **CALE** (il commerce) ou le **PONT** (il ramène des résidents) ? |
-| 5 | Les sept sœurs | ⬜ en réserve, jamais obligatoire |
+| 4 | **La passe maire** | ✅ **LIVRÉE AU 480** — §16 de `QUETE.md`. La suite est tranchée : le navire d'Eduardo ouvre la future route d'exploration des îles ; l'ancien lac devient le port qui l'accueille (§17). |
+| 5 | Les sept sœurs | 📝 **CONÇU AU §17, NON IMPLÉMENTÉ** — quatre premières, puis verte/orange/violette dans la seconde moitié |
 
 ⚠️⚠️ **CE QUE LE LOT 4 A CHANGÉ, EN QUATRE LIGNES.** Le détail est au §16 de `QUETE.md`, qui a une
 ligne par chose ; ici, seulement de quoi savoir quoi ne pas casser.
@@ -78,18 +83,17 @@ TENUS** — le relais du plat (l'un cuisine, l'autre court) et les deux bords du
 arbitrés par l'hôte, mesurés par `verify-quete` §12, **et jamais joués face à face**. Le 480 en
 ajoute un troisième d'une autre nature : **une audience que personne n'a menée.**
 
-État à jour du **zip 480**. La direction longue reste de **rendre Valley Town habitable au regard
+État à jour au **2026-08-27**. La direction longue reste de **rendre Valley Town habitable au regard
 ET crédible au jeu**, et **lui donner une histoire**. Tout ce qui concerne la ville, ses habitants,
 ses bâtiments et **ses pièges** est dans **`components/ferme/README.md`**, qui fait autorité ; les
 règles de DESSIN sont dans **`components/ferme/DESSIN.md`** ; les bancs dans **`tools/README.md`**.
 **`candyluge` et `crystal` sont EN PAUSE.**
 
 ⚠️⚠️ **LA REFONTE DE LA QUÊTE DE L'ÉTOILE EST LE CHANTIER VIVANT, ET SON DOCUMENT DE REPRISE
-EST `components/ferme/QUETE.md`. LIS SON BLOC D'AUTORITÉ 469 AVANT D'Y TOUCHER.** Ce qui reste :
-cinq impacts qu'on FOUILLE, le grand cratère, l'étoile reine, le chantier naval. La liste de ce
-qui manque est au **§15.3** ; le §16 décrit l'audience. ⚠️ **Le point 4 du §15.3 vient d'être
-DÉBLOQUÉ** : les PNJ peuvent enfin parler du bateau, la condition qu'ils attendaient
-(`MR.mayorSigned`) existe.
+EST `components/ferme/QUETE.md`. LIS SON BLOC D'AUTORITÉ 2026-08-26 ET SON §17 AVANT D'Y
+TOUCHER.** Le code livré au 480 bis précède encore ce dossier : chronologie 5 + 3, sept sœurs,
+attentes actives et ancien port restent à construire par les lots A à G du §17.11. L'audience
+existe déjà (§16) et sa signature (`MR.mayorSigned`) débloque les répliques du bateau.
 
 ---
 
@@ -185,10 +189,10 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 
 | # | La leçon, en une phrase | Où est le détail |
 |---|---|---|
-| hors-zip | ⚠️⚠️ **UN FILTRE DE TEINTE APPLIQUÉ À TOUT UN CANEVAS PEUT FAIRE GLISSER UN CONTRÔLE QUI SURVEILLE UNE BANDE DE COULEUR PRÉCISE, MÊME QUAND LA GÉOMÉTRIE NE BOUGE PAS.** Relever le point noir de l'escalier importé (`liftShadowFloor`) a fait passer le détecteur d'aplat gris résiduel de `render-escaliers.mjs` de 9 à 46 px : la compression de teinte rapprochait des pixels auparavant distincts dans la bande `[114,150]` que ce banc surveille. Corrigé en rendant la fonction IDENTITÉ stricte au-delà d'un seuil, jamais en désactivant le contrôle. *Un banc de structure et un filtre de couleur peuvent lire le même canevas sans le savoir l'un de l'autre — relancer le banc après un simple changement de teinte n'est pas optionnel.* | `liftShadowFloor`, `fermeArt.js` |
-| hors-zip | ⚠️⚠️⚠️ **UN CORRECTIF POSÉ SUR UNE SEULE INSTANCE D'UN MOTIF RÉPÉTÉ NE COUVRE PAS SA SŒUR.** La rambarde du pont de l'anse sud a reçu sa collision ; le pont du PARC, un second bloc de génération pour le même geste visuel, ne l'avait jamais reçue — personne n'avait pensé à relire l'autre pont. Même défaut sur la lumière, le même jour : le lampadaire suit l'altitude de sa case depuis longtemps, la torche PORTÉE ne l'a jamais fait, alors que les deux dessinent la même mécanique de halo perçant le voile nocturne. *Une correction trouvée sur UN exemplaire d'un motif qui existe ailleurs dans le code ne se généralise pas toute seule — il faut aller vérifier expressément les autres exemplaires, jamais supposer qu'ils partagent le correctif.* | `fermeEngine.js` (pont du parc), `FermeGame.js` (torche, `playerElevTown`) |
 | hors-zip | ⚠️⚠️⚠️ **UNE MÊME CLÉ D'OBJECTIF QUI PILOTE DEUX MÉCANISMES INDÉPENDANTS NE SE SCINDE PAS POUR UN SEUL DES DEUX.** `farmImpactLure` désignait à la fois la phrase du bandeau/chevron ET la condition qui force le monde maléfique (`needsEvil`, FermeGame.js). Une fois l'Essence d'étoile prête, le chevron restait planté sur le chaudron déjà quitté ET le monde restait forcé sur « evil » — deux symptômes vus séparément par Guillaume (l'un en jouant cette session, l'autre aurait rendu le trou blanc littéralement inatteignable), une seule cause. Scinder la clé en deux (`farmImpactLure` / `farmImpactLureGive`, décidées par `ctx.potion`, même patron que `ctx.candy` pour la bleue) a corrigé les deux d'un coup, parce que `needsEvil` lit la MÊME clé que le chevron. *Avant de scinder une clé qui a l'air de ne servir qu'à un texte, chercher qui d'autre la lit — un verrou de monde peut se cacher derrière un `===` anodin.* | `starTameGoalKey`, `needsEvil`, `quete.js`/`FermeGame.js` |
 | hors-zip | ⚠️⚠️⚠️ **UN COMPTEUR CUMULATIF QUI SE REMET À ZÉRO SUR LA MOINDRE PAUSE N'EST PLUS CUMULATIF — IL EST BINAIRE, ET ÇA REND CE QU'IL GARDE PRATIQUEMENT INATTEIGNABLE.** Le gros météore n'attendait que deux minutes de présence active en ville, mais `starTownActivityTick` remettait `a.ms` à zéro à la moindre coupure (lire une bulle, ouvrir l'inventaire, s'arrêter cinq secondes) : aucun joueur ne reste « engagé » en continu deux minutes pleines, donc la chute était pratiquement inatteignable — signalé par Guillaume en jouant. L'inactivité doit mettre la progression EN PAUSE, jamais l'effacer ; seul un nouveau chapitre a le droit de repartir de zéro. *Un compteur qui garde un objectif accessible doit accumuler, pas redémarrer.* | `starTownActiveRef`, `STAR_TOWN_ACTIVE_MS`, `FermeGame.js`/`quete.js` |
+| hors-zip | ⚠️⚠️⚠️ **UNE HORLOGE D'INTERFACE DOIT ÊTRE BORNÉE PAR SA PHASE, PAS SEULEMENT PAR L'ABSENCE DE SON ÉVÉNEMENT FINAL.** Une avance du menu dev pouvait ouvrir le chantier avec `townFall` encore vide : le compteur de Valley Town survivait alors sous l'objectif de la mairie, parce qu'il ne vérifiait que « pas encore tombé ». `starTownWaiting` joint désormais chapitre, chute initiale et chute urbaine, et la boucle comme l'affichage lisent ce même prédicat. *Une date manquante ne prouve pas qu'une attente est encore en cours ; la phase courante doit l'autoriser.* | `starTownWaiting`, `starTownActivityTick`, `FermeGame.js`/`quete.js` |
+| 2026-08-27 | ⚠️⚠️⚠️ **`self:true` EST UN ÉTAT DU CANAL, PAS UN DÉTAIL DU MESSAGE.** Le Ludo solo envoyait bien son état initial, mais le relais local supprimait inconditionnellement l'écho de toute trame binaire : un seul client restait donc éternellement sur « trois bots rejoignent ». Le `phx_join` annonce l'option une fois ; les broadcasts binaires suivants ne la répètent pas. Un relais de test doit mémoriser la configuration par sujet, sinon il invalide exactement le mode à un client qu'il sert à tester. | `tools/fake-supabase.mjs`, `tools/verify-ludo.mjs`, `PetitsChevaux.js` |
 
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
@@ -424,11 +428,11 @@ de conception qui valent pour n'importe quel morceau du dépôt.
 |---|---|
 | `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **~20 500 l.** |
 | `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** |
-| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE : table, chronologies et résolveurs purs.** ⚠️ **469 — la FOUILLE (`STAR_DIG_MS`, `starDug`, `resolveStarDig`, `starDigResult`) et TROIS chapitres au lieu de cinq.** `STAR_FARM_IMPACTS` porte les cinq cratères (2 étoiles / 1 matière / 2 vides), `resolveStarCalm` tient le barème 60/10 s et `resolveStarTownFall` sépare le gros météore. `STAR_FOLLOWER_SITES` dérive toutes les compagnes de `content:"star"`, `starFollowerAdded` identifie celle qui doit jouer son arrivée, `starFarmFlightPath` tient le cap stable des fragments et `queen` désigne l'unique reine. Le reste des chapitres 444–460 demeure techniquement présent mais sa fiction de chant et sa plongée sont obsolètes. Aucun React, aucun dessin — `verify-quete.mjs` l'importe. |
+| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE : table, chronologies et résolveurs purs.** ⚠️ **469 — la FOUILLE (`STAR_DIG_MS`, `starDug`, `resolveStarDig`, `starDigResult`) et TROIS chapitres au lieu de cinq.** `STAR_FARM_IMPACTS` porte les cinq cratères (2 étoiles / 1 matière / 2 vides), `resolveStarCalm` tient le barème 60/10 s et `resolveStarTownFall` sépare le gros météore. `STAR_FOLLOWER_SITES` dérive toutes les compagnes de `content:"star"`, `starFollowerAdded` identifie celle qui doit jouer son arrivée, `starFarmFlightPath` tient le cap stable des fragments et `queen` désigne l'unique reine. `starShipProgress` joint les cinq états du plan aux commandes et à la cale sans persistance supplémentaire. Aucun React, aucun dessin — `verify-quete.mjs` l'importe. |
 | `components/ferme/maire.js` | **L'AUDIENCE CHEZ LE MAIRE (480) : la table des battements et les résolveurs purs.** Douze nœuds, cinq actes, cinq familles d'argument, la jauge d'adhésion qui FUIT, l'élan, la rejouabilité côté hôte (`mayorReplay` : le client envoie sa TRANSCRIPTION, l'hôte la rejoue). Aucun React, aucun dessin — `verify-maire.mjs` l'importe. ⚠️ **C'est un système de NÉGOCIATION, pas une scène** : la confiance gagnée sert les audiences futures, donc une commission ou le cadastre s'y ajouteront en une table de plus. |
 | `components/ferme/MaireScene.js` | **la VUE de l'audience — le seul morceau de 3D du monde partagé.** Écran PLEIN, à la PREMIÈRE PERSONNE, caméra libre dans la pièce, bulles projetées, réponses en jaune, **mode spectateur** (`MayorWatch`), repli plat si WebGL manque. ⚠️ Il porte `mayorCtxOf`, **la fonction de contexte que le CLIENT et l'HÔTE appellent tous les deux** : leur accord est une propriété du code, pas une coïncidence. |
 | `components/ferme/maireBureau.js` | **LE BUREAU DU MAIRE, EN CODE (481).** La pièce entière (parquet, boiseries, pilastres, fenêtre sur la place, bibliothèque, buste, lustre, porte qui claque), le meuble et ses objets — *chacun est une réplique de l'arbre* —, et le maire : sept postures, huit visages, sourcils/paupières/bouche, cinématique inverse des bras. ⚠️ **PROCÉDURAL, comme `fermeArt.js` mais en 3D** : aucun fichier à charger, textures peintes au canevas 2D, `THREE` passé en paramètre (jamais importé — deux copies de three.js dans une page ne ressemblent à rien). ⚠️ Rien n'y vit dans la closure de la boucle de rendu : `buildOffice` rend un objet, `applyPose`/`applyFace`/`solveArm` sont des fonctions de module. |
-| `components/ferme/QUETE.md` | **le chantier 444 : déroulé, grammaire magique, avancement, ET CE QUI RESTE À FAIRE (§12) — autorité tant que la quête n'est pas finie** |
+| `components/ferme/QUETE.md` | **la quête de l'étoile — autorité. Le §17 est le dossier cible « Port des Sept Sœurs » : une soirée, chronologie 5 + 3, sept étoiles, attentes actives, ancien port et lots A–G ; il distingue explicitement conception et code livré** |
 | `components/ferme/README.md` | **Valley Town, le tribunal, l'HÔTEL DE VILLE, l'ÉGLISE, le BEFFROI, les habitants, la VENTE, les OISEAUX, les ÉLECTIONS et les PIÈGES de ces zones — autorité (428-444)** |
 | `components/ferme/DESSIN.md` | **les règles de DESSIN, vraies partout — autorité (441, sorties du §4)** |
 | `tools/README.md` | **les bancs, ce qu'ils attrapent et leurs chiffres — autorité (432-439)** |
@@ -436,6 +440,7 @@ de conception qui valent pour n'importe quel morceau du dépôt.
 | `components/ferme/planche.js` | **GÉNÉRÉ** par `tools/import-planche.mjs` — les sprites de la planche de Guillaume, en données. Ne pas éditer à la main |
 | `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural. `starWispColors` décline le vivant en jaune, bleu et rose ; `drawStarFragmentMeteor` fait tourner le petit caillou incandescent sur un centre stable et `drawStarFragmentImpact` dessine son choc de terre/poussière/braises, sans réutiliser la boule de feu de Valley Town. Les gros dessins de quête (`drawStarCrater`, comète, navire, jauge, poses) vivent ici pour rester regardables par les bancs. |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
+| `components/PetitsChevaux.js` · `components/ludoBot.js` | **Ludo 2–4 humains ou 1 humain + 1 à 3 bots choisis avant le départ.** `ludoBot.js` ne connaît aucune règle de déplacement : il classe seulement le plan légal et les simulations que l'arbitre hôte lui remet |
 | `public/candyluge/README.md` | **la dette et les 18 règles de la luge — autorité (427)** |
 | `public/candyluge/js/` | `config.js` (tous les nombres) · `slope.js` (la piste) · `sled.js` · `world.js` |
 | `public/vendor/three-r128/` | three.js r128 + GLTFLoader + EffectComposer, en local |
@@ -594,9 +599,10 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 `✓ Compiled successfully` juste avant.**
 
 ⚠️⚠️ **LES BANCS SONT DANS `tools/README.md` DEPUIS LE 432, ET CE CHAPITRE A ÉTÉ ÉLAGUÉ AU 444
-SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 442** (reporté deux fois). **17 bancs de contrôle et 19 bancs
-de rendu**, comptés en listant `tools/` (⚠️ **le 480 en ajoute un, `verify-maire`, et les 36 ont
-été relancés un par un**, tous verts : `verify-quete` **596/596**, `verify-maire` **113/113**,
+SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 442** (reporté deux fois). **18 bancs de contrôle et 19 bancs
+de rendu**, comptés en listant `tools/` (⚠️ **le 480 ajoutait `verify-maire` et avait relancé les
+36 bancs d'alors un par un** ; le 2026-08-27 ajoute `verify-ludo`, relancé **30/30** :
+`verify-quete` **596/596**, `verify-maire` **113/113**,
 `render-etoile` **161/161**
 ⚠️ *ces deux premiers chiffres mentaient depuis un moment : `verify-maire` était resté à 72/72 ici
 alors que le 481 l'annonce correctement à 113/113 plus bas dans ce même fichier — même défaut que
@@ -630,7 +636,10 @@ FICHIER, DONC IL NE PEUT PAS VOIR UN IMPORT QUI NE RÉSOUT PAS.** Un **bundle** 
 de deux zips** (le piège n°1 de ce fichier, dans le zip même qui livrait la fonctionnalité). Ça ne
 remplace pas `next build`, mais ça se lance PENDANT qu'un `next dev` tourne, et c'est le seul
 contrôle du dépôt qui voie une liaison entre deux fichiers.
-⚠️ **Le seul qui touche à de l'ARGENT est `verify-vallee`** (205/205, relancé au 458) : il joue des ventes,
+⚠️ **`verify-ludo` est le deuxième banc qui joue une mécanique de mini-jeu** : il balaie 1 000
+plans légaux et tient les cinq chemins bot vers les arbitres de l'hôte. Son détail et ses limites
+sont dans `tools/README.md`.
+⚠️ **Le seul qui touche à de l'ARGENT est `verify-vallee`** (208/208, relancé hors-zip le 2026-08-26) : il joue des ventes,
 compte les pièces, et vérifie que **le cours est bit à bit celui du 430** — contrôle hérité de
 `verify-enquete`, sauvé de sa suppression parce qu'il protégeait le marché, pas l'enquête.
 **Tout chiffre écrit là-bas a été obtenu en lançant le banc**, c'est sa règle d'entrée.
@@ -694,18 +703,22 @@ vérifie jamais — c'est elle, et elle seule, qui protège du banc imaginaire (
   clients a désormais payé les trois fois sur trois où elle a eu lieu.* **Ce qui reste** : la
   moitié qui se joue FACE À FACE (l'étoile timide dos à dos, le croisement d'ombres à deux, la
   flaque promenée sur le ponton, le duo) et **la ferme PEUPLÉE**, jamais vue à deux.
-- ⚠️⚠️ **UN BANC JOUE ENFIN UN MOUVEMENT, DEPUIS LE 459, ET C'EST LE SEUL** : `render-etoile` §7
-  simule `starSlipStep` sur le vrai creux du cratère, 317 départs, et vérifie qu'on SORT du trou.
-  Il a trouvé, avant d'être fini, que 219 départs sur 317 étaient bloqués. ⚠️ Ce qu'il ne fait
-  toujours pas : jouer un mini-jeu (voir juste en dessous) ni tourner à deux clients.
-- ⚠️ **AUCUN BANC NE JOUE UN MINI-JEU.** Ils vivent dans le DOM et demandent un vrai canevas et un
-  vrai `rAF`. Ce qui se juge là — *est-ce que c'est agréable ?* — ne se mesure nulle part.
+- ⚠️⚠️ **`render-etoile` JOUE UN MOUVEMENT DU MONDE DEPUIS LE 459** : son §7 simule
+  `starSlipStep` sur le vrai creux du cratère, 317 départs, et vérifie qu'on SORT du trou. Il a
+  trouvé, avant d'être fini, que 219 départs sur 317 étaient bloqués. `verify-ludo` joue désormais
+  aussi l'automate pur d'un bot et balaie 1 000 plans légaux ; aucun des deux ne tourne à deux
+  clients.
+- ⚠️ **AUCUN BANC NE JOUE UN MINI-JEU DANS SON DOM ET SON CANEVAS.** `verify-ludo` protège les
+  décisions pures et le branchement aux arbitres ; le navigateur a seul validé le choix 1/2/3 et
+  l'enchaînement humain → bot → humain du duel. Ce qui se juge là — *est-ce que c'est agréable ?*
+  — ne se mesure toujours nulle part.
 
 ⚠️⚠️ **JOUER À DEUX EN LOCAL : `node tools/fake-supabase.mjs`.** REST bidon **+ relais Realtime**,
 donc deux onglets = deux joueurs, sans compte et sans consommer un message du quota. `LAT=90
 JIT=60` simule une vraie liaison ; il imprime le débit réel PAR TYPE toutes les 5 s.
 ⚠️ **Le broadcast de supabase-js est BINAIRE**, pas JSON — un relais qui ne lit que les trames
-texte voit tout se connecter et rien passer.
+texte voit tout se connecter et rien passer. Depuis le 2026-08-27, le relais mémorise aussi
+`broadcast.self` à la jonction : une partie solo à client unique doit recevoir son propre état.
 
 **Jouer en local** — deux échafaudages TEMPORAIRES, **à supprimer après** (recette resservie telle
 quelle au 454 puis au 456) :
@@ -1163,6 +1176,13 @@ erreur** en choisissant mal.
    `verify-strings`, `verify-syntax`, bundle esbuild, `next build`, `render-etoile`,
    `verify-vallee`), jamais à l'écran — même blocage d'automatisation du déplacement que les
    sessions précédentes.)**.
+
+   **2026-08-27, dossier quête & Ludo solo (VINGT-HUITIÈME passe : la ligne la plus ancienne du
+   tableau, « un correctif de motif ne couvre pas sa sœur », part avant la leçon `self:true` — une
+   retirée, une ajoutée, le tableau reste à quatre. Son détail demeure dans `fermeEngine.js`,
+   `FermeGame.js` et `DESSIN.md`. La passe corrige aussi le compte des bancs : `verify-ludo`
+   devient le dix-huitième banc de contrôle et passe 30/30. Le dossier créatif vit au §17 de
+   `QUETE.md`, la mécanique Ludo dans `ludoBot.js` ; aucun des deux n'est recopié ici.)**.
 
    **478 (DIX-HUITIÈME passe : la ligne 473 part avant la leçon de ce zip — une retirée, une
    ajoutée, le tableau reste à sa taille et couvre exactement 474 à 478. Son détail reste dans

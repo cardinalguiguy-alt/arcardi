@@ -253,15 +253,15 @@ const STAR_FR = {
          touche à presser. Même famille que `farmImpactTame`, qui ne mentionne
          pas non plus de touche pour la même raison. */
       farmImpactLureGive: "Tu as l'Essence d'étoile. Approche du trou blanc, elle viendra d'elle-même.",
-      farmImpactCool: "Une plaque noire attend d'être refroidie. Reviens l'examiner (E).",
+      farmImpactCool: "La plaque noire refroidit. Examine-la ici (E) pour poursuivre.",
       /* ⚠️ hors-zip — « l'étoile insiste » retiré (Guillaume : la personnification
          était de trop) et « occupe-toi » remplacé par une suggestion CONCRÈTE —
          un bandeau qui dit quoi faire, pas seulement d'attendre (même exigence
          que la note du 455 juste au-dessus). Et DEUX phrases, pas une : celle-ci
          suppose qu'on n'est pas encore parti, `townWaitThere` (juste en dessous)
          parle à qui a déjà pris le train — voir la note de `starGoalKey`. */
-      townWait: "Prends le train pour Valley Town. Fais un tour au marché en attendant.",
-      townWaitThere: "Tu es à Valley Town. Fais un tour au marché en attendant.",
+      townWait: "Prends le train pour Valley Town. Reste actif 2 min : marche ou interagis.",
+      townWaitThere: "Reste actif 2 min à Valley Town : marche, explore ou interagis.",
       craterHot: "À l'est de Valley Town, le trou brûle encore. Attends qu'il refroidisse.",
       /* ⚠️⚠️ ZIP 479 — LA REINE NE SE PREND PLUS EN DESCENDANT. « Descends :
          quelque chose se cache au fond » décrivait le geste d'avant ce lot, et le
@@ -332,11 +332,15 @@ const STAR_FR = {
        pastille ne s'affiche que côté hôte (lui seul tient l'horloge réelle,
        §3 de CLAUDE.md : on ne diffuse pas ce qui se déduit, mais ici rien ne
        se déduit chez l'invité, qui n'a pas cette horloge). */
-    townFallCountdown: (mmss) => `Ça gronde. Encore ${mmss} d'activité en ville et le ciel cède.`,
-    againTitle: "Où tu en étais",
-    /* ⚠️ ZIP 453 — LE PLURIEL EST DÉRIVÉ, LUI AUSSI : cette phrase écrivait
-       « Tu as 1 morceaux » au premier morceau, ce qu'aucun banc ne regardait. */
-    again: (n, total) => `Tu as ${nfr(n)} morceau${n > 1 ? "x" : ""} sur ${nfr(total)}. La petite étoile est toujours là.`,
+    townFallCountdown: (mmss) => `Impact dans ${mmss} d'activité en ville.`,
+    againTitle: "Prochaine étape",
+    againClose: "Reprendre la quête",
+    /* Le rappel nomme l'objet construit et traite zéro comme un vrai cas :
+       « zéro morceau » était grammatical mais ne disait pas ce que le compteur
+       changeait dans le monde. */
+    again: (n, total) => n <= 0
+      ? `Aucune des ${nfr(total)} pièces du bateau n'est encore montée. Les étoiles restent avec toi.`
+      : `${nfr(n)} pièce${n > 1 ? "s" : ""} du bateau montée${n > 1 ? "s" : ""} sur ${nfr(total)}. Les étoiles restent avec toi.`,
   },
   guide: {
     go: "L'étoile reine prend la tête. Suis sa lumière.",
@@ -674,7 +678,7 @@ const STAR_FR = {
     ready: "Les plans sont à toi. Ouvre-les (P) pour voir le bateau.",
     openBtn: "📐 Le plan",
     panelTitle: (name) => `📐 Plans de construction — ${name}`,
-    panelHint: (total) => `${Nfr(total)} pièces, cinq listes. Fais tailler le bois, puis monte-les ici.`,
+    panelHint: (total) => `${Nfr(total)} pièces. Leur état suit directement les commandes de Tristan et la cale.`,
     panelAtLake: "Déplie-le au bord du lac : le bateau apparaîtra sur sa cale.",
     lakeToast: "Tu déplies le plan devant la cale. Le bateau se dessine dans l'air, en entier.",
     lakeClose: "Tu replies le plan. Le bateau s'efface.",
@@ -685,6 +689,24 @@ const STAR_FR = {
       hull: "Le bordé de la coque", rudder: "Le safran et sa barre",
       mast: "Le mât", sail: "La vergue", bell: "La chaise de cloche",
     }[k] || k),
+    progressTitle: "Progression de la construction",
+    progressPart: (k) => ({
+      hull: "Coque", rudder: "Gouvernail", mast: "Mât", sail: "Voile", bell: "Cloche",
+    }[k] || k),
+    progressState: (state) => ({
+      done: "ASSEMBLÉ", ready: "À MONTER", building: "EN FABRICATION",
+      available: "À COMMANDER", locked: "À VENIR",
+    }[state] || state),
+    progressDetail: (state, detail) => state === "done" ? "En place sur la cale."
+      : state === "ready" ? "Bois livré ; montage sur la cale."
+      : state === "building" ? `Tristan travaille · ${detail}`
+      : state === "available" ? detail
+      : detail === "noPlan" ? "Plans nécessaires."
+      : detail === "noMayor" ? "Accord du maire nécessaire."
+      : detail === "noShard" ? "Éclat correspondant à retrouver."
+      : "Étape encore verrouillée.",
+    progressNext: (part) => `Prochaine transformation visible : ${part}.`,
+    progressComplete: "Construction terminée : toutes les pièces sont sur la cale.",
     /* ── TRISTAN. */
     orderTitle: (name) => `🪵 Le chantier de ${name}`,
     /* ⚠️⚠️ ZIP 478 — CETTE PHRASE DÉCRIVAIT LA RÈGLE QU'ON VIENT DE SUPPRIMER.
@@ -972,12 +994,12 @@ const STAR_EN = {
       farmImpactLure: "It flees bare-handed. Brew a Star Essence at the cauldron (E).",
       // hors-zip — see the FR block: no "(E)", the gesture is a plain hold, not a keypress.
       farmImpactLureGive: "You have the Star Essence. Go near the white hole — she will come on her own.",
-      farmImpactCool: "A black plate is waiting to cool down. Come back and examine it (E).",
+      farmImpactCool: "The black plate is cooling. Examine it here (E) to continue.",
       // hors-zip — see the FR block: no more "the star insists", and a concrete
       // suggestion instead of vague "keep busy"; two lines, one for before the
       // train, one for a player already there (see starGoalKey, quete.js).
-      townWait: "Take the train to Valley Town. Look around the market while you wait.",
-      townWaitThere: "You're in Valley Town. Look around the market while you wait.",
+      townWait: "Take the train to Valley Town. Stay active for 2 min: walk or interact.",
+      townWaitThere: "Stay active in Valley Town for 2 min: walk, explore, or interact.",
       craterHot: "East of Valley Town the hole still burns. Wait for it to cool.",
       /* ⚠️ ZIP 479 — voir la note française : le fond du trou est l'endroit où le
          nouveau geste ne marche pas, ce texte y envoyait. */
@@ -1007,11 +1029,14 @@ const STAR_EN = {
     // hors-zip — the multiplayer toast that announces the clickable pips, see the FR block.
     focusHint: "There's more than one of you. Click a dot to pick a hole of your own.",
     // The big meteor's countdown — host-side only, see the FR block for why.
-    townFallCountdown: (mmss) => `It's rumbling. ${mmss} more of activity in town and the sky gives way.`,
+    townFallCountdown: (mmss) => `Impact in ${mmss} of activity in town.`,
     /* Le rappel de reprise. ⚠️ UNE FOIS PAR SESSION, jamais deux — un « où en
        étions-nous » qui revient à chaque écran est une notification. */
-    againTitle: "Where you were",
-    again: (n, total) => `You have ${nen(n)} of ${nen(total)} piece${n > 1 ? "s" : ""}. The little star is still with you.`,
+    againTitle: "Your next step",
+    againClose: "Resume the quest",
+    again: (n, total) => n <= 0
+      ? `None of the ship's ${nen(total)} parts has been installed yet. The stars are still with you.`
+      : `${nen(n)} of the ship's ${nen(total)} parts ${n === 1 ? "is" : "are"} installed. The stars are still with you.`,
   },
   /* ╔═══════════════════════════════════════════════════════════════════════════
      ║ ZIP 449 — LE FAMILIER QUI MÈNE. Trois lignes, pas une de plus.
@@ -1225,7 +1250,7 @@ const STAR_EN = {
     ready: "The plans are yours. Open them (P) to see the boat.",
     openBtn: "📐 The plan",
     panelTitle: (name) => `📐 Building plans — ${name}`,
-    panelHint: (total) => `${Nen(total)} pieces, five lists. Have the wood cut, then raise them here.`,
+    panelHint: (total) => `${Nen(total)} pieces. Their status comes straight from Tristan's orders and the slipway.`,
     panelAtLake: "Unfold it by the lake and the boat will stand on its slipway.",
     lakeToast: "You unfold the plan in front of the slipway. The whole boat draws itself in the air.",
     lakeClose: "You fold the plan away. The boat fades out.",
@@ -1234,6 +1259,24 @@ const STAR_EN = {
       hull: "Hull planking", rudder: "Rudder and tiller",
       mast: "The mast", sail: "The yard", bell: "The bell cradle",
     }[k] || k),
+    progressTitle: "Construction progress",
+    progressPart: (k) => ({
+      hull: "Hull", rudder: "Rudder", mast: "Mast", sail: "Sail", bell: "Bell",
+    }[k] || k),
+    progressState: (state) => ({
+      done: "ASSEMBLED", ready: "TO BE RAISED", building: "BEING MADE",
+      available: "TO ORDER", locked: "UPCOMING",
+    }[state] || state),
+    progressDetail: (state, detail) => state === "done" ? "In place on the slipway."
+      : state === "ready" ? "Timber delivered; raise it on the slipway."
+      : state === "building" ? `Tristan is working · ${detail}`
+      : state === "available" ? detail
+      : detail === "noPlan" ? "Plans required."
+      : detail === "noMayor" ? "The mayor's approval is required."
+      : detail === "noShard" ? "Find the matching shard."
+      : "This step is still locked.",
+    progressNext: (part) => `Next visible change: ${part}.`,
+    progressComplete: "Construction complete: every piece is on the slipway.",
     orderTitle: (name) => `🪵 ${name}'s workshop`,
     orderHint: "He can run all five at once. What's short isn't time any more: it's the stock.",
     orderCost: (wood, d, extra) => `${wood} wood${extra ? ` · ${extra}` : ""} · ${d} of work`,

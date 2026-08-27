@@ -1,5 +1,20 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 467
 
+## Hors-zip 2026-08-26 — les libellés de porte restent devant le décor
+
+Les noms de salle du tribunal, de la mairie et de l'église ne sont plus peints
+avec les chambranles, avant le mobilier : ils passent dans la dernière couche du
+monde, après les meubles, les PNJ, les joueurs et la vignette. Un comptoir, une
+plante ou un personnage ne peut donc plus masquer le texte qu'il accompagne.
+
+Le survol ne demande plus de viser l'unique colonne exacte de l'ouverture. La
+zone sensible déborde de **0,85 case sur les quatre côtés** et, si deux marges se
+touchent, choisit la porte la plus proche plutôt que la première de la table.
+Cette géométrie est une fonction pure partagée avec `verify-vallee`; la planche
+`render-mairie` peint elle aussi sa plaque témoin après le décor. Vérifié dans le
+navigateur au guichet d'accueil, y compris avec le pointeur placé sur la marge.
+Aucun état partagé, message réseau, migration ou manipulation Supabase.
+
 ## 467 — L'escalier détouré est un seul bloc, conforme à la composition
 
 `refs/ESCALIERDETOURE.jpg` est l'autorité visuelle donnée par Guillaume, elle-même
@@ -83,9 +98,6 @@ qu'un paragraphe d'orientation, et les pièges qui valent pour tout le projet re
   barque, ni canard. C'est la même question ouverte que les vingt blocs de prairie ;
 - **le bois du sud-est (440) est vide lui aussi, et délibérément** : aucun endroit de vie, aucun
   résident n'y va. Demande de Guillaume — « pas une zone très fréquentée, un peu sauvage » ;
-- **les intérieurs du tribunal et de la mairie sont difficiles à naviguer** (on ne voit pas où
-  sont les portes) et **l'église n'a pas d'intérieur** : c'est le SECOND TEMPS décidé au 440,
-  pas encore construit. Voir la fin du §23.
 
 ---
 
@@ -3104,6 +3116,13 @@ de banc, 448 : *il mesure ce qu'une chose EST et jamais QUAND elle est*).
 6. **au bord du lac** (12 cases), déplier le plan n'ouvre AUCUN panneau — il fait apparaître le
    bateau entier en fantôme sur sa cale. Un panneau y aurait caché ce qu'on vient de déplier le plan
    pour voir.
+
+**Décision UI du 2026-08-27 : hors de cette zone, `P` garde le dessin et remplace les cinq lignes
+à pictogrammes par une barre en cinq segments sans icône.** Les mots `À VENIR`, `À COMMANDER`,
+`EN FABRICATION`, `À MONTER` et `ASSEMBLÉ` doublent couleur et trait supérieur. L'état ne vit pas
+dans React : `Q.starShipProgress` joint les mêmes clés que `starShipParts`, les livraisons et les
+commandes de Tristan ; son trait de travail se recalcule depuis `at`/`readyAt`. À 560 px et moins,
+les segments défilent horizontalement. Aucune autre proposition UI du dossier §17 n'est livrée.
 
 ### 31.3 Le bois de Tristan : un morceau demande DEUX choses
 

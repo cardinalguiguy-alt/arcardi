@@ -567,6 +567,31 @@ export function starTimberBlock(e, key) {
   return null;
 }
 export function starTimberCan(e, key) { return starTimberBlock(e, key) === null; }
+/* Une lecture prête pour le plan déplié. Elle ne crée ni compteur, ni nouvel
+   état : chaque segment rejoint la pièce posée, la livraison et la commande
+   déjà persistées. `work` n'existe que pendant la fabrication et se recalcule
+   depuis les deux dates de Tristan, comme sa bulle d'ouvrage. */
+export function starShipProgress(e, now) {
+  const parts = starShipParts(e);
+  return STAR_SHIP_KEYS.map((key, index) => {
+    const order = starTimberOrder(e, key);
+    const ready = starTimberReady(e, key);
+    const reason = starTimberBlock(e, key);
+    let state = "available";
+    if (parts[index]) state = "done";
+    else if (ready) state = "ready";
+    else if (order) state = "building";
+    else if (reason) state = "locked";
+    let work = 0;
+    if (order) {
+      const span = order.readyAt - order.at;
+      work = span > 0
+        ? Math.max(0, Math.min(1, ((+now || 0) - order.at) / span))
+        : 1;
+    }
+    return { key, state, reason, work, readyAt: order ? order.readyAt : 0 };
+  });
+}
 /* La pièce qu'on attend MAINTENANT — celle du bandeau et du plan. ⚠️ UNE
    JOINTURE, PAS UNE SECONDE LISTE (449) : elle balaie `STAR_SHIP_KEYS` dans
    l'ordre et rend la première qui n'est pas livrée, ce qui est exactement l'ordre
@@ -2696,6 +2721,12 @@ export function migrateStar(saved) {
 
 export function starFallen(e) { return !!(e && e.fall); }
 export function starTownFallen(e) { return !!(e && e.townFall); }
+/* Le compteur urbain n'existe que pendant le chapitre du cratère. Cette garde
+   unique évite qu'un état avancé par le menu dev garde une ancienne horloge à
+   l'écran alors que le chantier a déjà commencé. */
+export function starTownWaiting(e) {
+  return !!(e && starFallen(e) && starChapterKey(e) === "crater" && !starTownFallen(e));
+}
 export function starStarted(e) { return !!(e && (e.ch > 0 || Object.keys(e.found || {}).length)); }
 export function starDone(e) { return !!(e && e.doneAt); }
 export function starHas(e, id) { return !!(e && e.found && e.found[id]); }

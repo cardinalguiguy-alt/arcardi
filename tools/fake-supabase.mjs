@@ -53,7 +53,7 @@ const server = http.createServer((req, res) => {
 });
 
 /* ---------------- WebSocket minimal ---------------- */
-const clients = new Set(); // { socket, topics:Set }
+const clients = new Set(); // { socket, topics:Set, selfTopics:Set }
 
 function sendFrame(sock, str) { sendRaw(sock, Buffer.from(str, "utf8"), 0x81); }
 function sendRaw(sock, payload, first) {
@@ -95,7 +95,9 @@ server.on("upgrade", (req, sock) => {
     "Upgrade: websocket\r\nConnection: Upgrade\r\n" +
     "Sec-WebSocket-Accept: " + accept + "\r\n\r\n"
   );
-  const me = { sock, topics: new Set() };
+  // A Phoenix join can opt into receiving its own broadcasts. Binary frames do
+  // not repeat that option, so the relay remembers it for every joined topic.
+  const me = { sock, topics: new Set(), selfTopics: new Set() };
   clients.add(me);
   console.log("[ws] connexion (" + clients.size + ")");
 
@@ -139,7 +141,7 @@ function handleBinary(me, frame) {
   const out = encodeBroadcast(m);
   const lag = LAT ? LAT + Math.random() * JIT : 0;
   for (const c of clients) {
-    if (c === me) continue;              // self:false
+    if (c === me && !me.selfTopics.has(m.topic)) continue;
     if (!c.topics.has(m.topic)) continue;
     if (lag) setTimeout(() => { try { sendRaw(c.sock, out, 0x82); } catch {} }, lag);
     else sendRaw(c.sock, out, 0x82);
@@ -156,11 +158,14 @@ function handle(me, raw) {
   }
   if (event === "phx_join") {
     me.topics.add(topic);
+    if (payload?.config?.broadcast?.self) me.selfTopics.add(topic);
+    else me.selfTopics.delete(topic);
     sendFrame(me.sock, JSON.stringify([joinRef, ref, topic, "phx_reply", { status: "ok", response: { postgres_changes: [] } }]));
     return;
   }
   if (event === "phx_leave") {
     me.topics.delete(topic);
+    me.selfTopics.delete(topic);
     sendFrame(me.sock, JSON.stringify([joinRef, ref, topic, "phx_reply", { status: "ok", response: {} }]));
     return;
   }
@@ -169,7 +174,7 @@ function handle(me, raw) {
     if (event !== "broadcast") return;
     msgCount++;
     if (VERBOSE) console.log("[bc]", payload && payload.event, "->", [...clients].filter(c => c !== me && c.topics.has(topic)).length);
-    const self = payload && payload.self;   // config self:false -> pas d'écho
+    const self = Boolean(payload?.self) || me.selfTopics.has(topic);
     for (const c of clients) {
       if (c === me && !self) continue;
       if (!c.topics.has(topic)) continue;

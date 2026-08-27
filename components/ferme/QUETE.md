@@ -1,5 +1,43 @@
 # LA QUÊTE DE L'ÉTOILE — « LE BATEAU DES ÉTOILES » / « THE STAR BOAT »
 
+## ⚠️⚠️⚠️ AUTORITÉ DE CONCEPTION 2026-08-26 — UNE SOIRÉE, SEPT SŒURS, UN PORT
+
+**Cette autorité décrit la CIBLE validée par Guillaume ; elle n'est pas encore le code livré.**
+Le dossier complet est au §17. Elle tranche les quatre dettes qui structuraient la reprise :
+
+1. **Cinq impacts ouvrent la quête.** Les trois autres tombent à des instants dérivés et
+   pseudo-aléatoires **pendant les trois minutes qui suivent l'apprivoisement de la première
+   étoile**. Ils contiennent les trois familiers shiny collectors et ne bloquent jamais le départ
+   pour Valley Town.
+2. **La constellation de la Brebis compte sept sœurs.** Les trois étoiles de la première vague et
+   la reine en donnent quatre ; **les trois dernières se chassent plus tard**, pendant la remise en
+   état du port et la construction du navire. La constellation dessinée aura donc sept points,
+   jamais quatre ou cinq.
+3. **La quête tient dans une soirée** : cible **55 à 65 minutes**, sans quatre horloges en série.
+   Les délais qui restent tournent en parallèle d'occupations qui font avancer le monde et portent
+   plusieurs jalons visibles.
+4. **Le lac devient le port de Valley Town.** Le retournement révèle un ancien bassin portuaire et
+   une route oubliée ; le navire d'Eduardo est le premier véhicule des futures explorations d'îles,
+   pas un objet de fin qui disparaît sans fonction.
+
+⚠️ **Conséquence sur le 480 bis actuel :** ses huit impacts fixes (trois vides, trois étoiles,
+deux matières) sont un état transitoire. L'implémentation future devra garder cinq sites dans la
+chute d'ouverture — trois étoiles, une matière, un vide — et convertir les trois sites restants en
+chutes différées `pet`. Cette passe ne construit ni cette chronologie, ni les familiers, ni le port.
+
+## ⚠️⚠️⚠️ AUTORITÉ 480 BIS — HUIT IMPACTS, MAIS PAS LES FAMILIERS SHINY
+
+**État réellement livré : huit impacts fixes tombent dans la scène d'ouverture**, sur les
+deux rives : trois étoiles (`light`, `warm`, `lure`), deux matières et trois cratères vides.
+Cette ligne remplace les comptes « cinq impacts / deux vides » encore présents dans les
+autorités historiques 465 et 469 ci-dessous.
+
+⚠️ **Ce n'est qu'une réalisation partielle de la demande des trois chutes supplémentaires.**
+La fenêtre cible de trois minutes après la première étoile, le contenu `pet` et les trois
+familiers collectors shiny ne sont pas construits. Les trois sites ajoutés au 480 bis ont été
+intégrés à la chute initiale et donnent un vide, une étoile blanche et une seconde matière.
+Il ne faut donc jamais présenter le point 15.2 comme livré en entier.
+
 ## ⚠️⚠️⚠️ AUTORITÉ 469 — LE DÉCHANT EST FAIT. TROIS CHAPITRES, ET ON FOUILLE.
 
 **Décision de Guillaume, et elle est structurante : la quête est SIMPLIFIÉE.** Ce qui
@@ -23,7 +61,7 @@ ferme, et il est désormais la seule chose qu'une fouille puisse ouvrir.
 
 ### La trame, en trois lignes
 
-**Cinq impacts à la ferme → on les FOUILLE → le grand impact de Valley Town → l'étoile
+**Huit impacts à la ferme → on les FOUILLE → le grand impact de Valley Town → l'étoile
 reine → le chantier naval (mairie, puis Tristan) → le navire part.**
 
 ### ⚠️⚠️ LA FOUILLE — LA MÉCANIQUE NEUVE DU 469
@@ -2017,7 +2055,7 @@ ce que l'acceptation change dans le monde. Le patron existe déjà et il est mes
 |---|---|
 | Les PNJ peuvent-ils parler du bateau ? | **Oui** — occasionnellement, en se promenant dans Valley Town, **une fois le projet validé par le maire et lancé**. |
 | Savent-ils quelque chose des étoiles ? | **Non, rien.** Ils ne les voient pas et n'y font aucune référence. La constellation de la Brebis est une licence poétique : les futurs matelots s'orienteront grâce à elle, ils ne le savent pas encore. |
-| Faut-il des cratères qui ne donnent rien ? | **Oui** — « pour que la chasse soit intéressante ». Deux vides sur cinq, mesuré par le banc. |
+| Faut-il des cratères qui ne donnent rien ? | **Oui** — « pour que la chasse soit intéressante ». Trois vides sur huit, mesuré par le banc. |
 | Le sort des chapitres 3, 4 et 5 | **Supprimés** (fait). |
 
 ⚠️ **LE SECRET SURVIT, ET IL EST MÊME PLUS PROPRE QU'AVANT** : les habitants parleront d'un
@@ -2025,20 +2063,30 @@ BATEAU — un chantier public, financé, validé par le maire — et jamais de l
 `verify-quete` refuse déjà qu'une réplique de PNJ nomme l'étoile ou dise où chercher ; la
 règle ne change pas d'un mot, elle gagne un sujet de conversation.
 
-### 15.2 ⚠️⚠️ LA DEMANDE QUI N'EST PAS ENCORE CONSTRUITE : LES TROIS CHUTES D'ASTÉROÏDES
+### 15.2 ⚠️⚠️ LA DEMANDE PARTIELLEMENT CONSTRUITE : LES TROIS CHUTES D'ASTÉROÏDES
 
 **Demande de Guillaume, mot pour mot :** *« On ajoutera 3 chutes d'astéroïdes sur la ferme,
 mais faut les faire tomber de manière aléatoire sur une fenêtre de 7 minutes après
 l'apprivoisement de la première étoile. Elles auront des pets collectors shiny que l'on
 pourra garder, sortir etc. comme les pets actuels. »*
 
-⚠️ **RIEN N'EN EST FAIT.** Ce qu'il faudra, et dans cet ordre :
-1. **L'horloge.** Trois dates tirées dans une fenêtre de 7 min à partir de
+⚠️ **ARBITRAGE DU 2026-08-26 : sept minutes devient TROIS minutes.** La phrase ci-dessus reste la
+demande historique ; elle ne fait plus autorité sur la durée. Les trois chutes se répartissent
+dans trois bandes successives de la fenêtre (`15–60 s`, `60–120 s`, `120–180 s`) avec un instant
+pseudo-aléatoire dans chaque bande. On garde ainsi la surprise sans permettre trois impacts dans
+la même seconde. Les dates se dérivent du `found.at` de la première étoile et de l'identité du
+site : aucune date de plus à persister, aucune horloge client à comparer.
+
+⚠️ **480 bis a ajouté trois SITES, pas la mécanique demandée.** Ils tombent tous pendant
+la scène initiale et donnent `empty`, `star/lure` et `material`. Restent à construire, dans
+cet ordre, la fenêtre différée, le contenu `pet` et les familiers shiny :
+1. **L'horloge.** Trois dates tirées dans les trois minutes suivant la première étoile, une par
+   bande (`15–60 s`, `60–120 s`, `120–180 s`), à partir de
    `e.found[<première étoile>].at`. ⚠️ **Elles se DÉRIVENT, elles ne se stockent pas** — une
    fonction pure du tampon de la première trouvaille, comme le jour de marché (431) et
    toutes les échéances de ce chantier. Trois dates persistées seraient trois champs à
    réconcilier, et une fenêtre qui se fige au premier rechargement.
-   ⚠️⚠️ **ET ELLE SE BORNE EN TEMPS RÉEL** (leçon du 468) : sept minutes de temps réel,
+   ⚠️⚠️ **ET ELLE SE BORNE EN TEMPS RÉEL** (leçon du 468) : trois minutes de temps réel,
    jamais de temps visible, sinon un joueur parti en ville les rate définitivement.
 2. **Le placement.** `starFarmImpactSites` sait déjà poser un cratère sur une ferme sans
    écraser une construction ni une culture : trois sites de plus, même règle, même
@@ -2081,17 +2129,17 @@ puis s'éteint, en deux temps (`starHideAnim`), et une phrase le dit une fois pa
 | 2 | **La fouille** — geste, pose, terre, jauge, overlay, arbitrage | ✅ **fait au 469** |
 | 3 | **La discussion avec le maire** — validation du projet | ✅ **LIVRÉE AU 480** — voir §16 |
 | 4 | **Les PNJ parlent du bateau** dans les rues de Valley Town, après validation | ⏭️ **DÉBLOQUÉ AU 480 : la condition qu'il attendait existe enfin** (`MR.mayorSigned`). Court, et le patron des rumeurs existe (`starNerveSay`) |
-| 5 | **Les trois chutes + familiers shiny** | à faire (15.2) — le point 4 est le seul gros |
+| 5 | **Les trois chutes + familiers shiny** | 🟡 **conception tranchée au 2026-08-26** : trois chutes dérivées sur 3 min, hors progression obligatoire ; contenu `pet` et familiers shiny à construire (§15.2, §17) |
 | 6 | **L'attente habitée du grand cratère** — 3 min à ne rien faire pendant qu'il refroidit | à faire. ⚠️ « Attendre » n'est pas une occupation, et une activité plaquée serait pire que rien. Proposition qui tient toujours : **relever les éclats projetés** autour du trou. |
-| 7 | **La constellation de la Brebis** — sept places dans le ciel, allumées une à une | à faire, et **personne ne l'a jamais vue**. ⚠️ La trame n'en produit que TROIS ; il manque quatre étoiles, ou il faut abandonner les sept. **C'est la seule décision de fiction encore ouverte.** |
+| 7 | **La constellation de la Brebis** — sept places dans le ciel, allumées une à une | ✅ **fiction tranchée au 2026-08-26** : sept points ; les trois manquantes se chassent pendant le port, le sciage et le voyage d'Eduardo. Dessin et mécanique restent à faire (§17). |
 | 8 | **La fiction des quatre morceaux sans lieu** (safran, mât, voile, cloche) | à faire — voir l'autorité 469. Techniquement finissable, narrativement muet. |
 | 9 | **Le sciage à deux chez Tristan** | l'atelier existe, le geste non |
 | 10 | **Le voyage d'Eduardo pour la voile** | le système de voyage existe, la commande non |
-| 11 | **Le retournement** — la quête n'a plus AUCUN moment de bascule | à concevoir. ⚠️ C'est ce que le déchant a coûté, et il faut le dire : la quête est devenue une chaîne logistique propre. Elle est livrable ; elle n'a plus de surprise. |
+| 11 | **Le retournement** — la quête n'a plus AUCUN moment de bascule | ✅ **conçu au 2026-08-26** : le « lac » est l'ancien port ensablé ; la reine ne cherche pas un retour au ciel, elle ouvre aux joueurs la route des futures îles. À construire (§17). |
 | 12 | **Rejouer le mini-jeu survivant jusqu'à la victoire** (le refroidissement) | ✅ **fait à l'audit 477** — gagné jusqu'à la manche 3, première fois depuis le 444. Il en est sorti le défaut #6 (les deux échecs par le haut rappelaient la CONSIGNE au lieu de dire la faute), corrigé au 478. |
 | 3b | **Les trois verbes distincts** (défauts 3, 9, 10 de l'audit 477) | ✅ **fait au 479** — voir le tableau ci-dessus |
 | 13 | **Une séance à DEUX clients sur toute la chaîne** | ⚠️ **toujours jamais faite face à face**, et le 479 vient d'AJOUTER deux postes à deux qui n'ont jamais été tenus : le RELAIS du plat (l'un cuisine, l'autre court) et les DEUX BORDS du cratère. Le code est là, mesuré par `verify-quete` §12 ; les postes, non. L'audit 477 a mené un apprivoisement de ferme à deux (~24 s au lieu de 60) et y a trouvé le défaut #8 (l'invité recevait « Où tu en étais » à la place de la chute, corrigé au 478) — mais la CHAÎNE ENTIÈRE à deux reste à jouer. |
-| 14 | **La constellation de cinq points peinte en haut à droite dès la première nuit** | à faire. ⚠️ C'est le reste de la LYRE (453) : elle n'est nommée nulle part, elle n'a pas le bon compte (cinq, pour une trame qui produit trois étoiles et une fiction qui en promet sept), et **elle se peint aussi À L'INTÉRIEUR de la mairie et du tribunal** — c'est-à-dire un ciel sous un plafond. Défaut relevé au 476, jamais corrigé ; sorti de `CLAUDE.md` au 478 pour vivre à côté de ce qu'il décrit. |
+| 14 | **La constellation de cinq points peinte en haut à droite dès la première nuit** | à remplacer par **sept points**, seulement dehors et de nuit. Elle n'est pas le pisteur du bateau : c'est la mémoire narrative des sœurs, révélée dans le ciel et les scènes (§17.9). |
 
 ### 15.4 ⚠️ CE QUE LE 469 A LAISSÉ EN DETTE, ET QU'IL FAUT LIRE AVANT DE ROUVRIR
 
@@ -2231,3 +2279,202 @@ tension qu'on voulait ; elle n'a jamais été jouée par un humain.
   ne s'y tient. C'est la même dette que « aucun résident n'ENTRE dans les deux bâtiments ».
 - ⚠️ **Le point 4 du §15.3 est débloqué et pas fait** : les PNJ peuvent enfin parler du bateau,
   puisque la condition qu'ils attendaient (`MR.mayorSigned`) existe.
+
+---
+
+## 17. DOSSIER DE CONCEPTION 2026-08-26 — « LE PORT DES SEPT SŒURS »
+
+### 17.1 La promesse
+
+**En une soirée, deux amis voient tomber quelque chose d'impossible, mènent une chasse sur deux
+cartes, découvrent que le lac de Valley Town est un ancien port, bâtissent ensemble le premier
+navire d'exploration d'Arcardi et regardent Eduardo prendre la route des îles.** En solo, chaque
+poste à deux a un partenaire diégétique plus lent ; à deux ou trois, les rôles sont simultanés et
+plus rapides, jamais obligatoires au point de bloquer une sauvegarde.
+
+La quête garde deux secrets superposés : les habitants voient un chantier municipal et parlent du
+bateau ; seuls les joueurs voient les étoiles. Le retournement vient de leur accord involontaire :
+la ville croit rouvrir un port, la reine utilise ce port pour donner aux joueurs une route vers
+l'archipel. **Elle ne veut pas rentrer chez elle : elle veut qu'on puisse la suivre.**
+
+### 17.2 Le rythme d'une soirée
+
+| acte | minute cible | ce que les joueurs font | ce qui avance en arrière-plan | jalon visible |
+|---|---:|---|---|---|
+| I — La pluie courte | 0–15 | cinq fouilles, trois apprivoisements distincts ; les shiny restent une chasse facultative | trois impacts collectors tombent entre +0:15 et +3:00 après la première étoile | cinq traces sur la carte ; trois traînées neuves restent inconnues tant qu'elles ne sont pas fouillées |
+| II — La reine | 15–27 | train, signes en ville, grand impact, relevé des éclats autour du cratère, apprivoisement à deux/épouvantail | les 2 min d'activité urbaine s'accumulent ; le cratère refroidit au maximum 3 min | oiseaux qui fuient, ombres, fumée en trois âges, six éclats plantés dans le terrain |
+| III — Le port sous le lac | 27–40 | commande des plans, rendez-vous du maire, arpentage des anciennes bornes du bassin, chasse de la cinquième sœur | voyage et travail de Kerguélen ; délai du rendez-vous, **en parallèle** | planche de plans : arrivée, relevé, quille, gréement, signature |
+| IV — Les trois chantiers | 40–55 | sciage à deux, remise en service des feux du port, voyage visible d'Eduardo ; chasse des sixième et septième sœurs | les cinq commandes de bois tournent déjà en parallèle | la cale gagne quille, membrures, mât, voile et cloche à leur vraie place |
+| V — La route | 55–65 | dernière mise à l'eau, constellation complète, départ d'Eduardo | aucune nouvelle attente | bassin ouvert, poste d'amarrage et table des cartes restent dans le monde |
+
+**Les nombres sont des plafonds de rythme, pas cinq minuteurs à afficher.** Le joueur peut perdre
+du temps en se trompant chez le maire ou en arrivant sans ressources ; le chemin naturel, lui,
+doit rester dans la fenêtre. Les shiny ne comptent jamais dans une condition de chapitre : rater
+leur chute à l'écran ne rend ni le familier ni la quête perdus, car le cratère reste à fouiller.
+
+### 17.3 Acte I — cinq impacts, puis trois surprises
+
+La scène d'ouverture conserve cinq impacts et leur grammaire actuelle. Leur distribution cible
+est **trois étoiles** (bleue, rose, blanche), **une matière** et **un vide**. C'est assez pour que
+la fouille puisse décevoir sans annoncer trois fois « rien », et cela conserve les quatre sœurs
+déjà jouées une fois la reine trouvée.
+
+Dès que la première étoile est apprivoisée, trois instants sont dérivés dans les bandes du §15.2.
+Chaque chute se manifeste de trois façons — trait dans le ciel, grondement orienté, nouvelle marque
+sur la carte — mais ne révèle jamais son contenu. À la fouille, la quatrième famille de résultat
+`pet` ouvre un médaillon collector puis le rangement existant des familiers. Les shiny sont des
+variantes de trois espèces déjà aimées du monde, avec silhouette identique et matière vraiment
+distincte (nacre, irisation, traînée) : **un collector doit se reconnaître en mouvement, pas à son
+nom dans l'inventaire.**
+
+Cette seconde vague donne aussi un choix de soirée : continuer la mission principale, ou se
+séparer pendant trois minutes — l'un suit les impacts, l'autre finit les cinq fouilles. Elle crée
+de la coopération sans ajouter une serrure multijoueur.
+
+### 17.4 Acte II — habiter les deux attentes
+
+Les deux minutes de Valley Town restent **cumulatives**. Elles reçoivent trois présages à 40, 80
+et 120 secondes : les pigeons quittent la place, les ombres se tournent vers l'est, puis les vitres
+et l'eau prennent une lueur jaune. Le joueur peut marcher, parler, vendre ou reconnaître le futur
+port ; les présages donnent une montée sans transformer l'activité en checklist.
+
+Après l'impact, six éclats sont projetés en trois couronnes autour du cratère. Les relever sert à
+deux choses qui existaient sans lien : mesurer sa chaleur et révéler sur leurs faces des traits qui
+forment un plan de chenal. Chaque éclat ramassé retire **15 secondes** au refroidissement, jusqu'à
+90 secondes de réduction ; le cratère reste donc brûlant entre 1 min 30 et 3 min. À deux, les
+joueurs couvrent des bords opposés ; seul, on fait le tour. La fumée, les braises et le son changent
+à chaque tiers : le temps ne dépend plus d'une petite pastille d'interface.
+
+La reine reste le quatrième apprivoisement : deux joueurs aux bords opposés, ou l'épouvantail en
+face. Quand elle sort, elle ne montre pas seulement le navire brisé. Elle relie les six éclats et
+projette **trois points encore noirs** vers le lac : les dernières sœurs ne sont pas des colis, ce
+sont les guides des trois chantiers suivants.
+
+### 17.5 Acte III — le retournement : ce n'était pas un lac
+
+Kerguélen part et travaille toujours sur une vraie durée, mais ses 18 minutes deviennent une
+**horloge de fond à cinq jalons**, pas un écran « revenez plus tard » :
+
+| jalon | instant | transformation visible | ce qu'il ouvre |
+|---|---:|---|---|
+| En route | 0:00 | son portrait quitte le panneau de la gare | prendre le rendez-vous et arpenter le lac |
+| Sur le quai | 3:00 | Kerguélen apparaît avec trépied et jalons | relever trois bornes de pierre |
+| Bassin reconnu | 7:00 | craie et cotes apparaissent sur le quai | retournement + chasse de la verte des quais |
+| Gréement | 12:00 | silhouette du mât et de la voile sur la planche | départ d'Eduardo et feux du port |
+| Plans signés | 18:00 | rouleau complet, sceau et fantômes des cinq pièces | argument idéal chez le maire + toutes les commandes de Tristan |
+
+À « Bassin reconnu », les mesures de l'ingénieur coïncident avec les traits des éclats : la berge
+n'est pas naturelle. Sous la vase se trouvent un quai, une passe et les pierres d'une écluse. Une
+ancienne carte d'Eduardo nomme trois îles au-delà du chenal. **Le bateau n'est plus une réparation
+logistique : c'est le premier navire d'exploration d'un port qu'on croyait disparu.**
+
+Le rendez-vous de 3, 4 ou 5 minutes se prend dès le début de ce travail et court en parallèle. On
+peut tenter l'audience tôt, sans plans, pour gagner du temps au prix d'une vraie difficulté ; ou
+arpenter le port, chasser la cinquième sœur et présenter les plans signés plus tard, dans la grâce
+de trente minutes déjà prévue. La mécanique du maire devient un choix de rythme au lieu d'une
+horloge supplémentaire.
+
+La cinquième sœur, **verte**, bondit de borne en borne quand les trois repères sont alignés. Sa
+chasse est spatiale : suivre sa réflexion dans l'eau et fermer un triangle autour d'elle ; seul,
+les trois éclats relevés servent de balises fixes. Apprivoisée, elle allume les feux du futur quai.
+
+### 17.6 Acte IV — trois chantiers, trois verbes
+
+**La charpente et la sixième sœur — tirer.** Chez Tristan, deux poignées apparaissent sur la grande
+scie. Deux joueurs alternent leurs traits : tirer quand l'autre pousse entretient l'élan, tirer
+ensemble coince la lame. En solo, Tristan tient la seconde poignée et annonce son rythme ; la
+séquence dure environ deux fois plus longtemps. Une lumière orange fuit dans les veines du bois,
+puis saute entre les piles de planches : la chasse finale lit les copeaux et les vibrations, pas
+un chevron. L'orange apprivoisée stabilise la quille sur la cale.
+
+**Le voyage d'Eduardo et la septième sœur — guider.** Eduardo ne disparaît plus derrière un délai.
+Son petit bateau suit une route visible sur l'eau pendant que les joueurs rallument trois feux :
+entrée du chenal, bout du quai, tour du parc. À deux, l'un entretient la séquence des feux et
+l'autre rejoint le poste de signal ; seul, on suit leur ordre. Dans le brouillard, une lumière
+violette se met devant Eduardo et le ramène avec la voile. Elle bondit ensuite de bitte en bitte
+jusqu'au navire. Ce geste rend son voyage jouable et prouve déjà ce que le futur système d'îles
+devra montrer : **où est le bateau, où il va, quand il revient.**
+
+**La cale — assembler.** Les commandes de bois restent parallèles, mais leur livraison se monte
+dans un ordre lisible. Chaque pièce a trois états sur le vrai navire : fantôme bleu, matériaux
+posés, pièce assemblée. Le sciage, le voyage et le montage ne sont donc plus trois panneaux : ils
+se répondent dans le monde. La cloche est le signal du port, pas un trésor arbitraire ; elle sonne
+quand les sept sœurs prennent leur place.
+
+### 17.7 Acte V — une fin qui ouvre quelque chose
+
+Au lancement, les sept compagnes tracent la **Brebis** dans le ciel — sept points et six segments,
+seulement dehors et de nuit ou pendant cette scène. Le navire descend la cale, franchit l'ancienne
+passe et Eduardo part reconnaître la route. Il ne s'évapore pas : le quai conserve son amarre vide,
+une table des cartes et un fanion **« En mer »**. Tant que les îles ne sont pas construites, ce sont
+la promesse honnête et la trace du voyage. Quand elles le seront, ce même poste deviendra le choix
+d'expédition et le navire reviendra s'y amarrer.
+
+Les habitants célèbrent la réouverture du **port de Valley Town**, sans jamais nommer les étoiles.
+Les joueurs comprennent seuls le second sens : la reine a fabriqué une route entre le monde partagé
+et les prochains mondes d'Arcardi.
+
+### 17.8 Transformation graphique du lac en port
+
+La transformation doit se lire par grandes masses, dans cet ordre : **passe navigable**, deux quais
+en pierre et bois, cale/rampe, feux d'entrée, petit entrepôt, table des cartes. Les accessoires
+(cordages, casiers, bouées, mouettes) viennent ensuite. On conserve une rive sauvage pour que le
+lieu ne devienne pas une marina uniforme ; le port occupe la berge déjà liée au chantier naval et
+ouvre visuellement l'eau vers l'extérieur de la carte.
+
+Les cinq jalons de Kerguélen modifient progressivement ce décor : bornes dégagées, lignes de craie,
+pilotis, feux, puis passe ouverte. La ville ne se réveille donc pas dans un port terminé après un
+fondu : **les joueurs la voient changer pendant qu'ils y travaillent.**
+
+### 17.9 Décision UI de livraison — uniquement le plan du bateau
+
+**Une seule proposition graphique de ce dossier entre dans le jeu : la progression de la
+construction du bateau, dans le panneau existant ouvert avec `P`.** Les autres idées de la
+maquette — nouveau bandeau de quête, alerte de monde, constellation redessinée, postes coopératifs
+et nouvelle carte — restent hors périmètre et ne doivent pas être implémentées par cette livraison.
+
+Le panneau conserve le dessin actuel du navire. Sous ce dessin, les cinq anciennes lignes avec
+`✅`, `🪚` ou `◻` deviennent une barre horizontale en cinq segments : coque, gouvernail, mât, voile,
+cloche. **Décision de Guillaume : cette barre ne porte aucune icône.** Chaque segment lit directement
+les données déjà persistées de la pièce et distingue cinq états typographiques : `À VENIR`,
+`À COMMANDER`, `EN FABRICATION`, `À MONTER`, `ASSEMBLÉ`. Le trait de fabrication est le seul
+avancement continu ; il se dérive des dates de la commande de Tristan et n'est jamais sauvegardé.
+
+Ce n'est pas un second compteur. Le dessin, la barre et la cale rejoignent les mêmes cinq clés de
+`STAR_SHIP_ORDER`; aucune valeur `3/5` n'est ajoutée à l'état. Sur petit écran, les cinq segments
+restent dans l'ordre du navire et défilent horizontalement plutôt que de réduire leur texte jusqu'à
+devenir illisible. Au bord de l'eau, le comportement historique de `P` reste inchangé : le plan
+projette le bateau directement dans le monde, sans panneau qui cacherait la cale.
+
+Wireframe du panneau `P` :
+
+```text
+ PLANS DE CONSTRUCTION — LE NAVIRE DES SEPT SŒURS
+ [dessin actuel du bateau]
+
+ PROGRESSION DE LA CONSTRUCTION
+ ┌ coque ┐ ┌ gouvernail ┐ ┌ mât           ┐ ┌ voile       ┐ ┌ cloche  ┐
+ │assemblé│ │ à monter  │ │ en fabrication│ │ à commander │ │ à venir │
+ └────────┘ └───────────┘ └────────────────┘ └─────────────┘ └─────────┘
+
+ Prochaine transformation visible : gouvernail.
+```
+
+### 17.10 Lots d'implémentation — ne pas mêler les changements visuels
+
+| lot | contenu | validation indispensable |
+|---|---|---|
+| A | chronologie 5 + 3 sur trois minutes, résultat `pet`, trois shiny | banc pur sur les bandes + partie rechargée après la fenêtre + rendu des trois familiers |
+| B | six éclats et refroidissement actif | jouer le tour du cratère seul et à deux ; mesurer chaleur et réduction ensemble |
+| C | planche à cinq jalons et ordonnancement parallèle maire/ingénieur | partie reprise à chacun des cinq instants, sans comparer horloge invité/hôte |
+| D | port, retournement et cinquième sœur | vérification visuelle dédiée ; aucune constellation sous un plafond |
+| E | sciage coop/solo et sixième sœur | deux vrais clients aux deux poignées, puis repli Tristan en solo |
+| F | voyage visible d'Eduardo, feux et septième sœur | deux vrais clients sur les rôles, puis perte/reprise de connexion pendant le voyage |
+| G | finale, ciel à sept points, statut « En mer » | partie complète en une soirée ; navire et trace persistants après rechargement |
+
+**Aucun des lots A–G n'est livré ici.** La seule modification de quête autorisée pour cette
+livraison est la barre du panneau `P` décrite au §17.9 ; elle ne change aucune règle de quête.
+Les lots restent séparés parce que chacun change un geste ou un dessin que Guillaume doit pouvoir
+juger isolément. La chaîne multijoueur complète reste la validation terminale : relais du plat,
+bords opposés, scie et feux du port, avec deux vrais clients et sans raccourci développeur entre
+les postes.

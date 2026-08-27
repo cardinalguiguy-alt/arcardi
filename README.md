@@ -1,5 +1,46 @@
 # ARCARDI 🎪
 
+> **LIVRAISON 2026-08-27 — UNE SOIRÉE POUR LES SEPT SŒURS, ET LE LUDO SE JOUE ENFIN SEUL.**
+>
+> La suite de la quête de l'étoile a désormais un **dossier de conception**, pas une chaîne de
+> tâches ajoutée au hasard. Les cinq impacts ouvrent la soirée ; trois autres tombent dans trois
+> fenêtres aléatoires au cours des **trois minutes suivantes**, chacune avec un futur familier
+> shiny. Quatre étoiles forment la première figure, puis les trois dernières se chassent dans la
+> seconde moitié : verte sur les quais retrouvés, orange dans le sciage, violette sur l'eau. La fiction promet
+> donc sept points et le jeu en poursuit bien sept.
+>
+> **L'attente devient du jeu.** Le refroidissement du cratère se travaille en relevant six éclats ;
+> les dix-huit minutes de Kerguélen montrent cinq jalons physiques du plan et s'entrelacent avec le
+> rendez-vous du maire. Le retournement est géographique : le « lac » est l'ancien port ensablé de
+> Valley Town. Le bateau n'est plus une récompense morte, mais le premier navire d'une future route
+> d'îles. Le sciage à deux et les feux du port donnent deux vraies scènes coopératives, avec une
+> substitution par PNJ en solo. **Ce dossier est une cible de production ; cette livraison ne
+> prétend pas avoir codé cette nouvelle moitié de quête.**
+>
+> **La seule proposition graphique codée dans la quête est la progression du bateau.** Après `P`,
+> sous le dessin existant du plan, cinq segments sans icône indiquent `À VENIR`, `À COMMANDER`,
+> `EN FABRICATION`, `À MONTER` ou `ASSEMBLÉ`. Ils lisent les commandes de Tristan et les pièces de
+> la cale ; aucun compteur ni état de sauvegarde n'a été ajouté. Les autres idées UI du dossier ne
+> sont pas des cibles d'implémentation de cette livraison. La maquette HTML a été recentrée sur ce
+> seul panneau.
+>
+> **🐴 LE LUDO SOLO, LUI, EST LIVRÉ.** Une seule personne dans le salon choisit **un, deux ou trois
+> bots** avant de lancer. À un bot, Rouge affronte Bot Soleil en diagonale ; à deux s'ajoute Bot
+> Trèfle, à trois Bot Azur complète le plateau. Les bots n'ont
+> aucune copie des règles : l'hôte leur remet les coups légaux du vrai moteur et exécute leur choix
+> par les mêmes cinq arbitres que pour un humain — lancer, déplacement, roue, grâce et cible. Leur
+> préférence est lisible : finir, entrer dans le couloir, capturer, sortir, progresser. À deux,
+> trois ou quatre humains, le fonctionnement historique reste inchangé.
+>
+> `verify-ludo` passe **30/30**, dont 1 000 plans légaux aléatoires ; `verify-quete` passe
+> **616/616** et les **1 102** clés de la ferme restent appariées. Une vraie page navigateur à client unique
+> a validé les trois choix exclusifs, les compositions à 2, 3 et 4 camps, puis un tour de bot en
+> duel ; la page jetable a été supprimée. La maquette ciblée du nouveau panneau a été vérifiée à
+> 1280 px et 360 px.
+> Le build Next compile avec succès, puis rencontre comme
+> prévu l'absence des variables Supabase pendant le pré-rendu. Aucun schéma, aucune donnée Supabase et aucun quota
+> Realtime de production n'ont été touchés.
+
 > **ZIP 439 — ON NE POUVAIT PAS RESSORTIR DE L'HÔTEL DE VILLE, ET AUCUN BANC NE
 > POUVAIT LE DIRE.**
 >

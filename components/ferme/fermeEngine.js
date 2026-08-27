@@ -8280,6 +8280,27 @@ export function courtDoorGroups(doors) {
   }
   return out;
 }
+/* hors-zip (2026-08-26) — LE SURVOL VISE L'OUVERTURE, PAS UNE CASE UNIQUE.
+   Une porte occupe un rectangle continu, auquel on ajoute une marge de moins
+   d'une case tout autour : assez pour ne plus devoir viser au pixel près,
+   insuffisant pour accrocher la porte voisine dans un couloir. Quand deux
+   marges se touchent, la porte dont le centre est le plus proche gagne ;
+   l'ordre de `cw.doors` ne décide donc jamais du libellé affiché. Pure pour que
+   `verify-vallee` mesure la vraie zone sensible au lieu d'en recopier une. */
+export const COURT_DOOR_LABEL_PAD = 0.85;
+export function courtDoorLabelAt(groups, floor, x, y, pad = COURT_DOOR_LABEL_PAD) {
+  let best = null, bestD = Infinity;
+  for (const g of (groups || [])) {
+    if (g.floor !== floor) continue;
+    const x0 = g.x, x1 = g.x + 1, y0 = g.y0, y1 = g.y1 + 1;
+    const dx = x < x0 ? x0 - x : x > x1 ? x - x1 : 0;
+    const dy = y < y0 ? y0 - y : y > y1 ? y - y1 : 0;
+    if (dx > pad || dy > pad) continue;
+    const d = Math.hypot(x - (x0 + x1) / 2, y - (y0 + y1) / 2);
+    if (d < bestD) { bestD = d; best = g; }
+  }
+  return best;
+}
 /* La cage d'escalier qui contient cette case, ou `null`. ⚠️ MÊME RAISON : le
    jeu la retrouvait dans sa closure (`checkCourtStairs`), donc un banc qui veut
    rejouer un trajet à travers deux niveaux devait réinventer la recherche. Une

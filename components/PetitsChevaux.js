@@ -5,6 +5,12 @@ import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } fro
 import { playDiceShuffle } from "@/lib/sfx";
 import Crossfade from "./Crossfade";
 import GameCountdown, { COUNTDOWN_MS } from "./GameCountdown";
+import {
+  isLudoBotId,
+  ludoBotActionForState,
+  ludoBotNameKey,
+  ludoSoloMatch,
+} from "./ludoBot";
 
 
 // ===================================================================
@@ -581,6 +587,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   const [lastEvent, setLastEvent] = useState(null); // texte de statut transitoire
   const [winner, setWinner] = useState(null);       // null | couleur
   const [selected, setSelected] = useState([]);     // sélection du picker (>4 joueurs)
+  const [soloBotCount, setSoloBotCount] = useState(1); // choix de l'hôte : 1, 2 ou 3 bots
   const [myWin, setMyWin] = useState(false);
   // Décompte 3-2-1 (2026-07, extension du mécanisme déjà en place sur
   // 10000/Gold Mines/Président) : voile bloquant posé au lancement d'une
@@ -635,6 +642,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   const moveTimerRef = useRef(null);   // couperet du minuteur de tour (hôte)
   const rollAnimTimerRef = useRef(null);
   const rollAnimIvRef = useRef(null);
+  const botActionTimerRef = useRef(null);
   // Verrou anti-double-action (correctif 2026-07, audit) : rollDice/pickToken/
   // requestSpin/requestSpare ne s'appuient QUE sur l'état React local (dice,
   // pendingMystery, pendingCapture) pour décider si une action est déjà en
@@ -907,6 +915,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
       clearTimeout(moveTimerRef.current);
       clearTimeout(rollAnimTimerRef.current);
       clearInterval(rollAnimIvRef.current);
+      clearTimeout(botActionTimerRef.current);
       clearTimeout(actionLockTimerRef.current);
       supabase.removeChannel(ch);
     };
@@ -1448,8 +1457,70 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     });
   }
 
-  // Si le salon a entre 2 et 4 joueurs, l'hôte démarre automatiquement dès
-  // que le canal est prêt : chacun reçoit une couleur, dans l'ordre.
+  // ===== Joueur synthétique, hôte seulement (solo 2026-08-27) =============
+  // Un bot n'envoie pas une fausse requête Realtime : l'hôte possède déjà
+  // l'arbitre, il appelle donc les MÊMES hostHandle* qu'un message humain
+  // aurait déclenchés. Un seul broadcast `state` sort ensuite, exactement
+  // comme en multijoueur. Le délai est visuel — les dés ont le temps de se
+  // poser — mais toutes les décisions restent sous les 20 s du vrai minuteur.
+  const botStateKey = [
+    phase, winner || "", turnIdx, order.join(","),
+    dice?.rollKey || 0, dice?.used?.join("") || "",
+    pendingMystery?.key || 0, pendingMystery?.spin?.key || 0,
+    pendingCapture?.key || 0, pendingTarget?.key || 0,
+  ].join("|");
+
+  useEffect(() => {
+    clearTimeout(botActionTimerRef.current);
+    if (!isHost || phase !== "playing") return;
+    const s0 = stateRef.current;
+    if (!s0 || s0.winner || !s0.order.length) return;
+    const color0 = s0.order[s0.turnIdx];
+    const botId0 = Object.keys(colorRef.current).find((pid) => colorRef.current[pid] === color0);
+    if (!isLudoBotId(botId0)) return;
+
+    // Le premier choix d'un tirage attend la fin des 950 ms de roulis. Les
+    // décisions suivantes gardent un petit temps humain sans ralentir la partie.
+    const firstDiceChoice = !!s0.dice && !s0.dice.used?.[0]
+      && (s0.dice.b == null || !s0.dice.used?.[1]);
+    const delay = firstDiceChoice ? ROLL_ANIM_MS + 520 : 720;
+
+    botActionTimerRef.current = setTimeout(() => {
+      const s = stateRef.current;
+      if (!s || s.winner || !s.order.length) return;
+      const color = s.order[s.turnIdx];
+      const botId = Object.keys(colorRef.current).find((pid) => colorRef.current[pid] === color);
+      if (!isLudoBotId(botId)) return;
+
+      const pt = s.pendingTarget;
+      const action = ludoBotActionForState({
+        state: s, color,
+        simulateMove: (tokenIndex, value) => applyMove(s.tokens, color, tokenIndex, value),
+        scoreSwap: pt ? ({ targetColor, targetIdx }) => {
+          const mine = s.tokens[pt.color][pt.tokenIdx];
+          const theirs = s.tokens[targetColor][targetIdx];
+          const mineAfter = stepsFromAbs(pt.color, absIndex(targetColor, theirs));
+          const theirsAfter = stepsFromAbs(targetColor, absIndex(pt.color, mine));
+          return (mineAfter - mine) * 2 + (theirs - theirsAfter);
+        } : null,
+      });
+      if (!action) return;
+      if (action.type === "roll") hostHandleRoll({ by: botId });
+      else if (action.type === "move") hostHandleMove({ by: botId, tokenIndex: action.tokenIndex, die: action.die });
+      else if (action.type === "spin") hostHandleSpin({ by: botId });
+      else if (action.type === "spare") hostHandleSpare({ by: botId, spare: action.spare });
+      else if (action.type === "target") hostHandleTarget({ by: botId, targetColor: action.targetColor, targetIdx: action.targetIdx });
+    }, delay);
+
+    return () => clearTimeout(botActionTimerRef.current);
+    // `botStateKey` contient toutes les phases arbitrables. Les hostHandle*
+    // relisent stateRef au déclenchement : aucune closure de plateau périmée.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHost, botStateKey]);
+
+  // À 2–4 personnes, le multijoueur historique démarre automatiquement. Un
+  // joueur seul reste sur l'écran de choix : il décide d'abord combien de
+  // bots (1 à 3) complètent la table, comme dans les autres jeux à bot.
   useEffect(() => {
     if (!isHost || phase !== "intro" || autoStartedRef.current || !channelReady) return;
     if (players.length >= 2 && players.length <= 4) {
@@ -1461,6 +1532,15 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, phase, channelReady, players.length]);
+
+  function startSolo(botCount) {
+    if (!isHost || players.length !== 1 || !channelReady || autoStartedRef.current) return;
+    autoStartedRef.current = true;
+    channelRef.current.send({
+      type: "broadcast", event: "match_start",
+      payload: ludoSoloMatch(me.id, botCount),
+    });
+  }
 
   function confirmPick() {
     if (selected.length < 2 || selected.length > 4 || !channelReady) return;
@@ -1641,6 +1721,8 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   }, [isMyTurn, dice, pendingMystery, pendingCapture, myColor]);
   const playerNameFor = (color) => {
     const pid = Object.keys(colorOfPlayer).find(id => colorOfPlayer[id] === color);
+    const botKey = ludoBotNameKey(pid);
+    if (botKey) return t(botKey);
     const p = players.find(pp => pp.profile_id === pid);
     return p?.profiles?.username || "?";
   };
@@ -2031,8 +2113,35 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     );
   } else {
     // phase "intro" : choix des joueurs, attente, ou pas assez de monde
-    if (players.length < 2) {
+    if (players.length < 1) {
       content = <p className="muted">{t("ludoNotEnough")}</p>;
+    } else if (players.length === 1) {
+      content = isHost ? (
+        <div style={{ textAlign: "center" }}>
+          <p className="hint">{t("ludoSoloHint")}</p>
+          <div style={{ display: "flex", gap: 8, justifyContent: "center", margin: "12px 0 16px", flexWrap: "wrap" }}>
+            {[1, 2, 3].map((count) => (
+              <button
+                key={count}
+                type="button"
+                onClick={() => setSoloBotCount(count)}
+                aria-pressed={soloBotCount === count}
+                style={{
+                  padding: "8px 16px", borderRadius: 99, fontWeight: 700, fontSize: 13, cursor: "pointer",
+                  border: `2px solid ${soloBotCount === count ? "var(--p3)" : "var(--line)"}`,
+                  background: soloBotCount === count ? "rgba(182,240,76,.12)" : "rgba(255,255,255,.04)",
+                  color: "var(--ink)",
+                }}
+              >
+                🤖 {t(count === 1 ? "ludoOneBot" : count === 2 ? "ludoTwoBots" : "ludoThreeBots")}
+              </button>
+            ))}
+          </div>
+          <button className="btn" disabled={!channelReady} onClick={() => startSolo(soloBotCount)}>
+            {t("ludoStartSolo")}
+          </button>
+        </div>
+      ) : <p className="muted">{t("ludoWaitSoloChoice")}</p>;
     } else if (!needsPick) {
       content = <p className="muted">{t("ludoStarting")}</p>;
     } else if (isHost) {

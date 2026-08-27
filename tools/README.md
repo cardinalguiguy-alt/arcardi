@@ -9,9 +9,10 @@ Le 433 en ajoute trois (`verify-taxi`, `render-taxi`, `render-oiseaux`), le 434 
 (`verify-compo`), le 441 une (`verify-pont`), le 443 une (`verify-portee`), et le **444 trois**
 (`render-etoile`, `verify-quete`, `render-beffroi`) contre deux supprimés (`verify-enquete`,
 `render-enquete`, partis avec l'enquête qu'ils mesuraient), et le **451 une**
-(`render-navire`, le navire des étoiles), et le **480 une** (`verify-maire`, l'audience chez le
-maire). **Total à ce jour : 17 bancs de contrôle et 19 bancs de rendu, les 36 relancés un par un
-au 480, tous verts.**
+(`render-navire`, le navire des étoiles), le **480 une** (`verify-maire`, l'audience chez le
+maire), et la livraison du **2026-08-27 une** (`verify-ludo`, le solo contre un à trois bots).
+**Total à ce jour : 18 bancs de contrôle et 19 bancs de rendu.** Le nouveau banc passe
+**30/30** ; les 36 bancs antérieurs avaient été relancés un par un au 480, tous verts.
 
 ⚠️⚠️ **ET LE 444 A APPRIS QUELQUE CHOSE QUI VAUT POUR TOUS LES BANCS DE CE DOSSIER : SIX BANCS AU
 VERT N'ONT PAS VU DIX DÉFAUTS QU'UNE SEULE SÉANCE DE JEU A TROUVÉS EN VINGT MINUTES**, dont cinq
@@ -109,6 +110,21 @@ grille est une grille dans les deux sens, donc c'est une mesure plus complète E
 d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
 
 ## Ce qui existe
+
+- **`tools/verify-ludo.mjs` — 30 contrôles, 30/30 (2026-08-27).** Le mode Ludo solo propose un,
+  deux ou trois bots. Guillaume garde Rouge ; le duel place le bot Jaune en diagonale, puis Vert et
+  Bleu complètent les parties à trois et quatre camps. Le banc ne réécrit pas les règles ; il
+  donne au bot le plan légal construit par `PetitsChevaux.js`, puis vérifie sur **1 000 plans** que
+  le choix reste dans ce plan. Il tient
+  aussi les priorités (finir, rentrer, capturer, sortir, progresser), les décisions qui pourraient
+  bloquer une partie (roue, grâce, renvoi, échange), les cinq chemins vers les arbitres de l'hôte,
+  les noms FR/EN et le démarrage depuis un salon d'une personne.
+  ⚠️ **Le test navigateur a trouvé un défaut de l'ÉCHAFAUDAGE, pas du jeu** : le relais local
+  imposait `self:false` aux trames binaires alors que le canal Ludo demande `self:true`. Il
+  mémorise désormais cette option à la jonction. Une partie à client unique a été vue à l'écran :
+  les trois choix sont exclusifs, ils produisent 2, 3 et 4 camps, et Bot Soleil joue dans le duel.
+  Ce banc ne juge toujours ni le plaisir d'une partie entière, ni le
+  niveau stratégique des bots.
 
 - **`tools/verify-maire.mjs` — 113 contrôles, 113/113 (480, étendu au 481).** L'AUDIENCE CHEZ LE MAIRE, JOUÉE.
   ⚠️⚠️⚠️ **C'est le premier banc du dépôt qui JOUE une mécanique de bout en bout au lieu de la
@@ -271,7 +287,7 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   sentier de rive qui épousait chaque encoche de crique, et un buisson enterré sous le parvis
   du kiosque — posé sur de l'herbe, dallé par une passe ultérieure, resté SOLIDE.
 
-- **`tools/verify-vallee.mjs` — 205 contrôles, 205/205 (465 ; 200 au 444, 194 au 440, 182 au 438, 172 au 431, 113 au 427).** Il
+- **`tools/verify-vallee.mjs` — 208 contrôles, 208/208 (hors-zip 2026-08-26 ; 205 au 465, 200 au 444, 194 au 440, 182 au 438, 172 au 431, 113 au 427).** Il
   importe le VRAI moteur : circulation, murs invisibles ET décors traversables, géométrie des
   bâtiments, rebords sautables, le tribunal pièce par pièce, la coupe de bois, les familles,
   la garde-robe.
@@ -866,7 +882,13 @@ touche le sol — le défaut même de ce zip — leur est **totalement invisible
 `verify-quete` qui le tient désormais (cinq contrôles purs sur `starImpactLanded` et l'azimut).
 *Un banc de rendu ne peut pas voir un défaut de temps.*
 
-## `verify-quete.mjs` — 585 contrôles, 585/585 (444 à 479 : cinq impacts, FOUILLE, LES TROIS VERBES, arrivée visible, constellation et reine-guide inclus)
+## `verify-quete.mjs` — 616 contrôles, 616/616 (444 à 480 bis : cinq impacts, FOUILLE, LES QUATRE VERBES, chantier et maire inclus)
+
+Le contrôle de l'ouvrage de Tristan vérifie aussi la lecture utilisée par le panneau `P` : cinq
+segments dans l'ordre de `STAR_SHIP_ORDER`, une fabrication à 50 % lue à 50 %, puis l'état
+`ready` après livraison. Un contrôle de source tient en plus le branchement de la barre et
+l'absence de pictogrammes ; les deux assertions historiques sur les dates et la livraison sont
+renforcées sans être dupliquées.
 
 ⚠️⚠️⚠️ **ZIP 479 — LE §12 TIENT UNE PROMESSE DE CONCEPTION DANS DU CODE, ET C'EST SA RAISON
 D'ÊTRE.** L'audit 477 reprochait aux trois étoiles de « dire la même chose » ; la cause n'était
@@ -1212,6 +1234,10 @@ vraie liaison ; il imprime le débit réel PAR TYPE de message toutes les 5 s.
 ⚠️ **C'est lui qui a trouvé les trois défauts multijoueur du 432**, dont un qui rendait Valley
 Town injouable à deux depuis un zip entier. La recette complète (`.env.local`, page jetable,
 onglet d'arrière-plan) est en §10 de `CLAUDE.md`, avec ses trois pièges.
+⚠️ **Depuis le 2026-08-27, il mémorise `broadcast.self` par sujet au `phx_join`.** Les trames
+binaires suivantes ne répètent pas cette option : l'ancienne boucle imposait donc `self:false` et
+empêchait le Ludo solo, à client unique, de recevoir son propre `match_start`. `verify-ludo` tient
+ce chemin de source ; le navigateur a tenu l'enchaînement réel.
 
 ---
 

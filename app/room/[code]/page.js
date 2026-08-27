@@ -59,7 +59,7 @@ const GAME_META = {
   worldle:  { icon: "🌍", accent: "--acc-worldle",   nameKey: "nameWorldle", tagKey: "tagWorldle", stage: "video" },
   piano:    { icon: "🎹", accent: "--acc-piano",     nameKey: "namePiano",   tagKey: "tagPiano", stage: "curtain" },
   connect4: { icon: "🔴", accent: "--acc-c4",        nameKey: "nameC4",      tagKey: "tagC4", stage: "curtain" }, // pas de minPlayers : jouable en solo contre un bot (2026-07)
-  ludo:     { icon: "🐴", accent: "--acc-ludo",      nameKey: "nameLudo",    tagKey: "tagLudo", minPlayers: 2, stage: "door" },
+  ludo:     { icon: "🐴", accent: "--acc-ludo",      nameKey: "nameLudo",    tagKey: "tagLudo", stage: "door" }, // solo 2026-08-27 : 1 humain choisit 1 à 3 bots ; à plusieurs, moteur historique inchangé
   echoes:   { icon: "🌊", accent: "--acc-echoes",    nameKey: "nameEchoes",  tagKey: "tagEchoes", minPlayers: 2, stage: "curtain" },
   diapason: { icon: "🎼", accent: "--acc-diapason",  nameKey: "nameDiapason", tagKey: "tagDiapason", minPlayers: 2, stage: "curtain" },
   heist:    { icon: "🖼️", accent: "--acc-heist",     nameKey: "nameHeist",   tagKey: "tagHeist", minPlayers: 2, stage: "curtain" }, // "Le Louvre" (ex-Le Casse) — id technique inchangé
@@ -1174,7 +1174,11 @@ export default function Room() {
                     <ConnectFour room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "ludo" && (
-                    <PetitsChevaux room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                    // Le verrou du sélecteur compte déjà la présence réelle :
+                    // le moteur doit recevoir la même population. Sans ce
+                    // filtre, un ancien membre hors ligne transformait un
+                    // lancement solo en duel contre une chaise vide.
+                    <PetitsChevaux room={room} me={me} isHost={isHost} players={online === null ? players : players.filter((p) => isOnline(p.profile_id))} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "echoes" && (
                     <EchoesRoom room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />

@@ -99,28 +99,33 @@ function shot(name, f, k) {
      clavier/tactile), les peindre tous dans cette planche ferait précisément
      revivre l'état permanent que le jeu vient de supprimer. Le faux canvas ne
      connaît pas `fillText` (§4) : le cartouche sombre suffit à montrer l'état
-     ciblé, les autres portes ne gardent que leur chambranle. */
+     ciblé, les autres portes ne gardent que leur chambranle. La plaque témoin
+     est peinte APRÈS la file, comme dans le jeu : ce banc ne doit pas reproduire
+     le défaut où un meuble recouvre le libellé. */
   /* HORS-ZIP — UN CARTOUCHE PAR PORTE, PAS PAR CASE. Même raison que dans
      FermeGame.js : `E.courtDoorGroups` est la seule jointure entre « les
      cases de porte » et « les portes » depuis que chacune en fait
      `COURT_DOOR_W` — le relire case par case aurait empilé deux cartouches
      identiques sur la même pièce. */
   const doorGroups = E.courtDoorGroups(cw.doors);
-  const targetedDoor = doorGroups.find(g => g.floor === f);
+  const firstDoor = doorGroups.find(g => g.floor === f);
+  const targetedDoor = firstDoor && E.courtDoorLabelAt(doorGroups, f,
+    firstDoor.x - E.COURT_DOOR_LABEL_PAD * 0.75, (firstDoor.y0 + firstDoor.y1 + 1) / 2);
   for (const g of doorGroups) {
     if (g.floor !== f) continue;
     const px = g.x * T, pyTop = (g.y0 - y0) * T, spanH = (g.y1 - g.y0 + 1) * T;
     q.push({ by: (g.y0 - y0 + 0.6) * T, fn: () => {
       sh.ctx.fillStyle = "#5a4230"; sh.ctx.fillRect(px - 1, pyTop - 14, T + 2, spanH + 14);
       sh.ctx.fillStyle = "#3a2a1c"; sh.ctx.fillRect(px + 1, pyTop - 11, T - 2, spanH + 11);
-      if (g === targetedDoor) {
-        sh.ctx.fillStyle = "#2e2013"; sh.ctx.fillRect(px - 6, pyTop - 12, T + 12, 8);
-        sh.ctx.fillStyle = "#c9a961"; sh.ctx.fillRect(px - 3, pyTop - 9, T + 6, 2);
-      }
     } });
   }
   q.sort((a, b) => a.by - b.by);
   for (const e of q) e.fn();
+  if (targetedDoor) {
+    const px = targetedDoor.x * T, pyTop = (targetedDoor.y0 - y0) * T;
+    sh.ctx.fillStyle = "#2e2013"; sh.ctx.fillRect(px - 6, pyTop - 12, T + 12, 8);
+    sh.ctx.fillStyle = "#e3c775"; sh.ctx.fillRect(px - 3, pyTop - 9, T + 6, 2);
+  }
   const up = scale(sh.px, W * T, H * T, k);
   writePNG(path.join(OUT, name + ".png"), up.px, up.W, up.H);
 }

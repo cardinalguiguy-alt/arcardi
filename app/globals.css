@@ -7028,10 +7028,17 @@ div.ferme-usage{ margin-bottom:10px; }
   position:fixed; inset:0; z-index:48; display:flex; align-items:center; justify-content:center;
   background:rgba(0,0,0,.6); cursor:pointer;
 }
-.ferme-map-box{ padding:16px 18px; text-align:center; cursor:default; max-width:94vw; max-height:94vh; animation: ferme-popup-fade .18s ease-out; }
+.ferme-map-box{ box-sizing:border-box; padding:16px 18px; text-align:center; cursor:default; max-width:94vw; max-height:94vh; animation: ferme-popup-fade .18s ease-out; }
 .ferme-map-box h2{ margin-bottom:10px; }
-.ferme-map-canvas{ image-rendering:pixelated; border:3px solid var(--f-wood); border-radius:6px; background:#000; display:block; margin:0 auto; }
-.ferme-map-close{ font-size:11px; opacity:.7; margin-top:8px; }
+.ferme-map-canvas{
+  image-rendering:pixelated; border:3px solid var(--f-wood); border-radius:6px;
+  background:#000; display:block; margin:0 auto; width:auto; height:auto;
+  max-width:100%; max-height:calc(94vh - 132px);
+}
+.ferme-map-close{
+  font-family:ui-rounded, "Avenir Next", Avenir, system-ui, sans-serif;
+  font-size:12px; line-height:1.35; opacity:.88; margin-top:8px;
+}
 
 @media (max-width:620px){
   .ferme-chatlog, .ferme-chat-input{ width:220px; }
@@ -7321,6 +7328,7 @@ div.ferme-usage{ margin-bottom:10px; }
   text-shadow:0 0 16px rgba(255,220,140,.30);
 }
 .ferme-star-find-body{
+  font-family:ui-rounded, "Avenir Next", Avenir, system-ui, sans-serif;
   margin-top:6px; font-size:clamp(11px, 2.1vw, 13.5px); line-height:1.42;
   color:rgba(240,232,220,.86);
 }
@@ -7329,12 +7337,14 @@ div.ferme-usage{ margin-bottom:10px; }
    pouvoir ne lire QUE celle-là. Règle du 455 sur les objectifs (« OÙ, QUOI et
    COMMENT ») appliquée à la mise en page. */
 .ferme-star-find-next{
-  margin-top:9px; font-family:var(--font-mono, monospace);
+  margin-top:9px; font-family:ui-rounded, "Avenir Next", Avenir, system-ui, sans-serif;
+  font-weight:650;
   font-size:clamp(10.5px, 2vw, 12.5px); letter-spacing:.02em;
 }
 .ferme-star-find-left{
+  font-family:ui-rounded, "Avenir Next", Avenir, system-ui, sans-serif;
   margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,.09);
-  font-size:clamp(10px, 1.9vw, 11.5px); color:rgba(255,236,196,.50);
+  font-size:clamp(11px, 1.9vw, 12px); color:rgba(255,236,196,.72);
 }
 /* ⚠️⚠️ LES TROIS RÉSULTATS N'ONT PAS LA MÊME TEMPÉRATURE, et c'est ce qui rend le
    verdict lisible avant le texte — même rôle que le rebord du médaillon côté
@@ -7416,13 +7426,85 @@ div.ferme-usage{ margin-bottom:10px; }
 
 /* ---- LE PANNEAU D'ÉTOILE (le rappel « Previously »). Même famille que les
    modales de la ferme, palette de nuit. */
-.ferme-star-panel{
+.ferme-root .ferme-star-panel{
   background:linear-gradient(#161f3a, #0d1226) !important;
   border-color:rgba(255,230,170,.35) !important;
   color:#f2ecd8;
 }
 .ferme-star-panel h2{ color:#ffe9a8; }
 .ferme-star-panel .ferme-hint{ color:rgba(255,240,210,.62); }
+/* Le plan déplié transforme les cinq anciennes lignes à pictogrammes en une
+   seule barre segmentée. Chaque segment lit l'état réel de la pièce ; le petit
+   trait interne n'apparaît que pendant le travail chronométré de Tristan. */
+.ferme-ship-progress-head{
+  display:flex; align-items:baseline; justify-content:space-between; gap:10px;
+  margin:14px 0 7px; color:#ffe9a8; font-size:13px; letter-spacing:.035em;
+}
+.ferme-ship-progress{
+  display:grid; min-width:0; max-width:100%;
+  grid-template-columns:repeat(5, minmax(0, 1fr)); gap:6px;
+}
+.ferme-ship-progress-step{
+  position:relative; min-width:0; min-height:112px; overflow:hidden;
+  padding:14px 9px 9px; border:1px solid rgba(255,230,170,.24);
+  border-radius:8px; background:rgba(255,255,255,.035);
+}
+.ferme-ship-progress-step::before{
+  content:""; position:absolute; inset:0 0 auto; height:4px;
+  background:rgba(255,230,170,.18);
+}
+.ferme-ship-progress-step[data-state="done"]{
+  background:rgba(113,203,139,.12); border-color:rgba(130,226,157,.42);
+}
+.ferme-ship-progress-step[data-state="done"]::before{ background:#82e29d; }
+.ferme-ship-progress-step[data-state="ready"]{
+  background:rgba(113,214,255,.10); border-color:rgba(113,214,255,.38);
+}
+.ferme-ship-progress-step[data-state="ready"]::before{ background:#71d6ff; }
+.ferme-ship-progress-step[data-state="building"]{
+  background:rgba(255,217,138,.10); border-color:rgba(255,217,138,.42);
+}
+.ferme-ship-progress-step[data-state="building"]::before{ background:#ffd98a; }
+.ferme-ship-progress-step > b{
+  display:block; margin-bottom:5px; color:#f8efd9; font-size:12px;
+  line-height:1.15; overflow-wrap:anywhere;
+}
+.ferme-ship-progress-state{
+  display:block; min-height:26px; color:rgba(255,240,210,.68);
+  font-size:9.5px; font-weight:750; line-height:1.35; letter-spacing:.075em;
+}
+.ferme-ship-progress-step[data-state="done"] .ferme-ship-progress-state{ color:#a8edba; }
+.ferme-ship-progress-step[data-state="ready"] .ferme-ship-progress-state{ color:#9cdef7; }
+.ferme-ship-progress-step[data-state="building"] .ferme-ship-progress-state{ color:#ffe3a8; }
+.ferme-ship-progress-work{
+  display:block; height:3px; margin:5px 0 6px; overflow:hidden;
+  border-radius:999px; background:rgba(255,230,170,.16);
+}
+.ferme-ship-progress-work > span{
+  display:block; height:100%; min-width:2px; border-radius:inherit; background:#ffd98a;
+}
+.ferme-ship-progress-detail{
+  display:block; margin-top:7px; color:rgba(255,240,210,.56);
+  font-size:10px; line-height:1.3;
+}
+.ferme-ship-progress-next{
+  margin-top:10px; color:#ffe3a8; font-size:12px; line-height:1.35;
+}
+.ferme-star-recap{
+  font-family:ui-rounded, "Avenir Next", Avenir, system-ui, sans-serif;
+  font-size:17px; line-height:1.55; letter-spacing:.01em;
+}
+.ferme-star-recap h2{ font-size:clamp(27px, 4vw, 38px); line-height:1.15; }
+.ferme-star-recap .ferme-hint{ font-size:15px; font-weight:650; color:rgba(255,240,210,.78); }
+.ferme-star-recap .ferme-btn{ font-family:inherit; }
+
+@media (max-width: 560px){
+  .ferme-ship-progress{
+    grid-template-columns:repeat(5, minmax(116px, 1fr)); overflow-x:auto;
+    padding-bottom:6px; scroll-snap-type:x proximity;
+  }
+  .ferme-ship-progress-step{ scroll-snap-align:start; }
+}
 
 /* ---- LE PISTEUR. Un bandeau compact : ⭐ + quatre pastilles + UNE phrase.
    ⚠️ Jamais deux phrases : c'est ce qui le distingue d'un journal de quête,
@@ -7433,7 +7515,9 @@ div.ferme-usage{ margin-bottom:10px; }
   display:flex; align-items:center; gap:10px; max-width:min(560px, 92vw);
   padding:6px 12px; border-radius:14px; pointer-events:none;
   background:rgba(10,14,30,.72); border:2px solid rgba(255,228,164,.30);
-  box-shadow:0 3px 14px rgba(0,0,0,.45);
+  /* Passe d'audit bateau : lueur de bord légère, isolée sur cette ombre pour
+     pouvoir la retirer sans retoucher la structure à la prochaine passe. */
+  box-shadow:0 0 0 1px rgba(255,230,170,.20), 0 0 14px rgba(255,211,120,.18), 0 3px 14px rgba(0,0,0,.45);
   color:#f4ecd6; font-size:12px; line-height:1.25;
 }
 .ferme-star-hud .ico{ font-size:15px; filter:drop-shadow(0 0 6px rgba(255,220,140,.6)); }
@@ -7468,16 +7552,37 @@ div.ferme-usage{ margin-bottom:10px; }
    jamais ensemble dans la chronologie de la quête. */
 .ferme-wait-pill{
   position:fixed; right:calc(env(safe-area-inset-right, 0px) + 10px);
-  top:calc(env(safe-area-inset-top, 0px) + 8px); z-index:22;
+  top:calc(env(safe-area-inset-top, 0px) + 58px); z-index:22;
   display:flex; align-items:center; gap:8px; max-width:min(280px, 46vw);
   padding:6px 12px; border-radius:14px; pointer-events:none;
   background:rgba(10,14,30,.72); border:2px solid rgba(255,228,164,.30);
-  box-shadow:0 3px 14px rgba(0,0,0,.45);
+  box-shadow:0 0 0 1px rgba(255,230,170,.20), 0 0 14px rgba(255,211,120,.18), 0 3px 14px rgba(0,0,0,.45);
   color:#f4ecd6; font-size:12px; line-height:1.25;
+  transition:top .18s ease-out;
 }
+.ferme-wait-pill.ui-menu-open{ top:calc(env(safe-area-inset-top, 0px) + 382px); }
 .ferme-wait-pill .ico{ font-size:15px; filter:drop-shadow(0 0 6px rgba(255,220,140,.6)); flex:0 0 auto; }
 @media (max-width: 560px){
   .ferme-wait-pill{ font-size:11px; padding:5px 9px; gap:6px; max-width:56vw; }
+}
+
+/* Sur une fenêtre étroite, le HUD central ne peut pas rester entre le panneau
+   d'état à gauche et les trois boutons à droite : il passe sous cette rangée,
+   puis la pastille d'attente sous le HUD. Quand la roue est ouverte, ses
+   boutons occupent toute la hauteur disponible à droite ; masquer brièvement
+   les deux informations est la seule disposition sans recouvrement ni texte
+   poussé hors écran. Elles reviennent dès la fermeture du menu. */
+@media (max-width: 760px){
+  .ferme-star-hud{
+    top:calc(env(safe-area-inset-top, 0px) + 100px);
+    max-width:calc(100vw - 20px);
+  }
+  .ferme-wait-pill{
+    top:calc(env(safe-area-inset-top, 0px) + 158px);
+    max-width:calc(100vw - 20px);
+  }
+  .ferme-star-hud.ui-menu-open,
+  .ferme-wait-pill.ui-menu-open{ opacity:0; visibility:hidden; }
 }
 
 /* ---- LE MINI-JEU. Plein écran, canevas au centre. ⚠️ `touch-action:none` :

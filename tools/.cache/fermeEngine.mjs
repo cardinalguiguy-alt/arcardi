@@ -4778,6 +4778,28 @@ export function generateTownWorld() {
               ground[i] = C.G_BRIDGE; solid[i] = 0; objects[i] = C.O_NONE; objHp.delete(i);
             }
           }
+          /* hors-zip — LES DEUX RAMBARDES DU PONT DU PARC, ENFIN EN COLLISION.
+             Signalé par Guillaume après le pont de l'anse sud (déjà corrigé,
+             voir plus bas) : « le pont n'est pas corrigé », et de fait ce
+             SECOND pont — l'arche japonaise de l'étang — n'avait jamais reçu
+             le même traitement. `archBridge` (fermeArt.js) peint une
+             balustrade des deux côtés du tablier ; rien ne la rendait solide,
+             donc on marchait à travers, droit dans l'étang. Même principe que
+             la rive sud : on solidifie seulement les DEUX rangées d'eau qui
+             bordent IMMÉDIATEMENT le tablier (`br-1` au nord, `br+2` au sud),
+             jamais le tablier lui-même — un garde-corps vit à côté de la
+             surface qu'il borde, pas dessus. Le test `ground===G_WATER` est
+             nécessaire ici (contrairement à la rive sud) : l'encroachment des
+             culées (juste au-dessus) a déjà changé certaines de ces cases en
+             pelouse ou en gravier près des deux têtes, et ce sol-là doit
+             rester praticable. */
+          for (let x = bA; x <= bB; x++) {
+            for (const y of [br - 1, br + 2]) {
+              if (!inMap(x, y)) continue;
+              const i = id(x, y);
+              if (ground[i] === C.G_WATER) solid[i] = 1;
+            }
+          }
           /* LES DEUX APPROCHES. ⚠️ SANS ELLES LE PONT NE MÈNE NULLE PART : la
              promenade de l'étang ne longe que la rive sud-est, donc la rive
              OUEST n'a aucun chemin. On tire l'allée de chaque tête jusqu'à ce
@@ -8257,6 +8279,27 @@ export function courtDoorGroups(doors) {
     else out.push({ floor: d.floor, room: d.room, x: d.x, y0: d.y, y1: d.y });
   }
   return out;
+}
+/* hors-zip (2026-08-26) — LE SURVOL VISE L'OUVERTURE, PAS UNE CASE UNIQUE.
+   Une porte occupe un rectangle continu, auquel on ajoute une marge de moins
+   d'une case tout autour : assez pour ne plus devoir viser au pixel près,
+   insuffisant pour accrocher la porte voisine dans un couloir. Quand deux
+   marges se touchent, la porte dont le centre est le plus proche gagne ;
+   l'ordre de `cw.doors` ne décide donc jamais du libellé affiché. Pure pour que
+   `verify-vallee` mesure la vraie zone sensible au lieu d'en recopier une. */
+export const COURT_DOOR_LABEL_PAD = 0.85;
+export function courtDoorLabelAt(groups, floor, x, y, pad = COURT_DOOR_LABEL_PAD) {
+  let best = null, bestD = Infinity;
+  for (const g of (groups || [])) {
+    if (g.floor !== floor) continue;
+    const x0 = g.x, x1 = g.x + 1, y0 = g.y0, y1 = g.y1 + 1;
+    const dx = x < x0 ? x0 - x : x > x1 ? x - x1 : 0;
+    const dy = y < y0 ? y0 - y : y > y1 ? y - y1 : 0;
+    if (dx > pad || dy > pad) continue;
+    const d = Math.hypot(x - (x0 + x1) / 2, y - (y0 + y1) / 2);
+    if (d < bestD) { bestD = d; best = g; }
+  }
+  return best;
 }
 /* La cage d'escalier qui contient cette case, ou `null`. ⚠️ MÊME RAISON : le
    jeu la retrouvait dans sa closure (`checkCourtStairs`), donc un banc qui veut

@@ -381,6 +381,20 @@ ok("dimensions", cw.w === C.COURT_MAP_W && cw.h === C.COURT_MAP_H, `${cw.w}×${c
 ok("une porte par pièce au minimum", cw.doors.length >= C.COURT_ROOMS.length, `${cw.doors.length} portes pour ${C.COURT_ROOMS.length} pièces`);
 ok("chaque pièce a un libellé de porte disponible", C.COURT_ROOMS.every(r => cw.doors.some(d => d.room === r.key)));
 {
+  const groups = E.courtDoorGroups(cw.doors);
+  const widened = groups.every(g => {
+    const cy = (g.y0 + g.y1 + 1) / 2;
+    return E.courtDoorLabelAt(groups, g.floor, g.x - E.COURT_DOOR_LABEL_PAD * 0.75, cy) === g
+      && E.courtDoorLabelAt(groups, g.floor, g.x + 1 + E.COURT_DOOR_LABEL_PAD * 0.75, cy) === g;
+  });
+  ok("la zone de survol déborde de chaque côté des portes", widened,
+     `${groups.length} ouvertures · marge ${E.COURT_DOOR_LABEL_PAD} case`);
+  const lone = [{ floor: 0, room: "test", x: 10, y0: 10, y1: 11 }];
+  ok("la zone de survol reste bornée", E.courtDoorLabelAt(lone, 0, 10 - E.COURT_DOOR_LABEL_PAD - 0.01, 11) === null);
+  const overlap = [{ floor: 0, room: "a", x: 10, y0: 10, y1: 11 }, { floor: 0, room: "b", x: 12, y0: 10, y1: 11 }];
+  ok("deux zones qui se touchent choisissent la porte la plus proche", E.courtDoorLabelAt(overlap, 0, 11.6, 11)?.room === "b");
+}
+{
   const dup = C.COURT_ROOMS.map(r => r.key).filter((k, i, a) => a.indexOf(k) !== i);
   ok("aucune clé de pièce en double", dup.length === 0, dup.join(" "));
 }

@@ -19125,11 +19125,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const cw = courtWorldRef.current, m = meRef.current, sprites = spritesRef.current;
       if (!cw || !sprites) return;
       const cam = getCamCourt();
-      /* hors-zip (Codex, 2026-08-26) — UNE SEULE réponse à « quelle case est
-         visée » : `pointerTargetTile` est le même calcul que celui des pips de
-         graines. Aucun écouteur ni état de survol parallèle ; le repli sans
-         pointeur reste la décision isolée en tête de fichier. */
-      const pointerTile = pointerTargetTile(m, cw.w, cw.h, cam, ZOOM);
+      /* hors-zip (Codex, 2026-08-26) — UNE SEULE conversion du pointeur en
+         coordonnées du monde. Le libellé travaille sur le point continu (sa
+         zone sensible déborde volontairement de la porte) ; les outils gardent
+         ensuite leur case entière via `pointerTargetTile`. */
+      const pointerWorld = pointerWorldAt(m, cw.w, cw.h, cam, ZOOM, C.ACT_RANGE + 1.25);
+      const pointerTile = pointerWorld && { x: Math.floor(pointerWorld.x), y: Math.floor(pointerWorld.y) };
       const roomLabelTile = pointerTile || (COURT_LABEL_FALLBACK_TO_FACING_TILE ? facingTile() : null);
       starViewRef.current = { cam, zoom: ZOOM };      // 465 — survol des étoiles à l'intérieur aussi
       const myFloor = E.courtFloorOf(m.y + 0.2);
@@ -19380,8 +19381,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          pleine hauteur, linteau en haut — ce qui le fait lire comme UNE
          porte large plutôt que deux portes étroites côte à côte. */
       const doorGroups = E.courtDoorGroups(cw.doors);
-      const labelledDoor = roomLabelTile && doorGroups.find(g =>
-        g.floor === myFloor && g.x === roomLabelTile.x && roomLabelTile.y >= g.y0 && roomLabelTile.y <= g.y1);
+      const labelledDoor = pointerWorld
+        ? E.courtDoorLabelAt(doorGroups, myFloor, pointerWorld.x, pointerWorld.y)
+        : roomLabelTile && E.courtDoorLabelAt(doorGroups, myFloor, roomLabelTile.x + 0.5, roomLabelTile.y + 0.5, 0);
       for (const g of doorGroups) {
         if (g.floor !== myFloor || g.x < x0 - 2 || g.x > x1 + 2 || g.y1 < y0 - 2 || g.y0 > y1 + 2) continue;
         const px = g.x * T, pyTop = g.y0 * T, spanH = (g.y1 - g.y0 + 1) * T;
@@ -19390,32 +19392,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         ctx.fillStyle = "#5a4230"; ctx.fillRect(px - 1, pyTop - 14, T + 2, spanH + 14);
         ctx.fillStyle = "#3a2a1c"; ctx.fillRect(px + 1, pyTop - 11, T - 2, spanH + 11);
         ctx.fillStyle = "#7a5232"; ctx.fillRect(px - 1, pyTop - 14, T + 2, 2);
-        /* hors-zip — LA PLAQUE EST GRAVÉE DANS LE LINTEAU, PAS POSÉE DEVANT.
-           Guillaume : les labels de salles sont « inélégants et déconnent ».
-           Le déconnage était réel : cette plaque vivait dans `draws` avec une
-           clé de tri `(g.y0+0.6)*T` — la rangée de la PORTE — alors qu'elle se
-           peignait 16px plus haut ; son ordre de superposition avec les
-           personnages ne correspondait donc jamais à sa position réelle à
-           l'écran. Ici elle rejoint le MÊME bloc immédiat que le chambranle
-           (jamais dans `draws`) : il n'y a plus de clé à faire correspondre,
-           elle est là où elle est peinte, comme le linteau et les montants.
-           Le style change aussi : plus de boîte crème façon post-it (identique
-           aux enseignes de boutiques de rue, pensées pour l'extérieur) — un
-           fond bois sombre encastré, un texte en léger relief (une passe
-           d'ombre, une passe claire, pas de bordure), à la largeur du texte
-           mesuré une fois pour centrer, jamais pour cadrer une boîte : un
-           emoji en police monospace ne rend pas une largeur fiable, ce qui
-           déformait la boîte avant. */
-        if (g === labelledDoor) {
-          const label = L.courtRoomName(g.room);
-          ctx.font = "bold 7px monospace"; ctx.textAlign = "center";
-          const wpx = Math.max(T, ctx.measureText(label).width + 6);
-          const tx = px + T / 2, plateTop = pyTop - 12, plateH = 8;
-          ctx.fillStyle = "#2e2013"; ctx.fillRect(tx - wpx / 2, plateTop, wpx, plateH);
-          ctx.fillStyle = "#140d07"; ctx.fillText(label, tx, plateTop + plateH - 1.5);
-          ctx.fillStyle = "#c9a961"; ctx.fillText(label, tx, plateTop + plateH - 2.5);
-          ctx.textAlign = "left";
-        }
+        /* hors-zip — LE CHAMBRANLE APPARTIENT AU MUR, le libellé à l'interface.
+           Le premier reste ici, avant le mobilier. Le second conserve l'ancrage
+           du linteau mais part dans la passe finale plus bas : aucun comptoir,
+           PNJ ou personnage ne peut alors le recouvrir. */
       }
 
       /* ══════════════════════════════════════════════════════════════════════
@@ -19600,6 +19580,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       gvig.addColorStop(0, "rgba(0,0,0,0)");
       gvig.addColorStop(1, `rgba(8,6,10,${vig})`);
       ctx.fillStyle = gvig; ctx.fillRect(cam.x, cam.y, cam.vw, cam.vh);
+
+      /* hors-zip (2026-08-26) — LE LIBELLÉ EST UNE INTERFACE, DONC LA DERNIÈRE
+         PASSE DU MONDE. Le 1er jet le peignait avec le chambranle, avant le
+         mobilier, les PNJ et les joueurs : un comptoir ou une plante le
+         recouvrait exactement comme dans la capture de Guillaume. On conserve
+         son ancrage au linteau, mais on le dessine après le tri et la vignette ;
+         aucun décor ne peut désormais passer devant. */
+      if (labelledDoor) {
+        const px = labelledDoor.x * T, pyTop = labelledDoor.y0 * T;
+        const label = L.courtRoomName(labelledDoor.room);
+        ctx.save();
+        ctx.font = "bold 7px monospace"; ctx.textAlign = "center";
+        const wpx = Math.max(T, ctx.measureText(label).width + 6);
+        const tx = px + T / 2, plateTop = pyTop - 12, plateH = 8;
+        ctx.fillStyle = "rgba(46,32,19,0.96)"; ctx.fillRect(tx - wpx / 2, plateTop, wpx, plateH);
+        ctx.fillStyle = "#140d07"; ctx.fillText(label, tx, plateTop + plateH - 1.5);
+        ctx.fillStyle = "#e3c775"; ctx.fillText(label, tx, plateTop + plateH - 2.5);
+        ctx.restore();
+      }
 
       /* ZIP 429 — la boussole marche aussi dans le tribunal. ⚠️ ET C'EST LÀ
          QU'ELLE SERT LE PLUS : dix-sept pièces sur trois niveaux empilés dans
@@ -21888,19 +21887,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const fx = [0, 0, -1, 1][m.dir], fy = [1, -1, 0, 0][m.dir];
     return { x: Math.floor(m.x + fx), y: Math.floor(m.y + 0.2 + fy) };
   }
-  /* hors-zip (Codex, 2026-08-26) — LA SOURCE UNIQUE DU CIBLAGE POINTEUR.
-     Les pips, la ville et les labels d'intérieur doivent convertir le pointeur
-     avec exactement la même portée ; seule leur politique de repli sans souris
-     peut différer. `null` signifie donc « aucun pointeur à portée », jamais une
-     case de remplacement inventée par l'appelant. */
-  function pointerTargetTile(m, mapW, mapH, cam, zoom) {
+  /* hors-zip (Codex, 2026-08-26) — LA SOURCE UNIQUE DE CONVERSION DU POINTEUR.
+     Les pips et la ville gardent la portée d'action ; les labels d'intérieur
+     demandent une portée un peu plus généreuse, mais tous partent du même point
+     continu avant de choisir case ou ouverture. `null` signifie « aucun
+     pointeur à portée », jamais une case de remplacement inventée. */
+  function pointerWorldAt(m, mapW, mapH, cam, zoom, range = C.ACT_RANGE + 0.5) {
     const wx = (mouseRef.current.x / zoom + cam.x) / C.TILE;
     const wy = (mouseRef.current.y / zoom + cam.y) / C.TILE;
-    const tx = Math.floor(wx), ty = Math.floor(wy);
-    if (tx >= 0 && ty >= 0 && tx < mapW && ty < mapH
-      && Math.abs(wx - (m.x + 0.5)) <= C.ACT_RANGE + 0.5
-      && Math.abs(wy - (m.y + 0.2)) <= C.ACT_RANGE + 0.5) return { x: tx, y: ty };
+    if (wx >= 0 && wy >= 0 && wx < mapW && wy < mapH
+      && Math.abs(wx - (m.x + 0.5)) <= range
+      && Math.abs(wy - (m.y + 0.2)) <= range) return { x: wx, y: wy };
     return null;
+  }
+  function pointerTargetTile(m, mapW, mapH, cam, zoom) {
+    const p = pointerWorldAt(m, mapW, mapH, cam, zoom);
+    return p ? { x: Math.floor(p.x), y: Math.floor(p.y) } : null;
   }
   function targetTile() {
     const m = meRef.current, w = worldRef.current; if (!m || !w) return { x: 0, y: 0 };
@@ -23240,7 +23242,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function starTownActivityTick(e, now) {
     if (!isHost) return;
     const a = starTownActiveRef.current;
-    if (!e || !e.fall || e.ch < 1 || Q.starTownFallen(e)) { a.fall = 0; a.at = 0; a.ms = 0; return; }
+    if (!Q.starTownWaiting(e)) { a.fall = 0; a.at = 0; a.ms = 0; return; }
     if (a.fall !== e.fall) { a.fall = e.fall; a.at = now; a.ms = 0; }
     if (!a.at) a.at = now;
     const dt = Math.max(0, Math.min(1500, now - a.at));
@@ -26537,7 +26539,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            l'horloge de ce client — jamais recalculée dans `quete.js`, qui n'a
            pas d'horloge (§3 de CLAUDE.md, encore). */
         return (
-          <div className="ferme-star-hud" data-tick={starTick}>
+          <div className={"ferme-star-hud" + (settingsOpen ? " ui-menu-open" : "")} data-tick={starTick}>
             <span className="ico">{huntingImpacts ? "☄" : "✦"}</span>
             {/* hors-zip — LES PUCES DU CHAPITRE 1 DEVIENNENT CLIQUABLES.
                 Demande de Guillaume : à plusieurs, viser des trous différents
@@ -26611,10 +26613,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {(() => {
         if (starMini || starCard) return null;
         const e = sharedRef.current.star;
-        if (isHost && e && Q.starFallen(e) && !Q.starTownFallen(e) && e.ch >= 1) {
+        if (isHost && Q.starTownWaiting(e)) {
           const remain = Math.max(0, Q.STAR_TOWN_ACTIVE_MS - (starTownActiveRef.current.ms || 0));
           return (
-            <div className="ferme-wait-pill">
+            <div className={"ferme-wait-pill" + (settingsOpen ? " ui-menu-open" : "")}>
               <span className="ico">☄</span>
               <span>{L.star.hud.townFallCountdown(msClock(remain))}</span>
             </div>
@@ -26627,7 +26629,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const wait = MR.mayorApptWaitMs(eA, Date.now());
           if (wait > 0) {
             return (
-              <div className="ferme-wait-pill">
+              <div className={"ferme-wait-pill" + (settingsOpen ? " ui-menu-open" : "")}>
                 <span className="ico">🎩</span>
                 <span>{L.maire.bookedWhen(msClock(wait))}</span>
               </div>
@@ -30274,14 +30276,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ⚠️⚠️ IL NE S'OUVRE PAS AU BORD DU LAC, et c'est écrit dans `togglePlan` :
           là-bas, déplier le plan fait apparaître le bateau DANS LE MONDE, et un
           panneau par-dessus cacherait exactement ce qu'on est venu voir.
-          ⚠️ IL NE PORTE AUCUN COMPTEUR ÉCRIT : l'avancement se lit sur le dessin
-          (une pièce posée est dense, une pièce à venir bat) et dans la liste des
-          cinq lignes. Un « 3/5 » de plus aurait été un sixième endroit où compter
-          des morceaux — la faute du 452, que ce zip s'est promis de ne pas
-          refaire. */}
+          La progression segmentée ci-dessous ne stocke aucun compteur : elle lit
+          les cinq mêmes pièces que le dessin. C'est donc une autre forme du plan,
+          pas une seconde vérité susceptible de dériver. */}
       {planOpen === "panel" && (() => {
         const e = Q.migrateStar(sharedRef.current.star);
         const parts = Q.starShipParts(e);
+        const planNow = Date.now();
+        const progress = Q.starShipProgress(e, planNow);
+        const next = Q.starTimberNext(e);
         const close = () => { planOpenRef.current = false; setPlanOpen(false); };
         const sheet = spritesReady ? (() => {
           const cnv = document.createElement("canvas");
@@ -30297,25 +30300,34 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <h2>{L.star.plan.panelTitle(C.STAR_SHIP_NAME)}</h2>
               <div className="ferme-hint">{L.star.plan.panelHint(Q.STAR_SHIP_TOTAL)}</div>
               {sheet && <div style={{ margin: "10px 0", textAlign: "center" }}><Sprite img={sheet} w={432} h={288} /></div>}
-              {Q.STAR_SHIP_KEYS.map((k, i) => {
-                const why = Q.starTimberBlock(e, k);
-                const ord = Q.starTimberOrder(e, k);
-                return (
-                  <div className="ferme-shop-row" key={"plan-" + k}>
-                    <div className="info">
-                      <b>{parts[i] ? "✅ " : ord ? "🪚 " : "◻ "}{L.star.plan.part(k)}</b>
-                      <span className="ferme-usage">
-                        {parts[i] ? L.star.plan.orderDone
-                          : ord ? L.star.plan.orderWait(fmtDuration(ord.readyAt - Date.now()))
-                          : why === "noShard" ? L.star.plan.blockNoShard
-                          : why === "raise" ? L.star.plan.blockRaise
-                          : why === "noMayor" ? L.star.plan.blockNoMayor
-                          : L.star.plan.orderCost(C.STAR_TIMBER[k].wood, fmtDuration(C.STAR_TIMBER[k].ms), L.star.plan.extraName(C.STAR_TIMBER[k].extra))}
-                      </span>
+              <div className="ferme-ship-progress-head">
+                <b>{L.star.plan.progressTitle}</b>
+              </div>
+              <div className="ferme-ship-progress" role="list" aria-label={L.star.plan.progressTitle}>
+                {progress.map(step => {
+                  const timber = C.STAR_TIMBER[step.key];
+                  const detail = step.state === "building"
+                    ? fmtDuration(step.readyAt - planNow)
+                    : step.state === "available"
+                      ? L.star.plan.orderCost(timber.wood, fmtDuration(timber.ms), L.star.plan.extraName(timber.extra))
+                      : step.reason;
+                  return (
+                    <div className="ferme-ship-progress-step" data-state={step.state} role="listitem" key={"plan-" + step.key} title={L.star.plan.part(step.key)}>
+                      <b>{L.star.plan.progressPart(step.key)}</b>
+                      <span className="ferme-ship-progress-state">{L.star.plan.progressState(step.state)}</span>
+                      {step.state === "building" && (
+                        <span className="ferme-ship-progress-work" aria-hidden="true">
+                          <span style={{ width: `${Math.round(step.work * 100)}%` }} />
+                        </span>
+                      )}
+                      <span className="ferme-ship-progress-detail">{L.star.plan.progressDetail(step.state, detail)}</span>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+              <div className="ferme-ship-progress-next">
+                {next ? L.star.plan.progressNext(L.star.plan.progressPart(next)) : L.star.plan.progressComplete}
+              </div>
               <div className="ferme-hint" style={{ marginTop: 10 }}>{L.star.plan.panelAtLake}</div>
             </div>
           </div>
@@ -30330,7 +30342,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const close = () => setStarRecap(false);
         return (
           <div className="ferme-modal open" onClick={close} data-tick={starTick}>
-            <div className="panel ferme-modal-panel ferme-star-panel" onClick={ev => ev.stopPropagation()}>
+            <div className="panel ferme-modal-panel ferme-star-panel ferme-star-recap" onClick={ev => ev.stopPropagation()}>
               <button className="ferme-close-x" onClick={close}>✕</button>
               <h2>✦ {L.star.hud.againTitle}</h2>
               <div className="ferme-hint">{L.star.title}</div>
@@ -30342,7 +30354,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <div style={{ marginTop: 8, opacity: 0.85 }}>
                 {starGoalText(e)}
               </div>
-              <div style={{ marginTop: 12 }}><button className="ferme-btn" onClick={close}>✦</button></div>
+              <div style={{ marginTop: 16 }}><button className="ferme-btn" onClick={close}>{L.star.hud.againClose}</button></div>
             </div>
           </div>
         );
