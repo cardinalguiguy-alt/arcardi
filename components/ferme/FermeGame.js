@@ -487,6 +487,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      seul dans les deux sens. */
   const [touchUi, setTouchUi] = useState(false);
   const touchUiRef = useRef(false);
+  /* Première passe mobile : la hauteur réellement visible décide du mode
+     téléphone paysage. `innerWidth` seul classe un iPhone couché comme un
+     écran de bureau ; `visualViewport` tient aussi compte des barres Safari
+     et du clavier virtuel. Les offsets deviennent des variables CSS afin que
+     le chat reste dans la partie visible quand le clavier monte. */
+  const [viewportUi, setViewportUi] = useState({ width: 0, height: 0, top: 0, left: 0, right: 0, bottom: 0, lowLandscape: false });
+  const lowLandscapeRef = useRef(false);
+  const mobileFoldedRef = useRef(false);
   const [touchPrompt, setTouchPrompt] = useState(null);   // ce que le bouton d'action ferait, maintenant
   const [running, setRunning] = useState(false);          // la course, en BASCULE (voir plus bas)
   const marketOpenRef = useRef(false);
@@ -1426,6 +1434,42 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      ce voile-ci prend le relais côté ferme et s'efface, pour que le raccord
      entre les deux soit un fondu et non une coupe. */
   const runReturnFadeRef = useRef(0);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const updateViewport = () => {
+      const vv = window.visualViewport;
+      const width = Math.round(vv ? vv.width : window.innerWidth);
+      const height = Math.round(vv ? vv.height : window.innerHeight);
+      const top = Math.round(vv ? vv.offsetTop : 0);
+      const left = Math.round(vv ? vv.offsetLeft : 0);
+      const right = Math.max(0, Math.round(window.innerWidth - width - left));
+      const bottom = Math.max(0, Math.round(window.innerHeight - height - top));
+      const lowLandscape = width > height && height <= 500;
+      lowLandscapeRef.current = lowLandscape;
+      setViewportUi(v => (v.width === width && v.height === height && v.top === top && v.left === left && v.right === right && v.bottom === bottom && v.lowLandscape === lowLandscape)
+        ? v : { width, height, top, left, right, bottom, lowLandscape });
+      /* Le premier passage en paysage bas replie les panneaux secondaires.
+         Le verrou est volontaire : une rotation ou l'ouverture du clavier ne
+         doit jamais refermer un panneau que le joueur vient d'ouvrir. */
+      if (lowLandscape && !mobileFoldedRef.current) {
+        mobileFoldedRef.current = true;
+        touchUiRef.current = true; setTouchUi(true);
+        setQuestOpen(false); setSettingsOpen(false); setChatOpen(false);
+      }
+    };
+    updateViewport();
+    window.addEventListener("resize", updateViewport);
+    window.addEventListener("orientationchange", updateViewport);
+    window.visualViewport?.addEventListener("resize", updateViewport);
+    window.visualViewport?.addEventListener("scroll", updateViewport);
+    return () => {
+      window.removeEventListener("resize", updateViewport);
+      window.removeEventListener("orientationchange", updateViewport);
+      window.visualViewport?.removeEventListener("resize", updateViewport);
+      window.visualViewport?.removeEventListener("scroll", updateViewport);
+    };
+  }, []);
 
   useEffect(() => { fishMiniRef.current = !!fishMini || !!barnMini || !!wolfBite || !!evilBite || !!repairMini; }, [fishMini, barnMini, wolfBite, evilBite, repairMini]);
   useEffect(() => { adsOpenRef.current = adsOpen; visitorOpenRef.current = visitorOpen; }, [adsOpen, visitorOpen]);
@@ -13751,9 +13795,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const ctx = canvas.getContext("2d"); ctx.imageSmoothingEnabled = false;
     const T = C.TILE;
 
-    function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; ctx.imageSmoothingEnabled = false; }
+    function resize() {
+      const vv = window.visualViewport;
+      canvas.width = Math.max(1, Math.round(vv ? vv.width : window.innerWidth));
+      canvas.height = Math.max(1, Math.round(vv ? vv.height : window.innerHeight));
+      ctx.imageSmoothingEnabled = false;
+    }
     resize();
     window.addEventListener("resize", resize);
+    window.visualViewport?.addEventListener("resize", resize);
 
     // ----- entrées -----
     function onKeyDown(e) {
@@ -13818,7 +13868,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       /* ⚠️ UNE TOUCHE DE CLAVIER ÉTEINT LES COMMANDES TACTILES. Voir la note de
          `touchUi` : l'affichage suit la dernière entrée utilisée, il ne se
          règle pas. Ce joueur-ci branche son clavier une fois sur deux. */
-      if (touchUiRef.current) { touchUiRef.current = false; setTouchUi(false); }
+      if (touchUiRef.current && !lowLandscapeRef.current) { touchUiRef.current = false; setTouchUi(false); }
       keysRef.current[e.code] = true;
       if (e.code >= "Digit1" && e.code <= "Digit9") {
         const idx = +e.code.slice(5) - 1;
@@ -13891,7 +13941,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
         }
       }
-      if (e.code === "KeyT") { e.preventDefault(); setChatOpen(true); setTimeout(() => chatInputRef.current?.focus(), 0); }
+      if (e.code === "KeyT") { e.preventDefault(); openChatPanel(); }
       if (e.code === "KeyM") setMapOpen(o => !o);
       /* ⚠️ ZIP 449/463 — G COMME GUIDE : la reine part devant, ou revient dans
          la constellation. Vérifié sur `e.code` comme tout ce gestionnaire (AZERTY et
@@ -21832,6 +21882,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       cancelAnimationFrame(raf);
       clearTimeout(sleepTimerRef.current);
       window.removeEventListener("resize", resize);
+      window.visualViewport?.removeEventListener("resize", resize);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("touchstart", onFirstTouch);
@@ -26110,6 +26161,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (chatInputRef.current) chatInputRef.current.value = "";
     setChatOpen(false); chatInputRef.current?.blur();
   }
+  function openChatPanel() {
+    setQuestOpen(false); setSettingsOpen(false); setChatOpen(true);
+    setTimeout(() => chatInputRef.current?.focus(), 0);
+  }
+  function closeChatPanel() {
+    setChatOpen(false); chatInputRef.current?.blur();
+  }
   async function leaveGame() {
     // L'hôte ne quitte pas réellement le monde partagé : Ferme Vallée est
     // host-authoritative (simulation, réponse aux requêtes des autres
@@ -26427,11 +26485,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                       carry: carryMode === "hand" ? "hand" : "herd" };
   const slots = SLOT_ORDER.map(k => ({ key: k, icon: SLOT_ICON[k] }));
   const clockStr = (() => { const h = Math.floor(hud.timeMin / 60) % 24, mn = hud.timeMin % 60; return `${h}h${String(mn).padStart(2, "0")}`; })();
+  const rootClass = "ferme-root" + (viewportUi.lowLandscape ? " ferme-low-landscape" : "")
+    + (touchUi ? " ferme-touch-ui" : "") + ((questOpen || chatOpen || settingsOpen) ? " ferme-secondary-open" : "");
+  const rootStyle = {
+    "--ferme-vv-width": viewportUi.width ? viewportUi.width + "px" : "100vw",
+    "--ferme-vv-height": viewportUi.height ? viewportUi.height + "px" : "100vh",
+    "--ferme-vv-top": viewportUi.top + "px",
+    "--ferme-vv-left": viewportUi.left + "px",
+    "--ferme-vv-right": viewportUi.right + "px",
+    "--ferme-vv-bottom": viewportUi.bottom + "px",
+  };
+  const rotatePrompt = (
+    <div className="ferme-rotate-device" role="status">
+      <div className="ferme-rotate-card panel">
+        <span className="ferme-rotate-icon" aria-hidden="true">↻</span>
+        <b>{L.rotateTitle}</b>
+        <span>{L.rotateBody}</span>
+      </div>
+    </div>
+  );
 
   // Écran de code de ferme (hôte uniquement) : choisit quelle ferme durable ouvrir.
   if (phase === "code") {
     return wrap(
-      <div className="ferme-root">
+      <div className={rootClass} style={rootStyle}>
         <div className="ferme-join-screen">
           <div className="ferme-join-box panel">
             <h1>{L.codeTitle}</h1>
@@ -26444,6 +26521,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             <div className="ferme-join-err">{codeError}</div>
           </div>
         </div>
+        {rotatePrompt}
       </div>
     );
   }
@@ -26451,7 +26529,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // Sélection de personnage
   if (phase === "select") {
     return wrap(
-      <div className="ferme-root">
+      <div className={rootClass} style={rootStyle}>
         <div className="ferme-join-screen">
           <div className="ferme-join-box panel">
             <h1>{L.csTitle}</h1>
@@ -26474,13 +26552,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             <div className="ferme-join-err">{!worldReady ? (hostPreparing ? L.waitWorld : L.connecting) : ""}</div>
           </div>
         </div>
+        {rotatePrompt}
       </div>
     );
   }
 
   return wrap(
-    <div className="ferme-root">
+    <div className={rootClass} style={rootStyle}>
       <canvas id="ferme-game" ref={canvasRef} className="ferme-canvas" />
+      {rotatePrompt}
 
       {/* ╔══════════════════════════════════════════════════════════════════════
           ║ ZIP 444 — LE PISTEUR. Une icône, quatre pastilles, UNE phrase.
@@ -26738,6 +26818,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           <button className="ferme-greg-order-fab" disabled={gregChopMarks.length === 0} onClick={fireGregChop}>{L.gregChopFab}</button>
           <button className="ferme-greg-order-cancel" title={L.gregOrderCancel} onClick={cancelGregChop}>✕</button>
         </div>
+      )}
+
+      {/* Paysage bas : une seule rangée stable donne les cinq accès tactiles
+          indispensables. Les panneaux se remplacent au lieu de s'empiler —
+          c'est ce qui garde le centre du jeu lisible sur 360 px de haut. */}
+      {viewportUi.lowLandscape && (
+        <nav className="ferme-mobile-nav" aria-label={L.mobileMenu}>
+          <button title={L.mobileQuest} aria-label={L.mobileQuest} className={questOpen ? "on" : ""}
+                  onClick={() => { setSettingsOpen(false); setChatOpen(false); setQuestOpen(o => !o); }}>🎯</button>
+          <button title={L.chatOpen} aria-label={L.chatOpen} className={chatOpen ? "on" : ""}
+                  onClick={() => { if (chatOpen) closeChatPanel(); else openChatPanel(); }}>💬</button>
+          <button title={L.btnMap} aria-label={L.btnMap}
+                  onClick={() => { setQuestOpen(false); setSettingsOpen(false); closeChatPanel(); setBagOpen(false); setMapOpen(true); }}>🗺️</button>
+          <button title={L.btnSettings} aria-label={L.btnSettings} className={settingsOpen ? "on" : ""}
+                  onClick={() => { setQuestOpen(false); closeChatPanel(); setSettingsOpen(o => !o); }}>⚙️</button>
+          <button title={L.mobileBag} aria-label={L.mobileBag} className={bagOpen ? "on" : ""}
+                  onClick={() => { setQuestOpen(false); setSettingsOpen(false); closeChatPanel(); setMapOpen(false); setBagOpen(true); }}>🎒</button>
+        </nav>
+      )}
+      {touchUi && !viewportUi.lowLandscape && !chatOpen && (
+        <button className="ferme-chat-fab" title={L.chatOpen} aria-label={L.chatOpen} onClick={openChatPanel}>💬</button>
       )}
 
       {/* ZIP 2026-08 — CARTE ET EMPLOYÉS SORTENT DE LA ROUE, SUR RETOUR DE
@@ -27712,9 +27813,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           "chasse aux lapins" retirés avec le défi lui-même. */}
 
       {/* Chat */}
-      <div className="ferme-chatlog">{[...chat].reverse().map(c => <div key={c.id}><b>{c.from}</b> {c.msg}</div>)}</div>
-      {chatOpen && <input ref={chatInputRef} className="ferme-chat-input" maxLength={120} placeholder={L.chatSend}
-        onKeyDown={e => { if (e.key === "Enter") submitChat(); else if (e.key === "Escape") { setChatOpen(false); chatInputRef.current.blur(); } }} autoFocus />}
+      {!chatOpen && <div className="ferme-chatlog">{[...chat].reverse().map(c => <div key={c.id}><b>{c.from}</b> {c.msg}</div>)}</div>}
+      {chatOpen && (
+        <div className="ferme-chat-panel panel" role="dialog" aria-label={L.chatTitle}>
+          <div className="ferme-chat-head">
+            <b>{L.chatTitle}</b>
+            <button onClick={closeChatPanel} title={L.chatClose} aria-label={L.chatClose}>✕</button>
+          </div>
+          <div className="ferme-chat-history">{[...chat].reverse().map(c => <div key={c.id}><b>{c.from}</b> {c.msg}</div>)}</div>
+          <form className="ferme-chat-compose" onSubmit={e => { e.preventDefault(); submitChat(); }}>
+            <input ref={chatInputRef} className="ferme-chat-input" maxLength={120} placeholder={L.chatSend}
+              onKeyDown={e => { if (e.key === "Escape") closeChatPanel(); }} autoFocus />
+            <button className="ferme-btn" type="submit">{L.chatSendBtn}</button>
+          </form>
+        </div>
+      )}
 
       {/* Blessure (morsure de loup, chantier 2026-07) : bannière rouge avec
           décompte, tant que injuredUntil (persistant, survit à un refresh)
@@ -28715,7 +28828,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              clavier ; un joystick plus fin donnerait une vitesse que la
              réplication réseau (`vx/vy`, zip 365) transporte très bien, mais
              qui ne correspondrait à rien de ce que fait un joueur au clavier. */}
-      {touchUi && !mapOpen && !shopOpen && !binOpen && !marketOpen && !bagOpen && (
+      {touchUi && !mapOpen && !shopOpen && !binOpen && !marketOpen && !bagOpen && !questOpen && !chatOpen && !settingsOpen && (
         <TouchPad
           onVec={(dx, dy) => {
             const k = keysRef.current;
@@ -28728,7 +28841,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }}
         />
       )}
-      {touchUi && !mapOpen && !shopOpen && !binOpen && !marketOpen && !bagOpen && (
+      {touchUi && !mapOpen && !shopOpen && !binOpen && !marketOpen && !bagOpen && !questOpen && !chatOpen && !settingsOpen && (
         <div className="ferme-touch-btns">
           {/* ⚠️ LE BOUTON PORTE LE LIBELLÉ DE L'INVITE, et il n'a rien à
               calculer pour ça : `promptKey` est déjà mis à jour à chaque image
@@ -28744,7 +28857,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           <div className="ferme-touch-row">
             <button className={"ferme-touch-mini" + (running ? " on" : "")}
                     onPointerDown={e => { e.preventDefault(); toggleRun(); }} title={L.touchRun}>🏃</button>
-            <button className="ferme-touch-mini"
+            <button className="ferme-touch-mini ferme-touch-map"
                     onPointerDown={e => { e.preventDefault(); setMapOpen(o => !o); }} title={L.touchMap}>🗺️</button>
             {/* ⚠️ ESPACE A SON PROPRE BOUTON, séparé de l'action. En ville il
                 est absorbé par le bouton contextuel (le saut passe avant) ;
@@ -30782,14 +30895,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
 function TouchPad({ onVec, onRelease }) {
   const ref = useRef(null);
   const origin = useRef(null);
-  const [knob, setKnob] = useState(null);
+  const [stick, setStick] = useState(null);
   const R = 52;                      // rayon utile, en pixels CSS
   const handle = (e) => {
     const o = origin.current; if (!o) return;
     let dx = e.clientX - o.x, dy = e.clientY - o.y;
     const d = Math.hypot(dx, dy);
     if (d > R) { dx *= R / d; dy *= R / d; }
-    setKnob({ x: dx, y: dy });
+    setStick({ x: o.x, y: o.y, dx, dy });
     const nx = dx / R, ny = dy / R;
     if (Math.hypot(nx, ny) < 0.18) onRelease();
     else onVec(nx, ny);
@@ -30797,19 +30910,24 @@ function TouchPad({ onVec, onRelease }) {
   const down = (e) => {
     e.preventDefault();
     origin.current = { x: e.clientX, y: e.clientY };
+    setStick({ x: e.clientX, y: e.clientY, dx: 0, dy: 0 });
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch (e2) { /* navigateur sans capture */ }
     handle(e);
   };
   const up = (e) => {
     e.preventDefault();
-    origin.current = null; setKnob(null); onRelease();
+    origin.current = null; setStick(null); onRelease();
   };
   return (
-    <div ref={ref} className="ferme-touch-pad"
+    <div ref={ref} className="ferme-touch-zone"
          onPointerDown={down}
          onPointerMove={e => { if (origin.current) { e.preventDefault(); handle(e); } }}
          onPointerUp={up} onPointerCancel={up} onLostPointerCapture={up}>
-      <div className="ring" style={knob ? { transform: `translate(${knob.x}px, ${knob.y}px)` } : undefined} />
+      {stick && (
+        <div className="ferme-touch-pad" style={{ left: stick.x, top: stick.y }}>
+          <div className="ring" style={{ transform: `translate(${stick.dx}px, ${stick.dy}px)` }} />
+        </div>
+      )}
     </div>
   );
 }
