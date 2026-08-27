@@ -11,25 +11,24 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**ACTION SUIVANTE UNIQUE — REJOUER UNE CHUTE NATURELLE À DEUX VRAIS APPAREILS.** Sans raccourci
-après le démarrage, alterner activité, inventaire et arrêts à Valley Town ; vérifier que le compte
-reprend sans remonter et que les deux joueurs voient la même chute. Le relais du plat chaud et les
-deux positions opposées autour du cratère restent ensuite les contrôles face à face du §17.
+**ACTION SUIVANTE UNIQUE — REJOUER LE PAIEMENT NATUREL DE L'ÉTOILE BLEUE À L'ÉCRAN.** Après une
+vraie course au défi de fuite, revenir au trou en moins de cinq minutes : E doit prélever 60
+bonbons, afficher UN SEUL succès, puis permettre de tourner le dos à l'étoile. Aucun raccourci de
+quête ; vérifier aussi que le halo bleu est encore visible juste avant l'offrande.
 
-**CORRECTIF DU GROS MÉTÉORE LIVRÉ LE 2026-08-27.** Le code courant cumulait déjà correctement :
-l'inactivité conservait `starTownActiveRef.ms`, `starTownWaiting` bornait bien le chapitre, toutes
-les requêtes hôte re-migraient `star`, et les scènes reçues étaient datées sur l'horloge locale.
-Le défaut restant était la marque locale « chute vue » : sa clé nommait la ferme, mais pas le
-joueur, si bien que deux profils dans le même navigateur partageaient la scène. La clé inclut
-désormais l'identifiant du joueur ; l'horloge cumulative est isolée dans
-`starTownActivityStep` et le banc rejoue 60 s actives + 30 s de pause + 60 s actives.
+**CORRECTIF DE LA LUMIÈRE BLEUE LIVRÉ LE 2026-08-27.** `candyUntil` est une date absolue, mais
+`migrateStar` la convertissait avec `| 0` à chaque requête hôte : l'horodatage de 2026 était
+tronqué à 32 bits et paraissait déjà expiré. Le client lisait encore le flux brut et annonçait
+« lumière versée » pendant que l'hôte répondait « zéro » — exactement les deux messages de la
+capture de Guillaume. La migration conserve désormais le nombre entier ; le succès ne s'affiche
+qu'après le verdict hôte qui prélève les bonbons. Le banc rejoue une vraie date, sérialise puis
+re-migre l'état comme l'hôte, et paie ensuite l'étoile.
 
-Vu dans le navigateur avec le faux Supabase : le compteur est passé de 2:00 à 1:47, est resté à
-1:47 pendant la pause, puis a repris à 1:40 jusqu'à la chute ; après correctif, deux profils reliés
-à Valley Town ont affiché simultanément le météore lors du rejeu de la scène. Vérifications
-relancées : `verify-quete` **619/619**, `render-etoile` **161/161**, `git diff --check` vert.
-La seconde attente naturelle complète n'a pas été rejouée après modification. **Aucune migration
-SQL, aucun changement de schéma, aucune donnée ni manipulation Supabase n'est nécessaire.**
+Vérifications relancées : `verify-quete` **621/621**, `verify-syntax`, bundle esbuild et
+`git diff --check` verts ; `next build` compile avec succès puis s'arrête au pré-rendu faute de
+variables Supabase, comportement documenté. Le geste n'a pas encore été rejoué à l'écran.
+**Aucune migration SQL, aucun changement de schéma, aucune donnée ni manipulation Supabase n'est
+nécessaire.**
 
 ⚠️ **DÉCISION DE GUILLAUME, TOUJOURS EN VIGUEUR : LE BUG DU CHAUDRON-ARTÉFACT VISIBLE SUR 4 TERRES/5
 N'EST PAS CORRIGÉ.** Le sprite scintillant (`FermeGame.js`) reste sans la garde `spec.key==="evil"`
@@ -179,7 +178,7 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 | hors-zip | ⚠️⚠️⚠️ **UNE MÉMOIRE LOCALE D'ÉVÉNEMENT PARTAGÉE PAR LE NAVIGATEUR DOIT NOMMER LE JOUEUR, SINON LE PREMIER PROFIL QUI L'ÉCRIT VOLE LA SCÈNE AUX SUIVANTS.** | `starFallSeenStorageKey`, `starFallSeenKey`, `quete.js`/`FermeGame.js` |
 | hors-zip | ⚠️⚠️⚠️ **UN COMPTEUR CUMULATIF QUI SE REMET À ZÉRO SUR LA MOINDRE PAUSE N'EST PLUS CUMULATIF — IL EST BINAIRE, ET ÇA REND CE QU'IL GARDE PRATIQUEMENT INATTEIGNABLE.** Le gros météore n'attendait que deux minutes de présence active en ville, mais `starTownActivityTick` remettait `a.ms` à zéro à la moindre coupure (lire une bulle, ouvrir l'inventaire, s'arrêter cinq secondes) : aucun joueur ne reste « engagé » en continu deux minutes pleines, donc la chute était pratiquement inatteignable — signalé par Guillaume en jouant. L'inactivité doit mettre la progression EN PAUSE, jamais l'effacer ; seul un nouveau chapitre a le droit de repartir de zéro. *Un compteur qui garde un objectif accessible doit accumuler, pas redémarrer.* | `starTownActiveRef`, `STAR_TOWN_ACTIVE_MS`, `FermeGame.js`/`quete.js` |
 | hors-zip | ⚠️⚠️⚠️ **UNE HORLOGE D'INTERFACE DOIT ÊTRE BORNÉE PAR SA PHASE, PAS SEULEMENT PAR L'ABSENCE DE SON ÉVÉNEMENT FINAL.** Une avance du menu dev pouvait ouvrir le chantier avec `townFall` encore vide : le compteur de Valley Town survivait alors sous l'objectif de la mairie, parce qu'il ne vérifiait que « pas encore tombé ». `starTownWaiting` joint désormais chapitre, chute initiale et chute urbaine, et la boucle comme l'affichage lisent ce même prédicat. *Une date manquante ne prouve pas qu'une attente est encore en cours ; la phase courante doit l'autoriser.* | `starTownWaiting`, `starTownActivityTick`, `FermeGame.js`/`quete.js` |
-| 2026-08-27 | ⚠️⚠️⚠️ **`self:true` EST UN ÉTAT DU CANAL, PAS UN DÉTAIL DU MESSAGE.** Le Ludo solo envoyait bien son état initial, mais le relais local supprimait inconditionnellement l'écho de toute trame binaire : un seul client restait donc éternellement sur « trois bots rejoignent ». Le `phx_join` annonce l'option une fois ; les broadcasts binaires suivants ne la répètent pas. Un relais de test doit mémoriser la configuration par sujet, sinon il invalide exactement le mode à un client qu'il sert à tester. | `tools/fake-supabase.mjs`, `tools/verify-ludo.mjs`, `PetitsChevaux.js` |
+| 2026-08-27 | ⚠️⚠️⚠️ **UNE DATE ABSOLUE NE PASSE JAMAIS PAR UNE OPÉRATION 32 BITS.** Un petit instant de banc survit à `| 0`, une date réelle de 2026 non ; toute migration d'horodatage se rejoue avec `Date.now()` ET le vrai cycle de sérialisation/reprise de l'hôte. | `candyUntil`, `migrateStar`, `verify-quete.mjs` §12 |
 
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
@@ -589,7 +588,7 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 442** (reporté deux fois). **18 bancs de contrôle et 19 bancs
 de rendu**, comptés en listant `tools/` (⚠️ **le 480 ajoutait `verify-maire` et avait relancé les
 36 bancs d'alors un par un** ; le 2026-08-27 ajoute `verify-ludo`, relancé **30/30** :
-`verify-quete` **619/619**, `verify-maire` **113/113**,
+`verify-quete` **621/621**, `verify-maire` **113/113**,
 `render-etoile` **161/161**
 ⚠️ *ces deux premiers chiffres mentaient depuis un moment : `verify-maire` était resté à 72/72 ici
 alors que le 481 l'annonce correctement à 113/113 plus bas dans ce même fichier — même défaut que
@@ -1170,6 +1169,12 @@ erreur** en choisissant mal.
    `FermeGame.js` et `DESSIN.md`. La passe corrige aussi le compte des bancs : `verify-ludo`
    devient le dix-huitième banc de contrôle et passe 30/30. Le dossier créatif vit au §17 de
    `QUETE.md`, la mécanique Ludo dans `ludoBot.js` ; aucun des deux n'est recopié ici.)**.
+
+   **2026-08-27, lumière bleue (VINGT-NEUVIÈME passe : la ligne `self:true` part avant la leçon
+   sur les dates absolues — une retirée, une ajoutée, le tableau reste à quatre. Son détail demeure
+   dans `tools/fake-supabase.mjs`, `verify-ludo.mjs` et `PetitsChevaux.js`. Le bloc ⏭️ REPRISE est
+   remplacé par le paiement à rejouer et les deux chiffres de `verify-quete` passent ensemble à
+   621/621.)**.
 
    **478 (DIX-HUITIÈME passe : la ligne 473 part avant la leçon de ce zip — une retirée, une
    ajoutée, le tableau reste à sa taille et couvre exactement 474 à 478. Son détail reste dans

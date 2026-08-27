@@ -3305,6 +3305,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (r.ok) {
           f.inv.candies = Math.max(0, (f.inv.candies | 0) - (r.spend | 0));
           out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+          /* hors-zip, 2026-08-27 — LE SUCCÈS VIENT DE L'ARBITRE. Le client
+             l'annonçait dès l'envoi de la requête ; quand l'hôte refusait, les
+             deux verdicts s'empilaient à l'écran. Une offrande payante n'est
+             réussie qu'après le verdict qui la prélève. */
+          out.toast = { id: f.id, key: "starLightGiven" };
         } else if (r.short) out.toast = { id: f.id, key: "starLightShort", n: { have: r.have | 0, need: r.need | 0 } };
       } else if (req.kind === "starCook") {
         if (req.pz === "farm") r = Q.resolveStarCook(e, f.id, now);
@@ -7217,6 +7222,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        `starShort` juste au-dessus : un refus qui n'apprend rien est un refus qu'on
        relance en boucle sans comprendre (426). */
     if (key === "starLightShort") { const t = n || {}; return L.star.s2.lightShort(t.have | 0, t.need | 0); }
+    if (key === "starLightGiven") return L.star.s2.lightGiven;
     if (key === "starNoScarecrow") return L.star.s2.noScarecrow;
     if (key === "starNoTristan") return L.star.plan.noTristan;
     if (key === "starUnbuilt") { const t = n || {}; return L.star.plan.unbuilt(t.n | 0, t.total | 0); }
@@ -23409,8 +23415,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function starGoalCtx() {
     const e = sharedRef.current.star;
     const m = meRef.current;
+    const now = Date.now();
     return {
-      craterHot: !starCraterCoolNow(), engineerHere: Q.starEngineerHere(e, Date.now()),
+      craterHot: !starCraterCoolNow(), engineerHere: Q.starEngineerHere(e, now),
       landed: starImpactLandedNow(),
       /* hors-zip — signalé par Guillaume : le bandeau redisait « prends le
          train pour Valley Town » à un joueur déjà arrivé et qui attendait sur
@@ -23418,14 +23425,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          attente sans reparler d'un trajet déjà fait (voir `starGoalKey`,
          quete.js). */
       inTown: !!(m && (m.zone || "farm") === "town"),
-      candy: m ? Q.starCandyFresh(e, m.id) : 0,
+      /* hors-zip, 2026-08-27 — LE BANDEAU LIT LA MÊME FRAÎCHEUR DATÉE QUE
+         L'INTERACTION. Lire le flux brut ici maintiendrait le chevron « payer »
+         après l'extinction alors que E répond déjà zéro. */
+      candy: m ? Q.starCandyFresh(e, m.id, now) : 0,
       /* hors-zip — LE MIROIR EXACT DE `candy`, POUR LA BLANCHE. `myInvRef` est
          le ref synchrone de l'inventaire (piège n°1 : un state React lu ici
          vieillirait dans la closure du chevron) ; le CONTEXTE est la seule
          porte par laquelle une donnée personnelle entre dans `quete.js`, comme
          `candy` déjà — jamais une lecture directe de `f.inv` par ce fichier. */
       potion: !!(myInvRef.current && (myInvRef.current.starLure | 0) > 0),
-      now: Date.now(),
+      now,
       alone: starAlone("crater"),
       focus: myStarFocusRef.current,   // hors-zip — le choix personnel du chapitre 1, voir myStarFocusRef
     };
@@ -25317,13 +25327,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              quantité pour masquer l'invite aurait caché le prix à qui ne l'a pas —
              c'est-à-dire à la seule personne qui a besoin de le connaître. */
           return { p: "light", act: () => {
-            const fresh = Q.starCandyFresh(e, m.id);
+            const fresh = Q.starCandyFresh(e, m.id, Date.now());
             if (fresh < Q.STAR_CANDY_PRICE) {
               starTell([L.star.dig.nextStarLight, L.star.s2.lightShort(fresh, Q.STAR_CANDY_PRICE)], 2600);
               return;
             }
             sendReq({ kind: "starLight", site: near.id });
-            pushToast(L.star.s2.lightGiven);
           } };
         }
         /* 480 bis — LA BLANCHE NE SE TIENT PAS EN LA BOUDANT, elle fuit tant

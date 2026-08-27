@@ -3008,6 +3008,23 @@ section("12. LES QUATRE VERBES (479, 480 bis)");
     ok("⚠️⚠️⚠️ arriver au trou APRÈS l'extinction refuse l'offrande, même avec le compte juste",
        tooLate.ok === false && tooLate.short === true && tooLate.have === 0,
        `${tooLate.have}/${tooLate.need}`);
+    /* hors-zip, 2026-08-27 — LE BANC REJOUE LE VRAI CYCLE DE L'HÔTE AVEC UNE
+       VRAIE DATE. Les contrôles ci-dessus employaient 1 000 ms : `| 0` et une
+       conversion numérique ordinaire y donnent le même résultat, donc 619
+       contrôles verts n'avaient aucun moyen de voir la troncature de 2026. */
+    const who = "12345678-1234-1234-1234-123456789abc";
+    const realNow = Date.now();
+    const e3 = Q.newStar(); e3.fall = realNow - 1000;
+    Q.resolveStarDig(e3, BLUE, who, realNow - 500);
+    Q.resolveStarCandy(e3, who, Q.STAR_CANDY_PRICE, realNow);
+    const hostCycle = Q.migrateStar(JSON.parse(JSON.stringify(e3)));
+    ok("⚠️⚠️ une vraie échéance de 2026 survit à la migration exécutée par l'hôte à chaque requête",
+       hostCycle.candyUntil[who] === realNow + Q.STAR_CANDY_FRESH_MS,
+       `${hostCycle.candyUntil[who]} au lieu de ${realNow + Q.STAR_CANDY_FRESH_MS}`);
+    const paidAfterHostCycle = Q.resolveStarLight(hostCycle, who, BLUE, 9999, realNow + 1000);
+    ok("⚠️⚠️ après ce vrai cycle hôte, la lumière fraîche paie encore l'étoile bleue",
+       paidAfterHostCycle.ok === true && Q.starLit(hostCycle, BLUE),
+       `${paidAfterHostCycle.have || 0}/${paidAfterHostCycle.need || Q.STAR_CANDY_PRICE}`);
   }
 
   /* ── LA ROSE : LE GESTE EST LE CHEMIN. */

@@ -882,7 +882,12 @@ touche le sol — le défaut même de ce zip — leur est **totalement invisible
 `verify-quete` qui le tient désormais (cinq contrôles purs sur `starImpactLanded` et l'azimut).
 *Un banc de rendu ne peut pas voir un défaut de temps.*
 
-## `verify-quete.mjs` — 619 contrôles, 619/619 (444 à 480 bis : cinq impacts, FOUILLE, LES QUATRE VERBES, chantier et maire inclus)
+## `verify-quete.mjs` — 621 contrôles, 621/621 (444 à 480 bis : cinq impacts, FOUILLE, LES QUATRE VERBES, chantier et maire inclus)
+
+⚠️⚠️ **LE §12 REJOUE DÉSORMAIS UNE VRAIE DATE À TRAVERS `migrateStar`.** Les contrôles de fraîcheur
+employaient des instants autour de 1 000 ms : ils ne pouvaient pas distinguer une conversion
+numérique de `| 0`. Le nouveau contrôle part de `Date.now()`, sérialise et re-migre l'état comme
+l'hôte à chaque requête, puis paie l'étoile bleue ; une troncature 32 bits tombe avant le verdict.
 
 Le contrôle de l'ouvrage de Tristan vérifie aussi la lecture utilisée par le panneau `P` : cinq
 segments dans l'ordre de `STAR_SHIP_ORDER`, une fabrication à 50 % lue à 50 %, puis l'état

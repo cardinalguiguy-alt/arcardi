@@ -2651,9 +2651,19 @@ export function migrateStar(saved) {
   /* hors-zip — une sauvegarde d'avant cette décision n'a pas `candyUntil` :
      `starCandyFresh` la traite alors comme périmée (`until` absent), jamais
      comme éternelle — c'est le AND, pas le OR, qui protège une reprise après
-     redémarrage du serveur (voir la note de `starCandyFresh`). */
-  if (saved.candyUntil && typeof saved.candyUntil === "object")
-    for (const k of Object.keys(saved.candyUntil)) e.candyUntil[String(k).slice(0, CALM_ID_MAX)] = Math.max(0, saved.candyUntil[k] | 0);
+     redémarrage du serveur (voir la note de `starCandyFresh`).
+     ⚠️⚠️ hors-zip, 2026-08-27 — UNE DATE ABSOLUE N'EST JAMAIS UN ENTIER 32 BITS.
+     `saved.candyUntil[k] | 0` tronquait l'échéance de 2026 à sa partie basse à
+     CHAQUE requête hôte, donc la lumière tout juste rapportée paraissait déjà
+     périmée. Le client lisait encore le flux brut et annonçait le succès pendant
+     que l'hôte répondait « zéro » : les deux toasts contradictoires nommaient
+     exactement cette troncature. */
+  if (saved.candyUntil && typeof saved.candyUntil === "object") {
+    for (const k of Object.keys(saved.candyUntil)) {
+      const until = +saved.candyUntil[k];
+      e.candyUntil[String(k).slice(0, CALM_ID_MAX)] = Number.isFinite(until) ? Math.max(0, until) : 0;
+    }
+  }
   /* ⚠️ UN PLAT SANS DATE N'EST PAS UN PLAT : `starDishPhase` rendrait `null` de
      toute façon, mais un objet à moitié écrit se traînerait dans l'état persisté
      et dans chaque `apply`. On le jette au chargement. */
