@@ -6504,11 +6504,10 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .ferme-root{
   --f-wood:#8a6340; --f-wood-d:#5f4327; --f-paper:#f4e4c0; --f-paper-d:#e0cc9e;
   --f-ink:#4a3520; --f-gold:#e8c85a; --f-accent:#d44a3f;
-  position:fixed; top:0; left:0; right:0; height:100vh; height:100dvh;
-  z-index:40; overflow:hidden; background:#1a2416;
+  position:fixed; inset:0; z-index:40; overflow:hidden; background:#1a2416;
   font-family:'Courier New', monospace; user-select:none;
 }
-.ferme-canvas{ display:block; width:100vw; height:100vh; height:100dvh; image-rendering:pixelated; }
+.ferme-canvas{ display:block; width:100vw; height:100vh; image-rendering:pixelated; }
 .ferme-root .panel{
   background:var(--f-paper); border:4px solid var(--f-wood); border-radius:8px;
   box-shadow:0 4px 0 var(--f-wood-d), 0 8px 24px rgba(0,0,0,.5); color:var(--f-ink);
@@ -6526,11 +6525,9 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 /* Écran de connexion / choix du personnage */
 .ferme-join-screen{
   position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
-  padding:calc(env(safe-area-inset-top, 0px) + 8px) calc(env(safe-area-inset-right, 0px) + 8px)
-          calc(env(safe-area-inset-bottom, 0px) + 8px) calc(env(safe-area-inset-left, 0px) + 8px);
   background:radial-gradient(circle at 50% 30%, #3d5c33, #1a2416); z-index:50;
 }
-.ferme-join-box{ box-sizing:border-box; padding:28px 36px; text-align:center; min-width:min(360px, 100%); max-height:calc(100vh - 16px); max-height:calc(100dvh - 16px); overflow:auto; }
+.ferme-join-box{ padding:28px 36px; text-align:center; min-width:360px; }
 .ferme-join-box h1{ font-size:30px; margin-bottom:4px; letter-spacing:1px; }
 .ferme-join-sub{ font-size:13px; margin-bottom:18px; opacity:.8; max-width:420px; }
 .ferme-name-input{
@@ -6550,7 +6547,7 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .ferme-join-err{ color:var(--f-accent); font-size:13px; margin-top:10px; min-height:16px; font-weight:bold; }
 
 /* HUD */
-.ferme-hud{ position:fixed; top:calc(var(--ferme-vv-top, 0px) + env(safe-area-inset-top, 0px) + 10px); left:calc(var(--ferme-vv-left, 0px) + env(safe-area-inset-left, 0px) + 10px); z-index:10; padding:8px 14px; font-size:14px; font-weight:bold; line-height:1.6; }
+.ferme-hud{ position:fixed; top:10px; left:10px; z-index:10; padding:8px 14px; font-size:14px; font-weight:bold; line-height:1.6; }
 .ferme-hud-extra{
   overflow:hidden;
   max-height:0;
@@ -6594,7 +6591,7 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
    déplie/replie au CLIC (`settingsOpen` en JS) — même motif d'ouverture que
    `.ferme-hud-extra` (max-height/opacity/transform), pour rester cohérent. */
 .ferme-settings-fab{
-  position:fixed; top:calc(var(--ferme-vv-top, 0px) + env(safe-area-inset-top, 0px) + 10px); right:calc(var(--ferme-vv-right, 0px) + env(safe-area-inset-right, 0px) + 10px); z-index:42; width:44px; height:44px;
+  position:fixed; top:10px; right:10px; z-index:42; width:38px; height:38px;
   border-radius:50%; display:flex; align-items:center; justify-content:center;
   font-size:19px; border:3px solid var(--f-wood); background:var(--f-gold);
   box-shadow:0 3px 0 var(--f-wood-d); cursor:pointer; padding:0;
@@ -6608,17 +6605,17 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
    roue qu'on ouvre/replie, une icône qui ouvre directement un panneau n'a
    rien à tourner. */
 .ferme-quick-fab{
-  position:fixed; top:calc(var(--ferme-vv-top, 0px) + env(safe-area-inset-top, 0px) + 10px); z-index:42; width:44px; height:44px;
+  position:fixed; top:10px; z-index:42; width:38px; height:38px;
   border-radius:50%; display:flex; align-items:center; justify-content:center;
   font-size:19px; border:3px solid var(--f-wood); background:var(--f-gold);
   box-shadow:0 3px 0 var(--f-wood-d); cursor:pointer; padding:0;
 }
 .ferme-quick-fab:hover{ filter:brightness(1.08); }
 .ferme-quick-fab:active{ transform:translateY(2px); box-shadow:0 1px 0 var(--f-wood-d); }
-.ferme-map-fab{ right:calc(var(--ferme-vv-right, 0px) + env(safe-area-inset-right, 0px) + 64px); }
-.ferme-employees-fab{ right:calc(var(--ferme-vv-right, 0px) + env(safe-area-inset-right, 0px) + 118px); }
+.ferme-map-fab{ right:58px; }
+.ferme-employees-fab{ right:106px; }
 .ferme-actions{
-  position:fixed; top:calc(var(--ferme-vv-top, 0px) + env(safe-area-inset-top, 0px) + 60px); right:calc(var(--ferme-vv-right, 0px) + env(safe-area-inset-right, 0px) + 10px); z-index:41; display:flex; flex-direction:column;
+  position:fixed; top:54px; right:10px; z-index:41; display:flex; flex-direction:column;
   align-items:flex-end; gap:8px; max-width:min(66vw, 260px);
   max-height:0; opacity:0; overflow:hidden; transform:translateY(-6px); pointer-events:none;
   transition: max-height .3s cubic-bezier(.22,.61,.36,1),
@@ -6632,11 +6629,11 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
               transform .3s cubic-bezier(.22,.61,.36,1) .03s;
 }
 .ferme-actions .ferme-btn{ width:100%; text-align:left; }
-.ferme-whistle-btn{ position:fixed; left:calc(var(--ferme-vv-left, 0px) + env(safe-area-inset-left, 0px) + 10px); top:50%; transform:translateY(-50%); z-index:41; width:52px; height:52px; display:flex; align-items:center; justify-content:center; border-radius:50%; border:3px solid var(--f-wood); background:var(--f-gold); box-shadow:0 3px 0 var(--f-wood-d); cursor:pointer; padding:0; }
+.ferme-whistle-btn{ position:fixed; left:10px; top:50%; transform:translateY(-50%); z-index:41; width:52px; height:52px; display:flex; align-items:center; justify-content:center; border-radius:50%; border:3px solid var(--f-wood); background:var(--f-gold); box-shadow:0 3px 0 var(--f-wood-d); cursor:pointer; padding:0; }
 .ferme-whistle-btn:hover{ filter:brightness(1.08); }
 .ferme-whistle-btn:active{ transform:translateY(calc(-50% + 2px)); box-shadow:0 1px 0 var(--f-wood-d); }
 .ferme-whistle-btn canvas{ image-rendering:pixelated; }
-.ferme-torch-btn{ position:fixed; left:calc(var(--ferme-vv-left, 0px) + env(safe-area-inset-left, 0px) + 10px); top:calc(50% + 64px); z-index:41; width:52px; height:52px; display:flex; align-items:center; justify-content:center; border-radius:50%; border:3px solid var(--f-wood); background:#4a4238; box-shadow:0 3px 0 var(--f-wood-d); cursor:pointer; padding:0; transition:background .15s, box-shadow .15s; }
+.ferme-torch-btn{ position:fixed; left:10px; top:calc(50% + 64px); z-index:41; width:52px; height:52px; display:flex; align-items:center; justify-content:center; border-radius:50%; border:3px solid var(--f-wood); background:#4a4238; box-shadow:0 3px 0 var(--f-wood-d); cursor:pointer; padding:0; transition:background .15s, box-shadow .15s; }
 .ferme-torch-btn:hover{ filter:brightness(1.12); }
 .ferme-torch-btn:active{ transform:translateY(2px); box-shadow:0 1px 0 var(--f-wood-d); }
 .ferme-torch-btn canvas{ image-rendering:pixelated; }
@@ -6652,7 +6649,7 @@ body.ferme-active .stage-bar,
 body.ferme-active .wrap-room > .brand{ display:none !important; }
 
 /* Barre d'outils */
-.ferme-toolbar{ position:fixed; bottom:calc(var(--ferme-vv-bottom, 0px) + env(safe-area-inset-bottom, 0px) + 12px); left:50%; transform:translateX(-50%); display:flex; gap:6px; z-index:10; padding:8px; }
+.ferme-toolbar{ position:fixed; bottom:12px; left:50%; transform:translateX(-50%); display:flex; gap:6px; z-index:10; padding:8px; }
 .ferme-slot{
   width:48px; height:48px; border:3px solid var(--f-wood); border-radius:6px; background:var(--f-paper-d);
   display:flex; align-items:center; justify-content:center; position:relative; cursor:pointer;
@@ -6735,7 +6732,7 @@ body.ferme-active .wrap-room > .brand{ display:none !important; }
 .ferme-greg-order-fab:hover{ filter:brightness(1.08); }
 .ferme-greg-order-fab:active{ transform:translateY(2px); box-shadow:0 1px 0 var(--f-wood-d); }
 .ferme-greg-order-cancel{
-  width:44px; height:44px; border-radius:50%; border:2px solid var(--f-wood); background:#4a4238;
+  width:36px; height:36px; border-radius:50%; border:2px solid var(--f-wood); background:#4a4238;
   color:#fff; cursor:pointer; font-size:14px; line-height:1; flex:none;
 }
 
@@ -6754,17 +6751,17 @@ body.ferme-active .wrap-room > .brand{ display:none !important; }
    le coin reste fixe quel que soit le nombre de lignes affichées. bottom:270px
    pour rester au-dessus du chat (.ferme-chatlog / .ferme-chat-input, qui
    occupent le bas-gauche jusqu'à bottom:256px). */
-.ferme-quests{ position:fixed; bottom:calc(var(--ferme-vv-bottom, 0px) + env(safe-area-inset-bottom, 0px) + 270px); left:calc(var(--ferme-vv-left, 0px) + env(safe-area-inset-left, 0px) + 12px); z-index:11; width:250px; max-width:70vw; padding:8px 10px; font-size:12px; }
+.ferme-quests{ position:fixed; bottom:270px; left:12px; z-index:11; width:250px; max-width:70vw; padding:8px 10px; font-size:12px; }
 .ferme-quests-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
 .ferme-quests-head b{ font-size:13px; }
-.ferme-quests-x{ width:44px; height:44px; background:var(--f-accent); color:#fff; border:2px solid var(--f-wood); border-radius:5px; font-family:inherit; font-weight:bold; cursor:pointer; padding:0; }
+.ferme-quests-x{ background:var(--f-accent); color:#fff; border:2px solid var(--f-wood); border-radius:5px; font-family:inherit; font-weight:bold; cursor:pointer; padding:1px 7px; }
 .ferme-quest-row{ display:flex; align-items:center; gap:6px; padding:3px 2px; border-bottom:1px solid var(--f-paper-d); }
 .ferme-quest-row.done .ferme-quest-label{ text-decoration:line-through; opacity:.6; }
 .ferme-quest-check{ flex:none; }
 .ferme-quest-label{ flex:1; }
 .ferme-quest-reward{ flex:none; font-weight:bold; color:#b06a00; }
 .ferme-quest-alldone{ margin-top:6px; font-weight:bold; text-align:center; color:#2f7a2f; }
-.ferme-quests-fab{ position:fixed; bottom:calc(var(--ferme-vv-bottom, 0px) + env(safe-area-inset-bottom, 0px) + 270px); left:calc(var(--ferme-vv-left, 0px) + env(safe-area-inset-left, 0px) + 12px); z-index:11; min-height:44px; padding:5px 10px; font-size:12px; }
+.ferme-quests-fab{ position:fixed; bottom:270px; left:12px; z-index:11; padding:5px 10px; font-size:12px; }
 /* ⚠️⚠️ ZIP 478 (audit 477, défaut #11) — LE PANNEAU S'EFFACE QUAND LE FERMIER
    PASSE DESSOUS. Au bord OUEST de la carte la caméra se bride : le personnage
    continue de glisser vers la gauche de l'écran et finit ENTIÈREMENT caché par
@@ -6809,16 +6806,10 @@ body.ferme-active .wrap-room > .brand{ display:none !important; }
 /* Modales boutique / bac */
 .ferme-modal{
   position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
-  box-sizing:border-box;
-  padding:calc(var(--ferme-vv-top, 0px) + env(safe-area-inset-top, 0px) + 8px)
-          calc(var(--ferme-vv-right, 0px) + env(safe-area-inset-right, 0px) + 8px)
-          calc(var(--ferme-vv-bottom, 0px) + env(safe-area-inset-bottom, 0px) + 8px)
-          calc(var(--ferme-vv-left, 0px) + env(safe-area-inset-left, 0px) + 8px);
   background:rgba(0,0,0,.45); z-index:45;
 }
-.ferme-modal-panel{ box-sizing:border-box; width:min(560px, 100%); max-height:calc(100vh - 16px); max-height:calc(100dvh - 16px); overflow-y:auto; padding:20px 24px; animation: ferme-popup-fade .18s ease-out; }
+.ferme-modal-panel{ width:min(560px, 92vw); max-height:86vh; overflow-y:auto; padding:20px 24px; animation: ferme-popup-fade .18s ease-out; }
 .ferme-modal-panel h2{ margin-bottom:4px; }
-.ferme-modal-panel button, .ferme-map-box button, .ferme-actions button{ min-height:44px; }
 
 /* Zip 432 — la liste des destinations du taxi. Deux colonnes : douze arrêts en
    une seule colonne obligent à faire défiler un panneau qu'on ouvre pour choisir
@@ -6907,7 +6898,7 @@ body.ferme-active .wrap-room > .brand{ display:none !important; }
 .ferme-notif-card.clickable:hover{ background:#faf4e4; }
 .ferme-notif-body{ font-size:12px; line-height:1.35; padding-right:14px; }
 .ferme-notif-x{
-  position:absolute; top:0; right:0; width:44px; height:44px; padding:0;
+  position:absolute; top:2px; right:4px; padding:2px;
   border:none; background:transparent; color:#6b4a2e;
   font-size:14px; line-height:1; cursor:pointer;
 }
@@ -6998,12 +6989,12 @@ div.ferme-usage{ margin-bottom:10px; }
 
 .ferme-close-x{
   float:right; background:var(--f-accent); color:#fff; font-family:inherit; font-weight:bold;
-  cursor:pointer; border:3px solid var(--f-wood); border-radius:6px; width:44px; height:44px; padding:0; box-shadow:0 3px 0 var(--f-wood-d);
+  cursor:pointer; border:3px solid var(--f-wood); border-radius:6px; padding:4px 10px; box-shadow:0 3px 0 var(--f-wood-d);
 }
 
 /* Chat & toasts */
 .ferme-chatlog{
-  position:fixed; bottom:calc(var(--ferme-vv-bottom, 0px) + env(safe-area-inset-bottom, 0px) + 76px); left:calc(var(--ferme-vv-left, 0px) + env(safe-area-inset-left, 0px) + 12px); width:330px; max-height:180px; overflow:hidden;
+  position:fixed; bottom:76px; left:12px; width:330px; max-height:180px; overflow:hidden;
   display:flex; flex-direction:column-reverse; z-index:9; pointer-events:none; gap:2px;
 }
 .ferme-chatlog div{
@@ -7011,35 +7002,10 @@ div.ferme-usage{ margin-bottom:10px; }
   border-radius:4px; max-width:100%; word-wrap:break-word;
 }
 .ferme-chatlog b{ color:var(--f-gold); }
-.ferme-chat-panel{
-  position:fixed; z-index:46; box-sizing:border-box;
-  left:calc(var(--ferme-vv-left, 0px) + env(safe-area-inset-left, 0px) + 10px);
-  bottom:calc(var(--ferme-vv-bottom, 0px) + env(safe-area-inset-bottom, 0px) + 10px);
-  width:min(440px, calc(var(--ferme-vv-width, 100vw) - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 20px));
-  max-height:min(360px, calc(var(--ferme-vv-height, 100vh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 20px));
-  display:flex; flex-direction:column; gap:8px; padding:10px;
-}
-.ferme-chat-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
-.ferme-chat-head button{
-  width:44px; height:44px; flex:none; border:2px solid var(--f-wood); border-radius:6px;
-  background:var(--f-accent); color:#fff; font-family:inherit; font-size:16px; font-weight:700; cursor:pointer;
-}
-.ferme-chat-history{ min-height:48px; max-height:180px; overflow-y:auto; display:flex; flex-direction:column-reverse; gap:3px; }
-.ferme-chat-history:empty{ display:none; }
-.ferme-chat-history div{ background:rgba(138,99,64,.12); border-radius:4px; padding:4px 7px; font-size:12px; overflow-wrap:anywhere; }
-.ferme-chat-history b{ color:#8b5d00; }
-.ferme-chat-compose{ display:flex; align-items:stretch; gap:8px; }
 .ferme-chat-input{
-  position:static; min-width:0; width:100%; flex:1; z-index:auto;
-  font-family:inherit; font-size:16px; padding:8px; border:3px solid var(--f-wood);
+  position:fixed; bottom:46px; left:12px; width:330px; z-index:11;
+  font-family:inherit; font-size:13px; padding:6px 8px; border:3px solid var(--f-wood);
   border-radius:6px; background:#fff8e8; color:var(--f-ink);
-}
-.ferme-chat-compose .ferme-btn{ min-height:44px; }
-.ferme-chat-fab{
-  position:fixed; left:calc(var(--ferme-vv-left, 0px) + env(safe-area-inset-left, 0px) + 12px);
-  bottom:calc(var(--ferme-vv-bottom, 0px) + env(safe-area-inset-bottom, 0px) + 76px);
-  z-index:42; width:48px; height:48px; border-radius:50%; border:3px solid var(--f-wood);
-  background:var(--f-gold); box-shadow:0 3px 0 var(--f-wood-d); font-size:20px; cursor:pointer;
 }
 .ferme-toasts{ position:fixed; top:70px; left:50%; transform:translateX(-50%); z-index:30; display:flex; flex-direction:column; gap:6px; align-items:center; }
 .ferme-toast{
@@ -7060,19 +7026,14 @@ div.ferme-usage{ margin-bottom:10px; }
 /* Carte plein écran (nouveauté) */
 .ferme-map-ov{
   position:fixed; inset:0; z-index:48; display:flex; align-items:center; justify-content:center;
-  box-sizing:border-box;
-  padding:calc(var(--ferme-vv-top, 0px) + env(safe-area-inset-top, 0px) + 6px)
-          calc(var(--ferme-vv-right, 0px) + env(safe-area-inset-right, 0px) + 6px)
-          calc(var(--ferme-vv-bottom, 0px) + env(safe-area-inset-bottom, 0px) + 6px)
-          calc(var(--ferme-vv-left, 0px) + env(safe-area-inset-left, 0px) + 6px);
   background:rgba(0,0,0,.6); cursor:pointer;
 }
-.ferme-map-box{ box-sizing:border-box; padding:16px 18px; text-align:center; cursor:default; max-width:100%; max-height:calc(100vh - 12px); max-height:calc(100dvh - 12px); animation: ferme-popup-fade .18s ease-out; }
+.ferme-map-box{ box-sizing:border-box; padding:16px 18px; text-align:center; cursor:default; max-width:94vw; max-height:94vh; animation: ferme-popup-fade .18s ease-out; }
 .ferme-map-box h2{ margin-bottom:10px; }
 .ferme-map-canvas{
   image-rendering:pixelated; border:3px solid var(--f-wood); border-radius:6px;
   background:#000; display:block; margin:0 auto; width:auto; height:auto;
-  max-width:100%; max-height:calc(100vh - 144px); max-height:calc(100dvh - 144px);
+  max-width:100%; max-height:calc(94vh - 132px);
 }
 .ferme-map-close{
   font-family:ui-rounded, "Avenir Next", Avenir, system-ui, sans-serif;
@@ -7080,8 +7041,8 @@ div.ferme-usage{ margin-bottom:10px; }
 }
 
 @media (max-width:620px){
-  .ferme-chatlog{ width:220px; }
-  .ferme-slot{ width:44px; height:44px; }
+  .ferme-chatlog, .ferme-chat-input{ width:220px; }
+  .ferme-slot{ width:40px; height:40px; }
   .ferme-help{ display:none; }
 }
 
@@ -7234,19 +7195,11 @@ div.ferme-usage{ margin-bottom:10px; }
    ⚠️ Les cibles font 72 px : en dessous de ~48 px un pouce rate, et un pouce
    qui rate sur le SEUL moyen de jouer fait rebrancher le clavier.
    ═══════════════════════════════════════════════════════════════════════════ */
-.ferme-touch-zone{
-  position:fixed; z-index:9; touch-action:none; user-select:none; -webkit-user-select:none;
-  left:calc(var(--ferme-vv-left, 0px) + env(safe-area-inset-left, 0px) + 4px);
-  top:calc(var(--ferme-vv-top, 0px) + env(safe-area-inset-top, 0px) + 62px);
-  bottom:calc(var(--ferme-vv-bottom, 0px) + env(safe-area-inset-bottom, 0px) + 82px);
-  width:min(44vw, 420px);
-}
-.ferme-touch-ui .ferme-help{ display:none; }
-.ferme-secondary-open .ferme-whistle-btn,
-.ferme-secondary-open .ferme-torch-btn{ display:none; }
 .ferme-touch-pad{
-  position:fixed; width:132px; height:132px; border-radius:50%;
-  transform:translate(-50%, -50%); pointer-events:none;
+  position:fixed; z-index:12; touch-action:none; user-select:none; -webkit-user-select:none;
+  left:calc(env(safe-area-inset-left, 0px) + 14px);
+  bottom:calc(env(safe-area-inset-bottom, 0px) + 92px);
+  width:150px; height:150px; border-radius:50%;
   background:radial-gradient(circle at 50% 50%, rgba(255,238,200,.10), rgba(20,14,10,.34));
   border:2px solid rgba(255,238,200,.28);
   box-shadow:0 4px 18px rgba(0,0,0,.45);
@@ -7261,8 +7214,8 @@ div.ferme-usage{ margin-bottom:10px; }
 }
 .ferme-touch-btns{
   position:fixed; z-index:12; touch-action:none; user-select:none; -webkit-user-select:none;
-  right:calc(var(--ferme-vv-right, 0px) + env(safe-area-inset-right, 0px) + 14px);
-  bottom:calc(var(--ferme-vv-bottom, 0px) + env(safe-area-inset-bottom, 0px) + 92px);
+  right:calc(env(safe-area-inset-right, 0px) + 14px);
+  bottom:calc(env(safe-area-inset-bottom, 0px) + 92px);
   display:flex; flex-direction:column; align-items:flex-end; gap:10px;
 }
 /* ⚠️ Le bouton d'action est ROND et large : c'est le seul qu'on presse sans
@@ -7293,164 +7246,9 @@ div.ferme-usage{ margin-bottom:10px; }
 /* Sur un écran étroit (iPhone), on resserre — mais on ne descend JAMAIS sous
    la taille de cible : on préfère chevaucher le décor que rater le bouton. */
 @media (max-width: 560px){
-  .ferme-touch-pad{ width:124px; height:124px; }
+  .ferme-touch-pad{ width:124px; height:124px; bottom:calc(env(safe-area-inset-bottom, 0px) + 78px); }
   .ferme-touch-act{ width:88px; height:88px; }
   .ferme-touch-mini{ width:60px; height:60px; font-size:22px; }
-}
-
-/* Première passe mobile — le téléphone paysage est défini par sa faible
-   HAUTEUR dans FermeGame, pas par une largeur arbitraire. Une seule rangée
-   porte les accès secondaires ; les trois zones de jeu restent séparées :
-   déplacement à gauche, outils au centre, actions à droite. */
-.ferme-mobile-nav{
-  position:fixed; z-index:44;
-  top:calc(var(--ferme-vv-top, 0px) + env(safe-area-inset-top, 0px) + 6px);
-  right:calc(var(--ferme-vv-right, 0px) + env(safe-area-inset-right, 0px) + 6px);
-  display:flex; gap:4px;
-}
-.ferme-mobile-nav button{
-  box-sizing:border-box; width:44px; height:44px; padding:0; border-radius:10px;
-  border:2px solid var(--f-wood); background:rgba(244,228,192,.94); color:var(--f-ink);
-  box-shadow:0 2px 0 var(--f-wood-d); font-size:19px; line-height:1; cursor:pointer;
-}
-.ferme-mobile-nav button.on{ background:var(--f-gold); box-shadow:0 0 0 2px var(--f-accent); }
-
-.ferme-rotate-device{ display:none; }
-@media (orientation:portrait) and (max-width:900px){
-  .ferme-rotate-device{
-    position:fixed; inset:0; z-index:10000; display:flex; align-items:center; justify-content:center;
-    box-sizing:border-box;
-    padding:calc(env(safe-area-inset-top, 0px) + 18px) calc(env(safe-area-inset-right, 0px) + 18px)
-            calc(env(safe-area-inset-bottom, 0px) + 18px) calc(env(safe-area-inset-left, 0px) + 18px);
-    background:radial-gradient(circle at 50% 36%, #3d5c33, #172013 75%);
-  }
-  .ferme-rotate-card{
-    width:min(340px, 100%); padding:22px; display:grid; justify-items:center; gap:8px;
-    text-align:center; font-size:14px; line-height:1.45;
-  }
-  .ferme-rotate-card b{ font-size:19px; }
-  .ferme-rotate-icon{ font-size:42px; color:var(--f-accent); line-height:1; }
-}
-
-.ferme-low-landscape .ferme-hud{
-  top:calc(var(--ferme-vv-top, 0px) + env(safe-area-inset-top, 0px) + 6px);
-  left:calc(var(--ferme-vv-left, 0px) + env(safe-area-inset-left, 0px) + 6px);
-  max-width:190px; padding:5px 8px; border-width:3px; font-size:12px; line-height:1.35;
-}
-.ferme-low-landscape .ferme-hud-players,
-.ferme-low-landscape .ferme-hud-extra{ display:none; }
-.ferme-low-landscape .ferme-settings-fab,
-.ferme-low-landscape .ferme-quick-fab,
-.ferme-low-landscape .ferme-quests-fab,
-.ferme-low-landscape .ferme-help,
-.ferme-low-landscape .ferme-energy-wrap,
-.ferme-low-landscape .ferme-chatlog{ display:none; }
-.ferme-low-landscape .ferme-toolbar{
-  bottom:calc(var(--ferme-vv-bottom, 0px) + env(safe-area-inset-bottom, 0px) + 5px);
-  gap:4px; padding:5px; border-width:3px;
-}
-.ferme-low-landscape .ferme-slot{ width:44px; height:44px; }
-.ferme-low-landscape .ferme-slot-bag{ display:none; }
-.ferme-low-landscape .ferme-whistle-btn,
-.ferme-low-landscape .ferme-torch-btn{
-  top:auto; bottom:calc(var(--ferme-vv-bottom, 0px) + env(safe-area-inset-bottom, 0px) + 7px);
-  width:44px; height:44px; transform:none;
-}
-.ferme-low-landscape .ferme-whistle-btn{
-  left:calc(var(--ferme-vv-left, 0px) + env(safe-area-inset-left, 0px) + 7px);
-}
-.ferme-low-landscape .ferme-torch-btn{
-  left:calc(var(--ferme-vv-left, 0px) + env(safe-area-inset-left, 0px) + 57px);
-}
-.ferme-low-landscape .ferme-whistle-btn:active{ transform:translateY(2px); }
-.ferme-low-landscape .ferme-touch-zone{
-  top:calc(var(--ferme-vv-top, 0px) + env(safe-area-inset-top, 0px) + 56px);
-  bottom:calc(var(--ferme-vv-bottom, 0px) + env(safe-area-inset-bottom, 0px) + 64px);
-  width:43vw;
-}
-.ferme-low-landscape .ferme-touch-pad{ width:122px; height:122px; }
-.ferme-low-landscape .ferme-touch-pad .ring{ width:52px; height:52px; }
-.ferme-low-landscape .ferme-touch-btns{
-  right:calc(var(--ferme-vv-right, 0px) + env(safe-area-inset-right, 0px) + 7px);
-  bottom:calc(var(--ferme-vv-bottom, 0px) + env(safe-area-inset-bottom, 0px) + 7px);
-  gap:6px;
-}
-.ferme-low-landscape .ferme-touch-act{ width:78px; height:78px; font-size:11px; }
-.ferme-low-landscape .ferme-touch-row{ gap:6px; }
-.ferme-low-landscape .ferme-touch-mini{ width:48px; height:48px; border-radius:15px; font-size:19px; }
-.ferme-low-landscape .ferme-touch-map{ display:none; }
-.ferme-low-landscape .ferme-prompt{
-  bottom:calc(var(--ferme-vv-bottom, 0px) + env(safe-area-inset-bottom, 0px) + 68px);
-  max-width:42vw; padding:5px 9px; font-size:12px; text-align:center;
-}
-.ferme-low-landscape .ferme-quests{
-  top:calc(var(--ferme-vv-top, 0px) + env(safe-area-inset-top, 0px) + 56px);
-  bottom:auto;
-  left:calc(var(--ferme-vv-left, 0px) + env(safe-area-inset-left, 0px) + 7px);
-  box-sizing:border-box; width:min(280px, 42vw);
-  max-width:none; max-height:calc(var(--ferme-vv-height, 100vh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 140px);
-  overflow-y:auto; padding:7px 9px; font-size:11px;
-}
-.ferme-low-landscape .ferme-quests-head{
-  position:sticky; top:-7px; z-index:1; margin:-7px -9px 5px; padding:7px 9px 4px;
-  background:var(--f-paper);
-}
-.ferme-low-landscape .ferme-quests.ferme-behind-player{
-  opacity:.84; pointer-events:auto;
-}
-.ferme-low-landscape .ferme-quest-row{ padding:4px 2px; }
-.ferme-low-landscape .ferme-actions{
-  top:calc(var(--ferme-vv-top, 0px) + env(safe-area-inset-top, 0px) + 56px);
-  right:calc(var(--ferme-vv-right, 0px) + env(safe-area-inset-right, 0px) + 7px);
-  max-height:calc(var(--ferme-vv-height, 100vh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 66px);
-  overflow-y:auto;
-}
-.ferme-low-landscape .ferme-actions .ferme-btn{ min-height:44px; }
-.ferme-low-landscape .ferme-chat-panel{
-  left:calc(var(--ferme-vv-left, 0px) + env(safe-area-inset-left, 0px) + 7px);
-  right:auto;
-  bottom:calc(var(--ferme-vv-bottom, 0px) + env(safe-area-inset-bottom, 0px) + 7px);
-  width:min(420px, calc(var(--ferme-vv-width, 100vw) - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 14px));
-  max-height:calc(var(--ferme-vv-height, 100vh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 62px);
-}
-.ferme-low-landscape .ferme-chat-history{ min-height:0; max-height:58px; }
-.ferme-low-landscape .ferme-toasts{ top:calc(var(--ferme-vv-top, 0px) + env(safe-area-inset-top, 0px) + 58px); }
-.ferme-low-landscape .ferme-notif{
-  top:calc(var(--ferme-vv-top, 0px) + env(safe-area-inset-top, 0px) + 56px);
-  right:calc(var(--ferme-vv-right, 0px) + env(safe-area-inset-right, 0px) + 7px);
-}
-.ferme-low-landscape .ferme-star-hud{
-  top:calc(var(--ferme-vv-top, 0px) + env(safe-area-inset-top, 0px) + 56px);
-  max-width:calc(100vw - var(--ferme-vv-left, 0px) - var(--ferme-vv-right, 0px) - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 16px);
-  font-size:11px; padding:5px 8px; gap:6px;
-}
-.ferme-low-landscape .ferme-wait-pill{
-  top:calc(var(--ferme-vv-top, 0px) + env(safe-area-inset-top, 0px) + 96px);
-  max-width:46vw;
-}
-.ferme-low-landscape .ferme-join-box{
-  width:min(610px, 100%); padding:10px 18px;
-}
-.ferme-low-landscape .ferme-join-box h1{ margin:0 0 2px; font-size:21px; }
-.ferme-low-landscape .ferme-join-sub{ margin:0 auto 7px; font-size:11px; }
-.ferme-low-landscape .ferme-name-input{ margin-bottom:7px; min-height:44px; }
-.ferme-low-landscape .ferme-char-pick{ margin-bottom:7px; gap:14px; }
-.ferme-low-landscape .ferme-char-card{ padding:4px 14px 3px; min-width:76px; }
-.ferme-low-landscape .ferme-char-card canvas{ width:32px !important; height:48px !important; }
-.ferme-low-landscape .ferme-join-btn{ min-height:44px; padding:6px 24px; font-size:14px; }
-.ferme-low-landscape .ferme-join-err{ margin-top:4px; min-height:13px; font-size:11px; }
-.ferme-low-landscape .ferme-modal-panel{ padding:10px 14px; }
-.ferme-low-landscape .ferme-map-box{ position:relative; padding:7px 10px; }
-.ferme-low-landscape .ferme-map-box h2{ margin:0 0 4px; font-size:17px; }
-.ferme-low-landscape .ferme-map-close{ margin-top:3px; font-size:10px; }
-.ferme-low-landscape .ferme-map-canvas{ max-height:calc(100dvh - 102px); }
-.ferme-low-landscape .ferme-map-box > .ferme-btn{
-  position:absolute; top:4px; right:4px; width:44px; height:44px; margin:0 !important; padding:0;
-}
-
-@media (max-height:380px) and (orientation:landscape){
-  .ferme-low-landscape .ferme-chat-history{ max-height:58px; }
-  .ferme-low-landscape .ferme-quest-row{ padding:3px 2px; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -7791,30 +7589,18 @@ div.ferme-usage{ margin-bottom:10px; }
    sans lui, glisser le doigt pour mener la lumière fait défiler la page. */
 .ferme-star-mini{
   position:fixed; inset:0; z-index:48; display:flex; align-items:center; justify-content:center;
-  box-sizing:border-box;
-  padding:calc(var(--ferme-vv-top, 0px) + env(safe-area-inset-top, 0px) + 6px)
-          calc(var(--ferme-vv-right, 0px) + env(safe-area-inset-right, 0px) + 6px)
-          calc(var(--ferme-vv-bottom, 0px) + env(safe-area-inset-bottom, 0px) + 6px)
-          calc(var(--ferme-vv-left, 0px) + env(safe-area-inset-left, 0px) + 6px);
   background:rgba(2,4,10,.82); touch-action:none;
 }
-.ferme-star-mini-box{
-  width:min(720px, 100%); max-height:100%; min-height:0;
-  display:flex; flex-direction:column; align-items:stretch;
-}
+.ferme-star-mini-box{ width:min(720px, 96vw); }
 .ferme-star-mini-cv{
-  display:block; width:auto; height:auto; max-width:100%;
-  max-height:calc(var(--ferme-vv-height, 100vh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 70px);
-  margin:0 auto; border-radius:10px;
+  display:block; width:100%; height:auto; border-radius:10px;
   border:3px solid rgba(255,228,164,.35); box-shadow:0 6px 26px rgba(0,0,0,.6);
   touch-action:none; cursor:crosshair;
 }
 .ferme-star-mini-foot{
   display:flex; align-items:center; justify-content:space-between; gap:10px;
-  min-height:44px; margin-top:6px; color:#f4ecd6; font-size:12px; line-height:1.3;
+  margin-top:8px; color:#f4ecd6; font-size:12px;
 }
-.ferme-star-mini-foot span{ overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
-.ferme-star-mini-foot .ferme-btn{ width:44px; height:44px; flex:none; padding:0; }
 @media (max-width: 560px){
   .ferme-star-hud{ font-size:11px; padding:5px 9px; gap:7px; }
 }
@@ -7834,7 +7620,6 @@ div.ferme-usage{ margin-bottom:10px; }
   border-radius:12px; padding:12px 15px; font-size:15px; line-height:1.46;
   box-shadow:0 10px 30px rgba(0,0,0,.55); position:relative;
 }
-.maire-stage{ width:100vw; height:100vh; height:100dvh; }
 .maire-bubble-tint{ color:#c9bda0; font-style:italic; font-size:13.5px; margin-bottom:6px; }
 /* HORS-ZIP — LA DIDASCALIE ET LA RÉPLIQUE, DEUX STYLES DANS LA MÊME BULLE.
    `MayorLine` (MaireScene.js) sépare chaque texte du maire en segments à la
@@ -7852,7 +7637,7 @@ div.ferme-usage{ margin-bottom:10px; }
 }
 [data-off="1"] .maire-bubble-tail{ display:none; }
 
-.maire-top{ position:absolute; top:calc(env(safe-area-inset-top, 0px) + 12px); left:calc(env(safe-area-inset-left, 0px) + 14px); pointer-events:none; max-width:44vw;
+.maire-top{ position:absolute; top:12px; left:14px; pointer-events:none; max-width:44vw;
   background:linear-gradient(180deg, rgba(8,9,12,.55), rgba(8,9,12,0));
   padding:6px 12px 16px 4px; border-radius:10px; }
 .maire-who{ color:#f4efe2; font-size:15.5px; text-shadow:0 2px 8px rgba(0,0,0,.9); }
@@ -7865,24 +7650,23 @@ div.ferme-usage{ margin-bottom:10px; }
 .maire-mood.m-bad  { border-color:#c08a6f; color:#e6c0a8; }
 .maire-mood.m-awful{ border-color:#c06f6f; color:#e6a8a8; }
 
-.maire-cams{ position:absolute; top:calc(env(safe-area-inset-top, 0px) + 14px); right:calc(env(safe-area-inset-right, 0px) + 16px); display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+.maire-cams{ position:absolute; top:14px; right:16px; display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
 .maire-cam{
   background:rgba(16,18,24,.72); border:1px solid rgba(255,255,255,.16); color:#ded7c8;
-  border-radius:8px; min-width:44px; min-height:44px; padding:5px 10px; font-size:12.5px; cursor:pointer;
+  border-radius:8px; padding:5px 10px; font-size:12.5px; cursor:pointer;
 }
 .maire-cam:hover{ background:rgba(36,40,50,.88); }
 .maire-cam.on{ border-color:rgba(212,186,120,.75); color:#f2e4bc; }
 /* ⚠️ SOUS les boutons de vue, jamais derrière : ils passent à la ligne dès que la
    fenêtre rétrécit, et une aide qui chevauche ce qu'elle explique n'aide pas. */
-.maire-camhint{ position:absolute; top:calc(env(safe-area-inset-top, 0px) + 64px); right:calc(env(safe-area-inset-right, 0px) + 16px); color:#8e887e; font-size:11px;
+.maire-camhint{ position:absolute; top:52px; right:16px; color:#8e887e; font-size:11px;
   text-shadow:0 2px 8px rgba(0,0,0,.9); pointer-events:none; max-width:46vw; text-align:right; }
 
 /* ⚠️ LE BANDEAU EST AUSSI MINCE QUE POSSIBLE : c'est de la scène qu'il mange, et
    la scène est ce qu'on est venu voir. Tout ce qui pouvait tenir sur une ligne y
    tient. */
 .maire-foot{
-  position:absolute; left:0; right:0; bottom:0;
-  padding:9px max(env(safe-area-inset-right, 0px), clamp(12px,4vw,40px)) max(env(safe-area-inset-bottom, 0px), 12px) max(env(safe-area-inset-left, 0px), clamp(12px,4vw,40px));
+  position:absolute; left:0; right:0; bottom:0; padding:9px clamp(12px,4vw,40px) 12px;
   /* ⚠️ LE DÉGRADÉ MONTE VITE : la jauge est la première chose du bandeau, et sur
      un fond clair (une manche grise, un mur crème) une barre de douze pixels
      sur un voile à 30 % ne se lit pas du tout. */
@@ -7904,14 +7688,14 @@ div.ferme-usage{ margin-bottom:10px; }
 .maire-say{
   display:block; width:100%; text-align:left; cursor:pointer;
   background:rgba(28,26,18,.72); border:1px solid rgba(214,178,86,.40); border-radius:9px;
-  color:#f0cf6a; font-size:14px; line-height:1.34; min-height:44px; padding:8px 12px; transition:background .12s, border-color .12s;
+  color:#f0cf6a; font-size:14px; line-height:1.34; padding:8px 12px; transition:background .12s, border-color .12s;
 }
 .maire-say:hover{ background:rgba(58,50,24,.86); border-color:rgba(240,207,106,.85); color:#ffe08a; }
 .maire-gestures{ display:flex; gap:7px; flex-wrap:wrap; margin-top:1px; }
 .maire-gesture{
   flex:1 1 220px; text-align:left; cursor:pointer;
   background:rgba(18,20,26,.70); border:1px solid rgba(255,255,255,.16); border-radius:9px;
-  color:#ded7c8; font-size:12.5px; min-height:44px; padding:6px 11px;
+  color:#ded7c8; font-size:12.5px; padding:6px 11px;
 }
 .maire-gesture:hover{ background:rgba(34,38,48,.9); }
 .maire-gesture span{ display:block; color:#8f887c; font-size:11.5px; margin-top:2px; }
@@ -7924,35 +7708,6 @@ div.ferme-usage{ margin-bottom:10px; }
   .maire-bubble{ font-size:13.5px; padding:10px 12px; }
   .maire-say{ font-size:13.5px; padding:9px 11px; }
   .maire-camhint{ display:none; }
-}
-@media (max-height:500px) and (orientation:landscape){
-  .maire-top{
-    top:calc(env(safe-area-inset-top, 0px) + 6px); left:calc(env(safe-area-inset-left, 0px) + 8px);
-    max-width:24vw; padding:4px 8px 10px 2px;
-  }
-  .maire-who{ font-size:13px; }
-  .maire-sub{ display:none; }
-  .maire-mood{ font-size:11px; }
-  .maire-cams{
-    top:calc(env(safe-area-inset-top, 0px) + 6px); right:calc(env(safe-area-inset-right, 0px) + 8px);
-    gap:4px; max-width:62vw;
-  }
-  .maire-cam{ padding:4px 8px; font-size:11px; }
-  .maire-camhint{ display:none; }
-  .maire-bubble{ padding:9px 11px; font-size:13px; line-height:1.35; }
-  .maire-foot{
-    max-height:64vh; max-height:64dvh; overflow-y:auto; overscroll-behavior:contain;
-    padding-top:6px; padding-right:max(env(safe-area-inset-right, 0px), 8px);
-    padding-bottom:max(env(safe-area-inset-bottom, 0px), 6px);
-    padding-left:max(env(safe-area-inset-left, 0px), 8px);
-  }
-  .maire-says{ margin-top:5px; gap:4px; }
-  .maire-say{ padding:6px 9px; font-size:12.5px; }
-  .maire-gestures{ gap:4px; }
-  .maire-gesture{ flex-basis:180px; padding:5px 8px; font-size:11.5px; }
-  .maire-gesture span{ display:none; }
-  .maire-gaugerow{ margin-top:3px; font-size:11px; }
-  .maire-why{ margin-top:4px; font-size:11px; }
 }
 
 /* ⚠️ ZIP 481 — LE BOUTON « VOIR LA SCÈNE DE… ». Il est en bas à gauche, au-dessus

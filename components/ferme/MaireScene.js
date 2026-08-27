@@ -277,7 +277,6 @@ function useBureau(canvasRef, viewRef, bubbleRef, opts) {
         };
         resize();
         on(window, "resize", resize);
-        if (window.visualViewport) on(window.visualViewport, "resize", resize);
 
         const pose = { ...B.poseTarget("closed") };
         const face = { ...B.faceTarget("cold") };
@@ -423,7 +422,7 @@ function Stage({ L, cand, view, opts, head, foot, bubble, onClose, closeLabel })
   const pick = (k) => { setCam(k); api.current && api.current.setView(k); };
 
   return (
-    <div className="maire-stage" style={{ position: "fixed", inset: 0, zIndex: 90, background: "#0d0f13", overflow: "hidden", userSelect: "none" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 90, background: "#0d0f13", overflow: "hidden", userSelect: "none" }}>
       <canvas ref={canvasRef} style={{ width: "100%", height: "100%", display: "block", cursor: "grab", touchAction: "none" }} />
 
       {/* LE REPLI. ⚠️ UN FOND PEINT, PAS UN MESSAGE D'ERREUR : le joueur n'a pas

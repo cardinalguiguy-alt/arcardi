@@ -11,9 +11,89 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**ACTION SUIVANTE UNIQUE — REJOUER SUR DE VRAIS APPAREILS LE CHAT AVEC CLAVIER VIRTUEL ET TROIS
-ROTATIONS SUCCESSIVES.** Faire ce contrôle matériel sur Safari iPhone et Chrome Samsung, aux
-viewports de référence, sans modifier le bateau ; la passe navigateur intégrée est déjà livrée.
+**ACTION SUIVANTE UNIQUE — REJOUER LA CHAÎNE EXISTANTE AVEC DEUX VRAIS CLIENTS.** Valider le relais
+du plat chaud et les deux positions opposées autour du cratère sans raccourci développeur entre les
+postes. ⚠️ Les autres propositions du dossier « Port des Sept Sœurs » ne sont pas autorisées à
+l'implémentation par cette livraison ; ne pas commencer les lots A–G sans une nouvelle demande.
+
+**DOSSIER DE CONCEPTION ET LUDO SOLO LIVRÉS LE 2026-08-27.** `QUETE.md` §17 tient désormais une
+soirée de 55–65 minutes : quatre étoiles dans la première figure, trois chasses tardives, attente
+active au cratère, plans de Kerguélen en cinq jalons, rendez-vous du maire en parallèle, lac révélé
+comme ancien port, sciage et feux du port en coopération avec substitutions PNJ en solo, puis bateau
+ouvrant la future route des îles. **C'est une cible documentée, pas une implémentation de quête.**
+Seule exception livrée : le panneau ouvert avec `P` remplace ses cinq lignes à pictogrammes par une
+progression segmentée sans icône. `starShipProgress` dérive `À VENIR`, `À COMMANDER`,
+`EN FABRICATION`, `À MONTER` et `ASSEMBLÉ` des commandes et de la cale existantes ; aucun état
+persisté n'est ajouté. La maquette HTML ne montre plus que ce panneau. Vérifié par `verify-quete`
+**616/616**, `verify-strings` **1 102**, compilation Next réussie (pré-rendu arrêté ensuite par
+les variables Supabase absentes, défaut d'environnement connu) et maquette contrôlée à 1280/360 px.
+
+Le Ludo est, lui, modifié : un humain choisit 1, 2 ou 3 bots avant le départ ; 2–4 humains gardent
+le flux historique. Les bots choisissent uniquement dans le plan légal du vrai arbitre de l'hôte
+et passent par les mêmes cinq actions que les humains. Vérifié : `verify-ludo` **30/30**, 1 000 plans balayés,
+syntaxe, bundle esbuild et `git diff --check` verts. Vu dans le navigateur : choix exclusifs 1/2/3,
+compositions exactes à 2/3/4 camps, lancer humain et tour du bot dans le duel. La page jetable a
+été supprimée. Le build Next compile puis bute comme prévu sur les variables Supabase absentes au
+pré-rendu ; aucun
+schéma, donnée Supabase ni quota de production n'a été touché.
+
+**CORRECTIF DE LISIBILITÉ DES PORTES LIVRÉ.** Les noms de salle de la mairie, du tribunal et de
+l'église passent maintenant dans la dernière couche du monde : comptoirs, plantes, PNJ et joueurs
+ne peuvent plus les masquer. Leur survol déborde de **0,85 case sur les quatre côtés** de
+l'ouverture et choisit la porte la plus proche si deux marges se rencontrent. Rejoué dans le
+navigateur au guichet d'accueil, sur la porte et dans sa marge ; `verify-vallee` est à **208/208**.
+Aucun état partagé, message réseau, migration ou manipulation Supabase.
+
+⚠️ **DÉCISION DE GUILLAUME, TOUJOURS EN VIGUEUR : LE BUG DU CHAUDRON-ARTÉFACT VISIBLE SUR 4 TERRES/5
+N'EST PAS CORRIGÉ.** Le sprite scintillant (`FermeGame.js`) reste sans la garde `spec.key==="evil"`
+que l'interaction a déjà. **Ne pas le corriger avant d'en avoir reçu l'ordre.**
+
+⚠️⚠️ **UNE MESURE À PART, DEMANDÉE PAR GUILLAUME (« un ami qui joue sur tablette me dit qu'arcardi ne
+fonctionne plus ») : LE CHIFFRE EST 1 829 CANEVAS 2D RETENUS AU CHARGEMENT** (2 722 créés,
+2,6 millions de pixels), dont `townWater` **636** et `petFrames` **468** à eux deux. Le détail et ce
+qu'il faut en faire sont au §10, « ce qui n'existe pas » — **ce n'est PAS corrigé dans cette
+livraison** (règle du 424 : on ne mêle pas deux changements visuels), c'est mesuré et daté.
+
+| Lot | Ce que c'est | État |
+|---|---|---|
+| 0 | La rivière | ✅ **CLASSÉ SANS SUITE — le défaut 1 de l'audit est FAUX.** On traverse à cheval depuis 2026-07 (`HORSE_WATER_SLOW`, `fermeConstants.js:619`), premier cheval 800 or. |
+| 1 | Ce qui ment (textes, invité, HUD) | ✅ **LIVRÉ AU 478** — défauts 5, 6, 7, 8, 11, 13 |
+| 2 | Le chantier naval devient un chantier | ✅ **LIVRÉ AU 478** — défaut 4 |
+| 3a | La tenue devient une scène | ✅ **LIVRÉ AU 478** — défaut 2 ⚠️ *et sa lumière ne s'est jamais affichée : voir le préalable ci-dessus* |
+| 3b | Les trois verbes distincts | ✅ **LIVRÉ AU 479** — défauts 3, 9, 10 |
+| 4 | **La passe maire** | ✅ **LIVRÉE AU 480** — §16 de `QUETE.md`. La suite est tranchée : le navire d'Eduardo ouvre la future route d'exploration des îles ; l'ancien lac devient le port qui l'accueille (§17). |
+| 5 | Les sept sœurs | 📝 **CONÇU AU §17, NON IMPLÉMENTÉ** — quatre premières, puis verte/orange/violette dans la seconde moitié |
+
+⚠️⚠️ **CE QUE LE LOT 4 A CHANGÉ, EN QUATRE LIGNES.** Le détail est au §16 de `QUETE.md`, qui a une
+ligne par chose ; ici, seulement de quoi savoir quoi ne pas casser.
+· **UNE ÉTAPE DE PLUS DANS LA CHAÎNE** : `starTimberBlock` rend `noMayor` tant que l'audience n'a
+pas abouti, parce que **la cale est sur le quai municipal**. Le bandeau la désigne (`goal: mayor`
+→ `townHall`). `verify-quete` la joue avec le VRAI résolveur, jamais avec un champ posé à la main.
+· **LES PLANS NE SONT PAS UNE SERRURE** (décision de Guillaume) : on monte le voir les mains vides
+et on peut gagner — mais sans aucun droit à l'erreur. C'est la seule vraie décision du chapitre.
+· **LES ÉLECTIONS ONT ENFIN UNE CONSÉQUENCE DE JEU.** Les cinq candidats du 439 avaient un
+portefeuille écrit en commentaire qui ne servait à RIEN ; il décide maintenant de la valeur de
+chaque argument, et l'échéance du scrutin la déplace encore.
+· **LA CONFIANCE EST UN CAPITAL QUI SERT LA FOIS SUIVANTE** (`e.mayor.trust`, 0 à 3) : c'est ce qui
+oblige `maire.js` à être un **système de négociation** et pas une scène. Une commission ou le
+cadastre s'y ajouteront en une table et zéro ligne de mécanique.
+
+⚠️⚠️⚠️ **ET LA DETTE DU 479 N'A PAS BOUGÉ D'UN POUCE : DEUX POSTES À DEUX QUI N'ONT JAMAIS ÉTÉ
+TENUS** — le relais du plat (l'un cuisine, l'autre court) et les deux bords du cratère. Écrits,
+arbitrés par l'hôte, mesurés par `verify-quete` §12, **et jamais joués face à face**. Le 480 en
+ajoute un troisième d'une autre nature : **une audience que personne n'a menée.**
+
+État à jour au **2026-08-27**. La direction longue reste de **rendre Valley Town habitable au regard
+ET crédible au jeu**, et **lui donner une histoire**. Tout ce qui concerne la ville, ses habitants,
+ses bâtiments et **ses pièges** est dans **`components/ferme/README.md`**, qui fait autorité ; les
+règles de DESSIN sont dans **`components/ferme/DESSIN.md`** ; les bancs dans **`tools/README.md`**.
+**`candyluge` et `crystal` sont EN PAUSE.**
+
+⚠️⚠️ **LA REFONTE DE LA QUÊTE DE L'ÉTOILE EST LE CHANTIER VIVANT, ET SON DOCUMENT DE REPRISE
+EST `components/ferme/QUETE.md`. LIS SON BLOC D'AUTORITÉ 2026-08-26 ET SON §17 AVANT D'Y
+TOUCHER.** Le code livré au 480 bis précède encore ce dossier : chronologie 5 + 3, sept sœurs,
+attentes actives et ancien port restent à construire par les lots A à G du §17.11. L'audience
+existe déjà (§16) et sa signature (`MR.mayorSigned`) débloque les répliques du bateau.
 
 ---
 
