@@ -2264,6 +2264,29 @@ export const STAR_CANDY_PRICE = 60;
    borne combien de temps `candy` reste utilisable APRÈS le dernier ramassage,
    pas depuis la chute. */
 export const STAR_CANDY_FRESH_MS = 5 * 60 * 1000;
+/* ⚠️⚠️⚠️ 2026-08-31 — LA FRAÎCHEUR NE COURT PAS PENDANT QU'ON NE PEUT PAS AGIR,
+   ET C'EST UN CORRECTIF DE BLOCAGE, PAS UN CONFORT. Les deux horloges existaient
+   depuis le 479 et personne ne les avait comparées : la lueur durait CINQ
+   minutes, la blessure de fin de course en durait DIX (`C.RUN_INJURED_MS`), et
+   `doAction()` refuse tout tant qu'on est blessé. Or `resolveStarCandy` crédite
+   « réussie ou ratée » — donc **toute défaite** rendait la lumière morte avant
+   que le joueur puisse marcher. Pas un cas limite : cent pour cent des défaites,
+   pendant que l'écran de fin promettait « les bonbons ramassés sont conservés ».
+   ⚠️ La parade est de dater l'échéance depuis l'instant où le joueur REDEVIENT
+   capable d'offrir, pas depuis le ramassage : cinq minutes de jeu réel, ce que
+   la décision de Guillaume voulait dire. La règle « on rapporte une lumière
+   FRAÎCHE » est intacte — c'est le décompte d'un temps qu'on ne peut pas
+   utiliser qui ne l'était pas.
+   ⚠️⚠️ ET LE REPORT EST BORNÉ, PARCE QUE `readyAt` VIENT D'UN CHAMP QUE L'HÔTE
+   RECOPIE D'UNE REQUÊTE CLIENT (`f.injuredUntil`). Le plafond est DÉRIVÉ de la
+   blessure la plus longue que la course puisse infliger, jamais réglé à la main
+   (§8 de `CLAUDE.md` : un paramètre qui en double un autre est une divergence en
+   attente) : un client modifié ne peut donc pas s'offrir une lueur éternelle en
+   annonçant une blessure de trois ans.
+   ⚠️ C'est la forme 458 — deux grandeurs qui s'opposent — appliquée au TEMPS :
+   `verify-quete` §bleue les mesure désormais ENSEMBLE, jamais chacune de son
+   côté, parce que chacune était juste toute seule. */
+export const STAR_CANDY_HOLD_MAX_MS = C.RUN_INJURED_MS;
 /* Ce qu'un joueur a rapporté depuis la chute, ET qui n'est pas encore périmé.
    ⚠️ PAR JOUEUR ET PAS COMMUN, comme les bonbons eux-mêmes (`fermeEngine.js` :
    « le défi est individuel, personne ne court à deux »). Mettre l'offrande en
@@ -3465,14 +3488,23 @@ export function resolveStarCalm(e, who, now, ctx, siteId) {
    repart donc de zéro, jamais d'un flux qui aurait dû s'éteindre. `candyUntil`
    est réécrit à CHAQUE ramassage, pas seulement au premier — courir deux fois
    de suite prolonge la fenêtre plutôt que de la couper à la première échéance. */
-export function resolveStarCandy(e, who, n, now) {
+export function resolveStarCandy(e, who, n, now, readyAt) {
   const add = Math.max(0, n | 0);
   if (!e || !starFallen(e) || !who || !add) return { ok: false };
   if (now !== undefined && +now < e.fall) return { ok: false, tooEarly: true };
   const k = String(who).slice(0, CALM_ID_MAX);
   e.candy[k] = starCandyFresh(e, k, now) + add;
-  e.candyUntil[k] = (+now || 0) + STAR_CANDY_FRESH_MS;
-  return { ok: true, fresh: e.candy[k], need: STAR_CANDY_PRICE, until: e.candyUntil[k] };
+  /* ⚠️⚠️ 2026-08-31 — L'ÉCHÉANCE PART DE L'INSTANT OÙ IL POURRA OFFRIR. Voir la
+     note de `STAR_CANDY_HOLD_MAX_MS` : sans ça, une course perdue rendait sa
+     propre récompense inutilisable, parce que la blessure dure DEUX FOIS la
+     fraîcheur. `readyAt` est le `injuredUntil` du fermier — zéro quand il rentre
+     valide, auquel cas rien ne change et l'échéance repart de `now` comme avant.
+     ⚠️ Le `Math.min` est la ceinture : `readyAt` transite par une requête client,
+     donc on ne reporte jamais de plus qu'une blessure de course entière. */
+  const base = +now || 0;
+  const ready = Math.max(base, Math.min(+readyAt || 0, base + STAR_CANDY_HOLD_MAX_MS));
+  e.candyUntil[k] = ready + STAR_CANDY_FRESH_MS;
+  return { ok: true, fresh: e.candy[k], need: STAR_CANDY_PRICE, until: e.candyUntil[k], held: ready > base };
 }
 /* ── LA BLEUE, 2/2 : L'OFFRANDE.
    ⚠️⚠️ LE PRIX EST LE FLUX, ET LE SAC N'EST QUE CE QU'ON DÉBITE. Le premier jet

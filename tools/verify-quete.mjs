@@ -3008,6 +3008,57 @@ section("12. LES QUATRE VERBES (479, 480 bis)");
     ok("⚠️⚠️⚠️ arriver au trou APRÈS l'extinction refuse l'offrande, même avec le compte juste",
        tooLate.ok === false && tooLate.short === true && tooLate.have === 0,
        `${tooLate.have}/${tooLate.need}`);
+
+    /* ╔═══════════════════════════════════════════════════════════════════════
+       ║ 2026-08-31 — LES DEUX HORLOGES, MESURÉES ENSEMBLE ET PLUS CHACUNE DE
+       ║ SON CÔTÉ. C'est la forme 458 appliquée au TEMPS.
+       ╚═══════════════════════════════════════════════════════════════════════
+       ⚠️⚠️⚠️ TOUS LES CONTRÔLES CI-DESSUS ÉTAIENT VERTS PENDANT QUE LA QUÊTE ÉTAIT
+       INFINISSABLE APRÈS UNE DÉFAITE. Chacun mesurait la fraîcheur toute seule,
+       avec un joueur libre de ses gestes — un monde qui n'existe pas au retour
+       d'une course perdue, où l'on rentre BLESSÉ pour `RUN_INJURED_MS`, soit
+       DEUX FOIS la durée de la lueur, et où `doAction()` refuse tout. Il n'a
+       jamais manqué un contrôle juste : il manquait le contrôle qui met les deux
+       grandeurs dans la MÊME expression. */
+    {
+      const eHurt = Q.newStar(); eHurt.fall = 1;
+      const t0 = 10_000_000;
+      const ready = t0 + C.RUN_INJURED_MS;                 // il rentre blessé : voilà quand il pourra offrir
+      Q.resolveStarCandy(eHurt, "j1", Q.STAR_CANDY_PRICE, t0, ready);
+      ok("⚠️⚠️⚠️ UNE COURSE PERDUE LAISSE LA LUMIÈRE VIVANTE JUSQU'À LA FIN DU REPOS FORCÉ",
+         Q.starCandyFresh(eHurt, "j1", ready) === Q.STAR_CANDY_PRICE,
+         `blessure ${C.RUN_INJURED_MS} ms > fraîcheur ${Q.STAR_CANDY_FRESH_MS} ms`);
+      ok("…et il lui reste bien ses cinq minutes ENTIÈRES une fois debout",
+         Q.starCandyFresh(eHurt, "j1", ready + Q.STAR_CANDY_FRESH_MS - 1) === Q.STAR_CANDY_PRICE);
+      ok("…et elle s'éteint quand même, cinq minutes après qu'il a PU agir",
+         Q.starCandyFresh(eHurt, "j1", ready + Q.STAR_CANDY_FRESH_MS) === 0);
+      /* Et l'offrande, elle, passe — c'est la grandeur qui compte vraiment :
+         le banc mesurait la fraîcheur, le joueur mesure s'il peut payer. */
+      const eHurt2 = Q.newStar(); eHurt2.fall = 1;
+      Q.resolveStarDig(eHurt2, BLUE, "j1", 5);
+      Q.resolveStarCandy(eHurt2, "j1", Q.STAR_CANDY_PRICE, t0, ready);
+      const paid = Q.resolveStarLight(eHurt2, "j1", BLUE, 9999, ready + 1000);
+      ok("⚠️⚠️ …ET L'OFFRANDE PASSE À LA SECONDE OÙ IL SE RELÈVE (le bogue rendait 100 % des défaites stériles)",
+         paid.ok === true, paid.ok ? "payée" : `refusée : ${JSON.stringify(paid)}`);
+
+      /* ⚠️ LE REPORT EST BORNÉ. `readyAt` vient d'un champ que l'hôte recopie
+         d'une requête CLIENT : sans plafond, un client modifié s'offrirait une
+         lueur éternelle en annonçant une blessure de trois ans. */
+      const eCheat = Q.newStar(); eCheat.fall = 1;
+      Q.resolveStarCandy(eCheat, "j1", 40, t0, t0 + 3 * 365 * 24 * 3600 * 1000);
+      ok("⚠️⚠️ un `readyAt` aberrant ne donne PAS une lumière éternelle (plafond dérivé de la blessure)",
+         Q.starCandyFresh(eCheat, "j1", t0 + C.RUN_INJURED_MS + Q.STAR_CANDY_FRESH_MS) === 0,
+         `plafond ${Q.STAR_CANDY_HOLD_MAX_MS} ms`);
+      ok("…et ce plafond est DÉRIVÉ de la blessure de course, jamais réglé à la main",
+         Q.STAR_CANDY_HOLD_MAX_MS === C.RUN_INJURED_MS);
+
+      /* Non-régression : rentrer VALIDE ne change rien à ce qui existait. */
+      const eOk = Q.newStar(); eOk.fall = 1;
+      Q.resolveStarCandy(eOk, "j1", 40, t0, 0);
+      ok("⚠️ sans blessure, l'échéance repart de la course comme avant (aucune régression)",
+         Q.starCandyFresh(eOk, "j1", t0 + Q.STAR_CANDY_FRESH_MS - 1) === 40 &&
+         Q.starCandyFresh(eOk, "j1", t0 + Q.STAR_CANDY_FRESH_MS) === 0);
+    }
     /* hors-zip, 2026-08-27 — LE BANC REJOUE LE VRAI CYCLE DE L'HÔTE AVEC UNE
        VRAIE DATE. Les contrôles ci-dessus employaient 1 000 ms : `| 0` et une
        conversion numérique ordinaire y donnent le même résultat, donc 619

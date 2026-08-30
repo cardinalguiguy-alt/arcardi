@@ -11,24 +11,58 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**ACTION SUIVANTE UNIQUE — REJOUER LE PAIEMENT NATUREL DE L'ÉTOILE BLEUE À L'ÉCRAN.** Après une
-vraie course au défi de fuite, revenir au trou en moins de cinq minutes : E doit prélever 60
-bonbons, afficher UN SEUL succès, puis permettre de tourner le dos à l'étoile. Aucun raccourci de
-quête ; vérifier aussi que le halo bleu est encore visible juste avant l'offrande.
+**ACTION SUIVANTE UNIQUE — LES TROIS DETTES GRAPHIQUES DE L'AUDIENCE ET DE LA FIN, QUI SONT
+LES SEULES QUI RESTENT SUR LA QUÊTE DU BATEAU.** Dans cet ordre : (1) **la posture DEBOUT du maire
+se désassemble** — tête fendue en deux blocs décalés, écharpe détachée passant sous le plan du
+bureau, un bras en bloc isolé, alors qu'assis il est impeccable (`maireBureau.js`, `POSE.window` /
+`applyPose`) ; (2) **tout le HUD de la ferme est peint par-dessus la scène annoncée PLEIN ÉCRAN du
+maire** — or, jour/heure, boutons, bandeau de quête —, deux textes se chevauchant au pixel
+(`Glissez pour regarder…` x 861→1264 contre `🏠 Maison` x 1079→1270) ; (3) **la fin est trois points
+colorés qui traversent le ponton**, pour le climax d'une quête de 55 minutes.
+⚠️ **AUCUNE DES TROIS N'EST MESURABLE PAR UN BANC EXISTANT** : `verify-maire` (113/113) vérifie que
+les sept postures EXISTENT et sont dessinables, jamais qu'elles s'ASSEMBLENT. La première chose à
+faire n'est donc pas de corriger, c'est de **rendre la posture regardable** — un banc de rendu qui
+peint les sept poses côte à côte, comme `render-etoile` l'a fait pour le sillon.
 
-**CORRECTIF DE LA LUMIÈRE BLEUE LIVRÉ LE 2026-08-27.** `candyUntil` est une date absolue, mais
-`migrateStar` la convertissait avec `| 0` à chaque requête hôte : l'horodatage de 2026 était
-tronqué à 32 bits et paraissait déjà expiré. Le client lisait encore le flux brut et annonçait
-« lumière versée » pendant que l'hôte répondait « zéro » — exactement les deux messages de la
-capture de Guillaume. La migration conserve désormais le nombre entier ; le succès ne s'affiche
-qu'après le verdict hôte qui prélève les bonbons. Le banc rejoue une vraie date, sérialise puis
-re-migre l'état comme l'hôte, et paie ensuite l'étoile.
+**LE VERROU BLOQUANT ET LES CINQ DETTES DE TEXTE SONT CORRIGÉS LE 2026-08-31.**
+· **La lumière bleue ne meurt plus pendant le repos forcé.** `resolveStarCandy` prend un cinquième
+argument `readyAt` : l'échéance part de l'instant où le joueur POURRA offrir, pas du ramassage.
+Sans ça, la fraîcheur (5 min) expirait pendant la blessure (10 min) et **100 % des défaites**
+rendaient leur propre récompense inutilisable. Le report est borné par `STAR_CANDY_HOLD_MAX_MS`,
+**dérivé** de `C.RUN_INJURED_MS`.
+· **E ne se tait plus.** Blessé, on n'agit toujours pas — mais on le dit, avec le décompte
+(`toastInjuredWait`). L'invite « E : lui offrir de la lumière bleue » restait affichée devant une
+touche morte. ⚠️ **Et le doigt et le clavier faisaient deux jeux différents** : `pressTouchAction`
+appelait `tryOpenNearby()` en étant blessé, donc l'offrande passait sur tablette et pas au clavier.
+Les deux chemins sont alignés.
+· **La porte claquée a enfin une conséquence écrite** (`maire.after.slam` : c'était la seule fin
+sur six qui n'affichait rien). · **La rancune se dit** : `appt.sour` porte la trace, parce que
+`resolveMayorAsk` effaçait `e.mayor.sour` dans la ligne qui suivait sa lecture — `moodSour` n'avait
+jamais pu s'afficher. · **`end2` n'annonce plus un navire à flot** alors que `STAR_SHIP_WATER_MAX`
+le garde à terre sur sa cale. · **Le chat du menu dev est traduit** (`star.devChat` ; seul le
+libellé du bouton reste anglais, c'est le nom d'un outil). · Doublon `engineer` supprimé, état
+« fouillé » écrit en toutes lettres sur la carte.
 
-Vérifications relancées : `verify-quete` **621/621**, `verify-syntax`, bundle esbuild et
-`git diff --check` verts ; `next build` compile avec succès puis s'arrête au pré-rendu faute de
-variables Supabase, comportement documenté. Le geste n'a pas encore été rejoué à l'écran.
-**Aucune migration SQL, aucun changement de schéma, aucune donnée ni manipulation Supabase n'est
-nécessaire.**
+⚠️⚠️ **SEPT CONTRÔLES NEUFS DANS `verify-quete` §bleue, ET ILS MESURENT LES DEUX HORLOGES ENSEMBLE.**
+Aucun contrôle ne manquait : il manquait celui qui met la fraîcheur ET la blessure dans la MÊME
+expression. ⚠️ **Le banc a d'ailleurs attrapé ma propre régression pendant ce chantier** — sortir la
+phrase de chat du menu dev laissait `dev.chat` orphelin, et le contrôle « chaque phrase de la quête
+est affichée quelque part » est tombé au premier essai. *Un banc qui échoue sur le zip qui l'écrit
+est un banc en bonne santé.*
+
+Vérifications : **18/18 bancs verts** — `verify-quete` **628/628**, `verify-maire` **113/113**,
+`verify-strings` **1104 clés**, `verify-vallee` **208/208**, `verify-taxi` **15/15** ; bundle
+esbuild propre (seul `G_SOIL` préexistant subsiste) ; `git diff --check` propre ; `next build`
+**✓ Compiled successfully** puis l'arrêt documenté sur `supabaseUrl`. **Rejoué à l'écran** : vraie
+course, défaite, retour blessé, E qui répond avec son décompte, soin, offrande, apprivoisement.
+**Aucune migration SQL, aucun changement de schéma, aucune manipulation Supabase n'est nécessaire.**
+
+⚠️ **UN OUTIL À CONNAÎTRE AVANT DE REPRENDRE : `tools/.cache/*.mjs` ET `tools/out/*.png` SONT SUIVIS
+PAR GIT** (la règle `/out` du `.gitignore` ne vaut qu'à la racine). Lancer un banc SALIT donc l'arbre
+de travail, et `git status` cesse d'être un contrôle de propreté utilisable. Corollaire mesuré le
+2026-08-31 : **sept des dix-huit bancs ne peuvent pas tourner en lecture seule** — ils écrivent
+`tools/.cache/fermeConstants.mjs` via `lib-canvas.mjs:307`. À savoir avant de confier un audit à un
+agent en bac à sable : il rendra « 0/13 exécutés » sans que rien ne soit cassé.
 
 ⚠️ **DÉCISION DE GUILLAUME, TOUJOURS EN VIGUEUR : LE BUG DU CHAUDRON-ARTÉFACT VISIBLE SUR 4 TERRES/5
 N'EST PAS CORRIGÉ.** Le sprite scintillant (`FermeGame.js`) reste sans la garde `spec.key==="evil"`
@@ -175,7 +209,7 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 
 | # | La leçon, en une phrase | Où est le détail |
 |---|---|---|
-| hors-zip | ⚠️⚠️⚠️ **UNE MÉMOIRE LOCALE D'ÉVÉNEMENT PARTAGÉE PAR LE NAVIGATEUR DOIT NOMMER LE JOUEUR, SINON LE PREMIER PROFIL QUI L'ÉCRIT VOLE LA SCÈNE AUX SUIVANTS.** | `starFallSeenStorageKey`, `starFallSeenKey`, `quete.js`/`FermeGame.js` |
+| 2026-08-30 | ⚠️⚠️⚠️ **DEUX HORLOGES QUI SE CROISENT SUR LE MÊME OBJET SE MESURENT ENSEMBLE OU PAS DU TOUT.** Une durée de péremption plus COURTE qu'une durée d'indisponibilité rend la récompense inatteignable à 100 %, et chacune est juste de son côté : c'est la forme 458 (deux grandeurs qui s'opposent), appliquée au TEMPS. | `STAR_CANDY_FRESH_MS`, `RUN_INJURED_MS`, `doAction` |
 | hors-zip | ⚠️⚠️⚠️ **UN COMPTEUR CUMULATIF QUI SE REMET À ZÉRO SUR LA MOINDRE PAUSE N'EST PLUS CUMULATIF — IL EST BINAIRE, ET ÇA REND CE QU'IL GARDE PRATIQUEMENT INATTEIGNABLE.** Le gros météore n'attendait que deux minutes de présence active en ville, mais `starTownActivityTick` remettait `a.ms` à zéro à la moindre coupure (lire une bulle, ouvrir l'inventaire, s'arrêter cinq secondes) : aucun joueur ne reste « engagé » en continu deux minutes pleines, donc la chute était pratiquement inatteignable — signalé par Guillaume en jouant. L'inactivité doit mettre la progression EN PAUSE, jamais l'effacer ; seul un nouveau chapitre a le droit de repartir de zéro. *Un compteur qui garde un objectif accessible doit accumuler, pas redémarrer.* | `starTownActiveRef`, `STAR_TOWN_ACTIVE_MS`, `FermeGame.js`/`quete.js` |
 | hors-zip | ⚠️⚠️⚠️ **UNE HORLOGE D'INTERFACE DOIT ÊTRE BORNÉE PAR SA PHASE, PAS SEULEMENT PAR L'ABSENCE DE SON ÉVÉNEMENT FINAL.** Une avance du menu dev pouvait ouvrir le chantier avec `townFall` encore vide : le compteur de Valley Town survivait alors sous l'objectif de la mairie, parce qu'il ne vérifiait que « pas encore tombé ». `starTownWaiting` joint désormais chapitre, chute initiale et chute urbaine, et la boucle comme l'affichage lisent ce même prédicat. *Une date manquante ne prouve pas qu'une attente est encore en cours ; la phase courante doit l'autoriser.* | `starTownWaiting`, `starTownActivityTick`, `FermeGame.js`/`quete.js` |
 | 2026-08-27 | ⚠️⚠️⚠️ **UNE DATE ABSOLUE NE PASSE JAMAIS PAR UNE OPÉRATION 32 BITS.** Un petit instant de banc survit à `| 0`, une date réelle de 2026 non ; toute migration d'horodatage se rejoue avec `Date.now()` ET le vrai cycle de sérialisation/reprise de l'hôte. | `candyUntil`, `migrateStar`, `verify-quete.mjs` §12 |
@@ -437,7 +471,7 @@ de conception qui valent pour n'importe quel morceau du dépôt.
 |---|---|
 | `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **~20 500 l.** |
 | `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** |
-| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE : table, chronologies et résolveurs purs.** ⚠️ **469 — la FOUILLE (`STAR_DIG_MS`, `starDug`, `resolveStarDig`, `starDigResult`) et TROIS chapitres au lieu de cinq.** `STAR_FARM_IMPACTS` porte les cinq cratères (2 étoiles / 1 matière / 2 vides), `resolveStarCalm` tient le barème 60/10 s et `resolveStarTownFall` sépare le gros météore. `STAR_FOLLOWER_SITES` dérive toutes les compagnes de `content:"star"`, `starFollowerAdded` identifie celle qui doit jouer son arrivée, `starFarmFlightPath` tient le cap stable des fragments et `queen` désigne l'unique reine. `starShipProgress` joint les cinq états du plan aux commandes et à la cale sans persistance supplémentaire. Aucun React, aucun dessin — `verify-quete.mjs` l'importe. |
+| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE : table, chronologies et résolveurs purs.** ⚠️ **469 — la FOUILLE (`STAR_DIG_MS`, `starDug`, `resolveStarDig`, `starDigResult`) et TROIS chapitres au lieu de cinq.** `STAR_FARM_IMPACTS` porte les **huit** cratères (3 étoiles / 2 matières / 3 vides — compté en important le module le 2026-08-30 ; il annonçait « cinq (2/1/2) » depuis le 480 bis), `resolveStarCalm` tient le barème 60/10 s et `resolveStarTownFall` sépare le gros météore. `STAR_FOLLOWER_SITES` dérive toutes les compagnes de `content:"star"`, `starFollowerAdded` identifie celle qui doit jouer son arrivée, `starFarmFlightPath` tient le cap stable des fragments et `queen` désigne l'unique reine. `starShipProgress` joint les cinq états du plan aux commandes et à la cale sans persistance supplémentaire. Aucun React, aucun dessin — `verify-quete.mjs` l'importe. |
 | `components/ferme/maire.js` | **L'AUDIENCE CHEZ LE MAIRE (480) : la table des battements et les résolveurs purs.** Douze nœuds, cinq actes, cinq familles d'argument, la jauge d'adhésion qui FUIT, l'élan, la rejouabilité côté hôte (`mayorReplay` : le client envoie sa TRANSCRIPTION, l'hôte la rejoue). Aucun React, aucun dessin — `verify-maire.mjs` l'importe. ⚠️ **C'est un système de NÉGOCIATION, pas une scène** : la confiance gagnée sert les audiences futures, donc une commission ou le cadastre s'y ajouteront en une table de plus. |
 | `components/ferme/MaireScene.js` | **la VUE de l'audience — le seul morceau de 3D du monde partagé.** Écran PLEIN, à la PREMIÈRE PERSONNE, caméra libre dans la pièce, bulles projetées, réponses en jaune, **mode spectateur** (`MayorWatch`), repli plat si WebGL manque. ⚠️ Il porte `mayorCtxOf`, **la fonction de contexte que le CLIENT et l'HÔTE appellent tous les deux** : leur accord est une propriété du code, pas une coïncidence. |
 | `components/ferme/maireBureau.js` | **LE BUREAU DU MAIRE, EN CODE (481).** La pièce entière (parquet, boiseries, pilastres, fenêtre sur la place, bibliothèque, buste, lustre, porte qui claque), le meuble et ses objets — *chacun est une réplique de l'arbre* —, et le maire : sept postures, huit visages, sourcils/paupières/bouche, cinématique inverse des bras. ⚠️ **PROCÉDURAL, comme `fermeArt.js` mais en 3D** : aucun fichier à charger, textures peintes au canevas 2D, `THREE` passé en paramètre (jamais importé — deux copies de three.js dans une page ne ressemblent à rien). ⚠️ Rien n'y vit dans la closure de la boucle de rendu : `buildOffice` rend un objet, `applyPose`/`applyFace`/`solveArm` sont des fonctions de module. |

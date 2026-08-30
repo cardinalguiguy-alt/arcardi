@@ -890,7 +890,22 @@ export function resolveMayorAsk(e, who, name, at, rnd, audienceDay) {
   const a = e.mayor.appt;
   if (a && a.due && !mayorApptStale(e, t)) return "mayorAlreadyBooked";
   const r = typeof rnd === "function" ? rnd : Math.random;
-  const mood = mayorPickMood(r, !!audienceDay, !!e.mayor.sour);
+  /* ⚠️⚠️⚠️ 2026-08-31 — LA RANCUNE VOYAGE AVEC LE RENDEZ-VOUS, PARCE QU'ELLE SE
+     CONSOMME ICI ET S'AFFICHE PLUS TARD. Les deux lignes ci-dessous formaient un
+     défaut que 113 contrôles verts ne pouvaient pas voir : on LIT `sour` pour
+     forcer l'humeur, on l'EFFACE dans la ligne suivante, et le seul texte qui
+     l'explique au joueur (`L.maire.moodSour`) est affiché par un écran qui exige
+     un rendez-vous — donc qui n'existe qu'APRÈS l'effacement. Résultat : le maire
+     recevait « d'une humeur de chien » sans que rien, nulle part, ne relie ça à
+     la porte claquée un quart d'heure plus tôt. La punition était livrée, sa
+     CAUSE était muette.
+     ⚠️ La donnée se recopie donc sur le rendez-vous qu'elle a gâté, là où elle
+     survivra jusqu'à l'écran qui doit la dire : `e.mayor.sour` reste le drapeau
+     qui se consomme, `appt.sour` est la trace de ce qu'il a produit. C'est le §6
+     (« un résident a une zone, pas deux positions ») appliqué à une humeur : une
+     seule vérité, recopiée là où on la lit, jamais recalculée. */
+  const sour = e.mayor.sour ? 1 : 0;
+  const mood = mayorPickMood(r, !!audienceDay, !!sour);
   e.mayor.sour = 0;                       // la rancune se consomme au rendez-vous suivant
   e.mayor.appt = {
     by: String(who || "").slice(0, 40),
@@ -898,6 +913,7 @@ export function resolveMayorAsk(e, who, name, at, rnd, audienceDay) {
     at: t,
     due: t + mayorPickWait(r),
     mood,
+    sour,
   };
   return "mayorBooked";
 }

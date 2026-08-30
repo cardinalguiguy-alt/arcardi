@@ -104,6 +104,11 @@ const STAR_FR = {
   },
   farm: {
     mapImpact: (n) => `Impact ${n}`,
+    /* ⚠️ 2026-08-31 — L'ÉTAT FOUILLÉ NE PASSAIT QUE PAR LA COULEUR (pastille grise
+       et fixe contre orange pulsante). C'est juste, et ça ne suffit pas : sur huit
+       pastilles, savoir lesquelles restent demande de comparer des teintes plutôt
+       que de lire. Le mot est ajouté À CÔTÉ de la couleur, il ne la remplace pas. */
+    mapImpactSeen: (n) => `Impact ${n} — fouillé`,
     seen: "Ce point d'impact a déjà été fouillé.",
     /* ⚠️ ZIP 469 — `empty1`/`empty2` SONT PARTIES DANS `dig.bodyEmpty` : le vide
        ne se raconte plus en deux bulles après coup, il s'annonce dans l'overlay de
@@ -160,7 +165,13 @@ const STAR_FR = {
     titleEmpty: "Rien.",
     bodyStarLight: "Une petite lumière bleue se tasse au fond dès que tu la regardes.",
     bodyStarWarm: "Une petite lumière rose. Elle ne recule pas : elle renifle vers toi.",
-    bodyStarLure: "Une petite lumière blanche. Elle bondit hors de portée dès que tu approches.",
+    /* hors-zip — LE TEXTE SUIT LE DESSIN. Elle ne bondit plus latéralement (ancien
+       texte, ancien visuel) : elle plonge sous la terre sur place dès qu'on
+       l'approche à mains nues (`Q.starHideK`/`Q.starHideAnim` appliqués à la
+       verticale, voir FermeGame.js). Un texte qui décrit un mouvement que
+       l'écran ne montre plus dit d'emblée le POURQUOI (les mains vides), pas
+       seulement le symptôme. */
+    bodyStarLure: "Une petite lumière blanche. Elle plonge sous la terre dès que tu approches à mains nues.",
     bodyMaterial: "Sous la cendre : lisse seulement sur sa cassure. La croûte a pris ; le cœur brûle encore.",
     bodyEmpty: "De la cendre tiède, du sable vitrifié, et rien dedans. Toutes les lumières n'abritaient pas quelque chose.",
     /* ╔═══════════════════════════════════════════════════════════════════════
@@ -235,13 +246,27 @@ const STAR_FR = {
       farmImpactSimmer: "Ça mijote au chaudron. Ne va pas trop loin, ce sera vite prêt.",
       farmImpactTake: "Le plat est prêt au chaudron. Prends-le (E) et ne traîne pas.",
       farmImpactCarry: "Porte le plat à son cratère avant qu'il refroidisse (E).",
-      /* 480 bis — LA BLANCHE : une seule phrase pour toute l'étape (voir la
-         note de `starTameGoalKey`, quete.js) — elle fuit tant que la fiole
-         n'est pas prête, et le chaudron est dans le monde maléfique, forcé
-         pendant cette étape. */
+      /* hors-zip — DEUX PHRASES, PAS UNE (voir la note de `starTameGoalKey`,
+         quete.js) : celle-ci tant que la fiole n'est pas prête (le chaudron
+         est dans le monde maléfique, forcé pendant cette étape), l'autre
+         (`farmImpactLureGive`) dès qu'elle l'est — signalé par Guillaume, le
+         chevron restait planté sur le chaudron une fois la fiole en poche. */
       farmImpactLure: "Elle fuit à mains nues. Prépare une Essence d'étoile au chaudron (E).",
-      farmImpactCool: "Une plaque noire attend d'être refroidie. Reviens l'examiner (E).",
-      townWait: "Prends le train pour Valley Town. Reste-y, occupe-toi : l’étoile insiste.",
+      /* hors-zip — AUCUN « (E) » : le geste est une simple approche, tenue
+         immobile près du trou (voir `starCalmSelf`, FermeGame.js — la blanche
+         ne demande pas qu'on lui tourne le dos, juste la proximité), pas une
+         touche à presser. Même famille que `farmImpactTame`, qui ne mentionne
+         pas non plus de touche pour la même raison. */
+      farmImpactLureGive: "Tu as l'Essence d'étoile. Approche du trou blanc, elle viendra d'elle-même.",
+      farmImpactCool: "La plaque noire refroidit. Examine-la ici (E) pour poursuivre.",
+      /* ⚠️ hors-zip — « l'étoile insiste » retiré (Guillaume : la personnification
+         était de trop) et « occupe-toi » remplacé par une suggestion CONCRÈTE —
+         un bandeau qui dit quoi faire, pas seulement d'attendre (même exigence
+         que la note du 455 juste au-dessus). Et DEUX phrases, pas une : celle-ci
+         suppose qu'on n'est pas encore parti, `townWaitThere` (juste en dessous)
+         parle à qui a déjà pris le train — voir la note de `starGoalKey`. */
+      townWait: "Prends le train pour Valley Town. Reste actif 2 min : marche ou interagis.",
+      townWaitThere: "Reste actif 2 min à Valley Town : marche, explore ou interagis.",
       craterHot: "À l'est de Valley Town, le trou brûle encore. Attends qu'il refroidisse.",
       /* ⚠️⚠️ ZIP 479 — LA REINE NE SE PREND PLUS EN DESCENDANT. « Descends :
          quelque chose se cache au fond » décrivait le geste d'avant ce lot, et le
@@ -256,7 +281,7 @@ const STAR_FR = {
          orpheline de texte, il échoue aussi sur un texte orphelin de clé. */
       /* ⚠️ ZIP 454 — plus courtes que leurs sœurs : le français gonfle de 15 à
          20 %, et ces deux-là portent un nom propre qu'on ne peut pas raccourcir. */
-      engineer:       "Va demander un ingénieur naval à la mairie (E). L'étoile insiste.",
+      engineer:       "Va demander un ingénieur naval à la mairie (E).",
       /* ⚠️⚠️ ZIP 470 — `engineerWait` DEVIENT DEUX PHRASES, UNE PAR PHASE. Avant,
          la même phrase ("il dessine") couvrait le train ET le dessin, donc elle
          mentait pendant les trois premières minutes. Demande de Guillaume : dire
@@ -291,6 +316,20 @@ const STAR_FR = {
        ramassé dans le monde maléfique — jamais en régime permanent une fois
        la ferme équipée. Voir `starGoalText`, FermeGame.js. */
     cauldronPassage: "Fouillez les moindres recoins de cette forêt maudite et vous y trouverez un chaudron magique, mais restez vigilant.",
+    /* hors-zip — L'INFOBULLE DES PUCES CLIQUABLES DU CHAPITRE 1. Une seule
+       fonction, composée, jamais deux chaînes séparées qui pourraient finir
+       par ne plus s'accorder (voir myStarFocusRef, FermeGame.js). */
+    focusTip: (mine, shared) => (mine ? "Ton objectif personnel — reclique pour l'annuler" : "Viser ce trou en priorité, sans attendre les autres")
+      + (shared ? " · un camarade vise le même" : ""),
+    /* hors-zip — LE TOAST QUI ANNONCE LES PUCES CLIQUABLES, À PLUSIEURS
+       SEULEMENT. Demande de Guillaume : sans lui, la fonctionnalité entière
+       (myStarFocusRef, la puce cliquable ci-dessus) tenait sur une infobulle
+       qu'il faut SURVOLER pour découvrir — donc jamais vue au doigt, et jamais
+       vue par quelqu'un qui ne pense pas à passer la souris sur une puce déjà
+       pleine. Un seul toast, une seule fois par partie (voir starFocusHintRef,
+       FermeGame.js), déclenché dès que le chapitre 1 est actif ET qu'un
+       camarade est là — jamais en solo, où la question ne se pose pas. */
+    focusHint: "Vous êtes plusieurs. Clique une puce pour viser un trou en particulier.",
     /* HORS-ZIP — LE COMPTE À REBOURS DU GROS MÉTÉORE. Signalé par Guillaume :
        la chute semblait ne jamais arriver, faute d'affichage — le mécanisme
        (deux minutes de présence active en ville, voir STAR_TOWN_ACTIVE_MS
@@ -298,11 +337,15 @@ const STAR_FR = {
        pastille ne s'affiche que côté hôte (lui seul tient l'horloge réelle,
        §3 de CLAUDE.md : on ne diffuse pas ce qui se déduit, mais ici rien ne
        se déduit chez l'invité, qui n'a pas cette horloge). */
-    townFallCountdown: (mmss) => `Ça gronde. Encore ${mmss} d'activité en ville et le ciel cède.`,
-    againTitle: "Où tu en étais",
-    /* ⚠️ ZIP 453 — LE PLURIEL EST DÉRIVÉ, LUI AUSSI : cette phrase écrivait
-       « Tu as 1 morceaux » au premier morceau, ce qu'aucun banc ne regardait. */
-    again: (n, total) => `Tu as ${nfr(n)} morceau${n > 1 ? "x" : ""} sur ${nfr(total)}. La petite étoile est toujours là.`,
+    townFallCountdown: (mmss) => `Impact dans ${mmss} d'activité en ville.`,
+    againTitle: "Prochaine étape",
+    againClose: "Reprendre la quête",
+    /* Le rappel nomme l'objet construit et traite zéro comme un vrai cas :
+       « zéro morceau » était grammatical mais ne disait pas ce que le compteur
+       changeait dans le monde. */
+    again: (n, total) => n <= 0
+      ? `Aucune des ${nfr(total)} pièces du bateau n'est encore montée. Les étoiles restent avec toi.`
+      : `${nfr(n)} pièce${n > 1 ? "s" : ""} du bateau montée${n > 1 ? "s" : ""} sur ${nfr(total)}. Les étoiles restent avec toi.`,
   },
   guide: {
     go: "L'étoile reine prend la tête. Suis sa lumière.",
@@ -566,7 +609,15 @@ const STAR_FR = {
   },
   end: {
     end1: "Elle monte comme un ballon qu'on lâche. Doucement. Comme si elle avait toute la nuit.",
-    end2: "En bas, le bateau est entier. Il flotte enfin. Il attend quelqu'un qui sache partir.",
+    /* ⚠️⚠️ 2026-08-31 — « IL FLOTTE ENFIN » ÉTAIT FAUX, ET C'EST LE TEXTE QUI AVAIT
+       TORT, PAS LE DESSIN. Le placement du navire est délibérément une CALE à
+       terre : `starShipPos` balaie jusqu'à une case libre, praticable et au bord
+       de l'eau, `STAR_SHIP_WATER_MAX` bornant la distance à trois cases (voir sa
+       note — « un navire posé au milieu d'un pré est un décor absurde »). Rien
+       ne le met jamais à l'eau. On lisait donc, au moment le plus important de
+       la quête, une phrase que l'écran contredisait. La coque prête à descendre
+       dit la même fierté sans mentir — et elle prépare le départ d'Eduardo. */
+    end2: "En bas, le bateau est entier, calé sur la grève, prêt à descendre. Il attend quelqu'un qui sache partir.",
     end3: "Le vent tombe. Plus personne ne dit rien.",
     gift: "Quelque chose d'elle est resté avec toi.",
     /* ⚠️ ZIP 479 — LA SEULE PHRASE DU JEU QUI NOMME DEUX JOUEURS. Elle ne se dit
@@ -640,7 +691,7 @@ const STAR_FR = {
     ready: "Les plans sont à toi. Ouvre-les (P) pour voir le bateau.",
     openBtn: "📐 Le plan",
     panelTitle: (name) => `📐 Plans de construction — ${name}`,
-    panelHint: (total) => `${Nfr(total)} pièces, cinq listes. Fais tailler le bois, puis monte-les ici.`,
+    panelHint: (total) => `${Nfr(total)} pièces. Leur état suit directement les commandes de Tristan et la cale.`,
     panelAtLake: "Déplie-le au bord du lac : le bateau apparaîtra sur sa cale.",
     lakeToast: "Tu déplies le plan devant la cale. Le bateau se dessine dans l'air, en entier.",
     lakeClose: "Tu replies le plan. Le bateau s'efface.",
@@ -651,6 +702,24 @@ const STAR_FR = {
       hull: "Le bordé de la coque", rudder: "Le safran et sa barre",
       mast: "Le mât", sail: "La vergue", bell: "La chaise de cloche",
     }[k] || k),
+    progressTitle: "Progression de la construction",
+    progressPart: (k) => ({
+      hull: "Coque", rudder: "Gouvernail", mast: "Mât", sail: "Voile", bell: "Cloche",
+    }[k] || k),
+    progressState: (state) => ({
+      done: "ASSEMBLÉ", ready: "À MONTER", building: "EN FABRICATION",
+      available: "À COMMANDER", locked: "À VENIR",
+    }[state] || state),
+    progressDetail: (state, detail) => state === "done" ? "En place sur la cale."
+      : state === "ready" ? "Bois livré ; montage sur la cale."
+      : state === "building" ? `Tristan travaille · ${detail}`
+      : state === "available" ? detail
+      : detail === "noPlan" ? "Plans nécessaires."
+      : detail === "noMayor" ? "Accord du maire nécessaire."
+      : detail === "noShard" ? "Éclat correspondant à retrouver."
+      : "Étape encore verrouillée.",
+    progressNext: (part) => `Prochaine transformation visible : ${part}.`,
+    progressComplete: "Construction terminée : toutes les pièces sont sur la cale.",
     /* ── TRISTAN. */
     orderTitle: (name) => `🪵 Le chantier de ${name}`,
     /* ⚠️⚠️ ZIP 478 — CETTE PHRASE DÉCRIVAIT LA RÈGLE QU'ON VIENT DE SUPPRIMER.
@@ -728,6 +797,16 @@ const STAR_FR = {
     away: (d) => `Eduardo emmène le bateau des étoiles au large. Il veut voir ce qu'il y a de l'autre côté (retour dans ${d}).`,
     back: (goods) => `Le bateau des étoiles est rentré. Eduardo rapporte : ${goods}.`,
   },
+  /* ⚠️⚠️⚠️ 2026-08-31 — LA PHRASE DU CHAT SORT DU MENU DÉVELOPPEUR, PARCE QU'ELLE
+     N'EST PAS UN OUTIL. `STAR_FR.dev` POINTE SUR `STAR_EN.dev` (voir sa note) et
+     c'est un choix assumé : un outil ne se traduit pas. Mais `dev.chat` était
+     DIFFUSÉ — `broadcastChat` l'envoie à tout le salon — donc l'autre joueur,
+     qui n'a jamais ouvert le menu, lisait « Guillaume touched the star quest »
+     en plein milieu d'un jeu français. Une règle juste appliquée une clé trop
+     loin. La PHRASE est donc ici, traduite ; le LIBELLÉ du bouton reste anglais
+     et cité tel quel, parce que c'est le nom d'un outil et qu'il faut pouvoir le
+     retrouver dans le menu. */
+  devChat: (who, what) => `${who} a touché à la quête de l'étoile : ${what}.`,
   trace: {
     dawnBell: "La vieille cloche sonne une fois à l'aube. Elle a toujours fait ça, paraît-il.",
     newStar: "Il y a une étoile de plus au-dessus de la vallée. Une brillante. Elle vient du lac.",
@@ -846,6 +925,7 @@ const STAR_EN = {
   },
   farm: {
     mapImpact: (n) => `Impact ${n}`,
+    mapImpactSeen: (n) => `Impact ${n} — searched`,
     seen: "This impact site has already been searched.",
     starPeek: "A little light shrinks into the crater whenever you look at it.",
     /* ⚠️ ZIP 479 — voir la note française : c'est une demi-minute depuis le 478. */
@@ -868,7 +948,8 @@ const STAR_EN = {
     titleEmpty: "Nothing.",
     bodyStarLight: "A small blue light huddles at the bottom the moment you look at it.",
     bodyStarWarm: "A small pink light. It does not shrink back: it sniffs towards you.",
-    bodyStarLure: "A small white light. It hops out of reach the moment you approach.",
+    // hors-zip — see the FR block: she dives underground on the spot now, not sideways.
+    bodyStarLure: "A small white light. It dives underground the moment you approach empty-handed.",
     bodyMaterial: "Under the ash: smooth only where it broke. The crust has set; the core still burns.",
     bodyEmpty: "Warm ash, glassed sand, and nothing inside. Not every light was hiding something.",
     /* ⚠️ ZIP 479 — voir la note française : l'overlay enseigne le geste, et il
@@ -935,8 +1016,14 @@ const STAR_EN = {
       farmImpactTake: "The dish is ready at the cauldron. Take it (E) and get going.",
       farmImpactCarry: "Carry the dish to its crater before it goes cold (E).",
       farmImpactLure: "It flees bare-handed. Brew a Star Essence at the cauldron (E).",
-      farmImpactCool: "A black plate is waiting to cool down. Come back and examine it (E).",
-      townWait: "Take the train to Valley Town. Stay there, keep busy: the star insists.",
+      // hors-zip — see the FR block: no "(E)", the gesture is a plain hold, not a keypress.
+      farmImpactLureGive: "You have the Star Essence. Go near the white hole — she will come on her own.",
+      farmImpactCool: "The black plate is cooling. Examine it here (E) to continue.",
+      // hors-zip — see the FR block: no more "the star insists", and a concrete
+      // suggestion instead of vague "keep busy"; two lines, one for before the
+      // train, one for a player already there (see starGoalKey, quete.js).
+      townWait: "Take the train to Valley Town. Stay active for 2 min: walk or interact.",
+      townWaitThere: "Stay active in Valley Town for 2 min: walk, explore, or interact.",
       craterHot: "East of Valley Town the hole still burns. Wait for it to cool.",
       /* ⚠️ ZIP 479 — voir la note française : le fond du trou est l'endroit où le
          nouveau geste ne marche pas, ce texte y envoyait. */
@@ -947,7 +1034,7 @@ const STAR_EN = {
          règle que les huit autres — OÙ et QUOI, jamais pourquoi — et ils sont plus
          courts que la moyenne parce qu'ils portent un NOM PROPRE, qui ne se coupe
          pas sans devenir illisible (le bandeau rabote en silence, 449). */
-      engineer:       "Ask the town hall for a naval engineer (E). The star insists.",
+      engineer:       "Ask the town hall for a naval engineer (E).",
       engineerTravel: "Kerguélen has been notified. He'll reach Valley Town shortly.",
       engineerWork:   "Kerguélen is drawing by the pier. He'll hand over his plans soon.",
       mayor:          "The plans are ready. Ask the town hall for an audience with the mayor.",
@@ -960,12 +1047,20 @@ const STAR_EN = {
     // Chevron fallback while the cauldron hasn't been picked up yet — see the
     // FR block for why this one line is allowed to run past the usual 80-char cap.
     cauldronPassage: "Search every corner of this cursed forest and you'll find a magic cauldron there — but stay alert.",
+    // hors-zip — tooltip for the clickable chapter-1 pips, see the FR block.
+    focusTip: (mine, shared) => (mine ? "Your personal target — click again to clear it" : "Aim for this hole first, without waiting on the others")
+      + (shared ? " · a friend is aiming for the same one" : ""),
+    // hors-zip — the multiplayer toast that announces the clickable pips, see the FR block.
+    focusHint: "There's more than one of you. Click a dot to pick a hole of your own.",
     // The big meteor's countdown — host-side only, see the FR block for why.
-    townFallCountdown: (mmss) => `It's rumbling. ${mmss} more of activity in town and the sky gives way.`,
+    townFallCountdown: (mmss) => `Impact in ${mmss} of activity in town.`,
     /* Le rappel de reprise. ⚠️ UNE FOIS PAR SESSION, jamais deux — un « où en
        étions-nous » qui revient à chaque écran est une notification. */
-    againTitle: "Where you were",
-    again: (n, total) => `You have ${nen(n)} of ${nen(total)} piece${n > 1 ? "s" : ""}. The little star is still with you.`,
+    againTitle: "Your next step",
+    againClose: "Resume the quest",
+    again: (n, total) => n <= 0
+      ? `None of the ship's ${nen(total)} parts has been installed yet. The stars are still with you.`
+      : `${nen(n)} of the ship's ${nen(total)} parts ${n === 1 ? "is" : "are"} installed. The stars are still with you.`,
   },
   /* ╔═══════════════════════════════════════════════════════════════════════════
      ║ ZIP 449 — LE FAMILIER QUI MÈNE. Trois lignes, pas une de plus.
@@ -1133,7 +1228,7 @@ const STAR_EN = {
   },
   end: {
     end1: "It goes up the way a balloon does. Slowly. Like it has all night.",
-    end2: "Down by the water, the boat is whole. It floats at last. It is waiting for someone who can sail.",
+    end2: "Down by the water, the boat is whole, cradled on the shore, ready to go down. It is waiting for someone who can sail.",
     end3: "The wind drops. Nobody says anything else.",
     gift: "Something of it stayed with you.",
     /* ⚠️ ZIP 479 — voir la note française : la seule phrase qui nomme deux joueurs. */
@@ -1179,7 +1274,7 @@ const STAR_EN = {
     ready: "The plans are yours. Open them (P) to see the boat.",
     openBtn: "📐 The plan",
     panelTitle: (name) => `📐 Building plans — ${name}`,
-    panelHint: (total) => `${Nen(total)} pieces, five lists. Have the wood cut, then raise them here.`,
+    panelHint: (total) => `${Nen(total)} pieces. Their status comes straight from Tristan's orders and the slipway.`,
     panelAtLake: "Unfold it by the lake and the boat will stand on its slipway.",
     lakeToast: "You unfold the plan in front of the slipway. The whole boat draws itself in the air.",
     lakeClose: "You fold the plan away. The boat fades out.",
@@ -1188,6 +1283,24 @@ const STAR_EN = {
       hull: "Hull planking", rudder: "Rudder and tiller",
       mast: "The mast", sail: "The yard", bell: "The bell cradle",
     }[k] || k),
+    progressTitle: "Construction progress",
+    progressPart: (k) => ({
+      hull: "Hull", rudder: "Rudder", mast: "Mast", sail: "Sail", bell: "Bell",
+    }[k] || k),
+    progressState: (state) => ({
+      done: "ASSEMBLED", ready: "TO BE RAISED", building: "BEING MADE",
+      available: "TO ORDER", locked: "UPCOMING",
+    }[state] || state),
+    progressDetail: (state, detail) => state === "done" ? "In place on the slipway."
+      : state === "ready" ? "Timber delivered; raise it on the slipway."
+      : state === "building" ? `Tristan is working · ${detail}`
+      : state === "available" ? detail
+      : detail === "noPlan" ? "Plans required."
+      : detail === "noMayor" ? "The mayor's approval is required."
+      : detail === "noShard" ? "Find the matching shard."
+      : "This step is still locked.",
+    progressNext: (part) => `Next visible change: ${part}.`,
+    progressComplete: "Construction complete: every piece is on the slipway.",
     orderTitle: (name) => `🪵 ${name}'s workshop`,
     orderHint: "He can run all five at once. What's short isn't time any more: it's the stock.",
     orderCost: (wood, d, extra) => `${wood} wood${extra ? ` · ${extra}` : ""} · ${d} of work`,
@@ -1232,6 +1345,7 @@ const STAR_EN = {
     back: (goods) => `The star boat is back. Eduardo brings: ${goods}.`,
   },
   /* ── CE QUE LA VILLE GARDE. */
+  devChat: (who, what) => `${who} touched the star quest: ${what}.`,
   trace: {
     dawnBell: "The old bell rings once at dawn. It always has, people say.",
     newStar: "There's a new star over the valley. Bright one. It came from the lake.",
@@ -1285,7 +1399,6 @@ const STAR_EN = {
        bureau est deux pièces plus loin, derrière une porte. Sans ce bouton, chaque
        essai de l'audience commence par une promenade. */
     standMayor: "🎩 Stand at the Mayor's desk",
-    chat: (who, what) => `${who} touched the star quest: ${what}.`,
   },
   /* ── LES ANNONCES DE CHAT. ⚠️ SANS EMOJI EN TÊTE : `broadcastChat` en écrit
      déjà un, et le 442 a livré « 🔍 🔍 Joueur1 a trouvé… » sur six libellés
@@ -1445,6 +1558,15 @@ const MAIRE_FR = {
   settleHint: "Signer maintenant. Vous ne saurez jamais jusqu'où il serait allé.",
   leave: "Se lever et partir",
   waitRead: "Il finit sa phrase.",
+
+  /* ── hors-zip — LA REPRISE, UNE FOIS PAR AUDIENCE. Demande de Guillaume :
+     « si on déconne et on le vexe, permettre une seconde chance ». Offerte
+     seulement sur une réponse qui casse quelque chose (`grade==="fault"`),
+     avant qu'elle ne parte — décliner ne coûte rien, le budget ne se dépense
+     qu'en la prenant. ── */
+  redoOffer: "Vous avez contrarié le maire. Voulez-vous vous reprendre ?",
+  redoYes: "↩️ Oui, je me reprends",
+  redoNo: "Non, j'assume",
 
   /* ── les familles d'argument ───────────────────────────────────────────── */
   type: { money: "L'argent", risk: "La sûreté", town: "La ville", self: "Lui", heart: "Le fond" },
@@ -1632,6 +1754,13 @@ const MAIRE_FR = {
     trust2: "Le maire vous a à la bonne. La prochaine fois sera plus courte.",
     trust3: "Vous avez ses coudées franches. La prochaine fois, il écoutera avant de compter.",
     again: "Vous pouvez redemander une audience à l'accueil. Il se souvient de ce que vous lui avez déjà dit.",
+    /* ⚠️⚠️ 2026-08-31 — CETTE LIGNE MANQUAIT, ET C'ÉTAIT LA SEULE FIN SUR SIX SANS
+       CONCLUSION. `MaireScene` aiguille `over === "slam"` ici (et l'exclut de
+       `again` juste après), donc la porte claquée affichait sa narration puis un
+       blanc : le joueur voyait la vitre trembler et n'apprenait nulle part ce que
+       ça lui coûtait. La sanction, elle, existait depuis le 480 — c'est la
+       famille « un mécanisme sans affichage » du §4. */
+    slam: "Il ne vous recevra pas avant un quart d'heure. Ninon vous redonnera un rendez-vous quand vous voudrez — mais il se souviendra de la porte.",
   },
   chat: {
     signed: (n) => `${n} a obtenu la signature du maire : le chantier naval est autorisé.`,
@@ -1716,6 +1845,10 @@ const MAIRE_EN = {
   settleHint: "Sign now. You will never know how far he would have gone.",
   leave: "Stand up and leave",
   waitRead: "He is finishing his sentence.",
+
+  redoOffer: "You've upset the mayor. Do you want to take that back?",
+  redoYes: "↩️ Yes, take it back",
+  redoNo: "No, I'll own it",
 
   type: { money: "Money", risk: "Liability", town: "The town", self: "Himself", heart: "The truth" },
 
@@ -1893,6 +2026,7 @@ const MAIRE_EN = {
     trust2: "The mayor has taken to you. Next time will be shorter.",
     trust3: "You have a free hand with him. Next time he will listen before he counts.",
     again: "You can ask the front desk for another audience. He remembers what you have already told him.",
+    slam: "He will not see you for a quarter of an hour. Ninon will book you again whenever you like — but he will remember the door.",
   },
   chat: {
     signed: (n) => `${n} secured the mayor's signature: the shipyard is authorised.`,
@@ -2220,7 +2354,6 @@ export const FERME_STR = {
       land: "Je voudrais acheter une parcelle.",
       ballot: "Je viens voter.",
       fonds: "C'est quoi, le fonds de la halle ?",
-      engineer: "Connaissez-vous quelqu'un qui dessine des bateaux ?",
       engineer: "Connaissez-vous quelqu'un qui dessine des bateaux ?",
     }[k] || k),
     hallTopicTitle: (k) => ({
@@ -2915,12 +3048,19 @@ export const FERME_STR = {
     rabbitCaughtChat: (who) => `🐇 ${who} a attrapé un lapin sauvage !`,
     injuredBanner: (mmss) => `🩸 Blessé — repos forcé (${mmss})`,
     toastInjured: "Tu es blessé, impossible d'agir pour le moment.",
+    /* ⚠️⚠️ 2026-08-31 — LE REFUS QUI MANQUAIT. `toastInjured` s'affiche au moment
+       où l'on est blessé ; celui-ci s'affiche à chaque fois qu'on ESSAIE d'agir
+       pendant le repos forcé, parce que E ne répondait rien du tout — voir la
+       garde `isInjured()` de `onKeyDown`. Il donne le décompte, sans quoi on ne
+       sait pas s'il reste dix secondes ou dix minutes. */
+    toastInjuredWait: (mmss) => `🩸 Tu es blessé — repos forcé encore ${mmss}. Ce que tu as rapporté t'attend.`,
     // Boutique : bâtiments et animaux
     buyLabel: "Acheter",
     shopHorseTitle: (cost) => `🐴 Cheval : ${cost} or`,
     shopHorseSub: "Se déplace bien plus vite une fois enfourché. Approche-toi et appuie sur F (peut porter deux cavaliers).",
     shopHorseCount: (n, max) => `Chevaux dans la ferme : ${n}/${max}`,
     shopHorseMax: "🐴 Nombre maximum de chevaux atteint.",
+    horseCoatLabel: (coat) => coat === "black" ? "Acheter (noir)" : coat === "white" ? "Acheter (blanc)" : "Acheter (bai)",
     shopWellTitle: (cost) => `🪣 Puits : ${cost} or`,
     shopWellSub: "Ajoute un 2e point de téléport dans les champs (bouton 🪣).",
     shopWellOwned: "🪣 Puits déjà construit.",
@@ -4637,11 +4777,13 @@ export const FERME_STR = {
     rabbitCaughtChat: (who) => `🐇 ${who} caught a wild rabbit!`,
     injuredBanner: (mmss) => `🩸 Injured — forced rest (${mmss})`,
     toastInjured: "You're injured and can't act right now.",
+    toastInjuredWait: (mmss) => `🩸 You're injured — ${mmss} of forced rest left. What you brought back is waiting for you.`,
     buyLabel: "Buy",
     shopHorseTitle: (cost) => `🐴 Horse: ${cost} gold`,
     shopHorseSub: "Moves much faster once mounted. Walk up to it and press F (can carry two riders).",
     shopHorseCount: (n, max) => `Horses on the farm: ${n}/${max}`,
     shopHorseMax: "🐴 Maximum number of horses reached.",
+    horseCoatLabel: (coat) => coat === "black" ? "Buy (black)" : coat === "white" ? "Buy (white)" : "Buy (bay)",
     shopWellTitle: (cost) => `🪣 Well: ${cost} gold`,
     shopWellSub: "Adds a 2nd teleport point in the fields (🪣 button).",
     shopWellOwned: "🪣 Well already built.",

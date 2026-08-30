@@ -104,6 +104,11 @@ const STAR_FR = {
   },
   farm: {
     mapImpact: (n) => `Impact ${n}`,
+    /* ⚠️ 2026-08-31 — L'ÉTAT FOUILLÉ NE PASSAIT QUE PAR LA COULEUR (pastille grise
+       et fixe contre orange pulsante). C'est juste, et ça ne suffit pas : sur huit
+       pastilles, savoir lesquelles restent demande de comparer des teintes plutôt
+       que de lire. Le mot est ajouté À CÔTÉ de la couleur, il ne la remplace pas. */
+    mapImpactSeen: (n) => `Impact ${n} — fouillé`,
     seen: "Ce point d'impact a déjà été fouillé.",
     /* ⚠️ ZIP 469 — `empty1`/`empty2` SONT PARTIES DANS `dig.bodyEmpty` : le vide
        ne se raconte plus en deux bulles après coup, il s'annonce dans l'overlay de
@@ -604,7 +609,15 @@ const STAR_FR = {
   },
   end: {
     end1: "Elle monte comme un ballon qu'on lâche. Doucement. Comme si elle avait toute la nuit.",
-    end2: "En bas, le bateau est entier. Il flotte enfin. Il attend quelqu'un qui sache partir.",
+    /* ⚠️⚠️ 2026-08-31 — « IL FLOTTE ENFIN » ÉTAIT FAUX, ET C'EST LE TEXTE QUI AVAIT
+       TORT, PAS LE DESSIN. Le placement du navire est délibérément une CALE à
+       terre : `starShipPos` balaie jusqu'à une case libre, praticable et au bord
+       de l'eau, `STAR_SHIP_WATER_MAX` bornant la distance à trois cases (voir sa
+       note — « un navire posé au milieu d'un pré est un décor absurde »). Rien
+       ne le met jamais à l'eau. On lisait donc, au moment le plus important de
+       la quête, une phrase que l'écran contredisait. La coque prête à descendre
+       dit la même fierté sans mentir — et elle prépare le départ d'Eduardo. */
+    end2: "En bas, le bateau est entier, calé sur la grève, prêt à descendre. Il attend quelqu'un qui sache partir.",
     end3: "Le vent tombe. Plus personne ne dit rien.",
     gift: "Quelque chose d'elle est resté avec toi.",
     /* ⚠️ ZIP 479 — LA SEULE PHRASE DU JEU QUI NOMME DEUX JOUEURS. Elle ne se dit
@@ -784,6 +797,16 @@ const STAR_FR = {
     away: (d) => `Eduardo emmène le bateau des étoiles au large. Il veut voir ce qu'il y a de l'autre côté (retour dans ${d}).`,
     back: (goods) => `Le bateau des étoiles est rentré. Eduardo rapporte : ${goods}.`,
   },
+  /* ⚠️⚠️⚠️ 2026-08-31 — LA PHRASE DU CHAT SORT DU MENU DÉVELOPPEUR, PARCE QU'ELLE
+     N'EST PAS UN OUTIL. `STAR_FR.dev` POINTE SUR `STAR_EN.dev` (voir sa note) et
+     c'est un choix assumé : un outil ne se traduit pas. Mais `dev.chat` était
+     DIFFUSÉ — `broadcastChat` l'envoie à tout le salon — donc l'autre joueur,
+     qui n'a jamais ouvert le menu, lisait « Guillaume touched the star quest »
+     en plein milieu d'un jeu français. Une règle juste appliquée une clé trop
+     loin. La PHRASE est donc ici, traduite ; le LIBELLÉ du bouton reste anglais
+     et cité tel quel, parce que c'est le nom d'un outil et qu'il faut pouvoir le
+     retrouver dans le menu. */
+  devChat: (who, what) => `${who} a touché à la quête de l'étoile : ${what}.`,
   trace: {
     dawnBell: "La vieille cloche sonne une fois à l'aube. Elle a toujours fait ça, paraît-il.",
     newStar: "Il y a une étoile de plus au-dessus de la vallée. Une brillante. Elle vient du lac.",
@@ -902,6 +925,7 @@ const STAR_EN = {
   },
   farm: {
     mapImpact: (n) => `Impact ${n}`,
+    mapImpactSeen: (n) => `Impact ${n} — searched`,
     seen: "This impact site has already been searched.",
     starPeek: "A little light shrinks into the crater whenever you look at it.",
     /* ⚠️ ZIP 479 — voir la note française : c'est une demi-minute depuis le 478. */
@@ -1204,7 +1228,7 @@ const STAR_EN = {
   },
   end: {
     end1: "It goes up the way a balloon does. Slowly. Like it has all night.",
-    end2: "Down by the water, the boat is whole. It floats at last. It is waiting for someone who can sail.",
+    end2: "Down by the water, the boat is whole, cradled on the shore, ready to go down. It is waiting for someone who can sail.",
     end3: "The wind drops. Nobody says anything else.",
     gift: "Something of it stayed with you.",
     /* ⚠️ ZIP 479 — voir la note française : la seule phrase qui nomme deux joueurs. */
@@ -1321,6 +1345,7 @@ const STAR_EN = {
     back: (goods) => `The star boat is back. Eduardo brings: ${goods}.`,
   },
   /* ── CE QUE LA VILLE GARDE. */
+  devChat: (who, what) => `${who} touched the star quest: ${what}.`,
   trace: {
     dawnBell: "The old bell rings once at dawn. It always has, people say.",
     newStar: "There's a new star over the valley. Bright one. It came from the lake.",
@@ -1374,7 +1399,6 @@ const STAR_EN = {
        bureau est deux pièces plus loin, derrière une porte. Sans ce bouton, chaque
        essai de l'audience commence par une promenade. */
     standMayor: "🎩 Stand at the Mayor's desk",
-    chat: (who, what) => `${who} touched the star quest: ${what}.`,
   },
   /* ── LES ANNONCES DE CHAT. ⚠️ SANS EMOJI EN TÊTE : `broadcastChat` en écrit
      déjà un, et le 442 a livré « 🔍 🔍 Joueur1 a trouvé… » sur six libellés
@@ -1730,6 +1754,13 @@ const MAIRE_FR = {
     trust2: "Le maire vous a à la bonne. La prochaine fois sera plus courte.",
     trust3: "Vous avez ses coudées franches. La prochaine fois, il écoutera avant de compter.",
     again: "Vous pouvez redemander une audience à l'accueil. Il se souvient de ce que vous lui avez déjà dit.",
+    /* ⚠️⚠️ 2026-08-31 — CETTE LIGNE MANQUAIT, ET C'ÉTAIT LA SEULE FIN SUR SIX SANS
+       CONCLUSION. `MaireScene` aiguille `over === "slam"` ici (et l'exclut de
+       `again` juste après), donc la porte claquée affichait sa narration puis un
+       blanc : le joueur voyait la vitre trembler et n'apprenait nulle part ce que
+       ça lui coûtait. La sanction, elle, existait depuis le 480 — c'est la
+       famille « un mécanisme sans affichage » du §4. */
+    slam: "Il ne vous recevra pas avant un quart d'heure. Ninon vous redonnera un rendez-vous quand vous voudrez — mais il se souviendra de la porte.",
   },
   chat: {
     signed: (n) => `${n} a obtenu la signature du maire : le chantier naval est autorisé.`,
@@ -1995,6 +2026,7 @@ const MAIRE_EN = {
     trust2: "The mayor has taken to you. Next time will be shorter.",
     trust3: "You have a free hand with him. Next time he will listen before he counts.",
     again: "You can ask the front desk for another audience. He remembers what you have already told him.",
+    slam: "He will not see you for a quarter of an hour. Ninon will book you again whenever you like — but he will remember the door.",
   },
   chat: {
     signed: (n) => `${n} secured the mayor's signature: the shipyard is authorised.`,
@@ -2322,7 +2354,6 @@ export const FERME_STR = {
       land: "Je voudrais acheter une parcelle.",
       ballot: "Je viens voter.",
       fonds: "C'est quoi, le fonds de la halle ?",
-      engineer: "Connaissez-vous quelqu'un qui dessine des bateaux ?",
       engineer: "Connaissez-vous quelqu'un qui dessine des bateaux ?",
     }[k] || k),
     hallTopicTitle: (k) => ({
@@ -3017,6 +3048,12 @@ export const FERME_STR = {
     rabbitCaughtChat: (who) => `🐇 ${who} a attrapé un lapin sauvage !`,
     injuredBanner: (mmss) => `🩸 Blessé — repos forcé (${mmss})`,
     toastInjured: "Tu es blessé, impossible d'agir pour le moment.",
+    /* ⚠️⚠️ 2026-08-31 — LE REFUS QUI MANQUAIT. `toastInjured` s'affiche au moment
+       où l'on est blessé ; celui-ci s'affiche à chaque fois qu'on ESSAIE d'agir
+       pendant le repos forcé, parce que E ne répondait rien du tout — voir la
+       garde `isInjured()` de `onKeyDown`. Il donne le décompte, sans quoi on ne
+       sait pas s'il reste dix secondes ou dix minutes. */
+    toastInjuredWait: (mmss) => `🩸 Tu es blessé — repos forcé encore ${mmss}. Ce que tu as rapporté t'attend.`,
     // Boutique : bâtiments et animaux
     buyLabel: "Acheter",
     shopHorseTitle: (cost) => `🐴 Cheval : ${cost} or`,
@@ -4740,6 +4777,7 @@ export const FERME_STR = {
     rabbitCaughtChat: (who) => `🐇 ${who} caught a wild rabbit!`,
     injuredBanner: (mmss) => `🩸 Injured — forced rest (${mmss})`,
     toastInjured: "You're injured and can't act right now.",
+    toastInjuredWait: (mmss) => `🩸 You're injured — ${mmss} of forced rest left. What you brought back is waiting for you.`,
     buyLabel: "Buy",
     shopHorseTitle: (cost) => `🐴 Horse: ${cost} gold`,
     shopHorseSub: "Moves much faster once mounted. Walk up to it and press F (can carry two riders).",

@@ -3463,7 +3463,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (rg.ok) { out.starScene = { key: "end" }; broadcastChat("⭐", L.star.chat.done); }
       }
       dirtyRef.current = true;
-      broadcastChat("🛠️", L.star.dev.chat(f.name, L.star.dev.op(op)));
+      broadcastChat("🛠️", L.star.devChat(f.name, L.star.dev.op(op)));   // 2026-08-31 : la phrase est traduite, le libellé du bouton reste le nom de l'outil
       persistFnRef.current && persistFnRef.current();
       hostFlushOut(out, f, null);
       return;
@@ -3732,7 +3732,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          compte). Sans cette ligne, le second joueur ne verrait la bourse fraîche
          qu'à la prochaine diffusion de la quête, c'est-à-dire peut-être jamais. */
       const starRun = (sharedRef.current.star = Q.migrateStar(sharedRef.current.star));
-      const freshRun = Q.resolveStarCandy(starRun, f.id, gained, nowR).ok;
+      /* ⚠️⚠️ 2026-08-31 — `untilR` EST PASSÉ EN CINQUIÈME ARGUMENT, ET C'EST LE
+         CORRECTIF DU BLOCAGE. On vient d'écrire `f.injuredUntil = untilR` deux
+         lignes plus haut : la lumière ne doit pas s'éteindre pendant un repos
+         forcé qui dure DEUX FOIS sa fraîcheur, sinon toute défaite annule sa
+         propre récompense — ce que l'écran de fin de course promet pourtant de
+         conserver. La règle et son plafond vivent dans `quete.js` ; ici on ne
+         fabrique que le CONSTAT « il pourra agir à cet instant-là ». */
+      const freshRun = Q.resolveStarCandy(starRun, f.id, gained, nowR, untilR).ok;
       const sc = Math.max(0, Math.min(C.RUN_MAX_SCORE, req.score | 0));
       if (sc > (f.inv.runBest | 0)) f.inv.runBest = sc;
       dirtyRef.current = true;
@@ -3769,7 +3776,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          lumière bleue. En oublier une aurait fait de la sortie offroad un chemin
          « qui ne compte pas », sans qu'aucun texte ne le dise. */
       const starRunE = (sharedRef.current.star = Q.migrateStar(sharedRef.current.star));
-      const freshRunE = Q.resolveStarCandy(starRunE, f.id, gainedE, Date.now()).ok;
+      /* ⚠️ 2026-08-31 — MÊME CINQUIÈME ARGUMENT QUE DANS `runFailed`, ET IL SERT
+         ICI AUSSI : la sortie offroad n'INFLIGE pas de blessure, mais elle n'en
+         EFFACE pas non plus (voir la note ci-dessus). Un joueur qui ressort
+         proprement en étant déjà blessé aurait vu sa lumière s'éteindre pendant
+         un repos qu'il n'a pas provoqué. `f.injuredUntil` vaut 0 s'il est
+         valide, auquel cas rien ne change. */
+      const freshRunE = Q.resolveStarCandy(starRunE, f.id, gainedE, Date.now(), f.injuredUntil | 0).ok;
       const scE = Math.max(0, Math.min(C.RUN_MAX_SCORE, req.score | 0));
       if (scE > (f.inv.runBest | 0)) f.inv.runBest = scE;
       dirtyRef.current = true;
@@ -13837,7 +13850,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // fermier ne doit surtout pas se mettre à marcher dans le monde sombre
       // pendant qu'on court dans le défi.
       if (runChallengeRef.current || candyGameRef.current || labGameRef.current || cryGameRef.current) return; // zip 385 : idem pour le Gourmandin ; zip 393 : idem pour le labyrinthe
-      if (isInjured()) return; // blessé : aucune entrée, en attendant la fin du repos forcé
+      /* ⚠️⚠️⚠️ 2026-08-31 — BLESSÉ, ON N'AGIT TOUJOURS PAS, MAIS ON LE DIT.
+         Cette ligne renvoyait en SILENCE depuis toujours, et c'est la moitié
+         invisible du blocage de la lumière bleue : au bord du trou, l'invite
+         « E : lui offrir de la lumière bleue » restait affichée pendant que E ne
+         produisait RIEN — ni geste, ni refus, ni raison. Vu à l'écran le
+         2026-08-30 (quatre appuis, aucune réaction). C'est la famille « un
+         mécanisme sans affichage » du §4, et elle se paie ici en « la touche est
+         cassée » plutôt qu'en « je suis blessé ».
+         ⚠️ ON NE DÉBLOQUE RIEN : le `return` est intact, seule une réponse
+         s'ajoute. Et elle ne répond qu'à E — la touche avec laquelle on essaie
+         d'agir — sinon marcher contre un mur pendant dix minutes noierait
+         l'écran de bulles.
+         ⚠️ Le décompte est formaté ICI plutôt que par `msClock` (défini au niveau
+         du composant, bien plus bas) : cette closure est montée une fois, à deps
+         vides, et le §4 est formel sur ce qu'on y appelle. Deux lignes valent
+         mieux qu'une liaison qui traverse la closure. */
+      if (isInjured()) {
+        if (e.code === "KeyE" && !e.repeat) {
+          const left = Math.max(0, Math.ceil((injuredUntilRef.current - Date.now()) / 1000));
+          pushToast(L.toastInjuredWait(`${(left / 60) | 0}:${String(left % 60).padStart(2, "0")}`));
+        }
+        return; // blessé : aucune entrée, en attendant la fin du repos forcé
+      }
       // Endormi : seule la touche E (se réveiller) doit rester active, pour
       // ne pas pouvoir changer d'outil/monter à cheval/etc. depuis "l'intérieur".
       if (meRef.current?.sleeping && e.code !== "KeyE") return;
@@ -21615,7 +21650,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           g.fillStyle = seen ? "#c9beb6" : "#fff0c4";
           g.beginPath(); g.arc(px, py, 2.4, 0, 7); g.fill();
           g.font = "bold 9px monospace"; g.textAlign = "center";
-          const label = L.star.farm.mapImpact(p.impact + 1);
+          const label = seen ? L.star.farm.mapImpactSeen(p.impact + 1) : L.star.farm.mapImpact(p.impact + 1);   // 2026-08-31 : l'état ne passait que par la couleur
           g.fillStyle = "#19120e"; g.fillText(label, px + 1, py - 9 + 1);
           g.fillStyle = seen ? "#c9beb6" : "#ffe4b4"; g.fillText(label, px, py - 9);
         }
@@ -22089,7 +22124,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      425) ; ailleurs, E interagit et le tap sur le décor utilise l'outil. */
   function pressTouchAction() {
     const m = meRef.current; if (!m) return;
-    if (isInjured() || m.sleeping) { tryOpenNearby(); return; }   // endormi : E réveille
+    /* ⚠️⚠️⚠️ 2026-08-31 — LE DOIGT ET LE CLAVIER NE FAISAIENT PAS LA MÊME CHOSE,
+       ET PERSONNE NE POUVAIT LE VOIR. Cette ligne groupait « blessé » et
+       « endormi » sous le même `tryOpenNearby()`, alors que le clavier, lui,
+       refuse tout net en amont (`onKeyDown`, garde `isInjured()`). Conséquence
+       mesurée en relisant les deux chemins : sur tablette, le bouton d'action
+       exécutait l'offrande à l'étoile PENDANT le repos forcé, là où le même
+       geste au clavier ne faisait rien. Deux entrées, deux jeux — exactement ce
+       que la note de `toggleRun` interdit trois fonctions plus bas (« les deux
+       écrivent dans la MÊME case, il n'y a qu'une définition de je cours »).
+       ⚠️ Les deux cas se séparent donc : ENDORMI, E réveille (c'est la seule
+       façon de sortir des soixante secondes) ; BLESSÉ, on refuse et on dit
+       pourquoi, comme au clavier. */
+    if (m.sleeping) { tryOpenNearby(); return; }   // endormi : E réveille
+    if (isInjured()) {
+      const left = Math.max(0, Math.ceil((injuredUntilRef.current - Date.now()) / 1000));
+      pushToast(L.toastInjuredWait(`${(left / 60) | 0}:${String(left % 60).padStart(2, "0")}`));
+      return;
+    }
     if (m.zone === "town" && townJumpReady()) { townJumpNow(); return; }
     tryOpenNearby();
   }
@@ -29967,7 +30019,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                             ) : appt && appt.due && !stale ? (
                               <>
                                 <div style={{ fontStyle: "italic" }}>
-                                  {eA.mayor.sour ? L.maire.moodSour : L.maire.moodSay[appt.mood]}
+                                  {/* ⚠️ 2026-08-31 — ON LIT `appt.sour`, PAS `eA.mayor.sour` :
+                                      celui-ci est TOUJOURS 0 ici, parce que `resolveMayorAsk`
+                                      l'efface dans la ligne qui suit sa lecture. `L.maire.moodSour`
+                                      n'a donc jamais pu s'afficher depuis le 480 — la punition
+                                      arrivait sans jamais dire d'où elle venait. Voir la note de
+                                      `maire.js`. */}
+                                  {appt.sour ? L.maire.moodSour : L.maire.moodSay[appt.mood]}
                                 </div>
                                 <div style={{ marginTop: 6 }}>
                                   {L.maire.mood[appt.mood]} · {mine ? (wait > 0 ? L.maire.bookedWhen(msClock(wait))

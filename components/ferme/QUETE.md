@@ -1250,7 +1250,7 @@ minutes, donc personne ne la reverrait.
 |---|---|
 | `npx next build` | ⚠️ **PAS RELANCÉ AU 453 : un `npm run dev` tournait dans le dossier** (§10 de `CLAUDE.md` — les deux écrivent dans le même `.next/`, et le faux négatif coûte une demi-session). `verify-syntax` a servi de contrôle de remplacement. Vert au 452 |
 | `verify-syntax` | tout se parse, JSX compris |
-| `verify-strings` | **1082 clés appariées** — ⚠️ **et depuis le 451 il vérifie aussi les VALEURS** : aucune section identique mot pour mot dans les deux langues. C'est ce contrôle qui manquait, et son absence a laissé passer six zips de quête en anglais des deux côtés |
+| `verify-strings` | **1104 clés appariées** (relancé le 2026-08-31 ; il annonçait 1082 depuis le 452) — ⚠️ **et depuis le 451 il vérifie aussi les VALEURS** : aucune section identique mot pour mot dans les deux langues. C'est ce contrôle qui manquait, et son absence a laissé passer six zips de quête en anglais des deux côtés |
 | **`verify-quete`** | **433/433** (lancé au 458 ; 413 au 456, 345 au 454, 294 au 453, 284 au 452, 220 au 446, 177 pendant la séance du 444) |
 | `verify-vallee` | **205/205** (relancé au 458) |
 | **`render-beffroi`** | **28/28**, planche `beffroi-plan.png` |
@@ -2271,12 +2271,16 @@ tension qu'on voulait ; elle n'a jamais été jouée par un humain.
   par quelqu'un qui lisait les répliques. Ce qui s'y juge — *est-ce que c'est agréable, est-ce que
   les fautes de tact se voient venir, est-ce que la fuite stresse ou agace* — n'est mesuré nulle
   part et ne le sera jamais (§25 de `ferme/README.md`).
-- ⚠️ **La scène 3D n'a jamais été affichée dans un navigateur.** Le glTF charge, le code est écrit,
-  le repli existe si WebGL manque — mais aucun banc ne regarde un canevas three.js, et c'est très
-  exactement le prix annoncé au §9 de `CLAUDE.md` pour un asset importé.
-- ⚠️ **Le maire n'est pas DANS son bureau.** L'audience s'ouvre depuis le panneau de l'accueil
-  (Léonie), pas en montant le voir : la pièce existe et elle est meublée depuis le 439, personne
-  ne s'y tient. C'est la même dette que « aucun résident n'ENTRE dans les deux bâtiments ».
+- ✅ **LA SCÈNE 3D A ÉTÉ JOUÉE DANS UN NAVIGATEUR LE 2026-08-30**, audience entière, deux clients.
+  ⚠️ Les deux phrases qui étaient ici sont FAUSSES et ont été retirées : il n'y a plus de glTF (le
+  bureau est procédural, `maireBureau.js`), et on entre bien DANS le bureau — rendez-vous à
+  l'accueil, puis « E : entrer dans le bureau du maire » (`FermeGame.js:22832`).
+  ⚠️⚠️ **ET LA PREMIÈRE SÉANCE A TROUVÉ CE QU'AUCUN BANC NE POUVAIT VOIR** : la posture DEBOUT du
+  maire se désassemble (tête fendue en deux blocs décalés, écharpe détachée passant sous le plan du
+  bureau, un bras en bloc isolé) alors qu'assis il est impeccable ; et tout le HUD de la ferme —
+  or, jour/heure, boutons, bandeau de quête — est peint PAR-DESSUS une scène annoncée plein écran,
+  deux textes se chevauchant au pixel. `verify-maire` était à 113/113 pendant ce constat : il
+  vérifie que les sept postures EXISTENT et sont dessinables, jamais qu'elles s'ASSEMBLENT.
 - ⚠️ **Le point 4 du §15.3 est débloqué et pas fait** : les PNJ peuvent enfin parler du bateau,
   puisque la condition qu'ils attendaient (`MR.mayorSigned`) existe.
 
