@@ -135,9 +135,24 @@ function hashSeed(str) {
 // TABLEAU `saved.horses` (0 à HORSE_MAX_COUNT entrées, chacune toujours
 // possédée). Ne perd jamais un cheval déjà acheté.
 function migrateHorses(saved) {
-  if (Array.isArray(saved.horses)) return saved.horses;
-  if (saved.horse && saved.horse.owned) return [{ x: saved.horse.x, y: saved.horse.y, rider: null, rider2: null }];
+  // hors-zip : troisième robe achetable (C.HORSE_COATS). Les chevaux
+  // sauvegardés avant cette fonctionnalité (tableau déjà présent, ou ancien
+  // format à cheval unique) n'ont pas de champ `coat` -> "bay" (robe
+  // d'origine), jamais un tirage au hasard qui changerait une monture déjà
+  // possédée d'une session à l'autre.
+  if (Array.isArray(saved.horses)) return saved.horses.map(h => (h.coat ? h : { ...h, coat: "bay" }));
+  if (saved.horse && saved.horse.owned) return [{ x: saved.horse.x, y: saved.horse.y, rider: null, rider2: null, coat: "bay" }];
   return [];
+}
+
+// hors-zip : jeu de sprites (statique + cycle de galop) pour une robe de
+// cheval donnée. Fonction PURE au niveau du module (jamais dans la closure
+// de la boucle de rendu, piège n°1 du fichier) : elle est appelée depuis le
+// composant (drawCharacter) et depuis la boucle elle-même (chevaux libres).
+function horseImgSet(sprites, coat) {
+  if (coat === "black") return { run: sprites.horseBlackRun, still: sprites.horseBlack };
+  if (coat === "white") return { run: sprites.horseWhiteRun, still: sprites.horseWhite };
+  return { run: sprites.horseRun, still: sprites.horse }; // "bay" ou coat inconnu
 }
 
 // Les gemmes/diamants deviennent un pool COMMUN à la salle (chantier 2026-07,
@@ -2080,7 +2095,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     for (const ci of E.clearGhostSucreries(w)) recordTileOverride(ci);
     sharedRef.current = {
       seed: payload.seed, money: payload.money, day: payload.day, dayStartAt: payload.dayStartAt, totalEarned: payload.totalEarned,
-      horses: payload.horses || (payload.horse && payload.horse.owned ? [{ x: payload.horse.x, y: payload.horse.y, rider: null, rider2: null }] : []),
+      horses: payload.horses || (payload.horse && payload.horse.owned ? [{ x: payload.horse.x, y: payload.horse.y, rider: null, rider2: null, coat: "bay" }] : []),
       animals: payload.animals || [], wellBuilt: !!payload.wellBuilt,
       barn: payload.barn || E.newBarnState(),
       salveCraft: (() => {
@@ -4108,8 +4123,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (hs.length < C.HORSE_MAX_COUNT) {
         const cost = C.HORSE_COSTS[hs.length];
         if (s.money >= cost) {
+          // hors-zip : trois robes achetables (C.HORSE_COATS), choisies par
+          // le client à l'achat — l'hôte reste l'autorité et retombe sur
+          // "bay" si le champ manque ou contient une valeur qu'il ne connaît
+          // pas (client modifié, ancienne version).
+          const coat = C.HORSE_COATS.includes(req.coat) ? req.coat : "bay";
           s.money -= cost;
-          hs.push({ x: C.SPAWN.x + 2 + hs.length * 2, y: C.SPAWN.y, rider: null, rider2: null });
+          hs.push({ x: C.SPAWN.x + 2 + hs.length * 2, y: C.SPAWN.y, rider: null, rider2: null, coat });
           out.state = shareState(); out.horses = hs;
           out.chat = { from: "🐴", msg: L.chatAnimalBought(lang === "en" ? "Horse" : "Cheval") };
         } else out.toast = { id: f.id, key: "noGold" };
@@ -12472,7 +12492,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     notifCountRef.current = notifCount;
   }, [notifCount]);
 
-  const buyHorse = () => sendReq({ kind: "buyHorse" });
+  const buyHorse = (coat) => sendReq({ kind: "buyHorse", coat });
   const buyWell = () => sendReq({ kind: "buyWell" });
   const buyJewelry = () => sendReq({ kind: "buyJewelry" });
   const makeJewelry = (design) => sendReq({ kind: "makeJewelry", type: design.type, gemId: design.gemId, shape: design.shape, price: design.price });
@@ -14935,7 +14955,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const dx0 = hp.x, dy0 = hp.y;
         draws.push({ y: (dy0 + 1) * T, fn: () => {
           const hx = dx0 * T - 6, hy = dy0 * T - 10;
-          const img = horse.callTarget ? sprites.horseRun[Math.floor(now / 110) % 4] : sprites.horse;
+          const hset = horseImgSet(sprites, horse.coat);
+          const img = horse.callTarget ? hset.run[Math.floor(now / 110) % 4] : hset.still;
           ctx.drawImage(img, hx, hy);
           if (E.isWaterTile(w, horse.x, horse.y)) drawSwimOverlay(hx, hy + 1, 28);
         } });
@@ -20984,10 +21005,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // Le cheval n'est dessiné qu'une fois, porté par le cavalier
         // principal, et se retourne avec lui selon le sens de la marche.
         // Zip 264 : monture cosmétique blanche (Eduardo) -> jeu de sprites
-        // horseWhite/horseWhiteRun, sinon le cheval brun du fermier.
-        const hRun = mount === "white" ? sprites.horseWhiteRun : sprites.horseRun;
-        const hStill = mount === "white" ? sprites.horseWhite : sprites.horse;
-        const hImg = p.moving ? hRun[hFrame] : hStill;
+        // horseWhite/horseWhiteRun. hors-zip : sinon, la robe est celle
+        // choisie à l'achat (horse.coat, "bay" par défaut) — horseImgSet
+        // couvre les deux cas avec le même appel.
+        const hset = horseImgSet(sprites, mount === "white" ? "white" : (horse && horse.coat));
+        const hImg = p.moving ? hset.run[hFrame] : hset.still;
         ctx.save();
         if (flip) { ctx.translate(basePx + 22, py - 6); ctx.scale(-1, 1); ctx.drawImage(hImg, 0, 0); }
         else ctx.drawImage(hImg, basePx - 6, py - 6);
@@ -27867,7 +27889,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             <div className="ferme-shop-row">
               <Sprite img={spritesReady ? spritesRef.current.horse : null} w={36} h={30} />
               <div className="info"><b>{L.shopHorseTitle(C.HORSE_COSTS[Math.min(buildings.horseCount, C.HORSE_MAX_COUNT - 1)])}</b><span>{L.shopHorseSub}</span><span className="ferme-usage">{buildings.horseCount >= C.HORSE_MAX_COUNT ? L.shopHorseMax : L.shopHorseCount(buildings.horseCount, C.HORSE_MAX_COUNT)}</span></div>
-              <button disabled={buildings.horseCount >= C.HORSE_MAX_COUNT || hud.money < C.HORSE_COSTS[Math.min(buildings.horseCount, C.HORSE_MAX_COUNT - 1)]} onClick={buyHorse}>{buildings.horseCount >= C.HORSE_MAX_COUNT ? L.maxLabel : L.buyLabel}</button>
+              {/* hors-zip (demande Guillaume : "proposer trois couleurs à
+                  l'achat") : un bouton par robe (C.HORSE_COATS), même prix —
+                  le choix se fait au clic, pas de sélecteur intermédiaire, un
+                  cheval acheté = une couleur choisie, indépendante des autres
+                  chevaux déjà possédés (voir le §host buyHorse). */}
+              {buildings.horseCount >= C.HORSE_MAX_COUNT ? (
+                <button disabled>{L.maxLabel}</button>
+              ) : (
+                <div className="ferme-horse-coats">
+                  {C.HORSE_COATS.map(coat => (
+                    <button key={coat}
+                      disabled={hud.money < C.HORSE_COSTS[buildings.horseCount]}
+                      onClick={() => buyHorse(coat)}>
+                      {L.horseCoatLabel(coat)}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="ferme-tools-header">{L.toolsHeader}</div>
             {C.TOOLS.map(k => {

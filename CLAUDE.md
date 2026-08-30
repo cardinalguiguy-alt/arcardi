@@ -267,6 +267,29 @@ l'un après l'autre, vérifier `git status`/`git diff`** : l'agent qui commence 
 comprendre ce qui est déjà là (souvent le travail non revu de l'agent précédent, décrit dans le
 bloc ⏭️ REPRISE) avant d'y toucher, jamais le nettoyer ou l'écraser sans le comprendre.
 
+⚠️ **CODEX COMME AGENT SECONDAIRE, DANS LA MÊME CONVERSATION — SEULEMENT SUR UN GROS CHANTIER.**
+Guillaume utilise ponctuellement Codex (GPT-5.1, dans le rôle Sol ou Terra) en appoint de Claude
+Code, pour délester des tests longs, de l'orchestration ou un audit indépendant et économiser des
+tokens côté Claude. **Sur un gros chantier** (audit large, batterie de tests, tâche parallélisable
+qui coûterait cher en tokens) : Claude DEMANDE si Codex est disponible avant de s'engager. **Sur
+tout le reste : Claude travaille seul, sans le demander** — ce n'est pas une question systématique
+en début de conversation. Si Guillaume confirme la disponibilité de Codex, Claude rédige lui-même
+le prompt de passation, avec précision : portée exacte, fichiers concernés, format de retour
+attendu — et il couvre le risque du paragraphe ci-dessus (arbre non commité partagé) pour que le
+travail circule sans accroc de Claude à Codex et de Codex à Claude.
+⚠️ **L'ASPECT GRAPHIQUE RESTE ENTRE LES MAINS DE CLAUDE CODE, MÊME SUR UN GROS CHANTIER.** Dessin
+procédural (`fermeArt.js`, `maireBureau.js`…), règles de `DESSIN.md`, tout jugement visuel : ne
+JAMAIS déléguer à Codex, quelle que soit la taille du chantier. Codex reste cantonné aux tests,
+à l'orchestration et à l'audit non visuel.
+⚠️ **SPRITE COMPLEXE NOUVEAU (végétation, infrastructures de ville…) : PROPOSER UN PROMPT GEMINI,
+JAMAIS L'APPELER SOI-MÊME.** Quand le décor à créer n'existe pas encore et sort du procédural
+simple (une haie, un pont, un bâtiment détaillé — pas une teinte ou un décalage de pose), Claude
+rédige un prompt prêt à coller dans Gemini, accompagné d'une ou plusieurs images de référence
+(Gemini rend mieux avec référence que texte seul) — et **s'arrête là** : c'est Guillaume qui colle
+le prompt et récupère le résultat, pas un appel API automatisé. L'intégration du PNG obtenu suit
+ensuite la même rigueur que tout asset bitmap (§9) : regardé à l'écran le jour de sa livraison,
+chargeur/cache/nommage posés au premier usage.
+
 ---
 
 ## 3. Contraintes réseau — avant de toucher au moindre `send()`

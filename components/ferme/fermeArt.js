@@ -13602,13 +13602,24 @@ export function buildSprites() {
   // Zip 258 : paramètre `coat` optionnel. "white" produit le CHEVAL BLANC
   // d'Eduardo (robe crème, crinière gris clair) en réutilisant exactement le
   // même tracé — seule la palette change. Sans argument, robe baie d'origine.
+  // hors-zip (demande Guillaume : "améliorer un peu le détail du cheval,
+  // proposer trois couleurs à l'achat") : coat prend aussi "black" (robe
+  // noire, crinière/queue encore plus sombres, pas de reflet clair sur le
+  // dos — sinon on obtient un cheval gris). La TÊTE gagne quelques pixels de
+  // silhouette (oreille effilée en deux temps, front qui bombe, mâchoire qui
+  // se resserre vers l'encolure) : on ASSEMBLE une masse un peu plus
+  // ressemblante, on ne texture rien (règle de DESSIN.md) — le nombre de
+  // pixels posés reste comparable à l'ancien tracé.
   function horseSprite(frame, coat) {
     const f = (frame || 0) % 4;
     const [c, g] = cv(28, 24); // vu de profil (regarde à droite)
-    const white = coat === "white";
-    const body = white ? "#ececef" : "#8a5a34", light = white ? "#ffffff" : "#a5764a",
-      dark = white ? "#c6c6d0" : "#6a4426", shade = white ? "#b2b2c0" : "#5a3a20",
-      mane = white ? "#c8c8d2" : "#3a2a18", maneDeep = white ? "#a8a8b6" : "#2a1c10",
+    const white = coat === "white", black = coat === "black";
+    const body = white ? "#ececef" : black ? "#2c2622" : "#8a5a34",
+      light = white ? "#ffffff" : black ? "#443a34" : "#a5764a",
+      dark = white ? "#c6c6d0" : black ? "#1a1512" : "#6a4426",
+      shade = white ? "#b2b2c0" : black ? "#100d0b" : "#5a3a20",
+      mane = white ? "#c8c8d2" : black ? "#0c0a09" : "#3a2a18",
+      maneDeep = white ? "#a8a8b6" : black ? "#000000" : "#2a1c10",
       hoof = white ? "#5a5a64" : "#2a2018", saddle = "#7a3020", saddleLight = "#9a4a30";
     const bob = [0, -1, 0, 0][f];   // rebond vertical du corps (phase d'envol)
     const ext = [0, 5, 1, -4][f];   // pattes avant : étendues vers l'avant / regroupées
@@ -13619,9 +13630,14 @@ export function buildSprites() {
     P(g, 6, b + 6, 15, 1, shade);      // ombre sous le ventre
     P(g, 19, b - 4, 6, 7, body);       // encolure
     P(g, 19, b - 4, 6, 2, light);
-    P(g, 23, b - 7, 5, 6, body);       // tête
-    P(g, 23, b - 7, 5, 1, light);
-    P(g, 24, b - 9, 2, 3, body); P(g, 24, b - 9, 1, 2, dark); // oreille
+    P(g, 23, b - 7, 5, 6, body);       // tête (masse principale)
+    P(g, 24, b - 7, 1, 2, light);      // front qui bombe : reflet haut, resserré
+    P(g, 23, b - 3, 2, 2, shade);      // mâchoire : elle se resserre vers l'encolure
+    P(g, 26, b - 2, 1, 1, shade);      // ombre de menton, à la base du museau
+    // Oreille effilée en deux temps (base large, pointe fine) plutôt qu'un
+    // simple bloc — c'est la silhouette qui manquait le plus à l'ancien tracé.
+    P(g, 24, b - 9, 2, 2, body); P(g, 24, b - 10, 1, 1, body);
+    P(g, 24, b - 9, 1, 2, dark);
     P(g, 27, b - 5, 1, 3, dark);       // museau
     P(g, 27, b - 3, 1, 1, "#3a2418");  // naseau
     P(g, 24, b - 6, 3, 2, mane);       // toupet
@@ -14813,6 +14829,9 @@ house: house(),
     horseRun: [horseSprite(0), horseSprite(1), horseSprite(2), horseSprite(3)], // cycle de galop (chantier 2026-07)
     horseWhite: horseSprite(0, "white"), // zip 258 : monture d'Eduardo (arrivée au village)
     horseWhiteRun: [horseSprite(0, "white"), horseSprite(1, "white"), horseSprite(2, "white"), horseSprite(3, "white")], // zip 264 : cycle de galop blanc — Eduardo chevauche EXACTEMENT comme le fermier (même modèle assis), seule la robe change
+    // hors-zip : troisième robe achetable (C.HORSE_COATS), même tracé, même cycle.
+    horseBlack: horseSprite(0, "black"),
+    horseBlackRun: [horseSprite(0, "black"), horseSprite(1, "black"), horseSprite(2, "black"), horseSprite(3, "black")],
     wolf: [wolfSprite(0), wolfSprite(1), wolfSprite(2), wolfSprite(3)],
     // Zip 235: winter swap. Same 4 frames, same anim, different pelt.
     snowLeopard: [snowLeopardSprite(0), snowLeopardSprite(1), snowLeopardSprite(2), snowLeopardSprite(3)],

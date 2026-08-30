@@ -451,6 +451,14 @@ export const SPAWN = { x: 43, y: 37 }; // chemin devant la maison (cible du tél
 export const HORSE_COSTS = [800, 1500, 2500];
 export const HORSE_MAX_COUNT = HORSE_COSTS.length;
 export const HORSE_SPEED_MULT = 1.9; // vitesse à cheval
+// hors-zip (demande Guillaume : "proposer trois couleurs à l'achat") : robes
+// achetables, une par cheval — chaque achat de la ferme choisit la sienne
+// (pas un réglage global). "bay" est la robe d'origine (sans coat), gardée
+// en première position pour rester le choix par défaut/legacy — voir
+// migrateHorses (FermeGame.js), qui assigne "bay" aux chevaux sauvegardés
+// avant l'existence du choix. `horseSprite(frame, coat)` (fermeArt.js) ne
+// connaît que ces trois clés + undefined (= "bay").
+export const HORSE_COATS = ["bay", "black", "white"];
 
 /* ╔══════════════════════════════════════════════════════════════════════════
    ║ ZIP 432 — LE TAXI DE VALLEY TOWN.

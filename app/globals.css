@@ -6941,6 +6941,9 @@ body.ferme-active .wrap-room > .brand{ display:none !important; }
 }
 .ferme-shop-row button:hover{ filter:brightness(1.08); }
 .ferme-shop-row button:disabled{ opacity:.45; cursor:default; }
+/* hors-zip : trois boutons de robe côte à côte, à la place du bouton
+   "Acheter" unique du cheval — même ligne, même style de bouton. */
+.ferme-horse-coats{ display:flex; flex-direction:column; gap:4px; }
 .ferme-tools-header{ margin-top:10px; font-weight:bold; }
 /* Phrase d'utilité d'un outil/d'une graine, directement dans la boutique
    (marche au tactile comme au clic, pas seulement au survol). */
