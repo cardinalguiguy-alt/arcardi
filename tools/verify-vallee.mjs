@@ -1451,6 +1451,153 @@ section("Valley Town — le fleuve, la passe, et la sortie du navire");
   ok("on peut marcher jusqu'à la passe depuis la ville", reach >= 7, `${reach}/9 colonnes du goulet abordables`);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   2026-08-31 — ON MONTE DANS LE BATEAU : LA MÉCANIQUE, JOUÉE
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️⚠️ CE CHAPITRE NE RELIT PAS UNE TABLE, IL PILOTE. C'est la leçon du 480
+   (`verify-maire`, le premier banc du dépôt qui JOUE) et celle du 459
+   (`render-etoile` §7, qui a trouvé **219 départs bloqués sur 317** dans le
+   cratère avant que l'écran ne le voie). Un véhicule ne se vérifie pas en
+   relisant ses constantes : trois nombres justes séparément peuvent faire un
+   bateau qui ne passe pas la passe, ou qui reste collé à la berge pour
+   toujours — et ces deux défauts-là ne se voient qu'en tenant la barre.
+   ⚠️ On rejoue avec la VRAIE carte et le VRAI résolveur (`E.boatStep`), jamais
+   avec un chenal inventé pour l'occasion : c'est la leçon du 469, *un banc qui
+   invente ses données mesure un jeu que personne ne joue*.
+   ═══════════════════════════════════════════════════════════════════════════ */
+section("Valley Town — LA BARQUE : la mécanique, tenue à la barre");
+{
+  const floats = (x, y, a) => E.boatCanFloat(tw, x, y, a);
+  const moor = E.boatMooring(tw);
+  ok("le poste d'amarrage existe, et la coque y flotte en entier",
+     !!moor && floats(moor.x, moor.y, 0), moor ? `x=${moor.x.toFixed(1)} y=${moor.y.toFixed(1)}` : "aucun");
+
+  /* ---- 1. ON NE SE DÉPLACE JAMAIS DE CÔTÉ. C'est la règle qui sépare un
+     bateau d'un fermier avec une coque peinte autour, et elle se BALAIE : un
+     contrôle de cas ne vaut pas un invariant (449). ---- */
+  {
+    let worst = 0;
+    for (let a = 0; a < 16; a++) for (let c = 0; c < 16; c++) {
+      const b = E.boatNew(0, 0, (a / 16) * Math.PI * 2);
+      b.spd = 3.0;
+      const ang0 = b.ang;
+      const ix = Math.cos((c / 16) * Math.PI * 2), iy = Math.sin((c / 16) * Math.PI * 2);
+      const x0 = b.x, y0 = b.y;
+      E.boatStep(b, ix, iy, 1 / 60, () => true);
+      /* la composante du pas PERPENDICULAIRE au cap de départ. Elle n'est pas
+         nulle (la coque a tourné pendant le pas), mais elle doit rester
+         négligeable devant le pas lui-même — sinon on glisse en crabe. */
+      const dx = b.x - x0, dy = b.y - y0;
+      const side = Math.abs(-Math.sin(ang0) * dx + Math.cos(ang0) * dy);
+      const step = Math.hypot(dx, dy) || 1e-9;
+      worst = Math.max(worst, side / step);
+    }
+    ok("⚠️ la coque n'avance jamais en crabe (256 caps × commandes)", worst < 0.06,
+       `dérive latérale maximale ${(worst * 100).toFixed(1)} % du pas`);
+  }
+
+  /* ---- 2. L'ERRE EXISTE, ET ELLE FINIT. Un bateau qui s'arrête net est un
+     fermier ; un bateau qui n'a pas de frein est un bug. ---- */
+  {
+    const b = E.boatNew(0, 0, 0); b.spd = C.BOAT_SPEED;
+    let dist = 0, t = 0;
+    while (b.spd > 0.02 && t < 20) { const x0 = b.x; E.boatStep(b, 0, 0, 1 / 60, () => true); dist += Math.abs(b.x - x0); t += 1 / 60; }
+    ok("commande lâchée, il continue sur son erre", dist > 3 && dist < 20, `${dist.toFixed(1)} cases avant l'arrêt`);
+    ok("…et il finit par s'arrêter", b.spd <= 0.02 && t < 20, `en ${t.toFixed(1)} s`);
+  }
+
+  /* ---- 3. ⚠️⚠️ ON SE DÉGAGE TOUJOURS D'UNE BERGE. C'est très exactement le
+     défaut du 459 : une mécanique juste dans son principe qui laisse le joueur
+     collé une fois sur trois. On balaie toute la longueur du fleuve, quatre
+     caps, coque poussée contre la rive nord — et on exige que le pilote sorte
+     en moins de quatre secondes en donnant l'ordre le plus bête qui soit
+     (« va au sud-est »). ---- */
+  {
+    let tried = 0, stuck = [];
+    for (let x = C.TOWN_RIVER_X + 2; x < W - 4; x += 3) {
+      // la première rangée d'eau de cette colonne : on s'y colle
+      let top = null;
+      for (let y = C.TOWN_LAKE.y; y < H; y++) if (tw.ground[idx(x, y)] === C.G_WATER) { top = y; break; }
+      if (top === null) continue;
+      for (let a = 0; a < 4; a++) {
+        const b = E.boatNew(x + 0.5, top + 0.9, (a / 4) * Math.PI * 2);
+        if (!floats(b.x, b.y, b.ang)) continue;      // pas assez d'eau ici pour s'y mettre
+        tried++;
+        const y0 = b.y;
+        let free = false;
+        for (let k = 0; k < 240 && !free; k++) {
+          E.boatStep(b, 0.7, 0.7, 1 / 60, floats);   // « vers le sud-est », rien de plus
+          if (b.y - y0 > 0.8 || b.x - x > 3) free = true;
+        }
+        if (!free) stuck.push(`x${x}/c${a}`);
+      }
+    }
+    ok("⚠️⚠️ on se dégage TOUJOURS de la berge, quel que soit le cap", stuck.length === 0,
+       `${tried - stuck.length}/${tried} départs dégagés` + (stuck.length ? ` · collés : ${stuck.slice(0, 6).join(" ")}` : ""));
+  }
+
+  /* ---- 4. ⚠️⚠️⚠️ L'ARRIVÉE : ON SORT DU MONDE EN BATEAU. Le §fleuve mesure que
+     l'EAU est continue ; ça ne dit rien de la COQUE, qui a une longueur et un
+     rayon de giration. Un chenal de quatre rangées peut être parfaitement
+     connexe et infranchissable pour un bateau de deux cases. C'est la leçon du
+     444 appliquée au véhicule : *aucun banc ne mesurait l'ARRIVÉE.* ---- */
+  {
+    const b = E.boatNew(moor.x, moor.y, 0);
+    /* un pilote bête, et c'est volontaire : il vise un point six cases devant,
+       au milieu de l'eau de cette colonne. Si un pilote bête passe, un joueur
+       passe ; si le banc devait piloter finement, la passe serait trop dure. */
+    const aim = (x) => {
+      const cx = Math.min(W - 1, Math.round(x) + 6);
+      let a = null, bq = null;
+      for (let y = C.TOWN_LAKE.y; y < H; y++) {
+        if (tw.ground[idx(cx, y)] === C.G_WATER) { if (a === null) a = y; bq = y; }
+      }
+      return a === null ? null : { x: cx + 0.5, y: (a + bq) / 2 + 0.5 };
+    };
+    let out = false, t = 0, hits = 0;
+    let minRoom = 99;
+    while (t < 90 && !out) {
+      const g = aim(b.x);
+      let ix = 1, iy = 0;
+      if (g) { const dx = g.x - b.x, dy = g.y - b.y, l = Math.hypot(dx, dy) || 1; ix = dx / l; iy = dy / l; }
+      const r = E.boatStep(b, ix, iy, 1 / 60, floats);
+      if (r.hit) hits++;
+      t += 1 / 60;
+      if (b.x >= W - 1.5) out = true;
+      minRoom = Math.min(minRoom, b.x);
+    }
+    ok("⚠️⚠️⚠️ LE BATEAU SORT DU MONDE : du poste d'amarrage au bord est, à la barre",
+       out, out ? `${t.toFixed(1)} s de navigation, ${hits} touchette(s) de berge`
+                : `bloqué en x=${b.x.toFixed(1)} après ${t.toFixed(0)} s`);
+    void minRoom;
+  }
+
+  /* ---- 5. LES QUATRE VUES, ET LEURS BASCULES. `boatDir` est lue par le jeu ET
+     par le banc de rendu : deux conversions du même angle divergeraient d'un
+     quart de tour sur les diagonales, et personne ne le verrait avant d'y être. */
+  {
+    const seen = new Set();
+    for (let k = 0; k < 64; k++) seen.add(E.boatDir((k / 64) * Math.PI * 2));
+    ok("les quatre orientations sont toutes atteintes", seen.size === 4, `${seen.size} vues`);
+    ok("est / sud / ouest / nord tombent bien où on les attend",
+       E.boatDir(0) === 3 && E.boatDir(Math.PI / 2) === 0 && E.boatDir(Math.PI) === 2 && E.boatDir(-Math.PI / 2) === 1);
+  }
+
+  /* ---- 6. LA COQUE NE TRAVERSE JAMAIS LA TERRE. Invariant sur tout un
+     parcours, pas sur un instant : c'est le seul moyen de voir un pas qui
+     saute par-dessus une pointe de berge à pleine vitesse. ---- */
+  {
+    const b = E.boatNew(moor.x, moor.y, 0);
+    let bad = 0;
+    for (let k = 0; k < 5400; k++) {
+      const a = (k * 0.017) % (Math.PI * 2);
+      E.boatStep(b, Math.cos(a), Math.sin(a), 1 / 60, floats);
+      if (!floats(b.x, b.y, b.ang)) bad++;
+    }
+    ok("⚠️ la coque reste sur l'eau pendant 90 s de barre au hasard", bad === 0, `${bad} image(s) à terre`);
+  }
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(`\n${fails === 0 ? "✅" : "❌"} ${total - fails}/${total} contrôles passés.\n`);
 process.exit(fails === 0 ? 0 : 1);

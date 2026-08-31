@@ -363,6 +363,18 @@ const STAR_FR = {
     build:  "Chapitre Trois — Le chantier",
     end:    "Le Bateau des Étoiles",
   },
+  /* HORS-ZIP — L'OVERLAY DE VICTOIRE. Demande de Guillaume : une carte de
+     félicitations pour les étapes difficiles du chapitre 3 (l'audience chez
+     le maire, la commande à Kerguélen), qui restaient jusqu'ici sans le
+     moindre repère à l'écran — seul un message de chat, vite noyé, disait
+     qu'on venait de franchir la partie la plus dure de la quête.
+     ⚠️ MÊME MISE EN SCÈNE QUE LA CARTE DE CHAPITRE (fondu, fermeture seule,
+     même file d'attente `starShowCard`) : c'est la même chose, un texte plein
+     écran qui marque un instant. Seul l'habillage change (`.win` en CSS). */
+  win: {
+    mayor:    { title: "Félicitations !", sub: "Le maire soutient votre projet." },
+    engineer: { title: "Les plans sont prêts !", sub: "Kerguélen a dessiné le navire." },
+  },
   fall: {
     agency: "L’Agence nationale d’astronomie avait prévu huit sites sur la ferme.",
     first: "Premier impact. Un site sur huit.",
@@ -1086,6 +1098,10 @@ const STAR_EN = {
     crater: "Chapter Two — The Crater",
     build:  "Chapter Three — The Slipway",
     end:    "The Star Boat",
+  },
+  win: {
+    mayor:    { title: "Congratulations!", sub: "The mayor supports your project." },
+    engineer: { title: "The plans are ready!", sub: "Kerguélen has drawn up the ship." },
   },
   /* ── LA CHUTE. Personne d'autre ne la commente : c'est le thème (§3 de
      QUETE.md). Le silence de la ville EST la première chose étrange. */
@@ -3304,6 +3320,11 @@ export const FERME_STR = {
     bagCandiesRow: (n) => `${n} bonbon(s)`,
     bagRunBestSub: (n) => n > 0 ? `Meilleur score : ${n}` : "Aucun score pour l'instant.",
     drownToast: "🌊 Glouglou... tu as coulé ! Ramené à la maison, blessé (1 min).",
+    /* 2026-08-31 — la barque. ⚠️ LE REFUS DIT POURQUOI ET CE QU'IL FAUT FAIRE :
+       « F » qui ne fait rien devant une touche qu'on vient d'apprendre est un
+       bug aux yeux du joueur, pas une règle. */
+    boatNoShore: "⛵ Trop loin de la berge pour débarquer — approche-toi du bord.",
+    boatNotReady: "⛵ Le navire n'est pas encore en état de prendre l'eau.",
     /* Zip 449 — la brûlure du cratère. ⚠️ ELLE DIT LA CAUSE, PAS LA SANCTION : un
        joueur qui lit « blessé 10 minutes » sans comprendre POURQUOI croit à un
        bogue. Le texte du jeu est en français des deux côtés ici (les répliques de
@@ -4993,6 +5014,8 @@ export const FERME_STR = {
     bagCandiesRow: (n) => `${n} candy(ies)`,
     bagRunBestSub: (n) => n > 0 ? `Best score: ${n}` : "No score yet.",
     drownToast: "🌊 Glub glub... you sank! Carried back home, injured (1 min).",
+    boatNoShore: "⛵ Too far from the bank to step out — get closer to the shore.",
+    boatNotReady: "⛵ The ship isn't ready to take the water yet.",
     burnToast: "🔥 The bottom is still molten! Burned, carried back home (10 min).",   // zip 449 : voir la note côté français
     mapDarkPassage: "Dark passage",
     mapTownStation: "Station",          // zip 426 : voir la note côté français

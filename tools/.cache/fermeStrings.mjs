@@ -3304,6 +3304,11 @@ export const FERME_STR = {
     bagCandiesRow: (n) => `${n} bonbon(s)`,
     bagRunBestSub: (n) => n > 0 ? `Meilleur score : ${n}` : "Aucun score pour l'instant.",
     drownToast: "🌊 Glouglou... tu as coulé ! Ramené à la maison, blessé (1 min).",
+    /* 2026-08-31 — la barque. ⚠️ LE REFUS DIT POURQUOI ET CE QU'IL FAUT FAIRE :
+       « F » qui ne fait rien devant une touche qu'on vient d'apprendre est un
+       bug aux yeux du joueur, pas une règle. */
+    boatNoShore: "⛵ Trop loin de la berge pour débarquer — approche-toi du bord.",
+    boatNotReady: "⛵ Le navire n'est pas encore en état de prendre l'eau.",
     /* Zip 449 — la brûlure du cratère. ⚠️ ELLE DIT LA CAUSE, PAS LA SANCTION : un
        joueur qui lit « blessé 10 minutes » sans comprendre POURQUOI croit à un
        bogue. Le texte du jeu est en français des deux côtés ici (les répliques de
@@ -4993,6 +4998,8 @@ export const FERME_STR = {
     bagCandiesRow: (n) => `${n} candy(ies)`,
     bagRunBestSub: (n) => n > 0 ? `Best score: ${n}` : "No score yet.",
     drownToast: "🌊 Glub glub... you sank! Carried back home, injured (1 min).",
+    boatNoShore: "⛵ Too far from the bank to step out — get closer to the shore.",
+    boatNotReady: "⛵ The ship isn't ready to take the water yet.",
     burnToast: "🔥 The bottom is still molten! Burned, carried back home (10 min).",   // zip 449 : voir la note côté français
     mapDarkPassage: "Dark passage",
     mapTownStation: "Station",          // zip 426 : voir la note côté français

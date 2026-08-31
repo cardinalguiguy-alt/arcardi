@@ -3307,6 +3307,51 @@ export const TOWN_RIVER_NECK_PINCH = 2.2; // de combien la rive nord descend ENC
    donc l'isoligne pour qu'il reste toujours au moins ces rangées d'eau —
    `verify-vallee` le balaie colonne par colonne. */
 export const TOWN_RIVER_MIN = 3;         // rangées d'eau minimum, du goulet au bord de la carte
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2026-08-31 — ON MONTE DANS LE BATEAU. LES NOMBRES DE LA NAVIGATION.
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume : *« eduardo peut utiliser le navire. mais nous aussi en
+   montant dedans : soigner les sprites. anatomiquement cohérentes dans un
+   bateau, mouvements cohérents. »*
+
+   ⚠️⚠️ « MOUVEMENTS COHÉRENTS » EST UNE CONTRAINTE DE MÉCANIQUE, PAS DE DESSIN,
+   ET C'EST LA MOITIÉ DIFFICILE. Un bateau qui se déplace comme un fermier — huit
+   directions, vitesse instantanée, arrêt net — est un fermier avec une coque
+   peinte autour, quel que soit le soin du sprite. Trois règles suffisent à le
+   rendre marin, et elles sont ici parce que `boatStep` (pur, dans `fermeEngine`)
+   et son banc les lisent toutes les deux :
+     1. **il ne se déplace jamais de côté** : la commande donne un CAP voulu, la
+        coque tourne vers lui à `BOAT_TURN`, et la poussée se fait le long de son
+        propre axe ;
+     2. **il a de l'erre** : il accélère, et il continue quand on lâche ;
+     3. **il peut culer**, doucement. Sans marche arrière, une étrave posée sur
+        une berge dans un chenal de quatre rangées est un joueur coincé pour de
+        bon — un défaut de jouabilité, pas une exigence de réalisme.
+
+   ⚠️⚠️ LA COQUE DE COLLISION N'EST PAS LA COQUE DESSINÉE, et c'est le §4 de
+   `CLAUDE.md` pris à la lettre (*une grandeur de dessin, une grandeur de
+   collision : deux choses, deux paramètres*). Le navire PEINT fait neuf cases de
+   long ; le faire manœuvrer dans un chenal qui en fait quatre de large le
+   rendrait immobile. On teste quatre points — étrave, étambot, deux travers —
+   autour d'une coque de collision volontairement plus courte que le dessin.
+   ═══════════════════════════════════════════════════════════════════════════ */
+export const BOAT_SPEED = 4.6;       // tuiles/seconde en vitesse de croisière (la marche vaut 5,2)
+export const BOAT_ASTERN = 1.4;      // ...et en marche arrière : on cule, on ne recule pas vite
+export const BOAT_ACCEL = 2.4;       // tuiles/seconde² — il faut deux secondes pour prendre son erre
+export const BOAT_DRAG = 1.1;        // décélération commande lâchée : il continue, il ne s'arrête pas
+export const BOAT_TURN = 2.0;        // radians/seconde
+/* ⚠️ ON PERD SON ERRE EN TOUCHANT LA BERGE, ON NE S'ARRÊTE PAS NET. Un véhicule
+   qui garde sa vitesse contre un mur la restitue dès qu'on se dégage, et ça se
+   lit comme un ressort ; un véhicule qui tombe à zéro se lit comme un bug. */
+export const BOAT_BUMP = 0.30;       // part de vitesse conservée quand la coque touche
+export const BOAT_LEN = 0.85;        // demi-longueur de la coque de COLLISION, en cases
+export const BOAT_BEAM = 0.38;       // demi-largeur de la coque de COLLISION
+/* ⚠️ ON EMBARQUE ET ON DÉBARQUE À LA MÊME PORTÉE QUE LE CHEVAL : deux distances
+   pour le même geste divergeraient, et le joueur ne saurait pas laquelle il a
+   dans les doigts. */
+export const BOAT_BOARD_RANGE = MOUNT_RANGE;
+export const BOAT_SEATS = 2;         // le pilote, et un passager — comme la monture
 /* ═══════════════════════════════════════════════════════════════════════════
    ZIP 440 — LE BOIS DU SUD-EST, ET LE SENTIER QUI S'Y PERD.
    ───────────────────────────────────────────────────────────────────────────

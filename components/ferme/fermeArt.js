@@ -8041,6 +8041,143 @@ export function buildSprites() {
     for (let k = 0; k <= 4; k++) g2.fillRect(x + 10 + k * ((W - 20) / 4), cy - 5, 1, 4);
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════
+     2026-08-31 — LA COQUE QU'ON MONTE DEDANS. DEUX COUCHES, ET C'EST TOUT LE
+     SUJET.
+     ───────────────────────────────────────────────────────────────────────
+     Demande de Guillaume : *« soigner les sprites. anatomiquement cohérentes
+     dans un bateau »*.
+
+     ⚠️⚠️ « DANS » EST UN PROBLÈME D'ORDRE DE DESSIN, PAS DE DESSIN. Un fermier
+     peint PAR-DESSUS une coque est un fermier debout sur un bateau ; un fermier
+     peint DERRIÈRE est un fermier caché. La seule façon d'être dedans est de
+     peindre la coque en DEUX temps — le bordé du fond et le franc-bord opposé
+     d'abord, l'occupant ensuite, le plat-bord près de nous en dernier — et
+     c'est ce que font `drawBoatBack` / `drawBoatFront`.
+     ⚠️ CONSÉQUENCE VOULUE : les jambes n'existent pas. L'appelant ne dessine que
+     le HAUT du personnage (voir `BOAT_SIT_CROP`), et le plat-bord finit le
+     travail. On ne dessine donc aucune pose assise : *la pose assise juste est
+     celle qu'on ne dessine pas.* C'est le même raisonnement que le col de
+     chemise du maire — deux boîtes qui suggèrent plutôt qu'une qui décrit.
+
+     ⚠️ CE N'EST PAS ENCORE LE NAVIRE DE LA QUÊTE : c'est une coque nue, sans
+     mât, sans voile, sans bordage. L'ornement viendra (demande de Guillaume :
+     « nous ornementerons plus tard ») ; ce qui compte ici est que les masses,
+     l'échelle et l'ordre soient justes.
+     ═══════════════════════════════════════════════════════════════════════ */
+  /* Part du personnage qui reste visible au-dessus du plat-bord. ⚠️ Elle est
+     ici, avec le dessin qui la cache, et pas dans la boucle de rendu : deux
+     descriptions de la même ligne de flottaison divergeraient au premier
+     réglage, et le symptôme serait un fermier coupé au menton (§8). */
+  const BOAT_SIT_CROP = 0.62;      // fraction HAUTE du sprite (24 px) qu'on garde
+  const BOAT_PAL = {
+    hull: "#6b4a2c", hullDark: "#4a3220", hullLite: "#8a6238",
+    rail: "#9a7043", inner: "#3a2716", trim: "#c2a04a", wake: "#cfe4ef",
+  };
+  const boatCache = new Map();
+  /* La coque, en cases : 2,6 de long, 1,15 de large. ⚠️ ELLE EST PLUS GRANDE
+     QUE LA COQUE DE COLLISION (`BOAT_LEN`/`BOAT_BEAM` = 1,7 × 0,76), et c'est
+     voulu : le §4 de `CLAUDE.md` sépare la grandeur de DESSIN de la grandeur de
+     COLLISION. Une coque qui bloque exactement ce qu'elle montre coince dans un
+     chenal de quatre rangées. */
+  /* ⚠️ LA COQUE EST DÉCRITE PAR DEUX COURBES, PAS PAR UNE BOÎTE : le PLAT-BORD
+     (haut aux deux bouts, bas au milieu — c'est la tonture, et c'est elle seule
+     qui fait lire « bateau » plutôt que « auge ») et la QUILLE (creuse au
+     milieu). Le premier jet remplissait un rectangle avec deux sinus : à
+     l'écran, une soupière. *Une coque n'a pas de hauteur, elle a une tonture.* */
+  const BOAT_LN = 40;               // longueur peinte, en px de référence (T = 16)
+  const BOAT_DP = 8;                // franc-bord + bordé, du plat-bord à la quille
+  const boatSheer = (t) => 5 + 4 * (1 - (2 * t - 1) * (2 * t - 1));   // y du plat-bord
+  const boatKeel  = (t) => boatSheer(t) + BOAT_DP - 2 * (2 * t - 1) * (2 * t - 1);
+
+  function boatBake(T2, dir, layer) {
+    const key = (T2 | 0) + ":" + dir + ":" + layer;
+    const hit = boatCache.get(key);
+    if (hit) return hit;
+    const u = T2 / 16;
+    const side = dir === 2 || dir === 3;
+    const W = Math.round((side ? BOAT_LN + 4 : 26) * u);
+    const H = Math.round((side ? 22 : 26) * u);
+    const [c, g] = cv(W, H);
+    const px = (x, y, w, h, col) => {
+      g.fillStyle = col;
+      g.fillRect(Math.round(x * u), Math.round(y * u), Math.max(1, Math.round(w * u)), Math.max(1, Math.round(h * u)));
+    };
+    if (side) {
+      /* ── DE PROFIL ── */
+      for (let i = 0; i < BOAT_LN; i++) {
+        const t = i / (BOAT_LN - 1), x = 2 + i;
+        const sh = Math.round(boatSheer(t)), kl = Math.round(boatKeel(t));
+        if (layer === "back") {
+          /* l'intérieur et le bordé OPPOSÉ : trois pixels sous le plat-bord,
+             c'est tout ce qu'on voit de l'autre bord par-dessus le nôtre */
+          px(x, sh, 1, 3, BOAT_PAL.inner);
+          px(x, sh, 1, 1, BOAT_PAL.hullDark);
+        } else {
+          /* le bordé qui est DE NOTRE CÔTÉ : c'est lui qui passe devant les
+             jambes de l'occupant, et c'est tout l'objet des deux couches */
+          px(x, sh + 3, 1, kl - sh - 3, BOAT_PAL.hull);
+          px(x, kl - 2, 1, 2, BOAT_PAL.hullDark);
+          px(x, sh + 3, 1, 1, BOAT_PAL.rail);
+        }
+      }
+      if (layer === "front") {
+        px(19, boatSheer(0.5) + 4, 6, 1, BOAT_PAL.trim);              // le banc de nage
+        px(1, boatSheer(0) + 1, 2, 5, BOAT_PAL.hullDark);             // l'étrave
+        px(BOAT_LN + 1, boatSheer(1) + 1, 2, 5, BOAT_PAL.hullDark);   // l'étambot
+      }
+    } else {
+      /* ── DANS L'AXE. Le raccourci : la coque est vue de bout, donc COURTE et
+         large, et c'est l'écartement des deux bords qui dit qu'on regarde
+         dedans. La tonture devient un creux au premier plan. ── */
+      /* ⚠️ VUE DE BOUT : LARGE ET BASSE. Le premier jet la faisait aussi HAUTE
+         que la vue de profil est longue — à l'écran, une urne. Une coque vue
+         dans son axe est écrasée : on voit surtout l'ouverture, très peu de
+         franc-bord, et la quille disparaît sous l'eau. Douze rangées suffisent,
+         et c'est l'ÉCARTEMENT des deux bords qui dit qu'on regarde dedans. */
+      const cxp = 13, TOP = 10, ROWS = 12;
+      for (let i = 0; i < ROWS; i++) {
+        const t = i / (ROWS - 1), y = TOP + i;
+        const half = Math.round(4 + 6 * Math.sin(Math.PI * (0.30 + 0.70 * t)));
+        if (layer === "back") {
+          px(cxp - half, y, half * 2, 1, i < 2 ? BOAT_PAL.hullDark : BOAT_PAL.inner);
+        } else if (i >= 7) {
+          px(cxp - half, y, half * 2, 1, BOAT_PAL.hull);
+          px(cxp - half, y, 1, 1, BOAT_PAL.rail);
+          px(cxp + half - 1, y, 1, 1, BOAT_PAL.rail);
+        }
+      }
+      if (layer === "front") {
+        px(cxp - 9, TOP + ROWS, 18, 2, BOAT_PAL.hullDark);   // le tableau, au ras de l'eau
+        px(cxp - 5, TOP + 6, 10, 1, BOAT_PAL.trim);          // le banc
+      }
+    }
+    const out = { c, ox: Math.round(W / 2), oy: Math.round(H - 2 * u) };
+    boatCache.set(key, out);
+    return out;
+  }
+  /* `dir` suit la convention du jeu : 0 sud, 1 nord, 2 ouest, 3 est. Le profil
+     est peint une fois et MIROITÉ — deux dessins pour la même coque
+     divergeraient, et personne ne saurait lequel est le bon. */
+  function drawBoatLayer(g2, cx, cy, T2, dir, layer) {
+    const b = boatBake(T2, dir, layer);
+    const flip = dir === 2;
+    if (flip) {
+      g2.save(); g2.translate(Math.round(cx), Math.round(cy)); g2.scale(-1, 1);
+      g2.drawImage(b.c, -b.ox, -b.oy); g2.restore();
+    } else g2.drawImage(b.c, Math.round(cx) - b.ox, Math.round(cy) - b.oy);
+  }
+  /* ⚠️⚠️ LA HAUTEUR D'ASSISE EST DÉFINIE ICI, AVEC LA COQUE QUI LA CACHE, et
+     l'appelant la LIT. C'est le §8 de `CLAUDE.md` : deux descriptions du même
+     banc de nage divergeraient au premier réglage du bordé, et le symptôme
+     serait un fermier qui flotte au-dessus de son plat-bord ou coupé au menton.
+     Vue de bout, on est assis PLUS BAS — la coque est écrasée, donc elle mange
+     davantage. */
+  function boatSeatDy(dir) { return (dir === 2 || dir === 3) ? -16 : -13; }
+
+  function drawBoatBack(g2, cx, cy, T2, dir) { drawBoatLayer(g2, cx, cy, T2, dir, "back"); }
+  function drawBoatFront(g2, cx, cy, T2, dir) { drawBoatLayer(g2, cx, cy, T2, dir, "front"); }
+
   /* ⚠️⚠️ LE POINT D'ENTRÉE. `parts` EST LE TABLEAU RENDU PAR `Q.starShipParts` —
      on ne lui passe PAS l'état de la quête, et c'est volontaire : `fermeArt` ne
      doit rien savoir de `quete.js`, sinon le banc de rendu devrait monter toute la
@@ -14929,6 +15066,7 @@ house: house(),
     drawStarCraterAir,
     drawStarDust,
     drawStarShip,          // 450 — le navire des étoiles, sur la grève du lac
+    drawBoatBack, drawBoatFront, boatSeatDy, BOAT_SIT_CROP,   // 2026-08-31 — la coque qu'on monte dedans
     drawStarPlan,          // 454 — la feuille de plan de Kerguélen
     starCraterSink,
     drawStarComet,          // zip 448 — la comète, sa queue, sa traînée et son impact

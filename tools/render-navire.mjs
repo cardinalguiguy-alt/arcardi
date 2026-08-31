@@ -510,5 +510,72 @@ ok(C.STAR_SHIP_BLOCK_W < C.STAR_SHIP_DRAW_W && C.STAR_SHIP_BLOCK_H < C.STAR_SHIP
   console.log(`\n  planche : tools/out/navire-plan.png (${zp.W}×${zp.H}, ×2) — zéro, trois et cinq pièces`);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   2026-08-31 — LA COQUE QU'ON MONTE DEDANS : LES QUATRE VUES, ET L'OCCLUSION
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ LE CONTRÔLE QUI COMPTE N'EST PAS « EST-CE JOLI », C'EST « EST-ON
+   DEDANS ». Un fermier peint par-dessus une coque est un fermier DEBOUT sur un
+   bateau, quelle que soit la finesse du bordé ; « dedans » est un problème
+   d'ORDRE de dessin, et il se mesure. On peint donc l'occupant en SILHOUETTE
+   MAGENTA, une fois seul et une fois entre les deux couches de coque, et on
+   compte ce que le plat-bord a mangé. C'est la technique du masque, et elle est
+   la seule qui ne dépende pas de la couleur du dessin qu'on juge.
+   ═══════════════════════════════════════════════════════════════════════════ */
+{
+  const T2 = 16, BW = 64, BH = 56;
+  const sheet = S.getChar("m", 0, false, false, false, false, false, false, null);
+  /* ⚠️ LA VUE OUEST N'EST PAS MESURÉE ICI, ET CE N'EST PAS UN OUBLI : elle est le
+     MIROIR de la vue est, et le faux canevas de `lib-canvas.mjs` ignore
+     `scale(-1,1)` (il le dit dans son en-tête). Un contrôle sur le miroir
+     mesurerait le stub, pas le dessin — le stub menteur du §10, dans l'outil
+     censé nous en protéger. Le jeu, lui, miroite pour de bon. */
+  const DIRS = [[0, "de face (sud)"], [1, "de dos (nord)"], [3, "de profil (est)"]];
+  const cells = [];
+  const mag = (sur, cx, cy, dir) => { sur.ctx.fillStyle = "#ff00ff"; sur.ctx.fillRect(cx - 8, cy + S.boatSeatDy(dir) - 8, 16, 22); };
+  for (const [dir, name] of DIRS) {
+    /* la vignette de LECTURE : coque, occupant assis, plat-bord */
+    const a = makeCanvas(BW, BH);
+    S.drawBoatBack(a.ctx, BW / 2, BH - 12, T2, dir);
+    A.drawSeated(a.ctx, sheet, dir === 1 ? 1 : (dir === 0 ? 0 : 2), BW / 2 - 8, BH - 12 + S.boatSeatDy(dir));
+    S.drawBoatFront(a.ctx, BW / 2, BH - 12, T2, dir);
+    cells.push([name, a]);
+
+    /* la MESURE : silhouette seule, puis silhouette occultée */
+    const solo = makeCanvas(BW, BH); mag(solo, BW / 2, BH - 12, dir);
+    const occ = makeCanvas(BW, BH);
+    S.drawBoatBack(occ.ctx, BW / 2, BH - 12, T2, dir);
+    mag(occ, BW / 2, BH - 12, dir);
+    S.drawBoatFront(occ.ctx, BW / 2, BH - 12, T2, dir);
+    const isMag = (d, i) => d[i] > 200 && d[i + 1] < 80 && d[i + 2] > 200;
+    let before = 0, after = 0;
+    for (let i = 0; i < BW * BH; i++) { if (isMag(solo.px, i * 4)) before++; if (isMag(occ.px, i * 4)) after++; }
+    const eaten = before ? 1 - after / before : 0;
+    ok(eaten > 0.18 && eaten < 0.72, `« ${name} » : le plat-bord passe DEVANT l'occupant`,
+       `${(eaten * 100).toFixed(0)} % du buste caché par la coque`);
+
+    /* aucun pixel sur les quatre bords — le canevas découpe en silence (427) */
+    let edge = 0;
+    for (let x = 0; x < BW; x++) { if (a.px[x * 4 + 3]) edge++; if (a.px[((BH - 1) * BW + x) * 4 + 3]) edge++; }
+    for (let y = 0; y < BH; y++) { if (a.px[(y * BW) * 4 + 3]) edge++; if (a.px[(y * BW + BW - 1) * 4 + 3]) edge++; }
+    ok(edge === 0, `« ${name} » : rien ne touche le bord du canevas`, edge ? edge + " px" : "");
+  }
+  /* l'échelle : une coque doit être franchement plus large qu'un fermier, sinon
+     ce n'est pas un bateau, c'est une planche (429 — on mesure contre le
+     fermier, jamais contre d'autres décors). */
+  {
+    const a = makeCanvas(BW, BH);
+    S.drawBoatFront(a.ctx, BW / 2, BH - 12, T2, 3);
+    let x0 = BW, x1 = -1;
+    for (let y = 0; y < BH; y++) for (let x = 0; x < BW; x++) if (a.px[(y * BW + x) * 4 + 3] > 150) { if (x < x0) x0 = x; if (x > x1) x1 = x; }
+    ok(x1 - x0 >= 32, "de profil, la coque fait au moins deux fermiers de long", `${x1 - x0 + 1} px pour 16 px de fermier`);
+  }
+  const CW = BW + 4, sheetW = CW * cells.length + 4, sheetH = BH + 4;
+  const out = makeCanvas(sheetW, sheetH);
+  cells.forEach(([, a], i) => out.ctx.drawImage({ width: BW, height: BH, px: a.px }, 4 + i * CW, 2));
+  const z = scale(out.px, sheetW, sheetH, 4);
+  writePNG(path.join(OUT, "barque.png"), z.px, z.W, z.H);
+  console.log("\n  planche : tools/out/barque.png — les quatre vues, occupant compris");
+}
+
 console.log(`\n${fails ? `❌ ${fails} contrôle(s) en échec` : "✅ tout est vert"}\n`);
 process.exit(fails ? 1 : 0);

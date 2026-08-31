@@ -1390,6 +1390,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     carryModeRef.current = "hand"; setCarryMode("hand");
     setBagOpen(false);
   }
+  /* 2026-08-31 — LA BARQUE. `boatRef` porte la seule chose qui ne se déduit
+     PAS : l'erre (la vitesse), qui est locale au pilote et n'intéresse personne
+     d'autre. Position et cap se déduisent du pilote (§3 : ce qui peut se
+     déduire ne se diffuse pas). `boatLandRef` est la berge la plus proche,
+     calculée DANS la boucle — `canStandTown` y vit, et l'appeler depuis le
+     composant lèverait le `ReferenceError` du piège n°1. */
+  const boatRef = useRef(null);
+  const boatLandRef = useRef(null);
   const horseCallAccumRef = useRef(0); // accumulateur (secondes) pour throttler la diffusion réseau des chevaux sifflés en course
   const wolfAccumRef = useRef(0);      // accumulateur (secondes), même throttle réseau pour les loups simulés côté hôte
   const evilMonstersAccumRef = useRef(0); // hôte : throttle réseau des créatures maléfiques partagées (2026-07)    // accumulateur (secondes), même throttle réseau pour les lapins simulés côté hôte
@@ -2676,7 +2684,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       orchards: worldRef.current ? E.serializeOrchards(worldRef.current) : [],
       sucreries: worldRef.current ? E.serializeSucreries(worldRef.current) : [],
       farmers: farmersRef.current,
-      horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, barn: s.barn, salveCraft: s.salveCraft, house: s.house, evilMonsters: s.evilMonsters, gems: s.gems, flour: s.flour, sugar: s.sugar, gregStock: s.gregStock, fertilizerShop: s.fertilizerShop, wolves: s.wolves, greg: s.greg, soan: s.soan, harald: s.harald,
+      horses: s.horses, boat: s.boat, animals: s.animals, wellBuilt: s.wellBuilt, barn: s.barn, salveCraft: s.salveCraft, house: s.house, evilMonsters: s.evilMonsters, gems: s.gems, flour: s.flour, sugar: s.sugar, gregStock: s.gregStock, fertilizerShop: s.fertilizerShop, wolves: s.wolves, greg: s.greg, soan: s.soan, harald: s.harald,
       // Zip 366 : `rabbits` retiré de l'instantané. Chaque client peuple les
       // siens depuis la graine de la ferme (voir updateRabbits) — les envoyer
       // ici les écraserait aussitôt avec ceux de l'hôte, ce qui n'aurait de
@@ -3112,8 +3120,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else if (rM === "mayorSlam") broadcastChat("🎩", L.maire.chat.slam(whoM));
       else broadcastChat("🎩", L.maire.chat.failed(whoM));
       /* ⚠️ UNE SIGNATURE EST UN POINT DE REPRISE : elle ouvre tout le chantier
-         naval. On force l'écriture, comme au franchissement d'un chapitre. */
-      if (rM === "mayorSigned") persistFnRef.current && persistFnRef.current();
+         naval. On force l'écriture, comme au franchissement d'un chapitre.
+         HORS-ZIP — et c'est aussi la seule des quatre issues qui mérite la
+         carte de victoire (`ferme-star-card.win`) : c'est l'audience la plus
+         dure de la quête (« sans aucun droit à l'erreur », § CLAUDE.md), et
+         un simple message de chat s'y noyait. Diffusée à toute la salle,
+         comme la carte de chapitre : c'est le chantier naval de TOUT LE MONDE
+         qui vient de s'ouvrir, pas seulement celui du joueur qui négociait. */
+      if (rM === "mayorSigned") { out.starScene = { key: "mayorWin" }; persistFnRef.current && persistFnRef.current(); }
       hostFlushOut(out, f, null);
       return;
     }
@@ -4721,6 +4735,49 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (h.rider === req.id) { h.rider = null; h.rider2 = null; h.x = px; h.y = py; out.horses = hs; break; }
         else if (h.rider2 === req.id) { h.rider2 = null; out.horses = hs; break; }
       }
+    } else if (req.kind === "board" || req.kind === "unboard") {
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ 2026-08-31 — ON MONTE DANS LE BATEAU. L'HÔTE ARBITRE, COMME POUR LA
+         ║ MONTURE.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️⚠️ C'EST LE PATRON DU CHEVAL, RECOPIÉ EXPRÈS ET PAS GÉNÉRALISÉ. Deux
+         véhicules qui partagent une abstraction partagent aussi ses bugs, et
+         celui-ci n'a ni robe, ni sifflet, ni noyade : le mettre en commun aurait
+         demandé trois drapeaux pour économiser douze lignes.
+         ⚠️ CE QUI CIRCULE EST MINIMAL : le bateau n'a de position PROPRE que
+         lorsqu'il est vide. Piloté, sa position se DÉDUIT de celle du pilote —
+         c'est le §3 de `CLAUDE.md` (*ce qui peut se déduire ne se diffuse pas*)
+         et c'est exactement ce que `horseAnchor` fait depuis toujours. Un canal
+         de position pour le bateau aurait doublé le trafic de la ville pour
+         zéro information. */
+      const bt = s.boat || (s.boat = null);
+      if (req.kind === "board") {
+        /* la coque est là où le dit l'état, ou à son poste d'amarrage dérivé */
+        const tw2 = getTownWorldCached(E);
+        const moor = E.boatMooring(tw2);
+        const bx = bt ? bt.x : (moor ? moor.x : 0), by = bt ? bt.y : (moor ? moor.y : 0);
+        const pilotFarmer = bt && bt.pilot ? farmersRef.current[bt.pilot] : null;
+        const ax = pilotFarmer ? pilotFarmer.x : bx, ay = pilotFarmer ? pilotFarmer.y : by;
+        const complete = Q.starShipComplete(s.star) && !Q.starShipGone(s.star, starVoyagerAway());
+        if (complete && moor && Math.abs(px - ax) <= C.BOAT_BOARD_RANGE && Math.abs(py - ay) <= C.BOAT_BOARD_RANGE) {
+          const b2 = bt || { x: moor.x, y: moor.y, ang: 0, pilot: null, crew: null };
+          if (b2.pilot !== req.id && b2.crew !== req.id) {
+            if (!b2.pilot) b2.pilot = req.id;
+            else if (!b2.crew) b2.crew = req.id;
+          }
+          s.boat = b2; out.boat = b2;
+        }
+      } else {
+        if (bt) {
+          /* ⚠️ LE BATEAU RESTE OÙ ON LE LAISSE, y compris en pleine eau : c'est
+             la règle du cheval (on descend, il reste), et c'est ce qui fait
+             qu'un bateau abandonné au milieu du fleuve est un problème que les
+             joueurs doivent résoudre entre eux plutôt qu'une règle de plus. */
+          if (bt.pilot === req.id) { bt.pilot = null; bt.crew = null; bt.x = px; bt.y = py; if (typeof req.ang === "number") bt.ang = req.ang; }
+          else if (bt.crew === req.id) bt.crew = null;
+          out.boat = bt;
+        }
+      }
     } else if (req.kind === "whistle") {
       // Sifflement (bouton dédié, icône cheval) : tous les chevaux LIBRES
       // (personne dessus) de la ferme se mettent à courir vers celui qui a
@@ -4990,7 +5047,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // Les quêtes accomplies voyagent avec l'état privé du fermier.
     if (out.farmer) out.farmer.quests = f.quests;
 
-    if (out.tiles.length || out.state || out.horses || out.animals || out.wellBuilt || out.gems || out.gregStock || out.mills || out.sucreries || out.orchards || out.house || out.flour !== undefined || out.sugar !== undefined) dirtyRef.current = true;
+    if (out.tiles.length || out.state || out.horses || out.boat || out.animals || out.wellBuilt || out.gems || out.gregStock || out.mills || out.sucreries || out.orchards || out.house || out.flour !== undefined || out.sugar !== undefined) dirtyRef.current = true;
     hostSend({ type: "broadcast", event: "apply", payload: { ...out, hostNow: Date.now() } });
   }
   // -------- 2026-07 station update: host-side station module --------
@@ -6883,6 +6940,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          toute seule. Une scène l'aurait mise dans la file de `starScenePump`,
          c'est-à-dire en attente d'un endroit où il y a du ciel — pour un texte. */
       else if (sc.key === "warn") starShowCard("warn");
+      /* HORS-ZIP — LES DEUX CARTES DE VICTOIRE PRENNENT LE MÊME CHEMIN QUE
+         « warn » : ce sont des NOUVELLES (le maire signe, Kerguélen livre),
+         pas des événements du monde, donc pas de file de scène — juste la
+         file de carte, qui attend déjà un écran libre toute seule. */
+      else if (sc.key === "mayorWin" || sc.key === "engDone") starShowCard(sc.key);
       /* ⚠️⚠️ ZIP 445 — LA CHUTE PASSE PAR LA FILE, LES DEUX AUTRES NON. Voir la
          note de `starScenePendRef` : le retournement et la finale sont la suite
          immédiate d'un geste du joueur, la chute est la seule qui ARRIVE. */
@@ -6994,6 +7056,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.chat) addChat(p.chat.from, p.chat.msg);
     if (p.fx) for (const f of p.fx) spawnFx(f);
     if (p.horses) { sharedRef.current.horses = p.horses; syncBuildings(); }
+    if (p.boat) sharedRef.current.boat = p.boat;   // 2026-08-31 — la barque
     if (p.animals) { sharedRef.current.animals = p.animals; syncBuildings(); }
     if (p.wolves) { sharedRef.current.wolves = p.wolves; minimapDirtyRef.current = true; }
     // Zip 366 : plus personne n'émet `rabbits` (simulation locale, voir
@@ -7541,7 +7604,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const nowT = Date.now();
           if (Q.resolveStarPlanTick(e0, nowT).ok) {
             dirtyRef.current = true;
-            hostSend({ type: "broadcast", event: "apply", payload: { star: e0 } });
+            /* HORS-ZIP — LA CARTE DE VICTOIRE, POUR LA MÊME RAISON QUE LA
+               SIGNATURE DU MAIRE : le prix payé pour Kerguélen est « une forte
+               rémunération » (§13 de CLAUDE.md), et jusqu'ici seul un message
+               de chat disait que le pari avait payé. Même file `starShowCard`,
+               même fondu — voir la note de `mayorTalk`. */
+            hostSend({ type: "broadcast", event: "apply", payload: { star: e0, starScene: { key: "engDone" } } });
             /* ⚠️ C'EST LUI QUI PARLE, PAS LE JEU : « Voilà. Cinq pièces, dans cet
                ordre. » dit d'un coup ce qui vient d'arriver ET ce qu'il faut faire
                ensuite. La phrase de la mairie (`hallReady`) reste au guichet, pour
@@ -9163,9 +9231,63 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // Zip 253 : aucun cheval en ville ni dans le passage sombre — on ne peut
     // monter QUE sur la ferme (les chevaux vivent à la ferme). En ville, F ne
     // fait rien (le prompt de monte y est déjà masqué, voir updateMeTown).
+    if (m.zone === "town" && toggleBoat()) return;      // 2026-08-31 — la barque
     if (m.zone && m.zone !== "farm") return;
     const idx = nearestMountableHorse();
     if (idx >= 0) sendReq({ kind: "mount", horseIndex: idx });
+  }
+  /* ── LA BARQUE (2026-08-31). Même geste que la monture, même touche : F.
+     ⚠️ AUCUNE TOUCHE NEUVE, et c'est un arbitrage, pas une paresse. « Monter
+     dans / descendre de » est déjà un verbe du jeu ; lui donner une seconde
+     touche selon le véhicule oblige le joueur à se souvenir de laquelle il a
+     dans les doigts au moment où il en a le moins envie. En ville, F ne
+     servait à rien (aucun cheval n'y vit) : la place était libre. ── */
+  function myBoat() {
+    const b = sharedRef.current.boat;
+    return b && (b.pilot === me.id || b.crew === me.id) ? b : null;
+  }
+  function boatAnchor(b) {
+    if (!b) return null;
+    if (b.pilot === me.id) { const m = meRef.current; return m ? { x: m.x, y: m.y } : { x: b.x, y: b.y }; }
+    if (b.pilot) { const r = playersRef.current.get(b.pilot); if (r) return { x: r.x, y: r.y }; }
+    return { x: b.x, y: b.y };
+  }
+  function toggleBoat() {
+    const m = meRef.current; if (!m || m.zone !== "town") return false;
+    const mine = myBoat();
+    if (mine) {
+      /* ⚠️ ON NE DÉBARQUE QUE PRÈS D'UNE BERGE, et la berge est celle que la
+         BOUCLE a trouvée : `canStandTown` vit dans sa closure. Sans ce refus,
+         descendre au milieu du fleuve poserait le fermier debout sur l'eau —
+         et le seul contrôle qui l'aurait vu est celui qu'on n'écrit jamais. */
+      const land = boatLandRef.current;
+      if (!land) { pushToast(L.boatNoShore); return true; }
+      sendReq({ kind: "unboard", ang: boatRef.current ? boatRef.current.ang : 0 });
+      m.x = land.x; m.y = land.y; m.moving = false; m.vx = 0; m.vy = 0;
+      boatRef.current = null;
+      sendPos();
+      return true;
+    }
+    const b = sharedRef.current.boat;
+    const a = b ? boatAnchor(b) : null;
+    const moor = boatMooringNow();
+    const tx = a ? a.x : (moor ? moor.x : null), ty = a ? a.y : (moor ? moor.y : null);
+    if (tx === null) return false;
+    if (Math.abs(m.x - tx) > C.BOAT_BOARD_RANGE || Math.abs(m.y - ty) > C.BOAT_BOARD_RANGE) return false;
+    if (!boatReady()) { pushToast(L.boatNotReady); return true; }
+    sendReq({ kind: "board" });
+    return true;
+  }
+  /* Le poste d'amarrage et la disponibilité : DEUX prédicats déjà existants, et
+     pas un champ de plus. Le bateau est là quand il est fini et qu'Eduardo ne
+     l'a pas emmené — c'est la règle du 453, on ne la double pas. */
+  function boatMooringNow() {
+    const tw = townWorldRef.current || (townWorldRef.current = getTownWorldCached(E));
+    return E.boatMooring(tw);
+  }
+  function boatReady() {
+    const st = sharedRef.current.star;
+    return Q.starShipComplete(st) && !Q.starShipGone(st, starVoyagerAway());
   }
   // Sifflement (bouton dédié, icône cheval, chantier 2026-07 demande
   // Guillaume) : envoie la requête au hôte, qui fixe `callTarget` sur chaque
@@ -17070,6 +17192,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        cette closure) — et deux copies du même seuil de proximité, c'est la
        garantie qu'un jour l'invite propose une porte que E refuse d'ouvrir. */
     const nearBuildingDoor = nearCivicDoor;
+    /* une seule description de « l'interface a la main » : deux copies
+       divergeraient au premier panneau ajouté (§8). */
+    function uiBlockedBoat() {
+      return mapOpenRef.current || marketOpenRef.current || starUiOpenRef.current
+          || document.activeElement === chatInputRef.current;
+    }
     function updateMeTown(dt) {
       const m = meRef.current, tw = townWorldRef.current, keys = keysRef.current;
       if (!tw) return;
@@ -17092,6 +17220,60 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         maybeSendPos();
         return;
       }
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ 2026-08-31 — À BORD. LE BATEAU EST LE VÉHICULE, LE JOUEUR EST DEDANS.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️ C'est la forme du taxi juste au-dessus : on recopie la position de la
+         coque sur le joueur, et tout ce qui suit un joueur — cadrage, AOI, voile
+         de nuit, réplication réseau — suit le bateau sans une ligne de plus.
+         ⚠️⚠️ MAIS LA MÉCANIQUE, ELLE, EST DANS `E.boatStep` : ici il ne reste
+         que le geste (normaliser la commande, appeler, appliquer). Écrite dans
+         cette closure, aucun banc n'aurait pu la rejouer — et c'est en la
+         rejouant que `verify-vallee` a trouvé les deux verrous qui collaient le
+         joueur à la berge et la coque qui s'échouait en virant sur place. */
+      const bt0 = sharedRef.current.boat;
+      if (bt0 && (bt0.pilot === me.id || bt0.crew === me.id)) {
+        if (bt0.pilot === me.id) {
+          let b = boatRef.current;
+          if (!b) b = boatRef.current = E.boatNew(m.x, m.y, bt0.ang || 0);
+          let bx = 0, by = 0;
+          if (!uiBlockedBoat()) {
+            if (keys["ArrowUp"] || keys["KeyW"] || keys["KeyZ"]) by -= 1;
+            if (keys["ArrowDown"] || keys["KeyS"]) by += 1;
+            if (keys["ArrowLeft"] || keys["KeyA"] || keys["KeyQ"]) bx -= 1;
+            if (keys["ArrowRight"] || keys["KeyD"]) bx += 1;
+          }
+          const bl = Math.hypot(bx, by);
+          if (bl > 0) { bx /= bl; by /= bl; }
+          E.boatStep(b, bx, by, Math.min(0.05, dt), (qx, qy, qa) => E.boatCanFloat(tw, qx, qy, qa));
+          m.x = b.x; m.y = b.y;
+          m.vx = Math.cos(b.ang) * b.spd; m.vy = Math.sin(b.ang) * b.spd;
+          /* ⚠️ LE CAP DEVIENT LA DIRECTION DU JOUEUR, et c'est ce qui rend le
+             dessin gratuit chez les autres : `dir` circule déjà dans chaque
+             paquet de position, donc un client distant oriente la coque sans
+             recevoir un seul champ de plus. */
+          m.dir = E.boatDir(b.ang);
+          m.moving = Math.abs(b.spd) > 0.05;
+          m.animT = 0; m.sitOn = null;
+          /* la berge la plus proche, pour savoir si l'on peut débarquer. Elle se
+             calcule ICI parce que `canStandTown` vit dans cette closure. */
+          let land = null, bestD = 9;
+          for (let ax = -2; ax <= 2; ax++) for (let ay = -2; ay <= 2; ay++) {
+            const lx = Math.floor(m.x) + ax + 0.5, ly = Math.floor(m.y) + ay + 0.5;
+            if (E.isWaterCell(tw, lx, ly)) continue;
+            if (!canStandTown(tw, lx, ly)) continue;
+            const d = Math.hypot(lx - m.x, ly - m.y);
+            if (d < bestD) { bestD = d; land = { x: lx, y: ly }; }
+          }
+          boatLandRef.current = land;
+          maybeSendPos();
+          return;
+        }
+        /* le passager : sa position EST celle du pilote. Rien à simuler, rien à
+           diffuser de plus — il envoie déjà sa propre position. */
+        const pil = playersRef.current.get(bt0.pilot);
+        if (pil) { m.x = pil.x; m.y = pil.y; m.dir = pil.dir; m.moving = !!pil.moving; m.animT = 0; m.sitOn = null; maybeSendPos(); return; }
+      }
       /* ---- LE SAUT EN COURS (425). Il prend la main sur les commandes : on ne
          pilote pas en l'air, et la trajectoire est décidée au décollage (voir
          tryTownJump). ⚠️ On interpole la POSITION, pas la vitesse : une
@@ -17109,7 +17291,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         maybeSendPos();
         return;
       }
-      const uiBlocked = mapOpenRef.current || marketOpenRef.current || starUiOpenRef.current || document.activeElement === chatInputRef.current;
+      const uiBlocked = uiBlockedBoat();
       let dx = 0, dy = 0;
       if (!uiBlocked) {
         if (keys["ArrowUp"] || keys["KeyW"] || keys["KeyZ"]) dy -= 1;
@@ -20969,6 +21151,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const isPrimaryRider = mount ? true : (horse && horse.rider === p.id);
       const isPassenger = mount ? false : (horse && horse.rider2 === p.id);
       const riding = isPrimaryRider || isPassenger;
+      /* 2026-08-31 — À BORD. Deux places, comme la monture ; le PILOTE porte la
+         coque (elle n'est dessinée qu'une fois), le passager s'assied dedans. */
+      const boatNow = sharedRef.current.boat;
+      const isPilot = !!(boatNow && boatNow.pilot === p.id);
+      const inBoat = !!(boatNow && (boatNow.pilot === p.id || boatNow.crew === p.id)) && p.zone === "town";
       const flip = p.dir === 2;
       // Le passager est assis juste derrière le cavalier principal sur la
       // selle, décalé du côté opposé au sens de la marche.
@@ -21076,9 +21263,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // invisible, plutôt qu'un effet purement logique invisible... au sens
       // propre.
       const invisibleNow = isSelf && p.zone === "evil" && Date.now() < immunityUntilRef.current;
+      /* ⚠️⚠️ LA COQUE SE PEINT EN DEUX TEMPS AUTOUR DE L'OCCUPANT, et c'est la
+         seule façon d'être DEDANS : le bordé opposé d'abord, l'homme ensuite, le
+         plat-bord près de nous en dernier. Peint d'un bloc avant, il est debout
+         dessus ; peint d'un bloc après, il a disparu. Le détail est dans
+         `fermeArt` (`drawBoatBack`/`drawBoatFront`), qui porte aussi la hauteur
+         d'assise — deux descriptions du même banc de nage divergeraient (§8). */
+      if (inBoat && isPilot && sprites.drawBoatBack) sprites.drawBoatBack(ctx, basePx + 8, py + 14, T, p.dir);
       ctx.save();
       if (invisibleNow) ctx.globalAlpha = 0.35;
-      if (riding) {
+      if (inBoat) {
+        /* ⚠️ ON RÉUTILISE LA POSE ASSISE DU BANC (428) PLUTÔT QUE D'EN DESSINER
+           UNE. Un homme sur un banc de nage est assis comme un homme sur un banc
+           public ; en inventer une seconde aurait donné deux poses assises qui
+           vieillissent séparément — et celle-ci est déjà mesurée par
+           `render-assise`. *La pose assise juste est celle qu'on ne redessine
+           pas.* */
+        const seatY = py + 14 + sprites.boatSeatDy(p.dir);
+        const bx = basePx + (isPilot ? 0 : (p.dir === 1 || p.dir === 0 ? 5 : -6));
+        if (flip) { ctx.translate(bx + 16, 0); ctx.scale(-1, 1); A.drawSeated(ctx, sheet, row, 0, seatY); }
+        else A.drawSeated(ctx, sheet, row, bx, seatY);
+      } else if (riding) {
         // ASSIS (chantier 2026-07, demande Guillaume : "le fermier qui le
         // chevauche doit clairement être assis dessus, de manière plus
         // réaliste") : on ne dessine que le BUSTE du sprite (15 px du haut —
@@ -21183,6 +21388,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       } else if (flip) { ctx.translate(px + 16, py - 8 - lift); ctx.scale(-1, 1); ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, 0, 0, 16, 24); }
       else ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, px, py - 8 - lift, 16, 24);
       ctx.restore();
+      if (inBoat && isPilot && sprites.drawBoatFront) sprites.drawBoatFront(ctx, basePx + 8, py + 14, T, p.dir);
       // Torche allumée (chantier 2026-07) : dessinée collée à la main côté
       // sens de la marche, flamme qui vacille légèrement.
       const carryingTorch = isSelf ? torchOnRef.current : !!p.torch;
@@ -30336,12 +30542,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            titre qui marque un début. Un second composant aurait eu sa propre durée
            et son propre fondu, donc deux transitions à régler pour un seul geste. */
         const warn = key === "warn";
+        /* HORS-ZIP — LA CARTE DE VICTOIRE. Deux clés seulement pour l'instant
+           (le maire signe, Kerguélen livre les plans) : les deux étapes du
+           chapitre 3 qu'un joueur peut rater plusieurs fois de suite avant de
+           réussir, et qui ne laissaient jusqu'ici qu'une ligne de chat.
+           ⚠️ ACCÈS LITTÉRAL, PAS `L.star.win[win]` : `verify-quete` §« chaque
+           phrase a un lecteur » lit le SOURCE pour savoir si une clé de
+           `fermeStrings.js` est affichée quelque part, et il ne peut pas
+           suivre un index calculé — seul un `L.star.win.mayor.title` écrit en
+           toutes lettres compte comme une lecture. */
+        const win = key === "mayorWin" || key === "engDone";
+        const winTitle = key === "mayorWin" ? L.star.win.mayor.title : key === "engDone" ? L.star.win.engineer.title : null;
+        const winSub   = key === "mayorWin" ? L.star.win.mayor.sub   : key === "engDone" ? L.star.win.engineer.sub   : null;
         return (
-          <div className="ferme-star-card" data-tick={starTick}>
+          <div className={"ferme-star-card" + (win ? " win" : "")} data-tick={starTick}>
             <div className="ferme-star-card-in">
-              <div className="ferme-star-card-mark">{warn ? "☄" : "✦"}</div>
-              <div className="ferme-star-card-title">{warn ? L.star.warn.cardTitle : (L.star.chapter[key] || L.star.title)}</div>
+              <div className="ferme-star-card-mark">{warn ? "☄" : win ? "✓" : "✦"}</div>
+              <div className="ferme-star-card-title">
+                {warn ? L.star.warn.cardTitle : win ? winTitle : (L.star.chapter[key] || L.star.title)}
+              </div>
               {warn && <div className="ferme-star-card-sub">{L.star.warn.cardSub}</div>}
+              {win && <div className="ferme-star-card-sub">{winSub}</div>}
             </div>
           </div>
         );

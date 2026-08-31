@@ -8013,6 +8013,183 @@ export function taxiStep(t, dt, cfg) {
   return false;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   2026-08-31 — LA NAVIGATION, EN PUR. « ON MONTE DEDANS. »
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume : *« eduardo peut utiliser le navire. mais nous aussi en
+   montant dedans […] mouvements cohérents. »*
+
+   ⚠️⚠️ C'EST ICI ET PAS DANS LA BOUCLE DE RENDU, ET C'EST LA SEULE CHOSE QUI
+   COMPTE DANS CE CHAPEAU. Un déplacement écrit dans la closure de `updateMeTown`
+   ne peut être rejoué par personne : ni un banc, ni un second client, ni la
+   prochaine session. C'est le piège n°1 de `CLAUDE.md` (deuxième visage : *un
+   dessin qu'aucun banc ne peut appeler ne se dégrade pas, il reste au niveau du
+   jour où il a été écrit*), et c'est aussi ce qui a permis à `render-etoile` de
+   simuler la sortie du cratère sur le vrai creux — 219 départs bloqués sur 317,
+   trouvés avant l'écran. Un bateau se règle en cinquante essais, pas en trois.
+   La boucle de jeu ne fait donc que : normaliser la commande, appeler, appliquer.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* La coque, en QUATRE points : étrave, étambot, et les deux travers. ⚠️ Ce
+   n'est pas la coque DESSINÉE (voir le chapeau de `BOAT_LEN` dans les
+   constantes) — le navire peint fait neuf cases, et le faire manœuvrer avec
+   neuf cases de collision dans un chenal qui en fait quatre le rendrait
+   immobile. Une grandeur de dessin, une grandeur de collision. */
+export function boatCanFloat(tw, x, y, ang) {
+  if (!tw) return false;
+  const ca = Math.cos(ang), sa = Math.sin(ang);
+  const pts = [
+    [x + ca * C.BOAT_LEN, y + sa * C.BOAT_LEN],      // l'étrave
+    [x - ca * C.BOAT_LEN, y - sa * C.BOAT_LEN],      // l'étambot
+    [x - sa * C.BOAT_BEAM, y + ca * C.BOAT_BEAM],    // un travers
+    [x + sa * C.BOAT_BEAM, y - ca * C.BOAT_BEAM],    // l'autre
+  ];
+  for (const [px, py] of pts) {
+    const fx = Math.floor(px), fy = Math.floor(py);
+    if (fx < 0 || fy < 0 || fx >= tw.w || fy >= tw.h) return false;
+    if (tw.ground[fy * tw.w + fx] !== C.G_WATER) return false;
+  }
+  return true;
+}
+
+/* ⚠️ `isWaterTile` plus haut est bornée à la carte de la FERME (son `inMap`
+   l'est) : appelée sur Valley Town, elle mesurerait une autre carte. Celle-ci
+   prend le monde qu'on lui donne, et c'est tout — le piège des deux cartes
+   sans repère commun (§4 de `CLAUDE.md`), payé quatre fois. */
+export function isWaterCell(w, x, y) {
+  const fx = Math.floor(x), fy = Math.floor(y);
+  if (!w || fx < 0 || fy < 0 || fx >= w.w || fy >= w.h) return false;
+  return w.ground[fy * w.w + fx] === C.G_WATER;
+}
+
+export function boatNew(x, y, ang) { return { x, y, ang: ang || 0, spd: 0 }; }
+
+/* ⚠️⚠️ LE POSTE D'AMARRAGE SE CHERCHE SUR LA CARTE, IL NE S'ÉCRIT PAS. Le ponton
+   est en bois : sa dernière case n'est pas de l'eau, et une position d'amarrage
+   écrite « au bout du ponton + 1 » tomberait dedans une fois sur deux selon le
+   découpage de la rive. On balaie donc autour de la tête du ponton et on prend
+   la première case où la COQUE ENTIÈRE flotte — la même fonction que la
+   navigation, jamais un second test (§8 de `CLAUDE.md`).
+   ⚠️ C'est le défaut n°1 du 444 dans sa forme la plus bête : *une porte qui
+   s'ouvre sur le vide passe tous les contrôles de la porte.* */
+export function boatMooring(tw) {
+  if (!tw) return null;
+  const px = C.STAR_PIER_X, py = C.STAR_PIER_Y;
+  let best = null, bestD = Infinity;
+  for (let dy = -2; dy <= 3; dy++) for (let dx = -4; dx <= 4; dx++) {
+    const x = px + dx + 0.5, y = py + dy + 0.5;
+    if (!boatCanFloat(tw, x, y, 0)) continue;
+    const d = Math.hypot(dx, dy);
+    if (d < bestD) { bestD = d; best = { x, y }; }
+  }
+  return best;
+}
+
+/* ⚠️⚠️ TROIS RÈGLES, ET C'EST TOUT CE QUI SÉPARE UN BATEAU D'UN FERMIER AVEC
+   UNE COQUE PEINTE AUTOUR : il ne va jamais de côté (la commande donne un CAP,
+   la poussée suit l'axe de la coque), il a de l'erre, et il peut culer.
+   ⚠️ `ix,iy` EST LA COMMANDE NORMALISÉE (0,0 = rien). `floats(x, y, ang)` est le
+   test de coque — passé en paramètre pour que le banc puisse en donner un faux
+   (un chenal droit) et le jeu la vraie carte, sans que l'un devine l'autre.
+   Rend `{ hit }` : la coque a-t-elle touché pendant ce pas. */
+export function boatStep(b, ix, iy, dt, floats) {
+  const cmd = Math.hypot(ix, iy) > 0.01;
+  /* Le cap voulu, et de quel côté de la coque il tombe. `thrust` vaut +1 droit
+     devant, −1 droit derrière : c'est lui qui décide si l'on pousse ou si l'on
+     cule, et c'est lui qui interdit de tourner pendant qu'on cule (personne ne
+     vire à la godille en marche arrière). */
+  let thrust = 0;
+  if (cmd) {
+    const want = Math.atan2(iy, ix);
+    thrust = Math.cos(want - b.ang);
+    /* ⚠️⚠️ ON TOURNE MÊME EN CULANT, ET C'EST UNE CORRECTION MESURÉE. Le premier
+       jet interdisait de virer quand la commande tombait derrière la coque
+       (`thrust > -0.35`) : c'est vrai d'une barque à l'aviron, et ça collait le
+       joueur contre la berge **2 fois sur 82** dans le balayage de
+       `verify-vallee` — étrave au nord, commande au sud-est, la coque cule
+       le long de la rive sans jamais gagner une case vers le large. Un bateau
+       qui recule embarde, il ne reste pas raide : on tourne donc toujours, mais
+       à 40 % du taux tant qu'on n'a pas remis le cap dessus. *Une règle de
+       réalisme qui produit un joueur coincé n'est pas du réalisme.* */
+    let da = want - b.ang;
+    while (da > Math.PI) da -= 2 * Math.PI;
+    while (da < -Math.PI) da += 2 * Math.PI;
+    const maxTurn = C.BOAT_TURN * (0.4 + 0.6 * Math.max(0, thrust)) * dt;
+    const na = b.ang + (Math.abs(da) < maxTurn ? da : Math.sign(da) * maxTurn);
+    /* ⚠️⚠️ ON TESTE LA COQUE AVANT DE VIRER, ET SANS ÇA ELLE S'ÉCHOUE EN
+       TOURNANT SUR PLACE. Défaut trouvé par le banc, jamais soupçonné en
+       écrivant : une coque de 1,7 case de long qui flotte au cap A ne flotte
+       pas forcément au cap A′ au MÊME point — dans un chenal de quatre rangées,
+       un quart de tour plante l'étrave dans la berge. Le pas, lui, était bien
+       testé ; la ROTATION ne l'était pas. **4 934 images à terre sur 5 400.**
+       *Un véhicule a deux degrés de liberté : les tester à moitié, c'est ne pas
+       les tester.* Pincé, il ne vire pas — il doit d'abord culer, ce qui est
+       exactement ce qu'on fait dans une passe étroite. */
+    /* ⚠️⚠️⚠️ ET QUAND LE VIRAGE EST REFUSÉ, ON SE DÉGAGE EN VIRANT — SINON C'EST
+       UN VERROU. Le banc l'a montré sur deux départs : la coque cule, tourne
+       jusqu'à se mettre EN TRAVERS de la commande (poussée ≈ 0, donc plus de
+       vitesse), et là elle ne peut ni avancer ni virer davantage, parce que
+       l'étambot bute sur la rive. Deux degrés de liberté bloqués l'un par
+       l'autre : le joueur est collé pour toujours et rien ne le lui dit.
+       La parade est celle qu'un marin emploie et celle que le pas à pied emploie
+       déjà : on ESSAIE, puis on essaie décalé. La coque s'écarte de la berge de
+       douze centimètres en même temps qu'elle vire. Chaque candidat est validé
+       par `floats`, donc on ne traverse jamais rien. */
+    let turned = false;
+    if (floats(b.x, b.y, na)) { b.x = b.x; b.y = b.y; turned = true; }
+    else {
+      const n = 0.12;
+      for (const [ox, oy] of [[n, 0], [-n, 0], [0, n], [0, -n]]) {
+        if (floats(b.x + ox, b.y + oy, na)) { b.x += ox; b.y += oy; turned = true; break; }
+      }
+    }
+    if (turned) {
+      b.ang = na;
+      while (b.ang > Math.PI) b.ang -= 2 * Math.PI;
+      while (b.ang < -Math.PI) b.ang += 2 * Math.PI;
+    }
+  }
+  /* L'erre. ⚠️ LA BANDE MORTE EST CELLE DU TAXI, ET POUR LA MÊME RAISON : deux
+     flottants qui convergent et qu'on compare strictement oscillent, et le
+     véhicule broute en ligne droite (défaut mesuré par le banc du taxi, jamais
+     vu à l'œil). */
+  const target = !cmd ? 0
+    : (thrust >= 0 ? C.BOAT_SPEED * thrust : -C.BOAT_ASTERN * Math.min(1, -thrust));
+  const dv = target - b.spd;
+  const rate = (target === 0 || Math.sign(target) !== Math.sign(b.spd || target)) ? C.BOAT_DRAG : C.BOAT_ACCEL;
+  if (Math.abs(dv) > 0.03) b.spd += Math.sign(dv) * rate * dt;
+  else b.spd = target;
+  b.spd = Math.max(-C.BOAT_ASTERN, Math.min(C.BOAT_SPEED, b.spd));
+
+  /* Le pas, puis la coque. ⚠️ ON GLISSE LE LONG DE LA BERGE au lieu de coller :
+     un bateau qui s'arrête net dès qu'un de ses quatre points touche est
+     inpilotable dans un chenal de quatre rangées — c'est l'axe le plus contraint
+     qui doit céder, pas le déplacement entier. C'est la parade du pas à pied
+     (`stand(nx, y)` puis `stand(x, ny)`), transposée. */
+  const vx = Math.cos(b.ang) * b.spd * dt, vy = Math.sin(b.ang) * b.spd * dt;
+  let hit = false;
+  if (floats(b.x + vx, b.y + vy, b.ang)) { b.x += vx; b.y += vy; }
+  else {
+    hit = true;
+    if (floats(b.x + vx, b.y, b.ang)) b.x += vx;
+    if (floats(b.x, b.y + vy, b.ang)) b.y += vy;
+    b.spd *= C.BOAT_BUMP;
+  }
+  return { hit };
+}
+
+/* Le cap, ramené aux quatre orientations du jeu (0 sud, 1 nord, 2 ouest, 3 est).
+   ⚠️ ELLE EST ICI ET PAS DANS LE RENDU parce que le banc doit peindre les mêmes
+   vues que le jeu : deux conversions du même angle divergeraient d'un quart de
+   tour sur les diagonales, et personne ne le verrait avant d'y être. */
+export function boatDir(ang) {
+  const a = ((ang % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+  if (a < Math.PI * 0.25 || a >= Math.PI * 1.75) return 3;   // vers l'est
+  if (a < Math.PI * 0.75) return 0;                          // vers le sud
+  if (a < Math.PI * 1.25) return 2;                          // vers l'ouest
+  return 1;                                                  // vers le nord
+}
+
 /* La boîte du personnage, en dur : c'est celle de townCanStand côté jeu.
    ⚠️ ELLE EST ÉCRITE ICI ET LUE LÀ-BAS, pas l'inverse — deux boîtes réglées
    séparément, c'est la divergence en attente du §8. */

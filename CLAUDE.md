@@ -11,19 +11,46 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**ACTION SUIVANTE UNIQUE — MONTER DANS LE BATEAU, PUIS LE FONDU ENCHAÎNÉ.** Le fleuve et sa
-passe sont construits (voir plus bas) ; il reste les DEUX autres tiers de la décision de
-Guillaume, et ils ne se mêlent pas (règle du 424, une livraison chacun) :
-· **(1) LES POSES À BORD.** *« eduardo peut utiliser le navire. mais nous aussi en montant dedans :
-soigner les sprites. anatomiquement cohérentes dans un bateau, mouvements cohérents. »* Le fermier
-n'a AUCUNE pose assise-dans-une-barque ; le coller debout sur un pont est exactement ce que cette
-phrase interdit. ⚠️ **La question de qualité se pose AVANT le premier `fillRect`** (§4.2) : ce
-dessin doit être regardable par un banc, donc il naît dans `fermeArt.js` avec ses contrôles, comme
-la bulle « ! » du 455 — pas après.
-· **(2) LE FONDU ENCHAÎNÉ ET LE DÉCOR MARIN GÉNÉRIQUE.** *« il y aura un mode de navigation jouable
-bientôt, mais pour l'instant juste faire un fondu enchaîné, avec décor marin générique (à l'avenir
-nous ferons une navigation 3D). »* Donc : franchir la passe → fondu → une mer générique → et le
-quai garde son amarre vide et son fanion « En mer » (§17.7 de `QUETE.md`). Rien n'est écrit.
+**ACTION SUIVANTE UNIQUE — TOUT REGARDER À L'ÉCRAN, RIEN DE CE QUI SUIT N'A ÉTÉ JOUÉ.** Trois choses
+s'accumulent sans avoir été vues en jeu, et une seule séance suffit à les cocher toutes : (1) la
+barque — tenir la barre, poser l'invite à l'écran ET le bouton tactile (clavier seul aujourd'hui),
+le fondu enchaîné en franchissant la passe (décor marin générique, voir §33 de
+`components/ferme/README.md`) ; (2) HORS-ZIP, 2026-08-31 — **les deux cartes de victoire et la
+typographie du maire**, demandées par Guillaume et livrées ce jour : une carte plein écran verte
+(✓, deux anneaux) félicite le joueur quand le maire signe (`starScene:{key:"mayorWin"}`, déclenchée
+dans le bloc `mayorTalk`) et quand Kerguélen livre les plans (`key:"engDone"`, dans le battement de
+`resolveStarPlanTick`) — même file `starShowCard` que la carte de chapitre, mêmes garanties
+multijoueur (`starPanelsClear`). La bulle du maire distingue maintenant nettement la RÉPLIQUE
+(18px, grasse, quasi blanche) de la DIDASCALIE (12px, italique, éteinte) — `.maire-line-say` /
+`.maire-line-stage` dans `app/globals.css`. **Vérifié par les bancs uniquement** (`verify-strings`
+1106/1106, `verify-quete` 628/628, `verify-maire` 113/113, bundle esbuild, `next build`) et par une
+capture CSS isolée hors du jeu — **jamais dans une vraie audience ni un vrai chantier naval**.
+⚠️ Portée volontairement réduite aux deux étapes nommées par Guillaume (« et Kerguelen, etc etc ») :
+la fin du navire (`key:"end"`) et d'autres jalons difficiles n'ont PAS de carte de victoire — à
+étendre une fois ces deux-là vues et validées à l'écran, pas avant.
+⚠️⚠️ **CETTE ACTION EST POUR CLAUDE, PAS POUR CODEX** — c'est du jugement visuel et du jeu joué à
+l'écran, exactement ce que le §2 réserve à Claude Code. Codex n'a rien à y faire tant que ce bloc
+la désigne.
+
+⚠️⚠️ **LE BATEAU EST LIVRÉ LE 2026-08-31, ET IL N'A COÛTÉ NI CANAL RÉSEAU NI POSE NEUVE.** Demande
+de Guillaume : *« eduardo peut utiliser le navire. mais nous aussi en montant dedans : soigner les
+sprites. anatomiquement cohérentes dans un bateau, mouvements cohérents »*, puis *« travaille
+surtout la mécanique et la cohérence organique, nous ornementerons plus tard »*. Le détail est au
+**§33 de `components/ferme/README.md`** ; ici, seulement ce qu'il ne faut pas casser :
+· **C'est le patron de la MONTURE, recopié exprès et pas généralisé** : `board`/`unboard` arbitrés
+par l'hôte, deux places, et surtout **la position de la coque se DÉDUIT de son pilote** — zéro
+octet de réseau (§3). Le CAP aussi : le pilote écrit `m.dir`, qui circule déjà.
+· **La disponibilité ne crée aucune porte** : `starShipComplete` et `starShipGone`, deux prédicats
+qui existaient. **Le bateau n'existe donc qu'une fois la quête finie** (menu dev pour l'essayer).
+· **`E.boatStep` est PUR**, donc rejouable — et c'est ce qui a tout trouvé (ci-dessous).
+· **La coque de collision n'est pas la coque dessinée** (1,7 case contre 2,6) : une coque qui bloque
+ce qu'elle montre est immobile dans une passe de quatre rangées.
+· **Aucune pose assise n'a été dessinée** : `drawSeated` (428) est réutilisée, et le plat-bord peint
+APRÈS l'occupant fait le reste. *La pose assise juste est celle qu'on ne redessine pas.*
+⚠️⚠️ **ET LE BANC A TROUVÉ TROIS VERROUS QU'AUCUNE RELECTURE N'AURAIT VUS**, dont celui-ci, qui vaut
+d'être retenu : **la coque s'échouait en tournant sur place, 4 934 images à terre sur 5 400** — le
+PAS était testé, la ROTATION ne l'était pas. *Un véhicule a deux degrés de liberté ; les tester à
+moitié, c'est ne pas les tester.*
 
 ⚠️⚠️ **LE FLEUVE EST LIVRÉ LE 2026-08-31, ET LA CARTE A ENFIN UNE SORTIE.** Décision de Guillaume :
 *« Je veux que l'on considère le lake and pier plutôt comme un accès à l'océan, et donc le port de
@@ -90,8 +117,8 @@ traverser un torse ; il regarde les sept ARRIVÉES). **Le bureau du maire n'a ja
 l'écran depuis cette correction** — seuls les bancs, le bundle et `next build` l'ont vue.
 
 Vérifications : **38 bancs relancés un par un, tous verts, zéro `ÉCHEC`** — `render-maire` **66/66**
-(neuf), `verify-vallee` **214/214** (six contrôles neufs pour le fleuve), `verify-maire` **113/113**,
-`verify-quete` **628/628**, `verify-strings` **1104 clés**, `verify-ludo` **30/30**, `verify-taxi`
+(neuf), `verify-vallee` **223/223** (six contrôles pour le fleuve, neuf pour la barque), `verify-maire` **113/113**,
+`verify-quete` **628/628**, `verify-strings` **1106 clés**, `verify-ludo` **30/30**, `verify-taxi`
 **15/15**, `render-parc` et `verify-portee` verts ; bundle esbuild propre sur `FermeGame.js` ET sur
 `MaireScene.js` (seul `G_SOIL` préexistant subsiste) ; `git diff --check` propre ; `next build`
 **✓ Compiled successfully** puis l'arrêt documenté sur `supabaseUrl`. **Aucune migration SQL, aucun
@@ -266,7 +293,7 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 | # | La leçon, en une phrase | Où est le détail |
 |---|---|---|
 | 2026-08-30 | ⚠️⚠️⚠️ **DEUX HORLOGES QUI SE CROISENT SUR LE MÊME OBJET SE MESURENT ENSEMBLE OU PAS DU TOUT.** Une durée de péremption plus COURTE qu'une durée d'indisponibilité rend la récompense inatteignable à 100 %, et chacune est juste de son côté : c'est la forme 458 (deux grandeurs qui s'opposent), appliquée au TEMPS. | `STAR_CANDY_FRESH_MS`, `RUN_INJURED_MS`, `doAction` |
-| 2026-08-31 | ⚠️⚠️⚠️ **UNE GARDE QUI BORNE AU LIEU DE JETER MENT EN SILENCE, ET ELLE DOIT DONC ÊTRE MESURÉE.** `solveArm` borne exprès une cible hors de portée — un `acos` hors bornes rendrait `NaN` et ferait DISPARAÎTRE le bras entier. Conséquence : une posture qui demande l'impossible ne plante pas, elle pose la main quinze centimètres à côté de là où le texte l'écrit, pour toujours, sans un mot. Toute garde qui rattrape doit publier de COMBIEN elle a rattrapé, sinon elle cache très exactement ce qu'elle protège. | `solveArm`, `render-maire` §3 |
+| 2026-08-31 | ⚠️⚠️⚠️ **UN VÉHICULE A DEUX DEGRÉS DE LIBERTÉ ; LES TESTER À MOITIÉ, C'EST NE PAS LES TESTER.** La coque du bateau testait son PAS contre l'eau et pas sa ROTATION : elle s'échouait en virant sur place, **4 934 images à terre sur 5 400**, et le défaut n'existe que dans un chenal étroit — donc jamais là où on l'essaie. Corollaire mesuré dans la foulée : deux libertés qui se bloquent l'une l'autre font un VERROU (en travers de la commande, plus de poussée, donc plus de rotation possible) ; la parade est celle du pas à pied — *on essaie, puis on essaie décalé*. | `boatStep`, `verify-vallee` §barque |
 | 2026-08-31 | ⚠️⚠️ **UNE CHAÎNE D'OS SE REMET À JOUR DEPUIS SA RACINE OU PAS DU TOUT.** `updateMatrixWorld` compose avec la matrice monde du PARENT telle qu'elle est : rafraîchir le buste laissait l'homme d'une image en retard. Tant que la racine ne bougeait jamais l'écart valait zéro ; le jour où une pose s'est mise à la lever, les deux mains se sont posées 39 cm à côté — et seulement à la pose SUIVANTE, donc par intermittence. *Mise à jour partielle et retard d'une image sont la même erreur, et la seconde ne se voit que si la première existe.* | `applyPose`, `m.man.updateMatrixWorld` |
 | 2026-08-27 | ⚠️⚠️⚠️ **UNE DATE ABSOLUE NE PASSE JAMAIS PAR UNE OPÉRATION 32 BITS.** Un petit instant de banc survit à `| 0`, une date réelle de 2026 non ; toute migration d'horodatage se rejoue avec `Date.now()` ET le vrai cycle de sérialisation/reprise de l'hôte. | `candyUntil`, `migrateStar`, `verify-quete.mjs` §12 |
 
@@ -746,7 +773,7 @@ contrôle du dépôt qui voie une liaison entre deux fichiers.
 ⚠️ **`verify-ludo` est le deuxième banc qui joue une mécanique de mini-jeu** : il balaie 1 000
 plans légaux et tient les cinq chemins bot vers les arbitres de l'hôte. Son détail et ses limites
 sont dans `tools/README.md`.
-⚠️ **Le seul qui touche à de l'ARGENT est `verify-vallee`** (**214/214** au 2026-08-31 ; 208 avant le fleuve) : il joue des ventes,
+⚠️ **Le seul qui touche à de l'ARGENT est `verify-vallee`** (**223/223** au 2026-08-31 ; 208 avant le fleuve et la barque) : il joue des ventes,
 compte les pièces, et vérifie que **le cours est bit à bit celui du 430** — contrôle hérité de
 `verify-enquete`, sauvé de sa suppression parce qu'il protégeait le marché, pas l'enquête.
 **Tout chiffre écrit là-bas a été obtenu en lançant le banc**, c'est sa règle d'entrée.

@@ -3294,3 +3294,95 @@ allé la regarder à chaque retouche, donc on l'aurait réglée en aveugle.
   debout sur un pont serait exactement ce que cette phrase interdit.
 - ⚠️ **RIEN DE TOUT ÇA N'A ÉTÉ VU EN JEU** : bancs, bundle et `next build` seulement. L'arrêt
   `townPasse` du menu dev existe précisément pour que la première séance coûte dix secondes.
+
+---
+
+## 33. 2026-08-31 — ON MONTE DANS LE BATEAU : LA MÉCANIQUE
+
+Demande de Guillaume : *« eduardo peut utiliser le navire. mais nous aussi en montant dedans :
+soigner les sprites. anatomiquement cohérentes dans un bateau, mouvements cohérents »*, puis
+*« travaille surtout la mécanique et la cohérence organique, nous ornementerons plus tard »*.
+
+### 33.1 Rien n'a été inventé : c'est le patron de la monture
+
+⚠️⚠️ **LA POSITION DU BATEAU SE DÉDUIT DE CELLE DE SON PILOTE, DONC ELLE NE COÛTE PAS UN OCTET DE
+RÉSEAU.** C'est ce que `horseAnchor` fait depuis toujours, c'est le §3 de `CLAUDE.md` (*ce qui peut
+se déduire ne se diffuse pas*), et c'est ce qui rend cette mécanique presque gratuite : un canal de
+position pour la coque aurait doublé le trafic de la ville pour zéro information. Le CAP suit la
+même règle — le pilote écrit `m.dir = boatDir(ang)`, et `dir` circule déjà dans chaque paquet de
+position, donc un client distant oriente la coque sans recevoir un champ de plus.
+
+| | |
+|---|---|
+| état persisté | `shared.boat = { x, y, ang, pilot, crew }` — **quatre nombres et deux identités**, et seulement quand il est vide |
+| arbitrage | `req: "board"` / `"unboard"`, côté hôte, comme `mount`/`dismount` |
+| disponibilité | **deux prédicats qui existaient déjà** : `starShipComplete` et `starShipGone`. Aucune porte de plus |
+| poste d'amarrage | **cherché sur la carte** (`boatMooring`), jamais écrit : le ponton est en bois, une position « au bout + 1 » tomberait dedans une fois sur deux |
+| touche | **F**, celle de la monture. En ville elle ne servait à rien : la place était libre |
+
+### 33.2 « Mouvements cohérents » est une contrainte de mécanique, pas de dessin
+
+Un bateau qui se déplace comme un fermier — huit directions, vitesse instantanée, arrêt net — est
+un fermier avec une coque peinte autour, quel que soit le soin du sprite. `E.boatStep` (**pur**,
+dans `fermeEngine`, donc rejouable par un banc) tient trois règles : **il ne va jamais de côté**
+(la commande donne un CAP, la poussée suit l'axe de la coque), **il a de l'erre**, **il peut
+culer**. La marche arrière n'est pas du réalisme, c'est de la jouabilité : sans elle, une étrave
+posée sur une berge dans un chenal de quatre rangées est un joueur coincé pour de bon.
+
+⚠️ **LA COQUE DE COLLISION N'EST PAS LA COQUE DESSINÉE** (§4 : *une grandeur de dessin, une
+grandeur de collision*). Le dessin fait 2,6 cases, la collision 1,7 : une coque qui bloque
+exactement ce qu'elle montre est immobile dans la passe.
+
+### 33.3 ⚠️⚠️ CE QUE LE BANC A TROUVÉ, ET AUCUN N'AURAIT PU LE VOIR AUTREMENT
+
+`verify-vallee` §barque **pilote** au lieu de relire (leçon du 480, et du 459 qui avait trouvé
+219 départs bloqués sur 317 dans le cratère). Trois défauts, tous à la première exécution :
+
+1. ⚠️⚠️⚠️ **LA COQUE S'ÉCHOUAIT EN TOURNANT SUR PLACE — 4 934 images à terre sur 5 400.** Le PAS
+   était testé, la ROTATION ne l'était pas : une coque de 1,7 case qui flotte au cap A ne flotte
+   pas forcément au cap A′ au MÊME point. *Un véhicule a deux degrés de liberté ; les tester à
+   moitié, c'est ne pas les tester.*
+2. **Deux départs sur 82 restaient collés à la berge** parce qu'on interdisait de virer en culant.
+   Vrai d'une barque à l'aviron, et cause d'un joueur bloqué : *une règle de réalisme qui produit
+   un joueur coincé n'est pas du réalisme.* On vire toujours, à 40 % du taux tant qu'on n'a pas
+   remis le cap dessus.
+3. **Puis un VERROU des deux degrés l'un par l'autre** : la coque se mettait en travers de la
+   commande (poussée ≈ 0, donc plus de vitesse) et ne pouvait plus virer, l'étambot butant sur la
+   rive. La parade est celle du pas à pied : on essaie, puis on essaie DÉCALÉ — la coque s'écarte
+   de douze centimètres en même temps qu'elle vire, et chaque candidat est validé par `floats`.
+
+Et un contrôle qui compte autant que les trois : ⚠️⚠️ **le bateau sort-il du monde ?** Le §fleuve
+mesure que l'EAU est continue ; ça ne dit rien d'une COQUE qui a une longueur et un rayon de
+giration. Un pilote volontairement bête (viser six cases devant, au milieu de l'eau) descend le
+fleuve du poste d'amarrage au bord est en **26,5 s, zéro touchette**.
+
+### 33.4 « Anatomiquement cohérent dans un bateau » est un problème d'ORDRE de dessin
+
+Un fermier peint PAR-DESSUS une coque est un fermier **debout sur** un bateau ; peint DERRIÈRE, il
+a disparu. La seule façon d'être *dedans* est de peindre en **deux couches** — `drawBoatBack`
+(bordé opposé et intérieur), l'occupant, puis `drawBoatFront` (le plat-bord près de nous).
+⚠️ **Conséquence voulue : les jambes n'existent pas.** On ne dessine donc AUCUNE pose assise neuve
+— on réutilise `drawSeated` (428), déjà mesurée par `render-assise`. *La pose assise juste est
+celle qu'on ne redessine pas.*
+⚠️ La hauteur d'assise (`boatSeatDy`) vit **avec la coque qui la cache**, pas chez l'appelant : deux
+descriptions du même banc de nage divergeraient, et le symptôme serait un fermier coupé au menton.
+⚠️ `render-navire` le mesure avec une **silhouette magenta** peinte une fois seule et une fois entre
+les deux couches : 29 % du buste mangé de bout, 22 % de profil. C'est la seule mesure d'occlusion
+qui ne dépende pas de la couleur du dessin qu'on juge.
+
+### 33.5 ⚠️ LES DETTES, ET ELLES SONT NOMMÉES
+
+- ⚠️⚠️ **AUCUN PROMPT À L'ÉCRAN.** Rien ne dit que **F** embarque. Les deux refus parlent
+  (`boatNoShore`, `boatNotReady`), l'invitation non — et une touche qu'on n'annonce pas n'existe
+  pas. Les deux clés de prompt ont été **supprimées plutôt que laissées orphelines** (leçon du 453).
+- ⚠️ **PAS DE BOUTON TACTILE.** Le tactile couvre la ferme, la ville et le tribunal depuis le 430 ;
+  la barque ne s'embarque qu'au clavier.
+- **Les vues de bout sont crues** : la coque de profil lit bien, les vues de face et de dos restent
+  une auge arrondie. C'est l'ornement, explicitement remis à plus tard par Guillaume.
+- **Ni mât, ni voile, ni sillage, ni aviron** : c'est une coque nue, pas encore le navire des sept
+  sœurs. Le sprite de profil du chantier (`drawStarShip`) reste un dessin d'ÉLÉVATION posé sur la
+  cale ; le raccorder à la coque navigable est un chantier à part.
+- **Le passage de la passe ne déclenche rien** : le fondu enchaîné et le décor marin générique
+  n'existent pas.
+- ⚠️ **RIEN N'A ÉTÉ JOUÉ À L'ÉCRAN**, ni à un client ni à deux. Le bateau n'apparaît qu'une fois la
+  quête finie (menu dev : ⭐ Star), et personne n'a encore tenu la barre autrement que dans un banc.

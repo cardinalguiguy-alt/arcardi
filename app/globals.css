@@ -7282,6 +7282,43 @@ div.ferme-usage{ margin-bottom:10px; }
 }
 @keyframes fermeStarTwinkle{ 0%,100%{ opacity:.55; } 50%{ opacity:1; } }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   HORS-ZIP — LA CARTE DE VICTOIRE (`.win`). Même conteneur, même fondu que
+   la carte de chapitre (`fermeStarCard`, ci-dessus) : c'est le même geste,
+   marquer un instant plein écran. Seul l'habillage change, pour qu'un
+   joueur distingue au premier coup d'œil « un chapitre commence » (nuit,
+   ✦ qui scintille) de « on vient de réussir » (vert, ✓ qui pousse). Demande
+   de Guillaume : des félicitations pour les étapes difficiles du chapitre 3
+   (l'audience chez le maire, la commande à Kerguélen).
+   ───────────────────────────────────────────────────────────────────────── */
+.ferme-star-card.win{
+  background:radial-gradient(circle at 50% 45%, rgba(20,52,30,.86), rgba(5,14,8,.97));
+}
+.ferme-star-card.win .ferme-star-card-in{ color:#e3ffd8; text-shadow:0 0 18px rgba(150,255,140,.38); }
+.ferme-star-card.win .ferme-star-card-title{ color:#f4ffe9; }
+.ferme-star-card.win .ferme-star-card-mark{
+  position:relative; display:inline-block; font-size:46px; color:#8ff09a;
+  letter-spacing:0; animation:fermeWinPop 3.8s cubic-bezier(.2,.9,.3,1) forwards;
+}
+/* Deux anneaux qui se détachent de la coche, l'un après l'autre — le seul
+   « effet » de la carte, et il suffit : un joueur de sept ans reconnaît un
+   accusé de réussite à cette forme sans qu'on ait besoin de le lui dire. */
+.ferme-star-card.win .ferme-star-card-mark::before,
+.ferme-star-card.win .ferme-star-card-mark::after{
+  content:""; position:absolute; inset:-16px; border-radius:50%;
+  border:2px solid rgba(150,255,140,.55); opacity:0;
+  animation:fermeWinRing 1.3s ease-out forwards;
+}
+.ferme-star-card.win .ferme-star-card-mark::before{ animation-delay:.35s; }
+.ferme-star-card.win .ferme-star-card-mark::after{ animation-delay:.68s; }
+@keyframes fermeWinPop{
+  0%{ transform:scale(.3); opacity:0; } 10%{ transform:scale(1.22); opacity:1; }
+  16%{ transform:scale(1); } 82%{ opacity:1; } 100%{ opacity:0; }
+}
+@keyframes fermeWinRing{
+  0%{ transform:scale(.5); opacity:.85; } 100%{ transform:scale(2.1); opacity:0; }
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    ZIP 469 — L'OVERLAY DE FOUILLE.
    ──────────────────────────────────────────────────────────────────────────
@@ -7627,12 +7664,22 @@ div.ferme-usage{ margin-bottom:10px; }
 /* HORS-ZIP — LA DIDASCALIE ET LA RÉPLIQUE, DEUX STYLES DANS LA MÊME BULLE.
    `MayorLine` (MaireScene.js) sépare chaque texte du maire en segments à la
    ponctuation qu'il porte déjà (« » / "…") : ceci est ce qui les distingue à
-   l'écran, sans toucher un mot de `fermeStrings.js`. `.maire-line-say`
-   reprend la couleur normale de la bulle même à l'intérieur de
-   `.maire-bubble-tint` (qui, elle, est italique en bloc) — c'est la réplique
-   qui doit rester lisible comme une réplique, où qu'elle apparaisse. */
-.maire-line-stage{ font-style:italic; color:#c9bda0; }
-.maire-line-say{ font-style:normal; color:#f2eee4; }
+   l'écran, sans toucher un mot de `fermeStrings.js`.
+   ⚠️⚠️ REVU HORS-ZIP : LES DEUX N'AVAIENT JUSQU'ICI QU'UNE COULEUR D'ÉCART,
+   à taille et graisse égales — trop peu pour qu'on sache, sans s'arrêter
+   pour lire, quelle moitié de la phrase est ce que le maire DIT. Demande de
+   Guillaume : la réplique doit se voir beaucoup plus que la didascalie.
+   `.maire-line-say` monte donc en TAILLE et en GRAISSE (pas seulement en
+   couleur), `.maire-line-stage` descend en taille — un vrai écart d'échelle,
+   pas une nuance. ⚠️ LES DEUX SONT EN `px`, PAS EN `em` : une didascalie
+   écrite dans `.maire-bubble-tint` (13,5px, italique en bloc) doit rester
+   PETITE, une réplique qui y apparaît doit rester GRANDE — la même
+   hiérarchie où qu'elle tombe, jamais relative au bloc qui la contient. */
+.maire-line-stage{ font-style:italic; color:#a89f8e; font-size:12px; line-height:1.4; }
+.maire-line-say{
+  font-style:normal; font-weight:700; color:#fff8e6; font-size:18px; line-height:1.4;
+  letter-spacing:.01em; text-shadow:0 1px 4px rgba(0,0,0,.4);
+}
 .maire-bubble-tail{
   position:absolute; left:50%; bottom:-9px; width:16px; height:16px; margin-left:-8px;
   background:rgba(20,22,28,.93); border-right:1px solid rgba(212,186,120,.42);
@@ -7711,6 +7758,9 @@ div.ferme-usage{ margin-bottom:10px; }
   .maire-bubble{ font-size:13.5px; padding:10px 12px; }
   .maire-say{ font-size:13.5px; padding:9px 11px; }
   .maire-camhint{ display:none; }
+  /* Même écart de hiérarchie qu'en plein écran, resserré au format tablette. */
+  .maire-line-stage{ font-size:11px; }
+  .maire-line-say{ font-size:15.5px; }
 }
 
 /* ⚠️ ZIP 481 — LE BOUTON « VOIR LA SCÈNE DE… ». Il est en bas à gauche, au-dessus
