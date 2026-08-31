@@ -1,4 +1,4 @@
-# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 467
+# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-08-31
 
 ## Hors-zip 2026-08-26 — les libellés de porte restent devant le décor
 
@@ -84,8 +84,10 @@ qu'un paragraphe d'orientation, et les pièges qui valent pour tout le projet re
 - le salon de coiffure n'a ni coiffeur ni mécanique — la décision manque, pas le code ;
 - **aucun PNJ n'habite la ville à demeure.** Les résidents la VISITENT depuis la ferme ;
 - pas d'intérieur de maison ;
-- **vingt blocs de 28×28 sont de la prairie non aménagée** (mesuré au 428). Le sud-est
-  surtout. Ce n'est pas un oubli, c'est une question ouverte : voir `CLAUDE.md` §13 ;
+- **dix-neuf blocs de 28×28 sont de la prairie non aménagée, et deux sont du bois** (mesuré par
+  `verify-vallee`, qui compte les trois catégories séparément depuis le 440 ; vingt au 428, avant
+  que le bois du sud-est ne devienne sa propre catégorie). Le sud-est surtout. Ce n'est pas un
+  oubli, c'est une question ouverte : voir `CLAUDE.md` §13 ;
 - **les commissions et les rendez-vous datés ne sont toujours pas construits** (décidés au
   428). Le marché, lui, est livré au 430 — et il porte déjà la graine du troisième : le
   **jour de marché** hebdomadaire est un rendez-vous daté, dérivé du calendrier ;
@@ -94,8 +96,9 @@ qu'un paragraphe d'orientation, et les pièges qui valent pour tout le projet re
   pour vingt-sept parcelles**, donc des jumelles côte à côte. Le corriger demande des décisions,
   pas des pixels. *(Le lac, lui, a reçu son dessin au 435 et sa profondeur au 436 ; il lui
   manque encore sa GÉOMÉTRIE — voir §18.)*
-- **rien à FAIRE au bord de l'eau.** L'étang et le lac sont beaux et vides : ni pêche, ni
-  barque, ni canard. C'est la même question ouverte que les vingt blocs de prairie ;
+- **rien à FAIRE au bord de l'eau, sauf embarquer.** Depuis le 2026-08-31 on monte dans le
+  navire achevé et on le pilote au clavier (§33) — mais ni pêche ni canard, et l'étang du parc
+  reste un but de promenade. C'est la même question ouverte que les blocs de prairie ;
 - **le bois du sud-est (440) est vide lui aussi, et délibérément** : aucun endroit de vie, aucun
   résident n'y va. Demande de Guillaume — « pas une zone très fréquentée, un peu sauvage » ;
 

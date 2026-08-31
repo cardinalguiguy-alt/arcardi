@@ -363,6 +363,18 @@ const STAR_FR = {
     build:  "Chapitre Trois — Le chantier",
     end:    "Le Bateau des Étoiles",
   },
+  /* HORS-ZIP — L'OVERLAY DE VICTOIRE. Demande de Guillaume : une carte de
+     félicitations pour les étapes difficiles du chapitre 3 (l'audience chez
+     le maire, la commande à Kerguélen), qui restaient jusqu'ici sans le
+     moindre repère à l'écran — seul un message de chat, vite noyé, disait
+     qu'on venait de franchir la partie la plus dure de la quête.
+     ⚠️ MÊME MISE EN SCÈNE QUE LA CARTE DE CHAPITRE (fondu, fermeture seule,
+     même file d'attente `starShowCard`) : c'est la même chose, un texte plein
+     écran qui marque un instant. Seul l'habillage change (`.win` en CSS). */
+  win: {
+    mayor:    { title: "Félicitations !", sub: "Le maire soutient votre projet." },
+    engineer: { title: "Les plans sont prêts !", sub: "Kerguélen a dessiné le navire." },
+  },
   fall: {
     agency: "L’Agence nationale d’astronomie avait prévu huit sites sur la ferme.",
     first: "Premier impact. Un site sur huit.",
@@ -1086,6 +1098,10 @@ const STAR_EN = {
     crater: "Chapter Two — The Crater",
     build:  "Chapter Three — The Slipway",
     end:    "The Star Boat",
+  },
+  win: {
+    mayor:    { title: "Congratulations!", sub: "The mayor supports your project." },
+    engineer: { title: "The plans are ready!", sub: "Kerguélen has drawn up the ship." },
   },
   /* ── LA CHUTE. Personne d'autre ne la commente : c'est le thème (§3 de
      QUETE.md). Le silence de la ville EST la première chose étrange. */
