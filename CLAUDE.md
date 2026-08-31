@@ -27,7 +27,15 @@ multijoueur (`starPanelsClear`). La bulle du maire distingue maintenant nettemen
 capture CSS isolée hors du jeu — **jamais dans une vraie audience ni un vrai chantier naval**.
 ⚠️ Portée volontairement réduite aux deux étapes nommées par Guillaume (« et Kerguelen, etc etc ») :
 la fin du navire (`key:"end"`) et d'autres jalons difficiles n'ont PAS de carte de victoire — à
-étendre une fois ces deux-là vues et validées à l'écran, pas avant.
+étendre une fois ces deux-là vues et validées à l'écran, pas avant. (3) HORS-ZIP, session saule,
+2026-08-31 — Guillaume a montré une capture où le saule procédural était « affreux quelle que soit
+la saison » à côté du saule importé de sa planche, « merveilleux ». `townTreeKind` (`fermeArt.js`)
+ne choisit plus jamais `TT.WILLOW` sur la berge (il y faisait pourtant la moitié des arbres) ; le
+saule importé (`REF_WILLOW`) le remplace et porte désormais, sur sa demande, **deux variantes de
+teinte légères rien qu'en automne** (`autumnAlt`, ±5° de teinte / ±5 % de lumière, choisies par le
+même hachage pur que la phase de vent — §3, rien ne circule). Vérifié par les bancs uniquement
+(`render-arbres` 14/15 essences utilisées, saule procédural à 0 ; `verify-vallee` 223/223 ; bundle
+esbuild ; `next build`) — **jamais revu sur la vraie berge où la capture a été prise.**
 ⚠️⚠️ **CETTE ACTION EST POUR CLAUDE, PAS POUR CODEX** — c'est du jugement visuel et du jeu joué à
 l'écran, exactement ce que le §2 réserve à Claude Code. Codex n'a rien à y faire tant que ce bloc
 la désigne.
@@ -292,10 +300,10 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 
 | # | La leçon, en une phrase | Où est le détail |
 |---|---|---|
-| 2026-08-30 | ⚠️⚠️⚠️ **DEUX HORLOGES QUI SE CROISENT SUR LE MÊME OBJET SE MESURENT ENSEMBLE OU PAS DU TOUT.** Une durée de péremption plus COURTE qu'une durée d'indisponibilité rend la récompense inatteignable à 100 %, et chacune est juste de son côté : c'est la forme 458 (deux grandeurs qui s'opposent), appliquée au TEMPS. | `STAR_CANDY_FRESH_MS`, `RUN_INJURED_MS`, `doAction` |
 | 2026-08-31 | ⚠️⚠️⚠️ **UN VÉHICULE A DEUX DEGRÉS DE LIBERTÉ ; LES TESTER À MOITIÉ, C'EST NE PAS LES TESTER.** La coque du bateau testait son PAS contre l'eau et pas sa ROTATION : elle s'échouait en virant sur place, **4 934 images à terre sur 5 400**, et le défaut n'existe que dans un chenal étroit — donc jamais là où on l'essaie. Corollaire mesuré dans la foulée : deux libertés qui se bloquent l'une l'autre font un VERROU (en travers de la commande, plus de poussée, donc plus de rotation possible) ; la parade est celle du pas à pied — *on essaie, puis on essaie décalé*. | `boatStep`, `verify-vallee` §barque |
 | 2026-08-31 | ⚠️⚠️ **UNE CHAÎNE D'OS SE REMET À JOUR DEPUIS SA RACINE OU PAS DU TOUT.** `updateMatrixWorld` compose avec la matrice monde du PARENT telle qu'elle est : rafraîchir le buste laissait l'homme d'une image en retard. Tant que la racine ne bougeait jamais l'écart valait zéro ; le jour où une pose s'est mise à la lever, les deux mains se sont posées 39 cm à côté — et seulement à la pose SUIVANTE, donc par intermittence. *Mise à jour partielle et retard d'une image sont la même erreur, et la seconde ne se voit que si la première existe.* | `applyPose`, `m.man.updateMatrixWorld` |
 | 2026-08-27 | ⚠️⚠️⚠️ **UNE DATE ABSOLUE NE PASSE JAMAIS PAR UNE OPÉRATION 32 BITS.** Un petit instant de banc survit à `| 0`, une date réelle de 2026 non ; toute migration d'horodatage se rejoue avec `Date.now()` ET le vrai cycle de sérialisation/reprise de l'hôte. | `candyUntil`, `migrateStar`, `verify-quete.mjs` §12 |
+| 2026-08-31 (saule) | ⚠️⚠️ **UN JITTER DE COULEUR SE CALCULE SUR LA TEINTE D'ORIGINE, JAMAIS SUR LE RÉSULTAT DÉJÀ TRANSPOSÉ.** La garde tronc/feuillage de `seasonPalette` (`h<65 \|\| h>190`) ne sépare le bois du feuillage que sur la palette D'ÉTÉ : appliquée sur une palette déjà tournée vers l'automne, tronc et feuillage tombent dans la même plage basse et la garde ne distingue plus rien. Les variantes du saule passent donc leur décalage EN PARAMÈTRE de la même fonction, jamais en repasse sur sa sortie. | `seasonPalette`, `plancheTree` |
 
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
@@ -1318,6 +1326,15 @@ erreur** en choisissant mal.
    une pour remplir le tableau* — c'est ce qui l'a fait grossir deux fois. La passe corrige en
    revanche deux chiffres : `verify-vallee` passe de 208 à **214**, et le §13 perd sa question
    « lac-océan » puisqu'elle est répondue.)**.
+
+   **hors-zip, session saule (TRENTE-DEUXIÈME passe : la ligne 2026-08-30 (« deux horloges qui se
+   croisent ») part avant la leçon de cette session — une retirée, une ajoutée, le tableau reste à
+   quatre. Son détail retiré reste dans `STAR_CANDY_FRESH_MS`/`RUN_INJURED_MS`/`doAction`, que sa
+   colonne de droite désignait déjà. La session corrige le saule procédural de Valley Town, signalé
+   « affreux » par Guillaume à côté du saule importé qu'il trouve « merveilleux » : `townTreeKind`
+   ne choisit plus `TT.WILLOW` sur la berge, et le saule importé porte deux variantes de teinte
+   légères en automne. Vérifié par `render-arbres` et `verify-vallee` (223/223) uniquement — jamais
+   revu sur la vraie berge.)**.
 
    **2026-08-31, le maire regardé (TRENTIÈME passe : les DEUX lignes « hors-zip » du tableau — le
    compteur cumulatif et l'horloge d'interface bornée par sa phase — partent avant les deux leçons

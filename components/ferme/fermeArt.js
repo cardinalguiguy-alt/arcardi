@@ -1486,7 +1486,15 @@ export function townTreeKind(tw, x, y, obj) {
     if (wet) return TT.FIR;
     return (h % 5) === 0 ? TT.PINE : TT.FIR;
   }
-  if (wet) { const k = h % 6; return k < 2 ? TT.REF_WILLOW : k < 3 ? TT.BIRCH : TT.WILLOW; }
+  /* ⚠️ hors-zip 2026-08-31 (session saule) — TT.WILLOW (le saule procédural)
+     N'EST PLUS CHOISI ICI, sur demande de Guillaume : « affreux quelle que
+     soit la saison », vu à l'écran sur la berge où il faisait la MOITIÉ des
+     arbres (`k < 3` sur 6, avant ce zip). Remplacé par le saule importé de sa
+     planche, qu'il trouve « merveilleux ». `TT.WILLOW` et son entrée dans
+     `TREE_SPECS` restent en place (les indices de `TT` ne se réordonnent
+     jamais, §1467) : le saule procédural reste dessinable par `render-arbres`,
+     simplement plus aucune case du monde ne le désigne. */
+  if (wet) { const k = h % 3; return k < 2 ? TT.REF_WILLOW : TT.BIRCH; }
   if (TT_IN(C.TOWN_ORCHARD, x, y)) return (h % 3) === 0 ? TT.REF_APPLE : TT.APPLE;
   if (TT_IN(C.TOWN_PARK, x, y)) {
     const k = h % 12;
@@ -1512,7 +1520,19 @@ export function townTreeImg(S, tw, x, y, seasonKey, obj, now) {
   if (!set) return null;
   const k = townTreeKind(tw, x, y, obj);
   if (k === null || !set[k]) return null;
-  const frames = set[k][seasonKey === "autumn" ? "autumn" : seasonKey === "spring" ? "spring" : "summer"];
+  const seasonName = seasonKey === "autumn" ? "autumn" : seasonKey === "spring" ? "spring" : "summer";
+  let frames = set[k][seasonName];
+  /* ⚠️ hors-zip 2026-08-31 (session saule) — LE JITTER DE TEINTE DU SAULE
+     IMPORTÉ, CHOISI PAR CASE ET NON PAR IMAGE : le même hachage que la phase de
+     vent juste en dessous, sur un couple de coordonnées différent pour ne pas
+     corréler les deux. `set[k].autumnAlt` n'existe que pour `treeWillow`
+     (construit plus haut) : pour les 14 autres essences, `alts` est
+     `undefined` et cette branche ne fait rien. */
+  if (seasonName === "autumn" && set[k].autumnAlt) {
+    const alts = set[k].autumnAlt;
+    const vi = waterHash(x * 19 + 31, y * 37 + 17) % (alts.length + 1);
+    if (vi > 0) frames = alts[vi - 1];
+  }
   if (!now) return frames[1];
   const ph = waterHash(x * 13 + 7, y * 29 + 3) % 1000 / 1000;
   return frames[TREE_SWAY[Math.floor(now / C.TOWN_TREE_SWAY_MS + ph * 4) & 3]];
@@ -3275,7 +3295,14 @@ export function buildSprites() {
             : h < 240 ? [0, x, c2] : h < 300 ? [x, 0, c2] : [c2, 0, x];
     return "#" + t.map(v => Math.round((v + m2) * 255).toString(16).padStart(2, "0")).join("");
   }
-  function seasonPalette(pal, season, evergreen) {
+  /* ⚠️ hueJit/lJit — hors-zip 2026-08-31 (session saule) : un léger décalage de
+     teinte/luminosité, appliqué APRÈS le calcul de la plage de saison mais sur
+     le HACHAGE DE FEUILLAGE D'ORIGINE (`h` avant transposition) — c'est ce qui
+     permet de garder la garde tronc/feuillage juste : jitter le résultat déjà
+     transposé aurait fait chevaucher la teinte du tronc et celle du feuillage
+     d'automne (les deux tombent alors dans le même bas de plage). Par défaut
+     (0, 1) ils ne changent rien : tous les appels existants sont inchangés. */
+  function seasonPalette(pal, season, evergreen, hueJit = 0, lJit = 1) {
     const sp = evergreen ? TREE_EVERGREEN[season] : TREE_HUE_SHIFT[season];
     if (!sp) return pal;
     return pal.map((hex) => {
@@ -3285,7 +3312,8 @@ export function buildSprites() {
       // Le vert d'origine (65..190) est étalé sur la plage de la saison : deux
       // verts distincts restent deux teintes distinctes.
       const t = (h - 65) / 125;
-      return hslToHex(sp.h[0] + t * (sp.h[1] - sp.h[0]), sa * sp.sMul, l * sp.lMul);
+      return hslToHex(sp.h[0] + t * (sp.h[1] - sp.h[0]) + hueJit, sa * sp.sMul,
+                       Math.max(0, Math.min(1, l * sp.lMul * lJit)));
     });
   }
   /* Un arbre de la planche, dans sa saison et sa phase de vent, posé dans le
@@ -3293,9 +3321,9 @@ export function buildSprites() {
      les sprites de la planche portent leur ombre portée peinte (c'est elle qu'on
      a pris soin de ne pas détourer, voir `backgroundMask`), et c'est elle qui
      donne la ligne de sol. */
-  function plancheTree(name, season, frame, evergreen) {
+  function plancheTree(name, season, frame, evergreen, hueJit, lJit) {
     const d = PLANCHE[name];
-    const pal = seasonPalette(d.pal, season, evergreen);
+    const pal = seasonPalette(d.pal, season, evergreen, hueJit, lJit);
     const [c, g] = cv(TW_, TH_);
     // La largeur peinte de chaque rangée : elle sépare la couronne du tronc.
     const wid = d.rows.map(r => { let n = 0; for (let i = 0; i < r.length; i++) if (r[i] !== ".") n++; return n; });
@@ -14948,6 +14976,19 @@ export function buildSprites() {
         summer: [-1, 0, 1].map(f => plancheTree(nm, "summer", f, ev)),
         spring: [-1, 0, 1].map(f => plancheTree(nm, "spring", f, ev)),
         autumn: [-1, 0, 1].map(f => plancheTree(nm, "autumn", f, ev)),
+        /* ⚠️ hors-zip 2026-08-31 (session saule) — LE SAULE IMPORTÉ DEVIENT LE
+           SEUL SAULE DE BERGE (voir `townTreeKind`, plus bas), et Guillaume
+           demande « des variations de couleurs légères en automne » pour qu'un
+           bouquet de saules identiques ne se lise pas comme un motif répété.
+           Deux teintes voisines de la même palette d'automne, ±5° de teinte et
+           ±5 % de lumière — RIEN À VOIR avec `TREE_HUE_SHIFT` (qui choisit la
+           saison), c'est un jitter PAR ARBRE, choisi par `townTreeImg` via le
+           même hachage pur que le reste (§3 : ce qui se déduit ne se diffuse
+           pas). N'existe QUE pour `treeWillow` : les 14 autres essences gardent
+           exactement leur unique jeu d'images d'automne, inchangé. */
+        autumnAlt: nm === "treeWillow"
+          ? [[-5, 0.95], [5, 1.05]].map(([hj, lj]) => [-1, 0, 1].map(f => plancheTree(nm, "autumn", f, ev, hj, lj)))
+          : undefined,
       })),
     ],
     deadTree: deadTree(),
