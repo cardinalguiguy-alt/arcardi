@@ -683,6 +683,34 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      booléens, purement LOCALE, jamais diffusée (voir `starDealNow`). */
   const [engDeal, setEngDeal] = useState({});
   const [starCard, setStarCard] = useState(null);   // { key } — une carte de chapitre
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-01 — LE RUBAN DE JALON, ET LES DEUX ACCUSÉS DE RÉCEPTION DU
+     ║ BANDEAU. Le volume sonore qui manquait à la quête.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ IL EST ARMÉ DEPUIS `starWatch`, JAMAIS DEPUIS UN MINI-JEU GAGNÉ, et
+     c'est la même règle que le compte de morceaux (453) : un mini-jeu gagné
+     n'accorde rien, il DEMANDE, et l'hôte tranche. Un ruban lancé sur `onWin`
+     annoncerait une pièce que l'hôte n'a pas encore posée — c'est-à-dire
+     parier sur l'arbitrage, et se contredire une fois sur cent.
+     ⚠️ IL NE SERT QU'AU CHAPITRE 3. Le chapitre 1 a DÉJÀ son volume du milieu
+     (`StarFindCard`, l'overlay de fouille) : lui en ajouter un second aurait
+     donné deux accusés de réception pour un seul geste, ce que le 449 appelle
+     « deux réponses à la même question ».
+     ⚠️ `parts`/`prev` SONT LES DEUX ÉTATS DU NAVIRE — avant et après. La
+     vignette les peint tous les deux et efface celle d'avant : ce que le
+     joueur voit apparaître est L'ÉCART, jamais l'état. Sans ça le safran, qui
+     ne change que 1,3 % de l'image, coûterait une manche de sciage pour rien
+     de visible (quinzième forme du « banc qui passe », CLAUDE.md). */
+  const [starRibbon, setStarRibbon] = useState(null); // { seq, part, parts, prev, built, total }
+  /* La séquence qui REMONTE les pastilles du bandeau. ⚠️ UNE CLASSE NE SUFFIT
+     PAS : une animation CSS ne redémarre pas sur un nœud déjà monté à qui l'on
+     ajoute une classe. On change le `key` du conteneur, React remonte, et
+     l'animation repart de zéro — c'est le seul moyen fiable, et il est gratuit
+     (ce sont cinq `<span>` vides). */
+  const [starPulse, setStarPulse] = useState({ seq: 0, at: -1 });
+  const [starBump, setStarBump] = useState(0);
+  const [starBumpOn, setStarBumpOn] = useState(false);
+  const starRibbonSeqRef = useRef(0);
   /* ⚠️ ZIP 455 — L'INVITE DE L'HÔTE, ET LE JOUR OÙ IL A DIT « PLUS TARD ». Le
      refus n'est PAS un état partagé : c'est le confort d'un joueur, il ne concerne
      personne d'autre, et persisté il aurait fallu le réconcilier (§3). Déduit du
@@ -1574,6 +1602,42 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const t = setTimeout(() => setStarCard(null), Q.STAR_CARD_MS);
     return () => clearTimeout(t);
   }, [starCard]);
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-01 — LES TROIS HORLOGES DU RYTHME. Toutes de la même famille que
+     ║ la carte ci-dessus : elles ÉTEIGNENT une mise en scène, elles ne décident
+     ║ de rien.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️ LE NETTOYAGE NE FAIT QUE LIBÉRER (`clearTimeout`), il n'a AUCUN effet de
+     bord : React 18 monte, nettoie, puis remonte les effets en développement, et
+     un nettoyage qui déciderait quelque chose se déclencherait donc tout seul
+     dans la milliseconde — c'est la demi-heure perdue du lot E (§4 de CLAUDE.md),
+     payée d'avance ici. */
+  useEffect(() => {
+    if (!starRibbon) return;
+    const t = setTimeout(() => setStarRibbon(null), C.STAR_RIBBON_MS);
+    return () => clearTimeout(t);
+  }, [starRibbon]);
+  /* Le tressaillement du bandeau. ⚠️ UN COMPTEUR EN ENTRÉE, UN BOOLÉEN EN
+     SORTIE : c'est ce qui permet à deux jalons rapprochés de rejouer
+     l'animation. Un booléen seul resterait à `true` et la seconde fois ne se
+     verrait pas. */
+  useEffect(() => {
+    if (!starBump) return;
+    setStarBumpOn(true);
+    const t = setTimeout(() => setStarBumpOn(false), 560);
+    return () => clearTimeout(t);
+  }, [starBump]);
+  /* ⚠️⚠️ LA PASTILLE ALLUMÉE S'OUBLIE AU BOUT DE 900 ms, ET CE N'EST PAS UN
+     DÉTAIL D'ANIMATION : `at` est un INDICE dans une liste qui change de nature
+     avec le chapitre (les huit cratères au chapitre 1, les cinq logements du
+     navire au chapitre 3). Gardé, il désignerait la mauvaise pastille au premier
+     changement de chapitre — le piège des deux cartes (§4 de CLAUDE.md) réduit à
+     un tableau. */
+  useEffect(() => {
+    if (starPulse.at < 0) return;
+    const t = setTimeout(() => setStarPulse(p => ({ ...p, at: -1 })), 900);
+    return () => clearTimeout(t);
+  }, [starPulse]);
   /* ⚠️⚠️ ZIP 469 — L'OVERLAY DE RÉSULTAT SE FERME TOUT SEUL, ET C'EST LA MÊME
      DÉCISION QUE LA CARTE DE CHAPITRE, POUR LA MÊME RAISON : il n'attend rien du
      joueur, il ANNONCE. Un panneau qu'il faut congédier après chaque cratère
@@ -14428,7 +14492,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // file ici et rendues dans une dernière passe, APRÈS tout le reste,
       // donc toujours au-dessus (voir bubbleQueue.forEach plus bas).
       const bubbleQueue = [];
-      const queueBubble = (cx, by, text, major, alpha) => bubbleQueue.push({ cx, by, text, major, alpha });
+      const queueBubble = (cx, by, text, major, alpha, reveal) => bubbleQueue.push({ cx, by, text, major, alpha, reveal });
 
       // Zip 367 : la case visee est desormais calculee UNE fois par frame, ici,
       // avant la boucle de tuiles. Elle servait deja au lisere blanc du curseur
@@ -15629,7 +15693,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          cran plus bas et plus vicieuse : ici le lecteur EXISTE, il est écrit,
          relu, compté par le banc — il ne s'exécute simplement jamais. */
         const sb = starBubbleNow(cps);
-        if (sb) queueBubble(Math.round((cp ? cp.x : m.x) * T) + 8, Math.round((cp ? cp.y : m.y) * T) - (cp ? 22 : 34), sb.text, "star", sb.alpha);   // 465 — fondu, rappel au survol
+        if (sb) queueBubble(Math.round((cp ? cp.x : m.x) * T) + 8, Math.round((cp ? cp.y : m.y) * T) - (cp ? 22 : 34), sb.text, "star", sb.alpha, sb.reveal);   // 465 — fondu, rappel au survol ; 2026-09-01 — écriture progressive
         /* ⚠️ ZIP 479 — LE PLAT PASSE DEVANT LA TENUE, même règle que l'effort en
            ville (`ef || starCalmUi()`, 459) : une seule barre à la fois au-dessus
            du fermier. */
@@ -16129,7 +16193,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (bq.emote) spritesRef.current.drawEmoteBubble(ctx, bq.cx, bq.by, bq.emote.a);
           else if (bq.work) spritesRef.current.drawWorkBubble(ctx, bq.cx, bq.by, bq.work.k, performance.now());   // zip 459
           else if (bq.meter) spritesRef.current.drawCalmMeter(ctx, bq.cx, bq.by, bq.meter.k, bq.meter);
-          else { ctx.save(); ctx.globalAlpha *= bq.alpha === undefined ? 1 : bq.alpha; drawSpeechBubble(ctx, bq.cx, bq.by, bq.text, bq.major); ctx.restore(); }
+          else { ctx.save(); ctx.globalAlpha *= bq.alpha === undefined ? 1 : bq.alpha; drawSpeechBubble(ctx, bq.cx, bq.by, bq.text, bq.major, bq.reveal); ctx.restore(); }
         } catch (e) { console.error("[FERME] bulle ignorée", e); }
       }
 
@@ -17540,7 +17604,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          aurait une bulle trente pixels sous ses pieds. Le décalage est appliqué
          par l'appelant, une fois, au moment de la mise en file. */
       const townBubbles = [];
-      const queueTownBubble = (cx, by, text, major, alpha) => townBubbles.push({ cx, by, text, major, alpha });
+      const queueTownBubble = (cx, by, text, major, alpha, reveal) => townBubbles.push({ cx, by, text, major, alpha, reveal });
       for (let y = y0; y <= yBot; y++) for (let x = x0; x <= x1; x++) {
         const i = y * tw.w + x, g = tw.ground[i];
         const bakedCourtStair = C.townCourtMainStairCell(x, y);
@@ -19080,7 +19144,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (sb) {
           const bxp = cp ? cp.x : m.x, byp = cp ? cp.y : m.y;
           const be = cp ? elevTown(tw, bxp, byp) : myE, bl = cp ? archPxTown(tw, bxp, byp) : myLift;
-          queueTownBubble(Math.round(bxp * T) + 8, Math.round(byp * T) - (cp ? 22 : 34) - be * C.TOWN_ELEV_PX - bl, sb.text, "star", sb.alpha);   // 465
+          queueTownBubble(Math.round(bxp * T) + 8, Math.round(byp * T) - (cp ? 22 : 34) - be * C.TOWN_ELEV_PX - bl, sb.text, "star", sb.alpha, sb.reveal);   // 465 ; 2026-09-01
         }
       }
       if (myTaxi) {
@@ -19138,7 +19202,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         try {
           if (bq.emote) spritesRef.current.drawEmoteBubble(ctx, bq.cx, bq.by, bq.emote.a);   // zip 455
           else if (bq.meter) spritesRef.current.drawCalmMeter(ctx, bq.cx, bq.by, bq.meter.k, bq.meter);   // zip 456
-          else { ctx.save(); ctx.globalAlpha *= bq.alpha === undefined ? 1 : bq.alpha; drawSpeechBubble(ctx, bq.cx, bq.by, bq.text, bq.major); ctx.restore(); }
+          else { ctx.save(); ctx.globalAlpha *= bq.alpha === undefined ? 1 : bq.alpha; drawSpeechBubble(ctx, bq.cx, bq.by, bq.text, bq.major, bq.reveal); ctx.restore(); }
         } catch (e) { console.error("[FERME] bulle ville ignorée", e); }
       }
       /* ╔══════════════════════════════════════════════════════════════════════
@@ -19839,7 +19903,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const sb = starBubbleNow(cps);
         if (sb) {
           const bxp = cp ? cp.x : m.x, byp = cp ? cp.y : m.y;
-          draws.push({ y: 1e9, fn: () => { ctx.save(); ctx.globalAlpha *= sb.alpha; drawSpeechBubble(ctx, Math.round(bxp * T) + 8, Math.round(byp * T) - (cp ? 22 : 34) - myRz, sb.text, "star"); ctx.restore(); } });   // 465
+          draws.push({ y: 1e9, fn: () => { ctx.save(); ctx.globalAlpha *= sb.alpha; drawSpeechBubble(ctx, Math.round(bxp * T) + 8, Math.round(byp * T) - (cp ? 22 : 34) - myRz, sb.text, "star", sb.reveal); ctx.restore(); } });   // 465 ; 2026-09-01
         }
       }
       /* ╔══════════════════════════════════════════════════════════════════════
@@ -20610,7 +20674,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        ⚠️ LE HALO EST PEINT AUTOUR, JAMAIS PAR-DESSUS (règle de la famille,
        `DESSIN.md`) : un halo qui mange sa source donne une tache, pas une
        lumière — c'est déjà ce que fait la compagne elle-même (`drawStarWisp`). */
-    function drawSpeechBubble(ctx, cx, by, text, major) {
+    /* ⚠️⚠️ 2026-09-01 — `reveal` EST UN NOMBRE DE SIGNES, ET LA BOÎTE NE LE
+       REGARDE PAS. C'est tout l'intérêt du paramètre : la mise en page (retours à
+       la ligne, largeur, hauteur) est calculée sur le texte ENTIER, et seul le
+       remplissage est tronqué. Une bulle dimensionnée sur le texte partiel
+       tressauterait à chaque signe et grandirait d'une ligne d'un coup au premier
+       retour — le défaut serait plus visible que l'effet.
+       ⚠️ `undefined` = tout afficher : les vingt autres appelants (résidents,
+       marchands, monstre) ne passent rien et ne changent pas d'un pixel. */
+    function drawSpeechBubble(ctx, cx, by, text, major, reveal) {
       if (major == null) major = true;
       const star = major === "star";
       if (star) major = false;
@@ -20660,7 +20732,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         else { ctx.fillRect(bx, byTop, bw, bh); ctx.strokeRect(bx, byTop, bw, bh); }
         ctx.beginPath(); ctx.moveTo(cx - 2, byTop + bh - 0.5); ctx.lineTo(cx + 2, byTop + bh - 0.5); ctx.lineTo(cx, byTop + bh + 3); ctx.closePath(); ctx.fill();
         ctx.fillStyle = star ? "#4b3308" : "#3a3a3a";
-        lines.forEach((l, i) => ctx.fillText(l, bx + padX, byTop + 5 + i * lineH));
+        /* Le budget de signes se consomme LIGNE PAR LIGNE : une ligne entamée
+           s'écrit jusqu'où le budget va, les suivantes ne s'écrivent pas encore.
+           ⚠️ Le retour à la ligne compte pour un signe (`+ 1`), sinon une phrase
+           coupée en trois s'écrirait par à-coups — trois lignes qui démarrent
+           chacune sans la pause que l'œil attend à la fin de la précédente. */
+        let budget = reveal === undefined ? Infinity : Math.max(0, reveal | 0);
+        for (let i = 0; i < lines.length; i++) {
+          if (budget <= 0) break;
+          const l = lines[i];
+          ctx.fillText(budget >= l.length ? l : l.slice(0, budget), bx + padX, byTop + 5 + i * lineH);
+          budget -= l.length + 1;
+        }
       }
       ctx.restore();
     }
@@ -20747,8 +20830,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function starBubbleNow(cps) {
       const b = starBubbleRef.current;
       if (!b || !b.text) return null;
-      const alpha = Q.starBubbleAlpha(performance.now(), b.until, starCompanionHovered(cps));
-      return alpha > 0 ? { text: b.text, alpha } : null;
+      const now = performance.now();
+      const alpha = Q.starBubbleAlpha(now, b.until, starCompanionHovered(cps));
+      /* ⚠️ LE COMPTE EST DÉRIVÉ DE L'HORLOGE, JAMAIS INCRÉMENTÉ : un compteur
+         qu'on avance d'une image à l'autre dépendrait de la cadence de rendu, et
+         la même phrase s'écrirait deux fois plus vite sur un écran à 120 Hz. */
+      const rev = Math.floor(Math.max(0, now - (b.from || 0)) * C.STAR_BUBBLE_CPS / 1000);
+      return alpha > 0 ? { text: b.text, alpha, reveal: rev } : null;
     }
 
     /* ╔══════════════════════════════════════════════════════════════════════
@@ -24776,7 +24864,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        secondes. Elle a le droit de finir son fondu ; son texte reste ensuite
        dans le ref et revient seulement quand on survole une étoile. */
     if (b.key === key) return;
-    starBubbleRef.current = { key, text: String(text || ""), until: performance.now() + (ms || 4200) };
+    /* ⚠️ 2026-09-01 — `from` EST L'INSTANT OÙ ELLE COMMENCE À PARLER, et il sert
+       à l'écriture progressive (voir `STAR_BUBBLE_CPS`). Il est posé ICI et
+       jamais retouché : la même phrase rappelée au survol après son fondu est
+       déjà écrite en entier, ce qui est exactement ce qu'on veut — on ne
+       refait pas patienter quelqu'un pour un texte qu'il a déjà lu. */
+    starBubbleRef.current = { key, text: String(text || ""), from: performance.now(),
+                              until: performance.now() + (ms || 4200) };
   }
   /* ⚠️ ZIP 453 — DIRE UNE SUITE DE PHRASES, ET RIEN DE PLUS. La bulle de
      l'étoile ne se dessine QUE là où elle est visible (`starCompanionsAt` rend
@@ -24792,6 +24886,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (i === 0) pushToast(txt);
       else setTimeout(() => pushToast(txt), i * g);
     });
+  }
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-01 — ARMER LE BANDEAU ET LE RUBAN. Deux fonctions, aucune
+     ║ décision : elles ALLUMENT ce que `starWatch` vient de LIRE dans l'état
+     ║ partagé.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️ ELLES SONT AU NIVEAU DU COMPOSANT, jamais dans la closure de la boucle de
+     rendu — piège n°1 de CLAUDE.md. `starWatch` les appelle, et `starWatch` est
+     lui-même appelé depuis `starFrame`, au niveau du composant.
+     ⚠️ ET ELLES NE DIFFUSENT RIEN. Un accusé de réception est une chose qu'on
+     voit chez soi ; l'ÉVÉNEMENT, lui, est déjà dans l'état partagé, ce qui fait
+     que les deux joueurs le voient à la même seconde sans un octet de plus
+     (§3 de CLAUDE.md). */
+  function starPulseAt(at) {
+    if (!(at >= 0)) return;
+    setStarPulse(p => ({ seq: p.seq + 1, at }));
+    setStarBump(b => b + 1);
+  }
+  /* ⚠️⚠️ `prev` EST AUSSI IMPORTANT QUE `parts` : la vignette peint les DEUX
+     états et efface celui d'avant en clignotant. Sans `prev`, on montrerait un
+     navire — ce que le joueur voit déjà en allant au quai — au lieu de montrer
+     CE QUI VIENT DE CHANGER dessus. */
+  function starRibbonShow(part, parts, prev, built, total, at) {
+    starPulseAt(at);
+    starRibbonSeqRef.current += 1;
+    setStarRibbon({ seq: starRibbonSeqRef.current, part, parts, prev, built, total });
   }
 
   /* ╔══════════════════════════════════════════════════════════════════════════
@@ -24825,6 +24946,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const w = starWatchRef.current;
     if (!w) { starWatchRef.current = { built, crater, gift, sky: false, pool: false, empty: false,
                                        followers, dug, plan: Q.starPlanReady(e), timber: Q.starTimberBuilt(e),
+                                       /* 2026-09-01 — L'ÉTAT des morceaux, pas leur NOMBRE. Un compteur
+                                          ne se souvient pas de QUOI a changé (même leçon que la liste des
+                                          cratères retournés, zip 469), et le ruban a besoin des deux
+                                          états pour peindre leur écart. */
+                                       parts: Q.starShipParts(e),
                                        dishPh, dishBy }; return; }
     /* ⚠️⚠️ TROIS PHRASES, ET AUCUNE N'EST UN ÉVÉNEMENT RÉSEAU : elles se déduisent
        de l'état partagé, comme tout ce bloc. Un joueur qui se connecte au milieu
@@ -24874,6 +25000,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         starDigPendRef.current = null;
         setStarFind({ id, found: Q.starDigResult(id), left: Q.starDigLeft(e) });
       }
+      /* ⚠️ 2026-09-01 — LA PASTILLE BAT POUR TOUT LE MONDE, l'overlay ne s'ouvre
+         que chez celui qui a gratté. Ce ne sont pas les mêmes informations : le
+         bandeau dit « la cale a avancé » (vrai pour les deux joueurs), l'overlay
+         dit « voilà ce que TU as trouvé ». C'est pour ça que le battement est
+         posé ICI, hors de la garde `starDigPendRef`. */
+      if (id) starPulseAt(Q.STAR_FARM_IMPACTS.findIndex(st => st.id === id));
     } else if (dug.length < w.dug.length) w.dug = dug;   // « effacer » au menu dev
 
     /* 464 — Le passage de LA liste précédente à LA liste courante arme la même
@@ -24936,11 +25068,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        afficher `n+1` en pariant. Ici on lit ce que le navire montre, donc les
        deux disent la même chose par construction. */
     if (built > w.built) {
-      w.built = built;
-      pushToast(built === 1 ? L.star.s1.got
-              : built === total - 1 ? L.star.ship.last(built, total)
-              : L.star.ship.got(built, total));
-    } else if (built < w.built) w.built = built;   // « effacer » au menu dev
+      /* ⚠️⚠️ 2026-09-01 — LE RUBAN REMPLACE LE TOAST ICI, IL NE S'Y AJOUTE PAS.
+         Les deux se posent en haut de l'écran (toasts à 70 px, ruban à 62) : les
+         garder tous les deux se recouvrait au pixel, et surtout disait deux fois
+         la même chose. Le ruban REPREND le texte du toast dans sa seconde ligne
+         (`L.star.ship.got`/`last`), donc aucune phrase n'est perdue et aucune
+         n'est orpheline — c'est la même source, montée d'un volume.
+         ⚠️ LE TOAST SURVIT AU CAS OÙ ON NE SAIT PAS QUELLE PIÈCE A ÉTÉ POSÉE
+         (`key` nul, qui ne devrait pas arriver) : un accusé de réception dégradé
+         vaut mieux que pas d'accusé du tout, et c'est la seule branche qui peut
+         faire mentir la vignette. */
+      const nowParts = Q.starShipParts(e);
+      const prevParts = w.parts || nowParts.map(() => false);
+      const idx = nowParts.findIndex((on, i) => on && !prevParts[i]);
+      const partKey = idx >= 0 ? (Q.STAR_SHIP_PARTS[idx] || {}).key : null;
+      w.built = built; w.parts = nowParts;
+      if (partKey) starRibbonShow(partKey, nowParts, prevParts, built, total, idx);
+      else pushToast(built === 1 ? L.star.s1.got
+                   : built === total - 1 ? L.star.ship.last(built, total)
+                   : L.star.ship.got(built, total));
+    } else if (built < w.built) { w.built = built; w.parts = Q.starShipParts(e); }   // « effacer » au menu dev
 
     /* ── LA RENCONTRE. La seule fois de toute la quête où l'histoire s'énonce. */
     if (crater && !w.crater) {
@@ -26979,7 +27126,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            l'horloge de ce client — jamais recalculée dans `quete.js`, qui n'a
            pas d'horloge (§3 de CLAUDE.md, encore). */
         return (
-          <div className={"ferme-star-hud" + (settingsOpen ? " ui-menu-open" : "")} data-tick={starTick}>
+          <div className={"ferme-star-hud" + (settingsOpen ? " ui-menu-open" : "") + (starBumpOn ? " bump" : "")} data-tick={starTick}>
             <span className="ico">{huntingImpacts ? "☄" : "✦"}</span>
             {/* hors-zip — LES PUCES DU CHAPITRE 1 DEVIENNENT CLIQUABLES.
                 Demande de Guillaume : à plusieurs, viser des trous différents
@@ -26996,13 +27143,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 rien serait le panneau qui s'ouvre pour rien (§4). Le style de
                 puce « mine »/« shared » ne change que l'AFFICHAGE : rien ici
                 n'arbitre, rien ne se gagne (voir myStarFocusRef). */}
-            <span className="pips">{pips.map((on, i) => {
-              if (!huntingImpacts) return <span key={"sp" + i} className={"pip" + (on ? " on" : "")} />;
+            {/* ⚠️⚠️ 2026-09-01 — LE `key` DU CONTENEUR PORTE LA SÉQUENCE DU
+                BATTEMENT, ET C'EST LE SEUL MOYEN FIABLE DE REJOUER UNE ANIMATION
+                CSS. Ajouter une classe à un nœud déjà monté ne redémarre RIEN (le
+                navigateur considère l'animation comme déjà jouée) ; remonter le
+                nœud la relance à coup sûr. Le coût est nul — ce sont cinq à huit
+                `<span>` vides — et le bénéfice est le seul accusé de réception
+                permanent de la quête. */}
+            <span className="pips" key={"pips-" + starPulse.seq}>{pips.map((on, i) => {
+              const fresh = starPulse.at === i && on;
+              if (!huntingImpacts) return <span key={"sp" + i} className={"pip" + (on ? " on" : "") + (fresh ? " fresh" : "")} />;
               const site = Q.STAR_FARM_IMPACTS[i];
               const claimable = !Q.starHas(e, site.id);
               const mine = claimable && myStarFocus === site.id;
               const otherHas = claimable && starFocusOtherHas(site.id);
-              const cls = "pip" + (on ? " on" : "") + (mine ? " mine" : "") + (otherHas ? " shared" : "");
+              const cls = "pip" + (on ? " on" : "") + (fresh ? " fresh" : "") + (mine ? " mine" : "") + (otherHas ? " shared" : "");
               return (
                 <span key={"sp" + i} className={cls}
                       title={claimable ? L.star.hud.focusTip(mine, otherHas) : undefined}
@@ -27018,7 +27173,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                       onClick={claimable ? () => toggleMyStarFocus(site.id) : undefined} />
               );
             })}</span>
-            <span className="goal">{starGoalText(e)}</span>
+            <StarGoalText text={starGoalText(e)} />
             {/* ⚠️ ZIP 454 — LE PLAN A UN BOUTON, ET PAS SEULEMENT UNE TOUCHE. Un
                 raccourci clavier qu'on n'a pas lu n'existe pas (et le jeu se joue
                 aussi au doigt depuis le 430) ; il n'apparaît qu'une fois les plans
@@ -27028,6 +27183,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     style={{ cursor: "pointer", marginLeft: 6, flex: "0 0 auto" }}
                     onClick={togglePlan}>📐</span>
             )}
+            {/* ⚠️⚠️ 2026-09-01 — LA BARRE NE COMPTE RIEN ELLE-MÊME : sa largeur est
+                le rapport des pastilles PLEINES sur leur total, c'est-à-dire
+                exactement ce que la rangée au-dessus montre déjà. Un second
+                compteur ici, ce serait deux réponses à « où j'en suis », et le
+                449 a payé ce défaut précis sur le bandeau et le chevron.
+                ⚠️ ELLE EST MUETTE AUX LECTEURS D'ÉCRAN (`aria-hidden`) : elle
+                redit une information que la phrase d'objectif porte déjà en
+                toutes lettres. */}
+            <span className="ferme-star-hud-bar" aria-hidden="true">
+              <i style={{ width: `${Math.round(100 * pips.filter(Boolean).length / Math.max(1, pips.length))}%` }} />
+            </span>
           </div>
         );
       })()}
@@ -27059,6 +27225,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             <div className={"ferme-wait-pill" + (settingsOpen ? " ui-menu-open" : "")}>
               <span className="ico">☄</span>
               <span>{L.star.hud.townFallCountdown(msClock(remain))}</span>
+              <StarWaitBar left={remain} total={Q.STAR_TOWN_ACTIVE_MS} />
             </div>
           );
         }
@@ -27072,6 +27239,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <div className={"ferme-wait-pill" + (settingsOpen ? " ui-menu-open" : "")}>
                 <span className="ico">🎩</span>
                 <span>{L.maire.bookedWhen(msClock(wait))}</span>
+                {/* ⚠️ LE TOTAL SE DÉDUIT DU RENDEZ-VOUS LUI-MÊME (`due - at`) et
+                    n'est pas recopié depuis `MAYOR_RETRY_WAIT_MS` : la première
+                    demande et la seconde n'attendent pas la même chose, et une
+                    jauge réglée sur une seule des deux serait fausse la moitié du
+                    temps sans jamais avoir l'air cassée. */}
+                <StarWaitBar left={wait} total={Math.max(1, (appt.due | 0) - (appt.at | 0))} />
               </div>
             );
           }
@@ -30721,6 +30894,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         />
       )}
 
+      {/* ── LE RUBAN DE JALON (2026-09-01). Voir la note du composant.
+          ⚠️ IL S'EFFACE SOUS UNE SCÈNE PLEIN ÉCRAN au lieu de se mettre en file :
+          un accusé de réception qui arrive après coup ment sur ce qui vient de se
+          passer. Il n'y a de toute façon aucun instant de la chronologie où l'on
+          pose une pièce pendant une cinématique — la garde est là pour le menu
+          développeur, qui peut tout enchaîner. */}
+      {starRibbon && !starCard && !starMini && !mayorTalk && !sawScene && (
+        /* ⚠️⚠️ LE `key` PORTE LA SÉQUENCE, ET C'EST LA MÊME LEÇON QUE LES
+           PASTILLES DU BANDEAU : deux jalons qui s'enchaînent sans passer par
+           `null` (le menu développeur le fait, et deux joueurs qui montent deux
+           pièces coup sur coup aussi) réutiliseraient le MÊME nœud, donc ni le
+           glissement, ni le clignotement, ni le halo ne rejoueraient. Le second
+           accusé de réception apparaîtrait tout fait, sans mouvement — c'est-à-dire
+           qu'il n'accuserait rien. Remonter le composant les relance tous les
+           trois d'un coup. */
+        <StarRibbon key={"rb" + starRibbon.seq} ribbon={starRibbon}
+                    sprites={spritesReady ? spritesRef.current : null}
+                    L={L} tick={starTick} />
+      )}
+
       {/* ── LA CARTE DE CHAPITRE. Le seul moment où le jeu prend l'écran entier
           pour dire un titre, et c'est la mise en scène qui découpe l'heure de
           jeu en cinq soirées possibles. ⚠️ ELLE SE FERME TOUTE SEULE : une carte
@@ -31588,6 +31781,253 @@ function StarFindCard({ find, sprites, L, tick }) {
         <div className="ferme-star-find-body">{L.star.dig["body" + K]}</div>
         <div className="ferme-star-find-next">{L.star.dig["next" + K]}</div>
         <div className="ferme-star-find-left">{L.star.dig.left(find.left | 0)}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ╔═══════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-01 — LA PHRASE D'OBJECTIF NE SAUTE PLUS.
+   ╚═══════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ LE DÉFAUT ÉTAIT INVISIBLE PARCE QU'IL N'AVAIT PAS DE FORME : le bandeau
+   changeait de phrase entre deux images, sans transition. Le joueur venait donc
+   de franchir une étape — le seul instant où il regarde cette ligne — et
+   l'interface la remplaçait comme on corrige une faute de frappe. Un changement
+   d'objectif est un ÉVÉNEMENT ; il doit se voir arriver.
+   ⚠️ LE SORTANT EST EN `absolute`, L'ENTRANT EN FLUX : c'est ce qui garde au
+   bandeau la largeur et la hauteur du texte COURANT pendant la transition. Les
+   deux en flux le feraient doubler de hauteur pendant 400 ms, les deux en
+   absolu l'écraseraient à zéro — deux façons de rendre le remède pire que le mal.
+   ⚠️ ET LE SORTANT S'EFFACE DU DOM APRÈS SON FONDU : gardé, il resterait un nœud
+   transparent par changement d'objectif pendant toute la partie. */
+function StarGoalText({ text }) {
+  const seenRef = useRef(text);
+  const [st, setSt] = useState({ cur: text, prev: null, seq: 0 });
+  useEffect(() => {
+    if (text === seenRef.current) return;
+    const old = seenRef.current;
+    seenRef.current = text;
+    setSt(s0 => ({ cur: text, prev: old, seq: s0.seq + 1 }));
+  }, [text]);
+  useEffect(() => {
+    if (st.prev == null) return;
+    const t = setTimeout(() => setSt(s0 => ({ ...s0, prev: null })), 420);
+    return () => clearTimeout(t);
+  }, [st]);
+  return (
+    <span className="goal">
+      {st.prev != null && <span className="g-out" key={"go" + st.seq}>{st.prev}</span>}
+      <span className="g-in" key={"gi" + st.seq}>{st.cur}</span>
+    </span>
+  );
+}
+
+/* ╔═══════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-01 — LA JAUGE DES DEUX ATTENTES.
+   ╚═══════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ C'EST LA MÊME DONNÉE QUE LE CHIFFRE À CÔTÉ, ET CE N'EST PAS LA MÊME
+   MINUTE DE JEU. « 4:12 » qui descend est une punition qu'on subit ; une barre
+   qui monte est un progrès qu'on regarde. Les deux attentes de la quête (les
+   deux minutes de présence en ville, le rendez-vous du maire) sont les deux
+   moments où le joueur se demande si le jeu est cassé — c'est exactement là
+   qu'il faut lui montrer que quelque chose avance.
+   ⚠️ LE CHIFFRE RESTE : on veut savoir COMBIEN, la barre dit seulement QUE ça
+   avance. Retirer le chiffre aurait échangé un défaut contre l'autre.
+   ⚠️ `left`/`total` VIENNENT DE L'APPELANT, jamais d'une horloge lue ici : les
+   deux attentes ne sont pas tenues par le même compteur (l'une est locale à
+   l'hôte, l'autre est dans l'état partagé) et ce composant n'a pas à le savoir. */
+function StarWaitBar({ left, total }) {
+  const t = Math.max(1, total | 0);
+  const k = Math.min(1, Math.max(0, 1 - (Math.max(0, left | 0) / t)));
+  return (
+    <span className="ferme-wait-pill-bar" aria-hidden="true">
+      <i style={{ width: `${Math.round(k * 100)}%` }} />
+    </span>
+  );
+}
+
+/* ╔═══════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-01 — LE RUBAN DE JALON. LE VOLUME SONORE QUI MANQUAIT.
+   ╚═══════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ IL RÉPOND À UNE MESURE, PAS À UNE INTUITION : la quête n'avait que le
+   TOAST (le cadre en bois de la ferme, 3,2 s, la même forme que « +3 blé ») et
+   la CARTE PLEIN ÉCRAN (5 à 7 fois par soirée). Poser une pièce du navire —
+   140 bois, une manche de sciage, un montage au marteau, jusqu'à huit minutes
+   d'attente — se soldait donc par une ligne de toast identique à une récolte.
+   ⚠️⚠️⚠️ ET IL MONTRE L'ÉCART, PAS L'ÉTAT. Deux vignettes superposées : le
+   navire APRÈS au-dessous, le navire AVANT au-dessus, et celle du dessus
+   s'efface en clignotant. Ce qui apparaît est donc EXACTEMENT la pièce qu'on
+   vient de poser. C'est la parade à la quinzième forme du « banc qui passe »
+   (CLAUDE.md) : `render-navire` a mesuré que le safran ne change que 1,3 % de
+   la vignette — montrer le navire entier ne montre rien, montrer la DIFFÉRENCE
+   le montre.
+   ⚠️⚠️ LES DEUX VIGNETTES SONT PEINTES AU MÊME INSTANT `t`, ET C'EST
+   INDISPENSABLE : les pièces manquantes sont dessinées en fantômes qui PULSENT
+   (`Math.sin(t / 700 + idx * 1.1)`). À deux `t` différents, les fantômes ne
+   seraient pas en phase et le clignotement ferait scintiller TOUT le bateau au
+   lieu de la seule pièce neuve — c'est-à-dire qu'il montrerait un écart faux.
+   ⚠️ LE CADRAGE EST CELUI DE `render-navire`, À L'IDENTIQUE. C'est le banc qui
+   rastérise ce dessin : cadrer autrement ici, ce serait montrer au joueur une
+   image que rien ne mesure (quatorzième forme — « il accuse le personnage de ce
+   que fait son cadrage »).
+   ⚠️ IL NE SE FERME PAS ET NE PREND AUCUN CLIC (`pointer-events:none` en CSS) :
+   il n'attend rien du joueur, il ANNONCE. Ce qu'on doit congédier est un
+   dialogue ; ce qui s'efface tout seul est une transition. */
+function StarRibbon({ ribbon, sprites, L, tick }) {
+  const afterRef = useRef(null);
+  const beforeRef = useRef(null);
+  /* ⚠️⚠️ LE HALO EST DÉDUIT DES DEUX IMAGES, PAS D'UNE TABLE DE POSITIONS.
+     Voir la note « LE HALO » plus bas : c'est ce qui fait qu'il vise juste pour
+     les cinq pièces sans qu'aucune coordonnée ne soit écrite deux fois. */
+  const [halo, setHalo] = useState(null);
+  useEffect(() => {
+    if (!ribbon || !sprites || !sprites.drawStarShip) return;
+    const T = 16;
+    const W = C.STAR_SHIP_DRAW_W * T, H = C.STAR_SHIP_DRAW_H * T;
+    /* Le point de pose du navire dans sa boîte, repris tel quel de
+       `tools/render-navire.mjs` — voir la note d'en-tête sur le cadrage. */
+    const cx = W / 2, cy = H - 11;
+    /* ⚠️ UN SEUL INSTANT POUR LES DEUX PASSES. Voir l'en-tête : c'est ce qui
+       garantit que la seule chose qui change entre les deux images est la pièce. */
+    const t = 1500;
+    const paint = (cv, parts) => {
+      if (!cv) return;
+      const g = cv.getContext("2d");
+      g.clearRect(0, 0, cv.width, cv.height);
+      g.imageSmoothingEnabled = false;
+      /* `ghosts: true` est HONNÊTE ICI, et seulement ici : le ruban ne se
+         déclenche qu'au chapitre 3, où l'on a forcément les plans (sans eux
+         `starTimberBlock` refuse la commande). Le fantôme des pièces manquantes
+         donne au navire sa silhouette entière, donc un repère pour voir ce qui
+         vient de se remplir. */
+      sprites.drawStarShip(g, cx, cy, T, parts, t, { t, ghosts: true });
+    };
+    paint(afterRef.current, ribbon.parts);
+    paint(beforeRef.current, ribbon.prev);
+
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ LE HALO — ET C'EST LE BANC QUI L'A EXIGÉ, PAS LE GOÛT.
+       ╚══════════════════════════════════════════════════════════════════════
+       ⚠️⚠️⚠️ `render-navire` §5 bis a mesuré ce que le clignotement seul montre
+       vraiment, en luminance, sur le dessin AVEC fantômes — celui du ruban :
+       coque 2 792 pixels, voile 2 622… et **safran 201**, cloche 459. Autrement
+       dit, deux des cinq rendez-vous du chantier changeaient l'image d'un
+       millième et personne ne les aurait vus. La cause est que le fantôme est
+       DÉJÀ de la matière (190 d'alpha) : passer du fantôme au bois plein change
+       une VALEUR, pas une présence, et sur une pièce de la taille d'un safran
+       ça ne fait pas une tache.
+       ⚠️⚠️ ON NE RÈGLE PAS ÇA EN COUPANT LES FANTÔMES : sans eux, la vignette à
+       un morceau n'est plus un bateau, c'est une cale avec un bout de bois
+       dessus — et c'est très exactement la lecture qu'on veut éviter chez un
+       enfant de dix ans, à qui l'on promet un navire.
+       ⚠️⚠️⚠️ LE HALO SE DÉDUIT DES DEUX IMAGES, ET C'EST CE QUI LE REND JUSTE
+       POUR LES CINQ PIÈCES SANS UNE SEULE COORDONNÉE ÉCRITE : on compare les
+       pixels, on prend la boîte de ce qui a changé, on pose la lueur dessus.
+       Une table « où est le safran » aurait été une SECONDE écriture de la
+       géométrie du navire, et elle aurait menti au premier coup de crayon sur
+       `fermeArt` (§8 de CLAUDE.md — un paramètre qui double un autre paramètre).
+       ⚠️ ET IL EST FACULTATIF : si le contexte 2D refuse `getImageData` (canevas
+       teinté, navigateur bridé), on n'a pas de halo et le ruban reste juste. Un
+       accusé de réception ne doit jamais dépendre d'une lecture de pixels. */
+    try {
+      const ca = afterRef.current, cb = beforeRef.current;
+      if (!ca || !cb) return;
+      const ga = ca.getContext("2d"), gb = cb.getContext("2d");
+      const da = ga.getImageData(0, 0, ca.width, ca.height).data;
+      const db = gb.getImageData(0, 0, cb.width, cb.height).data;
+      /* La même luminance composée sur le fond sombre du ruban que celle du
+         banc : deux formules pour la même grandeur finiraient par diverger, et
+         c'est le banc qui doit rester l'arbitre. */
+      const lum = (d, i) => {
+        const al = d[i + 3] / 255;
+        return 0.2126 * (d[i] * al + 10 * (1 - al))
+             + 0.7152 * (d[i + 1] * al + 14 * (1 - al))
+             + 0.0722 * (d[i + 2] * al + 30 * (1 - al));
+      };
+      let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1, n = 0;
+      for (let y = 0; y < ca.height; y++) for (let x = 0; x < ca.width; x++) {
+        const i = (y * ca.width + x) * 4;
+        if (Math.abs(lum(da, i) - lum(db, i)) <= 12) continue;
+        n++;
+        if (x < x0) x0 = x; if (x > x1) x1 = x;
+        if (y < y0) y0 = y; if (y > y1) y1 = y;
+      }
+      /* ╔════════════════════════════════════════════════════════════════════
+         ║ ⚠️⚠️⚠️ LE HALO NE SORT QUE POUR CE QUI EST PETIT, ET C'EST LA RÈGLE
+         ║ ENTIÈRE.
+         ╚════════════════════════════════════════════════════════════════════
+         Une pièce large — la coque, la voile, le mât — change entre 6 % et 17 %
+         de la vignette : le clignotement suffit, et la cercler reviendrait à
+         entourer le bateau pour désigner le bateau. Une pièce menue — le safran
+         (18 × 26 px), la cloche (21 × 30) — ne change qu'un millième de l'image :
+         sans halo, on paie 45 bois et une manche de sciage pour un changement
+         que personne ne voit.
+         ⚠️ LES DEUX SEUILS SONT MESURÉS, PAS CHOISIS : `render-navire` §5 bis
+         publie la boîte et le compte de chaque pièce à chaque exécution, et
+         tient l'invariant « chaque morceau est soit assez large pour se voir,
+         soit assez ramassé pour être cerclé ». Les changer ici sans le relancer,
+         c'est casser cet invariant en silence.
+         ⚠️ RIEN N'A CHANGÉ → PAS DE HALO NON PLUS. Le menu développeur peut
+         rejouer un ruban sur un état identique ; cercler le vide serait montrer
+         du doigt quelque chose qui n'existe pas. */
+      const aire = ca.width * ca.height;
+      const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+      const cerclable = n >= 40 && (bw * bh) <= aire * 0.12;
+      setHalo(!cerclable ? null : {
+        /* Une ELLIPSE à la forme de ce qui a changé, pas un cercle : un safran
+           est haut et étroit, une cloche aussi, et un cercle sur une forme
+           allongée déborde d'un côté en laissant du vide de l'autre. */
+        x: (x0 + x1) / 2, y: (y0 + y1) / 2,
+        w: Math.min(ca.width, Math.max(26, bw * 1.7)),
+        h: Math.min(ca.height, Math.max(26, bh * 1.7)),
+      });
+    } catch { setHalo(null); }
+  }, [ribbon, sprites]);
+  if (!ribbon) return null;
+  const T = 16;
+  const W = C.STAR_SHIP_DRAW_W * T, H = C.STAR_SHIP_DRAW_H * T;
+  const total = ribbon.total || Q.STAR_SHIP_TOTAL;
+  const built = ribbon.built | 0;
+  /* ⚠️ LA SECONDE LIGNE REPREND LE TEXTE DU TOAST QUE CE RUBAN REMPLACE
+     (`L.star.ship.got` / `last`) : aucune phrase n'est perdue, aucune n'est
+     orpheline, et il n'existe toujours qu'UNE écriture du compte de morceaux.
+     Seule la dernière pièce a sa phrase à elle — à cet instant il n'y a plus
+     rien à compter, il y a un bateau. */
+  const sub = built >= total ? L.star.ribbon.last
+            : built === total - 1 ? L.star.ship.last(built, total)
+            : L.star.ship.got(built, total);
+  const parts = ribbon.parts || [];
+  const prev = ribbon.prev || [];
+  return (
+    /* ⚠️ `animationDuration` VIENT DE LA CONSTANTE QUI FERME LE RUBAN
+       (`STAR_RIBBON_MS`), jamais de la feuille de style : deux nombres qui
+       décrivent le même instant finissent par se contredire (leçon du 476,
+       payée sur l'overlay de fouille). */
+    <div className="ferme-star-ribbon" data-tick={tick}
+         style={{ animationDuration: (C.STAR_RIBBON_MS / 1000) + "s" }}>
+      <div className="ferme-star-ribbon-ship" style={{ width: W, height: H }}>
+        <canvas ref={afterRef} width={W} height={H} style={{ width: W, height: H }} />
+        <canvas ref={beforeRef} width={W} height={H} className="before" style={{ width: W, height: H }} />
+        {/* ⚠️ IL ARRIVE APRÈS LE CLIGNOTEMENT (retard en CSS), jamais pendant :
+            deux choses qui bougent en même temps au même endroit, c'est une
+            seule chose qu'on ne lit pas. */}
+        {halo && (
+          <span className="ferme-star-ribbon-halo" aria-hidden="true"
+                style={{ left: halo.x - halo.w / 2, top: halo.y - halo.h / 2,
+                         width: halo.w, height: halo.h }} />
+        )}
+      </div>
+      <div className="ferme-star-ribbon-txt">
+        <div className="ferme-star-ribbon-kicker">{L.star.ribbon.kicker}</div>
+        <div className="ferme-star-ribbon-title">{L.star.ribbon.title(L.star.plan.part(ribbon.part))}</div>
+        <div className="ferme-star-ribbon-sub">{sub}</div>
+        {/* Les mêmes logements que le bandeau, à la même couleur : c'est ce qui
+            dit « ça compte pour la rangée du haut » sans avoir à l'écrire. */}
+        <div className="ferme-star-ribbon-pips">
+          {parts.map((on, i) => (
+            <i key={"rp" + i} className={(on ? "on" : "") + (on && !prev[i] ? " fresh" : "")} />
+          ))}
+        </div>
       </div>
     </div>
   );

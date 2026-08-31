@@ -395,6 +395,129 @@ ok(C.STAR_SHIP_BLOCK_W < C.STAR_SHIP_DRAW_W && C.STAR_SHIP_BLOCK_H < C.STAR_SHIP
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   5 bis. LE RUBAN DE JALON (2026-09-01) — CE QUE LE JOUEUR VOIT VRAIMENT QUAND
+   UNE PIÈCE EST POSÉE.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️⚠️ LE CONTRÔLE D'ÉCART CI-DESSUS MESURE UN AUTRE DESSIN QUE CELUI QU'ON
+   MONTRE, ET C'EST TOUT L'OBJET DE CETTE SECTION. Il compare deux images peintes
+   SANS fantômes ; le ruban, lui, les peint AVEC (`ghosts: true`), parce qu'un
+   chantier sans son plan en creux n'a pas de silhouette. Or un fantôme est déjà
+   de la matière à 190 d'alpha : un morceau qui passe du fantôme au bois plein ne
+   change presque AUCUN pixel au sens du masque, alors qu'il change tout au sens
+   de l'œil. *Mesurer la présence là où le joueur perçoit une VALEUR, c'est
+   mesurer autre chose que ce qu'on montre* — première forme du défaut de banc,
+   appliquée à son propre remède.
+   ⚠️ ON MESURE DONC LA LUMINANCE, PAS L'ALPHA : la moyenne du carré de
+   différence sur les pixels que la pièce occupe. C'est la grandeur qui dit
+   « ça a changé de matière », et c'est la seule que le clignotement du ruban
+   fait voir.
+   ⚠️⚠️ ET LA PLANCHE EST LA VRAIE SORTIE DE CETTE SECTION. Les cinq paires
+   avant/après sont peintes côte à côte : c'est là qu'on juge si la vignette
+   d'un navire à UN morceau se lit encore comme un navire — ce qu'aucun nombre
+   ne dira jamais (§10 de `CLAUDE.md`).
+   ═══════════════════════════════════════════════════════════════════════════ */
+{
+  const N = C.STAR_SHIP_ORDER.length;
+  const lum = (cv) => {
+    const d = px(cv), n = cv.width * cv.height, out = new Float32Array(n);
+    /* Le ruban est posé sur un fond sombre : on compose sur ce fond-là, sinon on
+       comparerait deux transparences au lieu de deux images. */
+    for (let i = 0; i < n; i++) {
+      const a0 = d[i * 4 + 3] / 255;
+      const r = d[i * 4] * a0 + 10 * (1 - a0), g = d[i * 4 + 1] * a0 + 14 * (1 - a0), b = d[i * 4 + 2] * a0 + 30 * (1 - a0);
+      out[i] = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    }
+    return out;
+  };
+  const cells = [];
+  const scores = [];
+  for (let i = 0; i < N; i++) {
+    /* AVANT / APRÈS tels que `StarRibbon` les peint : les pièces déjà posées
+       restent, la nouvelle bascule, tout le reste est fantôme. On prend le cas
+       le plus DÉFAVORABLE — la pièce arrive en premier, donc sur une cale nue,
+       là où elle a le moins d'appui visuel. */
+    const before = C.STAR_SHIP_ORDER.map(() => false);
+    const after = C.STAR_SHIP_ORDER.map((_, j) => j === i);
+    const A0 = shot(before, { t: 1500, ghosts: true });
+    const A1 = shot(after, { t: 1500, ghosts: true });
+    cells.push(A0, A1);
+    const SW = A0.width;
+    const l0 = lum(A0), l1 = lum(A1);
+    /* La MÊME grandeur que le composant, au même seuil (12) : c'est ce qui fait
+       que ce banc arbitre vraiment le halo au lieu de mesurer à côté. */
+    let sum = 0, hit = 0, x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1;
+    for (let k = 0; k < l0.length; k++) {
+      const dd = Math.abs(l1[k] - l0[k]);
+      if (dd <= 12) continue;
+      hit++; sum += dd;
+      /* ⚠️ LA FOULÉE EST CELLE DU CANEVAS, PAS CELLE DE LA BOÎTE. `shot()` ajoute
+         huit pixels de marge de chaque côté (voir sa note) : calculer `k % BOX_W`
+         donnait des boîtes de 144 de large pour TOUTES les pièces, y compris un
+         safran de 18 px — le contrôle accusait le dessin de ce que faisait son
+         propre index. C'est la quatorzième forme du défaut de banc, en une ligne
+         d'arithmétique. */
+      const x = k % SW, y = (k / SW) | 0;
+      if (x < x0) x0 = x; if (x > x1) x1 = x;
+      if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    scores.push({ key: C.STAR_SHIP_ORDER[i], hit, moy: hit ? sum / hit : 0,
+                  bw: hit ? x1 - x0 + 1 : 0, bh: hit ? y1 - y0 + 1 : 0 });
+  }
+  const faible = scores.reduce((a, b) => (a.hit < b.hit ? a : b));
+  /* ╔═══════════════════════════════════════════════════════════════════════════
+     ║ ⚠️⚠️⚠️ CE CONTRÔLE A ÉCHOUÉ LE JOUR OÙ IL A ÉTÉ ÉCRIT, ET C'EST LUI QUI A
+     ║ DICTÉ LE DESSIN — pas l'inverse.
+     ╚═══════════════════════════════════════════════════════════════════════════
+     Première mesure : coque 2 792 px, voile 2 622, mât 907, cloche 459,
+     **safran 201**. Deux des cinq rendez-vous du chantier ne changeaient donc
+     l'image que d'un millième, et le clignotement seul ne pouvait pas les
+     montrer. Le ruban a gagné un HALO qui se déduit de cette même différence.
+     ⚠️ LE SEUIL N'EST DONC PLUS « EST-CE VISIBLE » MAIS « EST-CE LOCALISABLE » :
+     40 pixels, la valeur exacte sous laquelle `StarRibbon` renonce à poser son
+     halo. Descendre en dessous, c'est livrer une pièce que rien ne désigne.
+     ⚠️⚠️ ET LA SECONDE MOITIÉ COMPTE AUTANT : un changement ÉPARPILLÉ sur toute
+     la vignette ne se cercle pas. On exige que la boîte de ce qui change tienne
+     dans les trois quarts de l'image — sinon le halo ne montrerait plus une
+     pièce, il entourerait le bateau. */
+  /* ╔═══════════════════════════════════════════════════════════════════════════
+     ║ L'INVARIANT DU RUBAN, ET IL TIENT LES DEUX MOITIÉS DU DESSIN ENSEMBLE.
+     ╚═══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ CHAQUE MORCEAU EST SOIT ASSEZ LARGE POUR SE VOIR TOUT SEUL, SOIT ASSEZ
+     RAMASSÉ POUR ÊTRE CERCLÉ. Ce n'est pas deux contrôles : c'est un OU, et c'est
+     ce qui autorise `StarRibbon` à ne sortir son halo que sur les petites pièces.
+     Un morceau qui tomberait entre les deux — un changement diffus ET faible —
+     serait invisible et impointable, et rien d'autre ne le dirait.
+     ⚠️ LES DEUX SEUILS SONT CEUX DU COMPOSANT, à la ligne près (12 % pour la
+     boîte, et « large » = 5 % des pixels de la vignette). Les recopier ailleurs
+     serait la divergence habituelle du §8 ; ici c'est le banc qui les publie, et
+     c'est lui qui échoue si le dessin change.
+     ⚠️ MESURÉ CE JOUR : coque 17 % des pixels, voile 16 %, mât 5,6 % → visibles
+     seuls. Safran 2,9 % de boîte, cloche 3,9 % → cerclés. Le mât est celui qui
+     passe de plus près : c'est lui qu'il faudra regarder si le gréement bouge. */
+  const AIRE = BOX_W * BOX_H;
+  const boiteOk = (x) => x.bw * x.bh <= AIRE * 0.12;
+  const largeOk = (x) => x.hit >= AIRE * 0.05;
+  const orphelines = scores.filter(x => !boiteOk(x) && !largeOk(x));
+  ok(orphelines.length === 0,
+     "⚠️⚠️ chaque morceau posé est SOIT visible seul, SOIT cerclable par le halo",
+     scores.map(x => `${x.key} ${x.hit}px ${x.bw}×${x.bh} ${largeOk(x) ? "vu" : boiteOk(x) ? "cerclé" : "NI L'UN NI L'AUTRE"}`).join(" · "));
+  ok(faible.hit >= 40, "…et aucun morceau ne passe sous le plancher de détection du halo",
+     `le plus discret : ${faible.key}, ${faible.hit} px`);
+  ok(true, "   …et l'intensité moyenne du changement, par pièce",
+     scores.map(x => `${x.key} Δ${x.moy.toFixed(0)} sur ${x.hit} px`).join(" · "));
+
+  const CW = BOX_W + 16 + 8, sheetW = CW * N + 8, sheetH = (BOX_H + 16) * 2 + 8;
+  const sheet = makeCanvas(sheetW, sheetH);
+  for (let i = 0; i < N; i++) {
+    sheet.ctx.drawImage({ width: cells[i * 2].width, height: cells[i * 2].height, px: px(cells[i * 2]) }, 8 + i * CW, 4);
+    sheet.ctx.drawImage({ width: cells[i * 2 + 1].width, height: cells[i * 2 + 1].height, px: px(cells[i * 2 + 1]) }, 8 + i * CW, 8 + BOX_H + 16);
+  }
+  const z2 = scale(sheet.px, sheetW, sheetH, 2);
+  writePNG(path.join(OUT, "navire-ruban.png"), z2.px, z2.W, z2.H);
+  console.log("\n  planche : tools/out/navire-ruban.png — rangée du haut AVANT, du bas APRÈS, une colonne par pièce");
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    6. LA CALE SEULE DIT DÉJÀ « CHANTIER », ET L'ÉCHELLE SE JUGE CONTRE LE FERMIER.
    ═══════════════════════════════════════════════════════════════════════════ */
 {

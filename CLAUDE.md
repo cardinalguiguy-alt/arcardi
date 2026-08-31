@@ -11,22 +11,28 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**ACTION SUIVANTE UNIQUE — JOUER LA QUÊTE DE L'ÉTOILE EN ENTIER, D'UNE TRAITE, ET JUGER SI ELLE
-EST ENCORE CHIANTE.** L'audit du 2026-08-31 a mesuré ce que Guillaume résumait en une phrase (« en
-gros le jeu est chiant ») : sur **~42 min d'horloge imposée par le chemin critique, 33,8 ne
-proposaient AUCUN geste de quête, et 31 tombaient après le cratère**, dans le chapitre `build` qui
-n'a aucun `need`. Le chantier de correction est ouvert et **trois lots sont livrés ce jour** (voir
-juste en dessous) ; **rien n'a été rejoué à l'écran**. Ce qui reste à juger n'est pas du code :
-(1) **la coupe suffit-elle ?** Le vide passe de 33,8 à ~18,8 min — est-ce que la seconde moitié
-respire, ou faut-il aussi la MEUBLER (le §17 garde de quoi : les trois chutes différées, les éclats
-autour du trou) ? (2) **l'étoile parle-t-elle au bon moment ?** Vingt répliques neuves, indexées sur
-la clé d'objectif ; elles se disent une fois et laissent leur fondu finir. (3) **la fin tient-elle
-enfin sa promesse ?** Le navire entre désormais dans sa propre scène de résolution.
-⚠️⚠️ **DEUX GARDE-FOUS DE GUILLAUME, DONNÉS PENDANT LE CHANTIER ET TOUJOURS EN VIGUEUR** : *« attention
-de ne pas basculer dans le WTF »* et *« l'idée est de rajouter du fun, mais pas de complexifier à
-outrance »*. Ils ont déjà servi : le premier jet des répliques de l'étoile philosophait sur les
-humains ; elles ont été réécrites pour que **chaque phrase du chapitre 3 ramène au bateau**. Aucune
-mécanique n'a été ajoutée par ce chantier, et c'est délibéré.
+**ACTION SUIVANTE UNIQUE — JOUER LA QUÊTE DE L'ÉTOILE EN ENTIER, D'UNE TRAITE, ET DIRE SI ELLE
+A DU RYTHME.** Le chantier « la quête est chiante » a deux moitiés : la COUPE (livrée la veille,
+jamais rejouée) et le RYTHME (livré ce jour, vu à l'écran). Ce qui reste à juger n'est pas du code.
+(1) **Les trois nombres de la coupe** — `STAR_ENG_WORK_MS` 15 → **5 min**, `STAR_ENG_TRAVEL_MS`
+3 → **1 min**, second rendez-vous chez le maire **1 min** au lieu de 3 à 5 : le vide sans geste
+passe de 33,8 à ~18,8 min sur 42. Est-ce que la seconde moitié respire, ou faut-il la MEUBLER
+(le §17 garde de quoi : les trois présages de l'attente, les six éclats autour du cratère) ?
+⚠️ Réversible en trois valeurs, et **rien de tout ça n'a encore été joué à cadence réelle**.
+(2) **Le ruban de jalon** : est-ce qu'il arrive au bon moment, assez longtemps, sans gêner ?
+(3) **L'étoile qui parle** : vingt répliques indexées sur la clé d'objectif, désormais écrites
+signe à signe. Trop lent, trop vite ?
+⚠️⚠️ **CE QUI N'A PAS PU ÊTRE JOUÉ, ET IL FAUT LE SAVOIR AVANT DE CONCLURE** : le montage d'UNE
+pièce au marteau sur la cale. Le déplacement automatisé n'a pas permis d'atteindre la cale
+(à quatorze cases du ponton, derrière les accessoires du quai), donc le ruban n'a été vu qu'en
+version « cinq pièces d'un coup » par le menu dev. Sa version à UNE pièce est tenue par
+`render-navire` §5 bis, qui la rastérise et publie sa planche — pas par l'écran.
+⚠️⚠️ **DEUX GARDE-FOUS DE GUILLAUME, TOUJOURS EN VIGUEUR** : *« attention de ne pas basculer dans
+le WTF »* et *« l'idée est de rajouter du fun, mais pas de complexifier à outrance »*, doublés le
+2026-09-01 par *« n'ajoute pas d'éléments wtf […] jeu que des enfants de 10 ans joueront ; on garde
+ce qu'on a et on ajoute ou modifie pour densifier et faire participer »*. **Aucune mécanique n'a
+été ajoutée par ce chantier, et c'est délibéré** : tout est de l'habillage et du tempo sur des
+gestes qui existaient déjà.
 ⚠️⚠️⚠️ **CE QUI RESTE DE L'AUDIT, NON FAIT, PAR ORDRE** : la **constellation** (cinq points écrits
 en dur, la fiction en promet sept, et elle se peint dès la chute **y compris à l'intérieur des
 bâtiments** — seule garde : `isNightTime`) ; les **quatre morceaux sans provenance** (safran, mât,
@@ -34,50 +40,70 @@ voile, cloche — `SHIP_SITE_OF` rend `null`, techniquement finissable et narrat
 **HUD peint par-dessus la scène plein écran du maire** ; les **1 829 canevas 2D au chargement**
 (tablette). Aucun n'est bloquant ; tous sont datés.
 ⚠️ **ET LE CHANTIER SUIVANT EST DÉJÀ NOMMÉ PAR GUILLAUME : LA DENSIFICATION DES RELATIONS SOCIALES
-ENTRE RÉSIDENTS.** Son premier dossier est écrit dans cette conversation et vaut d'être repris :
-*les quatre morceaux muets deviennent quatre personnes à convaincre*, avec la contrainte que le §15.1
-impose déjà — **on plaide pour un bateau sans jamais pouvoir dire pourquoi on le construit**. Le
-moteur de `maire.js` est réutilisable presque tel quel (`MAYOR_NODE[id]` n'est lu qu'à TROIS
-endroits, `mayorReplay` est agnostique, `MayorWatch` donne le mode spectateur gratuitement) ; le
-coût réel est le DÉCOR, et il ne faut pas le payer quatre fois — `maireBureau.js` fait 1 471 lignes,
-Tristan a déjà sa scène, et le genre aventure ALTERNE les registres. ⚠️ **Sortir la table des nœuds
-de `maire.js` n'a PAS été fait, exprès** : abstraire à l'aveugle avant de connaître les besoins des
-résidents produirait la mauvaise abstraction.
+ENTRE RÉSIDENTS.** Son premier dossier vaut d'être repris : *les quatre morceaux muets deviennent
+quatre personnes à convaincre*, avec la contrainte que le §15.1 impose déjà — **on plaide pour un
+bateau sans jamais pouvoir dire pourquoi on le construit**. Le moteur de `maire.js` est réutilisable
+presque tel quel (`MAYOR_NODE[id]` n'est lu qu'à TROIS endroits, `mayorReplay` est agnostique,
+`MayorWatch` donne le mode spectateur gratuitement) ; le coût réel est le DÉCOR, et il ne faut pas
+le payer quatre fois — `maireBureau.js` fait 1 471 lignes, Tristan a déjà sa scène, et le genre
+aventure ALTERNE les registres. ⚠️ **Sortir la table des nœuds de `maire.js` n'a PAS été fait,
+exprès** : abstraire à l'aveugle avant de connaître les besoins des résidents produirait la
+mauvaise abstraction.
 
-⚠️⚠️⚠️ **LE CHANTIER « BOUCLER LA QUÊTE » EST OUVERT LE 2026-08-31, ET TROIS LOTS SONT LIVRÉS.**
-Le détail vit à côté du code ; ici, seulement ce qu'il ne faut pas casser :
-· **LOT A — le ménage.** Les **huit feuilles `L.maire`** signalées ici depuis deux livraisons sont
-SUPPRIMÉES (les huit étaient des doublons de phrases vivantes, aucune fonctionnalité derrière) ;
-deux commentaires qui mentaient sur ce qu'ils expliquent sont corrigés (`magicOre` « sans usage »
-depuis le 480 bis, la « cloche » de la scène finale disparue au 469) ; `verify-quete` gagne un
-**contrôle d'orphelins sur `L.maire`** (deux vues déclarées, parité bilingue, témoin vérifié) et
-`render-navire` un **contrôle d'ÉCART** (quinzième forme, voir l'en-tête).
-· **LOT B — la coupe. TROIS NOMBRES ONT BOUGÉ, ET C'EST RÉVERSIBLE EN TROIS VALEURS.**
-`STAR_ENG_WORK_MS` 15 → **5 min**, `STAR_ENG_TRAVEL_MS` 3 → **1 min**, et le second rendez-vous chez
-le maire coûte `MAYOR_RETRY_WAIT_MS` (**1 min**) au lieu de 3 à 5. ⚠️ **La règle du voyage en train
-(431) n'est pas violée** : elle protège d'un réglage posé AU JUGÉ — ici il y a une mesure, et la
-justification écrite des 15 minutes était MORTE (elle citait les croisements d'ombres, supprimés au
-469). ⚠️ **Ni le seuil de 75 du maire, ni l'humeur, ni la fuite n'ont bougé** : la négociation est
-exactement aussi difficile, c'est le PRIX DE RECOMMENCER qui change. ⚠️ **La porte claquée garde ses
-quinze minutes** — `mayorSlam` passe par `mayor.block` et ne croise jamais ce chemin.
-· **LOT C — la fin.** L'étoile PARLE (`L.star.frame`, vingt répliques indexées sur la clé
-d'objectif — **la même source que le bandeau**, jamais une seconde liste) ; le **navire entre dans
-la scène de résolution**, peint par `drawStarShip`, celui du monde, jamais une silhouette refaite ;
-et les compagnes de la scène finale **dérivent** leur couleur de `STAR_FOLLOWER_SITES` joint à
-`STAR_WISP_PAL` (nouvellement exposée via `starWispTint`). ⚠️ **Ça a réparé une couleur FAUSSE** :
-l'étoile blanche était peinte en **vert** (`#a8e8a0`) dans le dernier plan de la quête depuis le
-480 bis, et aucun banc ne rastérise cette cinématique.
-· ⚠️⚠️ **ET UN BOGUE VIEUX DE QUELQUES HEURES A ÉTÉ TROUVÉ EN CHEMIN** : `migrateMayor` reconstruit
-`appt` sans relire `sour`, donc la rancune de la porte claquée était effacée à la requête suivante
-et `L.maire.moodSour` n'a **jamais** pu s'afficher. Corrigé, et la leçon est au tableau.
+⚠️⚠️⚠️ **LE RYTHME DE LA QUÊTE EST LIVRÉ LE 2026-09-01 : TROIS VOLUMES SONORES AU LIEU DE DEUX.**
+Demande de Guillaume : *« ce sont les textes, les overlays qui doivent être plus fluides et animés,
+et + retenir l'attention quand une milestone est passée »*. Le diagnostic tient en une phrase — la
+quête n'avait que le TOAST (cadre en bois, 3,2 s, la même forme que « +3 blé ») et la CARTE PLEIN
+ÉCRAN (5 à 7 fois par soirée), donc les vingt petits jalons d'une partie tombaient tous dans le
+chuchotement de l'intendance. Le détail vit à côté du code ; ici, seulement ce qu'il ne faut pas
+casser :
+· **LE BANDEAU EST DEVENU VIVANT** — il était le seul élément permanent de la quête et c'était un
+panneau mort. La pastille qui se remplit s'allume, le bandeau tressaille, la phrase d'objectif
+CROISE l'ancienne au lieu de la remplacer, et une barre pousse sous le tout. ⚠️ **Aucun de ces
+quatre affichages ne compte quoi que ce soit** : tous lisent la même liste de pastilles (`starDug`
+ou `starShipParts`) — *une jointure, jamais deux listes* (449).
+· **LE RUBAN DE JALON (`STAR_RIBBON_MS`) EST LE VOLUME DU MILIEU**, et il SORT du bandeau pour y
+RETOURNER : le mouvement dit « ce que tu viens de gagner est rangé là-haut ». Il **remplace** le
+toast du navire au lieu de s'y ajouter (les deux se recouvraient au pixel) et en REPREND le texte,
+donc aucune phrase n'est perdue. ⚠️ Il est armé par `starWatch`, **jamais par un mini-jeu gagné** :
+un ruban lancé sur `onWin` annoncerait une pièce que l'hôte n'a pas encore posée.
+· ⚠️⚠️ **SA VIGNETTE MONTRE L'ÉCART, PAS L'ÉTAT** : deux canevas superposés (le navire AVANT
+au-dessus, APRÈS au-dessous) et celui du dessus s'efface en clignotant. Les deux sont peints au
+MÊME instant `t`, sinon les fantômes ne seraient pas en phase et tout le bateau scintillerait.
+· ⚠️⚠️⚠️ **ET LE HALO EXISTE PARCE QU'UN BANC L'A EXIGÉ.** `render-navire` §5 bis a mesuré, en
+luminance et sur le dessin AVEC fantômes — celui du ruban —, ce que le clignotement montre
+vraiment : coque 2 792 px, voile 2 622… **safran 201**, cloche 459. Deux des cinq rendez-vous du
+chantier ne changeaient donc l'image que d'un millième. Le ruban cercle désormais ce qui a changé,
+**et la boîte se déduit des deux images** — aucune coordonnée de pièce n'est écrite nulle part. Le
+halo ne sort QUE pour les petites pièces (boîte ≤ 12 % de la vignette) : cercler la coque
+reviendrait à entourer le bateau pour désigner le bateau.
+· **L'ÉTOILE ÉCRIT SES PHRASES SIGNE À SIGNE** (`STAR_BUBBLE_CPS`, 48/s, borné par l'horloge et
+non par un compteur d'images). ⚠️ **La bulle est dessinée à sa taille FINALE dès la première
+image** : une boîte qui grandit avec son texte tressaute à chaque signe. Les vingt autres appelants
+de `drawSpeechBubble` ne passent pas de `reveal` et ne bougent pas d'un pixel.
 
-Vérifications : **19 bancs de contrôle relancés, zéro `ÉCHEC`** — `verify-quete` **631/631** (trois
-contrôles neufs), `verify-maire` **113/113**, `verify-vallee` **223/223**, `verify-scierie`
-**34/34**, `verify-ludo` **30/30**, `verify-taxi` **15/15**, `verify-strings` **1106 clés
-appariées** ; `render-navire` (contrôle d'écart neuf, témoin d'échec vérifié) et `render-etoile`
-verts ; bundle esbuild propre sur `FermeGame.js` (seul `G_SOIL` préexistant subsiste) ;
-`git diff --check` propre ; `next build` **✓ Compiled successfully** puis l'arrêt documenté sur
-`supabaseUrl`. **Aucune migration SQL, aucun changement de schéma, aucune manipulation Supabase.**
+⚠️⚠️ **ET LA SÉANCE DE JEU A TROUVÉ TROIS DÉFAUTS QU'AUCUN DES QUARANTE BANCS NE POUVAIT VOIR** :
+le bandeau **sorti de l'écran** (un `position:relative` redéclaré plus bas écrasait le
+`position:fixed` d'origine — 953 px du haut) ; la toute première consigne de la quête **tronquée en
+silence** (« …Ouvre la carte et… », parce qu'un `-webkit-box` calcule sa largeur en équilibrant ses
+lignes) ; et les toasts qui **recouvraient** le bandeau puis la pastille d'attente. Les trois sont
+corrigés et commentés dans `app/globals.css`.
+
+Vérifications : **40 bancs relancés un par un, zéro `ÉCHEC`** — `verify-quete` **631/631**,
+`verify-maire` **113/113**, `verify-vallee` **223/223**, `verify-vergers` **61/61**,
+`verify-cycle` **38/38**, `verify-scierie` **34/34**, `verify-ludo` **30/30**, `verify-taxi`
+**15/15**, `verify-gates` **14/14**, `verify-compo` **13/13**, `verify-pont` **12/12**,
+`verify-sol2` **8/8**, `verify-portee` **6/6**, `verify-strings` **1106 clés appariées**,
+`verify-syntax`, `verify-scope`, `verify-objects`, `verify-orchards` **42/42**, `verify-constants` ;
+côté rendu `render-etoile` **161/161**, `render-maire` **66/66**, `render-scierie` **58/58**,
+`render-navire` **48/48** (trois contrôles neufs, témoin d'échec vérifié), `render-escaliers`
+**35/35**, `render-parc` **31/31**, `render-beffroi` et `render-rues` **28/28**, `render-oiseaux`
+**27/27**, `render-eau` **16/16**, `render-mairie` **14/14**, `render-eglise` **13/13**,
+`render-arbres` **12/12**, et les sept sans contrôle chiffré. Bundle esbuild propre sur
+`FermeGame.js` (seul `G_SOIL` préexistant subsiste) ; `git diff --check` propre ; `next build`
+**✓ Compiled successfully** puis l'arrêt documenté sur `supabaseUrl`. Échafaudage de jeu local
+(`.env.local`, `app/rythme/`) **supprimé**. **Aucune migration SQL, aucun changement de schéma,
+aucune manipulation Supabase.**
 
 ⚠️⚠️⚠️ **LE LOT E EST LIVRÉ LE 2026-08-31 : LA GRANDE SCIE DE TRISTAN, EN 3D, JOUÉE AU RYTHME.**
 Demande de Guillaume, mot pour mot : *« implémenter cette scène 3D très fluide dans l'atelier de
@@ -190,14 +216,12 @@ qui recopie la référence des tableaux de mains. `poseState` la copie ; le banc
 permanence et de 7 penché sur le tampon. Invisible de notre chaise, visible dès que la caméra
 libre passe sur le côté — c'est-à-dire dans le geste même que la scène promet.
 
-⚠️ **CE QUI RESTE SUR LE MAIRE, ET CE N'EST PLUS DE LA POSTURE** : (1) **tout le HUD de la ferme est
+⚠️ **CE QUI RESTE SUR LE MAIRE, ET CE N'EST PLUS DE LA POSTURE** : **tout le HUD de la ferme est
 peint par-dessus la scène annoncée PLEIN ÉCRAN** — or, jour/heure, boutons, bandeau de quête, avec
 deux textes qui se chevauchent au pixel (`Glissez pour regarder…` x 861→1264 contre `🏠 Maison`
-x 1079→1270) ; (2) **huit feuilles `L.maire` n'ont aucun lecteur** (`who`, `trustAt`, `booked`,
-`alreadyBooked`, `doorHere`, `slamBang`, `camFree`, `waitRead`) — à brancher ou à supprimer, et
-l'angle mort qui les laisse passer est dans `verify-quete` §orphelins : *une feuille dont le PARENT
-est lu dynamiquement passe au vert sans être affichée.* (3) **La fin de la quête est trois points
-colorés qui traversent le ponton**, pour le climax d'une soirée de 55 minutes.
+x 1079→1270). ⚠️ *Les deux autres points de cette liste sont tombés depuis : les huit feuilles
+`L.maire` orphelines sont supprimées et gardées par un contrôle, et la fin de la quête n'est plus
+trois points colorés — le navire entre dans sa scène de résolution.*
 ⚠️⚠️ **ET CE QUE `render-maire` NE SAIT PAS FAIRE, ÉCRIT AVANT QU'ON S'Y FIE** : il ne juge NI
 l'éclairage (pas d'ombre portée, textures réduites à leur couleur moyenne — le §8 reste hors de sa
 portée), NI les TRANSITIONS (`ease` glisse d'une pose à l'autre, et c'est en chemin qu'un bras peut
@@ -354,6 +378,17 @@ toutes payées :
   l'image est un rendez-vous qui ne récompense pas le déplacement qu'il impose. ⚠️ La parade
   mesure les pixels qui CHANGENT, jamais l'encre gagnée : une pièce peut en remplacer une autre
   (un mât qui masque une membrure) sans rien ajouter au compte et rester parfaitement visible.
+- ⚠️⚠️⚠️ **il mesure une PRÉSENCE là où le joueur perçoit une VALEUR** (2026-09-01, seizième forme,
+  et c'est la quinzième qui se fait prendre à son propre piège). Le contrôle d'écart de
+  `render-navire` comparait deux images peintes SANS les fantômes des pièces manquantes ; le ruban
+  de jalon, lui, les peint AVEC, parce qu'un chantier sans son plan en creux n'a pas de silhouette.
+  Or un fantôme est déjà de la matière (190 d'alpha) : un morceau qui passe du fantôme au bois plein
+  ne change presque AUCUN pixel au sens du masque, et change tout au sens de l'œil. Mesuré sur le
+  vrai dessin, en luminance : **le safran ne fait bouger que 201 pixels sur 16 128**, la cloche 459.
+  *Un banc qui ne peint pas ce que le joueur regarde mesure un autre dessin — et il a d'autant plus
+  l'air juste qu'il est, lui, parfaitement exact.* ⚠️ La parade a dicté le dessin et pas l'inverse :
+  le ruban a gagné un halo, et l'invariant tenu est devenu un OU — *chaque morceau est soit assez
+  large pour se voir seul, soit assez ramassé pour être cerclé.*
 ⚠️⚠️ **ET UN CONTRÔLE DE CAS NE VAUT PAS UN INVARIANT** (449). Trois contrôles « est-ce que ça
 marche » étaient verts sur le placement du familier meneur ; l'invariant — *il n'est JAMAIS plus
 loin du but que le joueur*, balayé sur toutes les positions — a échoué **20 fois sur 164** et a
@@ -399,10 +434,10 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 
 | # | La leçon, en une phrase | Où est le détail |
 |---|---|---|
-| 2026-08-31 (scie) | ⚠️⚠️⚠️ **UNE BORNE POSÉE PAR LES APPELANTS EST DEUX BORNES — ET LES DEUX APPELANTS SONT LE CLIENT ET L'HÔTE.** Le plafond de durée d'une manche de sciage vivait dans `sawRun` (côté hôte) et nulle part dans la boucle du client : une manche traînante s'arrêtait donc à des pas différents des deux côtés, et le symptôme était le pire possible — une commande gagnée à l'écran, refusée par le réseau, sans rien pour l'expliquer. La borne est maintenant DANS `sawTick`. *Toute limite d'une simulation rejouable appartient à la simulation.* | `SAW_MAX_TICKS`, `sawTick`, `verify-scierie` §1 |
-| 2026-08-31 (scie) | ⚠️⚠️ **UN BANC DE RENDU SANS GESTION DE COULEUR NE JUGE PAS UNE LUMIÈRE, ET IL FAUT LE CROIRE QUAND IL LE DIT.** `render-scierie` peignait un atelier parfaitement lisible ; le même décor ouvert dans le navigateur était BLANC — le rastériseur ignore `sRGBEncoding`, donc il sous-estime toutes les intensités d'un tiers. Le §8 le savait depuis le 421 (« soleil à 2,45 → image entièrement blanche ») ; ce qui est neuf, c'est qu'un banc VERT peut désormais donner l'illusion du contraire. *Une intensité se règle dans le moteur qui l'applique, jamais dans celui qui l'approxime.* | en-tête de `render-scierie.mjs`, `buildShop` §lumière |
 | 2026-08-31 (audit) | ⚠️⚠️⚠️ **UNE MIGRATION QUI RECONSTRUIT UN OBJET CHAMP PAR CHAMP SUPPRIME TOUT CHAMP QU'ON A OUBLIÉ D'Y ÉCRIRE.** `migrateMayor` rebâtissait `appt` sans relire `sour` ; or `migrateStar` l'appelle et l'hôte re-migre à CHAQUE requête. La trace était donc effacée dans la milliseconde suivant son écriture — sans erreur, sans symptôme — et le correctif écrit quelques heures plus tôt le même jour n'a jamais rien fait. *Un champ ajouté à un objet migré s'ajoute à sa migration dans le même geste, ou il n'existe pas.* | `migrateMayor`, `appt.sour`, `quete.js:migrateStar` |
 | 2026-08-31 (audit) | ⚠️⚠️ **DEUX BANCS PEUVENT AVOIR DES ANGLES MORTS QUI SE RECOUVRENT EXACTEMENT, ET CE QUI TOMBE DEDANS NE SE VOIT NULLE PART.** Huit feuilles `L.maire` étaient écrites, traduites et jamais affichées : `verify-strings` ne les voyait pas (il ne capture que les clés indentées de QUATRE espaces, et la branche `maire` est à deux), `verify-quete` non plus (son contrôle d'orphelins ne balaie que `L.star`). Chacun était juste dans son périmètre. *Quand une chose échappe à deux contrôles, la question n'est pas lequel a un bug : c'est ce que leur intersection ne couvre pas.* | `verify-quete` §audience, `verify-strings:keysOf` |
+| 2026-09-01 (rythme) | ⚠️⚠️⚠️ **UN SÉLECTEUR CSS REDÉCLARÉ PLUS BAS NE COMPLÈTE PAS LE PREMIER, IL LE CORRIGE — ET AUCUN DES QUARANTE BANCS NE PEUT LE VOIR.** Un `position:relative` écrit pour ancrer un enfant a écrasé le `position:fixed` de la règle d'origine : le bandeau de quête est tombé dans le flux, à 953 px du haut, c'est-à-dire hors de l'écran, sur la seule information permanente de la quête. La ligne était inutile en plus d'être fausse (`fixed` établit déjà un bloc conteneur). *Les bancs de rendu rastérisent du canevas ; personne ne met en page du CSS, donc toute la mise en page se juge à l'écran ou ne se juge pas.* | `.ferme-star-hud`, `app/globals.css` §rythme |
+| 2026-09-01 (rythme) | ⚠️⚠️ **UNE ANIMATION CSS NE REDÉMARRE PAS SUR UN NŒUD DÉJÀ MONTÉ.** Ajouter une classe à un élément qui existe déjà ne rejoue rien — le navigateur considère l'animation comme jouée. C'est le piège de tout accusé de réception qui peut arriver deux fois de suite (une pastille qui se remplit, un ruban qui en remplace un autre), et il ne se voit qu'à la SECONDE occurrence, donc jamais en relisant. *La parade est un `key` React qui porte une séquence : on remonte le nœud, et l'animation repart de zéro.* | `starPulse.seq`, `key={"rb" + starRibbon.seq}` |
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
 
@@ -625,6 +660,19 @@ de conception qui valent pour n'importe quel morceau du dépôt.
   milliseconde, **sans une ligne d'erreur, sans rien dans la console**, et le bouton qui l'ouvrait
   avait l'air de ne rien faire. Une demi-heure perdue à chercher un bogue de rendu qui n'existait
   pas. ⚠️ Le nettoyage LIBÈRE (écouteurs, contexte WebGL, textures) ; il ne DÉCIDE de rien.
+- ⚠️⚠️⚠️ **UNE ANIMATION CSS NE REDÉMARRE PAS PARCE QU'ON AJOUTE UNE CLASSE À UN NŒUD DÉJÀ
+  MONTÉ** (2026-09-01). Le navigateur considère l'animation comme jouée et ne la rejoue pas. Ça ne
+  se voit qu'à la SECONDE occurrence — donc jamais en relisant, et jamais dans un test qui ne
+  déclenche l'effet qu'une fois. C'est le piège de tout accusé de réception qui peut arriver deux
+  fois de suite. ⚠️ **La parade est un `key` React qui porte une séquence** : le nœud est remonté,
+  l'animation repart de zéro, et le coût est nul quand le nœud est vide. Une classe qu'on retire
+  puis qu'on remet marche aussi, mais elle demande de choisir un délai — c'est-à-dire un second
+  nombre qui doit s'accorder avec la durée de l'animation (§8).
+- ⚠️⚠️ **UN SÉLECTEUR CSS REDÉCLARÉ PLUS BAS DANS LA FEUILLE NE COMPLÈTE PAS LE PREMIER, IL LE
+  CORRIGE** (2026-09-01, payé sur le bandeau de quête, sorti de l'écran par un `position:relative`
+  qui écrasait un `position:fixed`). ⚠️ **Et rien dans ce dépôt ne peut l'attraper** : les
+  vingt-et-un bancs de rendu rastérisent du canevas, aucun ne met en page du CSS. *Toute la mise en
+  page se juge à l'écran ou ne se juge pas* — corollaire direct du §10.
 - ⚠️⚠️ **`chaîne.replace("X", …)` NE REMPLACE QUE LA PREMIÈRE OCCURRENCE.**
 - ⚠️⚠️ **UN `useProgram` QUI ÉCHOUE NE DÉLIE PAS LE PROGRAMME PRÉCÉDENT** : un shader qui ne
   compile pas fait dessiner l'objet SUIVANT avec les mauvais attributs. **Seul indice :
@@ -686,6 +734,7 @@ de conception qui valent pour n'importe quel morceau du dépôt.
 | `components/ferme/README.md` | **Valley Town, le tribunal, l'HÔTEL DE VILLE, l'ÉGLISE, le BEFFROI, les habitants, la VENTE, les OISEAUX, les ÉLECTIONS et les PIÈGES de ces zones — autorité (428-444)** |
 | `components/ferme/DESSIN.md` | **les règles de DESSIN, vraies partout — autorité (441, sorties du §4)** |
 | `tools/README.md` | **les bancs, ce qu'ils attrapent et leurs chiffres — autorité (432-439)** |
+| `tools/render-navire.mjs` | **LE NAVIRE, ET DEPUIS LE 2026-09-01 LA VIGNETTE DU RUBAN DE JALON** (§5 bis). Il rastérise les deux images que le ruban superpose — le navire AVANT et APRÈS, fantômes compris — et mesure en LUMINANCE ce que leur clignotement montre vraiment, pièce par pièce. C'est lui qui tient l'invariant « chaque morceau est soit assez large pour se voir seul, soit assez ramassé pour être cerclé par le halo », et c'est lui qui a exigé le halo. Sa planche `tools/out/navire-ruban.png` met les cinq paires côte à côte. |
 | `tools/verify-scierie.mjs` · `tools/render-scierie.mjs` | **LES DEUX BANCS DE LA SCIE.** Le premier JOUE (déterminisme, accord direct/rejeu sur des images irrégulières, courbe de difficulté en fonction de la latence, martèlement, bornes, journaux malformés) ; le second RASTÉRISE l'atelier sans GPU et balaie la posture de Tristan sur **course de lame × profondeur de trait** — un carré, pas une liste, parce que sa posture est une fonction continue de deux variables. |
 | `tools/lib-3d.mjs` · `tools/render-maire.mjs` | **REGARDER DE LA 3D SANS GPU (2026-08-31).** `lib-3d` charge le three.js **r128 vendorisé du dépôt** dans Node — la même bibliothèque que la page, à l'octet près — et rastérise à la main (projection, découpe au plan proche, tampon de profondeur, ombrage plat), plus le théorème des axes séparateurs pour mesurer une interpénétration en mètres. `render-maire` s'en sert pour peindre les sept postures côte à côte. ⚠️ **Aucune dépendance npm, et surtout pas `three`** : une autre révision n'a pas la même atténuation de lumière (§11), donc mesurerait un autre programme. |
 | `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** · depuis le 440 il **importe `planche.js`** : une portée de pont et une emprise de décor sont des grandeurs de DESSIN, on les dérive du sprite au lieu de les recopier |
@@ -851,7 +900,7 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 `✓ Compiled successfully` juste avant.**
 
 ⚠️⚠️ **LES BANCS SONT DANS `tools/README.md` DEPUIS LE 432, ET CE CHAPITRE A ÉTÉ ÉLAGUÉ AU 444
-SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 442** (reporté deux fois). **18 bancs de contrôle et 20 bancs
+SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 442** (reporté deux fois). **19 bancs de contrôle et 21 bancs
 de rendu** (le vingtième est `render-maire`, 2026-08-31, **66/66**), comptés en listant `tools/` (⚠️ **le 480 ajoutait `verify-maire` et avait relancé les
 36 bancs d'alors un par un** ; le 2026-08-27 ajoute `verify-ludo`, relancé **30/30** :
 `verify-quete` **621/621**, `verify-maire` **113/113**,
@@ -927,7 +976,7 @@ vérifie jamais — c'est elle, et elle seule, qui protège du banc imaginaire (
   ⚠️ **Le chiffre se remesure en trois lignes** : encadrer `cv(w, h)` dans `fermeArt.js` d'un
   compteur sur `window`, recharger, lire. *Une grandeur qu'aucun banc ne mesure se mesure à la main,
   et on écrit le chiffre avec sa date.*
-- ⚠️ **AUCUN BANC NE REGARDE LA FERME EN IMAGE** : les dix-huit bancs de rendu ne dessinent que
+- ⚠️ **AUCUN BANC NE REGARDE LA FERME EN IMAGE** : les vingt-et-un bancs de rendu ne dessinent que
   Valley Town, ses intérieurs, ses habitants et sa quête. Un décor de la ferme mal proportionné
   n'a, à ce jour, aucun endroit où se voir. ⚠️ **Et le SOL de la ferme non plus** : `render-rues`
   peint les rues de la ville, pas les chemins de la ferme, restés sur la tuile unique de 16 px du
@@ -1447,6 +1496,23 @@ erreur** en choisissant mal.
    une pour remplir le tableau* — c'est ce qui l'a fait grossir deux fois. La passe corrige en
    revanche deux chiffres : `verify-vallee` passe de 208 à **214**, et le §13 perd sa question
    « lac-océan » puisqu'elle est répondue.)**.
+
+   **2026-09-01, le rythme de la quête (TRENTE-QUATRIÈME passe : les DEUX lignes « scie » du
+   tableau des leçons partent avant les deux de cette livraison — deux retirées, deux ajoutées, le
+   tableau reste à quatre et couvre exactement les deux dernières sessions. Leur détail retiré vit
+   dans `SAW_MAX_TICKS`/`sawTick`/`verify-scierie` §1 et dans l'en-tête de `render-scierie.mjs`,
+   que leur colonne de droite désignait déjà. ⚠️ Cette passe AJOUTE une **seizième forme** au
+   « banc qui passe » de l'en-tête — *il mesure une PRÉSENCE là où le joueur perçoit une VALEUR* —
+   et deux pièges au §4 (l'animation CSS qui ne redémarre pas, le sélecteur redéclaré qui corrige
+   au lieu de compléter). ⚠️⚠️ Et elle a trouvé ce qu'un élagage doit trouver, DEUX fois : (1) le
+   §10 annonçait encore **« 18 bancs de contrôle et 20 bancs de rendu »** et le §« ce qui n'existe
+   pas » **« les dix-huit bancs de rendu »**, alors qu'il y en a 19 et 21 depuis la livraison
+   précédente — laquelle avait pourtant écrit noir sur blanc qu'elle corrigeait ce compte ; c'est la
+   HUITIÈME fois que ce chapitre se fait reprendre sur un chiffre, et la seconde fois qu'une
+   correction annoncée n'a porté que sur un des deux endroits. (2) Le bloc du maire réclamait encore
+   deux choses **faites depuis** : les huit feuilles `L.maire` orphelines (supprimées, et un contrôle
+   les garde) et « la fin de la quête est trois points colorés » (le navire entre dans sa scène de
+   résolution). *Une dette payée qui reste écrite se relit comme une dette.*)**.
 
    **2026-08-31, la scie de Tristan — lot E (TRENTE-TROISIÈME passe : les DEUX lignes du 2026-08-31
    (le véhicule à deux degrés de liberté, la chaîne d'os remise à jour depuis sa racine) partent

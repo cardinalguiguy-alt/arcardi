@@ -7581,7 +7581,15 @@ div.ferme-usage{ margin-bottom:10px; }
    journal de quête, ce que ce chantier refuse depuis le 444. Les phrases sont
    donc écrites COURTES et `verify-quete` compte leurs signes : la contrainte est
    tenue par le texte, pas par la coupe. */
-.ferme-star-hud .goal{
+.ferme-star-hud .goal{ overflow:hidden; white-space:normal; }
+/* ⚠️⚠️ 2026-09-01 — LE PLAFOND DE DEUX LIGNES A DÛ DESCENDRE D'UN CRAN, SUR LES
+   DEUX TEXTES. Il était posé sur `.goal` ; depuis que celui-ci porte le texte
+   SORTANT et le texte ENTRANT, un `-webkit-box` à son niveau compterait les deux
+   comme des lignes du même bloc et la coupe tomberait au milieu de la
+   transition. La contrainte est la même (deux lignes, jamais un journal de
+   quête), elle est seulement appliquée là où le texte vit vraiment. */
+.ferme-star-hud .goal .g-in,
+.ferme-star-hud .goal .g-out{
   overflow:hidden; white-space:normal;
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
 }
@@ -7643,6 +7651,334 @@ div.ferme-usage{ margin-bottom:10px; }
 }
 @media (max-width: 560px){
   .ferme-star-hud{ font-size:11px; padding:5px 9px; gap:7px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2026-09-01 — LE RYTHME DE LA QUÊTE. TROIS VOLUMES SONORES AU LIEU DE DEUX.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ LE DÉFAUT QUE TOUT CE BLOC CORRIGE : la quête n'avait que le TOAST (le
+   cadre en bois de la ferme, 3,2 s, identique à « +3 blé ») et la CARTE PLEIN
+   ÉCRAN (3,8 s, 5 à 7 fois par soirée). Les vingt petits jalons d'une partie —
+   un cratère fouillé, un morceau posé — tombaient donc tous dans le
+   chuchotement de l'intendance. On ajoute le volume du milieu : le RUBAN.
+   ⚠️ RIEN ICI N'EST UNE NOUVELLE SOURCE DE VÉRITÉ. Le ruban, la barre et les
+   pastilles lisent la MÊME liste (`starShipParts` / `starDug`) que le bandeau ;
+   c'est la règle du 449 (« une jointure, jamais deux listes »), et c'est ce qui
+   garantit qu'aucun de ces trois affichages ne peut en contredire un autre.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ---- 1. LE BANDEAU DEVIENT VIVANT.
+   ⚠️ IL ÉTAIT LE SEUL ÉLÉMENT DE QUÊTE PRÉSENT EN PERMANENCE, ET C'ÉTAIT UN
+   PANNEAU MORT : une pastille se remplissait sans que rien ne bouge à l'écran.
+   Le joueur franchissait donc son jalon au moment précis où l'interface ne
+   disait rien. */
+/* ⚠️⚠️ VU À L'ÉCRAN LE 2026-09-01, ET C'EST LA PREMIÈRE CHOSE QU'UNE SÉANCE DE
+   JEU A TROUVÉE : ce bloc écrivait ici `position:relative` pour ancrer la barre
+   de progression et le texte sortant. Ça ÉCRASAIT le `position:fixed` de la
+   règle d'origine (même sélecteur, plus bas dans le fichier) — le bandeau
+   tombait dans le flux, à 953 px du haut, c'est-à-dire hors de l'écran. Aucun
+   banc ne pouvait le voir : ils ne rastérisent pas de CSS.
+   ⚠️ IL N'Y A RIEN À REMETTRE : `position:fixed` établit DÉJÀ un bloc conteneur
+   pour les enfants en `absolute`. La ligne était inutile en plus d'être fausse.
+   *Un sélecteur redéclaré plus bas ne complète pas le premier, il le corrige.* */
+/* ⚠️ LE TRESSAILLEMENT EST SUR `translate3d` ET PAS SUR `translateX(-50%)` seul :
+   le bandeau est centré PAR sa transformée, donc animer `transform` écraserait
+   son centrage. On anime une transformée COMPOSÉE qui repart toujours du -50 %. */
+@keyframes fermeStarBump{
+  0%{ transform:translateX(-50%) translateY(0) scale(1); }
+  22%{ transform:translateX(-50%) translateY(2px) scale(1.045); }
+  55%{ transform:translateX(-50%) translateY(0) scale(.994); }
+  100%{ transform:translateX(-50%) translateY(0) scale(1); }
+}
+.ferme-star-hud.bump{ animation:fermeStarBump .52s cubic-bezier(.2,.9,.3,1); }
+.ferme-star-hud.bump{ border-color:rgba(255,228,164,.62); }
+
+/* La pastille qui vient de se remplir. ⚠️ ELLE EST REMONTÉE PAR UN `key` REACT
+   qui change (voir `starPulse` dans FermeGame.js) : une animation CSS ne
+   redémarre pas parce qu'on lui rajoute une classe sur un nœud déjà monté, et
+   c'est le piège classique de ce genre d'accusé de réception. */
+.ferme-star-hud .pip{ position:relative; transition:background .28s ease-out, box-shadow .28s ease-out; }
+.ferme-star-hud .pip.fresh{ animation:fermeStarPipPop .62s cubic-bezier(.2,.9,.3,1); }
+.ferme-star-hud .pip.fresh::after{
+  content:""; position:absolute; inset:-3px; border-radius:50%;
+  border:2px solid rgba(255,216,104,.9); animation:fermeStarPipRing .78s ease-out forwards;
+}
+@keyframes fermeStarPipPop{
+  0%{ transform:scale(.55); } 42%{ transform:scale(1.75); } 100%{ transform:scale(1); }
+}
+@keyframes fermeStarPipRing{
+  0%{ transform:scale(.6); opacity:.95; } 100%{ transform:scale(3.4); opacity:0; }
+}
+
+/* Le texte d'objectif ne SAUTE plus : l'ancien sort par le haut pendant que le
+   nouveau entre par le bas. ⚠️ SEUL LE SORTANT EST EN `absolute` — le bandeau
+   doit garder la largeur et la hauteur du texte COURANT, sinon il se pince
+   pendant la transition, ce qui est pire que le saut qu'on corrige. */
+.ferme-star-hud .goal{ position:relative; }
+/* ╔═════════════════════════════════════════════════════════════════════════
+   ║ ⚠️⚠️ LA COLONNE DE TEXTE A UNE LARGEUR FIXE, ET C'EST LE FONDU QUI
+   ║ L'EXIGE — plus un défaut PRÉEXISTANT qu'elle corrige au passage.
+   ╚═════════════════════════════════════════════════════════════════════════
+   1. LE FONDU. Le bandeau se dimensionne sur son contenu ; une phrase courte
+      lui donnait 250 px, la suivante 380. En croisant les deux textes, le
+      bandeau se serait donc mis à ENFLER ou à SE PINCER pendant la transition
+      — un mouvement que personne n'a demandé, par-dessus celui qu'on veut
+      montrer. Largeur fixe, et seul le texte bouge.
+   2. LE DÉFAUT PRÉEXISTANT, MESURÉ À L'ÉCRAN LE 2026-09-01 : « Huit impacts,
+      sur les deux rives. Ouvre la carte et fouille-les. » — la toute première
+      consigne de la quête — s'affichait **tronquée** (« …Ouvre la carte et… »).
+      Le bandeau ne prenait que 377 px sur les 733 qu'il s'autorise, parce
+      qu'un `-webkit-box` calcule sa largeur naturelle en ÉQUILIBRANT ses
+      lignes, et que deux lignes équilibrées ne suffisaient pas d'un cheveu.
+      Mesuré : à pleine largeur la même phrase tient sur UNE ligne, sans coupe.
+      *Une coupe silencieuse est la pire : le texte est juste, le banc le
+      compte, et le joueur lit autre chose.*
+   ⚠️ LE PLAFOND DE DEUX LIGNES NE BOUGE PAS : le bandeau reste un bandeau et
+   pas un journal de quête (444). On lui rend la largeur qu'il s'autorisait
+   déjà, on ne lui donne pas une ligne de plus.
+   ⚠️⚠️ ET LE `:not([role="button"])` N'EST PAS UN DÉTAIL : le bouton du plan
+   (📐) porte LUI AUSSI la classe `goal` (voir `FermeGame.js`). Sans cette
+   exclusion, une icône de seize pixels se réserverait 360 px de bandeau. */
+.ferme-star-hud .goal:not([role="button"]){ flex:0 0 auto; width:min(360px, 62vw); }
+.ferme-star-hud .goal .g-in{ animation:fermeGoalIn .4s cubic-bezier(.2,.9,.3,1); }
+.ferme-star-hud .goal .g-out{
+  position:absolute; left:0; right:0; top:0; pointer-events:none;
+  animation:fermeGoalOut .4s cubic-bezier(.4,0,.7,.2) forwards;
+}
+@keyframes fermeGoalIn{ from{ opacity:0; transform:translateY(9px); } }
+@keyframes fermeGoalOut{ to{ opacity:0; transform:translateY(-9px); } }
+
+/* La barre de progression, collée sous le bandeau. ⚠️ ELLE NE COMPTE RIEN
+   ELLE-MÊME : sa largeur est le rapport des pastilles PLEINES sur leur total,
+   c'est-à-dire exactement ce que les pastilles montrent déjà. */
+.ferme-star-hud-bar{
+  position:absolute; left:12px; right:12px; bottom:3px; height:2px;
+  border-radius:2px; background:rgba(255,228,164,.16); overflow:hidden;
+}
+.ferme-star-hud-bar > i{
+  display:block; height:100%; border-radius:2px;
+  background:linear-gradient(90deg, rgba(255,200,96,.85), rgba(255,236,170,.95));
+  box-shadow:0 0 7px rgba(255,216,104,.7);
+  transition:width .55s cubic-bezier(.2,.9,.3,1);
+}
+
+/* ---- 2. LA PASTILLE D'ATTENTE MONTRE UNE JAUGE QUI AVANCE.
+   ⚠️ UN CHIFFRE QUI DESCEND EST UNE PUNITION, UNE BARRE QUI MONTE EST UN
+   PROGRÈS : c'est la même donnée, et ce n'est pas la même minute de jeu. Le
+   chiffre reste (on veut savoir COMBIEN), la barre s'ajoute (on veut voir que
+   ça avance). */
+/* ⚠️ Même remarque que pour le bandeau ci-dessus : `position:fixed` suffit. */
+.ferme-wait-pill-bar{
+  position:absolute; left:11px; right:11px; bottom:3px; height:2px;
+  border-radius:2px; background:rgba(255,228,164,.16); overflow:hidden;
+}
+.ferme-wait-pill-bar > i{
+  display:block; height:100%; border-radius:2px;
+  background:linear-gradient(90deg, rgba(255,200,96,.8), rgba(255,236,170,.95));
+  box-shadow:0 0 6px rgba(255,216,104,.6);
+  transition:width .9s linear;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   3. LE RUBAN DE JALON — LE VOLUME DU MILIEU.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ IL SORT DU BANDEAU ET IL Y RETOURNE, et ce mouvement EST le message :
+   « ce que tu viens de gagner est rangé là-haut ». Une notification qui
+   apparaît puis disparaît sur place n'apprend au joueur où RIEN regarder.
+   ⚠️ `pointer-events:none` — il couvre une bande de l'écran pendant que le
+   monde tourne derrière ; un clic destiné au jeu ne doit pas s'y perdre. C'est
+   la même règle que la carte de chapitre et l'overlay de fouille.
+   ⚠️⚠️ ET IL NE SE FERME PAS : il ne demande rien. La règle du dépôt tient en
+   une phrase — ce qu'on doit congédier est un dialogue, ce qui s'efface tout
+   seul est une transition. Un jalon est une transition.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.ferme-star-ribbon{
+  position:fixed; left:50%; z-index:21; pointer-events:none;
+  top:calc(env(safe-area-inset-top, 0px) + 8px);
+  display:flex; align-items:center; gap:14px;
+  padding:10px 16px 10px 10px; border-radius:16px;
+  background:linear-gradient(rgba(14,18,38,.95), rgba(6,8,20,.97));
+  border:2px solid rgba(255,228,164,.34);
+  box-shadow:0 0 0 1px rgba(255,230,170,.16) inset, 0 14px 42px rgba(0,0,0,.66);
+  color:#f4ecd6; max-width:min(560px, 94vw); box-sizing:border-box;
+  /* La durée arrive en style inline depuis `StarRibbon` (FermeGame.js), calculée
+     à partir de `STAR_RIBBON_MS` : la constante JS qui ferme le ruban est la
+     SEULE source de sa durée. Recopier 5200 ici, c'est deux nombres qui
+     divergeront au premier réglage (leçon du 476 sur l'overlay de fouille). */
+  animation-name:fermeStarRibbon; animation-timing-function:cubic-bezier(.2,.9,.3,1);
+  animation-fill-mode:forwards;
+}
+/* ⚠️ IL PART DE DERRIÈRE LE BANDEAU (`translateY(-24%) scale(.9)`) ET IL Y
+   RETOURNE. Le `z-index:21` est UN DE MOINS que celui du bandeau (22) : le
+   ruban glisse littéralement DESSOUS, ce qui est ce qu'on voit quand un tiroir
+   sort d'un meuble. Inversé, il aurait recouvert la phrase d'objectif au
+   moment exact où le joueur la relit. */
+@keyframes fermeStarRibbon{
+  0%{   opacity:0; transform:translateX(-50%) translateY(-24%) scale(.9); }
+  9%{   opacity:1; transform:translateX(-50%) translateY(60px) scale(1.012); }
+  14%{  transform:translateX(-50%) translateY(54px) scale(1); }
+  84%{  opacity:1; transform:translateX(-50%) translateY(54px) scale(1); }
+  100%{ opacity:0; transform:translateX(-50%) translateY(-14%) scale(.94); }
+}
+
+/* La vignette du navire. ⚠️⚠️ DEUX CANEVAS SUPERPOSÉS, ET C'EST TOUT LE POINT :
+   celui du DESSOUS porte le navire APRÈS, celui du DESSUS le navire AVANT, et
+   le second s'efface en clignotant. Ce que le joueur voit apparaître est donc
+   très exactement L'ÉCART entre les deux états — la pièce qu'il vient de poser.
+   C'est la parade à la quinzième forme du « banc qui passe » (CLAUDE.md) :
+   le safran ne change que 1,3 % de la vignette, donc le montrer en entier ne
+   montre rien ; montrer la DIFFÉRENCE le montre.
+   ⚠️ `image-rendering:pixelated` EST OBLIGATOIRE — le navire est peint à 16 px
+   par case et le navigateur le lisserait en tache de couleur. */
+.ferme-star-ribbon-ship{ position:relative; flex:0 0 auto; }
+.ferme-star-ribbon-ship canvas{
+  display:block; image-rendering:pixelated;
+  filter:drop-shadow(0 3px 10px rgba(0,0,0,.55));
+}
+.ferme-star-ribbon-ship canvas.before{
+  position:absolute; inset:0; animation:fermeShipReveal 1.5s ease-out forwards;
+}
+@keyframes fermeShipReveal{
+  0%{ opacity:1; } 22%{ opacity:1; } 34%{ opacity:0; } 46%{ opacity:1; }
+  58%{ opacity:0; } 70%{ opacity:.85; } 100%{ opacity:0; }
+}
+/* La lueur qui accompagne l'apparition de la pièce — elle bat au même rythme
+   que le clignotement ci-dessus, une seule fois, puis se tait. */
+.ferme-star-ribbon-ship::after{
+  content:""; position:absolute; inset:-8px; border-radius:14px; pointer-events:none;
+  background:radial-gradient(circle at 50% 62%, rgba(255,224,150,.34), transparent 66%);
+  animation:fermeShipGlow 1.5s ease-out forwards;
+}
+@keyframes fermeShipGlow{ 0%{ opacity:0; } 30%{ opacity:1; } 100%{ opacity:0; } }
+
+/* ---- LE HALO QUI DÉSIGNE LA PIÈCE POSÉE. Sa position et son rayon arrivent en
+   style inline depuis `StarRibbon`, qui les DÉDUIT de la différence entre les
+   deux vignettes (voir sa note) — la feuille de style ne fixe que la couleur et
+   le battement.
+   ⚠️ IL COMMENCE APRÈS LE CLIGNOTEMENT (`1.35s` de retard, le clignotement en
+   dure 1,5) : superposés, on lit une seule agitation au lieu de deux gestes.
+   D'abord « regarde, ça change », ensuite « c'est là ».
+   ⚠️⚠️ ET IL BAT DEUX FOIS PUIS SE TAIT. Un halo qui pulse tant que le ruban est
+   à l'écran devient un défaut d'affichage : ce qui insiste trop longtemps cesse
+   d'être une réponse et devient une question. */
+.ferme-star-ribbon-halo{
+  position:absolute; border-radius:50%; pointer-events:none;
+  box-shadow:0 0 0 2px rgba(255,226,150,.85), 0 0 18px 4px rgba(255,206,110,.55);
+  opacity:0; animation:fermeRibbonHalo 1.5s cubic-bezier(.2,.9,.3,1) 1.35s 2 both;
+}
+@keyframes fermeRibbonHalo{
+  0%{ opacity:0; transform:scale(1.55); }
+  26%{ opacity:1; transform:scale(1); }
+  62%{ opacity:.85; transform:scale(1.03); }
+  100%{ opacity:0; transform:scale(1.14); }
+}
+@media (prefers-reduced-motion: reduce){
+  .ferme-star-ribbon-halo{ animation:fermeRibbonHaloFade 1.5s ease-out 1.35s 2 both; }
+  @keyframes fermeRibbonHaloFade{ 0%,100%{ opacity:0; } 30%,70%{ opacity:1; } }
+}
+
+/* ⚠️ LA COLONNE DE TEXTE A UNE LARGEUR PLANCHER, ET ELLE EST MESURÉE, PAS
+   CHOISIE : le plus long des cinq titres (« Le safran et sa barre — en place »)
+   fait 31 signes, soit ~316 px dans la police à chasse fixe à 17 px. Sans ce
+   plancher, le titre se coupait au milieu (« Le bordé de la / coque — en
+   place »), vu à l'écran le 2026-09-01. Une phrase de quatre mots cassée en
+   deux lignes se lit deux fois. */
+.ferme-star-ribbon-txt{ min-width:min(330px, 52vw); display:flex; flex-direction:column; gap:6px; }
+.ferme-star-ribbon-kicker{
+  font-size:10px; letter-spacing:.18em; text-transform:uppercase;
+  color:rgba(255,224,150,.72);
+}
+.ferme-star-ribbon-title{
+  font-family:var(--font-mono, monospace); font-weight:700;
+  font-size:clamp(13px, 2.2vw, 17px); color:#fff6dc; line-height:1.25;
+  text-shadow:0 0 16px rgba(255,220,140,.3);
+}
+.ferme-star-ribbon-sub{ font-size:12px; color:rgba(244,236,214,.78); }
+/* Les logements du navire, repris tels quels du bandeau — même forme, même
+   couleur, pour que l'œil fasse le lien sans qu'on ait à écrire « ça compte
+   pour la barre du haut ». */
+.ferme-star-ribbon-pips{ display:flex; gap:5px; margin-top:1px; }
+.ferme-star-ribbon-pips i{
+  width:9px; height:9px; border-radius:50%; border:1px solid rgba(255,228,164,.55);
+}
+.ferme-star-ribbon-pips i.on{ background:#ffd868; box-shadow:0 0 7px rgba(255,216,104,.85); }
+.ferme-star-ribbon-pips i.fresh{ animation:fermeStarPipPop .62s cubic-bezier(.2,.9,.3,1) .35s both; }
+
+/* ⚠️ SUR FENÊTRE ÉTROITE, LE BANDEAU DESCEND À 100 px (voir la règle 760 px
+   ci-dessus) : le ruban DOIT le suivre, sinon il sort de dessous un meuble qui
+   n'est plus là. Et la vignette rétrécit à la moitié d'une case pour que le
+   ruban tienne dans la largeur au lieu de déborder. */
+@media (max-width: 760px){
+  .ferme-star-ribbon{ top:calc(env(safe-area-inset-top, 0px) + 100px); max-width:calc(100vw - 20px); }
+}
+@media (max-width: 560px){
+  .ferme-star-ribbon{ gap:10px; padding:8px 12px 8px 8px; }
+  .ferme-star-ribbon-ship canvas{ width:104px; height:81px; }
+  .ferme-star-ribbon-sub{ font-size:11px; }
+}
+/* ╔═══════════════════════════════════════════════════════════════════════════
+   ║ 4. LES TOASTS SE RANGENT SOUS LA QUÊTE — DÉFAUT VU À L'ÉCRAN LE 2026-09-01.
+   ╚═══════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ MESURÉ EN JOUANT, PAS RELU : la pile de toasts est à 70 px du haut ; sous
+   760 px de large, le bandeau de quête descend à 100 px pour laisser passer la
+   rangée de boutons. Les deux se chevauchaient donc de dix-huit pixels, et
+   c'est très exactement la phrase d'objectif — la seule ligne qu'un joueur
+   perdu relit — qui passait sous une annonce de récolte.
+   ⚠️ AUCUN BANC NE POUVAIT LE VOIR : les vingt-et-un bancs de rendu rastérisent
+   du canevas, aucun ne met en page du CSS. C'est la limite du §10 dans sa forme
+   la plus bête — *regarder l'écran est la seule chose qui trouve ce qu'on n'a
+   pas encore compris.*
+   ⚠️⚠️ ET C'EST `:has()` PLUTÔT QU'UNE CLASSE POSÉE EN JS, EXPRÈS : la présence
+   du bandeau est déjà décidée à un seul endroit (le rendu de `.ferme-star-hud`,
+   qui dépend de `starFallen`/`starDone`/panneaux ouverts). Recopier cette
+   condition dans un `useState` pour teindre `<body>`, ce serait une SECONDE
+   écriture de « la quête est-elle affichée », et elle finirait par diverger au
+   premier panneau qu'on ajoute. Le sélecteur, lui, lit le fait lui-même. */
+/* ⚠️⚠️ L'ORDRE DE CES RÈGLES EST LEUR LOGIQUE : même spécificité, donc la
+   DERNIÈRE qui s'applique gagne. On les écrit du plus haut au plus bas —
+   bandeau, pastille d'attente, ruban —, et la pile de toasts se range
+   automatiquement sous le plus bas des trois présents. Une seule liste,
+   dans l'ordre où les choses s'empilent à l'écran. */
+body:has(.ferme-star-hud) .ferme-toasts{ top:70px; }
+/* La pastille d'attente est à droite et le toast est centré : ils se croisent
+   dès qu'un toast est un peu long. ⚠️ Défaut PRÉEXISTANT sur écran large (la
+   pastille est à 58 px, les toasts à 70), rendu visible en fenêtre étroite par
+   la règle ci-dessus. Vu à l'écran le 2026-09-01 : « ☄ Le météore tombera dans
+   2:00 » était coupé en deux par « Rien à chercher pour l'instant. » */
+body:has(.ferme-wait-pill) .ferme-toasts{ top:104px; }
+@media (max-width: 760px){
+  body:has(.ferme-star-hud) .ferme-toasts{ top:calc(env(safe-area-inset-top, 0px) + 154px); }
+  body:has(.ferme-wait-pill) .ferme-toasts{ top:calc(env(safe-area-inset-top, 0px) + 202px); }
+}
+/* Le ruban sort SOUS le bandeau et occupe la bande suivante : tant qu'il est
+   là, les toasts passent encore dessous. ⚠️ Il ne peut pas se superposer à
+   lui-même — il remplace le toast du navire au lieu de s'y ajouter (voir
+   `starWatch`) —, mais la ferme continue d'annoncer ses récoltes pendant ce
+   temps-là, et c'est ce chevauchement-ci qu'on écarte. */
+body:has(.ferme-star-ribbon) .ferme-toasts{ top:212px; }
+@media (max-width: 760px){
+  body:has(.ferme-star-ribbon) .ferme-toasts{ top:calc(env(safe-area-inset-top, 0px) + 304px); }
+}
+/* ⚠️ LA TRANSITION EST SUR LA PILE, PAS SUR CHAQUE TOAST : quand le ruban
+   apparaît puis s'efface, les toasts déjà à l'écran GLISSENT à leur nouvelle
+   place au lieu de sauter. Un texte qui se téléporte de deux cents pixels se
+   lit comme un défaut d'affichage. */
+.ferme-toasts{ transition:top .34s cubic-bezier(.2,.9,.3,1); }
+
+/* ⚠️ RESPECT DE `prefers-reduced-motion` : tout ce chantier est du MOUVEMENT, et
+   c'est très exactement ce que ce réglage demande de ne pas imposer. On garde
+   les fondus (l'information passe) et on retire les déplacements. */
+@media (prefers-reduced-motion: reduce){
+  .ferme-star-hud.bump{ animation:none; }
+  .ferme-star-hud .pip.fresh{ animation:none; }
+  .ferme-star-hud .goal .g-in, .ferme-star-hud .goal .g-out{ animation-name:fermeGoalFade; }
+  @keyframes fermeGoalFade{ from{ opacity:0; } }
+  .ferme-star-ribbon{ animation-name:fermeStarRibbonFade; }
+  @keyframes fermeStarRibbonFade{
+    0%{ opacity:0; transform:translateX(-50%) translateY(54px); }
+    9%,84%{ opacity:1; transform:translateX(-50%) translateY(54px); }
+    100%{ opacity:0; transform:translateX(-50%) translateY(54px); }
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

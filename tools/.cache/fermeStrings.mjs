@@ -663,6 +663,21 @@ const STAR_FR = {
     got: (n, total) => `${Nfr(n)} morceaux sur ${nfr(total)}. Le bateau grandit.`,
     last: (n, total) => `${Nfr(n)} morceaux sur ${nfr(total)}. Il ne manque plus qu'une pièce.`,
   },
+  /* ── LE RUBAN DE JALON (2026-09-01). ⚠️⚠️ IL NE DOUBLE PAS `ship.got` : le
+     toast dit « le bateau grandit » PARTOUT, y compris à trois cents cases de
+     la cale ; le ruban MONTRE la pièce sur le navire. Deux phrases pour deux
+     rôles, jamais deux fois la même information — et c'est pour ça que le
+     ruban ne compte pas, lui : il pointe.
+     ⚠️ TROIS LIGNES COURTES, ET C'EST UN PLAFOND. Un accusé de réception qui
+     tient quatre secondes se lit d'un regard ou ne se lit pas ; ce qui ne
+     rentre pas ici n'a rien à y faire. */
+  ribbon: {
+    kicker: "Sur la cale",
+    title: (name) => `${name} — en place`,
+    /* La cinquième pièce ne compte plus : à ce moment-là il n'y a plus rien à
+       compter, il y a un bateau. */
+    last: "Le navire est entier.",
+  },
   end: {
     end1: "Elle monte comme un ballon qu'on lâche. Doucement. Comme si elle avait toute la nuit.",
     /* ⚠️⚠️ 2026-08-31 — « IL FLOTTE ENFIN » ÉTAIT FAUX, ET C'EST LE TEXTE QUI AVAIT
@@ -1355,6 +1370,12 @@ const STAR_EN = {
   ship: {
     got: (n, total) => `${Nen(n)} of ${nen(total)} pieces. The boat is growing.`,
     last: (n, total) => `${Nen(n)} of ${nen(total)} pieces. Only one piece left.`,
+  },
+  /* ── voir la note française : le toast COMPTE, le ruban MONTRE. */
+  ribbon: {
+    kicker: "On the slipway",
+    title: (name) => `${name} — in place`,
+    last: "The boat is whole.",
   },
   end: {
     end1: "It goes up the way a balloon does. Slowly. Like it has all night.",

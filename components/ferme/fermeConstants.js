@@ -3987,6 +3987,42 @@ export const STAR_SHIP_NAME = "La Belle Étoile";
    la bulle à la scie qui prend le relais et qui, elle, dure toute la commande. */
 export const STAR_TIMBER_GO_MS = 6000;
 
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-01 — LE RUBAN DE JALON : COMBIEN DE TEMPS IL RESTE À L'ÉCRAN.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ CETTE CONSTANTE EST LA SEULE SOURCE DE SA DURÉE. Elle ferme le ruban
+   (`setTimeout`) ET elle alimente `animation-duration` en style inline : la
+   feuille de style ne fixe que la COURBE. C'est la leçon du 476, prise
+   d'avance — l'overlay de fouille avait sa durée écrite aux deux endroits, et
+   deux nombres qui décrivent le même instant finissent par se contredire.
+   ⚠️ 5,2 s, comme `STAR_FIND_MS` : ce sont deux accusés de réception du même
+   ordre (« tu viens de gagner quelque chose »), et deux tempos différents pour
+   le même geste se remarquent tout de suite. Le ruban en passe 0,7 à sortir du
+   bandeau et 0,8 à y retourner ; il reste donc ~3,7 s lisible, ce qui est le
+   temps de lire deux lignes courtes sans avoir à s'arrêter de marcher.
+   ⚠️ IL NE MET RIEN EN FILE : deux morceaux posés coup sur coup (le menu dev le
+   fait) remplacent le ruban courant au lieu de s'empiler. Un accusé de
+   réception en retard est un mensonge sur ce qui vient de se passer. */
+export const STAR_RIBBON_MS = 5200;
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-01 — LA VITESSE À LAQUELLE L'ÉTOILE PARLE, EN SIGNES PAR SECONDE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ CE N'EST PAS UN EFFET, C'EST UN AIGUILLAGE DU REGARD. Sa bulle apparaît
+   au-dessus d'une compagne de dix-huit pixels, au milieu d'un décor chargé, et
+   une phrase qui s'affiche d'un bloc ne se distingue pas du décor : le joueur ne
+   sait pas qu'elle vient d'arriver. Un texte qui S'ÉCRIT est la seule chose de
+   l'écran qui bouge sans avoir été provoquée — on le remarque sans le chercher.
+   ⚠️ 48 SIGNES/SECONDE : la bulle fait 64 px de large en police 6 px, soit ~17
+   signes par ligne et trois lignes au plus — donc une seconde au maximum pour la
+   phrase la plus longue, sur les 5,2 s qu'elle reste affichée. Plus lent, on
+   attendrait après elle ; plus rapide, l'écriture ne se verrait plus.
+   ⚠️ ET LA BOÎTE EST DESSINÉE À SA TAILLE FINALE DÈS LA PREMIÈRE IMAGE (voir
+   `drawSpeechBubble`) : une bulle qui grandit avec son texte tressaute à chaque
+   signe et change de hauteur à chaque retour à la ligne — c'est-à-dire qu'elle
+   remplace un défaut de lisibilité par un défaut de stabilité. */
+export const STAR_BUBBLE_CPS = 48;
+
 /* LA VERRERIE, dans le quartier des artisans, et L'ARBRE DE LA PIE au-dessus.
    ⚠️ LE NID SE DÉDUIT DU FOUR, PAS D'UNE SECONDE ANCRE, et l'histoire l'exige :
    la pie a laissé tomber un éclat dans le sable de l'atelier, c'est comme ça
