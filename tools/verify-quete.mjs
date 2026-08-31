@@ -2314,6 +2314,79 @@ section("Les textes disent-ils la même chose que le monde ?");
        `${used.size} lectures, ${leaves.length} phrases, ${VIEWS.length} fichiers`);
   }
 
+  /* ╔═══════════════════════════════════════════════════════════════════════════
+     ║ ⚠️⚠️⚠️ AUDIT 2026-08-31 — LE MÊME CONTRÔLE, MAIS SUR `L.maire`. IL MANQUAIT,
+     ║ ET SON ABSENCE ÉTAIT ÉCRITE NOIR SUR BLANC DANS `CLAUDE.md` DEPUIS DEUX
+     ║ LIVRAISONS (« huit feuilles `L.maire` n'ont aucun lecteur »).
+     ╚═══════════════════════════════════════════════════════════════════════════
+     Le contrôle ci-dessus ne balaie que la branche `star`. L'audience est arrivée
+     avec sa propre branche et sa propre vue, et personne n'a dupliqué le garde-fou
+     — alors même que la note du bloc précédent explique en détail POURQUOI il
+     existe. Les huit feuilles sont supprimées aujourd'hui (elles étaient toutes des
+     doublons de phrases vivantes) ; ce contrôle est ce qui empêche les suivantes.
+     ⚠️ *Un garde-fou écrit pour une branche ne protège que cette branche* — c'est
+     la douzième forme du défaut de banc (§CLAUDE.md, « une discipline ajoutée à UNE
+     section ne protège que cette section »), reconnue ici sur le banc qui la cite.
+     ⚠️ LES DEUX VUES SONT DÉCLARÉES, comme au-dessus : `MaireScene.js` porte la
+     scène, `FermeGame.js` porte l'accueil, la porte et le chat. Oublier d'ajouter
+     une vue fait ÉCHOUER ce contrôle, jamais passer. */
+  {
+    const MAIRE = { fr: ST.FERME_STR.fr.maire, en: ST.FERME_STR.en.maire };
+    const FILES = ["MaireScene.js", "FermeGame.js"];
+    const used = new Set();
+    let srcLen = 0;
+    for (const file of FILES) {
+      const body = fs.readFileSync(path.join(ROOT, "components", "ferme", file), "utf8");
+      srcLen += body.length;
+      for (const m of body.matchAll(/L\.maire\.([A-Za-z0-9_.]*)/g)) used.add(m[1]);
+    }
+    const leaves = [];
+    (function walk(o, at) {
+      for (const k of Object.keys(o)) {
+        const v = o[k], p = at ? at + "." + k : k;
+        if (v && typeof v === "object" && !Array.isArray(v)) walk(v, p); else leaves.push(p);
+      }
+    })(MAIRE.fr, "");
+    /* Même indulgence que le contrôle jumeau, et pour la même raison : `say[k]`,
+       `why[w]`, `mood[m]` sont lus par une clé calculée.
+       ⚠️⚠️ MAIS ON REMONTE TOUS LES ANCÊTRES, PAS SEULEMENT LE PARENT, et c'est
+       `tint` qui l'exige : la vue écrit `L.maire.tint[node][ctx.mayorKey]`, donc
+       DEUX niveaux calculés d'un coup. S'arrêter au parent aurait déclaré mortes
+       quinze répliques parfaitement affichées — très exactement le faux positif que
+       le contrôle jumeau s'est déjà pris une fois (voir sa note sur les six phrases
+       de `ScierieScene`).
+       ⚠️ CE QU'ON NE PARDONNE JAMAIS, ET C'EST TOUTE LA DIFFÉRENCE : le PRÉFIXE DE
+       BRANCHE. `maire` n'entre pas dans `used` — la capture commence APRÈS lui
+       (`/L\.maire\.(...)/`) — donc aucune feuille ne peut être excusée par la seule
+       existence de sa branche. C'est le garde-fou que la note jumelle décrit :
+       *une commodité qui rend un contrôle vert est presque toujours le contrôle
+       qu'on vient de supprimer.* Les huit feuilles mortes d'aujourd'hui étaient à la
+       RACINE, sans aucun ancêtre : elles tombent malgré cette indulgence. */
+    const dead = leaves.filter(l => {
+      if (used.has(l)) return false;
+      const parts = l.split(".");
+      for (let i = parts.length - 1; i > 0; i--) if (used.has(parts.slice(0, i).join("."))) return false;
+      return true;
+    });
+    ok("⚠️⚠️ chaque phrase de l'audience est affichée quelque part",
+       dead.length === 0, dead.slice(0, 8).join(", ") || `${leaves.length} phrases, ${used.size} lectures dans ${FILES.length} vues`);
+    ok("…et ce contrôle lit vraiment les deux vues", used.size > 30 && leaves.length > 60 && srcLen > 1000,
+       `${used.size} lectures, ${leaves.length} phrases, ${FILES.length} fichiers`);
+    /* ⚠️ ET IL EST BILINGUE : une phrase supprimée d'un seul côté est le défaut que
+       `verify-strings` attrape en général, mais il ne coûte rien de le tenir ici
+       aussi, sur la branche qu'on vient de tailler. */
+    const enLeaves = [];
+    (function walk(o, at) {
+      for (const k of Object.keys(o)) {
+        const v = o[k], p = at ? at + "." + k : k;
+        if (v && typeof v === "object" && !Array.isArray(v)) walk(v, p); else enLeaves.push(p);
+      }
+    })(MAIRE.en, "");
+    ok("…et les deux langues portent exactement les mêmes clés",
+       leaves.length === enLeaves.length && leaves.every(l => enLeaves.includes(l)),
+       `${leaves.length} fr contre ${enLeaves.length} en`);
+  }
+
   /* ── C. LE NAVIRE PART, ET IL PEUT REVENIR (453, décision de Guillaume).
      ⚠️ La règle est une fonction PURE de `quete.js`, donc le jeu et le banc la
      partagent ; écrite dans la boucle de rendu, aucun des deux ne l'aurait vue. */

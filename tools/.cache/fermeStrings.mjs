@@ -347,6 +347,50 @@ const STAR_FR = {
       ? `Aucune des ${nfr(total)} pièces du bateau n'est encore montée. Les étoiles restent avec toi.`
       : `${nfr(n)} pièce${n > 1 ? "s" : ""} du bateau montée${n > 1 ? "s" : ""} sur ${nfr(total)}. Les étoiles restent avec toi.`,
   },
+  /* ╔═══════════════════════════════════════════════════════════════════════════
+     ║ AUDIT 2026-08-31 — CE QU'ELLE DIT PENDANT QU'ON JOUE. LE POSTE ÉTAIT VIDE
+     ║ DEPUIS LE DÉCHANT (469).
+     ╚═══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ INDEXÉ PAR LA CLÉ D'OBJECTIF, la même que `hud.goal` — donc la même source
+     que le bandeau, jamais une seconde liste accrochée aux chapitres (449). Une
+     clé sans phrase ici est un silence VOULU : elle ne parle pas tout le temps, et
+     c'est ce qui donne du poids aux fois où elle parle.
+     ⚠️⚠️ ELLE NE DIT JAMAIS QUOI FAIRE. Le bandeau répond à « qu'est-ce que je
+     peux faire maintenant » ; elle dit ce qu'elle voit, ce qu'elle craint et ce
+     qu'elle ne comprend pas de nous. Deux voix sur la même question auraient été
+     deux réponses à comparer ; sur deux questions, c'est une scène.
+     ⚠️ ET LE SECRET EST À ELLE AUSSI (§15.1) : c'est ELLE qui demande qu'on ne
+     parle pas d'elle au maire. Le secret cesse d'être une règle de documentation,
+     il devient une chose qu'un personnage veut. */
+  frame: {
+    /* Chapitre 1 — les huit trous. Le bateau n'existe pas encore ; elle cherche
+       ses sœurs, et `farmImpactCool` est la première fois qu'il est question de
+       fabriquer quelque chose. */
+    farmImpacts:        "Elles sont tombées avec moi. Je les sens sous la terre, mais pas laquelle est où.",
+    farmImpactTame:     "Celle-là est plus timide que moi. Fais comme si tu ne savais pas qu'elle est là.",
+    farmImpactLight:    "Le bleu qu'elle veut ne pousse pas ici. Il faudra descendre le chercher.",
+    farmImpactSimmer:   "Ça sent le sucre chaud. Elle viendra.",
+    farmImpactCarry:    "Va vite, ça refroidit.",
+    farmImpactLure:     "Elle a peur de tes mains. Il lui faut quelque chose qui brille plus fort.",
+    farmImpactCool:     "Ce n'est pas une des nôtres — c'est du métal de ciel. Ça, ça se travaille.",
+    /* Chapitre 2 — le cratère. `craterHot` couvre trois minutes d'attente pure. */
+    craterHot:          "Elle est encore dedans. Laisse le trou refroidir.",
+    crater:             "Celle-là nous a menées ici. C'est elle qui sait où on va.",
+    craterAlone:        "Un seul dos ne suffira pas pour elle. Trouve-lui quelqu'un — ou quelque chose qui y ressemble.",
+    townWait:           "C'est de l'autre côté du rail que ça se passe maintenant.",
+    townWaitThere:      "Reste près de moi. Personne ici ne me voit.",
+    /* Chapitre 3 — LE CHANTIER. ⚠️ CHAQUE PHRASE RAMÈNE AU BATEAU, sans exception :
+       c'est là que la quête se perdait, et une compagne qui philosophe pendant
+       qu'on attend des planches ferait exactement le contraire de ce qu'on lui
+       demande. Elle DIT L'ÉTAPE SUIVANTE à sa façon, elle ne médite pas. */
+    engineer:           "Il nous faut des plans avant des planches. Va chercher l'ingénieur.",
+    engineerTravel:     "Il arrive. Sans ses plans, ton bois ne sera que du bois.",
+    engineerWork:       "Il dessine la coque. Quand il aura fini, on saura quoi demander à Tristan.",
+    mayor:              "La cale est sur son quai : sans sa signature, personne ne montera rien dessus. Et ne lui parle pas de moi.",
+    timberOrder:        "Tristan sait faire toutes les pièces — il lui faut du bois, et une raison.",
+    timberWait:         "Il scie. Chaque trait, c'est un morceau de bateau en moins à attendre.",
+    timberRaise:        "Elle est arrivée. Monte-la toi-même.",
+  },
   guide: {
     go: "L'étoile reine prend la tête. Suis sa lumière.",
     offer: "L'étoile reine s'écarte du groupe. Elle veut te montrer le chemin.",
@@ -1128,6 +1172,31 @@ const STAR_EN = {
      sont jamais dans sa bouche.
      ⚠️ `offer` EST LE DÉPART SPONTANÉ, et il se lit comme une gentillesse plutôt
      que comme un aveu d'échec : le jeu ne dit jamais « tu es perdu ». */
+  /* Voir la note de `frame` côté français : indexé par la clé d'objectif, jamais
+     par le chapitre, et une clé sans phrase est un silence voulu. */
+  frame: {
+    farmImpacts:        "They fell with me. I can feel them under the soil, but not which is where.",
+    farmImpactTame:     "That one is shyer than I am. Act as if you did not know it was there.",
+    farmImpactLight:    "The blue it wants does not grow here. You will have to go down and fetch it.",
+    farmImpactSimmer:   "It smells of hot sugar. She will come.",
+    farmImpactCarry:    "Go quickly, it is cooling.",
+    farmImpactLure:     "It is afraid of your hands. It needs something that shines brighter.",
+    farmImpactCool:     "That is not one of us — that is sky metal. That can be worked.",
+    craterHot:          "She is still inside. Let the hole cool down.",
+    crater:             "That one led us here. She is the one who knows where we are going.",
+    craterAlone:        "One back will not be enough for her. Find her someone — or something that looks like one.",
+    townWait:           "It happens on the other side of the rails now.",
+    townWaitThere:      "Stay close to me. Nobody here can see me.",
+    /* Voir la note côté français : au chapitre 3, chaque line brings it back to
+       the boat. She names the next step in her own way; she does not muse. */
+    engineer:           "We need plans before we need planks. Go and fetch the engineer.",
+    engineerTravel:     "He is coming. Without his plans your timber is only timber.",
+    engineerWork:       "He is drawing the hull. When he is done we will know what to ask Tristan for.",
+    mayor:              "The slipway is on his quay: without his signature nobody raises anything on it. And do not tell him about me.",
+    timberOrder:        "Tristan can make every piece — he needs wood, and a reason.",
+    timberWait:         "He is sawing. Every stroke is one less piece of boat to wait for.",
+    timberRaise:        "It has arrived. Raise it yourself.",
+  },
   guide: {
     go: "The queen star takes the lead. Follow its light.",
     offer: "The queen star drifts away from the group. It wants to show you the way.",
@@ -1587,7 +1656,6 @@ STAR_FR.dev = STAR_EN.dev;
 const MAIRE_FR = {
   /* ── le cadre ──────────────────────────────────────────────────────────── */
   title: "Audience",
-  who: (e, n) => `${e} ${n}, maire de Valley Town`,
   gauge: "Adhésion",
   streakHold: "Il ne décroche plus.",
   streakGain: "Il finit vos phrases.",
@@ -1596,7 +1664,6 @@ const MAIRE_FR = {
   audienceDay: "C'est son jour d'audience. Il est préparé, et il a le temps.",
   busyDay: "Ce n'est pas son jour d'audience. Vous le prenez entre deux dossiers.",
   race: (d) => `Élections municipales dans ${d} jours.`,
-  trustAt: (n) => n >= 3 ? "Il vous fait entièrement confiance." : n === 2 ? "Il vous connaît, et ça se sent." : "Il se souvient de vous en bien.",
   triesAt: (n) => n === 1 ? "Vous êtes déjà venu une fois." : `Vous êtes déjà venu ${n} fois.`,
 
   /* ── ZIP 481 — LE RENDEZ-VOUS, L'HUMEUR, ET LA PORTE ─────────────────────
@@ -1619,28 +1686,23 @@ const MAIRE_FR = {
   },
   moodSour: "« Ah. C'est vous. » Elle ne dit rien de plus, et note quelque chose.",
   clerkAsk: "🎩 Demander une audience au maire",
-  booked: (mn) => `Rendez-vous pris. Montez à son bureau dans ${mn} minutes.`,
   bookedWhen: (mmss) => `Il vous reçoit dans ${mmss}.`,
   bookedNow: "C'est l'heure. Son bureau est à l'étage, au fond du couloir.",
   bookedStale: "Vous avez laissé passer l'heure. Il faudra en redemander une.",
   bookedBy: (n) => `${n} a rendez-vous avec le maire.`,
-  alreadyBooked: "Un rendez-vous est déjà pris. On ne prend pas deux fois la file.",
   blockedFor: (mmss) => `Il ne vous recevra pas avant ${mmss}. « Il a demandé à ne pas être dérangé. »`,
-  doorHere: "🎩 Entrer en audience",
   doorNotYet: "Le maire n'est pas disponible. Prenez rendez-vous à l'accueil.",
   doorWait: (mmss) => `Vous avez rendez-vous dans ${mmss}. Sa porte est encore fermée.`,
   doorOther: (n) => `C'est ${n} qui a rendez-vous, pas vous.`,
 
   slam: "🚪 Se lever et claquer la porte",
   slamHint: "Vous ne pourrez plus le voir avant un quart d'heure, et il s'en souviendra.",
-  slamBang: "!",
 
   /* ── la caméra, et c'est la seule chose du jeu qui s'explique en un mot ── */
   camHint: "Glissez pour regarder autour de vous · molette pour approcher",
   camSeat: "🪑 Ma chaise",
   camWide: "🖼️ La pièce",
   camDesk: "📄 Le bureau",
-  camFree: "🎥 Libre",
 
   /* ── le spectateur ────────────────────────────────────────────────────── */
   watch: (n) => `👀 Voir la scène de ${n}`,
@@ -1654,7 +1716,6 @@ const MAIRE_FR = {
   settle: "🤝 « Je crois qu'on s'est compris. »",
   settleHint: "Signer maintenant. Vous ne saurez jamais jusqu'où il serait allé.",
   leave: "Se lever et partir",
-  waitRead: "Il finit sa phrase.",
 
   /* ── hors-zip — LA REPRISE, UNE FOIS PAR AUDIENCE. Demande de Guillaume :
      « si on déconne et on le vexe, permettre une seconde chance ». Offerte
@@ -1881,7 +1942,6 @@ const MAIRE_FR = {
    mot d'esprit, tout le monde est poli, c'est la situation qui est drôle. */
 const MAIRE_EN = {
   title: "Audience",
-  who: (e, n) => `${e} ${n}, Mayor of Valley Town`,
   gauge: "Support",
   streakHold: "He has stopped drifting.",
   streakGain: "He is finishing your sentences.",
@@ -1890,7 +1950,6 @@ const MAIRE_EN = {
   audienceDay: "It is his audience day. He is prepared, and he has time.",
   busyDay: "This is not his audience day. You are catching him between two files.",
   race: (d) => `Municipal elections in ${d} days.`,
-  trustAt: (n) => n >= 3 ? "He trusts you completely." : n === 2 ? "He knows you, and it shows." : "He remembers you kindly.",
   triesAt: (n) => n === 1 ? "You have been here once before." : `You have been here ${n} times before.`,
 
   mood: {
@@ -1909,27 +1968,22 @@ const MAIRE_EN = {
   },
   moodSour: "\"Ah. It is you.\" She says nothing more, and writes something down.",
   clerkAsk: "🎩 Request an audience with the Mayor",
-  booked: (mn) => `Appointment made. Go up to his office in ${mn} minutes.`,
   bookedWhen: (mmss) => `He will see you in ${mmss}.`,
   bookedNow: "It is time. His office is upstairs, at the end of the corridor.",
   bookedStale: "You let the hour go by. You will have to ask for another one.",
   bookedBy: (n) => `${n} has an appointment with the Mayor.`,
-  alreadyBooked: "An appointment has already been made. One does not queue twice.",
   blockedFor: (mmss) => `He will not see you before ${mmss}. \"He asked not to be disturbed.\"`,
-  doorHere: "🎩 Go in for the audience",
   doorNotYet: "The Mayor is not available. Make an appointment at the front desk.",
   doorWait: (mmss) => `Your appointment is in ${mmss}. His door is still shut.`,
   doorOther: (n) => `It is ${n} who has the appointment, not you.`,
 
   slam: "🚪 Stand up and slam the door",
   slamHint: "He will not see you for a quarter of an hour, and he will remember.",
-  slamBang: "!",
 
   camHint: "Drag to look around · wheel to move closer",
   camSeat: "🪑 My chair",
   camWide: "🖼️ The room",
   camDesk: "📄 The desk",
-  camFree: "🎥 Free",
 
   watch: (n) => `👀 Watch ${n}'s audience`,
   watching: (n) => `You are watching ${n}'s audience.`,
@@ -1941,7 +1995,6 @@ const MAIRE_EN = {
   settle: "🤝 \"I think we understand each other.\"",
   settleHint: "Sign now. You will never know how far he would have gone.",
   leave: "Stand up and leave",
-  waitRead: "He is finishing his sentence.",
 
   redoOffer: "You've upset the mayor. Do you want to take that back?",
   redoYes: "↩️ Yes, take it back",

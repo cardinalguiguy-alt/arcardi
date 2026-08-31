@@ -11,24 +11,73 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**ACTION SUIVANTE UNIQUE — JOUER LA SCIE DE TRISTAN JUSQU'AU BOUT, ET JUGER TROIS NOMBRES.** La
-scène 3D du **lot E** est livrée ce jour (voir juste en dessous) ; elle a été ouverte, jouée et
-regardée à l'écran — mais **une seule fois, en fenêtre PORTRAIT, et jamais jusqu'à la victoire ni
-jusqu'à la troisième planche fendue.** Ce qui reste à juger n'est pas du code, c'est du réglage, et
-ça ne se mesure nulle part (§10) : (1) **le tempo** — la fenêtre parfaite fait 230 ms au départ et
-se resserre à 155 ms quand on enchaîne ; est-ce que ça monte trop vite ? (2) **la durée** — 33 s en
-jeu parfait, 80 à 100 s en martelant ; est-ce que la manche est trop courte pour cinq commandes
-d'affilée, ou juste ? (3) **la sanction** — trois planches fendues coûtent la commande et 12 bois
-chacune ; est-ce puni ou anecdotique ? ⚠️ **Aucun de ces trois nombres ne doit bouger avant d'avoir
-joué**, c'est la règle du voyage en train (431), qui a eu raison deux fois.
-⚠️⚠️ **ET IL RESTE LA MOITIÉ DU LOT E, ÉCRITE MAIS PAS TRANSPORTÉE** : le §17.6 de `QUETE.md`
-promet **deux joueurs sur la même scie**. La mécanique est déjà symétrique (`sawPull(s, side)`,
-`side = −1` est la poignée d'en face) ; ce qui manque est le transport du second journal et
-l'arbitrage à deux. C'est une dette DATÉE, pas un oubli — et c'est le poste coopératif le plus
-prêt du dépôt.
-⚠️ **CE QUI N'A TOUJOURS PAS ÉTÉ FAIT ET QUI ATTEND DEPUIS PLUS LONGTEMPS** : la barque (tenir la
-barre, invite à l'écran, bouton tactile, fondu en franchissant la passe), et le saule de la berge
-revu sur la vraie berge. Les deux restent au chaud, ils n'ont pas été touchés cette session.
+**ACTION SUIVANTE UNIQUE — JOUER LA QUÊTE DE L'ÉTOILE EN ENTIER, D'UNE TRAITE, ET JUGER SI ELLE
+EST ENCORE CHIANTE.** L'audit du 2026-08-31 a mesuré ce que Guillaume résumait en une phrase (« en
+gros le jeu est chiant ») : sur **~42 min d'horloge imposée par le chemin critique, 33,8 ne
+proposaient AUCUN geste de quête, et 31 tombaient après le cratère**, dans le chapitre `build` qui
+n'a aucun `need`. Le chantier de correction est ouvert et **trois lots sont livrés ce jour** (voir
+juste en dessous) ; **rien n'a été rejoué à l'écran**. Ce qui reste à juger n'est pas du code :
+(1) **la coupe suffit-elle ?** Le vide passe de 33,8 à ~18,8 min — est-ce que la seconde moitié
+respire, ou faut-il aussi la MEUBLER (le §17 garde de quoi : les trois chutes différées, les éclats
+autour du trou) ? (2) **l'étoile parle-t-elle au bon moment ?** Vingt répliques neuves, indexées sur
+la clé d'objectif ; elles se disent une fois et laissent leur fondu finir. (3) **la fin tient-elle
+enfin sa promesse ?** Le navire entre désormais dans sa propre scène de résolution.
+⚠️⚠️ **DEUX GARDE-FOUS DE GUILLAUME, DONNÉS PENDANT LE CHANTIER ET TOUJOURS EN VIGUEUR** : *« attention
+de ne pas basculer dans le WTF »* et *« l'idée est de rajouter du fun, mais pas de complexifier à
+outrance »*. Ils ont déjà servi : le premier jet des répliques de l'étoile philosophait sur les
+humains ; elles ont été réécrites pour que **chaque phrase du chapitre 3 ramène au bateau**. Aucune
+mécanique n'a été ajoutée par ce chantier, et c'est délibéré.
+⚠️⚠️⚠️ **CE QUI RESTE DE L'AUDIT, NON FAIT, PAR ORDRE** : la **constellation** (cinq points écrits
+en dur, la fiction en promet sept, et elle se peint dès la chute **y compris à l'intérieur des
+bâtiments** — seule garde : `isNightTime`) ; les **quatre morceaux sans provenance** (safran, mât,
+voile, cloche — `SHIP_SITE_OF` rend `null`, techniquement finissable et narrativement muet) ; le
+**HUD peint par-dessus la scène plein écran du maire** ; les **1 829 canevas 2D au chargement**
+(tablette). Aucun n'est bloquant ; tous sont datés.
+⚠️ **ET LE CHANTIER SUIVANT EST DÉJÀ NOMMÉ PAR GUILLAUME : LA DENSIFICATION DES RELATIONS SOCIALES
+ENTRE RÉSIDENTS.** Son premier dossier est écrit dans cette conversation et vaut d'être repris :
+*les quatre morceaux muets deviennent quatre personnes à convaincre*, avec la contrainte que le §15.1
+impose déjà — **on plaide pour un bateau sans jamais pouvoir dire pourquoi on le construit**. Le
+moteur de `maire.js` est réutilisable presque tel quel (`MAYOR_NODE[id]` n'est lu qu'à TROIS
+endroits, `mayorReplay` est agnostique, `MayorWatch` donne le mode spectateur gratuitement) ; le
+coût réel est le DÉCOR, et il ne faut pas le payer quatre fois — `maireBureau.js` fait 1 471 lignes,
+Tristan a déjà sa scène, et le genre aventure ALTERNE les registres. ⚠️ **Sortir la table des nœuds
+de `maire.js` n'a PAS été fait, exprès** : abstraire à l'aveugle avant de connaître les besoins des
+résidents produirait la mauvaise abstraction.
+
+⚠️⚠️⚠️ **LE CHANTIER « BOUCLER LA QUÊTE » EST OUVERT LE 2026-08-31, ET TROIS LOTS SONT LIVRÉS.**
+Le détail vit à côté du code ; ici, seulement ce qu'il ne faut pas casser :
+· **LOT A — le ménage.** Les **huit feuilles `L.maire`** signalées ici depuis deux livraisons sont
+SUPPRIMÉES (les huit étaient des doublons de phrases vivantes, aucune fonctionnalité derrière) ;
+deux commentaires qui mentaient sur ce qu'ils expliquent sont corrigés (`magicOre` « sans usage »
+depuis le 480 bis, la « cloche » de la scène finale disparue au 469) ; `verify-quete` gagne un
+**contrôle d'orphelins sur `L.maire`** (deux vues déclarées, parité bilingue, témoin vérifié) et
+`render-navire` un **contrôle d'ÉCART** (quinzième forme, voir l'en-tête).
+· **LOT B — la coupe. TROIS NOMBRES ONT BOUGÉ, ET C'EST RÉVERSIBLE EN TROIS VALEURS.**
+`STAR_ENG_WORK_MS` 15 → **5 min**, `STAR_ENG_TRAVEL_MS` 3 → **1 min**, et le second rendez-vous chez
+le maire coûte `MAYOR_RETRY_WAIT_MS` (**1 min**) au lieu de 3 à 5. ⚠️ **La règle du voyage en train
+(431) n'est pas violée** : elle protège d'un réglage posé AU JUGÉ — ici il y a une mesure, et la
+justification écrite des 15 minutes était MORTE (elle citait les croisements d'ombres, supprimés au
+469). ⚠️ **Ni le seuil de 75 du maire, ni l'humeur, ni la fuite n'ont bougé** : la négociation est
+exactement aussi difficile, c'est le PRIX DE RECOMMENCER qui change. ⚠️ **La porte claquée garde ses
+quinze minutes** — `mayorSlam` passe par `mayor.block` et ne croise jamais ce chemin.
+· **LOT C — la fin.** L'étoile PARLE (`L.star.frame`, vingt répliques indexées sur la clé
+d'objectif — **la même source que le bandeau**, jamais une seconde liste) ; le **navire entre dans
+la scène de résolution**, peint par `drawStarShip`, celui du monde, jamais une silhouette refaite ;
+et les compagnes de la scène finale **dérivent** leur couleur de `STAR_FOLLOWER_SITES` joint à
+`STAR_WISP_PAL` (nouvellement exposée via `starWispTint`). ⚠️ **Ça a réparé une couleur FAUSSE** :
+l'étoile blanche était peinte en **vert** (`#a8e8a0`) dans le dernier plan de la quête depuis le
+480 bis, et aucun banc ne rastérise cette cinématique.
+· ⚠️⚠️ **ET UN BOGUE VIEUX DE QUELQUES HEURES A ÉTÉ TROUVÉ EN CHEMIN** : `migrateMayor` reconstruit
+`appt` sans relire `sour`, donc la rancune de la porte claquée était effacée à la requête suivante
+et `L.maire.moodSour` n'a **jamais** pu s'afficher. Corrigé, et la leçon est au tableau.
+
+Vérifications : **19 bancs de contrôle relancés, zéro `ÉCHEC`** — `verify-quete` **631/631** (trois
+contrôles neufs), `verify-maire` **113/113**, `verify-vallee` **223/223**, `verify-scierie`
+**34/34**, `verify-ludo` **30/30**, `verify-taxi` **15/15**, `verify-strings` **1106 clés
+appariées** ; `render-navire` (contrôle d'écart neuf, témoin d'échec vérifié) et `render-etoile`
+verts ; bundle esbuild propre sur `FermeGame.js` (seul `G_SOIL` préexistant subsiste) ;
+`git diff --check` propre ; `next build` **✓ Compiled successfully** puis l'arrêt documenté sur
+`supabaseUrl`. **Aucune migration SQL, aucun changement de schéma, aucune manipulation Supabase.**
 
 ⚠️⚠️⚠️ **LE LOT E EST LIVRÉ LE 2026-08-31 : LA GRANDE SCIE DE TRISTAN, EN 3D, JOUÉE AU RYTHME.**
 Demande de Guillaume, mot pour mot : *« implémenter cette scène 3D très fluide dans l'atelier de
@@ -295,6 +344,16 @@ toutes payées :
   posé AVANT celui d'îlots (il nomme le vrai coupable), et des caméras qui DÉRIVENT leur recul de
   la boîte englobante au lieu d'être réglées à la main — un personnage qui travaille change de
   taille et de place d'une pose à l'autre.
+- ⚠️⚠️⚠️ **il mesure chaque ÉTAT, jamais l'ÉCART entre deux états successifs** (2026-08-31, quinzième
+  forme, et c'est la seule qui parle de ce que le JOUEUR perçoit). `render-navire` tenait la
+  silhouette, la connexité, l'échelle et l'invariant « poser un morceau n'en efface jamais un
+  autre » — quatre contrôles justes, tous sur un état isolé. Aucun ne pouvait voir que le SAFRAN
+  ne change que **1,3 % de la vignette**, douze fois moins que la voile, alors qu'il coûte 45 bois,
+  8 poissons, une manche de sciage et un montage au marteau. *Un chantier ne se perçoit pas par
+  ses états, il se perçoit par ses écarts* — et une pièce qui coûte cher sans rien changer à
+  l'image est un rendez-vous qui ne récompense pas le déplacement qu'il impose. ⚠️ La parade
+  mesure les pixels qui CHANGENT, jamais l'encre gagnée : une pièce peut en remplacer une autre
+  (un mât qui masque une membrure) sans rien ajouter au compte et rester parfaitement visible.
 ⚠️⚠️ **ET UN CONTRÔLE DE CAS NE VAUT PAS UN INVARIANT** (449). Trois contrôles « est-ce que ça
 marche » étaient verts sur le placement du familier meneur ; l'invariant — *il n'est JAMAIS plus
 loin du but que le joueur*, balayé sur toutes les positions — a échoué **20 fois sur 164** et a
@@ -342,8 +401,8 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 |---|---|---|
 | 2026-08-31 (scie) | ⚠️⚠️⚠️ **UNE BORNE POSÉE PAR LES APPELANTS EST DEUX BORNES — ET LES DEUX APPELANTS SONT LE CLIENT ET L'HÔTE.** Le plafond de durée d'une manche de sciage vivait dans `sawRun` (côté hôte) et nulle part dans la boucle du client : une manche traînante s'arrêtait donc à des pas différents des deux côtés, et le symptôme était le pire possible — une commande gagnée à l'écran, refusée par le réseau, sans rien pour l'expliquer. La borne est maintenant DANS `sawTick`. *Toute limite d'une simulation rejouable appartient à la simulation.* | `SAW_MAX_TICKS`, `sawTick`, `verify-scierie` §1 |
 | 2026-08-31 (scie) | ⚠️⚠️ **UN BANC DE RENDU SANS GESTION DE COULEUR NE JUGE PAS UNE LUMIÈRE, ET IL FAUT LE CROIRE QUAND IL LE DIT.** `render-scierie` peignait un atelier parfaitement lisible ; le même décor ouvert dans le navigateur était BLANC — le rastériseur ignore `sRGBEncoding`, donc il sous-estime toutes les intensités d'un tiers. Le §8 le savait depuis le 421 (« soleil à 2,45 → image entièrement blanche ») ; ce qui est neuf, c'est qu'un banc VERT peut désormais donner l'illusion du contraire. *Une intensité se règle dans le moteur qui l'applique, jamais dans celui qui l'approxime.* | en-tête de `render-scierie.mjs`, `buildShop` §lumière |
-| 2026-08-27 | ⚠️⚠️⚠️ **UNE DATE ABSOLUE NE PASSE JAMAIS PAR UNE OPÉRATION 32 BITS.** Un petit instant de banc survit à `\| 0`, une date réelle de 2026 non ; toute migration d'horodatage se rejoue avec `Date.now()` ET le vrai cycle de sérialisation/reprise de l'hôte. | `candyUntil`, `migrateStar`, `verify-quete.mjs` §12 |
-| 2026-08-31 (saule) | ⚠️⚠️ **UN JITTER DE COULEUR SE CALCULE SUR LA TEINTE D'ORIGINE, JAMAIS SUR LE RÉSULTAT DÉJÀ TRANSPOSÉ.** La garde tronc/feuillage de `seasonPalette` (`h<65 \|\| h>190`) ne sépare le bois du feuillage que sur la palette D'ÉTÉ : appliquée sur une palette déjà tournée vers l'automne, tronc et feuillage tombent dans la même plage basse et la garde ne distingue plus rien. Les variantes du saule passent donc leur décalage EN PARAMÈTRE de la même fonction, jamais en repasse sur sa sortie. | `seasonPalette`, `plancheTree` |
+| 2026-08-31 (audit) | ⚠️⚠️⚠️ **UNE MIGRATION QUI RECONSTRUIT UN OBJET CHAMP PAR CHAMP SUPPRIME TOUT CHAMP QU'ON A OUBLIÉ D'Y ÉCRIRE.** `migrateMayor` rebâtissait `appt` sans relire `sour` ; or `migrateStar` l'appelle et l'hôte re-migre à CHAQUE requête. La trace était donc effacée dans la milliseconde suivant son écriture — sans erreur, sans symptôme — et le correctif écrit quelques heures plus tôt le même jour n'a jamais rien fait. *Un champ ajouté à un objet migré s'ajoute à sa migration dans le même geste, ou il n'existe pas.* | `migrateMayor`, `appt.sour`, `quete.js:migrateStar` |
+| 2026-08-31 (audit) | ⚠️⚠️ **DEUX BANCS PEUVENT AVOIR DES ANGLES MORTS QUI SE RECOUVRENT EXACTEMENT, ET CE QUI TOMBE DEDANS NE SE VOIT NULLE PART.** Huit feuilles `L.maire` étaient écrites, traduites et jamais affichées : `verify-strings` ne les voyait pas (il ne capture que les clés indentées de QUATRE espaces, et la branche `maire` est à deux), `verify-quete` non plus (son contrôle d'orphelins ne balaie que `L.star`). Chacun était juste dans son périmètre. *Quand une chose échappe à deux contrôles, la question n'est pas lequel a un bug : c'est ce que leur intersection ne couvre pas.* | `verify-quete` §audience, `verify-strings:keysOf` |
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
 

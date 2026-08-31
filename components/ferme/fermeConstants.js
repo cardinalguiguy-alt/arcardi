@@ -3882,15 +3882,29 @@ export const STAR_BANG_MS = 2000;
    dépense du jeu qui touche à trois réserves à la fois, donc la seule qui se
    sente vraiment — et elle tombe au bon moment, puisqu'elle demande une ferme
    déjà installée (voir les portes ci-dessus).
-   ⚠️⚠️ ET LE VOYAGE EST COURT, LE TRAVAIL EST LONG. « Il arrive rapidement » :
-   trois minutes. « Il travaille quinze minutes réelles » : c'est le chiffre de
-   Guillaume, et il n'est pas décoratif — c'est le temps pendant lequel on
-   retourne jouer (les deux croisements d'ombres du chapitre 2 tiennent très
-   exactement dans cette fenêtre). Un compte à rebours qu'on regarde est du temps
-   perdu ; un compte à rebours pendant lequel on a autre chose à faire est du
-   rythme. */
-export const STAR_ENG_TRAVEL_MS = 3 * 60 * 1000;    // il monte dans le premier train
-export const STAR_ENG_WORK_MS = 15 * 60 * 1000;     // les plans, demande de Guillaume
+   ⚠️⚠️⚠️ AUDIT 2026-08-31 — 15 MIN → 5, ET 3 MIN DE VOYAGE → 1. LA JUSTIFICATION
+   DU CHIFFRE ÉTAIT MORTE DEPUIS LE DÉCHANT, ET ELLE ÉTAIT ÉCRITE ICI.
+   Ce bloc disait, mot pour mot : « c'est le temps pendant lequel on retourne
+   jouer (les deux croisements d'ombres du chapitre 2 tiennent très exactement
+   dans cette fenêtre) ». Le 469 a SUPPRIMÉ les croisements d'ombres. La fenêtre
+   est restée, son contenu est parti, et le commentaire a continué de promettre
+   pendant douze zips qu'on avait autre chose à faire.
+   ⚠️⚠️ CE QUE L'AUDIT A MESURÉ, ET C'EST CE QUI AUTORISE À TOUCHER CES NOMBRES
+   SANS AVOIR REJOUÉ (la règle du voyage en train, 431, protège d'un réglage posé
+   AU JUGÉ — ici il y a une mesure) : sur ~42 min d'horloge imposée par le chemin
+   critique, **33,8 ne proposaient aucun geste de quête, et 31 tombaient après le
+   cratère**, dans le chapitre `build` qui n'a aucun `need`. Ces deux constantes en
+   portaient 18 à elles seules.
+   ⚠️ ON COUPE AU LIEU DE MEUBLER, ET C'EST UN CHOIX. Meubler demandait d'écrire
+   une occupation ; couper demande deux nombres. Le §17 garde en réserve de quoi
+   remplir (les trois chutes différées, les éclats autour du trou) : le jour où
+   elles existeront, ces deux nombres pourront remonter — c'est leur contenu qui
+   les justifiera, jamais l'inverse.
+   ⚠️ POUR REVENIR EN ARRIÈRE : remettre 3 et 15. Rien d'autre ne dépend de ces
+   valeurs — `starPlanPhase`, `starPlanRemainMs` et `starPlanProgress` les DÉRIVENT
+   toutes les trois d'une seule date posée par l'hôte (`plan.at`). */
+export const STAR_ENG_TRAVEL_MS = 1 * 60 * 1000;    // il monte dans le premier train
+export const STAR_ENG_WORK_MS = 5 * 60 * 1000;      // les plans — 15 min à l'origine, voir ci-dessus
 export const STAR_ENG_FEE_GOLD = 24000;             // sur la bourse commune
 export const STAR_ENG_FEE_CROPS = 60;               // récoltes, toutes espèces confondues, dans MON sac
 export const STAR_ENG_FEE_FISH = 12;                // poissons, toutes espèces confondues, dans MON sac
@@ -6367,6 +6381,23 @@ export const MAYOR_MOOD_AUDIENCE_LIFT = 1;   // d'un cran vers le haut, une fois
    transforme « ouvrir un panneau » en « avoir rendez-vous ». On redescend faire
    autre chose, et on remonte. */
 export const MAYOR_WAIT_CHOICES_MS = [3 * 60000, 4 * 60000, 5 * 60000];
+/* ⚠️⚠️⚠️ AUDIT 2026-08-31 — LE SECOND RENDEZ-VOUS NE COÛTE PAS LE PRIX DU PREMIER,
+   ET C'EST UNE CORRECTION DE JUSTICE, PAS DE DIFFICULTÉ.
+   Le §16.4 de `QUETE.md` chiffre le réglage VOULU : un premier essai ordinaire
+   culmine à 69,9 contre un seuil à 75 — il échoue de cinq points, exprès. C'est
+   une bonne tension. Mais `resolveMayor` consomme le créneau QUOI QU'IL ARRIVE
+   (et il le doit : sans ça une audience ratée serait un droit de rentrer
+   aussitôt), donc l'échec prévu par la conception coûtait un second rendez-vous
+   PLEIN. Mesuré : 8 minutes d'attente pour une négociation qu'on est censé perdre
+   une fois. *Une leçon qu'on fait payer deux fois n'est plus une leçon.*
+   ⚠️ ON NE TOUCHE NI AU SEUIL DE 75, NI À L'HUMEUR, NI À LA FUITE : la
+   négociation reste exactement aussi difficile. Ce qui change est le PRIX de
+   recommencer, ce qui n'est pas la même grandeur.
+   ⚠️⚠️ ET LA PORTE CLAQUÉE GARDE SES QUINZE MINUTES, intactes. C'est la seule
+   sortie du jeu qui ait un prix (§16.2 bis) ; la confondre avec un échec ordinaire
+   retirerait tout son sens au geste. `mayorSlam` passe par `mayor.block`, jamais
+   par cette constante — les deux chemins ne se croisent nulle part. */
+export const MAYOR_RETRY_WAIT_MS = 60000;   // il vous reprend entre deux dossiers
 /* ⚠️⚠️ ET LE RENDEZ-VOUS NE PÉRIME PAS À LA SECONDE. Un créneau d'une minute
    ferait rater l'audience à qui traverse la ville à pied, et rater un rendez-vous
    qu'on a attendu quatre minutes est la définition d'une corvée. Une demi-heure

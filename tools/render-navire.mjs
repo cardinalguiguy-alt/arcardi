@@ -348,6 +348,50 @@ ok(C.STAR_SHIP_BLOCK_W < C.STAR_SHIP_DRAW_W && C.STAR_SHIP_BLOCK_H < C.STAR_SHIP
   const none = ink[0].px, all = ink[(1 << N) - 1].px;
   ok(all > none * 1.6, "le navire complet est franchement plus dessiné que la cale seule",
      `cale ${none} px → complet ${all} px (×${(all / none).toFixed(2)})`);
+
+  /* ╔═══════════════════════════════════════════════════════════════════════════
+     ║ AUDIT 2026-08-31 — CHAQUE PIÈCE PAYANTE DOIT SE VOIR. QUINZIÈME FORME DU
+     ║ DÉFAUT DE BANC : *il mesure chaque ÉTAT, jamais l'ÉCART entre deux états
+     ║ successifs* — or ce qu'on perçoit d'un chantier, c'est l'écart.
+     ╚═══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ CE QU'IL A TROUVÉ LE JOUR OÙ IL A ÉTÉ ÉCRIT : le SAFRAN change 1 156
+     pixels, soit 1,8 % de la vignette — SEPT FOIS moins que la voile (8 232) et
+     onze fois moins que la coque (13 104). Il coûte pourtant 45 bois, 8 poissons,
+     une manche de sciage et un montage au marteau : c'est le seul des cinq
+     rendez-vous du chantier qui ne récompense pas le déplacement qu'il impose. Le
+     joueur paie, attend, frappe, et le bateau a l'air identique.
+     ⚠️ AUCUN DES CONTRÔLES CI-DESSUS NE POUVAIT LE DIRE, ET ILS SONT TOUS JUSTES :
+     ils tiennent la silhouette, la connexité, l'échelle, et l'invariant « poser ne
+     retire pas ». Tous mesurent un ÉTAT. Ajouter une pièce qui ne change rien ne
+     viole aucun d'eux.
+     ⚠️⚠️ ON MESURE LES PIXELS QUI CHANGENT, PAS L'ENCRE GAGNÉE, et c'est la
+     différence qui compte : une pièce peut REMPLACER du dessin (un mât qui masque
+     une membrure) sans rien ajouter au compte, et rester parfaitement visible. Le
+     compte d'encre l'aurait déclarée invisible ; la différence la voit.
+     ⚠️ LE SEUIL EST BAS EXPRÈS (1 %). Ce banc n'est pas là pour dire si une pièce
+     est BELLE — il est là pour qu'aucune ne puisse coûter cher et ne rien changer
+     du tout. Le safran passe aujourd'hui, de peu, et le message imprime son rang :
+     c'est au regard de trancher s'il mérite mieux, pas au banc. */
+  {
+    const base = maskOf(shot(NONE, { t: 0 }), 150);
+    const diffs = C.STAR_SHIP_ORDER.map((key, i) => {
+      const only = C.STAR_SHIP_ORDER.map((_, j) => j === i);
+      const m = maskOf(shot(only, { t: 0 }), 150);
+      let d = 0;
+      for (let k = 0; k < m.length; k++) if (m[k] !== base[k]) d++;
+      return { key, d, pct: d / (BOX_W * BOX_H) * 100 };
+    });
+    const worst = diffs.reduce((a, b) => (a.d < b.d ? a : b));
+    const best = diffs.reduce((a, b) => (a.d > b.d ? a : b));
+    ok(worst.pct >= 1, "⚠️⚠️ chaque morceau CHANGE l'image de la cale (aucun n'est payé pour rien)",
+       diffs.map(x => `${x.key} ${x.pct.toFixed(1)} %`).join(" · "));
+    /* ⚠️ ET L'ÉCART ENTRE LE PLUS VISIBLE ET LE MOINS VISIBLE EST PUBLIÉ, sans
+       verdict : un rapport de 1 à 11 n'est pas un bug, c'est une information de
+       conception que seul l'œil peut trancher. Le banc la met sous les yeux au
+       lieu de la laisser dormir dans une planche que personne ne compare. */
+    ok(true, "   …et voici le rapport entre le plus visible et le moins visible",
+       `${best.key} ×${(best.d / Math.max(1, worst.d)).toFixed(1)} ${worst.key}`);
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

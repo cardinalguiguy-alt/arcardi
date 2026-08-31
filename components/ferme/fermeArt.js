@@ -6239,6 +6239,53 @@ export function buildSprites() {
      au compas est un pictogramme, pas une créature : on assemble un corps rond
      et QUATRE pointes molles de longueurs différentes, et la silhouette sort
      toute seule, festonnée (438). */
+  /* ╔═══════════════════════════════════════════════════════════════════════════
+     ║ AUDIT 2026-08-31 — LA PALETTE SORT DE LA FONCTION POUR QU'ON PUISSE LA LIRE
+     ║ AILLEURS SANS LA RECOPIER. RIEN D'AUTRE NE CHANGE : MÊMES TEINTES, MÊMES
+     ║ ÉTATS, MÊME SPRITE AU PIXEL.
+     ╚═══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ CE QU'ELLE RÉPARE EST LE DERNIER PLAN DE LA QUÊTE. La scène de résolution
+     (`FermeGame.js`) peint les quatre compagnes qui tournent autour du centre avec
+     un tableau de couleurs ÉCRIT EN DUR, hérité du 444 et jamais relu. Trois
+     teintes tombaient juste ; la quatrième était `#a8e8a0`, un VERT — alors
+     qu'aucune étoile de `STAR_SITES` n'est verte. L'étoile BLANCHE (`lure`, née au
+     480 bis) était donc peinte en vert dans la scène qui CLÔT la quête, et rien ne
+     pouvait le dire : aucun banc ne rastérise cette cinématique.
+     ⚠️ C'EST LE §8 DE `CLAUDE.md` DANS SA FORME LA PLUS PURE — *un paramètre qui
+     DOUBLE un autre paramètre est une divergence en attente : il doit être DÉRIVÉ,
+     jamais réglé.* Corriger le hex aurait remis les deux listes d'accord pour
+     aujourd'hui et rouvert le même trou à la cinquième étoile. La scène JOINT
+     désormais cette table à `STAR_SITES` par la colonne `color`, via `starWispTint`.
+     ⚠️ ET ELLE EST DÉCLARÉE AVANT `starWispSprite`, pas après : une `const` n'est
+     pas hissée avec sa valeur, et une table lue depuis une fonction déclarée plus
+     haut est le genre de piège qui ne se voit qu'à l'exécution (§4). */
+  const STAR_WISP_PAL = {
+      yellow: [["#fffdf2", "#ffe08a", "#eda43a", "#7a4a0e", "rgba(255,222,132,0.20)"],
+               ["#fff8e4", "#f2ce7e", "#c98a34", "#66400c", "rgba(255,210,116,0.11)"],
+               ["#dedad0", "#a8a49a", "#6e6a62", "#33302a", "rgba(200,196,186,0.05)"]],
+      blue:   [["#f4fcff", "#8edcff", "#3aa8df", "#174d75", "rgba(100,205,255,0.20)"],
+               ["#edf8ff", "#83c7e8", "#3d86ad", "#183f5a", "rgba(90,185,235,0.11)"],
+               ["#d7e0e4", "#94a8b2", "#536d78", "#29383f", "rgba(170,205,220,0.05)"]],
+      rose:   [["#fff8fc", "#ff9fd1", "#dc5b9f", "#712451", "rgba(255,130,205,0.20)"],
+               ["#fff0f8", "#e895bd", "#aa517e", "#59243e", "rgba(235,120,185,0.11)"],
+               ["#e0d6dc", "#ac929f", "#755363", "#3d2a33", "rgba(220,170,195,0.05)"]],
+      /* 480 bis — LA BLANCHE (verbe `lure`). Froide et argentée, pour se
+         distinguer de la jaune (chaude/dorée) au premier coup d'œil : même
+         construction à trois états que les trois autres. */
+      white:  [["#ffffff", "#eaf3ff", "#a8b8c8", "#46505c", "rgba(220,235,255,0.20)"],
+               ["#f6f9fc", "#d6dee6", "#8a97a4", "#3a424c", "rgba(210,222,238,0.11)"],
+               ["#dde1e4", "#a6acb2", "#6c7278", "#34383c", "rgba(200,206,212,0.05)"]],
+  };
+  /* La teinte VIVE d'une couleur d'étoile (état 0, ton du corps) — ce qu'il faut
+     pour peindre une compagne réduite à un point lumineux, sans son sprite.
+     ⚠️ UNE LECTURE, PAS UNE SECONDE TABLE : c'est ce qui garantit qu'une étoile
+     ajoutée à `STAR_SITES` arrive dans la scène finale avec sa vraie couleur, sans
+     que personne ait à y penser. Un `color` inconnu rend `null` — l'appelant saute
+     le point plutôt que d'en peindre un faux. */
+  function starWispTint(color) {
+    const p = STAR_WISP_PAL[color];
+    return p ? p[0][1] : null;
+  }
   function starWispSprite(pose, state, color, queen) {
     /* ⚠️⚠️⚠️ QUATRIÈME ÉCRITURE, ET C'EST UN CHANGEMENT DE CONSTRUCTION, PAS UN
        RÉGLAGE DE PLUS. Les trois premières tentatives ont produit, dans l'ordre :
@@ -6267,23 +6314,7 @@ export function buildSprites() {
        pouvait apparaître. Ici la taille écran reste la même, la définition non. */
     const S = queen ? 28 : 18;
     const [c, g] = cv(S, S);
-    const pal = {
-      yellow: [["#fffdf2", "#ffe08a", "#eda43a", "#7a4a0e", "rgba(255,222,132,0.20)"],
-               ["#fff8e4", "#f2ce7e", "#c98a34", "#66400c", "rgba(255,210,116,0.11)"],
-               ["#dedad0", "#a8a49a", "#6e6a62", "#33302a", "rgba(200,196,186,0.05)"]],
-      blue:   [["#f4fcff", "#8edcff", "#3aa8df", "#174d75", "rgba(100,205,255,0.20)"],
-               ["#edf8ff", "#83c7e8", "#3d86ad", "#183f5a", "rgba(90,185,235,0.11)"],
-               ["#d7e0e4", "#94a8b2", "#536d78", "#29383f", "rgba(170,205,220,0.05)"]],
-      rose:   [["#fff8fc", "#ff9fd1", "#dc5b9f", "#712451", "rgba(255,130,205,0.20)"],
-               ["#fff0f8", "#e895bd", "#aa517e", "#59243e", "rgba(235,120,185,0.11)"],
-               ["#e0d6dc", "#ac929f", "#755363", "#3d2a33", "rgba(220,170,195,0.05)"]],
-      /* 480 bis — LA BLANCHE (verbe `lure`). Froide et argentée, pour se
-         distinguer de la jaune (chaude/dorée) au premier coup d'œil : même
-         construction à trois états que les trois autres. */
-      white:  [["#ffffff", "#eaf3ff", "#a8b8c8", "#46505c", "rgba(220,235,255,0.20)"],
-               ["#f6f9fc", "#d6dee6", "#8a97a4", "#3a424c", "rgba(210,222,238,0.11)"],
-               ["#dde1e4", "#a6acb2", "#6c7278", "#34383c", "rgba(200,206,212,0.05)"]],
-    }[color || "yellow"] || null;
+    const pal = STAR_WISP_PAL[color || "yellow"] || null;
     const [CORE, BODY, EDGE, RIM, HALO] = pal[state];
     const cx = queen ? 14 : 9, cy = queen ? 14.5 : 9.5;   // ⚠️ décalé d'un demi-pixel vers le bas : à cy = 9 la pointe haute touchait le bord du canevas, donc elle était rabotée en silence (piège n°1, 433)
     /* ⚠️ LE RAYON INTÉRIEUR EST CE QUI DÉCIDE DE TOUT. Trop petit, l'étoile est
@@ -15087,6 +15118,10 @@ house: house(),
     starWisp: Array.from({ length: 3 }, (_, st) => Array.from({ length: 4 }, (_, po) => starWispSprite(po, st, "yellow"))),
     starWispColors: Object.fromEntries(["yellow", "blue", "rose", "white"].map(color => [color,
       Array.from({ length: 3 }, (_, st) => Array.from({ length: 4 }, (_, po) => starWispSprite(po, st, color))) ])),
+    /* AUDIT 2026-08-31 — exposée pour la scène de résolution, qui peint les
+       compagnes en points lumineux et n'a donc pas leur sprite. Voir la note de
+       `STAR_WISP_PAL`. */
+    starWispTint,
     starWispQueen: Array.from({ length: 3 }, (_, st) => Array.from({ length: 4 }, (_, po) => starWispSprite(po, st, "yellow", true))),
     starShard: Array.from({ length: 4 }, (_, n) => starShardSprite(n)),
     /* ⚠️ ZIP 454 — LE SILLON N'EST PLUS UN SPRITE, C'EST UNE FONCTION, exactement

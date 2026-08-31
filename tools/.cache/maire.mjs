@@ -770,9 +770,34 @@ export function migrateMayor(e) {
       at: Math.max(0, +m.appt.at || 0),
       due: Math.max(0, +m.appt.due || 0),
       mood: MAYOR_MOODS_SAFE(m.appt.mood),
+      /* ⚠️⚠️⚠️ AUDIT 2026-08-31 — CE CHAMP MANQUAIT, ET SON ABSENCE ANNULAIT LE
+         CORRECTIF ÉCRIT LE MÊME JOUR, QUELQUES HEURES PLUS TÔT.
+         `resolveMayorAsk` recopie la rancune sur le rendez-vous qu'elle a gâté
+         (voir sa note) précisément pour qu'elle survive jusqu'à l'écran qui doit
+         la dire. Mais cette reconstruction ne relisait PAS `sour` : or
+         `migrateStar` appelle `migrateMayor` (`quete.js`), et l'hôte re-migre
+         `star` à CHAQUE requête. La trace était donc effacée dans la milliseconde
+         qui suivait son écriture, et `L.maire.moodSour` n'a jamais pu s'afficher —
+         la punition de la porte claquée restait muette sur sa cause, ce qui est
+         exactement le défaut que le correctif prétendait fermer.
+         ⚠️ C'EST LA MÊME FAMILLE QUE LA TRONCATURE DE CLÉ DU 469, et il faut la
+         reconnaître : *une migration qui reconstruit un objet champ par champ
+         SUPPRIME tout champ qu'on a oublié d'y écrire* — sans erreur, sans
+         symptôme, et d'autant plus silencieusement qu'elle tourne deux fois par
+         seconde. Un champ ajouté à un objet migré s'ajoute à sa migration dans le
+         même geste, ou il n'existe pas. */
+      sour: m.appt.sour ? 1 : 0,
     } : null,
     block: Math.max(0, +m.block || 0),
     sour: m.sour ? 1 : 0,
+    /* ⚠️ AUDIT 2026-08-31 — « LA DERNIÈRE AUDIENCE S'EST MAL PASSÉE, MAIS SANS
+       CLAQUER LA PORTE. » Un booléen, consommé au rendez-vous suivant exactement
+       comme `sour`, et qui RACCOURCIT l'attente au lieu de l'aggraver
+       (`MAYOR_RETRY_WAIT_MS`). Il ne peut se déduire ni de `tries` (qui ne dit pas
+       si l'échec est celui d'À L'INSTANT ni si le créneau a déjà été repris), ni
+       de `block` (qui appartient à la porte claquée, un chemin qui ne croise
+       jamais celui-ci). */
+    retry: m.retry ? 1 : 0,
   };
   return e;
 }
@@ -907,11 +932,22 @@ export function resolveMayorAsk(e, who, name, at, rnd, audienceDay) {
   const sour = e.mayor.sour ? 1 : 0;
   const mood = mayorPickMood(r, !!audienceDay, !!sour);
   e.mayor.sour = 0;                       // la rancune se consomme au rendez-vous suivant
+  /* ⚠️⚠️ AUDIT 2026-08-31 — ON REVIENT APRÈS UN ÉCHEC : IL VOUS REPREND VITE.
+     La conception VEUT que le premier essai échoue (§16.4 : 69,9 contre un seuil
+     à 75). Mais `resolveMayor` consomme le créneau quoi qu'il arrive — et il le
+     doit —, donc cet échec voulu coûtait un second rendez-vous PLEIN : huit
+     minutes d'attente au total pour une leçon qu'on est censé recevoir une fois.
+     ⚠️ LA RANCUNE PASSE DEVANT, ET C'EST L'ORDRE QUI PORTE LE SENS : claquer la
+     porte n'ouvre AUCUN raccourci. Perdre une négociation est un apprentissage,
+     partir en claquant est un affront — les deux ne se paient pas pareil, et
+     `sour` gagne la comparaison quand les deux drapeaux sont levés. */
+  const retry = e.mayor.retry ? 1 : 0;
+  e.mayor.retry = 0;                      // et lui aussi : une seule fois
   e.mayor.appt = {
     by: String(who || "").slice(0, 40),
     name: typeof name === "string" ? name.slice(0, 24) : "",
     at: t,
-    due: t + mayorPickWait(r),
+    due: t + (retry && !sour ? C.MAYOR_RETRY_WAIT_MS : mayorPickWait(r)),
     mood,
     sour,
   };
@@ -948,7 +984,13 @@ export function resolveMayor(e, who, name, log, ctx, at) {
     e.mayor.sour = 1;
     return "mayorSlam";
   }
-  if (s.over !== "signed") return s.over === "thrown" ? "mayorThrown" : "mayorFailed";
+  /* ⚠️ AUDIT 2026-08-31 — UN ÉCHEC ORDINAIRE ARME LE RENDEZ-VOUS COURT. Il est
+     posé APRÈS la branche `slam` ci-dessus, donc la porte claquée ne l'atteint
+     jamais : elle sort par `mayor.block`, et les deux chemins ne se croisent pas. */
+  if (s.over !== "signed") {
+    e.mayor.retry = 1;
+    return s.over === "thrown" ? "mayorThrown" : "mayorFailed";
+  }
   e.mayor.ok = msOf(at);          // 481 — voir la note de `msOf` : jamais `| 0` sur une date
   e.mayor.by = typeof name === "string" ? name.slice(0, 24) : "";
   e.mayor.grade = mayorGrade(s);

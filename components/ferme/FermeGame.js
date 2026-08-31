@@ -9067,10 +9067,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // concoctions futures, à ramener au chaudron"). Même principe que la coupe
   // d'arbre ci-dessus : résolu localement sur evilWorldRef (jamais
   // synchronisé), seul le gain (pierre + minerai) est envoyé à l'hôte via la
-  // requête dédiée "evilMine" pour créditer l'inventaire du fermier. Le
-  // minerai n'a, pour l'instant, aucun usage côté chaudron (aucune recette ne
-  // le consomme encore) — il s'accumule simplement dans `inv.magicOre` en
-  // attendant un futur chantier de concoctions.
+  // requête dédiée "evilMine" pour créditer l'inventaire du fermier.
+  // ⚠️ AUDIT 2026-08-31 — CE COMMENTAIRE DISAIT LE CONTRAIRE DE CE QU'IL EXPLIQUE.
+  // Il annonçait que le minerai « n'a, pour l'instant, aucun usage côté chaudron
+  // (aucune recette ne le consomme encore) ». Le 480 bis en a fait l'ingrédient
+  // rare de l'Essence d'étoile (`STAR_LURE_RECIPE = { magicOre: 2, amethyst: 1 }`),
+  // c'est-à-dire la condition d'existence de l'étoile BLANCHE — donc d'un des huit
+  // lieux du chapitre 1. Ce minerai n'est plus une réserve en attente : c'est un
+  // ingrédient de quête, et c'est ici qu'on le gagne.
   function doMineEvil(m, ew) {
     const tt = targetTileEvil();
     if (!inMapEvil(tt.x, tt.y)) return;
@@ -21149,16 +21153,47 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          une scène qui raconte une histoire que le jeu ne joue plus (leçon du 452).
          ⚠️ `STAR_DEV_SCENES` et `STAR_TURN_MS` la nomment encore : voir `quete.js`. */
       } else {
-        /* ── LA RÉSOLUTION. Cinq notes, la cloche donne la sienne, l'étoile
-           monte comme un ballon qu'on lâche — pas comme une fusée. */
+        /* ── LA RÉSOLUTION. L'étoile monte comme un ballon qu'on lâche — pas
+           comme une fusée.
+           ⚠️ AUDIT 2026-08-31 — CE COMMENTAIRE DÉCRIVAIT UNE QUÊTE QUI N'EXISTE
+           PLUS. Il disait « Cinq notes, la cloche donne la sienne » : le beffroi,
+           la grande cloche et le chapitre du chant sont partis avec le déchant du
+           469, et il n'y a plus ni cinq notes ni cloche à faire sonner. Il restait
+           là, à décrire fidèlement la mise en scène d'avant, sur le code qui joue
+           celle d'aujourd'hui. *Un commentaire périmé sur un climax est pire
+           qu'ailleurs : c'est le dernier endroit qu'on relit.* */
         const veil = Math.min(0.7, t * 0.6);
         ctx.fillStyle = `rgba(6,8,20,${veil.toFixed(3)})`; ctx.fillRect(0, 0, W, H);
         const cx2 = W / 2, cy2 = H * 0.55;
-        if (t < 5) {                                     // les quatre éclats tournent autour de la cloche
-          for (let i = 0; i < 4; i++) {
-            const a = now / 900 + i * Math.PI / 2, r = 44 + Math.sin(now / 700 + i) * 6;
-            ctx.fillStyle = ["#ffd868", "#96ccf0", "#f0a8c8", "#a8e8a0"][i];
-            ctx.beginPath(); ctx.arc(cx2 + Math.cos(a) * r, cy2 + Math.sin(a) * r * 0.55, 4, 0, 7); ctx.fill();
+        /* ╔══════════════════════════════════════════════════════════════════════
+           ║ AUDIT 2026-08-31 — LES COMPAGNES SE DÉRIVENT DE LA TABLE, ELLES NE SE
+           ║ RECOPIENT PLUS. ET IL Y AVAIT UNE COULEUR FAUSSE DEPUIS LE 480 BIS.
+           ╚══════════════════════════════════════════════════════════════════════
+           ⚠️⚠️ Cette boucle disait `for (i = 0; i < 4; i++)` sur un tableau de
+           teintes écrit en dur : `#ffd868`, `#96ccf0`, `#f0a8c8`, `#a8e8a0`. Les
+           trois premières tombaient juste ; la quatrième est un VERT, et aucune
+           étoile de `STAR_SITES` n'est verte. L'étoile BLANCHE, née au 480 bis,
+           était donc peinte en vert dans le dernier plan de la quête — pendant
+           que `starWispSprite` la peignait argentée partout ailleurs. Deux
+           écritures de la même couleur, l'une jamais relue : le §8 exactement.
+           ⚠️ ON JOINT MAINTENANT `STAR_FOLLOWER_SITES` (les étoiles de la table,
+           reine comprise) À LA PALETTE DES SPRITES. Le compte de points N'EST PLUS
+           ÉCRIT NON PLUS : une cinquième étoile arriverait ici toute seule, avec sa
+           vraie teinte, sans que personne ait à y penser — *une jointure, jamais
+           deux listes* (449).
+           ⚠️ `starWispTint` rend `null` sur une couleur inconnue : on saute le
+           point plutôt que d'en peindre un faux. Un repli poli sur du jaune aurait
+           reproduit le défaut qu'on vient de corriger, en plus discret. */
+        if (t < 5) {                                     // les compagnes tournent autour du centre
+          const wisps = Q.STAR_FOLLOWER_SITES;
+          for (let i = 0; i < wisps.length; i++) {
+            const tint = spr0 && spr0.starWispTint ? spr0.starWispTint(wisps[i].color) : null;
+            if (!tint) continue;
+            const a = now / 900 + i * (Math.PI * 2 / wisps.length), r = 44 + Math.sin(now / 700 + i) * 6;
+            ctx.fillStyle = tint;
+            /* La reine est plus grosse, ici comme partout — `queen` est déjà la
+               colonne qui porte son rang dans la table (463). */
+            ctx.beginPath(); ctx.arc(cx2 + Math.cos(a) * r, cy2 + Math.sin(a) * r * 0.55, wisps[i].queen ? 6 : 4, 0, 7); ctx.fill();
           }
         }
         if (t > 2.2 && t < 8) {                          // la lumière sort par les quatre côtés
@@ -21174,6 +21209,41 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.beginPath(); ctx.arc(cx2, sy2, 6 - k * 3, 0, 7); ctx.fill();
           ctx.fillStyle = `rgba(255,236,180,${(0.22 * (1 - k)).toFixed(3)})`;
           ctx.beginPath(); ctx.arc(cx2, sy2, 26 - k * 12, 0, 7); ctx.fill();
+        }
+        /* ╔══════════════════════════════════════════════════════════════════════
+           ║ AUDIT 2026-08-31 — LE BATEAU ENTRE DANS SA PROPRE FIN.
+           ╚══════════════════════════════════════════════════════════════════════
+           ⚠️⚠️ `end2` DIT, DEPUIS LE 453 : « En bas, le bateau est entier, calé sur
+           la grève, prêt à descendre. » La scène ne le montrait NULLE PART. On
+           construisait un navire pendant toute une soirée et la résolution ne le
+           regardait pas — c'est la leçon du 448 (*un texte n'est pas un décor : il
+           AFFIRME*) sur le dernier plan de la quête, celui qu'on a le plus mérité.
+           ⚠️⚠️ ON LE PEINT AVEC `drawStarShip`, CELUI DU MONDE — pas une silhouette
+           dessinée pour l'occasion. C'est ce qui garantit qu'il aura toujours
+           l'allure du bateau qu'on vient de monter, pièce par pièce, y compris le
+           jour où l'une d'elles changera de dessin. Une seconde écriture du navire
+           pour sa propre scène finale aurait été la divergence la plus ironique du
+           dépôt (§8).
+           ⚠️ CINQ PIÈCES POSÉES, ÉCRITES NULLE PART : le tableau se dérive de
+           `STAR_SHIP_TOTAL`. À cet instant la quête est finie, donc il EST entier —
+           mais on ne lit pas l'état partagé ici, la scène étant purement en espace
+           écran (c'est ce qui la rend gratuite sur les quatre zones).
+           ⚠️ IL ARRIVE AVEC `end2` ET IL RESTE : il monte du bas, s'installe, et le
+           voile blanc de la fin l'emporte avec l'étoile. Le faire apparaître d'un
+           coup aurait fait un carton ; le faire partir avant la fin aurait redit
+           qu'il n'était pas là. */
+        if (t > 5.6) {
+          const kb = Math.min(1, (t - 5.6) / 1.8);
+          const ease = kb * kb * (3 - 2 * kb);
+          const T2 = Math.max(16, Math.round(Math.min(W, H) / 14));
+          const sy3 = H + 40 - ease * (H * 0.30 + 40);
+          ctx.save();
+          ctx.globalAlpha = 0.34 + 0.66 * ease;
+          try {
+            spr0.drawStarShip(ctx, cx2, sy3, T2,
+              new Array(Q.STAR_SHIP_TOTAL).fill(true), now, {});
+          } catch (err) { /* jamais au prix de la scène : voir la note de `line()` */ }
+          ctx.restore();
         }
         if (t > 10) { ctx.fillStyle = `rgba(255,255,255,${Math.min(1, (t - 10) / 1.6).toFixed(3)})`; ctx.fillRect(0, 0, W, H); }
         if (t > 12) { ctx.fillStyle = `rgba(255,244,224,${Math.max(0, 1 - (t - 12) / 1.6).toFixed(3)})`; ctx.fillRect(0, 0, W, H); }
@@ -25045,16 +25115,34 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     /* ── CE QU'ELLE DIT QUAND ELLE EST LÀ. ⚠️ UNE SEULE PHRASE PAR SITUATION,
        et elle est DÉRIVÉE de l'état partagé : rien n'est mis en file, rien n'est
        à consommer, donc rien ne peut se perdre à la reprise (§6 de QUETE.md). */
+    /* ╔══════════════════════════════════════════════════════════════════════════
+       ║ AUDIT 2026-08-31 — LE POSTE SANS TEXTE EST REMPLI, ET IL TOMBE PILE SUR LE
+       ║ VIDE.
+       ╚══════════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ CE BLOC ÉTAIT VIDE DEPUIS LE DÉCHANT (469) : ses quatre phrases parlaient
+       toutes des chapitres supprimés, et c'est le SEUL endroit du jeu où la
+       compagne commente ce qu'on est en train de faire. L'audit a mesuré que son
+       silence tombe exactement sur les trente minutes où la quête ne propose rien —
+       *le vide de jouabilité et le vide narratif étaient le même vide.*
+       ⚠️⚠️⚠️ ELLE NE RÉPÈTE PAS LE BANDEAU, ET C'EST TOUTE LA DIFFICULTÉ DU POSTE.
+       Le bandeau répond à « qu'est-ce que je peux faire MAINTENANT » ; elle, elle
+       dit ce qu'elle voit et ce qu'elle ne comprend pas. Deux voix sur la même
+       question auraient été deux réponses à comparer (449) ; deux voix sur deux
+       questions différentes sont une scène.
+       ⚠️⚠️ MAIS ELLE PART DE LA MÊME SOURCE — `starGoalKey`, via le contexte que
+       le bandeau utilise déjà. C'est ce qui garantit qu'elle ne parle jamais d'une
+       étape qu'on a dépassée : une seconde table indexée « à la main » sur les
+       chapitres aurait dérivé au premier changement de chaîne, exactement comme
+       les quatre phrases que le déchant a dû jeter.
+       ⚠️ `starSay` garde par CLÉ : tant que l'objectif ne bouge pas, la phrase est
+       dite une fois et laisse son fondu finir. Une réplique toutes les quatre
+       secondes pendant une attente de cinq minutes serait pire que le silence.
+       ⚠️ ET LE SECRET TIENT (§15.1) : elle parle à NOUS, jamais aux habitants, et
+       `verify-quete` continue d'interdire qu'une réplique de PNJ la nomme. */
     if (starWithMe(e)) {
-      const chk = Q.starChapterKey(e);
-      /* ⚠️ ZIP 469 — LES QUATRE PHRASES DE CE BLOC PARLAIENT TOUTES DES CHAPITRES
-         SUPPRIMÉS (le nom qui manque, les deux marques, la consigne d'écoute). Le
-         bloc reste, VIDE et documenté, parce que c'est le seul endroit du jeu où
-         l'étoile commente le chapitre en cours : le remplir est une des tâches de
-         la refonte (voir la liste de reprise), et le supprimer ferait perdre
-         l'accroche.
-         ⚠️ `starSay` est intacte et appelée ailleurs (les bulles d'objectif) : ce
-         n'est pas du code mort, c'est un poste sans texte. */
+      const gk = Q.starGoalKey(e, starGoalCtx());
+      const line = gk && L.star.frame ? L.star.frame[gk] : null;
+      if (line) starSay("frame:" + gk, line, 5200);
     }
   }
 
