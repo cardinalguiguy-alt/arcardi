@@ -47,6 +47,11 @@
    Repère : +X à droite, +Y en haut, +Z vers la porte, donc vers NOUS. Le maire
    est en Z négatif, derrière son bureau, face à nous. Tout est en mètres.
    ═══════════════════════════════════════════════════════════════════════════ */
+/* ⚠️ LA CINÉMATIQUE DES BRAS ET LE GLISSEMENT DE POSE VIVENT DANS `rig3d.js`
+   DEPUIS QU'IL Y A DEUX PERSONNAGES ARTICULÉS DANS CE JEU (le maire ici,
+   Tristan à sa scie). Voir la note de `solveArm` plus bas : une loi des cosinus
+   recopiée est une divergence en attente. */
+import * as R3 from "./rig3d";
 
 /* ⚠️ UN SEUL JEU DE NOMBRES POUR LA PIÈCE : ils bâtissent les murs ET bornent la
    caméra libre. Deux descriptions de la même pièce divergeraient au premier
@@ -1091,22 +1096,10 @@ export const FACE_CHANNELS = Object.keys(FACE.cold);
    ⚠️ `1 - Math.pow(k, dt)` PLUTÔT QUE `dt * k` : la seconde forme dépend de la
    cadence, donc la même pose met deux fois plus de temps à 30 images/s qu'à 60,
    et le réglage fait à 60 est faux partout ailleurs. */
-export function ease(cur, want, dt, speed) {
-  const a = 1 - Math.pow(0.0001, dt * (speed || 1));
-  for (const k in want) {
-    const w = want[k];
-    if (Array.isArray(w)) {
-      /* ⚠️ ON INTERPOLE LA MAIN, PAS L'ANGLE. Glisser sur les angles ferait
-         décrire à la main un ARC : elle traverserait le plateau pour aller d'un
-         bord à l'autre du sous-main. En interpolant la cible, elle glisse. */
-      let c = cur[k]; if (!Array.isArray(c)) c = cur[k] = w.slice();
-      for (let i = 0; i < w.length; i++) c[i] += (w[i] - c[i]) * a;
-    } else {
-      cur[k] = (cur[k] || 0) + ((w || 0) - (cur[k] || 0)) * a;
-    }
-  }
-  return cur;
-}
+/* ⚠️ MÊME DÉMÉNAGEMENT QUE `solveArm`, ET MÊME RAISON : deux glissements
+   d'interpolation recopiés auraient divergé au premier réglage de cadence. Le
+   nom reste exporté d'ici parce que c'est ce que la scène du maire appelle. */
+export const ease = R3.ease;
 export function poseTarget(key) { return POSE[key] || POSE.flat; }
 /* ⚠️⚠️⚠️ L'ÉTAT DE DÉPART SE PREND ICI, JAMAIS PAR `{ ...poseTarget(k) }`.
    Trouvé le 2026-08-31 en écrivant `render-maire` : la vue faisait exactement
@@ -1116,11 +1109,7 @@ export function poseTarget(key) { return POSE[key] || POSE.flat; }
    la seconde audience partait d'une pose que personne n'avait écrite. Aucun
    symptôme sur le moment : les nombres restaient plausibles.
    *Une table de référence qu'on étale à plat est une table qu'on modifie.* */
-export function poseState(key) {
-  const p = poseTarget(key), out = {};
-  for (const k in p) out[k] = Array.isArray(p[k]) ? p[k].slice() : p[k];
-  return out;
-}
+export function poseState(key) { return R3.poseCopy(poseTarget(key)); }
 export function faceTarget(key) { return FACE[key] || FACE.cold; }
 
 /* ── LA POSTURE. Elle ne lit que `cur`, jamais l'état de la négociation : c'est
@@ -1248,54 +1237,18 @@ export const STAND_LIFT = 0.44 + 0.41 + 0.045 - 0.50;
    toujours ; celle-ci est maintenant à côté de son os.* */
 const ARM_UPPER = 0.30, ARM_FORE = 0.30;
 export function solveArm(rig, arm, target, out, side) {
-  if (!target) return;
-  const T = rig._T;
-  /* la cible, ramenée dans le repère du BUSTE : c'est là que vit l'épaule, et
-     c'est ce qui fait que se pencher emmène les bras sans les décrocher */
-  T.v.set(target[0], target[1], target[2]);
-  rig.mayor.torso.worldToLocal(T.v);
-  T.v.sub(arm.sh.position);
-
-  const dMax = (ARM_UPPER + ARM_FORE) * 0.995;
-  const dMin = Math.abs(ARM_UPPER - ARM_FORE) + 0.02;
-  let d = T.v.length();
-  if (d < 1e-4) { T.v.set(0, -dMin, 0); d = dMin; }
-  else if (d > dMax) { T.v.multiplyScalar(dMax / d); d = dMax; }
-  else if (d < dMin) { T.v.multiplyScalar(dMin / d); d = dMin; }
-
-  /* l'angle du coude, par la loi des cosinus. `bend` est ce dont l'avant-bras
-     s'écarte du prolongement du bras : zéro = tendu. */
-  const cosB = (ARM_UPPER * ARM_UPPER + ARM_FORE * ARM_FORE - d * d) / (2 * ARM_UPPER * ARM_FORE);
-  const B = Math.acos(Math.max(-1, Math.min(1, cosB)));
-  const bend = Math.PI - B;
-  /* l'écart entre le bras et la ligne épaule-main */
-  const cosA = (ARM_UPPER * ARM_UPPER + d * d - ARM_FORE * ARM_FORE) / (2 * ARM_UPPER * d);
-  const A = Math.acos(Math.max(-1, Math.min(1, cosA)));
-
-  /* Le repère de l'épaule : −Y pointe vers la main, X est l'axe autour duquel le
-     coude plie. ⚠️ ON CHOISIT X, ON NE LE SUBIT PAS — c'est `out` qui décide de
-     quel côté sort le coude, et `side` qui donne son sens au bras gauche. */
-  const dir = T.d.copy(T.v).normalize();
-  T.hint.set(side * (out >= 0 ? 1 : -1), 0.15, out >= 0 ? -0.55 : 0.75).normalize();
-  T.x.copy(dir).cross(T.hint);
-  /* HORS-ZIP — LE REPLI DÉGÉNÉRÉ OUBLIAIT `side`. Quand la cible est presque
-     alignée avec `T.hint` (ça arrive pour le bras GAUCHE dans certaines
-     poses, p.ex. les mains dans le dos), le produit vectoriel s'effondre et
-     ce repli choisissait tout le temps +X MONDE — c'est-à-dire le côté du
-     bras DROIT. Le coude gauche se pliait alors dans le plan du bras droit :
-     un bras « inversé », mais seulement quand la géométrie tombait dans ce
-     cas précis — d'où le « parfois » signalé par Guillaume, jamais un défaut
-     systématique qu'une seule pose aurait suffi à voir. Le repli doit
-     mirrorer comme tout le reste de la fonction. */
-  if (T.x.lengthSq() < 1e-6) T.x.set(side, 0, 0);
-  T.x.normalize();
-  T.y.copy(dir).multiplyScalar(-1);                 // le bras pointe vers −Y
-  T.z.copy(T.x).cross(T.y).normalize();
-  T.m.makeBasis(T.x, T.y, T.z);
-  arm.sh.quaternion.setFromRotationMatrix(T.m);
-  /* on écarte le bras de la ligne, puis le coude ramène la main dessus */
-  arm.sh.rotateX(A);
-  arm.el.rotation.set(-bend, 0, 0);
+  /* ⚠️⚠️⚠️ LE SOLVEUR EST PARTI DANS `rig3d.js`, ET LA RAISON EST DATÉE : il y a
+     maintenant DEUX personnages articulés (le maire ici, Tristan à sa scie) et
+     une loi des cosinus recopiée est une divergence en attente — la première
+     correction de repli dégénéré ou de choix de coude n'aurait porté que d'un
+     côté (§8 de `CLAUDE.md`). Ce qui RESTE ici, et qui doit y rester, ce sont
+     les deux longueurs d'os : elles décrivent CE corps-là, et elles doivent
+     vivre à côté des boîtes qu'elles mesurent (`ARM_FORE` a menti d'un
+     centimètre le jour où elle en était séparée).
+     ⚠️ Le comportement est inchangé au bit près — c'est `render-maire` §3, qui
+     mesure l'écart entre la main rendue et la main écrite (14 mains à 0,0 cm),
+     qui rend cette délégation sûre plutôt que probable. */
+  R3.solveArm(rig._T, rig.mayor.torso, arm, target, out, side, ARM_UPPER, ARM_FORE);
 }
 
 /* ── LE VISAGE. ⚠️ `talk` EST UNE ENVELOPPE, PAS UN ALÉA PAR IMAGE : une bouche

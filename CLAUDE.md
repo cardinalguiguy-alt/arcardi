@@ -11,34 +11,65 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**ACTION SUIVANTE UNIQUE — TOUT REGARDER À L'ÉCRAN, RIEN DE CE QUI SUIT N'A ÉTÉ JOUÉ.** Trois choses
-s'accumulent sans avoir été vues en jeu, et une seule séance suffit à les cocher toutes : (1) la
-barque — tenir la barre, poser l'invite à l'écran ET le bouton tactile (clavier seul aujourd'hui),
-le fondu enchaîné en franchissant la passe (décor marin générique, voir §33 de
-`components/ferme/README.md`) ; (2) HORS-ZIP, 2026-08-31 — **les deux cartes de victoire et la
-typographie du maire**, demandées par Guillaume et livrées ce jour : une carte plein écran verte
-(✓, deux anneaux) félicite le joueur quand le maire signe (`starScene:{key:"mayorWin"}`, déclenchée
-dans le bloc `mayorTalk`) et quand Kerguélen livre les plans (`key:"engDone"`, dans le battement de
-`resolveStarPlanTick`) — même file `starShowCard` que la carte de chapitre, mêmes garanties
-multijoueur (`starPanelsClear`). La bulle du maire distingue maintenant nettement la RÉPLIQUE
-(18px, grasse, quasi blanche) de la DIDASCALIE (12px, italique, éteinte) — `.maire-line-say` /
-`.maire-line-stage` dans `app/globals.css`. **Vérifié par les bancs uniquement** (`verify-strings`
-1106/1106, `verify-quete` 628/628, `verify-maire` 113/113, bundle esbuild, `next build`) et par une
-capture CSS isolée hors du jeu — **jamais dans une vraie audience ni un vrai chantier naval**.
-⚠️ Portée volontairement réduite aux deux étapes nommées par Guillaume (« et Kerguelen, etc etc ») :
-la fin du navire (`key:"end"`) et d'autres jalons difficiles n'ont PAS de carte de victoire — à
-étendre une fois ces deux-là vues et validées à l'écran, pas avant. (3) HORS-ZIP, session saule,
-2026-08-31 — Guillaume a montré une capture où le saule procédural était « affreux quelle que soit
-la saison » à côté du saule importé de sa planche, « merveilleux ». `townTreeKind` (`fermeArt.js`)
-ne choisit plus jamais `TT.WILLOW` sur la berge (il y faisait pourtant la moitié des arbres) ; le
-saule importé (`REF_WILLOW`) le remplace et porte désormais, sur sa demande, **deux variantes de
-teinte légères rien qu'en automne** (`autumnAlt`, ±5° de teinte / ±5 % de lumière, choisies par le
-même hachage pur que la phase de vent — §3, rien ne circule). Vérifié par les bancs uniquement
-(`render-arbres` 14/15 essences utilisées, saule procédural à 0 ; `verify-vallee` 223/223 ; bundle
-esbuild ; `next build`) — **jamais revu sur la vraie berge où la capture a été prise.**
-⚠️⚠️ **CETTE ACTION EST POUR CLAUDE, PAS POUR CODEX** — c'est du jugement visuel et du jeu joué à
-l'écran, exactement ce que le §2 réserve à Claude Code. Codex n'a rien à y faire tant que ce bloc
-la désigne.
+**ACTION SUIVANTE UNIQUE — JOUER LA SCIE DE TRISTAN JUSQU'AU BOUT, ET JUGER TROIS NOMBRES.** La
+scène 3D du **lot E** est livrée ce jour (voir juste en dessous) ; elle a été ouverte, jouée et
+regardée à l'écran — mais **une seule fois, en fenêtre PORTRAIT, et jamais jusqu'à la victoire ni
+jusqu'à la troisième planche fendue.** Ce qui reste à juger n'est pas du code, c'est du réglage, et
+ça ne se mesure nulle part (§10) : (1) **le tempo** — la fenêtre parfaite fait 230 ms au départ et
+se resserre à 155 ms quand on enchaîne ; est-ce que ça monte trop vite ? (2) **la durée** — 33 s en
+jeu parfait, 80 à 100 s en martelant ; est-ce que la manche est trop courte pour cinq commandes
+d'affilée, ou juste ? (3) **la sanction** — trois planches fendues coûtent la commande et 12 bois
+chacune ; est-ce puni ou anecdotique ? ⚠️ **Aucun de ces trois nombres ne doit bouger avant d'avoir
+joué**, c'est la règle du voyage en train (431), qui a eu raison deux fois.
+⚠️⚠️ **ET IL RESTE LA MOITIÉ DU LOT E, ÉCRITE MAIS PAS TRANSPORTÉE** : le §17.6 de `QUETE.md`
+promet **deux joueurs sur la même scie**. La mécanique est déjà symétrique (`sawPull(s, side)`,
+`side = −1` est la poignée d'en face) ; ce qui manque est le transport du second journal et
+l'arbitrage à deux. C'est une dette DATÉE, pas un oubli — et c'est le poste coopératif le plus
+prêt du dépôt.
+⚠️ **CE QUI N'A TOUJOURS PAS ÉTÉ FAIT ET QUI ATTEND DEPUIS PLUS LONGTEMPS** : la barque (tenir la
+barre, invite à l'écran, bouton tactile, fondu en franchissant la passe), et le saule de la berge
+revu sur la vraie berge. Les deux restent au chaud, ils n'ont pas été touchés cette session.
+
+⚠️⚠️⚠️ **LE LOT E EST LIVRÉ LE 2026-08-31 : LA GRANDE SCIE DE TRISTAN, EN 3D, JOUÉE AU RYTHME.**
+Demande de Guillaume, mot pour mot : *« implémenter cette scène 3D très fluide dans l'atelier de
+Tristan (aussi fluide et quali que le jeu de ski slope). Le rendu doit être absolument parfait, la
+scie doit pas être trop rigide et on doit sentir l'effort. Je veux un truc bien arcade, appuyer en
+rythme pour découper les planches etc avec la possibilité de casser la planche de bois etc. Et
+Tristan en face un perso très cohérent anatomiquement, on doit ressentir l'effort. Le décor
+intérieur du bâtiment de Tristan doit être parfaitement traité. »* Le détail vit à côté du code ;
+ici, seulement ce qu'il ne faut pas casser :
+· **Quatre fichiers, et le découpage est celui du maire** : `scierie.js` (la mécanique pure, que
+l'hôte REJOUE), `scierieAtelier.js` (l'atelier et Tristan, procéduraux, sans un fichier à charger),
+`ScierieScene.js` (la vue), `rig3d.js` (la cinématique inverse, **partagée avec le maire** — deux
+personnages articulés, une seule loi des cosinus).
+· ⚠️⚠️ **LA COMMANDE DE BOIS NE SE CLIQUE PLUS, ELLE SE SCIE.** Le panneau de Tristan ouvre la
+scène ; à la fin le client envoie sa TRANSCRIPTION (des numéros de pas, pas des horodatages) et
+l'hôte rejoue la manche avec `sawRun`. **Un seul `send()` pour tout le sciage** (§3), et le client
+n'annonce jamais son résultat.
+· **Rien n'est prélevé tant que la manche n'est pas gagnée** : c'est ce qui autorise la rupture de
+planche à être un vrai risque. Perdre coûte le temps qu'on vient d'y passer, jamais du bois.
+· **La note ne change que la DURÉE de la commande** (×0,60 à ×1,15), jamais son prix — seules les
+planches fendues coûtent du bois, parce que c'est du bois qu'on a réellement fendu. Un mini-jeu qui
+change une dépense ferait de l'adresse une monnaie, et la ferme a déjà une économie.
+· **Le mou de la lame est la grandeur qui fait le rythme, et il se VOIT** : une scie qu'on laisse
+s'arrêter se détend, la lame s'assied dans son trait, et la fenêtre parfaite se referme. C'est la
+même valeur qui juge et qui fléchit le dessin.
+· **Tristan a les pieds PLANTÉS** : ses jambes sont résolues en cinématique inverse vers deux
+appuis fixes, et ses mains vers la poignée réelle (fille de la lame). Aucune position n'est
+recopiée, donc rien ne peut se décrocher — et il ne patine jamais.
+· **Un arrêt de menu dev naît le même jour** (« 🪚 Open Tristan's saw ») : leçon du 425 payée
+d'avance, sinon on ne juge la manche qu'une fois.
+⚠️⚠️ **ET LES DEUX BANCS NEUFS ONT TROUVÉ NEUF DÉFAUTS QU'AUCUNE RELECTURE N'AURAIT VUS**, dont
+trois qui valent d'être retenus : **le madrier était à hauteur de poitrine** (Tristan sciait les
+coudes en l'air, avant-bras en travers du buste — la posture était exacte et absurde) ; **tous les
+genoux pliaient à l'envers** ; et **le plafond de temps de la manche était posé par chaque appelant
+au lieu d'être dans la simulation**, donc le client et l'hôte pouvaient s'arrêter à des pas
+différents — une commande gagnée à l'écran et refusée par le réseau.
+⚠️ **CE QUE LES BANCS NE POUVAIENT PAS VOIR, ET QUE L'ÉCRAN A MONTRÉ EN TRENTE SECONDES** : la
+scène était **entièrement surexposée** (le rastériseur du banc n'a pas `sRGBEncoding`, il rendait
+un atelier plausible là où le vrai moteur rendait du blanc), **cadrée beaucoup trop serré**, et
+**la scène se refermait toute seule** — React 18 nettoie puis remonte les effets en développement,
+et le nettoyage rapportait la manche.
 
 ⚠️⚠️ **LE BATEAU EST LIVRÉ LE 2026-08-31, ET IL N'A COÛTÉ NI CANAL RÉSEAU NI POSE NEUVE.** Demande
 de Guillaume : *« eduardo peut utiliser le navire. mais nous aussi en montant dedans : soigner les
@@ -255,6 +286,15 @@ toutes payées :
   ⚠️ Corollaire, et c'est l'angle mort du contrôle de silhouette lui-même : **ce qui déborde se
   compte en pixels, ce qui s'enfonce se compte en mètres**. Une main enfoncée dans une poitrine ne
   fait pas d'îlot — elle disparaît, et la masse reste d'un seul tenant.
+- ⚠️⚠️ **il accuse le personnage de ce que fait son CADRAGE** (2026-08-31, quatorzième forme, et
+  c'est la plus embarrassante parce qu'elle vient du banc lui-même). Le contrôle de silhouette de
+  `render-scierie` annonçait « 2 îlots » sur deux poses de Tristan : un membre détaché, donc. Il
+  n'y avait aucun membre détaché — c'était le CADRE de la vignette qui coupait l'épaule, six pixels
+  dans un coin, et le morceau resté de l'autre côté comptait pour un second îlot. *Un contrôle de
+  connexité mesuré dans un cadre trop serré mesure le cadre.* La parade est un contrôle de BORD
+  posé AVANT celui d'îlots (il nomme le vrai coupable), et des caméras qui DÉRIVENT leur recul de
+  la boîte englobante au lieu d'être réglées à la main — un personnage qui travaille change de
+  taille et de place d'une pose à l'autre.
 ⚠️⚠️ **ET UN CONTRÔLE DE CAS NE VAUT PAS UN INVARIANT** (449). Trois contrôles « est-ce que ça
 marche » étaient verts sur le placement du familier meneur ; l'invariant — *il n'est JAMAIS plus
 loin du but que le joueur*, balayé sur toutes les positions — a échoué **20 fois sur 164** et a
@@ -300,11 +340,10 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 
 | # | La leçon, en une phrase | Où est le détail |
 |---|---|---|
-| 2026-08-31 | ⚠️⚠️⚠️ **UN VÉHICULE A DEUX DEGRÉS DE LIBERTÉ ; LES TESTER À MOITIÉ, C'EST NE PAS LES TESTER.** La coque du bateau testait son PAS contre l'eau et pas sa ROTATION : elle s'échouait en virant sur place, **4 934 images à terre sur 5 400**, et le défaut n'existe que dans un chenal étroit — donc jamais là où on l'essaie. Corollaire mesuré dans la foulée : deux libertés qui se bloquent l'une l'autre font un VERROU (en travers de la commande, plus de poussée, donc plus de rotation possible) ; la parade est celle du pas à pied — *on essaie, puis on essaie décalé*. | `boatStep`, `verify-vallee` §barque |
-| 2026-08-31 | ⚠️⚠️ **UNE CHAÎNE D'OS SE REMET À JOUR DEPUIS SA RACINE OU PAS DU TOUT.** `updateMatrixWorld` compose avec la matrice monde du PARENT telle qu'elle est : rafraîchir le buste laissait l'homme d'une image en retard. Tant que la racine ne bougeait jamais l'écart valait zéro ; le jour où une pose s'est mise à la lever, les deux mains se sont posées 39 cm à côté — et seulement à la pose SUIVANTE, donc par intermittence. *Mise à jour partielle et retard d'une image sont la même erreur, et la seconde ne se voit que si la première existe.* | `applyPose`, `m.man.updateMatrixWorld` |
-| 2026-08-27 | ⚠️⚠️⚠️ **UNE DATE ABSOLUE NE PASSE JAMAIS PAR UNE OPÉRATION 32 BITS.** Un petit instant de banc survit à `| 0`, une date réelle de 2026 non ; toute migration d'horodatage se rejoue avec `Date.now()` ET le vrai cycle de sérialisation/reprise de l'hôte. | `candyUntil`, `migrateStar`, `verify-quete.mjs` §12 |
+| 2026-08-31 (scie) | ⚠️⚠️⚠️ **UNE BORNE POSÉE PAR LES APPELANTS EST DEUX BORNES — ET LES DEUX APPELANTS SONT LE CLIENT ET L'HÔTE.** Le plafond de durée d'une manche de sciage vivait dans `sawRun` (côté hôte) et nulle part dans la boucle du client : une manche traînante s'arrêtait donc à des pas différents des deux côtés, et le symptôme était le pire possible — une commande gagnée à l'écran, refusée par le réseau, sans rien pour l'expliquer. La borne est maintenant DANS `sawTick`. *Toute limite d'une simulation rejouable appartient à la simulation.* | `SAW_MAX_TICKS`, `sawTick`, `verify-scierie` §1 |
+| 2026-08-31 (scie) | ⚠️⚠️ **UN BANC DE RENDU SANS GESTION DE COULEUR NE JUGE PAS UNE LUMIÈRE, ET IL FAUT LE CROIRE QUAND IL LE DIT.** `render-scierie` peignait un atelier parfaitement lisible ; le même décor ouvert dans le navigateur était BLANC — le rastériseur ignore `sRGBEncoding`, donc il sous-estime toutes les intensités d'un tiers. Le §8 le savait depuis le 421 (« soleil à 2,45 → image entièrement blanche ») ; ce qui est neuf, c'est qu'un banc VERT peut désormais donner l'illusion du contraire. *Une intensité se règle dans le moteur qui l'applique, jamais dans celui qui l'approxime.* | en-tête de `render-scierie.mjs`, `buildShop` §lumière |
+| 2026-08-27 | ⚠️⚠️⚠️ **UNE DATE ABSOLUE NE PASSE JAMAIS PAR UNE OPÉRATION 32 BITS.** Un petit instant de banc survit à `\| 0`, une date réelle de 2026 non ; toute migration d'horodatage se rejoue avec `Date.now()` ET le vrai cycle de sérialisation/reprise de l'hôte. | `candyUntil`, `migrateStar`, `verify-quete.mjs` §12 |
 | 2026-08-31 (saule) | ⚠️⚠️ **UN JITTER DE COULEUR SE CALCULE SUR LA TEINTE D'ORIGINE, JAMAIS SUR LE RÉSULTAT DÉJÀ TRANSPOSÉ.** La garde tronc/feuillage de `seasonPalette` (`h<65 \|\| h>190`) ne sépare le bois du feuillage que sur la palette D'ÉTÉ : appliquée sur une palette déjà tournée vers l'automne, tronc et feuillage tombent dans la même plage basse et la garde ne distingue plus rien. Les variantes du saule passent donc leur décalage EN PARAMÈTRE de la même fonction, jamais en repasse sur sa sortie. | `seasonPalette`, `plancheTree` |
-
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
 
@@ -520,6 +559,13 @@ de conception qui valent pour n'importe quel morceau du dépôt.
   de la session partait d'une posture que personne n'avait écrite. **Aucun symptôme sur le
   moment** — les nombres restaient plausibles. Parade : une copie explicite (`poseState`), et un
   contrôle qui rejoue deux cents images puis compare la table à elle-même.
+- ⚠️⚠️⚠️ **UN EFFET REACT DONT LE NETTOYAGE A UN EFFET DE BORD SE DÉCLENCHERA AU DÉMONTAGE QU'ON
+  N'AVAIT PAS PRÉVU** (2026-08-31). La scène de sciage rapportait sa manche depuis le `return` de
+  son effet, « au cas où le joueur ferme en cours de route ». En développement, React 18 monte
+  l'effet, le NETTOIE, puis le remonte : la scène se refermait donc toute seule dans la
+  milliseconde, **sans une ligne d'erreur, sans rien dans la console**, et le bouton qui l'ouvrait
+  avait l'air de ne rien faire. Une demi-heure perdue à chercher un bogue de rendu qui n'existait
+  pas. ⚠️ Le nettoyage LIBÈRE (écouteurs, contexte WebGL, textures) ; il ne DÉCIDE de rien.
 - ⚠️⚠️ **`chaîne.replace("X", …)` NE REMPLACE QUE LA PREMIÈRE OCCURRENCE.**
 - ⚠️⚠️ **UN `useProgram` QUI ÉCHOUE NE DÉLIE PAS LE PROGRAMME PRÉCÉDENT** : un shader qui ne
   compile pas fait dessiner l'objet SUIVANT avec les mauvais attributs. **Seul indice :
@@ -572,11 +618,16 @@ de conception qui valent pour n'importe quel morceau du dépôt.
 | `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE : table, chronologies et résolveurs purs.** ⚠️ **469 — la FOUILLE (`STAR_DIG_MS`, `starDug`, `resolveStarDig`, `starDigResult`) et TROIS chapitres au lieu de cinq.** `STAR_FARM_IMPACTS` porte les **huit** cratères (3 étoiles / 2 matières / 3 vides — compté en important le module le 2026-08-30 ; il annonçait « cinq (2/1/2) » depuis le 480 bis), `resolveStarCalm` tient le barème 60/10 s et `resolveStarTownFall` sépare le gros météore. `STAR_FOLLOWER_SITES` dérive toutes les compagnes de `content:"star"`, `starFollowerAdded` identifie celle qui doit jouer son arrivée, `starFarmFlightPath` tient le cap stable des fragments et `queen` désigne l'unique reine. `starShipProgress` joint les cinq états du plan aux commandes et à la cale sans persistance supplémentaire. Aucun React, aucun dessin — `verify-quete.mjs` l'importe. |
 | `components/ferme/maire.js` | **L'AUDIENCE CHEZ LE MAIRE (480) : la table des battements et les résolveurs purs.** Douze nœuds, cinq actes, cinq familles d'argument, la jauge d'adhésion qui FUIT, l'élan, la rejouabilité côté hôte (`mayorReplay` : le client envoie sa TRANSCRIPTION, l'hôte la rejoue). Aucun React, aucun dessin — `verify-maire.mjs` l'importe. ⚠️ **C'est un système de NÉGOCIATION, pas une scène** : la confiance gagnée sert les audiences futures, donc une commission ou le cadastre s'y ajouteront en une table de plus. |
 | `components/ferme/MaireScene.js` | **la VUE de l'audience — le seul morceau de 3D du monde partagé.** Écran PLEIN, à la PREMIÈRE PERSONNE, caméra libre dans la pièce, bulles projetées, réponses en jaune, **mode spectateur** (`MayorWatch`), repli plat si WebGL manque. ⚠️ Il porte `mayorCtxOf`, **la fonction de contexte que le CLIENT et l'HÔTE appellent tous les deux** : leur accord est une propriété du code, pas une coïncidence. |
+| `components/ferme/scierie.js` | **LA SCIE DE TRISTAN (lot E) : la simulation pure, à PAS FIXE.** Une lame qui a de l'inertie, un partenaire qui RÉPOND au lieu de mener, un mou qui referme la fenêtre parfaite, une contrainte qui fend la planche. ⚠️ **Aucune fonction transcendante dans le chemin de simulation** (`sin`/`pow`/`random` sont laissés à l'implémentation par la norme) : le hasard passe par un hachage entier, ce qui rend la manche rejouable **au bit près** par l'hôte à partir d'une liste de numéros de pas. Aucun React, aucun dessin — `verify-scierie.mjs` en joue des centaines. ⚠️ `sawPull(s, side)` est déjà symétrique : la seconde poignée du §17.6 s'ajoutera sans rouvrir la mécanique. |
+| `components/ferme/scierieAtelier.js` | **L'ATELIER DE TRISTAN, EN CODE.** Le hangar et sa charpente apparente, les grumes, les piles de planches, l'établi, le poêle, les rais de poussière — et Tristan : pieds PLANTÉS, jambes et bras résolus en cinématique inverse, buste dont l'inclinaison est CALCULÉE pour que la main tombe à portée. La lame est **segmentée**, donc elle plie (ventre du coincement, fouet de la vitesse, affaissement du mou). ⚠️ Procédural comme `maireBureau.js`, `THREE` passé en paramètre, rien dans la closure de la boucle. |
+| `components/ferme/ScierieScene.js` | **la VUE du sciage** : plein écran, simulation à pas fixe pilotée par une horloge réelle, journal de traits, repli jouable si WebGL manque. ⚠️ Elle n'envoie qu'**une seule `req` à la fin** — la transcription, jamais un résultat. |
+| `components/ferme/rig3d.js` | **LA CINÉMATIQUE INVERSE, ÉCRITE UNE FOIS POUR LES DEUX PERSONNAGES** (le maire, Tristan). ⚠️ Elle a été SORTIE de `maireBureau.js` le jour où le second est arrivé : une loi des cosinus recopiée est une divergence en attente (§8). Les LONGUEURS d'os, elles, restent à côté des boîtes qu'elles mesurent. |
 | `components/ferme/maireBureau.js` | **LE BUREAU DU MAIRE, EN CODE (481).** La pièce entière (parquet, boiseries, pilastres, fenêtre sur la place, bibliothèque, buste, lustre, porte qui claque), le meuble et ses objets — *chacun est une réplique de l'arbre* —, et le maire : sept postures, huit visages, sourcils/paupières/bouche, cinématique inverse des bras. ⚠️ **PROCÉDURAL, comme `fermeArt.js` mais en 3D** : aucun fichier à charger, textures peintes au canevas 2D, `THREE` passé en paramètre (jamais importé — deux copies de three.js dans une page ne ressemblent à rien). ⚠️ Rien n'y vit dans la closure de la boucle de rendu : `buildOffice` rend un objet, `applyPose`/`applyFace`/`solveArm` sont des fonctions de module. |
 | `components/ferme/QUETE.md` | **la quête de l'étoile — autorité. Le §17 est le dossier cible « Port des Sept Sœurs » : une soirée, chronologie 5 + 3, sept étoiles, attentes actives, ancien port et lots A–G ; il distingue explicitement conception et code livré** |
 | `components/ferme/README.md` | **Valley Town, le tribunal, l'HÔTEL DE VILLE, l'ÉGLISE, le BEFFROI, les habitants, la VENTE, les OISEAUX, les ÉLECTIONS et les PIÈGES de ces zones — autorité (428-444)** |
 | `components/ferme/DESSIN.md` | **les règles de DESSIN, vraies partout — autorité (441, sorties du §4)** |
 | `tools/README.md` | **les bancs, ce qu'ils attrapent et leurs chiffres — autorité (432-439)** |
+| `tools/verify-scierie.mjs` · `tools/render-scierie.mjs` | **LES DEUX BANCS DE LA SCIE.** Le premier JOUE (déterminisme, accord direct/rejeu sur des images irrégulières, courbe de difficulté en fonction de la latence, martèlement, bornes, journaux malformés) ; le second RASTÉRISE l'atelier sans GPU et balaie la posture de Tristan sur **course de lame × profondeur de trait** — un carré, pas une liste, parce que sa posture est une fonction continue de deux variables. |
 | `tools/lib-3d.mjs` · `tools/render-maire.mjs` | **REGARDER DE LA 3D SANS GPU (2026-08-31).** `lib-3d` charge le three.js **r128 vendorisé du dépôt** dans Node — la même bibliothèque que la page, à l'octet près — et rastérise à la main (projection, découpe au plan proche, tampon de profondeur, ombrage plat), plus le théorème des axes séparateurs pour mesurer une interpénétration en mètres. `render-maire` s'en sert pour peindre les sept postures côte à côte. ⚠️ **Aucune dépendance npm, et surtout pas `three`** : une autre révision n'a pas la même atténuation de lumière (§11), donc mesurerait un autre programme. |
 | `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** · depuis le 440 il **importe `planche.js`** : une portée de pont et une emprise de décor sont des grandeurs de DESSIN, on les dérive du sprite au lieu de les recopier |
 | `components/ferme/planche.js` | **GÉNÉRÉ** par `tools/import-planche.mjs` — les sprites de la planche de Guillaume, en données. Ne pas éditer à la main |
@@ -1014,6 +1065,17 @@ erreur** en choisissant mal.
   carte assumé comme un **vide habité par le décor** plutôt que par des gens, et c'est une réponse
   possible pour les blocs qui restent. `verify-vallee` a donc appris une troisième catégorie (bâti
   / prairie / bois) : sans elle, il réclamait « une raison qu'on y aille » pour une forêt.
+- ⚠️⚠️ **LA SCIE DE TRISTAN EST LIVRÉE (lot E, 2026-08-31) ET ELLE ATTEND TON JUGEMENT SUR TROIS
+  NOMBRES, PAS SUR SON CODE** — le tempo qui accélère, la durée d'une manche, le prix d'une planche
+  fendue. Ils sont détaillés dans le bloc ⏭️ REPRISE, et **aucun ne doit bouger avant que tu aies
+  joué** (règle du voyage en train, 431).
+  ⚠️ **Ce qui reste une VRAIE décision, en revanche : la seconde poignée.** Le §17.6 de `QUETE.md`
+  promet deux joueurs sur la même scie — l'un tire quand l'autre pousse — et la mécanique est déjà
+  écrite pour ça (`sawPull(s, side)`). Ce qui manque est le transport du second journal, et surtout
+  la réponse à une question qui n'est pas technique : **est-ce qu'on veut que la commande de bois
+  DEMANDE deux joueurs**, ou qu'elle soit seulement meilleure à deux ? Le §0 dit « 2 joueurs,
+  occasionnellement 3 » ; une serrure à deux sur une étape obligatoire de la quête serait la
+  première du jeu, et le §17 s'interdit explicitement d'en poser.
 - ⚠️ **DEUX DES TROIS CHANTIERS DE JOUABILITÉ RESTENT À CONSTRUIRE.** Le marché est livré au
   430 et **devenu le SEUL guichet au 431** : la ferme montre et transforme, la ville achète.
   L'économie existe donc vraiment, et le **jour de marché** hebdomadaire est déjà un
@@ -1326,6 +1388,19 @@ erreur** en choisissant mal.
    une pour remplir le tableau* — c'est ce qui l'a fait grossir deux fois. La passe corrige en
    revanche deux chiffres : `verify-vallee` passe de 208 à **214**, et le §13 perd sa question
    « lac-océan » puisqu'elle est répondue.)**.
+
+   **2026-08-31, la scie de Tristan — lot E (TRENTE-TROISIÈME passe : les DEUX lignes du 2026-08-31
+   (le véhicule à deux degrés de liberté, la chaîne d'os remise à jour depuis sa racine) partent
+   avant les deux leçons de cette livraison — deux retirées, deux ajoutées, le tableau reste à
+   quatre et couvre exactement les trois dernières sessions. Leur détail retiré vit dans `boatStep`
+   / `verify-vallee` §barque et dans `applyPose` / `maireBureau.js`, que leur colonne de droite
+   désignait déjà. ⚠️ Cette passe AJOUTE aussi une **quatorzième forme** au « banc qui passe » de
+   l'en-tête — *il accuse le personnage de ce que fait son cadrage* — et un piège React au §4
+   (un nettoyage d'effet qui a un effet de bord). ⚠️ Et elle a trouvé ce qu'un élagage doit
+   trouver : **le §10 annonçait « 18 bancs de contrôle et 20 bancs de rendu »** alors qu'il y en a
+   19 et 21 depuis cette livraison, et le compte n'était écrit qu'à un seul endroit — la seule
+   forme qui ne mente jamais deux fois, et la septième fois que ce chapitre se fait reprendre sur
+   un chiffre.)**.
 
    **hors-zip, session saule (TRENTE-DEUXIÈME passe : la ligne 2026-08-30 (« deux horloges qui se
    croisent ») part avant la leçon de cette session — une retirée, une ajoutée, le tableau reste à

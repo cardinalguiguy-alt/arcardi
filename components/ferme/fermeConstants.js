@@ -6407,3 +6407,154 @@ export const MAYOR_SLAM_HOLD_MS = 2600;
    qui ouvre la fenêtre pendant que l'autre LIT n'aurait rien à afficher jusqu'au
    battement suivant. */
 export const MAYOR_LIVE_KEEPALIVE_MS = 4000;
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ LOT E — LA GRANDE SCIE DE TRISTAN. TOUS LES NOMBRES DU GESTE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   Demande de Guillaume, mot pour mot : « la scie doit pas être trop rigide et on
+   doit sentir l'effort. Je veux un truc bien arcade, appuyer en rythme pour
+   découper les planches etc avec la possibilité de casser la planche de bois ».
+   Le dossier est au §17.6 de `QUETE.md` (« La charpente — tirer »).
+
+   ⚠️⚠️ TOUT CE QUI SUIT EST LU PAR UNE SIMULATION À PAS FIXE (`scierie.js`), ET
+   C'EST CE QUI REND LA MANCHE REJOUABLE PAR L'HÔTE. Un réglage exprimé en
+   « par image » aurait donné un sciage plus facile à 144 Hz qu'à 60, et surtout
+   un client et un hôte qui ne tombent pas d'accord — c'est-à-dire une manche
+   gagnée à l'écran et refusée par le réseau, le pire symptôme possible.
+   ⚠️ ON RÈGLE EN SECONDES ET EN UNITÉS DE COURSE, JAMAIS EN PIXELS : le dessin
+   dérive de la mécanique (`scierieAtelier.js` lit `bx`), l'inverse serait la
+   faute du §4 (« une grandeur de dessin ne doit pas entrer dans la collision »).
+   ═══════════════════════════════════════════════════════════════════════════ */
+/* Le pas de la simulation. ⚠️ 120 Hz ET PAS 60 : la fenêtre parfaite fait 90 ms,
+   soit onze pas — à 60 Hz elle en ferait cinq, et un demi-pas d'écart déplacerait
+   le verdict d'un cran. Un pas deux fois plus fin coûte deux fois rien (la
+   simulation est une douzaine de multiplications) et rend la note stable. */
+export const SAW_HZ = 120;
+export const SAW_DT = 1 / SAW_HZ;
+/* La course de la lame, en unités : −1 = poignée de Tristan, +1 = la nôtre.
+   `SAW_END` est le point où l'on considère qu'un trait est allé au bout ; on ne
+   va jamais jusqu'à ±1, une scie qui tape ses butées est une scie qu'on casse. */
+export const SAW_END = 0.86;
+/* ⚠️⚠️ LA MASSE ET LE FROTTEMENT SONT CE QUI FAIT « L'ÉLAN », et c'est la moitié
+   de la demande de Guillaume. Une lame sans inertie répond au bouton : c'est un
+   métronome, pas un outil. Avec inertie, un trait bien placé PROLONGE le
+   précédent — le joueur sent qu'il entretient quelque chose. */
+/* ⚠️⚠️ LE FROTTEMENT EST FORT, ET C'EST UNE MESURE, PAS UN GOÛT. Le premier jet
+   le posait à 1,55 : la lame partait sur son erre et mettait UNE SECONDE ET
+   DEMIE à s'arrêter, si bien qu'un aller-retour durait près de trois secondes et
+   que la manche ne finissait jamais dans la borne de temps. Une lame dans son
+   trait est freinée par le bois, pas par l'air : elle s'arrête à peu près quand
+   on cesse de tirer, et c'est ce qui rend le trait LISIBLE — on voit où finit le
+   geste de l'autre, donc on sait quand commencer le sien. */
+export const SAW_DRAG = 6.0;              // frottement visqueux, par seconde
+export const SAW_PULL = 30.5;             // accélération d'un trait, en unités/s²
+export const SAW_PULL_MS = 340;           // durée pendant laquelle un trait pousse
+/* ╔═══════════════════════════════════════════════════════════════════════════
+   ║ LE MOU — ⚠️ C'EST LUI QUI FAIT LE RYTHME, ET IL A FALLU LE MESURER POUR LE
+   ║ COMPRENDRE.
+   ╚═══════════════════════════════════════════════════════════════════════════
+   Le premier jet n'avait que la position de la lame dans son verdict, et la
+   première manche jouée par le banc l'a démonté en une ligne : une lame arrivée
+   chez Tristan et arrêtée y RESTE, donc la fenêtre parfaite ne se referme
+   jamais, donc il suffit d'attendre. Un jeu de rythme dont on peut prendre son
+   temps n'est pas un jeu de rythme.
+   ⚠️⚠️ LA PARADE N'EST PAS UN CHRONOMÈTRE, C'EST UNE GRANDEUR PHYSIQUE QU'ON
+   VOIT : une scie qu'on laisse s'arrêter se DÉTEND, la lame s'assied dans son
+   trait, et il faut la relancer avant qu'elle morde à nouveau. C'est vrai d'une
+   vraie scie, ça se dessine (la lame s'arque, `scierieAtelier.js` la fléchit
+   avec cette même valeur), et ça répond du même coup à la demande de Guillaume :
+   « la scie doit pas être trop rigide ». *Une contrainte de rythme qu'on peut
+   REGARDER s'apprend ; un compte à rebours invisible se subit.*
+   ⚠️ 3,4 par seconde : le mou atteint 1 en 294 ms, c'est-à-dire un tiers de
+   tempo. On a le temps de viser, pas celui d'hésiter. */
+export const SAW_SLACK_RATE = 3.4;
+export const SAW_SLACK_STILL = 0.35;      // en-deçà de cette vitesse, la lame est « arrêtée »
+export const SAW_SLACK_PERFECT = 0.55;    // au-delà, un trait ne peut plus être parfait
+export const SAW_SLACK_GOOD = 1.5;        // au-delà, il n'est même plus bon
+/* Le trait de Tristan. ⚠️ IL RÉPOND, IL NE MÈNE PAS : il part quand la lame
+   arrive chez nous, après un délai de réaction. C'est ce qui fait qu'on peut
+   accélérer le tempo en le pressant — et qu'un joueur mou ralentit la scène
+   entière au lieu de se faire distancer par un métronome. */
+export const SAW_MATE_DELAY_MS = 190;     // sa réaction quand la lame arrive chez nous
+export const SAW_MATE_JITTER_MS = 70;     // ce qu'il gagne ou perd, tiré du hachage
+export const SAW_MATE_PULL_K = 0.94;      // il tire un peu moins fort que nous : c'est NOTRE scie
+/* ⚠️⚠️ LES TROIS VERDICTS SE LISENT SUR LA LAME, JAMAIS SUR UNE HORLOGE. Une
+   fenêtre en millisecondes aurait été une seconde description du même instant
+   (§8 : un paramètre qui double un autre est une divergence en attente) : ici la
+   question est « où est la lame et où va-t-elle », et c'est la même question que
+   se pose le scieur. */
+export const SAW_PERFECT_X = 0.62;        // au-delà (vers Tristan), le trait est parfait…
+export const SAW_PERFECT_V = 0.55;        // …à condition que la lame ne fuie plus vite que ça
+export const SAW_GOOD_X = 0.24;           // au-delà, le trait est bon
+/* Ce qu'un trait fait avancer le trait de scie, par unité de course parcourue.
+   ⚠️ C'EST LA VITESSE QUI COUPE, PAS L'APPUI : une lame qu'on pousse sans qu'elle
+   bouge chauffe, elle ne mord pas. */
+export const SAW_BITE = 0.058;
+export const SAW_BITE_BIND = 0.22;        // ce qui reste quand la lame est coincée
+/* ⚠️⚠️ LE COINCEMENT EST LA SANCTION, ET IL EST PHYSIQUE : tirer quand l'autre
+   tire, c'est deux forces opposées sur une lame de deux mètres. Elle s'arque,
+   elle chauffe, elle ne coupe plus, et le bois encaisse la différence. */
+export const SAW_BIND_HIT = 0.62;         // ce qu'un trait à contresens ajoute
+export const SAW_BIND_FALL = 1.35;        // ce qui se dissipe par seconde
+export const SAW_STRESS_BIND = 0.78;      // contrainte gagnée par seconde de coincement plein
+export const SAW_STRESS_FALL = 0.115;     // ce que la planche récupère par seconde
+/* ⚠️ LA PLANCHE CASSE À 1, ET C'EST UN VRAI RISQUE (demande de Guillaume). Elle
+   ne coûte pas la manche : elle coûte le trait déjà fait, du bois, et le temps
+   de recommencer. Trois planches cassées et la commande est perdue — sans que
+   rien n'ait été dépensé, puisque l'hôte n'a encore rien prélevé. */
+export const SAW_BREAK_MAX = 3;
+export const SAW_BREAK_WOOD = 12;         // bois perdu par planche cassée
+export const SAW_BREAK_HOLD_MS = 900;     // le temps qu'on regarde la planche se fendre
+/* Le souffle. ⚠️ IL NE PUNIT PAS LE RYTHME, IL PUNIT LA PANIQUE : un trait tous
+   les tempos ne l'entame presque pas, un martèlement le vide en six secondes et
+   les traits deviennent mous. C'est la seule façon honnête de « sentir l'effort »
+   sans mettre une jauge de vie sur un geste d'artisan. */
+export const SAW_STAM_COST = 0.085;       // par trait
+export const SAW_STAM_BACK = 0.135;       // par seconde
+export const SAW_STAM_FLOOR = 0.42;       // la force qui reste à bout de souffle
+/* Le tempo. ⚠️⚠️ IL ACCÉLÈRE, ET C'EST CE QUI REND LA CHOSE ARCADE : chaque trait
+   parfait rapproche la réponse de Tristan, chaque raté lui rend du mou. La montée
+   est bornée des deux côtés — une scie qui accélère sans fin devient un test de
+   fréquence de clavier, ce qui n'est pas un geste. */
+/* ⚠️⚠️⚠️ LE TEMPO EST UNE ÉCHELLE DE TEMPS, PAS UN DÉLAI — ET C'EST LA SEULE
+   FORME QUI ACCÉLÈRE VRAIMENT LE GESTE. Le premier jet ne l'appliquait qu'à la
+   réaction de Tristan : la manche entière ne gagnait que 80 ms sur 1 500, c'est-
+   à-dire une montée invisible, donc pas une montée. Ici c'est la SIMULATION qui
+   tourne plus vite (`rate = SAW_TEMPO_MAX / tempo`) — même course, même
+   distance, même trait de scie, tout en moins de temps — donc la fenêtre
+   parfaite se resserre à la même proportion et le geste devient réellement plus
+   difficile à mesure qu'on le réussit. *Une difficulté qui monte doit se lire
+   dans le GESTE, pas dans un nombre affiché.*
+   ⚠️ 0,66 EN PLANCHER, PAS 0,58 : à ×1,72 la fenêtre parfaite tombe à 135 ms,
+   ce qui n'est plus du rythme mais du réflexe. ×1,51 laisse 155 ms — le même
+   ordre que le marteau de la grange, dont on sait qu'il est jouable. */
+export const SAW_TEMPO_MIN = 0.66, SAW_TEMPO_MAX = 1.0;
+export const SAW_TEMPO_GAIN = 0.045, SAW_TEMPO_LOSS = 0.10;
+/* Combien de planches par commande, et ce que ça vaut. ⚠️ CINQ N'EST PAS UN
+   NOMBRE ROND CHOISI AU HASARD : à tempo moyen une planche demande une douzaine
+   de traits, donc la manche dure de quarante à soixante secondes — la durée d'un
+   mini-jeu de ce dépôt (le marteau de la grange, la pêche), pas celle d'une
+   épreuve. */
+export const SAW_PLANKS = 5;
+/* ⚠️⚠️ CE QUE LA MANCHE CHANGE POUR LA QUÊTE, ET RIEN D'AUTRE : la DURÉE de la
+   commande. Bien scier fait gagner jusqu'à 40 % du délai, mal scier en coûte 15.
+   ⚠️ ELLE NE TOUCHE PAS AU PRIX EN BOIS (sauf les planches cassées) : un mini-jeu
+   qui change une dépense fait de l'adresse une monnaie, et la ferme a déjà une
+   économie. Elle change le TEMPS, qui est ce que ce chantier reproche à Tristan
+   depuis l'audit 477. */
+export const SAW_MS_BEST = 0.60, SAW_MS_WORST = 1.15;
+export const SAW_LOG_MAX = 220;           // traits transportés dans la `req` — voir `sawRun`
+/* ╔═══════════════════════════════════════════════════════════════════════════
+   ║ ⚠️⚠️⚠️ LE PLAFOND DE TEMPS APPARTIENT À LA SIMULATION, PAS À SES APPELANTS —
+   ║ ET C'EST LE BANC QUI L'A TROUVÉ, SUR LE SEUL CONTRÔLE QUI COMPTE VRAIMENT.
+   ╚═══════════════════════════════════════════════════════════════════════════
+   Le premier jet le posait dans `sawRun` (« trois minutes, largement au-delà
+   d'une manche jouée »), et la boucle du client n'en avait aucun. Une manche
+   traînante dépassait donc les trois minutes chez le joueur et s'arrêtait au
+   plafond chez l'hôte : deux manches différentes à partir du même journal, avec
+   pour symptôme une commande gagnée à l'écran et refusée par le réseau — sans
+   que rien ne l'explique. C'est le §8 sous sa forme la plus coûteuse : *deux
+   descriptions de la même limite, l'une chez chaque partie du réseau.*
+   ⚠️ Ici la borne est DANS `sawTick` : quel que soit l'appelant, la manche
+   s'arrête au même pas. Il n'y a plus rien à tenir d'accord. */
+export const SAW_MAX_TICKS = SAW_HZ * 180;

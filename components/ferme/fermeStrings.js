@@ -801,6 +801,51 @@ const STAR_FR = {
     noTristan: "Personne à la ferme ne sait travailler le bois comme ça.",
     unbuilt: (n, total) => `La cloche a répondu, mais il manque encore du bois : ${n} pièces sur ${total}.`,
   },
+  /* ╔═══════════════════════════════════════════════════════════════════════════
+     ║ LOT E — LE SCIAGE CHEZ TRISTAN.
+     ╚═══════════════════════════════════════════════════════════════════════════
+     ⚠️ TOUT CE QUE LE JOUEUR LIT PENDANT LA MANCHE EST ICI, y compris les quatre
+     verdicts : `scierie.js` ne connaît que des CLÉS (« perfect », « bind »),
+     parce que c'est l'hôte qui les rejoue et qu'un arbitre ne doit pas dépendre
+     d'une langue. C'est la même séparation que `maire.js`.
+     ⚠️ LA PHRASE D'AIDE DIT LA RÈGLE ENTIÈRE EN UNE LIGNE, et elle le doit : le
+     coincement est la seule sanction du jeu qui punisse un geste ACTIF, et un
+     joueur qui ne sait pas pourquoi sa planche casse conclut que c'est aléatoire. */
+  saw: {
+    title: (part) => `${part} — au trait de scie`,
+    him: (name) => `${name} cale le madrier sur les chevalets et te tend l'autre poignée.`,
+    himSide: "lui",
+    usSide: "toi",
+    planks: (n, total) => `planche ${Math.min(n + 1, total)} sur ${total}`,
+    broken: (n, max) => `${n} planche${n > 1 ? "s" : ""} fendue${n > 1 ? "s" : ""} sur ${max}`,
+    combo: (n) => `${n} traits d'affilée`,
+    stress: "Ce que la planche encaisse",
+    pull: "TIRER",
+    hint: "Tire quand la lame revient de son côté. Tirer pendant qu'il tire coince la lame.",
+    quit: "← Laisser tomber",
+    flat: "L'atelier ne s'affiche pas sur cette machine, mais la scie fonctionne : suis la lame sur la piste.",
+    camHint: "Glisse pour regarder autour · Espace ou clic pour tirer",
+    view: { poste: "\u{1FA9A} au poste", face: "\u{1F464} en face", atelier: "\u{1F3DA} l'atelier" },
+    verdict: {
+      perfect: "PARFAIT", good: "BON", weak: "MOU", bind: "ÇA COINCE !",
+      dead: "", plank: "PLANCHE !", break: "ELLE SE FEND !",
+    },
+    /* ── CE QU'ON LIT EN SORTANT. ⚠️ LA NOTE EST TRADUITE EN MOTS, PAS EN
+       POURCENTAGE : « 62 % » ne dit pas si c'est bien, et le joueur n'a aucun
+       barème en tête à sa première manche. */
+    grade: (n) => ["Il reprendra tout au rabot.", "Ça ira.", "Du beau travail.", "Du travail d'atelier."][n | 0] || "",
+    stars: (n) => "★".repeat(n | 0) + "☆".repeat(3 - (n | 0)),
+    win: (part, d) => `${part} : le bois est débité. Ce sera prêt dans ${d}.`,
+    faster: (pct) => `Trait franc : ${pct} % de temps gagné sur la pièce.`,
+    slower: (pct) => `Trait hésitant : ${pct} % de temps en plus.`,
+    extraWood: (n) => `${n} bois partis dans les planches fendues.`,
+    lost: "Trois planches fendues. La scie retourne au mur — rien n'a été prélevé, tu peux recommencer.",
+    quitToast: "Tu reposes la poignée. Aucune commande n'est passée.",
+    /* ⚠️ CE REFUS EXISTE PARCE QUE L'HÔTE REJOUE (voir `starTimberSaw`) : si sa
+       manche ne finit pas comme la nôtre, il refuse — et il doit le DIRE, sinon
+       le joueur voit un bouton qui ne fait rien. */
+    refused: "La commande n'a pas été enregistrée. Reprends la scie.",
+  },
   /* ⚠️ ZIP 453 — LE NAVIRE PREND LA MER AVEC EDUARDO (décision de Guillaume).
      Ces deux phrases REMPLACENT `voyagerDeparted` / `voyagerReturned` une fois
      la quête finie : elles ne coûtent donc pas un `send()` de plus, elles
@@ -1354,6 +1399,37 @@ const STAR_EN = {
     noTristan: "Nobody on the farm can work timber like that.",
     unbuilt: (n, total) => `The bell has answered, but the wood is short: ${n} pieces of ${total}.`,
   },
+  /* ⚠️ See the French note: the four verdicts are KEYS in `scierie.js` because
+     the host replays them, and an arbiter must not depend on a language. */
+  saw: {
+    title: (part) => `${part} — on the saw line`,
+    him: (name) => `${name} sets the beam on the trestles and hands you the far grip.`,
+    himSide: "him",
+    usSide: "you",
+    planks: (n, total) => `board ${Math.min(n + 1, total)} of ${total}`,
+    broken: (n, max) => `${n} board${n > 1 ? "s" : ""} split of ${max}`,
+    combo: (n) => `${n} strokes in a row`,
+    stress: "What the board is taking",
+    pull: "PULL",
+    hint: "Pull as the blade comes back from his side. Pulling while he pulls jams the blade.",
+    quit: "← Leave it",
+    flat: "The workshop will not draw on this machine, but the saw works: follow the blade on the track.",
+    camHint: "Drag to look around · Space or click to pull",
+    view: { poste: "\u{1FA9A} at the grip", face: "\u{1F464} across", atelier: "\u{1F3DA} the workshop" },
+    verdict: {
+      perfect: "PERFECT", good: "GOOD", weak: "SLACK", bind: "JAMMED!",
+      dead: "", plank: "BOARD!", break: "IT SPLITS!",
+    },
+    grade: (n) => ["He will plane all of that again.", "That will do.", "Fine work.", "Workshop work."][n | 0] || "",
+    stars: (n) => "★".repeat(n | 0) + "☆".repeat(3 - (n | 0)),
+    win: (part, d) => `${part}: the timber is cut. Ready in ${d}.`,
+    faster: (pct) => `Clean line: ${pct}% off the piece.`,
+    slower: (pct) => `Ragged line: ${pct}% added.`,
+    extraWood: (n) => `${n} wood lost in the split boards.`,
+    lost: "Three boards split. The saw goes back on the wall — nothing was spent, you can try again.",
+    quitToast: "You put the grip down. No order was placed.",
+    refused: "The order was not recorded. Take the saw again.",
+  },
   /* ⚠️ ZIP 453 — voir la note française : elles remplacent `voyagerDeparted` /
      `voyagerReturned` une fois la quête finie, donc zéro `send()` de plus. */
   sail: {
@@ -1415,6 +1491,11 @@ const STAR_EN = {
        bureau est deux pièces plus loin, derrière une porte. Sans ce bouton, chaque
        essai de l'audience commence par une promenade. */
     standMayor: "🎩 Stand at the Mayor's desk",
+    /* ⚠️ LOT E — cet arrêt naît le MÊME JOUR que la scène de sciage. Leçon du
+       425, écrite dans `CLAUDE.md` : un lieu qu'il faut quarante minutes de
+       quête pour atteindre est un lieu qu'on ne va pas regarder — donc qu'on
+       ne juge qu'une fois. */
+    saw: "\u{1FA9A} Open Tristan's saw",
   },
   /* ── LES ANNONCES DE CHAT. ⚠️ SANS EMOJI EN TÊTE : `broadcastChat` en écrit
      déjà un, et le 442 a livré « 🔍 🔍 Joueur1 a trouvé… » sur six libellés

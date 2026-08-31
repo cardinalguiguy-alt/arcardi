@@ -2403,6 +2403,29 @@ séquence dure environ deux fois plus longtemps. Une lumière orange fuit dans l
 puis saute entre les piles de planches : la chasse finale lit les copeaux et les vibrations, pas
 un chevron. L'orange apprivoisée stabilise la quille sur la cale.
 
+✅ **LA MOITIÉ SOLO EST CONSTRUITE LE 2026-08-31, ET ELLE A REMPLACÉ LE PANNEAU-LISTE.** Demande de
+Guillaume : *« une scène 3D très fluide dans l'atelier de Tristan […] la scie doit pas être trop
+rigide et on doit sentir l'effort […] un truc bien arcade, appuyer en rythme […] avec la
+possibilité de casser la planche de bois […] Tristan en face un perso très cohérent
+anatomiquement. »* Commander une pièce de bois n'est plus un clic dans une liste : on tient une
+poignée, Tristan tient l'autre, et **la note obtenue change la DURÉE de la commande** (×0,60 à
+×1,15). Le code vit dans `scierie.js` (mécanique pure, rejouée par l'hôte), `scierieAtelier.js`
+(l'atelier et Tristan, procéduraux), `ScierieScene.js` (la vue) et `rig3d.js` (la cinématique
+inverse, partagée avec le bureau du maire) ; les deux bancs sont `verify-scierie` (34/34, il JOUE)
+et `render-scierie` (58/58, il RASTÉRISE sans GPU).
+
+⚠️⚠️ **CE QUI N'EST PAS FAIT, ET C'EST LA MOITIÉ QUI PORTE LA PROMESSE DU §17.6 : LES DEUX
+JOUEURS.** La mécanique est déjà symétrique — `sawPull(s, side)`, `side = −1` est la poignée d'en
+face, et c'est l'automate `sawMate` qui la tient aujourd'hui. Ce qui manque est le TRANSPORT du
+second journal et l'arbitrage d'une manche à deux transcriptions. Ce n'est pas un oubli, c'est une
+dette datée : le lot E devait être jugeable isolément (règle du 424, ne pas mêler deux changements
+visuels), et une manche coopérative demande d'abord de trancher si la commande de bois doit
+*exiger* deux joueurs — ce que le §17 s'interdit ailleurs.
+⚠️ **LA SIXIÈME SŒUR N'EST PAS POSÉE NON PLUS.** La lumière orange dans les veines du bois et ses
+sauts entre les piles de planches appartiennent à la chasse, pas au geste : les piles existent dans
+l'atelier, à leur place, et rien d'autre n'a été écrit. Poser la sœur maintenant aurait mêlé une
+mécanique de chasse à une mécanique d'effort dans la même livraison.
+
 **Le voyage d'Eduardo et la septième sœur — guider.** Eduardo ne disparaît plus derrière un délai.
 Son petit bateau suit une route visible sur l'eau pendant que les joueurs rallument trois feux :
 entrée du chenal, bout du quai, tour du parc. À deux, l'un entretient la séquence des feux et
@@ -2510,12 +2533,13 @@ Wireframe du panneau `P` :
 | B | six éclats et refroidissement actif | jouer le tour du cratère seul et à deux ; mesurer chaleur et réduction ensemble |
 | C | planche à cinq jalons et ordonnancement parallèle maire/ingénieur | partie reprise à chacun des cinq instants, sans comparer horloge invité/hôte |
 | D | port, retournement et cinquième sœur | vérification visuelle dédiée ; aucune constellation sous un plafond |
-| E | sciage coop/solo et sixième sœur | deux vrais clients aux deux poignées, puis repli Tristan en solo |
+| E | sciage coop/solo et sixième sœur | deux vrais clients aux deux poignées, puis repli Tristan en solo — ⚠️ **la moitié SOLO est livrée le 2026-08-31 et a été jouée à l'écran une fois** (jamais jusqu'à la victoire ni jusqu'à la troisième planche fendue) ; la coop et la sixième sœur restent entières, voir le §17.6 |
 | F | voyage visible d'Eduardo, feux et septième sœur | deux vrais clients sur les rôles, puis perte/reprise de connexion pendant le voyage |
 | G | finale, ciel à sept points, statut « En mer » | partie complète en une soirée ; navire et trace persistants après rechargement |
 
-**Aucun des lots A–G n'est livré ici.** La seule modification de quête autorisée pour cette
-livraison est la barre du panneau `P` décrite au §17.9 ; elle ne change aucune règle de quête.
+⚠️ **CE PARAGRAPHE DATE DE LA LIVRAISON DU §17.9 ET IL EST DEVENU FAUX LE 2026-08-31** : la moitié
+solo du **lot E** est construite (voir le §17.6). Il reste vrai pour tous les autres lots — A, B, C,
+D, F, G ne sont toujours pas livrés, et la coop du E non plus.
 Les lots restent séparés parce que chacun change un geste ou un dessin que Guillaume doit pouvoir
 juger isolément. La chaîne multijoueur complète reste la validation terminale : relais du plat,
 bords opposés, scie et feux du port, avec deux vrais clients et sans raccourci développeur entre

@@ -3241,9 +3241,17 @@ export function resolveStarTimberOrder(e, key, who, now) {
   const t = C.STAR_TIMBER[key];
   return { ok: true, wood: t.wood, ms: t.ms };
 }
-export function commitStarTimber(e, key, who, now) {
+/* ⚠️⚠️ LOT E — `ms` EST FACULTATIF, ET C'EST CE QUI GARDE UN SEUL ENDROIT QUI
+   SACHE ÉCRIRE `e.wood[key]`. La manche de sciage raccourcit ou allonge la
+   commande (`sawResult().msScale`) ; l'appelant aurait pu réécrire `readyAt`
+   après coup, et il y aurait alors eu DEUX formes du même état — celle d'ici et
+   celle de la retouche —, qui divergent au premier champ ajouté (§8 de
+   `CLAUDE.md`). Sans argument, le comportement est celui d'avant, au champ près :
+   c'est ce qui rend la passe sûre pour le menu développeur et les migrations. */
+export function commitStarTimber(e, key, who, now, ms) {
   const t = C.STAR_TIMBER[key];
-  e.wood[key] = { at: now, readyAt: now + t.ms, done: false, by: String(who || "?").slice(0, 24) };
+  const d = ms > 0 ? Math.round(ms) : t.ms;
+  e.wood[key] = { at: now, readyAt: now + d, done: false, by: String(who || "?").slice(0, 24) };
   return { ok: true };
 }
 /* ╔═════════════════════════════════════════════════════════════════════════════

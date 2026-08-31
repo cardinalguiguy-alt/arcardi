@@ -49,6 +49,12 @@ import * as Q from "./quete";
    l'arbitrage. Voir l'en-tête de `maire.js` pour le contrat réseau. */
 import * as MR from "./maire";
 import { MayorAudience, MayorWatch, mayorCtxOf } from "./MaireScene";
+/* ⚠️ LOT E — LA SCIE DE TRISTAN. Même découpage que l'audience : la mécanique
+   pure est dans `scierie.js` (l'hôte la REJOUE, il ne croit pas le client), la
+   vue et l'atelier 3D dans `ScierieScene.js` / `scierieAtelier.js`. Ce fichier
+   ne fait que la porte et l'arbitrage. */
+import { SawScene } from "./ScierieScene";
+import * as SAW from "./scierie";
 import { buildSprites, charPalette, drawBridgeTile, drawBridgeOverlay, drawCandyGroundTile, candySyrupColor } from "./fermeArt";
 import { fstr } from "./fermeStrings";
 // ZIP 441 — l'orgue de l'église. Le lecteur de fichiers existe depuis longtemps
@@ -637,6 +643,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      derrière — un maire qu'on écoute pendant qu'un sanglier mange les carottes
      ne serait pas une scène, ce serait une fenêtre. */
   const [mayorTalk, setMayorTalk] = useState(null);
+  /* LOT E — la manche de sciage en cours, ou `null`. ⚠️ ELLE NE PORTE QUE LA
+     PIÈCE : tout le reste (graine, planches, tempo) se DÉDUIT de son nom des
+     deux côtés du réseau (`sawSeed`), donc rien ne circule (§3). */
+  const [sawScene, setSawScene] = useState(null);
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ZIP 481 — TROIS ÉTATS DE PLUS POUR L'AUDIENCE, ET AUCUN N'EST PARTAGÉ.
      ╚══════════════════════════════════════════════════════════════════════════
@@ -1486,8 +1496,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      l'overlay de résultat doit suspendre l'arrivée d'une étoile (468) et empêcher
      qu'on relance une fouille par-dessus. Il n'y est PAS pour bloquer les
      déplacements — voir la note de `starDigStep`. */
-  useEffect(() => { starUiOpenRef.current = !!(starMini || starCard || starRecap || starOffer || starFind || mayorTalk || mayorWatch); },
-            [starMini, starCard, starRecap, starOffer, starFind, mayorTalk, mayorWatch]);   // zip 444/469/480/481
+  useEffect(() => { starUiOpenRef.current = !!(starMini || starCard || starRecap || starOffer || starFind || mayorTalk || mayorWatch || sawScene); },
+            [starMini, starCard, starRecap, starOffer, starFind, mayorTalk, mayorWatch, sawScene]);   // zip 444/469/480/481 + lot E
   useEffect(() => { planOpenRef.current = planOpen; }, [planOpen]);                     // zip 454
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ZIP 449 — LE DÉPART SPONTANÉ DU GUIDE. Une veille d'une seconde, et elle
@@ -6069,7 +6079,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
   }
 
-    if (req.kind === "starTimberOrder") {
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ LOT E — LA COMMANDE PASSE DÉSORMAIS PAR LA SCIE, ET L'HÔTE REJOUE.
+       ╚══════════════════════════════════════════════════════════════════════
+       ⚠️⚠️⚠️ LE CLIENT N'ANNONCE JAMAIS SON RÉSULTAT. Il envoie sa TRANSCRIPTION
+       — la liste des pas de simulation où il a tiré, des entiers — et l'hôte
+       rejoue la manche entière avec `sawRun`, la même fonction pure que le
+       client a fait tourner en direct. C'est le patron de l'audience du maire
+       (`mayorReplay`), et c'est la seule forme qui interdise de gagner sans
+       jouer. ⚠️ La graine ne circule pas : elle se DÉDUIT du nom de la pièce des
+       deux côtés (`sawSeed`), donc il n'y a rien à réconcilier (§3).
+       ⚠️⚠️ ET RIEN N'EST PRÉLEVÉ TANT QUE LA MANCHE N'EST PAS GAGNÉE. C'est ce
+       qui autorise la rupture de planche à être un VRAI risque : perdre coûte le
+       temps qu'on vient d'y passer, jamais du bois qu'on n'a pas scié.
+       ⚠️ UN SEUL `send()` POUR TOUTE LA MANCHE (§3) : rien n'est diffusé pendant
+       qu'on scie, la scène est locale de bout en bout. */
+    if (req.kind === "starTimberSaw") {
       const s2 = sharedRef.current;
       const e = (s2.star = Q.migrateStar(s2.star));
       const now = Date.now();
@@ -6079,10 +6104,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       const r = Q.resolveStarTimberOrder(e, String(req.part || ""), f.name, now);
       if (!r.ok) return true;
+      /* ⚠️ LE JOURNAL EST UNE DONNÉE DU RÉSEAU : `sawRun` le NORMALISE (ordre
+         strict, longueur bornée) au lieu de lever. Un résolveur qui jette sur une
+         entrée réseau est un résolveur qu'un client fautif peut arrêter. */
+      const sw = SAW.sawResult(SAW.sawRun(req.log, { part: String(req.part || "") }));
+      if (!sw.ok) {
+        hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: f.id, key: "starSawRefused" } } });
+        return true;
+      }
       const stock = s2.gregStock || (s2.gregStock = { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
+      /* ⚠️ LE SUPPLÉMENT EST DU BOIS QU'ON A RÉELLEMENT FENDU, pas une amende :
+         la sanction dit ce qui s'est passé au lieu d'inventer un prix. C'est la
+         SEULE chose que l'adresse change au coût — le reste de la note joue sur
+         le TEMPS (voir `sawResult`), parce qu'un mini-jeu qui change une dépense
+         fait de l'adresse une monnaie, et la ferme a déjà une économie. */
+      const woodDue = r.wood + (sw.woodExtra | 0);
       const have = (stock.wood | 0) + (f.inv.wood | 0);
-      if (have < r.wood) {
-        hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: f.id, key: "starNoWood", n: r.wood } } });
+      if (have < woodDue) {
+        hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: f.id, key: "starNoWood", n: woodDue } } });
         return true;
       }
       /* ⚠️ ZIP 478 — LA CHOSE EN PLUS EST VÉRIFIÉE **AVANT** QUE LE BOIS NE PARTE.
@@ -6094,16 +6133,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: f.id, key: "starNoExtra", n: { n: ex.n | 0, what: L.star.plan.extraName(ex) } } } });
         return true;
       }
-      const fromPool = Math.min(stock.wood | 0, r.wood);
-      stock.wood -= fromPool; f.inv.wood -= (r.wood - fromPool);
+      const fromPool = Math.min(stock.wood | 0, woodDue);
+      stock.wood -= fromPool; f.inv.wood -= (woodDue - fromPool);
       starExtraTake(stock, f, ex);
-      Q.commitStarTimber(e, req.part, f.name, now);
+      /* ⚠️⚠️ C'EST LA DURÉE QUE LA MANCHE CHANGE, ET ELLE PASSE PAR `commitStarTimber`
+         PLUTÔT QUE D'ÊTRE RÉÉCRITE ICI : la commande garde UN seul endroit qui
+         sache écrire `e.wood[key]`, sinon deux formes du même état finiraient par
+         diverger (§8). Le facteur est borné par construction dans `sawResult`. */
+      const ms = Math.max(30000, Math.round(r.ms * sw.msScale));
+      Q.commitStarTimber(e, req.part, f.name, now, ms);
       dirtyRef.current = true;
       hostSend({ type: "broadcast", event: "apply", payload: {
         star: e, gregStock: stock,
         farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets },
       } });
-      broadcastChat("\u{1FAB5}", L.star.plan.orderSent(L.star.plan.part(req.part), fmtDuration(r.ms)));
+      broadcastChat("\u{1FA9A}", L.star.saw.win(L.star.plan.part(req.part), fmtDuration(ms)));
       persistFnRef.current && persistFnRef.current();
       return true;
     }
@@ -7321,6 +7365,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (key === "starLightGiven") return L.star.s2.lightGiven;
     if (key === "starNoScarecrow") return L.star.s2.noScarecrow;
     if (key === "starNoTristan") return L.star.plan.noTristan;
+    /* ⚠️ LOT E — L'HÔTE A REJOUÉ LA MANCHE ET NE L'A PAS VUE FINIR. Il DOIT le
+       dire : sans ce texte, le joueur qui a gagné à l'écran verrait un bouton
+       qui ne fait rien, et conclurait à un bogue plutôt qu'à un désaccord. */
+    if (key === "starSawRefused") return L.star.saw.refused;
     if (key === "starUnbuilt") { const t = n || {}; return L.star.plan.unbuilt(t.n | 0, t.total | 0); }
     return { tired: L.toastTired, farShop: L.toastFarShop, farMarket: L.toastFarMarket, marketNothing: L.toastMarketNothing, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, millPlaced: L.toastMillPlaced, millTaken: L.toastMillTaken, millGround: L.toastMillGround, millOccupied: L.toastMillOccupied, millOnCrop: L.toastMillOnCrop, noMillBuilt: L.toastNoMillBuilt, millBuilding: L.toastMillBuilding, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, noSucrerieStock: L.toastNoSucrerieStock, sucrerieNotEmpty: L.toastSucrerieNotEmpty, noCaneToDeposit: L.toastNoCaneToDeposit, sucrerieFull: L.toastSucrerieFull, actionFailed: L.toastActionFailed, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, reneCoffeeCooldown: L.toastReneCoffeeCooldown, tristanNotHere: L.toastTristanNotHere, tristanCoffeeCooldown: L.toastTristanCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, shardsAlreadyTaken: L.toastShardsAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, kickRefused: L.kickRefused, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy, balloonNotBoarding: L.toastBalloonNotBoarding, balloonFull: L.toastBalloonFull,
       /* zip 398 — vergers et produits */
@@ -27726,9 +27774,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                         {t.extra && !ord && !parts[i] ? <><br />{L.star.plan.extraWhy(t.extra)}</> : null}
                       </span>
                     </div>
+                    {/* ⚠️⚠️ LOT E — LE BOUTON N'ENVOIE PLUS RIEN, IL OUVRE LA SCIE.
+                        C'est le seul changement de ce panneau, et il est délibérément
+                        seul : la commande passe désormais par un GESTE (§17.6 de
+                        `QUETE.md`, « la charpente et la sixième sœur — tirer ») au lieu
+                        d'un clic dans une liste. Le refus, le prix et les trois raisons
+                        de grisage ne bougent pas d'un pixel — un panneau qui changerait
+                        en même temps que la scène rendrait impossible de juger laquelle
+                        a produit quoi (règle du 424). */}
                     {why === null
                       ? <button disabled={wood < t.wood || starExtraShort(t.extra)}
-                                onClick={() => { sendReq({ kind: "starTimberOrder", part: k }); close(); }}>
+                                onClick={() => { setSawScene({ part: k }); close(); }}>
                           {wood < t.wood ? L.star.plan.orderPoor(t.wood)
                             : starExtraShort(t.extra) ? L.star.plan.orderPoorExtra(t.extra.n | 0, L.star.plan.extraName(t.extra))
                             : L.star.plan.orderBtn}
@@ -30498,6 +30554,53 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       )}
       {mayorWatch && mayorLive && <MayorWatch live={mayorLive} L={L} onClose={() => setMayorWatch(false)} />}
 
+      {/* ╔════════════════════════════════════════════════════════════════════
+          ║ LOT E — LA SCIE DE TRISTAN, PLEIN ÉCRAN.
+          ╚════════════════════════════════════════════════════════════════════
+          ⚠️⚠️ ELLE NE DIFFUSE RIEN PENDANT QU'ELLE SE JOUE — exactement comme
+          l'audience. Une manche appartient à un client : la simulation tourne en
+          local, à pas fixe, et SEULE la transcription part à la fin, dans une
+          `req` unique. Le §3 est formel : seul le NOMBRE de `send()` est
+          facturé, et celui-ci en coûte un pour tout le sciage.
+          ⚠️⚠️⚠️ ET L'HÔTE REJOUE AU LIEU DE CROIRE (voir `starTimberSaw` plus
+          haut). Le client n'annonce jamais son résultat ; il raconte quand il a
+          tiré, et l'arbitre refait la manche avec les mêmes fonctions pures.
+          ⚠️ ON N'ENVOIE RIEN QUAND LE JOUEUR ABANDONNE ou casse ses trois
+          planches : rien n'a été prélevé, il n'y a donc rien à arbitrer — et on
+          ne dépense pas un message pour dire « je suis entré puis ressorti ». */}
+      {sawScene && (() => {
+        const part = sawScene.part;
+        const partName = L.star.plan.part(part);
+        return (
+          <SawScene
+            /* ⚠️ LE NOM SE CHERCHE PAR MÉTIER, JAMAIS PAR NUMÉRO : un `rid`
+               recopié pointerait sur quelqu'un d'autre au premier remaniement du
+               vivier (règle du 431, réappliquée au 453 sur Eduardo). C'est déjà
+               ce que fait le titre du panneau juste au-dessus. */
+            ctx={{ part, title: L.star.saw.title(partName),
+                   name: (C.VISITOR_ROSTER.find(v => v.skill === "lumberjack") || {}).name || "" }}
+            L={{ saw: L.star.saw }}
+            onDone={(log, over) => {
+              setSawScene(null);
+              if (over === "quit" || !Array.isArray(log) || !log.length) { pushToast(L.star.saw.quitToast); return; }
+              if (over === "broken") { pushToast(L.star.saw.lost); return; }
+              if (over !== "done") { pushToast(L.star.saw.quitToast); return; }
+              /* ⚠️ LE CLIENT REJOUE SA PROPRE MANCHE POUR AFFICHER LA NOTE, ET
+                 IL APPELLE `sawRun` — LA FONCTION DE L'HÔTE. Recompter les
+                 étoiles à partir de l'état local aurait donné deux réponses à
+                 « comment ai-je scié », donc un jour deux réponses différentes
+                 (défaut du 449). Ici les deux côtés lisent la même. */
+              const rr = SAW.sawResult(SAW.sawRun(log, { part }));
+              const pct = Math.round(Math.abs(1 - rr.msScale) * 100);
+              pushToast(`${L.star.saw.stars(rr.stars)} ${L.star.saw.grade(rr.stars)} `
+                + (rr.msScale < 1 ? L.star.saw.faster(pct) : L.star.saw.slower(pct))
+                + (rr.woodExtra > 0 ? " " + L.star.saw.extraWood(rr.woodExtra) : ""));
+              sendReq({ kind: "starTimberSaw", part, log });
+            }}
+          />
+        );
+      })()}
+
       {mayorTalk && (
         <MayorAudience
           ctx={mayorTalk.ctx}
@@ -30974,6 +31077,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                       </button>
                       <button className="ferme-btn" onClick={devStandAtMayorDesk}>
                         {L.star.dev.standMayor}
+                      </button>
+                      {/* ⚠️⚠️ LOT E — L'ARRÊT QUI OUVRE LA SCIE TOUT DE SUITE, ET IL
+                          NAÎT LE MÊME JOUR QUE LA SCÈNE. La leçon du 425 est écrite
+                          en toutes lettres dans `CLAUDE.md` : *un lieu qu'il faut
+                          quarante minutes de quête pour atteindre est un lieu qu'on
+                          n'ira pas regarder.* Revoir une manche exigerait sinon des
+                          plans, l'accord du maire, un bûcheron sur la ferme et du
+                          bois — donc on la jugerait UNE fois.
+                          ⚠️ IL N'ACCORDE RIEN : il ouvre la scène, et la commande
+                          passe par la même `req` arbitrée que d'habitude. L'hôte
+                          refusera si la pièce n'est pas commandable, exactement
+                          comme il refuse au joueur (§ menu développeur, 398). */}
+                      <button className="ferme-btn"
+                              onClick={() => { setSawScene({ part: Q.starTimberNext(e) || "hull" }); setDevMenuOpen(false); }}>
+                        {L.star.dev.saw}
                       </button>
                     </div>
                     <div className="ferme-hint" style={{ margin: "8px 0 4px" }}>{L.star.dev.sceneLabel}</div>

@@ -7781,3 +7781,104 @@ div.ferme-usage{ margin-bottom:10px; }
    se remarque plus qu'un décor raté. */
 .maire-says.grace .maire-say{ border-color:rgba(214,178,86,.18); }
 .maire-says.grace .maire-say:hover{ border-color:rgba(240,207,106,.85); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LOT E — LA SCÈNE DE SCIAGE CHEZ TRISTAN.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️ ELLE RÉUTILISE `.maire-cams` / `.maire-cam` / `.maire-camhint` TELLES
+   QUELLES : ce sont les mêmes boutons, au même endroit, pour le même geste
+   (changer d'attitude dans une scène plein écran). Deux jeux de classes
+   identiques auraient divergé au premier réglage — c'est le §8, appliqué à du
+   style. Tout ce qui suit est ce que la scie a en propre.
+   ⚠️⚠️ LE PIED EST DIMENSIONNÉ POUR LE POUCE : la piste et le bouton sont dans
+   le tiers bas, à portée sur une tablette tenue à deux mains, et le bouton fait
+   plus de 44 px de haut. Le §13 rappelle que le tactile est l'angle mort du
+   projet, et cette scène est la première depuis longtemps à être écrite avec.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.saw-stage{ position:fixed; inset:0; z-index:90; background:#140f0a; overflow:hidden; user-select:none; }
+.saw-canvas{ width:100%; height:100%; display:block; cursor:grab; touch-action:none; }
+.saw-fade{ position:absolute; inset:0; background:#0a0704; pointer-events:none;
+           transition:opacity .55s ease; }
+
+.saw-top{ position:absolute; top:12px; left:14px; max-width:52vw; pointer-events:none;
+          display:flex; flex-direction:column; gap:2px;
+          text-shadow:0 2px 8px rgba(0,0,0,.9); }
+.saw-top b{ color:#f6efdf; font-size:15.5px; }
+.saw-top span{ color:#c3b79f; font-size:12.5px; }
+.saw-broken{ color:#e0a396 !important; }
+
+/* ⚠️ LE VERDICT EST GRAND, AU CENTRE, ET IL S'EFFACE TOUT SEUL. Un retour de
+   geste qu'il faut aller chercher dans un coin n'enseigne rien — et un retour
+   qui reste affiché ment sur le trait suivant. L'animation part du `key` React
+   (l'instant du trait), donc elle rejoue à chaque coup sans qu'on ait à la
+   remettre à zéro. */
+.saw-verdict{ position:absolute; left:50%; top:31%; transform:translate(-50%,-50%);
+              font-size:44px; font-weight:800; letter-spacing:.04em; pointer-events:none;
+              text-shadow:0 3px 16px rgba(0,0,0,.95); animation:sawpop .45s ease-out forwards; }
+.saw-verdict.v-perfect{ color:#9ff0a8; }
+.saw-verdict.v-good{ color:#e8d795; }
+.saw-verdict.v-weak{ color:#c4b8a4; font-size:34px; }
+.saw-verdict.v-bind{ color:#ff8f78; }
+.saw-verdict.v-break{ color:#ff6a52; font-size:52px; }
+.saw-verdict.v-plank{ color:#bfe8ff; }
+@keyframes sawpop{ 0%{ transform:translate(-50%,-50%) scale(.72); opacity:0; }
+                   22%{ transform:translate(-50%,-50%) scale(1.06); opacity:1; }
+                   100%{ transform:translate(-50%,-62%) scale(1); opacity:0; } }
+.saw-combo{ position:absolute; left:50%; top:40%; transform:translateX(-50%);
+            color:#ffd98a; font-size:17px; font-weight:700; pointer-events:none;
+            text-shadow:0 2px 10px rgba(0,0,0,.9); }
+
+.saw-foot{ position:absolute; left:50%; bottom:16px; transform:translateX(-50%);
+           width:min(760px, 94vw); display:flex; flex-direction:column; gap:8px; align-items:stretch; }
+/* la contrainte de la planche : elle ne porte pas de chiffre, exprès — ce qu'on
+   doit lire est « ça va casser », pas « 0,63 » */
+.saw-stress{ height:7px; border-radius:4px; background:rgba(0,0,0,.55);
+             border:1px solid rgba(0,0,0,.6); overflow:hidden; }
+.saw-stress i{ display:block; height:100%; border-radius:4px; transition:width .1s linear; }
+
+.saw-track{ position:relative; height:30px; border-radius:15px; background:rgba(12,9,6,.72);
+            border:2px solid rgba(0,0,0,.55); overflow:hidden; transition:border-color .12s; }
+.saw-track.ok{ border-color:rgba(120,224,140,.95); box-shadow:0 0 16px rgba(120,224,140,.35); }
+.saw-track.mid{ border-color:rgba(224,200,110,.85); }
+.saw-track.bad{ border-color:rgba(230,110,86,.95); box-shadow:0 0 16px rgba(230,110,86,.4); }
+.saw-zone{ position:absolute; top:0; bottom:0; }
+.saw-zone.good{ background:rgba(224,200,110,.16); }
+.saw-zone.best{ background:rgba(120,224,140,.24); }
+.saw-blade{ position:absolute; top:3px; bottom:3px; width:8px; margin-left:-4px; border-radius:4px;
+            background:linear-gradient(180deg,#f2f5f8,#9aa3ad); box-shadow:0 0 8px rgba(255,255,255,.45); }
+.saw-end{ position:absolute; top:7px; font-size:11.5px; color:#9b8f7c; pointer-events:none; }
+.saw-end.left{ left:10px; } .saw-end.right{ right:10px; }
+
+.saw-pull{ height:52px; border-radius:12px; border:1px solid rgba(240,207,106,.5);
+           background:rgba(46,34,18,.9); color:#ffe6ac; font-size:17px; font-weight:700;
+           letter-spacing:.03em; cursor:pointer; touch-action:manipulation; }
+.saw-pull:active{ background:rgba(74,54,24,.95); transform:translateY(1px); }
+.saw-hint{ text-align:center; color:#8e8578; font-size:11.5px; }
+
+.saw-quit{ position:absolute; left:14px; bottom:16px; padding:7px 12px; border-radius:9px;
+           border:1px solid rgba(255,255,255,.16); background:rgba(20,18,16,.8);
+           color:#b8ae9e; font-size:12.5px; cursor:pointer; }
+.saw-quit:hover{ background:rgba(40,34,28,.9); color:#e6dcc8; }
+
+/* ── LE REPLI. Pas d'écran d'erreur : la même manche, sur une piste plate. ── */
+.saw-flat{ position:absolute; inset:0; display:flex; flex-direction:column; gap:18px;
+           align-items:center; justify-content:center;
+           background:radial-gradient(circle at 50% 38%, #3a2c1c, #140f0a 72%); }
+.saw-flat-beam{ width:min(520px,78vw); height:46px; border-radius:8px; background:#c9a874;
+                border:2px solid #6b4a26; overflow:hidden; position:relative; }
+.saw-flat-beam i{ position:absolute; left:0; top:0; bottom:0; background:#3a2513;
+                  transition:width .12s linear; }
+.saw-flat-hint{ color:#9b8f7c; font-size:13px; max-width:70vw; text-align:center; }
+
+@media (max-width: 700px){
+  .saw-verdict{ font-size:34px; top:27%; }
+  .saw-verdict.v-break{ font-size:40px; }
+  .saw-top{ max-width:60vw; }
+}
+/* la phrase d'ouverture de la scie : elle s'efface toute seule (voir le
+   commentaire de `ScierieScene`), donc elle n'a ni bouton ni fond opaque */
+.saw-intro{ position:absolute; left:50%; top:16%; transform:translateX(-50%);
+            max-width:min(52ch,86vw); text-align:center; color:#e8dcc4; font-size:15px;
+            font-style:italic; text-shadow:0 2px 10px rgba(0,0,0,.95); pointer-events:none;
+            animation:sawintro 4.5s ease-in forwards; }
+@keyframes sawintro{ 0%{opacity:0;} 10%{opacity:1;} 78%{opacity:1;} 100%{opacity:0;} }

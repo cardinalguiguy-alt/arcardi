@@ -2256,9 +2256,46 @@ section("Les textes disent-ils la même chose que le monde ?");
      de « ce qui est branché » serait la seconde liste que ce banc existe pour
      interdire. */
   {
-    const src = fs.readFileSync(path.join(ROOT, "components", "ferme", "FermeGame.js"), "utf8");
+    /* ╔═══════════════════════════════════════════════════════════════════════
+       ║ ⚠️⚠️⚠️ IL FAUT LIRE TOUTES LES VUES, PAS SEULEMENT `FermeGame.js` — ET
+       ║ C'EST UN ANGLE MORT DÉJÀ DATÉ QUI SE REFERME ICI.
+       ╚═══════════════════════════════════════════════════════════════════════
+       Ce contrôle ne regardait qu'un fichier, ce qui était vrai tant que toute
+       la quête s'affichait dedans. Depuis, deux morceaux entiers vivent dans
+       leur propre vue : l'audience du maire et le sciage chez Tristan. La
+       première fois qu'une scène a sorti ses textes de `FermeGame.js`, ce
+       contrôle a déclaré orphelines six phrases parfaitement affichées.
+       ⚠️ ET CHAQUE VUE REÇOIT SES TEXTES SOUS UN AUTRE NOM : `ScierieScene`
+       reçoit `L = { saw: L.star.saw }` et écrit donc `L.saw.pull`. Un banc qui
+       ne chercherait que `L.star.` ne verrait rien. On déclare donc, pour chaque
+       fichier, le PRÉFIXE qu'il utilise et la branche qu'il dessert.
+       ⚠️ LA LISTE EST UNE LISTE DE FICHIERS, PAS UNE LISTE DE PHRASES : c'est ce
+       qui la distingue de la « seconde liste » que ce banc existe pour
+       interdire. Ajouter une scène demande une ligne ici ; oublier de l'ajouter
+       fait ÉCHOUER le contrôle, jamais passer. */
+    const VIEWS = [
+      ["FermeGame.js", /L\.star\.([A-Za-z0-9_.]*)/g, ""],
+      ["ScierieScene.js", /L\.saw\.([A-Za-z0-9_.]*)/g, "saw."],
+    ];
     const used = new Set();
-    for (const m of src.matchAll(/L\.star\.([A-Za-z0-9_.]*)/g)) used.add(m[1]);
+    let srcLen = 0;
+    for (const [file, re, prefix] of VIEWS) {
+      const body = fs.readFileSync(path.join(ROOT, "components", "ferme", file), "utf8");
+      srcLen += body.length;
+      for (const m of body.matchAll(re)) {
+        /* ⚠️⚠️ ON N'AJOUTE **PAS** LE PRÉFIXE LUI-MÊME COMME « LU ». Le premier
+           jet le faisait, et c'était rouvrir en grand l'angle mort que ce
+           contrôle existe pour fermer : marquer `saw` comme lu excuse d'un coup
+           toutes ses feuilles, puisque le filtre plus bas pardonne une feuille
+           dont le PARENT est lu. Le banc redevenait vert, et une phrase écrite,
+           traduite, jamais affichée y passait sans bruit — c'est le défaut noté
+           dans `CLAUDE.md` à propos des huit feuilles `L.maire` sans lecteur.
+           *Une commodité qui rend un contrôle vert est presque toujours le
+           contrôle qu'on vient de supprimer.* */
+        used.add(prefix + m[1]);
+      }
+    }
+    const src = String(srcLen);
     const leaves = [];
     (function walk(o, at) {
       for (const k of Object.keys(o)) {
@@ -2272,9 +2309,9 @@ section("Les textes disent-ils la même chose que le monde ?");
       return !used.has(parent);
     });
     ok("⚠️⚠️ chaque phrase de la quête est affichée quelque part",
-       dead.length === 0, dead.slice(0, 6).join(", ") || `${leaves.length} phrases, ${used.size} lectures dans FermeGame.js`);
-    ok("…et ce contrôle lit vraiment le composant", used.size > 40 && leaves.length > 80,
-       `${used.size} lectures, ${leaves.length} phrases`);
+       dead.length === 0, dead.slice(0, 6).join(", ") || `${leaves.length} phrases, ${used.size} lectures dans ${VIEWS.length} vues`);
+    ok("…et ce contrôle lit vraiment les composants", used.size > 40 && leaves.length > 80 && src.length > 3,
+       `${used.size} lectures, ${leaves.length} phrases, ${VIEWS.length} fichiers`);
   }
 
   /* ── C. LE NAVIRE PART, ET IL PEUT REVENIR (453, décision de Guillaume).

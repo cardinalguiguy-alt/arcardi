@@ -1,7 +1,9 @@
 # tools/ — LES BANCS, ET CE QU'ILS ATTRAPENT
 
 Ce fichier est **l'autorité** sur les bancs du projet. Il a été extrait de `CLAUDE.md` §10 au
-zip 432, sur l'ordre laissé par son §14.2 : « le jour où la liste dépasse la moitié du
+zip 432, sur l'ordre laissé par son §14.2 — ⚠️ **il couvre 19 bancs de contrôle et 21 bancs de
+rendu au 2026-08-31**, les deux derniers étant ceux de la scie de Tristan (lot E), et
+tout chiffre écrit ici a été obtenu en LANÇANT le banc : « le jour où la liste dépasse la moitié du
 chapitre, elle part dans un `tools/README.md` — en ne gardant là-bas QUE ce qui n'existe pas ».
 Le 432 a ajouté deux entrées (`render-ruche.mjs`, `fake-supabase.mjs`) et l'a fait basculer.
 Le 433 en ajoute trois (`verify-taxi`, `render-taxi`, `render-oiseaux`), le 434 une
@@ -110,6 +112,60 @@ grille est une grille dans les deux sens, donc c'est une mesure plus complète E
 d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
 
 ## Ce qui existe
+
+- **`tools/verify-scierie.mjs` — 34 contrôles, 34/34 (lot E, 2026-08-31).** LA SCIE DE TRISTAN,
+  JOUÉE. C'est le troisième banc du dépôt qui joue une mécanique au lieu de la relire (après
+  `verify-maire` et `verify-ludo`), et pour la scie c'est la seule forme possible : **la difficulté
+  n'est écrite nulle part**, elle ÉMERGE d'une lame qui a de l'inertie, d'un partenaire qui répond
+  au lieu de mener, et d'un tempo qui dilate le temps. Aucune relecture ne peut dire si une manche
+  est gagnable.
+  ⚠️⚠️⚠️ **IL TIENT LA SEULE PROPRIÉTÉ DONT DÉPEND TOUT LE RÉSEAU : le rejeu de l'hôte donne
+  exactement la manche du client.** Le client simule en direct, avec des images de durée variable ;
+  l'hôte rejoue à partir d'une liste d'entiers. Le banc fait tourner soixante manches à cadence
+  irrégulière et compare **vingt-cinq champs d'état** — et il a trouvé du premier coup que le
+  plafond de durée était posé par chaque appelant au lieu d'être dans la simulation, c'est-à-dire
+  une commande gagnée à l'écran et refusée par le réseau.
+  Il mesure aussi : la manche est gagnable ET perdable ; la note DÉCROÎT quand la latence du joueur
+  monte (une propriété balayée sur neuf latences, pas trois exemples — règle du 449) ; marteler
+  n'est jamais ni plus rapide ni mieux noté ; toutes les grandeurs restent bornées sur 400 000 pas ;
+  `sawWould` (ce que le HUD colore) dit exactement ce que `sawPull` fait (parade du 449, mesurée sur
+  chaque pas) ; un journal venu du réseau — désordonné, dupliqué, négatif, démesuré — ne lève
+  jamais ; et les sept verdicts de la mécanique ont sept phrases **dans les deux langues**.
+  ⚠️ **CE QU'IL NE MESURE PAS** : *est-ce agréable ?* — ça ne se mesure nulle part et ça ne le sera
+  jamais. Ni la coop : la seconde poignée est écrite (`sawPull(s, −1)`) et jamais transportée.
+  ⚠️⚠️ **ET IL S'EST TROMPÉ LUI-MÊME UNE FOIS, CE QUI VAUT D'ÊTRE ÉCRIT** : son modèle de joueur se
+  BLOQUAIT (il n'attendait que la fenêtre parfaite, qui ne se rouvre jamais une fois le mou
+  installé), puis son secours se déclenchait à CHAQUE cycle et faisait tomber le joueur parfait de
+  1,00 à 0,57 de note. *Un modèle de joueur qui peut se bloquer mesure sa propre naïveté, et un
+  secours qui se déclenche en régime normal n'est pas un secours, c'est une seconde stratégie.*
+
+- **`tools/render-scierie.mjs` — 58 contrôles, 58/58 (lot E, 2026-08-31).** TRISTAN À SA SCIE,
+  REGARDÉ SANS GPU. Écrit **avant** que quiconque ait ouvert la scène, ce qui est la seule façon de
+  ne pas repayer la leçon du maire (113/113 sur une posture qui se cassait à la taille).
+  ⚠️⚠️ **IL BALAIE UN CARRÉ, PAS UNE LISTE DE POSES**, et c'est ce qui le sépare de
+  `render-maire` : le maire a sept postures nommées, Tristan en a une infinité — sa posture est une
+  fonction CONTINUE de deux variables (où est la lame, à quelle profondeur est le trait). On balaie
+  donc les deux axes : silhouette d'un seul tenant, quatre mains sur les poignées **en
+  centimètres** (`solveArm` BORNE une cible hors de portée, donc elle ment au lieu de planter),
+  postures atteignables, appuis plantés et **genoux qui plient dans le bon sens**, lame tenue par
+  ses deux bouts, interpénétrations en mètres, et aucun pixel sur le bord du cadre.
+  Il a sorti **quatre défauts d'un coup à sa première exécution**, dont deux qu'aucune relecture
+  n'aurait vus : tous les genoux pliaient à l'envers, et le madrier était à hauteur de POITRINE —
+  Tristan sciait coudes en l'air, avant-bras en travers du buste. *Une posture peut être exacte et
+  absurde ; seule l'image le dit.*
+  ⚠️⚠️ **CE QU'IL NE MESURE PAS, ET C'EST DEVENU UNE LEÇON DE PROJET** : il ne juge PAS
+  l'éclairage. Il rastérise sans `sRGBEncoding`, sans ombre portée, sans spéculaire, et il rendait
+  un atelier parfaitement lisible pendant que le vrai moteur rendait une scène **entièrement
+  blanche**. Toutes les intensités ont dû baisser d'un tiers après l'avoir ouverte dans un
+  navigateur. Il ne voit pas non plus la sciure, les rais de lumière ni la secousse (additifs et
+  particules), et il ne joue aucune TRANSITION : il pose des arrivées.
+  ⚠️ **Et il a fallu lui apprendre à ne pas accuser le personnage de ce que fait son CADRAGE** :
+  ses vignettes trop serrées coupaient une épaule, et le contrôle de connexité annonçait « 2 îlots,
+  6 px » — un membre détaché, donc, alors qu'il n'y en avait aucun. Un contrôle de BORD passe
+  maintenant en premier (il nomme le vrai coupable), et les caméras **dérivent** leur recul de la
+  boîte englobante de la pose au lieu d'être réglées à la main : un personnage qui travaille change
+  de taille et de place d'une vignette à l'autre, et cinq recadrages manuels ont échoué avant qu'on
+  le comprenne.
 
 - **`tools/verify-ludo.mjs` — 30 contrôles, 30/30 (2026-08-27).** Le mode Ludo solo propose un,
   deux ou trois bots. Guillaume garde Rouge ; le duel place le bot Jaune en diagonale, puis Vert et
