@@ -5233,17 +5233,48 @@ export function generateTownWorld() {
        ce qui le fait lire comme un ouvrage. Le naturel de la rive ne s'obtient
        pas en mettant du désordre PARTOUT — il s'obtient en opposant une ligne
        construite à une ligne qui ne l'est pas. */
+    /* ⚠️⚠️ 2026-08-31 — LE FLEUVE EST CE CHAMP-CI, PROLONGÉ À L'EST, ET SURTOUT
+       PAS UNE SECONDE NAPPE. Décision de Guillaume : le lac devient « une sorte
+       de fleuve qui mène à une sortie, par la droite ». Le POURQUOI complet est
+       sur `TOWN_RIVER_*` ; ici ne compte que ceci — deux nappes raccordées bout
+       à bout se décaleraient d'une case au premier réglage, et la couture
+       tomberait exactement là où le navire passe. `flow` vaut 0 dans le bassin
+       de la ville et 1 en aval ; `neckMix` vaut 1 au milieu du goulet. */
+    const flow = (x) => {
+      const t = Math.max(0, Math.min(1, (x + 0.5 - C.TOWN_RIVER_X) / C.TOWN_RIVER_RUN));
+      return t * t * (3 - 2 * t);
+    };
+    const neckMix = (x) => {
+      const d = Math.abs(x + 0.5 - C.TOWN_RIVER_NECK_X);
+      if (d >= C.TOWN_RIVER_NECK_HALF) return 0;
+      const t = d / C.TOWN_RIVER_NECK_HALF;
+      return 1 - t * t * (3 - 2 * t);
+    };
     const field = (x, y) => {
       const q = quayMix(x);
       let e = lk.y + C.TOWN_LAKE_EDGE;
       for (const b of C.TOWN_LAKE_BAYS) e += b.a * Math.sin((x / b.p) * 2 * Math.PI + b.ph);
       e = e * (1 - q) + (lk.y + C.TOWN_QUAY_EDGE) * q;
+      const f = flow(x);
+      if (f > 0) e = e * (1 - f) + (lk.y + C.TOWN_RIVER_EDGE) * f;
+      e += C.TOWN_RIVER_NECK_PINCH * neckMix(x);
       let n = 0;
       for (const o of C.TOWN_LAKE_NOISE) n += o.a * townNoise(x, y, o.p, 3);
-      return (y + 0.5) - e - n * (1 - q);
+      /* l'isoligne effective : c'est ELLE qu'on borne, jamais `e` — le bruit
+         seul suffirait à fermer le chenal, et c'est le bruit qu'il faut retenir */
+      let eff = e + n * (1 - q) * (1 - C.TOWN_RIVER_CALM * f);
+      if (f > 0) eff = Math.min(eff, lk.y + lk.h - C.TOWN_RIVER_MIN);
+      return (y + 0.5) - eff;
     };
+    /* ⚠️ LE CREUSEMENT VA JUSQU'AU BORD DE LA CARTE (`xW`), PAS JUSQU'AU BOUT DU
+       RECTANGLE DU LAC : c'est le fleuve. Tout ce qui suit et qui appartient à
+       la VILLE (promenade, ponton, mobilier) continue de se borner à `x1` — non
+       par prudence, mais parce que `quayMix` y vaut zéro de toute façon, et
+       qu'une boucle qui balaie soixante-douze colonnes pour n'y rien poser est
+       une boucle qu'on relira en se demandant ce qu'elle cherche. */
+    const xW = W;
     const wet = new Set();
-    for (let x = x0; x < x1; x++) for (let y = lk.y; y < yBot; y++) {
+    for (let x = x0; x < xW; x++) for (let y = lk.y; y < yBot; y++) {
       if (!inMap(x, y)) continue;
       const i = id(x, y);
       if (solid[i] || ground[i] === C.G_PATH || ground[i] === C.G_PATH_STONE) continue;
@@ -5256,7 +5287,7 @@ export function generateTownWorld() {
        sinon le comblement remonterait dans la pelouse au fond des criques. */
     for (let pass = 0; pass < 2; pass++) {
       const add = [], del = [];
-      for (let x = x0; x < x1; x++) for (let y = lk.y; y < yBot; y++) {
+      for (let x = x0; x < xW; x++) for (let y = lk.y; y < yBot; y++) {
         const i = id(x, y);
         let n = 0;
         for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
@@ -5265,7 +5296,7 @@ export function generateTownWorld() {
           // AILLEURS : le lac touche le bas de la carte, et sans ça sa dernière
           // rangée se croirait au bord d'une rive et se ferait effacer.
           if (ny >= yBot) { n++; continue; }
-          if (nx < x0 || nx >= x1 || ny < lk.y) continue;
+          if (nx < x0 || nx >= xW || ny < lk.y) continue;
           if (wet.has(id(nx, ny))) n++;
         }
         if (wet.has(i)) { if (n < 2) del.push(i); }
@@ -5285,7 +5316,7 @@ export function generateTownWorld() {
       return null;
     };
     const tops = new Array(W).fill(null);
-    for (let x = x0; x < x1; x++) tops[x] = waterTop(x);
+    for (let x = x0; x < xW; x++) tops[x] = waterTop(x);
     /* ---- LA PROMENADE MAÇONNÉE, devant le ponton seulement. */
     for (let x = x0; x < x1; x++) {
       if (quayMix(x) <= 0.5 || tops[x] === null) continue;
@@ -5813,17 +5844,36 @@ export function generateTownWorld() {
       let r0 = trailRow(xJoin);
       if (r0 === null) r0 = AVE + 3;
       const w0 = wave(xJoin);
-      const eastRow = (x) =>
-        Math.round(r0 + (x - xJoin) * C.TOWN_TRAIL_EAST_DIVE + wave(x) - w0);
+      /* ⚠️⚠️ 2026-08-31 — DEUX GRANDEURS, DEUX RÔLES : LE SENTIER GARDE SA
+         LIGNE, LA BERGE EST UN PLANCHER. Le fleuve occupe désormais le coin où
+         ce chemin plongeait ; il fallait donc l'empêcher d'y entrer, et le
+         premier correctif lui a fait suivre `topsSafe` case par case. C'était
+         PIRE : la rive descend de six rangées en vingt colonnes, le chemin
+         redevenait l'escalier de gravier payé quatre fois au 437, et il le
+         redevenait pile là où l'on regarde le navire s'en aller.
+         Sa ligne propre (pente + ondulation) décide donc où il va ; `topsSafe`
+         ne fait que l'empêcher de mouiller ses pieds. C'est le §4 de
+         `CLAUDE.md` — *une grandeur de dessin, une grandeur de collision : deux
+         choses, deux paramètres* — appliqué à un chemin. */
+      const eastRow = (x) => {
+        const own = Math.round(r0 + (x - xJoin) * C.TOWN_TRAIL_EAST_DIVE + wave(x) - w0);
+        const bank = topsSafe(x);
+        return bank === null ? own : Math.max(AVE, Math.min(own, bank - 2));
+      };
       /* ⚠️ LA DISPARITION EST UNE PROBABILITÉ, PAS UNE LARGEUR (voir
          `TOWN_TRAIL_FADE_*`) : un chemin qui rétrécit à une case redevient
          l'escalier de gravier payé quatre fois au 437, et il le redevient
          exactement au moment où on veut qu'il se fasse oublier. Un sentier
          abandonné se TROUE. Le tirage est un hachage : les deux joueurs voient
          les mêmes plaques, et elles ne bougent pas d'une image à l'autre. */
-      let prev = null, gone = 0;
+      /* ⚠️ `prev` PART DE LA DERNIÈRE RANGÉE DU SENTIER DE VILLE, relue sur
+         place : les deux tronçons n'ont pas la même ondulation, donc le raccord
+         peut valoir deux ou trois rangées — sans ce départ, il manquerait le
+         seul endroit où il est visible. */
+      let prev = trailRow(xJoin), gone = 0;
       for (let x = x1; x < W - 2 && gone < 5; x++) {
         const r = eastRow(x);
+        if (r === null) { prev = null; continue; }
         if (r < AVE + 1 || r + 1 >= H - 1) break;
         const t = (wood(x, r) - C.TOWN_TRAIL_FADE_FROM) / (C.TOWN_TRAIL_FADE_TO - C.TOWN_TRAIL_FADE_FROM);
         if (t >= 1) { gone++; prev = null; continue; }

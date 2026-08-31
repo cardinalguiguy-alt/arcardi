@@ -11,58 +11,103 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**ACTION SUIVANTE UNIQUE — LES TROIS DETTES GRAPHIQUES DE L'AUDIENCE ET DE LA FIN, QUI SONT
-LES SEULES QUI RESTENT SUR LA QUÊTE DU BATEAU.** Dans cet ordre : (1) **la posture DEBOUT du maire
-se désassemble** — tête fendue en deux blocs décalés, écharpe détachée passant sous le plan du
-bureau, un bras en bloc isolé, alors qu'assis il est impeccable (`maireBureau.js`, `POSE.window` /
-`applyPose`) ; (2) **tout le HUD de la ferme est peint par-dessus la scène annoncée PLEIN ÉCRAN du
-maire** — or, jour/heure, boutons, bandeau de quête —, deux textes se chevauchant au pixel
-(`Glissez pour regarder…` x 861→1264 contre `🏠 Maison` x 1079→1270) ; (3) **la fin est trois points
-colorés qui traversent le ponton**, pour le climax d'une quête de 55 minutes.
-⚠️ **AUCUNE DES TROIS N'EST MESURABLE PAR UN BANC EXISTANT** : `verify-maire` (113/113) vérifie que
-les sept postures EXISTENT et sont dessinables, jamais qu'elles s'ASSEMBLENT. La première chose à
-faire n'est donc pas de corriger, c'est de **rendre la posture regardable** — un banc de rendu qui
-peint les sept poses côte à côte, comme `render-etoile` l'a fait pour le sillon.
+**ACTION SUIVANTE UNIQUE — MONTER DANS LE BATEAU, PUIS LE FONDU ENCHAÎNÉ.** Le fleuve et sa
+passe sont construits (voir plus bas) ; il reste les DEUX autres tiers de la décision de
+Guillaume, et ils ne se mêlent pas (règle du 424, une livraison chacun) :
+· **(1) LES POSES À BORD.** *« eduardo peut utiliser le navire. mais nous aussi en montant dedans :
+soigner les sprites. anatomiquement cohérentes dans un bateau, mouvements cohérents. »* Le fermier
+n'a AUCUNE pose assise-dans-une-barque ; le coller debout sur un pont est exactement ce que cette
+phrase interdit. ⚠️ **La question de qualité se pose AVANT le premier `fillRect`** (§4.2) : ce
+dessin doit être regardable par un banc, donc il naît dans `fermeArt.js` avec ses contrôles, comme
+la bulle « ! » du 455 — pas après.
+· **(2) LE FONDU ENCHAÎNÉ ET LE DÉCOR MARIN GÉNÉRIQUE.** *« il y aura un mode de navigation jouable
+bientôt, mais pour l'instant juste faire un fondu enchaîné, avec décor marin générique (à l'avenir
+nous ferons une navigation 3D). »* Donc : franchir la passe → fondu → une mer générique → et le
+quai garde son amarre vide et son fanion « En mer » (§17.7 de `QUETE.md`). Rien n'est écrit.
 
-**LE VERROU BLOQUANT ET LES CINQ DETTES DE TEXTE SONT CORRIGÉS LE 2026-08-31.**
-· **La lumière bleue ne meurt plus pendant le repos forcé.** `resolveStarCandy` prend un cinquième
-argument `readyAt` : l'échéance part de l'instant où le joueur POURRA offrir, pas du ramassage.
-Sans ça, la fraîcheur (5 min) expirait pendant la blessure (10 min) et **100 % des défaites**
-rendaient leur propre récompense inutilisable. Le report est borné par `STAR_CANDY_HOLD_MAX_MS`,
-**dérivé** de `C.RUN_INJURED_MS`.
-· **E ne se tait plus.** Blessé, on n'agit toujours pas — mais on le dit, avec le décompte
-(`toastInjuredWait`). L'invite « E : lui offrir de la lumière bleue » restait affichée devant une
-touche morte. ⚠️ **Et le doigt et le clavier faisaient deux jeux différents** : `pressTouchAction`
-appelait `tryOpenNearby()` en étant blessé, donc l'offrande passait sur tablette et pas au clavier.
-Les deux chemins sont alignés.
-· **La porte claquée a enfin une conséquence écrite** (`maire.after.slam` : c'était la seule fin
-sur six qui n'affichait rien). · **La rancune se dit** : `appt.sour` porte la trace, parce que
-`resolveMayorAsk` effaçait `e.mayor.sour` dans la ligne qui suivait sa lecture — `moodSour` n'avait
-jamais pu s'afficher. · **`end2` n'annonce plus un navire à flot** alors que `STAR_SHIP_WATER_MAX`
-le garde à terre sur sa cale. · **Le chat du menu dev est traduit** (`star.devChat` ; seul le
-libellé du bouton reste anglais, c'est le nom d'un outil). · Doublon `engineer` supprimé, état
-« fouillé » écrit en toutes lettres sur la carte.
+⚠️⚠️ **LE FLEUVE EST LIVRÉ LE 2026-08-31, ET LA CARTE A ENFIN UNE SORTIE.** Décision de Guillaume :
+*« Je veux que l'on considère le lake and pier plutôt comme un accès à l'océan, et donc le port de
+Valley Town »*, puis *« une sorte de fleuve qui mène à une sortie ; par la droite. ensable un peu »*.
+Valley Town était close de tous les côtés : le navire censé « prendre le large » depuis le 453
+partait d'un étang. Mesuré : **10 rangées d'eau dans le bassin, 4 au plus étroit de la passe
+(x 166), 6 au bord du monde**, et `verify-vallee` vérifie qu'**on va de la cale au large par
+l'eau**, à quatre voisins. Le détail est au **§32 de `components/ferme/README.md`** ; ici, seulement
+ce qu'il ne faut pas casser :
+· **C'est le MÊME champ de rive prolongé, pas une seconde nappe** — deux nappes raccordées bout à
+bout se décaleraient au premier réglage, et la couture tomberait là où le navire passe.
+· **La passe n'a qu'une rive**, parce que le fleuve longe le bord sud du monde : lui en donner une
+seconde laisserait une bande de terre inatteignable, le défaut exact du 439.
+· **L'ensablement ne se peint pas, il se creuse** : la profondeur de l'eau est une transformée de
+distance à la terre, donc un chenal étroit devient tout seul un haut-fond pâle.
+· **Trois constantes du BOIS ont dû être reprises ENSEMBLE** (0,19 / 1,00 / y 157, issues d'un
+balayage) : son cœur tombait dans le coin que le fleuve occupe désormais.
+· **Un arrêt de téléport `townPasse` naît le même jour que la passe** — leçon du 425 appliquée
+avant d'être repayée : à quarante-trois cases du ponton, on ne serait pas allé la regarder.
+⚠️ **ET LE RETOURNEMENT DE LA QUÊTE CHANGE DE NATURE** : si l'eau mène visiblement au large,
+personne n'a jamais cru à un lac. Ce qui le remplace est plus solide et déjà dans la carte — *la
+passe est ensablée depuis vingt ans, plus personne ne peut sortir.* `QUETE.md` §17.8 le dit.
+⚠️ **AUCUNE RUINE PORTUAIRE À LA PASSE** (môle écroulé, duc-d'Albe, bornes) : elles appartiennent
+au retournement, lot D, et les poser ici mêlerait deux changements visuels.
 
-⚠️⚠️ **SEPT CONTRÔLES NEUFS DANS `verify-quete` §bleue, ET ILS MESURENT LES DEUX HORLOGES ENSEMBLE.**
-Aucun contrôle ne manquait : il manquait celui qui met la fraîcheur ET la blessure dans la MÊME
-expression. ⚠️ **Le banc a d'ailleurs attrapé ma propre régression pendant ce chantier** — sortir la
-phrase de chat du menu dev laissait `dev.chat` orphelin, et le contrôle « chaque phrase de la quête
-est affichée quelque part » est tombé au premier essai. *Un banc qui échoue sur le zip qui l'écrit
-est un banc en bonne santé.*
+**LE MAIRE EST CORRIGÉ ET MESURÉ LE 2026-08-31 — ET IL A FALLU CONSTRUIRE L'ŒIL AVANT LA MAIN.**
+La première chose faite n'a pas été de corriger, c'est de rendre la posture REGARDABLE :
+**`tools/render-maire.mjs`, 66/66, le premier banc de rendu du dépôt qui regarde de la 3D** — pas
+de WebGL, pas de npm, `tools/lib-3d.mjs` charge le r128 vendorisé du dépôt et rastérise à la main.
+Il peint les sept poses × trois angles (`tools/out/maire-postures.png`) et les trois vues du jeu
+(`tools/out/maire-bureau.png`). **Six défauts qu'aucun banc ne pouvait voir, tous trouvés par lui :**
+· **la posture DEBOUT n'existait pas** — `rise: 0.13` lève le BUSTE, et les jambes ne sont pas
+ses filles : un tronc **quatorze centimètres** au-dessus de ses propres cuisses. Le maire a
+maintenant des hanches, des genoux et un BASSIN (qui manquait, d'où une fente de 1,5 cm à la taille
+sur toutes les poses) ; `stand` déplie l'homme, `STAND_LIFT` est **dérivé** de la jambe, et le
+fauteuil recule. Au repos la géométrie est celle d'avant **au millimètre** — les six autres poses
+ne bougent pas d'un pixel.
+· **l'écharpe passait dans le bois du plateau** (jusqu'à 13 cm) : raccourcie de 60 à 40 cm et
+remontée. C'est aussi le bon dessin — une écharpe de maire se noue à la hanche.
+· **deux cibles de main étaient hors de portée** (`window` 5,1 cm, `stamp` 2,5) et `solveArm` les
+bornait EN SILENCE ; et `ARM_FORE` mentait d'un centimètre sur les quatorze. Les 14 mains arrivent
+maintenant **à 0,0 cm**.
+· **les bras croisés étaient DANS la poitrine** — seuls les doigts ressortaient, au menton.
+· **`applyPose` repartait du buste et pas de `man`**, donc une image de retard qui n'a coûté zéro
+tant que rien ne levait la racine, et 39 cm le jour où `stand` l'a levée.
+· **la table `POSE` se corrompait à la première image** : la vue partait de `{ ...poseTarget }`,
+qui recopie la référence des tableaux de mains. `poseState` la copie ; le banc rejoue 200 images.
+⚠️ **`ROOM.deskD` passe de 1,12 à 1,00** : le maire était assis DANS son bureau de 2,5 cm en
+permanence et de 7 penché sur le tampon. Invisible de notre chaise, visible dès que la caméra
+libre passe sur le côté — c'est-à-dire dans le geste même que la scène promet.
 
-Vérifications : **18/18 bancs verts** — `verify-quete` **628/628**, `verify-maire` **113/113**,
-`verify-strings` **1104 clés**, `verify-vallee` **208/208**, `verify-taxi` **15/15** ; bundle
-esbuild propre (seul `G_SOIL` préexistant subsiste) ; `git diff --check` propre ; `next build`
-**✓ Compiled successfully** puis l'arrêt documenté sur `supabaseUrl`. **Rejoué à l'écran** : vraie
-course, défaite, retour blessé, E qui répond avec son décompte, soin, offrande, apprivoisement.
-**Aucune migration SQL, aucun changement de schéma, aucune manipulation Supabase n'est nécessaire.**
+⚠️ **CE QUI RESTE SUR LE MAIRE, ET CE N'EST PLUS DE LA POSTURE** : (1) **tout le HUD de la ferme est
+peint par-dessus la scène annoncée PLEIN ÉCRAN** — or, jour/heure, boutons, bandeau de quête, avec
+deux textes qui se chevauchent au pixel (`Glissez pour regarder…` x 861→1264 contre `🏠 Maison`
+x 1079→1270) ; (2) **huit feuilles `L.maire` n'ont aucun lecteur** (`who`, `trustAt`, `booked`,
+`alreadyBooked`, `doorHere`, `slamBang`, `camFree`, `waitRead`) — à brancher ou à supprimer, et
+l'angle mort qui les laisse passer est dans `verify-quete` §orphelins : *une feuille dont le PARENT
+est lu dynamiquement passe au vert sans être affichée.* (3) **La fin de la quête est trois points
+colorés qui traversent le ponton**, pour le climax d'une soirée de 55 minutes.
+⚠️⚠️ **ET CE QUE `render-maire` NE SAIT PAS FAIRE, ÉCRIT AVANT QU'ON S'Y FIE** : il ne juge NI
+l'éclairage (pas d'ombre portée, textures réduites à leur couleur moyenne — le §8 reste hors de sa
+portée), NI les TRANSITIONS (`ease` glisse d'une pose à l'autre, et c'est en chemin qu'un bras peut
+traverser un torse ; il regarde les sept ARRIVÉES). **Le bureau du maire n'a jamais été rejoué à
+l'écran depuis cette correction** — seuls les bancs, le bundle et `next build` l'ont vue.
+
+Vérifications : **38 bancs relancés un par un, tous verts, zéro `ÉCHEC`** — `render-maire` **66/66**
+(neuf), `verify-vallee` **214/214** (six contrôles neufs pour le fleuve), `verify-maire` **113/113**,
+`verify-quete` **628/628**, `verify-strings` **1104 clés**, `verify-ludo` **30/30**, `verify-taxi`
+**15/15**, `render-parc` et `verify-portee` verts ; bundle esbuild propre sur `FermeGame.js` ET sur
+`MaireScene.js` (seul `G_SOIL` préexistant subsiste) ; `git diff --check` propre ; `next build`
+**✓ Compiled successfully** puis l'arrêt documenté sur `supabaseUrl`. **Aucune migration SQL, aucun
+changement de schéma, aucune manipulation Supabase n'est nécessaire.**
+⚠️⚠️ **ET RIEN DE CETTE SESSION N'A ÉTÉ VU EN JEU** — ni le maire corrigé, ni le fleuve. C'est la
+limite que le §10 rappelle en gras : *regarder l'écran est la seule chose qui trouve ce qu'on n'a
+pas encore compris.* Deux arrêts du menu dev existent pour que ça coûte dix secondes chacun :
+« Valley Town — le fleuve et le ponton » et le neuf **« ⛵ la passe »**.
 
 ⚠️ **UN OUTIL À CONNAÎTRE AVANT DE REPRENDRE : `tools/.cache/*.mjs` ET `tools/out/*.png` SONT SUIVIS
 PAR GIT** (la règle `/out` du `.gitignore` ne vaut qu'à la racine). Lancer un banc SALIT donc l'arbre
 de travail, et `git status` cesse d'être un contrôle de propreté utilisable. Corollaire mesuré le
-2026-08-31 : **sept des dix-huit bancs ne peuvent pas tourner en lecture seule** — ils écrivent
-`tools/.cache/fermeConstants.mjs` via `lib-canvas.mjs:307`. À savoir avant de confier un audit à un
-agent en bac à sable : il rendra « 0/13 exécutés » sans que rien ne soit cassé.
+2026-08-31 : **sept des dix-huit bancs de contrôle ne peuvent pas tourner en lecture seule** — ils
+écrivent `tools/.cache/fermeConstants.mjs` via `lib-canvas.mjs:307`. À savoir avant de confier un
+audit à un agent en bac à sable : il rendra « 0/13 exécutés » sans que rien ne soit cassé.
+⚠️ `render-maire` et `verify-maire`, eux, copient dans `os.tmpdir()` : c'est le motif à reprendre.
 
 ⚠️ **DÉCISION DE GUILLAUME, TOUJOURS EN VIGUEUR : LE BUG DU CHAUDRON-ARTÉFACT VISIBLE SUR 4 TERRES/5
 N'EST PAS CORRIGÉ.** Le sprite scintillant (`FermeGame.js`) reste sans la garde `spec.key==="evil"`
@@ -71,8 +116,7 @@ que l'interaction a déjà. **Ne pas le corriger avant d'en avoir reçu l'ordre.
 ⚠️⚠️ **UNE MESURE À PART, DEMANDÉE PAR GUILLAUME (« un ami qui joue sur tablette me dit qu'arcardi ne
 fonctionne plus ») : LE CHIFFRE EST 1 829 CANEVAS 2D RETENUS AU CHARGEMENT** (2 722 créés,
 2,6 millions de pixels), dont `townWater` **636** et `petFrames` **468** à eux deux. Le détail et ce
-qu'il faut en faire sont au §10, « ce qui n'existe pas » — **ce n'est PAS corrigé dans cette
-livraison** (règle du 424 : on ne mêle pas deux changements visuels), c'est mesuré et daté.
+qu'il faut en faire sont au §10, « ce qui n'existe pas » — **toujours pas corrigé**, mesuré et daté.
 
 | Lot | Ce que c'est | État |
 |---|---|---|
@@ -164,6 +208,18 @@ toutes payées :
   `starGoalKey` sur un état que personne ne re-migre : il n'a donc JAMAIS pu voir que l'hôte,
   qui re-migre à chaque requête, fait tomber le météore de Valley Town à la fermeture du
   chapitre 1. **Une règle de banc s'applique au banc ENTIER, ou elle ne s'applique pas.**
+- ⚠️⚠️⚠️ **il vérifie qu'une chose EXISTE, jamais qu'elle TIENT ENSEMBLE** (2026-08-31, treizième
+  forme). `verify-maire` rendait **113/113** pendant que la posture DEBOUT du maire se
+  désassemblait à l'écran : il tenait la jointure « sept postures de mécanique = sept postures
+  dessinables », qui est juste, et qui ne peut rien dire d'un CORPS — **une pose est un jeu de
+  nombres, et un jeu de nombres n'a pas de silhouette**. La pose écrivait `rise: 0.13` pour lever
+  un homme dont les jambes ne sont pas filles du buste : elle fabriquait un tronc quatorze
+  centimètres au-dessus de ses propres cuisses. *Une mise en scène qui demande un geste que le
+  squelette ne sait pas faire ne se règle pas, elle se construit* — et la parade est un banc qui
+  RASTÉRISE (`render-maire`, le premier du dépôt à regarder de la 3D, et sans WebGL).
+  ⚠️ Corollaire, et c'est l'angle mort du contrôle de silhouette lui-même : **ce qui déborde se
+  compte en pixels, ce qui s'enfonce se compte en mètres**. Une main enfoncée dans une poitrine ne
+  fait pas d'îlot — elle disparaît, et la masse reste d'un seul tenant.
 ⚠️⚠️ **ET UN CONTRÔLE DE CAS NE VAUT PAS UN INVARIANT** (449). Trois contrôles « est-ce que ça
 marche » étaient verts sur le placement du familier meneur ; l'invariant — *il n'est JAMAIS plus
 loin du but que le joueur*, balayé sur toutes les positions — a échoué **20 fois sur 164** et a
@@ -210,8 +266,8 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 | # | La leçon, en une phrase | Où est le détail |
 |---|---|---|
 | 2026-08-30 | ⚠️⚠️⚠️ **DEUX HORLOGES QUI SE CROISENT SUR LE MÊME OBJET SE MESURENT ENSEMBLE OU PAS DU TOUT.** Une durée de péremption plus COURTE qu'une durée d'indisponibilité rend la récompense inatteignable à 100 %, et chacune est juste de son côté : c'est la forme 458 (deux grandeurs qui s'opposent), appliquée au TEMPS. | `STAR_CANDY_FRESH_MS`, `RUN_INJURED_MS`, `doAction` |
-| hors-zip | ⚠️⚠️⚠️ **UN COMPTEUR CUMULATIF QUI SE REMET À ZÉRO SUR LA MOINDRE PAUSE N'EST PLUS CUMULATIF — IL EST BINAIRE, ET ÇA REND CE QU'IL GARDE PRATIQUEMENT INATTEIGNABLE.** Le gros météore n'attendait que deux minutes de présence active en ville, mais `starTownActivityTick` remettait `a.ms` à zéro à la moindre coupure (lire une bulle, ouvrir l'inventaire, s'arrêter cinq secondes) : aucun joueur ne reste « engagé » en continu deux minutes pleines, donc la chute était pratiquement inatteignable — signalé par Guillaume en jouant. L'inactivité doit mettre la progression EN PAUSE, jamais l'effacer ; seul un nouveau chapitre a le droit de repartir de zéro. *Un compteur qui garde un objectif accessible doit accumuler, pas redémarrer.* | `starTownActiveRef`, `STAR_TOWN_ACTIVE_MS`, `FermeGame.js`/`quete.js` |
-| hors-zip | ⚠️⚠️⚠️ **UNE HORLOGE D'INTERFACE DOIT ÊTRE BORNÉE PAR SA PHASE, PAS SEULEMENT PAR L'ABSENCE DE SON ÉVÉNEMENT FINAL.** Une avance du menu dev pouvait ouvrir le chantier avec `townFall` encore vide : le compteur de Valley Town survivait alors sous l'objectif de la mairie, parce qu'il ne vérifiait que « pas encore tombé ». `starTownWaiting` joint désormais chapitre, chute initiale et chute urbaine, et la boucle comme l'affichage lisent ce même prédicat. *Une date manquante ne prouve pas qu'une attente est encore en cours ; la phase courante doit l'autoriser.* | `starTownWaiting`, `starTownActivityTick`, `FermeGame.js`/`quete.js` |
+| 2026-08-31 | ⚠️⚠️⚠️ **UNE GARDE QUI BORNE AU LIEU DE JETER MENT EN SILENCE, ET ELLE DOIT DONC ÊTRE MESURÉE.** `solveArm` borne exprès une cible hors de portée — un `acos` hors bornes rendrait `NaN` et ferait DISPARAÎTRE le bras entier. Conséquence : une posture qui demande l'impossible ne plante pas, elle pose la main quinze centimètres à côté de là où le texte l'écrit, pour toujours, sans un mot. Toute garde qui rattrape doit publier de COMBIEN elle a rattrapé, sinon elle cache très exactement ce qu'elle protège. | `solveArm`, `render-maire` §3 |
+| 2026-08-31 | ⚠️⚠️ **UNE CHAÎNE D'OS SE REMET À JOUR DEPUIS SA RACINE OU PAS DU TOUT.** `updateMatrixWorld` compose avec la matrice monde du PARENT telle qu'elle est : rafraîchir le buste laissait l'homme d'une image en retard. Tant que la racine ne bougeait jamais l'écart valait zéro ; le jour où une pose s'est mise à la lever, les deux mains se sont posées 39 cm à côté — et seulement à la pose SUIVANTE, donc par intermittence. *Mise à jour partielle et retard d'une image sont la même erreur, et la seconde ne se voit que si la première existe.* | `applyPose`, `m.man.updateMatrixWorld` |
 | 2026-08-27 | ⚠️⚠️⚠️ **UNE DATE ABSOLUE NE PASSE JAMAIS PAR UNE OPÉRATION 32 BITS.** Un petit instant de banc survit à `| 0`, une date réelle de 2026 non ; toute migration d'horodatage se rejoue avec `Date.now()` ET le vrai cycle de sérialisation/reprise de l'hôte. | `candyUntil`, `migrateStar`, `verify-quete.mjs` §12 |
 
 
@@ -422,6 +478,13 @@ de conception qui valent pour n'importe quel morceau du dépôt.
   case (`x % 4`, `y % 4`). ⚠️ Il doit **boucler sur lui-même** (toute forme peinte aussi à −N
   et +N), sinon on a déplacé la couture de 16 à 64 px — et une couture tous les quatre
   carreaux dessine une SECONDE grille, pire que la première.
+- ⚠️⚠️ **UN ÉTALEMENT `{ ...table }` RECOPIE LES RÉFÉRENCES DE SES TABLEAUX : UNE TABLE DE
+  RÉFÉRENCE QU'ON ÉTALE À PLAT EST UNE TABLE QU'ON MODIFIE** (2026-08-31). La vue de l'audience
+  partait de `{ ...poseTarget("closed") }` et lissait dedans image par image : elle écrivait donc
+  dans `POSE.closed` lui-même, la table se corrompait à la PREMIÈRE image, et la seconde audience
+  de la session partait d'une posture que personne n'avait écrite. **Aucun symptôme sur le
+  moment** — les nombres restaient plausibles. Parade : une copie explicite (`poseState`), et un
+  contrôle qui rejoue deux cents images puis compare la table à elle-même.
 - ⚠️⚠️ **`chaîne.replace("X", …)` NE REMPLACE QUE LA PREMIÈRE OCCURRENCE.**
 - ⚠️⚠️ **UN `useProgram` QUI ÉCHOUE NE DÉLIE PAS LE PROGRAMME PRÉCÉDENT** : un shader qui ne
   compile pas fait dessiner l'objet SUIVANT avec les mauvais attributs. **Seul indice :
@@ -479,6 +542,7 @@ de conception qui valent pour n'importe quel morceau du dépôt.
 | `components/ferme/README.md` | **Valley Town, le tribunal, l'HÔTEL DE VILLE, l'ÉGLISE, le BEFFROI, les habitants, la VENTE, les OISEAUX, les ÉLECTIONS et les PIÈGES de ces zones — autorité (428-444)** |
 | `components/ferme/DESSIN.md` | **les règles de DESSIN, vraies partout — autorité (441, sorties du §4)** |
 | `tools/README.md` | **les bancs, ce qu'ils attrapent et leurs chiffres — autorité (432-439)** |
+| `tools/lib-3d.mjs` · `tools/render-maire.mjs` | **REGARDER DE LA 3D SANS GPU (2026-08-31).** `lib-3d` charge le three.js **r128 vendorisé du dépôt** dans Node — la même bibliothèque que la page, à l'octet près — et rastérise à la main (projection, découpe au plan proche, tampon de profondeur, ombrage plat), plus le théorème des axes séparateurs pour mesurer une interpénétration en mètres. `render-maire` s'en sert pour peindre les sept postures côte à côte. ⚠️ **Aucune dépendance npm, et surtout pas `three`** : une autre révision n'a pas la même atténuation de lumière (§11), donc mesurerait un autre programme. |
 | `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** · depuis le 440 il **importe `planche.js`** : une portée de pont et une emprise de décor sont des grandeurs de DESSIN, on les dérive du sprite au lieu de les recopier |
 | `components/ferme/planche.js` | **GÉNÉRÉ** par `tools/import-planche.mjs` — les sprites de la planche de Guillaume, en données. Ne pas éditer à la main |
 | `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural. `starWispColors` décline le vivant en jaune, bleu et rose ; `drawStarFragmentMeteor` fait tourner le petit caillou incandescent sur un centre stable et `drawStarFragmentImpact` dessine son choc de terre/poussière/braises, sans réutiliser la boule de feu de Valley Town. Les gros dessins de quête (`drawStarCrater`, comète, navire, jauge, poses) vivent ici pour rester regardables par les bancs. |
@@ -642,8 +706,8 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 `✓ Compiled successfully` juste avant.**
 
 ⚠️⚠️ **LES BANCS SONT DANS `tools/README.md` DEPUIS LE 432, ET CE CHAPITRE A ÉTÉ ÉLAGUÉ AU 444
-SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 442** (reporté deux fois). **18 bancs de contrôle et 19 bancs
-de rendu**, comptés en listant `tools/` (⚠️ **le 480 ajoutait `verify-maire` et avait relancé les
+SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 442** (reporté deux fois). **18 bancs de contrôle et 20 bancs
+de rendu** (le vingtième est `render-maire`, 2026-08-31, **66/66**), comptés en listant `tools/` (⚠️ **le 480 ajoutait `verify-maire` et avait relancé les
 36 bancs d'alors un par un** ; le 2026-08-27 ajoute `verify-ludo`, relancé **30/30** :
 `verify-quete` **621/621**, `verify-maire` **113/113**,
 `render-etoile` **161/161**
@@ -682,7 +746,7 @@ contrôle du dépôt qui voie une liaison entre deux fichiers.
 ⚠️ **`verify-ludo` est le deuxième banc qui joue une mécanique de mini-jeu** : il balaie 1 000
 plans légaux et tient les cinq chemins bot vers les arbitres de l'hôte. Son détail et ses limites
 sont dans `tools/README.md`.
-⚠️ **Le seul qui touche à de l'ARGENT est `verify-vallee`** (208/208, relancé hors-zip le 2026-08-26) : il joue des ventes,
+⚠️ **Le seul qui touche à de l'ARGENT est `verify-vallee`** (**214/214** au 2026-08-31 ; 208 avant le fleuve) : il joue des ventes,
 compte les pièces, et vérifie que **le cours est bit à bit celui du 430** — contrôle hérité de
 `verify-enquete`, sauvé de sa suppression parce qu'il protégeait le marché, pas l'enquête.
 **Tout chiffre écrit là-bas a été obtenu en lançant le banc**, c'est sa règle d'entrée.
@@ -864,6 +928,20 @@ erreur** en choisissant mal.
 ---
 
 ## 13. À compléter par Guillaume
+
+- ✅ **LE LAC-OCÉAN — TRANCHÉ ET À MOITIÉ CONSTRUIT LE 2026-08-31.** *« Je veux que l'on considère
+  le lake and pier plutôt comme un accès à l'océan, et donc le port de Valley Town »* · *« une
+  sorte de fleuve qui mène à une sortie ; par la droite. ensable un peu »* · *« il y aura un mode
+  de navigation jouable bientôt, mais pour l'instant juste faire un fondu enchaîné, avec décor
+  marin générique »* · *« eduardo peut utiliser le navire. mais nous aussi en montant dedans :
+  soigner les sprites. anatomiquement cohérentes dans un bateau, mouvements cohérents »*.
+  **Le fleuve et sa passe sont faits** (§32 de `components/ferme/README.md`). **Restent les poses à
+  bord et le fondu**, une livraison chacun — c'est le bloc ⏭️ REPRISE.
+  ⚠️ Ce qui reste une VRAIE question ouverte, et elle n'a rien de technique : **ce qu'on voit après
+  le fondu**. Un décor marin générique tient une fois ; à la seconde, le joueur veut savoir où il
+  va. Les trois îles de la carte d'Eduardo (§17.5) sont écrites mais rien ne dit encore ce qu'on y
+  fait — et c'est cette réponse-là qui décide si le navire est une fin ou une porte.
+
 
 - ⚠️ **LE CADASTRE ET LE NOTAIRE SONT DES GUICHETS FERMÉS** : les deux pièces existent, meublées,
   et ne rendent aucun service depuis que le 444 a retiré l'histoire qui les employait. La question
@@ -1203,6 +1281,29 @@ erreur** en choisissant mal.
    **480 bis (VINGT-ET-UNIÈME passe : la ligne 478 part avant la leçon de ce zip — une retirée,
    une ajoutée, le tableau reste à sa taille et couvre exactement 479 à 480 bis. Son détail reste
    dans `resolveStarTimberTick`/`starTimberBlock`, que sa colonne de droite désignait déjà.)**.
+
+   **2026-08-31 bis, le fleuve (TRENTE-ET-UNIÈME passe : aucune ligne du tableau des leçons ne
+   part, parce que cette session n'en ajoute AUCUNE — ses trois enseignements sont des leçons de
+   CARTE, pas de projet, et ils vivent au §32 de `components/ferme/README.md`, à côté du générateur
+   qu'ils décrivent : le sentier qui redevient un escalier quand il épouse la rive, les trois
+   constantes du bois qui se règlent ensemble ou pas du tout, le dénominateur du banc qui comptait
+   l'eau. ⚠️ *Une session qui ne produit pas de leçon à l'échelle du projet ne doit pas en inventer
+   une pour remplir le tableau* — c'est ce qui l'a fait grossir deux fois. La passe corrige en
+   revanche deux chiffres : `verify-vallee` passe de 208 à **214**, et le §13 perd sa question
+   « lac-océan » puisqu'elle est répondue.)**.
+
+   **2026-08-31, le maire regardé (TRENTIÈME passe : les DEUX lignes « hors-zip » du tableau — le
+   compteur cumulatif et l'horloge d'interface bornée par sa phase — partent avant les deux leçons
+   de cette session (une garde qui borne au lieu de jeter, une chaîne d'os remise à jour depuis sa
+   racine) : deux retirées, deux ajoutées, le tableau reste à quatre. Leur détail retiré vit dans
+   `starTownActiveRef`/`STAR_TOWN_ACTIVE_MS` et `starTownWaiting`/`starTownActivityTick`, que leur
+   colonne de droite désignait déjà. ⚠️ Cette passe AJOUTE aussi une treizième forme au « banc qui
+   passe » de l'en-tête — *il vérifie qu'une chose EXISTE, jamais qu'elle TIENT ENSEMBLE* — et un
+   piège JavaScript au §4 (l'étalement qui recopie les références de tableaux). ⚠️ Et elle a trouvé
+   ce qu'un élagage doit trouver : **le §10 annonçait « 19 bancs de rendu »** alors que
+   `render-maire` en fait vingt, et le compte n'était corrigé nulle part ailleurs — sixième
+   occurrence du chiffre recopié, mais cette fois il n'était écrit QU'À UN endroit, ce qui est la
+   seule forme qui ne ment jamais deux fois.)**.
 
    **hors-zip, textes de quête & lueur bleue (VINGT-SEPTIÈME passe : la ligne `solveArm` part
    avant la leçon de cette session (une même clé d'objectif qui pilote deux mécanismes — le

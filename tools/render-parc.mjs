@@ -479,12 +479,31 @@ console.log("\n=== 6. le sentier de la rive est se perd dans le bois ===\n");
      annonçait 23 % pour une futaie réglée à 44 %, et on serait allé « corriger »
      un dessin qui n'avait rien. Une bande de colonnes n'est pas une tranche de
      forêt — c'est un rectangle posé sur une forme qui n'est pas rectangulaire. */
+  /* ⚠️⚠️ 2026-08-31 — LE DÉNOMINATEUR EST « LES CASES OÙ UN ARBRE POUVAIT
+     POUSSER », PAS « LES CASES DU CHAMP », ET C'EST UNE CORRECTION DE BANC QUE
+     LE FLEUVE A IMPOSÉE. Le champ de profondeur du bois croît vers le sud-est ;
+     son cœur tombe donc là où le fleuve coule désormais. Compté sur toutes les
+     cases, ce contrôle annonçait **15 % de couvert au cœur d'une futaie qui en
+     porte 44** — il mesurait la part d'EAU du coin de carte, pas la densité du
+     bois, et on serait allé épaissir une forêt qui n'avait rien.
+     ⚠️ Ce n'est pas un assouplissement : l'eau et le sentier ne sont pas des
+     arbres manquants, ce sont des endroits où le générateur n'a JAMAIS eu le
+     droit d'en planter (il exige `G_GRASS`/`G_TOWN_LAWN`). Une case sur laquelle
+     la règle ne s'applique pas n'appartient pas à la mesure de la règle.
+     *Un dénominateur qui contient ce que la règle exclut mesure la carte, pas la
+     règle.* */
+  const plantable = (x, y) => {
+    const i = y * tw.w + x, o = tw.objects[i];
+    if (o === C.O_TREE || o === C.O_TREE2) return true;
+    return tw.ground[i] === C.G_GRASS || tw.ground[i] === C.G_TOWN_LAWN;
+  };
   const slab = (lo, hi) => {
     let n = 0, t = 0;
     for (let y = C.TOWN_WOOD.y; y < Math.min(tw.h - 1, C.TOWN_WOOD.y + C.TOWN_WOOD.h); y++) {
       for (let x = C.TOWN_WOOD.x; x < Math.min(tw.w - 1, C.TOWN_WOOD.x + C.TOWN_WOOD.w); x++) {
         const d = wood(x, y);
         if (d < lo || d >= hi) continue;
+        if (!plantable(x, y)) continue;
         t++;
         const o = tw.objects[y * tw.w + x];
         if (o === C.O_TREE || o === C.O_TREE2) n++;
@@ -559,8 +578,20 @@ console.log("\n=== 6. le sentier de la rive est se perd dans le bois ===\n");
   // l'autre — c'est trente cases de chemin qu'on juge, pas un objet.
   shot("sentier-est", { x: lk.x + lk.w - 6, y: lk.y - 2, w: 30, h: 14 }, 3);
   shot("sentier-bois", { x: 186, y: 152, w: 36, h: 16 }, 3);
+  /* ⚠️ LA PASSE (2026-08-31). C'est par là que le navire sort du monde : c'est
+     donc le seul endroit de la carte dont le cadrage soit imposé par une SCÈNE
+     et pas par un décor. On la regarde centrée sur son goulet, avec de quoi
+     voir le bassin d'un côté et le fleuve de l'autre — un goulet qu'on ne voit
+     pas s'ouvrir et se refermer n'est pas un goulet, c'est une rive. */
+  /* ⚠️ LE FLEUVE ENTIER, D'UN SEUL TENANT ET À FAIBLE ZOOM. C'est la seule
+     planche qui montre ce que la décision de Guillaume a changé : un bassin qui
+     se resserre, une passe, et une eau qui sort du cadre. Les vignettes de
+     détail ne peuvent pas le dire — un profil se juge sur sa longueur. */
+  shot("fleuve-entier", { x: lk.x - 2, y: lk.y - 8, w: tw.w - lk.x + 2, h: 24 }, 1);
+  shot("fleuve-passe", { x: C.TOWN_RIVER_NECK_X - 18, y: lk.y - 2, w: 36, h: 16 }, 3);
+  shot("fleuve-sortie", { x: tw.w - 30, y: lk.y - 2, w: 30, h: 16 }, 3);
 }
 
-console.log("\nImages : tools/out/parc-ensemble.png, parc-etang.png, lac-rive-ouest.png, lac-rive-est.png, lac-quai.png, sentier-est.png, sentier-bois.png\n");
+console.log("\nImages : tools/out/parc-ensemble.png, parc-etang.png, lac-rive-ouest.png, lac-rive-est.png, lac-quai.png, sentier-est.png, sentier-bois.png, fleuve-passe.png, fleuve-sortie.png\n");
 console.log(fail ? fail + " CONTRÔLE(S) EN ÉCHEC\n" : "Tout est bon.\n");
 process.exit(fail ? 1 : 0);

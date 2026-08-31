@@ -278,7 +278,11 @@ function useBureau(canvasRef, viewRef, bubbleRef, opts) {
         resize();
         on(window, "resize", resize);
 
-        const pose = { ...B.poseTarget("closed") };
+        /* ⚠️ `poseState`, PAS `{ ...poseTarget }` : l'étalement recopie la
+           RÉFÉRENCE de `hL`/`hR`, et `ease` écrit dedans — donc dans la table
+           `POSE` elle-même, qui se corrompait à la première image. Le détail
+           est en commentaire de `poseState` (2026-08-31). */
+        const pose = B.poseState("closed");
         const face = { ...B.faceTarget("cold") };
         let t0 = performance.now(), t = 0, doorT = 0;
 

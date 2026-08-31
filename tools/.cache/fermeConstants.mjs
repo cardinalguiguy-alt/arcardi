@@ -3260,6 +3260,54 @@ export const TOWN_TRAIL_MARGIN = 1;     // il ne s'approche jamais plus près qu
    gens qui vont quelque part. */
 export const TOWN_TRAIL_WAVE = [{ p: 29, a: 1.8, ph: 1.9 }, { p: 13, a: 0.7, ph: 4.4 }];
 /* ═══════════════════════════════════════════════════════════════════════════
+   2026-08-31 — CE N'EST PLUS UN LAC, C'EST UN FLEUVE, ET IL SORT DE LA CARTE
+   PAR L'EST.
+   ───────────────────────────────────────────────────────────────────────────
+   Décision de Guillaume : *« il faut imaginer que le lac actuel sera une sorte
+   de fleuve qui mène à une sortie ; par la droite. ensable un peu. »* C'est ce
+   qui fait de Valley Town un PORT et non une ville au bord d'un étang : le
+   navire d'Eduardo doit pouvoir s'en aller quelque part, sinon la promesse des
+   îles n'a aucun support dans la carte et la fin de la quête est une réplique.
+
+   ⚠️⚠️ CE N'EST PAS UNE SECONDE NAPPE D'EAU, C'EST LE MÊME CHAMP PROLONGÉ, et
+   c'est la leçon écrite en tête du bloc du lac dans `fermeEngine.js` : *il n'y a
+   qu'UNE seule description du rivage*. Deux nappes raccordées bout à bout se
+   décaleraient d'une case au premier réglage — et la couture tomberait très
+   exactement là où le navire passe, c'est-à-dire au seul endroit que le joueur
+   regarde à ce moment-là.
+
+   ⚠️ LA PASSE N'A PAS DEUX MÔLES, ET C'EST LA CARTE QUI L'INTERDIT : le fleuve
+   longe le bord SUD du monde (`TOWN_MAP_H`), il n'a donc qu'une seule rive
+   dessinable. Lui donner une rive sud laisserait entre l'eau et le bord une
+   bande de terre inatteignable — le défaut exact que le 439 a payé (quatre-
+   vingt-sept arbres plantés sur deux rangées cernées d'eau). Le goulet se fait
+   donc par la rive NORD qui descend, et l'ensablement par une LANGUE DE TERRE
+   qui avance dans le chenal.
+   ⚠️ Le haut-fond, lui, est GRATUIT : la profondeur de l'eau est une transformée
+   de distance à la terre (`TOWN_WATER_SHELF`), donc un chenal étroit se peint
+   tout seul en eau claire. On ne peint pas un banc de sable, on le CREUSE.
+   ═══════════════════════════════════════════════════════════════════════════ */
+export const TOWN_RIVER_X = TOWN_LAKE.x + TOWN_LAKE.w;   // 152 : là où le bassin de la ville cesse
+export const TOWN_RIVER_RUN = 24;        // longueur du raccord bassin → fleuve, en cases
+export const TOWN_RIVER_EDGE = 8.4;      // recul de la rive nord en aval, en cases sous TOWN_LAKE.y
+/* ⚠️ UN FLEUVE A DES BERGES PLUS CALMES QU'UN LAC, et il le FAUT ici : le bruit
+   du rivage vaut ±5 cases, ce qui refermerait purement et simplement un chenal
+   de cinq rangées. On l'amortit en aval au lieu de rétrécir ses octaves — les
+   mêmes trois octaves, moins fort, gardent le grain sans la houle. */
+export const TOWN_RIVER_CALM = 0.62;     // part du bruit de rive retirée en aval
+/* LA PASSE. ⚠️ ELLE EST LOIN DE L'ESPLANADE (x 123) EXPRÈS : on y va à pied par
+   le sentier de rive, et c'est ce trajet qui fait exister le fleuve autrement
+   que comme un décor de fond. */
+export const TOWN_RIVER_NECK_X = 166;    // le milieu du goulet
+export const TOWN_RIVER_NECK_HALF = 11;  // sa demi-longueur (raccord cubique aux deux bouts)
+export const TOWN_RIVER_NECK_PINCH = 2.2; // de combien la rive nord descend ENCORE dans le goulet
+/* ⚠️⚠️ LE CHENAL NE SE FERME JAMAIS, ET C'EST UN INVARIANT, PAS UN RÉGLAGE. Le
+   bruit de rive suffirait à le boucher sur une colonne ou deux ; une seule
+   colonne sèche et le fleuve n'est plus un fleuve, c'est deux flaques. On borne
+   donc l'isoligne pour qu'il reste toujours au moins ces rangées d'eau —
+   `verify-vallee` le balaie colonne par colonne. */
+export const TOWN_RIVER_MIN = 3;         // rangées d'eau minimum, du goulet au bord de la carte
+/* ═══════════════════════════════════════════════════════════════════════════
    ZIP 440 — LE BOIS DU SUD-EST, ET LE SENTIER QUI S'Y PERD.
    ───────────────────────────────────────────────────────────────────────────
    Demande de Guillaume : « le chemin à l'est de la jetée s'arrête sur rien du
@@ -3298,9 +3346,35 @@ export const TOWN_TRAIL_WAVE = [{ p: 29, a: 1.8, ph: 1.9 }, { p: 13, a: 0.7, ph:
 export const TOWN_WOOD = { x: 156, y: 152, w: 68, h: 16 };  // l'emprise où le bois a le droit de pousser
 /* Le fond du champ : la profondeur croît vers le SUD-EST, donc vers le coin de
    la carte. Les deux pentes sont en cases de profondeur par case parcourue. */
-export const TOWN_WOOD_SLOPE_X = 0.17;
-export const TOWN_WOOD_SLOPE_Y = 0.62;
-export const TOWN_WOOD_ORIGIN = { x: 190, y: 160 };   // le point où la profondeur du champ vaut zéro
+/* ⚠️⚠️ LES DEUX PENTES ET L'ORIGINE ONT ÉTÉ REPRISES ENSEMBLE LE 2026-08-31,
+   PARCE QUE LE FLEUVE A PRIS UN TIERS DU SOL DE CE BOIS. Elles se règlent
+   ENSEMBLE ou pas du tout : la pente sud décide où le cœur tombe, la pente est
+   décide sa largeur, et l'origine décide s'il est noyé. Prises une par une,
+   chacune casse l'une des quatre mesures de `render-parc` — c'est la forme 458
+   (deux grandeurs qui s'opposent), appliquée à un champ de densité.
+   ⚠️ Le triplet vient d'un BALAYAGE, pas d'un réglage à l'œil : 0,19 / 1,00 /
+   157 est le seul point qui tienne les quatre à la fois — futaie 66 cases,
+   bois entier 307, cœur 50 %, et **zéro clairière enfermée** (`verify-vallee`).
+   Les voisins immédiats en cassent toujours un : à 0,21 la futaie referme une
+   clairière de dix-sept cases où personne ne peut plus entrer, à 0,17 elle
+   tombe sous les 60 cases de « vraie surface ». */
+export const TOWN_WOOD_SLOPE_X = 0.19;
+export const TOWN_WOOD_SLOPE_Y = 1.00;
+/* ⚠️⚠️ L'ORIGINE EST REMONTÉE DE 160 À 155 LE 2026-08-31, ET C'EST UNE
+   CONSÉQUENCE DU FLEUVE, PAS UN GOÛT. La profondeur de ce champ croît vers le
+   SUD-EST : son cœur tombait donc très exactement dans le coin que le fleuve
+   occupe désormais, et `render-parc` l'a chiffré au premier essai — **13 % de
+   couvert au « cœur » du bois contre 34 % exigés**, c'est-à-dire une futaie
+   noyée. Remonter l'origine de TROIS rangées replace le cœur sur la terre qui
+   reste, entre l'avenue du sud et la berge, sans toucher ni au rectangle, ni à
+   la pente, ni au bruit, ni à la densité — la lisière garde donc sa forme.
+   ⚠️ Le chiffre est celui d'un balayage, pas d'un réglage à l'œil : à 155 et à
+   156 la futaie devenue trop épaisse ENFERMAIT une clairière de seize cases où
+   personne ne pouvait plus entrer (`verify-vallee`, « la ville tient dans une
+   seule poche praticable »). Il se règle avec les deux pentes, voir plus bas.
+   ⚠️ *Un champ de densité calé sur un coin de carte est calé sur ce qu'il y
+   avait dans ce coin ce jour-là.* */
+export const TOWN_WOOD_ORIGIN = { x: 190, y: 157 };   // le point où la profondeur du champ vaut zéro
 /* ⚠️ TROIS OCTAVES, COMME LA RIVE : la grande respiration de la lisière, les
    avancées de futaie, et le grain qui décide arbre par arbre. Sans le troisième,
    la lisière est nette au pixel près et se lit comme un bord de texture. */
@@ -3327,7 +3401,19 @@ export const TOWN_WOOD_DENSITY = 0.50;  // part d'arbres au cœur de la futaie
    jusqu'à plus rien. On garde donc les deux cases de large jusqu'au bout et on
    fait tomber la PROBABILITÉ de poser la plaque. */
 export const TOWN_TRAIL_EAST_WAVE = [{ p: 37, a: 2.6, ph: 0.9 }, { p: 17, a: 1.1, ph: 3.3 }];
-export const TOWN_TRAIL_EAST_DIVE = 0.18;   // cases de descente vers le sud par case vers l'est
+/* ⚠️⚠️ LA PENTE EST PASSÉE DE 0,18 À 0,10 LE 2026-08-31, ET C'EST LE FLEUVE QUI
+   L'IMPOSE. À 0,18 le chemin descendait de huit rangées entre le bassin et le
+   coin de carte : quand il n'y avait rien en bas, il finissait dans le vide et
+   c'était sans conséquence ; maintenant il finit DANS L'EAU vers x ≈ 180.
+   ⚠️ Le premier correctif l'a fait suivre la berge case par case, et c'était
+   pire : la rive descend de six rangées en vingt colonnes, donc le chemin
+   redevenait **l'escalier de gravier payé quatre fois au 437** — le contraire
+   exact de ce que la note de `TOWN_TRAIL_WAVE` demande. *Un chemin est tracé par
+   des gens qui vont quelque part ; c'est la RIVE qui ondule, pas eux.*
+   La forme juste est donc celle-ci : le sentier garde sa ligne (cette pente,
+   plus son ondulation propre), et la berge n'est qu'un PLANCHER qu'il ne
+   franchit jamais. Deux grandeurs, deux rôles. */
+export const TOWN_TRAIL_EAST_DIVE = 0.10;   // cases de descente vers le sud par case vers l'est
 export const TOWN_TRAIL_FADE_FROM = 0.9;    // profondeur de bois où le sentier commence à se trouer
 export const TOWN_TRAIL_FADE_TO = 4.2;      // ...et où il a définitivement disparu
 export const TOWN_KIOSK = { x: TOWN_PARK.x + 14, y: TOWN_PARK.y + 10 };  // kiosque à musique du parc (3×3, case nord-ouest) — DÉRIVÉ du parc depuis le 437
@@ -5153,6 +5239,14 @@ export const DEV_TELEPORTS = [
   { key: "townBelvedere", zone: "town" },  // le second palier
   { key: "townMarket",    zone: "town" },  // zip 426 : le champ de foire, enfin occupé
   { key: "townLake",      zone: "town" },  // zip 426 : la promenade du lac, au sud
+  /* ⚠️ 2026-08-31 — LA PASSE A SON ARRÊT LE JOUR OÙ ELLE EST CREUSÉE, et c'est
+     la leçon du 425 appliquée AVANT d'être repayée pour la troisième fois : elle
+     est à quarante-trois cases à l'est du ponton, sur un sentier de rive, donc
+     y aller à pied coûte une minute — donc on ne serait pas allé la REGARDER à
+     chaque retouche, donc on l'aurait réglée en aveugle. C'est le seul endroit
+     de la carte par où le monde a une sortie ; il ne peut pas être le plus
+     coûteux à atteindre. */
+  { key: "townPasse",     zone: "town" },
   /* ⚠️ ZIP 446 — LE CRATÈRE A SON ARRÊT, ET C'EST LA LEÇON DU 425 APPLIQUÉE
      AVANT D'ÊTRE REPAYÉE : il est dans un pré, à l'écart, et y aller à pied
      coûte une bonne minute — donc on ne serait pas allé le regarder à chaque

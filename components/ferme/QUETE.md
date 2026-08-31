@@ -2281,6 +2281,18 @@ tension qu'on voulait ; elle n'a jamais été jouée par un humain.
   or, jour/heure, boutons, bandeau de quête — est peint PAR-DESSUS une scène annoncée plein écran,
   deux textes se chevauchant au pixel. `verify-maire` était à 113/113 pendant ce constat : il
   vérifie que les sept postures EXISTENT et sont dessinables, jamais qu'elles s'ASSEMBLENT.
+- ✅ **LA POSTURE EST CORRIGÉE ET MESURÉE LE 2026-08-31 — MAIS L'ŒIL A ÉTÉ CONSTRUIT AVANT LA MAIN.**
+  Le premier geste n'a pas été de corriger : `tools/render-maire.mjs` (66/66) peint les sept poses
+  côte à côte sous trois angles, sans WebGL. Il a chiffré ce que la séance décrivait — **14 cm**
+  entre le buste levé et les cuisses restées assises (`rise` monte le TORSE, et les jambes ne sont
+  pas ses filles), **13 cm** d'écharpe dans le bois du plateau, **5,1 cm** de main hors de portée
+  bornée en silence par `solveArm` — et trois défauts que personne n'avait vus : les bras croisés
+  DANS la poitrine, `applyPose` qui repartait du buste au lieu de `man`, et la table `POSE`
+  corrompue à la première image par un `{ ...poseTarget }`. Le maire a maintenant un bassin, des
+  hanches et des genoux ; `stand` le lève vraiment et le fauteuil recule.
+  ⚠️ **Le HUD par-dessus la scène plein écran, lui, N'EST PAS corrigé** — c'est de l'interface, pas
+  de la posture, et ça reste la dette la plus visible de ce chapitre.
+  ⚠️ **La scène n'a pas été rejouée à l'écran depuis** : bancs, bundle et `next build` seulement.
 - ⚠️ **Le point 4 du §15.3 est débloqué et pas fait** : les PNJ peuvent enfin parler du bateau,
   puisque la condition qu'ils attendaient (`MR.mayorSigned`) existe.
 
@@ -2419,6 +2431,32 @@ Les joueurs comprennent seuls le second sens : la reine a fabriqué une route en
 et les prochains mondes d'Arcardi.
 
 ### 17.8 Transformation graphique du lac en port
+
+⚠️⚠️⚠️ **AUTORITÉ 2026-08-31 — CE N'EST PAS UN BASSIN, C'EST UN ACCÈS À L'OCÉAN.** Décision de
+Guillaume : *« Je veux que l'on considère le lake and pier plutôt comme un accès à l'océan, et donc
+le port de Valley Town. »* Le §17.5 disait déjà « ce n'était pas un lac » ; ce qui durcit ici est
+que **l'eau doit MENER QUELQUE PART**. Sans ça, le navire d'Eduardo part au large depuis un étang,
+la promesse des îles n'a pas de support dans la carte, et le retournement reste une réplique au
+lieu d'être un lieu. **LES ARBITRAGES SONT TRANCHÉS, ET LA CARTE EST FAITE.** Guillaume, le même jour :
+*« il faut imaginer que le lac actuel sera une sorte de fleuve qui mène à une sortie ; par la
+droite. ensable un peu »* · *« il y aura un mode de navigation jouable bientôt, mais pour l'instant
+juste faire un fondu enchaîné, avec décor marin générique (à l'avenir nous ferons une navigation
+3D) »* · *« eduardo peut utiliser le navire. mais nous aussi en montant dedans : soigner les
+sprites. anatomiquement cohérentes dans un bateau, mouvements cohérents »*.
+
+✅ **LE FLEUVE ET LA PASSE SONT CONSTRUITS** (2026-08-31) : le bassin de la ville se resserre vers
+l'est, la passe fait 4 rangées d'eau contre 10 dans le bassin, le fleuve sort du monde au bord est,
+et `verify-vallee` vérifie qu'**on peut aller de la cale au large par l'eau**. Le détail est au
+§32 de `components/ferme/README.md`. ⚠️ **Rien d'autre n'est fait** : ni les ruines portuaires de
+la passe (elles appartiennent au retournement, lot D — les poser maintenant mêlerait deux
+changements visuels), ni le fondu, ni les poses du fermier à bord.
+
+⚠️⚠️ **ET LE RETOURNEMENT CHANGE DE NATURE, IL FAUT LE SAVOIR AVANT D'ÉCRIRE LE TEXTE.** Si l'eau
+mène visiblement au large, la ville n'a jamais pu croire à un lac : *« ce n'était pas un lac »*
+tombe. Ce qui le remplace est plus solide et déjà dans la carte — **la passe est ensablée depuis
+vingt ans, plus personne ne peut sortir** : un blocage concret qu'on lève, au lieu d'un secret.
+
+
 
 La transformation doit se lire par grandes masses, dans cet ordre : **passe navigable**, deux quais
 en pierre et bois, cale/rampe, feux d'entrée, petit entrepôt, table des cartes. Les accessoires

@@ -3194,3 +3194,103 @@ d'intérieur, les arbres de la ferme et la comète.
   qui se raconte à l'autre joueur — c'est un usage à essayer.
 - **Kerguélen n'a pas de sprite dédié** : il emprunte un skin générique. Un architecte naval mérite
   peut-être mieux, mais un personnage qui reste quinze minutes ne mérite peut-être pas un dessin.
+
+---
+
+## 32. 2026-08-31 — CE N'EST PLUS UN LAC : LE FLEUVE, LA PASSE, ET LA SORTIE DU MONDE
+
+**Décision de Guillaume, et elle est structurante :** *« Je veux que l'on considère le lake and
+pier plutôt comme un accès à l'océan, et donc le port de Valley Town »*, puis, sur la forme :
+*« il faut imaginer que le lac actuel sera une sorte de fleuve qui mène à une sortie ; par la
+droite. ensable un peu »*, et *« ça déclencherait un fondu enchaîné vers une navigation »*.
+
+⚠️⚠️ **CE QUE ÇA CHANGE VRAIMENT, ET CE N'EST PAS UN DÉCOR : LA CARTE A MAINTENANT UNE SORTIE.**
+Valley Town était close de tous les côtés ; le navire d'Eduardo, qui est censé « prendre le large »
+depuis le 453, partait donc d'un étang. Le fleuve est le premier endroit du monde partagé qui
+mène ailleurs, et c'est lui qui rend la promesse des îles tenable au lieu d'être une réplique.
+
+### 32.1 La géométrie, et elle est dérivée de bout en bout
+
+| | |
+|---|---|
+| le bassin | inchangé : `TOWN_LAKE`, x 56→152, la promenade, le ponton, la cale du navire |
+| le fleuve | x 152 → **224, le bord du monde** ; la rive nord descend de `TOWN_LAKE_EDGE` (4,6) à `TOWN_RIVER_EDGE` (8,4) sur `TOWN_RIVER_RUN` = 24 cases, en raccord cubique |
+| la passe | `TOWN_RIVER_NECK_X` = 166, demi-longueur 11, la rive descend encore de `TOWN_RIVER_NECK_PINCH` = 2,2 |
+| mesuré | **10 rangées d'eau dans le bassin, 4 au plus étroit, 5 à 6 en aval, 6 au bord de la carte** |
+| l'ensablement | il ne se peint pas, il se CREUSE : la profondeur de l'eau est une transformée de distance à la terre (`TOWN_WATER_SHELF`), donc un chenal étroit devient tout seul un haut-fond pâle |
+
+⚠️⚠️ **CE N'EST PAS UNE SECONDE NAPPE D'EAU, C'EST LE MÊME CHAMP PROLONGÉ**, et c'est la leçon
+écrite en tête du bloc du lac depuis le 437 : *il n'y a qu'UNE seule description du rivage*. Deux
+nappes raccordées bout à bout se décaleraient d'une case au premier réglage — et la couture
+tomberait très exactement là où le navire passe, c'est-à-dire au seul endroit que le joueur
+regarde à ce moment-là.
+
+⚠️ **LA PASSE N'A PAS DEUX MÔLES, ET C'EST LA CARTE QUI L'INTERDIT.** Le fleuve longe le bord SUD
+du monde : il n'a qu'une seule rive dessinable. Lui en donner une seconde laisserait entre l'eau
+et le bord une bande de terre inatteignable — **le défaut exact du 439**, qui avait planté
+quatre-vingt-sept arbres sur deux rangées cernées d'eau. Le goulet se fait donc par la rive nord
+qui descend.
+
+### 32.2 Les trois choses que le fleuve a cassées en passant, et qu'il a fallu reprendre
+
+1. ⚠️⚠️ **LE SENTIER DE RIVE MARCHAIT DROIT DANS L'EAU.** `TOWN_TRAIL_EAST_DIVE` valait 0,18 case
+   de descente par case vers l'est : juste tant qu'il n'y avait RIEN au sud du rectangle du lac,
+   faux dès que le fleuve occupe ce coin — il entrait dans l'eau vers x ≈ 180.
+   ⚠️ **Le premier correctif l'a fait suivre la berge case par case, et c'était PIRE** : la rive
+   descend de six rangées en vingt colonnes, donc le chemin redevenait **l'escalier de gravier payé
+   quatre fois au 437**, et il le redevenait pile là où l'on regarde le navire s'en aller. *Un
+   chemin est tracé par des gens qui vont quelque part ; c'est la RIVE qui ondule, pas eux.*
+   La forme juste tient en deux rôles : **le sentier garde sa ligne** (pente 0,10 + son ondulation
+   propre), **la berge n'est qu'un plancher** qu'il ne franchit jamais. C'est le §4 de `CLAUDE.md`
+   — *une grandeur de dessin, une grandeur de collision : deux choses, deux paramètres.*
+2. ⚠️⚠️ **LE BOIS DU SUD-EST AVAIT LE CŒUR SOUS L'EAU.** Son champ de densité croît vers le
+   sud-est ; son cœur tombait donc pile dans le coin que le fleuve occupe. `render-parc` l'a
+   chiffré au premier essai : **13 % de couvert au « cœur » d'une futaie réglée à 44**.
+   ⚠️ Les trois nombres se règlent ENSEMBLE ou pas du tout (forme 458, deux grandeurs qui
+   s'opposent) : l'origine décide si le cœur est noyé, la pente sud où il tombe, la pente est sa
+   largeur. Le triplet **0,19 / 1,00 / y = 157** vient d'un balayage : c'est le seul point qui
+   tienne les quatre mesures à la fois — futaie 66 cases, bois entier 307, cœur 50 %, et **zéro
+   clairière enfermée**. Les voisins immédiats en cassent toujours un : à 0,21 la futaie referme
+   une clairière de dix-sept cases où personne ne peut plus entrer.
+3. ⚠️⚠️⚠️ **ET LE BANC S'EST TROMPÉ DE DÉNOMINATEUR.** `render-parc` comptait la part d'arbres sur
+   TOUTES les cases du champ, eau comprise : il mesurait la part d'eau du coin de carte, pas la
+   densité du bois, et on serait allé épaissir une forêt qui n'avait rien. Le dénominateur est
+   maintenant « les cases où un arbre POUVAIT pousser ». *Un dénominateur qui contient ce que la
+   règle exclut mesure la carte, pas la règle.*
+
+### 32.3 Ce que les bancs mesurent — et la grandeur qui compte n'est pas la largeur
+
+**`verify-vallee` §fleuve, cinq contrôles neufs (208 → 214).** ⚠️⚠️ **LE SEUL QUI COMPTE VRAIMENT
+EST L'ARRIVÉE** : *le navire peut-il sortir ?* — une connexité à QUATRE voisins depuis sa cale
+jusqu'au bord est de la carte. C'est la leçon du 444, la plus chère du dépôt : un chenal coupé
+d'une seule case diagonale a exactement la même tête qu'un chenal ouvert sur une image, et rendrait
+la fin de la quête injouable. Les quatre autres : le chenal ne se referme jamais (`TOWN_RIVER_MIN`,
+balayé colonne par colonne), le fleuve touche bien le bord du monde, la passe est un GOULET (un
+rapport au bassin, jamais une largeur absolue, qui doublerait `TOWN_RIVER_NECK_PINCH`), et **on
+peut marcher jusqu'à la passe depuis la ville** — une passe qu'on n'atteint pas est un décor de
+fond.
+⚠️ Le témoin du bassin est sa MÉDIANE, pas la colonne du ponton : le ponton est en bois, il mange
+ses propres rangées d'eau, et le premier jet annonçait « 2 rangées » pour une nappe qui en fait
+dix. *Un banc qui prend son témoin sur l'objet qu'il ne mesure pas se trompe de grandeur sans
+jamais le dire.*
+**`render-parc`** ajoute trois planches : `fleuve-entier` (tout le profil d'un seul tenant, à
+zoom 1 — un profil ne se juge pas sur une vignette), `fleuve-passe` et `fleuve-sortie`.
+**Un arrêt de téléport `townPasse`** naît le même jour que la passe, et c'est la leçon du 425
+appliquée AVANT d'être repayée : elle est à quarante-trois cases du ponton, donc on ne serait pas
+allé la regarder à chaque retouche, donc on l'aurait réglée en aveugle.
+
+### 32.4 ⚠️ CE QUI N'EST PAS FAIT, ET IL FAUT LE LIRE AVANT DE ROUVRIR
+
+- **Il n'y a AUCUNE ruine portuaire à la passe.** Pas de môle écroulé, pas de duc-d'Albe, pas de
+  borne : le lieu se lit comme un fleuve qui s'ensable, pas encore comme un port oublié. C'est
+  volontaire — ces pierres appartiennent au retournement du §17.5 de `QUETE.md` (lot D), et les
+  poser ici mêlerait deux changements visuels dans la même livraison (règle du 424).
+- **Le fondu enchaîné et le décor marin générique n'existent pas.** Guillaume a tranché : *« il y
+  aura un mode de navigation jouable bientôt, mais pour l'instant juste faire un fondu enchaîné,
+  avec décor marin générique »*. Rien n'est écrit.
+- **On ne monte pas dans le bateau.** Guillaume : *« eduardo peut utiliser le navire. mais nous
+  aussi en montant dedans : soigner les sprites. anatomiquement cohérentes dans un bateau,
+  mouvements cohérents »*. Le fermier n'a aucune pose assise-dans-une-barque, et la coller
+  debout sur un pont serait exactement ce que cette phrase interdit.
+- ⚠️ **RIEN DE TOUT ÇA N'A ÉTÉ VU EN JEU** : bancs, bundle et `next build` seulement. L'arrêt
+  `townPasse` du menu dev existe précisément pour que la première séance coûte dix secondes.

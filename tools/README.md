@@ -192,6 +192,51 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   postures dessinables, les **huit** visages aussi, aucune pose n'oublie un canal (une pose
   incomplète fige un membre), et le visage ne se ferme jamais pendant que la jauge monte.
 
+- **`tools/render-maire.mjs` — 66 contrôles, 66/66 (2026-08-31). LE PREMIER BANC DE RENDU DU DÉPÔT
+  QUI REGARDE DE LA 3D**, et il naît d'une phrase écrite en tête de `maireBureau.js` : *« il n'est
+  relu par aucun `tools/render-*.mjs` »*. C'est mot pour mot ce qui décrivait le glTF supprimé au
+  481 — un décor que rien ne sait REGARDER — et le défaut est arrivé par le même chemin : la
+  posture DEBOUT du maire se désassemblait à l'écran pendant que `verify-maire` rendait 113/113.
+  ⚠️⚠️⚠️ **CE QUE CE COUPLE DE BANCS APPREND, ET C'EST UNE TREIZIÈME FORME DU « UN BANC QUI PASSE
+  MESURE AUTRE CHOSE » : `verify-maire` vérifie qu'une posture EXISTE et qu'elle est dessinable ;
+  rien ne vérifiait qu'un CORPS TIENT ENSEMBLE.** Une pose est un jeu de nombres, et un jeu de
+  nombres n'a pas de silhouette.
+
+  Il n'y a **aucun WebGL et aucune dépendance npm** : `tools/lib-3d.mjs` charge le three.js **r128
+  vendorisé du dépôt** (donc la même bibliothèque que la page, à l'octet près) et rastérise à la
+  main — projection, découpe au plan proche, tampon de profondeur, ombrage plat. Le §11 de
+  `CLAUDE.md` explique pourquoi on ne prend pas `three` sur npm : une autre révision n'a pas la
+  même atténuation de lumière, donc mesurerait un autre programme.
+
+  Il mesure **sept grandeurs**, et chacune a sorti un défaut le jour où elle a été écrite :
+  1. **la silhouette est d'un seul tenant**, en connexité à huit, sur le maire SEUL et sous trois
+     angles (mesurée dans la pièce, le bureau le couperait en deux légitimement) ;
+  2. **le buste ne quitte pas son bassin** — c'est ce qui a chiffré les **14 cm** entre le torse
+     levé et les cuisses restées assises ;
+  3. **la main est où la pose l'écrit** — `solveArm` BORNE une cible hors de portée au lieu de
+     jeter, donc elle MENT en silence ; l'écart mesuré valait 5,1 cm sur `window`, 2,5 sur `stamp`,
+     et **1,0 cm partout ailleurs**, ce qui a révélé un `ARM_FORE` faux d'un centimètre ;
+  4. **rien du maire ne traverse le plateau** — théorème des axes séparateurs, exact, jamais des
+     boîtes englobantes (une boîte penchée de douze degrés a une englobante quinze centimètres trop
+     large : le contrôle accuserait toutes les poses penchées) ;
+  5. **aucun pixel du maire sur le bord du cadre** dans la vue du joueur ;
+  6. **une main ne rentre pas dans le buste** — l'angle mort exact du contrôle 1 : *ce qui déborde
+     se compte en pixels, ce qui s'enfonce se compte en mètres* ;
+  7. **la table `POSE` survit à une audience** — la vue partait de `{ ...poseTarget("closed") }`,
+     et un étalement recopie la RÉFÉRENCE des tableaux de mains.
+
+  ⚠️ **CE QU'IL NE MESURE PAS, ET IL L'ÉCRIT EN TÊTE** : ni ombre portée, ni spéculaire, ni
+  anticrénelage ; les textures sont réduites à leur couleur moyenne et `fillText` ne peint rien
+  (la plaque du bureau y est muette, ce n'est pas un défaut du jeu). Il ne juge donc **pas
+  l'éclairage** — le §8 de `CLAUDE.md`, l'écart plutôt que la moyenne, reste hors de sa portée, et
+  le seul moyen de juger la lumière de cette scène est de l'ouvrir dans un navigateur. Il ne joue
+  **aucune transition** non plus : `ease` glisse d'une pose à l'autre, et c'est en chemin qu'un
+  bras peut traverser un torse. Il regarde les sept ARRIVÉES.
+  ⚠️ Il écrit `tools/out/maire-postures.png` (les sept poses × trois angles) et
+  `tools/out/maire-bureau.png` (les trois vues du jeu × sept poses, à leur taille native).
+  ⚠️ **Il copie ses modules dans `os.tmpdir()`, pas dans `tools/.cache/`** : il est donc l'un des
+  rares à ne PAS salir l'arbre de travail en tournant.
+
 - **`tools/verify-compo.mjs` — 13 contrôles, 13/13 (440).** LA COMPOSITION DES DÉCORS, sur toute la carte.
   ⚠️ Il existe parce que Guillaume a vu « un arbre sur un pont » et qu'aucun des quinze autres
   bancs ne pouvait le voir. La grandeur qui manquait tient en une phrase : **le générateur raisonne
@@ -287,7 +332,21 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   sentier de rive qui épousait chaque encoche de crique, et un buisson enterré sous le parvis
   du kiosque — posé sur de l'herbe, dallé par une passe ultérieure, resté SOLIDE.
 
-- **`tools/verify-vallee.mjs` — 208 contrôles, 208/208 (hors-zip 2026-08-26 ; 205 au 465, 200 au 444, 194 au 440, 182 au 438, 172 au 431, 113 au 427).** Il
+- **`tools/verify-vallee.mjs` — 214 contrôles, 214/214 (2026-08-31 : +6 pour le fleuve ; 208 au hors-zip 2026-08-26, 205 au 465, 200 au 444, 194 au 440, 182 au 438, 172 au 431, 113 au 427).**
+  ⚠️⚠️ **SON §FLEUVE NE MESURE PAS UNE LARGEUR, IL MESURE UNE ARRIVÉE.** Le lac est devenu un
+  fleuve qui sort de la carte par l'est (2026-08-31, §32 de `components/ferme/README.md`), et la
+  question qui compte n'est pas « y a-t-il de l'eau » mais **« le navire peut-il sortir »** :
+  connexité à QUATRE voisins depuis sa cale jusqu'au bord du monde. C'est la leçon du 444 — un
+  chenal coupé d'une seule case diagonale a la même tête qu'un chenal ouvert sur une image, et
+  rendrait la fin de la quête injouable. Les cinq autres contrôles : le chenal ne se referme jamais
+  (`TOWN_RIVER_MIN`, colonne par colonne), le fleuve touche bien le bord est, la passe est un
+  GOULET (un RAPPORT au bassin, jamais une largeur absolue — qui doublerait
+  `TOWN_RIVER_NECK_PINCH`), le goulet est là où la table le place, et **on peut marcher jusqu'à la
+  passe depuis la ville**. ⚠️ Le témoin du bassin est sa MÉDIANE et pas la colonne du ponton : le
+  ponton est en bois, il mange ses propres rangées d'eau, et le premier jet annonçait « 2 rangées »
+  pour une nappe qui en fait dix. *Un banc qui prend son témoin sur l'objet qu'il ne mesure pas se
+  trompe de grandeur sans jamais le dire.*
+  Il
   importe le VRAI moteur : circulation, murs invisibles ET décors traversables, géométrie des
   bâtiments, rebords sautables, le tribunal pièce par pièce, la coupe de bois, les familles,
   la garde-robe.

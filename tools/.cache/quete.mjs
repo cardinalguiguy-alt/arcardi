@@ -567,6 +567,31 @@ export function starTimberBlock(e, key) {
   return null;
 }
 export function starTimberCan(e, key) { return starTimberBlock(e, key) === null; }
+/* Une lecture prête pour le plan déplié. Elle ne crée ni compteur, ni nouvel
+   état : chaque segment rejoint la pièce posée, la livraison et la commande
+   déjà persistées. `work` n'existe que pendant la fabrication et se recalcule
+   depuis les deux dates de Tristan, comme sa bulle d'ouvrage. */
+export function starShipProgress(e, now) {
+  const parts = starShipParts(e);
+  return STAR_SHIP_KEYS.map((key, index) => {
+    const order = starTimberOrder(e, key);
+    const ready = starTimberReady(e, key);
+    const reason = starTimberBlock(e, key);
+    let state = "available";
+    if (parts[index]) state = "done";
+    else if (ready) state = "ready";
+    else if (order) state = "building";
+    else if (reason) state = "locked";
+    let work = 0;
+    if (order) {
+      const span = order.readyAt - order.at;
+      work = span > 0
+        ? Math.max(0, Math.min(1, ((+now || 0) - order.at) / span))
+        : 1;
+    }
+    return { key, state, reason, work, readyAt: order ? order.readyAt : 0 };
+  });
+}
 /* La pièce qu'on attend MAINTENANT — celle du bandeau et du plan. ⚠️ UNE
    JOINTURE, PAS UNE SECONDE LISTE (449) : elle balaie `STAR_SHIP_KEYS` dans
    l'ordre et rend la première qui n'est pas livrée, ce qui est exactement l'ordre
@@ -2239,6 +2264,29 @@ export const STAR_CANDY_PRICE = 60;
    borne combien de temps `candy` reste utilisable APRÈS le dernier ramassage,
    pas depuis la chute. */
 export const STAR_CANDY_FRESH_MS = 5 * 60 * 1000;
+/* ⚠️⚠️⚠️ 2026-08-31 — LA FRAÎCHEUR NE COURT PAS PENDANT QU'ON NE PEUT PAS AGIR,
+   ET C'EST UN CORRECTIF DE BLOCAGE, PAS UN CONFORT. Les deux horloges existaient
+   depuis le 479 et personne ne les avait comparées : la lueur durait CINQ
+   minutes, la blessure de fin de course en durait DIX (`C.RUN_INJURED_MS`), et
+   `doAction()` refuse tout tant qu'on est blessé. Or `resolveStarCandy` crédite
+   « réussie ou ratée » — donc **toute défaite** rendait la lumière morte avant
+   que le joueur puisse marcher. Pas un cas limite : cent pour cent des défaites,
+   pendant que l'écran de fin promettait « les bonbons ramassés sont conservés ».
+   ⚠️ La parade est de dater l'échéance depuis l'instant où le joueur REDEVIENT
+   capable d'offrir, pas depuis le ramassage : cinq minutes de jeu réel, ce que
+   la décision de Guillaume voulait dire. La règle « on rapporte une lumière
+   FRAÎCHE » est intacte — c'est le décompte d'un temps qu'on ne peut pas
+   utiliser qui ne l'était pas.
+   ⚠️⚠️ ET LE REPORT EST BORNÉ, PARCE QUE `readyAt` VIENT D'UN CHAMP QUE L'HÔTE
+   RECOPIE D'UNE REQUÊTE CLIENT (`f.injuredUntil`). Le plafond est DÉRIVÉ de la
+   blessure la plus longue que la course puisse infliger, jamais réglé à la main
+   (§8 de `CLAUDE.md` : un paramètre qui en double un autre est une divergence en
+   attente) : un client modifié ne peut donc pas s'offrir une lueur éternelle en
+   annonçant une blessure de trois ans.
+   ⚠️ C'est la forme 458 — deux grandeurs qui s'opposent — appliquée au TEMPS :
+   `verify-quete` §bleue les mesure désormais ENSEMBLE, jamais chacune de son
+   côté, parce que chacune était juste toute seule. */
+export const STAR_CANDY_HOLD_MAX_MS = C.RUN_INJURED_MS;
 /* Ce qu'un joueur a rapporté depuis la chute, ET qui n'est pas encore périmé.
    ⚠️ PAR JOUEUR ET PAS COMMUN, comme les bonbons eux-mêmes (`fermeEngine.js` :
    « le défi est individuel, personne ne court à deux »). Mettre l'offrande en
@@ -2626,9 +2674,19 @@ export function migrateStar(saved) {
   /* hors-zip — une sauvegarde d'avant cette décision n'a pas `candyUntil` :
      `starCandyFresh` la traite alors comme périmée (`until` absent), jamais
      comme éternelle — c'est le AND, pas le OR, qui protège une reprise après
-     redémarrage du serveur (voir la note de `starCandyFresh`). */
-  if (saved.candyUntil && typeof saved.candyUntil === "object")
-    for (const k of Object.keys(saved.candyUntil)) e.candyUntil[String(k).slice(0, CALM_ID_MAX)] = Math.max(0, saved.candyUntil[k] | 0);
+     redémarrage du serveur (voir la note de `starCandyFresh`).
+     ⚠️⚠️ hors-zip, 2026-08-27 — UNE DATE ABSOLUE N'EST JAMAIS UN ENTIER 32 BITS.
+     `saved.candyUntil[k] | 0` tronquait l'échéance de 2026 à sa partie basse à
+     CHAQUE requête hôte, donc la lumière tout juste rapportée paraissait déjà
+     périmée. Le client lisait encore le flux brut et annonçait le succès pendant
+     que l'hôte répondait « zéro » : les deux toasts contradictoires nommaient
+     exactement cette troncature. */
+  if (saved.candyUntil && typeof saved.candyUntil === "object") {
+    for (const k of Object.keys(saved.candyUntil)) {
+      const until = +saved.candyUntil[k];
+      e.candyUntil[String(k).slice(0, CALM_ID_MAX)] = Number.isFinite(until) ? Math.max(0, until) : 0;
+    }
+  }
   /* ⚠️ UN PLAT SANS DATE N'EST PAS UN PLAT : `starDishPhase` rendrait `null` de
      toute façon, mais un objet à moitié écrit se traînerait dans l'état persisté
      et dans chaque `apply`. On le jette au chargement. */
@@ -2696,6 +2754,35 @@ export function migrateStar(saved) {
 
 export function starFallen(e) { return !!(e && e.fall); }
 export function starTownFallen(e) { return !!(e && e.townFall); }
+/* Le compteur urbain n'existe que pendant le chapitre du cratère. Cette garde
+   unique évite qu'un état avancé par le menu dev garde une ancienne horloge à
+   l'écran alors que le chantier a déjà commencé. */
+export function starTownWaiting(e) {
+  return !!(e && starFallen(e) && starChapterKey(e) === "crater" && !starTownFallen(e));
+}
+/* Le ref reste volontairement mutable : ce helper pur côté horloge rend
+   vérifiable l'invariant important — une pause conserve `ms`; seul le passage
+   hors du chapitre d'attente, ou une nouvelle chute initiale, le remet à zéro. */
+export function starTownActivityStep(a, e, now, active) {
+  if (!a || typeof a !== "object") return 0;
+  if (!starTownWaiting(e)) { a.fall = 0; a.at = 0; a.ms = 0; return 0; }
+  const fall = +e.fall || 0;
+  if (a.fall !== fall) { a.fall = fall; a.at = now; a.ms = 0; }
+  if (!a.at) a.at = now;
+  const dt = Math.max(0, Math.min(1500, now - a.at));
+  a.at = now;
+  a.ms = Math.max(0, +a.ms || 0);
+  if (active) a.ms += dt;
+  return a.ms;
+}
+
+/* ⚠️⚠️ HORS-ZIP — UNE MARQUE « VUE » APPARTIENT AU JOUEUR, PAS AU NAVIGATEUR.
+   Le faux Supabase rejoue volontairement deux profils dans deux onglets du même
+   navigateur : sans `who`, le premier qui voyait la chute la masquait au second. */
+export function starFallSeenStorageKey(kind, seed, who) {
+  return "ferme_star_" + (kind === "townFall" ? "town_fall" : "farm_fall")
+    + ":" + ((seed | 0) >>> 0) + ":" + String(who || "?").slice(0, 128);
+}
 export function starStarted(e) { return !!(e && (e.ch > 0 || Object.keys(e.found || {}).length)); }
 export function starDone(e) { return !!(e && e.doneAt); }
 export function starHas(e, id) { return !!(e && e.found && e.found[id]); }
@@ -2914,7 +3001,13 @@ export function starGoalKey(e, ctx) {
      du cratère et son panache) — jamais recalculé ici, qui n'a pas de scène à
      interroger. Un `ctx` sans `landed` retombe sur le fait brut de l'hôte, pour
      ne pas casser un appelant qui ne le fournirait pas encore. */
-  if (first === "crater" && !(ctx && ("landed" in ctx) ? ctx.landed : starTownFallen(e))) return "townWait";
+  /* ⚠️ hors-zip — DEUX PHRASES, PAS UNE, MÊME PATRON QUE `engineerTravel`/
+     `engineerWork` (470) : `townWait` dit d'aller prendre le train, ce qui est
+     faux pour qui l'a déjà pris — signalé par Guillaume, le bandeau continuait
+     de demander le trajet à un joueur arrivé et qui attendait sur place.
+     `ctx.inTown` (starGoalCtx, FermeGame.js) fait le partage. */
+  if (first === "crater" && !(ctx && ("landed" in ctx) ? ctx.landed : starTownFallen(e)))
+    return (ctx && ctx.inTown) ? "townWaitThere" : "townWait";
   /* ⚠️ L'ORDRE DE LA TABLE FAIT FOI, comme pour `starTargetSite` : le premier qui
      manque est celui qu'on cherche. Aucune liste parallèle. */
   if (first === "crater" && ctx && ctx.craterHot) return "craterHot";
@@ -2999,7 +3092,7 @@ export const STAR_GOAL_KEYS = (() => {
      ce n'est pas un LIEU (l'audience se tient à la mairie, qui a déjà son
      adresse), c'est une ÉTAPE, et cette liste ne sert qu'à obliger le banc à
      réclamer sa phrase de bandeau dans les deux langues. */
-  out.push("townWait", "engineerTravel", "engineerWork", "mayor",
+  out.push("townWait", "townWaitThere", "engineerTravel", "engineerWork", "mayor",
            "timberOrder", "timberWait", "timberRaise");
   return out;
 })();
@@ -3395,14 +3488,23 @@ export function resolveStarCalm(e, who, now, ctx, siteId) {
    repart donc de zéro, jamais d'un flux qui aurait dû s'éteindre. `candyUntil`
    est réécrit à CHAQUE ramassage, pas seulement au premier — courir deux fois
    de suite prolonge la fenêtre plutôt que de la couper à la première échéance. */
-export function resolveStarCandy(e, who, n, now) {
+export function resolveStarCandy(e, who, n, now, readyAt) {
   const add = Math.max(0, n | 0);
   if (!e || !starFallen(e) || !who || !add) return { ok: false };
   if (now !== undefined && +now < e.fall) return { ok: false, tooEarly: true };
   const k = String(who).slice(0, CALM_ID_MAX);
   e.candy[k] = starCandyFresh(e, k, now) + add;
-  e.candyUntil[k] = (+now || 0) + STAR_CANDY_FRESH_MS;
-  return { ok: true, fresh: e.candy[k], need: STAR_CANDY_PRICE, until: e.candyUntil[k] };
+  /* ⚠️⚠️ 2026-08-31 — L'ÉCHÉANCE PART DE L'INSTANT OÙ IL POURRA OFFRIR. Voir la
+     note de `STAR_CANDY_HOLD_MAX_MS` : sans ça, une course perdue rendait sa
+     propre récompense inutilisable, parce que la blessure dure DEUX FOIS la
+     fraîcheur. `readyAt` est le `injuredUntil` du fermier — zéro quand il rentre
+     valide, auquel cas rien ne change et l'échéance repart de `now` comme avant.
+     ⚠️ Le `Math.min` est la ceinture : `readyAt` transite par une requête client,
+     donc on ne reporte jamais de plus qu'une blessure de course entière. */
+  const base = +now || 0;
+  const ready = Math.max(base, Math.min(+readyAt || 0, base + STAR_CANDY_HOLD_MAX_MS));
+  e.candyUntil[k] = ready + STAR_CANDY_FRESH_MS;
+  return { ok: true, fresh: e.candy[k], need: STAR_CANDY_PRICE, until: e.candyUntil[k], held: ready > base };
 }
 /* ── LA BLEUE, 2/2 : L'OFFRANDE.
    ⚠️⚠️ LE PRIX EST LE FLUX, ET LE SAC N'EST QUE CE QU'ON DÉBITE. Le premier jet

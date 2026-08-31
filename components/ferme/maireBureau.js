@@ -58,7 +58,16 @@ export const ROOM = {
   h: 3.9,                     // sous plafond
   wains: 1.06,                // hauteur de la boiserie basse
   deskC: -2.30,               // centre du plateau
-  deskW: 2.30, deskD: 1.12, deskTop: 0.79,
+  /* ⚠️ LA PROFONDEUR EST PASSÉE DE 1,12 À 1,00 LE 2026-08-31, ET C'EST UNE
+     MESURE DE DÉGAGEMENT, PAS UN GOÛT. Le chant arrière tombait à z −2,86 pour
+     un homme dont le ventre avance jusqu'à −2,835 : il était assis DANS son
+     bureau de deux centimètres et demi en permanence, et de sept dès qu'il se
+     penchait sur le tampon. Ça ne se voit pas de notre chaise — le meuble le
+     cache — mais la caméra est LIBRE, et de trois quarts on voyait la veste
+     entrer dans le bois. Douze centimètres de moins rendent le dégagement sans
+     rien changer de la table de travail : le sous-main fait 72 cm de profond,
+     il reste à l'aise sur un metre. */
+  deskW: 2.30, deskD: 1.00, deskTop: 0.79,
   seatZ: -3.05,               // le fauteuil du maire
   /* ⚠️ LE FAUTEUIL EST À PORTÉE DE BRAS DU SOUS-MAIN, ET C'EST UN NOMBRE
      QU'ON A DÛ CALCULER PLUTÔT QUE CHOISIR : épaule à y 1,26 et z −2,99, main sur
@@ -752,14 +761,38 @@ function buildMayor(THREE, K) {
 
   const man = grp(0, 0, ROOM.seatZ + 0.04);
 
-  /* les jambes : elles ne se voient que depuis la caméra large, et seulement
-     sous le bureau. Deux boîtes suffisent, et il en faut deux — un homme assis
-     sans jambes se voit tout de suite quand on fait le tour du meuble. */
-  for (const sx of [-1, 1]) {
-    box(0.17, 0.17, 0.44, mSuitD, sx * 0.13, 0.50, 0.22, 0, 0, 0, man);
-    box(0.16, 0.42, 0.17, mSuitD, sx * 0.13, 0.25, 0.43, 0, 0, 0, man);
-    box(0.14, 0.09, 0.24, lam(0x1b1b20), sx * 0.13, 0.05, 0.49, 0, 0, 0, man);
-  }
+  /* ── LE BASSIN. ⚠️⚠️ IL N'EXISTAIT PAS, ET C'EST CE QUI DÉTACHAIT LES JAMBES.
+     Le ventre s'arrête à y 0,60 et les cuisses commencent à 0,585 : une FENTE de
+     quinze millimètres traversait l'homme à la taille, sur toute sa largeur.
+     Elle ne se voyait pas en lisant la table des poses — un banc de mécanique
+     n'a pas de silhouette — et `render-maire` la rend en trois îlots dès la
+     première image : le buste, et deux jambes qui flottent.
+     ⚠️ IL EST FILS DE `man`, PAS DU BUSTE : un bassin qui suivrait le penchant
+     rouvrirait la fente de l'autre côté à chaque `lean`. Le buste pivote DANS
+     le bassin, c'est ce qu'il fait chez tout le monde. */
+  box(0.42, 0.15, 0.30, mSuitD, 0, 0.545, 0.02, 0, 0, 0, man);
+
+  /* ── LES JAMBES. Deux pivots par jambe — hanche et genou — et c'est le
+     minimum pour que l'homme puisse SE LEVER. ⚠️⚠️ AVANT LE 2026-08-31 C'ÉTAIENT
+     TROIS BOÎTES FIXES, et la posture « debout » se contentait de monter le
+     BUSTE de treize centimètres : elle fabriquait un homme coupé à la taille,
+     avec ses jambes restées assises quatorze centimètres plus bas. Aucun
+     réglage ne pouvait rattraper ça — il manquait des articulations, pas un
+     nombre. *Une mise en scène qui demande un geste que le squelette ne sait
+     pas faire ne se règle pas, elle se construit.*
+     ⚠️ AU REPOS (`stand = 0`) LA GÉOMÉTRIE EST CELLE D'AVANT AU MILLIMÈTRE :
+     cuisse en (±0,13 ; 0,50 ; 0,22), tibia en (±0,13 ; 0,25 ; 0,43), soulier en
+     (±0,13 ; 0,05 ; 0,49). Les six autres postures ne bougent donc pas d'un
+     pixel, ce qui est la condition pour que Guillaume puisse juger la seule qui
+     change (règle du 424). */
+  const legs = [-1, 1].map((sx) => {
+    const hip = grp(sx * 0.13, 0.50, 0.00, man);
+    box(0.17, 0.17, 0.44, mSuitD, 0, 0, 0.22, 0, 0, 0, hip);              // la cuisse, vers l'avant
+    const knee = grp(0, -0.04, 0.43, hip);
+    box(0.16, 0.42, 0.17, mSuitD, 0, -0.21, 0, 0, 0, 0, knee);            // le tibia
+    box(0.14, 0.09, 0.24, lam(0x1b1b20), 0, -0.41, 0.06, 0, 0, 0, knee);  // le soulier
+    return { hip, knee };
+  });
 
   /* ── LE BUSTE. C'est LUI le pivot du penchant : tout ce qui suit est son
      enfant, donc se pencher entraîne la tête, les bras et l'écharpe d'un bloc.
@@ -811,14 +844,24 @@ function buildMayor(THREE, K) {
      de caméra. Une écharpe se porte PAR-DESSUS la veste, jamais dans son
      épaisseur : elle doit donc être l'élément le plus avancé du buste, pas un
      concurrent à la même profondeur. */
-  const sash = grp(0, 0.33, 0.178, torso);
+  /* ⚠️⚠️ ELLE A ÉTÉ RACCOURCIE DE 60 À 40 CM ET REMONTÉE LE 2026-08-31, ET C'EST
+     LE DÉFAUT QUE GUILLAUME A SIGNALÉ (« l'écharpe détachée passant sous le plan
+     du bureau »). Sa pointe descendait à y 0,72 monde, c'est-à-dire DANS
+     l'épaisseur du plateau (0,715 → 0,79) et treize centimètres à l'intérieur
+     du bois dès qu'il se penchait — mesuré par `render-maire` §4. Le symptôme
+     n'était pas « une écharpe qui traverse » : c'était une écharpe COUPÉE NET
+     par le meuble, donc une écharpe qui ne tient plus à l'homme.
+     ⚠️ Ce n'est pas non plus qu'une parade : une écharpe de maire se noue à la
+     hanche, elle ne pend pas jusqu'au genou. La version longue lisait comme un
+     cache-nez. */
+  const sash = grp(0, 0.38, 0.178, torso);
   /* ⚠️ ELLE DESCEND DE SON ÉPAULE DROITE — donc de NOTRE GAUCHE — vers sa hanche
      gauche, comme la portent les maires. Le premier jet la penchait dans l'autre
      sens : personne n'aurait su dire pourquoi ça n'allait pas, et tout le monde
      l'aurait vu. */
   sash.rotation.z = 0.70;
   for (let i = 0; i < 3; i++)
-    box(0.042, 0.60, 0.020, lam([COL.sashB, COL.sashW, COL.sashR][i]), (i - 1) * 0.043, 0, 0, 0, 0, 0, sash);
+    box(0.042, 0.40, 0.020, lam([COL.sashB, COL.sashW, COL.sashR][i]), (i - 1) * 0.043, 0, 0, 0, 0, 0, sash);
   /* HORS-ZIP — LA ROSETTE EST DÉSORMAIS L'ENFANT DE L'ÉCHARPE, PAS DU BUSTE.
      Elle vivait à une position `torso` fixe, calculée à la main pour tomber
      « à peu près » au bout des bandes — vraie tant que `sash` ne bougeait
@@ -903,7 +946,7 @@ function buildMayor(THREE, K) {
   const lipR = box(0.024, 0.013, 0.012, mLip, 0.034, 0, -0.002, 0, 0, 0, mouth);
   const mouthDark = box(0.046, 0.001, 0.008, lam(0x2a1210), 0, 0, 0.005, 0, 0, 0, mouth);
 
-  return { man, torso, head, face, armL, armR, sash,
+  return { man, torso, head, face, armL, armR, sash, legs,
            eyeL, eyeR, browL, browR, mouth, lipC, lipL, lipR, mouthDark };
 }
 
@@ -925,32 +968,73 @@ function buildMayor(THREE, K) {
    ═══════════════════════════════════════════════════════════════════════════ */
 export const POSE = {
   /* bras croisés, calé en arrière : il n'a rien décidé et il vous le montre */
-  closed: { lean: -0.17, rise: 0, turn: 0, headX: 0.02, headY: 0, pen: 0, stamp: 0, roll: 0,
-            hL: [0.10, 1.02, -2.86], hR: [-0.10, 1.10, -2.86], out: -0.55 },
+  /* ⚠️⚠️ LES DEUX CIBLES ÉTAIENT DANS SA POITRINE, ET C'EST `render-maire` §6 QUI
+     L'A DIT (2026-08-31). Écrites à z −2,86 pour un buste dont la face avant
+     tombe à −2,91 quand il se cale en arrière : les mains s'enfonçaient de
+     quatre centimètres dans la veste, et seuls les doigts ressortaient — au
+     niveau du menton. ⚠️ LE CONTRÔLE DE SILHOUETTE NE POUVAIT PAS LE VOIR : une
+     main enfoncée ne fait pas d'îlot, elle disparaît. *Ce qui déborde se compte
+     en pixels, ce qui s'enfonce se compte en mètres.*
+     ⚠️ Et le geste est plus juste : des bras croisés posent les mains sur le
+     bras opposé, à hauteur de sternum — pas sous le menton. */
+  closed: { lean: -0.17, rise: 0, stand: 0, turn: 0, headX: 0.02, headY: 0, pen: 0, stamp: 0, roll: 0,
+            hL: [0.150, 0.940, -2.805], hR: [-0.150, 0.975, -2.820], out: -0.55 },
   /* il regarde la pendule et joue avec son stylo : le geste de quelqu'un qui
      compte les minutes qu'il vous a données */
-  clock:  { lean: -0.07, rise: 0, turn: 0.16, headX: 0.04, headY: 0.42, pen: 1, stamp: 0, roll: 0,
+  clock:  { lean: -0.07, rise: 0, stand: 0, turn: 0.16, headX: 0.04, headY: 0.42, pen: 1, stamp: 0, roll: 0,
             hL: [-0.30, 0.86, -2.66], hR: [0.24, 1.02, -2.72], out: 0.55 },
   /* mains à plat sur le sous-main : il écoute, sans plus */
-  flat:   { lean: 0.00, rise: 0, turn: 0, headX: 0.03, headY: 0, pen: 0, stamp: 0, roll: 0,
+  flat:   { lean: 0.00, rise: 0, stand: 0, turn: 0, headX: 0.03, headY: 0, pen: 0, stamp: 0, roll: 0,
             hL: [-0.30, 0.84, -2.58], hR: [0.30, 0.84, -2.58], out: 0.75 },
   /* coudes sur le bureau, doigts croisés : c'est le moment où il entre dedans */
-  lean:   { lean: 0.19, rise: 0.02, turn: 0, headX: -0.02, headY: 0, pen: 0, stamp: 0, roll: 1,
+  lean:   { lean: 0.19, rise: 0.02, stand: 0, turn: 0, headX: -0.02, headY: 0, pen: 0, stamp: 0, roll: 1,
             hL: [-0.07, 0.94, -2.42], hR: [0.07, 0.94, -2.42], out: 0.95 },
   /* il tire le tampon vers lui. ⚠️ LA MAIN DROITE SEULE : les deux mains sur le
      tampon lirait comme une prière */
-  stamp:  { lean: 0.14, rise: 0.02, turn: -0.05, headX: 0.16, headY: -0.10, pen: 0, stamp: 1, roll: 1,
+  /* ⚠️ LE PENCHANT EST PASSÉ DE 0,14 À 0,21 LE 2026-08-31, ET C'EST UNE MESURE,
+     PAS UN GOÛT : `render-maire` §3 chiffrait l'épaule à 62,2 cm de la cible
+     pour un bras de 59 — la main s'arrêtait donc À CÔTÉ du tampon, et
+     `solveArm` bornait la cible en silence plutôt que de le dire. On ne
+     rapproche pas l'objet : on se penche pour l'attraper, ce que fait tout le
+     monde, et ce que la pose racontait déjà. */
+  stamp:  { lean: 0.21, rise: 0.02, stand: 0, turn: -0.05, headX: 0.16, headY: -0.10, pen: 0, stamp: 1, roll: 1,
             /* ⚠️ LA MAIN DROITE EST SUR LE TAMPON, PAS À CÔTÉ : sa position tirée
                vaut (0,58 ; 0,90 ; −2,44) — `stamp` la déplace de vingt centimètres
                vers lui. Écrire la cible « à peu près là » mettait la main à huit
                centimètres de l'objet, et c'est le geste qui conclut l'entretien. */
             hL: [-0.26, 0.84, -2.52], hR: [0.575, 0.905, -2.43], out: 0.80 },
-  /* il s'est levé, il regarde le quai, les mains dans le dos. C'est le nœud m12,
-     et c'est la seule pose où il vous tourne le dos */
-  window: { lean: 0.02, rise: 0.13, turn: -0.62, headX: -0.06, headY: -0.30, pen: 0, stamp: 0, roll: 0,
-            hL: [0.06, 0.86, -3.28], hR: [-0.06, 0.84, -3.30], out: -0.85 },
+  /* ── IL SE LÈVE, REPOUSSE SON FAUTEUIL, SE TOURNE VERS LA FENÊTRE ET VOUS
+     PARLE PAR-DESSUS SON ÉPAULE, LES MAINS DANS LE DOS. C'est la posture du
+     nœud m12 — et surtout celle qu'il prend DÈS QU'ON ENCHAÎNE LES BONS
+     ARGUMENTS (`mayorPose`, `streak >= MAYOR_STREAK_GAIN`). C'est donc une pose
+     de MILIEU d'entretien, pas une fin : il continue de parler pendant qu'il la
+     tient, et son visage doit rester lisible. ── */
+  /* ⚠️⚠️ ELLE ÉTAIT LA SEULE POSTURE CASSÉE DU JEU, ET LA CAUSE N'ÉTAIT PAS
+     DANS SES NOMBRES : elle écrivait `rise: 0.13`, or `rise` monte le BUSTE, et
+     les jambes ne sont pas ses filles. On obtenait un homme coupé à la taille,
+     buste quatorze centimètres au-dessus de ses propres cuisses — mesuré par
+     `render-maire` §2, invisible pour `verify-maire` qui vérifie que les sept
+     postures EXISTENT. *Une pose ne peut pas inventer une articulation ; quand
+     elle en demande une, c'est le squelette qu'il faut ouvrir.*
+     ⚠️ `stand` remplace donc `rise` ici, et il lève l'HOMME : hanches et genoux
+     se déplient, `man` monte de `STAND_LIFT`, le fauteuil recule. `rise` reste
+     pour ce à quoi il sert — les deux centimètres d'un homme qui se redresse
+     sur son siège (`lean`, `stamp`).
+     ⚠️ LE DOS N'EST PAS TOURNÉ À 180° ET C'EST DÉLIBÉRÉ : la vieille rédaction
+     l'annonçait (« la seule pose où il vous tourne le dos ») et écrivait 0,62
+     radian, soit trente-cinq degrés — ni l'un ni l'autre. Le corps part vers la
+     fenêtre (0,95 rad), la TÊTE revient vers nous (+0,34) : c'est la seule
+     figure qui dise « je regarde ailleurs et je vous écoute encore », et c'est
+     exactement ce que raconte une bonne série de réponses. */
+  window: { lean: 0.04, rise: 0, stand: 1, turn: -0.95, headX: -0.03, headY: 0.34, pen: 0, stamp: 0, roll: 0,
+            /* ⚠️ LES DEUX CIBLES SONT RECALCULÉES POUR L'HOMME DEBOUT — l'épaule
+               est passée de 1,12 à 1,53 m. Les anciennes (y 0,84) laissaient les
+               mains à la hauteur d'un homme assis : à 64,8 cm d'une épaule qui
+               n'a que 59 cm de bras, donc bornées, donc un avant-bras qui partait
+               tout seul en travers du dos. */
+            hL: [0.138, 1.05, -3.175], hR: [0.220, 1.05, -3.061], out: -0.85 },
   /* il repousse le rouleau, du bout des doigts, et se cale */
-  push:   { lean: -0.25, rise: 0, turn: 0, headX: -0.03, headY: 0, pen: 0, stamp: 0, roll: 0,
+  push:   { lean: -0.25, rise: 0, stand: 0, turn: 0, headX: -0.03, headY: 0, pen: 0, stamp: 0, roll: 0,
             hL: [-0.34, 0.90, -2.64], hR: [0.34, 0.90, -2.64], out: 0.60 },
 };
 /* ⚠️⚠️⚠️ UNE POSE DIT OÙ SONT SES MAINS, PAS QUELS ANGLES ONT SES ARTICULATIONS,
@@ -1024,6 +1108,19 @@ export function ease(cur, want, dt, speed) {
   return cur;
 }
 export function poseTarget(key) { return POSE[key] || POSE.flat; }
+/* ⚠️⚠️⚠️ L'ÉTAT DE DÉPART SE PREND ICI, JAMAIS PAR `{ ...poseTarget(k) }`.
+   Trouvé le 2026-08-31 en écrivant `render-maire` : la vue faisait exactement
+   ça, et un étalement RECOPIE LA RÉFÉRENCE des tableaux `hL`/`hR`. `ease`
+   écrit ensuite DANS ce tableau — donc dans `POSE.closed` lui-même. La table
+   des postures se corrompait à la première image de la première audience, et
+   la seconde audience partait d'une pose que personne n'avait écrite. Aucun
+   symptôme sur le moment : les nombres restaient plausibles.
+   *Une table de référence qu'on étale à plat est une table qu'on modifie.* */
+export function poseState(key) {
+  const p = poseTarget(key), out = {};
+  for (const k in p) out[k] = Array.isArray(p[k]) ? p[k].slice() : p[k];
+  return out;
+}
 export function faceTarget(key) { return FACE[key] || FACE.cold; }
 
 /* ── LA POSTURE. Elle ne lit que `cur`, jamais l'état de la négociation : c'est
@@ -1031,6 +1128,23 @@ export function faceTarget(key) { return FACE[key] || FACE.cold; }
    quelques nombres qu'il reçoit (voir `MAYOR_LIVE_KEEPALIVE_MS`). ── */
 export function applyPose(rig, cur, t) {
   const m = rig.mayor;
+  /* ── SE LEVER. ⚠️⚠️ `stand` EST LE SEUL CANAL QUI TOUCHE À `man`, ET C'EST LA
+     DIFFÉRENCE AVEC `rise` : `rise` monte le BUSTE sur ses hanches (deux
+     centimètres, un homme qui se redresse), `stand` lève l'HOMME sur ses jambes
+     (quarante et un centimètres, hanches et genoux dépliés). Les confondre est
+     ce qui cassait `window` : le buste montait, les jambes restaient assises.
+     ⚠️ ON GLISSE ENTRE LES DEUX, donc `stand` vaut aussi 0,4 en chemin — c'est
+     pourquoi c'est un ANGLE qu'on interpole et pas deux jeux de boîtes : à
+     mi-course l'homme est en train de se déplier, pas en double exemplaire. */
+  const st = Math.max(0, Math.min(1, cur.stand || 0));
+  const knee = st * (Math.PI / 2);
+  m.man.position.y = st * STAND_LIFT;
+  for (const l of m.legs) { l.hip.rotation.x = knee; l.knee.rotation.x = -knee; }
+  /* le fauteuil recule quand il se lève. ⚠️ C'est un mouvement de MEUBLE, il est
+     donc ici et pas dans la vue : deux descriptions du même geste divergeraient
+     (§8 de `CLAUDE.md`), et le symptôme serait un homme debout DANS son siège. */
+  if (rig.seat) rig.seat.position.z = ROOM.seatZ - st * 0.34;
+
   /* la respiration : quatre millimètres, et c'est ce qui sépare un homme d'un
      mannequin. ⚠️ ELLE S'AJOUTE À LA POSE, elle ne la remplace pas — un buste
      qui respirerait « au lieu » de se pencher perdrait le penchant. */
@@ -1038,14 +1152,31 @@ export function applyPose(rig, cur, t) {
   m.torso.rotation.x = cur.lean + Math.sin(t * 0.37) * 0.012;
   m.torso.rotation.y = cur.turn + Math.sin(t * 0.29) * 0.018;
   m.torso.position.y = 0.62 + cur.rise + breath;
-  m.torso.position.z = 0.02 + cur.lean * 0.16;
+  /* ⚠️ LE COEFFICIENT EST PASSÉ DE 0,16 À 0,06 LE 2026-08-31. Un homme qui se
+     penche sur son bureau PIVOTE, il ne GLISSE pas vers l'avant : la poitrine
+     avance déjà de dix centimètres par la seule rotation de l'épaule. Les trois
+     centimètres de translation en plus, eux, n'avançaient pas la poitrine — ils
+     enfonçaient le ventre de neuf centimètres dans le chant du plateau (son
+     fauteuil n'est qu'à dix-neuf centimètres du meuble). Ça ne se voit pas de
+     notre chaise ; ça se voit dès qu'on emmène la caméra libre sur le côté,
+     c'est-à-dire dans le geste même que la scène promet. */
+  m.torso.position.z = 0.02 + cur.lean * 0.06;
 
   /* ⚠️ LE BUSTE EST REMIS À JOUR AVANT LA CINÉMATIQUE INVERSE : elle travaille
      dans SON repère, et un buste qui vient de se pencher n'a pas encore de
      matrice à jour à cet instant de l'image. Sans cette ligne, les bras suivent
      le penchant d'UNE image de retard — ce qui se voit exactement quand il se
-     penche vite, c'est-à-dire au moment où on regarde. */
-  m.torso.updateMatrixWorld(true);
+     penche vite, c'est-à-dire au moment où on regarde.
+     ⚠️⚠️ ON REPART DE `man`, PAS DU BUSTE, ET C'EST UN DÉFAUT MESURÉ LE
+     2026-08-31. `updateMatrixWorld` compose avec la matrice monde du PARENT
+     telle qu'elle est : partir du buste laissait `man` d'une image en retard.
+     Tant que `man` ne bougeait jamais, la différence était nulle ; le jour où
+     `stand` s'est mis à le lever de quarante-quatre centimètres, les deux mains
+     se sont posées 39 cm à côté de leur cible — et seulement à la pose SUIVANTE,
+     donc de façon intermittente. *Une chaîne se remet à jour depuis sa racine
+     ou pas du tout : mise à jour partielle et retard d'une image sont la même
+     erreur, et la seconde ne se voit que si la première existe.* */
+  m.man.updateMatrixWorld(true);
   solveArm(rig, m.armL, cur.hL, cur.out, -1);
   solveArm(rig, m.armR, cur.hR, cur.out, 1);
 
@@ -1102,7 +1233,20 @@ export function applyPose(rig, cur, t) {
    (`STAR_FARM_CRATER_DRAW_SCALES`, un tableau qui rendait `undefined` en
    silence), et la parade est la même : on borne AVANT de calculer, pas après.
    ═══════════════════════════════════════════════════════════════════════════ */
-const ARM_UPPER = 0.30, ARM_FORE = 0.29;
+/* ⚠️ LA LEVÉE EST DÉRIVÉE DE LA JAMBE, PAS CHOISIE : cuisse 0,44 + tibia 0,41 +
+   la demi-épaisseur du soulier, moins la hauteur de hanche assise (0,50). Un
+   nombre réglé à l'œil ici enfoncerait les semelles dans le parquet ou les
+   ferait flotter, et c'est le genre d'écart qu'on ne voit qu'à la bonne
+   caméra (§8 : un paramètre qui double un autre paramètre doit être DÉRIVÉ). */
+export const STAND_LIFT = 0.44 + 0.41 + 0.045 - 0.50;
+
+/* ⚠️ LES DEUX LONGUEURS SONT CELLES DES OS DESSINÉS, ET `ARM_FORE` MENTAIT
+   D'UN CENTIMÈTRE : `buildMayor` accroche la main en (0, −0,30, 0) du coude,
+   pas en −0,29. Un centimètre d'écart CONSTANT sur les quatorze cibles, que
+   `render-maire` §3 a rendu visible du premier coup en affichant l'écart au
+   lieu de le supposer nul. *Deux descriptions de la même longueur divergent
+   toujours ; celle-ci est maintenant à côté de son os.* */
+const ARM_UPPER = 0.30, ARM_FORE = 0.30;
 export function solveArm(rig, arm, target, out, side) {
   if (!target) return;
   const T = rig._T;
@@ -1350,7 +1494,7 @@ export function buildOffice(THREE, opts) {
 
   return {
     root, mayor, room,
-    pen: desk.pen, roll: desk.roll, sheet: desk.sheet, stamp: desk.stamp,
+    pen: desk.pen, roll: desk.roll, sheet: desk.sheet, stamp: desk.stamp, seat: desk.seat,
     paper: desk.paper, lamp: desk.lamp, door: room.door, bang,
     lights: { hemi, sun, warm, chand, fill },
     _v: new THREE.Vector3(),

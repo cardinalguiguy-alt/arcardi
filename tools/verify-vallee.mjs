@@ -1357,6 +1357,100 @@ console.log("\n=== Valley Town — les élections municipales ===\n");
   ok("⚠️ …et il ne touche PAS l'altitude de collision", dirty === 0, `${dirty} case(s) polluée(s)`);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   2026-08-31 — LE FLEUVE ET SA PASSE : LE NAVIRE PEUT-IL SORTIR ?
+   ───────────────────────────────────────────────────────────────────────────
+   Décision de Guillaume : le lac devient « une sorte de fleuve qui mène à une
+   sortie, par la droite », d'où le navire s'en ira sur un fondu enchaîné.
+   ⚠️⚠️ LA GRANDEUR QUI COMPTE N'EST DONC PAS « Y A-T-IL DE L'EAU », C'EST
+   « PEUT-ON ALLER D'ICI À LÀ-BAS PAR L'EAU ». C'est la leçon du 444, la plus
+   chère du dépôt : six bancs au vert n'ont pas vu cinq lieux devenus
+   INATTEIGNABLES, parce qu'aucun ne mesurait l'ARRIVÉE. Un chenal coupé d'une
+   seule case diagonale a exactement la même tête qu'un chenal ouvert sur une
+   image, et rend la fin de la quête injouable.
+   ⚠️ On mesure donc une CONNEXITÉ à quatre voisins depuis la cale du navire —
+   la vraie, celle que le générateur a posée sur `tw.shipX`/`shipY` — jusqu'au
+   bord est de la carte. Pas une largeur, pas une moyenne : un chemin.
+   ═══════════════════════════════════════════════════════════════════════════ */
+section("Valley Town — le fleuve, la passe, et la sortie du navire");
+{
+  const lk = C.TOWN_LAKE;
+  const rows = (x) => { let n = 0; for (let y = lk.y; y < H; y++) if (tw.ground[idx(x, y)] === C.G_WATER) n++; return n; };
+
+  /* 1. le chenal ne se ferme jamais — c'est l'invariant que `TOWN_RIVER_MIN`
+     promet, et il se balaie colonne par colonne, pas sur un échantillon. */
+  const thin = [];
+  for (let x = C.TOWN_RIVER_X; x < W; x++) if (rows(x) < C.TOWN_RIVER_MIN) thin.push(`${x}:${rows(x)}`);
+  ok("le chenal ne se referme jamais entre le bassin et le bord de la carte",
+     thin.length === 0, thin.length ? thin.slice(0, 6).join(" ") : `${W - C.TOWN_RIVER_X} colonnes, minimum ${C.TOWN_RIVER_MIN} rangées`);
+
+  /* 2. il sort VRAIMENT de la carte : sans ça le fleuve est un cul-de-sac, et
+     le fondu enchaîné partirait d'une impasse. */
+  ok("le fleuve touche le bord est du monde", rows(W - 1) >= C.TOWN_RIVER_MIN, `${rows(W - 1)} rangées en x=${W - 1}`);
+
+  /* 3. la passe est un vrai GOULET. ⚠️ Un rétrécissement qu'on ne voit pas
+     s'ouvrir et se refermer n'est pas une passe, c'est une rive : on exige donc
+     un RAPPORT au bassin, pas une largeur absolue — une largeur absolue serait
+     un second réglage à côté de `TOWN_RIVER_NECK_PINCH` (§8). */
+  let neckW = 99, neckAt = -1;
+  for (let x = C.TOWN_RIVER_X; x < W; x++) { const r = rows(x); if (r < neckW) { neckW = r; neckAt = x; } }
+  /* ⚠️ LA RÉFÉRENCE EST LA MÉDIANE DU BASSIN, PAS LA COLONNE DU PONTON : le
+     ponton est en BOIS, il mange ses propres rangées d'eau, et mesurer le
+     bassin dessus rendait « 2 rangées » pour une nappe qui en fait dix. Un
+     banc qui prend son témoin sur l'objet qu'il ne mesure pas se trompe de
+     grandeur sans jamais le dire. */
+  const basinCols = [];
+  for (let x = lk.x + 4; x < C.TOWN_RIVER_X - 8; x++) basinCols.push(rows(x));
+  basinCols.sort((a, b) => a - b);
+  const basin = basinCols[basinCols.length >> 1];
+  ok("la passe est un goulet, pas un simple rétrécissement", neckW <= basin * 0.55,
+     `${neckW} rangées au plus étroit contre ${basin} dans le bassin`);
+  ok("…et le goulet est bien là où la table le place", Math.abs(neckAt - C.TOWN_RIVER_NECK_X) <= C.TOWN_RIVER_NECK_HALF,
+     `plus étroit en x=${neckAt}, passe annoncée en x=${C.TOWN_RIVER_NECK_X}`);
+
+  /* 4. ⚠️⚠️ L'ARRIVÉE. De la cale au large, par l'eau, à quatre voisins. */
+  const start = [];
+  for (let y = lk.y; y < H; y++) for (let dx = -3; dx <= 3; dx++) {
+    const x = tw.shipX + dx;
+    if (x >= 0 && x < W && tw.ground[idx(x, y)] === C.G_WATER) start.push(idx(x, y));
+  }
+  const seen = new Uint8Array(W * H);
+  const stack = [];
+  for (const i of start) if (!seen[i]) { seen[i] = 1; stack.push(i); }
+  let out = false;
+  while (stack.length) {
+    const i = stack.pop(), x = i % W, y = (i / W) | 0;
+    if (x === W - 1) out = true;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+      const j = ny * W + nx;
+      if (seen[j] || tw.ground[j] !== C.G_WATER) continue;
+      seen[j] = 1; stack.push(j);
+    }
+  }
+  ok("⚠️⚠️ LE NAVIRE PEUT SORTIR : de sa cale au bord est, par l'eau, sans diagonale",
+     start.length > 0 && out, start.length ? (out ? "chenal continu" : "chenal COUPÉ") : "aucune eau devant la cale");
+
+  /* 5. et on peut aller la REGARDER : la rive nord du goulet est dans la poche
+     praticable de la ville. Une passe qu'on ne peut pas atteindre à pied est un
+     décor de fond, et le §17.5 en fait un lieu qu'on arpente. */
+  const nav2 = E.townNav(tw);
+  const main = (() => {
+    const sz = new Map();
+    for (let i = 0; i < nav2.comp.length; i++) if (nav2.comp[i] >= 0) sz.set(nav2.comp[i], (sz.get(nav2.comp[i]) || 0) + 1);
+    return [...sz.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  })();
+  let reach = 0;
+  for (let x = C.TOWN_RIVER_NECK_X - 4; x <= C.TOWN_RIVER_NECK_X + 4; x++) {
+    for (let y = lk.y; y < H; y++) {
+      if (tw.ground[idx(x, y)] === C.G_WATER) break;
+      if (nav2.comp[idx(x, y)] === main) { reach++; break; }
+    }
+  }
+  ok("on peut marcher jusqu'à la passe depuis la ville", reach >= 7, `${reach}/9 colonnes du goulet abordables`);
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(`\n${fails === 0 ? "✅" : "❌"} ${total - fails}/${total} contrôles passés.\n`);
 process.exit(fails === 0 ? 0 : 1);

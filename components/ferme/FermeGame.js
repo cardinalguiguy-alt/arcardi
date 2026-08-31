@@ -13523,6 +13523,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (dk === "townPlaza") { m.x = C.TOWN_FOUNTAIN.x; m.y = C.TOWN_FOUNTAIN.y + 3; }
           else if (dk === "townMarket") { m.x = C.TOWN_MARKET.x + C.TOWN_MARKET.w / 2; m.y = C.TOWN_MARKET.y + C.TOWN_MARKET.h / 2; } // zip 426
           else if (dk === "townLake") { m.x = C.TOWN_PIER.x + C.TOWN_PIER.w / 2; m.y = C.TOWN_LAKE.y - C.TOWN_QUAY_H - 1; }
+          /* ⚠️ 2026-08-31 — LA PASSE. On se pose sur la BERGE, jamais dans
+             l'eau, et la rangée se LIT sur la carte (première case non-eau en
+             remontant) au lieu d'être calculée depuis `TOWN_RIVER_EDGE` : le
+             champ de rive porte son bruit, donc une rangée déduite de la
+             formule tombe à côté une colonne sur deux. C'est le défaut n°1 du
+             444 — *une porte qui s'ouvre sur le vide passe tous les contrôles
+             de la porte.* */
+          else if (dk === "townPasse") {
+            const tw2 = townWorldRef.current || (townWorldRef.current = getTownWorldCached(E));
+            m.x = C.TOWN_RIVER_NECK_X;
+            let ry = C.TOWN_LAKE.y + C.TOWN_RIVER_EDGE;
+            for (let y = C.TOWN_LAKE.y; y < tw2.h; y++) {
+              if (tw2.ground[y * tw2.w + C.TOWN_RIVER_NECK_X] === C.G_WATER) { ry = y - 2; break; }
+            }
+            m.y = ry;
+          }
           else if (dk === "townCourt") { m.x = C.TOWN_COURT.x + C.TOWN_COURT.w / 2; m.y = C.TOWN_COURT.y + C.TOWN_COURT.h + 2; }
           else if (dk === "townBelvedere") { m.x = C.TOWN_BELVEDERE.x + C.TOWN_BELVEDERE.w / 2; m.y = C.TOWN_BELVEDERE.y + C.TOWN_BELVEDERE.h - 3; }
           /* Zip 427 : la Haute-Ville commerçante. ⚠️ ELLE MÉRITE SON ARRÊT parce
