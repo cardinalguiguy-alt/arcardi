@@ -1488,7 +1488,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      entre les deux soit un fondu et non une coupe. */
   const runReturnFadeRef = useRef(0);
 
-  useEffect(() => { fishMiniRef.current = !!fishMini || !!barnMini || !!wolfBite || !!evilBite || !!repairMini; }, [fishMini, barnMini, wolfBite, evilBite, repairMini]);
+  /* ⚠️ 2026-09-01 — `starRaise` (le marteau qui hisse une pièce du navire,
+     même BarnMinigame que la grange) manquait à cette liste : Espace y
+     hammer la pièce ET traverse jusqu'à `pressJumpOrAct()` dans le monde
+     dessous, parce que la grange, elle, était déjà protégée par ce ref, mais
+     jamais recopiée ici pour sa pièce sœur. Trouvé en vérifiant que E/P/F
+     restent fonctionnels à chaque moment clé de la quête du bateau. */
+  useEffect(() => { fishMiniRef.current = !!fishMini || !!barnMini || !!wolfBite || !!evilBite || !!repairMini || !!starRaise; }, [fishMini, barnMini, wolfBite, evilBite, repairMini, starRaise]);
   useEffect(() => { adsOpenRef.current = adsOpen; visitorOpenRef.current = visitorOpen; }, [adsOpen, visitorOpen]);
   useEffect(() => { gregCardOpenRef.current = gregCardOpen; }, [gregCardOpen]); // FIX 246
   // 2026-07 station update: a fresh hostile raid opens the co-op repair
@@ -25981,15 +25987,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          de la cale, donc son test doit rester le premier ; le cratère est à l'autre
          bout de la ville, donc il ne peut pas entrer en conflit. Une invite de plus
          posée sans regarder cet ordre, c'est un PNJ qu'on ne peut plus atteindre.
-         ⚠️ LA PORTÉE EST DE 2,6 CASES, plus large que les 1,8 de l'ingénieur : on
-         monte une quille en tournant autour d'un chantier, on ne parle pas à un
-         navire. C'est la règle du 469 sur la fouille prise à l'endroit — *une portée
-         d'interaction se règle sur ce que le geste MONTRE*. */
+         ⚠️⚠️ 2026-09-01 — LE CERCLE DE 2,6 A ÉTÉ REMPLACÉ PAR LE RECTANGLE DU
+         DESSIN, ET C'EST GUILLAUME QUI L'A VU : « je clique et rien ne se passe ».
+         Un cercle de 2,6 case autour de `shipX/shipY` — le CENTRE de la coque —
+         ne couvre même pas la coque elle-même : elle bloque déjà de 3 cases à
+         l'ouest (`STAR_SHIP_BLOCK_W>>1`), donc un joueur collé au flanc du
+         navire, à la seule case où il PEUT se tenir contre la coque, en était
+         déjà hors de portée. C'est très exactement la seizième leçon retournée
+         contre elle-même : *une portée d'interaction se règle sur ce que le
+         geste MONTRE* — et ce que le dessin montre est un rectangle de neuf
+         cases de large sur sept de haut (`STAR_SHIP_DRAW_W/H`), pas un point.
+         ⚠️ ON REPREND `nearTownRect`, LA FORME DÉJÀ EMPLOYÉE POUR LE PONTON ET
+         LE BELVÉDÈRE — deux autres décors trop larges pour un cercle — au lieu
+         d'inventer un troisième calcul de portée. */
       {
         const tw1 = townWorldNow();
         const raise = Q.starTimberToRaise(e);
         if (tw1 && tw1.shipX && raise && Q.starPlanReady(e)
-          && Math.hypot(m.x - tw1.shipX, m.y - tw1.shipY) <= 2.6)
+          && nearTownRect(tw1.shipX - (C.STAR_SHIP_DRAW_W >> 1), tw1.shipY - C.STAR_SHIP_DRAW_H,
+                          C.STAR_SHIP_DRAW_W, C.STAR_SHIP_DRAW_H))
           return { p: "raise", act: () => setStarRaise({ part: raise }) };
       }
       /* Le cratère : E n'y sert à RIEN tant qu'elle n'est pas sortie, et c'est
