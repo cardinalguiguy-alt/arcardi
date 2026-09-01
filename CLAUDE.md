@@ -11,22 +11,23 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**ACTION SUIVANTE UNIQUE — LE SECOND CHANTIER QUE GUILLAUME A ANNONCÉ ET PAS ENCORE DIT.** La
-question laissée ouverte sur Tristan (tête trop large, inclinaison à la lame) est TRANCHÉE — voir
-le bloc de livraison juste en dessous, Guillaume a délégué le choix et il est fait. Sa demande du
-2026-09-01 était
-explicitement en deux morceaux (« deux chantiers », puis « le deuxième arrive après ») ; le
-premier — les haies et la cohérence des collisions — est livré plus bas. **Il n'y a donc rien à
-deviner : on attend l'énoncé du second.** À défaut, le chantier nommé par Guillaume avant
-celui-ci reste en tête de file : **la densification des relations sociales entre résidents**,
-dont le premier dossier vaut d'être repris — *les quatre morceaux muets du navire (safran, mât,
-voile, cloche) deviennent quatre personnes à convaincre*, avec la contrainte du §15.1 : on plaide
-pour un bateau sans jamais pouvoir dire pourquoi on le construit. Le moteur de `maire.js` est
-réutilisable presque tel quel (`MAYOR_NODE[id]` n'est lu qu'à TROIS endroits, `mayorReplay` est
-agnostique, `MayorWatch` donne le mode spectateur gratuitement) ; le coût réel est le DÉCOR, et il
-ne faut pas le payer quatre fois. ⚠️ **Sortir la table des nœuds de `maire.js` n'a PAS été fait,
-exprès** : abstraire à l'aveugle avant de connaître les besoins des résidents produirait la
-mauvaise abstraction.
+**ACTION SUIVANTE UNIQUE — CORRIGER LE RÉSIDENT SUCRIER (`sugarWorker`) FIGÉ SUR LA FERME.** Bug
+trouvé par Guillaume en jouant (2026-09-01, détaillé au §13). C'est la SEULE dette actionnable par
+un agent en ce moment : elle ne dépend d'aucune décision créative en attente et ne touche pas au
+dessin ni à la mécanique sociale. **Prompt exact à suivre** : reproduire en session locale
+(recette §10 : `.env.local` + page jetable, ⌘⇧X → « Peupler la ferme ») ; localiser la cause en
+comparant le déplacement des résidents de FERME à celui des résidents de VILLE, qui ont un vrai
+pathfinding depuis le zip 428 (`E.townFindPath`) — le symptôme ressemble à un résident resté sur
+un modèle plus ancien ; corriger ; vérifier avec les bancs concernés ; documenter en commentaire
+de code daté ; supprimer tout échafaudage local avant de finir ; mettre à jour ce fichier selon
+le §14 (remplacer la ligne de bug du §13, ne pas l'empiler). Ne rien toucher d'autre — pas de
+refactor, pas de nouvelle fonctionnalité.
+⚠️⚠️ **CE BUG CORRIGÉ, IL N'Y A PLUS RIEN À CODER SANS GUILLAUME.** Tout le reste — mariage
+(proche mais volontairement pas à livrer tout de suite), densification sociale (les quatre
+morceaux du navire → quatre personnes à convaincre, moteur de `maire.js` réutilisable, contrainte
+du §15.1), relations résident-résident, chaîne de transport du bois — attend explicitement que
+Guillaume ait joué la ferme peuplée à deux clients (§13, item n°1, la dette la plus vieille et la
+plus répétée de ce fichier). **Ne pas ouvrir l'un de ces chantiers de son propre chef.**
 
 ⚠️⚠️⚠️ **CE QUI EST LIVRÉ HORS-ZIP, SÉANCE DU 2026-09-01 : QUATRE DÉFAUTS TROUVÉS EN JOUANT, SUR
 LA CALE ET CHEZ TRISTAN.** Demande de Guillaume, mot pour mot, sur la cale : *« le chevron me
@@ -1252,6 +1253,88 @@ erreur** en choisissant mal.
 ---
 
 ## 13. À compléter par Guillaume
+
+⚠️⚠️⚠️ **CE QUI ATTEND UN JUGEMENT HUMAIN, PAS UN BANC — PAR ORDRE DE PRIORITÉ (diagnostic
+2026-09-01, à la demande de Guillaume : « je veux savoir quelle direction donner au jeu, tout en
+réglant l'aspect agréable ou pas, qui ne peut être vérifié que par moi-même »).** Un banc mesure
+la mécanique ; il ne peut jamais dire si c'est AGRÉABLE — seule une vraie séance de jeu le peut,
+et Guillaume est le seul à la faire (Claude ne lance pas de bancs ni de sessions de jeu de son
+propre chef dans cette phase). Cette liste ORDONNE ce qui est déjà détaillé plus bas dans ce
+chapitre ; elle ne redit rien de leur contenu, elle priorise LEQUEL jouer en premier.
+1. **Gels de PNJ chez l'invité, ferme PEUPLÉE, à deux clients** — la dette la plus vieille et la
+   plus souvent réclamée de ce fichier (« TOUJOURS LA PASSE LA PLUS URGENTE »), jamais faite en
+   six tentatives. C'est le socle de toute décision sociale à venir : mariage, densification,
+   commissions se jugeraient sur des résidents jamais vus se comporter à deux. ⚠️ **NON FAIT** —
+   pas encore testé au 2026-09-01.
+2. **Les cinq mini-jeux de la quête de l'étoile**, joués jusqu'à la victoire, à cadence réelle.
+3. **La moitié « face à face » de la quête** : l'étoile timide dos à dos, le croisement d'ombres
+   à deux, la flaque du ponton, le duo orgue/beffroi. ⚠️ Pas testable seul, dépend du n°1.
+4. **Les trois nombres de la scierie de Tristan** (tempo, durée de manche, prix de planche
+   fendue) — aucun ne doit bouger avant d'avoir été joué. ✅ **Diagnostiqué en solo (2026-09-01)** :
+   la mécanique n'est pas déplaisante mais reste peu claire, à rendre plus accessible pour de
+   jeunes joueurs ; le refroidissement ennuie ; la pose des planches est répétitive mais acceptée
+   comme compromis. **Le point commun aux trois : le manque d'ANIMATION**, pas une nouvelle
+   mécanique — reste en réserve derrière cette liste (décision de Guillaume).
+5. **Les trois nombres du navire** (prix de Kerguélen, les quinze minutes de plans, les cinq
+   commandes de bois). ✅ **Le prix de Kerguélen est confirmé accepté** : cher et pas agréable,
+   mais voulu pour la cohérence narrative — ne pas l'adoucir sans raison narrative. Les deux
+   autres nombres restent à juger.
+6. **Le bureau du maire**, jamais rejoué à l'écran depuis sa reconstruction procédurale.
+7. **Le voyage en train** — ✅ **confirmé bon** (2026-09-01) : pas une corvée, pas coûteux, item
+   clos.
+8. **Le pain des pigeons et le partage des oiseaux**, à deux, pour savoir si l'écart se remarque.
+
+**Tant que le n°1 n'est pas fait, aucune décision de conception sociale (mariage — proche mais
+pas à livrer tout de suite —, densification, commissions) ne doit être considérée fiable.**
+Guillaume joue lui-même (recette au §10 : `fake-supabase.mjs`, échafaudage temporaire,
+« Peupler la ferme », deux onglets) ; Claude fournit les commandes exactes si besoin, jamais ne
+les exécute à sa place sur ce chantier.
+
+⚠️ **BUG TROUVÉ EN JOUANT (2026-09-01), HORS LISTE CI-DESSUS PARCE QUE C'EST UN BUG PAS UN
+RESSENTI** : le résident sucrier (`sugarWorker`, `fermeArt.js`/`FermeGame.js`) reste parfois figé
+sur la ferme. Pas encore localisé — prompt de correction exact au bloc ⏭️ REPRISE en tête de
+fichier. Retour général sur toutes les activités testées : plus d'indicateurs visuels de
+progression et plus d'animations demandés.
+
+⚠️ **DEUX IDÉES DU MÊME DÉBRIEF, TRANCHÉES SUR LEUR SORT IMMÉDIAT, PAS SUR LEUR CONTENU** :
+· **Visiteurs célèbres** (noms et sprites de vraies personnes) — **à explorer plus tard**,
+  volontairement pas cadré maintenant. ⚠️ Le risque de droit à l'image a été nommé (ça compte
+  double avec les plans de commercialisation, voir mémoire) ; à trancher AVANT tout travail
+  dessus, pas après.
+· ✅ **RELATIONS RÉSIDENT-RÉSIDENT — DIRECTION TRANCHÉE, NON CONSTRUITE (2026-09-01).** Guillaume
+  veut un vrai système : affinités et inimitiés qui ÉVOLUENT avec les actions des joueurs
+  (services rendus, etc.), pas un décor social statique. Exemple donné mot pour mot : *« rosalie
+  qui est énervée à cause d'une histoire de cœur, il faut que ça mène (dans le futur) à une quête
+  de réconciliation ou un truc du genre »* — un différend entre résidents devient une porte de
+  quête, pas juste une ligne de dialogue. ⚠️ **NE PAS COMMENCER avant le n°1 de la liste ci-dessus**
+  (résidents jamais vus se comporter à deux clients) : construire un système de relations sur un
+  comportement de PNJ jamais éprouvé à plusieurs serait fabriquer la mauvaise abstraction, comme
+  le dit déjà l'avertissement sur `MAYOR_NODE` plus haut dans ce fichier.
+
+✅ **CHAÎNE DE TRANSPORT DU BOIS DU BATEAU — DIRECTION TRANCHÉE, NON CONSTRUITE (2026-09-01).**
+Quatre décisions actées avec Guillaume, à respecter le jour où ce chantier s'ouvre :
+1. **Elle REMPLACE le mécanisme actuel**, pas un habillage cosmétique par-dessus : la progression
+   d'une pièce du bateau dépendra de l'arrivée physique de la pièce transportée, plus seulement
+   d'un total de bois abstrait. ⚠️ Ceci touche un système déjà vérifié (`verify-scierie`,
+   `verify-quete`, `starShipProgress`) — l'implémentation devra ADAPTER ces deux bancs au nouveau
+   critère de progression, jamais les contourner.
+2. **Le trajet est automatique et simulé**, pas un mini-jeu de conduite : on dépose la pièce, elle
+   progresse seule sur une durée (même famille que le pathfinding des résidents,
+   `E.townFindPath`), et arrive.
+3. **La pièce transportée est EMBALLÉE** : une forme générale reconnaissable (longue, courbe…)
+   mais pas la silhouette finale à nu — un nouveau sprite à dessiner, pas une réutilisation du
+   dessin du bateau fini. ⚠️ **Guillaume peut fournir des images de référence pour ce sprite** —
+   à demander précisément le jour où ce chantier s'ouvre (règle Blender/sprite complexe du §2 : un
+   prompt Gemini avec référence, jamais un appel API automatisé).
+4. **Ordre de construction, par le bout visible d'abord, chaque étape jouable seule** :
+   étape 1 — les pièces arrivent et restent VISIBLES sur le quai jusqu'au hissage (le plus proche
+   de ce qui existe déjà, le bateau grandit déjà sur le quai) ; étape 2 — le trajet gare de Valley
+   Town → quai ; étape 3 — le trajet scierie → gare.
+⚠️ **NE PAS COMMENCER avant que la liste « à jouer » ci-dessus ait avancé**, en particulier le n°1
+(résidents à deux clients) et le n°5 (les trois nombres du bateau, dont le rythme des cinq
+commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'abord juger tel quel.
+⚠️ Ce bloc fixe la DIRECTION, pas le code : le détail d'implémentation (fichiers, fonctions) reste
+à écrire dans `QUETE.md` au moment où le chantier s'ouvre pour de vrai.
 
 - ⚠️ **DETTE GRAPHIQUE, 2026-09-01 — LE CŒUR DE L'ÉTANG DU PARC SE LIT COMME UN BLOC NET, PAS
   COMME UN DÉGRADÉ.** Mesuré sur le vrai générateur (`TOWN_POND`, pas une supposition) : la
