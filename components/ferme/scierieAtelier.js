@@ -148,8 +148,18 @@ const COL = {
      NOIRS — cinq tonneaux au lieu de cinq grumes. */
   bark: 0x6b5540, sawdust: 0xd9c08e, floor: 0x7a5c39,
   steel: 0xb9bec6, steelDark: 0x6e747c, iron: 0x3b3f45,
-  skin: 0xd0a077, skinDark: 0xa87f5c, hair: 0x4a3524, beard: 0x5a4029,
-  shirt: 0xa8483a, shirtDark: 0x7d3228, trouser: 0x4d5462, trouserDark: 0x373d48,
+  skin: 0xd0a077, skinDark: 0xa87f5c,
+  /* ⚠️⚠️ 2026-09-01 — CHEVEUX GRIS ET PANTALON DE TOILE BLEUE, DEMANDE DIRECTE
+     DE GUILLAUME. Le poivre-et-sel (`hair`) est un ton sous la barbe (`beard`,
+     plus claire) : un bûcheron grisonnant a la barbe qui blanchit avant les
+     cheveux, jamais l'inverse — les inverser aurait l'air d'une erreur de
+     teinte plutôt que d'un choix. */
+  hair: 0x8c8880, beard: 0xafaba2,
+  shirt: 0xa8483a, shirtDark: 0x6e2820,
+  /* le carreau du §2 (`texPlaid`) lit CETTE couleur pour la grille, jamais
+     `shirtDark` : un carreau buffalo est rouge ET NOIR, pas rouge sur rouge. */
+  plaidDark: 0x201713,
+  trouser: 0x3c5872, trouserDark: 0x293e51,
   boot: 0x39291d, apron: 0x7d6549,
   ember: 0xff7a2a, lamp: 0xffca7a,
 };
@@ -217,6 +227,36 @@ function texGrain(THREE, base, dark, seed, boards) {
     for (let i = 0; i < boards; i++) g.fillRect(0, Math.round(i * H / boards), W, 2);
   }
   return texOf(THREE, c, 1, 1);
+}
+
+/* ── LA CHEMISE À CARREAUX. ⚠️⚠️ 2026-09-01 — DEMANDE DIRECTE DE GUILLAUME :
+   « une vraie chemise de bûcheron ». Une chemise rouge UNIE n'en est pas une —
+   c'est le carreau buffalo (deux couleurs, une grille large) qui la nomme, et
+   c'est la même règle que le madrier pâle du §7 : peindre ce qui rend la chose
+   reconnaissable plutôt que de compter sur l'éclairage pour le dire.
+   ⚠️ LA GRILLE BOUCLE PAR CONSTRUCTION (bandes à espacement entier), donc pas
+   de couture visible où le repeat recommence — la période prime sur les
+   détails (§4, payé au 434). Une variation fine par-dessus (le grain du tissu)
+   évite l'aplat plastique qu'aurait un carreau parfaitement net. */
+function texPlaid(THREE, base, dark) {
+  const W = 128, H = 128, cell = 32;
+  const [c, g] = cv(W, H);
+  const r = rnd(6301);
+  g.fillStyle = hex(base); g.fillRect(0, 0, W, H);
+  /* le halo qui assombrit le rouge de part et d'autre de chaque bande noire —
+     c'est ce qui lit comme un TISSAGE et pas comme deux calques superposés */
+  g.fillStyle = `rgba(${(dark >> 16) & 255},${(dark >> 8) & 255},${dark & 255},0.22)`;
+  for (let p = 0; p <= W; p += cell) { g.fillRect(p - 6, 0, 12, H); g.fillRect(0, p - 6, W, 12); }
+  /* les bandes noires elles-mêmes, franches */
+  g.fillStyle = `rgba(${(dark >> 16) & 255},${(dark >> 8) & 255},${dark & 255},0.92)`;
+  for (let p = 0; p <= W; p += cell) { g.fillRect(p - 3, 0, 6, H); g.fillRect(0, p - 3, W, 6); }
+  /* le grain du tissu : un bruit fin, jamais assez fort pour casser la grille */
+  for (let i = 0; i < 700; i++) {
+    const x = r() * W, y = r() * H;
+    g.fillStyle = r() < 0.5 ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.04)";
+    g.fillRect(x, y, 1, 1);
+  }
+  return texOf(THREE, c, 2, 2);
 }
 
 /* ── LE BOUT DE FIL : le bois de bout, avec ses cernes concentriques. Il ne sert
@@ -698,10 +738,18 @@ function buildBeam(THREE, K, tex) {
    ═══════════════════════════════════════════════════════════════════════════ */
 function buildTristan(THREE, K, tex) {
   const { lam, texMat, box, cyl, sph, grp } = K;
-  const mShirt = lam(COL.shirt), mShirtD = lam(COL.shirtDark);
+  /* ⚠️⚠️ 2026-09-01 — LA CHEMISE EST UN TISSU, PAS UN APLAT : `texPlaid` (§2)
+     peint la grille rouge et noire du carreau buffalo, et `mShirt` la porte
+     désormais partout où elle est lue — reins, cage, épaules, manches. Le
+     col roulé et les bottes restent des ACCENTS unis (`mShirtD`) : un col qui
+     porte aussi le carreau se noierait dans le torse au lieu de le border. */
+  const mShirt = texMat("plaid", tex.plaid), mShirtD = lam(COL.shirtDark);
   const mTrou = lam(COL.trouser), mTrouD = lam(COL.trouserDark);
   const mSkin = lam(COL.skin), mBoot = lam(COL.boot);
   const mApron = lam(COL.apron);
+  /* les bretelles : du CUIR, pas de la toile de pantalon — sinon elles se
+     fondent dans le jean et ne se lisent plus comme un objet à part */
+  const mBrace = lam(0x4a3624);
 
   /* `man` ne bouge que par sa POSITION (le bassin) ; il ne tourne jamais, ce
      sont ses membres qui travaillent. Un homme qu'on fait pivoter en bloc
@@ -712,16 +760,25 @@ function buildTristan(THREE, K, tex) {
   box(0.44, 0.17, 0.30, mTrouD, 0, -0.03, 0, 0, 0, 0, man);
 
   /* ── LES JAMBES, résolues vers deux pieds plantés. Trois pivots : hanche,
-     genou, cheville. Le pied lui-même est reposé à plat par `applySaw`. ── */
+     genou, cheville. Le pied lui-même est reposé à plat par `applySaw`.
+     ⚠️⚠️ 2026-09-01 — ÉPAISSIES DE 20 %, ET C'EST LA CORRECTION DEMANDÉE PAR
+     GUILLAUME (« gros problème de proportions, le buste par rapport aux
+     jambes »). La LONGUEUR jambe/buste était déjà juste (mesuré : 0,87 m de
+     jambe pour 0,685 m de buste hors inclinaison, soit le même rapport qu'un
+     humain à la table anthropométrique) — c'est la LARGEUR qui manquait :
+     un torse de 0,50 m posé sur des cylindres de 0,16-0,19 m de diamètre lit
+     un buste large sur des jambes de bâton, quelle que soit leur longueur.
+     Les deux nombres montent ensemble, sinon la cuisse redevient plus fine
+     que le mollet du dessus. ── */
   const leg = (sx) => {
     const hip = grp(sx * 0.135, -0.02, 0, man);
-    cyl(0.095, 0.082, LEG_UP, mTrou, 0, -LEG_UP / 2, 0, 0, 0, 0, hip, 10);
+    cyl(0.114, 0.098, LEG_UP, mTrou, 0, -LEG_UP / 2, 0, 0, 0, 0, hip, 10);
     const knee = grp(0, -LEG_UP, 0, hip);
-    cyl(0.078, 0.062, LEG_LOW, mTrou, 0, -LEG_LOW / 2, 0, 0, 0, 0, knee, 10);
-    box(0.115, 0.075, 0.115, mTrouD, 0, -LEG_LOW + 0.03, 0, 0, 0, 0, knee);   // le bas de guêtre
+    cyl(0.094, 0.075, LEG_LOW, mTrou, 0, -LEG_LOW / 2, 0, 0, 0, 0, knee, 10);
+    box(0.135, 0.088, 0.135, mTrouD, 0, -LEG_LOW + 0.03, 0, 0, 0, 0, knee);   // le bas de guêtre
     const ankle = grp(0, -LEG_LOW, 0, knee);
-    box(0.125, 0.085, 0.29, mBoot, 0, -0.042, 0.055, 0, 0, 0, ankle);          // la botte
-    box(0.135, 0.030, 0.30, lam(0x241a12), 0, -0.083, 0.055, 0, 0, 0, ankle);  // sa semelle
+    box(0.145, 0.085, 0.29, mBoot, 0, -0.042, 0.055, 0, 0, 0, ankle);          // la botte
+    box(0.155, 0.030, 0.30, lam(0x241a12), 0, -0.083, 0.055, 0, 0, 0, ankle);  // sa semelle
     return { hip, knee, ankle };
   };
   const legL = leg(-1), legR = leg(1);
@@ -729,12 +786,16 @@ function buildTristan(THREE, K, tex) {
   /* ── LE BUSTE. Il pivote sur le bassin, et TOUT ce qui suit est son enfant :
      se pencher entraîne la tête, les épaules et le tablier d'un bloc. Une tête
      qui reste droite pendant que le dos se plie est le défaut le plus visible
-     d'un personnage articulé, et il ne coûte qu'une erreur de parenté. ── */
+     d'un personnage articulé, et il ne coûte qu'une erreur de parenté.
+     ⚠️ RÉTRÉCI DE 7 % EN LARGEUR ET EN PROFONDEUR, L'AUTRE MOITIÉ DE LA MÊME
+     CORRECTION : les jambes montent, le torse redescend un peu, et les deux
+     se retrouvent au milieu plutôt que d'empiler tout l'écart sur les jambes
+     seules. La HAUTEUR ne bouge pas — elle n'était pas en cause. ── */
   const torso = grp(0, 0.03, 0, man);
-  box(0.475, 0.34, 0.285, mShirt, 0, 0.20, 0, 0, 0, 0, torso);              // les reins
+  box(0.44, 0.34, 0.265, mShirt, 0, 0.20, 0, 0, 0, 0, torso);              // les reins
   const chest = grp(0, 0.34, 0, torso);
-  box(0.505, 0.30, 0.30, mShirt, 0, 0.14, 0, 0, 0, 0, chest);              // la cage
-  box(0.53, 0.10, 0.31, mShirtD, 0, 0.28, 0, 0, 0, 0, chest);              // le col roulé de la chemise
+  box(0.47, 0.30, 0.28, mShirt, 0, 0.14, 0, 0, 0, 0, chest);              // la cage
+  box(0.495, 0.10, 0.29, mShirtD, 0, 0.28, 0, 0, 0, 0, chest);              // le col roulé de la chemise
   /* ⚠️⚠️ LE TABLIER EST À LA TAILLE, PAS EN BAVETTE, ET C'EST LA PLANCHE DE
      CONTACT QUI L'A DIT : une bavette de 36 × 52 cm en aplat de cuir mangeait
      tout le torse — un panneau brun sur une chemise rouge, c'est-à-dire qu'elle
@@ -747,14 +808,23 @@ function buildTristan(THREE, K, tex) {
   const apron = grp(0, -0.06, 0.13, man);
   box(0.40, 0.40, 0.028, mApron, 0, -0.16, 0.02, 0.10, 0, 0, apron);
   box(0.46, 0.075, 0.030, mApron, 0, 0.035, 0.005, 0, 0, 0, apron);      // la ceinture
-  /* les bretelles, dans le dos */
-  for (const sx of [-1, 1]) box(0.05, 0.44, 0.02, mTrouD, sx * 0.14, 0.10, -0.152, 0, 0, 0, chest);
+  /* ⚠️⚠️ 2026-09-01 — LES BRETELLES SONT DEVANT ET DERRIÈRE, PAS SEULEMENT DANS
+     LE DOS. Demande de Guillaume : « pantalon jean avec bretelles » — or les
+     trois vues du joueur (poste, face, atelier) regardent Tristan DE FACE ou
+     de trois quarts avant (§10) : une bretelle qui n'existe que dans le dos
+     n'est vue par PERSONNE. Elle est fille de `chest` comme avant (elle suit
+     l'inclinaison du buste), et croise par-dessus l'épaule via `sh`. */
+  for (const sx of [-1, 1]) {
+    box(0.045, 0.46, 0.018, mBrace, sx * 0.15, 0.12, -0.152, 0, 0, 0, chest);   // dans le dos
+    box(0.045, 0.40, 0.018, mBrace, sx * 0.16, 0.06, 0.150, 0, 0, 0, chest);    // sur la poitrine
+    box(0.050, 0.050, 0.030, lam(0xb0925a), sx * 0.155, -0.10, 0.150, 0, 0, 0, chest); // la boucle
+  }
 
   /* ── LES BRAS. ⚠️ ILS SONT PLUS ÉPAIS QUE CEUX DU MAIRE, et c'est la moitié du
      personnage : un bûcheron se reconnaît à l'avant-bras. 16 segments parce que
      ce sont les pièces qui roulent le plus sous l'œil. ── */
   const arm = (sx) => {
-    const sh = grp(sx * 0.235, 0.235, 0, chest);
+    const sh = grp(sx * 0.220, 0.235, 0, chest);
     sph(0.088, mShirt, 0, 0.01, 0, sh, 10);
     cyl(0.075, 0.066, ARM_UP, mShirt, 0, -ARM_UP / 2, 0, 0, 0, 0, sh, 16);
     const el = grp(0, -ARM_UP, 0, sh);
@@ -814,6 +884,26 @@ function buildTristan(THREE, K, tex) {
   /* la bouche est un TROU dans la barbe : elle s'ouvre quand il force, et c'est
      le signe d'effort le plus lisible d'un visage à cette taille */
   const mouth = box(0.062, 0.012, 0.014, lam(0x3a1b18), 0, -0.086, 0.028, 0, 0, 0, face);
+
+  /* ⚠️⚠️ 2026-09-01 — LA TÊTE FAISAIT 43 % DE LA LARGEUR DES ÉPAULES (0,215 m
+     pour un torse de 0,505 m), CONTRE 25-32 % CHEZ UN HOMME. Signalé par
+     Guillaume en jouant : « on dirait un pantin ». `render-scierie` restait
+     58/58 (aucun genou à l'envers, une seule masse, 167,6 cm de haut) — la
+     silhouette est cohérente au sens du banc, mais la tête à elle seule la
+     fait lire fausse à l'œil, et aucun banc du dépôt ne mesure un RAPPORT de
+     tailles entre deux morceaux.
+     ⚠️ UN SEUL FACTEUR, SUR LE GROUPE, PAS DIX BOÎTES RETOUCHÉES À LA MAIN :
+     la mâchoire, les oreilles, les trois masses de cheveux, la barbe et tout
+     le visage (`face`, dont les yeux et les sourcils) sont des ENFANTS de
+     `head` — les redimensionner un par un aurait fait dériver leurs
+     proportions ENTRE EUX (une oreille qui ne rétrécit pas comme le crâne
+     ressort du crâne). `head.scale` les réduit tous ensemble, au même
+     rapport, sans toucher un seul offset — et sans déplacer le point
+     d'attache au cou, qui reste la position du GROUPE, jamais sa taille.
+     0,75 ramène le rapport à 32 %, en haut de la fourchette humaine — assez
+     pour rester lisible à la taille du personnage, dont le style reste
+     volontairement trapu (bras et torse épais, §8 de `buildTristan`). */
+  head.scale.setScalar(0.75);
 
   return { man, torso, chest, neck, head, face, armL, armR, legL, legR,
            eyeL, eyeR, browL, browR, mouth };
@@ -1051,6 +1141,7 @@ export function buildShop(THREE, opts) {
     end: texEnd(THREE, 991),
     steel: texSteel(THREE),
     mote: texMote(THREE),
+    plaid: texPlaid(THREE, COL.shirt, COL.plaidDark),
   };
   for (const k in tex) junk.push(tex[k]);
 
@@ -1344,11 +1435,21 @@ export function applySaw(shop, s, t, dt) {
 
   /* ── LA CHUTE. ⚠️ ELLE BASCULE SUR L'ARÊTE DU TRAIT (voir `buildBeam`), et son
      angle est piloté par l'ARRÊT de la mécanique, pas par un minuteur d'ici :
-     deux horloges pour un même événement, c'est le §8 appliqué au temps. ── */
+     deux horloges pour un même événement, c'est le §8 appliqué au temps.
+     ⚠️⚠️ 2026-09-01 — LE RETOUR À ZÉRO SE LISSE, IL NE SAUTE PLUS. Signalé par
+     Guillaume en jouant : « incohérences physiques après la découpe ». Le
+     morceau tombé basculait bien pendant les 420 ms de la pause (`soft(5)`
+     ci-dessous), mais dès que la planche suivante commençait, `dropWant`
+     retombait à 0 et la branche `? 0 : dropWant` le reposait D'UN COUP —
+     le chicot qui pendait encore se téléportait à plat dans l'image qui
+     suit. Ce n'est pas la même famille que le trait de scie plus bas (qui,
+     lui, doit sauter pour ne pas montrer une planche qui se répare) : ici
+     rien ne « répare » rien, une charnière retourne juste à son repos, et un
+     mouvement qu'on VOIT se figer d'un coup se lit pire qu'un mouvement qui
+     continue. ── */
   const dropWant = s.hold > 0 && s.holdKind === "plank" ? 1.35
                  : s.holdKind === "break" ? 0.30 : 0;
-  v.drop = dropWant > v.drop ? v.drop + (dropWant - v.drop) * soft(dropWant > 1 ? 5 : 12)
-                             : (dropWant === 0 && v.drop > 0.02 ? 0 : dropWant);
+  v.drop += (dropWant - v.drop) * soft(dropWant > v.drop ? (dropWant > 1 ? 5 : 12) : 10);
   shop.beam.drop.rotation.z = -v.drop;
   shop.beam.drop.position.y = -v.drop * 0.12;
   /* la fente : elle descend avec le trait et disparaît avec la planche neuve */

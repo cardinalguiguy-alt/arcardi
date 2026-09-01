@@ -25999,13 +25999,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          cases de large sur sept de haut (`STAR_SHIP_DRAW_W/H`), pas un point.
          ⚠️ ON REPREND `nearTownRect`, LA FORME DÉJÀ EMPLOYÉE POUR LE PONTON ET
          LE BELVÉDÈRE — deux autres décors trop larges pour un cercle — au lieu
-         d'inventer un troisième calcul de portée. */
+         d'inventer un troisième calcul de portée.
+         ⚠️⚠️⚠️ ET LE RECTANGLE LUI-MÊME ÉTAIT ENCORE COURT D'UN CÔTÉ, TROUVÉ LA
+         MÊME JOURNÉE EN REJOUANT LA SCÈNE : `STAR_SHIP_DRAW_H` mesure la boîte
+         peinte au NORD de l'ancre (coque, mât) ; la passerelle qui descend vers
+         l'eau PEND au SUD, et c'est exactement là que Guillaume se tenait —
+         « je clique et rien ne se passe » — debout sur la planche, hors du
+         rectangle de 0,2 case qui la bordait. `STAR_SHIP_INTERACT_S_PAD`
+         rallonge le SEUL côté qui manquait (voir sa note dans
+         `fermeConstants.js`) ; les trois autres restent ceux du dessin. */
       {
         const tw1 = townWorldNow();
         const raise = Q.starTimberToRaise(e);
         if (tw1 && tw1.shipX && raise && Q.starPlanReady(e)
           && nearTownRect(tw1.shipX - (C.STAR_SHIP_DRAW_W >> 1), tw1.shipY - C.STAR_SHIP_DRAW_H,
-                          C.STAR_SHIP_DRAW_W, C.STAR_SHIP_DRAW_H))
+                          C.STAR_SHIP_DRAW_W, C.STAR_SHIP_DRAW_H + C.STAR_SHIP_INTERACT_S_PAD))
           return { p: "raise", act: () => setStarRaise({ part: raise }) };
       }
       /* Le cratère : E n'y sert à RIEN tant qu'elle n'est pas sortie, et c'est

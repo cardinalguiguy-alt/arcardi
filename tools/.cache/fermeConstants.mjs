@@ -3228,6 +3228,34 @@ export const TOWN_WATER_SHELF = 1.5;
    redevient une falaise sous-marine, ce que `render-eau.mjs` compte. */
 export const TOWN_SHELF_VAR = 0.55;
 export const TOWN_SHELF_PER = 13;   // en cases : la longueur d'une anse, pas celle d'une vague
+/* ══════════════════════════════════════════════════════════════════════════
+   2026-09-01 — LA HOULE DE L'EAU DE VALLEY TOWN.
+   ──────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ RETIRABLE D'UN SEUL GESTE : `TOWN_WATER_SWELL` est le SEUL interrupteur.
+   À `false`, `drawTownWaterTile` ne dessine rien de plus qu'avant ce zip — le
+   reflet d'arbre et la lame de lumière existants sont inchangés. Décision de
+   Guillaume : la houle est encore en réglage (angle, vitesse, intensité), donc
+   elle doit pouvoir revenir en arrière sans toucher au corps de la fonction.
+   Prototypée et validée à l'écran (artefact) avant ce code, sur une intensité
+   « v1 » — la plus discrète des trois proposées.
+   ⚠️ Angle UNIQUE pour toute la carte (décision de Guillaume, à ne plus
+   rediscuter) : un plan d'eau n'a pas sa propre houle, c'est un seul temps qui
+   passe sur toute la ville. La longueur d'onde se dérive de `SPR_T`, pas d'un
+   nombre de pixels écrit en dur (§4 : une grandeur de dessin ne se recopie
+   pas). */
+export const TOWN_WATER_SWELL = true;
+export const TOWN_WATER_SWELL_ANGLE_DEG = 35;
+export const TOWN_WATER_SWELL_WAVELEN_CASES = 4;
+/* Passe 2 : la période et l'amplitude sont dérivées de `d` (la profondeur
+   déjà lue par `drawTownWaterTile`) — la rive est rapide, le large est lent,
+   et l'amplitude perd un TIERS au large, jamais plus (décision verrouillée).
+   ⚠️ Pas de période « passe 1 » uniforme séparée : les deux passes ont été
+   validées ensemble sur le prototype, la dérivation par profondeur remplace
+   directement la valeur fixe plutôt que de s'y ajouter — une constante que
+   plus rien ne lit est une question qu'on s'est posée sans y répondre. */
+export const TOWN_WATER_SWELL_PERIOD_NEAR_MS = 3200;
+export const TOWN_WATER_SWELL_PERIOD_FAR_MS = 7500;
+export const TOWN_WATER_SWELL_AMP_FAR_CUT = 1 / 3;
 export const TOWN_ORCHARD = { x: 12, y: 38, w: 18, h: 24 };   // le verger municipal
 export const TOWN_MARKET = { x: 38, y: 74, w: 26, h: 26 };    // le champ de foire, dallé et bordé d'arbres
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -3853,6 +3881,23 @@ export const STAR_SHIP_Y = TOWN_PIER.y + 2;
 export const STAR_SHIP_ORDER = ["hull", "rudder", "mast", "sail", "bell"];
 export const STAR_SHIP_DRAW_W = 9;      // cases peintes en largeur (coque + beaupré)
 export const STAR_SHIP_DRAW_H = 7;      // cases peintes en hauteur (jusqu'au haut du mât)
+/* ⚠️⚠️⚠️ 2026-09-01 — LE RECTANGLE D'INTERACTION S'ARRÊTAIT AU RAS DE L'ANCRE,
+   PAS AU BOUT DE LA PASSERELLE. `STAR_SHIP_DRAW_H` mesure la boîte peinte
+   depuis `shipY` vers le NORD (la coque, le mât) ; la passerelle qui mène à
+   l'eau, elle, PEND au SUD de `shipY` — c'est la moitié du dessin qu'aucune
+   des deux grandeurs de dessin n'a jamais mesurée, parce que rien avant ce
+   zip n'avait besoin de savoir où elle finissait. Guillaume, debout sur la
+   planche, à l'endroit précis où on l'y fait marcher pour monter une pièce :
+   « je clique et rien ne se passe ». Mesuré à l'écran (`__dbgShip`, séance du
+   2026-09-01) : le rectangle d'interaction refusait déjà à 0,2 case au sud de
+   l'ancre, alors que la planche reste visuellement praticable jusqu'à environ
+   deux cases plus loin, jusqu'à son bout recourbé au-dessus de l'eau. C'est la
+   dix-septième forme de l'en-tête de `CLAUDE.md` : *un banc — ou un rectangle
+   de portée — mesure qu'un geste est refusé, jamais OÙ.*
+   ⚠️ ELLE NE S'AJOUTE QU'AU SUD (voir son seul usage, `FermeGame.js`) : les
+   trois autres côtés du rectangle sont déjà justes, et les élargir n'aurait
+   fait qu'accepter des joueurs qui ne voient même pas le navire. */
+export const STAR_SHIP_INTERACT_S_PAD = 2;
 export const STAR_SHIP_BLOCK_W = 6;     // la COQUE, et elle seule, arrête le pas
 /* ⚠️⚠️ UNE SEULE RANGÉE BLOQUE, ET C'EST UN CHOIX DE JEU VU À L'ÉCRAN. La coque
    est peinte sur trois rangées ; en bloquer deux la faisait déborder de la grève

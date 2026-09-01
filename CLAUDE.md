@@ -11,19 +11,108 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**ACTION SUIVANTE UNIQUE — LE SECOND CHANTIER QUE GUILLAUME A ANNONCÉ ET PAS ENCORE DIT.** Sa
-demande du 2026-09-01 était explicitement en deux morceaux (« deux chantiers », puis « le deuxième
-arrive après ») ; le premier — les haies et la cohérence des collisions — est livré ci-dessous.
-**Il n'y a donc rien à deviner : on attend l'énoncé du second.** À défaut, le chantier nommé par
-Guillaume avant celui-ci reste en tête de file : **la densification des relations sociales entre
-résidents**, dont le premier dossier vaut d'être repris — *les quatre morceaux muets du navire
-(safran, mât, voile, cloche) deviennent quatre personnes à convaincre*, avec la contrainte du
-§15.1 : on plaide pour un bateau sans jamais pouvoir dire pourquoi on le construit. Le moteur de
-`maire.js` est réutilisable presque tel quel (`MAYOR_NODE[id]` n'est lu qu'à TROIS endroits,
-`mayorReplay` est agnostique, `MayorWatch` donne le mode spectateur gratuitement) ; le coût réel
-est le DÉCOR, et il ne faut pas le payer quatre fois. ⚠️ **Sortir la table des nœuds de `maire.js`
-n'a PAS été fait, exprès** : abstraire à l'aveugle avant de connaître les besoins des résidents
-produirait la mauvaise abstraction.
+**ACTION SUIVANTE UNIQUE — LE SECOND CHANTIER QUE GUILLAUME A ANNONCÉ ET PAS ENCORE DIT.** La
+question laissée ouverte sur Tristan (tête trop large, inclinaison à la lame) est TRANCHÉE — voir
+le bloc de livraison juste en dessous, Guillaume a délégué le choix et il est fait. Sa demande du
+2026-09-01 était
+explicitement en deux morceaux (« deux chantiers », puis « le deuxième arrive après ») ; le
+premier — les haies et la cohérence des collisions — est livré plus bas. **Il n'y a donc rien à
+deviner : on attend l'énoncé du second.** À défaut, le chantier nommé par Guillaume avant
+celui-ci reste en tête de file : **la densification des relations sociales entre résidents**,
+dont le premier dossier vaut d'être repris — *les quatre morceaux muets du navire (safran, mât,
+voile, cloche) deviennent quatre personnes à convaincre*, avec la contrainte du §15.1 : on plaide
+pour un bateau sans jamais pouvoir dire pourquoi on le construit. Le moteur de `maire.js` est
+réutilisable presque tel quel (`MAYOR_NODE[id]` n'est lu qu'à TROIS endroits, `mayorReplay` est
+agnostique, `MayorWatch` donne le mode spectateur gratuitement) ; le coût réel est le DÉCOR, et il
+ne faut pas le payer quatre fois. ⚠️ **Sortir la table des nœuds de `maire.js` n'a PAS été fait,
+exprès** : abstraire à l'aveugle avant de connaître les besoins des résidents produirait la
+mauvaise abstraction.
+
+⚠️⚠️⚠️ **CE QUI EST LIVRÉ HORS-ZIP, SÉANCE DU 2026-09-01 : QUATRE DÉFAUTS TROUVÉS EN JOUANT, SUR
+LA CALE ET CHEZ TRISTAN.** Demande de Guillaume, mot pour mot, sur la cale : *« le chevron me
+pointe au bateau, le texte me dit de presser E, rien ne semble se passer »* ; sur Tristan :
+*« l'anatomie de tristan est décevante […] on dirait un pantin »* et *« on ne comprend pas si on
+fait bien […] il y a aussi des incohérences physiques après la découpe »*. Le détail vit à côté du
+code ; ici, seulement ce qu'il ne faut pas casser :
+· **LA CALE REFUSAIT LE CÔTÉ PAR OÙ ON L'ABORDE.** `STAR_SHIP_DRAW_H` mesure la boîte peinte au
+NORD de l'ancre (coque, mât) ; la passerelle qui descend vers l'eau — là où le décor fait marcher
+le joueur pour « monter » une pièce — PEND au SUD, et le rectangle d'interaction s'arrêtait à
+0,2 case de l'ancre pendant que la planche reste praticable jusqu'à environ deux cases plus loin.
+Rejoué à l'écran (position forcée par un point d'entrée de débogage exposé le temps de la
+séance, jamais commité) : `E` ne répondait plus dès qu'un pied touchait le bout recourbé de la
+planche — exactement là où on est censé se tenir. `STAR_SHIP_INTERACT_S_PAD` rallonge le SEUL
+côté qui manquait ; c'est la dix-septième forme de l'en-tête (« un rectangle de portée mesure
+qu'un geste est refusé, jamais OÙ »), rejouée une seconde fois le même jour sur un autre décor.
+· **LA FENÊTRE DE RÉUSSITE DE LA SCIE ÉTAIT JUSTE ET PEINTE INVISIBLE.** `Track` (ScierieScene.js)
+pose les deux bandes vert/ambre aux largeurs dérivées de `SAW_GOOD_X`/`SAW_PERFECT_X` — la même
+fenêtre que le verdict, jamais une seconde lecture (§8) — mais à 16 % et 24 % d'opacité sur une
+piste presque noire, rien ne s'y voit avant que la lame l'ait déjà traversée. Opacité remontée
+(38 %/52 %) et un bord de couleur ajouté : *un calcul juste peint à une opacité illisible ment
+par le rendu, pas par le calcul.*
+· **LA CHUTE SE TÉLÉPORTAIT.** Le chicot sectionné bascule pendant les 420 ms de pause entre deux
+planches (`v.drop` monte vers 1,35 rad) — correct — mais dès que la planche suivante commençait il
+retombait à zéro D'UN SEUL COUP au lieu de glisser, donc le morceau qui venait de tomber semblait
+se replaquer sur le madrier dans l'image suivante. ⚠️ **Ce n'est PAS la même famille que le trait
+de scie juste en dessous, qui doit lui sauter** (sinon la planche a l'air de se réparer) : ici rien
+ne « répare » rien, une charnière rentre juste à son repos, et un `soft(10)` symétrique suffit.
+· **LA TÊTE DE TRISTAN FAISAIT 43 % DE LA LARGEUR DE SES ÉPAULES, CONTRE 25-32 % CHEZ UN HOMME —
+ET C'ÉTAIT UNE QUESTION, PAS UN BOGUE.** `render-scierie` restait 58/58 (aucun genou à l'envers,
+une seule masse, 167,6 cm de haut) : le RIG est juste, seul le RAPPORT de deux tailles ne l'était
+pas, et aucun banc du dépôt ne mesure un rapport. Deux leviers étaient possibles — réduire la
+tête, ou plafonner l'inclinaison de `tristanLean` à la lame — Guillaume a délégué le choix.
+**Choix fait : la tête seule, l'inclinaison reste intacte.** Plafonner le buste aurait fallu
+retoucher le calcul qui garantit qu'une main ne se décroche jamais de la poignée (§11 de
+`scierieAtelier.js`) pour un gain incertain, alors que réduire la tête est un seul facteur posé
+sur le GROUPE `head` — mâchoire, oreilles, cheveux, barbe et tout le visage (ses enfants) suivent
+ensemble, au même rapport, sans qu'un seul offset ne bouge et sans déplacer le point d'attache au
+cou. `head.scale.setScalar(0.75)` ramène le rapport à 32 %, en haut de la fourchette humaine.
+Rejoué : `render-scierie` **toujours 58/58** (167,6 → 162,8 cm, resté un homme).
+
+Vérifications (premier tour) : `render-scierie` **58/58**, `verify-scierie` **34/34**,
+`verify-collision` **TOUT PASSE**, `verify-quete` **631/631**, `verify-vallee` **223/223**,
+`verify-syntax` propre, bundle esbuild propre (seul `G_SOIL` préexistant subsiste), `next build`
+**✓ Compiled successfully** puis l'arrêt documenté sur `supabaseUrl`.
+
+⚠️⚠️⚠️ **ET GUILLAUME A REGARDÉ LE RÉSULTAT, ET EST REVENU AVEC QUATRE DEMANDES PRÉCISES SUR
+TRISTAN, dans le MÊME hors-zip.** Mot pour mot : *« gros problème de proportions, le buste par
+rapport aux jambes. Aussi, il est censé porter une vraie chemise de bûcheron et avoir les cheveux
+gris ; pantalon jean avec bretelles. »* Le détail vit à côté du code ; ici, seulement ce qu'il ne
+faut pas casser :
+· **LA LONGUEUR JAMBE/BUSTE ÉTAIT JUSTE, LA LARGEUR NE L'ÉTAIT PAS.** Mesuré (script de mesure
+temporaire, jamais commité) : 0,87 m de jambe pour 0,685 m de buste hors inclinaison, un rapport
+proche de la table anthropométrique. Le défaut était que le torse fait 0,50 m de large sur des
+cylindres de jambe de 0,16-0,19 m de diamètre — un buste large sur des jambes de bâton, quelle que
+soit leur longueur. **Les deux nombres montent ensemble** : jambes épaissies de 20 % (cuisse,
+mollet, guêtre, botte), torse rétréci de 7 % en largeur ET profondeur — jamais en hauteur, qui
+n'était pas en cause. `render-scierie` reste 58/58 (162,8 cm, une seule masse à chaque pose).
+· **LA CHEMISE ROUGE UNIE N'EST PAS UNE « VRAIE CHEMISE DE BÛCHERON » — C'EST LE CARREAU QUI LA
+NOMME.** `texPlaid` (nouvelle fonction, même famille que `texGrain`) peint un carreau buffalo
+rouge et noir qui boucle par construction (la période prime sur les détails, §4) ; `mShirt`
+le porte partout où il l'a toujours porté (reins, cage, épaules, manches) — le col roulé reste un
+accent uni, sinon il se noierait dans le carreau au lieu de le border.
+· **LES CHEVEUX SONT GRIS, LA BARBE UN CRAN PLUS CLAIRE** (`COL.hair`/`COL.beard`) : un homme qui
+grisonne blanchit par la barbe avant les cheveux, jamais l'inverse.
+· **LE PANTALON EST UN JEAN, ET LES BRETELLES SONT DEVANT ET DERRIÈRE.** `COL.trouser` passe au
+bleu denim. Les bretelles EXISTAIENT déjà (zip du lot E) mais seulement « dans le dos » — or les
+trois vues du joueur (poste, face, atelier, §10) regardent Tristan de face ou de trois quarts
+avant : une bretelle qui n'existe que dans le dos n'est vue par PERSONNE. Elles sont maintenant
+devant ET derrière, filles de `chest` comme avant (elles suivent l'inclinaison du buste), en cuir
+et non plus en toile de pantalon (sinon elles se fondent dans le jean).
+⚠️⚠️⚠️ **CE QUE LE BANC NE POUVAIT PAS JUGER, ET C'EST ÉCRIT DANS `lib-3d.mjs` DEPUIS SA
+NAISSANCE : « les textures sont réduites à leur COULEUR MOYENNE ».** `render-scierie` confirme que
+la géométrie tient (silhouette, cadre, hauteur) mais ne peut PAS voir le carreau, le gris des
+cheveux ni le bleu du jean — ils ont donc été vérifiés à l'écran, en direct, dans les trois vues et
+sur plusieurs coups de scie (repro : même échafaudage jetable que le premier tour, supprimé
+ensuite). *La leçon du bureau du maire, redite : un banc qui rastérise en couleur moyenne juge la
+FORME, jamais la MATIÈRE — les deux se vérifient, mais pas au même endroit.*
+
+Vérifications (second tour) : `render-scierie` **toujours 58/58**, `verify-scierie` **34/34**,
+bundle esbuild propre, carreau/cheveux gris/jean/bretelles avant-et-arrière confirmés à l'écran
+dans les trois vues. Échafaudage de jeu local (`.env.local`, `app/debugship/`) **supprimé**, ainsi
+que le point d'entrée de débogage posé sur `window` et le correctif de `requestAnimationFrame` qui
+a servi à faire tourner l'onglet masqué le temps de la repro (§10) — aucun des deux ne survit à
+cette livraison. **Aucune migration SQL, aucun changement de schéma, aucune manipulation
+Supabase.**
 
 ⚠️⚠️⚠️ **CE QUI EST LIVRÉ LE 2026-09-01 : LES HAIES, ET LA SEMELLE DE TOUT LE JEU.** Demande de
 Guillaume, mot pour mot : *« les haies sont ok à l'horizontale mais quand elles doivent être à la
@@ -453,10 +542,10 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 
 | # | La leçon, en une phrase | Où est le détail |
 |---|---|---|
-| 2026-09-01 (rythme) | ⚠️⚠️⚠️ **UN SÉLECTEUR CSS REDÉCLARÉ PLUS BAS NE COMPLÈTE PAS LE PREMIER, IL LE CORRIGE — ET AUCUN DES QUARANTE BANCS NE PEUT LE VOIR.** Un `position:relative` écrit pour ancrer un enfant a écrasé le `position:fixed` de la règle d'origine : le bandeau de quête est tombé dans le flux, à 953 px du haut, c'est-à-dire hors de l'écran, sur la seule information permanente de la quête. La ligne était inutile en plus d'être fausse (`fixed` établit déjà un bloc conteneur). *Les bancs de rendu rastérisent du canevas ; personne ne met en page du CSS, donc toute la mise en page se juge à l'écran ou ne se juge pas.* | `.ferme-star-hud`, `app/globals.css` §rythme |
-| 2026-09-01 (rythme) | ⚠️⚠️ **UNE ANIMATION CSS NE REDÉMARRE PAS SUR UN NŒUD DÉJÀ MONTÉ.** Ajouter une classe à un élément qui existe déjà ne rejoue rien — le navigateur considère l'animation comme jouée. C'est le piège de tout accusé de réception qui peut arriver deux fois de suite (une pastille qui se remplit, un ruban qui en remplace un autre), et il ne se voit qu'à la SECONDE occurrence, donc jamais en relisant. *La parade est un `key` React qui porte une séquence : on remonte le nœud, et l'animation repart de zéro.* | `starPulse.seq`, `key={"rb" + starRibbon.seq}` |
-| 2026-09-01 (haies) | ⚠️⚠️⚠️ **UN CHOIX DE TUILE QUI NE LIT QUE LA MOITIÉ DE SON VOISINAGE EST FAUX SUR LA MOITIÉ DE LA CARTE, ET IL A L'AIR JUSTE PARTOUT AILLEURS.** La haie choisissait son dessin sur l'ouest et l'est ; `hN`/`hS` étaient calculées et n'entraient dans aucun test. 436 cases sur 839 — les deux côtés de chacune des vingt-sept parcelles — recevaient donc le buisson ISOLÉ, case après case. Le défaut était invisible en relisant (le code se lit bien) et criant à l'écran. *Une variable calculée et jamais lue est une question qu'on s'est posée et à laquelle on n'a pas répondu.* | `A.drawTownHedgeTile`, `render-haies` §1 |
 | 2026-09-01 (semelle) | ⚠️⚠️⚠️ **DEUX ERREURS QUI SE COMPENSENT NE SE CORRIGENT PAS SÉPARÉMENT.** La boîte de collision était décalée d'une demi-case par rapport au sprite ; vingt-huit lectures de « la case sous ses pieds » l'étaient du même montant, dans le même sens. Tant que les deux mentaient ensemble, le jeu était à peu près jouable — corriger la collision seule aurait cassé la visée, l'altitude, l'étage du tribunal et le rebord du saut. *Une compensation n'est pas une correction : elle rend le prochain correctif dangereux, et c'est elle qu'il faut chercher AVANT de toucher au premier des deux nombres.* | `C.bodyPoints`, `C.footX`/`footY`, `C.tileAnchor` |
+| hors-zip (cale/scie) | ⚠️⚠️⚠️ **LA MÊME DIX-SEPTIÈME FORME, UN AUTRE DÉCOR, LE MÊME JOUR.** Le rectangle d'interaction de la cale mesurait bien la boîte peinte au nord de l'ancre et rien de la passerelle qui pend au sud, où le décor fait justement marcher le joueur pour « monter » une pièce. *Une leçon écrite une fois ne protège que l'endroit où elle a été payée ; le prochain rectangle de portée la doit encore.* | `STAR_SHIP_INTERACT_S_PAD`, `FermeGame.js` §raise |
+| hors-zip (cale/scie) | ⚠️⚠️ **UN ALLER QUI SE LISSE ET UN RETOUR QUI SAUTE SONT DEUX FAMILLES DIFFÉRENTES.** Le chicot scié basculait en douceur sur 420 ms puis retombait à zéro D'UN COUP dès la planche suivante — pas la même faute que le trait de scie voisin, qui DOIT sauter pour ne pas montrer du bois qui se répare : ici une charnière rentrait juste à son repos, et la voir se figer d'un coup se lit pire qu'un mouvement qui continue. | `v.drop`, `scierieAtelier.js` §chute |
+| hors-zip (Tristan) | ⚠️⚠️ **UN VÊTEMENT QUI N'EXISTE QUE DU CÔTÉ OPPOSÉ À TOUTES LES CAMÉRAS N'EST VU PAR PERSONNE.** Les bretelles de Tristan étaient posées, justes, « dans le dos » — sauf que les trois vues du joueur (poste, face, atelier) le regardent toutes de face ou de trois quarts avant. Un détail de costume ne se juge pas à ce qu'il existe dans la scène, mais à ce qu'il existe DANS LE CADRE qu'on lui donne. | `buildTristan` §bretelles, `scierieAtelier.js` |
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
 
@@ -1164,6 +1253,37 @@ erreur** en choisissant mal.
 
 ## 13. À compléter par Guillaume
 
+- ⚠️ **DETTE GRAPHIQUE, 2026-09-01 — LE CŒUR DE L'ÉTANG DU PARC SE LIT COMME UN BLOC NET, PAS
+  COMME UN DÉGRADÉ.** Mesuré sur le vrai générateur (`TOWN_POND`, pas une supposition) : la
+  profondeur EST un vrai dégradé de crans (00→04→10→14→15 autour du centre), ce n'est donc pas un
+  bug de données. La cause est un compromis déjà arbitré deux fois par le passé (zip 436) :
+  `TOWN_WATER_SHELF` (largeur où la teinte continue de bouger) a été resserré à 1,5 case
+  *spécifiquement pour ce petit étang* (rx=ry=4,6 cases), sinon il n'avait aucune zone « large »
+  du tout. Sur un si petit plan d'eau, cette zone « large » — quasi plate — occupe une grosse part
+  de sa surface visible, et ses crans voisins sont proches sur la rampe de couleur (`WAT_STOPS`,
+  `fermeArt.js`), donc l'œil les lit comme un bloc plutôt qu'un dégradé.
+  Guillaume a choisi la direction : **rendre `WAT_STOPS`/`WAT_RAMP` plus progressive dans le
+  registre foncé** (crans ~8-15, ceux qu'un petit étang atteint réellement), plutôt que de rouvrir
+  le compromis de largeur (déjà rejeté au 436) ou d'agrandir l'étang (change la carte). ⚠️ **NON
+  FAIT** : `WAT_RAMP` sert TOUTE l'eau de la ville et est mesurée par `render-eau.mjs` avec des
+  chiffres de contraste précis (luminance large/bord, écart-type) déjà arbitrés à deux reprises —
+  la corriger sans boucle de réglage visuel risquerait de déplacer le défaut ailleurs sur un grand
+  plan d'eau sans qu'on le voie. Une piste : une courbe gamma sur `k/(WAT_DEPTH-1)` avant de
+  l'indexer dans `WAT_STOPS` (repousse plus de contraste vers les crans profonds sans toucher aux
+  deux couleurs d'extrémité), à valider avec `render-eau.mjs` PUIS à l'écran avant de livrer.
+- ⚠️ **DETTE GRAPHIQUE, 2026-09-01 — DES DÉLIMITATIONS DE ZONE PEINTES SUR DES REBORDS SONT
+  DROITES, PAS COURBES.** Localisé par une capture de Guillaume : **la berge de l'étang du parc**,
+  là où l'allée qui le longe change de revêtement — dallage clair tramé (`G_PATH_STONE`) contre
+  chemin de terre (`G_PATH`). La capture montre une COUTURE VERTICALE NETTE entre les deux
+  revêtements, sans transition ni bordure, exactement le défaut « escalier de 16 px » que la rive
+  eau/terre elle-même a déjà résolu (voir §4, `drawTownShoreTile`, les carrés marcheurs sur les
+  coins). ⚠️ **NON FAIT** : `drawTownRoadTile`/`drawTownFlagTile` (`fermeArt.js`) n'ont
+  apparemment pas ce traitement à la jonction `G_PATH`/`G_PATH_STONE` — à vérifier si c'est un
+  oubli (les deux revêtements gagneraient le même isocontour/kerb que la rive) ou un choix
+  déjà arbitré ailleurs (une allée peut légitimement changer de matière net, comme un trottoir
+  contre un chemin). **Ne pas deviner lequel avant de l'ouvrir** — c'est la question à trancher en
+  premier.
+
 - ✅ **LE LAC-OCÉAN — TRANCHÉ ET À MOITIÉ CONSTRUIT LE 2026-08-31.** *« Je veux que l'on considère
   le lake and pier plutôt comme un accès à l'océan, et donc le port de Valley Town »* · *« une
   sorte de fleuve qui mène à une sortie ; par la droite. ensable un peu »* · *« il y aura un mode
@@ -1555,6 +1675,27 @@ erreur** en choisissant mal.
    §« ce qui n'existe pas » affirmait encore qu'**aucun banc ne regarde la haie** — c'était vrai
    jusqu'à cette livraison, et c'est le genre de phrase qui devient fausse en silence le jour où on
    la corrige.)**.
+
+   **hors-zip, cale & scie (TRENTE-SIXIÈME passe : les DEUX lignes « 2026-09-01 (rythme) » partent
+   avant les deux de cette séance — deux retirées, deux ajoutées, le tableau reste à quatre et
+   couvre exactement les trois dernières livraisons du même jour. Leur détail retiré vit dans
+   `.ferme-star-hud`/`app/globals.css` §rythme et dans `starPulse.seq`/`key={"rb"+starRibbon.seq}`,
+   que leur colonne de droite désignait déjà — rien n'est perdu, ces deux défauts restent corrigés
+   à leur code. ⚠️ Cette passe n'ajoute AUCUNE forme neuve au « banc qui passe » : le défaut de la
+   cale est la dix-septième forme déjà écrite au 2026-09-01 (haies/semelle), rejouée le même jour
+   sur un décor différent — l'écrire une seconde fois l'aurait fait mentir sur son propre numéro.
+   Le défaut de la chute, lui, est trop étroit pour mériter une forme (un seul aller-retour d'un
+   seul fichier) ; il vit en une ligne du tableau et dans le commentaire daté de
+   `scierieAtelier.js`. Aucun chiffre périmé trouvé cette fois-ci — l'élagage n'a mordu que le
+   tableau.)**.
+
+   **hors-zip, Tristan habillé (TRENTE-SEPTIÈME passe : la ligne « 2026-09-01 (haies) », la plus
+   ancienne du tableau, part avant celle de cette séance — une retirée, une ajoutée, le tableau
+   reste à quatre et couvre les quatre dernières livraisons plutôt que les trois. Son détail retiré
+   vit dans `A.drawTownHedgeTile` et `render-haies` §1, que sa colonne de droite désignait déjà.
+   ⚠️ Cette passe non plus n'ajoute aucune forme neuve au « banc qui passe » : la limite de
+   `lib-3d.mjs` sur les textures réduites à leur couleur moyenne est déjà écrite pour le bureau du
+   maire (§8 de l'en-tête) — c'est la même limite, pas une nouvelle. Aucun chiffre périmé trouvé.)**.
 
    **2026-09-01, le rythme de la quête (TRENTE-QUATRIÈME passe : les DEUX lignes « scie » du
    tableau des leçons partent avant les deux de cette livraison — deux retirées, deux ajoutées, le

@@ -8177,9 +8177,18 @@ body:has(.ferme-star-ribbon) .ferme-toasts{ top:212px; }
 .saw-track.ok{ border-color:rgba(120,224,140,.95); box-shadow:0 0 16px rgba(120,224,140,.35); }
 .saw-track.mid{ border-color:rgba(224,200,110,.85); }
 .saw-track.bad{ border-color:rgba(230,110,86,.95); box-shadow:0 0 16px rgba(230,110,86,.4); }
+/* ⚠️⚠️ 2026-09-01 — LES ZONES ÉTAIENT CALCULÉES JUSTE ET PEINTES INVISIBLES.
+   Signalé par Guillaume en jouant : « on ne comprend pas si on fait bien ».
+   `Track` (ScierieScene.js) pose bien deux bandes aux largeurs dérivées de
+   `SAW_GOOD_X`/`SAW_PERFECT_X` — la même fenêtre que le verdict, jamais une
+   seconde lecture (§8) — mais à 16 % et 24 % d'opacité sur un fond presque
+   noir (`.saw-track`, 72 %), la bande ne se distingue quasiment pas du reste
+   de la piste tant que la lame ne l'a pas déjà traversée. Le bord de couleur
+   dit maintenant OÙ vise la fenêtre, pas seulement le fond du bandeau qui la
+   remplit. */
 .saw-zone{ position:absolute; top:0; bottom:0; }
-.saw-zone.good{ background:rgba(224,200,110,.16); }
-.saw-zone.best{ background:rgba(120,224,140,.24); }
+.saw-zone.good{ background:rgba(224,200,110,.38); border-right:2px solid rgba(224,200,110,.7); }
+.saw-zone.best{ background:rgba(120,224,140,.52); border-right:2px solid rgba(120,224,140,.85); }
 .saw-blade{ position:absolute; top:3px; bottom:3px; width:8px; margin-left:-4px; border-radius:4px;
             background:linear-gradient(180deg,#f2f5f8,#9aa3ad); box-shadow:0 0 8px rgba(255,255,255,.45); }
 .saw-end{ position:absolute; top:7px; font-size:11.5px; color:#9b8f7c; pointer-events:none; }

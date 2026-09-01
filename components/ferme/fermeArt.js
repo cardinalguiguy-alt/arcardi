@@ -1280,6 +1280,68 @@ function townWaterCorner(tw, cx, cy) {
    ⚠️ ET IL NE DÉBORDE QUE SUR DE LA BERGE (`tw.shore`). Sans ce garde-fou,
    l'eau baverait sur la promenade en pierre du lac du sud et sur l'allée du
    parc : un quai a une arête franche, c'est ce qui le distingue d'une plage. */
+/* ══════════════════════════════════════════════════════════════════════════
+   2026-09-01 — LA HOULE. Voir le commentaire d'autorité au-dessus de
+   `TOWN_WATER_SWELL` (fermeConstants.js) pour la décision ; ce qui suit est
+   la mécanique. ⚠️ TOUT VIT ICI, PAS DANS LA CLOSURE DU RENDU (piège n°1 de
+   CLAUDE.md) : `drawTownWaterSwellBand` est une fonction de MODULE, appelable
+   par le banc de rendu comme n'importe quelle autre tuile d'eau. */
+const WATER_SWELL_ANGLE = C.TOWN_WATER_SWELL_ANGLE_DEG * Math.PI / 180;
+const WATER_SWELL_COS = Math.cos(WATER_SWELL_ANGLE);
+const WATER_SWELL_SIN = Math.sin(WATER_SWELL_ANGLE);
+const WATER_SWELL_WAVELEN = SPR_T * C.TOWN_WATER_SWELL_WAVELEN_CASES;
+/* ⚠️⚠️ CORRIGÉ EN SÉANCE, VU À L'ÉCRAN : le premier jet approximait la
+   diagonale par un escalier de 4 rectangles — des coins à angle droit, à
+   l'intérieur de la case ET entre deux cases voisines dès qu'elles tombaient
+   dans des paliers différents (« délimitations de zones... angles droits au
+   lieu de courbes », remarque de Guillaume). Un dégradé courbe une case, mais
+   PAS deux cases entre elles : deux tuiles pleines côte à côte, chacune
+   dégradée sur elle-même, recréaient la même arête droite un cran plus loin.
+   ⚠️⚠️⚠️ LA PARADE : un SEUL `ctx.createLinearGradient`, dont les arrêts sont
+   échantillonnés en COORDONNÉES MONDE (pas locales à la case) le long de
+   l'axe de propagation. La phase — donc l'opacité — est une fonction continue
+   du pixel monde ; deux cases voisines évaluent la MÊME fonction à des points
+   proches, donc se raccordent sans couture, exactement comme le fondu de
+   profondeur (`townWaterFadeTile`) recolle deux crans voisins. Le budget
+   « 4 fillRect max » est en fait dépassé dans le bon sens : UN SEUL par case,
+   le dégradé ne coûte rien de plus qu'un remplissage uni. */
+const WATER_SWELL_PEAK_O = 0.12;      // opacité de crête en « v1 » — validée à l'écran par Guillaume
+const WATER_SWELL_PEAK_PHASE = 0.62;  // où, dans le cycle, la crête est la plus nette (creux long, crête brève)
+const WATER_SWELL_SHARPNESS = 3;      // exposant du cosinus relevé : plus haut = crête plus étroite
+const WATER_SWELL_STOPS = 6;          // arrêts du dégradé — assez pour lisser une portion d'onde de 4 cases
+const WATER_SWELL_RADIUS = 15;        // demi-longueur du segment de dégradé, en px, centré sur la case
+function waterSwellOpacityAt(worldU, wavelen, period, now, ampScale) {
+  const phaseRaw = (worldU / wavelen) - (now / period);
+  const phase = ((phaseRaw % 1) + 1) % 1;
+  let ph = ((phase - WATER_SWELL_PEAK_PHASE + 1.5) % 1) - 0.5;   // recentré sur la crête, borné à [-0.5, 0.5)
+  const bump = Math.max(0, Math.cos(ph * Math.PI));                     // 0 sur la moitié du cycle, 1 à la crête
+  return WATER_SWELL_PEAK_O * ampScale * Math.pow(bump, WATER_SWELL_SHARPNESS);
+}
+function drawTownWaterSwellBand(ctx, x, y, px, py, now, d, depthsMax) {
+  const t = d / Math.max(1, depthsMax - 1);
+  const period = C.TOWN_WATER_SWELL_PERIOD_NEAR_MS
+    + (C.TOWN_WATER_SWELL_PERIOD_FAR_MS - C.TOWN_WATER_SWELL_PERIOD_NEAR_MS) * t;
+  const ampScale = 1 - C.TOWN_WATER_SWELL_AMP_FAR_CUT * t;
+  const cx = px + SPR_T / 2, cy = py + SPR_T / 2;
+  const baseU = cx * WATER_SWELL_COS + cy * WATER_SWELL_SIN;   // projection du centre sur l'axe de houle
+  const R = WATER_SWELL_RADIUS;
+  const grad = ctx.createLinearGradient(
+    cx - WATER_SWELL_COS * R, cy - WATER_SWELL_SIN * R,
+    cx + WATER_SWELL_COS * R, cy + WATER_SWELL_SIN * R
+  );
+  let anyVisible = false;
+  for (let i = 0; i <= WATER_SWELL_STOPS; i++) {
+    const tt = i / WATER_SWELL_STOPS;
+    const worldU = baseU + (tt * 2 - 1) * R;
+    const o = waterSwellOpacityAt(worldU, WATER_SWELL_WAVELEN, period, now, ampScale);
+    if (o > 0.003) anyVisible = true;
+    grad.addColorStop(tt, `rgba(220, 240, 246, ${o.toFixed(3)})`);
+  }
+  if (!anyVisible) return;
+  ctx.fillStyle = grad;
+  ctx.fillRect(px, py, SPR_T, SPR_T);
+}
+
 export function drawTownWaterTile(ctx, S, tw, x, y, px, py, now) {
   const SW = S && S.townWater;
   if (!SW || !tw.depth) return false;
@@ -1380,7 +1442,21 @@ export function drawTownWaterTile(ctx, S, tw, x, y, px, py, now) {
     }
     break;
   }
-  /* 2. LA LAME DE LUMIÈRE. Une seule, qui glisse lentement : à 16 px, deux
+  /* 2. LA HOULE (2026-09-01, RETIRABLE — voir `TOWN_WATER_SWELL`). Une crête
+        qui VOYAGE, corrélée dans l'espace par un décalage de PHASE croissant
+        avec la position — contrairement à la lame de lumière juste en dessous,
+        décorrélée par case exprès. Direction UNIQUE sur toute la carte
+        (décision de Guillaume) : ce n'est pas l'effet d'une case, c'est un
+        temps qui passe sur toute la ville.
+     ⚠️ BUDGET : UN SEUL `fillRect` par case et par image, via un dégradé —
+        pas de balayage par pixel (le défaut de coût que ce chantier corrige
+        par ailleurs, voir §10, les 1 829 canevas retenus), et pas non plus
+        d'escalier de segments : un dégradé courbe une case mais pas la
+        couture entre deux cases (voir le commentaire au-dessus de
+        `drawTownWaterSwellBand`, corrigé en séance après une remarque de
+        Guillaume sur des arêtes droites bien visibles à l'écran). */
+  if (C.TOWN_WATER_SWELL) drawTownWaterSwellBand(ctx, x, y, px, py, now, d, SW.depths);
+  /* 3. LA LAME DE LUMIÈRE. Une seule, qui glisse lentement : à 16 px, deux
         reflets animés dans la même case font de la friture. Sa hauteur est
         dérivée de la case pour que deux cases voisines ne battent pas ensemble
         — un lac qui clignote d'un seul bloc se lit comme un défaut d'affichage
