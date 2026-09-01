@@ -136,7 +136,8 @@ shot("eau-lac-sud", { x: C.TOWN_PIER.x - 16, y: C.TOWN_LAKE.y - 7, w: 36, h: 20 
   const sh = makeCanvas(W, H);
   sh.ctx.fillStyle = "#3c6b34"; sh.ctx.fillRect(0, 0, W, H);
   for (let cfg = 0; cfg < NC; cfg++) for (let vr = 0; vr < 2; vr++) for (let d = 0; d < ND; d++) {
-    sh.ctx.drawImage(S.townWater.tiles[cfg][vr][d], PAD + cfg * (T + PAD), PAD + (vr * ND + d) * (T + PAD));
+    // hors-zip 2026-09-02 : tiles[cfg][vr][d] est une case d'atlas, pas un canevas autonome.
+    A.blitCell(sh.ctx, S.townWater.tiles[cfg][vr][d], PAD + cfg * (T + PAD), PAD + (vr * ND + d) * (T + PAD));
   }
   const up = scale(sh.px, W, H, 5);
   writePNG(path.join(OUT, "eau-contours.png"), up.px, up.W, up.H);

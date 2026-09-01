@@ -20445,7 +20445,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         ctx.ellipse(dxp + dw / 2, f2.y * T - 2 + 16 - 1, Math.max(1, shR), Math.max(0.6, shR * 0.42), 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
-        ctx.drawImage(img, Math.round(dxp), Math.round(dyp), dw, dh);
+        /* ⚠️ HORS-ZIP 2026-09-02 — `img` EST UNE CASE D'ATLAS (`{img,sx,sy,w,h}`),
+           PLUS UN CANEVAS AUTONOME (CLAUDE.md §10, 468 canevas retenus par
+           `petFrames` avant ce correctif). Forme à neuf arguments. */
+        ctx.drawImage(img.img, img.sx, img.sy, img.w, img.h, Math.round(dxp), Math.round(dyp), dw, dh);
         /* ÉMOTE. Sans elle, « il tourne sur lui-même » et « il s'assoit » se
            ressemblent trop de loin, à 11 pixels de haut. Même raisonnement que
            les retours visuels du Gourmandin au zip 387 : deux actions

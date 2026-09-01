@@ -1280,6 +1280,68 @@ function townWaterCorner(tw, cx, cy) {
    ⚠️ ET IL NE DÉBORDE QUE SUR DE LA BERGE (`tw.shore`). Sans ce garde-fou,
    l'eau baverait sur la promenade en pierre du lac du sud et sur l'allée du
    parc : un quai a une arête franche, c'est ce qui le distingue d'une plage. */
+/* ══════════════════════════════════════════════════════════════════════════
+   2026-09-01 — LA HOULE. Voir le commentaire d'autorité au-dessus de
+   `TOWN_WATER_SWELL` (fermeConstants.js) pour la décision ; ce qui suit est
+   la mécanique. ⚠️ TOUT VIT ICI, PAS DANS LA CLOSURE DU RENDU (piège n°1 de
+   CLAUDE.md) : `drawTownWaterSwellBand` est une fonction de MODULE, appelable
+   par le banc de rendu comme n'importe quelle autre tuile d'eau. */
+const WATER_SWELL_ANGLE = C.TOWN_WATER_SWELL_ANGLE_DEG * Math.PI / 180;
+const WATER_SWELL_COS = Math.cos(WATER_SWELL_ANGLE);
+const WATER_SWELL_SIN = Math.sin(WATER_SWELL_ANGLE);
+const WATER_SWELL_WAVELEN = SPR_T * C.TOWN_WATER_SWELL_WAVELEN_CASES;
+/* ⚠️⚠️ CORRIGÉ EN SÉANCE, VU À L'ÉCRAN : le premier jet approximait la
+   diagonale par un escalier de 4 rectangles — des coins à angle droit, à
+   l'intérieur de la case ET entre deux cases voisines dès qu'elles tombaient
+   dans des paliers différents (« délimitations de zones... angles droits au
+   lieu de courbes », remarque de Guillaume). Un dégradé courbe une case, mais
+   PAS deux cases entre elles : deux tuiles pleines côte à côte, chacune
+   dégradée sur elle-même, recréaient la même arête droite un cran plus loin.
+   ⚠️⚠️⚠️ LA PARADE : un SEUL `ctx.createLinearGradient`, dont les arrêts sont
+   échantillonnés en COORDONNÉES MONDE (pas locales à la case) le long de
+   l'axe de propagation. La phase — donc l'opacité — est une fonction continue
+   du pixel monde ; deux cases voisines évaluent la MÊME fonction à des points
+   proches, donc se raccordent sans couture, exactement comme le fondu de
+   profondeur (`townWaterFadeTile`) recolle deux crans voisins. Le budget
+   « 4 fillRect max » est en fait dépassé dans le bon sens : UN SEUL par case,
+   le dégradé ne coûte rien de plus qu'un remplissage uni. */
+const WATER_SWELL_PEAK_O = 0.12;      // opacité de crête en « v1 » — validée à l'écran par Guillaume
+const WATER_SWELL_PEAK_PHASE = 0.62;  // où, dans le cycle, la crête est la plus nette (creux long, crête brève)
+const WATER_SWELL_SHARPNESS = 3;      // exposant du cosinus relevé : plus haut = crête plus étroite
+const WATER_SWELL_STOPS = 6;          // arrêts du dégradé — assez pour lisser une portion d'onde de 4 cases
+const WATER_SWELL_RADIUS = 15;        // demi-longueur du segment de dégradé, en px, centré sur la case
+function waterSwellOpacityAt(worldU, wavelen, period, now, ampScale) {
+  const phaseRaw = (worldU / wavelen) - (now / period);
+  const phase = ((phaseRaw % 1) + 1) % 1;
+  let ph = ((phase - WATER_SWELL_PEAK_PHASE + 1.5) % 1) - 0.5;   // recentré sur la crête, borné à [-0.5, 0.5)
+  const bump = Math.max(0, Math.cos(ph * Math.PI));                     // 0 sur la moitié du cycle, 1 à la crête
+  return WATER_SWELL_PEAK_O * ampScale * Math.pow(bump, WATER_SWELL_SHARPNESS);
+}
+function drawTownWaterSwellBand(ctx, x, y, px, py, now, d, depthsMax) {
+  const t = d / Math.max(1, depthsMax - 1);
+  const period = C.TOWN_WATER_SWELL_PERIOD_NEAR_MS
+    + (C.TOWN_WATER_SWELL_PERIOD_FAR_MS - C.TOWN_WATER_SWELL_PERIOD_NEAR_MS) * t;
+  const ampScale = 1 - C.TOWN_WATER_SWELL_AMP_FAR_CUT * t;
+  const cx = px + SPR_T / 2, cy = py + SPR_T / 2;
+  const baseU = cx * WATER_SWELL_COS + cy * WATER_SWELL_SIN;   // projection du centre sur l'axe de houle
+  const R = WATER_SWELL_RADIUS;
+  const grad = ctx.createLinearGradient(
+    cx - WATER_SWELL_COS * R, cy - WATER_SWELL_SIN * R,
+    cx + WATER_SWELL_COS * R, cy + WATER_SWELL_SIN * R
+  );
+  let anyVisible = false;
+  for (let i = 0; i <= WATER_SWELL_STOPS; i++) {
+    const tt = i / WATER_SWELL_STOPS;
+    const worldU = baseU + (tt * 2 - 1) * R;
+    const o = waterSwellOpacityAt(worldU, WATER_SWELL_WAVELEN, period, now, ampScale);
+    if (o > 0.003) anyVisible = true;
+    grad.addColorStop(tt, `rgba(220, 240, 246, ${o.toFixed(3)})`);
+  }
+  if (!anyVisible) return;
+  ctx.fillStyle = grad;
+  ctx.fillRect(px, py, SPR_T, SPR_T);
+}
+
 export function drawTownWaterTile(ctx, S, tw, x, y, px, py, now) {
   const SW = S && S.townWater;
   if (!SW || !tw.depth) return false;
@@ -1294,7 +1356,7 @@ export function drawTownWaterTile(ctx, S, tw, x, y, px, py, now) {
   // La berge est le cran le plus haut : un débord d'eau sur la terre, c'est du
   // haut-fond par définition.
   const d = isW ? Math.min(SW.depths - 1, ((tw.depth[i] * SW.depths) / 256) | 0) : 0;
-  ctx.drawImage(SW.tiles[cfg][vr][d], px, py);
+  blitCell(ctx, SW.tiles[cfg][vr][d], px, py);
 
   /* ⚠️⚠️ LE DÉGRADÉ DOIT TRAVERSER LA CASE, EXACTEMENT COMME LE TRAIT D'EAU.
      Premier jet : une case = un cran de profondeur = un aplat, et l'étang
@@ -1331,7 +1393,7 @@ export function drawTownWaterTile(ctx, S, tw, x, y, px, py, now) {
     const nb = [lvl(x - 1, y), lvl(x + 1, y), lvl(x, y - 1), lvl(x, y + 1)];
     for (let k = 0; k < 4; k++) {
       const m = mid(nb[k]);
-      if (m !== d) ctx.drawImage(SW.fade[k][m], px, py);
+      if (m !== d) blitCell(ctx, SW.fade[k][m], px, py);
     }
   }
 
@@ -1380,7 +1442,21 @@ export function drawTownWaterTile(ctx, S, tw, x, y, px, py, now) {
     }
     break;
   }
-  /* 2. LA LAME DE LUMIÈRE. Une seule, qui glisse lentement : à 16 px, deux
+  /* 2. LA HOULE (2026-09-01, RETIRABLE — voir `TOWN_WATER_SWELL`). Une crête
+        qui VOYAGE, corrélée dans l'espace par un décalage de PHASE croissant
+        avec la position — contrairement à la lame de lumière juste en dessous,
+        décorrélée par case exprès. Direction UNIQUE sur toute la carte
+        (décision de Guillaume) : ce n'est pas l'effet d'une case, c'est un
+        temps qui passe sur toute la ville.
+     ⚠️ BUDGET : UN SEUL `fillRect` par case et par image, via un dégradé —
+        pas de balayage par pixel (le défaut de coût que ce chantier corrige
+        par ailleurs, voir §10, les 1 829 canevas retenus), et pas non plus
+        d'escalier de segments : un dégradé courbe une case mais pas la
+        couture entre deux cases (voir le commentaire au-dessus de
+        `drawTownWaterSwellBand`, corrigé en séance après une remarque de
+        Guillaume sur des arêtes droites bien visibles à l'écran). */
+  if (C.TOWN_WATER_SWELL) drawTownWaterSwellBand(ctx, x, y, px, py, now, d, SW.depths);
+  /* 3. LA LAME DE LUMIÈRE. Une seule, qui glisse lentement : à 16 px, deux
         reflets animés dans la même case font de la friture. Sa hauteur est
         dérivée de la case pour que deux cases voisines ne battent pas ensemble
         — un lac qui clignote d'un seul bloc se lit comme un défaut d'affichage
@@ -1429,9 +1505,9 @@ export function drawTownWaterTile(ctx, S, tw, x, y, px, py, now) {
      que ce qui tient DANS une case : le rocher et le nénuphar du 436. */
   const WAT_SHOAL = Math.round((SW.depths - 1) * 0.30);
   if (SW.wrock && d <= WAT_SHOAL && (hh % 100) < 7) {
-    ctx.drawImage(SW.wrock[(hh >>> 7) % SW.wrock.length], px, py);
+    blitCell(ctx, SW.wrock[(hh >>> 7) % SW.wrock.length], px, py);
   } else if (SW.lily && d >= WAT_SHOAL && ((hh >>> 3) % 100) < 8) {
-    ctx.drawImage(SW.lily[(hh >>> 11) % SW.lily.length], px, py);
+    blitCell(ctx, SW.lily[(hh >>> 11) % SW.lily.length], px, py);
   }
   return true;
 }
@@ -1635,7 +1711,7 @@ export function drawTownShoreTile(ctx, S, tw, x, y, px, py) {
   // L'ordre de SHORE_DIRS commence au nord et tourne dans le sens horaire.
   let dir = Math.round((ang + Math.PI / 2) / (Math.PI / 4)) % 8;
   if (dir < 0) dir += 8;
-  ctx.drawImage(SW.shore[b - 1][dir][waterHash(x * 5, y * 11) & 1], px, py);
+  blitCell(ctx, SW.shore[b - 1][dir][waterHash(x * 5, y * 11) & 1], px, py);
   /* ⚠️ ZIP 436 — LES ROSEAUX, SUR LA VASE ET NULLE PART AILLEURS. Bande 1
      seulement (la rive mouillée) : sur la bande sèche ils pousseraient dans la
      pelouse du parc, et sur la bande 3 ils pousseraient au fond de l'eau.
@@ -1647,9 +1723,20 @@ export function drawTownShoreTile(ctx, S, tw, x, y, px, py) {
      touffe de 16 px du 436, qui, elle, est faite pour la tuile. */
   if (b === 1 && SW.reed) {
     const hh = waterHash(x * 17 + 5, y * 19 + 11);
-    if ((hh % 100) < 26) ctx.drawImage(SW.reed[(hh >>> 9) % SW.reed.length], px, py);
+    if ((hh % 100) < 26) blitCell(ctx, SW.reed[(hh >>> 9) % SW.reed.length], px, py);
   }
   return true;
+}
+
+/* ⚠️⚠️ HORS-ZIP 2026-09-02 — LIRE UNE CASE D'ATLAS, PAS UN CANEVAS AUTONOME
+   (CLAUDE.md §10, « 1829 canevas retenus au chargement »). `townWater` et
+   `petFrames` ne stockent plus un petit canevas par variante : chaque entrée
+   est `{ img, sx, sy, w, h }`, un rectangle dans un atlas partagé peint une
+   seule fois par `buildSprites()`. Même principe que `RS.grass`/
+   `drawTownGrassTile` un peu plus haut dans ce fichier — neuf arguments à
+   `drawImage` au lieu de trois, aucun autre changement visuel. */
+export function blitCell(ctx, cell, dx, dy, dw, dh) {
+  ctx.drawImage(cell.img, cell.sx, cell.sy, cell.w, cell.h, dx, dy, dw == null ? cell.w : dw, dh == null ? cell.h : dh);
 }
 
 function sprCv(w, h) {
@@ -3270,6 +3357,36 @@ export function buildSprites() {
   }
   function P(g, x, y, w, h, col) { g.fillStyle = col; g.fillRect(x, y, w, h); }
   function makeRnd(s) { return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; }; }
+
+  /* ⚠️⚠️⚠️ HORS-ZIP 2026-09-02 — UN ATLAS, PAS UN CANEVAS PAR VARIANTE
+     (CLAUDE.md §10, « 1829 canevas retenus au chargement », jamais corrigé
+     depuis sa mesure au 481). `townWater` (636 cases) et `petFrames` (468)
+     appelaient chacune `cv(T,T)` une fois par variante et RETENAIENT le
+     résultat pour toute la partie — 1104 canevas à eux deux, 60 % du total.
+     `makeAtlas` peint chaque variante dans un grand canevas PARTAGÉ puis
+     laisse le petit canevas source repartir au ramasse-miettes (rien ne le
+     référence plus après le `drawImage`) : ce qui reste en mémoire est
+     l'atlas, un seul par famille. Le contrat des fonctions qui dessinent une
+     variante (`townWaterTile`, `petSprite`, etc.) NE CHANGE PAS — elles
+     continuent de rendre un petit canevas autonome, exactement comme avant ;
+     seul l'appelant qui les stocke change. Lire une case se fait avec
+     `blitCell` (neuf arguments à `drawImage`), pas trois. */
+  function makeAtlas(cellW, cellH, count, cols) {
+    cols = Math.max(1, Math.min(cols, count));
+    const rows = Math.ceil(count / cols);
+    const atlas = document.createElement("canvas");
+    atlas.width = cols * cellW; atlas.height = rows * cellH;
+    const g = atlas.getContext("2d");
+    g.imageSmoothingEnabled = false;
+    let n = 0;
+    return function put(srcCanvas) {
+      const col = n % cols, row = (n / cols) | 0;
+      const sx = col * cellW, sy = row * cellH;
+      g.drawImage(srcCanvas, sx, sy);
+      n++;
+      return { img: atlas, sx, sy, w: cellW, h: cellH };
+    };
+  }
 
   /* ZIP 439 — un sprite de la planche, rejoué en canevas.
      ⚠️ IL PEINT PAR PLAGES HORIZONTALES, PAS PIXEL PAR PIXEL. Les quarante-cinq
@@ -14884,6 +15001,10 @@ export function buildSprites() {
      ══════════════════════════════════════════════════════════════════════════ */
 
   /* ---------------- Atlas ---------------- */
+  /* HORS-ZIP 2026-09-02 — comptes exacts : `townWater` empile 512 (tuiles) +
+     48 (berge) + 64 (tramage) + 12 (décors) = 636 cases ; `petFrames` (plus
+     bas) en fait 39 × 4 × 3 = 468. Un seul atlas par famille, en grille. */
+  const waterAtlasPut = makeAtlas(T, T, 636, 32);
   const S = {
     grass: [grassTile(0), grassTile(1), grassTile(2)],
     // Zip 431 : l'herbe de Valley Town, même grain, palette assombrie (voir GRASS_TOWN).
@@ -15100,22 +15221,30 @@ export function buildSprites() {
        rampe passe de six à huit crans, le rendu n'a rien à savoir. */
     townWater: {
       depths: WAT_DEPTH,
+      /* ⚠️ HORS-ZIP 2026-09-02 — 636 CASES, UN SEUL CANEVAS RETENU. Chaque
+         `townWaterTile(...)` etc. peint encore son propre petit canevas
+         temporaire, à l'identique d'avant ; `waterAtlasPut` le recopie dans
+         l'atlas partagé et rend `{img,sx,sy,w,h}` à la place — le petit
+         canevas source n'est plus référencé par rien après cette ligne, donc
+         il part au ramasse-miettes au lieu de rester en mémoire toute la
+         partie. Lu par `blitCell` (plus haut dans ce fichier) au lieu d'un
+         `drawImage` à trois arguments. */
       // [configuration des 4 coins][variante][cran de profondeur]
       tiles: Array.from({ length: WAT_CFG }, (_, cfg) =>
         Array.from({ length: WAT_VAR }, (_, vr) =>
-          Array.from({ length: WAT_DEPTH }, (_, d) => townWaterTile(cfg, vr, d)))),
+          Array.from({ length: WAT_DEPTH }, (_, d) => waterAtlasPut(townWaterTile(cfg, vr, d))))),
       // [bande 1 mouillée · 2 sèche · 3 immergée][une des 8 directions][variante]
       shore: Array.from({ length: 3 }, (_, b) =>
         Array.from({ length: 8 }, (_, dir) =>
-          Array.from({ length: 2 }, (_, vr) => townShoreTile(b + 1, dir, vr)))),
+          Array.from({ length: 2 }, (_, vr) => waterAtlasPut(townShoreTile(b + 1, dir, vr))))),
       // ZIP 436 — le tramage de profondeur : [O·E·N·S][cran]. 32 tuiles, et
       // c'est ce qui remplace la mosaïque de carrés bleus du 435.
       fade: Array.from({ length: 4 }, (_, dir) =>
-        Array.from({ length: WAT_DEPTH }, (_, d) => townWaterFadeTile(dir, d))),
+        Array.from({ length: WAT_DEPTH }, (_, d) => waterAtlasPut(townWaterFadeTile(dir, d)))),
       // ZIP 436 — ce qui flotte et ce qui émerge.
-      lily: Array.from({ length: WAT_DECOR_N }, (_, vr) => townLilyTile(vr)),
-      wrock: Array.from({ length: WAT_DECOR_N }, (_, vr) => townWaterRockTile(vr)),
-      reed: Array.from({ length: WAT_DECOR_N }, (_, vr) => townReedTile(vr)),
+      lily: Array.from({ length: WAT_DECOR_N }, (_, vr) => waterAtlasPut(townLilyTile(vr))),
+      wrock: Array.from({ length: WAT_DECOR_N }, (_, vr) => waterAtlasPut(townWaterRockTile(vr))),
+      reed: Array.from({ length: WAT_DECOR_N }, (_, vr) => waterAtlasPut(townReedTile(vr))),
     },
     oak: oakTree(),
     pine: pineTree(),
@@ -15380,11 +15509,24 @@ house: house(),
   // familier, proposition de cadeau). Une planche imposée partout aurait
   // demandé de reprendre chacun d'eux, sans rien apporter : dans un panneau,
   // un familier est un portrait, pas une animation.
+  /* ⚠️ HORS-ZIP 2026-09-02 — 468 CASES (39 familiers × 4 directions × 3
+     images), UN SEUL CANEVAS RETENU au lieu de 468. `petSprite(...)` dessine
+     encore son propre petit canevas, à l'identique d'avant ; `petAtlasPut` le
+     recopie dans l'atlas partagé et rend `{img,sx,sy,w,h}`. `drawPetsFor`
+     (FermeGame.js) lit ce descripteur avec la forme à neuf arguments de
+     `drawImage`. ⚠️ `S.pets[pid]` (le portrait au repos) N'EST PAS dérivé de
+     l'atlas : il reste un petit canevas autonome, en appelant `petSprite` une
+     seconde fois — les six endroits de l'interface qui l'affichent (`Sprite`)
+     découpent depuis (0,0) et ne savent pas lire un rectangle source dans un
+     atlas. Trente-neuf canevas de plus est un coût négligeable à côté du
+     risque de toucher `Sprite` et ses six appelants pour rien. */
   S.petFrames = {}; S.pets = {};
-  for (const pid of Object.keys(C.PET_CATALOG)) {
+  const petIds = Object.keys(C.PET_CATALOG);
+  const petAtlasPut = makeAtlas(SPR_T, SPR_T, petIds.length * C.PET_DIRS * C.PET_FRAMES, 36);
+  for (const pid of petIds) {
     S.petFrames[pid] = Array.from({ length: C.PET_DIRS }, (_, d) =>
-      Array.from({ length: C.PET_FRAMES }, (_, f) => petSprite(pid, d, f)));
-    S.pets[pid] = S.petFrames[pid][3][0];
+      Array.from({ length: C.PET_FRAMES }, (_, f) => petAtlasPut(petSprite(pid, d, f))));
+    S.pets[pid] = petSprite(pid, 3, 0);
   }
   // Zip 388 : bulles affichées au-dessus d'un familier qui joue.
   S.petEmotes = {}; for (const k of ["heart", "note", "spark", "excl", "zzz"]) S.petEmotes[k] = petEmoteSprite(k);

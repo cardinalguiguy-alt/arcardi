@@ -16,45 +16,54 @@ L'INVITÉ (§13 ITEM N°1) EST TOUJOURS TESTÉ, DIAGNOSTIQUÉ ET CORRIGÉ — D�
 RIEN N'A CHANGÉ, RIEN À RELIRE ICI.** **ACTION SUIVANTE UNIQUE — ATTENDRE QUE GUILLAUME AIT JOUÉ
 LA FERME PEUPLÉE À DEUX CLIENTS.** Si Guillaume dit « reprends le travail » sans autre précision,
 demander où en est cette session, et ne PAS ouvrir de chantier créatif de son propre chef en
-attendant.
+attendant. Les deux livraisons ci-dessous sont de la gestion de dette (§13/§10), choisies
+explicitement par Guillaume zip après zip — elles ne remplacent pas cette attente, elles la
+respectent.
 
-⚠️⚠️ **CE QUI EST LIVRÉ HORS-ZIP LE 2026-09-01, EN GÉRANT UNE DETTE DU §13 : LA CONSTELLATION EST
-LA BREBIS, SEPT POINTS, ET NE SE PEINT PLUS SOUS UN PLAFOND.** Demande de Guillaume (« continuons à
-gérer les dettes d'arcardi », choix explicite de la dette, puis « commence le dessin maintenant »
-après une première proposition trop timide) — cette livraison est allée plus loin que la portée
-initialement annoncée (« seulement l'intérieur, pas le passage à sept points »), sur instruction
-directe de Guillaume, qui a repris la main sur l'arbitrage.
-· **Intérieur** : `drawStarOverlay` — une passe « en espace écran » pensée comme neutre parce
-qu'elle ne lit aucune coordonnée du monde — se peignait quand même par-dessus le tribunal, la
-mairie et l'église (zone `court`), sans aucune garde autre que `isNightTime` : QUETE.md §17.9
-(lot D) l'interdit noir sur blanc. Corrigée par une garde de zone (`meRef.current.zone !== "court"`)
-sur le seul bloc constellation, identique au pattern déjà en place dans `drawStarChevron`. *Une
-passe « en espace écran » n'est pas une passe indépendante du lieu.*
-· **La forme** : cinq points arbitraires → sept points qui dessinent une VRAIE brebis (nez et tête
-baissés, dos PLAT entre garrot et croupe, petite queue en moignon, deux pattes qui PENDENT du dos
-au lieu de prolonger la ligne — sept points, six segments, un ARBRE et non plus une simple
-polyligne). ⚠️ **Un premier essai à dos BOMBÉ en triangle a été rejeté avant d'entrer dans le jeu**
-— rejoué dans un échafaudage jetable (serveur statique local + Browser pane, aucun fichier commité,
-supprimé après usage), il se lisait comme un oiseau, pas comme un mouton ; le dos aplati corrige
-ça. *Aucun banc du dépôt ne regarde ce dessin (§10) — la seule vérification possible pour une
-silhouette est de la regarder, donc elle a été regardée avant d'écrire les coordonnées définitives,
-pas après.*
-⚠️ **CE QUI N'A PAS BOUGÉ, DÉLIBÉRÉMENT** : le déclencheur reste identique à avant (quête démarrée +
-nuit + dehors) — les sept points sont TOUJOURS ensemble, AUCUNE révélation progressive par sœur.
-QUETE.md §17.2-§17.7 décrit une apparition progressive des points au fil des actes ; l'implémenter
-demanderait que les 4 compagnes manquantes (blanche, verte, orange, violette) existent en code
-comme entités capturables, ce qui n'est pas le cas (seules bleue/rose/reine existent,
-`quete.js:188,191`) et reste tout le chantier « sept sœurs » des lots A-G (§17.10), non construit.
-Guillaume a aussi verrouillé une direction pour CE chantier futur, en autorité datée au §17.7 bis
-de `QUETE.md` : les quatre dernières sœurs doivent se chercher « d'une manière inédite » et
-résister au taming simple — ce que §17.5-§17.6 prévoyaient déjà (triangulation, lecture des
-copeaux, guidage dans le brouillard), désormais non négociable.
+⚠️⚠️ **CE QUI EST LIVRÉ HORS-ZIP LE 2026-09-02 : LE COMPTE DE CANEVAS 2D EST RAMENÉ DE 1 842 À
+779** (§10, §13 — l'ami de Guillaume qui ne pouvait plus jouer sur tablette). `townWater` (636
+canevas) et `petFrames` (468 canevas), 60 % du total documenté depuis le 481 et jamais traité, sont
+désormais UN atlas chacun : chaque fonction qui dessine une variante (`townWaterTile`, `petSprite`,
+etc.) est INCHANGÉE, seul l'appelant qui les stockait a changé — un nouveau `makeAtlas()` compose
+chaque petit canevas temporaire dans un grand canevas partagé et le laisse repartir au ramasse-
+miettes, et la lecture passe par un nouveau `blitCell()` exporté (neuf arguments à `drawImage`,
+même patron que `RS.grass`/`drawTownGrassTile` qui existait déjà pour l'herbe de la ville). Quatre
+sites de lecture dans `fermeArt.js`, un dans `drawPetsFor` (`FermeGame.js`) et deux outils
+(`render-eau.mjs`, `render-rive.mjs`) adaptés à la forme neuve. `S.pets[pid]` (39 portraits au
+repos) reste volontairement HORS atlas : le composant `Sprite` qui l'affiche à six endroits ne sait
+découper que depuis (0,0), et l'y adapter aurait coûté plus que les 39 canevas économisés.
+⚠️⚠️ **AUCUN BANC DU DÉPÔT NE POUVAIT VÉRIFIER CE REFACTOR, ET DEUX ÉTAIENT MÊME CASSÉS AVANT
+D'AVOIR COMMENCÉ** : `render-eau.mjs`/`render-rive.mjs` plantent sur `ctx.createLinearGradient`
+non implémenté par le faux canevas — reproduit sur `HEAD` tel quel, donc sans rapport avec ce
+correctif (voir l'entrée dédiée au §10, non corrigée ici). La preuve est venue d'ailleurs : un
+parcours de l'objet réel retourné par `buildSprites()` (636 et 468 cases, chacune vers UN SEUL
+canevas partagé) et un rendu réel en navigateur (bundle esbuild de `fermeArt.js`, page jetable,
+rien commité) montrant l'étang peint par la VRAIE `drawTownWaterTile`/`drawTownShoreTile` et une
+planche de familiers découpés de l'atlas — identiques à toujours.
+⚠️⚠️⚠️ **CE QUI N'EST PAS PROUVÉ** : que l'ami de Guillaume peut de nouveau jouer sur sa tablette.
+779 canevas reste un nombre, pas un verdict, et personne n'a rejoué la mesure sur un vrai iPad.
+Cette dette a été choisie par Guillaume parmi quatre proposées ; contrairement à la constellation
+la veille, la portée n'a pas bougé en cours de route.
 
-Vérifications : bundle esbuild propre sur `FermeGame.js` (seul `G_SOIL` préexistant subsiste),
-`verify-quete` **631/631**, `verify-syntax` propre, `next build` **✓ Compiled successfully** puis
-l'arrêt documenté sur `supabaseUrl` — les quatre relancés après le réglage définitif de la forme,
-pas seulement avant. **Aucune migration SQL, aucun changement de schéma, aucune manipulation
-Supabase.**
+Vérifications : bundle esbuild propre sur `FermeGame.js` et `fermeArt.js` (seul `G_SOIL`
+préexistant subsiste), `verify-syntax` propre, `verify-quete` **631/631**, `next build`
+**✓ Compiled successfully** puis l'arrêt documenté sur `supabaseUrl`, plus la mesure structurelle
+et le rendu navigateur décrits ci-dessus (aucun des deux n'est un banc du dépôt, faute d'en avoir
+un qui fonctionne pour ce dessin). **Aucune migration SQL, aucun changement de schéma, aucune
+manipulation Supabase.**
+
+⚠️ **CE QUI EST LIVRÉ HORS-ZIP LE 2026-09-01, EN GÉRANT UNE DETTE DU §13 : LA CONSTELLATION EST
+LA BREBIS, SEPT POINTS, ET NE SE PEINT PLUS SOUS UN PLAFOND.** `drawStarOverlay` peignait la
+constellation par-dessus le tribunal/la mairie/l'église (QUETE.md §17.9 lot D l'interdit) : corrigé
+par une garde de zone sur le seul bloc constellation, pattern repris de `drawStarChevron`. Cinq
+points arbitraires sont devenus sept points en arbre (six segments) qui dessinent une vraie brebis
+— nez et tête baissés, dos PLAT (un premier essai à dos bombé se lisait comme un oiseau, rejeté
+après vérification dans un échafaudage jetable), deux pattes qui pendent, petite queue. Le
+déclencheur n'a pas changé (nuit + dehors) : les sept points sont toujours ensemble, aucune
+révélation progressive par sœur — 4 des 7 compagnes n'existent pas encore en code. Guillaume a
+verrouillé au passage une direction pour le chantier « sept sœurs » (encore non construit,
+§17.7 bis de `QUETE.md`) : les quatre dernières doivent se chercher « d'une manière inédite » et
+résister au taming simple. Détail complet dans l'historique §14.2 de ce fichier et à côté du code.
 
 ⚠️⚠️⚠️ **CE QUI EST LIVRÉ HORS-ZIP, SÉANCE DU 2026-09-01 : QUATRE DÉFAUTS TROUVÉS EN JOUANT, SUR
 LA CALE ET CHEZ TRISTAN.** Demande de Guillaume, mot pour mot, sur la cale : *« le chevron me
@@ -205,14 +214,15 @@ le WTF »* et *« l'idée est de rajouter du fun, mais pas de complexifier à ou
 2026-09-01 par *« n'ajoute pas d'éléments wtf […] jeu que des enfants de 10 ans joueront ; on garde
 ce qu'on a et on ajoute ou modifie pour densifier et faire participer »*.
 
-⚠️⚠️⚠️ **CE QUI RESTE DE L'AUDIT DE LA QUÊTE, NON FAIT, PAR ORDRE** : la **constellation** (toujours
-cinq points écrits en dur, la fiction en promet sept — dette non bloquante, volontairement hors
-périmètre tant que le chantier « sept sœurs » n'est pas construit, QUETE.md §17.9 ; le fait qu'elle
-se peignait aussi **à l'intérieur des bâtiments** est corrigé hors-zip le 2026-09-01, voir le bloc
-⏭️ REPRISE) ; les **quatre morceaux sans provenance**
+⚠️⚠️⚠️ **CE QUI RESTE DE L'AUDIT DE LA QUÊTE, NON FAIT, PAR ORDRE** — **la constellation est sortie
+de cette liste hors-zip le 2026-09-02** (sept points, la Brebis, invisible en intérieur, voir le
+bloc ⏭️ REPRISE) : les **quatre morceaux sans provenance**
 (safran, mât, voile, cloche — `SHIP_SITE_OF` rend `null`) ; le **HUD peint par-dessus la scène
-plein écran du maire** ; les **1 829 canevas 2D au chargement** (tablette). Aucun n'est bloquant ;
-tous sont datés. ⚠️ **Et la quête de l'étoile n'a toujours pas été JOUÉE d'une traite** : les trois
+plein écran du maire** ; **le compte de canevas au chargement, largement réduit mais pas nul**
+(§10 — `townWater`/`petFrames`, 60 % du total mesuré au 481, sont atlassés depuis le 2026-09-02 ;
+779 canevas distincts restent retenus contre 1 842 avant, **jamais reconfirmé sur un vrai iPad**).
+Aucun n'est bloquant ; tous sont datés. ⚠️ **Et la quête de l'étoile n'a toujours pas été JOUÉE d'une
+traite** : les trois
 nombres de la coupe (`STAR_ENG_WORK_MS` 5 min, `STAR_ENG_TRAVEL_MS` 1 min, second rendez-vous chez
 le maire 1 min) n'ont jamais tourné à cadence réelle.
 
@@ -381,9 +391,11 @@ N'EST PAS CORRIGÉ.** Le sprite scintillant (`FermeGame.js`) reste sans la garde
 que l'interaction a déjà. **Ne pas le corriger avant d'en avoir reçu l'ordre.**
 
 ⚠️⚠️ **UNE MESURE À PART, DEMANDÉE PAR GUILLAUME (« un ami qui joue sur tablette me dit qu'arcardi ne
-fonctionne plus ») : LE CHIFFRE EST 1 829 CANEVAS 2D RETENUS AU CHARGEMENT** (2 722 créés,
-2,6 millions de pixels), dont `townWater` **636** et `petFrames` **468** à eux deux. Le détail et ce
-qu'il faut en faire sont au §10, « ce qui n'existe pas » — **toujours pas corrigé**, mesuré et daté.
+fonctionne plus ») : MESURÉE AU 481 À 1 829 CANEVAS 2D RETENUS, RAMENÉE À 779 HORS-ZIP LE
+2026-09-02** — `townWater` (636 → 1 atlas) et `petFrames` (468 → 1 atlas), les deux plus gros
+contributeurs, sont désormais des atlas partagés découpés au `drawImage`. Le détail est au §10,
+« ce qui n'existe pas ». ⚠️ **NI CONFIRMÉ NI INFIRMÉ SUR UN VRAI IPAD** : personne n'a rejoué la
+mesure sur l'appareil qui a déclenché la demande — c'est ça qui reste à faire, pas du code.
 
 | Lot | Ce que c'est | État |
 |---|---|---|
@@ -573,7 +585,7 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 | # | La leçon, en une phrase | Où est le détail |
 |---|---|---|
 | hors-zip (constellation) | ⚠️⚠️ **UN DOS BOMBÉ EN TRIANGLE SE LIT COMME UN OISEAU, PAS COMME UN MOUTON.** Sept points reliés en arbre (six segments, pas une polyligne) devaient dessiner une brebis reconnaissable en restant une constellation ordinaire ; le premier essai, avec un dos qui montait puis redescendait en pointe, ratait sa cible bien qu'il fût géométriquement correct. Aucun banc ne regarde ce dessin (§10) : la forme a donc été rejouée dans un échafaudage jetable (Browser pane, rien commité) AVANT d'écrire les coordonnées définitives, pas relue après — un dos aplati (garrot et croupe presque au même niveau) a suffi. | `FermeGame.js` §constellation, `QUETE.md` §17.7 bis |
-| hors-zip (Tristan) | ⚠️⚠️ **UN VÊTEMENT QUI N'EXISTE QUE DU CÔTÉ OPPOSÉ À TOUTES LES CAMÉRAS N'EST VU PAR PERSONNE.** Les bretelles de Tristan étaient posées, justes, « dans le dos » — sauf que les trois vues du joueur (poste, face, atelier) le regardent toutes de face ou de trois quarts avant. Un détail de costume ne se juge pas à ce qu'il existe dans la scène, mais à ce qu'il existe DANS LE CADRE qu'on lui donne. | `buildTristan` §bretelles, `scierieAtelier.js` |
+| hors-zip (canevas) | ⚠️⚠️⚠️ **UN PATRON DÉJÀ EN PLACE AILLEURS DANS LE FICHIER PEUT DORMIR DES ZIPS SANS ÊTRE APPLIQUÉ LÀ OÙ IL FERAIT LE PLUS DE BIEN.** `RS.grass`/`drawTownGrassTile` prouvait depuis longtemps qu'un atlas partagé + `drawImage` à neuf arguments marche dans ce fichier — `townWater` (636 canevas) et `petFrames` (468) continuaient pourtant d'en créer un par variante, documentés comme dette depuis le 481 sans qu'on rapproche les deux faits. La parade n'a rien inventé : `makeAtlas`/`blitCell` généralisent un patron déjà validé. *Une dette mesurée n'est résolue que le jour où quelqu'un la compare à ce qui marche déjà ailleurs dans le même fichier.* | `fermeArt.js` (`makeAtlas`, `blitCell`), CLAUDE.md §10 |
 | hors-zip (Martial) | ⚠️⚠️⚠️ **UN MÉCANISME QUI SE RÉSOUT TOUT SEUL N'EST PAS UN BUG DE DÉPLACEMENT, MÊME S'IL Y RESSEMBLE.** Le résident sucrier « figé » n'avait aucune trajectoire cassée : c'était l'ITT de la rivalité Tristan/Jérôme (16 minutes réelles après une bagarre perdue), qui se lève seule à l'échéance — vérifié en avançant l'horloge en session de debug — mais dont le toast ne dit ni la durée ni qu'un pansement l'écourte. *Une conséquence de jeu correcte, mal signalée, se lit exactement comme une conséquence cassée — la distinction se fait en avançant l'horloge, pas en relisant le code.* | `TJ_BRAWL_ITT_MS`, `fermeConstants.js` |
 | hors-zip (réseau) | ⚠️⚠️⚠️ **LA DETTE LA PLUS VIEILLE DU FICHIER ÉTAIT UN BOOLÉEN MIS EN CACHE, PAS UN RÉSIDENT CASSÉ.** `hiddenRef` (reflet de `document.hidden`) ne se corrigeait que sur `visibilitychange` ; monté pendant un onglet réellement masqué, il restait figé à `true` pour toujours, coupant `broadcastStation()` en silence — zéro symptôme côté hôte, gel total côté invité. *Six tentatives avaient échoué à seulement OUVRIR ce test ; la cause, elle, ne s'est trouvée qu'en le jouant pour de vrai, deux onglets, jusqu'au bout.* | `netCanBroadcast`, `FermeGame.js` §4 |
 
@@ -1132,20 +1144,52 @@ vérifie jamais — c'est elle, et elle seule, qui protège du banc imaginaire (
 
 - ⚠️ **`verify-luge`, `verify-boot`, `preview-luge`, `preview.mjs`, `verify-perf` et
   `preview-fps` N'EXISTENT PAS** dans `tools/`.
-- ⚠️⚠️⚠️ **ET AUCUN BANC NE COMPTE CE QUE LE CHARGEMENT COÛTE À LA MACHINE — MESURÉ AU 481 PARCE
-  QU'UN AMI DE GUILLAUME NE PEUT PLUS JOUER SUR TABLETTE.** `buildSprites()` **crée 2 722 canevas
-  2D et en RETIENT 1 829** (2,6 millions de pixels), dont `townWater` **636** (16 configurations ×
-  2 variantes × 16 crans de profondeur, plus la berge et le tramage) et `petFrames` **468**
-  (39 familiers × 4 directions × 3 images) — soit **60 % à eux deux**. En octets ce n'est rien
-  (≈ 6 Mo) ; **ce qui compte n'est pas la taille, c'est le NOMBRE** : WebKit sur iPad alloue une
-  surface minimale par canevas et plafonne le total, et le symptôme d'un dépassement n'est pas une
-  erreur — c'est un onglet qui se ferme ou un canevas qui rend du blanc.
-  ⚠️ **Ce n'est pas corrigé au 481** (règle du 424 : on ne mêle pas deux changements visuels dans
-  une livraison) et la parade est connue : **paver** ces deux familles en quelques atlas et découper
-  au `drawImage` — le rendu appelle déjà `drawImage` partout, seule la source change.
-  ⚠️ **Le chiffre se remesure en trois lignes** : encadrer `cv(w, h)` dans `fermeArt.js` d'un
-  compteur sur `window`, recharger, lire. *Une grandeur qu'aucun banc ne mesure se mesure à la main,
-  et on écrit le chiffre avec sa date.*
+- ⚠️⚠️⚠️ **AUCUN BANC NE COMPTE CE QUE LE CHARGEMENT COÛTE À LA MACHINE, ET C'EST TOUJOURS VRAI**
+  malgré le correctif ci-dessous — la mesure se refait à la main, comme au 481. `buildSprites()`
+  RETENAIT **1 842 canevas 2D** distincts (mesuré hors-zip le 2026-09-02 en parcourant l'objet
+  réellement retourné — le chiffre du 481, 1 829, datait et avait dérivé), dont `townWater` **636**
+  (16 configurations × 2 variantes × 16 crans de profondeur, plus la berge et le tramage) et
+  `petFrames` **468** (39 familiers × 4 directions × 3 images) — **60 % à eux deux**. En octets ce
+  n'était rien (≈ 6 Mo) ; **ce qui compte n'est pas la taille, c'est le NOMBRE** : WebKit sur iPad
+  alloue une surface minimale par canevas et plafonne le total, et le symptôme d'un dépassement
+  n'est pas une erreur — c'est un onglet qui se ferme ou un canevas qui rend du blanc.
+  ⚠️⚠️ **CORRIGÉ HORS-ZIP LE 2026-09-02, COMME LA PARADE DÉJÀ CONNUE LE DÉCRIVAIT** : `townWater`
+  et `petFrames` sont désormais UN SEUL atlas chacun (`makeAtlas`, `fermeArt.js`), et la lecture
+  passe par `blitCell` (neuf arguments à `drawImage` avec un rectangle source) au lieu de trois.
+  Les fonctions qui dessinent une variante (`townWaterTile`, `petSprite`, etc.) **n'ont pas changé
+  d'une ligne** — seul l'appelant qui les stocke a changé, exactement comme `RS.grass`/
+  `drawTownGrassTile` le faisaient déjà pour l'herbe de la ville (le patron existait, il n'avait
+  jamais été appliqué à ces deux familles). Retenu : **779 canevas** (townWater 1, petFrames 1,
+  les 39 portraits `S.pets` gardés à part exprès — voir plus bas). ⚠️ **`S.pets[pid]` (le portrait
+  au repos) N'A PAS ÉTÉ ATLASSÉ** : `Sprite` (le composant qui l'affiche à six endroits de
+  l'interface) découpe toujours depuis (0,0) et ne sait pas lire un rectangle source — trente-neuf
+  canevas de plus est un coût négligeable à côté du risque de toucher six appelants pour rien.
+  ⚠️⚠️ **VÉRIFIÉ TROIS FOIS, PAS UNE** : (1) un parcours de l'objet réel retourné par
+  `buildSprites()` confirme 636 et 468 cases pointant chacune vers exactement UN canevas partagé ;
+  (2) `verify-syntax` et le bundle esbuild restent propres ; (3) **un rendu réel en navigateur**
+  (bundle esbuild de `fermeArt.js` chargé dans une page jetable, jamais commitée) montre l'étang
+  peint par la VRAIE `drawTownWaterTile`/`drawTownShoreTile` et une planche de familiers découpés
+  depuis l'atlas — identiques à toujours, parce qu'aucun banc de ce dépôt ne peut juger un dessin
+  au jugé (§8) et que `render-eau.mjs`/`render-rive.mjs`, qui auraient dû faire cette preuve,
+  **étaient déjà cassés avant ce correctif** (voir l'entrée dédiée plus bas).
+  ⚠️⚠️⚠️ **CE QUE ÇA NE PROUVE PAS** : que l'ami de Guillaume peut à nouveau jouer sur sa tablette.
+  Personne n'a rejoué la mesure sur un vrai iPad, et 779 reste un nombre, pas un verdict — la seule
+  chose qu'on sache est qu'il est très inférieur à 1 842. **C'est une mesure qui attend une
+  confirmation humaine, pas une case cochée.**
+  ⚠️ **CE QUI RESTE À PAVER, SI LE BESOIN REVIENT** : `S.pets` (39, décrit ci-dessus) et tout le
+  reste des 779 — aucune autre famille n'a été mesurée individuellement cette fois-ci.
+- ⚠️⚠️⚠️ **TROUVÉ EN ROUTE, SANS RAPPORT AVEC LE CORRECTIF CI-DESSUS : `render-eau.mjs` ET
+  `render-rive.mjs` SONT CASSÉS, ET ÇA NE DATE PAS DE CETTE LIVRAISON.** Les deux plantent sur
+  `ctx.createLinearGradient` — non implémenté par le faux canevas de `lib-canvas.mjs` — levé par
+  `drawTownWaterSwellBand` (le reflet animé de la surface). **Reproduit sur `HEAD` tel quel, avant
+  toute modification** (`git stash` puis relance, même trace) : ce n'est pas une régression de
+  l'atlas, c'est une dette antérieure que personne n'avait vue faute d'avoir relancé ces deux bancs
+  récemment — exactement le risque que le §10 nomme déjà (« affirmer qu'un outil existe sans
+  l'avoir lancé »). ⚠️ **NON CORRIGÉ ICI** : `lib-canvas.mjs` sert des dizaines de bancs, et une
+  implémentation hâtive du dégradé y introduirait un risque plus large que le gain de ce seul
+  correctif — la vérification visuelle de ce zip est passée par un chemin qui ne dépend pas de ces
+  deux outils (rendu réel en navigateur, ci-dessus). **À corriger séparément**, pas en même temps
+  qu'un autre changement visuel.
 - ⚠️⚠️ **CE QUI N'EST PLUS VRAI DEPUIS LE 2026-09-01, ET IL FAUT LE DIRE** : la HAIE était le plus
   gros décor que personne ne regardait — 839 cases, le pourtour des vingt-sept parcelles, dessiné
   dans la closure du rendu depuis le 425. `render-haies` la regarde. ⚠️ **Ce qui reste dans la
@@ -1871,6 +1915,27 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
    choix (LAQUELLE dette, PORTÉE du correctif, puis extension au dessin) lui a été soumis avant
    d'écrire une ligne de code, conformément au §2 — et la forme finale a été rejouée à l'écran avant
    d'entrer dans le jeu, pas après (§14.6, banc imaginaire).)**.
+
+   **hors-zip, l'atlas (QUARANTE-ET-UNIÈME passe : la ligne « hors-zip (Tristan), bretelles » part
+   avant celle de cette séance — une retirée, une ajoutée, le tableau reste à quatre. Son détail
+   retiré vit dans `buildTristan`/`scierieAtelier.js`, que sa colonne de droite désignait déjà.
+   Cette passe n'ajoute aucune forme neuve au « banc qui passe » de l'en-tête, mais elle en ajoute
+   une au tableau lui-même (voir la ligne « hors-zip (canevas) ») : un patron déjà validé ailleurs
+   dans le fichier peut dormir des zips sans être rapproché de la dette qu'il résoudrait. ⚠️ Et
+   elle a trouvé ce qu'un élagage doit trouver, deux fois : (1) le §13 et le §10 répétaient encore
+   « 1 829 canevas », chiffre du 481 jamais remesuré depuis malgré la dérive du code — remesuré ici
+   à 1 842 AVANT correctif, sur l'objet réellement retourné par `buildSprites()`, pas recopié d'une
+   note ancienne ; (2) le §13 listait encore la constellation à cinq points dans l'audit « non
+   fait », alors que la livraison de la veille (40e passe, ci-dessus) l'avait déjà portée à sept —
+   *un chiffre corrigé dans le bloc ⏭️ REPRISE et laissé faux ailleurs dans le même fichier n'est
+   pas corrigé, il a juste appris un second endroit où mentir* (la même leçon que le 470, le 479 et
+   le 480, une quatrième fois). ⚠️⚠️ Et elle a trouvé, sans le chercher, deux bancs cassés
+   (`render-eau.mjs`, `render-rive.mjs`, `ctx.createLinearGradient` non implémenté par
+   `lib-canvas.mjs`) — reproduit sur `HEAD` avant toute modification, donc antérieur à cette
+   livraison et non corrigé ici (le risque de toucher un fake DOM partagé par des dizaines de bancs
+   dépasse le gain de ce seul correctif). *Un banc qui ne peut plus s'exécuter du tout est la forme
+   la plus silencieuse du « banc qui passe » : il ne ment pas, il se tait, et personne ne remarque
+   qu'il s'est tu tant que personne n'a besoin de lui.*)**.
 
    **2026-09-01, le rythme de la quête (TRENTE-QUATRIÈME passe : les DEUX lignes « scie » du
    tableau des leçons partent avant les deux de cette livraison — deux retirées, deux ajoutées, le

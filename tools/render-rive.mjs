@@ -191,7 +191,8 @@ function grassBg(v, W, H) {
   grassBg(v, W, H);
   const SW = S.townWater;
   for (let y = 32; y < 64; y += T) for (let x = 0; x < W; x += T) {
-    v.ctx.drawImage(SW.tiles[15][(x / T) % SW.tiles[15].length][SW.depths - 1], x, y);
+    // hors-zip 2026-09-02 : tiles[15][...][...] est une case d'atlas, pas un canevas autonome.
+    A.blitCell(v.ctx, SW.tiles[15][(x / T) % SW.tiles[15].length][SW.depths - 1], x, y);
   }
   const b = S.townArchBridge;
   v.ctx.drawImage(b, (W - b.width) >> 1, 56 - b.height);
