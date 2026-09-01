@@ -21,6 +21,14 @@ hôte montait pendant qu'il était masqué (le cas banal : ouvrir l'onglet invit
 aucun `broadcastStation()` ne partait, silencieusement, sans aucun symptôme côté hôte. Corrigé en
 lisant `document.hidden` directement (plus de cache à désynchroniser) — reproduit AVANT et APRÈS le
 correctif, dans les deux cas en recréant la course exacte (hôte monté pendant qu'il est masqué).
+⚠️ **DEUX TESTS SUPPLÉMENTAIRES, MÊME SESSION** : un résident qui part en ville puis en revient reste
+synchro côté invité (zone ET coordonnées) — jamais vérifié avant ; et le correctif tient à cinq
+bascules masqué/visible d'affilée en pleine partie (8/20 résidents encore vus bouger juste après).
+⚠️ Piège d'outillage rencontré en testant, à savoir pour la prochaine session de debug à deux
+onglets : le panneau Browser peut rendre `document.hidden` vrai sur TOUS les onglets à la fois
+selon son propre état d'affichage, indépendamment de l'onglet interne réellement actif — un onglet
+qui semble au premier plan peut donc mentir sur sa visibilité. Se fier au `document.hidden` lu en
+direct dans la page, pas à quel onglet le panneau montre.
 ⚠️ **CE QUI RESTE, ET C'EST POUR GUILLAUME** : ce correctif règle le MÉCANISME (les résidents
 arrivent et bougent chez l'invité) — il ne dit rien du RESSENTI. Une vraie session de jeu à deux
 (§13, méthode inchangée) reste la seule façon de juger si le résultat est agréable, et reste le
