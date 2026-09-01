@@ -174,7 +174,13 @@ title("4. deux décors ne s'interpénètrent pas");
      c'est-à-dire que tout ce que ce contrôle attrapait, il l'attrape encore.
      Ce qu'on retire n'est pas la mesure, c'est un cas dont on peut nommer la
      raison (même geste qu'au 439 sur `archBridge` et les nénuphars). */
-  const CONTINU = new Set(["fence", "lowWall", "hedgeRow", "benchWall"]);
+  /* ⚠️ 2026-09-01 — `stoneBlock` REJOINT LA FAMILLE, ET C'EST UN CHANGEMENT
+     D'EMPLOI, PAS UNE TOLÉRANCE. Il ne servait nulle part jusqu'ici ; le
+     parapet du belvédère en fait une file continue de blocs, c'est-à-dire un
+     ouvrage LINÉAIRE au sens exact du §5 ci-dessous — il court, et ce qui en
+     fait un garde-corps est le fait qu'il court. L'exemption reste étroite :
+     même famille, et un massif planté dans le parapet reste un défaut. */
+  const CONTINU = new Set(["fence", "lowWall", "hedgeRow", "benchWall", "stoneBlock"]);
   const seen = new Set(), bad = [];
   for (const p of props) {
     if (!C.TOWN_PROP_ART[p.kind]) continue;
@@ -206,7 +212,7 @@ title("4. deux décors ne s'interpénètrent pas");
    rangée de haie. */
 title("5. un ouvrage linéaire court, il ne se pose pas tout seul");
 {
-  const LINEAR = ["fence", "lowWall", "hedgeRow", "benchWall"];
+  const LINEAR = ["fence", "lowWall", "hedgeRow", "benchWall", "stoneBlock"];
   for (const kind of LINEAR) {
     const list = props.filter(p => p.kind === kind);
     if (!list.length) { console.log(`  ····   ${kind} : aucun posé`); continue; }

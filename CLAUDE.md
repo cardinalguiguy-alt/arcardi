@@ -11,44 +11,103 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**ACTION SUIVANTE UNIQUE — JOUER LA QUÊTE DE L'ÉTOILE EN ENTIER, D'UNE TRAITE, ET DIRE SI ELLE
-A DU RYTHME.** Le chantier « la quête est chiante » a deux moitiés : la COUPE (livrée la veille,
-jamais rejouée) et le RYTHME (livré ce jour, vu à l'écran). Ce qui reste à juger n'est pas du code.
-(1) **Les trois nombres de la coupe** — `STAR_ENG_WORK_MS` 15 → **5 min**, `STAR_ENG_TRAVEL_MS`
-3 → **1 min**, second rendez-vous chez le maire **1 min** au lieu de 3 à 5 : le vide sans geste
-passe de 33,8 à ~18,8 min sur 42. Est-ce que la seconde moitié respire, ou faut-il la MEUBLER
-(le §17 garde de quoi : les trois présages de l'attente, les six éclats autour du cratère) ?
-⚠️ Réversible en trois valeurs, et **rien de tout ça n'a encore été joué à cadence réelle**.
-(2) **Le ruban de jalon** : est-ce qu'il arrive au bon moment, assez longtemps, sans gêner ?
-(3) **L'étoile qui parle** : vingt répliques indexées sur la clé d'objectif, désormais écrites
-signe à signe. Trop lent, trop vite ?
-⚠️⚠️ **CE QUI N'A PAS PU ÊTRE JOUÉ, ET IL FAUT LE SAVOIR AVANT DE CONCLURE** : le montage d'UNE
-pièce au marteau sur la cale. Le déplacement automatisé n'a pas permis d'atteindre la cale
-(à quatorze cases du ponton, derrière les accessoires du quai), donc le ruban n'a été vu qu'en
-version « cinq pièces d'un coup » par le menu dev. Sa version à UNE pièce est tenue par
-`render-navire` §5 bis, qui la rastérise et publie sa planche — pas par l'écran.
+**ACTION SUIVANTE UNIQUE — LE SECOND CHANTIER QUE GUILLAUME A ANNONCÉ ET PAS ENCORE DIT.** Sa
+demande du 2026-09-01 était explicitement en deux morceaux (« deux chantiers », puis « le deuxième
+arrive après ») ; le premier — les haies et la cohérence des collisions — est livré ci-dessous.
+**Il n'y a donc rien à deviner : on attend l'énoncé du second.** À défaut, le chantier nommé par
+Guillaume avant celui-ci reste en tête de file : **la densification des relations sociales entre
+résidents**, dont le premier dossier vaut d'être repris — *les quatre morceaux muets du navire
+(safran, mât, voile, cloche) deviennent quatre personnes à convaincre*, avec la contrainte du
+§15.1 : on plaide pour un bateau sans jamais pouvoir dire pourquoi on le construit. Le moteur de
+`maire.js` est réutilisable presque tel quel (`MAYOR_NODE[id]` n'est lu qu'à TROIS endroits,
+`mayorReplay` est agnostique, `MayorWatch` donne le mode spectateur gratuitement) ; le coût réel
+est le DÉCOR, et il ne faut pas le payer quatre fois. ⚠️ **Sortir la table des nœuds de `maire.js`
+n'a PAS été fait, exprès** : abstraire à l'aveugle avant de connaître les besoins des résidents
+produirait la mauvaise abstraction.
+
+⚠️⚠️⚠️ **CE QUI EST LIVRÉ LE 2026-09-01 : LES HAIES, ET LA SEMELLE DE TOUT LE JEU.** Demande de
+Guillaume, mot pour mot : *« les haies sont ok à l'horizontale mais quand elles doivent être à la
+verticale elles sont segmentées et plus continues c'est nul. Aussi la collision avec les haies est
+impossible, il faut la revoir sous les 4 angles ; pareil pour les autres éléments de la map. Je
+parle des ponts, des escaliers, des murs, du belvédère à revoir pour qu'il soit plus réaliste »*,
+puis *« j'insiste pour que tu aies une exigence ultra élevée pour la cohérence des collisions »*.
+Le détail vit à côté du code ; ici, seulement ce qu'il ne faut pas casser :
+· **LA HAIE A SEIZE VISAGES ET ELLE EST SORTIE DE LA CLOSURE** (`A.drawTownHedgeTile`). Le choix
+de tuile ne lisait que l'ouest et l'est : **436 des 839 cases de haie de la ville — 52 % —
+étaient dessinées faux**, dont 331 en chapelet de buissons détachés. `hN`/`hS` étaient calculées
+et n'entraient dans aucun test. ⚠️ **La haie verticale est l'horizontale TRANSPOSÉE** : même
+matière au pixel près, elle boucle en y parce que la source boucle en x, la lumière reste au
+nord-ouest, et les bouts suivent gratuitement (bout ouest transposé = bout nord).
+· ⚠️ **LES TROIS TUILES SONT RECADRÉES** : elles portaient deux ou trois rangées du sprite voisin
+de la planche, répétées tous les 16 px sous toute la haie. Le recadrage la repose aussi SUR sa
+case (elle flottait 4 px au-dessus de son propre sol).
+· ⚠️⚠️⚠️ **LA SEMELLE EST DÉSORMAIS SOUS LES PIEDS, ET ELLE N'EST ÉCRITE QU'UNE FOIS**
+(`C.bodyPoints`). Elle était recopiée à SEPT endroits, tous justes, tous décalés d'une demi-case
+à l'ouest et de trois quarts au nord de ce que le joueur voit de lui-même. Mesuré contre une
+haie, AVANT : nord −15,0 px, sud +9,4, ouest −7,2, est +3,2 (amplitude 24,4). APRÈS : nord 3,6,
+sud −2,0, ouest 0,1, est 0,1 (**amplitude 5,7 px**, et le reste est l'épaisseur du corps).
+· ⚠️⚠️ **ET LA MOITIÉ INVISIBLE DE LA CORRECTION EST AILLEURS** : vingt-huit endroits écrivaient
+`p.y + 0.2` pour dire « la case sous ses pieds » et cinq `Math.floor(m.x)` pour dire « ma
+colonne ». Les deux erreurs se compensaient à peu près tant que la collision partageait le même
+décalage — corriger l'une sans l'autre aurait CASSÉ ce qui marchait par accident. Elles vont
+donc ensemble (`C.footX`/`C.footY`/`C.bodyFootTile`/`C.tileAnchor`).
+· ⚠️ **LE PATHFINDER SUIT LA SEMELLE** : `TC = 0.5` centrait l'ANCIENNE boîte. Non corrigé, il a
+rendu **114 des 146 endroits de la ville inatteignables** — et c'est le banc qui l'a dit avant le
+jeu. `C.tileAnchor` est l'inverse exact de `C.bodyFootTile` ; les deux vont ensemble.
+· **LE BELVÉDÈRE EST UN BELVÉDÈRE** : seize cases sur onze de pelouse nue à deux étages
+au-dessus de la ville sont devenues une terrasse DALLÉE, cernée d'un parapet de blocs de pierre
+DÉDUIT du relief (une case du pourtour reçoit le parapet si la case juste à l'extérieur tombe de
+plus d'une marche — l'ouverture de l'escalier s'exclut donc toute seule), avec deux bancs de
+pierre dans l'axe des deux postes de contemplation, deux lampadaires et la statue. ⚠️ **Aucune
+mécanique ajoutée** : `benchWall`/`stoneBench` ne fabriquent pas de place assise, seul `bench` le
+fait. ⚠️ **Le parapet interdit le saut de rebord depuis la terrasse, délibérément** ; les rebords
+de la Haute-Ville, eux, ne bougent pas.
+
+⚠️⚠️ **DEUX BANCS NEUFS, ET C'EST LE VRAI LIVRABLE — `render-haies` (16/16) ET `verify-collision`
+(24/24).** Le second mesure la grandeur qu'aucun des quarante et un autres ne mesurait : **non pas
+qu'un obstacle refuse le pas, mais À QUELLE DISTANCE DU DESSIN il le refuse**, sur les quatre
+côtés, en approchant pour de vrai à la vitesse du jeu. Il tient aussi la traversée des deux ponts,
+la montée ET la descente des quatre volées, les vingt-cinq allées de parcelle, l'accord jeu/moteur
+sur 20 000 points, et le fait qu'on se dégage TOUJOURS d'une position interdite.
+⚠️ **Quatre de ses contrôles ont d'abord échoué sur des défauts DU BANC** (mauvais axe de
+traversée, emprise d'escalier transposée, arrivée comparée en flottants, quatre directions
+alternées à chaque image) : c'est la quatorzième forme de l'en-tête — *un banc mal repéré accuse
+l'ouvrage de ce que fait son repère* — et elle a resservi quatre fois en une séance.
+
+⚠️⚠️ **CE QUI A ÉTÉ VU À L'ÉCRAN, ET CE QUI NE L'A PAS ÉTÉ.** Vu, en session locale : la haie d'une
+parcelle (verticales continues, angles joints), le fermier arrêté PIED CONTRE la haie par le nord,
+contre le mur de la Maison Garfield, et **au pas de sa porte à la ferme, centré sur la porte** — ce
+qui n'arrivait pas avant. Vu aussi : le belvédère dallé et son parapet. ⚠️ **NON VU** : la ville à
+DEUX clients (la semelle change ce que `advanceRemote` rejoue), les intérieurs (tribunal, mairie,
+église) où la même semelle s'applique, et la carte maléfique. ⚠️ **Et le belvédère n'est regardé par
+AUCUN banc en image** : il est fait de props, qui vivent dans la closure du rendu — `verify-vallee`
+et `verify-compo` tiennent son emprise, pas son dessin.
+
 ⚠️⚠️ **DEUX GARDE-FOUS DE GUILLAUME, TOUJOURS EN VIGUEUR** : *« attention de ne pas basculer dans
 le WTF »* et *« l'idée est de rajouter du fun, mais pas de complexifier à outrance »*, doublés le
 2026-09-01 par *« n'ajoute pas d'éléments wtf […] jeu que des enfants de 10 ans joueront ; on garde
-ce qu'on a et on ajoute ou modifie pour densifier et faire participer »*. **Aucune mécanique n'a
-été ajoutée par ce chantier, et c'est délibéré** : tout est de l'habillage et du tempo sur des
-gestes qui existaient déjà.
-⚠️⚠️⚠️ **CE QUI RESTE DE L'AUDIT, NON FAIT, PAR ORDRE** : la **constellation** (cinq points écrits
-en dur, la fiction en promet sept, et elle se peint dès la chute **y compris à l'intérieur des
-bâtiments** — seule garde : `isNightTime`) ; les **quatre morceaux sans provenance** (safran, mât,
-voile, cloche — `SHIP_SITE_OF` rend `null`, techniquement finissable et narrativement muet) ; le
-**HUD peint par-dessus la scène plein écran du maire** ; les **1 829 canevas 2D au chargement**
-(tablette). Aucun n'est bloquant ; tous sont datés.
-⚠️ **ET LE CHANTIER SUIVANT EST DÉJÀ NOMMÉ PAR GUILLAUME : LA DENSIFICATION DES RELATIONS SOCIALES
-ENTRE RÉSIDENTS.** Son premier dossier vaut d'être repris : *les quatre morceaux muets deviennent
-quatre personnes à convaincre*, avec la contrainte que le §15.1 impose déjà — **on plaide pour un
-bateau sans jamais pouvoir dire pourquoi on le construit**. Le moteur de `maire.js` est réutilisable
-presque tel quel (`MAYOR_NODE[id]` n'est lu qu'à TROIS endroits, `mayorReplay` est agnostique,
-`MayorWatch` donne le mode spectateur gratuitement) ; le coût réel est le DÉCOR, et il ne faut pas
-le payer quatre fois — `maireBureau.js` fait 1 471 lignes, Tristan a déjà sa scène, et le genre
-aventure ALTERNE les registres. ⚠️ **Sortir la table des nœuds de `maire.js` n'a PAS été fait,
-exprès** : abstraire à l'aveugle avant de connaître les besoins des résidents produirait la
-mauvaise abstraction.
+ce qu'on a et on ajoute ou modifie pour densifier et faire participer »*.
+
+⚠️⚠️⚠️ **CE QUI RESTE DE L'AUDIT DE LA QUÊTE, NON FAIT, PAR ORDRE** : la **constellation** (cinq
+points écrits en dur, la fiction en promet sept, et elle se peint dès la chute **y compris à
+l'intérieur des bâtiments** — seule garde : `isNightTime`) ; les **quatre morceaux sans provenance**
+(safran, mât, voile, cloche — `SHIP_SITE_OF` rend `null`) ; le **HUD peint par-dessus la scène
+plein écran du maire** ; les **1 829 canevas 2D au chargement** (tablette). Aucun n'est bloquant ;
+tous sont datés. ⚠️ **Et la quête de l'étoile n'a toujours pas été JOUÉE d'une traite** : les trois
+nombres de la coupe (`STAR_ENG_WORK_MS` 5 min, `STAR_ENG_TRAVEL_MS` 1 min, second rendez-vous chez
+le maire 1 min) n'ont jamais tourné à cadence réelle.
+
+Vérifications de cette livraison : **42 bancs relancés un par un, zéro `ÉCHEC`** — dont les deux
+neufs `verify-collision` **24/24** et `render-haies` **16/16**, plus `verify-quete` **631/631**,
+`verify-vallee` **223/223**, `verify-maire` **113/113**, `verify-vergers` **61/61**, `verify-cycle`
+**38/38**, `verify-scierie` **34/34**, `verify-ludo` **30/30**, `verify-taxi` **15/15**,
+`verify-compo` **14/14**, `verify-pont` **12/12**, `verify-strings` **1106 clés appariées**,
+`render-etoile` **161/161**, `render-maire` **66/66**, `render-escaliers` **35/35**, `render-parc`
+**31/31**. Bundle esbuild propre sur
+`FermeGame.js` (seul `G_SOIL` préexistant subsiste) ; `git diff --check` propre ; `next build`
+**✓ Compiled successfully** puis l'arrêt documenté sur `supabaseUrl`. Échafaudage de jeu local
+(`.env.local`, `app/haies/`) **supprimé**. **Aucune migration SQL, aucun changement de schéma,
+aucune manipulation Supabase.**
 
 ⚠️⚠️⚠️ **LE RYTHME DE LA QUÊTE EST LIVRÉ LE 2026-09-01 : TROIS VOLUMES SONORES AU LIEU DE DEUX.**
 Demande de Guillaume : *« ce sont les textes, les overlays qui doivent être plus fluides et animés,
@@ -89,7 +148,7 @@ silence** (« …Ouvre la carte et… », parce qu'un `-webkit-box` calcule sa l
 lignes) ; et les toasts qui **recouvraient** le bandeau puis la pastille d'attente. Les trois sont
 corrigés et commentés dans `app/globals.css`.
 
-Vérifications : **40 bancs relancés un par un, zéro `ÉCHEC`** — `verify-quete` **631/631**,
+Vérifications de CETTE livraison-là (le rythme) : **40 bancs relancés un par un, zéro `ÉCHEC`** — `verify-quete` **631/631**,
 `verify-maire` **113/113**, `verify-vallee` **223/223**, `verify-vergers` **61/61**,
 `verify-cycle` **38/38**, `verify-scierie` **34/34**, `verify-ludo` **30/30**, `verify-taxi`
 **15/15**, `verify-gates` **14/14**, `verify-compo` **13/13**, `verify-pont` **12/12**,
@@ -166,79 +225,29 @@ d'être retenu : **la coque s'échouait en tournant sur place, 4 934 images à t
 PAS était testé, la ROTATION ne l'était pas. *Un véhicule a deux degrés de liberté ; les tester à
 moitié, c'est ne pas les tester.*
 
-⚠️⚠️ **LE FLEUVE EST LIVRÉ LE 2026-08-31, ET LA CARTE A ENFIN UNE SORTIE.** Décision de Guillaume :
-*« Je veux que l'on considère le lake and pier plutôt comme un accès à l'océan, et donc le port de
-Valley Town »*, puis *« une sorte de fleuve qui mène à une sortie ; par la droite. ensable un peu »*.
-Valley Town était close de tous les côtés : le navire censé « prendre le large » depuis le 453
-partait d'un étang. Mesuré : **10 rangées d'eau dans le bassin, 4 au plus étroit de la passe
-(x 166), 6 au bord du monde**, et `verify-vallee` vérifie qu'**on va de la cale au large par
-l'eau**, à quatre voisins. Le détail est au **§32 de `components/ferme/README.md`** ; ici, seulement
-ce qu'il ne faut pas casser :
-· **C'est le MÊME champ de rive prolongé, pas une seconde nappe** — deux nappes raccordées bout à
-bout se décaleraient au premier réglage, et la couture tomberait là où le navire passe.
-· **La passe n'a qu'une rive**, parce que le fleuve longe le bord sud du monde : lui en donner une
-seconde laisserait une bande de terre inatteignable, le défaut exact du 439.
-· **L'ensablement ne se peint pas, il se creuse** : la profondeur de l'eau est une transformée de
-distance à la terre, donc un chenal étroit devient tout seul un haut-fond pâle.
-· **Trois constantes du BOIS ont dû être reprises ENSEMBLE** (0,19 / 1,00 / y 157, issues d'un
-balayage) : son cœur tombait dans le coin que le fleuve occupe désormais.
-· **Un arrêt de téléport `townPasse` naît le même jour que la passe** — leçon du 425 appliquée
-avant d'être repayée : à quarante-trois cases du ponton, on ne serait pas allé la regarder.
-⚠️ **ET LE RETOURNEMENT DE LA QUÊTE CHANGE DE NATURE** : si l'eau mène visiblement au large,
-personne n'a jamais cru à un lac. Ce qui le remplace est plus solide et déjà dans la carte — *la
-passe est ensablée depuis vingt ans, plus personne ne peut sortir.* `QUETE.md` §17.8 le dit.
-⚠️ **AUCUNE RUINE PORTUAIRE À LA PASSE** (môle écroulé, duc-d'Albe, bornes) : elles appartiennent
-au retournement, lot D, et les poser ici mêlerait deux changements visuels.
+⚠️ **LE FLEUVE ET SA PASSE SONT LIVRÉS (2026-08-31), ET LE RÉCIT EST PARTI AU §32 DE
+`components/ferme/README.md`** — c'est là qu'il décrit le générateur qu'il modifie. Ce qu'il faut
+savoir sans l'ouvrir : la passe est le MÊME champ de rive prolongé (deux nappes se décaleraient au
+premier réglage), elle n'a qu'UNE rive (le fleuve longe le bord sud du monde), l'ensablement se
+CREUSE au lieu de se peindre, et `verify-vallee` tient l'invariant qui compte — *on va de la cale
+au large par l'eau*. ⚠️ **Le retournement de la quête en dépend** : si l'eau mène visiblement au
+large, personne n'a jamais cru à un lac ; ce qui le remplace est au §17.8 de `QUETE.md` — *la passe
+est ensablée depuis vingt ans, plus personne ne peut sortir.* ⚠️ **Aucune ruine portuaire à la
+passe** : elles appartiennent au lot D, et les poser ici mêlerait deux changements visuels.
 
-**LE MAIRE EST CORRIGÉ ET MESURÉ LE 2026-08-31 — ET IL A FALLU CONSTRUIRE L'ŒIL AVANT LA MAIN.**
-La première chose faite n'a pas été de corriger, c'est de rendre la posture REGARDABLE :
-**`tools/render-maire.mjs`, 66/66, le premier banc de rendu du dépôt qui regarde de la 3D** — pas
-de WebGL, pas de npm, `tools/lib-3d.mjs` charge le r128 vendorisé du dépôt et rastérise à la main.
-Il peint les sept poses × trois angles (`tools/out/maire-postures.png`) et les trois vues du jeu
-(`tools/out/maire-bureau.png`). **Six défauts qu'aucun banc ne pouvait voir, tous trouvés par lui :**
-· **la posture DEBOUT n'existait pas** — `rise: 0.13` lève le BUSTE, et les jambes ne sont pas
-ses filles : un tronc **quatorze centimètres** au-dessus de ses propres cuisses. Le maire a
-maintenant des hanches, des genoux et un BASSIN (qui manquait, d'où une fente de 1,5 cm à la taille
-sur toutes les poses) ; `stand` déplie l'homme, `STAND_LIFT` est **dérivé** de la jambe, et le
-fauteuil recule. Au repos la géométrie est celle d'avant **au millimètre** — les six autres poses
-ne bougent pas d'un pixel.
-· **l'écharpe passait dans le bois du plateau** (jusqu'à 13 cm) : raccourcie de 60 à 40 cm et
-remontée. C'est aussi le bon dessin — une écharpe de maire se noue à la hanche.
-· **deux cibles de main étaient hors de portée** (`window` 5,1 cm, `stamp` 2,5) et `solveArm` les
-bornait EN SILENCE ; et `ARM_FORE` mentait d'un centimètre sur les quatorze. Les 14 mains arrivent
-maintenant **à 0,0 cm**.
-· **les bras croisés étaient DANS la poitrine** — seuls les doigts ressortaient, au menton.
-· **`applyPose` repartait du buste et pas de `man`**, donc une image de retard qui n'a coûté zéro
-tant que rien ne levait la racine, et 39 cm le jour où `stand` l'a levée.
-· **la table `POSE` se corrompait à la première image** : la vue partait de `{ ...poseTarget }`,
-qui recopie la référence des tableaux de mains. `poseState` la copie ; le banc rejoue 200 images.
-⚠️ **`ROOM.deskD` passe de 1,12 à 1,00** : le maire était assis DANS son bureau de 2,5 cm en
-permanence et de 7 penché sur le tampon. Invisible de notre chaise, visible dès que la caméra
-libre passe sur le côté — c'est-à-dire dans le geste même que la scène promet.
-
+⚠️ **LE MAIRE EST CORRIGÉ ET MESURÉ (2026-08-31), ET LE RÉCIT VIT DANS `maireBureau.js` ET
+`tools/render-maire.mjs`** (66/66, le premier banc du dépôt qui regarde de la 3D — pas de WebGL,
+pas de npm, il charge le r128 vendorisé et rastérise à la main). La leçon est en tête de ce
+fichier, treizième forme du « banc qui passe » : *un banc vérifie qu'une chose EXISTE, jamais
+qu'elle TIENT ENSEMBLE.*
 ⚠️ **CE QUI RESTE SUR LE MAIRE, ET CE N'EST PLUS DE LA POSTURE** : **tout le HUD de la ferme est
 peint par-dessus la scène annoncée PLEIN ÉCRAN** — or, jour/heure, boutons, bandeau de quête, avec
-deux textes qui se chevauchent au pixel (`Glissez pour regarder…` x 861→1264 contre `🏠 Maison`
-x 1079→1270). ⚠️ *Les deux autres points de cette liste sont tombés depuis : les huit feuilles
-`L.maire` orphelines sont supprimées et gardées par un contrôle, et la fin de la quête n'est plus
-trois points colorés — le navire entre dans sa scène de résolution.*
+deux textes qui se chevauchent au pixel (`Glissez pour regarder…` contre `🏠 Maison`).
 ⚠️⚠️ **ET CE QUE `render-maire` NE SAIT PAS FAIRE, ÉCRIT AVANT QU'ON S'Y FIE** : il ne juge NI
-l'éclairage (pas d'ombre portée, textures réduites à leur couleur moyenne — le §8 reste hors de sa
-portée), NI les TRANSITIONS (`ease` glisse d'une pose à l'autre, et c'est en chemin qu'un bras peut
-traverser un torse ; il regarde les sept ARRIVÉES). **Le bureau du maire n'a jamais été rejoué à
-l'écran depuis cette correction** — seuls les bancs, le bundle et `next build` l'ont vue.
-
-Vérifications : **38 bancs relancés un par un, tous verts, zéro `ÉCHEC`** — `render-maire` **66/66**
-(neuf), `verify-vallee` **223/223** (six contrôles pour le fleuve, neuf pour la barque), `verify-maire` **113/113**,
-`verify-quete` **628/628**, `verify-strings` **1106 clés**, `verify-ludo` **30/30**, `verify-taxi`
-**15/15**, `render-parc` et `verify-portee` verts ; bundle esbuild propre sur `FermeGame.js` ET sur
-`MaireScene.js` (seul `G_SOIL` préexistant subsiste) ; `git diff --check` propre ; `next build`
-**✓ Compiled successfully** puis l'arrêt documenté sur `supabaseUrl`. **Aucune migration SQL, aucun
-changement de schéma, aucune manipulation Supabase n'est nécessaire.**
-⚠️⚠️ **ET RIEN DE CETTE SESSION N'A ÉTÉ VU EN JEU** — ni le maire corrigé, ni le fleuve. C'est la
-limite que le §10 rappelle en gras : *regarder l'écran est la seule chose qui trouve ce qu'on n'a
-pas encore compris.* Deux arrêts du menu dev existent pour que ça coûte dix secondes chacun :
-« Valley Town — le fleuve et le ponton » et le neuf **« ⛵ la passe »**.
+l'éclairage (pas d'ombre portée, textures réduites à leur couleur moyenne), NI les TRANSITIONS
+(`ease` glisse d'une pose à l'autre, et c'est en chemin qu'un bras peut traverser un torse) — il
+regarde les sept ARRIVÉES. **Le bureau du maire n'a jamais été rejoué à l'écran depuis cette
+correction.**
 
 ⚠️ **UN OUTIL À CONNAÎTRE AVANT DE REPRENDRE : `tools/.cache/*.mjs` ET `tools/out/*.png` SONT SUIVIS
 PAR GIT** (la règle `/out` du `.gitignore` ne vaut qu'à la racine). Lancer un banc SALIT donc l'arbre
@@ -389,6 +398,16 @@ toutes payées :
   l'air juste qu'il est, lui, parfaitement exact.* ⚠️ La parade a dicté le dessin et pas l'inverse :
   le ruban a gagné un halo, et l'invariant tenu est devenu un OU — *chaque morceau est soit assez
   large pour se voir seul, soit assez ramassé pour être cerclé.*
+- ⚠️⚠️⚠️ **il mesure qu'une chose est REFUSÉE, jamais OÙ elle l'est** (2026-09-01, dix-septième
+  forme, et c'est la plus vieille du dépôt puisqu'elle date de la première collision écrite).
+  Quarante et un bancs vérifiaient qu'une case solide arrête le pas — ce qui a toujours été vrai —
+  et aucun ne demandait **à quelle distance du DESSIN** le pas s'arrête. Mesuré le jour où la
+  question a été posée, contre une haie : on s'arrêtait à 15 px au nord, on entrait de 9 px au sud,
+  on s'arrêtait à 7 px à l'ouest et on chevauchait de 3 à l'est. *Deux directions laissaient un
+  vide, deux autres traversaient, et tous les contrôles étaient verts.* La parade est un banc qui
+  APPROCHE pour de vrai, à la vitesse du jeu, et qui compare la position d'arrêt à l'ombre portée
+  du personnage — pas à la case. ⚠️ Son critère premier est la SYMÉTRIE, pas la valeur : 3 px
+  partout est un jeu qui se tient, 0 d'un côté et 15 de l'autre est un jeu qui ment.
 ⚠️⚠️ **ET UN CONTRÔLE DE CAS NE VAUT PAS UN INVARIANT** (449). Trois contrôles « est-ce que ça
 marche » étaient verts sur le placement du familier meneur ; l'invariant — *il n'est JAMAIS plus
 loin du but que le joueur*, balayé sur toutes les positions — a échoué **20 fois sur 164** et a
@@ -434,10 +453,10 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 
 | # | La leçon, en une phrase | Où est le détail |
 |---|---|---|
-| 2026-08-31 (audit) | ⚠️⚠️⚠️ **UNE MIGRATION QUI RECONSTRUIT UN OBJET CHAMP PAR CHAMP SUPPRIME TOUT CHAMP QU'ON A OUBLIÉ D'Y ÉCRIRE.** `migrateMayor` rebâtissait `appt` sans relire `sour` ; or `migrateStar` l'appelle et l'hôte re-migre à CHAQUE requête. La trace était donc effacée dans la milliseconde suivant son écriture — sans erreur, sans symptôme — et le correctif écrit quelques heures plus tôt le même jour n'a jamais rien fait. *Un champ ajouté à un objet migré s'ajoute à sa migration dans le même geste, ou il n'existe pas.* | `migrateMayor`, `appt.sour`, `quete.js:migrateStar` |
-| 2026-08-31 (audit) | ⚠️⚠️ **DEUX BANCS PEUVENT AVOIR DES ANGLES MORTS QUI SE RECOUVRENT EXACTEMENT, ET CE QUI TOMBE DEDANS NE SE VOIT NULLE PART.** Huit feuilles `L.maire` étaient écrites, traduites et jamais affichées : `verify-strings` ne les voyait pas (il ne capture que les clés indentées de QUATRE espaces, et la branche `maire` est à deux), `verify-quete` non plus (son contrôle d'orphelins ne balaie que `L.star`). Chacun était juste dans son périmètre. *Quand une chose échappe à deux contrôles, la question n'est pas lequel a un bug : c'est ce que leur intersection ne couvre pas.* | `verify-quete` §audience, `verify-strings:keysOf` |
 | 2026-09-01 (rythme) | ⚠️⚠️⚠️ **UN SÉLECTEUR CSS REDÉCLARÉ PLUS BAS NE COMPLÈTE PAS LE PREMIER, IL LE CORRIGE — ET AUCUN DES QUARANTE BANCS NE PEUT LE VOIR.** Un `position:relative` écrit pour ancrer un enfant a écrasé le `position:fixed` de la règle d'origine : le bandeau de quête est tombé dans le flux, à 953 px du haut, c'est-à-dire hors de l'écran, sur la seule information permanente de la quête. La ligne était inutile en plus d'être fausse (`fixed` établit déjà un bloc conteneur). *Les bancs de rendu rastérisent du canevas ; personne ne met en page du CSS, donc toute la mise en page se juge à l'écran ou ne se juge pas.* | `.ferme-star-hud`, `app/globals.css` §rythme |
 | 2026-09-01 (rythme) | ⚠️⚠️ **UNE ANIMATION CSS NE REDÉMARRE PAS SUR UN NŒUD DÉJÀ MONTÉ.** Ajouter une classe à un élément qui existe déjà ne rejoue rien — le navigateur considère l'animation comme jouée. C'est le piège de tout accusé de réception qui peut arriver deux fois de suite (une pastille qui se remplit, un ruban qui en remplace un autre), et il ne se voit qu'à la SECONDE occurrence, donc jamais en relisant. *La parade est un `key` React qui porte une séquence : on remonte le nœud, et l'animation repart de zéro.* | `starPulse.seq`, `key={"rb" + starRibbon.seq}` |
+| 2026-09-01 (haies) | ⚠️⚠️⚠️ **UN CHOIX DE TUILE QUI NE LIT QUE LA MOITIÉ DE SON VOISINAGE EST FAUX SUR LA MOITIÉ DE LA CARTE, ET IL A L'AIR JUSTE PARTOUT AILLEURS.** La haie choisissait son dessin sur l'ouest et l'est ; `hN`/`hS` étaient calculées et n'entraient dans aucun test. 436 cases sur 839 — les deux côtés de chacune des vingt-sept parcelles — recevaient donc le buisson ISOLÉ, case après case. Le défaut était invisible en relisant (le code se lit bien) et criant à l'écran. *Une variable calculée et jamais lue est une question qu'on s'est posée et à laquelle on n'a pas répondu.* | `A.drawTownHedgeTile`, `render-haies` §1 |
+| 2026-09-01 (semelle) | ⚠️⚠️⚠️ **DEUX ERREURS QUI SE COMPENSENT NE SE CORRIGENT PAS SÉPARÉMENT.** La boîte de collision était décalée d'une demi-case par rapport au sprite ; vingt-huit lectures de « la case sous ses pieds » l'étaient du même montant, dans le même sens. Tant que les deux mentaient ensemble, le jeu était à peu près jouable — corriger la collision seule aurait cassé la visée, l'altitude, l'étage du tribunal et le rebord du saut. *Une compensation n'est pas une correction : elle rend le prochain correctif dangereux, et c'est elle qu'il faut chercher AVANT de toucher au premier des deux nombres.* | `C.bodyPoints`, `C.footX`/`footY`, `C.tileAnchor` |
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
 
@@ -622,6 +641,21 @@ de conception qui valent pour n'importe quel morceau du dépôt.
   livré un mur en croyant dessiner une bosse, et le symptôme n'aurait ressemblé en rien à sa cause.
   Deux fonctions qui se ressemblent assez pour qu'on les confonde doivent porter la différence
   dans leur NOM, et un banc doit tenir les deux moitiés séparément.
+- ⚠️⚠️⚠️ **UNE MÊME GRANDEUR ÉCRITE À SEPT ENDROITS RESTE JUSTE JUSQU'AU JOUR OÙ ELLE EST FAUSSE —
+  ET ALORS ELLE EST FAUSSE SEPT FOIS** (2026-09-01). La semelle du personnage était recopiée dans
+  `canStand`, `canStandMounted`, `canStandTown`, `townCanStand`, `canStandEvil`, `E.townBoxFree` et
+  `verify-vallee` : sept copies identiques, donc sept fois le même décalage d'une demi-case par
+  rapport au sprite. ⚠️ **Et le pire n'est pas la recopie, c'est la COMPENSATION** : vingt-huit
+  autres endroits lisaient « la case sous ses pieds » avec le même décalage, si bien que les deux
+  erreurs s'annulaient à peu près. *Corriger une moitié d'une paire d'erreurs qui se compensent
+  casse ce qui marchait ;* les deux se corrigent dans le même geste, ou pas du tout.
+- ⚠️⚠️ **UN SPRITE N'A PAS DE SENS INTERDIT, IL A UN SENS DESSINÉ** (2026-09-01). Une murette de
+  42 px de large posée sur une file NORD-SUD couvre 2,6 cases pour une case de collision : vu en
+  jeu, elle mange 0,8 case de sol praticable de chaque côté et le joueur passe DERRIÈRE un mur
+  qu'il traverse. Deux parades, et il faut choisir : un dessin CARRÉ (qui n'a pas d'orientation)
+  ou la TRANSPOSITION du dessin d'origine — *une haie qui tourne d'un quart de tour ne change pas
+  de matière, elle change d'axe* (`townHedge.v`, transposée pixel à pixel de `hedgeMid` : même
+  palette, elle boucle en y parce que la source boucle en x, et la lumière reste cohérente).
 - ⚠️⚠️ **UN PANNEAU QUI S'OUVRE À VOLONTÉ NE DOIT RIEN DONNER** (439). Un dialogue, un tableau, une
   plaque s'ouvrent avec E sans limite et sans arbitrage de l'hôte : tout ce qu'ils rendent doit
   être de l'INFORMATION ou une valeur DÉRIVÉE (une date, un cours). Ce qui récompense passe par une
@@ -671,7 +705,7 @@ de conception qui valent pour n'importe quel morceau du dépôt.
 - ⚠️⚠️ **UN SÉLECTEUR CSS REDÉCLARÉ PLUS BAS DANS LA FEUILLE NE COMPLÈTE PAS LE PREMIER, IL LE
   CORRIGE** (2026-09-01, payé sur le bandeau de quête, sorti de l'écran par un `position:relative`
   qui écrasait un `position:fixed`). ⚠️ **Et rien dans ce dépôt ne peut l'attraper** : les
-  vingt-et-un bancs de rendu rastérisent du canevas, aucun ne met en page du CSS. *Toute la mise en
+  vingt-deux bancs de rendu rastérisent du canevas, aucun ne met en page du CSS. *Toute la mise en
   page se juge à l'écran ou ne se juge pas* — corollaire direct du §10.
 - ⚠️⚠️ **`chaîne.replace("X", …)` NE REMPLACE QUE LA PREMIÈRE OCCURRENCE.**
 - ⚠️⚠️ **UN `useProgram` QUI ÉCHOUE NE DÉLIE PAS LE PROGRAMME PRÉCÉDENT** : un shader qui ne
@@ -737,7 +771,8 @@ de conception qui valent pour n'importe quel morceau du dépôt.
 | `tools/render-navire.mjs` | **LE NAVIRE, ET DEPUIS LE 2026-09-01 LA VIGNETTE DU RUBAN DE JALON** (§5 bis). Il rastérise les deux images que le ruban superpose — le navire AVANT et APRÈS, fantômes compris — et mesure en LUMINANCE ce que leur clignotement montre vraiment, pièce par pièce. C'est lui qui tient l'invariant « chaque morceau est soit assez large pour se voir seul, soit assez ramassé pour être cerclé par le halo », et c'est lui qui a exigé le halo. Sa planche `tools/out/navire-ruban.png` met les cinq paires côte à côte. |
 | `tools/verify-scierie.mjs` · `tools/render-scierie.mjs` | **LES DEUX BANCS DE LA SCIE.** Le premier JOUE (déterminisme, accord direct/rejeu sur des images irrégulières, courbe de difficulté en fonction de la latence, martèlement, bornes, journaux malformés) ; le second RASTÉRISE l'atelier sans GPU et balaie la posture de Tristan sur **course de lame × profondeur de trait** — un carré, pas une liste, parce que sa posture est une fonction continue de deux variables. |
 | `tools/lib-3d.mjs` · `tools/render-maire.mjs` | **REGARDER DE LA 3D SANS GPU (2026-08-31).** `lib-3d` charge le three.js **r128 vendorisé du dépôt** dans Node — la même bibliothèque que la page, à l'octet près — et rastérise à la main (projection, découpe au plan proche, tampon de profondeur, ombrage plat), plus le théorème des axes séparateurs pour mesurer une interpénétration en mètres. `render-maire` s'en sert pour peindre les sept postures côte à côte. ⚠️ **Aucune dépendance npm, et surtout pas `three`** : une autre révision n'a pas la même atténuation de lumière (§11), donc mesurerait un autre programme. |
-| `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** · depuis le 440 il **importe `planche.js`** : une portée de pont et une emprise de décor sont des grandeurs de DESSIN, on les dérive du sprite au lieu de les recopier |
+| `tools/verify-collision.mjs` · `tools/render-haies.mjs` | **LES DEUX BANCS DU 2026-09-01, ET LE PREMIER EST D'UNE NATURE NEUVE.** `verify-collision` ne demande pas si un obstacle refuse le pas, il demande **à quelle distance du dessin** il le refuse : il APPROCHE à la vitesse du jeu depuis les quatre côtés de chaque famille d'obstacle (haie, mur, berge, falaise), traverse les deux ponts, monte ET descend les quatre volées, franchit les vingt-cinq allées de parcelle, compare le jeu et le moteur sur 20 000 points, et vérifie qu'on se dégage TOUJOURS d'une position interdite. `render-haies` est le premier banc qui regarde la haie — le décor le plus répandu de la ville, dessiné dans la closure du rendu depuis le 425, donc invisible pour les quarante et un autres. |
+| `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** · **et depuis le 2026-09-01 LA SEMELLE (`bodyPoints`, `footX`/`footY`, `bodyFootTile`, `tileAnchor`) : l'unique description de l'empreinte au sol d'un personnage, dérivée de son ombre portée et lue par le jeu, le moteur ET les bancs** · depuis le 440 il **importe `planche.js`** : une portée de pont et une emprise de décor sont des grandeurs de DESSIN, on les dérive du sprite au lieu de les recopier |
 | `components/ferme/planche.js` | **GÉNÉRÉ** par `tools/import-planche.mjs` — les sprites de la planche de Guillaume, en données. Ne pas éditer à la main |
 | `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural. `starWispColors` décline le vivant en jaune, bleu et rose ; `drawStarFragmentMeteor` fait tourner le petit caillou incandescent sur un centre stable et `drawStarFragmentImpact` dessine son choc de terre/poussière/braises, sans réutiliser la boule de feu de Valley Town. Les gros dessins de quête (`drawStarCrater`, comète, navire, jauge, poses) vivent ici pour rester regardables par les bancs. |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
@@ -900,7 +935,7 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 `✓ Compiled successfully` juste avant.**
 
 ⚠️⚠️ **LES BANCS SONT DANS `tools/README.md` DEPUIS LE 432, ET CE CHAPITRE A ÉTÉ ÉLAGUÉ AU 444
-SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 442** (reporté deux fois). **19 bancs de contrôle et 21 bancs
+SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 442** (reporté deux fois). **20 bancs de contrôle et 22 bancs
 de rendu** (le vingtième est `render-maire`, 2026-08-31, **66/66**), comptés en listant `tools/` (⚠️ **le 480 ajoutait `verify-maire` et avait relancé les
 36 bancs d'alors un par un** ; le 2026-08-27 ajoute `verify-ludo`, relancé **30/30** :
 `verify-quete` **621/621**, `verify-maire` **113/113**,
@@ -976,7 +1011,13 @@ vérifie jamais — c'est elle, et elle seule, qui protège du banc imaginaire (
   ⚠️ **Le chiffre se remesure en trois lignes** : encadrer `cv(w, h)` dans `fermeArt.js` d'un
   compteur sur `window`, recharger, lire. *Une grandeur qu'aucun banc ne mesure se mesure à la main,
   et on écrit le chiffre avec sa date.*
-- ⚠️ **AUCUN BANC NE REGARDE LA FERME EN IMAGE** : les vingt-et-un bancs de rendu ne dessinent que
+- ⚠️⚠️ **CE QUI N'EST PLUS VRAI DEPUIS LE 2026-09-01, ET IL FAUT LE DIRE** : la HAIE était le plus
+  gros décor que personne ne regardait — 839 cases, le pourtour des vingt-sept parcelles, dessiné
+  dans la closure du rendu depuis le 425. `render-haies` la regarde. ⚠️ **Ce qui reste dans la
+  closure et n'a donc AUCUN banc** : les BÂTIMENTS de la ville, les PERSONNAGES, et **tous les
+  props** — c'est-à-dire le belvédère refait le même jour, dont `verify-vallee` et `verify-compo`
+  tiennent l'emprise mais dont personne ne voit le dessin.
+- ⚠️ **AUCUN BANC NE REGARDE LA FERME EN IMAGE** : les vingt-deux bancs de rendu ne dessinent que
   Valley Town, ses intérieurs, ses habitants et sa quête. Un décor de la ferme mal proportionné
   n'a, à ce jour, aucun endroit où se voir. ⚠️ **Et le SOL de la ferme non plus** : `render-rues`
   peint les rues de la ville, pas les chemins de la ferme, restés sur la tuile unique de 16 px du
@@ -1496,6 +1537,24 @@ erreur** en choisissant mal.
    une pour remplir le tableau* — c'est ce qui l'a fait grossir deux fois. La passe corrige en
    revanche deux chiffres : `verify-vallee` passe de 208 à **214**, et le §13 perd sa question
    « lac-océan » puisqu'elle est répondue.)**.
+
+   **2026-09-01, les haies et la semelle (TRENTE-CINQUIÈME passe : les DEUX lignes « 2026-08-31
+   (audit) » du tableau des leçons partent avant les deux de cette livraison — deux retirées, deux
+   ajoutées, le tableau reste à quatre et couvre exactement les deux dernières sessions. Leur détail
+   retiré vit dans `migrateMayor`/`appt.sour` et dans `verify-quete` §audience, que leur colonne de
+   droite désignait déjà. ⚠️ **Et l'élagage a mordu dans l'EN-TÊTE, ce qu'il n'avait plus fait
+   depuis le 449** : les deux récits du 2026-08-31 (le fleuve, le maire regardé) passent de 73 à 22
+   lignes — leur détail vit au §32 de `components/ferme/README.md` et dans `maireBureau.js` /
+   `render-maire.mjs` —, et seules leurs DETTES OUVERTES restent (le HUD par-dessus la scène du
+   maire, le bureau jamais rejoué à l'écran, l'absence de ruines à la passe). L'en-tête absorbe donc
+   une livraison entière en ne grossissant que de huit lignes. ⚠️⚠️ Cette passe AJOUTE une
+   **dix-septième forme** au « banc qui passe » — *il mesure qu'une chose est REFUSÉE, jamais OÙ
+   elle l'est* — et deux pièges au §4 (la grandeur écrite sept fois, le sprite qui n'a pas de sens
+   interdit mais un sens dessiné). ⚠️⚠️ Et elle a trouvé ce qu'un élagage doit trouver : le §10
+   annonçait **« 19 bancs de contrôle et 21 bancs de rendu »** alors qu'il y en a 20 et 22, et le
+   §« ce qui n'existe pas » affirmait encore qu'**aucun banc ne regarde la haie** — c'était vrai
+   jusqu'à cette livraison, et c'est le genre de phrase qui devient fausse en silence le jour où on
+   la corrige.)**.
 
    **2026-09-01, le rythme de la quête (TRENTE-QUATRIÈME passe : les DEUX lignes « scie » du
    tableau des leçons partent avant les deux de cette livraison — deux retirées, deux ajoutées, le

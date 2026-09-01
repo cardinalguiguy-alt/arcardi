@@ -6314,6 +6314,109 @@ export function generateTownWorld() {
       putNear(kiln.x + C.STAR_NEST_DX, kiln.y + C.STAR_NEST_DY, "starNestTree");
     }
   }
+  /* ═══════════════════════════════════════════════════════════════════════
+     2026-09-01 — LE BELVÉDÈRE DEVIENT UN BELVÉDÈRE.
+     ───────────────────────────────────────────────────────────────────────
+     Demande de Guillaume : « le belvédère à revoir pour qu'il soit plus
+     réaliste ». Ce qu'il y avait, mesuré : SEIZE CASES SUR ONZE DE PELOUSE
+     NUE, à deux étages au-dessus de la ville, avec une statue au milieu et
+     rien d'autre. Ce n'est pas un belvédère, c'est un pré en altitude — et le
+     défaut n'est pas décoratif : **on marchait jusqu'au bord d'un à-pic de
+     96 px sans que rien ne dise qu'il y avait un bord.**
+
+     Trois choses, et chacune répond à ce que le mot « belvédère » promet :
+
+       1. LA TERRASSE EST DALLÉE. Un point de vue aménagé est un ouvrage, pas
+          un talus. Le dallage se peint tout seul avec sa pierre de bord
+          (`drawTownFlagTile`, 436), qui la DÉDUIT du voisinage : la terrasse
+          reçoit donc son liseré sur tout son pourtour sans une coordonnée.
+
+       2. LE GARDE-CORPS, ET IL EST DÉDUIT DU RELIEF. On ne l'écrit pas côté
+          par côté : une case du pourtour reçoit le parapet si la case juste à
+          l'extérieur TOMBE de plus d'une marche. L'ouverture de l'escalier
+          s'exclut donc toute seule — et le jour où l'escalier déménage, le
+          parapet suit. C'est la règle du §8 appliquée à un ouvrage.
+          ⚠️⚠️ LE PARAPET EST FAIT DE BLOCS (`stoneBlock`, 21 × 21) ET PAS DE LA
+          MURETTE (`lowWall`, 42 × 21), ET C'EST L'ÉCRAN QUI A TRANCHÉ. La
+          murette est un dessin HORIZONTAL : posée sur les files nord-sud, elle
+          couvre 2,6 cases de large pour une case de collision — vu en jeu, elle
+          mangeait 0,8 case de dallage praticable de chaque côté, et un joueur
+          longeant le bord ouest passait DERRIÈRE un mur qu'il pouvait traverser.
+          C'est le §4 dans sa forme la plus banale : *une grandeur de dessin
+          n'est pas une grandeur de collision*, et un sprite n'a pas de sens
+          interdit, il a un sens dessiné. Le bloc, lui, est carré : il ne
+          déborde que de 0,16 case, dans les quatre directions, et il fait le
+          même ouvrage sur les quatre côtés — donc un seul matériau, une seule
+          famille, aucun angle à raccorder.
+          ⚠️⚠️ ET LE PARAPET REND LE SAUT DE REBORD IMPOSSIBLE DEPUIS LA
+          TERRASSE, délibérément : on ne saute pas d'un belvédère, on redescend
+          par l'escalier qui est à trois pas. Les rebords de la Haute-Ville,
+          eux, ne bougent pas.
+
+       3. DE QUOI S'Y TENIR. Deux bancs de pierre adossés au parapet sud —
+          `benchWall` est LITTÉRALEMENT le dessin d'un banc bâti dans un mur, il
+          n'avait aucun emploi jusqu'ici — dans l'axe des deux postes de
+          contemplation (`view`) que `townSpots` place déjà là, et deux
+          lampadaires. Rien de neuf n'est inventé : quatre sprites de la
+          planche, dont deux qui ne servaient nulle part.
+     ⚠️ AUCUNE MÉCANIQUE N'EST AJOUTÉE, et c'est volontaire (garde-fou de
+     Guillaume : « on ajoute ou on modifie pour densifier, pas pour complexifier »).
+     `benchWall` ne fabrique pas de place assise — seul `bench` le fait
+     (`addBench`) — donc la vie sociale de la ville n'est pas déplacée d'un iota.
+     ⚠️ CE BLOC EST L'AVANT-DERNIER DE LA FONCTION, comme la berge et pour la
+     même raison : il lit le sol et le relief FINAUX. Écrit plus haut, le
+     revêtement des rues serait repassé par-dessus son dallage. */
+  {
+    const B = C.TOWN_BELVEDERE;
+    const bx0 = B.x, by0 = B.y, bx1 = B.x + B.w - 1, by1 = B.y + B.h - 1;
+    const eTop = elev[id(bx0 + (B.w >> 1), by0 + (B.h >> 1))];
+    rect(B, (x, y, i) => {
+      if (solid[i] || objects[i] !== C.O_NONE) return;
+      if (ground[i] === C.G_PATH || ground[i] === C.G_PATH_STONE) return;
+      ground[i] = C.G_PATH_STONE;
+    });
+    /* Le bord surplombe-t-il ? On ne regarde QUE les voisines hors terrasse :
+       une case du pourtour a toujours des voisines dedans, et elles sont à la
+       même altitude — les compter dirait « pas de vide » partout. */
+    const overhang = (x, y) => {
+      for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx >= bx0 && nx <= bx1 && ny >= by0 && ny <= by1) continue;
+        if (!inMap(nx, ny)) return true;
+        if (eTop - elev[id(nx, ny)] > C.TOWN_STEP_MAX) return true;
+      }
+      return false;
+    };
+    const rail = [];
+    for (let y = by0; y <= by1; y++) for (let x = bx0; x <= bx1; x++) {
+      if (x !== bx0 && x !== bx1 && y !== by0 && y !== by1) continue;
+      if (!overhang(x, y) || objects[id(x, y)] !== C.O_NONE || solid[id(x, y)]) continue;
+      rail.push([x, y]);
+      solid[id(x, y)] = 1;
+    }
+    /* ⚠️ UN BLOC PAR CASE, ET LA COLLISION EST POSÉE AVANT. Deux raisons, et la
+       seconde est la vraie : (1) un ouvrage espacé laisserait passer entre ses
+       tronçons — un garde-corps qu'on traverse une fois sur deux est pire que
+       pas de garde-corps ; (2) `verify-vallee` refuse toute case bloquante que
+       personne ne dessine (le défaut des six cents haies du 425), et il
+       explique une case par le prop qui y est ANCRÉ, pas par l'emprise de son
+       voisin. D'où `blocks = false` à l'appel : `solid` est déjà posé au-dessus. */
+    for (const [x, y] of rail) addProp(x, y, "stoneBlock", false);
+    /* Les deux bancs de pierre, dans l'AXE des postes de contemplation que
+       `townSpots` pose déjà (`view`) : on DÉRIVE leur colonne de la même
+       formule, sinon on décrirait deux fois le même « où regarde-t-on ». Ils
+       sont posés DEUX rangées en retrait — la rangée du poste doit rester libre,
+       c'est là qu'on se tient. */
+    for (const vx of [B.x + 4, B.x + B.w - 5]) {
+      const vy = by1 - 2;
+      if (inMap(vx, vy) && !solid[id(vx, vy)] && objects[id(vx, vy)] === C.O_NONE) addProp(vx, vy, "stoneBench", true);
+    }
+    // Deux lampadaires, en retrait du parapet pour ne pas boucher la vue.
+    for (const lx of [bx0 + 2, bx1 - 2]) {
+      const ly = by1 - 2;
+      if (inMap(lx, ly) && !solid[id(lx, ly)] && objects[id(lx, ly)] === C.O_NONE) addProp(lx, ly, "lamp", true);
+    }
+  }
   const bloom = new Uint8Array(W * H);
   for (const b of beds) {
     for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) {
@@ -6994,22 +7097,32 @@ function townCompAt(nav, x, y) {
 }
 
 /* ⚠️ ON SE DÉPLACE DE CENTRE DE CASE À CENTRE DE CASE, ET CE N'EST PAS UN
-   DÉTAIL DE CONFORT. La boîte du personnage fait 0,6 case de large et 0,35 de
-   haut (voir townCanStand) : posée au CENTRE d'une case libre, elle tient
+   DÉTAIL DE CONFORT. La semelle du personnage fait 0,6 case de large et 0,31 de
+   profond (voir `C.bodyPoints`) : posée au CENTRE d'une case libre, elle tient
    toujours entièrement dedans. Viser un bord, c'est viser une position que le
    test de collision peut refuser alors que la case est libre — un chemin
    parfaitement valide qui échouerait à l'exécution, c'est-à-dire le retour du
-   défaut qu'on est en train de corriger. */
-const TC = 0.5;
+   défaut qu'on est en train de corriger.
+   ⚠️⚠️ 2026-09-01 — ET « LE CENTRE » N'EST PLUS `+ 0,5` : IL SE DÉDUIT DE LA
+   SEMELLE. Le `+ 0,5` d'ici centrait l'ANCIENNE boîte, celle qui partait de
+   l'ancre et descendait de 0,35 ; la semelle est maintenant sous les pieds,
+   donc l'ancre qui la centre dans la case n'est plus au centre de la case.
+   C'est `C.tileAnchor`, l'inverse exact de `C.bodyFootTile` — et les deux vont
+   ensemble, sans quoi un chemin rendu par ce fichier ne peut pas être suivi. */
 const TOWN_LOS_MAX = 48;   // portée de visée de la réduction, en cases (voir townSimplifyPath)
 export function townFindPath(tw, x0, y0, x1, y1, maxNodes) {
   const nav = townNav(tw); if (!nav) return null;
   const W = nav.w, H = nav.h;
-  const sx = Math.floor(x0), sy = Math.floor(y0), gx = Math.floor(x1), gy = Math.floor(y1);
+  /* ⚠️ ANCRE → CASE PASSE PAR LES PIEDS, jamais par un `floor` de l'ancre : le
+     sprite fait une case et demie de haut, son ancre est donc AU-DESSUS de la
+     case où il se tient dès que `y` n'est pas entier. `townRoadPath`, plus bas,
+     garde son `floor` : un taxi n'a pas de semelle, il a des roues sur une case. */
+  const s0 = C.bodyFootTile(x0, y0), g0 = C.bodyFootTile(x1, y1);
+  const sx = s0.x, sy = s0.y, gx = g0.x, gy = g0.y;
   if (sx < 0 || sy < 0 || sx >= W || sy >= H || gx < 0 || gy < 0 || gx >= W || gy >= H) return null;
   const start = sy * W + sx, goal = gy * W + gx;
   if (!nav.walk[start] || !nav.walk[goal]) return null;
-  if (start === goal) return [{ x: gx + TC, y: gy + TC }];
+  if (start === goal) return [C.tileAnchor(gx, gy)];
   // Le garde-fou : deux poches différentes, on ne cherche même pas.
   if (nav.comp[start] !== nav.comp[goal]) return null;
   const run = ++nav.run;
@@ -7124,7 +7237,7 @@ export function townFindPath(tw, x0, y0, x1, y1, maxNodes) {
    ⚠️ Effet de bord voulu : le chemin cesse de raser les murs. Deux virages en
    diagonale valent mieux que douze petits pas contre une haie. */
 function townSimplifyPath(tw, raw, W, tx, ty, from0) {
-  const pt = (i) => ({ x: (i % W) + TC, y: ((i / W) | 0) + TC });
+  const pt = (i) => C.tileAnchor(i % W, (i / W) | 0);
   const out = [];
   let anchor = from0 || pt(raw[0]);
   /* ⚠️⚠️ `base` NE RECULE JAMAIS, ET C'EST UNE GARANTIE D'ARRÊT, PAS UN
@@ -8190,12 +8303,14 @@ export function boatDir(ang) {
   return 1;                                                  // vers le nord
 }
 
-/* La boîte du personnage, en dur : c'est celle de townCanStand côté jeu.
-   ⚠️ ELLE EST ÉCRITE ICI ET LUE LÀ-BAS, pas l'inverse — deux boîtes réglées
-   séparément, c'est la divergence en attente du §8. */
+/* La boîte du personnage. ⚠️ 2026-09-01 — ELLE N'EST PLUS ÉCRITE ICI : elle
+   vient de `C.bodyPoints`, l'unique description de la semelle, que le jeu, ce
+   moteur et `verify-vallee` lisent tous les trois. Ce commentaire disait « elle
+   est écrite ici et lue là-bas, pas l'inverse » ; c'était encore une copie, et
+   elle est restée juste jusqu'au jour où la semelle a bougé. */
 export function townBoxFree(tw, x, y, fromE) {
   const nav = townNav(tw); if (!nav) return false;
-  const r = 0.3, W = nav.w, H = nav.h;
+  const W = nav.w, H = nav.h, pts = C.bodyPoints(x, y);
   /* ⚠️⚠️ SANS ALTITUDE DE RÉFÉRENCE, ON PREND CELLE DE LA CASE SOUS LES PIEDS —
      ET ON VÉRIFIE QUAND MÊME. Un `fromE` absent voulait dire « ne regarde pas
      le relief », ce qui laissait passer une boîte à cheval sur une falaise :
@@ -8203,9 +8318,9 @@ export function townBoxFree(tw, x, y, fromE) {
      bas. Le jeu, lui, relit l'altitude à chaque image et refuse. La boîte ne
      doit JAMAIS enjamber plus qu'une marche, c'est l'invariant — pas un
      paramètre de l'appelant. */
-  const eRef = fromE !== undefined ? fromE : townElevTile(tw, x, y + 0.2);
-  for (let p = 0; p < 4; p++) {
-    const px = x + (p % 2 ? r : -r), py = y + (p < 2 ? 0 : 0.35);
+  const ft = C.bodyFootTile(x, y);
+  const eRef = fromE !== undefined ? fromE : townElevTile(tw, ft.x, ft.y);
+  for (const [px, py] of pts) {
     const fx = Math.floor(px), fy = Math.floor(py);
     if (fx < 0 || fy < 0 || fx >= W || fy >= H) return false;
     const i = fy * W + fx;
@@ -8474,11 +8589,15 @@ export function courtFloorSpawn(cw, floor) {
    comme la ville partage sa boîte entre `townCanStand` (exécution) et
    `townBoxFree` (navigation) depuis le 428. Le jour où l'on élargit un
    personnage, il n'y a qu'un nombre à changer. */
-export const COURT_BOX = { r: 0.28, d: 0.35 };
+/* ⚠️ 2026-09-01 — LE TRIBUNAL GARDE SA DEMI-LARGEUR PLUS FINE, ET RIEN D'AUTRE.
+   Ses couloirs sont plus étroits que la rue (voir la note de COURT_DOOR_W) ;
+   la PROFONDEUR et la position de la semelle, elles, viennent maintenant de
+   `C.bodyPoints` comme partout ailleurs — elles n'avaient aucune raison d'être
+   différentes, et l'étaient par recopie. */
+export const COURT_BOX = { r: 0.28 };
 export function courtBoxFree(cw, x, y) {
   if (!cw) return true;
-  const { r, d } = COURT_BOX;
-  for (const [px, py] of [[x - r, y], [x + r, y], [x - r, y + d], [x + r, y + d]]) {
+  for (const [px, py] of C.bodyPoints(x, y, COURT_BOX.r)) {
     const fx = Math.floor(px), fy = Math.floor(py);
     if (fx < 0 || fy < 0 || fx >= cw.w || fy >= cw.h) return false;
     if (cw.solid[fy * cw.w + fx]) return false;

@@ -427,6 +427,92 @@ export const POS_BUF_MAX_SAMPLES = 12; // ~24 s d'historique au keep-alive de 2 
 export const POS_FAR_HZ = 1;         // FIX 242 (AOI) — zip 264: 1.5 -> 1 Hz. Quand aucun autre joueur n'est à portée de vue, la position ne sert qu'à la minimap : 1 Hz suffit largement (aucun rendu du perso à l'écran). Économie directe sur les longues traversées solo-dans-le-groupe.   // fréquence de diffusion des positions (broadcast)
 export const ACT_RANGE = 1.8;    // portée d'action en tuiles
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   2026-09-01 — LA SEMELLE : L'EMPREINTE AU SOL D'UN PERSONNAGE, EN UN ENDROIT.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️⚠️ ELLE ÉTAIT ÉCRITE SEPT FOIS, ET ELLE N'ÉTAIT PAS SOUS LES PIEDS.
+   `canStand` (ferme), `canStandMounted`, `canStandTown`, `advanceRemote`,
+   `canStandEvil`, `E.townBoxFree` et `verify-vallee` portaient chacun leur
+   copie de `[x ± 0,3] × [y … y + 0,35]` — sept fois le paramètre qui double un
+   paramètre du §8. Et surtout, cette boîte-là décrit le HAUT de la case, pas la
+   semelle : le sprite d'un personnage fait 16 px de large, il est donc centré
+   sur `x + 0,5` et non sur `x` ; son ombre portée est peinte à 15 px sous
+   l'ancre, donc sa ligne de contact est `y + 0,94` et non `y`. La boîte était
+   décalée d'une DEMI-CASE vers l'ouest et de TROIS QUARTS DE CASE vers le nord
+   par rapport à ce que le joueur voit de lui-même.
+
+   Ce que ça donnait, et c'est la plainte de Guillaume (« la collision avec les
+   haies est impossible, il faut la revoir sous les 4 angles ») en quatre lignes,
+   mesurée contre une haie, dont le pied tombe sur le bas de sa case :
+
+     · vers le NORD   on s'arrêtait à 15 px de la haie — une case entière d'herbe
+     · vers le SUD    on entrait de 9 px DANS la haie
+     · vers l'OUEST   on s'arrêtait à 7 px du feuillage
+     · vers l'EST     le corps chevauchait la case de haie de 3 px
+
+   Deux directions laissaient un vide, deux autres traversaient. Aucun banc ne
+   pouvait le voir : ils vérifiaient tous qu'une case solide REFUSE le pas — ce
+   qui était vrai — et jamais OÙ le pas s'arrête par rapport au dessin.
+
+   ⚠️ LA SEMELLE EST DÉRIVÉE DU DESSIN, elle n'est pas réglée : sa profondeur
+   est le diamètre de l'ombre portée, sa ligne de contact est le centre de cette
+   ombre, son centre est le milieu du sprite. Le jour où le personnage change de
+   gabarit, la collision suit — c'est la règle du §8, et c'est la seule façon
+   qu'elle ne redevienne pas fausse en silence.
+   ⚠️ SA DEMI-LARGEUR, ELLE, EST DÉLIBÉRÉMENT PLUS ÉTROITE QUE L'OMBRE (0,30
+   contre 0,375) : c'est la valeur historique, elle laisse 0,4 case de jeu dans
+   un passage d'une case, et l'élargir refermerait des portes qui s'ouvrent
+   depuis le 425. Une collision plus indulgente que le dessin ne se remarque
+   pas ; l'inverse, si.
+   ⚠️ ET ELLE RESTE ENTIÈREMENT DANS SA CASE quand `x` et `y` sont entiers —
+   c'est ce qui permet de se tenir dans la case voisine d'un mur, au nord comme
+   au sud. Une semelle centrée sur la ligne de contact déborderait sur la case
+   du dessous et interdirait de s'approcher d'un mur par le nord.
+   ═══════════════════════════════════════════════════════════════════════════ */
+export const CHAR_SPRITE_W = 16;      // largeur d'une pose de personnage, en px
+export const CHAR_SHADOW_PY = 15;     // la ligne de contact au sol, en px sous l'ancre
+export const CHAR_SHADOW_RY = 2.5;    // demi-profondeur de l'ombre portée, en px
+export const BODY_RX = 0.30;                                  // demi-largeur de la semelle, en cases
+export const BODY_DEPTH = (2 * CHAR_SHADOW_RY) / TILE;        // profondeur, DERRIÈRE la ligne de contact
+export const BODY_CX = CHAR_SPRITE_W / (2 * TILE);            // 0,5 — le sprite est centré sur x + 0,5
+export const BODY_FY = CHAR_SHADOW_PY / TILE;                 // 0,9375 — la ligne de contact
+/* Les quatre coins de la semelle, dans le repère du monde. `r` permet au
+   tribunal de garder sa demi-largeur un peu plus fine (couloirs étroits). */
+export function bodyPoints(x, y, r = BODY_RX, d = BODY_DEPTH) {
+  const cx = x + BODY_CX, fy = y + BODY_FY;
+  return [[cx - r, fy - d], [cx + r, fy - d], [cx - r, fy], [cx + r, fy]];
+}
+/* La case sous les pieds. ⚠️ C'est la MÊME ligne de contact que la semelle :
+   l'altitude d'un personnage se lit là où il touche le sol, jamais sous son
+   ancre — sans quoi il change de palier un demi-pas avant le reste de son
+   corps (c'est ce que faisait le `y + 0,2` d'avant). */
+export function bodyFootTile(x, y) { return { x: Math.floor(footX(x)), y: Math.floor(footY(y)) }; }
+/* ⚠️⚠️ LES DEUX MÊMES LIGNES DE CONTACT, POUR TOUT LE RESTE DU JEU — et c'est la
+   moitié de la correction, pas un raccourci d'écriture. Vingt-huit endroits
+   écrivaient `p.y + 0.2` pour dire « la case sous ses pieds » : c'est un
+   demi-pas trop haut (le sprite fait 24 px de haut, ses pieds sont à 15), donc
+   l'altitude, l'étage du tribunal, la case visée par E, le rebord du saut et
+   la flèche du pont se lisaient tous une case trop au nord dès que `y` n'était
+   pas entier. Cinq autres écrivaient `Math.floor(m.x)` pour dire « ma colonne »
+   alors que le sprite est centré sur `x + 0,5`.
+   ⚠️ Ce n'était pas visible tant que la collision partageait le même décalage :
+   les deux erreurs se compensaient à peu près. Corriger la semelle sans
+   corriger ces lectures aurait donc CASSÉ ce qui marchait par accident — c'est
+   pourquoi les deux vont ensemble, dans la même livraison. */
+export function footX(x) { return x + BODY_CX; }
+export function footY(y) { return y + BODY_FY; }
+/* L'INVERSE DE `bodyFootTile` : l'ancre qui pose la semelle au CENTRE d'une
+   case. ⚠️ C'est la ligne dont dépend toute la navigation des PNJ — le
+   pathfinder rend ses points de passage avec, et le comparait jusqu'ici à un
+   `+ 0,5` écrit en dur qui centrait l'ANCIENNE boîte. Une semelle qui bouge
+   sans que le point visé bouge avec elle, c'est un résident qui vise le bord
+   d'une case et se fait refuser le pas : 114 des 146 endroits de la ville sont
+   devenus inatteignables à l'instant où la semelle a changé, et c'est le banc
+   qui l'a dit avant le jeu. */
+export function tileAnchor(tx, ty) {
+  return { x: tx + 0.5 - BODY_CX, y: ty + 0.5 - BODY_FY + BODY_DEPTH / 2 };
+}
+
 // Couleurs de tenue attribuées aux joueurs (par ordre d'arrivée)
 export const OUTFITS = [
   { shirt: "#3f7fd4", pants: "#454f66" }, { shirt: "#d44a3f", pants: "#5a4632" },

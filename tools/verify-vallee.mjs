@@ -779,9 +779,12 @@ function elevBox(x, y) {
   if (fx < 0 || fy < 0 || fx >= W || fy >= H) return 0;
   return tw.elev[idx(fx, fy)];
 }
+/* ⚠️⚠️ 2026-09-01 — LA SEMELLE VIENT DE `C.bodyPoints`, ELLE N'EST PLUS
+   RECOPIÉE ICI. Ce banc portait sa propre copie de `[x ± 0,3] × [y … y+0,35]` :
+   elle était juste, elle était la septième, et le jour où le jeu a corrigé la
+   sienne elle serait devenue le banc qui mesure un autre programme (§10). */
 function canStandSim(x, y, fromE) {
-  const r = 0.3;
-  for (const [px, py] of [[x - r, y], [x + r, y], [x - r, y + 0.35], [x + r, y + 0.35]]) {
+  for (const [px, py] of C.bodyPoints(x, y)) {
     const fx = Math.floor(px), fy = Math.floor(py);
     if (fx < 0 || fy < 0 || fx >= W || fy >= H) return false;
     if (!walkable(fx, fy)) return false;
@@ -805,14 +808,19 @@ function walkTo(from, sp) {
     const s = speed * DT, ux = dx / d, uy = dy / d;
     // Les deux conditions de townResidentRoam (428) : la boîte est valide vue
     // de la position PRÉCÉDENTE, et valide vue D'ELLE-MÊME.
-    const canGo = (px, py) => canStandSim(px, py, elevBox(x, y + 0.2)) && canStandSim(px, py, elevBox(px, py + 0.2));
-    let moved = false;
+    const canGo = (px, py) => canStandSim(px, py, elevBox(C.footX(x), C.footY(y))) && canStandSim(px, py, elevBox(C.footX(px), C.footY(py)));
+    const wasX = x, wasY = y;
     const nx = x + ux * s;
-    if (canGo(nx, y)) { x = nx; moved = true; }
+    if (canGo(nx, y)) x = nx;
     const ny = y + uy * s;
-    if (canGo(x, ny)) { y = ny; moved = true; }
+    if (canGo(x, ny)) y = ny;
     // Le rattrapage en diagonale : voir la note de townResidentRoam (428).
-    if (!moved && canGo(nx, ny)) { x = nx; y = ny; moved = true; }
+    if (x === wasX && y === wasY && canGo(nx, ny)) { x = nx; y = ny; }
+    /* ⚠️ « AVANCER » SE MESURE (2026-09-01) : voir la note du même nom dans
+       townResidentRoam. Un pas nul sur un axe rendait `moved` vrai et le garde
+       anti-blocage ne se déclenchait jamais — le banc rendait « jamais arrivé »
+       là où il aurait dû rendre « bloqué », c'est-à-dire un diagnostic faux. */
+    const moved = Math.abs(x - wasX) + Math.abs(y - wasY) > s * 0.01;
     if (!moved) {
       stuck += DT;
       // Le recalcul du garde anti-blocage, borné comme dans le jeu.
@@ -840,7 +848,10 @@ function walkTo(from, sp) {
   for (const a2 of spotList) for (const b2 of spotList) {
     if (a2 === b2) continue;
     t2++; const r = walkTo(a2, b2);
-    if (r.ok) { d2++; wps.push(r.wp); } else if (why2.length < 4) why2.push(r.why);
+    /* ⚠️ UN ÉCHEC DOIT DIRE D'OÙ À OÙ (2026-09-01). « jamais arrivé » trois fois
+       de suite sur 21 170 trajets ne se cherche pas : il faut la paire. */
+    if (r.ok) { d2++; wps.push(r.wp); }
+    else if (why2.length < 4) why2.push(`${a2.act}(${a2.x},${a2.y})→${b2.act}(${b2.x},${b2.y}) : ${r.why}`);
   }
   const rate = 100 * d2 / t2;
   /* ⚠️ LE SEUIL EST À 100 %, ET C'EST DÉLIBÉRÉ. Il a été tenu par cinq

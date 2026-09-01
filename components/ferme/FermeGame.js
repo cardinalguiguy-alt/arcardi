@@ -11528,13 +11528,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          son test historique : il a le saut de rebord (Espace) pour se sortir de
          ce genre de recoin, et durcir sa collision serait un second changement
          de comportement dans la même livraison. */
-      const canGo = (px, py) => townCanStand(tw, px, py, townElevAt(tw, res.x, res.y + 0.2))
-                             && townCanStand(tw, px, py, townElevAt(tw, px, py + 0.2));
-      let moved = false;
+      const canGo = (px, py) => townCanStand(tw, px, py, townElevAt(tw, res.x, C.footY(res.y)))
+                             && townCanStand(tw, px, py, townElevAt(tw, px, C.footY(py)));
+      const wasX = res.x, wasY = res.y;
       const nx = res.x + ux * sp;
-      if (canGo(nx, res.y)) { res.x = nx; moved = true; }
+      if (canGo(nx, res.y)) res.x = nx;
       const ny = res.y + uy * sp;
-      if (canGo(res.x, ny)) { res.y = ny; moved = true; }
+      if (canGo(res.x, ny)) res.y = ny;
       /* ⚠️⚠️ ZIP 428 — SI AUCUN AXE NE PASSE, ON ESSAIE LA DIAGONALE ENTIÈRE,
          ET CE N'EST PAS UNE RUSTINE. Avancer axe par axe donne le glissement
          le long des murs, qu'on veut garder ; mais le point intermédiaire
@@ -11547,7 +11547,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          Mesuré : douze trajets sur 3 660 mouraient là, TOUS à l'approche des
          escaliers de la Haute-Ville — le seul endroit de la ville où l'on
          longe un dénivelé en diagonale. */
-      if (!moved && canGo(nx, ny)) { res.x = nx; res.y = ny; moved = true; }
+      if (res.x === wasX && res.y === wasY && canGo(nx, ny)) { res.x = nx; res.y = ny; }
+      /* ⚠️⚠️ 2026-09-01 — « AVANCER » SE MESURE, ÇA NE SE DÉCLARE PAS. `moved`
+         passait à vrai dès qu'un AXE était accepté ; or quand le point de
+         passage est pile sur le même x, le pas en x vaut zéro et le test porte
+         sur la position ACTUELLE, libre par construction. Le garde anti-blocage
+         se réarmait donc à chaque image et le résident piétinait pour toujours,
+         sans jamais recalculer son chemin — un blocage que le garde ne pouvait
+         pas voir puisqu'il croyait le voir marcher.
+         ⚠️ Ça ne s'est révélé qu'en corrigeant la semelle (`C.bodyPoints`) :
+         les points de passage ont changé, trois trajets sur 21 170 sont tombés
+         dans ce recoin, tous au même endroit — la sortie en diagonale d'une
+         volée d'escalier de la Haute-Ville. Le défaut, lui, était là depuis le
+         428 ; il attendait juste un chemin qui l'emprunte. */
+      const moved = Math.abs(res.x - wasX) + Math.abs(res.y - wasY) > sp * 0.01;
       res.moving = true;
       res.animT = (res.animT || 0) + dt * 9;
       if (Math.abs(ux) > Math.abs(uy)) res.dir = ux < 0 ? 2 : 3; else res.dir = uy < 0 ? 1 : 0;
@@ -11609,7 +11622,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const a = list[i], b = list[j];
       if (a.act === "talk" || b.act === "talk") continue;
       if (now < (a.meetCd || 0) || now < (b.meetCd || 0)) continue;
-      if (Math.abs(townElevAt(townWorldNow(), a.x, a.y + 0.2) - townElevAt(townWorldNow(), b.x, b.y + 0.2)) > 0.01) continue; // pas de conversation d'un étage à l'autre
+      if (Math.abs(townElevAt(townWorldNow(), a.x, C.footY(a.y)) - townElevAt(townWorldNow(), b.x, C.footY(b.y))) > 0.01) continue; // pas de conversation d'un étage à l'autre
       if (Math.hypot(a.x - b.x, a.y - b.y) > C.TOWN_MEET_DIST) continue;
       // Ceinture : même hors délai de grâce, le quai reste un lieu de passage.
       // Deux résidents qui s'y croisent au moment d'un départ se rebloqueraient
@@ -15620,7 +15633,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             if (g.sitting) {
               // Pose assise dédiée (sprite gregSeated) + ombre, aligné comme drawCharacter.
               const px = Math.round(gx * T), py = Math.round(gy * T);
-              ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(px + 8, py + 15, 6, 2.5, 0, 0, 7); ctx.fill();
+              ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(px + C.CHAR_SPRITE_W / 2, py + C.CHAR_SHADOW_PY, 6, C.CHAR_SHADOW_RY, 0, 0, 7); ctx.fill();
               ctx.drawImage(sprites.gregSeated, px, py - 8);
               ctx.font = "bold 9px sans-serif"; ctx.textAlign = "center";
               ctx.fillStyle = "#00000090"; ctx.fillText("Greg", px + 8 + 1, py - 10 + 1);
@@ -16937,8 +16950,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       return o === C.O_TREE || o === C.O_TREE2 || o === C.O_TREE_DEAD || o === C.O_STUMP || o === C.O_ROCK;
     }
     function canStandEvil(ew, x, y) {
-      const r = 0.3;
-      return !blockedEvil(ew, x - r, y) && !blockedEvil(ew, x + r, y) && !blockedEvil(ew, x - r, y + 0.35) && !blockedEvil(ew, x + r, y + 0.35);
+      // 2026-09-01 — la semelle vient de C.bodyPoints (une seule description, §8).
+      return C.bodyPoints(x, y).every(([px, py]) => !blockedEvil(ew, px, py));
     }
     function updateRunAmbush(dt) {
       const a = runAmbushRef.current;
@@ -17153,7 +17166,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        sous son ancre. Sa boîte de collision est y..y+0.35 (voir canStandTown) ;
        +0,2 tombe au milieu, ce qui évite qu'il change de niveau un demi-pas
        avant ou après le reste de son corps. */
-    function playerElevTown(tw, p) { return elevTown(tw, p.x, p.y + 0.2); }
+    function playerElevTown(tw, p) { return elevTown(tw, C.footX(p.x), C.footY(p.y)); }
     /* ⚠️⚠️⚠️ ZIP 439 — L'ALTITUDE DE DESSIN N'EST PAS L'ALTITUDE DE COLLISION,
        ET C'EST TOUTE LA PRUDENCE DE CE CHANTIER. Le dos d'âne des ponts est une
        grandeur d'IMAGE : il doit monter le personnage sur le tablier, il ne doit
@@ -17206,7 +17219,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        planches), le taxi, les décors posés.
        ⚠️ Et la cloche du SAUT de rebord suit la même règle, pour la même raison
        (voir `townJumpRef` plus bas) : c'est une hauteur d'image, pas un rang. */
-    function playerArchPxTown(tw, p) { return archPxTown(tw, p.x, p.y + 0.2); }
+    function playerArchPxTown(tw, p) { return archPxTown(tw, C.footX(p.x), C.footY(p.y)); }
     /* ⚠️ 425 — `fromE` EST FACULTATIF, ET LE LAISSER DE CÔTÉ EST UN CHOIX.
        Passé, il interdit de franchir plus de TOWN_STEP_MAX de dénivelé : c'est
        ce qui fait tenir les falaises et ce qui rend les escaliers praticables,
@@ -17215,13 +17228,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        familiers, qui suivent leur maître de case en case et n'ont pas à se
        voir refuser un raccourci par une marche. */
     function canStandTown(tw, x, y, fromE) {
-      const r = 0.3;
-      const pts = [[x - r, y], [x + r, y], [x - r, y + 0.35], [x + r, y + 0.35]];
-      for (const [px, py] of pts) {
+      for (const [px, py] of C.bodyPoints(x, y)) {
         if (blockedTown(tw, px, py)) return false;
         if (fromE !== undefined && Math.abs(elevTown(tw, px, py) - fromE) > C.TOWN_STEP_MAX) return false;
       }
       return true;
+    }
+    /* ⚠️⚠️ 2026-09-01 — SE DÉGAGER, ET SEULEMENT SI L'ON EST DÉJÀ COINCÉ.
+       La semelle a changé de place ce jour-là : elle est passée du haut de la
+       case à SOUS LES PIEDS (voir `C.bodyPoints`). Une position enregistrée la
+       veille — ou reçue d'un client qui n'a pas encore rechargé — peut donc se
+       retrouver dans un mur, et le déplacement axe par axe est incapable d'en
+       sortir : il refuse tout pas qui n'aboutit pas à une position libre, y
+       compris celui qui rapproche de la sortie. On accepte donc n'importe quel
+       pas TANT QUE la position actuelle est elle-même refusée.
+       ⚠️ Ce n'est pas une porte dérobée : elle ne s'ouvre que dans un état qui
+       ne devrait pas exister, elle se referme à la première position libre, et
+       elle ne peut pas servir à traverser un mur depuis une position valide.
+       ⚠️ ET ELLE NE REGARDE PAS L'ALTITUDE (`fromE` omis à l'appel de secours) :
+       quelqu'un coincé À CHEVAL sur une falaise doit pouvoir en descendre. */
+    function townStepOk(tw, m, nx, ny, fromE) {
+      return canStandTown(tw, nx, ny, fromE) || !canStandTown(tw, m.x, m.y);
     }
 
     /* ══════════════════════════════════════════════════════════════════════
@@ -17261,14 +17288,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!vx && !vy) return null;
       const e0 = playerElevTown(tw, m);
       // 1. Le REBORD : la case juste devant doit être nettement plus basse.
-      const ledgeE = elevTown(tw, m.x + vx, m.y + 0.2 + vy);
+      const ledgeE = elevTown(tw, C.footX(m.x) + vx, C.footY(m.y) + vy);
       if (e0 - ledgeE < C.TOWN_JUMP_MIN_DROP) return null;
       // 2. L'ARRIVÉE : libre, sans quoi le saut — qui ignore les collisions
       //    pendant sa cloche — déposerait le joueur DANS un mur.
       const tx = m.x + vx * C.TOWN_JUMP_TILES, ty = m.y + vy * C.TOWN_JUMP_TILES;
       if (!canStandTown(tw, tx, ty)) return null;
       // 3. ... et au niveau du rebord : on saute d'un étage, pas de deux.
-      const landE = elevTown(tw, tx, ty + 0.2);
+      const landE = elevTown(tw, C.footX(tx), C.footY(ty));
       if (Math.abs(landE - ledgeE) > C.TOWN_STEP_MAX) return null;
       return { tx, ty, e0, e1: landE };
     }
@@ -17485,8 +17512,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            d'escalier change de marche sur l'axe X puis se voit refuser l'axe Y
            s'il compare encore à l'altitude d'avant — on se retrouve à monter en
            crabe, une case sur deux. Deux lectures d'un tableau ne coûtent rien. */
-        if (canStandTown(tw, nx, m.y, playerElevTown(tw, m))) m.x = nx;
-        if (canStandTown(tw, m.x, ny, playerElevTown(tw, m))) m.y = ny;
+        if (townStepOk(tw, m, nx, m.y, playerElevTown(tw, m))) m.x = nx;
+        if (townStepOk(tw, m, m.x, ny, playerElevTown(tw, m))) m.y = ny;
         if (dx < 0) m.dir = 2; else if (dx > 0) m.dir = 3; else if (dy < 0) m.dir = 1; else if (dy > 0) m.dir = 0;
         m.animT += dt * 9;
         /* ⚠️⚠️ ZIP 459 — LA RÈGLE DE JUSTICE DU 458 N'A PAS DISPARU, ELLE A REMONTÉ
@@ -17514,8 +17541,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (slipping) {
         const sp2 = Math.hypot(slip.vx, slip.vy);
         const sx = m.x + slip.vx * dt, sy = m.y + slip.vy * dt;
-        if (canStandTown(tw, sx, m.y, playerElevTown(tw, m))) m.x = sx;
-        if (canStandTown(tw, m.x, sy, playerElevTown(tw, m))) m.y = sy;
+        if (townStepOk(tw, m, sx, m.y, playerElevTown(tw, m))) m.x = sx;
+        if (townStepOk(tw, m, m.x, sy, playerElevTown(tw, m))) m.y = sy;
         m.vx = slip.vx; m.vy = slip.vy;
         if (sp2 > 0.05) {
           if (Math.abs(slip.vx) > Math.abs(slip.vy)) m.dir = slip.vx < 0 ? 2 : 3;
@@ -17913,43 +17940,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              les passages**. Les 27 parcelles ont chacune une entrée percée dans
              la haie (§4 : « on perce le passage avant de poser la clôture ») ;
              sur un mur uniforme, ce trou d'une case ne se distinguait de rien.
-             On lisait la haie, on faisait demi-tour, et on longeait.
-             La parade tient en une ligne : une haie regarde ses VOISINES. Une
-             extrémité reçoit un bord arrondi et une ombre latérale ; une case
-             de milieu n'en reçoit pas. Du coup un passage est encadré par deux
-             bouts de haie visibles, et il se voit de loin. */
-          const hN = tw.hedge[i - tw.w], hS = tw.hedge[i + tw.w];
-          const hW = x > 0 && tw.hedge[i - 1], hE = x < tw.w - 1 && tw.hedge[i + 1];
+             La parade tient en une ligne : une haie regarde ses VOISINES.
+             ⚠️⚠️⚠️ 2026-09-01 — ET ELLE NE REGARDAIT QUE DEUX DES QUATRE. `hN` et
+             `hS` étaient calculées ici et n'entraient dans aucun test : toute
+             haie VERTICALE — les deux côtés de chacune des vingt-sept parcelles —
+             recevait le buisson isolé, case après case, avec du vide entre
+             chacun. Le choix de tuile et le dessin sont partis dans `fermeArt`
+             (`A.drawTownHedgeTile`), et pas seulement pour tenir les seize cas :
+             tant qu'ils vivaient ICI, dans la closure de la boucle de rendu,
+             AUCUN banc ne pouvait les appeler — c'est le piège n°1 de CLAUDE.md
+             dans sa forme la plus coûteuse, sur le décor le plus répandu de la
+             ville. `tools/render-haies.mjs` les regarde désormais. */
           pushE((y + 1) * T, e, () => {
-            const hx = x * T, hy = (y + 1) * T;
-            /* ⚠️⚠️ ZIP 439 — LA HAIE EST CELLE DE LA PLANCHE DE RÉFÉRENCE.
-               Ce qu'il y avait ici était SIX `fillRect` écrits au 425, retouchés
-               au 429, et jamais regardés depuis : trois bandes vertes pleine
-               case plus deux ombres latérales. C'est le constat de tête de
-               CLAUDE.md dans sa forme exacte — *un dessin qu'aucun banc ne peut
-               appeler ne se dégrade pas, il reste au niveau du jour où il a été
-               écrit pendant que tout ce qui est mesuré monte.* Posé à côté des
-               décors importés de la planche, il ne se lisait plus comme une haie
-               mais comme un ruban de peinture verte, et c'est le premier défaut
-               qui saute aux yeux sur une capture du jeu.
-               ⚠️ ET C'EST LE DÉCOR LE PLUS RÉPANDU DE LA VILLE : il entoure les
-               vingt-sept parcelles. Le corriger vaut plus, à l'image, que
-               n'importe quel objet de rive.
-               ⚠️ LE DESSIN EST CHOISI PAR LE VOISINAGE, comme au 429 et pour la
-               même raison pratique : chaque parcelle a une entrée PERCÉE dans sa
-               haie, et sur un tronçon uniforme ce trou d'une case ne se voit
-               pas. Un bout dessiné de chaque côté du passage le rend lisible de
-               loin. */
-            const HG = sprites.townHedge;
-            if (HG) {
-              const im = (!hW && !hE) ? HG.solo : !hW ? HG.w : !hE ? HG.e : HG.mid;
-              ctx.drawImage(im, hx, hy - im.height);
-            } else {
+            const hx = x * T, hy = y * T;
+            if (!A.drawTownHedgeTile(ctx, sprites, tw, x, y, hx, hy)) {
               // Repli : l'ancien dessin, si l'atlas n'a pas la haie de la planche.
-              ctx.fillStyle = "rgba(20,34,16,0.28)"; ctx.fillRect(hx, hy - 3, T, 3);
-              ctx.fillStyle = "#2c5c2a"; ctx.fillRect(hx, hy - 20, T, 18);
-              ctx.fillStyle = "#3d7a36"; ctx.fillRect(hx, hy - 20, T, 7);
-              ctx.fillStyle = "#55a047"; ctx.fillRect(hx, hy - 21, T, 3);
+              ctx.fillStyle = "rgba(20,34,16,0.28)"; ctx.fillRect(hx, hy + T - 3, T, 3);
+              ctx.fillStyle = "#2c5c2a"; ctx.fillRect(hx, hy + T - 20, T, 18);
+              ctx.fillStyle = "#3d7a36"; ctx.fillRect(hx, hy + T - 20, T, 7);
+              ctx.fillStyle = "#55a047"; ctx.fillRect(hx, hy + T - 21, T, 3);
             }
           });
         }
@@ -18826,13 +18835,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             if (!tr) { tr = []; guestTrailsRef.current.set(res.rid, tr); }
             const gp = trailFollow(tr, rx, ry, rMoving, C.TOWN_GUEST_FOLLOW_DIST);
             const gAnim = rMoving ? (performance.now() / 110) : 0;
-            const gpe = townElevAt(tw, gp.x, gp.y + 0.2);
+            const gpe = townElevAt(tw, C.footX(gp.x), C.footY(gp.y));
             pushE((gp.y + 1) * T - 1, gpe, () => drawCharacter({
               id: "guest" + res.rid, name: guest.name, x: gp.x, y: gp.y, dir: gp.dir,
               moving: rMoving, animT: gAnim, gender: guest.gender, outfit: guest.outfit,
               overalls: !!guest.overalls, cap: !!guest.cap, look: guest.look || null,
               scale: guest.small ? C.TOWN_GUEST_CHILD_SCALE : 1,
-            }, false), archPxTown(tw, gp.x, gp.y + 0.2));
+            }, false), archPxTown(tw, C.footX(gp.x), C.footY(gp.y)));
           }
           /* ⚠️ ZIP 441 — LES RÉSIDENTS N'AVAIENT PAS LE DOS D'ÂNE DU TOUT. Le
              439 l'a donné au joueur et l'a oublié ici :
@@ -19422,7 +19431,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // La case sous les pieds (même règle que Valley Town : +0,2, le milieu de
     // la boîte de collision) — c'est elle qui décide de l'étage et des
     // déclenchements au passage.
-    function courtFootTile(cw, p) { return courtTileAt(cw, p.x, p.y + 0.2); }
+    function courtFootTile(cw, p) { return courtTileAt(cw, C.footX(p.x), C.footY(p.y)); }
     /* LES ESCALIERS, EN TROIS LIGNES. Marcher sur une volée téléporte à la
        MÊME case du niveau visé (voir COURT_LINKS) : le trajet est
        lisible et il n'y a aucune table de destinations à tenir à jour.
@@ -19435,12 +19444,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const onStair = (t === C.CT_STAIR_UP || t === C.CT_STAIR_DOWN);
       if (!onStair) { courtStairArmedRef.current = true; return; }
       if (!courtStairArmedRef.current) return;
-      const f = E.courtFloorOf(m.y + 0.2);
+      const f = E.courtFloorOf(C.footY(m.y));
       /* ⚠️ LA DESTINATION EST « L'AUTRE NIVEAU DE MA CAGE », rien de plus. Il n'y
          a donc aucune table de trajets à tenir en accord avec la géométrie —
          c'est tout l'intérêt d'avoir fait de la cage un LIEU (voir
          COURT_STAIRWELLS). La case d'arrivée est la même, à l'étage près. */
-      const fx = Math.floor(m.x), fy = Math.floor(m.y + 0.2) - E.courtFloorY0(f);
+      const fx = Math.floor(C.footX(m.x)), fy = Math.floor(C.footY(m.y)) - E.courtFloorY0(f);
       const sw = C.COURT_STAIRWELLS.find(w2 => (w2.a === f || w2.b === f)
         && fx >= w2.x && fx < w2.x + w2.w && fy >= w2.y && fy < w2.y + w2.h);
       if (!sw) return;
@@ -19488,8 +19497,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const sp = spSec * dt;
         m.vx = dx * spSec; m.vy = dy * spSec;
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
-        if (canStandCourt(cw, nx, m.y)) m.x = nx;
-        if (canStandCourt(cw, m.x, ny)) m.y = ny;
+        /* Même trappe qu'à la ferme (zip 232) et qu'en ville : la semelle a
+           changé de place le 2026-09-01, une position d'avant peut être dans un
+           mur, et le pas axe par axe ne sait pas en sortir tout seul. */
+        const stuckC = !canStandCourt(cw, m.x, m.y);
+        if (stuckC || canStandCourt(cw, nx, m.y)) m.x = nx;
+        if (stuckC || canStandCourt(cw, m.x, ny)) m.y = ny;
         if (dx < 0) m.dir = 2; else if (dx > 0) m.dir = 3; else if (dy < 0) m.dir = 1; else if (dy > 0) m.dir = 0;
         m.animT += dt * 9;
       } else { m.animT = 0; m.vx = 0; m.vy = 0; }
@@ -19509,7 +19522,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const pointerTile = pointerWorld && { x: Math.floor(pointerWorld.x), y: Math.floor(pointerWorld.y) };
       const roomLabelTile = pointerTile || (COURT_LABEL_FALLBACK_TO_FACING_TILE ? facingTile() : null);
       starViewRef.current = { cam, zoom: ZOOM };      // 465 — survol des étoiles à l'intérieur aussi
-      const myFloor = E.courtFloorOf(m.y + 0.2);
+      const myFloor = E.courtFloorOf(C.footY(m.y));
       const fr = courtFloorRect(myFloor);
       ctx.setTransform(ZOOM, 0, 0, ZOOM, -Math.round(cam.x * ZOOM), -Math.round(cam.y * ZOOM));
       // Le dehors : un gris très sombre. ⚠️ PAS DU NOIR PUR — le noir se
@@ -19879,12 +19892,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         p.x += (p.tx - p.x) * Math.min(1, dt * 22);
         p.y += (p.ty - p.y) * Math.min(1, dt * 22);
         p.animT = p.moving ? (p.animT || 0) + dt * 9 : 0;
-        if (E.courtFloorOf(p.y + 0.2) !== myFloor) continue;
-        const rz = isDais(Math.floor(p.x), Math.floor(p.y + 0.2)) ? EP : 0;
+        if (E.courtFloorOf(C.footY(p.y)) !== myFloor) continue;
+        const rz = isDais(Math.floor(C.footX(p.x)), Math.floor(C.footY(p.y))) ? EP : 0;
         draws.push({ y: (p.y + 0.9) * T - rz, fn: () => { ctx.save(); ctx.translate(0, -rz); drawRemotePets(p, dt); ctx.restore(); } });
         draws.push({ y: (p.y + 1) * T - rz, fn: () => { ctx.save(); ctx.translate(0, -rz); drawCharacter(p, false); ctx.restore(); } });
       }
-      const myRz = isDais(Math.floor(m.x), Math.floor(m.y + 0.2)) ? EP : 0;
+      const myRz = isDais(Math.floor(C.footX(m.x)), Math.floor(C.footY(m.y))) ? EP : 0;
       draws.push({ y: (m.y + 0.9) * T - myRz, fn: () => { ctx.save(); ctx.translate(0, -myRz); drawMyPets(m, dt); ctx.restore(); } });
       draws.push({ y: (m.y + 1) * T - myRz, fn: () => { ctx.save(); ctx.translate(0, -myRz); drawSelf(m); ctx.restore(); } });
       /* ZIP 444 — l'étoile qui suit, à l'intérieur. ⚠️ ELLE ÉCLAIRE : c'est ici
@@ -20082,8 +20095,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const len = Math.hypot(dx, dy); dx /= len; dy /= len;
         const sp = C.PLAYER_SPEED * dt * (performance.now() < speedBuffUntilRef.current ? C.CANDY_SPEED_MUL : 1);
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
-        if (canStandEvil(ew, nx, m.y)) m.x = nx;
-        if (canStandEvil(ew, m.x, ny)) m.y = ny;
+        const stuckE = !canStandEvil(ew, m.x, m.y);
+        if (stuckE || canStandEvil(ew, nx, m.y)) m.x = nx;
+        if (stuckE || canStandEvil(ew, m.x, ny)) m.y = ny;
         if (dx < 0) m.dir = 2; else if (dx > 0) m.dir = 3; else if (dy < 0) m.dir = 1; else if (dy > 0) m.dir = 0;
         m.animT += dt * 9;
       } else m.animT = 0;
@@ -21414,7 +21428,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // pattes immergées + vaguelettes (drawSwimOverlay), pas d'ombre portée.
       const wSwim = worldRef.current;
       const swimmingHere = riding && wSwim && p.zone !== "evil" && E.isWaterTile(wSwim, p.x, p.y);
-      if (!swimmingHere) { ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(px + 8, py + 15, riding ? 9 : 6, riding ? 3 : 2.5, 0, 0, 7); ctx.fill(); }
+      /* ⚠️ 2026-09-01 — CETTE ELLIPSE EST LA DÉFINITION DE LA SEMELLE, pas une
+         décoration : `C.bodyPoints` en dérive sa ligne de contact et sa
+         profondeur. Les nombres viennent donc des constantes, sans quoi on
+         aurait deux descriptions du même sol (§8) — et c'est exactement ce qui
+         a laissé la collision décalée d'une demi-case pendant vingt zips. */
+      if (!swimmingHere) { ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(px + C.CHAR_SPRITE_W / 2, py + C.CHAR_SHADOW_PY, riding ? 9 : 6, riding ? 3 : C.CHAR_SHADOW_RY, 0, 0, 7); ctx.fill(); }
       /* hors-zip — LA LUEUR BLEUE DU DÉFI DE FUITE, VISIBLE 5 MINUTES APRÈS LA
          COURSE. Demande de Guillaume : indiquer SANS ouvrir un panneau si on a
          encore la lumière en réserve. `Q.starCandyFresh` porte déjà toute la
@@ -21953,7 +21972,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!g || !m) return;
       const zone = m.zone || "farm";
       if (g.zone !== zone) return;
-      if (zone === "court" && E.courtFloorOf(g.y) !== E.courtFloorOf(m.y + 0.2)) return;
+      if (zone === "court" && E.courtFloorOf(g.y) !== E.courtFloorOf(C.footY(m.y))) return;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalCompositeOperation = "source-over";
       const sx = (g.x * T - cam.x) * zoom, sy = (g.y * T - cam.y) * zoom;
@@ -22237,7 +22256,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function drawCourtMap() {
       const mc = mapCanvasRef.current; if (!mc) return;
       const cw = courtWorldRef.current, m = meRef.current; if (!cw || !m) return;
-      const f = E.courtFloorOf(m.y + 0.2), fy0 = E.courtFloorY0(f);
+      const f = E.courtFloorOf(C.footY(m.y)), fy0 = E.courtFloorY0(f);
       const g = mc.getContext("2d");
       const maxW = Math.min(window.innerWidth * 0.86, 900), scale = maxW / C.COURT_FLOOR_W;
       const dispW = Math.round(C.COURT_FLOOR_W * scale), dispH = Math.round(C.COURT_FLOOR_H * scale) + 26;
@@ -22307,7 +22326,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const all = [meRef.current, ...playersRef.current.values()];
       for (const p of all) {
         if (!p || (p.zone || "farm") !== "court") continue;
-        if (E.courtFloorOf(p.y + 0.2) !== f) continue;
+        if (E.courtFloorOf(C.footY(p.y)) !== f) continue;
         const px = p.x * scale, py = OY + (p.y - fy0) * scale;
         const self = p.id === me.id;
         g.fillStyle = "#000"; g.beginPath(); g.arc(px, py, 4.5, 0, 7); g.fill();
@@ -22356,27 +22375,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     cx = Math.max(0, Math.min(ew.w * C.TILE - vw, cx)); cy = Math.max(0, Math.min(ew.h * C.TILE - vh, cy));
     const wx = (mouseRef.current.x / ZOOM + cx) / C.TILE, wy = (mouseRef.current.y / ZOOM + cy) / C.TILE;
     const tx = Math.floor(wx), ty = Math.floor(wy);
-    if (inMapEvil(tx, ty) && Math.abs(wx - (m.x + 0.5)) <= C.ACT_RANGE + 0.5 && Math.abs(wy - (m.y + 0.2)) <= C.ACT_RANGE + 0.5) return { x: tx, y: ty };
+    if (inMapEvil(tx, ty) && Math.abs(wx - C.footX(m.x)) <= C.ACT_RANGE + 0.5 && Math.abs(wy - C.footY(m.y)) <= C.ACT_RANGE + 0.5) return { x: tx, y: ty };
     return facingTile();
   }
   function blocked(w, x, y) { return E.blockedTile(w, x, y, Date.now()); }
   function canStand(w, x, y) {
-    const r = 0.3;
-    return !blocked(w, x - r, y) && !blocked(w, x + r, y) && !blocked(w, x - r, y + 0.35) && !blocked(w, x + r, y + 0.35);
+    // 2026-09-01 — une seule description de la semelle, pour la ferme comme
+    // pour la ville et le tribunal. Voir C.bodyPoints.
+    return C.bodyPoints(x, y).every(([px, py]) => !blocked(w, px, py));
   }
+  /* ⚠️ PAS DE `farmStepOk` ICI : la ferme a sa trappe de dégagement depuis le
+     zip 232 (voir `stuck` dans updateMe) — c'est le même geste, écrit avant, et
+     c'est lui que la ville et le tribunal reprennent aujourd'hui. */
   // Variante montée (chantier 2026-07, demande Guillaume : "on doit pouvoir
   // traverser la rivière à cheval") : mêmes 4 points de test que canStand,
   // mais l'eau est franchissable à la nage (voir E.blockedTileMounted). Le
   // ralentissement /4 est appliqué dans updateMe, pas ici.
   function canStandMounted(w, x, y) {
-    const r = 0.3, now = Date.now();
-    const bm = (xx, yy) => E.blockedTileMounted(w, xx, yy, now);
-    return !bm(x - r, y) && !bm(x + r, y) && !bm(x - r, y + 0.35) && !bm(x + r, y + 0.35);
+    const now = Date.now();
+    return C.bodyPoints(x, y).every(([px, py]) => !E.blockedTileMounted(w, px, py, now));
   }
   function facingTile() {
     const m = meRef.current;
     const fx = [0, 0, -1, 1][m.dir], fy = [1, -1, 0, 0][m.dir];
-    return { x: Math.floor(m.x + fx), y: Math.floor(m.y + 0.2 + fy) };
+    return { x: Math.floor(C.footX(m.x)) + fx, y: Math.floor(C.footY(m.y)) + fy };
   }
   /* hors-zip (Codex, 2026-08-26) — LA SOURCE UNIQUE DE CONVERSION DU POINTEUR.
      Les pips et la ville gardent la portée d'action ; les labels d'intérieur
@@ -22387,8 +22409,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const wx = (mouseRef.current.x / zoom + cam.x) / C.TILE;
     const wy = (mouseRef.current.y / zoom + cam.y) / C.TILE;
     if (wx >= 0 && wy >= 0 && wx < mapW && wy < mapH
-      && Math.abs(wx - (m.x + 0.5)) <= range
-      && Math.abs(wy - (m.y + 0.2)) <= range) return { x: wx, y: wy };
+      && Math.abs(wx - C.footX(m.x)) <= range
+      && Math.abs(wy - C.footY(m.y)) <= range) return { x: wx, y: wy };
     return null;
   }
   function pointerTargetTile(m, mapW, mapH, cam, zoom) {
@@ -23015,14 +23037,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      peut refuser une case que le jeu accepte, jamais l'inverse (un arbre est
      toujours bloquant, une souche ne l'est jamais). C'est ce qui autorise la
      grille de navigation à être calculée une fois pour toutes.
-     ⚠️ La BOÎTE, elle, est la même des deux côtés (0,6 × 0,35), et c'est le
-     seul chiffre qu'il faudrait changer aux deux endroits — il est signalé
-     là-bas aussi. Deux boîtes différentes donneraient des chemins que le jeu
-     refuse de parcourir : le défaut même que ce zip corrige. */
+     ⚠️ La BOÎTE, elle, est la même des deux côtés, et depuis le 2026-09-01 elle
+     n'est plus écrite qu'UNE fois, dans `C.bodyPoints` : elle était recopiée à
+     sept endroits, tous justes, tous décalés d'une demi-case par rapport au
+     dessin du personnage. Deux boîtes différentes donneraient des chemins que
+     le jeu refuse de parcourir — le défaut même que le 428 corrigeait. */
   function townCanStand(tw, x, y, fromE) {
-    const r = 0.3;
-    const pts = [[x - r, y], [x + r, y], [x - r, y + 0.35], [x + r, y + 0.35]];
-    for (const [px, py] of pts) {
+    for (const [px, py] of C.bodyPoints(x, y)) {
       if (townBlockedAt(tw, px, py)) return false;
       if (fromE !== undefined && Math.abs(townElevAt(tw, px, py) - fromE) > C.TOWN_STEP_MAX) return false;
     }
@@ -23261,11 +23282,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function nearestCourtDoor() {
     const m = meRef.current, cw = courtWorldRef.current;
     if (!m || !cw) return null;
-    const f = E.courtFloorOf(m.y + 0.2);
+    const f = E.courtFloorOf(C.footY(m.y));
     let best = null, bestD = 1.9;
     for (const d of cw.doors) {
       if (d.floor !== f) continue;
-      const dd = Math.hypot(d.x + 0.5 - (m.x + 0.5), d.y + 0.5 - (m.y + 0.2));
+      const dd = Math.hypot(d.x + 0.5 - C.footX(m.x), d.y + 0.5 - C.footY(m.y));
       if (dd < bestD) { bestD = dd; best = d; }
     }
     return best;
@@ -23368,8 +23389,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function nearCourtExit() {
     const m = meRef.current;
     if (!m) return false;
-    const ex = E.courtExitPos(m.y + 0.2);
-    return E.courtFloorOf(m.y + 0.2) === ex.floor
+    const ex = E.courtExitPos(C.footY(m.y));
+    return E.courtFloorOf(C.footY(m.y)) === ex.floor
       && Math.abs(m.x - (ex.x + 0.5)) <= 1.8 && Math.abs(m.y - ex.y) <= 2.2;
   }
   /* ╔══════════════════════════════════════════════════════════════════════════
@@ -23393,12 +23414,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function nearChurchProp(kind, r) {
     const m = meRef.current, cw = courtWorldRef.current;
     if (!m || !cw || m.zone !== "court") return null;
-    if (E.courtBuildingOf(m.y + 0.2).key !== "church") return null;
-    const f = E.courtFloorOf(m.y + 0.2);
+    if (E.courtBuildingOf(C.footY(m.y)).key !== "church") return null;
+    const f = E.courtFloorOf(C.footY(m.y));
     let best = null, bd = Infinity;
     for (const pr of (cw.props || [])) {
       if (pr.kind !== kind || E.courtFloorOf(pr.y) !== f) continue;
-      const d = Math.hypot(pr.x + 0.5 - (m.x + 0.5), pr.y - m.y);
+      const d = Math.hypot(pr.x + 0.5 - C.footX(m.x), pr.y - m.y);
       if (d <= r && d < bd) { bd = d; best = pr; }
     }
     return best;

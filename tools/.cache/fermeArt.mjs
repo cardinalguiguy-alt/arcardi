@@ -1162,6 +1162,66 @@ export function drawTownStairCheek(ctx, S, tw, x, y, px, py, bx, bw, drop) {
   return true;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   2026-09-01 — LA HAIE, SEIZE CAS, ET ELLE SORT ENFIN DE LA CLOSURE.
+   ──────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️⚠️ ELLE ÉTAIT DESSINÉE DANS LA BOUCLE DE RENDU, ET C'EST LA RAISON POUR
+   LAQUELLE PERSONNE N'A VU LE DÉFAUT PENDANT SIX ZIPS. Le piège n°1 de
+   `CLAUDE.md`, deuxième visage : *un dessin qu'aucun banc ne peut appeler ne se
+   dégrade pas, il reste au niveau du jour où il a été écrit.* La haie est
+   pourtant le décor le PLUS répandu de Valley Town — elle borne les vingt-sept
+   parcelles — et le seul dont un joueur longe des centaines de cases.
+   Elle vit ici désormais, comme les marches (436) et le pavage (434), pour la
+   seule raison qui vaille : `tools/render-haies.mjs` doit pouvoir l'appeler.
+
+   ⚠️ LE CHOIX DE TUILE EST UNE JOINTURE, PAS DEUX LISTES. Une seule lecture du
+   voisinage (`tw.hedge`) décide et de la bande verticale et du tronçon
+   horizontal ; c'est la parade du 449 (« une jointure, jamais deux listes »)
+   appliquée à un dessin. Les seize cas se lisent donc en deux lignes :
+     · un AXE NORD-SUD s'il y a une voisine au nord ou au sud ;
+     · un AXE EST-OUEST s'il y a une voisine à l'ouest ou à l'est ;
+     · les deux ensemble font les quatre angles, les quatre tés et le croisement ;
+     · aucun des deux fait le buisson isolé.
+
+   ⚠️⚠️ L'ORDRE DE DESSIN DIT QUI PASSE DEVANT, ET IL N'EST PAS ARBITRAIRE : la
+   bande verticale d'abord, le tronçon horizontal par-dessus. C'est ce que
+   montre `hedgeCorner` de la seconde planche — le seul angle que Guillaume ait
+   dessiné : la branche qui descend part de SOUS le tronçon, elle ne le coupe
+   pas. L'inverse donnerait une croix plate, sans aucune lecture de volume.
+
+   ⚠️⚠️ ET LA RANGÉE D'OMBRE PORTÉE SAUTE QUAND LA HAIE CONTINUE VERS LE SUD.
+   C'est une ombre AU SOL : la peindre là où il y a encore de la haie tracerait
+   une barre grise en travers d'une branche verticale, une fois par angle. La
+   bande, elle, est prolongée jusqu'au bas de la case pour combler la rangée
+   qu'on vient de retirer — sans quoi on remplace une barre par un trou.
+   ══════════════════════════════════════════════════════════════════════════ */
+export function drawTownHedgeTile(ctx, S, tw, x, y, px, py) {
+  const HG = S && S.townHedge;
+  if (!HG || !HG.mid) return false;
+  const T = SPR_T, B = HG.body;
+  const at = (xx, yy) => (xx < 0 || yy < 0 || xx >= tw.w || yy >= tw.h) ? 0 : (tw.hedge ? tw.hedge[yy * tw.w + xx] : 0);
+  const n = at(x, y - 1), s = at(x, y + 1), w = at(x - 1, y), e = at(x + 1, y);
+  const vert = n || s, horz = w || e;
+  if (!vert && !horz) { ctx.drawImage(HG.solo, px, py + T - B); return true; }
+  if (vert) {
+    /* La bande : entière quand elle est seule sur la case, tronquée au-dessus
+       du tronçon quand elle le croise (elle n'a rien à faire au-dessus d'une
+       haie qui, elle, s'arrête là).
+       ⚠️ Le bout se choisit par l'ABSENCE de voisine, jamais par la présence :
+       une branche qui rejoint un tronçon n'a pas de bout, elle a une jointure. */
+    const img = !horz ? (n && s ? HG.v : s ? HG.vn : HG.vs) : HG.v;
+    const y0 = horz && !n ? T - B : 0;              // sous le plateau du tronçon
+    const y1 = horz && !s ? T - B : T;              // ... et pas plus bas que lui
+    if (y1 > y0) ctx.drawImage(img, 0, y0, B, y1 - y0, px + HG.vx, py + y0, B, y1 - y0);
+  }
+  if (horz) {
+    const img = w && e ? HG.mid : e ? HG.w : HG.e;
+    const rows = s ? B - 1 : B;                     // l'ombre portée saute si ça continue au sud
+    ctx.drawImage(img, 0, 0, T, rows, px, py + T - B, T, rows);
+  }
+  return true;
+}
+
 /* ZIP 467 — UN SEUL APPEL, UN SEUL BITMAP. Le bloc porte déjà les murs, les
    deux volées, les quatre colonnes, les balustrades et le pot. `dx/dy` servent
    uniquement aux bancs qui cadrent une fenêtre locale ; le jeu passe zéro.
@@ -14937,13 +14997,89 @@ export function buildSprites() {
        ⚠️ LE BOUT EST DESSINÉ POUR L'OUEST ET MIROITÉ POUR L'EST, par le même
        `flipH` que les personnages. Deux dessins séparés auraient divergé au
        premier retouchage — c'est le paramètre qui double un paramètre du §8,
-       appliqué à une symétrie. */
+       appliqué à une symétrie.
+
+       ⚠️⚠️⚠️ 2026-09-01 — ET IL MANQUAIT LA MOITIÉ DE LA FAMILLE : LA HAIE
+       N'AVAIT PAS D'AXE NORD-SUD. Le choix de tuile ne regardait que l'ouest et
+       l'est ; une colonne de haie — c'est-à-dire les DEUX CÔTÉS de chacune des
+       vingt-sept parcelles, soit la moitié de tout le linéaire de la ville —
+       n'avait ni voisin ouest ni voisin est, donc recevait `solo` à CHAQUE
+       case : un chapelet de buissons détachés, avec deux pixels de vide entre
+       chacun. Guillaume, mot pour mot : *« les haies sont ok à l'horizontale
+       mais quand elles doivent être à la verticale elles sont segmentées et
+       plus continues c'est nul »*. Les voisines nord et sud étaient LUES
+       (`hN`, `hS`) et n'entraient dans aucun test — le défaut le plus cher qui
+       soit à voir en relisant, et le plus évident à l'écran.
+
+       ⚠️⚠️ LA HAIE VERTICALE EST LA HAIE HORIZONTALE TRANSPOSÉE, et ce n'est
+       pas une astuce d'économie : *une haie qui tourne d'un quart de tour ne
+       change pas de matière, elle change d'axe.* La transposition (rangée
+       source → colonne de destination) donne quatre choses d'un coup, dont
+       aucune n'aurait été juste si on avait dessiné un second sprite :
+         · la MATIÈRE est au pixel près celle de la planche de Guillaume — pas
+           une couleur inventée, pas un grain qui vieillira à part ;
+         · elle BOUCLE en y, parce que la source boucle en x : le tronçon
+           horizontal fait 16 px de large, la bande verticale fait donc 16 px de
+           haut, c'est-à-dire exactement une case ;
+         · la LUMIÈRE reste cohérente. Le tronçon horizontal a son plateau clair
+           au nord et son ombre portée au sud ; transposé, il a son plateau à
+           l'ouest et son ombre à l'est. Une seule source de lumière, au
+           nord-ouest — et c'est ce que montre `hedgeCorner` de la seconde
+           planche, qui est le seul angle de haie que Guillaume ait dessiné ;
+         · les BOUTS suivent gratuitement : le bout OUEST transposé est le bout
+           NORD, le bout EST transposé est le bout SUD. Zéro dessin de plus.
+
+       ⚠️⚠️ LES TROIS DESSINS SONT RECADRÉS, ET C'EST UN DÉFAUT DE DÉCOUPE DE LA
+       PLANCHE, PAS UN CHOIX. `hedgeMid` porte trois rangées du sprite du
+       DESSOUS (une barre grise et deux touffes), `hedgeEnd` deux, et
+       `hedgeSolo` en porte trois du sprite du DESSUS — le bas de `hedgeEnd`,
+       reconnaissable au pixel. En jeu ça donnait un pointillé de débris sous
+       toute la haie, répété tous les 16 px, c'est-à-dire la pire forme
+       possible : une PÉRIODE (`DESSIN.md`). Les trois corps font 14 rangées ;
+       les décalages ci-dessous sont des faits sur la feuille de référence, et
+       `tools/render-haies.mjs` vérifie qu'après recadrage il ne reste aucun
+       îlot détaché.
+       ⚠️ ET LE RECADRAGE REPOSE LA HAIE SUR SA CASE. Le sprite de 20 px était
+       dessiné à `bas − 20` : son ombre portée tombait donc 4 px AU-DESSUS du
+       bas de la case, et la haie flottait au-dessus de son propre sol pendant
+       que tous les autres décors de la ville sont posés sur `(y+1)·TILE`
+       (`townPropBox`). C'est la moitié invisible du défaut de collision. */
     townHedge: (() => {
-      const mid = plancheSprite("hedgeMid"), end = plancheSprite("hedgeEnd");
-      const endE = cv(end.width, end.height);
-      endE[1].drawImage(end, 0, 0);
-      flipH(endE[1], end.width, end.height);
-      return { mid, w: end, e: endE[0], solo: plancheSprite("hedgeSolo") };
+      const BODY = 14;                     // hauteur utile, la même pour les trois
+      /* Le corps seul. Renvoie le couple [canevas, contexte] : la transposition
+         a besoin des pixels, et un second `getContext` sur le même canevas est
+         un aller-retour gratuit qu'on paierait 27 fois au chargement. */
+      const cut = (name, top) => {
+        const src = plancheSprite(name);
+        const o = cv(src.width, BODY);
+        o[1].drawImage(src, 0, top, src.width, BODY, 0, 0, src.width, BODY);
+        return o;
+      };
+      const mid = cut("hedgeMid", 3), capW = cut("hedgeEnd", 3), solo = cut("hedgeSolo", 4);
+      const capE = cv(capW[0].width, BODY);
+      capE[1].drawImage(capW[0], 0, 0);
+      flipH(capE[1], capW[0].width, BODY);
+      /* La transposition proprement dite : dst(x, y) = src(y, x). Elle est
+         écrite par pixel et non par plages — 224 pixels par tuile, trois
+         tuiles, une fois au chargement. */
+      const turn = (src) => {
+        const w = src[0].width, h = src[0].height;
+        const s = src[1].getImageData(0, 0, w, h).data;
+        const [c, g] = cv(h, w);
+        const im = g.getImageData(0, 0, h, w), d = im.data;
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+          const a = (y * w + x) * 4, b = (x * h + y) * 4;
+          for (let k = 0; k < 4; k++) d[b + k] = s[a + k];
+        }
+        g.putImageData(im, 0, 0);
+        return c;
+      };
+      return {
+        body: BODY,
+        mid: mid[0], w: capW[0], e: capE[0], solo: solo[0],
+        // La bande verticale, ses deux bouts, et le retrait qui la centre.
+        v: turn(mid), vn: turn(capW), vs: turn(capE), vx: (T - BODY) >> 1,
+      };
     })(),
     /* ZIP 436 — LA PIERRE DE LA HAUTE-VILLE : marches, parement de falaise,
        limons. Même forme que `townRoad` (un objet, sa période voyage avec) et
