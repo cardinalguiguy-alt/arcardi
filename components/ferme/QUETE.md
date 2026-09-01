@@ -2453,6 +2453,19 @@ Les habitants célèbrent la réouverture du **port de Valley Town**, sans jamai
 Les joueurs comprennent seuls le second sens : la reine a fabriqué une route entre le monde partagé
 et les prochains mondes d'Arcardi.
 
+### 17.7 bis Autorité — la chasse des sœurs 5 à 7 ne se simplifie pas
+
+⚠️⚠️ **AUTORITÉ 2026-09-01 — LES QUATRE DERNIÈRES SŒURS NE SE PRENNENT PAS COMME LES TROIS
+PREMIÈRES.** Guillaume, en tranchant la portée du correctif de constellation (§13 de `CLAUDE.md`) :
+*« il faudra chercher les étoiles manquantes d'une manière inédite mais le taming final sera bien
+le moyen de les récupérer. Elles doivent résister au taming simple, il faut inventer mieux. »* Ce
+que les §17.5 et §17.6 décrivent déjà va dans ce sens — la verte se chasse par triangulation d'une
+réflexion dans l'eau, l'orange se repère aux copeaux et aux vibrations plutôt qu'à un chevron, la
+violette se guide de feu en feu à travers le brouillard — et cette phrase les **verrouille** :
+aucune des trois ne doit se réduire, à l'implémentation, à une approche puis un apprivoisement
+simple comme les trois premières sœurs. Le geste d'apprivoisement final reste la porte de sortie de
+chaque chasse, jamais son intégralité.
+
 ### 17.8 Transformation graphique du lac en port
 
 ⚠️⚠️⚠️ **AUTORITÉ 2026-08-31 — CE N'EST PAS UN BASSIN, C'EST UN ACCÈS À L'OCÉAN.** Décision de

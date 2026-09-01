@@ -11,32 +11,50 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-⚠️⚠️⚠️ **LE GEL DE PNJ CHEZ L'INVITÉ (§13 ITEM N°1, SIX TENTATIVES, JAMAIS FAITE) EST ENFIN TESTÉ,
-DIAGNOSTIQUÉ ET CORRIGÉ (hors-zip, 2026-09-01) — DÉTAIL AU §4 ET AU §13.** Sur demande explicite de
-Guillaume (« tu peux le faire »), Claude a testé lui-même à deux clients (exception ponctuelle à la
-règle « Guillaume joue lui-même » — accordée pour CETTE session, pas reconduite tacitement) : la
-cause n'était PAS un résident cassé, mais `netCanBroadcast()` qui lisait un booléen mis en cache
-(`hiddenRef`) jamais resynchronisé avec `document.hidden` — figé à `true` pour toujours si l'onglet
-hôte montait pendant qu'il était masqué (le cas banal : ouvrir l'onglet invité juste après). Plus
-aucun `broadcastStation()` ne partait, silencieusement, sans aucun symptôme côté hôte. Corrigé en
-lisant `document.hidden` directement (plus de cache à désynchroniser) — reproduit AVANT et APRÈS le
-correctif, dans les deux cas en recréant la course exacte (hôte monté pendant qu'il est masqué).
-⚠️ **DEUX TESTS SUPPLÉMENTAIRES, MÊME SESSION** : un résident qui part en ville puis en revient reste
-synchro côté invité (zone ET coordonnées) — jamais vérifié avant ; et le correctif tient à cinq
-bascules masqué/visible d'affilée en pleine partie (8/20 résidents encore vus bouger juste après).
-⚠️ Piège d'outillage rencontré en testant, à savoir pour la prochaine session de debug à deux
-onglets : le panneau Browser peut rendre `document.hidden` vrai sur TOUS les onglets à la fois
-selon son propre état d'affichage, indépendamment de l'onglet interne réellement actif — un onglet
-qui semble au premier plan peut donc mentir sur sa visibilité. Se fier au `document.hidden` lu en
-direct dans la page, pas à quel onglet le panneau montre.
-⚠️ **CE QUI RESTE, ET C'EST POUR GUILLAUME** : ce correctif règle le MÉCANISME (les résidents
-arrivent et bougent chez l'invité) — il ne dit rien du RESSENTI. Une vraie session de jeu à deux
-(§13, méthode inchangée) reste la seule façon de juger si le résultat est agréable, et reste le
-préalable à toute décision sociale (mariage, densification, relations résident-résident, chaîne de
-transport du bois). **ACTION SUIVANTE UNIQUE — ATTENDRE QUE GUILLAUME AIT JOUÉ LA FERME PEUPLÉE À
-DEUX CLIENTS**, cette fois avec de bonnes chances que ça marche. Si Guillaume dit « reprends le
-travail » sans autre précision, demander où en est cette session, et ne PAS ouvrir de chantier
-créatif de son propre chef en attendant.
+⚠️⚠️⚠️ **CETTE LIVRAISON NE CHANGE PAS LE CENTRE DE GRAVITÉ DU FICHIER : LE GEL DE PNJ CHEZ
+L'INVITÉ (§13 ITEM N°1) EST TOUJOURS TESTÉ, DIAGNOSTIQUÉ ET CORRIGÉ — DÉTAIL AU §4 ET AU §13,
+RIEN N'A CHANGÉ, RIEN À RELIRE ICI.** **ACTION SUIVANTE UNIQUE — ATTENDRE QUE GUILLAUME AIT JOUÉ
+LA FERME PEUPLÉE À DEUX CLIENTS.** Si Guillaume dit « reprends le travail » sans autre précision,
+demander où en est cette session, et ne PAS ouvrir de chantier créatif de son propre chef en
+attendant.
+
+⚠️⚠️ **CE QUI EST LIVRÉ HORS-ZIP LE 2026-09-01, EN GÉRANT UNE DETTE DU §13 : LA CONSTELLATION EST
+LA BREBIS, SEPT POINTS, ET NE SE PEINT PLUS SOUS UN PLAFOND.** Demande de Guillaume (« continuons à
+gérer les dettes d'arcardi », choix explicite de la dette, puis « commence le dessin maintenant »
+après une première proposition trop timide) — cette livraison est allée plus loin que la portée
+initialement annoncée (« seulement l'intérieur, pas le passage à sept points »), sur instruction
+directe de Guillaume, qui a repris la main sur l'arbitrage.
+· **Intérieur** : `drawStarOverlay` — une passe « en espace écran » pensée comme neutre parce
+qu'elle ne lit aucune coordonnée du monde — se peignait quand même par-dessus le tribunal, la
+mairie et l'église (zone `court`), sans aucune garde autre que `isNightTime` : QUETE.md §17.9
+(lot D) l'interdit noir sur blanc. Corrigée par une garde de zone (`meRef.current.zone !== "court"`)
+sur le seul bloc constellation, identique au pattern déjà en place dans `drawStarChevron`. *Une
+passe « en espace écran » n'est pas une passe indépendante du lieu.*
+· **La forme** : cinq points arbitraires → sept points qui dessinent une VRAIE brebis (nez et tête
+baissés, dos PLAT entre garrot et croupe, petite queue en moignon, deux pattes qui PENDENT du dos
+au lieu de prolonger la ligne — sept points, six segments, un ARBRE et non plus une simple
+polyligne). ⚠️ **Un premier essai à dos BOMBÉ en triangle a été rejeté avant d'entrer dans le jeu**
+— rejoué dans un échafaudage jetable (serveur statique local + Browser pane, aucun fichier commité,
+supprimé après usage), il se lisait comme un oiseau, pas comme un mouton ; le dos aplati corrige
+ça. *Aucun banc du dépôt ne regarde ce dessin (§10) — la seule vérification possible pour une
+silhouette est de la regarder, donc elle a été regardée avant d'écrire les coordonnées définitives,
+pas après.*
+⚠️ **CE QUI N'A PAS BOUGÉ, DÉLIBÉRÉMENT** : le déclencheur reste identique à avant (quête démarrée +
+nuit + dehors) — les sept points sont TOUJOURS ensemble, AUCUNE révélation progressive par sœur.
+QUETE.md §17.2-§17.7 décrit une apparition progressive des points au fil des actes ; l'implémenter
+demanderait que les 4 compagnes manquantes (blanche, verte, orange, violette) existent en code
+comme entités capturables, ce qui n'est pas le cas (seules bleue/rose/reine existent,
+`quete.js:188,191`) et reste tout le chantier « sept sœurs » des lots A-G (§17.10), non construit.
+Guillaume a aussi verrouillé une direction pour CE chantier futur, en autorité datée au §17.7 bis
+de `QUETE.md` : les quatre dernières sœurs doivent se chercher « d'une manière inédite » et
+résister au taming simple — ce que §17.5-§17.6 prévoyaient déjà (triangulation, lecture des
+copeaux, guidage dans le brouillard), désormais non négociable.
+
+Vérifications : bundle esbuild propre sur `FermeGame.js` (seul `G_SOIL` préexistant subsiste),
+`verify-quete` **631/631**, `verify-syntax` propre, `next build` **✓ Compiled successfully** puis
+l'arrêt documenté sur `supabaseUrl` — les quatre relancés après le réglage définitif de la forme,
+pas seulement avant. **Aucune migration SQL, aucun changement de schéma, aucune manipulation
+Supabase.**
 
 ⚠️⚠️⚠️ **CE QUI EST LIVRÉ HORS-ZIP, SÉANCE DU 2026-09-01 : QUATRE DÉFAUTS TROUVÉS EN JOUANT, SUR
 LA CALE ET CHEZ TRISTAN.** Demande de Guillaume, mot pour mot, sur la cale : *« le chevron me
@@ -187,9 +205,11 @@ le WTF »* et *« l'idée est de rajouter du fun, mais pas de complexifier à ou
 2026-09-01 par *« n'ajoute pas d'éléments wtf […] jeu que des enfants de 10 ans joueront ; on garde
 ce qu'on a et on ajoute ou modifie pour densifier et faire participer »*.
 
-⚠️⚠️⚠️ **CE QUI RESTE DE L'AUDIT DE LA QUÊTE, NON FAIT, PAR ORDRE** : la **constellation** (cinq
-points écrits en dur, la fiction en promet sept, et elle se peint dès la chute **y compris à
-l'intérieur des bâtiments** — seule garde : `isNightTime`) ; les **quatre morceaux sans provenance**
+⚠️⚠️⚠️ **CE QUI RESTE DE L'AUDIT DE LA QUÊTE, NON FAIT, PAR ORDRE** : la **constellation** (toujours
+cinq points écrits en dur, la fiction en promet sept — dette non bloquante, volontairement hors
+périmètre tant que le chantier « sept sœurs » n'est pas construit, QUETE.md §17.9 ; le fait qu'elle
+se peignait aussi **à l'intérieur des bâtiments** est corrigé hors-zip le 2026-09-01, voir le bloc
+⏭️ REPRISE) ; les **quatre morceaux sans provenance**
 (safran, mât, voile, cloche — `SHIP_SITE_OF` rend `null`) ; le **HUD peint par-dessus la scène
 plein écran du maire** ; les **1 829 canevas 2D au chargement** (tablette). Aucun n'est bloquant ;
 tous sont datés. ⚠️ **Et la quête de l'étoile n'a toujours pas été JOUÉE d'une traite** : les trois
@@ -552,7 +572,7 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 
 | # | La leçon, en une phrase | Où est le détail |
 |---|---|---|
-| hors-zip (cale/scie) | ⚠️⚠️ **UN ALLER QUI SE LISSE ET UN RETOUR QUI SAUTE SONT DEUX FAMILLES DIFFÉRENTES.** Le chicot scié basculait en douceur sur 420 ms puis retombait à zéro D'UN COUP dès la planche suivante — pas la même faute que le trait de scie voisin, qui DOIT sauter pour ne pas montrer du bois qui se répare : ici une charnière rentrait juste à son repos, et la voir se figer d'un coup se lit pire qu'un mouvement qui continue. | `v.drop`, `scierieAtelier.js` §chute |
+| hors-zip (constellation) | ⚠️⚠️ **UN DOS BOMBÉ EN TRIANGLE SE LIT COMME UN OISEAU, PAS COMME UN MOUTON.** Sept points reliés en arbre (six segments, pas une polyligne) devaient dessiner une brebis reconnaissable en restant une constellation ordinaire ; le premier essai, avec un dos qui montait puis redescendait en pointe, ratait sa cible bien qu'il fût géométriquement correct. Aucun banc ne regarde ce dessin (§10) : la forme a donc été rejouée dans un échafaudage jetable (Browser pane, rien commité) AVANT d'écrire les coordonnées définitives, pas relue après — un dos aplati (garrot et croupe presque au même niveau) a suffi. | `FermeGame.js` §constellation, `QUETE.md` §17.7 bis |
 | hors-zip (Tristan) | ⚠️⚠️ **UN VÊTEMENT QUI N'EXISTE QUE DU CÔTÉ OPPOSÉ À TOUTES LES CAMÉRAS N'EST VU PAR PERSONNE.** Les bretelles de Tristan étaient posées, justes, « dans le dos » — sauf que les trois vues du joueur (poste, face, atelier) le regardent toutes de face ou de trois quarts avant. Un détail de costume ne se juge pas à ce qu'il existe dans la scène, mais à ce qu'il existe DANS LE CADRE qu'on lui donne. | `buildTristan` §bretelles, `scierieAtelier.js` |
 | hors-zip (Martial) | ⚠️⚠️⚠️ **UN MÉCANISME QUI SE RÉSOUT TOUT SEUL N'EST PAS UN BUG DE DÉPLACEMENT, MÊME S'IL Y RESSEMBLE.** Le résident sucrier « figé » n'avait aucune trajectoire cassée : c'était l'ITT de la rivalité Tristan/Jérôme (16 minutes réelles après une bagarre perdue), qui se lève seule à l'échéance — vérifié en avançant l'horloge en session de debug — mais dont le toast ne dit ni la durée ni qu'un pansement l'écourte. *Une conséquence de jeu correcte, mal signalée, se lit exactement comme une conséquence cassée — la distinction se fait en avançant l'horloge, pas en relisant le code.* | `TJ_BRAWL_ITT_MS`, `fermeConstants.js` |
 | hors-zip (réseau) | ⚠️⚠️⚠️ **LA DETTE LA PLUS VIEILLE DU FICHIER ÉTAIT UN BOOLÉEN MIS EN CACHE, PAS UN RÉSIDENT CASSÉ.** `hiddenRef` (reflet de `document.hidden`) ne se corrigeait que sur `visibilitychange` ; monté pendant un onglet réellement masqué, il restait figé à `true` pour toujours, coupant `broadcastStation()` en silence — zéro symptôme côté hôte, gel total côté invité. *Six tentatives avaient échoué à seulement OUVRIR ce test ; la cause, elle, ne s'est trouvée qu'en le jouant pour de vrai, deux onglets, jusqu'au bout.* | `netCanBroadcast`, `FermeGame.js` §4 |
@@ -1290,7 +1310,7 @@ pas se l'accorder soi-même » pour tout le reste). Cette liste ORDONNE ce qui e
 plus bas dans ce chapitre ; elle ne redit rien de leur contenu, elle priorise LEQUEL jouer en
 premier.
 1. **Gels de PNJ chez l'invité, ferme PEUPLÉE, à deux clients.** ✅ **MÉCANISME TESTÉ, DIAGNOSTIQUÉ
-   ET CORRIGÉ hors-zip le 2026-09-01** (détail au §4 et au bloc ⏭️ REPRISE) — `netCanBroadcast()`
+   ET CORRIGÉ hors-zip le 2026-09-01** (détail au §4) — `netCanBroadcast()`
    lisait un `hiddenRef` mis en cache jamais resynchronisé avec `document.hidden`, figé à `true`
    pour toujours si l'onglet hôte montait pendant qu'il était masqué. Plus aucun `broadcastStation()`
    ne partait ; les résidents (et tout le reste de `station`) restaient invisibles chez l'invité,
@@ -1837,6 +1857,20 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
    EXCEPTIONNELLEMENT menée par Claude lui-même sur demande explicite et répétée de Guillaume
    (« tu peux le faire ») — la règle « Guillaume joue lui-même » du §13 n'est pas changée pour la
    suite, c'est une dérogation ponctuelle, écrite comme telle dans le bloc ⏭️ REPRISE et au §13.)**.
+
+   **hors-zip, la brebis (QUARANTIÈME passe : la ligne « hors-zip (cale/scie), v.drop » part avant
+   celle de cette séance — une retirée, une ajoutée, le tableau reste à quatre. Son détail retiré
+   vit dans `v.drop`/`scierieAtelier.js` §chute, que sa colonne de droite désignait déjà. Cette
+   passe n'ajoute aucune forme neuve au « banc qui passe » (aucun banc ne regarde ce rendu, §10) ni
+   de nouveau piège formel au §4 — c'est une instance isolée, pas encore une famille payée deux
+   fois. ⚠️ Session directe, en deux temps : la portée proposée d'abord (l'intérieur seul, pas le
+   passage à sept points) a été explicitement ÉLARGIE par Guillaume en cours de route (« commence
+   le dessin maintenant »), qui a repris la main sur un arbitrage que Claude avait pourtant motivé —
+   *lister les décisions structurantes ne verrouille pas le périmètre pour toujours, Guillaume garde
+   la main pour le rouvrir à tout moment, y compris juste après l'avoir lui-même refermé.* Chaque
+   choix (LAQUELLE dette, PORTÉE du correctif, puis extension au dessin) lui a été soumis avant
+   d'écrire une ligne de code, conformément au §2 — et la forme finale a été rejouée à l'écran avant
+   d'entrer dans le jeu, pas après (§14.6, banc imaginaire).)**.
 
    **2026-09-01, le rythme de la quête (TRENTE-QUATRIÈME passe : les DEUX lignes « scie » du
    tableau des leçons partent avant les deux de cette livraison — deux retirées, deux ajoutées, le

@@ -20947,9 +20947,36 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          (pure fonction de l'heure). CE QU'ON RETIRE : le trou, le remplissage,
          et le second compte. **Le pisteur est le navire, et il est seul.** */
       const tmin = E.gameTimeMin(sharedRef.current.dayStartAt, Date.now());
-      if (E.isNightTime(tmin)) {
-        const sx = W - 116, sy = 72;
-        const CONST = [[0, 0], [-16, 22], [14, 26], [-10, 50], [18, 54]];
+      /* ⚠️ HORS-ZIP 2026-09-01 — AUCUNE CONSTELLATION SOUS UN PLAFOND (QUETE.md §17.9, lot D).
+         `drawStarOverlay` est appelée sans garde depuis la branche `zone === "court"` (tribunal,
+         mairie, église) : sans ce test elle se peignait par-dessus `drawCourtFrame`. Même source
+         et même pattern que `drawStarChevron` un peu plus bas dans ce fichier. */
+      const skyZone = meRef.current && meRef.current.zone;
+      if (E.isNightTime(tmin) && skyZone !== "court") {
+        const sx = W - 134, sy = 60;
+        /* ⚠️⚠️ HORS-ZIP 2026-09-01 — LA BREBIS, PAS SEPT POINTS AU HASARD (QUETE.md §17.7,
+           §17.7 bis). Nez et tête baissés (elle broute), un DOS PLAT entre garrot et
+           croupe (presque au même y — un dos bombé en triangle ressemblait à un oiseau,
+           pas à un mouton, à l'écran), une petite queue en moignon ; les deux pattes
+           PENDENT du dos et de la croupe au lieu de prolonger la ligne — sept points, six
+           segments, un ARBRE et pas une simple polyligne, sinon aucune patte n'est
+           possible avec une seule ligne continue. Rejoué à l'écran (échafaudage jetable,
+           supprimé) avant d'écrire ces coordonnées dans le jeu.
+           ⚠️ ELLE DOIT RESTER LISIBLE COMME UNE CONSTELLATION ORDINAIRE tant qu'on ne
+           sait pas ce qu'elle dessine — Guillaume : « ressemblent toujours à une simple
+           constellation ». Même déclencheur qu'avant (nuit + dehors) : les 7 points sont
+           TOUJOURS ensemble, aucune révélation progressive par sœur — 4 des 7 compagnes
+           (blanche, verte, orange, violette) n'existent pas encore en code. */
+        const CONST = [
+          [0, 14],   // 0 nez (tête baissée)
+          [7, 10],   // 1 tête / encolure
+          [16, 2],   // 2 dos avant (garrot)
+          [34, 3],   // 3 dos arrière (croupe) — presque au même niveau que 2 : dos PLAT
+          [42, 8],   // 4 queue (petit moignon)
+          [14, 22],  // 5 patte avant (pend du garrot)
+          [32, 24],  // 6 patte arrière (pend de la croupe)
+        ];
+        const EDGES = [[0, 1], [1, 2], [2, 3], [3, 4], [2, 5], [3, 6]];
         ctx.save();
         for (let i = 0; i < CONST.length; i++) {
           const px = sx + CONST[i][0], py = sy + CONST[i][1];
@@ -20960,9 +20987,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
         ctx.strokeStyle = "rgba(200,220,255,0.16)"; ctx.lineWidth = 1;
         ctx.beginPath();
-        for (let i = 0; i < CONST.length; i++) {
-          const px = sx + CONST[i][0], py = sy + CONST[i][1];
-          i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+        for (const [a, b] of EDGES) {
+          ctx.moveTo(sx + CONST[a][0], sy + CONST[a][1]);
+          ctx.lineTo(sx + CONST[b][0], sy + CONST[b][1]);
         }
         ctx.stroke();
         ctx.restore();
