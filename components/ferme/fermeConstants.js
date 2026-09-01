@@ -2237,7 +2237,15 @@ export const TJ_BRAWL_CHANCE = 0.3; // jet de bagarre à CHAQUE étape de tensio
 // remarque vexante de Tristan — tirée au moment du déclenchement de la
 // scène, voir residentRoam (branche isTj).
 export const TJ_JEROME_INTERJECTION_CHANCE = 0.35;
-export const TJ_BRAWL_ITT_MS = DAY_REAL_MS; // 24h in-game d'indisponibilité (immobile devant son stand) pour le perdant
+// 2026-09-01 (bug remonté par Guillaume, « Martial reste figé ») : c'était
+// DAY_REAL_MS, soit 16 MINUTES RÉELLES d'immobilisation pour le perdant — le
+// mécanisme se dégèle correctement tout seul (vérifié en avançant l'horloge
+// en session de debug), ce n'est donc pas un bug de déplacement, mais une
+// punition disproportionnée pour une soirée entre amis (§0), et le toast
+// (toastTJBrawl) ne donne ni durée ni indice qu'un pansement l'écourte —
+// d'où l'impression de PNJ cassé. Ramené à 3 minutes réelles, sur demande de
+// Guillaume ("raccourcir nettement").
+export const TJ_BRAWL_ITT_MS = 3 * 60 * 1000;
 
 // Chantier "bagarre = vrai événement, en public" (2026-07, demande
 // Guillaume) : dès que le jet de bagarre (TJ_BRAWL_CHANCE) tombe positif, la

@@ -1302,7 +1302,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const lastPosSentRef = useRef(0);
   const lastPosKeyRef = useRef("s");        // FIX 243: derniere cle d'etat de mouvement diffusee ("m"+dir ou "s") pour l'emission par intention
   const lastMovingSentRef = useRef(false); // FIX 241: dernier "moving" diffusé — coupe l'envoi de position quand le joueur est immobile
-  const hiddenRef = useRef(false);         // FIX 241: onglet masqué (Page Visibility) — coupe toute diffusion réseau (desktop + tablette)
   // ---- Chantier v364 (trafic realtime, passe 1) ----
   // Le quota Supabase compte des MESSAGES, pas des octets : tout ce qui suit
   // vise d'abord à réduire le NOMBRE d'émissions, la taille ensuite.
@@ -2707,14 +2706,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     return () => { try { delete window.__fermeNet; } catch { /* non configurable : sans conséquence */ } };
   }, []);
 
-  // FIX 241: pause réseau quand l'onglet du jeu n'est plus affiché (autre
-  // onglet/app au premier plan, fenêtre minimisée, ou sur TABLETTE écran
-  // verrouillé / app changée). netCanBroadcast() lit hiddenRef -> plus aucun
-  // message émis tant que le jeu n'est pas visible ; reprise immédiate au retour.
+  /* ⚠️⚠️⚠️ HORS-ZIP 2026-09-01 — LE FIX 241 S'EST TRANSFORMÉ EN SON PROPRE
+     BUG. `netCanBroadcast()` lisait `hiddenRef`, un booléen mis en cache qui
+     ne se met à jour QUE sur un vrai événement `visibilitychange` — jamais
+     resynchronisé contre `document.hidden` entre deux événements. Si le
+     montage de CE composant tombait pendant que l'onglet était masqué (le cas
+     le plus banal : ouvrir l'onglet invité juste après l'onglet hôte, comme
+     le prescrit le §10 pour tester à deux — ça bascule l'hôte en arrière-plan
+     pendant que son effet de montage tourne encore), `hiddenRef.current`
+     restait figé à `true` POUR TOUJOURS, sans qu'aucun retour réel sur
+     l'onglet ne puisse le corriger tant que le navigateur ne redéclenchait
+     pas l'événement. `netCanBroadcast()` refusait alors tout — `broadcastStation()`
+     en particulier — pendant que la simulation de l'hôte continuait
+     parfaitement normalement EN LOCAL : aucun symptôme côté hôte, gel total
+     et silencieux de tout ce qui passe par `station` (résidents, visiteurs,
+     scènes, montgolfière) côté invité. C'est un candidat très solide pour
+     « gels de PNJ chez l'invité », la dette la plus vieille et la plus
+     répétée de CLAUDE.md — reproduit et vérifié en session de debug à deux
+     clients (`hiddenRef` bloqué à `true` malgré un onglet réellement visible ;
+     un `document.dispatchEvent(new Event("visibilitychange"))` de secours
+     débloquait aussitôt les 20 résidents chez l'invité).
+     PARADE : `document.hidden` est un getter natif, aussi bon marché qu'une
+     ref, et TOUJOURS à jour — on le lit directement au lieu de le mettre en
+     cache. Rien ne peut plus désynchroniser la valeur de sa source. */
   useEffect(() => {
-    const onVis = () => { hiddenRef.current = document.hidden; if (!document.hidden && channelReadyRef.current) sendPos(); };
+    const onVis = () => { if (!document.hidden && channelReadyRef.current) sendPos(); };
     document.addEventListener('visibilitychange', onVis);
-    hiddenRef.current = document.hidden;
     return () => document.removeEventListener('visibilitychange', onVis);
   }, []);
 
@@ -8083,12 +8100,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // ferme (cas courant) ou onglet masqué/tablette verrouillée -> zéro message
   // émis, sans aucun impact de gameplay (personne pour voir). Vaut pour la
   // position ET pour les entités simulées par l'hôte (greg/soan/lapins/…).
-  function netCanBroadcast() { return channelReadyRef.current && !hiddenRef.current && playersRef.current.size > 0; }
+  function netCanBroadcast() { return channelReadyRef.current && !document.hidden && playersRef.current.size > 0; }
   // ------------------------------------------------------------------
   // Audit août 2026 — garde d'audience pour les messages d'ÉTAT DE JEU.
   //
   // Distincte de netCanBroadcast() ci-dessus, et la différence est cruciale :
-  // celle-ci NE TESTE PAS hiddenRef. Un hôte dont l'onglet passe en arrière-plan
+  // celle-ci NE TESTE PAS la visibilité de l'onglet. Un hôte dont l'onglet passe en arrière-plan
   // doit continuer à diffuser les `apply` (récolte, arrosage, artisanat…),
   // sinon les invités restés dans la ferme se désynchronisent silencieusement.
   // Couper la SIMULATION décorative quand personne ne regarde est gratuit ;

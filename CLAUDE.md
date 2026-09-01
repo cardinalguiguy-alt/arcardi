@@ -11,23 +11,24 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-**ACTION SUIVANTE UNIQUE — CORRIGER LE RÉSIDENT SUCRIER (`sugarWorker`) FIGÉ SUR LA FERME.** Bug
-trouvé par Guillaume en jouant (2026-09-01, détaillé au §13). C'est la SEULE dette actionnable par
-un agent en ce moment : elle ne dépend d'aucune décision créative en attente et ne touche pas au
-dessin ni à la mécanique sociale. **Prompt exact à suivre** : reproduire en session locale
-(recette §10 : `.env.local` + page jetable, ⌘⇧X → « Peupler la ferme ») ; localiser la cause en
-comparant le déplacement des résidents de FERME à celui des résidents de VILLE, qui ont un vrai
-pathfinding depuis le zip 428 (`E.townFindPath`) — le symptôme ressemble à un résident resté sur
-un modèle plus ancien ; corriger ; vérifier avec les bancs concernés ; documenter en commentaire
-de code daté ; supprimer tout échafaudage local avant de finir ; mettre à jour ce fichier selon
-le §14 (remplacer la ligne de bug du §13, ne pas l'empiler). Ne rien toucher d'autre — pas de
-refactor, pas de nouvelle fonctionnalité.
-⚠️⚠️ **CE BUG CORRIGÉ, IL N'Y A PLUS RIEN À CODER SANS GUILLAUME.** Tout le reste — mariage
-(proche mais volontairement pas à livrer tout de suite), densification sociale (les quatre
-morceaux du navire → quatre personnes à convaincre, moteur de `maire.js` réutilisable, contrainte
-du §15.1), relations résident-résident, chaîne de transport du bois — attend explicitement que
-Guillaume ait joué la ferme peuplée à deux clients (§13, item n°1, la dette la plus vieille et la
-plus répétée de ce fichier). **Ne pas ouvrir l'un de ces chantiers de son propre chef.**
+⚠️⚠️⚠️ **LE GEL DE PNJ CHEZ L'INVITÉ (§13 ITEM N°1, SIX TENTATIVES, JAMAIS FAITE) EST ENFIN TESTÉ,
+DIAGNOSTIQUÉ ET CORRIGÉ (hors-zip, 2026-09-01) — DÉTAIL AU §4 ET AU §13.** Sur demande explicite de
+Guillaume (« tu peux le faire »), Claude a testé lui-même à deux clients (exception ponctuelle à la
+règle « Guillaume joue lui-même » — accordée pour CETTE session, pas reconduite tacitement) : la
+cause n'était PAS un résident cassé, mais `netCanBroadcast()` qui lisait un booléen mis en cache
+(`hiddenRef`) jamais resynchronisé avec `document.hidden` — figé à `true` pour toujours si l'onglet
+hôte montait pendant qu'il était masqué (le cas banal : ouvrir l'onglet invité juste après). Plus
+aucun `broadcastStation()` ne partait, silencieusement, sans aucun symptôme côté hôte. Corrigé en
+lisant `document.hidden` directement (plus de cache à désynchroniser) — reproduit AVANT et APRÈS le
+correctif, dans les deux cas en recréant la course exacte (hôte monté pendant qu'il est masqué).
+⚠️ **CE QUI RESTE, ET C'EST POUR GUILLAUME** : ce correctif règle le MÉCANISME (les résidents
+arrivent et bougent chez l'invité) — il ne dit rien du RESSENTI. Une vraie session de jeu à deux
+(§13, méthode inchangée) reste la seule façon de juger si le résultat est agréable, et reste le
+préalable à toute décision sociale (mariage, densification, relations résident-résident, chaîne de
+transport du bois). **ACTION SUIVANTE UNIQUE — ATTENDRE QUE GUILLAUME AIT JOUÉ LA FERME PEUPLÉE À
+DEUX CLIENTS**, cette fois avec de bonnes chances que ça marche. Si Guillaume dit « reprends le
+travail » sans autre précision, demander où en est cette session, et ne PAS ouvrir de chantier
+créatif de son propre chef en attendant.
 
 ⚠️⚠️⚠️ **CE QUI EST LIVRÉ HORS-ZIP, SÉANCE DU 2026-09-01 : QUATRE DÉFAUTS TROUVÉS EN JOUANT, SUR
 LA CALE ET CHEZ TRISTAN.** Demande de Guillaume, mot pour mot, sur la cale : *« le chevron me
@@ -543,10 +544,10 @@ qu'il décrit — les recopier ici les ferait vieillir en double.**
 
 | # | La leçon, en une phrase | Où est le détail |
 |---|---|---|
-| 2026-09-01 (semelle) | ⚠️⚠️⚠️ **DEUX ERREURS QUI SE COMPENSENT NE SE CORRIGENT PAS SÉPARÉMENT.** La boîte de collision était décalée d'une demi-case par rapport au sprite ; vingt-huit lectures de « la case sous ses pieds » l'étaient du même montant, dans le même sens. Tant que les deux mentaient ensemble, le jeu était à peu près jouable — corriger la collision seule aurait cassé la visée, l'altitude, l'étage du tribunal et le rebord du saut. *Une compensation n'est pas une correction : elle rend le prochain correctif dangereux, et c'est elle qu'il faut chercher AVANT de toucher au premier des deux nombres.* | `C.bodyPoints`, `C.footX`/`footY`, `C.tileAnchor` |
-| hors-zip (cale/scie) | ⚠️⚠️⚠️ **LA MÊME DIX-SEPTIÈME FORME, UN AUTRE DÉCOR, LE MÊME JOUR.** Le rectangle d'interaction de la cale mesurait bien la boîte peinte au nord de l'ancre et rien de la passerelle qui pend au sud, où le décor fait justement marcher le joueur pour « monter » une pièce. *Une leçon écrite une fois ne protège que l'endroit où elle a été payée ; le prochain rectangle de portée la doit encore.* | `STAR_SHIP_INTERACT_S_PAD`, `FermeGame.js` §raise |
 | hors-zip (cale/scie) | ⚠️⚠️ **UN ALLER QUI SE LISSE ET UN RETOUR QUI SAUTE SONT DEUX FAMILLES DIFFÉRENTES.** Le chicot scié basculait en douceur sur 420 ms puis retombait à zéro D'UN COUP dès la planche suivante — pas la même faute que le trait de scie voisin, qui DOIT sauter pour ne pas montrer du bois qui se répare : ici une charnière rentrait juste à son repos, et la voir se figer d'un coup se lit pire qu'un mouvement qui continue. | `v.drop`, `scierieAtelier.js` §chute |
 | hors-zip (Tristan) | ⚠️⚠️ **UN VÊTEMENT QUI N'EXISTE QUE DU CÔTÉ OPPOSÉ À TOUTES LES CAMÉRAS N'EST VU PAR PERSONNE.** Les bretelles de Tristan étaient posées, justes, « dans le dos » — sauf que les trois vues du joueur (poste, face, atelier) le regardent toutes de face ou de trois quarts avant. Un détail de costume ne se juge pas à ce qu'il existe dans la scène, mais à ce qu'il existe DANS LE CADRE qu'on lui donne. | `buildTristan` §bretelles, `scierieAtelier.js` |
+| hors-zip (Martial) | ⚠️⚠️⚠️ **UN MÉCANISME QUI SE RÉSOUT TOUT SEUL N'EST PAS UN BUG DE DÉPLACEMENT, MÊME S'IL Y RESSEMBLE.** Le résident sucrier « figé » n'avait aucune trajectoire cassée : c'était l'ITT de la rivalité Tristan/Jérôme (16 minutes réelles après une bagarre perdue), qui se lève seule à l'échéance — vérifié en avançant l'horloge en session de debug — mais dont le toast ne dit ni la durée ni qu'un pansement l'écourte. *Une conséquence de jeu correcte, mal signalée, se lit exactement comme une conséquence cassée — la distinction se fait en avançant l'horloge, pas en relisant le code.* | `TJ_BRAWL_ITT_MS`, `fermeConstants.js` |
+| hors-zip (réseau) | ⚠️⚠️⚠️ **LA DETTE LA PLUS VIEILLE DU FICHIER ÉTAIT UN BOOLÉEN MIS EN CACHE, PAS UN RÉSIDENT CASSÉ.** `hiddenRef` (reflet de `document.hidden`) ne se corrigeait que sur `visibilitychange` ; monté pendant un onglet réellement masqué, il restait figé à `true` pour toujours, coupant `broadcastStation()` en silence — zéro symptôme côté hôte, gel total côté invité. *Six tentatives avaient échoué à seulement OUVRIR ce test ; la cause, elle, ne s'est trouvée qu'en le jouant pour de vrai, deux onglets, jusqu'au bout.* | `netCanBroadcast`, `FermeGame.js` §4 |
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
 
@@ -752,6 +753,22 @@ de conception qui valent pour n'importe quel morceau du dépôt.
   `req` arbitrée par l'hôte, comme la vente au marché. *La porte n'est jamais la caisse.*
 
 **JavaScript / three.js / canevas**
+- ⚠️⚠️⚠️ **UN BOOLÉEN MIS EN CACHE POUR UNE VALEUR NATIVE VOLATILE (`document.hidden`) NE SE
+  RESYNCHRONISE QUE SUR L'ÉVÉNEMENT QUI LE MET À JOUR — JAMAIS TOUT SEUL** (hors-zip, 2026-09-01,
+  bug « gels de PNJ chez l'invité », §13 item n°1, six tentatives, jamais diagnostiqué avant).
+  `netCanBroadcast()` lisait `hiddenRef.current`, écrit UNE fois au montage puis à chaque
+  `visibilitychange` — jamais ailleurs. Si le composant montait pendant que l'onglet était
+  RÉELLEMENT masqué (cas banal : ouvrir l'onglet invité juste après l'onglet hôte, exactement la
+  manip que le §10 prescrit pour tester à deux), `hiddenRef.current` restait figé à `true` POUR
+  TOUJOURS — aucun retour visuel sur l'onglet ne peut le corriger, seul un vrai événement
+  `visibilitychange` le peut, et rien ne le redéclenche si la valeur était déjà fausse au départ.
+  `broadcastStation()` refusait alors tout, silencieusement, pour toujours : la simulation de
+  l'hôte continuait parfaitement EN LOCAL (aucun symptôme chez lui), et rien de ce qui passe par
+  `station` (résidents, visiteurs, scènes, montgolfière) n'atteignait plus jamais l'invité.
+  *Un état qui ne peut se corriger que par un événement est aussi fragile que l'événement qui
+  peut ne jamais se reproduire.* ⚠️ La parade : `document.hidden` est un getter natif, aussi bon
+  marché qu'une ref — on le LIT DIRECTEMENT à chaque appel au lieu de le mettre en cache. Rien ne
+  peut plus désynchroniser une valeur de sa source si on ne la copie jamais.
 - ⚠️⚠️⚠️ **UNE FONCTION DÉCLARÉE DANS LA CLOSURE DE LA BOUCLE DE RENDU N'EXISTE PAS POUR LE
   COMPOSANT** — payé au 430 (`tryTownJump`, saut de rebord mort) puis au 431
   (`canStandTown` appelée par `advanceRemote`, Valley Town injouable à deux). Le hissage des
@@ -1259,13 +1276,21 @@ erreur** en choisissant mal.
 réglant l'aspect agréable ou pas, qui ne peut être vérifié que par moi-même »).** Un banc mesure
 la mécanique ; il ne peut jamais dire si c'est AGRÉABLE — seule une vraie séance de jeu le peut,
 et Guillaume est le seul à la faire (Claude ne lance pas de bancs ni de sessions de jeu de son
-propre chef dans cette phase). Cette liste ORDONNE ce qui est déjà détaillé plus bas dans ce
-chapitre ; elle ne redit rien de leur contenu, elle priorise LEQUEL jouer en premier.
-1. **Gels de PNJ chez l'invité, ferme PEUPLÉE, à deux clients** — la dette la plus vieille et la
-   plus souvent réclamée de ce fichier (« TOUJOURS LA PASSE LA PLUS URGENTE »), jamais faite en
-   six tentatives. C'est le socle de toute décision sociale à venir : mariage, densification,
-   commissions se jugeraient sur des résidents jamais vus se comporter à deux. ⚠️ **NON FAIT** —
-   pas encore testé au 2026-09-01.
+propre chef dans cette phase — **exception ponctuelle accordée hors-zip le 2026-09-01, sur
+demande explicite répétée de Guillaume, pour le seul item n°1 ci-dessous** ; la règle reste « ne
+pas se l'accorder soi-même » pour tout le reste). Cette liste ORDONNE ce qui est déjà détaillé
+plus bas dans ce chapitre ; elle ne redit rien de leur contenu, elle priorise LEQUEL jouer en
+premier.
+1. **Gels de PNJ chez l'invité, ferme PEUPLÉE, à deux clients.** ✅ **MÉCANISME TESTÉ, DIAGNOSTIQUÉ
+   ET CORRIGÉ hors-zip le 2026-09-01** (détail au §4 et au bloc ⏭️ REPRISE) — `netCanBroadcast()`
+   lisait un `hiddenRef` mis en cache jamais resynchronisé avec `document.hidden`, figé à `true`
+   pour toujours si l'onglet hôte montait pendant qu'il était masqué. Plus aucun `broadcastStation()`
+   ne partait ; les résidents (et tout le reste de `station`) restaient invisibles chez l'invité,
+   sans aucun symptôme côté hôte. ⚠️ **CE QUI RESTE, ET C'EST TOUJOURS POUR GUILLAUME** : le
+   mécanisme marche, le RESSENTI à deux (l'ambiance, ce qui se voit, ce qui manque encore) n'a
+   toujours pas été jugé par une vraie séance de jeu — c'est cette moitié-là qui reste le socle des
+   décisions sociales à venir (mariage, densification, relations résident-résident, transport du
+   bois).
 2. **Les cinq mini-jeux de la quête de l'étoile**, joués jusqu'à la victoire, à cadence réelle.
 3. **La moitié « face à face » de la quête** : l'étoile timide dos à dos, le croisement d'ombres
    à deux, la flaque du ponton, le duo orgue/beffroi. ⚠️ Pas testable seul, dépend du n°1.
@@ -1290,11 +1315,14 @@ Guillaume joue lui-même (recette au §10 : `fake-supabase.mjs`, échafaudage te
 « Peupler la ferme », deux onglets) ; Claude fournit les commandes exactes si besoin, jamais ne
 les exécute à sa place sur ce chantier.
 
-⚠️ **BUG TROUVÉ EN JOUANT (2026-09-01), HORS LISTE CI-DESSUS PARCE QUE C'EST UN BUG PAS UN
-RESSENTI** : le résident sucrier (`sugarWorker`, `fermeArt.js`/`FermeGame.js`) reste parfois figé
-sur la ferme. Pas encore localisé — prompt de correction exact au bloc ⏭️ REPRISE en tête de
-fichier. Retour général sur toutes les activités testées : plus d'indicateurs visuels de
-progression et plus d'animations demandés.
+✅ **BUG DU RÉSIDENT SUCRIER — RÉSOLU (2026-09-01).** Ce n'était pas un bug de déplacement : le
+résident sucrier (Jérôme Martial) « figé » avait perdu une bagarre de la rivalité Tristan/Jérôme
+et purgeait son ITT (`TJ_BRAWL_ITT_MS`), qui se levait correctement seule mais durait 16 MINUTES
+RÉELLES sans que le toast n'indique une durée ni la possibilité de le soigner au pansement — d'où
+l'impression de PNJ cassé. Ramené à 3 minutes réelles sur demande de Guillaume. Détail au
+commentaire daté de `fermeConstants.js` (`TJ_BRAWL_ITT_MS`). Retour général sur toutes les
+activités testées, toujours ouvert : plus d'indicateurs visuels de progression et plus
+d'animations demandés.
 
 ⚠️ **DEUX IDÉES DU MÊME DÉBRIEF, TRANCHÉES SUR LEUR SORT IMMÉDIAT, PAS SUR LEUR CONTENU** :
 · **Visiteurs célèbres** (noms et sprites de vraies personnes) — **à explorer plus tard**,
@@ -1779,6 +1807,28 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
    ⚠️ Cette passe non plus n'ajoute aucune forme neuve au « banc qui passe » : la limite de
    `lib-3d.mjs` sur les textures réduites à leur couleur moyenne est déjà écrite pour le bureau du
    maire (§8 de l'en-tête) — c'est la même limite, pas une nouvelle. Aucun chiffre périmé trouvé.)**.
+
+   **hors-zip, Martial dégelé (TRENTE-HUITIÈME passe : la ligne « 2026-09-01 (semelle) », la plus
+   ancienne du tableau, part avant celle de cette séance — une retirée, une ajoutée, le tableau
+   reste à quatre. Son détail retiré vit dans `C.bodyPoints`/`C.footX`/`C.footY`/`C.tileAnchor`, que
+   sa colonne de droite désignait déjà. Cette passe n'ajoute aucune forme neuve au « banc qui
+   passe » ni au §4 : le bug remonté par Guillaume n'en était pas un — c'est la seule fois de cette
+   séance où « comparer au modèle plus vieux » (le prompt de reprise) menait à une fausse piste, et
+   la vraie cause (un réglage de durée mal signalé) a demandé de rejouer l'horloge plutôt que de
+   relire le code.)**.
+
+   **hors-zip, réseau à deux clients (TRENTE-NEUVIÈME passe : la ligne « hors-zip (cale/scie),
+   STAR_SHIP_INTERACT_S_PAD » part avant celle de cette séance — une retirée, une ajoutée, le
+   tableau reste à quatre. Son détail retiré vit dans `STAR_SHIP_INTERACT_S_PAD`/`FermeGame.js`
+   §raise, que sa colonne de droite désignait déjà. ⚠️⚠️⚠️ Cette passe AJOUTE une forme neuve à la
+   tête du §4 (JavaScript) — *un booléen mis en cache pour une valeur native volatile ne se
+   resynchronise que sur l'événement qui le met à jour* — et règle l'item n°1 du §13, la dette la
+   plus vieille et la plus répétée du fichier depuis six tentatives : les « gels de PNJ chez
+   l'invité » n'étaient pas un résident cassé mais `netCanBroadcast()` bloqué en silence par un
+   `hiddenRef` jamais resynchronisé. Diagnostiqué et corrigé en session de test à deux clients,
+   EXCEPTIONNELLEMENT menée par Claude lui-même sur demande explicite et répétée de Guillaume
+   (« tu peux le faire ») — la règle « Guillaume joue lui-même » du §13 n'est pas changée pour la
+   suite, c'est une dérogation ponctuelle, écrite comme telle dans le bloc ⏭️ REPRISE et au §13.)**.
 
    **2026-09-01, le rythme de la quête (TRENTE-QUATRIÈME passe : les DEUX lignes « scie » du
    tableau des leçons partent avant les deux de cette livraison — deux retirées, deux ajoutées, le
