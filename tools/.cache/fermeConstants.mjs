@@ -4398,9 +4398,22 @@ export const TOWN_CHURCH = { x: 66, y: 46, w: 8, h: 5 };   // ex-TOWN_HALL du zi
    fontaine — la position d'une mairie sur une place de village. Brique et
    pierre, beffroi à horloge : rien de commun avec le portique blanc de
    l'église ni avec le péristyle du tribunal, pour qu'aucun des trois ne puisse
-   être confondu avec un autre à distance. Sprite 160×144, soit 10×9 cases,
-   dont 6 rangées bloquantes. */
-export const TOWN_HALL = { x: 112, y: 52, w: 10, h: 6 };
+   être confondu avec un autre à distance.
+   ⚠️ 2026-09-02 — ÉLARGI de 10 à 12 cases (croissance symétrique autour de
+   l'ancien centre x=117, donc x passe de 112 à 111) pour le sprite PNG importé
+   (townhall-day.png/townhall-glow.png, voir FermeGame.js/drawTownHallBitmap) :
+   Guillaume voulait plus de largeur et plus de fenêtres pour que le bâtiment
+   se lise comme un hôtel de ville. Largeur vérifiée sans chevauchement — le
+   voisin le plus proche (TOWN_COURT, x=136) laisse encore 13 cases de marge.
+   6 rangées bloquantes, inchangé (la profondeur du bâtiment n'a pas grandi). */
+export const TOWN_HALL = { x: 111, y: 52, w: 12, h: 6 };
+// Nombre de rangées, au sud de l'emprise, laissées TRAVERSABLES pour le
+// perron (fermeEngine.js, boucle de solidité des bâtiments civils) — partagé
+// avec FermeGame.js/drawTownHallBitmap, qui doit ancrer la clé de tri de
+// profondeur sur cette même limite (sinon un joueur planté sur le perron,
+// donc au nord de l'ancienne bordure sud, se fait recouvrir par le sprite :
+// payé le 2026-09-02, joueur invisible en s'approchant de la porte).
+export const TOWN_HALL_STEP_ROWS = 1;
 
 /* LE TRIBUNAL. Demande : « un autre bâtiment élégant néoclassique nommé
    tribunal, imposant, qui ressemble à un tribunal ».
@@ -5539,6 +5552,7 @@ export const DEV_TELEPORTS = [
   { key: "townBoutique",  zone: "town" },  // zip 427 : la Haute-Ville, devant la Maison Garfield (le seul quartier qu'on n'atteint qu'en montant)
   { key: "townPlaza",     zone: "town" },  // la place centrale, devant la fontaine
   { key: "townCourt",     zone: "town" },  // le parvis du tribunal, en Haute-Ville
+  { key: "townHall",      zone: "town" },  // 2026-09-02 : le perron de l'hôtel de ville (test PNG) — pour juger le sprite/les marches/l'horloge sans traverser la ville à chaque rechargement
   { key: "townBelvedere", zone: "town" },  // le second palier
   { key: "townMarket",    zone: "town" },  // zip 426 : le champ de foire, enfin occupé
   { key: "townLake",      zone: "town" },  // zip 426 : la promenade du lac, au sud

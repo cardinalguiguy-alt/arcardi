@@ -13840,6 +13840,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             m.y = ry;
           }
           else if (dk === "townCourt") { m.x = C.TOWN_COURT.x + C.TOWN_COURT.w / 2; m.y = C.TOWN_COURT.y + C.TOWN_COURT.h + 2; }
+          else if (dk === "townHall") { m.x = C.TOWN_HALL.x + C.TOWN_HALL.w / 2; m.y = C.TOWN_HALL.y + C.TOWN_HALL.h + 2; }
           else if (dk === "townBelvedere") { m.x = C.TOWN_BELVEDERE.x + C.TOWN_BELVEDERE.w / 2; m.y = C.TOWN_BELVEDERE.y + C.TOWN_BELVEDERE.h - 3; }
           /* Zip 427 : la Haute-Ville commerçante. ⚠️ ELLE MÉRITE SON ARRÊT parce
              qu'elle est le seul endroit de la ville qu'on n'atteint qu'en
@@ -18496,9 +18497,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const drawTownHallBitmap = (b) => {
         const day = loadBitmap("/town/townhall-day.png");
         if (!day) return; // pas encore chargé : rien à dessiner cette frame
-        const by = (b.y + b.h) * T;
+        const by = (b.y + b.h) * T; // bas de l'IMAGE : reste au vrai bord de l'emprise
+        /* ⚠️ 2026-09-02 — LA CLÉ DE TRI, ELLE, NE PEUT PAS ÊTRE `by` : depuis
+           que le perron est traversable (C.TOWN_HALL_STEP_ROWS), un joueur
+           planté dessus a un y-écran INFÉRIEUR à `by` (il est au nord de
+           l'ancienne bordure sud) — trié avant le sprite, donc dessiné
+           DESSOUS, donc invisible en s'approchant de la porte. La clé se
+           cale sur la limite réelle du plein (le pied du mur), pas sur le
+           bord de l'image : n'importe où sur le perron reste devant. */
+        const sortY = (b.y + b.h - C.TOWN_HALL_STEP_ROWS) * T;
         const e = elAt(b.x, b.y + b.h - 1);
-        pushE(by, e, () => {
+        pushE(sortY, e, () => {
           const cx2 = b.x * T + b.w * T / 2;
           const dx = b.x * T + (b.w * T - day.width) / 2, dy = by - day.height;
           /* Ombre portée, soleil en haut à gauche (convention du reste de la

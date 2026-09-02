@@ -4024,6 +4024,7 @@ export const FERME_STR = {
       town: "🚉 Valley Town — la gare",
       townPlaza: "⛲ Valley Town — la place",           // zip 425
       townCourt: "⚖️ Valley Town — le tribunal",
+      townHall: "🏛️ Valley Town — l'hôtel de ville (perron)",
       townBelvedere: "🔭 Valley Town — le belvédère",
       townBoutique: "👗 Valley Town — la Haute-Ville",   // zip 427
       townMarket: "🎪 Valley Town — le champ de foire",   // zip 426
@@ -5668,6 +5669,7 @@ export const FERME_STR = {
       town: "🚉 Valley Town — the station",
       townPlaza: "⛲ Valley Town — the plaza",          // zip 425
       townCourt: "⚖️ Valley Town — the courthouse",
+      townHall: "🏛️ Valley Town — the town hall (steps)",
       townBelvedere: "🔭 Valley Town — the belvedere",
       townBoutique: "👗 Valley Town — Upper Town",
       townMarket: "🎪 Valley Town — the fairground",      // zip 426

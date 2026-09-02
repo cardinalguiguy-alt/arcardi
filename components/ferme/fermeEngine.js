@@ -4310,7 +4310,7 @@ export function generateTownWorld() {
      porte) suffisait déjà à interagir, mais le joueur butait sur un mur
      invisible une case avant les marches au lieu de les monter. */
   for (const b of [C.TOWN_CHURCH, C.TOWN_HALL, C.TOWN_COURT, C.TOWN_BOUTIQUE, C.TOWN_SALON]) {
-    const stepRows = b === C.TOWN_HALL ? 1 : 0;
+    const stepRows = b === C.TOWN_HALL ? C.TOWN_HALL_STEP_ROWS : 0;
     rect(b, (x, y, i) => { if (y < b.y + b.h - stepRows) solid[i] = 1; });
   }
 
