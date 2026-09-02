@@ -200,13 +200,31 @@ export const STAR_SITES = [
   { id: "farmMaterialB", zone: "farm", spot: "starFarmImpact", impact: 7, content: "material" },
   // ── Chapitre 2 : le cratère. On ne trouve pas un morceau, on trouve QUELQU'UN.
   { id: "crater",    zone: "town",  spot: "starCrater", content: "star", color: "yellow", queen: true, verb: "pair" },
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-02 (lot A2) — LA SIXIÈME SŒUR, « LA DISCRÈTE ». VERBE `spot`.
+     ╚══════════════════════════════════════════════════════════════════════════
+     Guillaume : *« elle se cache entre les pnj, tranquillement, parfois sur un
+     banc, parfois circulant normalement : elle sera entre la place centrale, et
+     le parc, elle pourra se mouvoir dans cet espace seulement. »* Mini chapeau,
+     lunettes de soleil ; la reine oriente vers elle ; on l'apprivoise en pressant
+     E — *« on l'apprivoise facilement »*.
+     ⚠️⚠️ ELLE EST DANS LE `need` DU CHAPITRE 2, DERRIÈRE LA REINE, ET C'EST UNE
+     DÉCISION DE STRUCTURE : le seuil de la septième sœur est « reine apprivoisée
+     ET six étoiles trouvées ». La laisser hors des chapitres l'aurait rendue
+     facultative, donc jamais annoncée par le bandeau — et la septième aurait
+     attendu une condition que rien ne pousse le joueur à remplir.
+     ⚠️ SON GESTE EST LE PLUS SIMPLE DE TOUTE LA QUÊTE, ET C'EST VOULU : cinq
+     étoiles demandent déjà une mécanique chacune (bonbons, plat, fiole, deux
+     bords, rythme). La sixième demande seulement de REGARDER — c'est-à-dire la
+     seule chose qu'aucune des cinq autres ne demande. */
+  { id: "townShy",   zone: "town",  spot: "starShy",    content: "star", color: "orange", verb: "spot" },
 ];
 /* Les trois verbes connus, écrits UNE fois. ⚠⚠ Une étoile sans verbe est une
    erreur de table et non un cas à rattraper à l'exécution : `starVerbOf` rend
    `null`, `starTameTarget` ne la propose pas, et le banc le dit tout de suite.
    Un repli silencieux sur « dos tourné » aurait redonné le même geste à tout le
    monde, c'est-à-dire exactement le défaut qu'on vient de corriger. */
-export const STAR_VERBS = ["light", "warm", "pair", "lure"];
+export const STAR_VERBS = ["light", "warm", "pair", "lure", "spot"];
 export function starVerbOf(id) {
   const s = STAR_SITE[id];
   return s && STAR_VERBS.includes(s.verb) ? s.verb : null;
@@ -631,7 +649,12 @@ export function starTimberBuilt(e) { return STAR_SHIP_KEYS.filter(k => starTimbe
 export const STAR_CHAPTERS = [
   { key: "field",  need: ["farmStarBlue", "farmEmptyA", "farmMaterial", "farmStarRose", "farmEmptyB",
                           "farmEmptyC", "farmStarWhite", "farmMaterialB"] },
-  { key: "crater", need: ["crater"] },
+  /* 2026-09-02 (lot A2) — LA DISCRÈTE FERME LE CHAPITRE 2, DERRIÈRE LA REINE.
+     ⚠️ L'ORDRE DE CETTE LISTE FAIT FOI (`starMissing` rend le premier manquant) :
+     la reine d'abord, puisque c'est ELLE qui apprend au joueur que la discrète
+     existe. Inversés, le bandeau enverrait chercher quelqu'un dont personne n'a
+     encore parlé. */
+  { key: "crater", need: ["crater", "townShy"] },
   { key: "build",  need: [], final: true },
 ];
 export const STAR_CH_DONE = STAR_CHAPTERS.length;
@@ -2009,8 +2032,18 @@ export const STAR_GOAL_TARGET = { craterHot: "crater", craterAlone: "crater",
      chaudron") ; le chevron pointait pourtant ailleurs — deux réponses à « où
      vais-je », le défaut du 449, trouvé par Guillaume en jouant. */
   farmImpactWarm: "cauldron", farmImpactSimmer: "cauldron", farmImpactTake: "cauldron",
-  farmImpactLure: "cauldron" };
-export const STAR_OFF_TABLE_TARGETS = ["townHall", "sawmill", "shipyard", "cauldron"];
+  farmImpactLure: "cauldron",
+  // 2026-09-02 (lot A2) — voir la note de `STAR_OFF_TABLE_TARGETS` : la place, pas elle.
+  townShy: "shyPlaza", townShyAway: "shyPlaza" };
+/* ⚠️⚠️ 2026-09-02 (lot A2) — LE CHEVRON DE LA DISCRÈTE POINTE LA PLACE, PAS ELLE.
+   C'est la seule décision de conception de ce lot, et elle se joue là : un chevron
+   posé sur sa tête supprime la chasse — il resterait à marcher jusqu'à une flèche,
+   ce qui est exactement ce que Guillaume ne demande pas (« elle se cache entre les
+   pnj »). Il désigne donc l'ENTRÉE de son domaine ; le reste est à l'œil.
+   ⚠️ `shyPlaza` EST UNE ADRESSE HORS TABLE, comme `sawmill` ou `cauldron` : ce
+   n'est pas un lieu d'étoile, c'est un endroit de la ville. `FermeGame.js` la
+   résout depuis `C.TOWN_PLAZA`, seule source de « où est la place ». */
+export const STAR_OFF_TABLE_TARGETS = ["townHall", "sawmill", "shipyard", "cauldron", "shyPlaza"];
 export function starTargetSite(e, ctx) {
   const goal = starGoalKey(e, ctx);
   if (!goal) return null;
@@ -2476,6 +2509,71 @@ export function starWakeGlow(hits) {
    prompt §3.10), et une seconde carte à réconcilier est ce que le §3 de
    `CLAUDE.md` interdit. */
 export function starWoke(e, id) { return !!(e && e.woke && e.woke[id]); }
+
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-02 (lot A2) — OÙ SE CACHE LA DISCRÈTE. UNE HORLOGE, PAS UN ÉTAT.
+   ╚══════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ ELLE NE VOYAGE PAS SUR LE RÉSEAU, ET C'EST LE PATRON DÉJÀ ÉCRIT CINQ FOIS
+   DANS CE DÉPÔT (jour de marché, service de Carla, jour d'orage, cours du marché,
+   élections) : **une pure fonction du temps, jamais un état**. Un champ « où est
+   la discrète » aurait été un champ de plus à réconcilier (§3 de `CLAUDE.md`)
+   pour une information que les deux clients savent déjà calculer.
+   ⚠️⚠️ L'ORIGINE DU TEMPS EST `e.townFall`, C'EST-À-DIRE UNE DATE DE L'HÔTE DÉJÀ
+   PARTAGÉE — jamais l'horloge locale seule. Les deux clients comptent donc les
+   mêmes créneaux depuis le même instant ; il ne reste entre eux que leur dérive
+   d'horloge, de l'ordre de la seconde, sur un créneau de cinquante.
+   ⚠️⚠️⚠️ ET C'EST POUR ÇA QUE L'ARBITRE TOLÈRE LE CRÉNEAU VOISIN (voir
+   `resolveStarSpot`). Sans cette tolérance, un joueur qui la repère à la dernière
+   seconde d'un créneau se verrait refuser en SILENCE, parce que l'hôte serait déjà
+   passé au suivant — un refus qu'il ne pourrait ni comprendre ni reproduire, et
+   qui ressemblerait trait pour trait à « la touche est cassée ».
+   ⚠️ LES PLANQUES ELLES-MÊMES NE SONT PAS ICI : elles se dérivent de la CARTE de
+   la ville (bancs et cases libres entre la place et le parc), que ce fichier n'a
+   pas. `FermeGame.js` les énumère, ce fichier ne dit que LAQUELLE. C'est le même
+   partage que le cratère, dont la position vient d'un balayage de la carte. */
+export const STAR_SHY_PERIOD_MS = 50000;   // elle change de planque toutes les 50 s
+export function starShySlot(e, now) {
+  const t0 = (e && +e.townFall) || 0;
+  if (!t0) return 0;
+  return Math.max(0, Math.floor(((+now || 0) - t0) / STAR_SHY_PERIOD_MS));
+}
+/* ⚠️ LE CRÉNEAU NE SE LIT PAS DIRECTEMENT COMME UN INDICE : `slot % n` la ferait
+   tourner en rond, toujours dans le même ordre, et un joueur qui a fait la quête
+   une fois saurait où regarder. Un haché entier casse le cycle sans rien coûter —
+   même famille que le hasard rejouable de `scierie.js` (aucune transcendante,
+   aucun `Math.random`, donc les deux clients tombent sur le même nombre). */
+export function starShyPick(n, slot) {
+  const c = Math.max(1, n | 0);
+  let h = (Math.max(0, slot | 0) + 0x9e37) >>> 0;
+  h = (h ^ (h >>> 13)) >>> 0;
+  h = Math.imul(h, 0x5bd1) >>> 0;
+  h = (h ^ (h >>> 11)) >>> 0;
+  return h % c;
+}
+/* ⚠️ ELLE S'ASSIED UNE FOIS SUR TROIS, ET C'EST DÉRIVÉ DU MÊME HACHÉ — pas d'un
+   second tirage, qui aurait pu dire « assise » chez l'un et « debout » chez
+   l'autre. Guillaume : « parfois sur un banc, parfois circulant normalement ».
+   Une planque qui n'est pas un banc la laisse debout quoi qu'il arrive :
+   l'appelant le sait, ce fichier ne connaît pas les bancs. */
+export function starShySits(slot) {
+  return starShyPick(3, (Math.max(0, slot | 0) ^ 0x2f1b)) === 0;
+}
+
+/* ⚠️⚠️ L'ARBITRE DE LA DISCRÈTE. Il ne vérifie PAS la distance, et c'est le même
+   contrat que la fouille (469) : le client teste la proximité, l'hôte tient la
+   RÈGLE. Ce qui compte est que l'arbitrage soit unique, et l'idempotence le tient.
+   ⚠️ CE QU'IL TIENT VRAIMENT : on ne peut pas la trouver avant la reine. C'est
+   elle qui apprend au joueur que la discrète existe — sans cette garde, un joueur
+   qui passerait par hasard sur sa case l'apprivoiserait avant d'avoir entendu
+   parler d'elle, et le chapitre entier perdrait sa raison d'être. */
+export function resolveStarSpot(e, who, now, name) {
+  const id = "townShy";
+  if (starVerbOf(id) !== "spot") return { ok: false };
+  if (starHas(e, id)) return { ok: false, already: true };
+  if (!starHas(e, "crater")) return { ok: false, noQueen: true };
+  const byName = name || String(who || "");
+  return { ...resolveStarFound(e, id, byName, now), site: id, opened: true };
+}
 
 /* ╔══════════════════════════════════════════════════════════════════════════
    ║ LES DEUX DÉCISIONS DU RÉVEIL, PURES — POUR QU'UN BANC PUISSE LES JOUER.
@@ -3113,7 +3211,16 @@ export function starGoalKey(e, ctx) {
      pour le panneau de la mairie (`hallTravel` / `hallWork`) — le bandeau
      permanent leur emboîte le pas, via `ctx.engineerHere` (dérivé par l'appelant
      de `starEngineerHere`, jamais recalculé ici sur une seconde horloge). */
-  if (starHas(e, "crater") && !starPlanAsked(e)) return "engineer";
+  /* ⚠️⚠️ 2026-09-02 (lot A2) — `!missing.length` A ÉTÉ AJOUTÉ, ET SANS LUI LA
+     SIXIÈME SŒUR N'EXISTERAIT PAS POUR LE BANDEAU. Cette clé passe AVANT tout le
+     reste (c'est la voix de l'étoile qui conseille la mairie) : dès que la reine
+     sortait, elle prenait la parole pour toujours. La discrète, annoncée par la
+     reine elle-même, n'aurait jamais eu une ligne — un objectif qu'on ne peut pas
+     lire est un objectif qui n'existe pas (444, cinq lieux inatteignables).
+     ⚠️ ELLE NE RETARDE RIEN D'AUTRE : la discrète est le dernier `need` du
+     chapitre 2, donc `missing` se vide dès qu'on l'a repérée, et l'ingénieur
+     reprend la parole exactement où il la prenait avant. */
+  if (starHas(e, "crater") && !missing.length && !starPlanAsked(e)) return "engineer";
   if (!first) {
     if (!starPlanReady(e)) return (ctx && ctx.engineerHere) ? "engineerWork" : "engineerTravel";
     /* ⚠️ ZIP 480 — LA PASSE MAIRE PREND SA PLACE DANS LE BANDEAU, entre les plans
@@ -3209,6 +3316,12 @@ export function starGoalKey(e, ctx) {
     return (ctx && (ctx.candy | 0) >= starOfferPrice("crater")) ? "craterFeedPay" : "craterFeed";
   if (first === "crater" && !starWoke(e, "crater")) return "craterWake";
   if (first === "crater" && !e.effigy && ctx && ctx.alone) return "craterAlone";
+  /* ⚠️ 2026-09-02 (lot A2) — DEUX PHRASES POUR LA DISCRÈTE, ET LE PARTAGE EST
+     CELUI DE LA ZONE : à la ferme, le bandeau dit de prendre le train (elle est en
+     ville) ; en ville, il dit où chercher. Même geste que `townWait`/
+     `townWaitThere`, signalé par Guillaume sur l'attente du cratère — un bandeau
+     qui redemande un trajet déjà fait. */
+  if (first === "townShy") return (ctx && ctx.inTown) ? "townShy" : "townShyAway";
   return first;
 }
 /* ⚠️ LA CLÉ D'UN TROU D'ÉTOILE DÉJÀ FOUILLÉ — UNE PAR ÉTAT, ET C'EST LE POINT.
@@ -3271,6 +3384,8 @@ export const STAR_GOAL_KEYS = (() => {
        ce qui est le seul moyen d'ajouter un état sans afficher `undefined`. */
     if (s.id === "crater") out.push("craterHot", "craterFeed", "craterFeedPay",
                                     "craterWake", "craterAlone", "engineer");
+    // 2026-09-02 (lot A2) — deux états du même lieu : loin (prends le train) et sur place.
+    if (s.id === "townShy") out.push("townShyAway");
   }
   /* ⚠️ ZIP 454 — les clés de la construction. Elles ne sont pas dérivées de
      `STAR_SITES` parce qu'elles ne sont pas des LIEUX : deux désignent une
@@ -3972,7 +4087,7 @@ export function resolveStarGift(e, playerIds, now) {
    de la reine) n'en a PAS besoin et c'est délibéré : il ne coûte qu'un objet à 400
    or, que le bouton « Argent » du menu dev sait déjà donner. Un bouton par geste
    aurait été un bouton de plus à tenir pour rien. */
-export const STAR_DEV_OPS = ["reset", "warn", "start", "candy", "dish", "lure", "queen", "chapter", "skip", "all", "plans", "deliver", "timber", "appt", "unslam"];
+export const STAR_DEV_OPS = ["reset", "warn", "start", "candy", "dish", "lure", "queen", "shy", "chapter", "skip", "all", "plans", "deliver", "timber", "appt", "unslam"];
 /* ⚠️ ZIP 469 — `turn` (le retournement) sort de la liste : sa scène est supprimée
    dans `FermeGame`, et un bouton qui rejoue une scène qui n'existe plus ouvre un
    voile noir de sept secondes sur rien. */
@@ -4149,6 +4264,23 @@ export function devStar(e, op, now, who) {
        de client (§3 de `CLAUDE.md` — une horloge, jamais deux). */
     if (e.townFall) e.townFall = t - STAR_CRATER_COOL_MS - 1000;
     resolveStarCandy(e, String(who || ""), STAR_QUEEN_PRICE, t);
+    return { star: e, ok: true };
+  }
+  /* ⚠️ 2026-09-02 (lot A2) — LE BOUTON DE LA DISCRÈTE. Même famille que `queen` :
+     il pose le décor et LAISSE LE GESTE. Ici le geste est de la TROUVER, donc ce
+     bouton ne la trouve surtout pas — il apprivoise la reine (la seule condition
+     que l'arbitre tienne) et laisse la chasse entière. Sans lui, juger la chasse
+     demanderait de refaire les trois temps de la reine à chaque essai.
+     ⚠️ IL NE DÉPLACE PAS SA PLANQUE : elle est une pure fonction du temps
+     (`starShySlot`), donc « la remettre ailleurs » n'a pas de sens — il suffit
+     d'attendre cinquante secondes, ce qui est aussi ce que fait le joueur. */
+  if (op === "shy") {
+    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "\u{1F6E0}️" };
+    if (!e.fall) e.fall = t;
+    for (const site of STAR_FARM_IMPACTS) resolveStarFound(e, site.id, "\u{1F6E0}️", t);
+    resolveStarTownFall(e, t);
+    if (e.townFall) e.townFall = t - STAR_CRATER_COOL_MS - 1000;
+    resolveStarFound(e, "crater", "\u{1F6E0}️", t);
     return { star: e, ok: true };
   }
   if (op === "chapter") {

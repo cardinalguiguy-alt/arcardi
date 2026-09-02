@@ -135,6 +135,12 @@ const openTownCrater = (e, at = 10) => {
    masquerait ce refus-là. Ouvrir le trou et l'apprêter sont deux gestes.
    ⚠️ `resolveStarCandy` crédite le flux avec l'horloge de l'hôte et une échéance
    ABSOLUE (§3 de CLAUDE.md) : on lui passe `t`, jamais une durée. */
+/* 2026-09-02 (lot A2) — LA DISCRÈTE FERME LE CHAPITRE 2 DERRIÈRE LA REINE, donc
+   tout scénario qui traversait « cratère → ingénieur » doit désormais la repérer au
+   passage. ⚠️ IL PASSE PAR LE VRAI RÉSOLVEUR (qui refuse avant la reine), jamais
+   par une écriture directe dans `e.found` : c'est ce refus-là qu'on veut voir tenir
+   à chaque scénario, pas seulement dans son contrôle dédié. */
+const findShy = (e, t = 1) => Q.resolveStarSpot(e, "banc", t, "banc").ok;
 const queenReady = (e, who, t) => {
   Q.resolveStarCandy(e, who, Q.starOfferPrice("crater"), t, 0);
   const fed = Q.resolveStarLight(e, who, "crater", 999, t);
@@ -190,7 +196,7 @@ section("La chaîne des chapitres");
     /* ⚠️ ZIP 469 — SIX LIEUX SONT DEVENUS UN. Le contrôle garde tout son sens :
        on donne d'abord le chapitre 2 (le cratère), PUIS le chapitre 1, et on
        vérifie que la dernière trouvaille en franchit deux d'un coup. */
-    Q.resolveStarFound(e3, "crater", "banc", 1);
+    Q.resolveStarFound(e3, "crater", "banc", 1); findShy(e3, 1);
     const before = e3.ch;
     let cr = null;
     for (const [i, site] of Q.STAR_FARM_IMPACTS.entries())
@@ -677,7 +683,7 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
     ok("⚠️ elle retombe VITE au début (ça fume fort, puis ça traîne)", hM < 0.55, `${hM.toFixed(2)} à mi-course`);
     ok("⚠️ mais elle ne tombe jamais à zéro tant que l'étoile est au fond",
        hE > 0.05 && Math.abs(hE - Q.STAR_CRATER_EMBER) < 0.001, hE.toFixed(2));
-    Q.resolveStarFound(e2, "crater", "banc", 9);
+    Q.resolveStarFound(e2, "crater", "banc", 9); findShy(e2, 9);
     ok("⚠️⚠️ …et elle s'éteint le jour où on la sort", Q.starCraterHeat(e2, 10) === 0);
     ok("une quête pas encore tombée n'a pas de cratère chaud", Q.starCraterHeat(Q.newStar(), 10) === 0);
   }
@@ -705,7 +711,7 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
     ok("⚠️ un trou pas encore creusé ne brûle personne (quête neuve)",
        !Q.starCraterBurns(Q.newStar(), 0, FOND));
     const e3 = Q.devStar(Q.newStar(), "start", 1).star; openTownCrater(e3, e3.fall + 10);
-    Q.resolveStarFound(e3, "crater", "banc", 9);
+    Q.resolveStarFound(e3, "crater", "banc", 9); findShy(e3, 9);
     ok("⚠️⚠️ …et le trou s'éteint le jour où l'étoile en sort : on peut y descendre",
        !Q.starCraterBurns(e3, 0, FOND));
     /* ⚠️⚠️ LA JOINTURE, ET C'EST LE SEUL CONTRÔLE DE CE BLOC QUI PROTÈGE D'UN
@@ -1475,7 +1481,7 @@ section("La chute est vue, et le chevron désigne (445)");
     ok("…et lumières en poche, il désigne enfin le cratère",
        Q.starGoalKey(e, { candy: Q.starOfferPrice("crater") }) === "craterFeedPay"
        && Q.starTargetSite(e, { candy: Q.starOfferPrice("crater") }) === "crater");
-    Q.resolveStarFound(e, "crater", "banc", 3000);
+    Q.resolveStarFound(e, "crater", "banc", 3000); findShy(e, 3000);
     /* ⚠️⚠️ ET LÀ, PLUS AUCUN LIEU — C'EST VOULU, ET LE CONTRÔLE VAUT ENCORE PLUS
        CHER DEPUIS LE DÉCHANT. Le cratère était le DERNIER lieu de la table ; ce
        qui reste à faire est un chantier (la mairie, puis Tristan), et aucun des
@@ -1506,7 +1512,7 @@ section("La chute est vue, et le chevron désigne (445)");
        pas encore de plan à scier. */
     {
       const e2 = Q.newStar(); armFall(e2); findFarmImpacts(e2, "banc", 2000);
-      Q.resolveStarTownFall(e2, 2500); Q.resolveStarFound(e2, "crater", "banc", 3000);
+      Q.resolveStarTownFall(e2, 2500); Q.resolveStarFound(e2, "crater", "banc", 3000); findShy(e2, 3000);
       ok("…et sans plans, il envoie à la mairie",
          Q.starGoalKey(e2, {}) === "engineer" && Q.starTargetSite(e2, {}) === "townHall",
          `${Q.starGoalKey(e2, {})} → ${Q.starTargetSite(e2, {})}`);
@@ -1793,6 +1799,100 @@ section("L'objectif courant (bandeau) et le guide");
        Array.from({ length: Q.STAR_WAKE_HITS }, (_, i) => Q.starWakeGlow(i + 1) - Q.starWakeGlow(i)).every(d => d > 0));
   }
   /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-02 (lot A2) — LA DISCRÈTE : SA CACHETTE ET SA RÈGLE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️ CE QUI SE MESURE ICI EST CE QUI N'A PAS DE NAVIGATEUR : le CRÉNEAU (une
+     pure fonction du temps partagé) et la RÈGLE (on ne la trouve pas avant la
+     reine). Son domaine, lui, se dérive de la carte dans `FermeGame.js` et se
+     regarde sur la planche de `render-etoile` — deux choses qu'un banc pur ne
+     peut pas juger, et le dire vaut mieux que faire semblant. */
+  {
+    const e0 = Q.newStar(); e0.fall = 1000;
+    findFarmImpacts(e0, "j1", 1001); Q.resolveStarTownFall(e0, 1010);
+    const T0 = e0.townFall;
+    /* ── 1. LA RÈGLE : PAS AVANT LA REINE. C'est elle qui apprend au joueur que la
+       discrète existe ; sans cette garde, un joueur qui passerait par hasard sur sa
+       case l'apprivoiserait avant d'en avoir entendu parler, et le chapitre perdrait
+       sa raison d'être. */
+    const tooSoon = Q.resolveStarSpot(e0, "j1", T0 + 1000, "Alice");
+    ok("⚠️⚠️ on ne démasque pas la discrète avant d'avoir la reine",
+       tooSoon.ok === false && tooSoon.noQueen === true && !Q.starHas(e0, "townShy"));
+    Q.resolveStarFound(e0, "crater", "Alice", T0 + 2000);
+    const got = Q.resolveStarSpot(e0, "j1", T0 + 3000, "Alice");
+    ok("…et une fois la reine sortie, un simple E suffit", got.ok === true && Q.starHas(e0, "townShy"));
+    ok("⚠️ elle porte le nom du joueur, pas son identifiant",
+       e0.found.townShy && e0.found.townShy.by === "Alice", `${e0.found.townShy && e0.found.townShy.by}`);
+    ok("⚠️ et le geste est idempotent (double clic, rejeu de paquet)",
+       Q.resolveStarSpot(e0, "j1", T0 + 3100, "Alice").ok === false);
+    /* ── 2. ELLE FERME LE CHAPITRE 2, DERRIÈRE LA REINE. C'est la décision de
+       structure du lot : le seuil de la septième sœur est « reine ET six étoiles ».
+       ⚠️ ET LE BANDEAU DOIT LA NOMMER ENTRE LES DEUX — sans quoi elle serait une
+       condition que rien ne pousse le joueur à remplir (444, cinq lieux
+       inatteignables). */
+    {
+      const q = Q.newStar(); q.fall = 1000;
+      findFarmImpacts(q, "j1", 1001); Q.resolveStarTownFall(q, 1010);
+      Q.resolveStarFound(q, "crater", "j1", q.townFall + 2000);
+      ok("⚠️⚠️ la reine sortie, le bandeau annonce la discrète — pas encore l'ingénieur",
+         Q.starGoalKey(q, { inTown: true }) === "townShy"
+         && Q.starGoalKey(q, { inTown: false }) === "townShyAway",
+         `${Q.starGoalKey(q, { inTown: true })} / ${Q.starGoalKey(q, { inTown: false })}`);
+      ok("⚠️ et le chevron mène à la PLACE, jamais à elle (sinon il n'y a plus de chasse)",
+         Q.STAR_GOAL_TARGET.townShy === "shyPlaza" && Q.STAR_GOAL_TARGET.townShyAway === "shyPlaza");
+      ok("…le chapitre 2 n'est donc pas fini", Q.starMissing(q).includes("townShy"));
+      Q.resolveStarSpot(q, "j1", q.townFall + 3000, "j1");
+      Q.starAdvance(q);
+      ok("⚠️⚠️ …et une fois démasquée, l'ingénieur reprend la parole exactement où il l'avait",
+         Q.starGoalKey(q, { inTown: true }) === "engineer");
+    }
+    /* ── 3. LE CRÉNEAU. Deux clients qui comptent depuis la MÊME date de l'hôte
+       tombent sur la même planque ; c'est ce qui permet de ne rien diffuser. */
+    ok("⚠️ le créneau part de la chute du météore, pas de l'horloge locale",
+       Q.starShySlot(e0, T0) === 0 && Q.starShySlot(e0, T0 + Q.STAR_SHY_PERIOD_MS + 1) === 1
+       && Q.starShySlot({}, T0) === 0);
+    ok("…et il ne recule jamais",
+       Q.starShySlot(e0, T0 - 99999) === 0 && Q.starShySlot(e0, T0 + 10 * Q.STAR_SHY_PERIOD_MS) === 10);
+    /* ⚠️⚠️ ELLE NE TOURNE PAS EN ROND, ET C'EST LA RAISON DU HACHÉ. `slot % n` la
+       ferait passer par les planques toujours dans le même ordre : un joueur qui a
+       fait la quête une fois saurait où regarder. On balaie deux cents créneaux sur
+       une liste réaliste et on exige qu'aucune planque ne soit ni oubliée, ni
+       privilégiée au point de la rendre prévisible. */
+    {
+      const N = 24, seen = new Array(N).fill(0);
+      let cycles = 0;
+      for (let k = 0; k < 200; k++) {
+        seen[Q.starShyPick(N, k)]++;
+        if (Q.starShyPick(N, k) === Q.starShyPick(N, k + N)) cycles++;
+      }
+      const used = seen.filter(v => v > 0).length;
+      const max = Math.max(...seen);
+      ok("⚠️⚠️ elle passe par presque toutes les planques, sans en privilégier une",
+         used >= N * 0.7 && max <= 200 / N * 4,
+         `${used}/${N} planques visitées en 200 créneaux, la plus fréquente ${max} fois`);
+      ok("⚠️ …et sa tournée ne se répète pas à la période de la liste",
+         cycles < 200 * 0.25, `${cycles} coïncidences sur 200`);
+    }
+    /* ⚠️ UNE LISTE D'UNE SEULE PLANQUE NE DOIT PAS PLANTER NI SORTIR DE SES BORNES :
+       une ville dégénérée (toutes les cases occupées sauf une) reste jouable. */
+    {
+      let bad = 0;
+      for (const n of [1, 2, 3, 7, 40]) for (let k = 0; k < 60; k++) {
+        const i = Q.starShyPick(n, k);
+        if (!(i >= 0 && i < n && Number.isInteger(i))) bad++;
+      }
+      ok("⚠️ l'indice reste toujours dans la liste, quelle qu'en soit la taille", bad === 0);
+    }
+    /* ⚠️ ELLE S'ASSIED PARFOIS, PAS TOUJOURS — « parfois sur un banc, parfois
+       circulant normalement » (Guillaume). Un tiers est le réglage ; ce qui compte
+       est que les deux cas EXISTENT, sinon la moitié de la consigne est morte. */
+    {
+      let sits = 0;
+      for (let k = 0; k < 300; k++) if (Q.starShySits(k)) sits++;
+      ok("⚠️⚠️ elle s'assied parfois et marche parfois (les deux cas existent)",
+         sits > 60 && sits < 240, `assise sur ${sits} créneaux sur 300`);
+    }
+  }
+  /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ON JOUE LE RÉVEIL. C'EST LE TROISIÈME BANC DU DÉPÔT QUI JOUE UNE MÉCANIQUE.
      ╚══════════════════════════════════════════════════════════════════════════
      ⚠️⚠️ `verify-maire` (480) et `verify-scierie` (lot E) ont chacun sorti des
@@ -1909,7 +2009,7 @@ section("L'objectif courant (bandeau) et le guide");
   ok("…et dès que ce client a vu l'impact, il retrouve le cratère brûlant",
      Q.starGoalKey(e, { craterHot: true, landed: true }) === "craterHot"
      && Q.starGoalKey(e, { landed: true }) === "craterFeed");
-  Q.resolveStarFound(e, "crater", "j1", 1002);
+  Q.resolveStarFound(e, "crater", "j1", 1002); findShy(e, 1002);
   /* ⚠️⚠️ ZIP 454 — LA RENCONTRE ENVOIE À LA MAIRIE, ET LE BANDEAU LE DIT AVANT
      TOUT LE RESTE. C'est la consigne « le rôle des étoiles est de nous guider dans
      le projet » réduite à sa plus petite forme vérifiable : au sortir du cratère,
@@ -2034,7 +2134,7 @@ section("L'objectif courant (bandeau) et le guide");
        est la même : quand le chevron se tait, le bandeau doit parler. */
     const e3 = Q.newStar(); e3.fall = 1;
     e3.plan = { at: 1, by: "j1", done: 0 };
-    findFarmImpacts(e3, "j1", 2); Q.resolveStarTownFall(e3, 5); Q.resolveStarFound(e3, "crater", "j1", 10);
+    findFarmImpacts(e3, "j1", 2); Q.resolveStarTownFall(e3, 5); Q.resolveStarFound(e3, "crater", "j1", 10); findShy(e3, 10);
     ok("⚠️ pas de chevron pendant que l'ingénieur voyage…", Q.starTargetSite(e3, {}) === null);
     ok("…mais le bandeau, lui, dit quoi faire",
        Q.starGoalKey(e3, { engineerHere: Q.starEngineerHere(e3, 10) }) === "engineerTravel");
@@ -2164,7 +2264,7 @@ section("La construction du navire (454)");
     ok("on ne demande pas d'ingénieur avant d'avoir vu l'étoile",
        Q.resolveStarPlanAsk(e, "j1", 10).tooEarly === true);
     findFarmImpacts(e, "j1", 11);
-    Q.resolveStarFound(e, "crater", "j1", 12);
+    Q.resolveStarFound(e, "crater", "j1", 12); findShy(e, 12);
     const r = Q.resolveStarPlanAsk(e, "j1", 20);
     ok("…et la demande annonce ses trois monnaies",
        r.ok && r.cost.gold === C.STAR_ENG_FEE_GOLD && r.cost.crops === C.STAR_ENG_FEE_CROPS

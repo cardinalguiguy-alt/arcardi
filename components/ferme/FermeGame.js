@@ -3460,7 +3460,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        des résolveurs le tient. */
     if (req.kind === "starLight" || req.kind === "starCook" || req.kind === "starDishTake"
      || req.kind === "starDishPass" || req.kind === "starDishGive" || req.kind === "starEffigy"
-     || req.kind === "starWake") {
+     || req.kind === "starWake" || req.kind === "starSpot") {
       const s3 = sharedRef.current;
       const e = (s3.star = Q.migrateStar(s3.star));
       const now = Date.now();
@@ -3493,6 +3493,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              bandeau fait déjà entre `craterFeedPay` et `craterWake`. */
           out.toast = { id: f.id, key: site0.queen ? "starQueenFed" : "starLightGiven" };
         } else if (r.short) out.toast = { id: f.id, key: "starLightShort", n: { have: r.have | 0, need: r.need | 0 } };
+      } else if (req.kind === "starSpot") {
+        /* ⚠️ 2026-09-02 (lot A2) — LA ZONE AVANT TOUT (§4, le piège des deux
+           cartes) : elle se cache à VALLEY TOWN, et le rectangle de la place tombe
+           aussi au milieu des champs de la ferme. La règle, elle, est dans
+           `resolveStarSpot` : on ne la trouve pas avant la reine. */
+        if (req.pz === "town") r = Q.resolveStarSpot(e, f.id, now, who);
       } else if (req.kind === "starWake") {
         /* ╔══════════════════════════════════════════════════════════════════════
            ║ 2026-09-02 (lot A) — LE RÉVEIL AU RYTHME. UNE SEULE `req`, À LA FIN.
@@ -3551,6 +3557,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const mate = e.found[Q.STAR_WARM_SITE] && e.found[Q.STAR_WARM_SITE].with;
         broadcastChat("⭐", mate ? L.star.chat.tamedBoth(who, mate) : L.star.chat.tamed(who));
       }
+      /* ⚠️ 2026-09-02 (lot A2) — LA DISCRÈTE SE DIT AU CHAT, ET C'EST UNE EXCEPTION
+         MOTIVÉE à la règle juste au-dessus (« un geste privé ne s'annonce pas »).
+         Elle CHANGE CE QUE L'AUTRE JOUEUR PEUT FAIRE : sa planque disparaît de la
+         ville, la chasse s'arrête pour tout le monde, et le chapitre se ferme.
+         Sans cette ligne, un joueur continuerait de fouiller la place en cherchant
+         quelqu'un que son coéquipier vient de trouver. */
+      if (req.kind === "starSpot") broadcastChat("🕶️", L.star.chat.shySpotted(who));
       if ((r.crossed || []).length) {
         const nowCh = Q.STAR_CHAPTERS[Math.min(e.ch, Q.STAR_CH_DONE - 1)];
         broadcastChat("\u{1F4D6}", L.star.chat.chapter(L.star.chapter[nowCh.key] || nowCh.key));
@@ -19538,6 +19551,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           pushE(wy - 1e6, we, () => sprites.drawStarWakeRing(ctx, wx, wy, T, st, performance.now()), wl);
         }
       }
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ 2026-09-02 (lot A2) — LA DISCRÈTE, CACHÉE PARMI LES PASSANTS.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️⚠️⚠️ ELLE N'A PAS DE HALO, ET C'EST TOUT LE LOT. Les quatre autres
+         compagnes se peignent avec deux couronnes lumineuses (`drawStarWisp`) —
+         posée comme elles, celle-ci se verrait à trente cases, et il n'y aurait
+         plus rien à chercher. Une étoile qui se cache ne brille pas : c'est la
+         règle, et c'est aussi ce qui rend son chapeau nécessaire (sans lueur, il
+         faut bien quelque chose qui la distingue d'un passant quand on la trouve).
+         ⚠️ ELLE PASSE PAR `pushE` COMME TOUT CE QUI EST POSÉ AU SOL EN VILLE, et
+         son rang de tri est celui d'un PNJ (`(y + 1) * T`, sans epsilon) : c'est
+         ce qui la fait passer devant et derrière les résidents comme l'un d'eux.
+         Un epsilon l'aurait sortie du lot — donc trahie — sans qu'on le voie.
+         ⚠️ ELLE NE BOUGE PAS DANS LA MÊME IMAGE QU'ON LA REGARDE : sa case vient
+         d'une pure fonction du temps partagé (`starShyPos`), donc les deux clients
+         la voient au même endroit sans qu'un seul message ne parte (§3). */
+      if (!inCar) {
+        const shy = starShyPos();
+        if (shy) {
+          const se = elevTown(tw, shy.x, shy.y), sl = archPxTown(tw, shy.x, shy.y);
+          pushE((shy.y + 1) * T, se, () => drawStarShyHidden(shy), sl);
+        }
+      }
       /* ZIP 444 — l'étoile qui suit, en ville. ⚠️ ELLE PORTE L'ALTITUDE DE SA
          PROPRE CASE, pas la mienne : sur les marches de la Haute-Ville elle est
          une case derrière moi, donc un demi-niveau plus bas, et lui donner mon
@@ -21179,6 +21215,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        ⚠️ LE SPRITE VIENT DE `fermeArt` (`starWisp`), donc `render-etoile` le
        regarde. Rien de la créature n'est dessiné dans cette closure — ce qui y
        vivrait vieillirait (§2 du piège n°1). */
+    /* ⚠️⚠️ 2026-09-02 (lot A2) — ELLE SE DESSINE À PART DE `drawStarWisp`, ET CE
+       N'EST PAS UNE DUPLICATION : cette fonction-là peint DEUX COURONNES DE HALO
+       avant le sprite, ce qui est exactement ce qu'une étoile cachée ne doit pas
+       faire. Lui ajouter un drapeau « sans halo » aurait mis une condition au
+       milieu du dessin de toutes les compagnes pour le cas d'une seule.
+       ⚠️ ELLE S'ASSIED OU ELLE FLÂNE : `sits` vient de `starShyPos` (dérivé du même
+       créneau, jamais d'un second tirage qui pourrait dire « assise » chez l'un et
+       « debout » chez l'autre). Assise, elle ne flotte pas — d'où le `bob` coupé.
+       ⚠️ ET SA POSE SUIT L'HORLOGE, PAS SES PAS : elle ne se déplace pas vraiment,
+       elle change de planque. Une pose qui tournerait vite trahirait une créature
+       agitée au milieu de passants tranquilles. */
+    function drawStarShyHidden(sp) {
+      const sprites = spritesRef.current;
+      const fam = sprites && sprites.starWispShy;
+      if (!fam || !fam[0]) return;
+      const nowB = performance.now();
+      const im = fam[0][(sp.slot + Math.floor(nowB / 900)) & 3];
+      if (!im) return;
+      const bob = sp.sits ? 0 : Math.sin(nowB / 520) * 1.1;
+      const cx = sp.x * T + T / 2, cy = (sp.y + 1) * T - (sp.sits ? 11 : 16) + bob;
+      ctx.drawImage(im, Math.round(cx - im.width / 2), Math.round(cy - im.height / 2));
+    }
     function drawStarWisp(cp) {
       const sprites = spritesRef.current;
       const fam = sprites && cp && cp.queen && sprites.starWispQueen
@@ -24105,6 +24163,56 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     starCraterRef.current = { w: tw, pos };
     return pos;
   }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-02 (lot A2) — LES PLANQUES DE LA DISCRÈTE, DÉRIVÉES DE LA CARTE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     Guillaume : *« elle se cache entre les pnj […] parfois sur un banc, parfois
+     circulant normalement : elle sera entre la place centrale, et le parc, elle
+     pourra se mouvoir dans cet espace seulement. »*
+     ⚠️⚠️ SON DOMAINE EST DÉRIVÉ DES DEUX RECTANGLES, JAMAIS RECOPIÉ : la boîte qui
+     va de `TOWN_PLAZA` à `TOWN_PARK` est calculée ici à partir des deux constantes.
+     Quatre nombres écrits à la main auraient été justes le jour même et faux au
+     premier déplacement du parc — le paramètre qui en double un autre du §8.
+     ⚠️⚠️ ON REPREND `E.townSpots`, LA LISTE DÉJÀ CONSTRUITE POUR LES RÉSIDENTS, au
+     lieu de balayer la carte une seconde fois. C'est ce qui garantit qu'elle se
+     cache aux endroits où un PNJ pourrait VRAIMENT se tenir — un banc dont le point
+     d'assise tombe dans le lac n'est pas un endroit (leçon du 428), et une planque
+     inatteignable serait une chasse qu'on ne peut pas gagner.
+     ⚠️ LE CACHE EST INDEXÉ SUR LA CARTE (`w === tw`), comme `starCraterPos` : la
+     ville se régénère à chaque montage, et une liste retenue d'une carte précédente
+     désignerait des cases d'un autre monde. */
+  const starShyRef = useRef({ w: null, list: null });
+  function starShySpots() {
+    const tw = townWorldNow(); if (!tw) return [];
+    if (starShyRef.current.w === tw && starShyRef.current.list) return starShyRef.current.list;
+    const P = C.TOWN_PLAZA, K = C.TOWN_PARK;
+    const x0 = Math.min(P.x, K.x), x1 = Math.max(P.x + P.w, K.x + K.w);
+    const y0 = Math.min(P.y, K.y), y1 = Math.max(P.y + P.h, K.y + K.h);
+    const all = E.townSpots(tw) || [];
+    const list = all.filter(sp => sp.x >= x0 && sp.x < x1 && sp.y >= y0 && sp.y < y1);
+    /* ⚠️ ON GARDE `act` : c'est lui qui dit si la planque est un BANC, donc si elle
+       s'y assied (voir `starShyPos`). La liste des résidents porte déjà cette
+       information — la redemander à la carte serait une seconde réponse à la même
+       question. */
+    starShyRef.current = { w: tw, list };
+    return list;
+  }
+  /* Où elle est MAINTENANT. ⚠️ Le créneau vient de `quete.js` (une pure fonction du
+     temps partagé, jamais un état diffusé — voir `starShySlot`) ; ce fichier ne
+     fournit que la liste des planques. Les deux clients tombent donc sur la même
+     case sans qu'un seul message ne parte. */
+  function starShyPos() {
+    const e = sharedRef.current.star;
+    if (!e || !Q.starFallen(e) || Q.starHas(e, "townShy")) return null;
+    const list = starShySpots(); if (!list.length) return null;
+    const slot = Q.starShySlot(e, Date.now());
+    const sp = list[Q.starShyPick(list.length, slot)];
+    if (!sp) return null;
+    /* Elle ne s'assied que sur un vrai banc : ailleurs, `sits` n'a rien à quoi
+       s'appliquer et elle reste debout parmi les passants. */
+    const sits = sp.act === "sit" && Q.starShySits(slot);
+    return { x: sp.x, y: sp.y, sits, slot };
+  }
   const starFarmImpactsRef = useRef({ w: null, pos: null });
   function starFarmImpactSites() {
     const w = worldRef.current; if (!w) return [];
@@ -24971,6 +25079,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const w = worldRef.current;
       return (w && w.darkPassage) ? { zone: "farm", x: w.darkPassage.x, y: w.darkPassage.y } : null;
     }
+    /* ⚠️⚠️ 2026-09-02 (lot A2) — LA PLACE, ET PAS LA DISCRÈTE. C'est la seule
+       décision de conception du lot A2 : un chevron posé sur sa tête supprimerait
+       la chasse — il ne resterait qu'à marcher jusqu'à une flèche, ce qui est
+       exactement ce que Guillaume ne demande pas (« elle se cache entre les pnj »).
+       Il désigne le CENTRE de la place, c'est-à-dire l'entrée de son domaine ; le
+       reste se joue à l'œil, aidé du signalement que porte le bandeau.
+       ⚠️ DÉRIVÉ DE `C.TOWN_PLAZA`, jamais deux coordonnées écrites à la main. */
+    if (id === "shyPlaza")
+      return { zone: "town", x: C.TOWN_PLAZA.x + (C.TOWN_PLAZA.w >> 1), y: C.TOWN_PLAZA.y + (C.TOWN_PLAZA.h >> 1) };
     if (id === "sawmill") {
       const cb = (sharedRef.current.crafts || {}).sawmill;
       if (!cb || !cb.built) return null;
@@ -24984,6 +25101,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       return p ? { zone: "farm", x: p.x, y: p.y } : null;
     }
     if (id === "crater") { const c = starCraterPos(); return c ? { zone: "town", x: c.x, y: c.y } : null; }
+    /* 2026-09-02 (lot A2) — la discrète a une position, mais le chevron ne la vise
+       PAS : il vise la place (`shyPlaza`, voir `STAR_GOAL_TARGET`). Cette branche
+       sert au dessin et à la portée de l'invite, jamais au guidage. */
+    if (id === "townShy") { const p = starShyPos(); return p ? { zone: "town", x: p.x, y: p.y } : null; }
     /* ⚠️ ZIP 469 — QUATRE LIEUX SORTENT D'ICI AVEC LE DÉCHANT (le ponton, la
        verrerie, l'arbre de la pie, le beffroi). ⚠️ `starTownPropPos` PART AVEC
        EUX : elle n'avait plus aucun appelant, et une fonction que personne
@@ -26540,6 +26661,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           && nearTownRect(tw1.shipX - (C.STAR_SHIP_DRAW_W >> 1), tw1.shipY - C.STAR_SHIP_DRAW_H,
                           C.STAR_SHIP_DRAW_W, C.STAR_SHIP_DRAW_H + C.STAR_SHIP_INTERACT_S_PAD))
           return { p: "raise", act: () => setStarRaise({ part: raise }) };
+      }
+      /* ╔════════════════════════════════════════════════════════════════════════
+         ║ 2026-09-02 (lot A2) — LA DISCRÈTE. ELLE PASSE AVANT LE CRATÈRE.
+         ╚════════════════════════════════════════════════════════════════════════
+         ⚠️ RÈGLE DU 427, DU PLUS PRÉCIS AU PLUS LARGE : elle occupe UNE case, le
+         cratère en couvre plus de quatre-vingts. Placée après, elle serait
+         inatteignable les jours où sa planque tombe près du trou.
+         ⚠️⚠️ SA PORTÉE EST COURTE (1,6 case) ET C'EST LE SUJET : l'invite ne doit
+         apparaître que si l'on est vraiment à côté d'elle. Une portée généreuse la
+         signalerait en passant, donc supprimerait la chasse aussi sûrement qu'un
+         chevron posé sur sa tête. *Lire l'invite, c'est avoir déjà gagné.*
+         ⚠️ LA DISTANCE EST VÉRIFIÉE ICI, PAS PAR L'HÔTE — même contrat que la
+         fouille (469) : l'arbitre tient la RÈGLE (on ne la trouve pas avant la
+         reine), le client tient la géométrie. */
+      {
+        const sp = starShyPos();
+        if (sp && Q.starHas(e, "crater") && Math.hypot(m.x - sp.x, m.y - sp.y) <= 1.6)
+          return { p: "shy", act: () => sendReq({ kind: "starSpot" }) };
       }
       /* Le cratère : E n'y sert à RIEN tant qu'elle n'est pas sortie, et c'est
          le sujet. L'invite dit quoi faire (se tenir tranquille) ; la touche, elle,
@@ -31868,67 +32007,69 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const natural = C.PASSAGE_WORLDS[E.passageBlockOf(today) % C.PASSAGE_WORLDS.length];
         return (
           <div className="ferme-modal open" onClick={() => setDevMenuOpen(false)}>
-            <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
+            <div className="panel ferme-modal-panel ferme-dev-panel" onClick={e => e.stopPropagation()}>
               <button className="ferme-close-x" onClick={() => setDevMenuOpen(false)}>✕</button>
               <h2>{L.devMenuTitle}</h2>
-              <div className="ferme-hint">{L.devMenuHint}</div>
+              <div className="ferme-dev-hint">{L.devMenuHint}</div>
 
-              <h3 style={{ margin: "14px 0 6px" }}>{L.devWorldSection}</h3>
-              <div className="ferme-hint">{L.devWorldNatural(lang === "en" ? natural.nameEn : natural.name, today)}</div>
-              {C.PASSAGE_WORLDS.map(w => {
-                const dest = C.PASSAGE_GATE_DEST[w.key];
-                const isOn = forced === w.key;
-                return (
-                  <div className="ferme-shop-row" key={"dev-w-" + w.key}>
-                    <div className="info">
-                      <b>{isOn ? "✅ " : ""}{lang === "en" ? w.nameEn : w.name}</b>
-                      <span className="ferme-usage">
-                        {dest === "run" ? L.devDestRun : dest === "candy" ? L.devDestCandy : L.devDestNone}
-                        {w.pet ? " — " + (lang === "en" ? w.pet.nameEn : w.pet.name) : ""}
-                      </span>
+              {/* ═══ MONDE : quelle terre le passage donne, et le rappel de la
+                  rotation naturelle qu'il remplace. ═══ */}
+              <div className="ferme-dev-cat">
+                <div className="ferme-dev-cat-title">{L.devWorldSection}</div>
+                <div className="ferme-dev-hint">{L.devWorldNatural(lang === "en" ? natural.nameEn : natural.name, today)}</div>
+                {C.PASSAGE_WORLDS.map(w => {
+                  const dest = C.PASSAGE_GATE_DEST[w.key];
+                  const isOn = forced === w.key;
+                  return (
+                    <div className="ferme-dev-row" key={"dev-w-" + w.key}>
+                      <div className="info">
+                        <b>{lang === "en" ? w.nameEn : w.name}</b>
+                        <span>
+                          {dest === "run" ? L.devDestRun : dest === "candy" ? L.devDestCandy : L.devDestNone}
+                          {w.pet ? " — " + (lang === "en" ? w.pet.nameEn : w.pet.name) : ""}
+                        </span>
+                      </div>
+                      <button className={"ferme-dev-btn" + (isOn ? " on" : "")} disabled={isOn} onClick={() => devSetWorld(w.key)}>{isOn ? "✓" : L.devForceBtn}</button>
                     </div>
-                    <button disabled={isOn} onClick={() => devSetWorld(w.key)}>{L.devForceBtn}</button>
+                  );
+                })}
+                <div className="ferme-dev-row">
+                  <div className="info">
+                    <b>{L.devRotationTitle}</b>
+                    <span>{L.devRotationSub(C.PASSAGE_WORLD_DAYS)}</span>
                   </div>
-                );
-              })}
-              <div className="ferme-shop-row">
-                <div className="info">
-                  <b>{!forced ? "✅ " : ""}{L.devRotationTitle}</b>
-                  <span className="ferme-usage">{L.devRotationSub(C.PASSAGE_WORLD_DAYS)}</span>
+                  <button className={"ferme-dev-btn" + (!forced ? " on" : "")} disabled={!forced} onClick={() => devSetWorld(null)}>{!forced ? "✓" : L.devRotationBtn}</button>
                 </div>
-                <button disabled={!forced} onClick={() => devSetWorld(null)}>{L.devRotationBtn}</button>
               </div>
 
-              {/* Zip 427 — peupler la ferme. Voir la note du handler : sans
-                  lui, la vie sociale de Valley Town n'est vérifiable qu'après
-                  une heure de jeu, donc en pratique jamais. */}
-              <h3 style={{ margin: "14px 0 6px" }}>{L.devResidentsSection}</h3>
-              <div className="ferme-hint">{L.devResidentsHint(C.MAX_RESIDENTS)}</div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {[6, 12, C.MAX_RESIDENTS].map(n => (
-                  <button key={"devres-" + n} className="ferme-btn" onClick={() => { sendReq({ kind: "devResidents", n }); setDevMenuOpen(false); }}>
-                    {L.devResidentsBtn(n)}
-                  </button>
-                ))}
-              </div>
-              {/* Zip 2026-08 — s'attribuer de l'or / terminer les
-                  constructions en cours, sur demande de Guillaume. Même
-                  raison que « peupler la ferme » juste au-dessus : tester une
-                  fonctionnalité de la ferme sans compter sur le temps réel ou
-                  sur une économie qu'il faudrait faire tourner à la main. */}
-              <h3 style={{ margin: "14px 0 6px" }}>{L.devMoneySection}</h3>
-              <div className="ferme-hint">{L.devMoneyHint}</div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {[100000, 1000000, 10000000].map(n => (
-                  <button key={"devmoney-" + n} className="ferme-btn" onClick={() => sendReq({ kind: "devMoney", amount: n })}>
-                    {L.devMoneyBtn(n)}
-                  </button>
-                ))}
-              </div>
-              <h3 style={{ margin: "14px 0 6px" }}>{L.devBuildSection}</h3>
-              <div className="ferme-hint">{L.devBuildHint}</div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                <button className="ferme-btn" onClick={() => sendReq({ kind: "devBuild" })}>{L.devBuildBtn}</button>
+              {/* ═══ FERME : peupler, s'attribuer de l'or, finir les
+                  constructions en cours — tester sans attendre le temps réel
+                  ni faire tourner l'économie à la main (résidents : zip 427 ;
+                  or/constructions : zip 2026-08). ═══ */}
+              <div className="ferme-dev-cat">
+                <div className="ferme-dev-cat-title">{L.devResidentsSection}</div>
+                <div className="ferme-dev-hint">{L.devResidentsHint(C.MAX_RESIDENTS)}</div>
+                <div className="ferme-dev-grid">
+                  {[6, 12, C.MAX_RESIDENTS].map(n => (
+                    <button key={"devres-" + n} className="ferme-dev-btn" onClick={() => { sendReq({ kind: "devResidents", n }); setDevMenuOpen(false); }}>
+                      {L.devResidentsBtn(n)}
+                    </button>
+                  ))}
+                </div>
+                <div className="ferme-dev-cat-title" style={{ marginTop: 10 }}>{L.devMoneySection}</div>
+                <div className="ferme-dev-hint">{L.devMoneyHint}</div>
+                <div className="ferme-dev-grid">
+                  {[100000, 1000000, 10000000].map(n => (
+                    <button key={"devmoney-" + n} className="ferme-dev-btn" onClick={() => sendReq({ kind: "devMoney", amount: n })}>
+                      {L.devMoneyBtn(n)}
+                    </button>
+                  ))}
+                </div>
+                <div className="ferme-dev-cat-title" style={{ marginTop: 10 }}>{L.devBuildSection}</div>
+                <div className="ferme-dev-hint">{L.devBuildHint}</div>
+                <div className="ferme-dev-grid">
+                  <button className="ferme-dev-btn" onClick={() => sendReq({ kind: "devBuild" })}>{L.devBuildBtn}</button>
+                </div>
               </div>
               {/* ╔══════════════════════════════════════════════════════════════
                   ║ ZIP 444 — LA QUÊTE DE L'ÉTOILE.
@@ -31947,60 +32088,62 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   ⚠️ Aucun de ces boutons ne donne quoi que ce soit (voir le
                   handler) : c'est ce qui permet de les laisser à portée de tout
                   joueur qui connaît le raccourci (398). */}
-              <h3 style={{ margin: "14px 0 6px" }}>{L.star.dev.section}</h3>
-              <div className="ferme-hint">{L.star.dev.hint}</div>
-              {(() => {
-                const e = Q.migrateStar(sharedRef.current.star);
-                const chKey = Q.starChapterKey(e);
-                return (
-                  <div>
-                    <div className="ferme-hint" style={{ marginBottom: 6 }}>
-                      {Q.starStarted(e)
-                        ? L.star.dev.chapterAt(L.star.chapter[chKey] || chKey, Q.starShipBuilt(e), Q.STAR_SHIP_TOTAL)
-                        : L.star.dev.notStarted}
-                    </div>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {Q.STAR_DEV_OPS.map(op => (
-                        <button key={"devstar-" + op} className="ferme-btn"
-                                onClick={() => { sendReq({ kind: "devStar", op }); setDevMenuOpen(false); }}>
-                          {L.star.dev.op(op)}
+              <div className="ferme-dev-cat">
+                <div className="ferme-dev-cat-title">{L.star.dev.section}</div>
+                <div className="ferme-dev-hint">{L.star.dev.hint}</div>
+                {(() => {
+                  const e = Q.migrateStar(sharedRef.current.star);
+                  const chKey = Q.starChapterKey(e);
+                  return (
+                    <div>
+                      <div className="ferme-dev-hint">
+                        {Q.starStarted(e)
+                          ? L.star.dev.chapterAt(L.star.chapter[chKey] || chKey, Q.starShipBuilt(e), Q.STAR_SHIP_TOTAL)
+                          : L.star.dev.notStarted}
+                      </div>
+                      <div className="ferme-dev-grid">
+                        {Q.STAR_DEV_OPS.map(op => (
+                          <button key={"devstar-" + op} className="ferme-dev-btn"
+                                  onClick={() => { sendReq({ kind: "devStar", op }); setDevMenuOpen(false); }}>
+                            {L.star.dev.op(op)}
+                          </button>
+                        ))}
+                        <button className="ferme-dev-btn" onClick={devStandAtNextStar}>
+                          {L.star.dev.stand}
                         </button>
-                      ))}
-                      <button className="ferme-btn" onClick={devStandAtNextStar}>
-                        {L.star.dev.stand}
-                      </button>
-                      <button className="ferme-btn" onClick={devStandAtMayorDesk}>
-                        {L.star.dev.standMayor}
-                      </button>
-                      {/* ⚠️⚠️ LOT E — L'ARRÊT QUI OUVRE LA SCIE TOUT DE SUITE, ET IL
-                          NAÎT LE MÊME JOUR QUE LA SCÈNE. La leçon du 425 est écrite
-                          en toutes lettres dans `CLAUDE.md` : *un lieu qu'il faut
-                          quarante minutes de quête pour atteindre est un lieu qu'on
-                          n'ira pas regarder.* Revoir une manche exigerait sinon des
-                          plans, l'accord du maire, un bûcheron sur la ferme et du
-                          bois — donc on la jugerait UNE fois.
-                          ⚠️ IL N'ACCORDE RIEN : il ouvre la scène, et la commande
-                          passe par la même `req` arbitrée que d'habitude. L'hôte
-                          refusera si la pièce n'est pas commandable, exactement
-                          comme il refuse au joueur (§ menu développeur, 398). */}
-                      <button className="ferme-btn"
-                              onClick={() => { setSawScene({ part: Q.starTimberNext(e) || "hull" }); setDevMenuOpen(false); }}>
-                        {L.star.dev.saw}
-                      </button>
-                    </div>
-                    <div className="ferme-hint" style={{ margin: "8px 0 4px" }}>{L.star.dev.sceneLabel}</div>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {Q.STAR_DEV_SCENES.map(sc => (
-                        <button key={"devscene-" + sc} className="ferme-btn"
-                                onClick={() => { sendReq({ kind: "devStar", op: "scene:" + sc }); setDevMenuOpen(false); }}>
-                          {L.star.dev.scene(sc)}
+                        <button className="ferme-dev-btn" onClick={devStandAtMayorDesk}>
+                          {L.star.dev.standMayor}
                         </button>
-                      ))}
+                        {/* ⚠️⚠️ LOT E — L'ARRÊT QUI OUVRE LA SCIE TOUT DE SUITE, ET IL
+                            NAÎT LE MÊME JOUR QUE LA SCÈNE. La leçon du 425 est écrite
+                            en toutes lettres dans `CLAUDE.md` : *un lieu qu'il faut
+                            quarante minutes de quête pour atteindre est un lieu qu'on
+                            n'ira pas regarder.* Revoir une manche exigerait sinon des
+                            plans, l'accord du maire, un bûcheron sur la ferme et du
+                            bois — donc on la jugerait UNE fois.
+                            ⚠️ IL N'ACCORDE RIEN : il ouvre la scène, et la commande
+                            passe par la même `req` arbitrée que d'habitude. L'hôte
+                            refusera si la pièce n'est pas commandable, exactement
+                            comme il refuse au joueur (§ menu développeur, 398). */}
+                        <button className="ferme-dev-btn"
+                                onClick={() => { setSawScene({ part: Q.starTimberNext(e) || "hull" }); setDevMenuOpen(false); }}>
+                          {L.star.dev.saw}
+                        </button>
+                      </div>
+                      <div className="ferme-dev-hint" style={{ margin: "8px 0 4px" }}>{L.star.dev.sceneLabel}</div>
+                      <div className="ferme-dev-grid">
+                        {Q.STAR_DEV_SCENES.map(sc => (
+                          <button key={"devscene-" + sc} className="ferme-dev-btn"
+                                  onClick={() => { sendReq({ kind: "devStar", op: "scene:" + sc }); setDevMenuOpen(false); }}>
+                            {L.star.dev.scene(sc)}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                );
-              })()}
-              <h3 style={{ margin: "14px 0 6px" }}>{L.devHealSection}</h3>
+                  );
+                })()}
+              </div>
+
               {/* Zip 392 — soin instantané. Le bouton est TOUJOURS présent, et
                   seulement désactivé quand il n'y a rien à soigner : une entrée
                   de menu qui apparaît et disparaît selon l'état donne
@@ -32009,20 +32152,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   `injuredUntil` est l'état React (pas la ref) : il est déjà
                   remis à jour par applyDeltas, donc ce bloc se redessine seul
                   au moment de la blessure comme à celui du soin. */}
-              <div className="ferme-shop-row">
-                <div className="info">
-                  <b>{L.devHealTitle}</b>
-                  <span className="ferme-usage">
-                    {injuredUntil > Date.now()
-                      ? L.devHealRemaining(Math.ceil((injuredUntil - Date.now()) / 60000))
-                      : L.devHealNone}
-                  </span>
+              <div className="ferme-dev-cat">
+                <div className="ferme-dev-cat-title">{L.devHealSection}</div>
+                <div className="ferme-dev-row">
+                  <div className="info">
+                    <b>{L.devHealTitle}</b>
+                    <span>
+                      {injuredUntil > Date.now()
+                        ? L.devHealRemaining(Math.ceil((injuredUntil - Date.now()) / 60000))
+                        : L.devHealNone}
+                    </span>
+                  </div>
+                  <button className="ferme-dev-btn" disabled={!(injuredUntil > Date.now())} onClick={devHeal}>{L.devHealBtn}</button>
                 </div>
-                <button disabled={!(injuredUntil > Date.now())} onClick={devHeal}>{L.devHealBtn}</button>
               </div>
 
-              <h3 style={{ margin: "14px 0 6px" }}>{L.devTeleportSection}</h3>
-              <div className="ferme-hint">{L.devTeleportHint}</div>
               {/* Zip 431 (demande Guillaume) : les arrêts de Valley Town et du
                   tribunal se replient derrière leur arrêt principal (gare /
                   hall), avec un bouton "+" pour tout déplier. Sans ça, les dix
@@ -32030,39 +32174,43 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   monde qui n'a rien à voir — la ferme et la terre en cours,
                   eux, restent toujours visibles au complet (deux arrêts
                   chacun, rien à replier). */}
-              {(() => {
-                /* ⚠️⚠️ ZIP 442 — LE REPLI SE DÉDUIT DE LA ZONE, IL NE SE LIT PLUS
-                   DANS LE NOM DE LA CLÉ. Le 431 pliait « ce qui commence par
-                   court » ; les quatre arrêts d'intérieur ajoutés ici s'appellent
-                   `hall`, `hallUpper`, `church` et `churchLoft` — ils seraient
-                   restés dépliés en permanence, et le menu aurait grossi de
-                   quatre boutons visibles depuis la ferme. Un préfixe de nom
-                   n'est pas une catégorie : la catégorie, c'est la ZONE, et elle
-                   est déjà dans la table. */
-                const isInterior = (d) => d.zone === "court" && d.key !== "court";
-                const townExtraCount = C.DEV_TELEPORTS.filter(d => d.key.startsWith("town") && d.key !== "town").length;
-                const courtExtraCount = C.DEV_TELEPORTS.filter(isInterior).length;
-                const townOpen = !!devTeleportExpanded.town, courtOpen = !!devTeleportExpanded.court;
-                return (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {C.DEV_TELEPORTS.map(d => {
-                      if (d.key.startsWith("town") && d.key !== "town" && !townOpen) return null;
-                      if (isInterior(d) && !courtOpen) return null;
-                      return (
-                        <Fragment key={"dev-t-" + d.key}>
-                          <button onClick={() => devTeleport(d.key)}>{L.devTeleportName(d.key)}</button>
-                          {d.key === "town" && townExtraCount > 0 && (
-                            <button className="ferme-btn" onClick={() => setDevTeleportExpanded(s => ({ ...s, town: !s.town }))}>{townOpen ? "−" : "+"}</button>
-                          )}
-                          {d.key === "court" && courtExtraCount > 0 && (
-                            <button className="ferme-btn" onClick={() => setDevTeleportExpanded(s => ({ ...s, court: !s.court }))}>{courtOpen ? "−" : "+"}</button>
-                          )}
-                        </Fragment>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
+              <div className="ferme-dev-cat">
+                <div className="ferme-dev-cat-title">{L.devTeleportSection}</div>
+                <div className="ferme-dev-hint">{L.devTeleportHint}</div>
+                {(() => {
+                  /* ⚠️⚠️ ZIP 442 — LE REPLI SE DÉDUIT DE LA ZONE, IL NE SE LIT PLUS
+                     DANS LE NOM DE LA CLÉ. Le 431 pliait « ce qui commence par
+                     court » ; les quatre arrêts d'intérieur ajoutés ici s'appellent
+                     `hall`, `hallUpper`, `church` et `churchLoft` — ils seraient
+                     restés dépliés en permanence, et le menu aurait grossi de
+                     quatre boutons visibles depuis la ferme. Un préfixe de nom
+                     n'est pas une catégorie : la catégorie, c'est la ZONE, et elle
+                     est déjà dans la table. */
+                  const isInterior = (d) => d.zone === "court" && d.key !== "court";
+                  const townExtraCount = C.DEV_TELEPORTS.filter(d => d.key.startsWith("town") && d.key !== "town").length;
+                  const courtExtraCount = C.DEV_TELEPORTS.filter(isInterior).length;
+                  const townOpen = !!devTeleportExpanded.town, courtOpen = !!devTeleportExpanded.court;
+                  return (
+                    <div className="ferme-dev-grid">
+                      {C.DEV_TELEPORTS.map(d => {
+                        if (d.key.startsWith("town") && d.key !== "town" && !townOpen) return null;
+                        if (isInterior(d) && !courtOpen) return null;
+                        return (
+                          <Fragment key={"dev-t-" + d.key}>
+                            <button className="ferme-dev-btn" onClick={() => devTeleport(d.key)}>{L.devTeleportName(d.key)}</button>
+                            {d.key === "town" && townExtraCount > 0 && (
+                              <button className="ferme-dev-btn" onClick={() => setDevTeleportExpanded(s => ({ ...s, town: !s.town }))}>{townOpen ? "−" : "+"}</button>
+                            )}
+                            {d.key === "court" && courtExtraCount > 0 && (
+                              <button className="ferme-dev-btn" onClick={() => setDevTeleportExpanded(s => ({ ...s, court: !s.court }))}>{courtOpen ? "−" : "+"}</button>
+                            )}
+                          </Fragment>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
           </div>
         );

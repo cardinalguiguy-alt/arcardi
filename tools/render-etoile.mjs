@@ -2414,6 +2414,201 @@ console.log("\n15. L'ANNEAU DU RÉVEIL (lot A, 2026-09-02) — l'interface EST l
   }
 }
 
-console.log(`\nPlanches : tools/out/etoile-planche.png · tools/out/etoile-cratere.png · tools/out/etoile-comete.png · tools/out/etoile-alerte.png · tools/out/etoile-jauge.png · tools/out/etoile-poses.png · tools/out/etoile-tristan.png · tools/out/etoile-fouille.png · tools/out/etoile-lueur.png · tools/out/etoile-plat.png · tools/out/etoile-reveil.png`);
+console.log("\n16. LA DISCRÈTE (lot A2, 2026-09-02) — un chapeau ne cache personne\n");
+{
+  /* ⚠️⚠️ CE DESSIN NAÎT AVEC SON BANC (455, 478, lot A). Et il en a d'autant plus
+     besoin qu'il porte une CONTRAINTE CONTRADICTOIRE : elle doit passer inaperçue
+     de loin au milieu des passants, et être manifestement une étoile déguisée de
+     près. Un dessin qui rate l'un des deux côtés rate tout le lot — et aucun des
+     deux ne se juge en relisant du code.
+     ⚠️ FOND VERT PUR : rien dans ce sprite n'est vert. Le fond d'une mesure est un
+     réactif (455). */
+  const SW = 40;
+  const shot = (im) => {
+    const sur = makeCanvas(SW, SW), gg = sur.ctx;
+    gg.fillStyle = "#00ff00"; gg.fillRect(0, 0, SW, SW);
+    gg.drawImage(im, Math.round((SW - im.width) / 2), Math.round((SW - im.height) / 2));
+    return sur;
+  };
+  const painted = (sur) => {
+    const d = sur.px; let n = 0;
+    for (let i = 0; i < SW * SW; i++) { const o = i * 4; if (!(d[o] === 0 && d[o + 1] === 255 && d[o + 2] === 0)) n++; }
+    return n;
+  };
+  const shy = S.starWispShy, plain = S.starWispColors.orange, yellow = S.starWispColors.yellow;
+  ok(!!shy && shy.length === 3 && shy[0].length === 4,
+     "⚠️ la discrète a ses trois états et ses quatre poses, comme toute compagne",
+     `${shy ? shy.length : 0} × ${shy && shy[0] ? shy[0].length : 0}`);
+  /* ── ⚠️⚠️ LE CHAPEAU N'EST PAS ROGNÉ. C'est le piège du 433, et c'est la raison
+     pour laquelle le canevas a été agrandi : à 18×18 la pointe haute touchait déjà
+     le bord, donc un chapeau posé au-dessus serait arrivé décapité, sans erreur. */
+  {
+    let edge = 0;
+    for (const st of [0, 1, 2]) for (const po of [0, 1, 2, 3]) {
+      const im = shy[st][po];
+      const sur = makeCanvas(im.width, im.height), gg = sur.ctx;
+      gg.fillStyle = "#00ff00"; gg.fillRect(0, 0, im.width, im.height);
+      gg.drawImage(im, 0, 0);
+      const d = sur.px;
+      for (let x = 0; x < im.width; x++) for (const y of [0, im.height - 1]) {
+        const o = (y * im.width + x) * 4;
+        if (!(d[o] === 0 && d[o + 1] === 255 && d[o + 2] === 0)) edge++;
+      }
+    }
+    ok(edge === 0, "⚠️⚠️ aucune des douze images ne touche le haut ni le bas de son canevas",
+       `${edge} px sur les bords — le chapeau tient dans le cadre`);
+  }
+  /* ── ⚠️⚠️ LE CORPS N'A PAS BOUGÉ D'UN PIXEL À L'ÉCRAN. Le blit est CENTRÉ sur le
+     canevas (`drawStarWisp`) : agrandir le canevas sans recentrer le corps l'aurait
+     fait flotter au-dessus du sol, et rien ne l'aurait dit. On compare le centre de
+     gravité vertical du CORPS (hors chapeau) entre la déguisée et la nue. */
+  {
+    const bodyCy = (im, skipTop) => {
+      const sur = makeCanvas(im.width, im.height), gg = sur.ctx;
+      gg.fillStyle = "#00ff00"; gg.fillRect(0, 0, im.width, im.height);
+      gg.drawImage(im, 0, 0);
+      const d = sur.px; let sy = 0, n = 0;
+      for (let y = skipTop; y < im.height; y++) for (let x = 0; x < im.width; x++) {
+        const o = (y * im.width + x) * 4;
+        if (d[o] === 0 && d[o + 1] === 255 && d[o + 2] === 0) continue;
+        sy += y - (im.height / 2); n++;                 // relatif au CENTRE du canevas, comme le blit
+      }
+      return n ? sy / n : 0;
+    };
+    const a = bodyCy(plain[0][0], 0), b = bodyCy(shy[0][0], 6);
+    ok(Math.abs(a - b) < 1.2, "⚠️⚠️⚠️ le corps garde sa place à l'écran malgré le canevas agrandi",
+       `écart de ${Math.abs(a - b).toFixed(2)} px au centre de gravité`);
+  }
+  /* ── ⚠️⚠️ ELLE SE DISTINGUE DE LA REINE. Deux étoiles chaudes voisines se
+     confondent une fois posées sur de l'herbe et vues à travers un halo — c'est le
+     §8 (deux couleurs réglées à l'œil ne gardent pas leur écart). On mesure sur le
+     CORPS, pas sur le déguisement, parce que c'est la couleur qu'elle gardera une
+     fois apprivoisée et compagne. */
+  {
+    /* ⚠️⚠️⚠️ ON MESURE SUR FOND NOIR, ET LA PREMIÈRE ÉCRITURE MESURAIT SUR FOND
+       VERT — CE QUI DONNAIT DEUX ÉCARTS NÉGATIFS (−103,6 et −111,8), c'est-à-dire
+       « ces deux étoiles chaudes ont plus de vert que de rouge ». Le fond vert est
+       le bon réactif pour compter des pixels PEINTS (455), et le pire possible pour
+       en mesurer la TEINTE : les bords semi-transparents du halo se mélangent au
+       fond et le vert écrase tout. Sur noir, un orange à demi transparent reste un
+       orange, simplement plus sombre. *Le fond d'une mesure de couverture n'est pas
+       le fond d'une mesure de couleur.*
+       ⚠️ ET ON NE GARDE QUE LE CORPS (pixels assez clairs) : le halo à 5 % d'alpha
+       tirerait les deux moyennes vers le même noir. */
+    const bodyHue = (im) => {
+      const sur = makeCanvas(im.width, im.height), gg = sur.ctx;
+      gg.fillStyle = "#000000"; gg.fillRect(0, 0, im.width, im.height);
+      gg.drawImage(im, 0, 0);
+      const d = sur.px; let r = 0, g2 = 0, b = 0, n = 0;
+      for (let i = 0; i < im.width * im.height; i++) {
+        const o = i * 4;
+        if (d[o] + d[o + 1] + d[o + 2] < 150) continue;      // halo et fond : hors sujet
+        /* ⚠️ 150 ET PAS 210 : l'orange est plus SOMBRE que le jaune (c'est même une
+           partie de ce qui les distingue), donc un seuil haut retenait deux fois
+           moins de pixels chez elle que chez la reine — la mesure aurait comparé
+           deux échantillons de tailles très différentes. Le contrôle qui suit
+           publie les deux comptes, pour qu'un déséquilibre se voie. */
+        r += d[o]; g2 += d[o + 1]; b += d[o + 2]; n++;
+      }
+      return n ? { r: r / n, g: g2 / n, b: b / n, n } : { r: 0, g: 0, b: 0, n: 0 };
+    };
+    const o = bodyHue(plain[0][0]), y = bodyHue(yellow[0][0]);
+    ok(o.n > 40 && y.n > 40, "…et la mesure porte sur assez de pixels de corps pour vouloir dire quelque chose",
+       `${o.n} px orange, ${y.n} px jaune`);
+    /* Un jaune a son vert PROCHE de son rouge ; un orange l'a nettement plus bas.
+       C'est ce rapport-là qui sépare les deux, et pas la luminosité (§8). */
+    const dOrange = o.r - o.g, dYellow = y.r - y.g;
+    ok(dOrange > dYellow + 12, "⚠️⚠️ l'orange ne se confond pas avec le jaune de la reine",
+       `rouge−vert : orange ${dOrange.toFixed(1)} · jaune ${dYellow.toFixed(1)}`);
+  }
+  /* ── ⚠️⚠️⚠️ LE DÉGUISEMENT SE VOIT, ET IL RECOUVRE LES YEUX. C'est le gag : les
+     lunettes se peignent PAR-DESSUS un visage déjà dessiné. Une variante qui aurait
+     sauté le visage aurait donné un objet, pas quelqu'un qui se cache. */
+  {
+    const darkest = (im) => {
+      const sur = makeCanvas(im.width, im.height), gg = sur.ctx;
+      gg.fillStyle = "#00ff00"; gg.fillRect(0, 0, im.width, im.height);
+      gg.drawImage(im, 0, 0);
+      const d = sur.px; let mn = 999, n = 0;
+      for (let i = 0; i < im.width * im.height; i++) {
+        const o = i * 4;
+        if (d[o] === 0 && d[o + 1] === 255 && d[o + 2] === 0) continue;
+        const v = (d[o] + d[o + 1] + d[o + 2]) / 3;
+        if (v < 60) n++;
+        mn = Math.min(mn, v);
+      }
+      return { mn, n };
+    };
+    const a = darkest(plain[0][0]), b = darkest(shy[0][0]);
+    ok(b.n > a.n + 8, "⚠️⚠️ le déguisement ajoute une vraie masse sombre (lunettes + chapeau)",
+       `${a.n} px sombres nus → ${b.n} déguisée`);
+    ok(painted(shot(shy[0][0])) > painted(shot(plain[0][0])),
+       "…et il ajoute des pixels plutôt qu'il n'en remplace",
+       `${painted(shot(plain[0][0]))} → ${painted(shot(shy[0][0]))} px`);
+  }
+  /* ── ⚠️ LE DÉGUISEMENT NE RESPIRE PAS. Un chapeau qui changerait de forme d'une
+     pose à l'autre trahirait qu'il fait partie de la créature ; c'est justement son
+     immobilité qui la rend repérable parmi les passants. On compare les quatre
+     poses sur la seule bande du chapeau. */
+  {
+    /* ╔══════════════════════════════════════════════════════════════════════════
+       ║ ON ISOLE LE DÉGUISEMENT PAR DIFFÉRENCE, ET C'EST LA TROISIÈME ÉCRITURE.
+       ╚══════════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ LES DEUX PREMIÈRES MESURAIENT AUTRE CHOSE QUE CE QU'ELLES NOMMAIENT.
+       (1) « les sept rangées du haut » attrapait la POINTE HAUTE de l'étoile, qui
+       change de longueur à chaque pose — c'est la respiration, elle est voulue ;
+       (2) « les pixels sombres du haut » attrapait le CERNE de cette même pointe,
+       dont la teinte (un brun-orange foncé) est trop proche de celle du chapeau
+       pour qu'un seuil les sépare. Les deux fois, le contrôle échouait sur un
+       chapeau parfaitement immobile.
+       ⚠️ LA PRISE JUSTE EST UNE DIFFÉRENCE : on soustrait la déguisée à la NUE, à la
+       même pose et au même état, recalées sur le corps. Ce qui reste EST le
+       déguisement, par construction — aucune heuristique de couleur, aucune bande
+       de hauteur, et la mesure survit à un changement de palette comme à un
+       agrandissement du canevas. *Quand une prise demande un seuil, c'est souvent
+       qu'on n'a pas encore trouvé la bonne prise.* */
+    const DY = (shy[0][0].height - plain[0][0].height) / 2;   // le recalage, DÉRIVÉ des deux canevas
+    const mask = (im) => {
+      const sur = makeCanvas(im.width, im.height), gg = sur.ctx;
+      gg.fillStyle = "#00ff00"; gg.fillRect(0, 0, im.width, im.height);
+      gg.drawImage(im, 0, 0);
+      const d = sur.px, out = new Map();
+      for (let y = 0; y < im.height; y++) for (let x = 0; x < im.width; x++) {
+        const o = (y * im.width + x) * 4;
+        if (d[o] === 0 && d[o + 1] === 255 && d[o + 2] === 0) continue;
+        out.set(x + "," + y, `${d[o]},${d[o + 1]},${d[o + 2]}`);
+      }
+      return out;
+    };
+    const disguiseOf = (po) => {
+      const a = mask(plain[0][po]), b = mask(shy[0][po]);
+      const add = [];
+      for (const [k, v] of b) {
+        const [x, y] = k.split(",").map(Number);
+        if (a.get(x + "," + (y - DY)) !== v) add.push(k + ":" + v);
+      }
+      return add.sort().join("|");
+    };
+    const ref = disguiseOf(0);
+    ok(ref.length > 0, "⚠️ la différence entre la nue et la déguisée n'est pas vide",
+       `${ref.split("|").length} pixels de déguisement`);
+    ok([0, 1, 2, 3].every(po => disguiseOf(po) === ref),
+       "⚠️⚠️ le déguisement est IDENTIQUE aux quatre poses (il ne respire pas)",
+       "c'est son immobilité au milieu des passants qui la rend repérable");
+  }
+  /* ── LA PLANCHE : la nue, la déguisée, ses quatre poses, et la reine à côté pour
+     juger l'écart de couleur. C'est elle qu'on REGARDE avant de juger (§8). */
+  {
+    const CW = 7, W = CW * SW, H = SW;
+    const sur = makeCanvas(W, H), gg = sur.ctx;
+    gg.fillStyle = "#3b4a32"; gg.fillRect(0, 0, W, H);   // un fond d'herbe : c'est là qu'elle se cache
+    const line = [plain[0][0], shy[0][0], shy[0][1], shy[0][2], shy[0][3], shy[2][0], yellow[0][0]];
+    line.forEach((im, i) => gg.drawImage(im, Math.round(i * SW + (SW - im.width) / 2), Math.round((SW - im.height) / 2)));
+    const up = scale(sur.px, W, H, 4);
+    writePNG(path.join(OUT, "etoile-discrete.png"), up.px, up.W, up.H);
+  }
+}
+
+console.log(`\nPlanches : tools/out/etoile-planche.png · tools/out/etoile-cratere.png · tools/out/etoile-comete.png · tools/out/etoile-alerte.png · tools/out/etoile-jauge.png · tools/out/etoile-poses.png · tools/out/etoile-tristan.png · tools/out/etoile-fouille.png · tools/out/etoile-lueur.png · tools/out/etoile-plat.png · tools/out/etoile-reveil.png · tools/out/etoile-discrete.png`);
 console.log(fails === 0 ? `\n✅ tous les contrôles passés.\n` : `\n❌ ${fails} contrôle(s) en échec.\n`);
 process.exit(fails ? 1 : 0);

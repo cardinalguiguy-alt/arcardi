@@ -1,5 +1,59 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-02
 
+## Hors-zip 2026-09-02 (quinquies) — LOT A2 : la sixième sœur se cache dans Valley Town
+
+**Une étoile orange, un mini chapeau, des lunettes de soleil, et personne à qui elle ressemble.**
+Demande de Guillaume : *« elle se cache entre les pnj, tranquillement, parfois sur un banc, parfois
+circulant normalement : elle sera entre la place centrale, et le parc, elle pourra se mouvoir dans
+cet espace seulement. »* La reine annonce son existence ; on la démasque en pressant E.
+
+**C'est la première CHASSE de la ville** — pas un lieu qu'on atteint, quelqu'un qu'on repère. Trois
+choses la protègent, et elles disent toutes la même : *on ne doit pas pouvoir la trouver sans
+chercher.*
+
+1. ⚠️⚠️ **LE CHEVRON MÈNE À LA PLACE, PAS À ELLE** (`shyPlaza`, dérivé de `TOWN_PLAZA`). Posé sur sa
+   tête, il ne resterait qu'à marcher jusqu'à une flèche.
+2. ⚠️⚠️⚠️ **ELLE N'A PAS DE HALO.** Les quatre autres compagnes se peignent avec deux couronnes
+   lumineuses (`drawStarWisp`) ; posée comme elles, celle-ci se verrait à trente cases. D'où une
+   fonction de dessin à part (`drawStarShyHidden`) — et c'est aussi ce qui rend son chapeau
+   *nécessaire* : sans lueur, il faut bien quelque chose qui la distingue quand on la trouve.
+3. ⚠️ **LA PORTÉE DE L'INVITE EST COURTE (1,6 case).** Généreuse, elle la signalerait en passant.
+
+⚠️⚠️ **SES PLANQUES SONT CELLES DES RÉSIDENTS** : `starShySpots` filtre `E.townSpots(tw)` sur la
+boîte qui va de `TOWN_PLAZA` à `TOWN_PARK` — **dérivée des deux rectangles**, jamais quatre nombres
+écrits à la main (§8). C'est ce qui garantit qu'elle se cache là où un PNJ pourrait vraiment se
+tenir : un banc dont le point d'assise tombe dans le lac n'est pas un endroit (leçon du 428), et une
+planque inatteignable serait une chasse qu'on ne peut pas gagner. Elle s'y **assied** une fois sur
+trois, et seulement si la planque est un vrai banc.
+
+⚠️⚠️ **SA POSITION NE VOYAGE PAS SUR LE RÉSEAU.** Une pure fonction du temps partagé
+(`starShySlot`, comptée depuis `e.townFall` — une date de l'HÔTE déjà diffusée), exactement comme le
+jour de marché, le service de Carla, le cours du marché et les élections. Le choix passe par un
+**haché**, pas par `slot % n` : un modulo la ferait tourner en rond, toujours dans le même ordre, et
+un joueur qui a fait la quête une fois saurait où regarder.
+
+⚠️ **SON RANG DE TRI EST CELUI D'UN PNJ** (`(y + 1) * T`, sans epsilon) : c'est ce qui la fait passer
+devant et derrière les résidents comme l'une d'eux. Un epsilon l'aurait sortie du lot — donc trahie
+— sans que rien ne le dise.
+
+⚠️⚠️ **ELLE FERME LE CHAPITRE 2, DERRIÈRE LA REINE**, parce que le seuil de la septième sœur est
+« reine apprivoisée ET six étoiles trouvées ». La clé `engineer` a donc gagné un `!missing.length` :
+elle passe avant tout le reste (c'est la voix de l'étoile qui conseille la mairie), donc **dès que
+la reine sortait, elle prenait la parole pour toujours** et la discrète n'aurait jamais eu une
+ligne de bandeau. *Un objectif qu'on ne peut pas lire est un objectif qui n'existe pas* (444).
+
+⚠️ **ET ELLE SE DIT AU CHAT**, exception motivée à la règle « un geste privé ne s'annonce pas » :
+sa planque disparaît de la ville pour TOUT LE MONDE quand elle est démasquée. Sans cette ligne, un
+joueur continuerait de fouiller la place en cherchant quelqu'un que son coéquipier vient de trouver.
+
+**Bancs** : `verify-quete` **694/694**, `render-etoile` **180 contrôles** (planche
+`tools/out/etoile-discrete.png`), `verify-strings` **1 108 clés**, `verify-vallee` **223/223**,
+`verify-collision` **TOUT PASSE**, `next build` **✓ Compiled successfully**. **Aucune manipulation
+Supabase n'est nécessaire.** Menu dev : **« 🕶️ Queen tamed »** apprivoise la reine et laisse la
+chasse entière.
+
+---
+
 ## Hors-zip 2026-09-02 (quater) — LOT A : la reine se nourrit, puis se réveille au rythme
 
 **Le cratère de Valley Town avait UN geste ; il en a TROIS.** Demande de Guillaume (master prompt

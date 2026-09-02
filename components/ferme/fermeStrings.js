@@ -294,6 +294,15 @@ const STAR_FR = {
       craterWake: "Nourrie, elle dort encore. Réveille-la au rythme de son cœur (E).",
       crater:    "Le cratère a refroidi. Un à chaque bord, dos à dos : elle sortira.",
       craterAlone: "Personne en face ? Plante ton épouvantail au bord opposé (E).",
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ 2026-09-02 (lot A2) — LA DISCRÈTE. DEUX PHRASES, UNE PAR ZONE.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️ AUCUNE DES DEUX NE DIT OÙ ELLE EST EXACTEMENT, et c'est tout le lot :
+         le chevron mène à la place, le bandeau donne le SIGNALEMENT, et la
+         trouver reste à l'œil. Un objectif qui dirait « va à telle case » aurait
+         supprimé la seule chasse de la quête. ⚠️ PLAFOND DE 80 SIGNES. */
+      townShyAway: "Une des siennes se cache à Valley Town. Prends le train.",
+      townShy: "Chapeau et lunettes, entre la place et le parc. Regarde les passants.",
       /* ⚠️ ZIP 469 — SIX OBJECTIFS SONT PARTIS AVEC LE DÉCHANT (`lean`,
          `leanAgain`, `lakeShard`, `beadShard`, `nestShard`, `belfry`, `song`).
          `STAR_GOAL_KEYS` les dérive de la table : le banc échouerait sur une clé
@@ -405,6 +414,11 @@ const STAR_FR = {
     craterWake:         "Elle a de quoi brûler, mais rien ne bat. Frappe avec son cœur, pas plus vite.",
     crater:             "Celle-là nous a menées ici. C'est elle qui sait où on va.",
     craterAlone:        "Un seul dos ne suffira pas pour elle. Trouve-lui quelqu'un — ou quelque chose qui y ressemble.",
+    /* 2026-09-02 (lot A2) — C'EST LA REINE QUI PARLE, et c'est elle qui apprend au
+       joueur que la discrète existe : sans ces deux phrases, la sixième sœur
+       apparaîtrait dans le bandeau sans que personne l'ait annoncée. */
+    townShyAway:        "Une de mes sœurs est descendue en ville. Elle ne veut pas qu'on la voie.",
+    townShy:            "Elle croit qu'un chapeau suffit à la cacher. Regarde qui ne bouge pas comme les autres.",
     townWait:           "C'est de l'autre côté du rail que ça se passe maintenant.",
     townWaitThere:      "Reste près de moi. Personne ici ne me voit.",
     /* Chapitre 3 — LE CHANTIER. ⚠️ CHAQUE PHRASE RAMÈNE AU BATEAU, sans exception :
@@ -984,6 +998,9 @@ const STAR_FR = {
     found: (who, n, total) => `${who} a trouvé un morceau. ${nfr(n)} sur ${nfr(total)}.`,
     chapter: (t) => `${t}`,
     crater: (who) => `${who} a apprivoisé l'étoile reine.`,
+    // 2026-09-02 (lot A2) — la chasse s'arrête pour TOUT LE MONDE quand elle est
+    // repérée : c'est ce qui justifie une ligne de chat (voir la note côté hôte).
+    shySpotted: (who) => `${who} a démasqué la petite étoile au chapeau.`,
     tamed: (who) => `${who} a apprivoisé une petite étoile.`,
     /* ⚠️⚠️ ZIP 479 — LE SECOND JOUEUR EST NOMMÉ, ET C'EST LA MOITIÉ DU DÉFAUT
        « il ne reçoit rien » de l'audit 477. Il a tenu l'autre bord du cratère (ou
@@ -1066,6 +1083,10 @@ const STAR_FR = {
        quelque chose quand on presse E — donc elles le disent, règle du 456. */
     feed: "E : lui offrir la lumière bleue",
     wake: "E : la réveiller",
+    /* 2026-09-02 (lot A2) — LA SEULE INVITE DE LA QUÊTE QUI SOIT UNE RÉCOMPENSE :
+       la voir, c'est l'avoir. Elle ne s'affiche que si l'on est assez près, donc
+       la lire signifie qu'on a déjà gagné la chasse. */
+    shy: "E : lui dire que tu l'as reconnue",
     engineer: "E : parler à l'ingénieur",
     /* ⚠️ ZIP 478 — LA CALE. Elle nomme la TOUCHE et le GESTE (règle du 455 :
        OÙ, QUOI, COMMENT), et pas la pièce : le mini-jeu la nomme deux dixièmes de
@@ -1200,6 +1221,9 @@ const STAR_EN = {
       craterWake: "Fed, but still asleep. Wake her to the beat of her heart (E).",
       crater:    "The crater has cooled. One on each rim, backs turned: it will rise.",
       craterAlone: "Nobody across from you? Plant your scarecrow on the far rim (E).",
+      /* 2026-09-02 (lot A2) — see the FR block: neither line says where she is. */
+      townShyAway: "One of her sisters hides in Valley Town. Take the train.",
+      townShy: "Hat and sunglasses, between the square and the park. Watch the passers-by.",
       /* ⚠️ ZIP 469 — voir la note française : sept objectifs partent avec le déchant. */
       /* ⚠️⚠️ ZIP 454 — LES DEUX OBJECTIFS DE LA CONSTRUCTION. Ils suivent la même
          règle que les huit autres — OÙ et QUOI, jamais pourquoi — et ils sont plus
@@ -1260,6 +1284,9 @@ const STAR_EN = {
     craterWake:         "She has fuel, but nothing beats. Strike with her heart, no faster.",
     crater:             "That one led us here. She is the one who knows where we are going.",
     craterAlone:        "One back will not be enough for her. Find her someone — or something that looks like one.",
+    /* 2026-09-02 (lot A2) — see the FR block: the queen is the one who tells you. */
+    townShyAway:        "One of my sisters went down to the town. She does not want to be seen.",
+    townShy:            "She thinks a hat is enough to hide her. Look for whoever does not move like the others.",
     townWait:           "It happens on the other side of the rails now.",
     townWaitThere:      "Stay close to me. Nobody here can see me.",
     /* Voir la note côté français : au chapitre 3, chaque line brings it back to
@@ -1644,6 +1671,9 @@ const STAR_EN = {
          ⚠️ AUCUN CHIFFRE DANS LE LIBELLÉ : le prix vit dans `starOfferPrice`, et un
          « 80 » écrit ici serait faux le jour où il bouge (§8 de CLAUDE.md). */
       queen: "👑 The queen: cold crater + her lights (feed/wake stay)",
+      /* 2026-09-02 (lot A2) — il apprivoise la reine et LAISSE LA CHASSE : le geste
+         de la discrète est de la trouver, donc le bouton ne la trouve pas. */
+      shy: "🕶️ Queen tamed — the hidden sister is still out there",
     }[op] || op),
     scene: (s) => ({ warn: "🎬 The announcement", fall: "🎬 The eight farm impacts", townFall: "🎬 The Valley Town meteor", end: "🎬 The ending" }[s] || s),
     sceneLabel: "Replay a scene",
@@ -1666,6 +1696,8 @@ const STAR_EN = {
     found: (who, n, total) => `${who} found a piece. ${nen(n)} of ${nen(total)}.`,
     chapter: (t) => `${t}`,
     crater: (who) => `${who} tamed the queen star.`,
+    // 2026-09-02 (lot A2) — see the FR block: the hunt ends for everyone.
+    shySpotted: (who) => `${who} saw through the little star in the hat.`,
     tamed: (who) => `${who} tamed a little star.`,
     /* ⚠️ ZIP 479 — voir la note française : le second joueur est nommé. */
     /* ⚠️ ZIP 479 — voir la note française : le chaudron se dit, l'offrande non. */
@@ -1707,6 +1739,8 @@ const STAR_EN = {
     // 2026-09-02 (lot A) — two real keys, see the FR block.
     feed: "E: offer it the blue light",
     wake: "E: wake her",
+    // 2026-09-02 (lot A2) — see the FR block: reading it means you already won the hunt.
+    shy: "E: tell her you recognised her",
     engineer: "E: talk to the shipwright",
     raise: "E: raise the piece on the slipway",
   })[k] || "E",

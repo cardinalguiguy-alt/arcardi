@@ -6492,6 +6492,16 @@ export function buildSprites() {
       white:  [["#ffffff", "#eaf3ff", "#a8b8c8", "#46505c", "rgba(220,235,255,0.20)"],
                ["#f6f9fc", "#d6dee6", "#8a97a4", "#3a424c", "rgba(210,222,238,0.11)"],
                ["#dde1e4", "#a6acb2", "#6c7278", "#34383c", "rgba(200,206,212,0.05)"]],
+      /* ⚠️⚠️ 2026-09-02 (lot A2) — L'ORANGE (verbe `spot`, la sixième sœur). Elle
+         doit se distinguer de la JAUNE au premier coup d'œil, et c'est plus dur
+         qu'il n'y paraît : deux teintes chaudes voisines se confondent une fois
+         posées sur un pavé d'herbe, surtout à travers un halo. L'écart est donc
+         poussé sur la SATURATION et la valeur du corps (un orange cuivré, pas un
+         jaune tiède) plutôt que sur la seule teinte — c'est la leçon du §8, où
+         deux couleurs réglées à l'œil côte à côte ne gardent pas leur écart. */
+      orange: [["#fff2df", "#ffb765", "#d4761c", "#6b3406", "rgba(255,180,100,0.20)"],
+               ["#ffe9d0", "#eda758", "#b06216", "#5a2c06", "rgba(240,165,90,0.11)"],
+               ["#e0d6cc", "#b09a86", "#77644f", "#382e24", "rgba(210,190,170,0.05)"]],
   };
   /* La teinte VIVE d'une couleur d'étoile (état 0, ton du corps) — ce qu'il faut
      pour peindre une compagne réduite à un point lumineux, sans son sprite.
@@ -6503,7 +6513,7 @@ export function buildSprites() {
     const p = STAR_WISP_PAL[color];
     return p ? p[0][1] : null;
   }
-  function starWispSprite(pose, state, color, queen) {
+  function starWispSprite(pose, state, color, queen, shy) {
     /* ⚠️⚠️⚠️ QUATRIÈME ÉCRITURE, ET C'EST UN CHANGEMENT DE CONSTRUCTION, PAS UN
        RÉGLAGE DE PLUS. Les trois premières tentatives ont produit, dans l'ordre :
        une ICÔNE de scintillement (quatre branches sur les axes), un BISCUIT À
@@ -6530,10 +6540,25 @@ export function buildSprites() {
        mais chaque pixel devenait un gros carré et aucune matière nouvelle ne
        pouvait apparaître. Ici la taille écran reste la même, la définition non. */
     const S = queen ? 28 : 18;
-    const [c, g] = cv(S, S);
+    /* ╔══════════════════════════════════════════════════════════════════════════
+       ║ 2026-09-02 (lot A2) — LE CANEVAS GRANDIT POUR LE CHAPEAU, PAS L'INVERSE.
+       ╚══════════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ C'EST LE PIÈGE LE PLUS RÉPÉTITIF DU DÉPÔT (§4, payé TROIS fois dans le
+       seul zip 433) : un canevas découpe en silence ce qui dépasse, le dessin reste
+       joli, et il manque deux rangées que personne ne cherche. La pointe haute de
+       l'étoile touche DÉJÀ le bord à cy = 9,5 — un chapeau posé au-dessus serait
+       arrivé décapité, sans une erreur.
+       ⚠️ ET LE DÉCALAGE EST CALCULÉ POUR QUE LE CORPS NE BOUGE PAS D'UN PIXEL À
+       L'ÉCRAN : le blit est centré sur le canevas (`cx - im.width / 2`, voir
+       `drawStarWisp`), donc il faut que le corps garde le même écart au CENTRE du
+       canevas. 18×18 avec cy = 9,5 met le corps un demi-pixel sous le centre ;
+       18×24 avec cy = 12,5 fait exactement pareil. Les quatre rangées gagnées sont
+       toutes en haut, là où le chapeau les demande. */
+    const SH = shy ? 24 : S;
+    const [c, g] = cv(S, SH);
     const pal = STAR_WISP_PAL[color || "yellow"] || null;
     const [CORE, BODY, EDGE, RIM, HALO] = pal[state];
-    const cx = queen ? 14 : 9, cy = queen ? 14.5 : 9.5;   // ⚠️ décalé d'un demi-pixel vers le bas : à cy = 9 la pointe haute touchait le bord du canevas, donc elle était rabotée en silence (piège n°1, 433)
+    const cx = queen ? 14 : 9, cy = queen ? 14.5 : (shy ? 12.5 : 9.5);   // ⚠️ décalé d'un demi-pixel vers le bas : à cy = 9 la pointe haute touchait le bord du canevas, donc elle était rabotée en silence (piège n°1, 433) — et de quatre de plus pour la discrète, voir la note de `SH`
     /* ⚠️ LE RAYON INTÉRIEUR EST CE QUI DÉCIDE DE TOUT. Trop petit, l'étoile est
        une croix maigre et il n'y a plus de place pour un visage ; trop grand,
        les pointes disparaissent et on retombe sur le biscuit. À 0,44 du rayon
@@ -6643,6 +6668,47 @@ export function buildSprites() {
     if (queen && state === 0) {                                        // éclats intérieurs asymétriques
       P(g, cx - 6, cy - 5, 2, 1, CORE); P(g, cx + 5, cy - 1, 1, 2, CORE);
       P(g, cx - 1, cy - 7, 1, 2, CORE); P(g, cx + 2, cy + 5, 2, 1, EDGE);
+    }
+    /* ╔══════════════════════════════════════════════════════════════════════════
+       ║ 2026-09-02 (lot A2) — LE DÉGUISEMENT DE LA DISCRÈTE. IL PASSE EN DERNIER.
+       ╚══════════════════════════════════════════════════════════════════════════
+       Guillaume : *« avec un mini chapeau et des lunettes de soleil »*.
+       ⚠️⚠️ IL SE PEINT APRÈS LE VISAGE, ET C'EST TOUT LE GAG : les lunettes
+       RECOUVRENT les yeux qu'on vient de dessiner, au lieu de les remplacer. Une
+       variante qui aurait sauté le visage aurait produit une étoile sans regard
+       avec deux barres noires — un objet, pas quelqu'un qui se cache.
+       ⚠️ LE DÉGUISEMENT NE CHANGE PAS DE POSE : il est identique aux quatre poses
+       et aux trois états, parce qu'un chapeau ne respire pas. C'est aussi ce qui le
+       rend reconnaissable au milieu des passants — la seule chose immobile.
+       ⚠️⚠️ ET C'EST LE POINT DE CONCEPTION DU LOT : elle doit se repérer, pas
+       sauter aux yeux. Le chapeau est PENCHÉ (deux rangées décalées d'un pixel) et
+       trop petit pour elle : de loin c'est une silhouette de plus, de près c'est
+       manifestement une étoile qui porte un chapeau. */
+    if (shy) {
+      const HAT = "#3a2f26", HATB = "#241c16", BAND = "#8a6a3c";
+      const GLA = "#1b1a20", GLE = "#43414c";
+      /* Les lunettes : une barre sur les deux yeux, avec un pont d'un pixel. Elles
+         mesurent tout le cœur (six pixels) — des lunettes plus étroites que le
+         visage se lisent comme des sourcils. */
+      P(g, cx - 3, cy - 3, 3, 2, GLA);
+      P(g, cx + 1, cy - 3, 3, 2, GLA);
+      P(g, cx, cy - 3, 1, 1, GLE);                       // le pont
+      P(g, cx - 3, cy - 3, 1, 1, GLE); P(g, cx + 3, cy - 3, 1, 1, GLE);   // deux reflets, sinon c'est un bandeau
+      /* Le chapeau : bord, calotte, ruban. Il se pose sur la branche du HAUT, donc
+         au-dessus du cœur — d'où les quatre rangées gagnées sur le canevas. */
+      /* ⚠️ IL SE POSE, IL NE PLANE PAS. À `cy - 9`, la planche du banc montrait un
+         chapeau SUSPENDU un pixel au-dessus de la tête : de loin ça ne se voyait
+         pas, de près ça faisait un objet qui flotte à côté d'une étoile au lieu
+         d'une étoile qui porte un chapeau — c'est-à-dire que le gag ne prenait
+         pas. Un pixel, et la même image raconte autre chose. */
+      const hy = cy - 8;
+      P(g, cx - 4, hy + 2, 9, 1, HATB);                  // le bord
+      P(g, cx - 3, hy + 1, 7, 1, HAT);
+      P(g, cx - 2, hy, 5, 1, HAT);                       // la calotte, décalée d'un pixel : il est de travers
+      P(g, cx - 2, hy - 1, 4, 1, HAT);
+      P(g, cx - 3, hy + 1, 7, 1, BAND);                  // le ruban mange la rangée basse de la calotte
+      P(g, cx - 2, hy, 5, 1, HAT);
+      P(g, cx - 4, hy + 2, 1, 1, HATB); P(g, cx + 4, hy + 2, 1, 1, HATB);
     }
     return c;
   }
@@ -15603,13 +15669,18 @@ house: house(),
        SILLON (454) et le navire ne sont PAS ici : ce sont des fonctions, parce
        qu'ils se peignent sur un fond déjà là (voir leur note). */
     starWisp: Array.from({ length: 3 }, (_, st) => Array.from({ length: 4 }, (_, po) => starWispSprite(po, st, "yellow"))),
-    starWispColors: Object.fromEntries(["yellow", "blue", "rose", "white"].map(color => [color,
+    starWispColors: Object.fromEntries(["yellow", "blue", "rose", "white", "orange"].map(color => [color,
       Array.from({ length: 3 }, (_, st) => Array.from({ length: 4 }, (_, po) => starWispSprite(po, st, color))) ])),
     /* AUDIT 2026-08-31 — exposée pour la scène de résolution, qui peint les
        compagnes en points lumineux et n'a donc pas leur sprite. Voir la note de
        `STAR_WISP_PAL`. */
     starWispTint,
     starWispQueen: Array.from({ length: 3 }, (_, st) => Array.from({ length: 4 }, (_, po) => starWispSprite(po, st, "yellow", true))),
+    /* 2026-09-02 (lot A2) — LA DISCRÈTE, DÉGUISÉE. Une famille à part et non une
+       cinquième couleur : le déguisement n'est pas une teinte, c'est un dessin en
+       plus (voir la note dans `starWispSprite`). Elle garde sa couleur orange, qui
+       reste celle de sa compagne une fois apprivoisée. */
+    starWispShy: Array.from({ length: 3 }, (_, st) => Array.from({ length: 4 }, (_, po) => starWispSprite(po, st, "orange", false, true))),
     starShard: Array.from({ length: 4 }, (_, n) => starShardSprite(n)),
     /* ⚠️ ZIP 454 — LE SILLON N'EST PLUS UN SPRITE, C'EST UNE FONCTION, exactement
        comme le cratère et pour la même raison : il se peint sur un fond déjà là et

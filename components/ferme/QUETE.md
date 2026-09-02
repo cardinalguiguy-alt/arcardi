@@ -2,8 +2,8 @@
 
 ## ⚠️⚠️⚠️ MASTER PROMPT 2026-09-02 — LA REINE NOURRIE-MARTELÉE, ET LA SEPTIÈME SŒUR AU LAC MALÉFIQUE
 
-⚠️⚠️⚠️ **LES SEPT QUESTIONS DU §6 ONT ÉTÉ POSÉES ET TRANCHÉES AVEC GUILLAUME LE 2026-09-02, ET LE
-LOT A EST LIVRÉ.** Les réponses sont inscrites dans le §6 lui-même, à la place des questions —
+⚠️⚠️⚠️ **LES SEPT QUESTIONS DU §6 ONT ÉTÉ POSÉES ET TRANCHÉES AVEC GUILLAUME LE 2026-09-02 ; LES
+LOTS A ET A2 SONT LIVRÉS.** Les réponses sont inscrites dans le §6 lui-même, à la place des questions —
 elles ne s'empilent pas, elles remplacent (§14.1 de `CLAUDE.md`). Le reste de ce document (lots B à
 F) reste un ordre de mission : **rien n'en est implémenté**. **Lis-le en entier avant de toucher un
 fichier**, comme le §2 de `CLAUDE.md` le demande pour tout changement important.
@@ -85,6 +85,65 @@ réussit (étape 2), avant le dos-à-dos.
   `verify-quete` refusera toute étoile dont le verbe n'y figure pas — c'est voulu, c'est le
   garde-fou qui a empêché un repli silencieux par le passé (voir le commentaire à côté de
   `starVerbOf`).
+
+### 2 ter. La sixième sœur, « la discrète » — LIVRÉE (lot A2, 2026-09-02)
+
+**Elle se cache parmi les passants, entre la place centrale et le parc, avec un mini chapeau et des
+lunettes de soleil. La reine annonce son existence ; on la démasque en pressant E.**
+
+| grandeur | valeur | où |
+|---|---:|---|
+| couleur | orange (`STAR_WISP_PAL.orange`) | `fermeArt.js` |
+| verbe | `spot` | `STAR_VERBS` |
+| domaine | la boîte qui va de `TOWN_PLAZA` à `TOWN_PARK`, **dérivée**, jamais recopiée | `starShySpots`, `FermeGame.js` |
+| changement de planque | 50 s | `STAR_SHY_PERIOD_MS` |
+| portée de l'invite | 1,6 case | `starNearby`, `FermeGame.js` |
+
+⚠️⚠️⚠️ **TROIS CHOSES À NE PAS DÉFAIRE, ET LES TROIS SONT LA MÊME : ON NE DOIT PAS POUVOIR LA
+TROUVER SANS CHERCHER.**
+1. **Le chevron mène à la PLACE, pas à elle** (`shyPlaza`). Posé sur sa tête, il ne resterait qu'à
+   marcher jusqu'à une flèche — la chasse disparaîtrait entièrement.
+2. **Elle n'a PAS de halo.** Les quatre autres compagnes se peignent avec deux couronnes lumineuses
+   (`drawStarWisp`) ; posée comme elles, celle-ci se verrait à trente cases. Elle a donc sa propre
+   fonction de dessin (`drawStarShyHidden`), sans lueur — et c'est aussi ce qui rend son chapeau
+   *nécessaire* : sans lueur, il faut bien quelque chose qui la distingue quand on la trouve.
+3. **La portée de l'invite est courte (1,6 case).** Généreuse, elle la signalerait en passant.
+   *Lire « E : lui dire que tu l'as reconnue », c'est avoir déjà gagné.*
+
+⚠️⚠️ **SA PLANQUE NE VOYAGE PAS SUR LE RÉSEAU** : c'est une pure fonction du temps partagé
+(`starShySlot`, comptée depuis `e.townFall`, une date de l'hôte déjà diffusée) — le patron déjà
+écrit cinq fois dans ce dépôt (jour de marché, service de Carla, jour d'orage, cours du marché,
+élections). Le choix passe par un **haché** et non par `slot % n` : un modulo la ferait passer par
+les planques toujours dans le même ordre, et un joueur qui a fait la quête une fois saurait où
+regarder (vérifié en le remplaçant : 200 coïncidences sur 200).
+
+⚠️ **ELLE FERME LE CHAPITRE 2, DERRIÈRE LA REINE**, et c'est une décision de structure : le seuil de
+la septième sœur est « reine apprivoisée ET six étoiles trouvées ». Hors des chapitres, elle aurait
+été facultative, donc jamais annoncée par le bandeau — et la septième aurait attendu une condition
+que rien ne pousse le joueur à remplir. La clé `engineer` a donc gagné un `!missing.length` : sans
+lui, la voix de l'étoile prenait la parole dès la sortie de la reine et la discrète n'avait jamais
+une ligne.
+
+**Bancs** : `verify-quete` **694/694** (la règle « pas avant la reine », le créneau, la répartition
+des planques, l'assise) ; `render-etoile` **180 contrôles** dont neuf neufs sur le déguisement,
+planche `tools/out/etoile-discrete.png`.
+
+⚠️⚠️ **LE BANC A REFUSÉ TROIS MESURES AVANT D'EN ACCEPTER UNE, ET LES TROIS SE TROMPAIENT DE LA MÊME
+FAÇON — elles nommaient une chose et en mesuraient une autre.** « Les sept rangées du haut »
+attrapait la pointe haute de l'étoile, qui change de longueur à chaque pose ; « les pixels sombres
+du haut » attrapait le cerne de cette même pointe ; et la comparaison de couleur avec la reine,
+faite sur fond vert, rendait deux écarts NÉGATIFS (« ces deux étoiles chaudes ont plus de vert que
+de rouge »), parce que les bords semi-transparents se mélangent au fond. *Le fond d'une mesure de
+couverture n'est pas le fond d'une mesure de couleur.* La prise juste est une **différence** : on
+soustrait la déguisée à la nue, et ce qui reste EST le déguisement, par construction. *Quand une
+prise demande un seuil, c'est souvent qu'on n'a pas encore trouvé la bonne prise.*
+
+⚠️ **ET LA PLANCHE A CORRIGÉ UN DÉFAUT D'UN PIXEL** : le chapeau PLANAIT un pixel au-dessus de sa
+tête. De loin ça ne se voyait pas ; de près ça faisait un objet qui flotte à côté d'une étoile au
+lieu d'une étoile qui porte un chapeau — le gag ne prenait pas.
+
+**Menu développeur** : bouton **« 🕶️ Queen tamed »** — il apprivoise la reine et **laisse la chasse
+entière**, puisque le geste de ce lot est justement de la trouver.
 
 ### 3. Partie B — la septième sœur, prisonnière du lac maléfique
 
@@ -183,7 +242,7 @@ entre A et C. Les livrer après aurait donné une partie B injouable, ce qu'aucu
 | lot | contenu | ce qui se juge, isolément | état |
 |---|---|---|---|
 | A | La reine : nourrir (80 lumières) + réveiller au rythme | le geste en trois temps est-il clair, le réveil est-il agréable | ✅ **LIVRÉ 2026-09-02** |
-| A2 | **Sœur n°6, la discrète** — chapeau + lunettes, entre place centrale et parc, E pour l'apprivoiser | la trouve-t-on sans indice explicite, le déguisement amuse-t-il | ❌ |
+| A2 | **Sœur n°6, la discrète** — chapeau + lunettes, entre place centrale et parc, E pour l'apprivoiser | la trouve-t-on sans indice explicite, le déguisement amuse-t-il | ✅ **LIVRÉ 2026-09-02** |
 | A3 | **Sœur n°5** — simplifiée : la chercher, avec des indices | les indices suffisent-ils sans chevron | ❌ |
 | B | La scène d'éveil 3D (procédurale ou Blender+vérifiée) | comique, lisibilité du changement gris→jaune, `render-*.mjs` avant tout jugement en jeu | ❌ |
 | C | Le lac maléfique : constantes exportées, découverte, chevron, hazard de la canne | on trouve l'étoile, on comprend le danger, sans encore pouvoir la sauver | ❌ |
@@ -223,7 +282,7 @@ elles ont changé le PLAN et pas seulement le contenu — c'est signalé.
 5. **Sœur n°6, « la discrète ».** *« elle se cache entre les pnj, tranquillement, parfois sur un
    banc, parfois circulant normalement : elle sera entre la place centrale, et le parc, elle pourra
    se mouvoir dans cet espace seulement. »* Mini chapeau, lunettes de soleil ; la reine oriente vers
-   elle ; on l'apprivoise en pressant E. ❌ **NON CONSTRUITE.**
+   elle ; on l'apprivoise en pressant E. ✅ **LIVRÉE** (lot A2) — voir §2 ter.
 6. **Sœur n°5 : simplifiée elle aussi.** *« SIMPLIFIEE, IL FAUT JUSTE LA CHERCHER. mais avoir des
    indices sur où elle se trouve. on peut tout à fait trouver la 6 sur le chemin, bien sûr et faire
    la 5 après la 6. »* ⚠️ La chasse spatiale du §17.5 (triangle de bornes, reflet dans l'eau) n'est

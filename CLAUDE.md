@@ -11,33 +11,39 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-⚠️⚠️ **LE LOT A DU MASTER PROMPT EST LIVRÉ ET VÉRIFIÉ (hors-zip 2026-09-02, quater) : LA REINE SE
-NOURRIT, PUIS SE RÉVEILLE AU RYTHME.** Le cratère de Valley Town avait un geste, il en a trois —
-80 lumières bleues rapportées de la course de fuite, huit battements placés sur un anneau qui se
-contracte, puis le dos-à-dos déjà écrit. **Les sept questions du master prompt ont été posées et
-tranchées avec Guillaume avant d'écrire une ligne** ; les réponses ont REMPLACÉ les questions au §6
-de `components/ferme/QUETE.md`, et la mécanique du réveil (ses six nombres, les trois choses à ne
-pas défaire) est à son §2 bis. Le branchement dans la ville est en tête de
-`components/ferme/README.md`. `verify-quete` **673/673** (il JOUE le réveil), `render-etoile`
-**171 contrôles**, `verify-strings` **1 108 clés**, `verify-vallee` **223/223**,
-`verify-collision` **TOUT PASSE**, `verify-maire` **119/119**, `verify-scierie` **34/34**,
-`next build` **✓ Compiled successfully**. **Aucune manipulation Supabase n'est nécessaire.**
+⚠️⚠️ **LES LOTS A ET A2 DU MASTER PROMPT SONT LIVRÉS ET VÉRIFIÉS (hors-zip 2026-09-02).** Les sept
+questions ont été posées et tranchées avec Guillaume avant d'écrire une ligne ; les réponses ont
+REMPLACÉ les questions au §6 de `components/ferme/QUETE.md`.
+· **Lot A — la reine** : elle se nourrit (80 lumières de la course de fuite), se réveille au rythme
+  (huit battements sur un anneau qui se contracte, **sans aucun panneau** : l'interface est le
+  décor), puis le dos-à-dos déjà écrit. Détail au §2 bis de `QUETE.md`.
+· **Lot A2 — la sixième sœur, « la discrète »** : orange, mini chapeau, lunettes de soleil, cachée
+  parmi les passants entre la place et le parc. **La première CHASSE de la ville.** Détail au
+  §2 ter de `QUETE.md`. Le branchement des deux est en tête de `components/ferme/README.md`.
+`verify-quete` **694/694** (il JOUE les deux), `render-etoile` **180 contrôles**, `verify-strings`
+**1 108 clés**, `verify-vallee` **223/223**, `verify-collision` **TOUT PASSE**, `verify-maire`
+**119/119**, `verify-scierie` **34/34**, `next build` **✓ Compiled successfully**. **Aucune
+manipulation Supabase n'est nécessaire.**
 
-⚠️⚠️⚠️ **CE QUI ATTEND GUILLAUME, ET C'EST DU JUGEMENT, PAS DU CODE : LES SIX NOMBRES DU RÉVEIL
-SONT DE CLAUDE** (« tu jugeras »). Menu dev → **⭐ Star → 👑 The queen** pose le décor en un clic
-(météore tombé, trou froid, 80 lumières dans le flux) et **laisse les trois gestes à jouer** — sans
-lui, chaque essai coûte une course de Temple Run et trois minutes d'attente. Comme les trois
-nombres de la scierie : **aucun ne doit bouger avant d'avoir joué** (règle du voyage en train, 431).
+⚠️⚠️⚠️ **CE QUI ATTEND GUILLAUME, ET C'EST DU JUGEMENT, PAS DU CODE.** (1) **Les six nombres du
+réveil sont de Claude** (« tu jugeras ») — comme les trois nombres de la scierie, aucun ne doit
+bouger avant d'avoir joué (règle du voyage en train, 431). (2) **La chasse à la discrète** : est-ce
+qu'on la trouve en deux minutes ou en dix ? C'est le seul réglage qui ne se mesure nulle part.
+Menu dev → ⭐ Star → **👑 The queen** (décor posé, les trois gestes à jouer) et **🕶️ Queen tamed**
+(reine acquise, chasse entière).
 
-⚠️⚠️⚠️ **ACTION SUIVANTE UNIQUE : LE LOT A2 — LA SIXIÈME SŒUR, « LA DISCRÈTE ».** Elle se cache
-entre les PNJ, parfois assise sur un banc, parfois marchant normalement, **entre la place centrale
-et le parc et nulle part ailleurs** ; mini chapeau et lunettes de soleil ; la reine oriente vers
-elle ; on l'apprivoise en pressant E. C'est la décision n°5 du §6 de `QUETE.md`, et elle est sur le
-CHEMIN CRITIQUE : le seuil de la septième sœur est « reine apprivoisée **et six étoiles trouvées** »,
-donc rien du lac maléfique n'est jouable avant A2 puis A3 (la cinquième sœur, simplifiée elle
-aussi : on la cherche, avec des indices). **Ensuite seulement** viennent les lots B à F.
+⚠️⚠️⚠️ **ACTION SUIVANTE UNIQUE : LE LOT A3 — LA CINQUIÈME SŒUR.** Guillaume : *« SIMPLIFIEE, IL
+FAUT JUSTE LA CHERCHER. mais avoir des indices sur où elle se trouve. on peut tout à fait trouver
+la 6 sur le chemin, bien sûr et faire la 5 après la 6. »* ⚠️ **CE QUI LA DISTINGUE DE LA DISCRÈTE
+EST LE MOT « INDICES »** : la sixième se repère à l'œil dans un domaine annoncé ; la cinquième
+demande une piste à suivre. C'est donc une mécanique de plus, pas une copie — **poser la question
+de leur forme à Guillaume avant d'écrire** (§2). ⚠️ La chasse spatiale du §17.5 (triangle de bornes,
+reflet dans l'eau) est explicitement écartée par sa réponse ; elle reste écrite si elle revient.
+**A3 est sur le chemin critique** : le seuil de la septième sœur est « reine apprivoisée **et six
+étoiles trouvées** », et le compte n'y sera qu'avec elle. **Ensuite seulement** viennent les lots B
+à F (la scène d'éveil 3D, puis le lac maléfique).
 
-⚠️ **ET CE QUI ATTENDAIT DÉJÀ, NON TOUCHÉ PAR CETTE SESSION**, dans l'ordre : le même buis que
+⚠️ **ET CE QUI ATTENDAIT DÉJÀ, NON TOUCHÉ PAR CES DEUX LOTS**, dans l'ordre : le même buis que
 Valley Town, pour la ferme (VF — aucun équivalent du mécanisme `TOWN_SOFT_PROPS` côté ferme, §4) ;
 la villa (`refs/grandevilladeriches.png`, même pipeline PNG que l'hôtel de ville, prompt Gemini avec
 référence, jamais d'appel API direct — §2) ; retirer `townHall2Sprite` (canevas procédural sans
@@ -372,7 +378,7 @@ dépôt.
 |---|---|
 | `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **~20 500 l.** |
 | `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** |
-| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE : table, chronologies et résolveurs purs.** ⚠️ **469 — la FOUILLE (`STAR_DIG_MS`, `starDug`, `resolveStarDig`, `starDigResult`) et TROIS chapitres au lieu de cinq.** `STAR_FARM_IMPACTS` porte les **huit** cratères (3 étoiles / 2 matières / 3 vides — compté en important le module le 2026-08-30 ; il annonçait « cinq (2/1/2) » depuis le 480 bis), `resolveStarCalm` tient le barème 60/10 s et `resolveStarTownFall` sépare le gros météore. `STAR_FOLLOWER_SITES` dérive toutes les compagnes de `content:"star"`, `starFollowerAdded` identifie celle qui doit jouer son arrivée, `starFarmFlightPath` tient le cap stable des fragments et `queen` désigne l'unique reine. `starShipProgress` joint les cinq états du plan aux commandes et à la cale sans persistance supplémentaire. ⚠️ **2026-09-02 (lot A) — LA REINE SE NOURRIT PUIS SE RÉVEILLE** : `starOfferPrice` est le SEUL endroit qui dise ce que coûte une étoile (60 pour la bleue, `STAR_QUEEN_PRICE` = 80 pour la reine), `resolveStarLight` sert désormais les deux, et `starWakeAdvance`/`starWakeStrike` portent les deux décisions du réveil au rythme — sorties de `FermeGame.js` **pour qu'un banc puisse les jouer**, comme `maire.js` et `scierie.js`. Aucun React, aucun dessin — `verify-quete.mjs` l'importe. |
+| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE : table, chronologies et résolveurs purs.** ⚠️ **469 — la FOUILLE (`STAR_DIG_MS`, `starDug`, `resolveStarDig`, `starDigResult`) et TROIS chapitres au lieu de cinq.** `STAR_FARM_IMPACTS` porte les **huit** cratères (3 étoiles / 2 matières / 3 vides — compté en important le module le 2026-08-30 ; il annonçait « cinq (2/1/2) » depuis le 480 bis), `resolveStarCalm` tient le barème 60/10 s et `resolveStarTownFall` sépare le gros météore. `STAR_FOLLOWER_SITES` dérive toutes les compagnes de `content:"star"`, `starFollowerAdded` identifie celle qui doit jouer son arrivée, `starFarmFlightPath` tient le cap stable des fragments et `queen` désigne l'unique reine. `starShipProgress` joint les cinq états du plan aux commandes et à la cale sans persistance supplémentaire. ⚠️ **2026-09-02 (lot A) — LA REINE SE NOURRIT PUIS SE RÉVEILLE** : `starOfferPrice` est le SEUL endroit qui dise ce que coûte une étoile (60 pour la bleue, `STAR_QUEEN_PRICE` = 80 pour la reine), `resolveStarLight` sert désormais les deux, et `starWakeAdvance`/`starWakeStrike` portent les deux décisions du réveil au rythme — sorties de `FermeGame.js` **pour qu'un banc puisse les jouer**, comme `maire.js` et `scierie.js`. ⚠️ **2026-09-02 (lot A2) — LA SIXIÈME SŒUR, `townShy`, verbe `spot`** : `starShySlot`/`starShyPick`/`starShySits` disent OÙ elle se cache — une pure fonction du temps partagé, jamais un état diffusé (le patron du jour de marché et des élections) ; `resolveStarSpot` tient la seule règle qui compte (pas avant la reine). Aucun React, aucun dessin — `verify-quete.mjs` l'importe. |
 | `components/ferme/maire.js` | **L'AUDIENCE CHEZ LE MAIRE (480) : la table des battements et les résolveurs purs.** Douze nœuds, cinq actes, cinq familles d'argument, la jauge d'adhésion qui FUIT, l'élan, la rejouabilité côté hôte (`mayorReplay` : le client envoie sa TRANSCRIPTION, l'hôte la rejoue). Aucun React, aucun dessin — `verify-maire.mjs` l'importe. ⚠️ **C'est un système de NÉGOCIATION, pas une scène** : la confiance gagnée sert les audiences futures, donc une commission ou le cadastre s'y ajouteront en une table de plus. |
 | `components/ferme/MaireScene.js` | **la VUE de l'audience — le seul morceau de 3D du monde partagé.** Écran PLEIN, à la PREMIÈRE PERSONNE, caméra libre dans la pièce, bulles projetées, réponses en jaune, **mode spectateur** (`MayorWatch`), repli plat si WebGL manque. ⚠️ Il porte `mayorCtxOf`, **la fonction de contexte que le CLIENT et l'HÔTE appellent tous les deux** : leur accord est une propriété du code, pas une coïncidence. |
 | `components/ferme/scierie.js` | **LA SCIE DE TRISTAN (lot E) : la simulation pure, à PAS FIXE.** Une lame qui a de l'inertie, un partenaire qui RÉPOND au lieu de mener, un mou qui referme la fenêtre parfaite, une contrainte qui fend la planche. ⚠️ **Aucune fonction transcendante dans le chemin de simulation** (`sin`/`pow`/`random` sont laissés à l'implémentation par la norme) : le hasard passe par un hachage entier, ce qui rend la manche rejouable **au bit près** par l'hôte à partir d'une liste de numéros de pas. Aucun React, aucun dessin — `verify-scierie.mjs` en joue des centaines. ⚠️ `sawPull(s, side)` est déjà symétrique : la seconde poignée du §17.6 s'ajoutera sans rouvrir la mécanique. |
@@ -455,6 +461,18 @@ ressenti.** ⚠️ **ET LA STATISTIQUE QUI COMPTE N'EST PAS LA MOYENNE** : au 42
 moyenne était juste et l'image fausse — **pas un pixel sous L60**, donc aucune ombre. Il faut
 un **écart**, pas un décalage. (Référence : L 180,6 / **écart-type 47,7** / saturation 27,8 % /
 2,1 % sous L60.)
+
+⚠️⚠️⚠️ **QUAND UNE PRISE DEMANDE UN SEUIL, C'EST SOUVENT QU'ON N'A PAS TROUVÉ LA BONNE PRISE**
+(2026-09-02, quatre mesures refusées en deux lots). Pour vérifier qu'un chapeau ne bouge pas d'une
+pose à l'autre, deux écritures ont échoué sur un dessin JUSTE : « les rangées du haut » attrapait la
+pointe de l'étoile, qui change de longueur exprès ; « les pixels sombres du haut » attrapait le
+cerne de cette même pointe. La prise juste ne demandait aucun seuil — **une DIFFÉRENCE** entre le
+sprite nu et le sprite déguisé, dont le reste EST le déguisement, par construction. Même famille sur
+l'anneau du réveil, où « le pixel peint le plus loin du centre » mesurait la couronne des battements
+et non l'anneau. ⚠️ **Corollaire de fond : le fond d'une mesure de COUVERTURE n'est pas le fond
+d'une mesure de COULEUR** — sur le vert pur qui sert à compter les pixels peints, les bords
+semi-transparents se mélangent au fond, et deux étoiles chaudes ressortent « plus vertes que
+rouges ».
 
 ⚠️⚠️⚠️ **ET UNE MESURE QUI CONFOND DEUX PROPRIÉTÉS VALIDE LE DÉFAUT QU'ELLE CHERCHE** (2026-09-02).
 Pour prouver qu'une réussite et un raté ne se ressemblent pas, on a d'abord mesuré la « chaleur »
@@ -566,10 +584,10 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 ⚠️⚠️ **LES BANCS SONT DANS `tools/README.md` DEPUIS LE 432, ET CE CHAPITRE A ÉTÉ ÉLAGUÉ AU 444
 SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 442** (reporté deux fois). **20 bancs de contrôle et 22 bancs
 de rendu**, comptés en listant `tools/`. **TOUS RELANCÉS LE 2026-09-02 (lot A)** :
-`verify-quete` **673/673**, `verify-maire` **119/119**, `verify-vallee` **223/223**,
+`verify-quete` **694/694**, `verify-maire` **119/119**, `verify-vallee` **223/223**,
 `verify-collision` **TOUT PASSE** (30 contrôles), `verify-strings` **1 108 clés appariées**,
 `verify-scierie` **34/34**, `verify-ludo` **30/30**, `verify-taxi` **15/15**,
-`render-maire` **86/86**, `render-etoile` **171 contrôles** — et **vingt bancs de rendu sur
+`render-maire` **86/86**, `render-etoile` **180 contrôles** — et **vingt bancs de rendu sur
 vingt-deux** seulement s'exécutent (voir l'entrée dédiée plus bas : `render-eau` et `render-parc`,
 relancés un par un ce jour-là, sont cassés depuis avant cette livraison).
 ⚠️ *`verify-quete` était à 488 au 468 : le déchant a retiré les contrôles des quatre chapitres
@@ -860,14 +878,11 @@ Guillaume joue lui-même (recette au §10 : `fake-supabase.mjs`, échafaudage te
 « Peupler la ferme », deux onglets) ; Claude fournit les commandes exactes si besoin, jamais ne
 les exécute à sa place sur ce chantier.
 
-✅ **BUG DU RÉSIDENT SUCRIER — RÉSOLU (2026-09-01).** Ce n'était pas un bug de déplacement : le
-résident sucrier (Jérôme Martial) « figé » avait perdu une bagarre de la rivalité Tristan/Jérôme
-et purgeait son ITT (`TJ_BRAWL_ITT_MS`), qui se levait correctement seule mais durait 16 MINUTES
-RÉELLES sans que le toast n'indique une durée ni la possibilité de le soigner au pansement — d'où
-l'impression de PNJ cassé. Ramené à 3 minutes réelles sur demande de Guillaume. Détail au
-commentaire daté de `fermeConstants.js` (`TJ_BRAWL_ITT_MS`). Retour général sur toutes les
-activités testées, toujours ouvert : plus d'indicateurs visuels de progression et plus
-d'animations demandés.
+⚠️⚠️ **LE RETOUR LE PLUS RÉPÉTÉ DE GUILLAUME, ET IL EST TOUJOURS OUVERT : PLUS D'INDICATEURS
+VISUELS DE PROGRESSION, PLUS D'ANIMATIONS.** Il est sorti de trois séances distinctes (la scierie,
+les activités de la ferme, le résident « figé » qui purgeait en fait une blessure sans que rien ne
+le dise). *Une mécanique qui tourne sans rien montrer ne se distingue pas d'un jeu bloqué* — c'est
+le même défaut que le cratère muet du 456, et il se paie à chaque nouveau système.
 
 ⚠️ **DEUX IDÉES DU MÊME DÉBRIEF, TRANCHÉES SUR LEUR SORT IMMÉDIAT, PAS SUR LEUR CONTENU** :
 · **Visiteurs célèbres** (noms et sprites de vraies personnes) — **à explorer plus tard**,
