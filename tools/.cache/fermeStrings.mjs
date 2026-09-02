@@ -1784,9 +1784,9 @@ const MAIRE_FR = {
   /* ── la phrase que le maire élu ajoute, et lui seul ────────────────────── */
   tint: {
     m2: {
-      vasseur:   "Il regarde vos mains avant de regarder votre visage. « Bon. »",
+      vasseur:   "Elle regarde vos mains avant de regarder votre visage. « Bon. »",
       lantier:   "« Le nord. Vous passez par le pont est, alors. Il tient toujours ? »",
-      bonnefoy:  "Il ouvre un registre, y note quelque chose, le referme. « Bien. »",
+      bonnefoy:  "Elle ouvre un registre, y note quelque chose, le referme. « Bien. »",
       delaunay:  "« Le nord. Vous descendez au lac, quelquefois ? »",
       toussaint: "« La ferme Vallée. Nous avons des relevés de chez vous qui datent de 1890. Personne ne les a jamais demandés. »",
     },
@@ -1801,7 +1801,7 @@ const MAIRE_FR = {
       vasseur:   "« Mon père y a débarqué des betteraves pendant quarante ans. Il n'y a plus de betteraves. »",
       lantier:   "« Je l'ai fait repaver en première année. Vingt-deux mille. Pour quatre barques. »",
       bonnefoy:  "« Il figure à l'inventaire comme équipement portuaire. Il n'y a pas de port. »",
-      delaunay:  "« Quand j'étais petit, il y avait des voiles. Trois, quatre. Plus maintenant. »",
+      delaunay:  "« Quand j'étais petite, il y avait des voiles. Trois, quatre. Plus maintenant. »",
       toussaint: "« Il existe une photo de 1911 aux archives. On y voit un mât. Un seul, mais un mât. »",
     },
   },
@@ -1949,6 +1949,163 @@ const MAIRE_FR = {
     booked: (n) => `${n} a obtenu un rendez-vous avec le maire.`,
   },
 };
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   HORS-ZIP 2026-09-02 — QUAND LE MAIRE EST UNE FEMME.
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume : « créer une version féminine, quand le maire est une
+   femme ».
+
+   ⚠️⚠️⚠️ CE N'ÉTAIT PAS UNE VERSION À INVENTER, C'ÉTAIT UNE INCOHÉRENCE À
+   RÉPARER. `L.candName` nomme **Odile** Vasseur, **Séverine** Bonnefoy et
+   **Ninon** Delaunay depuis le 480 — TROIS maires sur cinq — pendant que la
+   table ci-dessus écrivait « Il ouvre un registre, y note quelque chose » et que
+   `buildMayor` ne savait dessiner qu'un homme. Le nom, le corps et le texte
+   racontaient trois personnages différents, et personne ne pouvait le voir en
+   relisant l'un des trois.
+
+   ⚠️⚠️ LA FORME EST UNE SURCHARGE ÉPARSE, PAS UNE SECONDE TABLE. Recopier les
+   cent quatre-vingt-douze clés au féminin aurait produit deux textes à tenir
+   d'accord — c'est-à-dire le défaut décrit trois fois dans ce fichier (la quête
+   restée anglaise, `MAIRE_EN` recopié, le chiffre de banc à deux endroits). Ici
+   on n'écrit QUE ce qui change : les répliques du maire ne bougent pas d'un mot
+   (ce qu'elle dit ne dépend pas de son sexe), seules changent les DIDASCALIES
+   et les tournures qui la désignent.
+   ⚠️ `verify-strings` vérifie que chaque clé de cette table existe dans
+   `MAIRE_FR` : une clé mal orthographiée ici serait un texte féminin que
+   personne ne verrait jamais, et rien ne le dirait.
+   ⚠️ CE QUI N'EST **PAS** ICI, ET C'EST DÉLIBÉRÉ :
+     · `say` — c'est LE JOUEUR qui parle, et les « il/lui » qu'on y lit désignent
+       Kerguélen ou Eduardo, pas le maire. Les féminiser aurait changé de sujet ;
+     · `tint` — ces répliques sont déjà indexées PAR MAIRE, donc les trois
+       féminines se corrigent à leur place, dans la table de base. Une surcharge
+       aurait été une seconde adresse pour la même ligne ;
+     · `triesAt` — « vous êtes déjà venu » parle de VOUS.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const MAIRE_FR_F = {
+  streakHold: "Elle ne décroche plus.",
+  streakGain: "Elle finit vos phrases.",
+  audienceDay: "C'est son jour d'audience. Elle est préparée, et elle a le temps.",
+  busyDay: "Ce n'est pas son jour d'audience. Vous la prenez entre deux dossiers.",
+  moodSay: {
+    great: "« Vous tombez bien. Elle a ri au téléphone il y a dix minutes, ça n'arrive pas tous les jours. »",
+    good:  "« Elle est de bonne composition ce matin. Le conseil s'est bien passé. »",
+    mid:   "« Comme d'habitude. Ni bien ni mal. Elle vous écoutera. »",
+    bad:   "« Je vous préviens : la réunion de dix heures s'est mal terminée. Elle n'est pas commode. »",
+  },
+  clerkAsk: "🎩 Demander une audience à la maire",
+  bookedWhen: (mmss) => `Elle vous reçoit dans ${mmss}.`,
+  bookedBy: (n) => `${n} a rendez-vous avec la maire.`,
+  blockedFor: (mmss) => `Elle ne vous recevra pas avant ${mmss}. « Elle a demandé à ne pas être dérangée. »`,
+  doorNotYet: "La maire n'est pas disponible. Prenez rendez-vous à l'accueil.",
+  slamHint: "Vous ne pourrez plus la voir avant un quart d'heure, et elle s'en souviendra.",
+  watchNoSay: "Vous regardez. C'est elle qui parle.",
+  settleHint: "Signer maintenant. Vous ne saurez jamais jusqu'où elle serait allée.",
+  redoOffer: "Vous avez contrarié la maire. Voulez-vous vous reprendre ?",
+  /* ⚠️ SEUL `self` CHANGE : les quatre autres familles d'argument n'ont pas de
+     genre. Recopier les cinq aurait été quatre phrases identiques déguisées en
+     traduction, et le banc les compte comme telles. */
+  type: { self: "Elle" },
+  why: {
+    "affinity+": (t) => `${t} : c'est son terrain. Elle écoute autrement.`,
+    "race-": (d) => `Scrutin dans ${d} jours. Elle ne veut surtout pas passer pour dépensière.`,
+    again: "Deuxième fois de suite sur le même terrain. Elle l'a remarqué, et elle le montre.",
+    slam: "Elle ne vous recevra pas avant un quart d'heure, et elle sera d'une humeur de chien.",
+    burnt: "Elle vous a déjà entendu dire ça, la dernière fois.",
+    plansNow: "Vous déroulez les plans à la seconde où elle demandait à voir. Elle se penche.",
+    plansLate: "Elle jette un œil au rouleau et ne le déroule pas. Ce n'était pas la question.",
+  },
+  ask: {
+    m1: "Elle ne lève pas les yeux tout de suite. Elle finit sa ligne, repose son stylo, se cale en arrière. « Vous êtes le fermier du nord. On m'a annoncé un quart d'heure. Je vous écoute. »",
+    m3: "Du bout de l'index, elle tapote la pile de dossiers ficelés posée à sa droite. « Un navire. Bien. Vous voyez ce tas ? C'est l'entretien du pont sud. On le repousse depuis deux ans, faute de six mille. Alors dites-moi qui paie le vôtre, et dites-le vite. »",
+    m6: "Elle repose son stylo pour de bon. « Kerguélen. Célestin Kerguélen ? Celui-là ne se dérange pas pour rien. »",
+    m7: "Elle tapote le sous-main, deux fois, du plat de la main. « Et si ça coule ? Qui signe, en bas de la page ? »",
+    m11: "Elle ne sourit pas. « Et moi ? Vous n'avez pas fait la route pour le bien de Valley Town. Qu'est-ce que vous voulez de moi, exactement ? »",
+    m12: "Elle se lève, va à la fenêtre, et reste là, dos à vous. « Vous voyez le quai, d'ici ? »",
+  },
+  tell: {
+    m1a: "Vous êtes le premier de la matinée à ne pas demander une faveur. Elle en a refusé quatre avant vous.",
+    m1b: "Ça ne la braque pas. Mais elle vous a donné un quart d'heure, et vous venez d'en dépenser une partie à annoncer que vous alliez parler.",
+    m1c: "Vous lui présentez une facture avant d'avoir dit bonjour. Elle reçoit soixante personnes par semaine, et toutes ont fait de la route.",
+    m2a: "Elle ne répond pas tout de suite. Non, elle n'en a pas vu passer. Vous ne lui avez pas dit qu'elle était démunie : vous lui avez dit que la ville l'était.",
+    m2b: "C'est vrai, et c'est utile. Ça reste un inventaire. Elle attendait une raison.",
+    m2c: "Un mot d'écart avec ce qu'il fallait dire. « Personne ne l'a proposé » parle de la ville. « Vous n'avez personne » parle d'elle, et c'est comme ça qu'elle l'entend.",
+    m3a:  "Vingt-quatre mille. Quatre fois son pont. Elle ne demandait pas une promesse, elle demandait une preuve, et la vôtre est plus grosse que son problème.",
+    m3a0: "« Pas encore le chiffre exact » est la formule qu'elle entend chaque fois qu'un chantier va coûter le double. Elle vous croit. Pas assez.",
+    m3b:  "C'est exact, et elle le sait mieux que vous. On ne dit pas à une maire que ses priorités peuvent attendre. Surtout quand c'est vrai.",
+    m3c:  "Vous venez de lui décrire un chantier privé sur un quai public. C'est l'objection qu'elle cherchait depuis dix minutes, et vous la lui avez apportée vous-même.",
+    m4a: "Elle n'avait pas envisagé qu'on lui propose quelque chose qui s'en aille. Tout ce qu'on lui demande, d'habitude, reste, et il faut l'entretenir.",
+    m4b: "Elle note. Une promesse qu'on accepte de voir écrite vaut mieux qu'une promesse. Elle ne signe pas des arrêtés pour se rassurer.",
+    m4c: "C'est mot pour mot ce qu'on lui répond toute la journée. Elle a un tiroir entier de choses qu'on verrait le moment venu.",
+    m5a:  "Trois chiffres et un mot de métier. Elle ignore ce qu'est un gréement aurique, et c'est précisément pour ça que ça marche : quelqu'un, quelque part, a fait le travail.",
+    m5a0: "C'est une intention, pas un bateau. Assez pour qu'elle ne vous mette pas dehors. Pas assez pour qu'elle prenne un crayon.",
+    m5b:  "Elle apprécie qu'on n'invente pas. Elle aurait quand même préféré une longueur.",
+    m5c:  "Vous venez de lui expliquer son métier. Sa signature engage la commune sur un objet dont elle ne connaît pas la taille, et c'est exactement ce qu'une maire n'a pas le droit de faire.",
+    m6a:  "Sept mots. Elle regarde le rouleau, puis vous. Elle connaît les honoraires de Kerguélen : vous venez de lui dire ce que vaut votre sérieux sans prononcer un chiffre.",
+    m6a0: "« Compter s'adresser » n'est pas « s'être adressé ». Elle en a reçu, des projets au conditionnel.",
+    m6b:  "Elle ignorait qu'on mesurait son lac. Ça la flatte un peu et ça l'inquiète un peu, ce qui, au total, ne fait pas grand-chose.",
+    m6c:  "Kerguélen n'a parlé de personne. Une maire reconnaît un compliment inventé à la même chose que tout le monde : il est trop bien tourné.",
+    m7a: "Elle se cale en arrière. Vous venez demander avant, pas après. C'est la première fois de la semaine, et elle n'a rien à répondre à ça.",
+    m7b: "Elle aimerait vous croire. Ce n'est pas une réponse à la question qu'elle a posée.",
+    m7c: "Vous lui proposez de se couvrir. Autrement dit, vous venez de supposer qu'elle a quelque chose à cacher, et vous l'avez dit à voix haute dans son bureau.",
+    m8a: "Vous venez de lui rendre le quai. Un chantier qu'elle encadre est un chantier qu'elle contrôle, et une maire préfère toujours contrôler que subir.",
+    m9a: "Un nom, et quelqu'un à qui vérifier. Elle note le nom. C'est la première chose de tout l'entretien qu'elle peut contrôler sans vous.",
+    m9b: "Elle apprécie que vous ne vous imaginiez pas capitaine. Ça reste quelqu'un sans nom.",
+    m9c: "Oui. Elle délivre l'autorisation d'un navire qui partira de sa commune. Savoir qui le mène est très exactement son travail.",
+    m10a: "Du travail, une promenade et un spectacle en une seule phrase. Elle refait le calcul dans sa tête et ne trouve rien à retirer.",
+    m10c: "Elle l'avait pensé. Elle n'aime pas qu'on le pense à sa place, et encore moins qu'on le dise avant elle.",
+    m11a: "Elle a demandé. C'est le seul moment de l'entretien où lui parler d'elle répond à sa question, et vous ne lui promettez pas une statue : vous lui promettez un risque.",
+    m11b: "Sobre, et un peu court. Elle vous tendait une perche.",
+    m11c: "Elle ne dit rien pendant trois secondes. Puis elle se lève, ouvre la porte, et attend. Vous ne saurez jamais ce qu'elle allait répondre.",
+    m12a: "Elle ne se retourne pas tout de suite. Vous venez de lui dire que vous étiez venu la voir elle, pour ça, et elle n'a aucune raison d'en douter.",
+    m12b: "Elle aime l'image. Elle aimerait aussi savoir combien elle coûte.",
+    m12c: "Elle rêvait. Vous venez de lui rappeler, au mot près, la seule chose qu'elle n'a pas réussi à faire en deux ans.",
+  },
+  end: {
+    plain: "Elle tire le tampon vers elle, souffle dessus par habitude, et l'abat sur le coin de la feuille. « C'est un chantier de la commune. Ne me le faites pas regretter. »",
+    good: "Elle tamponne, signe, puis relit ce qu'elle vient de signer, ce qu'elle ne fait jamais. « Tenez-moi au courant. Vraiment. »",
+    full: "Elle tamponne sans regarder la feuille, parce qu'elle vous regarde vous. « Quand vous aurez autre chose à me demander, prenez rendez-vous directement. Pas la peine de passer par l'accueil. »",
+    out: "Elle consulte l'horloge de la cheminée, se lève, et vous tend la main. « J'ai un conseil dans dix minutes. Repassez me voir. Je ne dis pas non, je dis pas aujourd'hui. »",
+    walked: "Elle ne dit plus rien depuis un moment. Elle repousse le rouleau vers vous, du bout des doigts, et rouvre son dossier. L'entretien est fini, personne ne l'a annoncé.",
+    thrown: "Elle se lève, ouvre la porte de son bureau, et attend, la main sur la poignée, sans un mot.",
+  },
+  after: {
+    trust1: "La maire se souviendra de vous.",
+    trust2: "La maire vous a à la bonne. La prochaine fois sera plus courte.",
+    trust3: "Vous avez ses coudées franches. La prochaine fois, elle écoutera avant de compter.",
+    again: "Vous pouvez redemander une audience à l'accueil. Elle se souvient de ce que vous lui avez déjà dit.",
+    slam: "Elle ne vous recevra pas avant un quart d'heure. L'accueil vous redonnera un rendez-vous quand vous voudrez — mais elle se souviendra de la porte.",
+  },
+  chat: {
+    signed: (n) => `${n} a obtenu la signature de la maire : le chantier naval est autorisé.`,
+    thrown: (n) => `${n} s'est fait raccompagner à la porte du bureau de la maire.`,
+    slam: (n) => `${n} a claqué la porte du bureau de la maire.`,
+    booked: (n) => `${n} a obtenu un rendez-vous avec la maire.`,
+  },
+};
+
+/* ⚠️⚠️ LA FUSION EST FAITE UNE FOIS ET MISE EN CACHE, ET ELLE NE DESCEND QUE
+   D'UN ÉTAGE — c'est tout ce dont cette table a besoin, et une fusion profonde
+   générique serait du code qu'on ne peut pas relire. Chaque valeur de la
+   surcharge remplace la sienne ; chaque sous-objet est fusionné clé à clé.
+   ⚠️ ELLE NE MODIFIE JAMAIS `MAIRE_FR` : un étalement recopie les références des
+   sous-objets, donc écrire dans le résultat écrirait dans la table de base — le
+   défaut exact payé le 2026-08-31 sur `POSE.closed` (« une table de référence
+   qu'on étale à plat est une table qu'on modifie »). On construit un objet neuf
+   pour chaque sous-table touchée. */
+const MAIRE_MERGED = {};
+function maireFor(fem) {
+  if (!fem) return MAIRE_FR;
+  if (MAIRE_MERGED.f) return MAIRE_MERGED.f;
+  const out = { ...MAIRE_FR };
+  for (const k in MAIRE_FR_F) {
+    const v = MAIRE_FR_F[k];
+    out[k] = (v && typeof v === "object" && !Array.isArray(v) && typeof v !== "function")
+      ? { ...MAIRE_FR[k], ...v } : v;
+  }
+  MAIRE_MERGED.f = out;
+  return out;
+}
 
 /* ⚠️⚠️ ZIP 480 — L'AUDIENCE EST BILINGUE LE JOUR DE SA NAISSANCE, ET C'EST LE
    BANC QUI L'A EXIGÉ. Le premier jet référençait `MAIRE_FR` des deux côtés,
@@ -2217,6 +2374,26 @@ export const FERME_STR = {
     /* ⚠️ ZIP 480 — l audience chez le maire. Une seule table, deux langues : voir
        la note au-dessus de MAIRE_FR. */
     maire: MAIRE_FR,
+    /* ⚠️⚠️ HORS-ZIP 2026-09-02 — `maireFor(fem)` REND LA TABLE DU MAIRE **OU** DE
+       LA MAIRE, et c'est par ELLE que la vue passe désormais. `maire` reste
+       exposée (le masculin est le cas par défaut, et une clé qui disparaît est
+       une clé que `verify-strings` réclame), mais tout ce qui s'affiche pendant
+       une audience passe par `maireFor`.
+       ⚠️ ELLE PREND UN BOOLÉEN, PAS UNE CLÉ DE MAIRE, et c'est délibéré : ce
+       fichier n'importe RIEN (il est lu par le jeu, par les bancs et par les
+       outils), et lui faire connaître `TOWN_CANDIDATES` créerait une seconde
+       liste de qui est une femme — exactement le doublon que ce chantier vient
+       de supprimer. L'unique source est `C.mayorIsFem` ; ici on ne fait que
+       recevoir sa réponse. */
+    maireFor: (fem) => maireFor(fem),
+    /* ⚠️ LA SURCHARGE BRUTE, POUR LE BANC ET POUR LUI SEUL. `maireFor` rend la
+       table FUSIONNÉE : on ne peut donc plus y distinguer ce qui a été décliné
+       de ce qui a été hérité, et un contrôle qui compare la fusion à la base
+       trouve forcément que « tout existe » — c'est-à-dire un contrôle qui ne
+       peut pas échouer (441). Ce qu'il faut vérifier, c'est la LISTE de ce
+       qu'on a écrit : chaque clé désigne-t-elle une clé réelle, et chacune
+       change-t-elle vraiment quelque chose ? */
+    maireFem: () => MAIRE_FR_F,
     // --- Mise à jour gare 2026-07 (créatures marines, canards, gare, visiteurs, saisons) ---
     seaCaught: (n) => `Prise rare : ${n} !`,
     seaBite: (n) => `Quelque chose d'inhabituel mord... ${n} ?!`,
@@ -4188,6 +4365,15 @@ export const FERME_STR = {
   en: {
     star: STAR_EN,
     maire: MAIRE_EN,
+    /* ⚠️ CÔTÉ ANGLAIS, `maireFor` REND TOUJOURS LA TABLE ANGLAISE : la
+       déclinaison féminine n'existe pas encore en anglais, et l'anglais n'en a
+       pas le même besoin (« they » n'existe pas dans ces textes, mais « he »
+       est le seul pronom écrit). ⚠️ C'est une DETTE, pas une propriété de la
+       langue : le jour où `MAIRE_EN` est relu, il lui faut sa surcharge comme
+       le français a la sienne. Écrit ici pour que la dette se voie à l'endroit
+       où on la contracte. */
+    maireFor: (fem) => (fem ? MAIRE_EN : MAIRE_EN),
+    maireFem: () => null,          // pas encore de déclinaison anglaise (voir ci-dessus)
     // --- 2026-07 station update (sea creatures, ducks, station, visitors, seasons) ---
     seaCaught: (n) => `Rare catch: ${n}!`,
     seaBite: (n) => `Something unusual bites... ${n}?!`,

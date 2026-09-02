@@ -917,6 +917,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const mazePrizeClaimedRef = useRef({}); // zip 235: worldIdx -> true (once/week/player)
   const speedBuffUntilRef = useRef(0);   // zip 235: candy speed buff expiry (performance.now())
   const chatInputRef = useRef(null);
+  /* HORS-ZIP 2026-09-02 — LE RESSORT DES BUISSONS : case → { last, dir }.
+     ⚠️ IL EST AU NIVEAU DU COMPOSANT ET PAS DANS LA CLOSURE DE LA BOUCLE, parce
+     qu'il est ÉCRIT par le déplacement et LU par le dessin, et que ces deux-là
+     ne sont pas dans la même passe (les décors s'empilent dans `draws` puis
+     s'exécutent après la boucle des joueurs). Un état posé dans la closure
+     repartirait de zéro à chaque remontage de la boucle, c'est-à-dire à chaque
+     changement de zone — tous les buissons de la ville se redresseraient d'un
+     coup quand quelqu'un entre dans le tribunal.
+     ⚠️ Purement local et purement visuel : rien n'en sort sur le réseau (§3 —
+     ce qui peut se déduire ne se diffuse pas ; ici ça se déduit des positions
+     qui circulent déjà). */
+  const bushSwayRef = useRef(new Map());
   const channelRef = useRef(null);
   const spritesRef = useRef(null);
   const worldRef = useRef(null);
@@ -3197,7 +3209,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (rA === "mayorBooked") {
         out.star = eA;
         dirtyRef.current = true;
-        broadcastChat("🎩", L.maire.chat.booked(whoA));
+        broadcastChat("🎩", maireL().chat.booked(whoA));
         hostFlushOut(out, f, null);
       }
       return;
@@ -3212,10 +3224,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!rM) return;                       // déjà signé : rien à rejouer, rien à diffuser
       out.star = eM;
       dirtyRef.current = true;
-      if (rM === "mayorSigned") broadcastChat("🎩", L.maire.chat.signed(whoM));
-      else if (rM === "mayorThrown") broadcastChat("🎩", L.maire.chat.thrown(whoM));
-      else if (rM === "mayorSlam") broadcastChat("🎩", L.maire.chat.slam(whoM));
-      else broadcastChat("🎩", L.maire.chat.failed(whoM));
+      if (rM === "mayorSigned") broadcastChat("🎩", maireL().chat.signed(whoM));
+      else if (rM === "mayorThrown") broadcastChat("🎩", maireL().chat.thrown(whoM));
+      else if (rM === "mayorSlam") broadcastChat("🎩", maireL().chat.slam(whoM));
+      else broadcastChat("🎩", maireL().chat.failed(whoM));
       /* ⚠️ UNE SIGNATURE EST UN POINT DE REPRISE : elle ouvre tout le chantier
          naval. On force l'écriture, comme au franchissement d'un chapitre.
          HORS-ZIP — et c'est aussi la seule des quatre issues qui mérite la
@@ -8238,6 +8250,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // baisser le compteur de messages (ce que compte le quota Supabase) plutôt
   // que seulement le volume d'octets.
   // ------------------------------------------------------------------
+  /* ⚠️⚠️ HORS-ZIP 2026-09-02 — LA TABLE DE TEXTE DU MAIRE **OU** DE LA MAIRE.
+     Trois maires sur cinq sont des femmes depuis le 480 (Odile Vasseur,
+     Séverine Bonnefoy, Ninon Delaunay) et tout le jeu leur parlait au masculin.
+     ⚠️ C'EST UNE FONCTION, PAS UNE CONSTANTE, et c'est la seule forme juste : le
+     maire change à chaque élection, donc à chaque mandat, sans que ce composant
+     soit remonté. Une valeur capturée au montage aurait dit « il » pendant tout
+     le mandat suivant — et le symptôme (un texte masculin sous un nom féminin)
+     est exactement celui qu'on vient de corriger.
+     ⚠️ Le jour vient de `sharedRef` (l'état partagé), pas d'une horloge locale :
+     l'hôte et l'invité doivent lire le MÊME maire (§3). */
+  function maireL() {
+    return L.maireFor(C.mayorIsFem((E.mayorOf(sharedRef.current.day || 1) || {}).key));
+  }
   function queueResidentPath(rid, path, speed, zone) {
     // `startAt` n'est PAS transmis : le client date le départ à la RÉCEPTION.
     // Ces horodatages étaient écrits avec l'horloge de l'HÔTE puis comparés à
@@ -12670,7 +12695,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      le rendez-vous, l'humeur et l'entretien restent entiers. On saute la MARCHE. */
   function devStandAtMayorDesk() {
     const m = meRef.current, cw = courtWorldRef.current;
-    if (!m || !cw || (m.zone || "farm") !== "court") { pushToast(L.maire.doorNotYet); return; }
+    if (!m || !cw || (m.zone || "farm") !== "court") { pushToast(maireL().doorNotYet); return; }
     const d = (cw.props || []).find(p => p.of === "mayorDesk");
     if (!d) return;
     keysRef.current = {};
@@ -14392,6 +14417,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       checkWalkOverPassage();
       checkCandyMonster();      // zip 411 : l'approche du monstre du lac
+      /* ⚠️⚠️ ZIP 426 — LE MINUTEUR D'ANIMATION D'ACTION SE DÉCRÉMENTE DANS
+         TOUTES LES ZONES, ET L'OUBLI A COÛTÉ UNE FONCTIONNALITÉ ENTIÈRE.
+         `actAnimRef` sert de verrou anti-répétition : `doAction` refuse tout
+         tant qu'il est positif. Il n'était décrémenté que dans la partie FERME
+         de la boucle, après les sorties anticipées des autres zones — donc en
+         ville, le PREMIER coup de hache le montait à 0,28 et il n'y redescendait
+         JAMAIS. Résultat : un seul coup possible par visite, l'arbre restait
+         debout, et rien n'indiquait pourquoi. C'est le même défaut que la carte
+         restée noire (§4) : une zone qui gagne sa boucle hérite de tout ce que
+         la boucle commune faisait pour elle.
+         ⚠️⚠️⚠️ HORS-ZIP 2026-09-02 — LE CORRECTIF CI-DESSUS NE COUVRAIT PAS LA
+         ZONE QU'IL CITE EN PREMIER. Cette ligne vivait APRÈS le bloc `zone ===
+         "evil"`, qui retourne toujours avant de l'atteindre (voir son `return`
+         juste en dessous, et celui de son `if (overlayUp) return`) : pour les
+         cinq terres du passage, `actAnimRef` montait à 0,28 au premier coup de
+         hache ou de pioche et n'en redescendait plus JAMAIS — exactement le
+         symptôme que le commentaire ci-dessus décrit pour la ville, mais resté
+         vrai pour le monde maléfique qu'il nommait pourtant. Un seul coup
+         possible par visite à une terre du passage, sans le moindre message.
+         La ligne est donc remontée ICI, avant le premier `if (m.zone === ...)`
+         de cette boucle, exactement comme elle l'est déjà pour la ville et le
+         tribunal plus bas (eux n'ont jamais eu ce défaut : leur bloc vient
+         APRÈS cette ligne, pas avant). */
+      if (actAnimRef.current > 0 && (m.zone === "town" || m.zone === "court" || m.zone === "evil")) actAnimRef.current -= dt;
       if (m.zone === "evil") {
         updateRunAmbush(dt); // zip 375 : embuscade locale de la jetée
         // Zip 425 : c'est ICI que se joue l'essentiel du gain — les cinq
@@ -14411,17 +14460,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         drawStarOverlay(now);   // zip 444 — la Lyre et les scènes passent PAR-DESSUS le voile de zone
         return;
       }
-      /* ⚠️⚠️ ZIP 426 — LE MINUTEUR D'ANIMATION D'ACTION SE DÉCRÉMENTE DANS
-         TOUTES LES ZONES, ET L'OUBLI A COÛTÉ UNE FONCTIONNALITÉ ENTIÈRE.
-         `actAnimRef` sert de verrou anti-répétition : `doAction` refuse tout
-         tant qu'il est positif. Il n'était décrémenté que dans la partie FERME
-         de la boucle, après les sorties anticipées des autres zones — donc en
-         ville, le PREMIER coup de hache le montait à 0,28 et il n'y redescendait
-         JAMAIS. Résultat : un seul coup possible par visite, l'arbre restait
-         debout, et rien n'indiquait pourquoi. C'est le même défaut que la carte
-         restée noire (§4) : une zone qui gagne sa boucle hérite de tout ce que
-         la boucle commune faisait pour elle. */
-      if (actAnimRef.current > 0 && (m.zone === "town" || m.zone === "court" || m.zone === "evil")) actAnimRef.current -= dt;
       /* ⚠️ ZIP 444 — LE BATTEMENT DE LA QUÊTE, DANS TOUTES LES ZONES ET AVANT
          TOUTE SORTIE ANTICIPÉE. C'est très exactement le défaut décrit
          ci-dessus, quatre fois payé : un geste qui ne vit que dans la partie
@@ -17163,7 +17201,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          de comparaisons par image pour une information qui ne change jamais.
          ⚠️ Corollaire : un décor ajouté plus tard doit être marqué DANS le
          générateur, sans quoi on le traversera — silencieusement. */
-      if (tw.solid && tw.solid[i]) return true;
+      /* ⚠️⚠️ HORS-ZIP 2026-09-02 — LA VÉGÉTATION BASSE NE BLOQUE PLUS, ET
+         L'EXCEPTION TIENT EN UNE CLAUSE PARCE QUE `soft` EST DÉRIVÉE PAR LE
+         GÉNÉRATEUR (voir la passe finale de `generateTownWorld`). Écrire ici la
+         liste des décors mous aurait fabriqué une SECONDE liste, à côté de
+         `C.TOWN_SOFT_PROPS`, et il aurait fallu retrouver le prop sous la case
+         à chaque test de collision — c'est-à-dire une boucle sur 265 décors par
+         point de semelle et par image. La carte, elle, ne change pas : `solid`
+         reste ce qu'il était, seul ce test-ci le nuance.
+         ⚠️ MÊME CLAUSE DANS `townNav` (fermeEngine.js), et `verify-collision`
+         §5 compare les deux sur 20 000 points. */
+      if (tw.solid && tw.solid[i] && !(tw.soft && tw.soft[i])) return true;
       if (tw.ground[i] === C.G_WATER) return true; // fountain pool
       const o = tw.objects[i];
       if (o !== C.O_TREE && o !== C.O_TREE2 && o !== C.O_STUMP) return false;
@@ -17176,6 +17224,62 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const e = ch && ch[i];
       if (e && e.r) return C.TOWN_STUMP_BLOCKS;
       return true;
+    }
+    /* ═══════════════════════════════════════════════════════════════════════
+       HORS-ZIP 2026-09-02 — LA VÉGÉTATION BASSE : Y SUIS-JE, ET COMMENT ELLE
+       PLIE.
+       ───────────────────────────────────────────────────────────────────────
+       ⚠️ `townSoftAt` LIT LA CASE SOUS LES PIEDS, PAS L'ANCRE. Même semelle que
+       la collision (`C.bodyFootTile`) : le frisson et le ralentissement
+       commencent exactement là où le buisson est dessiné, et pas un demi-pas
+       avant — c'est la grandeur écrite sept fois du §4, qu'on ne recopie plus.
+       ⚠️ ELLE NE TESTE QU'UN POINT quand la collision en teste quatre, et c'est
+       voulu : on ne demande pas « le corps entier est-il dans le buisson »
+       (personne ne frôle un massif du coude en marchant droit), on demande « où
+       est-ce que je pose le pied ». */
+    function townSoftAt(tw, x, y) {
+      if (!tw || !tw.soft) return false;
+      const ft = C.bodyFootTile(x, y);
+      if (ft.x < 0 || ft.y < 0 || ft.x >= tw.w || ft.y >= tw.h) return false;
+      return !!tw.soft[ft.y * tw.w + ft.x];
+    }
+    /* ⚠️⚠️ LE FRISSON EST UNE PRESSION, PAS UNE VIBRATION, ET C'EST TOUTE LA
+       DIFFÉRENCE ENTRE « une plante qu'on écarte » ET « un décor qui tremble ».
+       Tant que quelqu'un se tient dedans, le feuillage reste COUCHÉ du côté où
+       il est passé (âge ≈ 0, donc `cos` ≈ 1) ; c'est en SORTANT qu'il se
+       redresse en oscillant. L'inverse — une oscillation permanente pendant
+       qu'on marche dedans — donne un buisson qui grelotte, et un décor qui
+       grelotte se lit comme un défaut d'affichage (c'est la note du souffle des
+       arbres, `TOWN_TREE_SWAY_MS`, prise par l'autre bout).
+       ⚠️ ON MARQUE SUR LA PRÉSENCE, PAS SUR LE MOUVEMENT : quelqu'un qui
+       s'arrête au milieu d'une touffe la garde couchée. Seul le SENS vient du
+       déplacement — sans lui on ne saurait pas de quel côté écarter.
+       ⚠️ LA TABLE NE PEUT PAS FUIR : elle est indexée par case, et il n'y a que
+       vingt-huit cases molles sur la carte. On y écrit donc sans compter. */
+    function townBushPress(tw, x, y, vx, vy) {
+      if (!tw || !tw.soft) return;
+      const ft = C.bodyFootTile(x, y);
+      if (ft.x < 0 || ft.y < 0 || ft.x >= tw.w || ft.y >= tw.h) return;
+      const i = ft.y * tw.w + ft.x;
+      if (!tw.soft[i]) return;
+      const e = bushSwayRef.current.get(i) || { last: 0, dir: 1 };
+      e.last = performance.now();
+      /* Un pas de côté couche le buisson franchement ; un pas vers le nord ou
+         le sud ne peut le coucher que « un peu de biais » — il n'y a pas de
+         troisième dimension pour le montrer, et un buisson qui s'écarterait à
+         fond quand on le traverse du nord au sud aurait l'air de fuir. */
+      if (vx || vy) e.dir = Math.abs(vx) >= Math.abs(vy) ? (vx < 0 ? -1 : 1) : (vy < 0 ? -0.55 : 0.55);
+      bushSwayRef.current.set(i, e);
+    }
+    /* Le décalage du SOMMET du sprite, en pixels, à l'instant `now`. Zéro quand
+       la case n'a jamais été touchée ou que le ressort est retombé. */
+    function townBushLean(i, now) {
+      const e = bushSwayRef.current.get(i);
+      if (!e) return 0;
+      const age = now - e.last;
+      const k = Math.exp(-age / C.TOWN_BUSH_SWAY_FADE_MS);
+      if (k < 0.01) { bushSwayRef.current.delete(i); return 0; }
+      return C.TOWN_BUSH_SWAY_PX * e.dir * k * Math.cos((2 * Math.PI * age) / C.TOWN_BUSH_SWAY_MS);
     }
     /* L'altitude sous un point (425). Hors carte : 0 — c'est le niveau de la
        rue, donc le choix qui ne crée pas de falaise fantôme au bord du monde. */
@@ -17527,6 +17631,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const inv = 1 / slideNow.n;
           spSec *= Q.starClimbMul(slideNow.n, dx * slideNow.gx * inv + dy * slideNow.gy * inv);
         }
+        /* ⚠️⚠️ HORS-ZIP 2026-09-02 — LE BUISSON RETIENT LE PAS, ET IL LE RETIENT
+           ICI PLUTÔT QUE DANS LA COLLISION. C'est la leçon du §4 prise par le
+           bon bout : une grandeur de DÉCOR n'entre pas dans `canStandTown`, qui
+           ne sait dire que « passable ou non » — un buisson qui coûterait une
+           marche de dénivelé aurait été un mur, comme l'arc du pont au 439.
+           ⚠️ ON LIT LA CASE SOUS LES PIEDS (`bodyFootTile`), pas l'ancre : c'est
+           la même semelle que la collision (§4, la grandeur écrite sept fois),
+           donc on ralentit exactement quand le feuillage frissonne — et pas un
+           demi-pas avant, ce qui se serait senti sans se voir. */
+        if (townSoftAt(tw, m.x, m.y)) spSec *= C.TOWN_BUSH_SLOW;
         const sp = spSec * dt;
         m.vx = dx * spSec; m.vy = dy * spSec;
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
@@ -17577,6 +17691,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         craterDustPuff(m, slideNow, performance.now());
       }
       m.moving = !!moving || slipping;
+      /* HORS-ZIP 2026-09-02 — HORS DE LA BRANCHE « il marche », ET C'EST LA
+         MOITIÉ DE L'EFFET : on couche le feuillage sur la PRÉSENCE. S'arrêter
+         au milieu d'une touffe la laisse écartée ; c'est en sortant qu'elle se
+         redresse. Écrit dans la branche du pas, elle se serait relevée sous les
+         pieds de quelqu'un qui s'arrête, ce qui est exactement le contraire
+         d'une plante. Le sens, lui, vient de la vitesse — nulle à l'arrêt, donc
+         le dernier sens tient. */
+      townBushPress(tw, m.x, m.y, m.vx, m.vy);
       const nowP = performance.now();
       maybeSendPos();
     }
@@ -18622,7 +18744,31 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             ctx.fillStyle = "rgba(20,26,16,0.22)";
             ctx.beginPath(); ctx.ellipse(cxp, by - 2, img.width * 0.28, 3.5, 0, 0, 7); ctx.fill();
           }
-          ctx.drawImage(img, cxp - img.width / 2, by - img.height);
+          /* ⚠️⚠️ HORS-ZIP 2026-09-02 — LE FRISSON EST UN CISAILLEMENT ANCRÉ AU
+             PIED, PAS UNE ROTATION. Une plante pousse dans le sol : sa base ne
+             bouge pas d'un pixel, seul le haut s'écarte. Une rotation autour de
+             l'ancre aurait décollé le pied du sol d'un côté et l'aurait enfoncé
+             de l'autre — et comme les décors de la planche portent leur ombre
+             DESSINÉE (voir PLANCHE_PROPS juste au-dessus), c'est l'ombre qu'on
+             aurait vue glisser sous la plante. C'est le premier chose que l'œil
+             attrape.
+             ⚠️ `transform(1, 0, k, 1, 0, 0)` donne x' = x + k·y ; comme on
+             translate d'abord au PIED, tout le sprite a un y NÉGATIF, donc le
+             décalage croît linéairement du sol vers le sommet et vaut
+             exactement le penchant au sommet. Aucun réglage à accorder avec la
+             hauteur du sprite (§8 : un paramètre qui double un autre est une
+             divergence en attente) — on divise par sa hauteur, il se dérive.
+             ⚠️ ET LE CHEMIN RAPIDE EST LE DÉFAUT : `lean === 0` pour les 237
+             décors durs de la carte et pour les buissons au repos, donc aucun
+             `save`/`restore` n'est payé tant que personne ne marche dedans. */
+          const lean = tw.soft ? townBushLean(pr.y * tw.w + pr.x, now) : 0;
+          if (lean) {
+            ctx.save();
+            ctx.translate(cxp, by);
+            ctx.transform(1, 0, -lean / Math.max(1, img.height), 1, 0, 0);
+            ctx.drawImage(img, -img.width / 2, -img.height);
+            ctx.restore();
+          } else ctx.drawImage(img, cxp - img.width / 2, by - img.height);
         });
       }
       /* ══════════════════════════════════════════════════════════════════════
@@ -18836,6 +18982,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const dy2 = sitting ? res.sitOn.y + C.TOWN_SEAT_OFFSET : ry;
           const rDir = res.act ? (res.dir | 0) : (isHost ? (res.dir || 0) : (rp.dir != null ? rp.dir : 0));
           const rMoving = res.act ? false : (isHost ? !!res.moving : !!rp.moving);
+          /* HORS-ZIP 2026-09-02 — UN HABITANT AUSSI. ⚠️ SON SENS VIENT DE `dir`
+             (0 sud, 1 nord, 2 ouest, 3 est) ET PAS D'UNE VITESSE : un résident
+             n'en porte pas — chez l'invité il est interpolé le long d'un chemin,
+             chez l'hôte il avance par pas. Le cap, lui, est déjà là et il est
+             juste des deux côtés. */
+          if (rMoving) townBushPress(tw, dx2, dy2, rDir === 2 ? -1 : rDir === 3 ? 1 : 0, rDir === 1 ? -1 : rDir === 0 ? 1 : 0);
+          else townBushPress(tw, dx2, dy2, 0, 0);
           const rAnim = isHost ? (res.animT || 0) : (rp.animT || 0);
           const pe = townElevAt(tw, dx2, dy2 + 0.2);
           const charOf = (extra) => ({
@@ -19082,6 +19235,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         p.x += (p.tx - p.x) * Math.min(1, dt * 22);
         p.y += (p.ty - p.y) * Math.min(1, dt * 22);
         p.animT = p.moving ? (p.animT || 0) + dt * 9 : 0;
+        /* HORS-ZIP 2026-09-02 — UN CAMARADE COUCHE LES BUISSONS AUSSI, et rien
+           n'a été ajouté au réseau pour ça : le frisson se DÉDUIT de la position
+           qui circule déjà (§3 — ce qui peut se déduire ne se diffuse pas).
+           Sans cette ligne, voir quelqu'un traverser un massif sans qu'une
+           feuille ne bouge est pire que de ne pas avoir l'effet du tout : ça dit
+           que le décor n'appartient qu'à soi. */
+        townBushPress(tw, p.x, p.y, p.vx || 0, p.vy || 0);
         /* ⚠️ 425 — L'ALTITUDE D'UN JOUEUR DISTANT SE LIT SOUS SES PIEDS, elle
            ne se reçoit pas. C'est tout l'intérêt d'avoir mis la hauteur dans la
            CASE et non dans le personnage : les x/y qui circulaient déjà
@@ -23397,14 +23557,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      conversation ; tout ce qui compte part en `req` à la fin. */
   function tryMayorDoor() {
     const eA = Q.migrateStar(sharedRef.current.star);
-    if (MR.mayorSigned(eA)) { pushToast(L.maire.after.signed); return; }
+    if (MR.mayorSigned(eA)) { pushToast(maireL().after.signed); return; }
     const now = Date.now();
     if (MR.mayorApptReady(eA, me.id, now)) { openAudience(eA); return; }
     const a = MR.mayorAppt(eA);
-    if (a && a.due && String(a.by) !== String(me.id)) { pushToast(L.maire.doorOther(a.name || "?")); return; }
+    if (a && a.due && String(a.by) !== String(me.id)) { pushToast(maireL().doorOther(a.name || "?")); return; }
     const w = MR.mayorApptWaitMs(eA, now);
-    if (w > 0) { pushToast(L.maire.doorWait(msClock(w))); return; }
-    pushToast(L.maire.doorNotYet);
+    if (w > 0) { pushToast(maireL().doorWait(msClock(w))); return; }
+    pushToast(maireL().doorNotYet);
   }
   /* ⚠️⚠️ LE FONDU ENCHAÎNÉ EST EN DEUX TEMPS, ET LE SECOND EST DANS LA SCÈNE.
      Ici on noircit le MONDE ; c'est `MaireScene` qui lève le noir quand son
@@ -27330,7 +27490,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             return (
               <div className={"ferme-wait-pill" + (settingsOpen ? " ui-menu-open" : "")}>
                 <span className="ico">🎩</span>
-                <span>{L.maire.bookedWhen(msClock(wait))}</span>
+                <span>{maireL().bookedWhen(msClock(wait))}</span>
                 {/* ⚠️ LE TOTAL SE DÉDUIT DU RENDEZ-VOUS LUI-MÊME (`due - at`) et
                     n'est pas recopié depuis `MAYOR_RETRY_WAIT_MS` : la première
                     demande et la seconde n'attendent pas la même chose, et une
@@ -30640,40 +30800,40 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                           <div style={{ marginTop: 12, borderTop: "1px solid rgba(255,255,255,.15)", paddingTop: 10 }}>
                             {signed ? (
                               <>
-                                <div>{L.maire.after.signed}</div>
-                                {trust > 0 && <div className="ferme-hint" style={{ marginTop: 4 }}>{L.maire.after["trust" + trust]}</div>}
+                                <div>{maireL().after.signed}</div>
+                                {trust > 0 && <div className="ferme-hint" style={{ marginTop: 4 }}>{maireL().after["trust" + trust]}</div>}
                               </>
                             ) : blocked > 0 ? (
                               /* il a claqué la porte, et il paie : un quart d'heure
                                  RÉEL, compté par l'horloge de l'hôte. */
-                              <div style={{ fontStyle: "italic" }}>{L.maire.blockedFor(msClock(blocked))}</div>
+                              <div style={{ fontStyle: "italic" }}>{maireL().blockedFor(msClock(blocked))}</div>
                             ) : appt && appt.due && !stale ? (
                               <>
                                 <div style={{ fontStyle: "italic" }}>
                                   {/* ⚠️ 2026-08-31 — ON LIT `appt.sour`, PAS `eA.mayor.sour` :
                                       celui-ci est TOUJOURS 0 ici, parce que `resolveMayorAsk`
-                                      l'efface dans la ligne qui suit sa lecture. `L.maire.moodSour`
+                                      l'efface dans la ligne qui suit sa lecture. `maireL().moodSour`
                                       n'a donc jamais pu s'afficher depuis le 480 — la punition
                                       arrivait sans jamais dire d'où elle venait. Voir la note de
                                       `maire.js`. */}
-                                  {appt.sour ? L.maire.moodSour : L.maire.moodSay[appt.mood]}
+                                  {appt.sour ? maireL().moodSour : maireL().moodSay[appt.mood]}
                                 </div>
                                 <div style={{ marginTop: 6 }}>
-                                  {L.maire.mood[appt.mood]} · {mine ? (wait > 0 ? L.maire.bookedWhen(msClock(wait))
-                                                                     : ready ? L.maire.bookedNow : L.maire.bookedStale)
-                                                                  : L.maire.bookedBy(appt.name || "?")}
+                                  {maireL().mood[appt.mood]} · {mine ? (wait > 0 ? maireL().bookedWhen(msClock(wait))
+                                                                     : ready ? maireL().bookedNow : maireL().bookedStale)
+                                                                  : maireL().bookedBy(appt.name || "?")}
                                 </div>
-                                {!cA.plans && <div className="ferme-hint" style={{ marginTop: 4 }}>{L.maire.bare}</div>}
+                                {!cA.plans && <div className="ferme-hint" style={{ marginTop: 4 }}>{maireL().bare}</div>}
                               </>
                             ) : (
                               <>
-                                <div className="ferme-hint">{cA.audience ? L.maire.audienceDay : L.maire.busyDay}</div>
-                                {!cA.plans && <div className="ferme-hint" style={{ marginTop: 4 }}>{L.maire.bare}</div>}
-                                {tries > 0 && <div className="ferme-hint" style={{ marginTop: 4 }}>{L.maire.triesAt(tries)}</div>}
-                                {stale && <div className="ferme-hint" style={{ marginTop: 4 }}>{L.maire.bookedStale}</div>}
+                                <div className="ferme-hint">{cA.audience ? maireL().audienceDay : maireL().busyDay}</div>
+                                {!cA.plans && <div className="ferme-hint" style={{ marginTop: 4 }}>{maireL().bare}</div>}
+                                {tries > 0 && <div className="ferme-hint" style={{ marginTop: 4 }}>{maireL().triesAt(tries)}</div>}
+                                {stale && <div className="ferme-hint" style={{ marginTop: 4 }}>{maireL().bookedStale}</div>}
                                 <button className="ferme-btn" style={{ marginTop: 8 }}
                                         onClick={() => sendReq({ kind: "mayorAsk" })}>
-                                  {L.maire.clerkAsk}
+                                  {maireL().clerkAsk}
                                 </button>
                               </>
                             )}
@@ -30902,7 +31062,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {!mayorTalk && !mayorWatch && mayorLive && !mayorLive.state.over
         && Date.now() - mayorLive.at < C.MAYOR_LIVE_KEEPALIVE_MS * 3 && (
         <button className="ferme-btn ferme-maire-watch" onClick={() => setMayorWatch(true)}>
-          {L.maire.watch(mayorLive.name)}
+          {maireL().watch(mayorLive.name)}
         </button>
       )}
       {mayorWatch && mayorLive && <MayorWatch live={mayorLive} L={L} onClose={() => setMayorWatch(false)} />}

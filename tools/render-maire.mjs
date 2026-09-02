@@ -296,7 +296,13 @@ for (const key of KEYS) {
    3. LA MAIN EST OÙ LA POSE L'ÉCRIT
    ───────────────────────────────────────────────────────────────────────── */
 section("3. LA MAIN EST OÙ LA POSE L'ÉCRIT — `solveArm` borne en silence");
-const REACH = 0.59;   // (0,30 + 0,29) × 0,995, la borne de `solveArm`
+/* ⚠️⚠️ HORS-ZIP 2026-09-02 — LA PORTÉE VIENT DU CORPS, ELLE N'EST PLUS ÉCRITE
+   ICI. Ce banc portait `0.59` en dur : une SEPTIÈME copie des deux longueurs
+   d'os, dans le fichier même dont l'en-tête raconte comment `ARM_FORE` a menti
+   d'un centimètre le jour où elle en était séparée. Elle est devenue fausse à
+   l'instant où les cinq maires ont eu cinq tailles — et le banc aurait annoncé
+   « 59 cm de bras » pour une femme de 1,68 m qui en a 55,8. */
+const REACH = (rig.mayor.bones.up + rig.mayor.bones.fore) * 0.995;
 for (const key of KEYS) {
   const cur = setPose(key);
   for (const [side, arm, tgt] of [["gauche", rig.mayor.armL, cur.hL], ["droite", rig.mayor.armR, cur.hR]]) {
@@ -406,6 +412,94 @@ section("7. LA TABLE DES POSTURES SURVIT À UNE AUDIENCE");
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   PLANCHE 3 ET §8 — LES CINQ MAIRES, CÔTE À CÔTE ET MESURÉS.
+   ⚠️⚠️ ELLE NAÎT LE 2026-09-02, AVEC LES CINQ CORPS, ET ELLE MESURE LA SEULE
+   GRANDEUR QUI A RENDU LE MAIRE FAUX PENDANT DEUX ZIPS : le RAPPORT entre deux
+   morceaux. `verify-maire` compte les postures, §1 compte les îlots, §3 mesure
+   les mains — et aucun des trois n'aurait vu une tête de 25 cm de large sur des
+   épaules de 55. *Un banc qui mesure des pièces ne voit pas des proportions.*
+   ⚠️ Ce qu'elle contrôle, et pourquoi :
+     · la stature RENDUE égale la stature ÉCRITE. Sans elle, `H` serait un nom
+       poli pour un nombre qui ne décrit rien — c'est le §14.6 appliqué à une
+       table de ratios ;
+     · les pieds touchent le parquet quand il est DEBOUT. `lift` est dérivé des
+       trois os de la jambe : s'il ment, le maire flotte ou s'enfonce, et
+       seulement dans la pose `window` (une sur sept) ;
+     · la tête tient entre 32 et 44 % de la carrure. C'est la fourchette humaine
+       élargie d'un cran pour le style trapu du jeu (Tristan est à 32 %) ;
+     · les mains atteignent les quatorze cibles POUR LES CINQ CORPS. Le plus
+       petit bras fait 55,8 cm, le plus long 62,8 : une cible juste pour l'un
+       peut être hors de portée pour l'autre, et `solveArm` borne EN SILENCE.
+   ───────────────────────────────────────────────────────────────────────── */
+section("8. LES CINQ MAIRES — un corps par élu, et tous tiennent debout");
+{
+  const CW = 260, CH = 430;
+  const CANG = [
+    { name: "de face",   pos: [0.00, 1.05, -0.62], look: [0.00, 1.00, -3.02], fov: 44 },
+    { name: "3/4 droite", pos: [1.85, 1.42, -1.30], look: [-0.05, 1.00, -3.02], fov: 40 },
+  ];
+  const keys = B.MAYOR_LOOK_KEYS;
+  const CSW = keys.length * (CW + PAD) + PAD;
+  const CSH = HEAD + CANG.length * (CH + HEAD + PAD) + PAD;
+  const csheet = new Uint8ClampedArray(CSW * CSH * 4);
+  for (let i = 0; i < CSW * CSH; i++) { csheet[i * 4] = 28; csheet[i * 4 + 1] = 30; csheet[i * 4 + 2] = 34; csheet[i * 4 + 3] = 255; }
+  text(csheet, CSW, CSH, "LES CINQ MAIRES - POSE « FLAT »", PAD, 6, 3, [230, 226, 214]);
+  for (let ki = 0; ki < keys.length; ki++) {
+    const key = keys[ki];
+    /* ⚠️ UN BUREAU PAR MAIRE, ET ON LE LIBÈRE : cinq scènes gardées en mémoire,
+       ce sont cinq jeux de textures que `dispose()` seul rend. */
+    const r5 = B.buildOffice(THREE, { plateLabel: "MAIRE", mayorName: key.toUpperCase(), mayorKey: key });
+    const sc5 = new THREE.Scene(); sc5.add(r5.root);
+    const own = new Set(); r5.mayor.man.traverse((o) => own.add(o));
+    const tag5 = (o) => (own.has(o) ? 1 : 2);
+    const mens = r5.mayor.mens;
+    const poseOf = (k) => { const pp = B.poseTarget(k), cc = {};
+      for (const q in pp) cc[q] = Array.isArray(pp[q]) ? pp[q].slice() : pp[q];
+      B.applyPose(r5, cc, 0); r5.root.updateMatrixWorld(true); return cc; };
+    /* la stature et les pieds se mesurent DEBOUT — c'est la seule pose où le
+       corps est déplié, donc la seule où ces deux nombres veulent dire quelque
+       chose */
+    poseOf("window");
+    const wb = worldBox(THREE, r5.mayor.man);
+    ok(`${key} : la stature rendue est celle qui est écrite`,
+       Math.abs((wb.max.y - wb.min.y) - mens.H) <= 0.012,
+       `${(wb.max.y - wb.min.y).toFixed(3)} m pour ${mens.H.toFixed(2)} écrit`);
+    ok(`${key} : debout, il touche le parquet`, Math.abs(wb.min.y) <= 0.012, `semelle à y=${wb.min.y.toFixed(3)}`);
+    const hw = 0.250 * mens.headK[0];
+    const ratio = hw / mens.bidelt;
+    ok(`${key} : la tête tient dans la carrure`, ratio >= 0.32 && ratio <= 0.44,
+       `${(ratio * 100).toFixed(0)} % (tête ${cm(hw)} · carrure ${cm(mens.bidelt)})`);
+    /* les quatorze cibles, pour CE corps-là */
+    const reach5 = (r5.mayor.bones.up + r5.mayor.bones.fore) * 0.995;
+    let worstMiss = 0, worstKey = "";
+    for (const k of KEYS) {
+      const cc = poseOf(k);
+      for (const [arm, tgt] of [[r5.mayor.armL, cc.hL], [r5.mayor.armR, cc.hR]]) {
+        const hd = new THREE.Vector3().setFromMatrixPosition(arm.hd.matrixWorld);
+        const miss = hd.distanceTo(new THREE.Vector3(tgt[0], tgt[1], tgt[2]));
+        if (miss > worstMiss) { worstMiss = miss; worstKey = k; }
+      }
+    }
+    ok(`${key} : les 14 mains arrivent à leur cible`, worstMiss <= 0.02,
+       `pire ${cm(worstMiss)}${worstKey ? " sur « " + worstKey + " »" : ""} · bras ${cm(reach5)}`);
+    /* et la planche */
+    for (let ai = 0; ai < CANG.length; ai++) {
+      const A = CANG[ai];
+      poseOf(ai === 0 ? "flat" : "window");
+      const cam = camera(A.pos, A.look, A.fov, CW / CH);
+      const tris = collectTriangles(THREE, r5.root, tag5).filter((t) => t.tag === 1);
+      const rr = renderScene(THREE, r5.root, cam, CW, CH, { tris, tagOf: tag5, bg: [198, 200, 206] });
+      const y0 = HEAD + ai * (CH + HEAD + PAD) + HEAD;
+      const x0 = PAD + ki * (CW + PAD);
+      blit(csheet, CSW, CSH, rr.px, CW, CH, x0, y0);
+      text(csheet, CSW, CSH, key + " " + mens.H.toFixed(2) + "m" + (mens.fem ? " F" : " H"), x0 + 4, y0 - 16, 2, [200, 208, 220]);
+    }
+    r5.dispose();
+  }
+  writePNG(path.join(OUT, "maire-cinq.png"), csheet, CSW, CSH);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    LA JOINTURE, RAPPELÉE ICI : sept poses de mécanique, sept poses dessinées.
    ⚠️ `verify-maire` la tient déjà ; on la redit d'une ligne parce qu'un banc de
    RENDU qui balaie `POSE_KEYS` doit dire s'il a balayé les bonnes clés — sinon
@@ -416,7 +510,7 @@ ok("les clés peintes sont celles de MAYOR_POSES",
    JSON.stringify([...KEYS].sort()) === JSON.stringify([...M.MAYOR_POSES].sort()),
    KEYS.join(", "));
 
-console.log(`\nPNG : ${path.relative(ROOT, path.join(OUT, "maire-postures.png"))} · ${path.relative(ROOT, path.join(OUT, "maire-bureau.png"))}`);
+console.log(`\nPNG : ${path.relative(ROOT, path.join(OUT, "maire-postures.png"))} · ${path.relative(ROOT, path.join(OUT, "maire-bureau.png"))} · ${path.relative(ROOT, path.join(OUT, "maire-cinq.png"))}`);
 console.log(`\n${total - fails}/${total}`);
 fs.rmSync(tmp, { recursive: true, force: true });
 process.exit(fails ? 1 : 0);

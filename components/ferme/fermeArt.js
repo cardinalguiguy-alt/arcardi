@@ -958,23 +958,12 @@ export function drawTownRoadTile(ctx, S, tw, x, y, px, py) {
     return true;
   }
 
-  // LA LIGNE BLANCHE, à cheval sur l'axe de la chaussée — un pixel au sud de la
-  // rangée du dessus, un pixel au nord de celle du dessous. L'axe est DÉRIVÉ,
-  // comme la chaussée : la ligne ne peut donc pas se décentrer.
-  const axis = C.TOWN_MAIN_ST_Y0 + C.TOWN_MAIN_ST_W / 2;
-  // ⚠️ ET ELLE S'INTERROMPT AUX CARREFOURS, comme une vraie. Une ligne continue
-  // à travers une intersection est le détail qui trahit tout de suite le décor.
-  const cut = C.TOWN_ST_COLS.some((cx) => x >= cx - 1 && x <= cx + 2);
-  if (rd === C.TR_ASPHALT && (y === axis - 1 || y === axis) && !cut) {
-    const ly = (y === axis) ? py : py + T - 1;
-    const ON = 14, PER = 32;                 // 14 px de trait, 18 de vide, sur deux cases
-    const base = Math.floor(px / PER) * PER;
-    ctx.fillStyle = "#d6d4c8";               // blanc sali : un blanc pur ferait néon
-    for (const s of [base, base + PER]) {
-      const a = Math.max(px, s), b = Math.min(px + T, s + ON);
-      if (b > a) ctx.fillRect(a, ly, b - a, 1);
-    }
-  }
+  /* ⚠️ HORS-ZIP 2026-09-02 — LE MARQUAGE BLANC POINTILLÉ A ÉTÉ RETIRÉ, PAS
+     REMPLACÉ. L'audit du même jour le pointait comme le détail le plus
+     anachronique de la ville : une peinture routière du XXe siècle à
+     cinquante mètres du chaume et des guirlandes. Un caniveau central était
+     l'autre option ; on ne le construit pas — c'est un dessin de plus pour un
+     gain que les rebords en pierre de taille (ci-dessous) donnent déjà. */
 
   /* LES REBORDS. ⚠️ ILS SE POSENT CONTRE CE QUI N'EST PAS DALLÉ, jamais contre
      « un autre revêtement ». Testé sur le revêtement, un carrefour où le goudron
@@ -10007,16 +9996,29 @@ export function buildSprites() {
      accroche la lumière. */
   function townAsphaltSurface() {
     const [c, g] = cv(ROAD_N, ROAD_N), r = makeRnd(0x2b93);
-    P(g, 0, 0, ROAD_N, ROAD_N, "#3c3d42");
+    /* ⚠️ HORS-ZIP 2026-09-02 — LIANT ÉCLAIRCI ET RÉCHAUFFÉ, SUR MESURE DE
+       L'AUDIT : la route ressortait à L≈40 en jeu (l'herbe est à L≈150), seul
+       saut de valeur brutal de la carte, et son grain scintillait au zoom 3.
+       Chaque teinte de cette fonction a été recalée sur la MÊME luminance
+       cible (~78) avec le MÊME écart relatif au liant qu'avant — ce n'est pas
+       une nouvelle palette, c'est l'ancienne rehaussée d'un cran : les
+       cailloux restent plus clairs que le liant, les fissures et les traces
+       d'huile restent plus sombres, dans les mêmes proportions qu'avant.
+       Réalisme préservé par construction, pas par réglage à l'œil. */
+    P(g, 0, 0, ROAD_N, ROAD_N, "#564e4a");
     /* ⚠️ LE PREMIER JET AVAIT UN ÉCART-TYPE DE 8,7 SUR TREIZE COULEURS, et
        `render-rues.mjs` l'a refusé avant que Guillaume ne le voie : c'était un
        aplat anthracite avec du bruit dessus, pas du bitume. Ce qui manquait est
        ce qu'on voit vraiment en baissant les yeux sur une chaussée — LE
        GRANULAT. Un enrobé n'est pas gris : c'est du gravier clair noyé dans du
        noir, et à 16 px par case c'est le seul détail qui porte la matière.
-       Douze tons de liant, puis les cailloux par-dessus. */
-    const GRAIN = ["#36373c", "#42434a", "#3a3b40", "#45464d", "#333438", "#2e2f34",
-                   "#484951", "#3e3f45", "#313237", "#4b4c54", "#383940", "#414248"];
+       Douze tons de liant, puis les cailloux par-dessus.
+       ⚠️ Le bruit fin (3200 points) est en plus RESSERRÉ autour du liant (au
+       lieu d'être recalé à l'identique comme le reste) : c'est lui, pas le
+       granulat, que l'audit du 2026-09-02 pointe comme le poivre-et-sel qui
+       grésille au défilement. Les cailloux, eux, gardent tout leur contraste. */
+    const GRAIN = ["#534b47", "#59514f", "#554d49", "#5b5250", "#524945", "#4f4744",
+                   "#5c5353", "#574f4c", "#514845", "#5e5554", "#544b4b", "#59504d"];
     for (let i = 0; i < 3200; i++) {
       P(g, (r() * ROAD_N) | 0, (r() * ROAD_N) | 0, 1, 1, GRAIN[(r() * GRAIN.length) | 0]);
     }
@@ -10029,22 +10031,22 @@ export function buildSprites() {
        scintille au défilement au lieu de faire de la matière. On en pose 170,
        plafonnés deux tons plus bas. La règle est celle du §8 : ce qui porte la
        matière est l'écart de valeur, pas la quantité de points. */
-    const STONE = ["#55565e", "#5b5c64", "#4f5058", "#61626b", "#525359", "#585a62", "#5e5f68", "#646570"];
+    const STONE = ["#6f6766", "#756d6c", "#696160", "#7b7373", "#6c6461", "#726b6a", "#787070", "#7e7678"];
     for (let i = 0; i < 170; i++) {
       const sx = (r() * ROAD_N) | 0, sy = (r() * ROAD_N) | 0, sw = r() < 0.35 ? 2 : 1;
       const k = (r() * STONE.length) | 0;
       roadWrap(g, sx, sy, sw, 1, STONE[k]);
-      if (r() < 0.34) roadWrap(g, sx, sy + 1, sw, 1, "#2d2e33");
+      if (r() < 0.34) roadWrap(g, sx, sy + 1, sw, 1, "#473f3b");
     }
     // Quelques granulats CHAUDS : un enrobé contient du silex et du grès, et
     // deux ou trois taches ocres suffisent à sortir le gris du camaïeu bleuté.
-    for (let i = 0; i < 34; i++) P(g, (r() * ROAD_N) | 0, (r() * ROAD_N) | 0, 1, 1, r() < 0.5 ? "#585044" : "#63594a");
+    for (let i = 0; i < 34; i++) P(g, (r() * ROAD_N) | 0, (r() * ROAD_N) | 0, 1, 1, r() < 0.5 ? "#746148" : "#7f694e");
     // Les traces d'huile : les plus sombres du dessin, mais discrètes — deux
     // taches franches se répéteraient tous les quatre carreaux et dessineraient
     // à elles seules la période du motif (vu sur la planche assemblée).
     for (let i = 0; i < 2; i++) {
       const ox = (r() * ROAD_N) | 0, oy = (r() * ROAD_N) | 0;
-      for (let k = 0; k < 3 + ((r() * 3) | 0); k++) roadWrap(g, ox + ((r() * 5) | 0), oy + k, 2 + ((r() * 3) | 0), 1, "#303137");
+      for (let k = 0; k < 3 + ((r() * 3) | 0); k++) roadWrap(g, ox + ((r() * 5) | 0), oy + k, 2 + ((r() * 3) | 0), 1, "#4a4240");
     }
     /* Les reprises d'enrobé. ⚠️ PREMIER JET REFUSÉ EN REGARDANT LA PLANCHE : des
        RECTANGLES GRIS bien nets, qui se lisaient comme un bogue d'affichage et
@@ -10058,18 +10060,18 @@ export function buildSprites() {
     for (let p = 0; p < 4; p++) {
       const px0 = (r() * ROAD_N) | 0, py0 = (r() * ROAD_N) | 0;
       const pw = 11 + ((r() * 16) | 0), ph = 9 + ((r() * 13) | 0);
-      const col = r() < 0.5 ? "#37383d" : "#414248";
+      const col = r() < 0.5 ? "#514945" : "#5b5350";
       let a = 0, b = 0;
       for (let k = 0; k < ph; k++) {
         a += (r() < 0.5 ? 1 : -1) * (r() < 0.55 ? 1 : 0); b += (r() < 0.5 ? 1 : -1) * (r() < 0.55 ? 1 : 0);
         a = Math.max(-2, Math.min(2, a)); b = Math.max(-2, Math.min(2, b));
         roadWrap(g, px0 + a, py0 + k, pw + b - a, 1, col);
-        roadWrap(g, px0 + a, py0 + k, 1, 1, "#2f3035");        // joint d'émulsion, côté gauche
-        roadWrap(g, px0 + pw + b - 1, py0 + k, 1, 1, "#2f3035");
+        roadWrap(g, px0 + a, py0 + k, 1, 1, "#49413d");        // joint d'émulsion, côté gauche
+        roadWrap(g, px0 + pw + b - 1, py0 + k, 1, 1, "#49413d");
       }
       // Le granulat de la reprise, sinon elle reste une tache lisse.
       for (let i = 0; i < pw * ph / 7; i++) {
-        roadWrap(g, px0 + ((r() * pw) | 0), py0 + ((r() * ph) | 0), 1, 1, r() < 0.3 ? "#575860" : "#33343a");
+        roadWrap(g, px0 + ((r() * pw) | 0), py0 + ((r() * ph) | 0), 1, 1, r() < 0.3 ? "#716968" : "#4d4543");
       }
     }
     // Les fissures : une marche aléatoire, jamais une droite.
@@ -10077,15 +10079,15 @@ export function buildSprites() {
       let fx = (r() * ROAD_N) | 0, fy = (r() * ROAD_N) | 0;
       const horiz = r() < 0.55, len = 10 + ((r() * 26) | 0);
       for (let k = 0; k < len; k++) {
-        roadWrap(g, fx, fy, 1, 1, "#2a2b2f");
-        if (r() < 0.25) roadWrap(g, fx, fy + 1, 1, 1, "#4a4b52");   // la lèvre éclairée de la fissure
+        roadWrap(g, fx, fy, 1, 1, "#443c37");
+        if (r() < 0.25) roadWrap(g, fx, fy + 1, 1, 1, "#645c5a");   // la lèvre éclairée de la fissure
         if (horiz) { fx++; fy += r() < 0.22 ? (r() < 0.5 ? 1 : -1) : 0; }
         else { fy++; fx += r() < 0.22 ? (r() < 0.5 ? 1 : -1) : 0; }
         fx = ((fx % ROAD_N) + ROAD_N) % ROAD_N; fy = ((fy % ROAD_N) + ROAD_N) % ROAD_N;
       }
     }
     // Gravillon : le seul endroit où le bitume est clair.
-    for (let i = 0; i < 90; i++) P(g, (r() * ROAD_N) | 0, (r() * ROAD_N) | 0, 1, 1, r() < 0.3 ? "#6a6b73" : "#55565d");
+    for (let i = 0; i < 90; i++) P(g, (r() * ROAD_N) | 0, (r() * ROAD_N) | 0, 1, 1, r() < 0.3 ? "#847c7b" : "#6f6765");
     return c;
   }
 

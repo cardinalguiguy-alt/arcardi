@@ -6723,7 +6723,46 @@ export function generateTownWorld() {
     }
   }
 
-  return { w: W, h: H, ground, objects, objHp, elev, solid, props, hedge, road, bloom, depth, shore, shipX, shipY };
+  /* ═══════════════════════════════════════════════════════════════════════
+     HORS-ZIP 2026-09-02 — `soft` : LES CASES QU'ON TRAVERSE EN COUCHANT LE
+     FEUILLAGE. Dérivée, jamais posée.
+     ───────────────────────────────────────────────────────────────────────
+     ⚠️⚠️ `solid` NE CHANGE PAS D'UN BIT, ET C'EST TOUT L'INTÉRÊT DE CETTE
+     FORME. Le générateur consulte `solid` une quarantaine de fois pour décider
+     où poser l'arbre, la lanterne ou la dalle suivante : lui retirer les
+     buissons aurait laissé planter un chêne DANS une touffe de lavande, décalé
+     tous les tirages de `rnd()` qui suivent (note du 437 : un refus ne consomme
+     aucun tirage) et donc changé la carte entière pour un correctif de
+     collision. Ici la carte sort au bit près celle d'hier ; seule la lecture
+     du JOUEUR gagne une exception, et le pathfinder des résidents la même.
+     ⚠️⚠️⚠️ ELLE EST DÉRIVÉE DE `props` PLUTÔT QUE POSÉE PAR LES SIX SITES QUI
+     PLANTENT DU DÉCOR (`addProp`, `addGarden`, et trois `props.push` directs
+     dont les buis taillés de la place et du belvédère). Une liste noire tenue à
+     six endroits est une liste à laquelle il manquera une valeur — c'est le
+     défaut de l'arbre sur le pont (§ `plantTree`), et il ne lève rien : il
+     laisse passer.
+     ⚠️ UNE CASE N'EST MOLLE QUE SI **TOUT** CE QUI S'Y TIENT L'EST. Rien
+     n'interdit à un décor dur de partager une case avec un buisson (`addProp`
+     ne vérifie rien) : un seul montant de clôture suffit à rendre la case dure,
+     et le buisson qui la partage se traverse alors comme le reste, c'est-à-dire
+     pas. Le contraire — un buisson qui ouvrirait une clôture — serait un trou
+     dans un mur, invisible à la lecture et introuvable en jouant.
+     ⚠️ ET ELLE SE LIT APRÈS LA VAGUE DE SUPPRESSION DU NAVIRE (le `splice`
+     ci-dessus) : un buisson retiré de `props` ne doit pas laisser derrière lui
+     une case molle sans dessin, c'est-à-dire l'inverse exact d'un mur
+     invisible — un trou invisible. */
+  const soft = new Uint8Array(W * H);
+  {
+    const hard = new Uint8Array(W * H);
+    for (const p of props) {
+      if (!inMap(p.x, p.y)) continue;
+      if (C.TOWN_SOFT_PROPS.has(p.kind)) soft[id(p.x, p.y)] = 1;
+      else hard[id(p.x, p.y)] = 1;
+    }
+    for (let i = 0; i < soft.length; i++) if (hard[i] || !solid[i]) soft[i] = 0;
+  }
+
+  return { w: W, h: H, ground, objects, objHp, elev, solid, soft, props, hedge, road, bloom, depth, shore, shipX, shipY };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -7016,7 +7055,16 @@ export function townNav(tw) {
     const i = y * W + x;
     // Mêmes refus que townBlockedAt côté jeu, la coupe en moins (voir ci-dessus).
     if (x <= C.TOWN_RAIL_X + 1 && !(y >= C.TOWN_PLATFORM.y && y < C.TOWN_PLATFORM.y + C.TOWN_PLATFORM.h)) continue;
-    if (tw.solid && tw.solid[i]) continue;
+    /* ⚠️⚠️ HORS-ZIP 2026-09-02 — L'EXCEPTION DE LA VÉGÉTATION BASSE EST ÉCRITE
+       ICI **ET** DANS `blockedTown` (FermeGame.js), et ce n'est pas une copie
+       de trop : ces deux fonctions sont déjà deux écritures de la même règle
+       (le commentaire au-dessus le dit), et les faire diverger est le piège n°8
+       de `CLAUDE.md`. Ce qui les tient d'accord n'est pas la discipline, c'est
+       `verify-collision` §5, qui les compare sur 20 000 points.
+       ⚠️ ET LES RÉSIDENTS TRAVERSENT AUSSI. Le contraire aurait été pire que le
+       défaut d'origine : un habitant qui contourne solennellement une touffe
+       d'herbe que le joueur vient d'écraser du pied se lit comme un bug. */
+    if (tw.solid && tw.solid[i] && !(tw.soft && tw.soft[i])) continue;
     if (tw.ground[i] === C.G_WATER) continue;
     const o = tw.objects[i];
     if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_STUMP) continue;

@@ -212,6 +212,74 @@ for (const [name, test, byElev] of FAMILIES) {
   }
 }
 
+/* ═══════════════════════════════════════════════ 1 bis. LA VÉGÉTATION BASSE
+   HORS-ZIP 2026-09-02 — ON LA TRAVERSE, ET C'EST LE CONTRAIRE DE TOUT CE QUI
+   PRÉCÈDE. Les quatre familles ci-dessus mesurent OÙ l'on est arrêté ; celle-ci
+   mesure qu'on ne l'est PAS — dans les quatre sens, sur chaque touffe de la
+   carte. C'est la seule forme de contrôle qui puisse tomber le jour où une
+   passe du générateur remettra un buisson dans un rectangle solide.
+   ⚠️⚠️ ET IL PUBLIE COMBIEN DE CASES IL A LUES (441 : un banc qui n'a jamais pu
+   échouer ne vaut rien). Une liste `TOWN_SOFT_PROPS` dont plus aucune valeur
+   n'existe sur la carte annoncerait « 0 défaut » pour toujours. */
+{
+  const soft = [];
+  for (let i = 0; i < tw.soft.length; i++) if (tw.soft[i]) soft.push([i % W, (i / W) | 0]);
+  const kinds = new Map();
+  for (const p of tw.props) if (C.TOWN_SOFT_PROPS.has(p.kind)) kinds.set(p.kind, (kinds.get(p.kind) || 0) + 1);
+  ok(soft.length > 0, "le monde porte des cases de végétation basse",
+     `${soft.length} case(s) · ` + [...kinds].map(([k, n]) => `${k}×${n}`).join(" "));
+  /* ⚠️ CHAQUE NOM DE LA LISTE DOIT EXISTER SUR LA CARTE. Un décor renommé
+     laisserait la règle en place et sans effet : elle continuerait de passer. */
+  const dead = [...C.TOWN_SOFT_PROPS].filter(k => !kinds.has(k));
+  ok(dead.length === 0, "aucun nom de TOWN_SOFT_PROPS ne désigne un décor disparu",
+     dead.length ? dead.join(", ") : `${C.TOWN_SOFT_PROPS.size} noms, tous posés`);
+  /* ⚠️⚠️ UNE CASE MOLLE NE DOIT ÊTRE SOLIDE QUE PAR SON BUISSON. Si elle tombe
+     dans l'emprise d'un bâtiment, dans l'eau ou sur les rails, la traverser
+     ouvrirait un trou dans un mur — l'inverse exact du mur invisible, et bien
+     plus difficile à voir puisque rien ne s'y oppose. */
+  const RECTS = [C.TOWN_CHURCH, C.TOWN_HALL, C.TOWN_COURT, C.TOWN_BOUTIQUE, C.TOWN_SALON].filter(Boolean);
+  const inRect = (x, y, r) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+  const bad = soft.filter(([x, y]) =>
+    tw.ground[idx(x, y)] === C.G_WATER || !!tw.hedge[idx(x, y)] ||
+    x <= C.TOWN_RAIL_X + 1 || RECTS.some(r => inRect(x, y, r)));
+  ok(bad.length === 0, "aucune case molle n'est expliquée par autre chose que son buisson",
+     bad.length ? bad.map(p => `(${p[0]},${p[1]})`).join(" ") : `${soft.length} case(s) vérifiée(s)`);
+  /* ⚠️ ON TRAVERSE VRAIMENT : on part de trois cases avant, on pousse à la
+     vitesse du jeu, et on doit ressortir de l'autre côté. Un simple
+     `!blocked(x,y)` aurait suffi à faire passer ce contrôle ; il n'aurait rien
+     dit du PAS, qui est ce que le joueur pousse (§1 de ce fichier). */
+  let tested = 0, stuck = [];
+  for (const [ox, oy] of soft) {
+    for (const d of DIRS) {
+      const start = { x: ox - d.vx * 3, y: oy - d.vy * 3 };
+      if (!canStand(start.x, start.y)) continue;         // couloir d'approche impraticable : hors mesure
+      let clear = true;
+      for (let k = 1; k <= 2; k++) if (!canStand(ox - d.vx * k, oy - d.vy * k)) clear = false;
+      if (!clear || !canStand(ox + d.vx, oy + d.vy)) continue;
+      tested++;
+      let x = start.x, y = start.y;
+      for (let n = 0; n < 4000; n++) {
+        const nx = x + d.vx * SPD * DT, ny = y + d.vy * SPD * DT;
+        if (!canStand(nx, ny, elevAt(Math.floor(C.footX(x)), Math.floor(C.footY(y))))) break;
+        x = nx; y = ny;
+        if ((d.vx ? (d.vx > 0 ? C.footX(x) > ox + 1 : C.footX(x) < ox)
+                  : (d.vy > 0 ? C.footY(y) > oy + 1 : C.footY(y) < oy))) { n = 4000; }
+      }
+      const through = d.vx ? (d.vx > 0 ? C.footX(x) > ox + 1 : C.footX(x) < ox)
+                           : (d.vy > 0 ? C.footY(y) > oy + 1 : C.footY(y) < oy);
+      if (!through) stuck.push(`(${ox},${oy}) ${d.key}`);
+    }
+  }
+  ok(tested >= 20, "assez d'approches de buisson pour conclure", `${tested} approche(s) mesurée(s)`);
+  ok(stuck.length === 0, "on traverse la végétation basse dans les quatre sens",
+     stuck.length ? stuck.slice(0, 6).join(" · ") : `${tested} approche(s), aucune arrêtée`);
+  /* ⚠️ LE PRIX DU PASSAGE. Il n'est pas mesurable ici — il vit dans la boucle de
+     rendu (§10 : elle n'est appelable par aucun banc) — mais un multiplicateur
+     hors de ]0,1[ ferait du buisson soit un mur, soit un tapis roulant. */
+  ok(C.TOWN_BUSH_SLOW > 0 && C.TOWN_BUSH_SLOW < 1,
+     "le buisson retient le pas sans l'arrêter", `×${C.TOWN_BUSH_SLOW}`);
+}
+
 /* ═══════════════════════════════════════════════ 2. LA SEMELLE TIENT DANS SA CASE */
 {
   let bad = 0, worst = "";

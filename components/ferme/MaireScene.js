@@ -505,6 +505,14 @@ export function MayorAudience({ ctx, L, onDone, onLive }) {
   const [pendingFault, setPendingFault] = useState(null);
 
   const cand = C.TOWN_CANDIDATES.find(c => c.key === ctx.mayorKey) || C.TOWN_CANDIDATES[0];
+  /* ⚠️⚠️ HORS-ZIP 2026-09-02 — TOUT LE TEXTE DE L'AUDIENCE PASSE PAR `LM`, PAS
+     PAR `L.maire`. Trois maires sur cinq sont des femmes (Odile Vasseur,
+     Séverine Bonnefoy, Ninon Delaunay, nommées depuis le 480) et parlaient au
+     masculin. `L.maireFor` rend la table déclinée ; le sexe vient de
+     `C.mayorIsFem`, l'unique endroit qui le sache.
+     ⚠️ MÉMOÏSÉ SUR LA CLÉ : la fusion des deux tables est faite une fois par
+     partie, pas soixante fois par seconde de rendu. */
+  const LM = useMemo(() => L.maireFor(C.mayorIsFem(cand.key)), [L, cand.key]);
   const node = s.node;
   const choices = useMemo(() => MR.mayorChoices(s), [node, phase]);   // eslint-disable-line react-hooks/exhaustive-deps
   const says = useMemo(() => shuffled(choices.filter(c => c.kind === "say"),
@@ -523,8 +531,8 @@ export function MayorAudience({ ctx, L, onDone, onLive }) {
      seconde. *Un tableau reconstruit à chaque rendu, en dépendance d'un effet à
      minuteur, est un minuteur qui n'arrive jamais.* */
   const gestures = useMemo(() => choices.filter(c => c.kind !== "say"), [choices]);
-  const tint = node && L.maire.tint[node] ? L.maire.tint[node][ctx.mayorKey] : null;
-  const ask = node ? L.maire.ask[node] : null;
+  const tint = node && LM.tint[node] ? LM.tint[node][ctx.mayorKey] : null;
+  const ask = node ? LM.ask[node] : null;
 
   /* ⚠️⚠️ CE QUI PART SUR LE RÉSEAU, ET IL N'EN PART QU'À CHAQUE BATTEMENT. Le
      §3 de `CLAUDE.md` est formel : dix messages par seconde et par client, et
@@ -556,8 +564,8 @@ export function MayorAudience({ ctx, L, onDone, onLive }) {
   /* ⚠️ LE NOMBRE DE SIGNES EST UNE GRANDEUR, PAS UN TABLEAU : en dépendre par un
      NOMBRE plutôt que par les listes qui l'ont produit met l'effet à l'abri du
      défaut ci-dessus pour de bon, et pas seulement aujourd'hui. */
-  const askChars = useMemo(() => lenOf(ask, tint, ...says.map(c => L.maire.say[c.k]),
-      ...gestures.map(c => c.kind === "plans" ? L.maire.layPlans : c.kind === "settle" ? L.maire.settle : "")),
+  const askChars = useMemo(() => lenOf(ask, tint, ...says.map(c => LM.say[c.k]),
+      ...gestures.map(c => c.kind === "plans" ? LM.layPlans : c.kind === "settle" ? LM.settle : "")),
     [ask, tint, says, gestures, L]);
 
   useEffect(() => {
@@ -656,7 +664,7 @@ export function MayorAudience({ ctx, L, onDone, onLive }) {
       setTimeout(finish, C.MAYOR_SLAM_HOLD_MS);
       return;
     }
-    const tell = key === "__plans" || key === "__settle" ? null : L.maire.tell[key];
+    const tell = key === "__plans" || key === "__settle" ? null : LM.tell[key];
     setReact({ tell, why: r.why, delta: r.delta, grade: r.grade });
     viewRef.current.talking = !!tell;
     pushRef.current({ said: key });
@@ -672,19 +680,23 @@ export function MayorAudience({ ctx, L, onDone, onLive }) {
   const winPct = (C.MAYOR_ADH_WIN / C.MAYOR_ADH_MAX) * 100;
   const grade = MR.mayorGrade(s);
   const streakOn = s.streak >= C.MAYOR_STREAK_HOLD;
-  const bubble = phase === "over" ? { text: L.maire.end[grade] || L.maire.end.out }
+  const bubble = phase === "over" ? { text: LM.end[grade] || LM.end.out }
                : phase === "react" && react && react.tell ? { text: react.tell }
                : ask ? { text: ask, tint } : null;
 
   return (
     <Stage
       L={L} cand={cand} view={viewRef}
-      opts={{ plateLabel: L.maire.title, mayorName: L.candName(cand.key) }}
+      /* ⚠️ `mayorKey` DÉCIDE DU CORPS (hors-zip 2026-09-02) : `buildOffice` y lit
+         la silhouette, la coiffure, la coupe du costume et le sexe. C'est la
+         MÊME clé que la plaque et que les répliques `tint` — trois choses qui
+         doivent parler du même élu (`verify-maire`, « les trois tables »). */
+      opts={{ plateLabel: LM.title, mayorName: L.candName(cand.key), mayorKey: cand.key }}
       bubble={bubble}
       head={
         <>
-          <div className="maire-sub">{L.maire.race(Math.max(0, ctx.nextElection - ctx.day))}</div>
-          <div className={"maire-mood m-" + ctx.mood}>{L.maire.mood[ctx.mood]}</div>
+          <div className="maire-sub">{LM.race(Math.max(0, ctx.nextElection - ctx.day))}</div>
+          <div className={"maire-mood m-" + ctx.mood}>{LM.mood[ctx.mood]}</div>
         </>
       }
       foot={
@@ -699,9 +711,9 @@ export function MayorAudience({ ctx, L, onDone, onLive }) {
             <div className="mark" style={{ left: `${winPct}%` }} />
           </div>
           <div className="maire-gaugerow">
-            <span>{L.maire.gauge} {Math.round(adh)}</span>
-            <span>{s.over ? "" : streakOn ? (s.streak >= C.MAYOR_STREAK_GAIN ? L.maire.streakGain : L.maire.streakHold)
-                          : s.slipMs > 0 ? L.maire.slip : ""}</span>
+            <span>{LM.gauge} {Math.round(adh)}</span>
+            <span>{s.over ? "" : streakOn ? (s.streak >= C.MAYOR_STREAK_GAIN ? LM.streakGain : LM.streakHold)
+                          : s.slipMs > 0 ? LM.slip : ""}</span>
           </div>
 
           {/* POURQUOI IL A RÉAGI COMME ÇA. ⚠️⚠️ « Toujours avoir une justification
@@ -715,11 +727,11 @@ export function MayorAudience({ ctx, L, onDone, onLive }) {
                 {react.delta >= 0 ? "+" : ""}{react.delta}
               </b>
               {react.why.map((w, i) => (
-                <span key={"w" + i}>{typeof L.maire.why[w.why] === "function"
+                <span key={"w" + i}>{typeof LM.why[w.why] === "function"
                   /* ⚠️ L'ARGUMENT VIENT DE LA RAISON, PAS D'UNE DÉDUCTION : voir la
                      note de `days` dans `mayorDelta`. */
-                  ? L.maire.why[w.why](w.days != null ? w.days : L.maire.type[w.type])
-                  : L.maire.why[w.why]}</span>
+                  ? LM.why[w.why](w.days != null ? w.days : LM.type[w.type])
+                  : LM.why[w.why]}</span>
               ))}
             </div>
           )}
@@ -737,21 +749,21 @@ export function MayorAudience({ ctx, L, onDone, onLive }) {
               doit rester cliquable. */}
           {pendingFault && (phase === "live" || phase === "ask") && (
             <div className="maire-says">
-              <div className="maire-why">{L.maire.redoOffer}</div>
-              <button className="maire-say" onClick={confirmRedo}>{L.maire.redoYes}</button>
-              <button className="maire-say" onClick={declineRedo}>{L.maire.redoNo}</button>
+              <div className="maire-why">{LM.redoOffer}</div>
+              <button className="maire-say" onClick={confirmRedo}>{LM.redoYes}</button>
+              <button className="maire-say" onClick={declineRedo}>{LM.redoNo}</button>
             </div>
           )}
           {!pendingFault && (phase === "live" || phase === "ask") && (
             <div className={"maire-says" + (phase === "ask" ? " grace" : "")}>
               {says.map(c => (
-                <button className="maire-say" key={c.k} onClick={() => answer(c.k)}>{L.maire.say[c.k]}</button>
+                <button className="maire-say" key={c.k} onClick={() => answer(c.k)}>{LM.say[c.k]}</button>
               ))}
               <div className="maire-gestures">
                 {gestures.map(c => (
                   <button className={"maire-gesture" + (c.kind === "slam" ? " slam" : "")} key={c.k} onClick={() => answer(c.k)}>
-                    {c.kind === "plans" ? L.maire.layPlans : c.kind === "settle" ? L.maire.settle : L.maire.slam}
-                    <span>{c.kind === "settle" ? L.maire.settleHint : c.kind === "slam" ? L.maire.slamHint : ""}</span>
+                    {c.kind === "plans" ? LM.layPlans : c.kind === "settle" ? LM.settle : LM.slam}
+                    <span>{c.kind === "settle" ? LM.settleHint : c.kind === "slam" ? LM.slamHint : ""}</span>
                   </button>
                 ))}
               </div>
@@ -762,14 +774,14 @@ export function MayorAudience({ ctx, L, onDone, onLive }) {
             <div className="maire-end">
               {s.over === "signed" && (
                 <>
-                  <div>{L.maire.after.signed}</div>
-                  {MR.mayorTrustGain(s) > 0 && <div className="maire-dim">{L.maire.after["trust" + MR.mayorTrustGain(s)]}</div>}
+                  <div>{LM.after.signed}</div>
+                  {MR.mayorTrustGain(s) > 0 && <div className="maire-dim">{LM.after["trust" + MR.mayorTrustGain(s)]}</div>}
                 </>
               )}
-              {s.over === "slam" && <div className="maire-dim">{L.maire.after.slam}</div>}
-              {s.over !== "signed" && s.over !== "slam" && <div className="maire-dim">{L.maire.after.again}</div>}
+              {s.over === "slam" && <div className="maire-dim">{LM.after.slam}</div>}
+              {s.over !== "signed" && s.over !== "slam" && <div className="maire-dim">{LM.after.again}</div>}
               <button className="maire-say" style={{ marginTop: 10 }} onClick={() => onDone(s.log, s.over)}>
-                {L.maire.leave}
+                {LM.leave}
               </button>
             </div>
           )}
@@ -795,6 +807,10 @@ export function MayorAudience({ ctx, L, onDone, onLive }) {
 export function MayorWatch({ live, L, onClose }) {
   const viewRef = useRef({ pose: "closed", emote: "cold", talking: false, bang: false });
   const cand = C.TOWN_CANDIDATES.find(c => c.key === (live && live.mayorKey)) || C.TOWN_CANDIDATES[0];
+  /* ⚠️ LE SPECTATEUR LIT LA MÊME TABLE QUE L'ACTEUR (voir la note dans
+     `MayorAudience`) : deux tables pour la même scène, c'est deux récits d'une
+     même audience — l'un dirait « il », l'autre « elle ». */
+  const LM = useMemo(() => L.maireFor(C.mayorIsFem(cand.key)), [L, cand.key]);
   const st = (live && live.state) || {};
 
   useEffect(() => {
@@ -807,16 +823,20 @@ export function MayorWatch({ live, L, onClose }) {
 
   const adh = Math.max(0, Math.min(C.MAYOR_ADH_MAX, st.adh | 0));
   const winPct = (C.MAYOR_ADH_WIN / C.MAYOR_ADH_MAX) * 100;
-  const ask = st.node && L.maire.ask[st.node] ? L.maire.ask[st.node] : null;
+  const ask = st.node && LM.ask[st.node] ? LM.ask[st.node] : null;
   const done = !!st.over;
 
   return (
     <Stage
       L={L} cand={cand} view={viewRef}
-      opts={{ plateLabel: L.maire.title, mayorName: L.candName(cand.key) }}
-      bubble={done ? { text: L.maire.end[st.over] || L.maire.watchEnd } : ask ? { text: ask } : null}
-      onClose={onClose} closeLabel={L.maire.watchLeave}
-      head={<div className="maire-sub">{L.maire.watching(live && live.name || "?")}</div>}
+      /* ⚠️ `mayorKey` DÉCIDE DU CORPS (hors-zip 2026-09-02) : `buildOffice` y lit
+         la silhouette, la coiffure, la coupe du costume et le sexe. C'est la
+         MÊME clé que la plaque et que les répliques `tint` — trois choses qui
+         doivent parler du même élu (`verify-maire`, « les trois tables »). */
+      opts={{ plateLabel: LM.title, mayorName: L.candName(cand.key), mayorKey: cand.key }}
+      bubble={done ? { text: LM.end[st.over] || LM.watchEnd } : ask ? { text: ask } : null}
+      onClose={onClose} closeLabel={LM.watchLeave}
+      head={<div className="maire-sub">{LM.watching(live && live.name || "?")}</div>}
       foot={
         <div className="maire-foot">
           <div className="maire-gauge">
@@ -827,10 +847,10 @@ export function MayorWatch({ live, L, onClose }) {
             <div className="mark" style={{ left: `${winPct}%` }} />
           </div>
           <div className="maire-gaugerow">
-            <span>{L.maire.gauge} {adh}</span>
-            <span>{done ? L.maire.watchEnd : L.maire.watchNoSay}</span>
+            <span>{LM.gauge} {adh}</span>
+            <span>{done ? LM.watchEnd : LM.watchNoSay}</span>
           </div>
-          {done && <button className="maire-say" style={{ marginTop: 10 }} onClick={onClose}>{L.maire.watchLeave}</button>}
+          {done && <button className="maire-say" style={{ marginTop: 10 }} onClick={onClose}>{LM.watchLeave}</button>}
         </div>
       }
     />

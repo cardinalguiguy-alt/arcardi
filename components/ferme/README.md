@@ -1,4 +1,59 @@
-# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-08-31
+# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-02
+
+## Hors-zip 2026-09-02 — la végétation basse se traverse, et le maire a cinq corps
+
+**Vingt-huit cases de végétation ne bloquent plus.** Buisson d'or, touffe fleurie,
+lavande, arbuste, herbes, roseaux et buis taillé (`C.TOWN_SOFT_PROPS`) se
+traversent maintenant à pied, par le joueur, par ses camarades et par les
+résidents. Le critère n'est pas la taille, c'est **ce qui plie** : les bacs de
+roses, les jardinières, les pots et les bonsaïs restent solides — ce sont des
+contenants — et les haies restent des murs, puisque leur passage est l'allée.
+
+`solid` n'a pas changé d'un bit. Le générateur le consulte une quarantaine de
+fois pour décider où poser l'arbre ou la dalle suivante : lui retirer les
+buissons aurait décalé tous les tirages qui suivent et changé la carte entière
+pour un correctif de collision. Une couche **`soft`** est donc *dérivée* de la
+liste des props à la toute fin de `generateTownWorld` — un seul point de vérité
+plutôt que les six sites qui posent du décor — et seules deux lectures la
+consultent : `blockedTown` (le jeu) et `townNav` (le moteur, donc le pathfinder
+des résidents). La carte sort au bit près celle d'hier.
+
+Traverser **coûte** : `C.TOWN_BUSH_SLOW = 0,72` multiplie la vitesse tant que la
+case sous les pieds est molle. Mesuré en jeu : **3,744 contre 5,174 tuiles/s**,
+soit ×0,724. Et le feuillage **se couche** : un cisaillement ancré au pied du
+sprite (la base ne bouge pas d'un pixel, donc l'ombre dessinée dans le sprite
+reste où elle est), du côté où l'on est passé, tant que quelqu'un est dedans ; il
+se redresse en oscillant quand on sort. Rien n'a été ajouté au réseau — le
+frisson se déduit des positions qui circulent déjà.
+
+`verify-collision` gagne six contrôles : il approche chaque case molle **par les
+quatre côtés à la vitesse du jeu** et exige qu'on ressorte de l'autre côté (92
+approches mesurées), il refuse qu'une case molle soit expliquée par autre chose
+que son buisson, et il tombe si un nom de `TOWN_SOFT_PROPS` ne désigne plus aucun
+décor de la carte. `verify-vallee` a dû apprendre la même règle : il a annoncé
+« bloqué en (137.2,154.1) » sur quatre trajets parfaitement valides tant qu'il
+gardait l'ancienne.
+
+**Le maire mesurait 1,90 m avec une tête de 25 cm de large.** Mesuré avant de
+toucher à quoi que ce soit : 6,7 têtes de stature au lieu de 7,5, et une tête à
+47 % de la carrure quand un humain est à 34 % — le diagnostic de Tristan, en
+pire, et un crâne quasi cubique. Le corps est désormais **dérivé d'une stature**
+(six étages en fraction qui somment à 1), et `MAYOR_LOOKS` en décline **cinq
+silhouettes**, dont **trois femmes** : Odile Vasseur, Séverine Bonnefoy et Ninon
+Delaunay portaient un prénom féminin depuis le 480 sans que rien, ni le corps ni
+les didascalies, ne le dise. Le texte se décline par une surcharge éparse (82
+phrases sur 192) ; ce qu'elles disent ne change pas, seules changent les
+tournures qui les désignent.
+
+Trois réglages de mise en scène ont suivi le rétrécissement, et les trois se
+voient seulement en jouant : le tampon du bureau était **hors de portée** du plus
+petit bras (la cinématique inverse borne en silence, la main s'arrêtait à 9 cm de
+l'objet), la hanche assise est remontée de 0,50 à 0,58 parce qu'une épaule à 1,02
+devant un plateau à 0,79 tenait la maire **en croix**, et la visée de la caméra a
+suivi pour que la bulle cesse de recouvrir la plaque de son nom.
+
+Aucun état partagé, aucun message réseau, aucune migration, aucune manipulation
+Supabase.
 
 ## Hors-zip 2026-08-26 — les libellés de porte restent devant le décor
 

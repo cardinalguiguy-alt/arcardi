@@ -4451,6 +4451,57 @@ export const TOWN_TREE_REGROW_MS = 2 * DAY_REAL_MS;  // deux jours de jeu (32 mi
 export const TOWN_STUMP_BLOCKS = false;
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   HORS-ZIP 2026-09-02 — LA VÉGÉTATION BASSE SE TRAVERSE, ELLE FRISSONNE, ET
+   ELLE RETIENT LE PAS.
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume : « affiner les collisions pour les petits buissons, on
+   doit pouvoir passer à travers en faisant bouger le sprite (réalisme).
+   Ralentit un petit peu la marche. »
+
+   ⚠️⚠️ CE FICHIER SE LE REPROCHAIT DÉJÀ DEUX FOIS SANS L'AVOIR APPLIQUÉ ICI.
+   Le 401 a sorti `O_BERRY_BUSH` et `O_ORCHARD` des deux listes de collision de
+   la FERME (« un buisson à hauteur de genou qui arrête un fermier comme le
+   ferait un rocher »), et le 447 pose la végétation du dénivelé en `blocks =
+   false` (« un massif de fleurs qu'on ne peut pas traverser est un mur
+   invisible déguisé en décor »). `addGarden`, lui, marque TOUT ce qu'il pose
+   comme solide depuis le 437 : vingt-huit cases d'herbe, de lavande et de
+   buisson d'or arrêtaient net. *Une règle écrite deux fois pour deux endroits
+   n'a jamais été une règle ; c'était deux correctifs locaux.*
+
+   ⚠️⚠️⚠️ CE QUI EST DEDANS ET CE QUI N'Y EST PAS, ET LE CRITÈRE N'EST PAS LA
+   TAILLE : c'est **ce qui plie**. Une touffe, une lavande, un buisson d'or, un
+   buis taillé cèdent quand on marche dedans. Un BAC de roses, une jardinière,
+   un pot, un bonsaï sont des CONTENANTS — de la terre cuite et du bois, qui ne
+   plient pas — et une haie est un mur (elle borde les vingt-sept parcelles,
+   son passage est l'allée). Décision de Guillaume, contre les deux autres
+   listes proposées.
+   ⚠️ ELLE EST LUE À UN SEUL ENDROIT (la passe finale de `generateTownWorld`,
+   qui DÉRIVE `soft` de la liste des props) plutôt qu'aux six sites qui posent
+   du décor : `addProp`, `addGarden` et trois `props.push` directs auraient fait
+   trois listes, donc trois occasions d'oublier un buisson. */
+export const TOWN_SOFT_PROPS = new Set([
+  "goldBush", "clump", "lavender", "shrub", "grassTuft", "reedTuft", "topiary",
+]);
+/* ⚠️ ON RALENTIT, ON N'ARRÊTE PAS. C'est la contrepartie du passage : traverser
+   un buisson doit COÛTER quelque chose, sinon la végétation n'est plus qu'un
+   dessin qu'on ignore. 0,72 se sent (une seconde de plus sur quatre cases) sans
+   donner l'impression d'être englué — et il se cumule au galop comme à la
+   course, parce qu'il MULTIPLIE la vitesse au lieu de la plafonner. */
+export const TOWN_BUSH_SLOW = 0.72;
+/* ── LE FRISSON. Trois nombres, et c'est un ressort amorti : on couche le
+   feuillage d'un coup, il revient en oscillant, il s'arrête.
+   ⚠️ L'AMPLITUDE EST EN PIXELS AU SOMMET DU SPRITE, PAS UN ANGLE. Le dessin est
+   cisaillé autour de son PIED (une plante pousse dans le sol, elle ne pivote
+   pas sur son ancre) : la base ne bouge pas d'un pixel, ce qui garantit que
+   l'ombre portée dessinée dans le sprite reste où elle est. Un vrai angle
+   aurait décollé le pied du sol, et c'est le premier chose qu'on voit.
+   ⚠️ LA PÉRIODE EST PLUS COURTE QUE L'AMORTISSEMENT : sans ça on voit un seul
+   aller-retour, c'est-à-dire un décor qui glisse et revient, pas une plante. */
+export const TOWN_BUSH_SWAY_PX = 5.0;      // décalage du sommet, au premier temps
+export const TOWN_BUSH_SWAY_MS = 260;      // période de l'oscillation
+export const TOWN_BUSH_SWAY_FADE_MS = 520; // constante de temps de l'amortissement
+
+/* ═══════════════════════════════════════════════════════════════════════════
    ZIP 426 — L'INTÉRIEUR DU TRIBUNAL, SUR TROIS NIVEAUX.
    ───────────────────────────────────────────────────────────────────────────
    Demande de Guillaume : « un intérieur complet pour le tribunal avec étages,
@@ -4879,13 +4930,31 @@ export const COURT_ROOMS_LIVE = ["prices", "welcome"];
    au jour 400 a un maire tout de suite. */
 export const MAYOR_TERM_DAYS = 30;
 export const MAYOR_VOTE_BASE = 40, MAYOR_VOTE_SPAN = 60;  // les voix de la ville
+/* ⚠️⚠️ HORS-ZIP 2026-09-02 — `fem` DIT CE QUE LE PRÉNOM DISAIT DÉJÀ, ET
+   PERSONNE NE L'AVAIT ÉCRIT. `fermeStrings` nomme **Odile** Vasseur, **Séverine**
+   Bonnefoy et **Ninon** Delaunay depuis le 480 — trois maires sur cinq — pendant
+   que le bureau ne savait dessiner qu'un homme et que les didascalies disaient
+   « Il ouvre un registre, y note quelque chose ». Le nom, le corps et le texte
+   racontaient donc trois choses différentes du même personnage.
+   ⚠️ CE DRAPEAU EST LU À DEUX ENDROITS ET UN SEUL LE DÉCIDE : `MAYOR_LOOKS`
+   (`maireBureau.js`) pour le corps, `MAIRE_FR_F` (`fermeStrings.js`) pour le
+   texte. `verify-maire` vérifie que les trois tables portent les MÊMES clés et
+   le MÊME sexe — sans quoi on obtiendrait une maire au corps de femme qui parle
+   au masculin, c'est-à-dire l'état d'avant, à moitié corrigé. */
 export const TOWN_CANDIDATES = [
-  { key: "vasseur",  emoji: "🌾" },   // l'eau et les champs
-  { key: "lantier",  emoji: "🔨" },   // les travaux, les ponts, les chemins
-  { key: "bonnefoy", emoji: "⚖️" },   // l'ordre et les comptes
-  { key: "delaunay", emoji: "🌊" },   // le lac, le parc, les promenades
-  { key: "toussaint", emoji: "📚" },  // l'école et les archives
+  { key: "vasseur",  emoji: "🌾", fem: true },   // l'eau et les champs
+  { key: "lantier",  emoji: "🔨" },              // les travaux, les ponts, les chemins
+  { key: "bonnefoy", emoji: "⚖️", fem: true },   // l'ordre et les comptes
+  { key: "delaunay", emoji: "🌊", fem: true },   // le lac, le parc, les promenades
+  { key: "toussaint", emoji: "📚" },             // l'école et les archives
 ];
+/* Le sexe d'un maire, par sa clé. ⚠️ UNE FONCTION PLUTÔT QU'UNE LECTURE DIRECTE :
+   la table est un tableau, pas un dictionnaire, et six appelants qui refont le
+   `find` chacun de leur côté sont six occasions d'oublier le repli. */
+export function mayorIsFem(key) {
+  const c = TOWN_CANDIDATES.find((x) => x.key === key);
+  return !!(c && c.fem);
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    ZIP 439 — L'ACCUEIL DE L'HÔTEL DE VILLE, ET LA TABLE DES SUJETS.

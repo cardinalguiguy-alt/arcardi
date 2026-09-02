@@ -297,27 +297,22 @@ console.log("\n=== les rebords : autour de la rue, jamais en travers ===\n");
 
 console.log("\n=== la ligne blanche ===\n");
 {
+  // ⚠️ HORS-ZIP 2026-09-02 — LE MARQUAGE A ÉTÉ RETIRÉ (fermeArt.js,
+  // drawTownRoadTile), sur constat de l'audit du même jour : une peinture
+  // routière du XXe siècle à côté du chaume et des guirlandes. Le contrôle ne
+  // cherche donc plus le trait, il vérifie son ABSENCE — un banc qui teste
+  // toujours une fonctionnalité supprimée est le piège périmé que le §14 du
+  // dépôt interdit (« un piège périmé recopié ailleurs est pire qu'un piège
+  // supprimé »).
   const { sh, v } = shots.artere, W = v.w * T;
-  const axis = C.TOWN_MAIN_ST_Y0 + C.TOWN_MAIN_ST_W / 2;
-  const rows = [];
+  let n = 0;
   for (let y = 0; y < v.h * T; y++) {
-    let n = 0;
     for (let x = 0; x < W; x++) {
       const i = (y * W + x) * 4;
       if (sh.px[i] === 0xd6 && sh.px[i + 1] === 0xd4 && sh.px[i + 2] === 0xc8) n++;
     }
-    if (n > 0) rows.push([y, n]);
   }
-  ok(rows.length === 2, "la ligne tient sur deux rangées de pixels", rows.map(r => r[0]).join(", "));
-  if (rows.length === 2) {
-    ok(rows[1][0] === rows[0][0] + 1, "les deux rangées sont jointives", `${rows[0][0]} et ${rows[1][0]}`);
-    // Et elles encadrent l'axe : la couture entre les deux est l'axe exact.
-    const seamWorld = v.y + (rows[0][0] + 1) / T;
-    ok(seamWorld === axis, "la ligne est CENTRÉE sur l'axe de la chaussée", `couture y = ${seamWorld}, axe ${axis}`);
-    // Discontinue : le trait couvre nettement moins que toute la largeur.
-    const cover = rows[0][1] / W;
-    ok(cover > 0.25 && cover < 0.65, "la ligne est bien discontinue", `${(cover * 100).toFixed(0)} % de la longueur`);
-  }
+  ok(n === 0, "aucun marquage blanc résiduel sur la chaussée", `${n} pixel(s) trouvé(s)`);
 }
 
 console.log("\nImages : tools/out/rues-surfaces.png, rues-artere.png, rues-carrefour.png, rues-cimetiere.png, rues-esplanade.png");

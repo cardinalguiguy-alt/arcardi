@@ -11,583 +11,43 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-⚠️⚠️⚠️ **CETTE LIVRAISON NE CHANGE PAS LE CENTRE DE GRAVITÉ DU FICHIER : LE GEL DE PNJ CHEZ
-L'INVITÉ (§13 ITEM N°1) EST TOUJOURS TESTÉ, DIAGNOSTIQUÉ ET CORRIGÉ — DÉTAIL AU §4 ET AU §13,
-RIEN N'A CHANGÉ, RIEN À RELIRE ICI.** **ACTION SUIVANTE UNIQUE — ATTENDRE QUE GUILLAUME AIT JOUÉ
-LA FERME PEUPLÉE À DEUX CLIENTS.** Si Guillaume dit « reprends le travail » sans autre précision,
-demander où en est cette session, et ne PAS ouvrir de chantier créatif de son propre chef en
-attendant. Les deux livraisons ci-dessous sont de la gestion de dette (§13/§10), choisies
-explicitement par Guillaume zip après zip — elles ne remplacent pas cette attente, elles la
-respectent.
+⚠️⚠️ **CE QUI EST LIVRÉ HORS-ZIP LE 2026-09-02 (QUATRIÈME SESSION) : LA ROUTE DE VALLEY TOWN EST
+ÉCLAIRCIE ET RÉCHAUFFÉE, LE MARQUAGE BLANC RETIRÉ.** Point de départ : un audit visuel de Valley
+Town (séance de jeu réelle, sept points de vue, mesures sur le canevas) a mesuré l'asphalte à
+**L≈40** en jeu contre **L≈150** pour l'herbe — le seul saut de valeur brutal de la carte — et un
+marquage routier du XXe siècle à côté du chaume et des guirlandes. C'est le premier des cinq
+correctifs retenus avec Guillaume, dans cet ordre : **route → ombre portée dirigée → redessin des
+bâtiments (sprites détaillés, vraie perspective trois-quarts, lumière peinte) → collisions et
+profondeur des bâtiments → casseur de période au sol → variantes d'arbres/accessoires.** Le
+redessin des bâtiments passe AVANT les collisions parce que corriger l'emprise bloquante sur des
+sprites appelés à changer de dimensions serait du travail jetable — seule la route est déjà livrée.
 
-⚠️⚠️ **CE QUI EST LIVRÉ HORS-ZIP LE 2026-09-02 : LE COMPTE DE CANEVAS 2D EST RAMENÉ DE 1 842 À
-779** (§10, §13 — l'ami de Guillaume qui ne pouvait plus jouer sur tablette). `townWater` (636
-canevas) et `petFrames` (468 canevas), 60 % du total documenté depuis le 481 et jamais traité, sont
-désormais UN atlas chacun : chaque fonction qui dessine une variante (`townWaterTile`, `petSprite`,
-etc.) est INCHANGÉE, seul l'appelant qui les stockait a changé — un nouveau `makeAtlas()` compose
-chaque petit canevas temporaire dans un grand canevas partagé et le laisse repartir au ramasse-
-miettes, et la lecture passe par un nouveau `blitCell()` exporté (neuf arguments à `drawImage`,
-même patron que `RS.grass`/`drawTownGrassTile` qui existait déjà pour l'herbe de la ville). Quatre
-sites de lecture dans `fermeArt.js`, un dans `drawPetsFor` (`FermeGame.js`) et deux outils
-(`render-eau.mjs`, `render-rive.mjs`) adaptés à la forme neuve. `S.pets[pid]` (39 portraits au
-repos) reste volontairement HORS atlas : le composant `Sprite` qui l'affiche à six endroits ne sait
-découper que depuis (0,0), et l'y adapter aurait coûté plus que les 39 canevas économisés.
-⚠️⚠️ **AUCUN BANC DU DÉPÔT NE POUVAIT VÉRIFIER CE REFACTOR, ET DEUX ÉTAIENT MÊME CASSÉS AVANT
-D'AVOIR COMMENCÉ** : `render-eau.mjs`/`render-rive.mjs` plantent sur `ctx.createLinearGradient`
-non implémenté par le faux canevas — reproduit sur `HEAD` tel quel, donc sans rapport avec ce
-correctif (voir l'entrée dédiée au §10, non corrigée ici). La preuve est venue d'ailleurs : un
-parcours de l'objet réel retourné par `buildSprites()` (636 et 468 cases, chacune vers UN SEUL
-canevas partagé) et un rendu réel en navigateur (bundle esbuild de `fermeArt.js`, page jetable,
-rien commité) montrant l'étang peint par la VRAIE `drawTownWaterTile`/`drawTownShoreTile` et une
-planche de familiers découpés de l'atlas — identiques à toujours.
-⚠️⚠️⚠️ **CE QUI N'EST PAS PROUVÉ** : que l'ami de Guillaume peut de nouveau jouer sur sa tablette.
-779 canevas reste un nombre, pas un verdict, et personne n'a rejoué la mesure sur un vrai iPad.
-Cette dette a été choisie par Guillaume parmi quatre proposées ; contrairement à la constellation
-la veille, la portée n'a pas bougé en cours de route.
+**Ce qui a changé**, dans `townAsphaltSurface()` et `drawTownRoadTile()` (`fermeArt.js`) :
+toutes les teintes de la chaussée (liant, granulat, fissures, reprises d'enrobé, traces d'huile,
+gravillon) ont été recalées sur une luminance de base commune (~78, contre ~61 avant) **en gardant
+le même écart relatif qu'avant à chaque couche** — condition posée par Guillaume : ne pas perdre
+en réalisme. Le bruit fin (3200 points/tuile) est en plus resserré autour du liant : c'est lui,
+pas le granulat, que l'audit identifiait comme le poivre-et-sel qui grésille au défilement — le
+granulat, lui, garde tout son contraste. Le marquage blanc pointillé est retiré, pas remplacé par
+un caniveau (option la moins chère des deux que proposait l'audit).
 
-Vérifications : bundle esbuild propre sur `FermeGame.js` et `fermeArt.js` (seul `G_SOIL`
-préexistant subsiste), `verify-syntax` propre, `verify-quete` **631/631**, `next build`
-**✓ Compiled successfully** puis l'arrêt documenté sur `supabaseUrl`, plus la mesure structurelle
-et le rendu navigateur décrits ci-dessus (aucun des deux n'est un banc du dépôt, faute d'en avoir
-un qui fonctionne pour ce dessin). **Aucune migration SQL, aucun changement de schéma, aucune
-manipulation Supabase.**
+Vérifications : `render-rues.mjs` relancé, **tout passe** — goudron mesuré à **L moyen 80,5,
+écart-type 10,3**, dans la fourchette L 70-80 visée par l'audit ; un contrôle a été RÉÉCRIT plutôt
+que cassé (« la ligne tient sur deux rangées » cherchait un marquage supprimé exprès — devenu
+« aucun marquage blanc résiduel », le cas exact du piège périmé que le §14.2 interdit de laisser
+traîner). `verify-syntax` propre, `next build` **✓ Compiled successfully** (mêmes avertissements
+préexistants : `G_SOIL`, prérendu sans `.env.local`). ⚠️ **NON JOUÉ À L'ÉCRAN** : la vérification
+s'est arrêtée au banc de rendu (rasterise le code réel du jeu, pixel exact) et à la compilation —
+aucune séance en navigateur cette fois.
 
-⚠️ **CE QUI EST LIVRÉ HORS-ZIP LE 2026-09-01, EN GÉRANT UNE DETTE DU §13 : LA CONSTELLATION EST
-LA BREBIS, SEPT POINTS, ET NE SE PEINT PLUS SOUS UN PLAFOND.** `drawStarOverlay` peignait la
-constellation par-dessus le tribunal/la mairie/l'église (QUETE.md §17.9 lot D l'interdit) : corrigé
-par une garde de zone sur le seul bloc constellation, pattern repris de `drawStarChevron`. Cinq
-points arbitraires sont devenus sept points en arbre (six segments) qui dessinent une vraie brebis
-— nez et tête baissés, dos PLAT (un premier essai à dos bombé se lisait comme un oiseau, rejeté
-après vérification dans un échafaudage jetable), deux pattes qui pendent, petite queue. Le
-déclencheur n'a pas changé (nuit + dehors) : les sept points sont toujours ensemble, aucune
-révélation progressive par sœur — 4 des 7 compagnes n'existent pas encore en code. Guillaume a
-verrouillé au passage une direction pour le chantier « sept sœurs » (encore non construit,
-§17.7 bis de `QUETE.md`) : les quatre dernières doivent se chercher « d'une manière inédite » et
-résister au taming simple. Détail complet dans l'historique §14.2 de ce fichier et à côté du code.
-
-⚠️⚠️⚠️ **CE QUI EST LIVRÉ HORS-ZIP, SÉANCE DU 2026-09-01 : QUATRE DÉFAUTS TROUVÉS EN JOUANT, SUR
-LA CALE ET CHEZ TRISTAN.** Demande de Guillaume, mot pour mot, sur la cale : *« le chevron me
-pointe au bateau, le texte me dit de presser E, rien ne semble se passer »* ; sur Tristan :
-*« l'anatomie de tristan est décevante […] on dirait un pantin »* et *« on ne comprend pas si on
-fait bien […] il y a aussi des incohérences physiques après la découpe »*. Le détail vit à côté du
-code ; ici, seulement ce qu'il ne faut pas casser :
-· **LA CALE REFUSAIT LE CÔTÉ PAR OÙ ON L'ABORDE.** `STAR_SHIP_DRAW_H` mesure la boîte peinte au
-NORD de l'ancre (coque, mât) ; la passerelle qui descend vers l'eau — là où le décor fait marcher
-le joueur pour « monter » une pièce — PEND au SUD, et le rectangle d'interaction s'arrêtait à
-0,2 case de l'ancre pendant que la planche reste praticable jusqu'à environ deux cases plus loin.
-Rejoué à l'écran (position forcée par un point d'entrée de débogage exposé le temps de la
-séance, jamais commité) : `E` ne répondait plus dès qu'un pied touchait le bout recourbé de la
-planche — exactement là où on est censé se tenir. `STAR_SHIP_INTERACT_S_PAD` rallonge le SEUL
-côté qui manquait ; c'est la dix-septième forme de l'en-tête (« un rectangle de portée mesure
-qu'un geste est refusé, jamais OÙ »), rejouée une seconde fois le même jour sur un autre décor.
-· **LA FENÊTRE DE RÉUSSITE DE LA SCIE ÉTAIT JUSTE ET PEINTE INVISIBLE.** `Track` (ScierieScene.js)
-pose les deux bandes vert/ambre aux largeurs dérivées de `SAW_GOOD_X`/`SAW_PERFECT_X` — la même
-fenêtre que le verdict, jamais une seconde lecture (§8) — mais à 16 % et 24 % d'opacité sur une
-piste presque noire, rien ne s'y voit avant que la lame l'ait déjà traversée. Opacité remontée
-(38 %/52 %) et un bord de couleur ajouté : *un calcul juste peint à une opacité illisible ment
-par le rendu, pas par le calcul.*
-· **LA CHUTE SE TÉLÉPORTAIT.** Le chicot sectionné bascule pendant les 420 ms de pause entre deux
-planches (`v.drop` monte vers 1,35 rad) — correct — mais dès que la planche suivante commençait il
-retombait à zéro D'UN SEUL COUP au lieu de glisser, donc le morceau qui venait de tomber semblait
-se replaquer sur le madrier dans l'image suivante. ⚠️ **Ce n'est PAS la même famille que le trait
-de scie juste en dessous, qui doit lui sauter** (sinon la planche a l'air de se réparer) : ici rien
-ne « répare » rien, une charnière rentre juste à son repos, et un `soft(10)` symétrique suffit.
-· **LA TÊTE DE TRISTAN FAISAIT 43 % DE LA LARGEUR DE SES ÉPAULES, CONTRE 25-32 % CHEZ UN HOMME —
-ET C'ÉTAIT UNE QUESTION, PAS UN BOGUE.** `render-scierie` restait 58/58 (aucun genou à l'envers,
-une seule masse, 167,6 cm de haut) : le RIG est juste, seul le RAPPORT de deux tailles ne l'était
-pas, et aucun banc du dépôt ne mesure un rapport. Deux leviers étaient possibles — réduire la
-tête, ou plafonner l'inclinaison de `tristanLean` à la lame — Guillaume a délégué le choix.
-**Choix fait : la tête seule, l'inclinaison reste intacte.** Plafonner le buste aurait fallu
-retoucher le calcul qui garantit qu'une main ne se décroche jamais de la poignée (§11 de
-`scierieAtelier.js`) pour un gain incertain, alors que réduire la tête est un seul facteur posé
-sur le GROUPE `head` — mâchoire, oreilles, cheveux, barbe et tout le visage (ses enfants) suivent
-ensemble, au même rapport, sans qu'un seul offset ne bouge et sans déplacer le point d'attache au
-cou. `head.scale.setScalar(0.75)` ramène le rapport à 32 %, en haut de la fourchette humaine.
-Rejoué : `render-scierie` **toujours 58/58** (167,6 → 162,8 cm, resté un homme).
-
-Vérifications (premier tour) : `render-scierie` **58/58**, `verify-scierie` **34/34**,
-`verify-collision` **TOUT PASSE**, `verify-quete` **631/631**, `verify-vallee` **223/223**,
-`verify-syntax` propre, bundle esbuild propre (seul `G_SOIL` préexistant subsiste), `next build`
-**✓ Compiled successfully** puis l'arrêt documenté sur `supabaseUrl`.
-
-⚠️⚠️⚠️ **ET GUILLAUME A REGARDÉ LE RÉSULTAT, ET EST REVENU AVEC QUATRE DEMANDES PRÉCISES SUR
-TRISTAN, dans le MÊME hors-zip.** Mot pour mot : *« gros problème de proportions, le buste par
-rapport aux jambes. Aussi, il est censé porter une vraie chemise de bûcheron et avoir les cheveux
-gris ; pantalon jean avec bretelles. »* Le détail vit à côté du code ; ici, seulement ce qu'il ne
-faut pas casser :
-· **LA LONGUEUR JAMBE/BUSTE ÉTAIT JUSTE, LA LARGEUR NE L'ÉTAIT PAS.** Mesuré (script de mesure
-temporaire, jamais commité) : 0,87 m de jambe pour 0,685 m de buste hors inclinaison, un rapport
-proche de la table anthropométrique. Le défaut était que le torse fait 0,50 m de large sur des
-cylindres de jambe de 0,16-0,19 m de diamètre — un buste large sur des jambes de bâton, quelle que
-soit leur longueur. **Les deux nombres montent ensemble** : jambes épaissies de 20 % (cuisse,
-mollet, guêtre, botte), torse rétréci de 7 % en largeur ET profondeur — jamais en hauteur, qui
-n'était pas en cause. `render-scierie` reste 58/58 (162,8 cm, une seule masse à chaque pose).
-· **LA CHEMISE ROUGE UNIE N'EST PAS UNE « VRAIE CHEMISE DE BÛCHERON » — C'EST LE CARREAU QUI LA
-NOMME.** `texPlaid` (nouvelle fonction, même famille que `texGrain`) peint un carreau buffalo
-rouge et noir qui boucle par construction (la période prime sur les détails, §4) ; `mShirt`
-le porte partout où il l'a toujours porté (reins, cage, épaules, manches) — le col roulé reste un
-accent uni, sinon il se noierait dans le carreau au lieu de le border.
-· **LES CHEVEUX SONT GRIS, LA BARBE UN CRAN PLUS CLAIRE** (`COL.hair`/`COL.beard`) : un homme qui
-grisonne blanchit par la barbe avant les cheveux, jamais l'inverse.
-· **LE PANTALON EST UN JEAN, ET LES BRETELLES SONT DEVANT ET DERRIÈRE.** `COL.trouser` passe au
-bleu denim. Les bretelles EXISTAIENT déjà (zip du lot E) mais seulement « dans le dos » — or les
-trois vues du joueur (poste, face, atelier, §10) regardent Tristan de face ou de trois quarts
-avant : une bretelle qui n'existe que dans le dos n'est vue par PERSONNE. Elles sont maintenant
-devant ET derrière, filles de `chest` comme avant (elles suivent l'inclinaison du buste), en cuir
-et non plus en toile de pantalon (sinon elles se fondent dans le jean).
-⚠️⚠️⚠️ **CE QUE LE BANC NE POUVAIT PAS JUGER, ET C'EST ÉCRIT DANS `lib-3d.mjs` DEPUIS SA
-NAISSANCE : « les textures sont réduites à leur COULEUR MOYENNE ».** `render-scierie` confirme que
-la géométrie tient (silhouette, cadre, hauteur) mais ne peut PAS voir le carreau, le gris des
-cheveux ni le bleu du jean — ils ont donc été vérifiés à l'écran, en direct, dans les trois vues et
-sur plusieurs coups de scie (repro : même échafaudage jetable que le premier tour, supprimé
-ensuite). *La leçon du bureau du maire, redite : un banc qui rastérise en couleur moyenne juge la
-FORME, jamais la MATIÈRE — les deux se vérifient, mais pas au même endroit.*
-
-Vérifications (second tour) : `render-scierie` **toujours 58/58**, `verify-scierie` **34/34**,
-bundle esbuild propre, carreau/cheveux gris/jean/bretelles avant-et-arrière confirmés à l'écran
-dans les trois vues. Échafaudage de jeu local (`.env.local`, `app/debugship/`) **supprimé**, ainsi
-que le point d'entrée de débogage posé sur `window` et le correctif de `requestAnimationFrame` qui
-a servi à faire tourner l'onglet masqué le temps de la repro (§10) — aucun des deux ne survit à
-cette livraison. **Aucune migration SQL, aucun changement de schéma, aucune manipulation
-Supabase.**
-
-⚠️⚠️⚠️ **CE QUI EST LIVRÉ LE 2026-09-01 : LES HAIES, ET LA SEMELLE DE TOUT LE JEU.** Demande de
-Guillaume, mot pour mot : *« les haies sont ok à l'horizontale mais quand elles doivent être à la
-verticale elles sont segmentées et plus continues c'est nul. Aussi la collision avec les haies est
-impossible, il faut la revoir sous les 4 angles ; pareil pour les autres éléments de la map. Je
-parle des ponts, des escaliers, des murs, du belvédère à revoir pour qu'il soit plus réaliste »*,
-puis *« j'insiste pour que tu aies une exigence ultra élevée pour la cohérence des collisions »*.
-Le détail vit à côté du code ; ici, seulement ce qu'il ne faut pas casser :
-· **LA HAIE A SEIZE VISAGES ET ELLE EST SORTIE DE LA CLOSURE** (`A.drawTownHedgeTile`). Le choix
-de tuile ne lisait que l'ouest et l'est : **436 des 839 cases de haie de la ville — 52 % —
-étaient dessinées faux**, dont 331 en chapelet de buissons détachés. `hN`/`hS` étaient calculées
-et n'entraient dans aucun test. ⚠️ **La haie verticale est l'horizontale TRANSPOSÉE** : même
-matière au pixel près, elle boucle en y parce que la source boucle en x, la lumière reste au
-nord-ouest, et les bouts suivent gratuitement (bout ouest transposé = bout nord).
-· ⚠️ **LES TROIS TUILES SONT RECADRÉES** : elles portaient deux ou trois rangées du sprite voisin
-de la planche, répétées tous les 16 px sous toute la haie. Le recadrage la repose aussi SUR sa
-case (elle flottait 4 px au-dessus de son propre sol).
-· ⚠️⚠️⚠️ **LA SEMELLE EST DÉSORMAIS SOUS LES PIEDS, ET ELLE N'EST ÉCRITE QU'UNE FOIS**
-(`C.bodyPoints`). Elle était recopiée à SEPT endroits, tous justes, tous décalés d'une demi-case
-à l'ouest et de trois quarts au nord de ce que le joueur voit de lui-même. Mesuré contre une
-haie, AVANT : nord −15,0 px, sud +9,4, ouest −7,2, est +3,2 (amplitude 24,4). APRÈS : nord 3,6,
-sud −2,0, ouest 0,1, est 0,1 (**amplitude 5,7 px**, et le reste est l'épaisseur du corps).
-· ⚠️⚠️ **ET LA MOITIÉ INVISIBLE DE LA CORRECTION EST AILLEURS** : vingt-huit endroits écrivaient
-`p.y + 0.2` pour dire « la case sous ses pieds » et cinq `Math.floor(m.x)` pour dire « ma
-colonne ». Les deux erreurs se compensaient à peu près tant que la collision partageait le même
-décalage — corriger l'une sans l'autre aurait CASSÉ ce qui marchait par accident. Elles vont
-donc ensemble (`C.footX`/`C.footY`/`C.bodyFootTile`/`C.tileAnchor`).
-· ⚠️ **LE PATHFINDER SUIT LA SEMELLE** : `TC = 0.5` centrait l'ANCIENNE boîte. Non corrigé, il a
-rendu **114 des 146 endroits de la ville inatteignables** — et c'est le banc qui l'a dit avant le
-jeu. `C.tileAnchor` est l'inverse exact de `C.bodyFootTile` ; les deux vont ensemble.
-· **LE BELVÉDÈRE EST UN BELVÉDÈRE** : seize cases sur onze de pelouse nue à deux étages
-au-dessus de la ville sont devenues une terrasse DALLÉE, cernée d'un parapet de blocs de pierre
-DÉDUIT du relief (une case du pourtour reçoit le parapet si la case juste à l'extérieur tombe de
-plus d'une marche — l'ouverture de l'escalier s'exclut donc toute seule), avec deux bancs de
-pierre dans l'axe des deux postes de contemplation, deux lampadaires et la statue. ⚠️ **Aucune
-mécanique ajoutée** : `benchWall`/`stoneBench` ne fabriquent pas de place assise, seul `bench` le
-fait. ⚠️ **Le parapet interdit le saut de rebord depuis la terrasse, délibérément** ; les rebords
-de la Haute-Ville, eux, ne bougent pas.
-
-⚠️⚠️ **DEUX BANCS NEUFS, ET C'EST LE VRAI LIVRABLE — `render-haies` (16/16) ET `verify-collision`
-(24/24).** Le second mesure la grandeur qu'aucun des quarante et un autres ne mesurait : **non pas
-qu'un obstacle refuse le pas, mais À QUELLE DISTANCE DU DESSIN il le refuse**, sur les quatre
-côtés, en approchant pour de vrai à la vitesse du jeu. Il tient aussi la traversée des deux ponts,
-la montée ET la descente des quatre volées, les vingt-cinq allées de parcelle, l'accord jeu/moteur
-sur 20 000 points, et le fait qu'on se dégage TOUJOURS d'une position interdite.
-⚠️ **Quatre de ses contrôles ont d'abord échoué sur des défauts DU BANC** (mauvais axe de
-traversée, emprise d'escalier transposée, arrivée comparée en flottants, quatre directions
-alternées à chaque image) : c'est la quatorzième forme de l'en-tête — *un banc mal repéré accuse
-l'ouvrage de ce que fait son repère* — et elle a resservi quatre fois en une séance.
-
-⚠️⚠️ **CE QUI A ÉTÉ VU À L'ÉCRAN, ET CE QUI NE L'A PAS ÉTÉ.** Vu, en session locale : la haie d'une
-parcelle (verticales continues, angles joints), le fermier arrêté PIED CONTRE la haie par le nord,
-contre le mur de la Maison Garfield, et **au pas de sa porte à la ferme, centré sur la porte** — ce
-qui n'arrivait pas avant. Vu aussi : le belvédère dallé et son parapet. ⚠️ **NON VU** : la ville à
-DEUX clients (la semelle change ce que `advanceRemote` rejoue), les intérieurs (tribunal, mairie,
-église) où la même semelle s'applique, et la carte maléfique. ⚠️ **Et le belvédère n'est regardé par
-AUCUN banc en image** : il est fait de props, qui vivent dans la closure du rendu — `verify-vallee`
-et `verify-compo` tiennent son emprise, pas son dessin.
-
-⚠️⚠️ **DEUX GARDE-FOUS DE GUILLAUME, TOUJOURS EN VIGUEUR** : *« attention de ne pas basculer dans
-le WTF »* et *« l'idée est de rajouter du fun, mais pas de complexifier à outrance »*, doublés le
-2026-09-01 par *« n'ajoute pas d'éléments wtf […] jeu que des enfants de 10 ans joueront ; on garde
-ce qu'on a et on ajoute ou modifie pour densifier et faire participer »*.
-
-⚠️⚠️⚠️ **CE QUI RESTE DE L'AUDIT DE LA QUÊTE, NON FAIT, PAR ORDRE** — **la constellation est sortie
-de cette liste hors-zip le 2026-09-02** (sept points, la Brebis, invisible en intérieur, voir le
-bloc ⏭️ REPRISE) : les **quatre morceaux sans provenance**
-(safran, mât, voile, cloche — `SHIP_SITE_OF` rend `null`) ; le **HUD peint par-dessus la scène
-plein écran du maire** ; **le compte de canevas au chargement, largement réduit mais pas nul**
-(§10 — `townWater`/`petFrames`, 60 % du total mesuré au 481, sont atlassés depuis le 2026-09-02 ;
-779 canevas distincts restent retenus contre 1 842 avant, **jamais reconfirmé sur un vrai iPad**).
-Aucun n'est bloquant ; tous sont datés. ⚠️ **Et la quête de l'étoile n'a toujours pas été JOUÉE d'une
-traite** : les trois
-nombres de la coupe (`STAR_ENG_WORK_MS` 5 min, `STAR_ENG_TRAVEL_MS` 1 min, second rendez-vous chez
-le maire 1 min) n'ont jamais tourné à cadence réelle.
-
-Vérifications de cette livraison : **42 bancs relancés un par un, zéro `ÉCHEC`** — dont les deux
-neufs `verify-collision` **24/24** et `render-haies` **16/16**, plus `verify-quete` **631/631**,
-`verify-vallee` **223/223**, `verify-maire` **113/113**, `verify-vergers` **61/61**, `verify-cycle`
-**38/38**, `verify-scierie` **34/34**, `verify-ludo` **30/30**, `verify-taxi` **15/15**,
-`verify-compo` **14/14**, `verify-pont` **12/12**, `verify-strings` **1106 clés appariées**,
-`render-etoile` **161/161**, `render-maire` **66/66**, `render-escaliers` **35/35**, `render-parc`
-**31/31**. Bundle esbuild propre sur
-`FermeGame.js` (seul `G_SOIL` préexistant subsiste) ; `git diff --check` propre ; `next build`
-**✓ Compiled successfully** puis l'arrêt documenté sur `supabaseUrl`. Échafaudage de jeu local
-(`.env.local`, `app/haies/`) **supprimé**. **Aucune migration SQL, aucun changement de schéma,
-aucune manipulation Supabase.**
-
-⚠️⚠️⚠️ **LE RYTHME DE LA QUÊTE EST LIVRÉ LE 2026-09-01 : TROIS VOLUMES SONORES AU LIEU DE DEUX.**
-Demande de Guillaume : *« ce sont les textes, les overlays qui doivent être plus fluides et animés,
-et + retenir l'attention quand une milestone est passée »*. Le diagnostic tient en une phrase — la
-quête n'avait que le TOAST (cadre en bois, 3,2 s, la même forme que « +3 blé ») et la CARTE PLEIN
-ÉCRAN (5 à 7 fois par soirée), donc les vingt petits jalons d'une partie tombaient tous dans le
-chuchotement de l'intendance. Le détail vit à côté du code ; ici, seulement ce qu'il ne faut pas
-casser :
-· **LE BANDEAU EST DEVENU VIVANT** — il était le seul élément permanent de la quête et c'était un
-panneau mort. La pastille qui se remplit s'allume, le bandeau tressaille, la phrase d'objectif
-CROISE l'ancienne au lieu de la remplacer, et une barre pousse sous le tout. ⚠️ **Aucun de ces
-quatre affichages ne compte quoi que ce soit** : tous lisent la même liste de pastilles (`starDug`
-ou `starShipParts`) — *une jointure, jamais deux listes* (449).
-· **LE RUBAN DE JALON (`STAR_RIBBON_MS`) EST LE VOLUME DU MILIEU**, et il SORT du bandeau pour y
-RETOURNER : le mouvement dit « ce que tu viens de gagner est rangé là-haut ». Il **remplace** le
-toast du navire au lieu de s'y ajouter (les deux se recouvraient au pixel) et en REPREND le texte,
-donc aucune phrase n'est perdue. ⚠️ Il est armé par `starWatch`, **jamais par un mini-jeu gagné** :
-un ruban lancé sur `onWin` annoncerait une pièce que l'hôte n'a pas encore posée.
-· ⚠️⚠️ **SA VIGNETTE MONTRE L'ÉCART, PAS L'ÉTAT** : deux canevas superposés (le navire AVANT
-au-dessus, APRÈS au-dessous) et celui du dessus s'efface en clignotant. Les deux sont peints au
-MÊME instant `t`, sinon les fantômes ne seraient pas en phase et tout le bateau scintillerait.
-· ⚠️⚠️⚠️ **ET LE HALO EXISTE PARCE QU'UN BANC L'A EXIGÉ.** `render-navire` §5 bis a mesuré, en
-luminance et sur le dessin AVEC fantômes — celui du ruban —, ce que le clignotement montre
-vraiment : coque 2 792 px, voile 2 622… **safran 201**, cloche 459. Deux des cinq rendez-vous du
-chantier ne changeaient donc l'image que d'un millième. Le ruban cercle désormais ce qui a changé,
-**et la boîte se déduit des deux images** — aucune coordonnée de pièce n'est écrite nulle part. Le
-halo ne sort QUE pour les petites pièces (boîte ≤ 12 % de la vignette) : cercler la coque
-reviendrait à entourer le bateau pour désigner le bateau.
-· **L'ÉTOILE ÉCRIT SES PHRASES SIGNE À SIGNE** (`STAR_BUBBLE_CPS`, 48/s, borné par l'horloge et
-non par un compteur d'images). ⚠️ **La bulle est dessinée à sa taille FINALE dès la première
-image** : une boîte qui grandit avec son texte tressaute à chaque signe. Les vingt autres appelants
-de `drawSpeechBubble` ne passent pas de `reveal` et ne bougent pas d'un pixel.
-
-⚠️⚠️ **ET LA SÉANCE DE JEU A TROUVÉ TROIS DÉFAUTS QU'AUCUN DES QUARANTE BANCS NE POUVAIT VOIR** :
-le bandeau **sorti de l'écran** (un `position:relative` redéclaré plus bas écrasait le
-`position:fixed` d'origine — 953 px du haut) ; la toute première consigne de la quête **tronquée en
-silence** (« …Ouvre la carte et… », parce qu'un `-webkit-box` calcule sa largeur en équilibrant ses
-lignes) ; et les toasts qui **recouvraient** le bandeau puis la pastille d'attente. Les trois sont
-corrigés et commentés dans `app/globals.css`.
-
-Vérifications de CETTE livraison-là (le rythme) : **40 bancs relancés un par un, zéro `ÉCHEC`** — `verify-quete` **631/631**,
-`verify-maire` **113/113**, `verify-vallee` **223/223**, `verify-vergers` **61/61**,
-`verify-cycle` **38/38**, `verify-scierie` **34/34**, `verify-ludo` **30/30**, `verify-taxi`
-**15/15**, `verify-gates` **14/14**, `verify-compo` **13/13**, `verify-pont` **12/12**,
-`verify-sol2` **8/8**, `verify-portee` **6/6**, `verify-strings` **1106 clés appariées**,
-`verify-syntax`, `verify-scope`, `verify-objects`, `verify-orchards` **42/42**, `verify-constants` ;
-côté rendu `render-etoile` **161/161**, `render-maire` **66/66**, `render-scierie` **58/58**,
-`render-navire` **48/48** (trois contrôles neufs, témoin d'échec vérifié), `render-escaliers`
-**35/35**, `render-parc` **31/31**, `render-beffroi` et `render-rues` **28/28**, `render-oiseaux`
-**27/27**, `render-eau` **16/16**, `render-mairie` **14/14**, `render-eglise` **13/13**,
-`render-arbres` **12/12**, et les sept sans contrôle chiffré. Bundle esbuild propre sur
-`FermeGame.js` (seul `G_SOIL` préexistant subsiste) ; `git diff --check` propre ; `next build`
-**✓ Compiled successfully** puis l'arrêt documenté sur `supabaseUrl`. Échafaudage de jeu local
-(`.env.local`, `app/rythme/`) **supprimé**. **Aucune migration SQL, aucun changement de schéma,
-aucune manipulation Supabase.**
-
-⚠️⚠️⚠️ **LE LOT E EST LIVRÉ LE 2026-08-31 : LA GRANDE SCIE DE TRISTAN, EN 3D, JOUÉE AU RYTHME.**
-Demande de Guillaume, mot pour mot : *« implémenter cette scène 3D très fluide dans l'atelier de
-Tristan (aussi fluide et quali que le jeu de ski slope). Le rendu doit être absolument parfait, la
-scie doit pas être trop rigide et on doit sentir l'effort. Je veux un truc bien arcade, appuyer en
-rythme pour découper les planches etc avec la possibilité de casser la planche de bois etc. Et
-Tristan en face un perso très cohérent anatomiquement, on doit ressentir l'effort. Le décor
-intérieur du bâtiment de Tristan doit être parfaitement traité. »* Le détail vit à côté du code ;
-ici, seulement ce qu'il ne faut pas casser :
-· **Quatre fichiers, et le découpage est celui du maire** : `scierie.js` (la mécanique pure, que
-l'hôte REJOUE), `scierieAtelier.js` (l'atelier et Tristan, procéduraux, sans un fichier à charger),
-`ScierieScene.js` (la vue), `rig3d.js` (la cinématique inverse, **partagée avec le maire** — deux
-personnages articulés, une seule loi des cosinus).
-· ⚠️⚠️ **LA COMMANDE DE BOIS NE SE CLIQUE PLUS, ELLE SE SCIE.** Le panneau de Tristan ouvre la
-scène ; à la fin le client envoie sa TRANSCRIPTION (des numéros de pas, pas des horodatages) et
-l'hôte rejoue la manche avec `sawRun`. **Un seul `send()` pour tout le sciage** (§3), et le client
-n'annonce jamais son résultat.
-· **Rien n'est prélevé tant que la manche n'est pas gagnée** : c'est ce qui autorise la rupture de
-planche à être un vrai risque. Perdre coûte le temps qu'on vient d'y passer, jamais du bois.
-· **La note ne change que la DURÉE de la commande** (×0,60 à ×1,15), jamais son prix — seules les
-planches fendues coûtent du bois, parce que c'est du bois qu'on a réellement fendu. Un mini-jeu qui
-change une dépense ferait de l'adresse une monnaie, et la ferme a déjà une économie.
-· **Le mou de la lame est la grandeur qui fait le rythme, et il se VOIT** : une scie qu'on laisse
-s'arrêter se détend, la lame s'assied dans son trait, et la fenêtre parfaite se referme. C'est la
-même valeur qui juge et qui fléchit le dessin.
-· **Tristan a les pieds PLANTÉS** : ses jambes sont résolues en cinématique inverse vers deux
-appuis fixes, et ses mains vers la poignée réelle (fille de la lame). Aucune position n'est
-recopiée, donc rien ne peut se décrocher — et il ne patine jamais.
-· **Un arrêt de menu dev naît le même jour** (« 🪚 Open Tristan's saw ») : leçon du 425 payée
-d'avance, sinon on ne juge la manche qu'une fois.
-⚠️⚠️ **ET LES DEUX BANCS NEUFS ONT TROUVÉ NEUF DÉFAUTS QU'AUCUNE RELECTURE N'AURAIT VUS**, dont
-trois qui valent d'être retenus : **le madrier était à hauteur de poitrine** (Tristan sciait les
-coudes en l'air, avant-bras en travers du buste — la posture était exacte et absurde) ; **tous les
-genoux pliaient à l'envers** ; et **le plafond de temps de la manche était posé par chaque appelant
-au lieu d'être dans la simulation**, donc le client et l'hôte pouvaient s'arrêter à des pas
-différents — une commande gagnée à l'écran et refusée par le réseau.
-⚠️ **CE QUE LES BANCS NE POUVAIENT PAS VOIR, ET QUE L'ÉCRAN A MONTRÉ EN TRENTE SECONDES** : la
-scène était **entièrement surexposée** (le rastériseur du banc n'a pas `sRGBEncoding`, il rendait
-un atelier plausible là où le vrai moteur rendait du blanc), **cadrée beaucoup trop serré**, et
-**la scène se refermait toute seule** — React 18 nettoie puis remonte les effets en développement,
-et le nettoyage rapportait la manche.
-
-⚠️⚠️ **LE BATEAU EST LIVRÉ LE 2026-08-31, ET IL N'A COÛTÉ NI CANAL RÉSEAU NI POSE NEUVE.** Demande
-de Guillaume : *« eduardo peut utiliser le navire. mais nous aussi en montant dedans : soigner les
-sprites. anatomiquement cohérentes dans un bateau, mouvements cohérents »*, puis *« travaille
-surtout la mécanique et la cohérence organique, nous ornementerons plus tard »*. Le détail est au
-**§33 de `components/ferme/README.md`** ; ici, seulement ce qu'il ne faut pas casser :
-· **C'est le patron de la MONTURE, recopié exprès et pas généralisé** : `board`/`unboard` arbitrés
-par l'hôte, deux places, et surtout **la position de la coque se DÉDUIT de son pilote** — zéro
-octet de réseau (§3). Le CAP aussi : le pilote écrit `m.dir`, qui circule déjà.
-· **La disponibilité ne crée aucune porte** : `starShipComplete` et `starShipGone`, deux prédicats
-qui existaient. **Le bateau n'existe donc qu'une fois la quête finie** (menu dev pour l'essayer).
-· **`E.boatStep` est PUR**, donc rejouable — et c'est ce qui a tout trouvé (ci-dessous).
-· **La coque de collision n'est pas la coque dessinée** (1,7 case contre 2,6) : une coque qui bloque
-ce qu'elle montre est immobile dans une passe de quatre rangées.
-· **Aucune pose assise n'a été dessinée** : `drawSeated` (428) est réutilisée, et le plat-bord peint
-APRÈS l'occupant fait le reste. *La pose assise juste est celle qu'on ne redessine pas.*
-⚠️⚠️ **ET LE BANC A TROUVÉ TROIS VERROUS QU'AUCUNE RELECTURE N'AURAIT VUS**, dont celui-ci, qui vaut
-d'être retenu : **la coque s'échouait en tournant sur place, 4 934 images à terre sur 5 400** — le
-PAS était testé, la ROTATION ne l'était pas. *Un véhicule a deux degrés de liberté ; les tester à
-moitié, c'est ne pas les tester.*
-
-⚠️ **LE FLEUVE ET SA PASSE SONT LIVRÉS (2026-08-31), ET LE RÉCIT EST PARTI AU §32 DE
-`components/ferme/README.md`** — c'est là qu'il décrit le générateur qu'il modifie. Ce qu'il faut
-savoir sans l'ouvrir : la passe est le MÊME champ de rive prolongé (deux nappes se décaleraient au
-premier réglage), elle n'a qu'UNE rive (le fleuve longe le bord sud du monde), l'ensablement se
-CREUSE au lieu de se peindre, et `verify-vallee` tient l'invariant qui compte — *on va de la cale
-au large par l'eau*. ⚠️ **Le retournement de la quête en dépend** : si l'eau mène visiblement au
-large, personne n'a jamais cru à un lac ; ce qui le remplace est au §17.8 de `QUETE.md` — *la passe
-est ensablée depuis vingt ans, plus personne ne peut sortir.* ⚠️ **Aucune ruine portuaire à la
-passe** : elles appartiennent au lot D, et les poser ici mêlerait deux changements visuels.
-
-⚠️ **LE MAIRE EST CORRIGÉ ET MESURÉ (2026-08-31), ET LE RÉCIT VIT DANS `maireBureau.js` ET
-`tools/render-maire.mjs`** (66/66, le premier banc du dépôt qui regarde de la 3D — pas de WebGL,
-pas de npm, il charge le r128 vendorisé et rastérise à la main). La leçon est en tête de ce
-fichier, treizième forme du « banc qui passe » : *un banc vérifie qu'une chose EXISTE, jamais
-qu'elle TIENT ENSEMBLE.*
-⚠️ **CE QUI RESTE SUR LE MAIRE, ET CE N'EST PLUS DE LA POSTURE** : **tout le HUD de la ferme est
-peint par-dessus la scène annoncée PLEIN ÉCRAN** — or, jour/heure, boutons, bandeau de quête, avec
-deux textes qui se chevauchent au pixel (`Glissez pour regarder…` contre `🏠 Maison`).
-⚠️⚠️ **ET CE QUE `render-maire` NE SAIT PAS FAIRE, ÉCRIT AVANT QU'ON S'Y FIE** : il ne juge NI
-l'éclairage (pas d'ombre portée, textures réduites à leur couleur moyenne), NI les TRANSITIONS
-(`ease` glisse d'une pose à l'autre, et c'est en chemin qu'un bras peut traverser un torse) — il
-regarde les sept ARRIVÉES. **Le bureau du maire n'a jamais été rejoué à l'écran depuis cette
-correction.**
-
-⚠️ **UN OUTIL À CONNAÎTRE AVANT DE REPRENDRE : `tools/.cache/*.mjs` ET `tools/out/*.png` SONT SUIVIS
-PAR GIT** (la règle `/out` du `.gitignore` ne vaut qu'à la racine). Lancer un banc SALIT donc l'arbre
-de travail, et `git status` cesse d'être un contrôle de propreté utilisable. Corollaire mesuré le
-2026-08-31 : **sept des dix-huit bancs de contrôle ne peuvent pas tourner en lecture seule** — ils
-écrivent `tools/.cache/fermeConstants.mjs` via `lib-canvas.mjs:307`. À savoir avant de confier un
-audit à un agent en bac à sable : il rendra « 0/13 exécutés » sans que rien ne soit cassé.
-⚠️ `render-maire` et `verify-maire`, eux, copient dans `os.tmpdir()` : c'est le motif à reprendre.
-
-⚠️ **DÉCISION DE GUILLAUME, TOUJOURS EN VIGUEUR : LE BUG DU CHAUDRON-ARTÉFACT VISIBLE SUR 4 TERRES/5
-N'EST PAS CORRIGÉ.** Le sprite scintillant (`FermeGame.js`) reste sans la garde `spec.key==="evil"`
-que l'interaction a déjà. **Ne pas le corriger avant d'en avoir reçu l'ordre.**
-
-⚠️⚠️ **UNE MESURE À PART, DEMANDÉE PAR GUILLAUME (« un ami qui joue sur tablette me dit qu'arcardi ne
-fonctionne plus ») : MESURÉE AU 481 À 1 829 CANEVAS 2D RETENUS, RAMENÉE À 779 HORS-ZIP LE
-2026-09-02** — `townWater` (636 → 1 atlas) et `petFrames` (468 → 1 atlas), les deux plus gros
-contributeurs, sont désormais des atlas partagés découpés au `drawImage`. Le détail est au §10,
-« ce qui n'existe pas ». ⚠️ **NI CONFIRMÉ NI INFIRMÉ SUR UN VRAI IPAD** : personne n'a rejoué la
-mesure sur l'appareil qui a déclenché la demande — c'est ça qui reste à faire, pas du code.
-
-| Lot | Ce que c'est | État |
-|---|---|---|
-| 0 | La rivière | ✅ **CLASSÉ SANS SUITE — le défaut 1 de l'audit est FAUX.** On traverse à cheval depuis 2026-07 (`HORSE_WATER_SLOW`, `fermeConstants.js:619`), premier cheval 800 or. |
-| 1 | Ce qui ment (textes, invité, HUD) | ✅ **LIVRÉ AU 478** — défauts 5, 6, 7, 8, 11, 13 |
-| 2 | Le chantier naval devient un chantier | ✅ **LIVRÉ AU 478** — défaut 4 |
-| 3a | La tenue devient une scène | ✅ **LIVRÉ AU 478** — défaut 2 ⚠️ *et sa lumière ne s'est jamais affichée : voir le préalable ci-dessus* |
-| 3b | Les trois verbes distincts | ✅ **LIVRÉ AU 479** — défauts 3, 9, 10 |
-| 4 | **La passe maire** | ✅ **LIVRÉE AU 480** — §16 de `QUETE.md`. La suite est tranchée : le navire d'Eduardo ouvre la future route d'exploration des îles ; l'ancien lac devient le port qui l'accueille (§17). |
-| 5 | Les sept sœurs | 📝 **CONÇU AU §17, NON IMPLÉMENTÉ** — quatre premières, puis verte/orange/violette dans la seconde moitié |
-
-⚠️⚠️ **CE QUE LE LOT 4 A CHANGÉ, EN QUATRE LIGNES.** Le détail est au §16 de `QUETE.md`, qui a une
-ligne par chose ; ici, seulement de quoi savoir quoi ne pas casser.
-· **UNE ÉTAPE DE PLUS DANS LA CHAÎNE** : `starTimberBlock` rend `noMayor` tant que l'audience n'a
-pas abouti, parce que **la cale est sur le quai municipal**. Le bandeau la désigne (`goal: mayor`
-→ `townHall`). `verify-quete` la joue avec le VRAI résolveur, jamais avec un champ posé à la main.
-· **LES PLANS NE SONT PAS UNE SERRURE** (décision de Guillaume) : on monte le voir les mains vides
-et on peut gagner — mais sans aucun droit à l'erreur. C'est la seule vraie décision du chapitre.
-· **LES ÉLECTIONS ONT ENFIN UNE CONSÉQUENCE DE JEU.** Les cinq candidats du 439 avaient un
-portefeuille écrit en commentaire qui ne servait à RIEN ; il décide maintenant de la valeur de
-chaque argument, et l'échéance du scrutin la déplace encore.
-· **LA CONFIANCE EST UN CAPITAL QUI SERT LA FOIS SUIVANTE** (`e.mayor.trust`, 0 à 3) : c'est ce qui
-oblige `maire.js` à être un **système de négociation** et pas une scène. Une commission ou le
-cadastre s'y ajouteront en une table et zéro ligne de mécanique.
-
-⚠️⚠️⚠️ **ET LA DETTE DU 479 N'A PAS BOUGÉ D'UN POUCE : DEUX POSTES À DEUX QUI N'ONT JAMAIS ÉTÉ
-TENUS** — le relais du plat (l'un cuisine, l'autre court) et les deux bords du cratère. Écrits,
-arbitrés par l'hôte, mesurés par `verify-quete` §12, **et jamais joués face à face**. Le 480 en
-ajoute un troisième d'une autre nature : **une audience que personne n'a menée.**
-
-État à jour au **2026-08-27**. La direction longue reste de **rendre Valley Town habitable au regard
-ET crédible au jeu**, et **lui donner une histoire**. Tout ce qui concerne la ville, ses habitants,
-ses bâtiments et **ses pièges** est dans **`components/ferme/README.md`**, qui fait autorité ; les
-règles de DESSIN sont dans **`components/ferme/DESSIN.md`** ; les bancs dans **`tools/README.md`**.
-**`candyluge` et `crystal` sont EN PAUSE.**
-
-⚠️⚠️ **LA REFONTE DE LA QUÊTE DE L'ÉTOILE EST LE CHANTIER VIVANT, ET SON DOCUMENT DE REPRISE
-EST `components/ferme/QUETE.md`. LIS SON BLOC D'AUTORITÉ 2026-08-26 ET SON §17 AVANT D'Y
-TOUCHER.** Le code livré au 480 bis précède encore ce dossier : chronologie 5 + 3, sept sœurs,
-attentes actives et ancien port restent à construire par les lots A à G du §17.11. L'audience
-existe déjà (§16) et sa signature (`MR.mayorSigned`) débloque les répliques du bateau.
-
+⚠️⚠️⚠️ **ACTION SUIVANTE UNIQUE : L'OMBRE PORTÉE DIRIGÉE** (deuxième correctif de l'ordre
+ci-dessus). Une seule direction pour toute la ville (soleil en haut à gauche, l'orientation que le
+mobilier et les arbres ont déjà) ; l'ellipse centrée devient un parallélogramme décalé dont la
+longueur DÉRIVE de la hauteur du sprite, un seul point de code par famille (props, personnages,
+`drawCivic` — qui n'a AUCUNE ombre depuis le 425, sur des bâtiments de onze cases de haut). C'est
+un changement de CODE, pas de sprite : indépendant du redessin des bâtiments prévu ensuite, donc
+rien de ce travail ne sera perdu quand ce redessin commencera.
 ---
-
-⚠️⚠️⚠️ **UN BANC QUI PASSE NE VEUT PAS DIRE QUE LA CHOSE EST BONNE — IL VEUT DIRE QU'ON MESURE
-AUTRE CHOSE.** C'est la leçon la plus rentable du fichier, et elle a **sept** formes connues,
-toutes payées :
-- **il mesure la carte, pas l'interaction** (439 : « le seuil est bien une sortie, 9/9 » pendant
-  que la touche E ne sortait pas) ;
-- **il se donne un périmètre et excuse ce qui déborde** (439) ;
-- **il repeint au lieu d'appeler**, donc il juge sa propre maquette (439) ;
-- **il mesure l'inverse de ce qu'on veut** (438 : le « grain » pris pour de la qualité) ;
-- **il mesure ce qu'une chose EST et jamais QUAND elle est** (448 : sept contrôles sur le cratère,
-  aucun sur l'instant où il apparaît — *un banc de rendu ne peut pas voir un défaut de temps*) ;
-- ⚠️⚠️ **il mesure une grandeur JUSTE sur un intervalle que le joueur ne regarde pas** (454 : la
-  vitesse de la comète le long de tout son vol, alors qu'elle n'est à l'écran que sur les derniers
-  22 % — deux contrôles verts, zéro effet visible) ;
-- ⚠️ **il mesure DEUX réponses séparément et jamais leur ACCORD** (449). Le bandeau de la quête
-  disait le chapitre, le chevron dérivait d'une autre liste : deux réponses à « où vais-je », les
-  deux vertes, et personne n'avait eu l'idée de les comparer **parce qu'elles n'avaient jamais eu
-  la même source**. La parade est celle du 444 : *une jointure, jamais deux listes.*
-- ⚠️⚠️ **il mesure deux grandeurs qui S'OPPOSENT, chacune de son côté** (458, huitième forme, la
-  sœur de la précédente en plus dangereuse). La glissade du cratère reprenait 3,2 cases/s quand la
-  marche en montée n'en donnait plus que 2,34 : **le trou devenait infranchissable**, un MUR fait
-  de vitesse. Aucun pas n'est refusé, donc `canStandTown` n'est jamais consulté et rien ne lève ;
-  six contrôles étaient verts, tous justes, aucun ne calculait la DIFFÉRENCE. *Deux grandeurs qui
-  se combattent se mesurent ensemble ou pas du tout.*
-- ⚠️⚠️⚠️ **il invente ses IDENTIFIANTS et son cycle de vie d'état** (469, onzième forme, et
-  c'est la plus chère jamais mesurée : **447 contrôles verts sur une quête bloquée**). Le banc
-  jouait l'apprivoisement avec `"j1"` ; le jeu passe un `profile_id` de 36 signes. Le banc
-  gardait un objet d'état ; l'hôte le re-migre à CHAQUE requête. Il fallait les DEUX écarts
-  pour que la troncature de clé fusionne « la tenue » et « son départ » — donc aucun contrôle
-  ne pouvait tomber. *Un banc qui invente ses données mesure un jeu que personne ne joue :
-  on rejoue avec les vraies valeurs ET le vrai cycle de vie de l'état.*
-- ⚠️⚠️ **il balaie une COURBE image par image et ne regarde jamais l'HORLOGE qui l'alimente**
-  (468, neuvième forme, la sœur de la cinquième). Onze contrôles suivaient l'arrivée de l'étoile
-  ms par ms — continuité, phases, tour complet, extrémités exactes — et ils étaient tous verts
-  pendant que l'horloge qui la fait avancer pouvait rester figée **pour toujours**, bloquant la
-  quête entière. Ils mesuraient ce que l'animation EST ; aucun ne mesurait **combien de temps elle
-  a le droit d'attendre**. *Une fonction pure passe le banc ; c'est ce qui l'appelle qui casse.*
-- ⚠️⚠️ **il passe lui-même le drapeau qui l'arrange** (458). `verify-quete` jouait le cratère avec
-  `solo = true` et l'écoute des ombres avec `solo = false` — les deux seuls mondes où elles
-  marchaient, pendant que le jeu passait la valeur inverse. *Un paramètre écrit en dur par le banc
-  est une hypothèse que personne ne vérifie ; on balaie les deux valeurs.*
-- ⚠️⚠️⚠️ **une discipline de banc ajoutée à UNE section ne protège que cette section** (472,
-  douzième forme, et c'est la plus vicieuse parce qu'elle se déguise en leçon déjà apprise).
-  Le 469 avait écrit noir sur blanc *« on rejoue avec les vraies données ET le vrai cycle de vie
-  de l'état »* — et l'a appliqué au seul §fouille. Le §objectif, lui, appelle encore
-  `starGoalKey` sur un état que personne ne re-migre : il n'a donc JAMAIS pu voir que l'hôte,
-  qui re-migre à chaque requête, fait tomber le météore de Valley Town à la fermeture du
-  chapitre 1. **Une règle de banc s'applique au banc ENTIER, ou elle ne s'applique pas.**
-- ⚠️⚠️⚠️ **il vérifie qu'une chose EXISTE, jamais qu'elle TIENT ENSEMBLE** (2026-08-31, treizième
-  forme). `verify-maire` rendait **113/113** pendant que la posture DEBOUT du maire se
-  désassemblait à l'écran : il tenait la jointure « sept postures de mécanique = sept postures
-  dessinables », qui est juste, et qui ne peut rien dire d'un CORPS — **une pose est un jeu de
-  nombres, et un jeu de nombres n'a pas de silhouette**. La pose écrivait `rise: 0.13` pour lever
-  un homme dont les jambes ne sont pas filles du buste : elle fabriquait un tronc quatorze
-  centimètres au-dessus de ses propres cuisses. *Une mise en scène qui demande un geste que le
-  squelette ne sait pas faire ne se règle pas, elle se construit* — et la parade est un banc qui
-  RASTÉRISE (`render-maire`, le premier du dépôt à regarder de la 3D, et sans WebGL).
-  ⚠️ Corollaire, et c'est l'angle mort du contrôle de silhouette lui-même : **ce qui déborde se
-  compte en pixels, ce qui s'enfonce se compte en mètres**. Une main enfoncée dans une poitrine ne
-  fait pas d'îlot — elle disparaît, et la masse reste d'un seul tenant.
-- ⚠️⚠️ **il accuse le personnage de ce que fait son CADRAGE** (2026-08-31, quatorzième forme, et
-  c'est la plus embarrassante parce qu'elle vient du banc lui-même). Le contrôle de silhouette de
-  `render-scierie` annonçait « 2 îlots » sur deux poses de Tristan : un membre détaché, donc. Il
-  n'y avait aucun membre détaché — c'était le CADRE de la vignette qui coupait l'épaule, six pixels
-  dans un coin, et le morceau resté de l'autre côté comptait pour un second îlot. *Un contrôle de
-  connexité mesuré dans un cadre trop serré mesure le cadre.* La parade est un contrôle de BORD
-  posé AVANT celui d'îlots (il nomme le vrai coupable), et des caméras qui DÉRIVENT leur recul de
-  la boîte englobante au lieu d'être réglées à la main — un personnage qui travaille change de
-  taille et de place d'une pose à l'autre.
-- ⚠️⚠️⚠️ **il mesure chaque ÉTAT, jamais l'ÉCART entre deux états successifs** (2026-08-31, quinzième
-  forme, et c'est la seule qui parle de ce que le JOUEUR perçoit). `render-navire` tenait la
-  silhouette, la connexité, l'échelle et l'invariant « poser un morceau n'en efface jamais un
-  autre » — quatre contrôles justes, tous sur un état isolé. Aucun ne pouvait voir que le SAFRAN
-  ne change que **1,3 % de la vignette**, douze fois moins que la voile, alors qu'il coûte 45 bois,
-  8 poissons, une manche de sciage et un montage au marteau. *Un chantier ne se perçoit pas par
-  ses états, il se perçoit par ses écarts* — et une pièce qui coûte cher sans rien changer à
-  l'image est un rendez-vous qui ne récompense pas le déplacement qu'il impose. ⚠️ La parade
-  mesure les pixels qui CHANGENT, jamais l'encre gagnée : une pièce peut en remplacer une autre
-  (un mât qui masque une membrure) sans rien ajouter au compte et rester parfaitement visible.
-- ⚠️⚠️⚠️ **il mesure une PRÉSENCE là où le joueur perçoit une VALEUR** (2026-09-01, seizième forme,
-  et c'est la quinzième qui se fait prendre à son propre piège). Le contrôle d'écart de
-  `render-navire` comparait deux images peintes SANS les fantômes des pièces manquantes ; le ruban
-  de jalon, lui, les peint AVEC, parce qu'un chantier sans son plan en creux n'a pas de silhouette.
-  Or un fantôme est déjà de la matière (190 d'alpha) : un morceau qui passe du fantôme au bois plein
-  ne change presque AUCUN pixel au sens du masque, et change tout au sens de l'œil. Mesuré sur le
-  vrai dessin, en luminance : **le safran ne fait bouger que 201 pixels sur 16 128**, la cloche 459.
-  *Un banc qui ne peint pas ce que le joueur regarde mesure un autre dessin — et il a d'autant plus
-  l'air juste qu'il est, lui, parfaitement exact.* ⚠️ La parade a dicté le dessin et pas l'inverse :
-  le ruban a gagné un halo, et l'invariant tenu est devenu un OU — *chaque morceau est soit assez
-  large pour se voir seul, soit assez ramassé pour être cerclé.*
-- ⚠️⚠️⚠️ **il mesure qu'une chose est REFUSÉE, jamais OÙ elle l'est** (2026-09-01, dix-septième
-  forme, et c'est la plus vieille du dépôt puisqu'elle date de la première collision écrite).
-  Quarante et un bancs vérifiaient qu'une case solide arrête le pas — ce qui a toujours été vrai —
-  et aucun ne demandait **à quelle distance du DESSIN** le pas s'arrête. Mesuré le jour où la
-  question a été posée, contre une haie : on s'arrêtait à 15 px au nord, on entrait de 9 px au sud,
-  on s'arrêtait à 7 px à l'ouest et on chevauchait de 3 à l'est. *Deux directions laissaient un
-  vide, deux autres traversaient, et tous les contrôles étaient verts.* La parade est un banc qui
-  APPROCHE pour de vrai, à la vitesse du jeu, et qui compare la position d'arrêt à l'ombre portée
-  du personnage — pas à la case. ⚠️ Son critère premier est la SYMÉTRIE, pas la valeur : 3 px
-  partout est un jeu qui se tient, 0 d'un côté et 15 de l'autre est un jeu qui ment.
-⚠️⚠️ **ET UN CONTRÔLE DE CAS NE VAUT PAS UN INVARIANT** (449). Trois contrôles « est-ce que ça
-marche » étaient verts sur le placement du familier meneur ; l'invariant — *il n'est JAMAIS plus
-loin du but que le joueur*, balayé sur toutes les positions — a échoué **20 fois sur 164** et a
-sorti un vrai bogue. **Quand on peut énoncer une propriété, on la balaie ; on n'écrit pas trois
-exemples.**
-⚠️ **Quand Guillaume voit un défaut qu'aucun banc ne voit, la première question n'est pas « où est
-le bogue » mais « quelle grandeur ne mesure-t-on pas ».** Les six dernières fois, la réponse tenait
-en deux ou trois nombres qu'il a suffi d'ajouter.
-⚠️⚠️ **ET REGARDER L'ÉCRAN RESTE LE SEUL MOYEN DE TROUVER CE QU'ON N'A PAS ENCORE COMPRIS** : six
-bancs au vert n'ont pas vu dix défauts qu'une séance de vingt minutes a trouvés au 444, dont cinq
-qui rendaient un lieu **inatteignable** — aucun ne mesurait l'**ARRIVÉE**. Ça s'est reproduit à
-chaque zip depuis, 449 compris (le guide s'éteignait à chaque carte de chapitre : une garde qui
-confondait un INSTANT avec un ÉTAT). Détail au **§25 de `components/ferme/README.md`**, la
-meilleure page du dépôt sur ce que les bancs ne savent pas faire.
-
-⚠️⚠️ **ET UN DÉFAUT MESURÉ, DOCUMENTÉ, PUIS LAISSÉ EN PLACE REVIENT TOUJOURS — PAR LA BOUCHE DE
-GUILLAUME** (437, 439). La section « ce que ça ne fait pas » n'absout pas : c'est une **dette
-datée**. **La première chose à faire en ouvrant un chantier est de relire celle du zip précédent.**
-
-⚠️⚠️⚠️ **LE PIÈGE N°1 DU PROJET, ET IL A QUATRE VISAGES : CE QUI VIT DANS LA CLOSURE DE LA BOUCLE
-DE RENDU.**
-1. **Il plante** (430, 431) : une fonction déclarée dans la closure et appelée depuis le composant
-   lève un `ReferenceError` **à l'exécution seulement** — ni le build, ni le lint, ni aucun banc ne
-   le voient — et l'exception **emporte tout ce que la frame devait encore dessiner**. Mesuré à
-   deux clients : 97 % d'images figées. On EXPOSE par un ref, on ne recopie jamais.
-2. **Il fait vieillir** (436, 439) : un dessin qu'aucun banc ne peut appeler ne se dégrade pas,
-   **il reste au niveau du jour où il a été écrit** pendant que tout ce qui est mesuré monte.
-   *L'écart n'est pas un écart de soin, c'est un écart de DATE.* ⚠️ Corollaire : **« ce dessin
-   est-il regardable par un banc ? » est une question de QUALITÉ**, et elle se pose avant le
-   premier `fillRect`.
-3. **Il divise** (439) : une même grandeur décrite des deux côtés de la closure DIVERGE. Le seuil
-   de sortie de l'hôtel de ville était écrit dans le générateur *et* dans le composant ; seul le
-   premier a été corrigé, et **on ne pouvait plus ressortir du bâtiment**. Voir §8.
-4. ⚠️⚠️ **Il fait porter DEUX SENS au même nombre** (441). `pushE` classe par
-   `wy − altitude × TOWN_ELEV_PX` : une ALTITUDE monte le dessin **et** recule le rang, ce qui est
-   juste pour une terrasse — le 439 y a versé la flèche du dos d'âne des ponts, *or un dos d'âne
-   monte sans éloigner*. **Le fermier a disparu sur toute la rangée nord des deux ponts pendant un
-   zip entier**, sans qu'un seul banc puisse le voir. **Une grandeur de DESSIN, une grandeur de
-   RANG, une grandeur de COLLISION : trois choses, trois paramètres.** Voir `tools/verify-pont.mjs`.
-
-⚠️ **LES LEÇONS DES QUATRE DERNIERS ZIPS, EN UNE LIGNE CHACUNE. Le détail est à côté du code
-qu'il décrit — les recopier ici les ferait vieillir en double.**
-
-| # | La leçon, en une phrase | Où est le détail |
-|---|---|---|
-| hors-zip (constellation) | ⚠️⚠️ **UN DOS BOMBÉ EN TRIANGLE SE LIT COMME UN OISEAU, PAS COMME UN MOUTON.** Sept points reliés en arbre (six segments, pas une polyligne) devaient dessiner une brebis reconnaissable en restant une constellation ordinaire ; le premier essai, avec un dos qui montait puis redescendait en pointe, ratait sa cible bien qu'il fût géométriquement correct. Aucun banc ne regarde ce dessin (§10) : la forme a donc été rejouée dans un échafaudage jetable (Browser pane, rien commité) AVANT d'écrire les coordonnées définitives, pas relue après — un dos aplati (garrot et croupe presque au même niveau) a suffi. | `FermeGame.js` §constellation, `QUETE.md` §17.7 bis |
-| hors-zip (canevas) | ⚠️⚠️⚠️ **UN PATRON DÉJÀ EN PLACE AILLEURS DANS LE FICHIER PEUT DORMIR DES ZIPS SANS ÊTRE APPLIQUÉ LÀ OÙ IL FERAIT LE PLUS DE BIEN.** `RS.grass`/`drawTownGrassTile` prouvait depuis longtemps qu'un atlas partagé + `drawImage` à neuf arguments marche dans ce fichier — `townWater` (636 canevas) et `petFrames` (468) continuaient pourtant d'en créer un par variante, documentés comme dette depuis le 481 sans qu'on rapproche les deux faits. La parade n'a rien inventé : `makeAtlas`/`blitCell` généralisent un patron déjà validé. *Une dette mesurée n'est résolue que le jour où quelqu'un la compare à ce qui marche déjà ailleurs dans le même fichier.* | `fermeArt.js` (`makeAtlas`, `blitCell`), CLAUDE.md §10 |
-| hors-zip (Martial) | ⚠️⚠️⚠️ **UN MÉCANISME QUI SE RÉSOUT TOUT SEUL N'EST PAS UN BUG DE DÉPLACEMENT, MÊME S'IL Y RESSEMBLE.** Le résident sucrier « figé » n'avait aucune trajectoire cassée : c'était l'ITT de la rivalité Tristan/Jérôme (16 minutes réelles après une bagarre perdue), qui se lève seule à l'échéance — vérifié en avançant l'horloge en session de debug — mais dont le toast ne dit ni la durée ni qu'un pansement l'écourte. *Une conséquence de jeu correcte, mal signalée, se lit exactement comme une conséquence cassée — la distinction se fait en avançant l'horloge, pas en relisant le code.* | `TJ_BRAWL_ITT_MS`, `fermeConstants.js` |
-| hors-zip (réseau) | ⚠️⚠️⚠️ **LA DETTE LA PLUS VIEILLE DU FICHIER ÉTAIT UN BOOLÉEN MIS EN CACHE, PAS UN RÉSIDENT CASSÉ.** `hiddenRef` (reflet de `document.hidden`) ne se corrigeait que sur `visibilitychange` ; monté pendant un onglet réellement masqué, il restait figé à `true` pour toujours, coupant `broadcastStation()` en silence — zéro symptôme côté hôte, gel total côté invité. *Six tentatives avaient échoué à seulement OUVRIR ce test ; la cause, elle, ne s'est trouvée qu'en le jouant pour de vrai, deux onglets, jusqu'au bout.* | `netCanBroadcast`, `FermeGame.js` §4 |
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
 
@@ -787,6 +247,23 @@ de conception qui valent pour n'importe quel morceau du dépôt.
   ou la TRANSPOSITION du dessin d'origine — *une haie qui tourne d'un quart de tour ne change pas
   de matière, elle change d'axe* (`townHedge.v`, transposée pixel à pixel de `hedgeMid` : même
   palette, elle boucle en y parce que la source boucle en x, et la lumière reste cohérente).
+- ⚠️⚠️⚠️ **UNE PROPORTION N'EST PAS UNE DIMENSION, ET AUCUN BANC DU DÉPÔT NE MESURE UN RAPPORT
+  ENTRE DEUX MORCEAUX** (Tristan le 2026-09-01, le maire le 2026-09-02). Les deux personnages
+  articulés du jeu ont été livrés avec une tête trop grosse — 43 % de la carrure pour l'un, **47 %**
+  pour l'autre, contre 34 % chez un humain — et les deux fois le banc restait au vert : il comptait
+  les postures, les îlots, les mains, jamais un RAPPORT. Guillaume l'a vu en jouant, deux fois, avec
+  le même mot (« on dirait un pantin »). ⚠️ **La parade est de DÉRIVER le corps d'une seule
+  grandeur** : six étages en fraction de la stature qui somment à 1, d'où tombent les quatorze
+  longueurs. La stature devient alors un réglage au lieu d'être quatorze occasions de se tromper —
+  et le banc peut enfin comparer la stature RENDUE à la stature ÉCRITE, ce qui est la seule façon
+  qu'un nombre appelé « taille » décrive vraiment quelque chose.
+- ⚠️⚠️ **UN OBJET POSÉ SE PLACE PAR LA PORTÉE DU PLUS PETIT, PAS PAR L'ASPECT DU MEUBLE VU DE
+  HAUT** (2026-09-02). Le jour où les cinq maires ont eu cinq tailles, le tampon du bureau s'est
+  retrouvé à 64 cm de l'épaule d'une femme dont le bras en fait 56 — et une cinématique inverse
+  BORNE une cible hors de portée au lieu de la refuser : la main s'arrêtait à neuf centimètres de
+  l'objet, en silence, sur le geste qui conclut l'entretien. ⚠️ Corollaire, payé dans la même
+  séance : *quand un geste demande un effort anormal, c'est l'objet qu'il faut regarder, pas la
+  posture* — les 0,21 radians de penchant n'existaient que pour rattraper un objet mal posé.
 - ⚠️⚠️ **UN PANNEAU QUI S'OUVRE À VOLONTÉ NE DOIT RIEN DONNER** (439). Un dialogue, un tableau, une
   plaque s'ouvrent avec E sans limite et sans arbitrage de l'hôte : tout ce qu'ils rendent doit
   être de l'INFORMATION ou une valeur DÉRIVÉE (une date, un cours). Ce qui récompense passe par une
@@ -854,6 +331,12 @@ de conception qui valent pour n'importe quel morceau du dépôt.
   qui écrasait un `position:fixed`). ⚠️ **Et rien dans ce dépôt ne peut l'attraper** : les
   vingt-deux bancs de rendu rastérisent du canevas, aucun ne met en page du CSS. *Toute la mise en
   page se juge à l'écran ou ne se juge pas* — corollaire direct du §10.
+- ⚠️⚠️ **UN BANC QUI CHERCHE UN NOM D'APPEL MESURE UNE ÉCRITURE, PAS UN AFFICHAGE** (2026-09-02).
+  `verify-quete` déclare morte toute phrase du maire qu'aucun fichier ne lit — il les cherchait par
+  `L.maire.<clé>`. Le jour où les appels sont devenus `LM.` et `maireL().` (le texte se décline
+  selon le sexe de l'élu), le banc a annoncé cent quatre-vingts phrases mortes sur du code
+  parfaitement juste : il est tombé à l'instant exact, pour la mauvaise raison. *Un banc qui lit du
+  SOURCE doit énumérer toutes les écritures de ce qu'il cherche, ou n'en chercher aucune.*
 - ⚠️⚠️ **`chaîne.replace("X", …)` NE REMPLACE QUE LA PREMIÈRE OCCURRENCE.**
 - ⚠️⚠️ **UN `useProgram` QUI ÉCHOUE NE DÉLIE PAS LE PROGRAMME PRÉCÉDENT** : un shader qui ne
   compile pas fait dessiner l'objet SUIVANT avec les mauvais attributs. **Seul indice :
@@ -910,16 +393,16 @@ de conception qui valent pour n'importe quel morceau du dépôt.
 | `components/ferme/scierieAtelier.js` | **L'ATELIER DE TRISTAN, EN CODE.** Le hangar et sa charpente apparente, les grumes, les piles de planches, l'établi, le poêle, les rais de poussière — et Tristan : pieds PLANTÉS, jambes et bras résolus en cinématique inverse, buste dont l'inclinaison est CALCULÉE pour que la main tombe à portée. La lame est **segmentée**, donc elle plie (ventre du coincement, fouet de la vitesse, affaissement du mou). ⚠️ Procédural comme `maireBureau.js`, `THREE` passé en paramètre, rien dans la closure de la boucle. |
 | `components/ferme/ScierieScene.js` | **la VUE du sciage** : plein écran, simulation à pas fixe pilotée par une horloge réelle, journal de traits, repli jouable si WebGL manque. ⚠️ Elle n'envoie qu'**une seule `req` à la fin** — la transcription, jamais un résultat. |
 | `components/ferme/rig3d.js` | **LA CINÉMATIQUE INVERSE, ÉCRITE UNE FOIS POUR LES DEUX PERSONNAGES** (le maire, Tristan). ⚠️ Elle a été SORTIE de `maireBureau.js` le jour où le second est arrivé : une loi des cosinus recopiée est une divergence en attente (§8). Les LONGUEURS d'os, elles, restent à côté des boîtes qu'elles mesurent. |
-| `components/ferme/maireBureau.js` | **LE BUREAU DU MAIRE, EN CODE (481).** La pièce entière (parquet, boiseries, pilastres, fenêtre sur la place, bibliothèque, buste, lustre, porte qui claque), le meuble et ses objets — *chacun est une réplique de l'arbre* —, et le maire : sept postures, huit visages, sourcils/paupières/bouche, cinématique inverse des bras. ⚠️ **PROCÉDURAL, comme `fermeArt.js` mais en 3D** : aucun fichier à charger, textures peintes au canevas 2D, `THREE` passé en paramètre (jamais importé — deux copies de three.js dans une page ne ressemblent à rien). ⚠️ Rien n'y vit dans la closure de la boucle de rendu : `buildOffice` rend un objet, `applyPose`/`applyFace`/`solveArm` sont des fonctions de module. |
+| `components/ferme/maireBureau.js` | **LE BUREAU DU MAIRE, EN CODE (481), ET LES CINQ CORPS DE SES ÉLUS (2026-09-02).** La pièce entière (parquet, boiseries, pilastres, fenêtre sur la place, bibliothèque, buste, lustre, porte qui claque), le meuble et ses objets — *chacun est une réplique de l'arbre* —, et le maire : sept postures, huit visages, cinématique inverse des bras. ⚠️⚠️ **LE CORPS EST DÉRIVÉ D'UNE STATURE**, pas posé boîte par boîte : `RATIO` (six étages qui somment à 1) × `mensurations(look)` rendent les quatorze longueurs, et `MAYOR_LOOKS` en décline **cinq silhouettes distinctes, dont trois femmes** (corpulence, coiffure, lunettes, barbe, jupe ou pantalon). C'est une JOINTURE avec `C.TOWN_CANDIDATES`, tenue par `verify-maire`. ⚠️ **PROCÉDURAL, comme `fermeArt.js` mais en 3D** : aucun fichier à charger, textures peintes au canevas 2D, `THREE` passé en paramètre. ⚠️ Rien n'y vit dans la closure de la boucle de rendu.
 | `components/ferme/QUETE.md` | **la quête de l'étoile — autorité. Le §17 est le dossier cible « Port des Sept Sœurs » : une soirée, chronologie 5 + 3, sept étoiles, attentes actives, ancien port et lots A–G ; il distingue explicitement conception et code livré** |
 | `components/ferme/README.md` | **Valley Town, le tribunal, l'HÔTEL DE VILLE, l'ÉGLISE, le BEFFROI, les habitants, la VENTE, les OISEAUX, les ÉLECTIONS et les PIÈGES de ces zones — autorité (428-444)** |
 | `components/ferme/DESSIN.md` | **les règles de DESSIN, vraies partout — autorité (441, sorties du §4)** |
 | `tools/README.md` | **les bancs, ce qu'ils attrapent et leurs chiffres — autorité (432-439)** |
 | `tools/render-navire.mjs` | **LE NAVIRE, ET DEPUIS LE 2026-09-01 LA VIGNETTE DU RUBAN DE JALON** (§5 bis). Il rastérise les deux images que le ruban superpose — le navire AVANT et APRÈS, fantômes compris — et mesure en LUMINANCE ce que leur clignotement montre vraiment, pièce par pièce. C'est lui qui tient l'invariant « chaque morceau est soit assez large pour se voir seul, soit assez ramassé pour être cerclé par le halo », et c'est lui qui a exigé le halo. Sa planche `tools/out/navire-ruban.png` met les cinq paires côte à côte. |
 | `tools/verify-scierie.mjs` · `tools/render-scierie.mjs` | **LES DEUX BANCS DE LA SCIE.** Le premier JOUE (déterminisme, accord direct/rejeu sur des images irrégulières, courbe de difficulté en fonction de la latence, martèlement, bornes, journaux malformés) ; le second RASTÉRISE l'atelier sans GPU et balaie la posture de Tristan sur **course de lame × profondeur de trait** — un carré, pas une liste, parce que sa posture est une fonction continue de deux variables. |
-| `tools/lib-3d.mjs` · `tools/render-maire.mjs` | **REGARDER DE LA 3D SANS GPU (2026-08-31).** `lib-3d` charge le three.js **r128 vendorisé du dépôt** dans Node — la même bibliothèque que la page, à l'octet près — et rastérise à la main (projection, découpe au plan proche, tampon de profondeur, ombrage plat), plus le théorème des axes séparateurs pour mesurer une interpénétration en mètres. `render-maire` s'en sert pour peindre les sept postures côte à côte. ⚠️ **Aucune dépendance npm, et surtout pas `three`** : une autre révision n'a pas la même atténuation de lumière (§11), donc mesurerait un autre programme. |
-| `tools/verify-collision.mjs` · `tools/render-haies.mjs` | **LES DEUX BANCS DU 2026-09-01, ET LE PREMIER EST D'UNE NATURE NEUVE.** `verify-collision` ne demande pas si un obstacle refuse le pas, il demande **à quelle distance du dessin** il le refuse : il APPROCHE à la vitesse du jeu depuis les quatre côtés de chaque famille d'obstacle (haie, mur, berge, falaise), traverse les deux ponts, monte ET descend les quatre volées, franchit les vingt-cinq allées de parcelle, compare le jeu et le moteur sur 20 000 points, et vérifie qu'on se dégage TOUJOURS d'une position interdite. `render-haies` est le premier banc qui regarde la haie — le décor le plus répandu de la ville, dessiné dans la closure du rendu depuis le 425, donc invisible pour les quarante et un autres. |
-| `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** · **et depuis le 2026-09-01 LA SEMELLE (`bodyPoints`, `footX`/`footY`, `bodyFootTile`, `tileAnchor`) : l'unique description de l'empreinte au sol d'un personnage, dérivée de son ombre portée et lue par le jeu, le moteur ET les bancs** · depuis le 440 il **importe `planche.js`** : une portée de pont et une emprise de décor sont des grandeurs de DESSIN, on les dérive du sprite au lieu de les recopier |
+| `tools/lib-3d.mjs` · `tools/render-maire.mjs` | **REGARDER DE LA 3D SANS GPU (2026-08-31).** `lib-3d` charge le three.js **r128 vendorisé du dépôt** dans Node — la même bibliothèque que la page, à l'octet près — et rastérise à la main (projection, découpe au plan proche, tampon de profondeur, ombrage plat), plus le théorème des axes séparateurs pour mesurer une interpénétration en mètres. `render-maire` s'en sert pour peindre les sept postures côte à côte — et depuis le 2026-09-02 les **cinq maires** (`tools/out/maire-cinq.png`), avec le seul contrôle du dépôt qui mesure un RAPPORT entre deux morceaux (stature rendue contre stature écrite, tête contre carrure, pieds au parquet, quatorze mains à leur cible pour chacun des cinq corps). ⚠️ **Aucune dépendance npm, et surtout pas `three`** : une autre révision n'a pas la même atténuation de lumière (§11), donc mesurerait un autre programme. |
+| `tools/verify-collision.mjs` · `tools/render-haies.mjs` | **LES DEUX BANCS DU 2026-09-01, ET LE PREMIER EST D'UNE NATURE NEUVE.** `verify-collision` ne demande pas si un obstacle refuse le pas, il demande **à quelle distance du dessin** il le refuse : il APPROCHE à la vitesse du jeu depuis les quatre côtés de chaque famille d'obstacle (haie, mur, berge, falaise), traverse les deux ponts, monte ET descend les quatre volées, franchit les vingt-cinq allées de parcelle, compare le jeu et le moteur sur 20 000 points, et vérifie qu'on se dégage TOUJOURS d'une position interdite. ⚠️ **Depuis le 2026-09-02 il mesure aussi le CONTRAIRE** : que les vingt-huit cases de végétation basse ne refusent RIEN, par les quatre côtés, et qu'aucune ne soit solide pour une autre raison que son buisson. `render-haies` est le premier banc qui regarde la haie — le décor le plus répandu de la ville, dessiné dans la closure du rendu depuis le 425, donc invisible pour les quarante et un autres. |
+| `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** · **`TOWN_SOFT_PROPS`, `TOWN_BUSH_SLOW` et les trois nombres du frisson** (2026-09-02 : la végétation basse qu'on traverse) · **`mayorIsFem`, l'unique endroit qui sache lesquels des cinq maires sont des femmes** · **et depuis le 2026-09-01 LA SEMELLE (`bodyPoints`, `footX`/`footY`, `bodyFootTile`, `tileAnchor`) : l'unique description de l'empreinte au sol d'un personnage, dérivée de son ombre portée et lue par le jeu, le moteur ET les bancs** · depuis le 440 il **importe `planche.js`** : une portée de pont et une emprise de décor sont des grandeurs de DESSIN, on les dérive du sprite au lieu de les recopier |
 | `components/ferme/planche.js` | **GÉNÉRÉ** par `tools/import-planche.mjs` — les sprites de la planche de Guillaume, en données. Ne pas éditer à la main |
 | `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural. `starWispColors` décline le vivant en jaune, bleu et rose ; `drawStarFragmentMeteor` fait tourner le petit caillou incandescent sur un centre stable et `drawStarFragmentImpact` dessine son choc de terre/poussière/braises, sans réutiliser la boule de feu de Valley Town. Les gros dessins de quête (`drawStarCrater`, comète, navire, jauge, poses) vivent ici pour rester regardables par les bancs. |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
@@ -1083,17 +566,17 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 
 ⚠️⚠️ **LES BANCS SONT DANS `tools/README.md` DEPUIS LE 432, ET CE CHAPITRE A ÉTÉ ÉLAGUÉ AU 444
 SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 442** (reporté deux fois). **20 bancs de contrôle et 22 bancs
-de rendu** (le vingtième est `render-maire`, 2026-08-31, **66/66**), comptés en listant `tools/` (⚠️ **le 480 ajoutait `verify-maire` et avait relancé les
-36 bancs d'alors un par un** ; le 2026-08-27 ajoute `verify-ludo`, relancé **30/30** :
-`verify-quete` **621/621**, `verify-maire` **113/113**,
-`render-etoile` **161/161**
-⚠️ *ces deux premiers chiffres mentaient depuis un moment : `verify-maire` était resté à 72/72 ici
-alors que le 481 l'annonce correctement à 113/113 plus bas dans ce même fichier — même défaut que
-celui déjà daté ailleurs dans ce chapitre (« un chiffre corrigé à un seul endroit n'est pas
-corrigé »), retrouvé hors-zip en relançant les bancs pour cette livraison.*
-⚠️ *il était à 488 au 468 : le déchant a retiré les contrôles des quatre chapitres
+de rendu**, comptés en listant `tools/`. **TOUS RELANCÉS LE 2026-09-02** :
+`verify-quete` **631/631**, `verify-maire` **119/119**, `verify-vallee` **223/223**,
+`verify-collision` **TOUT PASSE** (30 contrôles), `verify-strings` **1 108 clés appariées**,
+`verify-scierie` **34/34**, `verify-ludo` **30/30**, `verify-taxi` **15/15**,
+`render-maire` **86/86**, `render-etoile` **161/161** — et **vingt bancs de rendu sur vingt-deux**
+seulement s'exécutent (voir l'entrée dédiée plus bas : `render-eau` et `render-parc` sont cassés
+depuis avant cette livraison).
+⚠️ *`verify-quete` était à 488 au 468 : le déchant a retiré les contrôles des quatre chapitres
 supprimés et en a ajouté une trentaine sur la fouille. **Un banc qui rétrécit parce que le code
-rétrécit est un banc en bonne santé** — ce qu'il ne faut pas, c'est qu'il rétrécisse tout seul*). ⚠️ **Six d'entre eux existent parce qu'un défaut vu par
+rétrécit est un banc en bonne santé** — ce qu'il ne faut pas, c'est qu'il rétrécisse tout seul.*
+⚠️ **Six d'entre eux existent parce qu'un défaut vu par
 Guillaume — ou vu à l'écran — n'était mesuré nulle part** : `verify-compo` (440), `verify-pont`
 (441), `verify-portee` (443), et au 444 `render-etoile`, `verify-quete`, `render-beffroi`.
 ⚠️⚠️ **ET LE 480 EN AJOUTE UN QUI EST D'UNE AUTRE NATURE : `verify-maire` JOUE une mécanique de
@@ -1178,8 +661,11 @@ vérifie jamais — c'est elle, et elle seule, qui protège du banc imaginaire (
   confirmation humaine, pas une case cochée.**
   ⚠️ **CE QUI RESTE À PAVER, SI LE BESOIN REVIENT** : `S.pets` (39, décrit ci-dessus) et tout le
   reste des 779 — aucune autre famille n'a été mesurée individuellement cette fois-ci.
-- ⚠️⚠️⚠️ **TROUVÉ EN ROUTE, SANS RAPPORT AVEC LE CORRECTIF CI-DESSUS : `render-eau.mjs` ET
-  `render-rive.mjs` SONT CASSÉS, ET ÇA NE DATE PAS DE CETTE LIVRAISON.** Les deux plantent sur
+- ⚠️⚠️⚠️ **DEUX BANCS DE RENDU NE S'EXÉCUTENT PLUS DU TOUT, ET ÇA NE DATE D'AUCUNE DES
+  LIVRAISONS QUI L'ONT CONSTATÉ.** ⚠️ **Ce sont `render-eau.mjs` ET `render-parc.mjs` — pas
+  `render-rive.mjs`, qui passe** : le couple a changé entre le matin et le soir du 2026-09-02 sans
+  que personne ne touche à ces fichiers, ce qui veut dire que la liste des bancs cassés se RELANCE,
+  elle ne se recopie pas. Les deux plantent sur
   `ctx.createLinearGradient` — non implémenté par le faux canevas de `lib-canvas.mjs` — levé par
   `drawTownWaterSwellBand` (le reflet animé de la surface). **Reproduit sur `HEAD` tel quel, avant
   toute modification** (`git stash` puis relance, même trace) : ce n'est pas une régression de
@@ -1376,7 +862,7 @@ premier.
    commandes de bois). ✅ **Le prix de Kerguélen est confirmé accepté** : cher et pas agréable,
    mais voulu pour la cohérence narrative — ne pas l'adoucir sans raison narrative. Les deux
    autres nombres restent à juger.
-6. **Le bureau du maire**, jamais rejoué à l'écran depuis sa reconstruction procédurale.
+6. ✅ **Le bureau du maire — REJOUÉ À L'ÉCRAN le 2026-09-02**, en séance réelle, avec **Ninon Delaunay**. La passe d'anthropométrie y a été jugée et corrigée quatre fois de suite sur ce que montrait l'écran. ⚠️ **CE QUI RESTE POUR TOI, ET C'EST DU RÉGLAGE** : les **quatre autres maires** n'ont été vus que sur la planche du banc, qui ne juge ni la lumière ni les textures (§10) — et une silhouette qui tient en ombrage plat peut se lire tout autrement sous les quatre lampes de la pièce.
 7. **Le voyage en train** — ✅ **confirmé bon** (2026-09-01) : pas une corvée, pas coûteux, item
    clos.
 8. **Le pain des pigeons et le partage des oiseaux**, à deux, pour savoir si l'écart se remarque.
@@ -1656,433 +1142,52 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
    ⚠️ *La leçon de ces six ordres exécutés est toujours la même : un chapitre qui grossit à chaque
    zip décrit un code qui vit ailleurs, et il faut le renvoyer là-bas — jamais le résumer ici.*
 
-   Historique : 426 (insuffisant), 427 (§7 → `public/candyluge/README.md`), 428 (§6 →
-   `components/ferme/README.md`, 507 → 490), 431 (§4 scindé, 534 → 482),
-   432 (§10 → `tools/README.md`, 524 → 483), 433 à 438 (aucun),
-   **439 (en-tête 151 → 50 et §13 relu, 687 → 661)**, 440 (aucun),
-   **441 (§4 scindé : le DESSIN → `DESSIN.md`)**, 442 (§13 relu ligne à ligne),
-   **444 (§10 élagué)**, 446 à 448 (aucun — et l'ordre du 444 reporté trois fois),
-   **449 (§4 scindé une 3e fois + en-tête 167 → 125, 903 → 804)**, 450 (aucun),
-   **451 (§13 relu ligne à ligne, quatre entrées périmées supprimées)**,
-   **452 (aucun ICI — la passe a porté sur `QUETE.md`, qui en avait plus besoin)**,
-   **453 (tableau des leçons ramené aux QUATRE derniers zips, comme son propre titre l'annonce)**,
-   **454 (le même tableau re-ramené à quatre : 448 et 449 partent, leur détail est déjà ailleurs)**,
-   **455 (le même tableau re-ramené à quatre pour la TROISIÈME fois en trois zips : le 451 part, ses
-   quatre lignes vivent au §30 de `ferme/README.md` et dans `render-navire.mjs`, que leur colonne de
-   droite désignait déjà — la forme tient, c'est tout ce qu'on lui demande)*,
-   **456 (QUATRIÈME fois en quatre zips, et pour la première fois l'élagage a mordu DANS un zip et
-   pas seulement sur le plus vieux : le 452 part en entier — ses trois lignes vivent au §1 et au
-   §12.2 de `QUETE.md`, que leur colonne de droite désignait déjà — et le 453 passe de quatre lignes
-   à deux, les deux qui ne sont pas des cas particuliers de compteur. ⚠️ *Le tableau annonce « les
-   quatre derniers zips » : le tenir demande de retirer autant qu'on ajoute, et un zip qui ajoute
-   quatre lignes doit en retirer cinq.*)**,
-   **457 (aucun ICI — le delivery est de l'écriture et une police, pas une leçon de banc ; la
-   relecture de `ferme/README.md` reste reportée, une quatrième fois)**,
-   **458 (CINQUIÈME fois en cinq zips que le tableau des leçons est ramené à quatre : le 453 et le
-   454 partent en entier — sept lignes — pour laisser entrer le 457 et les quatre du 458. Leur
-   détail vit là où leur colonne de droite le désignait déjà : `QUETE.md` §1 et §12.2, `render-etoile`
-   §5 bis, `furrowBake`, `furrowFib`, §10. ⚠️ *Un zip qui ajoute cinq lignes doit en retirer sept ;
-   c'est ce que « les quatre derniers zips » veut dire, et c'est la seule façon que ce tableau ne
-   devienne pas ce que l'en-tête est devenu deux fois.*)**.
+   Historique des passes : 426 (insuffisant) · 427 (§7 → `public/candyluge/README.md`) ·
+   428 (§6 → `components/ferme/README.md`, 507 → 490) · 431 (§4 scindé, 534 → 482) ·
+   432 (§10 → `tools/README.md`) · **439 (en-tête 151 → 50, §13 relu)** ·
+   **441 (§4 scindé : le DESSIN → `DESSIN.md`)** · 442 et 451 (§13 relus ligne à ligne) ·
+   **449 (§4 scindé une 3e fois : le GÉNÉRATEUR → `ferme/README.md` §15 bis ; en-tête 167 → 125)** ·
+   452 (`QUETE.md` relu contre le code, 943 → 1 141) · 453 à 481 et les sessions hors-zip qui ont
+   suivi : une passe par livraison, presque toutes sur le **tableau des leçons** de l'en-tête —
+   *ramené à quatre lignes onze fois de suite, puis supprimé avec l'en-tête qui le portait.*
 
-   **459 (SIXIÈME fois en six zips que le tableau des leçons est ramené à quatre : les QUATRE lignes
-   du 455 partent, plus deux du 456 — le seuil de banc et la somme des bulles, qui vivent déjà dans
-   `render-etoile` §11 et dans `starTalkerPick` — pour laisser entrer les quatre du 459. Six lignes
-   retirées, quatre ajoutées : le tableau RÉTRÉCIT, ce qui est la seule preuve que la forme tient.)**.
+   ⚠️⚠️⚠️ **CETTE PASSE-CI (2026-09-02, buissons + maire) A SUPPRIMÉ QUATRE CENT TRENTE LIGNES DE
+   PROCÈS-VERBAUX D'ÉLAGAGE, ET C'EST LE PLUS GROS RÉTRÉCISSEMENT DEPUIS LE 439.** Ce chapitre
+   portait la minute détaillée de QUARANTE-DEUX passes — « deux retirées, deux ajoutées, le tableau
+   reste à sa taille » — soit un tiers du fichier occupé à raconter comment on avait raccourci le
+   fichier. ⚠️ **Et la moitié de ces minutes désignaient un objet qui n'existe plus** : le « tableau
+   des leçons » de l'en-tête, supprimé lors d'une passe antérieure, était encore cité vingt fois au
+   présent. *Le chapitre qui interdit de dater une information périmée était devenu le seul endroit
+   du fichier entièrement fait d'informations périmées.* C'est l'application de sa propre règle n°1
+   à lui-même, avec seize passes de retard.
+   ⚠️ **CE QUI A ÉTÉ GARDÉ, ET POURQUOI** : les cinq leçons ci-dessous. Elles sont les seules de ces
+   quatre cent trente lignes qui soient vraies à l'échelle du projet et introuvables ailleurs ; tout
+   le reste était un compte rendu de déménagement réussi, c'est-à-dire précisément ce que §14.3
+   interdit d'écrire ici.
 
-   **460 (aucun ICI — le delivery est un réglage de pose visible en jeu, pas une leçon de
-   banc ; la relecture de `ferme/README.md` reste reportée, une SEPTIÈME fois)**.
+   ⚠️ **LES CINQ LEÇONS QUE CES QUARANTE-DEUX PASSES ONT PAYÉES :**
+   1. *Un chapitre qui grossit à chaque livraison décrit un code qui vit ailleurs : on le renvoie
+      là-bas, jamais on ne le résume ici.* Six scissions l'ont prouvé (§6, §7, §4 trois fois, §10).
+   2. *Un chiffre de banc recopié à deux endroits n'a pas deux chances d'être juste : il a deux
+      endroits où mentir.* Payé SIX fois sur `verify-quete` et `verify-maire` (468, 470, 479, 480,
+      481, hors-zip) — et une correction qui ne porte que sur l'un des deux n'est pas une
+      correction, elle apprend au chiffre un second endroit où mentir.
+   3. *Une question à laquelle on a répondu ne sort pas du fichier toute seule : elle y reste, et
+      elle ment.* Trois relectures du §13 (439, 442, 451) l'ont trouvée à chaque fois.
+   4. *Un récit s'allonge, une ligne de tableau non* — mais un tableau qu'on ne taille pas devient
+      un récit à son tour. Le tableau des leçons a été ramené à quatre lignes onze fois avant de
+      disparaître : la forme n'a jamais tenu toute seule.
+   5. *Une leçon qu'on écrit sans l'appliquer dans la même livraison est une leçon qu'on repaiera.*
+      Le 453 a diagnostiqué « une constante que seul le banc lit est débranchée » puis a gardé la
+      constante « en réserve ».
 
-   **464 (SEPTIÈME passe d'élagage du tableau : les quatre lignes du 458 partent avant l'ajout
-   des deux leçons du 464. Leur détail reste au §12.0 de `QUETE.md`, dans `render-etoile.mjs`,
-   `verify-quete.mjs`, `starShowCard` et `starScenePump`, exactement là où leur dernière colonne
-   le désignait. Le tableau couvre bien 459, 462, 463 et 464.)**.
-
-   **465 (HUITIÈME passe : les quatre lignes du 459 partent avant les deux leçons du 465 ; leur
-   détail reste dans `QUETE.md` et `render-etoile.mjs`. Le tableau couvre exactement 462 à 465,
-   avec les zips sans leçon nouvelle naturellement absents.)**.
-
-   **468 (DIXIÈME passe : les DEUX lignes du 464 partent avant les deux leçons du 468 — deux
-   retirées, deux ajoutées, le tableau reste à sa taille et couvre exactement 465 à 468. Leur
-   détail vit dans `starFollowerAdded`, `starJoinRef`, `starCompanionsAt`, `starFarmFlightPath` et
-   `drawStarFragmentMeteor`, que leur colonne de droite désignait déjà. ⚠️ **Et cette passe a
-   trouvé ce qu'un élagage doit trouver : un CHIFFRE PÉRIMÉ dans le §10** — `verify-quete` y était
-   annoncé à 439/439, il est à **488/488** ; il avait donc menti pendant neuf zips dans le chapitre
-   même qui interdit d'écrire un chiffre de banc sans l'avoir lancé.)**.
-
-   **469 (ONZIÈME passe : les DEUX lignes du 465 et celle du 466 partent avant les TROIS
-   leçons du 469 — trois retirées, trois ajoutées, le tableau reste à sa taille et couvre
-   exactement 467 à 469. Leur détail vit dans `starJoinRef`, `plancheEscaliers.js` et
-   `render-escaliers.mjs`, que leur colonne de droite désignait déjà. ⚠️ **Et cette passe a
-   trouvé ce qu'un élagage doit trouver : un CHAPITRE QUI MENTAIT PAR SA FORME** — le §14 de
-   `QUETE.md` s'intitulait « les sept décisions qui BLOQUENT la refonte », quatre étaient
-   tranchées, et il se lisait encore comme une consigne d'attendre. Il est marqué ARCHIVE et
-   la liste vivante est au §15.)**.
-
-   **470 (DOUZIÈME passe : la ligne 467 part avant l'ajout de la leçon du 470 — une retirée, une
-   ajoutée, le tableau reste à sa taille et couvre exactement 468 à 470. Le détail retiré reste
-   dans `render-escaliers.mjs` et `TOWN_COURT_BLOCK_SOLIDS`, que sa colonne de droite désignait
-   déjà. ⚠️ Et cette passe a trouvé le même chiffre périmé que le 468 avait déjà trouvé une fois :
-   `verify-quete` était encore annoncé à 449/449 dans l'en-tête ET au §10, alors qu'il est à
-   **453/453** — la correction du 468 n'avait porté que sur le §10, pas sur l'en-tête, qui se
-   réécrit à chaque livraison et où le chiffre revient donc à chaque fois qu'on oublie de le
-   relancer. **Un chiffre corrigé à un seul endroit n'est pas corrigé : il a juste appris un
-   second endroit où mentir.**)**.
-
-   **471 (aucun élagage ICI — le tableau ajoute la leçon du 471 et couvre encore exactement
-   468 à 471, quatre zips, sans qu'aucune ligne n'ait besoin de partir.)**.
-
-   **472 (TREIZIÈME passe : les DEUX lignes du 468 partent avant les deux leçons de l'audit 472 —
-   deux retirées, deux ajoutées, le tableau reste à sa taille et couvre exactement 469 à 472. Leur
-   détail vit dans `starJoinStale`, `starJoinBusy`/`starJoinActive` et `verify-quete` §arrivée, que
-   leur colonne de droite désignait déjà. ⚠️ Et cette passe a trouvé ce qu'un élagage doit trouver :
-   **le bloc ⏭️ REPRISE annonçait un défaut CORRIGÉ (471) que la séance de jeu venait de reproduire
-   à l'identique**. Un bloc de reprise qui déclare une victoire est le seul endroit du fichier où
-   personne ne pense à revérifier.)**.
-
-   **473 (QUATORZIÈME passe : les TROIS lignes du 469 partent avant la leçon de ce zip — trois
-   retirées, une ajoutée, le tableau RÉTRÉCIT et couvre exactement 470 à 473. Leur détail reste
-   dans `CALM_KEY_MAX`, `migrateStar`, `verify-quete` §fouille, `starDigStart` et `starNearby`, que
-   leur colonne de droite désignait déjà.)**.
-
-   **474 (QUINZIÈME passe : les DEUX lignes du 470 et du 471 partent avant la leçon de ce zip —
-   deux retirées, une ajoutée, le tableau RÉTRÉCIT ENCORE et couvre exactement 472 à 474. Leur
-   détail reste dans `starGoalKey`, `starEngineerHere`, `starImpactLandedNow` et `verify-quete`
-   §objectif, que leur colonne de droite désignait déjà.)**.
-
-   **475 (SEIZIÈME passe : la ligne « migrateStar/townFall » du 472 part avant la leçon de ce
-   zip — une retirée, une ajoutée, le tableau reste à sa taille et couvre exactement 472 à 475.
-   Son détail reste dans `migrateStar` et `starTownActivityTick`, que sa colonne de droite
-   désignait déjà.)**.
-
-   **476 (DIX-SEPTIÈME passe : la ligne 472 part avant la leçon de ce zip — une retirée, une
-   ajoutée, le tableau reste à sa taille et couvre exactement 473 à 476. Son détail reste dans
-   `starAlone`, `starOtherThere` et `resolveStarCalm`, que sa colonne de droite désignait déjà.)**.
-
-   **479 (DIX-NEUVIÈME passe : les DEUX lignes du 475 et du 478 (« une garde qui se fige à la
-   première lecture ») partent avant les deux leçons de ce zip — deux retirées, deux ajoutées,
-   le tableau reste à sa taille et couvre exactement 476 à 479. Leur détail reste dans
-   `starGoalKey`, `starFallSeen` et `starSeenRef.resume`, que leur colonne de droite désignait
-   déjà. ⚠️ Et cette passe a trouvé ce qu'un élagage doit trouver : **le §10 annonçait
-   `verify-quete` à 478/478 sur trois lignes de justification** — il est à **578/578** — et le
-   bloc ⏭️ REPRISE, réécrit à chaque livraison, portait le même chiffre une seconde fois. C'est
-   la TROISIÈME fois que ce chiffre précis ment (468, 470, 479) : *un chiffre de banc recopié à
-   deux endroits n'a pas deux chances d'être juste, il a deux endroits où mentir.*)**.
-
-   **480 (VINGTIÈME passe : les lignes du 476 et l'une des deux du 479 partent avant les deux
-   leçons de ce zip — deux retirées, deux ajoutées, le tableau reste à sa taille et couvre
-   exactement 478 à 480. Leur détail reste dans `starUiOpenRef`/`starDigStep`/`L.star.dig.blocked`
-   et dans `drawStarDish`/`render-etoile` §13, que leur colonne de droite désignait déjà.
-   ⚠️ Et cette passe a trouvé ce qu'un élagage doit trouver : **le §10 annonçait « 16 bancs de
-   contrôle » et « les 35 relancés au 479 »** alors qu'un dix-septième vient de naître ;
-   `verify-quete` y était à 580 et il est à 585. C'est la QUATRIÈME fois que ce chiffre précis ment
-   (468, 470, 479, 480) — et cette fois il a été corrigé aux DEUX endroits du même coup, ce que le
-   470 avait manqué. *Un chiffre de banc recopié à deux endroits n'a pas deux chances d'être juste,
-   il a deux endroits où mentir.*)**.
-
-   **481 (VINGT-DEUXIÈME passe : les DEUX lignes du 480 partent avant les deux leçons de ce zip —
-   deux retirées, deux ajoutées, le tableau reste à sa taille et couvre exactement 479 à 481. Leur
-   détail vit dans `MAYOR_BARE_RISK_K`, `MAYOR_STREAK_HOLD_K` et les §3 et §7 de `verify-maire`,
-   que leur colonne de droite désignait déjà. ⚠️ Et cette passe a trouvé ce qu'un élagage doit
-   trouver : **le §5 et le §16 de `QUETE.md` décrivaient tous les deux un fichier de 365 Ko qui
-   venait d'être supprimé parce qu'il était faux** — c'est le pendant exact de la leçon du 478
-   (« un rapport d'audit recopié hérite de ses erreurs »), appliqué cette fois à un ASSET : *une
-   ligne de tableau qui décrit un fichier ne dit pas qu'il marche, elle dit qu'il existe.*)**.
-
-   **hors-zip (VINGT-TROISIÈME passe : la ligne 479 part avant la leçon de cette session — une
-   retirée, une ajoutée, le tableau reste à sa taille et couvre exactement 480 bis à ce jour. Son
-   détail reste dans `nearPierMouth` et la garde du semis d'arbres, `fermeEngine.js`, que sa
-   colonne de droite désignait déjà. Cette passe n'est pas un zip numéroté — c'est une session de
-   correction de collisions demandée directement, sans upload — d'où l'étiquette.)**.
-
-   **hors-zip, séance suivante (VINGT-QUATRIÈME passe : les DEUX lignes « 481 » partent — le glTF
-   du bureau et le `msOf` de l'horodatage — avant les deux leçons de cette séance (compte à rebours
-   du météore sans affichage, repli `solveArm` qui oublie `side`) : deux retirées, deux ajoutées,
-   le tableau reste à sa taille et couvre exactement 480 bis à aujourd'hui. Leur détail reste dans
-   `maireBureau.js` (le bureau procédural qui a remplacé le glTF) et `msOf`/`verify-maire` §9, que
-   leur colonne de droite désignait déjà — rien n'est perdu, ces deux défauts restent corrigés et
-   documentés à leur code, seule la ligne de rappel s'efface. ⚠️ Et cette passe a trouvé ce qu'un
-   élagage doit trouver : le §10 annonçait encore `verify-maire` **72/72**, chiffre du 480, alors
-   que le 481 l'avait déjà corrigé à 113/113 quelques paragraphes plus loin dans CE MÊME fichier —
-   cinquième occurrence de ce défaut précis (468, 470, 479, 480, et maintenant ici), toujours la
-   même leçon : *un chiffre recopié à deux endroits n'a pas deux chances d'être juste, il a deux
-   endroits où mentir.*)**.
-
-   **hors-zip, collisions & maire (VINGT-CINQUIÈME passe : les DEUX lignes du hors-zip
-   `nearPierMouth`/`TOWN_PIER` et du 480 bis `STAR_FARM_CRATER_DRAW_SCALES` partent avant les deux
-   leçons de cette session (le décalage d'une case entre bitmap et collision de l'escalier, et le
-   filtre de teinte qui fait glisser un banc de structure) : deux retirées, deux ajoutées, le
-   tableau reste à sa taille. Leur détail retiré reste dans `nearPierMouth`/`fermeEngine.js` et
-   `STAR_FARM_CRATER_DRAW_SCALES`/`fermeConstants.js`, que leur colonne de droite désignait déjà —
-   rien n'est perdu, ces deux défauts restent corrigés à leur code. Session directe, sans upload —
-   d'où l'étiquette.)**.
-
-   **hors-zip, pont/torche/quête (VINGT-SIXIÈME passe : la ligne « mécanisme sans affichage » du
-   hors-zip précédent part avant la leçon de cette session (un correctif posé sur un pont ou un
-   porteur de lumière ne couvre pas son double ailleurs dans le code) : une retirée, une ajoutée, le
-   tableau reste à sa taille. Son détail retiré reste dans `starTownActiveRef`/`.ferme-wait-pill`,
-   que sa colonne de droite désignait déjà. Le bloc ⏭️ REPRISE a été remplacé en entier (pont du
-   parc, torche, escaliers non retrouvés, focus personnel du chapitre 1, plongeon de l'étoile
-   blanche) — aucun des cinq n'a pu être rejoué à l'écran, l'automatisation du déplacement restant
-   bloquée ; seuls les bancs (`verify-vallee` 205/205, `verify-quete` 596/596), le bundle esbuild et
-   `next build` ont vérifié cette livraison.)**.
-
-   **480 bis (VINGT-ET-UNIÈME passe : la ligne 478 part avant la leçon de ce zip — une retirée,
-   une ajoutée, le tableau reste à sa taille et couvre exactement 479 à 480 bis. Son détail reste
-   dans `resolveStarTimberTick`/`starTimberBlock`, que sa colonne de droite désignait déjà.)**.
-
-   **2026-08-31 bis, le fleuve (TRENTE-ET-UNIÈME passe : aucune ligne du tableau des leçons ne
-   part, parce que cette session n'en ajoute AUCUNE — ses trois enseignements sont des leçons de
-   CARTE, pas de projet, et ils vivent au §32 de `components/ferme/README.md`, à côté du générateur
-   qu'ils décrivent : le sentier qui redevient un escalier quand il épouse la rive, les trois
-   constantes du bois qui se règlent ensemble ou pas du tout, le dénominateur du banc qui comptait
-   l'eau. ⚠️ *Une session qui ne produit pas de leçon à l'échelle du projet ne doit pas en inventer
-   une pour remplir le tableau* — c'est ce qui l'a fait grossir deux fois. La passe corrige en
-   revanche deux chiffres : `verify-vallee` passe de 208 à **214**, et le §13 perd sa question
-   « lac-océan » puisqu'elle est répondue.)**.
-
-   **2026-09-01, les haies et la semelle (TRENTE-CINQUIÈME passe : les DEUX lignes « 2026-08-31
-   (audit) » du tableau des leçons partent avant les deux de cette livraison — deux retirées, deux
-   ajoutées, le tableau reste à quatre et couvre exactement les deux dernières sessions. Leur détail
-   retiré vit dans `migrateMayor`/`appt.sour` et dans `verify-quete` §audience, que leur colonne de
-   droite désignait déjà. ⚠️ **Et l'élagage a mordu dans l'EN-TÊTE, ce qu'il n'avait plus fait
-   depuis le 449** : les deux récits du 2026-08-31 (le fleuve, le maire regardé) passent de 73 à 22
-   lignes — leur détail vit au §32 de `components/ferme/README.md` et dans `maireBureau.js` /
-   `render-maire.mjs` —, et seules leurs DETTES OUVERTES restent (le HUD par-dessus la scène du
-   maire, le bureau jamais rejoué à l'écran, l'absence de ruines à la passe). L'en-tête absorbe donc
-   une livraison entière en ne grossissant que de huit lignes. ⚠️⚠️ Cette passe AJOUTE une
-   **dix-septième forme** au « banc qui passe » — *il mesure qu'une chose est REFUSÉE, jamais OÙ
-   elle l'est* — et deux pièges au §4 (la grandeur écrite sept fois, le sprite qui n'a pas de sens
-   interdit mais un sens dessiné). ⚠️⚠️ Et elle a trouvé ce qu'un élagage doit trouver : le §10
-   annonçait **« 19 bancs de contrôle et 21 bancs de rendu »** alors qu'il y en a 20 et 22, et le
-   §« ce qui n'existe pas » affirmait encore qu'**aucun banc ne regarde la haie** — c'était vrai
-   jusqu'à cette livraison, et c'est le genre de phrase qui devient fausse en silence le jour où on
-   la corrige.)**.
-
-   **hors-zip, cale & scie (TRENTE-SIXIÈME passe : les DEUX lignes « 2026-09-01 (rythme) » partent
-   avant les deux de cette séance — deux retirées, deux ajoutées, le tableau reste à quatre et
-   couvre exactement les trois dernières livraisons du même jour. Leur détail retiré vit dans
-   `.ferme-star-hud`/`app/globals.css` §rythme et dans `starPulse.seq`/`key={"rb"+starRibbon.seq}`,
-   que leur colonne de droite désignait déjà — rien n'est perdu, ces deux défauts restent corrigés
-   à leur code. ⚠️ Cette passe n'ajoute AUCUNE forme neuve au « banc qui passe » : le défaut de la
-   cale est la dix-septième forme déjà écrite au 2026-09-01 (haies/semelle), rejouée le même jour
-   sur un décor différent — l'écrire une seconde fois l'aurait fait mentir sur son propre numéro.
-   Le défaut de la chute, lui, est trop étroit pour mériter une forme (un seul aller-retour d'un
-   seul fichier) ; il vit en une ligne du tableau et dans le commentaire daté de
-   `scierieAtelier.js`. Aucun chiffre périmé trouvé cette fois-ci — l'élagage n'a mordu que le
-   tableau.)**.
-
-   **hors-zip, Tristan habillé (TRENTE-SEPTIÈME passe : la ligne « 2026-09-01 (haies) », la plus
-   ancienne du tableau, part avant celle de cette séance — une retirée, une ajoutée, le tableau
-   reste à quatre et couvre les quatre dernières livraisons plutôt que les trois. Son détail retiré
-   vit dans `A.drawTownHedgeTile` et `render-haies` §1, que sa colonne de droite désignait déjà.
-   ⚠️ Cette passe non plus n'ajoute aucune forme neuve au « banc qui passe » : la limite de
-   `lib-3d.mjs` sur les textures réduites à leur couleur moyenne est déjà écrite pour le bureau du
-   maire (§8 de l'en-tête) — c'est la même limite, pas une nouvelle. Aucun chiffre périmé trouvé.)**.
-
-   **hors-zip, Martial dégelé (TRENTE-HUITIÈME passe : la ligne « 2026-09-01 (semelle) », la plus
-   ancienne du tableau, part avant celle de cette séance — une retirée, une ajoutée, le tableau
-   reste à quatre. Son détail retiré vit dans `C.bodyPoints`/`C.footX`/`C.footY`/`C.tileAnchor`, que
-   sa colonne de droite désignait déjà. Cette passe n'ajoute aucune forme neuve au « banc qui
-   passe » ni au §4 : le bug remonté par Guillaume n'en était pas un — c'est la seule fois de cette
-   séance où « comparer au modèle plus vieux » (le prompt de reprise) menait à une fausse piste, et
-   la vraie cause (un réglage de durée mal signalé) a demandé de rejouer l'horloge plutôt que de
-   relire le code.)**.
-
-   **hors-zip, réseau à deux clients (TRENTE-NEUVIÈME passe : la ligne « hors-zip (cale/scie),
-   STAR_SHIP_INTERACT_S_PAD » part avant celle de cette séance — une retirée, une ajoutée, le
-   tableau reste à quatre. Son détail retiré vit dans `STAR_SHIP_INTERACT_S_PAD`/`FermeGame.js`
-   §raise, que sa colonne de droite désignait déjà. ⚠️⚠️⚠️ Cette passe AJOUTE une forme neuve à la
-   tête du §4 (JavaScript) — *un booléen mis en cache pour une valeur native volatile ne se
-   resynchronise que sur l'événement qui le met à jour* — et règle l'item n°1 du §13, la dette la
-   plus vieille et la plus répétée du fichier depuis six tentatives : les « gels de PNJ chez
-   l'invité » n'étaient pas un résident cassé mais `netCanBroadcast()` bloqué en silence par un
-   `hiddenRef` jamais resynchronisé. Diagnostiqué et corrigé en session de test à deux clients,
-   EXCEPTIONNELLEMENT menée par Claude lui-même sur demande explicite et répétée de Guillaume
-   (« tu peux le faire ») — la règle « Guillaume joue lui-même » du §13 n'est pas changée pour la
-   suite, c'est une dérogation ponctuelle, écrite comme telle dans le bloc ⏭️ REPRISE et au §13.)**.
-
-   **hors-zip, la brebis (QUARANTIÈME passe : la ligne « hors-zip (cale/scie), v.drop » part avant
-   celle de cette séance — une retirée, une ajoutée, le tableau reste à quatre. Son détail retiré
-   vit dans `v.drop`/`scierieAtelier.js` §chute, que sa colonne de droite désignait déjà. Cette
-   passe n'ajoute aucune forme neuve au « banc qui passe » (aucun banc ne regarde ce rendu, §10) ni
-   de nouveau piège formel au §4 — c'est une instance isolée, pas encore une famille payée deux
-   fois. ⚠️ Session directe, en deux temps : la portée proposée d'abord (l'intérieur seul, pas le
-   passage à sept points) a été explicitement ÉLARGIE par Guillaume en cours de route (« commence
-   le dessin maintenant »), qui a repris la main sur un arbitrage que Claude avait pourtant motivé —
-   *lister les décisions structurantes ne verrouille pas le périmètre pour toujours, Guillaume garde
-   la main pour le rouvrir à tout moment, y compris juste après l'avoir lui-même refermé.* Chaque
-   choix (LAQUELLE dette, PORTÉE du correctif, puis extension au dessin) lui a été soumis avant
-   d'écrire une ligne de code, conformément au §2 — et la forme finale a été rejouée à l'écran avant
-   d'entrer dans le jeu, pas après (§14.6, banc imaginaire).)**.
-
-   **hors-zip, l'atlas (QUARANTE-ET-UNIÈME passe : la ligne « hors-zip (Tristan), bretelles » part
-   avant celle de cette séance — une retirée, une ajoutée, le tableau reste à quatre. Son détail
-   retiré vit dans `buildTristan`/`scierieAtelier.js`, que sa colonne de droite désignait déjà.
-   Cette passe n'ajoute aucune forme neuve au « banc qui passe » de l'en-tête, mais elle en ajoute
-   une au tableau lui-même (voir la ligne « hors-zip (canevas) ») : un patron déjà validé ailleurs
-   dans le fichier peut dormir des zips sans être rapproché de la dette qu'il résoudrait. ⚠️ Et
-   elle a trouvé ce qu'un élagage doit trouver, deux fois : (1) le §13 et le §10 répétaient encore
-   « 1 829 canevas », chiffre du 481 jamais remesuré depuis malgré la dérive du code — remesuré ici
-   à 1 842 AVANT correctif, sur l'objet réellement retourné par `buildSprites()`, pas recopié d'une
-   note ancienne ; (2) le §13 listait encore la constellation à cinq points dans l'audit « non
-   fait », alors que la livraison de la veille (40e passe, ci-dessus) l'avait déjà portée à sept —
-   *un chiffre corrigé dans le bloc ⏭️ REPRISE et laissé faux ailleurs dans le même fichier n'est
-   pas corrigé, il a juste appris un second endroit où mentir* (la même leçon que le 470, le 479 et
-   le 480, une quatrième fois). ⚠️⚠️ Et elle a trouvé, sans le chercher, deux bancs cassés
-   (`render-eau.mjs`, `render-rive.mjs`, `ctx.createLinearGradient` non implémenté par
-   `lib-canvas.mjs`) — reproduit sur `HEAD` avant toute modification, donc antérieur à cette
-   livraison et non corrigé ici (le risque de toucher un fake DOM partagé par des dizaines de bancs
-   dépasse le gain de ce seul correctif). *Un banc qui ne peut plus s'exécuter du tout est la forme
-   la plus silencieuse du « banc qui passe » : il ne ment pas, il se tait, et personne ne remarque
-   qu'il s'est tu tant que personne n'a besoin de lui.*)**.
-
-   **2026-09-01, le rythme de la quête (TRENTE-QUATRIÈME passe : les DEUX lignes « scie » du
-   tableau des leçons partent avant les deux de cette livraison — deux retirées, deux ajoutées, le
-   tableau reste à quatre et couvre exactement les deux dernières sessions. Leur détail retiré vit
-   dans `SAW_MAX_TICKS`/`sawTick`/`verify-scierie` §1 et dans l'en-tête de `render-scierie.mjs`,
-   que leur colonne de droite désignait déjà. ⚠️ Cette passe AJOUTE une **seizième forme** au
-   « banc qui passe » de l'en-tête — *il mesure une PRÉSENCE là où le joueur perçoit une VALEUR* —
-   et deux pièges au §4 (l'animation CSS qui ne redémarre pas, le sélecteur redéclaré qui corrige
-   au lieu de compléter). ⚠️⚠️ Et elle a trouvé ce qu'un élagage doit trouver, DEUX fois : (1) le
-   §10 annonçait encore **« 18 bancs de contrôle et 20 bancs de rendu »** et le §« ce qui n'existe
-   pas » **« les dix-huit bancs de rendu »**, alors qu'il y en a 19 et 21 depuis la livraison
-   précédente — laquelle avait pourtant écrit noir sur blanc qu'elle corrigeait ce compte ; c'est la
-   HUITIÈME fois que ce chapitre se fait reprendre sur un chiffre, et la seconde fois qu'une
-   correction annoncée n'a porté que sur un des deux endroits. (2) Le bloc du maire réclamait encore
-   deux choses **faites depuis** : les huit feuilles `L.maire` orphelines (supprimées, et un contrôle
-   les garde) et « la fin de la quête est trois points colorés » (le navire entre dans sa scène de
-   résolution). *Une dette payée qui reste écrite se relit comme une dette.*)**.
-
-   **2026-08-31, la scie de Tristan — lot E (TRENTE-TROISIÈME passe : les DEUX lignes du 2026-08-31
-   (le véhicule à deux degrés de liberté, la chaîne d'os remise à jour depuis sa racine) partent
-   avant les deux leçons de cette livraison — deux retirées, deux ajoutées, le tableau reste à
-   quatre et couvre exactement les trois dernières sessions. Leur détail retiré vit dans `boatStep`
-   / `verify-vallee` §barque et dans `applyPose` / `maireBureau.js`, que leur colonne de droite
-   désignait déjà. ⚠️ Cette passe AJOUTE aussi une **quatorzième forme** au « banc qui passe » de
-   l'en-tête — *il accuse le personnage de ce que fait son cadrage* — et un piège React au §4
-   (un nettoyage d'effet qui a un effet de bord). ⚠️ Et elle a trouvé ce qu'un élagage doit
-   trouver : **le §10 annonçait « 18 bancs de contrôle et 20 bancs de rendu »** alors qu'il y en a
-   19 et 21 depuis cette livraison, et le compte n'était écrit qu'à un seul endroit — la seule
-   forme qui ne mente jamais deux fois, et la septième fois que ce chapitre se fait reprendre sur
-   un chiffre.)**.
-
-   **hors-zip, session saule (TRENTE-DEUXIÈME passe : la ligne 2026-08-30 (« deux horloges qui se
-   croisent ») part avant la leçon de cette session — une retirée, une ajoutée, le tableau reste à
-   quatre. Son détail retiré reste dans `STAR_CANDY_FRESH_MS`/`RUN_INJURED_MS`/`doAction`, que sa
-   colonne de droite désignait déjà. La session corrige le saule procédural de Valley Town, signalé
-   « affreux » par Guillaume à côté du saule importé qu'il trouve « merveilleux » : `townTreeKind`
-   ne choisit plus `TT.WILLOW` sur la berge, et le saule importé porte deux variantes de teinte
-   légères en automne. Vérifié par `render-arbres` et `verify-vallee` (223/223) uniquement — jamais
-   revu sur la vraie berge.)**.
-
-   **2026-08-31, le maire regardé (TRENTIÈME passe : les DEUX lignes « hors-zip » du tableau — le
-   compteur cumulatif et l'horloge d'interface bornée par sa phase — partent avant les deux leçons
-   de cette session (une garde qui borne au lieu de jeter, une chaîne d'os remise à jour depuis sa
-   racine) : deux retirées, deux ajoutées, le tableau reste à quatre. Leur détail retiré vit dans
-   `starTownActiveRef`/`STAR_TOWN_ACTIVE_MS` et `starTownWaiting`/`starTownActivityTick`, que leur
-   colonne de droite désignait déjà. ⚠️ Cette passe AJOUTE aussi une treizième forme au « banc qui
-   passe » de l'en-tête — *il vérifie qu'une chose EXISTE, jamais qu'elle TIENT ENSEMBLE* — et un
-   piège JavaScript au §4 (l'étalement qui recopie les références de tableaux). ⚠️ Et elle a trouvé
-   ce qu'un élagage doit trouver : **le §10 annonçait « 19 bancs de rendu »** alors que
-   `render-maire` en fait vingt, et le compte n'était corrigé nulle part ailleurs — sixième
-   occurrence du chiffre recopié, mais cette fois il n'était écrit QU'À UN endroit, ce qui est la
-   seule forme qui ne ment jamais deux fois.)**.
-
-   **hors-zip, textes de quête & lueur bleue (VINGT-SEPTIÈME passe : la ligne `solveArm` part
-   avant la leçon de cette session (une même clé d'objectif qui pilote deux mécanismes — le
-   chevron ET le forçage du monde maléfique — doit se scinder pour les deux, jamais un seul) :
-   une retirée, une ajoutée, le tableau reste à sa taille. Son détail retiré reste dans
-   `solveArm`/`maireBureau.js`, que sa colonne de droite désignait déjà. Session directe, sans
-   upload — quatre demandes de Guillaume en jouant : le texte de la plongée de l'étoile blanche
-   (pourquoi elle plonge, comment y remédier — `dig.bodyStarLure` corrigé, toast automatique une
-   fois), l'annonce des puces cliquables à plusieurs (`hud.focusHint`, toast une fois), la lueur
-   bleue du défi de fuite qui expire pour de vrai 5 minutes après la course
-   (`STAR_CANDY_FRESH_MS`, `candyUntil`, halo pulsant sur le fermier — `drawStarCalmGlow`
-   réutilisé), et le chevron de la blanche qui pointait encore le chaudron une fois la fiole
-   prête (`farmImpactLureGive`, `ctx.potion`). Vérifié par les bancs (`verify-quete` 609/609,
-   `verify-strings`, `verify-syntax`, bundle esbuild, `next build`, `render-etoile`,
-   `verify-vallee`), jamais à l'écran — même blocage d'automatisation du déplacement que les
-   sessions précédentes.)**.
-
-   **2026-08-27, dossier quête & Ludo solo (VINGT-HUITIÈME passe : la ligne la plus ancienne du
-   tableau, « un correctif de motif ne couvre pas sa sœur », part avant la leçon `self:true` — une
-   retirée, une ajoutée, le tableau reste à quatre. Son détail demeure dans `fermeEngine.js`,
-   `FermeGame.js` et `DESSIN.md`. La passe corrige aussi le compte des bancs : `verify-ludo`
-   devient le dix-huitième banc de contrôle et passe 30/30. Le dossier créatif vit au §17 de
-   `QUETE.md`, la mécanique Ludo dans `ludoBot.js` ; aucun des deux n'est recopié ici.)**.
-
-   **2026-08-27, lumière bleue (VINGT-NEUVIÈME passe : la ligne `self:true` part avant la leçon
-   sur les dates absolues — une retirée, une ajoutée, le tableau reste à quatre. Son détail demeure
-   dans `tools/fake-supabase.mjs`, `verify-ludo.mjs` et `PetitsChevaux.js`. Le bloc ⏭️ REPRISE est
-   remplacé par le paiement à rejouer et les deux chiffres de `verify-quete` passent ensemble à
-   621/621.)**.
-
-   **478 (DIX-HUITIÈME passe : la ligne 473 part avant la leçon de ce zip — une retirée, une
-   ajoutée, le tableau reste à sa taille et couvre exactement 474 à 478. Son détail reste dans
-   `starFarmImpactLandedReal`, `starImpactLandedReal` et `starCalmOk`, que sa colonne de droite
-   désignait déjà. ⚠️ Et cette passe a trouvé ce qu'un élagage doit trouver : **le bloc ⏭️ REPRISE
-   annonçait comme BLOQUANT un défaut qui n'existe pas** — « deux impacts derrière une rivière
-   qu'on ne peut pas traverser » — alors qu'on traverse à cheval depuis 2026-07, et que le
-   commentaire qui le dit est dans `fermeConstants.js` depuis. *Un rapport d'audit recopié dans ce
-   fichier hérite de ses erreurs, et il les garde plus longtemps que lui.*)**.
-
-      **467 (NEUVIÈME passe : la ligne 463 part avant l'ajout du 467. Le tableau couvre les quatre
-   derniers zips 464 à 467 ; le détail retiré reste dans `QUETE.md` et `starCompanionsAt`.)**.
-
-   ⚠️⚠️ **LE 451 A EXÉCUTÉ L'ORDRE DU 449 : §13 RELU LIGNE À LIGNE**, huit zips après le 442.
-   Quatre entrées parlaient d'un code SUPPRIMÉ au 444 — elles décrivaient l'enquête cadastrale
-   comme si elle tournait encore (« le 442 a ajouté une seconde raison d'aller en ville :
-   l'enquête… ») — et une cinquième racontait sur onze lignes l'histoire de séances à deux clients
-   au lieu de dire ce qui reste à faire. ⚠️ **Une question à laquelle on a répondu ne sort pas du
-   fichier toute seule : elle y reste, et elle ment** — troisième preuve après 439 et 442.
-
-   ⚠️⚠️ **LE 452 A EXÉCUTÉ L'ORDRE DU 451 : `QUETE.md` EST RELU CONTRE LE CODE** (943 → 1 141
-   lignes ; il a grossi parce qu'il portait quatre dettes qui n'étaient écrites nulle part). Ce qui
-   a été corrigé : la FICTION (§1, §2, le retournement, la fin), les **citations**, qui étaient en
-   anglais alors que le jeu parle français depuis le 451, le **pisteur** (c'est le navire, plus un
-   bandeau), les **dix** familles de dessin, le §10 qui ignorait quatre zips, et les **chiffres de
-   bancs**, tous relancés (`verify-quete` **284/284** contre 220 écrit, `verify-vallee` **205/205**
-   contre 200, `verify-strings` **1 082**). ⚠️ **Et une section « ce qui n'existe pas encore »
-   annonçait le beffroi comme non construit, huit zips après sa construction.**
-
-   ⚠️⚠️ **LE 453 A EXÉCUTÉ L'ORDRE DU 452 — LE BANC DU COMPTE DE MORCEAUX EST ÉCRIT — ET IL A
-   TROUVÉ EN CHEMIN CE QUE PERSONNE NE CHERCHAIT.** Le tableau des leçons annonçait « les QUATRE
-   derniers zips » et en portait SEPT : ramené à quatre, le détail restant à côté du code qu'il
-   décrit. ⚠️ **Et l'élagage a trouvé ce qu'un élagage doit trouver** : la leçon 448 « une constante
-   que seul le banc lit est débranchée » venait d'être **repayée par le zip qui l'avait écrite** —
-   le 452 l'a diagnostiquée sur `STAR_SHIP_NEAR_R` puis a gardé la constante « en réserve ». La
-   ligne le dit maintenant, et la constante est supprimée. *Une leçon qu'on écrit sans l'appliquer
-   dans le même zip est une leçon qu'on repaiera.*
-
-   ⚠️⚠️ **LE 454 A ÉLAGUÉ LE TABLEAU DES LEÇONS POUR LA SECONDE FOIS EN DEUX ZIPS, ET C'EST LE
-   SIGNE QUE LA FORME EST LA BONNE** : il annonce « les quatre derniers zips », il en portait cinq
-   (448 → 453), il en porte quatre (451 → 454). Les deux lignes du 448 ne sont pas résumées ailleurs
-   — elles vivent au §28 de `ferme/README.md`, que leur colonne de droite désignait déjà. *Une ligne
-   de tableau qu'on retire en ayant vérifié où elle vit n'est pas une perte, c'est un déménagement
-   qui a réussi.*
-
-   ⚠️⚠️ **LE 456 N'A PAS EXÉCUTÉ L'ORDRE DU 453 (RELIRE `ferme/README.md` CONTRE LE CODE) — IL EST
-   DONC REPORTÉ POUR LA TROISIÈME FOIS, ET ÇA COMMENCE À RESSEMBLER AUX QUATRE REPORTS DU 444.** Ce
-   qu'il a fait à la place mérite quand même d'être noté, parce que c'est la même grandeur : il a
-   trouvé, en jouant, que **cinq phrases de la quête n'avaient aucun chemin d'affichage** alors que
-   le banc les comptait comme lues. *La question du 453 — « chaque chose que le document dit visible
-   a-t-elle un chemin de code qui l'affiche ? » — vient de se reposer sur le CODE au lieu du
-   document, et elle a payé une seconde fois.*
-
-   ⚠️⚠️ **LE 458 NE L'A PAS FAIT NON PLUS — CINQUIÈME REPORT, ET ON DÉPASSE MAINTENANT LES QUATRE
-   REPORTS DU 444.** Ce qu'il a fait à la place est de la même famille et vaut d'être noté : il a
-   trouvé, en jouant à DEUX clients, que **trois mécaniques décrites comme jouables ne l'étaient
-   pas** dès qu'un second joueur se connectait. *La question du 453 — « chaque chose que le document
-   dit possible a-t-elle un chemin de code qui la rende possible ? » — vient de se reposer sur la
-   COOPÉRATION, et elle a payé une troisième fois.*
-
-   ⚠️ **L'ORDRE DU PROCHAIN ZIP : RELIRE `components/ferme/README.md` CONTRE LE CODE**, comme le 452
-   l'a fait pour `QUETE.md` et avec le même rendement. C'est le seul document d'autorité du dépôt
-   qui n'ait jamais eu sa passe, il couvre 428-451, et deux de ses chapitres décrivent du code que
-   le 453 vient de changer (§30 le navire, §26 le cratère). ⚠️ **La grandeur à mesurer en premier
-   est celle qui a payé au 453** : *chaque chose que le document dit visible à l'écran a-t-elle un
-   chemin de code qui l'affiche ?*
+   ⚠️⚠️ **L'ORDRE REPORTÉ SEPT FOIS, ET IL EST TOUJOURS OUVERT : RELIRE `components/ferme/README.md`
+   CONTRE LE CODE**, comme le 452 l'a fait pour `QUETE.md` et avec le même rendement (quatre dettes
+   qui n'étaient écrites nulle part, des chiffres de bancs faux, un chapitre qui annonçait comme
+   « pas encore construit » quelque chose de livré huit zips plus tôt). C'est le seul document
+   d'autorité du dépôt qui n'ait jamais eu sa passe. ⚠️ **La grandeur à mesurer en premier est celle
+   qui a payé trois fois** (453 sur le document, 456 sur le code, 458 sur la coopération) : *chaque
+   chose que le document dit visible à l'écran a-t-elle un chemin de code qui l'affiche ?*
 
 3. **Critère d'inclusion** : « est-ce vrai à l'échelle du projet, et invérifiable en ouvrant
    un seul fichier ? » Sinon, ça va dans un commentaire de code. **L'histoire d'un défaut

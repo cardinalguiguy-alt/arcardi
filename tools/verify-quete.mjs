@@ -2338,7 +2338,18 @@ section("Les textes disent-ils la même chose que le monde ?");
     for (const file of FILES) {
       const body = fs.readFileSync(path.join(ROOT, "components", "ferme", file), "utf8");
       srcLen += body.length;
-      for (const m of body.matchAll(/L\.maire\.([A-Za-z0-9_.]*)/g)) used.add(m[1]);
+      /* ⚠️⚠️ HORS-ZIP 2026-09-02 — TROIS ÉCRITURES DE LA MÊME LECTURE, ET LE
+         BANC DOIT LES CONNAÎTRE TOUTES LES TROIS. Depuis que le maire peut être
+         une maire, la vue lit `LM.` (la table déclinée, mémoïsée dans
+         `MaireScene`) et le jeu lit `maireL().` (la même, recalculée à chaque
+         affichage parce que le maire change d'un mandat à l'autre). `L.maire.`
+         reste pour ce qui n'a pas de genre. Ne reconnaître que la première
+         forme, c'est déclarer mortes cent quatre-vingts phrases parfaitement
+         affichées — ce qui est arrivé à la seconde où les appels ont changé de
+         nom : le banc est tombé à l'instant juste, pour la mauvaise raison.
+         *Un banc qui cherche un NOM D'APPEL mesure une écriture, pas un
+         affichage ; il faut alors qu'il les énumère toutes.* */
+      for (const m of body.matchAll(/(?:L\.maire|LM|maireL\(\))\.([A-Za-z0-9_.]*)/g)) used.add(m[1]);
     }
     const leaves = [];
     (function walk(o, at) {

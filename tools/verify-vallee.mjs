@@ -83,7 +83,15 @@ function walkable(x, y) {
   if (x < 0 || y < 0 || x >= W || y >= H) return false;
   if (railBlocked(x, y)) return false;
   const i = idx(x, y);
-  if (tw.solid[i]) return false;
+  /* ⚠️⚠️ HORS-ZIP 2026-09-02 — LA VÉGÉTATION BASSE SE TRAVERSE, ET CE BANC DOIT
+     LE SAVOIR AVANT TOUT LE MONDE. `soft` est dérivée par le générateur (voir
+     sa passe finale) ; `blockedTown` (le jeu) et `townNav` (le moteur) la lisent
+     tous les deux. Un banc qui garderait l'ancienne règle mesurerait un autre
+     programme (§10) : il l'a d'ailleurs fait pendant dix minutes ce jour-là — le
+     pathfinder du moteur traversait une touffe d'herbe de la rive que ce banc
+     refusait, et il rendait « bloqué en (137.2,154.1) » sur quatre trajets,
+     c'est-à-dire un diagnostic entièrement faux sur du code juste. */
+  if (tw.solid[i] && !(tw.soft && tw.soft[i])) return false;
   if (tw.ground[i] === C.G_WATER) return false;
   const o = tw.objects[i];
   return !(o === C.O_TREE || o === C.O_TREE2 || o === C.O_STUMP);

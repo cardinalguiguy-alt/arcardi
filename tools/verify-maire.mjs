@@ -990,6 +990,81 @@ section("§11 la vue, remplie pour de vrai");
      bad.length === 0, bad.slice(0, 3).join(" | ") || `${produced.size} raisons rendues`);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   HORS-ZIP 2026-09-02 — LES TROIS TABLES DU MÊME PERSONNAGE.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️⚠️ CE CHAPITRE EXISTE PARCE QUE LE DÉFAUT QU'IL ATTRAPE A VÉCU DEUX ZIPS
+   SANS QUE RIEN NE PUISSE LE VOIR : `L.candName` disait « Odile Vasseur »,
+   `MAIRE_FR` disait « Il ouvre un registre » et `buildMayor` dessinait un homme.
+   Trois fichiers, trois affirmations sur le même personnage, aucune jointure —
+   et chacun était juste tout seul. C'est le §4 de `CLAUDE.md` (« deux cartes
+   sans repère commun finissent par se mélanger ») appliqué à une identité.
+   ⚠️ LA GRANDEUR MESURÉE EST L'ÉGALITÉ DES CLÉS, dans les DEUX sens. Un maire
+   sans corps se dessinerait au hasard ; un corps sans maire serait du code mort
+   que personne ne verrait jamais tomber.
+   ═══════════════════════════════════════════════════════════════════════════ */
+section("les trois tables du même personnage — nom, corps, texte");
+{
+  const cands = C.TOWN_CANDIDATES.map(c => c.key).sort();
+  const looks = [...B.MAYOR_LOOK_KEYS].sort();
+  ok("un corps par candidat, et pas un de plus",
+     JSON.stringify(cands) === JSON.stringify(looks), cands.join(", "));
+  /* ⚠️ ET LE MÊME SEXE DES DEUX CÔTÉS. Sans ce contrôle, une maire au corps de
+     femme pourrait parler au masculin — c'est-à-dire l'état d'avant, à moitié
+     corrigé, et donc plus difficile à voir qu'avant. */
+  const mismatch = C.TOWN_CANDIDATES.filter(c => !!c.fem !== !!B.MAYOR_LOOKS[c.key].fem);
+  ok("le sexe du candidat est celui de son corps", mismatch.length === 0,
+     mismatch.length ? mismatch.map(c => c.key).join(", ")
+                     : C.TOWN_CANDIDATES.filter(c => c.fem).length + " femme(s) sur " + cands.length);
+  /* ⚠️ LE PRÉNOM EST LA TROISIÈME AFFIRMATION, ET C'EST CELLE QUI A MENTI LE PLUS
+     LONGTEMPS. On ne peut pas deviner un sexe depuis un prénom en général — ici
+     les cinq sont connus, on les nomme, et c'est justement ce qui rend le
+     contrôle honnête plutôt que malin. */
+  const FEM_FIRST = { Odile: 1, Séverine: 1, Ninon: 1, Marceau: 0, Basile: 0 };
+  const nameBad = C.TOWN_CANDIDATES.filter(c => {
+    const first = String(FERME_STR.fr.candName(c.key)).split(" ")[0];
+    return FEM_FIRST[first] === undefined || !!FEM_FIRST[first] !== !!c.fem;
+  });
+  ok("le prénom, le corps et le drapeau disent la même chose", nameBad.length === 0,
+     nameBad.length ? nameBad.map(c => c.key + " = " + FERME_STR.fr.candName(c.key)).join(", ")
+                    : C.TOWN_CANDIDATES.map(c => FERME_STR.fr.candName(c.key)).join(" · "));
+  /* ⚠️⚠️ LA SURCHARGE FÉMININE NE DOIT DÉSIGNER QUE DES CLÉS QUI EXISTENT. Une
+     clé mal orthographiée serait un texte écrit, jamais affiché, et rien ne le
+     dirait — c'est le banc imaginaire du §14.6, appliqué à une phrase. */
+  /* ⚠️ ON LIT LA SURCHARGE BRUTE, PAS LA FUSION. Comparer la table fusionnée à
+     la base ne peut RIEN trouver : la fusion contient la base par construction,
+     donc « aucune clé orpheline » serait vrai pour toujours — un contrôle qui
+     ne peut pas échouer (441). */
+  const base = FERME_STR.fr.maireFor(false), over = FERME_STR.fr.maireFem();
+  const strays = [];
+  const walk = (a, b2, at) => {
+    for (const k in b2) {
+      if (a[k] === undefined) { strays.push(at + k); continue; }
+      if (b2[k] && typeof b2[k] === "object" && typeof b2[k] !== "function") walk(a[k], b2[k], at + k + ".");
+    }
+  };
+  walk(FERME_STR.fr.maire, over, "");
+  ok("⚠️ chaque clé féminine surcharge une clé qui existe", strays.length === 0,
+     strays.slice(0, 5).join(", ") || "aucune clé orpheline");
+  /* ⚠️ ET LA DÉCLINAISON DOIT VRAIMENT DÉCLINER : une surcharge qui recopie le
+     masculin est une surcharge qu'on croit avoir écrite. On compte les feuilles
+     qui DIFFÈRENT — si le compte tombe à zéro, quelqu'un a écrasé le fichier. */
+  let changed = 0, leaves = 0;
+  const cmp = (a, b2) => {
+    for (const k in b2) {
+      if (b2[k] && typeof b2[k] === "object" && typeof b2[k] !== "function") { cmp(a[k] || {}, b2[k]); continue; }
+      leaves++;
+      const av = typeof a[k] === "function" ? String(a[k]("X")) : String(a[k]);
+      const bv = typeof b2[k] === "function" ? String(b2[k]("X")) : String(b2[k]);
+      if (av !== bv) changed++;
+    }
+  };
+  cmp(base, over);
+  ok("⚠️⚠️ la table féminine décline vraiment", changed >= 60 && changed === leaves,
+     `${changed} phrase(s) déclinée(s) sur ${leaves} surchargée(s)`);
+  ok("le masculin, lui, n'a pas bougé", base === FERME_STR.fr.maire);
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(`\n${fails === 0 ? "✅" : "❌"} ${total - fails}/${total} contrôles passés.\n`);
 process.exit(fails === 0 ? 0 : 1);
