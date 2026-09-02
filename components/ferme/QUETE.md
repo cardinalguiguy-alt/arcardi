@@ -1,5 +1,318 @@
 # LA QUÊTE DE L'ÉTOILE — « LE BATEAU DES ÉTOILES » / « THE STAR BOAT »
 
+## ⚠️⚠️⚠️ MASTER PROMPT 2026-09-02 — LA REINE NOURRIE-MARTELÉE, ET LA SEPTIÈME SŒUR AU LAC MALÉFIQUE
+
+⚠️⚠️⚠️ **LES SEPT QUESTIONS DU §6 ONT ÉTÉ POSÉES ET TRANCHÉES AVEC GUILLAUME LE 2026-09-02, ET LE
+LOT A EST LIVRÉ.** Les réponses sont inscrites dans le §6 lui-même, à la place des questions —
+elles ne s'empilent pas, elles remplacent (§14.1 de `CLAUDE.md`). Le reste de ce document (lots B à
+F) reste un ordre de mission : **rien n'en est implémenté**. **Lis-le en entier avant de toucher un
+fichier**, comme le §2 de `CLAUDE.md` le demande pour tout changement important.
+
+⚠️ **CE QUE LES RÉPONSES ONT CHANGÉ AU PLAN LUI-MÊME, ET C'EST STRUCTUREL** : le seuil de la
+septième sœur est « reine apprivoisée **et six étoiles trouvées** », donc les sœurs **5 et 6
+doivent exister AVANT** la partie B. Le découpage A → B → C du §5 ne le prévoyait pas ; il est
+corrigé là-bas.
+
+⚠️ **Ce chantier REMPLACE, sur le sort de la 7ᵉ sœur, ce que disent §17.6/§17.7/§17.7 bis
+plus bas dans ce fichier** (la violette guidée par des feux dans le brouillard, pendant le voyage
+d'Eduardo). Cette idée n'a jamais été codée — elle est remplacée sans perte par celle décrite ici,
+plus concrète et plus incarnée. **Les sœurs 5 (verte, aux quais) et 6 (orange, chez Tristan) ne
+sont PAS traitées par ce chantier** : leur conception (§17.5/§17.6) reste ce qu'il y a de plus
+proche d'une cible, mais rien n'est tranché avec la même précision que ce qui suit. Voir §6.
+
+### 1. Vue d'ensemble de ce qui change
+
+Deux morceaux, indépendants l'un de l'autre mais backés par la même leçon (§4 de `CLAUDE.md` :
+*chaque geste doit dire pourquoi il compte, même magiquement*) :
+
+**A. La reine** (`STAR_SITES` → `crater`, verbe actuel `pair`) devient plus dure et plus juste
+narrativement : on la NOURRIT (une ressource tirée de l'étoile bleue déjà apprivoisée), on la
+MARTÈLE pour la réveiller (jusque-là verbe `pair` suffisait à lui seul — il devient la SECONDE
+moitié du geste, pas plus le seul).
+
+**B. Une septième étoile**, la dernière, se trouve **prisonnière du lac violet du monde
+maléfique** — un lieu qui existe DÉJÀ dans le jeu (voir §4). Elle se sauve par une chaîne de gestes
+neuve : indice de la reine → chevron vers le chaudron → protection de la canne → pêche difficile
+(plusieurs poissons-squelettes avant l'étoile) → ramener à la rive → sortir du monde maléfique →
+poser au sol côté ferme → réanimer par appuis répétés → elle rejoint la formation.
+
+**Et la fin** : une fois toutes les étoiles réunies, se rendre à la jetée la nuit, une touche
+envoie les sept lumières former la constellation dans le ciel. Fondu, overlay de victoire.
+
+### 2. Partie A — la reine : nourrir, marteler, PUIS dos-à-dos
+
+**Séquence, dans cet ordre** (Guillaume a tranché : nourrir → marteler → dos-à-dos, PAS l'inverse,
+et PAS en remplacement l'un de l'autre) :
+
+1. **Nourrir.** Il faut lui apporter **60 unités d'une ressource « lumière bleue »**, tirée de
+   l'étoile bleue déjà apprivoisée (`farmStarBlue`, verbe `light`) — c'est elle qui rend la reine
+   atteignable, le fil narratif que la conversation avec Guillaume visait explicitement (« les
+   petites aident à atteindre la grande »). ⚠️ **NON TRANCHÉ** : comment cette ressource se
+   produit — un geste actif du joueur auprès du compagnon bleu (à décider : quel geste, combien de
+   temps), ou un flux passif qui s'accumule tant que la bleue est compagne ? Voir §6.
+2. **Marteler.** Une fois nourrie, la reine peut être réveillée par un geste de martèlement/
+   tapotement — appuis répétés en rythme, jouable au clavier ET au doigt sur tablette (Guillaume :
+   « martèle étoile (ou tapoter sur iPad) »). ⚠️ **RÉUTILISER `BarnMinigame`**
+   (`components/ferme/FermeGame.js:32865`), le patron d'« appuis répétés » déjà utilisé pour
+   `starRaise` (le marteau qui hisse une pièce du navire sur la cale, zip 2026-09-01) — ne pas en
+   écrire un second qui divergerait au premier réglage (§8 de `CLAUDE.md`).
+3. **Dos-à-dos (ou épouvantail seul).** Le geste `pair` déjà écrit (`resolveStarCalm`, verbe
+   `pair`) reste la conclusion : une fois réveillée, il faut encore la convaincre de se calmer. Ce
+   n'est plus le seul geste de la reine, c'est le DERNIER étage d'une séquence à trois temps.
+
+**La scène d'éveil — un VRAI morceau de 3D, dans l'esprit comique.** Guillaume : « une scène
+d'éveil comique de l'étoile, qui passe de grisâtre et lente à jaune brillante et animée, avec des
+yeux sur l'animation quand on a réussi à tapoter en rythme. » Elle se déclenche quand le martèlement
+réussit (étape 2), avant le dos-à-dos.
+
+- **Architecture** : un écran dédié plein cadre, sur le modèle de `MaireScene.js` /
+  `ScierieScene.js` — jamais une animation posée dans le canevas 2D principal, les deux scènes 3D
+  existantes du jeu suivent cette forme et rien d'autre. Camera fixe ou légèrement mobile (pas
+  besoin de la liberté de `MaireScene`), le sujet est la créature, pas la pièce.
+- **BlenderMCP est autorisé pour cette scène** (accord de Guillaume, 2026-09-02) — mais
+  ⚠️⚠️⚠️ **LA LEÇON DU 481 EST NON NÉGOCIABLE** : le bureau du maire a été livré une fois en glTF
+  exporté de Blender, jamais ouvert dans un canevas, et le maire flottait deux mètres derrière le
+  mur pendant un zip entier — aucun banc du dépôt ne peut relire une DONNÉE importée. **Toute
+  géométrie sortie de Blender doit être regardée** — soit rastérisée sans GPU sur le modèle de
+  `tools/render-maire.mjs` (`tools/lib-3d.mjs`, three.js r128 vendorisé, AUCUNE dépendance npm),
+  soit ouverte en vrai dans le navigateur — **avant** d'être déclarée livrée. Le maire et Tristan
+  ont fini par être écrits en three.js procédural (`maireBureau.js`, `scierieAtelier.js`,
+  `rig3d.js`) plutôt qu'importés : c'est la voie qui a marché deux fois, pas un hasard.
+- **Le comique** vient du CONTRASTE : lenteur/couleur grise/immobilité qui bascule d'un coup en
+  vivacité/jaune éclatant/regard qui s'ouvre — pas d'un gag ajouté par-dessus. Grisâtre → jaune
+  n'est pas qu'une teinte, c'est un changement de matière (terne/mat → lumineux/qui pulse).
+- ⚠️ **Un nouveau verbe implique une nouvelle entrée dans `STAR_VERBS`** (`quete.js:209`) et
+  `verify-quete` refusera toute étoile dont le verbe n'y figure pas — c'est voulu, c'est le
+  garde-fou qui a empêché un repli silencieux par le passé (voir le commentaire à côté de
+  `starVerbOf`).
+
+### 3. Partie B — la septième sœur, prisonnière du lac maléfique
+
+**Le lac existe DÉJÀ.** `generateEvilWorld` (`fermeEngine.js:490-504`) pose un « grand lac violet
+luisant » depuis 2026-07 (`lakeCx=47, lakeCy=30, lakeR=12`, `ground = C.G_WATER`), pour
+l'ambiance. Personne n'y avait donné de fonction narrative — c'est exactement ce que cette quête
+lui donne. ⚠️ **À FAIRE EN PREMIER, avant tout le reste** : sortir ces trois nombres en constantes
+exportées (`EVIL_LAKE_X/Y/R` ou équivalent, dans `fermeConstants.js`) — aujourd'hui ils sont
+recopiés en dur dans une seule fonction, mais la pêche, le placement de l'étoile et le chevron de
+guidage vont tous les trois avoir besoin de savoir où est ce lac. Trois lectures d'un seul nombre
+recopié à la main, c'est exactement le piège du §4 (« une même grandeur écrite à sept endroits »).
+
+**La séquence complète, dans l'ordre où Guillaume l'a racontée :**
+
+1. **Le déclencheur.** Une fois les autres étoiles réunies (nombre exact à confirmer, §6), la
+   reine dit — en bulle, comme les autres compagnes (`trailFollow`, §3 pour la position dérivée) :
+   *« La septième étoile a perdu presque toute son énergie. Elle est prisonnière d'un liquide qui
+   la corrompt ; elle s'éteint. Trouve-la. »* Puis un overlay de mission prend le relais :
+   « Objectif : trouver la septième étoile. » ⚠️ Réutiliser le patron d'overlay des fouilles
+   (`STAR_DIG_RESULTS`, l'overlay à médaillon) pour la forme, pas le fond — c'est un overlay de
+   MISSION, pas de résultat, donc un habillage différent, mais le même geste (s'affiche seul, se
+   ferme seul).
+2. **Le guidage.** Un chevron (`drawStarChevron`, `FermeGame.js:22305`, piloté par
+   `STAR_GOAL_TARGET`/`starGoalCtx` dans `quete.js`) mène d'abord au passage vers le monde
+   maléfique, puis, une fois dedans, au lac. ⚠️ `STAR_GOAL_TARGET` connaît déjà `"cauldron"` comme
+   cible valide (`quete.js:1986`) — ajouter une cible `"evilLake"` (ou équivalent) est la même
+   famille d'ajout, pas un nouveau mécanisme.
+3. **La découverte.** On voit dépasser du lac une branche de l'étoile, terne, presque grise, qui
+   se débat lentement. On s'approche : elle dit « Sauve-moi ». Quelques secondes après, la reine
+   (toujours en bulle, à distance) explique qu'il faudra la canne à pêche.
+4. **Le piège — la canne casse dans cette eau.** Utiliser la canne nue dans le lac maléfique la
+   fait casser en **3 secondes** (un compteur qui s'arme au premier lancer, rend la canne inutilisable
+   ensuite). C'est un **hazard NEUF** — l'eau maléfique n'endommage rien aujourd'hui dans le code
+   (vérifié : aucune trace de dégât lié à `G_WATER` en zone `evil`). ⚠️ Traiter ce compteur comme
+   tout minuteur de quête : dérivé d'un horodatage posé côté HÔTE au premier lancer, jamais compté
+   en local (§3 de `CLAUDE.md`, « ne jamais comparer une horloge hôte à une horloge invité »).
+5. **La protection.** La reine a l'idée : enduire la canne d'un liquide protecteur. Le chevron
+   pointe vers le chaudron. La concoction y est **déjà prête** en arrivant (pas d'ingrédients à
+   rassembler pour cette étape précise — Guillaume a été explicite). Un **E** à proximité du
+   chaudron « enduit » la canne. ⚠️ Réutiliser le système de menu du chaudron déjà existant
+   (`cauldronMenuOpenRef`, la même famille que la préparation du plat de l'étoile rose ou de
+   l'Essence d'étoile de la blanche) plutôt qu'inventer un second geste « E près d'un objet ».
+6. **La fenêtre protégée.** Pendant **10 minutes réelles**, la canne est protégée : un sprite avec
+   une fine fumerolle glow **violet et noir** tout autour signale l'état (à dessiner —
+   `fermeArt.js`, dans l'esprit des halos déjà utilisés ailleurs dans la quête, ex. la colonne de
+   lumière du cratère). Icône d'état à prévoir dans la barre d'objet équipé, pas seulement sur le
+   sprite en main.
+7. **La pêche.** Retour au lac. ⚠️ **RÉUTILISER `FishMinigame`**
+   (`FermeGame.js:32768`) et le déclencheur `startFishing()` (`FermeGame.js` ~9294) — la pêche est
+   **déjà gated uniquement sur `ground === C.G_WATER`**, sans notion de zone : elle fonctionne DÉJÀ
+   sur le lac maléfique sans rien changer au mécanisme de tirage/morsure/mini-jeu. Ce qui manque est
+   une **table de prises dédiée à ce lac** (des « poissons-squelettes », 3 à 6 prises manquées/
+   ratées avant de décrocher l'étoile — sprites neufs, sur le modèle de `C.FISH`/`C.SEA_CREATURES`
+   déjà existants) et un dernier « poisson » spécial qui EST l'étoile.
+8. **Ramener à la rive.** Une fois l'étoile ferrée, il faut une mécanique pour la ramener au bord
+   — Guillaume l'a nommée sans la détailler. ⚠️ **NON TRANCHÉ**, voir §6 : le modèle le plus proche
+   dans ce dépôt est la tension/l'inertie de `scierie.js` (une résistance qui répond à l'effort,
+   jamais un simple minuteur) plutôt qu'un QTE plat.
+9. **La sortir du monde maléfique.** Une fois à la rive, on la « attrape » (ramassage, comme un
+   compagnon qu'on porte plutôt qu'un objet dans le sac — cohérent avec `trailFollow`, sauf
+   qu'ici elle NE PEUT PAS suivre seule, voir point suivant) et on ressort par le passage
+   (`EVIL_RETURN_PASSAGE`, déjà défini) jusqu'à la ferme.
+10. **La réanimation.** Sur la ferme, on la pose au sol (elle n'a pas l'énergie de suivre toute
+    seule). On la réanime par appuis répétés pendant environ **10 secondes** — ⚠️ **même patron que
+    le martèlement de la reine (§2) et que `starRaise`** : un seul mini-jeu d'« appuis répétés »
+    paramétré par durée/cadence, réutilisé trois fois plutôt que réécrit trois fois. Puis
+    l'animation d'arrivée déjà existante pour toute étoile qui rejoint la formation
+    (`starFollowerAdded`, l'animation « climb » citée dans le commentaire de `fermeConstants.js`).
+
+### 4. Partie C — la finale : la jetée, la nuit, la constellation
+
+Une fois toutes les étoiles réunies : overlay « Rends-toi à la jetée, à la tombée de la nuit ».
+Une zone marquée au sol sur le ponton de Valley Town ; en l'atteignant de nuit, **Espace** envoie
+les étoiles former la constellation — sept lumières qui tournoient et montent au ciel, fondu
+enchaîné, puis overlay de victoire (texte à écrire, ton de fin de quête — pas un simple toast).
+
+⚠️ **CE QUE CETTE PARTIE NE PEUT PAS FAIRE AUJOURD'HUI** : la constellation à sept points et le
+ciel qui en dérive supposent SEPT étoiles réunies. Ce chantier n'en construit que CINQ au total
+(les trois de la ferme + la reine, déjà là, + cette septième). **Les sœurs 5 et 6 (verte, orange)
+restent à construire séparément** — voir §17.5/§17.6 plus bas pour leur direction de conception,
+non retranchée par ce document. Deux issues possibles, à trancher avec Guillaume avant d'écrire la
+partie C : (a) on retarde cette scène de fin tant que 5 et 6 n'existent pas, ou (b) on la construit
+maintenant avec le compte réel de sœurs existantes et on ajuste le nombre de points de la
+constellation le jour où 5 et 6 arrivent. **Ne pas inventer les sœurs 5 et 6 pour combler le
+chiffre sept** — ce serait écrire une mécanique que personne n'a validée.
+
+### 5. Découpage en lots — un changement visuel à la fois (règle du 424)
+
+C'est un gros chantier ; il se livre en morceaux JUGEABLES séparément, jamais en un seul bloc :
+
+⚠️⚠️ **LE DÉCOUPAGE A CHANGÉ APRÈS LES RÉPONSES DU §6, ET PAS POUR UNE RAISON DE CONFORT** : le
+seuil de la septième sœur est « reine apprivoisée **et six étoiles trouvées** ». Les sœurs 5 et 6
+ne sont donc plus « un chantier d'à côté qu'on fera peut-être » — elles sont sur le chemin critique,
+entre A et C. Les livrer après aurait donné une partie B injouable, ce qu'aucun banc n'aurait dit.
+
+| lot | contenu | ce qui se juge, isolément | état |
+|---|---|---|---|
+| A | La reine : nourrir (80 lumières) + réveiller au rythme | le geste en trois temps est-il clair, le réveil est-il agréable | ✅ **LIVRÉ 2026-09-02** |
+| A2 | **Sœur n°6, la discrète** — chapeau + lunettes, entre place centrale et parc, E pour l'apprivoiser | la trouve-t-on sans indice explicite, le déguisement amuse-t-il | ❌ |
+| A3 | **Sœur n°5** — simplifiée : la chercher, avec des indices | les indices suffisent-ils sans chevron | ❌ |
+| B | La scène d'éveil 3D (procédurale ou Blender+vérifiée) | comique, lisibilité du changement gris→jaune, `render-*.mjs` avant tout jugement en jeu | ❌ |
+| C | Le lac maléfique : constantes exportées, découverte, chevron, hazard de la canne | on trouve l'étoile, on comprend le danger, sans encore pouvoir la sauver | ❌ |
+| D | La protection de la canne (chaudron) + la pêche (poissons-squelettes) | la pêche est difficile mais juste, le glow de protection se voit et se comprend | ❌ |
+| E | Ramener à la rive — `FishMinigame` inchangé pour la prise, **puis un second jeu à touche répétée** — + sortie + réanimation | le sauvetage entier, de bout en bout, une fois | ❌ |
+| F | La finale (jetée, constellation à sept points) | la fin de la quête | ❌ |
+
+⚠️ **LA PARTIE C DU §4 EST DÉSORMAIS TRANCHÉE PAR LE SEUIL** : la constellation aura bien **sept**
+points, puisque A2 et A3 amènent le compte à six avant la septième. L'alternative « on la construit
+à cinq et on ajuste plus tard » tombe d'elle-même.
+
+### 6. Les sept questions — TRANCHÉES AVEC GUILLAUME LE 2026-09-02
+
+⚠️ **Ce ne sont plus des questions, ce sont des décisions.** Elles remplacent la liste d'origine
+(§14.1 de `CLAUDE.md` : une information périmée se supprime, elle ne se date pas). Deux d'entre
+elles ont changé le PLAN et pas seulement le contenu — c'est signalé.
+
+1. **La « lumière bleue » = les bonbons de Temple Run, exactement comme pour la petite bleue.**
+   *« Aller récolter les points sur le jeu temple run. Puis payer au point du cratère. persistance
+   après fin de partie (mort ou offroad), 5 minutes. »* Aucune nouvelle production à écrire :
+   `resolveStarCandy` alimente déjà un FLUX daté, et `STAR_CANDY_FRESH_MS` valait déjà 5 minutes.
+   ✅ **LIVRÉ** (lot A).
+2. **Le prix est 80**, pas 60. ⚠️ Le chiffre a été posé après avoir constaté que `STAR_CANDY_PRICE`
+   valait **déjà 60** pour la petite bleue : deux « va chercher 60 choses » d'affilée auraient donné
+   l'impression de refaire l'étape précédente. L'écart dit que c'est une autre étoile, plus chère.
+   ✅ **LIVRÉ** — `STAR_QUEEN_PRICE`, lu par le seul `starOfferPrice`.
+3. **Le martèlement : une mécanique NEUVE, sans gros overlay.** *« nouvelle mécanique à inventer, tu
+   jugeras. faut pas cacher avec un overlay trop gros. »* ⚠️ **Les deux patrons d'appui du dépôt ont
+   donc été ÉCARTÉS, et il faut savoir pourquoi avant d'être tenté de les reprendre** :
+   `BarnMinigame` et `WolfBiteMinigame` sont tous les deux des **panneaux plein écran**
+   (`ferme-fish-ov`) — ils cacheraient l'étoile à l'instant précis où elle passe du gris au jaune,
+   c'est-à-dire la seule chose que ce geste a à montrer. (Au passage : `BarnMinigame` n'est de toute
+   façon **pas** un martèlement, c'est un curseur qui balaie ; le vrai martèlement du dépôt est
+   `WolfBiteMinigame`. Le §2 de ce document les confondait.) ✅ **LIVRÉ** — voir §2 bis ci-dessous.
+4. **Seuil de la partie B : reine apprivoisée ET six étoiles trouvées.** ⚠️⚠️ **CETTE RÉPONSE CHANGE
+   LE PLAN** : les sœurs 5 et 6 doivent exister avant la septième. Voir §5.
+5. **Sœur n°6, « la discrète ».** *« elle se cache entre les pnj, tranquillement, parfois sur un
+   banc, parfois circulant normalement : elle sera entre la place centrale, et le parc, elle pourra
+   se mouvoir dans cet espace seulement. »* Mini chapeau, lunettes de soleil ; la reine oriente vers
+   elle ; on l'apprivoise en pressant E. ❌ **NON CONSTRUITE.**
+6. **Sœur n°5 : simplifiée elle aussi.** *« SIMPLIFIEE, IL FAUT JUSTE LA CHERCHER. mais avoir des
+   indices sur où elle se trouve. on peut tout à fait trouver la 6 sur le chemin, bien sûr et faire
+   la 5 après la 6. »* ⚠️ La chasse spatiale du §17.5 (triangle de bornes, reflet dans l'eau) n'est
+   donc **pas** ce qu'on construit ; elle reste écrite si elle revient un jour. ❌ **NON CONSTRUITE.**
+7. **« Ramener la 7ᵉ à la rive » : deux jeux, pas un.** *« le fish mini game doit être simple comme
+   celui qu'on connait déjà. Mais quand on a enfin la prise sur l'étoile c'est un autre jeu qui se
+   déclenche (on tire la canne par une action répétée sur la touche) invente une mécanique. »*
+   ❌ **NON CONSTRUITE.**
+8. **Coopération : naturelle, jamais une serrure.** *« la coop aidera naturellement puisque ça se
+   passe sur evil world. L'autre joueur pourra retenir les ennemis pendant que le pêcheur sera
+   protégé. »* Le second joueur n'a aucun geste dédié à inventer : c'est le MONDE qui rend sa
+   présence utile. ⚠️ C'est la meilleure forme possible du §4 (« la coopération est une conséquence,
+   pas une serrure ») — elle ne coûte ni message, ni état, ni barème. ❌ **NON CONSTRUITE.**
+
+⚠️ **CE QUI RESTE OUVERT ET N'A PAS ÉTÉ POSÉ** : les poissons-squelettes donnent-ils quelque chose
+(or, cosmétique, ou juste la déception comique), et combien de sprites distincts ? Question du lot D,
+sans effet sur ce qui précède — à trancher le jour où le lot D s'ouvre.
+
+### 2 bis. Le réveil au rythme — LIVRÉ (lot A, 2026-09-02)
+
+**La mécanique, en une phrase : un anneau se contracte vers le trou, on frappe quand il traverse la
+marque, et l'étoile passe du gris au jaune.** Il n'y a aucun panneau — l'interface EST le décor.
+
+| grandeur | valeur | où |
+|---|---:|---|
+| battements à placer | 8 | `STAR_WAKE_HITS` |
+| période du premier battement | 1 100 ms | `STAR_WAKE_PERIOD_MS` |
+| ce qu'une réussite retire à la période | 45 ms | `STAR_WAKE_STEP_MS` |
+| plancher | 700 ms | `STAR_WAKE_MIN_MS` |
+| bande cible | 74 % → 96 % de la période | `STAR_WAKE_BAND_A/B` |
+| battements sans appui avant effacement | 3 | `STAR_WAKE_IDLE_BEATS` |
+
+⚠️⚠️ **CES SIX NOMBRES SONT DE CLAUDE, PAS DE GUILLAUME** (« tu jugeras ») : ils attendent une
+séance de jeu, comme les trois nombres de la scierie (§13 de `CLAUDE.md`), et **aucun ne doit bouger
+avant**. Mesuré par `verify-quete`, qui JOUE la mécanique : jeu parfait **5,7 s / 8 appuis** ; joueur
+qui laisse passer un battement sur trois **8,4 s**, il gagne quand même ; **martèlement à 8, 12 et
+20 appuis/s : 0 ou 1 battement placé en 30 secondes** — il ne gagne jamais.
+
+⚠️⚠️⚠️ **TROIS CHOSES À NE PAS DÉFAIRE :**
+1. **Un appui hors bande RETIRE un battement.** C'est la seule ligne qui empêche le martèlement de
+   gagner, et sans elle tout le reste du banc reste vert (vérifié en la retirant : mash gagnant en
+   6 s). C'est aussi ce que `s2.wakeHint` annonce avant qu'on essaie.
+2. **La jauge, c'est la COULEUR de l'étoile** — il n'y a pas de barre. Une seconde grandeur dessinée
+   serait une seconde réponse à « où en suis-je », donc une qui finirait par mentir (456).
+3. **Le tempo accélère parce que c'est un cœur qui repart**, pas pour « monter la difficulté ». La
+   difficulté est une conséquence de la fiction — la seule forme de réglage qui s'explique au joueur
+   sans texte.
+
+**Où ça vit** : les deux décisions pures (`starWakeAdvance`, `starWakeStrike`) sont dans `quete.js`
+— sorties de `FermeGame.js` **pour que le banc puisse les jouer**, exactement comme `maire.js` et
+`scierie.js`. `FermeGame.js` ne garde que ce qu'un banc ne peut pas jouer : le ref, la zone, la
+distance au cratère, l'immobilité, l'envoi de la requête. Le dessin est `A.drawStarWakeRing`
+(`fermeArt.js`), regardé par `render-etoile` (planche `tools/out/etoile-reveil.png`).
+
+⚠️ **LA PLANCHE A CORRIGÉ TROIS DÉFAUTS QUE LA RELECTURE N'AVAIT PAS VUS** : à zéro battement il n'y
+avait rien au milieu (le joueur pressait E et voyait un anneau vide autour d'un trou noir) ; la
+marque et la couronne des battements tombaient à quatre pixels l'une de l'autre, donc on ne pouvait
+pas distinguer sa CIBLE de son SCORE ; et les encoches posées sur le trait s'y noyaient. *Un motif
+se juge assemblé.*
+
+### 7. Definition of Done — l'exigence, précisée
+
+Le ton demandé (« ingénieur ultra pointilleux, ne livre que wowed by the result ») se traduit en
+choses VÉRIFIABLES, pas en une intention :
+
+- **Jugé à l'écran, jamais au jugé** (§8 de `CLAUDE.md`) : toute nouvelle géométrie ou sprite
+  regardé en jeu ET, quand c'est possible, rastérisé par un banc `render-*.mjs` avant d'être
+  déclaré fini — jamais l'un sans l'autre pour un asset 3D neuf (leçon du 481).
+- **Chaque bouton/touche testé, y compris son impossibilité de contournement** — sauf par le menu
+  développeur (§10) : on ne peut pas pêcher l'étoile sans avoir protégé la canne, on ne peut pas
+  réveiller la reine sans l'avoir nourrie, on ne peut pas déclencher la constellation sans être de
+  nuit sur la zone marquée. Testé en essayant activement de tricher, pas en supposant que ça tient.
+- **Tout minuteur de quête arbitré par l'hôte**, jamais comparé entre horloges (§3) — en particulier
+  le compteur de casse de la canne (3 s) et la fenêtre de protection (10 min).
+- **Multijoueur** : si une étape reste solo par décision (§6, point 4), vérifier qu'un second
+  joueur n'est ni bloqué ni dupliqué en observant (bouton spectateur si la scène 3D le justifie,
+  comme l'audience du maire).
+- **Bancs étendus, jamais contournés** : `verify-quete` doit connaître le nouveau verbe et les
+  nouvelles cibles de chevron (il refuse déjà tout verbe absent de `STAR_VERBS` — c'est voulu) ;
+  si le lac maléfique gagne une zone de collision neuve, `verify-collision` doit la voir.
+- **Commentaires denses et datés**, comme le reste du dépôt — le POURQUOI d'un choix, pas son
+  histoire de conversation.
+- **`QUETE.md`, `README.md` et `CLAUDE.md` mis à jour à la fin de CHAQUE LOT**, pas seulement à la
+  toute fin du chantier — un lot qui grossit sans documentation est le défaut que ce fichier lui-
+  même se reproche déjà ailleurs (§14 de `CLAUDE.md`).
+- **Aucun commit/push** — ça reste à Guillaume (GitHub Desktop).
+
+---
+
 ## ⚠️⚠️⚠️ AUTORITÉ DE CONCEPTION 2026-08-26 — UNE SOIRÉE, SEPT SŒURS, UN PORT
 
 **Cette autorité décrit la CIBLE validée par Guillaume ; elle n'est pas encore le code livré.**

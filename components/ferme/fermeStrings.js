@@ -273,6 +273,25 @@ const STAR_FR = {
          fond est très exactement l'endroit où le nouveau geste ne marche PAS (deux
          joueurs au fond sont côte à côte, jamais dos à dos). Un texte n'est pas un
          décor : il AFFIRME (448), et celui-ci aurait envoyé au mauvais endroit. */
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ 2026-09-02 (lot A) — TROIS PHRASES DE PLUS : NOURRIR, PORTER, RÉVEILLER.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️⚠️ `crater` NE DEVAIT PLUS ÊTRE LA PREMIÈRE PHRASE DU CHAPITRE, et c'est
+         la seule raison de ces trois clés : depuis que la reine se nourrit puis se
+         réveille, « un à chaque bord, dos à dos » est le DERNIER conseil du
+         chapitre, pas le premier. Une seule phrase pour trois gestes aurait envoyé
+         planter un épouvantail quelqu'un à qui il manque 80 lumières — un objectif
+         qui saute deux étapes est un objectif qui ment (448).
+         ⚠️ MÊME PARTAGE QUE `farmImpactLight`/`farmImpactLightPay` : la première dit
+         où CHERCHER (le défi de fuite, pas un lieu de la carte — d'où l'absence de
+         chevron), la seconde dit où RAPPORTER. ⚠️ PLAFOND DE 80 SIGNES. */
+      craterFeed: "La reine est éteinte. Rapporte-lui 80 lumières du défi de fuite.",
+      craterFeedPay: "Tu as ses lumières. Va les lui offrir au bord du cratère (E).",
+      /* ⚠️ ELLE NOMME LA TOUCHE ET LE GESTE, pas la mécanique : « au rythme de son
+         cœur » est tout ce qu'il faut savoir avant de voir l'anneau, et l'anneau
+         explique le reste tout seul. Un bandeau qui décrirait la bande cible ferait
+         le travail que le dessin fait mieux. */
+      craterWake: "Nourrie, elle dort encore. Réveille-la au rythme de son cœur (E).",
       crater:    "Le cratère a refroidi. Un à chaque bord, dos à dos : elle sortira.",
       craterAlone: "Personne en face ? Plante ton épouvantail au bord opposé (E).",
       /* ⚠️ ZIP 469 — SIX OBJECTIFS SONT PARTIS AVEC LE DÉCHANT (`lean`,
@@ -375,6 +394,15 @@ const STAR_FR = {
     farmImpactCool:     "Ce n'est pas une des nôtres — c'est du métal de ciel. Ça, ça se travaille.",
     /* Chapitre 2 — le cratère. `craterHot` couvre trois minutes d'attente pure. */
     craterHot:          "Elle est encore dedans. Laisse le trou refroidir.",
+    /* 2026-09-02 (lot A) — LA VOIX DE LA PETITE ÉTOILE SUR LES TROIS NOUVEAUX
+       ÉTATS. ⚠️ C'est elle qui EXPLIQUE le lien narratif que la mécanique pose :
+       la lumière qu'on porte à la grande est celle de la petite. Sans ces trois
+       phrases, « va chercher 80 bonbons » serait une corvée sans raison — et la
+       raison est très exactement ce que Guillaume demande depuis le début (les
+       petites aident à atteindre la grande). */
+    craterFeed:         "Elle est vide. Ce qu'elle veut, c'est ma lumière à moi — descends la chercher.",
+    craterFeedPay:      "Tu portes un peu de moi. Verse-le au bord, elle saura.",
+    craterWake:         "Elle a de quoi brûler, mais rien ne bat. Frappe avec son cœur, pas plus vite.",
     crater:             "Celle-là nous a menées ici. C'est elle qui sait où on va.",
     craterAlone:        "Un seul dos ne suffira pas pour elle. Trouve-lui quelqu'un — ou quelque chose qui y ressemble.",
     townWait:           "C'est de l'autre côté du rail que ça se passe maintenant.",
@@ -615,6 +643,24 @@ const STAR_FR = {
        le payant est la définition du « le jeu propose et refuse » (426). */
     lightShort: (have, need) => `Il t'en faut ${nfr(need)} rapportés depuis la chute. Tu en as ${nfr(have)}.`,
     lightGiven: "La lumière bleue coule au fond du trou. Maintenant, tourne-toi.",
+    /* ╔═════════════════════════════════════════════════════════════════════
+       ║ 2026-09-02 (lot A) — `lightGiven` DISAIT « MAINTENANT, TOURNE-TOI »
+       ║ AUX DEUX ÉTOILES, ET C'EST DEVENU FAUX POUR LA REINE.
+       ╚═════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ C'est le défaut du 475 / 478 / 479 pris de vitesse : une phrase qui
+       couvrait un geste en couvre soudain deux, et elle envoie faire l'étape
+       d'APRÈS. La bleue se prend en se retournant, la reine demande encore un
+       réveil — deux gestes, donc deux phrases, choisies par le lieu côté hôte
+       (voir `starLightGiven`/`starQueenFed`, FermeGame.js).
+       ⚠️ ELLE ANNONCE LE GESTE SUIVANT SANS DÉCRIRE LA MÉCANIQUE : l'anneau qui
+       bat au-dessus du trou l'explique mieux qu'une phrase ne le ferait. */
+    queenFed: "Les lumières coulent en elle. Elle a de quoi brûler — mais rien ne bat encore.",
+    wokeHer: "Un battement. Puis un autre. Elle ouvre les yeux, et elle est jaune.",
+    /* ⚠️ LE SEUL TEXTE QUI DÉCRIVE LA MÉCANIQUE, ET IL NE S'AFFICHE QU'UNE FOIS,
+       À L'OUVERTURE DU GESTE : l'anneau fait le reste. Il dit la RÈGLE (frapper
+       quand l'anneau touche la marque) et son piège (marteler ne sert à rien),
+       parce que c'est très exactement ce qu'un joueur essaie en premier. */
+    wakeHint: "Frappe quand l'anneau touche la marque. Marteler la fait retomber.",
     /* ── LE PLAT. ⚠️⚠️ AUCUNE NE NOMME UNE RECETTE : ce qu'on cuisine ne regarde
        personne, et l'inventer aurait demandé un ingrédient, donc un prix, donc un
        arbitrage que Guillaume n'a pas tranché. Le geste est le CHEMIN. */
@@ -1015,6 +1061,11 @@ const STAR_FR = {
        chapitre 2. */
     crater: "Chacun un bord, dos à dos (E : pourquoi ?)",
     craterHot: "E : attendre que ça refroidisse",
+    /* 2026-09-02 (lot A) — DEUX INVITES, DEUX TOUCHES RÉELLES. ⚠️ Contrairement à
+       `crater` juste au-dessus (une posture, pas une touche), ces deux-là FONT
+       quelque chose quand on presse E — donc elles le disent, règle du 456. */
+    feed: "E : lui offrir la lumière bleue",
+    wake: "E : la réveiller",
     engineer: "E : parler à l'ingénieur",
     /* ⚠️ ZIP 478 — LA CALE. Elle nomme la TOUCHE et le GESTE (règle du 455 :
        OÙ, QUOI, COMMENT), et pas la pièce : le mini-jeu la nomme deux dixièmes de
@@ -1143,6 +1194,10 @@ const STAR_EN = {
       craterHot: "East of Valley Town the hole still burns. Wait for it to cool.",
       /* ⚠️ ZIP 479 — voir la note française : le fond du trou est l'endroit où le
          nouveau geste ne marche pas, ce texte y envoyait. */
+      /* 2026-09-02 (lot A) — see the FR block: three gestures, three lines. */
+      craterFeed: "The queen has gone out. Bring her 80 lights from the escape run.",
+      craterFeedPay: "You have her lights. Go and offer them at the crater rim (E).",
+      craterWake: "Fed, but still asleep. Wake her to the beat of her heart (E).",
       crater:    "The crater has cooled. One on each rim, backs turned: it will rise.",
       craterAlone: "Nobody across from you? Plant your scarecrow on the far rim (E).",
       /* ⚠️ ZIP 469 — voir la note française : sept objectifs partent avec le déchant. */
@@ -1198,6 +1253,11 @@ const STAR_EN = {
     farmImpactLure:     "It is afraid of your hands. It needs something that shines brighter.",
     farmImpactCool:     "That is not one of us — that is sky metal. That can be worked.",
     craterHot:          "She is still inside. Let the hole cool down.",
+    /* 2026-09-02 (lot A) — see the FR block: the little star explains that the
+       light carried to the big one is her own. */
+    craterFeed:         "She is empty. What she wants is my own light — go down and fetch it.",
+    craterFeedPay:      "You are carrying a piece of me. Pour it at the rim; she will know.",
+    craterWake:         "She has fuel, but nothing beats. Strike with her heart, no faster.",
     crater:             "That one led us here. She is the one who knows where we are going.",
     craterAlone:        "One back will not be enough for her. Find her someone — or something that looks like one.",
     townWait:           "It happens on the other side of the rails now.",
@@ -1348,6 +1408,11 @@ const STAR_EN = {
     queenSide: "Same side, and it sees you both. Go to the far rim.",
     lightShort: (have, need) => `You need ${nen(need)} brought back since the fall. You have ${nen(have)}.`,
     lightGiven: "Blue light pools at the bottom of the hole. Now turn around.",
+    /* 2026-09-02 (lot A) — see the FR block: one line per gesture, because the
+       queen still needs waking where the blue one only needed a turned back. */
+    queenFed: "The lights pour into her. She has fuel now — but nothing beats yet.",
+    wokeHer: "One beat. Then another. She opens her eyes, and she is yellow.",
+    wakeHint: "Strike when the ring meets the mark. Hammering makes her sink back.",
     dishCook: "The cauldron heats up. It smells of something no book ever wrote down.",
     dishSimmer: "It is simmering.",
     dishReady: "It is ready, and steaming.",
@@ -1573,6 +1638,12 @@ const STAR_EN = {
       dish: "🍲 A hot dish, ready to pick up",
       // 480 bis — same family: skips the mining + brewing, never the hold.
       lure: "✨ A Star Essence vial (the taming stays)",
+      /* 2026-09-02 (lot A) — même famille que `candy`/`dish`/`lure` : on saute la
+         corvée, jamais le geste. Le trou est froid et les lumières sont dans le
+         flux ; l'offrande, le réveil au rythme et la posture restent à jouer.
+         ⚠️ AUCUN CHIFFRE DANS LE LIBELLÉ : le prix vit dans `starOfferPrice`, et un
+         « 80 » écrit ici serait faux le jour où il bouge (§8 de CLAUDE.md). */
+      queen: "👑 The queen: cold crater + her lights (feed/wake stay)",
     }[op] || op),
     scene: (s) => ({ warn: "🎬 The announcement", fall: "🎬 The eight farm impacts", townFall: "🎬 The Valley Town meteor", end: "🎬 The ending" }[s] || s),
     sceneLabel: "Replay a scene",
@@ -1633,6 +1704,9 @@ const STAR_EN = {
     /* ⚠️ ZIP 479 — voir la note française : deux bords, pas une posture solitaire. */
     crater: "One on each rim, backs turned (E: why?)",
     craterHot: "E: wait for it to cool",
+    // 2026-09-02 (lot A) — two real keys, see the FR block.
+    feed: "E: offer it the blue light",
+    wake: "E: wake her",
     engineer: "E: talk to the shipwright",
     raise: "E: raise the piece on the slipway",
   })[k] || "E",

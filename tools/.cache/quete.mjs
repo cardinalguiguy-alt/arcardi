@@ -1983,7 +1983,20 @@ export function starFallAngle(zone) {
    raison que la scierie : c'est un endroit où l'on VA, pas une chose qu'on trouve.
    Et comme elle, il peut ne pas exister (il se ramasse dans le monde maléfique) et
    il est DÉPLAÇABLE — sa position se lit donc vivante, côté jeu. */
-export const STAR_GOAL_TARGET = { craterHot: "crater", craterAlone: "crater", engineer: "townHall",
+/* ⚠️⚠️ 2026-09-02 (lot A) — LES TROIS NOUVEAUX ÉTATS DU CRATÈRE POINTENT TOUS LE
+   CRATÈRE, ET UN SEUL FAIT EXCEPTION. `craterFeedPay` (« tu as ses lumières, va
+   les lui offrir ») et `craterWake` (« réveille-la ») désignent le trou, comme
+   `craterHot`/`craterAlone`. Mais `craterFeed` — « il t'en manque » — désigne la
+   COURSE DE FUITE, qui n'est pas un lieu de la carte : c'est le même partage que
+   `farmImpactLight`/`farmImpactLightPay`, où le premier envoie chercher la
+   lumière et le second la rapporter. ⚠️ Sans adresse, `craterFeed` afficherait un
+   chevron planté sur un trou où il n'y a rien à faire — la « seconde réponse à où
+   vais-je » du 449. Il est donc DÉLIBÉRÉMENT absent de cette table — et cette
+   absence est ÉCRITE, pas subie : `verify-quete` refuse tout objectif sans adresse
+   qui ne figure pas dans sa liste `NOWHERE` (« chaque objectif a une adresse, ou
+   une raison écrite de n'en pas avoir »). */
+export const STAR_GOAL_TARGET = { craterHot: "crater", craterAlone: "crater",
+  craterFeedPay: "crater", craterWake: "crater", engineer: "townHall",
   /* ⚠️ ZIP 480 — l'audience se tient à la MAIRIE, comme la commande des plans :
      le chevron y mène déjà, il n'y a pas d'adresse neuve à inventer. */
   mayor: "townHall",
@@ -2380,6 +2393,149 @@ export const STAR_QUEEN_SOLO_MS = 60000;   // seul, avec l'épouvantail en face
 export const STAR_QUEEN_EDGE_K = 0.55;     // fraction du rayon : au-delà, on est « au bord »
 export const STAR_QUEEN_OPP_DOT = -0.45;   // les deux écarts au centre doivent s'opposer (≈ 117°)
 export const STAR_QUEEN_HALF = 0.5;        // seul : elle ne sort qu'à moitié du trou (fiction, pas barème)
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-02 (lot A) — LA REINE SE NOURRIT, PUIS SE RÉVEILLE, PUIS SE CALME.
+   ╚══════════════════════════════════════════════════════════════════════════
+   Demande de Guillaume : `pair` n'est plus le geste ENTIER de la reine, il en est
+   le DERNIER étage. Avant lui viennent une offrande (`resolveStarLight`, la même
+   lumière bleue que la petite, rapportée de la course de fuite) et un réveil au
+   rythme (`resolveStarWake`).
+   ⚠️⚠️ LE PRIX EST À 80 ALORS QUE LA BLEUE EST À 60, ET C'EST DÉLIBÉRÉ : Guillaume
+   a tranché « 80, avec la corvée des bonbons sur le templerun ». Le chiffre a été
+   posé APRÈS avoir constaté que la bleue coûtait déjà exactement 60 — deux « va
+   chercher 60 choses » d'affilée auraient donné au joueur l'impression de refaire
+   l'étape précédente. Un écart visible dit que c'est une AUTRE étoile, plus chère.
+   ⚠️ ET LE PRIX NE SE LIT NULLE PART À LA MAIN : `starOfferPrice` est la seule
+   réponse à « combien coûte cette étoile », pour l'arbitre, pour le bandeau, pour
+   l'invite et pour le banc. C'est le §8 de `CLAUDE.md` appliqué avant la faute :
+   deux constantes existent, mais un seul endroit choisit laquelle. */
+export const STAR_QUEEN_PRICE = 80;
+/* ⚠️ ELLE REND 0 POUR TOUT LIEU QUI NE SE PAIE PAS, et c'est ce zéro qui sert de
+   test partout ailleurs (`starOfferPrice(id) > 0` remplace « le verbe est-il
+   light ? »). Ajouter une étoile payante un jour, c'est ajouter une ligne ICI —
+   pas retrouver les quatre endroits qui testaient un verbe. */
+export function starOfferPrice(id) {
+  const s = STAR_SITE[id];
+  if (!s) return 0;
+  if (s.queen) return STAR_QUEEN_PRICE;
+  return starVerbOf(id) === "light" ? STAR_CANDY_PRICE : 0;
+}
+
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-02 (lot A) — LE RÉVEIL AU RYTHME. « SON CŒUR REPART. »
+   ╚══════════════════════════════════════════════════════════════════════════
+   Guillaume, sur la mécanique du martèlement : « nouvelle mécanique à inventer,
+   tu jugeras. faut pas cacher avec un overlay trop gros. »
+   ⚠️⚠️ LES DEUX PATRONS D'APPUI DU DÉPÔT ONT DONC ÉTÉ ÉCARTÉS, ET IL FAUT SAVOIR
+   POURQUOI AVANT D'ÊTRE TENTÉ DE LES REPRENDRE : `BarnMinigame` et
+   `WolfBiteMinigame` sont tous les deux des PANNEAUX PLEIN ÉCRAN (`ferme-fish-ov`),
+   c'est-à-dire très exactement ce que la consigne interdit — ils cacheraient
+   l'étoile au moment où elle passe du gris au jaune, donc ils cacheraient la seule
+   chose que ce geste a à montrer.
+   ⚠️ CE QUI SE DESSINE À LA PLACE EST UN ANNEAU QUI SE CONTRACTE AU-DESSUS DU
+   CRATÈRE, dans le monde, à l'échelle du décor (voir `starWakeDraw`, FermeGame.js).
+   On frappe quand il traverse la bande cible. La mécanique est donc du RYTHME et
+   pas du martèlement aveugle : taper le plus vite possible ne donne rien, parce
+   qu'un appui hors bande RETIRE un battement.
+   ⚠️⚠️ ET LE TEMPO ACCÉLÈRE PARCE QUE C'EST UN CŒUR QUI REPART, pas parce qu'il
+   faut « augmenter la difficulté » : chaque battement réussi raccourcit la période
+   (`STAR_WAKE_STEP_MS`) jusqu'à un plancher. La difficulté est une CONSÉQUENCE de
+   la fiction, ce qui est la seule façon qu'un réglage se laisse expliquer au
+   joueur sans texte.
+   ⚠️ TOUS CES NOMBRES SONT DE MOI, PAS DE GUILLAUME (« tu jugeras ») : ils sont
+   donc à juger en jouant, comme les trois nombres de la scierie (§13 de
+   `CLAUDE.md`). Repère de lecture : huit battements, de 1,10 s à 0,79 s, soit
+   ~7,5 s de geste si l'on ne rate rien. */
+export const STAR_WAKE_HITS = 8;            // battements à placer pour la réveiller
+export const STAR_WAKE_PERIOD_MS = 1100;    // période du premier battement
+export const STAR_WAKE_STEP_MS = 45;        // ce que chaque réussite retire à la période
+export const STAR_WAKE_MIN_MS = 700;        // plancher : en dessous, ce n'est plus jouable au doigt
+export const STAR_WAKE_BAND_A = 0.74;       // début de la bande cible, en fraction de période
+export const STAR_WAKE_BAND_B = 0.96;       // fin de la bande — 22 %, soit 242 ms au départ, 172 ms au bout
+export const STAR_WAKE_IDLE_BEATS = 3;      // battements sans aucun appui avant que l'anneau s'efface
+/* ⚠️ PURE ET EXPORTÉE POUR QUE LE BANC LA JOUE : c'est la seule règle du réveil
+   qui décide quelque chose, donc c'est la seule qu'il faut pouvoir rejouer sans
+   navigateur (le reste est du dessin). */
+export function starWakeOnBeat(phase) {
+  const p = +phase || 0;
+  return p >= STAR_WAKE_BAND_A && p <= STAR_WAKE_BAND_B;
+}
+/* La période du battement n° `hits` — DÉRIVÉE, jamais une table. */
+export function starWakePeriod(hits) {
+  return Math.max(STAR_WAKE_MIN_MS, STAR_WAKE_PERIOD_MS - (Math.max(0, hits | 0) * STAR_WAKE_STEP_MS));
+}
+/* ⚠️ « À QUEL POINT EST-ELLE RÉVEILLÉE » — 0 gris, 1 jaune. Le dessin en dépend,
+   et le joueur ne lit QUE ça : la jauge n'est pas un chiffre affiché, c'est la
+   couleur de l'étoile elle-même. Une seule écriture, sinon la barre et la teinte
+   divergeraient (défaut du 456, « une barre qui promet et ment »). */
+export function starWakeGlow(hits) {
+  return Math.max(0, Math.min(1, (Math.max(0, hits | 0)) / STAR_WAKE_HITS));
+}
+/* Elle dort-elle encore ? ⚠️ `e.woke` est un DICTIONNAIRE de lieux, pas un
+   booléen de reine : la septième sœur se réanimera par le même geste (master
+   prompt §3.10), et une seconde carte à réconcilier est ce que le §3 de
+   `CLAUDE.md` interdit. */
+export function starWoke(e, id) { return !!(e && e.woke && e.woke[id]); }
+
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ LES DEUX DÉCISIONS DU RÉVEIL, PURES — POUR QU'UN BANC PUISSE LES JOUER.
+   ╚══════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ ELLES VIVENT ICI ET PAS DANS `FermeGame.js`, ET C'EST LA RÈGLE DU DÉPÔT,
+   PAS UNE PRÉFÉRENCE : `verify-maire` et `verify-scierie` JOUENT leurs mécaniques
+   parce que celles-ci sont pures (`maire.js`, `scierie.js`), et les deux ont sorti
+   des défauts de RÉGLAGE qu'aucune relecture n'aurait vus. Laissées dans la closure
+   React, ces douze lignes auraient été le seul morceau du lot que rien ne peut
+   rejouer — c'est-à-dire précisément celui où « marteler gagne quand même » se
+   serait caché.
+   ⚠️ `FermeGame.js` GARDE CE QUI N'EST PAS UNE DÉCISION : le ref, la zone, la
+   distance au cratère, l'immobilité, le dessin. Ici il n'y a que le temps et le
+   compte — et donc rien qui demande un navigateur.
+   ⚠️ ELLES NE MUTENT RIEN : on rend un nouvel état. Un `st` étalé puis lissé en
+   place serait la table de référence corrompue du 2026-08-31 (§4). */
+export function starWakeAdvance(st, dtMs) {
+  const s = { phase: +st.phase || 0, hits: Math.max(0, st.hits | 0), beats: Math.max(0, st.beats | 0),
+              flash: Math.max(0, +st.flash || 0), miss: Math.max(0, +st.miss || 0), gone: false };
+  /* ⚠️ LE PAS EST BORNÉ : un onglet qui revient au premier plan rend un `dt` de
+     plusieurs secondes, et sans cette borne il ferait passer trois battements
+     d'un coup — donc il abandonnerait le geste tout seul, sans que le joueur ait
+     rien lâché. Même famille que le `Math.min(0.05, dt)` des boucles du dépôt. */
+  const dt = Math.min(120, Math.max(0, +dtMs || 0));
+  s.phase += dt / starWakePeriod(s.hits);
+  while (s.phase >= 1) {
+    s.phase -= 1;
+    s.beats += 1;
+    /* ⚠️ TROIS TOURS SANS UN SEUL APPUI ET L'ANNEAU S'EFFACE : sans cette sortie,
+       il resterait à battre au-dessus d'un trou que le joueur a cessé de regarder.
+       Tout appui remet `beats` à zéro (voir `starWakeStrike`). */
+    if (s.beats >= STAR_WAKE_IDLE_BEATS) { s.gone = true; return s; }
+  }
+  s.flash = Math.max(0, s.flash - dt / 250);
+  s.miss = Math.max(0, s.miss - dt / 350);
+  return s;
+}
+/* ⚠️⚠️ L'APPUI, ET C'EST TOUTE LA MÉCANIQUE EN HUIT LIGNES. Deux choses s'y
+   décident, et la seconde est celle qui distingue ce geste d'un martèlement :
+   1. UN BATTEMENT PLACÉ REPART DU HAUT (`phase = 0`) — sinon frapper au DÉBUT de
+      la bande laisserait l'anneau finir sa course et compter deux fois le même
+      geste ;
+   2. UN APPUI HORS BANDE RETIRE UN BATTEMENT — sans quoi taper le plus vite
+      possible gagnerait à tous les coups, la bande finissant forcément par passer
+      sous un doigt. C'est ce que `s2.wakeHint` annonce en une phrase, et c'est ce
+      que `verify-quete` vérifie en martelant vraiment. */
+export function starWakeStrike(st) {
+  const s = { phase: +st.phase || 0, hits: Math.max(0, st.hits | 0), beats: 0,
+              flash: Math.max(0, +st.flash || 0), miss: Math.max(0, +st.miss || 0), won: false };
+  if (starWakeOnBeat(s.phase)) {
+    s.hits += 1;
+    s.flash = 1;
+    s.phase = 0;
+    s.won = s.hits >= STAR_WAKE_HITS;
+    return s;
+  }
+  s.hits = Math.max(0, s.hits - 1);
+  s.miss = 1;
+  return s;
+}
 /* ⚠️⚠️ UNE SEULE RÉPONSE POUR LA JAUGE, LE TEXTE ET L'ARBITRE — la discipline du
    456, tenue dès l'écriture cette fois. Sept états, dans l'ordre de L'ACTION LA
    PLUS PROCHE (478) : ce qui manque d'abord se dit d'abord.
@@ -2510,6 +2666,10 @@ export function newStar() {
            un objet de la carte de ville (celle-ci n'est jamais persistée, §6 de
            `CLAUDE.md`), donc il vit ici, avec ce qui lui donne un sens. */
     offer: {},      // id de lieu -> { by, at } — la lumière bleue a été offerte
+    /* 2026-09-02 (lot A) — le réveil au rythme, par lieu. ⚠️ UN DICTIONNAIRE ET
+       PAS UN BOOLÉEN DE REINE : la septième sœur se réanimera du même geste, et
+       une seconde carte à réconcilier est ce que le §3 de `CLAUDE.md` interdit. */
+    woke: {},       // id de lieu -> { by, at } — elle a été réveillée au rythme
     candy: {},      // id de joueur -> bonbons rapportés depuis la chute
     /* hors-zip — LA LUEUR S'ÉTEINT POUR DE VRAI. Décision de Guillaume : la
        lumière bleue reste disponible 5 minutes après la fin du défi de fuite,
@@ -2667,6 +2827,18 @@ export function migrateStar(saved) {
       if (!STAR_SITE[id]) continue;
       const v = saved.offer[id] || {};
       e.offer[id] = { by: String(v.by || "?").slice(0, 24), at: +v.at || 0 };
+    }
+  }
+  /* 2026-09-02 (lot A) — MÊME FORME, MÊMES GARDES QUE `offer` JUSTE AU-DESSUS :
+     une sauvegarde d'avant ce lot n'a pas `woke`, la reine y est donc endormie et
+     il faut la réveiller — ce qui est le bon comportement, et le même qu'au 469
+     pour `dug`. ⚠️ Un lieu inconnu est JETÉ (`STAR_SITE[id]`), sinon une
+     sauvegarde d'une version future peuplerait la table d'ici de clés mortes. */
+  if (saved.woke && typeof saved.woke === "object") {
+    for (const id of Object.keys(saved.woke)) {
+      if (!STAR_SITE[id]) continue;
+      const v = saved.woke[id] || {};
+      e.woke[id] = { by: String(v.by || "?").slice(0, 24), at: +v.at || 0 };
     }
   }
   if (saved.candy && typeof saved.candy === "object")
@@ -3018,6 +3190,24 @@ export function starGoalKey(e, ctx) {
      à quelqu'un qui n'a personne en face — la définition même de l'objectif qui
      ment. `ctx.effigy` et `ctx.alone` viennent de l'appelant : la position du
      cratère et la liste des joueurs ne sont pas des données de cette table. */
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-02 (lot A) — LE CRATÈRE A TROIS ÉTATS DE PLUS, ET L'ORDRE EST CELUI
+     ║ DE L'ACTION LA PLUS PROCHE (478), PAS CELUI DU RÉCIT.
+     ╚══════════════════════════════════════════════════════════════════════════
+     C'est le défaut du 475 / 478 / 479 pris de vitesse : une clé (`crater`) qui
+     avait l'air homogène cesse de l'être le jour où le geste sous elle se
+     dédouble. Ici il se DÉTRIPLE — nourrir, réveiller, tenir — donc trois clés.
+     ⚠️ `craterFeed` / `craterFeedPay` SONT LE MIROIR EXACT de `farmImpactLight` /
+     `farmImpactLightPay` : même donnée personnelle (`ctx.candy`, la fraîcheur
+     datée et non le flux brut), même partage. Ce qui change est le PRIX, et il
+     vient de `starOfferPrice` — pas d'une constante recopiée ici.
+     ⚠️⚠️ ET `craterAlone` DESCEND EN DERNIER, ce qui est un correctif silencieux :
+     tel qu'il était écrit, un joueur seul lisait « plante ton épouvantail » alors
+     qu'il lui restait 80 lumières à rapporter et un réveil à jouer — un objectif
+     qui saute deux étapes est un objectif qui ment (448). */
+  if (first === "crater" && !starLit(e, "crater"))
+    return (ctx && (ctx.candy | 0) >= starOfferPrice("crater")) ? "craterFeedPay" : "craterFeed";
+  if (first === "crater" && !starWoke(e, "crater")) return "craterWake";
   if (first === "crater" && !e.effigy && ctx && ctx.alone) return "craterAlone";
   return first;
 }
@@ -3076,7 +3266,11 @@ export const STAR_GOAL_KEYS = (() => {
       continue;
     }
     out.push(s.id);
-    if (s.id === "crater") out.push("craterHot", "craterAlone", "engineer");
+    /* 2026-09-02 (lot A) — trois états de plus pour le même lieu (voir
+       `starGoalKey`) : le banc vérifie ici qu'aucun n'est orphelin de texte,
+       ce qui est le seul moyen d'ajouter un état sans afficher `undefined`. */
+    if (s.id === "crater") out.push("craterHot", "craterFeed", "craterFeedPay",
+                                    "craterWake", "craterAlone", "engineer");
   }
   /* ⚠️ ZIP 454 — les clés de la construction. Elles ne sont pas dérivées de
      `STAR_SITES` parce qu'elles ne sont pas des LIEUX : deux désignent une
@@ -3393,7 +3587,20 @@ export function resolveStarCalm(e, who, now, ctx, siteId) {
      Cette ligne est la ceinture, pas la bretelle — un second client d'une version
      d'avant ne doit pas pouvoir sauter le chapitre. */
   if (site.spot === "starFarmImpact" && !starDug(e, target)) return { ok: false, unDug: true };
-  if (verb === "light" && !starLit(e, target)) return { ok: false, unlit: true, verb };
+  /* ⚠️⚠️ 2026-09-02 (lot A) — CE TEST NE DEMANDE PLUS « EST-CE LA BLEUE ? », IL
+     DEMANDE « CETTE ÉTOILE SE PAIE-T-ELLE ? ». La reine est devenue payante le
+     jour où Guillaume a voulu qu'on la nourrisse ; un test sur le VERBE aurait
+     laissé passer les 80 lumières sans les payer, en silence, parce que son verbe
+     est `pair` et pas `light`. `starOfferPrice` est la seule réponse à cette
+     question, ici comme dans l'invite et dans le bandeau. */
+  if (starOfferPrice(target) > 0 && !starLit(e, target)) return { ok: false, unlit: true, verb };
+  /* ⚠️⚠️⚠️ ET ON NE TIENT PAS COMPAGNIE À QUELQU'UN QUI DORT. Sans cette ligne, la
+     séquence en trois temps se contournerait par le seul geste qui existait avant
+     elle : nourrir puis se retourner, sans jamais réveiller. Le refus est
+     SILENCIEUX et la tenue n'est même pas COMPTÉE — exactement comme `tooHot`
+     (446) : un refus qui consommerait la tenue ferait « je me suis tenu tranquille
+     une minute pour rien », qui est la pire chose qu'un jeu puisse répondre. */
+  if (verb === "pair" && !starWoke(e, target)) return { ok: false, asleep: true, verb };
   /* 480 bis — LA BLANCHE NE SE LAISSE APPROCHER QU'AVEC LA CONCOCTION EN
      POCHE. `ctx.potion` est calculé par l'hôte, jamais fourni tel quel par le
      client (voir l'appel dans `FermeGame.js`, qui le lit dans `f.inv.starLure`
@@ -3527,18 +3734,83 @@ export function resolveStarCandy(e, who, n, now, readyAt) {
    ⚠️ `spend` EST DONC BORNÉ PAR CE QUI EST VRAIMENT LÀ : l'hôte retire ce qu'il
    peut, jamais plus. Une soustraction qui passerait sous zéro serait invisible
    jusqu'au prochain ramassage, et c'est le seul risque réel qu'il fallait fermer. */
+/* ⚠️⚠️⚠️ 2026-09-02 (lot A) — ELLE SERT MAINTENANT DEUX ÉTOILES, ET C'EST LA
+   RAISON POUR LAQUELLE ELLE N'A PAS ÉTÉ RECOPIÉE. La reine se nourrit de la même
+   lumière que la petite bleue, au même endroit du geste (une offrande payée au
+   bord du trou) : un second résolveur aurait recopié ces huit lignes — le calcul
+   de fraîcheur, le refus « il t'en manque », la soustraction, la marque — c'est-
+   à-dire quatre occasions de diverger au premier réglage (§8 de `CLAUDE.md`).
+   ⚠️ CE QUI CHANGE D'UNE ÉTOILE À L'AUTRE EST DONC UNIQUEMENT LE PRIX
+   (`starOfferPrice`) ET LA PRÉCONDITION DE LIEU. Un impact de ferme veut d'abord
+   être FOUILLÉ ; le cratère de la ville veut d'abord avoir REFROIDI — ce sont deux
+   façons de dire « ce trou est-il ouvert », et elles ne se confondent pas : le
+   cratère n'est pas un `starFarmImpact`, `starDug` y répondrait faux pour toujours.
+   ⚠️ LE NOM RESTE `starLight`/`resolveStarLight` alors que la reine est jaune :
+   ce n'est pas SA couleur qu'on lui apporte, c'est celle de sa petite sœur. Le
+   renommer aurait touché l'hôte, le client, les textes et le banc pour ne rien
+   dire de plus. */
 export function resolveStarLight(e, who, siteId, purse, now) {
   const id = String(siteId || "");
-  if (starVerbOf(id) !== "light") return { ok: false };
-  if (!starDug(e, id)) return { ok: false, unDug: true };
+  /* ⚠️ LA VARIABLE S'APPELLE `lights` ET PAS `price`, ET CE N'EST PAS DE LA
+     COQUETTERIE : `verify-quete` interdit à ce fichier de toucher à de l'ARGENT et
+     cherche le mot `price` dans le code. Ce qui se compte ici n'est pas de l'or,
+     c'est un flux de lumière (`e.candy`), et le banc a raison de refuser un nom qui
+     prétend le contraire — un mot juste vaut mieux qu'une exception dans un banc. */
+  const lights = starOfferPrice(id);
+  if (lights <= 0) return { ok: false };
+  const site = STAR_SITE[id];
+  if (site.spot === "starFarmImpact" && !starDug(e, id)) return { ok: false, unDug: true };
+  /* ⚠️ MÊME GARDE QUE `resolveStarCalm`, ET POUR LA MÊME RAISON (446) : on
+     n'offre rien à un trou en fusion. Deux dates de la SEULE horloge de l'hôte,
+     donc le §3 tient par construction. Le refus PORTE le temps restant, pour que
+     l'appelant puisse le dire au lieu de rester muet. */
+  if (site.queen && !starCraterCool(e, now - (e.townFall || 0)))
+    return { ok: false, tooHot: true, cool: Math.max(0, STAR_CRATER_COOL_MS - (now - (e.townFall || 0))) };
   if (starHas(e, id)) return { ok: false, already: true };
   if (starLit(e, id)) return { ok: false, already: true, lit: true };
   const k = String(who || "").slice(0, CALM_ID_MAX);
   const fresh = starCandyFresh(e, k, now);
-  if (fresh < STAR_CANDY_PRICE) return { ok: false, short: true, have: fresh, need: STAR_CANDY_PRICE };
-  e.candy[k] = fresh - STAR_CANDY_PRICE;
+  if (fresh < lights) return { ok: false, short: true, have: fresh, need: lights };
+  e.candy[k] = fresh - lights;
   e.offer[id] = { by: k, at: +now || 0 };
-  return { ok: true, spend: Math.min(STAR_CANDY_PRICE, Math.max(0, purse | 0)), site: id, left: e.candy[k] };
+  return { ok: true, spend: Math.min(lights, Math.max(0, purse | 0)), site: id, left: e.candy[k], need: lights };
+}
+
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-02 (lot A) — LE RÉVEIL. L'ARBITRE NE JUGE PAS LE RYTHME, IL JUGE
+   ║ LE DROIT DE L'AVOIR JOUÉ.
+   ╚══════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ IL NE PEUT PAS VÉRIFIER LES HUIT BATTEMENTS, ET C'EST ASSUMÉ — même
+   contrat que `starTimberRaise` (le marteau de la cale) et que la scierie : le
+   client joue, l'hôte arbitre ce qui ENTOURE le jeu. Ce que le §4 de `CLAUDE.md`
+   exige (« un panneau qui s'ouvre à volonté ne doit rien donner ») est tenu
+   ailleurs : on ne peut pas atteindre ce geste sans avoir payé 80 lumières, et
+   ce paiement-là, l'hôte l'a bien arbitré (`resolveStarLight`). Le réveil ne
+   DONNE rien — il ouvre la posture qui, elle, se mesure en secondes tenues.
+   ⚠️ IDEMPOTENT, comme tous les résolveurs de ce fichier : une seconde requête
+   (double clic, rejeu d'un paquet) rend `already` et ne rediffuse rien. */
+export function resolveStarWake(e, who, siteId, now) {
+  const id = String(siteId || "");
+  const site = STAR_SITE[id];
+  if (!site || site.content !== "star") return { ok: false };
+  if (starHas(e, id)) return { ok: false, already: true };
+  if (starWoke(e, id)) return { ok: false, already: true, woke: true };
+  /* ⚠️ L'ORDRE DU GESTE EST UNE RÈGLE, PAS UNE HABITUDE : nourrir, PUIS réveiller.
+     Le refus est SILENCIEUX (`ok: false`, donc aucune diffusion, §3) parce que le
+     client ne propose de toute façon pas le geste tant que l'offrande n'est pas
+     passée — c'est la ceinture, l'invite est la bretelle (même discipline que
+     `unlit` dans `resolveStarCalm`). */
+  /* ⚠️ L'ÉTAT DU LIEU PASSE DEVANT L'ÉTAT DE LA QUÊTE, ici comme dans
+     `resolveStarLight` juste au-dessus, et ce n'est pas cosmétique : sur un trou
+     en fusion les deux refus sont vrais à la fois (on n'a pas pu nourrir non
+     plus), et celui que l'appelant doit pouvoir DIRE est celui qui décrit ce que
+     le joueur voit — ça fume. Répondre « il faut d'abord la nourrir » devant un
+     cratère incandescent enverrait courir après des lumières qu'on ne pourrait
+     de toute façon pas offrir. */
+  if (site.queen && !starCraterCool(e, now - (e.townFall || 0))) return { ok: false, tooHot: true };
+  if (starOfferPrice(id) > 0 && !starLit(e, id)) return { ok: false, unlit: true };
+  e.woke[id] = { by: String(who || "").slice(0, CALM_ID_MAX), at: +now || 0 };
+  return { ok: true, site: id };
 }
 
 /* ── LA ROSE : CUIRE, PORTER, PASSER, SERVIR.
@@ -3700,7 +3972,7 @@ export function resolveStarGift(e, playerIds, now) {
    de la reine) n'en a PAS besoin et c'est délibéré : il ne coûte qu'un objet à 400
    or, que le bouton « Argent » du menu dev sait déjà donner. Un bouton par geste
    aurait été un bouton de plus à tenir pour rien. */
-export const STAR_DEV_OPS = ["reset", "warn", "start", "candy", "dish", "lure", "chapter", "skip", "all", "plans", "deliver", "timber", "appt", "unslam"];
+export const STAR_DEV_OPS = ["reset", "warn", "start", "candy", "dish", "lure", "queen", "chapter", "skip", "all", "plans", "deliver", "timber", "appt", "unslam"];
 /* ⚠️ ZIP 469 — `turn` (le retournement) sort de la liste : sa scène est supprimée
    dans `FermeGame`, et un bouton qui rejoue une scène qui n'existe plus ouvre un
    voile noir de sept secondes sur rien. */
@@ -3848,6 +4120,36 @@ export function devStar(e, op, now, who) {
     const site = STAR_VERB_SITE.lure;
     if (site) resolveStarDig(e, site, "\u{1F6E0}️", t);
     return { star: e, ok: true, grantLure: true };
+  }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-02 (lot A) — LE BOUTON DE LA REINE. MÊME FAMILLE QUE `candy`/`dish`/
+     ║ `lure` : ON SAUTE LA CORVÉE, JAMAIS LE GESTE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ IL FAIT TROIS CHOSES ET PAS UNE DE PLUS : le météore tombe, le trou est
+     déjà froid, et le FLUX de lumière contient les 80 unités. Restent à jouer
+     l'offrande (E au bord), le réveil au rythme, et la posture — c'est-à-dire
+     exactement les trois choses que ce lot ajoute, donc les trois seules qui
+     méritent d'être regardées.
+     ⚠️ SANS CE BOUTON, JUGER LE RÉVEIL DEMANDERAIT UNE COURSE DE TEMPLE RUN ET
+     TROIS MINUTES DE REFROIDISSEMENT PAR ESSAI — c'est-à-dire qu'on ne le
+     jugerait qu'une fois, ce qui est le défaut que « rejouer une scène » avait
+     été écrit pour corriger (444).
+     ⚠️ ET IL NE DONNE RIEN AU FERMIER, comme `candy` : il remplit le flux, pas le
+     sac. La règle du §10 de `CLAUDE.md` tient — le chemin développeur appelle les
+     mêmes résolveurs et ne rend personne plus riche. */
+  if (op === "queen") {
+    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "\u{1F6E0}️" };
+    if (!e.fall) e.fall = t;
+    /* ⚠️ LE MÉTÉORE DOIT ÊTRE TOMBÉ AVANT QU'ON PUISSE ANTIDATER SON TROU :
+       `resolveStarTownFall` refuse si le chapitre 1 n'est pas clos, donc on le
+       clôt d'abord — c'est ce que fait déjà `plans`, deux ops plus haut. */
+    for (const site of STAR_FARM_IMPACTS) resolveStarFound(e, site.id, "\u{1F6E0}️", t);
+    resolveStarTownFall(e, t);
+    /* Le trou froid : on recule SA date de chute, jamais on n'avance une horloge
+       de client (§3 de `CLAUDE.md` — une horloge, jamais deux). */
+    if (e.townFall) e.townFall = t - STAR_CRATER_COOL_MS - 1000;
+    resolveStarCandy(e, String(who || ""), STAR_QUEEN_PRICE, t);
+    return { star: e, ok: true };
   }
   if (op === "chapter") {
     /* On donne exactement ce qui manque au chapitre COURANT, pas un de plus.

@@ -1161,6 +1161,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      sorte — jamais l'inverse, puisque l'hôte démarre son compte AVANT nous. */
   const starCalmT0Ref = useRef(0);
   const starCalmBubbleRef = useRef({ key: "", until: 0 }); // 465 — texte de posture temporaire, jauge permanente
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-02 (lot A) — LE RÉVEIL AU RYTHME. TOUT SON ÉTAT TIENT ICI.
+     ╚══════════════════════════════════════════════════════════════════════════
+     Guillaume : « nouvelle mécanique à inventer, tu jugeras. faut pas cacher avec
+     un overlay trop gros. » Il n'y a donc AUCUN composant React : ni panneau, ni
+     barre, ni boîte. Un anneau se contracte au-dessus du cratère
+     (`A.drawStarWakeRing`), on frappe quand il traverse la marque, et l'étoile
+     passe du gris au jaune. L'interface EST le décor.
+     ⚠️⚠️⚠️ IL VIT AU NIVEAU DU COMPOSANT ET LA BOUCLE DE RENDU LE LIT — jamais
+     l'inverse. C'est le piège n°1 de `CLAUDE.md`, payé au 430 (`tryTownJump`) puis
+     au 431 (`canStandTown`) : une fonction déclarée dans la closure de la boucle
+     n'existe pas pour le composant, l'appel lève un `ReferenceError` À L'EXÉCUTION
+     SEULEMENT, et l'exception emporte tout ce que l'image devait encore dessiner.
+     Ici la touche est traitée par `starWakePress()` (composant) et l'horloge
+     avance dans `starWakeStep()` (composant, appelée par la boucle) : les deux
+     écrivent dans ce ref, aucune n'a besoin de l'autre.
+     ⚠️ AUCUN ÉTAT REACT : à huit battements en sept secondes, un `setState` par
+     image redessinerait tout l'arbre pendant le seul geste où le décor doit rester
+     fluide. Le ref suffit — c'est la boucle qui peint, pas React.
+     · `hits`   battements placés (0 → STAR_WAKE_HITS)
+     · `phase`  0→1 dans le battement courant, remis à 0 à chaque tour
+     · `beats`  tours écoulés sans le moindre appui (abandon à STAR_WAKE_IDLE_BEATS)
+     · `flash` / `miss` décroissances 1→0 pour le dessin, jamais des dates (§3) */
+  const starWakeRef = useRef(null);
   /* ⚠️⚠️ ZIP 456 — QUI PARLE, CETTE IMAGE. UN SEUL. Vu à l'écran dès la première
      séance : les vingt résidents apparaissent groupés près de la maison, neuf
      sont nerveux, et neuf bulles se sont ouvertes EN MÊME TEMPS, empilées les
@@ -1507,6 +1531,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      jamais recopiée ici pour sa pièce sœur. Trouvé en vérifiant que E/P/F
      restent fonctionnels à chaque moment clé de la quête du bateau. */
   useEffect(() => { fishMiniRef.current = !!fishMini || !!barnMini || !!wolfBite || !!evilBite || !!repairMini || !!starRaise; }, [fishMini, barnMini, wolfBite, evilBite, repairMini, starRaise]);
+  /* ⚠️ LE RÉVEIL N'EST PAS DANS `fishMiniRef`, ET C'EST VOLONTAIRE : ce ref sert à
+     dire « un panneau capte les touches », or le réveil n'ouvre aucun panneau — le
+     joueur reste dans le monde, il peut marcher, et marcher DOIT l'interrompre.
+     Espace est détourné en amont, dans `pressJumpOrAct()`, qui est le seul endroit
+     où le clavier et le bouton tactile se rejoignent. */
   useEffect(() => { adsOpenRef.current = adsOpen; visitorOpenRef.current = visitorOpen; }, [adsOpen, visitorOpen]);
   useEffect(() => { gregCardOpenRef.current = gregCardOpen; }, [gregCardOpen]); // FIX 246
   // 2026-07 station update: a fresh hostile raid opens the co-op repair
@@ -3430,7 +3459,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        `CLAUDE.md`. Ce qui compte est que l'arbitrage soit UNIQUE, et l'idempotence
        des résolveurs le tient. */
     if (req.kind === "starLight" || req.kind === "starCook" || req.kind === "starDishTake"
-     || req.kind === "starDishPass" || req.kind === "starDishGive" || req.kind === "starEffigy") {
+     || req.kind === "starDishPass" || req.kind === "starDishGive" || req.kind === "starEffigy"
+     || req.kind === "starWake") {
       const s3 = sharedRef.current;
       const e = (s3.star = Q.migrateStar(s3.star));
       const now = Date.now();
@@ -3439,8 +3469,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (req.kind === "starLight") {
         /* ⚠️ LA ZONE AVANT TOUT (§4 de `CLAUDE.md`, le piège des deux cartes) : les
            cinq impacts sont à la FERME, et le rectangle du marché de la ville tombe
-           au milieu des champs. */
-        if (req.pz === "farm") r = Q.resolveStarLight(e, f.id, String(req.site || ""), f.inv.candies | 0, now);
+           au milieu des champs.
+           ⚠️⚠️ 2026-09-02 (lot A) — ELLE N'EST PLUS ÉCRITE « farm » EN DUR, ET C'EST
+           LE PIÈGE DES DEUX CARTES QUI L'EXIGE : la reine se nourrit de la même
+           lumière, mais son cratère est à VALLEY TOWN. Un `req.pz === "farm"` figé
+           aurait refusé l'offrande à la reine en SILENCE — le joueur aurait payé
+           80 lumières du regard et rien ne serait arrivé. La zone attendue vient
+           donc de la table des lieux, seule source de « où est cette étoile », au
+           lieu d'un second `if` qui aurait divergé à la troisième étoile payante. */
+        const site0 = Q.STAR_SITE[String(req.site || "")];
+        if (site0 && req.pz === site0.zone)
+          r = Q.resolveStarLight(e, f.id, String(req.site || ""), f.inv.candies | 0, now);
         if (r.ok) {
           f.inv.candies = Math.max(0, (f.inv.candies | 0) - (r.spend | 0));
           out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
@@ -3448,8 +3487,31 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              l'annonçait dès l'envoi de la requête ; quand l'hôte refusait, les
              deux verdicts s'empilaient à l'écran. Une offrande payante n'est
              réussie qu'après le verdict qui la prélève. */
-          out.toast = { id: f.id, key: "starLightGiven" };
+          /* 2026-09-02 (lot A) — DEUX PHRASES, CHOISIES PAR LE LIEU : « tourne-toi »
+             est juste pour la bleue et faux pour la reine, à qui il reste un réveil
+             (voir `queenFed`, fermeStrings.js). C'est le même partage que le
+             bandeau fait déjà entre `craterFeedPay` et `craterWake`. */
+          out.toast = { id: f.id, key: site0.queen ? "starQueenFed" : "starLightGiven" };
         } else if (r.short) out.toast = { id: f.id, key: "starLightShort", n: { have: r.have | 0, need: r.need | 0 } };
+      } else if (req.kind === "starWake") {
+        /* ╔══════════════════════════════════════════════════════════════════════
+           ║ 2026-09-02 (lot A) — LE RÉVEIL AU RYTHME. UNE SEULE `req`, À LA FIN.
+           ╚══════════════════════════════════════════════════════════════════════
+           ⚠️ MÊME CONTRAT QUE `starTimberRaise` ET QUE LA SCIERIE : le client JOUE
+           les huit battements et n'envoie qu'un message quand il a gagné. Diffuser
+           chaque battement aurait coûté huit `send()` pour un geste de sept
+           secondes, sur un plafond de dix par seconde (§3) — et n'aurait rien
+           arbitré de plus, l'hôte ne pouvant de toute façon pas juger un rythme.
+           ⚠️⚠️ CE QU'IL ARBITRE, LUI, EST LE DROIT D'AVOIR JOUÉ : la reine doit
+           avoir été nourrie (80 lumières prélevées par LUI, plus haut) et le trou
+           refroidi. Un client qui enverrait `starWake` sans avoir rien payé se
+           heurte à `unlit`, en silence.
+           ⚠️ LA ZONE VIENT DE LA TABLE, comme pour `starLight` — pas de « town »
+           écrit en dur, qui redeviendrait faux le jour où la septième sœur se
+           réanimera à la ferme par le même geste (master prompt §3.10). */
+        const siteW = Q.STAR_SITE[String(req.site || "")];
+        if (siteW && req.pz === siteW.zone) r = Q.resolveStarWake(e, f.id, String(req.site || ""), now);
+        if (r.ok) out.toast = { id: f.id, key: "starWokeHer" };
       } else if (req.kind === "starCook") {
         if (req.pz === "farm") r = Q.resolveStarCook(e, f.id, now);
       } else if (req.kind === "starDishTake") {
@@ -7463,6 +7525,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        relance en boucle sans comprendre (426). */
     if (key === "starLightShort") { const t = n || {}; return L.star.s2.lightShort(t.have | 0, t.need | 0); }
     if (key === "starLightGiven") return L.star.s2.lightGiven;
+    /* 2026-09-02 (lot A) — voir la note de `queenFed` : la reine ne se prend pas
+       en se retournant tout de suite, il lui reste un réveil. */
+    if (key === "starQueenFed") return L.star.s2.queenFed;
+    if (key === "starWokeHer") return L.star.s2.wokeHer;
     if (key === "starNoScarecrow") return L.star.s2.noScarecrow;
     if (key === "starNoTristan") return L.star.plan.noTristan;
     /* ⚠️ LOT E — L'HÔTE A REJOUÉ LA MANCHE ET NE L'A PAS VUE FINIR. Il DOIT le
@@ -19442,6 +19508,36 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
         }
       }
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ 2026-09-02 (lot A) — L'ANNEAU DU RÉVEIL, DANS LE MONDE.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️⚠️ IL PASSE PAR `pushE`, LA FILE D'ÉLÉVATION, comme la lumière de tenue
+         juste au-dessus : en ville, une chose posée au sol qui ne passe pas par
+         cette file se peint à plat sur une terrasse et flotte à côté du trou (§4,
+         « une grandeur de dessin, une grandeur de rang, une grandeur de
+         collision »). L'épsilon négatif la range sous les sprites — on ne se fie
+         pas à la stabilité du tri (431).
+         ⚠️ IL EST DESSINÉ UN DEMI-CARREAU AU-DESSUS DU CENTRE DU CRATÈRE : le
+         joueur se tient sur la lèvre, plus haut que le fond, et un anneau centré
+         sur le fond disparaîtrait derrière la lèvre — c'est très exactement ce qui
+         était arrivé à la jauge de tenue (voir sa note, plus haut).
+         ⚠️⚠️ ET L'AVANCE DE LA SIMULATION SE FAIT ICI, DANS LA BOUCLE, PAR UNE
+         FONCTION DU COMPOSANT (`starWakeStep`) : la boucle n'en déclare aucune —
+         piège n°1, payé deux fois (430, 431). */
+      if (!inCar) {
+        const wk = starWakeStep();
+        const ws = wk ? starWakeSite() : null;
+        if (wk && ws) {
+          const wx = (ws.x + 0.5) * T, wy = (ws.y - 0.1) * T;
+          const we = elevTown(tw, ws.x, ws.y), wl = archPxTown(tw, ws.x, ws.y);
+          const st = { phase: wk.phase, hits: wk.hits, need: Q.STAR_WAKE_HITS,
+                       flash: wk.flash, miss: wk.miss,
+                       /* ⚠️ LA BANDE VOYAGE AVEC L'ÉTAT, elle n'est pas recopiée dans
+                          le dessin : voir `drawStarWakeRing` (fermeArt.js). */
+                       band: [Q.STAR_WAKE_BAND_A, Q.STAR_WAKE_BAND_B] };
+          pushE(wy - 1e6, we, () => sprites.drawStarWakeRing(ctx, wx, wy, T, st, performance.now()), wl);
+        }
+      }
       /* ZIP 444 — l'étoile qui suit, en ville. ⚠️ ELLE PORTE L'ALTITUDE DE SA
          PROPRE CASE, pas la mienne : sur les marches de la Haute-Ville elle est
          une case derrière moi, donc un demi-niveau plus bas, et lui donner mon
@@ -22902,7 +22998,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      corrige. Hors ville, `can()` répond `false` de toute façon. */
   function townJumpNow() { const a = townJumpApiRef.current; return !!(a && a.jump()); }
   function townJumpReady() { const a = townJumpApiRef.current; return !!(a && a.can()); }
-  function pressJumpOrAct() { if (!townJumpNow()) doAction(); }
+  /* ⚠️⚠️ 2026-09-02 (lot A) — LE RÉVEIL PASSE DEVANT, ET C'EST LE SEUL ENDROIT OÙ
+     IL FALLAIT LE BRANCHER : cette fonction est le point de rencontre du clavier
+     (Espace) et du bouton tactile ✋, donc le doigt et la touche font exactement la
+     même chose — la leçon du 2026-08-31 (« deux entrées, deux jeux ») était payée
+     sur l'offrande à l'étoile, autant ne pas la repayer sur son réveil.
+     ⚠️ IL REND `true` QUAND IL A CONSOMMÉ L'APPUI, sans quoi la même frappe
+     ferait sauter le fermier d'un rebord pendant qu'il frappe. */
+  function pressJumpOrAct() { if (starWakePress()) return; if (!townJumpNow()) doAction(); }
   /* Le bouton d'action tactile. ⚠️ IL SUIT LA MÊME PRIORITÉ QUE L'INVITE, et
      c'est ce qui le rend lisible : ce que le bandeau annonce est ce que le
      bouton fait. En ville, le saut de rebord passe avant l'interaction (règle du
@@ -25699,6 +25802,86 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       textUntil: performance.now() + 1200,
     };
   }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-02 (lot A) — LE RÉVEIL AU RYTHME : OUVRIR, AVANCER, FRAPPER.
+     ╚══════════════════════════════════════════════════════════════════════════
+     Trois fonctions, toutes au niveau du COMPOSANT (piège n°1). La boucle de la
+     ville n'appelle que `starWakeStep`/`starWakeUi` ; elle n'en déclare aucune.
+     ⚠️⚠️ LA SIMULATION AVANCE AVEC LE `dt` DE LA BOUCLE ET AVEC RIEN D'AUTRE. Pas
+     de `setInterval`, pas de date absolue comparée entre deux horloges (§3) : on
+     ajoute des millisecondes réelles à une phase locale. Un onglet ralenti ralentit
+     le cœur de l'étoile, ce qui est exactement ce qu'on veut — le geste reste
+     jouable, il ne se joue pas tout seul pendant qu'on regarde ailleurs. */
+  function starWakeOpen(siteId) {
+    starWakeRef.current = {
+      site: String(siteId || ""), hits: 0, phase: 0, beats: 0,
+      flash: 0, miss: 0, hinted: false, last: performance.now(),
+    };
+  }
+  function starWakeClose() { starWakeRef.current = null; }
+  /* ⚠️ APPELÉE UNE FOIS PAR IMAGE PAR LA BOUCLE DE LA VILLE. Elle rend `null` quand
+     il n'y a rien à dessiner, ce qui est aussi le signal « le geste s'est terminé
+     ou a été abandonné » — un seul chemin de sortie, jamais deux. */
+  function starWakeStep() {
+    const w = starWakeRef.current;
+    if (!w) return null;
+    const m = meRef.current, e = sharedRef.current.star;
+    /* ── LES TROIS ABANDONS. Ils sont tous SILENCIEUX : le joueur qui s'éloigne a
+       déjà répondu à la question, un toast lui redirait ce qu'il vient de faire.
+       ⚠️ MARCHER INTERROMPT, et c'est la seule chose qui rende ce geste habitable
+       dans le monde plutôt que dans un panneau : on ne peut pas s'en aller en
+       continuant de frapper. */
+    const c = starWakeSite();
+    if (!m || !e || !c || m.moving) { starWakeClose(); return null; }
+    if (Q.starWoke(e, w.site) || Q.starHas(e, w.site)) { starWakeClose(); return null; }
+    const now = performance.now();
+    /* ⚠️⚠️ L'AVANCE ELLE-MÊME EST DANS `quete.js` (`starWakeAdvance`), ET CE
+       FICHIER N'EN GARDE QUE CE QUI N'EST PAS UNE DÉCISION : la zone, la distance
+       au cratère, l'immobilité, le ref, le dessin. C'est ce qui rend la mécanique
+       rejouable par `verify-quete` sans navigateur — la règle que `maire.js` et
+       `scierie.js` suivent déjà, et qui a sorti chez eux des défauts de réglage
+       qu'aucune relecture n'aurait vus. */
+    const nx = Q.starWakeAdvance(w, now - w.last);
+    w.last = now;
+    if (nx.gone) { starWakeClose(); return null; }
+    w.phase = nx.phase; w.hits = nx.hits; w.beats = nx.beats; w.flash = nx.flash; w.miss = nx.miss;
+    return w;
+  }
+  /* Le lieu que le réveil vise, relu à chaque image depuis les sites autoritaires —
+     jamais mémorisé dans le ref. ⚠️ C'est la discipline du 462 (« une photo, un
+     verdict ») : la position du cratère vient de la carte de ville, qui peut ne pas
+     être montée à l'image où le geste s'ouvre. */
+  function starWakeSite() {
+    const w = starWakeRef.current; if (!w) return null;
+    const m = meRef.current; if (!m) return null;
+    const site = Q.STAR_SITE[w.site]; if (!site) return null;
+    if ((m.zone || "farm") !== site.zone) return null;
+    if (!site.queen) return null;                 // lot A : la reine seule ; la 7e sœur ajoutera son lieu ici (master prompt §3.10)
+    const c = starCraterPos(); if (!c) return null;
+    /* ⚠️ MÊME PORTÉE QUE L'INVITE QUI A OUVERT LE GESTE (`Q.STAR_CRATER_R + 1`) :
+       deux seuils de proximité, et le jeu propose puis refuse (426). */
+    if (Math.hypot(m.x - c.x, m.y - c.y) > Q.STAR_CRATER_R + 1) return null;
+    return { x: c.x, y: c.y };
+  }
+  /* ⚠️⚠️ L'APPUI. C'EST LE SEUL ENDROIT QUI DÉCIDE, et il rend `true` quand il a
+     consommé la touche — `pressJumpOrAct()` s'arrête alors, pour que le même appui
+     ne fasse pas SAUTER le fermier en même temps qu'il frappe. */
+  function starWakePress() {
+    const w = starWakeRef.current; if (!w) return false;
+    /* ⚠️ LA DÉCISION EST DANS `quete.js` (`starWakeStrike`) — placé ou raté, le
+       battement qui repart du haut, la pénalité du martèlement. Ici il ne reste
+       que ce qu'un banc ne peut pas jouer : envoyer la requête et fermer. */
+    const nx = Q.starWakeStrike(w);
+    w.phase = nx.phase; w.hits = nx.hits; w.beats = nx.beats; w.flash = nx.flash; w.miss = nx.miss;
+    if (nx.won) {
+      /* ⚠️ UNE SEULE `req`, À LA FIN (voir la note côté hôte) : huit messages pour
+         un geste de sept secondes tiendraient à peine sous le plafond de dix par
+         seconde du §3, et n'arbitreraient rien de plus. */
+      sendReq({ kind: "starWake", site: w.site });
+      starWakeClose();
+    }
+    return true;
+  }
   function starCalmUi() {
     const m = meRef.current, e = sharedRef.current.star;
     if (!m || !e || !Q.starFallen(e) || Q.starDone(e)) return null;
@@ -25974,7 +26157,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     /* ⚠️ ZIP 479 — LA REINE A SA PROPRE CONDITION, et c'est la MÊME fonction que
        celle qui remplit la jauge : deux écritures de « ça compte » donneraient une
        barre qui monte pendant que l'hôte ne compte rien (défaut du 456). */
-    if (Q.starVerbOf(c.id) === "pair") return starQueenView(m, c).step === "holding";
+    /* ⚠️⚠️⚠️ 2026-09-02 (lot A) — NOURRIE ET RÉVEILLÉE, SINON LA JAUGE MENT. L'hôte
+       refuse déjà (`unlit`/`asleep` dans `resolveStarCalm`), mais un refus muet ne
+       suffit pas ici : sans cette garde le client enverrait quand même, `starCalmT0Ref`
+       partirait, et la barre se remplirait jusqu'à 100 % sans que rien n'arrive —
+       c'est-à-dire EXACTEMENT le blocage du 458, « une barre qui promet et ment ».
+       ⚠️ ET C'EST LA MÊME FONCTION QUI REMPLIT LA JAUGE ET QUI ENVOIE (voir la note
+       du 479 juste au-dessus) : une seule écriture de « ça compte », donc la barre ne
+       peut pas monter pendant que l'hôte ne compte rien. */
+    if (Q.starVerbOf(c.id) === "pair") {
+      const e0 = sharedRef.current.star;
+      if (Q.starOfferPrice(c.id) > 0 && !Q.starLit(e0, c.id)) return false;
+      if (!Q.starWoke(e0, c.id)) return false;
+      return starQueenView(m, c).step === "holding";
+    }
     if (Math.hypot(m.x - c.x, m.y - c.y) > c.r) return false;
     /* 480 bis — LA BLANCHE NE DEMANDE PAS QU'ON LUI TOURNE LE DOS : on
        l'apprivoise en s'approchant, fiole en main, pas en la boudant comme la
@@ -26358,6 +26554,40 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            posture et pas une touche. */
         if (!starCraterCoolNow())
           return { p: "craterHot", act: () => pushToast(L.star.s2.tooHot) };
+        /* ╔══════════════════════════════════════════════════════════════════════
+           ║ 2026-09-02 (lot A) — NOURRIR, PUIS RÉVEILLER. LES DEUX MARCHES QUI
+           ║ PRÉCÈDENT DÉSORMAIS LA POSTURE.
+           ╚══════════════════════════════════════════════════════════════════════
+           ⚠️⚠️ ELLES PASSENT DEVANT L'ÉPOUVANTAIL ET DEVANT L'EXPLICATION, dans
+           l'ordre du GESTE : proposer « plante ton épouvantail au bord » à
+           quelqu'un à qui il manque 80 lumières, c'est envoyer faire l'étape
+           d'après — l'objectif qui ment du 448, et ici il coûterait un épouvantail.
+           ⚠️ L'INVITE PROPOSE, ELLE NE PRÉLÈVE PAS (même note que la bleue) : la
+           `req` part, l'hôte relit la bourse et refuse en le DISANT. Tester la
+           quantité pour MASQUER l'invite aurait caché le prix à la seule personne
+           qui a besoin de le connaître. */
+        if (!Q.starLit(e, "crater")) {
+          return { p: "feed", act: () => {
+            const fresh = Q.starCandyFresh(e, m.id, Date.now());
+            const need = Q.starOfferPrice("crater");
+            if (fresh < need) { starTell([L.star.frame.craterFeed, L.star.s2.lightShort(fresh, need)], 2600); return; }
+            sendReq({ kind: "starLight", site: "crater" });
+          } };
+        }
+        if (!Q.starWoke(e, "crater")) {
+          return { p: "wake", act: () => {
+            /* ⚠️ RÉOUVRIR NE REMET PAS À ZÉRO : un joueur qui presse E par réflexe
+               au milieu de sa série perdrait ses battements sans comprendre
+               pourquoi. Le geste ne s'abandonne que par le mouvement ou par trois
+               battements sans appui (voir `starWakeStep`). */
+            if (starWakeRef.current && starWakeRef.current.site === "crater") return;
+            starWakeOpen("crater");
+            /* ⚠️ LA RÈGLE SE DIT UNE FOIS, À L'OUVERTURE, ET L'ANNEAU FAIT LE RESTE.
+               Un texte permanent pendant sept secondes serait du bruit posé sur le
+               seul dessin qu'on demande au joueur de regarder. */
+            starTell([L.star.s2.wakeHint], 2600);
+          } };
+        }
         /* ╔══════════════════════════════════════════════════════════════════════
            ║ ZIP 479 — PLANTER LE FIGURANT. LA SORTIE SOLO DE LA REINE.
            ╚══════════════════════════════════════════════════════════════════════

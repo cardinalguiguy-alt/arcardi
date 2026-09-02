@@ -122,6 +122,25 @@ const openTownCrater = (e, at = 10) => {
   Q.resolveStarTownFall(e, at);
   return e.townFall;
 };
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-02 (lot A) — LA REINE SE NOURRIT ET SE RÉVEILLE AVANT DE SE TENIR.
+   ╚══════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ CE PRÉAMBULE PASSE PAR LES VRAIS RÉSOLVEURS, jamais par une écriture
+   directe dans `e.offer`/`e.woke` : un banc qui pose l'état à la main mesure
+   l'état, pas le CHEMIN — et c'est le chemin qui vient d'être ajouté. Tous les
+   scénarios de tenue de la reine s'en servent, donc ils échoueront tous si l'un
+   des deux nouveaux étages cesse de fonctionner.
+   ⚠️ IL EST SÉPARÉ DE `openTownCrater` À DESSEIN : plusieurs contrôles vérifient
+   qu'un cratère BRÛLANT ne donne rien, et un helper qui nourrirait au passage
+   masquerait ce refus-là. Ouvrir le trou et l'apprêter sont deux gestes.
+   ⚠️ `resolveStarCandy` crédite le flux avec l'horloge de l'hôte et une échéance
+   ABSOLUE (§3 de CLAUDE.md) : on lui passe `t`, jamais une durée. */
+const queenReady = (e, who, t) => {
+  Q.resolveStarCandy(e, who, Q.starOfferPrice("crater"), t, 0);
+  const fed = Q.resolveStarLight(e, who, "crater", 999, t);
+  const woke = Q.resolveStarWake(e, who, "crater", t);
+  return fed.ok && woke.ok;
+};
 
 /* ═══════════════════════════════════════════════════════════════════════════
    1. LA CHAÎNE DES CHAPITRES. ⚠️ TROIS DEPUIS LE 469, ET LE DERNIER N'A PLUS DE
@@ -635,6 +654,7 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
        !Q.resolveStarCalm(e, "j1", t0 + Q.STAR_CRATER_COOL_MS - 1000, true).ok);
     /* Refroidi : la tenue redevient possible, et elle demande VRAIMENT la durée. */
     const t1 = t0 + Q.STAR_CRATER_COOL_MS + 500;
+    ok("⚠️ (lot A) refroidie, elle se nourrit et se réveille — dans cet ordre", queenReady(e, "j1", t1));
     ok("⚠️ une fois froid, la tenue recommence à compter", !!Q.resolveStarCalm(e, "j1", t1, true).ok);
     ok("…mais pas d'un coup", !Q.starHas(e, "crater"));
     Q.resolveStarCalm(e, "j1", t1 + Q.STAR_CALM_SOLO_MS * 0.5, true);
@@ -730,6 +750,7 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
     const e = Q.devStar(Q.newStar(), "start", 1).star;
     openTownCrater(e, e.fall + 10);
     let t = e.townFall + Q.STAR_CRATER_COOL_MS + 500;
+    queenReady(e, "j1", t);
     /* ⚠️ ZIP 479 — LE DRAPEAU DEVIENT UN CONTEXTE, et le balayage garde son sens :
        ce qu'on mesure est qu'AUCUNE des deux valeurs ne peut bloquer le cratère.
        La boucle est allongée parce que le barème solo de la reine est passé de
@@ -744,6 +765,12 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
     const e = Q.devStar(Q.newStar(), "start", 1).star;
     openTownCrater(e, e.fall + 10);
     const t0 = e.townFall + Q.STAR_CRATER_COOL_MS + 500;
+    /* ⚠️ UN SEUL DES DEUX PAIE, ET C'EST VOLONTAIRE : l'offrande et le réveil sont
+       des états du LIEU (`e.offer`/`e.woke`), pas du joueur. Exiger que chacun
+       paie ses 80 lumières aurait fait du duo une double corvée là où le §4 de
+       QUETE.md en fait un raccourci. Ce contrôle le tient : `j2` tient le bord
+       sans avoir rien payé, et le trou s'ouvre quand même. */
+    queenReady(e, "j1", t0);
     let t = t0, opened = null;
     /* ⚠️ ZIP 479 — 60 × 400 ms = 24 s, juste au-dessus des 20 s du raccourci de la
        reine. La borne suit le barème : trop courte, elle ferait échouer le contrôle
@@ -1437,7 +1464,17 @@ section("La chute est vue, et le chevron désigne (445)");
     findFarmImpacts(e, "banc", 2000);
     ok("…puis l'attente naturelle à Valley Town", Q.starGoalKey(e, {}) === "townWait" && Q.starTargetSite(e, {}) === null);
     Q.resolveStarTownFall(e, 2500);
-    ok("…puis le cratère après le gros météore", Q.starTargetSite(e, {}) === "crater");
+    /* ⚠️⚠️ 2026-09-02 (lot A) — LE CHEVRON NE POINTE PLUS LE CRATÈRE TOUT DE
+       SUITE, ET C'EST LE COMPORTEMENT VOULU. Le premier geste du chapitre 2 est
+       d'aller chercher 80 lumières au défi de fuite, qui n'est pas un lieu de la
+       carte : le chevron se TAIT, comme il se tait déjà pour `farmImpactLight`.
+       Il ne désigne le trou qu'une fois les lumières en poche. Mesurer les deux
+       états vaut mieux que l'ancien contrôle, qui n'en mesurait qu'un. */
+    ok("…puis, sans lumières, le chevron se tait : c'est la course qu'il faut faire",
+       Q.starGoalKey(e, {}) === "craterFeed" && Q.starTargetSite(e, {}) === null);
+    ok("…et lumières en poche, il désigne enfin le cratère",
+       Q.starGoalKey(e, { candy: Q.starOfferPrice("crater") }) === "craterFeedPay"
+       && Q.starTargetSite(e, { candy: Q.starOfferPrice("crater") }) === "crater");
     Q.resolveStarFound(e, "crater", "banc", 3000);
     /* ⚠️⚠️ ET LÀ, PLUS AUCUN LIEU — C'EST VOULU, ET LE CONTRÔLE VAUT ENCORE PLUS
        CHER DEPUIS LE DÉCHANT. Le cratère était le DERNIER lieu de la table ; ce
@@ -1650,7 +1687,213 @@ section("L'objectif courant (bandeau) et le guide");
      Q.starGoalKey(e, {}) === "townWait" && Q.starTargetSite(e, {}) === null);
   Q.resolveStarTownFall(e, 1010);
   ok("⚠️ le cratère BRÛLANT et le cratère FROID ne disent pas la même chose",
-     Q.starGoalKey(e, { craterHot: true }) === "craterHot" && Q.starGoalKey(e, {}) === "crater");
+     Q.starGoalKey(e, { craterHot: true }) === "craterHot" && Q.starGoalKey(e, {}) === "craterFeed");
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-02 (lot A) — L'ÉCHELLE DU CHAPITRE 2, BARREAU PAR BARREAU.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ C'EST LE CONTRÔLE QUI MANQUAIT AVANT CE LOT, et il vaut pour toute la
+     famille : un bandeau qui saute un barreau envoie le joueur faire l'étape
+     d'après, donc il le fait échouer en silence. On monte les quatre dans
+     l'ordre, en passant par les VRAIS résolveurs, et on vérifie qu'aucun ne se
+     court-circuite — en particulier qu'on ne peut pas se retourner (dernier
+     barreau) sans avoir réveillé (troisième). */
+  {
+    const q = Q.newStar();
+    q.fall = 1000; findFarmImpacts(q, "j1", 1001); Q.resolveStarTownFall(q, 1010);
+    const t = q.townFall + Q.STAR_CRATER_COOL_MS + 500;
+    const NEED = Q.starOfferPrice("crater");
+    ok("⚠️ barreau 1/4 — à jeun, le bandeau envoie chercher la lumière",
+       Q.starGoalKey(q, { candy: 0 }) === "craterFeed");
+    ok("⚠️ barreau 2/4 — lumières en poche, il envoie les offrir",
+       Q.starGoalKey(q, { candy: NEED }) === "craterFeedPay");
+    ok("…et une poche presque pleine ne suffit pas (le prix est un seuil, pas un vœu)",
+       Q.starGoalKey(q, { candy: NEED - 1 }) === "craterFeed");
+    /* ⚠️ LE RACCOURCI QU'IL FAUT INTERDIRE : se tenir tranquille avant d'avoir
+       payé. Le refus est SILENCIEUX (§3) et ne consomme AUCUNE tenue — sinon on
+       aurait « je me suis tenu une minute pour rien », le défaut du 446. */
+    const early = Q.resolveStarCalm(q, "j1", t, { alone: true, partner: "effigy" }, "crater");
+    ok("⚠️⚠️ on ne tient pas compagnie à une étoile qu'on n'a pas nourrie",
+       early.ok === false && early.unlit === true && Object.keys(q.calm).length === 0);
+    Q.resolveStarCandy(q, "j1", NEED, t, 0);
+    ok("⚠️ l'offrande passe, et elle coûte exactement son prix",
+       Q.resolveStarLight(q, "j1", "crater", 999, t).ok === true
+       && Q.starCandyFresh(q, "j1", t) === 0);
+    ok("⚠️ barreau 3/4 — nourrie, le bandeau demande le réveil",
+       Q.starGoalKey(q, { candy: 0 }) === "craterWake");
+    /* ⚠️⚠️ ET LE SECOND RACCOURCI : nourrie mais endormie, la tenue ne compte
+       toujours pas. C'est la garde qui rend la séquence en trois temps réelle —
+       sans elle, `pair` (écrit avant ce lot) resterait le seul geste utile. */
+    const asleep = Q.resolveStarCalm(q, "j1", t, { alone: true, partner: "effigy" }, "crater");
+    ok("⚠️⚠️⚠️ on ne tient pas compagnie à une étoile qui DORT",
+       asleep.ok === false && asleep.asleep === true && Object.keys(q.calm).length === 0);
+    ok("⚠️ le réveil passe, et il est idempotent (double clic, rejeu de paquet)",
+       Q.resolveStarWake(q, "j1", "crater", t).ok === true
+       && Q.resolveStarWake(q, "j1", "crater", t).ok === false
+       && Q.starWoke(q, "crater") === true);
+    ok("⚠️ barreau 4/4 — réveillée, le bandeau revient à la posture",
+       Q.starGoalKey(q, { candy: 0 }) === "crater");
+    ok("…et la tenue compte enfin", Q.resolveStarCalm(q, "j1", t, { alone: true, partner: "effigy" }, "crater").ok === true);
+    /* ⚠️ LES DEUX ÉTAGES TRAVERSENT LA MIGRATION — sinon ils seraient perdus à la
+       PREMIÈRE requête de l'hôte, et le joueur repaierait ses 80 lumières sans
+       comprendre. Même contrôle que pour l'épouvantail (479). */
+    const q2 = Q.migrateStar(JSON.parse(JSON.stringify(q)));
+    ok("⚠️⚠️ l'offrande ET le réveil traversent la migration",
+       Q.starLit(q2, "crater") === true && Q.starWoke(q2, "crater") === true);
+    /* ⚠️ ON NE PAIE PAS DEUX FOIS : une seconde offrande est refusée sans rien
+       prélever. `starOfferPrice` est le seul endroit qui dise le prix — un test
+       du VERBE (`light`) aurait laissé passer la reine, dont le verbe est `pair`. */
+    Q.resolveStarCandy(q, "j1", NEED, t + 1, 0);
+    const twice = Q.resolveStarLight(q, "j1", "crater", 999, t + 1);
+    ok("⚠️ on ne nourrit pas deux fois la même étoile",
+       twice.ok === false && twice.lit === true && Q.starCandyFresh(q, "j1", t + 1) === NEED);
+    /* ⚠️⚠️ ET LE TROU BRÛLANT REFUSE L'OFFRANDE COMME IL REFUSE LA TENUE (446) :
+       sans cette garde, on pourrait payer 80 lumières dans un cratère en fusion,
+       c'est-à-dire dépenser sans que rien ne se passe à l'écran. */
+    const hot = Q.newStar();
+    hot.fall = 1000; findFarmImpacts(hot, "j1", 1001); Q.resolveStarTownFall(hot, 1010);
+    Q.resolveStarCandy(hot, "j1", NEED, hot.townFall + 1000, 0);
+    const paidHot = Q.resolveStarLight(hot, "j1", "crater", 999, hot.townFall + 1000);
+    ok("⚠️⚠️ on n'offre rien à un trou en fusion, et rien n'est prélevé",
+       paidHot.ok === false && paidHot.tooHot === true
+       && Q.starCandyFresh(hot, "j1", hot.townFall + 1000) === NEED);
+    ok("…et on ne réveille pas non plus ce qui brûle encore",
+       Q.resolveStarWake(hot, "j1", "crater", hot.townFall + 1000).tooHot === true);
+  }
+  /* ⚠️ LES NOMBRES DU RÉVEIL SONT DE CLAUDE, PAS DE GUILLAUME (« tu jugeras ») :
+     ce que le banc peut tenir n'est donc pas leur JUSTESSE — ça se joue — mais
+     leur COHÉRENCE. Une bande hors de [0,1], une période qui passerait sous son
+     plancher ou une jauge qui dépasserait 1 rendraient le geste injouable sans
+     qu'aucune erreur ne se lève. */
+  {
+    ok("⚠️ la bande cible est dans la période, et elle a une largeur",
+       Q.STAR_WAKE_BAND_A > 0 && Q.STAR_WAKE_BAND_B <= 1 && Q.STAR_WAKE_BAND_B > Q.STAR_WAKE_BAND_A,
+       `${((Q.STAR_WAKE_BAND_B - Q.STAR_WAKE_BAND_A) * 100).toFixed(0)} % de la période`);
+    ok("…et le battement ne compte que dedans",
+       !Q.starWakeOnBeat(0) && !Q.starWakeOnBeat(Q.STAR_WAKE_BAND_A - 0.01)
+       && Q.starWakeOnBeat((Q.STAR_WAKE_BAND_A + Q.STAR_WAKE_BAND_B) / 2)
+       && !Q.starWakeOnBeat(1.0000001));
+    let mono = true, prev = Infinity;
+    for (let h = 0; h <= Q.STAR_WAKE_HITS; h++) {
+      const p = Q.starWakePeriod(h);
+      if (p > prev || p < Q.STAR_WAKE_MIN_MS) mono = false;
+      prev = p;
+    }
+    ok("⚠️⚠️ le cœur ACCÉLÈRE sans jamais passer sous son plancher", mono,
+       `${Q.starWakePeriod(0)} ms → ${Q.starWakePeriod(Q.STAR_WAKE_HITS)} ms (plancher ${Q.STAR_WAKE_MIN_MS})`);
+    /* ⚠️ LA FENÊTRE EN MILLISECONDES EST CE QUE LE DOIGT RESSENT, pas la fraction :
+       au battement le plus rapide elle doit rester au-dessus de 120 ms, sous quoi
+       ce n'est plus du rythme mais de la chance (repère du mini-jeu du loup). */
+    const tightest = Q.starWakePeriod(Q.STAR_WAKE_HITS) * (Q.STAR_WAKE_BAND_B - Q.STAR_WAKE_BAND_A);
+    ok("⚠️⚠️ la fenêtre la plus serrée reste jouable au doigt", tightest >= 120,
+       `${tightest.toFixed(0)} ms au dernier battement`);
+    ok("⚠️ la lueur va de 0 (grise) à 1 (jaune), et elle est bornée",
+       Q.starWakeGlow(0) === 0 && Q.starWakeGlow(Q.STAR_WAKE_HITS) === 1
+       && Q.starWakeGlow(-5) === 0 && Q.starWakeGlow(Q.STAR_WAKE_HITS * 3) === 1);
+    ok("…et elle monte à chaque battement, sans palier mort",
+       Array.from({ length: Q.STAR_WAKE_HITS }, (_, i) => Q.starWakeGlow(i + 1) - Q.starWakeGlow(i)).every(d => d > 0));
+  }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ON JOUE LE RÉVEIL. C'EST LE TROISIÈME BANC DU DÉPÔT QUI JOUE UNE MÉCANIQUE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ `verify-maire` (480) et `verify-scierie` (lot E) ont chacun sorti des
+     défauts de RÉGLAGE qu'aucune relecture n'aurait vus, parce qu'ils JOUENT au
+     lieu de relire une table. Le réveil est une mécanique neuve, inventée de bout
+     en bout, avec des nombres que personne n'a encore éprouvés à la main : c'est
+     très exactement le cas où jouer paie.
+     ⚠️ IL JOUE LES VRAIES FONCTIONS (`starWakeAdvance`/`starWakeStrike`, sorties de
+     `FermeGame.js` pour cette raison), donc ce qu'il mesure est ce que le joueur
+     touchera — pas un modèle qui divergerait au premier réglage.
+     ⚠️ LE PAS EST IRRÉGULIER (11 à 21 ms), comme une vraie boucle de rendu : à pas
+     fixe, un défaut de bornage se cacherait derrière un diviseur rond. */
+  {
+    const fresh = () => ({ phase: 0, hits: 0, beats: 0, flash: 0, miss: 0 });
+    /* Un joueur qui frappe DANS la bande, dès qu'il la voit. */
+    const play = (strategy, maxMs) => {
+      let st = fresh(), t = 0, presses = 0, seed = 7;
+      while (t < (maxMs || 60000)) {
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff;      // pas de Math.random : rejouable au bit près
+        const dt = 11 + (seed % 11);
+        const before = st.phase;
+        const nx = Q.starWakeAdvance(st, dt);
+        t += dt;
+        if (nx.gone) return { won: false, gone: true, t, presses, hits: st.hits };
+        st = nx;
+        if (strategy(st, before, t)) {
+          presses++;
+          const sk = Q.starWakeStrike(st);
+          st = { ...st, ...sk };
+          if (sk.won) return { won: true, t, presses, hits: st.hits };
+        }
+      }
+      return { won: false, t, presses, hits: st.hits };
+    };
+    /* ── 1. LE JEU PARFAIT GAGNE, ET EN COMBIEN DE TEMPS. C'est le repère que
+       Guillaume jugera en jouant : si ce nombre dérive, le geste a changé de
+       nature sans que personne l'ait décidé. */
+    const perfect = play((st) => Q.starWakeOnBeat(st.phase));
+    ok("⚠️⚠️ EN FRAPPANT DANS LA BANDE, ELLE SE RÉVEILLE — et sans un appui de trop",
+       perfect.won && perfect.presses === Q.STAR_WAKE_HITS,
+       `${(perfect.t / 1000).toFixed(1)} s, ${perfect.presses} appuis pour ${Q.STAR_WAKE_HITS} battements`);
+    ok("…et le geste dure entre quatre et douze secondes (ni un réflexe, ni une corvée)",
+       perfect.t > 4000 && perfect.t < 12000,
+       `${(perfect.t / 1000).toFixed(1)} s`);
+    /* ── 2. ⚠️⚠️⚠️ LE MARTÈLEMENT NE GAGNE PAS, ET C'EST LA RAISON D'ÊTRE DE CE
+       BLOC. C'est la première chose qu'un joueur essaie, c'est ce que la phrase
+       d'aide annonce, et c'est ce qui distingue ce geste du mini-jeu du loup. Un
+       jour où la pénalité disparaîtrait, tout le reste resterait vert. */
+    for (const hz of [8, 12, 20]) {
+      let last = -1;
+      const mash = play((st, before, t) => { const k = Math.floor(t / (1000 / hz)); if (k === last) return false; last = k; return true; }, 30000);
+      ok(`⚠️⚠️⚠️ marteler à ${hz} appuis/s ne la réveille PAS`, !mash.won,
+         `${mash.presses} appuis, ${mash.hits} battements placés en ${(mash.t / 1000).toFixed(0)} s`);
+    }
+    /* ── 3. NE RIEN FAIRE REFERME L'ANNEAU, et vite : il ne doit pas rester à
+       battre au-dessus d'un trou que le joueur a quitté des yeux. */
+    const idle = play(() => false, 30000);
+    ok("⚠️ sans un seul appui, l'anneau s'efface tout seul", idle.gone && idle.t < 5000,
+       `${(idle.t / 1000).toFixed(1)} s`);
+    /* ── 4. UN JOUEUR MOYEN — il vise, il rate une fois sur trois — s'en sort quand
+       même. Une mécanique qu'on ne gagne qu'en étant parfait n'est pas du rythme,
+       c'est une punition ; et personne ne s'en apercevrait en jouant deux minutes. */
+    {
+      /* ⚠️⚠️ ON COMPTE LES PASSAGES DANS LA BANDE, PAS LES IMAGES — et la première
+         écriture faisait l'inverse. La bande dure ~180 ms, soit une douzaine
+         d'images : « rater une fois sur trois » appliqué par IMAGE laissait deux
+         chances sur trois à chaque image, donc le joueur « maladroit » frappait
+         quand même au premier passage, à la milliseconde près du joueur parfait
+         (5,7 s et 8 appuis pour les deux — c'est ce doublon suspect qui l'a
+         trahi). Un contrôle qui rejoue le cas d'à côté ne mesure rien. */
+      let pass = 0, armed = true;
+      const sloppy = play((st) => {
+        if (!Q.starWakeOnBeat(st.phase)) { armed = true; return false; }
+        if (!armed) return false;
+        armed = false;                                          // une seule décision par passage
+        pass++;
+        return pass % 3 !== 0;                                  // il en laisse vraiment passer un sur trois
+      }, 60000);
+      ok("⚠️⚠️ un joueur qui laisse passer un battement sur trois y arrive quand même", sloppy.won,
+         `${(sloppy.t / 1000).toFixed(1)} s, ${sloppy.presses} appuis pour ${Q.STAR_WAKE_HITS} battements`);
+    }
+    /* ── 5. UN GROS `dt` NE SAUTE PAS LE GESTE. Un onglet qui revient au premier
+       plan rend plusieurs secondes d'un coup ; sans le bornage de `starWakeAdvance`,
+       il ferait franchir trois battements à vide et l'anneau s'effacerait tout seul,
+       sur un joueur qui n'a rien lâché (§10 : l'onglet masqué est un vrai cas). */
+    {
+      const st = Q.starWakeAdvance(fresh(), 9000);
+      ok("⚠️⚠️ neuf secondes d'un coup n'effacent pas l'anneau (onglet revenu au premier plan)",
+         !st.gone && st.beats <= 1, `${st.beats} battement(s) écoulé(s)`);
+    }
+    /* ── 6. LES DEUX FONCTIONS NE MUTENT RIEN. C'est le défaut du 2026-08-31 (une
+       table de référence étalée à plat puis lissée en place) : aucun symptôme sur
+       le moment, et l'état de départ corrompu à la première image. */
+    {
+      const st0 = fresh(); st0.phase = 0.85;
+      const copy = JSON.stringify(st0);
+      Q.starWakeAdvance(st0, 40); Q.starWakeStrike(st0);
+      ok("⚠️⚠️ avancer et frapper ne MODIFIENT pas l'état reçu", JSON.stringify(st0) === copy,
+         "l'appelant garde la main sur son état");
+    }
+  }
   /* ⚠️⚠️ ZIP 471 — « TOMBÉ CHEZ L'HÔTE » ≠ « TOMBÉ CHEZ CE CLIENT ». Vu à l'écran
      par Guillaume : le bandeau annonçait « le trou brûle à l'est de Valley
      Town » à un joueur resté à la ferme, qui n'avait donc rien vu tomber — la
@@ -1665,7 +1908,7 @@ section("L'objectif courant (bandeau) et le guide");
      && Q.starTargetSite(e, { craterHot: true, landed: false }) === null);
   ok("…et dès que ce client a vu l'impact, il retrouve le cratère brûlant",
      Q.starGoalKey(e, { craterHot: true, landed: true }) === "craterHot"
-     && Q.starGoalKey(e, { landed: true }) === "crater");
+     && Q.starGoalKey(e, { landed: true }) === "craterFeed");
   Q.resolveStarFound(e, "crater", "j1", 1002);
   /* ⚠️⚠️ ZIP 454 — LA RENCONTRE ENVOIE À LA MAIRIE, ET LE BANDEAU LE DIT AVANT
      TOUT LE RESTE. C'est la consigne « le rôle des étoiles est de nous guider dans
@@ -1762,7 +2005,13 @@ section("L'objectif courant (bandeau) et le guide");
        (les deux écoutes d'ombres, l'attente de l'ingénieur). Sans ce contrôle, un
        objectif ajouté plus tard pointerait silencieusement dans le vide. */
     {
-      const NOWHERE = ["townWait", "townWaitThere", "engineerTravel", "engineerWork"];   // 469 — les deux écoutes d'ombres sont parties ; 470 — une clé d'attente devient deux ; hors-zip — townWait se scinde en deux phrases, ni l'une ni l'autre n'a de lieu
+      /* 2026-09-02 (lot A) — `craterFeed` REJOINT LA LISTE, ET IL FAUT SAVOIR
+         POURQUOI : « il te manque des lumières » n'envoie pas au cratère, il
+         envoie à la COURSE DE FUITE, qui n'est pas un lieu de la carte. C'est
+         exactement le partage de `farmImpactLight` (chercher) contre
+         `farmImpactLightPay` (rapporter) — et ce second-là, `craterFeedPay`, a
+         bien une adresse : le trou. */
+      const NOWHERE = ["townWait", "townWaitThere", "engineerTravel", "engineerWork", "craterFeed"];   // 469 — les deux écoutes d'ombres sont parties ; 470 — une clé d'attente devient deux ; hors-zip — townWait se scinde en deux phrases, ni l'une ni l'autre n'a de lieu
       const orphan = Q.STAR_GOAL_KEYS.filter(k => {
         /* ⚠️ ZIP 475 — `farmImpactTame`/`farmImpactCool` DÉSIGNENT LE MÊME
            TROU QUE `farmImpacts` (voir `starTargetSite`) : les trois clés
@@ -3398,6 +3647,7 @@ section("12. LES QUATRE VERBES (479, 480 bis)");
       e2.townFall = e2.fall + 10;
       Q.resolveStarEffigy(e2, "j1", CX, CY + R * 0.9, CX, CY, R, 20);
       let t = e2.townFall + Q.STAR_CRATER_COOL_MS + 500;
+      ok("⚠️ (lot A) le préambule de la reine passe : nourrie, puis réveillée", queenReady(e2, "j1", t));
       const start = t;
       for (let k = 0; k < 200 && !Q.starHas(e2, "crater"); k++) {
         t += 500;
@@ -3416,6 +3666,7 @@ section("12. LES QUATRE VERBES (479, 480 bis)");
       const e = Q.devStar(Q.newStar(), "start", 1).star;
       e.townFall = e.fall + 10;
       let t = e.townFall + Q.STAR_CRATER_COOL_MS + 500, opened = null;
+      queenReady(e, "j1", t);
       for (let k = 0; k < 80 && !opened; k++) {
         t += 400;
         const r = Q.resolveStarCalm(e, "j1", t, { alone: false, partner: "player", mate: "Bob" }, "crater");
@@ -3436,6 +3687,7 @@ section("12. LES QUATRE VERBES (479, 480 bis)");
         const e3 = Q.devStar(Q.newStar(), "start", 1).star;
         e3.townFall = e3.fall + 10;
         let t3 = e3.townFall + Q.STAR_CRATER_COOL_MS + 500, op3 = null;
+        queenReady(e3, uuid, t3);
         for (let k = 0; k < 80 && !op3; k++) {
           t3 += 400;
           const r = Q.resolveStarCalm(e3, uuid, t3, { alone: false, partner: "player", mate: "Bob", name: "Alice" }, "crater");

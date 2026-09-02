@@ -7741,6 +7741,167 @@ export function buildSprites() {
   }
 
   /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-02 (lot A) — L'ANNEAU DU RÉVEIL. « SON CŒUR REPART. »
+     ╚══════════════════════════════════════════════════════════════════════════
+     Guillaume, sur la mécanique du martèlement : « faut pas cacher avec un
+     overlay trop gros. » Ce dessin EST l'interface du geste — il n'y a pas de
+     panneau, pas de barre, pas de compteur : un anneau qui se contracte vers le
+     trou, une marque fixe qu'il traverse, et l'étoile qui passe du gris au jaune
+     à mesure qu'on place ses battements.
+     ⚠️⚠️ LA JAUGE, C'EST LA COULEUR DE L'ÉTOILE. Écrire une barre à côté aurait
+     donné deux réponses à « où en suis-je », dont l'une aurait fini par mentir
+     (défaut du 456). Ici il n'y a qu'une grandeur dessinée, `st.hits`, et elle
+     pilote à la fois la teinte, la taille de la lueur et l'espacement des
+     battements.
+     ⚠️ LA MARQUE EST FIXE ET L'ANNEAU BOUGE, jamais l'inverse : une cible qui se
+     déplace demande de suivre deux choses, et le geste demandé est un RYTHME —
+     on apprend où frapper en deux battements, puis on écoute.
+     ⚠️⚠️ AUCUN `createRadialGradient`, MÊME RAISON QU'À CÔTÉ (478) : le faux
+     canevas de `tools/lib-canvas.mjs` ne les connaît pas, et un dessin de quête
+     qu'aucun banc ne peut rastériser est un dessin qui vieillit sans qu'on le
+     voie (§4 de CLAUDE.md). Des ellipses empilées donnent la même douceur.
+     ⚠️ ELLIPSES ET PAS CERCLES (rapport 0,52, celui des ombres du dépôt) : le jeu
+     est vu de trois quarts, un anneau rond se lirait comme un cerceau debout.
+     ⚠️ `st.flash` et `st.miss` sont des DÉCROISSANCES 1→0 fournies par l'appelant,
+     pas des dates : ce dessin ne connaît aucune horloge en propre, donc il ne peut
+     pas diverger de la simulation qui, elle, avance avec le `dt` de la boucle. */
+  function drawStarWakeRing(g2, cx, cy, T2, st, tMs) {
+    if (!st) return;
+    const need = Math.max(1, st.need | 0);
+    const k = Math.max(0, Math.min(1, (st.hits | 0) / need));
+    const ph = Math.max(0, Math.min(1, +st.phase || 0));
+    const flash = Math.max(0, Math.min(1, +st.flash || 0));
+    const miss = Math.max(0, Math.min(1, +st.miss || 0));
+    const t = tMs || 0;
+    /* ⚠️⚠️ LA BANDE CIBLE ARRIVE PAR `st`, ELLE N'EST PAS RECOPIÉE ICI. C'est le
+       §8 de CLAUDE.md pris au mot : la bande est déjà écrite dans `quete.js`
+       (`STAR_WAKE_BAND_A/B`, que l'arbitre et le banc lisent), et une seconde
+       écriture dans le dessin aurait donné une marque qui ne tombe plus là où le
+       jeu compte le battement — c'est-à-dire une cible qui ment, au premier
+       réglage de difficulté. Le repli n'existe que pour un appelant incomplet. */
+    const bA = Number.isFinite(+(st.band && st.band[0])) ? +st.band[0] : 0.74;
+    const bB = Number.isFinite(+(st.band && st.band[1])) ? +st.band[1] : 0.96;
+    /* ── LA LUEUR DANS LE TROU : grise au premier battement, jaune au dernier.
+       ⚠️ ON INTERPOLE LA COULEUR À LA MAIN plutôt que de croiser deux passes
+       d'alpha : superposées, du gris et du jaune donnent un jaune SALE, pas un
+       jaune qui monte — c'est le mélange par le gris du §8 de CLAUDE.md, et il
+       se voit d'autant plus que les deux teintes sont proches en valeur. */
+    const lerp = (a, b) => Math.round(a + (b - a) * k);
+    const core = `rgba(${lerp(150, 255)},${lerp(150, 232)},${lerp(155, 158)},`;
+    const halo = `rgba(${lerp(196, 255)},${lerp(196, 248)},${lerp(200, 214)},`;
+    /* Le battement de la lueur suit la période du cœur : elle respire de plus en
+       plus vite, ce qui donne au joueur le tempo AVANT même qu'il ait à frapper. */
+    const beat = 0.5 + 0.5 * Math.sin(ph * Math.PI * 2);
+    const R = T2 * (0.55 + k * 1.35) * (0.92 + 0.08 * beat) * (1 + flash * 0.22);
+    g2.save();
+    const RINGS = 10;
+    for (let i = RINGS; i >= 1; i--) {
+      const rr = R * Math.pow(i / RINGS, 1.35);
+      g2.globalAlpha = (0.13 + k * 0.20) * 0.19 + flash * 0.03;
+      g2.fillStyle = (i > RINGS * 0.5 ? core : halo) + "1)";
+      g2.beginPath(); g2.ellipse(cx, cy, rr, rr * 0.52, 0, 0, 7); g2.fill();
+    }
+    /* ⚠️⚠️ LE CŒUR PLEIN — AJOUTÉ APRÈS AVOIR REGARDÉ LA PLANCHE, ET C'EST TOUT
+       L'INTÉRÊT DE L'AVOIR REGARDÉE. Avec les seules dix passes d'alpha, à zéro
+       battement il n'y avait RIEN au milieu : le joueur pressait E et voyait un
+       anneau vide tourner autour d'un trou noir. Or ce qu'il doit comprendre au
+       premier coup d'œil est qu'il y a QUELQU'UN là-dedans, simplement éteint.
+       Le cœur est donc toujours peint — terne et gris au départ, franc et jaune à
+       la fin. C'est le contraire de la lueur de tenue (478), qui doit justement
+       n'apparaître que progressivement : là on révèle, ici on réveille. */
+    g2.globalAlpha = 0.34 + k * 0.60;
+    g2.fillStyle = core + "1)";
+    const rc = T2 * (0.30 + k * 0.16) * (0.94 + 0.06 * beat);
+    g2.beginPath(); g2.ellipse(cx, cy, rc, rc * 0.62, 0, 0, 7); g2.fill();
+    g2.globalAlpha = 1;
+    /* ── LA MARQUE. Fixe, discrète, et c'est elle qu'on vise. Elle s'épaissit
+       quand l'anneau la traverse : sans ce signal, un joueur qui rate de peu ne
+       sait pas s'il a frappé trop tôt ou trop tard. */
+    const RO = T2 * 2.4, RI = T2 * 0.35;
+    /* La marque tombe EXACTEMENT au milieu de la bande : elle n'est donc pas un
+       réglage, c'est la même grandeur vue de l'autre côté. */
+    const RM = RO + (RI - RO) * ((bA + bB) / 2);
+    const onBand = ph >= bA && ph <= bB;
+    g2.globalAlpha = onBand ? 0.85 : 0.42;
+    g2.strokeStyle = onBand ? "rgba(255,246,206,1)" : "rgba(226,222,208,1)";
+    g2.lineWidth = onBand ? 2 : 1;
+    g2.beginPath(); g2.ellipse(cx, cy, RM, RM * 0.52, 0, 0, 7); g2.stroke();
+    /* ⚠️ QUATRE ENCOCHES QUI DÉPASSENT, PAS QUATRE POINTS — corrigé en regardant
+       la planche : posées sur le trait, elles s'y noyaient et la marque n'était
+       qu'une ellipse de plus au milieu d'autres. Une encoche qui SORT du cercle
+       fait lire « cible » et pas « anneau », ce qui est très exactement ce qu'on
+       demande au joueur de distinguer en une demi-seconde. */
+    g2.globalAlpha = onBand ? 0.95 : 0.55;
+    g2.fillStyle = g2.strokeStyle;
+    for (const [ex, ey] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const mx = Math.round(cx + ex * RM), my = Math.round(cy + ey * RM * 0.52);
+      const len = onBand ? 4 : 3;
+      if (ex) g2.fillRect(mx + (ex > 0 ? 0 : -len), my - 1, len, 2);
+      else g2.fillRect(mx - 1, my + (ey > 0 ? 0 : -len), 2, len);
+    }
+    /* ── L'ANNEAU QUI SE CONTRACTE. Il part de 2,4 carreaux et rentre jusqu'à
+       0,35 ; la marque, elle, est DÉRIVÉE du milieu de la bande (voir `RM`
+       ci-dessus), donc l'anneau la traverse toujours à l'instant exact où le
+       battement compte, quel que soit le réglage de la bande.
+       ⚠️ RATER LE FAIT REPARTIR EN ARRIÈRE (`miss`) : l'anneau s'écarte d'un
+       coup, ce qui dit « tu l'as fait redescendre » sans une ligne de texte. */
+    const rr = (RO + (RI - RO) * ph) * (1 + miss * 0.35);
+    g2.globalAlpha = 0.55 + 0.45 * (onBand ? 1 : 0.35);
+    g2.strokeStyle = miss > 0.02 ? "rgba(214,138,138,1)"
+                   : flash > 0.02 ? "rgba(255,250,224,1)"
+                   : "rgba(206,232,255,1)";
+    g2.lineWidth = onBand ? 2 : 1;
+    g2.beginPath(); g2.ellipse(cx, cy, rr, rr * 0.52, 0, 0, 7); g2.stroke();
+    g2.globalAlpha = 1;
+    /* ── LES BATTEMENTS DÉJÀ PLACÉS, en petits points sur la marque. C'est le seul
+       COMPTE affiché, et il tient en `need` pixels : une barre chiffrée aurait
+       demandé un cadre, donc un panneau, donc l'overlay qu'on ne veut pas. */
+    for (let i = 0; i < need; i++) {
+      const a2 = -Math.PI / 2 + (i / need) * Math.PI * 2;
+      /* ⚠️⚠️ 2,05 ET PAS 1,28 — LE DÉFAUT LE PLUS NET DE LA PREMIÈRE PLANCHE. À
+         1,28, la couronne des battements tombait à quatre pixels de la marque :
+         sur l'image assemblée, les deux se lisaient comme un seul amas de points,
+         donc le joueur ne pouvait distinguer SA CIBLE de SON SCORE. C'est la règle
+         du §DESSIN dans sa forme la plus bête — un motif se juge assemblé, jamais
+         élément par élément — et elle ne se voit pas en relisant le code. */
+      const px = Math.round(cx + Math.cos(a2) * RM * 2.05);
+      const py = Math.round(cy + Math.sin(a2) * RM * 2.05 * 0.52);
+      const done = i < (st.hits | 0);
+      g2.globalAlpha = done ? 0.95 : 0.30;
+      g2.fillStyle = done ? "rgba(255,238,170,1)" : "rgba(180,182,186,1)";
+      g2.fillRect(px - 1, py - 1, 2, 2);
+    }
+    g2.globalAlpha = 1;
+    /* ── LES YEUX. Ils ne s'ouvrent qu'au tout dernier tiers, et c'est le seul
+       endroit où l'on voit que c'est QUELQU'UN qu'on réveille et pas un objet.
+       (La scène d'éveil comique est le lot B ; ceci en est l'amorce, à l'échelle
+       du décor — deux pixels, pas une cinématique.) */
+    if (k > 0.66) {
+      const kk = (k - 0.66) / 0.34;
+      const open = Math.max(1, Math.round(kk * 3));
+      g2.globalAlpha = 0.55 + 0.45 * kk;
+      g2.fillStyle = "rgba(40,38,44,1)";
+      g2.fillRect(Math.round(cx - T2 * 0.22), Math.round(cy - T2 * 0.10), 2, open);
+      g2.fillRect(Math.round(cx + T2 * 0.22), Math.round(cy - T2 * 0.10), 2, open);
+      g2.globalAlpha = 1;
+    }
+    /* ── LES ÉTINCELLES DE RÉUSSITE : brèves, vers le haut, et seulement sur un
+       battement placé. Elles font la différence entre « il s'est passé quelque
+       chose » et « j'ai peut-être appuyé ». */
+    if (flash > 0.02) {
+      for (let i = 0; i < 5; i++) {
+        const a2 = (i / 5) * Math.PI * 2 + t / 700;
+        const d = T2 * (0.6 + (1 - flash) * 1.5);
+        g2.globalAlpha = flash * 0.9;
+        g2.fillStyle = "rgba(255,246,205,1)";
+        g2.fillRect(Math.round(cx + Math.cos(a2) * d), Math.round(cy + Math.sin(a2) * d * 0.52), 1, 1);
+      }
+      g2.globalAlpha = 1;
+    }
+    g2.restore();
+  }
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ZIP 479 — LE PLAT DE L'ÉTOILE ROSE. « ELLE VIENT À LA CHALEUR. »
      ╚══════════════════════════════════════════════════════════════════════════
      ⚠️⚠️ IL EST ICI ET PAS DANS LA CLOSURE DE LA BOUCLE, parce qu'il sert à TROIS
@@ -15464,6 +15625,7 @@ house: house(),
     magpie: [magpieSprite(0), magpieSprite(1), magpieSprite(2)],
     drawStarCrater,
     drawStarCalmGlow,   // 478 — la lumière qui monte pendant la tenue
+    drawStarWakeRing,   // 2026-09-02 (lot A) — l'anneau du réveil, dans le monde et pas en overlay
     drawStarDish,       // 479 — le plat de l'étoile rose, et sa chaleur qui tombe
     drawStarCraterAir,
     drawStarDust,

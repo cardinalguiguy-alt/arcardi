@@ -6734,6 +6734,85 @@ export function generateTownWorld() {
   }
 
   /* ═══════════════════════════════════════════════════════════════════════
+     HORS-ZIP 2026-09-02 (bis) — LA VÉGÉTATION BASSE SE DISPERSE DANS TOUTE
+     LA VILLE, PAS SEULEMENT DANS LES QUELQUES COMPOSITIONS QUI LA POSAIENT.
+     ───────────────────────────────────────────────────────────────────────
+     Demande de Guillaume : davantage de buis (les buissons qui plient au
+     passage, posés plus haut aujourd'hui) à plusieurs endroits de Valley
+     Town, dispersés largement — pas seulement place, quai et pont, qui les
+     semaient déjà en compositions fermées.
+     ⚠️ ELLE SE POSE ICI, EN TOUTE DERNIÈRE PASSE DE DÉCOR, APRÈS QUE TOUT LE
+     RESTE A DÉJÀ CONSOMMÉ SES TIRAGES DE `rnd()` : un scan placé plus tôt
+     aurait décalé tout ce que les passes suivantes sèment (note du 437, plus
+     haut, sur l'effet de bord d'un refus qui ne consomme aucun tirage) — pour
+     un correctif qui n'a besoin d'aucune d'entre elles.
+     ⚠️ `addGarden` FAIT TOUT LE TRAVAIL DE SÉCURITÉ, ET C'EST POUR ÇA QU'ON
+     LA RÉUTILISE PLUTÔT QU'UN NOUVEAU CHEMIN : herbe ou pelouse uniquement,
+     jamais sur du solide, une haie, un objet déjà posé, ni dans le corps d'un
+     décor voisin (`compoFree`/`propCover`, dérivés de `townPropBox`, donc de
+     la planche — §15 bis de `ferme/README.md`). Le semis ne peut donc jamais
+     planter un buisson dans une allée, une façade, une haie de jardin, ni
+     dans une composition déjà posée (place, quai, pont) : ces cases sont déjà
+     prises, `addGarden` les refuse silencieusement, la densité y reste celle
+     d'origine.
+     ⚠️ ET UNE CASE DE PLUS ICI NE PEUT JAMAIS FERMER UN PASSAGE : `soft` (ci-
+     dessous) ne fait que RALENTIR, jamais bloquer (§ TOWN_BUSH_SLOW) — un
+     semis dense ne peut donc pas créer de nouveau mur invisible, contrairement
+     à tout ce que ce fichier plante d'ordinaire. `verify-vallee` et
+     `verify-collision` restent la preuve, mais le mécanisme l'interdit déjà.
+     ⚠️ `reedTuft` reste hors de ce semis : c'est un roseau, il n'a de sens
+     qu'au bord de l'eau (la rive sauvage du lac le pose déjà, plus haut) — le
+     mettre en pleine pelouse sèche serait le défaut du §4 (« un sprite a un
+     sens dessiné ») appliqué à une plante plutôt qu'à un mur.
+     ⚠️⚠️ TROIS GARDES DE PLUS, TROUVÉES PAR `verify-collision` EN PASSANT LE
+     SEMIS DE 28 À PLUS DE MILLE CASES — À CETTE DENSITÉ, CE QU'UNE POIGNÉE DE
+     BUISSONS NE RENCONTRAIT JAMAIS PAR HASARD, LE SEMIS LE TROUVE À COUP SÛR :
+     1. LES RAILS (`TOWN_RAIL_X`) : le banc explique déjà toute case molle
+        posée sur la bande des voies comme une faute — `addGarden` n'exclut
+        que le solide, l'eau et les décors voisins, jamais une bande
+        purement conventionnelle.
+     2. LES FAÇADES CIVILES (`RECTS` du même banc — église, mairie, tribunal,
+        boutique, salon) : leur rectangle déborde parfois du solide réel
+        (marge de courette), donc `!solid[i]` seul ne suffit pas à les éviter.
+     3. LE RELIEF : un buisson planté à trois cases d'une marche ou d'un à-pic
+        tombe dans le couloir d'approche que `verify-collision` fait marcher
+        tout droit sur trois cases avant de mesurer — sans cette garde, le
+        buisson lui-même est innocent (il se traverse très bien), mais le
+        COULOIR qui mène à lui grimpe un dénivelé d'un coup, et la marche
+        échoue avant même d'atteindre le buisson. On exige donc un relief PLAT
+        sur trois cases dans les quatre directions, pas seulement sous le
+        pied du décor. */
+  {
+    const TOWN_SCATTER_DENSITY = 0.01;
+    // `topiary` est un arbuste TAILLÉ (la place et les monuments civils le
+    // portent déjà) : plus rare ici, sinon la ville entière prend un air de
+    // jardin à la française au lieu d'une pelouse qui verdit.
+    const SCATTER_KINDS = ["clump", "shrub", "grassTuft", "goldBush", "lavender", "clump", "shrub", "goldBush", "topiary"];
+    const CIVIC_RECTS = [C.TOWN_CHURCH, C.TOWN_HALL, C.TOWN_COURT, C.TOWN_BOUTIQUE, C.TOWN_SALON].filter(Boolean);
+    const inCivicRect = (x, y) => CIVIC_RECTS.some(r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
+    const flatAround = (x, y) => {
+      const e0 = elev[id(x, y)];
+      for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+        for (let k = 1; k <= 3; k++) {
+          const nx = x + dx * k, ny = y + dy * k;
+          if (!inMap(nx, ny) || elev[id(nx, ny)] !== e0) return false;
+        }
+      }
+      return true;
+    };
+    let sk = 0;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = id(x, y);
+      if (ground[i] !== C.G_GRASS && ground[i] !== C.G_TOWN_LAWN) continue;
+      if (solid[i] || hedge[i] || objects[i] !== C.O_NONE) continue;
+      if (x <= C.TOWN_RAIL_X + 1 || inCivicRect(x, y)) continue;
+      if (rnd() > TOWN_SCATTER_DENSITY) continue;
+      if (!flatAround(x, y)) continue;
+      addGarden(x, y, SCATTER_KINDS[sk++ % SCATTER_KINDS.length]);
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
      HORS-ZIP 2026-09-02 — `soft` : LES CASES QU'ON TRAVERSE EN COUCHANT LE
      FEUILLAGE. Dérivée, jamais posée.
      ───────────────────────────────────────────────────────────────────────

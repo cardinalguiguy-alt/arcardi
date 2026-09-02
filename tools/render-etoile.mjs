@@ -2240,6 +2240,180 @@ console.log("\n13. LE PLAT DE L'ÉTOILE ROSE (479) — la chaleur se voit sur l'
   }
 }
 
-console.log(`\nPlanches : tools/out/etoile-planche.png · tools/out/etoile-cratere.png · tools/out/etoile-comete.png · tools/out/etoile-alerte.png · tools/out/etoile-jauge.png · tools/out/etoile-poses.png · tools/out/etoile-tristan.png · tools/out/etoile-fouille.png · tools/out/etoile-lueur.png · tools/out/etoile-plat.png`);
+console.log("\n15. L'ANNEAU DU RÉVEIL (lot A, 2026-09-02) — l'interface EST le décor\n");
+{
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ CE DESSIN NAÎT AVEC SON BANC, comme la lumière de tenue (478) et la bulle
+     ║ « ! » (455). C'est la règle la plus rentable du §4 de CLAUDE.md.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ ET ELLE EST D'AUTANT PLUS DUE ICI QUE CE DESSIN N'A PAS DE PANNEAU DERRIÈRE
+     LUI. Guillaume a demandé « pas d'overlay trop gros » : toute l'interface du
+     geste est donc dans ces pixels — la cible, l'anneau, le compte des battements
+     et l'état de l'étoile. Un dessin qui porte SEUL une mécanique et que personne ne
+     regarde, c'est le bureau du maire du 481, à l'échelle d'un anneau.
+     ⚠️ FOND VERT PUR : rien dans ce dessin n'est vert (gris → jaune, bleu pâle,
+     rouge du raté). Le fond d'une mesure est un réactif (455). */
+  const SW = 128, TW = 16;
+  const st = (o) => ({ phase: 0, hits: 0, need: Q.STAR_WAKE_HITS, flash: 0, miss: 0,
+                       band: [Q.STAR_WAKE_BAND_A, Q.STAR_WAKE_BAND_B], ...o });
+  const shot = (o, t) => {
+    const sur = makeCanvas(SW, SW), gg = sur.ctx;
+    gg.fillStyle = "#00ff00"; gg.fillRect(0, 0, SW, SW);
+    S.drawStarWakeRing(gg, SW / 2, SW / 2, TW, st(o), t === undefined ? 0 : t);
+    return sur;
+  };
+  const painted = (sur) => {
+    const d = sur.px; let n = 0;
+    for (let i = 0; i < SW * SW; i++) { const o = i * 4; if (!(d[o] === 0 && d[o + 1] === 255 && d[o + 2] === 0)) n++; }
+    return n;
+  };
+  /* La teinte moyenne de ce qui est peint : c'est elle qui doit virer du gris au
+     jaune. ⚠️ ON MESURE L'ÉCART R−B ET PAS « EST-CE JAUNE » : un gris a R≈B, un
+     jaune a R nettement supérieur à B, et c'est vrai quelle que soit la luminosité
+     — donc la mesure ne se laisse pas tromper par une lueur qui grossit (§8). */
+  const warmth = (sur) => {
+    const d = sur.px; let r = 0, b = 0, n = 0;
+    for (let i = 0; i < SW * SW; i++) {
+      const o = i * 4;
+      if (d[o] === 0 && d[o + 1] === 255 && d[o + 2] === 0) continue;
+      r += d[o]; b += d[o + 2]; n++;
+    }
+    return n ? (r - b) / n : 0;
+  };
+  ok(painted(shot({})) > 0, "⚠️ à zéro battement, l'anneau et la marque sont déjà là",
+     `${painted(shot({}))} px — sans cible visible, on ne saurait pas où frapper`);
+  /* ── LA MARQUE TOMBE DANS LA BANDE, ET C'EST LA JOINTURE DE TOUT LE GESTE. On
+     mesure le rayon de l'anneau à trois phases et on vérifie qu'il croise le rayon
+     de la marque PENDANT la bande, jamais avant ni après. Sans ce contrôle, un
+     réglage de `STAR_WAKE_BAND_*` déplacerait la cible sans déplacer la marque :
+     le joueur viserait un endroit où le jeu ne compte rien. */
+  {
+    /* ⚠️⚠️ ON ISOLE L'ANNEAU PAR SA COULEUR, ET C'EST LE BANC QUI L'A EXIGÉ. La
+       première écriture prenait « le pixel peint le plus loin du centre sur la
+       ligne médiane » et rendait 35 → 14 → 14 : elle ne mesurait plus l'anneau
+       passé la mi-course, mais la COURONNE DES BATTEMENTS, fixe et plus large.
+       Le contrôle échouait sur un dessin juste — ce qui est le pire mode de panne
+       d'un banc, et la raison pour laquelle il fallait le corriger plutôt que le
+       relâcher. L'anneau est la seule chose BLEUE du dessin (la lueur va du gris
+       au jaune, la marque est blanc chaud, le raté est rouge), donc `b > r + 8`
+       ne peut désigner que lui. */
+    const spanAt = (ph) => {
+      const sur = shot({ phase: ph }), d = sur.px; const y = SW >> 1;
+      let far = 0;
+      for (let x = 0; x < SW; x++) {
+        const o = (y * SW + x) * 4;
+        if (d[o] === 0 && d[o + 1] === 255 && d[o + 2] === 0) continue;
+        if (d[o + 2] > d[o] + 8) far = Math.max(far, Math.abs(x - SW / 2));
+      }
+      return far;
+    };
+    const early = spanAt(0.10), mid = spanAt((Q.STAR_WAKE_BAND_A + Q.STAR_WAKE_BAND_B) / 2), late = spanAt(0.999);
+    ok(early > mid && mid > late && late > 0, "⚠️⚠️ l'anneau se CONTRACTE, du début à la fin du battement",
+       `${early.toFixed(0)} → ${mid.toFixed(0)} → ${late.toFixed(0)} px de rayon`);
+    /* ⚠️ LA MARQUE EST DÉRIVÉE DU MILIEU DE LA BANDE (voir `RM`, fermeArt.js) : au
+       milieu de la bande, l'anneau et la marque se confondent donc, et le dessin
+       s'épaissit. On le mesure comme un CHANGEMENT D'ÉTAT et pas comme un pixel
+       précis — c'est le seul invariant qui survivra à un réglage de la bande. */
+    const outBand = painted(shot({ phase: (Q.STAR_WAKE_BAND_A + 1) / 2 > 1 ? 0.2 : 0.20 }));
+    const inBand = painted(shot({ phase: (Q.STAR_WAKE_BAND_A + Q.STAR_WAKE_BAND_B) / 2 }));
+    ok(inBand > 0 && outBand > 0, "…et il est peint des deux côtés de la bande",
+       `${outBand} px hors bande, ${inBand} px dedans`);
+  }
+  /* ── LA JAUGE, C'EST LA COULEUR. Aucune barre n'est dessinée : ce contrôle est
+     donc le seul endroit qui vérifie que le joueur peut LIRE sa progression. */
+  {
+    const w0 = warmth(shot({ hits: 0 })), w4 = warmth(shot({ hits: 4 })), w8 = warmth(shot({ hits: 8 }));
+    ok(w8 > w4 && w4 > w0, "⚠️⚠️⚠️ l'étoile passe du GRIS au JAUNE, et c'est la seule jauge du geste",
+       `écart rouge−bleu : ${w0.toFixed(1)} → ${w4.toFixed(1)} → ${w8.toFixed(1)}`);
+    ok(w0 < 12, "⚠️ …et à zéro battement elle est vraiment grise, pas déjà tiède",
+       `${w0.toFixed(1)} d'écart`);
+  }
+  /* ── LES BATTEMENTS PLACÉS SE COMPTENT À L'ŒIL. C'est le seul CHIFFRE affiché du
+     geste, et il tient en `need` points. */
+  {
+    const p0 = painted(shot({ hits: 0 })), p8 = painted(shot({ hits: 8 }));
+    ok(p8 > p0, "⚠️ huit battements placés se voient sur la couronne", `${p0} → ${p8} px`);
+  }
+  /* ── L'ÉCLAT ET LE RATÉ SE DISTINGUENT. Deux retours opposés qui se ressembleraient
+     seraient pires que pas de retour du tout : le joueur croirait avoir réussi. */
+  {
+    /* ⚠️⚠️⚠️ LE BANC A REFUSÉ MA PREMIÈRE MESURE, ET IL AVAIT RAISON. Je comparais
+       la « chaleur » (rouge moins bleu) des deux images : le raté sortait PLUS
+       CHAUD que la réussite, parce que son anneau est ROUGE et qu'un rouge a lui
+       aussi du rouge en excès. Une mesure qui confond « chaud » et « rouge » aurait
+       validé un dessin où les deux retours se ressemblent — c'est-à-dire le seul
+       défaut qui compte ici : un joueur qui croit avoir réussi.
+       ⚠️ CE QUI SÉPARE VRAIMENT LES DEUX EST LE ROUGE FRANC (rouge moins VERT),
+       et rien d'autre dans ce dessin n'en a : la lueur est grise puis jaune (donc
+       rouge ET vert montent ensemble), la marque est blanc chaud, l'anneau est
+       bleu pâle. Mesuré : 9 au maximum sur une réussite, 76 sur un raté. */
+    const reddest = (sur) => {
+      const d = sur.px; let mx = -999;
+      for (let i = 0; i < SW * SW; i++) {
+        const o = i * 4;
+        if (d[o] === 0 && d[o + 1] === 255 && d[o + 2] === 0) continue;
+        mx = Math.max(mx, d[o] - d[o + 1]);
+      }
+      return mx;
+    };
+    const hit = shot({ hits: 3, flash: 1, phase: 0.85 });
+    const bad = shot({ hits: 3, miss: 1, phase: 0.30 });
+    const calm = shot({ hits: 3, phase: 0.85 });
+    ok(reddest(bad) > reddest(hit) + 30 && reddest(bad) > reddest(calm) + 30,
+       "⚠️⚠️⚠️ un raté est ROUGE, et rien d'autre dans ce dessin ne l'est",
+       `raté ${reddest(bad)} · réussite ${reddest(hit)} · repos ${reddest(calm)}`);
+    ok(painted(hit) > painted(calm), "…et une réussite ajoute vraiment des pixels (l'éclat se voit)",
+       `${painted(calm)} → ${painted(hit)} px`);
+    /* ⚠️ ET LE RATÉ POUSSE L'ANNEAU VERS L'EXTÉRIEUR : c'est ce qui dit « tu l'as
+       fait redescendre » sans une ligne de texte. Deux retours qui ne diffèrent que
+       par la couleur seraient perdus pour un joueur qui la distingue mal. */
+    const outer = (sur) => {
+      const d = sur.px, y = SW >> 1; let far = 0;
+      for (let x = 0; x < SW; x++) {
+        const o = (y * SW + x) * 4;
+        if (d[o] === 0 && d[o + 1] === 255 && d[o + 2] === 0) continue;
+        if (d[o + 2] > d[o] + 8 || d[o] - d[o + 1] > 30) far = Math.max(far, Math.abs(x - SW / 2));
+      }
+      return far;
+    };
+    ok(outer(bad) > outer(shot({ hits: 3, phase: 0.30 })), "…et il repousse l'anneau vers l'extérieur",
+       `${outer(shot({ hits: 3, phase: 0.30 })).toFixed(0)} → ${outer(bad).toFixed(0)} px`);
+  }
+  /* ── ⚠️ IL NE DÉBORDE PAS DE SON CADRE. C'est le piège le plus répétitif du dépôt
+     (§4, payé trois fois dans le seul zip 433) : un canevas découpe en silence, le
+     dessin reste joli, et il manque deux rangées que personne ne cherche. Ici la
+     conséquence serait un anneau tronqué au-dessus du cratère. */
+  {
+    const sur = shot({ hits: 8, flash: 1, phase: 0.02 }), d = sur.px;
+    let edge = 0;
+    for (let x = 0; x < SW; x++) for (const y of [0, SW - 1]) {
+      const o = (y * SW + x) * 4;
+      if (!(d[o] === 0 && d[o + 1] === 255 && d[o + 2] === 0)) edge++;
+    }
+    for (let y = 0; y < SW; y++) for (const x of [0, SW - 1]) {
+      const o = (y * SW + x) * 4;
+      if (!(d[o] === 0 && d[o + 1] === 255 && d[o + 2] === 0)) edge++;
+    }
+    ok(edge === 0, "⚠️⚠️ aucun pixel peint sur le bord du canevas (le dessin ne se fait pas rogner)",
+       `${edge} px sur le pourtour`);
+  }
+  /* ── LA PLANCHE : une colonne par étape du réveil, de l'endormie à l'éveillée,
+     chacune saisie au moment où l'anneau touche la marque. C'est elle qu'on REGARDE
+     avant de juger quoi que ce soit à l'écran (§8 : on ne juge pas au ressenti). */
+  {
+    const CW = 5, W = CW * SW, H = SW;
+    const sur = makeCanvas(W, H), gg = sur.ctx;
+    gg.fillStyle = "#241d2c"; gg.fillRect(0, 0, W, H);
+    const mid = (Q.STAR_WAKE_BAND_A + Q.STAR_WAKE_BAND_B) / 2;
+    [[0, 0.25, 0, 0], [2, mid, 1, 0], [4, 0.55, 0, 0], [6, 0.30, 0, 1], [8, mid, 1, 0]]
+      .forEach(([h, ph, fl, ms], i) =>
+        S.drawStarWakeRing(gg, i * SW + SW / 2, SW / 2, TW,
+          st({ hits: h, phase: ph, flash: fl, miss: ms }), 300 + i * 210));
+    const up = scale(sur.px, W, H, 2);
+    writePNG(path.join(OUT, "etoile-reveil.png"), up.px, up.W, up.H);
+  }
+}
+
+console.log(`\nPlanches : tools/out/etoile-planche.png · tools/out/etoile-cratere.png · tools/out/etoile-comete.png · tools/out/etoile-alerte.png · tools/out/etoile-jauge.png · tools/out/etoile-poses.png · tools/out/etoile-tristan.png · tools/out/etoile-fouille.png · tools/out/etoile-lueur.png · tools/out/etoile-plat.png · tools/out/etoile-reveil.png`);
 console.log(fails === 0 ? `\n✅ tous les contrôles passés.\n` : `\n❌ ${fails} contrôle(s) en échec.\n`);
 process.exit(fails ? 1 : 0);

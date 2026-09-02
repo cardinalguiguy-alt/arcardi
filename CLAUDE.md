@@ -11,45 +11,38 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-⚠️⚠️ **LE PIPELINE PNG DE L'HÔTEL DE VILLE EST CONFIRMÉ KEEPER (hors-zip 2026-09-02).** Guillaume,
-en autorisant le chantier suivant : « nous referons le tribunal comme nous avons refait le Town
-hall ». Détail du pipeline (deux calques day/glow, le piège du calque-lueur non enregistré comme
-source de lumière, le piège de la clé de tri sur un perron traversable) : `components/ferme/README.md`,
-section « l'hôtel de ville en PNG confirmé ». `townHall2Sprite` (l'ancien canevas procédural, sans
-appelant) reste à retirer au prochain passage qui touche ce fichier.
+⚠️⚠️ **LE LOT A DU MASTER PROMPT EST LIVRÉ ET VÉRIFIÉ (hors-zip 2026-09-02, quater) : LA REINE SE
+NOURRIT, PUIS SE RÉVEILLE AU RYTHME.** Le cratère de Valley Town avait un geste, il en a trois —
+80 lumières bleues rapportées de la course de fuite, huit battements placés sur un anneau qui se
+contracte, puis le dos-à-dos déjà écrit. **Les sept questions du master prompt ont été posées et
+tranchées avec Guillaume avant d'écrire une ligne** ; les réponses ont REMPLACÉ les questions au §6
+de `components/ferme/QUETE.md`, et la mécanique du réveil (ses six nombres, les trois choses à ne
+pas défaire) est à son §2 bis. Le branchement dans la ville est en tête de
+`components/ferme/README.md`. `verify-quete` **673/673** (il JOUE le réveil), `render-etoile`
+**171 contrôles**, `verify-strings` **1 108 clés**, `verify-vallee` **223/223**,
+`verify-collision` **TOUT PASSE**, `verify-maire` **119/119**, `verify-scierie` **34/34**,
+`next build` **✓ Compiled successfully**. **Aucune manipulation Supabase n'est nécessaire.**
 
-⚠️⚠️ **CETTE MÊME SESSION A CORRIGÉ DEUX DÉFAUTS TROUVÉS EN JOUANT, VÉRIFIÉS EN NAVIGATEUR ET PAR
-LES BANCS — DÉTAIL DANS `components/ferme/README.md`, MÊME SECTION :**
-1. **Le E du perron de l'hôtel de ville s'activait depuis le parvis, pas depuis la porte**
-   (`nearCivicDoor` ignorait `TOWN_HALL_STEP_ROWS`, seul bâtiment à perron traversable). Corrigé.
-2. **Le bloc d'escalier sous le tribunal — corrigé en DEUX passes, et la première avait tort sur
-   les deux points.** Une première passe avait conclu « collision saine, la couleur seule est en
-   cause » et livré un correctif de teinte. Guillaume a rejoué : « toujours un problème majeur de
-   couleur […] on dirait qu'il y a un filtre » — et a montré une vraie collision fautive (un
-   poteau qui bloque là où « une vision en perspective » dit que c'est dégagé). Les deux
-   jugements de la première passe étaient faux. ⚠️ *Un banc qui teste SI un mur bloque ne dit rien
-   de SI il bloque au bon endroit.* Détail des deux vraies causes (un poteau peint à x≈140,
-   collision posée à x=141 ; deux désaturations empilées qui produisaient le « filtre ») et de
-   leur correctif : `components/ferme/README.md`, même section. `render-escaliers` **35/35**
-   (dont un contrôle neuf sur la rambarde, qui avait perdu 100 % de son opacité au premier
-   correctif sans qu'aucun banc ne le voie), `verify-collision` **TOUT PASSE**, `verify-vallee`
-   **223/223**, `next build` **✓ Compiled successfully**. Vérifié en superposant l'emprise de
-   chaque poteau au bitmap affiché, pas en approchant seulement pour voir si ça bloque.
+⚠️⚠️⚠️ **CE QUI ATTEND GUILLAUME, ET C'EST DU JUGEMENT, PAS DU CODE : LES SIX NOMBRES DU RÉVEIL
+SONT DE CLAUDE** (« tu jugeras »). Menu dev → **⭐ Star → 👑 The queen** pose le décor en un clic
+(météore tombé, trou froid, 80 lumières dans le flux) et **laisse les trois gestes à jouer** — sans
+lui, chaque essai coûte une course de Temple Run et trois minutes d'attente. Comme les trois
+nombres de la scierie : **aucun ne doit bouger avant d'avoir joué** (règle du voyage en train, 431).
 
-⚠️⚠️ **L'ÉCHELLE DES TROIS MONUMENTS CIVILS EST FAITE : +10 %, VISUEL SEUL, LES TROIS VÉRIFIÉES EN
-JEU.** Guillaume a tranché court : « +10 pour les bâtiments officiels (pas maisons) […] assure-toi
-que ça ne crée aucun problème visuel, ni de bug pour l'entrée, ou de collision ». `drawCivic`
-(église, tribunal) et `drawTownHallBitmap` (mairie) grossissent leur dessin de 10 % dans un
-`ctx.save()/scale/restore()` ancré sur le point de contact au sol — l'emprise, `nearCivicDoor` et
-la clé de tri ne bougent pas d'un bit. Détail, chiffres et vérification aux trois portes :
-`components/ferme/README.md`, même section.
+⚠️⚠️⚠️ **ACTION SUIVANTE UNIQUE : LE LOT A2 — LA SIXIÈME SŒUR, « LA DISCRÈTE ».** Elle se cache
+entre les PNJ, parfois assise sur un banc, parfois marchant normalement, **entre la place centrale
+et le parc et nulle part ailleurs** ; mini chapeau et lunettes de soleil ; la reine oriente vers
+elle ; on l'apprivoise en pressant E. C'est la décision n°5 du §6 de `QUETE.md`, et elle est sur le
+CHEMIN CRITIQUE : le seuil de la septième sœur est « reine apprivoisée **et six étoiles trouvées** »,
+donc rien du lac maléfique n'est jouable avant A2 puis A3 (la cinquième sœur, simplifiée elle
+aussi : on la cherche, avec des indices). **Ensuite seulement** viennent les lots B à F.
 
-⚠️⚠️⚠️ **ACTION SUIVANTE UNIQUE : LA VILLA, MÊME PIPELINE QUE L'HÔTEL DE VILLE.** Réf.
-`refs/grandevilladeriches.png`, prompt Gemini avec référence (jamais d'appel API direct — §2),
-puis retirer `townHall2Sprite` (canevas procédural devenu sans appelant). **Ensuite seulement** :
-l'ombre portée dirigée générale (`drawCivic`, tous les bâtiments procéduraux) — correctif suivant
-de la liste posée le 2026-09-02 matin (route → ombre → redessin → collisions → casseur de période
-→ variantes), toujours en attente, non touché par cette session.
+⚠️ **ET CE QUI ATTENDAIT DÉJÀ, NON TOUCHÉ PAR CETTE SESSION**, dans l'ordre : le même buis que
+Valley Town, pour la ferme (VF — aucun équivalent du mécanisme `TOWN_SOFT_PROPS` côté ferme, §4) ;
+la villa (`refs/grandevilladeriches.png`, même pipeline PNG que l'hôtel de ville, prompt Gemini avec
+référence, jamais d'appel API direct — §2) ; retirer `townHall2Sprite` (canevas procédural sans
+appelant) ; l'ombre portée dirigée générale (`drawCivic`) ; et `render-eau`/`render-parc`, cassés,
+**à corriger seuls** (§10).
 ---
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
@@ -206,28 +199,18 @@ coordonnées — et on teste la zone AVANT les distances.**
 
 **Dessin — voir `components/ferme/DESSIN.md`**
 
-⚠️⚠️ **CE BLOC EST PARTI AU 441, SUR L'ORDRE DU §14.2 DU 440 (reporté deux fois).** Les treize
-règles de dessin — on assemble des masses et on ne texture pas une silhouette, une courbe `f(x)`
-ne se replie pas, la période prime sur les détails, une position réglée à la main penchera, un
-cerne sert aussi sur fond clair, un sprite haut contre le mur du fond avale ce qui passe
-devant… — vivent désormais **à côté des dessins qu'elles gouvernent**. Rien n'a été recopié.
-⚠️⚠️ **ET LA PHRASE QUI SUIVAIT ICI EST DEVENUE FAUSSE AU 449, PAR LE DÉPLACEMENT SUIVANT.** Elle
-disait que « la case d'un décor n'est pas la surface qu'il couvre » restait ici parce que c'est une
-règle du GÉNÉRATEUR et non du dessin — vrai au 441, périmé depuis que le générateur est parti à son
-tour au §15 bis de `components/ferme/README.md`. *Un déplacement laisse toujours derrière lui une
-phrase qui explique pourquoi quelque chose n'a pas bougé ; c'est elle qu'il faut relire en dernier.*
-
+Les treize règles de dessin — on assemble des masses et on ne texture pas une silhouette, une
+courbe `f(x)` ne se replie pas, la période prime sur les détails, un cerne sert aussi sur fond
+clair, un sprite haut contre le mur du fond avale ce qui passe devant… — vivent **à côté des
+dessins qu'elles gouvernent**, dans `components/ferme/DESSIN.md`. Rien n'en est recopié ici.
 
 **Conception — vrai partout**
 
-⚠️⚠️ **LES CINQ PIÈGES DU GÉNÉRATEUR SONT PARTIS AU 449, SUR L'ORDRE DU §14.2 DU 444** (reporté
-quatre fois) : la case d'un décor, la liste noire, la passe qui pave, le second de quelque chose,
-la variante de décor. Ils décrivent tous `generateTownWorld` et vivent désormais **à côté de lui**,
-au **§15 bis de `components/ferme/README.md`** — même geste qu'au 431 (les zones) et au 441 (le
-dessin). ⚠️ **Rien n'a été recopié, et un DOUBLON a été supprimé** : « une variante de décor est
-une couche » était écrit deux fois dans ce chapitre, une fois court et une fois long.
-⚠️ **Ce qui suit est resté exprès** : ce ne sont pas des règles de générateur, ce sont des règles
-de conception qui valent pour n'importe quel morceau du dépôt.
+Les cinq pièges du GÉNÉRATEUR (la case d'un décor, la liste noire, la passe qui pave, le second de
+quelque chose, la variante de décor) décrivent tous `generateTownWorld` et vivent **à côté de lui**,
+au **§15 bis de `components/ferme/README.md`**. ⚠️ **Ce qui suit est resté exprès** : ce ne sont pas
+des règles de générateur, ce sont des règles de conception qui valent pour n'importe quel morceau du
+dépôt.
 
 - ⚠️⚠️ **UNE GRANDEUR DE DESSIN NE DOIT PAS ENTRER DANS LA COLLISION** (439). L'arc du pont ajouté
   à `playerElevTown` aurait été trois lignes plus court et aurait rendu les deux ponts
@@ -389,7 +372,7 @@ de conception qui valent pour n'importe quel morceau du dépôt.
 |---|---|
 | `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **~20 500 l.** |
 | `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** |
-| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE : table, chronologies et résolveurs purs.** ⚠️ **469 — la FOUILLE (`STAR_DIG_MS`, `starDug`, `resolveStarDig`, `starDigResult`) et TROIS chapitres au lieu de cinq.** `STAR_FARM_IMPACTS` porte les **huit** cratères (3 étoiles / 2 matières / 3 vides — compté en important le module le 2026-08-30 ; il annonçait « cinq (2/1/2) » depuis le 480 bis), `resolveStarCalm` tient le barème 60/10 s et `resolveStarTownFall` sépare le gros météore. `STAR_FOLLOWER_SITES` dérive toutes les compagnes de `content:"star"`, `starFollowerAdded` identifie celle qui doit jouer son arrivée, `starFarmFlightPath` tient le cap stable des fragments et `queen` désigne l'unique reine. `starShipProgress` joint les cinq états du plan aux commandes et à la cale sans persistance supplémentaire. Aucun React, aucun dessin — `verify-quete.mjs` l'importe. |
+| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE : table, chronologies et résolveurs purs.** ⚠️ **469 — la FOUILLE (`STAR_DIG_MS`, `starDug`, `resolveStarDig`, `starDigResult`) et TROIS chapitres au lieu de cinq.** `STAR_FARM_IMPACTS` porte les **huit** cratères (3 étoiles / 2 matières / 3 vides — compté en important le module le 2026-08-30 ; il annonçait « cinq (2/1/2) » depuis le 480 bis), `resolveStarCalm` tient le barème 60/10 s et `resolveStarTownFall` sépare le gros météore. `STAR_FOLLOWER_SITES` dérive toutes les compagnes de `content:"star"`, `starFollowerAdded` identifie celle qui doit jouer son arrivée, `starFarmFlightPath` tient le cap stable des fragments et `queen` désigne l'unique reine. `starShipProgress` joint les cinq états du plan aux commandes et à la cale sans persistance supplémentaire. ⚠️ **2026-09-02 (lot A) — LA REINE SE NOURRIT PUIS SE RÉVEILLE** : `starOfferPrice` est le SEUL endroit qui dise ce que coûte une étoile (60 pour la bleue, `STAR_QUEEN_PRICE` = 80 pour la reine), `resolveStarLight` sert désormais les deux, et `starWakeAdvance`/`starWakeStrike` portent les deux décisions du réveil au rythme — sorties de `FermeGame.js` **pour qu'un banc puisse les jouer**, comme `maire.js` et `scierie.js`. Aucun React, aucun dessin — `verify-quete.mjs` l'importe. |
 | `components/ferme/maire.js` | **L'AUDIENCE CHEZ LE MAIRE (480) : la table des battements et les résolveurs purs.** Douze nœuds, cinq actes, cinq familles d'argument, la jauge d'adhésion qui FUIT, l'élan, la rejouabilité côté hôte (`mayorReplay` : le client envoie sa TRANSCRIPTION, l'hôte la rejoue). Aucun React, aucun dessin — `verify-maire.mjs` l'importe. ⚠️ **C'est un système de NÉGOCIATION, pas une scène** : la confiance gagnée sert les audiences futures, donc une commission ou le cadastre s'y ajouteront en une table de plus. |
 | `components/ferme/MaireScene.js` | **la VUE de l'audience — le seul morceau de 3D du monde partagé.** Écran PLEIN, à la PREMIÈRE PERSONNE, caméra libre dans la pièce, bulles projetées, réponses en jaune, **mode spectateur** (`MayorWatch`), repli plat si WebGL manque. ⚠️ Il porte `mayorCtxOf`, **la fonction de contexte que le CLIENT et l'HÔTE appellent tous les deux** : leur accord est une propriété du code, pas une coïncidence. |
 | `components/ferme/scierie.js` | **LA SCIE DE TRISTAN (lot E) : la simulation pure, à PAS FIXE.** Une lame qui a de l'inertie, un partenaire qui RÉPOND au lieu de mener, un mou qui referme la fenêtre parfaite, une contrainte qui fend la planche. ⚠️ **Aucune fonction transcendante dans le chemin de simulation** (`sin`/`pow`/`random` sont laissés à l'implémentation par la norme) : le hasard passe par un hachage entier, ce qui rend la manche rejouable **au bit près** par l'hôte à partir d'une liste de numéros de pas. Aucun React, aucun dessin — `verify-scierie.mjs` en joue des centaines. ⚠️ `sawPull(s, side)` est déjà symétrique : la seconde poignée du §17.6 s'ajoutera sans rouvrir la mécanique. |
@@ -472,6 +455,15 @@ ressenti.** ⚠️ **ET LA STATISTIQUE QUI COMPTE N'EST PAS LA MOYENNE** : au 42
 moyenne était juste et l'image fausse — **pas un pixel sous L60**, donc aucune ombre. Il faut
 un **écart**, pas un décalage. (Référence : L 180,6 / **écart-type 47,7** / saturation 27,8 % /
 2,1 % sous L60.)
+
+⚠️⚠️⚠️ **ET UNE MESURE QUI CONFOND DEUX PROPRIÉTÉS VALIDE LE DÉFAUT QU'ELLE CHERCHE** (2026-09-02).
+Pour prouver qu'une réussite et un raté ne se ressemblent pas, on a d'abord mesuré la « chaleur »
+(rouge moins bleu) des deux images : **le raté est sorti plus CHAUD que la réussite**, parce que son
+anneau est ROUGE et qu'un rouge a lui aussi du rouge en excès. La mesure aurait donc validé un
+dessin où les deux retours se confondent — c'est-à-dire le seul défaut qui comptait. *Avant de
+mesurer, il faut nommer ce qui SÉPARE vraiment les deux cas* : ici le rouge FRANC (rouge moins
+**vert**), que rien d'autre dans ce dessin ne porte. Même famille que l'écart-type ci-dessus : une
+statistique juste sur une grandeur mal choisie est une statistique fausse.
 
 ⚠️⚠️ **LA LEÇON LA PLUS COÛTEUSE, ET ELLE EST GÉNÉRALE : un paramètre qui DOUBLE un autre
 paramètre est une divergence en attente. Il doit être DÉRIVÉ, jamais réglé.**
@@ -573,13 +565,13 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 
 ⚠️⚠️ **LES BANCS SONT DANS `tools/README.md` DEPUIS LE 432, ET CE CHAPITRE A ÉTÉ ÉLAGUÉ AU 444
 SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 442** (reporté deux fois). **20 bancs de contrôle et 22 bancs
-de rendu**, comptés en listant `tools/`. **TOUS RELANCÉS LE 2026-09-02** :
-`verify-quete` **631/631**, `verify-maire` **119/119**, `verify-vallee` **223/223**,
+de rendu**, comptés en listant `tools/`. **TOUS RELANCÉS LE 2026-09-02 (lot A)** :
+`verify-quete` **673/673**, `verify-maire` **119/119**, `verify-vallee` **223/223**,
 `verify-collision` **TOUT PASSE** (30 contrôles), `verify-strings` **1 108 clés appariées**,
 `verify-scierie` **34/34**, `verify-ludo` **30/30**, `verify-taxi` **15/15**,
-`render-maire` **86/86**, `render-etoile` **161/161** — et **vingt bancs de rendu sur vingt-deux**
-seulement s'exécutent (voir l'entrée dédiée plus bas : `render-eau` et `render-parc` sont cassés
-depuis avant cette livraison).
+`render-maire` **86/86**, `render-etoile` **171 contrôles** — et **vingt bancs de rendu sur
+vingt-deux** seulement s'exécutent (voir l'entrée dédiée plus bas : `render-eau` et `render-parc`,
+relancés un par un ce jour-là, sont cassés depuis avant cette livraison).
 ⚠️ *`verify-quete` était à 488 au 468 : le déchant a retiré les contrôles des quatre chapitres
 supprimés et en a ajouté une trentaine sur la fouille. **Un banc qui rétrécit parce que le code
 rétrécit est un banc en bonne santé** — ce qu'il ne faut pas, c'est qu'il rétrécisse tout seul.*
@@ -590,7 +582,10 @@ Guillaume — ou vu à l'écran — n'était mesuré nulle part** : `verify-comp
 bout en bout** — quatre cents entretiens par propriété, cinq maires × deux mondes × dix vitesses
 de réflexion — au lieu de relire une table. Il a sorti quatre défauts de RÉGLAGE qu'aucune
 relecture n'aurait vus, dont une négociation arithmétiquement ingagnable et une seconde moitié de
-discussion devenue décorative. **C'est le premier banc du dépôt qui joue.**
+discussion devenue décorative. **C'est le premier banc du dépôt qui joue.** ⚠️ Ils sont **trois** depuis le
+2026-09-02 : `verify-quete` joue à son tour le réveil de la reine, et il a servi tout de suite —
+c'est lui qui prouve qu'un martèlement à 20 appuis/s place **zéro** battement en trente secondes,
+donc que la mécanique est bien du rythme et pas de la vitesse.
 ⚠️⚠️⚠️ **ET LE 481 LUI A APPRIS DEUX CHOSES QUE 72 CONTRÔLES VERTS NE POUVAIENT PAS VOIR, ET LES
 DEUX ONT ÉTÉ TROUVÉES EN JOUANT** (il est à **113/113**) : (1) **un banc qui manipule des dates doit
 manipuler de VRAIES dates** — avec `at: 1000`, rien ne dit que `now | 0` tronque un horodatage de
@@ -620,6 +615,17 @@ compte les pièces, et vérifie que **le cours est bit à bit celui du 430** —
 ⚠️⚠️ **ET UN BANC QUI N'A JAMAIS PU ÉCHOUER NE VAUT RIEN** (441). Le garde-fou de source de
 `verify-pont` annonçait « 0 appel fautif » alors que son motif ne pouvait matcher **aucun** appel
 réel. **Tout banc qui compte des occurrences doit publier combien il en a LUES.**
+⚠️⚠️⚠️ **ET IL A UN SECOND VISAGE, BEAUCOUP PLUS BÊTE, PAYÉ LE 2026-09-02 : LES ARGUMENTS INVERSÉS.**
+Les `ok(...)` du dépôt ne prennent pas tous leurs paramètres dans le même ordre — `verify-quete` veut
+`ok(nom, condition, détail)`, `render-etoile` veut `ok(condition, nom, détail)`. Six contrôles neufs
+écrits dans le mauvais ordre ont passé au vert **en imprimant `OK true`** : la condition partait dans
+la case du NOM (donc jamais évaluée) et le nom dans celle de la condition (une chaîne, donc toujours
+vraie). Ils ne pouvaient pas échouer, et rien ne les distinguait des autres dans un compte qui monte.
+⚠️ **LA PARADE N'EST PAS DE RELIRE, C'EST DE FALSIFIER : on casse exprès la règle que le banc
+prétend tenir, et on exige de le voir ROUGIR avant de le croire.** C'est ce qui a prouvé que la
+pénalité du réveil sert vraiment à quelque chose (sans elle, le martèlement gagne en 6 s) — et c'est
+la seule vérification qui aurait aussi attrapé l'inversion. *Un banc neuf se falsifie le jour où on
+l'écrit, ou il n'est pas écrit.*
 
 ⚠️⚠️⚠️ **ET LE 444 A AJOUTÉ LA LIMITE DE FOND, CELLE QUI VAUT POUR TOUS : SIX BANCS AU VERT N'ONT
 PAS VU DIX DÉFAUTS QU'UNE SÉANCE DE JEU DE VINGT MINUTES A TROUVÉS**, dont cinq qui rendaient un
@@ -634,55 +640,29 @@ vérifie jamais — c'est elle, et elle seule, qui protège du banc imaginaire (
 
 - ⚠️ **`verify-luge`, `verify-boot`, `preview-luge`, `preview.mjs`, `verify-perf` et
   `preview-fps` N'EXISTENT PAS** dans `tools/`.
-- ⚠️⚠️⚠️ **AUCUN BANC NE COMPTE CE QUE LE CHARGEMENT COÛTE À LA MACHINE, ET C'EST TOUJOURS VRAI**
-  malgré le correctif ci-dessous — la mesure se refait à la main, comme au 481. `buildSprites()`
-  RETENAIT **1 842 canevas 2D** distincts (mesuré hors-zip le 2026-09-02 en parcourant l'objet
-  réellement retourné — le chiffre du 481, 1 829, datait et avait dérivé), dont `townWater` **636**
-  (16 configurations × 2 variantes × 16 crans de profondeur, plus la berge et le tramage) et
-  `petFrames` **468** (39 familiers × 4 directions × 3 images) — **60 % à eux deux**. En octets ce
-  n'était rien (≈ 6 Mo) ; **ce qui compte n'est pas la taille, c'est le NOMBRE** : WebKit sur iPad
-  alloue une surface minimale par canevas et plafonne le total, et le symptôme d'un dépassement
-  n'est pas une erreur — c'est un onglet qui se ferme ou un canevas qui rend du blanc.
-  ⚠️⚠️ **CORRIGÉ HORS-ZIP LE 2026-09-02, COMME LA PARADE DÉJÀ CONNUE LE DÉCRIVAIT** : `townWater`
-  et `petFrames` sont désormais UN SEUL atlas chacun (`makeAtlas`, `fermeArt.js`), et la lecture
-  passe par `blitCell` (neuf arguments à `drawImage` avec un rectangle source) au lieu de trois.
-  Les fonctions qui dessinent une variante (`townWaterTile`, `petSprite`, etc.) **n'ont pas changé
-  d'une ligne** — seul l'appelant qui les stocke a changé, exactement comme `RS.grass`/
-  `drawTownGrassTile` le faisaient déjà pour l'herbe de la ville (le patron existait, il n'avait
-  jamais été appliqué à ces deux familles). Retenu : **779 canevas** (townWater 1, petFrames 1,
-  les 39 portraits `S.pets` gardés à part exprès — voir plus bas). ⚠️ **`S.pets[pid]` (le portrait
-  au repos) N'A PAS ÉTÉ ATLASSÉ** : `Sprite` (le composant qui l'affiche à six endroits de
-  l'interface) découpe toujours depuis (0,0) et ne sait pas lire un rectangle source — trente-neuf
-  canevas de plus est un coût négligeable à côté du risque de toucher six appelants pour rien.
-  ⚠️⚠️ **VÉRIFIÉ TROIS FOIS, PAS UNE** : (1) un parcours de l'objet réel retourné par
-  `buildSprites()` confirme 636 et 468 cases pointant chacune vers exactement UN canevas partagé ;
-  (2) `verify-syntax` et le bundle esbuild restent propres ; (3) **un rendu réel en navigateur**
-  (bundle esbuild de `fermeArt.js` chargé dans une page jetable, jamais commitée) montre l'étang
-  peint par la VRAIE `drawTownWaterTile`/`drawTownShoreTile` et une planche de familiers découpés
-  depuis l'atlas — identiques à toujours, parce qu'aucun banc de ce dépôt ne peut juger un dessin
-  au jugé (§8) et que `render-eau.mjs`/`render-rive.mjs`, qui auraient dû faire cette preuve,
-  **étaient déjà cassés avant ce correctif** (voir l'entrée dédiée plus bas).
-  ⚠️⚠️⚠️ **CE QUE ÇA NE PROUVE PAS** : que l'ami de Guillaume peut à nouveau jouer sur sa tablette.
-  Personne n'a rejoué la mesure sur un vrai iPad, et 779 reste un nombre, pas un verdict — la seule
-  chose qu'on sache est qu'il est très inférieur à 1 842. **C'est une mesure qui attend une
-  confirmation humaine, pas une case cochée.**
-  ⚠️ **CE QUI RESTE À PAVER, SI LE BESOIN REVIENT** : `S.pets` (39, décrit ci-dessus) et tout le
-  reste des 779 — aucune autre famille n'a été mesurée individuellement cette fois-ci.
-- ⚠️⚠️⚠️ **DEUX BANCS DE RENDU NE S'EXÉCUTENT PLUS DU TOUT, ET ÇA NE DATE D'AUCUNE DES
-  LIVRAISONS QUI L'ONT CONSTATÉ.** ⚠️ **Ce sont `render-eau.mjs` ET `render-parc.mjs` — pas
-  `render-rive.mjs`, qui passe** : le couple a changé entre le matin et le soir du 2026-09-02 sans
-  que personne ne touche à ces fichiers, ce qui veut dire que la liste des bancs cassés se RELANCE,
-  elle ne se recopie pas. Les deux plantent sur
-  `ctx.createLinearGradient` — non implémenté par le faux canevas de `lib-canvas.mjs` — levé par
-  `drawTownWaterSwellBand` (le reflet animé de la surface). **Reproduit sur `HEAD` tel quel, avant
-  toute modification** (`git stash` puis relance, même trace) : ce n'est pas une régression de
-  l'atlas, c'est une dette antérieure que personne n'avait vue faute d'avoir relancé ces deux bancs
-  récemment — exactement le risque que le §10 nomme déjà (« affirmer qu'un outil existe sans
-  l'avoir lancé »). ⚠️ **NON CORRIGÉ ICI** : `lib-canvas.mjs` sert des dizaines de bancs, et une
-  implémentation hâtive du dégradé y introduirait un risque plus large que le gain de ce seul
-  correctif — la vérification visuelle de ce zip est passée par un chemin qui ne dépend pas de ces
-  deux outils (rendu réel en navigateur, ci-dessus). **À corriger séparément**, pas en même temps
-  qu'un autre changement visuel.
+- ⚠️⚠️⚠️ **AUCUN BANC NE COMPTE CE QUE LE CHARGEMENT COÛTE À LA MACHINE** : la mesure se refait à
+  la main, en parcourant l'objet réellement retourné par `buildSprites()`. ⚠️ **CE QUI COMPTE N'EST
+  PAS LA TAILLE, C'EST LE NOMBRE** : WebKit sur iPad alloue une surface minimale par canevas et
+  plafonne le total, et le symptôme d'un dépassement n'est pas une erreur — c'est un onglet qui se
+  ferme ou un canevas qui rend du blanc. Six mégaoctets répartis sur 1 842 canevas tuent une
+  tablette que 6 Mo sur 779 ne dérangent pas. La parade est l'ATLAS (`makeAtlas`/`blitCell`,
+  `fermeArt.js`) : une seule feuille, une lecture par rectangle source, et **les fonctions de
+  dessin ne changent pas d'une ligne** — seul l'appelant qui les stocke change.
+  ⚠️⚠️ **ÉTAT : 779 canevas retenus** (contre 1 842 avant le pavage de `townWater` et `petFrames`,
+  hors-zip 2026-09-02). **Ce n'est pas une case cochée** : personne n'a rejoué la mesure sur un
+  VRAI iPad, et 779 reste un nombre, pas un verdict. *C'est une mesure qui attend une confirmation
+  humaine.* ⚠️ Restent non pavés `S.pets` (39 portraits — `Sprite` découpe depuis (0,0) et ne sait
+  pas lire un rectangle source, donc les paver demanderait de toucher six appelants pour un gain
+  négligeable) et tout le reste des 779, jamais mesuré famille par famille.
+- ⚠️⚠️⚠️ **DEUX BANCS DE RENDU SUR VINGT-DEUX NE S'EXÉCUTENT PAS — RELANCÉS LE 2026-09-02 (lot A),
+  CE SONT TOUJOURS `render-eau.mjs` ET `render-parc.mjs`.** ⚠️ **CETTE LISTE SE RELANCE, ELLE NE SE
+  RECOPIE PAS** : le couple avait déjà changé entre le matin et le soir du même jour sans que
+  personne ne touche à ces fichiers. Les deux plantent sur `ctx.createLinearGradient` — non
+  implémenté par le faux canevas de `lib-canvas.mjs` — levé par `drawTownWaterSwellBand`. C'est une
+  dette ANTÉRIEURE, reproduite sur `HEAD` avant toute modification. ⚠️ **NON CORRIGÉ** :
+  `lib-canvas.mjs` sert des dizaines de bancs, et une implémentation hâtive du dégradé y
+  introduirait un risque plus large que le gain. **À corriger séparément**, jamais en même temps
+  qu'un changement visuel.
 - ⚠️⚠️ **CE QUI N'EST PLUS VRAI DEPUIS LE 2026-09-01, ET IL FAUT LE DIRE** : la HAIE était le plus
   gros décor que personne ne regardait — 839 cases, le pourtour des vingt-sept parcelles, dessiné
   dans la closure du rendu depuis le 425. `render-haies` la regarde. ⚠️ **Ce qui reste dans la

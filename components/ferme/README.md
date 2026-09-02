@@ -1,5 +1,120 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-02
 
+## Hors-zip 2026-09-02 (quater) — LOT A : la reine se nourrit, puis se réveille au rythme
+
+**Le cratère de Valley Town avait UN geste ; il en a TROIS.** Demande de Guillaume (master prompt
+détaillé en tête de `QUETE.md`, sept questions posées et tranchées avant d'écrire une ligne) : la
+reine ne se prend plus en lui tournant le dos. On la **nourrit** de 80 lumières bleues rapportées
+de la course de fuite, on la **réveille** au rythme, et le dos-à-dos déjà écrit devient la
+conclusion.
+
+**L'échelle du chapitre 2, telle qu'un joueur la monte maintenant** — et chaque barreau a sa
+propre phrase de bandeau, sa propre invite et sa propre voix d'étoile, parce qu'ils demandent
+trois gestes différents :
+
+| barreau | bandeau | ce qu'il faut faire |
+|---|---|---|
+| le trou fume | `craterHot` | attendre 3 min |
+| à jeun | `craterFeed` | courir la course de fuite (⚠️ **pas d'adresse de chevron** : ce n'est pas un lieu de la carte) |
+| lumières en poche | `craterFeedPay` | E au bord du cratère |
+| nourrie, endormie | `craterWake` | E, puis huit battements au rythme |
+| réveillée | `crater` / `craterAlone` | le dos-à-dos, inchangé |
+
+⚠️⚠️ **LE DÉFAUT QU'IL FALLAIT ÉVITER, ET IL A DÛ ÊTRE CORRIGÉ EN TROIS ENDROITS À LA FOIS** : une
+clé qui avait l'air homogène cesse de l'être le jour où le geste sous elle se dédouble — c'est le
+475, le 478 et le 479, trois fois le même. Ici `crater` disait « un à chaque bord, dos à dos » à
+quelqu'un à qui il manquait 80 lumières, `craterAlone` l'envoyait planter un épouvantail (donc en
+dépenser un) deux étapes trop tôt, et le toast `lightGiven` disait « maintenant, tourne-toi » —
+vrai pour la petite bleue, **faux pour la reine**, qui a encore un réveil devant elle.
+
+⚠️⚠️⚠️ **ET UNE GARDE CÔTÉ CLIENT QUI N'EST PAS UNE CEINTURE DE PLUS.** L'hôte refuse déjà la tenue
+tant que la reine n'est pas nourrie et réveillée (`unlit`/`asleep`, silencieux). Mais sans la même
+garde dans `starCalmSelf`, le client aurait continué d'envoyer, `starCalmT0Ref` serait parti, et
+**la jauge se serait remplie jusqu'à 100 % sans que rien n'arrive** — c'est-à-dire le blocage du
+458 mot pour mot, « une barre qui promet et ment ». *La règle tient toujours : c'est la MÊME
+fonction qui remplit la jauge et qui envoie, sinon les deux divergent.*
+
+⚠️ **LA ZONE N'EST PLUS ÉCRITE EN DUR DANS L'ARBITRE.** `starLight` testait `req.pz === "farm"` :
+les cinq impacts sont à la ferme. La reine, elle, est à Valley Town — le test figé aurait refusé
+son offrande **en silence**, et le joueur aurait payé du regard. La zone attendue vient maintenant
+de la table des lieux (`STAR_SITE[id].zone`), seule source de « où est cette étoile ». C'est le
+piège des deux cartes (§4 de `CLAUDE.md`) attrapé avant d'être payé.
+
+**Le réveil lui-même — sa mécanique, ses six nombres, ce qu'il ne faut pas défaire — est décrit au
+§2 bis de `QUETE.md`**, qui fait autorité : il n'est pas recopié ici.
+
+**Bancs** : `verify-quete` **673/673** (il JOUE le réveil : martèlement à 8/12/20 appuis/s → 0 ou 1
+battement en 30 s ; jeu parfait 5,7 s ; joueur qui rate un battement sur trois 8,4 s et gagne
+quand même), `render-etoile` **171 contrôles** (dont dix neufs sur l'anneau, planche
+`tools/out/etoile-reveil.png`), `verify-strings` **1 108 clés appariées**, `verify-vallee`
+**223/223**, `verify-collision` **TOUT PASSE**, `verify-maire` **119/119**, `verify-scierie`
+**34/34**, `next build` **✓ Compiled successfully**. Aucune manipulation Supabase n'est nécessaire :
+`e.woke` voyage dans le `apply` qui partait déjà, et `migrateStar` le fait traverser une
+sauvegarde d'avant ce lot (où la reine est simplement endormie — le bon comportement).
+
+**Menu développeur** : un bouton **« 👑 The queen »** de plus. Il fait tomber le météore, antidate
+le refroidissement et remplit le flux de lumière — et **il ne saute ni l'offrande, ni le réveil, ni
+la posture**, qui sont les trois seules choses de ce lot qui méritent d'être regardées. Sans lui,
+juger le réveil coûterait une course de Temple Run et trois minutes d'attente **par essai**.
+
+---
+
+## Hors-zip 2026-09-02 (ter) — le semis de buis dans toute Valley Town
+
+**Demande de Guillaume : davantage de buis (les buissons qui plient au passage, livrés plus tôt
+le même jour — voir §4 de `CLAUDE.md`) à plusieurs endroits de Valley Town et de la ferme,
+dispersés largement.** Tranché avec lui avant d'écrire : VT d'abord (le mécanisme existait déjà,
+vérifié) ; VF (la ferme) reste une livraison séparée, parce qu'elle n'a AUCUN équivalent du
+mécanisme (collision différente, pas de frisson, aucun banc qui regarde son rendu — §10 de
+`CLAUDE.md`) et mélangerait deux changements visuels dans la même livraison (décision du 424).
+
+**Ce qui a été ajouté** : une passe de semis dans `generateTownWorld` (`fermeEngine.js`), en
+TOUTE DERNIÈRE position — après que toutes les autres passes ont consommé leurs tirages de
+`rnd()`, donc sans décaler un seul décor déjà posé. Elle réutilise `addGarden` (sécurité déjà
+écrite : herbe/pelouse, jamais de solide, de haie, ni le corps d'un décor voisin) sur six des sept
+espèces de `TOWN_SOFT_PROPS` — `reedTuft` reste exclu, c'est un roseau, il n'a de sens qu'au bord
+de l'eau, déjà semé là par la rive sauvage.
+
+⚠️⚠️ **LA DENSITÉ A ÉTÉ RÉGLÉE À L'ŒIL, PAS AU PREMIER JET.** Un essai à 6 % des cases d'herbe
+éligibles (rendu hors du jeu, voir plus bas) carrelait la pelouse — une ville qui a l'air d'un
+pré à l'abandon, l'inverse de « plusieurs endroits ». Ramené à 1 %, la même image montre une
+ville qui verdit par endroits sans jamais faire jungle : 283 cases molles au lieu de 28
+au départ, soit dix fois plus, réparties sur toute la carte. Le nombre exact est un réglage, pas
+une conception — il se retouche en changeant une seule constante (`TOWN_SCATTER_DENSITY`,
+`fermeEngine.js`).
+
+⚠️⚠️ **VÉRIFIÉ EN L'IMAGINANT DANS LE JEU, PAS SEULEMENT AU BANC** : un rendu hors du jeu (canevas
+sans navigateur, `tools/lib-canvas.mjs`, en rejouant EXACTEMENT le chemin de dessin de
+`FermeGame.js` — mêmes clés de sprite, même ancrage au pied) d'un pâté de maisons ordinaire et
+d'une vue large de la ville a servi à choisir la densité avant de la livrer. Pas de sprite neuf :
+les six espèces existaient déjà et avaient déjà été jugées à l'écran ailleurs (place, quai, pont) —
+seule leur RÉPARTITION est neuve, donc rien de nouveau à faire regarder par Guillaume sur le
+dessin lui-même, seulement sur la densité d'ensemble.
+
+⚠️⚠️⚠️ **DENSIFIER LE SEMIS A TROUVÉ DEUX DÉFAUTS QUE 28 BUISSONS NE POUVAIENT JAMAIS RENCONTRER
+PAR HASARD — `verify-collision` EST TOMBÉ DEUX FOIS AVANT DE PASSER.**
+1. **Un couloir d'approche peut grimper un dénivelé SANS toucher le buisson lui-même.**
+   `verify-collision` marche trois cases avant de mesurer une approche ; un buisson planté à trois
+   cases d'une marche ou d'un à-pic faisait grimper ce couloir d'un coup, et la marche échouait
+   avant même d'atteindre le buisson — qui, lui, se traverse très bien. Corrigé en exigeant un
+   relief plat sur trois cases dans les quatre directions autour de chaque candidat
+   (`flatAround`, `fermeEngine.js`).
+2. **Le classificateur « mur de bâtiment » du banc ne savait pas qu'un buisson est `solid` sans
+   être un mur.** `isBuilding` ne testait que `solid && !hedge && !eau` — vrai pour un vrai mur,
+   vrai aussi pour un buisson (c'est ce qui le rend explicable). À 28 buissons sur toute la carte,
+   le banc n'en tirait jamais un par hasard ; densifié, il en tirait, mesurait qu'on le traverse,
+   et lisait ça comme « le mur laisse passer ». Ce n'était jamais un mur — c'est la définition qui
+   ne distinguait pas les deux. Corrigé en excluant `tw.soft` de `isBuilding`
+   (`tools/verify-collision.mjs`) : un correctif du BANC, pas du jeu, et daté comme tel dans le
+   commentaire.
+
+Aussi exclus du semis, pour les mêmes raisons que le contrôle du banc les explique déjà : la
+bande des rails (`TOWN_RAIL_X`) et l'emprise des cinq façades civiles (église, mairie, tribunal,
+boutique, salon) — un rectangle qui déborde parfois du solide réel (marge de courette).
+
+**Vérifié** : `verify-collision` **TOUT PASSE** (30 contrôles, dont les deux nouveaux ci-dessus),
+`verify-vallee` **223/223**, `next build` **✓ Compiled successfully**.
+
 ## Hors-zip 2026-09-02 (suite) — l'hôtel de ville en PNG confirmé, sa porte corrigée, le bloc d'escalier recoloré
 
 **L'hôtel de ville en PNG (pipeline C) est confirmé comme un keeper.** Livré plus tôt le même

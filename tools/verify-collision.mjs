@@ -150,7 +150,15 @@ function approach(ox, oy, dir, blockedByElev) {
    dessin (48 px de parement) et la collision (une case) ne se ressemblent pas —
    la question que Guillaume pose sur « les murs ». */
 const isHedge = (x, y) => !!tw.hedge[idx(x, y)];
-const isBuilding = (x, y) => !!tw.solid[idx(x, y)] && !tw.hedge[idx(x, y)] && tw.ground[idx(x, y)] !== C.G_WATER;
+/* ⚠️ HORS-ZIP 2026-09-02 (bis) — ET PAS UNE CASE MOLLE. `tw.solid` seul ne dit
+   plus « mur » depuis que la végétation basse existe (§1 bis plus bas) : un
+   buisson est `solid` (c'est ce qui le rend explicable par `propCover`) mais
+   PAS un mur — il se traverse, ralenti. Densifier le semis de buissons (28 →
+   plus d'un millier de cases) a fait apparaître le défaut : ce test tombait
+   parfois sur un buisson qu'il attendait infranchissable, mesurait qu'on le
+   traverse, et le lisait comme « le mur laisse passer ». Ce n'était jamais un
+   mur — c'était l'ancienne définition qui ne distinguait pas les deux. */
+const isBuilding = (x, y) => !!tw.solid[idx(x, y)] && !tw.hedge[idx(x, y)] && tw.ground[idx(x, y)] !== C.G_WATER && !tw.soft[idx(x, y)];
 const isWater = (x, y) => tw.ground[idx(x, y)] === C.G_WATER;
 const FAMILIES = [
   ["la haie", isHedge, false],
