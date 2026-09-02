@@ -11,93 +11,45 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-⚠️⚠️ **CE QUI EST LIVRÉ HORS-ZIP LE 2026-09-02 (CINQUIÈME SESSION) : L'HÔTEL DE VILLE EST LE
-PREMIER BÂTIMENT DE VALLEY TOWN EN PNG IMPORTÉ (PIPELINE C), EN TEST.** Guillaume a fourni quatre
-références Gemini (grandes villas détaillées) en demandant d'égaler leur niveau de détail — hors
-de portée du canevas procédural (§9). Décision prise ensemble : basculer l'hôtel de ville en PNG
-pour juger le pipeline avant d'y engager les trois autres bâtiments. `refs/hdv.jpg` (pas de PNG
-transparent disponible côté Gemini — accepté, damier retiré à la main) → deux calques alignés au
-pixel (`tools/build-townhall-sprite.mjs`, nouveau : décodage JPEG, damier→alpha réelle par
-diffusion depuis les bords, cadran d'horloge repeint vierge) : `public/town/townhall-day.png`
-(fenêtres/lanternes éteintes) et `townhall-glow.png` (uniquement les fenêtres/lanternes, fond
-transparent). Chargeur `components/ferme/bitmapAssets.js` (nouveau, premier usage du pipeline C :
-cache par URL, tolère `null` tant que l'image charge, aucune replanification nécessaire — la
-boucle de jeu tourne déjà en continu). Dessin dans `drawTownHallBitmap` (FermeGame.js, à côté de
-`drawCivic`) : ombre portée dirigée propre à ce bâtiment (soleil en haut à gauche, trois ellipses
-emboîtées — PAS le système général de `drawCivic`, qui reste sans ombre, voir plus bas), horloge
-aux aiguilles VIVANTES (`E.gameTimeMin`, cadran repeint vierge pour ne pas doubler avec un cadran
-gravé), fenêtres/lanternes allumées la nuit.
-⚠️⚠️⚠️ **LE PIÈGE PAYÉ ICI, ET IL VAUT POUR TOUT FUTUR BÂTIMENT LUMINEUX : POSER UN CALQUE « LUEUR »
-NE SUFFIT PAS, IL FAUT AUSSI L'ENREGISTRER COMME SOURCE DE LUMIÈRE.** `drawNightVeil` assombrit
-TOUT l'écran APRÈS que les sprites du monde ont été dessinés, et ne préserve que les points inscrits
-dans `lampsInView` (percés par un dégradé radial, comme un lampadaire). Le calque `townhall-glow`
-se dessinait bien avec `globalAlpha = nightAlpha()`, mais le voile de nuit l'écrasait ensuite dans
-le même noir que le reste — mesuré : chaleur de couleur ~7 sur 175 possibles, invisible à l'écran,
-malgré un calque source parfaitement correct (vérifié en l'ouvrant seul dans le navigateur). Corrigé
-en poussant deux points dans `lampsInView` (FermeGame.js, juste après les torches, AVANT l'appel à
-`drawNightVeil` plus bas dans la même passe — un `push` après cet appel n'aurait aucun effet cette
-frame-là). Mesuré après correction : chaleur jusqu'à 104 en tombée de nuit. *Un bâtiment qui doit
-s'allumer la nuit a besoin des DEUX : le calque, et l'inscription dans la liste que le voile
-consulte — l'un sans l'autre ne se voit pas, et rien ne le signale.*
+⚠️⚠️ **LE PIPELINE PNG DE L'HÔTEL DE VILLE EST CONFIRMÉ KEEPER (hors-zip 2026-09-02).** Guillaume,
+en autorisant le chantier suivant : « nous referons le tribunal comme nous avons refait le Town
+hall ». Détail du pipeline (deux calques day/glow, le piège du calque-lueur non enregistré comme
+source de lumière, le piège de la clé de tri sur un perron traversable) : `components/ferme/README.md`,
+section « l'hôtel de ville en PNG confirmé ». `townHall2Sprite` (l'ancien canevas procédural, sans
+appelant) reste à retirer au prochain passage qui touche ce fichier.
 
-**Collisions** (demande explicite : « ultra soignées ») : emprise élargie de 10 à 12 cases,
-symétriquement autour de l'ancien centre (`TOWN_HALL = {x:111,y:52,w:12,h:6}`, marge vérifiée sans
-chevauchement — 13 cases avant `TOWN_COURT`). La rangée la plus au sud (celle où le sprite dessine
-le perron) est devenue TRAVERSABLE (`C.TOWN_HALL_STEP_ROWS = 1`, `fermeConstants.js` — PARTAGÉE
-entre `fermeEngine.js`, qui l'utilise pour la solidité, et `FermeGame.js`, voir plus bas) : le
-joueur monte les marches avant d'atteindre la porte, au lieu de buter un rang plus tôt.
-⚠️⚠️⚠️ **DEUXIÈME PIÈGE PAYÉ ICI, ET IL VAUT POUR TOUT BÂTIMENT DONT UNE PARTIE DU SOL DEVIENT
-TRAVERSABLE : LE JOUEUR DISPARAÎT S'IL N'EMPORTE PAS SA CLÉ DE TRI AVEC LUI.** `drawTownHallBitmap`
-triait le sprite entier sur `by = (b.y+b.h)*T`, le bord SUD de l'emprise — correct tant que personne
-ne pouvait s'approcher plus près que ce bord. Une fois le perron ouvert, un joueur dessus a un
-y-écran INFÉRIEUR à `by` (il est plus au nord que l'ancienne bordure), donc trié AVANT le sprite,
-donc dessiné DESSOUS : invisible en s'approchant de la porte — signalé par Guillaume après coup,
-pas anticipé. Corrigé en calant la clé de tri sur la limite RÉELLE du plein
-(`(b.y+b.h-C.TOWN_HALL_STEP_ROWS)*T`), pas sur le bord de l'image — l'image, elle, reste ancrée à
-`by`, seule la clé de tri bouge. *La marche à suivre pour tout prochain bâtiment au perron ouvert :
-la clé de tri de `pushE` doit toujours être calée sur la limite du PLEIN, jamais sur le bord de
-l'emprise dessinée — les deux ne coïncident plus dès qu'une case devient traversable.*
-⚠️ **Vérifié en jeu, dans les deux sens** : butée franche à la bonne limite (pas de fuite plus
-profonde dans le bâtiment), joueur visible à chaque pas sur tout le perron, jusqu'à toucher la
-porte. Un arrêt de téléport dédié a été ajouté (`C.DEV_TELEPORTS`, clé `townHall`, menu développeur
-→ Se téléporter → « 🏛️ Valley Town — l'hôtel de ville (perron) ») : sans lui, chaque vérification
-aurait coûté la traversée de la ville — la leçon déjà payée sept fois pour d'autres arrêts (§10).
+⚠️⚠️ **CETTE MÊME SESSION A CORRIGÉ DEUX DÉFAUTS TROUVÉS EN JOUANT, VÉRIFIÉS EN NAVIGATEUR ET PAR
+LES BANCS — DÉTAIL DANS `components/ferme/README.md`, MÊME SECTION :**
+1. **Le E du perron de l'hôtel de ville s'activait depuis le parvis, pas depuis la porte**
+   (`nearCivicDoor` ignorait `TOWN_HALL_STEP_ROWS`, seul bâtiment à perron traversable). Corrigé.
+2. **Le bloc d'escalier sous le tribunal — corrigé en DEUX passes, et la première avait tort sur
+   les deux points.** Une première passe avait conclu « collision saine, la couleur seule est en
+   cause » et livré un correctif de teinte. Guillaume a rejoué : « toujours un problème majeur de
+   couleur […] on dirait qu'il y a un filtre » — et a montré une vraie collision fautive (un
+   poteau qui bloque là où « une vision en perspective » dit que c'est dégagé). Les deux
+   jugements de la première passe étaient faux. ⚠️ *Un banc qui teste SI un mur bloque ne dit rien
+   de SI il bloque au bon endroit.* Détail des deux vraies causes (un poteau peint à x≈140,
+   collision posée à x=141 ; deux désaturations empilées qui produisaient le « filtre ») et de
+   leur correctif : `components/ferme/README.md`, même section. `render-escaliers` **35/35**
+   (dont un contrôle neuf sur la rambarde, qui avait perdu 100 % de son opacité au premier
+   correctif sans qu'aucun banc ne le voie), `verify-collision` **TOUT PASSE**, `verify-vallee`
+   **223/223**, `next build` **✓ Compiled successfully**. Vérifié en superposant l'emprise de
+   chaque poteau au bitmap affiché, pas en approchant seulement pour voir si ça bloque.
 
-⚠️ **DÉROGATION ASSUMÉE À LA RÈGLE DU §4 (texte de bâtiment toujours écrit vivant, jamais cuit) :**
-« TOWN HALL » est gravé dans l'image. Discuté avec Guillaume : le bilingue ne compte pas pour ce
-bâtiment, et une gravure dessinée à la main n'aurait pas la précision d'une génération. Décision
-tracée ici pour ne pas être reprise pour un oubli — l'horloge, elle, reste dynamique (voir plus
-haut), seule l'inscription est figée.
+⚠️⚠️ **L'ÉCHELLE DES TROIS MONUMENTS CIVILS EST FAITE : +10 %, VISUEL SEUL, LES TROIS VÉRIFIÉES EN
+JEU.** Guillaume a tranché court : « +10 pour les bâtiments officiels (pas maisons) […] assure-toi
+que ça ne crée aucun problème visuel, ni de bug pour l'entrée, ou de collision ». `drawCivic`
+(église, tribunal) et `drawTownHallBitmap` (mairie) grossissent leur dessin de 10 % dans un
+`ctx.save()/scale/restore()` ancré sur le point de contact au sol — l'emprise, `nearCivicDoor` et
+la clé de tri ne bougent pas d'un bit. Détail, chiffres et vérification aux trois portes :
+`components/ferme/README.md`, même section.
 
-⚠️ **NON FAIT, VOLONTAIREMENT** : l'ancien `townHall2Sprite` (canevas procédural, `fermeArt.js`)
-n'a PAS été supprimé — il reste construit dans `buildSprites()` mais n'est plus appelé nulle part.
-Retenu en réserve tant que Guillaume n'a pas rejoué la scène et validé le pipeline PNG ; à retirer
-au prochain passage si le PNG est confirmé, sans quoi c'est le genre de code mort que le §14
-interdit de laisser traîner.
-⚠️ **VÉRIFIÉ EN NAVIGATEUR** (recette du §10 : `.env.local` + `fake-supabase.mjs` + page jetable
-— supprimés après usage), PAS par un banc : ce bâtiment est un bitmap, hors du champ des bancs de
-rendu (§9). `next build` **✓ Compiled successfully** (mêmes avertissements préexistants).
-
-⚠️ **SIGNALÉ EN COURS DE SESSION, DÉLIBÉRÉMENT REPORTÉ PAR GUILLAUME** : un problème de cohérence
-colorimétrique et de collisions dans le bloc EN DESSOUS DU TRIBUNAL (capture à l'appui — la
-balustrade de pierre ouvragée au sud de `TOWN_COURT`, pas l'hôtel de ville). ⚠️ `verify-collision.mjs`
-relancé pendant cette même session passe intégralement (30 contrôles, haie/mur/berge/falaise/ponts/
-volées/allées) — le défaut, si réel, n'est donc PAS dans une des catégories que ce banc couvre déjà,
-et reste à localiser précisément avant de le corriger. Guillaume : « retravailler l'intégration de
-ce bloc quand le pb du town hall sera réglé » — donc APRÈS l'action suivante ci-dessous, jamais
-avant, et ce n'est délibérément PAS l'action suivante elle-même.
-
-⚠️⚠️⚠️ **ACTION SUIVANTE UNIQUE : LE VERDICT DE GUILLAUME SUR LE PIPELINE, PAS UN NOUVEAU
-CHANTIER.** Rejouer la scène (butée sur les marches, joueur visible dessus, horloge à l'heure,
-fenêtres qui s'allument à la tombée du jour — les trois défauts trouvés cette session sont
-corrigés et vérifiés en jeu) et dire si l'hôtel de ville en PNG est un keeper. Si oui : engager la
-villa (réf. `refs/grandevilladeriches.png`) en suivant EXACTEMENT le même pipeline (prompt Gemini
-avec référence, jamais d'appel API direct — §2), puis retirer `townHall2Sprite`. Si non : revenir
-au canevas procédural et retirer `bitmapAssets.js`/les deux PNG avant qu'ils ne deviennent une
-référence oubliée. **Ensuite seulement** : le bloc sous le tribunal (ci-dessus), puis l'ombre
-portée dirigée générale (`drawCivic`, tous les bâtiments procéduraux) — correctif suivant de la
-liste posée le 2026-09-02 matin (route → ombre → redessin → collisions → casseur de période →
-variantes), non touchée par cette session, toujours en attente.
+⚠️⚠️⚠️ **ACTION SUIVANTE UNIQUE : LA VILLA, MÊME PIPELINE QUE L'HÔTEL DE VILLE.** Réf.
+`refs/grandevilladeriches.png`, prompt Gemini avec référence (jamais d'appel API direct — §2),
+puis retirer `townHall2Sprite` (canevas procédural devenu sans appelant). **Ensuite seulement** :
+l'ombre portée dirigée générale (`drawCivic`, tous les bâtiments procéduraux) — correctif suivant
+de la liste posée le 2026-09-02 matin (route → ombre → redessin → collisions → casseur de période
+→ variantes), toujours en attente, non touché par cette session.
 ---
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
@@ -1007,6 +959,7 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
   déjà arbitré ailleurs (une allée peut légitimement changer de matière net, comme un trottoir
   contre un chemin). **Ne pas deviner lequel avant de l'ouvrir** — c'est la question à trancher en
   premier.
+
 
 - ✅ **LE LAC-OCÉAN — TRANCHÉ ET À MOITIÉ CONSTRUIT LE 2026-08-31.** *« Je veux que l'on considère
   le lake and pier plutôt comme un accès à l'océan, et donc le port de Valley Town »* · *« une

@@ -18447,12 +18447,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          ⚠️ `pad` NE SE DEVINE PAS — il se lit dans fermeArt.js, au dessin. Un
          pad faux ne lève rien : l'ombre flotte sous le bâtiment, et c'est
          exactement le défaut que Guillaume avait signalé captures à l'appui. */
-      const drawCivic = (b, img, pad) => {
+      /* ⚠️⚠️ hors-zip 2026-09-02 — `scale` GROSSIT LE DESSIN AUTOUR DE SON PROPRE
+         POINT D'ANCRAGE AU SOL (cx2, by), JAMAIS L'EMPRISE. Demande de
+         Guillaume : « +10 pour les bâtiments officiels (pas maisons) […]
+         assure-toi que ça ne crée aucun problème visuel, ni de bug pour
+         l'entrée, ou de collision ». `b.x/b.y/b.w/b.h` ne bougent pas d'un
+         bit — la collision (fermeEngine.js), `nearCivicDoor` (l'invite et la
+         touche E) et la clé de tri (`by`, calculée AVANT le transform) lisent
+         toujours l'emprise réelle. Seul ce qui se PEINT à l'intérieur du
+         `save()/restore()` grandit, centré sur le même point de contact avec
+         le sol : le bâtiment pousse vers le haut et s'élargit symétriquement,
+         il ne glisse pas et ne mange pas la case voisine. */
+      const drawCivic = (b, img, pad, scale = 1) => {
         if (!img) return;
         const by = (b.y + b.h) * T;
         const e = elAt(b.x, b.y + b.h - 1);
         pushE(by, e, () => {
           const cx2 = b.x * T + b.w * T / 2, gy = by - pad;
+          ctx.save();
+          if (scale !== 1) { ctx.translate(cx2, by); ctx.scale(scale, scale); ctx.translate(-cx2, -by); }
           /* ⚠️⚠️ 425 — PAS D'ELLIPSE D'OMBRE SOUS LES MONUMENTS, SEULEMENT
              L'EMBASE. Vu en jeu, et c'est une question d'échelle, pas de goût.
              `drawBuildingShadowConnected` marche par RECOUVREMENT : l'ellipse
@@ -18469,11 +18482,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              de taille ne tient pas. */
           ctx.drawImage(img, b.x * T + (b.w * T - img.width) / 2, by - img.height);
           drawBuildingFooting(ctx, cx2, gy, img.width / 2);
+          ctx.restore();
         });
       };
       // L'ÉGLISE : le bâtiment du zip 235, dessin inchangé, nom corrigé.
       // Sa marge basse (4 px sur 128) est celle relevée au zip 279.
-      drawCivic(C.TOWN_CHURCH, sprites.church, 4);
+      drawCivic(C.TOWN_CHURCH, sprites.church, 4, 1.1);
       /* L'HÔTEL DE VILLE (2026-09-02) : PREMIER bâtiment en PNG importé
          (pipeline C, §9 CLAUDE.md) plutôt qu'en canevas procédural —
          test demandé par Guillaume, à partir d'une référence Gemini
@@ -18509,6 +18523,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const e = elAt(b.x, b.y + b.h - 1);
         pushE(sortY, e, () => {
           const cx2 = b.x * T + b.w * T / 2;
+          /* hors-zip 2026-09-02 — MÊME GROSSISSEMENT QUE `drawCivic` (voir sa
+             note), autour du même point d'ancrage (cx2, by) : l'emprise, la
+             clé de tri et la porte ne bougent pas, seul ce qui est peint entre
+             `save()` et `restore()` grandit de 10 %. */
+          const GROW = 1.1;
+          ctx.save();
+          ctx.translate(cx2, by); ctx.scale(GROW, GROW); ctx.translate(-cx2, -by);
           const dx = b.x * T + (b.w * T - day.width) / 2, dy = by - day.height;
           /* Ombre portée, soleil en haut à gauche (convention du reste de la
              ville) : sans elle le bâtiment se lit comme une image collée sur
@@ -18557,11 +18578,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.stroke();
           ctx.restore();
           drawBuildingFooting(ctx, cx2, by, day.width / 2);
+          ctx.restore();
         });
       };
       drawTownHallBitmap(C.TOWN_HALL);
       // LE TRIBUNAL (425) : idem, le perron touche le bas du canevas.
-      drawCivic(C.TOWN_COURT, sprites.courthouse, 0);
+      drawCivic(C.TOWN_COURT, sprites.courthouse, 0, 1.1);
       /* ZIP 427 — LES DEUX COMMERCES DE LA HAUTE-VILLE. Ils passent par le MÊME
          `drawCivic` que les trois monuments : même ancrage par le bas, même
          embase, même règle de porte au milieu de la façade sud — donc
@@ -26522,9 +26544,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
   // Zip 426 : voir la note de drawTownFrame — une seule définition de « je suis
   // devant la porte de ce monument », partagée par l'invite et par la touche E.
+  // ⚠️ 2026-09-02 — L'HÔTEL DE VILLE EST LE SEUL DE CES BÂTIMENTS AVEC UN
+  // PERRON TRAVERSABLE (C.TOWN_HALL_STEP_ROWS). Pour tous les autres, toute
+  // l'emprise est solide et « b.y + b.h + 0.5 » EST la porte : on ne peut pas
+  // s'approcher plus près. Pour lui, cette même formule pose la zone une case
+  // trop au SUD — dans le vide du parvis, où le joueur peut encore reculer —
+  // au lieu de la caler sur la marche où il s'arrête réellement. Signalé en
+  // jeu par Guillaume (« E » se déclenchait depuis le parvis, loin de la
+  // porte peinte) : la case retirée par le perron doit aussi sortir d'ici.
   function nearCivicDoor(b) {
     const m = meRef.current; if (!m) return false;
-    const doorX = b.x + b.w / 2, doorY = b.y + b.h + 0.5;
+    const stepRows = b === C.TOWN_HALL ? C.TOWN_HALL_STEP_ROWS : 0;
+    const doorX = b.x + b.w / 2, doorY = b.y + b.h - stepRows + 0.5;
     return Math.abs(m.x + 0.5 - doorX) <= b.w / 2 && Math.abs(m.y - doorY) <= 1.6;
   }
   function tryOpenNearby() {

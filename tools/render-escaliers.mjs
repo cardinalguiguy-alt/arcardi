@@ -94,7 +94,15 @@ const ST = S.townStone;
 
 /* 467 — la composition n'est plus testée par morceaux : le test exige le bloc. */
 {
-  const im = S.townCourtStairBlock;
+  /* hors-zip 2026-09-02 — LE DÉTOURAGE SE VÉRIFIE SUR LE BRUT, PAS SUR
+     L'AFFICHÉ. `S.townCourtStairBlock` porte désormais `matchStoneToTownDallage`
+     (recolore le bloc pour rejoindre la teinte du dallage) : elle repeint
+     volontairement de grands aplats vers un gris proche de L≈132, exactement
+     la plage que le contrôle de matting ci-dessous surveille. Le vérifier sur
+     l'image affichée confondrait une pierre bien repeinte avec un fond de
+     détourage oublié — `townCourtStairBlockRaw` est le même décodage, sans le
+     réglage de teinte. */
+  const im = S.townCourtStairBlockRaw;
   ok(im.width === 268 && im.height === 248,
      "⚠️ le bloc garde exactement ses dimensions natives", `${im.width}×${im.height}`);
   let opaque = 0, transparent = 0;
@@ -127,9 +135,53 @@ const ST = S.townStone;
   ok(grayMax <= 9,
      "aucun grand aplat gris résiduel ne dépasse du bloc", `plus grand gris légitime : ${grayMax} px`);
 
+  /* hors-zip 2026-09-02 — LA PARITÉ DE TEINTE AVEC LE DALLAGE, CETTE FOIS SUR
+     L'AFFICHÉ. Même famille de contrôle que « 2. LA PARITÉ DE MATIÈRE AVEC LES
+     PAVÉS » plus bas (436) : Guillaume a vu « un gros problème de cohérence
+     colorimétrique » entre ce bloc et le parvis pavé qui l'entoure.
+     ⚠️⚠️ CE CONTRÔLE A DÛ ÊTRE REVU UNE FOIS : la première version exigeait
+     aussi une saturation basse (≤9 %, proche des 5,9 % du dallage). Elle
+     passait, et Guillaume a quand même vu « on dirait qu'il y a un filtre » —
+     le banc mesurait une désaturation UNIFORME comme une qualité, alors que
+     c'était elle, précisément, la source du filtre (voir la note de
+     `matchStoneToTownDallage`, fermeArt.js). Il ne reste donc qu'un seul
+     contrôle : la LUMINANCE ne doit plus jurer. La saturation, elle, n'est
+     plus bornée — une photo de pierre plus riche en couleur qu'une dalle
+     plate n'est pas un défaut, *un banc qui confond « différent » et
+     « faux » invente une deuxième fois le piège qu'il était censé éviter*. */
+  const disp = S.townCourtStairBlock;
+  let sumL = 0, n2 = 0;
+  for (let i = 0; i < disp.width * disp.height; i++) {
+    if (!disp.__px[i * 4 + 3]) continue;
+    sumL += lum(disp.__px[i * 4], disp.__px[i * 4 + 1], disp.__px[i * 4 + 2]); n2++;
+  }
+  const dispL = sumL / n2;
+  const flagPx = S.townRoad.flag.__px, flagN = S.townRoad.flag.width * S.townRoad.flag.height;
+  let fL = 0; for (let i = 0; i < flagN; i++) fL += lum(flagPx[i * 4], flagPx[i * 4 + 1], flagPx[i * 4 + 2]);
+  fL /= flagN;
+  ok(Math.abs(dispL - fL) / fL <= 0.12,
+     "le bloc affiché ne jure plus en luminance avec le dallage", `bloc L ${dispL.toFixed(1)} contre dallage L ${fL.toFixed(1)} (écart ${(100 * Math.abs(dispL - fL) / fL).toFixed(1)} %)`);
+
+  /* hors-zip 2026-09-02 — LA RAMBARDE DE PREMIER PLAN NE DOIT JAMAIS DEVENIR
+     INVISIBLE. `courtStairIronRailLayer` découpe sa ferronnerie par un seuil
+     de luminance lu sur le bitmap BRUT (voir sa note) — ce contrôle existe
+     parce que la version précédente de `matchStoneToTownDallage` a fait
+     passer TOUTE la bande au-dessus du seuil sans qu'aucun banc ne le voie :
+     mesuré à l'époque, `opaque=0/2304`, rambarde à 100 % transparente,
+     invisible en jeu. Un tracé d'ornement occupe une fraction franche de son
+     cadre, ni presque rien (le seuil aurait raté le motif) ni presque tout
+     (il aurait avalé le fond) : la fourchette est large exprès. */
+  {
+    const rail = S.townCourtStairIronRail;
+    let op = 0; const total = rail.width * rail.height;
+    for (let i = 0; i < total; i++) if (rail.__px[i * 4 + 3] > 0) op++;
+    ok(op / total >= 0.2 && op / total <= 0.8,
+       "la rambarde de premier plan garde un tracé visible", `${op}/${total} px opaques (${(100 * op / total).toFixed(1)} %)`);
+  }
+
   const W = 280, H = 260, sh = makeCanvas(W, H);
   sh.ctx.fillStyle = "#58764b"; sh.ctx.fillRect(0, 0, W, H);
-  sh.ctx.drawImage(im, 6, 6);
+  sh.ctx.drawImage(disp, 6, 6);
   const up = scale(sh.px, W, H, 4);
   writePNG(path.join(OUT, "escaliers-bloc.png"), up.px, up.W, up.H);
 }
@@ -448,9 +500,14 @@ console.log("\n=== 5. la composition de référence est celle de la carte ===\n"
   /* Le trajet central est joué dans les deux sens. On ne sonde pas trois cases :
      on balaie chaque rangée visible, le virage du palier et les deux sorties. */
   const id = (x, y) => y * tw.w + x;
+  /* ⚠️ hors-zip 2026-09-02 — LE POINT DE PASSAGE DU PALIER PASSE DE 140 À
+     141 : le poteau est de la volée haute a été recalé sur x=140 (il était
+     peint là, pas à 141 — voir la note de `TOWN_RAILS`), donc c'est
+     maintenant 141 la colonne libre à la rangée du palier, 140 celle qui
+     porte le poteau ET son socle. */
   const up = [
     [145, 37], [145, 36], [145, 35], [145, 34], [145, 33], [145, 32], [145, 31],
-    [145, 30], [140, 30], [138, 30], [138, 29], [138, 28], [138, 27], [138, 26],
+    [145, 30], [141, 30], [138, 30], [138, 29], [138, 28], [138, 27], [138, 26],
   ];
   const elevs = up.map(([x, y]) => tw.elev[id(x, y)]);
   const free = up.every(([x, y]) => !tw.solid[id(x, y)]);

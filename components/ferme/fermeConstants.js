@@ -4303,8 +4303,24 @@ export const TOWN_RAILS = [
      l'est ni vide avant contact à l'ouest. */
   { x: 141, y: 31, w: 1, h: 6, axis: "y", style: "short", side: "west" },
   { x: 148, y: 31, w: 1, h: 6, axis: "y", style: "short", side: "east" },   // volée basse
-  { x: 136, y: 27, w: 1, h: 3, axis: "y", style: "tall", side: "west" },
-  { x: 141, y: 27, w: 1, h: 3, axis: "y", style: "tall", side: "east" },   // volée haute
+  /* ⚠️⚠️⚠️ hors-zip 2026-09-02 — LA MÊME CORRECTION N'AVAIT JAMAIS ÉTÉ FAITE
+     ICI, ET C'EST CE QUE GUILLAUME A VU EN JOUANT : « on est bloqué avant
+     d'entrer en contact avec les rambardes […] vision en perspective des
+     poteaux ». Mesuré en superposant l'emprise au bitmap affiché
+     (`tools/_diag_post_zoom2.mjs`, jeté après usage) : le poteau EST de la
+     volée haute est peint centré sur x≈140, pas x=141 — un plein tile à
+     l'écart de sa propre emprise de collision, qui ne couvrait donc que du
+     pavé vide. Le poteau OUEST (x=136), lui, tombait déjà juste — seule la
+     paire de la volée basse avait reçu la correction ci-dessus au 467.
+     ⚠️ ET `h` PASSE DE 3 À 4 POUR LES DEUX POTEAUX DE CETTE VOLÉE (« on
+     marche sur le mur ») : leur socle sculpté déborde d'une rangée sous le
+     haut de la volée (rangée 30, le palier) — visible sur le même
+     recouvrement, la base du poteau continue nettement sous le bas de
+     l'ancienne emprise (h=3, rangées 27-29). Sans la rangée 30, rien
+     n'empêchait de se tenir SUR ce socle peint. Le palier reste ouvert sur
+     13 des 15 cases restantes — inchangé pour la traversée est-ouest. */
+  { x: 136, y: 27, w: 1, h: 4, axis: "y", style: "tall", side: "west" },
+  { x: 140, y: 27, w: 1, h: 4, axis: "y", style: "tall", side: "east" },   // volée haute
 ];
 
 /* ZIP 467 — LE VISUEL EST UN SEUL BLOC. `x` est son origine dans le monde ;

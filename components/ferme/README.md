@@ -1,5 +1,117 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-02
 
+## Hors-zip 2026-09-02 (suite) — l'hôtel de ville en PNG confirmé, sa porte corrigée, le bloc d'escalier recoloré
+
+**L'hôtel de ville en PNG (pipeline C) est confirmé comme un keeper.** Livré plus tôt le même
+jour (voir plus bas dans ce fichier historique pour le détail du pipeline en deux calques,
+`townhall-day.png`/`townhall-glow.png`), Guillaume a rejoué la scène et donné son accord —
+formulé en passant, en approuvant un autre chantier : *« nous referons le tribunal comme nous
+avons refait le Town hall »*. Le pipeline (photo Gemini détourée à la main, deux calques
+day/glow, `bitmapAssets.js`, ombre dirigée propre au bâtiment, horloge vivante) reste donc la
+voie pour les prochains bâtiments détaillés ; `townHall2Sprite` (l'ancien canevas procédural,
+gardé en réserve dans `fermeArt.js` sans appelant) peut être retiré au prochain passage.
+
+⚠️⚠️ **BUG TROUVÉ EN JOUANT : LE E DU PERRON S'ACTIVAIT DEPUIS LE PARVIS, PAS DEPUIS LA PORTE.**
+`nearCivicDoor` (FermeGame.js) place la porte à `b.y + b.h + 0.5` — juste, tant que toute
+l'emprise du bâtiment est solide. L'hôtel de ville est le seul des trois monuments à avoir un
+perron traversable (`C.TOWN_HALL_STEP_ROWS`) : la formule posait donc sa zone d'activation une
+case trop au SUD, dans le vide du parvis où le joueur peut encore reculer, au lieu de la caler
+sur la marche où il s'arrête réellement. Corrigé en retirant `stepRows` de `b.y + b.h` pour ce
+seul bâtiment (`b === C.TOWN_HALL`) ; les deux autres monuments, sans perron traversable, ne
+changent pas. *Un point d'interaction calé sur l'emprise entière ment dès qu'une case de cette
+emprise devient traversable — même piège que la clé de tri du perron, plus haut dans ce
+fichier, sous une autre forme.*
+
+⚠️⚠️⚠️ **LE BLOC D'ESCALIER SOUS LE TRIBUNAL — DEUX PASSES DANS LA MÊME SESSION, ET LA PREMIÈRE
+ÉTAIT FAUSSE SUR LES DEUX POINTS.** Guillaume avait vu, capture à l'appui : « un gros problème de
+cohérence colorimétrique » et « les collisions sont absolument à revoir ». Une première passe a
+conclu « collision saine, seule la couleur est en cause » et livré un premier correctif de
+teinte. **Guillaume a rejoué et corrigé les deux jugements :** « toujours un problème majeur de
+couleur […] on dirait qu'il y a un filtre » et, à l'écran, un exemple précis de collision fautive
+(« bloqué avant d'entrer en contact avec les rambardes », un poteau qu'« une vision en
+perspective » dit dégagé alors qu'il bloque). *Un banc qui teste SI un mur bloque ne dit rien de
+SI ce mur bloque au bon endroit — c'est le trou méthodologique qui a laissé passer le poteau ci-dessous.*
+
+**La couleur — pourquoi le premier correctif ressemblait à un filtre, et ce qui le remplace.**
+Deux fautes empilées, aucune vue avant que le résultat ne soit montré :
+1. `matchStoneToTownDallage` était calibré sur la sortie de `liftShadowFloor` (déjà remontée), pas
+   sur la photo brute — deux relevés de luminance COMPOSÉS plutôt qu'un seul mesuré. Résultat
+   mesuré après coup : plus un seul pixel affiché sous L≈100, toute la plage 0-250 du brut
+   écrasée dans une bande 100-250. C'est la définition d'un voile qui aplatit tout.
+2. Le mélange de 35 % vers le gris (pour faire baisser la saturation à 6,9 %, proche du dallage à
+   5,9 %) était lui-même une désaturation UNIFORME sur toute l'image — la définition d'un filtre,
+   quelle que soit la force du mélange. Comparé à l'œil sur plusieurs valeurs (0 %, 15 %, 30 %),
+   le rendu ne changeait presque pas : la richesse de couleur d'une vraie photo (mousse, usure,
+   mortier chaud, 16,3 % de saturation contre 5,9 % au dallage) n'était pas ce qui jurait.
+   **`liftShadowFloor` est retirée** (son rôle est repris entièrement par le correctif ci-dessous)
+   et `matchStoneToTownDallage` ne fait plus qu'UN geste, calibré sur le bitmap BRUT
+   (`townCourtStairBlockRaw`) : une affine sur la luminance de chaque pixel — `L' =
+   (L−109,9)×(33,0/46,0)+163,1` — appliquée en échelle sur les trois canaux, sans aucune
+   désaturation. Mesuré après : luminance recalée pile sur celle du dallage (163,1 contre 163,1),
+   saturation laissée à 16,3 %, et à l'écran le bloc se lit comme la même pierre que le parvis,
+   plus détaillée, pas comme une photo qu'on aurait passée au filtre.
+
+**La collision — le vrai défaut, trouvé en superposant l'emprise au bitmap affiché.** Guillaume
+avait raison deux fois :
+1. **Le poteau est de la volée haute était peint à x≈140, sa collision posée à x=141** — un plein
+   tile à côté, qui ne couvrait donc que du pavé vide (« on dirait qu'on est bloqué sans raison
+   visible »). Seule la paire de poteaux de la volée basse avait reçu, au 467, la correction d'une
+   case déjà appliquée à leur volée ; celle de la volée haute ne l'a jamais eue.
+2. **Le socle sculpté des deux poteaux de la volée haute déborde d'une rangée sous leur emprise**
+   (`h` valait 3, rangées 27-29 ; le socle peint continue visiblement en rangée 30, le palier) —
+   d'où « on marche sur le mur ». `TOWN_RAILS` (fermeConstants.js) corrige les deux : le poteau
+   est recalé sur `x: 140`, et `h` passe à 4 pour les deux poteaux de cette volée. Le palier reste
+   ouvert sur 13 de ses 15 cases, la traversée est-ouest n'en souffre pas.
+   ⚠️ Le point de passage codé en dur dans `render-escaliers.mjs` (§5, le trajet témoin qui monte
+   et descend chaque marche) traversait l'ancien poteau à `[140, 30]` : il devient `[141, 30]`,
+   la colonne désormais libre.
+
+⚠️⚠️ **UN CONTRÔLE DE DÉTOURAGE S'EST RÉVÉLÉ MESURER LA MAUVAISE IMAGE**, leçon inchangée par la
+reprise ci-dessus : `render-escaliers.mjs` vérifiait l'absence de gris résiduel de matting sur
+l'image AFFICHÉE, qu'un réglage de teinte peut légitimement pousser dans la plage surveillée. Il
+lit désormais `townCourtStairBlockRaw` (même décodage, jamais retouché) pour cette seule
+question : le détourage est une propriété de la DÉCOUPE, jamais du réglage cosmétique qui vient
+après. **Et ce même bitmap brut sert maintenant à un second banc** : `courtStairIronRailLayer`
+(la rambarde en fer forgé qui passe devant le joueur) découpait sa silhouette par un seuil de
+luminance mesuré sur l'image AFFICHÉE — calibré une fois pour une teinte, il s'est rompu à la
+teinte suivante : la première passe de recolorage a poussé toute la bande au-dessus du seuil,
+rambarde à **0 % opaque**, invisible en jeu, sans qu'aucun banc ne le voie. Elle lit maintenant le
+seuil sur le bitmap BRUT (où le partage clair/sombre est une propriété stable du découpage) et
+pioche la couleur affichée dans le bloc corrigé. `render-escaliers` a gagné un contrôle qui
+l'exige : entre 20 % et 80 % de la bande doit rester opaque.
+`render-escaliers` **35/35** (deux contrôles sur la couleur, un sur la rambarde), `verify-collision`
+**TOUT PASSE**, `verify-vallee` **223/223**, `next build` **✓ Compiled successfully**. Vérifié en
+jeu, dans le navigateur, en superposant l'emprise de chaque poteau au bitmap affiché avant de
+conclure — pas en approchant seulement pour voir si ça bloque.
+
+⚠️⚠️⚠️ **L'ÉCHELLE DES TROIS MONUMENTS CIVILS EST CORRIGÉE, +10 %, VISUEL SEUL.** Guillaume, en
+jouant : mairie/église/tribunal paraissaient chétifs à côté du personnage et du petit mobilier.
+Mesures de marge prises avant d'agir (mairie N22/S15/O39/E39, église N39/S22/O6/E39, tribunal
+N14/S6/O5/E4 cases — le tribunal est le plus contraint des trois) ; sa réponse a tranché court :
+« +10 pour les bâtiments officiels (pas maisons) […] assure-toi que ça ne crée aucun problème
+visuel, ni de bug pour l'entrée, ou de collision ».
+⚠️ **LE GROSSISSEMENT NE TOUCHE QUE CE QUI SE PEINT, JAMAIS L'EMPRISE.** `b.x/b.y/b.w/b.h` — donc
+la collision (fermeEngine.js), `nearCivicDoor` (l'invite ET la touche E, voir plus haut dans ce
+même fichier) et la clé de tri (`by`/`sortY`, lues AVANT le transform) — ne bougent pas d'un bit.
+Seul ce qui se dessine à l'intérieur d'un `ctx.save()/scale(1.1,1.1)/restore()` grandit, ancré
+sur le même point de contact au sol (`cx2, by`) : le bâtiment pousse vers le haut et s'élargit
+symétriquement, il ne glisse pas et ne mange pas la case voisine.
+`drawCivic` (FermeGame.js, mairie exclue — elle a sa propre fonction) reçoit un quatrième
+paramètre `scale`, à 1 par défaut : `drawCivic(C.TOWN_CHURCH, …, 1.1)` et
+`drawCivic(C.TOWN_COURT, …, 1.1)`, mais PAS les deux commerces (`TOWN_BOUTIQUE`/`TOWN_SALON`,
+scale 1 implicite — Guillaume a dit « pas maisons », les boutiques n'en sont pas plus). Même
+transform, écrite en propre, dans `drawTownHallBitmap` (la mairie est un bitmap PNG, un chemin de
+dessin différent) : jour, lueur nocturne, ombre portée et horloge vivante en héritent tous les
+quatre puisqu'ils dessinent dans le même repère transformé — aucun n'a eu besoin d'être recalculé
+séparément.
+⚠️ **VÉRIFIÉ EN JEU, LES TROIS**, pas supposé : à chaque porte, l'invite apparaît exactement là où
+elle apparaissait avant (même case), **E** ouvre bien l'intérieur, aucun chevauchement visuel avec
+un décor voisin (cimetière de l'église, bloc d'escalier du tribunal, arbres). `verify-vallee`
+**223/223**, `verify-collision` **TOUT PASSE**, `verify-compo` vert, `render-escaliers` **35/35**,
+`next build` **✓ Compiled successfully** — aucun de ces bancs ne pouvait à lui seul garantir
+l'absence de bug visuel puisque le changement est purement graphique ; c'est la séance en
+navigateur, aux trois portes, qui a tranché.
+
 ## Hors-zip 2026-09-02 — la végétation basse se traverse, et le maire a cinq corps
 
 **Vingt-huit cases de végétation ne bloquent plus.** Buisson d'or, touffe fleurie,
