@@ -4302,7 +4302,17 @@ export function generateTownWorld() {
      du bord (voir plus haut), un parvis profond l'aurait avalée. */
   forecourt(C.TOWN_BOUTIQUE, 2);
   forecourt(C.TOWN_SALON, 2);
-  for (const b of [C.TOWN_CHURCH, C.TOWN_HALL, C.TOWN_COURT, C.TOWN_BOUTIQUE, C.TOWN_SALON]) rect(b, (x, y, i) => { solid[i] = 1; });
+  /* ⚠️ 2026-09-02 — L'HÔTEL DE VILLE A UN PERRON GRAVISSABLE : sa rangée la
+     plus au sud (celle où le sprite dessine les marches) reste TRAVERSABLE,
+     seul le reste du bâtiment est plein. Demande de Guillaume : « que les
+     marches devant le bâtiment puissent être gravies avant d'arriver à la
+     porte » — sans ça, `nearCivicDoor` (qui accepte jusqu'à 1,6 case de la
+     porte) suffisait déjà à interagir, mais le joueur butait sur un mur
+     invisible une case avant les marches au lieu de les monter. */
+  for (const b of [C.TOWN_CHURCH, C.TOWN_HALL, C.TOWN_COURT, C.TOWN_BOUTIQUE, C.TOWN_SALON]) {
+    const stepRows = b === C.TOWN_HALL ? 1 : 0;
+    rect(b, (x, y, i) => { if (y < b.y + b.h - stepRows) solid[i] = 1; });
+  }
 
   /* --------------------------------------------------------- LES MAISONS
      Empreinte bloquante + allée jusqu'à la rue SOUS la parcelle.

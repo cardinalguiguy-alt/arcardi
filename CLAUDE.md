@@ -11,42 +11,67 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-⚠️⚠️ **CE QUI EST LIVRÉ HORS-ZIP LE 2026-09-02 (QUATRIÈME SESSION) : LA ROUTE DE VALLEY TOWN EST
-ÉCLAIRCIE ET RÉCHAUFFÉE, LE MARQUAGE BLANC RETIRÉ.** Point de départ : un audit visuel de Valley
-Town (séance de jeu réelle, sept points de vue, mesures sur le canevas) a mesuré l'asphalte à
-**L≈40** en jeu contre **L≈150** pour l'herbe — le seul saut de valeur brutal de la carte — et un
-marquage routier du XXe siècle à côté du chaume et des guirlandes. C'est le premier des cinq
-correctifs retenus avec Guillaume, dans cet ordre : **route → ombre portée dirigée → redessin des
-bâtiments (sprites détaillés, vraie perspective trois-quarts, lumière peinte) → collisions et
-profondeur des bâtiments → casseur de période au sol → variantes d'arbres/accessoires.** Le
-redessin des bâtiments passe AVANT les collisions parce que corriger l'emprise bloquante sur des
-sprites appelés à changer de dimensions serait du travail jetable — seule la route est déjà livrée.
+⚠️⚠️ **CE QUI EST LIVRÉ HORS-ZIP LE 2026-09-02 (CINQUIÈME SESSION) : L'HÔTEL DE VILLE EST LE
+PREMIER BÂTIMENT DE VALLEY TOWN EN PNG IMPORTÉ (PIPELINE C), EN TEST.** Guillaume a fourni quatre
+références Gemini (grandes villas détaillées) en demandant d'égaler leur niveau de détail — hors
+de portée du canevas procédural (§9). Décision prise ensemble : basculer l'hôtel de ville en PNG
+pour juger le pipeline avant d'y engager les trois autres bâtiments. `refs/hdv.jpg` (pas de PNG
+transparent disponible côté Gemini — accepté, damier retiré à la main) → deux calques alignés au
+pixel (`tools/build-townhall-sprite.mjs`, nouveau : décodage JPEG, damier→alpha réelle par
+diffusion depuis les bords, cadran d'horloge repeint vierge) : `public/town/townhall-day.png`
+(fenêtres/lanternes éteintes) et `townhall-glow.png` (uniquement les fenêtres/lanternes, fond
+transparent). Chargeur `components/ferme/bitmapAssets.js` (nouveau, premier usage du pipeline C :
+cache par URL, tolère `null` tant que l'image charge, aucune replanification nécessaire — la
+boucle de jeu tourne déjà en continu). Dessin dans `drawTownHallBitmap` (FermeGame.js, à côté de
+`drawCivic`) : ombre portée dirigée propre à ce bâtiment (soleil en haut à gauche, trois ellipses
+emboîtées — PAS le système général de `drawCivic`, qui reste sans ombre, voir plus bas), horloge
+aux aiguilles VIVANTES (`E.gameTimeMin`, cadran repeint vierge pour ne pas doubler avec un cadran
+gravé), fenêtres/lanternes allumées la nuit.
+⚠️⚠️⚠️ **LE PIÈGE PAYÉ ICI, ET IL VAUT POUR TOUT FUTUR BÂTIMENT LUMINEUX : POSER UN CALQUE « LUEUR »
+NE SUFFIT PAS, IL FAUT AUSSI L'ENREGISTRER COMME SOURCE DE LUMIÈRE.** `drawNightVeil` assombrit
+TOUT l'écran APRÈS que les sprites du monde ont été dessinés, et ne préserve que les points inscrits
+dans `lampsInView` (percés par un dégradé radial, comme un lampadaire). Le calque `townhall-glow`
+se dessinait bien avec `globalAlpha = nightAlpha()`, mais le voile de nuit l'écrasait ensuite dans
+le même noir que le reste — mesuré : chaleur de couleur ~7 sur 175 possibles, invisible à l'écran,
+malgré un calque source parfaitement correct (vérifié en l'ouvrant seul dans le navigateur). Corrigé
+en poussant deux points dans `lampsInView` (FermeGame.js, juste après les torches, AVANT l'appel à
+`drawNightVeil` plus bas dans la même passe — un `push` après cet appel n'aurait aucun effet cette
+frame-là). Mesuré après correction : chaleur jusqu'à 104 en tombée de nuit. *Un bâtiment qui doit
+s'allumer la nuit a besoin des DEUX : le calque, et l'inscription dans la liste que le voile
+consulte — l'un sans l'autre ne se voit pas, et rien ne le signale.*
 
-**Ce qui a changé**, dans `townAsphaltSurface()` et `drawTownRoadTile()` (`fermeArt.js`) :
-toutes les teintes de la chaussée (liant, granulat, fissures, reprises d'enrobé, traces d'huile,
-gravillon) ont été recalées sur une luminance de base commune (~78, contre ~61 avant) **en gardant
-le même écart relatif qu'avant à chaque couche** — condition posée par Guillaume : ne pas perdre
-en réalisme. Le bruit fin (3200 points/tuile) est en plus resserré autour du liant : c'est lui,
-pas le granulat, que l'audit identifiait comme le poivre-et-sel qui grésille au défilement — le
-granulat, lui, garde tout son contraste. Le marquage blanc pointillé est retiré, pas remplacé par
-un caniveau (option la moins chère des deux que proposait l'audit).
+**Collisions** (demande explicite : « ultra soignées ») : emprise élargie de 10 à 12 cases,
+symétriquement autour de l'ancien centre (`TOWN_HALL = {x:111,y:52,w:12,h:6}`, marge vérifiée sans
+chevauchement — 13 cases avant `TOWN_COURT`). La rangée la plus au sud (celle où le sprite dessine
+le perron) est devenue TRAVERSABLE (`fermeEngine.js`, boucle de solidité des cinq bâtiments civils,
+`stepRows`) : le joueur monte les marches avant d'atteindre la porte, au lieu de buter un rang plus
+tôt — vérifié en jeu, dans les deux sens (butée franche un rang plus loin qu'avant, pas de fuite
+plus profonde dans le bâtiment).
 
-Vérifications : `render-rues.mjs` relancé, **tout passe** — goudron mesuré à **L moyen 80,5,
-écart-type 10,3**, dans la fourchette L 70-80 visée par l'audit ; un contrôle a été RÉÉCRIT plutôt
-que cassé (« la ligne tient sur deux rangées » cherchait un marquage supprimé exprès — devenu
-« aucun marquage blanc résiduel », le cas exact du piège périmé que le §14.2 interdit de laisser
-traîner). `verify-syntax` propre, `next build` **✓ Compiled successfully** (mêmes avertissements
-préexistants : `G_SOIL`, prérendu sans `.env.local`). ⚠️ **NON JOUÉ À L'ÉCRAN** : la vérification
-s'est arrêtée au banc de rendu (rasterise le code réel du jeu, pixel exact) et à la compilation —
-aucune séance en navigateur cette fois.
+⚠️ **DÉROGATION ASSUMÉE À LA RÈGLE DU §4 (texte de bâtiment toujours écrit vivant, jamais cuit) :**
+« TOWN HALL » est gravé dans l'image. Discuté avec Guillaume : le bilingue ne compte pas pour ce
+bâtiment, et une gravure dessinée à la main n'aurait pas la précision d'une génération. Décision
+tracée ici pour ne pas être reprise pour un oubli — l'horloge, elle, reste dynamique (voir plus
+haut), seule l'inscription est figée.
 
-⚠️⚠️⚠️ **ACTION SUIVANTE UNIQUE : L'OMBRE PORTÉE DIRIGÉE** (deuxième correctif de l'ordre
-ci-dessus). Une seule direction pour toute la ville (soleil en haut à gauche, l'orientation que le
-mobilier et les arbres ont déjà) ; l'ellipse centrée devient un parallélogramme décalé dont la
-longueur DÉRIVE de la hauteur du sprite, un seul point de code par famille (props, personnages,
-`drawCivic` — qui n'a AUCUNE ombre depuis le 425, sur des bâtiments de onze cases de haut). C'est
-un changement de CODE, pas de sprite : indépendant du redessin des bâtiments prévu ensuite, donc
-rien de ce travail ne sera perdu quand ce redessin commencera.
+⚠️ **NON FAIT, VOLONTAIREMENT** : l'ancien `townHall2Sprite` (canevas procédural, `fermeArt.js`)
+n'a PAS été supprimé — il reste construit dans `buildSprites()` mais n'est plus appelé nulle part.
+Retenu en réserve tant que Guillaume n'a pas rejoué la scène et validé le pipeline PNG ; à retirer
+au prochain passage si le PNG est confirmé, sans quoi c'est le genre de code mort que le §14
+interdit de laisser traîner.
+⚠️ **VÉRIFIÉ EN NAVIGATEUR** (recette du §10 : `.env.local` + `fake-supabase.mjs` + page jetable
+— supprimés après usage), PAS par un banc : ce bâtiment est un bitmap, hors du champ des bancs de
+rendu (§9). `next build` **✓ Compiled successfully** (mêmes avertissements préexistants).
+
+⚠️⚠️⚠️ **ACTION SUIVANTE UNIQUE : LE VERDICT DE GUILLAUME SUR LE PIPELINE, PAS UN NOUVEAU
+CHANTIER.** Rejouer la scène (butée sur les marches, horloge à l'heure, fenêtres qui s'allument à
+la tombée du jour) et dire si l'hôtel de ville en PNG est un keeper. Si oui : engager la villa (réf.
+`refs/grandevilladeriches.png`) en suivant EXACTEMENT le même pipeline (prompt Gemini avec
+référence, jamais d'appel API direct — §2), puis retirer `townHall2Sprite`. Si non : revenir au
+canevas procédural et retirer `bitmapAssets.js`/les deux PNG avant qu'ils ne deviennent une
+référence oubliée. **L'ombre portée dirigée générale (`drawCivic`, tous les bâtiments procéduraux)
+reste le correctif suivant de la liste posée le 2026-09-02 matin (route → ombre → redessin →
+collisions → casseur de période → variantes) — non touchée par cette session, toujours en attente.**
 ---
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
@@ -526,9 +551,13 @@ le tampon 480×270 n'en affiche aucune ; ombrage plat pur, **aucun** anticrénel
 LINÉAIRE, courbe `Standard`, lampes Soleil) ; **B** vers les jeux three.js en glTF
 (`candyluge_props.py`, hors dépôt, export sans matériaux, maillages `part_<clé>`, 200-900
 triangles) ; **C, ouvert au 443** — rendu Blender → **PNG / feuille de sprites** chargé par le
-jeu. ⚠️ **C n'existe encore nulle part dans le dépôt** : il est autorisé, il n'est pas construit
-(ni chargeur, ni cache, ni convention de nommage, ni banc). Le premier usage devra les poser —
-c'est un chantier, pas un import.
+jeu. ⚠️ **C a eu son premier usage le 2026-09-02 — pas depuis Blender, depuis Gemini** (l'hôtel de
+ville de Valley Town, voir le bloc ⏭️ REPRISE en tête de fichier) : le chargeur/cache existent
+maintenant (`components/ferme/bitmapAssets.js`), la source de l'image importe moins que le fait
+qu'elle soit un PNG avec vraie transparence. Convention de nommage amorcée
+(`public/town/<bâtiment>-day.png` / `-glow.png`), pas encore éprouvée sur un second bâtiment.
+⚠️ **AUCUN BANC NE REGARDE UN BITMAP** : toujours vrai, et ça n'a pas changé — un PNG importé se
+vérifie en le regardant dans le jeu (§10), jamais par un `tools/render-*.mjs`.
 
 ⚠️ **BLENDER EST Z-UP, THREE.JS Y-UP, ET L'EXPORTEUR CONVERTIT FIDÈLEMENT UNE ORIENTATION
 FAUSSE** (`yup_authoring()`).

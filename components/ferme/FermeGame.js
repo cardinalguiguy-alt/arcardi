@@ -56,6 +56,7 @@ import { MayorAudience, MayorWatch, mayorCtxOf } from "./MaireScene";
 import { SawScene } from "./ScierieScene";
 import * as SAW from "./scierie";
 import { buildSprites, charPalette, drawBridgeTile, drawBridgeOverlay, drawCandyGroundTile, candySyrupColor } from "./fermeArt";
+import { loadBitmap } from "./bitmapAssets";
 import { fstr } from "./fermeStrings";
 // ZIP 441 — l'orgue de l'église. Le lecteur de fichiers existe depuis longtemps
 // (bruit de caisse, de porte, de pioche) : on ne monte pas un second pipeline
@@ -15018,6 +15019,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // et qui SUIT le porteur au lieu d'être fixe.
       if (torchOnRef.current) lampsInView.push({ x: m.x + 0.5, y: m.y + 0.5, r: C.TORCH_LIGHT_RADIUS });
       for (const p of playersRef.current.values()) if (p.torch) lampsInView.push({ x: p.x + 0.5, y: p.y + 0.5, r: C.TORCH_LIGHT_RADIUS });
+      /* ⚠️ 2026-09-02 — L'HÔTEL DE VILLE EN PNG (drawTownHallBitmap, plus bas)
+         dessine ses fenêtres/lanternes allumées AVANT que le voile de nuit ne
+         soit composé — donc sans un point de lumière ICI, `drawNightVeil`
+         écrase cette lueur dans le même noir que le reste (mesuré : chaleur
+         de couleur ~7 sur 175 possibles, invisible à l'écran). Un lampadaire
+         perce le voile parce qu'il s'enregistre ici, AVANT l'appel à
+         `drawNightVeil` (16369 ci-dessous) — un bâtiment lumineux a besoin de
+         la même déclaration. Deux points plutôt qu'un : l'aile gauche et
+         l'aile droite du bâtiment (12 cases de large), pour que le halo
+         couvre toute la façade sans laisser le centre retomber dans le noir. */
+      if (nightAlpha() > 0.05) {
+        lampsInView.push({ x: C.TOWN_HALL.x + C.TOWN_HALL.w * 0.28, y: C.TOWN_HALL.y + 1, r: 5 });
+        lampsInView.push({ x: C.TOWN_HALL.x + C.TOWN_HALL.w * 0.72, y: C.TOWN_HALL.y + 1, r: 5 });
+      }
       for (let y = y0 - 1; y <= Math.min(w.h - 1, y1 + 2); y++) for (let x = x0 - 1; x <= Math.min(w.w - 1, x1 + 1); x++) {
         if (!inMap(x, y)) continue;
         const o = w.objects[idxOf(x, y)];
@@ -18458,8 +18473,84 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // L'ÉGLISE : le bâtiment du zip 235, dessin inchangé, nom corrigé.
       // Sa marge basse (4 px sur 128) est celle relevée au zip 279.
       drawCivic(C.TOWN_CHURCH, sprites.church, 4);
-      // L'HÔTEL DE VILLE (425) : le canevas descend jusqu'à son bord, pas de marge.
-      drawCivic(C.TOWN_HALL, sprites.townHall2, 0);
+      /* L'HÔTEL DE VILLE (2026-09-02) : PREMIER bâtiment en PNG importé
+         (pipeline C, §9 CLAUDE.md) plutôt qu'en canevas procédural —
+         test demandé par Guillaume, à partir d'une référence Gemini
+         (refs/hdv.jpg). Deux calques alignés au pixel près
+         (tools/build-townhall-sprite.mjs) : les fenêtres/lanternes sont
+         ÉTEINTES dans le premier (townhall-day.png) et existent SEULES,
+         fond transparent, dans le second (townhall-glow.png) — posé
+         par-dessus avec `nightAlpha()`, la même fonction que le voile de
+         nuit du jeu, pour que l'allumage suive le même fondu que le reste
+         du monde plutôt qu'un bâtiment cuit "allumé" en permanence.
+         ⚠️ « TOWN HALL » est GRAVÉ dans l'image, pas écrit par le jeu —
+         dérogation délibérée à la règle du §4 de CLAUDE.md (« un texte de
+         bâtiment s'écrit vivant, jamais cuit dans un sprite »), décidée par
+         Guillaume en connaissance de cause : le bilingue ne compte pas pour
+         ce bâtiment, et une gravure dessinée à la main n'aurait pas la
+         précision d'une génération. ⚠️ L'HORLOGE, ELLE, N'EST PAS GRAVÉE :
+         le cadran a été repeint vierge (tools/build-townhall-sprite.mjs) et
+         les aiguilles sont dessinées ICI, chaque frame, à l'heure réelle du
+         jeu (`E.gameTimeMin`) — Guillaume : « l'horloge devra être liée à
+         l'heure de la journée ». */
+      const drawTownHallBitmap = (b) => {
+        const day = loadBitmap("/town/townhall-day.png");
+        if (!day) return; // pas encore chargé : rien à dessiner cette frame
+        const by = (b.y + b.h) * T;
+        const e = elAt(b.x, b.y + b.h - 1);
+        pushE(by, e, () => {
+          const cx2 = b.x * T + b.w * T / 2;
+          const dx = b.x * T + (b.w * T - day.width) / 2, dy = by - day.height;
+          /* Ombre portée, soleil en haut à gauche (convention du reste de la
+             ville) : sans elle le bâtiment se lit comme une image collée sur
+             l'herbe plutôt que comme un volume posé dessus — demande de
+             Guillaume (« sensation de volume », « bien travailler les
+             ombres »). Longueur DÉRIVÉE de la taille du sprite (pas un
+             nombre choisi au jugé) ; trois ellipses emboîtées pour un bord
+             dégradé plutôt qu'une flaque nette. */
+          const shx = cx2 + day.width * 0.16, shy = by - 3;
+          ctx.save();
+          for (let k = 0; k < 3; k++) {
+            ctx.fillStyle = `rgba(20,16,12,${0.16 - k * 0.045})`;
+            ctx.beginPath();
+            ctx.ellipse(shx, shy, day.width * (0.42 - k * 0.06), day.height * (0.10 - k * 0.02), 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+          ctx.drawImage(day, dx, dy);
+          const glow = loadBitmap("/town/townhall-glow.png");
+          const na = nightAlpha();
+          if (glow && na > 0.01) {
+            ctx.globalAlpha = na;
+            ctx.drawImage(glow, dx, dy);
+            ctx.globalAlpha = 1;
+          }
+          // L'horloge : centre et rayon mesurés à la main sur le PNG (192 px
+          // de large), voir tools/build-townhall-sprite.mjs pour l'origine
+          // des mêmes nombres côté cadran repeint.
+          const scaleK = day.width / 192;
+          const clockX = dx + 95.5 * scaleK, clockY = dy + 74 * scaleK;
+          const tmin = E.gameTimeMin(sharedRef.current.dayStartAt, Date.now());
+          const hourAngle = ((tmin % 720) / 720) * Math.PI * 2 - Math.PI / 2;
+          const minAngle = ((tmin % 60) / 60) * Math.PI * 2 - Math.PI / 2;
+          ctx.save();
+          ctx.strokeStyle = "#2e2a24";
+          ctx.lineCap = "round";
+          ctx.lineWidth = 1.1 * scaleK;
+          ctx.beginPath();
+          ctx.moveTo(clockX, clockY);
+          ctx.lineTo(clockX + Math.cos(hourAngle) * 3.2 * scaleK, clockY + Math.sin(hourAngle) * 3.2 * scaleK);
+          ctx.stroke();
+          ctx.lineWidth = 0.8 * scaleK;
+          ctx.beginPath();
+          ctx.moveTo(clockX, clockY);
+          ctx.lineTo(clockX + Math.cos(minAngle) * 4.6 * scaleK, clockY + Math.sin(minAngle) * 4.6 * scaleK);
+          ctx.stroke();
+          ctx.restore();
+          drawBuildingFooting(ctx, cx2, by, day.width / 2);
+        });
+      };
+      drawTownHallBitmap(C.TOWN_HALL);
       // LE TRIBUNAL (425) : idem, le perron touche le bas du canevas.
       drawCivic(C.TOWN_COURT, sprites.courthouse, 0);
       /* ZIP 427 — LES DEUX COMMERCES DE LA HAUTE-VILLE. Ils passent par le MÊME
