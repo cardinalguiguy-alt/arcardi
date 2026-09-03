@@ -2607,8 +2607,171 @@ console.log("\n16. LA DISCRÈTE (lot A2, 2026-09-02) — un chapeau ne cache per
     const up = scale(sur.px, W, H, 4);
     writePNG(path.join(OUT, "etoile-discrete.png"), up.px, up.W, up.H);
   }
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-03 (lot A3) — LA VERTE, ET LE SEUL DÉFAUT QUI LA GUETTE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️⚠️ ELLE A UN PROBLÈME QU'AUCUNE DES CINQ AUTRES N'A : SA COULEUR EST CELLE
+     DE SA CACHETTE. Une étoile verte posée sur un buisson vert peut rater de deux
+     façons opposées, et les deux se voient à l'œil trop tard :
+       · trop proche du feuillage → une fois trouvée, on ne la voit toujours pas,
+         donc la récompense de la chasse n'arrive jamais ;
+       · trop terne → elle se lit comme l'état ÉTEINT d'une étoile (l'état 2 de
+         toutes les compagnes est justement un gris-vert), donc on croit l'avoir
+         cassée.
+     ⚠️ ON MESURE DONC LES DEUX ÉCARTS, ET SUR LE VRAI BUISSON DE LA VILLE
+     (`townGoldBush`, un des sept décors mous où elle se cache) — jamais sur un vert
+     inventé pour l'occasion, qui aurait validé un dessin contre une supposition. */
+  {
+    const green = S.starWispColors.green;
+    ok(!!green && green.length === 3 && green[0].length === 4,
+       "⚠️ la verte a ses trois états et ses quatre poses, comme toute compagne",
+       `${green ? green.length : 0} × ${green && green[0] ? green[0].length : 0}`);
+    /* Le corps, sur fond NOIR : c'est la leçon du lot A2 — le fond vert est le bon
+       réactif pour COMPTER des pixels peints et le pire pour en mesurer la teinte
+       (les bords semi-transparents s'y mélangent). Ici, mesurer une étoile VERTE
+       sur du vert aurait été la même faute au carré. */
+    const body = (im) => {
+      const sur = makeCanvas(im.width, im.height), gg = sur.ctx;
+      gg.fillStyle = "#000000"; gg.fillRect(0, 0, im.width, im.height);
+      gg.drawImage(im, 0, 0);
+      const d = sur.px; let r = 0, g2 = 0, b = 0, n = 0;
+      for (let i = 0; i < im.width * im.height; i++) {
+        const o = i * 4;
+        if (d[o] + d[o + 1] + d[o + 2] < 150) continue;      // halo : hors sujet
+        r += d[o]; g2 += d[o + 1]; b += d[o + 2]; n++;
+      }
+      return n ? { r: r / n, g: g2 / n, b: b / n, n, L: (r * 0.30 + g2 * 0.59 + b * 0.11) / n } : null;
+    };
+    /* Le feuillage, lui, se mesure sur TOUS ses pixels peints : c'est une masse de
+       couleur, pas une silhouette. */
+    const leafOf = (im) => {
+      const sur = makeCanvas(im.width, im.height), gg = sur.ctx;
+      gg.fillStyle = "#00ff00"; gg.fillRect(0, 0, im.width, im.height);
+      gg.drawImage(im, 0, 0);
+      const d = sur.px; let r = 0, g2 = 0, b = 0, n = 0;
+      for (let i = 0; i < im.width * im.height; i++) {
+        const o = i * 4;
+        if (d[o] === 0 && d[o + 1] === 255 && d[o + 2] === 0) continue;
+        r += d[o]; g2 += d[o + 1]; b += d[o + 2]; n++;
+      }
+      return n ? { r: r / n, g: g2 / n, b: b / n, n, L: (r * 0.30 + g2 * 0.59 + b * 0.11) / n } : null;
+    };
+    /* ⚠️⚠️ ON MESURE CONTRE LE BUISSON LE PLUS CLAIR DE LA VILLE, PAS CONTRE UN
+       BUISSON. Elle peut se cacher dans sept sortes de décor mou (`TOWN_SOFT_PROPS`)
+       et c'est le plus lumineux qui la cache le mieux : mesuré, ce sont l'arbuste
+       (L 118) et le buisson d'or (L 114), loin devant la touffe d'herbe (72). Se
+       contenter d'un seul aurait validé un dessin qui disparaît dans les six autres —
+       et le premier jet de ce contrôle prenait justement le buisson d'or, dont les
+       fleurs JAUNES font tout le travail à la place de l'étoile. */
+    const BUSHES = ["townShrub", "townFlowerClump", "townGoldBush", "townLavender", "townGrassTuft", "townReedTuft"];
+    let bush = null, bushName = "";
+    for (const k of BUSHES) {
+      const fam = S[k];
+      const im = Array.isArray(fam) ? fam[0] : fam;
+      if (!im) continue;
+      const m = leafOf(im);
+      if (m && (!bush || m.L > bush.L)) { bush = m; bushName = k; }
+    }
+    const live = body(green[0][0]), dead = body(green[2][0]);
+    /* ⚠️ SON ÉCHANTILLON DE CORPS EST PLUS PETIT QUE CELUI DE L'ORANGE (30 px
+       contre 70), ET C'EST JUSTE : le seuil retient ce qui est assez CLAIR pour être
+       du corps, et le cerne d'un vert foncé (`#0f4d2a`, somme 134) tombe dessous
+       quand celui d'un orange (`#6b3406`, somme 165) passe. La mesure de la verte
+       est donc plus PURE, pas plus pauvre — exiger le même compte des deux aurait
+       obligé à baisser le seuil, c'est-à-dire à faire entrer le cerne dans une
+       mesure de couleur de corps. */
+    ok(!!bush && bush.n > 60 && !!live && live.n > 25,
+       "…et la comparaison porte sur assez de pixels des deux côtés pour vouloir dire quelque chose",
+       bush && live ? `${live.n} px d'étoile contre ${bush.n} px de buisson` : "mesure vide");
+    /* ⚠️⚠️ L'ÉCART EST DANS LA VALEUR, PAS DANS LA TEINTE, et c'est ce que le
+       commentaire de `STAR_WISP_PAL` promet : deux verts voisins ne se séparent pas
+       par la teinte (§8 — « la sortie est dans la VALEUR »). On exige donc qu'elle
+       soit franchement PLUS CLAIRE que le feuillage où elle se cache. */
+    ok(live && bush && live.L > bush.L + 45,
+       "⚠️⚠️ une fois trouvée, elle se détache du feuillage (l'écart est dans la VALEUR)",
+       live && bush ? `luminance ${live.L.toFixed(0)} contre ${bush.L.toFixed(0)} pour le décor le plus clair où elle se cache (${bushName})` : "—");
+    /* ⚠️⚠️ ET ELLE NE RESSEMBLE PAS À UNE ÉTOILE ÉTEINTE. L'état 2 de toute compagne
+       est un gris-vert : si la verte VIVANTE en était proche, le joueur lirait « elle
+       est morte » sur une étoile en pleine forme.
+       ⚠️⚠️⚠️ LA PREMIÈRE ÉCRITURE MESURAIT AUSSI LA LUMINANCE, ET ELLE A ÉCHOUÉ SUR UN
+       DESSIN JUSTE : vivante 196, éteinte 176 — vingt points d'écart seulement, parce
+       que le cœur de l'état éteint est un gris très PÂLE. La luminance ne sépare donc
+       pas ces deux-là ; ce qui les sépare est le vert FRANC (vert moins rouge : 94
+       contre 12). C'est mot pour mot la leçon du §8 de `CLAUDE.md` — *avant de
+       mesurer, il faut nommer ce qui SÉPARE vraiment les deux cas* — et c'est le même
+       piège que la « chaleur » du réveil, qui trouvait le raté plus chaud que la
+       réussite. Une statistique juste sur une grandeur mal choisie est fausse. */
+    ok(live && dead && (live.g - live.r) > (dead.g - dead.r) + 40,
+       "⚠️⚠️ …et elle ne se confond pas avec l'état ÉTEINT d'une étoile (c'est le vert FRANC qui les sépare)",
+       live && dead ? `vert−rouge : vivante ${(live.g - live.r).toFixed(0)} · éteinte ${(dead.g - dead.r).toFixed(0)} (luminance 196/176 : elle ne dit rien)` : "—");
+    /* ⚠️ ET ELLE SE DISTINGUE DES CINQ AUTRES SŒURS : une constellation de sept
+       lumières n'a de sens que si on les reconnaît une par une. */
+    {
+      let worst = 999, who = "";
+      for (const c of ["yellow", "blue", "rose", "white", "orange"]) {
+        const o = body(S.starWispColors[c][0][0]);
+        const d = Math.hypot(live.r - o.r, live.g - o.g, live.b - o.b);
+        if (d < worst) { worst = d; who = c; }
+      }
+      ok(worst > 60, "⚠️ elle ne se confond avec aucune de ses sœurs",
+         `la plus proche est la ${who}, à ${worst.toFixed(0)} de distance de couleur`);
+    }
+    /* ⚠️⚠️ LE PIÈGE DU 433, MAIS PAS SOUS SA FORME HABITUELLE, ET C'EST LE
+       DEUXIÈME CONTRÔLE QUE CE BLOC A DÛ RÉÉCRIRE. Le premier jet exigeait « aucun
+       pixel sur le bord » : il a rougi sur un dessin juste, parce que les SIX
+       couleurs y posent exactement 12 pixels — le halo de `starWispSprite` remplit
+       son canevas de 18×18 depuis toujours, pour toutes les sœurs. Exiger zéro,
+       c'était rejuger un choix accepté par cinq étoiles à l'occasion de la sixième.
+       ⚠️ LA PRISE JUSTE EST DONC UNE COMPARAISON, pas un seuil : la verte doit
+       occuper le bord EXACTEMENT comme ses sœurs. Ça attrape ce qui pourrait
+       vraiment casser (une palette qui déborde, un corps décalé, un canevas changé
+       pour elle seule) sans rien exiger de neuf du dessin commun. */
+    {
+      const edgeOf = (fam) => {
+        let edge = 0;
+        for (const st of [0, 1, 2]) for (const po of [0, 1, 2, 3]) {
+          const im = fam[st][po];
+          const sur = makeCanvas(im.width, im.height), gg = sur.ctx;
+          gg.fillStyle = "#00ff00"; gg.fillRect(0, 0, im.width, im.height);
+          gg.drawImage(im, 0, 0);
+          const d = sur.px;
+          for (let x = 0; x < im.width; x++) for (const y of [0, im.height - 1]) {
+            const o = (y * im.width + x) * 4;
+            if (!(d[o] === 0 && d[o + 1] === 255 && d[o + 2] === 0)) edge++;
+          }
+        }
+        return edge;
+      };
+      const g = edgeOf(green), y = edgeOf(S.starWispColors.yellow);
+      ok(g === y && green[0][0].width === S.starWispColors.yellow[0][0].width,
+         "⚠️ elle occupe son canevas exactement comme ses sœurs (rien ne déborde chez elle seule)",
+         `${g} px de bord contre ${y} chez la jaune — le halo commun, pas un débordement`);
+    }
+    /* ── LA PLANCHE : la verte sur un vrai buisson de la ville, ses quatre poses, son
+       état éteint, et les cinq sœurs à côté. C'est elle qu'on REGARDE (§8). */
+    {
+      const CW = 8, W = CW * SW, H = SW;
+      const sur = makeCanvas(W, H), gg = sur.ctx;
+      gg.fillStyle = "#2f3a26"; gg.fillRect(0, 0, W, H);
+      /* ⚠️ LA PLANCHE MONTRE L'ARBUSTE VERT, PAS LE BUISSON D'OR : c'est le cas le
+         plus dur à l'œil (un vert sur un vert, sans fleurs jaunes pour trancher), et
+         une planche qui montre le cas facile ne sert à rien. */
+      const bushIm = S.townShrub && S.townShrub[0];
+      const line = [green[0][0], green[0][1], green[0][2], green[0][3], green[2][0],
+                    S.starWispColors.yellow[0][0], S.starWispColors.orange[0][0], S.starWispColors.blue[0][0]];
+      line.forEach((im, i) => {
+        /* Les cinq premières colonnes sont posées SUR un buisson : c'est là qu'elle
+           vit, et c'est le seul fond où son défaut se verrait. */
+        if (bushIm && i < 5) gg.drawImage(bushIm, Math.round(i * SW + (SW - bushIm.width) / 2), Math.round(SW - bushIm.height - 2));
+        gg.drawImage(im, Math.round(i * SW + (SW - im.width) / 2), Math.round((SW - im.height) / 2));
+      });
+      const up = scale(sur.px, W, H, 4);
+      writePNG(path.join(OUT, "etoile-verte.png"), up.px, up.W, up.H);
+    }
+  }
 }
 
-console.log(`\nPlanches : tools/out/etoile-planche.png · tools/out/etoile-cratere.png · tools/out/etoile-comete.png · tools/out/etoile-alerte.png · tools/out/etoile-jauge.png · tools/out/etoile-poses.png · tools/out/etoile-tristan.png · tools/out/etoile-fouille.png · tools/out/etoile-lueur.png · tools/out/etoile-plat.png · tools/out/etoile-reveil.png · tools/out/etoile-discrete.png`);
+console.log(`\nPlanches : tools/out/etoile-planche.png · tools/out/etoile-cratere.png · tools/out/etoile-comete.png · tools/out/etoile-alerte.png · tools/out/etoile-jauge.png · tools/out/etoile-poses.png · tools/out/etoile-tristan.png · tools/out/etoile-fouille.png · tools/out/etoile-lueur.png · tools/out/etoile-plat.png · tools/out/etoile-reveil.png · tools/out/etoile-discrete.png · tools/out/etoile-verte.png`);
 console.log(fails === 0 ? `\n✅ tous les contrôles passés.\n` : `\n❌ ${fails} contrôle(s) en échec.\n`);
 process.exit(fails ? 1 : 0);

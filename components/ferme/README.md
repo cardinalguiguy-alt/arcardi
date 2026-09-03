@@ -1,4 +1,72 @@
-# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-02
+# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-03
+
+## Hors-zip 2026-09-03 — LOT A3 : la cinquième sœur se cache dans les buissons, et on la PISTE
+
+**Une étoile verte, dans un buisson qui remue tout seul.** Demande de Guillaume : *« SIMPLIFIEE, IL
+FAUT JUSTE LA CHERCHER. mais avoir des indices sur où elle se trouve »*, puis, sur la forme de ces
+indices : *« le buisson bouge tout seul. on peut demander des indices à la reine deux fois (cumulé
+entre les joueurs) […] la troisième fois […] "laisser la reine vous guider" : elle nous dirigera
+automatiquement de notre position jusqu'en face du buisson qui bouge, par la route »* et *« elle ne
+peut aller que de buisson en buisson et pas se téléporter […] on doit voir l'animation de
+déplacement ».*
+
+⚠️⚠️⚠️ **CE QUI LA SÉPARE DE LA DISCRÈTE TIENT EN UN MOT, ET C'EST LE MOT DE GUILLAUME : « INDICES ».**
+La sixième se REPÈRE à l'œil dans un domaine annoncé (le chevron mène à la place, le bandeau donne
+le signalement) ; la cinquième se PISTE — **aucun domaine annoncé, aucun chevron**, et trois sources
+de piste qui s'enchaînent. Un second verbe `spot` aurait donné deux fois la même chasse, ce que
+l'audit 479 reprochait déjà aux deux petites étoiles (*« le geste était paresseux, pas le texte »*).
+D'où un verbe neuf, `track`.
+
+| ce qui la trouve | où ça vit |
+|---|---|
+| le buisson qu'elle occupe **remue tout seul** | `starGreenSway` (quete.js) + `townBushLean` (FermeGame.js) |
+| deux **chaud/froid** demandés à la reine (touche G) | `resolveStarHint`, `starGreenTemp`, `starGreenBearing` |
+| au troisième appel, **la reine mène et les pieds suivent** | `starGreenLead` / `starGreenWalking` + le pas ordinaire de la ville |
+
+⚠️⚠️ **ELLE MARCHE, ELLE NE SE TÉLÉPORTE PAS, ET C'EST STRUCTUREL.** La discrète TIRE sa planque à
+chaque créneau ; ici on la VOIT partir, donc un tirage indépendant se lirait comme un défaut
+d'affichage (« elle a clignoté d'un bout à l'autre de la rue »). `starGreenWalk` REJOUE donc une
+marche depuis le début sur une table d'adjacence — bornée à 2 000 pas, sans quoi une sauvegarde
+reprise trois jours plus tard ferait tourner la boucle des dizaines de milliers de fois par image.
+⚠️ La table d'adjacence vient de `FermeGame.js` (`starGreenBushes`, dérivée de `tw.soft` dans
+`TOWN_CORE`, voisinage `STAR_GREEN_HOP` = 9 cases) : **`quete.js` ne connaît toujours pas la carte**,
+c'est le même partage que la discrète.
+
+⚠️⚠️⚠️ **DANS SON BUISSON, ON NE DESSINE RIEN.** Plus radical que le « pas de halo » de la discrète :
+elle n'a aucun pixel à elle tant qu'elle est couverte. Ce qu'on voit est le FEUILLAGE. Elle n'est
+visible que pendant son vol — 1,7 s toutes les 75 s — et **on peut l'attraper en vol** : *« au cas
+où le joueur la surprendrait ça pourrait être cool »*.
+
+⚠️⚠️ **LE COMPTE D'INDICES EST PARTAGÉ, PAS LE GUIDAGE.** Deux joueurs qui auraient chacun leurs
+deux indices en auraient quatre — la coopération doit AIDER, pas DISPENSER. Le compte vit donc dans
+`e.hints` (un dictionnaire de LIEUX, comme `woke` et `dug`) et l'hôte l'arbitre ; le mode « la reine
+me mène », lui, reste **local** comme tout `starGuideRef`. L'hôte compte, le client mesure la
+température depuis SA position — et compose la phrase dans SA langue.
+
+⚠️ **L'AUTO-MARCHE N'EST QU'UNE PAIRE DE TOUCHES SIMULÉE** : elle écrit `dx`/`dy` et laisse le pas
+ORDINAIRE faire le reste (collision, pente du cratère, ralentissement de buisson, envoi de
+position). Un déplacement écrit à côté aurait été un second chemin de marche à tenir d'accord avec
+le premier — et un pas que l'hôte ne peut pas rejouer. **E l'arrête et la relance** ; la moindre
+flèche reprend la main.
+
+**Bancs** : `verify-quete` **745/745** (il fait MARCHER la verte : locality, couverture, cycles, cas
+dégénérés, indices partagés, migration), `render-etoile` **186 contrôles** (planche
+`tools/out/etoile-verte.png`), `verify-strings` **1 108 clés**, `verify-vallee` **223/223**,
+`verify-collision` **TOUT PASSE**, `verify-maire` **119/119**, `verify-scierie` **34/34**,
+`next build` **✓ Compiled successfully**. **Aucune manipulation Supabase n'est nécessaire.**
+Menu dev : **« 🌿 Queen + hidden one tamed »** apprivoise les deux précédentes et laisse la chasse
+entière.
+
+⚠️⚠️ **TROIS MESURES ONT ÉTÉ REFUSÉES PAR LE BANC AVANT D'ÊTRE JUSTES, ET LA DEUXIÈME EST LA LEÇON
+DU LOT** : pour prouver qu'elle ne se confond pas avec une étoile ÉTEINTE, la luminance ne dit RIEN
+(196 contre 176 — le cœur de l'état éteint est un gris très pâle) ; ce qui les sépare est le vert
+FRANC (94 contre 12). *Avant de mesurer, il faut nommer ce qui SÉPARE vraiment les deux cas* (§8 de
+`CLAUDE.md`). Les deux autres : un contrôle de bord qui exigeait zéro pixel alors que les SIX sœurs
+en posent douze (le halo commun — exiger zéro, c'était rejuger un choix accepté par cinq étoiles à
+l'occasion de la sixième), et un seuil de corps calé sur l'orange, dont le cerne clair passe le
+filtre quand celui d'un vert foncé tombe dessous.
+
+---
 
 ## Hors-zip 2026-09-02 (quinquies) — LOT A2 : la sixième sœur se cache dans Valley Town
 

@@ -140,7 +140,15 @@ const openTownCrater = (e, at = 10) => {
    passage. ⚠️ IL PASSE PAR LE VRAI RÉSOLVEUR (qui refuse avant la reine), jamais
    par une écriture directe dans `e.found` : c'est ce refus-là qu'on veut voir tenir
    à chaque scénario, pas seulement dans son contrôle dédié. */
-const findShy = (e, t = 1) => Q.resolveStarSpot(e, "banc", t, "banc").ok;
+/* ⚠️⚠️ 2026-09-03 (lot A3) — `findShy` DEVIENT `findSisters`, ET LE RENOMMAGE EST
+   LE POINT : ce que ses huit appelants veulent n'a jamais été « démasquer la
+   discrète », c'est « fermer le chapitre 2 pour regarder la suite ». Le jour où la
+   verte s'est ajoutée au `need` du chapitre, un nom qui décrivait UNE trouvaille a
+   fait échouer treize contrôles qui parlaient du chantier naval — chacun réclamant
+   un objectif de chapitre 3 en obtenant `townGreenAway`. Le contrôle avait raison ;
+   c'est son échafaudage qui mentait sur son intention. */
+const findSisters = (e, t = 1) =>
+  Q.resolveStarSpot(e, "banc", t, "banc").ok && Q.resolveStarTrack(e, "banc", t, "banc").ok;
 const queenReady = (e, who, t) => {
   Q.resolveStarCandy(e, who, Q.starOfferPrice("crater"), t, 0);
   const fed = Q.resolveStarLight(e, who, "crater", 999, t);
@@ -196,7 +204,7 @@ section("La chaîne des chapitres");
     /* ⚠️ ZIP 469 — SIX LIEUX SONT DEVENUS UN. Le contrôle garde tout son sens :
        on donne d'abord le chapitre 2 (le cratère), PUIS le chapitre 1, et on
        vérifie que la dernière trouvaille en franchit deux d'un coup. */
-    Q.resolveStarFound(e3, "crater", "banc", 1); findShy(e3, 1);
+    Q.resolveStarFound(e3, "crater", "banc", 1); findSisters(e3, 1);
     const before = e3.ch;
     let cr = null;
     for (const [i, site] of Q.STAR_FARM_IMPACTS.entries())
@@ -683,7 +691,7 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
     ok("⚠️ elle retombe VITE au début (ça fume fort, puis ça traîne)", hM < 0.55, `${hM.toFixed(2)} à mi-course`);
     ok("⚠️ mais elle ne tombe jamais à zéro tant que l'étoile est au fond",
        hE > 0.05 && Math.abs(hE - Q.STAR_CRATER_EMBER) < 0.001, hE.toFixed(2));
-    Q.resolveStarFound(e2, "crater", "banc", 9); findShy(e2, 9);
+    Q.resolveStarFound(e2, "crater", "banc", 9); findSisters(e2, 9);
     ok("⚠️⚠️ …et elle s'éteint le jour où on la sort", Q.starCraterHeat(e2, 10) === 0);
     ok("une quête pas encore tombée n'a pas de cratère chaud", Q.starCraterHeat(Q.newStar(), 10) === 0);
   }
@@ -711,7 +719,7 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
     ok("⚠️ un trou pas encore creusé ne brûle personne (quête neuve)",
        !Q.starCraterBurns(Q.newStar(), 0, FOND));
     const e3 = Q.devStar(Q.newStar(), "start", 1).star; openTownCrater(e3, e3.fall + 10);
-    Q.resolveStarFound(e3, "crater", "banc", 9); findShy(e3, 9);
+    Q.resolveStarFound(e3, "crater", "banc", 9); findSisters(e3, 9);
     ok("⚠️⚠️ …et le trou s'éteint le jour où l'étoile en sort : on peut y descendre",
        !Q.starCraterBurns(e3, 0, FOND));
     /* ⚠️⚠️ LA JOINTURE, ET C'EST LE SEUL CONTRÔLE DE CE BLOC QUI PROTÈGE D'UN
@@ -1481,7 +1489,7 @@ section("La chute est vue, et le chevron désigne (445)");
     ok("…et lumières en poche, il désigne enfin le cratère",
        Q.starGoalKey(e, { candy: Q.starOfferPrice("crater") }) === "craterFeedPay"
        && Q.starTargetSite(e, { candy: Q.starOfferPrice("crater") }) === "crater");
-    Q.resolveStarFound(e, "crater", "banc", 3000); findShy(e, 3000);
+    Q.resolveStarFound(e, "crater", "banc", 3000); findSisters(e, 3000);
     /* ⚠️⚠️ ET LÀ, PLUS AUCUN LIEU — C'EST VOULU, ET LE CONTRÔLE VAUT ENCORE PLUS
        CHER DEPUIS LE DÉCHANT. Le cratère était le DERNIER lieu de la table ; ce
        qui reste à faire est un chantier (la mairie, puis Tristan), et aucun des
@@ -1512,7 +1520,7 @@ section("La chute est vue, et le chevron désigne (445)");
        pas encore de plan à scier. */
     {
       const e2 = Q.newStar(); armFall(e2); findFarmImpacts(e2, "banc", 2000);
-      Q.resolveStarTownFall(e2, 2500); Q.resolveStarFound(e2, "crater", "banc", 3000); findShy(e2, 3000);
+      Q.resolveStarTownFall(e2, 2500); Q.resolveStarFound(e2, "crater", "banc", 3000); findSisters(e2, 3000);
       ok("…et sans plans, il envoie à la mairie",
          Q.starGoalKey(e2, {}) === "engineer" && Q.starTargetSite(e2, {}) === "townHall",
          `${Q.starGoalKey(e2, {})} → ${Q.starTargetSite(e2, {})}`);
@@ -1842,7 +1850,18 @@ section("L'objectif courant (bandeau) et le guide");
       ok("…le chapitre 2 n'est donc pas fini", Q.starMissing(q).includes("townShy"));
       Q.resolveStarSpot(q, "j1", q.townFall + 3000, "j1");
       Q.starAdvance(q);
-      ok("⚠️⚠️ …et une fois démasquée, l'ingénieur reprend la parole exactement où il l'avait",
+      /* ⚠️⚠️ 2026-09-03 (lot A3) — LA VERTE S'INTERCALE ICI, ET CE CONTRÔLE A
+         CHANGÉ DE PHRASE PLUTÔT QUE DE DISPARAÎTRE : ce qu'il tient n'est pas
+         « l'ingénieur parle après la discrète », c'est *le bandeau ne saute
+         personne*. Une fois la discrète démasquée, il annonce la sœur suivante ;
+         l'ingénieur, lui, attend qu'elles y soient toutes. */
+      ok("⚠️⚠️ …et une fois démasquée, le bandeau passe à la verte, pas à l'ingénieur",
+         Q.starGoalKey(q, { inTown: true }) === "townGreen"
+         && Q.starGoalKey(q, { inTown: false }) === "townGreenAway",
+         `${Q.starGoalKey(q, { inTown: true })} / ${Q.starGoalKey(q, { inTown: false })}`);
+      Q.resolveStarTrack(q, "j1", q.townFall + 4000, "j1");
+      Q.starAdvance(q);
+      ok("⚠️⚠️ …et une fois les deux trouvées, l'ingénieur reprend la parole exactement où il l'avait",
          Q.starGoalKey(q, { inTown: true }) === "engineer");
     }
     /* ── 3. LE CRÉNEAU. Deux clients qui comptent depuis la MÊME date de l'hôte
@@ -1892,6 +1911,271 @@ section("L'objectif courant (bandeau) et le guide");
          sits > 60 && sits < 240, `assise sur ${sits} créneaux sur 300`);
     }
   }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2026-09-03 (lot A3) — LA CINQUIÈME SŒUR, « LA VERTE ». ON LA FAIT MARCHER.
+   ═══════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ CE BLOC JOUE, IL NE RELIT PAS. La discrète TIRE sa planque à chaque
+   créneau : un tirage se relit. La verte MARCHE — son état au créneau 300 est le
+   produit de trois cents décisions —, et la seule chose qui puisse dire si elle
+   reste locale, si elle couvre son quartier et si elle ne tourne pas en rond est
+   de la faire marcher.
+   ⚠️ ELLE MARCHE SUR UN GRAPHE FABRIQUÉ, PAS SUR VALLEY TOWN, et c'est le partage
+   voulu : `quete.js` ne connaît pas la carte (`FermeGame.js` lui passe une table
+   d'adjacence). Le banc n'a donc pas à générer une ville pour éprouver la règle —
+   et il peut fabriquer les cas qu'une vraie carte ne produit jamais (un buisson
+   isolé, une liste d'un seul élément).
+   ═══════════════════════════════════════════════════════════════════════════ */
+section("Lot A3 — la verte : sa marche, ses indices, sa trouvaille");
+{
+  /* Une grille de buissons 6×6, voisins jusqu'à deux cases : c'est l'ordre de
+     grandeur d'un quartier de la ville (216 buissons dans `TOWN_CORE`, groupés). */
+  const GRID = 6, N = GRID * GRID;
+  const at = (i) => ({ x: i % GRID, y: Math.floor(i / GRID) });
+  const neigh = Array.from({ length: N }, (_, i) => {
+    const a = at(i), out = [];
+    for (let j = 0; j < N; j++) {
+      if (j === i) continue;
+      const b = at(j);
+      if (Math.hypot(a.x - b.x, a.y - b.y) <= 2) out.push(j);
+    }
+    return out;
+  });
+
+  /* ── 1. LE CRÉNEAU ET LE VOL. ⚠️ ELLE NE COURT PAS AU CRÉNEAU 0 : il n'y a pas
+     de buisson d'où venir, et un vol depuis nulle part serait une apparition. */
+  {
+    const e = { townFall: 1000 };
+    const s0 = Q.starGreenSlot(e, 1000);
+    const s1 = Q.starGreenSlot(e, 1000 + Q.STAR_GREEN_PERIOD_MS + 10);
+    const s1b = Q.starGreenSlot(e, 1000 + Q.STAR_GREEN_PERIOD_MS + Q.STAR_GREEN_MOVE_MS + 10);
+    ok("⚠️ le créneau part de la chute du météore, comme celui de la discrète",
+       s0.slot === 0 && s1.slot === 1 && Q.starGreenSlot({}, 5000).slot === 0);
+    ok("⚠️⚠️ elle ne court pas au tout premier créneau (elle viendrait de nulle part)",
+       s0.moving === false);
+    ok("⚠️ elle court au DÉBUT du créneau, puis elle est posée pour le reste",
+       s1.moving === true && s1.k < 1 && s1b.moving === false);
+    ok("…et le créneau ne recule jamais",
+       Q.starGreenSlot(e, -50000).slot === 0
+       && Q.starGreenSlot(e, 1000 + 10 * Q.STAR_GREEN_PERIOD_MS).slot === 10);
+    ok("⚠️ le vol est court devant le créneau (on la voit passer, on ne l'attend pas)",
+       Q.STAR_GREEN_MOVE_MS * 12 < Q.STAR_GREEN_PERIOD_MS,
+       `${Q.STAR_GREEN_MOVE_MS} ms de vol pour ${Q.STAR_GREEN_PERIOD_MS} ms de créneau`);
+  }
+
+  /* ── 2. ⚠️⚠️⚠️ ELLE NE SE TÉLÉPORTE JAMAIS. C'est LA demande de Guillaume, et
+     c'est la seule propriété de ce lot qu'une relecture ne peut pas voir : elle
+     porte sur la SUITE des positions, pas sur une position. */
+  {
+    let jumps = 0, moves = 0, bad = 0;
+    let prev = Q.starGreenWalk(neigh, 0);
+    for (let k = 1; k <= 400; k++) {
+      const cur = Q.starGreenWalk(neigh, k);
+      if (cur < 0 || cur >= N) { bad++; prev = cur; continue; }
+      if (cur !== prev) { moves++; if (!neigh[prev].includes(cur)) jumps++; }
+      prev = cur;
+    }
+    ok("⚠️⚠️⚠️ elle ne va JAMAIS que d'un buisson à un buisson voisin (aucune téléportation)",
+       jumps === 0 && bad === 0, `${moves} déplacements sur 400 créneaux, ${jumps} sauts illégaux`);
+    ok("…et elle bouge vraiment (une marche qui n'avance pas serait une planque fixe)",
+       moves > 300, `${moves} déplacements sur 400 créneaux`);
+  }
+
+  /* ── 3. DEUX CLIENTS TOMBENT SUR LE MÊME BUISSON. C'est ce qui autorise à ne
+     rien diffuser : la marche est une pure fonction du temps partagé. */
+  {
+    let same = 0;
+    for (let k = 0; k < 200; k++) if (Q.starGreenWalk(neigh, k) === Q.starGreenWalk(neigh, k)) same++;
+    ok("⚠️ deux lectures du même créneau rendent le même buisson (rien à diffuser)", same === 200);
+  }
+
+  /* ── 4. ELLE COUVRE SON QUARTIER SANS TOURNER EN ROND. ⚠️ MÊME EXIGENCE QUE LA
+     DISCRÈTE, pour la même raison : un joueur qui a fait la quête une fois ne doit
+     pas savoir où regarder. Ici le risque est plus grand — une marche peut se
+     piéger dans deux buissons qui se renvoient la balle. */
+  {
+    const seen = new Array(N).fill(0);
+    for (let k = 0; k < 600; k++) seen[Q.starGreenWalk(neigh, k)]++;
+    const used = seen.filter(v => v > 0).length;
+    const max = Math.max(...seen);
+    ok("⚠️⚠️ elle passe par presque tous les buissons, sans camper sur un seul",
+       used >= N * 0.8 && max <= (600 / N) * 4,
+       `${used}/${N} buissons visités en 600 créneaux, le plus fréquent ${max} fois`);
+    /* ⚠️⚠️ ET SA TOURNÉE NE SE RÉPÈTE PAS, même contrôle que pour la discrète et
+       même raison : c'est ce qui interdit un `slot % n` déguisé. Une marche qui
+       repasserait par les mêmes buissons dans le même ordre serait apprenable en
+       une partie, et la seconde chasse ne serait plus une chasse. */
+    let cycles = 0;
+    for (let k = 0; k < 400; k++) if (Q.starGreenWalk(neigh, k) === Q.starGreenWalk(neigh, k + N)) cycles++;
+    ok("⚠️ …et sa tournée ne se répète pas à la période de la liste",
+       cycles < 400 * 0.25, `${cycles} coïncidences sur 400`);
+  }
+
+  /* ── 5. LES CAS DÉGÉNÉRÉS. ⚠️ UN BUISSON SANS VOISIN NE LA PERD PAS : elle y
+     reste, ce qui est la seule réponse honnête (la faire sauter ailleurs serait la
+     téléportation qu'on s'interdit). Et une carte absente rend −1, jamais une
+     exception : le §4 dit qu'on ACCEPTE au lieu de refuser. */
+  {
+    const lonely = [[], []];                      // deux buissons, aucun voisin
+    let bad = 0;
+    for (let k = 0; k < 50; k++) { const i = Q.starGreenWalk(lonely, k); if (i !== Q.starGreenWalk(lonely, 0)) bad++; }
+    ok("⚠️ un buisson sans voisin la garde (elle ne saute pas au hasard)", bad === 0);
+    ok("⚠️ une carte sans buisson rend −1 au lieu de planter", Q.starGreenWalk([], 12) === -1
+       && Q.starGreenWalk(null, 12) === -1);
+    let out = 0;
+    for (const n of [1, 2, 5, 30]) {
+      const g = Array.from({ length: n }, (_, i) => [(i + 1) % n].filter(j => j !== i));
+      for (let k = 0; k < 40; k++) { const i = Q.starGreenWalk(g, k); if (!(i >= 0 && i < n)) out++; }
+    }
+    ok("⚠️ l'indice reste dans la liste quelle qu'en soit la taille", out === 0);
+  }
+
+  /* ── 6. ⚠️⚠️ LA MARCHE EST BORNÉE, ET ON LE VÉRIFIE EN LA POUSSANT LOIN. Une
+     sauvegarde reprise trois jours plus tard demande le créneau 3 500 ; sans borne,
+     cette boucle tournerait des dizaines de milliers de fois PAR IMAGE. */
+  {
+    /* ⚠️⚠️ LE CRÉNEAU EST ÉNORME EXPRÈS (deux cents millions, soit un demi-siècle
+       de jeu), ET C'EST CE QUI REND CE CONTRÔLE FALSIFIABLE : à 500 000, une marche
+       SANS borne rend la même réponse en trente millisecondes, donc le contrôle
+       serait vert des deux côtés — c'est-à-dire un contrôle qui ne peut pas échouer
+       (§10 de `CLAUDE.md`). Vérifié en retirant la borne : il rougit. */
+    const t0 = Date.now();
+    const far = Q.starGreenWalk(neigh, 200000000);
+    const ms = Date.now() - t0;
+    ok("⚠️⚠️ un créneau très lointain reste instantané et dans les bornes",
+       far >= 0 && far < N && ms < 100, `créneau 200 000 000 → buisson ${far} en ${ms} ms`);
+    ok("…et il reste déterministe (les deux clients tombent au même endroit)",
+       Q.starGreenWalk(neigh, 200000000) === far);
+  }
+
+  /* ── 7. LE REMUEMENT DU BUISSON — L'INDICE PREMIER. ⚠️⚠️ IL DOIT S'ARRÊTER : un
+     feuillage qui remuerait sans jamais se taire redeviendrait un décor animé, donc
+     un décor qu'on ne regarde plus. Et il doit rester DISCRET devant le frisson
+     d'un passant, sinon il se lit comme quelqu'un qui marche dedans. */
+  {
+    let peak = 0, quiet = 0;
+    const STEP = 17;
+    for (let t = 0; t < 20000; t += STEP) {
+      const v = Math.abs(Q.starGreenSway(t));
+      if (v > peak) peak = v;
+      if (v < 0.05) quiet++;
+    }
+    const n = Math.ceil(20000 / STEP);
+    ok("⚠️⚠️ le buisson remue par bouffées et se tait entre elles",
+       quiet > n * 0.25 && quiet < n * 0.9, `${Math.round(quiet * 100 / n)} % du temps au repos`);
+    ok("⚠️ il reste plus discret que le frisson d'un passant (sinon on lit un piéton)",
+       peak <= C.TOWN_BUSH_SWAY_PX * 0.75 && peak > 0.8,
+       `${peak.toFixed(2)} px contre ${C.TOWN_BUSH_SWAY_PX} px pour un passant`);
+    ok("⚠️ et c'est une pure fonction du temps (les deux clients voient la même chose)",
+       Q.starGreenSway(1234) === Q.starGreenSway(1234) && Q.starGreenSway(0) === 0);
+  }
+
+  /* ── 8. CHAUD/FROID. ⚠️⚠️ LA SEULE PROPRIÉTÉ QUI COMPTE EST LA MONOTONIE : un
+     indice qui refroidirait en s'approchant serait pire que pas d'indice, et c'est
+     très exactement le genre de faute qu'une relecture ne voit pas. */
+  {
+    const rank = ["burning", "hot", "warm", "cold", "icy"];
+    let bad = 0, prev = 0;
+    for (let d = 0; d <= 120; d += 0.25) {
+      const r = rank.indexOf(Q.starGreenTemp(d));
+      if (r < 0 || r < prev) bad++;
+      prev = r;
+    }
+    const covered = new Set();
+    for (let d = 0; d <= 120; d += 0.25) covered.add(Q.starGreenTemp(d));
+    ok("⚠️⚠️ la température ne se réchauffe jamais quand on s'éloigne", bad === 0);
+    ok("⚠️ et les cinq paliers existent vraiment (aucun n'est inatteignable)",
+       covered.size === 5, [...covered].join(", "));
+    ok("⚠️ « brûlant » se lit à portée de l'invite, jamais plus loin qu'un écran",
+       Q.starGreenTemp(Q.STAR_GREEN_NEAR) === "burning" && Q.starGreenTemp(60) === "icy");
+  }
+
+  /* ── 9. LE CAP. ⚠️ CONVENTION D'ÉCRAN DU PROJET : `y` croît vers le BAS, donc un
+     `dy` positif est le SUD. C'est la même que `starNerveFace`, et l'inverser
+     enverrait le joueur exactement à l'opposé — une faute qu'aucun test de « ça
+     rend une chaîne » n'attraperait. */
+  {
+    ok("⚠️⚠️ le sud est en bas (la convention d'écran du projet, pas celle des maths)",
+       Q.starGreenBearing(0, 5) === "s" && Q.starGreenBearing(0, -5) === "n"
+       && Q.starGreenBearing(5, 0) === "e" && Q.starGreenBearing(-5, 0) === "w");
+    ok("…et les diagonales tombent bien entre les deux",
+       Q.starGreenBearing(4, 4) === "se" && Q.starGreenBearing(-4, -4) === "nw"
+       && Q.starGreenBearing(4, -4) === "ne" && Q.starGreenBearing(-4, 4) === "sw");
+    const caps = new Set();
+    for (let a = 0; a < 360; a += 3) caps.add(Q.starGreenBearing(Math.cos(a * Math.PI / 180), Math.sin(a * Math.PI / 180)));
+    ok("⚠️ les huit caps sont atteignables (aucun secteur mort)", caps.size === 8, [...caps].join(" "));
+  }
+
+  /* ── 10. ⚠️⚠️⚠️ LES INDICES SONT UNE RESSOURCE PARTAGÉE, ET C'EST LA DEMANDE DE
+     GUILLAUME (« deux fois, cumulé entre les joueurs »). À deux, deux indices ne
+     doivent pas en faire quatre : la coopération AIDE, elle ne DISPENSE pas. */
+  {
+    const e = Q.newStar(); e.fall = 1000; e.townFall = 2000;
+    ok("⚠️ sans la reine, la reine ne dit rien (elle n'a pas encore parlé d'elle)",
+       Q.resolveStarHint(e, "townGreen", "j1", 3000).noQueen === true
+       && Q.starHintsUsed(e, "townGreen") === 0);
+    Q.resolveStarFound(e, "crater", "j1", 3000);
+    const a = Q.resolveStarHint(e, "townGreen", "j1", 3100);
+    const b = Q.resolveStarHint(e, "townGreen", "j2", 3200);      // l'AUTRE joueur
+    const c = Q.resolveStarHint(e, "townGreen", "j1", 3300);
+    ok("⚠️⚠️ deux indices « chaud/froid », puis elle mène — et le compte est COMMUN aux joueurs",
+       a.ok && a.tier === "temp" && b.ok && b.tier === "temp" && c.ok && c.tier === "guide",
+       `${a.tier} (j1), ${b.tier} (j2), ${c.tier} (j1)`);
+    ok("…et il annonce ce qui reste, pour que le joueur sache ce qu'il dépense",
+       a.left === Q.STAR_GREEN_HINTS - 1 && b.left === 0 && c.left === 0,
+       `${a.left}, ${b.left}, ${c.left}`);
+    ok("⚠️ une fois le guidage acquis, il le reste (redemander ne le reprend pas)",
+       Q.resolveStarHint(e, "townGreen", "j2", 3400).tier === "guide"
+       && Q.starHintsUsed(e, "townGreen") === 4);
+    /* ⚠️ LE COMPTE SURVIT À LA MIGRATION : sans ça, l'hôte re-migrant l'état deux
+       fois par seconde rendrait les deux indices à chaque tour, et personne ne
+       verrait jamais la reine mener. C'est la troncature de clé du 469, prise à
+       l'avance. */
+    ok("⚠️⚠️ le compte traverse la sauvegarde (l'hôte re-migre deux fois par seconde)",
+       Q.starHintsUsed(Q.migrateStar(JSON.parse(JSON.stringify(e))), "townGreen") === 4);
+    ok("⚠️ une sauvegarde d'avant ce lot commence avec ses deux indices",
+       Q.starHintsUsed(Q.migrateStar({ ch: 0 }), "townGreen") === 0);
+  }
+
+  /* ── 11. LA TROUVAILLE. ⚠️ MÊME CONTRAT QUE LA DISCRÈTE : l'hôte tient la règle
+     (pas avant la reine), le client tient la géométrie. ⚠️⚠️ ET ELLE NE SE GARDE
+     PAS SUR LA DISCRÈTE — Guillaume : « on peut tout à fait trouver la 6 sur le
+     chemin, et faire la 5 après la 6 », donc l'inverse doit marcher aussi. */
+  {
+    const e = Q.newStar(); e.fall = 1000; e.townFall = 2000;
+    findFarmImpacts(e, "j1", 1001);
+    ok("⚠️ pas avant la reine (c'est elle qui apprend qu'elle existe)",
+       Q.resolveStarTrack(e, "j1", 2500, "Alice").noQueen === true && !Q.starHas(e, "townGreen"));
+    Q.resolveStarFound(e, "crater", "j1", 3000);
+    const got = Q.resolveStarTrack(e, "j1", 3100, "Alice");
+    ok("⚠️⚠️ …et on peut la trouver AVANT la discrète (l'ordre n'est pas imposé)",
+       got.ok === true && Q.starHas(e, "townGreen") && !Q.starHas(e, "townShy"));
+    ok("⚠️ elle porte le nom du joueur, pas son identifiant",
+       e.found.townGreen && e.found.townGreen.by === "Alice", `${e.found.townGreen && e.found.townGreen.by}`);
+    ok("⚠️ et le geste est idempotent (double appui, rejeu de paquet)",
+       Q.resolveStarTrack(e, "j1", 3200, "Alice").ok === false);
+    ok("⚠️ une étoile trouvée ne se cherche plus (plus d'indice à demander)",
+       Q.resolveStarHint(e, "townGreen", "j1", 3300).already === true);
+    ok("⚠️⚠️ elle devient une compagne verte, comme les cinq autres",
+       Q.starFollowers(e).some(s => s.id === "townGreen" && s.color === "green"));
+  }
+
+  /* ── 12. LA JOINTURE. ⚠️ Un verbe neuf plutôt qu'un second `spot` : `STAR_VERB_SITE`
+     rend le PREMIER lieu d'un verbe, donc deux `spot` auraient fait passer la verte
+     pour la discrète dans toute jointure qui lit cette table. */
+  {
+    ok("⚠️ son verbe est `track` et il ne désigne qu'elle",
+       Q.starVerbOf("townGreen") === "track" && Q.STAR_VERB_SITE.track === "townGreen"
+       && Q.STAR_VERB_SITE.spot === "townShy");
+    ok("⚠️⚠️ elle est dans le `need` du chapitre 2 (sinon rien ne pousse à la chercher)",
+       Q.STAR_CHAPTERS[1].need.includes("townGreen"));
+    ok("⚠️ le bandeau la nomme APRÈS la discrète, jamais avant",
+       Q.STAR_CHAPTERS[1].need.indexOf("townGreen") > Q.STAR_CHAPTERS[1].need.indexOf("townShy"));
+    ok("⚠️⚠️ et le chevron ne la désigne pas (sinon il n'y a plus de chasse)",
+       Q.STAR_GOAL_TARGET.townGreen === undefined && Q.STAR_GOAL_TARGET.townGreenAway === undefined
+       && Q.STAR_GOAL_TARGET.townGreenLed === "townGreen");
+  }
+}
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ON JOUE LE RÉVEIL. C'EST LE TROISIÈME BANC DU DÉPÔT QUI JOUE UNE MÉCANIQUE.
      ╚══════════════════════════════════════════════════════════════════════════
@@ -2009,7 +2293,7 @@ section("L'objectif courant (bandeau) et le guide");
   ok("…et dès que ce client a vu l'impact, il retrouve le cratère brûlant",
      Q.starGoalKey(e, { craterHot: true, landed: true }) === "craterHot"
      && Q.starGoalKey(e, { landed: true }) === "craterFeed");
-  Q.resolveStarFound(e, "crater", "j1", 1002); findShy(e, 1002);
+  Q.resolveStarFound(e, "crater", "j1", 1002); findSisters(e, 1002);
   /* ⚠️⚠️ ZIP 454 — LA RENCONTRE ENVOIE À LA MAIRIE, ET LE BANDEAU LE DIT AVANT
      TOUT LE RESTE. C'est la consigne « le rôle des étoiles est de nous guider dans
      le projet » réduite à sa plus petite forme vérifiable : au sortir du cratère,
@@ -2111,7 +2395,15 @@ section("L'objectif courant (bandeau) et le guide");
          exactement le partage de `farmImpactLight` (chercher) contre
          `farmImpactLightPay` (rapporter) — et ce second-là, `craterFeedPay`, a
          bien une adresse : le trou. */
-      const NOWHERE = ["townWait", "townWaitThere", "engineerTravel", "engineerWork", "craterFeed"];   // 469 — les deux écoutes d'ombres sont parties ; 470 — une clé d'attente devient deux ; hors-zip — townWait se scinde en deux phrases, ni l'une ni l'autre n'a de lieu
+      /* ⚠️⚠️ 2026-09-03 (lot A3) — `townGreenAway` REJOINT LA LISTE, ET C'EST LA
+         RAISON ÉCRITE QUE CE CONTRÔLE RÉCLAME : la verte n'a AUCUNE adresse tant
+         qu'on ne l'a pas payée de deux indices. Lui en donner une (le parc, le
+         cœur de ville) aurait inventé un domaine annoncé, c'est-à-dire refait la
+         chasse de la discrète. `townGreen` et `townGreenLed`, eux, ne sont pas
+         ici : ils DÉSIGNENT le lieu `townGreen` de la table, dont la position est
+         nulle tant que la reine ne mène pas (voir `starTargetPos`) — et c'est un
+         état du jeu, pas un trou dans la table. */
+      const NOWHERE = ["townWait", "townWaitThere", "engineerTravel", "engineerWork", "craterFeed", "townGreenAway"];   // 469 — les deux écoutes d'ombres sont parties ; 470 — une clé d'attente devient deux ; hors-zip — townWait se scinde en deux phrases, ni l'une ni l'autre n'a de lieu
       const orphan = Q.STAR_GOAL_KEYS.filter(k => {
         /* ⚠️ ZIP 475 — `farmImpactTame`/`farmImpactCool` DÉSIGNENT LE MÊME
            TROU QUE `farmImpacts` (voir `starTargetSite`) : les trois clés
@@ -2134,7 +2426,7 @@ section("L'objectif courant (bandeau) et le guide");
        est la même : quand le chevron se tait, le bandeau doit parler. */
     const e3 = Q.newStar(); e3.fall = 1;
     e3.plan = { at: 1, by: "j1", done: 0 };
-    findFarmImpacts(e3, "j1", 2); Q.resolveStarTownFall(e3, 5); Q.resolveStarFound(e3, "crater", "j1", 10); findShy(e3, 10);
+    findFarmImpacts(e3, "j1", 2); Q.resolveStarTownFall(e3, 5); Q.resolveStarFound(e3, "crater", "j1", 10); findSisters(e3, 10);
     ok("⚠️ pas de chevron pendant que l'ingénieur voyage…", Q.starTargetSite(e3, {}) === null);
     ok("…mais le bandeau, lui, dit quoi faire",
        Q.starGoalKey(e3, { engineerHere: Q.starEngineerHere(e3, 10) }) === "engineerTravel");
@@ -2264,7 +2556,7 @@ section("La construction du navire (454)");
     ok("on ne demande pas d'ingénieur avant d'avoir vu l'étoile",
        Q.resolveStarPlanAsk(e, "j1", 10).tooEarly === true);
     findFarmImpacts(e, "j1", 11);
-    Q.resolveStarFound(e, "crater", "j1", 12); findShy(e, 12);
+    Q.resolveStarFound(e, "crater", "j1", 12); findSisters(e, 12);
     const r = Q.resolveStarPlanAsk(e, "j1", 20);
     ok("…et la demande annonce ses trois monnaies",
        r.ok && r.cost.gold === C.STAR_ENG_FEE_GOLD && r.cost.crops === C.STAR_ENG_FEE_CROPS

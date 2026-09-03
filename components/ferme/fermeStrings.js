@@ -303,6 +303,17 @@ const STAR_FR = {
          supprimé la seule chasse de la quête. ⚠️ PLAFOND DE 80 SIGNES. */
       townShyAway: "Une des siennes se cache à Valley Town. Prends le train.",
       townShy: "Chapeau et lunettes, entre la place et le parc. Regarde les passants.",
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ 2026-09-03 (lot A3) — LA VERTE. TROIS PHRASES, ET AUCUNE NE DIT OÙ.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️⚠️ CELLE-CI NE DONNE PAS DE DOMAINE, contrairement à `townShy` juste
+         au-dessus, et c'est la seule différence qui compte entre les deux
+         chasses : la sixième se cherche DANS un endroit annoncé, la cinquième se
+         piste. Elle dit donc le SIGNE (une plante qui bouge toute seule) et la
+         ressource (la reine, touche G), jamais un lieu. ⚠️ PLAFOND DE 80 SIGNES. */
+      townGreenAway: "La verte est restée à Valley Town. Prends le train.",
+      townGreen: "Une plante qui remue sans vent. Demande un indice à la reine (G).",
+      townGreenLed: "La reine a pris la tête. E pour l'arrêter, E pour repartir.",
       /* ⚠️ ZIP 469 — SIX OBJECTIFS SONT PARTIS AVEC LE DÉCHANT (`lean`,
          `leanAgain`, `lakeShard`, `beadShard`, `nestShard`, `belfry`, `song`).
          `STAR_GOAL_KEYS` les dérive de la table : le banc échouerait sur une clé
@@ -419,6 +430,14 @@ const STAR_FR = {
        apparaîtrait dans le bandeau sans que personne l'ait annoncée. */
     townShyAway:        "Une de mes sœurs est descendue en ville. Elle ne veut pas qu'on la voie.",
     townShy:            "Elle croit qu'un chapeau suffit à la cacher. Regarde qui ne bouge pas comme les autres.",
+    /* 2026-09-03 (lot A3) — LA VERTE, PAR LA REINE. ⚠️ ELLE DIT CE QU'ELLE SENT,
+       jamais où aller (règle du chapeau de `frame`) : le bandeau donne le signe,
+       elle donne la raison de le chercher. Sans ces phrases, la cinquième sœur
+       apparaîtrait dans le bandeau sans que personne ait dit qu'elle existe —
+       c'est ce qu'on a corrigé pour la discrète au lot A2. */
+    townGreenAway:      "La verte a pris la couleur des feuilles. Je ne la sens que de l'autre côté du rail.",
+    townGreen:          "Elle est verte, alors elle se croit invisible dans un buisson. Un buisson qui remue sans vent, c'est elle.",
+    townGreenLed:       "Je vais devant. Reste derrière moi, et regarde les plantes.",
     townWait:           "C'est de l'autre côté du rail que ça se passe maintenant.",
     townWaitThere:      "Reste près de moi. Personne ici ne me voit.",
     /* Chapitre 3 — LE CHANTIER. ⚠️ CHAQUE PHRASE RAMÈNE AU BATEAU, sans exception :
@@ -689,6 +708,35 @@ const STAR_FR = {
        disparaît » aurait été un constat d'affichage ; celle-ci est une raison, et
        c'est ce qui transforme une absence en intention. */
     hideOnly: "Elle glisse dans ton dos et s'éteint. Elle ne veut exister que pour toi.",
+    /* ╔══════════════════════════════════════════════════════════════════════════
+       ║ 2026-09-03 (lot A3) — LES INDICES DE LA REINE. C'EST ELLE QUI PARLE.
+       ╚══════════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ LA TEMPÉRATURE ET LE CAP SONT DEUX PHRASES QU'ON ASSEMBLE, et ce n'est
+       pas de la paresse : cinq températures × huit caps feraient quarante phrases
+       à écrire, à traduire et à relire — c'est-à-dire quarante occasions de se
+       tromper pour une information qui en porte deux. La reine dit ce qu'elle
+       sent, puis d'où elle le sent.
+       ⚠️ AUCUNE NE DONNE DE DISTANCE EN CASES : un nombre transformerait la piste
+       en calcul, et Guillaume a demandé « chaud froid », pas un télémètre. */
+    hintTemp: {
+      burning: "Elle est là. À portée de main, et elle ne bouge plus.",
+      hot: "Chaud. Elle est tout près — cherche une plante qui remue.",
+      warm: "Tiède. Elle est dans ce coin de la ville.",
+      cold: "Froid. Tu la cherches loin d'elle.",
+      icy: "Glacé. Tu es à l'autre bout de la ville.",
+    },
+    hintWay: { n: "vers le nord", ne: "vers le nord-est", e: "vers l'est", se: "vers le sud-est",
+               s: "vers le sud", sw: "vers le sud-ouest", w: "vers l'ouest", nw: "vers le nord-ouest" },
+    /* ⚠️ ON ASSEMBLE ICI, PAS DANS LA VUE : deux fabriques de phrase (une par
+       langue) qui vivraient dans `FermeGame.js` seraient un texte à trous rempli
+       par du code, c'est-à-dire le défaut du 481 (« Scrutin dans Lui jours »). */
+    hintSay: (temp, way) => `${temp} ${way}.`,
+    hintLeft: (n) => n > 0 ? `Il reste ${n} indice${n > 1 ? "s" : ""}.` : "C'était le dernier indice. Demande encore, et je te mènerai.",
+    hintLead: "Alors viens. Je passe devant — E pour t'arrêter, E pour repartir.",
+    hintAway: "Elle n'est pas de ce côté du rail. Descends en ville d'abord.",
+    /* ⚠️ ELLE SE TROUVE, ELLE NE SE GAGNE PAS : la phrase de la trouvaille dit
+       ce qu'on a vu (une plante qui bougeait), pas ce qu'on a réussi. */
+    greenGot: "Le buisson s'écarte tout seul. Elle était là depuis le début, verte sur vert.",
     noScarecrow: "Il te faut un épouvantail à planter. Il s'en achète un à la boutique.",
     /* ⚠️⚠️ ZIP 459 — LES DEUX PHRASES DE L'EFFORT, ET ELLES EXISTENT À CAUSE DU
        456 : *un geste continu qui ne rend rien ne se distingue pas d'un jeu
@@ -1001,6 +1049,10 @@ const STAR_FR = {
     // 2026-09-02 (lot A2) — la chasse s'arrête pour TOUT LE MONDE quand elle est
     // repérée : c'est ce qui justifie une ligne de chat (voir la note côté hôte).
     shySpotted: (who) => `${who} a démasqué la petite étoile au chapeau.`,
+    /* 2026-09-03 (lot A3) — même exception motivée que `shySpotted` : la chasse
+       s'arrête pour TOUT LE MONDE, et sans cette ligne l'autre joueur continuerait
+       de fouiller les buissons d'un quartier vide. */
+    greenTracked: (who) => `${who} a débusqué la petite étoile verte dans son buisson.`,
     tamed: (who) => `${who} a apprivoisé une petite étoile.`,
     /* ⚠️⚠️ ZIP 479 — LE SECOND JOUEUR EST NOMMÉ, ET C'EST LA MOITIÉ DU DÉFAUT
        « il ne reçoit rien » de l'audit 477. Il a tenu l'autre bord du cratère (ou
@@ -1087,6 +1139,10 @@ const STAR_FR = {
        la voir, c'est l'avoir. Elle ne s'affiche que si l'on est assez près, donc
        la lire signifie qu'on a déjà gagné la chasse. */
     shy: "E : lui dire que tu l'as reconnue",
+    /* 2026-09-03 (lot A3) — MÊME FAMILLE QUE `shy` : la lire, c'est avoir gagné.
+       Elle nomme le BUISSON et pas l'étoile, parce que c'est un buisson qu'on a
+       sous les yeux — on ne l'a pas encore vue. */
+    track: "E : écarter le feuillage",
     engineer: "E : parler à l'ingénieur",
     /* ⚠️ ZIP 478 — LA CALE. Elle nomme la TOUCHE et le GESTE (règle du 455 :
        OÙ, QUOI, COMMENT), et pas la pièce : le mini-jeu la nomme deux dixièmes de
@@ -1224,6 +1280,11 @@ const STAR_EN = {
       /* 2026-09-02 (lot A2) — see the FR block: neither line says where she is. */
       townShyAway: "One of her sisters hides in Valley Town. Take the train.",
       townShy: "Hat and sunglasses, between the square and the park. Watch the passers-by.",
+      // 2026-09-03 (lot A3) — see the French note: no district, only a sign and a
+      // resource. The green one is TRACKED, the hidden one is SPOTTED.
+      townGreenAway: "The green one stayed in Valley Town. Take the train.",
+      townGreen: "A plant stirring with no wind. Ask the queen for a hint (G).",
+      townGreenLed: "The queen leads. E to stop, E to set off again.",
       /* ⚠️ ZIP 469 — voir la note française : sept objectifs partent avec le déchant. */
       /* ⚠️⚠️ ZIP 454 — LES DEUX OBJECTIFS DE LA CONSTRUCTION. Ils suivent la même
          règle que les huit autres — OÙ et QUOI, jamais pourquoi — et ils sont plus
@@ -1287,6 +1348,10 @@ const STAR_EN = {
     /* 2026-09-02 (lot A2) — see the FR block: the queen is the one who tells you. */
     townShyAway:        "One of my sisters went down to the town. She does not want to be seen.",
     townShy:            "She thinks a hat is enough to hide her. Look for whoever does not move like the others.",
+    // 2026-09-03 (lot A3) — the queen names the sign, never the place.
+    townGreenAway:      "The green one took the colour of leaves. I only feel her past the rails.",
+    townGreen:          "She is green, so she believes a bush makes her invisible. A bush stirring with no wind is her.",
+    townGreenLed:       "I will go first. Stay behind me, and watch the plants.",
     townWait:           "It happens on the other side of the rails now.",
     townWaitThere:      "Stay close to me. Nobody here can see me.",
     /* Voir la note côté français : au chapitre 3, chaque line brings it back to
@@ -1448,6 +1513,23 @@ const STAR_EN = {
     dishCooling: "It is cooling. Pick up the pace.",
     dishCold: "The dish went cold. It did not even look up. Start again.",
     hideOnly: "It slips behind you and goes out. It only wants to exist for you.",
+    /* 2026-09-03 (lot A3) — the queen's hints. Temperature and bearing are two
+       sentences we assemble: five by eight would be forty lines to write, translate
+       and keep in step, for information that carries two facts. */
+    hintTemp: {
+      burning: "She is here. Within arm's reach, and she has stopped moving.",
+      hot: "Warm. She is very close — look for a plant that stirs.",
+      warm: "Lukewarm. She is somewhere in this part of town.",
+      cold: "Cold. You are looking far from her.",
+      icy: "Freezing. You are at the other end of town.",
+    },
+    hintWay: { n: "to the north", ne: "to the north-east", e: "to the east", se: "to the south-east",
+               s: "to the south", sw: "to the south-west", w: "to the west", nw: "to the north-west" },
+    hintSay: (temp, way) => `${temp} ${way}.`,
+    hintLeft: (n) => n > 0 ? `${n} hint${n > 1 ? "s" : ""} left.` : "That was the last hint. Ask again and I will lead you.",
+    hintLead: "Then come. I will go ahead — E to stop, E to set off again.",
+    hintAway: "She is not on this side of the rails. Go down to town first.",
+    greenGot: "The bush parts on its own. She was there all along, green on green.",
     noScarecrow: "You need a scarecrow to plant. The shop sells them.",
     /* ⚠️ ZIP 459 — voir la note en face, côté français : les deux moitiés de
        l'effort, dites pendant qu'on le fournit. */
@@ -1674,6 +1756,10 @@ const STAR_EN = {
       /* 2026-09-02 (lot A2) — il apprivoise la reine et LAISSE LA CHASSE : le geste
          de la discrète est de la trouver, donc le bouton ne la trouve pas. */
       shy: "🕶️ Queen tamed — the hidden sister is still out there",
+      /* 2026-09-03 (lot A3) — the green one needs her OWN shortcut: without it,
+         judging her hunt would mean winning the hidden one's hunt first. Queen and
+         hidden sister tamed, green one untouched, hints untouched. */
+      green: "🌿 Queen + hidden one tamed — the green one is still hiding",
     }[op] || op),
     scene: (s) => ({ warn: "🎬 The announcement", fall: "🎬 The eight farm impacts", townFall: "🎬 The Valley Town meteor", end: "🎬 The ending" }[s] || s),
     sceneLabel: "Replay a scene",
@@ -1698,6 +1784,9 @@ const STAR_EN = {
     crater: (who) => `${who} tamed the queen star.`,
     // 2026-09-02 (lot A2) — see the FR block: the hunt ends for everyone.
     shySpotted: (who) => `${who} saw through the little star in the hat.`,
+    // 2026-09-03 (lot A3) — same motivated exception as `shySpotted`: the hunt ends
+    // for everyone, so the other player must not keep searching an empty district.
+    greenTracked: (who) => `${who} flushed the little green star out of its bush.`,
     tamed: (who) => `${who} tamed a little star.`,
     /* ⚠️ ZIP 479 — voir la note française : le second joueur est nommé. */
     /* ⚠️ ZIP 479 — voir la note française : le chaudron se dit, l'offrande non. */
@@ -1741,6 +1830,9 @@ const STAR_EN = {
     wake: "E: wake her",
     // 2026-09-02 (lot A2) — see the FR block: reading it means you already won the hunt.
     shy: "E: tell her you recognised her",
+    // 2026-09-03 (lot A3) — it names the BUSH, not the star: that is what is in
+    // front of the player. She has not been seen yet.
+    track: "E: part the leaves",
     engineer: "E: talk to the shipwright",
     raise: "E: raise the piece on the slipway",
   })[k] || "E",

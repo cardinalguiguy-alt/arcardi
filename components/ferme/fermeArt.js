@@ -6502,6 +6502,19 @@ export function buildSprites() {
       orange: [["#fff2df", "#ffb765", "#d4761c", "#6b3406", "rgba(255,180,100,0.20)"],
                ["#ffe9d0", "#eda758", "#b06216", "#5a2c06", "rgba(240,165,90,0.11)"],
                ["#e0d6cc", "#b09a86", "#77644f", "#382e24", "rgba(210,190,170,0.05)"]],
+      /* ⚠️⚠️ 2026-09-03 (lot A3) — LA VERTE (verbe `track`, la cinquième sœur), ET
+         ELLE A UN PROBLÈME QUE LES CINQ AUTRES N'ONT PAS : elle se cache DANS du
+         feuillage, donc sa couleur est celle de sa cachette. Un vert franc l'aurait
+         rendue invisible même une fois trouvée, et un vert désaturé l'aurait faite
+         passer pour une étoile éteinte (l'état 2 de toutes les autres est
+         justement un gris-vert). L'écart se joue donc sur la LUMINOSITÉ, comme
+         l'orange le joue sur la saturation : un vert d'eau très clair au cœur,
+         posé sur un corps franc, là où une plante de la ville reste sombre et
+         mate. C'est la sortie « dans la VALEUR » du §8 de `CLAUDE.md`, sur le seul
+         couple de ce jeu qui partage vraiment sa teinte avec son fond. */
+      green:  [["#f2fff4", "#8bf2a8", "#2fa85e", "#0f4d2a", "rgba(120,240,160,0.20)"],
+               ["#e8fbec", "#7cd897", "#2c8d51", "#0d3f23", "rgba(110,215,145,0.11)"],
+               ["#d8e0d8", "#9aa89e", "#5e6e64", "#2c352f", "rgba(190,210,196,0.05)"]],
   };
   /* La teinte VIVE d'une couleur d'étoile (état 0, ton du corps) — ce qu'il faut
      pour peindre une compagne réduite à un point lumineux, sans son sprite.
@@ -15669,7 +15682,7 @@ house: house(),
        SILLON (454) et le navire ne sont PAS ici : ce sont des fonctions, parce
        qu'ils se peignent sur un fond déjà là (voir leur note). */
     starWisp: Array.from({ length: 3 }, (_, st) => Array.from({ length: 4 }, (_, po) => starWispSprite(po, st, "yellow"))),
-    starWispColors: Object.fromEntries(["yellow", "blue", "rose", "white", "orange"].map(color => [color,
+    starWispColors: Object.fromEntries(["yellow", "blue", "rose", "white", "orange", "green"].map(color => [color,
       Array.from({ length: 3 }, (_, st) => Array.from({ length: 4 }, (_, po) => starWispSprite(po, st, color))) ])),
     /* AUDIT 2026-08-31 — exposée pour la scène de résolution, qui peint les
        compagnes en points lumineux et n'a donc pas leur sprite. Voir la note de

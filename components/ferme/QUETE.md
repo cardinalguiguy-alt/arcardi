@@ -145,6 +145,53 @@ lieu d'une étoile qui porte un chapeau — le gag ne prenait pas.
 **Menu développeur** : bouton **« 🕶️ Queen tamed »** — il apprivoise la reine et **laisse la chasse
 entière**, puisque le geste de ce lot est justement de la trouver.
 
+### 2 quater. La cinquième sœur, « la verte » — LIVRÉE (lot A3, 2026-09-03)
+
+**Elle se cache dans les buissons de Valley Town. Le buisson qu'elle occupe remue tout seul ; la
+reine donne deux « chaud/froid », puis elle mène.**
+
+⚠️⚠️ **LA FORME DES INDICES A ÉTÉ POSÉE AVANT D'ÉCRIRE** (règle du §2 de `CLAUDE.md`, et c'est ce
+que le bloc ⏭️ REPRISE demandait). Réponses de Guillaume, mot pour mot : *« le buisson bouge tout
+seul. on peut demander des indices à la reine deux fois (cumulé entre les joueurs). Et elle répond
+par chaud froid etc. la troisième fois qu'on demande à la reine un indice, ça sera "laisser la reine
+vous guider" et elle nous dirigera automatiquement de notre position jusqu'en face du buisson qui
+bouge, par la route, on marche elle nous devance et notre perso la suit (pas besoin de contrôler)
+(l'action peut être interrompue en appuyant de nouveau sur E, puis reprise en appuyant sur E à
+l'envi) »* · *« elle change de planque mais pas trop vite. et surtout elle ne peut aller que de
+buisson en buisson et pas se téléporter d'une zone de la map à une autre. on doit voir l'animation
+de déplacement d'un buisson à l'autre. Au cas où le joueur la surprendrait ça pourrait être cool.
+En tout cas l'indicateur premier est le mouvement du buisson quand il est occupé. »*
+
+| grandeur | valeur | où |
+|---|---:|---|
+| couleur | vert (`STAR_WISP_PAL.green`) | `fermeArt.js` |
+| verbe | `track` | `STAR_VERBS` |
+| domaine | les décors mous (`tw.soft`) de `TOWN_CORE`, **dérivés**, jamais listés | `starGreenBushes`, `FermeGame.js` |
+| créneau | 75 s | `STAR_GREEN_PERIOD_MS` |
+| vol visible d'un buisson à l'autre | 1,7 s | `STAR_GREEN_MOVE_MS` |
+| portée d'un saut | 9 cases | `STAR_GREEN_HOP` |
+| indices « chaud/froid » avant le guidage | 2 | `STAR_GREEN_HINTS` |
+| portée de l'invite | 1,6 case | `STAR_GREEN_NEAR` |
+| remuement du buisson occupé | 2,6 px au sommet, bouffées de 3,4 s | `STAR_GREEN_SWAY_*` |
+
+⚠️⚠️⚠️ **CE QUI LA DISTINGUE DE LA DISCRÈTE, ET IL FAUT LE TENIR : ELLE N'A PAS DE DOMAINE ANNONCÉ.**
+La sixième se cherche DANS un endroit que le chevron désigne ; la cinquième n'a **aucune adresse**
+tant qu'on ne l'a pas payée de deux indices (`STAR_GOAL_TARGET` ne porte ni `townGreen` ni
+`townGreenAway` — seulement `townGreenLed`). Lui donner une entrée de domaine « pour aider » serait
+refaire la chasse de la sixième, et il n'en resterait qu'une des deux.
+
+⚠️⚠️ **SA MARCHE EST UN CHEMIN, PAS UN TIRAGE** — et c'est la seule chose de ce lot qu'une relecture
+ne peut pas voir, puisqu'elle porte sur la SUITE des positions. `starGreenWalk` rejoue la marche
+depuis le début sur une table d'adjacence fournie par `FermeGame.js` ; `verify-quete` la fait
+marcher 400 créneaux sur un graphe fabriqué et exige **zéro saut illégal**.
+
+⚠️ **CINQ NOMBRES SONT DE CLAUDE** (75 s, 1,7 s, 9 cases, 2 indices, 2,6 px) : comme les six du
+réveil et les trois de la scierie, **aucun ne doit bouger avant d'avoir joué** (règle du voyage en
+train, 431). Le seul qui décide vraiment de la longueur de la chasse est le créneau.
+
+**Menu développeur** : **« 🌿 Queen + hidden one tamed »** — il apprivoise la reine ET la discrète,
+et laisse la verte entière, indices compris.
+
 ### 3. Partie B — la septième sœur, prisonnière du lac maléfique
 
 **Le lac existe DÉJÀ.** `generateEvilWorld` (`fermeEngine.js:490-504`) pose un « grand lac violet
@@ -243,7 +290,7 @@ entre A et C. Les livrer après aurait donné une partie B injouable, ce qu'aucu
 |---|---|---|---|
 | A | La reine : nourrir (80 lumières) + réveiller au rythme | le geste en trois temps est-il clair, le réveil est-il agréable | ✅ **LIVRÉ 2026-09-02** |
 | A2 | **Sœur n°6, la discrète** — chapeau + lunettes, entre place centrale et parc, E pour l'apprivoiser | la trouve-t-on sans indice explicite, le déguisement amuse-t-il | ✅ **LIVRÉ 2026-09-02** |
-| A3 | **Sœur n°5** — simplifiée : la chercher, avec des indices | les indices suffisent-ils sans chevron | ❌ |
+| A3 | **Sœur n°5** — simplifiée : la chercher, avec des indices | les indices suffisent-ils sans chevron | ✅ **LIVRÉ 2026-09-03** |
 | B | La scène d'éveil 3D (procédurale ou Blender+vérifiée) | comique, lisibilité du changement gris→jaune, `render-*.mjs` avant tout jugement en jeu | ❌ |
 | C | Le lac maléfique : constantes exportées, découverte, chevron, hazard de la canne | on trouve l'étoile, on comprend le danger, sans encore pouvoir la sauver | ❌ |
 | D | La protection de la canne (chaudron) + la pêche (poissons-squelettes) | la pêche est difficile mais juste, le glow de protection se voit et se comprend | ❌ |
@@ -286,7 +333,8 @@ elles ont changé le PLAN et pas seulement le contenu — c'est signalé.
 6. **Sœur n°5 : simplifiée elle aussi.** *« SIMPLIFIEE, IL FAUT JUSTE LA CHERCHER. mais avoir des
    indices sur où elle se trouve. on peut tout à fait trouver la 6 sur le chemin, bien sûr et faire
    la 5 après la 6. »* ⚠️ La chasse spatiale du §17.5 (triangle de bornes, reflet dans l'eau) n'est
-   donc **pas** ce qu'on construit ; elle reste écrite si elle revient un jour. ❌ **NON CONSTRUITE.**
+   donc **pas** ce qu'on construit ; elle reste écrite si elle revient un jour. ✅ **LIVRÉE**
+   (lot A3) — la FORME des indices a été posée à Guillaume avant d'écrire, voir §2 quater.
 7. **« Ramener la 7ᵉ à la rive » : deux jeux, pas un.** *« le fish mini game doit être simple comme
    celui qu'on connait déjà. Mais quand on a enfin la prise sur l'étoile c'est un autre jeu qui se
    déclenche (on tire la canne par une action répétée sur la touche) invente une mécanique. »*

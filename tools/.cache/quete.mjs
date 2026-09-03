@@ -218,13 +218,33 @@ export const STAR_SITES = [
      bords, rythme). La sixième demande seulement de REGARDER — c'est-à-dire la
      seule chose qu'aucune des cinq autres ne demande. */
   { id: "townShy",   zone: "town",  spot: "starShy",    content: "star", color: "orange", verb: "spot" },
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-03 (lot A3) — LA CINQUIÈME SŒUR, « LA VERTE ». VERBE `track`.
+     ╚══════════════════════════════════════════════════════════════════════════
+     Guillaume : *« SIMPLIFIEE, IL FAUT JUSTE LA CHERCHER. mais avoir des indices
+     sur où elle se trouve »*, puis, sur sa forme : *« le buisson bouge tout seul.
+     on peut demander des indices à la reine deux fois (cumulé entre les joueurs)
+     […] la troisième fois […] "laisser la reine vous guider" »* et *« elle ne peut
+     aller que de buisson en buisson […] on doit voir l'animation de déplacement ».*
+     ⚠️⚠️ CE QUI LA SÉPARE DE LA DISCRÈTE TIENT EN UN MOT, ET C'EST LE MOT DE
+     GUILLAUME : « INDICES ». La sixième se REPÈRE à l'œil dans un domaine annoncé
+     (le chevron mène à la place, le bandeau donne le signalement) ; la cinquième se
+     PISTE — aucun domaine annoncé, aucun chevron, et trois sources de piste : le
+     buisson qui remue tout seul, deux « chaud/froid » demandés à la reine, et le
+     guidage. Un second `spot` aurait donné deux fois la même chasse, ce que
+     l'audit 479 a déjà reproché aux deux petites étoiles (« le geste était
+     paresseux, pas le texte »).
+     ⚠️ SON VERBE EST DONC NEUF : `STAR_VERB_SITE` rend le PREMIER lieu d'un verbe,
+     et deux `spot` auraient fait passer la verte pour la discrète dans toute
+     jointure qui lit cette table. */
+  { id: "townGreen", zone: "town",  spot: "starGreen",  content: "star", color: "green",  verb: "track" },
 ];
-/* Les trois verbes connus, écrits UNE fois. ⚠⚠ Une étoile sans verbe est une
+/* Les verbes connus, écrits UNE fois. ⚠⚠ Une étoile sans verbe est une
    erreur de table et non un cas à rattraper à l'exécution : `starVerbOf` rend
    `null`, `starTameTarget` ne la propose pas, et le banc le dit tout de suite.
    Un repli silencieux sur « dos tourné » aurait redonné le même geste à tout le
    monde, c'est-à-dire exactement le défaut qu'on vient de corriger. */
-export const STAR_VERBS = ["light", "warm", "pair", "lure", "spot"];
+export const STAR_VERBS = ["light", "warm", "pair", "lure", "spot", "track"];
 export function starVerbOf(id) {
   const s = STAR_SITE[id];
   return s && STAR_VERBS.includes(s.verb) ? s.verb : null;
@@ -654,7 +674,13 @@ export const STAR_CHAPTERS = [
      la reine d'abord, puisque c'est ELLE qui apprend au joueur que la discrète
      existe. Inversés, le bandeau enverrait chercher quelqu'un dont personne n'a
      encore parlé. */
-  { key: "crater", need: ["crater", "townShy"] },
+  /* 2026-09-03 (lot A3) — LA VERTE FERME LE CHAPITRE, DERRIÈRE LA DISCRÈTE.
+     ⚠️ L'ORDRE DIT CE QUE LE BANDEAU ANNONCE, PAS CE QUE LE JOUEUR DOIT FAIRE :
+     Guillaume — *« on peut tout à fait trouver la 6 sur le chemin, bien sûr, et
+     faire la 5 après la 6 »* — donc les deux résolveurs ne se gardent QUE sur la
+     reine, jamais l'un sur l'autre. Tomber sur la verte en cherchant la discrète
+     doit compter. */
+  { key: "crater", need: ["crater", "townShy", "townGreen"] },
   { key: "build",  need: [], final: true },
 ];
 export const STAR_CH_DONE = STAR_CHAPTERS.length;
@@ -2034,7 +2060,20 @@ export const STAR_GOAL_TARGET = { craterHot: "crater", craterAlone: "crater",
   farmImpactWarm: "cauldron", farmImpactSimmer: "cauldron", farmImpactTake: "cauldron",
   farmImpactLure: "cauldron",
   // 2026-09-02 (lot A2) — voir la note de `STAR_OFF_TABLE_TARGETS` : la place, pas elle.
-  townShy: "shyPlaza", townShyAway: "shyPlaza" };
+  townShy: "shyPlaza", townShyAway: "shyPlaza",
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-03 (lot A3) — LA VERTE N'A AUCUNE ADRESSE, ET C'EST TOUT LE LOT.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ `townGreen` ET `townGreenAway` NE SONT PAS DANS CETTE TABLE, VOLONTAIREMENT.
+     La discrète a un domaine annoncé (la place), donc une entrée de domaine à
+     désigner ; la verte n'en a pas — Guillaume ne lui a donné que des INDICES.
+     Une adresse quelconque (le parc, le cœur de ville) aurait été un domaine
+     inventé, c'est-à-dire la chasse de la sixième une seconde fois.
+     ⚠️ SEUL `townGreenLed` A UNE CIBLE, et c'est le mode que le joueur a payé
+     deux indices pour obtenir : là, le chevron la désigne pour de bon. Sa
+     position est résolue par `starTargetPos` (`FermeGame.js`), seul endroit qui
+     connaisse les buissons. */
+  townGreenLed: "townGreen" };
 /* ⚠️⚠️ 2026-09-02 (lot A2) — LE CHEVRON DE LA DISCRÈTE POINTE LA PLACE, PAS ELLE.
    C'est la seule décision de conception de ce lot, et elle se joue là : un chevron
    posé sur sa tête supprime la chasse — il resterait à marcher jusqu'à une flèche,
@@ -2576,6 +2615,169 @@ export function resolveStarSpot(e, who, now, name) {
 }
 
 /* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-03 (lot A3) — LA VERTE : UNE MARCHE DE BUISSON EN BUISSON, PAS UN
+   ║ TIRAGE.
+   ╚══════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ C'EST LA DIFFÉRENCE DEMANDÉE PAR GUILLAUME, ET ELLE EST STRUCTURELLE :
+   *« elle ne peut aller que de buisson en buisson et pas se téléporter d'une zone
+   de la map à une autre. on doit voir l'animation de déplacement ».* La discrète
+   TIRE sa planque à chaque créneau (`starShyPick`) — elle peut donc passer de la
+   place au parc sans traverser l'espace, ce qui est invisible parce que personne
+   ne la voit partir. Ici on la VOIT partir : un tirage indépendant se lirait comme
+   un défaut d'affichage (« elle a clignoté d'un bout à l'autre de la rue »).
+   ⚠️ DONC L'ÉTAT EST UN CHEMIN, ET UN CHEMIN NE SE DEVINE PAS D'UN CRÉNEAU : on
+   REJOUE la marche depuis le début. C'est ce qui la garde PURE — aucun état
+   diffusé, aucune position à réconcilier, exactement comme la discrète — au prix
+   d'une boucle bornée ci-dessous.
+   ⚠️⚠️ LE VOISINAGE N'EST PAS ICI. Ce fichier ne connaît pas la carte : il reçoit
+   une table d'adjacence (`neigh[i]` = les buissons atteignables depuis le i-ième)
+   que `FermeGame.js` dérive des décors mous. Même partage que la discrète — *lui
+   énumère les planques, ce fichier dit laquelle* — et c'est ce qui permet au banc
+   de la faire marcher sur un graphe fabriqué, sans générer une ville. */
+export const STAR_GREEN_PERIOD_MS = 75000;   // elle change de buisson toutes les 75 s
+export const STAR_GREEN_MOVE_MS = 1700;      // la course visible d'un buisson à l'autre
+export const STAR_GREEN_HOP = 9;             // portée d'un saut, en cases (le voisinage)
+export const STAR_GREEN_NEAR = 1.6;          // portée de l'invite — celle de la discrète
+export const STAR_GREEN_HINTS = 2;           // « chaud/froid » gratuits avant le guidage
+/* ⚠️ LA MARCHE EST BORNÉE À 2 000 PAS (≈ 41 h de créneaux), et le report se fait
+   sur une GRAINE, pas sur un saut : au-delà, on repart d'un buisson tiré depuis le
+   numéro de tranche et on ne rejoue que le reste. Sans borne, une sauvegarde
+   reprise trois jours plus tard ferait tourner cette boucle des dizaines de
+   milliers de fois PAR IMAGE. La rupture tombe une fois toutes les quarante
+   heures, sur un déplacement que personne ne regarde. */
+const GREEN_WALK_CAP = 2000;
+export function starGreenSlot(e, now) {
+  const t0 = (e && +e.townFall) || 0;
+  if (!t0) return { slot: 0, moving: false, k: 1 };
+  const d = Math.max(0, (+now || 0) - t0);
+  const slot = Math.floor(d / STAR_GREEN_PERIOD_MS);
+  const into = d - slot * STAR_GREEN_PERIOD_MS;
+  /* ⚠️ ELLE COURT AU DÉBUT DU CRÉNEAU, PAS À LA FIN : le créneau porte donc son
+     buisson d'ARRIVÉE, et « où est-elle » a une seule réponse pendant 73 des
+     75 secondes. L'inverse aurait demandé de connaître le buisson suivant pour
+     dire où elle est maintenant, c'est-à-dire un pas de plus à chaque lecture. */
+  if (slot > 0 && into < STAR_GREEN_MOVE_MS)
+    return { slot, moving: true, k: into / STAR_GREEN_MOVE_MS };
+  return { slot, moving: false, k: 1 };
+}
+/* ⚠️ MÊME HACHÉ QUE LA DISCRÈTE (`starShyPick`), pour la même raison : `slot % n`
+   la ferait passer par les buissons toujours dans le même ordre, et un joueur qui
+   a fait la quête une fois saurait où regarder. Le haché prend ici DEUX entrées
+   (le buisson courant et le créneau) — sans le buisson, deux positions différentes
+   choisiraient le même rang de voisin, ce qui est un cycle déguisé. */
+function greenPick(n, cur, slot) {
+  const c = Math.max(1, n | 0);
+  let h = ((Math.max(0, cur | 0) + 0x2f6f) ^ (Math.max(0, slot | 0) * 0x9e37 + 0x85eb)) >>> 0;
+  h = (h ^ (h >>> 15)) >>> 0;
+  h = Math.imul(h, 0x2545) >>> 0;
+  h = (h ^ (h >>> 12)) >>> 0;
+  return h % c;
+}
+/* Le buisson qu'elle occupe au créneau `slot`. Rend un INDEX dans `neigh`, ou −1
+   quand il n'y a pas de buisson du tout (carte absente chez ce client : le §4 dit
+   qu'on ACCEPTE au lieu de refuser, donc l'appelant ne la dessine simplement pas).
+   ⚠️ UN BUISSON SANS VOISIN NE LA PIÈGE PAS : elle y reste, et c'est la seule
+   réponse honnête — la faire sauter ailleurs serait la téléportation qu'on
+   s'interdit. Le banc vérifie qu'aucun buisson retenu n'est dans ce cas. */
+export function starGreenWalk(neigh, slot) {
+  const n = (neigh && neigh.length) | 0;
+  if (!n) return -1;
+  const s = Math.max(0, slot | 0);
+  const era = Math.floor(s / GREEN_WALK_CAP);
+  let cur = greenPick(n, 0x1d7b, era);                 // le buisson de départ de la tranche
+  for (let i = s - era * GREEN_WALK_CAP; i > 0; i--) {
+    const around = neigh[cur];
+    if (!around || !around.length) continue;
+    cur = around[greenPick(around.length, cur, s - i + 1)];
+  }
+  return cur;
+}
+/* ⚠️⚠️ LE BUISSON REMUE PARCE QU'ELLE EST DEDANS, ET C'EST L'INDICE PREMIER
+   (Guillaume : *« l'indicateur premier est le mouvement du buisson quand il est
+   occupé »*). Il ne peut donc pas ressembler au frisson de quelqu'un qui traverse
+   (`townBushLean`, hors-zip 2026-09-02) : celui-là COUCHE le feuillage d'un coup
+   tant qu'on est dedans, puis le laisse osciller en sortant. Celui-ci est un
+   remuement lent et RÉPÉTÉ, de faible amplitude — la plante bouge alors que
+   personne ne la touche, ce qui est très exactement l'information à donner.
+   ⚠️ IL EST UNE PURE FONCTION DU TEMPS PARTAGÉ, comme sa planque : les deux
+   clients voient le même buisson remuer au même instant, sans un octet de réseau.
+   ⚠️ ET IL S'ARRÊTE ENTRE DEUX BOUFFÉES (le `max(0,…)` sur la sinusoïde lente) :
+   un feuillage qui remuerait sans jamais se taire redeviendrait un décor animé de
+   plus, donc un décor qu'on ne regarde pas. */
+export const STAR_GREEN_SWAY_PX = 2.6;       // le sommet, en pixels — la moitié d'un pas d'humain
+export const STAR_GREEN_SWAY_MS = 420;       // la période du remuement lui-même
+export const STAR_GREEN_BREATH_MS = 3400;    // la période des bouffées : elle remue, elle se tait
+export function starGreenSway(nowMs) {
+  const t = Math.max(0, +nowMs || 0);
+  const breath = Math.sin((2 * Math.PI * t) / STAR_GREEN_BREATH_MS);
+  const gate = Math.max(0, breath);
+  return STAR_GREEN_SWAY_PX * gate * gate * Math.sin((2 * Math.PI * t) / STAR_GREEN_SWAY_MS);
+}
+
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-03 (lot A3) — LES INDICES DE LA REINE. DEUX, PUIS ELLE MÈNE.
+   ╚══════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ LE COMPTE EST PARTAGÉ, ET C'EST GUILLAUME QUI L'A DEMANDÉ : *« deux fois
+   (cumulé entre les joueurs) »*. Il ne peut donc PAS se déduire (§3 de
+   `CLAUDE.md` : ce qui se déduit ne se diffuse pas — celui-ci ne se déduit de
+   rien) et il ne peut pas être local : deux joueurs qui auraient chacun leurs deux
+   indices auraient quatre indices, c'est-à-dire une chasse deux fois plus courte à
+   deux, alors que la coopération doit AIDER sans DISPENSER (§4 de `QUETE.md`).
+   ⚠️ C'EST UN DICTIONNAIRE DE LIEUX, PAS UN COMPTEUR DE VERTE — même forme que
+   `woke` et `dug`, pour la même raison : la septième sœur se cherchera aussi, et
+   un second compteur à réconcilier est ce que le §3 interdit.
+   ⚠️⚠️ ET LE TROISIÈME INDICE N'EST PAS UN INDICE, C'EST UN MODE : l'arbitre dit
+   seulement `tier: "guide"`. Ce qu'on en fait — la reine prend la tête et le
+   fermier la suit — est un confort LOCAL, jamais diffusé (voir `starGuideRef`
+   dans `FermeGame.js`) : deux joueurs peuvent chercher chacun de leur côté. */
+export function starHintsUsed(e, id) {
+  return Math.max(0, (e && e.hints && e.hints[id]) | 0);
+}
+export function resolveStarHint(e, id, who, now) {
+  if (!e || !STAR_SITE[id]) return { ok: false };
+  if (starHas(e, id)) return { ok: false, already: true };
+  if (!starHas(e, "crater")) return { ok: false, noQueen: true };
+  if (!e.hints) e.hints = {};
+  const n = starHintsUsed(e, id) + 1;
+  e.hints[id] = n;
+  return { ok: true, n, tier: n <= STAR_GREEN_HINTS ? "temp" : "guide",
+           left: Math.max(0, STAR_GREEN_HINTS - n), by: String(who || ""), at: +now || 0 };
+}
+/* ⚠️⚠️ « CHAUD/FROID » EST UNE ÉCHELLE, PAS UN SEUIL, et les bornes sont en CASES
+   parce que c'est en cases que se mesure une marche : `warm` (18) est à peu près
+   un écran, `cold` (40) un quartier, au-delà c'est l'autre bout de la ville.
+   ⚠️ ELLE EST ICI ET PAS DANS LA VUE pour que le banc puisse vérifier qu'elle est
+   MONOTONE — un indice qui refroidirait en s'approchant serait pire que pas
+   d'indice, et c'est le genre de faute qu'une relecture ne voit pas. */
+export const STAR_GREEN_TEMPS = [[3.5, "burning"], [9, "hot"], [18, "warm"], [40, "cold"]];
+export function starGreenTemp(d) {
+  const v = Math.max(0, +d || 0);
+  for (const [lim, key] of STAR_GREEN_TEMPS) if (v <= lim) return key;
+  return "icy";
+}
+/* Le cap, en huit points. ⚠️ MÊME CONVENTION D'ÉCRAN QUE TOUT LE JEU : `y` croît
+   vers le BAS, donc `dy > 0` est le SUD (c'est déjà celle de `starNerveFace`).
+   ⚠️ HUIT ET PAS QUATRE : à quatre, « à l'est » désigne un demi-plan, ce qui ne
+   retranche rien à une carte de 224 cases de large. */
+export function starGreenBearing(dx, dy) {
+  const a = Math.atan2(+dy || 0, +dx || 0);            // 0 = est, +π/2 = sud
+  const k = ((Math.round((a * 4) / Math.PI) % 8) + 8) % 8;
+  return ["e", "se", "s", "sw", "w", "nw", "n", "ne"][k];
+}
+/* ⚠️ L'ARBITRE DE LA VERTE — MÊME CONTRAT QUE LA DISCRÈTE : le client tient la
+   géométrie (il est à côté d'elle), l'hôte tient la RÈGLE (pas avant la reine).
+   ⚠️ ET IL NE SE GARDE PAS SUR LA DISCRÈTE : Guillaume autorise explicitement de
+   les trouver dans n'importe quel ordre. */
+export function resolveStarTrack(e, who, now, name) {
+  const id = "townGreen";
+  if (starVerbOf(id) !== "track") return { ok: false };
+  if (starHas(e, id)) return { ok: false, already: true };
+  if (!starHas(e, "crater")) return { ok: false, noQueen: true };
+  const byName = name || String(who || "");
+  return { ...resolveStarFound(e, id, byName, now), site: id, opened: true };
+}
+
+/* ╔══════════════════════════════════════════════════════════════════════════
    ║ LES DEUX DÉCISIONS DU RÉVEIL, PURES — POUR QU'UN BANC PUISSE LES JOUER.
    ╚══════════════════════════════════════════════════════════════════════════
    ⚠️⚠️ ELLES VIVENT ICI ET PAS DANS `FermeGame.js`, ET C'EST LA RÈGLE DU DÉPÔT,
@@ -2768,6 +2970,11 @@ export function newStar() {
        PAS UN BOOLÉEN DE REINE : la septième sœur se réanimera du même geste, et
        une seconde carte à réconcilier est ce que le §3 de `CLAUDE.md` interdit. */
     woke: {},       // id de lieu -> { by, at } — elle a été réveillée au rythme
+    /* 2026-09-03 (lot A3) — les indices demandés à la reine, PAR LIEU et non par
+       joueur : Guillaume les veut « cumulés entre les joueurs » (voir
+       `resolveStarHint`). Un compteur par joueur aurait donné quatre indices à
+       deux, c'est-à-dire une chasse deux fois plus courte à deux. */
+    hints: {},      // id de lieu -> nombre d'indices déjà demandés (tous joueurs)
     candy: {},      // id de joueur -> bonbons rapportés depuis la chute
     /* hors-zip — LA LUEUR S'ÉTEINT POUR DE VRAI. Décision de Guillaume : la
        lumière bleue reste disponible 5 minutes après la fin du défi de fuite,
@@ -2937,6 +3144,17 @@ export function migrateStar(saved) {
       if (!STAR_SITE[id]) continue;
       const v = saved.woke[id] || {};
       e.woke[id] = { by: String(v.by || "?").slice(0, 24), at: +v.at || 0 };
+    }
+  }
+  /* 2026-09-03 (lot A3) — les indices déjà consommés. ⚠️ UNE SAUVEGARDE D'AVANT
+     CE LOT N'A PAS LE CHAMP : la chasse démarre alors avec ses deux indices, ce
+     qui est le bon comportement (elle n'avait pas commencé). Le compte est BORNÉ
+     à la lecture — un état abîmé qui porterait un milliard ne doit pas décider
+     que la reine guide pour toujours. */
+  if (saved.hints && typeof saved.hints === "object") {
+    for (const id of Object.keys(saved.hints)) {
+      if (!STAR_SITE[id]) continue;
+      e.hints[id] = Math.max(0, Math.min(99, saved.hints[id] | 0));
     }
   }
   if (saved.candy && typeof saved.candy === "object")
@@ -3322,6 +3540,15 @@ export function starGoalKey(e, ctx) {
      `townWaitThere`, signalé par Guillaume sur l'attente du cratère — un bandeau
      qui redemande un trajet déjà fait. */
   if (first === "townShy") return (ctx && ctx.inTown) ? "townShy" : "townShyAway";
+  /* 2026-09-03 (lot A3) — MÊME PARTAGE PAR ZONE POUR LA VERTE, et une TROISIÈME
+     phrase quand la reine s'est mise à mener : ce n'est plus « cherche », c'est
+     « suis-la ». Sans elle, le bandeau continuerait de demander de chercher
+     pendant que le fermier marche tout seul derrière une étoile — deux réponses à
+     « qu'est-ce que je fais », le défaut du 449. */
+  if (first === "townGreen") {
+    if (!(ctx && ctx.inTown)) return "townGreenAway";
+    return (ctx && ctx.greenGuide) ? "townGreenLed" : "townGreen";
+  }
   return first;
 }
 /* ⚠️ LA CLÉ D'UN TROU D'ÉTOILE DÉJÀ FOUILLÉ — UNE PAR ÉTAT, ET C'EST LE POINT.
@@ -3386,6 +3613,8 @@ export const STAR_GOAL_KEYS = (() => {
                                     "craterWake", "craterAlone", "engineer");
     // 2026-09-02 (lot A2) — deux états du même lieu : loin (prends le train) et sur place.
     if (s.id === "townShy") out.push("townShyAway");
+    // 2026-09-03 (lot A3) — trois états : loin, sur place, et menée par la reine.
+    if (s.id === "townGreen") out.push("townGreenAway", "townGreenLed");
   }
   /* ⚠️ ZIP 454 — les clés de la construction. Elles ne sont pas dérivées de
      `STAR_SITES` parce qu'elles ne sont pas des LIEUX : deux désignent une
@@ -4087,7 +4316,7 @@ export function resolveStarGift(e, playerIds, now) {
    de la reine) n'en a PAS besoin et c'est délibéré : il ne coûte qu'un objet à 400
    or, que le bouton « Argent » du menu dev sait déjà donner. Un bouton par geste
    aurait été un bouton de plus à tenir pour rien. */
-export const STAR_DEV_OPS = ["reset", "warn", "start", "candy", "dish", "lure", "queen", "shy", "chapter", "skip", "all", "plans", "deliver", "timber", "appt", "unslam"];
+export const STAR_DEV_OPS = ["reset", "warn", "start", "candy", "dish", "lure", "queen", "shy", "green", "chapter", "skip", "all", "plans", "deliver", "timber", "appt", "unslam"];
 /* ⚠️ ZIP 469 — `turn` (le retournement) sort de la liste : sa scène est supprimée
    dans `FermeGame`, et un bouton qui rejoue une scène qui n'existe plus ouvre un
    voile noir de sept secondes sur rien. */
@@ -4281,6 +4510,24 @@ export function devStar(e, op, now, who) {
     resolveStarTownFall(e, t);
     if (e.townFall) e.townFall = t - STAR_CRATER_COOL_MS - 1000;
     resolveStarFound(e, "crater", "\u{1F6E0}️", t);
+    return { star: e, ok: true };
+  }
+  /* ⚠️ 2026-09-03 (lot A3) — LE BOUTON DE LA VERTE, ET IL EN FAUT UN SÉPARÉ DE
+     `shy` : sans lui, juger SA chasse obligerait d'abord à gagner celle de la
+     discrète, c'est-à-dire à chercher dix minutes avant de commencer à regarder ce
+     que ce lot ajoute. Il apprivoise donc la reine ET la discrète, et laisse la
+     verte entière — indices compris (`hints` reste à zéro).
+     ⚠️ COMME `shy`, IL NE DÉPLACE PAS SA PLANQUE : elle est une pure fonction du
+     temps (`starGreenSlot`), donc « la remettre ailleurs » n'a pas de sens — on
+     attend un créneau, exactement comme le joueur. */
+  if (op === "green") {
+    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "\u{1F6E0}️" };
+    if (!e.fall) e.fall = t;
+    for (const site of STAR_FARM_IMPACTS) resolveStarFound(e, site.id, "\u{1F6E0}️", t);
+    resolveStarTownFall(e, t);
+    if (e.townFall) e.townFall = t - STAR_CRATER_COOL_MS - 1000;
+    resolveStarFound(e, "crater", "\u{1F6E0}️", t);
+    resolveStarFound(e, "townShy", "\u{1F6E0}️", t);
     return { star: e, ok: true };
   }
   if (op === "chapter") {

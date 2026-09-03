@@ -11,39 +11,49 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-⚠️⚠️ **LES LOTS A ET A2 DU MASTER PROMPT SONT LIVRÉS ET VÉRIFIÉS (hors-zip 2026-09-02).** Les sept
-questions ont été posées et tranchées avec Guillaume avant d'écrire une ligne ; les réponses ont
-REMPLACÉ les questions au §6 de `components/ferme/QUETE.md`.
-· **Lot A — la reine** : elle se nourrit (80 lumières de la course de fuite), se réveille au rythme
-  (huit battements sur un anneau qui se contracte, **sans aucun panneau** : l'interface est le
-  décor), puis le dos-à-dos déjà écrit. Détail au §2 bis de `QUETE.md`.
-· **Lot A2 — la sixième sœur, « la discrète »** : orange, mini chapeau, lunettes de soleil, cachée
-  parmi les passants entre la place et le parc. **La première CHASSE de la ville.** Détail au
-  §2 ter de `QUETE.md`. Le branchement des deux est en tête de `components/ferme/README.md`.
-`verify-quete` **694/694** (il JOUE les deux), `render-etoile` **180 contrôles**, `verify-strings`
-**1 108 clés**, `verify-vallee` **223/223**, `verify-collision` **TOUT PASSE**, `verify-maire`
-**119/119**, `verify-scierie` **34/34**, `next build` **✓ Compiled successfully**. **Aucune
-manipulation Supabase n'est nécessaire.**
+⚠️⚠️ **LES LOTS A, A2 ET A3 DU MASTER PROMPT SONT LIVRÉS ET VÉRIFIÉS (hors-zip 2026-09-03).** Les
+sept questions du §6 de `components/ferme/QUETE.md` ont toutes été posées et tranchées avant
+d'écrire ; la FORME des indices de la verte l'a été de même, avant la première ligne de code.
+· **Lot A — la reine** : elle se nourrit (80 lumières), se réveille au rythme (huit battements sur
+  un anneau qui se contracte, **sans aucun panneau** : l'interface est le décor), puis le dos-à-dos.
+  Détail au §2 bis de `QUETE.md`.
+· **Lot A2 — la sixième, « la discrète »** : orange, chapeau, lunettes, cachée parmi les passants
+  entre la place et le parc. On la REPÈRE, dans un domaine annoncé. §2 ter.
+· **Lot A3 — la cinquième, « la verte »** : cachée dans les buissons de la ville. On la PISTE — le
+  buisson occupé remue tout seul, la reine donne deux « chaud/froid » (touche G, **compte partagé
+  entre les joueurs**), et au troisième appel elle prend la tête et **le fermier la suit tout seul**
+  (E arrête, E relance). **Aucun domaine annoncé, aucun chevron** : c'est le seul mot qui la sépare
+  de la discrète. §2 quater. Le branchement des trois est en tête de `components/ferme/README.md`.
+`verify-quete` **745/745** (il fait MARCHER la verte), `render-etoile` **186 contrôles**,
+`verify-strings` **1 108 clés**, `verify-vallee` **223/223**, `verify-collision` **TOUT PASSE**,
+`verify-maire` **119/119**, `verify-scierie` **34/34**, `verify-ludo` **30/30**, `verify-taxi`
+**15/15**, `render-maire` **86/86**, `next build` **✓ Compiled successfully**. **Aucune manipulation
+Supabase n'est nécessaire.**
 
 ⚠️⚠️⚠️ **CE QUI ATTEND GUILLAUME, ET C'EST DU JUGEMENT, PAS DU CODE.** (1) **Les six nombres du
-réveil sont de Claude** (« tu jugeras ») — comme les trois nombres de la scierie, aucun ne doit
-bouger avant d'avoir joué (règle du voyage en train, 431). (2) **La chasse à la discrète** : est-ce
-qu'on la trouve en deux minutes ou en dix ? C'est le seul réglage qui ne se mesure nulle part.
-Menu dev → ⭐ Star → **👑 The queen** (décor posé, les trois gestes à jouer) et **🕶️ Queen tamed**
-(reine acquise, chasse entière).
+réveil et les cinq de la verte sont de Claude** (75 s entre deux buissons, 1,7 s de vol, 9 cases de
+saut, 2 indices, 2,6 px de remuement) — comme les trois de la scierie, aucun ne doit bouger avant
+d'avoir joué (règle du voyage en train, 431). (2) **La longueur des deux chasses** : trouve-t-on la
+discrète en deux minutes ou en dix, et la verte se laisse-t-elle pister sans les indices de la
+reine ? C'est le seul réglage qui ne se mesure nulle part. Menu dev → ⭐ Star → **👑 The queen**,
+**🕶️ Queen tamed** (chasse de la discrète entière) et **🌿 Queen + hidden one tamed** (chasse de la
+verte entière).
 
-⚠️⚠️⚠️ **ACTION SUIVANTE UNIQUE : LE LOT A3 — LA CINQUIÈME SŒUR.** Guillaume : *« SIMPLIFIEE, IL
-FAUT JUSTE LA CHERCHER. mais avoir des indices sur où elle se trouve. on peut tout à fait trouver
-la 6 sur le chemin, bien sûr et faire la 5 après la 6. »* ⚠️ **CE QUI LA DISTINGUE DE LA DISCRÈTE
-EST LE MOT « INDICES »** : la sixième se repère à l'œil dans un domaine annoncé ; la cinquième
-demande une piste à suivre. C'est donc une mécanique de plus, pas une copie — **poser la question
-de leur forme à Guillaume avant d'écrire** (§2). ⚠️ La chasse spatiale du §17.5 (triangle de bornes,
-reflet dans l'eau) est explicitement écartée par sa réponse ; elle reste écrite si elle revient.
-**A3 est sur le chemin critique** : le seuil de la septième sœur est « reine apprivoisée **et six
-étoiles trouvées** », et le compte n'y sera qu'avec elle. **Ensuite seulement** viennent les lots B
-à F (la scène d'éveil 3D, puis le lac maléfique).
+⚠️⚠️⚠️ **ACTION SUIVANTE UNIQUE : LE LOT B — LA SCÈNE D'ÉVEIL 3D DE LA REINE.** Le seuil de la
+septième sœur (« reine apprivoisée **et six étoiles trouvées** ») est **atteint depuis A3** : trois
+étoiles de ferme + la reine + la discrète + la verte = six. La partie B n'est donc plus bloquée.
+Guillaume : *« une scène d'éveil comique de l'étoile, qui passe de grisâtre et lente à jaune
+brillante et animée, avec des yeux sur l'animation quand on a réussi à tapoter en rythme »* — elle
+se déclenche quand le martèlement réussit, avant le dos-à-dos. ⚠️ **Écran dédié plein cadre**, sur
+le modèle de `MaireScene.js` / `ScierieScene.js`, jamais une animation posée dans le canevas 2D.
+⚠️⚠️ **BlenderMCP est autorisé pour cette scène** (accord du 2026-09-02) **mais la leçon du 481 est
+non négociable** : toute géométrie importée se REGARDE avant d'être déclarée livrée (rastérisée sans
+GPU sur le modèle de `tools/render-maire.mjs`, ou ouverte en vrai) — le procédural three.js a marché
+deux fois de suite (`maireBureau.js`, `scierieAtelier.js`), l'import glTF a échoué une fois.
+Détail : §2 de `QUETE.md`. **Ensuite** viennent C à F (le lac maléfique, la canne protégée, la
+pêche, la finale).
 
-⚠️ **ET CE QUI ATTENDAIT DÉJÀ, NON TOUCHÉ PAR CES DEUX LOTS**, dans l'ordre : le même buis que
+⚠️ **ET CE QUI ATTENDAIT DÉJÀ, NON TOUCHÉ PAR CES TROIS LOTS**, dans l'ordre : le même buis que
 Valley Town, pour la ferme (VF — aucun équivalent du mécanisme `TOWN_SOFT_PROPS` côté ferme, §4) ;
 la villa (`refs/grandevilladeriches.png`, même pipeline PNG que l'hôtel de ville, prompt Gemini avec
 référence, jamais d'appel API direct — §2) ; retirer `townHall2Sprite` (canevas procédural sans
@@ -378,7 +388,7 @@ dépôt.
 |---|---|
 | `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **~20 500 l.** |
 | `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** |
-| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE : table, chronologies et résolveurs purs.** ⚠️ **469 — la FOUILLE (`STAR_DIG_MS`, `starDug`, `resolveStarDig`, `starDigResult`) et TROIS chapitres au lieu de cinq.** `STAR_FARM_IMPACTS` porte les **huit** cratères (3 étoiles / 2 matières / 3 vides — compté en important le module le 2026-08-30 ; il annonçait « cinq (2/1/2) » depuis le 480 bis), `resolveStarCalm` tient le barème 60/10 s et `resolveStarTownFall` sépare le gros météore. `STAR_FOLLOWER_SITES` dérive toutes les compagnes de `content:"star"`, `starFollowerAdded` identifie celle qui doit jouer son arrivée, `starFarmFlightPath` tient le cap stable des fragments et `queen` désigne l'unique reine. `starShipProgress` joint les cinq états du plan aux commandes et à la cale sans persistance supplémentaire. ⚠️ **2026-09-02 (lot A) — LA REINE SE NOURRIT PUIS SE RÉVEILLE** : `starOfferPrice` est le SEUL endroit qui dise ce que coûte une étoile (60 pour la bleue, `STAR_QUEEN_PRICE` = 80 pour la reine), `resolveStarLight` sert désormais les deux, et `starWakeAdvance`/`starWakeStrike` portent les deux décisions du réveil au rythme — sorties de `FermeGame.js` **pour qu'un banc puisse les jouer**, comme `maire.js` et `scierie.js`. ⚠️ **2026-09-02 (lot A2) — LA SIXIÈME SŒUR, `townShy`, verbe `spot`** : `starShySlot`/`starShyPick`/`starShySits` disent OÙ elle se cache — une pure fonction du temps partagé, jamais un état diffusé (le patron du jour de marché et des élections) ; `resolveStarSpot` tient la seule règle qui compte (pas avant la reine). Aucun React, aucun dessin — `verify-quete.mjs` l'importe. |
+| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE : table, chronologies et résolveurs purs.** ⚠️ **469 — la FOUILLE (`STAR_DIG_MS`, `starDug`, `resolveStarDig`, `starDigResult`) et TROIS chapitres au lieu de cinq.** `STAR_FARM_IMPACTS` porte les **huit** cratères (3 étoiles / 2 matières / 3 vides — compté en important le module le 2026-08-30 ; il annonçait « cinq (2/1/2) » depuis le 480 bis), `resolveStarCalm` tient le barème 60/10 s et `resolveStarTownFall` sépare le gros météore. `STAR_FOLLOWER_SITES` dérive toutes les compagnes de `content:"star"`, `starFollowerAdded` identifie celle qui doit jouer son arrivée, `starFarmFlightPath` tient le cap stable des fragments et `queen` désigne l'unique reine. `starShipProgress` joint les cinq états du plan aux commandes et à la cale sans persistance supplémentaire. ⚠️ **2026-09-02 (lot A) — LA REINE SE NOURRIT PUIS SE RÉVEILLE** : `starOfferPrice` est le SEUL endroit qui dise ce que coûte une étoile (60 pour la bleue, `STAR_QUEEN_PRICE` = 80 pour la reine), `resolveStarLight` sert désormais les deux, et `starWakeAdvance`/`starWakeStrike` portent les deux décisions du réveil au rythme — sorties de `FermeGame.js` **pour qu'un banc puisse les jouer**, comme `maire.js` et `scierie.js`. ⚠️ **2026-09-02 (lot A2) — LA SIXIÈME SŒUR, `townShy`, verbe `spot`** : `starShySlot`/`starShyPick`/`starShySits` disent OÙ elle se cache — une pure fonction du temps partagé, jamais un état diffusé (le patron du jour de marché et des élections) ; `resolveStarSpot` tient la seule règle qui compte (pas avant la reine). ⚠️⚠️ **2026-09-03 (lot A3) — LA CINQUIÈME, `townGreen`, verbe `track`** : `starGreenWalk` la fait MARCHER de buisson en buisson sur une table d'adjacence que `FermeGame.js` lui passe (elle ne se téléporte jamais, et ce fichier ne connaît toujours pas la carte), `starGreenSlot` sépare le vol du repos, `starGreenSway` fait remuer le buisson occupé, `resolveStarHint` tient le compte d'indices **partagé entre les joueurs**, `starGreenTemp`/`starGreenBearing` traduisent une distance en « chaud/froid » et en cap. Aucun React, aucun dessin — `verify-quete.mjs` l'importe et la fait marcher quatre cents créneaux. |
 | `components/ferme/maire.js` | **L'AUDIENCE CHEZ LE MAIRE (480) : la table des battements et les résolveurs purs.** Douze nœuds, cinq actes, cinq familles d'argument, la jauge d'adhésion qui FUIT, l'élan, la rejouabilité côté hôte (`mayorReplay` : le client envoie sa TRANSCRIPTION, l'hôte la rejoue). Aucun React, aucun dessin — `verify-maire.mjs` l'importe. ⚠️ **C'est un système de NÉGOCIATION, pas une scène** : la confiance gagnée sert les audiences futures, donc une commission ou le cadastre s'y ajouteront en une table de plus. |
 | `components/ferme/MaireScene.js` | **la VUE de l'audience — le seul morceau de 3D du monde partagé.** Écran PLEIN, à la PREMIÈRE PERSONNE, caméra libre dans la pièce, bulles projetées, réponses en jaune, **mode spectateur** (`MayorWatch`), repli plat si WebGL manque. ⚠️ Il porte `mayorCtxOf`, **la fonction de contexte que le CLIENT et l'HÔTE appellent tous les deux** : leur accord est une propriété du code, pas une coïncidence. |
 | `components/ferme/scierie.js` | **LA SCIE DE TRISTAN (lot E) : la simulation pure, à PAS FIXE.** Une lame qui a de l'inertie, un partenaire qui RÉPOND au lieu de mener, un mou qui referme la fenêtre parfaite, une contrainte qui fend la planche. ⚠️ **Aucune fonction transcendante dans le chemin de simulation** (`sin`/`pow`/`random` sont laissés à l'implémentation par la norme) : le hasard passe par un hachage entier, ce qui rend la manche rejouable **au bit près** par l'hôte à partir d'une liste de numéros de pas. Aucun React, aucun dessin — `verify-scierie.mjs` en joue des centaines. ⚠️ `sawPull(s, side)` est déjà symétrique : la seconde poignée du §17.6 s'ajoutera sans rouvrir la mécanique. |
@@ -481,7 +491,11 @@ anneau est ROUGE et qu'un rouge a lui aussi du rouge en excès. La mesure aurait
 dessin où les deux retours se confondent — c'est-à-dire le seul défaut qui comptait. *Avant de
 mesurer, il faut nommer ce qui SÉPARE vraiment les deux cas* : ici le rouge FRANC (rouge moins
 **vert**), que rien d'autre dans ce dessin ne porte. Même famille que l'écart-type ci-dessus : une
-statistique juste sur une grandeur mal choisie est une statistique fausse.
+statistique juste sur une grandeur mal choisie est une statistique fausse. ⚠️ **REPAYÉE LE
+2026-09-03**, sur l'étoile verte : pour prouver qu'elle ne se confond pas avec une étoile ÉTEINTE,
+la LUMINANCE ne dit rien (196 contre 176 — le cœur de l'état éteint est un gris très pâle) ; ce qui
+les sépare est le vert FRANC (94 contre 12). Deux fois de suite, la grandeur évidente était la
+mauvaise.
 
 ⚠️⚠️ **LA LEÇON LA PLUS COÛTEUSE, ET ELLE EST GÉNÉRALE : un paramètre qui DOUBLE un autre
 paramètre est une divergence en attente. Il doit être DÉRIVÉ, jamais réglé.**
@@ -583,13 +597,18 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 
 ⚠️⚠️ **LES BANCS SONT DANS `tools/README.md` DEPUIS LE 432, ET CE CHAPITRE A ÉTÉ ÉLAGUÉ AU 444
 SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 442** (reporté deux fois). **20 bancs de contrôle et 22 bancs
-de rendu**, comptés en listant `tools/`. **TOUS RELANCÉS LE 2026-09-02 (lot A)** :
-`verify-quete` **694/694**, `verify-maire` **119/119**, `verify-vallee` **223/223**,
+de rendu**, comptés en listant `tools/`. **TOUS RELANCÉS LE 2026-09-03 (lot A3)** :
+`verify-quete` **745/745**, `verify-maire` **119/119**, `verify-vallee` **223/223**,
 `verify-collision` **TOUT PASSE** (30 contrôles), `verify-strings` **1 108 clés appariées**,
 `verify-scierie` **34/34**, `verify-ludo` **30/30**, `verify-taxi` **15/15**,
-`render-maire` **86/86**, `render-etoile` **180 contrôles** — et **vingt bancs de rendu sur
-vingt-deux** seulement s'exécutent (voir l'entrée dédiée plus bas : `render-eau` et `render-parc`,
-relancés un par un ce jour-là, sont cassés depuis avant cette livraison).
+`render-maire` **86/86**, `render-etoile` **186 contrôles** — et **vingt bancs de rendu sur
+vingt-deux** seulement s'exécutent (voir l'entrée dédiée plus bas : `render-eau` et `render-parc`
+sont cassés depuis avant cette livraison).
+⚠️ **`verify-strings` NE COMPTE PAS LES CLÉS DE LA QUÊTE** dans son 1 108 : sa parité de clés ne lit
+que les tables `fr:`/`en:` indentées à quatre espaces, et `STAR_FR`/`STAR_EN` vivent hors de cette
+plage. Son SECOND contrôle, lui (« aucune section identique dans les deux langues »), importe le
+vrai module et les voit. *Le nombre ne bouge donc pas quand la quête gagne du texte — ce n'est pas
+un banc qui rétrécit, c'est un banc qui ne regarde pas là.*
 ⚠️ *`verify-quete` était à 488 au 468 : le déchant a retiré les contrôles des quatre chapitres
 supprimés et en a ajouté une trentaine sur la fouille. **Un banc qui rétrécit parce que le code
 rétrécit est un banc en bonne santé** — ce qu'il ne faut pas, c'est qu'il rétrécisse tout seul.*
@@ -639,6 +658,14 @@ Les `ok(...)` du dépôt ne prennent pas tous leurs paramètres dans le même or
 écrits dans le mauvais ordre ont passé au vert **en imprimant `OK true`** : la condition partait dans
 la case du NOM (donc jamais évaluée) et le nom dans celle de la condition (une chaîne, donc toujours
 vraie). Ils ne pouvaient pas échouer, et rien ne les distinguait des autres dans un compte qui monte.
+⚠️⚠️⚠️ **ET UN TROISIÈME VISAGE, TROUVÉ LE 2026-09-03 : UN BANC PEUT EXIGER D'UN CADET CE QUE SES
+AÎNÉS NE FONT PAS.** Trois mesures neuves ont rougi sur un dessin JUSTE, et la plus instructive
+exigeait « aucun pixel sur le bord du canevas » d'une nouvelle étoile — alors que les SIX couleurs
+en posent exactement douze depuis toujours (le halo commun). Exiger zéro, ce n'était pas mesurer un
+défaut, c'était rejuger à l'occasion du cadet un choix accepté par cinq aînés. ⚠️ **La prise juste
+est alors une COMPARAISON, jamais un seuil** : le nouveau venu doit se comporter *comme ses frères*,
+ce qui attrape ce qui casserait vraiment (une palette qui déborde, un canevas changé pour lui seul)
+sans rien exiger de neuf du dessin commun.
 ⚠️ **LA PARADE N'EST PAS DE RELIRE, C'EST DE FALSIFIER : on casse exprès la règle que le banc
 prétend tenir, et on exige de le voir ROUGIR avant de le croire.** C'est ce qui a prouvé que la
 pénalité du réveil sert vraiment à quelque chose (sans elle, le martèlement gagne en 6 s) — et c'est
@@ -853,7 +880,11 @@ premier.
    mécanisme marche, le RESSENTI à deux (l'ambiance, ce qui se voit, ce qui manque encore) n'a
    toujours pas été jugé par une vraie séance de jeu — c'est cette moitié-là qui reste le socle des
    décisions sociales à venir (mariage, densification, relations résident-résident, transport du
-   bois).
+   bois). ⚠️ **Deux pièges de la manip, payés en 2026-08 :** le faux Supabase ne persiste rien,
+   donc *peupler EN PREMIER et ne plus recharger* (un rechargement repart d'une ferme neuve) ; et
+   les trois séances à deux clients faites jusqu'ici l'ont été sur une ferme VIDE, ce qui ne dit
+   rien des vingt résidents. **Les bancs mesurent la simulation de l'hôte, jamais ce que voit
+   l'invité.**
 2. **Les cinq mini-jeux de la quête de l'étoile**, joués jusqu'à la victoire, à cadence réelle.
 3. **La moitié « face à face » de la quête** : l'étoile timide dos à dos, le croisement d'ombres
    à deux, la flaque du ponton, le duo orgue/beffroi. ⚠️ Pas testable seul, dépend du n°1.
@@ -1095,17 +1126,6 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
   « très cher » veut dire « on économise pour » ou « on n'y va jamais ».
 - **`candyluge`** : voir `public/candyluge/README.md`, qui fait autorité. La décision qui
   manque est de CONCEPTION (le bonbon empoisonné), pas de technique.
-- **Gels de PNJ chez l'invité** (359-365) : encore observés ? Vérification demandée depuis le
-  419 — session réelle à 2, **ferme PEUPLÉE**, console de l'hôte ouverte. ⚠️⚠️ **C'EST TOUJOURS
-  LA PASSE LA PLUS URGENTE DE CE FICHIER**, et aucune des six séances à deux clients (432, 442,
-  458) ne l'a faite : elles ont validé des chaînes réseau sur une ferme VIDE, ce qui ne dit rien
-  des vingt résidents. ⚠️ **Le 458 est passé à côté pour une raison bête et réparable** : le faux
-  Supabase ne persiste pas l'état, donc chaque rechargement repartait d'une ferme neuve — peupler
-  puis recharger efface le peuplement. *Peupler EN PREMIER, et ne plus recharger.* ⚠️ **L'EXCUSE TECHNIQUE EST TOMBÉE POUR DE BON AU 432** : `fake-supabase.mjs`
-  fait tourner deux clients en local (§10), et la première séance a immédiatement trouvé trois
-  défauts du multijoueur de la VILLE. Ce qui n'a jamais été vu à deux : les vingt résidents que le
-  428 fait circuler, et le champ d'assise qu'il diffuse. **Les bancs mesurent la simulation de
-  l'hôte, jamais ce que voit l'invité.**
 - **`crystal`** : le chapitre a **deux** segments jouables (`play run` et `play walk`).
   Retirer le second retire le seul endroit où l'on ramasse des éclats.
 - ⚠️ **VERCEL NE DÉPLOIE PLUS AUTOMATIQUEMENT depuis le 425**, et **ce n'est pas le dépôt** :

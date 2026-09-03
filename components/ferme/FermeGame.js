@@ -1268,6 +1268,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // manuel de Guillaume.
   const starForcedByQuestRef = useRef(false);
   const starGuidePathRef = useRef({ at: 0, key: "", path: null });
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-03 (lot A3) — LA REINE QUI MÈNE POUR DE BON, ET LES PIEDS SUIVENT.
+     ╚══════════════════════════════════════════════════════════════════════════
+     Guillaume : *« la troisième fois qu'on demande à la reine un indice, ça sera
+     "laisser la reine vous guider" : elle nous dirigera automatiquement de notre
+     position jusqu'en face du buisson qui bouge, par la route ; on marche, elle
+     nous devance et notre perso la suit (pas besoin de contrôler). L'action peut
+     être interrompue en appuyant de nouveau sur E, puis reprise en appuyant sur E
+     à l'envi. »*
+     ⚠️⚠️ DEUX DRAPEAUX ET PAS UN, PARCE QUE CE SONT DEUX CHOSES : `on` dit que ce
+     joueur a demandé le guidage (donc la reine a une cible et le chevron aussi),
+     `walk` dit que ses PIEDS suivent en ce moment. E bascule le second sans
+     toucher au premier — sinon « je m'arrête pour regarder » annulerait le
+     guidage, et il faudrait redemander un indice pour le retrouver.
+     ⚠️ LOCAL, JAMAIS DIFFUSÉ, comme tout `starGuideRef` : ce que le réseau porte
+     est le COMPTE d'indices (partagé, arbitré), pas le confort de chacun. */
+  const starGreenGuideRef = useRef({ on: false, walk: false });
   /* hors-zip — LE FOCUS PERSONNEL DU CHAPITRE 1. Demande de Guillaume : à
      plusieurs, chacun doit pouvoir viser un impact DIFFÉRENT plutôt que de
      suivre tous le même chevron figé sur le premier trou de la table. On
@@ -3460,7 +3477,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        des résolveurs le tient. */
     if (req.kind === "starLight" || req.kind === "starCook" || req.kind === "starDishTake"
      || req.kind === "starDishPass" || req.kind === "starDishGive" || req.kind === "starEffigy"
-     || req.kind === "starWake" || req.kind === "starSpot") {
+     || req.kind === "starWake" || req.kind === "starSpot"
+     || req.kind === "starTrack" || req.kind === "starHint") {
       const s3 = sharedRef.current;
       const e = (s3.star = Q.migrateStar(s3.star));
       const now = Date.now();
@@ -3499,6 +3517,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            aussi au milieu des champs de la ferme. La règle, elle, est dans
            `resolveStarSpot` : on ne la trouve pas avant la reine. */
         if (req.pz === "town") r = Q.resolveStarSpot(e, f.id, now, who);
+      } else if (req.kind === "starTrack") {
+        /* ⚠️ 2026-09-03 (lot A3) — LA ZONE AVANT TOUT (§4, le piège des deux
+           cartes) : elle se cache dans les buissons de VALLEY TOWN, et un massif de
+           la ferme tombe aux mêmes coordonnées. La règle est dans
+           `resolveStarTrack` : pas avant la reine. */
+        if (req.pz === "town") r = Q.resolveStarTrack(e, f.id, now, who);
+        if (r.ok) out.toast = { id: f.id, key: "starGreenGot" };
+      } else if (req.kind === "starHint") {
+        /* ╔══════════════════════════════════════════════════════════════════════
+           ║ 2026-09-03 (lot A3) — L'INDICE : L'HÔTE COMPTE, LE CLIENT MESURE.
+           ╚══════════════════════════════════════════════════════════════════════
+           ⚠️⚠️ C'EST LE MÊME PARTAGE QUE PARTOUT DANS CETTE QUÊTE, et il est ici
+           obligatoire plutôt que confortable : le COMPTE est une ressource partagée
+           (« deux fois, cumulé entre les joueurs », Guillaume), donc il ne peut
+           être tenu que par l'arbitre ; la TEMPÉRATURE, elle, dépend de l'endroit
+           où se tient le demandeur, que l'hôte ne connaît pas mieux que lui. Faire
+           calculer le chaud/froid par l'hôte aurait demandé de lui envoyer une
+           position — c'est-à-dire de rendre discutable ce qui ne l'est pas.
+           ⚠️ ET LE REFUS DE ZONE NE CONSOMME RIEN : un joueur qui demande depuis la
+           ferme s'entendrait répondre « glacé » et aurait payé un indice pour
+           apprendre qu'il n'est pas dans la bonne ville. */
+        if (req.pz === "town") r = Q.resolveStarHint(e, "townGreen", f.id, now);
+        if (r.ok) out.toast = { id: f.id, key: "starHint", n: { n: r.n | 0, left: r.left | 0, tier: r.tier } };
       } else if (req.kind === "starWake") {
         /* ╔══════════════════════════════════════════════════════════════════════
            ║ 2026-09-02 (lot A) — LE RÉVEIL AU RYTHME. UNE SEULE `req`, À LA FIN.
@@ -3564,6 +3605,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          Sans cette ligne, un joueur continuerait de fouiller la place en cherchant
          quelqu'un que son coéquipier vient de trouver. */
       if (req.kind === "starSpot") broadcastChat("🕶️", L.star.chat.shySpotted(who));
+      // 2026-09-03 (lot A3) — même raison que la ligne du dessus : la chasse
+      // s'arrête pour tout le monde, l'autre joueur doit cesser de fouiller.
+      if (req.kind === "starTrack") broadcastChat("\u{1F33F}", L.star.chat.greenTracked(who));
       if ((r.crossed || []).length) {
         const nowCh = Q.STAR_CHAPTERS[Math.min(e.ch, Q.STAR_CH_DONE - 1)];
         broadcastChat("\u{1F4D6}", L.star.chat.chapter(L.star.chapter[nowCh.key] || nowCh.key));
@@ -7270,6 +7314,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // Sert au "ban de spectacle" (départ en trombe / clash) — voir
     // broadcastGlobalToast plus bas.
     if (p.toast && (p.toast.broadcast || p.toast.id === me.id)) pushToast(toastMsg(p.toast.key, p.toast.petId != null ? p.toast.petId : p.toast.n));
+    /* ⚠️⚠️ 2026-09-03 (lot A3) — LE TROISIÈME INDICE ARME LE GUIDAGE, ET C'EST ICI
+       QUE ÇA SE PASSE : le mode est LOCAL (§3 — deux joueurs cherchent chacun de
+       leur côté), mais son droit vient de l'ARBITRE, qui seul tient le compte
+       partagé. Armer le mode au moment d'ENVOYER la requête aurait donné le
+       guidage à un joueur que l'hôte s'apprête à refuser (déjà trouvée, pas de
+       reine) — c'est le défaut « le client annonce le succès avant le verdict »,
+       payé hors-zip sur l'offrande de lumière. */
+    if (p.toast && p.toast.id === me.id && p.toast.key === "starHint"
+        && p.toast.n && p.toast.n.tier === "guide") starGreenLead();
     // Zip 252 : cadeau animal en attente mais sac plein -> ouvre le choix.
     if (p.petChoice && p.petChoice.id === me.id) setPetChoice({ petId: p.petChoice.petId, full: !!p.petChoice.full, rid: p.petChoice.rid });
     if (p.chat) addChat(p.chat.from, p.chat.msg);
@@ -7542,6 +7595,34 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        en se retournant tout de suite, il lui reste un réveil. */
     if (key === "starQueenFed") return L.star.s2.queenFed;
     if (key === "starWokeHer") return L.star.s2.wokeHer;
+    if (key === "starGreenGot") return L.star.s2.greenGot;
+    /* ╔══════════════════════════════════════════════════════════════════════════
+       ║ 2026-09-03 (lot A3) — L'INDICE SE COMPOSE ICI, CHEZ CELUI QUI L'A DEMANDÉ.
+       ╚══════════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ L'HÔTE N'ENVOIE QUE DES NOMBRES (le rang, ce qui reste, le palier) — la
+       température et le cap se calculent CHEZ LE DEMANDEUR, parce qu'ils dépendent
+       de l'endroit où IL se tient et que c'est lui qui doit lire la phrase dans SA
+       langue. C'est la contrainte de bilinguisme du projet, la même qui interdit de
+       faire voyager un nom de décoration formaté (voir `decorSold` plus haut).
+       ⚠️ SANS ÉTOILE À MESURER (elle vient d'être trouvée par l'autre joueur entre
+       la requête et la réponse), on rend le palier le plus froid plutôt que rien :
+       un indice payé qui n'afficherait aucune phrase se lirait comme une touche
+       cassée — et le cas est rare mais parfaitement atteignable à deux. */
+    /* ⚠️⚠️ LES CHEMINS SONT ÉCRITS EN ENTIER (`L.star.s2.hintTemp[…]`) ET NON PAR
+       UN ALIAS, ET CE N'EST PAS DU STYLE : `verify-quete` cherche `L.star.…` dans
+       le SOURCE pour déclarer mortes les phrases que personne n'affiche. Un
+       `const S2 = L.star.s2` aurait rendu ces treize phrases invisibles pour lui —
+       c'est le défaut inverse de celui du 2026-09-02 (« un banc qui cherche un nom
+       d'appel mesure une écriture »), pris du côté de la vue. */
+    if (key === "starHint") {
+      const t = n || {};
+      if (t.tier === "guide") return L.star.s2.hintLead;
+      const gp = starGreenPos(), me2 = meRef.current;
+      if (!gp || !me2) return L.star.s2.hintTemp.icy;
+      const temp = L.star.s2.hintTemp[Q.starGreenTemp(Math.hypot(me2.x - gp.x, me2.y - gp.y))] || L.star.s2.hintTemp.icy;
+      const way = L.star.s2.hintWay[Q.starGreenBearing(gp.x - me2.x, gp.y - me2.y)] || "";
+      return L.star.s2.hintSay(temp, way) + " " + L.star.s2.hintLeft(t.left | 0);
+    }
     if (key === "starNoScarecrow") return L.star.s2.noScarecrow;
     if (key === "starNoTristan") return L.star.plan.noTristan;
     /* ⚠️ LOT E — L'HÔTE A REJOUÉ LA MANCHE ET NE L'A PAS VUE FINIR. Il DOIT le
@@ -14356,7 +14437,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          maintenir la touche ne doit pas faire clignoter la reine.
          ⚠️ ET IL NE DONNE RIEN — c'est une aide à s'orienter, pas une trouvaille.
          Tout ce qu'il déplace est un point de rendez-vous. */
-      if (e.code === "KeyG" && !e.repeat) starGuideToggle();
+      /* ⚠️⚠️ 2026-09-03 (lot A3) — QUAND LA VERTE EST L'OBJECTIF, G DEMANDE UN
+         INDICE AU LIEU D'ALLUMER LE GUIDE, et c'est la même touche exprès : le
+         joueur a déjà appris que G veut dire « reine, aide-moi ». Une septième
+         touche pour une aide de plus, c'est une touche à apprendre pour une chasse
+         qui dure dix minutes. L'escalade est dans la RÉPONSE (chaud/froid, puis
+         chaud/froid, puis elle mène), jamais dans le geste.
+         ⚠️ `starGuideToggle` reste intact pour tout le reste de la quête : cette
+         branche ne s'ouvre que sur l'objectif de la verte, et seulement tant qu'elle
+         n'est pas trouvée (`starGoalKey` cesse alors de rendre `townGreen*`). */
+      if (e.code === "KeyG" && !e.repeat) {
+        const gk = Q.starGoalKey(sharedRef.current.star, starGoalCtx());
+        if (gk === "townGreen" || gk === "townGreenAway" || gk === "townGreenLed") starGreenAsk();
+        else starGuideToggle();
+      }
       /* ⚠️ ZIP 454 — P COMME PLAN. Il n'ouvre rien tant que Kerguélen n'a pas
          rendu son travail : une touche qui répond « tu n'as pas de plan » à chaque
          appui serait un rappel permanent de ce qu'on n'a pas. Elle ne dit rien —
@@ -17369,12 +17463,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     /* Le décalage du SOMMET du sprite, en pixels, à l'instant `now`. Zéro quand
        la case n'a jamais été touchée ou que le ressort est retombé. */
     function townBushLean(i, now) {
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ 2026-09-03 (lot A3) — LE BUISSON OCCUPÉ REMUE TOUT SEUL.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️⚠️ C'EST L'INDICE PREMIER DE LA CHASSE (Guillaume), ET IL PASSE PAR CETTE
+         FONCTION PLUTÔT QUE PAR UN SECOND EFFET : le penchant du sommet est déjà
+         la seule grandeur que la boucle de dessin lit sur un décor mou (voir son
+         cisaillement ancré au pied). Un effet parallèle aurait demandé un second
+         `save`/`restore` et une seconde convention d'ancrage, donc deux façons de
+         faire pencher la même plante.
+         ⚠️⚠️ ET IL S'AJOUTE AU FRISSON DU PASSAGE, IL NE LE REMPLACE PAS : marcher
+         dans SON buisson doit se sentir comme dans les autres, sinon la chasse se
+         gagnerait à la semelle plutôt qu'à l'œil.
+         ⚠️ PENDANT SON VOL, LE BUISSON SE TAIT (`moving`) : elle n'est plus dedans.
+         C'est ce qui donne au départ et à l'arrivée une lecture — un couvert qui
+         s'arrête de bouger est une piste, à condition qu'il puisse s'arrêter. */
+      /* ⚠️⚠️ IL LIT `Date.now()`, PAS LE `now` DE LA BOUCLE. Celui-ci vient de
+         `performance.now()`, qui compte depuis le CHARGEMENT DE LA PAGE : deux
+         joueurs devant le même buisson l'auraient vu remuer en désaccord de phase,
+         chacun le sien. L'horloge murale les remet d'accord sans un octet de réseau,
+         comme la planque elle-même. ⚠️ Et elle n'est lue QUE pour la case occupée
+         (le ternaire court-circuite) : une fois par image, pas deux cent
+         quatre-vingt-trois. */
+      const star = starGreenTileNow() === i ? Q.starGreenSway(Date.now()) : 0;
       const e = bushSwayRef.current.get(i);
-      if (!e) return 0;
+      if (!e) return star;
       const age = now - e.last;
       const k = Math.exp(-age / C.TOWN_BUSH_SWAY_FADE_MS);
-      if (k < 0.01) { bushSwayRef.current.delete(i); return 0; }
-      return C.TOWN_BUSH_SWAY_PX * e.dir * k * Math.cos((2 * Math.PI * age) / C.TOWN_BUSH_SWAY_MS);
+      if (k < 0.01) { bushSwayRef.current.delete(i); return star; }
+      return star + C.TOWN_BUSH_SWAY_PX * e.dir * k * Math.cos((2 * Math.PI * age) / C.TOWN_BUSH_SWAY_MS);
     }
     /* L'altitude sous un point (425). Hors carte : 0 — c'est le niveau de la
        rue, donc le choix qui ne crée pas de falaise fantôme au bord du monde. */
@@ -17676,6 +17793,36 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          se retrouverait debout à côté du banc sans comprendre pourquoi. */
       if (m.sitOn && (dx || dy)) { standUpTown(); return; }
       if (m.sitOn) { m.moving = false; m.animT = 0; m.vx = 0; m.vy = 0; maybeSendPos(); return; }
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ 2026-09-03 (lot A3) — LA REINE DEVANT, LES PIEDS DERRIÈRE.
+         ╚══════════════════════════════════════════════════════════════════════
+         Guillaume : *« on marche, elle nous devance et notre perso la suit (pas
+         besoin de contrôler) ».*
+         ⚠️⚠️ L'AUTO-MARCHE N'EST QU'UNE PAIRE DE TOUCHES SIMULÉE, ET C'EST TOUT LE
+         SOIN DE CE BLOC : elle écrit `dx`/`dy` et laisse le pas ORDINAIRE faire le
+         reste, avec sa collision, sa pente de cratère, son ralentissement de
+         buisson et son envoi de position. Un déplacement écrit à côté (« je pose
+         m.x, m.y ») aurait été un second chemin de marche à garder d'accord avec le
+         premier — la divergence en attente du §8 — et surtout un pas que l'hôte ne
+         peut pas rejouer.
+         ⚠️ ON SUIT LE POINT QUE LA REINE OCCUPE (`starGuideAim`, un point du chemin
+         A* déjà calculé pour elle), jamais le buisson en ligne droite : c'est ce
+         qui fait passer « par la route », comme demandé, et c'est gratuit puisque ce
+         point existait déjà pour la dessiner.
+         ⚠️⚠️ ET LA MOINDRE TOUCHE REPREND LA MAIN : on ne se bat pas avec le
+         pilote, on le lâche. Reprendre se fait avec E, comme l'arrêter (le mode,
+         lui, reste armé). */
+      if (!dx && !dy && starGreenWalking() && !uiBlocked) {
+        const aim = starGuideAim("town", m.x, m.y);
+        if (aim) {
+          const ax = aim.x - m.x, ay = aim.y - m.y, ad = Math.hypot(ax, ay);
+          /* Sous une demi-case, on ne pousse plus : sinon le fermier vibrerait
+             autour d'un point que la reine tient à distance constante. */
+          if (ad > 0.5) { dx = ax / ad; dy = ay / ad; }
+        }
+      } else if ((dx || dy) && starGreenWalking()) {
+        starGreenGuideRef.current.walk = false;
+      }
       const moving = (dx || dy) && actAnimRef.current <= 0;
       if (moving) starInputAtRef.current = performance.now();
       /* ⚠️ ZIP 458 — LA PENTE SE LIT UNE FOIS PAR IMAGE, AVANT LE PAS, et elle
@@ -19574,6 +19721,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           pushE((shy.y + 1) * T, se, () => drawStarShyHidden(shy), sl);
         }
       }
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ 2026-09-03 (lot A3) — LA VERTE, ET ON NE LA VOIT QUE QUAND ELLE COURT.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️⚠️⚠️ DANS SON BUISSON, ON NE DESSINE RIEN. C'est la décision de ce lot,
+         et elle est plus radicale que le « pas de halo » de la discrète : celle-ci
+         n'a aucun pixel à elle tant qu'elle est couverte. Ce que le joueur voit est
+         le FEUILLAGE QUI REMUE (`townBushLean`), c'est-à-dire l'indice que
+         Guillaume a demandé — un bout d'étoile qui dépasserait la donnerait au
+         premier coup d'œil et la chasse n'existerait plus.
+         ⚠️⚠️ ELLE N'EST DONC VISIBLE QUE PENDANT SON VOL, une seconde et demie
+         toutes les soixante-quinze : *« au cas où le joueur la surprendrait, ça
+         pourrait être cool »*. C'est la récompense de qui regarde au bon moment, et
+         c'est aussi ce qui prouve au joueur que sa proie existe. */
+      if (!inCar) {
+        const gp = starGreenPos();
+        if (gp && gp.moving) {
+          const ge = elevTown(tw, gp.x, gp.y), gl = archPxTown(tw, gp.x, gp.y);
+          /* ⚠️ `+ 0.5` ET NON `+ 1` : un buisson est retenu par le CENTRE de sa
+             case (`starGreenBushes`) alors qu'un décor se dessine par son PIED
+             (`by = (pr.y + 1) * T`). Les deux conventions se croisent ici, et le
+             raccord de la discrète (`(shy.y + 1) * T`, dont la position est un
+             INDICE de case) n'est pas transposable tel quel — recopié, il aurait
+             fait voler l'étoile une demi-case sous les buissons qu'elle quitte. */
+          pushE((gp.y + 0.5) * T, ge, () => drawStarGreenDart(gp), gl);
+        }
+      }
       /* ZIP 444 — l'étoile qui suit, en ville. ⚠️ ELLE PORTE L'ALTITUDE DE SA
          PROPRE CASE, pas la mienne : sur les marches de la Haute-Ville elle est
          une case derrière moi, donc un demi-niveau plus bas, et lui donner mon
@@ -21236,6 +21409,37 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const bob = sp.sits ? 0 : Math.sin(nowB / 520) * 1.1;
       const cx = sp.x * T + T / 2, cy = (sp.y + 1) * T - (sp.sits ? 11 : 16) + bob;
       ctx.drawImage(im, Math.round(cx - im.width / 2), Math.round(cy - im.height / 2));
+    }
+    /* ⚠️ 2026-09-03 (lot A3) — SON VOL D'UN COUVERT À L'AUTRE. Trois copies
+       fantômes derrière elle, et c'est la seule chose qui rende le bond LISIBLE :
+       à cette vitesse, un sprite seul se lit comme un défaut d'affichage (c'est le
+       même problème que le clignotement de la compagne, défaut 10 du 479). La
+       traîne dit d'où elle vient, donc quel buisson vient de se taire.
+       ⚠️ ELLE UTILISE LA FAMILLE VERTE ORDINAIRE (`starWispColors.green`), celle
+       de sa compagne une fois apprivoisée : deux dessins pour la même étoile
+       auraient divergé au premier réglage, et le joueur ne l'aurait pas reconnue en
+       la retrouvant dans sa constellation. */
+    function drawStarGreenDart(gp) {
+      const sprites = spritesRef.current;
+      const fam = sprites && sprites.starWispColors && sprites.starWispColors.green;
+      if (!fam || !fam[0]) return;
+      const nowB = performance.now();
+      const im = fam[0][Math.floor(nowB / 110) & 3];
+      if (!im) return;
+      const g = starGreenBushes(); if (!g) return;
+      /* La traîne rejoue la MÊME interpolation, en retard — jamais une seconde
+         formule de vol, qui aurait divergé du vrai chemin au premier réglage. */
+      const w = starGreenWalkRef.current;
+      const a = g.list[w.from], b = g.list[w.to];
+      if (!a || !b) return;
+      for (let t = 3; t >= 0; t--) {
+        const k = Math.max(0, gp.k - t * 0.035);
+        const tx = (a.x + (b.x - a.x) * k) * T;
+        const ty = (a.y + (b.y - a.y) * k + 0.5) * T - 16 - Math.sin(Math.PI * k) * 9;
+        ctx.globalAlpha = t === 0 ? 1 : 0.22 - t * 0.05;
+        ctx.drawImage(im, Math.round(tx - im.width / 2), Math.round(ty - im.height / 2));
+      }
+      ctx.globalAlpha = 1;
     }
     function drawStarWisp(cp) {
       const sprites = spritesRef.current;
@@ -24213,6 +24417,108 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const sits = sp.act === "sit" && Q.starShySits(slot);
     return { x: sp.x, y: sp.y, sits, slot };
   }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-03 (lot A3) — LES BUISSONS DE LA VERTE, ET LEUR VOISINAGE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ LA LISTE EST DÉRIVÉE DE `tw.soft`, PAS D'UNE SECONDE LISTE DE DÉCORS.
+     `C.TOWN_SOFT_PROPS` dit quelles sortes plient, le GÉNÉRATEUR en dérive `soft`
+     case par case (passe finale de `generateTownWorld`), et c'est cette carte-là
+     qu'on lit : ainsi la verte se cache exactement dans ce que le joueur peut
+     traverser et faire frissonner. Filtrer ici sur la sorte du prop aurait fabriqué
+     la troisième liste de la même chose — le défaut que `soft` a justement corrigé.
+     ⚠️ ON LES BORNE À `TOWN_CORE` : la ville dessine des touffes jusqu'au bord de
+     la carte (y=3, x=220), c'est-à-dire hors du quartier où l'on circule. Une
+     planque au bord n'est pas une planque, c'est une chasse qu'on ne peut pas
+     gagner — la leçon du 428 sur les points d'assise tombés dans le lac.
+     ⚠️⚠️ LE VOISINAGE EST CE QUI EMPÊCHE LA TÉLÉPORTATION (demande de Guillaume) :
+     `STAR_GREEN_HOP` cases à vol d'oiseau, et rien d'autre. Un vrai chemin de
+     marche serait plus juste et coûterait un A* par créneau et par client, pour un
+     bond d'une seconde et demie que l'œil lit comme un vol — elle est faite de
+     lumière, pas de jambes.
+     ⚠️ LE CACHE EST INDEXÉ SUR LA CARTE (`w === tw`), comme `starShySpots` et
+     `starCraterPos` : une liste retenue d'une carte précédente désignerait des
+     cases d'un autre monde. */
+  const starGreenRef = useRef({ w: null, list: null, neigh: null });
+  function starGreenBushes() {
+    const tw = townWorldNow(); if (!tw || !tw.soft) return null;
+    if (starGreenRef.current.w === tw && starGreenRef.current.list) return starGreenRef.current;
+    const B = C.TOWN_CORE, list = [];
+    for (let y = B.y; y < B.y + B.h && y < tw.h; y++) {
+      for (let x = B.x; x < B.x + B.w && x < tw.w; x++) {
+        if (tw.soft[y * tw.w + x]) list.push({ x: x + 0.5, y: y + 0.5, i: y * tw.w + x });
+      }
+    }
+    const hop = Q.STAR_GREEN_HOP;
+    const neigh = list.map((a, ia) => {
+      const out = [];
+      for (let ib = 0; ib < list.length; ib++) {
+        if (ib === ia) continue;
+        const b = list[ib];
+        if (Math.hypot(a.x - b.x, a.y - b.y) <= hop) out.push(ib);
+      }
+      return out;
+    });
+    starGreenRef.current = { w: tw, list, neigh };
+    return starGreenRef.current;
+  }
+  /* Où elle est MAINTENANT — le buisson, ou le vol entre deux buissons.
+     ⚠️ MÊME PARTAGE QUE LA DISCRÈTE : `quete.js` tient l'horloge et la marche, ce
+     fichier tient la carte. Les deux clients tombent donc sur le même buisson au
+     même instant sans qu'un seul message ne parte (§3 de `CLAUDE.md`).
+     ⚠️⚠️ PENDANT LE VOL, ELLE EST DEHORS ET ON PEUT L'ATTRAPER — Guillaume : *« au
+     cas où le joueur la surprendrait ça pourrait être cool »*. C'est la seule
+     seconde et demie où elle est visible sans avoir été cherchée, et la refuser
+     aurait puni le joueur qui regardait au bon moment. */
+  /* ⚠️⚠️ LA MARCHE SE REJOUE DEPUIS LE DÉBUT (voir `starGreenWalk`), DONC ELLE SE
+     MÉMORISE PAR CRÉNEAU — sans quoi elle coûterait jusqu'à deux mille pas par
+     BUISSON et par IMAGE, c'est-à-dire tout le budget de la boucle de rendu pour
+     une position qui ne change qu'une fois par minute et quart. C'est le même
+     raisonnement que le cache de `starGuidePath` (un A* à la seconde, pas à
+     l'image), et c'est ce qui autorise `townBushLean` à poser la question à chaque
+     décor de la carte. */
+  const starGreenWalkRef = useRef({ w: null, slot: -1, to: -1, from: -1 });
+  function starGreenWalkAt(g, slot) {
+    const c = starGreenWalkRef.current;
+    if (c.w !== g.w || c.slot !== slot) {
+      c.w = g.w; c.slot = slot;
+      c.to = Q.starGreenWalk(g.neigh, slot);
+      c.from = slot > 0 ? Q.starGreenWalk(g.neigh, slot - 1) : c.to;
+    }
+    return c;
+  }
+  function starGreenPos() {
+    const e = sharedRef.current.star;
+    if (!e || !Q.starFallen(e) || Q.starHas(e, "townGreen")) return null;
+    const g = starGreenBushes(); if (!g || !g.list.length) return null;
+    const t = Q.starGreenSlot(e, Date.now());
+    const w = starGreenWalkAt(g, t.slot);
+    const to = w.to;
+    if (to < 0) return null;
+    const b = g.list[to];
+    if (!t.moving) return { x: b.x, y: b.y, tile: b.i, moving: false, slot: t.slot };
+    const a = g.list[w.from] || b;
+    /* Une arche courte plutôt qu'un glissement : elle SAUTE d'un couvert à
+       l'autre. `lift` est une hauteur d'IMAGE (pixels), donc elle ne touche ni la
+       position ni la portée de l'invite — la leçon du 439, un arc de dessin ne
+       rentre jamais dans une grandeur de jeu. */
+    return { x: a.x + (b.x - a.x) * t.k, y: a.y + (b.y - a.y) * t.k,
+             tile: b.i, fromTile: a.i, moving: true, k: t.k,
+             lift: Math.sin(Math.PI * t.k) * 9, slot: t.slot };
+  }
+  /* QUELLE CASE REMUE — et RIEN D'AUTRE. ⚠️⚠️ ELLE EXISTE PARCE QUE
+     `townBushLean` POSE LA QUESTION POUR CHACUN DES 283 DÉCORS MOUS DE LA CARTE, À
+     CHAQUE IMAGE : `starGreenPos` alloue un objet et relit l'horloge, ce qui ne se
+     paie pas deux cent quatre-vingt-trois fois par image pour une réponse qui
+     change une fois par créneau. Le retard de 120 ms est invisible (le remuement,
+     lui, reste continu : c'est `starGreenSway` qui le calcule, image par image). */
+  const starGreenTileRef = useRef({ at: -1e9, tile: -1 });
+  function starGreenTileNow() {
+    const c = starGreenTileRef.current, now = performance.now();
+    if (now - c.at < 120) return c.tile;
+    const p = starGreenPos();
+    c.at = now; c.tile = p && !p.moving ? p.tile : -1;
+    return c.tile;
+  }
   const starFarmImpactsRef = useRef({ w: null, pos: null });
   function starFarmImpactSites() {
     const w = worldRef.current; if (!w) return [];
@@ -24507,6 +24813,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       now,
       alone: starAlone("crater"),
       focus: myStarFocusRef.current,   // hors-zip — le choix personnel du chapitre 1, voir myStarFocusRef
+      /* 2026-09-03 (lot A3) — « la reine me mène en ce moment », donnée PERSONNELLE
+         comme `candy` et `potion` : deux joueurs peuvent chercher la verte chacun de
+         leur côté, l'un guidé et l'autre non (voir `starGreenGuideOn`). Elle entre
+         par le contexte, jamais par une lecture de ref dans `quete.js`. */
+      greenGuide: starGreenGuideOn(),
     };
   }
 
@@ -25105,6 +25416,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        PAS : il vise la place (`shyPlaza`, voir `STAR_GOAL_TARGET`). Cette branche
        sert au dessin et à la portée de l'invite, jamais au guidage. */
     if (id === "townShy") { const p = starShyPos(); return p ? { zone: "town", x: p.x, y: p.y } : null; }
+    /* ╔════════════════════════════════════════════════════════════════════════
+       ║ 2026-09-03 (lot A3) — LA VERTE N'A DE POSITION QUE QUAND LA REINE MÈNE.
+       ╚════════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ C'EST LE POINT DE BASCULE DE TOUT LE LOT, ET IL TIENT EN UNE LIGNE. Le
+       chevron et la reine-guide lisent tous les deux cette fonction (voir
+       `starGuideTarget`) : tant qu'elle rend `null`, il n'y a NULLE PART où le jeu
+       envoie le joueur — c'est la chasse. Dès que les deux indices sont dépensés et
+       que le joueur a demandé le guidage, elle rend son buisson, et la reine y mène.
+       ⚠️ ON EXIGE LES DEUX : le compte partagé (l'hôte l'a accordé) ET le mode
+       local (`greenGuideRef`, ce joueur-ci l'a demandé). Sans le second, l'indice
+       payé par un joueur planterait un chevron chez l'autre, qui n'a rien demandé —
+       et la chasse s'arrêterait pour lui sans qu'il ait rien fait. */
+    if (id === "townGreen") {
+      if (!starGreenGuideOn()) return null;
+      const p = starGreenPos(); return p ? { zone: "town", x: p.x, y: p.y } : null;
+    }
     /* ⚠️ ZIP 469 — QUATRE LIEUX SORTENT D'ICI AVEC LE DÉCHANT (le ponton, la
        verrerie, l'arbre de la pie, le beffroi). ⚠️ `starTownPropPos` PART AVEC
        EUX : elle n'avait plus aucun appelant, et une fonction que personne
@@ -25189,6 +25516,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const g = starGuideRef.current;
     if (!g.on) return;
     g.on = false;
+    /* 2026-09-03 (lot A3) — ARRIVER RANGE AUSSI L'AUTO-MARCHE, et c'est
+       obligatoire : sur place, E doit écarter le feuillage, pas relancer le
+       pilote. Deux gestes sur la même touche au même endroit, c'est le « le jeu
+       propose et refuse » du 426 sur le geste qui conclut la chasse. */
+    const gg = starGreenGuideRef.current;
+    if (arrived) { gg.on = false; gg.walk = false; }
     starSay("guide", arrived ? L.star.guide.arrived : L.star.guide.stop, 3600);
   }
   function starGuideToggle() {
@@ -25198,6 +25531,40 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!Q.starHas(sharedRef.current.star, "crater")) { pushToast(L.star.guide.noQueen); return; }
     g.on = true; g.offered = true;      // demandé à la main : plus de départ spontané sur cet objectif
     starSay("guide", L.star.guide.go, 3600);
+  }
+  /* ── 2026-09-03 (lot A3) — LES TROIS GESTES DE LA VERTE, AU NIVEAU DU COMPOSANT
+     (le clavier, le bandeau, le chevron et la boucle de ville les appellent tous :
+     écrits dans la closure de la boucle, ils lèveraient un `ReferenceError` à
+     l'exécution seulement — piège n°1, payé au 430 et au 431). */
+  function starGreenGuideOn() { return !!starGreenGuideRef.current.on; }
+  function starGreenWalking() { const g = starGreenGuideRef.current; return !!(g.on && g.walk); }
+  /* La touche G quand la verte est l'objectif : ce n'est plus un interrupteur, c'est
+     une DEMANDE — l'hôte compte, puis répond. ⚠️ Le troisième « oui » arme le mode ;
+     les deux premiers ne font que parler (voir `toastMsg`, clé `starHint`). */
+  function starGreenAsk() {
+    const g = starGreenGuideRef.current;
+    if (g.on) { g.walk = false; g.on = false; starGuideStop(false); return; }
+    const m = meRef.current;
+    if (!m || (m.zone || "farm") !== "town") { pushToast(L.star.s2.hintAway); return; }
+    sendReq({ kind: "starHint" });
+  }
+  /* La réponse de l'arbitre, une fois le compte à trois : la reine prend la tête ET
+     les pieds suivent. ⚠️ ON ARME LES DEUX D'UN COUP parce que le joueur vient de
+     demander à être mené — lui laisser un second geste à trouver pour démarrer
+     serait « le jeu propose et attend ». */
+  function starGreenLead() {
+    const g = starGreenGuideRef.current;
+    g.on = true; g.walk = true;
+    starGuideRef.current.on = true;
+    starGuideRef.current.offered = true;
+  }
+  /* E, pendant le guidage : on lâche les pieds, on les reprend. ⚠️ LA REINE, ELLE,
+     RESTE DEVANT (`on` ne bouge pas) — s'arrêter pour regarder un buisson ne doit
+     pas coûter l'aide qu'on vient de payer deux indices. */
+  function starGreenWalkToggle() {
+    const g = starGreenGuideRef.current;
+    g.walk = !g.walk;
+    starSay("guide", g.walk ? L.star.guide.go : L.star.guide.stop, 2400);
   }
   /* Le chemin, mis en cache. ⚠️ IL SE RECALCULE À LA SECONDE, PAS À L'IMAGE :
      `townFindPath` est un A* sur 224×168 que les résidents se partagent déjà, et
@@ -26680,6 +27047,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (sp && Q.starHas(e, "crater") && Math.hypot(m.x - sp.x, m.y - sp.y) <= 1.6)
           return { p: "shy", act: () => sendReq({ kind: "starSpot" }) };
       }
+      /* ╔════════════════════════════════════════════════════════════════════════
+         ║ 2026-09-03 (lot A3) — LA VERTE. MÊME PORTÉE COURTE, MÊME RAISON.
+         ╚════════════════════════════════════════════════════════════════════════
+         ⚠️ 1,6 CASE (`STAR_GREEN_NEAR`), comme la discrète : une portée généreuse
+         signalerait son buisson en passant, donc supprimerait la chasse. La
+         différence est qu'ici l'invite désigne un BUISSON — on n'a encore rien vu,
+         on a seulement remarqué qu'il remuait.
+         ⚠️⚠️ ELLE VAUT AUSSI PENDANT SON VOL, et c'est voulu (voir `starGreenPos`) :
+         qui la surprend en l'air doit pouvoir l'attraper, sinon le seul moment où
+         elle est visible serait le seul où elle est intouchable. */
+      {
+        const gp = starGreenPos();
+        if (gp && Q.starHas(e, "crater") && Math.hypot(m.x - gp.x, m.y - gp.y) <= Q.STAR_GREEN_NEAR)
+          return { p: "track", act: () => sendReq({ kind: "starTrack" }) };
+      }
       /* Le cratère : E n'y sert à RIEN tant qu'elle n'est pas sortie, et c'est
          le sujet. L'invite dit quoi faire (se tenir tranquille) ; la touche, elle,
          n'est pas la solution. ⚠️ C'est délibérément le seul endroit du jeu où
@@ -27112,6 +27494,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          ponton, belvédère) qui couvrent des rectangles entiers et avaleraient
          tout ce qui s'y trouve. */
       { const st = starNearby(); if (st) { st.act(); return; } }
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ 2026-09-03 (lot A3) — E ARRÊTE ET RELANCE LA MARCHE DERRIÈRE LA REINE.
+         ╚══════════════════════════════════════════════════════════════════════
+         Guillaume : *« l'action peut être interrompue en appuyant de nouveau sur
+         E, puis reprise en appuyant sur E à l'envi ».*
+         ⚠️⚠️ ELLE EST APRÈS `starNearby`, ET C'EST LE SEUL ORDRE POSSIBLE : le
+         guidage s'arrête À CÔTÉ du buisson, donc la dernière pression de E de
+         toute la chasse tombe pile là où les deux gestes se disputent la touche.
+         Testée avant, elle relancerait le pilote au lieu d'écarter le feuillage —
+         c'est-à-dire qu'elle mangerait la trouvaille (l'arrivée range d'ailleurs
+         le mode, voir `starGuideStop` : deux garde-fous pour un seul défaut,
+         parce que celui-ci se paierait sur le dernier geste de la quête).
+         ⚠️ TANT QUE LE MODE EST ARMÉ, IL PREND LA TOUCHE : la fontaine, le
+         kiosque et les portes qui suivent attendent qu'on s'arrête. C'est le prix
+         d'un mode « je ne pilote plus », et il se paie d'un appui. */
+      if (starGreenGuideOn()) { starGreenWalkToggle(); return; }
       if (nearTownRect(C.TOWN_FOUNTAIN.x - 1, C.TOWN_FOUNTAIN.y - 1, 4, 4)) { sendReq({ kind: "townWish" }); return; }
       if (nearTownProp("kiosk", 2.6)) {
         // Le kiosque joue quand quelqu'un est là pour l'entendre — c'est-à-dire
