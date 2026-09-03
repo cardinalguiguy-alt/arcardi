@@ -2571,6 +2571,24 @@ export function starWoke(e, id) { return !!(e && e.woke && e.woke[id]); }
    pas. `FermeGame.js` les énumère, ce fichier ne dit que LAQUELLE. C'est le même
    partage que le cratère, dont la position vient d'un balayage de la carte. */
 export const STAR_SHY_PERIOD_MS = 50000;   // elle change de planque toutes les 50 s
+/* ⚠️ HORS-ZIP 2026-09-03 — CAPTURE AU CONTACT, PLUS AU BOUTON. Demande de
+   Guillaume : sa zone (place ↔ parc, pleine de passants) est trop occupée pour
+   viser une touche E au bon moment — « il faut que l'apprivoisement soit
+   simple ». Rayon COURT, exprès plus petit que l'ancienne invite (1,6 case) :
+   on doit lui MARCHER DESSUS, pas la capturer en passant à côté sans le
+   vouloir. */
+export const STAR_SHY_CATCH_R = 0.9;
+/* ⚠️ HORS-ZIP 2026-09-03 — LE CHANGEMENT DE PLANQUE SE VOIT, IL NE SE
+   TÉLÉPORTE PLUS. Signalé par Guillaume : « elle se téléporte, c'est pas
+   normal ». Même famille que `STAR_GREEN_MOVE_MS` (le saut de buisson) : une
+   fenêtre COURTE au DÉBUT de chaque créneau, pendant laquelle elle file de son
+   ancienne planque à la nouvelle — pure fonction du temps partagé, donc les
+   deux clients la voient courir au même instant sans qu'un message ne parte.
+   Volontairement plus courte que le saut de la verte (celle-ci traverse tout
+   le domaine place↔parc, pas juste le buisson voisin : une fenêtre longue la
+   ferait glisser au ralenti sur une grande distance, ce qui se lit comme un
+   bogue de vitesse, pas comme une fuite). */
+export const STAR_SHY_MOVE_MS = 900;
 export function starShySlot(e, now) {
   const t0 = (e && +e.townFall) || 0;
   if (!t0) return 0;
@@ -2639,6 +2657,15 @@ export const STAR_GREEN_MOVE_MS = 1700;      // la course visible d'un buisson �
 export const STAR_GREEN_HOP = 9;             // portée d'un saut, en cases (le voisinage)
 export const STAR_GREEN_NEAR = 1.6;          // portée de l'invite — celle de la discrète
 export const STAR_GREEN_HINTS = 2;           // « chaud/froid » gratuits avant le guidage
+/* ⚠️ HORS-ZIP 2026-09-03 — LE COUP D'ŒIL : demande de Guillaume, « passer dans le
+   buisson permet déjà d'animer l'étoile qui sort et replonge ». Purement
+   cosmétique et purement LOCAL (comme le frisson du buisson) — aucun état
+   partagé, donc ces deux nombres se règlent sans toucher au reste du lot.
+   ⚠️ COOLDOWN, PAS UNE FOIS POUR TOUJOURS : passer une seconde fois doit
+   pouvoir la faire réagir de nouveau, juste pas en boucle si le joueur piétine
+   la case (décision de Guillaume, 2026-09-03). */
+export const STAR_GREEN_PEEK_MS = 700;         // durée du coup d'œil (sortie + replongée)
+export const STAR_GREEN_PEEK_COOLDOWN_MS = 6000; // avant qu'elle puisse rejouer sur LE MÊME buisson
 /* ⚠️ LA MARCHE EST BORNÉE À 2 000 PAS (≈ 41 h de créneaux), et le report se fait
    sur une GRAINE, pas sur un saut : au-delà, on repart d'un buisson tiré depuis le
    numéro de tranche et on ne rejoue que le reste. Sans borne, une sauvegarde

@@ -1285,6 +1285,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      ⚠️ LOCAL, JAMAIS DIFFUSÉ, comme tout `starGuideRef` : ce que le réseau porte
      est le COMPTE d'indices (partagé, arbitré), pas le confort de chacun. */
   const starGreenGuideRef = useRef({ on: false, walk: false });
+  /* hors-zip 2026-09-03 — LE COUP D'ŒIL (demande de Guillaume). `wasNear` porte
+     le front montant (sinon elle rejouerait à CHAQUE image tant qu'on reste sur
+     la case) ; `at` date le dernier déclenchement pour le cooldown. Purement
+     local et purement cosmétique — comme `starGreenGuideRef`, rien de ceci ne
+     part sur le réseau. */
+  const starGreenPeekRef = useRef({ wasNear: false, at: -1e9 });
+  /* hors-zip 2026-09-03 — LA DISCRÈTE, CAPTURÉE AU CONTACT. Débounce local
+     seulement : le temps que l'hôte confirme et que `starShyPos()` cesse de
+     rendre une case (elle sort de la table), on ne veut pas renvoyer la même
+     requête à chaque image passée collé à elle. */
+  const starShyAutoRef = useRef({ at: -1e9 });
   /* hors-zip — LE FOCUS PERSONNEL DU CHAPITRE 1. Demande de Guillaume : à
      plusieurs, chacun doit pouvoir viser un impact DIFFÉRENT plutôt que de
      suivre tous le même chevron figé sur le premier trou de la table. On
@@ -17942,6 +17953,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          le dernier sens tient. */
       townBushPress(tw, m.x, m.y, m.vx, m.vy);
       const nowP = performance.now();
+      /* ⚠️ HORS-ZIP 2026-09-03 — LA DISCRÈTE, AU CONTACT, SANS TOUCHE. Demande de
+         Guillaume : sa zone (place ↔ parc, pleine de passants) est trop occupée
+         pour viser un E au bon moment, « il faut que l'apprivoisement soit
+         simple ». On lui marche dessus, l'hôte tranche comme avant (`starSpot`,
+         inchangé) — seul le GESTE qui déclenche la demande a changé.
+         ⚠️ `starShyPos()` REND `null` DÈS QU'ELLE EST TROUVÉE (`Q.starHas`) :
+         le débounce local n'est donc là que pour le temps d'un aller-retour
+         réseau, jamais pour toujours. */
+      {
+        const sp = starShyPos(), st = starShyAutoRef.current;
+        if (sp && Q.starHas(sharedRef.current.star, "crater")
+            && Math.hypot(m.x - sp.x, m.y - sp.y) <= Q.STAR_SHY_CATCH_R
+            && nowP - st.at > 1500) {
+          st.at = nowP;
+          sendReq({ kind: "starSpot" });
+        }
+      }
       maybeSendPos();
     }
     function drawTownFrame(now, dt) {
@@ -19715,10 +19743,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          d'une pure fonction du temps partagé (`starShyPos`), donc les deux clients
          la voient au même endroit sans qu'un seul message ne parte (§3). */
       if (!inCar) {
-        const shy = starShyPos();
-        if (shy) {
-          const se = elevTown(tw, shy.x, shy.y), sl = archPxTown(tw, shy.x, shy.y);
-          pushE((shy.y + 1) * T, se, () => drawStarShyHidden(shy), sl);
+        /* hors-zip 2026-09-03 — LE SPRINT PASSE DEVANT : pendant sa fenêtre, on
+           trace le trait plutôt que la poser immobile sur l'arrivée (voir
+           `starShyDash`, plus « pas normal » du tout — Guillaume). */
+        const dash = starShyDash(performance.now());
+        if (dash) {
+          const se = elevTown(tw, dash.bx, dash.by), sl = archPxTown(tw, dash.bx, dash.by);
+          pushE((dash.by + 1) * T, se, () => drawStarShyDash(dash), sl);
+        } else {
+          const shy = starShyPos();
+          if (shy) {
+            const se = elevTown(tw, shy.x, shy.y), sl = archPxTown(tw, shy.x, shy.y);
+            pushE((shy.y + 1) * T, se, () => drawStarShyHidden(shy), sl);
+          }
         }
       }
       /* ╔══════════════════════════════════════════════════════════════════════
@@ -19745,6 +19782,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              INDICE de case) n'est pas transposable tel quel — recopié, il aurait
              fait voler l'étoile une demi-case sous les buissons qu'elle quitte. */
           pushE((gp.y + 0.5) * T, ge, () => drawStarGreenDart(gp), gl);
+        } else if (gp) {
+          /* hors-zip 2026-09-03 — LE COUP D'ŒIL : même buisson, même ancrage
+             (+0.5, pas +1, cf. juste au-dessus), aucun vol. */
+          const peek = starGreenPeekPhase(performance.now());
+          if (peek > 0.02) {
+            const ge = elevTown(tw, gp.x, gp.y), gl = archPxTown(tw, gp.x, gp.y);
+            pushE((gp.y + 0.5) * T, ge, () => drawStarGreenPeek(gp, peek), gl);
+          }
         }
       }
       /* ZIP 444 — l'étoile qui suit, en ville. ⚠️ ELLE PORTE L'ALTITUDE DE SA
@@ -21410,6 +21455,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const cx = sp.x * T + T / 2, cy = (sp.y + 1) * T - (sp.sits ? 11 : 16) + bob;
       ctx.drawImage(im, Math.round(cx - im.width / 2), Math.round(cy - im.height / 2));
     }
+    /* ⚠️ HORS-ZIP 2026-09-03 — SON SPRINT D'UNE PLANQUE À L'AUTRE. Même traîne
+       fantôme que `drawStarGreenDart` (§8 CLAUDE.md, un mouvement se re-dérive,
+       il ne se réinvente pas) : à cette vitesse un sprite seul se lit comme un
+       défaut d'affichage. Elle reste DEBOUT pendant le sprint (`sits` ne
+       s'applique qu'une fois posée) et sans bob — on court, on ne flotte pas. */
+    function drawStarShyDash(d) {
+      const sprites = spritesRef.current;
+      const fam = sprites && sprites.starWispShy;
+      if (!fam || !fam[0]) return;
+      const nowB = performance.now();
+      const im = fam[0][Math.floor(nowB / 110) & 3];
+      if (!im) return;
+      for (let t = 3; t >= 0; t--) {
+        const k = Math.max(0, d.k - t * 0.06);
+        const tx = (d.ax + (d.bx - d.ax) * k) * T + T / 2;
+        const ty = (d.ay + (d.by - d.ay) * k + 1) * T - 16;
+        ctx.globalAlpha = t === 0 ? 1 : 0.22 - t * 0.05;
+        ctx.drawImage(im, Math.round(tx - im.width / 2), Math.round(ty - im.height / 2));
+      }
+      ctx.globalAlpha = 1;
+    }
     /* ⚠️ 2026-09-03 (lot A3) — SON VOL D'UN COUVERT À L'AUTRE. Trois copies
        fantômes derrière elle, et c'est la seule chose qui rende le bond LISIBLE :
        à cette vitesse, un sprite seul se lit comme un défaut d'affichage (c'est le
@@ -21439,6 +21505,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         ctx.globalAlpha = t === 0 ? 1 : 0.22 - t * 0.05;
         ctx.drawImage(im, Math.round(tx - im.width / 2), Math.round(ty - im.height / 2));
       }
+      ctx.globalAlpha = 1;
+    }
+    /* ⚠️ HORS-ZIP 2026-09-03 — LE COUP D'ŒIL. UN SEUL SPRITE, PAS DE TRAÎNE :
+       la traîne de `drawStarGreenDart` vend une VITESSE (elle vole d'un couvert
+       à l'autre) ; ici elle ne bouge pas d'une case, un sillage n'aurait donc
+       rien à raconter. Même famille de sprite qu'à l'apprivoisement (elle ne
+       change jamais de dessin, seulement de mise en scène).
+       ⚠️ `k` EST DÉJÀ LA COURBE (0→1→0, `sin(π·t)` calculé une seule fois dans
+       `starGreenPeekPhase`) : on l'utilise TELLE QUELLE pour l'altitude ET
+       l'alpha — la réappliquer ici (un second `sin(π·k)`) aurait plié la
+       courbe deux fois et cassé la symétrie sortie/replongée. Un seul calcul,
+       relu deux fois, jamais deux formules qui pourraient diverger (§8). */
+    function drawStarGreenPeek(gp, k) {
+      const sprites = spritesRef.current;
+      const fam = sprites && sprites.starWispColors && sprites.starWispColors.green;
+      if (!fam || !fam[0]) return;
+      const nowB = performance.now();
+      const im = fam[0][Math.floor(nowB / 110) & 3];
+      if (!im) return;
+      const tx = gp.x * T, ty = (gp.y + 0.5) * T - 16 - k * 9;
+      ctx.globalAlpha = Math.max(0, Math.min(1, k));
+      ctx.drawImage(im, Math.round(tx - im.width / 2), Math.round(ty - im.height / 2));
       ctx.globalAlpha = 1;
     }
     function drawStarWisp(cp) {
@@ -24417,6 +24505,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const sits = sp.act === "sit" && Q.starShySits(slot);
     return { x: sp.x, y: sp.y, sits, slot };
   }
+  /* hors-zip 2026-09-03 — LE COURT SPRINT ENTRE DEUX PLANQUES (voir la note de
+     `STAR_SHY_MOVE_MS`, quete.js). ⚠️ SÉPARÉE DE `starShyPos` EXPRÈS : celle-ci
+     reste la position SERVIE au reste du jeu (capture au contact, chevron) ;
+     un dessin qui la ferait glisser pendant la fenêtre de sprint tromperait la
+     capture, qui doit rester sur la case d'ARRIVÉE tout du long. Seul le TRAIT
+     du rendu voit le départ. */
+  function starShyDash(nowMs) {
+    const e = sharedRef.current.star;
+    if (!e || !Q.starFallen(e) || Q.starHas(e, "townShy")) return null;
+    const t0 = +e.townFall || 0; if (!t0) return null;
+    const list = starShySpots(); if (!list.length) return null;
+    const raw = nowMs - t0, slot = Math.max(0, Math.floor(raw / Q.STAR_SHY_PERIOD_MS));
+    if (slot <= 0) return null;                 // rien avant sa toute première planque
+    const into = raw - slot * Q.STAR_SHY_PERIOD_MS;
+    if (into >= Q.STAR_SHY_MOVE_MS) return null;
+    const a = list[Q.starShyPick(list.length, slot - 1)], b = list[Q.starShyPick(list.length, slot)];
+    if (!a || !b) return null;
+    return { ax: a.x, ay: a.y, bx: b.x, by: b.y, k: into / Q.STAR_SHY_MOVE_MS };
+  }
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ 2026-09-03 (lot A3) — LES BUISSONS DE LA VERTE, ET LEUR VOISINAGE.
      ╚══════════════════════════════════════════════════════════════════════════
@@ -24518,6 +24625,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const p = starGreenPos();
     c.at = now; c.tile = p && !p.moving ? p.tile : -1;
     return c.tile;
+  }
+  /* ⚠️ HORS-ZIP 2026-09-03 — LE COUP D'ŒIL. Demande de Guillaume : passer près
+     du buisson occupé doit déjà l'animer, avant même la capture (E). Purement
+     LOCAL et dérivé (comme le frisson) : `wasNear` porte le FRONT MONTANT — sans
+     lui, elle rejouerait à chaque image tant que le joueur reste sur la case,
+     ce qui est le défaut inverse d'une animation qui ne redémarre jamais. Rend
+     0 hors coup d'œil, ou une valeur qui monte puis redescend (0→1→0) pendant
+     `STAR_GREEN_PEEK_MS` — la même forme que l'arc de saut (`sin(π·k)`), donc
+     la même vocabulaire visuel que le reste de la quête. */
+  function starGreenPeekPhase(nowMs) {
+    const e = sharedRef.current.star;
+    const pk = starGreenPeekRef.current;
+    if (!e || Q.starHas(e, "townGreen")) return 0;
+    const gp = starGreenPos();
+    if (!gp || gp.moving) { pk.wasNear = false; return 0; }
+    const m = meRef.current;
+    const near = !!(m && (m.zone || "farm") === "town"
+      && Math.hypot(m.x - gp.x, m.y - gp.y) <= Q.STAR_GREEN_NEAR);
+    if (near && !pk.wasNear && nowMs - pk.at > Q.STAR_GREEN_PEEK_COOLDOWN_MS) pk.at = nowMs;
+    pk.wasNear = near;
+    const t = (nowMs - pk.at) / Q.STAR_GREEN_PEEK_MS;
+    return (t >= 0 && t <= 1) ? Math.sin(Math.PI * t) : 0;
   }
   const starFarmImpactsRef = useRef({ w: null, pos: null });
   function starFarmImpactSites() {
@@ -25417,19 +25546,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        sert au dessin et à la portée de l'invite, jamais au guidage. */
     if (id === "townShy") { const p = starShyPos(); return p ? { zone: "town", x: p.x, y: p.y } : null; }
     /* ╔════════════════════════════════════════════════════════════════════════
-       ║ 2026-09-03 (lot A3) — LA VERTE N'A DE POSITION QUE QUAND LA REINE MÈNE.
+       ║ 2026-09-03 (lot A3) — LA VERTE A TOUJOURS UNE POSITION ; SEUL LE
+       ║ CHEVRON EST CONDITIONNÉ AU GUIDAGE.
        ╚════════════════════════════════════════════════════════════════════════
-       ⚠️⚠️ C'EST LE POINT DE BASCULE DE TOUT LE LOT, ET IL TIENT EN UNE LIGNE. Le
-       chevron et la reine-guide lisent tous les deux cette fonction (voir
-       `starGuideTarget`) : tant qu'elle rend `null`, il n'y a NULLE PART où le jeu
-       envoie le joueur — c'est la chasse. Dès que les deux indices sont dépensés et
-       que le joueur a demandé le guidage, elle rend son buisson, et la reine y mène.
-       ⚠️ ON EXIGE LES DEUX : le compte partagé (l'hôte l'a accordé) ET le mode
-       local (`greenGuideRef`, ce joueur-ci l'a demandé). Sans le second, l'indice
-       payé par un joueur planterait un chevron chez l'autre, qui n'a rien demandé —
-       et la chasse s'arrêterait pour lui sans qu'il ait rien fait. */
+       ⚠️⚠️ CETTE FONCTION A DEUX APPELANTS, PAS UN SEUL : `starGuideTarget`
+       (le chevron / la reine-guide) ET l'arrivée dans la formation
+       (`starJoinRef`, plus bas, via `starTargetPos(joined.id)`). Le premier
+       jet gardait `!starGreenGuideOn()` ici — correct pour le chevron, qui ne
+       doit rien montrer hors guidage, mais FAUX pour l'arrivée : capturée sans
+       avoir jamais demandé la reine (un joueur qui tombe dessus par hasard),
+       elle rejoignait la formation sans origine, donc sans montée — exactement
+       le défaut que le climb→spin→settle du 464 existe pour éviter. `townShy`,
+       juste au-dessus, n'a pas ce garde-fou et n'en a jamais eu besoin.
+       ⚠️ LE GUIDAGE RESTE BIEN EXCLUSIF AU CHEVRON : `starTargetSite` ne
+       résout « townGreen » en objectif qu'une fois `ctx.greenGuide` vrai
+       (`starGoalKey`, quete.js) — le retirer ICI ne redonne donc aucun
+       chevron à qui n'a pas demandé le guidage, ça redonne seulement une
+       origine à qui vient de l'attraper. */
     if (id === "townGreen") {
-      if (!starGreenGuideOn()) return null;
       const p = starGreenPos(); return p ? { zone: "town", x: p.x, y: p.y } : null;
     }
     /* ⚠️ ZIP 469 — QUATRE LIEUX SORTENT D'ICI AVEC LE DÉCHANT (le ponton, la
@@ -25625,7 +25759,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (Math.hypot(gx - px, gy - py) <= Q.STAR_GUIDE_ARRIVE) { starGuideStop(true); return null; }
     const path = starGuidePath(zone, px, py, gx, gy);
     if (!path || !path.length) return null;
-    const p = Q.starGuidePoint(path, px, py, Q.STAR_GUIDE_AHEAD);
+    /* ⚠️⚠️⚠️ HORS-ZIP 2026-09-03 — TROUVÉ EN JOUANT LA VERTE (lot A3) : LA REINE
+       « PREND LA TÊTE » ET LE FERMIER NE BOUGE JAMAIS. `townFindPath`/
+       `townSimplifyPath` (fermeEngine.js) ne rendent QUE les virages, jamais le
+       point de départ du joueur — voulu pour les résidents, qui avancent en
+       ligne droite vers `path[0]` sans avoir besoin de s'y retrouver dedans.
+       Mais `Q.starGuidePoint` PROJETTE (px,py) sur les SEGMENTS du chemin
+       reçu : sans le segment « joueur → premier virage », la projection
+       retombe sur `path[0]` tel quel, et « avancer de 2,8 cases » depuis un
+       point qui peut être à cinquante cases du joueur dépasse aussitôt la
+       laisse (`STAR_GUIDE_LEASH`) — la reine se fige en silence, pour de bon.
+       ⚠️ ON NE LE CORRIGE PAS DANS LE CHEMIN MIS EN CACHE (`starGuidePath`) :
+       il vit jusqu'à 1200 ms, le joueur avance pendant ce temps, et un point de
+       départ figé à l'instant du calcul serait déjà faux une image plus tard.
+       On préfixe donc la position COURANTE à chaque appel, ici seulement —
+       c'est ce qui redonne au premier segment une existence, exactement celle
+       que `Q.starGuidePoint` (et son banc, `verify-quete.mjs`) suppose déjà. */
+    const p = Q.starGuidePoint([{ x: px, y: py }, ...path], px, py, Q.STAR_GUIDE_AHEAD);
     if (!p) return null;
     /* La laisse : au-delà, il attend. Un guide qu'on perd de vue ne guide plus,
        elle s'en va — et c'est très exactement ce qui ferait dire « mon guide est
@@ -27029,24 +27179,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                           C.STAR_SHIP_DRAW_W, C.STAR_SHIP_DRAW_H + C.STAR_SHIP_INTERACT_S_PAD))
           return { p: "raise", act: () => setStarRaise({ part: raise }) };
       }
-      /* ╔════════════════════════════════════════════════════════════════════════
-         ║ 2026-09-02 (lot A2) — LA DISCRÈTE. ELLE PASSE AVANT LE CRATÈRE.
-         ╚════════════════════════════════════════════════════════════════════════
-         ⚠️ RÈGLE DU 427, DU PLUS PRÉCIS AU PLUS LARGE : elle occupe UNE case, le
-         cratère en couvre plus de quatre-vingts. Placée après, elle serait
-         inatteignable les jours où sa planque tombe près du trou.
-         ⚠️⚠️ SA PORTÉE EST COURTE (1,6 case) ET C'EST LE SUJET : l'invite ne doit
-         apparaître que si l'on est vraiment à côté d'elle. Une portée généreuse la
-         signalerait en passant, donc supprimerait la chasse aussi sûrement qu'un
-         chevron posé sur sa tête. *Lire l'invite, c'est avoir déjà gagné.*
-         ⚠️ LA DISTANCE EST VÉRIFIÉE ICI, PAS PAR L'HÔTE — même contrat que la
-         fouille (469) : l'arbitre tient la RÈGLE (on ne la trouve pas avant la
-         reine), le client tient la géométrie. */
-      {
-        const sp = starShyPos();
-        if (sp && Q.starHas(e, "crater") && Math.hypot(m.x - sp.x, m.y - sp.y) <= 1.6)
-          return { p: "shy", act: () => sendReq({ kind: "starSpot" }) };
-      }
+      /* ⚠️ HORS-ZIP 2026-09-03 — LA DISCRÈTE N'A PLUS D'INVITE ICI : elle se
+         capture AU CONTACT, dans `updateMeTown` (voir `starShyAutoRef`), pas au
+         bouton E. Sa zone est trop peuplée de passants pour viser une touche au
+         bon moment (demande de Guillaume) ; rien à proposer, donc rien à lire. */
       /* ╔════════════════════════════════════════════════════════════════════════
          ║ 2026-09-03 (lot A3) — LA VERTE. MÊME PORTÉE COURTE, MÊME RAISON.
          ╚════════════════════════════════════════════════════════════════════════

@@ -11,33 +11,42 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-⚠️⚠️ **LES LOTS A, A2 ET A3 DU MASTER PROMPT SONT LIVRÉS ET VÉRIFIÉS (hors-zip 2026-09-03).** Les
-sept questions du §6 de `components/ferme/QUETE.md` ont toutes été posées et tranchées avant
-d'écrire ; la FORME des indices de la verte l'a été de même, avant la première ligne de code.
-· **Lot A — la reine** : elle se nourrit (80 lumières), se réveille au rythme (huit battements sur
-  un anneau qui se contracte, **sans aucun panneau** : l'interface est le décor), puis le dos-à-dos.
-  Détail au §2 bis de `QUETE.md`.
-· **Lot A2 — la sixième, « la discrète »** : orange, chapeau, lunettes, cachée parmi les passants
-  entre la place et le parc. On la REPÈRE, dans un domaine annoncé. §2 ter.
-· **Lot A3 — la cinquième, « la verte »** : cachée dans les buissons de la ville. On la PISTE — le
-  buisson occupé remue tout seul, la reine donne deux « chaud/froid » (touche G, **compte partagé
-  entre les joueurs**), et au troisième appel elle prend la tête et **le fermier la suit tout seul**
-  (E arrête, E relance). **Aucun domaine annoncé, aucun chevron** : c'est le seul mot qui la sépare
-  de la discrète. §2 quater. Le branchement des trois est en tête de `components/ferme/README.md`.
-`verify-quete` **745/745** (il fait MARCHER la verte), `render-etoile` **186 contrôles**,
-`verify-strings` **1 108 clés**, `verify-vallee` **223/223**, `verify-collision` **TOUT PASSE**,
-`verify-maire` **119/119**, `verify-scierie` **34/34**, `verify-ludo` **30/30**, `verify-taxi`
-**15/15**, `render-maire` **86/86**, `next build` **✓ Compiled successfully**. **Aucune manipulation
-Supabase n'est nécessaire.**
+⚠️⚠️⚠️ **LES LOTS A, A2 ET A3 SONT LIVRÉS, ET DEPUIS AUJOURD'HUI VÉRIFIÉS EN JEU, PAS SEULEMENT AU
+BANC** (hors-zip 2026-09-03, sur consigne de Guillaume : *« quand je te demande d'implémenter, avec
+un niveau de précision élevé, j'attends que tu testes ingame »*). Jouer la verte a immédiatement
+payé : **le guidage de la reine ne faisait jamais avancer le fermier au-delà de quelques cases**
+(`townFindPath`/`townSimplifyPath` rendent un chemin qui omet le segment joueur→premier virage ;
+`Q.starGuidePoint` projette dessus et retombe à cinquante cases, hors laisse). Corrigé en préfixant
+la position courante au chemin dans `starGuideAim` ([FermeGame.js:25628](components/ferme/FermeGame.js:25628)) —
+**aucun banc ne pouvait le voir**, `verify-quete` teste `starGuidePoint` sur une ligne synthétique
+qui inclut déjà le joueur, jamais sur la vraie sortie simplifiée du pathfinder. Vérifié en marchant
+77 cases à travers la ville derrière la reine.
+· **Lot A — la reine** : nourrie (80 lumières), réveil au rythme, dos-à-dos. §2 bis de `QUETE.md`.
+· **Lot A2 — la discrète** : **REVUE LE MÊME JOUR, sur retour de Guillaume en jouant** — elle
+  « se téléportait » entre planques (changement instantané, pas normal) et se capturait au bouton E
+  dans une zone trop peuplée pour viser une touche. Les deux sont corrigés : elle **sprinte**
+  maintenant d'une planque à l'autre (traîne fantôme, même procédé que le saut de la verte,
+  `STAR_SHY_MOVE_MS`) et se **capture au contact** — on lui marche dessus, plus de bouton
+  (`STAR_SHY_CATCH_R`, `updateMeTown`). §2 ter de `QUETE.md`.
+· **Lot A3 — la verte** : chasse au chaud/froid puis guidage (corrigé ci-dessus). **AJOUTÉ le même
+  jour** : le buisson occupé l'anime désormais d'un coup d'œil (sort, replonge) dès qu'on passe à
+  côté — purement local, cooldown 6 s (`starGreenPeekPhase`) — et la capture (E) rejoint la
+  formation avec sa montée `climb→spin→settle`, qui restait cassée (origine nulle) si le joueur ne
+  guidait pas encore quand il l'attrapait (`starTargetPos("townGreen")` ne dépend plus du guidage).
+  §2 quater.
+`verify-quete` **745/745**, `verify-collision` **TOUT PASSE**, bundle esbuild sans liaison cassée —
+tous relancés après ces cinq correctifs. **Aucune manipulation Supabase n'est nécessaire.**
 
-⚠️⚠️⚠️ **CE QUI ATTEND GUILLAUME, ET C'EST DU JUGEMENT, PAS DU CODE.** (1) **Les six nombres du
-réveil et les cinq de la verte sont de Claude** (75 s entre deux buissons, 1,7 s de vol, 9 cases de
-saut, 2 indices, 2,6 px de remuement) — comme les trois de la scierie, aucun ne doit bouger avant
-d'avoir joué (règle du voyage en train, 431). (2) **La longueur des deux chasses** : trouve-t-on la
-discrète en deux minutes ou en dix, et la verte se laisse-t-elle pister sans les indices de la
-reine ? C'est le seul réglage qui ne se mesure nulle part. Menu dev → ⭐ Star → **👑 The queen**,
-**🕶️ Queen tamed** (chasse de la discrète entière) et **🌿 Queen + hidden one tamed** (chasse de la
-verte entière).
+⚠️⚠️⚠️ **CE QUI ATTEND GUILLAUME, ET C'EST DU JUGEMENT, PAS DU CODE.** (1) **Les nombres du réveil,
+de la verte et des deux nouveaux réglages du jour (durée du coup d'œil, cooldown, rayon de capture
+au contact, durée du sprint) sont de Claude** — aucun ne doit bouger avant d'avoir joué (règle du
+voyage en train, 431). (2) **La longueur des deux chasses**, inchangé : trouve-t-on la discrète en
+deux minutes ou en dix, et la verte se laisse-t-elle pister sans les indices de la reine ? Menu
+dev → ⭐ Star → **👑 The queen**, **🕶️ Queen tamed**, **🌿 Queen + hidden one tamed**.
+⚠️ **DEUX RETOURS DE GUILLAUME EN JOUANT, ENCORE OUVERTS** : (a) **le saut de rebord n'atterrit pas
+sur le chemin pavé en dessous** (mur traité comme un plan plat) — Guillaume retravaille le bloc
+escalier de son côté d'abord, ne pas y toucher en attendant ; (b) **les ornements de la balustrade
+portent des taches rouges à retirer, et les ombres manquent de contraste** — pas encore traité.
 
 ⚠️⚠️⚠️ **ACTION SUIVANTE UNIQUE : LE LOT B — LA SCÈNE D'ÉVEIL 3D DE LA REINE.** Le seuil de la
 septième sœur (« reine apprivoisée **et six étoiles trouvées** ») est **atteint depuis A3** : trois
