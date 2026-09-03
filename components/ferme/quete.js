@@ -2073,7 +2073,13 @@ export const STAR_GOAL_TARGET = { craterHot: "crater", craterAlone: "crater",
      deux indices pour obtenir : là, le chevron la désigne pour de bon. Sa
      position est résolue par `starTargetPos` (`FermeGame.js`), seul endroit qui
      connaisse les buissons. */
-  townGreenLed: "townGreen" };
+  townGreenLed: "townGreen",
+  /* 2026-09-03 (lot C) — MÊME FAMILLE QUE "cauldron" : une adresse hors-table,
+     pas un lieu de `STAR_SITES` (elle n'y est pas encore, voir `resolveStarEvilFound`
+     un peu plus haut). `starTargetPos` (FermeGame.js) la résout vivante depuis
+     `ew.lake`, ou replie sur le passage sombre tant qu'on n'est pas dans le monde
+     maléfique — exactement le repli déjà écrit pour le chaudron. */
+  evilSeek: "evilLake" };
 /* ⚠️⚠️ 2026-09-02 (lot A2) — LE CHEVRON DE LA DISCRÈTE POINTE LA PLACE, PAS ELLE.
    C'est la seule décision de conception de ce lot, et elle se joue là : un chevron
    posé sur sa tête supprime la chasse — il resterait à marcher jusqu'à une flèche,
@@ -2082,7 +2088,7 @@ export const STAR_GOAL_TARGET = { craterHot: "crater", craterAlone: "crater",
    ⚠️ `shyPlaza` EST UNE ADRESSE HORS TABLE, comme `sawmill` ou `cauldron` : ce
    n'est pas un lieu d'étoile, c'est un endroit de la ville. `FermeGame.js` la
    résout depuis `C.TOWN_PLAZA`, seule source de « où est la place ». */
-export const STAR_OFF_TABLE_TARGETS = ["townHall", "sawmill", "shipyard", "cauldron", "shyPlaza"];
+export const STAR_OFF_TABLE_TARGETS = ["townHall", "sawmill", "shipyard", "cauldron", "shyPlaza", "evilLake"];
 export function starTargetSite(e, ctx) {
   const goal = starGoalKey(e, ctx);
   if (!goal) return null;
@@ -3054,6 +3060,16 @@ export function newStar() {
     gift: {},       // id de joueur -> { at, kind } — le crochet cosmétique (§8)
     seen: {},       // scènes déjà jouées : cartes de chapitre, « previously »
     doneAt: 0,
+    /* 2026-09-03 (lot C) — LA SEPTIÈME SŒUR A ÉTÉ VUE. Un horodatage HÔTE, pas
+       un booléen : même discipline que `fall`/`townFall`, et ça ne coûte rien de
+       plus à écrire. PARTAGÉ (pas indexé par joueur) — contrairement au hasard de
+       la canne (`f.evilRodArmedAt`, par fermier) : « elle est prisonnière, on l'a
+       vue » est un fait du MONDE que la reine annonce à la cantonade, pas une
+       confidence à chacun séparément. Elle n'est PAS ajoutée à `STAR_SITES` : elle
+       n'est pas encore apprivoisable (aucun verbe, aucun résolveur de prise —
+       lots D/E), et y inscrire un site à moitié câblé serait une porte sans
+       chemin de code (§4 de `CLAUDE.md`). */
+    evilFound: 0,
   };
 }
 /* ⚠️ LA REPRISE EST TOLÉRANTE, PAS CONFIANTE. Une sauvegarde d'avant ce zip n'a
@@ -3183,6 +3199,7 @@ export function migrateStar(saved) {
   if (saved.seen && typeof saved.seen === "object")
     for (const k of Object.keys(saved.seen)) if (saved.seen[k]) e.seen[String(k).slice(0, 32)] = true;
   e.doneAt = +saved.doneAt || 0;
+  e.evilFound = +saved.evilFound || 0; // 2026-09-03 (lot C)
   /* ── ZIP 479 : les trois verbes. ⚠️⚠️ MÊME DISCIPLINE QUE PARTOUT AILLEURS ICI —
      on RECONSTRUIT chaque sous-objet au lieu de faire confiance à sa forme, et un
      lieu inconnu est « une version d'après » qu'on ignore. Une sauvegarde d'avant
@@ -3408,6 +3425,26 @@ export function resolveStarDig(e, id, who, now) {
    façon de le compter. ⚠️ UN VIDE FOUILLÉ EST FAIT : sans ça, « il reste deux
    impacts » resterait affiché sur deux trous qu'on a vidés. */
 export function starDigLeft(e) { return STAR_FARM_IMPACTS.filter(s => !starDug(e, s.id)).length; }
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-03 (lot C) — LA SEPTIÈME SŒUR, PRISONNIÈRE DU LAC MALÉFIQUE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️ DÉBLOQUÉ QUAND LE CHAPITRE « crater » EST CLOS, C'EST-À-DIRE QUAND LES SIX
+   AUTRES COMPAGNES SONT RÉUNIES (§6 de QUETE.md, point 4 : « reine apprivoisée
+   ET six étoiles trouvées » — la reine EST l'une des six, voir STAR_CHAPTERS).
+   `e.ch >= STAR_CH_DONE - 1` teste « le chapitre final est atteint », jamais un
+   numéro écrit en dur (règle de la table des chapitres, plus haut dans ce
+   fichier). */
+export function starEvilUnlocked(e) { return !!e && (e.ch | 0) >= STAR_CH_DONE - 1; }
+export function starEvilFound(e) { return !!(e && e.evilFound); }
+/* Idempotent, comme resolveStarFound : plusieurs joueurs qui l'approchent dans
+   la même seconde ne produisent qu'une seule révélation. */
+export function resolveStarEvilFound(e, now) {
+  if (!starEvilUnlocked(e)) return { ok: false, tooEarly: true };
+  if (starEvilFound(e)) return { ok: true, already: true };
+  e.evilFound = +now || 1;
+  return { ok: true };
+}
 /* ⚠️ ZIP 453 — `starShards` A ÉTÉ SUPPRIMÉE. Le seul compte de la quête est
    `starShipBuilt` (voir la note de `STAR_SITES`) : un objet, une façon de le
    compter. Tout ce qui affichait « n sur 4 » lit maintenant « n sur
@@ -3503,6 +3540,31 @@ export function starGoalKey(e, ctx) {
      ⚠️ ELLE NE RETARDE RIEN D'AUTRE : la discrète est le dernier `need` du
      chapitre 2, donc `missing` se vide dès qu'on l'a repérée, et l'ingénieur
      reprend la parole exactement où il la prenait avant. */
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-03 (lot C) — LA SEPTIÈME SŒUR PREND LE PAS SUR TOUT, MAIS UNE
+     ║ SEULE FOIS.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️⚠️ CETTE CLÉ EST TESTÉE AVANT `engineer` JUSTE EN DESSOUS, ET C'EST UNE
+     CORRECTION, PAS UN CHOIX ARBITRAIRE : posée dans le bloc `!first`
+     (immédiatement sous `engineer`, l'endroit « logique »), elle ne se déclenchait
+     JAMAIS — `engineer` a exactement la même condition de déblocage
+     (`!missing.length`, la même chose que `starEvilUnlocked`) et la teste EN
+     PREMIER, donc « pas encore demandé de plans » gagnait toujours contre
+     « la reine vient de parler ». Trouvé en écrivant le banc (`tools/verify-quete.mjs`,
+     section « Lot C »), jamais en le relisant.
+     ⚠️ TANT QU'ELLE N'EST PAS ENCORE VUE, CETTE CLÉ PASSE DEVANT TOUT LE RESTE
+     — même famille que `engineer` juste en dessous, en plus urgent : la reine
+     interrompt le fil du bateau pour un fait plus pressant (« elle s'éteint »),
+     pas pour une corvée de plus. `starWithMe` fera parler la reine sur cette
+     même clé (`frame.evilSeek`), le bandeau montre `hud.goal.evilSeek`, et le
+     chevron la suit (STAR_GOAL_TARGET.evilSeek = "evilLake").
+     ⚠️ UNE FOIS VUE (`starEvilFound`), CETTE CLÉ NE REVIENT JAMAIS : rien n'est
+     encore CONSTRUIT pour la sauver (protection de la canne = lot D, pêche
+     dédiée = lot D/E) — la garder en tête du bandeau aurait enterré le
+     chantier naval, qui reste la seule progression réellement actionnable
+     tant que ces lots ne sont pas livrés. C'est la même discipline que
+     `engineer` : une clé qui n'a plus rien à dire cède la place. */
+  if (starEvilUnlocked(e) && !starEvilFound(e)) return "evilSeek";
   if (starHas(e, "crater") && !missing.length && !starPlanAsked(e)) return "engineer";
   if (!first) {
     if (!starPlanReady(e)) return (ctx && ctx.engineerHere) ? "engineerWork" : "engineerTravel";
@@ -3697,6 +3759,11 @@ export const STAR_GOAL_KEYS = (() => {
      réclamer sa phrase de bandeau dans les deux langues. */
   out.push("townWait", "townWaitThere", "engineerTravel", "engineerWork", "mayor",
            "timberOrder", "timberWait", "timberRaise");
+  /* 2026-09-03 (lot C) — même raison que le bloc juste au-dessus : "evilSeek"
+     n'est pas un LIEU de `STAR_SITES` (elle n'y a pas encore d'entrée, voir
+     `resolveStarEvilFound`), c'est une ÉTAPE. Cette liste n'existe que pour
+     obliger le banc à réclamer sa phrase dans les deux langues. */
+  out.push("evilSeek");
   return out;
 })();
 
@@ -4381,7 +4448,7 @@ export function resolveStarGift(e, playerIds, now) {
    de la reine) n'en a PAS besoin et c'est délibéré : il ne coûte qu'un objet à 400
    or, que le bouton « Argent » du menu dev sait déjà donner. Un bouton par geste
    aurait été un bouton de plus à tenir pour rien. */
-export const STAR_DEV_OPS = ["reset", "warn", "start", "candy", "dish", "lure", "queen", "shy", "green", "chapter", "skip", "all", "plans", "deliver", "timber", "appt", "unslam"];
+export const STAR_DEV_OPS = ["reset", "warn", "start", "candy", "dish", "lure", "queen", "shy", "green", "evil", "chapter", "skip", "all", "plans", "deliver", "timber", "appt", "unslam"];
 /* ⚠️ ZIP 469 — `turn` (le retournement) sort de la liste : sa scène est supprimée
    dans `FermeGame`, et un bouton qui rejoue une scène qui n'existe plus ouvre un
    voile noir de sept secondes sur rien. */
@@ -4594,6 +4661,32 @@ export function devStar(e, op, now, who) {
     resolveStarFound(e, "crater", "\u{1F6E0}️", t);
     resolveStarFound(e, "townShy", "\u{1F6E0}️", t);
     return { star: e, ok: true };
+  }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-03 (lot C) — LE BOUTON DU LAC MALÉFIQUE. MÊME FAMILLE QUE `green` :
+     ║ IL FERME LE CHAPITRE 2 ENTIER (les six compagnes) ET LAISSE LE GESTE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ SANS LUI, JUGER LA DÉCOUVERTE/LE CHEVRON/LE HASARD DE LA CANNE DEMANDE
+     D'ABORD DE GAGNER LES CINQ AUTRES CHASSES — c'est-à-dire qu'on ne les
+     jugerait qu'une fois par soirée de test, exactement le défaut que ce menu
+     existe pour corriger partout ailleurs (444).
+     ⚠️ IL REMET AUSSI LA CANNE INTACTE (`unbreakRod`, lu par l'appelant côté
+     FermeGame.js — `devStar` ne touche jamais à `f`, comme `grantLure`) : le lot
+     D (protection au chaudron) n'existe pas encore, donc RIEN d'autre ne peut la
+     réparer. Sans ce nettoyage, un premier essai du hasard épuiserait le seul
+     moyen de le retester. Il NE remet PAS `e.evilFound` à zéro : la révélation
+     est un fait du monde qu'on ne « annule » pas à la légère — un « reset »
+     complet reste la voie pour tout rejouer depuis le début. */
+  if (op === "evil") {
+    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "\u{1F6E0}️" };
+    if (!e.fall) e.fall = t;
+    for (const site of STAR_FARM_IMPACTS) resolveStarFound(e, site.id, "\u{1F6E0}️", t);
+    resolveStarTownFall(e, t);
+    if (e.townFall) e.townFall = t - STAR_CRATER_COOL_MS - 1000;
+    resolveStarFound(e, "crater", "\u{1F6E0}️", t);
+    resolveStarFound(e, "townShy", "\u{1F6E0}️", t);
+    resolveStarFound(e, "townGreen", "\u{1F6E0}️", t);
+    return { star: e, ok: true, unbreakRod: true };
   }
   if (op === "chapter") {
     /* On donne exactement ce qui manque au chapitre COURANT, pas un de plus.

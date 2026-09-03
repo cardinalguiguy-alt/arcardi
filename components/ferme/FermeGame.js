@@ -381,6 +381,12 @@ const selSapId = (k) => (selIsSap(k) ? k.slice(2) : null);
    qu'elle arbitre quelque chose. La durée du GRATTAGE, elle, est bien une règle
    (`Q.STAR_DIG_MS`) — c'est ce que le geste coûte. */
 const STAR_FIND_MS = 5200;
+/* 2026-09-03 (lot C) — DURÉE D'AFFICHAGE DE L'OVERLAY DE MISSION, même famille
+   que STAR_FIND_MS juste au-dessus (une durée d'affichage, pas une règle — elle
+   ne vit donc pas dans quete.js). Plus longue : c'est une phrase à lire, pas un
+   titre + un compte. ⚠️ Nombre provisoire, de Claude, à juger en jouant (§8 de
+   CLAUDE.md), comme les six du réveil de la reine. */
+const STAR_MISSION_MS = 6000;
 
 export default function FermeGame({ room, me, isHost, players, t, lang, onFinish, savedCode, onCodeLoaded, hidden }) {
   const L = fstr(lang);
@@ -477,6 +483,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [wolfBite, setWolfBite] = useState(null); // {wolfId} pendant le mini-jeu de morsure (loup agressif), sinon null
   const [evilBite, setEvilBite] = useState(null); // {monsterId} pendant le mini-jeu de morsure d'une créature maléfique (chantier 2026-07), sinon null
   const [injuredUntil, setInjuredUntil] = useState(0); // horodatage de fin d'indisponibilité (0 = pas blessé), survit à un refresh (voir farmer.injuredUntil)
+  const [evilRodArmedAt, setEvilRodArmedAt] = useState(0); // 2026-09-03 (lot C) : horodatage HÔTE du premier lancer nu au point de sauvetage (0 = canne intacte), survit à un refresh (voir farmer.evilRodArmedAt)
   const [immunityUntil, setImmunityUntil] = useState(0); // pommade de protection (chantier 2026-07) : horodatage de fin d'immunité/répulsion aux créatures maléfiques (0 = inactif), effet purement local, ne survit pas à un refresh
   const [shopOpen, setShopOpen] = useState(false);
   const [marketOpen, setMarketOpen] = useState(false);   // zip 430 : le marché du champ de foire
@@ -787,6 +794,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const starDigPendRef = useRef(null);              // le cratère dont CE client attend le verdict
   const [starDigTick, setStarDigTick] = useState(0);
   const [starFind, setStarFind] = useState(null);   // { id, found, left } — l'overlay de résultat
+  const [starMission, setStarMission] = useState(null); // 2026-09-03 (lot C) : { key, from } — l'overlay de mission ("Objectif : trouver la septième étoile")
   const [starTick, setStarTick] = useState(0);
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ZIP 454 — LE PLAN, ET IL EST LOCAL.
@@ -1533,6 +1541,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const sleepStartEnergyRef = useRef(0);
   const sleepTimerRef = useRef(null); // setTimeout de sortie automatique après C.SLEEP_MS
   const injuredUntilRef = useRef(0); // miroir synchrone de injuredUntil (lu dans la boucle de rendu/déplacement)
+  const evilRodArmedAtRef = useRef(0); // 2026-09-03 (lot C) : miroir synchrone de evilRodArmedAt (lu dans doActionEvil/startFishingEvil)
+  const evilFoundPingRef = useRef(0); // 2026-09-03 (lot C) : throttle du sendReq("evilFound") pendant qu'on reste dans le rayon (drawEvilFrame)
   const immunityUntilRef = useRef(0); // miroir synchrone de immunityUntil (lu dans updateEvilMonsters)
   // Correctif "dispute Chloé/Rosalie vue de tous" (2026-07, demande Guillaume) :
   // la scène et le cooldown sont désormais un état PARTAGÉ (station.crScene /
@@ -1733,6 +1743,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const t = setTimeout(() => setStarFind(null), STAR_FIND_MS);
     return () => clearTimeout(t);
   }, [starFind]);
+  // 2026-09-03 (lot C) — même geste que starFind juste au-dessus : s'affiche
+  // seul, se ferme seul.
+  useEffect(() => {
+    if (!starMission) return;
+    const t = setTimeout(() => setStarMission(null), STAR_MISSION_MS);
+    return () => clearTimeout(t);
+  }, [starMission]);
+  /* 2026-09-03 (lot C) — LE TOAST DE CASSE, UNE SEULE FOIS, À L'INSTANT EXACT.
+     `EvilRodHazard` (plus bas) montre le compte à rebours pendant les 3
+     secondes ; ceci annonce le moment où il atteint zéro — sans lui, le joueur
+     verrait juste la pastille disparaître, sans savoir si sa canne a cassé ou
+     si le danger est passé. Un `setTimeout` posé sur le RESTE exact (jamais
+     recompté par `EVIL_ROD_BREAK_MS` seul, qui daterait de l'armement plutôt
+     que de la lecture — §3 de CLAUDE.md). */
+  useEffect(() => {
+    if (!evilRodArmedAt) return;
+    const left = evilRodArmedAt + C.EVIL_ROD_BREAK_MS - Date.now();
+    if (left <= 0) return; // déjà cassée avant même ce montage (reprise) : rien à annoncer
+    const t = setTimeout(() => pushToast(L.star.evil.rodBroken), left);
+    return () => clearTimeout(t);
+  }, [evilRodArmedAt]);
   /* ⚠️ LE RAPPEL « PREVIOUSLY », UNE FOIS PAR SESSION ET JAMAIS DEUX. Il ne
      s'ouvre que si la quête est COMMENCÉE et pas finie : sur une ferme neuve il
      n'a rien à dire, et après la fin il redirait une histoire close. La marque
@@ -2334,6 +2365,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // l'état persistant du fermier (voir farmer.injuredUntil / INJURED_MS).
       injuredUntilRef.current = mine.injuredUntil || 0; setInjuredUntil(injuredUntilRef.current);
       hatUntilRef.current = mine.hatUntil || 0; setHatUntil(hatUntilRef.current);
+      // 2026-09-03 (lot C) — même reprise que injuredUntil : une canne cassée
+      // avant un rechargement doit le rester après.
+      evilRodArmedAtRef.current = mine.evilRodArmedAt || 0; setEvilRodArmedAt(evilRodArmedAtRef.current);
     }
     minimapDirtyRef.current = true;
     setHud(h => ({ ...h, money: payload.money, day: payload.day }));
@@ -3710,6 +3744,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         f.inv.starLure = (f.inv.starLure || 0) + 1;
         out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
       }
+      /* 2026-09-03 (lot C) — MÊME FAMILLE QUE `grantLure` juste au-dessus :
+         `devStar` ne touche jamais à `f`, l'appelant fait la mutation. Remet la
+         canne de l'hôte intacte pour retester le hasard — le lot D (protection)
+         n'existe pas encore pour le faire autrement. */
+      if (r.unbreakRod) {
+        f.evilRodArmedAt = 0;
+        out.farmer = out.farmer || { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+        out.farmer.evilRodArmedAt = 0;
+      }
       if (r.scene) out.starScene = { key: r.scene };
       /* ⚠️⚠️⚠️ ZIP 473 — DÉFAUT #4 : « ⏭⏭ All but the ending » et « 🪵 Deliver
          all the timber » posent `wood[k].done = true` directement dans
@@ -3960,6 +4003,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         type: "broadcast", event: "apply",
         payload: { injured: { id: f.id, until: f.injuredUntil } },
       });
+    } else if (req.kind === "evilRodCast") {
+      /* 2026-09-03 (lot C) — LE HASARD DE LA CANNE NUE (§3 de QUETE.md), ARMÉ
+         UNE SEULE FOIS. Idempotent côté hôte : un second `evilRodCast` du même
+         joueur (double pression, latence réseau) ne recule pas l'horodatage —
+         sinon la canne ne casserait jamais tant qu'on continue de presser E.
+         `evilRodBroken()` (fermeEngine.js) DÉRIVE « cassée » de cet horodatage
+         seul ; rien d'autre à écrire ici. */
+      if (!f.evilRodArmedAt) {
+        f.evilRodArmedAt = Date.now();
+        dirtyRef.current = true;
+        hostSend({
+          type: "broadcast", event: "apply",
+          payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, evilRodArmedAt: f.evilRodArmedAt } },
+        });
+      }
+    } else if (req.kind === "evilFound") {
+      /* 2026-09-03 (lot C) — LA SEPTIÈME SŒUR EST VUE, POUR TOUT LE MONDE.
+         Fait du MONDE, pas confidence par joueur (voir la note de `e.evilFound`,
+         quete.js) : `resolveStarEvilFound` est idempotent, deux joueurs qui
+         l'approchent dans la même seconde ne produisent qu'une seule révélation. */
+      const e = (sharedRef.current.star = Q.migrateStar(sharedRef.current.star));
+      const r = Q.resolveStarEvilFound(e, Date.now());
+      if (r.ok && !r.already) {
+        dirtyRef.current = true;
+        persistFnRef.current && persistFnRef.current();
+        hostSend({ type: "broadcast", event: "apply", payload: { star: e } });
+      }
     } else if (req.kind === "runFailed") {
       // Zip 372 : défaite au défi de fuite. Même contrat de confiance
       // qu'"evilCaught" au-dessus — la course s'est déroulée entièrement côté
@@ -7288,6 +7358,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // « l'hôte ne passe pas par le réseau ». La copie découple au passage
       // l'état React de l'objet autoritaire.
       if (Array.isArray(p.farmer.pets)) setMyPets(p.farmer.pets.map(pt => ({ ...pt })));
+      // 2026-09-03 (lot C) — miroir simple, comme injuredUntil juste en dessous,
+      // mais sans effet de bord : casser la canne ne téléporte personne.
+      if (typeof p.farmer.evilRodArmedAt === "number" && p.farmer.evilRodArmedAt !== evilRodArmedAtRef.current) {
+        evilRodArmedAtRef.current = p.farmer.evilRodArmedAt; setEvilRodArmedAt(p.farmer.evilRodArmedAt);
+      }
       if (typeof p.farmer.injuredUntil === "number" && p.farmer.injuredUntil !== injuredUntilRef.current) {
         const wasInjured = injuredUntilRef.current > Date.now();
         injuredUntilRef.current = p.farmer.injuredUntil; setInjuredUntil(p.farmer.injuredUntil);
@@ -9330,6 +9405,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function doActionEvil() {
     const m = meRef.current; if (!m || actAnimRef.current > 0) return;
     const ew = evilWorldRef.current; if (!ew) return;
+    /* 2026-09-03 (lot C) — LA CANNE, ARMÉE DEPUIS LE SAC COMME EN FERME (zip 403 :
+       « Mettre la canne dans le bag [...] au clic on pourra la déployer »). Elle
+       n'est pas une case de `SLOT.tools`, donc elle doit être testée AVANT ce
+       garde — exactement comme `doAction()` la teste avant tout le reste de la
+       branche ferme (`rodArmedRef.current`, ligne ~9165). */
+    if (rodArmedRef.current) { startFishingEvil(targetTileEvil()); return; }
     if (slotRef.current !== SLOT.tools) return;
     if (toolKindRef.current === "pick") { doMineEvil(m, ew); return; }
     if (toolKindRef.current !== "axe") return;
@@ -9495,10 +9576,59 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     pushToast(L.fishBite(lang === "en" ? C.FISH[ft].nameEn : C.FISH[ft].name));
     setFishMini({ mode: ft, fish: ft });
   }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-03 (lot C) — LA CANNE DANS LE LAC MALÉFIQUE, EN DEUX RÉGIMES.
+     ╚══════════════════════════════════════════════════════════════════════════
+     Guillaume, en cours de session : « ce lac maléfique doit permettre la pêche
+     même en dehors du contexte de la quête. Mais seulement la pêche de poissons
+     mutants et de squelettes de poissons donc rien de stockable pour l'instant. »
+     ⚠️⚠️ CE QUE CETTE PHRASE NE TRANCHAIT PAS, ET QU'IL A FALLU DÉCIDER (voir
+     `EVIL_ROD_HAZARD_R`, fermeConstants.js) : le hasard de la canne nue (§3 de
+     QUETE.md) NE FRAPPE QUE LA TENTATIVE DE SAUVER LA SEPTIÈME SŒUR, à son point
+     précis — jamais la pêche ambiante, qui reste jouable n'importe où ailleurs
+     dans le lac, sans condition de quête. Un hasard qui frapperait tout le lac
+     aurait contredit sa demande ; le confiner au point de sauvetage raconte la
+     même chose (l'eau qui la retient est hostile) sans éteindre la pêche
+     ordinaire.
+     ⚠️ TANT QUE LE LOT D (protection au chaudron) N'EXISTE PAS, IL N'Y A RIEN À
+     PÊCHER À CE POINT PRÉCIS : on arme le compteur, on avertit, et c'est tout —
+     « on comprend le danger, sans encore pouvoir la sauver » (table des lots,
+     QUETE.md §5). */
+  function startFishingEvil(tt) {
+    const ew = evilWorldRef.current, m = meRef.current; if (!ew || !m) return;
+    if (!inMapEvil(tt.x, tt.y) || ew.ground[tt.y * ew.w + tt.x] !== C.G_WATER) { pushToast(L.toastNeedWater); return; }
+    const e = sharedRef.current.star;
+    const spot = evilRescueSpot(ew);
+    const nearSpot = spot && Q.starEvilFound(e)
+      && Math.hypot((tt.x + 0.5) - (spot.x + 0.5), (tt.y + 0.5) - (spot.y + 0.5)) <= C.EVIL_ROD_HAZARD_R;
+    if (nearSpot) {
+      const armed = evilRodArmedAtRef.current;
+      if (armed && Date.now() - armed >= C.EVIL_ROD_BREAK_MS) { pushToast(L.star.evil.rodStillBroken); return; }
+      if (!armed) { pushToast(L.star.evil.rodArming); sendReq({ kind: "evilRodCast" }); }
+      return;
+    }
+    // Pêche AMBIANTE : mutant/squelette, jamais stockable (C.EVIL_LAKE_FISH).
+    // Purement locale — rien à créditer, donc aucun req vers l'hôte.
+    let total = 0; for (const fs of C.EVIL_LAKE_FISH) total += fs.weight;
+    let r = Math.random() * total, fi = 0;
+    for (let i = 0; i < C.EVIL_LAKE_FISH.length; i++) { r -= C.EVIL_LAKE_FISH[i].weight; if (r <= 0) { fi = i; break; } }
+    fishTileRef.current = { x: tt.x, y: tt.y };
+    pushToast(L.evilFishBite(lang === "en" ? C.EVIL_LAKE_FISH[fi].nameEn : C.EVIL_LAKE_FISH[fi].name));
+    setFishMini({ mode: fi % 3, fish: 0, evil: fi });
+  }
   function fishWon() {
     const fm = fishMini, tt = fishTileRef.current;
     setFishMini(null);
     if (!tt || !fm) return;
+    /* 2026-09-03 (lot C) — LES PRISES DU LAC MALÉFIQUE NE CRÉDITENT RIEN. « Rien
+       de stockable pour l'instant » (Guillaume) : contrairement à `sea`/`fish`
+       juste en dessous, aucun `sendReq` — il n'y a rien pour l'hôte à arbitrer,
+       la révélation est un pur toast, comme la coupe/le minage en zone maléfique
+       n'envoient QUE le gain, jamais un événement vide. */
+    if (typeof fm.evil === "number") {
+      pushToast(L.evilFishCaught(lang === "en" ? C.EVIL_LAKE_FISH[fm.evil].nameEn : C.EVIL_LAKE_FISH[fm.evil].name));
+      return;
+    }
     // 2026-07 station update: rare catches claim `sea`; the host validates
     // the streak/extreme-row eligibility (see resolveAct in fermeEngine.js).
     if (typeof fm.sea === "number") { seaStreakRef.current = 0; sendReq({ kind: "act", action: "fish", x: tt.x, y: tt.y, sea: fm.sea }); }
@@ -17065,6 +17195,56 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
         }
       }
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ 2026-09-03 (lot C) — LA SEPTIÈME SŒUR, VISIBLE DÈS QU'ON EST DÉBLOQUÉ.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️ VISIBLE AVANT `e.evilFound` — ET C'EST VOULU : c'est en la VOYANT
+         qu'on s'approche, pas l'inverse (« on voit dépasser du lac une branche
+         de l'étoile », QUETE.md §3). `e.evilFound` ne déclenche que le dialogue
+         (voir starWatch), jamais l'apparition elle-même.
+         ⚠️ COULEUR « white » (froide, argentée) réutilisée telle quelle depuis la
+         blanche : elle n'a pas encore de couleur à elle (aucun verbe, aucune
+         entrée dans STAR_SITES — voir la note de `e.evilFound`, quete.js), et
+         « trait pour trait à l'étoile réelle » (la leçon du lot B) veut dire un
+         DESSIN déjà existant, jamais une teinte inventée pour l'occasion. L'état
+         2 (éteinte/grise) EST le bon état : elle s'éteint, elle ne dort pas. */
+      const evilE = sharedRef.current.star;
+      if (Q.starEvilUnlocked(evilE)) {
+        const spot = evilRescueSpot(ew);
+        if (spot && spot.x >= x0 - 3 && spot.x <= x1 + 3 && spot.y >= y0 - 3 && spot.y <= y1 + 3) {
+          draws.push({ y: (spot.y + 1) * T, fn: () => {
+            const set = sprites.starWispColors && sprites.starWispColors.white;
+            const img = set && set[2] && set[2][Math.floor(now / 260) & 3];
+            if (!img) return;
+            const bob = Math.sin(now / 900) * 1.4;
+            const k = 3, w2 = img.width * k, h2 = img.height * k;
+            const cx = spot.x * T + T / 2, cy = (spot.y + 1) * T;
+            ctx.save();
+            // Ondulations : même famille que le Gourmandin plus haut dans cette fonction.
+            for (let ri = 0; ri < 2; ri++) {
+              const ph = ((now / 2400 + ri / 2) % 1);
+              ctx.strokeStyle = `rgba(200, 180, 255, ${(0.4 * (1 - ph)).toFixed(3)})`;
+              ctx.lineWidth = 1.3;
+              ctx.beginPath();
+              ctx.ellipse(cx, cy - 2, 5 + ph * 13, 2.5 + ph * 6, 0, 0, Math.PI * 2);
+              ctx.stroke();
+            }
+            // Clip : seule la moitié HAUTE dépasse — prisonnière, pas posée au bord.
+            ctx.beginPath();
+            ctx.rect(cx - w2 / 2 - 4, cy - h2 * 0.62 + bob, w2 + 8, h2 * 0.62);
+            ctx.clip();
+            ctx.globalAlpha = 0.88;
+            ctx.drawImage(img, Math.round(cx - w2 / 2), Math.round(cy - h2 + bob), w2, h2);
+            ctx.restore();
+          } });
+        }
+        /* ⚠️ LE DÉCLENCHEUR RÉSEAU (proximité -> sendReq) N'EST PAS ICI : cette
+           fonction DESSINE, elle n'agit pas — aucune autre passe de rendu de ce
+           fichier n'envoie de requête, et casser cette règle pour un seul cas
+           particulier serait la divergence en attente du §8 de CLAUDE.md. Il vit
+           dans `updateMeEvil`, la fonction de LOGIQUE appelée une fois par
+           image pour cette même zone (voir juste en dessous de `evilRescueSpot`). */
+      }
       draws.sort((a, b) => a.y - b.y);
       for (const d of draws) d.fn();
       /* Voile permanent (ambiance, indépendant du cycle jour/nuit de la ferme,
@@ -17079,6 +17259,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const candyHere = !!(ew.spec && ew.spec.key === "candy");
       ctx.fillStyle = candyHere ? "rgba(255,215,235,0.16)" : "rgba(0,0,10,0.35)";
       ctx.fillRect(cam.x, cam.y, cam.vw, cam.vh);
+      drawStarChevron(cam, ZOOM); // 2026-09-03 (lot C) — APRÈS le voile permanent, même règle que la boussole/le voile de nuit en ferme (« après le voile : rien ne s'assombrit »)
       // Invite E pour ramasser le chaudron-artéfact (chantier 2026-07).
       const already = sharedRef.current.salveCraft && sharedRef.current.salveCraft.cauldronUnlocked;
       // Zip 235: passage-world pickups (breloques). Only shown for worlds
@@ -20794,6 +20975,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // pour les coéquipiers présents sur la carte ET pour la simulation
       // hôte des créatures partagées. x/y publics restent figés côté ferme.
       const nowP = performance.now();
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ 2026-09-03 (lot C) — LE DÉCLENCHEUR DE LA DÉCOUVERTE, ICI ET PAS DANS
+         ║ LE RENDU.
+         ╚══════════════════════════════════════════════════════════════════════
+         Proximité du point de sauvetage — la MÊME distance que le hasard de la
+         canne (`EVIL_ROD_HAZARD_R`) : se tenir assez près pour tenter de pêcher,
+         c'est déjà être assez près pour l'avoir vue. Idempotent côté hôte
+         (`resolveStarEvilFound`) ; `evilFoundPingRef` n'existe QUE pour éviter de
+         spammer `sendReq` à chaque image tant que le joueur reste dans le rayon
+         (§3 de CLAUDE.md : seul le NOMBRE de `send()` compte, mais zéro inutile
+         vaut toujours mieux qu'un). */
+      const evilStar = sharedRef.current.star;
+      if (Q.starEvilUnlocked(evilStar) && !Q.starEvilFound(evilStar)) {
+        const spot = evilRescueSpot(ew);
+        if (spot && Math.hypot((m.x + 0.5) - (spot.x + 0.5), (m.y + 0.5) - (spot.y + 0.5)) <= C.EVIL_ROD_HAZARD_R
+            && nowP - (evilFoundPingRef.current || 0) > 2000) {
+          evilFoundPingRef.current = nowP;
+          sendReq({ kind: "evilFound" });
+        }
+      }
       maybeSendPos();
     }
     function updateMe(dt) {
@@ -23180,6 +23381,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // zone maléfique (elle borne la caméra sur les dimensions de la ferme, pas
   // celles, bien plus petites, de la carte maléfique). Voir doActionEvil.
   function inMapEvil(x, y) { const ew = evilWorldRef.current; return ew && x >= 0 && y >= 0 && x < ew.w && y < ew.h; }
+  /* 2026-09-03 (lot C) — LE POINT OÙ LA SEPTIÈME SŒUR EST PRISONNIÈRE. UNE SEULE
+     FORMULE, LUE PAR TROIS APPELANTS (startFishingEvil, drawEvilFrame,
+     starTargetPos) : le §4 de CLAUDE.md est explicite là-dessus (« une même
+     grandeur écrite à sept endroits reste juste jusqu'au jour où elle est
+     fausse »). Dérivé de `ew.lake` — jamais recopié — un peu en retrait du bord
+     nord pour rester en eau franche malgré le bruit du générateur
+     (`d < 6 + rnd()*2`, fermeEngine.js). */
+  function evilRescueSpot(ew) {
+    return ew && ew.lake ? { x: ew.lake.x, y: ew.lake.y - Math.max(1, ew.lake.r - 2) } : null;
+  }
   function targetTileEvil() {
     const m = meRef.current, ew = evilWorldRef.current; if (!m || !ew) return { x: 0, y: 0 };
     const canvas = canvasRef.current;
@@ -25560,6 +25771,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        ⚠️ DÉRIVÉ DE `C.TOWN_PLAZA`, jamais deux coordonnées écrites à la main. */
     if (id === "shyPlaza")
       return { zone: "town", x: C.TOWN_PLAZA.x + (C.TOWN_PLAZA.w >> 1), y: C.TOWN_PLAZA.y + (C.TOWN_PLAZA.h >> 1) };
+    /* 2026-09-03 (lot C) — MÊME CONTRAT QUE "cauldron" JUSTE AU-DESSUS : une
+       adresse hors-table, résolue vivante. Dans le monde maléfique, elle pointe
+       le point de sauvetage (`evilRescueSpot`, dérivé de `ew.lake` — un seul
+       endroit connaît cette formule, voir sa note). Hors du monde maléfique,
+       elle replie sur le passage sombre, EXACTEMENT comme le chaudron : c'est
+       la même porte pour les deux. */
+    if (id === "evilLake") {
+      const mm = meRef.current;
+      if (mm && mm.zone === "evil") {
+        const p = evilRescueSpot(evilWorldRef.current);
+        return p ? { zone: "evil", x: p.x, y: p.y } : null;
+      }
+      const w = worldRef.current;
+      return (w && w.darkPassage) ? { zone: "farm", x: w.darkPassage.x, y: w.darkPassage.y } : null;
+    }
     if (id === "sawmill") {
       const cb = (sharedRef.current.crafts || {}).sawmill;
       if (!cb || !cb.built) return null;
@@ -26073,6 +26299,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const dishPh = Q.starDishPhase(e, Date.now());
     const dishBy = (e.dish && e.dish.by) || "";
     const w = starWatchRef.current;
+    // 2026-09-03 (lot C) — deux transitions de plus, MÊME DISCIPLINE que le
+    // reste de cette fonction : un instantané au montage, une différence lue
+    // ensuite. Un joueur qui rejoint après coup (déjà débloqué, déjà trouvée)
+    // reçoit l'ÉTAT, pas l'événement — le même garde que pour les plans/le navire.
+    const evilUnlocked = Q.starEvilUnlocked(e), evilFound = Q.starEvilFound(e);
     if (!w) { starWatchRef.current = { built, crater, gift, sky: false, pool: false, empty: false,
                                        followers, dug, plan: Q.starPlanReady(e), timber: Q.starTimberBuilt(e),
                                        /* 2026-09-01 — L'ÉTAT des morceaux, pas leur NOMBRE. Un compteur
@@ -26080,7 +26311,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                                           cratères retournés, zip 469), et le ruban a besoin des deux
                                           états pour peindre leur écart. */
                                        parts: Q.starShipParts(e),
-                                       dishPh, dishBy }; return; }
+                                       dishPh, dishBy, evilUnlocked, evilFound }; return; }
     /* ⚠️⚠️ TROIS PHRASES, ET AUCUNE N'EST UN ÉVÉNEMENT RÉSEAU : elles se déduisent
        de l'état partagé, comme tout ce bloc. Un joueur qui se connecte au milieu
        d'un trajet reçoit l'ÉTAT (un plat en main) et non les toasts qui l'ont
@@ -26098,6 +26329,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          ne saurait plus s'il a refroidi ou s'il vient d'être servi. */
       else if (dishPh === "cold" && w.dishPh === "carry") pushToast(L.star.s2.dishCold);
       w.dishPh = dishPh; w.dishBy = dishBy;
+    }
+
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ 2026-09-03 (lot C) — LA SEPTIÈME SŒUR, DEUX RÉVÉLATIONS DISTINCTES.
+       ╚══════════════════════════════════════════════════════════════════════
+       ⚠️ `evilUnlocked` OUVRE LA MISSION (l'overlay « Objectif : trouver la
+       septième étoile »), `evilFound` OUVRE LA DÉCOUVERTE (les deux toasts,
+       « Sauve-moi » puis la reine). Ce ne sont pas deux noms pour le même
+       instant : entre les deux, il faut marcher jusqu'au lac — le même écart
+       que `dishPh` "cook"→"ready" juste au-dessus.
+       ⚠️ LES DEUX SE COMPARENT DANS LES DEUX SENS (`!==`, pas `&& !w.x`) : un
+       « reset » du menu dev (ou « effacer ce chapitre ») peut faire REDESCENDRE
+       `e.ch`/`evilFound`, et une re-progression doit pouvoir rejouer les deux
+       révélations — sinon `w.evilUnlocked` resterait bloqué à `true` pour
+       toujours après un seul cycle, empêchant tout second test dans la même
+       session (exactement le piège que Guillaume teste avec le bouton
+       développeur « evil », voir `devStar`). */
+    if (evilUnlocked !== w.evilUnlocked) {
+      if (evilUnlocked && !w.evilUnlocked) setStarMission({ key: "evilSeek", from: performance.now() });
+      w.evilUnlocked = evilUnlocked;
+    }
+    if (evilFound !== w.evilFound) {
+      if (evilFound && !w.evilFound) starTell([L.star.evil.trapped, L.star.evil.needRod], 2600);
+      w.evilFound = evilFound;
     }
 
     /* ╔══════════════════════════════════════════════════════════════════════
@@ -31575,7 +31830,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         );
       })()}
       {repairMini && <RepairMinigame name={repairMini.name} L={L} onDone={(win) => { setRepairMini(null); sendReq({ kind: "repairResult", win }); pushToast(win ? L.repairWin : L.repairFail); }} />}
-      {fishMini && <FishMinigame mode={fishMini.mode} fish={fishMini.fish} L={L} lang={lang} onWin={fishWon} onFail={fishLost} />}
+      {fishMini && <FishMinigame mode={fishMini.mode} fish={fishMini.fish} evil={fishMini.evil} L={L} lang={lang} onWin={fishWon} onFail={fishLost} />}
       {barnMini && <BarnMinigame level={barnMini.level} L={L} onWin={barnWon} onFail={barnLost} />}
       {/* ⚠️⚠️ ZIP 478 — LE MONTAGE D'UNE PIÈCE DU NAVIRE. Demande de Guillaume :
           « le même mini jeu marteau que pour l'amélioration de la grange ». C'est
@@ -32105,6 +32360,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
 
       {/* ── ZIP 469 — L'OVERLAY DE FOUILLE. Voir la note de `StarFindCard`. */}
       {starFind && <StarFindCard find={starFind} sprites={spritesRef.current} L={L} tick={starTick} />}
+      {starMission && <StarMissionCard mission={starMission} L={L} />}
+      {/* 2026-09-03 (lot C) — la pastille de casse de la canne, voir le commentaire
+          de startFishingEvil : le compte à rebours doit se VOIR (§13 de CLAUDE.md,
+          « plus d'indicateurs visuels de progression »), pas seulement se deviner
+          au toast. Elle se referme d'elle-même : cassée (au-delà de EVIL_ROD_BREAK_MS)
+          ou intacte (evilRodArmedAt à 0), elle n'a rien de plus à montrer. */}
+      {meRef.current && meRef.current.zone === "evil" && evilRodArmedAt > 0
+        && Date.now() - evilRodArmedAt < C.EVIL_ROD_BREAK_MS
+        && <EvilRodHazard armedAt={evilRodArmedAt} L={L} />}
 
       {/* ╔════════════════════════════════════════════════════════════════════
           ║ ZIP 480 — L'AUDIENCE CHEZ LE MAIRE.
@@ -33128,6 +33392,43 @@ function StarFindCard({ find, sprites, L, tick }) {
   );
 }
 
+/* 2026-09-03 (lot C) — L'OVERLAY DE MISSION DE LA SEPTIÈME SŒUR. Même geste que
+   `StarFindCard` juste au-dessus (s'affiche seul, se ferme seul, voir CSS
+   `.ferme-evil-mission`) — texte seul, pas de médaillon : elle vient d'être
+   ANNONCÉE, elle n'a encore ni sprite ni couleur (voir la note de `e.evilFound`,
+   quete.js). `mission.key` n'a qu'une seule valeur possible aujourd'hui
+   ("evilSeek"), gardée en prop plutôt qu'en dur pour ne pas avoir à toucher ce
+   composant le jour où un second déclencheur apparaît. */
+function StarMissionCard({ mission, L }) {
+  if (!mission) return null;
+  return (
+    <div className="ferme-evil-mission" style={{ animationDuration: (STAR_MISSION_MS / 1000) + "s" }}>
+      <div className="ferme-evil-mission-in">
+        <div className="ferme-evil-mission-title">{L.star.evil.missionTitle}</div>
+        <div className="ferme-evil-mission-body">{L.star.evil.missionBody}</div>
+      </div>
+    </div>
+  );
+}
+
+/* 2026-09-03 (lot C) — LA PASTILLE DE CASSE DE LA CANNE. Se tick elle-même
+   (même patron que `FishMinigame` : un `requestAnimationFrame` local, jamais un
+   état du composant parent) pour ne pas imposer un re-rendu par image à toute
+   la scène pour un simple compte à rebours de 3 secondes. `armedAt` est
+   l'horodatage HÔTE (§3 de CLAUDE.md) ; le compte à rebours se lit sur
+   l'horloge de CE client, jamais comparée à une autre. */
+function EvilRodHazard({ armedAt, L }) {
+  const [, force] = useState(0);
+  useEffect(() => {
+    let raf = 0;
+    const loop = () => { raf = requestAnimationFrame(loop); force(v => (v + 1) % 1000000); };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  const left = Math.max(0, C.EVIL_ROD_BREAK_MS - (Date.now() - armedAt));
+  return <div className="ferme-evil-rod-hazard">{L.star.evil.rodArming} ({(left / 1000).toFixed(1)}s)</div>;
+}
+
 /* ╔═══════════════════════════════════════════════════════════════════════════
    ║ 2026-09-01 — LA PHRASE D'OBJECTIF NE SAUTE PLUS.
    ╚═══════════════════════════════════════════════════════════════════════════
@@ -33724,12 +34025,16 @@ export function StarMinigame({ kind, round, solo, L, onWin, onQuit }) {
    mode 2 (brochet) : réaction, cliquer dès que le cadre devient vert.
    Entièrement local (clic ou Espace) ; sur victoire, le parent envoie la prise.
    ============================================================================ */
-function FishMinigame({ mode, fish, L, lang, onWin, onFail }) {
+function FishMinigame({ mode, fish, evil, L, lang, onWin, onFail }) {
   const [, force] = useState(0);
   const s = useRef(null);
   const done = useRef(false);
   const held = useRef(false);
-  const fishInfo = C.FISH[fish] || C.FISH[0];
+  /* 2026-09-03 (lot C) — MÊME PATRON QUE `sea` (voir startFishing) : `evil`
+     désigne une entrée de `C.EVIL_LAKE_FISH` plutôt que de `C.FISH`, seulement
+     pour l'AFFICHAGE (nom/sous-titre) — la mécanique du mini-jeu (mode 0/1/2)
+     ne change pas d'une ligne. */
+  const fishInfo = typeof evil === "number" ? (C.EVIL_LAKE_FISH[evil] || C.EVIL_LAKE_FISH[0]) : (C.FISH[fish] || C.FISH[0]);
 
   const finish = (kind, tooSoon) => { if (done.current) return; done.current = true; if (kind === "win") onWin(); else onFail(!!tooSoon); };
   const press = () => {

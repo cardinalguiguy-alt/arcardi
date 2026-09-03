@@ -1017,11 +1017,54 @@ export const STAR_LURE_BREW_MS = 90 * 1000;
    qu'il faut chercher ("fouillez les moindres recoins de cette forêt
    maudite"). Crédite directement STAR_LURE_RECIPE.magicOre — DÉRIVÉ, jamais
    recopié, pour que le tas suive tout seul si la recette change un jour.
-   Position choisie à l'écart de tout le reste de la carte maléfique (le lac
-   à 47/30, EVIL_SPAWN au sud, EVIL_RETURN_PASSAGE au nord-ouest,
-   EVIL_CAULDRON_SPAWN au nord-est, la rive est du défi de fuite à partir de
-   EAST_LAKE_X=57) : un vrai recoin, au sud-ouest. */
+   Position choisie à l'écart de tout le reste de la carte maléfique (le lac,
+   EVIL_SPAWN au sud, EVIL_RETURN_PASSAGE au nord-ouest, EVIL_CAULDRON_SPAWN au
+   nord-est, la rive est du défi de fuite à partir de EAST_LAKE_X=57) : un vrai
+   recoin, au sud-ouest.
+   ⚠️⚠️ CORRECTIF 2026-09-03 (lot C, quête de l'étoile) — CE COMMENTAIRE DISAIT
+   « le lac à 47/30 », ET C'ÉTAIT FAUX. Ce chiffre vient de `generateEvilWorld`
+   (fermeEngine.js), une fonction qui n'est appelée par AUCUN code de jeu — seuls
+   deux scripts hors-jeu de `public/templerun/tools/` la citent, comme « la carte
+   historique ». Le lac RÉELLEMENT servi (`generatePassageWorld`, seed fixe
+   `0xE411` pour le monde "evil") est ailleurs et légèrement plus petit ; il est
+   déjà exporté vivant en `ew.lake = {x,y,r}` à chaque entrée dans la zone (même
+   patron que le monstre du Pays des Bonbons, `FermeGame.js`). Aucune constante
+   figée n'a donc été ajoutée ici pour le lac lui-même — la lire dans `ew.lake`
+   est la seule source qui ne peut pas diverger de ce que le joueur voit. */
 export const EVIL_SHARDS_SPAWN = { x: 14, y: 50 };
+
+/* ══════════════════════════════════════════════════════════════════════════
+   2026-09-03 (lot C, quête de l'étoile) — LE LAC MALÉFIQUE DEVIENT PÊCHABLE.
+   ══════════════════════════════════════════════════════════════════════════
+   Demande de Guillaume : la pêche y marche MÊME HORS DU CONTEXTE DE LA QUÊTE —
+   ce n'est donc pas un système narratif, c'est une règle du MONDE, à côté des
+   autres constantes `EVIL_*`. Deux catégories de prises, jamais stockables
+   « pour l'instant » (sa formulation) : aucune des deux ne rejoint `f.inv`,
+   contrairement à `C.FISH`/`C.SEA_CREATURES`. Même forme que ces deux tables
+   (id/name/nameEn/color/weight) pour que `FishMinigame` les affiche pareil,
+   sans `sell`/`energy` puisqu'il n'y a rien à vendre ni à manger. */
+export const EVIL_LAKE_FISH = [
+  { id: 0, name: "Vairon difforme",     nameEn: "Warped minnow",   color: "#8fae6a", weight: 0.30 },
+  { id: 1, name: "Silure aux trois yeux", nameEn: "Three-eyed catfish", color: "#5a6a4a", weight: 0.22 },
+  { id: 2, name: "Carpe suintante",     nameEn: "Weeping carp",    color: "#7a8f3a", weight: 0.18 },
+  { id: 3, name: "Arête errante",       nameEn: "Wandering bones", color: "#d8d0c0", weight: 0.16 },
+  { id: 4, name: "Crâne de brochet",    nameEn: "Pike skull",      color: "#c8c0b0", weight: 0.09 },
+  { id: 5, name: "Squelette entier",    nameEn: "Whole skeleton",  color: "#e8e0d0", weight: 0.05 },
+];
+/* Casse de la canne NUE dans cette eau (§3 de QUETE.md, master prompt) : un
+   compteur s'arme au premier lancer et casse la canne au bout de ce délai. Voir
+   `evilRodBroken()` (fermeEngine.js) pour la lecture — un horodatage HÔTE posé
+   une fois, jamais recompté, jamais comparé entre deux horloges (§3 de
+   `CLAUDE.md`).
+   ⚠️ PORTÉE (décision de Guillaume, 2026-09-03) : ce danger ne frappe QUE la
+   tentative de sauver la septième sœur elle-même — voir `EVIL_ROD_HAZARD_R`
+   juste dessous — jamais la pêche ambiante des prises ci-dessus, qui doit
+   rester jouable en toutes circonstances. Bloquer TOUT le lac aurait contredit
+   « la pêche doit marcher même hors du contexte de la quête » ; bloquer
+   seulement l'endroit précis où elle est prisonnière raconte la même chose
+   (l'eau qui la retient est hostile) sans éteindre la pêche ordinaire. */
+export const EVIL_ROD_BREAK_MS = 3000;
+export const EVIL_ROD_HAZARD_R = 1.6; // cases autour du point de sauvetage — même ordre de grandeur que STAR_GREEN_NEAR/STAR_SHY_NEAR (quete.js)
 
 // --- Clôture (posée librement par les joueurs, section par section) ---
 export const FENCE_COST = 15; // prix d'une section de clôture à la boutique (payée en or, inchangé)

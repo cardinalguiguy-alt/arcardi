@@ -201,41 +201,79 @@ train, 431). Le seul qui décide vraiment de la longueur de la chasse est le cr�
 **Menu développeur** : **« 🌿 Queen + hidden one tamed »** — il apprivoise la reine ET la discrète,
 et laisse la verte entière, indices compris.
 
-### 3. Partie B — la septième sœur, prisonnière du lac maléfique
+### 3. Partie B — la septième sœur, prisonnière du lac maléfique — LOT C LIVRÉ (2026-09-03)
 
-**Le lac existe DÉJÀ.** `generateEvilWorld` (`fermeEngine.js:490-504`) pose un « grand lac violet
-luisant » depuis 2026-07 (`lakeCx=47, lakeCy=30, lakeR=12`, `ground = C.G_WATER`), pour
-l'ambiance. Personne n'y avait donné de fonction narrative — c'est exactement ce que cette quête
-lui donne. ⚠️ **À FAIRE EN PREMIER, avant tout le reste** : sortir ces trois nombres en constantes
-exportées (`EVIL_LAKE_X/Y/R` ou équivalent, dans `fermeConstants.js`) — aujourd'hui ils sont
-recopiés en dur dans une seule fonction, mais la pêche, le placement de l'étoile et le chevron de
-guidage vont tous les trois avoir besoin de savoir où est ce lac. Trois lectures d'un seul nombre
-recopié à la main, c'est exactement le piège du §4 (« une même grandeur écrite à sept endroits »).
+⚠️⚠️⚠️ **CE QUE CE PARAGRAPHE CROYAIT SAVOIR DU LAC ÉTAIT FAUX, ET ÇA A COÛTÉ LA MOITIÉ DU LOT C À
+DÉCOUVRIR.** Il disait « le lac existe DÉJÀ » en citant `generateEvilWorld` (`fermeEngine.js`,
+`lakeCx=47, lakeCy=30, lakeR=12`) — **cette fonction n'est appelée par AUCUN code de jeu**, seuls
+deux scripts hors-jeu de `public/templerun/tools/` la citent, comme « la carte maléfique
+historique ». Le lac RÉELLEMENT servi vient de `generatePassageWorld` (seed fixe `0xE411` pour le
+monde `"evil"`), à des coordonnées différentes, et il est **déjà exporté vivant** en `ew.lake =
+{x,y,r}` à chaque entrée dans la zone — précédent direct : le monstre du Pays des Bonbons le lit
+déjà de la même façon. **Aucune constante `EVIL_LAKE_X/Y/R` n'a donc été posée** : le point de
+sauvetage se calcule à la volée depuis `ew.lake` par une seule fonction, `evilRescueSpot(ew)`
+(`FermeGame.js`), lue par les trois appelants que ce paragraphe annonçait déjà (chevron, pêche,
+placement) — exactement l'esprit du §4 (« une même grandeur, un seul endroit »), juste pas la
+forme prévue. `EVIL_ROD_BREAK_MS`/`EVIL_ROD_HAZARD_R` (`fermeConstants.js`) portent la casse de la
+canne et le rayon du hasard.
+
+⚠️⚠️ **DEUX AUTRES PRÉMISSES DE CE DOCUMENT ÉTAIENT FAUSSES, TROUVÉES EN ÉCRIVANT LE CODE, PAS EN
+LE RELISANT** : (1) *« le chevron [...] »* — il n'était en réalité **jamais dessiné dans le monde
+maléfique** (`drawEvilFrame` n'appelait pas `drawStarChevron`, contrairement aux trois autres
+zones) ; l'appel est ajouté, après le voile permanent (même règle que le voile de nuit en ferme —
+« après le voile, rien ne s'assombrit »). (2) *« la pêche [...] fonctionne DÉJÀ sur le lac
+maléfique sans rien changer »* — faux : `doActionEvil()` ne gérait que la hache/pioche, la canne
+n'y était pas atteignable du tout, et `startFishing()` lisait le monde FERME en dur. Une branche
+canne dédiée (`startFishingEvil`) a dû être écrite.
+
+⚠️⚠️⚠️ **CE QUE GUILLAUME A AJOUTÉ EN COURS DE LOT, ET QUI CHANGE LA PORTÉE DU HASARD** : *« ce lac
+maléfique doit permettre la pêche même en dehors du contexte de la quête. Mais seulement la pêche
+de poissons mutants et de squelettes de poissons donc rien de stockable pour l'instant. »* Décision
+prise pour concilier les deux : **le hasard de la canne nue (§3 de ce document, casse en 3 s) ne
+frappe QUE la tentative de sauver la septième sœur, à son point précis** (`EVIL_ROD_HAZARD_R`,
+1,6 case) — jamais la pêche ambiante, qui reste jouable n'importe où ailleurs dans le lac, à toute
+heure, sans condition de quête (`C.EVIL_LAKE_FISH`, six prises, jamais stockées, mode de mini-jeu
+dérivé de l'espèce comme pour `C.FISH`). C'est une interprétation de Claude, pas une phrase
+supplémentaire de Guillaume — à confirmer en jouant que le partage danger/ambiance tombe au bon
+endroit.
 
 **La séquence complète, dans l'ordre où Guillaume l'a racontée :**
 
-1. **Le déclencheur.** Une fois les autres étoiles réunies (nombre exact à confirmer, §6), la
-   reine dit — en bulle, comme les autres compagnes (`trailFollow`, §3 pour la position dérivée) :
-   *« La septième étoile a perdu presque toute son énergie. Elle est prisonnière d'un liquide qui
-   la corrompt ; elle s'éteint. Trouve-la. »* Puis un overlay de mission prend le relais :
-   « Objectif : trouver la septième étoile. » ⚠️ Réutiliser le patron d'overlay des fouilles
-   (`STAR_DIG_RESULTS`, l'overlay à médaillon) pour la forme, pas le fond — c'est un overlay de
-   MISSION, pas de résultat, donc un habillage différent, mais le même geste (s'affiche seul, se
-   ferme seul).
-2. **Le guidage.** Un chevron (`drawStarChevron`, `FermeGame.js:22305`, piloté par
-   `STAR_GOAL_TARGET`/`starGoalCtx` dans `quete.js`) mène d'abord au passage vers le monde
-   maléfique, puis, une fois dedans, au lac. ⚠️ `STAR_GOAL_TARGET` connaît déjà `"cauldron"` comme
-   cible valide (`quete.js:1986`) — ajouter une cible `"evilLake"` (ou équivalent) est la même
-   famille d'ajout, pas un nouveau mécanisme.
-3. **La découverte.** On voit dépasser du lac une branche de l'étoile, terne, presque grise, qui
-   se débat lentement. On s'approche : elle dit « Sauve-moi ». Quelques secondes après, la reine
-   (toujours en bulle, à distance) explique qu'il faudra la canne à pêche.
-4. **Le piège — la canne casse dans cette eau.** Utiliser la canne nue dans le lac maléfique la
-   fait casser en **3 secondes** (un compteur qui s'arme au premier lancer, rend la canne inutilisable
-   ensuite). C'est un **hazard NEUF** — l'eau maléfique n'endommage rien aujourd'hui dans le code
-   (vérifié : aucune trace de dégât lié à `G_WATER` en zone `evil`). ⚠️ Traiter ce compteur comme
-   tout minuteur de quête : dérivé d'un horodatage posé côté HÔTE au premier lancer, jamais compté
-   en local (§3 de `CLAUDE.md`, « ne jamais comparer une horloge hôte à une horloge invité »).
+1. ✅ **Le déclencheur — LIVRÉ.** Une fois les six compagnes réunies (`starEvilUnlocked`, `e.ch`
+   au chapitre final — la reine EST l'une des six, voir §6 point 4), la reine dit — en bulle,
+   texte de Guillaume mot pour mot — *« La septième étoile a perdu presque toute son énergie.
+   Elle est prisonnière d'un liquide qui la corrompt ; elle s'éteint. Trouve-la. »* (`frame.evilSeek`,
+   déclenché par `starGoalKey` comme toutes les autres compagnes). Puis un overlay de mission
+   texte-seul (`StarMissionCard`, `FermeGame.js` — pas de médaillon, elle n'a pas encore de sprite
+   à montrer) : « OBJECTIF — Trouver la septième étoile. » ⚠️ **Priorité corrigée EN ÉCRIVANT LE
+   BANC** (`tools/verify-quete.mjs`, section « Lot C ») : posée à l'endroit « logique » (dans le
+   bloc `!first`, sous `engineer`), elle ne se déclenchait JAMAIS — `engineer` a la même condition
+   de déblocage et la teste EN PREMIER. `evilSeek` est donc testée AVANT `engineer` dans
+   `starGoalKey`, et une fois trouvée, elle ne revient plus (le chantier naval reprend le bandeau,
+   seule progression réellement actionnable tant que les lots D/E n'existent pas).
+2. ✅ **Le guidage — LIVRÉ, testé en jeu dans les deux zones.** Le chevron (`drawStarChevron`,
+   `FermeGame.js`) mène d'abord au passage sombre côté ferme (`STAR_OFF_TABLE_TARGETS` +
+   `STAR_GOAL_TARGET.evilSeek = "evilLake"`, résolu par `starTargetPos` exactement comme
+   `"cauldron"`), puis, une fois dans le monde maléfique, au point de sauvetage
+   (`evilRescueSpot(ew)`, dérivé de `ew.lake`). ⚠️⚠️ **DEUX CORRECTIFS TROUVÉS EN ÉCRIVANT** :
+   `drawEvilFrame` n'appelait `drawStarChevron` NULLE PART (contrairement aux trois autres zones)
+   — ajouté, après le voile permanent de la zone (même règle que le voile de nuit en ferme) ; et
+   le vrai lac n'est pas celui que ce document croyait (voir l'avertissement en tête de §3).
+3. ✅ **La découverte — LIVRÉE.** Un vrai sprite (état 2, gris/éteint, de la couleur `white` —
+   « trait pour trait à l'étoile réelle », aucune teinte inventée, comme l'exige la leçon du lot
+   B) dépasse de l'eau au point de sauvetage, visible dès le déblocage (pas seulement une fois
+   trouvée — c'est en la VOYANT qu'on s'approche). La proximité (`EVIL_ROD_HAZARD_R`, testée dans
+   `updateMeEvil`, jamais dans le rendu) arme `resolveStarEvilFound` (idempotent, partagé — un
+   fait du monde, pas une confidence par joueur). « Sauve-moi » puis la reine (rod hint) partent en
+   toasts échelonnés (`starTell`) sur la transition `e.evilFound`, observée par `starWatch`.
+4. ✅ **Le piège — LIVRÉ, mais RECADRÉ par une demande de Guillaume en cours de lot** (voir
+   l'encadré plus haut) : casse en **3 s** (`EVIL_ROD_BREAK_MS`), horodatage HÔTE
+   (`f.evilRodArmedAt`), dérivation pure (`E.evilRodBroken`, jamais un second champ « broken »).
+   ⚠️ **Portée volontairement RESTREINTE au point de sauvetage** (`EVIL_ROD_HAZARD_R`, 1,6 case) —
+   la pêche AMBIANTE ailleurs dans le lac (mutant/squelette, `C.EVIL_LAKE_FISH`, jamais stockable)
+   n'y est PAS soumise, exactement pour que « la pêche marche même hors du contexte de la quête »
+   reste vrai. Pastille visuelle de compte à rebours (`EvilRodHazard`) + toast à l'armement et à la
+   casse — la leçon « plus d'indicateurs visuels » (§13 de `CLAUDE.md`) appliquée dès l'écriture.
 5. **La protection.** La reine a l'idée : enduire la canne d'un liquide protecteur. Le chevron
    pointe vers le chaudron. La concoction y est **déjà prête** en arrivant (pas d'ingrédients à
    rassembler pour cette étape précise — Guillaume a été explicite). Un **E** à proximité du
@@ -269,6 +307,27 @@ recopié à la main, c'est exactement le piège du §4 (« une même grandeur é
     l'animation d'arrivée déjà existante pour toute étoile qui rejoint la formation
     (`starFollowerAdded`, l'animation « climb » citée dans le commentaire de `fermeConstants.js`).
 
+⚠️⚠️⚠️ **LOT C — VÉRIFICATION, HONNÊTE PAS COMPLÈTE (2026-09-03).** `verify-quete` **773/773**
+(15 contrôles neufs, falsification comprise — voir sa section « Lot C » : la priorité de
+`evilSeek` a été cassée exprès deux fois, `E.evilRodBroken` testé sur son bord `>=`), `next build`
+compile, le bundle esbuild ne lie rien de cassé. **CE QUI A ÉTÉ REGARDÉ EN JEU, PAS SEULEMENT
+BANCHÉ** : le chevron traverse les DEUX zones (18 m → 3 m → à l'écran côté ferme ; 39 m → 23 m côté
+maléfique, re-ciblé correctement sur le passage de zone), le bandeau `evilSeek` s'affiche avec la
+bonne priorité, l'overlay de mission (« OBJECTIF — Trouver la septième étoile. ») a été confirmé
+DANS LE DOM avec son vrai texte, le bouton développeur fonctionne, et l'accroche/soin d'une
+créature maléfique (mécanique préexistante, non touchée) n'a pas régressé. **CE QUI N'A PAS ÉTÉ VU
+EN JEU** : l'étoile elle-même dépassant du lac (le sprite gris), les deux toasts de découverte
+(« Sauve-moi » / la reine), la pastille de compte à rebours du hasard de la canne, et la pêche
+ambiante (mutant/squelette) — la navigation manuelle jusqu'au point exact du lac, dans un onglet de
+navigateur masqué (les touches de déplacement de l'outil de test n'atteignaient pas le jeu ; la
+parade posée — patcher `requestAnimationFrame` sur un Worker, §10 de `CLAUDE.md` — a fini par
+marcher pour TRAVERSER les deux zones, mais pas assez précisément pour immobiliser le joueur sur
+la case exacte du sauvetage dans le temps de cette session). ⚠️ **Guillaume : ce sont ces
+quatre choses-là qu'il reste à voir** — le chevron t'y mène (chapitre 2 fini, chevron actif), il
+suffit de suivre jusqu'au bout et de tenter un lancer nu une fois arrivé.
+⚠️ **Nombres provisoires, de Claude, à juger en jouant** : `EVIL_ROD_HAZARD_R = 1.6` case,
+`STAR_MISSION_MS = 6000` ms (durée d'affichage de l'overlay de mission).
+
 ### 4. Partie C — la finale : la jetée, la nuit, la constellation
 
 Une fois toutes les étoiles réunies : overlay « Rends-toi à la jetée, à la tombée de la nuit ».
@@ -301,7 +360,7 @@ entre A et C. Les livrer après aurait donné une partie B injouable, ce qu'aucu
 | A2 | **Sœur n°6, la discrète** — chapeau + lunettes, entre place centrale et parc, E pour l'apprivoiser | la trouve-t-on sans indice explicite, le déguisement amuse-t-il | ✅ **LIVRÉ 2026-09-02** |
 | A3 | **Sœur n°5** — simplifiée : la chercher, avec des indices | les indices suffisent-ils sans chevron | ✅ **LIVRÉ 2026-09-03** |
 | B | Le pouls de l'éveil, sur le vrai sprite (pas d'écran 3D — Guillaume a tranché en cours de lot) | comique, lisibilité du changement gris→jaune, le pouls de succès vu en jeu par Guillaume | ✅ **LIVRÉ 2026-09-03** |
-| C | Le lac maléfique : constantes exportées, découverte, chevron, hazard de la canne | on trouve l'étoile, on comprend le danger, sans encore pouvoir la sauver | ❌ |
+| C | Le lac maléfique : découverte, chevron, hazard de la canne, **pêche ambiante (mutant/squelette, jamais stockable — demande de Guillaume en cours de lot)** | on trouve l'étoile, on comprend le danger, on peut pêcher pour rien, sans encore pouvoir la sauver | ✅ **LIVRÉ 2026-09-03** |
 | D | La protection de la canne (chaudron) + la pêche (poissons-squelettes) | la pêche est difficile mais juste, le glow de protection se voit et se comprend | ❌ |
 | E | Ramener à la rive — `FishMinigame` inchangé pour la prise, **puis un second jeu à touche répétée** — + sortie + réanimation | le sauvetage entier, de bout en bout, une fois | ❌ |
 | F | La finale (jetée, constellation à sept points) | la fin de la quête | ❌ |

@@ -934,6 +934,7 @@ export function newFarmer(id, name, gender, outfit) {
     energy: C.MAX_ENERGY,
     sleepStartedAt: null, sleepStartEnergy: 0, // dort actuellement ? (voir resolveSleepStart/End)
     injuredUntil: 0, // horodatage de fin d'indisponibilité après une morsure de loup (0 = pas blessé)
+    evilRodArmedAt: 0, // 2026-09-03 (lot C) : horodatage HÔTE du premier lancer nu au point de sauvetage du lac maléfique (0 = canne intacte) — voir evilRodBroken()
     tools: { hoe: 1, can: 1, axe: 1, pick: 1 },
     inv: {
       wood: 0, stone: 0, food: 0, fence: 0, wall: 0, path: 0, lamp: 0, scarecrow: 0, grass: 0, mill: 0, healKit: 0, salve: 0,
@@ -971,6 +972,16 @@ export function toolYield(base, level) {
   return Math.max(1, Math.round(base * Math.pow(C.TOOL_YIELD_MULT, Math.max(0, level - 1))));
 }
 
+/* 2026-09-03 (lot C, quête de l'étoile) — LA CANNE EST-ELLE CASSÉE, LÀ, EN CE
+   MOMENT ? Un seul horodatage HÔTE (`f.evilRodArmedAt`, posé au premier lancer
+   nu près de la septième sœur), jamais un second champ « broken » qui pourrait
+   diverger de lui : « cassée » est DÉRIVÉ, pas stocké (même discipline que
+   `starCandyFresh`, quete.js). `now` doit être l'horloge de QUI LIT — jamais
+   celle qui a écrit `evilRodArmedAt` (§3 de `CLAUDE.md`). */
+export function evilRodBroken(f, now) {
+  return !!(f && f.evilRodArmedAt) && (now || Date.now()) - f.evilRodArmedAt >= C.EVIL_ROD_BREAK_MS;
+}
+
 // Complète un tableau numérique à la longueur attendue (préserve les valeurs
 // déjà présentes). Sert à faire évoluer le schéma d'inventaire sans jamais
 // perdre ce qu'un fermier possède déjà.
@@ -997,6 +1008,7 @@ export function normalizeFarmer(f) {
   if (typeof f.sleepStartedAt !== "number") f.sleepStartedAt = null;
   if (typeof f.sleepStartEnergy !== "number") f.sleepStartEnergy = 0;
   if (typeof f.injuredUntil !== "number") f.injuredUntil = 0;
+  if (typeof f.evilRodArmedAt !== "number") f.evilRodArmedAt = 0; // 2026-09-03 (lot C)
   // Trophée 🏆 du défi lapins (correctif 2026-07) : horodatage d'expiration,
   // remplace l'ancien champ booléen `hat` (permanent) — un ancien fermier
   // avec `hat: true` mais sans `hatUntil` verra simplement son trophée ne

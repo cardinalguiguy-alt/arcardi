@@ -318,6 +318,11 @@ const STAR_FR = {
          `leanAgain`, `lakeShard`, `beadShard`, `nestShard`, `belfry`, `song`).
          `STAR_GOAL_KEYS` les dérive de la table : le banc échouerait sur une clé
          orpheline de texte, il échoue aussi sur un texte orphelin de clé. */
+      /* 2026-09-03 (lot C) — LA SEPTIÈME SŒUR. Elle passe devant le chantier
+         naval tant qu'on ne l'a pas vue (voir la note de `starGoalKey`) ; une
+         fois trouvée, cette clé ne revient plus — rien n'est encore construit
+         pour la sauver, et le bandeau rend la main au bateau. */
+      evilSeek: "Une lumière s'éteint au fond du lac maléfique. Va voir.",
       /* ⚠️ ZIP 454 — plus courtes que leurs sœurs : le français gonfle de 15 à
          20 %, et ces deux-là portent un nom propre qu'on ne peut pas raccourcir. */
       engineer:       "Va demander un ingénieur naval à la mairie (E).",
@@ -440,6 +445,11 @@ const STAR_FR = {
     townGreenLed:       "Je vais devant. Reste derrière moi, et regarde les plantes.",
     townWait:           "C'est de l'autre côté du rail que ça se passe maintenant.",
     townWaitThere:      "Reste près de moi. Personne ici ne me voit.",
+    /* 2026-09-03 (lot C) — texte de Guillaume (master prompt), repris mot pour
+       mot : c'est la phrase qui déclenche tout ce chapitre, elle ne s'invente
+       pas. `starGoalKey` la fait passer devant le chantier naval une seule fois
+       (jusqu'à ce qu'elle soit trouvée). */
+    evilSeek:           "La septième étoile a perdu presque toute son énergie. Elle est prisonnière d'un liquide qui la corrompt ; elle s'éteint. Trouve-la.",
     /* Chapitre 3 — LE CHANTIER. ⚠️ CHAQUE PHRASE RAMÈNE AU BATEAU, sans exception :
        c'est là que la quête se perdait, et une compagne qui philosophe pendant
        qu'on attend des planches ferait exactement le contraire de ce qu'on lui
@@ -1076,6 +1086,26 @@ const STAR_FR = {
        Il est fini ; il partira avec Eduardo (voir `sail`). */
     done: "Le bateau est fini. L'étoile est rentrée.",
   },
+  /* 2026-09-03 (lot C) — LA SEPTIÈME SŒUR. Deux voix distinctes, comme le reste
+     de la quête (§4 de `CLAUDE.md` : chaque geste dit pourquoi il compte) :
+     `trapped` est ELLE, depuis l'eau — jamais la reine, qui n'y est pas — donc un
+     toast plutôt qu'une bulle positionnée sur un compagnon qui n'existe pas
+     encore ; `needRod` est la reine, quelques secondes après (`starTell`, la même
+     fonction qui échelonne déjà d'autres suites de phrases). Les deux se disent
+     UNE fois pour toute la table (déclenchées sur la transition `e.evilFound`
+     dans `starWatch`), pas à chaque joueur qui s'approche séparément. */
+  evil: {
+    trapped: "⭐ « ...Sauve-moi... »",
+    needRod: "Il te faudra ta canne — mais l'eau qui la retient corrompt tout ce qu'on y trempe.",
+    missionTitle: "Objectif",
+    missionBody: "Trouver la septième étoile.",
+    /* Le piège de la canne nue (§3 de QUETE.md) : trois phrases pour trois
+       instants (armée / cassée à l'instant / déjà cassée), jamais la même
+       répétée — la leçon des « trois états sous une seule phrase » (§4). */
+    rodArming: "L'eau corrompue s'infiltre dans ta ligne...",
+    rodBroken: "Ta canne s'est brisée dans cette eau maudite.",
+    rodStillBroken: "Ta canne est cassée ici. Protège-la avant de retenter.",
+  },
   /* ⚠️ ZIP 479 — LE BOUTON DU CHAUDRON. Il nomme le plat sans donner de recette :
      ce qu'on met dedans ne regarde personne, et l'inventer aurait demandé un
      ingrédient, donc un prix, donc un arbitrage qui n'a pas été tranché. */
@@ -1290,6 +1320,8 @@ const STAR_EN = {
          règle que les huit autres — OÙ et QUOI, jamais pourquoi — et ils sont plus
          courts que la moyenne parce qu'ils portent un NOM PROPRE, qui ne se coupe
          pas sans devenir illisible (le bandeau rabote en silence, 449). */
+      // 2026-09-03 (lot C) — see the French note: takes priority over the shipyard chain until found.
+      evilSeek: "A light is fading at the bottom of the evil lake. Go look.",
       engineer:       "Ask the town hall for a naval engineer (E).",
       engineerTravel: "Kerguélen has been notified. He'll reach Valley Town shortly.",
       engineerWork:   "Kerguélen is drawing by the pier. He'll hand over his plans soon.",
@@ -1354,6 +1386,8 @@ const STAR_EN = {
     townGreenLed:       "I will go first. Stay behind me, and watch the plants.",
     townWait:           "It happens on the other side of the rails now.",
     townWaitThere:      "Stay close to me. Nobody here can see me.",
+    // 2026-09-03 (lot C) — Guillaume's exact wording, translated. See the French note.
+    evilSeek:           "The seventh star has lost nearly all her light. She is trapped in a liquid that is corrupting her; she is fading. Find her.",
     /* Voir la note côté français : au chapitre 3, chaque line brings it back to
        the boat. She names the next step in her own way; she does not muse. */
     engineer:           "We need plans before we need planks. Go and fetch the engineer.",
@@ -1760,6 +1794,11 @@ const STAR_EN = {
          judging her hunt would mean winning the hidden one's hunt first. Queen and
          hidden sister tamed, green one untouched, hints untouched. */
       green: "🌿 Queen + hidden one tamed — the green one is still hiding",
+      /* 2026-09-03 (lot C) — closes the whole chapter (all six companions) and
+         resets the rod-break timer, since lot D (protection) doesn't exist yet
+         to repair it any other way. Does NOT reset `evilFound` — see the note
+         next to op "evil" in quete.js. */
+      evil: "🌊 All six tamed — evil lake unlocked, rod reset",
     }[op] || op),
     scene: (s) => ({ warn: "🎬 The announcement", fall: "🎬 The eight farm impacts", townFall: "🎬 The Valley Town meteor", end: "🎬 The ending" }[s] || s),
     sceneLabel: "Replay a scene",
@@ -1798,6 +1837,17 @@ const STAR_EN = {
       : `${who} searched the last crater on the farm.`,
     /* ⚠️ ZIP 453 — « The boat sailed » était faux : il restait à quai. */
     done: "The boat is finished. The star went home.",
+  },
+  // 2026-09-03 (lot C) — see the French note: two distinct voices, fired once
+  // for the whole table on the e.evilFound transition (starWatch).
+  evil: {
+    trapped: "⭐ \"...Save me...\"",
+    needRod: "You will need your rod — but the water holding her corrupts anything dipped in it.",
+    missionTitle: "Objective",
+    missionBody: "Find the seventh star.",
+    rodArming: "The corrupted water seeps into your line...",
+    rodBroken: "Your rod snapped in this cursed water.",
+    rodStillBroken: "Your rod is broken here. Protect it before trying again.",
   },
   /* ── LES INVITES, UNE SEULE CLÉ-FONCTION. ⚠️ Le préfixe `star:` est lu une
      fois, ici — six `if` répartis dans trois boucles de rendu finiraient par ne
@@ -3649,6 +3699,12 @@ export const FERME_STR = {
     fishWin: "Beau poisson !",
     fishFail: "Le poisson s'est échappé...",
     fishTooSoon: "Trop tôt ! Il a filé.",
+    /* 2026-09-03 (lot C) — la pêche AMBIANTE du lac maléfique (mutant/squelette,
+       jamais stockable — voir C.EVIL_LAKE_FISH). Deux toasts, comme `seaBite`/
+       `fishBite` : la morsure annonce l'espèce, la prise dit qu'il n'y a rien à en
+       tirer — c'est le geste comique de la « déception », voir §6 de QUETE.md. */
+    evilFishBite: (name) => `Ça mord... ${name.toLowerCase()} ?!`,
+    evilFishCaught: (name) => `Tu remontes ${name.toLowerCase()}. Rien à en tirer — mais l'eau grouille de vie étrange.`,
     // Invites de proximité
     promptShop: "[E] Boutique",
     promptBin: "[E] Réserves",
@@ -5386,6 +5442,9 @@ export const FERME_STR = {
     fishWin: "Nice catch!",
     fishFail: "The fish got away...",
     fishTooSoon: "Too soon! It escaped.",
+    // 2026-09-03 (lot C) — see the French note: the evil lake's ambient catches (never stockable).
+    evilFishBite: (name) => `A bite... ${name.toLowerCase()}?!`,
+    evilFishCaught: (name) => `You reel in ${name.toLowerCase()}. Nothing to gain from it — but the water teems with strange life.`,
     promptShop: "[E] Shop",
     promptBin: "[E] Stores",
     promptBarn: "[E] Deposit at barn",

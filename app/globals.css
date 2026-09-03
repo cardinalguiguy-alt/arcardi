@@ -7428,6 +7428,46 @@ div.ferme-usage{ margin-bottom:10px; }
   86%{ opacity:1; transform:translateX(-50%) translateY(0); }
   100%{ opacity:0; transform:translateX(-50%) translateY(-8px); }
 }
+/* 2026-09-03 (lot C) — L'OVERLAY DE MISSION DE LA SEPTIÈME SŒUR. Même geste que
+   `.ferme-star-find` juste au-dessus (s'affiche seul, se ferme seul — même
+   `@keyframes`, même minuterie posée en JS via `animationDuration`) : le master
+   prompt demandait « le patron de l'overlay des fouilles, pour la FORME » — pas
+   son fond, il n'y a rien à peindre dans un médaillon pour une mission qui vient
+   d'être ANNONCÉE, elle n'a encore ni sprite ni couleur (voir la note de
+   `e.evilFound`, quete.js). Texte seul, donc pas de canevas. */
+.ferme-evil-mission{
+  position:fixed; left:50%; bottom:128px; transform:translateX(-50%); z-index:58;
+  pointer-events:none;
+  animation-name:fermeStarFind; animation-timing-function:cubic-bezier(.2,.9,.3,1);
+  animation-fill-mode:forwards;
+  max-width:min(360px, 90vw);
+}
+.ferme-evil-mission-in{
+  padding:14px 22px 16px; text-align:center; border-radius:16px;
+  background:linear-gradient(rgba(18,14,28,.94), rgba(8,6,16,.97));
+  box-shadow:0 12px 40px rgba(0,0,0,.62), 0 0 0 1px rgba(160,120,255,.34) inset;
+}
+.ferme-evil-mission-title{
+  font-family:var(--font-mono, monospace); font-weight:700;
+  font-size:clamp(13px, 2.6vw, 16px); letter-spacing:.08em; text-transform:uppercase;
+  color:#c9a8ff; text-shadow:0 0 16px rgba(170,120,255,.35);
+}
+.ferme-evil-mission-body{
+  font-family:ui-rounded, "Avenir Next", Avenir, system-ui, sans-serif;
+  margin-top:6px; font-size:clamp(13px, 2.4vw, 16px); line-height:1.4;
+  color:rgba(240,232,220,.92);
+}
+/* Pastille de casse de la canne (§3 de QUETE.md) — le compte à rebours VISIBLE
+   que CLAUDE.md réclame ("plus d'indicateurs visuels de progression") : sans
+   elle, le joueur presse E une fois et ne comprend qu'après coup pourquoi sa
+   canne ne pêche plus. */
+.ferme-evil-rod-hazard{
+  position:fixed; left:50%; bottom:172px; transform:translateX(-50%); z-index:57;
+  pointer-events:none; padding:6px 14px; border-radius:999px;
+  font-family:ui-rounded, "Avenir Next", Avenir, system-ui, sans-serif;
+  font-size:12px; font-weight:650; color:#ffd9d9;
+  background:rgba(60,10,20,.72); box-shadow:0 0 0 1px rgba(255,120,140,.4) inset, 0 6px 18px rgba(0,0,0,.4);
+}
 @media (max-width:520px){ .ferme-star-find{ bottom:140px; } .ferme-star-find-cv{ width:176px; height:134px; } }
 
 /* ---- ZIP 455 — LE SOUS-TITRE DE LA CARTE D'ANNONCE. ⚠️ La carte de chapitre

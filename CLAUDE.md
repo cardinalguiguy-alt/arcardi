@@ -11,53 +11,38 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-⚠️⚠️⚠️ **LES LOTS A, A2, A3 ET B SONT LIVRÉS.** A/A2/A3 (la reine nourrie et réveillée, la
-discrète qui sprinte et se capture au contact, la verte pistée au chaud/froid) ont été vérifiés EN
-JEU le 2026-09-03 — détail dans `QUETE.md` §2 bis/ter/quater, rien à en répéter ici. `verify-quete`
-**745/745** à cette étape, `verify-collision` **TOUT PASSE**.
+⚠️⚠️⚠️ **LES LOTS A, A2, A3, B ET C SONT LIVRÉS.** A/A2/A3/B ont été vérifiés en jeu le 2026-09-03 —
+détail dans `QUETE.md` §2 bis/ter/quater, rien à en répéter ici.
 
-⚠️⚠️⚠️ **LOT B — LE MASTER PROMPT DEMANDAIT UN ÉCRAN 3D DÉDIÉ, GUILLAUME A TRANCHÉ AUTREMENT EN
-COURS DE SESSION.** Le prompt initial voulait une scène plein cadre façon `MaireScene.js` /
-`ScierieScene.js`. Une créature procédurale three.js (`starEveil.js` + `EveilScene.js`) a été
-écrite, vérifiée par un banc sans GPU (20/20, falsification comprise) et REGARDÉE dans le
-navigateur — puis Guillaume, en la voyant, a tranché contre : *« l'étoile de l'animation doit
-ressembler exactement trait pour trait à l'étoile réelle. Et l'animation peut être réduite à un
-pulse (sans changer de scène ou rien) »*. **Les deux fichiers ont donc été supprimés**, avec le
-petit correctif qu'ils avaient fait naître dans `tools/lib-3d.mjs` (`emissiveIntensity` jamais
-multipliée par le rastériseur sans GPU — revert aussi, plus rien ne l'exerce). *Un chantier avancé
-et vérifié qui ne répond plus à la demande se jette, il ne se livre pas à côté.*
-⚠️ **CE QUI EST LIVRÉ À LA PLACE, EN TROIS FONCTIONS PURES DE `quete.js`**
-(`starWakeCompanionState`, `starWakeCompanionPulse`, `starWakeCompanionPop`) : le VRAI sprite de
-la reine (`drawStarWisp`, `FermeGame.js`, inchangé) change d'état — les trois dessins qui
-existent déjà, jamais une teinte inventée — et d'échelle, un battement calé sur l'horloge de
-l'anneau pendant qu'on tape, un battement plus fort et amorti à la frappe gagnante. **Zéro écran,
-zéro géométrie, zéro message réseau** : `starWakePulseRef` est un ref client, jamais diffusé (§3).
-⚠️⚠️ **UN DÉFAUT DE LOT A (479) EN EST RESSORTI, ET LE POULS LE RÉPARE EN PASSANT** :
-`starWakeGlow(hits)` existait déjà, testée par `verify-quete`, **jamais appelée** —
-`drawStarWakeRing` (`fermeArt.js`) recalculait la même fraction hits/besoin EN LOCAL, deux
-écritures de la même chose à quelques lignes d'écart, jamais comparées. Le pouls réutilise
-`starWakeGlow` au lieu d'en écrire une troisième version.
-
-⚠️⚠️⚠️ **VÉRIFICATION — HONNÊTE, PAS COMPLÈTE.** `verify-quete` **754/754** (745 + neuf contrôles,
-falsification comprise : casser l'amortissement du pouls de succès le fait rester grand — la
-vraie formule redescend), `next build` compile, le bundle esbuild ne lie rien de cassé. **CE QUI
-N'A PAS ÉTÉ VU** : le pouls de SUCCÈS lui-même, à l'écran, au moment où la reine gagne. Le geste a
-été rejoué dans le navigateur jusqu'à l'anneau ouvert et le pouls de FRAPPE (état/échelle qui
-suivent `hits`/`phase` pendant qu'on tape) — visible, correct — mais réussir les huit battements
-par automatisation (la bande cible est étroite et bouge exprès contre le martèlement, 456) n'a
-pas abouti dans le temps de cette session, malgré plusieurs approches. **Guillaume : la dernière
-chose à voir est le pouls du SUCCÈS** — nourris la reine (menu dev → 👑), tape les huit battements
-toi-même (quelques secondes pour un humain, contre l'automatisation qui n'y est pas arrivée), et
-regarde-la sursauter et jaunir d'un coup. Si ce n'est pas ce qui se passe, c'est le seul endroit du
-lot restant à corriger.
-⚠️ **Nombres provisoires, datés du jour, à juger en jouant (règle du voyage en train, 431)** :
-`STAR_WAKE_POP_MS = 1300` (durée du sursaut de succès), et les deux amplitudes de pouls (0,05 à la
-frappe, 0,35 au succès) écrites dans le corps des trois fonctions.
-
-⚠️ **UNE SCAFFOLDING DE TEST OUBLIÉE, COMMITÉE PAR UNE SESSION ANTÉRIEURE, A ÉTÉ TROUVÉE ET
-SUPPRIMÉE** : `app/devtest/page.js` ouvrait une ferme sans authentification — exactement
-l'exception que le §10 interdit de laisser traîner. Elle a servi à cette vérification puis a été
-retirée ; elle se recrée en trente secondes avec la recette du §10 si tu veux retester toi-même.
+⚠️⚠️⚠️ **LOT C — LE LAC MALÉFIQUE : DÉCOUVERTE, CHEVRON, HASARD DE LA CANNE, PÊCHE AMBIANTE.**
+Détail complet dans `QUETE.md` §3 (le master prompt en tête de fichier, points 1 à 4 marqués ✅).
+Trois choses à savoir avant de retoucher ce chantier :
+1. **La prémisse technique du master prompt était fausse, et ça a coûté la moitié du lot à
+   découvrir.** Le lac « déjà là » qu'il citait (`generateEvilWorld`, `fermeEngine.js`) est du code
+   **mort** — aucun appelant en jeu. Le vrai lac vient de `generatePassageWorld` (seed fixe), et il
+   est déjà exporté vivant en `ew.lake` : aucune constante `EVIL_LAKE_X/Y/R` n'a donc été posée, le
+   point de sauvetage se lit à la volée (`evilRescueSpot(ew)`, `FermeGame.js`, une seule fonction,
+   trois appelants). Le chevron n'était par ailleurs jamais dessiné dans le monde maléfique
+   (`drawEvilFrame` n'appelait pas `drawStarChevron`) et la canne n'y était pas du tout atteignable
+   (`doActionEvil` ne gérait que la hache/pioche) — les deux corrigés.
+2. **Guillaume a étendu la demande en cours de lot** : *« ce lac maléfique doit permettre la pêche
+   même en dehors du contexte de la quête. Mais seulement la pêche de poissons mutants et de
+   squelettes de poissons donc rien de stockable pour l'instant. »* Réponse retenue (interprétation
+   de Claude, à confirmer en jouant) : le hasard de la canne nue (casse en 3 s) ne frappe QUE la
+   tentative de sauver la septième sœur, à son point précis (`EVIL_ROD_HAZARD_R`) — la pêche
+   ambiante (`C.EVIL_LAKE_FISH`, six prises, jamais stockées) reste jouable partout ailleurs dans
+   le lac, sans condition de quête.
+3. **Vérification honnête, pas complète.** `verify-quete` **773/773** (15 contrôles neufs,
+   falsification comprise), `next build` compile, bundle propre. **Regardé en jeu** : le chevron
+   traverse les deux zones (18 m → 3 m → à l'écran en ferme ; 39 m → 23 m en zone maléfique,
+   re-ciblé au passage), le bandeau `evilSeek` avec sa priorité corrigée, l'overlay de mission
+   confirmé DANS LE DOM avec son vrai texte. **PAS VU EN JEU** : le sprite de l'étoile qui dépasse
+   du lac, les deux toasts de découverte, la pastille de casse de la canne, la pêche ambiante — la
+   navigation manuelle jusqu'au point exact du lac n'a pas abouti dans le temps de cette session
+   (onglet de navigateur masqué, la parade du §10 a fait traverser les deux zones mais pas assez
+   précisément pour s'arrêter sur la bonne case). **Guillaume : ce sont ces quatre choses-là qu'il
+   reste à voir** — le chevron t'y mène directement (menu dev → 🌊, puis suis la flèche jusqu'au
+   bout, tente un lancer nu une fois arrivé).
 
 **Aucune manipulation Supabase n'est nécessaire** pour ce lot : zéro nouveau message, zéro
 nouveau schéma.
@@ -69,11 +54,13 @@ SEAMLESS, retravailler les collisions pour évoquer la 3D de façon cohérente (
 TESTER PLUSIEURS FOIS en jeu avant de livrer ; (b) **les ornements de la balustrade portent des
 taches rouges à retirer, et les ombres manquent de contraste** — pas encore traité.
 
-⚠️⚠️⚠️ **ACTION SUIVANTE : C À F DE LA QUÊTE DE L'ÉTOILE** (le lac maléfique, la canne protégée, la
-pêche, la finale) — détail au §2 de `QUETE.md`. Le seuil de la septième sœur (reine apprivoisée et
-six étoiles trouvées) est atteint depuis A3 ; B est maintenant livré ; rien ne bloque plus C.
+⚠️⚠️⚠️ **ACTION SUIVANTE : D À F DE LA QUÊTE DE L'ÉTOILE** (protection de la canne au chaudron, la
+pêche difficile des poissons-squelettes, ramener à la rive, sortir, réanimer, puis la finale) —
+détail au §5 (tableau des lots) et §3 (points 5 à 10) de `QUETE.md`. ⚠️ **AVANT D'ÉCRIRE LOT D :
+vérifier en jeu les quatre choses non vues du lot C (ci-dessus)** — un défaut dans la découverte ou
+le hasard de la canne se propagerait directement dans la protection qui s'appuie dessus.
 
-⚠️ **ET CE QUI ATTENDAIT DÉJÀ, NON TOUCHÉ PAR CES TROIS LOTS**, dans l'ordre : le même buis que
+⚠️ **ET CE QUI ATTENDAIT DÉJÀ, NON TOUCHÉ PAR CES LOTS**, dans l'ordre : le même buis que
 Valley Town, pour la ferme (VF — aucun équivalent du mécanisme `TOWN_SOFT_PROPS` côté ferme, §4) ;
 la villa (`refs/grandevilladeriches.png`, même pipeline PNG que l'hôtel de ville, prompt Gemini avec
 référence, jamais d'appel API direct — §2) ; retirer `townHall2Sprite` (canevas procédural sans
@@ -407,8 +394,8 @@ dépôt.
 | Fichier | Rôle |
 |---|---|
 | `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **~20 500 l.** |
-| `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** |
-| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE : table, chronologies et résolveurs purs.** ⚠️ **469 — la FOUILLE (`STAR_DIG_MS`, `starDug`, `resolveStarDig`, `starDigResult`) et TROIS chapitres au lieu de cinq.** `STAR_FARM_IMPACTS` porte les **huit** cratères (3 étoiles / 2 matières / 3 vides — compté en important le module le 2026-08-30 ; il annonçait « cinq (2/1/2) » depuis le 480 bis), `resolveStarCalm` tient le barème 60/10 s et `resolveStarTownFall` sépare le gros météore. `STAR_FOLLOWER_SITES` dérive toutes les compagnes de `content:"star"`, `starFollowerAdded` identifie celle qui doit jouer son arrivée, `starFarmFlightPath` tient le cap stable des fragments et `queen` désigne l'unique reine. `starShipProgress` joint les cinq états du plan aux commandes et à la cale sans persistance supplémentaire. ⚠️ **2026-09-02 (lot A) — LA REINE SE NOURRIT PUIS SE RÉVEILLE** : `starOfferPrice` est le SEUL endroit qui dise ce que coûte une étoile (60 pour la bleue, `STAR_QUEEN_PRICE` = 80 pour la reine), `resolveStarLight` sert désormais les deux, et `starWakeAdvance`/`starWakeStrike` portent les deux décisions du réveil au rythme — sorties de `FermeGame.js` **pour qu'un banc puisse les jouer**, comme `maire.js` et `scierie.js`. ⚠️ **2026-09-02 (lot A2) — LA SIXIÈME SŒUR, `townShy`, verbe `spot`** : `starShySlot`/`starShyPick`/`starShySits` disent OÙ elle se cache — une pure fonction du temps partagé, jamais un état diffusé (le patron du jour de marché et des élections) ; `resolveStarSpot` tient la seule règle qui compte (pas avant la reine). ⚠️⚠️ **2026-09-03 (lot A3) — LA CINQUIÈME, `townGreen`, verbe `track`** : `starGreenWalk` la fait MARCHER de buisson en buisson sur une table d'adjacence que `FermeGame.js` lui passe (elle ne se téléporte jamais, et ce fichier ne connaît toujours pas la carte), `starGreenSlot` sépare le vol du repos, `starGreenSway` fait remuer le buisson occupé, `resolveStarHint` tient le compte d'indices **partagé entre les joueurs**, `starGreenTemp`/`starGreenBearing` traduisent une distance en « chaud/froid » et en cap. Aucun React, aucun dessin — `verify-quete.mjs` l'importe et la fait marcher quatre cents créneaux. |
+| `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** · **2026-09-03 (lot C) `evilRodBroken(f, now)`** : dérive la casse de la canne d'un seul horodatage hôte (`f.evilRodArmedAt`), jamais un second champ |
+| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE : table, chronologies et résolveurs purs.** ⚠️ **469 — la FOUILLE (`STAR_DIG_MS`, `starDug`, `resolveStarDig`, `starDigResult`) et TROIS chapitres au lieu de cinq.** `STAR_FARM_IMPACTS` porte les **huit** cratères (3 étoiles / 2 matières / 3 vides — compté en important le module le 2026-08-30 ; il annonçait « cinq (2/1/2) » depuis le 480 bis), `resolveStarCalm` tient le barème 60/10 s et `resolveStarTownFall` sépare le gros météore. `STAR_FOLLOWER_SITES` dérive toutes les compagnes de `content:"star"`, `starFollowerAdded` identifie celle qui doit jouer son arrivée, `starFarmFlightPath` tient le cap stable des fragments et `queen` désigne l'unique reine. `starShipProgress` joint les cinq états du plan aux commandes et à la cale sans persistance supplémentaire. ⚠️ **2026-09-02 (lot A) — LA REINE SE NOURRIT PUIS SE RÉVEILLE** : `starOfferPrice` est le SEUL endroit qui dise ce que coûte une étoile (60 pour la bleue, `STAR_QUEEN_PRICE` = 80 pour la reine), `resolveStarLight` sert désormais les deux, et `starWakeAdvance`/`starWakeStrike` portent les deux décisions du réveil au rythme — sorties de `FermeGame.js` **pour qu'un banc puisse les jouer**, comme `maire.js` et `scierie.js`. ⚠️ **2026-09-02 (lot A2) — LA SIXIÈME SŒUR, `townShy`, verbe `spot`** : `starShySlot`/`starShyPick`/`starShySits` disent OÙ elle se cache — une pure fonction du temps partagé, jamais un état diffusé (le patron du jour de marché et des élections) ; `resolveStarSpot` tient la seule règle qui compte (pas avant la reine). ⚠️⚠️ **2026-09-03 (lot A3) — LA CINQUIÈME, `townGreen`, verbe `track`** : `starGreenWalk` la fait MARCHER de buisson en buisson sur une table d'adjacence que `FermeGame.js` lui passe (elle ne se téléporte jamais, et ce fichier ne connaît toujours pas la carte), `starGreenSlot` sépare le vol du repos, `starGreenSway` fait remuer le buisson occupé, `resolveStarHint` tient le compte d'indices **partagé entre les joueurs**, `starGreenTemp`/`starGreenBearing` traduisent une distance en « chaud/froid » et en cap. Aucun React, aucun dessin — `verify-quete.mjs` l'importe et la fait marcher quatre cents créneaux. ⚠️ **2026-09-03 (lot C) — LA SEPTIÈME SŒUR N'EST PAS ENCORE DANS `STAR_SITES`** (aucun verbe, aucun résolveur de prise — lots D/E) : `starEvilUnlocked`/`starEvilFound`/`resolveStarEvilFound` vivent à côté, sur `e.evilFound` (un fait du monde, partagé — pas indexé par joueur, contrairement au hasard de la canne qui vit sur le fermier, `fermeEngine.js`). `starGoalKey` teste `evilSeek` AVANT `engineer` — correctif trouvé en écrivant `verify-quete`, voir sa section « Lot C ». |
 | `components/ferme/maire.js` | **L'AUDIENCE CHEZ LE MAIRE (480) : la table des battements et les résolveurs purs.** Douze nœuds, cinq actes, cinq familles d'argument, la jauge d'adhésion qui FUIT, l'élan, la rejouabilité côté hôte (`mayorReplay` : le client envoie sa TRANSCRIPTION, l'hôte la rejoue). Aucun React, aucun dessin — `verify-maire.mjs` l'importe. ⚠️ **C'est un système de NÉGOCIATION, pas une scène** : la confiance gagnée sert les audiences futures, donc une commission ou le cadastre s'y ajouteront en une table de plus. |
 | `components/ferme/MaireScene.js` | **la VUE de l'audience — le seul morceau de 3D du monde partagé.** Écran PLEIN, à la PREMIÈRE PERSONNE, caméra libre dans la pièce, bulles projetées, réponses en jaune, **mode spectateur** (`MayorWatch`), repli plat si WebGL manque. ⚠️ Il porte `mayorCtxOf`, **la fonction de contexte que le CLIENT et l'HÔTE appellent tous les deux** : leur accord est une propriété du code, pas une coïncidence. |
 | `components/ferme/scierie.js` | **LA SCIE DE TRISTAN (lot E) : la simulation pure, à PAS FIXE.** Une lame qui a de l'inertie, un partenaire qui RÉPOND au lieu de mener, un mou qui referme la fenêtre parfaite, une contrainte qui fend la planche. ⚠️ **Aucune fonction transcendante dans le chemin de simulation** (`sin`/`pow`/`random` sont laissés à l'implémentation par la norme) : le hasard passe par un hachage entier, ce qui rend la manche rejouable **au bit près** par l'hôte à partir d'une liste de numéros de pas. Aucun React, aucun dessin — `verify-scierie.mjs` en joue des centaines. ⚠️ `sawPull(s, side)` est déjà symétrique : la seconde poignée du §17.6 s'ajoutera sans rouvrir la mécanique. |
@@ -424,7 +411,7 @@ dépôt.
 | `tools/verify-scierie.mjs` · `tools/render-scierie.mjs` | **LES DEUX BANCS DE LA SCIE.** Le premier JOUE (déterminisme, accord direct/rejeu sur des images irrégulières, courbe de difficulté en fonction de la latence, martèlement, bornes, journaux malformés) ; le second RASTÉRISE l'atelier sans GPU et balaie la posture de Tristan sur **course de lame × profondeur de trait** — un carré, pas une liste, parce que sa posture est une fonction continue de deux variables. |
 | `tools/lib-3d.mjs` · `tools/render-maire.mjs` | **REGARDER DE LA 3D SANS GPU (2026-08-31).** `lib-3d` charge le three.js **r128 vendorisé du dépôt** dans Node — la même bibliothèque que la page, à l'octet près — et rastérise à la main (projection, découpe au plan proche, tampon de profondeur, ombrage plat), plus le théorème des axes séparateurs pour mesurer une interpénétration en mètres. `render-maire` s'en sert pour peindre les sept postures côte à côte — et depuis le 2026-09-02 les **cinq maires** (`tools/out/maire-cinq.png`), avec le seul contrôle du dépôt qui mesure un RAPPORT entre deux morceaux (stature rendue contre stature écrite, tête contre carrure, pieds au parquet, quatorze mains à leur cible pour chacun des cinq corps). ⚠️ **Aucune dépendance npm, et surtout pas `three`** : une autre révision n'a pas la même atténuation de lumière (§11), donc mesurerait un autre programme. |
 | `tools/verify-collision.mjs` · `tools/render-haies.mjs` | **LES DEUX BANCS DU 2026-09-01, ET LE PREMIER EST D'UNE NATURE NEUVE.** `verify-collision` ne demande pas si un obstacle refuse le pas, il demande **à quelle distance du dessin** il le refuse : il APPROCHE à la vitesse du jeu depuis les quatre côtés de chaque famille d'obstacle (haie, mur, berge, falaise), traverse les deux ponts, monte ET descend les quatre volées, franchit les vingt-cinq allées de parcelle, compare le jeu et le moteur sur 20 000 points, et vérifie qu'on se dégage TOUJOURS d'une position interdite. ⚠️ **Depuis le 2026-09-02 il mesure aussi le CONTRAIRE** : que les vingt-huit cases de végétation basse ne refusent RIEN, par les quatre côtés, et qu'aucune ne soit solide pour une autre raison que son buisson. `render-haies` est le premier banc qui regarde la haie — le décor le plus répandu de la ville, dessiné dans la closure du rendu depuis le 425, donc invisible pour les quarante et un autres. |
-| `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** · **`TOWN_SOFT_PROPS`, `TOWN_BUSH_SLOW` et les trois nombres du frisson** (2026-09-02 : la végétation basse qu'on traverse) · **`mayorIsFem`, l'unique endroit qui sache lesquels des cinq maires sont des femmes** · **et depuis le 2026-09-01 LA SEMELLE (`bodyPoints`, `footX`/`footY`, `bodyFootTile`, `tileAnchor`) : l'unique description de l'empreinte au sol d'un personnage, dérivée de son ombre portée et lue par le jeu, le moteur ET les bancs** · depuis le 440 il **importe `planche.js`** : une portée de pont et une emprise de décor sont des grandeurs de DESSIN, on les dérive du sprite au lieu de les recopier |
+| `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** · **`TOWN_SOFT_PROPS`, `TOWN_BUSH_SLOW` et les trois nombres du frisson** (2026-09-02 : la végétation basse qu'on traverse) · **`mayorIsFem`, l'unique endroit qui sache lesquels des cinq maires sont des femmes** · **et depuis le 2026-09-01 LA SEMELLE (`bodyPoints`, `footX`/`footY`, `bodyFootTile`, `tileAnchor`) : l'unique description de l'empreinte au sol d'un personnage, dérivée de son ombre portée et lue par le jeu, le moteur ET les bancs** · depuis le 440 il **importe `planche.js`** : une portée de pont et une emprise de décor sont des grandeurs de DESSIN, on les dérive du sprite au lieu de les recopier · **2026-09-03 (lot C) `EVIL_LAKE_FISH`** (poissons mutants/squelettes du lac maléfique, jamais stockés), `EVIL_ROD_BREAK_MS`/`EVIL_ROD_HAZARD_R` (le hasard de la canne, confiné au point de sauvetage — voir `QUETE.md` §3) — **aucune constante de position du lac** : le vrai lac vient de `ew.lake`, vivant, voir `evilRescueSpot()` dans `FermeGame.js` |
 | `components/ferme/planche.js` | **GÉNÉRÉ** par `tools/import-planche.mjs` — les sprites de la planche de Guillaume, en données. Ne pas éditer à la main |
 | `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural. `starWispColors` décline le vivant en jaune, bleu et rose ; `drawStarFragmentMeteor` fait tourner le petit caillou incandescent sur un centre stable et `drawStarFragmentImpact` dessine son choc de terre/poussière/braises, sans réutiliser la boule de feu de Valley Town. Les gros dessins de quête (`drawStarCrater`, comète, navire, jauge, poses) vivent ici pour rester regardables par les bancs. |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
@@ -617,14 +604,14 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 
 ⚠️⚠️ **LES BANCS SONT DANS `tools/README.md` DEPUIS LE 432, ET CE CHAPITRE A ÉTÉ ÉLAGUÉ AU 444
 SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 442** (reporté deux fois). **20 bancs de contrôle et 22 bancs
-de rendu**, comptés en listant `tools/`. **TOUS RELANCÉS LE 2026-09-03 (lot A3)** :
-`verify-quete` **745/745**, `verify-maire` **119/119**, `verify-vallee` **223/223**,
-`verify-collision` **TOUT PASSE** (30 contrôles), `verify-strings` **1 108 clés appariées**,
-`verify-scierie` **34/34**, `verify-ludo` **30/30**, `verify-taxi` **15/15**,
-`render-maire` **86/86**, `render-etoile` **186 contrôles** — et **vingt bancs de rendu sur
-vingt-deux** seulement s'exécutent (voir l'entrée dédiée plus bas : `render-eau` et `render-parc`
-sont cassés depuis avant cette livraison).
-⚠️ **`verify-strings` NE COMPTE PAS LES CLÉS DE LA QUÊTE** dans son 1 108 : sa parité de clés ne lit
+de rendu**, comptés en listant `tools/`. **TOUS RELANCÉS LE 2026-09-03 (lot C)** :
+`verify-quete` **773/773**, `verify-maire` **119/119**, `verify-vallee` **223/223**,
+`verify-collision` **TOUT PASSE** (30 contrôles), `verify-strings` **1 110 clés appariées**,
+`verify-scierie` **34/34**, `verify-ludo` **30/30**, `verify-taxi` **15/15** — les deux bancs de
+rendu (`render-maire`, `render-etoile`) n'ont pas été relancés ce lot, aucun sprite n'a bougé — et
+**vingt bancs de rendu sur vingt-deux** seulement s'exécutent (voir l'entrée dédiée plus bas :
+`render-eau` et `render-parc` sont cassés depuis avant cette livraison).
+⚠️ **`verify-strings` NE COMPTE PAS LES CLÉS DE LA QUÊTE** dans son 1 110 : sa parité de clés ne lit
 que les tables `fr:`/`en:` indentées à quatre espaces, et `STAR_FR`/`STAR_EN` vivent hors de cette
 plage. Son SECOND contrôle, lui (« aucune section identique dans les deux langues »), importe le
 vrai module et les voit. *Le nombre ne bouge donc pas quand la quête gagne du texte — ce n'est pas

@@ -147,8 +147,21 @@ const openTownCrater = (e, at = 10) => {
    fait échouer treize contrôles qui parlaient du chantier naval — chacun réclamant
    un objectif de chapitre 3 en obtenant `townGreenAway`. Le contrôle avait raison ;
    c'est son échafaudage qui mentait sur son intention. */
-const findSisters = (e, t = 1) =>
-  Q.resolveStarSpot(e, "banc", t, "banc").ok && Q.resolveStarTrack(e, "banc", t, "banc").ok;
+/* ⚠️⚠️ 2026-09-03 (lot C) — `findSisters` MARQUE AUSSI LA SEPTIÈME SŒUR COMME
+   DÉJÀ VUE, ET C'EST LE MÊME RENOMMAGE QU'AU 2026-09-03 (LOT A3) CI-DESSUS.
+   Son intention documentée est « fermer le chapitre 2 pour regarder la suite » —
+   or la suite, depuis ce lot, contient DEUX chantiers parallèles (le bateau ET
+   le lac maléfique), et ses dizaines d'appelants ne veulent voir QUE le premier.
+   Sans cette ligne, `evilSeek` prenait la priorité sur `engineer`/`mayor`/
+   `timberOrder` dans chacun d'eux — dix échecs, tous à côté de leur vraie
+   question. `evilFound` est justement conçu pour ça : un fait du monde, pas une
+   confidence par joueur (voir la note de `e.evilFound`, quete.js), donc une
+   seule ligne suffit à le poser pour tout le scénario. */
+const findSisters = (e, t = 1) => {
+  const r = Q.resolveStarSpot(e, "banc", t, "banc").ok && Q.resolveStarTrack(e, "banc", t, "banc").ok;
+  Q.resolveStarEvilFound(e, t);
+  return r;
+};
 const queenReady = (e, who, t) => {
   Q.resolveStarCandy(e, who, Q.starOfferPrice("crater"), t, 0);
   const fed = Q.resolveStarLight(e, who, "crater", 999, t);
@@ -1907,7 +1920,15 @@ section("L'objectif courant (bandeau) et le guide");
          `${Q.starGoalKey(q, { inTown: true })} / ${Q.starGoalKey(q, { inTown: false })}`);
       Q.resolveStarTrack(q, "j1", q.townFall + 4000, "j1");
       Q.starAdvance(q);
-      ok("⚠️⚠️ …et une fois les deux trouvées, l'ingénieur reprend la parole exactement où il l'avait",
+      /* ⚠️⚠️⚠️ 2026-09-03 (lot C) — CE CONTRÔLE A CHANGÉ DE PHRASE UNE SECONDE
+         FOIS, MÊME RAISON QU'AU 2026-09-03 (LOT A3) JUSTE AU-DESSUS : *le
+         bandeau ne saute personne.* Les six compagnes réunies, la reine parle
+         D'ABORD de la septième — l'ingénieur attend qu'elle ait été vue, pas
+         seulement que les six premières le soient. */
+      ok("⚠️⚠️ …et une fois les deux trouvées, LA REINE PARLE DE LA SEPTIÈME AVANT L'INGÉNIEUR",
+         Q.starGoalKey(q, { inTown: true }) === "evilSeek");
+      Q.resolveStarEvilFound(q, q.townFall + 5000);
+      ok("⚠️ …et une fois qu'on l'a vue, l'ingénieur reprend enfin la parole exactement où il l'avait",
          Q.starGoalKey(q, { inTown: true }) === "engineer");
     }
     /* ── 3. LE CRÉNEAU. Deux clients qui comptent depuis la MÊME date de l'hôte
@@ -2556,6 +2577,89 @@ section("Lot A3 — la verte : sa marche, ses indices, sa trouvaille");
      Q.starBubbleAlpha(4000, 2000, false) === 0);
   ok("⚠️⚠️ le survol d'une étoile rappelle la dernière bulle expirée",
      Q.starBubbleAlpha(4000, 2000, true) === 1);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LOT C (2026-09-03) — LE LAC MALÉFIQUE : DÉBLOCAGE, PRIORITÉ, HASARD DE LA
+   CANNE.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ CE QUI A ÉTÉ TROUVÉ EN ÉCRIVANT CE BANC, PAS EN LE RELISANT : donner à
+   `evilSeek` la priorité sur tout le bandeau une fois débloqué a fait ROUGIR
+   dix contrôles existants (« pendant le train... », « ZIP 480 — les plans
+   rendus... ») — ils construisaient tous un chantier naval en cours sans
+   jamais dire que la septième sœur avait déjà été vue, ce que la vraie partie
+   garantit toujours (le seuil est « six compagnes réunies », donc `e.ch`
+   n'atteint le chapitre final que lorsque `findSisters` vient d'être appelé).
+   `findSisters` marque désormais `evilFound` — voir sa note plus haut — et
+   c'est ce correctif, pas un contournement de ces dix contrôles, qui les a
+   fait revenir au vert. */
+section("Lot C — le lac maléfique (découverte, chevron, hasard de la canne)");
+{
+  /* ── LE DÉBLOCAGE. Avant les six compagnes, rien ; après, tout de suite. */
+  {
+    const e = Q.newStar();
+    ok("⚠️ pas débloqué sur une quête neuve", !Q.starEvilUnlocked(e));
+    ok("…et la révélation refuse (`tooEarly`)",
+       Q.resolveStarEvilFound(e, 1).tooEarly === true && !Q.starEvilFound(e));
+    armFall(e); findFarmImpacts(e, "banc", 2); Q.resolveStarTownFall(e, 10);
+    Q.resolveStarFound(e, "crater", "banc", 11);
+    ok("⚠️ la reine seule ne suffit pas (il manque encore deux compagnes)",
+       !Q.starEvilUnlocked(e));
+    findSisters(e, 12);
+    ok("⚠️⚠️ les six compagnes réunies débloquent le lac — ET LA MARQUENT DÉJÀ VUE",
+       Q.starEvilUnlocked(e) && Q.starEvilFound(e),
+       "findSisters() a délibérément appelé resolveStarEvilFound (voir sa note)");
+  }
+  /* ── LA RÉVÉLATION, JOUÉE À LA MAIN CETTE FOIS (sans passer par findSisters),
+     pour vérifier resolveStarEvilFound isolément : idempotente, datée, refusée
+     avant le seuil — le même contrat que resolveStarFound/resolveStarDig. */
+  {
+    const e = Q.newStar();
+    armFall(e); findFarmImpacts(e, "banc", 2); Q.resolveStarTownFall(e, 10);
+    Q.resolveStarFound(e, "crater", "banc", 11);
+    Q.resolveStarSpot(e, "banc", 12, "banc"); Q.resolveStarTrack(e, "banc", 12, "banc");
+    ok("⚠️ pile au seuil, la révélation est possible", Q.starEvilUnlocked(e) && !Q.starEvilFound(e));
+    const r1 = Q.resolveStarEvilFound(e, 999);
+    ok("⚠️⚠️ première révélation : acceptée, datée", r1.ok && !r1.already && e.evilFound === 999);
+    const r2 = Q.resolveStarEvilFound(e, 1500);
+    ok("…deuxième joueur qui l'approche : idempotente, la date ne bouge pas",
+       r2.ok && r2.already === true && e.evilFound === 999);
+  }
+  /* ── LA PRIORITÉ DU BANDEAU. `evilSeek` passe devant tout le chantier naval
+     tant qu'on ne l'a pas vue, et lui rend la main dès qu'on l'a vue — les dix
+     contrôles plus haut dans ce fichier vérifient déjà le second demi (via
+     `findSisters`) ; celui-ci vérifie le PREMIER, qu'aucun autre contrôle du
+     dépôt ne couvrait avant ce lot. */
+  {
+    const e = Q.newStar();
+    armFall(e); findFarmImpacts(e, "banc", 2); Q.resolveStarTownFall(e, 10);
+    Q.resolveStarFound(e, "crater", "banc", 11);
+    Q.resolveStarSpot(e, "banc", 12, "banc"); Q.resolveStarTrack(e, "banc", 12, "banc");
+    ok("⚠️⚠️ débloquée mais pas encore vue : le bandeau ET le chevron pointent le lac, PAS l'ingénieur",
+       Q.starGoalKey(e, {}) === "evilSeek" && Q.starTargetSite(e, {}) === "evilLake",
+       `${Q.starGoalKey(e, {})} → ${Q.starTargetSite(e, {})}`);
+    Q.resolveStarEvilFound(e, 13);
+    ok("⚠️⚠️⚠️ une fois vue, la clé ne revient JAMAIS : le chantier naval reprend le bandeau",
+       Q.starGoalKey(e, {}) === "engineer",
+       Q.starGoalKey(e, {}));
+    /* Falsification : sans le garde `!starEvilFound(e)` dans starGoalKey, cette
+       dernière assertion redeviendrait "evilSeek" pour toujours — vérifié en
+       commentant la condition le temps de l'écrire, remis en place ensuite. */
+  }
+  /* ── LE HASARD DE LA CANNE (E.evilRodBroken, fermeEngine.js) : DÉRIVÉ D'UN
+     SEUL HORODATAGE HÔTE, JAMAIS UN SECOND CHAMP « broken ». */
+  {
+    ok("⚠️ une canne jamais armée n'est jamais cassée", !E.evilRodBroken({ evilRodArmedAt: 0 }, 999999));
+    ok("⚠️ juste armée, elle tient encore", !E.evilRodBroken({ evilRodArmedAt: 1000 }, 1000 + C.EVIL_ROD_BREAK_MS - 1));
+    ok("⚠️⚠️ PILE au délai, elle a cassé (>=, pas >)", E.evilRodBroken({ evilRodArmedAt: 1000 }, 1000 + C.EVIL_ROD_BREAK_MS));
+    ok("…et elle reste cassée bien après", E.evilRodBroken({ evilRodArmedAt: 1000 }, 1000 + C.EVIL_ROD_BREAK_MS * 50));
+    /* Falsification du garde du §3 de CLAUDE.md : `now` doit être l'horloge de
+       QUI LIT — si le calcul comparait deux fermiers entre eux (une confusion
+       facile vu que `evilRodArmedAt` est HÔTE), un fermier récemment rejoint
+       avec une horloge locale en retard verrait sa canne "réparée" toute seule. */
+    ok("⚠️⚠️⚠️ `now` PLUS PETIT QUE l'armement ne casse RIEN (repli sûr, pas une horloge qui recule)",
+       !E.evilRodBroken({ evilRodArmedAt: 5000 }, 100));
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
