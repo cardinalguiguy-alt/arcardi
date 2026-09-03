@@ -11,56 +11,67 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-⚠️⚠️⚠️ **LES LOTS A, A2 ET A3 SONT LIVRÉS, ET DEPUIS AUJOURD'HUI VÉRIFIÉS EN JEU, PAS SEULEMENT AU
-BANC** (hors-zip 2026-09-03, sur consigne de Guillaume : *« quand je te demande d'implémenter, avec
-un niveau de précision élevé, j'attends que tu testes ingame »*). Jouer la verte a immédiatement
-payé : **le guidage de la reine ne faisait jamais avancer le fermier au-delà de quelques cases**
-(`townFindPath`/`townSimplifyPath` rendent un chemin qui omet le segment joueur→premier virage ;
-`Q.starGuidePoint` projette dessus et retombe à cinquante cases, hors laisse). Corrigé en préfixant
-la position courante au chemin dans `starGuideAim` ([FermeGame.js:25628](components/ferme/FermeGame.js:25628)) —
-**aucun banc ne pouvait le voir**, `verify-quete` teste `starGuidePoint` sur une ligne synthétique
-qui inclut déjà le joueur, jamais sur la vraie sortie simplifiée du pathfinder. Vérifié en marchant
-77 cases à travers la ville derrière la reine.
-· **Lot A — la reine** : nourrie (80 lumières), réveil au rythme, dos-à-dos. §2 bis de `QUETE.md`.
-· **Lot A2 — la discrète** : **REVUE LE MÊME JOUR, sur retour de Guillaume en jouant** — elle
-  « se téléportait » entre planques (changement instantané, pas normal) et se capturait au bouton E
-  dans une zone trop peuplée pour viser une touche. Les deux sont corrigés : elle **sprinte**
-  maintenant d'une planque à l'autre (traîne fantôme, même procédé que le saut de la verte,
-  `STAR_SHY_MOVE_MS`) et se **capture au contact** — on lui marche dessus, plus de bouton
-  (`STAR_SHY_CATCH_R`, `updateMeTown`). §2 ter de `QUETE.md`.
-· **Lot A3 — la verte** : chasse au chaud/froid puis guidage (corrigé ci-dessus). **AJOUTÉ le même
-  jour** : le buisson occupé l'anime désormais d'un coup d'œil (sort, replonge) dès qu'on passe à
-  côté — purement local, cooldown 6 s (`starGreenPeekPhase`) — et la capture (E) rejoint la
-  formation avec sa montée `climb→spin→settle`, qui restait cassée (origine nulle) si le joueur ne
-  guidait pas encore quand il l'attrapait (`starTargetPos("townGreen")` ne dépend plus du guidage).
-  §2 quater.
-`verify-quete` **745/745**, `verify-collision` **TOUT PASSE**, bundle esbuild sans liaison cassée —
-tous relancés après ces cinq correctifs. **Aucune manipulation Supabase n'est nécessaire.**
+⚠️⚠️⚠️ **LES LOTS A, A2, A3 ET B SONT LIVRÉS.** A/A2/A3 (la reine nourrie et réveillée, la
+discrète qui sprinte et se capture au contact, la verte pistée au chaud/froid) ont été vérifiés EN
+JEU le 2026-09-03 — détail dans `QUETE.md` §2 bis/ter/quater, rien à en répéter ici. `verify-quete`
+**745/745** à cette étape, `verify-collision` **TOUT PASSE**.
 
-⚠️⚠️⚠️ **CE QUI ATTEND GUILLAUME, ET C'EST DU JUGEMENT, PAS DU CODE.** (1) **Les nombres du réveil,
-de la verte et des deux nouveaux réglages du jour (durée du coup d'œil, cooldown, rayon de capture
-au contact, durée du sprint) sont de Claude** — aucun ne doit bouger avant d'avoir joué (règle du
-voyage en train, 431). (2) **La longueur des deux chasses**, inchangé : trouve-t-on la discrète en
-deux minutes ou en dix, et la verte se laisse-t-elle pister sans les indices de la reine ? Menu
-dev → ⭐ Star → **👑 The queen**, **🕶️ Queen tamed**, **🌿 Queen + hidden one tamed**.
-⚠️ **DEUX RETOURS DE GUILLAUME EN JOUANT, ENCORE OUVERTS** : (a) **le saut de rebord n'atterrit pas
-sur le chemin pavé en dessous** (mur traité comme un plan plat) — Guillaume retravaille le bloc
-escalier de son côté d'abord, ne pas y toucher en attendant ; (b) **les ornements de la balustrade
-portent des taches rouges à retirer, et les ombres manquent de contraste** — pas encore traité.
+⚠️⚠️⚠️ **LOT B — LE MASTER PROMPT DEMANDAIT UN ÉCRAN 3D DÉDIÉ, GUILLAUME A TRANCHÉ AUTREMENT EN
+COURS DE SESSION.** Le prompt initial voulait une scène plein cadre façon `MaireScene.js` /
+`ScierieScene.js`. Une créature procédurale three.js (`starEveil.js` + `EveilScene.js`) a été
+écrite, vérifiée par un banc sans GPU (20/20, falsification comprise) et REGARDÉE dans le
+navigateur — puis Guillaume, en la voyant, a tranché contre : *« l'étoile de l'animation doit
+ressembler exactement trait pour trait à l'étoile réelle. Et l'animation peut être réduite à un
+pulse (sans changer de scène ou rien) »*. **Les deux fichiers ont donc été supprimés**, avec le
+petit correctif qu'ils avaient fait naître dans `tools/lib-3d.mjs` (`emissiveIntensity` jamais
+multipliée par le rastériseur sans GPU — revert aussi, plus rien ne l'exerce). *Un chantier avancé
+et vérifié qui ne répond plus à la demande se jette, il ne se livre pas à côté.*
+⚠️ **CE QUI EST LIVRÉ À LA PLACE, EN TROIS FONCTIONS PURES DE `quete.js`**
+(`starWakeCompanionState`, `starWakeCompanionPulse`, `starWakeCompanionPop`) : le VRAI sprite de
+la reine (`drawStarWisp`, `FermeGame.js`, inchangé) change d'état — les trois dessins qui
+existent déjà, jamais une teinte inventée — et d'échelle, un battement calé sur l'horloge de
+l'anneau pendant qu'on tape, un battement plus fort et amorti à la frappe gagnante. **Zéro écran,
+zéro géométrie, zéro message réseau** : `starWakePulseRef` est un ref client, jamais diffusé (§3).
+⚠️⚠️ **UN DÉFAUT DE LOT A (479) EN EST RESSORTI, ET LE POULS LE RÉPARE EN PASSANT** :
+`starWakeGlow(hits)` existait déjà, testée par `verify-quete`, **jamais appelée** —
+`drawStarWakeRing` (`fermeArt.js`) recalculait la même fraction hits/besoin EN LOCAL, deux
+écritures de la même chose à quelques lignes d'écart, jamais comparées. Le pouls réutilise
+`starWakeGlow` au lieu d'en écrire une troisième version.
 
-⚠️⚠️⚠️ **ACTION SUIVANTE UNIQUE : LE LOT B — LA SCÈNE D'ÉVEIL 3D DE LA REINE.** Le seuil de la
-septième sœur (« reine apprivoisée **et six étoiles trouvées** ») est **atteint depuis A3** : trois
-étoiles de ferme + la reine + la discrète + la verte = six. La partie B n'est donc plus bloquée.
-Guillaume : *« une scène d'éveil comique de l'étoile, qui passe de grisâtre et lente à jaune
-brillante et animée, avec des yeux sur l'animation quand on a réussi à tapoter en rythme »* — elle
-se déclenche quand le martèlement réussit, avant le dos-à-dos. ⚠️ **Écran dédié plein cadre**, sur
-le modèle de `MaireScene.js` / `ScierieScene.js`, jamais une animation posée dans le canevas 2D.
-⚠️⚠️ **BlenderMCP est autorisé pour cette scène** (accord du 2026-09-02) **mais la leçon du 481 est
-non négociable** : toute géométrie importée se REGARDE avant d'être déclarée livrée (rastérisée sans
-GPU sur le modèle de `tools/render-maire.mjs`, ou ouverte en vrai) — le procédural three.js a marché
-deux fois de suite (`maireBureau.js`, `scierieAtelier.js`), l'import glTF a échoué une fois.
-Détail : §2 de `QUETE.md`. **Ensuite** viennent C à F (le lac maléfique, la canne protégée, la
-pêche, la finale).
+⚠️⚠️⚠️ **VÉRIFICATION — HONNÊTE, PAS COMPLÈTE.** `verify-quete` **754/754** (745 + neuf contrôles,
+falsification comprise : casser l'amortissement du pouls de succès le fait rester grand — la
+vraie formule redescend), `next build` compile, le bundle esbuild ne lie rien de cassé. **CE QUI
+N'A PAS ÉTÉ VU** : le pouls de SUCCÈS lui-même, à l'écran, au moment où la reine gagne. Le geste a
+été rejoué dans le navigateur jusqu'à l'anneau ouvert et le pouls de FRAPPE (état/échelle qui
+suivent `hits`/`phase` pendant qu'on tape) — visible, correct — mais réussir les huit battements
+par automatisation (la bande cible est étroite et bouge exprès contre le martèlement, 456) n'a
+pas abouti dans le temps de cette session, malgré plusieurs approches. **Guillaume : la dernière
+chose à voir est le pouls du SUCCÈS** — nourris la reine (menu dev → 👑), tape les huit battements
+toi-même (quelques secondes pour un humain, contre l'automatisation qui n'y est pas arrivée), et
+regarde-la sursauter et jaunir d'un coup. Si ce n'est pas ce qui se passe, c'est le seul endroit du
+lot restant à corriger.
+⚠️ **Nombres provisoires, datés du jour, à juger en jouant (règle du voyage en train, 431)** :
+`STAR_WAKE_POP_MS = 1300` (durée du sursaut de succès), et les deux amplitudes de pouls (0,05 à la
+frappe, 0,35 au succès) écrites dans le corps des trois fonctions.
+
+⚠️ **UNE SCAFFOLDING DE TEST OUBLIÉE, COMMITÉE PAR UNE SESSION ANTÉRIEURE, A ÉTÉ TROUVÉE ET
+SUPPRIMÉE** : `app/devtest/page.js` ouvrait une ferme sans authentification — exactement
+l'exception que le §10 interdit de laisser traîner. Elle a servi à cette vérification puis a été
+retirée ; elle se recrée en trente secondes avec la recette du §10 si tu veux retester toi-même.
+
+**Aucune manipulation Supabase n'est nécessaire** pour ce lot : zéro nouveau message, zéro
+nouveau schéma.
+
+⚠️ **CE QUI RESTE OUVERT, INCHANGÉ PAR CE LOT** : (a) **le saut de rebord n'atterrit pas sur le
+chemin pavé en dessous** (mur traité comme un plan plat) — **Guillaume va fournir un nouveau PNG
+du bloc escalier du tribunal** ; à l'intégration : l'analyser en profondeur, l'assembler de façon
+SEAMLESS, retravailler les collisions pour évoquer la 3D de façon cohérente (pas un mur plat), et
+TESTER PLUSIEURS FOIS en jeu avant de livrer ; (b) **les ornements de la balustrade portent des
+taches rouges à retirer, et les ombres manquent de contraste** — pas encore traité.
+
+⚠️⚠️⚠️ **ACTION SUIVANTE : C À F DE LA QUÊTE DE L'ÉTOILE** (le lac maléfique, la canne protégée, la
+pêche, la finale) — détail au §2 de `QUETE.md`. Le seuil de la septième sœur (reine apprivoisée et
+six étoiles trouvées) est atteint depuis A3 ; B est maintenant livré ; rien ne bloque plus C.
 
 ⚠️ **ET CE QUI ATTENDAIT DÉJÀ, NON TOUCHÉ PAR CES TROIS LOTS**, dans l'ordre : le même buis que
 Valley Town, pour la ferme (VF — aucun équivalent du mécanisme `TOWN_SOFT_PROPS` côté ferme, §4) ;
@@ -902,7 +913,11 @@ premier.
    la mécanique n'est pas déplaisante mais reste peu claire, à rendre plus accessible pour de
    jeunes joueurs ; le refroidissement ennuie ; la pose des planches est répétitive mais acceptée
    comme compromis. **Le point commun aux trois : le manque d'ANIMATION**, pas une nouvelle
-   mécanique — reste en réserve derrière cette liste (décision de Guillaume).
+   mécanique — reste en réserve derrière cette liste (décision de Guillaume). ⚠️ **DETTE PRÉCISÉE
+   LE 2026-09-03, EN JOUANT** : les épaules de Tristan sont trop géométriques, le geste ne se lit
+   pas clairement, et les planches de bois SE TÉLÉPORTENT au lieu d'être transportées — manque de
+   réalisme et de poids. Touche `scierieAtelier.js` (posture, épaules) et `ScierieScene.js`
+   (dépôt des planches). Pas encore commencé.
 5. **Les trois nombres du navire** (prix de Kerguélen, les quinze minutes de plans, les cinq
    commandes de bois). ✅ **Le prix de Kerguélen est confirmé accepté** : cher et pas agréable,
    mais voulu pour la cohérence narrative — ne pas l'adoucir sans raison narrative. Les deux
@@ -938,6 +953,50 @@ le même défaut que le cratère muet du 456, et il se paie à chaque nouveau sy
   (résidents jamais vus se comporter à deux clients) : construire un système de relations sur un
   comportement de PNJ jamais éprouvé à plusieurs serait fabriquer la mauvaise abstraction, comme
   le dit déjà l'avertissement sur `MAYOR_NODE` plus haut dans ce fichier.
+
+⚠️⚠️⚠️ **DETTE DE CONCEPTION, PROPOSÉE PAR GUILLAUME LE 2026-09-03 : RECENTRER LA QUÊTE DE
+L'ÉTOILE AUTOUR DE LA CONSTRUCTION DU BATEAU, MÊME LA PLUIE D'ASTÉROÏDES.** Question posée par
+Guillaume, **PAS ENCORE TRANCHÉE** : le bateau deviendrait le PROJET moteur, la pluie d'astéroïdes
+une conséquence qui le traverse plutôt qu'un chapitre à part. Trame proposée, à discuter avec
+Guillaume avant tout code :
+1. **Prologue** — négociation avec le maire pour le financement, les plans, une discussion avec
+   Eduardo qui exige un VRAI bateau (pas un simulacre). Suppose que l'enjeu de la PREMIÈRE
+   rencontre avec le maire devient explicitement d'obtenir ce financement.
+2. **L'événement qui casse tout** — les astronomes de l'université de Valley Town se sont
+   trompés : une pluie d'astéroïdes est prévue bientôt, annoncée dans la GAZETTE, avec le nombre
+   d'impacts et leur lieu — la ferme pour les nombreux petits impacts, la ville pour le gros
+   cratère. Il survient PENDANT le chantier du bateau, pas avant.
+3. **Les missions s'articulent avec le chantier** : une seconde négociation avec le maire (qui
+   doit mentionner le coût des réparations après la chute des astéroïdes sur sa ville) et la
+   découpe de planches à la scierie s'entremêlent.
+4. **Le choix qui bloque ou débloque le projet** — le maire annonce que le chantier est mis en
+   pause, SAUF si le joueur avance 300 000 or pour le poursuivre tout de suite : accepter permet
+   de continuer, refuser bloque le projet.
+5. **Nouvelle main-d'œuvre à inventer** — ouvriers spécialisés, ingénieurs ; un temps de
+   construction avec animation des ouvriers autour du bateau, CONTRAIGNANT (un jour ou deux
+   réels), sauf bypass via le menu développeur — pour justifier ces coûts.
+6. **La mission des étoiles doit pouvoir se jouer vers la FIN de cette quête**, pas au début.
+⚠️⚠️ **CE QUI COMPTE LE PLUS DANS CETTE DETTE, DIT PAR GUILLAUME LE 2026-09-03 : L'ORDRE DES
+CHAPITRES ET L'IMPACT NARRATIF DE CE RÉORDONNANCEMENT — PAS LA LISTE DES SIX POINTS CI-DESSUS
+PRISE ISOLÉMENT.** La trame actuelle (`QUETE.md` §17.2, cinq actes : la pluie courte, la reine,
+le port sous le lac, les trois chantiers, la route) place la chute d'astéroïdes en ACTE I,
+AVANT toute construction — c'est elle qui déclenche la chasse aux sœurs et révèle le bateau
+brisé. Le recentrage proposé INVERSE ce rapport : le financement et le chantier viennent
+D'ABORD (prologue), la pluie devient un événement qui **traverse** un chantier déjà en cours
+plutôt que son déclencheur. **Ce basculement change ce que le joueur croit poursuivre** — dans
+la version actuelle il répare un bateau cassé par un cataclysme déjà arrivé ; dans la version
+proposée il construit un projet municipal qu'un cataclysme vient perturber en cours de route.
+Les deux ne racontent pas la même histoire, et le retournement du §17.1 (« la ville croit
+rouvrir un port, les joueurs suivent une reine ») doit être rejoué phrase par phrase contre le
+nouvel ordre avant tout code : à quel acte les joueurs apprennent-ils qu'il y a une reine et des
+sœurs, si la pluie n'ouvre plus la quête ? **C'est cette comparaison acte-par-acte, entre les
+cinq lignes de §17.2 et la nouvelle trame, qui est le vrai livrable de la discussion à venir —
+pas seulement le calage des six points de mécanique.**
+⚠️ Toucherait `quete.js` (chronologie, `STAR_FARM_IMPACTS`), `maire.js` (une ou deux
+négociations de plus), `scierie.js`/`scierieAtelier.js` (le chantier du bateau) et `QUETE.md` en
+entier, à commencer par son §17.2 (le tableau des cinq actes, à réécrire ou à confronter à un
+nouveau) — **à discuter et acter avec Guillaume avant d'écrire une ligne**, sur le modèle du §2
+(« lister les décisions structurantes et attendre »). Pas encore commencé.
 
 ✅ **CHAÎNE DE TRANSPORT DU BOIS DU BATEAU — DIRECTION TRANCHÉE, NON CONSTRUITE (2026-09-01).**
 Quatre décisions actées avec Guillaume, à respecter le jour où ce chantier s'ouvre :
@@ -1030,6 +1089,11 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
   or. Le 442 lui a donné **deux inscriptions à lire** dans la tribune (la cloche et la plaque du
   facteur d'orgues) : c'est la première fois qu'on y monte pour autre chose que la vue, et ça n'a
   rien coûté — les deux se lisent sur des décors qui étaient déjà là.
+- ⚠️ **NOUVELLE DETTE GRAPHIQUE (2026-09-03) : LE TRIBUNAL ET L'ÉGLISE MÉRITENT UN SPRITE PLUS
+  MAJESTUEUX.** Jugement de Guillaume en jouant — les deux bâtiments civiques les plus imposants
+  de Valley Town restent en dessous de ce que leur rôle demande. **Demander à Guillaume un JPG de
+  référence avant tout travail** (règle du §2 : Claude rédige un prompt Gemini prêt à coller,
+  accompagné de la référence — jamais d'appel API automatisé). Pas encore commencé.
 - **Valley Town : qui HABITE la ville à demeure ?** Les résidents ne font qu'y passer. Le 439 y
   pose **Léonie Sarrazin** à l'accueil de la mairie — mais c'est un décor qui parle, pas une
   habitante : elle ne bouge pas, et `res.zone` ne connaît toujours que « farm » et « town ».

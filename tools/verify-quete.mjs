@@ -1807,6 +1807,52 @@ section("L'objectif courant (bandeau) et le guide");
        Array.from({ length: Q.STAR_WAKE_HITS }, (_, i) => Q.starWakeGlow(i + 1) - Q.starWakeGlow(i)).every(d => d > 0));
   }
   /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-03 (lot B) — LE POULS DE LA VRAIE COMPAGNE, PAS UN ÉCRAN DÉDIÉ.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️ Guillaume a tranché contre une scène 3D plein cadre : l'animation du
+     réveil est le SPRITE RÉEL (`starWispSprite`, trois états rastérisés) qui
+     change d'état et d'échelle. Trois fonctions pures, donc trois choses à
+     falsifier : que l'état choisi existe vraiment dans le sprite (0/1/2, rien
+     d'autre), que le pouls de frappe reste un pouls (borné, pas une dérive), et
+     que le pouls de succès s'éteint tout seul sans qu'on ait à le fermer. */
+  {
+    const states = Array.from({ length: Q.STAR_WAKE_HITS + 1 }, (_, h) => Q.starWakeCompanionState(h));
+    ok("⚠️ l'état choisi est toujours l'un des trois dessins du sprite (0/1/2)",
+       states.every((s) => s === 0 || s === 1 || s === 2), states.join(","));
+    ok("…gris (2) au premier battement, jaune (0) au dernier",
+       Q.starWakeCompanionState(0) === 2 && Q.starWakeCompanionState(Q.STAR_WAKE_HITS) === 0);
+    ok("…et il ne RECULE jamais vers le gris à mesure qu'on réussit",
+       states.every((s, i) => i === 0 || s <= states[i - 1]));
+    let worstPulse = 0;
+    for (let h = 0; h <= Q.STAR_WAKE_HITS; h++)
+      for (let p = 0; p <= 1; p += 0.05)
+        worstPulse = Math.max(worstPulse, Math.abs(Q.starWakeCompanionPulse(p, h) - 1));
+    ok("⚠️ le pouls de frappe reste un POULS, jamais un bond (≤ 10 % de taille)",
+       worstPulse <= 0.10, `écart max ${(worstPulse * 100).toFixed(1)} %`);
+    ok("…et il est neutre en tout début de battement (phase 0)",
+       Math.abs(Q.starWakeCompanionPulse(0, Q.STAR_WAKE_HITS) - 1) < 1e-9);
+    ok("⚠️⚠️ le pouls de SUCCÈS s'éteint tout seul, sans qu'on doive le fermer",
+       Q.starWakeCompanionPop(-1) === null
+       && Q.starWakeCompanionPop(Q.STAR_WAKE_POP_MS) === null
+       && Q.starWakeCompanionPop(Q.STAR_WAKE_POP_MS * 4) === null
+       && Q.starWakeCompanionPop(0) !== null
+       && Q.starWakeCompanionPop(Q.STAR_WAKE_POP_MS - 1) !== null);
+    ok("…toujours au dessin le plus jaune (0) tant qu'il joue",
+       [0, 100, 500, 900, Q.STAR_WAKE_POP_MS - 1].every((t) => Q.starWakeCompanionPop(t).state === 0));
+    let worstPop = 0;
+    for (let t = 0; t < Q.STAR_WAKE_POP_MS; t += 10) worstPop = Math.max(worstPop, Math.abs(Q.starWakeCompanionPop(t).scale - 1));
+    /* ⚠️ FALSIFICATION (§10 de CLAUDE.md) : ON CASSE EXPRÈS. Un pouls sans
+       amortissement (`Math.exp` retiré) donnerait un écart qui ne redescend
+       JAMAIS — la ligne suivante le prouve avant de faire confiance à celle
+       du dessus, qui doit au contraire trouver un écart petit à la fin. */
+    const noDecay = 1 + 0.35 * Math.cos(((Q.STAR_WAKE_POP_MS - 1) / Q.STAR_WAKE_POP_MS) * Math.PI * 2.2);
+    ok("⚠️ falsification : un pouls SANS amortissement resterait grand à la fin (le vrai doit être petit)",
+       Math.abs(noDecay - 1) > 0.05 && Math.abs(Q.starWakeCompanionPop(Q.STAR_WAKE_POP_MS - 1).scale - 1) < 0.05,
+       `cassé : ${Math.abs(noDecay - 1).toFixed(2)} — réel : ${Math.abs(Q.starWakeCompanionPop(Q.STAR_WAKE_POP_MS - 1).scale - 1).toFixed(3)}`);
+    ok("⚠️ le pouls de succès reste un pouls, pas une explosion (≤ 50 % de taille)",
+       worstPop <= 0.50, `écart max ${(worstPop * 100).toFixed(1)} %`);
+  }
+  /* ╔══════════════════════════════════════════════════════════════════════════
      ║ 2026-09-02 (lot A2) — LA DISCRÈTE : SA CACHETTE ET SA RÈGLE.
      ╚══════════════════════════════════════════════════════════════════════════
      ⚠️ CE QUI SE MESURE ICI EST CE QUI N'A PAS DE NAVIGATEUR : le CRÉNEAU (une

@@ -1185,6 +1185,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      · `beats`  tours écoulés sans le moindre appui (abandon à STAR_WAKE_IDLE_BEATS)
      · `flash` / `miss` décroissances 1→0 pour le dessin, jamais des dates (§3) */
   const starWakeRef = useRef(null);
+  /* ⚠️ 2026-09-03 (lot B) — LE POULS DU SUCCÈS, ET RIEN D'AUTRE. `null` tant que
+     personne n'a réveillé la reine ; `{ site, at }` dès que `starWakePress()`
+     gagne — `at` en `performance.now()`, jamais diffusé (§3 : c'est un geste de
+     dessin, pas un fait du monde). Lu par `starWakeCompanionPop` (`quete.js`)
+     à l'endroit où la compagne se dessine ; il redevient sans effet tout seul
+     une fois `Q.STAR_WAKE_POP_MS` écoulées, sans qu'aucun appelant ait à le
+     remettre à `null`. */
+  const starWakePulseRef = useRef(null);
   /* ⚠️⚠️ ZIP 456 — QUI PARLE, CETTE IMAGE. UN SEUL. Vu à l'écran dès la première
      séance : les vingt résidents apparaissent groupés près de la maison, neuf
      sont nerveux, et neuf bulles se sont ouvertes EN MÊME TEMPS, empilées les
@@ -18466,11 +18474,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.translate(0, -ce * EP);
           sprites.drawStarCrater(ctx, ccx, ccy, T, cph, now, copt);
           ctx.restore();
-          if (queenWaiting)
+          if (queenWaiting) {
+            /* ╔══════════════════════════════════════════════════════════════
+               ║ LOT B (2026-09-03) — LE POULS DU RÉVEIL, SUR LA VRAIE COMPAGNE.
+               ╚══════════════════════════════════════════════════════════════
+               Guillaume a tranché contre un écran dédié : le sprite qu'on
+               dessine ici EST l'animation — « trait pour trait », sans
+               invention — et elle « se réduit à un pulse ». Trois sources,
+               une seule gagne, jamais mélangées :
+               1. le pouls du SUCCÈS (`starWakePulseRef`, posé par
+                  `starWakePress`), le plus court et le plus fort ;
+               2. tant qu'on tape (`starWakeRef`, la même horloge que l'anneau
+                  — `phase`/`hits` — LU, jamais ré-avancé : `starWakeStep()`
+                  fait déjà cette avance une fois par image, plus bas dans
+                  cette même passe, et l'appeler deux fois doublerait le temps
+                  écoulé du geste) ;
+               3. sinon, le dessin d'avant ce lot — state 1, échelle 1,
+                  inchangé. */
+            const pr = starWakePulseRef.current;
+            const pop = (pr && pr.site === "crater") ? Q.starWakeCompanionPop(now - pr.at) : null;
+            const tap = starWakeRef.current;
+            const st = pop ? pop
+              : (tap && tap.site === "crater")
+                ? { state: Q.starWakeCompanionState(tap.hits), scale: Q.starWakeCompanionPulse(tap.phase, tap.hits) }
+                : { state: 1, scale: 1 };
             pushE((cpos.y + 1) * T - 0.02, ce, () => drawStarWisp({
-              x: cpos.x, y: cpos.y + 0.12, state: 1, pose: Math.floor(now / 210) & 3,
-              color: "yellow", scale: 1, queen: true,
+              x: cpos.x, y: cpos.y + 0.12, state: st.state, pose: Math.floor(now / 210) & 3,
+              color: "yellow", scale: st.scale, queen: true,
             }));
+          }
           /* ╔══════════════════════════════════════════════════════════════════
              ║ ZIP 479 — LE FIGURANT. « ON PLANTE SON ÉPOUVANTAIL EN FACE. »
              ╚══════════════════════════════════════════════════════════════════
@@ -26516,6 +26548,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          un geste de sept secondes tiendraient à peine sous le plafond de dix par
          seconde du §3, et n'arbitreraient rien de plus. */
       sendReq({ kind: "starWake", site: w.site });
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ LOT B (2026-09-03) — LE POULS DU SUCCÈS, EN PARALLÈLE, JAMAIS EN SÉRIE.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️⚠️ IL NE RETARDE NI NE CONDITIONNE `sendReq`/`starWakeClose` : la
+         récompense est déjà accordée au moment où cette ligne s'exécute (côté
+         hôte comme côté client — `Q.starWakeStrike` a déjà décidé `nx.won`),
+         donc l'habillage cosmétique qui suit ne doit jamais pouvoir la
+         bloquer. `starWakePulseRef` ne part sur aucun réseau (§3) : le dessin
+         le lit à l'endroit où la compagne se peint (voir `drawStarWisp`, le
+         bloc du cratère) via `Q.starWakeCompanionPop`.
+         ⚠️ SCOPÉ AU SITE DE LA REINE, PAS À TOUT `starWake` : un autre lieu
+         qui réutiliserait un jour le même geste de martèlement n'a pas
+         demandé ce pouls-ci — même garde que `starWakeSite` (`site.queen`). */
+      const wsite = Q.STAR_SITE[w.site];
+      if (wsite && wsite.queen) starWakePulseRef.current = { site: w.site, at: performance.now() };
       starWakeClose();
     }
     return true;

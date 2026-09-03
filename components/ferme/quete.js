@@ -2543,6 +2543,44 @@ export function starWakePeriod(hits) {
 export function starWakeGlow(hits) {
   return Math.max(0, Math.min(1, (Math.max(0, hits | 0)) / STAR_WAKE_HITS));
 }
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-03 (lot B) — LA VRAIE COMPAGNE PULSE AVEC L'ANNEAU.
+   ╚══════════════════════════════════════════════════════════════════════════
+   Guillaume a tranché contre un écran dédié : « l'étoile de l'animation doit
+   ressembler exactement trait pour trait à l'étoile réelle […] réduite à un
+   pulse, sans changer de scène ». Ce que le joueur voit reste donc le sprite
+   `starWispSprite` qu'il connaît déjà (`FermeGame.js`, `drawStarWisp`), et rien
+   de plus — pas de géométrie, pas de nouvel écran.
+   ⚠️ TROIS BANDES, PAS UN DÉGRADÉ : le sprite n'a que trois états rastérisés
+   (0/1/2), donc « trait pour trait » veut dire CHOISIR entre ces trois dessins,
+   jamais une teinte inventée qui n'existe dans aucun d'eux. */
+export function starWakeCompanionState(hits) {
+  const g = starWakeGlow(hits);
+  return g >= 0.75 ? 0 : g >= 0.34 ? 1 : 2;
+}
+/* Le pouls pendant qu'on tape : une respiration calée sur `phase`, LA MÊME
+   horloge que l'anneau (`drawStarWakeRing`) — deux pouls qui ne battraient pas
+   ensemble se remarqueraient plus qu'un pouls absent. Elle s'amplifie avec
+   `hits` : « lente » puis « animée », jamais l'inverse. */
+export function starWakeCompanionPulse(phase, hits) {
+  const g = starWakeGlow(hits);
+  const ph = Math.max(0, Math.min(1, +phase || 0));
+  return 1 + 0.05 * (0.35 + 0.65 * g) * Math.sin(ph * Math.PI * 2);
+}
+/* ⚠️ NOMBRE PROVISOIRE, DATE DU JOUR : la durée du pouls de succès, à juger en
+   jouant comme les six nombres du réveil au rythme (CLAUDE.md §2/§13). */
+export const STAR_WAKE_POP_MS = 1300;
+/* Le battement du SUCCÈS : un seul, plus grand que ceux de la frappe, qui
+   s'éteint tout seul. `elapsedMs` est le temps écoulé depuis la frappe gagnante
+   (mesuré côté client, jamais diffusé — voir la note de `starWakePress`,
+   FermeGame.js) ; hors de la fenêtre, `null` : l'appelant retombe alors sur le
+   dessin par défaut, sans qu'aucun état ne reste à réconcilier. */
+export function starWakeCompanionPop(elapsedMs) {
+  const t = +elapsedMs;
+  if (!(t >= 0) || t >= STAR_WAKE_POP_MS) return null;
+  const u = t / STAR_WAKE_POP_MS;
+  return { state: 0, scale: 1 + 0.35 * Math.exp(-u * 4.5) * Math.cos(u * Math.PI * 2.2) };
+}
 /* Elle dort-elle encore ? ⚠️ `e.woke` est un DICTIONNAIRE de lieux, pas un
    booléen de reine : la septième sœur se réanimera par le même geste (master
    prompt §3.10), et une seconde carte à réconcilier est ce que le §3 de

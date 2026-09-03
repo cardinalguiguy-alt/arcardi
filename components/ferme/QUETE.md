@@ -60,31 +60,40 @@ et PAS en remplacement l'un de l'autre) :
    `pair`) reste la conclusion : une fois réveillée, il faut encore la convaincre de se calmer. Ce
    n'est plus le seul geste de la reine, c'est le DERNIER étage d'une séquence à trois temps.
 
-**La scène d'éveil — un VRAI morceau de 3D, dans l'esprit comique.** Guillaume : « une scène
-d'éveil comique de l'étoile, qui passe de grisâtre et lente à jaune brillante et animée, avec des
-yeux sur l'animation quand on a réussi à tapoter en rythme. » Elle se déclenche quand le martèlement
-réussit (étape 2), avant le dos-à-dos.
+**La scène d'éveil — LIVRÉE (lot B, 2026-09-03), et PAS en 3D.** Guillaume avait d'abord demandé un
+écran dédié plein cadre façon `MaireScene.js`/`ScierieScene.js` (ligne ci-dessous conservée comme
+trace de la commande initiale). Une créature procédurale three.js a été écrite en ce sens, vérifiée
+par un banc sans GPU, puis REGARDÉE dans le navigateur — et Guillaume, en la voyant, a tranché
+autrement, en cours de session : *« l'étoile de l'animation doit ressembler exactement trait pour
+trait à l'étoile réelle. Et l'animation peut être réduite à un pulse (sans changer de scène ou
+rien). »* Le chantier 3D (`starEveil.js` + `EveilScene.js`) a donc été **supprimé plutôt que livré à
+côté de cette demande.**
 
-- **Architecture** : un écran dédié plein cadre, sur le modèle de `MaireScene.js` /
-  `ScierieScene.js` — jamais une animation posée dans le canevas 2D principal, les deux scènes 3D
-  existantes du jeu suivent cette forme et rien d'autre. Camera fixe ou légèrement mobile (pas
-  besoin de la liberté de `MaireScene`), le sujet est la créature, pas la pièce.
-- **BlenderMCP est autorisé pour cette scène** (accord de Guillaume, 2026-09-02) — mais
-  ⚠️⚠️⚠️ **LA LEÇON DU 481 EST NON NÉGOCIABLE** : le bureau du maire a été livré une fois en glTF
-  exporté de Blender, jamais ouvert dans un canevas, et le maire flottait deux mètres derrière le
-  mur pendant un zip entier — aucun banc du dépôt ne peut relire une DONNÉE importée. **Toute
-  géométrie sortie de Blender doit être regardée** — soit rastérisée sans GPU sur le modèle de
-  `tools/render-maire.mjs` (`tools/lib-3d.mjs`, three.js r128 vendorisé, AUCUNE dépendance npm),
-  soit ouverte en vrai dans le navigateur — **avant** d'être déclarée livrée. Le maire et Tristan
-  ont fini par être écrits en three.js procédural (`maireBureau.js`, `scierieAtelier.js`,
-  `rig3d.js`) plutôt qu'importés : c'est la voie qui a marché deux fois, pas un hasard.
-- **Le comique** vient du CONTRASTE : lenteur/couleur grise/immobilité qui bascule d'un coup en
-  vivacité/jaune éclatant/regard qui s'ouvre — pas d'un gag ajouté par-dessus. Grisâtre → jaune
-  n'est pas qu'une teinte, c'est un changement de matière (terne/mat → lumineux/qui pulse).
+**Ce qui est livré à la place : le VRAI sprite de la reine (`drawStarWisp`, `FermeGame.js`, code
+inchangé) change d'état et d'échelle, à l'endroit même où il se dessine déjà (le bord du cratère).**
+Trois fonctions pures dans `quete.js` : `starWakeCompanionState(hits)` choisit entre les trois
+dessins RASTÉRISÉS du sprite (0/1/2 — jamais une teinte inventée, « trait pour trait » veut dire
+CES dessins-là) ; `starWakeCompanionPulse(phase, hits)` fait respirer l'échelle au même rythme que
+l'anneau de martèlement pendant qu'on tape, de plus en plus vif à mesure que `hits` grimpe (« lente »
+→ « animée ») ; `starWakeCompanionPop(elapsedMs)` est le battement de la frappe GAGNANTE — un
+sursaut amorti, posé par `starWakePress()` dans un ref client (`starWakePulseRef`, jamais diffusé,
+§3 de `CLAUDE.md`) et lu à chaque image tant qu'il dure (`STAR_WAKE_POP_MS`, provisoire).
+⚠️ **Zéro écran, zéro géométrie, zéro message réseau** — c'est tout le sens de « réduite à un pulse ».
+⚠️⚠️ **UN DÉFAUT DU LOT A EST RESSORTI DE CE CHANTIER** : `starWakeGlow(hits)` (§2 bis) existait déjà
+et n'était JAMAIS appelée — `A.drawStarWakeRing` recalculait la même fraction en local. Le pouls
+réutilise `starWakeGlow` au lieu d'écrire une troisième version de la même fraction.
+⚠️ **Le comique vient du CONTRASTE**, inchangé de la commande initiale : lenteur/gris/immobilité qui
+bascule d'un coup en vivacité/jaune/regard qui s'ouvre — pas d'un gag ajouté par-dessus.
+⚠️ **VÉRIFICATION HONNÊTE** : `verify-quete` **754/754** (neuf contrôles neufs, falsification
+comprise), build et bundle propres, le pouls de FRAPPE joué et regardé en jeu — mais le pouls de
+SUCCÈS n'a pas été vu à l'écran dans cette session (réussir les huit battements par automatisation
+du navigateur n'a pas abouti ; la bande cible est étroite et bouge exprès contre le martèlement,
+§2 bis). **À Guillaume de le voir en jouant** — c'est quelques secondes pour un humain.
 - ⚠️ **Un nouveau verbe implique une nouvelle entrée dans `STAR_VERBS`** (`quete.js:209`) et
   `verify-quete` refusera toute étoile dont le verbe n'y figure pas — c'est voulu, c'est le
   garde-fou qui a empêché un repli silencieux par le passé (voir le commentaire à côté de
-  `starVerbOf`).
+  `starVerbOf`). *Sans objet ici : le pouls ne crée aucun verbe, il habille `pair`/le martèlement
+  déjà existants.*
 
 ### 2 ter. La sixième sœur, « la discrète » — LIVRÉE (lot A2, 2026-09-02)
 
@@ -291,7 +300,7 @@ entre A et C. Les livrer après aurait donné une partie B injouable, ce qu'aucu
 | A | La reine : nourrir (80 lumières) + réveiller au rythme | le geste en trois temps est-il clair, le réveil est-il agréable | ✅ **LIVRÉ 2026-09-02** |
 | A2 | **Sœur n°6, la discrète** — chapeau + lunettes, entre place centrale et parc, E pour l'apprivoiser | la trouve-t-on sans indice explicite, le déguisement amuse-t-il | ✅ **LIVRÉ 2026-09-02** |
 | A3 | **Sœur n°5** — simplifiée : la chercher, avec des indices | les indices suffisent-ils sans chevron | ✅ **LIVRÉ 2026-09-03** |
-| B | La scène d'éveil 3D (procédurale ou Blender+vérifiée) | comique, lisibilité du changement gris→jaune, `render-*.mjs` avant tout jugement en jeu | ❌ |
+| B | Le pouls de l'éveil, sur le vrai sprite (pas d'écran 3D — Guillaume a tranché en cours de lot) | comique, lisibilité du changement gris→jaune, le pouls de succès vu en jeu par Guillaume | ✅ **LIVRÉ 2026-09-03** |
 | C | Le lac maléfique : constantes exportées, découverte, chevron, hazard de la canne | on trouve l'étoile, on comprend le danger, sans encore pouvoir la sauver | ❌ |
 | D | La protection de la canne (chaudron) + la pêche (poissons-squelettes) | la pêche est difficile mais juste, le glow de protection se voit et se comprend | ❌ |
 | E | Ramener à la rive — `FishMinigame` inchangé pour la prise, **puis un second jeu à touche répétée** — + sortie + réanimation | le sauvetage entier, de bout en bout, une fois | ❌ |
