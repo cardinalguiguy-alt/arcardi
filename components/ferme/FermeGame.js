@@ -1543,6 +1543,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const injuredUntilRef = useRef(0); // miroir synchrone de injuredUntil (lu dans la boucle de rendu/déplacement)
   const evilRodArmedAtRef = useRef(0); // 2026-09-03 (lot C) : miroir synchrone de evilRodArmedAt (lu dans doActionEvil/startFishingEvil)
   const evilFoundPingRef = useRef(0); // 2026-09-03 (lot C) : throttle du sendReq("evilFound") pendant qu'on reste dans le rayon (drawEvilFrame)
+  const evilCastRef = useRef(null); // 2026-09-03 (lot C) : {t0,tx,ty} pendant l'anim de lancer spécial (startFishingEvil), null sinon — voir evilCastNow()
+  const evilCatchRef = useRef(null); // 2026-09-03 (lot C) : {t0,fx,fy,sx,sy,color} pendant qu'une prise ambiante saute de l'eau vers la rive (fishWon), null sinon — voir evilCatchNow()
   const immunityUntilRef = useRef(0); // miroir synchrone de immunityUntil (lu dans updateEvilMonsters)
   // Correctif "dispute Chloé/Rosalie vue de tous" (2026-07, demande Guillaume) :
   // la scène et le cooldown sont désormais un état PARTAGÉ (station.crScene /
@@ -9598,13 +9600,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const ew = evilWorldRef.current, m = meRef.current; if (!ew || !m) return;
     if (!inMapEvil(tt.x, tt.y) || ew.ground[tt.y * ew.w + tt.x] !== C.G_WATER) { pushToast(L.toastNeedWater); return; }
     const e = sharedRef.current.star;
-    const spot = evilRescueSpot(ew);
-    const nearSpot = spot && Q.starEvilFound(e)
-      && Math.hypot((tt.x + 0.5) - (spot.x + 0.5), (tt.y + 0.5) - (spot.y + 0.5)) <= C.EVIL_ROD_HAZARD_R;
+    const nearSpot = Q.starEvilFound(e) && evilSpotDist(ew, tt) <= C.EVIL_ROD_HAZARD_R;
     if (nearSpot) {
       const armed = evilRodArmedAtRef.current;
       if (armed && Date.now() - armed >= C.EVIL_ROD_BREAK_MS) { pushToast(L.star.evil.rodStillBroken); return; }
-      if (!armed) { pushToast(L.star.evil.rodArming); sendReq({ kind: "evilRodCast" }); }
+      if (!armed) {
+        /* 2026-09-03 (lot C) — L'ANIMATION SPÉCIALE, UNE SEULE FOIS PAR ARMEMENT.
+           C'est LE geste qui compte (Guillaume : « pêcher l'étoile… saute un
+           peu, prend de l'élan… envoie l'appât bien loin dans le lac »), pas
+           chaque pression sur E pendant les 3 s d'armement qui suivent : elle
+           vit sur `!armed` (le tout premier lancer), jamais sur `nearSpot`
+           seul, sans quoi marteler E rejouerait le saut en boucle pour rien. */
+        evilCastRef.current = { t0: performance.now(), tx: tt.x, ty: tt.y };
+        actAnimRef.current = C.EVIL_CAST_ANIM_MS / 1000;
+        pushToast(L.star.evil.rodArming); sendReq({ kind: "evilRodCast" });
+      }
       return;
     }
     // Pêche AMBIANTE : mutant/squelette, jamais stockable (C.EVIL_LAKE_FISH).
@@ -9613,7 +9623,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     let r = Math.random() * total, fi = 0;
     for (let i = 0; i < C.EVIL_LAKE_FISH.length; i++) { r -= C.EVIL_LAKE_FISH[i].weight; if (r <= 0) { fi = i; break; } }
     fishTileRef.current = { x: tt.x, y: tt.y };
-    pushToast(L.evilFishBite(lang === "en" ? C.EVIL_LAKE_FISH[fi].nameEn : C.EVIL_LAKE_FISH[fi].name));
+    pushToast(L.evilFishBite);
     setFishMini({ mode: fi % 3, fish: 0, evil: fi });
   }
   function fishWon() {
@@ -9626,6 +9636,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        la révélation est un pur toast, comme la coupe/le minage en zone maléfique
        n'envoient QUE le gain, jamais un événement vide. */
     if (typeof fm.evil === "number") {
+      /* 2026-09-03 (lot C) — LE SAUT VERS LA RIVE, AVANT LE MOT. Guillaume, en
+         jouant : « ça doit pop out de l'eau et aller sur la rive avant de fade
+         out. » La prise n'est révélée que MAINTENANT (evilFishCaught, déjà
+         posé plus haut) — ce petit saut est ce qui la montre vraiment, le toast
+         ne fait que la nommer. */
+      const ew = evilWorldRef.current;
+      const shore = ew ? evilNearestShore(ew, tt.x, tt.y) : null;
+      if (shore) {
+        evilCatchRef.current = {
+          t0: performance.now(), fx: tt.x, fy: tt.y, sx: shore.x, sy: shore.y,
+          color: C.EVIL_LAKE_FISH[fm.evil].color,
+        };
+      }
       pushToast(L.evilFishCaught(lang === "en" ? C.EVIL_LAKE_FISH[fm.evil].nameEn : C.EVIL_LAKE_FISH[fm.evil].name));
       return;
     }
@@ -17102,6 +17125,78 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
       draws.push({ y: (m.y + 1) * T, fn: () => drawSelf(m) });
+      /* 2026-09-03 (lot C) — L'APPÂT QUI VOLE VERS LA SEPTIÈME SŒUR : l'autre
+         moitié du lancer spécial (la pose vit dans fermeArt/drawStarCast, cet
+         arc n'a besoin d'aucun sprite, juste des deux points qu'il relie).
+         Lu UNE fois ici (evilCastNow, même instantané que selfCastDraw) : un
+         aller simple, du rayon du lanceur vers la case visée, avec une petite
+         éclaboussure à l'arrivée. */
+      {
+        const cast = evilCastNow();
+        if (cast) {
+          draws.push({ y: (cast.ty + 1) * T, fn: () => {
+            const flightP = Math.max(0, Math.min(1, (cast.ph - 0.3) / 0.6));
+            const sx = m.x * T + T / 2, sy2 = m.y * T + T / 2 - 6;
+            const ex = cast.tx * T + T / 2, ey = cast.ty * T + T / 2;
+            const bx = sx + (ex - sx) * flightP;
+            const by = sy2 + (ey - sy2) * flightP - Math.sin(flightP * Math.PI) * 10;
+            ctx.save();
+            ctx.strokeStyle = "rgba(230,225,255,0.55)"; ctx.lineWidth = 0.6;
+            ctx.beginPath(); ctx.moveTo(sx, sy2); ctx.lineTo(bx, by); ctx.stroke();
+            ctx.fillStyle = "#e8dfa0";
+            ctx.beginPath(); ctx.arc(bx, by, 1.4, 0, 7); ctx.fill();
+            if (cast.ph >= 0.88) {
+              const sp = (cast.ph - 0.88) / 0.12;
+              ctx.strokeStyle = `rgba(214,186,255,${Math.max(0, 0.5 * (1 - sp))})`;
+              ctx.lineWidth = 1;
+              ctx.beginPath(); ctx.arc(ex, ey, 2 + sp * 6, 0, 7); ctx.stroke();
+            }
+            ctx.restore();
+          } });
+        }
+      }
+      /* 2026-09-03 (lot C) — LA PRISE QUI SAUTE JUSQU'À LA RIVE. Demande de
+         Guillaume, en jouant : « ça doit pop out de l'eau et aller sur la rive
+         avant de fade out » — c'est ce petit saut, pas le toast, qui montre la
+         prise. Trois temps sur la même barre de progression (`ph`) : un
+         sursaut hors de l'eau, une série de petits bonds qui s'amenuisent vers
+         la rive, un estompage une fois posée — jamais de sprite dédié
+         (EVIL_LAKE_FISH n'en a pas), juste une masse et deux yeux, comme le
+         reste des FX de ce fichier. */
+      {
+        const catchFx = evilCatchNow();
+        if (catchFx) {
+          draws.push({ y: (catchFx.sy + 1) * T, fn: () => {
+            const travel = Math.max(0, Math.min(1, (catchFx.ph - 0.1) / 0.75));
+            const fx0 = catchFx.fx * T + T / 2, fy0 = catchFx.fy * T + T / 2;
+            const sx0 = catchFx.sx * T + T / 2, sy0 = catchFx.sy * T + T / 2;
+            const bx = fx0 + (sx0 - fx0) * travel, by0 = fy0 + (sy0 - fy0) * travel;
+            // Bonds qui s'amenuisent : forts au départ (on sort de l'eau), à
+            // peine perceptibles juste avant la rive.
+            const bounce = Math.abs(Math.sin(travel * Math.PI * 2.5)) * 7 * (1 - travel * 0.7);
+            const by = by0 - bounce;
+            const fadeStart = 0.88;
+            const alpha = catchFx.ph < fadeStart ? 1 : Math.max(0, 1 - (catchFx.ph - fadeStart) / (1 - fadeStart));
+            if (alpha <= 0) return;
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            // Ondes à l'eau, tant qu'on n'a pas atteint la rive.
+            if (travel < 1) {
+              ctx.strokeStyle = "rgba(214,186,255,0.35)"; ctx.lineWidth = 1;
+              ctx.beginPath(); ctx.ellipse(bx, by0 + 2, 5, 2, 0, 0, 7); ctx.stroke();
+            }
+            ctx.fillStyle = "rgba(0,0,0,0.25)";
+            ctx.beginPath(); ctx.ellipse(bx, by0 + 2, 3.5, 1.4, 0, 0, 7); ctx.fill();
+            ctx.fillStyle = catchFx.color || "#a8c090";
+            ctx.beginPath(); ctx.ellipse(bx, by, 4, 2.6, 0, 0, 7); ctx.fill();
+            ctx.fillStyle = "rgba(0,0,0,0.35)";
+            ctx.beginPath(); ctx.ellipse(bx, by, 4, 2.6, 0, 0, 7); ctx.stroke();
+            ctx.fillStyle = "#f4ecff";
+            ctx.fillRect(bx - 1.5, by - 1, 1, 1); ctx.fillRect(bx + 0.5, by - 1, 1, 1);
+            ctx.restore();
+          } });
+        }
+      }
       // Créatures maléfiques (chantier 2026-07, demande Guillaume) : réutilise
       // le sprite loup (mêmes 4 frames de marche, même mécanique d'animT que
       // les loups de la ferme) plutôt qu'un nouvel asset — reteinté en violet
@@ -17217,7 +17312,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const img = set && set[2] && set[2][Math.floor(now / 260) & 3];
             if (!img) return;
             const bob = Math.sin(now / 900) * 1.4;
-            const k = 3, w2 = img.width * k, h2 = img.height * k;
+            /* 2026-09-03 (lot C) — CORRECTIF DE GUILLAUME, EN JOUANT : « l'étoile
+               ne doit pas être trop grande, taille cohérence avec les autres. »
+               `k=3` la dessinait TROIS FOIS plus grande que ses six sœurs
+               (`drawStarWisp` les peint à l'échelle native, sans multiplicateur)
+               — ce qui contredisait déjà la note juste au-dessus (« trait pour
+               trait à l'étoile réelle », la leçon du lot B). Échelle native,
+               comme les six autres. */
+            const k = 1, w2 = img.width * k, h2 = img.height * k;
             const cx = spot.x * T + T / 2, cy = (spot.y + 1) * T;
             ctx.save();
             // Ondulations : même famille que le Gourmandin plus haut dans cette fonction.
@@ -20979,17 +21081,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          ║ 2026-09-03 (lot C) — LE DÉCLENCHEUR DE LA DÉCOUVERTE, ICI ET PAS DANS
          ║ LE RENDU.
          ╚══════════════════════════════════════════════════════════════════════
-         Proximité du point de sauvetage — la MÊME distance que le hasard de la
-         canne (`EVIL_ROD_HAZARD_R`) : se tenir assez près pour tenter de pêcher,
-         c'est déjà être assez près pour l'avoir vue. Idempotent côté hôte
-         (`resolveStarEvilFound`) ; `evilFoundPingRef` n'existe QUE pour éviter de
-         spammer `sendReq` à chaque image tant que le joueur reste dans le rayon
-         (§3 de CLAUDE.md : seul le NOMBRE de `send()` compte, mais zéro inutile
-         vaut toujours mieux qu'un). */
+         ⚠️⚠️⚠️ CORRECTIF DE PORTÉE (même jour, session suivante) : ceci comparait
+         MA position à `evilRescueSpot`, qui est EN PLEINE EAU — l'eau bloque la
+         marche (`blockedEvil`), donc la case la plus proche accessible à pied
+         reste à 3,16 cases du point sur l'unique carte maléfique (seed fixe
+         0xE411), jamais sous `EVIL_ROD_HAZARD_R` (1,6) dans AUCUNE direction
+         (balayage complet vérifié). La découverte ne pouvait donc jamais
+         s'armer. `startFishingEvil` calculait déjà la bonne distance — celle de
+         la case VISÉE par le lancer, pas celle du joueur, ce qui est exactement
+         le bon calcul pour pêcher DEPUIS la rive — on lit ICI la même formule
+         (`evilSpotDist`, sur `targetTileEvil()`) plutôt que d'en dupliquer une
+         seconde qui suppose qu'on peut s'approcher à pied (§4 de CLAUDE.md :
+         une grandeur recopiée reste juste jusqu'au jour où elle est fausse).
+         Se tenir assez près ET VISER vers le point, c'est déjà être assez près
+         pour l'avoir vue. Idempotent côté hôte (`resolveStarEvilFound`) ;
+         `evilFoundPingRef` n'existe QUE pour éviter de spammer `sendReq` à
+         chaque image tant que la case visée reste dans le rayon (§3 de
+         CLAUDE.md : seul le NOMBRE de `send()` compte, mais zéro inutile vaut
+         toujours mieux qu'un). */
       const evilStar = sharedRef.current.star;
       if (Q.starEvilUnlocked(evilStar) && !Q.starEvilFound(evilStar)) {
-        const spot = evilRescueSpot(ew);
-        if (spot && Math.hypot((m.x + 0.5) - (spot.x + 0.5), (m.y + 0.5) - (spot.y + 0.5)) <= C.EVIL_ROD_HAZARD_R
+        if (evilSpotDist(ew, targetTileEvil()) <= C.EVIL_ROD_HAZARD_R
             && nowP - (evilFoundPingRef.current || 0) > 2000) {
           evilFoundPingRef.current = nowP;
           sendReq({ kind: "evilFound" });
@@ -21348,7 +21460,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          position et le sac — et c'est ce mélange qui, au 441, a fait porter deux
          sens au même nombre. */
       drawCharacter({ ...m, sit: !!m.sitOn, look: wardrobeLookOf(m.id) || m.look || null,
-                      ...craterSlipDraw(m, true), ...selfDigDraw() }, true);
+                      ...craterSlipDraw(m, true), ...selfDigDraw(), ...selfCastDraw() }, true);
       if (actAnimRef.current > 0 && slotRef.current <= SLOT.can) {
         const sprites = spritesRef.current;
         const key = slotRef.current === SLOT.tools ? toolKindRef.current : "can";
@@ -21363,6 +21475,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function selfDigDraw() {
       const d = starDigRef.current;
       return d ? { dig: true, digT0: d.t0, digFx: d.fx } : {};
+    }
+    /* Ma pose de lancer spécial (lot C) — même contrat que selfDigDraw : objet
+       vide tant qu'aucun lancer n'est en cours, donc les autres appelants de
+       drawCharacter ne changent pas. `castKx` compare la case visée à MA
+       position (pas à l'écran) : c'est un sens du MONDE, drawCharacter le
+       mirroite comme digFx/slipX sous scale(-1,1). */
+    function selfCastDraw() {
+      const c = evilCastNow(); if (!c) return {};
+      const m = meRef.current;
+      return { cast: true, castPh: c.ph, castKx: (m && c.tx < m.x) ? -1 : 1 };
     }
     /* Les trois champs de dessin de la pose de cratère — et rien d'autre : ni
        position, ni vitesse, ni état. ⚠️ ELLE REND UN OBJET VIDE PARTOUT AILLEURS
@@ -22541,6 +22663,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         ctx.fillStyle = "#241c14";  // botte
         ctx.fillRect(10, 19, 4, 3);
         ctx.restore();
+      } else if (p.cast) {
+        /* 2026-09-03 (lot C) — LE LANCER SPÉCIAL. Même contrat que p.dig/p.slip
+           juste en dessous : le dessin vit dans fermeArt (drawStarCast), ici
+           seulement le choix et le miroir. `castKx` est un sens du MONDE (vers
+           l'eau) ; sous scale(-1,1) du profil ouest, le passer tel quel
+           lancerait du mauvais côté à l'écran — même piège que digFx/slipX,
+           réglé de la même façon (le miroir multiplie, il ne remplace pas). */
+        const drawCast = (ox, mir) => A.drawStarCast(ctx, sheet, row, ox, py, p.castPh || 0, (p.castKx || 1) * mir);
+        if (flip) { ctx.translate(px + 16, 0); ctx.scale(-1, 1); drawCast(0, -1); }
+        else drawCast(px, 1);
       } else if (p.dig) {
         /* ╔══════════════════════════════════════════════════════════════════════
            ║ ZIP 469 — LA POSE DE FOUILLE. Même contrat que les trois poses du
@@ -23390,6 +23522,56 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      (`d < 6 + rnd()*2`, fermeEngine.js). */
   function evilRescueSpot(ew) {
     return ew && ew.lake ? { x: ew.lake.x, y: ew.lake.y - Math.max(1, ew.lake.r - 2) } : null;
+  }
+  /* 2026-09-03 (lot C) — LA MÊME DISTANCE, LUE PAR DEUX APPELANTS
+     (`startFishingEvil`, `updateMeEvil`) : §4 de CLAUDE.md, une grandeur
+     recopiée reste juste jusqu'au jour où elle est fausse — c'est exactement
+     ce qui a cassé la découverte (voir le correctif dans `updateMeEvil`). `tt`
+     est une case (x,y entiers), la case du point l'est aussi ; le +0.5 ramène
+     les deux au centre de leur case avant de mesurer. */
+  function evilSpotDist(ew, tt) {
+    const spot = evilRescueSpot(ew);
+    return spot && tt ? Math.hypot((tt.x + 0.5) - (spot.x + 0.5), (tt.y + 0.5) - (spot.y + 0.5)) : Infinity;
+  }
+  /* 2026-09-03 (lot C) — LE LANCER SPÉCIAL, LU UNE SEULE FOIS. `selfCastDraw`
+     (la pose, fermeArt.drawStarCast) et le petit arc de l'appât (drawEvilFrame)
+     ont besoin du même instantané ; écrire l'expiration à deux endroits aurait
+     été le même piège que ci-dessus. Purge le ref elle-même dès que le geste
+     est fini — aucun stop explicite à appeler, c'est un aller simple. */
+  function evilCastNow() {
+    const c = evilCastRef.current; if (!c) return null;
+    const el = performance.now() - c.t0;
+    if (el >= C.EVIL_CAST_ANIM_MS) { evilCastRef.current = null; return null; }
+    return { tx: c.tx, ty: c.ty, ph: el / C.EVIL_CAST_ANIM_MS };
+  }
+  /* 2026-09-03 (lot C) — LA RIVE LA PLUS PROCHE D'UNE CASE D'EAU, PAR BALAYAGE
+     EN ANNEAUX CROISSANTS. Sert à faire sauter une prise ambiante vers LA
+     bordure la plus courte, jamais vers le joueur (qui peut viser loin de la
+     rive — voir §4 de CLAUDE.md sur la portée du lancer). S'arrête au premier
+     anneau qui trouve une case hors eau ; 12 cases de rayon suffisent toujours
+     sur la carte maléfique (le lac ne dépasse jamais ce diamètre, voir §5 bis
+     de QUETE.md), et un lac sans rive proche ne doit rien renvoyer plutôt que
+     deviner un point faux. */
+  function evilNearestShore(ew, x, y) {
+    if (!ew) return null;
+    for (let r = 1; r <= 12; r++) {
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const nx = x + dx, ny = y + dy;
+        if (!inMapEvil(nx, ny)) continue;
+        if (ew.ground[ny * ew.w + nx] !== C.G_WATER) return { x: nx, y: ny };
+      }
+    }
+    return null;
+  }
+  /* Même contrat que evilCastNow : un instantané, lu une seule fois par la
+     pose de la créature (drawEvilFrame) — un aller simple de EVIL_CATCH_ANIM_MS,
+     jamais bouclé, purgé par lui-même à l'expiration. */
+  function evilCatchNow() {
+    const c = evilCatchRef.current; if (!c) return null;
+    const el = performance.now() - c.t0;
+    if (el >= C.EVIL_CATCH_ANIM_MS) { evilCatchRef.current = null; return null; }
+    return { fx: c.fx, fy: c.fy, sx: c.sx, sy: c.sy, color: c.color, ph: el / C.EVIL_CATCH_ANIM_MS };
   }
   function targetTileEvil() {
     const m = meRef.current, ew = evilWorldRef.current; if (!m || !ew) return { x: 0, y: 0 };

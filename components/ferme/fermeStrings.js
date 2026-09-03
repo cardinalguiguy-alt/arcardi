@@ -3700,10 +3700,12 @@ export const FERME_STR = {
     fishFail: "Le poisson s'est échappé...",
     fishTooSoon: "Trop tôt ! Il a filé.",
     /* 2026-09-03 (lot C) — la pêche AMBIANTE du lac maléfique (mutant/squelette,
-       jamais stockable — voir C.EVIL_LAKE_FISH). Deux toasts, comme `seaBite`/
-       `fishBite` : la morsure annonce l'espèce, la prise dit qu'il n'y a rien à en
-       tirer — c'est le geste comique de la « déception », voir §6 de QUETE.md. */
-    evilFishBite: (name) => `Ça mord... ${name.toLowerCase()} ?!`,
+       jamais stockable — voir C.EVIL_LAKE_FISH). ⚠️ 2026-09-03, correctif de
+       Guillaume en jouant : « on ne doit pas savoir à l'avance que c'est un
+       squelette de poisson qu'on va attraper » — contrairement à `seaBite`/
+       `fishBite`, la morsure ne nomme PLUS l'espèce (le mystère est le geste),
+       seule la prise le révèle une fois gagnée. */
+    evilFishBite: "Ça mord... quelque chose remue sous l'eau trouble.",
     evilFishCaught: (name) => `Tu remontes ${name.toLowerCase()}. Rien à en tirer — mais l'eau grouille de vie étrange.`,
     // Invites de proximité
     promptShop: "[E] Boutique",
@@ -5442,8 +5444,9 @@ export const FERME_STR = {
     fishWin: "Nice catch!",
     fishFail: "The fish got away...",
     fishTooSoon: "Too soon! It escaped.",
-    // 2026-09-03 (lot C) — see the French note: the evil lake's ambient catches (never stockable).
-    evilFishBite: (name) => `A bite... ${name.toLowerCase()}?!`,
+    // 2026-09-03 (lot C) — see the French note: the bite no longer names the
+    // catch (Guillaume: it shouldn't be known in advance) — only landing it does.
+    evilFishBite: "Something bites... something stirs beneath the murky water.",
     evilFishCaught: (name) => `You reel in ${name.toLowerCase()}. Nothing to gain from it — but the water teems with strange life.`,
     promptShop: "[E] Shop",
     promptBin: "[E] Stores",

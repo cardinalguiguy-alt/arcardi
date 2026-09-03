@@ -1065,6 +1065,18 @@ export const EVIL_LAKE_FISH = [
    (l'eau qui la retient est hostile) sans éteindre la pêche ordinaire. */
 export const EVIL_ROD_BREAK_MS = 3000;
 export const EVIL_ROD_HAZARD_R = 1.6; // cases autour du point de sauvetage — même ordre de grandeur que STAR_GREEN_NEAR/STAR_SHY_NEAR (quete.js)
+/* 2026-09-03 (lot C) — L'ANIMATION SPÉCIALE DU PREMIER LANCER (saut + élan,
+   voir drawStarCast dans fermeArt.js et startFishingEvil dans FermeGame.js) :
+   UNE seule durée, lue par le verrou de mouvement (actAnimRef) ET par la pose
+   ET par l'arc de l'appât — jamais trois nombres qui pourraient diverger. */
+export const EVIL_CAST_ANIM_MS = 900;
+/* 2026-09-03 (lot C) — LA PRISE AMBIANTE, RÉVÉLÉE PAR LE GESTE, PAS PAR LE MOT.
+   Correctif de Guillaume, en jouant : « on ne doit pas savoir à l'avance que
+   c'est un squelette de poisson qu'on va attraper. ça doit pop out de l'eau et
+   aller sur la rive avant de fade out. » La morsure (evilFishBite) ne nomme
+   plus l'espèce ; c'est CE saut qui la montre. Trois quarts de la durée pour le
+   trajet eau→rive, le dernier quart pour l'estompage — voir evilCatchNow(). */
+export const EVIL_CATCH_ANIM_MS = 1400;
 
 // --- Clôture (posée librement par les joueurs, section par section) ---
 export const FENCE_COST = 15; // prix d'une section de clôture à la boutique (payée en or, inchangé)

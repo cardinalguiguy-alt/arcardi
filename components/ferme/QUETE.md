@@ -413,9 +413,10 @@ elles ont changé le PLAN et pas seulement le contenu — c'est signalé.
    présence utile. ⚠️ C'est la meilleure forme possible du §4 (« la coopération est une conséquence,
    pas une serrure ») — elle ne coûte ni message, ni état, ni barème. ❌ **NON CONSTRUITE.**
 
-⚠️ **CE QUI RESTE OUVERT ET N'A PAS ÉTÉ POSÉ** : les poissons-squelettes donnent-ils quelque chose
-(or, cosmétique, ou juste la déception comique), et combien de sprites distincts ? Question du lot D,
-sans effet sur ce qui précède — à trancher le jour où le lot D s'ouvre.
+9. **Les poissons-squelettes ne donnent rien.** *Tranché avec Guillaume le 2026-09-03.* Chaque
+   prise manquée/ratée avant l'étoile est une pure déception comique (un squelette au bout de la
+   ligne), cohérent avec la pêche ambiante déjà tranchée « rien de stockable » (§3 point 4). ⚠️ Le
+   nombre de sprites distincts reste ouvert — à trancher en les dessinant, lot D.
 
 ### 2 bis. Le réveil au rythme — LIVRÉ (lot A, 2026-09-02)
 

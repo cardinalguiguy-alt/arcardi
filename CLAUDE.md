@@ -12,37 +12,68 @@ REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui cont
 rien tant qu'il ne dit pas par quoi commencer.*
 
 ⚠️⚠️⚠️ **LES LOTS A, A2, A3, B ET C SONT LIVRÉS.** A/A2/A3/B ont été vérifiés en jeu le 2026-09-03 —
-détail dans `QUETE.md` §2 bis/ter/quater, rien à en répéter ici.
+détail dans `QUETE.md` §2 bis/ter/quater. Le lot C (découverte, chevron, hasard de la canne, pêche
+ambiante) est détaillé dans `QUETE.md` §3 ; sa prémisse technique fausse et son inventaire du
+2026-09-03 n'ont pas à être répétés ici — seul ce qui reste vrai ou ouvert compte.
 
-⚠️⚠️⚠️ **LOT C — LE LAC MALÉFIQUE : DÉCOUVERTE, CHEVRON, HASARD DE LA CANNE, PÊCHE AMBIANTE.**
-Détail complet dans `QUETE.md` §3 (le master prompt en tête de fichier, points 1 à 4 marqués ✅).
-Trois choses à savoir avant de retoucher ce chantier :
-1. **La prémisse technique du master prompt était fausse, et ça a coûté la moitié du lot à
-   découvrir.** Le lac « déjà là » qu'il citait (`generateEvilWorld`, `fermeEngine.js`) est du code
-   **mort** — aucun appelant en jeu. Le vrai lac vient de `generatePassageWorld` (seed fixe), et il
-   est déjà exporté vivant en `ew.lake` : aucune constante `EVIL_LAKE_X/Y/R` n'a donc été posée, le
-   point de sauvetage se lit à la volée (`evilRescueSpot(ew)`, `FermeGame.js`, une seule fonction,
-   trois appelants). Le chevron n'était par ailleurs jamais dessiné dans le monde maléfique
-   (`drawEvilFrame` n'appelait pas `drawStarChevron`) et la canne n'y était pas du tout atteignable
-   (`doActionEvil` ne gérait que la hache/pioche) — les deux corrigés.
-2. **Guillaume a étendu la demande en cours de lot** : *« ce lac maléfique doit permettre la pêche
-   même en dehors du contexte de la quête. Mais seulement la pêche de poissons mutants et de
-   squelettes de poissons donc rien de stockable pour l'instant. »* Réponse retenue (interprétation
-   de Claude, à confirmer en jouant) : le hasard de la canne nue (casse en 3 s) ne frappe QUE la
-   tentative de sauver la septième sœur, à son point précis (`EVIL_ROD_HAZARD_R`) — la pêche
-   ambiante (`C.EVIL_LAKE_FISH`, six prises, jamais stockées) reste jouable partout ailleurs dans
-   le lac, sans condition de quête.
-3. **Vérification honnête, pas complète.** `verify-quete` **773/773** (15 contrôles neufs,
-   falsification comprise), `next build` compile, bundle propre. **Regardé en jeu** : le chevron
-   traverse les deux zones (18 m → 3 m → à l'écran en ferme ; 39 m → 23 m en zone maléfique,
-   re-ciblé au passage), le bandeau `evilSeek` avec sa priorité corrigée, l'overlay de mission
-   confirmé DANS LE DOM avec son vrai texte. **PAS VU EN JEU** : le sprite de l'étoile qui dépasse
-   du lac, les deux toasts de découverte, la pastille de casse de la canne, la pêche ambiante — la
-   navigation manuelle jusqu'au point exact du lac n'a pas abouti dans le temps de cette session
-   (onglet de navigateur masqué, la parade du §10 a fait traverser les deux zones mais pas assez
-   précisément pour s'arrêter sur la bonne case). **Guillaume : ce sont ces quatre choses-là qu'il
-   reste à voir** — le chevron t'y mène directement (menu dev → 🌊, puis suis la flèche jusqu'au
-   bout, tente un lancer nu une fois arrivé).
+⚠️⚠️⚠️ **CORRECTIF DE PORTÉE DU LOT C — FAIT ET VÉRIFIÉ EN JEU (2026-09-03, même jour, session
+suivante).** Le défaut était réel et bloquant : `updateMeEvil` comparait MA position à
+`evilRescueSpot` (en pleine eau, jamais atteignable à pied — 3,16 cases au plus près, jamais sous
+`EVIL_ROD_HAZARD_R`=1,6), donc la découverte de la septième sœur et le hasard de la canne ne
+pouvaient jamais s'armer. **Corrigé** : `updateMeEvil` lit maintenant `evilSpotDist(ew,
+targetTileEvil())` — la même formule que `startFishingEvil`, factorisée UNE fois (`evilSpotDist`,
+`FermeGame.js`, à côté d'`evilRescueSpot`) plutôt que dupliquée. **Vérifié EN JEU** (Guillaume
+suivait en direct sur son propre serveur de dev, arbre principal, hot-reload — pas besoin de
+`app/devtest`) : le toast d'armement (« L'eau corrompue s'infiltre dans ta ligne... ») et le
+compte à rebours `EvilRodHazard` se déclenchent bien depuis la rive.
+
+⚠️⚠️⚠️ **LE LANCER SPÉCIAL — DEMANDÉ ET LIVRÉ LE MÊME JOUR, REVU UNE FOIS SUR RETOUR DE
+GUILLAUME.** Demande initiale, mot pour mot : *« invente une animation spéciale pour pêcher
+l'étoile... notre personnage saute un peu, prend de l'impulsion/élan... envoie l'appât bien loin
+dans le lac... seulement quand on est dans l'étape étoile 7... en dehors de ce contexte la pêche
+doit avoir un aspect habituel. »* Livré : `drawStarCast` (`fermeArt.js`) — la pose, déclenchée
+UNIQUEMENT sur le tout premier lancer près du point de sauvetage (`startFishingEvil`, branche
+`!armed`), jamais sur la pêche ambiante ni la pêche normale ailleurs, qui restent inchangées ; un
+petit arc d'appât sans sprite dédié (`drawEvilFrame`, `FermeGame.js`) ; `evilCastRef`/`evilCastNow`
+(purement locaux, pas diffusés — voir plus bas) ; `EVIL_CAST_ANIM_MS`=900 (`fermeConstants.js`),
+une seule durée pour le verrou de mouvement, la pose et l'arc. ⚠️ **PREMIER JET JUGÉ
+« DÉSARTICULÉ » PAR GUILLAUME EN JOUANT, CORRIGÉ DANS LA FOULÉE** : tête et buste penchaient à deux
+vitesses (`lean` plein / `lean`×0,5), jambes et saut suivaient deux horloges séparées (`wind` fini
+au tiers du geste / `hop` sur tout le geste) — deux désynchronisations qui font lire trois
+morceaux au lieu d'un corps. Réécrite : une seule courbe (`s`) mène tête+buste+jambes ensemble ;
+seul le bras qui lance garde son propre rythme (voulu, un lancer part de l'épaule). **PAS ENCORE
+REJOUÉ PAR GUILLAUME après cette réécriture — à revérifier en premier.**
+
+⚠️⚠️ **DEUX AUTRES CORRECTIFS DEMANDÉS PAR GUILLAUME EN JOUANT LE MÊME JOUR, LIVRÉS MAIS PAS
+ENCORE REJOUÉS APRÈS COUP :**
+1. *« on ne doit pas savoir à l'avance que c'est un squelette de poisson qu'on va attraper. ça doit
+   pop out de l'eau et aller sur la rive avant de fade out. »* La morsure ambiante (`evilFishBite`,
+   `fermeStrings.js`) ne nomme plus l'espèce (texte fixe, plus une fonction) — seule la prise gagnée
+   (`evilFishCaught`) la révèle encore. Nouvelle FX `evilCatchRef`/`evilCatchNow` (`FermeGame.js`,
+   déclenchée dans `fishWon`) : une forme colorée (`EVIL_LAKE_FISH[i].color`, aucun sprite dédié)
+   saute par petits bonds décroissants de la case de morsure vers la rive la plus proche
+   (`evilNearestShore`, balayage en anneaux croissants) puis s'estompe — `EVIL_CATCH_ANIM_MS`=1400
+   (`fermeConstants.js`).
+2. *« l'étoile doit pas être trop grande, taille cohérence avec les autres. »* La septième sœur se
+   dessinait à `k=3` (`FermeGame.js`, ~l.17315) — trois fois la taille de ses six sœurs, que
+   `drawStarWisp` peint à l'échelle native. Ramené à `k=1`.
+
+⚠️⚠️⚠️ **CE QUI RESTE OUVERT, ET C'EST UNE VRAIE DÉCISION AVANT D'ÉCRIRE LE LOT D** — Guillaume,
+en jouant, a déjà donné une partie de la direction : *« la prise de l'étoile doit demander une
+mécanique, mais on doit voir qu'on la drag out of the water slowly but surely, jusqu'à ce qu'elle
+atteigne la rive. »* **Rien n'est construit** : pas de mini-jeu de halage, pas de traction
+progressive visible. C'est un vrai chantier (geste soutenu dans le temps, résistance qui répond,
+déplacement visible vers la rive) — à poser avec Guillaume avant d'écrire du code, comme le §2 le
+demande pour toute production créative, pas à trancher seul.
+
+⚠️ **UN DOUTE TECHNIQUE TROUVÉ EN VÉRIFIANT CE LOT, PAS ENCORE CONFIRMÉ NI CORRIGÉ** : quand
+l'HÔTE LUI-MÊME déclenche une action du menu développeur qui répare son propre fermier (« Me
+soigner », remise à zéro de la canne cassée), l'effet ne semblait pas se répercuter sur SON PROPRE
+affichage local en test solo (un seul client, hôte) — `hostHandleReq` diffuse un `apply`, mais le
+canal ferme est `self:false` (§3), donc l'hôte ne reçoit jamais sa propre diffusion. **Pas vérifié
+si c'est un vrai bug ou un artefact de test à un seul client** (Guillaume teste normalement à 2
+clients réels, `fake-supabase.mjs` — ce chemin n'est peut-être jamais emprunté en vrai) : à
+confirmer avant d'y toucher, ne rien changer sur la seule foi de ce test solo.
 
 **Aucune manipulation Supabase n'est nécessaire** pour ce lot : zéro nouveau message, zéro
 nouveau schéma.
@@ -54,11 +85,13 @@ SEAMLESS, retravailler les collisions pour évoquer la 3D de façon cohérente (
 TESTER PLUSIEURS FOIS en jeu avant de livrer ; (b) **les ornements de la balustrade portent des
 taches rouges à retirer, et les ombres manquent de contraste** — pas encore traité.
 
-⚠️⚠️⚠️ **ACTION SUIVANTE : D À F DE LA QUÊTE DE L'ÉTOILE** (protection de la canne au chaudron, la
-pêche difficile des poissons-squelettes, ramener à la rive, sortir, réanimer, puis la finale) —
-détail au §5 (tableau des lots) et §3 (points 5 à 10) de `QUETE.md`. ⚠️ **AVANT D'ÉCRIRE LOT D :
-vérifier en jeu les quatre choses non vues du lot C (ci-dessus)** — un défaut dans la découverte ou
-le hasard de la canne se propagerait directement dans la protection qui s'appuie dessus.
+⚠️⚠️⚠️ **ACTION SUIVANTE : REJOUER EN JEU LES QUATRE CORRECTIFS DE CETTE SESSION** (portée —
+confirmée, mais les trois autres non rejoués après leurs révisions : lancer spécial réécrit, pêche
+ambiante muette + saut-vers-la-rive, taille de l'étoile), **PUIS DÉCIDER AVEC GUILLAUME DU
+PÉRIMÈTRE DU MÉCANISME DE HALAGE** (lot D — le tirage progressif de l'étoile vers la rive) **AVANT
+D'EN ÉCRIRE UNE LIGNE**. Détail des lots D à F (protection de la canne au chaudron, poissons-
+squelettes qui ne donnent rien, ramener à la rive, sortir, réanimer, finale) au §5 et §3 (points 5
+à 10) de `QUETE.md`.
 
 ⚠️ **ET CE QUI ATTENDAIT DÉJÀ, NON TOUCHÉ PAR CES LOTS**, dans l'ordre : le même buis que
 Valley Town, pour la ferme (VF — aucun équivalent du mécanisme `TOWN_SOFT_PROPS` côté ferme, §4) ;
@@ -277,6 +310,14 @@ dépôt.
   plaque s'ouvrent avec E sans limite et sans arbitrage de l'hôte : tout ce qu'ils rendent doit
   être de l'INFORMATION ou une valeur DÉRIVÉE (une date, un cours). Ce qui récompense passe par une
   `req` arbitrée par l'hôte, comme la vente au marché. *La porte n'est jamais la caisse.*
+- ⚠️⚠️ **UNE CONDITION DE PROXIMITÉ DOIT MESURER CE QUE L'ACTION MESURE, PAS UNE APPROXIMATION QUI
+  SUPPOSE QU'ON PEUT S'EN APPROCHER** (lot C, 2026-09-03). La découverte de la septième sœur
+  comparait MA position à un point de sauvetage posé en pleine eau — un point que rien ne permet
+  jamais d'atteindre à pied. Le hasard de la canne, juste à côté, calculait déjà la bonne distance
+  (celle de la case VISÉE par le lancer, pas celle du joueur) ; la découverte, qui arme ce même
+  hasard, ne la lisait pas. *Deux formules voisines qui mesurent deux choses différentes se
+  ressemblent assez pour qu'on ne les compare jamais* — et celle qui ne peut jamais être vraie ne
+  lève aucune erreur : elle attend, silencieuse, une condition que personne n'atteindra.
 
 **JavaScript / three.js / canevas**
 - ⚠️⚠️⚠️ **UN BOOLÉEN MIS EN CACHE POUR UNE VALEUR NATIVE VOLATILE (`document.hidden`) NE SE

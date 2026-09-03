@@ -3007,6 +3007,67 @@ export function drawStarDig(ctx, sheet, row, px, py, phase, fx) {
 }
 
 /* ╔════════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-03 (lot C) — LE LANCER SPÉCIAL, POUR PÊCHER LA SEPTIÈME SŒUR.
+   ╚════════════════════════════════════════════════════════════════════════════
+   Demande de Guillaume, mot pour mot : « notre personnage saute un peu, prend
+   de l'impulsion/élan pour envoyer avec sa canne l'appât bien loin dans le lac,
+   autour de là où l'étoile se trouve » — réservée au premier lancer près du
+   point de sauvetage (voir `startFishingEvil`, FermeGame.js) ; partout
+   ailleurs, même en pêchant ce même lac, la pêche reste ordinaire (aucune
+   pose, droit au mini-jeu — « en dehors de ce contexte, la pêche doit avoir un
+   aspect habituel »). Un aller simple de `C.EVIL_CAST_ANIM_MS`, jamais bouclé.
+   ⚠️ MÊME TECHNIQUE QUE `drawStarSlide` : trois bandes (tête+haut du buste, bas
+   du buste, jambes) décalées par CISAILLEMENT — aucun translate/rotate/
+   roundRect, le faux canevas des bancs les ignore ou lève (§10 de CLAUDE.md).
+   ⚠️ LES JAMBES RESTENT ANCRÉES À `py + 16` (le sol, comme dans toute cette
+   famille de poses) PENDANT QUE LA TÊTE ET LE BUSTE MONTENT DE `hop` : c'est
+   cet ÉCART, pas une image qui grossit, qui lit « saut » — même principe que
+   l'écart tête/jambes de `drawStarSlide` sous `ky`.
+   `ph` : progression 0..1 du geste. `kx` : sens du jet (-1/1), un sens du
+   MONDE — l'appelant (`drawCharacter`) le mirroite comme `digFx`/`slipX`.
+   ⚠️⚠️ CORRECTIF DE GUILLAUME, EN JOUANT (même jour) : « l'animation de l'élan
+   doit pas être désarticulée. » Le premier jet faisait pencher la tête et le
+   buste à deux vitesses différentes (`lean` plein sur l'un, moitié sur
+   l'autre) et faisait plier les jambes sur UNE horloge (`wind`, finie au tiers
+   du geste) pendant que le saut suivait une AUTRE horloge (`hop`, sur tout le
+   geste) — deux désynchronisations qui font lire trois morceaux au lieu d'un
+   corps. La parade : UNE seule courbe (`s`) mène la tête, le buste ET les
+   jambes ensemble ; SEUL le bras qui lance garde son propre rythme, et c'est
+   voulu — un lancer part de l'épaule avant le reste du corps, l'épaule doit
+   donc se désynchroniser un peu, mais elle seule.
+   ════════════════════════════════════════════════════════════════════════════ */
+export function drawStarCast(ctx, sheet, row, px, py, ph, kx) {
+  const sy = row * 24;
+  const p = Math.max(0, Math.min(1, +ph || 0));
+  const k = (+kx || 1) < 0 ? -1 : 1;
+  const s = Math.sin(p * Math.PI);                          // 0→1→0 : accroupi, apogée, retombée — porte tout le corps
+  const lean = Math.round(p * 4 - 2) * k;                    // un seul lean, linéaire, tête+buste+bras : en arrière puis vers l'eau
+  const hop = Math.round(s * 3);
+  const top = py - 4 - hop;
+  // 1. Tête + haut du buste — LE MÊME lean que le bas du buste ci-dessous :
+  //    aucune coupure au cou, le corps penche d'un seul bloc.
+  ctx.drawImage(sheet, 0, sy, 16, POSE_HEAD_H, px + lean, top, 16, POSE_HEAD_H);
+  ctx.drawImage(sheet, 0, sy + POSE_TORSO_Y, 16, POSE_TORSO_H, px + lean, top + 8, 16, POSE_TORSO_H);
+  // 2. Jambes : LA MÊME courbe `s` que le saut — genoux pliés et décollage se
+  //    font sur la même horloge, jamais deux comptes à part.
+  const legH = 8 - Math.round(s * 2);
+  ctx.drawImage(sheet, 0, sy + POSE_LEG_Y, 16, POSE_LEG_H, px, py + 16 - legH, 16, legH);
+  /* 3. LE BRAS QUI LANCE, SEUL MEMBRE À SON PROPRE RYTHME (l'élan part de
+        l'épaule, avant le corps). L'autre bras reste bas, près du corps —
+        pour l'équilibre, pas pour lancer. */
+  const thr = Math.max(0, Math.min(1, (p - 0.15) / 0.6));
+  const liftMain = Math.round(Math.sin(thr * Math.PI) * 7);
+  const liftOff = Math.round(liftMain * 0.4);
+  const liftL = k > 0 ? liftOff : liftMain, liftR = k > 0 ? liftMain : liftOff;
+  ctx.drawImage(sheet, POSE_ARM_LX, sy + POSE_ARM_Y, POSE_ARM_W, POSE_ARM_H, px + lean + POSE_BODY_L - POSE_ARM_W, top + 4 - liftL, POSE_ARM_W, POSE_ARM_H);
+  ctx.drawImage(sheet, POSE_ARM_RX, sy + POSE_ARM_Y, POSE_ARM_W, POSE_ARM_H, px + lean + POSE_BODY_R, top + 4 - liftR, POSE_ARM_W, POSE_ARM_H);
+  // 4. Le creux sous le bassin — une VALEUR, pas une forme, même rôle que
+  //    dans les trois poses du cratère.
+  ctx.fillStyle = "rgba(0,0,0,0.30)";
+  ctx.fillRect(px + 3, py + 16 - legH, 10, 1);
+}
+
+/* ╔════════════════════════════════════════════════════════════════════════════
    ║ ZIP 469 — LA TERRE QUI SORT DU TROU. C'EST ELLE QUI FAIT LE GESTE.
    ╚════════════════════════════════════════════════════════════════════════════
    ⚠️⚠️ SANS ELLE, LA POSE NE RACONTE RIEN : un personnage accroupi qui agite les
