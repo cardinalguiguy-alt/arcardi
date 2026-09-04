@@ -2663,6 +2663,135 @@ section("Lot C — le lac maléfique (découverte, chevron, hasard de la canne)"
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   LE HALAGE (2026-09-04) — RAMENER LA SEPTIÈME SŒUR À LA RIVE.
+   ───────────────────────────────────────────────────────────────────────────
+   `evilHaulStep` est une simulation pure (état d'avant, un pas de temps, si le
+   joueur tient -> état d'après), donc un banc peut la REJOUER — pas seulement
+   vérifier une formule au repos. Trois politiques de joueur, comme
+   `verify-scierie` en tient pour la scie : un joueur qui lâche à temps, un
+   joueur qui ne lâche jamais, et un dt aberrant (onglet revenu au premier
+   plan). La première doit gagner en un temps raisonnable ; la deuxième doit
+   soit ne jamais gagner, soit mettre nettement plus longtemps — sinon la
+   tension ne sert à rien, et c'est exactement le genre de mécanique morte que
+   ce fichier existe pour attraper (voir l'en-tête).
+   ═══════════════════════════════════════════════════════════════════════════ */
+section("Le halage — tirer l'étoile hors de l'eau");
+{
+  const DT = 1 / 60; // un pas d'image, comme la vraie boucle de jeu
+  /* Joue evilHaulStep jusqu'à la victoire ou jusqu'à `maxSteps`, avec une
+     politique de tenue donnée. Retourne {steps, won, slips} — jamais l'état
+     interne seul, pour que l'appelant puisse mesurer un TEMPS, pas une
+     formule. */
+  function playHaul(holdPolicy, maxSteps) {
+    let s = { progress: 0, tension: 0, lockMs: 0 };
+    let slips = 0;
+    for (let i = 0; i < maxSteps; i++) {
+      const holding = holdPolicy(s, i);
+      s = Q.evilHaulStep(s, DT, holding);
+      if (s.slipped) slips++;
+      if (s.won) return { steps: i + 1, won: true, slips };
+    }
+    return { steps: maxSteps, won: false, slips };
+  }
+  /* ── LA MÉCANIQUE, AU REPOS. */
+  {
+    const s0 = Q.evilHaulStep({ progress: 0, tension: 0, lockMs: 0 }, DT, false);
+    ok("⚠️ relâché d'entrée : ni progression ni tension", s0.progress === 0 && s0.tension === 0 && !s0.slipped);
+    const s1 = Q.evilHaulStep({ progress: 0, tension: 0, lockMs: 0 }, DT, true);
+    ok("⚠️ tenir fait avancer LES DEUX (progression ET tension)", s1.progress > 0 && s1.tension > 0);
+    const s2 = Q.evilHaulStep({ progress: 0.4, tension: 0.6, lockMs: 0 }, DT, false);
+    ok("⚠️⚠️ relâcher fait retomber la tension SANS reculer la progression",
+       s2.tension < 0.6 && s2.progress === 0.4);
+    ok("…et la tension retombe plus vite qu'elle ne monte (un bref relâchement suffit)",
+       (0.6 - s2.tension) > (s1.tension - 0));
+  }
+  /* ── LA GLISSADE, PILE AU SEUIL. */
+  {
+    // Tension déjà à 1 - epsilon : UNE image de tenue en plus doit la faire
+    // franchir 1 et glisser, jamais rester juste en dessous indéfiniment.
+    const near = 1 - C.EVIL_HAUL_TENSION_RISE * DT * 0.5;
+    const s = Q.evilHaulStep({ progress: 0.5, tension: near, lockMs: 0 }, DT, true);
+    ok("⚠️⚠️ franchir 1 de tension glisse : progression amputée, tension retombée, verrou posé",
+       s.slipped && s.progress < 0.5 && s.tension === C.EVIL_HAUL_SLIP_TENSION && s.lockMs === C.EVIL_HAUL_SLIP_LOCK_MS,
+       `progress ${s.progress.toFixed(3)}, tension ${s.tension}, lockMs ${s.lockMs}`);
+    ok("⚠️⚠️⚠️ LA GLISSADE NE FAIT JAMAIS RECULER SOUS ZÉRO (bornée, pas juste soustraite)",
+       Q.evilHaulStep({ progress: 0.02, tension: 1, lockMs: 0 }, DT, true).progress >= 0);
+  }
+  /* ── LE VERROU APRÈS GLISSADE : tenir ne fait RIEN tant qu'il n'est pas
+     écoulé — sinon la glissade ne coûterait qu'un nombre, jamais un temps. */
+  {
+    const slipped = { progress: 0.3, tension: C.EVIL_HAUL_SLIP_TENSION, lockMs: C.EVIL_HAUL_SLIP_LOCK_MS };
+    const still = Q.evilHaulStep(slipped, DT, true);
+    ok("⚠️⚠️ verrouillé : tenir n'avance NI la progression NI la tension (relâché de force)",
+       still.progress === slipped.progress && still.tension < slipped.tension,
+       `progress ${still.progress}, tension ${still.tension.toFixed(3)} (était ${slipped.tension})`);
+    const past = Q.evilHaulStep({ progress: 0.3, tension: 0.1, lockMs: 0 }, DT, true);
+    ok("…verrou écoulé : tenir refonctionne normalement", past.progress > 0.3);
+  }
+  /* ── UN dt ABERRANT (onglet revenu au premier plan, §10 de CLAUDE.md) NE
+     TÉLÉPORTE PAS LA PROGRESSION : borné à 0,25 s, comme un tick de jeu
+     normal, jamais les cinq secondes réelles qu'un onglet masqué peut
+     accumuler d'un coup. */
+  {
+    const huge = Q.evilHaulStep({ progress: 0, tension: 0, lockMs: 0 }, 5, true);
+    const capped = Q.evilHaulStep({ progress: 0, tension: 0, lockMs: 0 }, 0.25, true);
+    ok("⚠️⚠️⚠️ dt=5s produit EXACTEMENT le même résultat qu'un dt=0,25s borné",
+       Math.abs(huge.progress - capped.progress) < 1e-9 && Math.abs(huge.tension - capped.tension) < 1e-9,
+       `dt=5s -> progress ${huge.progress.toFixed(4)} ; dt=0.25s -> ${capped.progress.toFixed(4)}`);
+  }
+  /* ── JOUÉ JUSQU'AU BOUT : un joueur qui lâche avant que la tension ne
+     morde gagne, dans un temps qui reste « un effort soutenu », pas une
+     corvée ni un réflexe éclair. Politique volontairement simple (bascule
+     à deux seuils) — ce n'est pas un modèle de joueur réaliste, c'est un
+     témoin reproductible. */
+  {
+    let holding = true;
+    const patient = (s) => {
+      if (holding && s.tension > 0.82) holding = false;
+      else if (!holding && s.tension < 0.12) holding = true;
+      return holding;
+    };
+    const r = playHaul(patient, 3600); // 60 s de jeu au plus
+    ok("⚠️⚠️ UN JOUEUR QUI LÂCHE À TEMPS GAGNE, EN MOINS DE 30 S DE JEU",
+       r.won && r.steps / 60 < 30,
+       `gagné en ${(r.steps / 60).toFixed(1)} s, ${r.slips} glissade(s)`);
+  }
+  /* ── FALSIFICATION : SANS RELÂCHER JAMAIS, ÇA NE VAUT RIEN — la leçon du
+     §10 de CLAUDE.md (« on casse exprès la règle que le banc prétend tenir,
+     et on exige de le voir ROUGIR avant de le croire »), appliquée à un
+     joueur plutôt qu'à un banc : si "tenir sans arrêt" gagnait aussi vite
+     qu'un joueur attentif, la jauge de tension ne serait qu'un décor. */
+  {
+    const reckless = () => true; // ne relâche jamais, quelle que soit la tension
+    const r = playHaul(reckless, 3600);
+    ok("⚠️⚠️⚠️ NE JAMAIS RELÂCHER NE GAGNE PAS EN 60 S (la tension n'est pas un décor)",
+       !r.won, `steps=${r.steps}, slips=${r.slips}`);
+    ok("…et ça glisse bien plusieurs fois — la mécanique se déclenche, elle ne dort pas",
+       r.slips >= 3, `slips=${r.slips}`);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LA SEPTIÈME SŒUR SUR LA RIVE (`resolveStarEvilRescue`) — MÊME CONTRAT QUE
+   `resolveStarEvilFound` : refusée trop tôt, datée, idempotente.
+   ═══════════════════════════════════════════════════════════════════════════ */
+section("Le halage — elle a atteint la rive");
+{
+  const e = Q.newStar();
+  ok("⚠️ pas encore vue : la ramener refuse (`tooEarly`)",
+     Q.resolveStarEvilRescue(e, 1).tooEarly === true && !Q.starEvilRescued(e));
+  armFall(e); findFarmImpacts(e, "banc", 2); Q.resolveStarTownFall(e, 10);
+  Q.resolveStarFound(e, "crater", "banc", 11);
+  findSisters(e, 12);
+  Q.resolveStarEvilFound(e, 999);
+  const r1 = Q.resolveStarEvilRescue(e, 5000);
+  ok("⚠️⚠️ vue puis halée : acceptée, datée", r1.ok && !r1.already && e.evilRescued === 5000);
+  const r2 = Q.resolveStarEvilRescue(e, 9000);
+  ok("…un second appel (double req réseau) : idempotent, la date ne bouge pas",
+     r2.ok && r2.already === true && e.evilRescued === 5000);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    8 bis. LA CONSTRUCTION (zip 454) : LA PORTE, L'INGÉNIEUR, LE BOIS.
    ───────────────────────────────────────────────────────────────────────────
    ⚠️⚠️ CE QUI EST MESURÉ ICI N'EST PAS « est-ce que ça marche » MAIS L'INVARIANT,

@@ -1078,6 +1078,31 @@ export const EVIL_CAST_ANIM_MS = 900;
    trajet eau→rive, le dernier quart pour l'estompage — voir evilCatchNow(). */
 export const EVIL_CATCH_ANIM_MS = 1400;
 
+/* ══════════════════════════════════════════════════════════════════════════
+   2026-09-04 — LE HALAGE : RAMENER LA SEPTIÈME SŒUR À LA RIVE.
+   ══════════════════════════════════════════════════════════════════════════
+   Demande de Guillaume, en jouant : « on doit voir qu'on la drag out of the
+   water slowly but surely, jusqu'à ce qu'elle atteigne la rive. » Un geste
+   dédié (pas une réutilisation de `FishMinigame`), solo par défaut. La
+   simulation pure vit dans `quete.js` (`evilHaulStep`), ces nombres sont ses
+   seuls réglages — jamais recopiés dans la fonction elle-même (§8 de
+   CLAUDE.md).
+   ⚠️ TENIR fait à la fois avancer `progress` (vers la rive) ET monter
+   `tension` — RELÂCHER fait retomber `tension` (plus vite qu'elle ne monte,
+   pour qu'un relâchement bref suffise) sans faire reculer `progress`. Passer
+   `tension` à son maximum GLISSE : `progress` recule d'un cran,`tension`
+   retombe à `EVIL_HAUL_SLIP_TENSION` (pas à zéro — on ne repart jamais à
+   froid) et un court verrou (`EVIL_HAUL_SLIP_LOCK_MS`) empêche de retirer
+   tout de suite, pour qu'une glissade se voie et se sente. */
+export const EVIL_HAUL_BITE_DELAY_MS = 650;  // entre la fin du lancer spécial et la touche (« Ça mord ! »)
+export const EVIL_HAUL_PULL_RATE = 0.078;    // progression/s en tirant
+export const EVIL_HAUL_TENSION_RISE = 0.62;  // tension/s en tirant
+export const EVIL_HAUL_TENSION_FALL = 1.05;  // tension/s relâché
+export const EVIL_HAUL_SLIP_PENALTY = 0.14;  // progression perdue à une glissade
+export const EVIL_HAUL_SLIP_TENSION = 0.32;  // tension après une glissade
+export const EVIL_HAUL_SLIP_LOCK_MS = 450;   // verrou bref après une glissade
+export const EVIL_HAUL_ARRIVE_MS = 1800;     // mise en scène d'arrivée sur la rive, une fois gagné
+
 // --- Clôture (posée librement par les joueurs, section par section) ---
 export const FENCE_COST = 15; // prix d'une section de clôture à la boutique (payée en or, inchangé)
 
@@ -5672,6 +5697,7 @@ export const DEV_TELEPORTS = [
   { key: "churchTower", zone: "court" }, // 444 — le beffroi, le point le plus haut de la carte
   { key: "world",   zone: "evil" },  // arrivée dans la terre en cours (EVIL_SPAWN)
   { key: "bridge",  zone: "evil" },  // pied du pont de la terre en cours
+  { key: "rescue",  zone: "evil" },  // 2026-09-04 : la rive au point de sauvetage de la septième sœur
 ];
 
 /* ╔══════════════════════════════════════════════════════════════════════════════

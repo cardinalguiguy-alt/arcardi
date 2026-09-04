@@ -3068,6 +3068,70 @@ export function drawStarCast(ctx, sheet, row, px, py, ph, kx) {
 }
 
 /* ╔════════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-04 — LE HALAGE : RAMENER LA SEPTIÈME SŒUR À LA RIVE.
+   ╚════════════════════════════════════════════════════════════════════════════
+   Demande de Guillaume : « on doit voir qu'on la drag out of the water slowly
+   but surely ». La simulation (progression, tension, glissades) vit dans
+   `quete.js` (`evilHaulStep`) — ici, uniquement le dessin d'un instant donné.
+   ⚠️⚠️⚠️ CORRECTIF DE GUILLAUME, EN JOUANT, MÊME JOUR : « la tête est dans des
+   épaules désarticulées. » Le premier jet faisait avancer les bras d'un
+   `armFwd` VERS l'eau pendant que `lean` reculait le buste LOIN de l'eau —
+   deux grandeurs de SIGNE OPPOSÉ, qui grandissent toutes les deux avec la
+   tension. Résultat : plus on tire fort, plus les bras et le buste
+   s'ÉCARTENT l'un de l'autre, jusqu'à lire une épaule qui se détache — la
+   même famille de défaut que le lancer désarticulé (`drawStarCast`), un cran
+   plus loin : ici ce n'est même pas deux horloges qui divergent, c'est deux
+   DIRECTIONS. LA PARADE EST LA MÊME LEÇON, APPLIQUÉE PLUS STRICTEMENT : les
+   bras n'ont PLUS de terme séparé, ils suivent EXACTEMENT le `lean` du buste
+   (l'épaule ne quitte jamais le corps) ; seule leur hauteur de prise
+   (`gripY`) répond à la tension, pour suggérer l'effort sans désolidariser
+   l'attache.
+   ⚠️ MÊME TECHNIQUE, MÊME LEÇON QUE `drawStarCast` : UNE seule courbe (`lean`)
+   mène tête + buste + bras ensemble. Le `wobble` (un effort qui tremble
+   légèrement pendant qu'on tient) est une MODULATION de ce `lean`, jamais une
+   seconde horloge indépendante.
+   ⚠️ `tension` FAIT RECULER LE CORPS (on s'arc-boute, loin de l'eau) — sens
+   opposé à `kx` (le cap vers l'eau) — et FAIT PLIER LES JAMBES (ancrées au
+   sol, jamais un saut : on ne décolle pas en tirant, on encaisse).
+   ⚠️ `slipMs` (millisecondes depuis la dernière glissade, ou négatif/absent
+   si aucune récente) casse brièvement `lean` dans l'AUTRE sens — un à-coup
+   VERS l'eau — pendant ~260 ms : c'est ce petit lurch, pas un texte, qui fait
+   sentir qu'on vient de perdre du terrain.
+   `kx` : cap vers l'eau, un sens du MONDE — l'appelant (`drawCharacter`) le
+   mirroite comme `castKx`/`digFx`. */
+export function drawStarHaul(ctx, sheet, row, px, py, tension, holding, kx, slipMs) {
+  const sy = row * 24;
+  const k = (+kx || 1) < 0 ? -1 : 1;
+  const ts = Math.max(0, Math.min(1, +tension || 0));
+  const now = performance.now();
+  const slipP = (slipMs != null && slipMs >= 0 && slipMs < 260) ? 1 - slipMs / 260 : 0;
+  const jerk = Math.round(Math.sin(slipP * Math.PI) * 3);
+  const wobble = holding ? Math.sin(now / 220) * ts * 0.8 : 0;
+  const lean = Math.round(-(1.5 + ts * 3.2) * k - wobble * k) + jerk * k;
+  const top = py - 1;
+  // 1. Tête + haut du buste : même `lean` que le bas du buste, aucune coupure au cou.
+  ctx.drawImage(sheet, 0, sy, 16, POSE_HEAD_H, px + lean, top, 16, POSE_HEAD_H);
+  ctx.drawImage(sheet, 0, sy + POSE_TORSO_Y, 16, POSE_TORSO_H, px + lean, top + 8, 16, POSE_TORSO_H);
+  // 2. Jambes : ancrées au sol, légèrement pliées — la tension s'y lit en
+  //    écrasement, jamais en décollage.
+  const crouch = Math.min(3, Math.round(1 + ts * 2));
+  const legH = 8 - crouch;
+  ctx.drawImage(sheet, 0, sy + POSE_LEG_Y, 16, POSE_LEG_H, px, py + 16 - legH, 16, legH);
+  /* 3. LES DEUX BRAS, ANCRÉS AU MÊME `lean` QUE LE BUSTE — aucun terme qui
+        leur soit propre en X, précisément la correction ci-dessus. Seule
+        `gripY` (verticale) répond à la tension, sans jamais écarter
+        l'épaule du corps. */
+  const gripY = top + 4 + Math.round(ts * 1.4);
+  ctx.drawImage(sheet, POSE_ARM_LX, sy + POSE_ARM_Y, POSE_ARM_W, POSE_ARM_H, px + lean + POSE_BODY_L - POSE_ARM_W, gripY, POSE_ARM_W, POSE_ARM_H);
+  ctx.drawImage(sheet, POSE_ARM_RX, sy + POSE_ARM_Y, POSE_ARM_W, POSE_ARM_H, px + lean + POSE_BODY_R, gripY, POSE_ARM_W, POSE_ARM_H);
+  // 4. L'ombre au sol — une VALEUR, pas une forme, même rôle que dans les
+  //    autres poses de cette famille. Pieds ancrés : elle reste à py+16,
+  //    jamais remontée comme dans un saut.
+  ctx.fillStyle = "rgba(0,0,0,0.34)";
+  ctx.fillRect(px + 1, py + 16, 14, 1);
+}
+
+/* ╔════════════════════════════════════════════════════════════════════════════
    ║ ZIP 469 — LA TERRE QUI SORT DU TROU. C'EST ELLE QUI FAIT LE GESTE.
    ╚════════════════════════════════════════════════════════════════════════════
    ⚠️⚠️ SANS ELLE, LA POSE NE RACONTE RIEN : un personnage accroupi qui agite les

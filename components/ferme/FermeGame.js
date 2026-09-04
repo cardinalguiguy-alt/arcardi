@@ -1545,6 +1545,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const evilFoundPingRef = useRef(0); // 2026-09-03 (lot C) : throttle du sendReq("evilFound") pendant qu'on reste dans le rayon (drawEvilFrame)
   const evilCastRef = useRef(null); // 2026-09-03 (lot C) : {t0,tx,ty} pendant l'anim de lancer spécial (startFishingEvil), null sinon — voir evilCastNow()
   const evilCatchRef = useRef(null); // 2026-09-03 (lot C) : {t0,fx,fy,sx,sy,color} pendant qu'une prise ambiante saute de l'eau vers la rive (fishWon), null sinon — voir evilCatchNow()
+  /* 2026-09-04 — LE HALAGE, PUREMENT LOCAL, COMME evilCastRef CI-DESSUS.
+     phase: "waiting" (elle va mordre) -> "active" (on tire, evilHaulStep
+     tourne chaque image dans updateMeEvil) -> "won" (mise en scène
+     d'arrivée, EVIL_HAUL_ARRIVE_MS, voir evilHaulDraw dans drawEvilFrame).
+     fx/fy : la case de morsure (= evilRescueSpot au moment du lancer, figée
+     pour ne pas suivre un lac qui ne bouge de toute façon jamais). sx/sy :
+     la rive la plus proche (evilNearestShore), calculée UNE fois à
+     l'armement.
+     ⚠️ `evilHaulActive` (juste en dessous) EST LE MIROIR RÉACTIF DE CE REF,
+     même patron que `rodArmed`/`rodArmedRef` un peu plus haut dans ce
+     fichier : le ref porte la simulation chaude (lue/écrite à chaque image,
+     un `setState` par image serait un rendu de plus à chaque frame pour
+     rien), l'état ne sert qu'à monter/démonter le HUD (EvilHaulHud) dans le
+     JSX — un ref seul ne peut pas déclencher ça. */
+  const evilHaulRef = useRef(null);
+  const [evilHaulActive, setEvilHaulActive] = useState(false);
   const immunityUntilRef = useRef(0); // miroir synchrone de immunityUntil (lu dans updateEvilMonsters)
   // Correctif "dispute Chloé/Rosalie vue de tous" (2026-07, demande Guillaume) :
   // la scène et le cooldown sont désormais un état PARTAGÉ (station.crScene /
@@ -4031,6 +4047,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         dirtyRef.current = true;
         persistFnRef.current && persistFnRef.current();
         hostSend({ type: "broadcast", event: "apply", payload: { star: e } });
+      }
+    } else if (req.kind === "evilRescueStar") {
+      /* 2026-09-04 — LE HALAGE EST GAGNÉ, POUR TOUT LE MONDE. Même contrat de
+         confiance que "runFailed"/le mini-jeu de pêche : la simulation
+         (`evilHaulStep`) s'est jouée entièrement côté client, l'hôte se
+         contente de persister et de diffuser le résultat — idempotent, comme
+         `evilFound` juste au-dessus. */
+      const e2 = (sharedRef.current.star = Q.migrateStar(sharedRef.current.star));
+      const r2 = Q.resolveStarEvilRescue(e2, Date.now());
+      if (r2.ok && !r2.already) {
+        dirtyRef.current = true;
+        persistFnRef.current && persistFnRef.current();
+        hostSend({ type: "broadcast", event: "apply", payload: { star: e2 } });
       }
     } else if (req.kind === "runFailed") {
       // Zip 372 : défaite au défi de fuite. Même contrat de confiance
@@ -9592,19 +9621,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      aurait contredit sa demande ; le confiner au point de sauvetage raconte la
      même chose (l'eau qui la retient est hostile) sans éteindre la pêche
      ordinaire.
-     ⚠️ TANT QUE LE LOT D (protection au chaudron) N'EXISTE PAS, IL N'Y A RIEN À
-     PÊCHER À CE POINT PRÉCIS : on arme le compteur, on avertit, et c'est tout —
-     « on comprend le danger, sans encore pouvoir la sauver » (table des lots,
-     QUETE.md §5). */
+     ⚠️ 2026-09-04 — LE PREMIER LANCER NU MORD DÉSORMAIS (voir le halage,
+     `evilHaulRef` plus bas) : la protection au chaudron (points 5-6 de §3 de
+     QUETE.md, table des lots) reste À CONSTRUIRE — ce n'est donc pas encore
+     elle qui rend ce lancer possible, c'est la simplification honnête de ce
+     lot : on saute la pêche ambiante dédiée (poissons-squelettes, point 7,
+     également non construite) et on va direct de l'appât spécial au halage.
+     Le hasard de la canne nue (`evilRodBroken`) reste posé tel quel derrière
+     ce premier lancer — il continuera de compter une fois la vraie
+     protection écrite. */
   function startFishingEvil(tt) {
     const ew = evilWorldRef.current, m = meRef.current; if (!ew || !m) return;
     if (!inMapEvil(tt.x, tt.y) || ew.ground[tt.y * ew.w + tt.x] !== C.G_WATER) { pushToast(L.toastNeedWater); return; }
     const e = sharedRef.current.star;
-    const nearSpot = Q.starEvilFound(e) && evilSpotDist(ew, tt) <= C.EVIL_ROD_HAZARD_R;
+    // 2026-09-04 : une fois halée, ce point redevient de l'eau ordinaire —
+    // sans cette garde, un second lancer y rejouerait tout le geste pour rien.
+    const nearSpot = Q.starEvilFound(e) && !Q.starEvilRescued(e) && evilSpotDist(ew, tt) <= C.EVIL_ROD_HAZARD_R;
     if (nearSpot) {
       const armed = evilRodArmedAtRef.current;
       if (armed && Date.now() - armed >= C.EVIL_ROD_BREAK_MS) { pushToast(L.star.evil.rodStillBroken); return; }
-      if (!armed) {
+      if (!armed && !evilHaulRef.current) {
         /* 2026-09-03 (lot C) — L'ANIMATION SPÉCIALE, UNE SEULE FOIS PAR ARMEMENT.
            C'est LE geste qui compte (Guillaume : « pêcher l'étoile… saute un
            peu, prend de l'élan… envoie l'appât bien loin dans le lac »), pas
@@ -9614,6 +9650,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         evilCastRef.current = { t0: performance.now(), tx: tt.x, ty: tt.y };
         actAnimRef.current = C.EVIL_CAST_ANIM_MS / 1000;
         pushToast(L.star.evil.rodArming); sendReq({ kind: "evilRodCast" });
+        /* 2026-09-04 — LE HALAGE S'ARME EN MÊME TEMPS QUE LE LANCER. Elle
+           mordra `EVIL_HAUL_BITE_DELAY_MS` après la fin de l'animation
+           (`updateMeEvil` fait la transition waiting -> active). Position de
+           départ et rive d'arrivée FIGÉES ici, une fois pour toute la scène —
+           `evilRescueSpot`/`evilNearestShore` ne varient jamais dans une
+           session (le lac est fixe), mais figer évite de les rappeler à
+           chaque image pour rien. */
+        const spot = evilRescueSpot(ew);
+        const shore = spot && evilNearestShore(ew, spot.x, spot.y);
+        if (spot && shore) {
+          evilHaulRef.current = {
+            phase: "waiting", startAt: performance.now() + C.EVIL_CAST_ANIM_MS + C.EVIL_HAUL_BITE_DELAY_MS,
+            fx: spot.x, fy: spot.y, sx: shore.x, sy: shore.y,
+            progress: 0, tension: 0, lockMs: 0, holding: false, lastSlipAt: -1, wonAt: 0,
+          };
+          setEvilHaulActive(true);
+        }
       }
       return;
     }
@@ -14126,12 +14179,43 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (typeof zt.dest === "string" && zt.dest.startsWith("dev:")) {
         const dk = zt.dest.slice(4);
         const wasFarm = (m.zone || "farm") === "farm";
-        if (dk === "world" || dk === "bridge") {
+        if (dk === "world" || dk === "bridge" || dk === "rescue") {
           if (wasFarm) { m.farmX = m.x; m.farmY = m.y; }
           evilWorldRef.current = getEvilWorldCached(E, sharedRef.current.day || 1);
           m.zone = "evil";
           if (dk === "world") { m.x = C.EVIL_SPAWN.x; m.y = C.EVIL_SPAWN.y; }
-          else { m.x = C.RUN_GATE.x - C.DEV_BRIDGE_OFFSET; m.y = C.RUN_GATE.y; }
+          else if (dk === "bridge") { m.x = C.RUN_GATE.x - C.DEV_BRIDGE_OFFSET; m.y = C.RUN_GATE.y; }
+          else {
+            /* 2026-09-04 — LE POINT DE SAUVETAGE, SANS LA TRAVERSÉE. Même
+               raison que devStandAtMayorDesk : mesuré ce jour même, onze
+               trajets à pied depuis EVIL_SPAWN, dix interceptés par une
+               créature en 1 à 3 s (§10 de CLAUDE.md) — juger le halage ne
+               doit pas dépendre d'avoir survécu à la marche à chaque essai.
+               ⚠️⚠️ PAS `evilNearestShore` : elle rend la première case qui
+               n'est PAS de l'eau, c'est-à-dire souvent la berge elle-même
+               (G_LAKE_SHORE — galets/mousse, teintée du même reflet violet
+               que l'eau) — vu en jeu le jour même, Guillaume : « le fermier
+               semble avoir les pieds dans l'eau ». On cherche ici une case
+               qui n'est NI eau NI berge, pour arriver clairement sur la
+               terre ferme. Viser son étoile visible au clic/à la touche fait
+               le reste (targetTileEvil suit la souris, pas le regard). */
+            const spot = evilRescueSpot(evilWorldRef.current);
+            let ground = null;
+            if (spot) {
+              const ew2 = evilWorldRef.current;
+              outer: for (let r = 1; r <= 14; r++) {
+                for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+                  if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+                  const nx = spot.x + dx, ny = spot.y + dy;
+                  if (!inMapEvil(nx, ny)) continue;
+                  const g = ew2.ground[ny * ew2.w + nx];
+                  if (g !== C.G_WATER && g !== C.G_LAKE_SHORE) { ground = { x: nx, y: ny }; break outer; }
+                }
+              }
+            }
+            if (ground) { m.x = ground.x + 0.5; m.y = ground.y + 0.5; }
+            else { m.x = C.EVIL_SPAWN.x; m.y = C.EVIL_SPAWN.y; }
+          }
         } else if (((C.DEV_TELEPORTS.find(d => d.key === dk) || {}).zone) === "town") {
           /* ⚠️⚠️ ZIP 446 — UNE JOINTURE, PLUS UNE LISTE. Cette ligne énumérait
              sept clés à la main, et c'est exactement le défaut n°1 du 444 :
@@ -14548,7 +14632,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          eux, E « traversait » un document ouvert : on lisait la note de service
          et la même touche rouvrait aussitôt le carton derrière. Et pendant une
          SAISIE de code, chaque lettre tapée partait aussi dans le jeu. */
-      const uiOpen = mapOpenRef.current || shopOpenRef.current || binOpenRef.current || bagOpenRef.current || cauldronMenuOpenRef.current || adsOpenRef.current || visitorOpenRef.current || gregCardOpenRef.current || marketOpenRef.current || starUiOpenRef.current;
+      // 2026-09-04 : Espace ne doit plus rien déclencher d'autre pendant le
+      // halage (pressJumpOrAct plus bas) — c'est evilHaulRef lui-même qui lit
+      // la touche, dans updateMeEvil, pas ce dispatch ponctuel.
+      const uiOpen = mapOpenRef.current || shopOpenRef.current || binOpenRef.current || bagOpenRef.current || cauldronMenuOpenRef.current || adsOpenRef.current || visitorOpenRef.current || gregCardOpenRef.current || marketOpenRef.current || starUiOpenRef.current || !!evilHaulRef.current;
       /* ⚠️ 425 — ESPACE SAUTE EN VILLE, ET AGIT PARTOUT AILLEURS. Ce n'est pas
          une surcharge risquée : `doAction()` sort déjà immédiatement quand la
          zone est "town" (aucun outil de ferme n'y sert), donc la touche ne
@@ -14635,7 +14722,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          `starUiOpenRef` tant qu'il est ouvert), ni congé anticipé. Échap ferme
          déjà tout le reste de l'interface ; l'overlay n'avait simplement jamais
          été ajouté à cette liste alors qu'il en compte pour `uiOpen`. */
-      if (e.code === "Escape") { setShopOpen(false); setBinOpen(false); setBagOpen(false); setMapOpen(false); setSeedMenuOpen(false); setToolMenuOpen(false); setCraftMenuOpen(null); setCauldronMenuOpen(false); setAdsOpen(false); setVisitorOpen(false); setJewelryDesignOpen(false); setDevMenuOpen(false); setStarFind(null); /* zip 392, 476 */ }
+      if (e.code === "Escape") { setShopOpen(false); setBinOpen(false); setBagOpen(false); setMapOpen(false); setSeedMenuOpen(false); setToolMenuOpen(false); setCraftMenuOpen(null); setCauldronMenuOpen(false); setAdsOpen(false); setVisitorOpen(false); setJewelryDesignOpen(false); setDevMenuOpen(false); setStarFind(null); /* zip 392, 476 */
+        // 2026-09-04 : abandonner le halage rend la main tout de suite — jamais
+        // gagnant (pas de req), la progression locale est simplement perdue.
+        if (evilHaulRef.current && evilHaulRef.current.phase !== "won") { evilHaulRef.current = null; setEvilHaulActive(false); }
+      }
     }
     function onKeyUp(e) { keysRef.current[e.code] = false; }
     function onMove(e) { mouseRef.current.x = e.clientX; mouseRef.current.y = e.clientY; }
@@ -17303,10 +17394,149 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          « trait pour trait à l'étoile réelle » (la leçon du lot B) veut dire un
          DESSIN déjà existant, jamais une teinte inventée pour l'occasion. L'état
          2 (éteinte/grise) EST le bon état : elle s'éteint, elle ne dort pas. */
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ 2026-09-04 — LE HALAGE, EN IMAGE : ELLE QUI SE DÉBAT, L'EAU QUI SE
+         ║ DÉCHIRE, LA LIGNE TENDUE, L'ÉCRAN QUI ENCAISSE UNE GLISSADE.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️ AUCUN ÉTAT DANS LA CLOSURE DE LA BOUCLE : anneaux et gouttelettes
+         sont une fonction de `now`/`h.tension`/un indice, jamais une liste de
+         particules qu'on ferait vivre d'image en image (§4 de CLAUDE.md,
+         deuxième visage du piège n°1 — `drawStarDigDirt` déjà écrit sur ce
+         principe, repris ici tel quel).
+         ⚠️ LA POSITION EST CELLE DE `evilHaulStep` (quete.js), LUE, JAMAIS
+         RECALCULÉE : un chahut perpendiculaire (`thrash`) et une émergence
+         progressive (`clipFrac`, la moitié haute au début, la totalité en
+         arrivant) l'HABILLENT, mais `progress` seul dit où elle en est.
+         ⚠️ LA LIGNE PARTAGE LA MÊME `tension` QUE LA JAUGE DU HUD (voir
+         EvilHaulHud plus bas) — une seule grandeur, lue deux fois, jamais
+         deux jauges qui pourraient un jour se contredire (§8). */
+      function evilHaulDraw(h) {
+        const p = Math.max(0, Math.min(1, h.progress));
+        const dx0 = h.sx - h.fx, dy0 = h.sy - h.fy;
+        const distLen = Math.hypot(dx0, dy0) || 1;
+        const nx = -dy0 / distLen, ny = dx0 / distLen;
+        const arriving = h.phase === "won";
+        const arriveP = arriving ? Math.max(0, Math.min(1, (now - h.wonAt) / C.EVIL_HAUL_ARRIVE_MS)) : 0;
+        const thrashAmp = arriving ? 0.22 * (1 - arriveP) : 0.16 + h.tension * 0.28;
+        const thrash = Math.sin(now / 130) * thrashAmp;
+        const settle = arriving ? Math.abs(Math.sin(arriveP * Math.PI * 1.4)) * 3 * (1 - arriveP) : 0;
+        const sx0 = h.fx + dx0 * (arriving ? 1 : p) + nx * thrash;
+        const sy0 = h.fy + dy0 * (arriving ? 1 : p) + ny * thrash;
+        const cx = sx0 * T + T / 2, cy = (sy0 + 1) * T - settle;
+        draws.push({ y: cy + 2, fn: () => {
+          const set = sprites.starWispColors && sprites.starWispColors.white;
+          const img = set && set[2] && set[2][Math.floor(now / 220) & 3];
+          if (!img) return;
+          const w2 = img.width, h2 = img.height;
+          const clipFrac = arriving ? 1 : Math.min(1, 0.62 + p * 0.55);
+          if (!arriving) {
+            // L'eau qui se déchire : des anneaux plus nombreux et plus vifs à mesure que la tension monte.
+            const rings = 2 + Math.round(h.tension * 2);
+            for (let ri = 0; ri < rings; ri++) {
+              const ph = ((now / (900 - h.tension * 400) + ri / rings) % 1);
+              ctx.strokeStyle = `rgba(210, 190, 255, ${(0.5 * (1 - ph)).toFixed(3)})`;
+              ctx.lineWidth = 1.2 + h.tension * 0.8;
+              ctx.beginPath();
+              ctx.ellipse(cx, cy - 1, 4 + ph * (14 + h.tension * 8), 2 + ph * (6 + h.tension * 4), 0, 0, Math.PI * 2);
+              ctx.stroke();
+            }
+            // Gouttelettes projetées, densité et portée croissant avec la tension.
+            const nDrops = 3 + Math.round(h.tension * 5);
+            for (let di = 0; di < nDrops; di++) {
+              const dph = ((now / 480 + di * 1.618) % 1);
+              const ang = (di / nDrops) * Math.PI * 2 + Math.sin(now / 900 + di) * 0.4;
+              const reach = (3 + h.tension * 9) * dph;
+              const ddx = Math.cos(ang) * reach, ddy = Math.sin(ang) * reach * 0.55 - dph * dph * 6;
+              const a = Math.max(0, (1 - dph) * (0.35 + h.tension * 0.45));
+              if (a <= 0) continue;
+              ctx.fillStyle = `rgba(226, 214, 255, ${a.toFixed(3)})`;
+              ctx.fillRect(Math.round(cx + ddx), Math.round(cy - 1 + ddy), 1, 1);
+            }
+          } else {
+            // Sortie : un éclat qui s'ouvre puis s'éteint, une seule fois (arriveP est monotone, jamais bouclé).
+            const burst = Math.max(0, 1 - arriveP * 2.2);
+            if (burst > 0) {
+              ctx.save();
+              ctx.globalAlpha = burst * 0.8;
+              ctx.fillStyle = "#f4ecff";
+              ctx.beginPath(); ctx.arc(cx, cy - h2 * 0.4, 3 + (1 - burst) * 16, 0, Math.PI * 2); ctx.fill();
+              ctx.restore();
+            }
+          }
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(cx - w2 / 2 - 4, cy - h2 * clipFrac, w2 + 8, h2 * clipFrac + 2);
+          ctx.clip();
+          const pulse = (0.6 + Math.sin(now / (260 - h.tension * 120)) * 0.24) * (arriving ? 0.4 : 1);
+          ctx.shadowColor = `rgba(220, 200, 255, ${Math.max(0, pulse).toFixed(3)})`;
+          ctx.shadowBlur = 6 + h.tension * 10;
+          ctx.globalAlpha = 0.9;
+          ctx.drawImage(img, Math.round(cx - w2 / 2), Math.round(cy - h2), w2, h2);
+          ctx.restore();
+        } });
+        // La ligne, tendue : trois points (canne -> creux qui s'affaisse -> elle),
+        // le creux se resserrant avec la tension (0 % de mou à tension max).
+        const rodX = m.x * T + T / 2, rodY = m.y * T + T / 2 - 6;
+        draws.push({ y: Math.max(rodY, cy) + 1, fn: () => {
+          const midx = (rodX + cx) / 2, midy = (rodY + cy) / 2 + (arriving ? 0 : (1 - h.tension) * 6);
+          ctx.save();
+          ctx.strokeStyle = `rgba(235, 228, 255, ${(0.55 + h.tension * 0.35).toFixed(3)})`;
+          ctx.lineWidth = 0.6 + h.tension * 0.9;
+          ctx.beginPath(); ctx.moveTo(rodX, rodY); ctx.quadraticCurveTo(midx, midy, cx, cy - 1); ctx.stroke();
+          ctx.restore();
+        } });
+        // Tremblement d'écran sur une glissade récente — même mécanisme que
+        // Q.starFarmShake (canvas.style.transform), câblé ici parce que le
+        // halage n'est pas une cinématique de chapitre.
+        const sinceSlip = h.lastSlipAt >= 0 ? now - h.lastSlipAt : Infinity;
+        if (!arriving && sinceSlip < 220) {
+          const sh = 1 - sinceSlip / 220;
+          canvas.style.transform = `translate(${(Math.sin(now / 18) * sh * 4).toFixed(2)}px, ${(Math.cos(now / 15) * sh * 3).toFixed(2)}px)`;
+        } else if (canvas.style.transform) canvas.style.transform = "";
+      }
       const evilE = sharedRef.current.star;
       if (Q.starEvilUnlocked(evilE)) {
         const spot = evilRescueSpot(ew);
-        if (spot && spot.x >= x0 - 3 && spot.x <= x1 + 3 && spot.y >= y0 - 3 && spot.y <= y1 + 3) {
+        const rescued = Q.starEvilRescued(evilE);
+        const haulLocal = evilHaulRef.current; // null si aucun halage local en cours
+        /* ⚠️ LE DÉCLENCHEUR RÉSEAU (proximité -> sendReq) N'EST PAS ICI : cette
+           fonction DESSINE, elle n'agit pas — voir updateMeEvil. */
+        if (rescued && !haulLocal) {
+          /* ╔══════════════════════════════════════════════════════════════════
+             ║ 2026-09-04 — POSÉE SUR LA RIVE, POUR DE BON.
+             ╚══════════════════════════════════════════════════════════════════
+             Une fois halée, elle ne redisparaît jamais dans l'eau : ramener le
+             regard sur un lac vide effacerait tout le geste qu'on vient de
+             faire. Elle reste visible tant que ce chantier n'a pas de suite
+             (la ramasser et sortir du monde maléfique, non construit) — un
+             ÉTAT DURABLE plutôt qu'une case retombée à zéro. */
+          const shoreR = evilNearestShore(ew, spot.x, spot.y);
+          if (shoreR && shoreR.x >= x0 - 3 && shoreR.x <= x1 + 3 && shoreR.y >= y0 - 3 && shoreR.y <= y1 + 3) {
+            draws.push({ y: (shoreR.y + 1) * T, fn: () => {
+              const set = sprites.starWispColors && sprites.starWispColors.white;
+              const img = set && set[2] && set[2][Math.floor(now / 340) & 3];
+              if (!img) return;
+              const w2 = img.width, h2 = img.height;
+              const cx = shoreR.x * T + T / 2, cy = (shoreR.y + 1) * T - 2;
+              const glow = 0.5 + Math.sin(now / 1500) * 0.22;
+              ctx.save();
+              ctx.shadowColor = `rgba(210, 195, 255, ${glow})`; ctx.shadowBlur = 10;
+              ctx.globalAlpha = 0.92;
+              /* ⚠️⚠️ CORRECTIF — LE PREMIER JET APPELAIT drawImage À 9 ARGUMENTS
+                 EN PASSANT LES COORDONNÉES ÉCRAN COMME RECTANGLE SOURCE : la
+                 lecture tombait hors de l'image (quelques dizaines de pixels)
+                 sur un canevas de plusieurs centaines — rien ne se dessinait,
+                 sans la moindre erreur. La forme à 5 arguments (image entière,
+                 juste une destination) est celle qu'utilise déjà le dessin de
+                 l'étoile PRISONNIÈRE juste en dessous — même sprite, même
+                 appel, une seule façon de le faire. */
+              ctx.drawImage(img, Math.round(cx - w2 / 2), Math.round(cy - h2 * 0.86), w2, h2 * 0.86);
+              ctx.restore();
+            } });
+          }
+        } else if (haulLocal && (haulLocal.phase === "active" || haulLocal.phase === "won")) {
+          evilHaulDraw(haulLocal);
+        } else if (spot && spot.x >= x0 - 3 && spot.x <= x1 + 3 && spot.y >= y0 - 3 && spot.y <= y1 + 3) {
           draws.push({ y: (spot.y + 1) * T, fn: () => {
             const set = sprites.starWispColors && sprites.starWispColors.white;
             const img = set && set[2] && set[2][Math.floor(now / 260) & 3];
@@ -17340,13 +17570,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             ctx.restore();
           } });
         }
-        /* ⚠️ LE DÉCLENCHEUR RÉSEAU (proximité -> sendReq) N'EST PAS ICI : cette
-           fonction DESSINE, elle n'agit pas — aucune autre passe de rendu de ce
-           fichier n'envoie de requête, et casser cette règle pour un seul cas
-           particulier serait la divergence en attente du §8 de CLAUDE.md. Il vit
-           dans `updateMeEvil`, la fonction de LOGIQUE appelée une fois par
-           image pour cette même zone (voir juste en dessous de `evilRescueSpot`). */
       }
+      /* ⚠️⚠️ SI AUCUN HALAGE LOCAL N'EST EN COURS, LA CAMÉRA NE DOIT PLUS
+         TREMBLER À CAUSE D'UN VIEUX TREMBLEMENT. Réinitialisation symétrique
+         de la pose (evilHaulDraw l'écrit, cette ligne l'efface). */
+      if (!(evilHaulRef.current && evilHaulRef.current.phase === "active") && canvas.style.transform) canvas.style.transform = "";
       draws.sort((a, b) => a.y - b.y);
       for (const d of draws) d.fn();
       /* Voile permanent (ambiance, indépendant du cycle jour/nuit de la ferme,
@@ -21052,7 +21280,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // bas de la fonction, et le fermier reste figé face aux loups au lieu
       // de garder la dernière frame de marche.
       const cine = !!(runAmbushRef.current && runAmbushRef.current.phase === "cine");
-      const uiBlocked = cine || mapOpenRef.current || document.activeElement === chatInputRef.current;
+      // 2026-09-04 : on ne marche pas en tirant l'étoile — le halage ancre le
+      // joueur comme la cinématique d'embuscade (même contrat que `cine`).
+      const hauling = !!evilHaulRef.current;
+      const uiBlocked = cine || hauling || mapOpenRef.current || document.activeElement === chatInputRef.current;
       let dx = 0, dy = 0;
       if (!uiBlocked) {
         if (keys["ArrowUp"] || keys["KeyW"] || keys["KeyZ"]) dy -= 1;
@@ -21105,6 +21336,34 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             && nowP - (evilFoundPingRef.current || 0) > 2000) {
           evilFoundPingRef.current = nowP;
           sendReq({ kind: "evilFound" });
+        }
+      }
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ 2026-09-04 — LE HALAGE, PAS À PAS.
+         ╚══════════════════════════════════════════════════════════════════════
+         Simulation pure (`evilHaulStep`, quete.js) pilotée ICI, dans la boucle
+         du JEU — contrairement à `FishMinigame`, qui pilote la sienne dans son
+         propre effet React derrière un panneau flottant. La différence n'est
+         pas cosmétique : Guillaume veut VOIR le tirage dans le monde (le
+         joueur, la ligne, l'étoile qui avance), donc rien ne doit se figer
+         derrière une vitre — `drawEvilFrame` continue de peindre la scène
+         entière pendant tout le geste. */
+      const haul = evilHaulRef.current;
+      if (haul) {
+        if (haul.phase === "waiting") {
+          if (nowP >= haul.startAt) { haul.phase = "active"; pushToast(L.star.evil.hookToast); }
+        } else if (haul.phase === "active") {
+          const holding = !!(keys["Space"] || haul.pointerDown);
+          const step = Q.evilHaulStep(haul, dt, holding);
+          haul.progress = step.progress; haul.tension = step.tension; haul.lockMs = step.lockMs; haul.holding = holding;
+          if (step.slipped) { haul.lastSlipAt = nowP; pushToast(L.star.evil.haulSlip); }
+          if (step.won) {
+            haul.phase = "won"; haul.wonAt = nowP;
+            pushToast(L.star.evil.haulWon);
+            sendReq({ kind: "evilRescueStar" });
+          }
+        } else if (haul.phase === "won") {
+          if (nowP - haul.wonAt >= C.EVIL_HAUL_ARRIVE_MS) { evilHaulRef.current = null; setEvilHaulActive(false); }
         }
       }
       maybeSendPos();
@@ -21460,7 +21719,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          position et le sac — et c'est ce mélange qui, au 441, a fait porter deux
          sens au même nombre. */
       drawCharacter({ ...m, sit: !!m.sitOn, look: wardrobeLookOf(m.id) || m.look || null,
-                      ...craterSlipDraw(m, true), ...selfDigDraw(), ...selfCastDraw() }, true);
+                      ...craterSlipDraw(m, true), ...selfDigDraw(), ...selfCastDraw(), ...selfHaulDraw() }, true);
       if (actAnimRef.current > 0 && slotRef.current <= SLOT.can) {
         const sprites = spritesRef.current;
         const key = slotRef.current === SLOT.tools ? toolKindRef.current : "can";
@@ -21485,6 +21744,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const c = evilCastNow(); if (!c) return {};
       const m = meRef.current;
       return { cast: true, castPh: c.ph, castKx: (m && c.tx < m.x) ? -1 : 1 };
+    }
+    /* Ma pose de halage — même contrat que selfCastDraw/selfDigDraw : objet
+       vide tant qu'aucun halage n'est en cours. `haulKx` compare la case de
+       morsure (pas la rive : c'est VERS L'EAU qu'on regarde en tirant) à MA
+       position — un sens du MONDE, mirroité comme les autres. `haulSlipMs`
+       est le temps écoulé depuis la dernière glissade (ou -1, jamais
+       récente) : `drawStarHaul` s'en sert pour le bref à-coup, `null` étant
+       traité comme « pas de glissade » côté fermeArt. */
+    function selfHaulDraw() {
+      const h = evilHaulRef.current; if (!h || h.phase !== "active") return {};
+      const m = meRef.current;
+      return {
+        haul: true, haulTension: h.tension, haulHolding: h.holding,
+        haulKx: (m && h.fx < m.x) ? -1 : 1,
+        haulSlipMs: h.lastSlipAt >= 0 ? performance.now() - h.lastSlipAt : -1,
+      };
     }
     /* Les trois champs de dessin de la pose de cratère — et rien d'autre : ni
        position, ni vitesse, ni état. ⚠️ ELLE REND UN OBJET VIDE PARTOUT AILLEURS
@@ -22673,6 +22948,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const drawCast = (ox, mir) => A.drawStarCast(ctx, sheet, row, ox, py, p.castPh || 0, (p.castKx || 1) * mir);
         if (flip) { ctx.translate(px + 16, 0); ctx.scale(-1, 1); drawCast(0, -1); }
         else drawCast(px, 1);
+      } else if (p.haul) {
+        /* 2026-09-04 — LE HALAGE. Même contrat que p.cast juste au-dessus :
+           le dessin vit dans fermeArt (drawStarHaul), ici seulement le choix
+           et le miroir. `haulKx` est un sens du MONDE (vers l'eau), mirroité
+           comme castKx/digFx/slipX. */
+        const drawHaul = (ox, mir) => A.drawStarHaul(ctx, sheet, row, ox, py, p.haulTension || 0, !!p.haulHolding, (p.haulKx || 1) * mir, p.haulSlipMs);
+        if (flip) { ctx.translate(px + 16, 0); ctx.scale(-1, 1); drawHaul(0, -1); }
+        else drawHaul(px, 1);
       } else if (p.dig) {
         /* ╔══════════════════════════════════════════════════════════════════════
            ║ ZIP 469 — LA POSE DE FOUILLE. Même contrat que les trois poses du
@@ -32551,6 +32834,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {meRef.current && meRef.current.zone === "evil" && evilRodArmedAt > 0
         && Date.now() - evilRodArmedAt < C.EVIL_ROD_BREAK_MS
         && <EvilRodHazard armedAt={evilRodArmedAt} L={L} />}
+      {/* 2026-09-04 — la jauge du halage. `evilHaulActive` (state) monte/démonte,
+          `evilHaulRef` (ref) porte la simulation chaude — voir le commentaire
+          sur sa déclaration. */}
+      {evilHaulActive && <EvilHaulHud haulRef={evilHaulRef} L={L} />}
 
       {/* ╔════════════════════════════════════════════════════════════════════
           ║ ZIP 480 — L'AUDIENCE CHEZ LE MAIRE.
@@ -33609,6 +33896,49 @@ function EvilRodHazard({ armedAt, L }) {
   }, []);
   const left = Math.max(0, C.EVIL_ROD_BREAK_MS - (Date.now() - armedAt));
   return <div className="ferme-evil-rod-hazard">{L.star.evil.rodArming} ({(left / 1000).toFixed(1)}s)</div>;
+}
+
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-04 — LA JAUGE DU HALAGE.
+   ╚══════════════════════════════════════════════════════════════════════════
+   Même patron que `EvilRodHazard` juste au-dessus : `evilHaulRef` est un
+   ref, pas un state — rien d'autre ne ferait ce composant se re-rendre —
+   donc il pilote sa propre boucle et le lit directement à chaque image.
+   ⚠️ `onDown`/`onUp` écrivent `h.pointerDown`, lu par `updateMeEvil`
+   (`keys["Space"] || haul.pointerDown`) : LA MÊME grandeur pour le clavier
+   et le tactile, jamais deux chemins de saisie qui pourraient diverger.
+   ⚠️ `.ferme-haul-touch` COUVRE TOUT L'ÉCRAN mais ne dessine rien
+   (`pointer-events` actifs, transparent) : sur un doigt, viser une jauge
+   étroite serait injouable — c'est la même idée que `.ferme-fish-ov` pour
+   la pêche, sans en assombrir le monde, puisqu'ici Guillaume veut
+   justement le voir tourner derrière. */
+function EvilHaulHud({ haulRef, L }) {
+  const [, force] = useState(0);
+  useEffect(() => {
+    let raf = 0;
+    const loop = () => { raf = requestAnimationFrame(loop); force(v => (v + 1) % 1000000); };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  const h = haulRef.current;
+  if (!h || h.phase !== "active") return null;
+  const ts = Math.max(0, Math.min(1, h.tension));
+  const danger = ts > 0.72;
+  const onDown = (e) => { e.preventDefault(); h.pointerDown = true; };
+  const onUp = () => { h.pointerDown = false; };
+  return (
+    <>
+      <div className="ferme-haul-vignette" style={{ opacity: (ts * 0.55).toFixed(2) }} />
+      <div className="ferme-haul-touch" onPointerDown={onDown} onPointerUp={onUp} onPointerLeave={onUp} onPointerCancel={onUp} />
+      <div className={"ferme-haul-hud" + (danger ? " danger" : "")}>
+        <div className="ferme-haul-hint">{L.star.evil.haulHint}</div>
+        <div className="ferme-haul-bar">
+          <div className="ferme-haul-safe" />
+          <div className="ferme-haul-fill" style={{ height: (ts * 100).toFixed(1) + "%" }} />
+        </div>
+      </div>
+    </>
+  );
 }
 
 /* ╔═══════════════════════════════════════════════════════════════════════════

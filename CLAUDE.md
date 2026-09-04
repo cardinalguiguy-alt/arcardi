@@ -11,87 +11,63 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-⚠️⚠️⚠️ **LES LOTS A, A2, A3, B ET C SONT LIVRÉS.** A/A2/A3/B ont été vérifiés en jeu le 2026-09-03 —
-détail dans `QUETE.md` §2 bis/ter/quater. Le lot C (découverte, chevron, hasard de la canne, pêche
-ambiante) est détaillé dans `QUETE.md` §3 ; sa prémisse technique fausse et son inventaire du
-2026-09-03 n'ont pas à être répétés ici — seul ce qui reste vrai ou ouvert compte.
+⚠️⚠️⚠️ **LOTS A, A2, A3, B, C ET LE HALAGE (« lot D ») SONT LIVRÉS ET VÉRIFIÉS EN JEU.** A/A2/A3/B
+le 2026-09-03 — détail `QUETE.md` §2 bis/ter/quater. Lot C (découverte, chevron, hasard de la
+canne, pêche ambiante, lancer spécial, taille de l'étoile) — ses **quatre** correctifs sont
+désormais TOUS vérifiés en jeu (le lancer spécial restait seul en suspens fin 2026-09-03 ; vu
+tourner en jeu le 2026-09-04, dans le cadre du halage ci-dessous). Détail `QUETE.md` §3, point 8
+pour le halage.
 
-⚠️⚠️⚠️ **CORRECTIF DE PORTÉE DU LOT C — FAIT ET VÉRIFIÉ EN JEU (2026-09-03, même jour, session
-suivante).** Le défaut était réel et bloquant : `updateMeEvil` comparait MA position à
-`evilRescueSpot` (en pleine eau, jamais atteignable à pied — 3,16 cases au plus près, jamais sous
-`EVIL_ROD_HAZARD_R`=1,6), donc la découverte de la septième sœur et le hasard de la canne ne
-pouvaient jamais s'armer. **Corrigé** : `updateMeEvil` lit maintenant `evilSpotDist(ew,
-targetTileEvil())` — la même formule que `startFishingEvil`, factorisée UNE fois (`evilSpotDist`,
-`FermeGame.js`, à côté d'`evilRescueSpot`) plutôt que dupliquée. **Vérifié EN JEU** (Guillaume
-suivait en direct sur son propre serveur de dev, arbre principal, hot-reload — pas besoin de
-`app/devtest`) : le toast d'armement (« L'eau corrompue s'infiltre dans ta ligne... ») et le
-compte à rebours `EvilRodHazard` se déclenchent bien depuis la rive.
+⚠️⚠️⚠️ **LE HALAGE (2026-09-04) : TIRER L'ÉTOILE HORS DE L'EAU, JUSQU'À LA RIVE.** Demande de
+Guillaume, mot pour mot : *« on doit voir qu'on la drag out of the water slowly but surely »*,
+puis, en cours de session : *« le rendu doit être digne des meilleurs jeux »*, *« je dois être
+wowed »*. Geste dédié (tenir Espace, une jauge de tension qui monte en tirant et retombe relâché,
+glisse si elle atteint son maximum), simulation pure (`evilHaulStep`, `quete.js`) rejouée par
+`tools/verify-quete.mjs` avec deux politiques de joueur (789/789 — un joueur patient gagne en
+~20 s, un joueur qui ne lâche jamais échoue et glisse). Rendu : pose dédiée du fermier
+(`drawStarHaul`), étoile qui se débat et émerge progressivement, ligne tendue, jauge HUD,
+tremblement d'écran sur une glissade, éclat à l'arrivée puis repos permanent sur la rive. **Testé
+en jeu à répétition** via un nouveau téléport développeur (« 🎣 Le point de sauvetage (halage) »)
+et un nouvel op (« hook ») — sans eux, chaque essai exigeait de survivre à la traversée depuis
+`EVIL_SPAWN` (voir §10 : onze trajets à pied tentés la veille, un seul arrivé).
+⚠️⚠️ **TROIS DÉFAUTS TROUVÉS ET CORRIGÉS EN JEU, LE MÊME JOUR** (Guillaume regardait en direct) :
+(1) les bras de la pose avançaient vers l'eau pendant que le buste reculait — deux grandeurs de
+signe opposé qui s'écartent avec la tension, jugé « la tête est dans des épaules désarticulées »,
+même famille que le lancer spécial (§4 de ce fichier) ; corrigé en ancrant les bras à la MÊME
+courbe que le buste, aucun terme qui leur soit propre en X ; (2) le téléport posait le joueur sur
+la berge elle-même (`G_LAKE_SHORE`, teintée du même reflet violet que l'eau) — « le fermier
+semble avoir les pieds dans l'eau » — corrigé en cherchant une case qui n'est NI eau NI berge ;
+(3) l'étoile posée sur la rive après victoire ne se dessinait pas du tout : un `drawImage` à 9
+arguments passait les coordonnées ÉCRAN comme rectangle SOURCE, une lecture hors image qui ne
+lève aucune erreur — corrigé en repassant à la forme à 5 arguments (image entière), comme le
+dessin de l'étoile prisonnière juste à côté.
+⚠️ **CE QUE CE LOT NE FAIT PAS** : la ramasser et sortir du monde maléfique (points 9-10 de
+`QUETE.md` §3) restent à construire — elle reste posée sur la rive en permanence, sans suite pour
+l'instant. Guillaume, informé, attend une **suite séparée** : *« il y en a d'autres [animations],
+notamment l'overlay de succès qui viendra quand on ramènera l'étoile sur la ferme »*.
 
-⚠️⚠️⚠️ **LE LANCER SPÉCIAL — DEMANDÉ ET LIVRÉ LE MÊME JOUR, REVU UNE FOIS SUR RETOUR DE
-GUILLAUME.** Demande initiale, mot pour mot : *« invente une animation spéciale pour pêcher
-l'étoile... notre personnage saute un peu, prend de l'impulsion/élan... envoie l'appât bien loin
-dans le lac... seulement quand on est dans l'étape étoile 7... en dehors de ce contexte la pêche
-doit avoir un aspect habituel. »* Livré : `drawStarCast` (`fermeArt.js`) — la pose, déclenchée
-UNIQUEMENT sur le tout premier lancer près du point de sauvetage (`startFishingEvil`, branche
-`!armed`), jamais sur la pêche ambiante ni la pêche normale ailleurs, qui restent inchangées ; un
-petit arc d'appât sans sprite dédié (`drawEvilFrame`, `FermeGame.js`) ; `evilCastRef`/`evilCastNow`
-(purement locaux, pas diffusés — voir plus bas) ; `EVIL_CAST_ANIM_MS`=900 (`fermeConstants.js`),
-une seule durée pour le verrou de mouvement, la pose et l'arc. ⚠️ **PREMIER JET JUGÉ
-« DÉSARTICULÉ » PAR GUILLAUME EN JOUANT, CORRIGÉ DANS LA FOULÉE** : tête et buste penchaient à deux
-vitesses (`lean` plein / `lean`×0,5), jambes et saut suivaient deux horloges séparées (`wind` fini
-au tiers du geste / `hop` sur tout le geste) — deux désynchronisations qui font lire trois
-morceaux au lieu d'un corps. Réécrite : une seule courbe (`s`) mène tête+buste+jambes ensemble ;
-seul le bras qui lance garde son propre rythme (voulu, un lancer part de l'épaule). **PAS ENCORE
-REJOUÉ PAR GUILLAUME après cette réécriture — à revérifier en premier.**
+⚠️⚠️ **NOUVELLE DEMANDE DE GUILLAUME, PAS ENCORE COMMENCÉE (2026-09-04, en regardant ce test) :
+L'ACCÈS À LA CANNE À PÊCHE DOIT SE FACILITER PRÈS DE N'IMPORTE QUEL PLAN D'EAU** — ferme, Valley
+Town, ET les mondes du passage (lac maléfique compris) —, mot pour mot : *« la canne à pêche doit
+être sélectionnable directement en un clic ou deux, ou bien avec un bouton interactif »*. Trouvée
+en la regardant elle-même farfouiller dans le sac à chaque essai (`armRod()`, tout au fond de
+« Mon sac » — voir `FermeGame.js`). ⚠️ **PORTÉE VOLONTAIREMENT
+NON TRANCHÉE ICI** — un bouton contextuel proche de l'eau ? un raccourci clavier direct ? une
+remontée dans la barre d'outils uniquement quand une case d'eau est en vue ? — à poser avec
+Guillaume avant d'écrire du code (§2), et c'est un changement transverse aux trois zones, donc une
+livraison à part, pas mêlée au reste.
 
-⚠️⚠️ **DEUX AUTRES CORRECTIFS DEMANDÉS PAR GUILLAUME EN JOUANT LE MÊME JOUR, LIVRÉS MAIS PAS
-ENCORE REJOUÉS APRÈS COUP :**
-1. *« on ne doit pas savoir à l'avance que c'est un squelette de poisson qu'on va attraper. ça doit
-   pop out de l'eau et aller sur la rive avant de fade out. »* La morsure ambiante (`evilFishBite`,
-   `fermeStrings.js`) ne nomme plus l'espèce (texte fixe, plus une fonction) — seule la prise gagnée
-   (`evilFishCaught`) la révèle encore. Nouvelle FX `evilCatchRef`/`evilCatchNow` (`FermeGame.js`,
-   déclenchée dans `fishWon`) : une forme colorée (`EVIL_LAKE_FISH[i].color`, aucun sprite dédié)
-   saute par petits bonds décroissants de la case de morsure vers la rive la plus proche
-   (`evilNearestShore`, balayage en anneaux croissants) puis s'estompe — `EVIL_CATCH_ANIM_MS`=1400
-   (`fermeConstants.js`).
-2. *« l'étoile doit pas être trop grande, taille cohérence avec les autres. »* La septième sœur se
-   dessinait à `k=3` (`FermeGame.js`, ~l.17315) — trois fois la taille de ses six sœurs, que
-   `drawStarWisp` peint à l'échelle native. Ramené à `k=1`.
+⚠️⚠️⚠️ **ACTION SUIVANTE : PAS DE DIRECTION DONNÉE POUR LA SUITE — DEUX CANDIDATS EN ATTENTE DE
+GUILLAUME**, à ne pas trancher seul (§2) : (a) l'accès facilité à la canne, ci-dessus ; (b) la
+suite du halage — la ramasser et sortir du monde maléfique (points 9-10 de `QUETE.md` §3), pour
+laquelle Guillaume a déjà dit qu'un overlay de succès séparé viendra à l'arrivée sur la ferme.
 
-⚠️⚠️⚠️ **CE QUI RESTE OUVERT, ET C'EST UNE VRAIE DÉCISION AVANT D'ÉCRIRE LE LOT D** — Guillaume,
-en jouant, a déjà donné une partie de la direction : *« la prise de l'étoile doit demander une
-mécanique, mais on doit voir qu'on la drag out of the water slowly but surely, jusqu'à ce qu'elle
-atteigne la rive. »* **Rien n'est construit** : pas de mini-jeu de halage, pas de traction
-progressive visible. C'est un vrai chantier (geste soutenu dans le temps, résistance qui répond,
-déplacement visible vers la rive) — à poser avec Guillaume avant d'écrire du code, comme le §2 le
-demande pour toute production créative, pas à trancher seul.
-
-⚠️ **UN DOUTE TECHNIQUE TROUVÉ EN VÉRIFIANT CE LOT, PAS ENCORE CONFIRMÉ NI CORRIGÉ** : quand
-l'HÔTE LUI-MÊME déclenche une action du menu développeur qui répare son propre fermier (« Me
-soigner », remise à zéro de la canne cassée), l'effet ne semblait pas se répercuter sur SON PROPRE
-affichage local en test solo (un seul client, hôte) — `hostHandleReq` diffuse un `apply`, mais le
-canal ferme est `self:false` (§3), donc l'hôte ne reçoit jamais sa propre diffusion. **Pas vérifié
-si c'est un vrai bug ou un artefact de test à un seul client** (Guillaume teste normalement à 2
-clients réels, `fake-supabase.mjs` — ce chemin n'est peut-être jamais emprunté en vrai) : à
-confirmer avant d'y toucher, ne rien changer sur la seule foi de ce test solo.
-
-**Aucune manipulation Supabase n'est nécessaire** pour ce lot : zéro nouveau message, zéro
-nouveau schéma.
-
-⚠️ **CE QUI RESTE OUVERT, INCHANGÉ PAR CE LOT** : (a) **le saut de rebord n'atterrit pas sur le
-chemin pavé en dessous** (mur traité comme un plan plat) — **Guillaume va fournir un nouveau PNG
-du bloc escalier du tribunal** ; à l'intégration : l'analyser en profondeur, l'assembler de façon
-SEAMLESS, retravailler les collisions pour évoquer la 3D de façon cohérente (pas un mur plat), et
-TESTER PLUSIEURS FOIS en jeu avant de livrer ; (b) **les ornements de la balustrade portent des
-taches rouges à retirer, et les ombres manquent de contraste** — pas encore traité.
-
-⚠️⚠️⚠️ **ACTION SUIVANTE : REJOUER EN JEU LES QUATRE CORRECTIFS DE CETTE SESSION** (portée —
-confirmée, mais les trois autres non rejoués après leurs révisions : lancer spécial réécrit, pêche
-ambiante muette + saut-vers-la-rive, taille de l'étoile), **PUIS DÉCIDER AVEC GUILLAUME DU
-PÉRIMÈTRE DU MÉCANISME DE HALAGE** (lot D — le tirage progressif de l'étoile vers la rive) **AVANT
-D'EN ÉCRIRE UNE LIGNE**. Détail des lots D à F (protection de la canne au chaudron, poissons-
-squelettes qui ne donnent rien, ramener à la rive, sortir, réanimer, finale) au §5 et §3 (points 5
-à 10) de `QUETE.md`.
+⚠️ **CE QUI RESTE OUVERT, SANS RAPPORT AVEC LE LOT C** : (a) le saut de rebord n'atterrit pas sur
+le chemin pavé en dessous (mur traité comme un plan plat) — Guillaume va fournir un nouveau PNG du
+bloc escalier du tribunal ; à l'intégration : l'analyser en profondeur, l'assembler SEAMLESS,
+retravailler les collisions pour évoquer la 3D de façon cohérente (pas un mur plat), et TESTER
+PLUSIEURS FOIS en jeu avant de livrer ; (b) les ornements de la balustrade portent des taches
+rouges à retirer, et les ombres manquent de contraste — pas encore traité.
 
 ⚠️ **ET CE QUI ATTENDAIT DÉJÀ, NON TOUCHÉ PAR CES LOTS**, dans l'ordre : le même buis que
 Valley Town, pour la ferme (VF — aucun équivalent du mécanisme `TOWN_SOFT_PROPS` côté ferme, §4) ;
@@ -404,6 +380,14 @@ dépôt.
   canevas fait `24 + DROP`), et **dessiner serré, RECADRER, PUIS cerner** — cerné dans son
   cadre juste, le liseré d'un sprite qui touche le bord est lui-même découpé (`padOutline`).
   ⚠️ Un banc peut l'attraper en une ligne : aucun pixel peint sur le bord du canevas.
+- ⚠️⚠️⚠️ **`ctx.drawImage` À 9 ARGUMENTS PREND UN RECTANGLE SOURCE EN PLUS DE LA DESTINATION —
+  LES DEUX N'ONT PAS LE MÊME REPÈRE** (halage, 2026-09-04). Passer les coordonnées ÉCRAN comme
+  rectangle source (au lieu d'une sous-région du sprite lui-même, 0..largeur native) fait lire
+  hors de l'image : aucune exception, un `drawImage` qui ne dessine RIEN, silencieusement. Trouvé
+  en jeu (une étoile posée sur la rive, invisible), pas en relisant le code — la ligne semblait
+  juste. **La forme à 5 arguments (image entière, juste une destination) est celle qu'il faut par
+  défaut** ; les 9 arguments ne se justifient que pour découper une VRAIE feuille de sprites, avec
+  un rectangle source dans les dimensions natives de l'image, jamais dans celles du monde.
 - ⚠️⚠️ **`ctx.fillText` N'EST PAS RASTÉRISABLE HORS NAVIGATEUR** (427) : un nom cuit dans un
   sprite fait planter `tools/render-*.mjs`, c'est-à-dire qu'on perd le seul moyen de REGARDER
   ce dessin. Les textes des bâtiments s'écrivent VIVANTS, au rendu — ce qui les rend en plus
@@ -868,6 +852,44 @@ changeait pas d'une image à l'autre** : on aurait conclu « les PNJ sont arrêt
 bougeait. **La capture d'écran, elle, est juste** : c'est elle qu'il faut échantillonner, pas les
 pixels du canevas. *Deux mesures de suite qui rendent le même nombre ne prouvent rien ; deux
 CAPTURES qui rendent la même image, si.*
+⚠️⚠️ **NE JAMAIS `terminate()` CE WORKER POUR « GELER » UNE IMAGE — MESURÉ LE 2026-09-04.** La
+boucle de rendu se réarme elle-même via `requestAnimationFrame(loop)` à chaque image ; couper le
+worker qui vide la file orpheline la toute dernière inscription, et en créer un SECOND ensuite ne
+réarme rien — plus aucune image ne se dessine, plus aucun déplacement ne s'applique, **pour de
+bon**, même après coup. Seul un rechargement complet répare (et reperd tout état non persisté).
+La bonne parade pour figer une image le temps d'une capture : garder LE MÊME worker vivant, et lui
+faire sauter les vidages via un simple drapeau (`onmessage` qui retourne tôt si `paused`) — la
+file continue de s'alimenter, rien n'est perdu, une capture d'écran suffit ensuite pour regarder
+l'image gelée à loisir.
+⚠️⚠️⚠️ **AUTOMATISER UNE MARCHE DEPUIS `EVIL_SPAWN` (LAC MALÉFIQUE) SE FAIT MORDRE — MESURÉ LE
+2026-09-04, ONZE TENTATIVES.** Dix trajets sur onze (directions et durées variées, cartes
+régénérées) se sont fait intercepter par une créature en 1 à 3 s ; un seul est arrivé au lac. Le
+joueur est pourtant bien plus rapide que la créature (`PLAYER_SPEED`=5,2 case/s contre
+`EVIL_MONSTER_SPEED`=1,5) : **ce n'est pas un problème de vitesse, c'est qu'un script qui tient une
+touche 1 à 3 s marche à l'aveugle sur toute sa durée**, sans capture entre temps pour voir venir la
+créature et bifurquer — l'avantage de vitesse du joueur ne sert à rien si rien ne le pilote pendant
+qu'il avance. **Aucune conclusion sur la difficulté en jeu réel** (Guillaume joue avec la carte sous
+les yeux en continu, pas par rafales aveugles) : ce piège vaut pour l'AUTOMATISATION, pas
+forcément pour lui. La parade, si le besoin revient : capturer après CHAQUE petite rafale (≤1 s),
+jamais après une longue.
+⚠️⚠️ **UNE CAPTURE D'ÉCRAN N'EST PAS FORCÉMENT DANS LE MÊME REPÈRE DE PIXELS QUE LE DOM DE LA
+PAGE — MESURÉ LE 2026-09-04, ~6 % D'ÉCART.** `getBoundingClientRect()` sur le canevas de jeu a
+donné 753×858, une capture d'écran prise au même instant 800×911 : caler un clic synthétique
+(`MouseEvent({clientX,clientY})`) sur des coordonnées LUES SUR LA CAPTURE a manqué une cible de
+1,6 case (quelques dizaines de pixels) alors que le point semblait juste à l'œil. **La parade qui
+marche** : ne jamais recalculer soi-même une coordonnée depuis une capture — utiliser l'outil de
+clic du navigateur avec les coordonnées de LA CAPTURE (il fait la conversion), ou mieux, chercher
+l'élément DOM et l'appeler directement (`element.click()`, qui ne dépend d'aucune coordonnée).
+⚠️⚠️⚠️ **UNE ÉDITION DE `FermeGame.js` PENDANT QUE `npm run dev` TOURNE PEUT COMPILER SANS QUE
+LE COMPOSANT MONTÉ NE CHANGE DE COMPORTEMENT — MESURÉ LE 2026-09-04.** Le terminal annonce
+`[Fast Refresh] done`, l'état du composant (position, inventaire) survit à l'édition — signe
+qu'il n'y a PAS eu de remontage complet — et pourtant le nouveau code d'une fonction déclarée
+dans l'unique gros effet du composant ne s'exécute pas : une correction ajoutée, une capture
+prise dans la foulée, toujours l'ancien comportement. Aucune erreur, aucun avertissement. **La
+seule parade fiable est un rechargement COMPLET de la page** (`navigate`, pas une édition à
+chaud) avant de rejuger un changement dans ce fichier — le coût (refaire la mise en place :
+rejoindre, menu dev, téléport) est faible à côté du temps perdu à chasser un défaut qui n'existe
+que dans du code déjà remplacé.
 
 ⚠️ **Le faux canvas de `lib-canvas.mjs` IGNORE `translate`/`rotate` et ne connaît pas `fillText`**
 — un sprite qui en dépend s'y juge faux. Ce n'est pas un bogue du jeu. ⚠️⚠️ **Et il

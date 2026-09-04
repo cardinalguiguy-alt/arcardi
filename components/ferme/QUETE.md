@@ -292,10 +292,45 @@ endroit.
    une **table de prises dédiée à ce lac** (des « poissons-squelettes », 3 à 6 prises manquées/
    ratées avant de décrocher l'étoile — sprites neufs, sur le modèle de `C.FISH`/`C.SEA_CREATURES`
    déjà existants) et un dernier « poisson » spécial qui EST l'étoile.
-8. **Ramener à la rive.** Une fois l'étoile ferrée, il faut une mécanique pour la ramener au bord
-   — Guillaume l'a nommée sans la détailler. ⚠️ **NON TRANCHÉ**, voir §6 : le modèle le plus proche
-   dans ce dépôt est la tension/l'inertie de `scierie.js` (une résistance qui répond à l'effort,
-   jamais un simple minuteur) plutôt qu'un QTE plat.
+8. ✅ **Ramener à la rive — LIVRÉ (2026-09-04), « le halage ».** Guillaume, en jouant : « on doit
+   voir qu'on la drag out of the water slowly but surely, jusqu'à ce qu'elle atteigne la rive » —
+   puis, après le premier jet : « le rendu doit être digne des meilleurs jeux » et « je dois être
+   wowed ». Geste DÉDIÉ (pas une réutilisation de `FishMinigame`, tranché par Guillaume plutôt que
+   la piste « réutiliser le mode tenir/relâcher » que Claude avait proposée), solo par défaut
+   (§17 interdit une serrure à deux sur une étape obligatoire).
+   ⚠️ **DÉCLENCHEUR** : le premier lancer spécial (`!armed`, déjà livré au lot C) mord désormais
+   pour de vrai — simplification honnête de ce lot, en attendant que les points 5-7 ci-dessus
+   (protection au chaudron, pêche ambiante dédiée) soient un jour construits.
+   ⚠️ **LA SIMULATION EST PURE** (`evilHaulStep`, `quete.js`) : tenir fait avancer `progress`
+   (vers la rive) ET monter `tension` ; relâcher fait retomber la tension (plus vite qu'elle ne
+   monte) sans reculer la progression ; franchir 1 de tension GLISSE (progression amputée,
+   tension retombée à un plancher, bref verrou). `tools/verify-quete.mjs` la REJOUE avec deux
+   politiques de joueur (un qui lâche à temps gagne en ~20 s, un qui ne lâche jamais échoue et
+   glisse plusieurs fois) — la preuve que la tension n'est pas un décor.
+   ⚠️ **LE RENDU** (`FermeGame.js`/`fermeArt.js`) : le fermier a une pose dédiée (`drawStarHaul`)
+   qui se penche en arrière à mesure que la tension monte, jambes ancrées, bras SUR LA MÊME
+   courbe que le buste (⚠️ premier jet corrigé en jeu le jour même : les bras avançaient vers
+   l'eau pendant que le buste reculait, ce qui désolidarisait visiblement l'épaule — « la tête
+   est dans des épaules désarticulées », leçon de la même famille que le lancer spécial) ; l'étoile
+   se débat, remonte des anneaux d'eau et des gouttelettes (fonction du temps, jamais une liste de
+   particules dans la closure) et émerge progressivement (le clip qui ne montrait que sa moitié
+   haute s'ouvre avec `progress`) ; une ligne tendue relie le fermier à l'étoile, son mou inversement
+   proportionnel à la tension ; une jauge verticale (HUD, vert→ambre→rouge, voile d'écran assorti)
+   et un tremblement d'écran bref sur une glissade. Une fois gagné : un éclat à l'émersion, puis
+   elle reste posée sur la rive EN PERMANENCE (⚠️ pas un `drawImage` à 9 arguments avec les
+   coordonnées écran comme rectangle source — bug trouvé et corrigé le jour même, rien ne se
+   dessinait).
+   ⚠️ **CE QUE CE LOT NE FAIT PAS** : la ramasser et sortir du monde maléfique (point 9) restent à
+   construire — elle reste visible, posée, sans suite pour l'instant. Guillaume, informé : « il y en
+   a d'autres [animations], notamment l'overlay de succès qui viendra quand on ramènera l'étoile sur
+   la ferme » — c'est-à-dire les points 9-10, sciemment hors de ce lot.
+   ⚠️ **TESTÉ EN JEU** (pas seulement au banc) via un nouveau téléport développeur (« 🎣 Le point de
+   sauvetage (halage) », `C.DEV_TELEPORTS`) et un nouvel op (`devStar` "hook") — sans eux, chaque
+   essai exigeait de survivre à la traversée depuis `EVIL_SPAWN` (§10 de CLAUDE.md : onze trajets à
+   pied tentés le même jour, un seul arrivé). ⚠️ Le téléport cherche une case qui n'est NI eau NI
+   berge (`G_LAKE_SHORE`) — un premier jet posait le joueur sur la berge elle-même, teintée du même
+   reflet violet que l'eau, jugé en jeu par Guillaume : « le fermier semble avoir les pieds dans
+   l'eau ».
 9. **La sortir du monde maléfique.** Une fois à la rive, on la « attrape » (ramassage, comme un
    compagnon qu'on porte plutôt qu'un objet dans le sac — cohérent avec `trailFollow`, sauf
    qu'ici elle NE PEUT PAS suivre seule, voir point suivant) et on ressort par le passage

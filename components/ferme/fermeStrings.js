@@ -1105,6 +1105,18 @@ const STAR_FR = {
     rodArming: "L'eau corrompue s'infiltre dans ta ligne...",
     rodBroken: "Ta canne s'est brisée dans cette eau maudite.",
     rodStillBroken: "Ta canne est cassée ici. Protège-la avant de retenter.",
+    /* 2026-09-04 — LE HALAGE. `hookToast` remplace le silence qui suivait le
+       lancer spécial (rien à pêcher là, avant ce lot) : elle mord, et le
+       geste commence. `haulHint` reste affiché tout du long (HUD, pas un
+       toast qui défile). `haulSlip` accompagne chaque glissade — bref, pour
+       ne pas noyer l'écran si le joueur en enchaîne plusieurs. `haulWon`
+       clôt la scène ; elle ne dit pas « sauvée », qui appartient à un
+       chantier qu'on n'a pas encore construit (la ramasser, la sortir du
+       monde maléfique). */
+    hookToast: "Ça mord fort — c'est elle ! Tiens bon.",
+    haulHint: "Maintiens Espace pour tirer. Relâche avant que la ligne ne casse.",
+    haulSlip: "Elle tire fort... tu perds du terrain !",
+    haulWon: "Tu la tires enfin sur la rive, hors de l'eau corrompue.",
   },
   /* ⚠️ ZIP 479 — LE BOUTON DU CHAUDRON. Il nomme le plat sans donner de recette :
      ce qu'on met dedans ne regarde personne, et l'inventer aurait demandé un
@@ -1799,6 +1811,12 @@ const STAR_EN = {
          to repair it any other way. Does NOT reset `evilFound` — see the note
          next to op "evil" in quete.js. */
       evil: "🌊 All six tamed — evil lake unlocked, rod reset",
+      /* 2026-09-04 — same family as `evil`, one step further: also marks her
+         as seen, so this single click opens the haul straight away instead
+         of requiring a fresh special cast every test. Does not start the
+         haul itself (purely local state, see evilHaulRef in FermeGame.js) —
+         pair with the "Stand at the rescue spot" teleport below, then cast. */
+      hook: "🎣 She's been seen — ready for the haul",
     }[op] || op),
     scene: (s) => ({ warn: "🎬 The announcement", fall: "🎬 The eight farm impacts", townFall: "🎬 The Valley Town meteor", end: "🎬 The ending" }[s] || s),
     sceneLabel: "Replay a scene",
@@ -1848,6 +1866,10 @@ const STAR_EN = {
     rodArming: "The corrupted water seeps into your line...",
     rodBroken: "Your rod snapped in this cursed water.",
     rodStillBroken: "Your rod is broken here. Protect it before trying again.",
+    hookToast: "Something bites hard — it's her! Hold on.",
+    haulHint: "Hold Space to pull. Release before the line snaps.",
+    haulSlip: "She's pulling hard... you're losing ground!",
+    haulWon: "You finally drag her onto the shore, out of the corrupted water.",
   },
   /* ── LES INVITES, UNE SEULE CLÉ-FONCTION. ⚠️ Le préfixe `star:` est lu une
      fois, ici — six `if` répartis dans trois boucles de rendu finiraient par ne
@@ -4303,6 +4325,7 @@ export const FERME_STR = {
       churchTower: "🔔 Église — le beffroi",
       world: "🌀 La terre en cours",
       bridge: "🌉 Le pied du pont",
+      rescue: "🎣 Le point de sauvetage (halage)", // 2026-09-04 : évite la traversée depuis EVIL_SPAWN, voir §10 de CLAUDE.md
     }[k] || k),
     devWorldForcedToast: (name) => `🛠️ Le passage mène maintenant à : ${name}.`,
     devWorldRotationToast: "🛠️ Rotation rétablie : le passage suit de nouveau le jour de jeu.",
@@ -5948,6 +5971,7 @@ export const FERME_STR = {
       churchTower: "🔔 Church — the belfry",            // zip 444
       world: "🌀 The current land",
       bridge: "🌉 Foot of the bridge",
+      rescue: "🎣 The rescue spot (haul)",
     }[k] || k),
     devWorldForcedToast: (name) => `🛠️ The passage now leads to: ${name}.`,
     devWorldRotationToast: "🛠️ Rotation restored: the passage follows the game day again.",

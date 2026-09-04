@@ -3070,6 +3070,13 @@ export function newStar() {
        lots D/E), et y inscrire un site à moitié câblé serait une porte sans
        chemin de code (§4 de `CLAUDE.md`). */
     evilFound: 0,
+    /* 2026-09-04 — ELLE A ATTEINT LA RIVE (halage gagné). Même discipline
+       qu'`evilFound` : horodatage HÔTE, fait du MONDE (pas indexé par
+       joueur — un seul joueur hale à la fois, mais le résultat est partagé).
+       Ne fait PAS d'elle une compagne (elle n'est toujours pas dans
+       `STAR_SITES` : la ramasser et la ramener à la ferme restent un
+       chantier séparé, non construit). */
+    evilRescued: 0,
   };
 }
 /* ⚠️ LA REPRISE EST TOLÉRANTE, PAS CONFIANTE. Une sauvegarde d'avant ce zip n'a
@@ -3200,6 +3207,7 @@ export function migrateStar(saved) {
     for (const k of Object.keys(saved.seen)) if (saved.seen[k]) e.seen[String(k).slice(0, 32)] = true;
   e.doneAt = +saved.doneAt || 0;
   e.evilFound = +saved.evilFound || 0; // 2026-09-03 (lot C)
+  e.evilRescued = +saved.evilRescued || 0; // 2026-09-04
   /* ── ZIP 479 : les trois verbes. ⚠️⚠️ MÊME DISCIPLINE QUE PARTOUT AILLEURS ICI —
      on RECONSTRUIT chaque sous-objet au lieu de faire confiance à sa forme, et un
      lieu inconnu est « une version d'après » qu'on ignore. Une sauvegarde d'avant
@@ -3443,6 +3451,47 @@ export function resolveStarEvilFound(e, now) {
   if (!starEvilUnlocked(e)) return { ok: false, tooEarly: true };
   if (starEvilFound(e)) return { ok: true, already: true };
   e.evilFound = +now || 1;
+  return { ok: true };
+}
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-04 — LE HALAGE : LA SIMULATION PURE, ET LE FAIT QU'ELLE A ATTEINT
+   ║ LA RIVE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   `evilHaulStep` ne connaît ni React ni le réseau : un état d'avant, un pas de
+   temps, si le joueur tient — un état d'après. `FermeGame.js` l'appelle chaque
+   image (comme `FishMinigame` pilote sa propre boucle), et n'envoie une `req`
+   au chef que quand `won` devient vrai — exactement le contrat du §4 de
+   CLAUDE.md (« ce qui récompense passe par une req arbitrée par l'hôte »). Un
+   banc peut la rejouer des centaines de fois avec des politiques de
+   tenir/relâcher différentes, comme `verify-scierie` le fait pour la scie. */
+export function evilHaulStep(state, dt, holding) {
+  const s = state || {};
+  let progress = Math.max(0, Math.min(1, +s.progress || 0));
+  let tension = Math.max(0, Math.min(1, +s.tension || 0));
+  const dtc = Math.max(0, Math.min(0.25, +dt || 0)); // borne un dt aberrant (onglet revenu au premier plan)
+  let lockMs = Math.max(0, (+s.lockMs || 0) - dtc * 1000);
+  let slipped = false;
+  if (holding && lockMs <= 0) {
+    progress = Math.min(1, progress + C.EVIL_HAUL_PULL_RATE * dtc);
+    tension = Math.min(1, tension + C.EVIL_HAUL_TENSION_RISE * dtc);
+    if (tension >= 1) {
+      progress = Math.max(0, progress - C.EVIL_HAUL_SLIP_PENALTY);
+      tension = C.EVIL_HAUL_SLIP_TENSION;
+      lockMs = C.EVIL_HAUL_SLIP_LOCK_MS;
+      slipped = true;
+    }
+  } else {
+    tension = Math.max(0, tension - C.EVIL_HAUL_TENSION_FALL * dtc);
+  }
+  return { progress, tension, lockMs, slipped, won: progress >= 1 };
+}
+export function starEvilRescued(e) { return !!(e && e.evilRescued); }
+/* Idempotent, comme `resolveStarEvilFound` : ne peut s'armer qu'après la
+   découverte, ne régresse jamais une fois gagné. */
+export function resolveStarEvilRescue(e, now) {
+  if (!starEvilFound(e)) return { ok: false, tooEarly: true };
+  if (starEvilRescued(e)) return { ok: true, already: true };
+  e.evilRescued = +now || 1;
   return { ok: true };
 }
 /* ⚠️ ZIP 453 — `starShards` A ÉTÉ SUPPRIMÉE. Le seul compte de la quête est
@@ -4448,7 +4497,7 @@ export function resolveStarGift(e, playerIds, now) {
    de la reine) n'en a PAS besoin et c'est délibéré : il ne coûte qu'un objet à 400
    or, que le bouton « Argent » du menu dev sait déjà donner. Un bouton par geste
    aurait été un bouton de plus à tenir pour rien. */
-export const STAR_DEV_OPS = ["reset", "warn", "start", "candy", "dish", "lure", "queen", "shy", "green", "evil", "chapter", "skip", "all", "plans", "deliver", "timber", "appt", "unslam"];
+export const STAR_DEV_OPS = ["reset", "warn", "start", "candy", "dish", "lure", "queen", "shy", "green", "evil", "hook", "chapter", "skip", "all", "plans", "deliver", "timber", "appt", "unslam"];
 /* ⚠️ ZIP 469 — `turn` (le retournement) sort de la liste : sa scène est supprimée
    dans `FermeGame`, et un bouton qui rejoue une scène qui n'existe plus ouvre un
    voile noir de sept secondes sur rien. */
@@ -4686,6 +4735,25 @@ export function devStar(e, op, now, who) {
     resolveStarFound(e, "crater", "\u{1F6E0}️", t);
     resolveStarFound(e, "townShy", "\u{1F6E0}️", t);
     resolveStarFound(e, "townGreen", "\u{1F6E0}️", t);
+    return { star: e, ok: true, unbreakRod: true };
+  }
+  /* 2026-09-04 — LE BOUTON DU HALAGE. Même famille que `evil`, un cran plus
+     loin : pose aussi `evilFound` (elle a été vue — sans quoi le halage
+     n'aurait rien à ramener) pour qu'un seul clic ouvre directement le
+     geste à juger, sans repasser par le lancer spécial à chaque essai. Ne
+     déclenche PAS le halage lui-même (état purement local, voir
+     `evilHaulRef` dans FermeGame.js) : ce bouton pose le décor, comme tous
+     les autres de cette famille, et laisse le geste. */
+  if (op === "hook") {
+    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "\u{1F6E0}️" };
+    if (!e.fall) e.fall = t;
+    for (const site of STAR_FARM_IMPACTS) resolveStarFound(e, site.id, "\u{1F6E0}️", t);
+    resolveStarTownFall(e, t);
+    if (e.townFall) e.townFall = t - STAR_CRATER_COOL_MS - 1000;
+    resolveStarFound(e, "crater", "\u{1F6E0}️", t);
+    resolveStarFound(e, "townShy", "\u{1F6E0}️", t);
+    resolveStarFound(e, "townGreen", "\u{1F6E0}️", t);
+    resolveStarEvilFound(e, t);
     return { star: e, ok: true, unbreakRod: true };
   }
   if (op === "chapter") {
