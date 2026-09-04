@@ -935,6 +935,7 @@ export function newFarmer(id, name, gender, outfit) {
     sleepStartedAt: null, sleepStartEnergy: 0, // dort actuellement ? (voir resolveSleepStart/End)
     injuredUntil: 0, // horodatage de fin d'indisponibilité après une morsure de loup (0 = pas blessé)
     evilRodArmedAt: 0, // 2026-09-03 (lot C) : horodatage HÔTE du premier lancer nu au point de sauvetage du lac maléfique (0 = canne intacte) — voir evilRodBroken()
+    townFishPermitUntil: 0, townFishBanUntil: 0, townFishDistrustUntil: 0, // 2026-09-04 : permis de pêche en ville — voir normalizeFarmer()
     tools: { hoe: 1, can: 1, axe: 1, pick: 1 },
     inv: {
       wood: 0, stone: 0, food: 0, fence: 0, wall: 0, path: 0, lamp: 0, scarecrow: 0, grass: 0, mill: 0, healKit: 0, salve: 0,
@@ -1009,6 +1010,16 @@ export function normalizeFarmer(f) {
   if (typeof f.sleepStartEnergy !== "number") f.sleepStartEnergy = 0;
   if (typeof f.injuredUntil !== "number") f.injuredUntil = 0;
   if (typeof f.evilRodArmedAt !== "number") f.evilRodArmedAt = 0; // 2026-09-03 (lot C)
+  // 2026-09-04 — permis de pêche en ville (C.TOWN_FISH_*, fermeConstants.js) :
+  // trois horodatages HÔTE, jamais un champ "banned"/"hasPermit" booléen — un
+  // booléen ne dit pas QUAND ça finit, et chaque écran qui doit l'afficher
+  // (le guichet, rideTrain) recalculerait sa propre horloge locale. 0 = jamais
+  // eu de permis / jamais banni / jamais méfiant. townFishBanUntil n'est PAS
+  // remis à 0 une fois écoulé : c'est le point de départ de la fenêtre de
+  // méfiance (resolveTownFishPermit le relit pour dater la décroissance).
+  if (typeof f.townFishPermitUntil !== "number") f.townFishPermitUntil = 0;
+  if (typeof f.townFishBanUntil !== "number") f.townFishBanUntil = 0;
+  if (typeof f.townFishDistrustUntil !== "number") f.townFishDistrustUntil = 0;
   // Trophée 🏆 du défi lapins (correctif 2026-07) : horodatage d'expiration,
   // remplace l'ancien champ booléen `hat` (permanent) — un ancien fermier
   // avec `hat: true` mais sans `hatUntil` verra simplement son trophée ne
@@ -1203,17 +1214,69 @@ export function townTreeRegrow(chop, now) {
    poissons » — seule la case visée est validée sur la carte de VILLE plutôt
    que sur `worldRef` (résolveur dédié, comme la coupe, le piège des deux
    cartes sans repère commun de §4 CLAUDE.md). */
-export function resolveTownFish(tw, f, x, y, wantFish) {
-  const res = { changed: false, fish: -1, toast: null };
+export function resolveTownFish(tw, f, x, y, wantFish, now) {
+  const res = { changed: false, fish: -1, toast: null, caught: false, fineGold: 0 };
   if (!tw || x < 0 || y < 0 || x >= tw.w || y >= tw.h || tw.ground[y * tw.w + x] !== C.G_WATER) {
     res.toast = "needWater"; return res;
   }
   normalizeFarmer(f);
+  /* ⚠️⚠️ 2026-09-04 — LE PERMIS SE VÉRIFIE ICI, AVANT L'ÉNERGIE. « il faut une
+     autorisation de la mairie pour pêcher en ville » (Guillaume, mot pour
+     mot) : sans permis valide, la prise n'a jamais lieu — ni énergie dépensée
+     ni poisson crédité, elle est confisquée avant même d'être comptée. La
+     sanction (bannissement + fenêtre de méfiance) s'écrit sur `f`, exactement
+     comme `evilRodArmedAt` — un seul horodatage HÔTE, jamais un compteur qui
+     s'empilerait en rejouant plusieurs prises. L'amende, elle, touche la
+     caisse COMMUNE (s.money) : ce résolveur ne la connaît pas (il ne mute que
+     `f`, comme le reste de ce fichier), c'est l'appelant qui la prélève avec
+     `res.fineGold` — même détour que `resolveBuy`/`moneyDelta`. */
+  const nowT = now || Date.now();
+  if (!(f.townFishPermitUntil > nowT)) {
+    f.townFishBanUntil = nowT + C.TOWN_FISH_BAN_MS;
+    f.townFishDistrustUntil = f.townFishBanUntil + C.TOWN_FISH_DISTRUST_MS;
+    res.changed = true; res.caught = true; res.fineGold = C.TOWN_FISH_FINE_GOLD; res.toast = "townFishNoPermit";
+    return res;
+  }
   if (!useEnergy(f, "fish", null)) { res.toast = "tired"; return res; }
   let ft = wantFish | 0;
   if (!(ft >= 0 && ft < C.FISH.length)) ft = weightedPick(C.FISH);
   f.inv.fish[ft] = (f.inv.fish[ft] || 0) + 1;
   res.changed = true; res.fish = ft;
+  return res;
+}
+/* 2026-09-04 — LE GUICHET DU PERMIS, CÔTÉ HÔTE. Léonie Sarrazin (HALL_TOPICS,
+   panel "fishPermit") l'arbitre exactement comme `resolveMayorAsk` arbitre
+   une audience : `rnd` est injecté (Math.random au site d'appel réel,
+   n'importe quel générateur reproductible dans un banc) plutôt que lu en
+   dur, pour que `verify-vallee` puisse rejouer la décroissance de la
+   méfiance sans dépendre de l'horloge système. `money` est passé en LECTURE
+   (comme `resolveBuy(f, s.money, req)`) ; le prix éventuel revient dans
+   `res.moneyDelta`, négatif, à appliquer par l'appelant — ce résolveur ne
+   mute jamais `s`. */
+export function resolveTownFishPermit(f, money, now, rnd) {
+  normalizeFarmer(f);
+  const res = { ok: false, reason: null, until: 0, moneyDelta: 0 };
+  const nowT = now || Date.now();
+  if (f.townFishBanUntil > nowT) { res.reason = "banned"; res.remainMs = f.townFishBanUntil - nowT; return res; }
+  // L'ARGENT SE VÉRIFIE AVANT LE TIRAGE DE MÉFIANCE : un joueur qui vient
+  // d'être ruiné par sa propre amende (townFishFine, juste au-dessus dans
+  // resolveTownFish) et qui redemande aussitôt un permis doit entendre « il
+  // vous manque d'or », pas un refus de Léonie qu'un hasard aurait pu ne
+  // jamais tirer — sinon le vrai motif du refus dépendrait d'un tirage qui
+  // n'a rien à voir avec lui.
+  if ((money | 0) < C.TOWN_FISH_PERMIT_PRICE) { res.reason = "noGold"; return res; }
+  if (f.townFishDistrustUntil > nowT) {
+    // Chance de refus DÉCROISSANTE depuis la fin du bannissement jusqu'à la
+    // fin de la méfiance — jamais un tirage à taux fixe, qui ne raconterait
+    // pas une administration qui se calme avec le temps (demande Guillaume :
+    // « tendance à refuser », « période de méfiance »).
+    const span = Math.max(1, f.townFishDistrustUntil - f.townFishBanUntil);
+    const remain = f.townFishDistrustUntil - nowT;
+    const chance = C.TOWN_FISH_DISTRUST_MAX_REFUSE * (remain / span);
+    if ((rnd ? rnd() : Math.random()) < chance) { res.reason = "distrust"; res.remainMs = remain; return res; }
+  }
+  f.townFishPermitUntil = nowT + C.TOWN_FISH_PERMIT_MS;
+  res.ok = true; res.until = f.townFishPermitUntil; res.moneyDelta = -C.TOWN_FISH_PERMIT_PRICE;
   return res;
 }
 

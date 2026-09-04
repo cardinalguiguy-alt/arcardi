@@ -3132,6 +3132,223 @@ export function drawStarHaul(ctx, sheet, row, px, py, tension, holding, kx, slip
 }
 
 /* ╔════════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-04 — LE BROCHET (ET LES FUTURS GROS POISSONS/REQUINS) SE DÉBAT.
+   ╚════════════════════════════════════════════════════════════════════════════
+   Demande de Guillaume, en tranchant la lutte du Brochet (CLAUDE.md §2) :
+   « un nouveau dessin, pas drawStarHaul recyclé tel quel » — `drawStarHaul`
+   pose un HUMAIN sur un banc de poses articulées, un poisson n'a rien de
+   cette anatomie ni de ce sprite sheet.
+   ⚠️⚠️⚠️ REPRIS DEUX FOIS LE MÊME JOUR, EN JOUANT. La première passe dessinait
+   des ellipses/chemins LISSES directement dans la boucle de rendu — et
+   `ctx.ellipse`/`ctx.fill` ANTICRÉNELENT TOUJOURS leurs bords, quel que soit
+   `imageSmoothingEnabled` (ce drapeau ne joue que sur `drawImage`) : le
+   résultat se lisait comme une icône vectorielle lissée, pas comme le pixel
+   art du reste du jeu. « le sprite doit être très soigné et détaillé […]
+   digne d'une génération Gemini/GPT, toujours pixel art » (Guillaume) —
+   tranché pour rester procédural (pas de PNG importé, §9 de CLAUDE.md), donc
+   le vrai levier est la TECHNIQUE de remplissage, pas une image externe.
+   ⚠️⚠️⚠️ LA PARADE EST CELLE DÉJÀ EN PLACE POUR LES ANIMAUX DE LA GRANGE
+   (`aEll`/`aRect`/`aLight`, plus bas dans ce fichier) : remplir CHAQUE FORME
+   ligne par ligne avec des `fillRect` à coordonnées ENTIÈRES — un rectangle
+   aligné sur la grille ne peut pas être anticrénelé, il n'y a rien à lisser.
+   `fhEll`/`fhPoly` ci-dessous sont cette même technique (scanline, bornes
+   arrondies), et `fishHaulBake` les utilise pour CUIRE le poisson UNE FOIS
+   par (couleur, phase de queue) sur un petit canevas natif dédié — jamais
+   redessiné à la main dans un contexte pivoté, où le rendu final serait de
+   toute façon ré-anticrénelé par la rotation elle-même. `drawFishHaul` ne
+   fait plus que choisir la cuisson la plus proche et la COMPOSER avec
+   `ctx.drawImage` (qui, lui, respecte bien `imageSmoothingEnabled=false`
+   même sous rotation) — exactement le patron de `drawStarHaul`/`shipBake`/
+   `animalSprite` : un sprite sheet cuit, jamais une forme vectorielle en
+   direct. `aLight`+`outlineSprite` (déjà exportée, réutilisée telle quelle)
+   ferment la cuisson : la même passe générique qui donne du relief à
+   n'importe quelle silhouette (poule, chèvre…) le donne au poisson.
+   ⚠️⚠️ CE QUI REND UN BROCHET RECONNAISSABLE, PAS UN POISSON GÉNÉRIQUE : la
+   silhouette (corps très allongé, museau plat, queue FOURCHUE), le motif
+   (selles sombres sur le dos), quatre bandes de ton (dos, flanc, ventre,
+   reflet — jamais deux), un œil à iris doré. Chaque ajout est une masse
+   cernée de plus, jamais un pixel tiré au hasard (DESSIN.md, règle n°1).
+   ⚠️ UNE SEULE GRANDEUR MÈNE L'ANIMATION : `sinVal` (le fouettement, -1..1)
+   choisit à la fois la phase de queue CUITE à afficher (discrète, pour rester
+   crénelée) ET l'inclinaison CONTINUE du corps entier au moment de composer
+   — jamais deux horloges qui pourraient diverger.
+   ⚠️ `slipMs` PLONGE BRIÈVEMENT LA PRISE (même famille que le `jerk` de
+   `drawStarHaul`). `tension` accélère et élargit le fouettement — sans quoi
+   `holding` seul ne montrerait pas la différence entre une ligne tendue et
+   relâchée. Purement fonction du temps (`now`) : aucun état dans la closure
+   du rendu, rejouable par un banc comme `drawStarFragmentImpact`. */
+const FISH_HAUL_CACHE = new Map();
+const FISH_HAUL_PHASES = 5; // positions de queue cuites — assez pour un fouettement crédible sans multiplier les cuissons
+function fhRect(g, x, y, w, h, col) {
+  g.fillStyle = col;
+  g.fillRect(Math.round(x), Math.round(y), Math.max(1, Math.round(w)), Math.max(1, Math.round(h)));
+}
+function fhEll(g, cx, cy, rx, ry, col) {
+  g.fillStyle = col;
+  const y0 = Math.floor(cy - ry), y1 = Math.ceil(cy + ry);
+  for (let y = y0; y < y1; y++) {
+    const t = (y + 0.5 - cy) / ry;
+    if (t <= -1 || t >= 1) continue;
+    const hw = rx * Math.sqrt(1 - t * t);
+    const xa = Math.round(cx - hw), xb = Math.round(cx + hw);
+    if (xb > xa) g.fillRect(xa, y, xb - xa, 1);
+  }
+}
+// Remplissage de polygone par balayage de lignes (mêmes bornes arrondies que
+// `fhEll`) : c'est ce qui permet aux nageoires/à la queue fourchue/au museau
+// d'être des masses aussi nettes qu'une ellipse, sans forcer chaque forme
+// dans un cercle.
+function fhPoly(g, pts, col) {
+  let y0 = Infinity, y1 = -Infinity;
+  for (const p of pts) { y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }
+  y0 = Math.floor(y0); y1 = Math.ceil(y1);
+  g.fillStyle = col;
+  for (let y = y0; y <= y1; y++) {
+    const ys = y + 0.5, xs = [];
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      if ((a[1] <= ys && b[1] > ys) || (b[1] <= ys && a[1] > ys)) xs.push(a[0] + (ys - a[1]) / (b[1] - a[1]) * (b[0] - a[0]));
+    }
+    xs.sort((p, q) => p - q);
+    for (let i = 0; i + 1 < xs.length; i += 2) {
+      const xa = Math.round(xs[i]), xb = Math.round(xs[i + 1]);
+      if (xb > xa) g.fillRect(xa, y, xb - xa, 1);
+    }
+  }
+}
+function fhAdjust(hex, d) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.max(0, Math.min(255, (n >> 16) + d));
+  const gg = Math.max(0, Math.min(255, ((n >> 8) & 255) + d));
+  const b = Math.max(0, Math.min(255, (n & 255) + d));
+  return `rgb(${r},${gg},${b})`;
+}
+function fhLight(g, w, h, rim, und) {
+  const a = g.getImageData(0, 0, w, h).data;
+  for (let x = 0; x < w; x++) {
+    for (let y = 0; y < h; y++) if (a[(y * w + x) * 4 + 3] > 128) { g.fillStyle = rim; g.fillRect(x, y, 1, 1); break; }
+    for (let y = h - 1; y >= 0; y--) if (a[(y * w + x) * 4 + 3] > 128) { g.fillStyle = und; g.fillRect(x, y, 1, 1); break; }
+  }
+}
+function fishHaulBake(color, phaseIdx) {
+  const key = color + ":" + phaseIdx;
+  const hit = FISH_HAUL_CACHE.get(key);
+  if (hit) return hit;
+  const W = 40, H = 22, ox = 20, oy = 11; // origine = centre du corps, pour une rotation juste à la composition
+  const c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const g = c.getContext("2d");
+  g.imageSmoothingEnabled = false;
+  const dark = fhAdjust(color, -70), deep = fhAdjust(color, -42), flank = color, pale = fhAdjust(color, 60), glow = fhAdjust(color, 95);
+  // -1..1 : queue au repos au centre (phase médiane), pleinement à droite/
+  // gauche aux extrêmes — MÊME grandeur que celle qui pilote l'inclinaison du
+  // corps à la composition (voir drawFishHaul).
+  const pn = (phaseIdx - (FISH_HAUL_PHASES - 1) / 2) / ((FISH_HAUL_PHASES - 1) / 2);
+  const bodyLen = 21, bodyW = 7.6;
+  const bx0 = ox - bodyLen / 2, bx1 = ox + bodyLen / 2; // pédoncule (queue) → base du museau
+  // Corps : QUATRE bandes de ton (dos sombre, flanc, ventre clair, reflet)
+  // au lieu de deux — c'est ce qui donne du volume à une masse aussi petite
+  // (§8 : ce qui compte n'est pas la moyenne, c'est l'étalement des tons).
+  fhEll(g, ox, oy, bodyLen / 2 + 1.4, bodyW / 2 + 1.4, dark);
+  fhEll(g, ox, oy, bodyLen / 2, bodyW / 2, flank);
+  fhEll(g, ox, oy + bodyW * 0.26, bodyLen * 0.42, bodyW * 0.22, pale);
+  fhEll(g, ox, oy - bodyW * 0.30, bodyLen * 0.44, bodyW * 0.17, dark);
+  fhEll(g, ox - bodyLen * 0.08, oy - bodyW * 0.40, bodyLen * 0.26, bodyW * 0.09, glow);
+  // Les selles du brochet — trois taches sombres sur le dos, la marque qui le
+  // distingue d'un poisson générique à ce gabarit.
+  for (let i = 0; i < 3; i++) fhEll(g, bx0 + bodyLen * 0.30 + i * bodyLen * 0.22, oy - bodyW * 0.16, bodyLen * 0.075, bodyW * 0.22, deep);
+  // Queue FOURCHUE : deux lobes qui partent du pédoncule, tournés de `pn` —
+  // c'est la SEULE masse qui change d'une phase à l'autre.
+  const tr = -pn * 0.62; // angle du fouettement pour cette phase
+  const rot = (px, py, a) => [ox + Math.cos(a) * (px - ox) - Math.sin(a) * (py - oy), oy + Math.sin(a) * (px - ox) + Math.cos(a) * (py - oy)];
+  const tailPts = [[bx0 + 2, oy - 1], [bx0 - 2, oy - 1.6], [bx0 - 9, oy - 6.2], [bx0 - 5.4, oy - 0.6],
+                    [bx0 - 5.8, oy + 0.6], [bx0 - 9, oy + 6.2], [bx0 - 2, oy + 1.6], [bx0 + 2, oy + 1]]
+    .map(([px, py]) => rot(px, py, tr));
+  fhPoly(g, tailPts, dark);
+  const tailInner = [[bx0 - 2, oy - 1.6], [bx0 - 7.6, oy - 5.4], [bx0 - 5.8, oy - 1.2]].map(([px, py]) => rot(px, py, tr));
+  fhPoly(g, tailInner, deep);
+  // Nageoire dorsale (reculée, comme chez le brochet) et anale, en vis-à-vis —
+  // c'est le couple qui dit « poisson qui nage », un seul dessus ne suffit pas.
+  fhPoly(g, [[bx0 + bodyLen * 0.42, oy - bodyW * 0.46], [bx0 + bodyLen * 0.58, oy - bodyW * 0.46 - 4.2], [bx0 + bodyLen * 0.76, oy - bodyW * 0.42]], dark);
+  fhPoly(g, [[bx0 + bodyLen * 0.46, oy - bodyW * 0.46], [bx0 + bodyLen * 0.56, oy - bodyW * 0.46 - 1.6], [bx0 + bodyLen * 0.72, oy - bodyW * 0.43]], deep);
+  fhPoly(g, [[bx0 + bodyLen * 0.48, oy + bodyW * 0.44], [bx0 + bodyLen * 0.60, oy + bodyW * 0.44 + 3], [bx0 + bodyLen * 0.70, oy + bodyW * 0.40]], dark);
+  // Nageoire pectorale, juste derrière l'ouïe.
+  fhEll(g, bx0 + bodyLen * 0.70, oy + bodyW * 0.30, 4, 1.4, dark);
+  // Ligne operculaire (l'ouïe).
+  g.strokeStyle = dark; g.lineWidth = 1; g.beginPath(); g.arc(bx0 + bodyLen * 0.74, oy, bodyW * 0.42, -1.3, 1.3); g.stroke();
+  // Museau plat et long — la mâchoire du brochet — avec deux dents à la pointe.
+  fhPoly(g, [[bx1 - 2, oy - bodyW * 0.22], [bx1 + 5.2, oy - bodyW * 0.05], [bx1 + 5.6, oy + bodyW * 0.06], [bx1 - 2, oy + bodyW * 0.20]], dark);
+  fhPoly(g, [[bx1 + 1, oy - bodyW * 0.11], [bx1 + 4.6, oy - bodyW * 0.03], [bx1 + 1, oy + bodyW * 0.07]], flank);
+  fhRect(g, bx1 + 3.4, oy - bodyW * 0.05, 1, 1.6, "#f4efe0");
+  fhRect(g, bx1 + 2.2, oy + bodyW * 0.02, 1, 1.4, "#f4efe0");
+  // Œil : iris doré cerné, pupille sombre, reflet — trois masses au lieu
+  // d'une, comme les vrais yeux dessinés ailleurs dans ce fichier.
+  fhEll(g, bx0 + bodyLen * 0.83, oy - bodyW * 0.10, 1.6, 1.6, "#c8a23a");
+  fhEll(g, bx0 + bodyLen * 0.85, oy - bodyW * 0.10, 1, 1, "#0c1509");
+  fhRect(g, bx0 + bodyLen * 0.86, oy - bodyW * 0.16, 1, 1, "#fff8ea");
+  fhLight(g, W, H, fhAdjust(color, 55), fhAdjust(color, -80));
+  outlineSprite(g, W, H, fhAdjust(color, -85));
+  c.ox = ox; c.oy = oy;
+  FISH_HAUL_CACHE.set(key, c);
+  return c;
+}
+export function drawFishHaul(ctx, cx, cy, T, now, tension, holding, slipMs, color) {
+  const ts = Math.max(0, Math.min(1, +tension || 0));
+  const slipP = (slipMs != null && slipMs >= 0 && slipMs < 260) ? 1 - slipMs / 260 : 0;
+  const dive = Math.sin(slipP * Math.PI) * 0.28 * T;
+  const period = 260 - ts * 150;                     // le fouettement s'accélère avec la tension
+  const sinVal = holding ? Math.sin(now / period) : Math.sin(now / 520) * 0.25; // -1..1, MÊME grandeur pour la phase cuite et l'inclinaison
+  const bx = cx, by = cy + dive;
+  const col = color || "#6a8f5a";
+  // 1. Les ondulations : la prise reste PARTIELLEMENT immergée (elle se
+  //    débat DANS l'eau, elle n'est pas posée dessus) — deux anneaux qui
+  //    naissent, s'élargissent puis s'effacent, jamais figés.
+  ctx.save();
+  for (let i = 0; i < 2; i++) {
+    const rp = (now / 900 + i * 0.5) % 1;
+    ctx.strokeStyle = `rgba(232,247,255,${(0.45 * (1 - rp)).toFixed(2)})`;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.ellipse(bx, cy + T * 0.46, (0.36 + rp * 0.55) * T, (0.14 + rp * 0.2) * T, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+  // 2. Le poisson : une cuisson choisie par `sinVal`, composée avec
+  //    `drawImage` (crénelée, jamais redessinée à la main sous rotation).
+  const phaseIdx = Math.max(0, Math.min(FISH_HAUL_PHASES - 1, Math.round((sinVal + 1) / 2 * (FISH_HAUL_PHASES - 1))));
+  const frame = fishHaulBake(col, phaseIdx);
+  // 2026-09-04 — REVU EN JEU (Guillaume : « trop grand et pas assez réaliste
+  // ni crédible ») : 1,55 gonflait le poisson bien au-delà de sa case, ce qui
+  // le lisait comme une pancarte plutôt qu'une prise. Ramené à la taille d'un
+  // gros poisson ordinaire — à peine plus grand que sa case, pas deux fois.
+  const scale = (T / 16) * 1.05;
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.translate(bx, by);
+  ctx.rotate((sinVal * (0.05 + ts * 0.22) * T / T) * 0.5);
+  ctx.drawImage(frame, -frame.ox * scale, -frame.oy * scale, frame.width * scale, frame.height * scale);
+  ctx.restore();
+  // 3. Les embruns : jaillissent au pic du fouettement (vitesse angulaire
+  //    maximale), jamais en continu — un poisson qui ne fouette pas n'en jette
+  //    pas non plus.
+  const whipSpeed = holding ? Math.abs(Math.cos(now / period)) : 0;
+  if (holding && whipSpeed > 0.88) {
+    ctx.save();
+    ctx.fillStyle = "rgba(235,248,255,0.85)";
+    const n = 3 + Math.round(ts * 2);
+    const side = sinVal >= 0 ? 1 : -1;
+    for (let i = 0; i < n; i++) {
+      const a = (i / Math.max(1, n - 1) - 0.5) * Math.PI * 0.7;
+      const d = T * (0.30 + 0.22 * (i % 2));
+      ctx.beginPath();
+      ctx.arc(bx + side * Math.cos(a) * d, by - Math.abs(Math.sin(a)) * d * 0.5 - T * 0.06, T * 0.032, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+/* ╔════════════════════════════════════════════════════════════════════════════
    ║ ZIP 469 — LA TERRE QUI SORT DU TROU. C'EST ELLE QUI FAIT LE GESTE.
    ╚════════════════════════════════════════════════════════════════════════════
    ⚠️⚠️ SANS ELLE, LA POSE NE RACONTE RIEN : un personnage accroupi qui agite les

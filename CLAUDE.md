@@ -11,126 +11,83 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-⚠️⚠️⚠️ **LOTS A→C ET LE HALAGE SONT LIVRÉS ET VÉRIFIÉS EN JEU** (détail `QUETE.md` §2 bis-quater
-et §3 point 8). Le halage ne fait PAS la suite (points 9-10 — ramasser l'étoile et sortir du monde
-maléfique) : toujours à construire, Guillaume attend un overlay de succès séparé à l'arrivée sur
-la ferme.
+⚠️⚠️⚠️ **2026-09-04 (session suivante) — TROIS LOTS DEMANDÉS EXPLICITEMENT PAR GUILLAUME,
+LIVRÉS EN CODE, BANCS VERTS (789/789 `verify-quete`, 223/223 `verify-vallee`, TOUT PASSE
+`verify-collision`, 1125 clés `verify-strings`, `npx next build` propre) — MAIS SEULE LA LUTTE
+DU BROCHET A ÉTÉ REVUE EN JEU, LES DEUX PREMIERS RESTENT À VOIR :**
 
-⚠️⚠️⚠️ **2026-09-04 (session suivante) — ACCÈS FACILITÉ À LA CANNE : LIVRÉ EN CODE, PAS ENCORE VU
-EN JEU.** Un bandeau (« [E] Déployer la canne », comme toutes les autres invites) apparaît près de
-N'IMPORTE QUEL plan d'eau — ferme, Valley Town, lac maléfique — après une courte immobilité
-(`C.ROD_PROMPT_IDLE_MS = 300`, provisoire, à juger en jouant), dans un rayon `C.ROD_PROMPT_RANGE =
-2,5` cases (`E.waterNearby`, `fermeEngine.js`, zone-agnostique). Réutilise le système d'invite
-EXISTANT (`promptKey`/`tryOpenNearby`, dernier recours dans les trois chaînes, même ordre des deux
-côtés) plutôt qu'un widget à part : E et le bouton tactile l'ont donc « gratuitement ». `armRod()`
-inchangée.
-⚠️⚠️ **EN CREUSANT, DÉCOUVERTE QUE LA PÊCHE NE MARCHAIT PAS DU TOUT À VALLEY TOWN** (`doAction`
-retournait avant même de regarder si la canne était armée). Guillaume, consulté, a tranché :
-câbler la pêche en ville pour de vrai — LIVRÉ EN CODE, PAS ENCORE VU EN JEU. `startFishingTown`
-(`FermeGame.js`) + `E.resolveTownFish` (`fermeEngine.js`, même famille que `resolveTownChop` juste
-au-dessus) + req dédié `"townFish"` (`hostHandleReq`) — l'hôte valide sur SA carte de ville, jamais
-sur `worldRef` (le piège des deux cartes, §4). Mécanique et table IDENTIQUES à la ferme (`C.FISH`),
-sur demande explicite de Guillaume — pas de poisson rare `sea` (géométrie de rivière absente en
-ville).
-⚠️⚠️ `npx next build` **compile sans erreur nouvelle** (seul `G_SOIL` préexistant). **AUCUN DES
-DEUX N'A ÉTÉ VÉRIFIÉ EN JEU** — la session s'est arrêtée au budget de contexte avant d'y arriver ;
-voir la note technique plus bas sur ce qui a coûté le temps.
+**1. Le permis de pêche en ville** (décisions posées et tranchées par Guillaume avant d'écrire,
+§2). Léonie Sarrazin (guichet accueil mairie, `HALL_TOPICS` clé `fishPermit`) délivre un permis
+PAYANT (`C.TOWN_FISH_PERMIT_PRICE` = 300 or) et TEMPORAIRE (`C.TOWN_FISH_PERMIT_MS` = 3 jours de
+jeu) — une `req` arbitrée par l'hôte (`E.resolveTownFishPermit`, `fermeEngine.js`), jamais un
+panneau qui donne. Pêcher sans permis valide (`E.resolveTownFish`) confisque la prise, prélève
+`C.TOWN_FISH_FINE_GOLD` = 5000 or sur la caisse commune (plafonné à ce qu'elle contient) et bannit
+du TRAIN (seulement — décision explicite de Guillaume, pas du reste de la ville) pour
+`C.TOWN_FISH_BAN_MS` = 1 jour. Une fois le bannissement levé, Léonie reste méfiante
+`C.TOWN_FISH_DISTRUST_MS` = 2 jours de plus, avec une chance de refus qui DÉCROÎT linéairement
+(`C.TOWN_FISH_DISTRUST_MAX_REFUSE` = 0,75 au départ). Trois horodatages sur le fermier
+(`f.townFishPermitUntil/BanUntil/DistrustUntil`), même patron qu'`evilRodArmedAt`.
+⚠️ **AUCUN DES NOMBRES N'A ÉTÉ JUGÉ EN JOUANT** (§8 : tous provisoires par construction) — prix,
+durées et la sévérité de la sanction (Guillaume a choisi « 5000 or, 1 jour », un mélange du sévère
+et du léger proposés) méritent une vraie séance avant d'être considérés justes.
 
-⚠️⚠️⚠️ **NOUVELLE EXIGENCE DE GUILLAUME, PAS ENCORE CODÉE : PÊCHER EN VILLE SANS AUTORISATION DE LA
-MAIRIE DOIT ÊTRE PUNI.** Mot pour mot : *« il faut une autorisation de la mairie pour pêcher en
-ville. Sinon on paye une amende et on est banni de valley town pendant quelques jours (ingame) »*.
-Le code actuel (`startFishingTown`/`resolveTownFish` ci-dessus) laisse pêcher librement, SANS
-AUCUNE vérification de permis — **cette livraison n'est donc pas complète tant que ce garde-fou
-manque**, elle ne doit pas être jugée comme finale en l'état. ⚠️ Ce que ceci suppose, PAS ENCORE
-TRANCHÉ (§2, à poser avec Guillaume avant d'écrire) : comment on obtient l'autorisation (une
-négociation façon `maire.js`/`MaireScene.js` ? un guichet ? gratuite mais à demander une fois ?),
-le montant de l'amende, la durée du bannissement en jours de jeu, et ce que « banni » empêche
-concrètement — un bannissement touche potentiellement bien plus que la pêche seule (le train ?
-une porte civique ? le marché ?), donc bien plus de code que `startFishingTown` seul.
+**2. Le ciblage du lancer pour la septième sœur, élargi** (décision tranchée : élargir plutôt
+qu'aimanter ou laisser). `C.EVIL_ROD_HAZARD_R` passé de 1,6 à 2,5 case (`fermeConstants.js`) —
+même valeur que `ROD_PROMPT_RANGE`, réutilisée plutôt qu'un troisième rayon inventé. Un seul
+changement de constante, aucune autre ligne touchée. **JAMAIS REJOUÉ EN JEU** : le lancer est-il
+maintenant assez indulgent, ou faut-il pousser plus loin ?
 
-⚠️⚠️⚠️ **TROISIÈME MORCEAU DEMANDÉ, PAS COMMENCÉ : LA LUTTE DU BROCHET.** Mot pour mot, en tranchant
-la portée de la pêche en ville : *« mécanique habituelle, mêmes poissons mais pour les poissons
-rares (gros) faire l'animation de lutte de l'étoile, le nouveau mini jeu déjà implémenté »* —
-reprendre la simulation de tension du halage (`evilHaulStep`, `quete.js`) pour la prise du Brochet
-(seul poisson rare de `C.FISH`, weight 0,08). ⚠️ **DÉCISIONS À POSER AVEC GUILLAUME AVANT D'ÉCRIRE
-(§2), PAS ENCORE FAITES** : (1) généraliser `evilHaulStep` en fonction pure paramétrée par PROFIL
-de vitesses (`EVIL_HAUL_RATES`/`FISH_HAUL_RATES` séparés) plutôt que dupliquer sa physique (§8) ;
-(2) un nouveau dessin (`fermeArt.js`) — un brochet qui se débat, PAS `drawStarHaul` recyclé tel
-quel ; (3) ville seulement, ou aussi la ferme (qui a son propre Brochet) ? Rien n'est écrit.
+**3. La lutte du Brochet — généralisée, câblée ferme ET ville, REVUE EN JEU ET CORRIGÉE UNE
+FOIS.** `Q.haulStep` (`quete.js`, ex-`evilHaulStep`, toujours un alias intact) prend désormais un
+PROFIL de vitesses en paramètre — `C.EVIL_HAUL_RATES` pour le sauvetage de l'étoile,
+`C.FISH_HAUL_RATES` pour les gros poissons, une seule physique. `C.FISH[2].haul = true` (le
+Brochet) déclenche cette lutte au lieu du `FishMinigame` habituel, dans `startFishing` ET
+`startFishingTown` (`FermeGame.js`) — `tickFishHaul`, appelée une fois par image dans `updateMe`
+AVANT le branchement par zone, fait tourner la simulation des deux côtés sans code dupliqué ; à la
+victoire elle envoie EXACTEMENT le req qu'un poisson ordinaire aurait envoyé (`act`/`fish` ou
+`townFish`) — l'hôte ne sait même pas qu'une lutte a eu lieu. `FishHaulHud` réutilise les classes
+CSS `.ferme-haul-*` déjà génériques (aucun CSS nouveau).
+⚠️⚠️⚠️ **LE DESSIN (`A.drawFishHaul`, `fermeArt.js`) A ÉTÉ REPRIS DEUX FOIS EN JOUANT ET RESTE UN
+CHANTIER OUVERT.** Première passe : formes vectorielles (`ctx.ellipse`/`ctx.fill`) dessinées en
+direct — se lisait comme une icône lissée, pas du pixel art (`ctx.ellipse` anticrénente TOUJOURS
+ses bords, `imageSmoothingEnabled` ne joue que sur `drawImage`, jamais sur les tracés vectoriels).
+Guillaume : « le sprite doit être très soigné et détaillé […] digne d'une génération Gemini/GPT,
+toujours pixel art » — **question posée : dessin généré (Gemini) ou procédural poussé plus loin ?
+Guillaume a choisi procédural.** Deuxième passe : reprise avec LA TECHNIQUE DÉJÀ EN PLACE POUR LES
+ANIMAUX DE LA GRANGE (`aEll`/`aRect`/`aLight`/`outlineSprite`, plus bas dans `fermeArt.js`) —
+remplissage ligne par ligne en coordonnées ENTIÈRES (`fhEll`/`fhPoly`, nouvelles, calquées sur
+`aEll`/le remplissage de polygone par balayage), CUIT UNE FOIS par (couleur, phase de queue) sur
+un petit canevas natif dédié (`fishHaulBake`, caché dans `FISH_HAUL_CACHE`) puis composé par
+`ctx.drawImage` (qui, lui, respecte `imageSmoothingEnabled=false` même sous rotation) — exactement
+le patron de `drawStarHaul`/`shipBake`/`animalSprite` : un sprite cuit, jamais une forme
+vectorielle en direct. Guillaume, en la voyant : **« trop grand et pas assez réaliste ni
+crédible »**, puis **« si trop complexe, passons »**. Corrigé dans la foulée : le facteur
+d'échelle (`scale`) était à 1,55× la case (« le poisson dépasse la case pour se lire GRANDE ») —
+ramené à 1,05×, un gros poisson ordinaire, pas une pancarte. **CETTE CORRECTION DE TAILLE N'A PAS
+ÉTÉ REVUE** — c'est le premier arrêt de la prochaine session sur ce sujet, PAS un aller-retour de
+plus tant que le format (taille, silhouette) n'est pas validé.
+⚠️ **CE QUE GUILLAUME A AUSSI DEMANDÉ, PAS ENCORE CADRÉ : 2-3 NOUVEAUX POISSONS RARES (dont des
+Requins), lutte réservée aux « gros poissons et Requins ».** `C.FISH[i].haul` porte déjà le
+mécanisme générique — ajouter une espèce est un ajout de table, pas un nouveau système. **DÉCISIONS
+À POSER AVEC GUILLAUME AVANT D'ÉCRIRE (§2), PAS ENCORE FAITES** : les Requins vivent-ils dans
+`C.FISH` (rivière/lac, pêche habituelle) ou dans `C.SEA_CREATURES` (le système de prise rare déjà
+existant, `sea`, extrémités de rivière) ? Combien d'espèces exactement, quels noms/couleurs ? Et
+surtout, vu le coût de cette session sur UN SEUL poisson : est-ce que chaque espèce mérite son
+propre dessin (`fishHaulBake` généralisée par forme, pas seulement par couleur), ou une même
+silhouette recolorée suffit-elle pour les suivantes ? **Rien de tout cela ne doit être commencé
+avant que le format du Brochet lui-même soit jugé bon.**
 
-⚠️⚠️⚠️ **CORRIGÉ CETTE SESSION (2026-09-04, revue croisée Codex) : LE DÉLAI AVANT LA CARTE DE
-CHAPITRE.** Codex, en testant indépendamment, a retrouvé exactement le bug vu en jeu à la session
-précédente sur l'apprivoisement de la verte (« trop d'événements se déclenchent simultanément »).
-Cause trouvée : `applyDeltas` (`FermeGame.js`) appelait `starShowCard` en direct et synchrone dès
-réception de `p.starScene` ; la verte et la discrète n'annoncent leur trouvaille qu'au chat
-(`broadcastChat`), sans l'overlay bloquant `starFind` qu'a la fouille de ferme — rien n'empêchait
-donc la carte plein écran d'arriver dans la MÊME image que le toast de découverte. Correctif :
-`Q.STAR_CARD_BREATH_MS` (`quete.js`, 3000 ms) enveloppé dans un `setTimeout` avant `starShowCard`
-(`FermeGame.js`). ⚠️ C'est un PLANCHER, pas un délai fixe : `starShowCard` revérifie
-`starPanelsClear()` à l'échéance, donc une fouille de ferme (déjà tenue 5200 ms par `starFind`)
-n'attend pas la somme des deux, seulement le plus long. `npx next build` compile sans erreur
-nouvelle (seul `G_SOIL` préexistant), `verify-quete` toujours 789/789 (aucune logique pure
-touchée). ⚠️⚠️ **VÉRIFIÉ EN JEU PARTIELLEMENT** (session dev-tool, voir note technique) : le
-mécanisme s'exécute sans erreur, et une carte de chapitre n'arrive plus dans la même image qu'un
-franchissement — mais le buisson mobile de la verte s'est révélé trop fragile à chasser par
-automatisation pour rejouer EXACTEMENT le cas de Codex jusqu'au bout. **Le jugement qui reste — 3 s,
-est-ce trop long, pas assez ? — est pour Guillaume, en jouant normalement.**
-
-⚠️⚠️ **REVUE CODEX (2026-09-04) — L'ORDRE 6→5→7 N'EST PAS UN BUG, VÉRIFIÉ DANS LE CODE.** Codex a
-joué la discrète avant la verte et l'a signalé comme une incohérence de séquençage. Faux : c'est
-une décision déjà prise et déjà écrite (`quete.js`, commentaire à `STAR_CHAPTERS` — Guillaume, mot
-pour mot : « on peut tout à fait trouver la 6 sur le chemin, bien sûr, et faire la 5 après la 6 »).
-Les deux résolveurs ne se gardent que sur la reine, jamais l'un sur l'autre. Rien à corriger.
-
-⚠️⚠️ **REVUE CODEX — CIBLAGE FRAGILE DU LANCER POUR LA SEPTIÈME SŒUR, PAS ENCORE TRANCHÉ.**
-`EVIL_ROD_HAZARD_R = 1.6` case (`fermeConstants.js`) : un lancer qui rate le point de sauvetage de
-peu bascule sur la pêche ambiante (mutant/squelette) au lieu du halage spécial. ⚠️ Distinct de la
-leçon déjà corrigée du §4 (« une condition de proximité doit mesurer ce que l'action mesure ») — la
-mesure de distance est déjà juste, sur la case VISÉE ; ici c'est une tolérance de visée jugée trop
-serrée. **DÉCISION À POSER AVEC GUILLAUME (§2) avant d'écrire** : élargir `EVIL_ROD_HAZARD_R`,
-aimanter le lancer quand `evilSeek` est l'objectif actif, ou laisser tel quel tant que la
-protection/le sauvetage (lot D/E, non construits) ne sont pas là.
-
-⚠️ **REVUE CODEX — DEUX RETOURS MINEURS, PAS ENCORE TRAITÉS** (règle du 424 : un changement visuel
-à la fois). (a) La capture de l'étoile au chapeau (la discrète) est trop sèche — aucun temps de
-reconnaissance avant que le chat/la constellation prennent le relais ; rejoint l'exigence
-permanente de Guillaume sur l'animation et la fluidité. (b) Le HUD du halage (jauge + consigne)
-tient mal en largeur réduite (testé ~652×734 par Codex) — tassé verticalement, loin de l'étoile.
-
-⚠️ **NOTE TECHNIQUE POUR LA PROCHAINE SESSION QUI AUTOMATISE UNE SÉANCE DANS LE NAVIGATEUR DE
-L'OUTIL (pas un vrai onglet Chrome) : DEUX PIÈGES NEUFS, COÛTEUX.** (1) `document.hidden=true`
-en permanence neutralise le `requestAnimationFrame` natif — le patch Worker du §10 (déjà
-documenté) le corrige, MAIS (2) après un usage intensif (beaucoup de `dispatchEvent` synthétiques
-d'affilée), les touches cessent silencieusement d'être prises en compte (`keysRef` figé) SANS
-AUCUNE ERREUR CONSOLE — cause non trouvée malgré une heure de diagnostic (refs remises à zéro une
-à une, fiber React inspecté à la main). **Symptôme jumeau d'une capture d'écran qui ne se
-recompose plus** : ne jamais juger un effet sur ce screenshot dans ce mode — lire l'état RÉEL par
-le fiber React (`canvas.__reactFiber$…`, remonter au composant `FermeGame`, parcourir
-`memoizedState` comme une liste chaînée de hooks) a été la seule vérité fiable trouvée, et c'est
-elle qui a confirmé le bug de l'overlay malgré le gel. **Seule parade qui a marché : recharger dès
-le premier signe de gel**, plutôt que d'insister — à compter dans le budget de toute séance
-automatisée future.
-⚠️ **AJOUT 2026-09-04 — DEUX LEÇONS DE PLUS, TROUVÉES EN VÉRIFIANT LE DÉLAI CI-DESSUS.** (1) Pour
-mesurer QUAND un overlay apparaît, une suite de captures d'écran est imprécise (le timing de l'outil
-domine) — un `setInterval` côté page qui horodate `document.body.innerText` sur `performance.now()`
-donne une chronologie fiable, lue en une seule fois à la fin. (2) **Un bouton du menu dev qui saute
-PLUSIEURS seuils d'un coup empile plusieurs scènes de jointure** (`starJoinBusy`, ~2,5 s chacune) :
-le délai observé n'est alors plus celui d'UNE transition mais de plusieurs mises bout à bout (14,5 s
-mesurés pour un saut qui traversait trois franchissements). Pour isoler une seule transition,
-utiliser le bouton immédiatement PRÉCÉDENT le seuil visé, pas le raccourci qui saute à la fin.
-
-⚠️⚠️⚠️ **ACTION SUIVANTE, DANS L'ORDRE** : (1) Guillaume vérifie en vraie session si
-`Q.STAR_CARD_BREATH_MS` = 3000 ms (ci-dessus) est le bon réglage — provisoire, à ajuster en jouant ;
-(2) vérifier en jeu (vraie session, plus fiable que l'automatisation) l'accès à la canne dans les
-trois zones et la pêche à la ferme/au lac maléfique, toujours en attente depuis la session
-précédente ; (3) poser avec Guillaume les décisions du permis de pêche en ville ci-dessus, PUIS le
-coder — la pêche en ville actuelle (libre, sans permis) est un gap connu, pas une version
-définitive à vérifier telle quelle ; (4) poser avec Guillaume la décision du ciblage du lancer pour
-la septième sœur ci-dessus (élargir/aimanter/laisser) ; (5) les deux retours mineurs de Codex
-(reconnaissance au chapeau, HUD du halage) — chacun sa propre livraison, jamais les deux ensemble ;
-(6) pour la lutte du Brochet, poser les trois décisions listées plus haut avec Guillaume avant
-d'écrire une ligne ; (7) seulement après : la suite du halage (points 9-10 de `QUETE.md` §3),
-toujours en attente.
+⚠️⚠️⚠️ **ACTION SUIVANTE, DANS L'ORDRE** : (1) Guillaume vérifie en vraie session (pas
+l'automatisation) les trois lots ci-dessus — le permis de pêche en ville de bout en bout (acheter,
+se faire prendre, être banni, redemander pendant la méfiance), le lancer élargi au lac maléfique,
+et surtout **regarder le Brochet après la correction de taille** ; (2) selon ce verdict, une
+troisième passe sur `drawFishHaul` (silhouette, proportions) ou considérer le format acquis ; (3)
+SEULEMENT APRÈS UN FORMAT JUGÉ BON : poser avec Guillaume les décisions des 2-3 nouveaux poissons
+rares (Requins compris) ci-dessus ; (4) toujours en attente depuis la session précédente, jamais
+faites : `Q.STAR_CARD_BREATH_MS` = 3000 ms (le bon réglage ?) et l'accès à la canne dans les trois
+zones ; (5) les deux retours mineurs de Codex (reconnaissance au chapeau, HUD du halage de
+l'étoile) — chacun sa propre livraison ; (6) la suite du halage de l'étoile (points 9-10 de
+`QUETE.md` §3), toujours en attente.
 
 ⚠️ **CE QUI RESTE OUVERT, SANS RAPPORT AVEC CETTE SESSION** : (a) le saut de rebord n'atterrit pas
 sur le chemin pavé en dessous (mur traité comme un plan plat) — Guillaume va fournir un nouveau PNG
@@ -489,8 +446,8 @@ dépôt.
 | Fichier | Rôle |
 |---|---|
 | `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **~20 500 l.** |
-| `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** · **2026-09-03 (lot C) `evilRodBroken(f, now)`** : dérive la casse de la canne d'un seul horodatage hôte (`f.evilRodArmedAt`), jamais un second champ |
-| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE : table, chronologies et résolveurs purs.** ⚠️ **469 — la FOUILLE (`STAR_DIG_MS`, `starDug`, `resolveStarDig`, `starDigResult`) et TROIS chapitres au lieu de cinq.** `STAR_FARM_IMPACTS` porte les **huit** cratères (3 étoiles / 2 matières / 3 vides — compté en important le module le 2026-08-30 ; il annonçait « cinq (2/1/2) » depuis le 480 bis), `resolveStarCalm` tient le barème 60/10 s et `resolveStarTownFall` sépare le gros météore. `STAR_FOLLOWER_SITES` dérive toutes les compagnes de `content:"star"`, `starFollowerAdded` identifie celle qui doit jouer son arrivée, `starFarmFlightPath` tient le cap stable des fragments et `queen` désigne l'unique reine. `starShipProgress` joint les cinq états du plan aux commandes et à la cale sans persistance supplémentaire. ⚠️ **2026-09-02 (lot A) — LA REINE SE NOURRIT PUIS SE RÉVEILLE** : `starOfferPrice` est le SEUL endroit qui dise ce que coûte une étoile (60 pour la bleue, `STAR_QUEEN_PRICE` = 80 pour la reine), `resolveStarLight` sert désormais les deux, et `starWakeAdvance`/`starWakeStrike` portent les deux décisions du réveil au rythme — sorties de `FermeGame.js` **pour qu'un banc puisse les jouer**, comme `maire.js` et `scierie.js`. ⚠️ **2026-09-02 (lot A2) — LA SIXIÈME SŒUR, `townShy`, verbe `spot`** : `starShySlot`/`starShyPick`/`starShySits` disent OÙ elle se cache — une pure fonction du temps partagé, jamais un état diffusé (le patron du jour de marché et des élections) ; `resolveStarSpot` tient la seule règle qui compte (pas avant la reine). ⚠️⚠️ **2026-09-03 (lot A3) — LA CINQUIÈME, `townGreen`, verbe `track`** : `starGreenWalk` la fait MARCHER de buisson en buisson sur une table d'adjacence que `FermeGame.js` lui passe (elle ne se téléporte jamais, et ce fichier ne connaît toujours pas la carte), `starGreenSlot` sépare le vol du repos, `starGreenSway` fait remuer le buisson occupé, `resolveStarHint` tient le compte d'indices **partagé entre les joueurs**, `starGreenTemp`/`starGreenBearing` traduisent une distance en « chaud/froid » et en cap. Aucun React, aucun dessin — `verify-quete.mjs` l'importe et la fait marcher quatre cents créneaux. ⚠️ **2026-09-03 (lot C) — LA SEPTIÈME SŒUR N'EST PAS ENCORE DANS `STAR_SITES`** (aucun verbe, aucun résolveur de prise — lots D/E) : `starEvilUnlocked`/`starEvilFound`/`resolveStarEvilFound` vivent à côté, sur `e.evilFound` (un fait du monde, partagé — pas indexé par joueur, contrairement au hasard de la canne qui vit sur le fermier, `fermeEngine.js`). `starGoalKey` teste `evilSeek` AVANT `engineer` — correctif trouvé en écrivant `verify-quete`, voir sa section « Lot C ». |
+| `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** · **2026-09-03 (lot C) `evilRodBroken(f, now)`** : dérive la casse de la canne d'un seul horodatage hôte (`f.evilRodArmedAt`), jamais un second champ · **2026-09-04 `resolveTownFish`/`resolveTownFishPermit`** : permis de pêche en ville — trois horodatages sur le fermier (voir bloc REPRISE) |
+| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE : table, chronologies et résolveurs purs.** ⚠️ **469 — la FOUILLE (`STAR_DIG_MS`, `starDug`, `resolveStarDig`, `starDigResult`) et TROIS chapitres au lieu de cinq.** `STAR_FARM_IMPACTS` porte les **huit** cratères (3 étoiles / 2 matières / 3 vides — compté en important le module le 2026-08-30 ; il annonçait « cinq (2/1/2) » depuis le 480 bis), `resolveStarCalm` tient le barème 60/10 s et `resolveStarTownFall` sépare le gros météore. `STAR_FOLLOWER_SITES` dérive toutes les compagnes de `content:"star"`, `starFollowerAdded` identifie celle qui doit jouer son arrivée, `starFarmFlightPath` tient le cap stable des fragments et `queen` désigne l'unique reine. `starShipProgress` joint les cinq états du plan aux commandes et à la cale sans persistance supplémentaire. ⚠️ **2026-09-02 (lot A) — LA REINE SE NOURRIT PUIS SE RÉVEILLE** : `starOfferPrice` est le SEUL endroit qui dise ce que coûte une étoile (60 pour la bleue, `STAR_QUEEN_PRICE` = 80 pour la reine), `resolveStarLight` sert désormais les deux, et `starWakeAdvance`/`starWakeStrike` portent les deux décisions du réveil au rythme — sorties de `FermeGame.js` **pour qu'un banc puisse les jouer**, comme `maire.js` et `scierie.js`. ⚠️ **2026-09-02 (lot A2) — LA SIXIÈME SŒUR, `townShy`, verbe `spot`** : `starShySlot`/`starShyPick`/`starShySits` disent OÙ elle se cache — une pure fonction du temps partagé, jamais un état diffusé (le patron du jour de marché et des élections) ; `resolveStarSpot` tient la seule règle qui compte (pas avant la reine). ⚠️⚠️ **2026-09-03 (lot A3) — LA CINQUIÈME, `townGreen`, verbe `track`** : `starGreenWalk` la fait MARCHER de buisson en buisson sur une table d'adjacence que `FermeGame.js` lui passe (elle ne se téléporte jamais, et ce fichier ne connaît toujours pas la carte), `starGreenSlot` sépare le vol du repos, `starGreenSway` fait remuer le buisson occupé, `resolveStarHint` tient le compte d'indices **partagé entre les joueurs**, `starGreenTemp`/`starGreenBearing` traduisent une distance en « chaud/froid » et en cap. Aucun React, aucun dessin — `verify-quete.mjs` l'importe et la fait marcher quatre cents créneaux. ⚠️ **2026-09-03 (lot C) — LA SEPTIÈME SŒUR N'EST PAS ENCORE DANS `STAR_SITES`** (aucun verbe, aucun résolveur de prise — lots D/E) : `starEvilUnlocked`/`starEvilFound`/`resolveStarEvilFound` vivent à côté, sur `e.evilFound` (un fait du monde, partagé — pas indexé par joueur, contrairement au hasard de la canne qui vit sur le fermier, `fermeEngine.js`). `starGoalKey` teste `evilSeek` AVANT `engineer` — correctif trouvé en écrivant `verify-quete`, voir sa section « Lot C ». ⚠️ **2026-09-04 `haulStep(state, dt, holding, rates)`** : généralisation d'`evilHaulStep` (alias conservé) par PROFIL de vitesses — `C.EVIL_HAUL_RATES`/`C.FISH_HAUL_RATES`, voir bloc REPRISE (lutte du Brochet). |
 | `components/ferme/maire.js` | **L'AUDIENCE CHEZ LE MAIRE (480) : la table des battements et les résolveurs purs.** Douze nœuds, cinq actes, cinq familles d'argument, la jauge d'adhésion qui FUIT, l'élan, la rejouabilité côté hôte (`mayorReplay` : le client envoie sa TRANSCRIPTION, l'hôte la rejoue). Aucun React, aucun dessin — `verify-maire.mjs` l'importe. ⚠️ **C'est un système de NÉGOCIATION, pas une scène** : la confiance gagnée sert les audiences futures, donc une commission ou le cadastre s'y ajouteront en une table de plus. |
 | `components/ferme/MaireScene.js` | **la VUE de l'audience — le seul morceau de 3D du monde partagé.** Écran PLEIN, à la PREMIÈRE PERSONNE, caméra libre dans la pièce, bulles projetées, réponses en jaune, **mode spectateur** (`MayorWatch`), repli plat si WebGL manque. ⚠️ Il porte `mayorCtxOf`, **la fonction de contexte que le CLIENT et l'HÔTE appellent tous les deux** : leur accord est une propriété du code, pas une coïncidence. |
 | `components/ferme/scierie.js` | **LA SCIE DE TRISTAN (lot E) : la simulation pure, à PAS FIXE.** Une lame qui a de l'inertie, un partenaire qui RÉPOND au lieu de mener, un mou qui referme la fenêtre parfaite, une contrainte qui fend la planche. ⚠️ **Aucune fonction transcendante dans le chemin de simulation** (`sin`/`pow`/`random` sont laissés à l'implémentation par la norme) : le hasard passe par un hachage entier, ce qui rend la manche rejouable **au bit près** par l'hôte à partir d'une liste de numéros de pas. Aucun React, aucun dessin — `verify-scierie.mjs` en joue des centaines. ⚠️ `sawPull(s, side)` est déjà symétrique : la seconde poignée du §17.6 s'ajoutera sans rouvrir la mécanique. |

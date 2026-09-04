@@ -301,11 +301,31 @@ export const RIVER_STONE_RESPAWN_RADIUS = 6;   // en cases, distance max au cent
 
 // --- Poissons (pêche à la rivière) ---
 // Se mangent (rendent de l'énergie) OU se revendent au bac. Tirage pondéré.
+// ⚠️⚠️ 2026-09-04 — `haul: true` MARQUE LES « GROS POISSONS » (demande
+// Guillaume, en tranchant la lutte du Brochet — CLAUDE.md §2) : ceux-là ne
+// jouent plus le mini-jeu de rythme habituel (FishMinigame) mais la lutte de
+// tension reprise du sauvetage de l'étoile (haulStep, quete.js, profil
+// C.FISH_HAUL_RATES) — voir startFishing/startFishingTown, FermeGame.js.
+// ⚠️ « le jeu de timing doit être préservé pour certains poissons » (mot pour
+// mot) : Gardon/Truite gardent FishMinigame intact, c'est un CHAMP DE PLUS
+// sur la table, pas un remplacement du système. Les futurs Requins et gros
+// poissons (2-3 espèces à venir, pas encore décidées) porteront le même
+// champ.
 export const FISH = [
   { id: 0, name: "Gardon",  nameEn: "Roach",  sell: 30,  energy: 20, color: "#9fb4c4", weight: 0.58 },
   { id: 1, name: "Truite",  nameEn: "Trout",  sell: 80,  energy: 30, color: "#d98a5a", weight: 0.34 },
-  { id: 2, name: "Brochet", nameEn: "Pike",   sell: 180, energy: 45, color: "#6a8f5a", weight: 0.08 },
+  { id: 2, name: "Brochet", nameEn: "Pike",   sell: 180, energy: 45, color: "#6a8f5a", weight: 0.08, haul: true },
 ];
+
+// 2026-09-04 — accès facilité à la canne (demande Guillaume : « sélectionnable
+// directement en un clic ou deux, ou avec un bouton interactif », près de
+// N'IMPORTE QUEL plan d'eau). Un banal `nearTile`-like : ROD_PROMPT_RANGE en
+// cases (E.waterNearby, fermeEngine.js), ROD_PROMPT_IDLE_MS l'immobilité
+// exigée avant de proposer — courte exprès, juste assez pour ne pas s'afficher
+// en marchant simplement le long d'une berge. Nombres provisoires, à juger en
+// jouant, comme tout le reste de la quête de l'étoile (CLAUDE.md §13).
+export const ROD_PROMPT_RANGE = 2.5;
+export const ROD_PROMPT_IDLE_MS = 300;
 
 // --- Outils ---
 export const TOOLS = ["hoe", "can", "axe", "pick"];
@@ -380,6 +400,29 @@ export const DAY_REAL_MS = 16 * 60 * 1000; // un jour = 16 minutes réelles (tem
 export const DAY_START_MIN = 6 * 60;      // 6h00
 export const DAY_END_MIN = 26 * 60;       // 2h00 le lendemain
 export const START_MONEY = 500;
+
+// --- Permis de pêche à Valley Town (2026-09-04, demande Guillaume : « il faut
+// une autorisation de la mairie pour pêcher en ville. Sinon on paye une amende
+// et on est banni de valley town pendant quelques jours (ingame) »).
+// Léonie Sarrazin (accueil de la mairie, voir HALL_TOPICS) délivre un permis
+// TEMPORAIRE et PAYANT (TOWN_FISH_PERMIT_PRICE), valable TOWN_FISH_PERMIT_MS —
+// une req arbitrée par l'hôte, comme la vente au marché (la porte n'est jamais
+// la caisse, §4 CLAUDE.md). Pêcher sans permis valide (resolveTownFish,
+// fermeEngine.js) confisque la prise, prélève TOWN_FISH_FINE_GOLD sur la
+// caisse commune (plafonné à ce qu'elle contient) et bannit le fautif du train
+// pour TOWN_FISH_BAN_MS (rideTrain, FermeGame.js — seul le sens FERME→VILLE
+// est bloqué, on n'enferme jamais quelqu'un déjà sur place). Une fois le
+// bannissement levé, Léonie reste méfiante TOWN_FISH_DISTRUST_MS de plus :
+// chaque nouvelle demande de permis a une chance de refus qui DÉCROÎT
+// linéairement de TOWN_FISH_DISTRUST_MAX_REFUSE (juste après le bannissement)
+// à 0 (à la fin de la méfiance) — voir resolveTownFishPermit. Nombres
+// provisoires, à ajuster en jouant, comme tout chiffre de ce projet (§8).
+export const TOWN_FISH_PERMIT_PRICE = 300;
+export const TOWN_FISH_PERMIT_MS = 3 * DAY_REAL_MS;        // "quelques jours" (demande Guillaume)
+export const TOWN_FISH_FINE_GOLD = 5000;
+export const TOWN_FISH_BAN_MS = DAY_REAL_MS;                // 1 jour de jeu
+export const TOWN_FISH_DISTRUST_MS = 2 * DAY_REAL_MS;       // 2 jours de jeu de plus
+export const TOWN_FISH_DISTRUST_MAX_REFUSE = 0.75;
 
 // --- Réseau / jeu ---
 export const MAX_PLAYERS = 8;
@@ -1064,7 +1107,14 @@ export const EVIL_LAKE_FISH = [
    seulement l'endroit précis où elle est prisonnière raconte la même chose
    (l'eau qui la retient est hostile) sans éteindre la pêche ordinaire. */
 export const EVIL_ROD_BREAK_MS = 3000;
-export const EVIL_ROD_HAZARD_R = 1.6; // cases autour du point de sauvetage — même ordre de grandeur que STAR_GREEN_NEAR/STAR_SHY_NEAR (quete.js)
+/* 2026-09-04 — ÉLARGI DE 1,6 À 2,5 (demande Guillaume, revue Codex : « le
+   lancer pour sauver la 7e sœur est fragile ») : viser au clic/tactile sur
+   une case précise en pleine eau, avec `targetTileEvil()` qui suit le
+   curseur en continu, ratait facilement le point de sauvetage de peu et
+   basculait sur la pêche ambiante (mutant/squelette) au lieu du halage
+   spécial. Réutilise la valeur de ROD_PROMPT_RANGE, déjà éprouvée comme
+   « généreuse » dans ce fichier — plutôt qu'inventer un troisième rayon. */
+export const EVIL_ROD_HAZARD_R = 2.5; // cases autour du point de sauvetage (élargi 2026-09-04, était 1,6)
 /* 2026-09-03 (lot C) — L'ANIMATION SPÉCIALE DU PREMIER LANCER (saut + élan,
    voir drawStarCast dans fermeArt.js et startFishingEvil dans FermeGame.js) :
    UNE seule durée, lue par le verrou de mouvement (actAnimRef) ET par la pose
@@ -1077,6 +1127,53 @@ export const EVIL_CAST_ANIM_MS = 900;
    plus l'espèce ; c'est CE saut qui la montre. Trois quarts de la durée pour le
    trajet eau→rive, le dernier quart pour l'estompage — voir evilCatchNow(). */
 export const EVIL_CATCH_ANIM_MS = 1400;
+
+/* ══════════════════════════════════════════════════════════════════════════
+   2026-09-04 — LE HALAGE : RAMENER LA SEPTIÈME SŒUR À LA RIVE.
+   ══════════════════════════════════════════════════════════════════════════
+   Demande de Guillaume, en jouant : « on doit voir qu'on la drag out of the
+   water slowly but surely, jusqu'à ce qu'elle atteigne la rive. » Un geste
+   dédié (pas une réutilisation de `FishMinigame`), solo par défaut. La
+   simulation pure vit dans `quete.js` (`evilHaulStep`), ces nombres sont ses
+   seuls réglages — jamais recopiés dans la fonction elle-même (§8 de
+   CLAUDE.md).
+   ⚠️ TENIR fait à la fois avancer `progress` (vers la rive) ET monter
+   `tension` — RELÂCHER fait retomber `tension` (plus vite qu'elle ne monte,
+   pour qu'un relâchement bref suffise) sans faire reculer `progress`. Passer
+   `tension` à son maximum GLISSE : `progress` recule d'un cran,`tension`
+   retombe à `slipTension` (pas à zéro — on ne repart jamais à froid) et un
+   court verrou (`slipLockMs`) empêche de retirer tout de suite, pour qu'une
+   glissade se voie et se sente.
+   ⚠️⚠️ 2026-09-04 — SIX DE CES NOMBRES SONT DEVENUS UN PROFIL, `EVIL_HAUL_RATES`
+   (demande Guillaume, en tranchant la lutte du Brochet : généraliser plutôt que
+   dupliquer). `haulStep` (quete.js, ex-`evilHaulStep`) prend désormais ce
+   PROFIL en paramètre au lieu de lire `C.EVIL_HAUL_*` en dur — une seule
+   physique, deux réglages. `FISH_HAUL_RATES` juste dessous est le second
+   profil, pour les poissons rares qui luttent (Brochet, et les prochains gros
+   poissons/Requins) : un combat plus court et plus indulgent qu'une sauvegarde
+   dramatique — la pêche reste un geste courant, pas un sauvetage. Les DEUX
+   timings de mise en scène restent des scalaires PARTAGÉS (BITE_DELAY_MS,
+   ARRIVE_MS) : ils cadencent l'habillage (attente avant la touche, célébration
+   à l'arrivée), pas la physique du combat, donc rien ne justifie de les
+   dédoubler par profil. */
+export const EVIL_HAUL_BITE_DELAY_MS = 650;  // entre la fin du lancer spécial et la touche (« Ça mord ! »)
+export const EVIL_HAUL_RATES = {
+  pullRate: 0.078,    // progression/s en tirant
+  tensionRise: 0.62,  // tension/s en tirant
+  tensionFall: 1.05,  // tension/s relâché
+  slipPenalty: 0.14,  // progression perdue à une glissade
+  slipTension: 0.32,  // tension après une glissade
+  slipLockMs: 450,    // verrou bref après une glissade
+};
+// 2026-09-04 — profil du Brochet (et des futurs gros poissons/Requins) : on
+// tire plus vite (pêche courante) mais la tension grimpe presque autant vite
+// qu'à l'étoile — combat court, pas un long tir de corde. Nombres provisoires,
+// à ajuster en jouant comme tout le reste (§8 de CLAUDE.md).
+export const FISH_HAUL_RATES = {
+  pullRate: 0.11, tensionRise: 0.58, tensionFall: 1.25,
+  slipPenalty: 0.12, slipTension: 0.28, slipLockMs: 380,
+};
+export const EVIL_HAUL_ARRIVE_MS = 1800;     // mise en scène d'arrivée sur la rive, une fois gagné
 
 // --- Clôture (posée librement par les joueurs, section par section) ---
 export const FENCE_COST = 15; // prix d'une section de clôture à la boutique (payée en or, inchangé)
@@ -5108,6 +5205,12 @@ export const HALL_TOPICS = [
      qui arbitre. La porte n'est toujours pas la caisse. */
   { key: "engineer", emoji: "📐", panel: "engineer",
     when: (c) => !!(c.shared && c.shared.star && c.shared.star.found && c.shared.star.found.crater) },
+  /* 2026-09-04 — LE PERMIS DE PÊCHE. Toujours visible (pas de garde) : c'est
+     un vrai service civique, pas un secret de quête. Comme "mayor"/"engineer",
+     le sujet OUVRE une conversation, jamais il ne donne : la `req`
+     ("townFishPermitAsk") part depuis le panneau dédié, arbitrée par l'hôte
+     (resolveTownFishPermit, fermeEngine.js) — la porte n'est pas la caisse. */
+  { key: "fishPermit", emoji: "🎣", panel: "fishPermit" },
 ];
 /* Le rendez-vous chez le maire : il reçoit un jour sur sept du mandat. ⚠️ PURE
    FONCTION, encore : « quand puis-je le voir ? » a la même réponse chez les
@@ -5672,6 +5775,7 @@ export const DEV_TELEPORTS = [
   { key: "churchTower", zone: "court" }, // 444 — le beffroi, le point le plus haut de la carte
   { key: "world",   zone: "evil" },  // arrivée dans la terre en cours (EVIL_SPAWN)
   { key: "bridge",  zone: "evil" },  // pied du pont de la terre en cours
+  { key: "rescue",  zone: "evil" },  // 2026-09-04 : la rive au point de sauvetage de la septième sœur
 ];
 
 /* ╔══════════════════════════════════════════════════════════════════════════════

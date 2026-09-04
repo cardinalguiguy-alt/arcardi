@@ -2709,10 +2709,10 @@ section("Le halage — tirer l'étoile hors de l'eau");
   {
     // Tension déjà à 1 - epsilon : UNE image de tenue en plus doit la faire
     // franchir 1 et glisser, jamais rester juste en dessous indéfiniment.
-    const near = 1 - C.EVIL_HAUL_TENSION_RISE * DT * 0.5;
+    const near = 1 - C.EVIL_HAUL_RATES.tensionRise * DT * 0.5;
     const s = Q.evilHaulStep({ progress: 0.5, tension: near, lockMs: 0 }, DT, true);
     ok("⚠️⚠️ franchir 1 de tension glisse : progression amputée, tension retombée, verrou posé",
-       s.slipped && s.progress < 0.5 && s.tension === C.EVIL_HAUL_SLIP_TENSION && s.lockMs === C.EVIL_HAUL_SLIP_LOCK_MS,
+       s.slipped && s.progress < 0.5 && s.tension === C.EVIL_HAUL_RATES.slipTension && s.lockMs === C.EVIL_HAUL_RATES.slipLockMs,
        `progress ${s.progress.toFixed(3)}, tension ${s.tension}, lockMs ${s.lockMs}`);
     ok("⚠️⚠️⚠️ LA GLISSADE NE FAIT JAMAIS RECULER SOUS ZÉRO (bornée, pas juste soustraite)",
        Q.evilHaulStep({ progress: 0.02, tension: 1, lockMs: 0 }, DT, true).progress >= 0);
@@ -2720,7 +2720,7 @@ section("Le halage — tirer l'étoile hors de l'eau");
   /* ── LE VERROU APRÈS GLISSADE : tenir ne fait RIEN tant qu'il n'est pas
      écoulé — sinon la glissade ne coûterait qu'un nombre, jamais un temps. */
   {
-    const slipped = { progress: 0.3, tension: C.EVIL_HAUL_SLIP_TENSION, lockMs: C.EVIL_HAUL_SLIP_LOCK_MS };
+    const slipped = { progress: 0.3, tension: C.EVIL_HAUL_RATES.slipTension, lockMs: C.EVIL_HAUL_RATES.slipLockMs };
     const still = Q.evilHaulStep(slipped, DT, true);
     ok("⚠️⚠️ verrouillé : tenir n'avance NI la progression NI la tension (relâché de force)",
        still.progress === slipped.progress && still.tension < slipped.tension,

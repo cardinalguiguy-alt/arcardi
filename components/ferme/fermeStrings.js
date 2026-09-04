@@ -2975,6 +2975,7 @@ export const FERME_STR = {
       ballot: "Je viens voter.",
       fonds: "C'est quoi, le fonds de la halle ?",
       engineer: "Connaissez-vous quelqu'un qui dessine des bateaux ?",
+      fishPermit: "Je voudrais un permis de pêche.",
     }[k] || k),
     hallTopicTitle: (k) => ({
       mayor: "🎩 Rencontrer le maire",
@@ -2985,6 +2986,7 @@ export const FERME_STR = {
       ballot: "🗳️ Le scrutin",
       fonds: "📜 Le fonds de la halle",
       engineer: "📐 L'architecte naval",   // 469 — la ligne était écrite DEUX fois (préexistant)
+      fishPermit: "🎣 Le permis de pêche",
     }[k] || k),
     hallMayorNow: (e, n) => `Le maire en exercice est ${e} ${n}.`,
     hallMayorAudience: (d, k) => k === 0
@@ -3009,6 +3011,20 @@ export const FERME_STR = {
     hallFondsWhere: "L'avis est affiché au tableau des nouvelles, sur la place. Allez le lire, vous en saurez autant que moi.",
     hallSoonWedding: "Les publications de bans sont prêtes et la salle est dressée — il manque l'officier d'état civil. Revenez à la prochaine mise à jour : la salle des mariages est la deuxième porte à gauche.",
     hallSoonLand: "Le plan est affiché au cadastre, première porte à gauche. La vente, elle, passera par le notaire du tribunal : on choisit ici, on signe là-bas.",
+    /* ═══ 2026-09-04 — LE PERMIS DE PÊCHE EN VILLE ═══════════════════════ */
+    hallFishPermitIntro: (p, v) => `« Il est interdit de pêcher dans les eaux de la commune sans autorisation. » Un permis coûte ${p} or et reste valable ${v}.`,
+    hallFishPermitHave: (v) => `Vous avez un permis valide encore ${v}.`,
+    hallFishPermitNone: "Vous n'avez actuellement aucun permis valide.",
+    hallFishPermitBanned: (v) => `« Vous êtes interdit de retour en ville pour l'instant, encore ${v}. Revenez me voir après. »`,
+    hallFishPermitDistrust: (v) => `« Après ce qui s'est passé, l'administration reste prudente encore ${v}. Vous pouvez toujours demander. »`,
+    hallFishPermitAsk: "Demander le permis",
+    townFishBannedToast: "🚫 Vous êtes interdit de retour en ville pour l'instant.",
+    townFishNoPermit: "🚨 Pris en flagrant délit de pêche sans permis ! La prise est confisquée.",
+    townFishPermitGranted: "🎣 Permis délivré par Léonie.",
+    townFishPermitBanned: "« Vous êtes actuellement banni, je ne peux rien pour vous. »",
+    townFishPermitDistrust: "« Après ce qui s'est passé, je préfère encore attendre. » — Léonie refuse.",
+    townFishPermitNoGold: "Il vous manque d'or pour le permis.",
+    chatTownFishCaught: (n, g) => `🚨 ${n} a été pris à pêcher sans permis — amende de ${g} or et banni du train.`,
     candName: (k) => ({
       vasseur: "Odile Vasseur", lantier: "Marceau Lantier", bonnefoy: "Séverine Bonnefoy",
       delaunay: "Ninon Delaunay", toussaint: "Basile Toussaint",
@@ -3721,6 +3737,11 @@ export const FERME_STR = {
     fishWin: "Beau poisson !",
     fishFail: "Le poisson s'est échappé...",
     fishTooSoon: "Trop tôt ! Il a filé.",
+    // 2026-09-04 — la lutte des gros poissons (C.FISH[i].haul, ex. le
+    // Brochet) : même HUD que le halage de l'étoile (FishHaulHud), un seul
+    // texte au lieu du trio timing/hold/react ci-dessus, puisqu'il n'y a
+    // qu'une seule phase à expliquer (tenir), pas trois mini-jeux distincts.
+    fishHaulHint: "Maintiens Espace pour ferrer le poisson. Relâche avant que la ligne ne casse.",
     /* 2026-09-03 (lot C) — la pêche AMBIANTE du lac maléfique (mutant/squelette,
        jamais stockable — voir C.EVIL_LAKE_FISH). ⚠️ 2026-09-03, correctif de
        Guillaume en jouant : « on ne doit pas savoir à l'avance que c'est un
@@ -4919,6 +4940,7 @@ export const FERME_STR = {
       ballot: "I am here to vote.",
       fonds: "What is the market hall fund?",
       engineer: "Do you know anyone who draws boats?",
+      fishPermit: "I would like a fishing permit.",
     }[k] || k),
     hallTopicTitle: (k) => ({
       mayor: "🎩 Meeting the mayor",
@@ -4929,6 +4951,7 @@ export const FERME_STR = {
       ballot: "🗳️ The ballot",
       fonds: "📜 The market hall fund",
       engineer: "📐 The naval architect",
+      fishPermit: "🎣 The fishing permit",
     }[k] || k),
     hallMayorNow: (e, n) => `The sitting mayor is ${e} ${n}.`,
     hallMayorAudience: (d, k) => k === 0
@@ -4953,6 +4976,20 @@ export const FERME_STR = {
     hallFondsWhere: "The notice is up on the news board, on the square. Go and read it; you'll know as much as I do.",
     hallSoonWedding: "The banns are ready and the room is set — the registrar is missing. Come back next update: the wedding room is the second door on the left.",
     hallSoonLand: "The plan is posted at the land registry, first door on the left. The sale itself goes through the courthouse notary: you choose here, you sign there.",
+    /* ═══ 2026-09-04 — TOWN FISHING PERMIT ═══════════════════════════════ */
+    hallFishPermitIntro: (p, v) => `"Fishing in town waters without authorization is forbidden." A permit costs ${p} gold and stays valid for ${v}.`,
+    hallFishPermitHave: (v) => `You have a valid permit for ${v} more.`,
+    hallFishPermitNone: "You currently have no valid permit.",
+    hallFishPermitBanned: (v) => `"You are barred from returning to town for now, for ${v} more. Come see me after."`,
+    hallFishPermitDistrust: (v) => `"After what happened, the administration is staying careful for ${v} more. You may still ask."`,
+    hallFishPermitAsk: "Ask for the permit",
+    townFishBannedToast: "🚫 You are barred from returning to town for now.",
+    townFishNoPermit: "🚨 Caught fishing without a permit! The catch is confiscated.",
+    townFishPermitGranted: "🎣 Permit issued by Léonie.",
+    townFishPermitBanned: "\"You are currently banned, there's nothing I can do.\"",
+    townFishPermitDistrust: "\"After what happened, I'd still rather wait.\" — Léonie refuses.",
+    townFishPermitNoGold: "You don't have enough gold for the permit.",
+    chatTownFishCaught: (n, g) => `🚨 ${n} was caught fishing without a permit — fined ${g} gold and barred from the train.`,
     candName: (k) => ({
       vasseur: "Odile Vasseur", lantier: "Marceau Lantier", bonnefoy: "Séverine Bonnefoy",
       delaunay: "Ninon Delaunay", toussaint: "Basile Toussaint",
@@ -5469,6 +5506,7 @@ export const FERME_STR = {
     fishWin: "Nice catch!",
     fishFail: "The fish got away...",
     fishTooSoon: "Too soon! It escaped.",
+    fishHaulHint: "Hold Space to reel in the fish. Release before the line snaps.",
     // 2026-09-03 (lot C) — see the French note: the bite no longer names the
     // catch (Guillaume: it shouldn't be known in advance) — only landing it does.
     evilFishBite: "Something bites... something stirs beneath the murky water.",

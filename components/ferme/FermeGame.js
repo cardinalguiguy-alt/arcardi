@@ -484,6 +484,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [evilBite, setEvilBite] = useState(null); // {monsterId} pendant le mini-jeu de morsure d'une créature maléfique (chantier 2026-07), sinon null
   const [injuredUntil, setInjuredUntil] = useState(0); // horodatage de fin d'indisponibilité (0 = pas blessé), survit à un refresh (voir farmer.injuredUntil)
   const [evilRodArmedAt, setEvilRodArmedAt] = useState(0); // 2026-09-03 (lot C) : horodatage HÔTE du premier lancer nu au point de sauvetage (0 = canne intacte), survit à un refresh (voir farmer.evilRodArmedAt)
+  // 2026-09-04 — permis de pêche en ville : trois horodatages HÔTE, même
+  // famille qu'evilRodArmedAt juste au-dessus (survivent à un refresh, voir
+  // farmer.townFish*). Lus par rideTrain() (bannissement) et le guichet de
+  // Léonie (panel "fishPermit", hallTalk) pour afficher l'état sans req.
+  const [townFishPermitUntil, setTownFishPermitUntil] = useState(0);
+  const [townFishBanUntil, setTownFishBanUntil] = useState(0);
+  const [townFishDistrustUntil, setTownFishDistrustUntil] = useState(0);
   const [immunityUntil, setImmunityUntil] = useState(0); // pommade de protection (chantier 2026-07) : horodatage de fin d'immunité/répulsion aux créatures maléfiques (0 = inactif), effet purement local, ne survit pas à un refresh
   const [shopOpen, setShopOpen] = useState(false);
   const [marketOpen, setMarketOpen] = useState(false);   // zip 430 : le marché du champ de foire
@@ -1549,6 +1556,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const sleepTimerRef = useRef(null); // setTimeout de sortie automatique après C.SLEEP_MS
   const injuredUntilRef = useRef(0); // miroir synchrone de injuredUntil (lu dans la boucle de rendu/déplacement)
   const evilRodArmedAtRef = useRef(0); // 2026-09-03 (lot C) : miroir synchrone de evilRodArmedAt (lu dans doActionEvil/startFishingEvil)
+  const townFishPermitUntilRef = useRef(0); // 2026-09-04 : miroir synchrone de townFishPermitUntil (lu dans le guichet de Léonie)
+  const townFishBanUntilRef = useRef(0);    // idem, lu dans rideTrain() — c'est LUI qui bloque l'embarquement
+  const townFishDistrustUntilRef = useRef(0);
   const evilFoundPingRef = useRef(0); // 2026-09-03 (lot C) : throttle du sendReq("evilFound") pendant qu'on reste dans le rayon (drawEvilFrame)
   const evilCastRef = useRef(null); // 2026-09-03 (lot C) : {t0,tx,ty} pendant l'anim de lancer spécial (startFishingEvil), null sinon — voir evilCastNow()
   const evilCatchRef = useRef(null); // 2026-09-03 (lot C) : {t0,fx,fy,sx,sy,color} pendant qu'une prise ambiante saute de l'eau vers la rive (fishWon), null sinon — voir evilCatchNow()
@@ -1568,6 +1578,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      JSX — un ref seul ne peut pas déclencher ça. */
   const evilHaulRef = useRef(null);
   const [evilHaulActive, setEvilHaulActive] = useState(false);
+  /* 2026-09-04 — LA LUTTE DU BROCHET (et des futurs gros poissons/Requins,
+     C.FISH[i].haul), MÊME PATRON QUE `evilHaulRef` JUSTE AU-DESSUS. Distincte
+     exprès plutôt que fondue dans `evilHaulRef` : celui-ci vit dans la carte
+     maléfique, celui-là en ferme ET en ville (`haul.town` distingue), et les
+     deux vitesses (C.EVIL_HAUL_RATES/C.FISH_HAUL_RATES) sont désormais deux
+     profils de la MÊME fonction pure (Q.haulStep, quete.js) — la duplication
+     évitée est celle de la PHYSIQUE, pas celle du ref. `haul.x/haul.y` est
+     la case pêchée (fishTileRef au moment de la touche), fixe pour la
+     manche ; `haul.fish` l'index dans C.FISH, pour créditer le bon poisson
+     à la victoire ET pour que le dessin choisisse sa couleur. */
+  const fishHaulRef = useRef(null);
+  const [fishHaulActive, setFishHaulActive] = useState(false);
   const immunityUntilRef = useRef(0); // miroir synchrone de immunityUntil (lu dans updateEvilMonsters)
   // Correctif "dispute Chloé/Rosalie vue de tous" (2026-07, demande Guillaume) :
   // la scène et le cooldown sont désormais un état PARTAGÉ (station.crScene /
@@ -1601,7 +1623,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      dessous, parce que la grange, elle, était déjà protégée par ce ref, mais
      jamais recopiée ici pour sa pièce sœur. Trouvé en vérifiant que E/P/F
      restent fonctionnels à chaque moment clé de la quête du bateau. */
-  useEffect(() => { fishMiniRef.current = !!fishMini || !!barnMini || !!wolfBite || !!evilBite || !!repairMini || !!starRaise; }, [fishMini, barnMini, wolfBite, evilBite, repairMini, starRaise]);
+  // 2026-09-04 — `fishHaulActive` rejoint ce ref combiné : la lutte du Brochet
+  // doit fermer les mêmes portes que FishMinigame (touche d'action, tir à
+  // l'arc, ouverture de la carte/boutique…) — c'est le même geste (pêcher),
+  // seule la mécanique de résolution diffère.
+  useEffect(() => { fishMiniRef.current = !!fishMini || !!barnMini || !!wolfBite || !!evilBite || !!repairMini || !!starRaise || !!fishHaulActive; }, [fishMini, barnMini, wolfBite, evilBite, repairMini, starRaise, fishHaulActive]);
   /* ⚠️ LE RÉVEIL N'EST PAS DANS `fishMiniRef`, ET C'EST VOLONTAIRE : ce ref sert à
      dire « un panneau capte les touches », or le réveil n'ouvre aucun panneau — le
      joueur reste dans le monde, il peut marcher, et marcher DOIT l'interrompre.
@@ -2393,6 +2419,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // 2026-09-03 (lot C) — même reprise que injuredUntil : une canne cassée
       // avant un rechargement doit le rester après.
       evilRodArmedAtRef.current = mine.evilRodArmedAt || 0; setEvilRodArmedAt(evilRodArmedAtRef.current);
+      // 2026-09-04 — permis de pêche en ville : même reprise après rechargement.
+      townFishPermitUntilRef.current = mine.townFishPermitUntil || 0; setTownFishPermitUntil(townFishPermitUntilRef.current);
+      townFishBanUntilRef.current = mine.townFishBanUntil || 0; setTownFishBanUntil(townFishBanUntilRef.current);
+      townFishDistrustUntilRef.current = mine.townFishDistrustUntil || 0; setTownFishDistrustUntil(townFishDistrustUntilRef.current);
     }
     minimapDirtyRef.current = true;
     setHud(h => ({ ...h, money: payload.money, day: payload.day }));
@@ -4296,16 +4326,56 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     } else if (req.kind === "townFish") {
       /* 2026-09-04 — PÊCHER À VALLEY TOWN. Même autorité que `townChop` juste
          au-dessus : l'hôte valide sur SA propre carte de ville, jamais sur
-         celle de l'émetteur. */
+         celle de l'émetteur.
+         ⚠️⚠️ ET DEPUIS CETTE SESSION, LE PERMIS (voir resolveTownFish,
+         fermeEngine.js) : `r.caught` signale une infraction — la prise est
+         confisquée, l'amende tombe ICI sur `s.money` (plafonnée à ce qu'elle
+         contient, jamais négative) parce que le résolveur ne mute que `f`,
+         comme toujours dans ce fichier. Le chat annonce publiquement la
+         mésaventure (même famille que `barnBuilt`) : se faire prendre est un
+         petit événement social, pas un échec silencieux. */
       const tw = townWorldRef.current || (townWorldRef.current = getTownWorldCached(E));
-      const r = E.resolveTownFish(tw, f, req.x | 0, req.y | 0, req.fish | 0);
+      const r = E.resolveTownFish(tw, f, req.x | 0, req.y | 0, req.fish | 0, Date.now());
       if (r.changed) {
-        out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+        out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv,
+                        townFishPermitUntil: f.townFishPermitUntil, townFishBanUntil: f.townFishBanUntil,
+                        townFishDistrustUntil: f.townFishDistrustUntil };
         dirtyRef.current = true;
-        out.fx.push({ k: "fish", x: req.x | 0, y: req.y | 0, fish: r.fish, zone: "town" });
-        questId = "fish";
+        if (r.caught) {
+          const fine = Math.min(r.fineGold, Math.max(0, s.money | 0));
+          s.money -= fine; out.state = shareState();
+          out.chat = { from: "👮", msg: L.chatTownFishCaught(f.name, fine) };
+        } else {
+          out.fx.push({ k: "fish", x: req.x | 0, y: req.y | 0, fish: r.fish, zone: "town" });
+          questId = "fish";
+        }
       }
       if (r.toast) out.toast = { id: f.id, key: r.toast };
+    } else if (req.kind === "townFishPermitAsk") {
+      /* 2026-09-04 — LE GUICHET DE LÉONIE. Même famille que `mayorAsk` : une
+         `req` sans coordonnées ni portée à vérifier (on lui parle de n'importe
+         où dans le hall, comme toutes ses autres réponses, §4 « un panneau qui
+         s'ouvre à volonté ne doit rien donner » — ici il PREND, comme
+         `starPlanAsk`, jamais il ne donne sans contrepartie). */
+      const rP = E.resolveTownFishPermit(f, s.money, Date.now(), Math.random);
+      /* ⚠️ energy/tools/inv SONT OBLIGATOIRES ICI, même inchangés : applyDeltas
+         (voir plus bas) les réécrit SANS GARDE dès que `p.farmer.id === me.id`
+         — un `out.farmer` qui les omettrait viderait le sac et les outils du
+         joueur à l'écran. C'est le seul défaut que ce fichier ne relève nulle
+         part par ailleurs : chacun des quarante et un autres `out.farmer` du
+         dépôt les porte, aucun n'explique pourquoi. */
+      out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv,
+                      townFishPermitUntil: f.townFishPermitUntil, townFishBanUntil: f.townFishBanUntil,
+                      townFishDistrustUntil: f.townFishDistrustUntil };
+      dirtyRef.current = true;
+      if (rP.ok) {
+        s.money += rP.moneyDelta; out.state = shareState();
+        out.toast = { id: f.id, key: "townFishPermitGranted" };
+      } else {
+        out.toast = { id: f.id, key: rP.reason === "banned" ? "townFishPermitBanned"
+                              : rP.reason === "distrust" ? "townFishPermitDistrust"
+                              : "townFishPermitNoGold" };
+      }
     } else if (req.kind === "spendEnergy") {
       /* ZIP 429 — LA COURSE COÛTE DE L'ÉNERGIE, ET C'EST L'HÔTE QUI DÉBITE.
          ⚠️ L'ÉNERGIE EST UN ÉTAT PARTAGÉ ET SAUVEGARDÉ : la décrémenter côté
@@ -7423,6 +7493,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (typeof p.farmer.evilRodArmedAt === "number" && p.farmer.evilRodArmedAt !== evilRodArmedAtRef.current) {
         evilRodArmedAtRef.current = p.farmer.evilRodArmedAt; setEvilRodArmedAt(p.farmer.evilRodArmedAt);
       }
+      // 2026-09-04 — permis de pêche en ville : même miroir simple, sans effet
+      // de bord (voir evilRodArmedAt juste au-dessus). Les trois voyagent
+      // ENSEMBLE dans chaque `out.farmer` qui les touche (townFish, req dédiée
+      // du guichet), donc les comparer un par un suffit à éviter un rendu pour
+      // rien quand un seul a bougé.
+      if (typeof p.farmer.townFishPermitUntil === "number" && p.farmer.townFishPermitUntil !== townFishPermitUntilRef.current) {
+        townFishPermitUntilRef.current = p.farmer.townFishPermitUntil; setTownFishPermitUntil(p.farmer.townFishPermitUntil);
+      }
+      if (typeof p.farmer.townFishBanUntil === "number" && p.farmer.townFishBanUntil !== townFishBanUntilRef.current) {
+        townFishBanUntilRef.current = p.farmer.townFishBanUntil; setTownFishBanUntil(p.farmer.townFishBanUntil);
+      }
+      if (typeof p.farmer.townFishDistrustUntil === "number" && p.farmer.townFishDistrustUntil !== townFishDistrustUntilRef.current) {
+        townFishDistrustUntilRef.current = p.farmer.townFishDistrustUntil; setTownFishDistrustUntil(p.farmer.townFishDistrustUntil);
+      }
       if (typeof p.farmer.injuredUntil === "number" && p.farmer.injuredUntil !== injuredUntilRef.current) {
         const wasInjured = injuredUntilRef.current > Date.now();
         injuredUntilRef.current = p.farmer.injuredUntil; setInjuredUntil(p.farmer.injuredUntil);
@@ -7793,7 +7877,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       gregNoOrchardRoom: L.toastGregNoOrchardRoom, gregChopNone: L.gregChopNone,
       punnetShort: L.toastPunnetShort, productNoFruit: L.toastProductNoFruit,
       productNoSugar: L.toastProductNoSugar, productNoFlour: L.toastProductNoFlour,
-      productNoMilk: L.toastProductNoMilk, productNoEgg: L.toastProductNoEgg }[key] || "";
+      productNoMilk: L.toastProductNoMilk, productNoEgg: L.toastProductNoEgg,
+      /* 2026-09-04 — permis de pêche en ville (voir resolveTownFish/
+         resolveTownFishPermit, fermeEngine.js). Le montant de l'amende, lui,
+         est déjà dans le chat public (L.chatTownFishCaught) : pas de raison de
+         le porter deux fois — ce toast reste une simple alerte. */
+      townFishNoPermit: L.townFishNoPermit, townFishPermitGranted: L.townFishPermitGranted,
+      townFishPermitBanned: L.townFishPermitBanned, townFishPermitDistrust: L.townFishPermitDistrust,
+      townFishPermitNoGold: L.townFishPermitNoGold }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -9640,7 +9731,53 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     fishTileRef.current = { x: tt.x, y: tt.y };
     pushToast(L.fishBite(lang === "en" ? C.FISH[ft].nameEn : C.FISH[ft].name));
+    if (C.FISH[ft].haul) { startFishHaul(ft, tt, false); return; }
     setFishMini({ mode: ft, fish: ft });
+  }
+  /* 2026-09-04 — LA LUTTE, PARTAGÉE ENTRE LA FERME ET LA VILLE. Un « gros
+     poisson » (C.FISH[ft].haul) n'ouvre pas `FishMinigame` : il arme
+     `fishHaulRef`, lu chaque image par `tickFishHaul` (avant le branchement
+     par zone dans `updateMe`, donc valable des deux côtés sans code de plus)
+     et dessiné par `A.drawFishHaul` dans la passe de rendu de CHAQUE zone (la
+     case pêchée ne bouge jamais entre les deux mondes, `town` dit laquelle
+     regarder). `startFishing`/`startFishingTown` restent les seuls appelants :
+     ⚠️ eux seuls savent si le mordu vient de la ferme ou de la ville, ce que
+     `tickFishHaul` ne doit pas redeviner. */
+  function startFishHaul(ft, tt, town) {
+    fishHaulRef.current = {
+      x: tt.x, y: tt.y, fish: ft, town: !!town, phase: "active",
+      progress: 0, tension: 0, lockMs: 0, holding: false, pointerDown: false, lastSlipAt: -1, wonAt: 0,
+    };
+    setFishHaulActive(true);
+  }
+  /* 2026-09-04 — LE PAS DE SIMULATION, APPELÉ UNE FOIS PAR IMAGE DEPUIS
+     `updateMe`, AVANT LE BRANCHEMENT PAR ZONE (voir plus bas) : la case pêchée
+     ne dépend d'aucune zone courante, contrairement au halage de la septième
+     sœur (`evilHaulRef`, lu seulement dans `updateMeEvil`). Même entrée que
+     l'étoile — Espace ou le bouton tactile de `FishHaulHud` — jamais deux
+     chemins de saisie qui pourraient diverger (§4 de CLAUDE.md). */
+  function tickFishHaul(dt) {
+    const h = fishHaulRef.current; if (!h) return;
+    const nowP = performance.now();
+    if (h.phase === "won") {
+      if (nowP - h.wonAt >= C.EVIL_HAUL_ARRIVE_MS) { fishHaulRef.current = null; setFishHaulActive(false); }
+      return;
+    }
+    const holding = !!(keysRef.current["Space"] || h.pointerDown);
+    const step = Q.fishHaulStep(h, dt, holding);
+    h.progress = step.progress; h.tension = step.tension; h.lockMs = step.lockMs; h.holding = holding;
+    if (step.slipped) h.lastSlipAt = nowP;
+    if (step.won) {
+      h.phase = "won"; h.wonAt = nowP;
+      /* Le même req que `fishWon()` aurait envoyé pour ce poisson (voir
+         plus bas) : la lutte ne change QUE la façon de le ferrer, jamais
+         la façon de le créditer — l'hôte ne sait même pas qu'un halage a eu
+         lieu, il reçoit exactement la requête qu'un poisson ordinaire aurait
+         envoyée. `seaStreakRef` avance comme pour toute prise de rivière
+         (jamais pour les prises de ville, qui n'ont pas de streak sea). */
+      if (h.town) sendReq({ kind: "townFish", x: h.x, y: h.y, fish: h.fish });
+      else { seaStreakRef.current += 1; sendReq({ kind: "act", action: "fish", x: h.x, y: h.y, fish: h.fish }); }
+    }
   }
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ 2026-09-03 (lot C) — LA CANNE DANS LE LAC MALÉFIQUE, EN DEUX RÉGIMES.
@@ -9732,6 +9869,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     for (let i = 0; i < C.FISH.length; i++) { r -= C.FISH[i].weight; if (r <= 0) { ft = i; break; } }
     fishTileRef.current = { x: tt.x, y: tt.y };
     pushToast(L.fishBite(lang === "en" ? C.FISH[ft].nameEn : C.FISH[ft].name));
+    if (C.FISH[ft].haul) { startFishHaul(ft, tt, true); return; }
     setFishMini({ mode: ft, fish: ft, town: true });
   }
   function fishWon() {
@@ -14185,6 +14323,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // "farmFromTown" (the ride back, arriving on the farm platform).
   function rideTrain(toTown) {
     if (zoneTransRef.current.active) return;
+    /* 2026-09-04 — LE BANNISSEMENT NE BLOQUE QUE CE SENS-LÀ (demande de
+       Guillaume, choix explicite parmi plusieurs portées possibles) : on
+       n'enferme jamais quelqu'un déjà sur place, on lui refuse seulement d'y
+       RETOURNER. Vérifié CÔTÉ CLIENT sur un horodatage écrit par l'hôte
+       (townFishBanUntilRef, même confiance que injuredUntil/evilRodArmedAt
+       ailleurs dans ce fichier) : `rideTrain` est un pur changement de zone
+       local, sans req ni arbitrage réseau (§3), donc rien d'autre à qui
+       demander la permission. */
+    if (toTown && townFishBanUntilRef.current > Date.now()) { pushToast(L.townFishBannedToast); return; }
     // Zip 253 (décision Guillaume : "le cheval reste à quai, mais le train
     // emmène quand même le joueur à pied") : un joueur monté qui embarque pour
     // la ville DESCEND d'abord — le cheval est laissé sur la ferme, à la place
@@ -16755,6 +16902,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           } });
         }
       }
+      /* 2026-09-04 — LA LUTTE DU BROCHET, CÔTÉ FERME. Poussée ici plutôt que
+         dans la boucle de tuiles : le tri par `y` ne dépend pas de l'ordre
+         d'insertion (`draws.sort` juste en dessous), donc rien n'oblige à
+         viser la case exacte pendant le balayage. `!h.town` distingue de la
+         même lutte vécue en ville, dessinée par `drawTownFrame` (son propre
+         `pushE`, plus bas dans ce fichier) — la même simulation, deux passes
+         de rendu, jamais une passe qui devine la zone de l'autre. */
+      { const h = fishHaulRef.current;
+        if (h && !h.town) {
+          draws.push({ y: (h.y + 1) * T, fn: () => A.drawFishHaul(
+            ctx, (h.x + 0.5) * T, (h.y + 0.5) * T, T, now,
+            h.tension, h.holding, h.lastSlipAt >= 0 ? now - h.lastSlipAt : -1,
+            C.FISH[h.fish] && C.FISH[h.fish].color) });
+        }
+      }
       draws.sort((a, b) => a.y - b.y);
       // Zip 253 (audit) : on isole chaque draw en try/catch, exactement comme
       // la boucle de rendu de la ville (fix zip 250 "les maisons disparaissent
@@ -18376,7 +18538,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         maybeSendPos();
         return;
       }
-      const uiBlocked = uiBlockedBoat();
+      // 2026-09-04 — `fishMiniRef` (pêche : minijeu de rythme OU lutte du
+      // Brochet, voir son effet combiné plus haut) ancre le joueur ici comme
+      // en ferme (`updateMe`, plus bas) : sans ce garde, on pouvait s'éloigner
+      // de la case pêchée en pleine partie de pêche en ville.
+      const uiBlocked = uiBlockedBoat() || fishMiniRef.current;
       let dx = 0, dy = 0;
       if (!uiBlocked) {
         if (keys["ArrowUp"] || keys["KeyW"] || keys["KeyZ"]) dy -= 1;
@@ -20470,6 +20636,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
         }
       }
+      /* 2026-09-04 — LA LUTTE DU BROCHET, CÔTÉ VILLE. Même dessin, même profil
+         de vitesse (C.FISH_HAUL_RATES) que côté ferme — seule la passe de
+         rendu change, `pushE` plutôt que `draws.push` direct, parce que la
+         ville a une élévation (`ey`) que la ferme n'a pas ; un plan d'eau
+         reste à l'élévation 0, donc `pushE` reçoit 0 sans avoir à la lire
+         nulle part. */
+      { const h = fishHaulRef.current;
+        if (h && h.town) {
+          pushE((h.y + 1) * T, 0, () => A.drawFishHaul(
+            ctx, (h.x + 0.5) * T, (h.y + 0.5) * T, T, now,
+            h.tension, h.holding, h.lastSlipAt >= 0 ? now - h.lastSlipAt : -1,
+            C.FISH[h.fish] && C.FISH[h.fish].color));
+        }
+      }
       draws.sort((a, b) => a.y - b.y);
       // Zip 250 (bug "les maisons disparaissent à deux") : la boucle exécutait
       // les draws triés d'un bloc — si UN seul draw levait une exception (ex.
@@ -21396,9 +21576,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          MA position à `evilRescueSpot`, qui est EN PLEINE EAU — l'eau bloque la
          marche (`blockedEvil`), donc la case la plus proche accessible à pied
          reste à 3,16 cases du point sur l'unique carte maléfique (seed fixe
-         0xE411), jamais sous `EVIL_ROD_HAZARD_R` (1,6) dans AUCUNE direction
-         (balayage complet vérifié). La découverte ne pouvait donc jamais
-         s'armer. `startFishingEvil` calculait déjà la bonne distance — celle de
+         0xE411), jamais sous `EVIL_ROD_HAZARD_R` (1,6 à l'époque du diagnostic,
+         élargi à 2,5 le 2026-09-04 — toujours hors de portée à pied) dans
+         AUCUNE direction (balayage complet vérifié). La découverte ne pouvait
+         donc jamais s'armer. `startFishingEvil` calculait déjà la bonne distance — celle de
          la case VISÉE par le lancer, pas celle du joueur, ce qui est exactement
          le bon calcul pour pêcher DEPUIS la rive — on lit ICI la même formule
          (`evilSpotDist`, sur `targetTileEvil()`) plutôt que d'en dupliquer une
@@ -21473,6 +21654,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
         worldRef.current.artisanBlocks = abs;
       }
+      // 2026-09-04 — la lutte du Brochet : AVANT le branchement par zone
+      // ci-dessous, donc valable qu'on pêche en ferme ou en ville sans code
+      // dupliqué (voir tickFishHaul, qui ne lit `h.town` que pour savoir quel
+      // req envoyer à la victoire, jamais pour choisir de tourner ou non).
+      tickFishHaul(dt);
       { const z = m.zone || "farm"; if (uiZoneRef.current !== z) { uiZoneRef.current = z; setUiZone(z); } }
       if (m.zone === "evil") { updateMeEvil(dt); return; }
       if (m.zone === "town") { updateMeTown(dt); return; } // Valley Town (zip 234)
@@ -32862,6 +33048,48 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                       </div>
                     );
                   })()}
+                  {/* ╔══════════════════════════════════════════════════════════
+                      ║ 2026-09-04 — LE GUICHET DU PERMIS DE PÊCHE.
+                      ╚══════════════════════════════════════════════════════════
+                      ⚠️⚠️ MÊME RÈGLE QUE "engineer"/"mayor" JUSTE AU-DESSUS : le
+                      bouton n'ouvre rien de plus qu'une `req` ("townFishPermitAsk"),
+                      c'est l'hôte qui arbitre (resolveTownFishPermit) — la porte
+                      n'est pas la caisse. ⚠️ Les trois horodatages lus ici
+                      (townFishPermitUntil/BanUntil/DistrustUntil) sont ceux du
+                      composant, tenus à jour par le miroir `p.farmer.townFish*`
+                      d'applyDeltas — aucun état local de plus, aucune req juste
+                      pour AFFICHER le statut. */}
+                  {t.panel === "fishPermit" && (() => {
+                    const now2 = Date.now();
+                    const permitLeft = townFishPermitUntil - now2;
+                    const banLeft = townFishBanUntil - now2;
+                    const distrustLeft = townFishDistrustUntil - now2;
+                    return (
+                      <div>
+                        <div>{L.hallFishPermitIntro(C.TOWN_FISH_PERMIT_PRICE, fmtDuration(C.TOWN_FISH_PERMIT_MS))}</div>
+                        <div style={{ marginTop: 8 }}>
+                          {permitLeft > 0 ? L.hallFishPermitHave(fmtDuration(permitLeft)) : L.hallFishPermitNone}
+                        </div>
+                        {banLeft > 0 ? (
+                          <div className="ferme-hint" style={{ marginTop: 8, fontStyle: "italic" }}>
+                            {L.hallFishPermitBanned(fmtDuration(banLeft))}
+                          </div>
+                        ) : (
+                          <>
+                            {distrustLeft > 0 && (
+                              <div className="ferme-hint" style={{ marginTop: 8, fontStyle: "italic" }}>
+                                {L.hallFishPermitDistrust(fmtDuration(distrustLeft))}
+                              </div>
+                            )}
+                            <button className="ferme-btn" style={{ marginTop: 8 }}
+                                    onClick={() => sendReq({ kind: "townFishPermitAsk" })}>
+                              {L.hallFishPermitAsk}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()}
                   {/* ⚠️ ZIP 442 — LE SECOND POINT D'ENTRÉE. Elle DIT où lire
                       l'avis, elle ne l'inscrit pas : un sujet de dialogue ne
                       donne jamais rien (439). Le bouton qui suit ouvre le
@@ -32932,6 +33160,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           `evilHaulRef` (ref) porte la simulation chaude — voir le commentaire
           sur sa déclaration. */}
       {evilHaulActive && <EvilHaulHud haulRef={evilHaulRef} L={L} />}
+      {/* 2026-09-04 — même patron, pour la lutte du Brochet (ferme ET ville,
+          `fishHaulRef.town` ne change rien à ce composant : c'est `tickFishHaul`
+          qui sait où envoyer le req à la victoire, pas le HUD). */}
+      {fishHaulActive && <FishHaulHud haulRef={fishHaulRef} L={L} />}
 
       {/* ╔════════════════════════════════════════════════════════════════════
           ║ ZIP 480 — L'AUDIENCE CHEZ LE MAIRE.
@@ -34026,6 +34258,43 @@ function EvilHaulHud({ haulRef, L }) {
       <div className="ferme-haul-touch" onPointerDown={onDown} onPointerUp={onUp} onPointerLeave={onUp} onPointerCancel={onUp} />
       <div className={"ferme-haul-hud" + (danger ? " danger" : "")}>
         <div className="ferme-haul-hint">{L.star.evil.haulHint}</div>
+        <div className="ferme-haul-bar">
+          <div className="ferme-haul-safe" />
+          <div className="ferme-haul-fill" style={{ height: (ts * 100).toFixed(1) + "%" }} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* 2026-09-04 — MÊME COMPOSANT QUE `EvilHaulHud` JUSTE AU-DESSUS, COPIÉ PLUTÔT
+   QUE PARAMÉTRÉ : deux classes CSS génériques (`.ferme-haul-*`, déjà sans
+   préfixe "evil") suffisent à le rendre identique à l'écran, mais `h.phase`
+   et `h.tension` viennent d'un ref DIFFÉRENT (`fishHaulRef`, jamais
+   `evilHaulRef`) — les fondre en un composant paramétré par le ref aurait
+   ajouté une indirection pour économiser douze lignes déjà dupliquées ailleurs
+   dans ce fichier (drawStarHaul/drawFishHaul, EVIL_HAUL_RATES/FISH_HAUL_RATES) :
+   la duplication évitée est celle de la PHYSIQUE, pas celle du composant. */
+function FishHaulHud({ haulRef, L }) {
+  const [, force] = useState(0);
+  useEffect(() => {
+    let raf = 0;
+    const loop = () => { raf = requestAnimationFrame(loop); force(v => (v + 1) % 1000000); };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  const h = haulRef.current;
+  if (!h || h.phase !== "active") return null;
+  const ts = Math.max(0, Math.min(1, h.tension));
+  const danger = ts > 0.72;
+  const onDown = (e) => { e.preventDefault(); h.pointerDown = true; };
+  const onUp = () => { h.pointerDown = false; };
+  return (
+    <>
+      <div className="ferme-haul-vignette" style={{ opacity: (ts * 0.55).toFixed(2) }} />
+      <div className="ferme-haul-touch" onPointerDown={onDown} onPointerUp={onUp} onPointerLeave={onUp} onPointerCancel={onUp} />
+      <div className={"ferme-haul-hud" + (danger ? " danger" : "")}>
+        <div className="ferme-haul-hint">{L.fishHaulHint}</div>
         <div className="ferme-haul-bar">
           <div className="ferme-haul-safe" />
           <div className="ferme-haul-fill" style={{ height: (ts * 100).toFixed(1) + "%" }} />

@@ -3477,8 +3477,17 @@ export function resolveStarEvilFound(e, now) {
    au chef que quand `won` devient vrai — exactement le contrat du §4 de
    CLAUDE.md (« ce qui récompense passe par une req arbitrée par l'hôte »). Un
    banc peut la rejouer des centaines de fois avec des politiques de
-   tenir/relâcher différentes, comme `verify-scierie` le fait pour la scie. */
-export function evilHaulStep(state, dt, holding) {
+   tenir/relâcher différentes, comme `verify-scierie` le fait pour la scie.
+   ⚠️⚠️ 2026-09-04 — GÉNÉRALISÉE EN `haulStep`, PARAMÉTRÉE PAR UN PROFIL DE
+   VITESSES (demande Guillaume, en tranchant la lutte du Brochet : généraliser
+   plutôt que dupliquer la physique — §4 de CLAUDE.md, « une grandeur recopiée
+   reste juste jusqu'au jour où elle est fausse »). `evilHaulStep` devient un
+   simple alias figé sur `C.EVIL_HAUL_RATES`, pour ne RIEN changer chez ses
+   appelants existants (le sauvetage de la septième sœur) ; `C.FISH_HAUL_RATES`
+   sert la lutte du Brochet (et des futurs gros poissons/Requins) — même
+   fonction, même bancs, un second réglage. */
+export function haulStep(state, dt, holding, rates) {
+  const R = rates || C.EVIL_HAUL_RATES;
   const s = state || {};
   let progress = Math.max(0, Math.min(1, +s.progress || 0));
   let tension = Math.max(0, Math.min(1, +s.tension || 0));
@@ -3486,19 +3495,21 @@ export function evilHaulStep(state, dt, holding) {
   let lockMs = Math.max(0, (+s.lockMs || 0) - dtc * 1000);
   let slipped = false;
   if (holding && lockMs <= 0) {
-    progress = Math.min(1, progress + C.EVIL_HAUL_PULL_RATE * dtc);
-    tension = Math.min(1, tension + C.EVIL_HAUL_TENSION_RISE * dtc);
+    progress = Math.min(1, progress + R.pullRate * dtc);
+    tension = Math.min(1, tension + R.tensionRise * dtc);
     if (tension >= 1) {
-      progress = Math.max(0, progress - C.EVIL_HAUL_SLIP_PENALTY);
-      tension = C.EVIL_HAUL_SLIP_TENSION;
-      lockMs = C.EVIL_HAUL_SLIP_LOCK_MS;
+      progress = Math.max(0, progress - R.slipPenalty);
+      tension = R.slipTension;
+      lockMs = R.slipLockMs;
       slipped = true;
     }
   } else {
-    tension = Math.max(0, tension - C.EVIL_HAUL_TENSION_FALL * dtc);
+    tension = Math.max(0, tension - R.tensionFall * dtc);
   }
   return { progress, tension, lockMs, slipped, won: progress >= 1 };
 }
+export function evilHaulStep(state, dt, holding) { return haulStep(state, dt, holding, C.EVIL_HAUL_RATES); }
+export function fishHaulStep(state, dt, holding) { return haulStep(state, dt, holding, C.FISH_HAUL_RATES); }
 export function starEvilRescued(e) { return !!(e && e.evilRescued); }
 /* Idempotent, comme `resolveStarEvilFound` : ne peut s'armer qu'après la
    découverte, ne régresse jamais une fois gagné. */
