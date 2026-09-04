@@ -238,13 +238,35 @@ export const STAR_SITES = [
      et deux `spot` auraient fait passer la verte pour la discrète dans toute
      jointure qui lit cette table. */
   { id: "townGreen", zone: "town",  spot: "starGreen",  content: "star", color: "green",  verb: "track" },
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-04 (lot E) — LA SEPTIÈME SŒUR REJOINT LA TABLE, MAIS PAS UN
+     ║ CHAPITRE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ ELLE N'A PAS DE `need` : ON NE LA CHERCHE PAS VIA CETTE TABLE. Elle est
+     trouvée, sauvée puis portée par le fil dédié du lac maléfique (`evilFound`/
+     `evilRescued`, plus bas dans ce fichier) — cette ligne existe pour UNE seule
+     raison, la même qu'annoncée en tête de `STAR_FOLLOWER_SITES` : `content:
+     "star"` suffit à la faire apparaître dans la formation dès que
+     `resolveStarFound` écrit son id, sans qu'aucun rendu n'ait à la connaître
+     par son nom. `starMissing`/`starGoalKey` ne lisent que les `need` des
+     chapitres (`STAR_CHAPTERS`) : rester hors de cette liste est ce qui la
+     garde hors du bandeau une fois trouvée — vrai depuis le lot C (voir la note
+     de `starGoalKey`, « une fois vue, cette clé ne revient jamais »).
+     ⚠️ Verbe NEUF (`revive`) : ni « la trouver » (elle l'est déjà, par un fil à
+     part) ni aucun des six gestes existants ne la décrit — le seul geste qui la
+     COMPLÈTE est de la réanimer, une fois portée hors du lac. */
+  { id: "evilStar", zone: "evil", spot: "evilShore", content: "star", color: "violet", verb: "revive" },
 ];
 /* Les verbes connus, écrits UNE fois. ⚠⚠ Une étoile sans verbe est une
    erreur de table et non un cas à rattraper à l'exécution : `starVerbOf` rend
    `null`, `starTameTarget` ne la propose pas, et le banc le dit tout de suite.
    Un repli silencieux sur « dos tourné » aurait redonné le même geste à tout le
    monde, c'est-à-dire exactement le défaut qu'on vient de corriger. */
-export const STAR_VERBS = ["light", "warm", "pair", "lure", "spot", "track"];
+export const STAR_VERBS = ["light", "warm", "pair", "lure", "spot", "track", "revive"];
+/* L'id de la septième sœur, écrit UNE fois — `FermeGame.js` le relit plutôt que
+   de recopier la chaîne "evilStar", même discipline que `STAR_LIGHT_SITE`/
+   `STAR_WARM_SITE` juste en dessous. */
+export const STAR_EVIL_ID = "evilStar";
 export function starVerbOf(id) {
   const s = STAR_SITE[id];
   return s && STAR_VERBS.includes(s.verb) ? s.verb : null;
@@ -2545,23 +2567,39 @@ export const STAR_WAKE_MIN_MS = 700;        // plancher : en dessous, ce n'est p
 export const STAR_WAKE_BAND_A = 0.74;       // début de la bande cible, en fraction de période
 export const STAR_WAKE_BAND_B = 0.96;       // fin de la bande — 22 %, soit 242 ms au départ, 172 ms au bout
 export const STAR_WAKE_IDLE_BEATS = 3;      // battements sans aucun appui avant que l'anneau s'efface
+/* Le profil par défaut, celui de la reine — REGROUPE les sept constantes
+   ci-dessus pour le second appelant. */
+const STAR_WAKE_PROFILE_DEFAULT = {
+  hits: STAR_WAKE_HITS, periodMs: STAR_WAKE_PERIOD_MS, stepMs: STAR_WAKE_STEP_MS,
+  minMs: STAR_WAKE_MIN_MS, bandA: STAR_WAKE_BAND_A, bandB: STAR_WAKE_BAND_B, idleBeats: STAR_WAKE_IDLE_BEATS,
+};
+/* ⚠️⚠️ 2026-09-04 (lot E) — LE RÉVEIL DE LA REINE DEVIENT UN PROFIL, PAS UN
+   RÉGLAGE FIGÉ. Même geste que `haulStep` la veille sur le Brochet
+   (`evilHaulStep` → `haulStep(state, dt, holding, rates)`) : la septième sœur
+   se réanime « par le même geste » que la reine (note de `starWoke`, plus
+   bas), donc c'est la MÊME mécanique qu'il faut appeler deux fois avec deux
+   réglages — jamais une seconde copie de ces sept constantes. Un `profile`
+   OMIS retombe sur `STAR_WAKE_PROFILE_DEFAULT` : les sept constantes
+   ci-dessus et leurs quatre appelants existants ne changent pas d'une ligne. */
+export function starWakePeriod(hits, profile) {
+  const P = profile || STAR_WAKE_PROFILE_DEFAULT;
+  return Math.max(P.minMs, P.periodMs - (Math.max(0, hits | 0) * P.stepMs));
+}
 /* ⚠️ PURE ET EXPORTÉE POUR QUE LE BANC LA JOUE : c'est la seule règle du réveil
    qui décide quelque chose, donc c'est la seule qu'il faut pouvoir rejouer sans
    navigateur (le reste est du dessin). */
-export function starWakeOnBeat(phase) {
+export function starWakeOnBeat(phase, profile) {
+  const P = profile || STAR_WAKE_PROFILE_DEFAULT;
   const p = +phase || 0;
-  return p >= STAR_WAKE_BAND_A && p <= STAR_WAKE_BAND_B;
-}
-/* La période du battement n° `hits` — DÉRIVÉE, jamais une table. */
-export function starWakePeriod(hits) {
-  return Math.max(STAR_WAKE_MIN_MS, STAR_WAKE_PERIOD_MS - (Math.max(0, hits | 0) * STAR_WAKE_STEP_MS));
+  return p >= P.bandA && p <= P.bandB;
 }
 /* ⚠️ « À QUEL POINT EST-ELLE RÉVEILLÉE » — 0 gris, 1 jaune. Le dessin en dépend,
    et le joueur ne lit QUE ça : la jauge n'est pas un chiffre affiché, c'est la
    couleur de l'étoile elle-même. Une seule écriture, sinon la barre et la teinte
    divergeraient (défaut du 456, « une barre qui promet et ment »). */
-export function starWakeGlow(hits) {
-  return Math.max(0, Math.min(1, (Math.max(0, hits | 0)) / STAR_WAKE_HITS));
+export function starWakeGlow(hits, profile) {
+  const P = profile || STAR_WAKE_PROFILE_DEFAULT;
+  return Math.max(0, Math.min(1, (Math.max(0, hits | 0)) / P.hits));
 }
 /* ╔══════════════════════════════════════════════════════════════════════════
    ║ 2026-09-03 (lot B) — LA VRAIE COMPAGNE PULSE AVEC L'ANNEAU.
@@ -2574,16 +2612,16 @@ export function starWakeGlow(hits) {
    ⚠️ TROIS BANDES, PAS UN DÉGRADÉ : le sprite n'a que trois états rastérisés
    (0/1/2), donc « trait pour trait » veut dire CHOISIR entre ces trois dessins,
    jamais une teinte inventée qui n'existe dans aucun d'eux. */
-export function starWakeCompanionState(hits) {
-  const g = starWakeGlow(hits);
+export function starWakeCompanionState(hits, profile) {
+  const g = starWakeGlow(hits, profile);
   return g >= 0.75 ? 0 : g >= 0.34 ? 1 : 2;
 }
 /* Le pouls pendant qu'on tape : une respiration calée sur `phase`, LA MÊME
    horloge que l'anneau (`drawStarWakeRing`) — deux pouls qui ne battraient pas
    ensemble se remarqueraient plus qu'un pouls absent. Elle s'amplifie avec
    `hits` : « lente » puis « animée », jamais l'inverse. */
-export function starWakeCompanionPulse(phase, hits) {
-  const g = starWakeGlow(hits);
+export function starWakeCompanionPulse(phase, hits, profile) {
+  const g = starWakeGlow(hits, profile);
   const ph = Math.max(0, Math.min(1, +phase || 0));
   return 1 + 0.05 * (0.35 + 0.65 * g) * Math.sin(ph * Math.PI * 2);
 }
@@ -2595,10 +2633,10 @@ export const STAR_WAKE_POP_MS = 1300;
    (mesuré côté client, jamais diffusé — voir la note de `starWakePress`,
    FermeGame.js) ; hors de la fenêtre, `null` : l'appelant retombe alors sur le
    dessin par défaut, sans qu'aucun état ne reste à réconcilier. */
-export function starWakeCompanionPop(elapsedMs) {
-  const t = +elapsedMs;
-  if (!(t >= 0) || t >= STAR_WAKE_POP_MS) return null;
-  const u = t / STAR_WAKE_POP_MS;
+export function starWakeCompanionPop(elapsedMs, popMs) {
+  const t = +elapsedMs, PM = popMs || STAR_WAKE_POP_MS;
+  if (!(t >= 0) || t >= PM) return null;
+  const u = t / PM;
   return { state: 0, scale: 1 + 0.35 * Math.exp(-u * 4.5) * Math.cos(u * Math.PI * 2.2) };
 }
 /* Elle dort-elle encore ? ⚠️ `e.woke` est un DICTIONNAIRE de lieux, pas un
@@ -2877,7 +2915,8 @@ export function resolveStarTrack(e, who, now, name) {
    compte — et donc rien qui demande un navigateur.
    ⚠️ ELLES NE MUTENT RIEN : on rend un nouvel état. Un `st` étalé puis lissé en
    place serait la table de référence corrompue du 2026-08-31 (§4). */
-export function starWakeAdvance(st, dtMs) {
+export function starWakeAdvance(st, dtMs, profile) {
+  const P = profile || STAR_WAKE_PROFILE_DEFAULT;
   const s = { phase: +st.phase || 0, hits: Math.max(0, st.hits | 0), beats: Math.max(0, st.beats | 0),
               flash: Math.max(0, +st.flash || 0), miss: Math.max(0, +st.miss || 0), gone: false };
   /* ⚠️ LE PAS EST BORNÉ : un onglet qui revient au premier plan rend un `dt` de
@@ -2885,14 +2924,14 @@ export function starWakeAdvance(st, dtMs) {
      d'un coup — donc il abandonnerait le geste tout seul, sans que le joueur ait
      rien lâché. Même famille que le `Math.min(0.05, dt)` des boucles du dépôt. */
   const dt = Math.min(120, Math.max(0, +dtMs || 0));
-  s.phase += dt / starWakePeriod(s.hits);
+  s.phase += dt / starWakePeriod(s.hits, P);
   while (s.phase >= 1) {
     s.phase -= 1;
     s.beats += 1;
     /* ⚠️ TROIS TOURS SANS UN SEUL APPUI ET L'ANNEAU S'EFFACE : sans cette sortie,
        il resterait à battre au-dessus d'un trou que le joueur a cessé de regarder.
        Tout appui remet `beats` à zéro (voir `starWakeStrike`). */
-    if (s.beats >= STAR_WAKE_IDLE_BEATS) { s.gone = true; return s; }
+    if (s.beats >= P.idleBeats) { s.gone = true; return s; }
   }
   s.flash = Math.max(0, s.flash - dt / 250);
   s.miss = Math.max(0, s.miss - dt / 350);
@@ -2907,20 +2946,39 @@ export function starWakeAdvance(st, dtMs) {
       possible gagnerait à tous les coups, la bande finissant forcément par passer
       sous un doigt. C'est ce que `s2.wakeHint` annonce en une phrase, et c'est ce
       que `verify-quete` vérifie en martelant vraiment. */
-export function starWakeStrike(st) {
+export function starWakeStrike(st, profile) {
+  const P = profile || STAR_WAKE_PROFILE_DEFAULT;
   const s = { phase: +st.phase || 0, hits: Math.max(0, st.hits | 0), beats: 0,
               flash: Math.max(0, +st.flash || 0), miss: Math.max(0, +st.miss || 0), won: false };
-  if (starWakeOnBeat(s.phase)) {
+  if (starWakeOnBeat(s.phase, P)) {
     s.hits += 1;
     s.flash = 1;
     s.phase = 0;
-    s.won = s.hits >= STAR_WAKE_HITS;
+    s.won = s.hits >= P.hits;
     return s;
   }
   s.hits = Math.max(0, s.hits - 1);
   s.miss = 1;
   return s;
 }
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-04 (lot E) — LE PROFIL DE LA SEPTIÈME SŒUR.
+   ╚══════════════════════════════════════════════════════════════════════════
+   Même bande/même plancher d'idle que la reine (le RESSENTI du geste ne
+   change pas) ; plus de battements pour approcher les ~10 s du point 10 de
+   QUETE.md §3 (« environ 10 secondes ») — nombre provisoire, comme les huit
+   de la reine, à juger en jouant (§8/§13 de CLAUDE.md). */
+export const STAR_REVIVE_HITS = 10;
+export const STAR_REVIVE_PERIOD_MS = STAR_WAKE_PERIOD_MS;
+export const STAR_REVIVE_STEP_MS = STAR_WAKE_STEP_MS;
+export const STAR_REVIVE_MIN_MS = STAR_WAKE_MIN_MS;
+export const STAR_REVIVE_BAND_A = STAR_WAKE_BAND_A;
+export const STAR_REVIVE_BAND_B = STAR_WAKE_BAND_B;
+export const STAR_REVIVE_IDLE_BEATS = STAR_WAKE_IDLE_BEATS;
+export const STAR_REVIVE_PROFILE = {
+  hits: STAR_REVIVE_HITS, periodMs: STAR_REVIVE_PERIOD_MS, stepMs: STAR_REVIVE_STEP_MS,
+  minMs: STAR_REVIVE_MIN_MS, bandA: STAR_REVIVE_BAND_A, bandB: STAR_REVIVE_BAND_B, idleBeats: STAR_REVIVE_IDLE_BEATS,
+};
 /* ⚠️⚠️ UNE SEULE RÉPONSE POUR LA JAUGE, LE TEXTE ET L'ARBITRE — la discipline du
    456, tenue dès l'écriture cette fois. Sept états, dans l'ordre de L'ACTION LA
    PLUS PROCHE (478) : ce qui manque d'abord se dit d'abord.
@@ -3806,6 +3864,15 @@ export const STAR_GOAL_KEYS = (() => {
                  "farmImpactLure", "farmImpactLureGive");
       continue;
     }
+    /* 2026-09-04 (lot E) — LA SEPTIÈME SŒUR N'EST PAS UNE CLÉ DE BANDEAU. Elle
+       n'est délibérément dans AUCUN `need` de chapitre (voir sa note dans
+       `STAR_SITES`) : `starMissing`/`starGoalKey` ne la lisent jamais, donc
+       `starGoalKey` ne peut PAS rendre "evilStar" — c'est `"evilSeek"` qui
+       porte sa voix pendant la recherche (§3 de QUETE.md, un fait du monde,
+       pas un lieu de cette table). Une phrase qu'aucun code ne peut afficher
+       serait pire qu'aucune phrase : le §14.2 de CLAUDE.md, appliqué avant la
+       faute plutôt qu'après. */
+    if (s.id === STAR_EVIL_ID) continue;
     out.push(s.id);
     /* 2026-09-02 (lot A) — trois états de plus pour le même lieu (voir
        `starGoalKey`) : le banc vérifie ici qu'aucun n'est orphelin de texte,
@@ -4522,7 +4589,7 @@ export function resolveStarGift(e, playerIds, now) {
    de la reine) n'en a PAS besoin et c'est délibéré : il ne coûte qu'un objet à 400
    or, que le bouton « Argent » du menu dev sait déjà donner. Un bouton par geste
    aurait été un bouton de plus à tenir pour rien. */
-export const STAR_DEV_OPS = ["reset", "warn", "start", "candy", "dish", "lure", "queen", "shy", "green", "evil", "hook", "chapter", "skip", "all", "plans", "deliver", "timber", "appt", "unslam"];
+export const STAR_DEV_OPS = ["reset", "warn", "start", "candy", "dish", "lure", "queen", "shy", "green", "evil", "hook", "rescue", "chapter", "skip", "all", "plans", "deliver", "timber", "appt", "unslam"];
 /* ⚠️ ZIP 469 — `turn` (le retournement) sort de la liste : sa scène est supprimée
    dans `FermeGame`, et un bouton qui rejoue une scène qui n'existe plus ouvre un
    voile noir de sept secondes sur rien. */
@@ -4779,6 +4846,25 @@ export function devStar(e, op, now, who) {
     resolveStarFound(e, "townShy", "\u{1F6E0}️", t);
     resolveStarFound(e, "townGreen", "\u{1F6E0}️", t);
     resolveStarEvilFound(e, t);
+    return { star: e, ok: true, unbreakRod: true };
+  }
+  /* 2026-09-04 (lot E) — MÊME FAMILLE QUE `hook`, UN CRAN PLUS LOIN : pose
+     aussi `evilRescued` (elle est halée jusqu'à la rive) pour qu'un seul clic
+     ouvre directement le ramassage/la réanimation à juger, sans rejouer le
+     halage à chaque essai. Ne touche à rien du halage lui-même (état
+     purement local, `evilHaulRef`) — ce bouton pose le décor, comme tous les
+     autres de cette famille, et laisse le geste. */
+  if (op === "rescue") {
+    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "\u{1F6E0}️" };
+    if (!e.fall) e.fall = t;
+    for (const site of STAR_FARM_IMPACTS) resolveStarFound(e, site.id, "\u{1F6E0}️", t);
+    resolveStarTownFall(e, t);
+    if (e.townFall) e.townFall = t - STAR_CRATER_COOL_MS - 1000;
+    resolveStarFound(e, "crater", "\u{1F6E0}️", t);
+    resolveStarFound(e, "townShy", "\u{1F6E0}️", t);
+    resolveStarFound(e, "townGreen", "\u{1F6E0}️", t);
+    resolveStarEvilFound(e, t);
+    resolveStarEvilRescue(e, t);
     return { star: e, ok: true, unbreakRod: true };
   }
   if (op === "chapter") {

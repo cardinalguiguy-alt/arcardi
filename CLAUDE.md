@@ -11,10 +11,65 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-⚠️⚠️⚠️ **2026-09-04 (session suivante) — TROIS LOTS DEMANDÉS EXPLICITEMENT PAR GUILLAUME,
-LIVRÉS EN CODE, BANCS VERTS (789/789 `verify-quete`, 223/223 `verify-vallee`, TOUT PASSE
-`verify-collision`, 1125 clés `verify-strings`, `npx next build` propre) — MAIS SEULE LA LUTTE
-DU BROCHET A ÉTÉ REVUE EN JEU, LES DEUX PREMIERS RESTENT À VOIR :**
+⚠️⚠️⚠️ **2026-09-04 (session la plus récente) — LOT E LIVRÉ EN CODE : RAMASSER, SORTIR ET
+RÉANIMER LA SEPTIÈME SŒUR (points 9-10 de `QUETE.md` §3, demande explicite de Guillaume), PLUS
+LES SIX COMPAGNES QUI SUIVENT DÉSORMAIS DANS LE MONDE MALÉFIQUE. Bancs verts (790/790
+`verify-quete`, TOUT PASSE `verify-collision`, 1126 clés `verify-strings`, `npx next build` et le
+scan `esbuild` propres) — MAIS LE CHEMIN COMPLET RAMASSER→PORTER→SORTIR→POSER→RÉANIMER N'A PAS PU
+ÊTRE VU JUSQU'AU BOUT EN JEU CETTE SESSION (voir plus bas pourquoi) :**
+
+**Ce qui a été construit.** `Q.STAR_SITES` gagne une septième ligne (`evilStar`, verbe neuf
+`revive`, couleur neuve `violet` dans `STAR_WISP_PAL`/`starWispColors`) — hors de tout chapitre
+exprès (voir sa note dans `quete.js`), pour que `content:"star"` la fasse rejoindre la formation
+tout seule dès que `Q.resolveStarFound(e, Q.STAR_EVIL_ID, …)` s'exécute, sans code de plus pour
+« l'arrivée ». `starWakeAdvance`/`starWakeStrike` (le réveil de la reine) deviennent un PROFIL
+(`Q.STAR_WAKE_PROFILE_DEFAULT` vs `Q.STAR_REVIVE_PROFILE`, même geste que `haulStep` la veille sur
+le Brochet) plutôt qu'une seconde mécanique. Côté `FermeGame.js` : `carryStarRef`/
+`evilStarPlaceRef`/`evilStarReviveRef` (purement locaux, comme le halage — un seul `req` à la fin,
+`"evilStarRevive"`, qui rejoue `resolveStarFound` côté hôte) ; ramassage sur la rive via
+`tryPickupEvilStar()` ; pose + réanimation via `evilStarPlace()`/`evilStarRevivePress()` ; rendu
+« portée » (au-dessus du fermier, comme le plat de la rose) dans LES DEUX zones (maléfique ET
+ferme, le trajet traverse les deux) ; anneau de réanimation dessiné au sol, comme celui de la
+reine. `starTargetPos("evilStar")` lit `evilStarPlaceRef` pour que la montée dans la formation
+parte du bon endroit. Un nouveau dev-op (`"rescue"`, bouton « 🌊➡️🏖️ Hauled onto the shore ») pose
+directement l'état « halée, prête à ramasser » pour tester sans rejouer le halage à chaque essai.
+⚠️ **Extension séparée, même livraison** : `starCompanionsAt("evil", …)` est désormais appelée
+dans la boucle de rendu du monde maléfique (elle ne l'était que pour ferme/ville/tribunal) — les
+compagnes apprivoisées suivent maintenant aussi là-bas, demande explicite de Guillaume.
+
+⚠️⚠️⚠️ **UN BOGUE RÉEL A ÉTÉ TROUVÉ ET CORRIGÉ EN TESTANT, ET C'EST LA LEÇON À GARDER** : le premier
+jet posait `tryPickupEvilStar()` dans `doActionEvil()`, appelée par Espace/clic (« utiliser
+l'outil »). L'invite affichée est pourtant « [E] La ramasser », et E est une touche différente,
+gérée par `tryOpenNearby()` (« interagir ») — une fonction séparée, jamais celle des outils.
+Résultat : l'invite promettait un geste qu'aucune touche ne faisait. Vu en jeu (E armait la canne
+au lieu de ramasser), corrigé en déplaçant l'appel dans `tryOpenNearby()`, à côté
+d'`evilCauldronPickup`/`evilShardsPickup` qui suivent déjà cette règle. *Une invite « [E] » qui ne
+vérifie pas qu'elle vit dans le bon gestionnaire de touche ment.*
+
+⚠️ **CE QUI A ÉTÉ REGARDÉ EN JEU, PAS SEULEMENT BANCHÉ** : le bouton dev `rescue`, la téléportation
+au point de sauvetage, l'invite « [E] La ramasser » qui apparaît PILE à la bonne distance (donc la
+géométrie `evilRescueSpot`/`evilNearestShore` de `tryPickupEvilStar` est juste), la transition
+« Chapitre Trois — Le chantier », et les compagnes visibles en train de suivre dans le monde
+maléfique (halos autour du fermier, plusieurs couleurs). **CE QUI N'A PAS ÉTÉ VU EN JEU** : la
+frappe E qui ramasse effectivement (le toast `pickedUp`), le trajet porté à travers le passage, la
+pose en ferme, l'anneau de réanimation qui tourne, et l'arrivée dans la formation. ⚠️ Pas parce
+qu'un défaut a été repéré : chaque session de test s'est heurtée au même piège que celui déjà
+noté au §10 de ce fichier pour l'automatisation dans le monde maléfique (onglet masqué,
+`requestAnimationFrame` qui cesse de tourner de façon intermittente même avec le correctif Worker
+déjà documenté) — le personnage refusait de marcher au-delà du tout premier déplacement suivant
+une navigation fraîche. **Ce n'est pas une conclusion sur le code, c'est une limite de
+l'automatisation** : Guillaume doit vérifier cette chaîne en vraie session, comme le §10 le
+prescrit déjà pour tout ce qui touche ce monde.
+
+⚠️ **NOMBRES PROVISOIRES, DE CLAUDE, À JUGER EN JOUANT** (§8/§13) : `Q.STAR_REVIVE_HITS` = 10
+battements pour ~9 s (contre 8/~7,5 s pour la reine) ; la couleur violette elle-même (palette
+`STAR_WISP_PAL.violet`, jamais vue à l'écran).
+
+---
+
+⚠️⚠️⚠️ **CE QUI ATTENDAIT DÉJÀ AVANT CETTE SESSION, ET N'A PAS BOUGÉ — TROIS LOTS DEMANDÉS
+EXPLICITEMENT PAR GUILLAUME, LIVRÉS EN CODE DEPUIS LE 2026-09-04 (session précédente), TOUJOURS
+NON REJOUÉS EN JEU SAUF LE TROISIÈME :**
 
 **1. Le permis de pêche en ville** (décisions posées et tranchées par Guillaume avant d'écrire,
 §2). Léonie Sarrazin (guichet accueil mairie, `HALL_TOPICS` clé `fishPermit`) délivre un permis
@@ -77,17 +132,19 @@ propre dessin (`fishHaulBake` généralisée par forme, pas seulement par couleu
 silhouette recolorée suffit-elle pour les suivantes ? **Rien de tout cela ne doit être commencé
 avant que le format du Brochet lui-même soit jugé bon.**
 
-⚠️⚠️⚠️ **ACTION SUIVANTE, DANS L'ORDRE** : (1) Guillaume vérifie en vraie session (pas
-l'automatisation) les trois lots ci-dessus — le permis de pêche en ville de bout en bout (acheter,
-se faire prendre, être banni, redemander pendant la méfiance), le lancer élargi au lac maléfique,
-et surtout **regarder le Brochet après la correction de taille** ; (2) selon ce verdict, une
-troisième passe sur `drawFishHaul` (silhouette, proportions) ou considérer le format acquis ; (3)
-SEULEMENT APRÈS UN FORMAT JUGÉ BON : poser avec Guillaume les décisions des 2-3 nouveaux poissons
-rares (Requins compris) ci-dessus ; (4) toujours en attente depuis la session précédente, jamais
-faites : `Q.STAR_CARD_BREATH_MS` = 3000 ms (le bon réglage ?) et l'accès à la canne dans les trois
-zones ; (5) les deux retours mineurs de Codex (reconnaissance au chapeau, HUD du halage de
-l'étoile) — chacun sa propre livraison ; (6) la suite du halage de l'étoile (points 9-10 de
-`QUETE.md` §3), toujours en attente.
+⚠️⚠️⚠️ **ACTION SUIVANTE, DANS L'ORDRE** : (1) Guillaume joue la chaîne du lot E de bout en bout —
+ramasser la septième sœur sur la rive, traverser jusqu'au passage, la poser en ferme, la réanimer
+(martèlement Espace), la voir rejoindre la formation — c'est la partie neuve de cette session,
+jamais vue en jeu (voir plus haut pourquoi) ; (2) puis les trois lots de la session d'avant,
+toujours non rejoués : le permis de pêche en ville de bout en bout (acheter, se faire prendre,
+être banni, redemander pendant la méfiance), le lancer élargi au lac maléfique, et **regarder le
+Brochet après la correction de taille** ; (3) selon ce dernier verdict, une troisième passe sur
+`drawFishHaul` (silhouette, proportions) ou considérer le format acquis ; (4) SEULEMENT APRÈS UN
+FORMAT JUGÉ BON : poser avec Guillaume les décisions des 2-3 nouveaux poissons rares (Requins
+compris, §17.5 de `QUETE.md`) ; (5) toujours en attente depuis deux sessions, jamais faites :
+`Q.STAR_CARD_BREATH_MS` = 3000 ms (le bon réglage ?) et l'accès à la canne dans les trois zones ;
+(6) les deux retours mineurs de Codex (reconnaissance au chapeau, HUD du halage de l'étoile) —
+chacun sa propre livraison.
 
 ⚠️ **CE QUI RESTE OUVERT, SANS RAPPORT AVEC CETTE SESSION** : (a) le saut de rebord n'atterrit pas
 sur le chemin pavé en dessous (mur traité comme un plan plat) — Guillaume va fournir un nouveau PNG
@@ -447,7 +504,7 @@ dépôt.
 |---|---|
 | `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **~20 500 l.** |
 | `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** · **2026-09-03 (lot C) `evilRodBroken(f, now)`** : dérive la casse de la canne d'un seul horodatage hôte (`f.evilRodArmedAt`), jamais un second champ · **2026-09-04 `resolveTownFish`/`resolveTownFishPermit`** : permis de pêche en ville — trois horodatages sur le fermier (voir bloc REPRISE) |
-| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE : table, chronologies et résolveurs purs.** ⚠️ **469 — la FOUILLE (`STAR_DIG_MS`, `starDug`, `resolveStarDig`, `starDigResult`) et TROIS chapitres au lieu de cinq.** `STAR_FARM_IMPACTS` porte les **huit** cratères (3 étoiles / 2 matières / 3 vides — compté en important le module le 2026-08-30 ; il annonçait « cinq (2/1/2) » depuis le 480 bis), `resolveStarCalm` tient le barème 60/10 s et `resolveStarTownFall` sépare le gros météore. `STAR_FOLLOWER_SITES` dérive toutes les compagnes de `content:"star"`, `starFollowerAdded` identifie celle qui doit jouer son arrivée, `starFarmFlightPath` tient le cap stable des fragments et `queen` désigne l'unique reine. `starShipProgress` joint les cinq états du plan aux commandes et à la cale sans persistance supplémentaire. ⚠️ **2026-09-02 (lot A) — LA REINE SE NOURRIT PUIS SE RÉVEILLE** : `starOfferPrice` est le SEUL endroit qui dise ce que coûte une étoile (60 pour la bleue, `STAR_QUEEN_PRICE` = 80 pour la reine), `resolveStarLight` sert désormais les deux, et `starWakeAdvance`/`starWakeStrike` portent les deux décisions du réveil au rythme — sorties de `FermeGame.js` **pour qu'un banc puisse les jouer**, comme `maire.js` et `scierie.js`. ⚠️ **2026-09-02 (lot A2) — LA SIXIÈME SŒUR, `townShy`, verbe `spot`** : `starShySlot`/`starShyPick`/`starShySits` disent OÙ elle se cache — une pure fonction du temps partagé, jamais un état diffusé (le patron du jour de marché et des élections) ; `resolveStarSpot` tient la seule règle qui compte (pas avant la reine). ⚠️⚠️ **2026-09-03 (lot A3) — LA CINQUIÈME, `townGreen`, verbe `track`** : `starGreenWalk` la fait MARCHER de buisson en buisson sur une table d'adjacence que `FermeGame.js` lui passe (elle ne se téléporte jamais, et ce fichier ne connaît toujours pas la carte), `starGreenSlot` sépare le vol du repos, `starGreenSway` fait remuer le buisson occupé, `resolveStarHint` tient le compte d'indices **partagé entre les joueurs**, `starGreenTemp`/`starGreenBearing` traduisent une distance en « chaud/froid » et en cap. Aucun React, aucun dessin — `verify-quete.mjs` l'importe et la fait marcher quatre cents créneaux. ⚠️ **2026-09-03 (lot C) — LA SEPTIÈME SŒUR N'EST PAS ENCORE DANS `STAR_SITES`** (aucun verbe, aucun résolveur de prise — lots D/E) : `starEvilUnlocked`/`starEvilFound`/`resolveStarEvilFound` vivent à côté, sur `e.evilFound` (un fait du monde, partagé — pas indexé par joueur, contrairement au hasard de la canne qui vit sur le fermier, `fermeEngine.js`). `starGoalKey` teste `evilSeek` AVANT `engineer` — correctif trouvé en écrivant `verify-quete`, voir sa section « Lot C ». ⚠️ **2026-09-04 `haulStep(state, dt, holding, rates)`** : généralisation d'`evilHaulStep` (alias conservé) par PROFIL de vitesses — `C.EVIL_HAUL_RATES`/`C.FISH_HAUL_RATES`, voir bloc REPRISE (lutte du Brochet). |
+| `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE : table, chronologies et résolveurs purs.** ⚠️ **469 — la FOUILLE (`STAR_DIG_MS`, `starDug`, `resolveStarDig`, `starDigResult`) et TROIS chapitres au lieu de cinq.** `STAR_FARM_IMPACTS` porte les **huit** cratères (3 étoiles / 2 matières / 3 vides — compté en important le module le 2026-08-30 ; il annonçait « cinq (2/1/2) » depuis le 480 bis), `resolveStarCalm` tient le barème 60/10 s et `resolveStarTownFall` sépare le gros météore. `STAR_FOLLOWER_SITES` dérive toutes les compagnes de `content:"star"`, `starFollowerAdded` identifie celle qui doit jouer son arrivée, `starFarmFlightPath` tient le cap stable des fragments et `queen` désigne l'unique reine. `starShipProgress` joint les cinq états du plan aux commandes et à la cale sans persistance supplémentaire. ⚠️ **2026-09-02 (lot A) — LA REINE SE NOURRIT PUIS SE RÉVEILLE** : `starOfferPrice` est le SEUL endroit qui dise ce que coûte une étoile (60 pour la bleue, `STAR_QUEEN_PRICE` = 80 pour la reine), `resolveStarLight` sert désormais les deux, et `starWakeAdvance`/`starWakeStrike` portent les deux décisions du réveil au rythme — sorties de `FermeGame.js` **pour qu'un banc puisse les jouer**, comme `maire.js` et `scierie.js`. ⚠️ **2026-09-02 (lot A2) — LA SIXIÈME SŒUR, `townShy`, verbe `spot`** : `starShySlot`/`starShyPick`/`starShySits` disent OÙ elle se cache — une pure fonction du temps partagé, jamais un état diffusé (le patron du jour de marché et des élections) ; `resolveStarSpot` tient la seule règle qui compte (pas avant la reine). ⚠️⚠️ **2026-09-03 (lot A3) — LA CINQUIÈME, `townGreen`, verbe `track`** : `starGreenWalk` la fait MARCHER de buisson en buisson sur une table d'adjacence que `FermeGame.js` lui passe (elle ne se téléporte jamais, et ce fichier ne connaît toujours pas la carte), `starGreenSlot` sépare le vol du repos, `starGreenSway` fait remuer le buisson occupé, `resolveStarHint` tient le compte d'indices **partagé entre les joueurs**, `starGreenTemp`/`starGreenBearing` traduisent une distance en « chaud/froid » et en cap. Aucun React, aucun dessin — `verify-quete.mjs` l'importe et la fait marcher quatre cents créneaux. ⚠️ **2026-09-03 (lot C)** : `starEvilUnlocked`/`starEvilFound`/`resolveStarEvilFound` vivent sur `e.evilFound` (un fait du monde, partagé — pas indexé par joueur, contrairement au hasard de la canne qui vit sur le fermier, `fermeEngine.js`). `starGoalKey` teste `evilSeek` AVANT `engineer` — correctif trouvé en écrivant `verify-quete`, voir sa section « Lot C ». ⚠️ **2026-09-04 `haulStep(state, dt, holding, rates)`** : généralisation d'`evilHaulStep` (alias conservé) par PROFIL de vitesses — `C.EVIL_HAUL_RATES`/`C.FISH_HAUL_RATES`, voir bloc REPRISE (lutte du Brochet). ⚠️⚠️ **2026-09-04 (lot E) — LA SEPTIÈME SŒUR REJOINT ENFIN `STAR_SITES`** (`Q.STAR_EVIL_ID`, verbe neuf `revive`, hors de tout chapitre par construction — voir sa note dans le fichier) : `content:"star"` suffit à la faire apparaître dans `starFollowers` dès que `resolveStarFound` écrit son id, exactement comme les six autres. `starWakeAdvance`/`starWakeStrike`/`starWakeGlow`/`starWakeCompanionState`/`starWakeCompanionPulse` prennent un `profile` optionnel (`STAR_WAKE_PROFILE_DEFAULT` pour la reine, `STAR_REVIVE_PROFILE` pour elle) — même geste que `haulStep` juste au-dessus, un jour plus tôt. |
 | `components/ferme/maire.js` | **L'AUDIENCE CHEZ LE MAIRE (480) : la table des battements et les résolveurs purs.** Douze nœuds, cinq actes, cinq familles d'argument, la jauge d'adhésion qui FUIT, l'élan, la rejouabilité côté hôte (`mayorReplay` : le client envoie sa TRANSCRIPTION, l'hôte la rejoue). Aucun React, aucun dessin — `verify-maire.mjs` l'importe. ⚠️ **C'est un système de NÉGOCIATION, pas une scène** : la confiance gagnée sert les audiences futures, donc une commission ou le cadastre s'y ajouteront en une table de plus. |
 | `components/ferme/MaireScene.js` | **la VUE de l'audience — le seul morceau de 3D du monde partagé.** Écran PLEIN, à la PREMIÈRE PERSONNE, caméra libre dans la pièce, bulles projetées, réponses en jaune, **mode spectateur** (`MayorWatch`), repli plat si WebGL manque. ⚠️ Il porte `mayorCtxOf`, **la fonction de contexte que le CLIENT et l'HÔTE appellent tous les deux** : leur accord est une propriété du code, pas une coïncidence. |
 | `components/ferme/scierie.js` | **LA SCIE DE TRISTAN (lot E) : la simulation pure, à PAS FIXE.** Une lame qui a de l'inertie, un partenaire qui RÉPOND au lieu de mener, un mou qui referme la fenêtre parfaite, une contrainte qui fend la planche. ⚠️ **Aucune fonction transcendante dans le chemin de simulation** (`sin`/`pow`/`random` sont laissés à l'implémentation par la norme) : le hasard passe par un hachage entier, ce qui rend la manche rejouable **au bit près** par l'hôte à partir d'une liste de numéros de pas. Aucun React, aucun dessin — `verify-scierie.mjs` en joue des centaines. ⚠️ `sawPull(s, side)` est déjà symétrique : la seconde poignée du §17.6 s'ajoutera sans rouvrir la mécanique. |

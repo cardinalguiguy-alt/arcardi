@@ -6857,6 +6857,17 @@ export function buildSprites() {
       green:  [["#f2fff4", "#8bf2a8", "#2fa85e", "#0f4d2a", "rgba(120,240,160,0.20)"],
                ["#e8fbec", "#7cd897", "#2c8d51", "#0d3f23", "rgba(110,215,145,0.11)"],
                ["#d8e0d8", "#9aa89e", "#5e6e64", "#2c352f", "rgba(190,210,196,0.05)"]],
+      /* ⚠️ 2026-09-04 (lot E) — LA VIOLETTE (verbe `revive`, la septième sœur,
+         sauvée du lac maléfique). Aucune des six autres n'est FROIDE ET SATURÉE
+         à la fois — le blanc est froid mais neutre, la rose est chaude, le bleu
+         est franc mais plus clair : le violet reste donc identifiable même posé
+         à côté d'elles dans la formation. Cohérent avec ce qui la retenait
+         (« un liquide violet et noir », déjà la teinte de son halo de canne
+         protégée, QUETE.md §3.6) — nombres provisoires, à juger une fois vue en
+         jeu, comme l'orange et le vert avant elle (§8 de CLAUDE.md). */
+      violet: [["#faf2ff", "#c895ff", "#7c3fd6", "#331463", "rgba(195,140,255,0.20)"],
+               ["#f3e9fb", "#b184dd", "#6b4aa8", "#2c1652", "rgba(180,130,235,0.11)"],
+               ["#dcd6e0", "#a89aae", "#6c6272", "#332c3a", "rgba(200,186,215,0.05)"]],
   };
   /* La teinte VIVE d'une couleur d'étoile (état 0, ton du corps) — ce qu'il faut
      pour peindre une compagne réduite à un point lumineux, sans son sprite.
@@ -16024,7 +16035,7 @@ house: house(),
        SILLON (454) et le navire ne sont PAS ici : ce sont des fonctions, parce
        qu'ils se peignent sur un fond déjà là (voir leur note). */
     starWisp: Array.from({ length: 3 }, (_, st) => Array.from({ length: 4 }, (_, po) => starWispSprite(po, st, "yellow"))),
-    starWispColors: Object.fromEntries(["yellow", "blue", "rose", "white", "orange", "green"].map(color => [color,
+    starWispColors: Object.fromEntries(["yellow", "blue", "rose", "white", "orange", "green", "violet"].map(color => [color,
       Array.from({ length: 3 }, (_, st) => Array.from({ length: 4 }, (_, po) => starWispSprite(po, st, color))) ])),
     /* AUDIT 2026-08-31 — exposée pour la scène de résolution, qui peint les
        compagnes en points lumineux et n'a donc pas leur sprite. Voir la note de

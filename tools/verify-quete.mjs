@@ -1289,11 +1289,16 @@ section("Les grandeurs partagées");
      Q.STAR_CHAPTERS.every(c => c.need.every(id => !!Q.STAR_SITE[id])));
   ok("chaque prérequis désigne un lieu qui existe",
      Q.STAR_SITES.every(s => !s.req || s.req.every(id => !!Q.STAR_SITE[id])));
-  ok("chaque lieu appartient à un chapitre",
-     Q.STAR_SITES.every(s => Q.STAR_CHAPTERS.some(c => c.need.includes(s.id))),
-     Q.STAR_SITES.filter(s => !Q.STAR_CHAPTERS.some(c => c.need.includes(s.id))).map(s => s.id).join(",") || "tous");
+  /* ⚠️ 2026-09-04 (lot E) — UNE SEULE EXCEPTION, NOMMÉE : la septième sœur
+     (`Q.STAR_EVIL_ID`) n'appartient délibérément à aucun chapitre — elle est
+     trouvée et sauvée par le fil dédié du lac maléfique, jamais par un `need`
+     de cette table (voir sa note dans `STAR_SITES`, quete.js). Le contrôle
+     reste dur pour les six autres : SEUL cet id peut manquer. */
+  ok("chaque lieu appartient à un chapitre (sauf la septième sœur, exemptée par nom)",
+     Q.STAR_SITES.every(s => s.id === Q.STAR_EVIL_ID || Q.STAR_CHAPTERS.some(c => c.need.includes(s.id))),
+     Q.STAR_SITES.filter(s => s.id !== Q.STAR_EVIL_ID && !Q.STAR_CHAPTERS.some(c => c.need.includes(s.id))).map(s => s.id).join(",") || "tous sauf evilStar");
   ok("chaque lieu déclare une zone connue",
-     Q.STAR_SITES.every(s => ["farm", "town", "court"].includes(s.zone)));
+     Q.STAR_SITES.every(s => ["farm", "town", "court", "evil"].includes(s.zone)));
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

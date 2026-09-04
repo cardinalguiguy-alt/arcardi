@@ -1590,6 +1590,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      à la victoire ET pour que le dessin choisisse sa couleur. */
   const fishHaulRef = useRef(null);
   const [fishHaulActive, setFishHaulActive] = useState(false);
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-04 (lot E) — RAMENER LA SEPTIÈME SŒUR (point 9-10 de QUETE.md §3).
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ PUREMENT LOCAL, COMME `evilHaulRef` : rien de tout ceci ne part sur le
+     réseau tant que la réanimation n'est pas gagnée (une seule `req` à la fin,
+     "evilStarRevive" — même contrat que le halage). Ce qui protège d'une perte
+     réelle est `e.evilRescued`, qui reste vrai pour toujours côté hôte : tant
+     qu'`e.found.evilStar` n'existe pas, elle reste dessinable sur la rive — un
+     joueur qui recharge en la portant, ou qui meurt en chemin, la retrouve là
+     où le halage l'a laissée, jamais perdue.
+     `carryStarRef` : true tant qu'on la porte (ramassée sur la rive, pas encore
+     posée). `evilStarPlaceRef` : {x,y} de la case où elle a été posée au sol en
+     ferme, ou null tant qu'elle n'y est pas encore — permanent une fois posée
+     (on peut s'éloigner et revenir sans la reperdre, seul l'anneau se referme).
+     `evilStarReviveRef` : la simulation chaude de l'anneau (même forme que
+     `starWakeRef`, mais un ref à part — elle ne vit pas au cratère et n'a pas
+     de `site` de la table à résoudre). `evilRevivePulseRef` : le pouls du
+     succès, même famille que `starWakePulseRef`, isolé pour ne pas coupler les
+     deux réveils. */
+  const carryStarRef = useRef(false);
+  const evilStarPlaceRef = useRef(null);
+  const evilStarReviveRef = useRef(null);
+  const evilRevivePulseRef = useRef(null);
   const immunityUntilRef = useRef(0); // miroir synchrone de immunityUntil (lu dans updateEvilMonsters)
   // Correctif "dispute Chloé/Rosalie vue de tous" (2026-07, demande Guillaume) :
   // la scène et le cooldown sont désormais un état PARTAGÉ (station.crScene /
@@ -4097,6 +4120,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         dirtyRef.current = true;
         persistFnRef.current && persistFnRef.current();
         hostSend({ type: "broadcast", event: "apply", payload: { star: e2 } });
+      }
+    } else if (req.kind === "evilStarRevive") {
+      /* 2026-09-04 (lot E) — LA RÉANIMATION EST GAGNÉE, POUR TOUT LE MONDE. Même
+         contrat de confiance que "evilRescueStar" juste au-dessus (l'anneau
+         d'appuis répétés s'est joué entièrement côté client, `Q.starWakeStrike`
+         a déjà décidé `won`) : l'hôte se contente de rejouer `resolveStarFound`,
+         EXACTEMENT le résolveur générique qui fait rejoindre la formation à
+         n'importe quelle étoile de `STAR_SITES` — aucun code neuf pour
+         « qu'est-ce que ça donne », c'est la même jointure que les six autres. */
+      const e3 = (sharedRef.current.star = Q.migrateStar(sharedRef.current.star));
+      if (Q.starEvilRescued(e3)) {
+        const r3 = Q.resolveStarFound(e3, Q.STAR_EVIL_ID, req.name, Date.now());
+        if (r3.ok && !r3.already) {
+          dirtyRef.current = true;
+          persistFnRef.current && persistFnRef.current();
+          hostSend({ type: "broadcast", event: "apply", payload: { star: e3 } });
+        }
       }
     } else if (req.kind === "runFailed") {
       // Zip 372 : défaite au défi de fuite. Même contrat de confiance
@@ -9559,6 +9599,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // Seuls la hache (arbres) et la pioche (rochers, chantier 2026-07 ci-dessous)
   // agissent ici (pas de récolte/arrosage/construction en zone maléfique,
   // hors périmètre de la demande).
+  /* ⚠️⚠️ 2026-09-04 (lot E) — LE RAMASSAGE, C'EST UN « E : INTERAGIR », PAS UN
+     GESTE D'OUTIL. Appelée depuis `tryOpenNearby()` (zone "evil"), à côté
+     d'`evilCauldronPickup`/`evilShardsPickup` — jamais depuis `doActionEvil()`
+     (celui-là répond à Espace/clic, « utiliser l'outil » : la canne y a sa
+     place, un ramassage à mains nues non). Rayon serré (1,4 case) : s'approcher
+     suffit, comme `dishGive`. */
+  function tryPickupEvilStar() {
+    const m = meRef.current, ew = evilWorldRef.current; if (!m || !ew) return false;
+    const e = sharedRef.current.star;
+    if (!Q.starEvilRescued(e) || Q.starHas(e, Q.STAR_EVIL_ID) || carryStarRef.current) return false;
+    const spot = evilRescueSpot(ew);
+    const shoreR = spot && evilNearestShore(ew, spot.x, spot.y);
+    if (!shoreR || Math.hypot(m.x - shoreR.x, m.y - (shoreR.y + 1)) > 1.4) return false;
+    carryStarRef.current = true;
+    pushToast(L.star.evil.pickedUp);
+    return true;
+  }
   function doActionEvil() {
     const m = meRef.current; if (!m || actAnimRef.current > 0) return;
     const ew = evilWorldRef.current; if (!ew) return;
@@ -16463,6 +16520,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
         }
       }
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ 2026-09-04 (lot E) — LA SEPTIÈME SŒUR : PORTÉE, POSÉE, RÉANIMÉE.
+         ╚══════════════════════════════════════════════════════════════════════
+         Trois états, jamais deux à la fois (`evilStarPlace` les rend exclusifs
+         par construction) : PORTÉE — au-dessus du fermier, même famille que le
+         plat de la rose (`drawStarDish` juste au-dessus) ; POSÉE, anneau
+         fermé — au sol, en attente (state 2, éteinte) ; POSÉE, anneau ouvert —
+         le pouls tourne, MÊME PATRON que le réveil de la reine (voir sa note
+         plus haut dans ce fichier, bloc `queenWaiting`) : succès > frappe en
+         cours > repos, jamais mélangés. */
+      if (carryStarRef.current) {
+        draws.push({ y: (m.y + 1) * T + 0.02, fn: () => drawStarWisp({
+          x: m.x, y: m.y - 0.55, state: 2, pose: Math.floor(now / 260) & 3, color: "violet",
+        }) });
+      } else if (evilStarPlaceRef.current && !Q.starHas(sharedRef.current.star, Q.STAR_EVIL_ID)) {
+        const p = evilStarPlaceRef.current;
+        const wk = evilStarReviveStep();
+        const pr = evilRevivePulseRef.current;
+        const pop = pr ? Q.starWakeCompanionPop(now - pr.at) : null;
+        const rst = pop ? pop
+          : wk ? { state: Q.starWakeCompanionState(wk.hits, Q.STAR_REVIVE_PROFILE), scale: Q.starWakeCompanionPulse(wk.phase, wk.hits, Q.STAR_REVIVE_PROFILE) }
+          : { state: 2, scale: 1 };
+        draws.push({ y: (p.y + 1) * T - 0.02, fn: () => drawStarWisp({
+          x: p.x, y: p.y + 0.12, state: rst.state, pose: Math.floor(now / 210) & 3, color: "violet", scale: rst.scale,
+        }) });
+        if (wk) {
+          const wx = (p.x + 0.5) * T, wy = (p.y - 0.1) * T;
+          const ringSt = { phase: wk.phase, hits: wk.hits, need: Q.STAR_REVIVE_HITS,
+                            flash: wk.flash, miss: wk.miss, band: [Q.STAR_REVIVE_BAND_A, Q.STAR_REVIVE_BAND_B] };
+          draws.push({ y: wy - 1e6, fn: () => sprites.drawStarWakeRing(ctx, wx, wy, T, ringSt, now) });
+        }
+      }
       // Zip 234 (Guillaume: "when we walk over a certain crop, we can see
       // what they are"): standing on a planted tile floats a small paper tag
       // above the farmer — crop name + growth % (or "ready!" / "needs
@@ -17443,6 +17532,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
       draws.push({ y: (m.y + 1) * T, fn: () => drawSelf(m) });
+      /* ⚠️⚠️ 2026-09-04 (lot E) — LES COMPAGNES SUIVENT AUSSI DANS LE MONDE
+         MALÉFIQUE. `starCompanionsAt` ne l'appelait que depuis la ferme, la
+         ville et le tribunal (§4 de CLAUDE.md : « quand une zone gagne sa
+         propre boucle, elle hérite de tout ce que la boucle commune faisait
+         pour elle » — vrai aussi entre zones sœurs). Demande de Guillaume :
+         « les autres étoiles doivent nous suivre quand on passe dans les
+         autres worlds. » Aucun résident n'a `zone:"evil"` : `starResidentNear`
+         ne les cachera donc jamais ici, ce qui est le bon défaut (rien pour se
+         cacher d'elles). */
+      {
+        const cps = starCompanionsAt("evil", m.x, m.y, !!m.moving, now);
+        for (const cp of cps) draws.push({ y: (cp.y + 1) * T - (cp.queen ? 0.02 : 0.01), fn: () => drawStarWisp(cp) });
+      }
+      /* 2026-09-04 (lot E) — LA SEPTIÈME SŒUR, SI ON LA PORTE : même dessin que
+         côté ferme (voir sa note là-bas), le trajet du sauvetage passe par les
+         deux zones tant qu'on n'a pas franchi `EVIL_RETURN_PASSAGE`. */
+      if (carryStarRef.current) {
+        draws.push({ y: (m.y + 1) * T + 0.02, fn: () => drawStarWisp({
+          x: m.x, y: m.y - 0.55, state: 2, pose: Math.floor(now / 260) & 3, color: "violet",
+        }) });
+      }
       /* 2026-09-03 (lot C) — L'APPÂT QUI VOLE VERS LA SEPTIÈME SŒUR : l'autre
          moitié du lancer spécial (la pose vit dans fermeArt/drawStarCast, cet
          arc n'a besoin d'aucun sprite, juste des deux points qu'il relie).
@@ -17923,8 +18033,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       // Prompt on the passage world: pickup nearby > cauldron > return.
       let ppk = null;
+      /* 2026-09-04 (lot E) — MÊME INVITE QUE LE GESTE (`tryPickupEvilStar`
+         ci-dessus), MÊME RAYON : une invite qui ne promet pas ce que E fait
+         serait le défaut du 426 retourné. */
+      {
+        const evE = sharedRef.current.star;
+        if (Q.starEvilRescued(evE) && !Q.starHas(evE, Q.STAR_EVIL_ID) && !carryStarRef.current) {
+          const spot = evilRescueSpot(ew);
+          const shoreR = spot && evilNearestShore(ew, spot.x, spot.y);
+          if (shoreR && Math.hypot(m.x - shoreR.x, m.y - (shoreR.y + 1)) <= 1.4) ppk = "evilStarPickup";
+        }
+      }
       const cauldronDone = sharedRef.current.salveCraft && sharedRef.current.salveCraft.cauldronUnlocked;
-      if (passSpec && passSpec.pickupColor && Array.isArray(ew.pickups)) {
+      if (!ppk && passSpec && passSpec.pickupColor && Array.isArray(ew.pickups)) {
         const pickedNow = pickedIdsRef.current[ew.worldIdx] || {};
         for (const pk of ew.pickups) {
           if (pickedNow[pk.id]) continue;
@@ -22463,6 +22584,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const puls = 0.5 + 0.5 * Math.sin(nowB / 700);
       const halo = cp.color === "blue" ? ["100,205,255", "190,238,255"]
                  : cp.color === "rose" ? ["255,130,205", "255,205,232"]
+                 /* 2026-09-04 (lot E) — la violette a son propre halo : un halo doré
+                    par défaut sur un corps violet aurait juré (les deux teintes ne se
+                    mélangent pas), exactement le défaut que ce couple évite déjà pour
+                    le bleu et la rose. */
+                 : cp.color === "violet" ? ["195,140,255", "225,195,255"]
                  : ["255,226,148", "255,240,190"];
       ctx.fillStyle = `rgba(${halo[0]},${(0.10 + 0.05 * puls).toFixed(3)})`;
       ctx.beginPath(); ctx.arc(cx, cy, 15 * (cp.scale || 1), 0, 7); ctx.fill();
@@ -24330,7 +24456,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      sur l'offrande à l'étoile, autant ne pas la repayer sur son réveil.
      ⚠️ IL REND `true` QUAND IL A CONSOMMÉ L'APPUI, sans quoi la même frappe
      ferait sauter le fermier d'un rebord pendant qu'il frappe. */
-  function pressJumpOrAct() { if (starWakePress()) return; if (!townJumpNow()) doAction(); }
+  function pressJumpOrAct() { if (starWakePress()) return; if (evilStarRevivePress()) return; if (!townJumpNow()) doAction(); }
   /* Le bouton d'action tactile. ⚠️ IL SUIT LA MÊME PRIORITÉ QUE L'INVITE, et
      c'est ce qui le rend lisible : ce que le bandeau annonce est ce que le
      bouton fait. En ville, le saut de rebord passe avant l'interaction (règle du
@@ -26448,6 +26574,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      boussole du 429 (`gps.zone === m.zone`), et la seule qui résiste au piège des
      deux cartes — le ponton de la ville tombe aussi au milieu des champs. */
   function starTargetPos(id) {
+    /* ⚠️⚠️ 2026-09-04 (lot E) — LA SEPTIÈME SŒUR N'A PAS DE POSITION FIXE DANS LA
+       TABLE : elle est posée là où le joueur l'a réanimée (`evilStarPlaceRef`),
+       jamais un endroit écrit en dur. C'est ce qui fait que l'arrivée dans la
+       formation (`starJoinRef`, plus bas — le SEUL autre appelant de cette
+       branche pour elle, voir sa note) parte du bon carré au lieu de sauter
+       depuis nulle part. `null` si elle n'a jamais été posée (repli déjà prévu
+       par l'appelant : pas d'origine, pas de montée). */
+    if (id === "evilStar") {
+      const p = evilStarPlaceRef.current;
+      return p ? { zone: "farm", x: p.x, y: p.y } : null;
+    }
     /* ⚠️⚠️ ZIP 454 — DEUX ADRESSES QUI NE SONT PAS DES LIEUX DE LA TABLE, et elles
        passent AVANT le test `STAR_SITE` : la mairie (où l'on demande l'ingénieur) et
        l'atelier du bûcheron (où l'on commande le bois). Les inscrire dans
@@ -27554,6 +27691,68 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     return true;
   }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-04 (lot E) — POSER LA SEPTIÈME SŒUR, PUIS LA RÉANIMER.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ UNE SEULE FONCTION POUR « LA POSER » ET « REPRENDRE L'ANNEAU », PARCE
+     QUE C'EST LE MÊME GESTE VU DEUX FOIS : la première pose une position ET
+     ouvre l'anneau ; les suivantes ne font que rouvrir l'anneau, PILE là où
+     elle a été posée (jamais recalculé sur la position courante — sinon
+     s'éloigner puis revenir la ferait glisser). Appelée depuis `starNearby()`
+     (prompt `evilPlace`/`evilRevive`), jamais directement par une touche —
+     même discipline que le reste de cette table. */
+  function evilStarPlace() {
+    const m = meRef.current; if (!m) return;
+    if (carryStarRef.current) {
+      evilStarPlaceRef.current = { x: m.x, y: m.y };
+      carryStarRef.current = false;
+      pushToast(L.star.evil.placed);
+    }
+    if (evilStarReviveRef.current) return; // déjà ouvert (garde défensive, comme starWakeOpen("crater"))
+    evilStarReviveRef.current = { hits: 0, phase: 0, beats: 0, flash: 0, miss: 0, last: performance.now() };
+    starTell([L.star.s2.wakeHint], 2600);
+  }
+  /* ⚠️ MÊME TROIS ABANDONS QUE `starWakeStep` (marcher, changer de zone, sortir
+     de la ferme) — « marcher interrompt » est ce qui rend ce geste habitable
+     dans le monde plutôt que dans un panneau (note de `starWakeStep`). La
+     POSE, elle, reste : seul l'anneau se referme, `evilStarPlaceRef` persiste
+     pour qu'un second `evilStarPlace()` le rouvre au même endroit. */
+  function evilStarReviveStep() {
+    const w = evilStarReviveRef.current; if (!w) return null;
+    const m = meRef.current, e = sharedRef.current.star;
+    if (!m || (m.zone || "farm") !== "farm" || m.moving || !e || Q.starHas(e, Q.STAR_EVIL_ID)) {
+      evilStarReviveRef.current = null; return null;
+    }
+    const now = performance.now();
+    const nx = Q.starWakeAdvance(w, now - w.last, Q.STAR_REVIVE_PROFILE);
+    w.last = now;
+    if (nx.gone) { evilStarReviveRef.current = null; return null; }
+    w.phase = nx.phase; w.hits = nx.hits; w.beats = nx.beats; w.flash = nx.flash; w.miss = nx.miss;
+    return w;
+  }
+  function evilStarRevivePress() {
+    const w = evilStarReviveRef.current; if (!w) return false;
+    const nx = Q.starWakeStrike(w, Q.STAR_REVIVE_PROFILE);
+    w.phase = nx.phase; w.hits = nx.hits; w.beats = nx.beats; w.flash = nx.flash; w.miss = nx.miss;
+    if (nx.won) {
+      /* ⚠️ UNE SEULE `req`, comme `starWakePress` juste au-dessus : l'hôte
+         rejoue `Q.resolveStarFound(e, Q.STAR_EVIL_ID, ...)`, exactement ce
+         qui fait apparaître n'importe quelle étoile dans `starFollowers` —
+         `starFollowerAdded`/`starJoinRef` prennent le relais tout seuls
+         (aucun code à écrire ici pour l'arrivée dans la formation).
+         ⚠️⚠️ `evilStarPlaceRef` N'EST PAS EFFACÉ ICI : `starTargetPos` s'en sert
+         comme ORIGINE de la montée (le `apply` qui pose `e.found.evilStar`
+         revient plus tard, en écho réseau même côté hôte — l'effacer tout de
+         suite ferait lire une origine nulle à `starJoinRef` et sauter la
+         montée. Il reste ensuite un point figé et inoffensif, comme
+         `starCraterPos()` qui ne redevient jamais `null` après la reine. */
+      sendReq({ kind: "evilStarRevive" });
+      evilRevivePulseRef.current = { at: performance.now() };
+      evilStarReviveRef.current = null;
+      pushToast(L.star.evil.revived);
+    }
+    return true;
+  }
   function starCalmUi() {
     const m = meRef.current, e = sharedRef.current.star;
     if (!m || !e || !Q.starFallen(e) || Q.starDone(e)) return null;
@@ -28044,6 +28243,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const zone = m.zone || "farm";
 
     if (zone === "farm") {
+      /* ╔════════════════════════════════════════════════════════════════════════
+         ║ 2026-09-04 (lot E) — LA SEPTIÈME SŒUR, AVANT MÊME LE RELAIS DU PLAT.
+         ╚════════════════════════════════════════════════════════════════════════
+         ⚠️⚠️ ELLE S'ÉTEINT DANS TES BRAS — ça passe devant un plat qui refroidit
+         (règle du 427, du plus urgent au plus large, appliquée à la fiction plutôt
+         qu'à la seule distance). Deux invites, UNE fonction (`evilStarPlace`) :
+         « E : la poser au sol » tant qu'on la porte, « E : la réanimer » une fois
+         posée et tant qu'on n'a pas fini — l'anneau se rouvre pile où elle a été
+         posée, jamais ailleurs (§4, une grandeur de dessin ne se recopie pas). */
+      if (carryStarRef.current) return { p: "evilPlace", act: () => evilStarPlace() };
+      if (evilStarPlaceRef.current && !Q.starHas(e, Q.STAR_EVIL_ID) && !evilStarReviveRef.current) {
+        const p = evilStarPlaceRef.current;
+        if (Math.hypot(m.x - p.x, m.y - p.y) <= 1.4) return { p: "evilRevive", act: () => evilStarPlace() };
+      }
       /* ╔════════════════════════════════════════════════════════════════════════
          ║ ZIP 479 — LE RELAIS PASSE DEVANT TOUT, ET IL LE DOIT.
          ╚════════════════════════════════════════════════════════════════════════
@@ -28557,6 +28770,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // donc tôt plutôt que de risquer une fausse coïncidence de coordonnées.
     if (m0 && m0.zone === "evil") {
       const ew = evilWorldRef.current;
+      /* 2026-09-04 (lot E) — LA SEPTIÈME SŒUR, EN TÊTE : même invite
+         (`evilStarPickup`, calculée juste au-dessus dans `ppk`), même touche.
+         Ne dépend d'aucun `ew.spec`/pickup de passage : elle vit hors de cette
+         mécanique-là. */
+      if (tryPickupEvilStar()) return;
       // Zip 235: passage-world pickups (breloques). Idempotent client-side
       // via pickedIdsRef so a nearby pickup isn't collected twice.
       if (ew && ew.spec && ew.spec.pickupColor && Array.isArray(ew.pickups)) {
@@ -29723,7 +29941,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           expression que le bandeau, et pas ailleurs. Deux traductions du même
           `promptKey` finiraient par diverger d'un libellé, et la divergence
           tomberait sur l'appareil du joueur qui n'a QUE ce bouton. */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "evilShardsPickup" ? L.promptEvilShardsPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : promptKey === "rod" ? L.promptRod : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "evilShardsPickup" ? L.promptEvilShardsPickup : promptKey === "evilStarPickup" ? L.promptEvilStarPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : promptKey === "rod" ? L.promptRod : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (

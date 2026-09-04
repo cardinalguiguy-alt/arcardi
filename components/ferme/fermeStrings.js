@@ -1117,6 +1117,11 @@ const STAR_FR = {
     haulHint: "Maintiens Espace pour tirer. Relâche avant que la ligne ne casse.",
     haulSlip: "Elle tire fort... tu perds du terrain !",
     haulWon: "Tu la tires enfin sur la rive, hors de l'eau corrompue.",
+    /* 2026-09-04 (lot E) — points 9-10 de QUETE.md §3 : la ramasser, sortir du
+       monde maléfique, la poser, la réanimer. */
+    pickedUp: "Tu la portes contre toi, fragile, presque éteinte.",
+    placed: "Tu la poses doucement au sol.",
+    revived: "Son cœur reprend enfin. La septième sœur est sauvée.",
   },
   /* ⚠️ ZIP 479 — LE BOUTON DU CHAUDRON. Il nomme le plat sans donner de recette :
      ce qu'on met dedans ne regarde personne, et l'inventer aurait demandé un
@@ -1157,6 +1162,9 @@ const STAR_FR = {
     dishTake: "E : prendre le plat encore fumant",
     dishPass: "E : reprendre le plat",
     dishGive: "E : lui donner le plat",
+    // 2026-09-04 (lot E) — points 9-10 de QUETE.md §3.
+    evilPlace: "E : la poser au sol",
+    evilRevive: "E : la réanimer",
     effigy: "E : planter l'épouvantail au bord",
     /* ⚠️⚠️ ZIP 456 — LE CRATÈRE NE PROMET PLUS UNE TOUCHE. « E : ne plus bouger »
        décrivait le seul geste du jeu qui n'A PAS de touche, avec le préfixe de
@@ -1817,6 +1825,10 @@ const STAR_EN = {
          haul itself (purely local state, see evilHaulRef in FermeGame.js) —
          pair with the "Stand at the rescue spot" teleport below, then cast. */
       hook: "🎣 She's been seen — ready for the haul",
+      /* 2026-09-04 (lot E) — same family, one step further: also marks her
+         as hauled onto the shore, so this single click opens pickup/place/
+         revive straight away instead of replaying the haul every test. */
+      rescue: "🌊➡️🏖️ Hauled onto the shore — ready to carry home",
     }[op] || op),
     scene: (s) => ({ warn: "🎬 The announcement", fall: "🎬 The eight farm impacts", townFall: "🎬 The Valley Town meteor", end: "🎬 The ending" }[s] || s),
     sceneLabel: "Replay a scene",
@@ -1870,6 +1882,9 @@ const STAR_EN = {
     haulHint: "Hold Space to pull. Release before the line snaps.",
     haulSlip: "She's pulling hard... you're losing ground!",
     haulWon: "You finally drag her onto the shore, out of the corrupted water.",
+    pickedUp: "You hold her close, fragile, barely glowing.",
+    placed: "You gently set her down.",
+    revived: "Her heart beats again at last. The seventh sister is saved.",
   },
   /* ── LES INVITES, UNE SEULE CLÉ-FONCTION. ⚠️ Le préfixe `star:` est lu une
      fois, ici — six `if` répartis dans trois boucles de rendu finiraient par ne
@@ -1892,6 +1907,8 @@ const STAR_EN = {
     dishTake: "E: take the steaming dish",
     dishPass: "E: take the dish over",
     dishGive: "E: give it the dish",
+    evilPlace: "E: set her down",
+    evilRevive: "E: revive her",
     effigy: "E: plant the scarecrow on the rim",
     tame: "Turn your back, stand still (E: why?)",
     /* ⚠️ ZIP 479 — voir la note française : deux bords, pas une posture solitaire. */
@@ -4063,6 +4080,8 @@ export const FERME_STR = {
     // chaudron-artéfact juste au-dessus.
     promptEvilShardsPickup: "[E] Ramasser les éclats de comète",
     evilShardsPickedToast: "✨ Tu as ramassé un tas d'éclats de comète ! Prépare-les avec une améthyste au chaudron pour l'Essence d'étoile.",
+    // 2026-09-04 (lot E) — même trio, pour la septième sœur posée sur la rive.
+    promptEvilStarPickup: "[E] La ramasser",
     toastShardsAlreadyTaken: "Ce tas d'éclats de comète a déjà été ramassé.",
     toastNoCauldronStock: "Tu ne portes pas de chaudron à poser.",
     toastCauldronNotEmpty: "Vide le chaudron (poisson déposé) avant de le déplacer.",
@@ -5759,6 +5778,7 @@ export const FERME_STR = {
     toastCauldronAlreadyTaken: "This cauldron has already been picked up.",
     promptEvilShardsPickup: "[E] Pick up the comet shards",
     evilShardsPickedToast: "✨ You picked up a pile of comet shards! Prepare them with an amethyst at the cauldron for the Star Essence.",
+    promptEvilStarPickup: "[E] Pick her up",
     toastShardsAlreadyTaken: "This pile of comet shards has already been picked up.",
     toastNoCauldronStock: "You aren't carrying a cauldron to place.",
     toastCauldronNotEmpty: "Empty the cauldron (deposited fish) before moving it.",
