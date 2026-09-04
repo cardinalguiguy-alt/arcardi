@@ -7336,7 +7336,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        joue les mêmes neuf secondes. */
     if (p.starScene) {
       const sc = p.starScene;
-      if (sc.key === "card") starShowCard(sc.ch);
+      /* ⚠️⚠️ 2026-09-04 — RESPIRATION AVANT LA CARTE (voir `Q.STAR_CARD_BREATH_MS`).
+         Sans délai, une trouvaille annoncée au chat SEUL (verte, discrète — pas
+         d'overlay `starFind` bloquant, contrairement à la fouille de ferme) laisse
+         la carte plein écran arriver dans la MÊME image que le toast de
+         découverte : illisible, et incohérent (« Chapitre Trois » pendant que
+         l'étoile s'éteint dans le lac). Un `setTimeout` suffit : `starShowCard`
+         revérifie `starPanelsClear()` à l'échéance, donc une fouille de ferme
+         (déjà tenue 5200 ms par `starFind`) n'attend pas la somme des deux délais,
+         seulement le plus long des deux. */
+      if (sc.key === "card") setTimeout(() => starShowCard(sc.ch), Q.STAR_CARD_BREATH_MS);
       /* ⚠️ ZIP 455 — L'ANNONCE EST UNE CARTE, PAS UNE SCÈNE : elle n'a rien à
          montrer dans le monde (c'est une NOUVELLE, pas un événement), donc elle
          passe par le même fondu enchaîné que les cartes de chapitre et se ferme

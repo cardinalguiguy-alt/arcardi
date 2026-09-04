@@ -1817,6 +1817,20 @@ export const STAR_END_MS = 14000;      // durée de la résolution
    vérifier qu'elle ne dépasse pas la scène qui la précède. Une carte qui reste
    à l'écran pendant qu'on rejoue est un panneau, pas une transition. */
 export const STAR_CARD_MS = 3800;
+/* ⚠️⚠️ 2026-09-04 — LA RESPIRATION AVANT LA CARTE, QUAND ELLE SUIT UNE TROUVAILLE
+   « CHAT SEUL ». La fouille de ferme (chapitre 1→2) a déjà sa pause : elle passe
+   par l'overlay bloquant `starFind` (STAR_FIND_MS = 5200, FermeGame.js), qui tient
+   `starPanelsClear()` fermé le temps qu'il faut. La verte et la discrète (chapitre
+   2→3) n'annoncent leur trouvaille qu'au chat (`broadcastChat`, pas d'overlay
+   bloquant) : rien n'empêchait donc la carte « Chapitre Trois » de s'afficher dans
+   LA MÊME image que le toast de découverte — vu en jeu (bloc ⏭️ REPRISE de
+   CLAUDE.md) et confirmé indépendamment par Codex (« trop d'événements se
+   déclenchent simultanément »). `STAR_CARD_BREATH_MS` est un PLANCHER, pas un
+   délai fixe : `FermeGame.js` en fait un `setTimeout` avant le premier appel à
+   `starShowCard`, qui vérifie encore `starPanelsClear()` une fois le délai
+   écoulé — donc une fouille de ferme (déjà bloquée 5200 ms par `starFind`) n'est
+   pas ralentie d'autant de plus, seul le maximum des deux compte. */
+export const STAR_CARD_BREATH_MS = 3000;
 
 /* ╔═════════════════════════════════════════════════════════════════════════════
    ║ ZIP 445 — LA CHUTE DOIT ÊTRE VUE. (demande de Guillaume : « quand la comète

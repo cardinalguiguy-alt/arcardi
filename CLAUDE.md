@@ -58,13 +58,44 @@ de vitesses (`EVIL_HAUL_RATES`/`FISH_HAUL_RATES` séparés) plutôt que duplique
 (2) un nouveau dessin (`fermeArt.js`) — un brochet qui se débat, PAS `drawStarHaul` recyclé tel
 quel ; (3) ville seulement, ou aussi la ferme (qui a son propre Brochet) ? Rien n'est écrit.
 
-⚠️⚠️⚠️ **BUG CONFIRMÉ EN JEU, PAS CORRIGÉ : L'OVERLAY DU CHAPITRE SUIVANT ARRIVE INSTANTANÉMENT SUR
-L'APPRIVOISEMENT DE LA VERTE.** Guillaume, en observant : « overlay arrive instantanément donc à
-retarder légèrement ». Reproduit exactement à l'écran : le toast de trouvaille et le bandeau/carte
-du chapitre suivant (lac maléfique) s'affichent dans la MÊME image, aucune respiration entre la
-découverte et la suite. À corriger : un court délai avant l'overlay de chapitre, où que ce soit
-déclenché au franchissement d'un chapitre (`quete.js`/`FermeGame.js` — pas localisé plus finement,
-faute de temps).
+⚠️⚠️⚠️ **CORRIGÉ CETTE SESSION (2026-09-04, revue croisée Codex) : LE DÉLAI AVANT LA CARTE DE
+CHAPITRE.** Codex, en testant indépendamment, a retrouvé exactement le bug vu en jeu à la session
+précédente sur l'apprivoisement de la verte (« trop d'événements se déclenchent simultanément »).
+Cause trouvée : `applyDeltas` (`FermeGame.js`) appelait `starShowCard` en direct et synchrone dès
+réception de `p.starScene` ; la verte et la discrète n'annoncent leur trouvaille qu'au chat
+(`broadcastChat`), sans l'overlay bloquant `starFind` qu'a la fouille de ferme — rien n'empêchait
+donc la carte plein écran d'arriver dans la MÊME image que le toast de découverte. Correctif :
+`Q.STAR_CARD_BREATH_MS` (`quete.js`, 3000 ms) enveloppé dans un `setTimeout` avant `starShowCard`
+(`FermeGame.js`). ⚠️ C'est un PLANCHER, pas un délai fixe : `starShowCard` revérifie
+`starPanelsClear()` à l'échéance, donc une fouille de ferme (déjà tenue 5200 ms par `starFind`)
+n'attend pas la somme des deux, seulement le plus long. `npx next build` compile sans erreur
+nouvelle (seul `G_SOIL` préexistant), `verify-quete` toujours 789/789 (aucune logique pure
+touchée). ⚠️⚠️ **VÉRIFIÉ EN JEU PARTIELLEMENT** (session dev-tool, voir note technique) : le
+mécanisme s'exécute sans erreur, et une carte de chapitre n'arrive plus dans la même image qu'un
+franchissement — mais le buisson mobile de la verte s'est révélé trop fragile à chasser par
+automatisation pour rejouer EXACTEMENT le cas de Codex jusqu'au bout. **Le jugement qui reste — 3 s,
+est-ce trop long, pas assez ? — est pour Guillaume, en jouant normalement.**
+
+⚠️⚠️ **REVUE CODEX (2026-09-04) — L'ORDRE 6→5→7 N'EST PAS UN BUG, VÉRIFIÉ DANS LE CODE.** Codex a
+joué la discrète avant la verte et l'a signalé comme une incohérence de séquençage. Faux : c'est
+une décision déjà prise et déjà écrite (`quete.js`, commentaire à `STAR_CHAPTERS` — Guillaume, mot
+pour mot : « on peut tout à fait trouver la 6 sur le chemin, bien sûr, et faire la 5 après la 6 »).
+Les deux résolveurs ne se gardent que sur la reine, jamais l'un sur l'autre. Rien à corriger.
+
+⚠️⚠️ **REVUE CODEX — CIBLAGE FRAGILE DU LANCER POUR LA SEPTIÈME SŒUR, PAS ENCORE TRANCHÉ.**
+`EVIL_ROD_HAZARD_R = 1.6` case (`fermeConstants.js`) : un lancer qui rate le point de sauvetage de
+peu bascule sur la pêche ambiante (mutant/squelette) au lieu du halage spécial. ⚠️ Distinct de la
+leçon déjà corrigée du §4 (« une condition de proximité doit mesurer ce que l'action mesure ») — la
+mesure de distance est déjà juste, sur la case VISÉE ; ici c'est une tolérance de visée jugée trop
+serrée. **DÉCISION À POSER AVEC GUILLAUME (§2) avant d'écrire** : élargir `EVIL_ROD_HAZARD_R`,
+aimanter le lancer quand `evilSeek` est l'objectif actif, ou laisser tel quel tant que la
+protection/le sauvetage (lot D/E, non construits) ne sont pas là.
+
+⚠️ **REVUE CODEX — DEUX RETOURS MINEURS, PAS ENCORE TRAITÉS** (règle du 424 : un changement visuel
+à la fois). (a) La capture de l'étoile au chapeau (la discrète) est trop sèche — aucun temps de
+reconnaissance avant que le chat/la constellation prennent le relais ; rejoint l'exigence
+permanente de Guillaume sur l'animation et la fluidité. (b) Le HUD du halage (jauge + consigne)
+tient mal en largeur réduite (testé ~652×734 par Codex) — tassé verticalement, loin de l'étoile.
 
 ⚠️ **NOTE TECHNIQUE POUR LA PROCHAINE SESSION QUI AUTOMATISE UNE SÉANCE DANS LE NAVIGATEUR DE
 L'OUTIL (pas un vrai onglet Chrome) : DEUX PIÈGES NEUFS, COÛTEUX.** (1) `document.hidden=true`
@@ -79,15 +110,27 @@ le fiber React (`canvas.__reactFiber$…`, remonter au composant `FermeGame`, pa
 elle qui a confirmé le bug de l'overlay malgré le gel. **Seule parade qui a marché : recharger dès
 le premier signe de gel**, plutôt que d'insister — à compter dans le budget de toute séance
 automatisée future.
+⚠️ **AJOUT 2026-09-04 — DEUX LEÇONS DE PLUS, TROUVÉES EN VÉRIFIANT LE DÉLAI CI-DESSUS.** (1) Pour
+mesurer QUAND un overlay apparaît, une suite de captures d'écran est imprécise (le timing de l'outil
+domine) — un `setInterval` côté page qui horodate `document.body.innerText` sur `performance.now()`
+donne une chronologie fiable, lue en une seule fois à la fin. (2) **Un bouton du menu dev qui saute
+PLUSIEURS seuils d'un coup empile plusieurs scènes de jointure** (`starJoinBusy`, ~2,5 s chacune) :
+le délai observé n'est alors plus celui d'UNE transition mais de plusieurs mises bout à bout (14,5 s
+mesurés pour un saut qui traversait trois franchissements). Pour isoler une seule transition,
+utiliser le bouton immédiatement PRÉCÉDENT le seuil visé, pas le raccourci qui saute à la fin.
 
-⚠️⚠️⚠️ **ACTION SUIVANTE, DANS L'ORDRE** : (1) vérifier en jeu (vraie session, plus fiable que
-l'automatisation d'après cette session) l'accès à la canne dans les trois zones et la pêche à la
-ferme/au lac maléfique ; (2) poser avec Guillaume les décisions du permis de pêche en ville
-ci-dessus, PUIS le coder — la pêche en ville actuelle (libre, sans permis) est un gap connu, pas
-une version définitive à vérifier telle quelle ; (3) corriger le délai de l'overlay de chapitre
-ci-dessus ; (4) pour la lutte du Brochet, poser les trois décisions listées plus haut avec
-Guillaume avant d'écrire une ligne ; (5) seulement après : la suite du halage (points 9-10 de
-`QUETE.md` §3), toujours en attente.
+⚠️⚠️⚠️ **ACTION SUIVANTE, DANS L'ORDRE** : (1) Guillaume vérifie en vraie session si
+`Q.STAR_CARD_BREATH_MS` = 3000 ms (ci-dessus) est le bon réglage — provisoire, à ajuster en jouant ;
+(2) vérifier en jeu (vraie session, plus fiable que l'automatisation) l'accès à la canne dans les
+trois zones et la pêche à la ferme/au lac maléfique, toujours en attente depuis la session
+précédente ; (3) poser avec Guillaume les décisions du permis de pêche en ville ci-dessus, PUIS le
+coder — la pêche en ville actuelle (libre, sans permis) est un gap connu, pas une version
+définitive à vérifier telle quelle ; (4) poser avec Guillaume la décision du ciblage du lancer pour
+la septième sœur ci-dessus (élargir/aimanter/laisser) ; (5) les deux retours mineurs de Codex
+(reconnaissance au chapeau, HUD du halage) — chacun sa propre livraison, jamais les deux ensemble ;
+(6) pour la lutte du Brochet, poser les trois décisions listées plus haut avec Guillaume avant
+d'écrire une ligne ; (7) seulement après : la suite du halage (points 9-10 de `QUETE.md` §3),
+toujours en attente.
 
 ⚠️ **CE QUI RESTE OUVERT, SANS RAPPORT AVEC CETTE SESSION** : (a) le saut de rebord n'atterrit pas
 sur le chemin pavé en dessous (mur traité comme un plan plat) — Guillaume va fournir un nouveau PNG
