@@ -1486,6 +1486,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [carryMenuOpen, setCarryMenuOpen] = useState(false);
   const [rodArmed, setRodArmed] = useState(false);
   const rodArmedRef = useRef(false);
+  /* 2026-09-04 — accès facilité à la canne : `performance.now()` de la
+     dernière fois où le joueur a bougé, mise à jour par `markWaterIdle` dans
+     les trois `updateMe*` qui marchent (pas le tribunal, qui n'a pas d'eau).
+     Un seul ref pour les trois zones : un seul joueur local à la fois, jamais
+     dans deux zones en même temps. */
+  const waterIdleSinceRef = useRef(0);
+  function markWaterIdle(isMoving) { if (isMoving) waterIdleSinceRef.current = performance.now(); }
   /* ⚠️ « DÉPLOYER » LA CANNE, C'EST L'ARMER — et c'est copié sur armHealKit
      (388) plutôt qu'inventé : le joueur connaît déjà ce geste pour la trousse
      de soins. Le mode reste actif jusqu'à ce qu'on change de case, sans quoi il
@@ -4284,6 +4291,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         dirtyRef.current = true;                       // à sauvegarder
         if (r.felled) { out.fx.push({ k: "treedown", x: req.x | 0, y: req.y | 0, wood: r.wood, zone: "town" }); questId = "chop"; }
         else out.fx.push({ k: "chop", x: req.x | 0, y: req.y | 0, zone: "town" });
+      }
+      if (r.toast) out.toast = { id: f.id, key: r.toast };
+    } else if (req.kind === "townFish") {
+      /* 2026-09-04 — PÊCHER À VALLEY TOWN. Même autorité que `townChop` juste
+         au-dessus : l'hôte valide sur SA propre carte de ville, jamais sur
+         celle de l'émetteur. */
+      const tw = townWorldRef.current || (townWorldRef.current = getTownWorldCached(E));
+      const r = E.resolveTownFish(tw, f, req.x | 0, req.y | 0, req.fish | 0);
+      if (r.changed) {
+        out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+        dirtyRef.current = true;
+        out.fx.push({ k: "fish", x: req.x | 0, y: req.y | 0, fish: r.fish, zone: "town" });
+        questId = "fish";
       }
       if (r.toast) out.toast = { id: f.id, key: r.toast };
     } else if (req.kind === "spendEnergy") {
@@ -9246,6 +9266,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          strictement rien. C'est le « propose puis refuse » du 426, dans sa
          version silencieuse (on ne propose même pas). */
       if (m.sitOn) { throwCrumbs(); return; }
+      /* 2026-09-04 — LA CANNE MARCHE AUSSI EN VILLE, DÉSORMAIS. Même priorité
+         que la ferme et le lac maléfique (`doAction`/`doActionEvil`) : la
+         canne armée passe AVANT le reste (ici, avant même le garde-fou
+         « hache seule » — sans quoi une canne armée en ville ne faisait
+         jamais rien, `doAction` retournait avant de la voir). */
+      if (rodArmedRef.current) { startFishingTown(targetTileTown()); return; }
       if (slotRef.current !== SLOT.tools || toolKindRef.current !== "axe") return;
       const tw = townWorldRef.current; if (!tw) return;
       const tt2 = targetTileTown();
@@ -9679,6 +9705,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     pushToast(L.evilFishBite);
     setFishMini({ mode: fi % 3, fish: 0, evil: fi });
   }
+  /* 2026-09-04 — LA CANNE À VALLEY TOWN. Mécanique et table de poissons
+     HABITUELLES (C.FISH, comme la ferme) — demande de Guillaume : « mécanique
+     habituelle, mêmes poissons ». `startFishing` ne peut pas être réutilisée
+     telle quelle : elle ferme sur `worldRef`/`inMap`/`idxOf`, bornés à la
+     ferme (même piège que `startFishingEvil` un peu plus haut, voir sa note)
+     — une branche dédiée, à l'identique du lac maléfique.
+     ⚠️ Pas de poisson rare/`sea` ici : `seaExtremeRow` mesure les rives NORD/
+     SUD de la rivière de la ferme, une géométrie qui n'existe pas en ville. */
+  function startFishingTown(tt) {
+    const tw = townWorldRef.current; if (!tw) return;
+    if (tt.x < 0 || tt.y < 0 || tt.x >= tw.w || tt.y >= tw.h || tw.ground[tt.y * tw.w + tt.x] !== C.G_WATER) {
+      pushToast(L.toastNeedWater); return;
+    }
+    let total = 0; for (const fs of C.FISH) total += fs.weight;
+    let r = Math.random() * total, ft = 0;
+    for (let i = 0; i < C.FISH.length; i++) { r -= C.FISH[i].weight; if (r <= 0) { ft = i; break; } }
+    fishTileRef.current = { x: tt.x, y: tt.y };
+    pushToast(L.fishBite(lang === "en" ? C.FISH[ft].nameEn : C.FISH[ft].name));
+    setFishMini({ mode: ft, fish: ft, town: true });
+  }
   function fishWon() {
     const fm = fishMini, tt = fishTileRef.current;
     setFishMini(null);
@@ -9705,6 +9751,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       pushToast(L.evilFishCaught(lang === "en" ? C.EVIL_LAKE_FISH[fm.evil].nameEn : C.EVIL_LAKE_FISH[fm.evil].name));
       return;
     }
+    /* 2026-09-04 — VILLE : un req DÉDIÉ (`townFish`), jamais le `act`/"fish" de
+       la ferme — l'hôte doit valider la case visée sur la carte de VILLE, pas
+       sur `worldRef` (le piège des deux cartes sans repère commun, §4 de
+       CLAUDE.md). Même famille que `townChop`, juste en dessous du req farm. */
+    if (fm.town) { sendReq({ kind: "townFish", x: tt.x, y: tt.y, fish: fm.fish }); return; }
     // 2026-07 station update: rare catches claim `sea`; the host validates
     // the streak/extreme-row eligibility (see resolveAct in fermeEngine.js).
     if (typeof fm.sea === "number") { seaStreakRef.current = 0; sendReq({ kind: "act", action: "fish", x: tt.x, y: tt.y, sea: fm.sea }); }
@@ -16861,6 +16912,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const secs = cst.brewing && !cst.brewReady ? Math.max(1, Math.ceil((cst.brewingUntil - Date.now()) / 1000)) : 0;
         if (secs !== brewSecsRef.current) { brewSecsRef.current = secs; setBrewSecs(secs); }
       }
+      /* 2026-09-04 — accès facilité à la canne : DERNIER recours, comme le
+         chaudron juste au-dessus — une invite qui vole la place d'une autre
+         est un bâtiment qu'on ne peut plus utiliser (règle du 427). */
+      if (!pk && !rodArmedRef.current && performance.now() - waterIdleSinceRef.current >= C.ROD_PROMPT_IDLE_MS
+          && E.waterNearby(worldRef.current, meRef.current.x, meRef.current.y, C.ROD_PROMPT_RANGE)) pk = "rod";
       setPromptKeyThrottled(pk);
       // Invite cheval (monter/descendre) : plusieurs chevaux possibles.
       const hs = sharedRef.current.horses || []; let mp = null;
@@ -17712,6 +17768,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Éclats de comète (hors-zip) : même invite que le chaudron juste au-dessus.
       const shardsDone = sharedRef.current.salveCraft && sharedRef.current.salveCraft.shardsTaken;
       if (!ppk && !shardsDone && nearTile(C.EVIL_SHARDS_SPAWN) && passSpec && passSpec.key === "evil") ppk = "evilShardsPickup";
+      /* 2026-09-04 — accès facilité à la canne, dernier recours ici aussi.
+         ⚠️ Exclue pendant le halage (`evilHaulRef`) : les commandes sont
+         coupées (voir `uiBlocked` d'`updateMeEvil`), une invite de pêche
+         par-dessus la jauge de tension serait un panneau qui promet ce que E
+         ne fait plus. */
+      if (!ppk && !rodArmedRef.current && !evilHaulRef.current
+          && performance.now() - waterIdleSinceRef.current >= C.ROD_PROMPT_IDLE_MS
+          && E.waterNearby(ew, m.x, m.y, C.ROD_PROMPT_RANGE)) ppk = "rod";
       setPromptKeyThrottled(ppk);
     }
     function blockedEvil(ew, x, y) {
@@ -18463,6 +18527,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         craterDustPuff(m, slideNow, performance.now());
       }
       m.moving = !!moving || slipping;
+      markWaterIdle(m.moving);
       /* HORS-ZIP 2026-09-02 — HORS DE LA BRANCHE « il marche », ET C'EST LA
          MOITIÉ DE L'EFFET : on couche le feuillage sur la PRÉSENCE. S'arrêter
          au milieu d'une touffe la laisse écartée ; c'est en sortant qu'elle se
@@ -20550,6 +20615,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else if (nearTownProp("kiosk", 2.6)) tpk = "townKiosk";
       else if (nearTownRect(C.TOWN_PIER.x, C.TOWN_PIER.y, C.TOWN_PIER.w, C.TOWN_PIER.h + 2)) tpk = "townPier";
       else if (nearTownRect(C.TOWN_BELVEDERE.x, C.TOWN_BELVEDERE.y, C.TOWN_BELVEDERE.w, C.TOWN_BELVEDERE.h)) tpk = "townView";
+      /* 2026-09-04 — accès facilité à la canne, dernier recours (avant
+         seulement les portes de maison juste en dessous, qui couvrent un
+         rectangle bien plus étroit que le lac/la rivière). */
+      else if (!rodArmedRef.current && performance.now() - waterIdleSinceRef.current >= C.ROD_PROMPT_IDLE_MS
+               && E.waterNearby(townWorldRef.current, m.x, m.y, C.ROD_PROMPT_RANGE)) tpk = "rod";
       else {
         for (const hsn of owners) {
           const doorX = hsn.x + C.TOWN_HOUSE_W / 2, doorY = hsn.y + C.TOWN_HOUSE_H + 0.5;
@@ -21303,6 +21373,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         m.animT += dt * 9;
       } else m.animT = 0;
       m.moving = !!moving;
+      markWaterIdle(m.moving);
       // Monde maléfique MULTIJOUEUR (2026-07) : la position est désormais
       // diffusée aussi depuis la carte maléfique (champs ex/ey de pubMe) —
       // pour les coéquipiers présents sur la carte ET pour la simulation
@@ -21454,6 +21525,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         m.animT += dt * (swimming ? 4 : 9);
       } else { m.animT = 0; m.vx = 0; m.vy = 0; }
       m.moving = !!moving;
+      markWaterIdle(m.moving);
       const now = performance.now();
       maybeSendPos();
     }
@@ -28326,7 +28398,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!already && nearTile(C.EVIL_CAULDRON_SPAWN) && ew && ew.spec && ew.spec.key === "evil") { evilCauldronPickup(); return; }
       // Éclats de comète (hors-zip) : même mécanique que le chaudron juste au-dessus.
       const shardsAlready = sharedRef.current.salveCraft && sharedRef.current.salveCraft.shardsTaken;
-      if (!shardsAlready && nearTile(C.EVIL_SHARDS_SPAWN) && ew && ew.spec && ew.spec.key === "evil") evilShardsPickup();
+      if (!shardsAlready && nearTile(C.EVIL_SHARDS_SPAWN) && ew && ew.spec && ew.spec.key === "evil") { evilShardsPickup(); return; }
+      /* 2026-09-04 — accès facilité à la canne : même invite, même touche,
+         dernier recours — voir le `ppk` correspondant plus haut. */
+      if (!rodArmedRef.current && !evilHaulRef.current
+          && performance.now() - waterIdleSinceRef.current >= C.ROD_PROMPT_IDLE_MS
+          && E.waterNearby(ew, m0.x, m0.y, C.ROD_PROMPT_RANGE)) { armRod(); return; }
       return;
     }
     // Vendre l'animal porté (outil "déplacer") est prioritaire sur toute
@@ -28444,6 +28521,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           return;
         }
       }
+      /* 2026-09-04 — accès facilité à la canne : même invite, même touche,
+         dernier recours — voir le `tpk` correspondant plus haut. */
+      if (!rodArmedRef.current && performance.now() - waterIdleSinceRef.current >= C.ROD_PROMPT_IDLE_MS
+          && E.waterNearby(townWorldRef.current, m0.x, m0.y, C.ROD_PROMPT_RANGE)) { armRod(); return; }
       return;
     }
     // Zip 235: berry bush / fruit tree pick (spring). Checked BEFORE the
@@ -28511,6 +28592,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     //    Sinon (recette incomplète, ou torche éteinte), ouvre le menu
     //    "que voulez-vous concocter ?" pour déposer les ingrédients — voir
     //    cauldronMenuOpen, cauldronPlaceIngredients.
+    /* 2026-09-04 — accès facilité à la canne : même invite, même touche,
+       dernier recours — voir le `pk` correspondant plus haut. */
+    else if (!rodArmedRef.current && performance.now() - waterIdleSinceRef.current >= C.ROD_PROMPT_IDLE_MS
+             && E.waterNearby(worldRef.current, m0.x, m0.y, C.ROD_PROMPT_RANGE)) armRod();
     else { const ct = findCauldronTile(); if (ct && nearTile(ct)) cauldronInteract(); }
   }
 
@@ -29443,7 +29528,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           expression que le bandeau, et pas ailleurs. Deux traductions du même
           `promptKey` finiraient par diverger d'un libellé, et la divergence
           tomberait sur l'appareil du joueur qui n'a QUE ce bouton. */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "evilShardsPickup" ? L.promptEvilShardsPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "evilShardsPickup" ? L.promptEvilShardsPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : promptKey === "rod" ? L.promptRod : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (

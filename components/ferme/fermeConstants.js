@@ -307,6 +307,16 @@ export const FISH = [
   { id: 2, name: "Brochet", nameEn: "Pike",   sell: 180, energy: 45, color: "#6a8f5a", weight: 0.08 },
 ];
 
+// 2026-09-04 — accès facilité à la canne (demande Guillaume : « sélectionnable
+// directement en un clic ou deux, ou avec un bouton interactif », près de
+// N'IMPORTE QUEL plan d'eau). Un banal `nearTile`-like : ROD_PROMPT_RANGE en
+// cases (E.waterNearby, fermeEngine.js), ROD_PROMPT_IDLE_MS l'immobilité
+// exigée avant de proposer — courte exprès, juste assez pour ne pas s'afficher
+// en marchant simplement le long d'une berge. Nombres provisoires, à juger en
+// jouant, comme tout le reste de la quête de l'étoile (CLAUDE.md §13).
+export const ROD_PROMPT_RANGE = 2.5;
+export const ROD_PROMPT_IDLE_MS = 300;
+
 // --- Outils ---
 export const TOOLS = ["hoe", "can", "axe", "pick"];
 export const TOOL_NAMES = { hoe: "Houe", can: "Arrosoir", axe: "Hache", pick: "Pioche" };

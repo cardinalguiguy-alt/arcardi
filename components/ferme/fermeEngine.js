@@ -1195,6 +1195,27 @@ export function townTreeRegrow(chop, now) {
   }
   return back;
 }
+/* 2026-09-04 — LA PÊCHE À VALLEY TOWN, CÔTÉ HÔTE. Même famille que
+   `resolveTownChop` juste au-dessus : la carte de ville est un singleton de
+   module, donc ces deux fonctions ne mutent que ce qu'on leur passe (`f`),
+   jamais `tw`. Table et coût IDENTIQUES à la ferme (C.FISH, `useEnergy(f,
+   "fish", null)`) — demande de Guillaume : « mécanique habituelle, mêmes
+   poissons » — seule la case visée est validée sur la carte de VILLE plutôt
+   que sur `worldRef` (résolveur dédié, comme la coupe, le piège des deux
+   cartes sans repère commun de §4 CLAUDE.md). */
+export function resolveTownFish(tw, f, x, y, wantFish) {
+  const res = { changed: false, fish: -1, toast: null };
+  if (!tw || x < 0 || y < 0 || x >= tw.w || y >= tw.h || tw.ground[y * tw.w + x] !== C.G_WATER) {
+    res.toast = "needWater"; return res;
+  }
+  normalizeFarmer(f);
+  if (!useEnergy(f, "fish", null)) { res.toast = "tired"; return res; }
+  let ft = wantFish | 0;
+  if (!(ft >= 0 && ft < C.FISH.length)) ft = weightedPick(C.FISH);
+  f.inv.fish[ft] = (f.inv.fish[ft] || 0) + 1;
+  res.changed = true; res.fish = ft;
+  return res;
+}
 
 /* -------------------------------------------------------------------------
    Résolution d'une action sur le monde (hôte). MUTE world + farmer et renvoie
@@ -8322,6 +8343,20 @@ export function isWaterCell(w, x, y) {
   const fx = Math.floor(x), fy = Math.floor(y);
   if (!w || fx < 0 || fy < 0 || fx >= w.w || fy >= w.h) return false;
   return w.ground[fy * w.w + fx] === C.G_WATER;
+}
+
+/* 2026-09-04 — accès facilité à la canne : « y a-t-il de l'eau à portée ? »,
+   sur le même `w` zone-agnostique qu'`isWaterCell` juste au-dessus (ferme,
+   Valley Town ou monde maléfique). Balayage en carré, pas en cercle, pour
+   rester dans la même convention que `nearTile` (FermeGame.js) — une seule
+   façon de mesurer « proche » dans tout le dépôt. */
+export function waterNearby(w, x, y, radius) {
+  const x0 = Math.floor(x - radius), x1 = Math.floor(x + radius);
+  const y0 = Math.floor(y - radius), y1 = Math.floor(y + radius);
+  for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) {
+    if (isWaterCell(w, tx, ty)) return true;
+  }
+  return false;
 }
 
 export function boatNew(x, y, ang) { return { x, y, ang: ang || 0, spd: 0 }; }

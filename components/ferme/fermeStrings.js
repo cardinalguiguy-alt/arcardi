@@ -3803,6 +3803,8 @@ export const FERME_STR = {
     bagRodSub: "Clique pour la déployer, puis vise l'eau. Elle se range dès que tu changes de case.",
     rodArmedTip: "Déployée : vise une case d'eau.",
     rodArmedToast: "🎣 Canne déployée. Vise l'eau ; change de case pour la ranger.",
+    // 2026-09-04 — accès facilité, près de n'importe quel plan d'eau.
+    promptRod: "[E] Déployer la canne",
     /* ⚠️ ZIP 401 — LES NOMS COURTS DES VARIANTES DE CONSTRUCTION.
        Ils n'existaient pas : la case 6 n'avait que des INFOBULLES (wallTip,
        pathTip…), c'est-à-dire des phrases. Or une case d'inventaire de 44 px
@@ -5540,6 +5542,8 @@ export const FERME_STR = {
     bagRodSub: "Click to get it out, then aim at water. It goes away when you pick another slot.",
     rodArmedTip: "Out: aim at a water tile.",
     rodArmedToast: "🎣 Rod out. Aim at water; pick another slot to put it away.",
+    // 2026-09-04 — facilitated access, near any body of water.
+    promptRod: "[E] Get the rod out",
     // ZIP 401 — short names for the build variants (see the FR block).
     buildNames: {
       fence: "Fence", wall: "Wall", path: "Paving", lamp: "Lamp post",

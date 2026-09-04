@@ -11,65 +11,92 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-⚠️⚠️⚠️ **LOTS A, A2, A3, B, C ET LE HALAGE (« lot D ») SONT LIVRÉS ET VÉRIFIÉS EN JEU.** A/A2/A3/B
-le 2026-09-03 — détail `QUETE.md` §2 bis/ter/quater. Lot C (découverte, chevron, hasard de la
-canne, pêche ambiante, lancer spécial, taille de l'étoile) — ses **quatre** correctifs sont
-désormais TOUS vérifiés en jeu (le lancer spécial restait seul en suspens fin 2026-09-03 ; vu
-tourner en jeu le 2026-09-04, dans le cadre du halage ci-dessous). Détail `QUETE.md` §3, point 8
-pour le halage.
+⚠️⚠️⚠️ **LOTS A→C ET LE HALAGE SONT LIVRÉS ET VÉRIFIÉS EN JEU** (détail `QUETE.md` §2 bis-quater
+et §3 point 8). Le halage ne fait PAS la suite (points 9-10 — ramasser l'étoile et sortir du monde
+maléfique) : toujours à construire, Guillaume attend un overlay de succès séparé à l'arrivée sur
+la ferme.
 
-⚠️⚠️⚠️ **LE HALAGE (2026-09-04) : TIRER L'ÉTOILE HORS DE L'EAU, JUSQU'À LA RIVE.** Demande de
-Guillaume, mot pour mot : *« on doit voir qu'on la drag out of the water slowly but surely »*,
-puis, en cours de session : *« le rendu doit être digne des meilleurs jeux »*, *« je dois être
-wowed »*. Geste dédié (tenir Espace, une jauge de tension qui monte en tirant et retombe relâché,
-glisse si elle atteint son maximum), simulation pure (`evilHaulStep`, `quete.js`) rejouée par
-`tools/verify-quete.mjs` avec deux politiques de joueur (789/789 — un joueur patient gagne en
-~20 s, un joueur qui ne lâche jamais échoue et glisse). Rendu : pose dédiée du fermier
-(`drawStarHaul`), étoile qui se débat et émerge progressivement, ligne tendue, jauge HUD,
-tremblement d'écran sur une glissade, éclat à l'arrivée puis repos permanent sur la rive. **Testé
-en jeu à répétition** via un nouveau téléport développeur (« 🎣 Le point de sauvetage (halage) »)
-et un nouvel op (« hook ») — sans eux, chaque essai exigeait de survivre à la traversée depuis
-`EVIL_SPAWN` (voir §10 : onze trajets à pied tentés la veille, un seul arrivé).
-⚠️⚠️ **TROIS DÉFAUTS TROUVÉS ET CORRIGÉS EN JEU, LE MÊME JOUR** (Guillaume regardait en direct) :
-(1) les bras de la pose avançaient vers l'eau pendant que le buste reculait — deux grandeurs de
-signe opposé qui s'écartent avec la tension, jugé « la tête est dans des épaules désarticulées »,
-même famille que le lancer spécial (§4 de ce fichier) ; corrigé en ancrant les bras à la MÊME
-courbe que le buste, aucun terme qui leur soit propre en X ; (2) le téléport posait le joueur sur
-la berge elle-même (`G_LAKE_SHORE`, teintée du même reflet violet que l'eau) — « le fermier
-semble avoir les pieds dans l'eau » — corrigé en cherchant une case qui n'est NI eau NI berge ;
-(3) l'étoile posée sur la rive après victoire ne se dessinait pas du tout : un `drawImage` à 9
-arguments passait les coordonnées ÉCRAN comme rectangle SOURCE, une lecture hors image qui ne
-lève aucune erreur — corrigé en repassant à la forme à 5 arguments (image entière), comme le
-dessin de l'étoile prisonnière juste à côté.
-⚠️ **CE QUE CE LOT NE FAIT PAS** : la ramasser et sortir du monde maléfique (points 9-10 de
-`QUETE.md` §3) restent à construire — elle reste posée sur la rive en permanence, sans suite pour
-l'instant. Guillaume, informé, attend une **suite séparée** : *« il y en a d'autres [animations],
-notamment l'overlay de succès qui viendra quand on ramènera l'étoile sur la ferme »*.
+⚠️⚠️⚠️ **2026-09-04 (session suivante) — ACCÈS FACILITÉ À LA CANNE : LIVRÉ EN CODE, PAS ENCORE VU
+EN JEU.** Un bandeau (« [E] Déployer la canne », comme toutes les autres invites) apparaît près de
+N'IMPORTE QUEL plan d'eau — ferme, Valley Town, lac maléfique — après une courte immobilité
+(`C.ROD_PROMPT_IDLE_MS = 300`, provisoire, à juger en jouant), dans un rayon `C.ROD_PROMPT_RANGE =
+2,5` cases (`E.waterNearby`, `fermeEngine.js`, zone-agnostique). Réutilise le système d'invite
+EXISTANT (`promptKey`/`tryOpenNearby`, dernier recours dans les trois chaînes, même ordre des deux
+côtés) plutôt qu'un widget à part : E et le bouton tactile l'ont donc « gratuitement ». `armRod()`
+inchangée.
+⚠️⚠️ **EN CREUSANT, DÉCOUVERTE QUE LA PÊCHE NE MARCHAIT PAS DU TOUT À VALLEY TOWN** (`doAction`
+retournait avant même de regarder si la canne était armée). Guillaume, consulté, a tranché :
+câbler la pêche en ville pour de vrai — LIVRÉ EN CODE, PAS ENCORE VU EN JEU. `startFishingTown`
+(`FermeGame.js`) + `E.resolveTownFish` (`fermeEngine.js`, même famille que `resolveTownChop` juste
+au-dessus) + req dédié `"townFish"` (`hostHandleReq`) — l'hôte valide sur SA carte de ville, jamais
+sur `worldRef` (le piège des deux cartes, §4). Mécanique et table IDENTIQUES à la ferme (`C.FISH`),
+sur demande explicite de Guillaume — pas de poisson rare `sea` (géométrie de rivière absente en
+ville).
+⚠️⚠️ `npx next build` **compile sans erreur nouvelle** (seul `G_SOIL` préexistant). **AUCUN DES
+DEUX N'A ÉTÉ VÉRIFIÉ EN JEU** — la session s'est arrêtée au budget de contexte avant d'y arriver ;
+voir la note technique plus bas sur ce qui a coûté le temps.
 
-⚠️⚠️ **NOUVELLE DEMANDE DE GUILLAUME, PAS ENCORE COMMENCÉE (2026-09-04, en regardant ce test) :
-L'ACCÈS À LA CANNE À PÊCHE DOIT SE FACILITER PRÈS DE N'IMPORTE QUEL PLAN D'EAU** — ferme, Valley
-Town, ET les mondes du passage (lac maléfique compris) —, mot pour mot : *« la canne à pêche doit
-être sélectionnable directement en un clic ou deux, ou bien avec un bouton interactif »*. Trouvée
-en la regardant elle-même farfouiller dans le sac à chaque essai (`armRod()`, tout au fond de
-« Mon sac » — voir `FermeGame.js`). ⚠️ **PORTÉE VOLONTAIREMENT
-NON TRANCHÉE ICI** — un bouton contextuel proche de l'eau ? un raccourci clavier direct ? une
-remontée dans la barre d'outils uniquement quand une case d'eau est en vue ? — à poser avec
-Guillaume avant d'écrire du code (§2), et c'est un changement transverse aux trois zones, donc une
-livraison à part, pas mêlée au reste.
+⚠️⚠️⚠️ **NOUVELLE EXIGENCE DE GUILLAUME, PAS ENCORE CODÉE : PÊCHER EN VILLE SANS AUTORISATION DE LA
+MAIRIE DOIT ÊTRE PUNI.** Mot pour mot : *« il faut une autorisation de la mairie pour pêcher en
+ville. Sinon on paye une amende et on est banni de valley town pendant quelques jours (ingame) »*.
+Le code actuel (`startFishingTown`/`resolveTownFish` ci-dessus) laisse pêcher librement, SANS
+AUCUNE vérification de permis — **cette livraison n'est donc pas complète tant que ce garde-fou
+manque**, elle ne doit pas être jugée comme finale en l'état. ⚠️ Ce que ceci suppose, PAS ENCORE
+TRANCHÉ (§2, à poser avec Guillaume avant d'écrire) : comment on obtient l'autorisation (une
+négociation façon `maire.js`/`MaireScene.js` ? un guichet ? gratuite mais à demander une fois ?),
+le montant de l'amende, la durée du bannissement en jours de jeu, et ce que « banni » empêche
+concrètement — un bannissement touche potentiellement bien plus que la pêche seule (le train ?
+une porte civique ? le marché ?), donc bien plus de code que `startFishingTown` seul.
 
-⚠️⚠️⚠️ **ACTION SUIVANTE : PAS DE DIRECTION DONNÉE POUR LA SUITE — DEUX CANDIDATS EN ATTENTE DE
-GUILLAUME**, à ne pas trancher seul (§2) : (a) l'accès facilité à la canne, ci-dessus ; (b) la
-suite du halage — la ramasser et sortir du monde maléfique (points 9-10 de `QUETE.md` §3), pour
-laquelle Guillaume a déjà dit qu'un overlay de succès séparé viendra à l'arrivée sur la ferme.
+⚠️⚠️⚠️ **TROISIÈME MORCEAU DEMANDÉ, PAS COMMENCÉ : LA LUTTE DU BROCHET.** Mot pour mot, en tranchant
+la portée de la pêche en ville : *« mécanique habituelle, mêmes poissons mais pour les poissons
+rares (gros) faire l'animation de lutte de l'étoile, le nouveau mini jeu déjà implémenté »* —
+reprendre la simulation de tension du halage (`evilHaulStep`, `quete.js`) pour la prise du Brochet
+(seul poisson rare de `C.FISH`, weight 0,08). ⚠️ **DÉCISIONS À POSER AVEC GUILLAUME AVANT D'ÉCRIRE
+(§2), PAS ENCORE FAITES** : (1) généraliser `evilHaulStep` en fonction pure paramétrée par PROFIL
+de vitesses (`EVIL_HAUL_RATES`/`FISH_HAUL_RATES` séparés) plutôt que dupliquer sa physique (§8) ;
+(2) un nouveau dessin (`fermeArt.js`) — un brochet qui se débat, PAS `drawStarHaul` recyclé tel
+quel ; (3) ville seulement, ou aussi la ferme (qui a son propre Brochet) ? Rien n'est écrit.
 
-⚠️ **CE QUI RESTE OUVERT, SANS RAPPORT AVEC LE LOT C** : (a) le saut de rebord n'atterrit pas sur
-le chemin pavé en dessous (mur traité comme un plan plat) — Guillaume va fournir un nouveau PNG du
-bloc escalier du tribunal ; à l'intégration : l'analyser en profondeur, l'assembler SEAMLESS,
+⚠️⚠️⚠️ **BUG CONFIRMÉ EN JEU, PAS CORRIGÉ : L'OVERLAY DU CHAPITRE SUIVANT ARRIVE INSTANTANÉMENT SUR
+L'APPRIVOISEMENT DE LA VERTE.** Guillaume, en observant : « overlay arrive instantanément donc à
+retarder légèrement ». Reproduit exactement à l'écran : le toast de trouvaille et le bandeau/carte
+du chapitre suivant (lac maléfique) s'affichent dans la MÊME image, aucune respiration entre la
+découverte et la suite. À corriger : un court délai avant l'overlay de chapitre, où que ce soit
+déclenché au franchissement d'un chapitre (`quete.js`/`FermeGame.js` — pas localisé plus finement,
+faute de temps).
+
+⚠️ **NOTE TECHNIQUE POUR LA PROCHAINE SESSION QUI AUTOMATISE UNE SÉANCE DANS LE NAVIGATEUR DE
+L'OUTIL (pas un vrai onglet Chrome) : DEUX PIÈGES NEUFS, COÛTEUX.** (1) `document.hidden=true`
+en permanence neutralise le `requestAnimationFrame` natif — le patch Worker du §10 (déjà
+documenté) le corrige, MAIS (2) après un usage intensif (beaucoup de `dispatchEvent` synthétiques
+d'affilée), les touches cessent silencieusement d'être prises en compte (`keysRef` figé) SANS
+AUCUNE ERREUR CONSOLE — cause non trouvée malgré une heure de diagnostic (refs remises à zéro une
+à une, fiber React inspecté à la main). **Symptôme jumeau d'une capture d'écran qui ne se
+recompose plus** : ne jamais juger un effet sur ce screenshot dans ce mode — lire l'état RÉEL par
+le fiber React (`canvas.__reactFiber$…`, remonter au composant `FermeGame`, parcourir
+`memoizedState` comme une liste chaînée de hooks) a été la seule vérité fiable trouvée, et c'est
+elle qui a confirmé le bug de l'overlay malgré le gel. **Seule parade qui a marché : recharger dès
+le premier signe de gel**, plutôt que d'insister — à compter dans le budget de toute séance
+automatisée future.
+
+⚠️⚠️⚠️ **ACTION SUIVANTE, DANS L'ORDRE** : (1) vérifier en jeu (vraie session, plus fiable que
+l'automatisation d'après cette session) l'accès à la canne dans les trois zones et la pêche à la
+ferme/au lac maléfique ; (2) poser avec Guillaume les décisions du permis de pêche en ville
+ci-dessus, PUIS le coder — la pêche en ville actuelle (libre, sans permis) est un gap connu, pas
+une version définitive à vérifier telle quelle ; (3) corriger le délai de l'overlay de chapitre
+ci-dessus ; (4) pour la lutte du Brochet, poser les trois décisions listées plus haut avec
+Guillaume avant d'écrire une ligne ; (5) seulement après : la suite du halage (points 9-10 de
+`QUETE.md` §3), toujours en attente.
+
+⚠️ **CE QUI RESTE OUVERT, SANS RAPPORT AVEC CETTE SESSION** : (a) le saut de rebord n'atterrit pas
+sur le chemin pavé en dessous (mur traité comme un plan plat) — Guillaume va fournir un nouveau PNG
+du bloc escalier du tribunal ; à l'intégration : l'analyser en profondeur, l'assembler SEAMLESS,
 retravailler les collisions pour évoquer la 3D de façon cohérente (pas un mur plat), et TESTER
 PLUSIEURS FOIS en jeu avant de livrer ; (b) les ornements de la balustrade portent des taches
 rouges à retirer, et les ombres manquent de contraste — pas encore traité.
 
-⚠️ **ET CE QUI ATTENDAIT DÉJÀ, NON TOUCHÉ PAR CES LOTS**, dans l'ordre : le même buis que
+⚠️ **ET CE QUI ATTENDAIT DÉJÀ, NON TOUCHÉ PAR CETTE SESSION**, dans l'ordre : le même buis que
 Valley Town, pour la ferme (VF — aucun équivalent du mécanisme `TOWN_SOFT_PROPS` côté ferme, §4) ;
 la villa (`refs/grandevilladeriches.png`, même pipeline PNG que l'hôtel de ville, prompt Gemini avec
 référence, jamais d'appel API direct — §2) ; retirer `townHall2Sprite` (canevas procédural sans
