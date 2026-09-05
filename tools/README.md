@@ -1411,3 +1411,33 @@ sait pas si c'est beau. **Le placement, lui, est mesuré par `verify-vallee`** (
 atteignable par le nord, proue à ≤ 3 cases de l'eau, promenade franchissable derrière) — et c'est
 là que la séance à l'écran a corrigé le banc, pas l'inverse : voir §30.4 de
 `components/ferme/README.md`.
+
+---
+
+## `hook-bancs.sh` — LE FILET, ET IL N'EST PAS UN BANC
+
+⚠️⚠️ **CE N'EST PAS UN BANC DE PLUS : C'EST CE QUI LANCE LES VINGT AUTRES.** Appelé par le HARNAIS
+de Claude Code au démarrage d'une session (`SessionStart`, `async`, `.claude/settings.json`), jamais
+par un modèle — la règle « Claude ne lance pas de bancs de son propre chef » (§13 de `CLAUDE.md`)
+reste donc entière : ce n'est pas un jugement d'agent, c'est un réflexe de la machine.
+
+**Pourquoi il existe (2026-09-05) :** deux bancs — `verify-compo` et `verify-cycle` — étaient rouges
+depuis des jours sans que personne le sache, parce que le §10 de `CLAUDE.md` annonçait « TOUS
+RELANCÉS » en en nommant **huit sur vingt**. Aucun des deux ne signalait un défaut de jeu ; les deux
+avaient vieilli sous une livraison plus récente. ⚠️ **Mais tant qu'un banc rougit pour sa propre
+raison, la règle qu'il existe pour tenir n'est plus tenue par personne** — `verify-cycle` garde
+trente comparaisons d'indice de case dans `FermeGame.js`, et pendant ces jours-là un vrai
+`slotRef.current === 3` s'y serait glissé sans que rien ne change à l'écran. *Un banc rouge n'est
+pas une dette qui attend : c'est une protection qui a déjà cessé.*
+
+**Trois choix, et chacun a sa raison :**
+- **muet quand tout est vert** — un filet qui parle à chaque session cesse d'être lu au bout de
+  trois. Il ne parle que pour dire qu'une protection est tombée ;
+- **`async: true`** — les vingt bancs prennent **63 s** (mesuré le 2026-09-05). Il ne doit jamais
+  bloquer un tour ;
+- **`SessionStart`, pas `Stop`** — `Stop` se déclenche à la fin de CHAQUE tour ; une fois par
+  session suffit pour attraper exactement ce qui a échappé pendant des jours.
+
+⚠️ **Il a été falsifié le jour où il a été écrit** (un faux banc qui sort en code 1 le fait bien
+crier, en le nommant) — c'est la règle du §10 de `CLAUDE.md`, appliquée à l'outil qui surveille les
+outils.

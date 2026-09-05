@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./tools/hook-bancs.sh",
+            "async": true,
+            "timeout": 300,
+            "statusMessage": "Bancs de contrôle en arrière-plan…"
+          }
+        ]
+      }
+    ]
+  }
+}
