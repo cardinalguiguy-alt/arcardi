@@ -36,7 +36,18 @@ obtenus en lançant : `verify-quete` **790/790**, `verify-strings` **1 126 clés
 ### ✅ P0 — RÉCONCILIER LES DOCUMENTS AVEC LE CODE — **FAIT LE 2026-09-05**
 
 *Gardé ici tant que P1 n'est pas ouvert, parce que la LEÇON vaut pour la prochaine passe, pas
-parce que le travail reste à faire.* ⚠️ **LA PROCHAINE ACTION EST P1.**
+parce que le travail reste à faire.*
+
+⚠️⚠️⚠️ **SI GUILLAUME DIT SEULEMENT « CONTINUE », VOICI L'ARBRE DE DÉCISION — IL N'Y A PAS À LE
+LUI REDEMANDER :**
+- **Par défaut, et sans rien demander → P1 bis** (le menu dev qui pose une trame cohérente).
+  Claude le mène seul, et c'est ce qui débloque tout le reste. **C'est l'action suivante.**
+- **P1 bis fait, et Guillaume est disponible → P1** (la bifurcation narrative) — mais *après* avoir
+  joué les actes tardifs, jamais avant.
+- **P1 bis fait, Guillaume indisponible → P3** (recompter les canevas, puis la chaîne
+  `createLinearGradient`), puis **P4**, puis la **passe de menue monnaie**.
+- ⚠️ **Ne JAMAIS choisir P2 ou P5 de sa propre initiative** : la première demande une soirée de
+  Guillaume, la seconde en dépend.
 
 **C'était le seul travail qui rendait justes TOUTES les séances suivantes.** Mesuré le 2026-09-05 :
 `QUETE.md` porte **24 symboles fantômes sur 307**, contre 5 sur 381 pour `ferme/README.md` et 0
@@ -71,9 +82,62 @@ Ce qui a été corrigé — **tout est fait, ne pas rouvrir sans une mesure neuv
    `tools/README.md`, **qui est leur autorité et qui est le document le plus sain du dépôt**. Les
    ajouter au §5 aurait dupliqué une liste juste — *le §14.1 interdit de recopier, pas seulement de
    périmer.*
-6. **Ce qui reste après cette passe est donc ENTIÈREMENT dans `QUETE.md`** (points 1 à 4 ci-dessus).
+6. ✅ **RIEN NE RESTE DE P0.** Les quatre corrections de `QUETE.md` et les deux de `CLAUDE.md` sont
+   faites le 2026-09-05. *Cette ligne annonçait « ce qui reste » alors que tout était fait — corrigée
+   dans la même passe, parce que c'est exactement la leçon n°3 du §14.2 : une question à laquelle on
+   a répondu ne sort pas du fichier toute seule, elle y reste et elle ment.*
 
-### 🟠 P1 — LA BIFURCATION NARRATIVE *(Guillaume + Claude, zéro code)*
+### 🔴 P1 bis — LE MENU DEV DOIT POSER UNE TRAME, PAS DES ÉTATS *(Claude seul — **L'ACTION SUIVANTE**, gate P1 ET P2)*
+
+⚠️⚠️⚠️ **SIGNALÉ PAR GUILLAUME LE 2026-09-05, ET C'EST LA VRAIE RAISON POUR LAQUELLE QUATRE LOTS
+SONT LIVRÉS ET JAMAIS REJOUÉS.** Mot pour mot : *« le rdv avec le maire doit être fait alors qu'on
+a cliqué sur une étape de la quête plus tardive »*. Vérifié dans le code le jour même.
+
+**La quête a DEUX pistes d'état parallèles, et aucun bouton ne les avance ensemble :**
+- **les ÉTOILES** — `e.found`, `e.ch` (avancées par `chapter`, `skip`, `all`, `queen`, `shy`,
+  `green`, `evil`…) ;
+- **le BATEAU / LE MAIRE** — `e.plan`, `e.wood`, `MR.mayorSigned`, les pièces de coque (avancées
+  par `plans`, `timber`, `deliver`, `appt`).
+
+`devStar("chapter" | "skip" | "all")` n'appelle que `resolveStarFound` : **il ne touche jamais
+`e.plan`, `e.wood` ni la signature du maire.** Sauter à une étape tardive laisse donc la moitié
+bateau à l'étape 1, et produit **un état du monde qu'aucune partie réelle ne peut atteindre**.
+⚠️ **CE N'EST PAS UN BOUTON CASSÉ, C'EST UNE CATÉGORIE D'ERREUR QUE CE FICHIER CONNAÎT DÉJÀ** : le
+commentaire de `devStar("all")` avertit, depuis le 442, qu'un raccourci incomplet fait *« conclure
+que la scène finale est cassée alors que c'est le raccourci qui l'était »*. Guillaume a trouvé le
+même piège **entre** les deux pistes au lieu de l'intérieur d'une seule. *Un raccourci qui produit
+un état impossible ne raccourcit pas le test : il le remplace par un autre test.*
+
+**LA LIGNE ROUGE DU 444 RESTE INTACTE : un bouton dev ne SAUTE JAMAIS une scène.** L'audience du
+maire doit continuer de se JOUER. Ce qui manque n'est pas un bouton qui la passe, c'est un bouton
+qui amène **les deux pistes à l'état que la vraie trame aurait à ce point du récit**, et qui laisse
+exactement les scènes à jouer.
+
+**La forme : une table de JALONS DE TRAME, pas des boutons d'état.** Un bouton = un point de
+l'histoire (« Acte III, plans signés, il reste l'audience à jouer »), qui pose les deux pistes de
+façon cohérente. ⚠️ **Et la moitié qui a de la valeur est le BANC** : chaque jalon doit être un
+état que le jeu réel peut ATTEINDRE, et c'est vérifiable — on part d'une partie neuve, on applique
+les résolveurs dans l'ordre, on compare. *Sans ce contrôle on aura simplement remplacé un état
+impossible par un autre, en plus long.*
+⚠️⚠️⚠️ **P1 bis PASSE DEVANT P1, ET LA DÉPENDANCE ÉTAIT ÉCRITE À L'ENVERS ICI LE 2026-09-05
+(corrigé le jour même, sur une question de Guillaume : « faut-il attendre d'avoir réécrit la trame
+pour avoir un menu dev cohérent ? »). NON — et pour deux raisons.**
+1. **La cohérence d'un état est une propriété du CODE, pas du récit.** Ce qui rend un état
+   atteignable, ce sont les prérequis réels des résolveurs (`site.req`, l'audience avant
+   `mayorSigned`, `starPlanAsked` avant les commandes de bois). **Ils ne bougent pas quand on
+   raconte l'histoire dans un autre ordre.** Le chantier se coupe donc en deux moitiés très
+   inégales : **la MACHINE** (amener les deux pistes à un état mutuellement cohérent + le banc
+   d'atteignabilité) ne connaît pas le récit et survit à n'importe quelle réécriture ; **les
+   JALONS** (quels N points, comment on les nomme) suivent la trame et se refont en une table de N
+   entrées. On paie la seconde deux fois, et elle est petite.
+2. ⚠️⚠️ **ET C'EST L'ARGUMENT DÉCISIF : FAIRE P1 bis D'ABORD REND P1 MEILLEUR.** Sans lui, la
+   bifurcation narrative se tranche **sur le papier**, par quelqu'un qui n'a jamais joué les actes
+   tardifs — parce qu'ils sont inatteignables sans rejouer toute la trame. *C'est le geste que ce
+   fichier interdit partout ailleurs* : décider d'une abstraction sur un comportement jamais
+   observé (même faute que bâtir le système de relations sur des PNJ jamais vus à deux clients).
+   Avec P1 bis, l'ordre des actes se juge **joué** au lieu d'être **lu**.
+
+### 🟠 P1 — LA BIFURCATION NARRATIVE *(Guillaume + Claude, zéro code — ⚠️ APRÈS P1 bis)*
 
 Trancher le recentrage bateau / pluie d'astéroïdes (§13). ⚠️ **ELLE A ÉTÉ REMONTÉE DEVANT LA
 SÉANCE DE JEU, ET LA RAISON EST UNE DÉPENDANCE INVERSÉE** : elle ne coûte ni code ni soirée (c'est
@@ -84,6 +148,10 @@ peut annuler le remplacement. Livrable : la comparaison acte par acte écrite da
 avant toute ligne de `quete.js` / `maire.js` / `scierie.js`.
 
 ### 🟡 P2 — UNE SEULE SÉANCE, À DEUX CLIENTS, SCRIPTÉE *(Guillaume — gate tout le social)*
+
+⚠️⚠️ **NE PAS OUVRIR AVANT P1 bis.** Trois des quatre points ci-dessous se jouent en fin de quête ;
+sans un jalon cohérent, les atteindre demande de rejouer toute la trame à chaque essai — c'est
+précisément pour ça qu'ils sont livrés et jamais rejoués.
 
 ⚠️ **UNE soirée, pas cinq vérifications séparées.** `QUETE.md` le dit déjà (« cette séance-là peut
 faire les deux d'un coup »), et la séance à deux clients a payé **trois fois sur trois**. Recette

@@ -2321,6 +2321,23 @@ navire, un panneau qui ne donne RIEN (§4 de `CLAUDE.md` : la porte n'est jamais
 portée qui va avec — **écrite le jour où on l'écrit, pas gardée en réserve** (c'est ce que le 452
 avait fait avec `STAR_SHIP_NEAR_R`, et le 453 l'a supprimée pour ça).
 
+**A moins un. ⚠️⚠️⚠️ AVANT TOUT LE RESTE : LE MENU DEV NE SAIT PAS POSER UN ÉTAT DE TRAME COHÉRENT,
+ET C'EST CE QUI EMPÊCHE DE TESTER LA FIN DE LA QUÊTE.** Signalé par Guillaume le 2026-09-05,
+vérifié dans le code le jour même. La quête a **deux pistes d'état parallèles** — les ÉTOILES
+(`e.found`, `e.ch`) et le BATEAU/MAIRE (`e.plan`, `e.wood`, `MR.mayorSigned`, les pièces de coque)
+— et **aucun bouton ne les avance ensemble** : `devStar("chapter" | "skip" | "all")` n'appelle que
+`resolveStarFound`. Sauter à une étape tardive laisse donc la moitié bateau à l'étape 1, et le
+rendez-vous du maire réclamé au milieu d'un chapitre avancé. **C'est un état que le jeu réel ne
+peut pas produire.** ⚠️ Le commentaire de `devStar("all")` avertit du même piège depuis le 442, à
+l'intérieur d'une seule piste (*« on conclurait que la scène finale est cassée alors que c'est le
+raccourci qui l'était »*) ; Guillaume l'a trouvé ENTRE les deux. ⚠️ **La parade n'est pas de sauter
+la scène du maire** — la ligne rouge du 444 tient — mais des **jalons de trame** : un bouton = un
+point du récit, qui pose les deux pistes de façon cohérente et laisse exactement les scènes à
+jouer, **avec un banc qui prouve que chaque jalon est atteignable par une vraie partie**. Détail et
+rang dans le **P1 bis** du bloc ⏭️ REPRISE de `CLAUDE.md`. *Tant que ce n'est pas fait, tout ce qui
+suit se teste en rejouant la trame entière à chaque essai — ce qui est très exactement la raison
+pour laquelle rien de ce qui suit n'a jamais été joué jusqu'au bout.*
+
 **A. LA SÉANCE À DEUX CLIENTS — ⚠️ ELLE A COMMENCÉ AU 458, ET ELLE A PAYÉ TOUT DE SUITE.**
 Deux clients ont tourné ensemble pour la première fois : ils ont trouvé **trois blocages
 durs** (le cratère, les deux croisements d'ombres, la flaque) dont deux rendaient la quête
