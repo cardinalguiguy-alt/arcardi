@@ -257,8 +257,27 @@ ok("les nouveaux messages sont BRANCHÉS dans la table de FermeGame.js",
 
      La leçon est plus large que la ligne : UN CONTRÔLE QUI ÉNUMÈRE DES FORMES
      NE PROTÈGE QUE DES FORMES ÉNUMÉRÉES. On couvre donc aussi `s`, `sl` et
-     `slot` avec tous les opérateurs de comparaison, et `setSlot(N)`. */
-  const hard = code.match(/slotRef\.current [=!<>]==? \d|\b(?:s|sl|slot) [=!<>]==? \d\b|selectSlot\(\d|setSlot\(\d/g) || [];
+     `slot`, et `setSlot(N)`.
+
+     ⚠️⚠️ 2026-09-05 — ET IL A LA FAIBLESSE DE SA FORCE : UNE FORME ATTRAPE AUSSI
+     CE QUI LUI RESSEMBLE SANS AVOIR LE MÊME SENS. Le motif couvrait `<` et `>`,
+     et il est devenu ROUGE le jour où `starShyDash` (hors-zip 2026-09-03) a écrit
+     `if (slot <= 0) return null` — un CRÉNEAU DE TEMPS de l'étoile timide, qui
+     n'a rien à voir avec une case d'inventaire et qui porte ce nom parce que
+     `quete.js` l'appelle ainsi (`starShySlot`, `starShyPick(n, slot)`). Renommer
+     la variable aurait fait diverger le jeu du moteur pour arranger un banc.
+
+     ⚠️ LA NARROWING EST PRINCIPIELLE, PAS UNE TOLÉRANCE : une case d'inventaire
+     se compare par IDENTITÉ (`=== 3`, `!== 6`), jamais par ORDRE. Un `<=` ou un
+     `>` sur un indice est un BORNAGE, et un bornage ne peut pas vouloir dire
+     « c'est la case N ». On garde donc les quatre opérateurs d'égalité — ce qui
+     conserve mot pour mot les deux défauts que ce contrôle a déjà attrapés
+     (`slotRef.current === 3` au 403, `s !== 6` au 404) — et on laisse tomber
+     l'ordre. *Ce qu'on retire n'est pas la mesure, c'est un cas dont on peut
+     nommer la raison* (même geste qu'au §4 de `verify-compo` sur les ouvrages
+     linéaires). ⚠️ Falsifié le jour du changement : `s !== 6` réinjecté dans
+     `FermeGame.js` fait bien rougir ce contrôle. */
+  const hard = code.match(/slotRef\.current [=!]==? \d|\b(?:s|sl|slot) [=!]==? \d\b|selectSlot\(\d|setSlot\(\d/g) || [];
   ok("⚠️ aucun indice de case n'est écrit en chiffre", hard.length === 0,
      hard.length ? "EN DUR : " + hard.join(" · ") : "tout passe par SLOT.*");
 

@@ -273,12 +273,56 @@ const STAR_FR = {
          fond est très exactement l'endroit où le nouveau geste ne marche PAS (deux
          joueurs au fond sont côte à côte, jamais dos à dos). Un texte n'est pas un
          décor : il AFFIRME (448), et celui-ci aurait envoyé au mauvais endroit. */
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ 2026-09-02 (lot A) — TROIS PHRASES DE PLUS : NOURRIR, PORTER, RÉVEILLER.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️⚠️ `crater` NE DEVAIT PLUS ÊTRE LA PREMIÈRE PHRASE DU CHAPITRE, et c'est
+         la seule raison de ces trois clés : depuis que la reine se nourrit puis se
+         réveille, « un à chaque bord, dos à dos » est le DERNIER conseil du
+         chapitre, pas le premier. Une seule phrase pour trois gestes aurait envoyé
+         planter un épouvantail quelqu'un à qui il manque 80 lumières — un objectif
+         qui saute deux étapes est un objectif qui ment (448).
+         ⚠️ MÊME PARTAGE QUE `farmImpactLight`/`farmImpactLightPay` : la première dit
+         où CHERCHER (le défi de fuite, pas un lieu de la carte — d'où l'absence de
+         chevron), la seconde dit où RAPPORTER. ⚠️ PLAFOND DE 80 SIGNES. */
+      craterFeed: "La reine est éteinte. Rapporte-lui 80 lumières du défi de fuite.",
+      craterFeedPay: "Tu as ses lumières. Va les lui offrir au bord du cratère (E).",
+      /* ⚠️ ELLE NOMME LA TOUCHE ET LE GESTE, pas la mécanique : « au rythme de son
+         cœur » est tout ce qu'il faut savoir avant de voir l'anneau, et l'anneau
+         explique le reste tout seul. Un bandeau qui décrirait la bande cible ferait
+         le travail que le dessin fait mieux. */
+      craterWake: "Nourrie, elle dort encore. Réveille-la au rythme de son cœur (E).",
       crater:    "Le cratère a refroidi. Un à chaque bord, dos à dos : elle sortira.",
       craterAlone: "Personne en face ? Plante ton épouvantail au bord opposé (E).",
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ 2026-09-02 (lot A2) — LA DISCRÈTE. DEUX PHRASES, UNE PAR ZONE.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️ AUCUNE DES DEUX NE DIT OÙ ELLE EST EXACTEMENT, et c'est tout le lot :
+         le chevron mène à la place, le bandeau donne le SIGNALEMENT, et la
+         trouver reste à l'œil. Un objectif qui dirait « va à telle case » aurait
+         supprimé la seule chasse de la quête. ⚠️ PLAFOND DE 80 SIGNES. */
+      townShyAway: "Une des siennes se cache à Valley Town. Prends le train.",
+      townShy: "Chapeau et lunettes, entre la place et le parc. Regarde les passants.",
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ 2026-09-03 (lot A3) — LA VERTE. TROIS PHRASES, ET AUCUNE NE DIT OÙ.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️⚠️ CELLE-CI NE DONNE PAS DE DOMAINE, contrairement à `townShy` juste
+         au-dessus, et c'est la seule différence qui compte entre les deux
+         chasses : la sixième se cherche DANS un endroit annoncé, la cinquième se
+         piste. Elle dit donc le SIGNE (une plante qui bouge toute seule) et la
+         ressource (la reine, touche G), jamais un lieu. ⚠️ PLAFOND DE 80 SIGNES. */
+      townGreenAway: "La verte est restée à Valley Town. Prends le train.",
+      townGreen: "Une plante qui remue sans vent. Demande un indice à la reine (G).",
+      townGreenLed: "La reine a pris la tête. E pour l'arrêter, E pour repartir.",
       /* ⚠️ ZIP 469 — SIX OBJECTIFS SONT PARTIS AVEC LE DÉCHANT (`lean`,
          `leanAgain`, `lakeShard`, `beadShard`, `nestShard`, `belfry`, `song`).
          `STAR_GOAL_KEYS` les dérive de la table : le banc échouerait sur une clé
          orpheline de texte, il échoue aussi sur un texte orphelin de clé. */
+      /* 2026-09-03 (lot C) — LA SEPTIÈME SŒUR. Elle passe devant le chantier
+         naval tant qu'on ne l'a pas vue (voir la note de `starGoalKey`) ; une
+         fois trouvée, cette clé ne revient plus — rien n'est encore construit
+         pour la sauver, et le bandeau rend la main au bateau. */
+      evilSeek: "Une lumière s'éteint au fond du lac maléfique. Va voir.",
       /* ⚠️ ZIP 454 — plus courtes que leurs sœurs : le français gonfle de 15 à
          20 %, et ces deux-là portent un nom propre qu'on ne peut pas raccourcir. */
       engineer:       "Va demander un ingénieur naval à la mairie (E).",
@@ -375,10 +419,37 @@ const STAR_FR = {
     farmImpactCool:     "Ce n'est pas une des nôtres — c'est du métal de ciel. Ça, ça se travaille.",
     /* Chapitre 2 — le cratère. `craterHot` couvre trois minutes d'attente pure. */
     craterHot:          "Elle est encore dedans. Laisse le trou refroidir.",
+    /* 2026-09-02 (lot A) — LA VOIX DE LA PETITE ÉTOILE SUR LES TROIS NOUVEAUX
+       ÉTATS. ⚠️ C'est elle qui EXPLIQUE le lien narratif que la mécanique pose :
+       la lumière qu'on porte à la grande est celle de la petite. Sans ces trois
+       phrases, « va chercher 80 bonbons » serait une corvée sans raison — et la
+       raison est très exactement ce que Guillaume demande depuis le début (les
+       petites aident à atteindre la grande). */
+    craterFeed:         "Elle est vide. Ce qu'elle veut, c'est ma lumière à moi — descends la chercher.",
+    craterFeedPay:      "Tu portes un peu de moi. Verse-le au bord, elle saura.",
+    craterWake:         "Elle a de quoi brûler, mais rien ne bat. Frappe avec son cœur, pas plus vite.",
     crater:             "Celle-là nous a menées ici. C'est elle qui sait où on va.",
     craterAlone:        "Un seul dos ne suffira pas pour elle. Trouve-lui quelqu'un — ou quelque chose qui y ressemble.",
+    /* 2026-09-02 (lot A2) — C'EST LA REINE QUI PARLE, et c'est elle qui apprend au
+       joueur que la discrète existe : sans ces deux phrases, la sixième sœur
+       apparaîtrait dans le bandeau sans que personne l'ait annoncée. */
+    townShyAway:        "Une de mes sœurs est descendue en ville. Elle ne veut pas qu'on la voie.",
+    townShy:            "Elle croit qu'un chapeau suffit à la cacher. Regarde qui ne bouge pas comme les autres.",
+    /* 2026-09-03 (lot A3) — LA VERTE, PAR LA REINE. ⚠️ ELLE DIT CE QU'ELLE SENT,
+       jamais où aller (règle du chapeau de `frame`) : le bandeau donne le signe,
+       elle donne la raison de le chercher. Sans ces phrases, la cinquième sœur
+       apparaîtrait dans le bandeau sans que personne ait dit qu'elle existe —
+       c'est ce qu'on a corrigé pour la discrète au lot A2. */
+    townGreenAway:      "La verte a pris la couleur des feuilles. Je ne la sens que de l'autre côté du rail.",
+    townGreen:          "Elle est verte, alors elle se croit invisible dans un buisson. Un buisson qui remue sans vent, c'est elle.",
+    townGreenLed:       "Je vais devant. Reste derrière moi, et regarde les plantes.",
     townWait:           "C'est de l'autre côté du rail que ça se passe maintenant.",
     townWaitThere:      "Reste près de moi. Personne ici ne me voit.",
+    /* 2026-09-03 (lot C) — texte de Guillaume (master prompt), repris mot pour
+       mot : c'est la phrase qui déclenche tout ce chapitre, elle ne s'invente
+       pas. `starGoalKey` la fait passer devant le chantier naval une seule fois
+       (jusqu'à ce qu'elle soit trouvée). */
+    evilSeek:           "La septième étoile a perdu presque toute son énergie. Elle est prisonnière d'un liquide qui la corrompt ; elle s'éteint. Trouve-la.",
     /* Chapitre 3 — LE CHANTIER. ⚠️ CHAQUE PHRASE RAMÈNE AU BATEAU, sans exception :
        c'est là que la quête se perdait, et une compagne qui philosophe pendant
        qu'on attend des planches ferait exactement le contraire de ce qu'on lui
@@ -615,6 +686,24 @@ const STAR_FR = {
        le payant est la définition du « le jeu propose et refuse » (426). */
     lightShort: (have, need) => `Il t'en faut ${nfr(need)} rapportés depuis la chute. Tu en as ${nfr(have)}.`,
     lightGiven: "La lumière bleue coule au fond du trou. Maintenant, tourne-toi.",
+    /* ╔═════════════════════════════════════════════════════════════════════
+       ║ 2026-09-02 (lot A) — `lightGiven` DISAIT « MAINTENANT, TOURNE-TOI »
+       ║ AUX DEUX ÉTOILES, ET C'EST DEVENU FAUX POUR LA REINE.
+       ╚═════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ C'est le défaut du 475 / 478 / 479 pris de vitesse : une phrase qui
+       couvrait un geste en couvre soudain deux, et elle envoie faire l'étape
+       d'APRÈS. La bleue se prend en se retournant, la reine demande encore un
+       réveil — deux gestes, donc deux phrases, choisies par le lieu côté hôte
+       (voir `starLightGiven`/`starQueenFed`, FermeGame.js).
+       ⚠️ ELLE ANNONCE LE GESTE SUIVANT SANS DÉCRIRE LA MÉCANIQUE : l'anneau qui
+       bat au-dessus du trou l'explique mieux qu'une phrase ne le ferait. */
+    queenFed: "Les lumières coulent en elle. Elle a de quoi brûler — mais rien ne bat encore.",
+    wokeHer: "Un battement. Puis un autre. Elle ouvre les yeux, et elle est jaune.",
+    /* ⚠️ LE SEUL TEXTE QUI DÉCRIVE LA MÉCANIQUE, ET IL NE S'AFFICHE QU'UNE FOIS,
+       À L'OUVERTURE DU GESTE : l'anneau fait le reste. Il dit la RÈGLE (frapper
+       quand l'anneau touche la marque) et son piège (marteler ne sert à rien),
+       parce que c'est très exactement ce qu'un joueur essaie en premier. */
+    wakeHint: "Frappe quand l'anneau touche la marque. Marteler la fait retomber.",
     /* ── LE PLAT. ⚠️⚠️ AUCUNE NE NOMME UNE RECETTE : ce qu'on cuisine ne regarde
        personne, et l'inventer aurait demandé un ingrédient, donc un prix, donc un
        arbitrage que Guillaume n'a pas tranché. Le geste est le CHEMIN. */
@@ -629,6 +718,35 @@ const STAR_FR = {
        disparaît » aurait été un constat d'affichage ; celle-ci est une raison, et
        c'est ce qui transforme une absence en intention. */
     hideOnly: "Elle glisse dans ton dos et s'éteint. Elle ne veut exister que pour toi.",
+    /* ╔══════════════════════════════════════════════════════════════════════════
+       ║ 2026-09-03 (lot A3) — LES INDICES DE LA REINE. C'EST ELLE QUI PARLE.
+       ╚══════════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ LA TEMPÉRATURE ET LE CAP SONT DEUX PHRASES QU'ON ASSEMBLE, et ce n'est
+       pas de la paresse : cinq températures × huit caps feraient quarante phrases
+       à écrire, à traduire et à relire — c'est-à-dire quarante occasions de se
+       tromper pour une information qui en porte deux. La reine dit ce qu'elle
+       sent, puis d'où elle le sent.
+       ⚠️ AUCUNE NE DONNE DE DISTANCE EN CASES : un nombre transformerait la piste
+       en calcul, et Guillaume a demandé « chaud froid », pas un télémètre. */
+    hintTemp: {
+      burning: "Elle est là. À portée de main, et elle ne bouge plus.",
+      hot: "Chaud. Elle est tout près — cherche une plante qui remue.",
+      warm: "Tiède. Elle est dans ce coin de la ville.",
+      cold: "Froid. Tu la cherches loin d'elle.",
+      icy: "Glacé. Tu es à l'autre bout de la ville.",
+    },
+    hintWay: { n: "vers le nord", ne: "vers le nord-est", e: "vers l'est", se: "vers le sud-est",
+               s: "vers le sud", sw: "vers le sud-ouest", w: "vers l'ouest", nw: "vers le nord-ouest" },
+    /* ⚠️ ON ASSEMBLE ICI, PAS DANS LA VUE : deux fabriques de phrase (une par
+       langue) qui vivraient dans `FermeGame.js` seraient un texte à trous rempli
+       par du code, c'est-à-dire le défaut du 481 (« Scrutin dans Lui jours »). */
+    hintSay: (temp, way) => `${temp} ${way}.`,
+    hintLeft: (n) => n > 0 ? `Il reste ${n} indice${n > 1 ? "s" : ""}.` : "C'était le dernier indice. Demande encore, et je te mènerai.",
+    hintLead: "Alors viens. Je passe devant — E pour t'arrêter, E pour repartir.",
+    hintAway: "Elle n'est pas de ce côté du rail. Descends en ville d'abord.",
+    /* ⚠️ ELLE SE TROUVE, ELLE NE SE GAGNE PAS : la phrase de la trouvaille dit
+       ce qu'on a vu (une plante qui bougeait), pas ce qu'on a réussi. */
+    greenGot: "Le buisson s'écarte tout seul. Elle était là depuis le début, verte sur vert.",
     noScarecrow: "Il te faut un épouvantail à planter. Il s'en achète un à la boutique.",
     /* ⚠️⚠️ ZIP 459 — LES DEUX PHRASES DE L'EFFORT, ET ELLES EXISTENT À CAUSE DU
        456 : *un geste continu qui ne rend rien ne se distingue pas d'un jeu
@@ -938,6 +1056,13 @@ const STAR_FR = {
     found: (who, n, total) => `${who} a trouvé un morceau. ${nfr(n)} sur ${nfr(total)}.`,
     chapter: (t) => `${t}`,
     crater: (who) => `${who} a apprivoisé l'étoile reine.`,
+    // 2026-09-02 (lot A2) — la chasse s'arrête pour TOUT LE MONDE quand elle est
+    // repérée : c'est ce qui justifie une ligne de chat (voir la note côté hôte).
+    shySpotted: (who) => `${who} a démasqué la petite étoile au chapeau.`,
+    /* 2026-09-03 (lot A3) — même exception motivée que `shySpotted` : la chasse
+       s'arrête pour TOUT LE MONDE, et sans cette ligne l'autre joueur continuerait
+       de fouiller les buissons d'un quartier vide. */
+    greenTracked: (who) => `${who} a débusqué la petite étoile verte dans son buisson.`,
     tamed: (who) => `${who} a apprivoisé une petite étoile.`,
     /* ⚠️⚠️ ZIP 479 — LE SECOND JOUEUR EST NOMMÉ, ET C'EST LA MOITIÉ DU DÉFAUT
        « il ne reçoit rien » de l'audit 477. Il a tenu l'autre bord du cratère (ou
@@ -960,6 +1085,43 @@ const STAR_FR = {
     /* ⚠️ ZIP 453 — « Le bateau a pris la mer » ÉTAIT FAUX : il restait à quai.
        Il est fini ; il partira avec Eduardo (voir `sail`). */
     done: "Le bateau est fini. L'étoile est rentrée.",
+  },
+  /* 2026-09-03 (lot C) — LA SEPTIÈME SŒUR. Deux voix distinctes, comme le reste
+     de la quête (§4 de `CLAUDE.md` : chaque geste dit pourquoi il compte) :
+     `trapped` est ELLE, depuis l'eau — jamais la reine, qui n'y est pas — donc un
+     toast plutôt qu'une bulle positionnée sur un compagnon qui n'existe pas
+     encore ; `needRod` est la reine, quelques secondes après (`starTell`, la même
+     fonction qui échelonne déjà d'autres suites de phrases). Les deux se disent
+     UNE fois pour toute la table (déclenchées sur la transition `e.evilFound`
+     dans `starWatch`), pas à chaque joueur qui s'approche séparément. */
+  evil: {
+    trapped: "⭐ « ...Sauve-moi... »",
+    needRod: "Il te faudra ta canne — mais l'eau qui la retient corrompt tout ce qu'on y trempe.",
+    missionTitle: "Objectif",
+    missionBody: "Trouver la septième étoile.",
+    /* Le piège de la canne nue (§3 de QUETE.md) : trois phrases pour trois
+       instants (armée / cassée à l'instant / déjà cassée), jamais la même
+       répétée — la leçon des « trois états sous une seule phrase » (§4). */
+    rodArming: "L'eau corrompue s'infiltre dans ta ligne...",
+    rodBroken: "Ta canne s'est brisée dans cette eau maudite.",
+    rodStillBroken: "Ta canne est cassée ici. Protège-la avant de retenter.",
+    /* 2026-09-04 — LE HALAGE. `hookToast` remplace le silence qui suivait le
+       lancer spécial (rien à pêcher là, avant ce lot) : elle mord, et le
+       geste commence. `haulHint` reste affiché tout du long (HUD, pas un
+       toast qui défile). `haulSlip` accompagne chaque glissade — bref, pour
+       ne pas noyer l'écran si le joueur en enchaîne plusieurs. `haulWon`
+       clôt la scène ; elle ne dit pas « sauvée », qui appartient à un
+       chantier qu'on n'a pas encore construit (la ramasser, la sortir du
+       monde maléfique). */
+    hookToast: "Ça mord fort — c'est elle ! Tiens bon.",
+    haulHint: "Maintiens Espace pour tirer. Relâche avant que la ligne ne casse.",
+    haulSlip: "Elle tire fort... tu perds du terrain !",
+    haulWon: "Tu la tires enfin sur la rive, hors de l'eau corrompue.",
+    /* 2026-09-04 (lot E) — points 9-10 de QUETE.md §3 : la ramasser, sortir du
+       monde maléfique, la poser, la réanimer. */
+    pickedUp: "Tu la portes contre toi, fragile, presque éteinte.",
+    placed: "Tu la poses doucement au sol.",
+    revived: "Son cœur reprend enfin. La septième sœur est sauvée.",
   },
   /* ⚠️ ZIP 479 — LE BOUTON DU CHAUDRON. Il nomme le plat sans donner de recette :
      ce qu'on met dedans ne regarde personne, et l'inventer aurait demandé un
@@ -1000,6 +1162,9 @@ const STAR_FR = {
     dishTake: "E : prendre le plat encore fumant",
     dishPass: "E : reprendre le plat",
     dishGive: "E : lui donner le plat",
+    // 2026-09-04 (lot E) — points 9-10 de QUETE.md §3.
+    evilPlace: "E : la poser au sol",
+    evilRevive: "E : la réanimer",
     effigy: "E : planter l'épouvantail au bord",
     /* ⚠️⚠️ ZIP 456 — LE CRATÈRE NE PROMET PLUS UNE TOUCHE. « E : ne plus bouger »
        décrivait le seul geste du jeu qui n'A PAS de touche, avec le préfixe de
@@ -1015,6 +1180,19 @@ const STAR_FR = {
        chapitre 2. */
     crater: "Chacun un bord, dos à dos (E : pourquoi ?)",
     craterHot: "E : attendre que ça refroidisse",
+    /* 2026-09-02 (lot A) — DEUX INVITES, DEUX TOUCHES RÉELLES. ⚠️ Contrairement à
+       `crater` juste au-dessus (une posture, pas une touche), ces deux-là FONT
+       quelque chose quand on presse E — donc elles le disent, règle du 456. */
+    feed: "E : lui offrir la lumière bleue",
+    wake: "E : la réveiller",
+    /* 2026-09-02 (lot A2) — LA SEULE INVITE DE LA QUÊTE QUI SOIT UNE RÉCOMPENSE :
+       la voir, c'est l'avoir. Elle ne s'affiche que si l'on est assez près, donc
+       la lire signifie qu'on a déjà gagné la chasse. */
+    shy: "E : lui dire que tu l'as reconnue",
+    /* 2026-09-03 (lot A3) — MÊME FAMILLE QUE `shy` : la lire, c'est avoir gagné.
+       Elle nomme le BUISSON et pas l'étoile, parce que c'est un buisson qu'on a
+       sous les yeux — on ne l'a pas encore vue. */
+    track: "E : écarter le feuillage",
     engineer: "E : parler à l'ingénieur",
     /* ⚠️ ZIP 478 — LA CALE. Elle nomme la TOUCHE et le GESTE (règle du 455 :
        OÙ, QUOI, COMMENT), et pas la pièce : le mini-jeu la nomme deux dixièmes de
@@ -1143,13 +1321,27 @@ const STAR_EN = {
       craterHot: "East of Valley Town the hole still burns. Wait for it to cool.",
       /* ⚠️ ZIP 479 — voir la note française : le fond du trou est l'endroit où le
          nouveau geste ne marche pas, ce texte y envoyait. */
+      /* 2026-09-02 (lot A) — see the FR block: three gestures, three lines. */
+      craterFeed: "The queen has gone out. Bring her 80 lights from the escape run.",
+      craterFeedPay: "You have her lights. Go and offer them at the crater rim (E).",
+      craterWake: "Fed, but still asleep. Wake her to the beat of her heart (E).",
       crater:    "The crater has cooled. One on each rim, backs turned: it will rise.",
       craterAlone: "Nobody across from you? Plant your scarecrow on the far rim (E).",
+      /* 2026-09-02 (lot A2) — see the FR block: neither line says where she is. */
+      townShyAway: "One of her sisters hides in Valley Town. Take the train.",
+      townShy: "Hat and sunglasses, between the square and the park. Watch the passers-by.",
+      // 2026-09-03 (lot A3) — see the French note: no district, only a sign and a
+      // resource. The green one is TRACKED, the hidden one is SPOTTED.
+      townGreenAway: "The green one stayed in Valley Town. Take the train.",
+      townGreen: "A plant stirring with no wind. Ask the queen for a hint (G).",
+      townGreenLed: "The queen leads. E to stop, E to set off again.",
       /* ⚠️ ZIP 469 — voir la note française : sept objectifs partent avec le déchant. */
       /* ⚠️⚠️ ZIP 454 — LES DEUX OBJECTIFS DE LA CONSTRUCTION. Ils suivent la même
          règle que les huit autres — OÙ et QUOI, jamais pourquoi — et ils sont plus
          courts que la moyenne parce qu'ils portent un NOM PROPRE, qui ne se coupe
          pas sans devenir illisible (le bandeau rabote en silence, 449). */
+      // 2026-09-03 (lot C) — see the French note: takes priority over the shipyard chain until found.
+      evilSeek: "A light is fading at the bottom of the evil lake. Go look.",
       engineer:       "Ask the town hall for a naval engineer (E).",
       engineerTravel: "Kerguélen has been notified. He'll reach Valley Town shortly.",
       engineerWork:   "Kerguélen is drawing by the pier. He'll hand over his plans soon.",
@@ -1198,10 +1390,24 @@ const STAR_EN = {
     farmImpactLure:     "It is afraid of your hands. It needs something that shines brighter.",
     farmImpactCool:     "That is not one of us — that is sky metal. That can be worked.",
     craterHot:          "She is still inside. Let the hole cool down.",
+    /* 2026-09-02 (lot A) — see the FR block: the little star explains that the
+       light carried to the big one is her own. */
+    craterFeed:         "She is empty. What she wants is my own light — go down and fetch it.",
+    craterFeedPay:      "You are carrying a piece of me. Pour it at the rim; she will know.",
+    craterWake:         "She has fuel, but nothing beats. Strike with her heart, no faster.",
     crater:             "That one led us here. She is the one who knows where we are going.",
     craterAlone:        "One back will not be enough for her. Find her someone — or something that looks like one.",
+    /* 2026-09-02 (lot A2) — see the FR block: the queen is the one who tells you. */
+    townShyAway:        "One of my sisters went down to the town. She does not want to be seen.",
+    townShy:            "She thinks a hat is enough to hide her. Look for whoever does not move like the others.",
+    // 2026-09-03 (lot A3) — the queen names the sign, never the place.
+    townGreenAway:      "The green one took the colour of leaves. I only feel her past the rails.",
+    townGreen:          "She is green, so she believes a bush makes her invisible. A bush stirring with no wind is her.",
+    townGreenLed:       "I will go first. Stay behind me, and watch the plants.",
     townWait:           "It happens on the other side of the rails now.",
     townWaitThere:      "Stay close to me. Nobody here can see me.",
+    // 2026-09-03 (lot C) — Guillaume's exact wording, translated. See the French note.
+    evilSeek:           "The seventh star has lost nearly all her light. She is trapped in a liquid that is corrupting her; she is fading. Find her.",
     /* Voir la note côté français : au chapitre 3, chaque line brings it back to
        the boat. She names the next step in her own way; she does not muse. */
     engineer:           "We need plans before we need planks. Go and fetch the engineer.",
@@ -1348,6 +1554,11 @@ const STAR_EN = {
     queenSide: "Same side, and it sees you both. Go to the far rim.",
     lightShort: (have, need) => `You need ${nen(need)} brought back since the fall. You have ${nen(have)}.`,
     lightGiven: "Blue light pools at the bottom of the hole. Now turn around.",
+    /* 2026-09-02 (lot A) — see the FR block: one line per gesture, because the
+       queen still needs waking where the blue one only needed a turned back. */
+    queenFed: "The lights pour into her. She has fuel now — but nothing beats yet.",
+    wokeHer: "One beat. Then another. She opens her eyes, and she is yellow.",
+    wakeHint: "Strike when the ring meets the mark. Hammering makes her sink back.",
     dishCook: "The cauldron heats up. It smells of something no book ever wrote down.",
     dishSimmer: "It is simmering.",
     dishReady: "It is ready, and steaming.",
@@ -1356,6 +1567,23 @@ const STAR_EN = {
     dishCooling: "It is cooling. Pick up the pace.",
     dishCold: "The dish went cold. It did not even look up. Start again.",
     hideOnly: "It slips behind you and goes out. It only wants to exist for you.",
+    /* 2026-09-03 (lot A3) — the queen's hints. Temperature and bearing are two
+       sentences we assemble: five by eight would be forty lines to write, translate
+       and keep in step, for information that carries two facts. */
+    hintTemp: {
+      burning: "She is here. Within arm's reach, and she has stopped moving.",
+      hot: "Warm. She is very close — look for a plant that stirs.",
+      warm: "Lukewarm. She is somewhere in this part of town.",
+      cold: "Cold. You are looking far from her.",
+      icy: "Freezing. You are at the other end of town.",
+    },
+    hintWay: { n: "to the north", ne: "to the north-east", e: "to the east", se: "to the south-east",
+               s: "to the south", sw: "to the south-west", w: "to the west", nw: "to the north-west" },
+    hintSay: (temp, way) => `${temp} ${way}.`,
+    hintLeft: (n) => n > 0 ? `${n} hint${n > 1 ? "s" : ""} left.` : "That was the last hint. Ask again and I will lead you.",
+    hintLead: "Then come. I will go ahead — E to stop, E to set off again.",
+    hintAway: "She is not on this side of the rails. Go down to town first.",
+    greenGot: "The bush parts on its own. She was there all along, green on green.",
     noScarecrow: "You need a scarecrow to plant. The shop sells them.",
     /* ⚠️ ZIP 459 — voir la note en face, côté français : les deux moitiés de
        l'effort, dites pendant qu'on le fournit. */
@@ -1573,6 +1801,34 @@ const STAR_EN = {
       dish: "🍲 A hot dish, ready to pick up",
       // 480 bis — same family: skips the mining + brewing, never the hold.
       lure: "✨ A Star Essence vial (the taming stays)",
+      /* 2026-09-02 (lot A) — même famille que `candy`/`dish`/`lure` : on saute la
+         corvée, jamais le geste. Le trou est froid et les lumières sont dans le
+         flux ; l'offrande, le réveil au rythme et la posture restent à jouer.
+         ⚠️ AUCUN CHIFFRE DANS LE LIBELLÉ : le prix vit dans `starOfferPrice`, et un
+         « 80 » écrit ici serait faux le jour où il bouge (§8 de CLAUDE.md). */
+      queen: "👑 The queen: cold crater + her lights (feed/wake stay)",
+      /* 2026-09-02 (lot A2) — il apprivoise la reine et LAISSE LA CHASSE : le geste
+         de la discrète est de la trouver, donc le bouton ne la trouve pas. */
+      shy: "🕶️ Queen tamed — the hidden sister is still out there",
+      /* 2026-09-03 (lot A3) — the green one needs her OWN shortcut: without it,
+         judging her hunt would mean winning the hidden one's hunt first. Queen and
+         hidden sister tamed, green one untouched, hints untouched. */
+      green: "🌿 Queen + hidden one tamed — the green one is still hiding",
+      /* 2026-09-03 (lot C) — closes the whole chapter (all six companions) and
+         resets the rod-break timer, since lot D (protection) doesn't exist yet
+         to repair it any other way. Does NOT reset `evilFound` — see the note
+         next to op "evil" in quete.js. */
+      evil: "🌊 All six tamed — evil lake unlocked, rod reset",
+      /* 2026-09-04 — same family as `evil`, one step further: also marks her
+         as seen, so this single click opens the haul straight away instead
+         of requiring a fresh special cast every test. Does not start the
+         haul itself (purely local state, see evilHaulRef in FermeGame.js) —
+         pair with the "Stand at the rescue spot" teleport below, then cast. */
+      hook: "🎣 She's been seen — ready for the haul",
+      /* 2026-09-04 (lot E) — same family, one step further: also marks her
+         as hauled onto the shore, so this single click opens pickup/place/
+         revive straight away instead of replaying the haul every test. */
+      rescue: "🌊➡️🏖️ Hauled onto the shore — ready to carry home",
     }[op] || op),
     scene: (s) => ({ warn: "🎬 The announcement", fall: "🎬 The eight farm impacts", townFall: "🎬 The Valley Town meteor", end: "🎬 The ending" }[s] || s),
     sceneLabel: "Replay a scene",
@@ -1595,6 +1851,11 @@ const STAR_EN = {
     found: (who, n, total) => `${who} found a piece. ${nen(n)} of ${nen(total)}.`,
     chapter: (t) => `${t}`,
     crater: (who) => `${who} tamed the queen star.`,
+    // 2026-09-02 (lot A2) — see the FR block: the hunt ends for everyone.
+    shySpotted: (who) => `${who} saw through the little star in the hat.`,
+    // 2026-09-03 (lot A3) — same motivated exception as `shySpotted`: the hunt ends
+    // for everyone, so the other player must not keep searching an empty district.
+    greenTracked: (who) => `${who} flushed the little green star out of its bush.`,
     tamed: (who) => `${who} tamed a little star.`,
     /* ⚠️ ZIP 479 — voir la note française : le second joueur est nommé. */
     /* ⚠️ ZIP 479 — voir la note française : le chaudron se dit, l'offrande non. */
@@ -1606,6 +1867,24 @@ const STAR_EN = {
       : `${who} searched the last crater on the farm.`,
     /* ⚠️ ZIP 453 — « The boat sailed » était faux : il restait à quai. */
     done: "The boat is finished. The star went home.",
+  },
+  // 2026-09-03 (lot C) — see the French note: two distinct voices, fired once
+  // for the whole table on the e.evilFound transition (starWatch).
+  evil: {
+    trapped: "⭐ \"...Save me...\"",
+    needRod: "You will need your rod — but the water holding her corrupts anything dipped in it.",
+    missionTitle: "Objective",
+    missionBody: "Find the seventh star.",
+    rodArming: "The corrupted water seeps into your line...",
+    rodBroken: "Your rod snapped in this cursed water.",
+    rodStillBroken: "Your rod is broken here. Protect it before trying again.",
+    hookToast: "Something bites hard — it's her! Hold on.",
+    haulHint: "Hold Space to pull. Release before the line snaps.",
+    haulSlip: "She's pulling hard... you're losing ground!",
+    haulWon: "You finally drag her onto the shore, out of the corrupted water.",
+    pickedUp: "You hold her close, fragile, barely glowing.",
+    placed: "You gently set her down.",
+    revived: "Her heart beats again at last. The seventh sister is saved.",
   },
   /* ── LES INVITES, UNE SEULE CLÉ-FONCTION. ⚠️ Le préfixe `star:` est lu une
      fois, ici — six `if` répartis dans trois boucles de rendu finiraient par ne
@@ -1628,11 +1907,21 @@ const STAR_EN = {
     dishTake: "E: take the steaming dish",
     dishPass: "E: take the dish over",
     dishGive: "E: give it the dish",
+    evilPlace: "E: set her down",
+    evilRevive: "E: revive her",
     effigy: "E: plant the scarecrow on the rim",
     tame: "Turn your back, stand still (E: why?)",
     /* ⚠️ ZIP 479 — voir la note française : deux bords, pas une posture solitaire. */
     crater: "One on each rim, backs turned (E: why?)",
     craterHot: "E: wait for it to cool",
+    // 2026-09-02 (lot A) — two real keys, see the FR block.
+    feed: "E: offer it the blue light",
+    wake: "E: wake her",
+    // 2026-09-02 (lot A2) — see the FR block: reading it means you already won the hunt.
+    shy: "E: tell her you recognised her",
+    // 2026-09-03 (lot A3) — it names the BUSH, not the star: that is what is in
+    // front of the player. She has not been seen yet.
+    track: "E: part the leaves",
     engineer: "E: talk to the shipwright",
     raise: "E: raise the piece on the slipway",
   })[k] || "E",
@@ -2703,6 +2992,7 @@ export const FERME_STR = {
       ballot: "Je viens voter.",
       fonds: "C'est quoi, le fonds de la halle ?",
       engineer: "Connaissez-vous quelqu'un qui dessine des bateaux ?",
+      fishPermit: "Je voudrais un permis de pêche.",
     }[k] || k),
     hallTopicTitle: (k) => ({
       mayor: "🎩 Rencontrer le maire",
@@ -2713,6 +3003,7 @@ export const FERME_STR = {
       ballot: "🗳️ Le scrutin",
       fonds: "📜 Le fonds de la halle",
       engineer: "📐 L'architecte naval",   // 469 — la ligne était écrite DEUX fois (préexistant)
+      fishPermit: "🎣 Le permis de pêche",
     }[k] || k),
     hallMayorNow: (e, n) => `Le maire en exercice est ${e} ${n}.`,
     hallMayorAudience: (d, k) => k === 0
@@ -2737,6 +3028,20 @@ export const FERME_STR = {
     hallFondsWhere: "L'avis est affiché au tableau des nouvelles, sur la place. Allez le lire, vous en saurez autant que moi.",
     hallSoonWedding: "Les publications de bans sont prêtes et la salle est dressée — il manque l'officier d'état civil. Revenez à la prochaine mise à jour : la salle des mariages est la deuxième porte à gauche.",
     hallSoonLand: "Le plan est affiché au cadastre, première porte à gauche. La vente, elle, passera par le notaire du tribunal : on choisit ici, on signe là-bas.",
+    /* ═══ 2026-09-04 — LE PERMIS DE PÊCHE EN VILLE ═══════════════════════ */
+    hallFishPermitIntro: (p, v) => `« Il est interdit de pêcher dans les eaux de la commune sans autorisation. » Un permis coûte ${p} or et reste valable ${v}.`,
+    hallFishPermitHave: (v) => `Vous avez un permis valide encore ${v}.`,
+    hallFishPermitNone: "Vous n'avez actuellement aucun permis valide.",
+    hallFishPermitBanned: (v) => `« Vous êtes interdit de retour en ville pour l'instant, encore ${v}. Revenez me voir après. »`,
+    hallFishPermitDistrust: (v) => `« Après ce qui s'est passé, l'administration reste prudente encore ${v}. Vous pouvez toujours demander. »`,
+    hallFishPermitAsk: "Demander le permis",
+    townFishBannedToast: "🚫 Vous êtes interdit de retour en ville pour l'instant.",
+    townFishNoPermit: "🚨 Pris en flagrant délit de pêche sans permis ! La prise est confisquée.",
+    townFishPermitGranted: "🎣 Permis délivré par Léonie.",
+    townFishPermitBanned: "« Vous êtes actuellement banni, je ne peux rien pour vous. »",
+    townFishPermitDistrust: "« Après ce qui s'est passé, je préfère encore attendre. » — Léonie refuse.",
+    townFishPermitNoGold: "Il vous manque d'or pour le permis.",
+    chatTownFishCaught: (n, g) => `🚨 ${n} a été pris à pêcher sans permis — amende de ${g} or et banni du train.`,
     candName: (k) => ({
       vasseur: "Odile Vasseur", lantier: "Marceau Lantier", bonnefoy: "Séverine Bonnefoy",
       delaunay: "Ninon Delaunay", toussaint: "Basile Toussaint",
@@ -3449,6 +3754,19 @@ export const FERME_STR = {
     fishWin: "Beau poisson !",
     fishFail: "Le poisson s'est échappé...",
     fishTooSoon: "Trop tôt ! Il a filé.",
+    // 2026-09-04 — la lutte des gros poissons (C.FISH[i].haul, ex. le
+    // Brochet) : même HUD que le halage de l'étoile (FishHaulHud), un seul
+    // texte au lieu du trio timing/hold/react ci-dessus, puisqu'il n'y a
+    // qu'une seule phase à expliquer (tenir), pas trois mini-jeux distincts.
+    fishHaulHint: "Maintiens Espace pour ferrer le poisson. Relâche avant que la ligne ne casse.",
+    /* 2026-09-03 (lot C) — la pêche AMBIANTE du lac maléfique (mutant/squelette,
+       jamais stockable — voir C.EVIL_LAKE_FISH). ⚠️ 2026-09-03, correctif de
+       Guillaume en jouant : « on ne doit pas savoir à l'avance que c'est un
+       squelette de poisson qu'on va attraper » — contrairement à `seaBite`/
+       `fishBite`, la morsure ne nomme PLUS l'espèce (le mystère est le geste),
+       seule la prise le révèle une fois gagnée. */
+    evilFishBite: "Ça mord... quelque chose remue sous l'eau trouble.",
+    evilFishCaught: (name) => `Tu remontes ${name.toLowerCase()}. Rien à en tirer — mais l'eau grouille de vie étrange.`,
     // Invites de proximité
     promptShop: "[E] Boutique",
     promptBin: "[E] Réserves",
@@ -3523,6 +3841,8 @@ export const FERME_STR = {
     bagRodSub: "Clique pour la déployer, puis vise l'eau. Elle se range dès que tu changes de case.",
     rodArmedTip: "Déployée : vise une case d'eau.",
     rodArmedToast: "🎣 Canne déployée. Vise l'eau ; change de case pour la ranger.",
+    // 2026-09-04 — accès facilité, près de n'importe quel plan d'eau.
+    promptRod: "[E] Déployer la canne",
     /* ⚠️ ZIP 401 — LES NOMS COURTS DES VARIANTES DE CONSTRUCTION.
        Ils n'existaient pas : la case 6 n'avait que des INFOBULLES (wallTip,
        pathTip…), c'est-à-dire des phrases. Or une case d'inventaire de 44 px
@@ -3760,6 +4080,8 @@ export const FERME_STR = {
     // chaudron-artéfact juste au-dessus.
     promptEvilShardsPickup: "[E] Ramasser les éclats de comète",
     evilShardsPickedToast: "✨ Tu as ramassé un tas d'éclats de comète ! Prépare-les avec une améthyste au chaudron pour l'Essence d'étoile.",
+    // 2026-09-04 (lot E) — même trio, pour la septième sœur posée sur la rive.
+    promptEvilStarPickup: "[E] La ramasser",
     toastShardsAlreadyTaken: "Ce tas d'éclats de comète a déjà été ramassé.",
     toastNoCauldronStock: "Tu ne portes pas de chaudron à poser.",
     toastCauldronNotEmpty: "Vide le chaudron (poisson déposé) avant de le déplacer.",
@@ -4024,6 +4346,7 @@ export const FERME_STR = {
       town: "🚉 Valley Town — la gare",
       townPlaza: "⛲ Valley Town — la place",           // zip 425
       townCourt: "⚖️ Valley Town — le tribunal",
+      townHall: "🏛️ Valley Town — l'hôtel de ville (perron)",
       townBelvedere: "🔭 Valley Town — le belvédère",
       townBoutique: "👗 Valley Town — la Haute-Ville",   // zip 427
       townMarket: "🎪 Valley Town — le champ de foire",   // zip 426
@@ -4044,6 +4367,7 @@ export const FERME_STR = {
       churchTower: "🔔 Église — le beffroi",
       world: "🌀 La terre en cours",
       bridge: "🌉 Le pied du pont",
+      rescue: "🎣 Le point de sauvetage (halage)", // 2026-09-04 : évite la traversée depuis EVIL_SPAWN, voir §10 de CLAUDE.md
     }[k] || k),
     devWorldForcedToast: (name) => `🛠️ Le passage mène maintenant à : ${name}.`,
     devWorldRotationToast: "🛠️ Rotation rétablie : le passage suit de nouveau le jour de jeu.",
@@ -4635,6 +4959,7 @@ export const FERME_STR = {
       ballot: "I am here to vote.",
       fonds: "What is the market hall fund?",
       engineer: "Do you know anyone who draws boats?",
+      fishPermit: "I would like a fishing permit.",
     }[k] || k),
     hallTopicTitle: (k) => ({
       mayor: "🎩 Meeting the mayor",
@@ -4645,6 +4970,7 @@ export const FERME_STR = {
       ballot: "🗳️ The ballot",
       fonds: "📜 The market hall fund",
       engineer: "📐 The naval architect",
+      fishPermit: "🎣 The fishing permit",
     }[k] || k),
     hallMayorNow: (e, n) => `The sitting mayor is ${e} ${n}.`,
     hallMayorAudience: (d, k) => k === 0
@@ -4669,6 +4995,20 @@ export const FERME_STR = {
     hallFondsWhere: "The notice is up on the news board, on the square. Go and read it; you'll know as much as I do.",
     hallSoonWedding: "The banns are ready and the room is set — the registrar is missing. Come back next update: the wedding room is the second door on the left.",
     hallSoonLand: "The plan is posted at the land registry, first door on the left. The sale itself goes through the courthouse notary: you choose here, you sign there.",
+    /* ═══ 2026-09-04 — TOWN FISHING PERMIT ═══════════════════════════════ */
+    hallFishPermitIntro: (p, v) => `"Fishing in town waters without authorization is forbidden." A permit costs ${p} gold and stays valid for ${v}.`,
+    hallFishPermitHave: (v) => `You have a valid permit for ${v} more.`,
+    hallFishPermitNone: "You currently have no valid permit.",
+    hallFishPermitBanned: (v) => `"You are barred from returning to town for now, for ${v} more. Come see me after."`,
+    hallFishPermitDistrust: (v) => `"After what happened, the administration is staying careful for ${v} more. You may still ask."`,
+    hallFishPermitAsk: "Ask for the permit",
+    townFishBannedToast: "🚫 You are barred from returning to town for now.",
+    townFishNoPermit: "🚨 Caught fishing without a permit! The catch is confiscated.",
+    townFishPermitGranted: "🎣 Permit issued by Léonie.",
+    townFishPermitBanned: "\"You are currently banned, there's nothing I can do.\"",
+    townFishPermitDistrust: "\"After what happened, I'd still rather wait.\" — Léonie refuses.",
+    townFishPermitNoGold: "You don't have enough gold for the permit.",
+    chatTownFishCaught: (n, g) => `🚨 ${n} was caught fishing without a permit — fined ${g} gold and barred from the train.`,
     candName: (k) => ({
       vasseur: "Odile Vasseur", lantier: "Marceau Lantier", bonnefoy: "Séverine Bonnefoy",
       delaunay: "Ninon Delaunay", toussaint: "Basile Toussaint",
@@ -5185,6 +5525,11 @@ export const FERME_STR = {
     fishWin: "Nice catch!",
     fishFail: "The fish got away...",
     fishTooSoon: "Too soon! It escaped.",
+    fishHaulHint: "Hold Space to reel in the fish. Release before the line snaps.",
+    // 2026-09-03 (lot C) — see the French note: the bite no longer names the
+    // catch (Guillaume: it shouldn't be known in advance) — only landing it does.
+    evilFishBite: "Something bites... something stirs beneath the murky water.",
+    evilFishCaught: (name) => `You reel in ${name.toLowerCase()}. Nothing to gain from it — but the water teems with strange life.`,
     promptShop: "[E] Shop",
     promptBin: "[E] Stores",
     promptBarn: "[E] Deposit at barn",
@@ -5254,6 +5599,8 @@ export const FERME_STR = {
     bagRodSub: "Click to get it out, then aim at water. It goes away when you pick another slot.",
     rodArmedTip: "Out: aim at a water tile.",
     rodArmedToast: "🎣 Rod out. Aim at water; pick another slot to put it away.",
+    // 2026-09-04 — facilitated access, near any body of water.
+    promptRod: "[E] Get the rod out",
     // ZIP 401 — short names for the build variants (see the FR block).
     buildNames: {
       fence: "Fence", wall: "Wall", path: "Paving", lamp: "Lamp post",
@@ -5431,6 +5778,7 @@ export const FERME_STR = {
     toastCauldronAlreadyTaken: "This cauldron has already been picked up.",
     promptEvilShardsPickup: "[E] Pick up the comet shards",
     evilShardsPickedToast: "✨ You picked up a pile of comet shards! Prepare them with an amethyst at the cauldron for the Star Essence.",
+    promptEvilStarPickup: "[E] Pick her up",
     toastShardsAlreadyTaken: "This pile of comet shards has already been picked up.",
     toastNoCauldronStock: "You aren't carrying a cauldron to place.",
     toastCauldronNotEmpty: "Empty the cauldron (deposited fish) before moving it.",
@@ -5668,6 +6016,7 @@ export const FERME_STR = {
       town: "🚉 Valley Town — the station",
       townPlaza: "⛲ Valley Town — the plaza",          // zip 425
       townCourt: "⚖️ Valley Town — the courthouse",
+      townHall: "🏛️ Valley Town — the town hall (steps)",
       townBelvedere: "🔭 Valley Town — the belvedere",
       townBoutique: "👗 Valley Town — Upper Town",
       townMarket: "🎪 Valley Town — the fairground",      // zip 426
@@ -5684,6 +6033,7 @@ export const FERME_STR = {
       churchTower: "🔔 Church — the belfry",            // zip 444
       world: "🌀 The current land",
       bridge: "🌉 Foot of the bridge",
+      rescue: "🎣 The rescue spot (haul)",
     }[k] || k),
     devWorldForcedToast: (name) => `🛠️ The passage now leads to: ${name}.`,
     devWorldRotationToast: "🛠️ Rotation restored: the passage follows the game day again.",

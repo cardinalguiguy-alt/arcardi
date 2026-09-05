@@ -140,9 +140,27 @@ title("2. l'ouvrage couvre exactement son tablier");
    par l'emprise du sprite. */
 title("3. rien ne pousse dans le corps d'un décor");
 {
+  /* ⚠️⚠️ 2026-09-05 — LA VÉGÉTATION BASSE EST EXEMPTÉE, ET C'EST LA RÈGLE PRISE AU
+     MOT PLUTÔT QU'UN TROU DEDANS. L'en-tête ci-dessus dit « le corps d'un décor
+     CONSTRUIT » : ce qu'on interdit, c'est un tronc planté dans une clôture, un
+     banc, un lampadaire — un ouvrage qui a un dedans. `C.TOWN_SOFT_PROPS` (les
+     sept sortes qu'on TRAVERSE, 2026-09-02) n'a pas de dedans, par construction :
+     elle plie au passage et ralentit sans arrêter. Une touffe d'herbe au pied
+     d'un arbre n'est pas un défaut de composition, c'est ce que fait l'herbe.
+
+     ⚠️ CE CONTRÔLE EST RESTÉ ROUGE PLUSIEURS JOURS SANS QUE PERSONNE LE SACHE :
+     il rejetait trois placements — clump(21,3), grassTuft(198,3), goldBush(205,3)
+     — apparus avec la végétation basse, c'est-à-dire qu'il jugeait un CADET sur
+     une règle écrite pour ses aînés solides (leçon symétrique du §10 de
+     `CLAUDE.md`). *Ce qu'on retire n'est pas la mesure, c'est un cas dont on peut
+     nommer la raison* — même geste que l'exemption des ouvrages LINÉAIRES au §4
+     ci-dessous, et qu'`archBridge`/les nénuphars au 439.
+     ⚠️ L'EXEMPTION EST ÉTROITE ET FALSIFIÉE : un arbre dans le corps d'un décor
+     solide reste un défaut, et le contrôle rougit toujours si on en plante un. */
   const bad = [];
   for (const p of props) {
     if (!C.TOWN_PROP_ART[p.kind]) continue;
+    if (C.TOWN_SOFT_PROPS.has(p.kind)) continue;
     const b = C.townPropBox(p.kind, p.x, p.y);
     for (let y = Math.floor(b.y0); y <= p.y; y++) {
       for (let x = Math.floor(b.x0); x <= Math.ceil(b.x1); x++) {

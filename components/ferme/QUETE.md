@@ -2331,26 +2331,37 @@ chute et l'ouverture du cratère par un seul, pas les postes face à face :
 été vu, pas une fois :
 1. **l'étoile timide du cratère** — deux joueurs dos à dos, immobiles, quatre secondes. C'est la
    plus jolie mécanique du chantier et personne ne l'a jouée ;
-2. **le croisement d'ombres** — deux lectures à plus de 30 cases d'écart dans une fenêtre de 20 s
-   datée par l'hôte ;
-3. **la flaque de lumière** — A marche sur le ponton, la flaque suit ses pas, B ne voit que
-   dedans. ⚠️ **Le 458 l'a rendue DÉCISIVE** (hors de la flaque : noir, souffle × 2,4, pilotis
-   invisibles) et a corrigé deux défauts qu'un seul client ne pouvait pas voir — la flaque
-   figée au centre, et le morceau dessiné hors du découpage. **Elle reste à jouer à deux ;**
-4. **le duo** — A à l'orgue, B au beffroi, et le faisceau qui faiblit quand l'autre quitte son
-   poste (`starMiniPartner()`) ;
-5. **la chute vue simultanément** par deux clients, chacun sur sa propre horloge.
+2. **le RELAIS du plat** (ajouté au 479) — l'un cuisine au chaudron, l'autre PORTE le plat jusqu'au
+   trou de la rose ; le passage de main remet la jauge de 3 min à plein ;
+3. **les DEUX BORDS du cratère** (ajouté au 479) — deux présences aux bords OPPOSÉS, dos à dos,
+   20 s, contre 60 s à l'épouvantail en solo ;
+4. **la chute vue simultanément** par deux clients, chacun sur sa propre horloge.
+
+⚠️⚠️⚠️ **CETTE LISTE A ÉTÉ CORRIGÉE LE 2026-09-05, ET LA CORRECTION EST LA LEÇON.** Elle nommait
+encore, en 2ᵉ, 3ᵉ et 4ᵉ position, **le croisement d'ombres, la flaque du ponton et le duo
+orgue/beffroi** — trois postes SUPPRIMÉS PAR LE DÉCHANT DU 469, dont il ne reste pas une ligne de
+code (`starMiniPartner`, `orgue`, `magpie`, `croisement` : zéro occurrence dans le dépôt). Pendant
+ce temps, les deux postes que le 479 a AJOUTÉS n'étaient inscrits nulle part. *Le document qui dit
+à Guillaume quoi jouer l'envoyait chercher trois mécaniques mortes et lui cachait les deux vraies*
+— et son temps de jeu est le goulot de tout le reste du projet. **Une liste de choses à JOUER se
+relit contre le code au même titre qu'une liste de symboles ; elle vieillit plus vite, et elle
+coûte plus cher.**
 ⚠️ Et la ferme PEUPLÉE à deux clients n'a toujours jamais été jouée (§13 de `CLAUDE.md`, réclamé
 depuis le 419) : **cette séance-là peut faire les deux d'un coup.**
 
-**B. LES CINQ MINI-JEUX, JOUÉS JUSQU'À LA VICTOIRE, À CADENCE RÉELLE.** ⚠️ **Deux d'entre
-eux ont changé au 458** (le refroidissement poli, la plongée refaite) et ont été REGARDÉS
-isolément, jamais gagnés. Ils sont dessinés et
-vérifiés à l'écran, mais le banc de navigateur ne peut pas les JOUER (voir §10). Ce qu'il faut
-juger, et qu'aucun banc ne verra jamais : **est-ce que c'est agréable ?** Les manches sont
-réglées, pas éprouvées. Les nombres à surveiller en premier : `STAR_COOL_BAND` (la bande
-se resserre-t-elle trop vite ?), `STAR_DIVE_CURRENT` (le courant du troisième palier),
-`STAR_SWEEP_MIN`/`MAX` (la « bonne allure » se sent-elle ?), `STAR_MAGPIE_LAG`.
+**B. LE MINI-JEU QUI RESTE — IL N'Y EN A QU'UN — JOUÉ JUSQU'À LA VICTOIRE, À CADENCE RÉELLE.**
+Le **refroidissement du cratère**, et rien d'autre : `setStarMini({ kind: "cool" })` est le seul
+appel du dépôt. Il est dessiné et vérifié à l'écran, mais le banc de navigateur ne peut pas le
+JOUER (voir §10). Ce qu'il faut juger, et qu'aucun banc ne verra jamais : **est-ce que c'est
+agréable ?** Le seul nombre à surveiller est **`STAR_COOL_BAND`** — la bande se resserre-t-elle
+trop vite ?
+⚠️⚠️ **CE PARAGRAPHE DISAIT « LES CINQ MINI-JEUX » JUSQU'AU 2026-09-05 ET DONNAIT QUATRE NOMBRES À
+SURVEILLER, DONT TROIS N'EXISTENT PLUS** (`STAR_DIVE_CURRENT`, `STAR_SWEEP_MIN`/`MAX`,
+`STAR_MAGPIE_LAG` : zéro occurrence). Le déchant du 469 a supprimé quatre mini-jeux ; ce paragraphe
+ne l'avait pas appris, et **la branche `duet` de `StarMinigame` est restée dans `FermeGame.js`
+comme code mort** — plus jamais ouverte, jamais retirée. *Un chapitre supprimé laisse trois traces
+et pas une seule ne lève d'erreur : une branche morte dans le composant, une constante que plus
+personne ne lit, et une consigne de test qui envoie chercher les deux.*
 
 **C. LES DEUX SCÈNES JAMAIS VUES** : le retournement (fin du chapitre 4) et la finale. Le bouton
 « 🎬 Rejouer une scène » du menu dev les joue isolément — c'est exactement pour ça qu'il existe.
@@ -2814,8 +2825,12 @@ tension qu'on voulait ; elle n'a jamais été jouée par un humain.
   DANS la poitrine, `applyPose` qui repartait du buste au lieu de `man`, et la table `POSE`
   corrompue à la première image par un `{ ...poseTarget }`. Le maire a maintenant un bassin, des
   hanches et des genoux ; `stand` le lève vraiment et le fauteuil recule.
-  ⚠️ **Le HUD par-dessus la scène plein écran, lui, N'EST PAS corrigé** — c'est de l'interface, pas
-  de la posture, et ça reste la dette la plus visible de ce chapitre.
+  ⚠️ **Le HUD par-dessus la scène plein écran : PARTIELLEMENT corrigé, vérifié le 2026-09-05.** Le
+  bandeau de quête, lui, est bien gardé (`starRibbon && … && !mayorTalk && !sawScene`,
+  `FermeGame.js:33513`) — ce chapitre l'annonçait encore comme non corrigé. **Le reste du HUD (or,
+  jour/heure, boutons) est à VÉRIFIER À L'ÉCRAN, pas à réécrire de mémoire** : c'est de la mise en
+  page, et *toute la mise en page se juge à l'écran ou ne se juge pas* (§4 de `CLAUDE.md` — aucun
+  des quarante-deux bancs ne met en page du CSS).
   ⚠️ **La scène n'a pas été rejouée à l'écran depuis** : bancs, bundle et `next build` seulement.
 - ⚠️ **Le point 4 du §15.3 est débloqué et pas fait** : les PNJ peuvent enfin parler du bateau,
   puisque la condition qu'ils attendaient (`MR.mayorSigned`) existe.
@@ -3074,9 +3089,26 @@ Wireframe du panneau `P` :
 | F | voyage visible d'Eduardo, feux et septième sœur | deux vrais clients sur les rôles, puis perte/reprise de connexion pendant le voyage |
 | G | finale, ciel à sept points, statut « En mer » | partie complète en une soirée ; navire et trace persistants après rechargement |
 
-⚠️ **CE PARAGRAPHE DATE DE LA LIVRAISON DU §17.9 ET IL EST DEVENU FAUX LE 2026-08-31** : la moitié
-solo du **lot E** est construite (voir le §17.6). Il reste vrai pour tous les autres lots — A, B, C,
-D, F, G ne sont toujours pas livrés, et la coop du E non plus.
+⚠️⚠️⚠️ **ÉTAT REFAIT CONTRE LE CODE LE 2026-09-05, ET LE TABLEAU CI-DESSUS SE LIT AVEC CECI :**
+- **lot D** — la **cinquième sœur** est LIVRÉE (`starGreenWalk`, `starGreenSlot`, `starGreenTemp` :
+  elle marche de buisson en buisson, elle ne se téléporte pas). Le port et le retournement, non.
+- **lot E** — la moitié SOLO du sciage est construite (2026-08-31, vue à l'écran une fois, jamais
+  jusqu'à la victoire). La **sixième sœur** est LIVRÉE (`townShy`, verbe `spot`). La coop à deux
+  poignées, non.
+- **lot F** — la **septième sœur** est LIVRÉE (`Q.STAR_EVIL_ID`, verbe `revive`, profil
+  `STAR_REVIVE_PROFILE`), en code, bancs verts, **jamais vue en jeu jusqu'au bout**. Le voyage
+  visible d'Eduardo et les feux, non.
+- **lots A, B, C, G** — toujours pas livrés.
+
+⚠️⚠️⚠️ **ET UN PIÈGE DE VOCABULAIRE QU'IL FAUT TUER, PAS DOCUMENTER : « LOT E » A DÉSIGNÉ DEUX
+CHOSES.** Ici (§17.10, autorité de conception) c'est le *sciage coop + sixième sœur* ; dans les
+notes de livraison de 2026-09 (et dans le §5 de `CLAUDE.md`) « lot E » désignait la *septième sœur
+et sa réanimation*, « lot C » le lac maléfique, « lot A3 » la cinquième. **Deux jeux de lettres sur
+le même chantier, dans deux documents d'autorité.** ⚠️ **La lettre du §17.10 est la seule qui
+fasse foi** ; toute autre se date et se nomme par son contenu (« la passe du 2026-09-04, septième
+sœur »), jamais par une lettre. *Deux nomenclatures qui se ressemblent assez pour qu'on les
+confonde doivent porter la différence dans leur nom* — c'est le §4 de `CLAUDE.md` appliqué à la
+documentation au lieu du code.
 Les lots restent séparés parce que chacun change un geste ou un dessin que Guillaume doit pouvoir
 juger isolément. La chaîne multijoueur complète reste la validation terminale : relais du plat,
 bords opposés, scie et feux du port, avec deux vrais clients et sans raccourci développeur entre

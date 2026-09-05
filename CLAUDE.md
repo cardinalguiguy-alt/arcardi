@@ -11,154 +11,180 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
 rien tant qu'il ne dit pas par quoi commencer.*
 
-⚠️⚠️⚠️ **2026-09-04 (session la plus récente) — LOT E LIVRÉ EN CODE : RAMASSER, SORTIR ET
-RÉANIMER LA SEPTIÈME SŒUR (points 9-10 de `QUETE.md` §3, demande explicite de Guillaume), PLUS
-LES SIX COMPAGNES QUI SUIVENT DÉSORMAIS DANS LE MONDE MALÉFIQUE. Bancs verts (790/790
-`verify-quete`, TOUT PASSE `verify-collision`, 1126 clés `verify-strings`, `npx next build` et le
-scan `esbuild` propres) — MAIS LE CHEMIN COMPLET RAMASSER→PORTER→SORTIR→POSER→RÉANIMER N'A PAS PU
-ÊTRE VU JUSQU'AU BOUT EN JEU CETTE SESSION (voir plus bas pourquoi) :**
+**2026-09-05 — LA HIÉRARCHIE EST RANGÉE PAR *QUI PEUT DÉBLOQUER*, PLUS PAR SUJET.** C'est le
+changement de fond de cette passe, validé par Guillaume. L'ancienne liste triait par thème
+(social / visuel / contenu) ; or la contrainte réelle n'est pas le thème, c'est la ressource — et
+elles sont trois, indépendantes : **le temps de jeu de Guillaume**, **un fichier que lui seul peut
+fournir**, **du travail que Claude fait seul**. Les mélanger est ce qui faisait grossir le passif :
+un item bloqué sur un JPG restait rangé à côté d'un chantier de trois jours, donc ni l'un ni
+l'autre n'était choisi.
 
-**Ce qui a été construit.** `Q.STAR_SITES` gagne une septième ligne (`evilStar`, verbe neuf
-`revive`, couleur neuve `violet` dans `STAR_WISP_PAL`/`starWispColors`) — hors de tout chapitre
-exprès (voir sa note dans `quete.js`), pour que `content:"star"` la fasse rejoindre la formation
-tout seule dès que `Q.resolveStarFound(e, Q.STAR_EVIL_ID, …)` s'exécute, sans code de plus pour
-« l'arrivée ». `starWakeAdvance`/`starWakeStrike` (le réveil de la reine) deviennent un PROFIL
-(`Q.STAR_WAKE_PROFILE_DEFAULT` vs `Q.STAR_REVIVE_PROFILE`, même geste que `haulStep` la veille sur
-le Brochet) plutôt qu'une seconde mécanique. Côté `FermeGame.js` : `carryStarRef`/
-`evilStarPlaceRef`/`evilStarReviveRef` (purement locaux, comme le halage — un seul `req` à la fin,
-`"evilStarRevive"`, qui rejoue `resolveStarFound` côté hôte) ; ramassage sur la rive via
-`tryPickupEvilStar()` ; pose + réanimation via `evilStarPlace()`/`evilStarRevivePress()` ; rendu
-« portée » (au-dessus du fermier, comme le plat de la rose) dans LES DEUX zones (maléfique ET
-ferme, le trajet traverse les deux) ; anneau de réanimation dessiné au sol, comme celui de la
-reine. `starTargetPos("evilStar")` lit `evilStarPlaceRef` pour que la montée dans la formation
-parte du bon endroit. Un nouveau dev-op (`"rescue"`, bouton « 🌊➡️🏖️ Hauled onto the shore ») pose
-directement l'état « halée, prête à ramasser » pour tester sans rejouer le halage à chaque essai.
-⚠️ **Extension séparée, même livraison** : `starCompanionsAt("evil", …)` est désormais appelée
-dans la boucle de rendu du monde maléfique (elle ne l'était que pour ferme/ville/tribunal) — les
-compagnes apprivoisées suivent maintenant aussi là-bas, demande explicite de Guillaume.
-
-⚠️⚠️⚠️ **UN BOGUE RÉEL A ÉTÉ TROUVÉ ET CORRIGÉ EN TESTANT, ET C'EST LA LEÇON À GARDER** : le premier
-jet posait `tryPickupEvilStar()` dans `doActionEvil()`, appelée par Espace/clic (« utiliser
-l'outil »). L'invite affichée est pourtant « [E] La ramasser », et E est une touche différente,
-gérée par `tryOpenNearby()` (« interagir ») — une fonction séparée, jamais celle des outils.
-Résultat : l'invite promettait un geste qu'aucune touche ne faisait. Vu en jeu (E armait la canne
-au lieu de ramasser), corrigé en déplaçant l'appel dans `tryOpenNearby()`, à côté
-d'`evilCauldronPickup`/`evilShardsPickup` qui suivent déjà cette règle. *Une invite « [E] » qui ne
-vérifie pas qu'elle vit dans le bon gestionnaire de touche ment.*
-
-⚠️ **CE QUI A ÉTÉ REGARDÉ EN JEU, PAS SEULEMENT BANCHÉ** : le bouton dev `rescue`, la téléportation
-au point de sauvetage, l'invite « [E] La ramasser » qui apparaît PILE à la bonne distance (donc la
-géométrie `evilRescueSpot`/`evilNearestShore` de `tryPickupEvilStar` est juste), la transition
-« Chapitre Trois — Le chantier », et les compagnes visibles en train de suivre dans le monde
-maléfique (halos autour du fermier, plusieurs couleurs). **CE QUI N'A PAS ÉTÉ VU EN JEU** : la
-frappe E qui ramasse effectivement (le toast `pickedUp`), le trajet porté à travers le passage, la
-pose en ferme, l'anneau de réanimation qui tourne, et l'arrivée dans la formation. ⚠️ Pas parce
-qu'un défaut a été repéré : chaque session de test s'est heurtée au même piège que celui déjà
-noté au §10 de ce fichier pour l'automatisation dans le monde maléfique (onglet masqué,
-`requestAnimationFrame` qui cesse de tourner de façon intermittente même avec le correctif Worker
-déjà documenté) — le personnage refusait de marcher au-delà du tout premier déplacement suivant
-une navigation fraîche. **Ce n'est pas une conclusion sur le code, c'est une limite de
-l'automatisation** : Guillaume doit vérifier cette chaîne en vraie session, comme le §10 le
-prescrit déjà pour tout ce qui touche ce monde.
-
-⚠️ **NOMBRES PROVISOIRES, DE CLAUDE, À JUGER EN JOUANT** (§8/§13) : `Q.STAR_REVIVE_HITS` = 10
-battements pour ~9 s (contre 8/~7,5 s pour la reine) ; la couleur violette elle-même (palette
-`STAR_WISP_PAL.violet`, jamais vue à l'écran).
+**Livré dans cette passe (2026-09-05) :** les vingt bancs de contrôle relancés — **18 verts, 2
+rouges**, et les deux rouges l'étaient **depuis des jours sans que personne le sache**. Aucun des
+deux n'était un défaut de jeu : les deux étaient des bancs dont la règle avait vieilli sous une
+livraison plus récente. `verify-cycle` interdisait un indice de case en chiffre avec TOUS les
+opérateurs, et rougissait sur `slot <= 0` de `starShyDash` — un créneau de TEMPS qui porte ce nom
+parce que `quete.js` l'appelle ainsi. `verify-compo` refusait un arbre dans l'emprise d'un décor,
+et rougissait sur trois touffes de `TOWN_SOFT_PROPS`, la végétation qu'on TRAVERSE. Les deux
+corrections sont **falsifiées** (défaut historique réinjecté ⇒ le banc rougit). Chiffres réels,
+obtenus en lançant : `verify-quete` **790/790**, `verify-strings` **1 126 clés**, `verify-maire`
+119/119, `verify-vallee` 223/223, `verify-scierie` 34/34, `verify-ludo` 30/30, `verify-taxi`
+15/15, `verify-collision` TOUT PASSE, `verify-compo` et `verify-cycle` verts.
 
 ---
 
-⚠️⚠️⚠️ **CE QUI ATTENDAIT DÉJÀ AVANT CETTE SESSION, ET N'A PAS BOUGÉ — TROIS LOTS DEMANDÉS
-EXPLICITEMENT PAR GUILLAUME, LIVRÉS EN CODE DEPUIS LE 2026-09-04 (session précédente), TOUJOURS
-NON REJOUÉS EN JEU SAUF LE TROISIÈME :**
+### ✅ P0 — RÉCONCILIER LES DOCUMENTS AVEC LE CODE — **FAIT LE 2026-09-05**
 
-**1. Le permis de pêche en ville** (décisions posées et tranchées par Guillaume avant d'écrire,
-§2). Léonie Sarrazin (guichet accueil mairie, `HALL_TOPICS` clé `fishPermit`) délivre un permis
-PAYANT (`C.TOWN_FISH_PERMIT_PRICE` = 300 or) et TEMPORAIRE (`C.TOWN_FISH_PERMIT_MS` = 3 jours de
-jeu) — une `req` arbitrée par l'hôte (`E.resolveTownFishPermit`, `fermeEngine.js`), jamais un
-panneau qui donne. Pêcher sans permis valide (`E.resolveTownFish`) confisque la prise, prélève
-`C.TOWN_FISH_FINE_GOLD` = 5000 or sur la caisse commune (plafonné à ce qu'elle contient) et bannit
-du TRAIN (seulement — décision explicite de Guillaume, pas du reste de la ville) pour
-`C.TOWN_FISH_BAN_MS` = 1 jour. Une fois le bannissement levé, Léonie reste méfiante
-`C.TOWN_FISH_DISTRUST_MS` = 2 jours de plus, avec une chance de refus qui DÉCROÎT linéairement
-(`C.TOWN_FISH_DISTRUST_MAX_REFUSE` = 0,75 au départ). Trois horodatages sur le fermier
-(`f.townFishPermitUntil/BanUntil/DistrustUntil`), même patron qu'`evilRodArmedAt`.
-⚠️ **AUCUN DES NOMBRES N'A ÉTÉ JUGÉ EN JOUANT** (§8 : tous provisoires par construction) — prix,
-durées et la sévérité de la sanction (Guillaume a choisi « 5000 or, 1 jour », un mélange du sévère
-et du léger proposés) méritent une vraie séance avant d'être considérés justes.
+*Gardé ici tant que P1 n'est pas ouvert, parce que la LEÇON vaut pour la prochaine passe, pas
+parce que le travail reste à faire.* ⚠️ **LA PROCHAINE ACTION EST P1.**
 
-**2. Le ciblage du lancer pour la septième sœur, élargi** (décision tranchée : élargir plutôt
-qu'aimanter ou laisser). `C.EVIL_ROD_HAZARD_R` passé de 1,6 à 2,5 case (`fermeConstants.js`) —
-même valeur que `ROD_PROMPT_RANGE`, réutilisée plutôt qu'un troisième rayon inventé. Un seul
-changement de constante, aucune autre ligne touchée. **JAMAIS REJOUÉ EN JEU** : le lancer est-il
-maintenant assez indulgent, ou faut-il pousser plus loin ?
+**C'était le seul travail qui rendait justes TOUTES les séances suivantes.** Mesuré le 2026-09-05 :
+`QUETE.md` porte **24 symboles fantômes sur 307**, contre 5 sur 381 pour `ferme/README.md` et 0
+sur 80 pour `tools/README.md`. ⚠️ **Cela INVERSE l'ordre permanent du §14.2** (« relire
+`ferme/README.md` contre le code », reporté sept fois) : il visait le document le plus SAIN des
+trois. C'est `QUETE.md` qui a pourri, et c'est lui qui pilote les séances de Guillaume.
 
-**3. La lutte du Brochet — généralisée, câblée ferme ET ville, REVUE EN JEU ET CORRIGÉE UNE
-FOIS.** `Q.haulStep` (`quete.js`, ex-`evilHaulStep`, toujours un alias intact) prend désormais un
-PROFIL de vitesses en paramètre — `C.EVIL_HAUL_RATES` pour le sauvetage de l'étoile,
-`C.FISH_HAUL_RATES` pour les gros poissons, une seule physique. `C.FISH[2].haul = true` (le
-Brochet) déclenche cette lutte au lieu du `FishMinigame` habituel, dans `startFishing` ET
-`startFishingTown` (`FermeGame.js`) — `tickFishHaul`, appelée une fois par image dans `updateMe`
-AVANT le branchement par zone, fait tourner la simulation des deux côtés sans code dupliqué ; à la
-victoire elle envoie EXACTEMENT le req qu'un poisson ordinaire aurait envoyé (`act`/`fish` ou
-`townFish`) — l'hôte ne sait même pas qu'une lutte a eu lieu. `FishHaulHud` réutilise les classes
-CSS `.ferme-haul-*` déjà génériques (aucun CSS nouveau).
-⚠️⚠️⚠️ **LE DESSIN (`A.drawFishHaul`, `fermeArt.js`) A ÉTÉ REPRIS DEUX FOIS EN JOUANT ET RESTE UN
-CHANTIER OUVERT.** Première passe : formes vectorielles (`ctx.ellipse`/`ctx.fill`) dessinées en
-direct — se lisait comme une icône lissée, pas du pixel art (`ctx.ellipse` anticrénente TOUJOURS
-ses bords, `imageSmoothingEnabled` ne joue que sur `drawImage`, jamais sur les tracés vectoriels).
-Guillaume : « le sprite doit être très soigné et détaillé […] digne d'une génération Gemini/GPT,
-toujours pixel art » — **question posée : dessin généré (Gemini) ou procédural poussé plus loin ?
-Guillaume a choisi procédural.** Deuxième passe : reprise avec LA TECHNIQUE DÉJÀ EN PLACE POUR LES
-ANIMAUX DE LA GRANGE (`aEll`/`aRect`/`aLight`/`outlineSprite`, plus bas dans `fermeArt.js`) —
-remplissage ligne par ligne en coordonnées ENTIÈRES (`fhEll`/`fhPoly`, nouvelles, calquées sur
-`aEll`/le remplissage de polygone par balayage), CUIT UNE FOIS par (couleur, phase de queue) sur
-un petit canevas natif dédié (`fishHaulBake`, caché dans `FISH_HAUL_CACHE`) puis composé par
-`ctx.drawImage` (qui, lui, respecte `imageSmoothingEnabled=false` même sous rotation) — exactement
-le patron de `drawStarHaul`/`shipBake`/`animalSprite` : un sprite cuit, jamais une forme
-vectorielle en direct. Guillaume, en la voyant : **« trop grand et pas assez réaliste ni
-crédible »**, puis **« si trop complexe, passons »**. Corrigé dans la foulée : le facteur
-d'échelle (`scale`) était à 1,55× la case (« le poisson dépasse la case pour se lire GRANDE ») —
-ramené à 1,05×, un gros poisson ordinaire, pas une pancarte. **CETTE CORRECTION DE TAILLE N'A PAS
-ÉTÉ REVUE** — c'est le premier arrêt de la prochaine session sur ce sujet, PAS un aller-retour de
-plus tant que le format (taille, silhouette) n'est pas validé.
-⚠️ **CE QUE GUILLAUME A AUSSI DEMANDÉ, PAS ENCORE CADRÉ : 2-3 NOUVEAUX POISSONS RARES (dont des
-Requins), lutte réservée aux « gros poissons et Requins ».** `C.FISH[i].haul` porte déjà le
-mécanisme générique — ajouter une espèce est un ajout de table, pas un nouveau système. **DÉCISIONS
-À POSER AVEC GUILLAUME AVANT D'ÉCRIRE (§2), PAS ENCORE FAITES** : les Requins vivent-ils dans
-`C.FISH` (rivière/lac, pêche habituelle) ou dans `C.SEA_CREATURES` (le système de prise rare déjà
-existant, `sea`, extrémités de rivière) ? Combien d'espèces exactement, quels noms/couleurs ? Et
-surtout, vu le coût de cette session sur UN SEUL poisson : est-ce que chaque espèce mérite son
-propre dessin (`fishHaulBake` généralisée par forme, pas seulement par couleur), ou une même
-silhouette recolorée suffit-elle pour les suivantes ? **Rien de tout cela ne doit être commencé
-avant que le format du Brochet lui-même soit jugé bon.**
+Ce qui a été corrigé — **tout est fait, ne pas rouvrir sans une mesure neuve** :
+1. ✅ **`QUETE.md` §12.2 A** — la liste « jamais joué face à face » cite quatre postes ; **trois
+   n'existent plus** (croisement d'ombres, flaque du ponton, duo orgue/beffroi : `starMiniPartner`,
+   `orgue`, `magpie`, `croisement` = zéro occurrence, supprimés au déchant du 469). Seul le
+   dos-à-dos survit (verbe `pair` de la reine). **Et le 479 a AJOUTÉ deux postes à deux jamais
+   tenus qui ne sont dans aucune liste** : le RELAIS du plat et les DEUX BORDS du cratère.
+2. ✅ **`QUETE.md` §12.2 B** — « les nombres à surveiller en premier » en donne quatre, **trois
+   n'existent plus** (`STAR_DIVE_CURRENT`, `STAR_SWEEP_MIN/MAX`, `STAR_MAGPIE_LAG`). Seul
+   `STAR_COOL_BAND` est réel, et **il ne reste qu'UN mini-jeu**, le refroidissement : un seul
+   `setStarMini({ kind: "cool" })` dans tout le dépôt, et la branche `duet` de `StarMinigame` est
+   du **code mort** à retirer.
+3. ✅ **`QUETE.md` §17.10** — le tableau des lots dit D et F non livrés alors que la 5ᵉ sœur
+   (`starGreenWalk`) et la 7ᵉ (`STAR_EVIL_ID`, `STAR_REVIVE_PROFILE`) sont dans le code. ⚠️⚠️ **Et
+   « lot E » désigne DEUX choses** : le sciage coop + 6ᵉ sœur dans `QUETE.md` §17.10, la 7ᵉ sœur
+   et sa réanimation dans ce fichier-ci. **Un des deux jeux de lettres doit mourir** — garder
+   celui du §17.10, qui est l'autorité de conception, et dater les autres.
+4. ✅ **`QUETE.md` §16.5** — dit le HUD encore entièrement peint par-dessus la scène plein écran du
+   maire ; **c'est déjà faux pour le bandeau de quête**, gardé par `!mayorTalk && !sawScene`
+   (`FermeGame.js:33513`). Le reste du HUD est à vérifier, pas à réécrire de mémoire.
+5. ✅ **FAIT LE 2026-09-05, CÔTÉ `CLAUDE.md`** : §5 annonçait `FermeGame.js` « ~20 500 l. » pour
+   **35 477** (+73 %) — un modèle qui planifie dans ce fichier planifiait sur la moitié ; `planche2.js`
+   (826 l.) manquait à la carte du territoire ; les chiffres de bancs du §10 dataient du lot C.
+   ⚠️ **Et une fausse piste vérifiée puis retirée d'ici** : les huit bancs qui semblaient absents de
+   la carte (`verify-vergers`, `render-fruits`, `render-escaliers`…) sont tous documentés dans
+   `tools/README.md`, **qui est leur autorité et qui est le document le plus sain du dépôt**. Les
+   ajouter au §5 aurait dupliqué une liste juste — *le §14.1 interdit de recopier, pas seulement de
+   périmer.*
+6. **Ce qui reste après cette passe est donc ENTIÈREMENT dans `QUETE.md`** (points 1 à 4 ci-dessus).
 
-⚠️⚠️⚠️ **ACTION SUIVANTE, DANS L'ORDRE** : (1) Guillaume joue la chaîne du lot E de bout en bout —
-ramasser la septième sœur sur la rive, traverser jusqu'au passage, la poser en ferme, la réanimer
-(martèlement Espace), la voir rejoindre la formation — c'est la partie neuve de cette session,
-jamais vue en jeu (voir plus haut pourquoi) ; (2) puis les trois lots de la session d'avant,
-toujours non rejoués : le permis de pêche en ville de bout en bout (acheter, se faire prendre,
-être banni, redemander pendant la méfiance), le lancer élargi au lac maléfique, et **regarder le
-Brochet après la correction de taille** ; (3) selon ce dernier verdict, une troisième passe sur
-`drawFishHaul` (silhouette, proportions) ou considérer le format acquis ; (4) SEULEMENT APRÈS UN
-FORMAT JUGÉ BON : poser avec Guillaume les décisions des 2-3 nouveaux poissons rares (Requins
-compris, §17.5 de `QUETE.md`) ; (5) toujours en attente depuis deux sessions, jamais faites :
-`Q.STAR_CARD_BREATH_MS` = 3000 ms (le bon réglage ?) et l'accès à la canne dans les trois zones ;
-(6) les deux retours mineurs de Codex (reconnaissance au chapeau, HUD du halage de l'étoile) —
-chacun sa propre livraison.
+### 🟠 P1 — LA BIFURCATION NARRATIVE *(Guillaume + Claude, zéro code)*
 
-⚠️ **CE QUI RESTE OUVERT, SANS RAPPORT AVEC CETTE SESSION** : (a) le saut de rebord n'atterrit pas
-sur le chemin pavé en dessous (mur traité comme un plan plat) — Guillaume va fournir un nouveau PNG
-du bloc escalier du tribunal ; à l'intégration : l'analyser en profondeur, l'assembler SEAMLESS,
-retravailler les collisions pour évoquer la 3D de façon cohérente (pas un mur plat), et TESTER
-PLUSIEURS FOIS en jeu avant de livrer ; (b) les ornements de la balustrade portent des taches
-rouges à retirer, et les ombres manquent de contraste — pas encore traité.
+Trancher le recentrage bateau / pluie d'astéroïdes (§13). ⚠️ **ELLE A ÉTÉ REMONTÉE DEVANT LA
+SÉANCE DE JEU, ET LA RAISON EST UNE DÉPENDANCE INVERSÉE** : elle ne coûte ni code ni soirée (c'est
+une comparaison acte par acte de `QUETE.md` §17.2 contre la nouvelle trame), elle gate P6, et
+surtout **elle invalide potentiellement une partie de P2** — juger « les trois nombres du bateau »
+alors que la chaîne de transport du bois doit REMPLACER ce mécanisme ne paie que si le jugement
+peut annuler le remplacement. Livrable : la comparaison acte par acte écrite dans `QUETE.md`,
+avant toute ligne de `quete.js` / `maire.js` / `scierie.js`.
 
-⚠️ **ET CE QUI ATTENDAIT DÉJÀ, NON TOUCHÉ PAR CETTE SESSION**, dans l'ordre : le même buis que
-Valley Town, pour la ferme (VF — aucun équivalent du mécanisme `TOWN_SOFT_PROPS` côté ferme, §4) ;
-la villa (`refs/grandevilladeriches.png`, même pipeline PNG que l'hôtel de ville, prompt Gemini avec
-référence, jamais d'appel API direct — §2) ; retirer `townHall2Sprite` (canevas procédural sans
-appelant) ; l'ombre portée dirigée générale (`drawCivic`) ; et `render-eau`/`render-parc`, cassés,
-**à corriger seuls** (§10).
+### 🟡 P2 — UNE SEULE SÉANCE, À DEUX CLIENTS, SCRIPTÉE *(Guillaume — gate tout le social)*
+
+⚠️ **UNE soirée, pas cinq vérifications séparées.** `QUETE.md` le dit déjà (« cette séance-là peut
+faire les deux d'un coup »), et la séance à deux clients a payé **trois fois sur trois**. Recette
+au §10. Ordre imposé : **peupler la ferme EN PREMIER et ne plus recharger** (le faux Supabase ne
+persiste rien). Ce qu'une seule soirée doit payer :
+1. **la ferme PEUPLÉE à deux clients** — jamais fait, réclamé depuis le 419, gate tout le social ;
+2. **le lot E de bout en bout** (7ᵉ sœur : ramasser / porter / sortir / poser / réanimer) — livré
+   en code, bancs verts, jamais vu jusqu'au bout ;
+3. **permis de pêche en ville, lancer élargi au lac maléfique, format `drawFishHaul`** (corrigé à
+   l'échelle 1,05×, jamais revu) — trois lots livrés et non rejoués ;
+4. **les deux postes à deux qui existent vraiment** : le relais du plat, les deux bords du cratère.
+⚠️ Claude fournit la feuille de route exacte AVANT la séance ; il ne la joue pas à sa place.
+
+### 🟢 P3 — LA CHAÎNE TECHNIQUE QUI SE DÉBLOQUE ELLE-MÊME *(Claude seul)*
+
+**Préflight, vingt minutes, à ne jamais suspendre à un chantier qui glisse : RECOMPTER LES
+CANEVAS.** 779 est une mesure de 2026-09-02 que personne n'a reconfirmée, aucun banc ne la tient,
+et le symptôme d'un dépassement sur iPad n'est pas une erreur mais un onglet qui se ferme (§10).
+Tout ce qui ajoute des sprites en dépend.
+
+Puis la seule vraie chaîne du passif technique : **`lib-canvas.createLinearGradient`** →
+**`render-eau` / `render-parc` revivent** (2 bancs de rendu sur 22 ne s'exécutent pas) → **`WAT_RAMP`
+devient réglable ET mesurable** (direction déjà tranchée par Guillaume, §13).
+⚠️⚠️ **LE PIÈGE N'EST PAS LE DÉGRADÉ, C'EST QUE `fillStyle` AVALE EN SILENCE CE QUE `parseColor`
+REFUSE** (`lib-canvas.mjs:66`) : une demi-implémentation peindrait avec la couleur précédente sans
+rien dire — le stub menteur du §10, dans l'outil censé nous en protéger. Les deux moitiés se
+corrigent dans le même geste. **Falsification obligatoire** : les 20 autres bancs de rendu doivent
+sortir des chiffres identiques.
+
+### 🔵 P4 — RATTRAPAGE VISUEL DE LA FERME *(Claude seul — deux livraisons séparées)*
+
+La ferme garde **les deux arbres du zip 232** et son **herbe en tuile de 16 px** pendant que la
+ville a onze essences animées et un gazon au pavé de 64 px. C'est la dette la plus visible du
+projet, c'est là que se passe la soirée (~99 % du trafic), et c'est le retour le plus répété de
+Guillaume.
+⚠️ **POURQUOI SI HAUT, ET L'ARGUMENT N'EST PAS ESTHÉTIQUE : P3 ET P4 SONT LES DEUX SEULES PHASES
+QUE CLAUDE MÈNE SANS GUILLAUME.** P2 attend sa soirée, P5 est gaté par P2. P4 ne DÉPLACE pas le
+social, il REMPLIT l'attente du social. Arbitré ainsi avec Guillaume le 2026-09-05.
+⚠️ **LE COUPLAGE EST UNE CONDITION, PAS UN RANG** : toute nouvelle décoration de ferme livrée avant
+ce rattrapage se fait juger contre l'herbe du zip 232 — palette et contraste réglés contre un sol
+qui va changer, donc à re-régler. Rien en P1/P2/P3/P5 ne dessine sur le sol de la ferme, donc le
+risque est nul aujourd'hui ; **il se réveille dès qu'une phase pose un décor à la ferme**, et
+alors P4 passe devant elle.
+⚠️ (a) le sol en pavé 4×4 qui BOUCLE, (b) les arbres — **jamais les deux dans la même livraison**
+(décision du 424). Le banc s'écrit **le jour même**, pas après (leçon du 455 : la ferme n'a qu'un
+seul banc de rendu, `render-etoile`).
+
+### 🟣 P5 — LE SOCIAL *(gaté par P2)*
+
+Relations résident-résident (affinités et inimitiés qui ÉVOLUENT avec les actions des joueurs,
+la quête de réconciliation) ; mariage — il ne manque que l'officier, et c'est le seul endroit du
+jeu où deux joueurs feraient ensemble autre chose que du commerce.
+
+### ⚪ P6 — CONTENU ET DÉCISIONS À POSER
+
+Chaîne de transport du bois du bateau (**dépend de P1**, direction déjà tranchée §13) · nouvelles
+espèces de poissons rares / Requins (après le format `drawFishHaul` de P2) · commissions et
+rendez-vous datés (patron déjà écrit cinq fois) · cadastre / notaire · salon de coiffure.
+⚠️ Un item marqué « décision à poser » s'arrête toujours AVANT le code (§2).
+
+### ⚫ P7 — RÉSERVE
+
+Visiteurs célèbres — bloqué sur une question de droit à l'image à trancher isolément, et qui
+compte double avec les plans de commercialisation. Peut ne jamais se faire.
+
+---
+
+### 📮 CE QUI N'ATTEND PAS DU TRAVAIL MAIS UN FICHIER DE GUILLAUME
+
+*Sorti des phases exprès : ce ne sont pas des chantiers, ce sont deux minutes de sa part, et
+rangés parmi des chantiers ils n'étaient jamais choisis.*
+- **un JPG de référence** pour les sprites du tribunal et de l'église (Claude rédige ensuite un
+  prompt Gemini prêt à coller — jamais d'appel API, §2) ;
+- **un nouveau PNG** pour le saut de rebord du tribunal qui n'atterrit pas sur le chemin pavé ;
+- **`public/sounds/church-organ.mp3`** — décidé au 441, rien à coder, toujours absent ;
+- **des images de référence** pour la pièce EMBALLÉE du transport du bois, le jour où P6 s'ouvre.
+
+### 🪙 LA PASSE DE MENUE MONNAIE — *une seule livraison, pas dix lignes qu'on ne choisit jamais*
+
+*Un item trop petit pour être élu « action suivante » ne l'est jamais : ceux-ci attendent depuis
+deux sessions. Groupés, ils deviennent choisissables une fois.*
+`townHall2Sprite` **mort** (construit dans la table de sprites, `fermeArt.js:15983`, zéro
+consommateur — un canevas gaspillé) · la branche `duet` de `StarMinigame`, morte depuis le déchant ·
+`Q.STAR_CARD_BREATH_MS` = 3 000 ms et l'accès à la canne dans les trois zones (réglages en attente
+depuis deux sessions) · les deux retours mineurs de Codex (reconnaissance au chapeau, HUD du
+halage) · taches rouges et contraste des ombres sur la balustrade · le buis de la ferme (VF, comme
+`TOWN_SOFT_PROPS`) · l'ombre portée dirigée de `drawCivic` · la jonction dallage/chemin non courbée
+du parc (⚠️ **vérifier d'abord si c'est un oubli ou un choix** — un trottoir a le droit de changer
+de matière net ; ne pas deviner avant de l'ouvrir).
+
+---
+
+⚠️⚠️⚠️ **CETTE HIÉRARCHIE SE RÉÉVALUE, ELLE NE S'APPLIQUE PAS.** Elle a été écrite par un modèle
+antérieur à celui qui la lit. Avant de choisir dedans, **relire les phases contre le code et contre
+`QUETE.md` / `README.md` réels** et corriger ce qui a mal vieilli : un ordre de dépendance mal posé,
+un coût sous- ou sur-estimé, un item déjà obsolète. *La passe du 2026-09-05 l'a faite et y a trouvé
+deux bancs rouges depuis des jours et une liste de séance à 75 % fictive — les deux invisibles à la
+lecture.* Corriger cette section fait partie du choix de l'action, pas d'une étape à part.
+⚠️ **JUGER veut dire : choisir, dans ce qui est débloqué, l'élément qui sert le mieux le §0 (une
+soirée à 2-3 qui donne envie d'y revenir) pour le moindre coût — et le DIRE avant d'écrire (§2).**
+
 ---
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
@@ -502,7 +528,7 @@ dépôt.
 
 | Fichier | Rôle |
 |---|---|
-| `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **~20 500 l.** |
+| `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **35 477 l.** (compté le 2026-09-05 ; il était annoncé « ~20 500 » depuis assez longtemps pour qu'on planifie sur un fichier deux fois plus petit que le vrai) |
 | `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** · **2026-09-03 (lot C) `evilRodBroken(f, now)`** : dérive la casse de la canne d'un seul horodatage hôte (`f.evilRodArmedAt`), jamais un second champ · **2026-09-04 `resolveTownFish`/`resolveTownFishPermit`** : permis de pêche en ville — trois horodatages sur le fermier (voir bloc REPRISE) |
 | `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE : table, chronologies et résolveurs purs.** ⚠️ **469 — la FOUILLE (`STAR_DIG_MS`, `starDug`, `resolveStarDig`, `starDigResult`) et TROIS chapitres au lieu de cinq.** `STAR_FARM_IMPACTS` porte les **huit** cratères (3 étoiles / 2 matières / 3 vides — compté en important le module le 2026-08-30 ; il annonçait « cinq (2/1/2) » depuis le 480 bis), `resolveStarCalm` tient le barème 60/10 s et `resolveStarTownFall` sépare le gros météore. `STAR_FOLLOWER_SITES` dérive toutes les compagnes de `content:"star"`, `starFollowerAdded` identifie celle qui doit jouer son arrivée, `starFarmFlightPath` tient le cap stable des fragments et `queen` désigne l'unique reine. `starShipProgress` joint les cinq états du plan aux commandes et à la cale sans persistance supplémentaire. ⚠️ **2026-09-02 (lot A) — LA REINE SE NOURRIT PUIS SE RÉVEILLE** : `starOfferPrice` est le SEUL endroit qui dise ce que coûte une étoile (60 pour la bleue, `STAR_QUEEN_PRICE` = 80 pour la reine), `resolveStarLight` sert désormais les deux, et `starWakeAdvance`/`starWakeStrike` portent les deux décisions du réveil au rythme — sorties de `FermeGame.js` **pour qu'un banc puisse les jouer**, comme `maire.js` et `scierie.js`. ⚠️ **2026-09-02 (lot A2) — LA SIXIÈME SŒUR, `townShy`, verbe `spot`** : `starShySlot`/`starShyPick`/`starShySits` disent OÙ elle se cache — une pure fonction du temps partagé, jamais un état diffusé (le patron du jour de marché et des élections) ; `resolveStarSpot` tient la seule règle qui compte (pas avant la reine). ⚠️⚠️ **2026-09-03 (lot A3) — LA CINQUIÈME, `townGreen`, verbe `track`** : `starGreenWalk` la fait MARCHER de buisson en buisson sur une table d'adjacence que `FermeGame.js` lui passe (elle ne se téléporte jamais, et ce fichier ne connaît toujours pas la carte), `starGreenSlot` sépare le vol du repos, `starGreenSway` fait remuer le buisson occupé, `resolveStarHint` tient le compte d'indices **partagé entre les joueurs**, `starGreenTemp`/`starGreenBearing` traduisent une distance en « chaud/froid » et en cap. Aucun React, aucun dessin — `verify-quete.mjs` l'importe et la fait marcher quatre cents créneaux. ⚠️ **2026-09-03 (lot C)** : `starEvilUnlocked`/`starEvilFound`/`resolveStarEvilFound` vivent sur `e.evilFound` (un fait du monde, partagé — pas indexé par joueur, contrairement au hasard de la canne qui vit sur le fermier, `fermeEngine.js`). `starGoalKey` teste `evilSeek` AVANT `engineer` — correctif trouvé en écrivant `verify-quete`, voir sa section « Lot C ». ⚠️ **2026-09-04 `haulStep(state, dt, holding, rates)`** : généralisation d'`evilHaulStep` (alias conservé) par PROFIL de vitesses — `C.EVIL_HAUL_RATES`/`C.FISH_HAUL_RATES`, voir bloc REPRISE (lutte du Brochet). ⚠️⚠️ **2026-09-04 (lot E) — LA SEPTIÈME SŒUR REJOINT ENFIN `STAR_SITES`** (`Q.STAR_EVIL_ID`, verbe neuf `revive`, hors de tout chapitre par construction — voir sa note dans le fichier) : `content:"star"` suffit à la faire apparaître dans `starFollowers` dès que `resolveStarFound` écrit son id, exactement comme les six autres. `starWakeAdvance`/`starWakeStrike`/`starWakeGlow`/`starWakeCompanionState`/`starWakeCompanionPulse` prennent un `profile` optionnel (`STAR_WAKE_PROFILE_DEFAULT` pour la reine, `STAR_REVIVE_PROFILE` pour elle) — même geste que `haulStep` juste au-dessus, un jour plus tôt. |
 | `components/ferme/maire.js` | **L'AUDIENCE CHEZ LE MAIRE (480) : la table des battements et les résolveurs purs.** Douze nœuds, cinq actes, cinq familles d'argument, la jauge d'adhésion qui FUIT, l'élan, la rejouabilité côté hôte (`mayorReplay` : le client envoie sa TRANSCRIPTION, l'hôte la rejoue). Aucun React, aucun dessin — `verify-maire.mjs` l'importe. ⚠️ **C'est un système de NÉGOCIATION, pas une scène** : la confiance gagnée sert les audiences futures, donc une commission ou le cadastre s'y ajouteront en une table de plus. |
@@ -521,7 +547,7 @@ dépôt.
 | `tools/lib-3d.mjs` · `tools/render-maire.mjs` | **REGARDER DE LA 3D SANS GPU (2026-08-31).** `lib-3d` charge le three.js **r128 vendorisé du dépôt** dans Node — la même bibliothèque que la page, à l'octet près — et rastérise à la main (projection, découpe au plan proche, tampon de profondeur, ombrage plat), plus le théorème des axes séparateurs pour mesurer une interpénétration en mètres. `render-maire` s'en sert pour peindre les sept postures côte à côte — et depuis le 2026-09-02 les **cinq maires** (`tools/out/maire-cinq.png`), avec le seul contrôle du dépôt qui mesure un RAPPORT entre deux morceaux (stature rendue contre stature écrite, tête contre carrure, pieds au parquet, quatorze mains à leur cible pour chacun des cinq corps). ⚠️ **Aucune dépendance npm, et surtout pas `three`** : une autre révision n'a pas la même atténuation de lumière (§11), donc mesurerait un autre programme. |
 | `tools/verify-collision.mjs` · `tools/render-haies.mjs` | **LES DEUX BANCS DU 2026-09-01, ET LE PREMIER EST D'UNE NATURE NEUVE.** `verify-collision` ne demande pas si un obstacle refuse le pas, il demande **à quelle distance du dessin** il le refuse : il APPROCHE à la vitesse du jeu depuis les quatre côtés de chaque famille d'obstacle (haie, mur, berge, falaise), traverse les deux ponts, monte ET descend les quatre volées, franchit les vingt-cinq allées de parcelle, compare le jeu et le moteur sur 20 000 points, et vérifie qu'on se dégage TOUJOURS d'une position interdite. ⚠️ **Depuis le 2026-09-02 il mesure aussi le CONTRAIRE** : que les vingt-huit cases de végétation basse ne refusent RIEN, par les quatre côtés, et qu'aucune ne soit solide pour une autre raison que son buisson. `render-haies` est le premier banc qui regarde la haie — le décor le plus répandu de la ville, dessiné dans la closure du rendu depuis le 425, donc invisible pour les quarante et un autres. |
 | `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** · **`TOWN_SOFT_PROPS`, `TOWN_BUSH_SLOW` et les trois nombres du frisson** (2026-09-02 : la végétation basse qu'on traverse) · **`mayorIsFem`, l'unique endroit qui sache lesquels des cinq maires sont des femmes** · **et depuis le 2026-09-01 LA SEMELLE (`bodyPoints`, `footX`/`footY`, `bodyFootTile`, `tileAnchor`) : l'unique description de l'empreinte au sol d'un personnage, dérivée de son ombre portée et lue par le jeu, le moteur ET les bancs** · depuis le 440 il **importe `planche.js`** : une portée de pont et une emprise de décor sont des grandeurs de DESSIN, on les dérive du sprite au lieu de les recopier · **2026-09-03 (lot C) `EVIL_LAKE_FISH`** (poissons mutants/squelettes du lac maléfique, jamais stockés), `EVIL_ROD_BREAK_MS`/`EVIL_ROD_HAZARD_R` (le hasard de la canne, confiné au point de sauvetage — voir `QUETE.md` §3) — **aucune constante de position du lac** : le vrai lac vient de `ew.lake`, vivant, voir `evilRescueSpot()` dans `FermeGame.js` |
-| `components/ferme/planche.js` | **GÉNÉRÉ** par `tools/import-planche.mjs` — les sprites de la planche de Guillaume, en données. Ne pas éditer à la main |
+| `components/ferme/planche.js` · `components/ferme/planche2.js` | **GÉNÉRÉS** par `tools/import-planche.mjs` / `import-planche2.mjs` — les sprites des DEUX planches de Guillaume, en données. Ne pas éditer à la main. ⚠️ `planche2` était absente de cette carte jusqu'au 2026-09-05 : son échelle (une case = 62 px image) est DÉRIVÉE de cinq gabarits du jeu, pas mesurée dans l'image — la planche n'a pas de pas natif franc |
 | `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural. `starWispColors` décline le vivant en jaune, bleu et rose ; `drawStarFragmentMeteor` fait tourner le petit caillou incandescent sur un centre stable et `drawStarFragmentImpact` dessine son choc de terre/poussière/braises, sans réutiliser la boule de feu de Valley Town. Les gros dessins de quête (`drawStarCrater`, comète, navire, jauge, poses) vivent ici pour rester regardables par les bancs. |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
 | `components/PetitsChevaux.js` · `components/ludoBot.js` | **Ludo 2–4 humains ou 1 humain + 1 à 3 bots choisis avant le départ.** `ludoBot.js` ne connaît aucune règle de déplacement : il classe seulement le plan légal et les simulations que l'arbitre hôte lui remet |
@@ -713,14 +739,27 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 
 ⚠️⚠️ **LES BANCS SONT DANS `tools/README.md` DEPUIS LE 432, ET CE CHAPITRE A ÉTÉ ÉLAGUÉ AU 444
 SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 442** (reporté deux fois). **20 bancs de contrôle et 22 bancs
-de rendu**, comptés en listant `tools/`. **TOUS RELANCÉS LE 2026-09-03 (lot C)** :
-`verify-quete` **773/773**, `verify-maire` **119/119**, `verify-vallee` **223/223**,
-`verify-collision` **TOUT PASSE** (30 contrôles), `verify-strings` **1 110 clés appariées**,
-`verify-scierie` **34/34**, `verify-ludo` **30/30**, `verify-taxi` **15/15** — les deux bancs de
-rendu (`render-maire`, `render-etoile`) n'ont pas été relancés ce lot, aucun sprite n'a bougé — et
-**vingt bancs de rendu sur vingt-deux** seulement s'exécutent (voir l'entrée dédiée plus bas :
-`render-eau` et `render-parc` sont cassés depuis avant cette livraison).
-⚠️ **`verify-strings` NE COMPTE PAS LES CLÉS DE LA QUÊTE** dans son 1 110 : sa parité de clés ne lit
+de rendu**, comptés en listant `tools/`. **LES VINGT RELANCÉS LE 2026-09-05, ET C'EST LA PREMIÈRE
+FOIS QUE LES VINGT LE SONT** : `verify-quete` **790/790**, `verify-strings` **1 126 clés
+appariées**, `verify-maire` **119/119**, `verify-vallee` **223/223**, `verify-scierie` **34/34**,
+`verify-ludo` **30/30**, `verify-taxi` **15/15**, `verify-collision` **TOUT PASSE**, les douze
+autres verts. Les bancs de RENDU n'ont pas été relancés ce jour-là (aucun sprite n'a bougé), et
+**vingt sur vingt-deux** seulement s'exécutent (`render-eau` / `render-parc`, entrée dédiée plus bas).
+⚠️⚠️⚠️ **ET C'EST CE JOUR-LÀ QU'ON A APPRIS CE QUE « TOUS RELANCÉS » VALAIT : DEUX BANCS ÉTAIENT
+ROUGES DEPUIS DES JOURS.** La phrase précédente disait « TOUS RELANCÉS LE 2026-09-03 » et en
+nommait **huit sur vingt** — `verify-compo` et `verify-cycle` n'étaient dans aucune des deux
+listes, donc personne ne les avait lancés. Aucun des deux ne signalait un défaut de JEU : les deux
+étaient des bancs dont la règle avait vieilli sous une livraison plus récente (`verify-cycle`
+rougissait sur un `slot` qui est un créneau de TEMPS ; `verify-compo` refusait une touffe d'herbe
+au pied d'un arbre depuis l'arrivée de `TOWN_SOFT_PROPS`). ⚠️ **LA LEÇON EST LÀ, ET ELLE EST
+GÉNÉRALE : UN BANC DÉJÀ ROUGE NE PEUT PLUS RIEN DIRE DU DÉFAUT SUIVANT.** Tant que `verify-cycle`
+rougissait pour sa propre raison, la règle qu'il existe pour tenir — aucun indice de case en
+chiffre, trente comparaisons dans `FermeGame.js` — n'était plus tenue par personne, et un vrai
+`slotRef.current === 3` s'y serait ajouté sans rien changer à l'affichage. *Un banc rouge n'est pas
+une dette qui attend : c'est une protection qui a déjà cessé.* ⚠️ **Corollaire d'écriture** : une
+phrase qui dit « tous » et énumère huit sur vingt est plus dangereuse qu'une phrase qui n'énumère
+rien — **on écrit le compte, ou on écrit la liste entière.**
+⚠️ **`verify-strings` NE COMPTE PAS LES CLÉS DE LA QUÊTE** dans son 1 126 : sa parité de clés ne lit
 que les tables `fr:`/`en:` indentées à quatre espaces, et `STAR_FR`/`STAR_EN` vivent hors de cette
 plage. Son SECOND contrôle, lui (« aucune section identique dans les deux langues »), importe le
 vrai module et les voit. *Le nombre ne bouge donc pas quand la quête gagne du texte — ce n'est pas
@@ -856,8 +895,10 @@ vérifie jamais — c'est elle, et elle seule, qui protège du banc imaginaire (
   **pour la quête de l'étoile au 458 — TROIS BLOCAGES DURS**, dont deux rendaient la quête
   infinissable dès qu'un second joueur se connectait (§12.0 de `QUETE.md`). ⚠️ *La séance à deux
   clients a désormais payé les trois fois sur trois où elle a eu lieu.* **Ce qui reste** : la
-  moitié qui se joue FACE À FACE (l'étoile timide dos à dos, le croisement d'ombres à deux, la
-  flaque promenée sur le ponton, le duo) et **la ferme PEUPLÉE**, jamais vue à deux.
+  moitié qui se joue FACE À FACE — ⚠️ **liste corrigée le 2026-09-05, trois des quatre postes qui
+  étaient écrits ici avaient été supprimés au déchant du 469** : restent l'étoile timide dos à dos,
+  le RELAIS du plat et les DEUX BORDS du cratère (ces deux-là ajoutés au 479) — et **la ferme
+  PEUPLÉE**, jamais vue à deux.
 - ⚠️⚠️ **`render-etoile` JOUE UN MOUVEMENT DU MONDE DEPUIS LE 459** : son §7 simule
   `starSlipStep` sur le vrai creux du cratère, 317 départs, et vérifie qu'on SORT du trou. Il a
   trouvé, avant d'être fini, que 219 départs sur 317 étaient bloqués. `verify-ludo` joue désormais
@@ -1039,9 +1080,16 @@ premier.
    les trois séances à deux clients faites jusqu'ici l'ont été sur une ferme VIDE, ce qui ne dit
    rien des vingt résidents. **Les bancs mesurent la simulation de l'hôte, jamais ce que voit
    l'invité.**
-2. **Les cinq mini-jeux de la quête de l'étoile**, joués jusqu'à la victoire, à cadence réelle.
-3. **La moitié « face à face » de la quête** : l'étoile timide dos à dos, le croisement d'ombres
-   à deux, la flaque du ponton, le duo orgue/beffroi. ⚠️ Pas testable seul, dépend du n°1.
+2. ⚠️ **LE MINI-JEU DE LA QUÊTE — IL N'EN RESTE QU'UN**, le refroidissement du cratère, joué
+   jusqu'à la victoire à cadence réelle. *Cette ligne disait « les cinq » jusqu'au 2026-09-05 :
+   quatre ont été supprimés par le déchant du 469 et la liste ne l'avait pas appris.* Le seul
+   nombre encore réel à surveiller est `STAR_COOL_BAND` — la bande se resserre-t-elle trop vite ?
+3. **Les postes à deux, jamais tenus** — et la liste a changé au 2026-09-05 : **l'étoile timide
+   dos à dos** (verbe `pair` de la reine) est le seul survivant des quatre qui étaient écrits ici ;
+   le croisement d'ombres, la flaque du ponton et le duo orgue/beffroi **n'existent plus dans le
+   code**. ⚠️ **En revanche le 479 en a AJOUTÉ deux que personne n'avait inscrits** : le RELAIS du
+   plat (l'un cuisine, l'autre court) et les DEUX BORDS du cratère. ⚠️ Pas testable seul, dépend
+   du n°1.
 4. **Les trois nombres de la scierie de Tristan** (tempo, durée de manche, prix de planche
    fendue) — aucun ne doit bouger avant d'avoir été joué. ✅ **Diagnostiqué en solo (2026-09-01)** :
    la mécanique n'est pas déplaisante mais reste peu claire, à rendre plus accessible pour de
@@ -1301,9 +1349,11 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
   PAYÉ IMMÉDIATEMENT.** Deux clients ont tourné ensemble pour la première fois et ont trouvé **trois
   blocages durs**, dont deux rendaient la quête **infinissable dès qu'un second joueur se
   connectait** (§12.0 de `QUETE.md`). ⚠️ **Ce qui n'a TOUJOURS pas été joué est la moitié qui se
-  joue FACE À FACE** : l'étoile timide dos à dos, le croisement d'ombres à deux (barème court, 30
-  cases / 20 s), la flaque que l'un promène sur le ponton pour l'autre, le duo orgue/beffroi. Le
-  code est là et il est corrigé ; les postes n'ont jamais été tenus. ⚠️ **Et la même séance doit
+  joue FACE À FACE** : l'étoile timide dos à dos, le RELAIS du plat et les DEUX BORDS du cratère.
+  ⚠️ *Cette liste nommait aussi le croisement d'ombres, la flaque du ponton et le duo orgue/beffroi
+  jusqu'au 2026-09-05 — supprimés au déchant du 469, ils envoyaient Guillaume chercher des
+  mécaniques qui n'existent plus.* Le code des trois restants est là et corrigé ; les postes n'ont
+  jamais été tenus. ⚠️ **Et la même séance doit
   faire la ferme PEUPLÉE**, réclamée depuis le 419. Voir `components/ferme/QUETE.md` §12.2.
   **Ce qui attend une DÉCISION de ta part, et rien d'autre :**
   **1. Le dessin de la compagne.** Cinq écritures, vue en jeu, pas encore juste : deux directions
@@ -1312,7 +1362,8 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
   `star.gift[joueur]`, une fois, côté hôte, persisté). Reste à décider CE QU'ON DÉBLOQUE — le jour
   où la garde-robe cosmétique lira ce champ, elle n'aura pas à inventer un chemin d'attribution,
   et c'est au moment où l'on en invente un qu'on se trompe.
-  **3. Le réglage des cinq mini-jeux.** Ils sont dessinés et vérifiés, jamais joués jusqu'à la
+  **3. Le réglage du mini-jeu qui reste** (le refroidissement — les quatre autres sont morts au
+  déchant du 469). Il est dessiné et vérifié, jamais joué jusqu'à la
   victoire à cadence réelle. Ce qui s'y juge — *est-ce que c'est agréable ?* — n'est mesuré nulle
   part et ne le sera jamais.
   **4. ✅ CE QUE LE NAVIRE FAIT UNE FOIS FINI — TRANCHÉ AU 453 PAR TOI.** *« Le bateau est construit
@@ -1348,76 +1399,40 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
    se supprime, elle ne se date pas.
 2. **200 lignes = passe d'élagage obligatoire. Ne pas relever le seuil.** L'élagage se fait
    AVANT d'ajouter.
-   ⚠️⚠️⚠️ **LE 439 A ÉLAGUÉ, ET C'EST LE PLUS GROS RÉTRÉCISSEMENT DE L'HISTOIRE DU FICHIER :
-   687 → 661 lignes, dont un EN-TÊTE passé de 151 à 50.** Cet en-tête était devenu un mur de
-   cinquante lignes d'avertissements avant le premier chapitre — c'est-à-dire la partie qu'on lit
-   le moins bien, occupée par ce qu'on veut qu'on lise le mieux. Les leçons de DESSIN sont
-   descendues en §4 (elles y sont à côté des pièges de dessin), les leçons de BANC sont restées
-   en tête sous une seule forme (« un banc qui passe ne veut pas dire que la chose est bonne »)
-   avec ses quatre variantes connues, et **trois blocs qui redisaient la même chose que §4 ont
-   été supprimés, pas déplacés**.
-   ⚠️⚠️⚠️ **LE 449 A EXÉCUTÉ L'ORDRE DU 444, QUATRE FOIS REPORTÉ (446, 447, 448) : §4 EST SCINDÉ
-   UNE TROISIÈME FOIS.** Les cinq pièges du GÉNÉRATEUR sont partis au §15 bis de
-   `components/ferme/README.md` ; les deux règles de CONCEPTION sont restées, parce qu'elles ne
-   parlent pas du générateur. ⚠️ **Et l'élagage a trouvé ce qu'un élagage doit trouver : un
-   DOUBLON.** « Une variante de décor est une couche » était écrit DEUX fois dans le même
-   chapitre — une version courte en Architecture, une longue en JavaScript — et personne ne
-   pouvait s'en apercevoir en lisant, puisque cent lignes les séparaient. La longue a survécu.
-   ⚠️⚠️ **ET L'EN-TÊTE EST REPASSÉ DE 167 À 125 LIGNES, POUR LA SECONDE FOIS EN DIX ZIPS.** Il
-   avait refait exactement ce que le 439 lui avait reproché : quatre récits de zip (444, 446,
-   447, 448) empilés avant le premier chapitre, chacun redisant en quinze lignes ce que
-   `components/ferme/README.md` dit mieux en un paragraphe. Les RÉCITS sont supprimés, les
-   LEÇONS gardées — **une ligne chacune, dans un tableau qui renvoie au détail**. C'est la forme
-   qui résiste à l'empilement, parce qu'un récit s'allonge et qu'une ligne de tableau, non.
-   ⚠️ *La leçon de ces six ordres exécutés est toujours la même : un chapitre qui grossit à chaque
-   zip décrit un code qui vit ailleurs, et il faut le renvoyer là-bas — jamais le résumer ici.*
+   ⚠️⚠️⚠️ **QUARANTE-DEUX PASSES D'ÉLAGAGE ONT EU LIEU ; LEUR RÉCIT A ÉTÉ SUPPRIMÉ, PAS RÉSUMÉ.**
+   Ce chapitre a porté jusqu'à quatre cent trente lignes de procès-verbaux — un tiers du fichier
+   occupé à raconter comment on avait raccourci le fichier, dont la moitié désignait un objet
+   supprimé depuis. *Le chapitre qui interdit de dater une information périmée était devenu le seul
+   endroit du fichier entièrement fait d'informations périmées.* Seules survivent les leçons
+   ci-dessous : vraies à l'échelle du projet, introuvables ailleurs, et payées.
 
-   Historique des passes : 426 (insuffisant) · 427 (§7 → `public/candyluge/README.md`) ·
-   428 (§6 → `components/ferme/README.md`, 507 → 490) · 431 (§4 scindé, 534 → 482) ·
-   432 (§10 → `tools/README.md`) · **439 (en-tête 151 → 50, §13 relu)** ·
-   **441 (§4 scindé : le DESSIN → `DESSIN.md`)** · 442 et 451 (§13 relus ligne à ligne) ·
-   **449 (§4 scindé une 3e fois : le GÉNÉRATEUR → `ferme/README.md` §15 bis ; en-tête 167 → 125)** ·
-   452 (`QUETE.md` relu contre le code, 943 → 1 141) · 453 à 481 et les sessions hors-zip qui ont
-   suivi : une passe par livraison, presque toutes sur le **tableau des leçons** de l'en-tête —
-   *ramené à quatre lignes onze fois de suite, puis supprimé avec l'en-tête qui le portait.*
-
-   ⚠️⚠️⚠️ **CETTE PASSE-CI (2026-09-02, buissons + maire) A SUPPRIMÉ QUATRE CENT TRENTE LIGNES DE
-   PROCÈS-VERBAUX D'ÉLAGAGE, ET C'EST LE PLUS GROS RÉTRÉCISSEMENT DEPUIS LE 439.** Ce chapitre
-   portait la minute détaillée de QUARANTE-DEUX passes — « deux retirées, deux ajoutées, le tableau
-   reste à sa taille » — soit un tiers du fichier occupé à raconter comment on avait raccourci le
-   fichier. ⚠️ **Et la moitié de ces minutes désignaient un objet qui n'existe plus** : le « tableau
-   des leçons » de l'en-tête, supprimé lors d'une passe antérieure, était encore cité vingt fois au
-   présent. *Le chapitre qui interdit de dater une information périmée était devenu le seul endroit
-   du fichier entièrement fait d'informations périmées.* C'est l'application de sa propre règle n°1
-   à lui-même, avec seize passes de retard.
-   ⚠️ **CE QUI A ÉTÉ GARDÉ, ET POURQUOI** : les cinq leçons ci-dessous. Elles sont les seules de ces
-   quatre cent trente lignes qui soient vraies à l'échelle du projet et introuvables ailleurs ; tout
-   le reste était un compte rendu de déménagement réussi, c'est-à-dire précisément ce que §14.3
-   interdit d'écrire ici.
-
-   ⚠️ **LES CINQ LEÇONS QUE CES QUARANTE-DEUX PASSES ONT PAYÉES :**
+   ⚠️ **LES SIX LEÇONS QUE CES PASSES ONT PAYÉES :**
    1. *Un chapitre qui grossit à chaque livraison décrit un code qui vit ailleurs : on le renvoie
       là-bas, jamais on ne le résume ici.* Six scissions l'ont prouvé (§6, §7, §4 trois fois, §10).
    2. *Un chiffre de banc recopié à deux endroits n'a pas deux chances d'être juste : il a deux
-      endroits où mentir.* Payé SIX fois sur `verify-quete` et `verify-maire` (468, 470, 479, 480,
-      481, hors-zip) — et une correction qui ne porte que sur l'un des deux n'est pas une
-      correction, elle apprend au chiffre un second endroit où mentir.
+      endroits où mentir.* Payé six fois sur `verify-quete` et `verify-maire` — et une correction
+      qui ne porte que sur l'un des deux apprend au chiffre un second endroit où mentir.
    3. *Une question à laquelle on a répondu ne sort pas du fichier toute seule : elle y reste, et
-      elle ment.* Trois relectures du §13 (439, 442, 451) l'ont trouvée à chaque fois.
+      elle ment.* Trois relectures du §13 l'ont trouvée à chaque fois.
    4. *Un récit s'allonge, une ligne de tableau non* — mais un tableau qu'on ne taille pas devient
       un récit à son tour. Le tableau des leçons a été ramené à quatre lignes onze fois avant de
       disparaître : la forme n'a jamais tenu toute seule.
    5. *Une leçon qu'on écrit sans l'appliquer dans la même livraison est une leçon qu'on repaiera.*
-      Le 453 a diagnostiqué « une constante que seul le banc lit est débranchée » puis a gardé la
-      constante « en réserve ».
+   6. ⚠️⚠️ **2026-09-05, ET C'EST LA PLUS CHÈRE DES SIX** : *un ordre d'élagage qui désigne un
+      document par son NOM, et non par une mesure, peut viser le mauvais pendant sept passes.*
+      « Relire `ferme/README.md` contre le code » a été reporté sept fois — et le jour où on a
+      MESURÉ les trois documents, c'était le plus SAIN (5 symboles fantômes sur 381, contre **24
+      sur 307** pour `QUETE.md`, 0 sur 80 pour `tools/README.md`). Sept passes de retard sur le
+      mauvais fichier, pendant que le document qui pilote les séances de jeu de Guillaume
+      pourrissait. **La passe suivante commence par la MESURE, jamais par la liste héritée.**
 
-   ⚠️⚠️ **L'ORDRE REPORTÉ SEPT FOIS, ET IL EST TOUJOURS OUVERT : RELIRE `components/ferme/README.md`
-   CONTRE LE CODE**, comme le 452 l'a fait pour `QUETE.md` et avec le même rendement (quatre dettes
-   qui n'étaient écrites nulle part, des chiffres de bancs faux, un chapitre qui annonçait comme
-   « pas encore construit » quelque chose de livré huit zips plus tôt). C'est le seul document
-   d'autorité du dépôt qui n'ait jamais eu sa passe. ⚠️ **La grandeur à mesurer en premier est celle
-   qui a payé trois fois** (453 sur le document, 456 sur le code, 458 sur la coopération) : *chaque
-   chose que le document dit visible à l'écran a-t-elle un chemin de code qui l'affiche ?*
+   ⚠️⚠️ **L'ORDRE OUVERT, CORRIGÉ LE 2026-09-05 : RELIRE `components/ferme/QUETE.md` CONTRE LE
+   CODE** — le détail est déjà diagnostiqué au **P0 du bloc ⏭️ REPRISE**, il n'est pas à
+   rechercher. ⚠️ **La grandeur à mesurer en premier est celle qui a payé trois fois** (453 sur le
+   document, 456 sur le code, 458 sur la coopération) : *chaque chose que le document dit visible à
+   l'écran a-t-elle un chemin de code qui l'affiche ?* — et son corollaire de 2026-09-05, qui a
+   sorti trois postes de jeu fantômes et trois constantes mortes : *chaque chose que le document
+   dit JOUABLE existe-t-elle encore ?*
 
 3. **Critère d'inclusion** : « est-ce vrai à l'échelle du projet, et invérifiable en ouvrant
    un seul fichier ? » Sinon, ça va dans un commentaire de code. **L'histoire d'un défaut
