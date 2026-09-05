@@ -7,261 +7,69 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-⚠️⚠️⚠️ **CE BLOC EST LE SEUL ENDROIT DU FICHIER QUI DÉSIGNE UNE ACTION SUIVANTE.** Il se
-REMPLACE à chaque fin de livraison, il ne s'empile jamais. *Un fichier qui contient tout ne dit
-rien tant qu'il ne dit pas par quoi commencer.*
+⚠️⚠️⚠️ **CE BLOC DÉSIGNE UNE SEULE ACTION SUIVANTE. IL SE REMPLACE, IL NE
+S'EMPILE PAS.**
 
-**2026-09-05 — LA HIÉRARCHIE EST RANGÉE PAR *QUI PEUT DÉBLOQUER*, PLUS PAR SUJET.** C'est le
-changement de fond de cette passe, validé par Guillaume. L'ancienne liste triait par thème
-(social / visuel / contenu) ; or la contrainte réelle n'est pas le thème, c'est la ressource — et
-elles sont trois, indépendantes : **le temps de jeu de Guillaume**, **un fichier que lui seul peut
-fournir**, **du travail que Claude fait seul**. Les mélanger est ce qui faisait grossir le passif :
-un item bloqué sur un JPG restait rangé à côté d'un chantier de trois jours, donc ni l'un ni
-l'autre n'était choisi.
+### 🔴 ACTION SUIVANTE — FERME VALLÉE P1 BIS, JALONS DE TRAME ATTEIGNABLES
 
-**Livré dans cette passe (2026-09-05) :** les vingt bancs de contrôle relancés — **18 verts, 2
-rouges**, et les deux rouges l'étaient **depuis des jours sans que personne le sache**. Aucun des
-deux n'était un défaut de jeu : les deux étaient des bancs dont la règle avait vieilli sous une
-livraison plus récente. `verify-cycle` interdisait un indice de case en chiffre avec TOUS les
-opérateurs, et rougissait sur `slot <= 0` de `starShyDash` — un créneau de TEMPS qui porte ce nom
-parce que `quete.js` l'appelle ainsi. `verify-compo` refusait un arbre dans l'emprise d'un décor,
-et rougissait sur trois touffes de `TOWN_SOFT_PROPS`, la végétation qu'on TRAVERSE. Les deux
-corrections sont **falsifiées** (défaut historique réinjecté ⇒ le banc rougit). Chiffres réels,
-obtenus en lançant : `verify-quete` **790/790**, `verify-strings` **1 126 clés**, `verify-maire`
-119/119, `verify-vallee` 223/223, `verify-scierie` 34/34, `verify-ludo` 30/30, `verify-taxi`
-15/15, `verify-collision` TOUT PASSE, `verify-compo` et `verify-cycle` verts.
+**« Où's that ? » est livré et validé avec Google réel ; reprendre maintenant le premier point du
+passif Ferme Vallée ci-dessous.** Le menu développeur doit poser des jalons atteignables qui font
+avancer ensemble les pistes étoiles et bateau/maire, sans sauter de scène, avec un banc
+d'atteignabilité. Ne pas engager la bifurcation narrative P1 avant que Guillaume ait pu jouer les
+actes tardifs grâce à ces jalons.
 
----
+**Livré et validé les 2026-09-05–06 :**
+- jeu catalogue exact ousthat, nom affiché **« Où's that ? »**, exactement 2 joueurs en ligne ;
+- écran hôte configurable (PV, manche, délai final, multiplicateurs) et arène plein écran ;
+- Google Maps Embed par pano, carte Leaflet 1.9.4 + tuiles OpenStreetMap avec attribution visible ;
+- 40 panoramas mondiaux sans pays répété, issus uniquement de
+  data/diverse-locations.json à la dernière révision WorldGuessr MIT
+  ef88928c03a70d77ce5a1c86fddf74814ff67fc7 ; aucun ajout PolyForm repris ;
+- autorité hôte : requêtes invitées, états appliqués/persistés par l'hôte, propositions bridées à
+  8,3/s, chrono invité reconstruit depuis une durée restante sans comparer deux horloges ;
+- score Haversine précis à l'antiméridien, 5 000 points jusqu'à 25 m, dégâts sur le seul perdant,
+  réponse confirmée définitive, dernier marqueur compté à l'expiration ;
+- reprise rooms.game_state, résultat de match, victoire, revanche et retour salon, sans migration ;
+- tools/verify-ousthat.mjs **44/44** ; mutation volontaire des dégâts ⇒ **2 échecs** ; filet
+  complet des **21** bancs muet donc vert ; npm run build vert avec le seul avertissement
+  préexistant G_SOIL de Ferme Vallée ;
+- clé Maps Embed réelle locale, restreinte à localhost et à la seule API Embed ; même panorama et
+  orientation sur deux clients, masque, double chargement, décompte, verrou, délai final,
+  expirations avec/sans marqueur, dégâts, panorama indisponible, victoire, revanche et reconnexion
+  validés dans le navigateur ; bureau + mobile contrôlés ;
+- la recette Google a découvert et corrigé l'annulation du délai de stabilisation lorsque le second
+  acquittement de chargement produisait un nouvel état ; carte désormais rétractable façon
+  GeoGuessr, marqueur conservé à la fermeture, drapeau du pays sur le vrai point de révélation.
 
-### ✅ P0 — RÉCONCILIER LES DOCUMENTS AVEC LE CODE — **FAIT LE 2026-09-05**
+**Configuration :** aucune manipulation Supabase, aucune migration SQL. Une clé Google Maps Embed
+publique mais restreinte est requise. Les contraintes fournisseur/licence sont dans
+components/ousthat/README.md et components/ousthat/THIRD_PARTY_NOTICES.md.
 
-*Gardé ici tant que P1 n'est pas ouvert, parce que la LEÇON vaut pour la prochaine passe, pas
-parce que le travail reste à faire.*
+### PASSIF FERME VALLÉE
 
-⚠️⚠️⚠️ **SI GUILLAUME DIT SEULEMENT « CONTINUE », VOICI L'ARBRE DE DÉCISION — IL N'Y A PAS À LE
-LUI REDEMANDER :**
-- **Par défaut, et sans rien demander → P1 bis** (le menu dev qui pose une trame cohérente).
-  Claude le mène seul, et c'est ce qui débloque tout le reste. **C'est l'action suivante.**
-- **P1 bis fait, et Guillaume est disponible → P1** (la bifurcation narrative) — mais *après* avoir
-  joué les actes tardifs, jamais avant.
-- **P1 bis fait, Guillaume indisponible → P3** (recompter les canevas, puis la chaîne
-  `createLinearGradient`), puis **P4**, puis la **passe de menue monnaie**.
-- ⚠️ **Ne JAMAIS choisir P2 ou P5 de sa propre initiative** : la première demande une soirée de
-  Guillaume, la seconde en dépend.
-
-**C'était le seul travail qui rendait justes TOUTES les séances suivantes.** Mesuré le 2026-09-05 :
-`QUETE.md` porte **24 symboles fantômes sur 307**, contre 5 sur 381 pour `ferme/README.md` et 0
-sur 80 pour `tools/README.md`. ⚠️ **Cela INVERSE l'ordre permanent du §14.2** (« relire
-`ferme/README.md` contre le code », reporté sept fois) : il visait le document le plus SAIN des
-trois. C'est `QUETE.md` qui a pourri, et c'est lui qui pilote les séances de Guillaume.
-
-Ce qui a été corrigé — **tout est fait, ne pas rouvrir sans une mesure neuve** :
-1. ✅ **`QUETE.md` §12.2 A** — la liste « jamais joué face à face » cite quatre postes ; **trois
-   n'existent plus** (croisement d'ombres, flaque du ponton, duo orgue/beffroi : `starMiniPartner`,
-   `orgue`, `magpie`, `croisement` = zéro occurrence, supprimés au déchant du 469). Seul le
-   dos-à-dos survit (verbe `pair` de la reine). **Et le 479 a AJOUTÉ deux postes à deux jamais
-   tenus qui ne sont dans aucune liste** : le RELAIS du plat et les DEUX BORDS du cratère.
-2. ✅ **`QUETE.md` §12.2 B** — « les nombres à surveiller en premier » en donne quatre, **trois
-   n'existent plus** (`STAR_DIVE_CURRENT`, `STAR_SWEEP_MIN/MAX`, `STAR_MAGPIE_LAG`). Seul
-   `STAR_COOL_BAND` est réel, et **il ne reste qu'UN mini-jeu**, le refroidissement : un seul
-   `setStarMini({ kind: "cool" })` dans tout le dépôt, et la branche `duet` de `StarMinigame` est
-   du **code mort** à retirer.
-3. ✅ **`QUETE.md` §17.10** — le tableau des lots dit D et F non livrés alors que la 5ᵉ sœur
-   (`starGreenWalk`) et la 7ᵉ (`STAR_EVIL_ID`, `STAR_REVIVE_PROFILE`) sont dans le code. ⚠️⚠️ **Et
-   « lot E » désigne DEUX choses** : le sciage coop + 6ᵉ sœur dans `QUETE.md` §17.10, la 7ᵉ sœur
-   et sa réanimation dans ce fichier-ci. **Un des deux jeux de lettres doit mourir** — garder
-   celui du §17.10, qui est l'autorité de conception, et dater les autres.
-4. ✅ **`QUETE.md` §16.5** — dit le HUD encore entièrement peint par-dessus la scène plein écran du
-   maire ; **c'est déjà faux pour le bandeau de quête**, gardé par `!mayorTalk && !sawScene`
-   (`FermeGame.js:33513`). Le reste du HUD est à vérifier, pas à réécrire de mémoire.
-5. ✅ **FAIT LE 2026-09-05, CÔTÉ `CLAUDE.md`** : §5 annonçait `FermeGame.js` « ~20 500 l. » pour
-   **35 477** (+73 %) — un modèle qui planifie dans ce fichier planifiait sur la moitié ; `planche2.js`
-   (826 l.) manquait à la carte du territoire ; les chiffres de bancs du §10 dataient du lot C.
-   ⚠️ **Et une fausse piste vérifiée puis retirée d'ici** : les huit bancs qui semblaient absents de
-   la carte (`verify-vergers`, `render-fruits`, `render-escaliers`…) sont tous documentés dans
-   `tools/README.md`, **qui est leur autorité et qui est le document le plus sain du dépôt**. Les
-   ajouter au §5 aurait dupliqué une liste juste — *le §14.1 interdit de recopier, pas seulement de
-   périmer.*
-6. ✅ **RIEN NE RESTE DE P0.** Les quatre corrections de `QUETE.md` et les deux de `CLAUDE.md` sont
-   faites le 2026-09-05. *Cette ligne annonçait « ce qui reste » alors que tout était fait — corrigée
-   dans la même passe, parce que c'est exactement la leçon n°3 du §14.2 : une question à laquelle on
-   a répondu ne sort pas du fichier toute seule, elle y reste et elle ment.*
-
-### 🔴 P1 bis — LE MENU DEV DOIT POSER UNE TRAME, PAS DES ÉTATS *(Claude seul — **L'ACTION SUIVANTE**, gate P1 ET P2)*
-
-⚠️⚠️⚠️ **SIGNALÉ PAR GUILLAUME LE 2026-09-05, ET C'EST LA VRAIE RAISON POUR LAQUELLE QUATRE LOTS
-SONT LIVRÉS ET JAMAIS REJOUÉS.** Mot pour mot : *« le rdv avec le maire doit être fait alors qu'on
-a cliqué sur une étape de la quête plus tardive »*. Vérifié dans le code le jour même.
-
-**La quête a DEUX pistes d'état parallèles, et aucun bouton ne les avance ensemble :**
-- **les ÉTOILES** — `e.found`, `e.ch` (avancées par `chapter`, `skip`, `all`, `queen`, `shy`,
-  `green`, `evil`…) ;
-- **le BATEAU / LE MAIRE** — `e.plan`, `e.wood`, `MR.mayorSigned`, les pièces de coque (avancées
-  par `plans`, `timber`, `deliver`, `appt`).
-
-`devStar("chapter" | "skip" | "all")` n'appelle que `resolveStarFound` : **il ne touche jamais
-`e.plan`, `e.wood` ni la signature du maire.** Sauter à une étape tardive laisse donc la moitié
-bateau à l'étape 1, et produit **un état du monde qu'aucune partie réelle ne peut atteindre**.
-⚠️ **CE N'EST PAS UN BOUTON CASSÉ, C'EST UNE CATÉGORIE D'ERREUR QUE CE FICHIER CONNAÎT DÉJÀ** : le
-commentaire de `devStar("all")` avertit, depuis le 442, qu'un raccourci incomplet fait *« conclure
-que la scène finale est cassée alors que c'est le raccourci qui l'était »*. Guillaume a trouvé le
-même piège **entre** les deux pistes au lieu de l'intérieur d'une seule. *Un raccourci qui produit
-un état impossible ne raccourcit pas le test : il le remplace par un autre test.*
-
-**LA LIGNE ROUGE DU 444 RESTE INTACTE : un bouton dev ne SAUTE JAMAIS une scène.** L'audience du
-maire doit continuer de se JOUER. Ce qui manque n'est pas un bouton qui la passe, c'est un bouton
-qui amène **les deux pistes à l'état que la vraie trame aurait à ce point du récit**, et qui laisse
-exactement les scènes à jouer.
-
-**La forme : une table de JALONS DE TRAME, pas des boutons d'état.** Un bouton = un point de
-l'histoire (« Acte III, plans signés, il reste l'audience à jouer »), qui pose les deux pistes de
-façon cohérente. ⚠️ **Et la moitié qui a de la valeur est le BANC** : chaque jalon doit être un
-état que le jeu réel peut ATTEINDRE, et c'est vérifiable — on part d'une partie neuve, on applique
-les résolveurs dans l'ordre, on compare. *Sans ce contrôle on aura simplement remplacé un état
-impossible par un autre, en plus long.*
-⚠️⚠️⚠️ **P1 bis PASSE DEVANT P1, ET LA DÉPENDANCE ÉTAIT ÉCRITE À L'ENVERS ICI LE 2026-09-05
-(corrigé le jour même, sur une question de Guillaume : « faut-il attendre d'avoir réécrit la trame
-pour avoir un menu dev cohérent ? »). NON — et pour deux raisons.**
-1. **La cohérence d'un état est une propriété du CODE, pas du récit.** Ce qui rend un état
-   atteignable, ce sont les prérequis réels des résolveurs (`site.req`, l'audience avant
-   `mayorSigned`, `starPlanAsked` avant les commandes de bois). **Ils ne bougent pas quand on
-   raconte l'histoire dans un autre ordre.** Le chantier se coupe donc en deux moitiés très
-   inégales : **la MACHINE** (amener les deux pistes à un état mutuellement cohérent + le banc
-   d'atteignabilité) ne connaît pas le récit et survit à n'importe quelle réécriture ; **les
-   JALONS** (quels N points, comment on les nomme) suivent la trame et se refont en une table de N
-   entrées. On paie la seconde deux fois, et elle est petite.
-2. ⚠️⚠️ **ET C'EST L'ARGUMENT DÉCISIF : FAIRE P1 bis D'ABORD REND P1 MEILLEUR.** Sans lui, la
-   bifurcation narrative se tranche **sur le papier**, par quelqu'un qui n'a jamais joué les actes
-   tardifs — parce qu'ils sont inatteignables sans rejouer toute la trame. *C'est le geste que ce
-   fichier interdit partout ailleurs* : décider d'une abstraction sur un comportement jamais
-   observé (même faute que bâtir le système de relations sur des PNJ jamais vus à deux clients).
-   Avec P1 bis, l'ordre des actes se juge **joué** au lieu d'être **lu**.
-
-### 🟠 P1 — LA BIFURCATION NARRATIVE *(Guillaume + Claude, zéro code — ⚠️ APRÈS P1 bis)*
-
-Trancher le recentrage bateau / pluie d'astéroïdes (§13). ⚠️ **ELLE A ÉTÉ REMONTÉE DEVANT LA
-SÉANCE DE JEU, ET LA RAISON EST UNE DÉPENDANCE INVERSÉE** : elle ne coûte ni code ni soirée (c'est
-une comparaison acte par acte de `QUETE.md` §17.2 contre la nouvelle trame), elle gate P6, et
-surtout **elle invalide potentiellement une partie de P2** — juger « les trois nombres du bateau »
-alors que la chaîne de transport du bois doit REMPLACER ce mécanisme ne paie que si le jugement
-peut annuler le remplacement. Livrable : la comparaison acte par acte écrite dans `QUETE.md`,
-avant toute ligne de `quete.js` / `maire.js` / `scierie.js`.
-
-### 🟡 P2 — UNE SEULE SÉANCE, À DEUX CLIENTS, SCRIPTÉE *(Guillaume — gate tout le social)*
-
-⚠️⚠️ **NE PAS OUVRIR AVANT P1 bis.** Trois des quatre points ci-dessous se jouent en fin de quête ;
-sans un jalon cohérent, les atteindre demande de rejouer toute la trame à chaque essai — c'est
-précisément pour ça qu'ils sont livrés et jamais rejoués.
-
-⚠️ **UNE soirée, pas cinq vérifications séparées.** `QUETE.md` le dit déjà (« cette séance-là peut
-faire les deux d'un coup »), et la séance à deux clients a payé **trois fois sur trois**. Recette
-au §10. Ordre imposé : **peupler la ferme EN PREMIER et ne plus recharger** (le faux Supabase ne
-persiste rien). Ce qu'une seule soirée doit payer :
-1. **la ferme PEUPLÉE à deux clients** — jamais fait, réclamé depuis le 419, gate tout le social ;
-2. **le lot E de bout en bout** (7ᵉ sœur : ramasser / porter / sortir / poser / réanimer) — livré
-   en code, bancs verts, jamais vu jusqu'au bout ;
-3. **permis de pêche en ville, lancer élargi au lac maléfique, format `drawFishHaul`** (corrigé à
-   l'échelle 1,05×, jamais revu) — trois lots livrés et non rejoués ;
-4. **les deux postes à deux qui existent vraiment** : le relais du plat, les deux bords du cratère.
-⚠️ Claude fournit la feuille de route exacte AVANT la séance ; il ne la joue pas à sa place.
-
-### 🟢 P3 — LA CHAÎNE TECHNIQUE QUI SE DÉBLOQUE ELLE-MÊME *(Claude seul)*
-
-**Préflight, vingt minutes, à ne jamais suspendre à un chantier qui glisse : RECOMPTER LES
-CANEVAS.** 779 est une mesure de 2026-09-02 que personne n'a reconfirmée, aucun banc ne la tient,
-et le symptôme d'un dépassement sur iPad n'est pas une erreur mais un onglet qui se ferme (§10).
-Tout ce qui ajoute des sprites en dépend.
-
-Puis la seule vraie chaîne du passif technique : **`lib-canvas.createLinearGradient`** →
-**`render-eau` / `render-parc` revivent** (2 bancs de rendu sur 22 ne s'exécutent pas) → **`WAT_RAMP`
-devient réglable ET mesurable** (direction déjà tranchée par Guillaume, §13).
-⚠️⚠️ **LE PIÈGE N'EST PAS LE DÉGRADÉ, C'EST QUE `fillStyle` AVALE EN SILENCE CE QUE `parseColor`
-REFUSE** (`lib-canvas.mjs:66`) : une demi-implémentation peindrait avec la couleur précédente sans
-rien dire — le stub menteur du §10, dans l'outil censé nous en protéger. Les deux moitiés se
-corrigent dans le même geste. **Falsification obligatoire** : les 20 autres bancs de rendu doivent
-sortir des chiffres identiques.
-
-### 🔵 P4 — RATTRAPAGE VISUEL DE LA FERME *(Claude seul — deux livraisons séparées)*
-
-La ferme garde **les deux arbres du zip 232** et son **herbe en tuile de 16 px** pendant que la
-ville a onze essences animées et un gazon au pavé de 64 px. C'est la dette la plus visible du
-projet, c'est là que se passe la soirée (~99 % du trafic), et c'est le retour le plus répété de
-Guillaume.
-⚠️ **POURQUOI SI HAUT, ET L'ARGUMENT N'EST PAS ESTHÉTIQUE : P3 ET P4 SONT LES DEUX SEULES PHASES
-QUE CLAUDE MÈNE SANS GUILLAUME.** P2 attend sa soirée, P5 est gaté par P2. P4 ne DÉPLACE pas le
-social, il REMPLIT l'attente du social. Arbitré ainsi avec Guillaume le 2026-09-05.
-⚠️ **LE COUPLAGE EST UNE CONDITION, PAS UN RANG** : toute nouvelle décoration de ferme livrée avant
-ce rattrapage se fait juger contre l'herbe du zip 232 — palette et contraste réglés contre un sol
-qui va changer, donc à re-régler. Rien en P1/P2/P3/P5 ne dessine sur le sol de la ferme, donc le
-risque est nul aujourd'hui ; **il se réveille dès qu'une phase pose un décor à la ferme**, et
-alors P4 passe devant elle.
-⚠️ (a) le sol en pavé 4×4 qui BOUCLE, (b) les arbres — **jamais les deux dans la même livraison**
-(décision du 424). Le banc s'écrit **le jour même**, pas après (leçon du 455 : la ferme n'a qu'un
-seul banc de rendu, `render-etoile`).
-
-### 🟣 P5 — LE SOCIAL *(gaté par P2)*
-
-Relations résident-résident (affinités et inimitiés qui ÉVOLUENT avec les actions des joueurs,
-la quête de réconciliation) ; mariage — il ne manque que l'officier, et c'est le seul endroit du
-jeu où deux joueurs feraient ensemble autre chose que du commerce.
-
-### ⚪ P6 — CONTENU ET DÉCISIONS À POSER
-
-Chaîne de transport du bois du bateau (**dépend de P1**, direction déjà tranchée §13) · nouvelles
-espèces de poissons rares / Requins (après le format `drawFishHaul` de P2) · commissions et
-rendez-vous datés (patron déjà écrit cinq fois) · cadastre / notaire · salon de coiffure.
-⚠️ Un item marqué « décision à poser » s'arrête toujours AVANT le code (§2).
-
-### ⚫ P7 — RÉSERVE
-
-Visiteurs célèbres — bloqué sur une question de droit à l'image à trancher isolément, et qui
-compte double avec les plans de commercialisation. Peut ne jamais se faire.
+L'ordre ancien reste, mais n'est plus l'action courante :
+1. **P1 bis, Claude seul** — le menu dev doit poser des jalons de trame atteignables qui avancent
+   ensemble les pistes étoiles et bateau/maire, sans jamais sauter une scène ; banc
+   d'atteignabilité obligatoire.
+2. **P1, Guillaume + Claude** — trancher sur le papier la bifurcation bateau / pluie d'astéroïdes
+   après avoir joué les actes tardifs grâce à P1 bis.
+3. **P2, séance Guillaume à deux clients** — ferme peuplée, lot E complet, pêche en ville/lac,
+   relais du plat et deux bords du cratère.
+4. **P3, Claude seul** — recompter les canevas, implémenter createLinearGradient dans le
+   rastériseur, remettre render-eau/render-parc au vert puis rendre WAT_RAMP mesurable.
+5. **P4, deux livraisons visuelles séparées** — sol de ferme 4×4 qui boucle, puis arbres.
+6. **P5 social après P2** — relations évolutives, réconciliation, mariage.
+7. **P6 contenu après décisions** — transport du bois, poissons rares/requins, commissions,
+   cadastre/notaire, coiffeur. **P7 réserve** — visiteurs célèbres après décision de droit à l'image.
 
 ---
-
-### 📮 CE QUI N'ATTEND PAS DU TRAVAIL MAIS UN FICHIER DE GUILLAUME
-
-*Sorti des phases exprès : ce ne sont pas des chantiers, ce sont deux minutes de sa part, et
-rangés parmi des chantiers ils n'étaient jamais choisis.*
-- **un JPG de référence** pour les sprites du tribunal et de l'église (Claude rédige ensuite un
-  prompt Gemini prêt à coller — jamais d'appel API, §2) ;
-- **un nouveau PNG** pour le saut de rebord du tribunal qui n'atterrit pas sur le chemin pavé ;
-- **`public/sounds/church-organ.mp3`** — décidé au 441, rien à coder, toujours absent ;
-- **des images de référence** pour la pièce EMBALLÉE du transport du bois, le jour où P6 s'ouvre.
-
-### 🪙 LA PASSE DE MENUE MONNAIE — *une seule livraison, pas dix lignes qu'on ne choisit jamais*
-
-*Un item trop petit pour être élu « action suivante » ne l'est jamais : ceux-ci attendent depuis
-deux sessions. Groupés, ils deviennent choisissables une fois.*
-`townHall2Sprite` **mort** (construit dans la table de sprites, `fermeArt.js:15983`, zéro
-consommateur — un canevas gaspillé) · la branche `duet` de `StarMinigame`, morte depuis le déchant ·
-`Q.STAR_CARD_BREATH_MS` = 3 000 ms et l'accès à la canne dans les trois zones (réglages en attente
-depuis deux sessions) · les deux retours mineurs de Codex (reconnaissance au chapeau, HUD du
-halage) · taches rouges et contraste des ombres sur la balustrade · le buis de la ferme (VF, comme
-`TOWN_SOFT_PROPS`) · l'ombre portée dirigée de `drawCivic` · la jonction dallage/chemin non courbée
-du parc (⚠️ **vérifier d'abord si c'est un oubli ou un choix** — un trottoir a le droit de changer
-de matière net ; ne pas deviner avant de l'ouvrir).
-
----
-
-⚠️⚠️⚠️ **CETTE HIÉRARCHIE SE RÉÉVALUE, ELLE NE S'APPLIQUE PAS.** Elle a été écrite par un modèle
-antérieur à celui qui la lit. Avant de choisir dedans, **relire les phases contre le code et contre
-`QUETE.md` / `README.md` réels** et corriger ce qui a mal vieilli : un ordre de dépendance mal posé,
-un coût sous- ou sur-estimé, un item déjà obsolète. *La passe du 2026-09-05 l'a faite et y a trouvé
-deux bancs rouges depuis des jours et une liste de séance à 75 % fictive — les deux invisibles à la
-lecture.* Corriger cette section fait partie du choix de l'action, pas d'une étape à part.
-⚠️ **JUGER veut dire : choisir, dans ce qui est débloqué, l'élément qui sert le mieux le §0 (une
-soirée à 2-3 qui donne envie d'y revenir) pour le moindre coût — et le DIRE avant d'écrire (§2).**
-
----
-
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
 
 **Une soirée de jeu entre amis, à deux ou trois, qui donne envie d'y revenir.** Arcardi n'est
 pas une plateforme : c'est un salon qu'on ouvre un vendredi soir avec un code partagé. Tout
 arbitrage se fait contre ce chiffre — **2 joueurs, occasionnellement 3**.
 
-1. **La qualité avant le nombre.** 22 jeux existent ; ce qui compte est qu'un jeu donné soit
+1. **La qualité avant le nombre.** 23 jeux existent ; ce qui compte est qu'un jeu donné soit
    *fini*. Depuis le 421, l'exigence est explicitement **AAA**.
 2. **Le monde partagé est le cœur.** La ferme est un lieu qu'on habite ; les mini-jeux sont des
    portes qui s'y ouvrent, jamais des applications séparées.
@@ -272,7 +80,7 @@ arbitrage se fait contre ce chiffre — **2 joueurs, occasionnellement 3**.
 ## 1. Le projet
 
 Next.js 14 (App Router, **JavaScript pur, pas de TypeScript**) + Supabase (auth, Postgres,
-Realtime) + Vercel. Salons à code partagé, 22 jeux, scores synchronisés.
+Realtime) + Vercel. Salons à code partagé, 23 jeux, scores synchronisés.
 
 **La ferme** (`GAME_ID = "ferme"`) est un monde partagé persistant, ~99 % du trafic réseau.
 **Valley Town** en est la seconde carte, multijoueur, atteinte par le train ; **l'intérieur du
@@ -1387,7 +1195,7 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
   et au 439 les **élections municipales** + le jour d'audience du maire) : **une pure fonction du
   numéro de jour, jamais un état**. Les élections sont le premier de ces rendez-vous qui ait un
   RÉSULTAT visible dans le monde (le portrait officiel) — c'est le modèle à copier.
-- ⚠️⚠️ **LE TACTILE NE COUVRE QUE LA FERME, LA VILLE ET LE TRIBUNAL** (430). Les 21 autres jeux
+- ⚠️⚠️ **LE TACTILE NE COUVRE QUE LA FERME, LA VILLE ET LE TRIBUNAL** (430). Les 22 autres jeux
   de la plateforme n'ont pas été audités au doigt. Certains ont déjà des `pointer*` (puzzle,
   naval, yahtzee), d'autres non — **personne ne sait lesquels**, et c'est exactement l'angle
   mort qui a laissé la ferme injouable pendant des années.

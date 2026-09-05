@@ -1,11 +1,12 @@
 import "./globals.css";
+import "leaflet/dist/leaflet.css";
 import SiteAmbience from "@/components/SiteAmbience";
 import AmbienceSkipButton from "@/components/AmbienceSkipButton";
 import LoadingIntro from "@/components/LoadingIntro";
 
 export const metadata = {
   title: "ARCARDI — soirée jeux en ligne",
-  description: "Mini-jeux multijoueurs à distance entre amis : quiz, mot mystère, Worldle, escape game musical, Puissance 4, Petits Chevaux et plus."
+  description: "Mini-jeux multijoueurs à distance entre amis : quiz, mot mystère, duel Street View, escape game musical, Puissance 4, Petits Chevaux et plus."
 };
 
 // Sans ceci, les navigateurs mobiles (Safari/Chrome iOS) rendent la page à

@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { resetRoomToLobby, launchGame, launchStage, clearGameState, nominateHost, leaveRoomAndHandoff, claimAbandonedHost, GAME_LAUNCH_BUFFER_MS, STAGE_LAUNCH_BUFFER_MS } from "@/lib/gameSync";
@@ -41,6 +42,13 @@ import FlashStage from "@/components/FlashStage";
 import VideoStage from "@/components/VideoStage";
 import OceanStage from "@/components/OceanStage";
 
+// Leaflet lit `window` au chargement du module : le duel cartographique doit
+// donc être chargé uniquement dans le navigateur, quand sa scène est ouverte.
+const OusThatGame = dynamic(() => import("@/components/ousthat/OusThatGame"), {
+  ssr: false,
+  loading: () => <div className="ot-root ot-center"><div className="ot-orbit" /><p>Chargement du duel…</p></div>,
+});
+
 // Métadonnées d'affichage de chaque jeu : icône, couleur d'accent (variable
 // CSS existante), clés i18n pour le nom / la description courte de la carte
 // de sélection dans le salon, et habillage d'entrée ("stage") :
@@ -57,6 +65,7 @@ const GAME_META = {
   quiz:     { icon: "🧠", accent: "--acc-quiz",      nameKey: "nameQuiz",    tagKey: "tagQuiz", stage: "door" },
   wordle:   { icon: "🔤", accent: "--acc-wordle",    nameKey: "nameWordle",  tagKey: "tagWordle", stage: "door" },
   worldle:  { icon: "🌍", accent: "--acc-worldle",   nameKey: "nameWorldle", tagKey: "tagWorldle", stage: "video" },
+  ousthat:  { icon: "⌖", accent: "--acc-ousthat",   nameKey: "nameOusThat", tagKey: "tagOusThat", minPlayers: 2, maxPlayers: 2, stage: "door" },
   piano:    { icon: "🎹", accent: "--acc-piano",     nameKey: "namePiano",   tagKey: "tagPiano", stage: "curtain" },
   connect4: { icon: "🔴", accent: "--acc-c4",        nameKey: "nameC4",      tagKey: "tagC4", stage: "curtain" }, // pas de minPlayers : jouable en solo contre un bot (2026-07)
   ludo:     { icon: "🐴", accent: "--acc-ludo",      nameKey: "nameLudo",    tagKey: "tagLudo", stage: "door" }, // solo 2026-08-27 : 1 humain choisit 1 à 3 bots ; à plusieurs, moteur historique inchangé
@@ -78,7 +87,7 @@ const GAME_META = {
   ferme:    { icon: "🌾", accent: "--acc-ferme", nameKey: "nameFerme", tagKey: "tagFerme", maxPlayers: 8, stage: "door" }, // "Ferme Vallée" (jeu n°22) : ferme coopérative temps réel, jouable seul aussi ; monde partagé host-authoritative
 };
 const STAGE_COMPONENT = { door: DoorStage, curtain: CurtainStage, flash: FlashStage, video: VideoStage, ocean: OceanStage };
-const GAME_ORDER = ["quiz", "wordle", "worldle", "petitbac", "tupreferes", "connect4", "chess", "ludo", "naval", "chromatik", "president", "rami", "goldmines", "yahtzee", "tenk", "piano", "echoes", "diapason", "heist", "calcrace", "puzzle", "ferme"];
+const GAME_ORDER = ["quiz", "wordle", "worldle", "ousthat", "petitbac", "tupreferes", "connect4", "chess", "ludo", "naval", "chromatik", "president", "rami", "goldmines", "yahtzee", "tenk", "piano", "echoes", "diapason", "heist", "calcrace", "puzzle", "ferme"];
 
 // Victoires/Défaites, en discret (demande 2026-07) : remplace les deux chips
 // "✓N/✕N" auparavant affichées EN PERMANENCE sur chaque ligne joueur du
@@ -568,7 +577,7 @@ export default function Room() {
     // que pour un invité (handleGameFinish), qui garde en plus une
     // instance cachée de la ferme active en arrière-plan pour l'hôte (voir
     // le commentaire de `fermeAway` plus haut). Comportement INCHANGÉ pour
-    // les 21 autres jeux : reset global classique, comme avant.
+    // les 22 autres jeux : reset global classique, comme avant.
     if (room?.current_game === "ferme") { handleGameFinish(); return; }
     await resetRoomToLobby(room.id);
     // Mise à jour locale immédiate : ne dépend pas du round-trip Realtime,
@@ -781,6 +790,7 @@ export default function Room() {
     petitbac: "pb-theme",
     ludo: "ludo-theme",
     worldle: "worldle-theme",
+    ousthat: "ousthat-theme",
     quiz: "quiz-theme",
     wordle: "wordle-theme",
     piano: "piano-theme",
@@ -983,7 +993,7 @@ export default function Room() {
             sélection de jeu — même action que backToLobby (logo ARCARDI).
             Pour Ferme Vallée (demande 2026-07, révisée) : ne ramène QUE
             l'hôte, la ferme continue de tourner pour les autres (voir
-            backToLobby/fermeAway) ; pour les 21 autres jeux, comportement
+            backToLobby/fermeAway) ; pour les 22 autres jeux, comportement
             inchangé, ramène tout le monde.
           - "📣 Rassembler tout le monde" (hôte SEUL, Ferme Vallée
             uniquement, demande 2026-07) : LA seule action qui referme
@@ -1169,6 +1179,9 @@ export default function Room() {
                   )}
                   {room.current_game === "worldle" && (
                     <Worldle room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                  )}
+                  {room.current_game === "ousthat" && (
+                    <OusThatGame room={room} me={me} isHost={isHost} players={online === null ? players : players.filter((p) => isOnline(p.profile_id))} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "connect4" && (
                     <ConnectFour room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />

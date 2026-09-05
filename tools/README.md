@@ -13,8 +13,10 @@ Le 433 en ajoute trois (`verify-taxi`, `render-taxi`, `render-oiseaux`), le 434 
 `render-enquete`, partis avec l'enquête qu'ils mesuraient), et le **451 une**
 (`render-navire`, le navire des étoiles), le **480 une** (`verify-maire`, l'audience chez le
 maire), et la livraison du **2026-08-27 une** (`verify-ludo`, le solo contre un à trois bots).
-**Total à ce jour : 18 bancs de contrôle et 19 bancs de rendu.** Le nouveau banc passe
-**30/30** ; les 36 bancs antérieurs avaient été relancés un par un au 480, tous verts.
+La livraison de **Où's that ?** ajoute `verify-ousthat.mjs`. L'inventaire présent sur disque
+compte désormais **21 bancs de contrôle et 22 bancs de rendu**. Son nouveau banc passe
+**44/44** après une falsification volontaire qui a bien produit **2 échecs** ; les bancs
+antérieurs n'ont pas été renommés ni supprimés par cette livraison.
 
 ⚠️⚠️ **ET LE 444 A APPRIS QUELQUE CHOSE QUI VAUT POUR TOUS LES BANCS DE CE DOSSIER : SIX BANCS AU
 VERT N'ONT PAS VU DIX DÉFAUTS QU'UNE SEULE SÉANCE DE JEU A TROUVÉS EN VINGT MINUTES**, dont cinq
@@ -112,6 +114,19 @@ grille est une grille dans les deux sens, donc c'est une mesure plus complète E
 d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
 
 ## Ce qui existe
+
+- **`tools/verify-ousthat.mjs` — 44 contrôles, 44/44 (2026-09-06).** Le duel de
+  géolocalisation est mesuré sur ses vraies règles pures : Haversine (Paris–Londres,
+  antipodes et passage à l'antiméridien), précision des coordonnées, tolérance des 25 m,
+  décroissance du score, bornes des réglages, multiplicateurs, dégâts sur le seul perdant,
+  proposition non confirmée à l'expiration, KO, verrou, résolution unique et revanche. Le
+  banc vérifie aussi les 40 lieux sans pays répété et leur mélange déterministe, puis les
+  jointures du catalogue, de l'autorité hôte, de la reconnexion par durée restante, de la
+  limite réseau, de Google Maps Embed, de Leaflet/OpenStreetMap et de la notice MIT. Sa
+  falsification `--falsify` remplace les dégâts par zéro dans une copie temporaire : elle a
+  produit 2 échecs sur 42 avant le passage vert du moteur intact. Il ne prouve ni qu'un
+  panorama tiers est encore publié, ni la qualité visuelle de l'iframe Google : ces deux
+  points exigent une clé réelle et une partie jouée dans deux navigateurs.
 
 - **`tools/verify-scierie.mjs` — 34 contrôles, 34/34 (lot E, 2026-08-31).** LA SCIE DE TRISTAN,
   JOUÉE. C'est le troisième banc du dépôt qui joue une mécanique au lieu de la relire (après
