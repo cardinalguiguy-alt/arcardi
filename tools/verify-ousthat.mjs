@@ -3,7 +3,7 @@
    -----------------------------------------------------------------------------
    Ce banc appelle les règles pures réellement utilisées par le jeu, puis tient
    leurs jonctions avec le catalogue, le réseau hôte, Google Maps Embed,
-   Leaflet/OpenStreetMap et la notice MIT des lieux.
+   MapLibre/OpenFreeMap et la notice MIT des lieux.
 
    Usage : node tools/verify-ousthat.mjs
    Falsification : node tools/verify-ousthat.mjs --falsify
@@ -123,7 +123,7 @@ const rulesCopy = fs.readFileSync(path.join(ROOT, "lib", "gameRules.js"), "utf8"
 const notice = fs.readFileSync(path.join(ROOT, "components", "ousthat", "THIRD_PARTY_NOTICES.md"), "utf8");
 const css = fs.readFileSync(path.join(ROOT, "app", "globals.css"), "utf8");
 ok("le catalogue ouvre le solo et borne le multijoueur à huit", /ousthat:\s*\{[^\n]*maxPlayers:\s*8/.test(page) && !/ousthat:\s*\{[^\n]*minPlayers:/.test(page) && page.includes('"worldle", "ousthat"'));
-ok("Leaflet est isolé du serveur et le plein écran échappe au transform de la porte", /dynamic\(\(\) => import\("@\/components\/ousthat\/OusThatGame"\),\s*\{[\s\S]{0,100}ssr:\s*false/.test(page) && /body\.ousthat-active \.door-content\{[^}]*transform:none/.test(css));
+ok("MapLibre est isolé du serveur et le plein écran échappe au transform de la porte", /dynamic\(\(\) => import\("@\/components\/ousthat\/OusThatGame"\),\s*\{[\s\S]{0,100}ssr:\s*false/.test(page) && /body\.ousthat-active \.door-content\{[^}]*transform:none/.test(css));
 ok("les joueurs hors ligne sont écartés des sièges", /OusThatGame[^\n]*players=\{online === null \? players : players\.filter/.test(page));
 ok("le nom exact et la description existent dans les deux langues", (i18n.match(/nameOusThat:\s*"Où's that \?"/g) || []).length === 2 && (i18n.match(/tagOusThat:/g) || []).length === 2);
 ok("les règles des quatre parcours sont bilingues", (rulesCopy.match(/ousthat:/g) || []).length === 1 && rulesCopy.includes("Country Streak :") && rulesCopy.includes("Country Streak:") && rulesCopy.includes("jusqu’à 8 joueurs") && rulesCopy.includes("one to eight players"));
@@ -135,7 +135,9 @@ ok("le solo ne pollue jamais les compteurs victoire/défaite", /state\?\.phase !
 ok("le cartouche d'adresse Google ne livre pas la réponse du mode pays", game.includes('className="ot-google-place-mask"') && /\.ot-google-place-mask\{[^}]*z-index:6/.test(css));
 ok("la carte de réponse se rétracte sans perdre son composant et le vrai point porte un drapeau", game.includes('mapOpen ? "open" : "collapsed"') && game.includes('className="ot-map-peek"') && game.includes("countryFlag(revealTarget?.country)") && map.includes("countryFlag(reveal.target.country)"));
 ok("Google reçoit un pano et une orientation, sans clé copiée", frame.includes('pano: location.panoId') && frame.includes('heading: String(location.heading)') && frame.includes('referrerPolicy="strict-origin-when-cross-origin"') && frame.includes('process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY') && !/AIza[0-9A-Za-z_-]{30,}/.test(frame));
-ok("la carte crédite OSM et ne précharge aucune tuile", map.includes("tile.openstreetmap.org/{z}/{x}/{y}.png") && map.includes("OpenStreetMap") && !/prefetch|bulk|download/i.test(map));
+ok("la carte détaillée utilise OpenFreeMap sans clé et garde les interactions fluides", map.includes("https://tiles.openfreemap.org/styles/liberty") && map.includes("new AttributionControl") && map.includes("setWheelZoomRate") && map.includes("setZoomRate") && !/api[_-]?key|access[_-]?token/i.test(map));
+ok("le pin de réponse et les pins de révélation portent les mascottes Arcardi", game.includes("avatar={mySeat?.avatar}") && game.includes("seats={state.seats}") && map.includes('seat?.avatar || "🧭"'));
+ok("le temps de round configurable pilote l'échéance hôte partagée", /roundSeconds:\s*\[20,\s*300\]/.test(fs.readFileSync(path.join(ROOT, "components", "ousthat", "rules.js"), "utf8")) && game.includes("current.config.roundSeconds * 1000") && game.includes("remainingMs"));
 ok("la provenance reste bornée à la dernière révision MIT", notice.includes("ef88928c03a70d77ce5a1c86fddf74814ff67fc7") && /PolyForm\s+Noncommercial/.test(notice) && notice.includes("No code or data introduced after"));
 
 console.log(fails ? `\n${fails} ÉCHEC(S) sur ${total} contrôles.\n` : `\n${total}/${total} contrôles verts.\n`);

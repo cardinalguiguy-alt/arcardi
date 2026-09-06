@@ -15,7 +15,7 @@ Le 433 en ajoute trois (`verify-taxi`, `render-taxi`, `render-oiseaux`), le 434 
 maire), et la livraison du **2026-08-27 une** (`verify-ludo`, le solo contre un à trois bots).
 La livraison de **Où's that ?** ajoute `verify-ousthat.mjs`. L'inventaire présent sur disque
 compte désormais **21 bancs de contrôle et 22 bancs de rendu**. Son nouveau banc passe
-**44/44** après une falsification volontaire qui a bien produit **2 échecs** ; les bancs
+**57/57** après une falsification volontaire qui a bien produit **3 échecs** ; les bancs
 antérieurs n'ont pas été renommés ni supprimés par cette livraison.
 
 ⚠️⚠️ **ET LE 444 A APPRIS QUELQUE CHOSE QUI VAUT POUR TOUS LES BANCS DE CE DOSSIER : SIX BANCS AU

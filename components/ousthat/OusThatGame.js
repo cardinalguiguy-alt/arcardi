@@ -535,6 +535,7 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
   const location = state ? LOCATION_BY_ID[state.locationOrder?.[state.locationCursor]] : null;
   const mode = modeOf(state);
   const solo = isSolo(state);
+  const mySeat = state?.seats?.find((seat) => seat.id === me.id);
   const myAnswer = state?.answers?.[me.id] || null;
   const myPlaying = !!playingSeats(state).find((seat) => seat.id === me.id);
   const locked = !!myAnswer?.confirmed || !myPlaying;
@@ -664,7 +665,7 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
         {finished && solo && <section className="ot-final-summary"><span className="ot-final-icon">{mode === "country" ? "⚡" : "⌖"}</span><h2>{mode === "country" ? c.streakComplete : c.fiveRoundsComplete}</h2><strong>{finalTitle}</strong><div className="ot-history">{(state.history || []).map((entry) => <div key={`${entry.round}-${entry.locationId}`} className={entry.correct === false ? "wrong" : ""}><span>{entry.round}</span><b>{entry.targetCountry ? countryFlag(entry.targetCountry) : `${Number(entry.score || 0).toLocaleString()} pts`}</b><small>{entry.targetCountry ? countryName(entry.targetCountry, lang) : formatDistance(entry.distanceKm, lang)}</small></div>)}</div></section>}
 
         {(!finished || !solo) && <div className="ot-reveal-grid">
-          {mode === "pinpoint" ? <section className="ot-reveal-map"><GuessMap expanded reveal={{ target: revealTarget, players: result?.players || [] }} /><span className="ot-actual-chip">{countryFlag(revealTarget?.country)} {c.actual}</span></section> : <section className="ot-country-reveal"><div className="ot-country-reveal-flag">{countryFlag(result?.targetCountry)}</div><span className="ot-kicker">{c.correctCountry}</span><h2>{countryName(result?.targetCountry, lang)}</h2>{solo && <p className={result?.players?.[0]?.correct ? "correct" : "wrong"}>{result?.players?.[0]?.correct ? c.streakContinues : c.streakStops}</p>}</section>}
+          {mode === "pinpoint" ? <section className="ot-reveal-map"><GuessMap expanded reveal={{ target: revealTarget, players: result?.players || [] }} seats={state.seats} unavailableMessage={c.mapUnavailable} /><span className="ot-actual-chip">{countryFlag(revealTarget?.country)} {c.actual}</span></section> : <section className="ot-country-reveal"><div className="ot-country-reveal-flag">{countryFlag(result?.targetCountry)}</div><span className="ot-kicker">{c.correctCountry}</span><h2>{countryName(result?.targetCountry, lang)}</h2>{solo && <p className={result?.players?.[0]?.correct ? "correct" : "wrong"}>{result?.players?.[0]?.correct ? c.streakContinues : c.streakStops}</p>}</section>}
           <section className="ot-scoreboard">
             {state.seats.map((seat, index) => {
               const player = result?.players?.find((entry) => entry.playerId === seat.id);
@@ -708,7 +709,7 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
       {state.phase === "playing" && mode === "pinpoint" && <section className={"ot-map-dock " + (mapOpen ? "open" : "collapsed") + (mapExpanded ? " expanded" : "")}>
         <button className="ot-map-peek" onClick={() => setMapOpen(true)} aria-label={c.openMap}><span>🗺️</span>{draft && <i>✓</i>}</button>
         <div className="ot-map-head"><div><b>{c.mapTitle}</b><small>{locked ? (myPlaying ? c.answerLocked : c.spectating) : c.placeHint}</small></div><div className="ot-map-head-controls"><button onClick={(event) => { event.stopPropagation(); setMapExpanded((value) => !value); }} aria-label={mapExpanded ? c.shrink : c.expand}>{mapExpanded ? "↘" : "↗"}</button><button onClick={(event) => { event.stopPropagation(); setMapExpanded(false); setMapOpen(false); }} aria-label={c.closeMap}>×</button></div></div>
-        <GuessMap marker={draft} onChange={updateDraft} locked={locked} expanded={mapOpen ? (mapExpanded ? "fullscreen" : "open") : "closed"} />
+        <GuessMap marker={draft} onChange={updateDraft} locked={locked} expanded={mapOpen ? (mapExpanded ? "fullscreen" : "open") : "closed"} avatar={mySeat?.avatar} unavailableMessage={c.mapUnavailable} />
         <div className="ot-map-actions"><span>{draft ? `${draft.lat.toFixed(5)}, ${draft.lng.toFixed(5)}` : c.noMarker}</span><button className="ot-btn primary" disabled={!draft || locked} onClick={(event) => { event.stopPropagation(); submitDraft(); }}>{locked ? c.confirmed : c.confirm}</button></div>
       </section>}
 

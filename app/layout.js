@@ -1,5 +1,5 @@
+import "maplibre-gl/dist/maplibre-gl.css";
 import "./globals.css";
-import "leaflet/dist/leaflet.css";
 import SiteAmbience from "@/components/SiteAmbience";
 import AmbienceSkipButton from "@/components/AmbienceSkipButton";
 import LoadingIntro from "@/components/LoadingIntro";

@@ -54,23 +54,31 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-## Leaflet
+## MapLibre GL JS
 
-The answer map uses Leaflet 1.9.4, installed from npm (`leaflet`). Leaflet is
-Copyright (c) 2010-2023 Vladimir Agafonkin and Copyright (c) 2010-2011 CloudMade,
-and is distributed under the BSD 2-Clause License. Its complete package
-license is shipped in `node_modules/leaflet/LICENSE` after installation and is
-available upstream at https://github.com/Leaflet/Leaflet/blob/v1.9.4/LICENSE
+The answer map uses MapLibre GL JS 4.7.1, installed from npm (`maplibre-gl`).
+MapLibre GL JS is distributed under the BSD 3-Clause License. Its complete
+package license is shipped in `node_modules/maplibre-gl/LICENSE.txt` after
+installation and is available upstream at
+https://github.com/maplibre/maplibre-gl-js/blob/v4.7.1/LICENSE.txt
+
+## OpenFreeMap
+
+The detailed vector map uses OpenFreeMap's public Liberty style at
+`https://tiles.openfreemap.org/styles/liberty`. It requires no account or API
+key. OpenFreeMap publishes its server and style code under open-source
+licenses and serves map data derived from OpenStreetMap. Attribution remains
+visible in MapLibre's attribution control:
+
+- https://openfreemap.org/quick_start/
+- https://github.com/hyperknot/openfreemap
 
 ## OpenStreetMap
 
-Map tiles and map data are provided by OpenStreetMap contributors. Attribution
-is kept visible in the Leaflet control. OpenStreetMap data is available under
-the Open Database License: https://www.openstreetmap.org/copyright
-
-The standard tile service is used directly and without bulk download,
-prefetch, offline packaging or proxying, in accordance with its usage policy:
-https://operations.osmfoundation.org/policies/tiles/
+Map data is provided by OpenStreetMap contributors through OpenFreeMap.
+Attribution is kept visible in the MapLibre control. OpenStreetMap data is
+available under the Open Database License:
+https://www.openstreetmap.org/copyright
 
 ## Google Maps Embed
 

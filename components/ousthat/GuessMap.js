@@ -1,18 +1,41 @@
 "use client";
-import { memo, useEffect, useRef } from "react";
-import L from "leaflet";
+import { memo, useEffect, useRef, useState } from "react";
+import {
+  AttributionControl,
+  LngLatBounds,
+  Map as MapLibreMap,
+  Marker as MapLibreMarker,
+  NavigationControl,
+} from "maplibre-gl";
 import { countryFlag } from "./locations";
 import { normalizeGuess } from "./rules";
 
+const OPENFREEMAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
+const REVEAL_SOURCE_ID = "ot-reveal-lines";
+const REVEAL_LAYER_ID = "ot-reveal-lines-layer";
+const EMPTY_SEATS = Object.freeze([]);
 const PLAYER_COLORS = ["#ffca5f", "#68d9ff", "#ff7fa4", "#86e39a", "#bda0ff", "#ff9f68", "#78e4da", "#e4de78"];
 
-function icon(kind, label = "", color = "") {
-  return L.divIcon({
-    className: "ot-leaflet-icon",
-    html: `<span class="ot-map-pin ${kind}"${color ? ` style="background:${color}"` : ""}><i></i>${label ? `<b>${label}</b>` : ""}</span>`,
-    iconSize: [34, 42],
-    iconAnchor: [17, 39],
-  });
+function pinElement(kind, label = "", color = "", number = null) {
+  const root = document.createElement("div");
+  root.className = `ot-map-marker ${kind}`;
+  root.setAttribute("aria-hidden", "true");
+  if (color) root.style.setProperty("--pin-color", color);
+
+  const pin = document.createElement("span");
+  pin.className = `ot-map-pin ${kind}`;
+  const avatar = document.createElement("b");
+  avatar.className = "ot-map-pin-avatar";
+  avatar.textContent = label;
+  pin.appendChild(avatar);
+  root.appendChild(pin);
+
+  if (number !== null) {
+    const badge = document.createElement("small");
+    badge.textContent = String(number);
+    root.appendChild(badge);
+  }
+  return root;
 }
 
 function sameGuess(a, b) {
@@ -26,47 +49,69 @@ function unwrapLng(lng, around) {
   return value;
 }
 
-function GuessMap({ marker, onChange, locked = false, expanded = false, reveal = null }) {
+function removeReveal(map, markers) {
+  for (const marker of markers) marker.remove();
+  markers.length = 0;
+  if (!map) return;
+  if (map.getLayer(REVEAL_LAYER_ID)) map.removeLayer(REVEAL_LAYER_ID);
+  if (map.getSource(REVEAL_SOURCE_ID)) map.removeSource(REVEAL_SOURCE_ID);
+}
+
+function GuessMap({ marker, onChange, locked = false, expanded = false, reveal = null, avatar = "🗺️", seats = EMPTY_SEATS, unavailableMessage = "La carte détaillée nécessite l’accélération graphique du navigateur." }) {
   const rootRef = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
-  const revealLayersRef = useRef([]);
-  const markerValueRef = useRef(marker);
+  const revealMarkersRef = useRef([]);
+  const [mapError, setMapError] = useState(false);
   const onChangeRef = useRef(onChange);
   const lockedRef = useRef(locked);
 
-  markerValueRef.current = marker;
   onChangeRef.current = onChange;
   lockedRef.current = locked;
 
   useEffect(() => {
     if (!rootRef.current || mapRef.current) return;
-    const map = L.map(rootRef.current, {
-      center: [18, 4], zoom: 2, minZoom: 2, maxZoom: 19,
-      worldCopyJump: true, zoomControl: false, attributionControl: true,
-      doubleClickZoom: true, scrollWheelZoom: true, touchZoom: true,
-    });
-    L.control.zoom({ position: "topright" }).addTo(map);
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      minZoom: 2, maxZoom: 19, maxNativeZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    }).addTo(map);
+    let map;
+    try {
+      map = new MapLibreMap({
+        container: rootRef.current,
+        style: OPENFREEMAP_STYLE,
+        center: [4, 18],
+        zoom: 1.6,
+        minZoom: 1.5,
+        maxZoom: 19,
+        renderWorldCopies: true,
+        attributionControl: false,
+        cooperativeGestures: false,
+      });
+    } catch (error) {
+      // MapLibre 4 accepte WebGL1 et WebGL2 ; cette sortie évite malgré tout
+      // de faire tomber le jeu si l'accélération graphique est désactivée.
+      console.error("OpenFreeMap n’a pas pu initialiser WebGL.", error);
+      setMapError(true);
+      return;
+    }
+    map.addControl(new NavigationControl({ showCompass: false, showZoom: true }), "top-right");
+    map.addControl(new AttributionControl({ compact: true }), "bottom-right");
+    map.dragRotate.disable();
+    map.touchZoomRotate.disableRotation();
+    // Les deux cadences distinguent la molette crantée du geste continu du
+    // pavé tactile ; MapLibre conserve alors son interpolation native fluide.
+    map.scrollZoom.setWheelZoomRate(1 / 450);
+    map.scrollZoom.setZoomRate(1 / 100);
     map.on("click", (event) => {
-      // Leaflet sait distinguer un clic d'un glissement. Le second garde
-      // couvre les périphériques où le pointerup et le clic arrivent dans
-      // deux files d'événements différentes.
-      if (lockedRef.current || map.dragging?.moved?.()) return;
-      const next = normalizeGuess(event.latlng);
+      if (lockedRef.current) return;
+      const next = normalizeGuess(event.lngLat);
       if (next) onChangeRef.current?.(next);
     });
     mapRef.current = map;
-    requestAnimationFrame(() => map.invalidateSize({ pan: false }));
+    requestAnimationFrame(() => map.resize());
     return () => {
-      map.off();
+      removeReveal(map, revealMarkersRef.current);
+      markerRef.current?.remove();
+      markerRef.current = null;
       map.remove();
       mapRef.current = null;
-      markerRef.current = null;
-      revealLayersRef.current = [];
     };
   }, []);
 
@@ -75,63 +120,109 @@ function GuessMap({ marker, onChange, locked = false, expanded = false, reveal =
     if (!map || reveal) return;
     const clean = normalizeGuess(marker);
     if (!clean) {
-      if (markerRef.current) { markerRef.current.remove(); markerRef.current = null; }
+      markerRef.current?.remove();
+      markerRef.current = null;
       return;
     }
     if (!markerRef.current) {
-      const pin = L.marker([clean.lat, clean.lng], { icon: icon("mine"), draggable: !locked }).addTo(map);
+      const pin = new MapLibreMarker({
+        element: pinElement("mine", avatar),
+        anchor: "bottom",
+        draggable: !locked,
+      }).setLngLat([clean.lng, clean.lat]).addTo(map);
       pin.on("dragend", () => {
         if (lockedRef.current) return;
-        const next = normalizeGuess(pin.getLatLng());
+        const next = normalizeGuess(pin.getLngLat());
         if (next) onChangeRef.current?.(next);
       });
       markerRef.current = pin;
     } else {
-      if (!sameGuess(markerRef.current.getLatLng(), clean)) markerRef.current.setLatLng([clean.lat, clean.lng]);
-      if (locked) markerRef.current.dragging?.disable();
-      else markerRef.current.dragging?.enable();
+      const current = markerRef.current.getLngLat();
+      if (!sameGuess({ lat: current.lat, lng: current.lng }, clean)) markerRef.current.setLngLat([clean.lng, clean.lat]);
+      markerRef.current.setDraggable(!locked);
+      const face = markerRef.current.getElement().querySelector(".ot-map-pin-avatar");
+      if (face && face.textContent !== avatar) face.textContent = avatar;
     }
-  }, [marker, locked, reveal]);
+  }, [marker, locked, reveal, avatar]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    for (const layer of revealLayersRef.current) layer.remove();
-    revealLayersRef.current = [];
-    if (!reveal?.target) return;
-    if (markerRef.current) { markerRef.current.remove(); markerRef.current = null; }
-    const target = normalizeGuess(reveal.target);
-    if (!target) return;
-    const points = [L.latLng(target.lat, target.lng)];
-    const targetMarker = L.marker([target.lat, target.lng], { icon: icon("target", countryFlag(reveal.target.country)), interactive: false }).addTo(map);
-    revealLayersRef.current.push(targetMarker);
-    (reveal.players || []).forEach((player, index) => {
-      const guess = normalizeGuess(player.guess);
-      if (!guess) return;
-      const displayLng = unwrapLng(guess.lng, target.lng);
-      const color = PLAYER_COLORS[index % PLAYER_COLORS.length];
-      const pin = L.marker([guess.lat, displayLng], { icon: icon("player", String(index + 1), color), interactive: false }).addTo(map);
-      const line = L.polyline([[target.lat, target.lng], [guess.lat, displayLng]], { color, weight: 3, opacity: 0.82, dashArray: "7 8", interactive: false }).addTo(map);
-      revealLayersRef.current.push(pin, line);
-      points.push(L.latLng(guess.lat, displayLng));
-    });
-    if (points.length > 1) map.fitBounds(L.latLngBounds(points), { padding: [46, 46], maxZoom: 13, animate: false });
-    else map.setView([target.lat, target.lng], 11, { animate: false });
-  }, [reveal]);
+    let cancelled = false;
+
+    const drawReveal = () => {
+      if (cancelled || mapRef.current !== map) return;
+      removeReveal(map, revealMarkersRef.current);
+      if (!reveal?.target) return;
+      markerRef.current?.remove();
+      markerRef.current = null;
+      const target = normalizeGuess(reveal.target);
+      if (!target) return;
+
+      const bounds = new LngLatBounds([target.lng, target.lat], [target.lng, target.lat]);
+      const lines = [];
+      revealMarkersRef.current.push(new MapLibreMarker({
+        element: pinElement("target", countryFlag(reveal.target.country)),
+        anchor: "bottom",
+      }).setLngLat([target.lng, target.lat]).addTo(map));
+
+      (reveal.players || []).forEach((player, resultIndex) => {
+        const guess = normalizeGuess(player.guess);
+        if (!guess) return;
+        const foundSeatIndex = seats.findIndex((seat) => seat.id === player.playerId);
+        const seatIndex = foundSeatIndex >= 0 ? foundSeatIndex : resultIndex;
+        const seat = foundSeatIndex >= 0 ? seats[foundSeatIndex] : null;
+        const displayLng = unwrapLng(guess.lng, target.lng);
+        const color = PLAYER_COLORS[seatIndex % PLAYER_COLORS.length];
+        revealMarkersRef.current.push(new MapLibreMarker({
+          element: pinElement("player", seat?.avatar || "🧭", color, seatIndex + 1),
+          anchor: "bottom",
+        }).setLngLat([displayLng, guess.lat]).addTo(map));
+        lines.push({
+          type: "Feature",
+          properties: { color },
+          geometry: { type: "LineString", coordinates: [[target.lng, target.lat], [displayLng, guess.lat]] },
+        });
+        bounds.extend([displayLng, guess.lat]);
+      });
+
+      if (lines.length) {
+        map.addSource(REVEAL_SOURCE_ID, {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: lines },
+        });
+        map.addLayer({
+          id: REVEAL_LAYER_ID,
+          type: "line",
+          source: REVEAL_SOURCE_ID,
+          layout: { "line-cap": "round", "line-join": "round" },
+          paint: { "line-color": ["get", "color"], "line-width": 3, "line-opacity": 0.82, "line-dasharray": [2, 2] },
+        });
+        map.fitBounds(bounds, { padding: 46, maxZoom: 18, duration: 0 });
+      } else {
+        map.jumpTo({ center: [target.lng, target.lat], zoom: 15 });
+      }
+    };
+
+    removeReveal(map, revealMarkersRef.current);
+    if (map.isStyleLoaded()) drawReveal();
+    else map.once("load", drawReveal);
+    return () => {
+      cancelled = true;
+      map.off("load", drawReveal);
+      if (mapRef.current === map) removeReveal(map, revealMarkersRef.current);
+    };
+  }, [reveal, seats]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    const center = map.getCenter();
-    const zoom = map.getZoom();
-    const timer = setTimeout(() => {
-      map.invalidateSize({ pan: false });
-      map.setView(center, zoom, { animate: false });
-    }, 220);
+    const timer = setTimeout(() => map.resize(), 260);
     return () => clearTimeout(timer);
   }, [expanded]);
 
-  return <div ref={rootRef} className="ot-map-canvas" role="application" aria-label="Carte de réponse" />;
+  if (mapError) return <div className="ot-map-canvas ot-map-unavailable" role="status"><span>🗺️</span><b>{unavailableMessage}</b></div>;
+  return <div ref={rootRef} className="ot-map-canvas" role="application" aria-label="Carte de réponse détaillée" />;
 }
 
 export default memo(GuessMap);

@@ -10,12 +10,15 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ⚠️⚠️⚠️ **CE BLOC DÉSIGNE UNE SEULE ACTION SUIVANTE. IL SE REMPLACE, IL NE
 S'EMPILE PAS.**
 
-### 🔴 ACTION SUIVANTE — RECETTER LE MULTI À 2–3 APPAREILS
+### 🔴 ACTION SUIVANTE — RECETTER OPENFREEMAP ET LE MULTI À 2–3 APPAREILS
 
-**« Où's that ? » est déployé et jouable en production.** La prochaine séance doit seulement
-jouer Country + Pinpoint depuis deux ou trois appareils/réseaux différents et vérifier reconnexion
-et passage hôte. Le `.env.local` reste volontairement branché sur le faux Supabase de recette ; ne
-jamais y recopier une clé du Dashboard. Après cette recette, reprendre Ferme Vallée P1 bis.
+**« Où's that ? » reste déployé et jouable en production, mais le remplacement de sa carte attend
+le commit/push de Guillaume.** Après déploiement, jouer Pinpoint avec OpenFreeMap depuis Chrome et
+Safari, puis Country + Pinpoint depuis deux ou trois appareils/réseaux différents ; vérifier pins
+mascottes, zoom molette/pavé tactile/pincement, reconnexion et passage hôte. Le `.env.local` reste
+volontairement branché sur le faux Supabase de recette ; ne jamais y recopier une clé du Dashboard.
+**Non fait : aucun calque de relief tiers n'a été ajouté** — cette première passe teste Liberty
+seule. Après cette recette, reprendre Ferme Vallée P1 bis.
 
 **Livré et validé le 2026-09-06 :**
 - jeu catalogue **« Où's that ? »** ouvert au solo et borné à 8 joueurs en ligne ;
@@ -32,22 +35,29 @@ jamais y recopier une clé du Dashboard. Après cette recette, reprendre Ferme V
   sans masquer l'attribution Google ; documentation fournisseur/licence mise à jour ;
 - recette navigateur avec Google réel : Country Streak QCM et recherche, erreur/fin de série, puis
   partie Pays à 3 joueurs avec réponses différentes et révélation identique sur les trois écrans ;
-- production `arcardi.vercel.app` redéployée et recettée : Street View, choix/révélation Country,
-  carte OpenStreetMap, marqueur, score/distance Pinpoint et manche suivante sont tous passés ;
+- production `arcardi.vercel.app` recettée avant le remplacement : Street View, choix/révélation
+  Country, score/distance Pinpoint et manche suivante étaient tous passés ; nouvelle carte locale
+  MapLibre 4.7.1 + OpenFreeMap Liberty recettée dans Chrome isolé avec rues/bâtiments/libellés,
+  clic, zoom progressif, révélation à trois pins et mascottes Arcardi ;
 - Dashboard Supabase réel audité en lecture seule : 8/10 prérequis présents, seuls `rooms` et
   `room_players` manquaient dans `supabase_realtime` ; ces deux publications additives ont été
   activées, puis le second audit a rendu **10/10 vrais** ; aucune donnée ni autre schéma touché ;
-- `tools/verify-ousthat.mjs` **55/55** ; mutation dégâts ⇒ **3 échecs** ; filet complet des **21**
+- `tools/verify-ousthat.mjs` **57/57** ; mutation dégâts ⇒ **3 échecs** ; filet complet des **21**
   bancs muet donc vert après ajout explicite du global standard `Intl` à la liste blanche de
   `verify-portee` ; `npm run build` vert avec le seul avertissement préexistant `G_SOIL` de Ferme
   Vallée.
 
-**Configuration :** aucune migration SQL. Vercel est en **Hobby** ; Supabase en **Free** avec
+**Configuration :** aucune manipulation Supabase ni Vercel pour cette carte. OpenFreeMap ne demande
+**ni compte, ni clé, ni moyen de paiement** ; MapLibre est installé localement sous licence BSD.
+Vercel est en **Hobby** ; Supabase en **Free** avec
 **spend cap activé** (un quota dépassé peut bloquer le service, jamais facturer un dépassement).
 Google Cloud n'a pas été converti en compte payant ; l'unique clé publique est limitée à
 **Maps Embed API** et aux seuls référents exacts `http://localhost:3000` et
 `https://arcardi.vercel.app`. Ne jamais activer une offre/API payante ni désactiver le spend cap.
-Les contraintes et le pas-à-pas sont dans `components/ousthat/README.md`.
+`npm audit` signale **3 vulnérabilités héritées de Next 14.2.15** (`next` → `postcss` → `nanoid`) ;
+MapLibre n'en ajoute aucune. La correction automatique proposée saute à Next 16 : ne jamais lancer
+`npm audit fix --force`, traiter la migration du framework dans une livraison séparée. Les
+contraintes et le pas-à-pas sont dans `components/ousthat/README.md`.
 
 ### PASSIF FERME VALLÉE
 

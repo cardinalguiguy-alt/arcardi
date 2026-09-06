@@ -23,6 +23,10 @@ Le dernier choix proposé compte à l'expiration même s'il n'a pas été confir
 Une confirmation est définitive. En multi, la première confirmation raccourcit
 l'échéance sans jamais la rallonger.
 
+L'hôte règle la durée de chaque manche entre 20 et 300 secondes, en solo comme
+en multi. Cette valeur est validée par les règles puis transformée en échéance
+par l'hôte ; les invités ne comparent jamais directement leurs horloges.
+
 ## Configuration locale
 
 Le jeu utilise les variables publiques suivantes dans `.env.local` :
@@ -44,9 +48,9 @@ https://developers.google.com/maps/documentation/embed/usage-and-billing
 En production, Vercel porte les vraies variables publiques Supabase et Maps
 Embed. Le `.env.local` du dépôt reste volontairement factice pour la recette :
 ne pas y recopier les valeurs du Dashboard. L'architecture doit rester gratuite
-: Vercel **Hobby**, Supabase **Free** avec spend cap activé, Maps Embed seulement.
-Un quota atteint doit interrompre ou restreindre le service, jamais produire un
-dépassement facturé.
+: Vercel **Hobby**, Supabase **Free** avec spend cap activé, Maps Embed seulement,
+et OpenFreeMap sans compte ni clé. Un quota atteint doit interrompre ou
+restreindre le service, jamais produire un dépassement facturé.
 
 ## Supabase existant
 
@@ -99,8 +103,12 @@ le document Google s'est ouvert, pas que sa dernière tuile est rendue.
 ## Fournisseurs et licences
 
 - Panorama : Google Maps Embed API, demandé par identifiant de panorama.
-- Carte de réponse : Leaflet 1.9.4 et tuiles standard OpenStreetMap, avec
-  attribution visible et sans préchargement ni proxy.
+- Carte de réponse : MapLibre GL JS 4.7.1 et style vectoriel OpenFreeMap Liberty,
+  avec rues, bâtiments, frontières et libellés OpenStreetMap. Le zoom continu
+  accepte pavé tactile, molette, pincement et boutons ; les pins portent les
+  mascottes Arcardi. OpenFreeMap ne demande ni compte, ni clé, ni moyen de
+  paiement. L'attribution reste visible et aucune tuile n'est préchargée ou
+  relayée par Arcardi.
 - Panoramas : 40 enregistrements tirés de la dernière révision WorldGuessr
   encore sous MIT. Aucun ajout PolyForm Noncommercial n'est repris.
 - Vocabulaire pays/territoires : liste factuelle de l'Explorer officiel
