@@ -10,14 +10,12 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ⚠️⚠️⚠️ **CE BLOC DÉSIGNE UNE SEULE ACTION SUIVANTE. IL SE REMPLACE, IL NE
 S'EMPILE PAS.**
 
-### 🔴 ACTION SUIVANTE — DÉPLOYER PUIS RECETTER À DISTANCE
+### 🔴 ACTION SUIVANTE — RECETTER LE MULTI À 2–3 APPAREILS
 
-**Le code et le Supabase réel de « Où's that ? » sont prêts.** Commit/push restent à Guillaume.
-Après déploiement, jouer une partie depuis deux ou trois appareils/réseaux différents et vérifier
-Country + Pinpoint, reconnexion et passage hôte. Le `.env.local` reste volontairement branché sur
-le faux Supabase de recette ; ne jamais recopier de clé du Dashboard dans ce fichier à la place de
-Guillaume. Une fois la recette distante verte, reprendre Ferme Vallée P1 bis dans le passif
-ci-dessous.
+**« Où's that ? » est déployé et jouable en production.** La prochaine séance doit seulement
+jouer Country + Pinpoint depuis deux ou trois appareils/réseaux différents et vérifier reconnexion
+et passage hôte. Le `.env.local` reste volontairement branché sur le faux Supabase de recette ; ne
+jamais y recopier une clé du Dashboard. Après cette recette, reprendre Ferme Vallée P1 bis.
 
 **Livré et validé le 2026-09-06 :**
 - jeu catalogue **« Où's that ? »** ouvert au solo et borné à 8 joueurs en ligne ;
@@ -34,6 +32,8 @@ ci-dessous.
   sans masquer l'attribution Google ; documentation fournisseur/licence mise à jour ;
 - recette navigateur avec Google réel : Country Streak QCM et recherche, erreur/fin de série, puis
   partie Pays à 3 joueurs avec réponses différentes et révélation identique sur les trois écrans ;
+- production `arcardi.vercel.app` redéployée et recettée : Street View, choix/révélation Country,
+  carte OpenStreetMap, marqueur, score/distance Pinpoint et manche suivante sont tous passés ;
 - Dashboard Supabase réel audité en lecture seule : 8/10 prérequis présents, seuls `rooms` et
   `room_players` manquaient dans `supabase_realtime` ; ces deux publications additives ont été
   activées, puis le second audit a rendu **10/10 vrais** ; aucune donnée ni autre schéma touché ;
@@ -42,8 +42,12 @@ ci-dessous.
   `verify-portee` ; `npm run build` vert avec le seul avertissement préexistant `G_SOIL` de Ferme
   Vallée.
 
-**Configuration :** Supabase réel prêt, aucune autre migration SQL. La recette distante attend le
-déploiement utilisateur. Les contraintes et le pas-à-pas sont dans `components/ousthat/README.md`.
+**Configuration :** aucune migration SQL. Vercel est en **Hobby** ; Supabase en **Free** avec
+**spend cap activé** (un quota dépassé peut bloquer le service, jamais facturer un dépassement).
+Google Cloud n'a pas été converti en compte payant ; l'unique clé publique est limitée à
+**Maps Embed API** et aux seuls référents exacts `http://localhost:3000` et
+`https://arcardi.vercel.app`. Ne jamais activer une offre/API payante ni désactiver le spend cap.
+Les contraintes et le pas-à-pas sont dans `components/ousthat/README.md`.
 
 ### PASSIF FERME VALLÉE
 
@@ -73,7 +77,8 @@ arbitrage se fait contre ce chiffre — **2 joueurs, occasionnellement 3**.
    *fini*. Depuis le 421, l'exigence est explicitement **AAA**.
 2. **Le monde partagé est le cœur.** La ferme est un lieu qu'on habite ; les mini-jeux sont des
    portes qui s'y ouvrent, jamais des applications séparées.
-3. **Rien ne doit casser pour les autres.** Le multijoueur est fragile et gratuit (§3).
+3. **Rien ne doit casser pour les autres.** Le multijoueur est fragile et l'architecture doit rester
+   durablement gratuite : un quota peut interrompre le service, jamais déclencher une facturation.
 
 ---
 
@@ -184,8 +189,8 @@ chargeur/cache/nommage posés au premier usage.
   `send()` compte, jamais la taille des payloads.**
 - **La ferme est le seul canal en `self:false`** ; écho local à la main (`broadcastChat`).
 - **Ne jamais comparer une horloge hôte à une horloge invité.** Dater à la réception.
-- **Quota : 2 M messages/mois, plan gratuit**, déjà dépassé une fois — d'où
-  `lib/realtimeQuota.js`.
+- **Quota : 2 M messages/mois, Supabase Free avec spend cap activé**, déjà dépassé une fois —
+  d'où `lib/realtimeQuota.js`. Ne jamais désactiver le spend cap.
 - ⚠️ **CE QUI PEUT SE DÉDUIRE NE SE DIFFUSE PAS.** L'altitude d'un joueur en ville se lit
   sous ses pieds ; son ÉTAGE dans le tribunal se lit dans son `y` (§6). Un champ de plus,
   c'est surtout un champ à réconcilier.

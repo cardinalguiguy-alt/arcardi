@@ -35,14 +35,18 @@ NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY=VOTRE_CLE_MAPS_EMBED
 
 Ne jamais mettre de clé `service_role` dans une variable `NEXT_PUBLIC_*`.
 La clé Maps Embed est nécessairement visible dans le navigateur : elle doit
-être restreinte à **Maps Embed API** et aux référents HTTP des domaines Arcardi
-ainsi qu'à `localhost` pour le développement. La documentation de facturation
-Google Maps Embed est :
+être restreinte à **Maps Embed API** et aux seuls référents exacts
+`https://arcardi.vercel.app` et `http://localhost:3000`. Ne jamais ajouter de
+joker de domaine ni activer une autre API sur cette clé. La documentation de
+facturation Google Maps Embed est :
 https://developers.google.com/maps/documentation/embed/usage-and-billing
 
-Si le dépôt local contient encore une URL Supabase factice, le propriétaire du
-projet doit remplacer lui-même les deux valeurs Supabase dans `.env.local` et
-dans les variables d'environnement de l'hébergeur, puis redémarrer Next.js.
+En production, Vercel porte les vraies variables publiques Supabase et Maps
+Embed. Le `.env.local` du dépôt reste volontairement factice pour la recette :
+ne pas y recopier les valeurs du Dashboard. L'architecture doit rester gratuite
+: Vercel **Hobby**, Supabase **Free** avec spend cap activé, Maps Embed seulement.
+Un quota atteint doit interrompre ou restreindre le service, jamais produire un
+dépassement facturé.
 
 ## Supabase existant
 
