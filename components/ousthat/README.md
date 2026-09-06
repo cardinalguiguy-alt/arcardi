@@ -29,6 +29,28 @@ L'hôte règle la durée de chaque manche entre 20 et 300 secondes, en solo comm
 en multi. Cette valeur est validée par les règles puis transformée en échéance
 par l'hôte ; les invités ne comparent jamais directement leurs horloges.
 
+## Cartes (2026-09-06)
+
+Le tirage des lieux se fait dans une **carte** choisie à l'écran de réglages
+(les deux modes, Pays et Pinpoint, s'y réfèrent). Une seule à ce jour,
+**Beautiful World**, qui couvre tout le stock historique (1 551 lieux) — voir
+`maps.js` pour le registre et `locationOrder(seed, mode, mapId)`
+(`locations.js`) pour le tirage borné à la carte choisie.
+
+Ajouter une carte future (à partir d'un export GeoGuessr que Guillaume
+fournit, même format que celui déjà utilisé) :
+
+1. `node tools/import-map.mjs <source.json> <id-de-carte> "<Nom affiché>"`
+   → écrit `components/ousthat/mapData.<id>.js` (généré, ne pas éditer).
+2. Importer ce fichier dans `maps.js` et l'ajouter à `MAPS`.
+3. Ajouter `<id-de-carte>` à `GAME_MAP_IDS` dans `rules.js`.
+
+Rien d'autre à toucher : le sélecteur du setup, la validation de config et
+`tools/verify-ousthat.mjs` lisent tous le registre, pas une liste recopiée.
+Un `mapId` inconnu ou un croisement mode/carte sans aucun lieu retombe sur
+la carte par défaut côté moteur, et est refusé avec un message côté client
+avant même d'envoyer la requête de lancement.
+
 ## Configuration locale
 
 Le jeu utilise les variables publiques suivantes dans `.env.local` :

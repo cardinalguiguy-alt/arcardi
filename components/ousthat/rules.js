@@ -18,9 +18,15 @@ export const MULTI_COUNTRY_ROUNDS = 5;
 export const MAX_PLAYERS = 8;
 export const GAME_MODES = Object.freeze(["pinpoint", "country"]);
 export const COUNTRY_INPUTS = Object.freeze(["multiple-choice", "search"]);
+// Whitelist des cartes jouables (2026-09-06) — un id de plus ici à chaque
+// nouvelle carte enregistrée dans maps.js (voir tools/import-map.mjs). Une
+// petite liste manuelle plutôt qu'un import de maps.js : ce fichier reste
+// des règles pures, sans dépendre du catalogue de panoramas ni de sa taille.
+export const GAME_MAP_IDS = Object.freeze(["beautiful-world"]);
 
 export const DEFAULT_CONFIG = Object.freeze({
   mode: "pinpoint",
+  mapId: "beautiful-world",
   countryInput: "multiple-choice",
   initialHp: 6000,
   roundSeconds: 120,
@@ -58,6 +64,7 @@ export function validateConfig(input = {}) {
   const value = { ...DEFAULT_CONFIG };
   const errors = [];
   value.mode = GAME_MODES.includes(input.mode) ? input.mode : DEFAULT_CONFIG.mode;
+  value.mapId = GAME_MAP_IDS.includes(input.mapId) ? input.mapId : DEFAULT_CONFIG.mapId;
   value.countryInput = COUNTRY_INPUTS.includes(input.countryInput) ? input.countryInput : DEFAULT_CONFIG.countryInput;
   const integerKeys = ["initialHp", "roundSeconds", "finalSeconds", "multiplierStartRound"];
   for (const key of integerKeys) {

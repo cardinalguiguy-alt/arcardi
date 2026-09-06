@@ -1,30 +1,34 @@
 /*
- * Le catalogue de panoramas. Les données brutes vivent dans locationsData.js
- * (généré par tools/import-locations.mjs — ne pas éditer à la main) : ce
- * fichier-ci ne porte que la logique.
- *
- * Deux provenances, mélangées dans un seul tableau : 38 panoramas WorldGuessr
- * (MIT, révision ef88928c) et la carte personnelle que Guillaume a construite
- * dans l'éditeur GeoGuessr, ~1500 lieux après déduplication (2026-09-06).
+ * Le catalogue de panoramas, réparti en CARTES nommées (maps.js — 2026-09-06,
+ * voir ce fichier pour ajouter une carte future). « Beautiful World » reste
+ * la seule à ce jour et couvre tout le stock historique : 38 panoramas
+ * WorldGuessr (MIT, révision ef88928c) et la carte personnelle que Guillaume
+ * a construite dans l'éditeur GeoGuessr, ~1500 lieux après déduplication.
  * Provenance et licences complètes : ./THIRD_PARTY_NOTICES.md.
  *
  * ⚠️ panoId peut être null : la plupart des lieux GeoGuessr n'en ont pas non
  * plus, et streetViewUrl (StreetViewFrame.js) résout alors le panorama au vol
  * depuis lat/lng. ⚠️ country peut être null (rattachement pays hors ligne,
- * point-dans-polygone, voir import-locations.mjs) : ces lieux restent
- * utilisables en Pinpoint, jamais tirés en mode Pays — locationOrder(seed,
- * "country") filtre sur ce champ, locationOrder(seed, "pinpoint") ne filtre
- * rien.
+ * point-dans-polygone, voir import-locations.mjs/import-map.mjs) : ces lieux
+ * restent utilisables en Pinpoint, jamais tirés en mode Pays —
+ * locationOrder(seed, "country") filtre sur ce champ, locationOrder(seed,
+ * "pinpoint") ne filtre rien.
  *
  * ⚠️ Aucune vérification programmatique ne peut confirmer qu'un panoId est
  * encore servi par Google sans une API facturée (voir README.md) — un
  * panorama mort se signale en jeu (bouton « signaler »), pas au chargement.
  */
 
-import { LOCATIONS_RAW } from "./locationsData";
+import { MAPS, MAP_BY_ID } from "./maps";
 import { COUNTRY_BY_CODE } from "./countries";
 
-export const LOCATIONS = LOCATIONS_RAW;
+export { MAPS, MAP_BY_ID } from "./maps";
+
+// Union de toutes les cartes enregistrées. Un id de lieu reste unique ENTRE
+// cartes (préfixe imposé par tools/import-map.mjs) : hostResolve retrouve
+// donc la cible via LOCATION_BY_ID quelle que soit la carte qui a servi à
+// construire locationOrder.
+export const LOCATIONS = MAPS.flatMap((map) => map.locations);
 
 export const LOCATION_BY_ID = Object.freeze(Object.fromEntries(LOCATIONS.map((location) => [location.id, location])));
 
@@ -52,8 +56,11 @@ function seededRandom(seed) {
 // mode "country" ne tire que les lieux rattachés à un pays du vocabulaire
 // GeoGuessr Explorer (countries.js) — un tiers du stock reste Pinpoint seul.
 // mode "pinpoint" (par défaut) tire dans tout le stock, pays ou non.
-export function locationOrder(seed, mode = "pinpoint") {
-  const pool = mode === "country" ? LOCATIONS.filter((location) => COUNTRY_BY_CODE[location.country]) : LOCATIONS;
+// mapId (2026-09-06) restreint le tirage à UNE carte de maps.js — un id
+// inconnu retombe sur la carte par défaut plutôt que de planter.
+export function locationOrder(seed, mode = "pinpoint", mapId = "beautiful-world") {
+  const base = (MAP_BY_ID[mapId] || MAP_BY_ID["beautiful-world"]).locations;
+  const pool = mode === "country" ? base.filter((location) => COUNTRY_BY_CODE[location.country]) : base;
   const ids = pool.map((location) => location.id);
   const random = seededRandom(seed);
   for (let i = ids.length - 1; i > 0; i--) {

@@ -27,10 +27,16 @@ const countriesSrc = fs.readFileSync(path.join(ROOT, "components", "ousthat", "c
 fs.writeFileSync(path.join(tmp, "countries.mjs"), countriesSrc);
 const locationsDataSrc = fs.readFileSync(path.join(ROOT, "components", "ousthat", "locationsData.js"), "utf8");
 fs.writeFileSync(path.join(tmp, "locationsData.mjs"), locationsDataSrc);
+// Une carte de plus (maps.js) = un fichier mapData.<id>.js de plus à copier
+// ici avec le même traitement, tant que ce banc réécrit les imports à la
+// main plutôt que de laisser Node résoudre depuis le vrai dépôt.
+const mapsSrc = fs.readFileSync(path.join(ROOT, "components", "ousthat", "maps.js"), "utf8")
+  .replaceAll('from "./locationsData"', 'from "./locationsData.mjs"');
+fs.writeFileSync(path.join(tmp, "maps.mjs"), mapsSrc);
 const locationsSrc = fs.readFileSync(path.join(ROOT, "components", "ousthat", "locations.js"), "utf8")
   .replaceAll('from "./rules"', 'from "./rules.mjs"')
   .replaceAll('from "./countries"', 'from "./countries.mjs"')
-  .replaceAll('from "./locationsData"', 'from "./locationsData.mjs"');
+  .replaceAll('from "./maps"', 'from "./maps.mjs"');
 fs.writeFileSync(path.join(tmp, "locations.mjs"), locationsSrc);
 
 const R = await import(pathToFileURL(path.join(tmp, "rules.mjs")).href);
@@ -124,11 +130,24 @@ ok("le QCM est déterministe, unique et contient toujours la bonne réponse", qc
 const orderA = L.locationOrder("same-match"), orderB = L.locationOrder("same-match"), orderC = L.locationOrder("other-match");
 ok("le mélange Pinpoint est déterministe pour tous les clients", JSON.stringify(orderA) === JSON.stringify(orderB));
 ok("deux matchs changent réellement l'ordre", JSON.stringify(orderA) !== JSON.stringify(orderC));
-ok("un ordre Pinpoint contient TOUT le stock, pays ou non, exactement une fois", orderA.length === L.LOCATIONS.length && new Set(orderA).size === L.LOCATIONS.length && orderA.every((id) => L.LOCATION_BY_ID[id]));
+// Comparé à la carte PAR DÉFAUT, pas à L.LOCATIONS (union de toutes les
+// cartes) : les deux coïncident tant qu'une seule carte existe, mais
+// divergeront le jour où une deuxième s'ajoute au registre (maps.js) — voir
+// le commentaire de tête sur les bancs qui rétrécissent sans qu'on le sache.
+const defaultMapLocations = L.MAP_BY_ID["beautiful-world"].locations;
+ok("un ordre Pinpoint contient TOUTE la carte par défaut, pays ou non, exactement une fois", orderA.length === defaultMapLocations.length && new Set(orderA).size === defaultMapLocations.length && orderA.every((id) => L.LOCATION_BY_ID[id]));
 
 const countryOrderA = L.locationOrder("same-match", "country"), countryOrderB = L.locationOrder("other-match", "country");
-ok("un ordre Pays ne contient QUE les lieux rattachés à un pays, exactement une fois", countryOrderA.length === withCountry.length && new Set(countryOrderA).size === withCountry.length && countryOrderA.every((id) => L.LOCATION_BY_ID[id].country !== null));
+const withCountryDefaultMap = defaultMapLocations.filter((place) => place.country);
+ok("un ordre Pays ne contient QUE les lieux rattachés à un pays, exactement une fois", countryOrderA.length === withCountryDefaultMap.length && new Set(countryOrderA).size === withCountryDefaultMap.length && countryOrderA.every((id) => L.LOCATION_BY_ID[id].country !== null));
 ok("le mode Pays exclut réellement des lieux que le mode Pinpoint inclut", countryOrderA.length < orderA.length);
+
+section("cartes (maps.js, 2026-09-06)");
+ok("le registre expose au moins la carte par défaut, cohérente avec rules.js", L.MAPS.length >= 1 && L.MAPS.some((m) => m.id === "beautiful-world") && R.GAME_MAP_IDS.includes("beautiful-world"));
+ok("chaque carte du registre est admise par validateConfig", L.MAPS.every((m) => R.GAME_MAP_IDS.includes(m.id)));
+ok("un mapId inconnu retombe sur la carte par défaut plutôt que de planter", R.validateConfig({ mapId: "carte-imaginaire" }).value.mapId === "beautiful-world" && L.locationOrder("x", "pinpoint", "carte-imaginaire").length === defaultMapLocations.length);
+ok("un mapId explicite restreint bien le tirage à cette carte", JSON.stringify(L.locationOrder("same-match", "pinpoint", "beautiful-world")) === JSON.stringify(orderA));
+ok("la config par défaut pointe déjà vers Beautiful World", R.DEFAULT_CONFIG.mapId === "beautiful-world");
 ok("deux matchs Pays changent aussi l'ordre", JSON.stringify(countryOrderA) !== JSON.stringify(countryOrderB));
 
 section("jonctions catalogue, réseau et fournisseurs");
@@ -160,6 +179,16 @@ ok("la carte détaillée utilise OpenFreeMap sans clé et garde les interactions
 ok("le pin de réponse et les pins de révélation portent les mascottes Arcardi", game.includes("avatar={mySeat?.avatar}") && game.includes("seats={state.seats}") && map.includes('seat?.avatar || "🧭"'));
 ok("le temps de round configurable pilote l'échéance hôte partagée", /roundSeconds:\s*\[20,\s*300\]/.test(fs.readFileSync(path.join(ROOT, "components", "ousthat", "rules.js"), "utf8")) && game.includes("current.config.roundSeconds * 1000") && game.includes("remainingMs"));
 ok("la provenance reste bornée à la dernière révision MIT", notice.includes("ef88928c03a70d77ce5a1c86fddf74814ff67fc7") && /PolyForm\s+Noncommercial/.test(notice) && notice.includes("No code or data introduced after"));
+
+section("audit 2026-09-06 — masque Google, signalement et cartes");
+ok("l'iframe Street View n'a plus allowFullScreen et sort de la navigation Tab", !/^\s*allowFullScreen\b/m.test(frame) && /tabIndex=\{-1\}/.test(frame));
+ok("le masque d'adresse bloque vraiment le clic (pointer-events:auto), plus none", /\.ot-google-place-mask\{[^}]*pointer-events:auto/.test(css) && !/\.ot-google-place-mask\{[^}]*pointer-events:none/.test(css));
+ok("le bouton de signalement vit aussi pendant preparing/countdown, pas seulement playing", /\(state\.phase === "playing" \|\| preparing\) && <button className=\{reportArmed/.test(game));
+ok("un tirage vide (mode Pays × carte sans pays) est refusé côté hôte ET annoncé côté client", game.includes("if (!order.length) return;") && game.includes("c.noLocationsForMap"));
+ok("le setup affiche un sélecteur de carte et envoie mapId au lancement", game.includes("ot-map-picker") && game.includes("MAPS.map((map)") && game.includes("mapId: map.id") && /sendRequest\("start",\s*\{\s*config:\s*checked\.value\s*\}\)/.test(game));
+ok("start() passe mapId à locationOrder côté hôte, la revanche aussi", /locationOrder\(matchId, checked\.value\.mode, checked\.value\.mapId\)/.test(game) && /locationOrder\(matchId, current\.config\.mode, current\.config\.mapId\)/.test(game));
+ok("un téléphone en paysage (court, quelle que soit sa largeur) reçoit son propre resserrement", /@media \(max-height:500px\)\{[\s\S]{0,400}\.ot-map-dock\.open/.test(css));
+ok("le canevas MapLibre se fond en fondu plutôt que de flasher en blanc", /\.ot-map-canvas \.maplibregl-canvas\{ opacity:0/.test(css) && map.includes('map.once("load", () => setMapReady(true))') && map.includes('mapReady ? " ready" : ""'));
 
 console.log(fails ? `\n${fails} ÉCHEC(S) sur ${total} contrôles.\n` : `\n${total}/${total} contrôles verts.\n`);
 if (process.argv.includes("--falsify")) console.log("Mutation active : ce passage ne doit JAMAIS être vert.\n");

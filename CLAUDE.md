@@ -10,82 +10,76 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ⚠️⚠️⚠️ **CE BLOC DÉSIGNE UNE SEULE ACTION SUIVANTE. IL SE REMPLACE, IL NE
 S'EMPILE PAS.**
 
-### 🔴 ACTION SUIVANTE — AUDIT RAPIDE DU REVEAL « OÙ'S THAT ? » EN CONDITION DE JEU, PUIS SESSION COMPLÈTE ET RECETTE OPENFREEMAP/MULTI
+### 🔴 ACTION SUIVANTE — JOUER EN VRAI (SOURIS RÉELLE, VRAI TÉLÉPHONE) LES CORRECTIFS « OÙ'S THAT », PUIS DÉCIDER D'UNE DEUXIÈME CARTE
 
-**Guillaume signale que le reveal « bug » et demande de l'auditer rapidement en condition de jeu au
-prochain passage. Le vrai lieu porte désormais une épingle vectorielle VERTE, dont la pointe est
-l'ancre MapLibre exacte, avec le drapeau dans un cartouche séparé ; les réponses gardent les
-mascottes. Ce seul changement a été livré sans ouvrir l'audit. Rien de ce qui s'est accumulé sur ce
-jeu depuis le 2026-09-06 matin n'a encore été vu par Guillaume : P0 (masque d'adresse, panoramas
-morts retirés, garde WebGL, signalement en deux clics), P1 (révélation en incrustation sur le
-panorama, panneau Pays repliable), la passe mobile (aria-label, collisions de bulles, bulles
-invisibles sous 500 px de large), et le stock passé de 38 à environ 1 550 lieux.**
+**Suite à l'audit du 2026-09-06 (Pinpoint joué de bout en bout, solo, hors production — voir
+`components/ousthat/README.md`), Guillaume a demandé de corriger les problèmes graves de jouabilité
+et d'équilibre UI, et d'ajouter un sélecteur de CARTE (façon worldguessr) préparant des cartes
+futures fournies en JSON. Fait, vérifié par banc et par le jeu, jamais encore par une vraie souris.**
 
-**Le stock élargi, livré en fin de journée sur commande explicite de Guillaume (« je veux un stock
-comparable à ce que propose worldguessr, et geoguessr pour les maps publiques ») :** Guillaume a
-fourni sa propre carte construite dans l'éditeur GeoGuessr (`~/Downloads/locations.json`, 1 645
-lieux — 85 % sans `panoId` figé, 0 % avec code pays). `tools/import-locations.mjs` (nouveau, sur le
-modèle d'`import-planche.mjs`) la fusionne aux 38 lieux WorldGuessr inchangés : dédoublonnage
-(121 quasi-doublons sous 30 m, 10 `panoId` déjà vus), rattachement pays HORS LIGNE par
-point-dans-polygone contre les frontières Natural Earth (`world-atlas`/`topojson-client`/
-`i18n-iso-countries`, trois devDependencies, **jamais chargées par le jeu** — voir
-THIRD_PARTY_NOTICES.md), cadrage (heading/pitch/zoom→fov) conservé tel que Guillaume l'a composé
-plutôt que remis à plat (son choix explicite). Résultat : **1 551 lieux, 91 pays distincts couverts
-sur les 114 de l'Explorer, 1 172 lieux rattachés à un pays, 259 avec `panoId` figé.** ⚠️ **Deux
-changements de code, pas seulement de données** : `streetViewUrl` (StreetViewFrame.js) demande
-`location=lat,lng` au lieu de `pano=<id>` quand `panoId` est absent — Google résout alors le
-panorama le plus proche, exactement comme le fait GeoGuessr pour la majorité de ses propres lieux ;
-`locationOrder(seed, mode)` (locations.js) ne tire que les lieux rattachés à un pays quand
-`mode==="country"`, tout le stock sinon — les deux points d'appel (`OusThatGame.js`, lancement et
-revanche) passent désormais le mode. La donnée générée vit dans `locationsData.js` (nouveau, « ne
-pas éditer à la main », `locations.js` ne porte plus que la logique).
+**Trois bugs corrigés :**
+1. **P0, masque d'adresse Google contournable.** `ot-google-place-mask` était en
+   `pointer-events:none` (la souris traversait jusqu'à l'iframe) et l'iframe portait
+   `allowFullScreen` (le plein écran natif de Google faisait disparaître tout le HUD ET le masque —
+   la triche la plus directe). Corrigé : masque en `pointer-events:auto` (vrai bouclier au clic),
+   `allowFullScreen` retiré, `tabIndex={-1}` sur l'iframe (sort de la navigation Tab).
+2. **P1, aucune échappatoire si un panorama ne finit jamais de charger.** Le moteur acceptait déjà
+   `location_problem` pendant `preparing`/`countdown` ; seul le bouton ne s'affichait qu'en
+   `playing`. Corrigé : le bouton vit maintenant aussi pendant `preparing`/`countdown`.
+3. **Équilibre UI, dock carte Pinpoint trop court en paysage mobile.** La règle mobile ne se
+   déclenchait que sur `max-width`, jamais sur la hauteur — un paysage large mais bas héritait du
+   dimensionnement bureau. Nouvelle règle `@media (max-height:500px)`, indépendante de la largeur.
 
-**Vérifié, et comment :** `tools/verify-ousthat.mjs` **64/64**, falsification toujours à **3
-échecs**, `verify-portee` vert (**110 fichiers, 138 462 références**), `npm run build` vert (seul
-avertissement préexistant `G_SOIL`) — les quatre relancés après le changement, pas recopiés d'avant.
-⚠️ **Le seul panorama confirmé mort l'a été EN JOUANT, pas en relisant** : balayage visuel d'un
-échantillon réparti de 24 lieux à `panoId` figé (page jetable, grille d'iframes Embed API) — 23
-vivants, 1 mort (Galápagos, `gg-1375`, « Aucune image Street View disponible »), retiré et ajouté à
-`KNOWN_DEAD_PANO_IDS` dans le script pour rester exclu si le script est relancé. Puis la VRAIE partie
-solo (page jetable + `fake-supabase.mjs`) a chargé un lieu Pays et un lieu Pinpoint tous deux résolus
-par `location=` (donc sans `panoId`), les deux confirmés `ot-sv loaded` sans erreur console ; une
-manche Pays jouée jusqu'à la révélation (Canada, juste) sans accroc.
+**Cosmétique, validé par Guillaume (l'autre option proposée — troncature de texte sur mobile
+étroit — a été refusée, donc PAS touchée) :** le flash blanc de ~1-2 s sur la carte de révélation
+(MapLibre peint son propre canevas en blanc tant que le style n'a pas chargé) est remplacé par un
+fondu, même geste que `.ot-sv`/`.loaded` (StreetViewFrame.js) : `mapReady` posé au `load`, classe
+`.ready`, transition CSS sur `.maplibregl-canvas`.
 
-**Non vérifié, assumé comme tel :** le panneau du navigateur est resté masqué en cours de balayage
-(quirk de session, pas du jeu) — seuls 24 des 259 `panoId` figés ont été regardés à l'œil, et aucun
-des ~1 292 lieux résolus par coordonnée n'a été balayé un par un (1 550 lieux ne se vérifient pas à
-la main, voir §10 — le bouton signaler reste le filet en conditions réelles). **Codex, disponible
-dans deux heures au moment de cette livraison, est le candidat naturel pour élargir ce balayage** si
-Guillaume le juge utile avant de jouer pour de vrai.
+**Sélecteur de carte (nouveau) :** `components/ousthat/maps.js` est le registre (`MAPS`,
+`MAP_BY_ID`) ; une seule carte à ce jour, **Beautiful World**, qui enveloppe tout le stock existant
+(1 551 lieux, `locationsData.js` inchangé). `locationOrder(seed, mode, mapId)` (`locations.js`)
+restreint le tirage à la carte choisie, retombe sur Beautiful World si l'id est inconnu. Le setup
+affiche un sélecteur (cartes façon `ot-mode-picker`, une seule entrée pour l'instant — le rendu
+n'a rien à changer le jour où une deuxième s'ajoute). ⚠️ **Un croisement mode Pays × future carte
+sans aucun lieu rattaché à un pays est refusé** : côté client avant l'envoi (`c.noLocationsForMap`)
+et côté hôte (`if (!order.length) return;`) — sans ce garde-fou, une future carte trop petite
+aurait pu démarrer sur un tirage vide.
+**Pour Guillaume, la marche à suivre le jour où il fournit un JSON de carte supplémentaire (même
+format que l'export GeoGuessr déjà utilisé) :** `node tools/import-map.mjs <source.json> <id>
+"<Nom>"` écrit `components/ousthat/mapData.<id>.js` (généré) ; puis DEUX lignes à la main —
+l'ajouter à `MAPS` (`maps.js`) et son id à `GAME_MAP_IDS` (`rules.js`). Rien d'autre : setup,
+validation et bancs suivent le registre. Détail dans `components/ousthat/README.md` §Cartes.
 
-**Toujours en attente, sans rapport avec le stock du jour :** le remplacement de la carte OpenFreeMap
+**Vérifié, et comment :** `node tools/verify-ousthat.mjs` **77/77** (13 contrôles neufs sur cette
+livraison, dont les trois correctifs et le registre de cartes), falsification toujours à **3
+échecs** (inchangé), `npx next build` vert (seul avertissement préexistant `G_SOIL`) — les trois
+relancés après le changement. Rejoué en jeu (page jetable + `fake-supabase.mjs`, VRAIE clé Maps
+Embed et VRAI OpenFreeMap — seul Supabase Realtime est simulé) : sélecteur de carte visible et
+sélectionnable au setup ; bouton « Panorama indisponible » confirmé visible pendant l'écran de
+préparation ; icône plein écran de Google confirmée absente à l'écran (comparée à une capture
+d'avant correctif) ; carte de révélation confirmée en fondu (classe `ready` posée après `load`,
+plus de flash observé).
+
+**Non vérifié, assumé comme tel :** tout ce qui précède a été déclenché par des événements
+synthétiques (`pointerdown`/`click` via JavaScript) ou par ref CDP, PAS par une souris réelle —
+l'automatisation de ce navigateur a été peu fiable sur les clics React ce jour-là (cause non
+identifiée, contournée plutôt que résolue). Aucune confirmation donc qu'un vrai clic déclenche bien
+le blocage du masque, ni que le dock resserré se manipule bien du doigt sur un vrai téléphone en
+paysage. **À rejouer par Guillaume en conditions réelles (Chrome, vrai mobile) avant de considérer
+ces trois points définitivement clos.** Le tirage déséquilibré (France 14,6 %, top 10 = 53,8 %,
+relevé dans l'audit) n'a volontairement PAS été touché : Guillaume n'a pas demandé de rééquilibrer
+le TIRAGE, seulement l'UI — à trancher séparément si besoin.
+
+**Configuration :** aucune manipulation Supabase ni Vercel pour cette livraison — uniquement du
+code, plus un fichier JSON que Guillaume fournira pour une carte future (jamais une clé, jamais un
+schéma).
+
+**Toujours en attente, sans rapport avec ce qui précède :** le remplacement de la carte OpenFreeMap
 attend toujours le commit/push de Guillaume ; après déploiement, jouer Pinpoint avec OpenFreeMap
 depuis Chrome et Safari, puis Country + Pinpoint depuis deux ou trois appareils/réseaux différents ;
-vérifier pins mascottes, zoom molette/pavé tactile/pincement, reconnexion et passage hôte. Aucun
-calque de relief tiers ajouté — cette passe teste Liberty seule. Après ces deux recettes, reprendre
-Ferme Vallée P1 bis.
-
-**Rappel de ce qui a été livré avant ces correctifs (toujours vrai) :** jeu catalogue ouvert au
-solo et borné à 8 joueurs en ligne ; solo Country Streak (QCM ou recherche dans les 114
-pays/territoires de l'Explorer GeoGuessr) et solo Pinpoint en 5 manches sur 25 000 ; multi Pays en
-5 manches et multi Pinpoint à 2–8 (meilleur intact, poursuivants perdent leur écart × multiplicateur,
-éliminés spectateurs) ; autorité hôte et `rooms.game_state` conservées, solo qui n'écrit jamais
-victoire/défaite ; Dashboard Supabase réel audité **10/10** (`rooms`/`room_players` ajoutées à
-`supabase_realtime`, aucune donnée touchée).
-
-**Configuration :** aucune manipulation Supabase ni Vercel pour cette carte. OpenFreeMap ne demande
-**ni compte, ni clé, ni moyen de paiement** ; MapLibre est installé localement sous licence BSD.
-Vercel est en **Hobby** ; Supabase en **Free** avec
-**spend cap activé** (un quota dépassé peut bloquer le service, jamais facturer un dépassement).
-Google Cloud n'a pas été converti en compte payant ; l'unique clé publique est limitée à
-**Maps Embed API** et aux seuls référents exacts `http://localhost:3000` et
-`https://arcardi.vercel.app`. Ne jamais activer une offre/API payante ni désactiver le spend cap.
-`npm audit` signale **3 vulnérabilités héritées de Next 14.2.15** (`next` → `postcss` → `nanoid`) ;
-MapLibre n'en ajoute aucune, ni les trois devDependencies du 2026-09-06 (`world-atlas`,
-`topojson-client`, `i18n-iso-countries` — rattachement pays hors ligne, jamais chargées par le jeu,
-voir `tools/import-locations.mjs`). La correction automatique proposée saute à Next 16 : ne jamais
-lancer `npm audit fix --force`, traiter la migration du framework dans une livraison séparée. Les
-contraintes et le pas-à-pas sont dans `components/ousthat/README.md`.
+vérifier pins mascottes, zoom molette/pavé tactile/pincement, reconnexion et passage hôte. Après ces
+deux recettes, reprendre Ferme Vallée P1 bis.
 
 ### PASSIF FERME VALLÉE
 

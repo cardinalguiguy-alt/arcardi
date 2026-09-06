@@ -50,7 +50,12 @@ function StreetViewFrame({ location, roundId, lang, onFrameLoad, onSlow }) {
       src={src}
       title="Google Street View"
       loading="eager"
-      allowFullScreen
+      // Pas de allowFullScreen (audit 2026-09-06) : le plein écran natif de
+      // Google fait disparaître tout le HUD Arcardi ET contourne
+      // ot-google-place-mask — c'était le moyen de triche le plus direct.
+      // tabIndex=-1 : exclut l'iframe (et tout ce qu'elle contient) de la
+      // navigation Tab, seconde moitié du même contournement.
+      tabIndex={-1}
       // Politique recommandée par Maps Embed : Google reçoit seulement
       // l'origine, assez pour valider les référents autorisés sans exposer
       // le code du salon ni le chemin complet.

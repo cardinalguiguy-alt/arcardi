@@ -84,6 +84,12 @@ function GuessMap({ marker, onChange, locked = false, expanded = false, reveal =
   const markerRef = useRef(null);
   const revealMarkersRef = useRef([]);
   const [mapError, setMapError] = useState(false);
+  // MapLibre peint son propre canevas en blanc tant que le style (fond de
+  // carte OpenFreeMap) n'a pas fini de charger — visible ~1-2 s sur la
+  // révélation, qui recrée une carte à chaque manche (audit 2026-09-06).
+  // Même geste que StreetViewFrame.js (.ot-sv/.loaded) : masqué jusqu'à
+  // "load", puis un fondu CSS plutôt qu'un flash.
+  const [mapReady, setMapReady] = useState(false);
   const onChangeRef = useRef(onChange);
   const lockedRef = useRef(locked);
 
@@ -125,6 +131,7 @@ function GuessMap({ marker, onChange, locked = false, expanded = false, reveal =
       const next = normalizeGuess(event.lngLat);
       if (next) onChangeRef.current?.(next);
     });
+    map.once("load", () => setMapReady(true));
     mapRef.current = map;
     requestAnimationFrame(() => map.resize());
     return () => {
@@ -247,7 +254,7 @@ function GuessMap({ marker, onChange, locked = false, expanded = false, reveal =
   }, [expanded]);
 
   if (mapError) return <div className="ot-map-canvas ot-map-unavailable" role="status"><span>🗺️</span><b>{unavailableMessage}</b></div>;
-  return <div ref={rootRef} className="ot-map-canvas" role="application" aria-label="Carte de réponse détaillée" />;
+  return <div ref={rootRef} className={"ot-map-canvas" + (mapReady ? " ready" : "")} role="application" aria-label="Carte de réponse détaillée" />;
 }
 
 export default memo(GuessMap);

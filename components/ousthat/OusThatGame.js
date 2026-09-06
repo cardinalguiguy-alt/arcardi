@@ -12,7 +12,7 @@ import {
   normalizeCountryCode,
   searchableCountryText,
 } from "./countries";
-import { LOCATION_BY_ID, locationOrder } from "./locations";
+import { LOCATION_BY_ID, MAPS, locationOrder } from "./locations";
 import {
   DEFAULT_CONFIG,
   GAME_ID,
@@ -447,7 +447,11 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
       const checked = validateConfig(request.config);
       if (!checked.ok || current.seats.length < 1 || current.seats.length > MAX_PLAYERS) return;
       const matchId = `${room.id}:${now}`;
-      const order = locationOrder(matchId, checked.value.mode);
+      const order = locationOrder(matchId, checked.value.mode, checked.value.mapId);
+      // Une carte future, croisée avec le mode Pays, peut n'avoir AUCUN lieu
+      // rattaché à un pays (audit 2026-09-06) : refuser plutôt que démarrer
+      // sur un tirage vide, que hostResolve ne saurait pas résoudre.
+      if (!order.length) return;
       const teams = current.seats.map((seat) => ({ id: seat.teamId, hp: checked.value.initialHp }));
       emitState({
         ...current,
@@ -508,7 +512,7 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
     }
     if (request.kind === "rematch" && current.phase === "finished" && request.from === room.host_id) {
       const matchId = `${room.id}:${now}`;
-      emitState(resetForRematch(current, locationOrder(matchId, current.config.mode), matchId));
+      emitState(resetForRematch(current, locationOrder(matchId, current.config.mode, current.config.mapId), matchId));
     }
   }, [emitState, hostResolve, isHost, room.host_id, room.id, saveHostOnly, transportFor]);
 
@@ -693,6 +697,11 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
     const checked = validateConfig(draftConfig);
     setConfigErrors(checked.errors);
     if (!checked.ok) { setNotice(c.invalid); return; }
+    // Vérifié côté client AVANT d'envoyer (audit 2026-09-06) : l'hôte refuse
+    // silencieusement un tirage vide (croisement mode Pays × carte sans
+    // aucun lieu rattaché à un pays) — mieux vaut le dire tout de suite que
+    // laisser le clic "Jouer" ne rien faire sans explication.
+    if (!locationOrder("preview", checked.value.mode, checked.value.mapId).length) { setNotice(c.noLocationsForMap); return; }
     sendRequest("start", { config: checked.value });
   };
 
@@ -719,6 +728,21 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
               <div className="ot-mode-picker">
                 <button className={draftConfig.mode === "country" ? "selected" : ""} onClick={() => setDraftConfig((old) => ({ ...old, mode: "country" }))}><span>🌐</span><b>{setupSolo ? c.countryStreak : c.countryBattle}</b><small>{setupSolo ? c.countryStreakDesc : c.countryBattleDesc}</small></button>
                 <button className={draftConfig.mode === "pinpoint" ? "selected" : ""} onClick={() => setDraftConfig((old) => ({ ...old, mode: "pinpoint" }))}><span>⌖</span><b>{c.pinpoint}</b><small>{setupSolo ? c.pinpointSoloDesc : c.pinpointMultiDesc}</small></button>
+              </div>
+              {/* Sélecteur de carte (2026-09-06) : une seule carte à ce jour
+                  (Beautiful World, tout le stock) — voir maps.js pour en
+                  ajouter. Rendu même à une seule entrée : c'est ce qui rend
+                  visible qu'il y en aura d'autres, sans logique à changer le
+                  jour où une deuxième carte s'ajoute au registre. */}
+              <div className="ot-map-picker">
+                <b className="ot-map-picker-label">{c.mapLabel}</b>
+                <div className="ot-map-picker-list">
+                  {MAPS.map((map) => (
+                    <button key={map.id} className={draftConfig.mapId === map.id ? "selected" : ""} onClick={() => setDraftConfig((old) => ({ ...old, mapId: map.id }))}>
+                      <span>{map.icon}</span><b>{map.name}</b><small>{map.locations.length.toLocaleString(lang === "en" ? "en-US" : "fr-FR")} {c.mapLocations}</small>
+                    </button>
+                  ))}
+                </div>
               </div>
               {draftConfig.mode === "country" && <div className="ot-answer-picker"><b>{c.answerMethod}</b><button className={draftConfig.countryInput === "multiple-choice" ? "selected" : ""} onClick={() => setDraftConfig((old) => ({ ...old, countryInput: "multiple-choice" }))}>🚩 {c.multipleChoice}</button><button className={draftConfig.countryInput === "search" ? "selected" : ""} onClick={() => setDraftConfig((old) => ({ ...old, countryInput: "search" }))}>⌕ {c.countrySearch}</button></div>}
               <div className="ot-settings">
@@ -824,7 +848,11 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
       {state.finalDeadline && state.firstConfirmedBy !== me.id && !locked && <div className="ot-final-alert">⚡ {c.firstLocked}</div>}
       {locked && myPlaying && state.phase === "playing" && <div className="ot-locked-toast">✓ {solo ? c.answerLocked : c.waitingOpponent}</div>}
       {!myPlaying && state.phase === "playing" && <div className="ot-locked-toast">◉ {c.spectating}</div>}
-      <div className="ot-corner-actions">{state.phase === "playing" && <button className={reportArmed ? "armed" : ""} title={reportArmed ? c.reportConfirmHint : undefined} onClick={handleReport}>{reportArmed ? c.reportConfirm : c.report}</button>}<button onClick={backToLobby}>{c.lobby}</button></div>
+      {/* Le bouton doit aussi vivre pendant preparing/countdown (audit
+          2026-09-06) : le moteur accepte déjà location_problem à ces phases
+          (canVoidLocation, plus haut) — un panorama qui ne finit jamais de
+          charger n'avait sinon aucune échappatoire hors "Retour au salon". */}
+      <div className="ot-corner-actions">{(state.phase === "playing" || preparing) && <button className={reportArmed ? "armed" : ""} title={reportArmed ? c.reportConfirmHint : undefined} onClick={handleReport}>{reportArmed ? c.reportConfirm : c.report}</button>}<button onClick={backToLobby}>{c.lobby}</button></div>
       {notice && <div className="ot-network-note">{notice}</div>}
     </div>
   );
