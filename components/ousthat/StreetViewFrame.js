@@ -4,15 +4,22 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 const LOAD_WATCHDOG_MS = 18000;
 
 export function streetViewUrl(location, key, lang = "fr") {
-  if (!location?.panoId || !key) return null;
+  if (!location || !key) return null;
   const params = new URLSearchParams({
     key,
-    pano: location.panoId,
     heading: String(location.heading),
     pitch: String(location.pitch),
     fov: String(location.fov),
     language: lang === "en" ? "en" : "fr",
   });
+  // La plupart du stock élargi (2026-09-06) n'a pas de panoId figé : Google
+  // résout alors le panorama le plus proche de la coordonnée, exactement
+  // comme le fait GeoGuessr lui-même pour la majorité de ses propres lieux.
+  // `pano=` reste préféré quand on l'a : un identifiant explicite ne peut
+  // pas dériver vers un panorama voisin au fil du temps.
+  if (location.panoId) params.set("pano", location.panoId);
+  else if (Number.isFinite(location.lat) && Number.isFinite(location.lng)) params.set("location", `${location.lat},${location.lng}`);
+  else return null;
   return `https://www.google.com/maps/embed/v1/streetview?${params.toString()}`;
 }
 

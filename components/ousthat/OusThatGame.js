@@ -447,7 +447,7 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
       const checked = validateConfig(request.config);
       if (!checked.ok || current.seats.length < 1 || current.seats.length > MAX_PLAYERS) return;
       const matchId = `${room.id}:${now}`;
-      const order = locationOrder(matchId);
+      const order = locationOrder(matchId, checked.value.mode);
       const teams = current.seats.map((seat) => ({ id: seat.teamId, hp: checked.value.initialHp }));
       emitState({
         ...current,
@@ -508,7 +508,7 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
     }
     if (request.kind === "rematch" && current.phase === "finished" && request.from === room.host_id) {
       const matchId = `${room.id}:${now}`;
-      emitState(resetForRematch(current, locationOrder(matchId), matchId));
+      emitState(resetForRematch(current, locationOrder(matchId, current.config.mode), matchId));
     }
   }, [emitState, hostResolve, isHost, room.host_id, room.id, saveHostOnly, transportFor]);
 

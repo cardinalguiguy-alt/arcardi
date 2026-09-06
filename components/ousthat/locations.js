@@ -1,73 +1,30 @@
 /*
- * 38 panoramas issus de data/diverse-locations.json à la révision MIT
- * WorldGuessr ef88928c03a70d77ce5a1c86fddf74814ff67fc7. Un pays différent
- * par entrée pour obtenir une première sélection mondiale sans répétition.
- * Provenance et licence complètes : ./THIRD_PARTY_NOTICES.md.
+ * Le catalogue de panoramas. Les données brutes vivent dans locationsData.js
+ * (généré par tools/import-locations.mjs — ne pas éditer à la main) : ce
+ * fichier-ci ne porte que la logique.
  *
- * Les coordonnées restent celles du panorama identifié par panoId, sans
- * arrondi. pitch et fov sont fixés ici afin que tous les clients demandent
- * exactement la même vue initiale ; les mouvements de caméra restent locaux.
+ * Deux provenances, mélangées dans un seul tableau : 38 panoramas WorldGuessr
+ * (MIT, révision ef88928c) et la carte personnelle que Guillaume a construite
+ * dans l'éditeur GeoGuessr, ~1500 lieux après déduplication (2026-09-06).
+ * Provenance et licences complètes : ./THIRD_PARTY_NOTICES.md.
  *
- * ⚠️ 2 des 40 entrées d'origine (Tchéquie, Bolivie) ont été retirées le
- * 2026-09-06 : Google ne sert plus ces panoId (« Aucune image Street View
- * disponible »), vérifié en chargeant les 40 embeds dans un navigateur. Une
- * iframe Maps Embed qui charge ne garantit pas que le panoId existe encore
- * (voir README.md) — aucun code ne peut le détecter à l'exécution sans une
- * API Google supplémentaire, potentiellement facturée. Seule parade fiable
- * aujourd'hui : revalider ce catalogue de temps en temps à la main.
+ * ⚠️ panoId peut être null : la plupart des lieux GeoGuessr n'en ont pas non
+ * plus, et streetViewUrl (StreetViewFrame.js) résout alors le panorama au vol
+ * depuis lat/lng. ⚠️ country peut être null (rattachement pays hors ligne,
+ * point-dans-polygone, voir import-locations.mjs) : ces lieux restent
+ * utilisables en Pinpoint, jamais tirés en mode Pays — locationOrder(seed,
+ * "country") filtre sur ce champ, locationOrder(seed, "pinpoint") ne filtre
+ * rien.
+ *
+ * ⚠️ Aucune vérification programmatique ne peut confirmer qu'un panoId est
+ * encore servi par Google sans une API facturée (voir README.md) — un
+ * panorama mort se signale en jeu (bouton « signaler »), pas au chargement.
  */
 
-const RAW = [
-  ["GR",38.09794071723781,21.41533809512418,50,"NcoJdB2eZSNI3pu2sXLn4Q"],
-  ["PA",7.720799390611916,-81.28070050453492,329,"ZPIXWk_cxzptC30XZYUpTA"],
-  ["BT",27.59804593690841,90.71850930387379,120,"CYbZnXlvl7IDwGkQgfzCyg"],
-  ["FI",63.741796138345165,23.45785769109084,303,"H7QVL0Ev-hm1NbecZoVuPw"],
-  ["RW",-1.4931212579717026,29.608533461165358,279,"DdR9r4DylfdLxD_39bvgfA"],
-  ["UG",0.3224683328104386,32.58646422192249,141,"wFeMmyo-5LBoh0vCkn1PQA"],
-  ["IS",65.86552508267427,-19.722893831713613,300,"O3WoeGvcXXRAS-if7o4dOg"],
-  ["EE",59.38707156224448,24.868470595974205,180,"PIR_1kB_1pTQyA6xERxLOw"],
-  ["SK",48.47282480504339,17.778202964775023,205,"xkxgkVG6kvPJHi6MUxMi8g"],
-  ["LV",56.519173343108115,27.067598799314485,7,"qJWBL1Q2-zTRPGDiPvjM5Q"],
-  ["MY",2.8670119665411242,112.81033237516255,74,"EZdPvnifluXu9KXzEk4sEA"],
-  ["IE",52.36209687927321,-8.662582887081811,57,"RXLZvJnGFND6SxI7SWGRVg"],
-  ["UY",-34.04474280494128,-57.052976109246025,288,"YKhdR2osy0x9bM_MEWua5A"],
-  ["QA",25.808204219083933,51.368158223136135,317,"qgx2ZAPXQmWKp8aC9XGz2Q"],
-  ["LA",15.116353248296825,105.81926873293646,5,"57zMZk9QFheynTsKQCLjeg"],
-  ["NZ",-36.8857152509417,174.7414486753889,284,"jOyNDblXhFsKPz6WNyhgtA"],
-  ["NG",12.589125857277123,4.969343267330353,206,"MnZfWuM1xTA7mUVcA31Q7g"],
-  ["EC",-1.0837965582824887,-80.68629956758294,62,"5cPEnn8xHd_EbUjy3xUi-g"],
-  ["CH",47.056682914097905,8.169505611429546,329,"un9kx9-3gDs7p6I7Qf_AUQ"],
-  ["SZ",-26.519788491646636,31.374655127046722,198,"cA-J5JZfjQaACLQUIeGT6w"],
-  ["JO",32.01398092438247,35.87653648492203,337,"y0vLB9mebe612xC6hVHQVQ"],
-  ["SI",46.63954534421098,16.233991129831974,81,"skbNF0AgVnRxUdKvLy2JgA"],
-  ["BG",42.370290404617634,23.01200072810348,305,"FL64KbWtxgShsUD6m3mmKw"],
-  ["LK",7.713678415617654,80.00061063843755,13,"a5tQSd0xHCB3QpWeFKFVbQ"],
-  ["AT",48.287828182714414,16.330082965819507,180,"--Q6k-dX_L1lITAsqgRWtQ"],
-  ["SN",14.2693909616509,-16.400863273311113,30,"RZj1J8wfDbEYFsakBwWi-Q"],
-  ["DE",52.8292124159868,7.425134802360592,359,"t3bYaHpjrgbzHzfkSHgAOw"],
-  ["CY",34.8949855464069,33.12263648481302,50,"HhQlLT53GotFv_LqOs3b8g"],
-  ["BE",49.93259646642778,5.1983998104247675,47,"eMQ_nPJifbzbrc_q0OStmA"],
-  ["PT",39.858927947166,-7.4936459022197734,266,"JF_d8WHzl1SOrAXZMcLuNQ"],
-  ["LS",-28.897658462819813,28.803572844774703,191,"V9Z3k1IWoWX89nDeQcq2bQ"],
-  ["ME",43.24663154053162,19.37869554324906,179,"XB5m5NIQ2wCfJjukDT-RvA"],
-  ["CR",9.99238643656763,-83.06450544260684,326,"v0JfEWMWzlyLqPN5-b3WBw"],
-  ["GT",13.926713783339046,-90.38934535079791,191,"P6p8y3wzC73U8bOcYCyOGQ"],
-  ["LU",49.89694748578,5.801207108108202,243,"kuxTQQWHyly51WPsHW_O_Q"],
-  ["HR",43.92911659404249,16.45996373419789,229,"YfYvNiOgpDofeE76tUx-9w"],
-  ["NL",52.728632434730976,4.967683604340568,60,"aGNXJ0Xgp2_d0-9x4nd_hg"],
-  ["BD",25.11277262069851,91.1940152580006,17,"6HnPXYneUZMBj_OEFp3zQw"],
-];
+import { LOCATIONS_RAW } from "./locationsData";
+import { COUNTRY_BY_CODE } from "./countries";
 
-export const LOCATIONS = Object.freeze(RAW.map(([country, lat, lng, heading, panoId], index) => Object.freeze({
-  id: `mit-${String(index + 1).padStart(2, "0")}`,
-  country,
-  lat,
-  lng,
-  heading,
-  pitch: 0,
-  fov: 82,
-  panoId,
-})));
+export const LOCATIONS = LOCATIONS_RAW;
 
 export const LOCATION_BY_ID = Object.freeze(Object.fromEntries(LOCATIONS.map((location) => [location.id, location])));
 
@@ -92,8 +49,12 @@ function seededRandom(seed) {
   };
 }
 
-export function locationOrder(seed) {
-  const ids = LOCATIONS.map((location) => location.id);
+// mode "country" ne tire que les lieux rattachés à un pays du vocabulaire
+// GeoGuessr Explorer (countries.js) — un tiers du stock reste Pinpoint seul.
+// mode "pinpoint" (par défaut) tire dans tout le stock, pays ou non.
+export function locationOrder(seed, mode = "pinpoint") {
+  const pool = mode === "country" ? LOCATIONS.filter((location) => COUNTRY_BY_CODE[location.country]) : LOCATIONS;
+  const ids = pool.map((location) => location.id);
   const random = seededRandom(seed);
   for (let i = ids.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1));

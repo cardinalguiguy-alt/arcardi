@@ -110,7 +110,17 @@ le document Google s'est ouvert, pas que sa dernière tuile est rendue.
   paiement. L'attribution reste visible et aucune tuile n'est préchargée ou
   relayée par Arcardi.
 - Panoramas : 38 enregistrements tirés de la dernière révision WorldGuessr
-  encore sous MIT. Aucun ajout PolyForm Noncommercial n'est repris.
+  encore sous MIT, complétés le 2026-09-06 par la carte personnelle que
+  Guillaume a construite dans l'éditeur GeoGuessr (~1500 lieux après
+  déduplication — voir `tools/import-locations.mjs`). Aucun ajout PolyForm
+  Noncommercial n'est repris. La majorité des lieux ajoutés n'ont pas de
+  panorama figé : `streetViewUrl` demande alors `location=lat,lng` plutôt que
+  `pano=<id>`, et Google résout lui-même le panorama le plus proche — c'est le
+  fonctionnement natif de la plupart des lieux GeoGuessr eux-mêmes. Le
+  rattachement pays se fait hors ligne, par point-dans-polygone contre les
+  frontières Natural Earth (voir THIRD_PARTY_NOTICES.md) : un lieu non
+  rattachable reste jouable en Pinpoint mais n'est jamais tiré en mode Pays
+  (`locationOrder(seed, "country")` filtre sur ce champ).
 - Vocabulaire pays/territoires : liste factuelle de l'Explorer officiel
   GeoGuessr relevée le 2026-09-06 ; aucun code ni visuel GeoGuessr n'est repris.
 

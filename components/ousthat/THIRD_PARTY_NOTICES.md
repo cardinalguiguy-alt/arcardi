@@ -89,3 +89,37 @@ imagery or credentials are stored in this repository. Deployers provide their
 own restricted public API key and remain responsible for Google Maps Platform
 terms, branding and service availability:
 https://developers.google.com/maps/documentation/embed/usage-and-billing
+
+## Guillaume's personal GeoGuessr map (2026-09-06 expansion)
+
+Most of `locationsData.js` (`gg-0001` onward) comes from a map Guillaume built
+himself in the GeoGuessr map editor and exported as JSON. This is Guillaume's
+own compiled selection of coordinates and Google panorama identifiers, not
+GeoGuessr source code, UI, artwork or game logic — the same factual-data
+principle already applied to the Explorer vocabulary above. The export
+carried no country codes: `country` is derived offline by this project (see
+below), never copied from GeoGuessr.
+
+## Natural Earth country boundaries (offline country lookup only)
+
+Country attribution for locations without an explicit code is computed once,
+offline, by `tools/import-locations.mjs`, using the 1:50,000,000 admin-0
+countries layer bundled by the npm package `world-atlas` (devDependency,
+version 2.0.2, ISC license) and converted to GeoJSON with `topojson-client`
+(devDependency, version 3.1.0, ISC license). Numeric-to-alpha-2 ISO 3166-1
+conversion uses `i18n-iso-countries` (devDependency, version 7.14.0, MIT
+license). None of the three packages, nor the boundary data itself, is
+imported by any file the browser loads — only `locationsData.js`, plain
+coordinate data, ships to the client.
+
+The boundary data itself is Natural Earth, whose authors place it fully in
+the public domain:
+
+> All versions of Natural Earth raster + vector map data found on this
+> website are in the public domain. You may use the maps in any manner,
+> including modifying the content and design, electronic dissemination, and
+> offset printing. The primary authors, Tom Patterson and Nathaniel Vaughn
+> Kelso, and all other contributors renounce all financial claim to the maps
+> and invite you to use them for any purpose, personal or commercial.
+
+https://www.naturalearthdata.com/about/terms-of-use/

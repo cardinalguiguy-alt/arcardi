@@ -25,9 +25,12 @@ if (process.argv.includes("--falsify")) {
 fs.writeFileSync(path.join(tmp, "rules.mjs"), rulesSrc);
 const countriesSrc = fs.readFileSync(path.join(ROOT, "components", "ousthat", "countries.js"), "utf8");
 fs.writeFileSync(path.join(tmp, "countries.mjs"), countriesSrc);
+const locationsDataSrc = fs.readFileSync(path.join(ROOT, "components", "ousthat", "locationsData.js"), "utf8");
+fs.writeFileSync(path.join(tmp, "locationsData.mjs"), locationsDataSrc);
 const locationsSrc = fs.readFileSync(path.join(ROOT, "components", "ousthat", "locations.js"), "utf8")
-  .replace('from "./rules"', 'from "./rules.mjs"')
-  .replace('from "./countries"', 'from "./countries.mjs"');
+  .replaceAll('from "./rules"', 'from "./rules.mjs"')
+  .replaceAll('from "./countries"', 'from "./countries.mjs"')
+  .replaceAll('from "./locationsData"', 'from "./locationsData.mjs"');
 fs.writeFileSync(path.join(tmp, "locations.mjs"), locationsSrc);
 
 const R = await import(pathToFileURL(path.join(tmp, "rules.mjs")).href);
@@ -101,17 +104,32 @@ const rematch = R.resetForRematch({ config: R.DEFAULT_CONFIG, teams, result: { o
 ok("la revanche garde les règles mais remet PV, manche et réponses à zéro", rematch.phase === "preparing" && rematch.round === 1 && rematch.retry === 0 && rematch.roundId === "match-2:1:0" && rematch.teams.every((team) => team.hp === 6000) && Object.keys(rematch.answers).length === 0 && rematch.winnerTeamId === null);
 
 section("sélection mondiale");
-ok("au moins 30 panoramas sont livrés", L.LOCATIONS.length >= 30, `${L.LOCATIONS.length} lieux`);
-ok("la première sélection ne répète aucun pays", new Set(L.LOCATIONS.map((place) => place.country)).size === L.LOCATIONS.length);
-ok("chaque panorama garde des coordonnées et une orientation complètes", L.LOCATIONS.every((place) => R.normalizeGuess(place) && typeof place.panoId === "string" && place.panoId.length > 10 && Number.isFinite(place.heading) && Number.isFinite(place.pitch) && Number.isFinite(place.fov)));
+// Depuis le 2026-09-06 le stock mélange les 38 lieux WorldGuessr et la carte
+// personnelle de Guillaume (~1500 lieux après déduplication, panoId et pays
+// souvent absents) : les contrôles qui supposaient un panoId et un pays sur
+// CHAQUE entrée, et aucune répétition de pays, ne tiennent plus — voir
+// locationsData.js et tools/import-locations.mjs.
+ok("au moins 1000 panoramas sont livrés", L.LOCATIONS.length >= 1000, `${L.LOCATIONS.length} lieux`);
+const withCountry = L.LOCATIONS.filter((place) => place.country);
+const distinctCountries = new Set(withCountry.map((place) => place.country));
+ok("au moins 50 pays distincts sont couverts", distinctCountries.size >= 50, `${distinctCountries.size} pays`);
+ok("chaque panorama garde des coordonnées et une orientation complètes", L.LOCATIONS.every((place) => R.normalizeGuess(place) && (place.panoId === null || (typeof place.panoId === "string" && place.panoId.length > 10)) && Number.isFinite(place.heading) && Number.isFinite(place.pitch) && Number.isFinite(place.fov)));
 ok("les codes pays produisent un drapeau de révélation sûr", L.countryFlag("FR") === "🇫🇷" && L.countryFlag("?") === "🏳️");
-ok("tous les pays des panoramas appartiennent à la recherche GeoGuessr", L.LOCATIONS.every((place) => C.COUNTRY_BY_CODE[place.country]), `${C.COUNTRIES.length} choix admis`);
+ok("un pays de panorama, quand il existe, appartient toujours à la recherche GeoGuessr", L.LOCATIONS.every((place) => place.country === null || C.COUNTRY_BY_CODE[place.country]), `${C.COUNTRIES.length} choix admis, ${withCountry.length} lieux rattachés`);
+const panoIds = L.LOCATIONS.filter((place) => place.panoId).map((place) => place.panoId);
+ok("aucun panoId n'est dupliqué dans le stock", panoIds.length === new Set(panoIds).size, `${panoIds.length} panoId`);
 const qcm = C.countryChoices("GR", "round-1", 4);
 ok("le QCM est déterministe, unique et contient toujours la bonne réponse", qcm.length === 4 && new Set(qcm).size === 4 && qcm.includes("GR") && JSON.stringify(qcm) === JSON.stringify(C.countryChoices("GR", "round-1", 4)));
+
 const orderA = L.locationOrder("same-match"), orderB = L.locationOrder("same-match"), orderC = L.locationOrder("other-match");
-ok("le mélange est déterministe pour tous les clients", JSON.stringify(orderA) === JSON.stringify(orderB));
+ok("le mélange Pinpoint est déterministe pour tous les clients", JSON.stringify(orderA) === JSON.stringify(orderB));
 ok("deux matchs changent réellement l'ordre", JSON.stringify(orderA) !== JSON.stringify(orderC));
-ok("un ordre contient chaque lieu exactement une fois", orderA.length === L.LOCATIONS.length && new Set(orderA).size === L.LOCATIONS.length && orderA.every((id) => L.LOCATION_BY_ID[id]));
+ok("un ordre Pinpoint contient TOUT le stock, pays ou non, exactement une fois", orderA.length === L.LOCATIONS.length && new Set(orderA).size === L.LOCATIONS.length && orderA.every((id) => L.LOCATION_BY_ID[id]));
+
+const countryOrderA = L.locationOrder("same-match", "country"), countryOrderB = L.locationOrder("other-match", "country");
+ok("un ordre Pays ne contient QUE les lieux rattachés à un pays, exactement une fois", countryOrderA.length === withCountry.length && new Set(countryOrderA).size === withCountry.length && countryOrderA.every((id) => L.LOCATION_BY_ID[id].country !== null));
+ok("le mode Pays exclut réellement des lieux que le mode Pinpoint inclut", countryOrderA.length < orderA.length);
+ok("deux matchs Pays changent aussi l'ordre", JSON.stringify(countryOrderA) !== JSON.stringify(countryOrderB));
 
 section("jonctions catalogue, réseau et fournisseurs");
 const page = fs.readFileSync(path.join(ROOT, "app", "room", "[code]", "page.js"), "utf8");
@@ -137,7 +155,7 @@ ok("le masque Google reste pleinement opaque avant son dégradé (pas de fuite p
 ok("le signalement de panorama passe par le thème du jeu, jamais par un window.confirm natif", !game.includes("window.confirm") && game.includes("reportArmed"));
 ok("Pinpoint exige WebGL avant de pouvoir lancer la partie, pas seulement la clé Maps", game.includes("function supportsWebGL") && /disabled=\{!hasEmbedKey \|\| !state\.seats\.length \|\| \(draftConfig\.mode === "pinpoint" && !hasWebGL\)\}/.test(game));
 ok("la carte de réponse se rétracte sans perdre son composant et le vrai point porte un drapeau", game.includes('mapOpen ? "open" : "collapsed"') && game.includes('className="ot-map-peek"') && game.includes("countryFlag(revealTarget?.country)") && map.includes("countryFlag(reveal.target.country)"));
-ok("Google reçoit un pano et une orientation, sans clé copiée", frame.includes('pano: location.panoId') && frame.includes('heading: String(location.heading)') && frame.includes('referrerPolicy="strict-origin-when-cross-origin"') && frame.includes('process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY') && !/AIza[0-9A-Za-z_-]{30,}/.test(frame));
+ok("Google reçoit un pano ou une coordonnée de repli, une orientation, sans clé copiée", frame.includes('params.set("pano", location.panoId)') && frame.includes('params.set("location", ') && frame.includes('heading: String(location.heading)') && frame.includes('referrerPolicy="strict-origin-when-cross-origin"') && frame.includes('process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY') && !/AIza[0-9A-Za-z_-]{30,}/.test(frame));
 ok("la carte détaillée utilise OpenFreeMap sans clé et garde les interactions fluides", map.includes("https://tiles.openfreemap.org/styles/liberty") && map.includes("new AttributionControl") && map.includes("setWheelZoomRate") && map.includes("setZoomRate") && !/api[_-]?key|access[_-]?token/i.test(map));
 ok("le pin de réponse et les pins de révélation portent les mascottes Arcardi", game.includes("avatar={mySeat?.avatar}") && game.includes("seats={state.seats}") && map.includes('seat?.avatar || "🧭"'));
 ok("le temps de round configurable pilote l'échéance hôte partagée", /roundSeconds:\s*\[20,\s*300\]/.test(fs.readFileSync(path.join(ROOT, "components", "ousthat", "rules.js"), "utf8")) && game.includes("current.config.roundSeconds * 1000") && game.includes("remainingMs"));

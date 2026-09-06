@@ -10,78 +10,57 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ⚠️⚠️⚠️ **CE BLOC DÉSIGNE UNE SEULE ACTION SUIVANTE. IL SE REMPLACE, IL NE
 S'EMPILE PAS.**
 
-### 🔴 ACTION SUIVANTE — REJOUER P0 + P1 + LA PASSE MOBILE « OÙ'S THAT ? », PUIS RECETTER OPENFREEMAP ET LE MULTI
+### 🔴 ACTION SUIVANTE — GUILLAUME JOUE ENFIN UNE VRAIE SESSION « OÙ'S THAT ? » (P0+P1+MOBILE+NOUVEAU STOCK), PUIS RECETTE OPENFREEMAP/MULTI
 
-**Le 2026-09-06, un audit (Codex puis Claude, en jouant réellement — page jetable +
-`fake-supabase.mjs`, pas en relisant le code) a trouvé quatre défauts qui cassaient le jeu (P0,
-corrigés le matin) ; l'après-midi, sur feu vert explicite de Guillaume (« attaque le P1, découpe-le
-comme tu veux »), Claude a livré la sensation GeoGuessr qui manquait (P1) ; en fin de journée, sur
-consigne large de Guillaume (« paufine la fabrication générale, mais les overlays ne doivent pas
-être trop invasifs »), une troisième passe — toujours en jouant, cette fois sur un viewport mobile
-émulé — a trouvé trois défauts invisibles sur desktop (détail plus bas) :**
+**Rien de ce qui s'est accumulé sur ce jeu depuis le 2026-09-06 matin n'a encore été vu par
+Guillaume : P0 (masque d'adresse, panoramas morts retirés, garde WebGL, signalement en deux clics),
+P1 (révélation en incrustation sur le panorama, panneau Pays repliable), la passe mobile (aria-label,
+collisions de bulles, bulles invisibles sous 500 px de large), et maintenant le stock de panoramas,
+qui passe le même jour de 38 à environ 1 550 lieux.**
 
-**P0 — sécurité/disponibilité :** masque d'adresse Google étendu au Pinpoint (il n'existait qu'en
-mode Pays ; en Pinpoint le lien « Afficher dans Google Maps » posait la réponse exacte) et son
-opacité passée à pleine ; 2 des 40 panoramas retirés (Tchéquie, Bolivie — Google ne les sert plus,
-`onLoad` d'iframe se déclenchait quand même, voir §4) ; garde WebGL avant de lancer Pinpoint ;
-signalement d'un panorama mort passé d'un `window.confirm()` natif à un bouton à deux clics dans le
-thème.
+**Le stock élargi, livré en fin de journée sur commande explicite de Guillaume (« je veux un stock
+comparable à ce que propose worldguessr, et geoguessr pour les maps publiques ») :** Guillaume a
+fourni sa propre carte construite dans l'éditeur GeoGuessr (`~/Downloads/locations.json`, 1 645
+lieux — 85 % sans `panoId` figé, 0 % avec code pays). `tools/import-locations.mjs` (nouveau, sur le
+modèle d'`import-planche.mjs`) la fusionne aux 38 lieux WorldGuessr inchangés : dédoublonnage
+(121 quasi-doublons sous 30 m, 10 `panoId` déjà vus), rattachement pays HORS LIGNE par
+point-dans-polygone contre les frontières Natural Earth (`world-atlas`/`topojson-client`/
+`i18n-iso-countries`, trois devDependencies, **jamais chargées par le jeu** — voir
+THIRD_PARTY_NOTICES.md), cadrage (heading/pitch/zoom→fov) conservé tel que Guillaume l'a composé
+plutôt que remis à plat (son choix explicite). Résultat : **1 551 lieux, 91 pays distincts couverts
+sur les 114 de l'Explorer, 1 172 lieux rattachés à un pays, 259 avec `panoId` figé.** ⚠️ **Deux
+changements de code, pas seulement de données** : `streetViewUrl` (StreetViewFrame.js) demande
+`location=lat,lng` au lieu de `pano=<id>` quand `panoId` est absent — Google résout alors le
+panorama le plus proche, exactement comme le fait GeoGuessr pour la majorité de ses propres lieux ;
+`locationOrder(seed, mode)` (locations.js) ne tire que les lieux rattachés à un pays quand
+`mode==="country"`, tout le stock sinon — les deux points d'appel (`OusThatGame.js`, lancement et
+revanche) passent désormais le mode. La donnée générée vit dans `locationsData.js` (nouveau, « ne
+pas éditer à la main », `locations.js` ne porte plus que la logique).
 
-**P1 — la révélation ne coupe plus le panorama :** ancien écran séparé (`ot-reveal-root`) qui
-démontait `<StreetViewFrame>` à chaque manche, remplacé par `RevealDock` — une incrustation repliable
-posée SUR le panorama toujours monté (`OusThatGame.js`), avec le même patron replié/déplié que la
-carte Pinpoint et le nouveau panneau Pays. Le panneau Pays (`CountryPicker`) est lui-même devenu
-repliable, replié par défaut, ouvert au survol (desktop) ou au clic (tactile), refermé tout seul dès
-la réponse verrouillée — retour direct de Guillaume en cours d'audit (« très masquant, devrait être
-rétractable et réagir au hover »). Le dock de carte Pinpoint et le nouveau dock de révélation sont
-décalés à `right:82px` plutôt que `14px` : la boussole et le zoom natifs de Google occupent déjà ce
-coin, les coller dessous les faisait lire comme un bouton de plus dans la même pile. Le survol final
-de la carte de révélation (`GuessMap.js`) est passé de `duration:0` (saut sec) à un travelling animé
-de 1,1 s. L'écran de fin de MATCH (`state.phase === "finished"`, pas manche par manche) garde son
-plein écran d'origine, sans changement — il n'y a plus de manche suivante à voir arriver, la prise
-plein écran y reste justifiée.
+**Vérifié, et comment :** `tools/verify-ousthat.mjs` **64/64**, falsification toujours à **3
+échecs**, `verify-portee` vert (**110 fichiers, 138 462 références**), `npm run build` vert (seul
+avertissement préexistant `G_SOIL`) — les quatre relancés après le changement, pas recopiés d'avant.
+⚠️ **Le seul panorama confirmé mort l'a été EN JOUANT, pas en relisant** : balayage visuel d'un
+échantillon réparti de 24 lieux à `panoId` figé (page jetable, grille d'iframes Embed API) — 23
+vivants, 1 mort (Galápagos, `gg-1375`, « Aucune image Street View disponible »), retiré et ajouté à
+`KNOWN_DEAD_PANO_IDS` dans le script pour rester exclu si le script est relancé. Puis la VRAIE partie
+solo (page jetable + `fake-supabase.mjs`) a chargé un lieu Pays et un lieu Pinpoint tous deux résolus
+par `location=` (donc sans `panoId`), les deux confirmés `ot-sv loaded` sans erreur console ; une
+manche Pays jouée jusqu'à la révélation (Canada, juste) sans accroc.
 
-**Passe mobile — trois défauts trouvés en rejouant sur un viewport 375 px émulé, aucun visible sur
-desktop :** les aria-label des deux nouveaux docks repliables (`CountryPicker`, `RevealDock`)
-réutilisaient telles quelles les chaînes du VRAI dock de carte Pinpoint (`c.openMap`/`c.closeMap`/
-`c.shrink`, « …la carte ») — un lecteur d'écran l'annonçait même sur le panneau Pays et sur la
-révélation en mode Pays, qui n'ont jamais de carte du tout. Deux chaînes génériques ajoutées
-(`openPanel`/`closePanel`, `strings.js`) et les quatre usages corrigés (`OusThatGame.js`). Sur
-mobile, la bulle repliée du dock de révélation (220 px) et celle du panneau Pays (198 px, centrée)
-débordaient jusque sous `.ot-corner-actions` (signaler un panorama mort, retour au salon — ancré en
-bas à gauche) : mesuré au pixel (`getBoundingClientRect`), les deux boutons se recouvraient
-vraiment, pas seulement à l'œil. Remonté à `bottom:80px` dans le bloc `@media (max-width:800px)` de
-`globals.css`, desktop inchangé. Et sans rapport avec les docks du jour : `.ot-final-alert`/
-`.ot-locked-toast` (« premier verrouillé », « réponse verrouillée ») utilisaient
-`max-width:calc(100vw - 500px)` — négatif sur tout viewport sous 500 px, donc ramené à `0` par le
-moteur : ces deux bulles étaient invisibles sur téléphone depuis toujours, dans les deux modes, pas
-seulement depuis le P1 du matin. Corrigé en `min(420px, 100vw - 32px)`.
+**Non vérifié, assumé comme tel :** le panneau du navigateur est resté masqué en cours de balayage
+(quirk de session, pas du jeu) — seuls 24 des 259 `panoId` figés ont été regardés à l'œil, et aucun
+des ~1 292 lieux résolus par coordonnée n'a été balayé un par un (1 550 lieux ne se vérifient pas à
+la main, voir §10 — le bouton signaler reste le filet en conditions réelles). **Codex, disponible
+dans deux heures au moment de cette livraison, est le candidat naturel pour élargir ce balayage** si
+Guillaume le juge utile avant de jouer pour de vrai.
 
-**Non fait, et volontairement laissé pour une prochaine passe :** la carte de révélation Pinpoint
-recrée encore MapLibre de zéro à chaque manche (deux montages React distincts, un pour deviner, un
-pour révéler) — le panorama reste visible pendant ce remontage désormais, donc le défaut le plus
-gênant est réglé, mais le coût réseau et le flash de rechargement restent entiers. Partager UNE
-seule instance de carte entre deviner et révéler est le chantier suivant si on continue sur ce fil.
-
-`tools/verify-ousthat.mjs` **60/60** ; falsification toujours à **3 échecs** ; `verify-portee`
-vert (109 fichiers, 138 452 références) ; `npm run build` vert (seul avertissement préexistant
-`G_SOIL`) — les trois chiffres ci-dessus relancés le 2026-09-06 en fin de journée, pas recopiés du
-matin. Testé en jouant (page jetable + `fake-supabase.mjs`) : Pinpoint solo jusqu'à la révélation
-avec repli/dépli du dock, Country Streak solo jusqu'au bout de la série avec repli/dépli du panneau
-Pays, écran de fin de match. La passe mobile a été rejouée en Country/Pinpoint solo sur un viewport
-375 px émulé DANS LE NAVIGATEUR (`resize_window`, jamais un vrai téléphone), collisions mesurées au
-pixel avant/après correctif. Pas rejoué en multi, pas rejoué sur un vrai appareil.
-
-**Non fait : rien de tout ça (P0, P1, ni la passe mobile) n'a encore été rejoué par Guillaume — et
-la passe mobile n'a jamais été vue sur un vrai téléphone, seulement émulée.**
-
-**Toujours en attente, sans rapport avec les correctifs du jour :** « Où's that ? » reste déployé et
-jouable en production, mais le remplacement de sa carte attend le commit/push de Guillaume. Après
-déploiement, jouer Pinpoint avec OpenFreeMap depuis Chrome et Safari, puis Country + Pinpoint depuis
-deux ou trois appareils/réseaux différents ; vérifier pins mascottes, zoom molette/pavé
-tactile/pincement, reconnexion et passage hôte. Le `.env.local` reste volontairement branché sur le
-faux Supabase de recette ; ne jamais y recopier une clé du Dashboard. Aucun calque de relief tiers
-ajouté — cette passe teste Liberty seule. Après ces deux recettes, reprendre Ferme Vallée P1 bis.
+**Toujours en attente, sans rapport avec le stock du jour :** le remplacement de la carte OpenFreeMap
+attend toujours le commit/push de Guillaume ; après déploiement, jouer Pinpoint avec OpenFreeMap
+depuis Chrome et Safari, puis Country + Pinpoint depuis deux ou trois appareils/réseaux différents ;
+vérifier pins mascottes, zoom molette/pavé tactile/pincement, reconnexion et passage hôte. Aucun
+calque de relief tiers ajouté — cette passe teste Liberty seule. Après ces deux recettes, reprendre
+Ferme Vallée P1 bis.
 
 **Rappel de ce qui a été livré avant ces correctifs (toujours vrai) :** jeu catalogue ouvert au
 solo et borné à 8 joueurs en ligne ; solo Country Streak (QCM ou recherche dans les 114
@@ -99,8 +78,10 @@ Google Cloud n'a pas été converti en compte payant ; l'unique clé publique es
 **Maps Embed API** et aux seuls référents exacts `http://localhost:3000` et
 `https://arcardi.vercel.app`. Ne jamais activer une offre/API payante ni désactiver le spend cap.
 `npm audit` signale **3 vulnérabilités héritées de Next 14.2.15** (`next` → `postcss` → `nanoid`) ;
-MapLibre n'en ajoute aucune. La correction automatique proposée saute à Next 16 : ne jamais lancer
-`npm audit fix --force`, traiter la migration du framework dans une livraison séparée. Les
+MapLibre n'en ajoute aucune, ni les trois devDependencies du 2026-09-06 (`world-atlas`,
+`topojson-client`, `i18n-iso-countries` — rattachement pays hors ligne, jamais chargées par le jeu,
+voir `tools/import-locations.mjs`). La correction automatique proposée saute à Next 16 : ne jamais
+lancer `npm audit fix --force`, traiter la migration du framework dans une livraison séparée. Les
 contraintes et le pas-à-pas sont dans `components/ousthat/README.md`.
 
 ### PASSIF FERME VALLÉE
