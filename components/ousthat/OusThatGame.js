@@ -14,6 +14,7 @@ import {
 } from "./countries";
 import { LOCATION_BY_ID, MAPS, locationOrder } from "./locations";
 import {
+  CONFIG_LIMITS,
   DEFAULT_CONFIG,
   GAME_ID,
   MAX_PLAYERS,
@@ -24,11 +25,13 @@ import {
   canAcceptAnswer,
   canResolveRound,
   finalDeadline,
+  isUnlimitedRound,
   matchWinners,
   normalizeGuess,
   resetForRematch,
   resolveCountryRound,
   resolveRound,
+  ROUND_SECONDS_UNLIMITED,
   roundMultiplier,
   validateConfig,
 } from "./rules";
@@ -134,13 +137,53 @@ function normalizeSearch(value) {
   return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 }
 
-function ConfigField({ label, unit, value, min, max, step = 1, invalid, onChange }) {
+function ConfigField({ label, unit, value, min, max, step = 1, invalid, dimmed, hint, onChange }) {
   return (
-    <label className={"ot-field" + (invalid ? " invalid" : "")}>
+    <label className={"ot-field" + (invalid ? " invalid" : "") + (dimmed ? " dimmed" : "")}>
       <span>{label}</span>
       <span className="ot-input-wrap">
         <input type="number" value={value} min={min} max={max} step={step} onChange={(event) => onChange(event.target.value)} />
         <small>{unit}</small>
+      </span>
+      {hint && <small className="ot-field-hint">{hint}</small>}
+    </label>
+  );
+}
+
+// Curseur de durée de manche (2026-09-07) : remplace le champ numérique brut
+// par un contrôle continu qui va jusqu'à Illimité en bout de course, plutôt
+// qu'une case à cocher séparée — un seul geste, une seule valeur affichée.
+const ROUND_DURATION_STEP = 10;
+const ROUND_DURATION_INFINITE_SLOT = CONFIG_LIMITS.roundSeconds[1] + ROUND_DURATION_STEP;
+
+function formatRoundSeconds(value, c) {
+  if (value === ROUND_SECONDS_UNLIMITED) return c.unlimited;
+  const minutes = Math.floor(value / 60);
+  const seconds = value % 60;
+  if (!minutes) return `${seconds} ${c.secondsShort}`;
+  if (!seconds) return `${minutes} ${c.min}`;
+  return `${minutes} ${c.min} ${seconds}`;
+}
+
+function RoundDurationField({ label, value, invalid, onChange, c }) {
+  const [min] = CONFIG_LIMITS.roundSeconds;
+  const sliderValue = value === ROUND_SECONDS_UNLIMITED ? ROUND_DURATION_INFINITE_SLOT : value;
+  return (
+    <label className={"ot-field ot-field-slider" + (invalid ? " invalid" : "")}>
+      <span>{label}</span>
+      <span className="ot-slider-wrap">
+        <input
+          type="range"
+          min={min}
+          max={ROUND_DURATION_INFINITE_SLOT}
+          step={ROUND_DURATION_STEP}
+          value={sliderValue}
+          onChange={(event) => {
+            const raw = Number(event.target.value);
+            onChange(raw >= ROUND_DURATION_INFINITE_SLOT ? ROUND_SECONDS_UNLIMITED : raw);
+          }}
+        />
+        <strong className={value === ROUND_SECONDS_UNLIMITED ? "infinite" : ""}>{formatRoundSeconds(value, c)}</strong>
       </span>
     </label>
   );
@@ -374,9 +417,14 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
     stateRef.current = next;
     setState(next);
     if (next.phase === "playing") {
-      const remaining = Number(transport.remainingMs);
+      // transport.remainingMs vaut null pour une manche illimitée (voir
+      // transportFor) : Number(null) === 0 le ferait passer pour "0 ms
+      // restante" au lieu de "aucune échéance" — d'où la vérification de
+      // type AVANT la conversion numérique.
+      const remaining = typeof transport.remainingMs === "number" ? transport.remainingMs : NaN;
       if (Number.isFinite(remaining)) setLocalDeadline(Date.now() + Math.max(0, remaining));
       else if (isHost && currentLimit(next)) setLocalDeadline(currentLimit(next));
+      else setLocalDeadline(null);
     } else setLocalDeadline(null);
     if (next.phase === "countdown") {
       const remaining = Number(transport.countdownMs);
@@ -641,7 +689,10 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
       hostTimerRef.current = setTimeout(() => {
         const current = stateRef.current;
         if (!current || current.phase !== "countdown" || current.roundId !== state.roundId) return;
-        const deadline = Date.now() + current.config.roundSeconds * 1000;
+        // Une manche illimitée part sans échéance (deadline: null) plutôt
+        // qu'avec une échéance lointaine : voir isUnlimitedRound et le garde
+        // équivalent de finalDeadline() dans rules.js.
+        const deadline = isUnlimitedRound(current.config) ? null : Date.now() + current.config.roundSeconds * 1000;
         emitState({ ...current, phase: "playing", countdownAt: null, deadline, finalDeadline: null });
       }, Math.max(0, state.countdownAt - Date.now()));
       return () => clearTimeout(hostTimerRef.current);
@@ -824,8 +875,8 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
               {draftConfig.mode === "country" && <div className="ot-answer-picker"><b>{c.answerMethod}</b><button className={draftConfig.countryInput === "multiple-choice" ? "selected" : ""} onClick={() => setDraftConfig((old) => ({ ...old, countryInput: "multiple-choice" }))}>🚩 {c.multipleChoice}</button><button className={draftConfig.countryInput === "search" ? "selected" : ""} onClick={() => setDraftConfig((old) => ({ ...old, countryInput: "search" }))}>⌕ {c.countrySearch}</button></div>}
               <div className="ot-settings">
                 {draftConfig.mode === "pinpoint" && !setupSolo && <ConfigField label={c.hp} unit={c.points} value={draftConfig.initialHp} min={500} max={30000} invalid={configErrors.includes("initialHp")} onChange={(value) => setDraftConfig((old) => ({ ...old, initialHp: value }))} />}
-                <ConfigField label={c.roundTime} unit={c.seconds} value={draftConfig.roundSeconds} min={20} max={300} invalid={configErrors.includes("roundSeconds")} onChange={(value) => setDraftConfig((old) => ({ ...old, roundSeconds: value }))} />
-                {!setupSolo && <ConfigField label={c.finalTime} unit={c.seconds} value={draftConfig.finalSeconds} min={3} max={60} invalid={configErrors.includes("finalSeconds")} onChange={(value) => setDraftConfig((old) => ({ ...old, finalSeconds: value }))} />}
+                <RoundDurationField label={c.roundTime} value={draftConfig.roundSeconds} invalid={configErrors.includes("roundSeconds")} c={c} onChange={(value) => setDraftConfig((old) => ({ ...old, roundSeconds: value }))} />
+                {!setupSolo && <ConfigField label={c.finalTime} unit={c.seconds} value={draftConfig.finalSeconds} min={3} max={60} invalid={configErrors.includes("finalSeconds")} dimmed={isUnlimitedRound(draftConfig)} hint={isUnlimitedRound(draftConfig) ? c.finalTimeDisabledHint : ""} onChange={(value) => setDraftConfig((old) => ({ ...old, finalSeconds: value }))} />}
                 {draftConfig.mode === "pinpoint" && !setupSolo && <label className="ot-field ot-toggle-field"><span>{c.multipliers}</span><button type="button" className={draftConfig.multipliers ? "on" : ""} onClick={() => setDraftConfig((old) => ({ ...old, multipliers: !old.multipliers }))}><i />{draftConfig.multipliers ? c.enabled : c.disabled}</button></label>}
                 {draftConfig.mode === "pinpoint" && !setupSolo && draftConfig.multipliers && <ConfigField label={c.firstBoost} unit={c.round.toLowerCase()} value={draftConfig.multiplierStartRound} min={2} max={20} invalid={configErrors.includes("multiplierStartRound")} onChange={(value) => setDraftConfig((old) => ({ ...old, multiplierStartRound: value }))} />}
                 {draftConfig.mode === "pinpoint" && !setupSolo && draftConfig.multipliers && <ConfigField label={c.increment} unit="×" value={draftConfig.multiplierIncrement} min={0.1} max={3} step={0.1} invalid={configErrors.includes("multiplierIncrement")} onChange={(value) => setDraftConfig((old) => ({ ...old, multiplierIncrement: value }))} />}
@@ -866,7 +917,7 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
           const scoreLabel = mode === "country" ? `${Number(state.countryScores?.[seat.id] || 0)} ${c.pointsShort}` : solo ? `${state.soloScore.toLocaleString()} / 25 000` : undefined;
           return <PlayerBadge key={seat.id} seat={seat} team={team} maxHp={state.config.initialHp} ready={preparing && !eliminated ? !!state.loaded?.[seat.id] : undefined} answered={!!state.answers?.[seat.id]?.confirmed} active={state.firstConfirmedBy === seat.id} scoreLabel={scoreLabel} eliminated={eliminated} color={SEAT_COLORS[index % SEAT_COLORS.length]} />;
         })}</div>
-        <div className="ot-round-clock"><small>{mode === "country" ? (solo ? `${c.streak} ${state.streak}` : `${c.round} ${state.round}/${MULTI_COUNTRY_ROUNDS}`) : `${c.round} ${state.round}${solo ? `/${SOLO_ROUNDS}` : ` · ×${multiplier.toLocaleString(lang === "en" ? "en-US" : "fr-FR")}`}`}</small><strong className={state.finalDeadline ? "urgent" : ""}>{state.phase === "playing" ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}` : "—:—"}</strong></div>
+        <div className="ot-round-clock"><small>{mode === "country" ? (solo ? `${c.streak} ${state.streak}` : `${c.round} ${state.round}/${MULTI_COUNTRY_ROUNDS}`) : `${c.round} ${state.round}${solo ? `/${SOLO_ROUNDS}` : ` · ×${multiplier.toLocaleString(lang === "en" ? "en-US" : "fr-FR")}`}`}</small><strong className={state.finalDeadline ? "urgent" : ""}>{state.phase === "playing" ? (isUnlimitedRound(state.config) ? "∞" : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`) : "—:—"}</strong></div>
       </header>
 
       {/* Toujours monté, jamais démonté/remonté (2026-09-06, retour de
@@ -896,7 +947,10 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
           2026-09-06) : le moteur accepte déjà location_problem à ces phases
           (canVoidLocation, plus haut) — un panorama qui ne finit jamais de
           charger n'avait sinon aucune échappatoire hors "Retour au salon". */}
-      <div className="ot-corner-actions">{(state.phase === "playing" || preparing) && <button className={reportArmed ? "armed" : ""} title={reportArmed ? c.reportConfirmHint : undefined} onClick={handleReport}>{reportArmed ? c.reportConfirm : c.report}</button>}<button onClick={toggleFullscreen} aria-label={fsActive ? c.exitFullscreen : c.enterFullscreen} title={fsActive ? c.exitFullscreen : c.enterFullscreen}>{fsActive ? "⤡" : "⤢"}</button><button onClick={backToLobby}>{c.lobby}</button></div>
+      {/* Garde-fou (2026-09-07) : une manche Illimité n'a plus AUCUNE échéance
+          qui la termine toute seule — sans ce bouton, un joueur AFK/déconnecté
+          la bloquerait pour toujours (seul "tous confirmés" la résout sinon). */}
+      <div className="ot-corner-actions">{(state.phase === "playing" || preparing) && <button className={reportArmed ? "armed" : ""} title={reportArmed ? c.reportConfirmHint : undefined} onClick={handleReport}>{reportArmed ? c.reportConfirm : c.report}</button>}{isHost && state.phase === "playing" && isUnlimitedRound(state.config) && <button title={c.endRoundHint} onClick={() => hostResolve(state.roundId)}>⏭ {c.endRound}</button>}<button onClick={toggleFullscreen} aria-label={fsActive ? c.exitFullscreen : c.enterFullscreen} title={fsActive ? c.exitFullscreen : c.enterFullscreen}>{fsActive ? "⤡" : "⤢"}</button><button onClick={backToLobby}>{c.lobby}</button></div>
       {notice && <div className="ot-network-note">{notice}</div>}
     </div>
   );

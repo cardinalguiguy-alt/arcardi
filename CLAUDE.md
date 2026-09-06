@@ -10,71 +10,61 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ⚠️⚠️⚠️ **CE BLOC DÉSIGNE UNE SEULE ACTION SUIVANTE. IL SE REMPLACE, IL NE
 S'EMPILE PAS.**
 
-### 🔴 ACTION SUIVANTE — REJOUER EN VRAI (SOURIS RÉELLE) LE PLEIN ÉCRAN ET LE DOCK CARTE, LE RESTE EST DÉJÀ CONFIRMÉ EN JEU
+### 🔴 ACTION SUIVANTE — GUILLAUME JOUE EN VRAI LA NOUVELLE CARTE ET LE CURSEUR DE DURÉE, LE MÉCANISME EST DÉJÀ CONFIRMÉ EN JEU
 
-**Suite de la livraison Où's that du 2026-09-06 (sélecteur de carte + trois bugs graves). Guillaume
-a demandé, dans la foulée : plus de sensibilité sur le zoom de la carte de réponse, un travail sur
-les transitions, camoufler le bandeau du masque d'adresse au lieu de le cacher (« façon dynamic
-island », jugement laissé à Claude), remettre le plein écran qui avait été retiré (« il était cool »)
-en continuant à censurer l'adresse, et refaire le mécanisme de fin de partie en overlay. Fait,
-vérifié par banc et rejoué en jeu (page jetable + `fake-supabase.mjs`, vraie clé Maps Embed, vrai
-OpenFreeMap) — un match complet de bout en bout, revanche comprise.**
+**Livraison du 2026-09-07, demandée par Guillaume en deux volets : (1) une carte de réponse avec
+numéros de route et de meilleurs labels de pays, plus le relief toujours visible ; (2) un meilleur
+outil pour la durée de manche, jusqu'à Illimité. Fait, vérifié par banc et par une vraie session
+dans le navigateur (page jetable + `fake-supabase.mjs`) — pas encore rejoué par Guillaume lui-même.**
 
-1. **Zoom de la carte de réponse, plus sensible.** `GuessMap.js` : `setWheelZoomRate(1/450→1/220)`,
-   `setZoomRate(1/100→1/50)`. Le pan n'a pas été touché (déjà bon selon Guillaume).
-2. **Masque d'adresse, habillage « dynamic island ».** Empreinte (position/taille/dégradé)
-   **inchangée** — c'est elle qui couvre le texte de Google, la retoucher rouvrirait la fuite. Seul
-   l'habillage change : coin arrondi côté panorama, liseré, ombre, glyphe `⌖` à très faible opacité
-   posé loin du coin exact où Google écrit — plus un aplat noir plat.
-3. **Plein écran RÉINTRODUIT, mais RENDU PAR ARCARDI, jamais délégué à l'iframe.** L'ancien
-   `allowFullScreen` laissait Google promouvoir SON iframe seule dans le calque plein écran, hors de
-   portée d'un masque posé en frère dans le DOM (c'est exactement ce que l'audit avait fait retirer).
-   `toggleFullscreen` appelle `requestFullscreen()` sur `ot-arena` elle-même : masque et HUD, en
-   étant des DESCENDANTS de l'élément promu, restent affichés par-dessus à toute taille — « toujours
-   censurer les infos » est donc structurellement garanti, pas juste espéré. ⚠️ **Bug trouvé EN
-   JOUANT, pas en relisant** : un contexte qui refuse le plein écran (Permissions-Policy, iframe sans
-   `allow="fullscreen"`) peut faire lever à `requestFullscreen()` un `TypeError` **synchrone**
-   (« Permissions check failed »), pas seulement rejeter une promesse — sans `try/catch` +
-   `.catch()`, ça cassait tout le jeu React pour un simple bouton de confort. Reproduit dans le
-   sandbox de test (page Next.js elle-même refusait le geste), corrigé, revérifié : plus d'erreur.
-4. **Transitions.** Guillaume a choisi lui-même deux points (« sois juge » pour l'exécution) :
-   changements de phase et manche-à-manche. Le voile de préparation (`ot-panorama-cover`) reste
-   désormais monté en permanence et fond en sortie (classe `.hidden`) au lieu de se démonter net dès
-   `playing`, révélant sinon d'un coup un panorama déjà chargé. Le dock de révélation manche par
-   manche (`ot-reveal-dock`) a maintenant une entrée animée à chaque remontage (`key={roundId}` le
-   remonte réellement à chaque manche, donc l'animation rejoue à chaque fois sans piège de classe
-   qui ne redémarre pas).
-5. **Fin de partie, refaite en overlay.** `FinishedDock` (nouveau, sur le modèle de `RevealDock`)
-   s'incruste désormais sur le DERNIER panorama (voile sombre + carte flottante centrée), au lieu
-   d'une page séparée qui remontait sa propre `.ot-root` — cohérent avec la révélation manche par
-   manche, qui avait déjà quitté ce travers le même jour (2026-09-06). `location` reste celui de la
-   dernière manche (`locationCursor` ne bouge plus une fois `matchComplete`), donc le panorama
-   derrière le voile est le bon.
+1. **Carte de réponse : OpenFreeMap → OpenTopoMap.** `GuessMap.js` n'utilise plus le style vectoriel
+   OpenFreeMap Liberty mais un style MapLibre **raster** minimal pointant vers les tuiles OpenTopoMap
+   (`{a,b,c}.tile.opentopomap.org`) — gratuit, sans compte ni clé, comme l'exigeait déjà le README.
+   Relief (ombrage SRTM) ET numéros de route sont dessinés NATIVEMENT par ce fournisseur ; l'ancien
+   style n'avait ni l'un ni l'autre. Zoom natif jusqu'à 17 (au-delà, MapLibre suréchantillonne la
+   dernière tuile, jamais d'erreur). Attribution (OSM + SRTM + OpenTopoMap CC-BY-SA) posée dans le
+   style et documentée dans `README.md`/`THIRD_PARTY_NOTICES.md`.
+2. **Durée de manche : curseur jusqu'à Illimité, avec un vrai garde-fou.** `rules.js` porte
+   `ROUND_SECONDS_UNLIMITED = 0` (jamais `Infinity`, qui ne survit pas à un `JSON.stringify` —
+   l'état voyage en JSON via le broadcast Realtime et `rooms.game_state`). `RoundDurationField`
+   (nouveau, `OusThatGame.js`) remplace le champ numérique brut par un `<input type="range">` qui va
+   jusqu'à un cran supplémentaire affiché « ∞ Illimité ». `finalDeadline()` et `canAcceptAnswer()`
+   traitent `deadline === null` comme « aucune échéance » (possible uniquement en cours de manche,
+   la phase étant déjà vérifiée) plutôt que de laisser `Number(null) === 0` clôturer la manche à
+   l'instant même — piège trouvé EN ÉCRIVANT le code, pas en le relisant. ⚠️ **Garde-fou ajouté
+   (demande explicite de Guillaume)** : sans échéance, un joueur AFK/déconnecté bloquerait la manche
+   pour toujours (seul « tous confirmés » la résout sinon) — un bouton hôte « Terminer la manche »
+   (`⏭`, dans les actions de coin, visible seulement en manche Illimitée) appelle directement
+   `hostResolve`. Le délai de rush après la première réponse (`finalSeconds`) est désormais
+   réellement désactivé en mode Illimité (grisé + expliqué dans le setup), pour que « sans
+   pression » le reste vraiment jusqu'au bout, même après la première réponse d'un joueur.
 
-**Vérifié, et comment :** `node tools/verify-ousthat.mjs` **85/85** (8 contrôles neufs sur cette
-sous-livraison, dont le piège du `TypeError` synchrone), falsification toujours à **3 échecs**
-(inchangé), `npx next build` vert. Rejoué en jeu un match Pinpoint solo complet (5 manches, revanche
-comprise) : sélecteur de carte, badge du masque et bouton plein écran visibles côte à côte dans le
-coin ; voile de préparation confirmé toujours monté (juste caché) ; dock de révélation confirmé
-remonté à chaque manche ; **fin de partie confirmée en overlay flottant** sur trois largeurs
-(mobile portrait, mobile paysage, bureau) ; revanche depuis l'overlay confirmée fonctionnelle.
+**Vérifié, et comment :** `node tools/verify-ousthat.mjs` **97/97** (11 contrôles neufs sur cette
+livraison), falsification toujours à **3 échecs** (inchangé), `npx next build` vert. Rejoué dans le
+navigateur (page jetable + `fake-supabase.mjs`, vraie clé Maps Embed) : le curseur affiche bien
+« ∞ Illimité » en bout de course, une manche Illimitée lancée montre **∞** au HUD au lieu d'un compte
+à rebours trompeur, le bouton hôte apparaît et résout la manche instantanément sans erreur. La carte
+a été vérifiée à l'œil à trois échelles : le monde entier (relief visible partout), les Alpes (relief
++ pastilles de numéros de route + libellés de villes), et le centre de Varsovie au zoom rue (route
+artérielle en jaune, libellés bilingues « Warszawa Śródmieście / Warsaw City Center », station de
+métro) — sans CORS ni erreur de rendu.
 
-**Non vérifié, assumé comme tel :** le clic RÉEL sur le bouton plein écran n'a pas pu être testé —
-`requestFullscreen()` exige un vrai geste utilisateur, que ce navigateur de test ne fournit pas
-(erreur confirmée : « can only be initiated by a user gesture »). Le CODE est le patron standard
-(bouton → `requestFullscreen()` sur un ref), mais seul un vrai clic de Guillaume confirmera qu'il
-bascule effectivement en plein écran sans rien découvrir. **C'est le seul point qui reste à
-rejouer par Guillaume avant de clore ce sujet.** Idem sensibilité du zoom et dock carte en
-paysage : réglés au jugé, jamais confirmés au doigt sur un vrai téléphone.
+**Non vérifié, assumé comme tel :** aucun clic/glisser RÉEL n'a pu être testé (curseur de durée,
+bouton hôte, nouveau fond de carte) — outils d'automatisation seulement. Recette héritée jamais
+faite et toujours valable, maintenant pour OpenTopoMap comme elle l'était pour OpenFreeMap : jouer
+Pinpoint depuis Chrome et Safari, puis Country + Pinpoint depuis deux ou trois appareils/réseaux
+différents ; vérifier pins mascottes, zoom molette/pavé tactile/pincement, reconnexion et passage
+hôte. Le bouton « Terminer la manche » n'a été déclenché qu'en solo, jamais avec un second joueur
+réellement AFK. Et surtout : le LOOK d'OpenTopoMap (style « carte de randonnée », brun/vert,
+différent du rendu épuré précédent) est un jugement esthétique que seul Guillaume peut trancher en
+jouant — rien ici ne mesure « est-ce que ça plaît ? ». **C'est le point qui reste à rejouer par
+Guillaume avant de clore ce sujet.**
 
 **Configuration :** aucune manipulation Supabase ni Vercel — uniquement du code.
 
-**Toujours en attente, sans rapport avec ce qui précède :** le remplacement de la carte OpenFreeMap
-attend toujours le commit/push de Guillaume ; après déploiement, jouer Pinpoint avec OpenFreeMap
-depuis Chrome et Safari, puis Country + Pinpoint depuis deux ou trois appareils/réseaux différents ;
-vérifier pins mascottes, zoom molette/pavé tactile/pincement, reconnexion et passage hôte. Le tirage
-des lieux reste déséquilibré (France 14,6 %, top 10 = 53,8 %) — jamais touché, Guillaume n'a demandé
-que l'UI. Après ces recettes, reprendre Ferme Vallée P1 bis.
+**Toujours en attente, sans rapport avec ce qui précède :** le tirage des lieux reste déséquilibré
+(France 14,6 %, top 10 = 53,8 %) — jamais touché, Guillaume n'a demandé que l'UI et la carte. Après
+la recette ci-dessus, reprendre Ferme Vallée P1 bis.
 
 ### PASSIF FERME VALLÉE
 

@@ -151,12 +151,15 @@ le même jour.
 ## Fournisseurs et licences
 
 - Panorama : Google Maps Embed API, demandé par identifiant de panorama.
-- Carte de réponse : MapLibre GL JS 4.7.1 et style vectoriel OpenFreeMap Liberty,
-  avec rues, bâtiments, frontières et libellés OpenStreetMap. Le zoom continu
-  accepte pavé tactile, molette, pincement et boutons ; les pins portent les
-  mascottes Arcardi pour les réponses, tandis que le vrai lieu est une épingle
-  verte avec drapeau séparé. OpenFreeMap ne demande ni compte, ni clé, ni moyen
-  de paiement. L'attribution reste visible et aucune tuile n'est préchargée ou
+- Carte de réponse : MapLibre GL JS 4.7.1 avec un style raster minimal pointant
+  vers OpenTopoMap (2026-09-07, remplace le style vectoriel OpenFreeMap
+  Liberty) — relief (ombrage SRTM) ET numéros de route sont dessinés
+  NATIVEMENT par ce fournisseur, ce que le style précédent n'offrait ni l'un
+  ni l'autre. Le zoom continu accepte pavé tactile, molette, pincement et
+  boutons ; les pins portent les mascottes Arcardi pour les réponses, tandis
+  que le vrai lieu est une épingle verte avec drapeau séparé. OpenTopoMap ne
+  demande ni compte, ni clé, ni moyen de paiement. L'attribution (OSM + SRTM +
+  OpenTopoMap, CC-BY-SA) reste visible et aucune tuile n'est préchargée ou
   relayée par Arcardi.
 - Panoramas : 38 enregistrements tirés de la dernière révision WorldGuessr
   encore sous MIT, complétés le 2026-09-06 par la carte personnelle que

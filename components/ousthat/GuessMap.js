@@ -10,7 +10,32 @@ import {
 import { countryFlag } from "./locations";
 import { normalizeGuess } from "./rules";
 
-const OPENFREEMAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
+// OpenTopoMap (2026-09-07, retour de Guillaume) remplace le style vectoriel
+// OpenFreeMap Liberty : relief (ombrage SRTM) ET numéros de route sont
+// dessinés NATIVEMENT par ce fournisseur, contrairement au style épuré
+// précédent qui n'avait ni l'un ni l'autre. Gratuit, sans compte ni clé —
+// mais ce sont des tuiles RASTER (PNG), donc un style MapLibre minimal (une
+// seule source raster) plutôt qu'un style vectoriel complet. Zoom natif
+// jusqu'à 17 : au-delà, MapLibre agrandit la dernière tuile plutôt que
+// d'échouer (plus flou, jamais d'erreur ni de tuile manquante).
+const OPENTOPOMAP_ATTRIBUTION = 'Données : © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributeurs, SRTM · Style : © <a href="https://opentopomap.org" target="_blank" rel="noopener">OpenTopoMap</a> (CC-BY-SA)';
+const OPENTOPOMAP_STYLE = {
+  version: 8,
+  sources: {
+    opentopomap: {
+      type: "raster",
+      tiles: [
+        "https://a.tile.opentopomap.org/{z}/{x}/{y}.png",
+        "https://b.tile.opentopomap.org/{z}/{x}/{y}.png",
+        "https://c.tile.opentopomap.org/{z}/{x}/{y}.png",
+      ],
+      tileSize: 256,
+      maxzoom: 17,
+      attribution: OPENTOPOMAP_ATTRIBUTION,
+    },
+  },
+  layers: [{ id: "opentopomap", type: "raster", source: "opentopomap" }],
+};
 const REVEAL_SOURCE_ID = "ot-reveal-lines";
 const REVEAL_LAYER_ID = "ot-reveal-lines-layer";
 const EMPTY_SEATS = Object.freeze([]);
@@ -85,7 +110,7 @@ function GuessMap({ marker, onChange, locked = false, expanded = false, reveal =
   const revealMarkersRef = useRef([]);
   const [mapError, setMapError] = useState(false);
   // MapLibre peint son propre canevas en blanc tant que le style (fond de
-  // carte OpenFreeMap) n'a pas fini de charger — visible ~1-2 s sur la
+  // carte OpenTopoMap) n'a pas fini de charger — visible ~1-2 s sur la
   // révélation, qui recrée une carte à chaque manche (audit 2026-09-06).
   // Même geste que StreetViewFrame.js (.ot-sv/.loaded) : masqué jusqu'à
   // "load", puis un fondu CSS plutôt qu'un flash.
@@ -102,7 +127,7 @@ function GuessMap({ marker, onChange, locked = false, expanded = false, reveal =
     try {
       map = new MapLibreMap({
         container: rootRef.current,
-        style: OPENFREEMAP_STYLE,
+        style: OPENTOPOMAP_STYLE,
         center: [4, 18],
         zoom: 1.6,
         minZoom: 1.5,
@@ -114,7 +139,7 @@ function GuessMap({ marker, onChange, locked = false, expanded = false, reveal =
     } catch (error) {
       // MapLibre 4 accepte WebGL1 et WebGL2 ; cette sortie évite malgré tout
       // de faire tomber le jeu si l'accélération graphique est désactivée.
-      console.error("OpenFreeMap n’a pas pu initialiser WebGL.", error);
+      console.error("La carte de réponse n’a pas pu initialiser WebGL.", error);
       setMapError(true);
       return;
     }

@@ -6569,6 +6569,13 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
 .ot-settings{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
 .ot-field{ display:flex; min-width:0; flex-direction:column; gap:7px; padding:12px; background:rgba(255,255,255,.035); border:1px solid transparent; border-radius:14px; color:#aeb9d5; font-size:10px; font-weight:800; }
 .ot-field.invalid{ border-color:#ff647d; box-shadow:0 0 0 2px rgba(255,100,125,.1); }
+.ot-field.dimmed{ opacity:.5; }
+.ot-field-hint{ color:#70809f; font-weight:600; }
+.ot-field-slider{ grid-column:1 / -1; }
+.ot-slider-wrap{ display:flex; align-items:center; gap:12px; }
+.ot-slider-wrap input[type="range"]{ flex:1; min-width:0; accent-color:var(--ot-cyan); height:4px; cursor:pointer; }
+.ot-slider-wrap strong{ min-width:92px; text-align:right; color:#fff; font-size:14px; font-weight:900; font-variant-numeric:tabular-nums; }
+.ot-slider-wrap strong.infinite{ color:var(--ot-gold); }
 .ot-input-wrap{ display:flex; align-items:center; gap:7px; }
 .ot-input-wrap input{ width:100%; min-width:0; box-sizing:border-box; border:1px solid var(--ot-line); border-radius:9px; padding:8px 9px; color:#fff; background:#080e21; outline:none; font-size:14px; font-weight:900; }
 .ot-input-wrap input:focus{ border-color:var(--ot-cyan); box-shadow:0 0 0 3px rgba(104,217,255,.1); }

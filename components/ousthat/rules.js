@@ -24,6 +24,12 @@ export const COUNTRY_INPUTS = Object.freeze(["multiple-choice", "search"]);
 // des règles pures, sans dépendre du catalogue de panoramas ni de sa taille.
 export const GAME_MAP_IDS = Object.freeze(["beautiful-world"]);
 
+// Sentinel de durée de manche illimitée (2026-09-07). 0, jamais Infinity :
+// l'état voyage en JSON (broadcast Realtime + rooms.game_state), et
+// JSON.stringify(Infinity) === "null" — indiscernable d'une valeur absente.
+// 0 est un entier ordinaire qui traverse cette tuyauterie sans se transformer.
+export const ROUND_SECONDS_UNLIMITED = 0;
+
 export const DEFAULT_CONFIG = Object.freeze({
   mode: "pinpoint",
   mapId: "beautiful-world",
@@ -45,6 +51,10 @@ export const CONFIG_LIMITS = Object.freeze({
 });
 
 const finite = (value) => Number.isFinite(Number(value));
+
+export function isUnlimitedRound(config) {
+  return Number(config?.roundSeconds) === ROUND_SECONDS_UNLIMITED;
+}
 
 export function normalizeLng(value) {
   const lng = Number(value);
@@ -70,7 +80,10 @@ export function validateConfig(input = {}) {
   for (const key of integerKeys) {
     const n = Number(input[key]);
     const [min, max] = CONFIG_LIMITS[key];
-    if (!Number.isInteger(n) || n < min || n > max) errors.push(key);
+    // roundSeconds a une valeur spéciale en dehors de ses bornes : 0 veut dire
+    // illimité, jamais 0 seconde de manche (voir ROUND_SECONDS_UNLIMITED).
+    const unlimited = key === "roundSeconds" && n === ROUND_SECONDS_UNLIMITED;
+    if (!Number.isInteger(n) || (!unlimited && (n < min || n > max))) errors.push(key);
     else value[key] = n;
   }
   const inc = Number(input.multiplierIncrement);
@@ -110,12 +123,23 @@ export function roundMultiplier(round, config = DEFAULT_CONFIG) {
 }
 
 export function finalDeadline(now, roundDeadline, finalSeconds) {
+  // Une manche illimitée n'a pas d'échéance (roundDeadline === null) : le
+  // délai de rush après la première réponse ne doit alors JAMAIS s'activer,
+  // sinon "illimité" redeviendrait sous pression dès qu'un joueur répond.
+  // Number(null) vaut 0 : sans ce garde, Math.min renverrait 0 (échéance déjà
+  // passée) et clôturerait la manche pour tout le monde à l'instant même.
+  if (roundDeadline === null) return null;
   return Math.min(Number(roundDeadline), Number(now) + Number(finalSeconds) * 1000);
 }
 
 export function canAcceptAnswer({ phase, now, deadline, answer }) {
   if (phase !== "playing") return false;
-  if (!Number.isFinite(now) || !Number.isFinite(deadline) || now > deadline) return false;
+  if (!Number.isFinite(now)) return false;
+  // deadline === null ne peut se produire qu'en cours de manche (le test de
+  // phase ci-dessus l'a déjà garanti) : c'est le signal d'une manche
+  // illimitée, pas d'une manche inexistante. Toute autre valeur non finie
+  // (undefined, NaN) reste refusée.
+  if (deadline !== null && (!Number.isFinite(deadline) || now > deadline)) return false;
   return !answer?.confirmed;
 }
 

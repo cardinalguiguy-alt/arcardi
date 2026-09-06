@@ -64,23 +64,40 @@ package license is shipped in `node_modules/maplibre-gl/LICENSE.txt` after
 installation and is available upstream at
 https://github.com/maplibre/maplibre-gl-js/blob/v4.7.1/LICENSE.txt
 
-## OpenFreeMap
+## OpenTopoMap (2026-09-07, replaces OpenFreeMap)
 
-The detailed vector map uses OpenFreeMap's public Liberty style at
-`https://tiles.openfreemap.org/styles/liberty`. It requires no account or API
-key. OpenFreeMap publishes its server and style code under open-source
-licenses and serves map data derived from OpenStreetMap. Attribution remains
-visible in MapLibre's attribution control:
+The detailed answer map uses OpenTopoMap's public raster tile server
+(`https://{a,b,c}.tile.opentopomap.org/{z}/{x}/{y}.png`), loaded through a
+minimal MapLibre raster style (see `GuessMap.js`) instead of a full vector
+style. It requires no account, API key or payment method. Guillaume chose it
+specifically because it draws relief (hillshading) and road-number shields
+natively, which the previous OpenFreeMap Liberty style did not. OpenTopoMap's
+own cartographic style and rendering are licensed under
+Creative Commons Attribution-ShareAlike 3.0 (CC-BY-SA); the required
+attribution string is kept visible in MapLibre's attribution control:
 
-- https://openfreemap.org/quick_start/
-- https://github.com/hyperknot/openfreemap
+> Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap
+> (CC-BY-SA)
+
+- https://opentopomap.org
+- https://opentopomap.org/about
+- https://opentopomap.org/copyright
 
 ## OpenStreetMap
 
-Map data is provided by OpenStreetMap contributors through OpenFreeMap.
+Map data is provided by OpenStreetMap contributors through OpenTopoMap.
 Attribution is kept visible in the MapLibre control. OpenStreetMap data is
 available under the Open Database License:
 https://www.openstreetmap.org/copyright
+
+## SRTM elevation data
+
+The relief/hillshading drawn by OpenTopoMap is derived from the Shuttle Radar
+Topography Mission (SRTM), a NASA/NGA dataset. No elevation data is
+downloaded, stored or processed by Arcardi: the browser only requests
+finished PNG tiles from OpenTopoMap, which already bakes the hillshading in.
+Attribution is included in the string above, per OpenTopoMap's own
+requirement.
 
 ## Google Maps Embed
 

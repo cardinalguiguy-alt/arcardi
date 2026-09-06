@@ -109,6 +109,17 @@ ok("une manche ne peut être résolue qu'une fois et avec le bon identifiant", R
 const rematch = R.resetForRematch({ config: R.DEFAULT_CONFIG, teams, result: { old: true }, winnerTeamId: "t1", retry: 4 }, ["a", "b"], "match-2");
 ok("la revanche garde les règles mais remet PV, manche et réponses à zéro", rematch.phase === "preparing" && rematch.round === 1 && rematch.retry === 0 && rematch.roundId === "match-2:1:0" && rematch.teams.every((team) => team.hp === 6000) && Object.keys(rematch.answers).length === 0 && rematch.winnerTeamId === null);
 
+section("durée de manche Illimitée (2026-09-07) — règles pures");
+// Sentinel choisi précisément pour survivre à la tuyauterie JSON du jeu
+// (broadcast Realtime + rooms.game_state) : Infinity y serait devenu null,
+// indiscernable d'une valeur absente — voir ROUND_SECONDS_UNLIMITED.
+ok("le sentinel d'illimité est un nombre fini ordinaire, jamais Infinity (qui ne survit pas à un JSON.stringify)", Number.isFinite(R.ROUND_SECONDS_UNLIMITED) && JSON.parse(JSON.stringify({ v: Infinity })).v === null);
+ok("0 est un roundSeconds valide : durée illimitée, conservée telle quelle", R.validateConfig({ ...R.DEFAULT_CONFIG, roundSeconds: R.ROUND_SECONDS_UNLIMITED }).ok && R.validateConfig({ ...R.DEFAULT_CONFIG, roundSeconds: R.ROUND_SECONDS_UNLIMITED }).value.roundSeconds === R.ROUND_SECONDS_UNLIMITED);
+ok("un roundSeconds sous 20 mais différent du sentinel reste refusé", !R.validateConfig({ ...R.DEFAULT_CONFIG, roundSeconds: 5 }).ok);
+ok("isUnlimitedRound reconnaît le sentinel, jamais une vraie petite valeur ni une config absente", R.isUnlimitedRound({ roundSeconds: 0 }) && !R.isUnlimitedRound({ roundSeconds: 20 }) && !R.isUnlimitedRound(undefined));
+ok("une échéance nulle en cours de manche n'empêche plus les réponses (manche illimitée), mais la phase reste vérifiée", R.canAcceptAnswer({ phase: "playing", now: 999999999, deadline: null, answer: null }) && !R.canAcceptAnswer({ phase: "setup", now: 1, deadline: null, answer: null }));
+ok("le délai final ne s'active jamais sur une manche sans échéance", R.finalDeadline(10_000, null, 15) === null);
+
 section("sélection mondiale");
 // Depuis le 2026-09-06 le stock mélange les 38 lieux WorldGuessr et la carte
 // personnelle de Guillaume (~1500 lieux après déduplication, panoId et pays
@@ -175,10 +186,18 @@ ok("le signalement de panorama passe par le thème du jeu, jamais par un window.
 ok("Pinpoint exige WebGL avant de pouvoir lancer la partie, pas seulement la clé Maps", game.includes("function supportsWebGL") && /disabled=\{!hasEmbedKey \|\| !state\.seats\.length \|\| \(draftConfig\.mode === "pinpoint" && !hasWebGL\)\}/.test(game));
 ok("la carte de réponse se rétracte sans perdre son composant et le vrai point porte une épingle avec drapeau séparé", game.includes('mapOpen ? "open" : "collapsed"') && game.includes('className="ot-map-peek"') && game.includes("countryFlag(revealTarget?.country)") && map.includes("countryFlag(reveal.target.country)") && map.includes('kind === "target"') && map.includes('flag.className = "ot-map-target-flag"') && /\.ot-map-marker\.target\{[^}]*width:58px/.test(css) && /\.ot-map-target-flag\{/.test(css));
 ok("Google reçoit un pano ou une coordonnée de repli, une orientation, sans clé copiée", frame.includes('params.set("pano", location.panoId)') && frame.includes('params.set("location", ') && frame.includes('heading: String(location.heading)') && frame.includes('referrerPolicy="strict-origin-when-cross-origin"') && frame.includes('process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY') && !/AIza[0-9A-Za-z_-]{30,}/.test(frame));
-ok("la carte détaillée utilise OpenFreeMap sans clé et garde les interactions fluides", map.includes("https://tiles.openfreemap.org/styles/liberty") && map.includes("new AttributionControl") && map.includes("setWheelZoomRate") && map.includes("setZoomRate") && !/api[_-]?key|access[_-]?token/i.test(map));
+ok("la carte détaillée utilise OpenTopoMap sans clé et garde les interactions fluides", map.includes("tile.opentopomap.org") && map.includes("new AttributionControl") && map.includes("setWheelZoomRate") && map.includes("setZoomRate") && !/api[_-]?key|access[_-]?token/i.test(map));
+ok("le style OpenTopoMap est un raster minimal, avec attribution OSM+SRTM et relief/routes natifs documentés", map.includes('type: "raster"') && map.includes("OPENTOPOMAP_ATTRIBUTION") && notice.includes("OpenTopoMap") && notice.includes("SRTM") && /CC-BY-SA/.test(notice));
 ok("le pin de réponse et les pins de révélation portent les mascottes Arcardi", game.includes("avatar={mySeat?.avatar}") && game.includes("seats={state.seats}") && map.includes('seat?.avatar || "🧭"'));
 ok("le temps de round configurable pilote l'échéance hôte partagée", /roundSeconds:\s*\[20,\s*300\]/.test(fs.readFileSync(path.join(ROOT, "components", "ousthat", "rules.js"), "utf8")) && game.includes("current.config.roundSeconds * 1000") && game.includes("remainingMs"));
 ok("la provenance reste bornée à la dernière révision MIT", notice.includes("ef88928c03a70d77ce5a1c86fddf74814ff67fc7") && /PolyForm\s+Noncommercial/.test(notice) && notice.includes("No code or data introduced after"));
+
+section("durée de manche Illimitée (2026-09-07) — branchements");
+ok("le début de manche part sans échéance quand la durée est illimitée", game.includes("isUnlimitedRound(current.config)"));
+ok("l'hôte dispose d'un bouton pour terminer une manche illimitée bloquée (garde-fou AFK)", game.includes("c.endRound") && /isHost && state\.phase === "playing" && isUnlimitedRound\(state\.config\)/.test(game) && game.includes("hostResolve(state.roundId)"));
+ok("le réglage de durée devient un curseur qui va jusqu'à Illimité, plutôt qu'un champ nu", game.includes("ROUND_DURATION_INFINITE_SLOT") && game.includes('type="range"') && game.includes("RoundDurationField"));
+ok("le HUD affiche ∞ en manche illimitée au lieu d'un compte à rebours trompeur", /isUnlimitedRound\(state\.config\) \? "∞"/.test(game));
+ok("le délai final se grise et s'explique dans le setup quand la durée est illimitée", game.includes("finalTimeDisabledHint") && game.includes("dimmed={isUnlimitedRound(draftConfig)}"));
 
 section("audit 2026-09-06 — masque Google, signalement et cartes");
 ok("l'iframe Street View n'a plus allowFullScreen et sort de la navigation Tab", !/^\s*allowFullScreen\b/m.test(frame) && /tabIndex=\{-1\}/.test(frame));
