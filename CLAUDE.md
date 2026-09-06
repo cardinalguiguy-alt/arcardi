@@ -10,36 +10,70 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ⚠️⚠️⚠️ **CE BLOC DÉSIGNE UNE SEULE ACTION SUIVANTE. IL SE REMPLACE, IL NE
 S'EMPILE PAS.**
 
-### 🔴 ACTION SUIVANTE — REJOUER LES CORRECTIFS P0 « OÙ'S THAT ? », PUIS RECETTER OPENFREEMAP ET LE MULTI
+### 🔴 ACTION SUIVANTE — REJOUER P0 + P1 + LA PASSE MOBILE « OÙ'S THAT ? », PUIS RECETTER OPENFREEMAP ET LE MULTI
 
 **Le 2026-09-06, un audit (Codex puis Claude, en jouant réellement — page jetable +
-`fake-supabase.mjs`, pas en relisant le code) a trouvé quatre défauts qui cassaient le jeu, tous
-corrigés le jour même :**
-- **Pinpoint donnait la réponse.** Le masque d'adresse Google n'existait qu'en mode Pays ; en
-  Pinpoint — le seul mode où ignorer sa position est tout le jeu — le lien Google « Afficher dans
-  Google Maps » restait visible et cliquable toute la manche. Masqué dans les deux modes
-  désormais, opacité pleine (l'ancien dégradé partiellement transparent pouvait laisser un reste de
-  texte visible).
-- **2 des 40 panoramas ne répondaient plus chez Google** (Tchéquie, Bolivie) : la manche démarrait
-  quand même, chrono en marche, sur un écran noir « Aucune image Street View disponible » — message
-  de Google, pas d'Arcardi. Retirés (38 restants, rien ajouté au catalogue MIT). ⚠️ Aucun code ne
-  peut détecter ça à l'exécution (iframe cross-origin, voir §4) : seule une revue manuelle
-  périodique du catalogue protège de la prochaine perte de couverture Google.
-- **Aucune vérification WebGL avant de lancer Pinpoint** : un joueur sans accélération graphique
-  démarrait une partie où il ne pourrait jamais poser de point. Le bouton "Jouer" le bloque
-  désormais, même avertissement que la clé Maps manquante.
-- **Le signalement d'un panorama mort passait par un `window.confirm()` natif** (hors thème,
-  bloquait l'automatisation de test) : remplacé par un bouton à deux clics dans le thème du jeu.
+`fake-supabase.mjs`, pas en relisant le code) a trouvé quatre défauts qui cassaient le jeu (P0,
+corrigés le matin) ; l'après-midi, sur feu vert explicite de Guillaume (« attaque le P1, découpe-le
+comme tu veux »), Claude a livré la sensation GeoGuessr qui manquait (P1) ; en fin de journée, sur
+consigne large de Guillaume (« paufine la fabrication générale, mais les overlays ne doivent pas
+être trop invasifs »), une troisième passe — toujours en jouant, cette fois sur un viewport mobile
+émulé — a trouvé trois défauts invisibles sur desktop (détail plus bas) :**
+
+**P0 — sécurité/disponibilité :** masque d'adresse Google étendu au Pinpoint (il n'existait qu'en
+mode Pays ; en Pinpoint le lien « Afficher dans Google Maps » posait la réponse exacte) et son
+opacité passée à pleine ; 2 des 40 panoramas retirés (Tchéquie, Bolivie — Google ne les sert plus,
+`onLoad` d'iframe se déclenchait quand même, voir §4) ; garde WebGL avant de lancer Pinpoint ;
+signalement d'un panorama mort passé d'un `window.confirm()` natif à un bouton à deux clics dans le
+thème.
+
+**P1 — la révélation ne coupe plus le panorama :** ancien écran séparé (`ot-reveal-root`) qui
+démontait `<StreetViewFrame>` à chaque manche, remplacé par `RevealDock` — une incrustation repliable
+posée SUR le panorama toujours monté (`OusThatGame.js`), avec le même patron replié/déplié que la
+carte Pinpoint et le nouveau panneau Pays. Le panneau Pays (`CountryPicker`) est lui-même devenu
+repliable, replié par défaut, ouvert au survol (desktop) ou au clic (tactile), refermé tout seul dès
+la réponse verrouillée — retour direct de Guillaume en cours d'audit (« très masquant, devrait être
+rétractable et réagir au hover »). Le dock de carte Pinpoint et le nouveau dock de révélation sont
+décalés à `right:82px` plutôt que `14px` : la boussole et le zoom natifs de Google occupent déjà ce
+coin, les coller dessous les faisait lire comme un bouton de plus dans la même pile. Le survol final
+de la carte de révélation (`GuessMap.js`) est passé de `duration:0` (saut sec) à un travelling animé
+de 1,1 s. L'écran de fin de MATCH (`state.phase === "finished"`, pas manche par manche) garde son
+plein écran d'origine, sans changement — il n'y a plus de manche suivante à voir arriver, la prise
+plein écran y reste justifiée.
+
+**Passe mobile — trois défauts trouvés en rejouant sur un viewport 375 px émulé, aucun visible sur
+desktop :** les aria-label des deux nouveaux docks repliables (`CountryPicker`, `RevealDock`)
+réutilisaient telles quelles les chaînes du VRAI dock de carte Pinpoint (`c.openMap`/`c.closeMap`/
+`c.shrink`, « …la carte ») — un lecteur d'écran l'annonçait même sur le panneau Pays et sur la
+révélation en mode Pays, qui n'ont jamais de carte du tout. Deux chaînes génériques ajoutées
+(`openPanel`/`closePanel`, `strings.js`) et les quatre usages corrigés (`OusThatGame.js`). Sur
+mobile, la bulle repliée du dock de révélation (220 px) et celle du panneau Pays (198 px, centrée)
+débordaient jusque sous `.ot-corner-actions` (signaler un panorama mort, retour au salon — ancré en
+bas à gauche) : mesuré au pixel (`getBoundingClientRect`), les deux boutons se recouvraient
+vraiment, pas seulement à l'œil. Remonté à `bottom:80px` dans le bloc `@media (max-width:800px)` de
+`globals.css`, desktop inchangé. Et sans rapport avec les docks du jour : `.ot-final-alert`/
+`.ot-locked-toast` (« premier verrouillé », « réponse verrouillée ») utilisaient
+`max-width:calc(100vw - 500px)` — négatif sur tout viewport sous 500 px, donc ramené à `0` par le
+moteur : ces deux bulles étaient invisibles sur téléphone depuis toujours, dans les deux modes, pas
+seulement depuis le P1 du matin. Corrigé en `min(420px, 100vw - 32px)`.
+
+**Non fait, et volontairement laissé pour une prochaine passe :** la carte de révélation Pinpoint
+recrée encore MapLibre de zéro à chaque manche (deux montages React distincts, un pour deviner, un
+pour révéler) — le panorama reste visible pendant ce remontage désormais, donc le défaut le plus
+gênant est réglé, mais le coût réseau et le flash de rechargement restent entiers. Partager UNE
+seule instance de carte entre deviner et révéler est le chantier suivant si on continue sur ce fil.
 
 `tools/verify-ousthat.mjs` **60/60** ; falsification toujours à **3 échecs** ; `verify-portee`
-vert ; `npm run build` vert (seul avertissement préexistant `G_SOIL`).
+vert (109 fichiers, 138 452 références) ; `npm run build` vert (seul avertissement préexistant
+`G_SOIL`) — les trois chiffres ci-dessus relancés le 2026-09-06 en fin de journée, pas recopiés du
+matin. Testé en jouant (page jetable + `fake-supabase.mjs`) : Pinpoint solo jusqu'à la révélation
+avec repli/dépli du dock, Country Streak solo jusqu'au bout de la série avec repli/dépli du panneau
+Pays, écran de fin de match. La passe mobile a été rejouée en Country/Pinpoint solo sur un viewport
+375 px émulé DANS LE NAVIGATEUR (`resize_window`, jamais un vrai téléphone), collisions mesurées au
+pixel avant/après correctif. Pas rejoué en multi, pas rejoué sur un vrai appareil.
 
-**Non fait : aucune de ces quatre corrections n'a encore été rejouée par Guillaume**, et le fond de
-l'audit reste entier — seule la sécurité/disponibilité a été traitée aujourd'hui. La sensation
-GeoGuessr (révélation qui coupe le panorama au lieu de le garder visible dessous, carte de
-révélation qui remonte MapLibre de zéro au lieu de réutiliser celle du jeu, aucun survol animé,
-panneau Pays plaqué à l'écran plutôt que rétractable) reste tout un chantier P1, à livrer par petits
-morceaux (§2 : ne pas mêler deux changements visuels dans la même livraison).
+**Non fait : rien de tout ça (P0, P1, ni la passe mobile) n'a encore été rejoué par Guillaume — et
+la passe mobile n'a jamais été vue sur un vrai téléphone, seulement émulée.**
 
 **Toujours en attente, sans rapport avec les correctifs du jour :** « Où's that ? » reste déployé et
 jouable en production, mais le remplacement de sa carte attend le commit/push de Guillaume. Après
@@ -368,6 +402,12 @@ dépôt.
   qui écrasait un `position:fixed`). ⚠️ **Et rien dans ce dépôt ne peut l'attraper** : les
   vingt-deux bancs de rendu rastérisent du canevas, aucun ne met en page du CSS. *Toute la mise en
   page se juge à l'écran ou ne se juge pas* — corollaire direct du §10.
+- ⚠️⚠️ **UN `max-width:calc(100vw − Npx)` SUPPOSE UN VIEWPORT LARGE, ET DEVIENT NÉGATIF EN DESSOUS —
+  LE MOTEUR RAMÈNE ALORS LA VALEUR À 0, SANS ERREUR** (Où's that ?, 2026-09-06). Une bulle réglée
+  pour rester étroite sur un écran large (`calc(100vw - 500px)`) devient invisible sur tout
+  viewport plus étroit que la constante soustraite — c'est-à-dire tous les téléphones — et rien ne
+  le signale : la règle est valide, juste toujours à zéro. La parade est `min(Npx, calc(100vw -
+  margePx))` : un plafond ferme plutôt qu'une soustraction qui peut changer de signe.
 - ⚠️⚠️ **UN BANC QUI CHERCHE UN NOM D'APPEL MESURE UNE ÉCRITURE, PAS UN AFFICHAGE** (2026-09-02).
   `verify-quete` déclare morte toute phrase du maire qu'aucun fichier ne lit — il les cherchait par
   `L.maire.<clé>`. Le jour où les appels sont devenus `LM.` et `maireL().` (le texte se décline

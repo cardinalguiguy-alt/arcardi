@@ -6606,7 +6606,11 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
 .ot-countdown{ font-family:'Bungee'; font-size:min(30vw,170px); color:var(--ot-gold); line-height:1; text-shadow:0 0 55px rgba(255,202,95,.45); animation:otCount .75s cubic-bezier(.2,.8,.2,1); }
 @keyframes otCount{ from{ opacity:0; transform:scale(1.4); } }
 
-.ot-map-dock{ position:absolute; z-index:9; right:14px; bottom:14px; width:58px; height:58px; display:block; overflow:hidden; border:1px solid rgba(220,235,255,.25); border-radius:50%; background:var(--ot-panel); box-shadow:0 22px 70px rgba(0,0,0,.48); backdrop-filter:blur(12px); transition:inset .24s ease,width .24s ease,height .24s ease,border-radius .24s ease,box-shadow .2s ease; }
+/* right:82px, pas 14px : la boussole et le zoom natifs de Google occupent déjà
+   la colonne du bord droit (§ audit 2026-09-06) — coller notre bulle dessous
+   la faisait lire comme un quatrième bouton de la même pile plutôt que
+   comme un contrôle Arcardi distinct. */
+.ot-map-dock{ position:absolute; z-index:9; right:82px; bottom:14px; width:58px; height:58px; display:block; overflow:hidden; border:1px solid rgba(220,235,255,.25); border-radius:50%; background:var(--ot-panel); box-shadow:0 22px 70px rgba(0,0,0,.48); backdrop-filter:blur(12px); transition:inset .24s ease,width .24s ease,height .24s ease,border-radius .24s ease,box-shadow .2s ease; }
 .ot-map-dock.open{ width:min(450px,42vw); height:min(390px,50vh); display:grid; grid-template-rows:auto 1fr auto; border-radius:20px; }
 .ot-map-dock.expanded{ position:fixed; inset:clamp(72px,9vh,104px) clamp(18px,4vw,56px) clamp(18px,4vh,42px); width:auto; height:auto; z-index:14; border-radius:24px; }
 .ot-map-peek{ position:absolute; inset:0; z-index:3; display:grid; place-items:center; border:0; border-radius:50%; color:#fff; background:radial-gradient(circle at 35% 28%,#25476d,#091226 72%); cursor:pointer; transition:opacity .16s ease,transform .2s ease,box-shadow .2s ease; }.ot-map-peek:hover{ transform:scale(.96); box-shadow:inset 0 0 0 2px rgba(104,217,255,.35); }.ot-map-peek span{ font-size:25px; filter:drop-shadow(0 3px 5px rgba(0,0,0,.35)); }.ot-map-peek i{ position:absolute; right:1px; top:1px; display:grid; place-items:center; width:18px; height:18px; border:2px solid #081020; border-radius:50%; color:#07101d; background:#62e7af; font-size:9px; font-style:normal; font-weight:1000; }.ot-map-dock.open .ot-map-peek{ opacity:0; transform:scale(.72); pointer-events:none; }
@@ -6626,7 +6630,12 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
 .ot-map-marker.target{ --pin-color:#ff647d; }.ot-map-marker.target .ot-map-pin-avatar{ font-size:21px; }
 .ot-map-actions{ display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px 10px; border-top:1px solid var(--ot-line); }.ot-map-actions>span{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#8c99b5; font-size:8px; font-variant-numeric:tabular-nums; }.ot-map-actions .ot-btn{ min-height:36px; padding:7px 11px; font-size:9px; }
 .ot-corner-actions{ position:absolute; z-index:10; left:12px; bottom:12px; display:flex; flex-direction:column; align-items:flex-start; gap:5px; }.ot-corner-actions button{ border:1px solid rgba(255,255,255,.16); border-radius:9px; padding:7px 9px; color:#d2d9e9; background:rgba(6,10,23,.7); backdrop-filter:blur(8px); cursor:pointer; font-size:8px; transition:background .15s ease,border-color .15s ease,color .15s ease; }.ot-corner-actions button.armed{ border-color:rgba(255,142,110,.7); color:#ffd9cd; background:rgba(120,42,30,.75); }
-.ot-final-alert,.ot-locked-toast{ position:absolute; z-index:10; left:50%; transform:translateX(-50%); bottom:20px; max-width:calc(100vw - 500px); padding:9px 13px; border-radius:99px; font-size:9px; font-weight:900; background:rgba(8,13,29,.88); border:1px solid rgba(255,202,95,.35); box-shadow:0 8px 25px rgba(0,0,0,.4); }
+/* min(420px, 100vw - 32px), pas calc(100vw - 500px) : sur un viewport sous
+   500px (tous les mobiles) l'ancienne formule tombait négative, et un
+   max-width négatif est repris à 0 par le moteur — la bulle « premier
+   verrouillé »/« réponse verrouillée » y était donc invisible depuis
+   toujours, sur les deux modes (§ audit 2026-09-06 bis). */
+.ot-final-alert,.ot-locked-toast{ position:absolute; z-index:10; left:50%; transform:translateX(-50%); bottom:20px; max-width:min(420px,calc(100vw - 32px)); padding:9px 13px; border-radius:99px; font-size:9px; font-weight:900; background:rgba(8,13,29,.88); border:1px solid rgba(255,202,95,.35); box-shadow:0 8px 25px rgba(0,0,0,.4); }
 .ot-locked-toast{ color:#a7f0d1; border-color:rgba(98,231,175,.35); }.ot-network-note{ position:absolute; z-index:15; top:90px; left:50%; transform:translateX(-50%); padding:8px 12px; border-radius:10px; color:#ffe0a0; background:rgba(40,28,8,.88); border:1px solid rgba(255,202,95,.3); font-size:9px; }
 
 .ot-reveal-root{ overflow:auto; padding:clamp(18px,3vw,42px); box-sizing:border-box; background:radial-gradient(circle at 50% -20%,#1c3e65,#070b19 56%); }
@@ -6659,8 +6668,39 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
 .ot-player.eliminated{ opacity:.48; filter:grayscale(.8); }.ot-player.eliminated .ot-player-copy small::before{ content:"☠ "; }
 .ot-google-place-mask{ position:absolute; z-index:6; top:0; left:0; width:min(370px,78vw); height:96px; pointer-events:none; background:linear-gradient(135deg,#040714 0%,#040714 80%,transparent); }
 
-.ot-country-picker{ position:absolute; z-index:9; left:50%; bottom:14px; transform:translateX(-50%); width:min(760px,calc(100vw - 28px)); box-sizing:border-box; padding:15px; border:1px solid rgba(220,235,255,.25); border-radius:21px; background:rgba(6,11,26,.91); box-shadow:0 24px 80px rgba(0,0,0,.55); backdrop-filter:blur(16px) saturate(1.2); }
-.ot-country-title{ display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin-bottom:11px; }.ot-country-title h2{ font-family:'Bungee'; font-size:clamp(15px,2.5vw,23px); }
+.ot-country-picker{ position:absolute; z-index:9; left:50%; bottom:14px; transform:translateX(-50%); width:min(760px,calc(100vw - 28px)); height:min(460px,66vh); overflow:hidden; box-sizing:border-box; padding:15px; border:1px solid rgba(220,235,255,.25); border-radius:21px; background:rgba(6,11,26,.91); box-shadow:0 24px 80px rgba(0,0,0,.55); backdrop-filter:blur(16px) saturate(1.2); transition:width .24s ease,height .24s ease,border-radius .24s ease,padding .24s ease,box-shadow .2s ease; }
+.ot-country-picker.open{ overflow-y:auto; }
+.ot-country-picker.collapsed{ width:198px; height:56px; padding:0; border-radius:28px; cursor:pointer; }
+.ot-country-picker.collapsed>.ot-country-title,.ot-country-picker.collapsed>.ot-country-choices,.ot-country-picker.collapsed>.ot-country-search,.ot-country-picker.collapsed>.ot-country-submit{ visibility:hidden; pointer-events:none; }
+.ot-country-peek{ position:absolute; inset:0; z-index:3; display:flex; align-items:center; justify-content:center; gap:8px; border:0; border-radius:28px; color:#eef4ff; background:radial-gradient(circle at 30% 24%,#25476d,#091226 74%); cursor:pointer; font-size:11px; font-weight:700; opacity:0; pointer-events:none; transition:opacity .16s ease,transform .2s ease; }
+.ot-country-peek span{ font-size:24px; flex:none; filter:drop-shadow(0 3px 5px rgba(0,0,0,.35)); }
+.ot-country-peek b{ min-width:0; max-width:118px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ot-country-peek i{ position:absolute; right:10px; top:10px; display:grid; place-items:center; width:16px; height:16px; border:2px solid #081020; border-radius:50%; color:#07101d; background:#62e7af; font-size:8px; font-style:normal; font-weight:1000; }
+.ot-country-picker.collapsed .ot-country-peek{ opacity:1; pointer-events:auto; }
+.ot-country-picker.collapsed .ot-country-peek:hover{ transform:scale(.97); }
+.ot-country-title{ position:relative; display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin-bottom:11px; padding-right:32px; }.ot-country-title h2{ font-family:'Bungee'; font-size:clamp(15px,2.5vw,23px); }
+.ot-country-collapse{ position:absolute; right:0; top:-2px; width:26px; height:26px; border:1px solid var(--ot-line); border-radius:8px; color:#fff; background:rgba(255,255,255,.06); cursor:pointer; font-size:13px; line-height:1; }
+
+/* Révélation incrustée sur le panorama toujours monté (2026-09-06), même
+   patron replié/déplié que le dock de carte et le panneau Pays. right:82px
+   pour la même raison que .ot-map-dock : la boussole et le zoom natifs de
+   Google restent visibles derrière, et occupent déjà ce coin. */
+.ot-reveal-dock{ position:absolute; z-index:11; right:82px; bottom:14px; width:220px; height:58px; overflow:hidden; box-sizing:border-box; padding:0; border:1px solid rgba(220,235,255,.25); border-radius:29px; background:rgba(6,11,26,.94); box-shadow:0 24px 80px rgba(0,0,0,.55); backdrop-filter:blur(16px) saturate(1.2); transition:width .24s ease,height .24s ease,border-radius .24s ease,padding .24s ease; }
+.ot-reveal-dock.open{ width:min(480px,44vw); height:min(600px,78vh); padding:16px; border-radius:22px; overflow-y:auto; display:flex; flex-direction:column; gap:10px; }
+.ot-reveal-dock.collapsed>*:not(.ot-reveal-peek){ visibility:hidden; pointer-events:none; }
+.ot-reveal-peek{ position:absolute; inset:0; z-index:3; display:flex; align-items:center; justify-content:center; gap:8px; border:0; border-radius:29px; color:#eef4ff; background:radial-gradient(circle at 30% 24%,#2d5a3f,#091226 74%); cursor:pointer; font-size:12px; font-weight:800; opacity:0; pointer-events:none; transition:opacity .16s ease,transform .2s ease; }
+.ot-reveal-dock.country .ot-reveal-peek{ background:radial-gradient(circle at 30% 24%,#25476d,#091226 74%); }
+.ot-reveal-peek span{ font-size:22px; flex:none; filter:drop-shadow(0 3px 5px rgba(0,0,0,.35)); }
+.ot-reveal-dock.collapsed .ot-reveal-peek{ opacity:1; pointer-events:auto; }
+.ot-reveal-dock.collapsed .ot-reveal-peek:hover{ transform:scale(.97); }
+.ot-reveal-dock-head{ position:relative; display:flex; align-items:flex-end; justify-content:space-between; gap:12px; flex:none; padding-right:32px; }.ot-reveal-dock-head h2{ font-family:'Bungee'; font-size:clamp(14px,2vw,19px); }
+.ot-reveal-dock .ot-score-burst,.ot-reveal-dock .ot-damage-burst{ flex:none; }
+.ot-reveal-dock .ot-score-burst strong,.ot-reveal-dock .ot-damage-burst strong{ font-size:clamp(24px,3.4vw,36px); }
+.ot-reveal-dock .ot-country-target{ flex:none; }
+.ot-reveal-dock .ot-reveal-map{ flex:none; position:relative; min-height:220px; height:38vh; max-height:320px; overflow:hidden; border:1px solid var(--ot-line); border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.35); }
+.ot-reveal-streak{ flex:none; padding:8px 12px; border-radius:99px; font-size:10px; font-weight:900; }.ot-reveal-streak.correct{ color:#9ff2cf; background:rgba(98,231,175,.1); }.ot-reveal-streak.wrong{ color:#ff9eb0; background:rgba(255,100,125,.1); }
+.ot-reveal-dock .ot-scoreboard{ flex:none; }
+.ot-reveal-dock .ot-reveal-actions{ flex:none; margin-top:0; }
 .ot-country-choices{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
 .ot-country-choices>button{ min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; min-height:94px; padding:9px; border:1px solid var(--ot-line); border-radius:14px; color:#eef4ff; background:rgba(255,255,255,.045); cursor:pointer; transition:transform .14s ease,border-color .14s ease,background .14s ease; }
 .ot-country-choices>button:hover:not(:disabled){ transform:translateY(-2px); border-color:rgba(104,217,255,.6); }.ot-country-choices>button.selected{ border-color:var(--ot-gold); background:rgba(255,202,95,.14); box-shadow:inset 0 0 0 1px rgba(255,202,95,.22); }
@@ -6682,7 +6722,15 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
 
 @media (max-width:800px){
   .ot-settings{ grid-template-columns:1fr 1fr; }
-  .ot-map-dock{ right:10px; bottom:10px; }.ot-map-dock.open{ width:calc(100vw - 20px); height:min(39vh,340px); }
+  .ot-map-dock{ right:76px; bottom:10px; }.ot-map-dock.open{ width:calc(100vw - 20px); height:min(39vh,340px); right:10px; }
+  .ot-reveal-dock{ right:76px; bottom:10px; }.ot-reveal-dock.open{ width:calc(100vw - 20px); height:min(72vh,560px); right:10px; }.ot-reveal-dock .ot-reveal-map{ height:30vh; min-height:180px; }
+  /* Sur un viewport étroit, la bulle repliée du dock de révélation (220px)
+     et celle du panneau Pays (198px, centrée) débordent jusque sous
+     ot-corner-actions (bottom:12px, ancré à gauche) : les deux boutons se
+     recouvrent visuellement (§ audit 2026-09-06 bis, joué sur mobile). On
+     remonte le coin plutôt que de rétrécir chaque bulle : ça vaut pour les
+     deux docks, quel que soit leur contenu ou la langue du bouton. */
+  .ot-corner-actions{ bottom:80px; }
   .ot-hud{ top:max(6px,env(safe-area-inset-top)); width:calc(100vw - 12px); gap:3px; padding:5px; }
   .ot-hud.ot-hud-many{ width:calc(100vw - 12px); }.ot-player-strip .ot-player{ flex-basis:112px; }
   .ot-player{ padding:3px; gap:1px 4px; }.ot-player-avatar{ font-size:19px; }.ot-player-copy b{ font-size:9px; }.ot-player-copy small{ font-size:7px; }.ot-round-clock{ min-width:67px; }.ot-round-clock strong{ font-size:20px; }.ot-round-clock small{ font-size:7px; }

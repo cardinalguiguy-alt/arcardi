@@ -198,9 +198,12 @@ function GuessMap({ marker, onChange, locked = false, expanded = false, reveal =
           layout: { "line-cap": "round", "line-join": "round" },
           paint: { "line-color": ["get", "color"], "line-width": 3, "line-opacity": 0.82, "line-dasharray": [2, 2] },
         });
-        map.fitBounds(bounds, { padding: 46, maxZoom: 18, duration: 0 });
+        // Travelling animé plutôt qu'un saut sec (duration:0) : c'est le geste
+        // qui rend une révélation GeoGuessr satisfaisante — la ligne se
+        // découvre pendant que la caméra recule, pas après (2026-09-06).
+        map.fitBounds(bounds, { padding: 46, maxZoom: 18, duration: 1100 });
       } else {
-        map.jumpTo({ center: [target.lng, target.lat], zoom: 15 });
+        map.flyTo({ center: [target.lng, target.lat], zoom: 15, duration: 1100 });
       }
     };
 
