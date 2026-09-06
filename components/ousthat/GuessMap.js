@@ -4,10 +4,12 @@ import L from "leaflet";
 import { countryFlag } from "./locations";
 import { normalizeGuess } from "./rules";
 
-function icon(kind, label = "") {
+const PLAYER_COLORS = ["#ffca5f", "#68d9ff", "#ff7fa4", "#86e39a", "#bda0ff", "#ff9f68", "#78e4da", "#e4de78"];
+
+function icon(kind, label = "", color = "") {
   return L.divIcon({
     className: "ot-leaflet-icon",
-    html: `<span class="ot-map-pin ${kind}"><i></i>${label ? `<b>${label}</b>` : ""}</span>`,
+    html: `<span class="ot-map-pin ${kind}"${color ? ` style="background:${color}"` : ""}><i></i>${label ? `<b>${label}</b>` : ""}</span>`,
     iconSize: [34, 42],
     iconAnchor: [17, 39],
   });
@@ -107,8 +109,8 @@ function GuessMap({ marker, onChange, locked = false, expanded = false, reveal =
       const guess = normalizeGuess(player.guess);
       if (!guess) return;
       const displayLng = unwrapLng(guess.lng, target.lng);
-      const color = index === 0 ? "#ffca5f" : "#68d9ff";
-      const pin = L.marker([guess.lat, displayLng], { icon: icon(index === 0 ? "p1" : "p2", String(index + 1)), interactive: false }).addTo(map);
+      const color = PLAYER_COLORS[index % PLAYER_COLORS.length];
+      const pin = L.marker([guess.lat, displayLng], { icon: icon("player", String(index + 1), color), interactive: false }).addTo(map);
       const line = L.polyline([[target.lat, target.lng], [guess.lat, displayLng]], { color, weight: 3, opacity: 0.82, dashArray: "7 8", interactive: false }).addTo(map);
       revealLayersRef.current.push(pin, line);
       points.push(L.latLng(guess.lat, displayLng));

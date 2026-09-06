@@ -78,7 +78,7 @@ const title = (s) => console.log(`\n=== ${s} ===\n`);
 const GLOBALS = new Set([
   // ES
   "Array", "Boolean", "Date", "Error", "Infinity", "JSON", "Map", "Math", "NaN",
-  "Number", "Object", "Promise", "Proxy", "Reflect", "RegExp", "Set", "String",
+  "Intl", "Number", "Object", "Promise", "Proxy", "Reflect", "RegExp", "Set", "String",
   "Symbol", "WeakMap", "WeakSet", "BigInt", "Function", "globalThis", "undefined",
   "isFinite", "isNaN", "parseFloat", "parseInt", "decodeURIComponent", "encodeURIComponent",
   "Float32Array", "Float64Array", "Int8Array", "Int16Array", "Int32Array",

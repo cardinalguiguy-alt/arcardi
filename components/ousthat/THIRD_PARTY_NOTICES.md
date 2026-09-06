@@ -1,5 +1,19 @@
 # Third-party notices — Où's that ?
 
+## GeoGuessr Explorer vocabulary
+
+The country-search vocabulary in `countries.js` follows the factual set of
+countries and territories displayed by GeoGuessr's official Explorer on
+2026-09-06:
+
+- source: https://www.geoguessr.com/explorer
+- copied scope: ISO 3166-1 alpha-2 identifiers for the displayed destinations
+- not copied: source code, UI code, artwork, map imagery or game logic
+
+Country names are produced locally with `Intl.DisplayNames`, and flag glyphs
+are generated from ISO codes. The selection and scoring interfaces were
+implemented independently for Arcardi.
+
 ## WorldGuessr location records
 
 The 40 panorama records in `locations.js` were extracted from
@@ -65,4 +79,3 @@ imagery or credentials are stored in this repository. Deployers provide their
 own restricted public API key and remain responsible for Google Maps Platform
 terms, branding and service availability:
 https://developers.google.com/maps/documentation/embed/usage-and-billing
-

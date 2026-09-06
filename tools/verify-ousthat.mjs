@@ -1,5 +1,5 @@
 /* =============================================================================
-   verify-ousthat.mjs — LE DUEL GÉOGRAPHIQUE EST-IL COHÉRENT ET BRANCHÉ ?
+   verify-ousthat.mjs — LES MODES GÉOGRAPHIQUES SONT-ILS COHÉRENTS ET BRANCHÉS ?
    -----------------------------------------------------------------------------
    Ce banc appelle les règles pures réellement utilisées par le jeu, puis tient
    leurs jonctions avec le catalogue, le réseau hôte, Google Maps Embed,
@@ -18,14 +18,20 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ousthat-"));
 let rulesSrc = fs.readFileSync(path.join(ROOT, "components", "ousthat", "rules.js"), "utf8");
 if (process.argv.includes("--falsify")) {
   // Mutation volontaire : un banc honnête doit voir disparaître les dégâts.
-  rulesSrc = rulesSrc.replace("Math.round(difference * multiplier)", "0");
+  rulesSrc = rulesSrc
+    .replace("Math.round((bestScore - team.score) * multiplier)", "0")
+    .replace("Math.round(difference * multiplier)", "0");
 }
 fs.writeFileSync(path.join(tmp, "rules.mjs"), rulesSrc);
+const countriesSrc = fs.readFileSync(path.join(ROOT, "components", "ousthat", "countries.js"), "utf8");
+fs.writeFileSync(path.join(tmp, "countries.mjs"), countriesSrc);
 const locationsSrc = fs.readFileSync(path.join(ROOT, "components", "ousthat", "locations.js"), "utf8")
-  .replace('from "./rules"', 'from "./rules.mjs"');
+  .replace('from "./rules"', 'from "./rules.mjs"')
+  .replace('from "./countries"', 'from "./countries.mjs"');
 fs.writeFileSync(path.join(tmp, "locations.mjs"), locationsSrc);
 
 const R = await import(pathToFileURL(path.join(tmp, "rules.mjs")).href);
+const C = await import(pathToFileURL(path.join(tmp, "countries.mjs")).href);
 const L = await import(pathToFileURL(path.join(tmp, "locations.mjs")).href);
 let fails = 0, total = 0;
 const ok = (name, condition, detail = "") => {
@@ -70,6 +76,20 @@ const tie = R.resolveRound({ seats, teams, answers: {}, target: { lat: 0, lng: 0
 ok("une égalité, même multipliée, ne fait aucun dégât", tie.damage === 0 && tie.damagedTeamId === null && tie.teams.every((team) => team.hp === 6000));
 const knockout = R.resolveRound({ seats, teams: [{ id: "t1", hp: 4000 }, { id: "t2", hp: 4000 }], answers: { p1: { confirmed: { lat: 0, lng: 0 } } }, target: { lat: 0, lng: 0 }, round: 1 });
 ok("les PV sont bornés à zéro et la victoire revient à l'autre camp", knockout.teams.find((team) => team.id === "t2").hp === 0 && knockout.winnerTeamId === "t1");
+const threeSeats = [{ id: "p1", teamId: "t1" }, { id: "p2", teamId: "t2" }, { id: "p3", teamId: "t3" }];
+const threeTeams = [{ id: "t1", hp: 6000 }, { id: "t2", hp: 6000 }, { id: "t3", hp: 6000 }];
+const threeWay = R.resolveRound({ seats: threeSeats, teams: threeTeams, answers: { p1: { confirmed: { lat: 0, lng: 0 } }, p2: { confirmed: { lat: 0, lng: 1 } } }, target: { lat: 0, lng: 0 }, round: 1 });
+ok("à trois, chaque poursuivant subit son propre écart avec le meilleur", threeWay.teams.find((team) => team.id === "t1").damage === 0 && threeWay.teams.find((team) => team.id === "t2").damage > 0 && threeWay.teams.find((team) => team.id === "t3").damage === 5000);
+const withEliminated = threeWay.teams.map((team) => team.id === "t3" ? { ...team, hp: 0 } : team);
+ok("un joueur éliminé sort des réponses attendues mais reste dans l'état", R.activeSeats(threeSeats, withEliminated).length === 2 && withEliminated.length === 3);
+
+section("pays, séries et parties courtes");
+const countryRound = R.resolveCountryRound({ seats: threeSeats, answers: { p1: { confirmed: "FR" }, p2: { proposal: "FR" }, p3: { confirmed: "DE" } }, targetCountry: "FR" });
+ok("le pays confirmé et le dernier pays proposé comptent tous les deux", countryRound.players[0].correct && countryRound.players[1].correct && !countryRound.players[2].correct);
+const countryTotals = R.addCountryScores({ p1: 2, p2: 1 }, countryRound.players);
+ok("les scores pays s'additionnent sans effacer une série précédente", countryTotals.p1 === 3 && countryTotals.p2 === 2 && countryTotals.p3 === 0);
+ok("les ex aequo de tête sont tous gagnants", JSON.stringify(R.matchWinners(threeSeats, { p1: 4, p2: 4, p3: 2 })) === JSON.stringify(["p1", "p2"]));
+ok("les deux formats courts restent fixés à cinq manches", R.SOLO_ROUNDS === 5 && R.MULTI_COUNTRY_ROUNDS === 5);
 
 section("échéances, verrou et reprise");
 ok("le délai final ne rallonge jamais la manche", R.finalDeadline(10_000, 20_000, 15) === 20_000 && R.finalDeadline(10_000, 100_000, 15) === 25_000);
@@ -85,6 +105,9 @@ ok("au moins 30 panoramas sont livrés", L.LOCATIONS.length >= 30, `${L.LOCATION
 ok("la première sélection ne répète aucun pays", new Set(L.LOCATIONS.map((place) => place.country)).size === L.LOCATIONS.length);
 ok("chaque panorama garde des coordonnées et une orientation complètes", L.LOCATIONS.every((place) => R.normalizeGuess(place) && typeof place.panoId === "string" && place.panoId.length > 10 && Number.isFinite(place.heading) && Number.isFinite(place.pitch) && Number.isFinite(place.fov)));
 ok("les codes pays produisent un drapeau de révélation sûr", L.countryFlag("FR") === "🇫🇷" && L.countryFlag("?") === "🏳️");
+ok("tous les pays des panoramas appartiennent à la recherche GeoGuessr", L.LOCATIONS.every((place) => C.COUNTRY_BY_CODE[place.country]), `${C.COUNTRIES.length} choix admis`);
+const qcm = C.countryChoices("GR", "round-1", 4);
+ok("le QCM est déterministe, unique et contient toujours la bonne réponse", qcm.length === 4 && new Set(qcm).size === 4 && qcm.includes("GR") && JSON.stringify(qcm) === JSON.stringify(C.countryChoices("GR", "round-1", 4)));
 const orderA = L.locationOrder("same-match"), orderB = L.locationOrder("same-match"), orderC = L.locationOrder("other-match");
 ok("le mélange est déterministe pour tous les clients", JSON.stringify(orderA) === JSON.stringify(orderB));
 ok("deux matchs changent réellement l'ordre", JSON.stringify(orderA) !== JSON.stringify(orderC));
@@ -99,14 +122,17 @@ const i18n = fs.readFileSync(path.join(ROOT, "lib", "i18n.js"), "utf8");
 const rulesCopy = fs.readFileSync(path.join(ROOT, "lib", "gameRules.js"), "utf8");
 const notice = fs.readFileSync(path.join(ROOT, "components", "ousthat", "THIRD_PARTY_NOTICES.md"), "utf8");
 const css = fs.readFileSync(path.join(ROOT, "app", "globals.css"), "utf8");
-ok("le catalogue expose un duel exactement à deux", /ousthat:\s*\{[^\n]*minPlayers:\s*2,\s*maxPlayers:\s*2/.test(page) && page.includes('"worldle", "ousthat"'));
+ok("le catalogue ouvre le solo et borne le multijoueur à huit", /ousthat:\s*\{[^\n]*maxPlayers:\s*8/.test(page) && !/ousthat:\s*\{[^\n]*minPlayers:/.test(page) && page.includes('"worldle", "ousthat"'));
 ok("Leaflet est isolé du serveur et le plein écran échappe au transform de la porte", /dynamic\(\(\) => import\("@\/components\/ousthat\/OusThatGame"\),\s*\{[\s\S]{0,100}ssr:\s*false/.test(page) && /body\.ousthat-active \.door-content\{[^}]*transform:none/.test(css));
-ok("les joueurs hors ligne sont écartés des deux sièges", /OusThatGame[^\n]*players=\{online === null \? players : players\.filter/.test(page));
+ok("les joueurs hors ligne sont écartés des sièges", /OusThatGame[^\n]*players=\{online === null \? players : players\.filter/.test(page));
 ok("le nom exact et la description existent dans les deux langues", (i18n.match(/nameOusThat:\s*"Où's that \?"/g) || []).length === 2 && (i18n.match(/tagOusThat:/g) || []).length === 2);
-ok("les règles de lancement sont bilingues", (rulesCopy.match(/ousthat:/g) || []).length === 1 && rulesCopy.includes("À l'expiration") && rulesCopy.includes("At timeout"));
+ok("les règles des quatre parcours sont bilingues", (rulesCopy.match(/ousthat:/g) || []).length === 1 && rulesCopy.includes("Country Streak :") && rulesCopy.includes("Country Streak:") && rulesCopy.includes("jusqu’à 8 joueurs") && rulesCopy.includes("one to eight players"));
 ok("les invités ne font que demander et l'hôte seul applique/persiste", game.includes('event: "request"') && game.includes('event: "apply"') && /if \(!isHost\) return;[\s\S]{0,180}saveGameState/.test(game));
 ok("la reconnexion transporte des durées, jamais une comparaison d'horloges clientes", game.includes("remainingMs") && game.includes("countdownMs") && !game.includes("clockOffset"));
 ok("les propositions sont bridées sous dix messages par seconde", /PROPOSAL_INTERVAL_MS\s*=\s*120/.test(game));
+ok("les quatre parcours sont sélectionnables et la version persistée a changé", game.includes('STATE_VERSION = 2') && game.includes("countryStreak") && game.includes("pinpointSoloDesc") && game.includes("MULTI_COUNTRY_ROUNDS") && game.includes("MAX_PLAYERS"));
+ok("le solo ne pollue jamais les compteurs victoire/défaite", /state\?\.phase !== "finished" \|\| isSolo\(state\)/.test(game));
+ok("le cartouche d'adresse Google ne livre pas la réponse du mode pays", game.includes('className="ot-google-place-mask"') && /\.ot-google-place-mask\{[^}]*z-index:6/.test(css));
 ok("la carte de réponse se rétracte sans perdre son composant et le vrai point porte un drapeau", game.includes('mapOpen ? "open" : "collapsed"') && game.includes('className="ot-map-peek"') && game.includes("countryFlag(revealTarget?.country)") && map.includes("countryFlag(reveal.target.country)"));
 ok("Google reçoit un pano et une orientation, sans clé copiée", frame.includes('pano: location.panoId') && frame.includes('heading: String(location.heading)') && frame.includes('referrerPolicy="strict-origin-when-cross-origin"') && frame.includes('process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY') && !/AIza[0-9A-Za-z_-]{30,}/.test(frame));
 ok("la carte crédite OSM et ne précharge aucune tuile", map.includes("tile.openstreetmap.org/{z}/{x}/{y}.png") && map.includes("OpenStreetMap") && !/prefetch|bulk|download/i.test(map));

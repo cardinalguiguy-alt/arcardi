@@ -65,11 +65,9 @@ export const LOCATIONS = Object.freeze(RAW.map(([country, lat, lng, heading, pan
 
 export const LOCATION_BY_ID = Object.freeze(Object.fromEntries(LOCATIONS.map((location) => [location.id, location])));
 
-export function countryFlag(countryCode) {
-  const code = String(countryCode || "").trim().toUpperCase();
-  if (!/^[A-Z]{2}$/.test(code)) return "🏳️";
-  return String.fromCodePoint(...[...code].map((letter) => 127397 + letter.charCodeAt(0)));
-}
+// Compatibilité des appelants historiques : le catalogue complet et les noms
+// vivent dans countries.js, locations.js ne décrit que les panoramas.
+export { countryFlag } from "./countries";
 
 function hashSeed(seed) {
   let h = 2166136261;

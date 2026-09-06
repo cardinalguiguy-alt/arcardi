@@ -65,7 +65,7 @@ const GAME_META = {
   quiz:     { icon: "🧠", accent: "--acc-quiz",      nameKey: "nameQuiz",    tagKey: "tagQuiz", stage: "door" },
   wordle:   { icon: "🔤", accent: "--acc-wordle",    nameKey: "nameWordle",  tagKey: "tagWordle", stage: "door" },
   worldle:  { icon: "🌍", accent: "--acc-worldle",   nameKey: "nameWorldle", tagKey: "tagWorldle", stage: "video" },
-  ousthat:  { icon: "⌖", accent: "--acc-ousthat",   nameKey: "nameOusThat", tagKey: "tagOusThat", minPlayers: 2, maxPlayers: 2, stage: "door" },
+  ousthat:  { icon: "⌖", accent: "--acc-ousthat",   nameKey: "nameOusThat", tagKey: "tagOusThat", maxPlayers: 8, stage: "door" },
   piano:    { icon: "🎹", accent: "--acc-piano",     nameKey: "namePiano",   tagKey: "tagPiano", stage: "curtain" },
   connect4: { icon: "🔴", accent: "--acc-c4",        nameKey: "nameC4",      tagKey: "tagC4", stage: "curtain" }, // pas de minPlayers : jouable en solo contre un bot (2026-07)
   ludo:     { icon: "🐴", accent: "--acc-ludo",      nameKey: "nameLudo",    tagKey: "tagLudo", stage: "door" }, // solo 2026-08-27 : 1 humain choisit 1 à 3 bots ; à plusieurs, moteur historique inchangé

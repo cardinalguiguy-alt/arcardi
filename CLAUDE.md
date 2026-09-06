@@ -10,40 +10,40 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ⚠️⚠️⚠️ **CE BLOC DÉSIGNE UNE SEULE ACTION SUIVANTE. IL SE REMPLACE, IL NE
 S'EMPILE PAS.**
 
-### 🔴 ACTION SUIVANTE — FERME VALLÉE P1 BIS, JALONS DE TRAME ATTEIGNABLES
+### 🔴 ACTION SUIVANTE — DÉPLOYER PUIS RECETTER À DISTANCE
 
-**« Où's that ? » est livré et validé avec Google réel ; reprendre maintenant le premier point du
-passif Ferme Vallée ci-dessous.** Le menu développeur doit poser des jalons atteignables qui font
-avancer ensemble les pistes étoiles et bateau/maire, sans sauter de scène, avec un banc
-d'atteignabilité. Ne pas engager la bifurcation narrative P1 avant que Guillaume ait pu jouer les
-actes tardifs grâce à ces jalons.
+**Le code et le Supabase réel de « Où's that ? » sont prêts.** Commit/push restent à Guillaume.
+Après déploiement, jouer une partie depuis deux ou trois appareils/réseaux différents et vérifier
+Country + Pinpoint, reconnexion et passage hôte. Le `.env.local` reste volontairement branché sur
+le faux Supabase de recette ; ne jamais recopier de clé du Dashboard dans ce fichier à la place de
+Guillaume. Une fois la recette distante verte, reprendre Ferme Vallée P1 bis dans le passif
+ci-dessous.
 
-**Livré et validé les 2026-09-05–06 :**
-- jeu catalogue exact ousthat, nom affiché **« Où's that ? »**, exactement 2 joueurs en ligne ;
-- écran hôte configurable (PV, manche, délai final, multiplicateurs) et arène plein écran ;
-- Google Maps Embed par pano, carte Leaflet 1.9.4 + tuiles OpenStreetMap avec attribution visible ;
-- 40 panoramas mondiaux sans pays répété, issus uniquement de
-  data/diverse-locations.json à la dernière révision WorldGuessr MIT
-  ef88928c03a70d77ce5a1c86fddf74814ff67fc7 ; aucun ajout PolyForm repris ;
-- autorité hôte : requêtes invitées, états appliqués/persistés par l'hôte, propositions bridées à
-  8,3/s, chrono invité reconstruit depuis une durée restante sans comparer deux horloges ;
-- score Haversine précis à l'antiméridien, 5 000 points jusqu'à 25 m, dégâts sur le seul perdant,
-  réponse confirmée définitive, dernier marqueur compté à l'expiration ;
-- reprise rooms.game_state, résultat de match, victoire, revanche et retour salon, sans migration ;
-- tools/verify-ousthat.mjs **44/44** ; mutation volontaire des dégâts ⇒ **2 échecs** ; filet
-  complet des **21** bancs muet donc vert ; npm run build vert avec le seul avertissement
-  préexistant G_SOIL de Ferme Vallée ;
-- clé Maps Embed réelle locale, restreinte à localhost et à la seule API Embed ; même panorama et
-  orientation sur deux clients, masque, double chargement, décompte, verrou, délai final,
-  expirations avec/sans marqueur, dégâts, panorama indisponible, victoire, revanche et reconnexion
-  validés dans le navigateur ; bureau + mobile contrôlés ;
-- la recette Google a découvert et corrigé l'annulation du délai de stabilisation lorsque le second
-  acquittement de chargement produisait un nouvel état ; carte désormais rétractable façon
-  GeoGuessr, marqueur conservé à la fermeture, drapeau du pays sur le vrai point de révélation.
+**Livré et validé le 2026-09-06 :**
+- jeu catalogue **« Où's that ? »** ouvert au solo et borné à 8 joueurs en ligne ;
+- solo Country Streak jusqu'à la première erreur, avec QCM de 4 drapeaux ou recherche
+  accent-insensible dans les 114 pays/territoires de l'Explorer GeoGuessr ; révélation à chaque
+  tour, historique et score final ;
+- solo Pinpoint en exactement 5 manches, total final sur 25 000 et détail manche par manche ;
+- multi Pays en 5 manches, 1 point par bonne réponse, classement final et ex aequo ;
+- multi Pinpoint à 2–8 : meilleur intact, chaque poursuivant perd son propre écart × multiplicateur,
+  éliminés spectateurs, dernier vivant gagnant ;
+- autorité hôte et `rooms.game_state` conservées ; réponses, chronos, lancement, résultat, revanche
+  et statistiques multi synchronisés ; le solo n'écrit jamais victoire/défaite ;
+- 40 panoramas mondiaux conservés ; le cartouche d'adresse Google est masqué pendant le mode Pays
+  sans masquer l'attribution Google ; documentation fournisseur/licence mise à jour ;
+- recette navigateur avec Google réel : Country Streak QCM et recherche, erreur/fin de série, puis
+  partie Pays à 3 joueurs avec réponses différentes et révélation identique sur les trois écrans ;
+- Dashboard Supabase réel audité en lecture seule : 8/10 prérequis présents, seuls `rooms` et
+  `room_players` manquaient dans `supabase_realtime` ; ces deux publications additives ont été
+  activées, puis le second audit a rendu **10/10 vrais** ; aucune donnée ni autre schéma touché ;
+- `tools/verify-ousthat.mjs` **55/55** ; mutation dégâts ⇒ **3 échecs** ; filet complet des **21**
+  bancs muet donc vert après ajout explicite du global standard `Intl` à la liste blanche de
+  `verify-portee` ; `npm run build` vert avec le seul avertissement préexistant `G_SOIL` de Ferme
+  Vallée.
 
-**Configuration :** aucune manipulation Supabase, aucune migration SQL. Une clé Google Maps Embed
-publique mais restreinte est requise. Les contraintes fournisseur/licence sont dans
-components/ousthat/README.md et components/ousthat/THIRD_PARTY_NOTICES.md.
+**Configuration :** Supabase réel prêt, aucune autre migration SQL. La recette distante attend le
+déploiement utilisateur. Les contraintes et le pas-à-pas sont dans `components/ousthat/README.md`.
 
 ### PASSIF FERME VALLÉE
 

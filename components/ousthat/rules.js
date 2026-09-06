@@ -13,8 +13,15 @@ export const MAX_GEO_SCORE = 5000;
 export const PERFECT_DISTANCE_KM = 0.025;
 export const SCORE_DECAY_KM = 2000;
 export const EARTH_RADIUS_KM = 6371.0088;
+export const SOLO_ROUNDS = 5;
+export const MULTI_COUNTRY_ROUNDS = 5;
+export const MAX_PLAYERS = 8;
+export const GAME_MODES = Object.freeze(["pinpoint", "country"]);
+export const COUNTRY_INPUTS = Object.freeze(["multiple-choice", "search"]);
 
 export const DEFAULT_CONFIG = Object.freeze({
+  mode: "pinpoint",
+  countryInput: "multiple-choice",
   initialHp: 6000,
   roundSeconds: 120,
   finalSeconds: 15,
@@ -50,6 +57,8 @@ export function normalizeGuess(value) {
 export function validateConfig(input = {}) {
   const value = { ...DEFAULT_CONFIG };
   const errors = [];
+  value.mode = GAME_MODES.includes(input.mode) ? input.mode : DEFAULT_CONFIG.mode;
+  value.countryInput = COUNTRY_INPUTS.includes(input.countryInput) ? input.countryInput : DEFAULT_CONFIG.countryInput;
   const integerKeys = ["initialHp", "roundSeconds", "finalSeconds", "multiplierStartRound"];
   for (const key of integerKeys) {
     const n = Number(input[key]);
@@ -107,6 +116,20 @@ export function effectiveAnswer(answer) {
   return normalizeGuess(answer?.confirmed) || normalizeGuess(answer?.proposal) || null;
 }
 
+export function normalizeCountryAnswer(value) {
+  const code = String(value || "").trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(code) ? code : null;
+}
+
+export function effectiveCountryAnswer(answer) {
+  return normalizeCountryAnswer(answer?.confirmed) || normalizeCountryAnswer(answer?.proposal) || null;
+}
+
+export function activeSeats(seats, teams) {
+  const teamById = Object.fromEntries((teams || []).map((team) => [team.id, team]));
+  return (seats || []).filter((seat) => Number(teamById[seat.teamId]?.hp || 0) > 0);
+}
+
 export function resolveRound({ seats, teams, answers, target, round, config = DEFAULT_CONFIG }) {
   const cleanTarget = normalizeGuess(target);
   if (!cleanTarget) throw new Error("Target coordinates are invalid");
@@ -134,21 +157,57 @@ export function resolveRound({ seats, teams, answers, target, round, config = DE
   }
 
   const multiplier = roundMultiplier(round, config);
+  const participatingIds = new Set(players.map((player) => player.teamId));
   const ranked = (teams || []).map((team) => ({ ...team, score: teamScores[team.id] || 0 }));
-  const difference = ranked.length === 2 ? Math.abs(ranked[0].score - ranked[1].score) : 0;
-  const damage = Math.round(difference * multiplier);
-  let damagedTeamId = null;
-  if (ranked.length === 2 && ranked[0].score !== ranked[1].score) {
-    damagedTeamId = ranked[0].score < ranked[1].score ? ranked[0].id : ranked[1].id;
-  }
-  const nextTeams = ranked.map((team) => ({
-    ...team,
-    hp: team.id === damagedTeamId ? Math.max(0, Number(team.hp || 0) - damage) : Number(team.hp || 0),
-  }));
-  const defeated = nextTeams.find((team) => team.hp <= 0);
-  const winnerTeamId = defeated ? nextTeams.find((team) => team.id !== defeated.id)?.id || null : null;
+  const participants = ranked.filter((team) => participatingIds.has(team.id) && Number(team.hp || 0) > 0);
+  const bestScore = participants.length ? Math.max(...participants.map((team) => team.score)) : 0;
+  const nextTeams = ranked.map((team) => {
+    if (!participatingIds.has(team.id) || Number(team.hp || 0) <= 0 || team.score === bestScore) {
+      return { ...team, hp: Number(team.hp || 0), damage: 0 };
+    }
+    const damage = Math.round((bestScore - team.score) * multiplier);
+    return { ...team, hp: Math.max(0, Number(team.hp || 0) - damage), damage };
+  });
+  const damagedTeamIds = nextTeams.filter((team) => team.damage > 0).map((team) => team.id);
+  // Ces deux champs singuliers restent pour le duel historique et ses bancs.
+  const damagedTeamId = damagedTeamIds.length === 1 ? damagedTeamIds[0] : null;
+  const difference = participants.length === 2 ? Math.abs(participants[0].score - participants[1].score) : 0;
+  const damage = participants.length === 2 ? Math.round(difference * multiplier) : Math.max(0, ...nextTeams.map((team) => team.damage));
+  const alive = nextTeams.filter((team) => team.hp > 0);
+  const winnerTeamId = participants.length > 1 && alive.length === 1 ? alive[0].id : null;
 
-  return { players, teamScores, multiplier, difference, damage, damagedTeamId, teams: nextTeams, winnerTeamId };
+  return { players, teamScores, bestScore, multiplier, difference, damage, damagedTeamId, damagedTeamIds, teams: nextTeams, winnerTeamId };
+}
+
+export function resolveCountryRound({ seats, answers, targetCountry }) {
+  const target = normalizeCountryAnswer(targetCountry);
+  if (!target) throw new Error("Target country is invalid");
+  const players = (seats || []).map((seat) => {
+    const answer = answers?.[seat.id] || null;
+    const guessCountry = effectiveCountryAnswer(answer);
+    return {
+      playerId: seat.id,
+      teamId: seat.teamId,
+      answered: !!guessCountry,
+      confirmed: !!normalizeCountryAnswer(answer?.confirmed),
+      guessCountry,
+      correct: guessCountry === target,
+      score: guessCountry === target ? 1 : 0,
+    };
+  });
+  return { targetCountry: target, players };
+}
+
+export function addCountryScores(previous, players) {
+  const totals = { ...(previous || {}) };
+  for (const player of players || []) totals[player.playerId] = Number(totals[player.playerId] || 0) + (player.correct ? 1 : 0);
+  return totals;
+}
+
+export function matchWinners(seats, scores) {
+  const ranked = (seats || []).map((seat) => ({ id: seat.id, score: Number(scores?.[seat.id] || 0) }));
+  const best = ranked.length ? Math.max(...ranked.map((entry) => entry.score)) : 0;
+  return ranked.filter((entry) => entry.score === best).map((entry) => entry.id);
 }
 
 export function canResolveRound(state, roundId) {
@@ -172,6 +231,12 @@ export function resetForRematch(state, order, matchId) {
     usedLocationIds: order.length ? [order[0]] : [],
     loaded: {},
     answers: {},
+    countryScores: {},
+    soloScore: 0,
+    streak: 0,
+    history: [],
+    matchComplete: false,
+    winnerPlayerIds: [],
     firstConfirmedBy: null,
     countdownAt: null,
     deadline: null,

@@ -1,83 +1,106 @@
 # Où's that ?
 
-Jeu de duel de géolocalisation 1 contre 1 intégré au salon Arcardi. Chaque
-client reçoit le même panorama Google Street View, pose un marqueur sur une
-carte Leaflet/OpenStreetMap, puis l'hôte arbitre le score, les dégâts, les PV,
-les changements de manche et la victoire.
+Jeu de géolocalisation Arcardi jouable seul ou de 2 à 8 joueurs. Tous les
+clients reçoivent le même panorama Google Street View ; l'hôte arbitre les
+réponses, les changements de manche et la fin de partie.
 
-Pendant une manche, la carte est rétractée en un bouton rond pour laisser le
-panorama respirer. Elle se déploie à la demande, peut passer en plein écran et
-conserve le marqueur lorsqu'elle est refermée. La révélation remplace le point
-réel générique par le drapeau du pays, sur la carte comme dans sa légende.
+## Parcours de jeu
+
+- **Solo — Country Streak** : trouver le pays jusqu'à la première erreur.
+  L'écran de départ permet de choisir entre quatre drapeaux en QCM ou une
+  recherche dans les 114 pays et territoires de l'Explorer GeoGuessr relevés
+  le 2026-09-06. Le pays correct et la réponse sont révélés après chaque tour.
+- **Solo — Pinpoint** : placer cinq points sur la carte, puis obtenir un total
+  final sur 25 000 et le détail des cinq manches.
+- **Multi — Pays** : cinq manches, un point par bonne réponse, classement final
+  et ex aequo conservés.
+- **Multi — Pinpoint** : le meilleur score de chaque manche ne perd rien ;
+  chaque adversaire moins précis perd son propre écart au meilleur, multiplié
+  par le coefficient courant. Un joueur à 0 PV devient spectateur. Le dernier
+  encore en vie gagne.
+
+Le dernier choix proposé compte à l'expiration même s'il n'a pas été confirmé.
+Une confirmation est définitive. En multi, la première confirmation raccourcit
+l'échéance sans jamais la rallonger.
 
 ## Configuration locale
 
-Le panorama utilise l'API **Google Maps Embed**, pas une clé ou un service de
-WorldGuessr. Ajouter dans `.env.local`, puis redémarrer Next.js :
+Le jeu utilise les variables publiques suivantes dans `.env.local` :
 
 ```dotenv
-NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY=...
+NEXT_PUBLIC_SUPABASE_URL=https://VOTRE-PROJET.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=VOTRE_CLE_PUBLIQUE
+NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY=VOTRE_CLE_MAPS_EMBED
 ```
 
-La clé est nécessairement publique dans le navigateur. Elle doit être limitée
-à **Maps Embed API** et aux référents HTTP des domaines Arcardi (ainsi qu'à
-`localhost` pour le développement). L'API Embed est annoncée sans frais et
-sans limite quotidienne par Google à la date de cette livraison, mais elle
-requiert un projet Google Cloud et une clé valide :
+Ne jamais mettre de clé `service_role` dans une variable `NEXT_PUBLIC_*`.
+La clé Maps Embed est nécessairement visible dans le navigateur : elle doit
+être restreinte à **Maps Embed API** et aux référents HTTP des domaines Arcardi
+ainsi qu'à `localhost` pour le développement. La documentation de facturation
+Google Maps Embed est :
 https://developers.google.com/maps/documentation/embed/usage-and-billing
 
-Sans clé, l'écran de réglage reste utilisable et explique l'intervention
-requise, mais le bouton de lancement est désactivé. Une iframe chargée signale
-que le document Google s'est ouvert ; les navigateurs n'exposent pas la fin de
-chargement de chaque tuile à la page parente. Le jeu masque donc le panorama
-jusqu'à l'acquittement des deux iframes, ajoute 2,5 s de stabilisation, puis un
-décompte de 3 s. C'est la synchronisation loyale réalisable avec une iframe
-cross-origin, pas une preuve du dernier pixel rendu.
+Si le dépôt local contient encore une URL Supabase factice, le propriétaire du
+projet doit remplacer lui-même les deux valeurs Supabase dans `.env.local` et
+dans les variables d'environnement de l'hébergeur, puis redémarrer Next.js.
 
-## Règles calculées
+## Supabase existant
+
+Aucune nouvelle table, colonne, policy ou fonction n'est requise pour ces
+modes. Le jeu réutilise :
+
+- `rooms.game_state` pour l'instantané persistant ;
+- Realtime sur `rooms` et `room_players` ;
+- `rooms.launch_at` et `rooms.stage_launch_at` pour les transitions partagées ;
+- `room_players.wins`, `room_players.losses` et `add_game_result` pour les
+  parties multi uniquement. Une partie solo ne modifie jamais ces compteurs.
+
+Pour auditer un projet déjà créé sans le modifier, exécuter
+`supabase/verify-ousthat.sql` dans le SQL Editor. Toutes les lignes de la
+colonne `ok` doivent être vraies. Si une ligne manque, appliquer seulement la
+mise à niveau correspondante, dans l'ordre : `upgrade-002.sql`,
+`upgrade-003.sql`, puis `upgrade-004.sql`. Ne pas rejouer `schema.sql` au hasard
+sur un projet existant : certaines policies de base ne sont pas recréables.
+
+État du projet Supabase Arcardi au 2026-09-06 : audit final 10/10. Les seules
+corrections nécessaires étaient l'ajout de `rooms` et `room_players` à la
+publication `supabase_realtime` ; elles ont été appliquées sans modification
+de données.
+
+## Règles Pinpoint calculées
 
 - 5 000 points jusqu'à 25 m inclus ; au-delà :
   `round(5000 × exp(-distanceKm / 2000))`, plafonné à 4 999.
 - La distance est un Haversine avec rayon terrestre moyen de 6 371,0088 km et
   normalisation du passage à l'antiméridien.
-- Dégâts : valeur absolue de l'écart entre les deux scores, multipliée par le
-  multiplicateur de manche puis arrondie. Seul le score le plus faible perd
-  ces PV. Une égalité ne fait aucun dégât.
-- Une confirmation verrouille irréversiblement la réponse. Le premier verrou
-  ramène l'échéance à `min(échéance initiale, maintenant + délai final)`.
 - À l'expiration, le dernier marqueur proposé compte même s'il n'a pas été
   confirmé. L'absence de marqueur vaut 0.
 
-Les bornes des réglages et tous les calculs purs vivent dans `rules.js`. Le
-banc `node tools/verify-ousthat.mjs` les appelle réellement, y compris les cas
-antiméridien, expiration, double résolution, multiplicateurs, drapeaux et victoire.
+Les bornes des réglages et les calculs purs vivent dans `rules.js`. Le banc
+`node tools/verify-ousthat.mjs` couvre notamment score, dégâts à plusieurs,
+élimination, séries, QCM, cinq manches, expiration, reprise et branchements.
 
 ## Réseau et reprise
 
-`OusThatGame.js` suit l'architecture d'autorité du dépôt : les invités
-émettent des requêtes, l'hôte les valide, applique le nouvel état, le diffuse
-et l'enregistre dans `rooms.game_state`. Les marqueurs ne partent qu'au clic ou
-en fin de glissement et sont bridés sous 10 messages/s. Le chrono affiché par
-un invité est reconstruit à la réception depuis une **durée restante** envoyée
-par l'hôte ; les horloges de deux machines ne sont jamais comparées.
+Les invités n'envoient que des requêtes ; l'hôte les valide, diffuse le nouvel
+état et l'enregistre dans `rooms.game_state`. Les propositions de carte sont
+bridées sous 10 messages/s. Le chrono invité est reconstruit à la réception à
+partir d'une durée restante : deux horloges de machines ne sont jamais
+comparées. Une reconnexion demande l'instantané vivant à l'hôte.
 
-Une reconnexion demande l'instantané vivant à l'hôte. L'état persistant couvre
-la manche, les lieux déjà consommés, les propositions, confirmations, PV et
-réglages. Aucune migration Supabase supplémentaire n'est requise : le module
-réutilise `rooms.game_state` et les RPC déjà utilisées par les autres jeux.
+Le panorama reste masqué jusqu'à l'acquittement des joueurs connectés, ajoute
+2,5 s de stabilisation, puis un décompte de 3 s. Une iframe chargée prouve que
+le document Google s'est ouvert, pas que sa dernière tuile est rendue.
 
 ## Fournisseurs et licences
 
-- Panorama : Google Maps Embed API, demandé par `pano` avec latitude/longitude
-  conservées pour le calcul du score.
-- Carte de réponse : Leaflet 1.9.4 et tuiles standard OpenStreetMap. Le crédit
-  OpenStreetMap reste visible. Aucun préchargement, téléchargement en masse ou
-  proxy de tuiles n'est effectué. Le service standard est communautaire et
-  sans SLA ; pour une exploitation importante, prévoir un fournisseur de
-  tuiles dédié conforme à la politique OSM.
-- Sélection initiale : 40 enregistrements de panoramas extraits de la dernière
-  révision WorldGuessr encore sous MIT. Aucun moteur, composant ou ajout publié
-  sous PolyForm Noncommercial n'est repris.
+- Panorama : Google Maps Embed API, demandé par identifiant de panorama.
+- Carte de réponse : Leaflet 1.9.4 et tuiles standard OpenStreetMap, avec
+  attribution visible et sans préchargement ni proxy.
+- Panoramas : 40 enregistrements tirés de la dernière révision WorldGuessr
+  encore sous MIT. Aucun ajout PolyForm Noncommercial n'est repris.
+- Vocabulaire pays/territoires : liste factuelle de l'Explorer officiel
+  GeoGuessr relevée le 2026-09-06 ; aucun code ni visuel GeoGuessr n'est repris.
 
-Les révisions exactes, URLs, périmètres et textes de licence sont consignés
-dans [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).
+Les révisions, URLs, périmètres et textes de licence sont consignés dans
+[THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).
