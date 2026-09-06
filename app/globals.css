@@ -6627,7 +6627,14 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
 .ot-map-pin::after{ content:""; position:absolute; z-index:-1; left:50%; bottom:-10px; width:16px; height:16px; box-sizing:border-box; transform:translateX(-50%) rotate(45deg); border-right:3px solid #fff; border-bottom:3px solid #fff; border-radius:0 0 4px 0; background:var(--pin-color); }
 .ot-map-pin-avatar{ position:relative; z-index:1; color:#07101d; font-family:system-ui,sans-serif; font-size:22px; line-height:1; filter:drop-shadow(0 1px 1px rgba(255,255,255,.25)); }
 .ot-map-marker small{ position:absolute; z-index:3; top:-3px; right:-1px; display:grid; place-items:center; width:18px; height:18px; border:2px solid #fff; border-radius:50%; color:#07101d; background:var(--pin-color); font:900 9px/1 system-ui,sans-serif; }
-.ot-map-marker.target{ --pin-color:#ff647d; }.ot-map-marker.target .ot-map-pin-avatar{ font-size:21px; }
+/* Hors-zip 2026-09-06 : la cible n'est pas une mascotte de plus. Sa boîte
+   finit à y=50, au bout de la pointe : l'ancre MapLibre `bottom` tombe donc
+   sur la coordonnée exacte, tandis que le drapeau reste un cartouche voisin. */
+.ot-map-marker.target{ --pin-color:#237a58; width:58px; }
+.ot-map-target-pin{ position:absolute; left:12px; top:0; width:34px; height:50px; overflow:visible; color:var(--pin-color); }
+.ot-map-target-pin path{ fill:currentColor; stroke:#fff; stroke-width:2; stroke-linejoin:round; }
+.ot-map-target-pin circle{ fill:#fff; stroke:rgba(255,255,255,.7); stroke-width:2; }
+.ot-map-target-flag{ position:absolute; z-index:3; left:38px; top:-4px; display:grid; place-items:center; min-width:25px; height:22px; box-sizing:border-box; padding:1px 4px; border:1px solid rgba(255,255,255,.75); border-radius:7px; background:rgba(8,14,31,.94); box-shadow:0 3px 9px rgba(0,0,0,.38); font:normal 16px/1 system-ui,sans-serif; }
 .ot-map-actions{ display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px 10px; border-top:1px solid var(--ot-line); }.ot-map-actions>span{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#8c99b5; font-size:8px; font-variant-numeric:tabular-nums; }.ot-map-actions .ot-btn{ min-height:36px; padding:7px 11px; font-size:9px; }
 .ot-corner-actions{ position:absolute; z-index:10; left:12px; bottom:12px; display:flex; flex-direction:column; align-items:flex-start; gap:5px; }.ot-corner-actions button{ border:1px solid rgba(255,255,255,.16); border-radius:9px; padding:7px 9px; color:#d2d9e9; background:rgba(6,10,23,.7); backdrop-filter:blur(8px); cursor:pointer; font-size:8px; transition:background .15s ease,border-color .15s ease,color .15s ease; }.ot-corner-actions button.armed{ border-color:rgba(255,142,110,.7); color:#ffd9cd; background:rgba(120,42,30,.75); }
 /* min(420px, 100vw - 32px), pas calc(100vw - 500px) : sur un viewport sous

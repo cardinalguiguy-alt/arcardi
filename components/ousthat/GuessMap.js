@@ -22,13 +22,34 @@ function pinElement(kind, label = "", color = "", number = null) {
   root.setAttribute("aria-hidden", "true");
   if (color) root.style.setProperty("--pin-color", color);
 
-  const pin = document.createElement("span");
-  pin.className = `ot-map-pin ${kind}`;
-  const avatar = document.createElement("b");
-  avatar.className = "ot-map-pin-avatar";
-  avatar.textContent = label;
-  pin.appendChild(avatar);
-  root.appendChild(pin);
+  if (kind === "target") {
+    // Hors-zip 2026-09-06 : le vrai lieu garde une épingle neutre et porte
+    // son drapeau à côté ; il ne peut plus être confondu avec une réponse.
+    const pin = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    pin.classList.add("ot-map-target-pin");
+    pin.setAttribute("viewBox", "0 0 34 50");
+    const shape = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    shape.setAttribute("d", "M17 49 C14 43 3 29 3 18 A14 14 0 1 1 31 18 C31 29 20 43 17 49Z");
+    const center = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    center.setAttribute("cx", "17");
+    center.setAttribute("cy", "18");
+    center.setAttribute("r", "5");
+    pin.append(shape, center);
+    root.appendChild(pin);
+
+    const flag = document.createElement("i");
+    flag.className = "ot-map-target-flag";
+    flag.textContent = label;
+    root.appendChild(flag);
+  } else {
+    const pin = document.createElement("span");
+    pin.className = `ot-map-pin ${kind}`;
+    const avatar = document.createElement("b");
+    avatar.className = "ot-map-pin-avatar";
+    avatar.textContent = label;
+    pin.appendChild(avatar);
+    root.appendChild(pin);
+  }
 
   if (number !== null) {
     const badge = document.createElement("small");
@@ -163,6 +184,7 @@ function GuessMap({ marker, onChange, locked = false, expanded = false, reveal =
       const lines = [];
       revealMarkersRef.current.push(new MapLibreMarker({
         element: pinElement("target", countryFlag(reveal.target.country)),
+        // La boîte CSS se termine exactement à la pointe de l'épingle.
         anchor: "bottom",
       }).setLngLat([target.lng, target.lat]).addTo(map));
 

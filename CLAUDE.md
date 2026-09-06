@@ -10,13 +10,16 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ⚠️⚠️⚠️ **CE BLOC DÉSIGNE UNE SEULE ACTION SUIVANTE. IL SE REMPLACE, IL NE
 S'EMPILE PAS.**
 
-### 🔴 ACTION SUIVANTE — GUILLAUME JOUE ENFIN UNE VRAIE SESSION « OÙ'S THAT ? » (P0+P1+MOBILE+NOUVEAU STOCK), PUIS RECETTE OPENFREEMAP/MULTI
+### 🔴 ACTION SUIVANTE — AUDIT RAPIDE DU REVEAL « OÙ'S THAT ? » EN CONDITION DE JEU, PUIS SESSION COMPLÈTE ET RECETTE OPENFREEMAP/MULTI
 
-**Rien de ce qui s'est accumulé sur ce jeu depuis le 2026-09-06 matin n'a encore été vu par
-Guillaume : P0 (masque d'adresse, panoramas morts retirés, garde WebGL, signalement en deux clics),
-P1 (révélation en incrustation sur le panorama, panneau Pays repliable), la passe mobile (aria-label,
-collisions de bulles, bulles invisibles sous 500 px de large), et maintenant le stock de panoramas,
-qui passe le même jour de 38 à environ 1 550 lieux.**
+**Guillaume signale que le reveal « bug » et demande de l'auditer rapidement en condition de jeu au
+prochain passage. Le vrai lieu porte désormais une épingle vectorielle VERTE, dont la pointe est
+l'ancre MapLibre exacte, avec le drapeau dans un cartouche séparé ; les réponses gardent les
+mascottes. Ce seul changement a été livré sans ouvrir l'audit. Rien de ce qui s'est accumulé sur ce
+jeu depuis le 2026-09-06 matin n'a encore été vu par Guillaume : P0 (masque d'adresse, panoramas
+morts retirés, garde WebGL, signalement en deux clics), P1 (révélation en incrustation sur le
+panorama, panneau Pays repliable), la passe mobile (aria-label, collisions de bulles, bulles
+invisibles sous 500 px de large), et le stock passé de 38 à environ 1 550 lieux.**
 
 **Le stock élargi, livré en fin de journée sur commande explicite de Guillaume (« je veux un stock
 comparable à ce que propose worldguessr, et geoguessr pour les maps publiques ») :** Guillaume a

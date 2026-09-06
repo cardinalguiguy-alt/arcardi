@@ -11,7 +11,9 @@ réponses, les changements de manche et la fin de partie.
   recherche dans les 114 pays et territoires de l'Explorer GeoGuessr relevés
   le 2026-09-06. Le pays correct et la réponse sont révélés après chaque tour.
 - **Solo — Pinpoint** : placer cinq points sur la carte, puis obtenir un total
-  final sur 25 000 et le détail des cinq manches.
+  final sur 25 000 et le détail des cinq manches. À la révélation, la position
+  réelle porte une épingle verte ancrée par sa pointe, avec le drapeau à côté ;
+  les réponses conservent les mascottes des joueurs.
 - **Multi — Pays** : cinq manches, un point par bonne réponse, classement final
   et ex aequo conservés.
 - **Multi — Pinpoint** : le meilleur score de chaque manche ne perd rien ;
@@ -106,8 +108,9 @@ le document Google s'est ouvert, pas que sa dernière tuile est rendue.
 - Carte de réponse : MapLibre GL JS 4.7.1 et style vectoriel OpenFreeMap Liberty,
   avec rues, bâtiments, frontières et libellés OpenStreetMap. Le zoom continu
   accepte pavé tactile, molette, pincement et boutons ; les pins portent les
-  mascottes Arcardi. OpenFreeMap ne demande ni compte, ni clé, ni moyen de
-  paiement. L'attribution reste visible et aucune tuile n'est préchargée ou
+  mascottes Arcardi pour les réponses, tandis que le vrai lieu est une épingle
+  verte avec drapeau séparé. OpenFreeMap ne demande ni compte, ni clé, ni moyen
+  de paiement. L'attribution reste visible et aucune tuile n'est préchargée ou
   relayée par Arcardi.
 - Panoramas : 38 enregistrements tirés de la dernière révision WorldGuessr
   encore sous MIT, complétés le 2026-09-06 par la carte personnelle que
