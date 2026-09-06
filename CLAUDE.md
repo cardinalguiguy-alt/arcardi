@@ -10,42 +10,52 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ⚠️⚠️⚠️ **CE BLOC DÉSIGNE UNE SEULE ACTION SUIVANTE. IL SE REMPLACE, IL NE
 S'EMPILE PAS.**
 
-### 🔴 ACTION SUIVANTE — RECETTER OPENFREEMAP ET LE MULTI À 2–3 APPAREILS
+### 🔴 ACTION SUIVANTE — REJOUER LES CORRECTIFS P0 « OÙ'S THAT ? », PUIS RECETTER OPENFREEMAP ET LE MULTI
 
-**« Où's that ? » reste déployé et jouable en production, mais le remplacement de sa carte attend
-le commit/push de Guillaume.** Après déploiement, jouer Pinpoint avec OpenFreeMap depuis Chrome et
-Safari, puis Country + Pinpoint depuis deux ou trois appareils/réseaux différents ; vérifier pins
-mascottes, zoom molette/pavé tactile/pincement, reconnexion et passage hôte. Le `.env.local` reste
-volontairement branché sur le faux Supabase de recette ; ne jamais y recopier une clé du Dashboard.
-**Non fait : aucun calque de relief tiers n'a été ajouté** — cette première passe teste Liberty
-seule. Après cette recette, reprendre Ferme Vallée P1 bis.
+**Le 2026-09-06, un audit (Codex puis Claude, en jouant réellement — page jetable +
+`fake-supabase.mjs`, pas en relisant le code) a trouvé quatre défauts qui cassaient le jeu, tous
+corrigés le jour même :**
+- **Pinpoint donnait la réponse.** Le masque d'adresse Google n'existait qu'en mode Pays ; en
+  Pinpoint — le seul mode où ignorer sa position est tout le jeu — le lien Google « Afficher dans
+  Google Maps » restait visible et cliquable toute la manche. Masqué dans les deux modes
+  désormais, opacité pleine (l'ancien dégradé partiellement transparent pouvait laisser un reste de
+  texte visible).
+- **2 des 40 panoramas ne répondaient plus chez Google** (Tchéquie, Bolivie) : la manche démarrait
+  quand même, chrono en marche, sur un écran noir « Aucune image Street View disponible » — message
+  de Google, pas d'Arcardi. Retirés (38 restants, rien ajouté au catalogue MIT). ⚠️ Aucun code ne
+  peut détecter ça à l'exécution (iframe cross-origin, voir §4) : seule une revue manuelle
+  périodique du catalogue protège de la prochaine perte de couverture Google.
+- **Aucune vérification WebGL avant de lancer Pinpoint** : un joueur sans accélération graphique
+  démarrait une partie où il ne pourrait jamais poser de point. Le bouton "Jouer" le bloque
+  désormais, même avertissement que la clé Maps manquante.
+- **Le signalement d'un panorama mort passait par un `window.confirm()` natif** (hors thème,
+  bloquait l'automatisation de test) : remplacé par un bouton à deux clics dans le thème du jeu.
 
-**Livré et validé le 2026-09-06 :**
-- jeu catalogue **« Où's that ? »** ouvert au solo et borné à 8 joueurs en ligne ;
-- solo Country Streak jusqu'à la première erreur, avec QCM de 4 drapeaux ou recherche
-  accent-insensible dans les 114 pays/territoires de l'Explorer GeoGuessr ; révélation à chaque
-  tour, historique et score final ;
-- solo Pinpoint en exactement 5 manches, total final sur 25 000 et détail manche par manche ;
-- multi Pays en 5 manches, 1 point par bonne réponse, classement final et ex aequo ;
-- multi Pinpoint à 2–8 : meilleur intact, chaque poursuivant perd son propre écart × multiplicateur,
-  éliminés spectateurs, dernier vivant gagnant ;
-- autorité hôte et `rooms.game_state` conservées ; réponses, chronos, lancement, résultat, revanche
-  et statistiques multi synchronisés ; le solo n'écrit jamais victoire/défaite ;
-- 40 panoramas mondiaux conservés ; le cartouche d'adresse Google est masqué pendant le mode Pays
-  sans masquer l'attribution Google ; documentation fournisseur/licence mise à jour ;
-- recette navigateur avec Google réel : Country Streak QCM et recherche, erreur/fin de série, puis
-  partie Pays à 3 joueurs avec réponses différentes et révélation identique sur les trois écrans ;
-- production `arcardi.vercel.app` recettée avant le remplacement : Street View, choix/révélation
-  Country, score/distance Pinpoint et manche suivante étaient tous passés ; nouvelle carte locale
-  MapLibre 4.7.1 + OpenFreeMap Liberty recettée dans Chrome isolé avec rues/bâtiments/libellés,
-  clic, zoom progressif, révélation à trois pins et mascottes Arcardi ;
-- Dashboard Supabase réel audité en lecture seule : 8/10 prérequis présents, seuls `rooms` et
-  `room_players` manquaient dans `supabase_realtime` ; ces deux publications additives ont été
-  activées, puis le second audit a rendu **10/10 vrais** ; aucune donnée ni autre schéma touché ;
-- `tools/verify-ousthat.mjs` **57/57** ; mutation dégâts ⇒ **3 échecs** ; filet complet des **21**
-  bancs muet donc vert après ajout explicite du global standard `Intl` à la liste blanche de
-  `verify-portee` ; `npm run build` vert avec le seul avertissement préexistant `G_SOIL` de Ferme
-  Vallée.
+`tools/verify-ousthat.mjs` **60/60** ; falsification toujours à **3 échecs** ; `verify-portee`
+vert ; `npm run build` vert (seul avertissement préexistant `G_SOIL`).
+
+**Non fait : aucune de ces quatre corrections n'a encore été rejouée par Guillaume**, et le fond de
+l'audit reste entier — seule la sécurité/disponibilité a été traitée aujourd'hui. La sensation
+GeoGuessr (révélation qui coupe le panorama au lieu de le garder visible dessous, carte de
+révélation qui remonte MapLibre de zéro au lieu de réutiliser celle du jeu, aucun survol animé,
+panneau Pays plaqué à l'écran plutôt que rétractable) reste tout un chantier P1, à livrer par petits
+morceaux (§2 : ne pas mêler deux changements visuels dans la même livraison).
+
+**Toujours en attente, sans rapport avec les correctifs du jour :** « Où's that ? » reste déployé et
+jouable en production, mais le remplacement de sa carte attend le commit/push de Guillaume. Après
+déploiement, jouer Pinpoint avec OpenFreeMap depuis Chrome et Safari, puis Country + Pinpoint depuis
+deux ou trois appareils/réseaux différents ; vérifier pins mascottes, zoom molette/pavé
+tactile/pincement, reconnexion et passage hôte. Le `.env.local` reste volontairement branché sur le
+faux Supabase de recette ; ne jamais y recopier une clé du Dashboard. Aucun calque de relief tiers
+ajouté — cette passe teste Liberty seule. Après ces deux recettes, reprendre Ferme Vallée P1 bis.
+
+**Rappel de ce qui a été livré avant ces correctifs (toujours vrai) :** jeu catalogue ouvert au
+solo et borné à 8 joueurs en ligne ; solo Country Streak (QCM ou recherche dans les 114
+pays/territoires de l'Explorer GeoGuessr) et solo Pinpoint en 5 manches sur 25 000 ; multi Pays en
+5 manches et multi Pinpoint à 2–8 (meilleur intact, poursuivants perdent leur écart × multiplicateur,
+éliminés spectateurs) ; autorité hôte et `rooms.game_state` conservées, solo qui n'écrit jamais
+victoire/défaite ; Dashboard Supabase réel audité **10/10** (`rooms`/`room_players` ajoutées à
+`supabase_realtime`, aucune donnée touchée).
 
 **Configuration :** aucune manipulation Supabase ni Vercel pour cette carte. OpenFreeMap ne demande
 **ni compte, ni clé, ni moyen de paiement** ; MapLibre est installé localement sous licence BSD.
@@ -394,6 +404,11 @@ dépôt.
   ce dessin. Les textes des bâtiments s'écrivent VIVANTS, au rendu — ce qui les rend en plus
   bilingues, ce qu'un sprite baké ne peut pas être. Idem `translate`/`rotate` : le faux canvas
   les ignore, un sprite qui en dépend se juge faux.
+- ⚠️⚠️ **UN `onLoad` D'IFRAME PROUVE QUE LE DOCUMENT S'EST OUVERT, JAMAIS QUE SON CONTENU EST
+  VALIDE** (Où's that ?, 2026-09-06). Un panoId Street View retiré par Google sert quand même une
+  page qui charge normalement — `onLoad` se déclenche à l'identique d'un vrai panorama, en
+  silence. Aucun code ne peut lire l'intérieur d'un iframe cross-origin pour distinguer les deux ;
+  seule une revue manuelle régulière du contenu attendu le peut.
 - ⚠️ **TEINTER UN SPRITE AVEC UN `fillRect` DESSINE UNE BOÎTE.** Un sprite est transparent
   partout sauf sur lui-même ; l'assombrir passe par `ctx.filter` (et il FAUT le remettre à
   `"none"`, c'est un état du contexte). ⚠️ Même famille au 427 : teinter un VÊTEMENT ne se

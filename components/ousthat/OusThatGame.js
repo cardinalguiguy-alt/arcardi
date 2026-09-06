@@ -216,9 +216,23 @@ function CountryPicker({ choices, inputMode, lang, selected, locked, onChange, o
   );
 }
 
+// Vérifié une seule fois, au montage : GuessMap ne découvre l'absence de
+// WebGL qu'au moment de poser le point, la manche déjà lancée (§ audit
+// 2026-09-06). Un joueur sans accélération graphique doit le savoir AVANT de
+// s'engager sur Pinpoint, pas au milieu d'une manche qu'il ne peut plus finir.
+function supportsWebGL() {
+  try {
+    const canvas = document.createElement("canvas");
+    return !!(canvas.getContext("webgl2") || canvas.getContext("webgl") || canvas.getContext("experimental-webgl"));
+  } catch (error) {
+    return false;
+  }
+}
+
 export default function OusThatGame({ room, me, isHost, players, lang, onFinish }) {
   const c = copyFor(lang);
   const hasEmbedKey = !!process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY;
+  const hasWebGL = useMemo(() => supportsWebGL(), []);
   const [state, setState] = useState(null);
   const [channelReady, setChannelReady] = useState(false);
   const [draftConfig, setDraftConfig] = useState({ ...DEFAULT_CONFIG });
@@ -230,6 +244,7 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
   const [tick, setTick] = useState(() => Date.now());
   const [localDeadline, setLocalDeadline] = useState(null);
   const [localCountdown, setLocalCountdown] = useState(null);
+  const [reportArmed, setReportArmed] = useState(false);
 
   const stateRef = useRef(null);
   const channelRef = useRef(null);
@@ -238,6 +253,7 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
   const lastProposalAtRef = useRef(0);
   const pendingProposalRef = useRef(null);
   const proposalTimerRef = useRef(null);
+  const reportTimerRef = useRef(null);
 
   const proposedSeats = seatList(players);
   const playerSignature = proposedSeats.map((seat) => seat.id).join("|");
@@ -489,6 +505,8 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
     setMapOpen(false);
     setMapExpanded(false);
     setNotice("");
+    clearTimeout(reportTimerRef.current);
+    setReportArmed(false);
   }, [state?.roundId, me.id]);
 
   useEffect(() => {
@@ -593,6 +611,23 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
   }, [sendRequest]);
   const markPanoramaSlow = useCallback(() => { setNotice(copyFor(lang).loadingSlow); }, [lang]);
 
+  // Deux clics dans le thème du jeu plutôt qu'une boîte de dialogue native du
+  // navigateur : celle-ci cassait le thème sombre et bloquait toute
+  // automatisation de test (§ audit 2026-09-06). Le second clic doit arriver
+  // dans les 3 s.
+  const handleReport = useCallback(() => {
+    if (!reportArmed) {
+      setReportArmed(true);
+      clearTimeout(reportTimerRef.current);
+      reportTimerRef.current = setTimeout(() => setReportArmed(false), 3000);
+      return;
+    }
+    clearTimeout(reportTimerRef.current);
+    setReportArmed(false);
+    const current = stateRef.current;
+    if (current?.roundId) sendRequest("location_problem", { roundId: current.roundId });
+  }, [reportArmed, sendRequest]);
+
   const start = () => {
     const checked = validateConfig(draftConfig);
     setConfigErrors(checked.errors);
@@ -635,8 +670,9 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
               </div>
               <div className="ot-summary"><b>{c.summary}</b><span>{draftConfig.mode === "country" ? (setupSolo ? c.untilMistake : `${MULTI_COUNTRY_ROUNDS} ${c.rounds}`) : (setupSolo ? `${SOLO_ROUNDS} ${c.rounds} · 25 000 ${c.points}` : `${checked.value.initialHp.toLocaleString()} PV`)}</span><small>{draftConfig.mode === "country" ? c.countryRule : (setupSolo ? c.soloScoreRule : c.damageRule)}</small></div>
               {!hasEmbedKey && <div className="ot-key-warning"><b>{c.noKeyTitle}</b><span>{c.noKeyBody}</span></div>}
+              {draftConfig.mode === "pinpoint" && !hasWebGL && <div className="ot-key-warning"><b>{c.noWebglTitle}</b><span>{c.noWebglBody}</span></div>}
               {notice && <p className="ot-form-error">{notice}</p>}
-              <div className="ot-setup-actions"><button className="ot-btn secondary" onClick={() => { setDraftConfig({ ...DEFAULT_CONFIG }); setConfigErrors([]); setNotice(""); }}>{c.reset}</button><button className="ot-btn primary" disabled={!hasEmbedKey || !state.seats.length} onClick={start}>{setupSolo ? c.launchSolo : c.launchMulti}</button></div>
+              <div className="ot-setup-actions"><button className="ot-btn secondary" onClick={() => { setDraftConfig({ ...DEFAULT_CONFIG }); setConfigErrors([]); setNotice(""); }}>{c.reset}</button><button className="ot-btn primary" disabled={!hasEmbedKey || !state.seats.length || (draftConfig.mode === "pinpoint" && !hasWebGL)} onClick={start}>{setupSolo ? c.launchSolo : c.launchMulti}</button></div>
             </>
           ) : <div className="ot-wait-card"><div className="ot-orbit" /><p>{c.waitingHost}</p></div>}
           <button className="ot-text-button" onClick={backToLobby}>{c.lobby}</button>
@@ -693,7 +729,11 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
   return (
     <div className={"ot-root ot-arena" + (mapOpen ? " map-open" : "") + (mode === "country" ? " country" : "")}>
       {location && <StreetViewFrame location={location} roundId={state.roundId} lang={lang} onFrameLoad={markPanoramaLoaded} onSlow={markPanoramaSlow} />}
-      {mode === "country" && <div className="ot-google-place-mask" aria-hidden="true" />}
+      {/* Les deux modes révèlent la position si on les laisse tels quels : le
+          cartouche d'adresse de Google trahit le pays en mode Pays, et son
+          lien « Afficher dans Google Maps » pose la réponse exacte en
+          Pinpoint. Masqué dans les deux cas, jamais un seul (2026-09-06). */}
+      <div className="ot-google-place-mask" aria-hidden="true" />
       <header className="ot-hud ot-hud-many">
         <div className="ot-player-strip">{state.seats.map((seat, index) => {
           const team = state.teams.find((entry) => entry.id === seat.teamId);
@@ -718,7 +758,7 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
       {state.finalDeadline && state.firstConfirmedBy !== me.id && !locked && <div className="ot-final-alert">⚡ {c.firstLocked}</div>}
       {locked && myPlaying && state.phase === "playing" && <div className="ot-locked-toast">✓ {solo ? c.answerLocked : c.waitingOpponent}</div>}
       {!myPlaying && state.phase === "playing" && <div className="ot-locked-toast">◉ {c.spectating}</div>}
-      <div className="ot-corner-actions"><button onClick={() => { if (window.confirm(c.reportHint)) sendRequest("location_problem", { roundId: state.roundId }); }}>{c.report}</button><button onClick={backToLobby}>{c.lobby}</button></div>
+      <div className="ot-corner-actions"><button className={reportArmed ? "armed" : ""} title={reportArmed ? c.reportConfirmHint : undefined} onClick={handleReport}>{reportArmed ? c.reportConfirm : c.report}</button><button onClick={backToLobby}>{c.lobby}</button></div>
       {notice && <div className="ot-network-note">{notice}</div>}
     </div>
   );

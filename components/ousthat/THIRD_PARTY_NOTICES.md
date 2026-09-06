@@ -16,8 +16,10 @@ implemented independently for Arcardi.
 
 ## WorldGuessr location records
 
-The 40 panorama records in `locations.js` were extracted from
-`data/diverse-locations.json` at WorldGuessr revision:
+38 of 40 panorama records originally extracted from
+`data/diverse-locations.json` remain in `locations.js` (two — Czech Republic
+and Bolivia — were removed on 2026-09-06 after their panorama IDs stopped
+resolving at Google). The extraction source is WorldGuessr revision:
 
 - repository: https://github.com/codergautam/worldguessr
 - last MIT revision used: `ef88928c03a70d77ce5a1c86fddf74814ff67fc7`

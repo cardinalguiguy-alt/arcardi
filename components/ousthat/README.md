@@ -109,7 +109,7 @@ le document Google s'est ouvert, pas que sa dernière tuile est rendue.
   mascottes Arcardi. OpenFreeMap ne demande ni compte, ni clé, ni moyen de
   paiement. L'attribution reste visible et aucune tuile n'est préchargée ou
   relayée par Arcardi.
-- Panoramas : 40 enregistrements tirés de la dernière révision WorldGuessr
+- Panoramas : 38 enregistrements tirés de la dernière révision WorldGuessr
   encore sous MIT. Aucun ajout PolyForm Noncommercial n'est repris.
 - Vocabulaire pays/territoires : liste factuelle de l'Explorer officiel
   GeoGuessr relevée le 2026-09-06 ; aucun code ni visuel GeoGuessr n'est repris.
