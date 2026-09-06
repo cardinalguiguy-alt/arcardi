@@ -6598,7 +6598,13 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
 .ot-ready-dot{ width:8px; height:8px; border-radius:50%; background:#525d78; box-shadow:0 0 0 3px rgba(82,93,120,.13); }.ot-ready-dot.ready{ background:#62e7af; box-shadow:0 0 0 3px rgba(98,231,175,.13),0 0 9px #62e7af; }
 .ot-round-clock{ min-width:96px; text-align:center; }.ot-round-clock small{ display:block; color:#9daccc; font-size:9px; text-transform:uppercase; letter-spacing:.12em; }.ot-round-clock strong{ display:block; font-size:25px; line-height:1.08; font-variant-numeric:tabular-nums; letter-spacing:-.06em; }.ot-round-clock strong.urgent{ color:#ffca5f; animation:otPulse 1s ease-in-out infinite; }
 @keyframes otPulse{ 50%{ opacity:.62; transform:scale(.97); } }
-.ot-panorama-cover{ position:absolute; inset:0; z-index:7; display:grid; place-items:center; padding:20px; background:radial-gradient(circle at 50% 45%,#142a50,#060914 64%); }
+/* Toujours monté (voir OusThatGame.js) : .hidden pilote un fondu de sortie au
+   lieu d'un démontage sec — le panorama, déjà chargé, apparaissait sinon
+   d'un coup au passage "playing" (retour de Guillaume sur les transitions,
+   2026-09-06). pointer-events coupé une fois caché : sinon ce calque continue
+   d'intercepter les clics pendant son fondu. */
+.ot-panorama-cover{ position:absolute; inset:0; z-index:7; display:grid; place-items:center; padding:20px; background:radial-gradient(circle at 50% 45%,#142a50,#060914 64%); opacity:1; transition:opacity .4s ease; }
+.ot-panorama-cover.hidden{ opacity:0; pointer-events:none; }
 .ot-panorama-cover::before{ content:""; position:absolute; inset:0; opacity:.16; background:repeating-linear-gradient(90deg,transparent 0 69px,rgba(104,217,255,.18) 70px),repeating-linear-gradient(0deg,transparent 0 69px,rgba(104,217,255,.18) 70px); mask-image:radial-gradient(circle,#000,transparent 70%); }
 .ot-cover-card{ position:relative; width:min(530px,90vw); display:flex; flex-direction:column; align-items:center; gap:14px; padding:28px; box-sizing:border-box; text-align:center; border:1px solid var(--ot-line); border-radius:24px; background:rgba(8,14,31,.88); box-shadow:0 25px 80px rgba(0,0,0,.45); }
 .ot-cover-card h2{ font-family:'Bungee'; font-size:17px; }.ot-cover-card p{ color:#b3bfd9; font-size:11px; line-height:1.6; }.ot-cover-card>small{ color:#7483a3; font-size:9px; line-height:1.55; }
@@ -6652,6 +6658,19 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
 .ot-final-alert,.ot-locked-toast{ position:absolute; z-index:10; left:50%; transform:translateX(-50%); bottom:20px; max-width:min(420px,calc(100vw - 32px)); padding:9px 13px; border-radius:99px; font-size:9px; font-weight:900; background:rgba(8,13,29,.88); border:1px solid rgba(255,202,95,.35); box-shadow:0 8px 25px rgba(0,0,0,.4); }
 .ot-locked-toast{ color:#a7f0d1; border-color:rgba(98,231,175,.35); }.ot-network-note{ position:absolute; z-index:15; top:90px; left:50%; transform:translateX(-50%); padding:8px 12px; border-radius:10px; color:#ffe0a0; background:rgba(40,28,8,.88); border:1px solid rgba(255,202,95,.3); font-size:9px; }
 
+/* Fin de partie EN INCRUSTATION sur le dernier panorama (2026-09-06, retour
+   de Guillaume), plutôt qu'une page séparée : .ot-finished-overlay est le
+   voile (absolu, DANS ot-arena — jamais son propre .ot-root) posé sur le
+   panorama/HUD/masque déjà montés ; .ot-reveal-root en devient la carte
+   flottante, plus la position:fixed d'un root à elle seule. */
+.ot-finished-overlay{ position:absolute; inset:0; z-index:15; display:flex; align-items:center; justify-content:center; padding:clamp(12px,3vw,32px); box-sizing:border-box; background:rgba(4,7,16,.72); backdrop-filter:blur(10px) saturate(1.1); animation:otFinishedIn .4s ease; }
+@keyframes otFinishedIn{ from{ opacity:0; } }
+.ot-finished-overlay .ot-reveal-root{ width:100%; max-height:100%; border:1px solid var(--ot-line); border-radius:26px; box-shadow:0 30px 100px rgba(0,0,0,.5); }
+/* Les deux réglages ci-dessous supposaient une page PLEINE HAUTEUR (avant
+   2026-09-06) : dans la carte flottante, ils gonfleraient inutilement une
+   fin de partie courte au lieu de s'ajuster à son contenu. */
+.ot-finished-overlay .ot-reveal-grid{ min-height:0; max-height:min(640px,72vh); }
+.ot-finished-overlay .ot-final-summary{ margin-top:0; }
 .ot-reveal-root{ overflow:auto; padding:clamp(18px,3vw,42px); box-sizing:border-box; background:radial-gradient(circle at 50% -20%,#1c3e65,#070b19 56%); }
 .ot-reveal-root.finished::before{ content:""; position:fixed; inset:0; pointer-events:none; background:radial-gradient(circle at 50% 0,rgba(255,202,95,.15),transparent 46%); }
 .ot-reveal-head{ position:relative; max-width:1180px; margin:0 auto 18px; display:flex; align-items:flex-end; justify-content:space-between; }.ot-reveal-head h1{ margin-top:4px; font-family:'Bungee'; font-size:clamp(28px,5vw,58px); line-height:1; }.ot-damage-burst{ display:grid; grid-template-columns:auto auto; align-items:end; gap:0 8px; text-align:right; }.ot-damage-burst small{ grid-column:1/-1; color:#8f9dbb; font-size:9px; letter-spacing:.14em; text-transform:uppercase; }.ot-damage-burst strong{ color:#ff8b72; font-size:clamp(34px,5vw,64px); line-height:.85; }.ot-damage-burst span{ color:var(--ot-gold); font-size:13px; }
@@ -6692,8 +6711,16 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
 /* pointer-events:auto (audit 2026-09-06) : un masque en pointer-events:none
    ne repeint que des pixels, la souris traverse jusqu'à l'iframe Google en
    dessous (adresse/recherche cliquables). Ce bloc doit rester OPAQUE au clic
-   pour être un vrai bouclier, pas seulement un habillage visuel. */
-.ot-google-place-mask{ position:absolute; z-index:6; top:0; left:0; width:min(370px,78vw); height:96px; pointer-events:auto; cursor:default; background:linear-gradient(135deg,#040714 0%,#040714 80%,transparent); }
+   pour être un vrai bouclier, pas seulement un habillage visuel.
+   Habillage « dynamic island » (2026-09-06, retour de Guillaume : le bandeau
+   plat lisait comme un bug) : coin arrondi côté panorama (top/left restent
+   francs contre les bords réels de l'écran, seul le coin exposé se galbe),
+   liseré et ombre pour lire comme un panneau posé plutôt qu'un aplat, un
+   glyphe en très faible opacité pour signer la forme. Empreinte (position,
+   taille, opacité du dégradé) INCHANGÉE : c'est elle qui couvre le texte de
+   Google, la retoucher redonnerait la fuite. */
+.ot-google-place-mask{ position:absolute; z-index:6; top:0; left:0; width:min(370px,78vw); height:96px; pointer-events:auto; cursor:default; border-radius:0 0 28px 0; border-right:1px solid rgba(255,255,255,.07); border-bottom:1px solid rgba(255,255,255,.07); box-shadow:0 14px 30px -12px rgba(0,0,0,.55); background:linear-gradient(135deg,#040714 0%,#040714 80%,transparent); }
+.ot-google-place-mask-glyph{ position:absolute; left:58%; bottom:10px; display:grid; place-items:center; width:22px; height:22px; border-radius:50%; color:rgba(210,225,255,.38); background:rgba(255,255,255,.05); font-size:12px; line-height:1; }
 
 .ot-country-picker{ position:absolute; z-index:9; left:50%; bottom:14px; transform:translateX(-50%); width:min(760px,calc(100vw - 28px)); height:min(460px,66vh); overflow:hidden; box-sizing:border-box; padding:15px; border:1px solid rgba(220,235,255,.25); border-radius:21px; background:rgba(6,11,26,.91); box-shadow:0 24px 80px rgba(0,0,0,.55); backdrop-filter:blur(16px) saturate(1.2); transition:width .24s ease,height .24s ease,border-radius .24s ease,padding .24s ease,box-shadow .2s ease; }
 .ot-country-picker.open{ overflow-y:auto; }
@@ -6712,7 +6739,12 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
    patron replié/déplié que le dock de carte et le panneau Pays. right:82px
    pour la même raison que .ot-map-dock : la boussole et le zoom natifs de
    Google restent visibles derrière, et occupent déjà ce coin. */
-.ot-reveal-dock{ position:absolute; z-index:11; right:82px; bottom:14px; width:220px; height:58px; overflow:hidden; box-sizing:border-box; padding:0; border:1px solid rgba(220,235,255,.25); border-radius:29px; background:rgba(6,11,26,.94); box-shadow:0 24px 80px rgba(0,0,0,.55); backdrop-filter:blur(16px) saturate(1.2); transition:width .24s ease,height .24s ease,border-radius .24s ease,padding .24s ease; }
+/* Remonté à chaque manche (key={state.roundId}) : l'animation d'entrée
+   rejoue donc à chaque fois sans piège de classe qui ne redémarre pas
+   (retour de Guillaume sur les transitions, 2026-09-06 — avant, le dock
+   apparaissait d'un coup, sans transition d'entrée). */
+.ot-reveal-dock{ position:absolute; z-index:11; right:82px; bottom:14px; width:220px; height:58px; overflow:hidden; box-sizing:border-box; padding:0; border:1px solid rgba(220,235,255,.25); border-radius:29px; background:rgba(6,11,26,.94); box-shadow:0 24px 80px rgba(0,0,0,.55); backdrop-filter:blur(16px) saturate(1.2); transition:width .24s ease,height .24s ease,border-radius .24s ease,padding .24s ease; animation:otRevealIn .38s cubic-bezier(.2,.8,.2,1); }
+@keyframes otRevealIn{ from{ opacity:0; transform:translateY(10px) scale(.94); } }
 .ot-reveal-dock.open{ width:min(480px,44vw); height:min(600px,78vh); padding:16px; border-radius:22px; overflow-y:auto; display:flex; flex-direction:column; gap:10px; }
 .ot-reveal-dock.collapsed>*:not(.ot-reveal-peek){ visibility:hidden; pointer-events:none; }
 .ot-reveal-peek{ position:absolute; inset:0; z-index:3; display:flex; align-items:center; justify-content:center; gap:8px; border:0; border-radius:29px; color:#eef4ff; background:radial-gradient(circle at 30% 24%,#2d5a3f,#091226 74%); cursor:pointer; font-size:12px; font-weight:800; opacity:0; pointer-events:none; transition:opacity .16s ease,transform .2s ease; }
@@ -6799,6 +6831,9 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
 @media (prefers-reduced-motion:reduce){
   .ot-orbit,.ot-round-clock strong.urgent,.ot-countdown,.ot-scoreboard article.damaged{ animation:none; }
   .ot-btn,.ot-map-dock,.ot-sv,.ot-hp i,.ot-reveal-hp i{ transition:none; }
+  .ot-panorama-cover{ transition:none; }
+  .ot-reveal-dock,.ot-finished-overlay{ animation:none; }
+  .ot-map-canvas .maplibregl-canvas{ transition:none; }
 }
 
 /* ==========================================================================

@@ -124,6 +124,30 @@ Le panorama reste masqué jusqu'à l'acquittement des joueurs connectés, ajoute
 2,5 s de stabilisation, puis un décompte de 3 s. Une iframe chargée prouve que
 le document Google s'est ouvert, pas que sa dernière tuile est rendue.
 
+## Interface : masque, plein écran, fin de partie (2026-09-06)
+
+L'iframe Street View n'a **jamais** `allowFullScreen` : Google y promeut SON
+contenu seul dans le calque plein écran, hors de portée d'un masque posé en
+frère dans le DOM. Le plein écran est donc rendu par Arcardi lui-même
+(`requestFullscreen()` sur `ot-arena`, bouton dédié dans le coin) — masque et
+HUD sont des **descendants** de l'élément promu, ils restent affichés par-
+dessus à n'importe quelle taille. `toggleFullscreen` encaisse un refus
+(Permissions-Policy, iframe sans `allow="fullscreen"`) par `try/catch` et
+`.catch()` : Chrome peut lever un `TypeError` **synchrone**
+(« Permissions check failed »), pas seulement rejeter une promesse — trouvé
+en jouant, pas en relisant.
+
+Le masque d'adresse (`ot-google-place-mask`) est en `pointer-events:auto` : un
+masque qui laisse passer le clic n'est qu'un habillage visuel, pas un
+bouclier. Son empreinte (position, taille, dégradé) ne se retouche pas — elle
+couvre exactement le texte de Google. Seul l'habillage (coin arrondi, liseré,
+glyphe à faible opacité) peut changer.
+
+La fin de partie s'incruste sur le dernier panorama (`FinishedDock`, voile +
+carte flottante), au lieu d'une page séparée — même principe que la
+révélation manche par manche (`RevealDock`), qui avait déjà quitté ce travers
+le même jour.
+
 ## Fournisseurs et licences
 
 - Panorama : Google Maps Embed API, demandé par identifiant de panorama.

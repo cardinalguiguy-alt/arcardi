@@ -190,6 +190,23 @@ ok("start() passe mapId à locationOrder côté hôte, la revanche aussi", /loca
 ok("un téléphone en paysage (court, quelle que soit sa largeur) reçoit son propre resserrement", /@media \(max-height:500px\)\{[\s\S]{0,400}\.ot-map-dock\.open/.test(css));
 ok("le canevas MapLibre se fond en fondu plutôt que de flasher en blanc", /\.ot-map-canvas \.maplibregl-canvas\{ opacity:0/.test(css) && map.includes('map.once("load", () => setMapReady(true))') && map.includes('mapReady ? " ready" : ""'));
 
+section("audit 2026-09-06 (suite) — sensibilité, transitions, plein écran, fin de partie");
+ok("le zoom de la carte de réponse a été rendu plus sensible qu'avant (diviseurs abaissés)", /setWheelZoomRate\(1 \/ (\d+)\)/.exec(map)?.[1] < 450 && /setZoomRate\(1 \/ (\d+)\)/.exec(map)?.[1] < 100);
+ok("le masque d'adresse porte un habillage de coin (coin arrondi + repère), pas un aplat brut", /\.ot-google-place-mask\{[^}]*border-radius:0 0 28px 0/.test(css) && game.includes('className="ot-google-place-mask-glyph"'));
+ok("le voile de préparation reste monté et fond en sortie au lieu de se démonter net", game.includes('"ot-panorama-cover" + (preparing ? "" : " hidden")') && /\.ot-panorama-cover\.hidden\{ opacity:0/.test(css));
+ok("le dock de révélation manche par manche a une entrée animée à chaque remontage", /\.ot-reveal-dock\{[^}]*animation:otRevealIn/.test(css));
+// Le plein écran DOIT passer par ot-arena (masque + HUD en descendants,
+// visibles même promus), jamais par l'iframe (Google y promeut SON contenu
+// seul dans le calque plein écran, hors de portée d'un masque posé en frère).
+ok("le plein écran est piloté par Arcardi sur l'arène, pas délégué à l'iframe Google", game.includes("arenaRef.current?.requestFullscreen") && !/^\s*allowFullScreen\b/m.test(frame));
+// Trouvé EN JOUANT (2026-09-06) : un contexte qui refuse le plein écran peut
+// lever un TypeError SYNCHRONE ("Permissions check failed"), pas seulement
+// rejeter une promesse — sans garde, ça cassait tout le jeu pour un bouton
+// de confort. Les deux formes d'échec doivent être couvertes.
+ok("le bouton plein écran ne peut pas planter le jeu si l'API est refusée (try/catch + .catch())", /const toggleFullscreen = useCallback\(\(\) => \{\s*try \{[\s\S]{0,300}\} catch \(error\) \{/.test(game) && game.includes("requestFullscreen?.()?.catch(() => {})"));
+ok("la fin de partie s'incruste sur le dernier panorama au lieu d'une page séparée", !game.includes('if (state.phase === "finished") {') && /state\.phase === "finished" && <FinishedDock/.test(game) && game.includes('"ot-finished-overlay"'));
+ok("FinishedDock reçoit bien location (pays de repli) et déclenche next/lobby via les requêtes existantes", /<FinishedDock state=\{state\} result=\{state\.result\} mode=\{mode\} solo=\{solo\} lang=\{lang\} c=\{c\} revealTarget=\{revealTarget\} location=\{location\}/.test(game) && game.includes('onRematch={() => sendRequest("rematch")}'));
+
 console.log(fails ? `\n${fails} ÉCHEC(S) sur ${total} contrôles.\n` : `\n${total}/${total} contrôles verts.\n`);
 if (process.argv.includes("--falsify")) console.log("Mutation active : ce passage ne doit JAMAIS être vert.\n");
 process.exit(fails ? 1 : 0);

@@ -124,8 +124,11 @@ function GuessMap({ marker, onChange, locked = false, expanded = false, reveal =
     map.touchZoomRotate.disableRotation();
     // Les deux cadences distinguent la molette crantée du geste continu du
     // pavé tactile ; MapLibre conserve alors son interpolation native fluide.
-    map.scrollZoom.setWheelZoomRate(1 / 450);
-    map.scrollZoom.setZoomRate(1 / 100);
+    // Sensibilité relevée (2026-09-06, retour de Guillaume : le zoom/dézoom
+    // manquait de réactivité, le pan restait bon) — diviseurs abaissés,
+    // chaque cran/geste va plus loin. Revenir à 1/450 et 1/100 si trop vif.
+    map.scrollZoom.setWheelZoomRate(1 / 220);
+    map.scrollZoom.setZoomRate(1 / 50);
     map.on("click", (event) => {
       if (lockedRef.current) return;
       const next = normalizeGuess(event.lngLat);

@@ -10,76 +10,71 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ⚠️⚠️⚠️ **CE BLOC DÉSIGNE UNE SEULE ACTION SUIVANTE. IL SE REMPLACE, IL NE
 S'EMPILE PAS.**
 
-### 🔴 ACTION SUIVANTE — JOUER EN VRAI (SOURIS RÉELLE, VRAI TÉLÉPHONE) LES CORRECTIFS « OÙ'S THAT », PUIS DÉCIDER D'UNE DEUXIÈME CARTE
+### 🔴 ACTION SUIVANTE — REJOUER EN VRAI (SOURIS RÉELLE) LE PLEIN ÉCRAN ET LE DOCK CARTE, LE RESTE EST DÉJÀ CONFIRMÉ EN JEU
 
-**Suite à l'audit du 2026-09-06 (Pinpoint joué de bout en bout, solo, hors production — voir
-`components/ousthat/README.md`), Guillaume a demandé de corriger les problèmes graves de jouabilité
-et d'équilibre UI, et d'ajouter un sélecteur de CARTE (façon worldguessr) préparant des cartes
-futures fournies en JSON. Fait, vérifié par banc et par le jeu, jamais encore par une vraie souris.**
+**Suite de la livraison Où's that du 2026-09-06 (sélecteur de carte + trois bugs graves). Guillaume
+a demandé, dans la foulée : plus de sensibilité sur le zoom de la carte de réponse, un travail sur
+les transitions, camoufler le bandeau du masque d'adresse au lieu de le cacher (« façon dynamic
+island », jugement laissé à Claude), remettre le plein écran qui avait été retiré (« il était cool »)
+en continuant à censurer l'adresse, et refaire le mécanisme de fin de partie en overlay. Fait,
+vérifié par banc et rejoué en jeu (page jetable + `fake-supabase.mjs`, vraie clé Maps Embed, vrai
+OpenFreeMap) — un match complet de bout en bout, revanche comprise.**
 
-**Trois bugs corrigés :**
-1. **P0, masque d'adresse Google contournable.** `ot-google-place-mask` était en
-   `pointer-events:none` (la souris traversait jusqu'à l'iframe) et l'iframe portait
-   `allowFullScreen` (le plein écran natif de Google faisait disparaître tout le HUD ET le masque —
-   la triche la plus directe). Corrigé : masque en `pointer-events:auto` (vrai bouclier au clic),
-   `allowFullScreen` retiré, `tabIndex={-1}` sur l'iframe (sort de la navigation Tab).
-2. **P1, aucune échappatoire si un panorama ne finit jamais de charger.** Le moteur acceptait déjà
-   `location_problem` pendant `preparing`/`countdown` ; seul le bouton ne s'affichait qu'en
-   `playing`. Corrigé : le bouton vit maintenant aussi pendant `preparing`/`countdown`.
-3. **Équilibre UI, dock carte Pinpoint trop court en paysage mobile.** La règle mobile ne se
-   déclenchait que sur `max-width`, jamais sur la hauteur — un paysage large mais bas héritait du
-   dimensionnement bureau. Nouvelle règle `@media (max-height:500px)`, indépendante de la largeur.
+1. **Zoom de la carte de réponse, plus sensible.** `GuessMap.js` : `setWheelZoomRate(1/450→1/220)`,
+   `setZoomRate(1/100→1/50)`. Le pan n'a pas été touché (déjà bon selon Guillaume).
+2. **Masque d'adresse, habillage « dynamic island ».** Empreinte (position/taille/dégradé)
+   **inchangée** — c'est elle qui couvre le texte de Google, la retoucher rouvrirait la fuite. Seul
+   l'habillage change : coin arrondi côté panorama, liseré, ombre, glyphe `⌖` à très faible opacité
+   posé loin du coin exact où Google écrit — plus un aplat noir plat.
+3. **Plein écran RÉINTRODUIT, mais RENDU PAR ARCARDI, jamais délégué à l'iframe.** L'ancien
+   `allowFullScreen` laissait Google promouvoir SON iframe seule dans le calque plein écran, hors de
+   portée d'un masque posé en frère dans le DOM (c'est exactement ce que l'audit avait fait retirer).
+   `toggleFullscreen` appelle `requestFullscreen()` sur `ot-arena` elle-même : masque et HUD, en
+   étant des DESCENDANTS de l'élément promu, restent affichés par-dessus à toute taille — « toujours
+   censurer les infos » est donc structurellement garanti, pas juste espéré. ⚠️ **Bug trouvé EN
+   JOUANT, pas en relisant** : un contexte qui refuse le plein écran (Permissions-Policy, iframe sans
+   `allow="fullscreen"`) peut faire lever à `requestFullscreen()` un `TypeError` **synchrone**
+   (« Permissions check failed »), pas seulement rejeter une promesse — sans `try/catch` +
+   `.catch()`, ça cassait tout le jeu React pour un simple bouton de confort. Reproduit dans le
+   sandbox de test (page Next.js elle-même refusait le geste), corrigé, revérifié : plus d'erreur.
+4. **Transitions.** Guillaume a choisi lui-même deux points (« sois juge » pour l'exécution) :
+   changements de phase et manche-à-manche. Le voile de préparation (`ot-panorama-cover`) reste
+   désormais monté en permanence et fond en sortie (classe `.hidden`) au lieu de se démonter net dès
+   `playing`, révélant sinon d'un coup un panorama déjà chargé. Le dock de révélation manche par
+   manche (`ot-reveal-dock`) a maintenant une entrée animée à chaque remontage (`key={roundId}` le
+   remonte réellement à chaque manche, donc l'animation rejoue à chaque fois sans piège de classe
+   qui ne redémarre pas).
+5. **Fin de partie, refaite en overlay.** `FinishedDock` (nouveau, sur le modèle de `RevealDock`)
+   s'incruste désormais sur le DERNIER panorama (voile sombre + carte flottante centrée), au lieu
+   d'une page séparée qui remontait sa propre `.ot-root` — cohérent avec la révélation manche par
+   manche, qui avait déjà quitté ce travers le même jour (2026-09-06). `location` reste celui de la
+   dernière manche (`locationCursor` ne bouge plus une fois `matchComplete`), donc le panorama
+   derrière le voile est le bon.
 
-**Cosmétique, validé par Guillaume (l'autre option proposée — troncature de texte sur mobile
-étroit — a été refusée, donc PAS touchée) :** le flash blanc de ~1-2 s sur la carte de révélation
-(MapLibre peint son propre canevas en blanc tant que le style n'a pas chargé) est remplacé par un
-fondu, même geste que `.ot-sv`/`.loaded` (StreetViewFrame.js) : `mapReady` posé au `load`, classe
-`.ready`, transition CSS sur `.maplibregl-canvas`.
+**Vérifié, et comment :** `node tools/verify-ousthat.mjs` **85/85** (8 contrôles neufs sur cette
+sous-livraison, dont le piège du `TypeError` synchrone), falsification toujours à **3 échecs**
+(inchangé), `npx next build` vert. Rejoué en jeu un match Pinpoint solo complet (5 manches, revanche
+comprise) : sélecteur de carte, badge du masque et bouton plein écran visibles côte à côte dans le
+coin ; voile de préparation confirmé toujours monté (juste caché) ; dock de révélation confirmé
+remonté à chaque manche ; **fin de partie confirmée en overlay flottant** sur trois largeurs
+(mobile portrait, mobile paysage, bureau) ; revanche depuis l'overlay confirmée fonctionnelle.
 
-**Sélecteur de carte (nouveau) :** `components/ousthat/maps.js` est le registre (`MAPS`,
-`MAP_BY_ID`) ; une seule carte à ce jour, **Beautiful World**, qui enveloppe tout le stock existant
-(1 551 lieux, `locationsData.js` inchangé). `locationOrder(seed, mode, mapId)` (`locations.js`)
-restreint le tirage à la carte choisie, retombe sur Beautiful World si l'id est inconnu. Le setup
-affiche un sélecteur (cartes façon `ot-mode-picker`, une seule entrée pour l'instant — le rendu
-n'a rien à changer le jour où une deuxième s'ajoute). ⚠️ **Un croisement mode Pays × future carte
-sans aucun lieu rattaché à un pays est refusé** : côté client avant l'envoi (`c.noLocationsForMap`)
-et côté hôte (`if (!order.length) return;`) — sans ce garde-fou, une future carte trop petite
-aurait pu démarrer sur un tirage vide.
-**Pour Guillaume, la marche à suivre le jour où il fournit un JSON de carte supplémentaire (même
-format que l'export GeoGuessr déjà utilisé) :** `node tools/import-map.mjs <source.json> <id>
-"<Nom>"` écrit `components/ousthat/mapData.<id>.js` (généré) ; puis DEUX lignes à la main —
-l'ajouter à `MAPS` (`maps.js`) et son id à `GAME_MAP_IDS` (`rules.js`). Rien d'autre : setup,
-validation et bancs suivent le registre. Détail dans `components/ousthat/README.md` §Cartes.
+**Non vérifié, assumé comme tel :** le clic RÉEL sur le bouton plein écran n'a pas pu être testé —
+`requestFullscreen()` exige un vrai geste utilisateur, que ce navigateur de test ne fournit pas
+(erreur confirmée : « can only be initiated by a user gesture »). Le CODE est le patron standard
+(bouton → `requestFullscreen()` sur un ref), mais seul un vrai clic de Guillaume confirmera qu'il
+bascule effectivement en plein écran sans rien découvrir. **C'est le seul point qui reste à
+rejouer par Guillaume avant de clore ce sujet.** Idem sensibilité du zoom et dock carte en
+paysage : réglés au jugé, jamais confirmés au doigt sur un vrai téléphone.
 
-**Vérifié, et comment :** `node tools/verify-ousthat.mjs` **77/77** (13 contrôles neufs sur cette
-livraison, dont les trois correctifs et le registre de cartes), falsification toujours à **3
-échecs** (inchangé), `npx next build` vert (seul avertissement préexistant `G_SOIL`) — les trois
-relancés après le changement. Rejoué en jeu (page jetable + `fake-supabase.mjs`, VRAIE clé Maps
-Embed et VRAI OpenFreeMap — seul Supabase Realtime est simulé) : sélecteur de carte visible et
-sélectionnable au setup ; bouton « Panorama indisponible » confirmé visible pendant l'écran de
-préparation ; icône plein écran de Google confirmée absente à l'écran (comparée à une capture
-d'avant correctif) ; carte de révélation confirmée en fondu (classe `ready` posée après `load`,
-plus de flash observé).
-
-**Non vérifié, assumé comme tel :** tout ce qui précède a été déclenché par des événements
-synthétiques (`pointerdown`/`click` via JavaScript) ou par ref CDP, PAS par une souris réelle —
-l'automatisation de ce navigateur a été peu fiable sur les clics React ce jour-là (cause non
-identifiée, contournée plutôt que résolue). Aucune confirmation donc qu'un vrai clic déclenche bien
-le blocage du masque, ni que le dock resserré se manipule bien du doigt sur un vrai téléphone en
-paysage. **À rejouer par Guillaume en conditions réelles (Chrome, vrai mobile) avant de considérer
-ces trois points définitivement clos.** Le tirage déséquilibré (France 14,6 %, top 10 = 53,8 %,
-relevé dans l'audit) n'a volontairement PAS été touché : Guillaume n'a pas demandé de rééquilibrer
-le TIRAGE, seulement l'UI — à trancher séparément si besoin.
-
-**Configuration :** aucune manipulation Supabase ni Vercel pour cette livraison — uniquement du
-code, plus un fichier JSON que Guillaume fournira pour une carte future (jamais une clé, jamais un
-schéma).
+**Configuration :** aucune manipulation Supabase ni Vercel — uniquement du code.
 
 **Toujours en attente, sans rapport avec ce qui précède :** le remplacement de la carte OpenFreeMap
 attend toujours le commit/push de Guillaume ; après déploiement, jouer Pinpoint avec OpenFreeMap
 depuis Chrome et Safari, puis Country + Pinpoint depuis deux ou trois appareils/réseaux différents ;
-vérifier pins mascottes, zoom molette/pavé tactile/pincement, reconnexion et passage hôte. Après ces
-deux recettes, reprendre Ferme Vallée P1 bis.
+vérifier pins mascottes, zoom molette/pavé tactile/pincement, reconnexion et passage hôte. Le tirage
+des lieux reste déséquilibré (France 14,6 %, top 10 = 53,8 %) — jamais touché, Guillaume n'a demandé
+que l'UI. Après ces recettes, reprendre Ferme Vallée P1 bis.
 
 ### PASSIF FERME VALLÉE
 

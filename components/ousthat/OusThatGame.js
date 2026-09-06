@@ -277,6 +277,53 @@ function RevealDock({ state, result, mode, solo, lang, c, revealTarget, isHost, 
   );
 }
 
+// Fin de partie EN INCRUSTATION sur le dernier panorama (2026-09-06, retour
+// de Guillaume), plutôt qu'une page séparée : même principe que RevealDock,
+// qui avait déjà quitté ce travers le même jour pour la révélation manche
+// par manche. `location` reste celui de la DERNIÈRE manche (locationCursor
+// ne bouge plus une fois matchComplete) : le panorama derrière le voile reste
+// donc le bon, pas un panorama neuf ou vide.
+function FinishedDock({ state, result, mode, solo, lang, c, revealTarget, location, isHost, onRematch, onLobby }) {
+  const winnerSeats = state.seats.filter((seat) => (state.winnerPlayerIds || []).includes(seat.id));
+  const pinpointWinner = state.seats.find((seat) => seat.teamId === state.winnerTeamId);
+  const finalTitle = solo
+    ? (mode === "country" ? `${state.streak} ${state.streak === 1 ? c.country : c.countries}` : `${state.soloScore.toLocaleString()} / 25 000`)
+    : (winnerSeats.length ? winnerSeats.map((seat) => `${seat.avatar} ${seat.username}`).join(" · ") : pinpointWinner ? `${pinpointWinner.avatar} ${pinpointWinner.username}` : c.results);
+  return (
+    <div className={"ot-finished-overlay" + (mode === "country" ? " country" : "")}>
+      <div className="ot-reveal-root finished">
+        <div className="ot-reveal-head">
+          <div><span className="ot-kicker">{c.finalResult}</span><h1>{finalTitle}</h1></div>
+          {mode === "pinpoint" && !solo && <div className="ot-damage-burst"><small>{c.maxDamage}</small><strong>{result?.damage || 0}</strong><span>×{result?.multiplier?.toLocaleString(lang === "en" ? "en-US" : "fr-FR")}</span></div>}
+          {mode === "country" && <div className="ot-country-target"><span>{countryFlag(result?.targetCountry || location?.country)}</span><div><small>{c.correctCountry}</small><b>{countryName(result?.targetCountry || location?.country, lang)}</b></div></div>}
+        </div>
+
+        {solo && <section className="ot-final-summary"><span className="ot-final-icon">{mode === "country" ? "⚡" : "⌖"}</span><h2>{mode === "country" ? c.streakComplete : c.fiveRoundsComplete}</h2><strong>{finalTitle}</strong><div className="ot-history">{(state.history || []).map((entry) => <div key={`${entry.round}-${entry.locationId}`} className={entry.correct === false ? "wrong" : ""}><span>{entry.round}</span><b>{entry.targetCountry ? countryFlag(entry.targetCountry) : `${Number(entry.score || 0).toLocaleString()} pts`}</b><small>{entry.targetCountry ? countryName(entry.targetCountry, lang) : formatDistance(entry.distanceKm, lang)}</small></div>)}</div></section>}
+
+        {!solo && <div className="ot-reveal-grid">
+          {mode === "pinpoint" ? <section className="ot-reveal-map"><GuessMap expanded reveal={{ target: revealTarget, players: result?.players || [] }} seats={state.seats} unavailableMessage={c.mapUnavailable} /><span className="ot-actual-chip">{countryFlag(revealTarget?.country)} {c.actual}</span></section> : <section className="ot-country-reveal"><div className="ot-country-reveal-flag">{countryFlag(result?.targetCountry)}</div><span className="ot-kicker">{c.correctCountry}</span><h2>{countryName(result?.targetCountry, lang)}</h2></section>}
+          <section className="ot-scoreboard">
+            {state.seats.map((seat, index) => {
+              const player = result?.players?.find((entry) => entry.playerId === seat.id);
+              const team = state.teams.find((entry) => entry.id === seat.teamId);
+              const before = result?.beforeTeams?.find((entry) => entry.id === seat.teamId);
+              const countryTotal = Number(state.countryScores?.[seat.id] || 0);
+              return <article className={(team?.damage > 0 ? "damaged " : "") + (player?.correct ? "correct" : mode === "country" ? "wrong" : "")} key={seat.id} style={{ "--seat": SEAT_COLORS[index % SEAT_COLORS.length] }}>
+                <header><span>{seat.avatar}</span><b>{seat.username}</b><strong>{mode === "country" ? `${countryTotal}/${state.round}` : (player?.score?.toLocaleString() || 0)}</strong></header>
+                {mode === "pinpoint" && !solo && <AnimatedHealth team={team} maxHp={state.config.initialHp} fromHp={before?.hp} />}
+                {mode === "pinpoint" ? <div><span>{player?.answered ? (player.confirmed ? c.confirmed : c.unconfirmed) : c.noAnswer}</span><b>{c.distance} · {formatDistance(player?.distanceKm, lang)}</b></div> : <div><span>{player?.guessCountry ? `${countryFlag(player.guessCountry)} ${countryName(player.guessCountry, lang)}` : c.noAnswer}</span><b>{player?.correct ? `✓ ${c.correct}` : `✕ ${c.wrong}`}</b></div>}
+              </article>;
+            })}
+            {mode === "pinpoint" && !solo && <p className="ot-damage-copy">{result?.damagedTeamIds?.length ? c.multiDamageRule : c.tie}</p>}
+            <div className="ot-reveal-actions">{isHost ? <><button className="ot-btn primary" onClick={onRematch}>{c.rematch}</button><button className="ot-btn secondary" onClick={onLobby}>{c.lobby}</button></> : <><p>{c.hostOnly}</p><button className="ot-btn secondary" onClick={onLobby}>{c.lobby}</button></>}</div>
+          </section>
+        </div>}
+        {solo && <div className="ot-final-actions"><button className="ot-btn primary" onClick={onRematch}>{c.playAgain}</button><button className="ot-btn secondary" onClick={onLobby}>{c.lobby}</button></div>}
+      </div>
+    </div>
+  );
+}
+
 // Vérifié une seule fois, au montage : GuessMap ne découvre l'absence de
 // WebGL qu'au moment de poser le point, la manche déjà lancée (§ audit
 // 2026-09-06). Un joueur sans accélération graphique doit le savoir AVANT de
@@ -306,7 +353,9 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
   const [localDeadline, setLocalDeadline] = useState(null);
   const [localCountdown, setLocalCountdown] = useState(null);
   const [reportArmed, setReportArmed] = useState(false);
+  const [fsActive, setFsActive] = useState(false);
 
+  const arenaRef = useRef(null);
   const stateRef = useRef(null);
   const channelRef = useRef(null);
   const hostTimerRef = useRef(null);
@@ -693,6 +742,34 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
     if (current?.roundId) sendRequest("location_problem", { roundId: current.roundId });
   }, [reportArmed, sendRequest]);
 
+  // Plein écran RENDU PAR ARCARDI (2026-09-06, retour de Guillaume : « il
+  // était cool, remets-le, en censurant toujours les infos ») — jamais via
+  // l'attribut allowFullScreen de l'iframe (retiré à l'audit : Google y
+  // promeut SON iframe seul dans le calque plein écran, hors de portée d'un
+  // masque posé en frère dans le DOM parent, HUD compris). En demandant le
+  // plein écran sur ot-arena elle-même, le masque ET le HUD sont des
+  // DESCENDANTS de l'élément promu : ils restent rendus par-dessus, à
+  // n'importe quelle taille d'écran.
+  // Testé en dev (2026-09-06) : un contexte qui refuse le plein écran
+  // (Permissions-Policy sans "fullscreen", iframe sans allow="fullscreen")
+  // ne rejette pas toujours proprement une promesse — Chrome peut lever un
+  // TypeError SYNCHRONE ("Permissions check failed"), qui remontait tel
+  // quel jusqu'à React et cassait tout le jeu pour un simple bouton de
+  // confort. try/catch + .catch() couvrent les deux formes d'échec.
+  const toggleFullscreen = useCallback(() => {
+    try {
+      if (document.fullscreenElement) document.exitFullscreen?.()?.catch(() => {});
+      else arenaRef.current?.requestFullscreen?.()?.catch(() => {});
+    } catch (error) {
+      // Rien à faire : le jeu reste jouable, seul le plein écran est refusé.
+    }
+  }, []);
+  useEffect(() => {
+    const onChange = () => setFsActive(document.fullscreenElement === arenaRef.current);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
   const start = () => {
     const checked = validateConfig(draftConfig);
     setConfigErrors(checked.errors);
@@ -766,62 +843,22 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
     );
   }
 
-  if (state.phase === "finished") {
-    const result = state.result;
-    const winnerSeats = state.seats.filter((seat) => (state.winnerPlayerIds || []).includes(seat.id));
-    const pinpointWinner = state.seats.find((seat) => seat.teamId === state.winnerTeamId);
-    const finalTitle = solo
-      ? (mode === "country" ? `${state.streak} ${state.streak === 1 ? c.country : c.countries}` : `${state.soloScore.toLocaleString()} / 25 000`)
-      : (winnerSeats.length ? winnerSeats.map((seat) => `${seat.avatar} ${seat.username}`).join(" · ") : pinpointWinner ? `${pinpointWinner.avatar} ${pinpointWinner.username}` : c.results);
-    // Le match est FINI, il n'y a plus de manche suivante à voir arriver : la
-    // prise plein écran reste justifiée ici. La révélation manche par manche,
-    // elle, se joue désormais en incrustation sur le panorama (RevealDock,
-    // rendu depuis l'arène ci-dessous) — c'est elle qui gardait le panorama
-    // caché à chaque tour avant le 2026-09-06.
-    return (
-      <div className={"ot-root ot-reveal-root finished" + (mode === "country" ? " country" : "")}>
-        <div className="ot-reveal-head">
-          <div><span className="ot-kicker">{c.finalResult}</span><h1>{finalTitle}</h1></div>
-          {mode === "pinpoint" && !solo && <div className="ot-damage-burst"><small>{c.maxDamage}</small><strong>{result?.damage || 0}</strong><span>×{result?.multiplier?.toLocaleString(lang === "en" ? "en-US" : "fr-FR")}</span></div>}
-          {mode === "country" && <div className="ot-country-target"><span>{countryFlag(result?.targetCountry || location?.country)}</span><div><small>{c.correctCountry}</small><b>{countryName(result?.targetCountry || location?.country, lang)}</b></div></div>}
-        </div>
-
-        {solo && <section className="ot-final-summary"><span className="ot-final-icon">{mode === "country" ? "⚡" : "⌖"}</span><h2>{mode === "country" ? c.streakComplete : c.fiveRoundsComplete}</h2><strong>{finalTitle}</strong><div className="ot-history">{(state.history || []).map((entry) => <div key={`${entry.round}-${entry.locationId}`} className={entry.correct === false ? "wrong" : ""}><span>{entry.round}</span><b>{entry.targetCountry ? countryFlag(entry.targetCountry) : `${Number(entry.score || 0).toLocaleString()} pts`}</b><small>{entry.targetCountry ? countryName(entry.targetCountry, lang) : formatDistance(entry.distanceKm, lang)}</small></div>)}</div></section>}
-
-        {!solo && <div className="ot-reveal-grid">
-          {mode === "pinpoint" ? <section className="ot-reveal-map"><GuessMap expanded reveal={{ target: revealTarget, players: result?.players || [] }} seats={state.seats} unavailableMessage={c.mapUnavailable} /><span className="ot-actual-chip">{countryFlag(revealTarget?.country)} {c.actual}</span></section> : <section className="ot-country-reveal"><div className="ot-country-reveal-flag">{countryFlag(result?.targetCountry)}</div><span className="ot-kicker">{c.correctCountry}</span><h2>{countryName(result?.targetCountry, lang)}</h2></section>}
-          <section className="ot-scoreboard">
-            {state.seats.map((seat, index) => {
-              const player = result?.players?.find((entry) => entry.playerId === seat.id);
-              const team = state.teams.find((entry) => entry.id === seat.teamId);
-              const before = result?.beforeTeams?.find((entry) => entry.id === seat.teamId);
-              const countryTotal = Number(state.countryScores?.[seat.id] || 0);
-              return <article className={(team?.damage > 0 ? "damaged " : "") + (player?.correct ? "correct" : mode === "country" ? "wrong" : "")} key={seat.id} style={{ "--seat": SEAT_COLORS[index % SEAT_COLORS.length] }}>
-                <header><span>{seat.avatar}</span><b>{seat.username}</b><strong>{mode === "country" ? `${countryTotal}/${state.round}` : (player?.score?.toLocaleString() || 0)}</strong></header>
-                {mode === "pinpoint" && !solo && <AnimatedHealth team={team} maxHp={state.config.initialHp} fromHp={before?.hp} />}
-                {mode === "pinpoint" ? <div><span>{player?.answered ? (player.confirmed ? c.confirmed : c.unconfirmed) : c.noAnswer}</span><b>{c.distance} · {formatDistance(player?.distanceKm, lang)}</b></div> : <div><span>{player?.guessCountry ? `${countryFlag(player.guessCountry)} ${countryName(player.guessCountry, lang)}` : c.noAnswer}</span><b>{player?.correct ? `✓ ${c.correct}` : `✕ ${c.wrong}`}</b></div>}
-              </article>;
-            })}
-            {mode === "pinpoint" && !solo && <p className="ot-damage-copy">{result?.damagedTeamIds?.length ? c.multiDamageRule : c.tie}</p>}
-            <div className="ot-reveal-actions">{isHost ? <><button className="ot-btn primary" onClick={() => sendRequest("rematch")}>{c.rematch}</button><button className="ot-btn secondary" onClick={backToLobby}>{c.lobby}</button></> : <><p>{c.hostOnly}</p><button className="ot-btn secondary" onClick={backToLobby}>{c.lobby}</button></>}</div>
-          </section>
-        </div>}
-        {solo && <div className="ot-final-actions"><button className="ot-btn primary" onClick={() => sendRequest("rematch")}>{c.playAgain}</button><button className="ot-btn secondary" onClick={backToLobby}>{c.lobby}</button></div>}
-      </div>
-    );
-  }
 
   if (state.phase === "exhausted") return <div className="ot-root ot-center"><h1>Où&apos;s that ?</h1><p>{c.exhausted}</p><button className="ot-btn primary" onClick={backToLobby}>{c.lobby}</button></div>;
 
   const preparing = state.phase === "preparing" || state.phase === "countdown";
   return (
-    <div className={"ot-root ot-arena" + (mapOpen ? " map-open" : "") + (mode === "country" ? " country" : "")}>
+    <div ref={arenaRef} className={"ot-root ot-arena" + (mapOpen ? " map-open" : "") + (mode === "country" ? " country" : "")}>
       {location && <StreetViewFrame location={location} roundId={state.roundId} lang={lang} onFrameLoad={markPanoramaLoaded} onSlow={markPanoramaSlow} />}
       {/* Les deux modes révèlent la position si on les laisse tels quels : le
           cartouche d'adresse de Google trahit le pays en mode Pays, et son
           lien « Afficher dans Google Maps » pose la réponse exacte en
-          Pinpoint. Masqué dans les deux cas, jamais un seul (2026-09-06). */}
-      <div className="ot-google-place-mask" aria-hidden="true" />
+          Pinpoint. Masqué dans les deux cas, jamais un seul (2026-09-06).
+          Habillage « dynamic island » (retour de Guillaume, même date) : un
+          repère de coin plutôt qu'un bandeau plat — le glyphe est un simple
+          rappel de marque, posé loin du coin exact (haut-gauche) où Google
+          rend son texte, jamais dessus. */}
+      <div className="ot-google-place-mask" aria-hidden="true"><span className="ot-google-place-mask-glyph">⌖</span></div>
       <header className="ot-hud ot-hud-many">
         <div className="ot-player-strip">{state.seats.map((seat, index) => {
           const team = state.teams.find((entry) => entry.id === seat.teamId);
@@ -832,7 +869,12 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
         <div className="ot-round-clock"><small>{mode === "country" ? (solo ? `${c.streak} ${state.streak}` : `${c.round} ${state.round}/${MULTI_COUNTRY_ROUNDS}`) : `${c.round} ${state.round}${solo ? `/${SOLO_ROUNDS}` : ` · ×${multiplier.toLocaleString(lang === "en" ? "en-US" : "fr-FR")}`}`}</small><strong className={state.finalDeadline ? "urgent" : ""}>{state.phase === "playing" ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}` : "—:—"}</strong></div>
       </header>
 
-      {preparing && <div className="ot-panorama-cover"><div className="ot-cover-card">{state.phase === "countdown" ? <div className="ot-countdown" key={countdown}>{countdown}</div> : <><div className="ot-orbit" /><h2>{c.loading}</h2><div className="ot-load-list">{playingSeats(state).filter((seat) => onlineSeatIds.has(seat.id)).map((seat) => <span key={seat.id} className={state.loaded?.[seat.id] ? "ready" : ""}>{seat.avatar} {seat.username} · {state.loaded?.[seat.id] ? c.loaded : c.loadingOne}</span>)}</div><p>{solo ? c.soloFairStart : c.fairStart}</p><small>{c.externalLimit}</small></>}</div></div>}
+      {/* Toujours monté, jamais démonté/remonté (2026-09-06, retour de
+          Guillaume sur les transitions) : la classe .hidden pilote un fondu
+          CSS en sortie — avant, {preparing && <div>} démontait le voile
+          d'un coup dès "playing", découvrant le panorama déjà chargé sans
+          transition. */}
+      <div className={"ot-panorama-cover" + (preparing ? "" : " hidden")}><div className="ot-cover-card">{state.phase === "countdown" ? <div className="ot-countdown" key={countdown}>{countdown}</div> : <><div className="ot-orbit" /><h2>{c.loading}</h2><div className="ot-load-list">{playingSeats(state).filter((seat) => onlineSeatIds.has(seat.id)).map((seat) => <span key={seat.id} className={state.loaded?.[seat.id] ? "ready" : ""}>{seat.avatar} {seat.username} · {state.loaded?.[seat.id] ? c.loaded : c.loadingOne}</span>)}</div><p>{solo ? c.soloFairStart : c.fairStart}</p><small>{c.externalLimit}</small></>}</div></div>
 
       {state.phase === "playing" && mode === "pinpoint" && <section className={"ot-map-dock " + (mapOpen ? "open" : "collapsed") + (mapExpanded ? " expanded" : "")}>
         <button className="ot-map-peek" onClick={() => setMapOpen(true)} aria-label={c.openMap}><span>🗺️</span>{draft && <i>✓</i>}</button>
@@ -845,6 +887,8 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
 
       {state.phase === "reveal" && <RevealDock key={state.roundId} state={state} result={state.result} mode={mode} solo={solo} lang={lang} c={c} revealTarget={revealTarget} isHost={isHost} onNext={() => sendRequest("next")} onLobby={backToLobby} />}
 
+      {state.phase === "finished" && <FinishedDock state={state} result={state.result} mode={mode} solo={solo} lang={lang} c={c} revealTarget={revealTarget} location={location} isHost={isHost} onRematch={() => sendRequest("rematch")} onLobby={backToLobby} />}
+
       {state.finalDeadline && state.firstConfirmedBy !== me.id && !locked && <div className="ot-final-alert">⚡ {c.firstLocked}</div>}
       {locked && myPlaying && state.phase === "playing" && <div className="ot-locked-toast">✓ {solo ? c.answerLocked : c.waitingOpponent}</div>}
       {!myPlaying && state.phase === "playing" && <div className="ot-locked-toast">◉ {c.spectating}</div>}
@@ -852,7 +896,7 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
           2026-09-06) : le moteur accepte déjà location_problem à ces phases
           (canVoidLocation, plus haut) — un panorama qui ne finit jamais de
           charger n'avait sinon aucune échappatoire hors "Retour au salon". */}
-      <div className="ot-corner-actions">{(state.phase === "playing" || preparing) && <button className={reportArmed ? "armed" : ""} title={reportArmed ? c.reportConfirmHint : undefined} onClick={handleReport}>{reportArmed ? c.reportConfirm : c.report}</button>}<button onClick={backToLobby}>{c.lobby}</button></div>
+      <div className="ot-corner-actions">{(state.phase === "playing" || preparing) && <button className={reportArmed ? "armed" : ""} title={reportArmed ? c.reportConfirmHint : undefined} onClick={handleReport}>{reportArmed ? c.reportConfirm : c.report}</button>}<button onClick={toggleFullscreen} aria-label={fsActive ? c.exitFullscreen : c.enterFullscreen} title={fsActive ? c.exitFullscreen : c.enterFullscreen}>{fsActive ? "⤡" : "⤢"}</button><button onClick={backToLobby}>{c.lobby}</button></div>
       {notice && <div className="ot-network-note">{notice}</div>}
     </div>
   );
