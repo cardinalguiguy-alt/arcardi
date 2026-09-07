@@ -7998,13 +7998,63 @@ div.ferme-usage{ margin-bottom:10px; }
 .ferme-ship-progress-next{
   margin-top:10px; color:#ffe3a8; font-size:12px; line-height:1.35;
 }
-.ferme-star-recap{
-  font-family:ui-rounded, "Avenir Next", Avenir, system-ui, sans-serif;
-  font-size:17px; line-height:1.55; letter-spacing:.01em;
+
+/* 2026-09-07 — la plaque du chantier naval (QUETE.md §12.2, « 0 bis ») : une
+   simple liste numérotée, dans l'ordre où la coque prendra forme
+   (`Q.STAR_SHIP_KEYS`). Rien à commander, rien à suivre — juste des noms. */
+.ferme-plaque-parts{ display:flex; flex-direction:column; gap:6px; margin-top:12px; }
+.ferme-plaque-part{ display:flex; align-items:center; gap:10px; font-size:14px; }
+.ferme-plaque-num{
+  display:flex; align-items:center; justify-content:center; flex:0 0 auto;
+  width:22px; height:22px; border-radius:999px; font-size:12px; font-weight:800;
+  background:rgba(255,216,104,.16); border:1px solid rgba(255,216,104,.4); color:#ffd868;
 }
-.ferme-star-recap h2{ font-size:clamp(27px, 4vw, 38px); line-height:1.15; }
-.ferme-star-recap .ferme-hint{ font-size:15px; font-weight:650; color:rgba(255,240,210,.78); }
-.ferme-star-recap .ferme-btn{ font-family:inherit; }
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-07 — LE RAPPEL DE REPRISE N'EST PLUS UNE MODALE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️⚠️ Guillaume : « l'overlay de reprise de quête est un peu envahissant, il
+   est pas fluide et en plus il est très autoritaire. » Il vivait dans
+   `.ferme-modal` (fond noir à 45 %, clic obligatoire pour se fermer) — le même
+   coffrage qu'une boutique où il FAUT choisir. Une simple information n'a pas
+   à prendre le joueur en otage : cette carte ne capte de clic que sur
+   elle-même (le reste du fond continue de recevoir la marche et les outils —
+   `starRecap` est d'ailleurs sorti de `starUiOpenRef`, voir `FermeGame.js`).
+   ⚠️ ELLE NE RÉINVENTE PAS UNE SECONDE CHORÉGRAPHIE : `animation-name` pointe
+   sur `fermeStarRibbon`, la même course d'entrée/tenue/sortie que le ruban de
+   jalon juste au-dessus — glisser depuis derrière le bandeau, tenir, repartir.
+   Une seule course pour toute la famille des annonces de la quête, jamais deux
+   qui pourraient diverger au premier réglage (§8 de `CLAUDE.md`). Sa durée
+   arrive en style inline depuis `STAR_RECAP_MS` (`FermeGame.js`), jamais
+   recopiée ici — même leçon que le ruban (476). */
+.ferme-star-recap{
+  position:fixed; left:50%; z-index:21;
+  top:calc(env(safe-area-inset-top, 0px) + 8px);
+  display:flex; flex-direction:column; gap:4px;
+  padding:12px 34px 12px 16px; border-radius:16px;
+  background:linear-gradient(rgba(14,18,38,.95), rgba(6,8,20,.97));
+  border:2px solid rgba(255,228,164,.34);
+  box-shadow:0 0 0 1px rgba(255,230,170,.16) inset, 0 14px 42px rgba(0,0,0,.66);
+  color:#f4ecd6; max-width:min(420px, 90vw); box-sizing:border-box;
+  font-family:ui-rounded, "Avenir Next", Avenir, system-ui, sans-serif;
+  animation-name:fermeStarRibbon; animation-timing-function:cubic-bezier(.2,.9,.3,1);
+  animation-fill-mode:forwards;
+}
+.ferme-star-recap-x{
+  position:absolute; top:8px; right:10px; padding:4px; line-height:1;
+  border:none; background:transparent; color:rgba(244,236,214,.6);
+  font-size:14px; cursor:pointer; transition:color .15s ease;
+}
+.ferme-star-recap-x:hover{ color:#f4ecd6; }
+.ferme-star-recap-kicker{
+  font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+  color:rgba(255,216,104,.82);
+}
+.ferme-star-recap-title{ font-size:19px; font-weight:800; line-height:1.2; }
+.ferme-star-recap-sub{ font-size:13px; line-height:1.4; color:rgba(244,236,214,.86); }
+.ferme-star-recap-goal{ font-size:12px; line-height:1.4; color:rgba(255,216,104,.82); margin-top:2px; }
+@media (max-width: 560px){
+  .ferme-star-recap{ max-width:calc(100vw - 20px); }
+}
 
 @media (max-width: 560px){
   .ferme-ship-progress{
@@ -8427,6 +8477,12 @@ body:has(.ferme-star-ribbon) .ferme-toasts{ top:212px; }
 @media (max-width: 760px){
   body:has(.ferme-star-ribbon) .ferme-toasts{ top:calc(env(safe-area-inset-top, 0px) + 304px); }
 }
+/* Le rappel de reprise occupe la même bande que le ruban (les deux sont
+   mutuellement exclusifs côté JS) : même décalage, pour la même raison. */
+body:has(.ferme-star-recap) .ferme-toasts{ top:212px; }
+@media (max-width: 760px){
+  body:has(.ferme-star-recap) .ferme-toasts{ top:calc(env(safe-area-inset-top, 0px) + 304px); }
+}
 /* ⚠️ LA TRANSITION EST SUR LA PILE, PAS SUR CHAQUE TOAST : quand le ruban
    apparaît puis s'efface, les toasts déjà à l'écran GLISSENT à leur nouvelle
    place au lieu de sauter. Un texte qui se téléporte de deux cents pixels se
@@ -8441,7 +8497,7 @@ body:has(.ferme-star-ribbon) .ferme-toasts{ top:212px; }
   .ferme-star-hud .pip.fresh{ animation:none; }
   .ferme-star-hud .goal .g-in, .ferme-star-hud .goal .g-out{ animation-name:fermeGoalFade; }
   @keyframes fermeGoalFade{ from{ opacity:0; } }
-  .ferme-star-ribbon{ animation-name:fermeStarRibbonFade; }
+  .ferme-star-ribbon, .ferme-star-recap{ animation-name:fermeStarRibbonFade; }
   @keyframes fermeStarRibbonFade{
     0%{ opacity:0; transform:translateX(-50%) translateY(54px); }
     9%,84%{ opacity:1; transform:translateX(-50%) translateY(54px); }

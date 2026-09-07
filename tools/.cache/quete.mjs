@@ -238,13 +238,35 @@ export const STAR_SITES = [
      et deux `spot` auraient fait passer la verte pour la discrète dans toute
      jointure qui lit cette table. */
   { id: "townGreen", zone: "town",  spot: "starGreen",  content: "star", color: "green",  verb: "track" },
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-04 (lot E) — LA SEPTIÈME SŒUR REJOINT LA TABLE, MAIS PAS UN
+     ║ CHAPITRE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ ELLE N'A PAS DE `need` : ON NE LA CHERCHE PAS VIA CETTE TABLE. Elle est
+     trouvée, sauvée puis portée par le fil dédié du lac maléfique (`evilFound`/
+     `evilRescued`, plus bas dans ce fichier) — cette ligne existe pour UNE seule
+     raison, la même qu'annoncée en tête de `STAR_FOLLOWER_SITES` : `content:
+     "star"` suffit à la faire apparaître dans la formation dès que
+     `resolveStarFound` écrit son id, sans qu'aucun rendu n'ait à la connaître
+     par son nom. `starMissing`/`starGoalKey` ne lisent que les `need` des
+     chapitres (`STAR_CHAPTERS`) : rester hors de cette liste est ce qui la
+     garde hors du bandeau une fois trouvée — vrai depuis le lot C (voir la note
+     de `starGoalKey`, « une fois vue, cette clé ne revient jamais »).
+     ⚠️ Verbe NEUF (`revive`) : ni « la trouver » (elle l'est déjà, par un fil à
+     part) ni aucun des six gestes existants ne la décrit — le seul geste qui la
+     COMPLÈTE est de la réanimer, une fois portée hors du lac. */
+  { id: "evilStar", zone: "evil", spot: "evilShore", content: "star", color: "violet", verb: "revive" },
 ];
 /* Les verbes connus, écrits UNE fois. ⚠⚠ Une étoile sans verbe est une
    erreur de table et non un cas à rattraper à l'exécution : `starVerbOf` rend
    `null`, `starTameTarget` ne la propose pas, et le banc le dit tout de suite.
    Un repli silencieux sur « dos tourné » aurait redonné le même geste à tout le
    monde, c'est-à-dire exactement le défaut qu'on vient de corriger. */
-export const STAR_VERBS = ["light", "warm", "pair", "lure", "spot", "track"];
+export const STAR_VERBS = ["light", "warm", "pair", "lure", "spot", "track", "revive"];
+/* L'id de la septième sœur, écrit UNE fois — `FermeGame.js` le relit plutôt que
+   de recopier la chaîne "evilStar", même discipline que `STAR_LIGHT_SITE`/
+   `STAR_WARM_SITE` juste en dessous. */
+export const STAR_EVIL_ID = "evilStar";
 export function starVerbOf(id) {
   const s = STAR_SITE[id];
   return s && STAR_VERBS.includes(s.verb) ? s.verb : null;
@@ -1817,6 +1839,20 @@ export const STAR_END_MS = 14000;      // durée de la résolution
    vérifier qu'elle ne dépasse pas la scène qui la précède. Une carte qui reste
    à l'écran pendant qu'on rejoue est un panneau, pas une transition. */
 export const STAR_CARD_MS = 3800;
+/* ⚠️⚠️ 2026-09-04 — LA RESPIRATION AVANT LA CARTE, QUAND ELLE SUIT UNE TROUVAILLE
+   « CHAT SEUL ». La fouille de ferme (chapitre 1→2) a déjà sa pause : elle passe
+   par l'overlay bloquant `starFind` (STAR_FIND_MS = 5200, FermeGame.js), qui tient
+   `starPanelsClear()` fermé le temps qu'il faut. La verte et la discrète (chapitre
+   2→3) n'annoncent leur trouvaille qu'au chat (`broadcastChat`, pas d'overlay
+   bloquant) : rien n'empêchait donc la carte « Chapitre Trois » de s'afficher dans
+   LA MÊME image que le toast de découverte — vu en jeu (bloc ⏭️ REPRISE de
+   CLAUDE.md) et confirmé indépendamment par Codex (« trop d'événements se
+   déclenchent simultanément »). `STAR_CARD_BREATH_MS` est un PLANCHER, pas un
+   délai fixe : `FermeGame.js` en fait un `setTimeout` avant le premier appel à
+   `starShowCard`, qui vérifie encore `starPanelsClear()` une fois le délai
+   écoulé — donc une fouille de ferme (déjà bloquée 5200 ms par `starFind`) n'est
+   pas ralentie d'autant de plus, seul le maximum des deux compte. */
+export const STAR_CARD_BREATH_MS = 3000;
 
 /* ╔═════════════════════════════════════════════════════════════════════════════
    ║ ZIP 445 — LA CHUTE DOIT ÊTRE VUE. (demande de Guillaume : « quand la comète
@@ -2073,7 +2109,13 @@ export const STAR_GOAL_TARGET = { craterHot: "crater", craterAlone: "crater",
      deux indices pour obtenir : là, le chevron la désigne pour de bon. Sa
      position est résolue par `starTargetPos` (`FermeGame.js`), seul endroit qui
      connaisse les buissons. */
-  townGreenLed: "townGreen" };
+  townGreenLed: "townGreen",
+  /* 2026-09-03 (lot C) — MÊME FAMILLE QUE "cauldron" : une adresse hors-table,
+     pas un lieu de `STAR_SITES` (elle n'y est pas encore, voir `resolveStarEvilFound`
+     un peu plus haut). `starTargetPos` (FermeGame.js) la résout vivante depuis
+     `ew.lake`, ou replie sur le passage sombre tant qu'on n'est pas dans le monde
+     maléfique — exactement le repli déjà écrit pour le chaudron. */
+  evilSeek: "evilLake" };
 /* ⚠️⚠️ 2026-09-02 (lot A2) — LE CHEVRON DE LA DISCRÈTE POINTE LA PLACE, PAS ELLE.
    C'est la seule décision de conception de ce lot, et elle se joue là : un chevron
    posé sur sa tête supprime la chasse — il resterait à marcher jusqu'à une flèche,
@@ -2082,7 +2124,7 @@ export const STAR_GOAL_TARGET = { craterHot: "crater", craterAlone: "crater",
    ⚠️ `shyPlaza` EST UNE ADRESSE HORS TABLE, comme `sawmill` ou `cauldron` : ce
    n'est pas un lieu d'étoile, c'est un endroit de la ville. `FermeGame.js` la
    résout depuis `C.TOWN_PLAZA`, seule source de « où est la place ». */
-export const STAR_OFF_TABLE_TARGETS = ["townHall", "sawmill", "shipyard", "cauldron", "shyPlaza"];
+export const STAR_OFF_TABLE_TARGETS = ["townHall", "sawmill", "shipyard", "cauldron", "shyPlaza", "evilLake"];
 export function starTargetSite(e, ctx) {
   const goal = starGoalKey(e, ctx);
   if (!goal) return null;
@@ -2525,23 +2567,77 @@ export const STAR_WAKE_MIN_MS = 700;        // plancher : en dessous, ce n'est p
 export const STAR_WAKE_BAND_A = 0.74;       // début de la bande cible, en fraction de période
 export const STAR_WAKE_BAND_B = 0.96;       // fin de la bande — 22 %, soit 242 ms au départ, 172 ms au bout
 export const STAR_WAKE_IDLE_BEATS = 3;      // battements sans aucun appui avant que l'anneau s'efface
+/* Le profil par défaut, celui de la reine — REGROUPE les sept constantes
+   ci-dessus pour le second appelant. */
+const STAR_WAKE_PROFILE_DEFAULT = {
+  hits: STAR_WAKE_HITS, periodMs: STAR_WAKE_PERIOD_MS, stepMs: STAR_WAKE_STEP_MS,
+  minMs: STAR_WAKE_MIN_MS, bandA: STAR_WAKE_BAND_A, bandB: STAR_WAKE_BAND_B, idleBeats: STAR_WAKE_IDLE_BEATS,
+};
+/* ⚠️⚠️ 2026-09-04 (lot E) — LE RÉVEIL DE LA REINE DEVIENT UN PROFIL, PAS UN
+   RÉGLAGE FIGÉ. Même geste que `haulStep` la veille sur le Brochet
+   (`evilHaulStep` → `haulStep(state, dt, holding, rates)`) : la septième sœur
+   se réanime « par le même geste » que la reine (note de `starWoke`, plus
+   bas), donc c'est la MÊME mécanique qu'il faut appeler deux fois avec deux
+   réglages — jamais une seconde copie de ces sept constantes. Un `profile`
+   OMIS retombe sur `STAR_WAKE_PROFILE_DEFAULT` : les sept constantes
+   ci-dessus et leurs quatre appelants existants ne changent pas d'une ligne. */
+export function starWakePeriod(hits, profile) {
+  const P = profile || STAR_WAKE_PROFILE_DEFAULT;
+  return Math.max(P.minMs, P.periodMs - (Math.max(0, hits | 0) * P.stepMs));
+}
 /* ⚠️ PURE ET EXPORTÉE POUR QUE LE BANC LA JOUE : c'est la seule règle du réveil
    qui décide quelque chose, donc c'est la seule qu'il faut pouvoir rejouer sans
    navigateur (le reste est du dessin). */
-export function starWakeOnBeat(phase) {
+export function starWakeOnBeat(phase, profile) {
+  const P = profile || STAR_WAKE_PROFILE_DEFAULT;
   const p = +phase || 0;
-  return p >= STAR_WAKE_BAND_A && p <= STAR_WAKE_BAND_B;
-}
-/* La période du battement n° `hits` — DÉRIVÉE, jamais une table. */
-export function starWakePeriod(hits) {
-  return Math.max(STAR_WAKE_MIN_MS, STAR_WAKE_PERIOD_MS - (Math.max(0, hits | 0) * STAR_WAKE_STEP_MS));
+  return p >= P.bandA && p <= P.bandB;
 }
 /* ⚠️ « À QUEL POINT EST-ELLE RÉVEILLÉE » — 0 gris, 1 jaune. Le dessin en dépend,
    et le joueur ne lit QUE ça : la jauge n'est pas un chiffre affiché, c'est la
    couleur de l'étoile elle-même. Une seule écriture, sinon la barre et la teinte
    divergeraient (défaut du 456, « une barre qui promet et ment »). */
-export function starWakeGlow(hits) {
-  return Math.max(0, Math.min(1, (Math.max(0, hits | 0)) / STAR_WAKE_HITS));
+export function starWakeGlow(hits, profile) {
+  const P = profile || STAR_WAKE_PROFILE_DEFAULT;
+  return Math.max(0, Math.min(1, (Math.max(0, hits | 0)) / P.hits));
+}
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-03 (lot B) — LA VRAIE COMPAGNE PULSE AVEC L'ANNEAU.
+   ╚══════════════════════════════════════════════════════════════════════════
+   Guillaume a tranché contre un écran dédié : « l'étoile de l'animation doit
+   ressembler exactement trait pour trait à l'étoile réelle […] réduite à un
+   pulse, sans changer de scène ». Ce que le joueur voit reste donc le sprite
+   `starWispSprite` qu'il connaît déjà (`FermeGame.js`, `drawStarWisp`), et rien
+   de plus — pas de géométrie, pas de nouvel écran.
+   ⚠️ TROIS BANDES, PAS UN DÉGRADÉ : le sprite n'a que trois états rastérisés
+   (0/1/2), donc « trait pour trait » veut dire CHOISIR entre ces trois dessins,
+   jamais une teinte inventée qui n'existe dans aucun d'eux. */
+export function starWakeCompanionState(hits, profile) {
+  const g = starWakeGlow(hits, profile);
+  return g >= 0.75 ? 0 : g >= 0.34 ? 1 : 2;
+}
+/* Le pouls pendant qu'on tape : une respiration calée sur `phase`, LA MÊME
+   horloge que l'anneau (`drawStarWakeRing`) — deux pouls qui ne battraient pas
+   ensemble se remarqueraient plus qu'un pouls absent. Elle s'amplifie avec
+   `hits` : « lente » puis « animée », jamais l'inverse. */
+export function starWakeCompanionPulse(phase, hits, profile) {
+  const g = starWakeGlow(hits, profile);
+  const ph = Math.max(0, Math.min(1, +phase || 0));
+  return 1 + 0.05 * (0.35 + 0.65 * g) * Math.sin(ph * Math.PI * 2);
+}
+/* ⚠️ NOMBRE PROVISOIRE, DATE DU JOUR : la durée du pouls de succès, à juger en
+   jouant comme les six nombres du réveil au rythme (CLAUDE.md §2/§13). */
+export const STAR_WAKE_POP_MS = 1300;
+/* Le battement du SUCCÈS : un seul, plus grand que ceux de la frappe, qui
+   s'éteint tout seul. `elapsedMs` est le temps écoulé depuis la frappe gagnante
+   (mesuré côté client, jamais diffusé — voir la note de `starWakePress`,
+   FermeGame.js) ; hors de la fenêtre, `null` : l'appelant retombe alors sur le
+   dessin par défaut, sans qu'aucun état ne reste à réconcilier. */
+export function starWakeCompanionPop(elapsedMs, popMs) {
+  const t = +elapsedMs, PM = popMs || STAR_WAKE_POP_MS;
+  if (!(t >= 0) || t >= PM) return null;
+  const u = t / PM;
+  return { state: 0, scale: 1 + 0.35 * Math.exp(-u * 4.5) * Math.cos(u * Math.PI * 2.2) };
 }
 /* Elle dort-elle encore ? ⚠️ `e.woke` est un DICTIONNAIRE de lieux, pas un
    booléen de reine : la septième sœur se réanimera par le même geste (master
@@ -2571,6 +2667,24 @@ export function starWoke(e, id) { return !!(e && e.woke && e.woke[id]); }
    pas. `FermeGame.js` les énumère, ce fichier ne dit que LAQUELLE. C'est le même
    partage que le cratère, dont la position vient d'un balayage de la carte. */
 export const STAR_SHY_PERIOD_MS = 50000;   // elle change de planque toutes les 50 s
+/* ⚠️ HORS-ZIP 2026-09-03 — CAPTURE AU CONTACT, PLUS AU BOUTON. Demande de
+   Guillaume : sa zone (place ↔ parc, pleine de passants) est trop occupée pour
+   viser une touche E au bon moment — « il faut que l'apprivoisement soit
+   simple ». Rayon COURT, exprès plus petit que l'ancienne invite (1,6 case) :
+   on doit lui MARCHER DESSUS, pas la capturer en passant à côté sans le
+   vouloir. */
+export const STAR_SHY_CATCH_R = 0.9;
+/* ⚠️ HORS-ZIP 2026-09-03 — LE CHANGEMENT DE PLANQUE SE VOIT, IL NE SE
+   TÉLÉPORTE PLUS. Signalé par Guillaume : « elle se téléporte, c'est pas
+   normal ». Même famille que `STAR_GREEN_MOVE_MS` (le saut de buisson) : une
+   fenêtre COURTE au DÉBUT de chaque créneau, pendant laquelle elle file de son
+   ancienne planque à la nouvelle — pure fonction du temps partagé, donc les
+   deux clients la voient courir au même instant sans qu'un message ne parte.
+   Volontairement plus courte que le saut de la verte (celle-ci traverse tout
+   le domaine place↔parc, pas juste le buisson voisin : une fenêtre longue la
+   ferait glisser au ralenti sur une grande distance, ce qui se lit comme un
+   bogue de vitesse, pas comme une fuite). */
+export const STAR_SHY_MOVE_MS = 900;
 export function starShySlot(e, now) {
   const t0 = (e && +e.townFall) || 0;
   if (!t0) return 0;
@@ -2639,6 +2753,15 @@ export const STAR_GREEN_MOVE_MS = 1700;      // la course visible d'un buisson �
 export const STAR_GREEN_HOP = 9;             // portée d'un saut, en cases (le voisinage)
 export const STAR_GREEN_NEAR = 1.6;          // portée de l'invite — celle de la discrète
 export const STAR_GREEN_HINTS = 2;           // « chaud/froid » gratuits avant le guidage
+/* ⚠️ HORS-ZIP 2026-09-03 — LE COUP D'ŒIL : demande de Guillaume, « passer dans le
+   buisson permet déjà d'animer l'étoile qui sort et replonge ». Purement
+   cosmétique et purement LOCAL (comme le frisson du buisson) — aucun état
+   partagé, donc ces deux nombres se règlent sans toucher au reste du lot.
+   ⚠️ COOLDOWN, PAS UNE FOIS POUR TOUJOURS : passer une seconde fois doit
+   pouvoir la faire réagir de nouveau, juste pas en boucle si le joueur piétine
+   la case (décision de Guillaume, 2026-09-03). */
+export const STAR_GREEN_PEEK_MS = 700;         // durée du coup d'œil (sortie + replongée)
+export const STAR_GREEN_PEEK_COOLDOWN_MS = 6000; // avant qu'elle puisse rejouer sur LE MÊME buisson
 /* ⚠️ LA MARCHE EST BORNÉE À 2 000 PAS (≈ 41 h de créneaux), et le report se fait
    sur une GRAINE, pas sur un saut : au-delà, on repart d'un buisson tiré depuis le
    numéro de tranche et on ne rejoue que le reste. Sans borne, une sauvegarde
@@ -2792,7 +2915,8 @@ export function resolveStarTrack(e, who, now, name) {
    compte — et donc rien qui demande un navigateur.
    ⚠️ ELLES NE MUTENT RIEN : on rend un nouvel état. Un `st` étalé puis lissé en
    place serait la table de référence corrompue du 2026-08-31 (§4). */
-export function starWakeAdvance(st, dtMs) {
+export function starWakeAdvance(st, dtMs, profile) {
+  const P = profile || STAR_WAKE_PROFILE_DEFAULT;
   const s = { phase: +st.phase || 0, hits: Math.max(0, st.hits | 0), beats: Math.max(0, st.beats | 0),
               flash: Math.max(0, +st.flash || 0), miss: Math.max(0, +st.miss || 0), gone: false };
   /* ⚠️ LE PAS EST BORNÉ : un onglet qui revient au premier plan rend un `dt` de
@@ -2800,14 +2924,14 @@ export function starWakeAdvance(st, dtMs) {
      d'un coup — donc il abandonnerait le geste tout seul, sans que le joueur ait
      rien lâché. Même famille que le `Math.min(0.05, dt)` des boucles du dépôt. */
   const dt = Math.min(120, Math.max(0, +dtMs || 0));
-  s.phase += dt / starWakePeriod(s.hits);
+  s.phase += dt / starWakePeriod(s.hits, P);
   while (s.phase >= 1) {
     s.phase -= 1;
     s.beats += 1;
     /* ⚠️ TROIS TOURS SANS UN SEUL APPUI ET L'ANNEAU S'EFFACE : sans cette sortie,
        il resterait à battre au-dessus d'un trou que le joueur a cessé de regarder.
        Tout appui remet `beats` à zéro (voir `starWakeStrike`). */
-    if (s.beats >= STAR_WAKE_IDLE_BEATS) { s.gone = true; return s; }
+    if (s.beats >= P.idleBeats) { s.gone = true; return s; }
   }
   s.flash = Math.max(0, s.flash - dt / 250);
   s.miss = Math.max(0, s.miss - dt / 350);
@@ -2822,20 +2946,39 @@ export function starWakeAdvance(st, dtMs) {
       possible gagnerait à tous les coups, la bande finissant forcément par passer
       sous un doigt. C'est ce que `s2.wakeHint` annonce en une phrase, et c'est ce
       que `verify-quete` vérifie en martelant vraiment. */
-export function starWakeStrike(st) {
+export function starWakeStrike(st, profile) {
+  const P = profile || STAR_WAKE_PROFILE_DEFAULT;
   const s = { phase: +st.phase || 0, hits: Math.max(0, st.hits | 0), beats: 0,
               flash: Math.max(0, +st.flash || 0), miss: Math.max(0, +st.miss || 0), won: false };
-  if (starWakeOnBeat(s.phase)) {
+  if (starWakeOnBeat(s.phase, P)) {
     s.hits += 1;
     s.flash = 1;
     s.phase = 0;
-    s.won = s.hits >= STAR_WAKE_HITS;
+    s.won = s.hits >= P.hits;
     return s;
   }
   s.hits = Math.max(0, s.hits - 1);
   s.miss = 1;
   return s;
 }
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-04 (lot E) — LE PROFIL DE LA SEPTIÈME SŒUR.
+   ╚══════════════════════════════════════════════════════════════════════════
+   Même bande/même plancher d'idle que la reine (le RESSENTI du geste ne
+   change pas) ; plus de battements pour approcher les ~10 s du point 10 de
+   QUETE.md §3 (« environ 10 secondes ») — nombre provisoire, comme les huit
+   de la reine, à juger en jouant (§8/§13 de CLAUDE.md). */
+export const STAR_REVIVE_HITS = 10;
+export const STAR_REVIVE_PERIOD_MS = STAR_WAKE_PERIOD_MS;
+export const STAR_REVIVE_STEP_MS = STAR_WAKE_STEP_MS;
+export const STAR_REVIVE_MIN_MS = STAR_WAKE_MIN_MS;
+export const STAR_REVIVE_BAND_A = STAR_WAKE_BAND_A;
+export const STAR_REVIVE_BAND_B = STAR_WAKE_BAND_B;
+export const STAR_REVIVE_IDLE_BEATS = STAR_WAKE_IDLE_BEATS;
+export const STAR_REVIVE_PROFILE = {
+  hits: STAR_REVIVE_HITS, periodMs: STAR_REVIVE_PERIOD_MS, stepMs: STAR_REVIVE_STEP_MS,
+  minMs: STAR_REVIVE_MIN_MS, bandA: STAR_REVIVE_BAND_A, bandB: STAR_REVIVE_BAND_B, idleBeats: STAR_REVIVE_IDLE_BEATS,
+};
 /* ⚠️⚠️ UNE SEULE RÉPONSE POUR LA JAUGE, LE TEXTE ET L'ARBITRE — la discipline du
    456, tenue dès l'écriture cette fois. Sept états, dans l'ordre de L'ACTION LA
    PLUS PROCHE (478) : ce qui manque d'abord se dit d'abord.
@@ -2989,6 +3132,23 @@ export function newStar() {
     gift: {},       // id de joueur -> { at, kind } — le crochet cosmétique (§8)
     seen: {},       // scènes déjà jouées : cartes de chapitre, « previously »
     doneAt: 0,
+    /* 2026-09-03 (lot C) — LA SEPTIÈME SŒUR A ÉTÉ VUE. Un horodatage HÔTE, pas
+       un booléen : même discipline que `fall`/`townFall`, et ça ne coûte rien de
+       plus à écrire. PARTAGÉ (pas indexé par joueur) — contrairement au hasard de
+       la canne (`f.evilRodArmedAt`, par fermier) : « elle est prisonnière, on l'a
+       vue » est un fait du MONDE que la reine annonce à la cantonade, pas une
+       confidence à chacun séparément. Elle n'est PAS ajoutée à `STAR_SITES` : elle
+       n'est pas encore apprivoisable (aucun verbe, aucun résolveur de prise —
+       lots D/E), et y inscrire un site à moitié câblé serait une porte sans
+       chemin de code (§4 de `CLAUDE.md`). */
+    evilFound: 0,
+    /* 2026-09-04 — ELLE A ATTEINT LA RIVE (halage gagné). Même discipline
+       qu'`evilFound` : horodatage HÔTE, fait du MONDE (pas indexé par
+       joueur — un seul joueur hale à la fois, mais le résultat est partagé).
+       Ne fait PAS d'elle une compagne (elle n'est toujours pas dans
+       `STAR_SITES` : la ramasser et la ramener à la ferme restent un
+       chantier séparé, non construit). */
+    evilRescued: 0,
   };
 }
 /* ⚠️ LA REPRISE EST TOLÉRANTE, PAS CONFIANTE. Une sauvegarde d'avant ce zip n'a
@@ -3118,6 +3278,8 @@ export function migrateStar(saved) {
   if (saved.seen && typeof saved.seen === "object")
     for (const k of Object.keys(saved.seen)) if (saved.seen[k]) e.seen[String(k).slice(0, 32)] = true;
   e.doneAt = +saved.doneAt || 0;
+  e.evilFound = +saved.evilFound || 0; // 2026-09-03 (lot C)
+  e.evilRescued = +saved.evilRescued || 0; // 2026-09-04
   /* ── ZIP 479 : les trois verbes. ⚠️⚠️ MÊME DISCIPLINE QUE PARTOUT AILLEURS ICI —
      on RECONSTRUIT chaque sous-objet au lieu de faire confiance à sa forme, et un
      lieu inconnu est « une version d'après » qu'on ignore. Une sauvegarde d'avant
@@ -3343,6 +3505,78 @@ export function resolveStarDig(e, id, who, now) {
    façon de le compter. ⚠️ UN VIDE FOUILLÉ EST FAIT : sans ça, « il reste deux
    impacts » resterait affiché sur deux trous qu'on a vidés. */
 export function starDigLeft(e) { return STAR_FARM_IMPACTS.filter(s => !starDug(e, s.id)).length; }
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-03 (lot C) — LA SEPTIÈME SŒUR, PRISONNIÈRE DU LAC MALÉFIQUE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️ DÉBLOQUÉ QUAND LE CHAPITRE « crater » EST CLOS, C'EST-À-DIRE QUAND LES SIX
+   AUTRES COMPAGNES SONT RÉUNIES (§6 de QUETE.md, point 4 : « reine apprivoisée
+   ET six étoiles trouvées » — la reine EST l'une des six, voir STAR_CHAPTERS).
+   `e.ch >= STAR_CH_DONE - 1` teste « le chapitre final est atteint », jamais un
+   numéro écrit en dur (règle de la table des chapitres, plus haut dans ce
+   fichier). */
+export function starEvilUnlocked(e) { return !!e && (e.ch | 0) >= STAR_CH_DONE - 1; }
+export function starEvilFound(e) { return !!(e && e.evilFound); }
+/* Idempotent, comme resolveStarFound : plusieurs joueurs qui l'approchent dans
+   la même seconde ne produisent qu'une seule révélation. */
+export function resolveStarEvilFound(e, now) {
+  if (!starEvilUnlocked(e)) return { ok: false, tooEarly: true };
+  if (starEvilFound(e)) return { ok: true, already: true };
+  e.evilFound = +now || 1;
+  return { ok: true };
+}
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-04 — LE HALAGE : LA SIMULATION PURE, ET LE FAIT QU'ELLE A ATTEINT
+   ║ LA RIVE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   `evilHaulStep` ne connaît ni React ni le réseau : un état d'avant, un pas de
+   temps, si le joueur tient — un état d'après. `FermeGame.js` l'appelle chaque
+   image (comme `FishMinigame` pilote sa propre boucle), et n'envoie une `req`
+   au chef que quand `won` devient vrai — exactement le contrat du §4 de
+   CLAUDE.md (« ce qui récompense passe par une req arbitrée par l'hôte »). Un
+   banc peut la rejouer des centaines de fois avec des politiques de
+   tenir/relâcher différentes, comme `verify-scierie` le fait pour la scie.
+   ⚠️⚠️ 2026-09-04 — GÉNÉRALISÉE EN `haulStep`, PARAMÉTRÉE PAR UN PROFIL DE
+   VITESSES (demande Guillaume, en tranchant la lutte du Brochet : généraliser
+   plutôt que dupliquer la physique — §4 de CLAUDE.md, « une grandeur recopiée
+   reste juste jusqu'au jour où elle est fausse »). `evilHaulStep` devient un
+   simple alias figé sur `C.EVIL_HAUL_RATES`, pour ne RIEN changer chez ses
+   appelants existants (le sauvetage de la septième sœur) ; `C.FISH_HAUL_RATES`
+   sert la lutte du Brochet (et des futurs gros poissons/Requins) — même
+   fonction, même bancs, un second réglage. */
+export function haulStep(state, dt, holding, rates) {
+  const R = rates || C.EVIL_HAUL_RATES;
+  const s = state || {};
+  let progress = Math.max(0, Math.min(1, +s.progress || 0));
+  let tension = Math.max(0, Math.min(1, +s.tension || 0));
+  const dtc = Math.max(0, Math.min(0.25, +dt || 0)); // borne un dt aberrant (onglet revenu au premier plan)
+  let lockMs = Math.max(0, (+s.lockMs || 0) - dtc * 1000);
+  let slipped = false;
+  if (holding && lockMs <= 0) {
+    progress = Math.min(1, progress + R.pullRate * dtc);
+    tension = Math.min(1, tension + R.tensionRise * dtc);
+    if (tension >= 1) {
+      progress = Math.max(0, progress - R.slipPenalty);
+      tension = R.slipTension;
+      lockMs = R.slipLockMs;
+      slipped = true;
+    }
+  } else {
+    tension = Math.max(0, tension - R.tensionFall * dtc);
+  }
+  return { progress, tension, lockMs, slipped, won: progress >= 1 };
+}
+export function evilHaulStep(state, dt, holding) { return haulStep(state, dt, holding, C.EVIL_HAUL_RATES); }
+export function fishHaulStep(state, dt, holding) { return haulStep(state, dt, holding, C.FISH_HAUL_RATES); }
+export function starEvilRescued(e) { return !!(e && e.evilRescued); }
+/* Idempotent, comme `resolveStarEvilFound` : ne peut s'armer qu'après la
+   découverte, ne régresse jamais une fois gagné. */
+export function resolveStarEvilRescue(e, now) {
+  if (!starEvilFound(e)) return { ok: false, tooEarly: true };
+  if (starEvilRescued(e)) return { ok: true, already: true };
+  e.evilRescued = +now || 1;
+  return { ok: true };
+}
 /* ⚠️ ZIP 453 — `starShards` A ÉTÉ SUPPRIMÉE. Le seul compte de la quête est
    `starShipBuilt` (voir la note de `STAR_SITES`) : un objet, une façon de le
    compter. Tout ce qui affichait « n sur 4 » lit maintenant « n sur
@@ -3438,6 +3672,31 @@ export function starGoalKey(e, ctx) {
      ⚠️ ELLE NE RETARDE RIEN D'AUTRE : la discrète est le dernier `need` du
      chapitre 2, donc `missing` se vide dès qu'on l'a repérée, et l'ingénieur
      reprend la parole exactement où il la prenait avant. */
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-03 (lot C) — LA SEPTIÈME SŒUR PREND LE PAS SUR TOUT, MAIS UNE
+     ║ SEULE FOIS.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️⚠️ CETTE CLÉ EST TESTÉE AVANT `engineer` JUSTE EN DESSOUS, ET C'EST UNE
+     CORRECTION, PAS UN CHOIX ARBITRAIRE : posée dans le bloc `!first`
+     (immédiatement sous `engineer`, l'endroit « logique »), elle ne se déclenchait
+     JAMAIS — `engineer` a exactement la même condition de déblocage
+     (`!missing.length`, la même chose que `starEvilUnlocked`) et la teste EN
+     PREMIER, donc « pas encore demandé de plans » gagnait toujours contre
+     « la reine vient de parler ». Trouvé en écrivant le banc (`tools/verify-quete.mjs`,
+     section « Lot C »), jamais en le relisant.
+     ⚠️ TANT QU'ELLE N'EST PAS ENCORE VUE, CETTE CLÉ PASSE DEVANT TOUT LE RESTE
+     — même famille que `engineer` juste en dessous, en plus urgent : la reine
+     interrompt le fil du bateau pour un fait plus pressant (« elle s'éteint »),
+     pas pour une corvée de plus. `starWithMe` fera parler la reine sur cette
+     même clé (`frame.evilSeek`), le bandeau montre `hud.goal.evilSeek`, et le
+     chevron la suit (STAR_GOAL_TARGET.evilSeek = "evilLake").
+     ⚠️ UNE FOIS VUE (`starEvilFound`), CETTE CLÉ NE REVIENT JAMAIS : rien n'est
+     encore CONSTRUIT pour la sauver (protection de la canne = lot D, pêche
+     dédiée = lot D/E) — la garder en tête du bandeau aurait enterré le
+     chantier naval, qui reste la seule progression réellement actionnable
+     tant que ces lots ne sont pas livrés. C'est la même discipline que
+     `engineer` : une clé qui n'a plus rien à dire cède la place. */
+  if (starEvilUnlocked(e) && !starEvilFound(e)) return "evilSeek";
   if (starHas(e, "crater") && !missing.length && !starPlanAsked(e)) return "engineer";
   if (!first) {
     if (!starPlanReady(e)) return (ctx && ctx.engineerHere) ? "engineerWork" : "engineerTravel";
@@ -3605,6 +3864,15 @@ export const STAR_GOAL_KEYS = (() => {
                  "farmImpactLure", "farmImpactLureGive");
       continue;
     }
+    /* 2026-09-04 (lot E) — LA SEPTIÈME SŒUR N'EST PAS UNE CLÉ DE BANDEAU. Elle
+       n'est délibérément dans AUCUN `need` de chapitre (voir sa note dans
+       `STAR_SITES`) : `starMissing`/`starGoalKey` ne la lisent jamais, donc
+       `starGoalKey` ne peut PAS rendre "evilStar" — c'est `"evilSeek"` qui
+       porte sa voix pendant la recherche (§3 de QUETE.md, un fait du monde,
+       pas un lieu de cette table). Une phrase qu'aucun code ne peut afficher
+       serait pire qu'aucune phrase : le §14.2 de CLAUDE.md, appliqué avant la
+       faute plutôt qu'après. */
+    if (s.id === STAR_EVIL_ID) continue;
     out.push(s.id);
     /* 2026-09-02 (lot A) — trois états de plus pour le même lieu (voir
        `starGoalKey`) : le banc vérifie ici qu'aucun n'est orphelin de texte,
@@ -3632,6 +3900,11 @@ export const STAR_GOAL_KEYS = (() => {
      réclamer sa phrase de bandeau dans les deux langues. */
   out.push("townWait", "townWaitThere", "engineerTravel", "engineerWork", "mayor",
            "timberOrder", "timberWait", "timberRaise");
+  /* 2026-09-03 (lot C) — même raison que le bloc juste au-dessus : "evilSeek"
+     n'est pas un LIEU de `STAR_SITES` (elle n'y a pas encore d'entrée, voir
+     `resolveStarEvilFound`), c'est une ÉTAPE. Cette liste n'existe que pour
+     obliger le banc à réclamer sa phrase dans les deux langues. */
+  out.push("evilSeek");
   return out;
 })();
 
@@ -4316,7 +4589,7 @@ export function resolveStarGift(e, playerIds, now) {
    de la reine) n'en a PAS besoin et c'est délibéré : il ne coûte qu'un objet à 400
    or, que le bouton « Argent » du menu dev sait déjà donner. Un bouton par geste
    aurait été un bouton de plus à tenir pour rien. */
-export const STAR_DEV_OPS = ["reset", "warn", "start", "candy", "dish", "lure", "queen", "shy", "green", "chapter", "skip", "all", "plans", "deliver", "timber", "appt", "unslam"];
+export const STAR_DEV_OPS = ["reset", "warn", "start", "candy", "dish", "lure", "queen", "shy", "green", "evil", "hook", "rescue", "chapter", "skip", "all", "plans", "deliver", "timber", "appt", "unslam"];
 /* ⚠️ ZIP 469 — `turn` (le retournement) sort de la liste : sa scène est supprimée
    dans `FermeGame`, et un bouton qui rejoue une scène qui n'existe plus ouvre un
    voile noir de sept secondes sur rien. */
@@ -4330,6 +4603,31 @@ export const STAR_DEV_SCENES = ["warn", "fall", "townFall", "end"];
    reste entière pour tout le monde, y compris pour l'hôte qui arme la chute. */
 const DEV_GATE = { skills: C.STAR_GATE_SKILLS, artisans: C.STAR_GATE_ARTISANS };
 
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ P1 BIS (2026-09-07) — LA MOITIÉ BATEAU NE S'ÉCRIT JAMAIS SANS LE MAIRE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️⚠️ Signalé par Guillaume le 2026-09-05 (`QUETE.md` §12.2, « A moins un ») :
+   `timber`/`deliver`/`all` écrivaient `e.wood` sans jamais regarder `e.mayor`,
+   donc un clic pouvait poser un bateau fini devant un maire jamais rencontré —
+   un état que la partie réelle ne peut pas produire (`starTimberBlock` refuse
+   « noMayor » avant la toute première commande). **La parade n'est pas de
+   signer à sa place** — la ligne rouge du 444 tient, ce menu ne saute aucune
+   scène — mais de poser le même rendez-vous que le bouton `appt`, et de
+   renvoyer `blocked:"needMayor"` pour que l'appelant explique qu'il reste à
+   monter jouer l'audience. Écrite UNE fois : les trois boutons partagent le
+   même geste, jamais trois copies qui divergeraient au premier réglage (§8 de
+   `CLAUDE.md`). */
+function starDevBoatGate(e, who, t) {
+  if (MA.mayorSigned(e)) return true;
+  MA.migrateMayor(e);
+  e.mayor.block = 0;
+  if (!e.mayor.appt) {
+    e.mayor.appt = { by: String(who || ""), name: "🛠️", at: t, due: t,
+                      mood: MA.mayorPickMood(Math.random, false, !!e.mayor.sour) };
+  }
+  e.mayor.sour = 0;
+  return false;
+}
 /* ⚠️ ZIP 479 — UN QUATRIÈME PARAMÈTRE, `who`, ET UN SEUL BOUTON S'EN SERT. La
    bourse de lumière bleue est indexée PAR JOUEUR (`e.candy`, comme
    `f.inv.candies`) : un raccourci de développeur qui ne saurait pas qui clique
@@ -4373,6 +4671,8 @@ export function devStar(e, op, now, who) {
     if (!e.warn || !e.warn.at) e.warn = { at: t, by: "🛠️" };
     if (!e.fall) e.fall = t;
     if (!starPlanAsked(e)) e.plan = { at: t, by: "🛠️", done: t };
+    else if (!starPlanReady(e)) e.plan.done = t;
+    if (!starDevBoatGate(e, who, t)) return { star: e, ok: true, blocked: "needMayor" };
     for (const k of STAR_SHIP_KEYS) e.wood[k] = { at: t, readyAt: t, done: true, ready: false, by: "🛠️" };
     return { star: e, ok: true };
   }
@@ -4418,6 +4718,8 @@ export function devStar(e, op, now, who) {
     if (!e.warn || !e.warn.at) e.warn = { at: t, by: "\u{1F6E0}\uFE0F" };
     if (!e.fall) e.fall = t;
     if (!starPlanAsked(e)) e.plan = { at: t, by: "\u{1F6E0}\uFE0F", done: t };
+    else if (!starPlanReady(e)) e.plan.done = t;
+    if (!starDevBoatGate(e, who, t)) return { star: e, ok: true, blocked: "needMayor" };
     for (const k of STAR_SHIP_KEYS) e.wood[k] = { at: t, readyAt: t, done: false, ready: true, by: "\u{1F6E0}\uFE0F" };
     return { star: e, ok: true };
   }
@@ -4530,6 +4832,70 @@ export function devStar(e, op, now, who) {
     resolveStarFound(e, "townShy", "\u{1F6E0}️", t);
     return { star: e, ok: true };
   }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-03 (lot C) — LE BOUTON DU LAC MALÉFIQUE. MÊME FAMILLE QUE `green` :
+     ║ IL FERME LE CHAPITRE 2 ENTIER (les six compagnes) ET LAISSE LE GESTE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ SANS LUI, JUGER LA DÉCOUVERTE/LE CHEVRON/LE HASARD DE LA CANNE DEMANDE
+     D'ABORD DE GAGNER LES CINQ AUTRES CHASSES — c'est-à-dire qu'on ne les
+     jugerait qu'une fois par soirée de test, exactement le défaut que ce menu
+     existe pour corriger partout ailleurs (444).
+     ⚠️ IL REMET AUSSI LA CANNE INTACTE (`unbreakRod`, lu par l'appelant côté
+     FermeGame.js — `devStar` ne touche jamais à `f`, comme `grantLure`) : le lot
+     D (protection au chaudron) n'existe pas encore, donc RIEN d'autre ne peut la
+     réparer. Sans ce nettoyage, un premier essai du hasard épuiserait le seul
+     moyen de le retester. Il NE remet PAS `e.evilFound` à zéro : la révélation
+     est un fait du monde qu'on ne « annule » pas à la légère — un « reset »
+     complet reste la voie pour tout rejouer depuis le début. */
+  if (op === "evil") {
+    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "\u{1F6E0}️" };
+    if (!e.fall) e.fall = t;
+    for (const site of STAR_FARM_IMPACTS) resolveStarFound(e, site.id, "\u{1F6E0}️", t);
+    resolveStarTownFall(e, t);
+    if (e.townFall) e.townFall = t - STAR_CRATER_COOL_MS - 1000;
+    resolveStarFound(e, "crater", "\u{1F6E0}️", t);
+    resolveStarFound(e, "townShy", "\u{1F6E0}️", t);
+    resolveStarFound(e, "townGreen", "\u{1F6E0}️", t);
+    return { star: e, ok: true, unbreakRod: true };
+  }
+  /* 2026-09-04 — LE BOUTON DU HALAGE. Même famille que `evil`, un cran plus
+     loin : pose aussi `evilFound` (elle a été vue — sans quoi le halage
+     n'aurait rien à ramener) pour qu'un seul clic ouvre directement le
+     geste à juger, sans repasser par le lancer spécial à chaque essai. Ne
+     déclenche PAS le halage lui-même (état purement local, voir
+     `evilHaulRef` dans FermeGame.js) : ce bouton pose le décor, comme tous
+     les autres de cette famille, et laisse le geste. */
+  if (op === "hook") {
+    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "\u{1F6E0}️" };
+    if (!e.fall) e.fall = t;
+    for (const site of STAR_FARM_IMPACTS) resolveStarFound(e, site.id, "\u{1F6E0}️", t);
+    resolveStarTownFall(e, t);
+    if (e.townFall) e.townFall = t - STAR_CRATER_COOL_MS - 1000;
+    resolveStarFound(e, "crater", "\u{1F6E0}️", t);
+    resolveStarFound(e, "townShy", "\u{1F6E0}️", t);
+    resolveStarFound(e, "townGreen", "\u{1F6E0}️", t);
+    resolveStarEvilFound(e, t);
+    return { star: e, ok: true, unbreakRod: true };
+  }
+  /* 2026-09-04 (lot E) — MÊME FAMILLE QUE `hook`, UN CRAN PLUS LOIN : pose
+     aussi `evilRescued` (elle est halée jusqu'à la rive) pour qu'un seul clic
+     ouvre directement le ramassage/la réanimation à juger, sans rejouer le
+     halage à chaque essai. Ne touche à rien du halage lui-même (état
+     purement local, `evilHaulRef`) — ce bouton pose le décor, comme tous les
+     autres de cette famille, et laisse le geste. */
+  if (op === "rescue") {
+    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "\u{1F6E0}️" };
+    if (!e.fall) e.fall = t;
+    for (const site of STAR_FARM_IMPACTS) resolveStarFound(e, site.id, "\u{1F6E0}️", t);
+    resolveStarTownFall(e, t);
+    if (e.townFall) e.townFall = t - STAR_CRATER_COOL_MS - 1000;
+    resolveStarFound(e, "crater", "\u{1F6E0}️", t);
+    resolveStarFound(e, "townShy", "\u{1F6E0}️", t);
+    resolveStarFound(e, "townGreen", "\u{1F6E0}️", t);
+    resolveStarEvilFound(e, t);
+    resolveStarEvilRescue(e, t);
+    return { star: e, ok: true, unbreakRod: true };
+  }
   if (op === "chapter") {
     /* On donne exactement ce qui manque au chapitre COURANT, pas un de plus.
        `starAdvance` fait le reste, et il peut en franchir deux d'un coup si le
@@ -4566,6 +4932,14 @@ export function devStar(e, op, now, who) {
        promettrait « c'est tout » et le jeu, lui, attendrait quarante minutes de
        sciage. Un raccourci qui ment est pire que pas de raccourci. */
     if (!starPlanAsked(e)) e.plan = { at: t, by: "🛠️", done: t };
+    else if (!starPlanReady(e)) e.plan.done = t;
+    /* ⚠️⚠️⚠️ P1 BIS — ET IL DOIT DIRE LE MAIRE, EXACTEMENT COMME IL DIT LE BOIS.
+       Avant cette passe, ce bouton posait un navire achevé sans jamais poser la
+       question au maire : un état qu'aucune partie réelle ne peut produire (voir
+       `starDevBoatGate`, juste au-dessus de `devStar`). Il s'arrête maintenant
+       au même point que le ferait un vrai joueur pressé — plans en main,
+       rendez-vous pris — et laisse l'audience à jouer. */
+    if (!starDevBoatGate(e, who, t)) return { star: e, ok: true, blocked: "needMayor" };
     for (const k of STAR_SHIP_KEYS) e.wood[k] = { at: t, readyAt: t, done: true, by: "🛠️" };
     return { star: e, ok: true };
   }

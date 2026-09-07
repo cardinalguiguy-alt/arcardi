@@ -2314,12 +2314,12 @@ ponton, celui qui regarde le mur du fond. ⚠️ **Elles se réécriront AVEC le
 et elles auront un lecteur dès leur première ligne. *Une chaîne sans lecteur a l'air juste et ne
 peut pas échouer.*
 
-**0 bis. ⚠️ LA PLAQUE DU CHANTIER NAVAL — L'IDÉE QUI RESTE, ET ELLE EST BONNE.** C'est le seul endroit
-où l'on pourrait **nommer les cinq morceaux dans les deux langues** (la coque, le safran, le mât, la
-voile, la cloche) : aujourd'hui le joueur voit cinq formes et n'en connaît aucune. Un `E` sur le
-navire, un panneau qui ne donne RIEN (§4 de `CLAUDE.md` : la porte n'est jamais la caisse), et la
-portée qui va avec — **écrite le jour où on l'écrit, pas gardée en réserve** (c'est ce que le 452
-avait fait avec `STAR_SHIP_NEAR_R`, et le 453 l'a supprimée pour ça).
+**0 bis. ✅ FAITE LE 2026-09-07 — LA PLAQUE DU CHANTIER NAVAL.** Un `E` près de la cale (même
+rectangle que « monter la pièce », juste après lui dans l'ordre du 427 — un geste passe avant une
+lecture) ouvre un panneau qui **nomme les cinq morceaux** (`L.star.plan.part`, la table qui existait
+déjà pour le tableau de commande — une jointure, pas une seconde liste) et **ne donne rien** (§4 de
+`CLAUDE.md`), lisible avec ou sans les plans en poche. Voir `starNearby()` (`FermeGame.js`, branche
+`town`, juste après « raise ») et l'état `starPlaqueOpen`.
 
 **A moins un. ✅ CORRIGÉ LE 2026-09-07 (P1 bis) — LE MENU DEV POSE MAINTENANT UN ÉTAT DE TRAME
 COHÉRENT.** Signalé par Guillaume le 2026-09-05 : la quête a **deux pistes d'état parallèles** —
@@ -2414,32 +2414,40 @@ suffit, et son frein est dans sa forme —
 mesurer l'enfoncement. ⚠️ **Les points A et B ci-dessus deviennent donc faisables au banc** : le
 `MessageChannel` du 444 n'était pas la seule voie.
 
-### 12.3 ⚠️ LE POINT QUI N'A PAS CONVERGÉ, ET LES DEUX DIRECTIONS
+### 12.3 ✅ CORRIGÉ LE 2026-09-07 — LE POINT QUI N'AVAIT PAS CONVERGÉ
 
-**L'étoile compagnon a demandé CINQ écritures et n'est pas encore juste.** ⚠️ **Vue en jeu
-maintenant, et le diagnostic tient** : à côté du fermier elle se lit comme une petite bête dorée
-attachante, mais **elle ne lit pas « étoile » d'emblée**, et son état ÉTEINT (chapitre 5) est un
-petit tas gris qu'on perd de vue sur un plancher sombre.
+**L'étoile compagnon avait demandé CINQ écritures sans être juste** : à côté du fermier elle se
+lisait comme une petite bête dorée attachante, mais **elle ne lisait pas « étoile » d'emblée** —
+« un biscuit, une amibe, un blob », mesuré et confirmé à l'écran avant cette passe
+(`tools/out/etoile-planche.png`, rangée du haut, avant/après comparés au pixel).
 
-⚠️ **LA CAUSE EST IDENTIFIÉE ET ELLE EST GÉNÉRALE** — c'est la vraie trouvaille de cette passe :
-**un cerne d'un pixel impose une profondeur d'échancrure d'au moins trois pixels.** En dessous, le
-contour rebouche la forme qu'il souligne. C'est ce qui a produit, tour à tour, une icône, un
-biscuit, une amibe et un blob. *Le contour d'un dessin est une contrainte de FORME, pas une
-finition.*
+⚠️ **LA CAUSE ÉTAIT IDENTIFIÉE ET ELLE ÉTAIT GÉNÉRALE** : *un cerne d'un pixel impose une
+profondeur d'échancrure d'au moins trois pixels* — en dessous, le contour rebouche la forme qu'il
+souligne. Le polygone géométrique (toujours en place pour les états 1/2 et pour la reine) ne
+pouvait pas creuser assez sans faire flotter ses pointes en îlots séparés du corps.
 
-**Direction 1 — l'agrandir.** De 15 à 20-22 px (×0,85 d'un fermier). Les échancrures tiennent, le
-visage tient. **Prix :** elle cesse d'être « quelque chose qu'on protège » et devient un familier
-de la taille d'un chien ; il faut alors changer `star.s2.meet1` (« smaller than a hen »).
+**La direction retenue est celle que Guillaume a arbitrée : la 2, mais seulement sur l'état
+CALME.** `starWispCalmMask` (`fermeArt.js`, juste avant `starWispSprite`) dessine quatre poses à la
+main — des rectangles qui RÉTRÉCISSENT par paliers vers leur pointe, toujours soudés au noyau — et
+calcule le cerne par voisinage à 4 SEULEMENT (jamais les diagonales, qui rebouchaient les
+échancrures exactement comme le polygone). Les états 1/2 et la reine gardent la géométrie,
+inchangée, comme prévu (« vus deux fois chacun dans toute la quête »). La discrète (`shy`) partage
+le même masque, décalé de `dy0` pour rester à la même silhouette que le corps nu — sinon la mesure
+de son déguisement par différence (`tools/render-etoile.mjs`) capturait un changement de corps au
+lieu du seul chapeau.
+⚠️ **Vérifié, et comment** : `tools/render-etoile.mjs` (tous les contrôles, y compris les deux
+seuils déjà en place — hauteur d'encre 10-15 px, matière de la reine ≥ 2× celle d'une petite —
+mesurés à chaque réglage, jamais devinés) ; regardé à l'œil sur herbe ET sur fond sombre, à côté
+d'un fermier pour l'échelle, avant d'être câblé.
 
-**Direction 2 — la dessiner à la main.** Quatre masques de pixels explicites (14×14, ~45 pixels
-chacun), ce que fait un pixel-artiste à cette échelle. **Prix :** quatre masques à maintenir, et
-les états ne se dérivent plus — soit douze masques.
-
-⚠️ **Mon avis, si tu veux un arbitrage :** la direction 2, mais **seulement sur l'état CALME**
-(quatre masques), en gardant la géométrie pour les deux autres, vus deux fois chacun dans toute la
-quête. On paie le dessin là où le joueur regarde. ⚠️ **Et une troisième chose, indépendante des
-deux :** l'état ÉTEINT a besoin d'un **cerne clair** plutôt que sombre — il est vu dans le
-beffroi, sur du bois foncé, et un gris cerné de gris disparaît.
+⚠️ **La troisième chose citée ici (cerne clair pour l'état ÉTEINT, « vu dans le beffroi ») était
+devenue FAUSSE avant même d'être traitée** : le beffroi est parti avec le déchant du 469, et l'état
+ÉTEINT (2) se lit maintenant sur la reine qui suit le joueur en ville/à la ferme tant que le navire
+n'est pas fini (`FermeGame.js`, commentaire à côté de `starCompanionsAt`) — jamais sur du bois
+foncé. Regardé sur herbe (son vrai contexte aujourd'hui) : le cerne sombre s'y lit correctement, le
+défaut cité ne se reproduit pas. **Non retouché** — un piège périmé recopié ailleurs est pire qu'un
+piège supprimé (§14.2 de `CLAUDE.md`) ; celui-ci est resté ici, corrigé, au lieu d'être recopié
+faux.
 
 ### 12.4 Ce qu'il faut savoir avant de rouvrir le chantier
 

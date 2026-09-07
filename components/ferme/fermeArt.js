@@ -6879,6 +6879,73 @@ export function buildSprites() {
     const p = STAR_WISP_PAL[color];
     return p ? p[0][1] : null;
   }
+  /* ╔═════════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-07 — LA COMPAGNE, ÉTAT CALME : UN MASQUE DESSINÉ À LA MAIN.
+     ╚═════════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️⚠️ CE QUE `QUETE.md` §12.3 APPELAIT « LE POINT QUI N'A PAS CONVERGÉ »,
+     AVEC L'ARBITRAGE DE GUILLAUME : *« la direction 2, mais seulement sur
+     l'état CALME, en gardant la géométrie pour les deux autres, vus deux fois
+     chacun dans toute la quête. On paie le dessin là où le joueur regarde. »*
+     Le polygone à cinq branches (juste au-dessus, toujours en place pour les
+     états 1/2 et pour la reine) rebouchait ses échancrures à la dilatation du
+     cerne — cinq écritures l'ont montré, la dernière avec le diagnostic exact :
+     *un cerne d'un pixel impose une profondeur d'échancrure d'au moins trois
+     pixels*, et le rayon intérieur qui aurait pu creuser assez profond faisait
+     flotter les pointes en îlots séparés du corps.
+     ⚠️ LA PARADE ICI N'EST PAS GÉOMÉTRIQUE, ELLE EST DESSINÉE : cinq pointes
+     RECTANGULAIRES qui RÉTRÉCISSENT par paliers vers leur pointe (jamais un
+     seul rectangle large — c'est ce qui donne une vraie pointe et pas un doigt
+     carré), toujours SOUDÉES au noyau. Le cerne se calcule ensuite par
+     voisinage à 4 (haut/bas/gauche/droite SEULEMENT, jamais les diagonales) :
+     une dilatation à 8 voisins comblerait une échancrure en diagonale
+     exactement comme le faisait le polygone — c'est la cause exacte du défaut,
+     corrigée à la source plutôt que compensée par un réglage.
+     ⚠️ QUATRE POSES, QUATRE LONGUEURS PAR POINTE — jamais deux identiques
+     (même leçon que le polygone : une paire de poses qui se ressemble trop ne
+     se distingue plus une fois rastérisée). Vérifié à l'œil sur herbe ET sur
+     fond sombre avant d'être câblé ici (`tools/out/etoile-planche.png` après
+     ce zip).
+     ⚠️ SCOPÉ AUX PETITES COMPAGNES, ÉTAT CALME UNIQUEMENT (`!queen && !shy &&
+     state === 0`) — la reine (28 px, plus de marge par pixel) et la discrète
+     déguisée (canevas plus haut) restent sur la géométrie existante, jamais
+     retouchées : c'est exactement la portée que Guillaume a demandée, ni plus
+     ni moins. Les états 1 (apeurée) et 2 (elle attend) gardent eux aussi le
+     polygone — vus deux fois chacun dans toute la quête, le prix d'un second
+     masque n'en valait pas la peine (son propre arbitrage). */
+  const STAR_WISP_CALM_CORE = [[7, 7, 3, 3], [7, 9, 4, 1], [8, 6, 2, 1], [8, 10, 2, 1]];
+  const STAR_WISP_CALM_POINTS = {
+    up:    [[8, 5, 3, 2], [8, 3, 2, 2], [9, 2, 1, 1]],
+    right: [[10, 7, 2, 2], [12, 7, 2, 2], [14, 8, 1, 1]],
+    dr:    [[10, 11, 3, 2], [12, 13, 1, 1]],
+    dl:    [[4, 11, 3, 2], [5, 13, 1, 1]],
+    left:  [[5, 8, 2, 2], [3, 8, 2, 2], [1, 9, 1, 1]],
+  };
+  /* ⚠️ POSE 0 EST CELLE QUE LES BANCS MESURENT SEULE (`S.starWisp[0][0]`) : sa
+     hauteur d'encre et sa matière doivent tenir sous les seuils écrits pour la
+     petite compagne (10-15 px, moins de la moitié de la matière de la reine) —
+     mesuré, pas deviné, avec `tools/render-etoile.mjs` à chaque réglage. */
+  const STAR_WISP_CALM_POSES = [
+    { up: 1, right: 1, dr: 1, dl: 2, left: 1 },
+    { up: 2, right: 1, dr: 1, dl: 1, left: 1 },
+    { up: 1, right: 2, dr: 2, dl: 1, left: 1 },
+    { up: 1, right: 1, dr: 1, dl: 1, left: 2 },
+  ];
+  function starWispCalmMask(pose) {
+    const S2 = 18;
+    const m = Array.from({ length: S2 }, () => new Array(S2).fill(false));
+    const put = (x, y, w, h) => {
+      for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++)
+        if (y + dy >= 0 && y + dy < S2 && x + dx >= 0 && x + dx < S2) m[y + dy][x + dx] = true;
+    };
+    for (const r of STAR_WISP_CALM_CORE) put(...r);
+    const lens = STAR_WISP_CALM_POSES[pose & 3];
+    for (const key of Object.keys(STAR_WISP_CALM_POINTS)) {
+      const segs = STAR_WISP_CALM_POINTS[key];
+      const n = Math.max(1, Math.min(segs.length, lens[key]));
+      for (let i = 0; i < n; i++) put(...segs[i]);
+    }
+    return m;
+  }
   function starWispSprite(pose, state, color, queen, shy) {
     /* ⚠️⚠️⚠️ QUATRIÈME ÉCRITURE, ET C'EST UN CHANGEMENT DE CONSTRUCTION, PAS UN
        RÉGLAGE DE PLUS. Les trois premières tentatives ont produit, dans l'ordre :
@@ -6997,6 +7064,42 @@ export function buildSprites() {
     g.fillStyle = HALO;
     g.beginPath(); g.arc(cx, cy, R + 2.2, 0, 7); g.fill();
     g.beginPath(); g.arc(cx, cy, R * 0.75, 0, 7); g.fill();
+    /* ⚠️⚠️ 2026-09-07 — L'ÉTAT CALME DES PETITES COMPAGNES (jamais la reine)
+       PASSE PAR LE MASQUE DESSINÉ À LA MAIN CI-DESSUS — voir sa note. Tout le
+       reste (états 1/2, la reine) garde le polygone géométrique, inchangé.
+       ⚠️ LA DISCRÈTE (`shy`) Y PASSE AUSSI, DÉCALÉE DE `dy0` : son déguisement
+       (`FermeGame.js`, « il passe en dernier ») se mesure par DIFFÉRENCE entre
+       le corps nu et le corps déguisé À LA MÊME POSE (`tools/render-etoile.mjs`,
+       « une prise qui demande un seuil… ») — les deux doivent donc partager
+       EXACTEMENT le même corps, sinon la différence capture un changement de
+       silhouette au lieu du seul chapeau. `dy0` recale le masque (dessiné pour
+       un canevas de 18 rangées) sur le canevas plus haut de la discrète (24
+       rangées, la marge du chapeau), à partir du MÊME `cy` que la géométrie
+       aurait utilisé — jamais un second nombre écrit à la main (§8). */
+    if (!queen && state === 0) {
+      const mask = starWispCalmMask(pose);
+      const dy0 = Math.round(cy - 9.5);
+      const mAt = (x, y) => { const my = y - dy0; return my >= 0 && my < 18 && mask[my] && mask[my][x]; };
+      // 2. Le cerne, à 4 voisins SEULEMENT (jamais les diagonales) : c'est ce
+      // qui laisse les échancrures entre pointes intactes (voir la note).
+      for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+        if (mAt(x, y)) continue;
+        const n = mAt(x, y - 1) || mAt(x, y + 1) || mAt(x - 1, y) || mAt(x + 1, y);
+        if (n) P(g, x, y, 1, 1, RIM);
+      }
+      // 3. La matière : les pointes (loin du centre) sont plus chaudes (EDGE),
+      // le corps est BODY — même principe que le polygone, un ton par distance.
+      for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+        if (!mAt(x, y)) continue;
+        const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
+        P(g, x, y, 1, 1, d > 5.2 ? EDGE : BODY);
+      }
+      // 4. Le visage : un reflet fixe (pas une zone de distance, qui mangeait
+      // la face dans le polygone), deux yeux, une bouche — calme uniquement.
+      P(g, cx - 1, cy - 3, 2, 1, CORE); P(g, cx - 2, cy - 2, 1, 1, CORE);
+      P(g, cx - 2, cy - 1, 1, 2, RIM); P(g, cx + 1, cy - 1, 1, 2, RIM);
+      P(g, cx - 1, cy + 1, 2, 1, EDGE);
+    } else {
     // 2. Le cerne, par DILATATION du masque : impossible d'oublier une branche.
     for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
       if (inside(x + 0.5, y + 0.5)) continue;
@@ -7034,6 +7137,7 @@ export function buildSprites() {
     if (queen && state === 0) {                                        // éclats intérieurs asymétriques
       P(g, cx - 6, cy - 5, 2, 1, CORE); P(g, cx + 5, cy - 1, 1, 2, CORE);
       P(g, cx - 1, cy - 7, 1, 2, CORE); P(g, cx + 2, cy + 5, 2, 1, EDGE);
+    }
     }
     /* ╔══════════════════════════════════════════════════════════════════════════
        ║ 2026-09-02 (lot A2) — LE DÉGUISEMENT DE LA DISCRÈTE. IL PASSE EN DERNIER.

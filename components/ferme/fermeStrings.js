@@ -891,6 +891,17 @@ const STAR_FR = {
       hull: "Le bordé de la coque", rudder: "Le safran et sa barre",
       mast: "Le mât", sail: "La vergue", bell: "La chaise de cloche",
     }[k] || k),
+    /* ╔═══════════════════════════════════════════════════════════════════════
+       ║ 2026-09-07 — LA PLAQUE DU CHANTIER (§12.2 de QUETE.md, point « 0 bis »).
+       ╚═══════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ « L'IDÉE QUI RESTE, ET ELLE EST BONNE » : nommer les cinq pièces sans
+       rien donner (§4 de CLAUDE.md, « la porte n'est jamais la caisse »). Elle
+       réutilise `part(k)` ci-dessus au lieu d'inventer un second vocabulaire —
+       une jointure, jamais deux listes (449). Lisible dès qu'on s'approche de
+       la cale, avec ou sans les plans en poche : c'est un DÉCOR, pas une étape,
+       donc rien ici ne dépend de l'avancement de la quête. */
+    plaqueTitle: (name) => `⚓ Chantier naval — ${name}`,
+    plaqueIntro: "Une main a gravé les noms des pièces à venir, dans l'ordre où la coque prendra forme.",
     progressTitle: "Progression de la construction",
     progressPart: (k) => ({
       hull: "Coque", rudder: "Gouvernail", mast: "Mât", sail: "Voile", bell: "Cloche",
@@ -1199,6 +1210,8 @@ const STAR_FR = {
        seconde plus tard, et une invite qui changerait de mot à chaque pièce
        clignoterait pendant qu'on tourne autour du chantier. */
     raise: "E : monter la pièce sur la cale",
+    // 2026-09-07 — la plaque du chantier (voir sa note dans `plan.plaqueTitle`).
+    plaque: "E : lire la plaque du chantier",
   })[k] || "E",
 };
 
@@ -1662,6 +1675,8 @@ const STAR_EN = {
       hull: "Hull planking", rudder: "Rudder and tiller",
       mast: "The mast", sail: "The yard", bell: "The bell cradle",
     }[k] || k),
+    plaqueTitle: (name) => `⚓ Shipyard — ${name}`,
+    plaqueIntro: "A hand carved the names of the pieces to come, in the order the hull will take shape.",
     progressTitle: "Construction progress",
     progressPart: (k) => ({
       hull: "Hull", rudder: "Rudder", mast: "Mast", sail: "Sail", bell: "Bell",
@@ -1924,6 +1939,7 @@ const STAR_EN = {
     track: "E: part the leaves",
     engineer: "E: talk to the shipwright",
     raise: "E: raise the piece on the slipway",
+    plaque: "E: read the shipyard plaque",
   })[k] || "E",
 };
 /* ⚠️ LE MENU DÉVELOPPEUR EST LA MÊME TABLE DES DEUX CÔTÉS — pointée, jamais

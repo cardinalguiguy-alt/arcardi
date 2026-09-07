@@ -646,6 +646,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [devMenuOpen, setDevMenuOpen] = useState(false); // zip 392 : menu développeur (Cmd/Ctrl+Shift+X, hôte seul)
   const [courtBoardOpen, setCourtBoardOpen] = useState(false); // zip 426 : le panneau d'affichage du tribunal
   const [priceBoardOpen, setPriceBoardOpen] = useState(false); // zip 438 : le tableau des cours, à la mairie
+  const [starPlaqueOpen, setStarPlaqueOpen] = useState(false); // 2026-09-07 : la plaque du chantier naval (QUETE.md §12.2, « 0 bis »)
   /* ⚠️ ZIP 439 — L'ACCUEIL DE LA MAIRIE. `null` = fermé ; sinon `{ topic }`,
      où `topic` vaut `null` (elle attend qu'on parle) ou la clé du sujet en
      cours. Un seul état pour les deux écrans du dialogue : le menu des
@@ -971,6 +972,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const courtStairArmedRef = useRef(true);
   const courtBoardOpenRef = useRef(false);   // zip 426 : lu par la boucle (closure à deps vides), comme devMenuOpenRef
   const priceBoardOpenRef = useRef(false);   // zip 438 : idem pour le tableau des cours
+  const starPlaqueOpenRef = useRef(false);   // 2026-09-07 : idem pour la plaque du chantier
   const hallTalkOpenRef = useRef(false);     // zip 439 : idem pour le dialogue de l'accueil
   /* ⚠️⚠️ ZIP 442, GARDÉ TEL QUEL AU 444 — UN ÉCRAN DE QUÊTE OUVERT DOIT ARRÊTER
      LE FERMIER, ET C'EST UN OUBLI QUI AVAIT ÉTÉ TROUVÉ EN JOUANT. Les états sont
@@ -1683,6 +1685,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   useEffect(() => { mapOpenRef.current = mapOpen; }, [mapOpen]);
   useEffect(() => { courtBoardOpenRef.current = courtBoardOpen; }, [courtBoardOpen]); // zip 426
   useEffect(() => { priceBoardOpenRef.current = priceBoardOpen; }, [priceBoardOpen]); // zip 438
+  useEffect(() => { starPlaqueOpenRef.current = starPlaqueOpen; }, [starPlaqueOpen]); // 2026-09-07
   useEffect(() => { hallTalkOpenRef.current = !!hallTalk; }, [hallTalk]);            // zip 439
   /* ⚠️ ZIP 455 — L'INVITE EN FAIT PARTIE. Sans elle dans cette liste, on marche
      et on agit derrière le panneau qui demande si l'on veut commencer — le défaut
@@ -1691,8 +1694,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      l'overlay de résultat doit suspendre l'arrivée d'une étoile (468) et empêcher
      qu'on relance une fouille par-dessus. Il n'y est PAS pour bloquer les
      déplacements — voir la note de `starDigStep`. */
-  useEffect(() => { starUiOpenRef.current = !!(starMini || starCard || starRecap || starOffer || starFind || mayorTalk || mayorWatch || sawScene); },
-            [starMini, starCard, starRecap, starOffer, starFind, mayorTalk, mayorWatch, sawScene]);   // zip 444/469/480/481 + lot E
+  /* ⚠️⚠️ 2026-09-07 — `starRecap` EST SORTI DE CETTE LISTE. Reproche de
+     Guillaume : le rappel de reprise gelait la marche comme une vraie modale
+     alors qu'il ne demande aucune décision — une simple information n'a pas à
+     tenir le joueur immobile pendant qu'il lit. Il reste un état React
+     ordinaire, juste plus lu par personne d'autre : voir sa nouvelle carte
+     flottante (§ rendu), qui ne capte de clic que sur elle-même. */
+  useEffect(() => { starUiOpenRef.current = !!(starMini || starCard || starOffer || starFind || mayorTalk || mayorWatch || sawScene); },
+            [starMini, starCard, starOffer, starFind, mayorTalk, mayorWatch, sawScene]);   // zip 444/469/480/481 + lot E
   useEffect(() => { planOpenRef.current = planOpen; }, [planOpen]);                     // zip 454
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ZIP 449 — LE DÉPART SPONTANÉ DU GUIDE. Une veille d'une seconde, et elle
@@ -1784,6 +1793,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const t = setTimeout(() => setStarRibbon(null), C.STAR_RIBBON_MS);
     return () => clearTimeout(t);
   }, [starRibbon]);
+  /* ⚠️ 2026-09-07 — LE RAPPEL DE REPRISE S'ÉTEINT TOUT SEUL, MÊME FAMILLE QUE LE
+     RUBAN JUSTE AU-DESSUS : `STAR_RECAP_MS` est l'unique source de sa durée
+     (voir sa note dans `fermeConstants.js`), lue ici ET par l'animation CSS. */
+  useEffect(() => {
+    if (!starRecap) return;
+    const t = setTimeout(() => setStarRecap(false), C.STAR_RECAP_MS);
+    return () => clearTimeout(t);
+  }, [starRecap]);
   /* Le tressaillement du bandeau. ⚠️ UN COMPTEUR EN ENTRÉE, UN BOOLÉEN EN
      SORTIE : c'est ce qui permet à deux jalons rapprochés de rejouer
      l'animation. Un booléen seul resterait à `true` et la seconde fois ne se
@@ -18572,6 +18589,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        divergeraient au premier panneau ajouté (§8). */
     function uiBlockedBoat() {
       return mapOpenRef.current || marketOpenRef.current || starUiOpenRef.current
+          || starPlaqueOpenRef.current   // 2026-09-07 — la plaque du chantier, ouverte en ville
           || document.activeElement === chatInputRef.current;
     }
     function updateMeTown(dt) {
@@ -28434,6 +28452,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                           C.STAR_SHIP_DRAW_W, C.STAR_SHIP_DRAW_H + C.STAR_SHIP_INTERACT_S_PAD))
           return { p: "raise", act: () => setStarRaise({ part: raise }) };
       }
+      /* ╔════════════════════════════════════════════════════════════════════════
+         ║ 2026-09-07 — LA PLAQUE DU CHANTIER (QUETE.md §12.2, « 0 bis »).
+         ╚════════════════════════════════════════════════════════════════════════
+         ⚠️ « L'IDÉE QUI RESTE, ET ELLE EST BONNE » : nommer les cinq pièces, sans
+         rien donner (§4 de CLAUDE.md, « la porte n'est jamais la caisse »).
+         ⚠️ MÊME RECTANGLE QUE « raise » JUSTE AU-DESSUS — la portée que le
+         DESSIN montre, pas un point (leçon du 2026-09-01) — et elle vient
+         APRÈS, règle du 427 (du plus précis au plus large) : une pièce prête à
+         monter est un GESTE, plus précis qu'une lecture. Elle ne dépend NI des
+         plans NI d'une pièce en attente : c'est un DÉCOR, lisible dès qu'on
+         approche de la cale, comme la cale elle-même reste visible sans la
+         quête (450). */
+      {
+        const tw2 = townWorldNow();
+        if (tw2 && tw2.shipX
+          && nearTownRect(tw2.shipX - (C.STAR_SHIP_DRAW_W >> 1), tw2.shipY - C.STAR_SHIP_DRAW_H,
+                          C.STAR_SHIP_DRAW_W, C.STAR_SHIP_DRAW_H + C.STAR_SHIP_INTERACT_S_PAD))
+          return { p: "plaque", act: () => setStarPlaqueOpen(true) };
+      }
       /* ⚠️ HORS-ZIP 2026-09-03 — LA DISCRÈTE N'A PLUS D'INVITE ICI : elle se
          capture AU CONTACT, dans `updateMeTown` (voir `starShyAutoRef`), pas au
          bouton E. Sa zone est trop peuplée de passants pour viser une touche au
@@ -33518,7 +33555,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           passer. Il n'y a de toute façon aucun instant de la chronologie où l'on
           pose une pièce pendant une cinématique — la garde est là pour le menu
           développeur, qui peut tout enchaîner. */}
-      {starRibbon && !starCard && !starMini && !mayorTalk && !sawScene && (
+      {starRibbon && !starCard && !starMini && !mayorTalk && !sawScene && !starRecap && (
         /* ⚠️⚠️ LE `key` PORTE LA SÉQUENCE, ET C'EST LA MÊME LEÇON QUE LES
            PASTILLES DU BANDEAU : deux jalons qui s'enchaînent sans passer par
            `null` (le menu développeur le fait, et deux joueurs qui montent deux
@@ -33677,29 +33714,62 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           </div>
         );
       })()}
-      {/* ── LE RAPPEL DE REPRISE. ⚠️ UNE FOIS PAR SESSION, JAMAIS DEUX : un
-          « où en étions-nous » qui revient à chaque écran est une notification.
-          Il répond à la consigne de persistance du chantier — on revient trois
-          jours plus tard, et le jeu redit où l'on allait sans rien rejouer. */}
-      {starRecap && (() => {
+      {/* ── LA PLAQUE DU CHANTIER (2026-09-07, QUETE.md §12.2 « 0 bis »).
+          ⚠️ ELLE NE DONNE RIEN (§4 de CLAUDE.md) : elle nomme les cinq pièces,
+          rien de plus — `E : lire la plaque du chantier` près de la cale, à
+          tout moment de la quête, plans en poche ou non. Même famille de
+          panneau que le tableau des cours / l'affichage du tribunal
+          (`.ferme-modal`) : un geste DÉLIBÉRÉ du joueur, pas une interruption
+          — la leçon du rappel de reprise juste en dessous ne s'applique pas
+          ici, elle vaut pour ce qui s'ouvre TOUT SEUL. */}
+      {starPlaqueOpen && (() => {
+        const close = () => setStarPlaqueOpen(false);
+        return (
+          <div className="ferme-modal open" onClick={close}>
+            <div className="panel ferme-modal-panel" onClick={ev => ev.stopPropagation()}>
+              <button className="ferme-close-x" onClick={close}>✕</button>
+              <h2>{L.star.plan.plaqueTitle(C.STAR_SHIP_NAME)}</h2>
+              <div className="ferme-hint">{L.star.plan.plaqueIntro}</div>
+              <div className="ferme-plaque-parts">
+                {Q.STAR_SHIP_KEYS.map((k, i) => (
+                  <div className="ferme-plaque-part" key={"plaque-" + k}>
+                    <span className="ferme-plaque-num">{i + 1}</span>
+                    <span>{L.star.plan.part(k)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+      {/* ── LE RAPPEL DE REPRISE (refondu le 2026-09-07). ⚠️⚠️ Guillaume : « l'overlay
+          de reprise de quête est un peu envahissant, il est pas fluide et en plus il
+          est très autoritaire. » Ce n'était pas le TEXTE qui posait problème — c'était
+          le COFFRAGE : une modale plein écran (fond noir à 45 %, `.ferme-modal`) pour
+          une simple information, qui gelait la marche (`starUiOpenRef`, voir plus haut)
+          et réclamait un clic pour disparaître. La carte ci-dessous dit exactement la
+          même chose, mais elle PARTAGE la chorégraphie du ruban de jalon
+          (`animation-name:fermeStarRibbon`, § feuille de style) au lieu d'inventer une
+          seconde entrée/sortie : elle glisse depuis derrière le bandeau, tient le temps
+          de lire (`STAR_RECAP_MS`), puis repart toute seule — sans jamais intercepter
+          un clic ni un pas en dehors d'elle-même. Une fois par session, jamais deux :
+          la consigne de persistance du chantier reste entière, seule sa manière de la
+          tenir a changé. */}
+      {starRecap && !starRibbon && (() => {
         const e = Q.migrateStar(sharedRef.current.star);
         const close = () => setStarRecap(false);
         return (
-          <div className="ferme-modal open" onClick={close} data-tick={starTick}>
-            <div className="panel ferme-modal-panel ferme-star-panel ferme-star-recap" onClick={ev => ev.stopPropagation()}>
-              <button className="ferme-close-x" onClick={close}>✕</button>
-              <h2>✦ {L.star.hud.againTitle}</h2>
-              <div className="ferme-hint">{L.star.title}</div>
-              <div style={{ marginTop: 10 }}>{L.star.hud.again(Q.starShipBuilt(e), Q.STAR_SHIP_TOTAL)}</div>
-              {/* ⚠️ ZIP 449 — MÊME SOURCE QUE LE BANDEAU. Le rappel de reprise
-                  affichait lui aussi la phrase du CHAPITRE : on revenait trois
-                  jours plus tard et le jeu redisait un objectif déjà atteint,
-                  c'est-à-dire exactement l'inverse de ce que ce panneau promet. */}
-              <div style={{ marginTop: 8, opacity: 0.85 }}>
-                {starGoalText(e)}
-              </div>
-              <div style={{ marginTop: 16 }}><button className="ferme-btn" onClick={close}>{L.star.hud.againClose}</button></div>
-            </div>
+          <div className="ferme-star-recap" onClick={ev => ev.stopPropagation()}
+               style={{ animationDuration: (C.STAR_RECAP_MS / 1000) + "s" }}>
+            <button className="ferme-star-recap-x" onClick={close} aria-label={L.star.hud.againClose}>✕</button>
+            <div className="ferme-star-recap-kicker">{L.star.title}</div>
+            <div className="ferme-star-recap-title">✦ {L.star.hud.againTitle}</div>
+            <div className="ferme-star-recap-sub">{L.star.hud.again(Q.starShipBuilt(e), Q.STAR_SHIP_TOTAL)}</div>
+            {/* ⚠️ ZIP 449 — MÊME SOURCE QUE LE BANDEAU. Le rappel de reprise
+                affichait lui aussi la phrase du CHAPITRE : on revenait trois
+                jours plus tard et le jeu redisait un objectif déjà atteint,
+                c'est-à-dire exactement l'inverse de ce que ce panneau promet. */}
+            <div className="ferme-star-recap-goal">{starGoalText(e)}</div>
           </div>
         );
       })()}

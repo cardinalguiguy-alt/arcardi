@@ -10,51 +10,64 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ⚠️⚠️⚠️ **CE BLOC DÉSIGNE UNE SEULE ACTION SUIVANTE. IL SE REMPLACE, IL NE
 S'EMPILE PAS.**
 
-### 🔴 ACTION SUIVANTE — GUILLAUME JOUE LA FIN DE LA QUÊTE DE L'ÉTOILE POUR DE VRAI
+### 🔴 ACTION SUIVANTE — GUILLAUME JOUE UNE VRAIE SÉANCE : COMPAGNE, PLAQUE, RAPPEL, PUIS LE MAIRE
 
-**Livraison du 2026-09-07 (Ferme Vallée, P1 bis, Claude seul — terminé) : le menu dev pose
-maintenant un état de trame cohérent entre les étoiles et le bateau/maire, et un banc le prouve.**
+**Livraison du 2026-09-07, seconde passe du jour (Claude seul, sur demande directe : « je veux
+qu'on finisse la quête… surprends-moi », plus un reproche précis sur le rappel de reprise).**
+Trois chantiers, tous vérifiés par les bancs et regardés à l'écran, aucun encore jugé en vraie
+séance :
 
-Le trou signalé par Guillaume le 2026-09-05 (`QUETE.md` §12.2, « A moins un ») : `devStar("timber"
-| "deliver" | "all")` écrivait `e.wood` sans jamais regarder `e.mayor`, donc un clic pouvait poser
-un bateau fini devant un maire jamais rencontré — un état que la partie réelle ne peut pas produire
-(`starTimberBlock` refuse « noMayor » avant la première commande). Corrigé par `starDevBoatGate`
-(`quete.js`, juste au-dessus de `devStar`) : les trois boutons posent maintenant le rendez-vous chez
-le maire (même geste que le bouton `appt`) et rendent `blocked:"needMayor"` tant que
-`MA.mayorSigned` est faux — **jamais en signant à sa place** (la ligne rouge du 444 tient, ce menu
-ne saute toujours aucune scène). Le chat du menu dev dit maintenant pourquoi rien n'a bougé sur la
-cale, au lieu d'un clic silencieux qui a l'air cassé.
+1. **Le rappel de reprise n'est plus une modale.** Reproche mot pour mot : *« l'overlay de reprise
+   de quête est un peu envahissant, il est pas fluide et en plus il est très autoritaire. »* Il
+   vivait dans `.ferme-modal` (fond noir à 45 %, mouvement gelé via `starUiOpenRef`, clic
+   obligatoire). Il est maintenant une carte flottante (`ferme-star-recap`, `FermeGame.js`/
+   `globals.css`) qui PARTAGE la chorégraphie du ruban de jalon (`animation-name:fermeStarRibbon`,
+   jamais une seconde course), s'efface toute seule après `STAR_RECAP_MS` (9 s), et ne bloque plus
+   rien — `starRecap` est sorti de `starUiOpenRef`. Testé à l'écran (état forcé temporairement,
+   retiré après) : mouvement possible pendant l'affichage, fermeture au ✕ propre, aucune erreur.
+2. **La plaque du chantier naval, l'idée qui restait dans `QUETE.md` §12.2 (« 0 bis »).** `E` près
+   de la cale nomme les cinq pièces (`L.star.plan.part`, jointure avec la table déjà existante) et
+   ne donne rien (§4). Testé à l'écran (état forcé), fermeture propre.
+3. **Le dessin de la compagne, `QUETE.md` §12.3 — cinq écritures, enfin juste.** Ton arbitrage
+   suivi au mot : masques dessinés à la main sur l'état CALME seulement (`starWispCalmMask`,
+   `fermeArt.js`), géométrie inchangée pour les états 1/2 et la reine. La cause du blob était
+   identifiée depuis longtemps (*« un cerne d'un pixel impose une échancrure d'au moins trois
+   pixels »*) ; la parade est un cerne à 4 voisins SEULEMENT (jamais les diagonales, qui
+   rebouchaient les échancrures). La discrète (`shy`) partage le masque, décalée pour rester au
+   même corps que la nue — sinon le banc de son déguisement mesurait un changement de silhouette
+   au lieu du seul chapeau. ⚠️ Trouvaille en cours de route : la moitié restante du §12.3 (cerne
+   clair pour l'état ÉTEINT, « vu dans le beffroi ») s'appuyait sur un lieu supprimé depuis le
+   déchant du 469 — non retouchée, le défaut cité ne se reproduit pas dans son vrai contexte actuel
+   (la reine sur l'herbe). `QUETE.md` §12.3 tient le détail.
 
-**Vérifié, et comment :** `node tools/verify-jalons.mjs` (nouveau banc, 58/58) rejoue toute la
-trame avec les VRAIS résolveurs — impacts, cratère, plans, une audience GAGNÉE avec les résolveurs
-réels de `maire.js` (même méthode que `verify-maire.mjs`), chantier, navire fini — puis rejoue la
-même trame en raccourci via le menu dev et vérifie l'accord des deux. **Falsifié** : relancé sur le
-code d'avant cette passe (`git stash`), il rougit à **9 contrôles**, tous et seulement ceux qui
-mesurent l'état que Guillaume avait trouvé. `node tools/verify-quete.mjs` **792/792** (4 contrôles
-ajustés pour signer le maire avant d'attendre un bateau fini — ils testaient sans le savoir l'état
-devenu impossible). `node tools/verify-maire.mjs` **119/119** (non touché, relancé par prudence).
-`npx next build` vert (seul l'avertissement `G_SOIL` préexistant). **Testé à l'écran** :
-`fake-supabase.mjs` + page jetable, menu dev ouvert, les trois boutons cliqués avant toute
-signature — le message de blocage s'affiche bien dans le chat, aucune erreur console, le
-rendez-vous est posé. `.env.local` du dépôt pointe déjà sur `http://127.0.0.1:54321` (le faux
-serveur local) plutôt que sur le vrai Supabase — à vérifier si c'est voulu avant la prochaine vraie
-session.
+**Vérifié, et comment :** `node tools/render-etoile.mjs` (tous les contrôles, y compris les deux
+seuils déjà en place sur la compagne — hauteur d'encre, matière relative à la reine — mesurés à
+chaque réglage) · `node tools/verify-quete.mjs` **792/792** · `node tools/verify-strings.mjs`
+(1126 clés, la plaque ajoute deux clés hors de ce compte comme toujours pour la quête, voir la
+note de `tools/README.md`) · `npx next build` vert (seul `G_SOIL`, préexistant) ·
+`node --check` sur les deux fichiers modifiés. **Regardé à l'écran** : planche complète
+(`tools/out/etoile-planche.png`), les quatre poses calmes zoomées à côté d'un fermier pour
+l'échelle, le rendu de la discrète déguisée, et les trois panneaux ouverts en direct
+(`fake-supabase.mjs` + page jetable, supprimée après chaque test).
 
-**Non vérifié :** aucune audience RÉELLE n'a été jouée à l'écran jusqu'à la signature (le banc la
-simule ; personne n'a monté au bureau du maire et mené l'entretien en vrai depuis ce correctif) ;
-et donc rien du chantier naval qui suit (commandes de bois, marteau, navire fini) n'a été rejoué en
-conditions réelles depuis cette passe.
+**Non vérifié :** aucune vraie séance de jeu n'a jugé si le nouveau rappel est *agréable* (pas
+seulement non bloquant), si la plaque se découvre naturellement, ni si la compagne « lit étoile »
+pour quelqu'un qui ne sait pas qu'elle vient d'être retouchée — un banc mesure la forme, jamais le
+plaisir (§13 de ce fichier). Et **le préalable de P1 reste entier** : personne n'a encore mené une
+audience du maire jusqu'à la signature en conditions réelles depuis le correctif du menu dev du
+matin (voir passif ci-dessous) — le chantier naval qui suit n'a donc toujours pas été rejoué pour
+de vrai.
 
-**Action suivante, pour Guillaume :** jouer les actes tardifs pour de vrai — cliquer les jalons du
-menu dev jusqu'au chantier (`📐 Hand me the plans`, puis un des boutons bateau pour poser le
-rendez-vous), monter voir le maire, mener l'audience, puis finir le navire — c'est le préalable que
-P1 ci-dessous attend depuis le début (« après avoir joué les actes tardifs grâce à P1 bis »).
+**Action suivante, pour Guillaume :** une vraie séance — reprendre la ferme (le nouveau rappel
+apparaîtra), aller voir la compagne et la plaque du chantier, puis pousser jusqu'à l'audience du
+maire et la signer. C'est le même geste qui règle les deux non-vérifiés à la fois.
 
 ### PASSIF FERME VALLÉE
 
 L'ordre ancien reste, mais n'est plus l'action courante :
 1. **P1, Guillaume + Claude** — trancher sur le papier la bifurcation bateau / pluie d'astéroïdes
-   après avoir joué les actes tardifs grâce à P1 bis (fait, voir ci-dessus).
+   après avoir joué les actes tardifs. Le menu dev le permet depuis le 2026-09-07 matin (P1 bis,
+   `QUETE.md` §12.2 « A moins un ») ; reste à le faire pour de vrai, jusqu'à la signature du maire.
 2. **P2, séance Guillaume à deux clients** — ferme peuplée, lot E complet, pêche en ville/lac,
    relais du plat et deux bords du cratère.
 3. **P3, Claude seul** — recompter les canevas, implémenter createLinearGradient dans le
@@ -1246,8 +1259,9 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
   jamais été tenus. ⚠️ **Et la même séance doit
   faire la ferme PEUPLÉE**, réclamée depuis le 419. Voir `components/ferme/QUETE.md` §12.2.
   **Ce qui attend une DÉCISION de ta part, et rien d'autre :**
-  **1. Le dessin de la compagne.** Cinq écritures, vue en jeu, pas encore juste : deux directions
-  chiffrées dans `QUETE.md` §12.3 (l'agrandir, ou quatre masques de pixels à la main).
+  **1. ✅ LE DESSIN DE LA COMPAGNE, CORRIGÉ LE 2026-09-07** (`QUETE.md` §12.3) : masques dessinés à
+  la main sur l'état calme, ton arbitrage suivi au mot (direction 2, calme seulement). À juger à
+  l'écran, en vraie séance — le banc dit que ça mesure juste, pas que ça plaît.
   **2. La récompense cosmétique.** L'arbitrage est POSÉ et VIDE (`resolveStarGift` écrit
   `star.gift[joueur]`, une fois, côté hôte, persisté). Reste à décider CE QU'ON DÉBLOQUE — le jour
   où la garde-robe cosmétique lira ce champ, elle n'aura pas à inventer un chemin d'attribution,

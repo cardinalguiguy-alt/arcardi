@@ -4297,6 +4297,23 @@ export const STAR_TIMBER_GO_MS = 6000;
 export const STAR_RIBBON_MS = 5200;
 
 /* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-07 — LE RAPPEL DE REPRISE : COMBIEN DE TEMPS IL RESTE À L'ÉCRAN.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️⚠️ IL N'EST PLUS UNE MODALE (Guillaume : « l'overlay de reprise de quête
+   est un peu envahissant, il est pas fluide et en plus il est très
+   autoritaire ») : plus de fond noir à 45 %, plus de clic obligatoire, plus de
+   déplacement gelé (`starUiOpenRef` ne le compte plus). Il PARTAGE la
+   chorégraphie du ruban (`fermeStarRibbon`, même famille visuelle que
+   `STAR_RIBBON_MS` juste au-dessus) — même leçon du 476 : cette constante est
+   la SEULE source de sa durée, `setTimeout` et `animation-duration` inline la
+   lisent tous les deux, jamais recopiée.
+   ⚠️ PLUS LONG QUE LE RUBAN (deux phrases contre un titre court) mais fini : un
+   rappel qui reste indéfiniment est encore une notification qui s'installe
+   dans le champ de vision, ce qui est exactement ce que Guillaume reproche —
+   la fermeture au clic (`✕`) reste là pour qui a fini de lire avant. */
+export const STAR_RECAP_MS = 9000;
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
    ║ 2026-09-01 — LA VITESSE À LAQUELLE L'ÉTOILE PARLE, EN SIGNES PAR SECONDE.
    ╚═════════════════════════════════════════════════════════════════════════════
    ⚠️⚠️ CE N'EST PAS UN EFFET, C'EST UN AIGUILLAGE DU REGARD. Sa bulle apparaît
