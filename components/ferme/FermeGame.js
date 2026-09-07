@@ -3846,7 +3846,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (rg.ok) { out.starScene = { key: "end" }; broadcastChat("⭐", L.star.chat.done); }
       }
       dirtyRef.current = true;
-      broadcastChat("🛠️", L.star.devChat(f.name, L.star.dev.op(op)));   // 2026-08-31 : la phrase est traduite, le libellé du bouton reste le nom de l'outil
+      /* ⚠️⚠️ P1 BIS (2026-09-07) — `r.blocked` DIT POURQUOI LE BOIS N'A PAS BOUGÉ.
+         `timber`/`deliver`/`all` peuvent maintenant s'arrêter au rendez-vous du
+         maire (`starDevBoatGate`, `quete.js`) au lieu de fabriquer un bateau que
+         personne n'a signé. Sans cette ligne, le clic aurait l'air d'avoir raté :
+         `r.ok` reste vrai (le rendez-vous EST posé), mais rien sur la cale n'a
+         changé, et un silence à cet endroit précis se lirait comme un bouton
+         cassé plutôt que comme une piste qui s'arrête où elle doit. */
+      broadcastChat("🛠️", L.star.devChat(f.name, L.star.dev.op(op) +
+        (r.blocked === "needMayor" ? " — blocked: the mayor's audience comes first (appointment booked)" : "")));
       persistFnRef.current && persistFnRef.current();
       hostFlushOut(out, f, null);
       return;

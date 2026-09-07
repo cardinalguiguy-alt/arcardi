@@ -10,59 +10,58 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ⚠️⚠️⚠️ **CE BLOC DÉSIGNE UNE SEULE ACTION SUIVANTE. IL SE REMPLACE, IL NE
 S'EMPILE PAS.**
 
-### 🔴 ACTION SUIVANTE — GUILLAUME JOUE UNE VRAIE MANCHE PINPOINT (LABELS DE ROUTE + ESPACE)
+### 🔴 ACTION SUIVANTE — GUILLAUME JOUE LA FIN DE LA QUÊTE DE L'ÉTOILE POUR DE VRAI
 
-**Livraison du 2026-09-07 (même jour, remplace la précédente) : le correctif Safari de la carte est
-CONFIRMÉ par Guillaume en conditions réelles (« le bug n'existe plus »). Deux retours dans la
-foulée, réglés sans nouvelle question créative — voir pourquoi au point 2.**
+**Livraison du 2026-09-07 (Ferme Vallée, P1 bis, Claude seul — terminé) : le menu dev pose
+maintenant un état de trame cohérent entre les étoiles et le bateau/maire, et un banc le prouve.**
 
-1. **Panneaux de route trop tardifs en dézoomé** (`shieldLayer.js`) : l'ancien `"step"` par zoom
-   imposait SES PROPRES paliers (motorway dès 8, tout à 14) par-dessus le zoom minimal auquel
-   chaque classe existe déjà dans les tuiles `transportation_name` (motorway ~6, trunk ~9 — mesuré
-   en comptant `queryRenderedFeatures`, pas deviné). Remplacé par un simple filtre de classe sans
-   palier : le panneau apparaît désormais dès que sa route existe dans les tuiles, jamais plus
-   tard. ⚠️ **C'est déjà le maximum atteignable** : en dessous de zoom 6, `transportation_name` est
-   VIDE côté serveur (0 résultat mesuré à zoom 4 et 5,5 sur l'Allemagne entière) — aucun réglage de
-   style ne peut faire apparaître un panneau avant que le fournisseur de tuiles ne le serve.
-   `symbol-sort-key` (déjà en place) évite l'embouteillage si jamais c'est trop dense : les classes
-   basses s'effacent les premières.
-2. ⚠️ **Une question posée puis une seule confirmée nécessaire** : Guillaume a d'abord écrit
-   « les 5K » (en fait les panneaux, pas le plafond de score à 5000 pts — question posée, mauvaise
-   piste écartée en un aller-retour) puis, sur un choix à quatre options motivé par des captures
-   réelles (zoom 9,5 : panneaux déjà nets ; zoom 6 sur l'Allemagne : rien avant ce correctif), a
-   désigné **« trop tard en dézoomé »** — pas la taille, pas le nom de rue manquant à côté du
-   numéro (idée notée mais non demandée, à reprendre seulement si Guillaume la nomme).
-3. **Espace confirme le pin** (`OusThatGame.js`, mode pinpoint uniquement) : même garde que le
-   bouton (`submitDraft()` s'auto-protège), ignoré si le focus est sur un champ de saisie.
+Le trou signalé par Guillaume le 2026-09-05 (`QUETE.md` §12.2, « A moins un ») : `devStar("timber"
+| "deliver" | "all")` écrivait `e.wood` sans jamais regarder `e.mayor`, donc un clic pouvait poser
+un bateau fini devant un maire jamais rencontré — un état que la partie réelle ne peut pas produire
+(`starTimberBlock` refuse « noMayor » avant la première commande). Corrigé par `starDevBoatGate`
+(`quete.js`, juste au-dessus de `devStar`) : les trois boutons posent maintenant le rendez-vous chez
+le maire (même geste que le bouton `appt`) et rendent `blocked:"needMayor"` tant que
+`MA.mayorSigned` est faux — **jamais en signant à sa place** (la ligne rouge du 444 tient, ce menu
+ne saute toujours aucune scène). Le chat du menu dev dit maintenant pourquoi rien n'a bougé sur la
+cale, au lieu d'un clic silencieux qui a l'air cassé.
 
-**Vérifié, et comment :** capture d'écran avant/après sur l'Allemagne entière à zoom 6 (rien →
-A39/A33/A36/A45/A71/A81/E41/E43/E331/E533 lisibles, sans amas), compté `queryRenderedFeatures` à
-zoom 4/5,5/6/7/8/9/10 pour confirmer le plancher réel des tuiles. `node tools/verify-ousthat.mjs`
-**105/105**, `npx next build` vert.
+**Vérifié, et comment :** `node tools/verify-jalons.mjs` (nouveau banc, 58/58) rejoue toute la
+trame avec les VRAIS résolveurs — impacts, cratère, plans, une audience GAGNÉE avec les résolveurs
+réels de `maire.js` (même méthode que `verify-maire.mjs`), chantier, navire fini — puis rejoue la
+même trame en raccourci via le menu dev et vérifie l'accord des deux. **Falsifié** : relancé sur le
+code d'avant cette passe (`git stash`), il rougit à **9 contrôles**, tous et seulement ceux qui
+mesurent l'état que Guillaume avait trouvé. `node tools/verify-quete.mjs` **792/792** (4 contrôles
+ajustés pour signer le maire avant d'attendre un bateau fini — ils testaient sans le savoir l'état
+devenu impossible). `node tools/verify-maire.mjs` **119/119** (non touché, relancé par prudence).
+`npx next build` vert (seul l'avertissement `G_SOIL` préexistant). **Testé à l'écran** :
+`fake-supabase.mjs` + page jetable, menu dev ouvert, les trois boutons cliqués avant toute
+signature — le message de blocage s'affiche bien dans le chat, aucune erreur console, le
+rendez-vous est posé. `.env.local` du dépôt pointe déjà sur `http://127.0.0.1:54321` (le faux
+serveur local) plutôt que sur le vrai Supabase — à vérifier si c'est voulu avant la prochaine vraie
+session.
 
-**Non vérifié :** aucune session de jeu réelle (le clic Espace n'a jamais été pressé dans une vraie
-manche, seulement raisonné sur le code) ; pas de second avis sur si "trop tard" est maintenant
-réglé à son goût — c'est un jugement qui se fait en jouant, pas sur une capture. Le clic/glisser
-réel dans l'appli (drag du pin, zoom molette/pincement, deux clients) reste entièrement à faire,
-comme avant cette livraison et la précédente.
+**Non vérifié :** aucune audience RÉELLE n'a été jouée à l'écran jusqu'à la signature (le banc la
+simule ; personne n'a monté au bureau du maire et mené l'entretien en vrai depuis ce correctif) ;
+et donc rien du chantier naval qui suit (commandes de bois, marteau, navire fini) n'a été rejoué en
+conditions réelles depuis cette passe.
 
-**Après confirmation, sans rapport : reprendre Ferme Vallée P1 bis** (voir passif ci-dessous).
+**Action suivante, pour Guillaume :** jouer les actes tardifs pour de vrai — cliquer les jalons du
+menu dev jusqu'au chantier (`📐 Hand me the plans`, puis un des boutons bateau pour poser le
+rendez-vous), monter voir le maire, mener l'audience, puis finir le navire — c'est le préalable que
+P1 ci-dessous attend depuis le début (« après avoir joué les actes tardifs grâce à P1 bis »).
 
 ### PASSIF FERME VALLÉE
 
 L'ordre ancien reste, mais n'est plus l'action courante :
-1. **P1 bis, Claude seul** — le menu dev doit poser des jalons de trame atteignables qui avancent
-   ensemble les pistes étoiles et bateau/maire, sans jamais sauter une scène ; banc
-   d'atteignabilité obligatoire.
-2. **P1, Guillaume + Claude** — trancher sur le papier la bifurcation bateau / pluie d'astéroïdes
-   après avoir joué les actes tardifs grâce à P1 bis.
-3. **P2, séance Guillaume à deux clients** — ferme peuplée, lot E complet, pêche en ville/lac,
+1. **P1, Guillaume + Claude** — trancher sur le papier la bifurcation bateau / pluie d'astéroïdes
+   après avoir joué les actes tardifs grâce à P1 bis (fait, voir ci-dessus).
+2. **P2, séance Guillaume à deux clients** — ferme peuplée, lot E complet, pêche en ville/lac,
    relais du plat et deux bords du cratère.
-4. **P3, Claude seul** — recompter les canevas, implémenter createLinearGradient dans le
+3. **P3, Claude seul** — recompter les canevas, implémenter createLinearGradient dans le
    rastériseur, remettre render-eau/render-parc au vert puis rendre WAT_RAMP mesurable.
-5. **P4, deux livraisons visuelles séparées** — sol de ferme 4×4 qui boucle, puis arbres.
-6. **P5 social après P2** — relations évolutives, réconciliation, mariage.
-7. **P6 contenu après décisions** — transport du bois, poissons rares/requins, commissions,
+4. **P4, deux livraisons visuelles séparées** — sol de ferme 4×4 qui boucle, puis arbres.
+5. **P5 social après P2** — relations évolutives, réconciliation, mariage.
+6. **P6 contenu après décisions** — transport du bois, poissons rares/requins, commissions,
    cadastre/notaire, coiffeur. **P7 réserve** — visiteurs célèbres après décision de droit à l'image.
 
 ---

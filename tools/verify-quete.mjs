@@ -182,8 +182,18 @@ section("La chaîne des chapitres");
   ok("une quête neuve n'est pas tombée", !Q.starFallen(e) && !Q.starStarted(e) && !Q.starDone(e));
   ok("…et son premier chapitre est le champ", Q.starChapterKey(e) === "field");
 
-  const r = Q.devStar(Q.newStar(), "all", 1000);
+  /* ⚠️⚠️ P1 BIS (2026-09-07) — « all » NE POSE PLUS LE BOIS SANS LE MAIRE.
+     `starDevBoatGate` (`quete.js`) refuse d'écrire `e.wood` tant que
+     `MA.mayorSigned` est faux — c'est le correctif du trou signalé par
+     Guillaume le 2026-09-05 (`QUETE.md` §12.2). Un seed déjà signé garde ce
+     contrôle fidèle à ce qu'il mesurait avant : le raccourci qui franchit tout
+     sauf la scène finale, jamais un état que la partie réelle ne peut produire.
+     Voir `tools/verify-jalons.mjs`, le banc dédié à cette cohérence. */
+  const seed2 = Q.newStar();
+  signMayor(seed2, 500);
+  const r = Q.devStar(seed2, "all", 1000);
   const e2 = r.star;
+  ok("…le bois ne s'écrit qu'une fois le maire signé", !r.blocked && MA.mayorSigned(e2));
   ok("« tout sauf la fin » franchit tous les chapitres sauf le dernier",
      e2.ch === Q.STAR_CH_DONE - 1, `chapitre ${e2.ch}/${Q.STAR_CH_DONE - 1}`);
   ok("…et il ne saute aucun lieu",
@@ -286,12 +296,18 @@ section("La chaîne des chapitres");
      l'on retirerait `starShipComplete` du résolveur, la scène finale se jouerait
      sur un chantier ouvert et AUCUN autre contrôle ne le verrait. */
   {
-    const eUn = Q.devStar(Q.newStar(), "all", 10).star;
+    /* ⚠️⚠️ P1 BIS (2026-09-07) — LE SEED EST SIGNÉ AVANT « all », SINON LE BOIS
+       NE S'ÉCRIT PLUS DU TOUT (`starDevBoatGate`) ET LE CONTRÔLE « inachevé »
+       PASSERAIT POUR LA MAUVAISE RAISON (un navire vide, pas un navire à qui il
+       manque la cloche). */
+    const eUn = Q.newStar(); signMayor(eUn, 9);
+    Q.devStar(eUn, "all", 10);
     delete eUn.wood.bell;                       // une pièce manque sur la cale
     ok("⚠️ un navire inachevé ne peut pas déclencher la fin",
        Q.resolveStarGift(eUn, ["j1"], 11).unbuilt === true);
 
-    const e7 = Q.devStar(Q.newStar(), "all", 10).star;
+    const e7 = Q.newStar(); signMayor(e7, 9);
+    Q.devStar(e7, "all", 10);
     ok("…et un navire fini le peut", Q.starShipComplete(e7));
     const g = Q.resolveStarGift(e7, ["j1", "j2"], 99);
     ok("le don se fait une fois, aux joueurs PRÉSENTS", g.ok && g.granted.length === 2 && e7.doneAt === 99);
@@ -2977,8 +2993,19 @@ section("La construction du navire (454)");
     const d = Q.devStar(Q.newStar(), "plans", 5).star;
     ok("⚠️ le bouton « plans » rend vraiment des plans", Q.starPlanReady(d) === true);
     ok("…sans construire le bateau à notre place", Q.starTimberBuilt(d) === 0);
-    const d2 = Q.devStar(Q.newStar(), "timber", 5).star;
-    ok("⚠️ le bouton « bois » livre les cinq pièces", Q.starTimberBuilt(d2) === Q.STAR_SHIP_TOTAL);
+    /* ⚠️⚠️ P1 BIS (2026-09-07) — « timber » S'ARRÊTE AU RENDEZ-VOUS DU MAIRE. Un
+       seed non signé le prouve directement : le bouton pose le rendez-vous et
+       rend `blocked:"needMayor"`, sans une seule ligne dans `e.wood` (voir
+       `starDevBoatGate`, `quete.js`, et `tools/verify-jalons.mjs`). Signé, il
+       tient exactement sa promesse d'avant. */
+    const dBlocked = Q.devStar(Q.newStar(), "timber", 5);
+    ok("⚠️⚠️ …et sans le maire, il ne livre RIEN — il prend rendez-vous",
+       dBlocked.blocked === "needMayor" && Q.starTimberBuilt(dBlocked.star) === 0
+       && !!MA.mayorAppt(dBlocked.star));
+    const seedD2 = Q.newStar(); signMayor(seedD2, 4);
+    const d2 = Q.devStar(seedD2, "timber", 5).star;
+    ok("⚠️ le bouton « bois » livre les cinq pièces, une fois le maire signé",
+       Q.starTimberBuilt(d2) === Q.STAR_SHIP_TOTAL);
     /* ⚠️ ZIP 469 — LA COQUE EST LE SEUL MORCEAU QUI DÉPENDE ENCORE D'UN LIEU. Le
        bouton « bois » livre les cinq pièces ; quatre d'entre elles n'attendent plus
        que ça, donc `starShipBuilt` en compte quatre — et la coque manque, parce
@@ -2987,7 +3014,8 @@ section("La construction du navire (454)");
     ok("…sans trouver le seul morceau qui se RAMASSE (la coque)",
        Q.starShipBuilt(d2) === Q.STAR_SHIP_TOTAL - 1 && !Q.starShipHas(d2, "hull"),
        `${Q.starShipBuilt(d2)}/${Q.STAR_SHIP_TOTAL}`);
-    const d3 = Q.devStar(Q.newStar(), "all", 5).star;
+    const seedD3 = Q.newStar(); signMayor(seedD3, 4);
+    const d3 = Q.devStar(seedD3, "all", 5).star;
     ok("⚠️⚠️ « tout sauf la fin » tient sa promesse : il ne manque QUE la scène",
        Q.starMissing(d3).length === 0 && Q.starTimberBuilt(d3) === Q.STAR_SHIP_TOTAL && !Q.starDone(d3),
        Q.starMissing(d3).join() || "rien à trouver");
@@ -3327,7 +3355,8 @@ section("Les textes disent-ils la même chose que le monde ?");
      ⚠️ La règle est une fonction PURE de `quete.js`, donc le jeu et le banc la
      partagent ; écrite dans la boucle de rendu, aucun des deux ne l'aurait vue. */
   {
-    const e = Q.devStar(Q.newStar(), "all", 1000).star;
+    const seed = Q.newStar(); signMayor(seed, 999);
+    const e = Q.devStar(seed, "all", 1000).star;
     Q.resolveStarGift(e, ["banc"], 1000);
     ok("la quête finie, le navire est entier", Q.starShipComplete(e) && Q.starDone(e),
        `${Q.starShipBuilt(e)}/${Q.STAR_SHIP_TOTAL}`);

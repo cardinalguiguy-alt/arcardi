@@ -4603,6 +4603,31 @@ export const STAR_DEV_SCENES = ["warn", "fall", "townFall", "end"];
    reste entière pour tout le monde, y compris pour l'hôte qui arme la chute. */
 const DEV_GATE = { skills: C.STAR_GATE_SKILLS, artisans: C.STAR_GATE_ARTISANS };
 
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ P1 BIS (2026-09-07) — LA MOITIÉ BATEAU NE S'ÉCRIT JAMAIS SANS LE MAIRE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️⚠️ Signalé par Guillaume le 2026-09-05 (`QUETE.md` §12.2, « A moins un ») :
+   `timber`/`deliver`/`all` écrivaient `e.wood` sans jamais regarder `e.mayor`,
+   donc un clic pouvait poser un bateau fini devant un maire jamais rencontré —
+   un état que la partie réelle ne peut pas produire (`starTimberBlock` refuse
+   « noMayor » avant la toute première commande). **La parade n'est pas de
+   signer à sa place** — la ligne rouge du 444 tient, ce menu ne saute aucune
+   scène — mais de poser le même rendez-vous que le bouton `appt`, et de
+   renvoyer `blocked:"needMayor"` pour que l'appelant explique qu'il reste à
+   monter jouer l'audience. Écrite UNE fois : les trois boutons partagent le
+   même geste, jamais trois copies qui divergeraient au premier réglage (§8 de
+   `CLAUDE.md`). */
+function starDevBoatGate(e, who, t) {
+  if (MA.mayorSigned(e)) return true;
+  MA.migrateMayor(e);
+  e.mayor.block = 0;
+  if (!e.mayor.appt) {
+    e.mayor.appt = { by: String(who || ""), name: "🛠️", at: t, due: t,
+                      mood: MA.mayorPickMood(Math.random, false, !!e.mayor.sour) };
+  }
+  e.mayor.sour = 0;
+  return false;
+}
 /* ⚠️ ZIP 479 — UN QUATRIÈME PARAMÈTRE, `who`, ET UN SEUL BOUTON S'EN SERT. La
    bourse de lumière bleue est indexée PAR JOUEUR (`e.candy`, comme
    `f.inv.candies`) : un raccourci de développeur qui ne saurait pas qui clique
@@ -4646,6 +4671,8 @@ export function devStar(e, op, now, who) {
     if (!e.warn || !e.warn.at) e.warn = { at: t, by: "🛠️" };
     if (!e.fall) e.fall = t;
     if (!starPlanAsked(e)) e.plan = { at: t, by: "🛠️", done: t };
+    else if (!starPlanReady(e)) e.plan.done = t;
+    if (!starDevBoatGate(e, who, t)) return { star: e, ok: true, blocked: "needMayor" };
     for (const k of STAR_SHIP_KEYS) e.wood[k] = { at: t, readyAt: t, done: true, ready: false, by: "🛠️" };
     return { star: e, ok: true };
   }
@@ -4691,6 +4718,8 @@ export function devStar(e, op, now, who) {
     if (!e.warn || !e.warn.at) e.warn = { at: t, by: "\u{1F6E0}\uFE0F" };
     if (!e.fall) e.fall = t;
     if (!starPlanAsked(e)) e.plan = { at: t, by: "\u{1F6E0}\uFE0F", done: t };
+    else if (!starPlanReady(e)) e.plan.done = t;
+    if (!starDevBoatGate(e, who, t)) return { star: e, ok: true, blocked: "needMayor" };
     for (const k of STAR_SHIP_KEYS) e.wood[k] = { at: t, readyAt: t, done: false, ready: true, by: "\u{1F6E0}\uFE0F" };
     return { star: e, ok: true };
   }
@@ -4903,6 +4932,14 @@ export function devStar(e, op, now, who) {
        promettrait « c'est tout » et le jeu, lui, attendrait quarante minutes de
        sciage. Un raccourci qui ment est pire que pas de raccourci. */
     if (!starPlanAsked(e)) e.plan = { at: t, by: "🛠️", done: t };
+    else if (!starPlanReady(e)) e.plan.done = t;
+    /* ⚠️⚠️⚠️ P1 BIS — ET IL DOIT DIRE LE MAIRE, EXACTEMENT COMME IL DIT LE BOIS.
+       Avant cette passe, ce bouton posait un navire achevé sans jamais poser la
+       question au maire : un état qu'aucune partie réelle ne peut produire (voir
+       `starDevBoatGate`, juste au-dessus de `devStar`). Il s'arrête maintenant
+       au même point que le ferait un vrai joueur pressé — plans en main,
+       rendez-vous pris — et laisse l'audience à jouer. */
+    if (!starDevBoatGate(e, who, t)) return { star: e, ok: true, blocked: "needMayor" };
     for (const k of STAR_SHIP_KEYS) e.wood[k] = { at: t, readyAt: t, done: true, by: "🛠️" };
     return { star: e, ok: true };
   }

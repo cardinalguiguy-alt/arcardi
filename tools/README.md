@@ -13,10 +13,11 @@ Le 433 en ajoute trois (`verify-taxi`, `render-taxi`, `render-oiseaux`), le 434 
 `render-enquete`, partis avec l'enquête qu'ils mesuraient), et le **451 une**
 (`render-navire`, le navire des étoiles), le **480 une** (`verify-maire`, l'audience chez le
 maire), et la livraison du **2026-08-27 une** (`verify-ludo`, le solo contre un à trois bots).
-La livraison de **Où's that ?** ajoute `verify-ousthat.mjs`. L'inventaire présent sur disque
-compte désormais **21 bancs de contrôle et 22 bancs de rendu**. Son nouveau banc passe
-**57/57** après une falsification volontaire qui a bien produit **3 échecs** ; les bancs
-antérieurs n'ont pas été renommés ni supprimés par cette livraison.
+La livraison de **Où's that ?** ajoute `verify-ousthat.mjs`. Son nouveau banc passe
+**57/57** après une falsification volontaire qui a bien produit **3 échecs**.
+La livraison **P1 bis** (2026-09-07) ajoute `verify-jalons.mjs` — 58/58, falsifié à 9 échecs sur le
+code d'avant la passe. L'inventaire présent sur disque compte désormais **22 bancs de contrôle et
+22 bancs de rendu** ; les bancs antérieurs n'ont pas été renommés ni supprimés par ces livraisons.
 
 ⚠️⚠️ **ET LE 444 A APPRIS QUELQUE CHOSE QUI VAUT POUR TOUS LES BANCS DE CE DOSSIER : SIX BANCS AU
 VERT N'ONT PAS VU DIX DÉFAUTS QU'UNE SEULE SÉANCE DE JEU A TROUVÉS EN VINGT MINUTES**, dont cinq
@@ -262,6 +263,32 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   le §7 de `maire.js` promet depuis le 480 : les **sept** postures de la mécanique sont les sept
   postures dessinables, les **huit** visages aussi, aucune pose n'oublie un canal (une pose
   incomplète fige un membre), et le visage ne se ferme jamais pendant que la jauge monte.
+
+- **`tools/verify-jalons.mjs` — 58 contrôles, 58/58 (P1 bis, 2026-09-07).** LE BANC D'ATTEIGNABILITÉ
+  DE LA QUÊTE DE L'ÉTOILE : signalé par Guillaume le 2026-09-05 (`QUETE.md` §12.2, « A moins un »),
+  le menu dev pouvait poser un bateau fini devant un maire jamais rencontré — un état que le jeu
+  réel ne peut pas produire (`starTimberBlock` refuse « noMayor » avant la première commande de
+  bois). ⚠️⚠️ **IL NE RELIT PAS UNE TABLE, IL JOUE LA TRAME ENTIÈRE** avec les VRAIS résolveurs
+  (`resolveStarFound`, `resolveStarPlanAsk`/`commitStarPlan`/`resolveStarPlanTick`,
+  `resolveMayorAsk`/`resolveMayor`, `resolveStarTimberOrder`/`commitStarTimber`/
+  `resolveStarTimberTick`/`resolveStarTimberRaise`), du premier impact météorique jusqu'au navire
+  achevé — l'audience du maire est GAGNÉE avec les résolveurs réels de `maire.js`
+  (`mayorOpen`/`mayorChoices`/`mayorPlay`), même méthode que `verify-maire.mjs` (qui la vérifie déjà
+  à fond, séparément — ce banc-ci ne la re-teste pas, il s'en sert). Il rejoue ensuite la MÊME trame
+  en raccourci via `Q.devStar`, et vérifie que le menu dev pose les mêmes jalons — jamais un état
+  que la partie réelle n'aurait pas pu produire.
+  ⚠️⚠️⚠️ **ET IL SE FALSIFIE (§3) : il rejoue `devStar("timber"/"deliver"/"all")` avant la signature
+  et exige qu'aucune pièce de bois ne devienne « ready » ou « done ».** Vérifié en le lançant sur le
+  code d'AVANT cette passe (`git stash` sur `quete.js`/`FermeGame.js`) : **9 échecs**, tous et
+  seulement dans les contrôles qui mesurent cet état précis. Un banc qui n'a jamais pu échouer ne
+  vaut rien (§10 de `CLAUDE.md`) — celui-ci a rougi exactement où il devait.
+  ⚠️ La parade elle-même vit dans `starDevBoatGate` (`quete.js`, juste au-dessus de `devStar`) :
+  elle ne signe RIEN à la place du joueur (la ligne rouge du 444 tient, ce menu ne saute aucune
+  scène) — elle pose le rendez-vous, exactement comme le bouton `appt`, et rend
+  `blocked:"needMayor"` pour que l'appelant explique qu'il reste à monter jouer l'audience.
+  ⚠️ **Non vérifié par ce banc** : la vraie séance à l'écran (le blocage a été confirmé dans le
+  navigateur — `fake-supabase.mjs` + une page jetable, voir §10 de `CLAUDE.md` — mais personne n'a
+  encore joué une audience réelle jusqu'à la signature pour continuer le chantier depuis là).
 
 - **`tools/render-maire.mjs` — 66 contrôles, 66/66 (2026-08-31). LE PREMIER BANC DE RENDU DU DÉPÔT
   QUI REGARDE DE LA 3D**, et il naît d'une phrase écrite en tête de `maireBureau.js` : *« il n'est

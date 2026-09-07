@@ -2321,22 +2321,26 @@ navire, un panneau qui ne donne RIEN (§4 de `CLAUDE.md` : la porte n'est jamais
 portée qui va avec — **écrite le jour où on l'écrit, pas gardée en réserve** (c'est ce que le 452
 avait fait avec `STAR_SHIP_NEAR_R`, et le 453 l'a supprimée pour ça).
 
-**A moins un. ⚠️⚠️⚠️ AVANT TOUT LE RESTE : LE MENU DEV NE SAIT PAS POSER UN ÉTAT DE TRAME COHÉRENT,
-ET C'EST CE QUI EMPÊCHE DE TESTER LA FIN DE LA QUÊTE.** Signalé par Guillaume le 2026-09-05,
-vérifié dans le code le jour même. La quête a **deux pistes d'état parallèles** — les ÉTOILES
-(`e.found`, `e.ch`) et le BATEAU/MAIRE (`e.plan`, `e.wood`, `MR.mayorSigned`, les pièces de coque)
-— et **aucun bouton ne les avance ensemble** : `devStar("chapter" | "skip" | "all")` n'appelle que
-`resolveStarFound`. Sauter à une étape tardive laisse donc la moitié bateau à l'étape 1, et le
-rendez-vous du maire réclamé au milieu d'un chapitre avancé. **C'est un état que le jeu réel ne
-peut pas produire.** ⚠️ Le commentaire de `devStar("all")` avertit du même piège depuis le 442, à
-l'intérieur d'une seule piste (*« on conclurait que la scène finale est cassée alors que c'est le
-raccourci qui l'était »*) ; Guillaume l'a trouvé ENTRE les deux. ⚠️ **La parade n'est pas de sauter
-la scène du maire** — la ligne rouge du 444 tient — mais des **jalons de trame** : un bouton = un
-point du récit, qui pose les deux pistes de façon cohérente et laisse exactement les scènes à
-jouer, **avec un banc qui prouve que chaque jalon est atteignable par une vraie partie**. Détail et
-rang dans le **P1 bis** du bloc ⏭️ REPRISE de `CLAUDE.md`. *Tant que ce n'est pas fait, tout ce qui
-suit se teste en rejouant la trame entière à chaque essai — ce qui est très exactement la raison
-pour laquelle rien de ce qui suit n'a jamais été joué jusqu'au bout.*
+**A moins un. ✅ CORRIGÉ LE 2026-09-07 (P1 bis) — LE MENU DEV POSE MAINTENANT UN ÉTAT DE TRAME
+COHÉRENT.** Signalé par Guillaume le 2026-09-05 : la quête a **deux pistes d'état parallèles** —
+les ÉTOILES (`e.found`, `e.ch`) et le BATEAU/MAIRE (`e.plan`, `e.wood`, `MA.mayorSigned`) — et
+`devStar("timber"|"deliver"|"all")` écrivait `e.wood` sans jamais regarder `e.mayor` : un clic
+pouvait poser un bateau fini devant un maire jamais rencontré, **un état que le jeu réel ne peut
+pas produire** (`starTimberBlock` refuse « noMayor » avant la première commande).
+⚠️ **La parade n'est PAS de signer à sa place** — la ligne rouge du 444 tient, ce menu ne saute
+toujours aucune scène. `starDevBoatGate` (`quete.js`, juste au-dessus de `devStar`) fait exactement
+ce que ferait un joueur pressé : il pose le rendez-vous chez le maire (même geste que le bouton
+`appt`) et REND `blocked:"needMayor"` tant que `MA.mayorSigned` est faux — le bois ne s'écrit qu'à
+la signature, jouée pour de vrai. Les trois boutons partagent la même garde, écrite une fois.
+⚠️ **Le banc d'atteignabilité réclamé est `tools/verify-jalons.mjs`** (58/58) : il rejoue la trame
+entière avec les VRAIS résolveurs (impacts → cratère → plans → audience GAGNÉE avec les résolveurs
+réels de `maire.js`, même méthode que `verify-maire.mjs` → chantier → navire fini), vérifie que le
+menu dev pose les mêmes jalons en raccourci, et se FALSIFIE : §3 prouve qu'aucun des trois boutons
+n'écrit plus une seule ligne dans `e.wood` avant la signature — c'est l'état exact que Guillaume
+avait trouvé, rejoué sur le code d'avant cette passe (9 échecs), puis rendu impossible.
+⚠️ **Non vérifié** : aucune séance de jeu n'a fait signer le maire pour de vrai APRÈS avoir cliqué
+un bouton bloqué (testé en direct : le blocage s'affiche bien, `node tools/fake-supabase.mjs` + une
+page jetable, voir §10 de `CLAUDE.md`) — seul le banc simule l'audience jusqu'au bout.
 
 **A. LA SÉANCE À DEUX CLIENTS — ⚠️ ELLE A COMMENCÉ AU 458, ET ELLE A PAYÉ TOUT DE SUITE.**
 Deux clients ont tourné ensemble pour la première fois : ils ont trouvé **trois blocages
