@@ -49,7 +49,19 @@ function loadShieldDefs() {
 // ne demande que le SQUELETTE du style (sources/sprite/glyphes) — vrai
 // dans les millisecondes qui suivent la création, tuiles ou pas — donc la
 // carte peut voler/afficher tout de suite et se garnir au fil de l'arrivée
-// des tuiles, exactement comme n'importe quelle carte web.
+// des tuiles, exactement comme n'importe quelle carte web (l'écoute réelle
+// est sur "data", voir la note juste en dessous).
+// 2026-09-07 (Safari, la carte ne s'affichait jamais — diagnostiqué au clic
+// réel, pas en relisant) : "styledata" seul RATE la transition. La dernière
+// étape qui fait passer isStyleLoaded() à vrai est très souvent annoncée par
+// un "sourcedata" SEUL (la source vectorielle finit de charger sa TileJSON
+// sans qu'aucun "styledata" ne suive) — mesuré en rejouant la vraie carte du
+// dock (grille à 3 lignes, .ot-map-dock.open.expanded) : la source atteint
+// isSourceLoaded:true plusieurs fois de suite sans qu'aucun "check" ne soit
+// jamais rappelé, donc mapReady ne passe jamais à vrai et le canevas reste
+// figé à opacity:0 pour toujours — aucune erreur, rien dans la console.
+// "data" couvre les deux ("styledata" ET "sourcedata" sont rediffusés comme
+// "data" par MapLibre) : un seul abonnement, plus de course.
 function whenStyleReady(map, callback) {
   if (map.isStyleLoaded()) {
     callback();
@@ -57,11 +69,11 @@ function whenStyleReady(map, callback) {
   }
   const check = () => {
     if (!map.isStyleLoaded()) return;
-    map.off("styledata", check);
+    map.off("data", check);
     callback();
   };
-  map.on("styledata", check);
-  return () => map.off("styledata", check);
+  map.on("data", check);
+  return () => map.off("data", check);
 }
 const REVEAL_SOURCE_ID = "ot-reveal-lines";
 const REVEAL_LAYER_ID = "ot-reveal-lines-layer";
