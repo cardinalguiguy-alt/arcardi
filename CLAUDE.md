@@ -10,43 +10,41 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ⚠️⚠️⚠️ **CE BLOC DÉSIGNE UNE SEULE ACTION SUIVANTE. IL SE REMPLACE, IL NE
 S'EMPILE PAS.**
 
-### 🔴 ACTION SUIVANTE — GUILLAUME RECONFIRME DANS SAFARI QUE LA CARTE S'AFFICHE ENFIN
+### 🔴 ACTION SUIVANTE — GUILLAUME JOUE UNE VRAIE MANCHE PINPOINT (LABELS DE ROUTE + ESPACE)
 
-**Livraison du 2026-09-07 (même jour, remplace la précédente) : Guillaume a signalé qu'en testant
-pour la première fois la carte vectorielle (livraison précédente) dans Safari, elle ne s'affichait
-simplement pas — écran vide. Cause trouvée et corrigée ; voir la vraie limite en bas de bloc.**
+**Livraison du 2026-09-07 (même jour, remplace la précédente) : le correctif Safari de la carte est
+CONFIRMÉ par Guillaume en conditions réelles (« le bug n'existe plus »). Deux retours dans la
+foulée, réglés sans nouvelle question créative — voir pourquoi au point 2.**
 
-1. **LE BUG, dans `whenStyleReady()` (`GuessMap.js`)** : il ne réécoutait que `"styledata"` pour
-   retester `map.isStyleLoaded()`. Or la dernière transition qui fait passer `isStyleLoaded()` à
-   vrai est très souvent annoncée par un `"sourcedata"` **seul** (la source vectorielle finit de
-   charger sa TileJSON sans qu'aucun `"styledata"` ne suive) — le `check()` n'était alors jamais
-   rappelé, `mapReady` ne passait jamais à vrai, le canevas restait figé à `opacity:0` **pour
-   toujours, sans la moindre erreur, sans rien dans la console.** Corrigé en écoutant `"data"`
-   (MapLibre y rediffuse `"styledata"` ET `"sourcedata"`) : un seul abonnement couvre les deux,
-   plus de course.
-2. ⚠️⚠️ **CE N'EST PROBABLEMENT PAS UN BUG SAFARI** : reproduit à l'identique dans Chromium, à
-   condition de tester la VRAIE structure du dock (`.ot-map-dock.open.expanded`, grille à 3 lignes
-   tête/carte/actions, `OusThatGame.js:930-937`) plutôt qu'un conteneur nu — la page jetable de la
-   livraison précédente n'avait testé QUE le style sur un conteneur nu, jamais le dock réel. Une
-   course d'événements ne dépend pas du moteur de rendu ; elle a juste été vue en premier chez
-   Guillaume.
-3. **Comment vérifié** : page jetable hors dépôt (`app/maptest/`, supprimée avant livraison — règle
-   du §10) reproduisant exactement les trois enfants du dock réel (tête/carte/actions). Avant le
-   correctif : `map.isStyleLoaded()` devenait bien `true` en coulisses (confirmé par les événements
-   `sourcedata` en console) mais `.ready`/l'opacité du canevas restaient bloqués indéfiniment. Après
-   : capture d'écran avec pays, frontières et libellés visibles, stable sur plusieurs rechargements
-   de suite. `node tools/verify-ousthat.mjs` **105/105**, `npx next build` vert (seul avertissement :
-   `G_SOIL`, préexistant).
+1. **Panneaux de route trop tardifs en dézoomé** (`shieldLayer.js`) : l'ancien `"step"` par zoom
+   imposait SES PROPRES paliers (motorway dès 8, tout à 14) par-dessus le zoom minimal auquel
+   chaque classe existe déjà dans les tuiles `transportation_name` (motorway ~6, trunk ~9 — mesuré
+   en comptant `queryRenderedFeatures`, pas deviné). Remplacé par un simple filtre de classe sans
+   palier : le panneau apparaît désormais dès que sa route existe dans les tuiles, jamais plus
+   tard. ⚠️ **C'est déjà le maximum atteignable** : en dessous de zoom 6, `transportation_name` est
+   VIDE côté serveur (0 résultat mesuré à zoom 4 et 5,5 sur l'Allemagne entière) — aucun réglage de
+   style ne peut faire apparaître un panneau avant que le fournisseur de tuiles ne le serve.
+   `symbol-sort-key` (déjà en place) évite l'embouteillage si jamais c'est trop dense : les classes
+   basses s'effacent les premières.
+2. ⚠️ **Une question posée puis une seule confirmée nécessaire** : Guillaume a d'abord écrit
+   « les 5K » (en fait les panneaux, pas le plafond de score à 5000 pts — question posée, mauvaise
+   piste écartée en un aller-retour) puis, sur un choix à quatre options motivé par des captures
+   réelles (zoom 9,5 : panneaux déjà nets ; zoom 6 sur l'Allemagne : rien avant ce correctif), a
+   désigné **« trop tard en dézoomé »** — pas la taille, pas le nom de rue manquant à côté du
+   numéro (idée notée mais non demandée, à reprendre seulement si Guillaume la nomme).
+3. **Espace confirme le pin** (`OusThatGame.js`, mode pinpoint uniquement) : même garde que le
+   bouton (`submitDraft()` s'auto-protège), ignoré si le focus est sur un champ de saisie.
 
-**Non vérifié, et c'est la vraie limite de cette livraison :** aucun accès à un VRAI Safari macOS
-depuis cette session — `safaridriver --enable` demande le mot de passe de Guillaume (jamais
-tenté), et aucun runtime de Simulateur iOS n'est installé sur cette machine. Le correctif est donc
-validé par la mécanique (l'événement manqué, reproduit puis corrigé dans Chromium), **pas par un
-rechargement dans Safari lui-même.** **Guillaume doit recharger le jeu dans Safari et confirmer que
-la carte s'affiche.** Si elle ne s'affiche toujours pas là-bas spécifiquement (et nulle part
-ailleurs), c'est un second bug, différent de celui-ci. Le clic/glisser réel dans l'appli (drag du
-pin, zoom molette/pincement, deux clients) reste par ailleurs entièrement à faire, comme avant
-cette livraison.
+**Vérifié, et comment :** capture d'écran avant/après sur l'Allemagne entière à zoom 6 (rien →
+A39/A33/A36/A45/A71/A81/E41/E43/E331/E533 lisibles, sans amas), compté `queryRenderedFeatures` à
+zoom 4/5,5/6/7/8/9/10 pour confirmer le plancher réel des tuiles. `node tools/verify-ousthat.mjs`
+**105/105**, `npx next build` vert.
+
+**Non vérifié :** aucune session de jeu réelle (le clic Espace n'a jamais été pressé dans une vraie
+manche, seulement raisonné sur le code) ; pas de second avis sur si "trop tard" est maintenant
+réglé à son goût — c'est un jugement qui se fait en jouant, pas sur une capture. Le clic/glisser
+réel dans l'appli (drag du pin, zoom molette/pincement, deux clients) reste entièrement à faire,
+comme avant cette livraison et la précédente.
 
 **Après confirmation, sans rapport : reprendre Ferme Vallée P1 bis** (voir passif ci-dessous).
 

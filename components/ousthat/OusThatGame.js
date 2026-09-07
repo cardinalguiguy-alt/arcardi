@@ -768,6 +768,24 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
     setMapOpen(false);
   }, [draft, locked, sendRequest]);
 
+  // 2026-09-07 (retour de Guillaume) : Espace confirme le pin posé, comme le
+  // bouton "Confirmer" de .ot-map-actions — submitDraft() se garde déjà tout
+  // seul (pas de pin/verrouillé/pas de manche = no-op). Ignoré si le focus
+  // est sur un champ de saisie (recherche pays du mode Country, chat…) pour
+  // ne jamais voler un espace tapé au clavier.
+  useEffect(() => {
+    if (state?.phase !== "playing" || mode !== "pinpoint") return;
+    const onKeyDown = (event) => {
+      if (event.code !== "Space" && event.key !== " ") return;
+      const target = event.target;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      event.preventDefault();
+      submitDraft();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [state?.phase, mode, submitDraft]);
+
   // Ces callbacks restent stables pendant les ticks du chrono : l'iframe
   // Street View ne doit jamais être reconstruite dix fois par seconde.
   const markPanoramaLoaded = useCallback(() => {

@@ -85,19 +85,18 @@ export function makeShieldLayer(sourceId) {
       "symbol-sort-key": ["match", ["get", "class"], "motorway", 0, "trunk", 1, "primary", 2, "secondary", 3, "tertiary", 4, 5],
     },
     paint: {
-      "text-opacity": [
-        "step",
-        ["zoom"],
-        ["match", ["get", "class"], "motorway", 1, 0],
-        8,
-        ["match", ["get", "class"], ["motorway", "trunk"], 1, 0],
-        10,
-        ["match", ["get", "class"], ["motorway", "trunk", "primary"], 1, 0],
-        12,
-        ["match", ["get", "class"], ["motorway", "trunk", "primary", "secondary", "tertiary"], 1, 0],
-        14,
-        1,
-      ],
+      // 2026-09-07 (retour de Guillaume : « apparaissent trop tard en
+      // dézoomé ») — remplace le "step" par zoom (motorway dès 8, tout à 14)
+      // par un simple filtre de classe, SANS palier de zoom à nous : les
+      // tuiles `transportation` d'OpenMapTiles ont déjà leur propre minzoom
+      // par classe (motorway~3, trunk~4, primary~7, secondary~9, tertiary~11
+      // — les MÊMES seuils que `ot-road-casing-*`/`ot-road-fill-*` dans
+      // guessMapStyle.js). Le panneau apparaît donc dès que la route
+      // elle-même devient visible, jamais quatre ou cinq crans de zoom plus
+      // tard. `symbol-sort-key` (déjà en place) fait le reste : à densité
+      // trop forte, MapLibre masque d'abord les classes les moins
+      // prioritaires plutôt que d'empiler les panneaux.
+      "text-opacity": ["match", ["get", "class"], ["motorway", "trunk", "primary", "secondary", "tertiary"], 1, 0],
     },
     filter: ["any", ...ROUTE_ATTRIBUTES.map((attr) => ["has", `route_1_${attr}`])],
   };
