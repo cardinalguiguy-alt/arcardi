@@ -927,7 +927,10 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
           transition. */}
       <div className={"ot-panorama-cover" + (preparing ? "" : " hidden")}><div className="ot-cover-card">{state.phase === "countdown" ? <div className="ot-countdown" key={countdown}>{countdown}</div> : <><div className="ot-orbit" /><h2>{c.loading}</h2><div className="ot-load-list">{playingSeats(state).filter((seat) => onlineSeatIds.has(seat.id)).map((seat) => <span key={seat.id} className={state.loaded?.[seat.id] ? "ready" : ""}>{seat.avatar} {seat.username} · {state.loaded?.[seat.id] ? c.loaded : c.loadingOne}</span>)}</div><p>{solo ? c.soloFairStart : c.fairStart}</p><small>{c.externalLimit}</small></>}</div></div>
 
-      {state.phase === "playing" && mode === "pinpoint" && <section className={"ot-map-dock " + (mapOpen ? "open" : "collapsed") + (mapExpanded ? " expanded" : "")}>
+      {state.phase === "playing" && mode === "pinpoint" && <section className={"ot-map-dock " + (mapOpen ? "open" : "collapsed") + (mapExpanded ? " expanded" : "")} onMouseEnter={() => setMapOpen(true)}>
+        {/* 2026-09-07 (retour de Guillaume : ouverture facilitée) : le survol
+            de tout le dock ouvre la carte, pas seulement le clic sur le
+            rond — le clic reste nécessaire au doigt (aucun "hover" tactile). */}
         <button className="ot-map-peek" onClick={() => setMapOpen(true)} aria-label={c.openMap}><span>🗺️</span>{draft && <i>✓</i>}</button>
         <div className="ot-map-head"><div><b>{c.mapTitle}</b><small>{locked ? (myPlaying ? c.answerLocked : c.spectating) : c.placeHint}</small></div><div className="ot-map-head-controls"><button onClick={(event) => { event.stopPropagation(); setMapExpanded((value) => !value); }} aria-label={mapExpanded ? c.shrink : c.expand}>{mapExpanded ? "↘" : "↗"}</button><button onClick={(event) => { event.stopPropagation(); setMapExpanded(false); setMapOpen(false); }} aria-label={c.closeMap}>×</button></div></div>
         <GuessMap marker={draft} onChange={updateDraft} locked={locked} expanded={mapOpen ? (mapExpanded ? "fullscreen" : "open") : "closed"} avatar={mySeat?.avatar} unavailableMessage={c.mapUnavailable} />

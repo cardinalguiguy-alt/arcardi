@@ -64,40 +64,56 @@ package license is shipped in `node_modules/maplibre-gl/LICENSE.txt` after
 installation and is available upstream at
 https://github.com/maplibre/maplibre-gl-js/blob/v4.7.1/LICENSE.txt
 
-## OpenTopoMap (2026-09-07, replaces OpenFreeMap)
+## OpenStreetMap US Tileservice (2026-09-07, replaces OpenTopoMap)
 
-The detailed answer map uses OpenTopoMap's public raster tile server
-(`https://{a,b,c}.tile.opentopomap.org/{z}/{x}/{y}.png`), loaded through a
-minimal MapLibre raster style (see `GuessMap.js`) instead of a full vector
-style. It requires no account, API key or payment method. Guillaume chose it
-specifically because it draws relief (hillshading) and road-number shields
-natively, which the previous OpenFreeMap Liberty style did not. OpenTopoMap's
-own cartographic style and rendering are licensed under
-Creative Commons Attribution-ShareAlike 3.0 (CC-BY-SA); the required
-attribution string is kept visible in MapLibre's attribution control:
+The detailed answer map uses the OpenStreetMap US Tileservice's public,
+keyless vector tiles (OpenMapTiles schema,
+`https://tiles.openstreetmap.us/vector/openmaptiles/{z}/{x}/{y}.mvt`) and
+glyph server (`https://tiles.openstreetmap.us/fonts/{fontstack}/{range}.pbf`),
+loaded through a hand-written MapLibre vector style (`guessMapStyle.js`)
+instead of the previous single raster source. It requires no account, API key
+or payment method; the service is operated by the OpenStreetMap US non-profit
+and is free for low-volume non-commercial use. Guillaume chose to move to a
+vector style specifically to get country/capital/city labels, roads and
+country borders that a raster basemap cannot provide, and to unlock real
+road-number shields (see the next section). Required attribution is kept
+visible in MapLibre's attribution control:
 
-> Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap
-> (CC-BY-SA)
+> Data: © OpenStreetMap contributors · Tiles: OpenStreetMap US · Shields:
+> OpenStreetMap Americana (CC0)
 
-- https://opentopomap.org
-- https://opentopomap.org/about
-- https://opentopomap.org/copyright
+- https://openstreetmap.us/our-work/tileservice/
+- https://tiles.openstreetmap.us/
 
 ## OpenStreetMap
 
-Map data is provided by OpenStreetMap contributors through OpenTopoMap.
-Attribution is kept visible in the MapLibre control. OpenStreetMap data is
-available under the Open Database License:
+Map data is provided by OpenStreetMap contributors through the OpenStreetMap
+US Tileservice above. Attribution is kept visible in the MapLibre control.
+OpenStreetMap data is available under the Open Database License:
 https://www.openstreetmap.org/copyright
 
-## SRTM elevation data
+## OpenStreetMap Americana — road shields (2026-09-07)
 
-The relief/hillshading drawn by OpenTopoMap is derived from the Shuttle Radar
-Topography Mission (SRTM), a NASA/NGA dataset. No elevation data is
-downloaded, stored or processed by Arcardi: the browser only requests
-finished PNG tiles from OpenTopoMap, which already bakes the hillshading in.
-Attribution is included in the string above, per OpenTopoMap's own
-requirement.
+Road-number shields (the colored panels drawn on top of roads, e.g. a red
+French `A6` autoroute panel or a blue US `I-25` interstate shield) are
+rendered at runtime by the `@americana/maplibre-shield-generator` npm
+package (installed as a dependency) plus two vendored data files copied
+verbatim from the OpenStreetMap Americana project
+(`public/ousthat/shields/shields.json`, `sprite.json`/`sprite.png` and their
+`@2x` variants) — about 1,900 hand-researched road-network → shield-color
+mappings, covering most countries that actually appear in `locationsData.js`.
+One additional entry, `pl:regional` (Polish voivodeship roads, yellow
+background/black text), was added by hand on top of the vendored file — see
+the comment above `SHIELD_DEFS_URL` in `GuessMap.js` for why. The shield
+layer definition and image-name parser in `shieldLayer.js` are a JavaScript
+port of `src/layer/highway_shield.js` and `src/js/shield_format.ts` from the
+same project (this repository has no TypeScript).
+
+- repository: https://github.com/osm-americana/openstreetmap-americana
+- license: CC0-1.0 (public domain) for both the code and the shield
+  data/sprites — confirmed via the repository's `LICENSE` file.
+- npm package: https://www.npmjs.com/package/@americana/maplibre-shield-generator
+  (same project, same CC0-1.0 license)
 
 ## Google Maps Embed
 

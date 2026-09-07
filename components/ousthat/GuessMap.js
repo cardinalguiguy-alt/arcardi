@@ -7,35 +7,62 @@ import {
   Marker as MapLibreMarker,
   NavigationControl,
 } from "maplibre-gl";
+import { ShieldRenderer } from "@americana/maplibre-shield-generator";
 import { countryFlag } from "./locations";
 import { normalizeGuess } from "./rules";
+import { buildGuessMapStyle, GUESS_MAP_SOURCE_ID } from "./guessMapStyle";
+import { makeShieldLayer, shieldRouteParser, shieldImagePredicate, shieldNetworkPredicate } from "./shieldLayer";
 
-// OpenTopoMap (2026-09-07, retour de Guillaume) remplace le style vectoriel
-// OpenFreeMap Liberty : relief (ombrage SRTM) ET numéros de route sont
-// dessinés NATIVEMENT par ce fournisseur, contrairement au style épuré
-// précédent qui n'avait ni l'un ni l'autre. Gratuit, sans compte ni clé —
-// mais ce sont des tuiles RASTER (PNG), donc un style MapLibre minimal (une
-// seule source raster) plutôt qu'un style vectoriel complet. Zoom natif
-// jusqu'à 17 : au-delà, MapLibre agrandit la dernière tuile plutôt que
-// d'échouer (plus flou, jamais d'erreur ni de tuile manquante).
-const OPENTOPOMAP_ATTRIBUTION = 'Données : © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributeurs, SRTM · Style : © <a href="https://opentopomap.org" target="_blank" rel="noopener">OpenTopoMap</a> (CC-BY-SA)';
-const OPENTOPOMAP_STYLE = {
-  version: 8,
-  sources: {
-    opentopomap: {
-      type: "raster",
-      tiles: [
-        "https://a.tile.opentopomap.org/{z}/{x}/{y}.png",
-        "https://b.tile.opentopomap.org/{z}/{x}/{y}.png",
-        "https://c.tile.opentopomap.org/{z}/{x}/{y}.png",
-      ],
-      tileSize: 256,
-      maxzoom: 17,
-      attribution: OPENTOPOMAP_ATTRIBUTION,
-    },
-  },
-  layers: [{ id: "opentopomap", type: "raster", source: "opentopomap" }],
-};
+// 2026-09-07 (retour de Guillaume : « je veux voir les labels, noms de pays,
+// capitales, villes, rues, frontières, numéros de route avec le code couleur
+// du pays ») remplace OpenTopoMap par un style vectoriel écrit à la main —
+// voir guessMapStyle.js pour la carte de fond/frontières/libellés et
+// shieldLayer.js pour les panneaux routiers. Détail complet dans le bloc
+// ⏭️ REPRISE de CLAUDE.md.
+const GUESS_MAP_STYLE = buildGuessMapStyle(makeShieldLayer(GUESS_MAP_SOURCE_ID));
+// Table CC0 de github.com/osm-americana/openstreetmap-americana (~1900
+// réseaux routiers, dont la plupart des pays qui comptent dans le tirage
+// d'« Où's that ? » — vérifié le 2026-09-07 contre locationsData.js). Un
+// réseau absent de cette table retombe sur son panneau "default" (générique,
+// numéro seul) plutôt que de ne rien afficher.
+// ⚠️ 2026-09-07 : UNE seule entrée ajoutée À LA MAIN par-dessus le vendor
+// d'origine — "pl:regional" (route de voïvodie polonaise, jaune/noir), le
+// réseau que Guillaume a nommé explicitement (route 431) et qu'Americana ne
+// couvre pas encore. Vérifié dans les vraies tuiles : les routes de voïvodie
+// portent bien `route_N_network:"pl:regional"` (confirmé sur les routes
+// 307/196/433/430 autour de Poznań) — donc la couleur, pas la donnée,
+// manquait. Toute correction future d'Americana écrasera cette entrée sans
+// dommage si on re-télécharge shields.json (même clé, même intention).
+const SHIELD_DEFS_URL = "/ousthat/shields/shields.json";
+let shieldDefsPromise = null;
+function loadShieldDefs() {
+  if (!shieldDefsPromise) shieldDefsPromise = fetch(SHIELD_DEFS_URL).then((response) => response.json());
+  return shieldDefsPromise;
+}
+// 2026-09-07 — piège trouvé en mesurant le style vectoriel : l'événement
+// "load" de MapLibre attend que TOUTES les tuiles de la vue COURANTE soient
+// arrivées — au zoom monde (1.6, la vue de départ), ça veut dire le monde
+// entier, plusieurs secondes avec des tuiles vectorielles alors que
+// l'ancien raster OpenTopoMap n'en payait presque rien. Une révélation vole
+// vers sa cible juste après : attendre "load" revient à charger le monde
+// EN PLUS de la destination, deux fois pour rien. "styledata" + isStyleLoaded()
+// ne demande que le SQUELETTE du style (sources/sprite/glyphes) — vrai
+// dans les millisecondes qui suivent la création, tuiles ou pas — donc la
+// carte peut voler/afficher tout de suite et se garnir au fil de l'arrivée
+// des tuiles, exactement comme n'importe quelle carte web.
+function whenStyleReady(map, callback) {
+  if (map.isStyleLoaded()) {
+    callback();
+    return () => {};
+  }
+  const check = () => {
+    if (!map.isStyleLoaded()) return;
+    map.off("styledata", check);
+    callback();
+  };
+  map.on("styledata", check);
+  return () => map.off("styledata", check);
+}
 const REVEAL_SOURCE_ID = "ot-reveal-lines";
 const REVEAL_LAYER_ID = "ot-reveal-lines-layer";
 const EMPTY_SEATS = Object.freeze([]);
@@ -109,11 +136,11 @@ function GuessMap({ marker, onChange, locked = false, expanded = false, reveal =
   const markerRef = useRef(null);
   const revealMarkersRef = useRef([]);
   const [mapError, setMapError] = useState(false);
-  // MapLibre peint son propre canevas en blanc tant que le style (fond de
-  // carte OpenTopoMap) n'a pas fini de charger — visible ~1-2 s sur la
-  // révélation, qui recrée une carte à chaque manche (audit 2026-09-06).
-  // Même geste que StreetViewFrame.js (.ot-sv/.loaded) : masqué jusqu'à
-  // "load", puis un fondu CSS plutôt qu'un flash.
+  // MapLibre peint son propre canevas en blanc tant que le style n'a pas
+  // fini de charger — visible sur la révélation, qui recrée une carte à
+  // chaque manche (audit 2026-09-06). Même geste que StreetViewFrame.js
+  // (.ot-sv/.loaded) : masqué jusqu'à whenStyleReady(), puis un fondu CSS
+  // plutôt qu'un flash.
   const [mapReady, setMapReady] = useState(false);
   const onChangeRef = useRef(onChange);
   const lockedRef = useRef(locked);
@@ -127,7 +154,7 @@ function GuessMap({ marker, onChange, locked = false, expanded = false, reveal =
     try {
       map = new MapLibreMap({
         container: rootRef.current,
-        style: OPENTOPOMAP_STYLE,
+        style: GUESS_MAP_STYLE,
         center: [4, 18],
         zoom: 1.6,
         minZoom: 1.5,
@@ -159,7 +186,21 @@ function GuessMap({ marker, onChange, locked = false, expanded = false, reveal =
       const next = normalizeGuess(event.lngLat);
       if (next) onChangeRef.current?.(next);
     });
-    map.once("load", () => setMapReady(true));
+    whenStyleReady(map, () => setMapReady(true));
+    // Le générateur de panneaux attrape "styleimagemissing" : dès qu'une
+    // couche référence une image "shield\n…\n…\n…\n" qui n'existe pas encore
+    // (voir shieldLayer.js), il la dessine à la volée à partir de
+    // shields.json et l'ajoute au sprite. Chargé une seule fois (module
+    // scope), branché à chaque carte.
+    loadShieldDefs()
+      .then((shieldDefs) => {
+        if (mapRef.current !== map) return;
+        new ShieldRenderer(shieldDefs, shieldRouteParser)
+          .filterImageID(shieldImagePredicate)
+          .filterNetwork(shieldNetworkPredicate)
+          .renderOnMaplibreGL(map);
+      })
+      .catch((error) => console.error("Panneaux routiers : table de définitions indisponible.", error));
     mapRef.current = map;
     requestAnimationFrame(() => map.resize());
     return () => {
@@ -265,11 +306,10 @@ function GuessMap({ marker, onChange, locked = false, expanded = false, reveal =
     };
 
     removeReveal(map, revealMarkersRef.current);
-    if (map.isStyleLoaded()) drawReveal();
-    else map.once("load", drawReveal);
+    const stopWaiting = whenStyleReady(map, drawReveal);
     return () => {
       cancelled = true;
-      map.off("load", drawReveal);
+      stopWaiting();
       if (mapRef.current === map) removeReveal(map, revealMarkersRef.current);
     };
   }, [reveal, seats]);

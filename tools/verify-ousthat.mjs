@@ -166,6 +166,8 @@ const page = fs.readFileSync(path.join(ROOT, "app", "room", "[code]", "page.js")
 const game = fs.readFileSync(path.join(ROOT, "components", "ousthat", "OusThatGame.js"), "utf8");
 const frame = fs.readFileSync(path.join(ROOT, "components", "ousthat", "StreetViewFrame.js"), "utf8");
 const map = fs.readFileSync(path.join(ROOT, "components", "ousthat", "GuessMap.js"), "utf8");
+const mapStyle = fs.readFileSync(path.join(ROOT, "components", "ousthat", "guessMapStyle.js"), "utf8");
+const shieldLayerSrc = fs.readFileSync(path.join(ROOT, "components", "ousthat", "shieldLayer.js"), "utf8");
 const i18n = fs.readFileSync(path.join(ROOT, "lib", "i18n.js"), "utf8");
 const rulesCopy = fs.readFileSync(path.join(ROOT, "lib", "gameRules.js"), "utf8");
 const notice = fs.readFileSync(path.join(ROOT, "components", "ousthat", "THIRD_PARTY_NOTICES.md"), "utf8");
@@ -186,11 +188,23 @@ ok("le signalement de panorama passe par le thème du jeu, jamais par un window.
 ok("Pinpoint exige WebGL avant de pouvoir lancer la partie, pas seulement la clé Maps", game.includes("function supportsWebGL") && /disabled=\{!hasEmbedKey \|\| !state\.seats\.length \|\| \(draftConfig\.mode === "pinpoint" && !hasWebGL\)\}/.test(game));
 ok("la carte de réponse se rétracte sans perdre son composant et le vrai point porte une épingle avec drapeau séparé", game.includes('mapOpen ? "open" : "collapsed"') && game.includes('className="ot-map-peek"') && game.includes("countryFlag(revealTarget?.country)") && map.includes("countryFlag(reveal.target.country)") && map.includes('kind === "target"') && map.includes('flag.className = "ot-map-target-flag"') && /\.ot-map-marker\.target\{[^}]*width:58px/.test(css) && /\.ot-map-target-flag\{/.test(css));
 ok("Google reçoit un pano ou une coordonnée de repli, une orientation, sans clé copiée", frame.includes('params.set("pano", location.panoId)') && frame.includes('params.set("location", ') && frame.includes('heading: String(location.heading)') && frame.includes('referrerPolicy="strict-origin-when-cross-origin"') && frame.includes('process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY') && !/AIza[0-9A-Za-z_-]{30,}/.test(frame));
-ok("la carte détaillée utilise OpenTopoMap sans clé et garde les interactions fluides", map.includes("tile.opentopomap.org") && map.includes("new AttributionControl") && map.includes("setWheelZoomRate") && map.includes("setZoomRate") && !/api[_-]?key|access[_-]?token/i.test(map));
-ok("le style OpenTopoMap est un raster minimal, avec attribution OSM+SRTM et relief/routes natifs documentés", map.includes('type: "raster"') && map.includes("OPENTOPOMAP_ATTRIBUTION") && notice.includes("OpenTopoMap") && notice.includes("SRTM") && /CC-BY-SA/.test(notice));
+ok("la carte détaillée utilise l'OpenStreetMap US Tileservice sans clé et garde les interactions fluides", mapStyle.includes("tiles.openstreetmap.us") && map.includes("new AttributionControl") && map.includes("setWheelZoomRate") && map.includes("setZoomRate") && !/api[_-]?key|access[_-]?token/i.test(map));
+ok("le style est vectoriel (OpenMapTiles), avec attribution OSM+OpenStreetMap US+Americana documentée, et les panneaux routiers portent le vrai code couleur par pays via Americana (CC0)", mapStyle.includes('type: "vector"') && mapStyle.includes("GUESS_MAP_ATTRIBUTION") && notice.includes("OpenStreetMap US Tileservice") && notice.includes("OpenStreetMap Americana") && /CC0-1\.0/.test(notice) && shieldLayerSrc.includes("route_") && map.includes("ShieldRenderer") && map.includes("shields.json"));
 ok("le pin de réponse et les pins de révélation portent les mascottes Arcardi", game.includes("avatar={mySeat?.avatar}") && game.includes("seats={state.seats}") && map.includes('seat?.avatar || "🧭"'));
 ok("le temps de round configurable pilote l'échéance hôte partagée", /roundSeconds:\s*\[20,\s*300\]/.test(fs.readFileSync(path.join(ROOT, "components", "ousthat", "rules.js"), "utf8")) && game.includes("current.config.roundSeconds * 1000") && game.includes("remainingMs"));
 ok("la provenance reste bornée à la dernière révision MIT", notice.includes("ef88928c03a70d77ce5a1c86fddf74814ff67fc7") && /PolyForm\s+Noncommercial/.test(notice) && notice.includes("No code or data introduced after"));
+
+section("carte vectorielle et panneaux routiers (2026-09-07)");
+const shieldDefsPath = path.join(ROOT, "public", "ousthat", "shields", "shields.json");
+const shieldDefs = JSON.parse(fs.readFileSync(shieldDefsPath, "utf8"));
+ok("les frontières, le fond de carte et les libellés pays/capitale/ville/route sont dans le style, pas dans une closure de rendu", /"source-layer":\s*"boundary"/.test(mapStyle) && /"source-layer":\s*"place"/.test(mapStyle) && mapStyle.includes('"class"], "country"') && mapStyle.includes('["get", "capital"], 2') && /"source-layer":\s*"transportation_name"/.test(mapStyle) && ["motorway", "trunk", "primary", "secondary", "tertiary"].every((cls) => mapStyle.includes(`"${cls}"`)));
+ok("le libellé des lieux préfère le français, retombe sur l'anglais puis la forme latine avant le nom natif (évite le cyrillique/CJK/arabe injouable, faute de police dédiée)", /coalesce.*name:fr.*name:en.*name:latin/.test(mapStyle.replace(/\s+/g, " ")));
+ok("le générateur de panneaux lit jusqu'à 8 itinéraires concurrents par tronçon (route_1_… à route_8_…) et jamais un réseau de randonnée/cyclisme", shieldLayerSrc.includes("route_${routeIndex}") && shieldLayerSrc.includes("MAX_CONCURRENT_ROUTES = 8") && /\[lrni\]\[chimpw\]n/.test(shieldLayerSrc));
+ok("la table de panneaux vendorisée (CC0, Americana) couvre au moins la France et les USA nativement", !!shieldDefs.networks["FR:A-road"] && !!shieldDefs.networks["US:I"] && !!shieldDefs.networks.default);
+ok("la route de voïvodie polonaise (pl:regional, l'exemple donné par Guillaume : jaune sur noir) a été ajoutée à la main, Americana ne la couvrant pas encore", shieldDefs.networks["pl:regional"]?.textColor === "black" && /^#f/i.test(shieldDefs.networks["pl:regional"]?.shapeBlank?.params?.fillColor || ""));
+ok("les sprites de panneaux vides (1x et 2x) sont bien vendorisés à côté de la table", ["sprite.json", "sprite.png", "sprite@2x.json", "sprite@2x.png"].every((f) => fs.existsSync(path.join(ROOT, "public", "ousthat", "shields", f))));
+ok("ni la carte de guessing ni le vol de révélation n'attendent \"load\" (le monde entier en tuiles vectorielles) — les deux passent par whenStyleReady", map.includes("whenStyleReady(map, () => setMapReady(true));") && map.includes("whenStyleReady(map, drawReveal);") && !map.includes('map.once("load"'));
+ok("survoler le dock de carte l'ouvre (retour de Guillaume), le clic sur le rond reste le repli tactile", game.includes('onMouseEnter={() => setMapOpen(true)}') && game.includes('className="ot-map-peek"'));
 
 section("durée de manche Illimitée (2026-09-07) — branchements");
 ok("le début de manche part sans échéance quand la durée est illimitée", game.includes("isUnlimitedRound(current.config)"));
@@ -207,7 +221,7 @@ ok("un tirage vide (mode Pays × carte sans pays) est refusé côté hôte ET an
 ok("le setup affiche un sélecteur de carte et envoie mapId au lancement", game.includes("ot-map-picker") && game.includes("MAPS.map((map)") && game.includes("mapId: map.id") && /sendRequest\("start",\s*\{\s*config:\s*checked\.value\s*\}\)/.test(game));
 ok("start() passe mapId à locationOrder côté hôte, la revanche aussi", /locationOrder\(matchId, checked\.value\.mode, checked\.value\.mapId\)/.test(game) && /locationOrder\(matchId, current\.config\.mode, current\.config\.mapId\)/.test(game));
 ok("un téléphone en paysage (court, quelle que soit sa largeur) reçoit son propre resserrement", /@media \(max-height:500px\)\{[\s\S]{0,400}\.ot-map-dock\.open/.test(css));
-ok("le canevas MapLibre se fond en fondu plutôt que de flasher en blanc", /\.ot-map-canvas \.maplibregl-canvas\{ opacity:0/.test(css) && map.includes('map.once("load", () => setMapReady(true))') && map.includes('mapReady ? " ready" : ""'));
+ok("le canevas MapLibre se fond en fondu plutôt que de flasher en blanc", /\.ot-map-canvas \.maplibregl-canvas\{ opacity:0/.test(css) && map.includes("whenStyleReady(map, () => setMapReady(true))") && map.includes('mapReady ? " ready" : ""'));
 
 section("audit 2026-09-06 (suite) — sensibilité, transitions, plein écran, fin de partie");
 ok("le zoom de la carte de réponse a été rendu plus sensible qu'avant (diviseurs abaissés)", /setWheelZoomRate\(1 \/ (\d+)\)/.exec(map)?.[1] < 450 && /setZoomRate\(1 \/ (\d+)\)/.exec(map)?.[1] < 100);

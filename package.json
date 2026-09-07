@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@americana/maplibre-shield-generator": "^0.1.1",
     "@supabase/supabase-js": "^2.45.4",
     "chess.js": "^1.4.0",
     "maplibre-gl": "^4.7.1",

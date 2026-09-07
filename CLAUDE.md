@@ -10,61 +10,82 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ⚠️⚠️⚠️ **CE BLOC DÉSIGNE UNE SEULE ACTION SUIVANTE. IL SE REMPLACE, IL NE
 S'EMPILE PAS.**
 
-### 🔴 ACTION SUIVANTE — GUILLAUME JOUE EN VRAI LA NOUVELLE CARTE ET LE CURSEUR DE DURÉE, LE MÉCANISME EST DÉJÀ CONFIRMÉ EN JEU
+### 🔴 ACTION SUIVANTE — GUILLAUME JOUE EN VRAI LA CARTE VECTORIELLE ET SES PANNEAUX ROUTIERS, JAMAIS TESTÉS AU CLIC RÉEL
 
-**Livraison du 2026-09-07, demandée par Guillaume en deux volets : (1) une carte de réponse avec
-numéros de route et de meilleurs labels de pays, plus le relief toujours visible ; (2) un meilleur
-outil pour la durée de manche, jusqu'à Illimité. Fait, vérifié par banc et par une vraie session
-dans le navigateur (page jetable + `fake-supabase.mjs`) — pas encore rejoué par Guillaume lui-même.**
+**Livraison du 2026-09-07 (même jour, remplace la précédente) : Guillaume a rejeté OpenTopoMap
+("très insatisfait") et demandé une carte de réponse à la GeoGuessr/WorldGuessr — labels, noms de
+pays, capitales, villes, rues, frontières, ET les numéros de route avec le VRAI code couleur du
+pays (son exemple : la route 431 en Pologne, noir sur fond jaune). Fait, en gratuit, sans compte ni
+carte bancaire — voir le §2 pour pourquoi Google Maps était exclu d'office.**
 
-1. **Carte de réponse : OpenFreeMap → OpenTopoMap.** `GuessMap.js` n'utilise plus le style vectoriel
-   OpenFreeMap Liberty mais un style MapLibre **raster** minimal pointant vers les tuiles OpenTopoMap
-   (`{a,b,c}.tile.opentopomap.org`) — gratuit, sans compte ni clé, comme l'exigeait déjà le README.
-   Relief (ombrage SRTM) ET numéros de route sont dessinés NATIVEMENT par ce fournisseur ; l'ancien
-   style n'avait ni l'un ni l'autre. Zoom natif jusqu'à 17 (au-delà, MapLibre suréchantillonne la
-   dernière tuile, jamais d'erreur). Attribution (OSM + SRTM + OpenTopoMap CC-BY-SA) posée dans le
-   style et documentée dans `README.md`/`THIRD_PARTY_NOTICES.md`.
-2. **Durée de manche : curseur jusqu'à Illimité, avec un vrai garde-fou.** `rules.js` porte
-   `ROUND_SECONDS_UNLIMITED = 0` (jamais `Infinity`, qui ne survit pas à un `JSON.stringify` —
-   l'état voyage en JSON via le broadcast Realtime et `rooms.game_state`). `RoundDurationField`
-   (nouveau, `OusThatGame.js`) remplace le champ numérique brut par un `<input type="range">` qui va
-   jusqu'à un cran supplémentaire affiché « ∞ Illimité ». `finalDeadline()` et `canAcceptAnswer()`
-   traitent `deadline === null` comme « aucune échéance » (possible uniquement en cours de manche,
-   la phase étant déjà vérifiée) plutôt que de laisser `Number(null) === 0` clôturer la manche à
-   l'instant même — piège trouvé EN ÉCRIVANT le code, pas en le relisant. ⚠️ **Garde-fou ajouté
-   (demande explicite de Guillaume)** : sans échéance, un joueur AFK/déconnecté bloquerait la manche
-   pour toujours (seul « tous confirmés » la résout sinon) — un bouton hôte « Terminer la manche »
-   (`⏭`, dans les actions de coin, visible seulement en manche Illimitée) appelle directement
-   `hostResolve`. Le délai de rush après la première réponse (`finalSeconds`) est désormais
-   réellement désactivé en mode Illimité (grisé + expliqué dans le setup), pour que « sans
-   pression » le reste vraiment jusqu'au bout, même après la première réponse d'un joueur.
+1. **OpenTopoMap (raster) → un style MapLibre VECTORIEL écrit à la main** (`guessMapStyle.js`),
+   sur les tuiles gratuites et sans clé de l'**OpenStreetMap US Tileservice**
+   (`tiles.openstreetmap.us`, schéma OpenMapTiles — un fournisseur DIFFÉRENT d'OpenFreeMap, même
+   famille associative à but non lucratif). Frontières (`admin_level` 2), libellés pays/capitale
+   (le champ `capital` vaut **2** pour une capitale nationale — pas un booléen, un maire de province
+   l'aurait mis en gras par erreur)/ville/village, rues nommées, tout en français d'abord
+   (`coalesce(name:fr, name:en, name:latin, name)` — jamais le nom natif seul, pour éviter le
+   cyrillique/CJK/arabe injouable sans police dédiée).
+2. **Les panneaux routiers portent le vrai code couleur du pays** — la pièce qui manquait vraiment.
+   Bibliothèque CC0 **`@americana/maplibre-shield-generator`** (nouvelle dépendance npm) +
+   ~1 900 définitions réseau→couleur du projet **OpenStreetMap Americana**, vendorisées telles
+   quelles dans `public/ousthat/shields/` (`shields.json`, sprites 1x/2x) — `shieldLayer.js` est
+   une traduction JS de leur `highway_shield.js`/`shield_format.ts` (jusqu'à 8 itinéraires
+   concurrents par tronçon, ex. une route qui porte aussi un numéro d'Route Européenne).
+   ⚠️ **Une seule entrée ajoutée à la main par-dessus le vendor** : `pl:regional` (route de
+   voïvodie polonaise, jaune/noir) — exactement l'exemple de Guillaume, absent de la table
+   officielle mais confirmé présent dans les vraies tuiles. Un réseau routier qui n'est dans
+   AUCUNE des deux tables retombe sur un panneau générique (numéro seul), jamais sur rien.
+3. **Ouverture de la carte facilitée par simple survol** (retour de Guillaume, même message) : le
+   dock de carte (`OusThatGame.js`) s'ouvre au `onMouseEnter`, le clic sur le rond restant le repli
+   tactile (aucun survol au doigt).
+4. ⚠️⚠️ **PIÈGE MESURÉ EN CONSTRUISANT LE STYLE, ET IL A FAILLI COÛTER CHER** : l'événement
+   MapLibre `"load"` attend que **toutes** les tuiles de la vue COURANTE arrivent — au zoom monde
+   de départ (1.6), ça veut dire le monde entier, plusieurs secondes en tuiles vectorielles contre
+   presque rien pour un raster. Une révélation vole vers sa cible juste après : attendre `"load"`
+   revient à charger le monde EN PLUS de la destination. `whenStyleReady()` (nouveau, `GuessMap.js`)
+   attend seulement `isStyleLoaded()` — le squelette du style (sources/sprite/glyphes), vrai en
+   quelques centaines de ms, tuiles ou pas — remplace les deux `map.once("load", …)` de l'ancien
+   code. Le même style vide de contenu se garnit ensuite au fil de l'arrivée des tuiles, comme
+   n'importe quelle carte web.
 
-**Vérifié, et comment :** `node tools/verify-ousthat.mjs` **97/97** (11 contrôles neufs sur cette
-livraison), falsification toujours à **3 échecs** (inchangé), `npx next build` vert. Rejoué dans le
-navigateur (page jetable + `fake-supabase.mjs`, vraie clé Maps Embed) : le curseur affiche bien
-« ∞ Illimité » en bout de course, une manche Illimitée lancée montre **∞** au HUD au lieu d'un compte
-à rebours trompeur, le bouton hôte apparaît et résout la manche instantanément sans erreur. La carte
-a été vérifiée à l'œil à trois échelles : le monde entier (relief visible partout), les Alpes (relief
-+ pastilles de numéros de route + libellés de villes), et le centre de Varsovie au zoom rue (route
-artérielle en jaune, libellés bilingues « Warszawa Śródmieście / Warsaw City Center », station de
-métro) — sans CORS ni erreur de rendu.
+**Vérifié, et comment :** `node tools/verify-ousthat.mjs` **105/105** (97 avant cette livraison ;
+8 contrôles neufs sur le nouveau style/panneaux, 3 autres réécrits pour ne plus tester
+OpenTopoMap — un falsifié à la main : la couleur de `pl:regional` changée puis restaurée, vu
+rougir puis revert), falsification toujours à **3 échecs** (inchangé), `npx next build` vert.
+⚠️ **Vérifié à l'œil dans un VRAI navigateur, sur les VRAIES tuiles**, pas seulement par le code :
+une page HTML jetable hors du dépôt Next (le composant React lui-même tourne le même style, jamais
+testé au clic dans l'appli). A6/E15 françaises (rouge/vert), départementales D-quelconque
+(jaune/noir), A2/S5/S11/E30/E261/2/5 polonaises (rouge/bleu/vert/rouge), **433 polonaise en
+noir-sur-jaune — l'exemple exact de Guillaume**, boucliers Interstate/US Route américains (la
+vraie forme du panneau, pas un simple rectangle), M25/M1/A41 britanniques, E26/E51 allemandes —
+tout au bon endroit, sans CORS ni tuile manquante. ⚠️ **Et un vrai piège de test a été retrouvé et
+recontourné en le mesurant** : le panneau d'aperçu du navigateur reste "hidden" pour Chrome même
+fronté, qui n'y déclenche jamais `requestAnimationFrame` — dont MapLibre a besoin dans son propre
+amorçage — reproduisant exactement le piège déjà noté au §10 (gels de PNJ), mais sur MapLibre cette
+fois. Contourné par le même patch `requestAnimationFrame = setTimeout(…, 16)`, appliqué UNIQUEMENT
+dans la page de test, jamais dans le code livré (un vrai onglet utilisateur n'a pas ce problème).
 
-**Non vérifié, assumé comme tel :** aucun clic/glisser RÉEL n'a pu être testé (curseur de durée,
-bouton hôte, nouveau fond de carte) — outils d'automatisation seulement. Recette héritée jamais
-faite et toujours valable, maintenant pour OpenTopoMap comme elle l'était pour OpenFreeMap : jouer
-Pinpoint depuis Chrome et Safari, puis Country + Pinpoint depuis deux ou trois appareils/réseaux
-différents ; vérifier pins mascottes, zoom molette/pavé tactile/pincement, reconnexion et passage
-hôte. Le bouton « Terminer la manche » n'a été déclenché qu'en solo, jamais avec un second joueur
-réellement AFK. Et surtout : le LOOK d'OpenTopoMap (style « carte de randonnée », brun/vert,
-différent du rendu épuré précédent) est un jugement esthétique que seul Guillaume peut trancher en
-jouant — rien ici ne mesure « est-ce que ça plaît ? ». **C'est le point qui reste à rejouer par
-Guillaume avant de clore ce sujet.**
+**Non vérifié, assumé comme tel :** aucun clic/glisser RÉEL dans l'appli elle-même (carte + son
+survol, drag du pin, zoom molette/pincement) — la page de test qui a prouvé le rendu a été
+supprimée avant livraison (règle du §10), et la reconstruire pour rejouer une session complète à
+deux clients n'a pas été fait. **Ce n'est donc PAS la recette habituelle "Pinpoint + Country à deux
+clients" — elle reste entièrement à faire, comme avant.** Et surtout, deux jugements qui
+n'appartiennent qu'à Guillaume : (1) le LOOK du nouveau fond de carte (plus dense, plus "atlas
+routier" que l'épure d'OpenFreeMap) — accepté comme compromis nécessaire pour obtenir les panneaux,
+mais jamais jugé en jouant ; (2) **cinq pays du tirage réel n'ont pas de panneau coloré natif**
+(Brésil 3,3 %, Norvège 1,5 %, Jordanie 1,6 %, Laos 1,5 %, Oman 1,8 % des lieux) — panneau générique
+gris pour l'instant, ajoutable à la main comme `pl:regional` le jour où Guillaume les remarque en
+jouant.
 
-**Configuration :** aucune manipulation Supabase ni Vercel — uniquement du code.
+**Configuration :** aucune manipulation Supabase ni Vercel — du code, une dépendance npm de plus
+(`@americana/maplibre-shield-generator`, `npm install` déjà fait), et ~975 Ko de données statiques
+neuves sous `public/ousthat/shields/` (CC0, vendorisées, jamais rechargées au runtime depuis un
+autre domaine que le dépôt lui-même).
 
 **Toujours en attente, sans rapport avec ce qui précède :** le tirage des lieux reste déséquilibré
-(France 14,6 %, top 10 = 53,8 %) — jamais touché, Guillaume n'a demandé que l'UI et la carte. Après
-la recette ci-dessus, reprendre Ferme Vallée P1 bis.
+(France 14,6 %, top 10 = 53,8 %) — jamais touché. Après la recette ci-dessus, reprendre Ferme
+Vallée P1 bis.
 
 ### PASSIF FERME VALLÉE
 

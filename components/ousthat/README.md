@@ -151,16 +151,28 @@ le même jour.
 ## Fournisseurs et licences
 
 - Panorama : Google Maps Embed API, demandé par identifiant de panorama.
-- Carte de réponse : MapLibre GL JS 4.7.1 avec un style raster minimal pointant
-  vers OpenTopoMap (2026-09-07, remplace le style vectoriel OpenFreeMap
-  Liberty) — relief (ombrage SRTM) ET numéros de route sont dessinés
-  NATIVEMENT par ce fournisseur, ce que le style précédent n'offrait ni l'un
-  ni l'autre. Le zoom continu accepte pavé tactile, molette, pincement et
-  boutons ; les pins portent les mascottes Arcardi pour les réponses, tandis
-  que le vrai lieu est une épingle verte avec drapeau séparé. OpenTopoMap ne
-  demande ni compte, ni clé, ni moyen de paiement. L'attribution (OSM + SRTM +
-  OpenTopoMap, CC-BY-SA) reste visible et aucune tuile n'est préchargée ou
-  relayée par Arcardi.
+- Carte de réponse : MapLibre GL JS 4.7.1 avec un style VECTORIEL écrit à la
+  main (`guessMapStyle.js`, 2026-09-07, remplace le raster OpenTopoMap) sur
+  les tuiles gratuites et sans clé de l'OpenStreetMap US Tileservice —
+  frontières, libellés pays/capitales/villes bilingues FR/EN, rues nommées.
+  Les numéros de route portent le VRAI code couleur du pays (rouge/blanc
+  pour une autoroute française, jaune/noir pour une route de voïvodie
+  polonaise, bouclier bleu pour une Interstate US…) via la bibliothèque CC0
+  `@americana/maplibre-shield-generator` et ses ~1 900 définitions de réseaux
+  routiers, vendorisées dans `public/ousthat/shields/` — voir
+  `shieldLayer.js` et THIRD_PARTY_NOTICES.md. Un réseau routier absent de
+  cette table retombe sur un panneau générique (numéro seul), jamais sur rien.
+  Le zoom continu accepte pavé tactile, molette, pincement et boutons ; les
+  pins portent les mascottes Arcardi pour les réponses, tandis que le vrai
+  lieu est une épingle verte avec drapeau séparé. Aucun compte, clé ou moyen
+  de paiement requis ; l'attribution (OSM + OpenStreetMap US + Americana)
+  reste visible et aucune tuile n'est préchargée ou relayée par Arcardi.
+  ⚠️ Piège mesuré en construisant ce style : l'événement MapLibre "load"
+  attend que TOUTES les tuiles de la vue courante arrivent — au zoom monde de
+  départ, ça veut dire le monde entier, plusieurs secondes avec du vectoriel.
+  `GuessMap.js` attend seulement `isStyleLoaded()` (le squelette du style,
+  indépendant des tuiles) avant d'afficher la carte ou de lancer le vol vers
+  la cible d'une révélation.
 - Panoramas : 38 enregistrements tirés de la dernière révision WorldGuessr
   encore sous MIT, complétés le 2026-09-06 par la carte personnelle que
   Guillaume a construite dans l'éditeur GeoGuessr (~1500 lieux après
