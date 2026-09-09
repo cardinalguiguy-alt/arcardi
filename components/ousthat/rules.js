@@ -22,7 +22,7 @@ export const COUNTRY_INPUTS = Object.freeze(["multiple-choice", "search"]);
 // nouvelle carte enregistrée dans maps.js (voir tools/import-map.mjs). Une
 // petite liste manuelle plutôt qu'un import de maps.js : ce fichier reste
 // des règles pures, sans dépendre du catalogue de panoramas ni de sa taille.
-export const GAME_MAP_IDS = Object.freeze(["beautiful-world"]);
+export const GAME_MAP_IDS = Object.freeze(["beautiful-world", "australie"]);
 
 // Sentinel de durée de manche illimitée (2026-09-07). 0, jamais Infinity :
 // l'état voyage en JSON (broadcast Realtime + rooms.game_state), et

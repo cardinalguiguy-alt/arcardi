@@ -137,7 +137,15 @@ function main() {
   if (fs.existsSync(OUT)) {
     console.log(`⚠️  ${OUT} existe déjà — écrasement (régénération de la carte "${MAP_ID}").`);
   }
-  const raw = JSON.parse(fs.readFileSync(SOURCE_JSON, "utf8"));
+  const parsed = JSON.parse(fs.readFileSync(SOURCE_JSON, "utf8"));
+  // L'export du fabricant de cartes (map-making.app) enveloppe le tableau
+  // dans { name, customCoordinates: [...] } au lieu du tableau nu attendu
+  // jusqu'ici — les deux formes sont acceptées, jamais devinées en silence.
+  const raw = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.customCoordinates) ? parsed.customCoordinates : null;
+  if (!raw) {
+    console.error(`Format inattendu dans ${SOURCE_JSON} : ni tableau nu, ni { customCoordinates: [...] }.`);
+    process.exit(1);
+  }
   console.log(`Source : ${raw.length} lieux dans ${SOURCE_JSON}`);
 
   const countryIndex = buildCountryIndex();

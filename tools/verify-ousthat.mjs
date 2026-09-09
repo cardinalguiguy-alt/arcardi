@@ -27,11 +27,16 @@ const countriesSrc = fs.readFileSync(path.join(ROOT, "components", "ousthat", "c
 fs.writeFileSync(path.join(tmp, "countries.mjs"), countriesSrc);
 const locationsDataSrc = fs.readFileSync(path.join(ROOT, "components", "ousthat", "locationsData.js"), "utf8");
 fs.writeFileSync(path.join(tmp, "locationsData.mjs"), locationsDataSrc);
-// Une carte de plus (maps.js) = un fichier mapData.<id>.js de plus à copier
-// ici avec le même traitement, tant que ce banc réécrit les imports à la
-// main plutôt que de laisser Node résoudre depuis le vrai dépôt.
-const mapsSrc = fs.readFileSync(path.join(ROOT, "components", "ousthat", "maps.js"), "utf8")
+// Une carte de plus (maps.js) = un fichier mapData.<id>.js de plus, importé
+// depuis maps.js — repéré ici par motif et copié avec le même traitement,
+// pour que ce banc n'ait plus à être retouché à chaque carte ajoutée.
+let mapsSrc = fs.readFileSync(path.join(ROOT, "components", "ousthat", "maps.js"), "utf8")
   .replaceAll('from "./locationsData"', 'from "./locationsData.mjs"');
+for (const [, mapDataBase] of mapsSrc.matchAll(/from ["']\.\/(mapData\.[a-z0-9-]+)["']/g)) {
+  const mapDataSrc = fs.readFileSync(path.join(ROOT, "components", "ousthat", `${mapDataBase}.js`), "utf8");
+  fs.writeFileSync(path.join(tmp, `${mapDataBase}.mjs`), mapDataSrc);
+}
+mapsSrc = mapsSrc.replace(/from (["'])\.\/(mapData\.[a-z0-9-]+)\1/g, 'from "./$2.mjs"');
 fs.writeFileSync(path.join(tmp, "maps.mjs"), mapsSrc);
 const locationsSrc = fs.readFileSync(path.join(ROOT, "components", "ousthat", "locations.js"), "utf8")
   .replaceAll('from "./rules"', 'from "./rules.mjs"')

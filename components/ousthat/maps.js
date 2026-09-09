@@ -12,9 +12,11 @@
  * Rien d'autre : locations.js, le setup et les bancs suivent le registre.
  */
 import { LOCATIONS_RAW as BEAUTIFUL_WORLD_LOCATIONS } from "./locationsData";
+import { LOCATIONS_RAW as AUSTRALIE_LOCATIONS } from "./mapData.australie";
 
 export const MAPS = Object.freeze([
   { id: "beautiful-world", name: "Beautiful World", icon: "🌍", locations: BEAUTIFUL_WORLD_LOCATIONS },
+  { id: "australie", name: "Australie", icon: "🦘", locations: AUSTRALIE_LOCATIONS },
 ]);
 
 export const MAP_BY_ID = Object.freeze(Object.fromEntries(MAPS.map((map) => [map.id, map])));
