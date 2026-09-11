@@ -91,13 +91,20 @@ ne demandent ni changement de schéma, ni nouvelle API, ni abonnement payant.
   `orderForMatch(matchId, mode, mapId)` (`locations.js`) le redérive localement, mémoïsé à une
   seule entrée — hôte et invité recalculent bit à bit le même tableau depuis `matchId`/
   `config`, déjà dans l'état partagé. Mesuré après coup : 908 octets pour un état de manche
-  typique. `tools/verify-ousthat.mjs` : 105/105.
+  typique.
 - ✅ **P1 — les 10 secondes après la première validation, même en durée illimitée**
   (2026-09-11) : tranché par Guillaume, **duel 1v1 uniquement**. `DUEL_FINAL_SECONDS = 10`
   (`rules.js`) s'arme dès que `eligible.length === 2`, y compris quand `current.deadline`
   est `null` (illimité) — les parties à 3+ gardent `finalSeconds` (15 s par défaut),
   inchangé, extension hors scope. Le HUD bascule de "∞" au compte à rebours réel dès que
-  `state.finalDeadline` est posé. `tools/verify-ousthat.mjs` : 106/106.
+  `state.finalDeadline` est posé. `tools/verify-ousthat.mjs` : **106/106** (chiffre final des
+  trois corrections ci-dessus, ne pas recopier un compte intermédiaire).
+- ⚠️ **Vérification partielle sur ces trois points** : le premier a été confirmé à l'écran
+  (page jetable, supprimée après usage) ; les deux autres ne le sont que par le banc et une
+  mesure en Node (octets, déterminisme hôte/invité) — **aucun n'a tourné en session réelle à
+  2 clients** (`fake-supabase.mjs`, CLAUDE.md §10). Le duel 10 s n'a jamais été joué dans un
+  vrai navigateur : les deux sens hôte/invité, la validation simultanée, les réponses
+  tardives et la reconnexion avec latence restent à voir avant de le considérer acquis.
 - ⏳ Tout ce qui suit dans l'ordre proposé ci-dessus (rythme des tours, urgence/résultats,
   interface, typographie, signalement en illimité) reste à cadrer avec Guillaume — voir le
   bloc ⏭️ REPRISE de CLAUDE.md pour le point exact où le travail s'est arrêté.

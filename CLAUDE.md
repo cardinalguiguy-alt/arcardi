@@ -21,7 +21,12 @@ diffuser/persister ; mesuré après coup : 908 octets pour un état de manche ty
 **duel 1v1 uniquement** (`DUEL_FINAL_SECONDS`, `rules.js`) — les parties à 3+ gardent
 `finalSeconds` inchangé (config par défaut 15 s), l'extension reste hors scope. Le HUD
 bascule de "∞" au compte à rebours réel dès que le délai s'arme. `tools/verify-ousthat.mjs` :
-106/106.
+106/106. ⚠️ **Vérification partielle, à savoir avant de continuer** : le point 1 a été confirmé
+à l'écran (page jetable) ; les points 2 et 3 ne le sont que par le banc + mesure en Node
+(octets, déterminisme) — **aucun des trois n'a été rejoué en session réelle à 2 clients**
+(`fake-supabase.mjs`, §10). Le duel 10 s en particulier n'a jamais tourné dans un vrai
+navigateur : les deux sens hôte/invité, la validation simultanée et la reconnexion restent à
+voir.
 
 **Reste à cadrer avec Guillaume avant tout code, §2 oblige :** rythme des tours (2,5 s de
 stabilisation + 3 s de décompte, carte de réponse démontée/recréée à chaque manche), ton de
