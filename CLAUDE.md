@@ -1244,10 +1244,22 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
   manque est de CONCEPTION (le bonbon empoisonné), pas de technique.
 - **`crystal`** : le chapitre a **deux** segments jouables (`play run` et `play walk`).
   Retirer le second retire le seul endroit où l'on ramasse des éclats.
-- ⚠️ **VERCEL NE DÉPLOIE PLUS AUTOMATIQUEMENT depuis le 425**, et **ce n'est pas le dépôt** :
-  `origin/main` porte bien le commit, il n'y a ni `vercel.json` ni étape ignorée, et le projet
-  compile. Le lien Git du projet est à vérifier côté tableau de bord. Un `vercel --prod` depuis
-  le terminal **ne rétablit rien** : une livraison CLI n'est pas une livraison Git.
+- ✅ **PANNE VERCEL DU 2026-09-12, DIAGNOSTIQUÉE ET CORRIGÉE** — trois livraisons de suite en
+  `Error` (`ca4c885`, un redeploy, `fda9804`). Ce n'était PAS le piège du 425 ci-dessus (celui-là
+  reste vrai en soi, mais n'était pas la cause cette fois) : `app/tmp-ousthat-audit/page.js`,
+  une page jetable de l'audit ousthat du 2026-09-11 (voir §2, « la page jetable se supprime avant
+  de livrer »), avait été **commitée au lieu d'être supprimée** (`ca4c885`). Elle utilisait
+  `useSearchParams()` sans `<Suspense>` : Next.js refuse de prérendre une page pareille en export
+  statique, et casse **tout le build**, pas seulement cette route. **Reproduit en local avec
+  `npx next build`, dans un `git worktree` isolé** (jamais dans l'arbre de travail principal : un
+  `npm run dev` d'une autre session y tournait, et §10 interdit de mélanger les deux sur le même
+  `.next/`) — la même erreur exacte que Vercel, confirmée en supprimant le fichier puis en
+  rebuildant : `✓ Compiled successfully`, 9/9 pages statiques. **Reste à faire : Guillaume commite
+  la suppression et pousse** (règle du §2, Claude ne commite ni ne pousse jamais).
+  ⚠️ **La leçon qui dépasse cet incident** : une page jetable non supprimée ne casse pas
+  seulement un test local oublié — commitée, elle peut **arrêter tous les déploiements de
+  production**. La règle « la supprimer avant de livrer » n'est pas une question d'hygiène, c'est
+  un point de panne pour tout le monde.
 
 ---
 
