@@ -6611,6 +6611,11 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
 .ot-arena{ background:#040714; }
 .ot-sv{ position:absolute; inset:0; width:100%; height:100%; border:0; background:#060914; opacity:0; transition:opacity .35s ease; }
 .ot-sv.loaded{ opacity:1; }
+/* Rythme des tours (2026-09-11) : charge le panorama suivant pendant la
+   révélation. position:fixed sur CE conteneur (pas .ot-sv lui-même) fait de
+   lui l'ancêtre positionné le plus proche : le inset:0 de .ot-sv se résout
+   contre cette boîte de 1px, jamais contre .ot-arena en entier. */
+.ot-sv-preload{ position:fixed; top:-9999px; left:-9999px; width:1px; height:1px; overflow:hidden; opacity:0; pointer-events:none; }
 /* Bandeaux de joueurs, polis à chaud le 2026-09-11 (retour de Guillaume en
    regardant l'écran : "pas élégant") — un geste CONTENU, pas la refonte
    face-à-face/chrono central déjà actée séparément pour §"transitions et
@@ -6638,6 +6643,8 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
 .ot-load-list{ width:100%; display:grid; gap:6px; }.ot-load-list span{ display:block; padding:8px 10px; border-radius:10px; color:#8492af; background:rgba(255,255,255,.035); font-size:10px; }.ot-load-list span.ready{ color:#9ff2cf; background:rgba(98,231,175,.07); }
 .ot-countdown{ font-family:'Bungee'; font-size:min(30vw,170px); color:var(--ot-gold); line-height:1; text-shadow:0 0 55px rgba(255,202,95,.45); animation:otCount .75s cubic-bezier(.2,.8,.2,1); }
 @keyframes otCount{ from{ opacity:0; transform:scale(1.4); } }
+.ot-transition-paused-note{ color:#9ff2cf; font-size:11px; }
+.ot-transition-pause{ min-height:36px; padding:8px 16px; font-size:11px; }
 
 /* right:82px, pas 14px : la boussole et le zoom natifs de Google occupent déjà
    la colonne du bord droit (§ audit 2026-09-06) — coller notre bulle dessous
@@ -6650,6 +6657,19 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
 .ot-map-dock.collapsed>.ot-map-head,.ot-map-dock.collapsed>.ot-map-canvas,.ot-map-dock.collapsed>.ot-map-actions{ visibility:hidden; pointer-events:none; }
 .ot-map-head{ min-width:0; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 11px 9px 14px; border-bottom:1px solid var(--ot-line); }.ot-map-head>div:first-child{ min-width:0; }.ot-map-head b{ display:block; font-size:11px; }.ot-map-head small{ display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#8f9bb7; font-size:8px; margin-top:2px; }.ot-map-head-controls{ display:flex; flex:none; gap:5px; }.ot-map-head-controls button{ width:32px;height:32px;flex:none;border:1px solid var(--ot-line);border-radius:9px;color:#fff;background:rgba(255,255,255,.06);cursor:pointer; }
 .ot-map-canvas{ width:100%; height:100%; min-height:0; cursor:crosshair; background:#0b1326; touch-action:none; }
+/* Rythme des tours (2026-09-11) : couche du <GuessMap> persistant
+   (MapPortal.js) — parquée hors écran par défaut, repositionnée en JS
+   (measure sur l'ancre active) à chaque image tant qu'une phase l'affiche.
+   ⚠️ z-index PIÉGÉ, trouvé EN JOUANT (pas en relisant) : un z-index de 20
+   ne bat que les frères de .ot-map-portal DANS LE MÊME CONTEXTE D'EMPILEMENT
+   — or .ot-root (.ot-arena) est lui-même en position:fixed avec z-index:80
+   (règle .ot-root, partagée par tous les jeux), donc TOUT ce qu'il contient,
+   dock replié compris, s'empilait au-dessus du portail entier, quel que
+   soit le z-index posé ICI. Le clic atterrissait sur l'ancre vide plutôt
+   que sur la vraie carte, invisible en dessous — aucune erreur, juste un
+   marqueur qui ne se posait jamais. Il faut battre .ot-root (80), pas ses
+   descendants. */
+.ot-map-portal{ position:fixed; top:-99999px; left:-99999px; z-index:85; overflow:hidden; }
 /* Le canevas WebGL de MapLibre peint en blanc tant que le style n'a pas
    fini de charger (le fond sombre ci-dessus est sur le CONTENEUR, pas sur ce
    canevas) : on le masque jusqu'à "load" (classe .ready posée par GuessMap),

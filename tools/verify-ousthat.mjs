@@ -180,6 +180,7 @@ const page = fs.readFileSync(path.join(ROOT, "app", "room", "[code]", "page.js")
 const game = fs.readFileSync(path.join(ROOT, "components", "ousthat", "OusThatGame.js"), "utf8");
 const frame = fs.readFileSync(path.join(ROOT, "components", "ousthat", "StreetViewFrame.js"), "utf8");
 const map = fs.readFileSync(path.join(ROOT, "components", "ousthat", "GuessMap.js"), "utf8");
+const portal = fs.readFileSync(path.join(ROOT, "components", "ousthat", "MapPortal.js"), "utf8");
 const mapStyle = fs.readFileSync(path.join(ROOT, "components", "ousthat", "guessMapStyle.js"), "utf8");
 const shieldLayerSrc = fs.readFileSync(path.join(ROOT, "components", "ousthat", "shieldLayer.js"), "utf8");
 const i18n = fs.readFileSync(path.join(ROOT, "lib", "i18n.js"), "utf8");
@@ -204,7 +205,11 @@ ok("la carte de réponse se rétracte sans perdre son composant et le vrai point
 ok("Google reçoit un pano ou une coordonnée de repli, une orientation, sans clé copiée", frame.includes('params.set("pano", location.panoId)') && frame.includes('params.set("location", ') && frame.includes('heading: String(location.heading)') && frame.includes('referrerPolicy="strict-origin-when-cross-origin"') && frame.includes('process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY') && !/AIza[0-9A-Za-z_-]{30,}/.test(frame));
 ok("la carte détaillée utilise l'OpenStreetMap US Tileservice sans clé et garde les interactions fluides", mapStyle.includes("tiles.openstreetmap.us") && map.includes("new AttributionControl") && map.includes("setWheelZoomRate") && map.includes("setZoomRate") && !/api[_-]?key|access[_-]?token/i.test(map));
 ok("le style est vectoriel (OpenMapTiles), avec attribution OSM+OpenStreetMap US+Americana documentée, et les panneaux routiers portent le vrai code couleur par pays via Americana (CC0)", mapStyle.includes('type: "vector"') && mapStyle.includes("GUESS_MAP_ATTRIBUTION") && notice.includes("OpenStreetMap US Tileservice") && notice.includes("OpenStreetMap Americana") && /CC0-1\.0/.test(notice) && shieldLayerSrc.includes("route_") && map.includes("ShieldRenderer") && map.includes("shields.json"));
-ok("le pin de réponse et les pins de révélation portent les mascottes Arcardi", game.includes("avatar={mySeat?.avatar}") && game.includes("seats={state.seats}") && map.includes('seat?.avatar || "🧭"'));
+// 2026-09-11 (rythme des tours) : les props GuessMap passent maintenant par
+// un objet JS (mapProps, vers MapPortal), plus des attributs JSX littéraux —
+// même donnée, autre syntaxe. Voir plus bas pour les contrôles de la carte
+// persistante elle-même.
+ok("le pin de réponse et les pins de révélation portent les mascottes Arcardi", game.includes("avatar: mySeat?.avatar") && game.includes("seats: state.seats") && map.includes('seat?.avatar || "🧭"'));
 ok("le temps de round configurable pilote l'échéance hôte partagée", /roundSeconds:\s*\[20,\s*300\]/.test(fs.readFileSync(path.join(ROOT, "components", "ousthat", "rules.js"), "utf8")) && game.includes("current.config.roundSeconds * 1000") && game.includes("remainingMs"));
 ok("la provenance reste bornée à la dernière révision MIT", notice.includes("ef88928c03a70d77ce5a1c86fddf74814ff67fc7") && /PolyForm\s+Noncommercial/.test(notice) && notice.includes("No code or data introduced after"));
 
@@ -279,6 +284,43 @@ ok("le volet avancé encadre bien la bascule multiplicateurs et ses deux réglag
 // composition" séparée (§2 : ne pas mêler deux changements visuels).
 ok("l'écran de réglages passe à Outfit sans toucher la police par défaut du reste du jeu", /\.ot-setup-root\{[^}]*font-family:'Outfit'/.test(css) && /\.ot-root\{[^}]*font-family:'Space Mono'/.test(css));
 ok("le titre de l'écran de réglages perd sa lueur cyan décorative", !/\.ot-setup-card>h1\{[^}]*text-shadow/.test(css));
+
+section("audit 2026-09-11 — rythme des tours (carte persistante, préchargement, pause)");
+// toggleTransitionPause (rules.js) : pure, donc jouée ici sans composant.
+const pausedAt3s = R.toggleTransitionPause({ phase: "countdown", countdownAt: 8000, transitionPaused: false }, 5000);
+ok("mettre en pause fige une DURÉE restante et efface l'échéance, jamais l'inverse", pausedAt3s.transitionPaused === true && pausedAt3s.countdownAt === null && pausedAt3s.pausedCountdownMs === 3000);
+const resumed = R.toggleTransitionPause({ phase: "countdown", countdownAt: null, transitionPaused: true, pausedCountdownMs: 3000 }, 20000);
+ok("reprendre pose une échéance FRAÎCHE (now + durée figée), jamais l'ancienne horloge", resumed.transitionPaused === false && resumed.countdownAt === 23000 && resumed.pausedCountdownMs === null);
+const preparingState = { phase: "preparing", transitionPaused: false };
+const playingState = { phase: "playing", transitionPaused: false };
+ok("hors de la phase countdown, la bascule est un no-op explicite (même référence, rien à diffuser)", R.toggleTransitionPause(preparingState, 1000) === preparingState && R.toggleTransitionPause(playingState, 1000) === playingState);
+ok("une pause sans countdownAt connu (cas limite) retombe sur la durée par défaut du décompte", R.toggleTransitionPause({ phase: "countdown", countdownAt: null, transitionPaused: false }, 1000).pausedCountdownMs === R.COUNTDOWN_MS);
+ok("resetForRematch ne démarre jamais une revanche déjà en pause", R.resetForRematch({ config: R.DEFAULT_CONFIG, teams, transitionPaused: true, pausedCountdownMs: 1200 }, ["a"], "m3").transitionPaused === false);
+
+// Une seule carte : plus aucun <GuessMap> direct dans le composant de jeu,
+// un seul point de montage via le portail, trois ancres distinctes (une par
+// habillage visuel) pour qu'il sache où s'afficher selon la phase.
+ok("OusThatGame ne monte plus GuessMap directement : tout passe par un seul MapPortal", !/<GuessMap[\s/]/.test(game) && game.includes('import MapPortal from "./MapPortal"') && (game.match(/<MapPortal\b/g) || []).length === 1);
+ok("trois ancres distinctes (jeu, révélation, fin) désignent où la carte persistante s'affiche selon la phase", game.includes("playMapAnchorRef") && game.includes("revealMapAnchorRef") && game.includes("finishedMapAnchorRef") && game.includes('ref={playMapAnchorRef} className="ot-map-canvas"') && game.includes("mapAnchorRef={revealMapAnchorRef}") && game.includes("mapAnchorRef={finishedMapAnchorRef}"));
+ok("le portail ne s'active qu'en Pinpoint, playing/reveal/finished — jamais en country ni pendant la transition", /const mapActive = mode === "pinpoint" && \(state\.phase === "playing" \|\| state\.phase === "reveal" \|\| state\.phase === "finished"\)/.test(game));
+ok("le portail mesure l'ancre à chaque image (measure, pas un calcul CSS statique) et respecte un dock replié (visibility:hidden garde ses dimensions, contrairement à display:none)", portal.includes("requestAnimationFrame(sync)") && portal.includes("getBoundingClientRect()") && portal.includes('getComputedStyle(anchor).visibility === "hidden"'));
+ok("hors ancre active, la carte est parquée hors écran plutôt que démontée (elle garde son contexte WebGL et son pan/zoom)", portal.includes('container.style.left = "-99999px"') && !/if \(!active\)[\s\S]{0,40}return null/.test(portal));
+ok("GuessMap n'a plus besoin d'un prop expanded : un ResizeObserver réagit à n'importe quelle cause de redimensionnement du portail", !/function GuessMap\(\{[^}]*\bexpanded\b/.test(map) && map.includes("new ResizeObserver(() => map.resize())") && map.includes("resizeObserver.observe(rootRef.current)") && map.includes("resizeObserver.disconnect()"));
+
+// Préchargement pendant la révélation : déduit sans requête réseau, jamais
+// pour un signalement de lieu (tirage imprévisible côté client).
+ok("le lieu suivant se déduit pendant reveal uniquement, jamais si la partie est terminée ou hors Pinpoint", /state\.phase !== "reveal" \|\| state\.matchComplete \|\| mode !== "pinpoint"\) return null;/.test(game));
+ok("le panorama suivant charge caché (hors écran, aria-hidden), séparé du panorama affiché", game.includes('aria-hidden="true"') && game.includes('className="ot-sv-preload"') && game.includes("onFrameLoad={handlePreloadLoaded}") && /\.ot-sv-preload\{[^}]*position:fixed/.test(css));
+ok("l'accusé de préchargement réutilise panorama_loaded (aucun protocole réseau nouveau) et se rattrape dès que la manche prédite devient réelle", game.includes('sendRequest("panorama_loaded", { roundId: predicted.roundId })') && game.includes('sendRequest("panorama_loaded", { roundId: state.roundId })') && game.includes("preloadedRoundIdRef.current = predicted.roundId"));
+
+// Pause : hôte seul, uniquement pendant countdown (jamais preparing, qui n'a
+// pas d'horloge visible), et l'affichage figé relit l'état diffusé plutôt
+// que de comparer une horloge locale à un stock déjà expiré.
+ok("le décompte ne se met en pause que côté hôte, jamais un invité", /request\.kind === "toggle_pause" && request\.from === room\.host_id/.test(game));
+ok("togglePause est appliqué via la règle pure de rules.js (importée), pas une comparaison locale dupliquée", game.includes("toggleTransitionPause(current, now)") && /import \{[\s\S]{0,600}\btoggleTransitionPause\b[\s\S]{0,600}\} from "\.\/rules"/.test(game));
+ok("l'affichage du décompte en pause relit la durée diffusée (pausedCountdownMs), jamais le tick local basé sur une horloge", /state\.transitionPaused\s*\n?\s*\? Math\.max\(1, Math\.ceil\(\(state\.pausedCountdownMs \?\? COUNTDOWN_MS\) \/ 1000\)\)/.test(game));
+ok("countdownMs reconstruit correctement une pause (null, jamais 0 par Number(null))", game.includes('typeof transport.countdownMs === "number" ? transport.countdownMs : NaN') && game.includes("setLocalCountdown(Number.isFinite(remaining) ? Date.now() + Math.max(0, remaining) : null)"));
+
 console.log(fails ? `\n${fails} ÉCHEC(S) sur ${total} contrôles.\n` : `\n${total}/${total} contrôles verts.\n`);
 if (process.argv.includes("--falsify")) console.log("Mutation active : ce passage ne doit JAMAIS être vert.\n");
 process.exit(fails ? 1 : 0);

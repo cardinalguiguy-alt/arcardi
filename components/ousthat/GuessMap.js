@@ -142,7 +142,7 @@ function removeReveal(map, markers) {
   if (map.getSource(REVEAL_SOURCE_ID)) map.removeSource(REVEAL_SOURCE_ID);
 }
 
-function GuessMap({ marker, onChange, locked = false, expanded = false, reveal = null, avatar = "🗺️", seats = EMPTY_SEATS, unavailableMessage = "La carte détaillée nécessite l’accélération graphique du navigateur." }) {
+function GuessMap({ marker, onChange, locked = false, reveal = null, avatar = "🗺️", seats = EMPTY_SEATS, unavailableMessage = "La carte détaillée nécessite l’accélération graphique du navigateur." }) {
   const rootRef = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
@@ -215,7 +215,17 @@ function GuessMap({ marker, onChange, locked = false, expanded = false, reveal =
       .catch((error) => console.error("Panneaux routiers : table de définitions indisponible.", error));
     mapRef.current = map;
     requestAnimationFrame(() => map.resize());
+    // Rythme des tours (2026-09-11) : la carte vit maintenant dans un
+    // portail (MapPortal.js) dont le conteneur change de taille en continu
+    // (il suit une ancre différente selon la phase, pas une seule
+    // transition CSS connue à l'avance) — un ResizeObserver réagit à
+    // n'importe quelle cause de redimensionnement, au lieu d'un délai fixe
+    // deviné après UN SEUL déclencheur (l'ancien prop "expanded", qui ne
+    // couvrait que l'ouverture/fermeture du dock de jeu).
+    const resizeObserver = new ResizeObserver(() => map.resize());
+    resizeObserver.observe(rootRef.current);
     return () => {
+      resizeObserver.disconnect();
       removeReveal(map, revealMarkersRef.current);
       markerRef.current?.remove();
       markerRef.current = null;
@@ -325,13 +335,6 @@ function GuessMap({ marker, onChange, locked = false, expanded = false, reveal =
       if (mapRef.current === map) removeReveal(map, revealMarkersRef.current);
     };
   }, [reveal, seats]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    const timer = setTimeout(() => map.resize(), 260);
-    return () => clearTimeout(timer);
-  }, [expanded]);
 
   // Audit 2026-09-11 (P0) : écrire "ready" via le className React écrase
   // TOUT le className du conteneur à chaque rendu — y compris "maplibregl-map",

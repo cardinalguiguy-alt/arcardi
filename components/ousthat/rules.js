@@ -294,5 +294,35 @@ export function resetForRematch(state, order, matchId) {
     resolvedRoundId: null,
     result: null,
     winnerTeamId: null,
+    transitionPaused: false,
+    pausedCountdownMs: null,
   };
+}
+
+// Rythme des tours (audit 2026-09-11, "carte persistante + pause") : durée du
+// décompte avant qu'une manche démarre. Vit ici (et pas en constante locale
+// du composant) pour que cette règle pure puisse la reprendre sans dépendre
+// du fichier React.
+export const COUNTDOWN_MS = 3000;
+
+// Mettre en pause/reprendre le décompte "countdown" — jamais la phase
+// "preparing" (qui n'a pas d'horloge visible à figer, seulement une liste
+// d'attente de chargement). Fige un temps RESTANT (une durée), jamais une
+// horloge : reprendre pose une échéance fraîche à partir de cette durée,
+// comme le reste du réseau du jeu (§3 CLAUDE.md, ne jamais comparer une
+// horloge hôte à une horloge invité). Pure et no-op explicite (retourne la
+// même référence) hors de la phase countdown, pour que l'appelant sache
+// qu'il n'a rien à diffuser.
+export function toggleTransitionPause(current, now) {
+  if (!current || current.phase !== "countdown") return current;
+  if (current.transitionPaused) {
+    return {
+      ...current,
+      transitionPaused: false,
+      countdownAt: Number(now) + Number(current.pausedCountdownMs ?? COUNTDOWN_MS),
+      pausedCountdownMs: null,
+    };
+  }
+  const remaining = current.countdownAt ? Math.max(0, Number(current.countdownAt) - Number(now)) : COUNTDOWN_MS;
+  return { ...current, transitionPaused: true, countdownAt: null, pausedCountdownMs: remaining };
 }

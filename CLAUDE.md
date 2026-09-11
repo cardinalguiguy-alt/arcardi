@@ -7,46 +7,36 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### ACTION SUIVANTE — OÙ'S THAT : TRANSITIONS ET COMPOSITION (rythme des tours, urgence/résultats)
+### ACTION SUIVANTE — OÙ'S THAT : URGENCE/RÉSULTATS (face à face, chrono central, son)
 
-**Fait et vérifié le 2026-09-11**, la passe « typographie » de l'écran de réglages, tranchée par
-Guillaume (« typo seule d'abord, palette dans une livraison séparée ») :
-`components/ousthat/README.md`, tableau P1 « interface tableau de réglages ». Bungee/Outfit
-remplace Space Mono sur `.ot-setup-root` SEUL (le reste du jeu garde Space Mono exprès, §2),
-les aides 8–11 px passent à 12–16 px, les multiplicateurs vivent dans un volet `.ot-advanced`
-replié par défaut (jamais replié SUR une erreur de validation). ⚠️ **Une seule ligne pleine
-largeur mal placée dans la grille coûtait 144 px** : le curseur de durée (`.ot-field-slider`,
-pleine largeur) séparait vie/délai sur deux rangées à moitié vides — le mettre EN PREMIER,
-plus un resserrement de marges ciblé au `@media (max-height:780px)`, a suffi à ramener
-« Lancer la partie » au-dessus du pli à 1280×720, **mesuré en direct**
-(`getBoundingClientRect`), pas supposé. Les coordonnées à cinq décimales du marqueur de
-réponse ont disparu (`c.markerPlaced`). Le signalement en durée illimitée marche enfin pendant
-`playing` avant toute confirmation — `canVoidLocation` extrait en règle pure testée dans
-`rules.js` (`components/ousthat/rules.js`) : c'était `now <= null`, toujours faux, silencieux.
-**Vérifié en session réelle à 2 clients** (`fake-supabase.mjs`) : panorama changé chez les
-DEUX joueurs après un signalement en illimité, jamais fait avant ce jour. Guillaume a aussi
-demandé en direct, en regardant l'écran, un geste contenu sur les bandeaux de joueurs du HUD
-(police Outfit, espacement, halo de PV sur `.ot-player`/`.ot-player-strip`) — fait, mais ce
-n'est PAS la refonte face-à-face/chrono central ci-dessous. `tools/verify-ousthat.mjs` :
-**116/116**.
+**Fait et vérifié le 2026-09-12**, le rythme des tours — « carte persistante + pause », tranché
+par Guillaume (préchargement + pause sur l'attente, dock qui referme son ouverture mais garde sa
+taille) : détail complet dans `components/ousthat/README.md`, bullet daté. Les trois `<GuessMap>`
+(dock de jeu, dock de révélation, modale de fin — trois géométries CSS différentes) sont
+remplacés par UN SEUL montage porté par `components/ousthat/MapPortal.js` : trois ancres vides,
+une couche `position:fixed` resynchronisée sur l'ancre active à chaque image. Le panorama suivant
+charge caché pendant la révélation (aucun protocole réseau nouveau). Le décompte se met en pause
+côté hôte (`toggleTransitionPause`, règle pure de `rules.js`, jamais une horloge comparée entre
+clients). ⚠️ **Bogue trouvé EN JOUANT, invisible en relisant** : le portail avait un z-index de
+20, qui ne bat que ses frères dans SON propre contexte d'empilement — `.ot-root` (l'écran de jeu
+entier) est en `position:fixed;z-index:80`, donc tout ce qu'il contient passait au-dessus du
+portail sans qu'aucune erreur ne le dise : le clic atterrissait sur l'ancre vide, le marqueur ne
+se posait jamais. Corrigé (z-index:85). **Vérifié en session réelle à 2 clients**
+(`fake-supabase.mjs`) sur trois manches jouées : carte cliquable, révélation avec pins/lignes sur
+les vraies tuiles, pause/reprise avec le même nombre figé chez l'hôte ET l'invité. `tools/
+verify-ousthat.mjs` : **134/134**. ⚠️ **Bonus non demandé mais observé pendant ces manches** : le
+délai fixe de 10 s en duel (`DUEL_FINAL_SECONDS`) a tourné pour la première fois dans un vrai
+navigateur (hôte confirme en premier → alerte + décompte chez l'invité → résolution à
+expiration) — **un seul sens testé** (hôte puis invité) ; invité-puis-hôte, la validation
+simultanée et la reconnexion restent à voir.
 
 **Reste à faire, dans l'ordre déjà arbitré avec Guillaume (§ « Ordre proposé » du README) :**
-1. **Rythme des tours — « carte persistante + pause »** (tranché, pas codé) : la carte de
-   réponse est aujourd'hui démontée puis recréée à CHAQUE phase (trois `<GuessMap>` JSX
-   séparés selon `state.phase`, dans `OusThatGame.js`) — la faire vivre en UN SEUL composant
-   monté en continu, préparer le tour suivant pendant l'affichage du résultat, un seul temps
-   de transition commun avec pause.
-2. **Urgence/résultats — direction validée** (tranché, pas codé) : adversaires face à face
+1. **Urgence/résultats — direction validée** (tranché, pas codé) : adversaires face à face
    (au lieu des deux à gauche), chrono au centre, message nommé (« Robin a joué — 10 s ») au
    lieu de l'alerte 9 px actuelle, son discret réglable, pastille repliée qui garde MON
    résultat (pas celui du premier siège).
-La **palette du salon** (crème/ambre/cyan) reste une **troisième** livraison, décidée mais pas
-commencée — ne pas la mêler aux deux points ci-dessus (§2, décision 424).
-
-⚠️ **Vérification qui reste ouverte, héritée de la passe précédente** : le délai fixe de 10 s
-en duel (`DUEL_FINAL_SECONDS`) n'a toujours jamais tourné dans un vrai navigateur — la session
-à 2 clients de ce jour a testé le signalement en illimité, pas la validation qui arme les 10 s.
-Les deux sens hôte/invité, la validation simultanée et la reconnexion restent à voir.
+La **palette du salon** (crème/ambre/cyan) reste une **deuxième** livraison après celle-ci,
+décidée mais pas commencée — ne pas les mêler (§2, décision 424).
 
 Chantier ferme indépendant, toujours en réserve, non touché aujourd'hui : voir §13 (séance à
 deux, bancs eau/parc, audience du maire à rejouer avant le recentrage bateau/astéroïdes).

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { readGameState, recordMatchResult, resetRoomToLobby, saveGameState } from "@/lib/gameSync";
-import GuessMap from "./GuessMap";
+import MapPortal from "./MapPortal";
 import StreetViewFrame from "./StreetViewFrame";
 import {
   COUNTRIES,
@@ -15,6 +15,7 @@ import {
 import { LOCATION_BY_ID, MAPS, locationOrder, orderForMatch } from "./locations";
 import {
   CONFIG_LIMITS,
+  COUNTDOWN_MS,
   DEFAULT_CONFIG,
   DUEL_FINAL_SECONDS,
   GAME_ID,
@@ -35,13 +36,13 @@ import {
   resolveRound,
   ROUND_SECONDS_UNLIMITED,
   roundMultiplier,
+  toggleTransitionPause,
   validateConfig,
 } from "./rules";
 import { copyFor } from "./strings";
 
 const STATE_VERSION = 2;
 const PANORAMA_SETTLE_MS = 2500;
-const COUNTDOWN_MS = 3000;
 const PROPOSAL_INTERVAL_MS = 120; // 8,3/s maximum, sous la limite projet de 10/s.
 const SEAT_COLORS = ["#ffca5f", "#68d9ff", "#ff7fa4", "#86e39a", "#bda0ff", "#ff9f68", "#78e4da", "#e4de78"];
 
@@ -72,6 +73,8 @@ function setupState(players) {
     firstConfirmedBy: null,
     deadline: null,
     finalDeadline: null,
+    transitionPaused: false,
+    pausedCountdownMs: null,
     resolvedRoundId: null,
     result: null,
     winnerTeamId: null,
@@ -123,6 +126,8 @@ function nextLocation(state, advanceRound) {
     countdownAt: null,
     deadline: null,
     finalDeadline: null,
+    transitionPaused: false,
+    pausedCountdownMs: null,
     resolvedRoundId: null,
     result: null,
     matchComplete: false,
@@ -284,7 +289,7 @@ function CountryPicker({ choices, inputMode, lang, selected, locked, onChange, o
 // le dock de carte : ouverte par défaut (le résultat est ce qu'on veut voir
 // tout de suite), mais on peut la refermer pour regarder autour de soi
 // pendant que la manche suivante n'a pas encore chargé.
-function RevealDock({ state, result, mode, solo, lang, c, revealTarget, isHost, onNext, onLobby }) {
+function RevealDock({ state, result, mode, solo, lang, c, revealTarget, isHost, onNext, onLobby, mapAnchorRef }) {
   const [open, setOpen] = useState(true);
   const soloCorrect = result?.players?.[0]?.correct;
   return (
@@ -301,7 +306,7 @@ function RevealDock({ state, result, mode, solo, lang, c, revealTarget, isHost, 
       {mode === "pinpoint" && solo && <div className="ot-score-burst"><small>{c.roundScore}</small><strong>{result?.players?.[0]?.score?.toLocaleString() || 0}</strong></div>}
       {mode === "country" && <div className="ot-country-target"><span>{countryFlag(result?.targetCountry)}</span><div><small>{c.correctCountry}</small><b>{countryName(result?.targetCountry, lang)}</b></div></div>}
       {mode === "country" && solo && <p className={"ot-reveal-streak " + (soloCorrect ? "correct" : "wrong")}>{soloCorrect ? c.streakContinues : c.streakStops}</p>}
-      {mode === "pinpoint" && <section className="ot-reveal-map"><GuessMap expanded reveal={{ target: revealTarget, players: result?.players || [] }} seats={state.seats} unavailableMessage={c.mapUnavailable} /><span className="ot-actual-chip">{countryFlag(revealTarget?.country)} {c.actual}</span></section>}
+      {mode === "pinpoint" && <section className="ot-reveal-map"><div ref={mapAnchorRef} className="ot-map-canvas" /><span className="ot-actual-chip">{countryFlag(revealTarget?.country)} {c.actual}</span></section>}
       <section className="ot-scoreboard">
         {state.seats.map((seat, index) => {
           const player = result?.players?.find((entry) => entry.playerId === seat.id);
@@ -327,7 +332,7 @@ function RevealDock({ state, result, mode, solo, lang, c, revealTarget, isHost, 
 // par manche. `location` reste celui de la DERNIÈRE manche (locationCursor
 // ne bouge plus une fois matchComplete) : le panorama derrière le voile reste
 // donc le bon, pas un panorama neuf ou vide.
-function FinishedDock({ state, result, mode, solo, lang, c, revealTarget, location, isHost, onRematch, onLobby }) {
+function FinishedDock({ state, result, mode, solo, lang, c, revealTarget, location, isHost, onRematch, onLobby, mapAnchorRef }) {
   const winnerSeats = state.seats.filter((seat) => (state.winnerPlayerIds || []).includes(seat.id));
   const pinpointWinner = state.seats.find((seat) => seat.teamId === state.winnerTeamId);
   const finalTitle = solo
@@ -345,7 +350,7 @@ function FinishedDock({ state, result, mode, solo, lang, c, revealTarget, locati
         {solo && <section className="ot-final-summary"><span className="ot-final-icon">{mode === "country" ? "⚡" : "⌖"}</span><h2>{mode === "country" ? c.streakComplete : c.fiveRoundsComplete}</h2><strong>{finalTitle}</strong><div className="ot-history">{(state.history || []).map((entry) => <div key={`${entry.round}-${entry.locationId}`} className={entry.correct === false ? "wrong" : ""}><span>{entry.round}</span><b>{entry.targetCountry ? countryFlag(entry.targetCountry) : `${Number(entry.score || 0).toLocaleString()} pts`}</b><small>{entry.targetCountry ? countryName(entry.targetCountry, lang) : formatDistance(entry.distanceKm, lang)}</small></div>)}</div></section>}
 
         {!solo && <div className="ot-reveal-grid">
-          {mode === "pinpoint" ? <section className="ot-reveal-map"><GuessMap expanded reveal={{ target: revealTarget, players: result?.players || [] }} seats={state.seats} unavailableMessage={c.mapUnavailable} /><span className="ot-actual-chip">{countryFlag(revealTarget?.country)} {c.actual}</span></section> : <section className="ot-country-reveal"><div className="ot-country-reveal-flag">{countryFlag(result?.targetCountry)}</div><span className="ot-kicker">{c.correctCountry}</span><h2>{countryName(result?.targetCountry, lang)}</h2></section>}
+          {mode === "pinpoint" ? <section className="ot-reveal-map"><div ref={mapAnchorRef} className="ot-map-canvas" /><span className="ot-actual-chip">{countryFlag(revealTarget?.country)} {c.actual}</span></section> : <section className="ot-country-reveal"><div className="ot-country-reveal-flag">{countryFlag(result?.targetCountry)}</div><span className="ot-kicker">{c.correctCountry}</span><h2>{countryName(result?.targetCountry, lang)}</h2></section>}
           <section className="ot-scoreboard">
             {state.seats.map((seat, index) => {
               const player = result?.players?.find((entry) => entry.playerId === seat.id);
@@ -409,6 +414,18 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
   const pendingProposalRef = useRef(null);
   const proposalTimerRef = useRef(null);
   const reportTimerRef = useRef(null);
+  // Rythme des tours (audit 2026-09-11) : trois emplacements visuels pour
+  // une seule carte persistante (voir MapPortal.js) — chaque dock pose une
+  // ancre vide, le portail choisit laquelle est active selon la phase.
+  const playMapAnchorRef = useRef(null);
+  const revealMapAnchorRef = useRef(null);
+  const finishedMapAnchorRef = useRef(null);
+  // Préchargement du panorama suivant PENDANT la révélation : chaque client
+  // le fait pour son propre compte (aucun protocole réseau nouveau), et
+  // court-circuite l'attente de "preparing" s'il retrouve exactement le même
+  // roundId une fois la manche suivante réellement lancée.
+  const preloadedRoundIdRef = useRef(null);
+  const nextPredictedRef = useRef(null);
 
   const proposedSeats = seatList(players);
   const playerSignature = proposedSeats.map((seat) => seat.id).join("|");
@@ -429,8 +446,14 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
       else setLocalDeadline(null);
     } else setLocalDeadline(null);
     if (next.phase === "countdown") {
-      const remaining = Number(transport.countdownMs);
-      setLocalCountdown(Date.now() + (Number.isFinite(remaining) ? Math.max(0, remaining) : COUNTDOWN_MS));
+      // Même garde que remainingMs juste au-dessus : countdownMs vaut null,
+      // jamais 0, quand le décompte est en PAUSE (transitionPaused) — un
+      // Number(null) === 0 non gardé ferait croire à un décompte à 0 s au
+      // lieu d'aucune échéance à reconstruire (voir toggleTransitionPause,
+      // rules.js). L'affichage figé pendant la pause relit directement
+      // state.pausedCountdownMs, pas ce compte à rebours local.
+      const remaining = typeof transport.countdownMs === "number" ? transport.countdownMs : NaN;
+      setLocalCountdown(Number.isFinite(remaining) ? Date.now() + Math.max(0, remaining) : null);
     } else setLocalCountdown(null);
   }, [isHost]);
 
@@ -621,6 +644,11 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
       emitState(nextLocation(current, false));
       return;
     }
+    if (request.kind === "toggle_pause" && request.from === room.host_id) {
+      const next = toggleTransitionPause(current, now);
+      if (next !== current) emitState(next);
+      return;
+    }
     if (request.kind === "next" && current.phase === "reveal" && request.from === room.host_id) {
       emitState(nextLocation(current, true));
       return;
@@ -682,8 +710,12 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
     lastProposalAtRef.current = 0;
     const mine = state.answers?.[me.id];
     setDraft(normalizeModeGuess(modeOf(state), mine?.confirmed) || normalizeModeGuess(modeOf(state), mine?.proposal) || null);
+    // Le dock se replie à chaque manche (le panorama garde l'attention au
+    // démarrage), mais la TAILLE choisie (plein écran ou non) survit d'une
+    // manche à l'autre depuis le rythme des tours du 2026-09-11 — avant, un
+    // joueur qui préférait la carte en plein écran devait ré-agrandir à
+    // chaque manche (audit : "taille/ouverture réinitialisées").
     setMapOpen(false);
-    setMapExpanded(false);
     setNotice("");
     clearTimeout(reportTimerRef.current);
     setReportArmed(false);
@@ -742,10 +774,55 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
   const locked = !!myAnswer?.confirmed || !myPlaying;
   const remainingMs = state?.phase === "playing" && localDeadline ? Math.max(0, localDeadline - tick) : 0;
   const seconds = Math.max(0, Math.ceil(remainingMs / 1000));
-  const countdown = state?.phase === "countdown" && localCountdown ? Math.max(1, Math.ceil((localCountdown - tick) / 1000)) : 3;
+  // En pause, le nombre affiché relit directement l'état diffusé (une durée
+  // déjà calculée par l'hôte), jamais le décompte local à base de tick : les
+  // deux ne doivent jamais comparer d'horloges (§3 CLAUDE.md), et l'état
+  // diffusé est justement ce qui reste identique pour tout le monde tant que
+  // rien ne reprend.
+  const countdown = state?.phase === "countdown"
+    ? (state.transitionPaused
+        ? Math.max(1, Math.ceil((state.pausedCountdownMs ?? COUNTDOWN_MS) / 1000))
+        : (localCountdown ? Math.max(1, Math.ceil((localCountdown - tick) / 1000)) : 3))
+    : 3;
   const multiplier = state ? roundMultiplier(state.round || 1, state.config || DEFAULT_CONFIG) : 1;
   const revealTarget = location ? { lat: location.lat, lng: location.lng, country: location.country } : null;
   const choiceCodes = useMemo(() => location && state?.roundId ? countryChoices(location.country, state.roundId, 4) : [], [location, state?.roundId]);
+
+  // Rythme des tours : le lieu suivant se déduit sans requête (matchId +
+  // curseur + numéro de manche sont déjà dans l'état partagé) UNIQUEMENT
+  // pour l'avancée normale ("Suivant" en reveal) — un signalement de lieu
+  // (location_problem) change le tirage de façon imprévisible côté client,
+  // donc n'est jamais préchargé : au pire, "preparing" attend normalement.
+  const nextPredicted = useMemo(() => {
+    if (!state || state.phase !== "reveal" || state.matchComplete || mode !== "pinpoint") return null;
+    const order = orderForMatch(state.matchId, state.config?.mode, state.config?.mapId);
+    const nextId = order[state.locationCursor + 1];
+    const nextLoc = nextId ? LOCATION_BY_ID[nextId] : null;
+    if (!nextLoc) return null;
+    return { location: nextLoc, roundId: `${state.matchId}:${state.round + 1}:0` };
+  }, [state?.phase, state?.matchComplete, state?.matchId, state?.config?.mode, state?.config?.mapId, state?.locationCursor, state?.round, mode]);
+  nextPredictedRef.current = nextPredicted;
+
+  const handlePreloadLoaded = useCallback(() => {
+    const predicted = nextPredictedRef.current;
+    if (!predicted) return;
+    preloadedRoundIdRef.current = predicted.roundId;
+    const current = stateRef.current;
+    if (current?.phase === "preparing" && current.roundId === predicted.roundId && !current.loaded?.[me.id]) {
+      sendRequest("panorama_loaded", { roundId: predicted.roundId });
+    }
+  }, [me.id, sendRequest]);
+
+  // Le préchargement peut finir PENDANT reveal, avant que la phase ne passe
+  // à "preparing" — dans ce cas handlePreloadLoaded ne peut pas encore
+  // envoyer l'accusé (l'hôte le refuserait, phase !== "preparing"). Cet
+  // effet rattrape ce cas dès que la manche prédite devient la manche RÉELLE.
+  useEffect(() => {
+    if (state?.phase !== "preparing" || !state.roundId) return;
+    if (preloadedRoundIdRef.current !== state.roundId) return;
+    if (state.loaded?.[me.id]) return;
+    sendRequest("panorama_loaded", { roundId: state.roundId });
+  }, [state?.phase, state?.roundId, state?.loaded, me.id, sendRequest]);
 
   const updateDraft = useCallback((guess) => {
     if (locked || stateRef.current?.phase !== "playing") return;
@@ -963,9 +1040,25 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
   if (state.phase === "exhausted") return <div className="ot-root ot-center"><h1>Où&apos;s that ?</h1><p>{c.exhausted}</p><button className="ot-btn primary" onClick={backToLobby}>{c.lobby}</button></div>;
 
   const preparing = state.phase === "preparing" || state.phase === "countdown";
+  // Rythme des tours : UNE carte persistante (MapPortal.js), qui choisit
+  // l'ancre active et les props GuessMap selon la phase — jamais trois
+  // <GuessMap> séparés qui démontaient le contexte WebGL à chaque manche.
+  const mapActive = mode === "pinpoint" && (state.phase === "playing" || state.phase === "reveal" || state.phase === "finished");
+  const mapAnchorRef = state.phase === "playing" ? playMapAnchorRef : state.phase === "reveal" ? revealMapAnchorRef : finishedMapAnchorRef;
+  const mapProps = state.phase === "playing"
+    ? { marker: draft, onChange: updateDraft, locked, avatar: mySeat?.avatar, reveal: null, seats: state.seats, unavailableMessage: c.mapUnavailable }
+    : { reveal: { target: revealTarget, players: state.result?.players || [] }, seats: state.seats, unavailableMessage: c.mapUnavailable };
   return (
     <div ref={arenaRef} className={"ot-root ot-arena" + (mapOpen ? " map-open" : "") + (mode === "country" ? " country" : "")}>
       {location && <StreetViewFrame location={location} roundId={state.roundId} lang={lang} onFrameLoad={markPanoramaLoaded} onSlow={markPanoramaSlow} />}
+      {/* Rythme des tours (audit 2026-09-11) : charge en coulisses le
+          panorama de la manche suivante PENDANT que la révélation est
+          affichée, pour que l'attente de "preparing" soit déjà résolue une
+          fois "Suivant" cliqué — jamais retiré du DOM par un simple masque
+          CSS (§4 CLAUDE.md : ça ne l'empêcherait pas de charger, ici c'est
+          justement le but, mais autant garder le geste conscient plutôt
+          qu'un display:none accidentel qui l'empêcherait). */}
+      {nextPredicted && <div aria-hidden="true" className="ot-sv-preload"><StreetViewFrame location={nextPredicted.location} roundId={nextPredicted.roundId} lang={lang} onFrameLoad={handlePreloadLoaded} onSlow={() => {}} /></div>}
       {/* Les deux modes révèlent la position si on les laisse tels quels : le
           cartouche d'adresse de Google trahit le pays en mode Pays, et son
           lien « Afficher dans Google Maps » pose la réponse exacte en
@@ -990,7 +1083,17 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
           CSS en sortie — avant, {preparing && <div>} démontait le voile
           d'un coup dès "playing", découvrant le panorama déjà chargé sans
           transition. */}
-      <div className={"ot-panorama-cover" + (preparing ? "" : " hidden")}><div className="ot-cover-card">{state.phase === "countdown" ? <div className="ot-countdown" key={countdown}>{countdown}</div> : <><div className="ot-orbit" /><h2>{c.loading}</h2><div className="ot-load-list">{playingSeats(state).filter((seat) => onlineSeatIds.has(seat.id)).map((seat) => <span key={seat.id} className={state.loaded?.[seat.id] ? "ready" : ""}>{seat.avatar} {seat.username} · {state.loaded?.[seat.id] ? c.loaded : c.loadingOne}</span>)}</div><p>{solo ? c.soloFairStart : c.fairStart}</p><small>{c.externalLimit}</small></>}</div></div>
+      <div className={"ot-panorama-cover" + (preparing ? "" : " hidden")}><div className="ot-cover-card">{state.phase === "countdown" ? <>
+        <div className="ot-countdown" key={countdown}>{countdown}</div>
+        {state.transitionPaused && <p className="ot-transition-paused-note">{c.transitionPausedNote}</p>}
+        {/* Rythme des tours (audit 2026-09-11) : ne pause QUE ce décompte
+            visible, jamais l'attente de chargement (pas d'horloge à figer
+            là — voir toggleTransitionPause, rules.js). Hôte seul, comme le
+            reste de l'arbitrage réseau (§3 CLAUDE.md). */}
+        {isHost && <button type="button" className="ot-btn secondary ot-transition-pause" onClick={() => sendRequest("toggle_pause")}>{state.transitionPaused ? c.resumeTransition : c.pauseTransition}</button>}
+      </> : <><div className="ot-orbit" /><h2>{c.loading}</h2><div className="ot-load-list">{playingSeats(state).filter((seat) => onlineSeatIds.has(seat.id)).map((seat) => <span key={seat.id} className={state.loaded?.[seat.id] ? "ready" : ""}>{seat.avatar} {seat.username} · {state.loaded?.[seat.id] ? c.loaded : c.loadingOne}</span>)}</div><p>{solo ? c.soloFairStart : c.fairStart}</p><small>{c.externalLimit}</small></>}</div></div>
+
+      {mapActive && <MapPortal anchorRef={mapAnchorRef} active={mapActive} {...mapProps} />}
 
       {state.phase === "playing" && mode === "pinpoint" && <section className={"ot-map-dock " + (mapOpen ? "open" : "collapsed") + (mapExpanded ? " expanded" : "")} onMouseEnter={() => setMapOpen(true)}>
         {/* 2026-09-07 (retour de Guillaume : ouverture facilitée) : le survol
@@ -998,15 +1101,15 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
             rond — le clic reste nécessaire au doigt (aucun "hover" tactile). */}
         <button className="ot-map-peek" onClick={() => setMapOpen(true)} aria-label={c.openMap}><span>🗺️</span>{draft && <i>✓</i>}</button>
         <div className="ot-map-head"><div><b>{c.mapTitle}</b><small>{locked ? (myPlaying ? c.answerLocked : c.spectating) : c.placeHint}</small></div><div className="ot-map-head-controls"><button onClick={(event) => { event.stopPropagation(); setMapExpanded((value) => !value); }} aria-label={mapExpanded ? c.shrink : c.expand}>{mapExpanded ? "↘" : "↗"}</button><button onClick={(event) => { event.stopPropagation(); setMapExpanded(false); setMapOpen(false); }} aria-label={c.closeMap}>×</button></div></div>
-        <GuessMap marker={draft} onChange={updateDraft} locked={locked} expanded={mapOpen ? (mapExpanded ? "fullscreen" : "open") : "closed"} avatar={mySeat?.avatar} unavailableMessage={c.mapUnavailable} />
+        <div ref={playMapAnchorRef} className="ot-map-canvas" />
         <div className="ot-map-actions"><span>{draft ? c.markerPlaced : c.noMarker}</span><button className="ot-btn primary" disabled={!draft || locked} onClick={(event) => { event.stopPropagation(); submitDraft(); }}>{locked ? c.confirmed : c.confirm}</button></div>
       </section>}
 
       {state.phase === "playing" && mode === "country" && <CountryPicker key={state.roundId} choices={choiceCodes} inputMode={state.config.countryInput} lang={lang} selected={typeof draft === "string" ? draft : null} locked={locked} onChange={updateCountryDraft} onConfirm={submitDraft} c={c} />}
 
-      {state.phase === "reveal" && <RevealDock key={state.roundId} state={state} result={state.result} mode={mode} solo={solo} lang={lang} c={c} revealTarget={revealTarget} isHost={isHost} onNext={() => sendRequest("next")} onLobby={backToLobby} />}
+      {state.phase === "reveal" && <RevealDock key={state.roundId} state={state} result={state.result} mode={mode} solo={solo} lang={lang} c={c} revealTarget={revealTarget} isHost={isHost} onNext={() => sendRequest("next")} onLobby={backToLobby} mapAnchorRef={revealMapAnchorRef} />}
 
-      {state.phase === "finished" && <FinishedDock state={state} result={state.result} mode={mode} solo={solo} lang={lang} c={c} revealTarget={revealTarget} location={location} isHost={isHost} onRematch={() => sendRequest("rematch")} onLobby={backToLobby} />}
+      {state.phase === "finished" && <FinishedDock state={state} result={state.result} mode={mode} solo={solo} lang={lang} c={c} revealTarget={revealTarget} location={location} isHost={isHost} onRematch={() => sendRequest("rematch")} onLobby={backToLobby} mapAnchorRef={finishedMapAnchorRef} />}
 
       {state.finalDeadline && state.firstConfirmedBy !== me.id && !locked && <div className="ot-final-alert">⚡ {c.firstLocked}</div>}
       {locked && myPlaying && state.phase === "playing" && <div className="ot-locked-toast">✓ {solo ? c.answerLocked : c.waitingOpponent}</div>}

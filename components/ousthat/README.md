@@ -127,10 +127,31 @@ ne demandent ni changement de schéma, ni nouvelle API, ni abonnement payant.
   pas supposé. Guillaume a aussi demandé en direct un geste sur les bandeaux de joueurs du HUD
   (police, espacement) : fait en petit, ce n'est pas la refonte face-à-face ci-dessous.
   `tools/verify-ousthat.mjs` : **116/116**.
-- ⏳ **Restent : le rythme des tours (« carte persistante + pause ») et l'urgence/résultats
-  (face à face, chrono central, son)** — tranchés par Guillaume, pas codés. Voir le bloc
-  ⏭️ REPRISE de CLAUDE.md pour le détail exact et l'ordre. La palette du salon reste une
-  troisième livraison séparée, décidée mais pas commencée.
+- ✅ **P1 — le rythme des tours, « carte persistante + pause »** (2026-09-12) : tranché par
+  Guillaume, préchargement + pause sur l'attente, dock qui referme son ouverture mais garde sa
+  taille. Les trois `<GuessMap>` (dock de jeu, dock de révélation, modale de fin — trois
+  géométries CSS différentes, dont une dépend de la hauteur d'un texte voisin) sont remplacés par
+  UN SEUL montage, porté par `MapPortal.js` : trois ancres vides, une couche `position:fixed`
+  resynchronisée sur l'ancre active à chaque image (measure, jamais un calcul CSS statique).
+  `GuessMap.js` perd son prop `expanded` (devenu inutile) pour un `ResizeObserver` qui réagit à
+  n'importe quelle cause de redimensionnement, pas seulement l'ouverture du dock de jeu.
+  Le panorama de la manche suivante charge caché (iframe hors écran) PENDANT la révélation —
+  aucun protocole réseau nouveau, chaque client rattrape son propre accusé `panorama_loaded` dès
+  que la manche prédite devient réelle. Le décompte (`countdown`, jamais `preparing`, qui n'a pas
+  d'horloge visible) se met en pause côté hôte (`toggleTransitionPause`, règle pure de
+  `rules.js`) : une DURÉE figée, jamais une horloge comparée entre clients. ⚠️ **Bogue trouvé EN
+  JOUANT, invisible en relisant** : `.ot-map-portal` avait un z-index de 20, qui ne bat que ses
+  frères dans son propre contexte d'empilement — or `.ot-root` (l'écran de jeu entier) est en
+  `position:fixed;z-index:80`, donc tout ce qu'il contient passait au-dessus du portail quel que
+  soit son z-index local. Le clic atterrissait sur l'ancre vide, jamais sur la vraie carte,
+  **sans aucune erreur** : le marqueur ne se posait tout simplement jamais. Corrigé (z-index:85,
+  au-dessus de `.ot-root`). **Vérifié en session réelle à 2 clients** (`fake-supabase.mjs`) sur
+  trois manches jouées : carte cliquable, révélation avec pins/lignes sur les vraies tuiles,
+  pause/reprise avec le même nombre figé chez l'hôte ET l'invité, dock qui rouvre en plein écran
+  après une manche où il l'était déjà. `tools/verify-ousthat.mjs` : **134/134**.
+- ⏳ **Reste : l'urgence/résultats (face à face, chrono central, son)** — tranché par Guillaume,
+  pas codé. Voir le bloc ⏭️ REPRISE de CLAUDE.md pour le détail exact. La palette du salon reste
+  une troisième livraison séparée, décidée mais pas commencée.
 
 ## Parcours de jeu
 
