@@ -105,9 +105,32 @@ ne demandent ni changement de schéma, ni nouvelle API, ni abonnement payant.
   2 clients** (`fake-supabase.mjs`, CLAUDE.md §10). Le duel 10 s n'a jamais été joué dans un
   vrai navigateur : les deux sens hôte/invité, la validation simultanée, les réponses
   tardives et la reconnexion avec latence restent à voir avant de le considérer acquis.
-- ⏳ Tout ce qui suit dans l'ordre proposé ci-dessus (rythme des tours, urgence/résultats,
-  interface, typographie, signalement en illimité) reste à cadrer avec Guillaume — voir le
-  bloc ⏭️ REPRISE de CLAUDE.md pour le point exact où le travail s'est arrêté.
+- ✅ **P1 — le signalement peut rester sans effet en durée illimitée** (2026-09-11) : tranché
+  par Guillaume, activer plutôt que masquer. `canVoidLocation` compare `now` à `currentLimit`,
+  qui vaut `null` tant que personne n'a confirmé en illimité — `now <= null` vaut `now <= 0`,
+  toujours faux. Extrait en règle pure dans `rules.js` (même garde que `canAcceptAnswer` :
+  `limit === null` veut dire « rien à comparer », pas « déjà expiré ») pour que le banc puisse
+  la jouer sans passer par le composant. **Vérifié en session réelle à 2 clients**
+  (`fake-supabase.mjs`) : un signalement pendant `playing`, en illimité, avant toute
+  confirmation, change bien le panorama chez l'hôte ET chez l'invité — c'est la première fois
+  qu'un point de cet audit tourne dans un vrai navigateur à deux, pas seulement au banc.
+- ✅ **P1 — l'interface ressemble à un tableau de réglages** (2026-09-11) : tranché par
+  Guillaume, « typo seule d'abord, palette dans une livraison séparée ». Bungee/Outfit
+  remplace Space Mono sur l'écran de réglages seul (`.ot-setup-root`, pas `.ot-root` : le HUD
+  et la révélation gardent Space Mono, à traiter avec la composition, pas la typo) ; les
+  multiplicateurs vivent dans un volet replié par défaut (`.ot-advanced`, jamais replié sur
+  une erreur de validation) ; les coordonnées à cinq décimales du marqueur de réponse ont
+  disparu, remplacées par `c.markerPlaced`. ⚠️ Mettre le curseur de durée EN PREMIER dans la
+  grille — il forçait vie/délai sur deux rangées séparées à moitié vides quand il coupait entre
+  eux — a rendu 144 px à lui seul ; avec un resserrement de marges ciblé sous 780 px de hauteur,
+  « Lancer la partie » tient au-dessus du pli à 1280×720, **mesuré** (`getBoundingClientRect`),
+  pas supposé. Guillaume a aussi demandé en direct un geste sur les bandeaux de joueurs du HUD
+  (police, espacement) : fait en petit, ce n'est pas la refonte face-à-face ci-dessous.
+  `tools/verify-ousthat.mjs` : **116/116**.
+- ⏳ **Restent : le rythme des tours (« carte persistante + pause ») et l'urgence/résultats
+  (face à face, chrono central, son)** — tranchés par Guillaume, pas codés. Voir le bloc
+  ⏭️ REPRISE de CLAUDE.md pour le détail exact et l'ordre. La palette du salon reste une
+  troisième livraison séparée, décidée mais pas commencée.
 
 ## Parcours de jeu
 

@@ -25,6 +25,7 @@ import {
   addCountryScores,
   canAcceptAnswer,
   canResolveRound,
+  canVoidLocation,
   finalDeadline,
   isUnlimitedRound,
   matchWinners,
@@ -388,6 +389,7 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
   const [channelReady, setChannelReady] = useState(false);
   const [draftConfig, setDraftConfig] = useState({ ...DEFAULT_CONFIG });
   const [configErrors, setConfigErrors] = useState([]);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [draft, setDraft] = useState(null);
   const [mapOpen, setMapOpen] = useState(false);
   const [mapExpanded, setMapExpanded] = useState(false);
@@ -609,9 +611,13 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
       if (eligible.every((seat) => !!answers[seat.id]?.confirmed)) hostResolve(current.roundId);
       return;
     }
-    const canVoidLocation = ["preparing", "countdown"].includes(current.phase)
-      || (current.phase === "playing" && now <= currentLimit(current) && !eligible.some((seat) => current.answers?.[seat.id]?.confirmed));
-    if (request.kind === "location_problem" && canVoidLocation && request.roundId === current.roundId) {
+    const locationVoidable = canVoidLocation({
+      phase: current.phase,
+      now,
+      limit: currentLimit(current),
+      anyConfirmed: eligible.some((seat) => current.answers?.[seat.id]?.confirmed),
+    });
+    if (request.kind === "location_problem" && locationVoidable && request.roundId === current.roundId) {
       emitState(nextLocation(current, false));
       return;
     }
@@ -873,6 +879,11 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
   if (state.phase === "setup") {
     const checked = validateConfig(draftConfig);
     const setupSolo = state.seats.length === 1;
+    // Repliés par défaut (audit 2026-09-11 : "réglages avancés exposés dès
+    // l'entrée" faisait passer Lancer la partie sous le pli) — mais jamais
+    // repliés SUR une valeur hors bornes : une erreur de validation doit
+    // rester visible, jamais cachée derrière un volet fermé.
+    const advancedVisible = advancedOpen || configErrors.includes("multiplierStartRound") || configErrors.includes("multiplierIncrement");
     return (
       <div className="ot-root ot-setup-root">
         <div className="ot-setup-globe" aria-hidden="true" />
@@ -903,14 +914,38 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
                 </div>
               </div>
               {draftConfig.mode === "country" && <div className="ot-answer-picker"><b>{c.answerMethod}</b><button className={draftConfig.countryInput === "multiple-choice" ? "selected" : ""} onClick={() => setDraftConfig((old) => ({ ...old, countryInput: "multiple-choice" }))}>🚩 {c.multipleChoice}</button><button className={draftConfig.countryInput === "search" ? "selected" : ""} onClick={() => setDraftConfig((old) => ({ ...old, countryInput: "search" }))}>⌕ {c.countrySearch}</button></div>}
+              {/* La ligne pleine largeur (.ot-field-slider) force un saut de
+                  ligne dans la grille à trois colonnes : la mettre EN
+                  PREMIER lui laisse sa rangée à elle seule, puis vie/délai se
+                  PARTAGENT la rangée suivante au lieu d'ouvrir chacun la
+                  sienne. Mesuré (audit 2026-09-11, 1280×720) : 294px → 150px
+                  pour ce bloc, la moitié de l'écart qui passait "Lancer la
+                  partie" sous le pli. Champs identiques, ordre seul change. */}
               <div className="ot-settings">
-                {draftConfig.mode === "pinpoint" && !setupSolo && <ConfigField label={c.hp} unit={c.points} value={draftConfig.initialHp} min={500} max={30000} invalid={configErrors.includes("initialHp")} onChange={(value) => setDraftConfig((old) => ({ ...old, initialHp: value }))} />}
                 <RoundDurationField label={c.roundTime} value={draftConfig.roundSeconds} invalid={configErrors.includes("roundSeconds")} c={c} onChange={(value) => setDraftConfig((old) => ({ ...old, roundSeconds: value }))} />
+                {draftConfig.mode === "pinpoint" && !setupSolo && <ConfigField label={c.hp} unit={c.points} value={draftConfig.initialHp} min={500} max={30000} invalid={configErrors.includes("initialHp")} onChange={(value) => setDraftConfig((old) => ({ ...old, initialHp: value }))} />}
                 {!setupSolo && <ConfigField label={c.finalTime} unit={c.seconds} value={draftConfig.finalSeconds} min={3} max={60} invalid={configErrors.includes("finalSeconds")} dimmed={isUnlimitedRound(draftConfig)} hint={isUnlimitedRound(draftConfig) ? c.finalTimeDisabledHint : ""} onChange={(value) => setDraftConfig((old) => ({ ...old, finalSeconds: value }))} />}
-                {draftConfig.mode === "pinpoint" && !setupSolo && <label className="ot-field ot-toggle-field"><span>{c.multipliers}</span><button type="button" className={draftConfig.multipliers ? "on" : ""} onClick={() => setDraftConfig((old) => ({ ...old, multipliers: !old.multipliers }))}><i />{draftConfig.multipliers ? c.enabled : c.disabled}</button></label>}
-                {draftConfig.mode === "pinpoint" && !setupSolo && draftConfig.multipliers && <ConfigField label={c.firstBoost} unit={c.round.toLowerCase()} value={draftConfig.multiplierStartRound} min={2} max={20} invalid={configErrors.includes("multiplierStartRound")} onChange={(value) => setDraftConfig((old) => ({ ...old, multiplierStartRound: value }))} />}
-                {draftConfig.mode === "pinpoint" && !setupSolo && draftConfig.multipliers && <ConfigField label={c.increment} unit="×" value={draftConfig.multiplierIncrement} min={0.1} max={3} step={0.1} invalid={configErrors.includes("multiplierIncrement")} onChange={(value) => setDraftConfig((old) => ({ ...old, multiplierIncrement: value }))} />}
               </div>
+              {/* Volet replié par défaut (audit 2026-09-11, §P1 "tableau de
+                  réglages") : les multiplicateurs étaient exposés au même
+                  niveau que les réglages courants (HP, durée) dès l'entrée
+                  sur l'écran. Sorti de .ot-settings plutôt que cousu dedans :
+                  sa visibilité dépend de advancedVisible, pas seulement du
+                  mode/solo comme les champs ci-dessus. */}
+              {draftConfig.mode === "pinpoint" && !setupSolo && (
+                <div className={"ot-advanced" + (advancedVisible ? " open" : "")}>
+                  <button type="button" className="ot-advanced-toggle" aria-expanded={advancedVisible} onClick={() => setAdvancedOpen((value) => !value)}>
+                    <b>{c.advancedSettings}</b>
+                    <small>{c.multipliers} · {draftConfig.multipliers ? c.enabled : c.disabled}</small>
+                    <i aria-hidden="true">{advancedVisible ? "▲" : "▼"}</i>
+                  </button>
+                  {advancedVisible && <div className="ot-settings">
+                    <label className="ot-field ot-toggle-field"><span>{c.multipliers}</span><button type="button" className={draftConfig.multipliers ? "on" : ""} onClick={() => setDraftConfig((old) => ({ ...old, multipliers: !old.multipliers }))}><i />{draftConfig.multipliers ? c.enabled : c.disabled}</button></label>
+                    {draftConfig.multipliers && <ConfigField label={c.firstBoost} unit={c.round.toLowerCase()} value={draftConfig.multiplierStartRound} min={2} max={20} invalid={configErrors.includes("multiplierStartRound")} onChange={(value) => setDraftConfig((old) => ({ ...old, multiplierStartRound: value }))} />}
+                    {draftConfig.multipliers && <ConfigField label={c.increment} unit="×" value={draftConfig.multiplierIncrement} min={0.1} max={3} step={0.1} invalid={configErrors.includes("multiplierIncrement")} onChange={(value) => setDraftConfig((old) => ({ ...old, multiplierIncrement: value }))} />}
+                  </div>}
+                </div>
+              )}
               <div className="ot-summary"><b>{c.summary}</b><span>{draftConfig.mode === "country" ? (setupSolo ? c.untilMistake : `${MULTI_COUNTRY_ROUNDS} ${c.rounds}`) : (setupSolo ? `${SOLO_ROUNDS} ${c.rounds} · 25 000 ${c.points}` : `${checked.value.initialHp.toLocaleString()} PV`)}</span><small>{draftConfig.mode === "country" ? c.countryRule : (setupSolo ? c.soloScoreRule : c.damageRule)}</small></div>
               {!hasEmbedKey && <div className="ot-key-warning"><b>{c.noKeyTitle}</b><span>{c.noKeyBody}</span></div>}
               {draftConfig.mode === "pinpoint" && !hasWebGL && <div className="ot-key-warning"><b>{c.noWebglTitle}</b><span>{c.noWebglBody}</span></div>}
@@ -964,7 +999,7 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
         <button className="ot-map-peek" onClick={() => setMapOpen(true)} aria-label={c.openMap}><span>🗺️</span>{draft && <i>✓</i>}</button>
         <div className="ot-map-head"><div><b>{c.mapTitle}</b><small>{locked ? (myPlaying ? c.answerLocked : c.spectating) : c.placeHint}</small></div><div className="ot-map-head-controls"><button onClick={(event) => { event.stopPropagation(); setMapExpanded((value) => !value); }} aria-label={mapExpanded ? c.shrink : c.expand}>{mapExpanded ? "↘" : "↗"}</button><button onClick={(event) => { event.stopPropagation(); setMapExpanded(false); setMapOpen(false); }} aria-label={c.closeMap}>×</button></div></div>
         <GuessMap marker={draft} onChange={updateDraft} locked={locked} expanded={mapOpen ? (mapExpanded ? "fullscreen" : "open") : "closed"} avatar={mySeat?.avatar} unavailableMessage={c.mapUnavailable} />
-        <div className="ot-map-actions"><span>{draft ? `${draft.lat.toFixed(5)}, ${draft.lng.toFixed(5)}` : c.noMarker}</span><button className="ot-btn primary" disabled={!draft || locked} onClick={(event) => { event.stopPropagation(); submitDraft(); }}>{locked ? c.confirmed : c.confirm}</button></div>
+        <div className="ot-map-actions"><span>{draft ? c.markerPlaced : c.noMarker}</span><button className="ot-btn primary" disabled={!draft || locked} onClick={(event) => { event.stopPropagation(); submitDraft(); }}>{locked ? c.confirmed : c.confirm}</button></div>
       </section>}
 
       {state.phase === "playing" && mode === "country" && <CountryPicker key={state.roundId} choices={choiceCodes} inputMode={state.config.countryInput} lang={lang} selected={typeof draft === "string" ? draft : null} locked={locked} onChange={updateCountryDraft} onConfirm={submitDraft} c={c} />}

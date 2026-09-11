@@ -109,6 +109,15 @@ section("échéances, verrou et reprise");
 ok("le délai final ne rallonge jamais la manche", R.finalDeadline(10_000, 20_000, 15) === 20_000 && R.finalDeadline(10_000, 100_000, 15) === 25_000);
 ok("une réponse est acceptée jusqu'à l'échéance incluse", R.canAcceptAnswer({ phase: "playing", now: 2000, deadline: 2000, answer: null }));
 ok("une réponse tardive ou déjà confirmée est refusée", !R.canAcceptAnswer({ phase: "playing", now: 2001, deadline: 2000, answer: null }) && !R.canAcceptAnswer({ phase: "playing", now: 1000, deadline: 2000, answer: { confirmed: { lat: 0, lng: 0 } } }));
+ok("le signalement reste ouvert pendant preparing/countdown, peu importe l'échéance ou une réponse déjà là", R.canVoidLocation({ phase: "preparing", now: 5000, limit: 1000, anyConfirmed: true }) && R.canVoidLocation({ phase: "countdown", now: 5000, limit: null, anyConfirmed: false }));
+ok("en durée limitée, le signalement suit l'échéance comme une réponse (ouvert avant, fermé après)", R.canVoidLocation({ phase: "playing", now: 1999, limit: 2000, anyConfirmed: false }) && !R.canVoidLocation({ phase: "playing", now: 2001, limit: 2000, anyConfirmed: false }));
+ok("une réponse déjà confirmée ferme le signalement, même sans échéance à comparer", !R.canVoidLocation({ phase: "playing", now: 999999, limit: null, anyConfirmed: true }));
+// Audit 2026-09-11 : limit === null en playing (manche illimitée, personne
+// n'a encore confirmé) bloquait TOUJOURS le signalement (now <= null vaut
+// now <= 0, donc toujours faux) — silencieusement, le bouton restait affiché
+// mais chaque clic était refusé côté hôte. Corrigé pour suivre le même garde
+// que canAcceptAnswer (deadline/limit === null = pas d'échéance à comparer).
+ok("une manche illimitée où personne n'a confirmé reste signalable en playing, corrigé au 2026-09-11", R.canVoidLocation({ phase: "playing", now: 999999999, limit: null, anyConfirmed: false }));
 ok("la confirmation prime toujours sur une proposition plus récente", R.effectiveAnswer({ confirmed: { lat: 1, lng: 2 }, proposal: { lat: 3, lng: 4 } }).lat === 1);
 ok("une manche ne peut être résolue qu'une fois et avec le bon identifiant", R.canResolveRound({ phase: "playing", roundId: "r1", resolvedRoundId: null }, "r1") && !R.canResolveRound({ phase: "playing", roundId: "r1", resolvedRoundId: "r1" }, "r1") && !R.canResolveRound({ phase: "playing", roundId: "r1", resolvedRoundId: null }, "r2"));
 const rematch = R.resetForRematch({ config: R.DEFAULT_CONFIG, teams, result: { old: true }, winnerTeamId: "t1", retry: 4 }, ["a", "b"], "match-2");
@@ -226,6 +235,7 @@ section("audit 2026-09-06 — masque Google, signalement et cartes");
 ok("l'iframe Street View n'a plus allowFullScreen et sort de la navigation Tab", !/^\s*allowFullScreen\b/m.test(frame) && /tabIndex=\{-1\}/.test(frame));
 ok("le masque d'adresse bloque vraiment le clic (pointer-events:auto), plus none", /\.ot-google-place-mask\{[^}]*pointer-events:auto/.test(css) && !/\.ot-google-place-mask\{[^}]*pointer-events:none/.test(css));
 ok("le bouton de signalement vit aussi pendant preparing/countdown, pas seulement playing", /\(state\.phase === "playing" \|\| preparing\) && <button className=\{reportArmed/.test(game));
+ok("le signalement passe par la règle pure canVoidLocation (rules.js), pas par une comparaison locale dupliquée", game.includes("canVoidLocation({") && game.includes("limit: currentLimit(current)") && !game.includes("now <= currentLimit(current)"));
 ok("un tirage vide (mode Pays × carte sans pays) est refusé côté hôte ET annoncé côté client", game.includes("if (!order.length) return;") && game.includes("c.noLocationsForMap"));
 ok("le setup affiche un sélecteur de carte et envoie mapId au lancement", game.includes("ot-map-picker") && game.includes("MAPS.map((map)") && game.includes("mapId: map.id") && /sendRequest\("start",\s*\{\s*config:\s*checked\.value\s*\}\)/.test(game));
 ok("start() passe mapId à locationOrder côté hôte, la revanche aussi", /locationOrder\(matchId, checked\.value\.mode, checked\.value\.mapId\)/.test(game) && /locationOrder\(matchId, current\.config\.mode, current\.config\.mapId\)/.test(game));
@@ -252,6 +262,23 @@ ok("le bouton plein écran ne peut pas planter le jeu si l'API est refusée (try
 ok("la fin de partie s'incruste sur le dernier panorama au lieu d'une page séparée", !game.includes('if (state.phase === "finished") {') && /state\.phase === "finished" && <FinishedDock/.test(game) && game.includes('"ot-finished-overlay"'));
 ok("FinishedDock reçoit bien location (pays de repli) et déclenche next/lobby via les requêtes existantes", /<FinishedDock state=\{state\} result=\{state\.result\} mode=\{mode\} solo=\{solo\} lang=\{lang\} c=\{c\} revealTarget=\{revealTarget\} location=\{location\}/.test(game) && game.includes('onRematch={() => sendRequest("rematch")}'));
 
+section("audit 2026-09-11 — typographie de l'écran de réglages, coordonnées, signalement illimité");
+// L'audit demandait de retirer "le texte technique sur l'iframe et les
+// coordonnées à cinq décimales" de l'écran de jeu : le lat/lng brut du
+// marqueur de réponse ne s'affiche plus, remplacé par un état humain.
+ok("le marqueur de réponse n'affiche plus ses coordonnées décimales brutes", !game.includes("draft.lat.toFixed(5)") && !game.includes("draft.lng.toFixed(5)") && game.includes("draft ? c.markerPlaced : c.noMarker"));
+// "Prioriser mode/carte/Jouer et ranger les multiplicateurs dans un volet" :
+// les trois champs multiplicateurs (bascule + deux réglages) sont sortis de
+// la grille .ot-settings visible par défaut, dans un volet qui se replie —
+// jamais ouvert d'entrée, sauf pour ne pas cacher une valeur hors bornes.
+ok("les réglages de multiplicateurs vivent dans un volet replié par défaut, jamais caché en cas d'erreur", game.includes('className={"ot-advanced" + (advancedVisible ? " open" : "")}') && game.includes('const advancedVisible = advancedOpen || configErrors.includes("multiplierStartRound") || configErrors.includes("multiplierIncrement")'));
+ok("le volet avancé encadre bien la bascule multiplicateurs et ses deux réglages conditionnels, rien de plus", /ot-advanced-toggle[\s\S]{0,600}ot-toggle-field[\s\S]{0,400}firstBoost[\s\S]{0,400}increment/.test(game));
+// Typographie : Outfit remplace Space Mono SUR L'ÉCRAN DE RÉGLAGES SEULEMENT
+// (.ot-setup-root, pas .ot-root) — HUD, révélation et fin de partie gardent
+// Space Mono pour l'instant, à traiter dans la livraison "transitions et
+// composition" séparée (§2 : ne pas mêler deux changements visuels).
+ok("l'écran de réglages passe à Outfit sans toucher la police par défaut du reste du jeu", /\.ot-setup-root\{[^}]*font-family:'Outfit'/.test(css) && /\.ot-root\{[^}]*font-family:'Space Mono'/.test(css));
+ok("le titre de l'écran de réglages perd sa lueur cyan décorative", !/\.ot-setup-card>h1\{[^}]*text-shadow/.test(css));
 console.log(fails ? `\n${fails} ÉCHEC(S) sur ${total} contrôles.\n` : `\n${total}/${total} contrôles verts.\n`);
 if (process.argv.includes("--falsify")) console.log("Mutation active : ce passage ne doit JAMAIS être vert.\n");
 process.exit(fails ? 1 : 0);

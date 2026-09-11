@@ -7,42 +7,49 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### ACTION SUIVANTE — LES CHOIX GRAPHIQUES DE L'AUDIT OÙ'S THAT, À CADRER AVEC GUILLAUME
+### ACTION SUIVANTE — OÙ'S THAT : TRANSITIONS ET COMPOSITION (rythme des tours, urgence/résultats)
 
-**Fait et vérifié le 2026-09-11**, les trois premiers points de l'audit
-(`components/ousthat/README.md`, section « Audit comparatif du 2026-09-11 ») : (1) la carte
-de réponse recouvrait ses commandes (`GuessMap.js` effaçait `maplibregl-map` via le
-`className` React à chaque passage de `mapReady` — corrigé par un `classList.toggle` posé
-dans un effet ; confirmé à l'écran avant/après). (2) L'état Australie dépassait la taille
-d'un broadcast Free (`locationOrder`, **533 008 octets** mesurés pour 30 167 identifiants) —
-`orderForMatch()` le dérive maintenant côté client depuis `matchId`/`config` au lieu de le
-diffuser/persister ; mesuré après coup : 908 octets pour un état de manche typique. (3) Les
-10 secondes après la première validation, même en durée illimitée : Guillaume a tranché
-**duel 1v1 uniquement** (`DUEL_FINAL_SECONDS`, `rules.js`) — les parties à 3+ gardent
-`finalSeconds` inchangé (config par défaut 15 s), l'extension reste hors scope. Le HUD
-bascule de "∞" au compte à rebours réel dès que le délai s'arme. `tools/verify-ousthat.mjs` :
-106/106. ⚠️ **Vérification partielle, à savoir avant de continuer** : le point 1 a été confirmé
-à l'écran (page jetable) ; les points 2 et 3 ne le sont que par le banc + mesure en Node
-(octets, déterminisme) — **aucun des trois n'a été rejoué en session réelle à 2 clients**
-(`fake-supabase.mjs`, §10). Le duel 10 s en particulier n'a jamais tourné dans un vrai
-navigateur : les deux sens hôte/invité, la validation simultanée et la reconnexion restent à
-voir.
+**Fait et vérifié le 2026-09-11**, la passe « typographie » de l'écran de réglages, tranchée par
+Guillaume (« typo seule d'abord, palette dans une livraison séparée ») :
+`components/ousthat/README.md`, tableau P1 « interface tableau de réglages ». Bungee/Outfit
+remplace Space Mono sur `.ot-setup-root` SEUL (le reste du jeu garde Space Mono exprès, §2),
+les aides 8–11 px passent à 12–16 px, les multiplicateurs vivent dans un volet `.ot-advanced`
+replié par défaut (jamais replié SUR une erreur de validation). ⚠️ **Une seule ligne pleine
+largeur mal placée dans la grille coûtait 144 px** : le curseur de durée (`.ot-field-slider`,
+pleine largeur) séparait vie/délai sur deux rangées à moitié vides — le mettre EN PREMIER,
+plus un resserrement de marges ciblé au `@media (max-height:780px)`, a suffi à ramener
+« Lancer la partie » au-dessus du pli à 1280×720, **mesuré en direct**
+(`getBoundingClientRect`), pas supposé. Les coordonnées à cinq décimales du marqueur de
+réponse ont disparu (`c.markerPlaced`). Le signalement en durée illimitée marche enfin pendant
+`playing` avant toute confirmation — `canVoidLocation` extrait en règle pure testée dans
+`rules.js` (`components/ousthat/rules.js`) : c'était `now <= null`, toujours faux, silencieux.
+**Vérifié en session réelle à 2 clients** (`fake-supabase.mjs`) : panorama changé chez les
+DEUX joueurs après un signalement en illimité, jamais fait avant ce jour. Guillaume a aussi
+demandé en direct, en regardant l'écran, un geste contenu sur les bandeaux de joueurs du HUD
+(police Outfit, espacement, halo de PV sur `.ot-player`/`.ot-player-strip`) — fait, mais ce
+n'est PAS la refonte face-à-face/chrono central ci-dessous. `tools/verify-ousthat.mjs` :
+**116/116**.
 
-**Reste à cadrer avec Guillaume avant tout code, §2 oblige :** rythme des tours (2,5 s de
-stabilisation + 3 s de décompte, carte de réponse démontée/recréée à chaque manche), ton de
-l'urgence/résultats (adversaires face à face, chrono au centre, son discret), l'interface
-« tableau de réglages » (Space Mono partout → **Bungee/Outfit, déjà dans le salon**, aucune
-nouvelle police), le signalement sans effet en manche illimitée pendant "playing"
-(`canVoidLocation` compare à `currentLimit(current)`, qui vaut `null` en illimité). Détail et
-ordre proposé dans le document du module. Aucune manipulation Supabase nécessaire pour tout
-ce chantier.
+**Reste à faire, dans l'ordre déjà arbitré avec Guillaume (§ « Ordre proposé » du README) :**
+1. **Rythme des tours — « carte persistante + pause »** (tranché, pas codé) : la carte de
+   réponse est aujourd'hui démontée puis recréée à CHAQUE phase (trois `<GuessMap>` JSX
+   séparés selon `state.phase`, dans `OusThatGame.js`) — la faire vivre en UN SEUL composant
+   monté en continu, préparer le tour suivant pendant l'affichage du résultat, un seul temps
+   de transition commun avec pause.
+2. **Urgence/résultats — direction validée** (tranché, pas codé) : adversaires face à face
+   (au lieu des deux à gauche), chrono au centre, message nommé (« Robin a joué — 10 s ») au
+   lieu de l'alerte 9 px actuelle, son discret réglable, pastille repliée qui garde MON
+   résultat (pas celui du premier siège).
+La **palette du salon** (crème/ambre/cyan) reste une **troisième** livraison, décidée mais pas
+commencée — ne pas la mêler aux deux points ci-dessus (§2, décision 424).
 
-**Réserve ferme, indépendante de cette action :** le rappel de reprise non bloquant, la plaque
-du chantier et les poses calmes de la compagne sont livrés ; leur agrément reste à juger en
-vraie séance. L'audience du maire jusqu'à la signature doit encore être rejouée avant le
-recentrage bateau / astéroïdes (`components/ferme/QUETE.md` §12.2–12.3). Restent ensuite la
-séance à deux (ferme peuplée, relais du plat, deux bords du cratère), les bancs eau/parc,
-le sol puis les arbres en livraisons distinctes. Les décisions sociales dépendent de la séance.
+⚠️ **Vérification qui reste ouverte, héritée de la passe précédente** : le délai fixe de 10 s
+en duel (`DUEL_FINAL_SECONDS`) n'a toujours jamais tourné dans un vrai navigateur — la session
+à 2 clients de ce jour a testé le signalement en illimité, pas la validation qui arme les 10 s.
+Les deux sens hôte/invité, la validation simultanée et la reconnexion restent à voir.
+
+Chantier ferme indépendant, toujours en réserve, non touché aujourd'hui : voir §13 (séance à
+deux, bancs eau/parc, audience du maire à rejouer avant le recentrage bateau/astéroïdes).
 
 ---
 

@@ -148,6 +148,21 @@ export function canAcceptAnswer({ phase, now, deadline, answer }) {
   return !answer?.confirmed;
 }
 
+// Audit 2026-09-11 : signaler un lieu (« ce lieu est invalide ») doit rester
+// possible tant que personne n'a confirmé de réponse. `limit` (currentLimit()
+// côté composant) vaut sciemment null en manche illimitée avant la première
+// confirmation (finalDeadline() garde son null, voir plus haut) — comparer
+// `now <= limit` sans le même garde que canAcceptAnswer bloquait donc le
+// signalement pendant TOUTE la phase playing en illimité, silencieusement :
+// le bouton restait affiché mais chaque clic était refusé côté hôte.
+export function canVoidLocation({ phase, now, limit, anyConfirmed }) {
+  if (phase === "preparing" || phase === "countdown") return true;
+  if (phase !== "playing" || anyConfirmed) return false;
+  if (!Number.isFinite(now)) return false;
+  if (limit !== null && (!Number.isFinite(limit) || now > limit)) return false;
+  return true;
+}
+
 export function effectiveAnswer(answer) {
   return normalizeGuess(answer?.confirmed) || normalizeGuess(answer?.proposal) || null;
 }
