@@ -333,8 +333,19 @@ function GuessMap({ marker, onChange, locked = false, expanded = false, reveal =
     return () => clearTimeout(timer);
   }, [expanded]);
 
+  // Audit 2026-09-11 (P0) : écrire "ready" via le className React écrase
+  // TOUT le className du conteneur à chaque rendu — y compris "maplibregl-map",
+  // que MapLibre ajoute lui-même sur ce même nœud (container: rootRef.current)
+  // pour poser son position:relative. Sans elle, le canevas et les contrôles
+  // MapLibre (position:absolute) remontent au premier ancêtre positionné en
+  // amont — mesuré : le canevas peint depuis le haut du panneau, par-dessus
+  // l'en-tête. classList.toggle ne touche qu'UN token, jamais le reste.
+  useEffect(() => {
+    rootRef.current?.classList.toggle("ready", mapReady);
+  }, [mapReady]);
+
   if (mapError) return <div className="ot-map-canvas ot-map-unavailable" role="status"><span>🗺️</span><b>{unavailableMessage}</b></div>;
-  return <div ref={rootRef} className={"ot-map-canvas" + (mapReady ? " ready" : "")} role="application" aria-label="Carte de réponse détaillée" />;
+  return <div ref={rootRef} className="ot-map-canvas" role="application" aria-label="Carte de réponse détaillée" />;
 }
 
 export default memo(GuessMap);

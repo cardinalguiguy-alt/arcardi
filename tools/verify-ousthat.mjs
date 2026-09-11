@@ -215,7 +215,11 @@ section("durée de manche Illimitée (2026-09-07) — branchements");
 ok("le début de manche part sans échéance quand la durée est illimitée", game.includes("isUnlimitedRound(current.config)"));
 ok("l'hôte dispose d'un bouton pour terminer une manche illimitée bloquée (garde-fou AFK)", game.includes("c.endRound") && /isHost && state\.phase === "playing" && isUnlimitedRound\(state\.config\)/.test(game) && game.includes("hostResolve(state.roundId)"));
 ok("le réglage de durée devient un curseur qui va jusqu'à Illimité, plutôt qu'un champ nu", game.includes("ROUND_DURATION_INFINITE_SLOT") && game.includes('type="range"') && game.includes("RoundDurationField"));
-ok("le HUD affiche ∞ en manche illimitée au lieu d'un compte à rebours trompeur", /isUnlimitedRound\(state\.config\) \? "∞"/.test(game));
+ok("le HUD affiche ∞ en manche illimitée au lieu d'un compte à rebours trompeur", /isUnlimitedRound\(state\.config\) && !state\.finalDeadline \? "∞"/.test(game));
+// 2026-09-11 : en duel (2 joueurs actifs), la première validation arme 10 s
+// fixes même en durée illimitée (voir DUEL_FINAL_SECONDS) — le HUD bascule
+// alors de "∞" au compte à rebours réel, plutôt que de mentir sur l'illimité.
+ok("un duel illimité arme un délai final fixe, jamais les parties à 3+", R.DUEL_FINAL_SECONDS === 10 && game.includes("isDuel && current.deadline === null") && game.includes("now + DUEL_FINAL_SECONDS * 1000") && game.includes("isDuel ? DUEL_FINAL_SECONDS : current.config.finalSeconds"));
 ok("le délai final se grise et s'explique dans le setup quand la durée est illimitée", game.includes("finalTimeDisabledHint") && game.includes("dimmed={isUnlimitedRound(draftConfig)}"));
 
 section("audit 2026-09-06 — masque Google, signalement et cartes");
@@ -226,7 +230,10 @@ ok("un tirage vide (mode Pays × carte sans pays) est refusé côté hôte ET an
 ok("le setup affiche un sélecteur de carte et envoie mapId au lancement", game.includes("ot-map-picker") && game.includes("MAPS.map((map)") && game.includes("mapId: map.id") && /sendRequest\("start",\s*\{\s*config:\s*checked\.value\s*\}\)/.test(game));
 ok("start() passe mapId à locationOrder côté hôte, la revanche aussi", /locationOrder\(matchId, checked\.value\.mode, checked\.value\.mapId\)/.test(game) && /locationOrder\(matchId, current\.config\.mode, current\.config\.mapId\)/.test(game));
 ok("un téléphone en paysage (court, quelle que soit sa largeur) reçoit son propre resserrement", /@media \(max-height:500px\)\{[\s\S]{0,400}\.ot-map-dock\.open/.test(css));
-ok("le canevas MapLibre se fond en fondu plutôt que de flasher en blanc", /\.ot-map-canvas \.maplibregl-canvas\{ opacity:0/.test(css) && map.includes("whenStyleReady(map, () => setMapReady(true))") && map.includes('mapReady ? " ready" : ""'));
+// 2026-09-11 : la classe "ready" ne passe plus par le className React (voir
+// l'audit du jour, §GuessMap) — un className recalculé à chaque rendu efface
+// tout ce que MapLibre pose lui-même sur le même nœud, dont "maplibregl-map".
+ok("le canevas MapLibre se fond en fondu plutôt que de flasher en blanc", /\.ot-map-canvas \.maplibregl-canvas\{ opacity:0/.test(css) && map.includes("whenStyleReady(map, () => setMapReady(true))") && map.includes('classList.toggle("ready", mapReady)'));
 
 section("audit 2026-09-06 (suite) — sensibilité, transitions, plein écran, fin de partie");
 ok("le zoom de la carte de réponse a été rendu plus sensible qu'avant (diviseurs abaissés)", /setWheelZoomRate\(1 \/ (\d+)\)/.exec(map)?.[1] < 450 && /setZoomRate\(1 \/ (\d+)\)/.exec(map)?.[1] < 100);

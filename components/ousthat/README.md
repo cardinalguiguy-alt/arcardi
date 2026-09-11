@@ -79,6 +79,29 @@ Les limites techniques viennent des documentations
 Aucune manipulation Supabase effectuée. Les corrections prioritaires proposées
 ne demandent ni changement de schéma, ni nouvelle API, ni abonnement payant.
 
+### Corrections appliquées
+
+- ✅ **P0 — géométrie de la carte** (2026-09-11) : `GuessMap.js` gardait le `className` React
+  comme seule source de vérité sur le conteneur MapLibre, effaçant `maplibregl-map` — donc son
+  `position:relative` — à chaque passage de `mapReady`. La classe "ready" passe désormais par
+  `classList.toggle` dans un effet ; le `className` JSX reste stable, MapLibre garde la sienne.
+  Confirmé à l'écran avant/après (page jetable, supprimée après usage).
+- ✅ **P0 — volume réseau Australie** (2026-09-11) : `locationOrder` (533 008 octets mesurés
+  pour les 30 167 identifiants) n'est plus stocké dans l'état diffusé ni persisté.
+  `orderForMatch(matchId, mode, mapId)` (`locations.js`) le redérive localement, mémoïsé à une
+  seule entrée — hôte et invité recalculent bit à bit le même tableau depuis `matchId`/
+  `config`, déjà dans l'état partagé. Mesuré après coup : 908 octets pour un état de manche
+  typique. `tools/verify-ousthat.mjs` : 105/105.
+- ✅ **P1 — les 10 secondes après la première validation, même en durée illimitée**
+  (2026-09-11) : tranché par Guillaume, **duel 1v1 uniquement**. `DUEL_FINAL_SECONDS = 10`
+  (`rules.js`) s'arme dès que `eligible.length === 2`, y compris quand `current.deadline`
+  est `null` (illimité) — les parties à 3+ gardent `finalSeconds` (15 s par défaut),
+  inchangé, extension hors scope. Le HUD bascule de "∞" au compte à rebours réel dès que
+  `state.finalDeadline` est posé. `tools/verify-ousthat.mjs` : 106/106.
+- ⏳ Tout ce qui suit dans l'ordre proposé ci-dessus (rythme des tours, urgence/résultats,
+  interface, typographie, signalement en illimité) reste à cadrer avec Guillaume — voir le
+  bloc ⏭️ REPRISE de CLAUDE.md pour le point exact où le travail s'est arrêté.
+
 ## Parcours de jeu
 
 - **Solo — Country Streak** : trouver le pays jusqu'à la première erreur.

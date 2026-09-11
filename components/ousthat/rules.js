@@ -16,6 +16,11 @@ export const EARTH_RADIUS_KM = 6371.0088;
 export const SOLO_ROUNDS = 5;
 export const MULTI_COUNTRY_ROUNDS = 5;
 export const MAX_PLAYERS = 8;
+// Audit 2026-09-11 : en 1v1 (exactement deux joueurs actifs), la première
+// validation lance ce délai fixe pour l'autre — y compris en durée initiale
+// illimitée — au lieu du finalSeconds configurable (15 s par défaut), qui
+// reste inchangé pour les parties à 3+ (extension explicitement hors scope).
+export const DUEL_FINAL_SECONDS = 10;
 export const GAME_MODES = Object.freeze(["pinpoint", "country"]);
 export const COUNTRY_INPUTS = Object.freeze(["multiple-choice", "search"]);
 // Whitelist des cartes jouables (2026-09-06) — un id de plus ici à chaque
@@ -257,7 +262,6 @@ export function resetForRematch(state, order, matchId) {
     roundId: `${matchId}:1:0`,
     config,
     teams,
-    locationOrder: order.slice(),
     locationCursor: 0,
     usedLocationIds: order.length ? [order[0]] : [],
     loaded: {},

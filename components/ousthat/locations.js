@@ -69,3 +69,19 @@ export function locationOrder(seed, mode = "pinpoint", mapId = "beautiful-world"
   }
   return ids;
 }
+
+// Audit 2026-09-11 (P0) : sur l'Australie, locationOrder tire dans 30 167
+// identifiants — 533 008 octets en JSON, au-dessus de la limite de broadcast
+// Supabase Free (256 Ko). Le tirage est une fonction PURE de (seed, mode,
+// mapId), tous trois déjà présents dans l'état partagé (matchId, config.mode,
+// config.mapId) : chaque client le recalcule localement au lieu de le
+// recevoir — ce qui se déduit ne se diffuse pas (CLAUDE.md §3). Mémoïsé à une
+// seule entrée : une partie en cours ne change jamais de seed une fois
+// lancée, donc un seul calcul de tirage sert tout le match.
+let cachedOrder = null;
+export function orderForMatch(matchId, mode, mapId) {
+  if (!matchId) return [];
+  const key = `${matchId}|${mode}|${mapId}`;
+  if (cachedOrder?.key !== key) cachedOrder = { key, order: locationOrder(matchId, mode, mapId) };
+  return cachedOrder.order;
+}

@@ -7,18 +7,30 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### ACTION SUIVANTE — CADRER LA PREMIÈRE PASSE OÙ'S THAT À PARTIR DE SON AUDIT
+### ACTION SUIVANTE — LES CHOIX GRAPHIQUES DE L'AUDIT OÙ'S THAT, À CADRER AVEC GUILLAUME
 
-**Non fait :** aucune correction de gameplay ni refonte graphique livrée. Guillaume demande
-une interface plus accueillante, des polices moins génériques et un duel où la première
-validation donne **10 secondes** à l'autre joueur. L'audit et l'ordre de correction sont dans
-`components/ousthat/README.md`, section « Audit comparatif du 2026-09-11 ».
+**Fait et vérifié le 2026-09-11**, les trois premiers points de l'audit
+(`components/ousthat/README.md`, section « Audit comparatif du 2026-09-11 ») : (1) la carte
+de réponse recouvrait ses commandes (`GuessMap.js` effaçait `maplibregl-map` via le
+`className` React à chaque passage de `mapReady` — corrigé par un `classList.toggle` posé
+dans un effet ; confirmé à l'écran avant/après). (2) L'état Australie dépassait la taille
+d'un broadcast Free (`locationOrder`, **533 008 octets** mesurés pour 30 167 identifiants) —
+`orderForMatch()` le dérive maintenant côté client depuis `matchId`/`config` au lieu de le
+diffuser/persister ; mesuré après coup : 908 octets pour un état de manche typique. (3) Les
+10 secondes après la première validation, même en durée illimitée : Guillaume a tranché
+**duel 1v1 uniquement** (`DUEL_FINAL_SECONDS`, `rules.js`) — les parties à 3+ gardent
+`finalSeconds` inchangé (config par défaut 15 s), l'extension reste hors scope. Le HUD
+bascule de "∞" au compte à rebours réel dès que le délai s'arme. `tools/verify-ousthat.mjs` :
+106/106.
 
-**À traiter d'abord :** géométrie de la carte de réponse, volume des états multijoueurs sur
-les grandes cartes, puis compte à rebours même en durée illimitée. Les choix graphiques
-structurants restent à valider (§2). Aucune manipulation Supabase nécessaire pour cet audit.
-Les limites de vérification (panoramas non chargés, manches artificiellement préparées) sont
-consignées avec les résultats dans le document du module, pas assimilées à une vraie partie.
+**Reste à cadrer avec Guillaume avant tout code, §2 oblige :** rythme des tours (2,5 s de
+stabilisation + 3 s de décompte, carte de réponse démontée/recréée à chaque manche), ton de
+l'urgence/résultats (adversaires face à face, chrono au centre, son discret), l'interface
+« tableau de réglages » (Space Mono partout → **Bungee/Outfit, déjà dans le salon**, aucune
+nouvelle police), le signalement sans effet en manche illimitée pendant "playing"
+(`canVoidLocation` compare à `currentLimit(current)`, qui vaut `null` en illimité). Détail et
+ordre proposé dans le document du module. Aucune manipulation Supabase nécessaire pour tout
+ce chantier.
 
 **Réserve ferme, indépendante de cette action :** le rappel de reprise non bloquant, la plaque
 du chantier et les poses calmes de la compagne sont livrés ; leur agrément reste à juger en

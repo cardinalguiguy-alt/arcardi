@@ -12,10 +12,11 @@ import {
   normalizeCountryCode,
   searchableCountryText,
 } from "./countries";
-import { LOCATION_BY_ID, MAPS, locationOrder } from "./locations";
+import { LOCATION_BY_ID, MAPS, locationOrder, orderForMatch } from "./locations";
 import {
   CONFIG_LIMITS,
   DEFAULT_CONFIG,
+  DUEL_FINAL_SECONDS,
   GAME_ID,
   MAX_PLAYERS,
   MULTI_COUNTRY_ROUNDS,
@@ -63,7 +64,6 @@ function setupState(players) {
     teams: seats.map((seat) => ({ id: seat.teamId, hp: DEFAULT_CONFIG.initialHp })),
     round: 0,
     roundId: null,
-    locationOrder: [],
     locationCursor: 0,
     usedLocationIds: [],
     loaded: {},
@@ -104,7 +104,7 @@ function normalizeModeGuess(mode, value) {
 function nextLocation(state, advanceRound) {
   if (state.matchComplete) return { ...state, phase: "finished", deadline: null, finalDeadline: null };
   const cursor = state.locationCursor + 1;
-  const nextId = state.locationOrder[cursor];
+  const nextId = orderForMatch(state.matchId, state.config?.mode, state.config?.mapId)[cursor];
   if (!nextId) return { ...state, phase: "exhausted", deadline: null, finalDeadline: null };
   const round = advanceRound ? state.round + 1 : state.round;
   const retry = advanceRound ? 0 : (state.retry || 0) + 1;
@@ -460,7 +460,8 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
   const hostResolve = useCallback((roundId) => {
     const current = stateRef.current;
     if (!isHost || !canResolveRound(current, roundId)) return;
-    const target = LOCATION_BY_ID[current.locationOrder[current.locationCursor]];
+    const order = orderForMatch(current.matchId, current.config?.mode, current.config?.mapId);
+    const target = LOCATION_BY_ID[order[current.locationCursor]];
     if (!target) return;
     const seats = playingSeats(current);
     const solo = isSolo(current);
@@ -470,7 +471,7 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
       const countryScores = addCountryScores(current.countryScores, result.players);
       const mine = result.players[0];
       const streak = solo && mine?.correct ? current.streak + 1 : current.streak;
-      const lastLocation = current.locationCursor >= current.locationOrder.length - 1;
+      const lastLocation = current.locationCursor >= order.length - 1;
       const matchComplete = solo ? (!mine?.correct || lastLocation) : current.round >= MULTI_COUNTRY_ROUNDS;
       const winnerPlayerIds = matchComplete ? (solo ? [current.seats[0]?.id].filter(Boolean) : matchWinners(current.seats, countryScores)) : [];
       emitState({
@@ -559,7 +560,6 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
         round: 1,
         retry: 0,
         roundId: `${matchId}:1:0`,
-        locationOrder: order,
         locationCursor: 0,
         usedLocationIds: [order[0]],
         loaded: {}, answers: {}, firstConfirmedBy: null,
@@ -585,11 +585,23 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
       if (!guess || request.roundId !== current.roundId) return;
       const answers = { ...current.answers, [request.from]: { ...answer, proposal: guess, confirmed: guess, confirmedAt: now } };
       const first = current.firstConfirmedBy || request.from;
+      // Audit 2026-09-11 : en duel (exactement 2 joueurs actifs), la première
+      // validation arme toujours 10 s fixes pour l'autre, y compris en durée
+      // illimitée (current.deadline === null, où finalDeadline() renvoie
+      // sciemment null — voir sa garde). Les parties à 3+ gardent le
+      // comportement existant (finalSeconds configurable, toujours désarmé
+      // en illimité) : l'extension au-delà du duel reste hors scope.
+      const isDuel = eligible.length === 2;
+      const nextFinalDeadline = current.firstConfirmedBy
+        ? current.finalDeadline
+        : isDuel && current.deadline === null
+          ? now + DUEL_FINAL_SECONDS * 1000
+          : finalDeadline(now, current.deadline, isDuel ? DUEL_FINAL_SECONDS : current.config.finalSeconds);
       const next = {
         ...current,
         answers,
         firstConfirmedBy: first,
-        finalDeadline: current.firstConfirmedBy ? current.finalDeadline : finalDeadline(now, current.deadline, current.config.finalSeconds),
+        finalDeadline: nextFinalDeadline,
       };
       emitState(next);
       // Un joueur éliminé en Pinpoint reste spectateur et ne peut pas bloquer
@@ -715,7 +727,7 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
     if (state.seats.some((seat) => seat.id === me.id)) recordMatchResult(room.id, (state.winnerPlayerIds || []).includes(me.id));
   }, [state?.phase, state?.matchId, state?.winnerPlayerIds, me.id, room.id]);
 
-  const location = state ? LOCATION_BY_ID[state.locationOrder?.[state.locationCursor]] : null;
+  const location = state ? LOCATION_BY_ID[orderForMatch(state.matchId, state.config?.mode, state.config?.mapId)[state.locationCursor]] : null;
   const mode = modeOf(state);
   const solo = isSolo(state);
   const mySeat = state?.seats?.find((seat) => seat.id === me.id);
@@ -935,7 +947,7 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
           const scoreLabel = mode === "country" ? `${Number(state.countryScores?.[seat.id] || 0)} ${c.pointsShort}` : solo ? `${state.soloScore.toLocaleString()} / 25 000` : undefined;
           return <PlayerBadge key={seat.id} seat={seat} team={team} maxHp={state.config.initialHp} ready={preparing && !eliminated ? !!state.loaded?.[seat.id] : undefined} answered={!!state.answers?.[seat.id]?.confirmed} active={state.firstConfirmedBy === seat.id} scoreLabel={scoreLabel} eliminated={eliminated} color={SEAT_COLORS[index % SEAT_COLORS.length]} />;
         })}</div>
-        <div className="ot-round-clock"><small>{mode === "country" ? (solo ? `${c.streak} ${state.streak}` : `${c.round} ${state.round}/${MULTI_COUNTRY_ROUNDS}`) : `${c.round} ${state.round}${solo ? `/${SOLO_ROUNDS}` : ` · ×${multiplier.toLocaleString(lang === "en" ? "en-US" : "fr-FR")}`}`}</small><strong className={state.finalDeadline ? "urgent" : ""}>{state.phase === "playing" ? (isUnlimitedRound(state.config) ? "∞" : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`) : "—:—"}</strong></div>
+        <div className="ot-round-clock"><small>{mode === "country" ? (solo ? `${c.streak} ${state.streak}` : `${c.round} ${state.round}/${MULTI_COUNTRY_ROUNDS}`) : `${c.round} ${state.round}${solo ? `/${SOLO_ROUNDS}` : ` · ×${multiplier.toLocaleString(lang === "en" ? "en-US" : "fr-FR")}`}`}</small><strong className={state.finalDeadline ? "urgent" : ""}>{state.phase === "playing" ? (isUnlimitedRound(state.config) && !state.finalDeadline ? "∞" : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`) : "—:—"}</strong></div>
       </header>
 
       {/* Toujours monté, jamais démonté/remonté (2026-09-06, retour de
