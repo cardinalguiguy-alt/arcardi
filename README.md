@@ -1,5 +1,15 @@
 # ARCARDI 🎪
 
+> **AUDIT 2026-09-11 — OÙ'S THAT : JOUABILITÉ ET FLUIDITÉ.**
+>
+> Comparaison documentée avec GeoGuessr, lecture du jeu et vérification à deux
+> clients locaux : carte qui recouvre ses commandes, état Australie dépassant
+> la taille d'un broadcast Free, délai final désactivé en illimité, rythme et
+> lisibilité à revoir. Les 10 secondes demandées et la direction typographique
+> Arcardi sont cadrées dans [le README du jeu](components/ousthat/README.md).
+> Aucune correction de gameplay livrée ; panoramas réels non validés dans cette
+> session. Aucun changement Supabase.
+
 > **LIVRAISON 2026-08-27 — UNE SOIRÉE POUR LES SEPT SŒURS, ET LE LUDO SE JOUE ENFIN SEUL.**
 >
 > La suite de la quête de l'étoile a désormais un **dossier de conception**, pas une chaîne de

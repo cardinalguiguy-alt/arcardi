@@ -7,77 +7,28 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-⚠️⚠️⚠️ **CE BLOC DÉSIGNE UNE SEULE ACTION SUIVANTE. IL SE REMPLACE, IL NE
-S'EMPILE PAS.**
+### ACTION SUIVANTE — CADRER LA PREMIÈRE PASSE OÙ'S THAT À PARTIR DE SON AUDIT
 
-### 🔴 ACTION SUIVANTE — GUILLAUME JOUE UNE VRAIE SÉANCE : COMPAGNE, PLAQUE, RAPPEL, PUIS LE MAIRE
+**Non fait :** aucune correction de gameplay ni refonte graphique livrée. Guillaume demande
+une interface plus accueillante, des polices moins génériques et un duel où la première
+validation donne **10 secondes** à l'autre joueur. L'audit et l'ordre de correction sont dans
+`components/ousthat/README.md`, section « Audit comparatif du 2026-09-11 ».
 
-**Livraison du 2026-09-07, seconde passe du jour (Claude seul, sur demande directe : « je veux
-qu'on finisse la quête… surprends-moi », plus un reproche précis sur le rappel de reprise).**
-Trois chantiers, tous vérifiés par les bancs et regardés à l'écran, aucun encore jugé en vraie
-séance :
+**À traiter d'abord :** géométrie de la carte de réponse, volume des états multijoueurs sur
+les grandes cartes, puis compte à rebours même en durée illimitée. Les choix graphiques
+structurants restent à valider (§2). Aucune manipulation Supabase nécessaire pour cet audit.
+Les limites de vérification (panoramas non chargés, manches artificiellement préparées) sont
+consignées avec les résultats dans le document du module, pas assimilées à une vraie partie.
 
-1. **Le rappel de reprise n'est plus une modale.** Reproche mot pour mot : *« l'overlay de reprise
-   de quête est un peu envahissant, il est pas fluide et en plus il est très autoritaire. »* Il
-   vivait dans `.ferme-modal` (fond noir à 45 %, mouvement gelé via `starUiOpenRef`, clic
-   obligatoire). Il est maintenant une carte flottante (`ferme-star-recap`, `FermeGame.js`/
-   `globals.css`) qui PARTAGE la chorégraphie du ruban de jalon (`animation-name:fermeStarRibbon`,
-   jamais une seconde course), s'efface toute seule après `STAR_RECAP_MS` (9 s), et ne bloque plus
-   rien — `starRecap` est sorti de `starUiOpenRef`. Testé à l'écran (état forcé temporairement,
-   retiré après) : mouvement possible pendant l'affichage, fermeture au ✕ propre, aucune erreur.
-2. **La plaque du chantier naval, l'idée qui restait dans `QUETE.md` §12.2 (« 0 bis »).** `E` près
-   de la cale nomme les cinq pièces (`L.star.plan.part`, jointure avec la table déjà existante) et
-   ne donne rien (§4). Testé à l'écran (état forcé), fermeture propre.
-3. **Le dessin de la compagne, `QUETE.md` §12.3 — cinq écritures, enfin juste.** Ton arbitrage
-   suivi au mot : masques dessinés à la main sur l'état CALME seulement (`starWispCalmMask`,
-   `fermeArt.js`), géométrie inchangée pour les états 1/2 et la reine. La cause du blob était
-   identifiée depuis longtemps (*« un cerne d'un pixel impose une échancrure d'au moins trois
-   pixels »*) ; la parade est un cerne à 4 voisins SEULEMENT (jamais les diagonales, qui
-   rebouchaient les échancrures). La discrète (`shy`) partage le masque, décalée pour rester au
-   même corps que la nue — sinon le banc de son déguisement mesurait un changement de silhouette
-   au lieu du seul chapeau. ⚠️ Trouvaille en cours de route : la moitié restante du §12.3 (cerne
-   clair pour l'état ÉTEINT, « vu dans le beffroi ») s'appuyait sur un lieu supprimé depuis le
-   déchant du 469 — non retouchée, le défaut cité ne se reproduit pas dans son vrai contexte actuel
-   (la reine sur l'herbe). `QUETE.md` §12.3 tient le détail.
-
-**Vérifié, et comment :** `node tools/render-etoile.mjs` (tous les contrôles, y compris les deux
-seuils déjà en place sur la compagne — hauteur d'encre, matière relative à la reine — mesurés à
-chaque réglage) · `node tools/verify-quete.mjs` **792/792** · `node tools/verify-strings.mjs`
-(1126 clés, la plaque ajoute deux clés hors de ce compte comme toujours pour la quête, voir la
-note de `tools/README.md`) · `npx next build` vert (seul `G_SOIL`, préexistant) ·
-`node --check` sur les deux fichiers modifiés. **Regardé à l'écran** : planche complète
-(`tools/out/etoile-planche.png`), les quatre poses calmes zoomées à côté d'un fermier pour
-l'échelle, le rendu de la discrète déguisée, et les trois panneaux ouverts en direct
-(`fake-supabase.mjs` + page jetable, supprimée après chaque test).
-
-**Non vérifié :** aucune vraie séance de jeu n'a jugé si le nouveau rappel est *agréable* (pas
-seulement non bloquant), si la plaque se découvre naturellement, ni si la compagne « lit étoile »
-pour quelqu'un qui ne sait pas qu'elle vient d'être retouchée — un banc mesure la forme, jamais le
-plaisir (§13 de ce fichier). Et **le préalable de P1 reste entier** : personne n'a encore mené une
-audience du maire jusqu'à la signature en conditions réelles depuis le correctif du menu dev du
-matin (voir passif ci-dessous) — le chantier naval qui suit n'a donc toujours pas été rejoué pour
-de vrai.
-
-**Action suivante, pour Guillaume :** une vraie séance — reprendre la ferme (le nouveau rappel
-apparaîtra), aller voir la compagne et la plaque du chantier, puis pousser jusqu'à l'audience du
-maire et la signer. C'est le même geste qui règle les deux non-vérifiés à la fois.
-
-### PASSIF FERME VALLÉE
-
-L'ordre ancien reste, mais n'est plus l'action courante :
-1. **P1, Guillaume + Claude** — trancher sur le papier la bifurcation bateau / pluie d'astéroïdes
-   après avoir joué les actes tardifs. Le menu dev le permet depuis le 2026-09-07 matin (P1 bis,
-   `QUETE.md` §12.2 « A moins un ») ; reste à le faire pour de vrai, jusqu'à la signature du maire.
-2. **P2, séance Guillaume à deux clients** — ferme peuplée, lot E complet, pêche en ville/lac,
-   relais du plat et deux bords du cratère.
-3. **P3, Claude seul** — recompter les canevas, implémenter createLinearGradient dans le
-   rastériseur, remettre render-eau/render-parc au vert puis rendre WAT_RAMP mesurable.
-4. **P4, deux livraisons visuelles séparées** — sol de ferme 4×4 qui boucle, puis arbres.
-5. **P5 social après P2** — relations évolutives, réconciliation, mariage.
-6. **P6 contenu après décisions** — transport du bois, poissons rares/requins, commissions,
-   cadastre/notaire, coiffeur. **P7 réserve** — visiteurs célèbres après décision de droit à l'image.
+**Réserve ferme, indépendante de cette action :** le rappel de reprise non bloquant, la plaque
+du chantier et les poses calmes de la compagne sont livrés ; leur agrément reste à juger en
+vraie séance. L'audience du maire jusqu'à la signature doit encore être rejouée avant le
+recentrage bateau / astéroïdes (`components/ferme/QUETE.md` §12.2–12.3). Restent ensuite la
+séance à deux (ferme peuplée, relais du plat, deux bords du cratère), les bancs eau/parc,
+le sol puis les arbres en livraisons distinctes. Les décisions sociales dépendent de la séance.
 
 ---
+
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
 
 **Une soirée de jeu entre amis, à deux ou trois, qui donne envie d'y revenir.** Arcardi n'est
@@ -1226,17 +1177,6 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
   de la plateforme n'ont pas été audités au doigt. Certains ont déjà des `pointer*` (puzzle,
   naval, yahtzee), d'autres non — **personne ne sait lesquels**, et c'est exactement l'angle
   mort qui a laissé la ferme injouable pendant des années.
-- ⚠️⚠️ **LE VOYAGE EST-IL DEVENU UNE CORVÉE ?** (431, à jouer, c'est la question de ce zip.)
-  Vendre exige maintenant de prendre le train : c'est ce qui donne son sens à la ville, mais
-  personne ne l'a encore vécu sur une soirée entière. Deux réglages existent si c'est pénible —
-  élargir la portée du marché, ou raccourcir le trajet — et **aucun ne doit être touché avant
-  d'avoir joué**. On a délibérément conservé la prime de cours (jusqu'à +35 %) comme
-  contrepartie : le voyage doit PAYER, pas seulement coûter.
-  ⚠️ **ET IL Y A DÉSORMAIS UNE SECONDE RAISON D'Y ALLER, QUI N'EST PAS DE L'ARGENT** : la quête
-  de l'étoile fait faire l'aller-retour (le sillon est à la ferme, tout le reste est en ville), et
-  depuis le 451 **le NAVIRE donne une raison de revenir voir** — il grandit sur le quai du lac à
-  chaque morceau rapporté. Si le voyage cesse d'être une corvée, ce sera peut-être pour cette
-  raison-là plutôt que par un réglage — à juger en jouant, comme prévu.
 - ⚠️ **LE PAIN DES PIGEONS EST GRATUIT (433) — ARBITRAGE TOUJOURS À TRANCHER**, mais la scène
   MARCHE depuis le 439 (assis, treize pigeons viennent manger ; se lever en fait partir dix sur
   quatorze). L'objection « un joueur qui appuie sans rien voir se passer croit que la touche est
@@ -1331,8 +1271,8 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
       pourrissait. **La passe suivante commence par la MESURE, jamais par la liste héritée.**
 
    ⚠️⚠️ **L'ORDRE OUVERT, CORRIGÉ LE 2026-09-05 : RELIRE `components/ferme/QUETE.md` CONTRE LE
-   CODE** — le détail est déjà diagnostiqué au **P0 du bloc ⏭️ REPRISE**, il n'est pas à
-   rechercher. ⚠️ **La grandeur à mesurer en premier est celle qui a payé trois fois** (453 sur le
+   CODE**, en mesurant les divergences actuelles ; ce chantier est indépendant de l’audit
+   Où's that. ⚠️ **La grandeur à mesurer en premier est celle qui a payé trois fois** (453 sur le
    document, 456 sur le code, 458 sur la coopération) : *chaque chose que le document dit visible à
    l'écran a-t-elle un chemin de code qui l'affiche ?* — et son corollaire de 2026-09-05, qui a
    sorti trois postes de jeu fantômes et trois constantes mortes : *chaque chose que le document

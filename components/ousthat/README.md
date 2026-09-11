@@ -4,6 +4,81 @@ Jeu de géolocalisation Arcardi jouable seul ou de 2 à 8 joueurs. Tous les
 clients reçoivent le même panorama Google Street View ; l'hôte arbitre les
 réponses, les changements de manche et la fin de partie.
 
+## Audit comparatif du 2026-09-11 — avant corrections
+
+**Non livré :** aucune correction de gameplay ni refonte graphique. Cet audit
+cherche les écarts de jouabilité, fluidité et lisibilité pour une soirée à
+deux. Les **10 secondes** sont demandées par Guillaume ; les autres changements
+ci-dessous sont des propositions à cadrer, pas des décisions actées.
+
+**Vérifié :** `node tools/verify-ousthat.mjs` : **105/105**. Écrans examinés à
+1280 × 720, deux clients sur le relais Supabase local. Street View est resté
+vide dans le navigateur d'audit : son chargement réel et sa navigation ne
+sont pas validés. Les échanges et le chrono ont donc été joués sur deux
+manches préparées artificiellement, l'une illimitée, l'autre de 120 s.
+La page temporaire a été supprimée. Pas de test tactile physique ni de
+session GeoGuessr jouée ; comparaison avec ses sources officielles.
+
+### Les écarts, par priorité
+
+| Priorité | Écart constaté | Effet pour le joueur et correction proposée |
+|---|---|---|
+| P0 | **La carte recouvre ses commandes**, reproduit à l'écran. React remplace la classe ajoutée par MapLibre par `ot-map-canvas ready` (`GuessMap.js`, rendu final). Le conteneur perd `maplibregl-map` et son positionnement relatif. | La carte remonte sur son en-tête et l'attribution gêne la confirmation. Mesuré : en-tête à y=347, zone de carte à y=399, dessin remontant sur l'en-tête. Conserver explicitement la classe du conteneur et vérifier les limites de chaque zone à l'écran. |
+| P0 | **L'état Australie dépasse la taille d'un broadcast Free.** Les seuls 30 167 identifiants dans `locationOrder` pèsent **533 008 octets** en JSON (Beautiful World : 15 473). `emitState` transmet la liste entière ; `saveHostOnly` la sauvegarde à chaque proposition. | Risque de partie qui avance chez l'hôte sans suivre chez l'invité. La limite Supabase Free documentée est **256 KB**. Dépassement mesuré, refus non reproduit en production : le relais local n'applique pas cette limite. Transmettre graine/curseur ou sélection bornée et mesurer le message complet, sans changer d'abonnement. |
+| P1 | **Le duel illimité désactive le délai après réponse.** `finalSeconds` vaut 15 et `finalDeadline(..., null, ...)` retourne `null`. Reproduit à deux : l'invité reste à ∞ après confirmation de l'hôte. | La réponse rapide ne met aucune pression. En durée limitée, le délai puis la révélation fonctionnent. Cible demandée : **10 s même sans chrono initial**. Modifier ensemble règle, affichage ∞, texte du réglage et tests : plusieurs tests exigent aujourd'hui le comportement contraire. |
+| P1 | **Le rythme s'interrompt à chaque tour.** Chargement puis **2,5 s de stabilisation + 3 s de décompte** ; après le résultat, l'hôte seul peut relancer. La carte de réponse est démontée, une autre créée pour le résultat, puis encore une au tour suivant. | Attente répétée, pas de signal « prêt » de l'invité, taille/ouverture réinitialisées. Conserver la carte et ses préférences, préparer le prochain tour pendant le résultat, prévoir une transition commune avec pause. Les 5,5 s sont un coût programmé, pas un chargement réel mesuré ; ne pas les supprimer à l'aveugle. |
+| P1 | **Urgence et résultats peu personnels.** Alerte de 9 px en bas : « Un joueur a répondu : délai final déclenché. ». Aucun son dédié. Les deux joueurs sont à gauche, le chrono à droite. La révélation dit « Dégâts maximum » ; repliée, elle prend le score du premier siège, même chez l'invité. | Mettre les adversaires face à face, le chrono au centre, « Robin a joué — 10 s », un son discret réglable. Montrer qui perd les PV et combien ; la pastille repliée doit garder MON résultat. Les barres animées existent déjà et sont à conserver. |
+| P1 | **L'interface ressemble à un tableau de réglages.** Space Mono partout, aides de 8–11 px, nombreux cadres, réglages avancés exposés dès l'entrée. À 1280 × 720, « Lancer la partie » est sous le pli. | Prioriser mode/carte/Jouer et ranger les multiplicateurs dans un volet. Retrouver la typographie et la chaleur du salon ; retirer de l'écran de jeu le texte technique sur l'iframe et les coordonnées à cinq décimales. |
+| P1 | **Le signalement peut rester sans effet.** Pendant `playing`, `canVoidLocation` compare `now <= currentLimit(current)` : en illimité c'est `now <= null`, donc faux. Après une confirmation, la requête est également refusée alors que le bouton reste affiché. | Rendre les actions disponibles cohérentes avec les règles et annoncer les refus. L'événement `onLoad` ne prouve pas un panorama exploitable ; le délai de 18 s ne couvre que son absence. La panne locale observée ne prouve pas une panne du jeu déployé. |
+| P2 | **Exploration et relecture limitées.** Pas de modes de déplacement explicites, ni retour au départ Arcardi, ni historique détaillé de duel (`history` n'est alimenté qu'en solo Pinpoint ou en Pays). La carte commence toujours sur `[4,18]`, zoom 1,6, même en Australie. | Commencer par cadrer la carte sélectionnée et permettre la relecture des manches. Étudier séparément les contrôles de caméra : une iframe Maps Embed ne donne pas le pilotage complet du panorama. Ne pas promettre une parité avec Moving/No Move/NMPZ par simple CSS. |
+
+### Contrat proposé pour les 10 secondes
+
+- En 1VS1, la **première validation**, pas le simple placement du marqueur,
+  lance 10 secondes pour l'autre joueur, y compris en durée initiale illimitée.
+- S'il reste moins de 10 s sur le chrono initial, conserver la fin la plus proche.
+- La deuxième validation termine immédiatement la manche. À expiration, le
+  dernier marqueur proposé compte ; sans marqueur, le score est nul.
+- Un doublon ou une reconnexion ne doit jamais réarmer le délai. L'hôte
+  arbitre ; l'invité reconstruit une durée restante à la réception.
+- Vérifier les deux sens (hôte puis invité, invité puis hôte), l'expiration,
+  la validation simultanée, les réponses tardives et la reconnexion avec latence.
+- La demande vise le 1VS1 ; l'extension à 3+ et aux finales à deux d'une partie
+  commencée à plusieurs reste à cadrer.
+
+### Proposition graphique Arcardi
+
+**Bungee pour le titre, Outfit pour lire et agir**, chiffres tabulaires pour
+le chrono. Ces polices existent déjà dans le salon : aucune nouvelle police
+n'est nécessaire pour la première passe. Textes usuels autour de 14–16 px,
+labels secondaires autour de 12–13 px, à juger en situation. Moins de
+majuscules, de lueurs et de panneaux imbriqués ; crème, ambre, mascottes et
+cyan en accent. Garder le panorama dominant. Livrer la typographie puis la
+composition séparément, conformément à CLAUDE.md §2.
+
+**Ordre proposé :** géométrie de carte et états réseau → règle des 10 s et
+retour clair → typographie → transitions et composition. À cadrer avant la
+refonte : palette sombre actuelle ou plus proche du salon, enchaînement
+automatique avec pause ou accord « prêts ». Le choix des 10 s est déjà exprimé.
+
+### Sources et limites de la comparaison
+
+Le support GeoGuessr indique **15 secondes** après le guess adverse : les
+**10 secondes** sont ici un réglage Arcardi avec le même principe de pression.
+[Support GeoGuessr](https://geoguessr.freshdesk.com/support/solutions/articles/206000056716-troubleshooting-for-common-issues).
+GeoGuessr décrit un flash d'urgence en Party Duels, le détail des dégâts et
+la relecture des positions. Ses multiplicateurs ont évolué ; copier son
+ancien barème n'est pas un préalable à améliorer notre fluidité.
+[Notes officielles du 17 avril 2026](https://geoguessr.canny.io/changelog/patch-notes-17th-april-2026).
+Moving, No Move et NMPZ sont listés dans le
+[guide officiel du jeu classé](https://www.geoguessr.support/support/solutions/articles/206000056733-a-guide-to-geoguessr-s-ranked-play).
+Les limites techniques viennent des documentations
+[Supabase Realtime](https://supabase.com/docs/guides/realtime/limits) et
+[Google Maps Embed](https://developers.google.com/maps/documentation/embed/embedding-map#streetview_mode).
+
+Aucune manipulation Supabase effectuée. Les corrections prioritaires proposées
+ne demandent ni changement de schéma, ni nouvelle API, ni abonnement payant.
+
 ## Parcours de jeu
 
 - **Solo — Country Streak** : trouver le pays jusqu'à la première erreur.
@@ -22,18 +97,19 @@ réponses, les changements de manche et la fin de partie.
   encore en vie gagne.
 
 Le dernier choix proposé compte à l'expiration même s'il n'a pas été confirmé.
-Une confirmation est définitive. En multi, la première confirmation raccourcit
-l'échéance sans jamais la rallonger.
+Une confirmation est définitive. En multi à durée limitée, la première
+confirmation raccourcit l'échéance sans jamais la rallonger. En illimité, le
+délai final reste actuellement désactivé (voir l'audit ci-dessus).
 
-L'hôte règle la durée de chaque manche entre 20 et 300 secondes, en solo comme
-en multi. Cette valeur est validée par les règles puis transformée en échéance
-par l'hôte ; les invités ne comparent jamais directement leurs horloges.
+L'hôte règle la durée entre 20 et 300 secondes ou choisit Illimité (valeur 0),
+en solo comme en multi. Une durée limitée devient une échéance côté hôte ;
+les invités ne comparent jamais directement leurs horloges.
 
 ## Cartes (2026-09-06)
 
 Le tirage des lieux se fait dans une **carte** choisie à l'écran de réglages
-(les deux modes, Pays et Pinpoint, s'y réfèrent). Une seule à ce jour,
-**Beautiful World**, qui couvre tout le stock historique (1 551 lieux) — voir
+(les deux modes, Pays et Pinpoint, s'y réfèrent). Deux cartes sont présentes :
+**Beautiful World** (1 551 lieux) et **Australie** (30 167 lieux) — voir
 `maps.js` pour le registre et `locationOrder(seed, mode, mapId)`
 (`locations.js`) pour le tirage borné à la carte choisie.
 
