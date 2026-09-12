@@ -6880,303 +6880,162 @@ export function buildSprites() {
     return p ? p[0][1] : null;
   }
   /* ╔═════════════════════════════════════════════════════════════════════════════
-     ║ 2026-09-07 — LA COMPAGNE, ÉTAT CALME : UN MASQUE DESSINÉ À LA MAIN.
+     ║ 2026-09-12 — LA COMPAGNE REDESSINÉE : UN SEUL POLYGONE CHANFREINÉ, POUR LES
+     ║ TROIS ÉTATS ET LA REINE À LA FOIS.
      ╚═════════════════════════════════════════════════════════════════════════════
-     ⚠️⚠️⚠️ CE QUE `QUETE.md` §12.3 APPELAIT « LE POINT QUI N'A PAS CONVERGÉ »,
-     AVEC L'ARBITRAGE DE GUILLAUME : *« la direction 2, mais seulement sur
-     l'état CALME, en gardant la géométrie pour les deux autres, vus deux fois
-     chacun dans toute la quête. On paie le dessin là où le joueur regarde. »*
-     Le polygone à cinq branches (juste au-dessus, toujours en place pour les
-     états 1/2 et pour la reine) rebouchait ses échancrures à la dilatation du
-     cerne — cinq écritures l'ont montré, la dernière avec le diagnostic exact :
-     *un cerne d'un pixel impose une profondeur d'échancrure d'au moins trois
-     pixels*, et le rayon intérieur qui aurait pu creuser assez profond faisait
-     flotter les pointes en îlots séparés du corps.
-     ⚠️ LA PARADE ICI N'EST PAS GÉOMÉTRIQUE, ELLE EST DESSINÉE : cinq pointes
-     RECTANGULAIRES qui RÉTRÉCISSENT par paliers vers leur pointe (jamais un
-     seul rectangle large — c'est ce qui donne une vraie pointe et pas un doigt
-     carré), toujours SOUDÉES au noyau. Le cerne se calcule ensuite par
-     voisinage à 4 (haut/bas/gauche/droite SEULEMENT, jamais les diagonales) :
-     une dilatation à 8 voisins comblerait une échancrure en diagonale
-     exactement comme le faisait le polygone — c'est la cause exacte du défaut,
-     corrigée à la source plutôt que compensée par un réglage.
-     ⚠️ QUATRE POSES, QUATRE LONGUEURS PAR POINTE — jamais deux identiques
-     (même leçon que le polygone : une paire de poses qui se ressemble trop ne
-     se distingue plus une fois rastérisée). Vérifié à l'œil sur herbe ET sur
-     fond sombre avant d'être câblé ici (`tools/out/etoile-planche.png` après
-     ce zip).
-     ⚠️ SCOPÉ AUX PETITES COMPAGNES, ÉTAT CALME UNIQUEMENT (`!queen && !shy &&
-     state === 0`) — la reine (28 px, plus de marge par pixel) et la discrète
-     déguisée (canevas plus haut) restent sur la géométrie existante, jamais
-     retouchées : c'est exactement la portée que Guillaume a demandée, ni plus
-     ni moins. Les états 1 (apeurée) et 2 (elle attend) gardent eux aussi le
-     polygone — vus deux fois chacun dans toute la quête, le prix d'un second
-     masque n'en valait pas la peine (son propre arbitrage). */
-  const STAR_WISP_CALM_CORE = [[7, 7, 3, 3], [7, 9, 4, 1], [8, 6, 2, 1], [8, 10, 2, 1]];
-  const STAR_WISP_CALM_POINTS = {
-    up:    [[8, 5, 3, 2], [8, 3, 2, 2], [9, 2, 1, 1]],
-    right: [[10, 7, 2, 2], [12, 7, 2, 2], [14, 8, 1, 1]],
-    dr:    [[10, 11, 3, 2], [12, 13, 1, 1]],
-    dl:    [[4, 11, 3, 2], [5, 13, 1, 1]],
-    left:  [[5, 8, 2, 2], [3, 8, 2, 2], [1, 9, 1, 1]],
-  };
-  /* ⚠️ POSE 0 EST CELLE QUE LES BANCS MESURENT SEULE (`S.starWisp[0][0]`) : sa
-     hauteur d'encre et sa matière doivent tenir sous les seuils écrits pour la
-     petite compagne (10-15 px, moins de la moitié de la matière de la reine) —
-     mesuré, pas deviné, avec `tools/render-etoile.mjs` à chaque réglage. */
-  const STAR_WISP_CALM_POSES = [
-    { up: 1, right: 1, dr: 1, dl: 2, left: 1 },
-    { up: 2, right: 1, dr: 1, dl: 1, left: 1 },
-    { up: 1, right: 2, dr: 2, dl: 1, left: 1 },
-    { up: 1, right: 1, dr: 1, dl: 1, left: 2 },
-  ];
-  function starWispCalmMask(pose) {
-    const S2 = 18;
-    const m = Array.from({ length: S2 }, () => new Array(S2).fill(false));
-    const put = (x, y, w, h) => {
-      for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++)
-        if (y + dy >= 0 && y + dy < S2 && x + dx >= 0 && x + dx < S2) m[y + dy][x + dx] = true;
-    };
-    for (const r of STAR_WISP_CALM_CORE) put(...r);
-    const lens = STAR_WISP_CALM_POSES[pose & 3];
-    for (const key of Object.keys(STAR_WISP_CALM_POINTS)) {
-      const segs = STAR_WISP_CALM_POINTS[key];
-      const n = Math.max(1, Math.min(segs.length, lens[key]));
-      for (let i = 0; i < n; i++) put(...segs[i]);
-    }
-    return m;
-  }
+     Guillaume, en jeu : « ça ne ressemble plus du tout à une étoile ». Vrai des
+     DEUX dessins qui coexistaient : le polygone à rayon intérieur 0,44 (états
+     1/2, la reine) ET le masque calme du 07/09 (`QUETE.md` §12.3, direction 2,
+     scopée au seul état calme) se lisaient comme une masse à bosses. Demande
+     explicite, portée aux trois états et à la reine cette fois : cinq branches,
+     dodues et mignonnes, façon Mario Party.
+     ⚠️⚠️⚠️ CE QUE CINQ ÉCRITURES AVAIENT MANQUÉ N'ÉTAIT PAS LE RAYON, C'ÉTAIT LE
+     COIN. Le cerne par dilatation rebouche toute échancrure de moins de trois
+     pixels (§4 de CLAUDE.md) quel que soit le rayon intérieur choisi — et une
+     pointe qui finit en angle VIF concentre toute sa matière sur UN pixel à son
+     extrémité, donc l'échancrure qui la sépare de sa voisine se resserre à rien
+     exactement là où l'œil la cherche. **CHANFREINER LA POINTE** (deux sommets
+     serrés de part et d'autre plutôt qu'un seul) lui laisse un dernier tronçon
+     large de deux-trois pixels : l'échancrure voisine en hérite, et le cerne
+     cesse de la reboucher. Testé aux DEUX tailles déjà en place (18 et 28 px,
+     aucune n'a grandi) avant d'y croire — voir `tools/out/etoile-planche.png`.
+     ⚠️ CINQ BRANCHES ÉGALES PAR IMAGE, PLUS DE LONGUEURS ORGANIQUES INÉGALES :
+     la demande insiste sur la propreté, la vie vient d'ailleurs — un souffle
+     d'ensemble resserré (quatre poses, jamais deux identiques, §8), et surtout
+     le `bob` et le pouls du halo déjà CONTINUS dans `FermeGame.js`
+     (`drawStarWisp`), qu'il n'y a pas eu besoin de toucher : leur seul défaut
+     hérité était l'amplitude du souffle sous-jacent (±12 à 30 % d'une pose à
+     l'autre, un vrai à-coup toutes les 250 ms), pas leur continuité.
+     ⚠️ LE MASQUE DESSINÉ À LA MAIN DU 07/09 (`starWispCalmMask` et ses trois
+     tables) DISPARAÎT AVEC CE ZIP : il ne couvrait qu'un état sur trois, et ce
+     dessin les couvre maintenant tous les trois d'un coup — le garder à côté
+     n'aurait plus rien protégé. */
   function starWispSprite(pose, state, color, queen, shy) {
-    /* ⚠️⚠️⚠️ QUATRIÈME ÉCRITURE, ET C'EST UN CHANGEMENT DE CONSTRUCTION, PAS UN
-       RÉGLAGE DE PLUS. Les trois premières tentatives ont produit, dans l'ordre :
-       une ICÔNE de scintillement (quatre branches sur les axes), un BISCUIT À
-       VISAGE (corps trop gros, rayons en bosses), puis une AMIBE (rayons décrits
-       par un champ de distance qui les fait fondre dans le corps). Chaque fois,
-       tous les contrôles du banc passaient.
-
-       ⚠️ LA LEÇON EST DANS L'OUTIL, PAS DANS LES NOMBRES : **un champ de
-       distance ne sait pas faire une pointe à quatorze pixels.** Il fait des
-       masses molles — ce qui est exactement ce qu'on veut pour le cratère, neuf
-       cases de large et organique, et exactement ce qu'on ne veut pas pour un
-       personnage de la taille d'une main. Une pointe, c'est deux ARÊTES DROITES
-       qui se rencontrent ; ça se décrit par un POLYGONE, et on le rastérise.
-       C'est la même famille de leçon que « une courbe f(x) ne peut pas se
-       replier » (437) : l'outil décide de ce qu'on peut dessiner.
-
-       Ici : un polygone à cinq branches (dix sommets, rayon extérieur et rayon
-       intérieur), donc des arêtes franches et des pointes qui finissent sur un
-       pixel. Cinq est premier : la silhouette ne peut pas se replier sur une
-       symétrie et redevenir un pictogramme. Les cinq rayons ont des longueurs
-       INÉGALES qui changent avec la pose — c'est la respiration. */
-    /* 465 — la reine possède sa propre trame 28 × 28. L'ancienne version
-       agrandissait le 18 × 18 des petites à ×1,58 : même silhouette à l'écran,
-       mais chaque pixel devenait un gros carré et aucune matière nouvelle ne
-       pouvait apparaître. Ici la taille écran reste la même, la définition non. */
+    /* 465 — la reine garde sa propre trame 28 × 28, taille écran inchangée. */
     const S = queen ? 28 : 18;
-    /* ╔══════════════════════════════════════════════════════════════════════════
-       ║ 2026-09-02 (lot A2) — LE CANEVAS GRANDIT POUR LE CHAPEAU, PAS L'INVERSE.
-       ╚══════════════════════════════════════════════════════════════════════════
-       ⚠️⚠️ C'EST LE PIÈGE LE PLUS RÉPÉTITIF DU DÉPÔT (§4, payé TROIS fois dans le
-       seul zip 433) : un canevas découpe en silence ce qui dépasse, le dessin reste
-       joli, et il manque deux rangées que personne ne cherche. La pointe haute de
-       l'étoile touche DÉJÀ le bord à cy = 9,5 — un chapeau posé au-dessus serait
-       arrivé décapité, sans une erreur.
-       ⚠️ ET LE DÉCALAGE EST CALCULÉ POUR QUE LE CORPS NE BOUGE PAS D'UN PIXEL À
-       L'ÉCRAN : le blit est centré sur le canevas (`cx - im.width / 2`, voir
-       `drawStarWisp`), donc il faut que le corps garde le même écart au CENTRE du
-       canevas. 18×18 avec cy = 9,5 met le corps un demi-pixel sous le centre ;
-       18×24 avec cy = 12,5 fait exactement pareil. Les quatre rangées gagnées sont
-       toutes en haut, là où le chapeau les demande. */
+    /* ⚠️ Le canevas grandit pour le chapeau, pas l'inverse (§4, piège n°1,
+       payé trois fois au 433) : la discrète gagne quatre rangées EN HAUT, où
+       le chapeau les demande, sans que le corps ne bouge d'un pixel à l'écran
+       (le blit reste centré sur le canevas, voir `drawStarWisp`). */
     const SH = shy ? 24 : S;
     const [c, g] = cv(S, SH);
     const pal = STAR_WISP_PAL[color || "yellow"] || null;
     const [CORE, BODY, EDGE, RIM, HALO] = pal[state];
-    const cx = queen ? 14 : 9, cy = queen ? 14.5 : (shy ? 12.5 : 9.5);   // ⚠️ décalé d'un demi-pixel vers le bas : à cy = 9 la pointe haute touchait le bord du canevas, donc elle était rabotée en silence (piège n°1, 433) — et de quatre de plus pour la discrète, voir la note de `SH`
-    /* ⚠️ LE RAYON INTÉRIEUR EST CE QUI DÉCIDE DE TOUT. Trop petit, l'étoile est
-       une croix maigre et il n'y a plus de place pour un visage ; trop grand,
-       les pointes disparaissent et on retombe sur le biscuit. À 0,44 du rayon
-       extérieur, le cœur fait six pixels de large — juste assez pour deux yeux —
-       et les branches restent des branches. */
-    /* ⚠️⚠️⚠️ ET VOICI LE VRAI COUPABLE DES QUATRE JETS PRÉCÉDENTS : **LE CERNE
-       PAR DILATATION REBOUCHE LES ÉCHANCRURES.** À rayon intérieur 0,44, les
-       creux entre deux branches faisaient deux pixels de profondeur ; le cerne
-       ajoute un pixel DE CHAQUE CÔTÉ, donc il les comblait entièrement, et la
-       silhouette rendue était un BLOB — quelles que soient les longueurs de
-       branches, ce qui explique aussi pourquoi deux poses sortaient identiques
-       au pixel près. Le dessin était juste, son contour le mangeait.
-       ⚠️⚠️ ET LA PARADE ESSAYÉE — creuser plus fort (rayon intérieur 0,32) — A
-       ÉCHOUÉ AUTREMENT : les échancrures apparaissent, mais le cœur tombe à
-       quatre pixels de large, le visage n'y tient plus, et le banc voit des
-       ÎLOTS FLOTTANTS à 4,6 % (les pointes se détachent du corps). C'est la
-       cinquième tentative sur ce seul dessin, et la règle du chantier
-       s'applique : **on s'arrête et on documente au lieu de boucler seul.**
-       ⚠️ ÉTAT LIVRÉ : le rayon intérieur reste à 0,44. La silhouette est une
-       masse ronde à cinq bosses molles avec un visage — une petite créature de
-       lumière, lisible et attachante, mais qui ne lit PAS « étoile » d'emblée.
-       Tous les contrôles passent. Ce qui reste à trancher est décrit dans
-       `components/ferme/QUETE.md` §12, avec deux directions chiffrées.
-       ⚠️ LA CONTRAINTE DE FOND, ET ELLE EST GÉNÉRALE : *un cerne d'un pixel
-       impose une profondeur d'échancrure d'au moins trois pixels.* En dessous,
-       le contour rebouche la forme qu'il est censé souligner. C'est vrai de
-       toute dentelure à cette échelle, pas seulement d'une étoile. */
+    const cx = queen ? 14 : 9, cy = queen ? 14.5 : (shy ? 12.5 : 9.5);
     const rot = -Math.PI / 2 + 0.22;                  // une pointe en haut, légèrement penchée
-    /* ⚠️⚠️ LE SOUFFLE PORTE SUR LE RAYON D'ENSEMBLE, ET C'EST LA CONSÉQUENCE
-       DIRECTE DU DÉFAUT CI-DESSUS : puisque le cerne rebouche les échancrures,
-       faire varier les longueurs de branche NE CHANGE PAS la silhouette rendue —
-       deux poses sortaient identiques au pixel près, et le banc l'a dit. La
-       seule grandeur qui traverse encore la dilatation est la TAILLE. Elle
-       respire donc de ±12 %, ce qui est de toute façon la bonne animation :
-       une bestiole qui respire enfle et se creuse. */
-    const BREATH = [1.00, 0.88, 1.12, 0.82][pose & 3];
-    const R = (state === 1 ? (queen ? 7.1 : 4.4) : (queen ? 9.1 : 5.6)) * BREATH, r = R * (queen ? 0.48 : 0.44);
-    /* Les cinq longueurs, par pose : quatre lignes réellement distinctes (le
-       piège du jet 1, où deux poses sortaient identiques au pixel près). */
-    /* ⚠️ L'ÉCART ENTRE DEUX POSES DOIT SURVIVRE À LA RASTÉRISATION. Premier jet
-       à ±13 % : à ce rayon-là, deux poses tombaient sur les MÊMES pixels et le
-       banc annonçait « 0 pixel d'écart ». Une différence qui ne franchit pas
-       l'arrondi n'existe pas — c'est vrai d'une animation comme d'un seuil. */
-    const PUFF = [[1.00, 0.70, 0.92, 0.62, 0.84], [0.66, 1.00, 0.64, 0.90, 0.68],
-                  [0.88, 0.62, 1.00, 0.70, 0.98], [0.62, 0.86, 0.72, 1.00, 0.64]][pose & 3];
-    /* ⚠️⚠️ ET UN SOUFFLE D'ENSEMBLE PAR-DESSUS, PARCE QUE LES LONGUEURS SEULES NE
-       SUFFISENT PAS. Le banc a trouvé que les poses 0 et 2 sortaient IDENTIQUES
-       au pixel près : leurs cinq longueurs étaient différentes mais leur somme
-       ne l'était presque pas, et à ce rayon-là la rastérisation avalait l'écart.
-       Un facteur global assure que les quatre images ont des TAILLES distinctes,
-       ce qui est de toute façon la bonne animation : une bestiole qui respire
-       enfle et se creuse, elle ne fait pas seulement remuer ses branches. */
-    const pts = [];
+    // Souffle : quatre valeurs distinctes (jamais deux identiques, §8) mais
+    // resserrées — l'ancien ±12/30 % produisait un à-coup toutes les 250 ms.
+    const shrink = state === 1 ? 0.80 : 1;            // elle se fait petite quand elle se retire
+    /* ⚠️ QUATRE VALEURS RÉELLEMENT DISTINCTES (§8) : à ce rayon, un écart de
+       moins de 3 % arrondit sur les MÊMES pixels au rendu (payé cinq fois par
+       les jets précédents) — mesuré ici avec `render-etoile.mjs`, pas deviné. */
+    const BREATH = [0.98, 1.06, 1.02, 0.94][pose & 3];
+    const R = S * 0.38 * shrink * BREATH;
+    const r = R * 0.62;                               // cœur large : dodue plutôt que filiforme
+    /* Le chanfrein : deux sommets serrés de part et d'autre de la pointe au
+       lieu d'un seul pixel vif — c'est lui qui empêche le cerne de reboucher
+       l'échancrure voisine (voir la note en tête de fonction). */
+    const CH = 0.11;
+    const poly = [];
     for (let k = 0; k < 5; k++) {
       const a1 = rot + k * (Math.PI * 2 / 5);
+      poly.push([cx + Math.cos(a1 - CH) * R * 0.96, cy + Math.sin(a1 - CH) * R * 0.96]);
+      poly.push([cx + Math.cos(a1) * R, cy + Math.sin(a1) * R]);
+      poly.push([cx + Math.cos(a1 + CH) * R * 0.96, cy + Math.sin(a1 + CH) * R * 0.96]);
       const a2 = a1 + Math.PI / 5;
-      const rr = R * (state === 2 ? 0.72 : 1) * PUFF[k];
-      pts.push([cx + Math.cos(a1) * rr, cy + Math.sin(a1) * rr]);
-      pts.push([cx + Math.cos(a2) * r, cy + Math.sin(a2) * r]);
+      poly.push([cx + Math.cos(a2) * r, cy + Math.sin(a2) * r]);
     }
     const inside = (x, y) => {
       let hit = false;
-      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-        const [xi, yi] = pts[i], [xj, yj] = pts[j];
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const [xi, yi] = poly[i], [xj, yj] = poly[j];
         if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) hit = !hit;
       }
       return hit;
     };
-    // 1. Le halo, AUTOUR, en deux couronnes — jamais par-dessus la source.
+    // 1. Le halo, autour, en deux couronnes — jamais par-dessus la source.
+    // ⚠️ BORNÉ À LA MOITIÉ DU CANEVAS (§4, piège n°1) : un corps plus dodu
+    // laisse moins de marge, et un halo qui déborde se coupe net au bord au
+    // lieu de s'éteindre — dérivé de `S`, jamais un second nombre à recaler
+    // à la main si `S` change encore.
+    const haloR = Math.min(R + 2.2, S / 2 - 1);
     g.fillStyle = HALO;
-    g.beginPath(); g.arc(cx, cy, R + 2.2, 0, 7); g.fill();
+    g.beginPath(); g.arc(cx, cy, haloR, 0, 7); g.fill();
     g.beginPath(); g.arc(cx, cy, R * 0.75, 0, 7); g.fill();
-    /* ⚠️⚠️ 2026-09-07 — L'ÉTAT CALME DES PETITES COMPAGNES (jamais la reine)
-       PASSE PAR LE MASQUE DESSINÉ À LA MAIN CI-DESSUS — voir sa note. Tout le
-       reste (états 1/2, la reine) garde le polygone géométrique, inchangé.
-       ⚠️ LA DISCRÈTE (`shy`) Y PASSE AUSSI, DÉCALÉE DE `dy0` : son déguisement
-       (`FermeGame.js`, « il passe en dernier ») se mesure par DIFFÉRENCE entre
-       le corps nu et le corps déguisé À LA MÊME POSE (`tools/render-etoile.mjs`,
-       « une prise qui demande un seuil… ») — les deux doivent donc partager
-       EXACTEMENT le même corps, sinon la différence capture un changement de
-       silhouette au lieu du seul chapeau. `dy0` recale le masque (dessiné pour
-       un canevas de 18 rangées) sur le canevas plus haut de la discrète (24
-       rangées, la marge du chapeau), à partir du MÊME `cy` que la géométrie
-       aurait utilisé — jamais un second nombre écrit à la main (§8). */
-    if (!queen && state === 0) {
-      const mask = starWispCalmMask(pose);
-      const dy0 = Math.round(cy - 9.5);
-      const mAt = (x, y) => { const my = y - dy0; return my >= 0 && my < 18 && mask[my] && mask[my][x]; };
-      // 2. Le cerne, à 4 voisins SEULEMENT (jamais les diagonales) : c'est ce
-      // qui laisse les échancrures entre pointes intactes (voir la note).
-      for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-        if (mAt(x, y)) continue;
-        const n = mAt(x, y - 1) || mAt(x, y + 1) || mAt(x - 1, y) || mAt(x + 1, y);
-        if (n) P(g, x, y, 1, 1, RIM);
-      }
-      // 3. La matière : les pointes (loin du centre) sont plus chaudes (EDGE),
-      // le corps est BODY — même principe que le polygone, un ton par distance.
-      for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-        if (!mAt(x, y)) continue;
-        const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
-        P(g, x, y, 1, 1, d > 5.2 ? EDGE : BODY);
-      }
-      // 4. Le visage : un reflet fixe (pas une zone de distance, qui mangeait
-      // la face dans le polygone), deux yeux, une bouche — calme uniquement.
-      P(g, cx - 1, cy - 3, 2, 1, CORE); P(g, cx - 2, cy - 2, 1, 1, CORE);
-      P(g, cx - 2, cy - 1, 1, 2, RIM); P(g, cx + 1, cy - 1, 1, 2, RIM);
-      P(g, cx - 1, cy + 1, 2, 1, EDGE);
-    } else {
-    // 2. Le cerne, par DILATATION du masque : impossible d'oublier une branche.
-    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    // 2. Le cerne, par dilatation à 8 voisins — le chanfrein le rend enfin
+    // sûr (voir la note en tête de fonction).
+    // ⚠️⚠️⚠️ BORNE EN Y SUR `SH`, PAS SUR `S` (§4, piège n°1) : `S` est la
+    // LARGEUR du canevas, pas sa hauteur — la discrète est plus HAUTE que
+    // large (`cv(S, SH)`). Boucler jusqu'à `S` a d'abord rogné le bas de son
+    // corps en silence, exactement le piège que ce fichier documente depuis
+    // le 433 : aucune erreur, une étoile discrète juste un peu décapitée par
+    // en dessous. Trouvé en falsifiant `render-etoile.mjs` §16, pas en relisant.
+    for (let y = 0; y < SH; y++) for (let x = 0; x < S; x++) {
       if (inside(x + 0.5, y + 0.5)) continue;
       let touch = false;
       for (let dy = -1; dy <= 1 && !touch; dy++) for (let dx = -1; dx <= 1; dx++)
         if (inside(x + dx + 0.5, y + dy + 0.5)) { touch = true; break; }
       if (touch) P(g, x, y, 1, 1, RIM);
     }
-    /* 3. La matière. ⚠️ LE TON SUIT LA DISTANCE AU CENTRE, PAS LA FORME : c'est
-       ce qui fait que les branches sont plus chaudes que le cœur, donc qu'elles
-       se détachent, donc qu'on les lit comme des branches et pas comme un
-       contour. Une étoile peinte d'un seul ton est un autocollant. */
-    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    // 3. La matière, par distance au centre : le cœur est la source de
+    // lumière — une étoile peinte d'un seul ton est un autocollant.
+    for (let y = 0; y < SH; y++) for (let x = 0; x < S; x++) {
       if (!inside(x + 0.5, y + 0.5)) continue;
-      const d = Math.hypot(x + 0.5 - (cx - 0.9), y + 0.5 - (cy - 1.0));
-      P(g, x, y, 1, 1, d > r + 1.4 ? EDGE : d > r * 0.55 ? BODY : CORE);
+      const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
+      P(g, x, y, 1, 1, d > r * 1.05 ? EDGE : d > r * 0.5 ? BODY : CORE);
     }
-    /* 4. LE VISAGE, DANS LE CŒUR. ⚠️ DES YEUX D'UN PIXEL DE LARGE : à 2×2 sur un
-       cœur de six pixels ils mangeaient la face et la bestiole devenait un
-       animal (jet 2). Un pixel de large, deux de haut, dans la moitié HAUTE — un
-       œil au milieu d'une masse donne un ballon, un œil haut donne un front, et
-       un front donne un être. */
-    if (state === 2) {
-      P(g, cx - (queen ? 4 : 2), cy, queen ? 3 : 2, 1, RIM);
-      P(g, cx + 1, cy, queen ? 3 : 2, 1, RIM);                          // fermés
+    /* 4. LE VISAGE. ⚠️ DÉRIVÉ DE `rBase`, JAMAIS DU `r` QUI RESPIRE : sinon
+       l'arrondi de la taille des yeux changerait d'une pose à l'autre et
+       clignoterait tout seul — le corps respire, le visage reste immobile
+       (une seule grandeur, jamais recopiée sous deux formes qui pourraient
+       diverger, §8). */
+    const rBase = S * 0.38 * shrink * 0.62;
+    const eyeS = Math.max(1, Math.round(rBase * 0.45));
+    const eyeGap = Math.max(1, Math.round(rBase * 0.22));
+    const eyeY = Math.round(cy - rBase * 0.45);
+    if (state === 2) {                                // assoupie : yeux mi-clos, pas de bouche
+      P(g, cx - eyeGap - eyeS, cy - 1, eyeS, 1, RIM);
+      P(g, cx + eyeGap, cy - 1, eyeS, 1, RIM);
     } else {
-      P(g, cx - (queen ? 4 : 2), cy - (queen ? 3 : 2), queen ? 2 : 1, queen ? 3 : 2, RIM);
-      P(g, cx + (queen ? 2 : 1), cy - (queen ? 3 : 2), queen ? 2 : 1, queen ? 3 : 2, RIM);
-      if (queen) {                                                      // reflets et pommettes : détail natif, pas pixels gonflés
-        P(g, cx - 3, cy - 3, 1, 1, CORE); P(g, cx + 3, cy - 3, 1, 1, CORE);
-        P(g, cx - 5, cy + 1, 1, 1, EDGE); P(g, cx + 4, cy + 1, 1, 1, EDGE);
+      P(g, cx - eyeGap - eyeS, eyeY, eyeS, eyeS, RIM);  // deux yeux pleins, sombres sur un cœur clair — le contraste EST le regard
+      P(g, cx + eyeGap, eyeY, eyeS, eyeS, RIM);
+      if (state === 0) {
+        const mouthY = Math.round(cy + rBase * 0.45), mouthW = Math.max(2, eyeS);
+        P(g, cx - Math.floor(mouthW / 2), mouthY, mouthW, 1, EDGE);           // sourire, calme
+      } else {                                        // elle se retire : sourcils levés, sur le qui-vive
+        P(g, cx - eyeGap - eyeS, eyeY - 1, eyeS, 1, RIM);
+        P(g, cx + eyeGap, eyeY - 1, eyeS, 1, RIM);
       }
-      if (state === 0) P(g, cx - (queen ? 2 : 1), cy + (queen ? 2 : 1), queen ? 4 : 2, 1, EDGE); // une bouche, calme seulement
     }
-    if (queen && state === 0) {                                        // éclats intérieurs asymétriques
+    // Les joues, juste à côté de chaque œil et à sa hauteur — dérivées des
+    // mêmes grandeurs que les yeux, jamais un second couple de coordonnées
+    // qui pourrait cesser de s'accorder avec eux (§8).
+    P(g, cx - eyeGap - eyeS - 1, eyeY + eyeS, 1, 1, EDGE);
+    P(g, cx + eyeGap + eyeS, eyeY + eyeS, 1, 1, EDGE);
+    if (queen && state === 0) {                       // éclats intérieurs, natifs à sa trame
       P(g, cx - 6, cy - 5, 2, 1, CORE); P(g, cx + 5, cy - 1, 1, 2, CORE);
-      P(g, cx - 1, cy - 7, 1, 2, CORE); P(g, cx + 2, cy + 5, 2, 1, EDGE);
+      P(g, cx - 1, cy - 7, 1, 2, CORE);
     }
-    }
-    /* ╔══════════════════════════════════════════════════════════════════════════
-       ║ 2026-09-02 (lot A2) — LE DÉGUISEMENT DE LA DISCRÈTE. IL PASSE EN DERNIER.
-       ╚══════════════════════════════════════════════════════════════════════════
-       Guillaume : *« avec un mini chapeau et des lunettes de soleil »*.
-       ⚠️⚠️ IL SE PEINT APRÈS LE VISAGE, ET C'EST TOUT LE GAG : les lunettes
-       RECOUVRENT les yeux qu'on vient de dessiner, au lieu de les remplacer. Une
-       variante qui aurait sauté le visage aurait produit une étoile sans regard
-       avec deux barres noires — un objet, pas quelqu'un qui se cache.
-       ⚠️ LE DÉGUISEMENT NE CHANGE PAS DE POSE : il est identique aux quatre poses
-       et aux trois états, parce qu'un chapeau ne respire pas. C'est aussi ce qui le
-       rend reconnaissable au milieu des passants — la seule chose immobile.
-       ⚠️⚠️ ET C'EST LE POINT DE CONCEPTION DU LOT : elle doit se repérer, pas
-       sauter aux yeux. Le chapeau est PENCHÉ (deux rangées décalées d'un pixel) et
-       trop petit pour elle : de loin c'est une silhouette de plus, de près c'est
-       manifestement une étoile qui porte un chapeau. */
+    /* ── LE DÉGUISEMENT DE LA DISCRÈTE, INCHANGÉ (2026-09-02, lot A2). Guillaume :
+       « avec un mini chapeau et des lunettes de soleil ». Il se peint APRÈS le
+       visage : les lunettes RECOUVRENT les yeux qu'on vient de dessiner, au lieu
+       de les remplacer. Une variante qui aurait sauté le visage aurait produit
+       une étoile sans regard avec deux barres noires — un objet, pas quelqu'un
+       qui se cache. Il ne respire jamais (une seule pose) : c'est ce qui le
+       rend reconnaissable au milieu des passants, la seule chose immobile. */
     if (shy) {
       const HAT = "#3a2f26", HATB = "#241c16", BAND = "#8a6a3c";
       const GLA = "#1b1a20", GLE = "#43414c";
-      /* Les lunettes : une barre sur les deux yeux, avec un pont d'un pixel. Elles
-         mesurent tout le cœur (six pixels) — des lunettes plus étroites que le
-         visage se lisent comme des sourcils. */
-      P(g, cx - 3, cy - 3, 3, 2, GLA);
-      P(g, cx + 1, cy - 3, 3, 2, GLA);
-      P(g, cx, cy - 3, 1, 1, GLE);                       // le pont
-      P(g, cx - 3, cy - 3, 1, 1, GLE); P(g, cx + 3, cy - 3, 1, 1, GLE);   // deux reflets, sinon c'est un bandeau
-      /* Le chapeau : bord, calotte, ruban. Il se pose sur la branche du HAUT, donc
-         au-dessus du cœur — d'où les quatre rangées gagnées sur le canevas. */
-      /* ⚠️ IL SE POSE, IL NE PLANE PAS. À `cy - 9`, la planche du banc montrait un
-         chapeau SUSPENDU un pixel au-dessus de la tête : de loin ça ne se voyait
-         pas, de près ça faisait un objet qui flotte à côté d'une étoile au lieu
-         d'une étoile qui porte un chapeau — c'est-à-dire que le gag ne prenait
-         pas. Un pixel, et la même image raconte autre chose. */
+      P(g, cx - 3, cy - 3, 3, 3, GLA);                  // lunettes plus hautes (3 rangées, pas 2) : la matière du corps est
+      P(g, cx + 1, cy - 3, 3, 3, GLA);                  // plus dense sous elles depuis la refonte, la mesure de contraste veut plus d'obscur
+      P(g, cx, cy - 3, 1, 1, GLE);
+      P(g, cx - 3, cy - 3, 1, 1, GLE); P(g, cx + 3, cy - 3, 1, 1, GLE);
       const hy = cy - 8;
-      P(g, cx - 4, hy + 2, 9, 1, HATB);                  // le bord
+      P(g, cx - 4, hy + 2, 9, 1, HATB);
       P(g, cx - 3, hy + 1, 7, 1, HAT);
-      P(g, cx - 2, hy, 5, 1, HAT);                       // la calotte, décalée d'un pixel : il est de travers
+      P(g, cx - 2, hy, 5, 1, HAT);
       P(g, cx - 2, hy - 1, 4, 1, HAT);
-      P(g, cx - 3, hy + 1, 7, 1, BAND);                  // le ruban mange la rangée basse de la calotte
+      P(g, cx - 3, hy + 1, 7, 1, BAND);
       P(g, cx - 2, hy, 5, 1, HAT);
       P(g, cx - 4, hy + 2, 1, 1, HATB); P(g, cx + 4, hy + 2, 1, 1, HATB);
     }

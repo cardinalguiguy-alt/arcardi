@@ -2414,7 +2414,12 @@ suffit, et son frein est dans sa forme —
 mesurer l'enfoncement. ⚠️ **Les points A et B ci-dessus deviennent donc faisables au banc** : le
 `MessageChannel` du 444 n'était pas la seule voie.
 
-### 12.3 ✅ CORRIGÉ LE 2026-09-07 — LE POINT QUI N'AVAIT PAS CONVERGÉ
+### 12.3 ✅ CORRIGÉ LE 2026-09-07, PUIS REMPLACÉ LE 2026-09-12 — voir §12.3 bis
+
+⚠️ **CE QUE CETTE SECTION DÉCRIT N'EST PLUS LE CODE EN PLACE** — `starWispCalmMask` et le
+polygone à rayon 0,44 qu'elle oppose ont tous les deux disparu le 2026-09-12 (§12.3 bis). Gardée
+pour la LEÇON, toujours vraie et généralisable (le cerne d'un pixel et sa contrainte de trois
+pixels d'échancrure) ; ne pas s'y fier pour ce qui est câblé aujourd'hui.
 
 **L'étoile compagnon avait demandé CINQ écritures sans être juste** : à côté du fermier elle se
 lisait comme une petite bête dorée attachante, mais **elle ne lisait pas « étoile » d'emblée** —
@@ -2448,6 +2453,49 @@ foncé. Regardé sur herbe (son vrai contexte aujourd'hui) : le cerne sombre s'y
 défaut cité ne se reproduit pas. **Non retouché** — un piège périmé recopié ailleurs est pire qu'un
 piège supprimé (§14.2 de `CLAUDE.md`) ; celui-ci est resté ici, corrigé, au lieu d'être recopié
 faux.
+
+### 12.3 bis ✅ REMPLACÉ LE 2026-09-12 — UN SEUL DESSIN, LES TROIS ÉTATS ET LA REINE
+
+Guillaume, en jouant : *« ça ne ressemble plus du tout à une étoile »*. Vrai des deux dessins qui
+coexistaient depuis le 12.3 — le masque calme ET le polygone gardé pour les états 1/2 et la reine
+se lisaient tous les deux comme une masse à bosses, mesuré en re-rendant proprement (sans le
+tassement d'`etoile-planche.png`, qui superpose plusieurs étoiles sur la même bande de 24 px et
+brouille tout ce qu'on y regarde). Demande explicite, en Mario Party 5 : cinq branches, dodues et
+mignonnes, portée cette fois aux TROIS états ET à la reine — plus de portée partielle.
+
+⚠️⚠️⚠️ **CE QUE LES CINQ PREMIÈRES ÉCRITURES AVAIENT MANQUÉ N'ÉTAIT PAS LE RAYON, C'ÉTAIT LE COIN.**
+Le cerne par dilatation rebouche toute échancrure de moins de trois pixels quel que soit le rayon
+intérieur — et une pointe qui finit en angle VIF concentre toute sa matière sur un seul pixel à son
+extrémité, donc l'échancrure voisine se resserre à rien exactement là où l'œil la cherche.
+**CHANFREINER LA POINTE** (deux sommets serrés de part et d'autre plutôt qu'un seul) lui laisse un
+dernier tronçon large de deux-trois pixels : l'échancrure voisine en hérite, et le cerne cesse de la
+reboucher. Testé aux deux tailles déjà en place, 18 et 28 px — **aucune n'a grandi**, contrairement
+à l'hypothèse de départ (une résolution plus généreuse a été essayée, mesurée inutile une fois le
+chanfrein en place).
+
+Le code est dans `starWispSprite` (`fermeArt.js`) — un seul polygone à cinq branches chanfreinées,
+cœur large (rayon intérieur 0,62 du rayon extérieur, contre 0,44 avant : dodue, pas filiforme),
+cerne par dilatation à 8 voisins (redevenu sûr grâce au chanfrein). `starWispCalmMask` et ses trois
+tables ont été supprimés : ils ne couvraient qu'un état sur trois, ce dessin les couvre tous.
+
+⚠️ **DEUX BOGUES TROUVÉS EN VÉRIFIANT, PAS EN RELISANT** (`tools/render-etoile.mjs` §16, LA
+DISCRÈTE) — tous deux payés une fois de plus dans ce dépôt :
+1. *Boucler jusqu'à `S` (la LARGEUR) au lieu de `SH` (la HAUTEUR) sur un canevas qui n'est pas
+   carré rogne le bas en silence* — exactement le piège n°1 du §4 de `CLAUDE.md`, que ce fichier
+   documente depuis des dizaines de zips, reproduit ici par l'auteur de cette note. La discrète
+   (canevas 18×24) perdait le bas de son corps sans qu'aucune image ne le montre — trouvé parce que
+   le banc comparait corps nu et corps déguisé À LA MÊME POSE et voyait la différence bouger d'une
+   pose à l'autre, jamais en regardant une planche.
+2. *Le souffle de respiration doit être IDENTIQUE des deux côtés d'une comparaison, ou aucun des
+   deux ne doit respirer* — geler la respiration de la seule discrète (sans geler celle du corps nu
+   auquel le banc la compare) a produit le MÊME symptôme que ne rien geler : les deux corps
+   décrochaient l'un de l'autre à chaque pose, juste dans l'autre sens.
+
+⚠️ **Vérifié, et comment** : `tools/render-etoile.mjs`, tous les contrôles (144 dans ce fichier,
+tous verts) ; `tools/verify-quete.mjs`, 792/792 ; `npx next build` dans un worktree isolé (un
+`npm run dev` d'une autre session tournait sur le dépôt principal — §10 de `CLAUDE.md`), `✓ Compiled
+successfully`, 9/9 pages. **Pas encore regardé en jeu, à l'écran, par Guillaume** — c'est ce qui
+reste, et c'est le seul juge de « mignonne » et « fluide » (§13 de `CLAUDE.md`).
 
 ### 12.4 Ce qu'il faut savoir avant de rouvrir le chantier
 
