@@ -760,6 +760,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     barnMiniSub: (hits, needed) => L.star.plan.raiseSub(hits, needed),
     barnMiniHint: L.star.plan.raiseHint,
   } : L), [starRaise, L]);
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ AUTORITÉ 2026-09-12 (repasse) — LE MARTEAU DE LA RÉPARATION, MÊME FORME
+     ║ QUE `starRaise` JUSTE AU-DESSUS.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ DEMANDE DE GUILLAUME, EN JOUANT : « il faut qu'on répare la coque avec
+     lui (animation), […] seulement à ce moment-là on peut engager la conversation
+     avec Kerguélen ». Un booléen suffit — pas de `{part}` ici, une seule pièce
+     concernée — et `onWin` est ce qui envoie la VRAIE `req: "vandalReveal"` :
+     c'est SEULEMENT maintenant, après le marteau, qu'elle part (voir
+     `starEngineerUrgent`, `quete.js`). Avant cette passe, elle partait au premier
+     E — ce mini-jeu ne fait que déplacer QUAND elle part, jamais ce qu'elle fait. */
+  const [vandalFix, setVandalFix] = useState(false);
+  const vandalFixL = useMemo(() => (vandalFix ? {
+    ...L,
+    barnMiniTitle: () => L.star.plan.fixTitle,
+    barnMiniSub: (hits, needed) => L.star.plan.fixSub(hits, needed),
+    barnMiniHint: L.star.plan.fixHint,
+  } : L), [vandalFix, L]);
   /* ⚠️⚠️ ZIP 478 — LE MIROIR D'AFFICHAGE, ET IL LIT LES MÊMES DEUX RÉSERVES QUE
      L'HÔTE. Il ne DÉCIDE rien (l'hôte tranche, §3) : il sert à griser un bouton et
      à écrire ce qui manque. Écrit juste au-dessus de `starExtraHave` exprès — les
@@ -1660,7 +1678,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // doit fermer les mêmes portes que FishMinigame (touche d'action, tir à
   // l'arc, ouverture de la carte/boutique…) — c'est le même geste (pêcher),
   // seule la mécanique de résolution diffère.
-  useEffect(() => { fishMiniRef.current = !!fishMini || !!barnMini || !!wolfBite || !!evilBite || !!repairMini || !!starRaise || !!fishHaulActive; }, [fishMini, barnMini, wolfBite, evilBite, repairMini, starRaise, fishHaulActive]);
+  useEffect(() => { fishMiniRef.current = !!fishMini || !!barnMini || !!wolfBite || !!evilBite || !!repairMini || !!starRaise || !!vandalFix || !!fishHaulActive; }, [fishMini, barnMini, wolfBite, evilBite, repairMini, starRaise, vandalFix, fishHaulActive]);
   /* ⚠️ LE RÉVEIL N'EST PAS DANS `fishMiniRef`, ET C'EST VOLONTAIRE : ce ref sert à
      dire « un panneau capte les touches », or le réveil n'ouvre aucun panneau — le
      joueur reste dans le monde, il peut marcher, et marcher DOIT l'interrompre.
@@ -19607,6 +19625,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           pushE((tw.shipY + 1) * T, se, () =>
             sprites.drawStarShip(ctx, (tw.shipX + 0.5) * T, (tw.shipY + 1) * T, T, sparts, now,
                                  { night: snight, gone: sgone, ghosts: sghost }));
+          /* ⚠️⚠️ AUTORITÉ 2026-09-12 (repasse) — LA LUEUR DE RÉPARATION, JOUÉE UNE
+             FOIS. `sprites.drawStarHullFixGlow` (fermeArt.js) est une fonction pure
+             de `now - e.vandal.at` (§8 de CLAUDE.md : rien de plus à faire vieillir),
+             donc elle s'éteint TOUTE SEULE après `C.VANDAL_FIX_VFX_MS` — pas besoin
+             de la retirer explicitement. `+1` sur la clé de tri : elle se peint
+             APRÈS le navire, au même point, jamais dessous. */
+          if (sprites.drawStarHullFixGlow) {
+            const vandalAt = (sharedRef.current.star.vandal && sharedRef.current.star.vandal.at) || 0;
+            const vandalAge = vandalAt ? now - vandalAt : Infinity;
+            if (vandalAge >= 0 && vandalAge < C.VANDAL_FIX_VFX_MS) {
+              pushE((tw.shipY + 1) * T + 1, se, () =>
+                sprites.drawStarHullFixGlow(ctx, (tw.shipX + 0.5) * T, (tw.shipY + 1) * T, T, vandalAge));
+            }
+          }
           /* ╔══════════════════════════════════════════════════════════════════
              ║ ZIP 454 — CÉLESTIN KERGUÉLEN, SUR LA GRÈVE, PENDANT QU'IL DESSINE.
              ╚══════════════════════════════════════════════════════════════════
@@ -19625,16 +19657,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              a payé sur six cents haies. */
           if (Q.starEngineerHere(sharedRef.current.star, Date.now())) {
             const ex = tw.shipX + C.STAR_ENG_DX, ey = tw.shipY + C.STAR_ENG_DY;
+            /* ⚠️⚠️ AUTORITÉ 2026-09-12 (repasse) — L'URGENCE SE VOIT AVANT DE
+               S'ENTENDRE. Demande de Guillaume, en jouant : Kerguélen « s'agite
+               en cercles » tant que la coque n'est pas réparée
+               (`Q.starEngineerUrgent`, la même garde que le point d'interaction
+               plus bas). Position et cap sont une fonction pure de `now`, comme
+               `starGreenSway` — zéro état, ça repart identique après un
+               rechargement. `moving:true` réutilise le cycle de marche existant :
+               un PNJ qui bouge sans nouveau sprite. */
+            const urgent = Q.starEngineerUrgent(sharedRef.current.star, Date.now());
+            let engX = ex, engY = ey, engDir = 2, engMoving = false, engAnimT = 0;
+            if (urgent) {
+              const ang = (now % C.VANDAL_URGENT_PACE_MS) / C.VANDAL_URGENT_PACE_MS * Math.PI * 2;
+              engX = ex + Math.cos(ang) * C.VANDAL_URGENT_PACE_R;
+              engY = ey + Math.sin(ang) * C.VANDAL_URGENT_PACE_R * 0.6;
+              const tdx = -Math.sin(ang), tdy = Math.cos(ang) * 0.6;
+              engDir = Math.abs(tdx) > Math.abs(tdy) ? (tdx > 0 ? 3 : 2) : (tdy > 0 ? 0 : 1);
+              engMoving = true;
+              engAnimT = now / 100;
+            }
             pushE((ey + 1) * T, elAt(ex, ey), () => {
-              drawCharacter({ id: "star:engineer", x: ex, y: ey, dir: 2, moving: false, animT: 0,
+              drawCharacter({ id: "star:engineer", x: engX, y: engY, dir: engDir, moving: engMoving, animT: engAnimT,
                               gender: "m", outfit: 3, overalls: false, cap: true,
                               name: L.star.plan.engName }, false);
             });
-            /* ⚠️ IL MARMONNE, ET C'EST CE QUI LE REND VIVANT À DISTANCE : sans un
-               mot au-dessus de la tête, un PNJ immobile sur une grève se lit comme
-               un décor qu'on a oublié d'enlever. La bulle est locale, cosmétique,
-               et cadencée sur une horloge dérivée — comme les rembarrages de Carla
-               (376), donc sans un seul message. */
+            /* ⚠️ IL MARMONNE (OU IL HURLE), ET C'EST CE QUI LE REND VIVANT À
+               DISTANCE : sans un mot au-dessus de la tête, un PNJ immobile sur une
+               grève se lit comme un décor qu'on a oublié d'enlever. La bulle est
+               locale, cosmétique, et cadencée sur une horloge dérivée — comme les
+               rembarrages de Carla (376), donc sans un seul message. */
             /* ⚠️⚠️ `queueTownBubble` ET PAS `queueBubble` : la ferme et la ville ont
                chacune leur file de bulles, et le premier jet a appelé celle de la
                FERME depuis la passe de la VILLE. Ça ne lève rien au build, ça ne
@@ -19642,8 +19693,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                tout ce que la frame devait encore dessiner (piège n°1 du §4). C'est
                `verify-portee` qui l'a dit, à la première exécution — c'est
                exactement le défaut du 443 pour lequel il a été écrit. */
-            if ((Math.floor(now / 9000) % 2) === 0)
+            if (urgent) {
+              if ((Math.floor(now / C.VANDAL_URGENT_BUBBLE_MS) % 2) === 0)
+                queueTownBubble(engX * T + 8, engY * T - 6, L.star.vandal.urgentBubble, "star");
+            } else if ((Math.floor(now / 9000) % 2) === 0) {
               queueTownBubble(ex * T + 8, ey * T - 6, L.star.plan.engBubble, "star");   // zip 455
+            }
           }
         }
       }
@@ -28569,16 +28624,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (tw0 && tw0.shipX && Q.starEngineerHere(e, Date.now())) {
           const ex = tw0.shipX + C.STAR_ENG_DX, ey = tw0.shipY + C.STAR_ENG_DY;
           if (Math.hypot(m.x - ex, m.y - ey) <= 1.8) {
-            /* ⚠️ AUTORITÉ 2026-09-12 — LA SECONDE FENÊTRE (voir `starEngineerHere`) :
-               même PNJ, même position, mais la reine est déjà sortie et le
-               joueur ne lui a pas encore parlé (`!e.vandal`). Le dialogue
-               remplace celui des plans — les deux fenêtres ne se recouvrent
-               jamais dans la trame cible (voir la note de `starEngineerHere`). */
+            /* ⚠️⚠️ AUTORITÉ 2026-09-12 (repasse) — LA SECONDE FENÊTRE OUVRE LE
+               MARTEAU, ELLE NE PARLE PLUS TOUT DE SUITE. Même PNJ, même position,
+               mais la reine est déjà sortie et la coque n'est pas encore réparée
+               (`Q.starEngineerUrgent`, identique à `!e.vandal` ici puisqu'on est
+               déjà dans la seconde fenêtre de `starEngineerHere`). Le dialogue
+               (et `req: "vandalReveal"`) ne partent plus au premier E — ils
+               partent du `onWin` du mini-jeu, plus bas dans ce fichier : demande
+               de Guillaume, en jouant, « seulement à ce moment-là on peut engager
+               la conversation ». Les deux fenêtres ne se recouvrent jamais dans
+               la trame cible (voir la note de `starEngineerHere`). */
             if (Q.starHas(e, "crater") && !e.vandal) {
-              return { p: "kerguelenVandal", act: () => {
-                sendReq({ kind: "vandalReveal" });
-                starTell([L.star.vandal.say1, L.star.vandal.say2, L.star.vandal.say3], 2600);
-              } };
+              return { p: "kerguelenVandal", act: () => { setVandalFix(true); } };
             }
             /* ⚠️ IL SE PRÉSENTE, ET ÇA N'EST PAS DE LA POLITESSE : c'est le seul
                endroit où le joueur apprend son nom et son métier. Le panneau de la
@@ -30827,6 +30884,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                             : why === "busy" ? L.star.plan.orderWait(fmtDuration((ord || {}).readyAt - Date.now()))
                             : why === "noShard" ? L.star.plan.blockNoShard
                             : why === "noMayor" ? L.star.plan.blockNoMayor
+                            /* ⚠️ AUTORITÉ 2026-09-12 (repasse) — le verrou provisoire
+                               de `starTimberBlock` (voir sa note, quete.js). */
+                            : why === "needStars" ? L.star.plan.blockNeedStars
                             : L.star.plan.blockNoPlan}
                         </span>}
                   </div>
@@ -33052,6 +33112,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           L={starRaiseL}
           onWin={() => { const part = starRaise.part; setStarRaise(null); sendReq({ kind: "starTimberRaise", part }); pushToast(L.star.plan.raiseWin); }}
           onFail={() => { setStarRaise(null); pushToast(L.star.plan.raiseFail); }}
+        />
+      )}
+      {/* ╔══════════════════════════════════════════════════════════════════════
+         ║ AUTORITÉ 2026-09-12 (repasse) — LA RÉPARATION DE LA COQUE, AVEC KERGUÉLEN.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️⚠️ C'EST ICI, ET SEULEMENT ICI, QUE `req: "vandalReveal"` PART — plus
+         au premier E (voir le point d'interaction, plus haut dans ce fichier).
+         `resolveVandalReveal` reste idempotent côté hôte, donc rien ne casse si
+         deux joueurs gagnent le marteau à quelques secondes d'écart : le premier
+         `onWin` pose `e.vandal`, le second ne fait que le retrouver déjà posé.
+         ⚠️ UN ÉCHEC NE COÛTE RIEN : on referme, on peut reprendre le marteau
+         tant que la reine est sortie et que la coque n'est pas réparée — même
+         règle que `starRaise` juste au-dessus (« le bois est déjà payé »). */}
+      {vandalFix && (
+        <BarnMinigame
+          level={1}
+          L={vandalFixL}
+          onWin={() => {
+            setVandalFix(false);
+            sendReq({ kind: "vandalReveal" });
+            pushToast(L.star.plan.fixWin);
+            starTell([L.star.vandal.say1, L.star.vandal.say2, L.star.vandal.say3], 2600);
+          }}
+          onFail={() => { setVandalFix(false); pushToast(L.star.plan.fixFail); }}
         />
       )}
       {wolfBite && <WolfBiteMinigame L={L} onWin={wolfBiteWon} onFail={wolfBiteLost} />}

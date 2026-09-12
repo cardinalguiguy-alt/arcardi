@@ -2977,13 +2977,27 @@ section("La construction du navire (454)");
          blocage à guetter est désormais l'inverse d'une raison légitime : une pièce
          dont le morceau d'étoile est trouvé et qui n'est pourtant ni commandable,
          ni chez Tristan, ni sur la cale, ni posée. */
+      /* ⚠️⚠️ AUTORITÉ 2026-09-12 — "needStars" REJOINT LES RAISONS LÉGITIMES.
+         C'est le verrou provisoire de `starTimberBlock` (la dernière pièce
+         attend `e.ch >= 1`) : pendant le champ, il bloque volontairement,
+         exactement comme "noShard"/"noPlan"/"noMayor" bloquent ailleurs pour
+         de bonnes raisons. Un banc qui l'ignorerait crierait « bloqué » sur un
+         état voulu. */
       const blocked = Q.STAR_SHIP_KEYS.filter((kk) => {
         if (Q.starTimberDone(e, kk) || Q.starTimberReady(e, kk) || Q.starTimberOrder(e, kk)) return false;
         const why = Q.starTimberBlock(e, kk);
-        return why !== null && why !== "noShard" && why !== "noPlan" && why !== "noMayor";
+        return why !== null && why !== "noShard" && why !== "noPlan" && why !== "noMayor" && why !== "needStars";
       });
       if (blocked.length) stuck.push("bloqué " + blocked.join());
       Q.resolveStarFound(e, miss[0], "j1", 200 + guard);
+      /* ⚠️⚠️ AUTORITÉ 2026-09-12 (repasse) — LA RÉPARATION FAIT PARTIE DU CHEMIN
+         NORMAL. Ce balayage rejoue toute la quête réelle ; sans le marteau
+         simulé ici, la coque resterait régressée pour toujours dès que la
+         reine sort (voir `shipSiteOk`), et « le navire est entier à
+         l'arrivée » plus bas deviendrait faux pour une raison qui n'a rien à
+         voir avec ce que ce test mesure — la mécanique du marteau elle-même
+         est testée séparément, juste après ce bloc. */
+      if (miss[0] === "crater" && !e.vandal) Q.resolveVandalReveal(e, 200 + guard);
     }
     ok("⚠️⚠️ la chaîne du bûcheron ne se bloque JAMAIS, à aucun état de la quête",
        stuck.length === 0 && ordered === Q.STAR_SHIP_TOTAL,
@@ -3008,21 +3022,91 @@ section("La construction du navire (454)");
     Q.resolveStarTimberRaise(e, "hull", "j1", 4 + C.STAR_TIMBER.hull.ms);
     ok("…et il se pose quand les deux sont là", Q.starShipBuilt(e) === 1);
     ok("…et monter deux fois la même pièce ne fait rien", Q.resolveStarTimberRaise(e, "hull", "j1", 9e9).ok === false);
-    /* ⚠️⚠️ AUTORITÉ 2026-09-12 — LA COQUE N'EST PLUS LIÉE À UN LIEU AVANT LA REINE.
+    /* ⚠️⚠️⚠️ AUTORITÉ 2026-09-12 (repasse) — LA COQUE N'EST PLUS LIÉE À UN LIEU
+       AVANT LA REINE, ET SON RENFORT APRÈS N'EST PLUS `farmMaterial`.
        Le chantier se motive indépendamment des étoiles : du bois seul construit la
        coque comme les quatre autres pièces, tant que la reine n'est pas sortie.
        C'est APRÈS (Kerguélen la déclare fragile) que le bois seul ne suffit plus —
        et c'est là que l'invariant AND/OR d'origine (« un `||` à la place d'un `&&`
-       passerait inaperçu ») redevient mesurable. */
+       passerait inaperçu ») redevient mesurable.
+       ⚠️⚠️ `farmMaterial` A ÉTÉ RETIRÉ DE CE TEST, ET C'EST LE POINT DE LA PASSE :
+       un test direct (`node`, hors banc) a montré que `farmMaterial` est TOUJOURS
+       déjà trouvé au moment où `crater` peut l'être — préalable structurel du
+       chapitre `field` sur `resolveStarTownFall` (`e.ch < 1` refuse). La
+       "régression" ne pouvait donc jamais se voir : `starHas(e,"farmMaterial")`
+       valait déjà `true` avant même d'appeler `resolveStarFound(e,"crater",…)`.
+       Le renfort est maintenant `e.vandal` lui-même (posé par
+       `resolveVandalReveal`, désormais appelé APRÈS le mini-jeu du marteau) —
+       garanti FAUX au moment où la reine sort, donc une vraie régression. */
     const e2 = Q.newStar(); e2.fall = 1; e2.plan = { at: 1, by: "j1", done: 1 };
     e2.wood.hull = { at: 1, readyAt: 1, done: true, by: "j1" };
     ok("⚠️ AVANT la reine, du bois seul construit la coque (chantier indépendant des étoiles)",
        Q.starShipBuilt(e2) === 1 && Q.starShipHas(e2, "hull"));
     Q.resolveStarFound(e2, "crater", "j1", 5);
-    ok("⚠️⚠️ APRÈS la reine, ce même bois ne suffit plus : la coque réclame le renfort météorique",
+    ok("⚠️⚠️ APRÈS la reine, ce même bois ne suffit plus : la coque réclame la réparation",
        Q.starShipBuilt(e2) === 0 && !Q.starShipHas(e2, "hull"));
-    Q.resolveStarFound(e2, "farmMaterial", "j1", 6);
-    ok("…et le renfort trouvé, elle repart", Q.starShipBuilt(e2) === 1 && Q.starShipHas(e2, "hull"));
+    ok("…et le renfort météorique n'y est pour rien (déjà trouvé bien avant, structurellement)",
+       Q.starHas(e2, "farmMaterial") === false /* pas trouvé dans CE test, et ça n'a aucune importance ici */);
+    Q.resolveVandalReveal(e2, 6);
+    ok("…et la réparation jouée (le marteau, avec Kerguélen), elle repart",
+       Q.starShipBuilt(e2) === 1 && Q.starShipHas(e2, "hull"));
+  }
+
+  /* ╔═════════════════════════════════════════════════════════════════════════════
+     ║ AUTORITÉ 2026-09-12 (repasse) — POURQUOI `farmMaterial` A ÉTÉ ABANDONNÉ.
+     ╚═════════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️⚠️ CE CONTRÔLE FIGE L'INVARIANT STRUCTUREL QUI REND `farmMaterial` MORT
+     COMME GARDE-FOU DE LA COQUE — pour qu'il ne revienne jamais sans que ce test
+     rougisse en premier. `field` (huit trouvailles, farmMaterial compris) doit
+     être ENTIÈREMENT trouvé avant que `resolveStarTownFall` n'accepte (`e.ch<1`
+     refuse), et `crater` ne peut être trouvé qu'après le grand impact de ville.
+     Donc : au moment où `starHas(e,"crater")` peut devenir vrai,
+     `starHas(e,"farmMaterial")` l'est FORCÉMENT déjà. */
+  {
+    const e = Q.newStar();
+    const fieldSansMateriau = ["farmStarBlue", "farmEmptyA", "farmStarRose", "farmEmptyB",
+                                "farmEmptyC", "farmStarWhite", "farmMaterialB"];
+    for (const id of fieldSansMateriau) Q.resolveStarFound(e, id, "j1", 1);
+    e.fall = 1;
+    ok("⚠️⚠️⚠️ tout le champ sauf farmMaterial : la ville refuse de tomber (e.ch encore à 0)",
+       Q.resolveStarTownFall(e, 2).ok === false && e.ch === 0);
+    Q.resolveStarFound(e, "farmMaterial", "j1", 3);
+    ok("…farmMaterial trouvé À SON TOUR : e.ch avance, et SEULEMENT maintenant la ville peut tomber",
+       e.ch === 1 && Q.resolveStarTownFall(e, 4).ok === true);
+    Q.resolveStarFound(e, "crater", "j1", 5);
+    ok("⚠️⚠️⚠️ ET DONC, au moment où « crater » devient vrai, « farmMaterial » l'était déjà — " +
+       "c'est ce qui rend l'ancien garde-fou (farmMaterial) inatteignable, et c'est pour ça qu'il a changé",
+       Q.starHas(e, "crater") === true && Q.starHas(e, "farmMaterial") === true);
+  }
+
+  /* ╔═════════════════════════════════════════════════════════════════════════════
+     ║ AUTORITÉ 2026-09-12 (repasse) — LE VERROU PROVISOIRE : LA DERNIÈRE PIÈCE
+     ║ ATTEND LA PLUIE.
+     ╚═════════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️⚠️ FALSIFIÉ À L'ÉCRITURE (§10 de CLAUDE.md) : sans la ligne `needStars`
+     dans `starTimberBlock`, ce test rougirait sur la troisième assertion — vérifié
+     en la commentant le temps d'un essai avant de l'écrire ici. Reproduit tel quel
+     le test direct (`node`, hors banc) qui a servi à diagnostiquer la faille : maire
+     signé, plans prêts, cinq pièces montées, AUCUNE étoile trouvée. */
+  {
+    const e = Q.newStar();
+    signMayor(e, 1);
+    e.plan = { at: 1, by: "j1", done: 1 };
+    ok("⚠️ maire signé, plans prêts, AUCUNE étoile trouvée (e.ch=0, e.found={})",
+       MA.mayorSigned(e) && Q.starPlanReady(e) && e.ch === 0 && Object.keys(e.found).length === 0);
+    for (const k of Q.STAR_SHIP_KEYS.slice(0, 4)) e.wood[k] = { at: 1, readyAt: 1, done: true, by: "j1" };
+    const lastKey = Q.STAR_SHIP_KEYS[4];
+    ok("⚠️⚠️⚠️ SANS AUCUNE ÉTOILE, LA DERNIÈRE PIÈCE EST BLOQUÉE — c'est le garde-fou",
+       Q.starTimberBlock(e, lastKey) === "needStars");
+    /* ⚠️ ET ELLE SE DÉBLOQUE DÈS QUE LE CHAMP EST TROUVÉ — le verrou porte sur
+       `e.ch < 1`, pas sur une étoile précise : demander « toutes » les huit,
+       pas seulement une, serait le défaut inverse (un verrou qu'on ne peut
+       jamais lever en jouant normalement). */
+    for (const site of ["farmStarBlue", "farmEmptyA", "farmMaterial", "farmStarRose",
+                         "farmEmptyB", "farmEmptyC", "farmStarWhite", "farmMaterialB"])
+      Q.resolveStarFound(e, site, "j1", 2);
+    ok("…et le champ trouvé (e.ch >= 1), la dernière pièce redevient commandable",
+       e.ch >= 1 && Q.starTimberBlock(e, lastKey) === null);
   }
 
   /* ── LA TABLE DE BOIS EST LA MÊME LISTE QUE LE NAVIRE (la leçon du 452). */

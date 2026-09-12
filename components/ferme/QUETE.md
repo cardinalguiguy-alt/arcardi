@@ -39,7 +39,7 @@ mer »* — ce n'est plus le bateau qui est magique, c'est sa boussole.
 | 2 | **La Panique** *(bandeau dérivé, PAS un cran de `e.ch`/`STAR_CHAPTERS` — même mécanisme que `warn` qui remplace déjà le titre de la carte aujourd'hui, zéro risque sur les seuils existants)* | chevron → `newsBoard` → lire l'avis = déclenche `resolveStarWarn` (remplace le pop-up « Commencer la quête ? Oui/Plus tard ») ; PNJ nerveux et rumeurs, déjà automatiques sur la fenêtre `Q.starWarning` | porte ouverte au jalon « Bassin reconnu » de Kerguélen (3/5, §17.5) — **hypothèse posée ici, jamais encore vue en jeu par Guillaume, à confirmer/ajuster en jouant** | à écrire |
 | 3 | Les huit impacts | inchangé | délai réel existant (`STAR_WARN_FLOOR_MS`, 5 min mini) après la lecture | inchangé |
 | 4 | Le cratère | inchangé — la reine place les sœurs 5/6/7 sur le chantier déjà en cours | comme aujourd'hui | inchangé |
-| 5 | **Le chantier (reprend)** | Kerguélen repasse : la coque est fragile, un vandale s'en est pris à elle. Réparation = matériau du refroidissement de la plaque météorique (chapitre 3), qui gagne ainsi un vrai usage. 2ᵉ négociation maire (le budget a dérapé) → **300 000 or** (débloque tout de suite) ou **1-2 jours réels par pièce restante** (façon `BUILD_TIMES`/`buildReady`, minigame de Tristan pour accélérer une pièce pendant que les autres patientent). Sciage/voyage désormais habités par les sœurs 6/7 | comme aujourd'hui + nouveau gate | à écrire |
+| 5 | **Le chantier (reprend)** | Kerguélen repasse, affolé (« VITE !! VITE !! ») : la coque est fragile, un vandale s'en est pris à elle. ⚠️ Réparation = un mini-jeu marteau AVEC Kerguélen (même mécanique que le montage des pièces), pas le matériau du refroidissement — corrigé le jour même, voir « Ce qui est fait » plus bas. 2ᵉ négociation maire (le budget a dérapé) → **300 000 or** (débloque tout de suite) ou **1-2 jours réels par pièce restante** (façon `BUILD_TIMES`/`buildReady`, minigame de Tristan pour accélérer une pièce pendant que les autres patientent). Sciage/voyage désormais habités par les sœurs 6/7 | comme aujourd'hui + nouveau gate | réparation écrite, 2ᵉ négociation/gate à écrire |
 | — | Fin | mise à l'eau, constellation complète, Eduardo navigue au large **en suivant la Brebis** | comme aujourd'hui | ligne de narration à écrire |
 
 ### Ce qui change concrètement dans le code
@@ -59,57 +59,83 @@ mer »* — ce n'est plus le bateau qui est magique, c'est sa boussole.
   dans ce chantier-ci : la vraie décision revient à la quête future qui le résout ; en prendre
   une ici serait une dette qu'il faudrait défaire.
 
-### Ce qui est fait — 2026-09-12, l'ouverture du chapitre 5
+### Ce qui est fait — 2026-09-12, l'ouverture du chapitre 5 (réécrit le même jour, seconde passe)
 
-**Le tout premier geste du chapitre 5** (« Kerguélen repasse : la coque est fragile, un
-vandale s'en est pris à elle ») est codé et vérifié — pas le reste (2ᵉ négociation maire,
-gate or/temps, ci-dessous). Un seul champ neuf dans l'état partagé, `e.vandal = { at }` :
-tout le reste (quelle phase, où il se trouve) est une fonction pure de `now - e.vandal.at`,
-même principe que le voyage d'Eduardo ou l'arrivée des visiteurs en gare.
+**Le tout premier geste du chapitre 5** est codé et vérifié — pas le reste (2ᵉ négociation
+maire, gate or/temps, ci-dessous). ⚠️⚠️⚠️ **CETTE SECTION A ÉTÉ ENTIÈREMENT RÉÉCRITE LE MÊME
+JOUR, APRÈS UNE REVUE DE CHRONOLOGIE DEMANDÉE PAR GUILLAUME.** La première version (matin)
+disait « le renfort météorique répare la coque » et « e.vandal se pose au premier contact » —
+un test direct (`node`, hors banc) a montré que le premier point était MORT : `farmMaterial`
+est un préalable structurel du chapitre `field`, donc toujours déjà trouvé au moment où la
+reine sort ; la régression promise ne pouvait jamais se voir. Le second point a aussi changé,
+sur demande de Guillaume, en jouant à la scène telle que décrite : *« il faut rapidement aller
+aider Kerguélen qui s'agite en cercles, et nous dit en majuscule "VITE !! VITE !! venez m'aider,
+le bateau va couler", […] nous demande de la réparer avec lui (animation). Et ensuite […] un
+effet magique suggérant que c'est réparé (inspire-toi de l'anim Clash of Clans quand une
+construction monte de niveau). Et seulement à ce moment-là on peut engager la conversation avec
+Kerguélen. »*
 
-1. **Le toast** (`broadcastGlobalToast`, vu par toute la salle) part au moment exact de la
-   régression déjà en place (`shipSiteOk`, quete.js) : quand `starHas(e,"crater")` devient
-   vrai (`req.kind === "starCalm" && r.opened && r.site === "crater"`, `FermeGame.js`).
-2. **Kerguélen repasse au même endroit** que sa première visite (`starEngineerHere` a
-   maintenant deux fenêtres — même PNJ, même position dérivée de `shipX/shipY`, pas de
-   duplication). Il ne réapparaît que « reine ET six étoiles » (même garde que l'ancien
-   `engineer`) **et** `starPlanReady(e)` — il ne peut revenir que s'il est déjà venu.
-   S'en approcher déclenche `resolveVandalReveal` (idempotent) et trois répliques
-   (`starTell`, `L.star.vandal.say1/2/3`).
-3. **La fuite du vandale** : un sprite neuf, procédural (`fermeArt.js`, `look:"vandal"` —
-   overlay ajouté à `drawCharFrame`, même famille que la combinaison d'apiculteur ; capuche
-   pleine, aucun trait de visage, conforme à « jamais élucidé »). Deux segments scriptés
-   indépendants — ville (quai → gare, via `townFindPath`, mémoïsé une fois) puis ferme (un
-   trajet court et fixe, `C.VANDAL_FARM_PATH`, autour de `STATION_PLATFORM`) — jamais une
-   seule trajectoire continue (§4 de CLAUDE.md, les deux cartes n'ont pas de repère commun).
-   Quatre durées dans `fermeConstants.js` (`VANDAL_TOWN_MS`/`GAP_MS`/`FARM_MS`/`ESCAPED_MS`) :
-   **premiers réglages, jamais vus en jeu, à ajuster par Guillaume comme les trois nombres de
-   la scierie**.
-4. **Le bandeau permanent** porte quatre états neufs (`kerguelenBack` → `vandalChaseTown` →
-   `vandalChaseFarm` → `vandalEscaped` → retombe pour toujours sur la chaîne normale),
-   dérivés de `vandalPhase`/`e.vandal.at`, jamais un état écrit à part.
+Un seul champ neuf dans l'état partagé, `e.vandal = { at }` — inchangé dans sa NATURE, déplacé
+dans son DÉCLENCHEUR : il se pose maintenant APRÈS le mini-jeu du marteau, plus jamais au
+premier contact. Tout le reste (quelle phase, où le vandale se trouve) reste une fonction pure
+de `now - e.vandal.at`.
 
-`verify-quete` 839/839 (section 13 neuve : révélation, quatre phases, `pathAtFraction` pure,
-la chaîne complète du bandeau rejouée), `verify-strings` 1126 clés, `verify-jalons` 51/51,
-`verify-maire` 119/119, `render-navire` tout vert, bundle esbuild propre.
+1. **Le toast** (`broadcastGlobalToast`, vu par toute la salle) part quand `starHas(e,"crater")`
+   devient vrai, inchangé.
+2. **Kerguélen s'agite au quai** (`Q.starEngineerUrgent`, `quete.js` — la même garde que la
+   seconde fenêtre de `starEngineerHere`, séparée dans sa propre fonction pour que le rendu
+   sache DANS QUEL ÉTAT dessiner le PNJ). Position et cap dérivent de `now` seuls
+   (`VANDAL_URGENT_PACE_R`/`_MS`, `fermeConstants.js`) — un petit cercle, `moving:true` pour
+   réutiliser le cycle de marche existant. Sa bulle hurle « VITE !! VITE !! »
+   (`L.star.vandal.urgentBubble`, cadence `VANDAL_URGENT_BUBBLE_MS`, plus nerveuse que le
+   marmonnement calme qu'elle remplace).
+3. **E ouvre un mini-jeu marteau** (`vandalFix`, état local `FermeGame.js`, composant
+   `BarnMinigame` RÉUTILISÉ tel quel — demande d'origine de Guillaume au 478, « le même mini
+   jeu marteau que pour l'amélioration de la grange »). Textes dédiés (`L.star.plan.fixTitle/
+   fixSub/fixHint/fixWin/fixFail`). Victoire → `req:"vandalReveal"` part enfin (donc
+   `resolveVandalReveal`, idempotent, inchangée) ; échec → rien n'est perdu, on reprend le
+   marteau (même règle que le montage d'une pièce).
+4. **La lueur de réparation**, jouée une fois (`drawStarHullFixGlow`, `fermeArt.js`, dérivée de
+   `now - e.vandal.at`, `VANDAL_FIX_VFX_MS`) — flash, anneau brisé, étincelles qui montent,
+   même famille de dessin que `drawStarFragmentImpact` juste au-dessus dans le fichier.
+5. **SEULEMENT MAINTENANT, les trois répliques** (`starTell`, `L.star.vandal.say1/2/3`,
+   réécrites : Kerguélen essoufflé, remercie, décrit un vandale tout en noir, capuche rabattue
+   — toujours aucun nom, aucun visage, conforme à « jamais élucidé »).
+6. **La fuite du vandale, INCHANGÉE** : sprite procédural (`fermeArt.js`, `look:"vandal"`),
+   deux segments scriptés indépendants (ville puis ferme, §4 de CLAUDE.md — les deux cartes
+   n'ont pas de repère commun), quatre durées dans `fermeConstants.js`
+   (`VANDAL_TOWN_MS`/`GAP_MS`/`FARM_MS`/`ESCAPED_MS`) — premiers réglages, jamais vus en jeu.
+   Elle démarre simplement plus tard qu'avant : au moment du marteau, pas du premier contact.
+7. **`shipSiteOk` lit maintenant `e.vandal` lui-même**, pas `farmMaterial` : une coque déjà
+   montée régresse pour de vrai à la sortie de la reine (le champ étant déjà fini, `e.vandal`
+   est garanti faux à cet instant), et ne revient qu'après le marteau — la régression est
+   enfin atteignable, contrairement à celle du matin.
+8. **Garde-fou provisoire** (`starTimberBlock`, raison `"needStars"`) : la DERNIÈRE pièce
+   restante du navire reste bloquée tant que `e.ch < 1` — sans lui, un test direct a montré
+   qu'on pouvait finir tout le bateau (`starShipComplete === true`) avec `e.found={}`, aucune
+   étoile jamais trouvée. Les quatre premières pièces restent libres. **Ce n'est PAS le vrai
+   système** (2ᵉ négociation/gate or-temps, ci-dessous) — un ersatz à retirer quand celui-ci
+   existera.
+
+`verify-quete` 847/847, `verify-jalons` 52/52 (deux assertions réécrites : la trame réaliste
+« tout le champ avant le cratère » fait maintenant régresser puis réparer la coque au lieu de
+« rester commandable, renfort déjà en poche »), `render-navire` tout vert (même correction),
+`verify-strings` 1131 clés, `verify-maire` 119/119, `verify-vallee` 223/223, `verify-collision`
+tout passe, `verify-syntax` propre, bundle esbuild propre.
 ⚠️⚠️ **RIEN DE TOUT ÇA N'A ÉTÉ VU EN JEU** — un `npm run dev` d'une autre session tournait sur
 ce dépôt pendant toute cette livraison (port 3000 déjà occupé, vérifié), donc aucune preview
-n'était possible depuis celle-ci (§10). Le sprite, la fuite en deux segments et le texte du
-bandeau sont donc à regarder à l'écran en priorité — c'est la seule chose que ce zip n'a pas
-pu faire lui-même.
+n'était possible depuis celle-ci (§10). Le cercle d'agitation, le mini-jeu du marteau, la lueur
+magique, la fuite en deux segments et le texte du bandeau sont donc à regarder à l'écran en
+priorité — c'est la seule chose que cette passe n'a pas pu faire elle-même.
 
 ### Ce qui n'est PAS fait
 
 - **La 2ᵉ négociation du maire** (`maire.js`) : budget dérapé par la réparation/le vandale,
-  table à ajouter (le système le permet en une table de plus, §16.1).
+  table à ajouter (le système le permet en une table de plus, §16.1). C'est elle qui doit
+  remplacer le garde-fou `"needStars"` du point 8 ci-dessus.
 - **Le gate or/temps** : 300 000 or (débloque tout de suite) ou 1-2 jours réels par pièce
   restante (façon `BUILD_TIMES`), minigame de Tristan pour accélérer — conception posée
-  plus haut, pas codée.
-- **La réparation elle-même** : `farmMaterial` est déjà redemandé par `shipSiteOk` une fois
-  la reine sortie (régression déjà en place, voir Contexte plus haut) — mais rien ne dit
-  encore au joueur QUOI poser où une fois qu'il a la plaque en poche ; c'est le panneau de
-  la cale (« monter la pièce ») qui devra le faire, à vérifier une fois la 2ᵉ négociation et
-  le gate posés.
+  plus haut, pas codée. Le garde-fou `"needStars"` n'en est qu'un ersatz provisoire.
 
 ---
 

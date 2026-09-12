@@ -9901,6 +9901,56 @@ export function buildSprites() {
     }
   }
 
+  /* ╔═════════════════════════════════════════════════════════════════════════════
+     ║ AUTORITÉ 2026-09-12 (repasse) — LA LUEUR DE RÉPARATION.
+     ╚═════════════════════════════════════════════════════════════════════════════
+     Demande de Guillaume : « un effet magique suggérant que c'est réparé, inspire
+     toi de l'anim Clash of Clans quand une construction monte de niveau ». Jouée
+     UNE fois, dérivée de `now - e.vandal.at` (FermeGame.js, `VANDAL_FIX_VFX_MS`) —
+     zéro état de plus, même principe que `drawStarFragmentImpact` juste au-dessus.
+     ⚠️ MÊME FAMILLE DE DESSIN : peinte en COUCHES qui se recouvrent (flash, anneau
+     brisé, étincelles), jamais un dégradé translucide (DESSIN.md, « on assemble
+     des masses »). Un accusé de réception bref, pas une cinématique — c'est
+     pourquoi il n'y a que trois couches là où l'impact en a quatre. */
+  function drawStarHullFixGlow(g2, cx, cy, T2, ageMs) {
+    const age = Math.max(0, +ageMs || 0), life = Math.min(1, age / C.VANDAL_FIX_VFX_MS);
+    if (life >= 1) return;
+    const rnd = makeRnd(70519), oy = cy - T2 * 0.4;
+
+    // 1. Le flash : bref, au centre, presque blanc — le "niveau supérieur" qui claque.
+    const flash = Math.max(0, 1 - age / 260);
+    if (flash > 0.02) {
+      qDisc(g2, cx, oy, T2 * (0.32 + flash * 0.58), `rgba(255,250,214,${(0.85 * flash).toFixed(3)})`, 2);
+    }
+
+    // 2. L'anneau qui s'évase et s'éteint — brisé, comme celui de l'impact.
+    const ringOut = 1 - Math.pow(1 - life, 2.2);
+    const ringR = T2 * (0.55 + ringOut * 2.6), ringA = Math.max(0, 1 - life) * 0.85;
+    if (ringA > 0.02) {
+      for (let i = 0; i < 26; i++) {
+        const a = i * Math.PI * 2 / 26;
+        const broken = Math.sin(i * 1.7 + 1.1);
+        if (broken < -0.3) continue;
+        const rr = ringR * (0.94 + 0.08 * Math.sin(i * 2.3));
+        qDot(g2, cx + Math.cos(a) * rr, oy + Math.sin(a) * rr * 0.5,
+             broken > 0.6 ? 2 : 1, `rgba(255,214,96,${ringA.toFixed(3)})`, 2);
+      }
+    }
+
+    // 3. Les étincelles : montent en tournoyant, s'éteignent avant le sommet —
+    //    même construction que les braises de `drawStarFragmentImpact`, en or.
+    for (let i = 0; i < 16; i++) {
+      const seed = rnd(), a0 = rnd() * Math.PI * 2, r0 = T2 * (0.2 + rnd() * 0.7);
+      const ph = Math.min(1, life * (0.7 + seed * 0.6));
+      const rise = T2 * (2.2 + seed * 1.6) * ph;
+      const sway = Math.sin(ph * Math.PI * 2 + i) * T2 * 0.22;
+      const al = Math.max(0, 1 - Math.max(0, ph - 0.6) / 0.4) * 0.9;
+      if (al < 0.05) continue;
+      qDot(g2, cx + Math.cos(a0) * r0 + sway, oy - rise, 1,
+           `rgba(255,${226 - Math.round(seed * 40)},140,${al.toFixed(3)})`, 2);
+    }
+  }
+
   // ----- 10 façades de maison basiques pour Valley Town (zip 235). Toutes
   // au même canevas 96x96 que la maison de ferme, ancrées par leur bord bas.
   function townHouseVariant(styleIdx) {
@@ -16073,6 +16123,7 @@ house: house(),
     drawStarComet,          // zip 448 — la comète, sa queue, sa traînée et son impact
     drawStarFragmentMeteor, // 462 — petit caillou incandescent des impacts de ferme
     drawStarFragmentImpact, // 463 — choc physique terre/éjectas/poussière des petits fragments
+    drawStarHullFixGlow,    // 2026-09-12 (repasse) — la lueur "niveau supérieur" de la coque réparée
     drawStarCometTrail,
     drawStarImpactFlash,
     drawEmoteBubble,        // zip 455 — le « ! » des PNJ : tampon d'annonce et impact

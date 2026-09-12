@@ -486,17 +486,24 @@ export function starTimberProgress(e, now) {
    Un morceau sans lieu n'attend que le bois ; un morceau avec lieu attend les
    deux. Deux écritures de cette condition (ici et dans `starShipHas`) ont déjà
    divergé une fois dans ce dépôt — on la dérive donc d'une fonction unique.
-   ⚠️⚠️ AUTORITÉ 2026-09-12 — LA COQUE EST UN CAS À PART, ET C'EST DÉRIVÉ, PAS
-   UN CHAMP DE PLUS. Avant la tempête (reine pas encore trouvée), une coque
-   taillée par Tristan suffit — même règle que les quatre autres pièces. Après
-   (`starHas(e,"crater")` devient vrai), Kerguélen la déclare fragile : elle ne
-   redevient valide qu'avec le matériau de la plaque météorique
-   (`farmMaterial`, le refroidissement — inchangé, seule sa RAISON D'ÊTRE
-   change). Zéro champ ajouté : si le joueur avait déjà fini la coque avant la
-   tempête, ce test la fait régresser tout seul le jour où la reine sort — la
-   régression EST la révélation, aucun message dédié ne la porte. */
+   ⚠️⚠️⚠️ AUTORITÉ 2026-09-12 (repasse) — LA COQUE EST UN CAS À PART, ET SON
+   GARDE-FOU A CHANGÉ DE NATURE. La première version demandait
+   `starHas(e,"farmMaterial")` — et c'était MORT : `farmMaterial` fait partie
+   du besoin du chapitre `field`, dont la fin est un préalable STRUCTUREL à
+   `resolveStarTownFall` (`e.ch < 1` refuse). Autrement dit, au moment où
+   `starHas(e,"crater")` peut devenir vrai, `farmMaterial` l'est déjà
+   FORCÉMENT — vérifié par un test direct (`node`, deux ordres rejoués) avant
+   d'y toucher : aucune régression ne pouvait jamais se voir, et Kerguélen
+   promettait une tâche que le jeu ne posait jamais.
+   ⚠️ LE GARDE-FOU EST DONC `!!e.vandal` : le champ existant qui marque la
+   RÉPARATION elle-même (posé par `resolveVandalReveal`, désormais appelé
+   APRÈS le mini-jeu du marteau, pas à la première approche — voir
+   `starEngineerUrgent`). Zéro champ de plus : si le joueur avait déjà fini la
+   coque avant la tempête, ce test la fait régresser tout seul le jour où la
+   reine sort, et elle ne revient qu'une fois la réparation jouée — la
+   régression EST la révélation, et cette fois elle est atteignable. */
 function shipSiteOk(e, p) {
-  if (p.key === "hull" && starHas(e, "crater")) return starHas(e, "farmMaterial");
+  if (p.key === "hull" && starHas(e, "crater")) return !!(e && e.vandal);
   return !p.site || starHas(e, p.site);
 }
 export function starShipHas(e, key) {
@@ -583,10 +590,16 @@ export function starPlanReady(e) { return !!(e && e.plan && e.plan.done); }
    chantier naval se motive avant la pluie d'étoiles, donc les plans sont déjà
    rendus quand la reine sort) — mais l'ordre du test reste défensif : la
    PREMIÈRE fenêtre (plans en cours) passe devant, comme avant ce zip. */
-export function starEngineerHere(e, now) {
-  if (starPlanAsked(e) && !starPlanReady(e))
-    return (+now || 0) >= (e.plan.at + C.STAR_ENG_TRAVEL_MS);
-  /* ⚠️ MÊME GARDE QUE L'ANCIEN `engineer` : « reine ET six étoiles » (§6 de
+/* ⚠️⚠️ AUTORITÉ 2026-09-12 (repasse) — LA SECONDE FENÊTRE A SON PROPRE NOM.
+   Jusqu'ici `starEngineerHere` mélangeait « il est là pour les plans » et
+   « il est là, affolé, pour la coque » dans un seul booléen — bon pour savoir
+   s'il faut le DESSINER, insuffisant pour savoir COMMENT (posture calme contre
+   agitation en cercles, bulle qui marmonne contre bulle qui hurle). On sépare
+   donc la condition, et `starEngineerHere` s'écrit maintenant EN TERMES
+   D'ELLE : jamais deux endroits qui pourraient diverger sur ce qui compte
+   comme « la reine est sortie, pas encore réparé » (§8 de CLAUDE.md). */
+export function starEngineerUrgent(e, now) {
+  /* MÊME GARDE QUE L'ANCIEN `engineer` : « reine ET six étoiles » (§6 de
      QUETE.md), pas la reine seule — sinon Kerguélen apparaîtrait au quai
      pendant que la discrète ou la verte restent encore à trouver, avant même
      que le bandeau n'ait fini de les réclamer.
@@ -594,9 +607,21 @@ export function starEngineerHere(e, now) {
      Kerguélen qui repasse alors qu'il n'a même pas encore livré ses plans
      n'a rien à faire au quai — cette garde n'est pas un détour pour les bancs,
      c'est l'invariant réel de la trame cible (le chantier, chapitre 1, se
-     termine toujours avant que la reine ne sorte, chapitre 4). */
-  if (starHas(e, "crater") && !starMissing(e).length && starPlanReady(e) && !(e && e.vandal)) return true;
-  return false;
+     termine toujours avant que la reine ne sorte, chapitre 4).
+     ⚠️ `!e.vandal` : IL RESTE AFFOLÉ JUSQU'À LA RÉPARATION, PAS JUSQU'À LA
+     PREMIÈRE APPROCHE. `e.vandal` ne se pose plus au premier contact — il se
+     pose quand le marteau a gagné (voir `resolveVandalReveal`, appelé depuis
+     `FermeGame.js` APRÈS le mini-jeu, plus jamais au moment du E). */
+  return !!(starHas(e, "crater") && !starMissing(e).length && starPlanReady(e) && !(e && e.vandal));
+}
+export function starEngineerHere(e, now) {
+  if (starPlanAsked(e) && !starPlanReady(e))
+    return (+now || 0) >= (e.plan.at + C.STAR_ENG_TRAVEL_MS);
+  /* ⚠️ LES DEUX FENÊTRES NE SE RECOUVRENT JAMAIS DANS LA TRAME CIBLE (le
+     chantier naval se motive avant la pluie d'étoiles, donc les plans sont
+     déjà rendus quand la reine sort) — mais l'ordre du test reste défensif :
+     la PREMIÈRE fenêtre (plans en cours) passe devant, comme avant ce zip. */
+  return starEngineerUrgent(e, now);
 }
 export function starPlanPhase(e, now) {
   if (!starPlanAsked(e)) return "none";
@@ -646,6 +671,25 @@ export function starTimberBlock(e, key) {
   if (starTimberOrder(e, key)) return "busy";
   const part = STAR_SHIP_PARTS[idx];
   if (!shipSiteOk(e, part)) return "noShard";   // 469 — un morceau sans lieu n'a rien à attendre
+  /* ╔═════════════════════════════════════════════════════════════════════════════
+     ║ AUTORITÉ 2026-09-12 — GARDE-FOU PROVISOIRE : LA DERNIÈRE PIÈCE ATTEND LA PLUIE.
+     ╚═════════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️⚠️ SANS ELLE, LE CHANTIER SE FINIT SANS UNE SEULE ÉTOILE — vérifié par un
+     test direct (maire signé, plans, cinq pièces montées, `e.ch=0`, `e.found={}` :
+     `starShipComplete` rendait déjà `true`). Rien dans `starTimberBlock` ne dépend
+     du chapitre `field` ; `resolveStarTimberRaise` est la seule voie qui déclenche
+     `resolveStarGift` en jeu réel (zip 478) — donc un joueur pressé pouvait obtenir
+     la fin sans jamais voir tomber la pluie d'astéroïdes.
+     ⚠️ LA VRAIE PORTE EST « 2ᵉ négociation maire + gate or/temps » (`QUETE.md`
+     §« Ce qui n'est PAS fait »), PAS ENCORE ÉCRITE. En attendant, on bloque la
+     SEULE pièce qui resterait à commander (`starTimberBuilt(e) === STAR_SHIP_KEYS.
+     length - 1`, c'est-à-dire les quatre autres déjà posées) tant que `e.ch < 1` —
+     le champ complet de la ferme, pas encore trouvé. Les quatre premières pièces
+     restent commandables sans limite, exactement comme le veut « le chantier se
+     lance indépendamment des étoiles » : seule la CONCLUSION du chantier attend un
+     signe du ciel, jamais son démarrage. À retirer le jour où le vrai système
+     existe — ce verrou n'en est qu'un ersatz. */
+  if (e.ch < 1 && starTimberBuilt(e) >= STAR_SHIP_KEYS.length - 1) return "needStars";
   /* ⚠️⚠️⚠️ ZIP 478 — LA GARDE « LA PIÈCE PRÉCÉDENTE DOIT ÊTRE LIVRÉE » EST PARTIE,
      ET C'EST LE PLUS GROS GAIN DE TOUTE LA REFONTE POUR LE PLUS PETIT GESTE.
      Elle sérialisait 8 + 3 + 6 + 4 + 3 minutes : **24 minutes d'horloge réelle
@@ -3580,7 +3624,7 @@ export function resolveStarEvilFound(e, now) {
    Kerguélen dans la même seconde ne déclenchent la fuite qu'une fois. */
 export function resolveVandalReveal(e, now) {
   if (!starHas(e, "crater")) return { ok: false };
-  if (e.vandal) return { ok: false, already: true };
+  if (e.vandal) return { ok: true, already: true };
   e.vandal = { at: +now || 0 };
   return { ok: true };
 }
@@ -4759,7 +4803,15 @@ export function resolveStarGift(e, playerIds, now) {
    de la reine) n'en a PAS besoin et c'est délibéré : il ne coûte qu'un objet à 400
    or, que le bouton « Argent » du menu dev sait déjà donner. Un bouton par geste
    aurait été un bouton de plus à tenir pour rien. */
-export const STAR_DEV_OPS = ["reset", "warn", "start", "candy", "dish", "lure", "queen", "shy", "green", "evil", "hook", "rescue", "chapter", "skip", "all", "plans", "deliver", "timber", "appt", "unslam"];
+/* ⚠️⚠️ AUTORITÉ 2026-09-12 — « vandal » REJOINT LA LISTE, MÊME FAMILLE QUE
+   `queen`..`rescue` : IL POSE LE DÉCOR ET LAISSE LE GESTE. Sans lui, atteindre
+   la seconde fenêtre de Kerguélen (`starEngineerHere`, voir sa note) demande de
+   gagner les six chasses ET les quinze minutes de plans avant de pouvoir
+   REGARDER la révélation — c'est-à-dire qu'on ne la regarderait qu'une fois par
+   soirée de test, exactement le défaut que ce menu existe pour corriger. Il ne
+   pose PAS `e.vandal` : la révélation reste le geste (marcher jusqu'au quai —
+   `standKerguelen` juste au-dessus dans le menu — et appuyer sur E). */
+export const STAR_DEV_OPS = ["reset", "warn", "start", "candy", "dish", "lure", "queen", "shy", "green", "evil", "hook", "rescue", "chapter", "skip", "all", "plans", "vandal", "deliver", "timber", "appt", "unslam"];
 /* ⚠️ ZIP 469 — `turn` (le retournement) sort de la liste : sa scène est supprimée
    dans `FermeGame`, et un bouton qui rejoue une scène qui n'existe plus ouvre un
    voile noir de sept secondes sur rien. */
@@ -4832,6 +4884,33 @@ export function devStar(e, op, now, who) {
     for (const site of STAR_FARM_IMPACTS) resolveStarFound(e, site.id, "🛠️", t);
     resolveStarFound(e, "crater", "🛠️", t);
     e.plan = { at: t - C.STAR_ENG_TRAVEL_MS - C.STAR_ENG_WORK_MS, by: "🛠️", done: t };
+    return { star: e, ok: true };
+  }
+  /* ╔═════════════════════════════════════════════════════════════════════════════
+     ║ AUTORITÉ 2026-09-12 — LE BOUTON DE LA RÉVÉLATION, MÊME FAMILLE QUE
+     ║ `queen`..`rescue` : ON POSE LE DÉCOR, ON LAISSE LE GESTE.
+     ╚═════════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ SANS LUI, ATTEINDRE LA SECONDE FENÊTRE DE KERGUÉLEN (`starEngineerHere`,
+     voir sa note) DEMANDE DE GAGNER LES SIX CHASSES ET LES QUINZE MINUTES DE
+     PLANS avant de pouvoir REGARDER la fuite — c'est-à-dire qu'on ne la
+     regarderait qu'une fois par soirée de test, exactement le défaut que ce menu
+     existe pour corriger (444). Autonome comme `rescue` : il refait sa propre
+     préparation plutôt que de supposer qu'un autre bouton a déjà tourné.
+     ⚠️ IL NE POSE PAS `e.vandal` : la révélation reste LE GESTE — marcher jusqu'au
+     quai (« Stand at Kerguélen », FermeGame.js, même famille que
+     `devStandAtMayorDesk`) et appuyer sur E déclenche la vraie `req:
+     "vandalReveal"`, donc `resolveVandalReveal`, exactement comme un joueur. */
+  if (op === "vandal") {
+    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "🛠️" };
+    if (!e.fall) e.fall = t;
+    for (const site of STAR_FARM_IMPACTS) resolveStarFound(e, site.id, "🛠️", t);
+    resolveStarTownFall(e, t);
+    if (e.townFall) e.townFall = t - STAR_CRATER_COOL_MS - 1000;
+    resolveStarFound(e, "crater", "🛠️", t);
+    resolveStarFound(e, "townShy", "🛠️", t);
+    resolveStarFound(e, "townGreen", "🛠️", t);
+    if (!starPlanAsked(e)) e.plan = { at: t, by: "🛠️", done: t };
+    else if (!starPlanReady(e)) e.plan.done = t;
     return { star: e, ok: true };
   }
   if (op === "timber") {
@@ -5097,6 +5176,17 @@ export function devStar(e, op, now, who) {
     if (!e.fall) e.fall = t;
     for (let pass = 0; pass < 2; pass++)
       for (const st of STAR_SITES) resolveStarFound(e, st.id, "🛠️", t);
+    /* ⚠️⚠️ AUTORITÉ 2026-09-12 (repasse) — ET IL DOIT DIRE LA RÉPARATION, À CÔTÉ DE
+       LA TROUVAILLE QUI LA DÉCLENCHE, PAS APRÈS LE VERROU DU MAIRE. `STAR_SITES`
+       trouve `crater` dans la boucle juste au-dessus, sans dépendre du bois ni du
+       maire : sans cette ligne AU MÊME ENDROIT, `shipSiteOk` regarderait `e.vandal`
+       (encore vide) et ferait redescendre la coque à 4/5 dès qu'un test ou un
+       joueur pressé appelle « all » sans avoir d'abord signé — exactement le
+       défaut inverse de celui que P1 BIS a corrigé ici même (le bois posé sans
+       le maire). Placée APRÈS `starDevBoatGate`, elle aurait hérité du même
+       retour anticipé que le bois — et le trouver a coûté un test qui a rougi
+       avant que cette note ne soit écrite. */
+    resolveVandalReveal(e, t);
     /* ⚠️ ZIP 454 — LE RACCOURCI DOIT AUSSI DIRE LE BOIS, sans quoi la résolution
        n'arriverait jamais (`resolveStarGift` exige un navire fini) : le bouton
        promettrait « c'est tout » et le jeu, lui, attendrait quarante minutes de

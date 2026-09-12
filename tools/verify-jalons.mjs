@@ -171,16 +171,26 @@ Q.resolveStarFound(e, "townShy", "banc", now);
 Q.resolveStarFound(e, "townGreen", "banc", now);
 ok("jalon 5 — chapitre 2 clos, chapitre « build » ouvert (final)",
    Q.starChapterKey(e) === "build" && Q.STAR_CHAPTERS[e.ch].final, `e.ch=${e.ch}`);
-/* ⚠️ AUTORITÉ 2026-09-12 — DANS CETTE TRAME PRÉCISE, LA COQUE NE RÉGRESSE PAS :
-   `farmMaterial` fait partie des huit impacts fouillés au jalon 4, donc le
-   renfort de Kerguélen est déjà en poche avant même que la reine ne sorte. La
-   régression (coque bloquée tant que le renfort manque) est une règle réelle
-   de `shipSiteOk`, mais elle ne se voit QUE si le joueur atteint le cratère
-   sans avoir fini de fouiller la ferme — testée isolément par
-   `tools/render-navire.mjs` (§1, trois contrôles dédiés à `shipSiteOk`). */
-for (const k of Q.STAR_SHIP_KEYS)
-  ok(`…« ${k} » reste commandable après le cratère (renfort déjà en poche)`,
+/* ⚠️⚠️⚠️ AUTORITÉ 2026-09-12 (repasse) — DANS CETTE TRAME PRÉCISE, LA COQUE
+   RÉGRESSE MAINTENANT POUR DE VRAI. La première version de cette passe disait
+   l'inverse : « farmMaterial fait partie des huit impacts fouillés au jalon 4,
+   donc le renfort est déjà en poche ». C'était vrai — et c'est justement ce
+   qui rendait `farmMaterial` MORT comme garde-fou (vérifié par un test direct,
+   hors banc : au moment où `crater` peut devenir vrai, `farmMaterial` l'est
+   TOUJOURS déjà — `field` en est un préalable structurel). Le garde-fou est
+   donc devenu `e.vandal` (posé par `resolveVandalReveal`, désormais appelé
+   APRÈS le mini-jeu du marteau, plus jamais au premier contact) — garanti FAUX
+   à cet instant précis, donc une vraie régression, visible dans CETTE trame et
+   pas seulement dans le cas limite que `render-navire.mjs` isolait. */
+ok("…« hull » régresse après le cratère : la réparation n'a pas encore été jouée",
+   Q.starTimberBlock(e, "hull") === "noShard");
+for (const k of Q.STAR_SHIP_KEYS.filter(k => k !== "hull"))
+  ok(`…« ${k} » reste commandable après le cratère (aucun lieu ne le concerne)`,
      Q.starTimberBlock(e, k) === null, Q.starTimberBlock(e, k));
+/* Le marteau, avec Kerguélen — la coque redevient commandable. */
+Q.resolveVandalReveal(e, now);
+ok("…et la réparation jouée, « hull » redevient commandable",
+   Q.starTimberBlock(e, "hull") === null, Q.starTimberBlock(e, "hull"));
 
 // ── Jalon 6 : le chantier — cinq commandes, cinq livraisons, cinq montages.
 for (const k of Q.STAR_SHIP_KEYS) {

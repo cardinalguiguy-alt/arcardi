@@ -187,12 +187,19 @@ console.log(`  morceaux        : ${C.STAR_SHIP_ORDER.join(", ")}\n`);
      indépendamment des étoiles. `STAR_SHIP_PARTS` a donc CINQ `site: null`
      aujourd'hui, et ce n'est plus une erreur, la règle du 469 vient de gagner sa
      cinquième pièce.
-     ⚠️ CE QUI REMPLACE LE PLANCHER « au moins un morceau se ramasse » : la coque
+     ⚠️⚠️ CE QUI REMPLACE LE PLANCHER « au moins un morceau se ramasse » : la coque
      garde un lien au monde, mais DÉRIVÉ et CONDITIONNEL — `shipSiteOk` (privée à
-     `quete.js`) la fait dépendre de `farmMaterial` UNIQUEMENT une fois la reine
+     `quete.js`) la fait dépendre de `e.vandal` UNIQUEMENT une fois la reine
      trouvée (`starHas(e,"crater")`). On le mesure en jouant `starShipHas`, pas en
      lisant la table statique — sinon ce garde-fou mesurerait un champ qui n'existe
-     plus et manquerait la vraie règle. */
+     plus et manquerait la vraie règle.
+     ⚠️⚠️⚠️ AUTORITÉ 2026-09-12 (repasse) — `farmMaterial` N'EST PLUS LE RENFORT.
+     Un test direct (`node`, hors banc) a montré qu'il était MORT comme garde-fou :
+     `field` (farmMaterial compris) est un préalable structurel à
+     `resolveStarTownFall` (`e.ch<1` refuse), donc `farmMaterial` est TOUJOURS déjà
+     trouvé au moment où `crater` peut l'être — la « régression » ne pouvait jamais
+     se voir. Le renfort est maintenant la réparation elle-même : `e.vandal`, posé
+     par `resolveVandalReveal` (le mini-jeu du marteau, avec Kerguélen). */
   const siteIds = new Set(Q.STAR_SITES.map(s => s.id));
   const named = Q.STAR_SHIP_PARTS.filter(p => p.site);
   const orphans = named.filter(p => !siteIds.has(p.site));
@@ -206,14 +213,14 @@ console.log(`  morceaux        : ${C.STAR_SHIP_ORDER.join(", ")}\n`);
     e0.wood.hull = { done: true };
     const preStorm = Q.starShipHas(e0, "hull");
     Q.resolveStarFound(e0, "crater", "banc", Date.now());
-    const postStormNoMat = Q.starShipHas(e0, "hull");
-    Q.resolveStarFound(e0, "farmMaterial", "banc", Date.now());
+    const postStormBroken = Q.starShipHas(e0, "hull");
+    Q.resolveVandalReveal(e0, Date.now());
     const postStormRepaired = Q.starShipHas(e0, "hull");
     ok(preStorm === true, "⚠️⚠️ AVANT la reine, une coque taillée suffit (chantier indépendant des étoiles)",
        `hull=${preStorm}`);
-    ok(postStormNoMat === false, "⚠️⚠️ APRÈS la reine et SANS le renfort, la coque régresse (Kerguélen : elle est fragile)",
-       `hull=${postStormNoMat}`);
-    ok(postStormRepaired === true, "⚠️⚠️ le renfort (farmMaterial, refroidissement) répare la coque",
+    ok(postStormBroken === false, "⚠️⚠️ APRÈS la reine et SANS réparation, la coque régresse (Kerguélen : elle est fragile)",
+       `hull=${postStormBroken}`);
+    ok(postStormRepaired === true, "⚠️⚠️ la réparation (le marteau, avec Kerguélen) répare la coque",
        `hull=${postStormRepaired}`);
   }
   ok(Q.STAR_SHIP_TOTAL === N, "STAR_SHIP_TOTAL est dérivé, pas écrit", `${Q.STAR_SHIP_TOTAL}`);

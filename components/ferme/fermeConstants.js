@@ -4229,6 +4229,21 @@ export const VANDAL_FARM_PATH = [
   { x: STATION_PLATFORM.x + 5, y: STATION.y + STATION.h + 3 },
   { x: STATION_PLATFORM.x + 9, y: STATION.y + STATION.h + 5.5 },
 ];
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ AUTORITÉ 2026-09-12 (repasse) — L'URGENCE, PUIS LA RÉPARATION.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   Demande de Guillaume, en jouant à ce qui n'était encore qu'une idée : avant
+   `e.vandal` (qui ne se pose plus qu'APRÈS le marteau, voir `starEngineerUrgent`,
+   `quete.js`), Kerguélen s'agite en cercles sur le quai et hurle qu'il faut
+   venir vite. Deux réglages cosmétiques, purement locaux — rien de tout ça ne
+   voyage sur le réseau, c'est une fonction pure de `now`, comme `starGreenSway`. */
+export const VANDAL_URGENT_PACE_R = 0.32;    // rayon du cercle qu'il arpente, en cases
+export const VANDAL_URGENT_PACE_MS = 1400;   // une boucle complète
+export const VANDAL_URGENT_BUBBLE_MS = 1200; // cadence de la bulle "VITE !!" — plus nerveuse que le marmonnement calme (9000)
+/* La lueur de réparation ("level up"), jouée une fois sur la cale au moment où
+   `e.vandal.at` se pose — dérivée de `now - e.vandal.at`, jamais un état de
+   plus. Courte exprès : c'est un accusé de réception, pas une cinématique. */
+export const VANDAL_FIX_VFX_MS = 1600;
 /* ⚠️ « À CÔTÉ DU LAC » A UN RAYON, ET IL EST GÉNÉREUX EXPRÈS. Demande de
    Guillaume : « si on ouvre le plan à côté du lac, on verra effectivement le
    fantôme virtuel du bateau ». Trop serré, le joueur ouvre le plan à trois pas de
