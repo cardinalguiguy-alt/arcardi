@@ -3236,6 +3236,33 @@ export function newStar() {
        `STAR_SITES` : la ramasser et la ramener à la ferme restent un
        chantier séparé, non construit). */
     evilRescued: 0,
+    /* ╔══════════════════════════════════════════════════════════════════════════
+       ║ AUDIT 2026-09-12 — CE CHAMP MANQUAIT ICI, ET C'EST CE QUI RENDAIT LA QUÊTE
+       ║ INFINISSABLE. LA LEÇON EST LA PLUS CHÈRE DE L'AUDIT.
+       ╚══════════════════════════════════════════════════════════════════════════
+       ⚠️⚠️⚠️ `resolveVandalReveal` posait `e.vandal = { at }` sur un champ que NI
+       `newStar` NI `migrateStar` ne connaissaient. Or `migrateStar` ne « répare »
+       pas un objet : elle en construit un NEUF (`newStar()`) et y recopie les
+       champs qu'elle connaît, un par un — donc tout champ qu'elle ignore est
+       SUPPRIMÉ. Et elle est appelée en tête de CHAQUE requête d'étoile et de
+       CHAQUE `apply` : la réparation de la coque était donc effacée dans la
+       milliseconde qui suivait sa pose, à chaque fois, chez tout le monde.
+       ⚠️⚠️ CE QUE ÇA COÛTAIT, ET RIEN NE LE DISAIT : la fuite du vandale (quatre
+       phases, 2 min 35 de scène, un sprite, quatre phrases de bandeau) ne pouvait
+       JAMAIS se déclencher ; et surtout, depuis que `shipSiteOk` lit `e.vandal`
+       (autorité du matin même), la coque régressait à la sortie de la reine et
+       **ne pouvait plus jamais revenir** — donc `starShipComplete` restait faux
+       pour toujours et la quête n'avait plus de fin. Trois livraisons de suite
+       ont livré cette scène sans que personne puisse la voir, et le symptôme
+       n'était pas une erreur : c'était un `E` qui rouvrait éternellement le même
+       mini-jeu.
+       ⚠️ LA LEÇON, GÉNÉRALE : *un résolveur qui écrit un champ neuf doit être
+       livré DANS LE MÊME GESTE que sa déclaration et sa migration.* Un champ
+       absent de `newStar` ne lève rien, ne casse aucun banc (aucun ne rejoue un
+       `migrateStar` APRÈS un résolveur), et disparaît en silence. Les trois
+       voisins ci-dessus (`evilFound`, `evilRescued`, `plan`) sont le modèle :
+       déclarés ici, recopiés là-bas, jamais l'un sans l'autre. */
+    vandal: null,   // { at } — la coque réparée avec Kerguélen ; la fuite s'en dérive
   };
 }
 /* ⚠️ LA REPRISE EST TOLÉRANTE, PAS CONFIANTE. Une sauvegarde d'avant ce zip n'a
@@ -3367,6 +3394,11 @@ export function migrateStar(saved) {
   e.doneAt = +saved.doneAt || 0;
   e.evilFound = +saved.evilFound || 0; // 2026-09-03 (lot C)
   e.evilRescued = +saved.evilRescued || 0; // 2026-09-04
+  /* AUDIT 2026-09-12 — voir la note de `vandal` dans `newStar` : sans cette
+     ligne, la réparation de la coque s'effaçait à chaque migration, donc à
+     chaque requête. ⚠️ On RECONSTRUIT le sous-objet au lieu de faire confiance
+     à sa forme, comme tous les autres ici (« tolérante, pas confiante »). */
+  e.vandal = saved.vandal && +saved.vandal.at ? { at: +saved.vandal.at } : null;
   /* ── ZIP 479 : les trois verbes. ⚠️⚠️ MÊME DISCIPLINE QUE PARTOUT AILLEURS ICI —
      on RECONSTRUIT chaque sous-objet au lieu de faire confiance à sa forme, et un
      lieu inconnu est « une version d'après » qu'on ignore. Une sauvegarde d'avant
@@ -3857,6 +3889,32 @@ export function starGoalKey(e, ctx) {
      chantier naval, qui reste la seule progression réellement actionnable
      tant que ces lots ne sont pas livrés. C'est la même discipline que
      `engineer` : une clé qui n'a plus rien à dire cède la place. */
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ AUDIT 2026-09-12 — L'URGENCE PASSE DEVANT L'OBJECTIF PERMANENT, ET SANS
+     ║ ÇA SES QUATRE PHRASES SONT INJOIGNABLES.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️⚠️ CE BLOC ÉTAIT ÉCRIT JUSTE APRÈS `evilSeek`, et sa propre note disait
+     « cette place, juste en dessous, qui reste libre pour la voix de Kerguélen ».
+     ELLE N'ÉTAIT PAS LIBRE : `kerguelenBack` et la fuite exigent
+     `!missing.length`, ce qui n'arrive qu'au chapitre `build` — c'est-à-dire à
+     `e.ch >= STAR_CH_DONE - 1`, la définition EXACTE de `starEvilUnlocked`. Les
+     deux conditions deviennent donc vraies au même instant, et `evilSeek`
+     gagnait toujours. Résultat : les quatre phrases écrites pour cette scène
+     (`kerguelenBack`, `vandalChaseTown`, `vandalChaseFarm`, `vandalEscaped`)
+     ne pouvaient JAMAIS s'afficher — du contenu livré et inatteignable, le
+     défaut que `STAR_GOAL_KEYS` existe pour rendre visible aux bancs et que
+     seul un test de chronologie pouvait attraper.
+     ⚠️ L'ORDRE JUSTE EST CELUI DE L'URGENCE : la fuite est une scène MINUTÉE
+     (2 min 35, quatre phases) ; `evilSeek` est un objectif PERMANENT qui attend
+     sans rien perdre. Une scène qui passe ne se remet pas à plus tard ; un
+     objectif qui attend, si. */
+  if (e.vandal) {
+    const ph = vandalPhase(e, ctx && ctx.now);
+    if (ph === "town" || ph === "gap") return "vandalChaseTown";
+    if (ph === "farm") return "vandalChaseFarm";
+    if (ph === "escaped") return "vandalEscaped";
+    // ph === "gone" : rien à dire de plus, on retombe sur la chaîne normale.
+  }
   if (starEvilUnlocked(e) && !starEvilFound(e)) return "evilSeek";
   if (starHas(e, "crater") && !missing.length && !starPlanAsked(e)) return "engineer";
   /* ╔══════════════════════════════════════════════════════════════════════════
@@ -3866,8 +3924,16 @@ export function starGoalKey(e, ctx) {
      ⚠️ TESTÉ AVANT `!first` : dans la trame cible, les plans sont déjà rendus
      quand la reine sort (le chantier se motive avant la pluie d'étoiles), donc
      `starPlanAsked(e)` est déjà vrai et la branche `engineer` ci-dessus ne se
-     déclenche plus ici — c'est cette place, juste en dessous, qui reste
-     libre pour la voix de Kerguélen.
+     déclenche plus ici.
+     ⚠️⚠️ CORRECTION D'UNE AFFIRMATION FAUSSE (audit 2026-09-12) : cette note
+     disait « c'est cette place, juste en dessous, qui reste LIBRE pour la voix
+     de Kerguélen ». Elle ne l'est pas — `evilSeek` devient vrai au même instant
+     que `!missing.length` (voir la note de la FUITE, plus haut) et gagne donc
+     toujours. `kerguelenBack` ne s'affiche qu'une fois la septième sœur vue, et
+     c'est ASSUMÉ : comme `engineer` juste au-dessus, c'est un objectif qui
+     attend sans rien perdre, alors que la fuite est une scène minutée — seule
+     celle-ci est passée devant. Ce qu'il ne faut pas croire, c'est que la place
+     était libre.
      ⚠️⚠️ MÊME GARDE `!missing.length` QUE `engineer` : « reine ET six
      étoiles » (§6 de QUETE.md), jamais la reine seule — sinon le bandeau
      sauterait la discrète ou la verte pendant qu'elles attendent encore
@@ -3876,13 +3942,6 @@ export function starGoalKey(e, ctx) {
      `starPlanReady(e)` : il ne peut revenir que s'il est déjà venu — même
      invariant que `starEngineerHere`, tenu une seconde fois ici. */
   if (starHas(e, "crater") && !missing.length && starPlanReady(e) && !e.vandal) return "kerguelenBack";
-  if (e.vandal) {
-    const ph = vandalPhase(e, ctx && ctx.now);
-    if (ph === "town" || ph === "gap") return "vandalChaseTown";
-    if (ph === "farm") return "vandalChaseFarm";
-    if (ph === "escaped") return "vandalEscaped";
-    // ph === "gone" : rien à dire de plus, on retombe sur la chaîne normale.
-  }
   if (!first) {
     if (!starPlanReady(e)) return (ctx && ctx.engineerHere) ? "engineerWork" : "engineerTravel";
     /* ⚠️ ZIP 480 — LA PASSE MAIRE PREND SA PLACE DANS LE BANDEAU, entre les plans
@@ -4322,8 +4381,50 @@ export function resolveStarTimberTick(e, now) {
    vivre dans le battement, puisque le battement ne finit plus le navire. Leçon 474
    — un résolveur appelé d'un seul endroit ne s'exécute que si cet endroit est
    atteint —, appliquée d'avance en déplaçant l'appel avec le fait qu'il observe. */
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ AUDIT 2026-09-12 — LE GARDE-FOU DU CIEL SE TIENT SUR LE MONTAGE, PAS SUR LA
+   ║ COMMANDE. CELUI DU MATIN NE GARDAIT RIEN, ET C'EST MESURÉ.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️⚠️ LE `needStars` DE `starTimberBlock` EST INATTEIGNABLE EN JEU. Il ne
+   refuse une COMMANDE que si quatre pièces sont déjà POSÉES (`starTimberBuilt >=
+   4`) ; or depuis le 478 les cinq commandes tournent EN PARALLÈLE, donc le
+   joueur pressé les passe toutes les cinq d'un coup alors que `starTimberBuilt`
+   vaut encore ZÉRO — et aucune n'est refusée. Rejoué par un test direct :
+   maire signé, plans rendus, cinq commandes, cinq montages, `e.ch = 0`,
+   `e.found = {}` → `starShipComplete === true` et `resolveStarGift` accorde la
+   fin. **La quête se termine sans qu'une seule étoile soit tombée**, ce qui est
+   exactement le défaut que la passe du matin croyait avoir fermé.
+   ⚠️ LA LEÇON : *un garde-fou posé sur la DEMANDE ne tient rien quand les
+   demandes sont parallèles — il faut le poser sur l'ÉVÉNEMENT qu'il protège.*
+   L'événement protégé est la CONCLUSION du chantier (« seule la conclusion
+   attend un signe du ciel, jamais son démarrage »), et la conclusion est ce
+   MONTAGE-ci. On garde donc les deux écritures, mais celle qui compte est ici.
+   ⚠️ ET ELLE SE DÉRIVE, elle ne compte pas : « ce montage achèverait-il le
+   navire ? » se lit en rejouant `shipSiteOk` sur les cinq pièces, la pièce
+   courante comptée comme posée. Un compte (`starTimberBuilt === 4`) aurait
+   ignoré la régression de la coque, qui est justement ce qui rend le navire
+   incomplet avec cinq bois posés. */
+export function starRaiseCompletes(e, key) {
+  const idx = STAR_SHIP_KEYS.indexOf(key);
+  if (idx < 0) return false;
+  for (const p of STAR_SHIP_PARTS) {
+    if (!shipSiteOk(e, p)) return false;                     // la coque non réparée, par exemple
+    if (p.key !== key && !starTimberDone(e, p.key)) return false;
+  }
+  return true;
+}
+/* La raison de refuser un MONTAGE, ou `null`. ⚠️ UNE SEULE ÉCRITURE, LUE PAR LE
+   CLIENT (qui choisit l'invite) ET PAR L'HÔTE (qui tranche) : c'est la parade du
+   §8 de CLAUDE.md, et elle est écrite ici parce que la divergence entre ces deux
+   endroits vient de coûter la scène d'urgence de Kerguélen le jour même. */
+export function starRaiseBlock(e, key) {
+  if (!starTimberReady(e, key)) return "notReady";
+  if ((e ? e.ch | 0 : 0) < 1 && starRaiseCompletes(e, key)) return "needStars";
+  return null;
+}
 export function resolveStarTimberRaise(e, key, who, now) {
-  if (!starTimberReady(e, key)) return { ok: false, why: starTimberBlock(e, key) || "notReady" };
+  const no = starRaiseBlock(e, key);
+  if (no) return { ok: false, why: no === "notReady" ? (starTimberBlock(e, key) || "notReady") : no };
   const w = e.wood[key];
   w.done = true;
   w.ready = false;

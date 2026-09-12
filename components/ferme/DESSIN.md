@@ -153,3 +153,41 @@ eux-mêmes ; `tools/README.md` pour les bancs qui les regardent.
   `globalAlpha` donnent un dessin **juste en jeu et faux au banc** — le stub menteur du §10, dans
   l'outil censé nous en protéger. On taille par un CHAMP (une couleur par rayon et par angle) et
   on module l'alpha **dans la couleur**, jamais par l'état du contexte.
+
+---
+
+## AUDIT 2026-09-12 — DEUX LEÇONS PAYÉES SUR LES ÉTOILES COMPAGNES
+
+⚠️⚠️⚠️ **UNE GRANDEUR DE DESSIN QUI SERT DEUX RÔLES REND TOUT RÉGLAGE IMPOSSIBLE.** Un seul
+rayon (`r = R × 0,62`) était à la fois le **rayon intérieur du polygone** — donc la profondeur
+des échancrures, donc le fait qu'on lise cinq branches — et le **rayon du cœur clair** — donc la
+place du visage. Les deux tirent en sens opposés : élargir le cœur pour loger un regard rebouche
+les creux et l'étoile devient une masse à bosses ; creuser pour retrouver l'étoile écrase le
+visage. **Cinq réécritures ont cherché le bon réglage là où il y avait DEUX décisions**, et
+Guillaume a refusé le résultat deux fois avec le même mot (« ça ne ressemble plus à une étoile »,
+puis « pas assez expressives »). La sortie est de les SÉPARER (`rIn` creuse, `rCore` éclaire) :
+le nombre avait l'air d'un réglage, il était deux choix.
+⚠️ **Corollaire de méthode** : un banc vert ne dit pas que la forme se LIT. Celui des étoiles
+mesurait la hauteur, la quantité de matière et l'écart de couleur — les trois restaient justes
+pendant que la silhouette devenait une motte. *On regarde la planche, toujours.*
+
+⚠️⚠️ **UN ANGLE CONSTANT N'EST PAS UNE LARGEUR CONSTANTE.** Le chanfrein des pointes existe pour
+garantir « un dernier tronçon large de deux-trois pixels », sans quoi le cerne par dilatation
+rebouche l'échancrure voisine. Écrit en RADIANS (`0,11`), il ne tient cette promesse qu'au rayon
+où il a été réglé : à un rayon plus petit — et pire, dans un état qui rétrécit encore le corps —
+l'arc ne fait plus qu'un pixel, la pointe devient une écharde ceinturée par le cerne, et le
+contrôle d'îlots flottants rougit. *Ce que le dessin promet est la largeur : on la dérive du
+rayon, bornée aux deux bouts.*
+
+⚠️ **ET UNE TROISIÈME, PLUS BÊTE : UNE BRANCHE POSÉE PRESQUE À L'HORIZONTALE EST CELLE QUE LE
+CERNE PINCE.** Les 0,22 radian d'inclinaison « pour casser la symétrie » couchaient une pointe à
+4° de l'horizontale ; les pixels y sont carrés et la diagonale n'aide pas, donc le cerne la
+mangeait des deux côtés. Un balayage 4 profondeurs × 4 inclinaisons l'a montré : **toutes** les
+profondeurs passent à inclinaison nulle, **aucune** ne passe à 0,22. *Quand un réglage et une
+mesure s'opposent, le coupable est parfois un troisième réglage.*
+
+⚠️ **LE VISAGE SE PEINT À TRAVERS LA FONCTION QUI DÉFINIT LA FORME** (`inside()`), jamais à des
+coordonnées calées à la main : sinon chaque changement de taille — ou un état qui rétrécit le
+corps — repose la question pour chaque trait, et les sourcils finissent sur du vide. Même famille
+que le chapeau et les éclats de la reine, qui étaient en offsets absolus « natifs à leur trame »
+et sont devenus faux dès que la trame a bougé.

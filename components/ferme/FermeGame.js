@@ -2993,6 +2993,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.id === me.id) return;
     if (!playersRef.current.has(p.id)) {
       playersRef.current.set(p.id, { id: p.id, name: p.name, gender: p.gender || "m", outfit: p.outfit || 0, x: p.x ?? C.SPAWN.x, y: p.y ?? C.SPAWN.y, tx: p.x ?? C.SPAWN.x, ty: p.y ?? C.SPAWN.y, dir: p.dir || 0, moving: false, tool: 0, animT: 0, sleeping: false, torch: false, starFocus: null, hatUntil: (farmersRef.current[p.id] && farmersRef.current[p.id].hatUntil) || 0, pets: (p.pets) || (farmersRef.current[p.id] && farmersRef.current[p.id].pets) || [], zone: "farm", lastSeenAt: Date.now() });
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ AUDIT 2026-09-12 — « 👥 1 JOUEUR EN LIGNE » CHEZ L'INVITÉ, POUR TOUJOURS.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️⚠️ TROUVÉ EN JOUANT À DEUX, et invisible autrement : le compteur du HUD
+         n'était rafraîchi que par les événements `join` et `leave`. Or l'HÔTE est
+         là AVANT l'invité — son `join` a été diffusé quand personne n'écoutait
+         encore —, et rien d'autre ne remet le compte à jour. L'invité voit donc
+         « 1 joueur » tant que personne n'arrive ou ne part APRÈS lui, c'est-à-dire
+         pendant toute une soirée à deux : le seul indicateur qui dise « tu n'es
+         pas seul » affiche exactement le contraire.
+         ⚠️ LA PARADE EST ICI ET PAS DANS UN TROISIÈME ÉVÉNEMENT : `ensureRemote`
+         est le SEUL endroit qui fasse entrer un joueur distant dans la carte, quel
+         que soit le message qui l'a révélé (`join`, `pos`, `ping`, instantané).
+         Le compte se met donc à jour là où la carte change, jamais à côté — c'est
+         la même discipline que `hostFlushOut` pour l'état partagé, et ça ne coûte
+         pas un `send()` de plus (§3 : le compteur se DÉDUIT, il ne se diffuse pas).
+         ⚠️ Et seulement à la CRÉATION : `ensureRemote` est rappelée à chaque
+         paquet de position, donc un `setHud` inconditionnel ici rendrait un
+         `setState` par position reçue, soit dix par seconde et par joueur. */
+      setHud(h => (h.players === playersRef.current.size + 1 ? h : { ...h, players: playersRef.current.size + 1 }));
     }
     // Zip 364 : toute preuve de vie (join/pos/ping) repousse l'expiration —
     // voir le balayage TTL plus haut.
@@ -4174,11 +4194,41 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          (`e.vandal.at`), et tout le reste (position, bandeau) s'en dérive
          chez chaque client sans un `send()` de plus. */
       const ev = (sharedRef.current.star = Q.migrateStar(sharedRef.current.star));
-      const rv = Q.resolveVandalReveal(ev, Date.now());
+      const nowV = Date.now();
+      const rv = Q.resolveVandalReveal(ev, nowV);
       if (rv.ok && !rv.already) {
         dirtyRef.current = true;
+        const outV = { star: ev };
+        /* ╔══════════════════════════════════════════════════════════════════════
+           ║ AUDIT 2026-09-12 — LA RÉPARATION PEUT ACHEVER LE NAVIRE, DONC ELLE
+           ║ PEUT DÉCLENCHER LA FIN. SANS CES QUATRE LIGNES, LA QUÊTE EST
+           ║ INFINISSABLE.
+           ╚══════════════════════════════════════════════════════════════════════
+           ⚠️⚠️⚠️ PROUVÉ PAR UN TEST DIRECT, pas par relecture. Depuis que
+           `shipSiteOk` lit `e.vandal` (autorité du matin même), la coque RÉGRESSE
+           à la sortie de la reine : `starShipComplete` devient donc faux, et il
+           redevient vrai à l'instant où `e.vandal` se pose ICI. Or la seule voie
+           qui appelait `resolveStarGift` en jeu réel est `starTimberRaise` (leçon
+           474, écrite dans son propre commentaire) — et quand la dernière pièce a
+           déjà été montée PENDANT la régression, `starTimberToRaise` rend `null` :
+           plus une seule invite, plus un seul battement, plus rien. Le joueur
+           finissait le bateau, réparait la coque, voyait les cinq pièces en place
+           — et la scène finale ne venait jamais.
+           ⚠️ C'EST EXACTEMENT LE DÉFAUT #4 DU ZIP 473, REJOUÉ SUR UN TROISIÈME
+           ÉVÉNEMENT : *un résolveur appelé d'un seul endroit ne s'exécute que si
+           cet endroit est atteint.* La parade est la même qu'au 473 (menu dev) et
+           qu'au 478 (montage) : partout où quelque chose peut rendre
+           `starShipComplete` vrai, on retente le don. `resolveStarGift` est
+           idempotent sur `e.doneAt`, donc un essai qui échoue ne coûte rien.
+           ⚠️ ET LA SCÈNE PART DANS LE MÊME `apply` QUE `e.vandal` : deux messages
+           laisseraient une image où la coque est réparée et la fin pas encore
+           jouée (même raison qu'au 478, §3 — seul le NOMBRE de `send()` compte). */
+        if (Q.starShipComplete(ev)) {
+          const rgV = Q.resolveStarGift(ev, starRoomPlayerIds(), nowV);
+          if (rgV.ok) { outV.starScene = { key: "end" }; broadcastChat("⭐", L.star.chat.done); }
+        }
         persistFnRef.current && persistFnRef.current();
-        hostSend({ type: "broadcast", event: "apply", payload: { star: ev } });
+        hostSend({ type: "broadcast", event: "apply", payload: outV });
       }
     } else if (req.kind === "evilRescueStar") {
       /* 2026-09-04 — LE HALAGE EST GAGNÉ, POUR TOUT LE MONDE. Même contrat de
@@ -13457,10 +13507,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      n'est pas une porte qu'on explique, c'est un raccourci pour qui y est déjà. */
   function devStandAtKerguelen() {
     const m = meRef.current;
-    if (!m || (m.zone || "farm") !== "town") return;
+    /* ⚠️⚠️ AUDIT 2026-09-12 — IL SE TAISAIT, ET C'EST CE QUI A FAIT CROIRE AU
+       BOUTON CASSÉ. Sa note disait « silencieux hors de la ville […] ce n'est pas
+       une porte qu'on explique » — sauf qu'on clique dessus DEPUIS LA FERME (le
+       bouton « vandal » juste au-dessus, lui, marche de n'importe où), et un
+       bouton qui ne fait rien sans rien dire est indiscernable d'un bouton
+       cassé : exactement le défaut du 426 que tout ce fichier s'interdit. Son
+       frère `devStandAtMayorDesk` prévient DEPUIS TOUJOURS (`doorNotYet`) — deux
+       boutons de la même famille qui traitent le même refus autrement, c'est la
+       divergence du §8 sur une ligne d'ergonomie. */
+    if (!m || (m.zone || "farm") !== "town") { pushToast(L.star.dev.standKerguelenFar); return; }
     const tw = townWorldNow();
-    if (!tw || !tw.shipX) return;
+    if (!tw || !tw.shipX) { pushToast(L.star.dev.standKerguelenFar); return; }
     keysRef.current = {};
+    /* ⚠️⚠️⚠️ AUDIT 2026-09-12 — LE `+ 1` EST VOLONTAIRE, NE PAS LE RETIRER. Il a
+       été enlevé pendant cet audit sur une mauvaise lecture d'écran (le fermier
+       SEMBLE debout sur l'eau, au sud du quai) puis RÉTABLI après mesure : la
+       case visée est une planche de quai peinte par-dessus l'eau, et c'est la
+       seule d'où l'on soit à la fois praticable ET dans les 1,8 case de
+       l'ingénieur. Sans le `+ 1`, on tombe sur la case d'ANCRAGE de Kerguélen
+       lui-même : le joueur s'y fait repousser par la collision et l'invite ne
+       se déclenche plus du tout — « je clique et rien ne se passe », pour la
+       troisième fois sur ce même quai.
+       ⚠️ LA LEÇON EST SUR LA MÉTHODE, PAS SUR LE NOMBRE : *un sprite posé au
+       bord de l'eau n'apprend pas si sa case est praticable* — ça se lit dans la
+       collision, jamais sur une capture. Une correction « évidente » tirée d'une
+       seule image a cassé le seul chemin d'accès à la scène. */
     m.x = tw.shipX + C.STAR_ENG_DX; m.y = tw.shipY + C.STAR_ENG_DY + 1; m.dir = 0; m.moving = false;
     sendPos();
     setDevMenuOpen(false);
@@ -28626,15 +28698,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (Math.hypot(m.x - ex, m.y - ey) <= 1.8) {
             /* ⚠️⚠️ AUTORITÉ 2026-09-12 (repasse) — LA SECONDE FENÊTRE OUVRE LE
                MARTEAU, ELLE NE PARLE PLUS TOUT DE SUITE. Même PNJ, même position,
-               mais la reine est déjà sortie et la coque n'est pas encore réparée
-               (`Q.starEngineerUrgent`, identique à `!e.vandal` ici puisqu'on est
-               déjà dans la seconde fenêtre de `starEngineerHere`). Le dialogue
+               mais la reine est déjà sortie et la coque n'est pas encore réparée.
+               ⚠️⚠️⚠️ AUDIT 2026-09-12 — ON APPELLE `Q.starEngineerUrgent`, ON NE LE
+               RÉÉCRIT PLUS. La version d'avant testait `starHas(e,"crater") &&
+               !e.vandal` en affirmant en commentaire que c'était « identique à
+               `starEngineerUrgent` puisqu'on est déjà dans la seconde fenêtre ».
+               C'ÉTAIT FAUX, et prouvé par un test direct : `starEngineerHere`
+               rend vrai par sa PREMIÈRE fenêtre (plans en cours) dès que
+               l'ingénieur est arrivé, et rien n'empêche le cratère d'être déjà
+               trouvé à ce moment-là (le chantier et les étoiles sont deux
+               histoires indépendantes — c'est l'autorité du jour même). Un
+               joueur qui trouvait le cratère avant de payer les 24 000 or des
+               plans se voyait donc ouvrir LE MARTEAU par le Kerguélen venu
+               livrer ses plans, deux sœurs encore manquantes : les trois
+               répliques du vandale tombaient hors sujet, la fuite partait pour
+               rien, et `e.vandal` posé là rendait la vraie scène d'urgence
+               DÉFINITIVEMENT invisible (`starEngineerUrgent` teste `!e.vandal`).
+               ⚠️ LE DESSIN, LUI, APPELAIT DÉJÀ LE PRÉDICAT (voir la passe de
+               rendu, `urgent`) : les deux endroits avaient donc divergé pour de
+               vrai — Kerguélen était peint CALME et ouvrait le marteau. C'est
+               très exactement le §8 de CLAUDE.md, et la parade est celle du §8 :
+               une seule écriture, jamais deux. Le dialogue
                (et `req: "vandalReveal"`) ne partent plus au premier E — ils
                partent du `onWin` du mini-jeu, plus bas dans ce fichier : demande
                de Guillaume, en jouant, « seulement à ce moment-là on peut engager
                la conversation ». Les deux fenêtres ne se recouvrent jamais dans
                la trame cible (voir la note de `starEngineerHere`). */
-            if (Q.starHas(e, "crater") && !e.vandal) {
+            if (Q.starEngineerUrgent(e, Date.now())) {
               return { p: "kerguelenVandal", act: () => { setVandalFix(true); } };
             }
             /* ⚠️ IL SE PRÉSENTE, ET ÇA N'EST PAS DE LA POLITESSE : c'est le seul
@@ -28681,8 +28771,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const raise = Q.starTimberToRaise(e);
         if (tw1 && tw1.shipX && raise && Q.starPlanReady(e)
           && nearTownRect(tw1.shipX - (C.STAR_SHIP_DRAW_W >> 1), tw1.shipY - C.STAR_SHIP_DRAW_H,
-                          C.STAR_SHIP_DRAW_W, C.STAR_SHIP_DRAW_H + C.STAR_SHIP_INTERACT_S_PAD))
+                          C.STAR_SHIP_DRAW_W, C.STAR_SHIP_DRAW_H + C.STAR_SHIP_INTERACT_S_PAD)) {
+          /* ⚠️⚠️ AUDIT 2026-09-12 — LE CLIENT LIT LA MÊME RAISON QUE L'HÔTE
+             (`Q.starRaiseBlock`, une seule écriture — §8). Sans ça, le garde-fou
+             du ciel posé côté hôte aurait produit le pire des deux mondes : le
+             joueur ouvre le marteau, GAGNE la manche, et l'hôte refuse en
+             silence — « le jeu propose et refuse » du 426, sur le geste qui
+             conclut le chantier. On refuse AVANT le mini-jeu, et on dit pourquoi
+             (le libellé `needStars` existe déjà, il sert au plan déplié). */
+          const noRaise = Q.starRaiseBlock(e, raise);
+          if (noRaise) return { p: "raiseWait", act: () => pushToast(L.star.plan.blockWhy(noRaise)) };
           return { p: "raise", act: () => setStarRaise({ part: raise }) };
+        }
       }
       /* ╔════════════════════════════════════════════════════════════════════════
          ║ 2026-09-07 — LA PLAQUE DU CHANTIER (QUETE.md §12.2, « 0 bis »).

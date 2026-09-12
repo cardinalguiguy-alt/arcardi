@@ -936,6 +936,12 @@ const STAR_FR = {
       // AUTORITÉ 2026-09-12 (repasse) — le verrou provisoire, voir starTimberBlock.
       : detail === "needStars" ? "Un signe du ciel, d'abord."
       : "Étape encore verrouillée.",
+    /* ⚠️ AUDIT 2026-09-12 — LA MÊME RAISON, DITE EN TOAST. Le plan déplié
+       explique déjà chaque verrou (`progressDetail`) ; l'invite de la cale en a
+       besoin aussi depuis que le garde-fou du ciel se tient sur le MONTAGE
+       (`Q.starRaiseBlock`). On la DÉRIVE au lieu d'écrire une seconde table de
+       raisons, qui aurait divergé au premier verrou ajouté (§8 de CLAUDE.md). */
+    blockWhy(d) { return this.progressDetail("locked", d); },
     progressNext: (part) => `Prochaine transformation visible : ${part}.`,
     progressComplete: "Construction terminée : toutes les pièces sont sur la cale.",
     /* ── TRISTAN. */
@@ -1262,6 +1268,22 @@ const STAR_FR = {
        clignoterait pendant qu'on tourne autour du chantier. */
     raise: "E : monter la pièce sur la cale",
     // 2026-09-07 — la plaque du chantier (voir sa note dans `plan.plaqueTitle`).
+    /* ⚠️⚠️⚠️ AUDIT 2026-09-12 — CETTE CLÉ MANQUAIT, ET LE REPLI `|| "E"` DE CETTE
+       TABLE L'A CACHÉE. Trouvée EN JEU, pas par un banc : debout devant un
+       Kerguélen qui hurle « VITE !! VITE !! », l'invite affichait un « E » NU,
+       sans un mot pour dire ce que la touche allait faire — sur le seul geste
+       de la quête qui ouvre un mini-jeu qu'on n'attend pas.
+       ⚠️ LA LEÇON EST SUR LE REPLI, PAS SUR LA CLÉ : `({...})[k] || "E"` rend une
+       invite PLAUSIBLE pour n'importe quelle clé inconnue, donc il ment mieux
+       qu'il ne planterait (§10 de CLAUDE.md, le stub menteur). `verify-quete`
+       vérifie que chaque clé lue EXISTE — elle « existe » toujours, grâce au
+       repli. C'est pourquoi le banc gagne du même coup un contrôle qui compare
+       les clés `p:` de `FermeGame.js` à cette table SANS passer par le repli. */
+    kerguelenVandal: "E : réparer la coque avec lui",
+    /* AUDIT 2026-09-12 — un CONSTAT, pas une invite : le bois est livré, le
+       montage attend le ciel. Sans « E : », comme `impactDig` (règle du 456) —
+       mais E reste branché pour DIRE pourquoi (`plan.blockWhy`). */
+    raiseWait: "La cale attend un signe du ciel (E : pourquoi ?)",
     plaque: "E : lire la plaque du chantier",
   })[k] || "E",
 };
@@ -1748,6 +1770,12 @@ const STAR_EN = {
       // AUTORITÉ 2026-09-12 (repasse) mirror — see the FR block for context.
       : detail === "needStars" ? "A sign from the sky, first."
       : "This step is still locked.",
+    /* ⚠️ AUDIT 2026-09-12 — LA MÊME RAISON, DITE EN TOAST. Le plan déplié
+       explique déjà chaque verrou (`progressDetail`) ; l'invite de la cale en a
+       besoin aussi depuis que le garde-fou du ciel se tient sur le MONTAGE
+       (`Q.starRaiseBlock`). On la DÉRIVE au lieu d'écrire une seconde table de
+       raisons, qui aurait divergé au premier verrou ajouté (§8 de CLAUDE.md). */
+    blockWhy(d) { return this.progressDetail("locked", d); },
     progressNext: (part) => `Next visible change: ${part}.`,
     progressComplete: "Construction complete: every piece is on the slipway.",
     orderTitle: (name) => `🪵 ${name}'s workshop`,
@@ -1934,6 +1962,9 @@ const STAR_EN = {
        ville depuis l'arrêt de téléport le plus proche. Local only — see the
        function next to devStandAtMayorDesk. */
     standKerguelen: "🥷 Stand at Kerguélen (the dock)",
+    // AUDIT 2026-09-12 — le refus se DIT (voir devStandAtKerguelen) : ce menu
+    // n'est pas traduit (§ dev), donc une seule phrase pour les deux langues.
+    standKerguelenFar: "Kerguélen is at the Valley Town dock — take the train first (or the \u{1F689} teleport).",
     /* ⚠️ LOT E — cet arrêt naît le MÊME JOUR que la scène de sciage. Leçon du
        425, écrite dans `CLAUDE.md` : un lieu qu'il faut quarante minutes de
        quête pour atteindre est un lieu qu'on ne va pas regarder — donc qu'on
@@ -2021,6 +2052,10 @@ const STAR_EN = {
     track: "E: part the leaves",
     engineer: "E: talk to the shipwright",
     raise: "E: raise the piece on the slipway",
+    // AUDIT 2026-09-12 — voir la note française : clé absente, masquée par le
+    // repli `|| "E"` de cette table, trouvée en jeu.
+    kerguelenVandal: "E: repair the hull with him",
+    raiseWait: "The slipway is waiting for a sign from the sky (E: why?)",
     plaque: "E: read the shipyard plaque",
   })[k] || "E",
 };

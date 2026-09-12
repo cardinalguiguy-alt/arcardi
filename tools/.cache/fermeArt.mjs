@@ -6910,19 +6910,81 @@ export function buildSprites() {
      tables) DISPARAÎT AVEC CE ZIP : il ne couvrait qu'un état sur trois, et ce
      dessin les couvre maintenant tous les trois d'un coup — le garder à côté
      n'aurait plus rien protégé. */
+  /* ╔═════════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-12 (audit, retour de Guillaume EN JEU) — « LES ÉTOILES SONT TROP
+     ║ GRANDES ET PAS ASSEZ EXPRESSIVES. DÉTAILLE UN PEU PLUS. »
+     ╚═════════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ « TROP GRANDES » EST UNE MESURE, PAS UNE IMPRESSION, et elle est
+     accablante : le corps faisait **14,5 px pointe à pointe** dans un canevas de
+     18, blitté à l'échelle NATIVE (`drawStarWisp`, forme à 5 arguments) sur des
+     tuiles de 16 — donc une compagne **plus large qu'un être humain** (le
+     personnage fait 16 × 24 par pose) et aussi haute que ses trois quarts. Une
+     « petite lumière qui se blottit au fond du cratère » avait la carrure du
+     fermier qui la porte.
+     ⚠️⚠️⚠️ ET LES DEUX DEMANDES SE CONTREDISENT AU PIXEL SI ON RÉTRÉCIT BÊTEMENT :
+     le visage est dérivé du rayon, donc un corps plus petit donne un œil d'UN
+     pixel — c'est-à-dire moins expressif, l'inverse de ce qui est demandé. La
+     sortie est de séparer les trois grandeurs qui n'étaient qu'une :
+       · le CANEVAS reste large (16 px, une tuile pile) pour que le halo et le
+         cerne aient de la marge — les borner sur un canevas rétréci les aurait
+         fait disparaître (§4, piège n°1) ;
+       · le CORPS rétrécit (facteur 0,38 → 0,30) : **10,2 px pointe à pointe**,
+         nettement sous la carrure du fermier ;
+       · le CŒUR grossit DANS ce corps (0,62 → 0,70 du rayon) : 6,7 px de
+         diamètre, donc toujours de la place pour un vrai visage.
+     ⚠️ L'ŒIL EST DONC PLANCHÉ À DEUX PIXELS au lieu d'être arrondi depuis le
+     rayon : un œil d'un pixel n'est pas un œil, c'est une poussière, et c'est
+     précisément ce qu'un arrondi aurait rendu après la réduction. La reine, plus
+     grande, en gagne trois — dérivé, jamais écrit (§8).
+     ⚠️⚠️ « DÉTAILLE UN PEU PLUS » SE PAIE EN TROIS ENDROITS, ET AUCUN N'AJOUTE UNE
+     COULEUR (la palette des sept familles ne bouge pas d'un octet) :
+       1. un ÉCLAT dans chaque œil (1 px du ton du cœur, en haut à gauche) — le
+          truc le moins cher du pixel art et celui qui fait le plus : un œil mat
+          est un bouton, un œil qui brille est un regard ;
+       2. une bouche qui a une FORME au lieu d'une barre — un V de trois pixels
+          (sourire) au calme, un point (« oh ! ») quand elle se retire ;
+       3. un ÉCLAIRAGE DIRECTIONNEL du corps, en HAUT À GAUCHE comme tout le
+          projet (`DESSIN.md` : « un relief éclairé de l'autre côté a l'air
+          découpé et collé »). Il DÉCALE LES BANDES existantes au lieu de peindre
+          un quatrième ton : trois couleurs, mais un volume — un dégradé
+          concentrique seul fait autocollant, c'est la note du point 3 ci-dessous.
+     ⚠️ CE QUI NE CHANGE PAS : le chanfrein des pointes (sans lui le cerne
+     rebouche les échancrures, leçon acquise plus haut), les quatre poses de
+     souffle, et le `bob`/pouls de halo continus de `FermeGame.js`. */
   function starWispSprite(pose, state, color, queen, shy) {
-    /* 465 — la reine garde sa propre trame 28 × 28, taille écran inchangée. */
-    const S = queen ? 28 : 18;
+    /* ⚠️ 16 = UNE TUILE PILE, et le canevas ne se rétrécit PAS avec le corps :
+       c'est lui qui loge le halo et le cerne (voir la note en tête). La reine
+       garde une trame plus large, dérivée du même rapport qu'avant. */
+    const S = queen ? 28 : 16;
     /* ⚠️ Le canevas grandit pour le chapeau, pas l'inverse (§4, piège n°1,
        payé trois fois au 433) : la discrète gagne quatre rangées EN HAUT, où
        le chapeau les demande, sans que le corps ne bouge d'un pixel à l'écran
        (le blit reste centré sur le canevas, voir `drawStarWisp`). */
-    const SH = shy ? 24 : S;
+    /* ⚠️ AUDIT 2026-09-12 — LES QUATRE RANGÉES DU CHAPEAU ET LE CENTRE SE
+       DÉRIVENT MAINTENANT DE `S`, ILS NE SONT PLUS ÉCRITS. Ils l'étaient
+       (`24`, `9`, `9.5`, `14`, `14.5`) : cinq nombres qui décrivaient le canevas
+       de 18 et qui auraient tous été faux d'un demi-pixel après la réduction,
+       sans qu'aucun banc ne le dise — le §8 en quatre exemplaires. */
+    const SH = shy ? S + 6 : S;
     const [c, g] = cv(S, SH);
     const pal = STAR_WISP_PAL[color || "yellow"] || null;
     const [CORE, BODY, EDGE, RIM, HALO] = pal[state];
-    const cx = queen ? 14 : 9, cy = queen ? 14.5 : (shy ? 12.5 : 9.5);
-    const rot = -Math.PI / 2 + 0.22;                  // une pointe en haut, légèrement penchée
+    const cx = S / 2, cy = SH / 2 + 0.5;
+    const rot = -Math.PI / 2;
+    /* ⚠️⚠️⚠️ AUDIT 2026-09-12 — LA POINTE EST DROITE EN HAUT, ET LES 0,22 RADIAN
+       D'INCLINAISON ONT COÛTÉ BEAUCOUP PLUS CHER QU'ILS NE RAPPORTAIENT. Ils
+       étaient là pour « casser la symétrie » ; leur effet réel était de coucher
+       une branche à 4° de l'HORIZONTALE — et une branche horizontale est celle
+       que le cerne par dilatation pince des deux côtés, parce que les pixels y
+       sont carrés et que la diagonale n'y aide pas. C'est ce pincement, pas la
+       profondeur des creux, qui détachait la pointe en écharde.
+       ⚠️ MESURÉ, PAS DEVINÉ : un balayage 4 profondeurs × 4 inclinaisons montre
+       que TOUTES les profondeurs passent à inclinaison nulle et qu'AUCUNE ne
+       passe à 0,22 — le défaut était entièrement dans l'angle. On récupère donc
+       des échancrures franches (0,56, la valeur la plus creusée essayée) SANS
+       écharde : l'étoile redevient une étoile, ce que Guillaume réclame depuis
+       deux passes, et le banc reste vert. *Quand un réglage et une mesure
+       s'opposent, il arrive que le coupable soit un troisième réglage.* */
     // Souffle : quatre valeurs distinctes (jamais deux identiques, §8) mais
     // resserrées — l'ancien ±12/30 % produisait un à-coup toutes les 250 ms.
     const shrink = state === 1 ? 0.80 : 1;            // elle se fait petite quand elle se retire
@@ -6930,12 +6992,66 @@ export function buildSprites() {
        moins de 3 % arrondit sur les MÊMES pixels au rendu (payé cinq fois par
        les jets précédents) — mesuré ici avec `render-etoile.mjs`, pas deviné. */
     const BREATH = [0.98, 1.06, 1.02, 0.94][pose & 3];
-    const R = S * 0.38 * shrink * BREATH;
-    const r = R * 0.62;                               // cœur large : dodue plutôt que filiforme
+    /* ⚠️⚠️ AUDIT 2026-09-12 — LES DEUX FACTEURS DE LA RÉDUCTION, ET ILS VONT EN
+       SENS INVERSE (voir la note en tête) : le CORPS maigrit, le CŒUR grossit
+       dedans. C'est ce couple, et lui seul, qui permet « plus petite » ET « plus
+       expressive » à la fois — un seul facteur baissé aurait rendu un œil d'un
+       pixel. Nommés parce qu'ils se lisent ensemble ou pas du tout. */
+    /* ⚠️⚠️⚠️ LA REINE NE RÉTRÉCIT PAS, ET CE N'EST PAS UNE EXCEPTION DE CONFORT :
+       `render-etoile` §3 exige d'elle 21 à 28 px natifs ET deux fois la matière
+       d'une petite — c'est-à-dire qu'elle DOIT rester grande, parce que sa
+       silhouette est ce qui la distingue de ses six sœurs au premier coup d'œil
+       (décision du 465, « elle garde sa propre trame »). Le retour de Guillaume
+       porte sur les COMPAGNES qui suivent le fermier, pas sur elle. Réduire les
+       deux d'un même facteur aurait fait rougir le banc — et il a rougi, avant
+       cette ligne : 19 px et 1,86× de matière. Elle garde donc ses nombres au
+       bit près, et ne gagne que les trois détails de visage et le volume. */
+    const BODY_K = queen ? 0.38 : 0.34;               // 0,38 partout avant : 14,5 px pointe à pointe pour une compagne, plus large qu'un humain
+    const R = S * BODY_K * shrink * BREATH;
+    /* ╔═══════════════════════════════════════════════════════════════════════════
+       ║ AUDIT 2026-09-12 — `r` SERVAIT DEUX GRANDEURS, ET C'EST CE QUI A FAIT LA
+       ║ MOTTE. On les sépare.
+       ╚═══════════════════════════════════════════════════════════════════════════
+       ⚠️⚠️⚠️ UN SEUL `r = R * 0,62` était à la fois (a) le RAYON INTÉRIEUR du
+       polygone — donc la profondeur des échancrures, donc le fait qu'on lise
+       cinq branches — et (b) le RAYON DU CŒUR CLAIR, donc la place du visage.
+       Les deux tirent en sens opposés : élargir le cœur pour loger un visage
+       DÉGONFLE les échancrures et l'étoile devient une masse à bosses ; les
+       creuser pour retrouver l'étoile écrase le visage. Premier jet de cette
+       passe monté à 0,70 : le banc est resté vert (il mesure la hauteur, la
+       matière et la couleur) et la planche montrait une motte — *le banc
+       protège de ce qu'on a déjà compris* (§10 de CLAUDE.md).
+       ⚠️ DEUX NOMS, DEUX RÔLES, PLUS JAMAIS UN SEUL : `rIn` creuse, `rCore`
+       éclaire. C'est la seule chose que cinq réécritures de ce dessin n'avaient
+       pas essayée, parce que le nombre avait l'air d'un réglage alors qu'il
+       était deux décisions. */
+    /* ⚠️⚠️ 0,64 N'EST PAS UN CHOIX ESTHÉTIQUE, C'EST LA BORNE BASSE QUE LE BANC
+       AUTORISE. En dessous (0,58 → 0,62, mesurés un par un) la branche de DROITE
+       — celle qui part presque à l'horizontale — se fait pincer par le cerne de
+       part et d'autre : son intérieur se détache du corps et devient une écharde
+       ceinturée, l'îlot flottant de `render-etoile` §2. Au-dessus de ~0,70 les
+       échancrures se rebouchent et l'étoile redevient la « motte » que Guillaume
+       a déjà refusée une fois. La fenêtre jouable est donc étroite, et 0,64 est
+       son bord bas : le plus creusé que le cerne accepte. */
+    const rIn = R * 0.56;                             // le creux entre deux branches — c'est LUI qui fait l'étoile
+    const rCore = R * 0.46;                           // le cœur clair, juste assez large pour un visage
+    const r = rIn;                                    // le polygone lit `r` plus bas (forme)
     /* Le chanfrein : deux sommets serrés de part et d'autre de la pointe au
        lieu d'un seul pixel vif — c'est lui qui empêche le cerne de reboucher
        l'échancrure voisine (voir la note en tête de fonction). */
-    const CH = 0.11;
+    /* ⚠️⚠️⚠️ AUDIT 2026-09-12 — LE CHANFREIN ÉTAIT UN ANGLE, IL DOIT ÊTRE UNE
+       LARGEUR EN PIXELS. Sa propre note (juste au-dessus) dit ce qu'il sert à
+       garantir : « un dernier tronçon large de deux-trois pixels », sans quoi le
+       cerne par dilatation rebouche l'échancrure voisine. Mais 0,11 RADIAN ne
+       donne deux-trois pixels qu'au rayon où il a été réglé (« testé aux DEUX
+       tailles déjà en place, 18 et 28 px ») : au rayon réduit d'une compagne — et
+       pire, à celui de l'état APEURÉ, qui rétrécit encore de 20 % — l'arc ne fait
+       plus qu'un pixel. La pointe devient alors une écharde de 2 px entièrement
+       ceinturée par le cerne, c'est-à-dire l'îlot flottant que `render-etoile` §2
+       a refusé (2,78 %). *Un angle constant n'est pas une largeur constante ; ce
+       que le dessin promet, c'est la largeur.* On la dérive donc du rayon, bornée
+       aux deux bouts pour que ni une reine ni une apeurée ne sorte du dessin. */
+    const CH = Math.min(0.34, Math.max(0.10, 1.5 / R));
     const poly = [];
     for (let k = 0; k < 5; k++) {
       const a1 = rot + k * (Math.PI * 2 / 5);
@@ -6979,42 +7095,155 @@ export function buildSprites() {
     }
     // 3. La matière, par distance au centre : le cœur est la source de
     // lumière — une étoile peinte d'un seul ton est un autocollant.
+    /* ⚠️⚠️ AUDIT 2026-09-12 — L'ÉCLAIRAGE EST DIRECTIONNEL, ET IL NE COÛTE PAS UNE
+       COULEUR. Les trois bandes se calculaient sur la seule DISTANCE au centre :
+       un dégradé parfaitement concentrique, c'est-à-dire une cible, pas un objet
+       — « une étoile peinte d'un seul ton est un autocollant » disait déjà la
+       note, et un oignon concentrique en est la version à trois tons. On DÉCALE
+       donc le seuil de bande selon l'orientation du pixel : le haut-gauche
+       remonte d'un cran, le bas-droit descend d'un cran. Trois couleurs, un
+       volume. ⚠️ HAUT À GAUCHE PARCE QUE TOUT LE PROJET ÉCLAIRE DE LÀ (le four,
+       les moellons, les toits — `DESSIN.md`) : « un relief éclairé de l'autre
+       côté a l'air découpé et collé ».
+       ⚠️ `LIT_K` RESTE PETIT (0,18 du rayon du cœur) : au-delà, la bande claire
+       mange le cœur entier d'un côté et l'étoile se lit comme un croissant. */
+    /* ⚠️⚠️⚠️ L'ÉCLAIRAGE DÉPLACE LE CŒUR EN BLOC, IL NE DÉCALE PAS UN SEUIL PIXEL
+       PAR PIXEL. Premier jet : `band = d − lit · R · 0,16`, avec `lit` dérivé de
+       l'orientation du pixel. C'était joli sur le papier et `render-etoile` §2 l'a
+       refusé — **19 % de la matière en îlots de 1 à 3 px** : à ce rayon, un seuil
+       qui ondule découpe les bandes de teinte en ÉCHARDES isolées, et une écharde
+       de deux pixels au milieu d'un aplat est précisément ce que ce contrôle
+       existe pour attraper (438). Vu sur la planche aussi : le corps grésillait.
+       ⚠️ LA PARADE GARDE LE MÊME EFFET SANS LE DÉFAUT : le cœur reste un DISQUE,
+       simplement centré un peu plus haut à gauche que le corps. Un disque est
+       connexe par construction, donc zéro écharde possible — et la lumière se lit
+       exactement pareil (elle vient du haut-gauche, `DESSIN.md`). *Quand une mesure
+       refuse un dégradé, c'est souvent qu'il fallait déplacer la forme, pas
+       corriger le seuil.* */
+    const LIT_K = 0.16;                               // décentrage du cœur, en fraction du rayon
+    const lcx = cx - R * LIT_K, lcy = cy - R * LIT_K;
     for (let y = 0; y < SH; y++) for (let x = 0; x < S; x++) {
       if (!inside(x + 0.5, y + 0.5)) continue;
       const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
-      P(g, x, y, 1, 1, d > r * 1.05 ? EDGE : d > r * 0.5 ? BODY : CORE);
+      const dCore = Math.hypot(x + 0.5 - lcx, y + 0.5 - lcy);
+      P(g, x, y, 1, 1, d > rIn * 1.04 ? EDGE : dCore > rCore ? BODY : CORE);
     }
     /* 4. LE VISAGE. ⚠️ DÉRIVÉ DE `rBase`, JAMAIS DU `r` QUI RESPIRE : sinon
        l'arrondi de la taille des yeux changerait d'une pose à l'autre et
        clignoterait tout seul — le corps respire, le visage reste immobile
        (une seule grandeur, jamais recopiée sous deux formes qui pourraient
        diverger, §8). */
-    const rBase = S * 0.38 * shrink * 0.62;
-    const eyeS = Math.max(1, Math.round(rBase * 0.45));
-    const eyeGap = Math.max(1, Math.round(rBase * 0.22));
-    const eyeY = Math.round(cy - rBase * 0.45);
+    /* ⚠️⚠️ AUDIT 2026-09-12 — LE VISAGE SE MESURE SUR LE CORPS *SANS SOUFFLE*, ET
+       PLUS SUR LE CŒUR. Il lisait `… * CORE_K`, un facteur qui vient de
+       disparaître (il en cachait deux, voir `rIn`/`rCore`) ; et le mesurer sur le
+       cœur l'aurait fait rétrécir avec lui. Ce qui doit rester stable est la
+       proportion du visage dans le CORPS — et son immobilité pendant que le corps
+       respire, qui était déjà la règle écrite juste au-dessus. */
+    const rBase = S * BODY_K * shrink;
+    /* ⚠️⚠️⚠️ AUDIT 2026-09-12 — L'ŒIL EST PLANCHÉ À DEUX PIXELS, PAS ARRONDI. Avec
+       `max(1, …)`, la réduction du corps rendait `round(1,5) = 2` puis `1` au
+       premier réglage suivant — et un œil d'UN pixel n'est pas un œil, c'est une
+       poussière : « pas assez expressives » aurait empiré en croyant l'améliorer.
+       Le plancher est à 2 ; la reine, elle, en gagne 3 par le même calcul (elle
+       est plus grande), donc rien n'est écrit deux fois (§8). */
+    const eyeS = Math.max(2, Math.round(rBase * 0.30));
+    /* ⚠️⚠️⚠️ AUDIT 2026-09-12 — L'ŒIL EST PLUS HAUT QUE LARGE, ET C'EST CE QUI LE
+       REND VISIBLE. Carré (2 × 2, écart 1), le couple faisait SIX pixels
+       d'envergure sur un corps dont le creux n'en fait que 6,4 : les deux yeux
+       venaient donc buter contre le cerne et FUSIONNAIENT avec lui — sur la
+       planche, plus de regard du tout, juste un cœur clair. Une pupille de 1 px
+       de large sur 2 de haut ramène l'envergure à QUATRE pixels, loin du bord, et
+       se lit mieux qu'un carré : c'est la forme d'un œil. La reine, plus large,
+       en garde deux de front par le même calcul (§8, rien d'écrit deux fois). */
+    const eyeW = Math.max(1, Math.round(eyeS * 0.6));
+    const eyeGap = Math.max(1, Math.round(rBase * 0.16));
+    /* ⚠️⚠️ LES YEUX SE POSENT AU PLUS LARGE DU CORPS, PAS AU TIERS SUPÉRIEUR.
+       Premier jet à −0,30 du rayon : à cette hauteur le polygone est déjà étroit
+       et le cerne par dilatation AVALAIT les deux yeux — sur la planche, on ne
+       voyait qu'un cœur clair et une barre sombre (la bouche). C'est le piège du
+       cerne, celui que le chanfrein des pointes corrige pour les échancrures,
+       rencontré une seconde fois sur le visage. À hauteur de centre, il y a de la
+       matière des deux côtés. */
+    const eyeY = Math.round(cy - rBase * 0.16);
+    /* L'ÉCLAT : un pixel du ton du CŒUR dans le coin haut-gauche de l'œil, du
+       côté de la lumière (comme le corps juste au-dessus). C'est le détail le
+       moins cher de tout ce dessin et celui qui change le plus — un œil mat est
+       un bouton de manteau, un œil qui accroche la lumière est un regard. */
+    /* ⚠️⚠️ L'ÉCLAT NE SE POSE QU'À PARTIR DE TROIS PIXELS D'ŒIL — c'est-à-dire
+       chez la REINE seule. Essayé d'abord sur les petites (œil de 2 px) : le
+       pixel clair en mange le QUART et l'œil se lit comme un trou, pas comme un
+       regard. *Un détail qui occupe un quart de ce qu'il décore n'est plus un
+       détail.* Les petites tirent donc leur expression de la BOUCHE et des
+       sourcils, qui ont de la place sous et sur les yeux. */
+    /* ╔═══════════════════════════════════════════════════════════════════════════
+       ║ AUDIT 2026-09-12 — TOUT LE VISAGE SE PEINT *DANS* LE POLYGONE, ET C'EST
+       ║ UNE GARANTIE, PLUS UN RÉGLAGE À REFAIRE À CHAQUE TAILLE.
+       ╚═══════════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ `render-etoile` §2 a rougi sur l'état APEURÉ (2,78 % d'îlots flottants
+       pour 2 % permis) : cet état rétrécit le corps (`shrink` 0,80) alors que
+       l'œil et l'écart ont des PLANCHERS (2 px, 1 px) qui ne rétrécissent pas —
+       les sourcils tombaient donc à trois pixels du centre d'un corps dont le
+       creux n'en fait que 2,5. Résultat : deux pixels sombres posés sur du vide,
+       exactement l'« îlot flottant » que ce contrôle existe pour attraper.
+       ⚠️ LA PARADE N'EST PAS DE RERÉGLER LES TROIS NOMBRES (ils redeviendraient
+       faux à la taille suivante, comme les cinq nombres du chapeau deux heures
+       plus tôt) : c'est de peindre le visage à travers `inside()`, la fonction qui
+       DÉFINIT déjà la forme. Un pixel de visage hors du corps ne peut plus
+       exister — pour les trois états, les quatre poses, la reine et la discrète,
+       sans qu'aucun seuil n'ait à être tenu d'accord avec un autre (§8).
+       ⚠️ LE DÉGUISEMENT, LUI, N'EST PAS GARDÉ : le chapeau DOIT dépasser. */
+    const PIN = (x, y, w, h, col) => {
+      for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++)
+        if (inside(xx + 0.5, yy + 0.5)) P(g, xx, yy, 1, 1, col);
+    };
+    const glint = (ex, ey) => { if (eyeS >= 3) PIN(ex, ey, 1, 1, CORE); };
     if (state === 2) {                                // assoupie : yeux mi-clos, pas de bouche
-      P(g, cx - eyeGap - eyeS, cy - 1, eyeS, 1, RIM);
-      P(g, cx + eyeGap, cy - 1, eyeS, 1, RIM);
+      PIN(cx - eyeGap - eyeW, cy - 1, eyeW, 1, RIM);
+      PIN(cx + eyeGap, cy - 1, eyeW, 1, RIM);
     } else {
-      P(g, cx - eyeGap - eyeS, eyeY, eyeS, eyeS, RIM);  // deux yeux pleins, sombres sur un cœur clair — le contraste EST le regard
-      P(g, cx + eyeGap, eyeY, eyeS, eyeS, RIM);
+      PIN(cx - eyeGap - eyeW, eyeY, eyeW, eyeS, RIM);  // deux pupilles, sombres sur un cœur clair — le contraste EST le regard
+      PIN(cx + eyeGap, eyeY, eyeW, eyeS, RIM);
+      glint(cx - eyeGap - eyeW, eyeY);
+      glint(cx + eyeGap, eyeY);
       if (state === 0) {
-        const mouthY = Math.round(cy + rBase * 0.45), mouthW = Math.max(2, eyeS);
-        P(g, cx - Math.floor(mouthW / 2), mouthY, mouthW, 1, EDGE);           // sourire, calme
+        /* ⚠️ UN SOURIRE EST UNE COURBE, PAS UNE BARRE. Trois pixels en V — les
+           deux bouts remontés d'une rangée — lisent « sourire » là où la barre
+           d'un pixel lisait « fente ». C'est la même idée que le chanfrein des
+           pointes : à cette taille, ce qui compte est la FORME sur deux rangées,
+           jamais le détail sur une. */
+        /* ⚠️ TROIS PIXELS, CENTRÉS, DANS LA LARGEUR SÛRE. Les coins tirés jusqu'à
+           `cx ± (eyeGap + eyeS)` sortaient du polygone par le bas (là où une
+           ÉCHANCRURE tombe, pas une pointe) : deux pixels sombres posés sur du
+           vide. Un sourire de trois pixels au centre est toujours dans la
+           matière, quel que soit le souffle. */
+        const mouthY = Math.round(cy + rBase * 0.40);
+        PIN(cx, mouthY, 1, 1, RIM);
+        PIN(cx - 1, mouthY - 1, 1, 1, RIM);
+        PIN(cx + 1, mouthY - 1, 1, 1, RIM);
       } else {                                        // elle se retire : sourcils levés, sur le qui-vive
-        P(g, cx - eyeGap - eyeS, eyeY - 1, eyeS, 1, RIM);
-        P(g, cx + eyeGap, eyeY - 1, eyeS, 1, RIM);
+        PIN(cx - eyeGap - eyeW - 1, eyeY - 1, eyeW + 1, 1, RIM);
+        PIN(cx + eyeGap, eyeY - 1, eyeW + 1, 1, RIM);
+        // …et une bouche en point : le « oh ! » de qui vient de se faire voir.
+        PIN(cx, Math.round(cy + rBase * 0.40), 1, 1, RIM);
       }
     }
     // Les joues, juste à côté de chaque œil et à sa hauteur — dérivées des
     // mêmes grandeurs que les yeux, jamais un second couple de coordonnées
     // qui pourrait cesser de s'accorder avec eux (§8).
-    P(g, cx - eyeGap - eyeS - 1, eyeY + eyeS, 1, 1, EDGE);
-    P(g, cx + eyeGap + eyeS, eyeY + eyeS, 1, 1, EDGE);
-    if (queen && state === 0) {                       // éclats intérieurs, natifs à sa trame
-      P(g, cx - 6, cy - 5, 2, 1, CORE); P(g, cx + 5, cy - 1, 1, 2, CORE);
-      P(g, cx - 1, cy - 7, 1, 2, CORE);
+    PIN(cx - eyeGap - eyeW - 1, eyeY + eyeS - 1, 1, 1, EDGE);
+    PIN(cx + eyeGap + eyeW, eyeY + eyeS - 1, 1, 1, EDGE);
+    /* ⚠️⚠️ AUDIT 2026-09-12 — CES TROIS ÉCLATS ÉTAIENT « NATIFS À SA TRAME », et
+       c'est ce qui les rendait faux dès que la trame bouge : posés à `cy − 7`
+       d'un rayon de 11,3 px, ils tombaient à `cy − 7` d'un rayon de 7,6 —
+       c'est-à-dire DEHORS, au-delà des pointes, donc trois pixels clairs
+       flottant sur du vide transparent. On les dérive du rayon du CŒUR (`r`),
+       pas du corps : le cœur est un disque, donc tout point à moins de `r` du
+       centre est garanti dans le polygone, quelle que soit l'orientation des
+       cinq branches. Le §8, sur trois pixels. */
+    if (queen && state === 0) {
+      PIN(cx - Math.round(r * 0.6), cy - Math.round(r * 0.55), 2, 1, CORE);
+      PIN(cx + Math.round(r * 0.5), cy - 1, 1, 2, CORE);
+      PIN(cx - 1, cy - Math.round(r * 0.8), 1, 2, CORE);
     }
     /* ── LE DÉGUISEMENT DE LA DISCRÈTE, INCHANGÉ (2026-09-02, lot A2). Guillaume :
        « avec un mini chapeau et des lunettes de soleil ». Il se peint APRÈS le
@@ -7023,21 +7252,40 @@ export function buildSprites() {
        une étoile sans regard avec deux barres noires — un objet, pas quelqu'un
        qui se cache. Il ne respire jamais (une seule pose) : c'est ce qui le
        rend reconnaissable au milieu des passants, la seule chose immobile. */
+    /* ⚠️⚠️⚠️ AUDIT 2026-09-12 — LES LUNETTES SE CALENT SUR LES YEUX, LE CHAPEAU SUR
+       LE CORPS. Les deux étaient en offsets ABSOLUS (`cx − 3`, `cx ± 4`,
+       `cy − 8`) calés sur un corps de 14,5 px : sur le corps réduit, les verres
+       de 7 px débordaient d'un cœur de 6,7 et le chapeau de 9 px faisait 88 % de
+       la largeur de l'étoile — un couvre-chef plus large que sa tête. C'est le
+       piège le plus répétitif de ce fichier (une grandeur de dessin recopiée en
+       nombre, §8), et il s'est déclenché sur le seul sprite qui en avait deux.
+       ⚠️ LES VERRES RECOUVRENT EXACTEMENT LES DEUX YEUX déjà peints — donc ils se
+       dérivent de `eyeS`/`eyeGap`/`eyeY`, ce qui les rend justes par
+       construction même si le visage change encore. Le chapeau, lui, se dérive
+       de `R` : sa largeur reste ~0,7 de la portée des pointes, le rapport
+       d'avant la réduction. */
     if (shy) {
       const HAT = "#3a2f26", HATB = "#241c16", BAND = "#8a6a3c";
       const GLA = "#1b1a20", GLE = "#43414c";
-      P(g, cx - 3, cy - 3, 3, 3, GLA);                  // lunettes plus hautes (3 rangées, pas 2) : la matière du corps est
-      P(g, cx + 1, cy - 3, 3, 3, GLA);                  // plus dense sous elles depuis la refonte, la mesure de contraste veut plus d'obscur
-      P(g, cx, cy - 3, 1, 1, GLE);
-      P(g, cx - 3, cy - 3, 1, 1, GLE); P(g, cx + 3, cy - 3, 1, 1, GLE);
-      const hy = cy - 8;
-      P(g, cx - 4, hy + 2, 9, 1, HATB);
-      P(g, cx - 3, hy + 1, 7, 1, HAT);
-      P(g, cx - 2, hy, 5, 1, HAT);
-      P(g, cx - 2, hy - 1, 4, 1, HAT);
-      P(g, cx - 3, hy + 1, 7, 1, BAND);
-      P(g, cx - 2, hy, 5, 1, HAT);
-      P(g, cx - 4, hy + 2, 1, 1, HATB); P(g, cx + 4, hy + 2, 1, 1, HATB);
+      const lw = eyeS + 1, lx = cx - eyeGap - eyeS - 1, rx = cx + eyeGap, ly = eyeY - 1;
+      P(g, lx, ly, lw, lw, GLA);                        // verre gauche : il couvre l'œil, il ne le remplace pas
+      P(g, rx, ly, lw, lw, GLA);                        // verre droit
+      P(g, cx - 1, ly + 1, 2, 1, GLA);                  // le pont, entre les deux
+      P(g, lx, ly, 1, 1, GLE); P(g, rx + lw - 1, ly, 1, 1, GLE);   // deux reflets, aux coins extérieurs
+      /* ⚠️⚠️⚠️ IL SE DÉRIVE DU RAYON *SANS SOUFFLE* (`rStill`), JAMAIS DE `R`. Avec
+         `R`, le chapeau grandissait et rétrécissait avec la respiration du corps
+         — et `render-etoile` §16 tient précisément l'invariant inverse : « le
+         déguisement est IDENTIQUE aux quatre poses, c'est son immobilité au
+         milieu des passants qui la rend repérable ». Le banc l'a attrapé au
+         premier jet, et c'est exactement ce pour quoi il existe. */
+      const rStill = S * BODY_K * shrink;              // le corps, respiration exclue
+      const bw = Math.max(2, Math.round(rStill * 0.62));     // demi-largeur du bord
+      const hy = Math.round(cy - rStill) - 2;                // le bord se pose au sommet du corps
+      P(g, cx - bw, hy + 2, bw * 2 + 1, 1, HATB);       // le bord
+      P(g, cx - bw + 1, hy + 1, bw * 2 - 1, 1, BAND);   // le ruban
+      P(g, cx - bw + 2, hy, Math.max(1, bw * 2 - 3), 1, HAT);       // la calotte
+      P(g, cx - bw + 2, hy - 1, Math.max(1, bw * 2 - 4), 1, HAT);   // …et son sommet
+      P(g, cx - bw, hy + 2, 1, 1, HATB); P(g, cx + bw, hy + 2, 1, 1, HATB);
     }
     return c;
   }

@@ -7,115 +7,90 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### ACTION SUIVANTE — VOIR EN JEU (TROIS LIVRAISONS QUI ATTENDENT), PUIS LA 2ᵉ NÉGOCIATION DU MAIRE
+### ACTION SUIVANTE — VOIR EN JEU LA FUITE DU VANDALE, PUIS LA 2ᵉ NÉGOCIATION DU MAIRE
 
-**Conception tranchée le 2026-09-12** (discussion complète avec Guillaume), **codée en trois
-passes le même jour, la dernière déclenchée par une revue de chronologie demandée par
-Guillaume**. Texte de référence complet : `components/ferme/QUETE.md`, autorité en tête de
-fichier (« LE CHANTIER D'ABORD, LA PLUIE ENSUITE »). Le chantier naval se motive et se lance
-indépendamment des étoiles ; la pluie d'astéroïdes l'interrompt au lieu de l'ouvrir ; les deux
-histoires se rejoignent à la fin par la navigation (Eduardo suit la Brebis), pas par l'origine du
-bois. Un vandale anonyme y est semé, jamais élucidé ici — réservé à une quête future.
+**Audit complet de la quête demandé par Guillaume le 2026-09-12 (« teste tout à deux joueurs,
+vois les bugs potentiels, corrige-les »). Sept défauts trouvés, sept corrigés.** Le blocage de
+preview des trois livraisons précédentes est LEVÉ : `npm run dev` **et** `node
+tools/fake-supabase.mjs` tournaient déjà sur ce dépôt, donc la séance à deux clients a enfin eu
+lieu. Cinq correctifs ont été **vus à l'écran** ; trois attendent un œil humain (ci-dessous).
 
-**Codé et vérifié :**
-1. **`resolveStarPlanAsk`/`resolveStarWarn`** exigent `MA.mayorSigned(e)` au lieu de
-   `starHas(e,"crater")` : l'ingénieur se commande avant toute étoile.
-2. **Le pop-up « Commencer la quête ? » est retiré** : l'avis se lit au tableau des nouvelles
-   (`newsBoard`), chevron dédié, bandeau renommé « La Panique ».
-3. **La coque quitte `SHIP_SITE_OF`** (`quete.js`) : commande Tristan comme les quatre autres
-   pièces, tant que la reine n'est pas sortie.
-4. **⚠️⚠️⚠️ LA SCÈNE DE KERGUÉLEN, REVUE UNE SECONDE FOIS LE MÊME JOUR — demande explicite de
-   Guillaume, « revoir la chronologie de la quête ».** Une revue directe du code (des tests
-   exécutables, pas une relecture) a trouvé deux failles dans ce que la passe précédente croyait
-   fini :
-   - **`shipSiteOk` demandait `farmMaterial` — MORT, PROUVÉ PAR UN TEST DIRECT.** `field` (huit
-     trouvailles, `farmMaterial` compris) est un préalable STRUCTUREL à `resolveStarTownFall`
-     (`e.ch<1` refuse) : au moment où `starHas(e,"crater")` peut devenir vrai, `farmMaterial`
-     l'est TOUJOURS déjà. La « régression » promise par la note du matin ne pouvait donc jamais
-     se voir — Kerguélen promettait une tâche que le jeu ne posait jamais.
-   - **Rien n'empêchait de finir tout le bateau sans toucher une seule étoile.** Testé : maire
-     signé, plans, cinq pièces montées, `e.ch=0`, `e.found={}` → `starShipComplete === true`.
-     `resolveStarTimberRaise` est la seule voie qui déclenche `resolveStarGift` en jeu réel — un
-     joueur pressé pouvait donc obtenir la fin sans jamais voir tomber la pluie.
+**⚠️⚠️⚠️ LE DÉFAUT RACINE, ET IL EXPLIQUE POURQUOI RIEN N'AVAIT JAMAIS PU SE VOIR EN TROIS
+LIVRAISONS : `migrateStar` NE CONNAISSAIT PAS `e.vandal`.** Elle ne répare pas un objet, elle en
+construit un NEUF (`newStar()`) et y recopie les champs qu'elle connaît — donc tout champ qu'elle
+ignore est **supprimé**. Et elle est appelée en tête de CHAQUE `req` d'étoile et de CHAQUE
+`apply` : la réparation de la coque s'effaçait dans la milliseconde. Conséquences, aucune ne
+levant d'erreur : la fuite (4 phases, 2 min 35, un sprite, 4 phrases de bandeau) ne pouvait
+**jamais** partir ; et depuis que `shipSiteOk` lit `e.vandal`, la coque régressait à la sortie de
+la reine **sans pouvoir revenir** — `starShipComplete` restait faux pour toujours, donc **la quête
+n'avait plus de fin**. Corrigé : `vandal: null` dans `newStar`, recopie dans `migrateStar`.
 
-   **Réponse de Guillaume aux deux, en jouant :** une vraie scène d'urgence, pas une case à
-   cocher. Séquence codée dans `quete.js`/`fermeConstants.js`/`fermeStrings.js`/`fermeArt.js`/
-   `FermeGame.js` :
-   1. Au moment où la reine sort (`starHas(e,"crater")`), toast à toute la salle ; Kerguélen
-      **s'agite en cercles** au quai (`Q.starEngineerUrgent`, wobble dérivé de `now`,
-      `VANDAL_URGENT_PACE_R/MS`) et sa bulle hurle « VITE !! VITE !! » (`VANDAL_URGENT_BUBBLE_MS`,
-      remplace le marmonnement calme).
-   2. E l'approche ouvre un **mini-jeu marteau** (`vandalFix`, `BarnMinigame` réutilisé — même
-      mécanique que le montage des pièces, demande d'origine de Guillaume au 478) : on répare
-      AVEC lui, on ne parle pas encore.
-   3. Victoire → `req:"vandalReveal"` part (donc `e.vandal = {at}`, **désormais posé APRÈS le
-      marteau, jamais au premier contact**) → lueur magique « niveau supérieur » sur la cale
-      (`drawStarHullFixGlow`, `VANDAL_FIX_VFX_MS`, référence Clash of Clans donnée par Guillaume)
-      → SEULEMENT MAINTENANT les trois répliques (`starTell`, réécrites : Kerguélen essoufflé,
-      remercie, décrit un vandale tout en noir — jamais de nom ni de visage).
-   4. La fuite en deux segments (ville puis ferme, `vandalPhase`) est **inchangée** : elle
-      démarre simplement plus tard qu'avant (après la réparation, plus au premier contact).
-   - **`shipSiteOk` lit maintenant `e.vandal`** (la réparation elle-même) au lieu de
-     `farmMaterial` : une coque déjà montée régresse pour de vrai à la sortie de la reine, et ne
-     revient qu'après le marteau — la régression EST enfin atteignable.
-   - **Garde-fou provisoire** (`starTimberBlock`, raison `"needStars"`) : la DERNIÈRE pièce
-     restante du navire reste bloquée tant que `e.ch < 1` (le champ pas fini). Les quatre
-     premières restent libres — seule la CONCLUSION du chantier attend un signe du ciel. À
-     retirer le jour où la 2ᵉ négociation/le gate or-temps (point 2 plus bas) existent pour de
-     vrai.
-5. **Le menu dev — `Q.STAR_DEV_OPS` gagne `"vandal"`** (pose le décor, JAMAIS `e.vandal`
-   lui-même — la révélation reste le geste) et un second téléport local, **« Stand at Kerguélen »**
-   (`devStandAtKerguelen`, même famille que `devStandAtMayorDesk`).
-
-`verify-quete` 847/847, `verify-jalons` 52/52 (deux assertions réécrites : la trame réaliste
-« tout le champ avant le cratère » fait maintenant régresser puis réparer la coque, elle ne
-« passait » qu'à cause du garde-fou mort), `render-navire` tout vert (même correction),
-`verify-maire` 119/119, `verify-strings` 1131 clés (inchangé, `dev` non traduit), `verify-vallee`
-223/223, `verify-collision` tout passe, `verify-syntax` propre, bundle esbuild propre (seul
-`G_SOIL`, préexistant).
-⚠️⚠️ **RIEN DE TOUT ÇA N'A ÉTÉ VU EN JEU, TROIS LIVRAISONS DE SUITE** — un `npm run dev` d'une
-autre session tournait sur ce dépôt (§10) pendant les trois (port 3000 vérifié occupé à chaque
-fois), donc toujours aucune preview possible depuis celle-ci. Ni le cercle d'agitation, ni le
-mini-jeu du marteau, ni la lueur magique, ni le bouton « Stand at Kerguélen » n'ont jamais été vus
-à l'écran.
+**Les sept défauts, tous prouvés par test exécutable avant correction :**
+1. **La quête était infinissable** si la dernière pièce était montée pendant la régression de la
+   coque : `resolveStarTimberRaise` est la seule voie qui appelle `resolveStarGift`, et une fois
+   les cinq pièces posées `starTimberToRaise` rend `null`. La réparation chez Kerguélen tente
+   maintenant le don elle aussi (`FermeGame.js`, branche `vandalReveal`).
+2. **Le garde-fou `needStars` ne gardait rien** : il refusait une COMMANDE si quatre pièces étaient
+   déjà posées, or les cinq commandes tournent en parallèle depuis le 478 — on les passait toutes
+   à zéro pièce posée. Testé : maire signé, plans, cinq montages, `e.ch=0`, `e.found={}` → fin
+   accordée, **zéro étoile tombée**. Le garde-fou est passé sur le MONTAGE (`starRaiseBlock` /
+   `starRaiseCompletes`, `quete.js`), lu par le client ET l'hôte.
+3. **La branche du marteau testait `crater && !vandal` au lieu de `starEngineerUrgent`** : un
+   joueur qui trouvait le cratère avant de payer les plans se voyait ouvrir le marteau par le
+   Kerguélen venu livrer ses plans, deux sœurs encore manquantes — et `e.vandal` posé là rendait
+   la vraie scène d'urgence définitivement invisible. Le DESSIN appelait déjà le prédicat : les
+   deux endroits avaient divergé pour de vrai.
+4. **L'invite du marteau n'avait aucune phrase** (`kerguelenVandal`) : le repli `|| "E"` de la
+   table rendait un « E » nu. Vu à l'écran, invisible pour tout banc.
+5. **Le bandeau ne pouvait jamais annoncer la fuite** : `evilSeek` devient vrai au même instant
+   que `!missing.length`, donc les quatre phrases de la chasse étaient injoignables. La fuite (une
+   scène MINUTÉE) passe maintenant devant l'objectif permanent ; `kerguelenBack` reste après,
+   comme `engineer` — décision assumée, tenue par `verify-quete`.
+6. **L'invité affichait « 1 joueur en ligne » pour toujours** : le compteur n'était rafraîchi que
+   par `join`/`leave`, et l'hôte est là AVANT lui. Corrigé dans `ensureRemote`, le seul endroit
+   qui fasse entrer un joueur distant. **Vu à deux clients.**
+7. **Le téléport dev « Stand at Kerguélen » se taisait hors de la ville** — indiscernable d'un
+   bouton cassé, là où son frère `devStandAtMayorDesk` prévient depuis toujours.
 
 **Reste à faire, dans cet ordre :**
-1. **Voir en jeu, en priorité absolue avant d'ajouter quoi que ce soit de plus.** Tout le point 4
-   ci-dessus, jamais vu à l'écran : Kerguélen agité (le cercle se lit-il ? la bulle est-elle trop
-   fréquente, pas assez ?), le mini-jeu du marteau (texte, difficulté), la lueur magique (assez
-   lisible ? bien positionnée sur la cale ?), les trois répliques réécrites, puis la fuite
-   inchangée (sprite, deux segments, quatre phrases du bandeau). « ⭐ Star → vandal » puis
-   « Stand at Kerguélen » puis E suffisent pour y arriver sans rejouer toute la chaîne. Les
-   quatre durées de la fuite (`VANDAL_TOWN_MS`/`GAP_MS`/`FARM_MS`/`ESCAPED_MS`) restent un
-   premier réglage à ajuster une fois vues, comme les trois nombres de la scierie (§13).
-2. **La 2ᵉ négociation du maire** (`maire.js`) : budget dérapé par la réparation/le vandale,
-   table à ajouter (le système le permet en une table de plus, §16.1 de `QUETE.md`). C'est elle
-   qui doit remplacer le garde-fou `"needStars"` du point 4 — celui-ci n'est qu'un ersatz.
-3. **Le gate or/temps** : 300 000 or (débloque tout de suite) ou 1-2 jours réels par pièce
-   restante (façon `BUILD_TIMES`), minigame de Tristan pour accélérer — conception posée dans
-   `QUETE.md`, pas encore codée (le garde-fou `"needStars"` du point 4 n'en est qu'un ersatz
-   provisoire, pas ce système).
-4. **Voir en jeu la revente de chevaux** (livraison indépendante du même jour, ci-dessous) —
-   secondaire face aux trois points ci-dessus, mais même blocage de preview.
+1. **VOIR EN JEU les trois morceaux que l'automatisation n'a pas pu regarder** (volet du navigateur
+   masqué, file de scènes) : **la fuite du vandale** (sprite, deux segments ville/ferme, les quatre
+   phrases du bandeau, et les quatre durées `VANDAL_TOWN_MS`/`GAP_MS`/`FARM_MS`/`ESCAPED_MS` qui
+   restent un premier réglage) ; **le refus `needStars`** sur la dernière pièce ; **la scène finale
+   déclenchée par la réparation**. Recette : « ⭐ Star → 🥷 Kerguélen ready to talk », puis la gare
+   de Valley Town, **puis laisser la cinématique du météore jouer sans rien toucher** (sinon
+   `starImpactLandedNow` reste faux et TOUTE l'interaction d'étoile en ville est muette), puis
+   « Stand at Kerguélen », puis E.
+2. **Les étoiles compagnes redessinées le même jour** (retour de Guillaume en cours d'audit : « trop
+   grandes et pas assez expressives, détaille un peu plus ») — à juger à l'écran. Mesuré : **13 px
+   contre 24 px pour un fermier (×0,54)**, contre ~15 px et un corps de 14,5 px **plus large qu'un
+   humain** avant. Ce qui a changé : canevas 16 px (une tuile) mais CORPS réduit (0,38 → 0,34) et
+   creux/cœur enfin SÉPARÉS (`rIn`/`rCore` — un seul nombre servait les deux, c'est ce qui faisait
+   la « motte » refusée deux fois) ; pointe droite en haut (les 0,22 rad d'inclinaison couchaient
+   une branche à l'horizontale, que le cerne pinçait) ; pupilles verticales de 1 px (un œil carré
+   de 2 px butait contre le cerne et fusionnait avec lui) ; sourire en V ; éclairage haut-gauche par
+   décentrage du cœur ; visage peint À TRAVERS `inside()`, donc plus aucun pixel hors du corps.
+   **La reine ne bouge pas** (`render-etoile` §3 exige 21-28 px natifs et 2× la matière).
+3. **La 2ᵉ négociation du maire** (`maire.js`) : budget dérapé par la réparation, une table de plus
+   (§16.1 de `QUETE.md`). C'est elle qui doit remplacer le garde-fou `needStars`, qui n'est qu'un
+   ersatz.
+4. **Le gate or/temps** : 300 000 or ou 1-2 jours réels par pièce (façon `BUILD_TIMES`), minigame de
+   Tristan pour accélérer — conçu dans `QUETE.md`, pas codé.
+5. **Voir en jeu la revente de chevaux** (livraison du 2026-09-12, jamais vue) : vendre un cheval
+   possédé depuis la boutique, à 1/3 du prix payé (`h.boughtPrice`, posé à l'achat — `HORSE_COSTS`
+   est indexé par RANG, donc relire le catalogue à la revente rendait un montant faux).
 
-**Livraison indépendante du même jour (2026-09-12) : revente des chevaux.** Demande Guillaume —
-vendre un cheval possédé, depuis la boutique (à côté d'« acheter »), pour libérer une place et en
-racheter un d'une autre robe. Chaque cheval mémorise désormais son prix payé (`h.boughtPrice`,
-posé à l'achat) : `HORSE_COSTS` est indexé par RANG d'achat, pas par cheval, donc relire le
-catalogue au rang courant à la revente aurait rendu un montant faux dès qu'un cheval change de
-position dans le tableau. Revente à 1/3 de ce prix, arrondi (même règle que `sellAnimal`),
-refusée si le cheval est monté. Migration des sauvegardes anciennes : le rang dans le tableau EST
-l'ordre d'achat (aucune vente n'existait avant), donc `C.HORSE_COSTS[rang]` y est le vrai prix,
-jamais une valeur arbitraire. `verify-strings` 1131 clés, `verify-scope` propre, bundle esbuild
-propre (seul `G_SOIL`, préexistant). ⚠️ **JAMAIS VUE EN JEU — même blocage de preview que
-ci-dessus** (§10, port 3000 occupé par une autre session).
+**Bancs relancés après correction : les 22 `verify-*` verts** (`verify-quete` 847/847,
+`verify-jalons` 52/52, `verify-maire` 119/119, `verify-vallee` 223/223, `verify-strings` 1131 clés,
+`verify-collision` tout passe, `verify-scierie` 34/34, `verify-taxi` 15/15, `verify-ludo` 30/30,
+`verify-ousthat` 144/144, plus `verify-gates`/`syntax`/`scope`/`constants`/`cycle`/`compo`/
+`objects`/`orchards`/`portee`/`pont`/`sol2`/`vergers`), **les 20 `render-*` exécutables verts**
+(`render-eau`/`render-parc` ne s'exécutent toujours pas, dette antérieure), bundle esbuild propre
+(seul `G_SOIL`, préexistant).
 
-Chantiers indépendants, non touchés aujourd'hui : la compagne redessinée (§12.3 bis de
-`QUETE.md`) attend toujours que Guillaume la regarde en jeu — rien à corriger tant que ce retour
-n'est pas là. Où's that attend le retour de jeu de Guillaume sur typographie/urgence/palette
-(`components/ousthat/README.md`) ; ferme/ville/tribunal voir §13 (bancs eau/parc, audience du
-maire).
-
+Chantiers indépendants, non touchés : Où's that attend le retour de jeu de Guillaume
+(`components/ousthat/README.md`) ; ferme/ville/tribunal voir §13 (bancs eau/parc, audience du maire,
+sprites tribunal/église).
 ---
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
@@ -273,6 +248,13 @@ coordonnées — et on teste la zone AVANT les distances.**
 
 **Dessin — voir `components/ferme/DESSIN.md`**
 
+⚠️⚠️⚠️ **DEUX LEÇONS DE L'AUDIT 2026-09-12 SONT PARTIES LÀ-BAS** (à côté des dessins qu'elles
+gouvernent) : *une grandeur de dessin qui sert DEUX rôles rend tout réglage impossible* — un seul
+rayon servait le creux d'une étoile ET la largeur de son cœur, donc élargir le visage rebouchait
+les échancrures, et cinq réécritures ont cherché un réglage là où il y avait deux décisions ; et
+*un angle constant n'est pas une largeur constante* — un chanfrein réglé en radians pour un rayon
+donné ne garantit plus aucune largeur de pointe à un rayon plus petit.
+
 Les treize règles de dessin — on assemble des masses et on ne texture pas une silhouette, une
 courbe `f(x)` ne se replie pas, la période prime sur les détails, un cerne sert aussi sur fond
 clair, un sprite haut contre le mur du fond avale ce qui passe devant… — vivent **à côté des
@@ -336,6 +318,40 @@ dépôt.
   hasard, ne la lisait pas. *Deux formules voisines qui mesurent deux choses différentes se
   ressemblent assez pour qu'on ne les compare jamais* — et celle qui ne peut jamais être vraie ne
   lève aucune erreur : elle attend, silencieuse, une condition que personne n'atteindra.
+
+- ⚠️⚠️⚠️ **UN RÉSOLVEUR QUI ÉCRIT UN CHAMP NEUF DOIT ÊTRE LIVRÉ DANS LE MÊME GESTE QUE SA
+  DÉCLARATION *ET* SA MIGRATION** (audit 2026-09-12, le défaut le plus cher de tout le chantier
+  quête). Une fonction de migration d'état ne RÉPARE pas l'objet reçu : elle en construit un NEUF
+  et y recopie les champs qu'elle connaît, un par un — donc **tout champ qu'elle ignore est
+  supprimé**. Et ces fonctions sont appelées en tête de chaque requête et de chaque `apply` : un
+  champ non déclaré s'efface dans la milliseconde qui suit sa pose, chez tout le monde, *sans
+  jamais lever d'erreur*. Ça a coûté une scène entière (quatre phases, un sprite, quatre phrases)
+  qui ne pouvait pas partir, et une quête **infinissable** parce qu'une régression volontaire ne
+  pouvait plus être levée. ⚠️ **Et aucun banc ne pouvait le voir** : aucun ne rejoue une migration
+  APRÈS un résolveur. *Le seul contrôle qui l'attrape est « poser le champ, migrer, relire ».*
+- ⚠️⚠️⚠️ **UN GARDE-FOU POSÉ SUR LA DEMANDE NE TIENT RIEN QUAND LES DEMANDES SONT PARALLÈLES**
+  (audit 2026-09-12). Le verrou qui devait réserver la CONCLUSION d'un chantier comptait les pièces
+  déjà posées *au moment de commander* — or les commandes tournent en parallèle depuis qu'on a
+  retiré leur sérialisation : on les passe toutes alors que le compte vaut encore zéro. Le verrou
+  n'a jamais refusé quoi que ce soit. *Un garde-fou se pose sur l'ÉVÉNEMENT qu'il protège, jamais
+  sur la demande qui le précède* — et quand le client et l'hôte doivent tous deux le lire, il
+  s'écrit UNE fois et se lit deux (§8).
+- ⚠️⚠️ **UN REPLI `|| "quelque chose"` SUR UNE TABLE DE LIBELLÉS EST UN STUB MENTEUR** (audit
+  2026-09-12). `({…})[k] || "E"` rend une invite PLAUSIBLE pour n'importe quelle clé inconnue :
+  la clé manquante ne se signale jamais, et un banc qui vérifie que « chaque clé lue existe » la
+  trouve toujours — grâce au repli. Vu à l'écran seulement : un « E » nu devant un PNJ qui hurle.
+  *Une table dont le repli est indiscernable d'une vraie valeur doit être vérifiée SANS son repli.*
+- ⚠️⚠️ **UNE CONDITION RECOPIÉE À LA MAIN À CÔTÉ DU PRÉDICAT QUI LA NOMME A DÉJÀ DIVERGÉ** (audit
+  2026-09-12, payé sur `starEngineerUrgent`). Le DESSIN appelait le prédicat, l'INTERACTION en
+  réécrivait une moitié, et un commentaire affirmait que les deux étaient « identiques ». Elles ne
+  l'étaient pas : le PNJ était peint calme et ouvrait la scène d'urgence. *Un commentaire qui
+  affirme une équivalence est l'endroit exact où il faut appeler la fonction au lieu de la
+  recopier* — et la troisième copie, dans le bandeau, disait encore autre chose.
+- ⚠️⚠️ **UN COMPTEUR RAFRAÎCHI SEULEMENT PAR DES ÉVÉNEMENTS PONCTUELS MENT POUR QUI ARRIVE APRÈS**
+  (audit 2026-09-12, trouvé en jouant à deux). « 👥 1 joueur en ligne » chez l'invité, pour toute
+  la soirée : le compte ne bougeait que sur `join`/`leave`, et l'hôte était là AVANT. *Un compteur
+  se met à jour là où la CARTE change (l'unique fonction qui fait entrer une entité), jamais à côté
+  d'un message particulier* — et il se DÉDUIT, il ne se diffuse pas (§3).
 
 **JavaScript / three.js / canevas**
 - ⚠️⚠️⚠️ **UN BOOLÉEN MIS EN CACHE POUR UNE VALEUR NATIVE VOLATILE (`document.hidden`) NE SE
@@ -852,6 +868,25 @@ vérifie jamais — c'est elle, et elle seule, qui protège du banc imaginaire (
   l'enchaînement humain → bot → humain du duel. Ce qui se juge là — *est-ce que c'est agréable ?*
   — ne se mesure toujours nulle part.
 
+⚠️⚠️⚠️ **LE VOLET DU NAVIGATEUR PEUT ÊTRE MASQUÉ MÊME QUAND UN ONGLET EST « AU PREMIER PLAN » —
+ET ALORS `requestAnimationFrame` EST GELÉ, DONC LE JEU NE TOURNE PAS** (audit 2026-09-12). Le
+symptôme est trompeur : la lecture du DOM marche parfaitement, les textes sont à jour, les clics
+passent — et un curseur de mini-jeu reste figé à 5 % pendant vingt secondes, ce qui ressemble trait
+pour trait à une mécanique cassée. **On vérifie `document.hidden` AVANT de conclure quoi que ce
+soit d'une mesure**, et on pose le worker du paragraphe ci-dessous **avant de rejoindre la ferme**
+(une fois la boucle partie, la patcher ne la récupère pas : la dernière inscription reste orpheline
+chez le `rAF` natif, exactement comme quand on `terminate()` le worker).
+⚠️⚠️ **ET `fake-supabase.mjs` NE PERSISTE RIEN : il répond `[]` sur tout `/rest/v1/*`.** Donc un
+rechargement repart TOUJOURS d'une ferme neuve — ne jamais conclure « l'état a survécu » d'un
+comportement observé après reload (erreur commise pendant cet audit : on a cru à une persistance
+là où le dev menu venait simplement d'être rejoué).
+⚠️⚠️ **UNE SCÈNE EN FILE BLOQUE TOUTE L'INTERACTION QU'ELLE PRÉCÈDE, ET ÇA RESSEMBLE À UN BUG.**
+`starImpactLandedNow()` exige que le joueur ait VU la cinématique du météore (marqueur local
+comparé à `e.townFall`) ; un bouton dev qui pose un `townFall` neuf rend donc TOUTE l'interaction
+d'étoile en ville muette jusqu'à ce que la scène ait joué. Et la scène ne joue que si aucun panneau
+n'est ouvert : **une automatisation qui ouvre le menu dev juste après l'arrivée empêche
+indéfiniment la scène, donc l'interaction.** Laisser trente secondes sans rien toucher.
+
 ⚠️⚠️ **JOUER À DEUX EN LOCAL : `node tools/fake-supabase.mjs`.** REST bidon **+ relais Realtime**,
 donc deux onglets = deux joueurs, sans compte et sans consommer un message du quota. `LAT=90
 JIT=60` simule une vraie liaison ; il imprime le débit réel PAR TYPE toutes les 5 s.
@@ -1286,22 +1321,15 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
   manque est de CONCEPTION (le bonbon empoisonné), pas de technique.
 - **`crystal`** : le chapitre a **deux** segments jouables (`play run` et `play walk`).
   Retirer le second retire le seul endroit où l'on ramasse des éclats.
-- ✅ **PANNE VERCEL DU 2026-09-12, DIAGNOSTIQUÉE ET CORRIGÉE** — trois livraisons de suite en
-  `Error` (`ca4c885`, un redeploy, `fda9804`). Ce n'était PAS le piège du 425 ci-dessus (celui-là
-  reste vrai en soi, mais n'était pas la cause cette fois) : `app/tmp-ousthat-audit/page.js`,
-  une page jetable de l'audit ousthat du 2026-09-11 (voir §2, « la page jetable se supprime avant
-  de livrer »), avait été **commitée au lieu d'être supprimée** (`ca4c885`). Elle utilisait
-  `useSearchParams()` sans `<Suspense>` : Next.js refuse de prérendre une page pareille en export
-  statique, et casse **tout le build**, pas seulement cette route. **Reproduit en local avec
-  `npx next build`, dans un `git worktree` isolé** (jamais dans l'arbre de travail principal : un
-  `npm run dev` d'une autre session y tournait, et §10 interdit de mélanger les deux sur le même
-  `.next/`) — la même erreur exacte que Vercel, confirmée en supprimant le fichier puis en
-  rebuildant : `✓ Compiled successfully`, 9/9 pages statiques. **Reste à faire : Guillaume commite
-  la suppression et pousse** (règle du §2, Claude ne commite ni ne pousse jamais).
-  ⚠️ **La leçon qui dépasse cet incident** : une page jetable non supprimée ne casse pas
-  seulement un test local oublié — commitée, elle peut **arrêter tous les déploiements de
-  production**. La règle « la supprimer avant de livrer » n'est pas une question d'hygiène, c'est
-  un point de panne pour tout le monde.
+- ✅ **PANNE VERCEL DU 2026-09-12 — CLOSE.** `app/tmp-ousthat-audit/page.js`, une page jetable
+  commitée au lieu d'être supprimée, utilisait `useSearchParams()` sans `<Suspense>` : Next.js
+  refuse de prérendre une page pareille et casse **tout le build**, pas seulement cette route.
+  Vérifié le 2026-09-12 : le fichier n'est plus dans le dépôt (`git cat-file -e HEAD:…` échoue).
+  ⚠️ **LA LEÇON, ELLE, RESTE** : une page jetable non supprimée ne casse pas un test local oublié
+  — commitée, elle **arrête tous les déploiements de production**. « La supprimer avant de livrer »
+  (§10) n'est pas de l'hygiène, c'est un point de panne pour tout le monde. L'audit du 2026-09-12
+  en a recréé deux (`app/tmp-audit-h`, `app/tmp-audit-g`) et les a supprimées dans la même
+  livraison.
 
 ---
 
@@ -1338,13 +1366,32 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
       mauvais fichier, pendant que le document qui pilote les séances de jeu de Guillaume
       pourrissait. **La passe suivante commence par la MESURE, jamais par la liste héritée.**
 
-   ⚠️⚠️ **L'ORDRE OUVERT, CORRIGÉ LE 2026-09-05 : RELIRE `components/ferme/QUETE.md` CONTRE LE
-   CODE**, en mesurant les divergences actuelles ; ce chantier est indépendant de l’audit
-   Où's that. ⚠️ **La grandeur à mesurer en premier est celle qui a payé trois fois** (453 sur le
-   document, 456 sur le code, 458 sur la coopération) : *chaque chose que le document dit visible à
-   l'écran a-t-elle un chemin de code qui l'affiche ?* — et son corollaire de 2026-09-05, qui a
-   sorti trois postes de jeu fantômes et trois constantes mortes : *chaque chose que le document
-   dit JOUABLE existe-t-elle encore ?*
+   ⚠️⚠️ **L'ORDRE OUVERT, ET IL EST MAINTENANT CHIFFRÉ (mesuré le 2026-09-12, pendant l'audit
+   quête) : RELIRE `components/ferme/QUETE.md` CONTRE LE CODE.** La mesure d'abord, jamais la liste
+   héritée — c'est la leçon n°6 ci-dessus. Symboles cités en backticks qui n'existent NULLE PART
+   dans `components/ferme/*.js` :
+
+   | document | symboles cités | fantômes |
+   |---|---|---|
+   | `components/ferme/QUETE.md` | 419 | **36** (8,6 %) |
+   | `components/ferme/README.md` | 396 | 11 |
+   | `CLAUDE.md` | 238 | 13 |
+   | `tools/README.md` | 122 | 4 |
+   | `components/ferme/DESSIN.md` | 2 | 0 |
+
+   ⚠️ **`QUETE.md` EMPIRE** (24 sur 307 au 2026-09-05, 36 sur 419 aujourd'hui) et ses fantômes se
+   rangent en **familles mortes, pas en fautes isolées** : la plongée (`STAR_DIVE_CURRENT`,
+   `diveDeeper`, `promptDive`, `promptUp`), le duo (`resolveStarDuet`, `STAR_DUET_AIM_DRIFT`,
+   `STAR_DUET_ALONE_MUL`, `starMiniPartner`), la pie et la verrerie (`STAR_MAGPIE_LAG`,
+   `resolveStarShard`, `STAR_SWEEP_MIN`), les cloches et les « pourquoi » (`bell1`..`bell4`,
+   `whyBell`, `whyDark`, `whyLean`, `whyMast`, `whySail`), plus des restes de l'enquête supprimée
+   (`ENQ_STONE_ANCHORS`, `devEnq`). **Ce sont les chapitres tués par le déchant du 469** : le
+   document décrit encore une quête en cinq chapitres là où le code en a trois. C'est le document
+   qui pilote les séances de jeu de Guillaume — donc celui dont les mensonges coûtent le plus.
+   ⚠️ **La grandeur à mesurer en premier reste celle qui a payé quatre fois** (453 sur le document,
+   456 sur le code, 458 sur la coopération, **2026-09-12 sur `e.vandal`**) : *chaque chose que le
+   document dit visible à l'écran a-t-elle un chemin de code qui l'affiche ?* — et son corollaire :
+   *chaque chose qu'il dit JOUABLE existe-t-elle encore ?*
 
 3. **Critère d'inclusion** : « est-ce vrai à l'échelle du projet, et invérifiable en ouvrant
    un seul fichier ? » Sinon, ça va dans un commentaire de code. **L'histoire d'un défaut

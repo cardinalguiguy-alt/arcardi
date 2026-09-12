@@ -933,7 +933,15 @@ const STAR_FR = {
       : detail === "noPlan" ? "Plans nécessaires."
       : detail === "noMayor" ? "Accord du maire nécessaire."
       : detail === "noShard" ? "Éclat correspondant à retrouver."
+      // AUTORITÉ 2026-09-12 (repasse) — le verrou provisoire, voir starTimberBlock.
+      : detail === "needStars" ? "Un signe du ciel, d'abord."
       : "Étape encore verrouillée.",
+    /* ⚠️ AUDIT 2026-09-12 — LA MÊME RAISON, DITE EN TOAST. Le plan déplié
+       explique déjà chaque verrou (`progressDetail`) ; l'invite de la cale en a
+       besoin aussi depuis que le garde-fou du ciel se tient sur le MONTAGE
+       (`Q.starRaiseBlock`). On la DÉRIVE au lieu d'écrire une seconde table de
+       raisons, qui aurait divergé au premier verrou ajouté (§8 de CLAUDE.md). */
+    blockWhy(d) { return this.progressDetail("locked", d); },
     progressNext: (part) => `Prochaine transformation visible : ${part}.`,
     progressComplete: "Construction terminée : toutes les pièces sont sur la cale.",
     /* ── TRISTAN. */
@@ -989,6 +997,12 @@ const STAR_FR = {
        un marteau sur la cale. */
     blockRaise: "🔨 Livrée — va la monter sur la cale",
     blockNoShard: "🔒 Cette pièce n'est pas encore disponible",
+    /* ⚠️⚠️ AUTORITÉ 2026-09-12 (repasse) — LE VERROU PROVISOIRE SUR LA DERNIÈRE
+       PIÈCE (`starTimberBlock`, quete.js, raison "needStars"). Volontairement
+       vague — le jeu ne dit jamais « attends le chapitre 3 », il parle le
+       langage de sa propre fiction (les étoiles qui guident le chantier, zip
+       454). À retirer le jour où la 2ᵉ négociation/le gate or-temps existent. */
+    blockNeedStars: "🔒 Il faut d'abord un signe du ciel",
     /* ⚠️ ZIP 478 — LIVRER N'EST PLUS POSER. Tristan dépose le bois au pied de la
        cale ; c'est le joueur qui monte la pièce, au marteau. Les deux phrases sont
        donc deux ÉVÉNEMENTS distincts, à deux moments différents et souvent par deux
@@ -1001,6 +1015,16 @@ const STAR_FR = {
     raiseHint: "Frappe quand le maillet passe sur la zone claire. Un coup à côté ne compte pas.",
     raiseWin: "La pièce est en place. Elle ne bougera plus.",
     raiseFail: "Le bois a glissé. Reprends-le calmement.",
+    /* ⚠️⚠️ AUTORITÉ 2026-09-12 (repasse) — LE MARTEAU DE LA RÉPARATION. Même
+       mini-jeu que `raise*` (`BarnMinigame`, demande initiale de Guillaume au
+       478 : « le même mini jeu marteau que pour l'amélioration de la grange »),
+       textes distincts pour un geste distinct : on ne MONTE pas une pièce
+       neuve, on RETIENT une coque qui prend l'eau, avec Kerguélen à côté. */
+    fixTitle: "🔨 Réparer la coque, avec Kerguélen",
+    fixSub: (n, total) => `coup ${n} sur ${total}`,
+    fixHint: "Frappe en rythme avec lui : vise la zone claire, vite mais juste.",
+    fixWin: "La coque tient bon. Kerguélen souffle, soulagé.",
+    fixFail: "Le maillet a raté sa prise. Kerguélen serre les dents — on recommence.",
     lastOne: "La dernière pièce est en place. Le bateau est fini.",
     noTristan: "Personne à la ferme ne sait travailler le bois comme ça.",
     unbuilt: (n, total) => `La cloche a répondu, mais il manque encore du bois : ${n} pièces sur ${total}.`,
@@ -1058,16 +1082,22 @@ const STAR_FR = {
     away: (d) => `Eduardo emmène le bateau des étoiles au large. Il veut voir ce qu'il y a de l'autre côté (retour dans ${d}).`,
     back: (goods) => `Le bateau des étoiles est rentré. Eduardo rapporte : ${goods}.`,
   },
-  /* ⚠️ AUTORITÉ 2026-09-12 — LE VANDALE. Le toast est vu par toute la salle
-     (`broadcastGlobalToast`, FermeGame.js) au moment où la reine sort ; les
-     trois répliques se lisent l'une après l'autre (`starTell`) quand on
-     s'approche de Kerguélen sur le quai. Jamais de nom, jamais de visage —
-     QUETE.md l'interdit explicitement pour cette quête. */
+  /* ⚠️⚠️ AUTORITÉ 2026-09-12 (repasse) — LE VANDALE, EN DEUX TEMPS. Le toast est
+     vu par toute la salle (`broadcastGlobalToast`, FermeGame.js) au moment où
+     la reine sort. `urgentBubble` tourne au-dessus de la tête de Kerguélen,
+     agité, tant que la coque n'est pas réparée (`Q.starEngineerUrgent`) —
+     remplace `engBubble` pendant cette fenêtre, plus fréquente (voir
+     `VANDAL_URGENT_BUBBLE_MS`). Les trois répliques (`starTell`) se lisent
+     maintenant APRÈS le mini-jeu du marteau, jamais avant : demande de
+     Guillaume, en jouant — l'urgence se VIT (on répare), elle ne s'explique
+     pas d'abord. Jamais de nom, jamais de visage — QUETE.md l'interdit
+     explicitement pour cette quête. */
   vandal: {
-    toast: "Nouvelles du chantier : va voir Kerguélen sur le quai.",
-    say1: "Kerguélen se retourne, la mine sombre.",
-    say2: "« La coque a été abîmée pendant la nuit. Quelqu'un s'en est pris à elle — je ne sais pas qui. »",
-    say3: "« Il faudra la renforcer. La plaque refroidie du cratère devrait suffire. »",
+    toast: "Nouvelles du chantier : la coque a été sabotée cette nuit — Kerguélen a besoin d'aide, VITE, sur le quai !",
+    urgentBubble: "VITE !! VITE !! Venez m'aider, le bateau va couler !!",
+    say1: "Kerguélen essuie son front, encore essoufflé.",
+    say2: "« Merci… on l'a tenue à temps. Quelqu'un s'en est pris à la coque cette nuit — je ne sais pas qui. »",
+    say3: "« Tout de noir vêtu, capuche rabattue. Je n'ai pas eu le temps de voir son visage. »",
   },
   /* ⚠️⚠️⚠️ 2026-08-31 — LA PHRASE DU CHAT SORT DU MENU DÉVELOPPEUR, PARCE QU'ELLE
      N'EST PAS UN OUTIL. `STAR_FR.dev` POINTE SUR `STAR_EN.dev` (voir sa note) et
@@ -1238,6 +1268,22 @@ const STAR_FR = {
        clignoterait pendant qu'on tourne autour du chantier. */
     raise: "E : monter la pièce sur la cale",
     // 2026-09-07 — la plaque du chantier (voir sa note dans `plan.plaqueTitle`).
+    /* ⚠️⚠️⚠️ AUDIT 2026-09-12 — CETTE CLÉ MANQUAIT, ET LE REPLI `|| "E"` DE CETTE
+       TABLE L'A CACHÉE. Trouvée EN JEU, pas par un banc : debout devant un
+       Kerguélen qui hurle « VITE !! VITE !! », l'invite affichait un « E » NU,
+       sans un mot pour dire ce que la touche allait faire — sur le seul geste
+       de la quête qui ouvre un mini-jeu qu'on n'attend pas.
+       ⚠️ LA LEÇON EST SUR LE REPLI, PAS SUR LA CLÉ : `({...})[k] || "E"` rend une
+       invite PLAUSIBLE pour n'importe quelle clé inconnue, donc il ment mieux
+       qu'il ne planterait (§10 de CLAUDE.md, le stub menteur). `verify-quete`
+       vérifie que chaque clé lue EXISTE — elle « existe » toujours, grâce au
+       repli. C'est pourquoi le banc gagne du même coup un contrôle qui compare
+       les clés `p:` de `FermeGame.js` à cette table SANS passer par le repli. */
+    kerguelenVandal: "E : réparer la coque avec lui",
+    /* AUDIT 2026-09-12 — un CONSTAT, pas une invite : le bois est livré, le
+       montage attend le ciel. Sans « E : », comme `impactDig` (règle du 456) —
+       mais E reste branché pour DIRE pourquoi (`plan.blockWhy`). */
+    raiseWait: "La cale attend un signe du ciel (E : pourquoi ?)",
     plaque: "E : lire la plaque du chantier",
   })[k] || "E",
 };
@@ -1721,7 +1767,15 @@ const STAR_EN = {
       : detail === "noPlan" ? "Plans required."
       : detail === "noMayor" ? "The mayor's approval is required."
       : detail === "noShard" ? "Find the matching shard."
+      // AUTORITÉ 2026-09-12 (repasse) mirror — see the FR block for context.
+      : detail === "needStars" ? "A sign from the sky, first."
       : "This step is still locked.",
+    /* ⚠️ AUDIT 2026-09-12 — LA MÊME RAISON, DITE EN TOAST. Le plan déplié
+       explique déjà chaque verrou (`progressDetail`) ; l'invite de la cale en a
+       besoin aussi depuis que le garde-fou du ciel se tient sur le MONTAGE
+       (`Q.starRaiseBlock`). On la DÉRIVE au lieu d'écrire une seconde table de
+       raisons, qui aurait divergé au premier verrou ajouté (§8 de CLAUDE.md). */
+    blockWhy(d) { return this.progressDetail("locked", d); },
     progressNext: (part) => `Next visible change: ${part}.`,
     progressComplete: "Construction complete: every piece is on the slipway.",
     orderTitle: (name) => `🪵 ${name}'s workshop`,
@@ -1750,6 +1804,8 @@ const STAR_EN = {
     blockNoMayor: "🔒 The quay is public: you need the mayor's approval",
     blockRaise: "🔨 Delivered — go raise it on the slipway",
     blockNoShard: "🔒 This piece isn't available yet",
+    // AUTORITÉ 2026-09-12 (repasse) mirror — see the FR block for context.
+    blockNeedStars: "🔒 A sign from the sky comes first",
     delivered: (part) => `${part} — the timber is on the slipway. All it needs is a hammer.`,
     raised: (part, who) => `${part} — ${who} just raised it. The boat is growing for real now.`,
     raiseTitle: (part) => `🔨 Raise ${part}`,
@@ -1757,6 +1813,12 @@ const STAR_EN = {
     raiseHint: "Strike when the mallet crosses the bright band. A blow off the mark doesn't count.",
     raiseWin: "The piece is home. It won't move again.",
     raiseFail: "The timber slipped. Take it up again, calmly.",
+    // AUTORITÉ 2026-09-12 (repasse) mirror — see the FR block for context.
+    fixTitle: "🔨 Repair the hull, with Kerguélen",
+    fixSub: (n, total) => `blow ${n} of ${total}`,
+    fixHint: "Strike in rhythm with him: aim for the bright band, fast but true.",
+    fixWin: "The hull holds. Kerguélen breathes out, relieved.",
+    fixFail: "The mallet missed its mark. Kerguélen grits his teeth — again.",
     lastOne: "The last piece is in place. The boat is finished.",
     noTristan: "Nobody on the farm can work timber like that.",
     unbuilt: (n, total) => `The bell has answered, but the wood is short: ${n} pieces of ${total}.`,
@@ -1798,12 +1860,13 @@ const STAR_EN = {
     away: (d) => `Eduardo takes the star boat out to sea. He wants to see what's on the other side (back in ${d}).`,
     back: (goods) => `The star boat is back. Eduardo brings: ${goods}.`,
   },
-  // AUTORITÉ 2026-09-12 mirror — see the FR block for context.
+  // AUTORITÉ 2026-09-12 (repasse) mirror — see the FR block for context.
   vandal: {
-    toast: "News from the shipyard: go see Kerguélen at the dock.",
-    say1: "Kerguélen turns around, grim-faced.",
-    say2: "\"The hull was damaged overnight. Someone got to it — I don't know who.\"",
-    say3: "\"It'll need reinforcing. The cooled plate from the crater should do it.\"",
+    toast: "News from the shipyard: the hull was sabotaged overnight — Kerguélen needs help, FAST, at the dock!",
+    urgentBubble: "QUICK !! QUICK !! Come help me, the boat's going to sink !!",
+    say1: "Kerguélen wipes his brow, still out of breath.",
+    say2: "\"Thanks… we held it in time. Someone got to the hull last night — I don't know who.\"",
+    say3: "\"Dressed all in black, hood up. I didn't get a look at their face.\"",
   },
   /* ── CE QUE LA VILLE GARDE. */
   devChat: (who, what) => `${who} touched the star quest: ${what}.`,
@@ -1838,6 +1901,11 @@ const STAR_EN = {
          regarderait le plan et le fantôme qu'une fois, donc on ne les jugerait
          qu'une fois — la raison d'être de tout ce menu. */
       plans: "📐 Hand me the plans",
+      /* ⚠️ AUTORITÉ 2026-09-12 — même famille que `queen`..`rescue` : pose le
+         décor (crater cold, six sisters tamed, plan done), leaves the reveal
+         itself to be triggered by walking up to Kerguélen and pressing E
+         (pair with "Stand at Kerguélen" below). */
+      vandal: "🥷 Kerguélen ready to talk (the reveal itself stays to play)",
       /* ⚠️ ZIP 478 — deux boutons pour deux états : « deliver » s'arrête AVANT le
          marteau (c'est le seul moyen de juger le mini-jeu de montage sans huit
          minutes de scie), « timber » pose les cinq pièces. */
@@ -1888,6 +1956,15 @@ const STAR_EN = {
        bureau est deux pièces plus loin, derrière une porte. Sans ce bouton, chaque
        essai de l'audience commence par une promenade. */
     standMayor: "🎩 Stand at the Mayor's desk",
+    /* ⚠️ AUTORITÉ 2026-09-12 — même raison que `standMayor` : la seconde fenêtre
+       de Kerguélen (le vandale) se joue à quatre cases précises de la cale, sur
+       le quai ; sans ce bouton, chaque essai recommence par une traversée de la
+       ville depuis l'arrêt de téléport le plus proche. Local only — see the
+       function next to devStandAtMayorDesk. */
+    standKerguelen: "🥷 Stand at Kerguélen (the dock)",
+    // AUDIT 2026-09-12 — le refus se DIT (voir devStandAtKerguelen) : ce menu
+    // n'est pas traduit (§ dev), donc une seule phrase pour les deux langues.
+    standKerguelenFar: "Kerguélen is at the Valley Town dock — take the train first (or the \u{1F689} teleport).",
     /* ⚠️ LOT E — cet arrêt naît le MÊME JOUR que la scène de sciage. Leçon du
        425, écrite dans `CLAUDE.md` : un lieu qu'il faut quarante minutes de
        quête pour atteindre est un lieu qu'on ne va pas regarder — donc qu'on
@@ -1975,6 +2052,10 @@ const STAR_EN = {
     track: "E: part the leaves",
     engineer: "E: talk to the shipwright",
     raise: "E: raise the piece on the slipway",
+    // AUDIT 2026-09-12 — voir la note française : clé absente, masquée par le
+    // repli `|| "E"` de cette table, trouvée en jeu.
+    kerguelenVandal: "E: repair the hull with him",
+    raiseWait: "The slipway is waiting for a sign from the sky (E: why?)",
     plaque: "E: read the shipyard plaque",
   })[k] || "E",
 };
