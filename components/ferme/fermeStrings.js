@@ -1838,6 +1838,11 @@ const STAR_EN = {
          regarderait le plan et le fantôme qu'une fois, donc on ne les jugerait
          qu'une fois — la raison d'être de tout ce menu. */
       plans: "📐 Hand me the plans",
+      /* ⚠️ AUTORITÉ 2026-09-12 — même famille que `queen`..`rescue` : pose le
+         décor (crater cold, six sisters tamed, plan done), leaves the reveal
+         itself to be triggered by walking up to Kerguélen and pressing E
+         (pair with "Stand at Kerguélen" below). */
+      vandal: "🥷 Kerguélen ready to talk (the reveal itself stays to play)",
       /* ⚠️ ZIP 478 — deux boutons pour deux états : « deliver » s'arrête AVANT le
          marteau (c'est le seul moyen de juger le mini-jeu de montage sans huit
          minutes de scie), « timber » pose les cinq pièces. */
@@ -1888,6 +1893,12 @@ const STAR_EN = {
        bureau est deux pièces plus loin, derrière une porte. Sans ce bouton, chaque
        essai de l'audience commence par une promenade. */
     standMayor: "🎩 Stand at the Mayor's desk",
+    /* ⚠️ AUTORITÉ 2026-09-12 — même raison que `standMayor` : la seconde fenêtre
+       de Kerguélen (le vandale) se joue à quatre cases précises de la cale, sur
+       le quai ; sans ce bouton, chaque essai recommence par une traversée de la
+       ville depuis l'arrêt de téléport le plus proche. Local only — see the
+       function next to devStandAtMayorDesk. */
+    standKerguelen: "🥷 Stand at Kerguélen (the dock)",
     /* ⚠️ LOT E — cet arrêt naît le MÊME JOUR que la scène de sciage. Leçon du
        425, écrite dans `CLAUDE.md` : un lieu qu'il faut quarante minutes de
        quête pour atteindre est un lieu qu'on ne va pas regarder — donc qu'on

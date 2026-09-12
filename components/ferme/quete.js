@@ -4759,7 +4759,15 @@ export function resolveStarGift(e, playerIds, now) {
    de la reine) n'en a PAS besoin et c'est délibéré : il ne coûte qu'un objet à 400
    or, que le bouton « Argent » du menu dev sait déjà donner. Un bouton par geste
    aurait été un bouton de plus à tenir pour rien. */
-export const STAR_DEV_OPS = ["reset", "warn", "start", "candy", "dish", "lure", "queen", "shy", "green", "evil", "hook", "rescue", "chapter", "skip", "all", "plans", "deliver", "timber", "appt", "unslam"];
+/* ⚠️⚠️ AUTORITÉ 2026-09-12 — « vandal » REJOINT LA LISTE, MÊME FAMILLE QUE
+   `queen`..`rescue` : IL POSE LE DÉCOR ET LAISSE LE GESTE. Sans lui, atteindre
+   la seconde fenêtre de Kerguélen (`starEngineerHere`, voir sa note) demande de
+   gagner les six chasses ET les quinze minutes de plans avant de pouvoir
+   REGARDER la révélation — c'est-à-dire qu'on ne la regarderait qu'une fois par
+   soirée de test, exactement le défaut que ce menu existe pour corriger. Il ne
+   pose PAS `e.vandal` : la révélation reste le geste (marcher jusqu'au quai —
+   `standKerguelen` juste au-dessus dans le menu — et appuyer sur E). */
+export const STAR_DEV_OPS = ["reset", "warn", "start", "candy", "dish", "lure", "queen", "shy", "green", "evil", "hook", "rescue", "chapter", "skip", "all", "plans", "vandal", "deliver", "timber", "appt", "unslam"];
 /* ⚠️ ZIP 469 — `turn` (le retournement) sort de la liste : sa scène est supprimée
    dans `FermeGame`, et un bouton qui rejoue une scène qui n'existe plus ouvre un
    voile noir de sept secondes sur rien. */
@@ -4832,6 +4840,33 @@ export function devStar(e, op, now, who) {
     for (const site of STAR_FARM_IMPACTS) resolveStarFound(e, site.id, "🛠️", t);
     resolveStarFound(e, "crater", "🛠️", t);
     e.plan = { at: t - C.STAR_ENG_TRAVEL_MS - C.STAR_ENG_WORK_MS, by: "🛠️", done: t };
+    return { star: e, ok: true };
+  }
+  /* ╔═════════════════════════════════════════════════════════════════════════════
+     ║ AUTORITÉ 2026-09-12 — LE BOUTON DE LA RÉVÉLATION, MÊME FAMILLE QUE
+     ║ `queen`..`rescue` : ON POSE LE DÉCOR, ON LAISSE LE GESTE.
+     ╚═════════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ SANS LUI, ATTEINDRE LA SECONDE FENÊTRE DE KERGUÉLEN (`starEngineerHere`,
+     voir sa note) DEMANDE DE GAGNER LES SIX CHASSES ET LES QUINZE MINUTES DE
+     PLANS avant de pouvoir REGARDER la fuite — c'est-à-dire qu'on ne la
+     regarderait qu'une fois par soirée de test, exactement le défaut que ce menu
+     existe pour corriger (444). Autonome comme `rescue` : il refait sa propre
+     préparation plutôt que de supposer qu'un autre bouton a déjà tourné.
+     ⚠️ IL NE POSE PAS `e.vandal` : la révélation reste LE GESTE — marcher jusqu'au
+     quai (« Stand at Kerguélen », FermeGame.js, même famille que
+     `devStandAtMayorDesk`) et appuyer sur E déclenche la vraie `req:
+     "vandalReveal"`, donc `resolveVandalReveal`, exactement comme un joueur. */
+  if (op === "vandal") {
+    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "🛠️" };
+    if (!e.fall) e.fall = t;
+    for (const site of STAR_FARM_IMPACTS) resolveStarFound(e, site.id, "🛠️", t);
+    resolveStarTownFall(e, t);
+    if (e.townFall) e.townFall = t - STAR_CRATER_COOL_MS - 1000;
+    resolveStarFound(e, "crater", "🛠️", t);
+    resolveStarFound(e, "townShy", "🛠️", t);
+    resolveStarFound(e, "townGreen", "🛠️", t);
+    if (!starPlanAsked(e)) e.plan = { at: t, by: "🛠️", done: t };
+    else if (!starPlanReady(e)) e.plan.done = t;
     return { star: e, ok: true };
   }
   if (op === "timber") {

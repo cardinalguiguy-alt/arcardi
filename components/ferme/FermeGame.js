@@ -13423,6 +13423,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     sendPos();
     setDevMenuOpen(false);
   }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ AUTORITÉ 2026-09-12 — SE PLANTER DEVANT KERGUÉLEN, MÊME RAISON QUE LE 481.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ SANS LUI, JUGER LA RÉVÉLATION DU VANDALE (la seconde fenêtre de
+     `Q.starEngineerHere`, voir sa note dans `quete.js`) DEMANDE DE RETROUVER LE
+     QUAI À PIED À CHAQUE ESSAI — le même défaut que le bureau du maire, à
+     l'identique. Il pose le joueur au MÊME point que celui que
+     `starEngineerHere` vérifie (`tw.shipX + C.STAR_ENG_DX`,
+     `tw.shipY + C.STAR_ENG_DY`, rayon 1,8 case), donc un simple E suffit.
+     ⚠️ IL NE DONNE RIEN ET NE TOUCHE QUE LE JOUEUR LOCAL, comme les deux autres :
+     la révélation (`e.vandal`), la fuite et le dialogue restent le geste à
+     jouer — voir l'op « vandal » de `Q.devStar`, qui pose le décor et s'arrête
+     là exprès. Silencieux hors de la ville, comme `devStandAtNextStar` : ce
+     n'est pas une porte qu'on explique, c'est un raccourci pour qui y est déjà. */
+  function devStandAtKerguelen() {
+    const m = meRef.current;
+    if (!m || (m.zone || "farm") !== "town") return;
+    const tw = townWorldNow();
+    if (!tw || !tw.shipX) return;
+    keysRef.current = {};
+    m.x = tw.shipX + C.STAR_ENG_DX; m.y = tw.shipY + C.STAR_ENG_DY + 1; m.dir = 0; m.moving = false;
+    sendPos();
+    setDevMenuOpen(false);
+  }
 
   /* ======================================================================
      ZIP 392 — LE PANNEAU DE NOTIFICATIONS, EN UN SEUL ENDROIT.
@@ -34210,6 +34234,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                         </button>
                         <button className="ferme-dev-btn" onClick={devStandAtMayorDesk}>
                           {L.star.dev.standMayor}
+                        </button>
+                        {/* AUTORITÉ 2026-09-12 — voir devStandAtKerguelen : se pose
+                            au même point que `Q.starEngineerHere` vérifie, à côté du
+                            bouton « vandal » ci-dessus (STAR_DEV_OPS) qui pose le
+                            décor et laisse le E déclencher la vraie révélation. */}
+                        <button className="ferme-dev-btn" onClick={devStandAtKerguelen}>
+                          {L.star.dev.standKerguelen}
                         </button>
                         {/* ⚠️⚠️ LOT E — L'ARRÊT QUI OUVRE LA SCIE TOUT DE SUITE, ET IL
                             NAÎT LE MÊME JOUR QUE LA SCÈNE. La leçon du 425 est écrite

@@ -38,22 +38,35 @@ l'origine du bois. Un vandale anonyme y est semé, jamais élucidé ici — rés
    (`kerguelenBack`→`vandalChaseTown`→`vandalChaseFarm`→`vandalEscaped`→retombe pour toujours).
    Détail, textes et durées (premiers réglages, jamais vus en jeu) : `QUETE.md`, « Ce qui est
    fait — 2026-09-12, l'ouverture du chapitre 5 ».
+5. **Le menu dev a rattrapé le point 4 — demande explicite de Guillaume** (« assure-toi que le
+   menu dev prend en compte les changements narratifs et d'états de la quête »). `Q.STAR_DEV_OPS`
+   gagne `"vandal"` (`quete.js`, même famille que `queen`..`rescue` : pose le décor — crater froid,
+   six sœurs apprivoisées, plans prêts — et LAISSE LE GESTE, il ne pose jamais `e.vandal` lui-même)
+   et le menu gagne un second téléport local, « Stand at Kerguélen » (`devStandAtKerguelen`,
+   `FermeGame.js`, même famille que `devStandAtMayorDesk` : pose le joueur au point exact que
+   `starEngineerHere` vérifie, `tw.shipX + STAR_ENG_DX`/`tw.shipY + STAR_ENG_DY`). Un clic + une
+   marche de zéro case + un E suffisent maintenant à atteindre la vraie révélation (`req:
+   "vandalReveal"`), au lieu de gagner les six chasses et les quinze minutes de plans à chaque
+   essai.
 
-`verify-quete` 839/839 (section 13 neuve, falsifiée à l'écriture), `verify-jalons` 51/51,
-`render-navire` tout vert, `verify-maire` 119/119, `verify-strings` 1126 clés, `verify-vallee`
-223/223, `verify-collision` tout passe, bundle esbuild propre (seul `G_SOIL`, préexistant).
-⚠️⚠️ **RIEN DE TOUT ÇA N'A ÉTÉ VU EN JEU, DEUX LIVRAISONS DE SUITE** — un `npm run dev` d'une
-autre session tournait sur ce dépôt (§10) pendant la première ET la seconde (port 3000 vérifié
-occupé), donc toujours aucune preview possible depuis celle-ci.
+`verify-quete` 840/840 (+1 : le libellé du bouton « vandal »), `verify-strings` 1131 clés
+(inchangé — `dev` n'est pas traduit, voir §10), bundle esbuild propre (seul `G_SOIL`,
+préexistant). Les autres bancs du bloc ci-dessus n'ont pas été relancés par cette passe (rien
+qu'ils mesurent n'a changé).
+⚠️⚠️ **RIEN DE TOUT ÇA N'A ÉTÉ VU EN JEU, TROIS LIVRAISONS DE SUITE** — un `npm run dev` d'une
+autre session tournait sur ce dépôt (§10) pendant les trois (port 3000 vérifié occupé à chaque
+fois), donc toujours aucune preview possible depuis celle-ci. Le bouton « Stand at Kerguélen »
+lui-même n'a donc jamais été cliqué.
 
 **Reste à faire, dans cet ordre :**
 1. **Voir en jeu, en priorité absolue avant d'ajouter quoi que ce soit de plus** : le chevron
    mène-t-il au tableau, l'avis se lit-il bien, la négociation maire fonctionne-t-elle avant
    toute étoile — ET, du point 4 ci-dessus, jamais vus à l'écran : le sprite du vandale
    (silhouette, capuche), sa fuite en ville puis à la ferme, le dialogue de Kerguélen, les
-   quatre phrases du bandeau. Les quatre durées de `fermeConstants.js`
-   (`VANDAL_TOWN_MS`/`GAP_MS`/`FARM_MS`/`ESCAPED_MS`) sont un premier réglage à ajuster une fois
-   vues, comme les trois nombres de la scierie (§13).
+   quatre phrases du bandeau. **Le point 5 ci-dessus raccourcit ce test** : « ⭐ Star → vandal »
+   puis « Stand at Kerguélen » puis E suffisent, plus besoin de rejouer toute la chaîne. Les
+   quatre durées de `fermeConstants.js` (`VANDAL_TOWN_MS`/`GAP_MS`/`FARM_MS`/`ESCAPED_MS`) sont un
+   premier réglage à ajuster une fois vues, comme les trois nombres de la scierie (§13).
 2. **La 2ᵉ négociation du maire** (`maire.js`) : budget dérapé par la réparation/le vandale,
    table à ajouter (le système le permet en une table de plus, §16.1 de `QUETE.md`).
 3. **Le gate or/temps** : 300 000 or (débloque tout de suite) ou 1-2 jours réels par pièce
