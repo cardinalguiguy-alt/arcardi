@@ -7,36 +7,58 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### ACTION SUIVANTE — OÙ'S THAT : URGENCE/RÉSULTATS (face à face, chrono central, son)
+### ACTION SUIVANTE — OÙ'S THAT : GUILLAUME JOUE ET JUGE (mécanique, son, palette)
 
-**Fait et vérifié le 2026-09-12**, le rythme des tours — « carte persistante + pause », tranché
-par Guillaume (préchargement + pause sur l'attente, dock qui referme son ouverture mais garde sa
-taille) : détail complet dans `components/ousthat/README.md`, bullet daté. Les trois `<GuessMap>`
-(dock de jeu, dock de révélation, modale de fin — trois géométries CSS différentes) sont
-remplacés par UN SEUL montage porté par `components/ousthat/MapPortal.js` : trois ancres vides,
-une couche `position:fixed` resynchronisée sur l'ancre active à chaque image. Le panorama suivant
-charge caché pendant la révélation (aucun protocole réseau nouveau). Le décompte se met en pause
-côté hôte (`toggleTransitionPause`, règle pure de `rules.js`, jamais une horloge comparée entre
-clients). ⚠️ **Bogue trouvé EN JOUANT, invisible en relisant** : le portail avait un z-index de
-20, qui ne bat que ses frères dans SON propre contexte d'empilement — `.ot-root` (l'écran de jeu
-entier) est en `position:fixed;z-index:80`, donc tout ce qu'il contient passait au-dessus du
-portail sans qu'aucune erreur ne le dise : le clic atterrissait sur l'ancre vide, le marqueur ne
-se posait jamais. Corrigé (z-index:85). **Vérifié en session réelle à 2 clients**
-(`fake-supabase.mjs`) sur trois manches jouées : carte cliquable, révélation avec pins/lignes sur
-les vraies tuiles, pause/reprise avec le même nombre figé chez l'hôte ET l'invité. `tools/
-verify-ousthat.mjs` : **134/134**. ⚠️ **Bonus non demandé mais observé pendant ces manches** : le
-délai fixe de 10 s en duel (`DUEL_FINAL_SECONDS`) a tourné pour la première fois dans un vrai
-navigateur (hôte confirme en premier → alerte + décompte chez l'invité → résolution à
-expiration) — **un seul sens testé** (hôte puis invité) ; invité-puis-hôte, la validation
-simultanée et la reconnexion restent à voir.
+**Fait et vérifié le 2026-09-12** : l'audit du 2026-09-11 est maintenant épuisé — les trois
+livraisons proposées (typographie, composition, palette) sont codées, **chacune séparément**
+(§2). Détail complet, daté, dans `components/ousthat/README.md`. En bref :
+
+1. **Typographie sur tout le jeu** : `.ot-root` passe d'Space Mono à Outfit. **Seul le chrono
+   (`.ot-round-clock`) reste épinglé en Space Mono**, sur ordre explicite de Guillaume (« touche
+   pas au décompte, il est bien »).
+2. **Urgence/résultats** : le duel (2 sièges) retrouve un HUD face à face, chrono au centre —
+   réactivation d'un grid CSS orphelin depuis le roster v2, pas une nouvelle mise en page ; les
+   parties à 3+ gardent ce roster. Alerte nommée et vivante (« Robin a joué — 10 s ») au lieu
+   d'une phrase générique à 9 px. Bip discret réglable (icône 🔊/🔇, synthétisé, préférence
+   `localStorage` PAR SPECTATEUR). La pastille repliée de la révélation garde enfin MON résultat
+   (`myId`), plus celui du premier siège.
+3. **Palette, écran de réglages seulement** (composition/HUD pas encore touchés, décision de
+   Guillaume — « réglages d'abord », comme la typo) : fond sombre gardé (utile pour la lisibilité
+   du panorama ailleurs, même si cet écran ne le montre pas), mais réchauffé — bleu nuit
+   (`#060914`) devient brun sombre chaud (`#100a06`/`#241a10`) ; le cyan qui dominait sélections,
+   focus et libellés devient de l'ambre (`--ot-gold`), **cyan gardé sur UN SEUL rôle** (le curseur
+   de durée) pour respecter « cyan en accent » ; nouvelles variables `--ot-cream`/`-dim`/`-mute`
+   pour le texte. Toutes redéclarées SUR `.ot-setup-root` (jamais sur `.ot-root`) : invisibles du
+   HUD/révélation/fin de partie, qui gardent leur bleu nuit actuel jusqu'à la prochaine étape.
+   ⚠️ **Décision volontairement PAS reprise du reste du site** : le crème/ambre/cyan du salon
+   existe déjà comme variables globales (`--ink`, `--p2`, `--acc-ousthat`), mais Guillaume a choisi
+   une variante propre au jeu plutôt qu'un alias direct — ne pas les fusionner par la suite sans
+   qu'il le redemande.
+
+`tools/verify-ousthat.mjs` : **144/144**, dont dix contrôles neufs (urgence/résultats) —
+falsifiés un par un avant d'être crus. `npx next build`, trois fois, un worktree isolé à chaque
+fois : `✓ Compiled successfully`, 9/9 pages.
+
+⚠️ **Deux séances à 2 clients JOUÉES PAR CLAUDE, sur demande explicite et directe de Guillaume**
+(« joue une vraie session à deux pour juger », 2026-09-12) — précédent identique à l'exception du
+2026-09-01 pour l'item n°1 du §13 : ce n'est pas une initiative prise seule. Cumulées : Pinpoint
+ET Pays, les DEUX sens du duel (hôte confirme en premier, puis l'inverse), plusieurs transitions
+de manche, un passage en viewport mobile (375 px), la palette regardée à l'écran sur les deux
+modes et le volet réglages. Aucune erreur console (à part `ERR_CONNECTION_REFUSED` sur l'iframe
+Street View — panne du bac à sable sans réseau réel vers Google, déjà documentée le 2026-09-11).
+⚠️⚠️ **CE QUE CES SÉANCES NE PROUVENT PAS, ET NE POURRONT JAMAIS PROUVER, MÊME REJOUÉES CENT
+FOIS** : Claude ne peut ni entendre le bip (aucune sortie audio dans cet environnement — seule
+l'ABSENCE d'erreur est vérifiable, jamais le rendu), ni juger si le ton du message, l'équilibre
+visuel du face-à-face ou la nouvelle palette sont AGRÉABLES. C'est la limite que pose le §13 en
+toutes lettres : un banc — ou une session automatisée qui n'entend rien — mesure la mécanique,
+jamais le ressenti.
 
 **Reste à faire, dans l'ordre déjà arbitré avec Guillaume (§ « Ordre proposé » du README) :**
-1. **Urgence/résultats — direction validée** (tranché, pas codé) : adversaires face à face
-   (au lieu des deux à gauche), chrono au centre, message nommé (« Robin a joué — 10 s ») au
-   lieu de l'alerte 9 px actuelle, son discret réglable, pastille repliée qui garde MON
-   résultat (pas celui du premier siège).
-La **palette du salon** (crème/ambre/cyan) reste une **deuxième** livraison après celle-ci,
-décidée mais pas commencée — ne pas les mêler (§2, décision 424).
+1. **Guillaume joue une vraie session à deux** (recette §10, `fake-supabase.mjs`) et juge les
+   trois : le duel face-à-face, le message et le son, la nouvelle palette du réglages. Rien à
+   corriger ni à étendre tant que ce retour n'est pas là.
+2. **Si la palette convainc** : l'étendre au HUD/révélation/fin de partie — nouveau changement
+   visuel, donc nouvelle livraison séparée (§2), pas un prolongement silencieux de celle-ci.
 
 Chantier ferme indépendant, toujours en réserve, non touché aujourd'hui : voir §13 (séance à
 deux, bancs eau/parc, audience du maire à rejouer avant le recentrage bateau/astéroïdes).

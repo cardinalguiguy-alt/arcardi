@@ -149,9 +149,66 @@ ne demandent ni changement de schéma, ni nouvelle API, ni abonnement payant.
   trois manches jouées : carte cliquable, révélation avec pins/lignes sur les vraies tuiles,
   pause/reprise avec le même nombre figé chez l'hôte ET l'invité, dock qui rouvre en plein écran
   après une manche où il l'était déjà. `tools/verify-ousthat.mjs` : **134/134**.
-- ⏳ **Reste : l'urgence/résultats (face à face, chrono central, son)** — tranché par Guillaume,
-  pas codé. Voir le bloc ⏭️ REPRISE de CLAUDE.md pour le détail exact. La palette du salon reste
-  une troisième livraison séparée, décidée mais pas commencée.
+- ✅ **P1 — typographie sur le reste du jeu** (2026-09-12) : `.ot-root` passe à son tour d'Space
+  Mono à Outfit — le HUD, la révélation et la fin de partie rejoignent l'écran de réglages, qui
+  l'était déjà depuis le 2026-09-11. **Seul le chrono (`.ot-round-clock`) reste épinglé en Space
+  Mono**, sur demande explicite de Guillaume (« touche pas au décompte, il est bien ») : sélecteur
+  dédié, mécanisme (`toggleTransitionPause`, `pausedCountdownMs`) intouché. Quelques nombres
+  (dégâts, scores, historique) gagnent `font-variant-numeric:tabular-nums`, déjà en place ailleurs
+  (curseur de durée, PV des joueurs). `tools/verify-ousthat.mjs` : **134/134**.
+- ✅ **P1 — urgence et résultats, face à face/chrono central/son/pastille personnelle**
+  (2026-09-12) : direction tranchée par Guillaume (bloc ⏭️ REPRISE de CLAUDE.md), codée le même
+  jour. Le duel (exactement deux sièges, la même borne que `DUEL_FINAL_SECONDS`) retrouve un HUD
+  face à face avec le chrono au centre — pas une nouvelle disposition : la réactivation de
+  `.ot-hud` SANS `.ot-hud-many` (grid à trois colonnes, miroir `nth-child(3)`), orpheline dans le
+  CSS depuis le passage au roster horizontal (v2) mais jamais supprimée. Les parties à 3+ gardent
+  ce roster, inchangé. L'alerte 9 px générique (« Un joueur a répondu ») devient un message nommé
+  et vivant (« Robin a joué — 10 s »), qui relit le même compte à rebours que le chrono — aucune
+  horloge dupliquée. Un bip discret et réglable (icône 🔊/🔇, synthétisé par Web Audio, aucun
+  fichier à livrer) sonne une fois par manche pour le seul joueur qui doit se presser ; la
+  préférence vit dans `localStorage`, PAR SPECTATEUR, jamais dans l'état de partie diffusé. La
+  pastille repliée de la révélation gardait le score du premier siège pour tout le monde : elle
+  garde maintenant MON résultat (`myId`, retombe sur `players[0]` seulement si `myId` est absent).
+  `tools/verify-ousthat.mjs` : **144/144**, dix contrôles neufs falsifiés un par un avant d'être
+  crus. `npx next build` (worktree isolé) : `✓ Compiled successfully`, 9/9 pages. **Vérifié en
+  session à 2 clients** (deux onglets, `fake-supabase.mjs`) : HUD face à face confirmé à l'écran
+  des deux côtés, alerte nommée avec décompte réel, pastille distincte par joueur (240 côté hôte,
+  0 côté invité sur la même manche), aucune erreur console. Le cas à 3 joueurs a aussi été rejoué
+  pour confirmer que le roster horizontal n'a pas bougé. ⚠️ **Ce qu'aucun banc ni session
+  automatisée ne peut juger** : le son n'a jamais été ÉCOUTÉ par un humain, et le ton du message
+  comme l'équilibre visuel du nouveau face-à-face n'ont été jugés par personne — reste à Guillaume
+  de jouer une vraie session (voir le bloc ⏭️ REPRISE de CLAUDE.md).
+- ⚠️ **Séance complémentaire à 2 clients, JOUÉE PAR CLAUDE sur demande explicite de Guillaume**
+  (2026-09-12, « joue une vraie session à deux pour juger » — précédent identique à l'exception du
+  2026-09-01, §13). Cinq manches (Pinpoint et Pays), les DEUX sens du duel (le second, invité
+  confirme en premier, restait explicitement à voir), plusieurs transitions de manche, un passage
+  en viewport mobile (375 px). Tout tient : HUD face à face lisible aux deux formats, alerte nommée
+  correcte dans les deux sens et les deux modes, pastille distincte par joueur confirmée une
+  seconde fois, aucune erreur console (à part `ERR_CONNECTION_REFUSED` sur l'iframe Street View —
+  panne du bac à sable sans réseau réel, déjà documentée le 2026-09-11). ⚠️⚠️ Cette séance ne
+  change rien à la limite ci-dessus : elle ne prouve toujours pas que le son est agréable à
+  l'oreille ni que le ton/l'équilibre visuel plaisent — Claude ne peut ni les entendre ni les juger.
+- ✅ **P1 — palette du salon, écran de réglages seulement** (2026-09-12) : deux décisions listées
+  et tranchées par Guillaume avant tout code (§2) — **portée** : réglages d'abord, comme la typo,
+  pas encore le HUD/révélation/fin de partie ; **fidélité** : une variante nocturne propre au jeu
+  (pas un alias direct des variables globales `--ink`/`--p2`/`--acc-ousthat` du reste du site).
+  Fond gardé sombre (le panorama ailleurs en a besoin) mais réchauffé — bleu nuit (`#060914`) vers
+  brun sombre chaud (`#100a06`/`#241a10`). Le cyan qui dominait sélections, focus et libellés
+  devient de l'ambre (`--ot-gold`) ; **cyan gardé sur un seul rôle** (le curseur de durée),
+  conformément à « crème, ambre, mascottes et cyan EN ACCENT » de la proposition d'origine.
+  Nouvelles variables `--ot-cream`/`-dim`/`-mute`, toutes redéclarées SUR `.ot-setup-root` — le
+  HUD/révélation/fin de partie, en dehors de ce sélecteur, ne les voient pas et gardent leur bleu
+  nuit actuel. `.ot-orbit`/`.ot-text-button` (partagés avec le reste du jeu) sont surchargés
+  localement plutôt que modifiés à la source. **Regardé à l'écran** (page jetable, supprimée après
+  usage), Pinpoint et Pays, réglages avancés compris : cohérent, aucune régression de lisibilité.
+  `tools/verify-ousthat.mjs` : **144/144** (rien à mesurer côté banc, c'est de la couleur pure).
+  `npx next build` (worktree isolé) : `✓ Compiled successfully`, 9/9 pages. ⚠️ **Ce que ça ne
+  prouve pas** : que ce ton plaît — seul Guillaume le juge, en jouant (§13).
+
+**Étape suivante, pour Guillaume seul** : jouer une vraie session à deux (recette §10,
+`fake-supabase.mjs`) et juger les trois livraisons du jour — le duel face-à-face, le message et
+le son, la palette du réglages. Si elle convainc, l'étendre au HUD/révélation/fin de partie sera
+une **nouvelle** livraison visuelle, séparée (§2), pas un prolongement silencieux de celle-ci.
 
 ## Parcours de jeu
 

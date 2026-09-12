@@ -289,14 +289,19 @@ function CountryPicker({ choices, inputMode, lang, selected, locked, onChange, o
 // le dock de carte : ouverte par défaut (le résultat est ce qu'on veut voir
 // tout de suite), mais on peut la refermer pour regarder autour de soi
 // pendant que la manche suivante n'a pas encore chargé.
-function RevealDock({ state, result, mode, solo, lang, c, revealTarget, isHost, onNext, onLobby, mapAnchorRef }) {
+function RevealDock({ state, result, mode, solo, lang, c, revealTarget, isHost, myId, onNext, onLobby, mapAnchorRef }) {
   const [open, setOpen] = useState(true);
-  const soloCorrect = result?.players?.[0]?.correct;
+  // Repliée, la pastille doit garder MON résultat, pas celui du premier siège
+  // (audit 2026-09-11 §P1 "Urgence et résultats peu personnels", corrigé
+  // 2026-09-12) — en solo players[0] EST moi, d'où le repli qui garde le
+  // même comportement qu'avant pour ce cas.
+  const myResult = result?.players?.find((entry) => entry.playerId === myId) || result?.players?.[0];
+  const soloCorrect = myResult?.correct;
   return (
     <section className={"ot-reveal-dock " + (open ? "open" : "collapsed") + (mode === "country" ? " country" : "")}>
       <button type="button" className="ot-reveal-peek" onClick={() => setOpen(true)} aria-label={c.openPanel}>
         <span>{mode === "country" ? countryFlag(result?.targetCountry) : "📍"}</span>
-        <b>{mode === "country" ? (soloCorrect ? c.correct : c.wrong) : (result?.players?.[0]?.score?.toLocaleString() || 0)}</b>
+        <b>{mode === "country" ? (soloCorrect ? c.correct : c.wrong) : (myResult?.score?.toLocaleString() || 0)}</b>
       </button>
       <div className="ot-reveal-dock-head">
         <div><span className="ot-kicker">{c.round} {state.round}</span><h2>{c.reveal}</h2></div>
@@ -404,6 +409,12 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
   const [localCountdown, setLocalCountdown] = useState(null);
   const [reportArmed, setReportArmed] = useState(false);
   const [fsActive, setFsActive] = useState(false);
+  // Son discret et réglable (audit 2026-09-11 §P1, livré 2026-09-12) :
+  // préférence PAR SPECTATEUR, jamais un champ d'état partagé — elle ne
+  // concerne que ce qu'on entend soi-même, comme mapOpen ou mapExpanded.
+  const [soundOn, setSoundOn] = useState(() => {
+    try { return localStorage.getItem("ousthat-sound") !== "0"; } catch (error) { return true; }
+  });
 
   const arenaRef = useRef(null);
   const stateRef = useRef(null);
@@ -426,6 +437,12 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
   // roundId une fois la manche suivante réellement lancée.
   const preloadedRoundIdRef = useRef(null);
   const nextPredictedRef = useRef(null);
+  // Un seul AudioContext, créé au premier son plutôt qu'au montage : la
+  // plupart des navigateurs le suspendent tant qu'aucun geste utilisateur ne
+  // l'a débloqué, et un geste a toujours déjà eu lieu ici (Jouer, Confirmer…)
+  // avant qu'une urgence de duel ne puisse survenir.
+  const audioCtxRef = useRef(null);
+  const pingedFinalDeadlineRef = useRef(null);
 
   const proposedSeats = seatList(players);
   const playerSignature = proposedSeats.map((seat) => seat.id).join("|");
@@ -934,6 +951,47 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
 
+  useEffect(() => {
+    try { localStorage.setItem("ousthat-sound", soundOn ? "1" : "0"); } catch (error) { /* confort seul, jamais bloquant */ }
+  }, [soundOn]);
+
+  // Bip discret, synthétisé (aucun fichier à livrer) : deux notes courtes en
+  // glissando, jamais plus de 0,25 s. Un échec (API absente, contexte refusé
+  // par la politique d'autoplay du navigateur) laisse simplement le jeu muet
+  // — le son est un confort, jamais un blocage.
+  const playPing = useCallback(() => {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      if (!audioCtxRef.current) audioCtxRef.current = new Ctx();
+      const ctx = audioCtxRef.current;
+      if (ctx.state === "suspended") ctx.resume().catch(() => {});
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.exponentialRampToValueAtTime(660, now + 0.16);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.08, now + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.24);
+    } catch (error) { /* confort seul, jamais bloquant */ }
+  }, []);
+
+  // Sonne une seule fois par manche, seulement pour le joueur qui doit se
+  // presser (pas celui qui vient de répondre) — jamais en solo, où personne
+  // n'attend personne. pingedFinalDeadlineRef évite de rejouer le bip à
+  // chaque re-rendu tant que finalDeadline garde la même échéance.
+  useEffect(() => {
+    if (!soundOn || solo || !state?.finalDeadline) return;
+    if (pingedFinalDeadlineRef.current === state.finalDeadline) return;
+    pingedFinalDeadlineRef.current = state.finalDeadline;
+    if (state.firstConfirmedBy !== me.id) playPing();
+  }, [soundOn, solo, state?.finalDeadline, state?.firstConfirmedBy, me.id, playPing]);
+
   const start = () => {
     const checked = validateConfig(draftConfig);
     setConfigErrors(checked.errors);
@@ -1048,6 +1106,23 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
   const mapProps = state.phase === "playing"
     ? { marker: draft, onChange: updateDraft, locked, avatar: mySeat?.avatar, reveal: null, seats: state.seats, unavailableMessage: c.mapUnavailable }
     : { reveal: { target: revealTarget, players: state.result?.players || [] }, seats: state.seats, unavailableMessage: c.mapUnavailable };
+  // Urgence/résultats (audit 2026-09-11 §P1, direction tranchée par
+  // Guillaume, livrée 2026-09-12) : le duel (exactement deux sièges, la même
+  // borne que DUEL_FINAL_SECONDS) retrouve le face-à-face — .ot-hud SANS
+  // .ot-hud-many réactive le grid 3 colonnes et le miroir nth-child(3)
+  // encore présents dans le CSS, orphelins depuis le passage au roster
+  // horizontal (v2). Les parties à 3+ gardent .ot-player-strip, inchangé.
+  const isDuelLayout = state.seats.length === 2;
+  const renderPlayerBadge = (seat, index) => {
+    const team = state.teams.find((entry) => entry.id === seat.teamId);
+    const eliminated = mode === "pinpoint" && !solo && Number(team?.hp || 0) <= 0;
+    const scoreLabel = mode === "country" ? `${Number(state.countryScores?.[seat.id] || 0)} ${c.pointsShort}` : solo ? `${state.soloScore.toLocaleString()} / 25 000` : undefined;
+    return <PlayerBadge key={seat.id} seat={seat} team={team} maxHp={state.config.initialHp} ready={preparing && !eliminated ? !!state.loaded?.[seat.id] : undefined} answered={!!state.answers?.[seat.id]?.confirmed} active={state.firstConfirmedBy === seat.id} scoreLabel={scoreLabel} eliminated={eliminated} color={SEAT_COLORS[index % SEAT_COLORS.length]} />;
+  };
+  const roundClock = (
+    <div className="ot-round-clock"><small>{mode === "country" ? (solo ? `${c.streak} ${state.streak}` : `${c.round} ${state.round}/${MULTI_COUNTRY_ROUNDS}`) : `${c.round} ${state.round}${solo ? `/${SOLO_ROUNDS}` : ` · ×${multiplier.toLocaleString(lang === "en" ? "en-US" : "fr-FR")}`}`}</small><strong className={state.finalDeadline ? "urgent" : ""}>{state.phase === "playing" ? (isUnlimitedRound(state.config) && !state.finalDeadline ? "∞" : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`) : "—:—"}</strong></div>
+  );
+  const firstConfirmedSeat = state.seats.find((seat) => seat.id === state.firstConfirmedBy);
   return (
     <div ref={arenaRef} className={"ot-root ot-arena" + (mapOpen ? " map-open" : "") + (mode === "country" ? " country" : "")}>
       {location && <StreetViewFrame location={location} roundId={state.roundId} lang={lang} onFrameLoad={markPanoramaLoaded} onSlow={markPanoramaSlow} />}
@@ -1068,14 +1143,19 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
           rappel de marque, posé loin du coin exact (haut-gauche) où Google
           rend son texte, jamais dessus. */}
       <div className="ot-google-place-mask" aria-hidden="true"><span className="ot-google-place-mask-glyph">⌖</span></div>
-      <header className="ot-hud ot-hud-many">
-        <div className="ot-player-strip">{state.seats.map((seat, index) => {
-          const team = state.teams.find((entry) => entry.id === seat.teamId);
-          const eliminated = mode === "pinpoint" && !solo && Number(team?.hp || 0) <= 0;
-          const scoreLabel = mode === "country" ? `${Number(state.countryScores?.[seat.id] || 0)} ${c.pointsShort}` : solo ? `${state.soloScore.toLocaleString()} / 25 000` : undefined;
-          return <PlayerBadge key={seat.id} seat={seat} team={team} maxHp={state.config.initialHp} ready={preparing && !eliminated ? !!state.loaded?.[seat.id] : undefined} answered={!!state.answers?.[seat.id]?.confirmed} active={state.firstConfirmedBy === seat.id} scoreLabel={scoreLabel} eliminated={eliminated} color={SEAT_COLORS[index % SEAT_COLORS.length]} />;
-        })}</div>
-        <div className="ot-round-clock"><small>{mode === "country" ? (solo ? `${c.streak} ${state.streak}` : `${c.round} ${state.round}/${MULTI_COUNTRY_ROUNDS}`) : `${c.round} ${state.round}${solo ? `/${SOLO_ROUNDS}` : ` · ×${multiplier.toLocaleString(lang === "en" ? "en-US" : "fr-FR")}`}`}</small><strong className={state.finalDeadline ? "urgent" : ""}>{state.phase === "playing" ? (isUnlimitedRound(state.config) && !state.finalDeadline ? "∞" : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`) : "—:—"}</strong></div>
+      <header className={"ot-hud" + (isDuelLayout ? "" : " ot-hud-many")}>
+        {isDuelLayout ? (
+          <>
+            {renderPlayerBadge(state.seats[0], 0)}
+            {roundClock}
+            {renderPlayerBadge(state.seats[1], 1)}
+          </>
+        ) : (
+          <>
+            <div className="ot-player-strip">{state.seats.map((seat, index) => renderPlayerBadge(seat, index))}</div>
+            {roundClock}
+          </>
+        )}
       </header>
 
       {/* Toujours monté, jamais démonté/remonté (2026-09-06, retour de
@@ -1107,11 +1187,11 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
 
       {state.phase === "playing" && mode === "country" && <CountryPicker key={state.roundId} choices={choiceCodes} inputMode={state.config.countryInput} lang={lang} selected={typeof draft === "string" ? draft : null} locked={locked} onChange={updateCountryDraft} onConfirm={submitDraft} c={c} />}
 
-      {state.phase === "reveal" && <RevealDock key={state.roundId} state={state} result={state.result} mode={mode} solo={solo} lang={lang} c={c} revealTarget={revealTarget} isHost={isHost} onNext={() => sendRequest("next")} onLobby={backToLobby} mapAnchorRef={revealMapAnchorRef} />}
+      {state.phase === "reveal" && <RevealDock key={state.roundId} state={state} result={state.result} mode={mode} solo={solo} lang={lang} c={c} revealTarget={revealTarget} isHost={isHost} myId={me.id} onNext={() => sendRequest("next")} onLobby={backToLobby} mapAnchorRef={revealMapAnchorRef} />}
 
       {state.phase === "finished" && <FinishedDock state={state} result={state.result} mode={mode} solo={solo} lang={lang} c={c} revealTarget={revealTarget} location={location} isHost={isHost} onRematch={() => sendRequest("rematch")} onLobby={backToLobby} mapAnchorRef={finishedMapAnchorRef} />}
 
-      {state.finalDeadline && state.firstConfirmedBy !== me.id && !locked && <div className="ot-final-alert">⚡ {c.firstLocked}</div>}
+      {state.finalDeadline && state.firstConfirmedBy !== me.id && !locked && <div className="ot-final-alert">⚡ {c.playerAnsweredAlert(firstConfirmedSeat?.username || c.opponent, seconds)}</div>}
       {locked && myPlaying && state.phase === "playing" && <div className="ot-locked-toast">✓ {solo ? c.answerLocked : c.waitingOpponent}</div>}
       {!myPlaying && state.phase === "playing" && <div className="ot-locked-toast">◉ {c.spectating}</div>}
       {/* Le bouton doit aussi vivre pendant preparing/countdown (audit
@@ -1121,7 +1201,7 @@ export default function OusThatGame({ room, me, isHost, players, lang, onFinish 
       {/* Garde-fou (2026-09-07) : une manche Illimité n'a plus AUCUNE échéance
           qui la termine toute seule — sans ce bouton, un joueur AFK/déconnecté
           la bloquerait pour toujours (seul "tous confirmés" la résout sinon). */}
-      <div className="ot-corner-actions">{(state.phase === "playing" || preparing) && <button className={reportArmed ? "armed" : ""} title={reportArmed ? c.reportConfirmHint : undefined} onClick={handleReport}>{reportArmed ? c.reportConfirm : c.report}</button>}{isHost && state.phase === "playing" && isUnlimitedRound(state.config) && <button title={c.endRoundHint} onClick={() => hostResolve(state.roundId)}>⏭ {c.endRound}</button>}<button onClick={toggleFullscreen} aria-label={fsActive ? c.exitFullscreen : c.enterFullscreen} title={fsActive ? c.exitFullscreen : c.enterFullscreen}>{fsActive ? "⤡" : "⤢"}</button><button onClick={backToLobby}>{c.lobby}</button></div>
+      <div className="ot-corner-actions">{(state.phase === "playing" || preparing) && <button className={reportArmed ? "armed" : ""} title={reportArmed ? c.reportConfirmHint : undefined} onClick={handleReport}>{reportArmed ? c.reportConfirm : c.report}</button>}{isHost && state.phase === "playing" && isUnlimitedRound(state.config) && <button title={c.endRoundHint} onClick={() => hostResolve(state.roundId)}>⏭ {c.endRound}</button>}<button onClick={() => setSoundOn((value) => !value)} aria-label={soundOn ? c.muteSound : c.unmuteSound} title={soundOn ? c.muteSound : c.unmuteSound}>{soundOn ? "🔊" : "🔇"}</button><button onClick={toggleFullscreen} aria-label={fsActive ? c.exitFullscreen : c.enterFullscreen} title={fsActive ? c.exitFullscreen : c.enterFullscreen}>{fsActive ? "⤡" : "⤢"}</button><button onClick={backToLobby}>{c.lobby}</button></div>
       {notice && <div className="ot-network-note">{notice}</div>}
     </div>
   );

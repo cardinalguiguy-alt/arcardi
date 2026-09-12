@@ -187,6 +187,7 @@ const i18n = fs.readFileSync(path.join(ROOT, "lib", "i18n.js"), "utf8");
 const rulesCopy = fs.readFileSync(path.join(ROOT, "lib", "gameRules.js"), "utf8");
 const notice = fs.readFileSync(path.join(ROOT, "components", "ousthat", "THIRD_PARTY_NOTICES.md"), "utf8");
 const css = fs.readFileSync(path.join(ROOT, "app", "globals.css"), "utf8");
+const stringsSrc = fs.readFileSync(path.join(ROOT, "components", "ousthat", "strings.js"), "utf8");
 ok("le catalogue ouvre le solo et borne le multijoueur à huit", /ousthat:\s*\{[^\n]*maxPlayers:\s*8/.test(page) && !/ousthat:\s*\{[^\n]*minPlayers:/.test(page) && page.includes('"worldle", "ousthat"'));
 ok("MapLibre est isolé du serveur et le plein écran échappe au transform de la porte", /dynamic\(\(\) => import\("@\/components\/ousthat\/OusThatGame"\),\s*\{[\s\S]{0,100}ssr:\s*false/.test(page) && /body\.ousthat-active \.door-content\{[^}]*transform:none/.test(css));
 ok("les joueurs hors ligne sont écartés des sièges", /OusThatGame[^\n]*players=\{online === null \? players : players\.filter/.test(page));
@@ -278,11 +279,12 @@ ok("le marqueur de réponse n'affiche plus ses coordonnées décimales brutes", 
 // jamais ouvert d'entrée, sauf pour ne pas cacher une valeur hors bornes.
 ok("les réglages de multiplicateurs vivent dans un volet replié par défaut, jamais caché en cas d'erreur", game.includes('className={"ot-advanced" + (advancedVisible ? " open" : "")}') && game.includes('const advancedVisible = advancedOpen || configErrors.includes("multiplierStartRound") || configErrors.includes("multiplierIncrement")'));
 ok("le volet avancé encadre bien la bascule multiplicateurs et ses deux réglages conditionnels, rien de plus", /ot-advanced-toggle[\s\S]{0,600}ot-toggle-field[\s\S]{0,400}firstBoost[\s\S]{0,400}increment/.test(game));
-// Typographie : Outfit remplace Space Mono SUR L'ÉCRAN DE RÉGLAGES SEULEMENT
-// (.ot-setup-root, pas .ot-root) — HUD, révélation et fin de partie gardent
-// Space Mono pour l'instant, à traiter dans la livraison "transitions et
-// composition" séparée (§2 : ne pas mêler deux changements visuels).
-ok("l'écran de réglages passe à Outfit sans toucher la police par défaut du reste du jeu", /\.ot-setup-root\{[^}]*font-family:'Outfit'/.test(css) && /\.ot-root\{[^}]*font-family:'Space Mono'/.test(css));
+// Typographie : Outfit avait d'abord remplacé Space Mono sur l'écran de
+// réglages SEUL (2026-09-11) ; le 2026-09-12 l'harmonisation a gagné le
+// reste du jeu (.ot-root lui-même passe à Outfit) — seul le chrono
+// (.ot-round-clock) reste épinglé en Space Mono, sur demande explicite de
+// Guillaume ("touche pas au décompte, il est bien").
+ok("le jeu entier passe à Outfit ; seul le chrono (.ot-round-clock) garde Space Mono, intact", /\.ot-root\{[^}]*font-family:'Outfit'/.test(css) && /\.ot-round-clock\{[^}]*font-family:'Space Mono'/.test(css));
 ok("le titre de l'écran de réglages perd sa lueur cyan décorative", !/\.ot-setup-card>h1\{[^}]*text-shadow/.test(css));
 
 section("audit 2026-09-11 — rythme des tours (carte persistante, préchargement, pause)");
@@ -320,6 +322,25 @@ ok("le décompte ne se met en pause que côté hôte, jamais un invité", /reque
 ok("togglePause est appliqué via la règle pure de rules.js (importée), pas une comparaison locale dupliquée", game.includes("toggleTransitionPause(current, now)") && /import \{[\s\S]{0,600}\btoggleTransitionPause\b[\s\S]{0,600}\} from "\.\/rules"/.test(game));
 ok("l'affichage du décompte en pause relit la durée diffusée (pausedCountdownMs), jamais le tick local basé sur une horloge", /state\.transitionPaused\s*\n?\s*\? Math\.max\(1, Math\.ceil\(\(state\.pausedCountdownMs \?\? COUNTDOWN_MS\) \/ 1000\)\)/.test(game));
 ok("countdownMs reconstruit correctement une pause (null, jamais 0 par Number(null))", game.includes('typeof transport.countdownMs === "number" ? transport.countdownMs : NaN') && game.includes("setLocalCountdown(Number.isFinite(remaining) ? Date.now() + Math.max(0, remaining) : null)"));
+
+section("audit 2026-09-11 — urgence/résultats (face-à-face, chrono central, son, pastille personnelle)");
+// Direction tranchée par Guillaume dans le bloc ⏭️ REPRISE de CLAUDE.md,
+// livrée 2026-09-12 : adversaires face à face au lieu des deux à gauche,
+// chrono au centre, message nommé au lieu de l'alerte générique, son
+// discret réglable, pastille repliée qui garde MON résultat.
+ok("le duel (exactement deux sièges) retrouve le HUD face-à-face, jamais .ot-hud-many", game.includes("const isDuelLayout = state.seats.length === 2") && game.includes('"ot-hud" + (isDuelLayout ? "" : " ot-hud-many")') && game.includes("renderPlayerBadge(state.seats[0], 0)") && game.includes("renderPlayerBadge(state.seats[1], 1)"));
+ok("le chrono est un seul nœud partagé entre les deux mises en page, jamais dupliqué", (game.match(/const roundClock = \(/g) || []).length === 1);
+ok("les parties à 3+ gardent le roster horizontal existant, inchangé", game.includes('<div className="ot-player-strip">{state.seats.map((seat, index) => renderPlayerBadge(seat, index))}</div>'));
+ok("l'alerte d'urgence nomme le premier joueur et affiche le vrai compte à rebours, plus une phrase générique figée", game.includes("const firstConfirmedSeat = state.seats.find((seat) => seat.id === state.firstConfirmedBy)") && game.includes("c.playerAnsweredAlert(firstConfirmedSeat?.username || c.opponent, seconds)") && !game.includes("c.firstLocked") && !stringsSrc.includes("firstLocked"));
+ok("le texte nommé existe dans les deux langues, comme une vraie fonction de gabarit", /fr:\s*\{[\s\S]*?playerAnsweredAlert:\s*\(name, seconds\)\s*=>/.test(stringsSrc) && /en:\s*\{[\s\S]*?playerAnsweredAlert:\s*\(name, seconds\)\s*=>/.test(stringsSrc));
+// result?.players?.[0] reste légitime ailleurs (ot-score-burst, solo
+// uniquement : le seul siège EST moi) — seule la pastille repliée, commune
+// aux deux joueurs d'un duel, avait le bogue nommé par l'audit.
+ok("la pastille repliée de la révélation garde MON résultat (myId), jamais players[0] en dur", game.includes("result?.players?.find((entry) => entry.playerId === myId) || result?.players?.[0]") && game.includes("myId={me.id}") && /<b>\{mode === "country" \? \(soloCorrect \? c\.correct : c\.wrong\) : \(myResult\?\.score/.test(game));
+ok("le son est une préférence par spectateur (localStorage), jamais un champ d'état partagé diffusé", game.includes('localStorage.getItem("ousthat-sound")') && game.includes('localStorage.setItem("ousthat-sound"') && !game.includes("soundOn:") && !/state\.\.\.[\s\S]{0,20}soundOn/.test(game));
+ok("le bip ne sonne que pour qui doit se presser, jamais en solo, jamais deux fois pour la même échéance", game.includes("if (!soundOn || solo || !state?.finalDeadline) return;") && game.includes("if (pingedFinalDeadlineRef.current === state.finalDeadline) return;") && game.includes("if (state.firstConfirmedBy !== me.id) playPing();"));
+ok("le bip est synthétisé (aucun fichier audio à livrer) et un échec de l'API reste silencieux, jamais bloquant", game.includes("window.AudioContext || window.webkitAudioContext") && /playPing = useCallback\(\(\) => \{\s*try \{/.test(game));
+ok("le chrono garde sa police et son mécanisme : rien dans cette livraison ne touche pausedCountdownMs ni transitionPaused", /state\.transitionPaused\s*\n?\s*\? Math\.max\(1, Math\.ceil\(\(state\.pausedCountdownMs \?\? COUNTDOWN_MS\) \/ 1000\)\)/.test(game) && /\.ot-round-clock\{[^}]*font-family:'Space Mono'/.test(css));
 
 console.log(fails ? `\n${fails} ÉCHEC(S) sur ${total} contrôles.\n` : `\n${total}/${total} contrôles verts.\n`);
 if (process.argv.includes("--falsify")) console.log("Mutation active : ce passage ne doit JAMAIS être vert.\n");

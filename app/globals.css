@@ -6537,7 +6537,7 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
   --ot-ink:#070b19; --ot-panel:rgba(10,16,35,.91); --ot-panel-solid:#0d142a;
   --ot-line:rgba(175,206,255,.2); --ot-cyan:#68d9ff; --ot-gold:#ffca5f;
   position:fixed; inset:0; z-index:80; overflow:hidden; color:#f5f7ff;
-  font-family:'Space Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-family:'Outfit',sans-serif;
   background:#060914; user-select:none;
 }
 .ot-root h1,.ot-root h2,.ot-root p{ margin:0; }
@@ -6556,57 +6556,89 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
 .ot-orbit{ width:38px; height:38px; border:2px solid rgba(104,217,255,.2); border-top-color:var(--ot-cyan); border-radius:50%; animation:otSpin 1s linear infinite; box-shadow:0 0 25px rgba(104,217,255,.18); }
 @keyframes otSpin{ to{ transform:rotate(360deg); } }
 
-/* Typographie de l'écran de réglages seule (audit 2026-09-11, §P1 "tableau
-   de réglages") : Outfit remplace Space Mono ICI, en écrasant l'héritage
-   de .ot-root, sans toucher la police du HUD/révélation/fin de partie —
-   ceux-là restent la "composition" à livrer séparément (§2 : ne pas mêler
-   deux changements visuels). */
-.ot-setup-root{ overflow:auto; display:grid; place-items:center; padding:clamp(18px,4vw,46px); font-family:'Outfit',sans-serif; background:radial-gradient(circle at 72% 15%,rgba(42,95,145,.35),transparent 32%),linear-gradient(145deg,#060914,#0c1730 58%,#080d1d); }
-.ot-setup-root::before{ content:""; position:fixed; inset:0; opacity:.22; pointer-events:none; background-image:radial-gradient(circle,#b8d9ff 0 1px,transparent 1.5px); background-size:31px 31px; mask-image:linear-gradient(to bottom,#000,transparent 70%); }
-.ot-setup-globe{ position:fixed; width:min(68vw,760px); aspect-ratio:1; right:-24vw; top:-34vw; border:1px solid rgba(104,217,255,.15); border-radius:50%; box-shadow:inset 0 0 90px rgba(104,217,255,.06),0 0 100px rgba(17,69,116,.18); background:repeating-radial-gradient(ellipse at center,transparent 0 46px,rgba(104,217,255,.055) 47px 48px); }
-.ot-setup-card{ position:relative; width:min(860px,94vw); box-sizing:border-box; padding:clamp(22px,4vw,42px); border:1px solid var(--ot-line); border-radius:28px; background:linear-gradient(150deg,rgba(16,25,51,.96),rgba(7,12,27,.96)); box-shadow:0 30px 100px rgba(0,0,0,.5),inset 0 1px rgba(255,255,255,.06); backdrop-filter:blur(16px); }
+/* Typographie (audit 2026-09-11 puis 2026-09-12) : Outfit avait d'abord
+   remplacé Space Mono UNIQUEMENT sur cet écran de réglages (§P1 "tableau de
+   réglages"), en écrasant l'héritage de .ot-root, avec la consigne explicite
+   de ne pas mêler deux changements visuels (§2) — HUD/révélation/fin de
+   partie restaient donc en Space Mono "pour l'instant". Le 2026-09-12,
+   Guillaume a demandé d'achever cette harmonisation sur le reste du jeu :
+   .ot-root porte maintenant Outfit lui-même (voir plus haut), donc cette
+   règle est redondante mais inoffensive — laissée telle quelle pour ne pas
+   toucher un sélecteur qui marche. SEUL LE CHRONO (.ot-round-clock) garde
+   Space Mono, explicitement épinglé sur son propre sélecteur : "touche pas
+   au décompte, il est bien" (le rythme des tours vient d'être livré et
+   vérifié à deux clients le même jour, voir le bloc ⏭️ REPRISE de
+   CLAUDE.md). */
+/* Palette du salon, en variante nocturne (2026-09-12, décision de Guillaume :
+   « garde un fond sombre, réchauffe les accents » — pas la palette crème/
+   ambre/cyan du reste du site reprise telle quelle, un ton propre au jeu qui
+   VA vers elle). Scope : L'ÉCRAN DE RÉGLAGES SEUL, comme la typo l'a fait en
+   premier (§2, ne pas mêler deux changements visuels) — ces variables sont
+   redéclarées ICI, sur .ot-setup-root, donc invisibles du HUD/révélation/fin
+   de partie qui gardent .ot-cyan/.ot-gold du fond sombre-bleu actuel. Le
+   cyan garde UN SEUL rôle (le curseur de durée, `accent-color`) ; partout
+   ailleurs où il dominait (sélections, focus, libellés), l'ambre le
+   remplace — c'est le point du "crème, ambre, cyan EN ACCENT" de l'audit. */
+.ot-setup-root{
+  --ot-cream:#f4e6d0; --ot-cream-dim:#cbb89a; --ot-cream-mute:#9c8a70;
+  --ot-line:rgba(255,214,170,.18);
+  --ot-gold-05:rgba(255,202,95,.06); --ot-gold-1:rgba(255,202,95,.1);
+  --ot-gold-13:rgba(255,202,95,.13); --ot-gold-15:rgba(255,202,95,.15);
+  --ot-gold-18:rgba(255,202,95,.18); --ot-gold-2:rgba(255,202,95,.2);
+  --ot-gold-3:rgba(255,202,95,.3);
+  overflow:auto; display:grid; place-items:center; padding:clamp(18px,4vw,46px); font-family:'Outfit',sans-serif; color:var(--ot-cream); background:radial-gradient(circle at 72% 15%,rgba(168,100,40,.28),transparent 32%),linear-gradient(145deg,#100a06,#241a10 58%,#120c07);
+}
+.ot-setup-root::before{ content:""; position:fixed; inset:0; opacity:.22; pointer-events:none; background-image:radial-gradient(circle,#f0d9a8 0 1px,transparent 1.5px); background-size:31px 31px; mask-image:linear-gradient(to bottom,#000,transparent 70%); }
+.ot-setup-globe{ position:fixed; width:min(68vw,760px); aspect-ratio:1; right:-24vw; top:-34vw; border:1px solid var(--ot-gold-15); border-radius:50%; box-shadow:inset 0 0 90px var(--ot-gold-05),0 0 100px rgba(120,65,15,.18); background:repeating-radial-gradient(ellipse at center,transparent 0 46px,var(--ot-gold-05) 47px 48px); }
+.ot-setup-card{ position:relative; width:min(860px,94vw); box-sizing:border-box; padding:clamp(22px,4vw,42px); border:1px solid var(--ot-line); border-radius:28px; background:linear-gradient(150deg,rgba(48,34,20,.96),rgba(20,13,7,.96)); box-shadow:0 30px 100px rgba(0,0,0,.5),inset 0 1px rgba(255,235,210,.06); backdrop-filter:blur(16px); }
 .ot-setup-card>h1{ margin-top:6px; font-family:'Bungee',sans-serif; font-size:clamp(30px,6vw,64px); line-height:1; letter-spacing:-.035em; }
-.ot-setup-lead{ max-width:670px; margin-top:12px !important; color:#adb8d4; font-size:14px; line-height:1.6; }
+.ot-setup-lead{ max-width:670px; margin-top:12px !important; color:var(--ot-cream-dim); font-size:14px; line-height:1.6; }
 .ot-versus{ margin:24px 0; display:grid; grid-template-columns:1fr 1fr; gap:48px; }
-.ot-versus>div{ position:relative; display:flex; align-items:center; gap:12px; padding:11px 14px; border:1px solid var(--ot-line); border-radius:15px; background:rgba(255,255,255,.035); }
+.ot-versus>div{ position:relative; display:flex; align-items:center; gap:12px; padding:11px 14px; border:1px solid var(--ot-line); border-radius:15px; background:rgba(255,235,210,.035); }
 .ot-versus span{ font-size:27px; }.ot-versus b{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; }
 .ot-versus i{ position:absolute; left:calc(100% + 9px); width:30px; text-align:center; color:var(--ot-gold); font-family:'Bungee'; font-size:12px; font-style:normal; }
 .ot-settings{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
-.ot-field{ display:flex; min-width:0; flex-direction:column; gap:7px; padding:12px; background:rgba(255,255,255,.035); border:1px solid transparent; border-radius:14px; color:#aeb9d5; font-size:12.5px; font-weight:800; }
+.ot-field{ display:flex; min-width:0; flex-direction:column; gap:7px; padding:12px; background:rgba(255,235,210,.035); border:1px solid transparent; border-radius:14px; color:var(--ot-cream-dim); font-size:12.5px; font-weight:800; }
 .ot-field.invalid{ border-color:#ff647d; box-shadow:0 0 0 2px rgba(255,100,125,.1); }
 .ot-field.dimmed{ opacity:.5; }
-.ot-field-hint{ color:#70809f; font-weight:600; }
+.ot-field-hint{ color:var(--ot-cream-mute); font-weight:600; }
 .ot-field-slider{ grid-column:1 / -1; }
 .ot-slider-wrap{ display:flex; align-items:center; gap:12px; }
 .ot-slider-wrap input[type="range"]{ flex:1; min-width:0; accent-color:var(--ot-cyan); height:4px; cursor:pointer; }
-.ot-slider-wrap strong{ min-width:92px; text-align:right; color:#fff; font-size:14px; font-weight:900; font-variant-numeric:tabular-nums; }
+.ot-slider-wrap strong{ min-width:92px; text-align:right; color:var(--ot-cream); font-size:14px; font-weight:900; font-variant-numeric:tabular-nums; }
 .ot-slider-wrap strong.infinite{ color:var(--ot-gold); }
 .ot-input-wrap{ display:flex; align-items:center; gap:7px; }
-.ot-input-wrap input{ width:100%; min-width:0; box-sizing:border-box; border:1px solid var(--ot-line); border-radius:9px; padding:8px 9px; color:#fff; background:#080e21; outline:none; font-size:14px; font-weight:900; }
-.ot-input-wrap input:focus{ border-color:var(--ot-cyan); box-shadow:0 0 0 3px rgba(104,217,255,.1); }
-.ot-input-wrap small{ color:#70809f; }
-.ot-toggle-field button{ flex:1; display:flex; align-items:center; gap:8px; border:0; border-radius:9px; padding:8px; color:#9aa6c3; background:#080e21; cursor:pointer; font-size:12.5px; }
-.ot-toggle-field button i{ position:relative; width:31px; height:17px; border-radius:99px; background:#27314a; }
-.ot-toggle-field button i::after{ content:""; position:absolute; left:3px; top:3px; width:11px; height:11px; border-radius:50%; background:#8290ac; transition:transform .18s ease,background .18s ease; }
-.ot-toggle-field button.on{ color:#fff; }.ot-toggle-field button.on i{ background:rgba(104,217,255,.3); }.ot-toggle-field button.on i::after{ transform:translateX(14px); background:var(--ot-cyan); }
+.ot-input-wrap input{ width:100%; min-width:0; box-sizing:border-box; border:1px solid var(--ot-line); border-radius:9px; padding:8px 9px; color:var(--ot-cream); background:#1c150c; outline:none; font-size:14px; font-weight:900; }
+.ot-input-wrap input:focus{ border-color:var(--ot-gold); box-shadow:0 0 0 3px var(--ot-gold-15); }
+.ot-input-wrap small{ color:var(--ot-cream-mute); }
+.ot-toggle-field button{ flex:1; display:flex; align-items:center; gap:8px; border:0; border-radius:9px; padding:8px; color:var(--ot-cream-dim); background:#1c150c; cursor:pointer; font-size:12.5px; }
+.ot-toggle-field button i{ position:relative; width:31px; height:17px; border-radius:99px; background:#4a3822; }
+.ot-toggle-field button i::after{ content:""; position:absolute; left:3px; top:3px; width:11px; height:11px; border-radius:50%; background:var(--ot-cream-dim); transition:transform .18s ease,background .18s ease; }
+.ot-toggle-field button.on{ color:var(--ot-cream); }.ot-toggle-field button.on i{ background:var(--ot-gold-3); }.ot-toggle-field button.on i::after{ transform:translateX(14px); background:var(--ot-gold); }
 /* Volet "Réglages avancés" (audit 2026-09-11) : reprend le look .ot-field
    (fond translucide, liseré, rayon 13-14px) plutôt qu'un chrome inédit —
    son corps réutilise directement .ot-settings, sans dupliquer sa grille
    responsive (@media plus bas dans ce fichier). */
 .ot-advanced{ margin-top:12px; }
-.ot-advanced-toggle{ width:100%; box-sizing:border-box; display:flex; align-items:center; gap:10px; margin-bottom:12px; padding:11px 14px; border:1px solid var(--ot-line); border-radius:13px; color:#e2e8f7; background:rgba(255,255,255,.03); cursor:pointer; text-align:left; }
+.ot-advanced-toggle{ width:100%; box-sizing:border-box; display:flex; align-items:center; gap:10px; margin-bottom:12px; padding:11px 14px; border:1px solid var(--ot-line); border-radius:13px; color:var(--ot-cream); background:rgba(255,235,210,.03); cursor:pointer; text-align:left; }
 .ot-advanced-toggle b{ flex:none; font-size:12.5px; }
-.ot-advanced-toggle small{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#8e9bb9; font-size:12px; }
-.ot-advanced-toggle i{ flex:none; font-style:normal; color:#8e9bb9; font-size:10px; transition:transform .18s ease; }
-.ot-advanced.open .ot-advanced-toggle i{ color:var(--ot-cyan); }
-.ot-summary{ display:grid; grid-template-columns:auto 1fr; gap:6px 18px; margin-top:14px; padding:13px 15px; border-radius:14px; color:#c9d3ea; background:rgba(104,217,255,.055); border:1px solid rgba(104,217,255,.13); font-size:13px; }
-.ot-summary>b{ color:var(--ot-cyan); }.ot-summary>span{ text-align:right; font-weight:900; }.ot-summary>small{ grid-column:1/-1; line-height:1.6; color:#8e9bb9; }
+.ot-advanced-toggle small{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ot-cream-mute); font-size:12px; }
+.ot-advanced-toggle i{ flex:none; font-style:normal; color:var(--ot-cream-mute); font-size:10px; transition:transform .18s ease; }
+.ot-advanced.open .ot-advanced-toggle i{ color:var(--ot-gold); }
+.ot-summary{ display:grid; grid-template-columns:auto 1fr; gap:6px 18px; margin-top:14px; padding:13px 15px; border-radius:14px; color:var(--ot-cream); background:var(--ot-gold-05); border:1px solid var(--ot-gold-13); font-size:13px; }
+.ot-summary>b{ color:var(--ot-gold); }.ot-summary>span{ text-align:right; font-weight:900; }.ot-summary>small{ grid-column:1/-1; line-height:1.6; color:var(--ot-cream-mute); }
 .ot-key-warning{ display:flex; flex-direction:column; gap:4px; margin-top:12px; padding:12px 14px; border:1px solid rgba(255,202,95,.35); border-radius:13px; color:#ffe0a0; background:rgba(255,190,70,.075); font-size:12px; line-height:1.55; }
 .ot-key-warning b{ font-size:13px; }.ot-form-error{ color:#ff8ba0; margin-top:10px !important; font-size:12.5px; }
 .ot-setup-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:18px; }
 .ot-setup-card>.ot-text-button{ display:block; margin:10px auto -12px; }
-.ot-wait-card{ display:flex; align-items:center; justify-content:center; gap:14px; min-height:180px; color:#aeb9d5; }
+.ot-wait-card{ display:flex; align-items:center; justify-content:center; gap:14px; min-height:180px; color:var(--ot-cream-dim); }
 .ot-wait-card .ot-orbit{ width:24px;height:24px; }
+/* .ot-orbit et .ot-text-button sont PARTAGÉS avec le reste du jeu (l'écran
+   de connexion générique, les docks de jeu) : on ne touche pas leur règle de
+   base, on la SURCHARGE ici pour que ces deux éléments repris tels quels
+   suivent quand même la palette du réglages, sans rien changer ailleurs. */
+.ot-setup-root .ot-orbit{ border-color:var(--ot-gold-2); border-top-color:var(--ot-gold); box-shadow:0 0 25px var(--ot-gold-18); }
+.ot-setup-root .ot-text-button{ color:var(--ot-cream-mute); }
 
 .ot-arena{ background:#040714; }
 .ot-sv{ position:absolute; inset:0; width:100%; height:100%; border:0; background:#060914; opacity:0; transition:opacity .35s ease; }
@@ -6623,12 +6655,24 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
    PV, sans toucher la structure ni la palette. */
 .ot-hud{ position:absolute; z-index:8; top:max(10px,env(safe-area-inset-top)); left:50%; transform:translateX(-50%); width:min(860px,calc(100vw - 24px)); display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px; padding:8px; box-sizing:border-box; border:1px solid rgba(220,235,255,.19); border-radius:19px; background:rgba(5,10,24,.83); backdrop-filter:blur(14px) saturate(1.25); box-shadow:0 12px 38px rgba(0,0,0,.38); font-family:'Outfit',sans-serif; }
 .ot-player{ min-width:0; display:grid; grid-template-columns:auto 1fr auto; grid-template-rows:auto auto; align-items:center; gap:2px 10px; padding:7px 10px; border-radius:12px; transition:background .2s ease; }
+/* nth-child(3) : le 3e enfant direct de .ot-hud est le second joueur quand
+   le HUD n'a PAS .ot-hud-many (voir OusThatGame.js, isDuelLayout) — joueur,
+   chrono, joueur. Miroir repris tel quel : ce grid à trois colonnes existait
+   déjà pour le face-à-face "figé" d'avant le roster v2 (.ot-roster
+   ci-dessous) ; il était orphelin depuis que le JSX rendait toujours
+   .ot-hud-many, jusqu'à ce que l'audit 2026-09-11 §P1 demande de le
+   réactiver PRÉCISÉMENT pour le duel (2 sièges), tout en gardant le roster
+   pour 3+ joueurs. */
 .ot-player:nth-child(3){ direction:rtl; }.ot-player:nth-child(3) .ot-player-copy{ text-align:right; direction:ltr; }.ot-player:nth-child(3) .ot-hp{ direction:ltr; }
 .ot-player.active{ background:rgba(255,202,95,.08); }.ot-player.answered{ box-shadow:inset 0 0 0 1px rgba(98,231,175,.24); }
 .ot-player-avatar{ grid-row:1/3; font-size:24px; }.ot-player-copy{ min-width:0; display:flex; flex-direction:column; gap:1px; }.ot-player-copy b{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12.5px; font-weight:700; }.ot-player-copy small{ color:#9aa8c5; font-size:11px; font-variant-numeric:tabular-nums; }
 .ot-hp{ grid-column:2/4; height:6px; margin-top:1px; overflow:hidden; border-radius:99px; background:rgba(255,255,255,.09); }.ot-hp i{ display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#ff647d,#ffca5f); box-shadow:0 0 8px rgba(255,180,120,.35); transition:width .75s cubic-bezier(.22,.9,.35,1); }
 .ot-ready-dot{ width:8px; height:8px; border-radius:50%; background:#525d78; box-shadow:0 0 0 3px rgba(82,93,120,.13); }.ot-ready-dot.ready{ background:#62e7af; box-shadow:0 0 0 3px rgba(98,231,175,.13),0 0 9px #62e7af; }
-.ot-round-clock{ min-width:96px; text-align:center; }.ot-round-clock small{ display:block; color:#9daccc; font-size:9px; text-transform:uppercase; letter-spacing:.12em; }.ot-round-clock strong{ display:block; font-size:25px; line-height:1.08; font-variant-numeric:tabular-nums; letter-spacing:-.06em; }.ot-round-clock strong.urgent{ color:#ffca5f; animation:otPulse 1s ease-in-out infinite; }
+/* Épinglé volontairement en Space Mono (2026-09-12) : seul élément que
+   l'harmonisation Outfit du reste du jeu ne doit pas toucher — le rythme des
+   tours vient d'être livré et vérifié à deux clients (voir .ot-root et le
+   bloc ⏭️ REPRISE de CLAUDE.md). */
+.ot-round-clock{ min-width:96px; text-align:center; font-family:'Space Mono',ui-monospace,SFMono-Regular,Menlo,monospace; }.ot-round-clock small{ display:block; color:#9daccc; font-size:9px; text-transform:uppercase; letter-spacing:.12em; }.ot-round-clock strong{ display:block; font-size:25px; line-height:1.08; font-variant-numeric:tabular-nums; letter-spacing:-.06em; }.ot-round-clock strong.urgent{ color:#ffca5f; animation:otPulse 1s ease-in-out infinite; }
 @keyframes otPulse{ 50%{ opacity:.62; transform:scale(.97); } }
 /* Toujours monté (voir OusThatGame.js) : .hidden pilote un fondu de sortie au
    lieu d'un démontage sec — le panorama, déjà chargé, apparaissait sinon
@@ -6703,7 +6747,12 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
    verrouillé »/« réponse verrouillée » y était donc invisible depuis
    toujours, sur les deux modes (§ audit 2026-09-06 bis). */
 .ot-final-alert,.ot-locked-toast{ position:absolute; z-index:10; left:50%; transform:translateX(-50%); bottom:20px; max-width:min(420px,calc(100vw - 32px)); padding:9px 13px; border-radius:99px; font-size:9px; font-weight:900; background:rgba(8,13,29,.88); border:1px solid rgba(255,202,95,.35); box-shadow:0 8px 25px rgba(0,0,0,.4); }
-.ot-locked-toast{ color:#a7f0d1; border-color:rgba(98,231,175,.35); }.ot-network-note{ position:absolute; z-index:15; top:90px; left:50%; transform:translateX(-50%); padding:8px 12px; border-radius:10px; color:#ffe0a0; background:rgba(40,28,8,.88); border:1px solid rgba(255,202,95,.3); font-size:9px; }
+.ot-locked-toast{ color:#a7f0d1; border-color:rgba(98,231,175,.35); }
+/* Urgence/résultats (audit 2026-09-11 §P1, livré 2026-09-12) : ce message
+   porte désormais un nom et une durée ("Robin a joué — 10 s") au lieu d'une
+   phrase générique — 9px le rendait illisible, un défaut que le texte fixe
+   d'avant n'exposait pas autant. */
+.ot-final-alert{ font-size:12px; font-weight:800; padding:10px 15px; }.ot-network-note{ position:absolute; z-index:15; top:90px; left:50%; transform:translateX(-50%); padding:8px 12px; border-radius:10px; color:#ffe0a0; background:rgba(40,28,8,.88); border:1px solid rgba(255,202,95,.3); font-size:9px; }
 
 /* Fin de partie EN INCRUSTATION sur le dernier panorama (2026-09-06, retour
    de Guillaume), plutôt qu'une page séparée : .ot-finished-overlay est le
@@ -6720,11 +6769,11 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
 .ot-finished-overlay .ot-final-summary{ margin-top:0; }
 .ot-reveal-root{ overflow:auto; padding:clamp(18px,3vw,42px); box-sizing:border-box; background:radial-gradient(circle at 50% -20%,#1c3e65,#070b19 56%); }
 .ot-reveal-root.finished::before{ content:""; position:fixed; inset:0; pointer-events:none; background:radial-gradient(circle at 50% 0,rgba(255,202,95,.15),transparent 46%); }
-.ot-reveal-head{ position:relative; max-width:1180px; margin:0 auto 18px; display:flex; align-items:flex-end; justify-content:space-between; }.ot-reveal-head h1{ margin-top:4px; font-family:'Bungee'; font-size:clamp(28px,5vw,58px); line-height:1; }.ot-damage-burst{ display:grid; grid-template-columns:auto auto; align-items:end; gap:0 8px; text-align:right; }.ot-damage-burst small{ grid-column:1/-1; color:#8f9dbb; font-size:9px; letter-spacing:.14em; text-transform:uppercase; }.ot-damage-burst strong{ color:#ff8b72; font-size:clamp(34px,5vw,64px); line-height:.85; }.ot-damage-burst span{ color:var(--ot-gold); font-size:13px; }
+.ot-reveal-head{ position:relative; max-width:1180px; margin:0 auto 18px; display:flex; align-items:flex-end; justify-content:space-between; }.ot-reveal-head h1{ margin-top:4px; font-family:'Bungee'; font-size:clamp(28px,5vw,58px); line-height:1; }.ot-damage-burst{ display:grid; grid-template-columns:auto auto; align-items:end; gap:0 8px; text-align:right; }.ot-damage-burst small{ grid-column:1/-1; color:#8f9dbb; font-size:9px; letter-spacing:.14em; text-transform:uppercase; }.ot-damage-burst strong{ color:#ff8b72; font-size:clamp(34px,5vw,64px); line-height:.85; font-variant-numeric:tabular-nums; }.ot-damage-burst span{ color:var(--ot-gold); font-size:13px; }
 .ot-reveal-grid{ position:relative; max-width:1180px; min-height:min(690px,calc(100vh - 150px)); margin:auto; display:grid; grid-template-columns:minmax(0,1.55fr) minmax(330px,.85fr); gap:16px; }
 .ot-reveal-map{ position:relative; min-height:480px; overflow:hidden; border:1px solid var(--ot-line); border-radius:22px; box-shadow:0 20px 60px rgba(0,0,0,.35); }.ot-actual-chip{ position:absolute; z-index:500; top:12px; left:12px; padding:7px 10px; border-radius:99px; color:#fff; background:#a93d56; box-shadow:0 5px 18px rgba(0,0,0,.25); font-size:9px; font-weight:900; }
 .ot-scoreboard{ display:flex; flex-direction:column; gap:10px; }.ot-scoreboard article{ padding:15px; border:1px solid var(--ot-line); border-left:3px solid var(--seat); border-radius:16px; background:rgba(13,20,42,.82); transition:transform .4s ease,background .4s ease; }.ot-scoreboard article.damaged{ background:rgba(71,22,37,.58); animation:otHit .48s ease-out; }@keyframes otHit{ 35%{ transform:translateX(-7px); } 65%{ transform:translateX(4px); } }
-.ot-scoreboard article header{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:9px; }.ot-scoreboard article header span{ font-size:23px; }.ot-scoreboard article header b{ overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px; }.ot-scoreboard article header strong{ color:var(--seat); font-size:22px; }.ot-scoreboard article>div{ display:flex; justify-content:space-between; gap:8px; margin-top:7px; color:#8996b2; font-size:8px; }.ot-scoreboard article>div b{ color:#d9e1f2; }
+.ot-scoreboard article header{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:9px; }.ot-scoreboard article header span{ font-size:23px; }.ot-scoreboard article header b{ overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px; }.ot-scoreboard article header strong{ color:var(--seat); font-size:22px; font-variant-numeric:tabular-nums; }.ot-scoreboard article>div{ display:flex; justify-content:space-between; gap:8px; margin-top:7px; color:#8996b2; font-size:8px; }.ot-scoreboard article>div b{ color:#d9e1f2; }
 .ot-reveal-hp{ display:block; height:8px; margin-top:10px; overflow:hidden; border-radius:99px; background:rgba(255,255,255,.08); }.ot-reveal-hp i{ display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#ff647d,#ffca5f); transition:width 1s cubic-bezier(.18,.85,.3,1); }
 .ot-damage-copy{ padding:12px 14px; border-radius:13px; color:#aeb9d3; background:rgba(255,255,255,.035); font-size:9px; line-height:1.6; }.ot-reveal-actions{ margin-top:auto; display:flex; flex-wrap:wrap; gap:8px; }.ot-reveal-actions p{ width:100%; color:#8c99b6; font-size:9px; }.ot-reveal-actions .ot-btn{ flex:1; }
 
@@ -6732,23 +6781,23 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
    figé. Le roster défile horizontalement : huit joueurs tiennent sans réduire
    leurs noms à des initiales et le même composant reste lisible en solo. */
 .ot-roster{ display:flex; gap:8px; margin:18px 0; overflow-x:auto; scrollbar-width:thin; }
-.ot-roster>div{ flex:0 0 auto; min-width:120px; display:flex; align-items:center; gap:9px; padding:9px 11px; border:1px solid var(--ot-line); border-radius:13px; background:rgba(255,255,255,.035); }
+.ot-roster>div{ flex:0 0 auto; min-width:120px; display:flex; align-items:center; gap:9px; padding:9px 11px; border:1px solid var(--ot-line); border-radius:13px; background:rgba(255,235,210,.035); }
 .ot-roster span{ font-size:23px; }.ot-roster b{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
 .ot-mode-picker{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
-.ot-mode-picker>button{ min-width:0; display:grid; grid-template-columns:auto 1fr; grid-template-rows:auto auto; align-items:center; gap:2px 10px; padding:13px; text-align:left; color:#d9e4f7; border:1px solid var(--ot-line); border-radius:15px; background:rgba(255,255,255,.035); cursor:pointer; }
-.ot-mode-picker>button>span{ grid-row:1/3; font-size:25px; }.ot-mode-picker>button>b{ font-size:13px; }.ot-mode-picker>button>small{ color:#8492b0; font-size:12px; line-height:1.4; }
-.ot-mode-picker>button.selected{ border-color:var(--ot-cyan); background:rgba(104,217,255,.1); box-shadow:inset 0 0 0 1px rgba(104,217,255,.18),0 8px 24px rgba(0,0,0,.18); }
+.ot-mode-picker>button{ min-width:0; display:grid; grid-template-columns:auto 1fr; grid-template-rows:auto auto; align-items:center; gap:2px 10px; padding:13px; text-align:left; color:var(--ot-cream); border:1px solid var(--ot-line); border-radius:15px; background:rgba(255,235,210,.035); cursor:pointer; }
+.ot-mode-picker>button>span{ grid-row:1/3; font-size:25px; }.ot-mode-picker>button>b{ font-size:13px; }.ot-mode-picker>button>small{ color:var(--ot-cream-mute); font-size:12px; line-height:1.4; }
+.ot-mode-picker>button.selected{ border-color:var(--ot-gold); background:var(--ot-gold-1); box-shadow:inset 0 0 0 1px var(--ot-gold-18),0 8px 24px rgba(0,0,0,.18); }
 /* Sélecteur de carte (2026-09-06) : même famille visuelle que
    .ot-mode-picker, en rangée compacte plutôt qu'en grille — pensé pour
    accueillir plusieurs cartes futures sans changer de forme. */
-.ot-map-picker{ margin-bottom:12px; padding:9px 11px; border:1px solid var(--ot-line); border-radius:13px; background:rgba(255,255,255,.025); }
-.ot-map-picker-label{ display:block; margin-bottom:7px; color:#9daac5; font-size:12px; }
+.ot-map-picker{ margin-bottom:12px; padding:9px 11px; border:1px solid var(--ot-line); border-radius:13px; background:rgba(255,235,210,.025); }
+.ot-map-picker-label{ display:block; margin-bottom:7px; color:var(--ot-cream-mute); font-size:12px; }
 .ot-map-picker-list{ display:flex; flex-wrap:wrap; gap:8px; }
-.ot-map-picker-list>button{ display:flex; align-items:center; gap:8px; min-width:0; padding:8px 12px; text-align:left; color:#d9e4f7; border:1px solid var(--ot-line); border-radius:12px; background:rgba(255,255,255,.035); cursor:pointer; }
-.ot-map-picker-list>button>span{ font-size:19px; }.ot-map-picker-list>button>b{ display:block; font-size:13px; }.ot-map-picker-list>button>small{ display:block; color:#8492b0; font-size:12px; }
-.ot-map-picker-list>button.selected{ border-color:var(--ot-cyan); background:rgba(104,217,255,.1); box-shadow:inset 0 0 0 1px rgba(104,217,255,.18); }
-.ot-answer-picker{ display:flex; align-items:center; flex-wrap:wrap; gap:7px; margin-bottom:12px; padding:9px 11px; border:1px solid var(--ot-line); border-radius:13px; background:rgba(255,255,255,.025); }
-.ot-answer-picker>b{ margin-right:auto; color:#9daac5; font-size:12px; }.ot-answer-picker button{ border:1px solid transparent; border-radius:9px; padding:7px 10px; color:#aeb9d3; background:#080e21; cursor:pointer; font-size:12.5px; }.ot-answer-picker button.selected{ color:#07101d; border-color:var(--ot-cyan); background:var(--ot-cyan); font-weight:900; }
+.ot-map-picker-list>button{ display:flex; align-items:center; gap:8px; min-width:0; padding:8px 12px; text-align:left; color:var(--ot-cream); border:1px solid var(--ot-line); border-radius:12px; background:rgba(255,235,210,.035); cursor:pointer; }
+.ot-map-picker-list>button>span{ font-size:19px; }.ot-map-picker-list>button>b{ display:block; font-size:13px; }.ot-map-picker-list>button>small{ display:block; color:var(--ot-cream-mute); font-size:12px; }
+.ot-map-picker-list>button.selected{ border-color:var(--ot-gold); background:var(--ot-gold-1); box-shadow:inset 0 0 0 1px var(--ot-gold-18); }
+.ot-answer-picker{ display:flex; align-items:center; flex-wrap:wrap; gap:7px; margin-bottom:12px; padding:9px 11px; border:1px solid var(--ot-line); border-radius:13px; background:rgba(255,235,210,.025); }
+.ot-answer-picker>b{ margin-right:auto; color:var(--ot-cream-mute); font-size:12px; }.ot-answer-picker button{ border:1px solid transparent; border-radius:9px; padding:7px 10px; color:var(--ot-cream-dim); background:#1c150c; cursor:pointer; font-size:12.5px; }.ot-answer-picker button.selected{ color:#241c14; border-color:var(--ot-gold); background:var(--ot-gold); font-weight:900; }
 
 .ot-hud.ot-hud-many{ width:min(1080px,calc(100vw - 24px)); grid-template-columns:minmax(0,1fr) auto; }
 .ot-player-strip{ min-width:0; display:flex; gap:5px; overflow-x:auto; scrollbar-width:none; }.ot-player-strip::-webkit-scrollbar{ display:none; }
@@ -6817,12 +6866,12 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
 .ot-country-results>button{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; min-width:0; padding:7px 9px; border:1px solid transparent; border-radius:9px; text-align:left; color:#dce6f7; background:rgba(255,255,255,.035); cursor:pointer; }.ot-country-results>button.selected{ border-color:var(--ot-gold); background:rgba(255,202,95,.1); }.ot-country-results>button span{ font-size:21px; }.ot-country-results>button b{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:9px; }.ot-country-results>button small{ color:#71809f; font-size:8px; }.ot-country-results>p{ grid-column:1/-1; padding:14px; color:#8290ad; text-align:center; font-size:9px; }
 .ot-country-submit{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:10px; }.ot-country-submit>span{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#cdd8ec; font-size:10px; }.ot-country-submit .ot-btn{ min-height:38px; padding:7px 14px; }
 
-.ot-score-burst{ text-align:right; }.ot-score-burst small{ display:block; color:#8f9dbb; font-size:9px; text-transform:uppercase; }.ot-score-burst strong{ color:var(--ot-gold); font-size:clamp(34px,5vw,64px); line-height:.95; }
+.ot-score-burst{ text-align:right; }.ot-score-burst small{ display:block; color:#8f9dbb; font-size:9px; text-transform:uppercase; }.ot-score-burst strong{ color:var(--ot-gold); font-size:clamp(34px,5vw,64px); line-height:.95; font-variant-numeric:tabular-nums; }
 .ot-country-target{ display:flex; align-items:center; gap:12px; padding:8px 12px; border:1px solid rgba(98,231,175,.25); border-radius:14px; background:rgba(98,231,175,.06); }.ot-country-target>span{ font-size:37px; }.ot-country-target small,.ot-country-target b{ display:block; }.ot-country-target small{ color:#8f9dbb; font-size:8px; text-transform:uppercase; }.ot-country-target b{ margin-top:2px; font-size:12px; }
 .ot-country-reveal{ min-height:480px; display:flex; flex-direction:column; align-items:center; justify-content:center; overflow:hidden; border:1px solid var(--ot-line); border-radius:22px; text-align:center; background:radial-gradient(circle at 50% 38%,rgba(104,217,255,.18),rgba(8,14,31,.92) 58%); box-shadow:0 20px 60px rgba(0,0,0,.35); }
 .ot-country-reveal-flag{ font-size:clamp(90px,16vw,190px); line-height:1; filter:drop-shadow(0 18px 24px rgba(0,0,0,.35)); }.ot-country-reveal h2{ margin-top:5px; font-family:'Bungee'; font-size:clamp(25px,4vw,48px); }.ot-country-reveal p{ margin-top:18px; padding:8px 12px; border-radius:99px; font-size:10px; font-weight:900; }.ot-country-reveal p.correct{ color:#9ff2cf; background:rgba(98,231,175,.1); }.ot-country-reveal p.wrong{ color:#ff9eb0; background:rgba(255,100,125,.1); }
 .ot-scoreboard article.correct{ background:rgba(20,65,52,.55); }.ot-scoreboard article.wrong{ background:rgba(62,25,38,.52); }
-.ot-final-summary{ position:relative; width:min(900px,calc(100vw - 32px)); margin:9vh auto 0; padding:clamp(22px,4vw,42px); box-sizing:border-box; text-align:center; border:1px solid var(--ot-line); border-radius:25px; background:rgba(10,17,36,.9); box-shadow:0 28px 90px rgba(0,0,0,.45); }.ot-final-icon{ display:block; font-size:55px; }.ot-final-summary h2{ margin-top:7px; color:#a8b6d1; font-size:13px; text-transform:uppercase; letter-spacing:.14em; }.ot-final-summary>strong{ display:block; margin-top:9px; color:var(--ot-gold); font-family:'Bungee'; font-size:clamp(35px,7vw,82px); }
+.ot-final-summary{ position:relative; width:min(900px,calc(100vw - 32px)); margin:9vh auto 0; padding:clamp(22px,4vw,42px); box-sizing:border-box; text-align:center; border:1px solid var(--ot-line); border-radius:25px; background:rgba(10,17,36,.9); box-shadow:0 28px 90px rgba(0,0,0,.45); }.ot-final-icon{ display:block; font-size:55px; }.ot-final-summary h2{ margin-top:7px; color:#a8b6d1; font-size:13px; text-transform:uppercase; letter-spacing:.14em; }.ot-final-summary>strong{ display:block; margin-top:9px; color:var(--ot-gold); font-family:'Bungee'; font-size:clamp(35px,7vw,82px); font-variant-numeric:tabular-nums; }
 .ot-history{ display:grid; grid-template-columns:repeat(5,1fr); gap:7px; margin-top:24px; }.ot-history>div{ display:grid; gap:3px; padding:10px 6px; border:1px solid rgba(98,231,175,.2); border-radius:11px; background:rgba(98,231,175,.055); }.ot-history>div.wrong{ border-color:rgba(255,100,125,.25); background:rgba(255,100,125,.055); }.ot-history span{ color:#72809e; font-size:8px; }.ot-history b{ font-size:18px; }.ot-history small{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#aab6cf; font-size:8px; }
 .ot-final-actions{ width:min(900px,calc(100vw - 32px)); margin:14px auto; display:flex; justify-content:center; gap:9px; }.ot-final-actions .ot-btn{ min-width:160px; }
 
