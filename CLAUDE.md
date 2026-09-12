@@ -61,16 +61,19 @@ n'avait plus de fin**. Corrigé : `vandal: null` dans `newStar`, recopie dans `m
    de Valley Town, **puis laisser la cinématique du météore jouer sans rien toucher** (sinon
    `starImpactLandedNow` reste faux et TOUTE l'interaction d'étoile en ville est muette), puis
    « Stand at Kerguélen », puis E.
-2. **Les étoiles compagnes redessinées le même jour** (retour de Guillaume en cours d'audit : « trop
-   grandes et pas assez expressives, détaille un peu plus ») — à juger à l'écran. Mesuré : **13 px
-   contre 24 px pour un fermier (×0,54)**, contre ~15 px et un corps de 14,5 px **plus large qu'un
-   humain** avant. Ce qui a changé : canevas 16 px (une tuile) mais CORPS réduit (0,38 → 0,34) et
-   creux/cœur enfin SÉPARÉS (`rIn`/`rCore` — un seul nombre servait les deux, c'est ce qui faisait
-   la « motte » refusée deux fois) ; pointe droite en haut (les 0,22 rad d'inclinaison couchaient
-   une branche à l'horizontale, que le cerne pinçait) ; pupilles verticales de 1 px (un œil carré
-   de 2 px butait contre le cerne et fusionnait avec lui) ; sourire en V ; éclairage haut-gauche par
-   décentrage du cœur ; visage peint À TRAVERS `inside()`, donc plus aucun pixel hors du corps.
-   **La reine ne bouge pas** (`render-etoile` §3 exige 21-28 px natifs et 2× la matière).
+2. **L'étoile est un PETIT MODÈLE 3D depuis la nuit du 2026-09-12** (`starWispRender`,
+   `fermeArt.js`) — à juger EN JEU, seules les planches l'ont vue. Demande de Guillaume, après un
+   masque au pixel refusé (« comme avant, souple et dodue, vraiment en 3D », référence : le dessin
+   du 16 août) : contour à cinq lobes ronds inégaux et penchés, gonflé en coussin, deux faces,
+   tourné/projeté/tamponné en profondeur ×4, éclairé haut-gauche, quantifié sur la palette ; visage
+   ancré sur la surface (il pivote avec elle). Poses = gelée + petit lacet. **En marche**,
+   `drawStarWisp` (`FermeGame.js`) déduit la vitesse de chaque compagne (`STAR_LEAN_MEM`, niveau
+   module) et affiche `starWispLive` : penchée, de trois quarts, étirée le long du chemin (cache
+   borné à 96 canevas). ⚠️ Les petites ont leurs propres réglages (creux plus francs, coussin plus
+   mince, ombrage lissé 3×3 avant quantification) : avec ceux de la reine, onze pixels rendaient un
+   caillou. `render-etoile` tout vert, `verify-quete` 847/847, bundle propre. **Reste à voir** : la
+   traîne en jeu (amplitudes `roll` 0,34 / `yaw` 0,45 / `stretch` 0,20 = premier réglage), et si
+   la reine (non rétrécie, §3 du banc) doit l'être.
 3. **La 2ᵉ négociation du maire** (`maire.js`) : budget dérapé par la réparation, une table de plus
    (§16.1 de `QUETE.md`). C'est elle qui doit remplacer le garde-fou `needStars`, qui n'est qu'un
    ersatz.

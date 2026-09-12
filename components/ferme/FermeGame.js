@@ -56,6 +56,11 @@ import { MayorAudience, MayorWatch, mayorCtxOf } from "./MaireScene";
 import { SawScene } from "./ScierieScene";
 import * as SAW from "./scierie";
 import { buildSprites, charPalette, drawBridgeTile, drawBridgeOverlay, drawCandyGroundTile, candySyrupColor } from "./fermeArt";
+/* 2026-09-12 (nuit) — LA VITESSE LISSÉE DE CHAQUE COMPAGNE, pour la traîne de
+   `drawStarWisp`. ⚠️ AU NIVEAU DU MODULE, PAS DANS LA CLOSURE DE LA BOUCLE : une
+   `Map` recréée à chaque image oublierait la position précédente et la vitesse
+   resterait nulle — une traîne qui ne se déclenche jamais, sans aucune erreur. */
+const STAR_LEAN_MEM = new Map();
 import { loadBitmap } from "./bitmapAssets";
 import { fstr } from "./fermeStrings";
 // ZIP 441 — l'orgue de l'église. Le lecteur de fichiers existe depuis longtemps
@@ -22870,10 +22875,47 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       ctx.beginPath(); ctx.arc(cx, cy, 15 * (cp.scale || 1), 0, 7); ctx.fill();
       ctx.fillStyle = `rgba(${halo[1]},${(0.14 + 0.06 * puls).toFixed(3)})`;
       ctx.beginPath(); ctx.arc(cx, cy, 8.5 * (cp.scale || 1), 0, 7); ctx.fill();
+      /* ╔════════════════════════════════════════════════════════════════════
+         ║ 2026-09-12 (nuit) — LA TRAÎNE : ELLE SE PENCHE VERS OÙ ELLE VA.
+         ╚════════════════════════════════════════════════════════════════════
+         Guillaume : « souple », précisé en « elle se penche et s'étire dans le
+         sens du déplacement ». La vitesse se DÉDUIT des positions dessinées
+         (§3 : rien de diffusé), lissée sur ~140 ms pour que la pose suive la
+         marche au lieu de trembler avec elle. Le sprite penché est un vrai
+         re-rendu du modèle 3D (`starWispLive`, `fermeArt.js`) — jamais un
+         `rotate` du canevas, qui baverait les pixels.
+         ⚠️ SEULES LES COMPAGNES QUI ONT UN `id` SE PENCHENT : les étoiles posées
+         (sites, scènes) passent des objets sans identité, donc sans passé. */
+      let live = null;
+      if (cp.id != null && !jn && sprites.starWispLive) {
+        const key = String(cp.id) + (cp.queen ? ":q" : "");
+        const mem = STAR_LEAN_MEM.get(key);
+        // Une absence ou un saut de plus de deux cases (train, porte) repart de zéro :
+        // sans ça, un changement de carte se lirait comme une vitesse folle.
+        if (!mem || nowB - mem.t > 300 || Math.hypot(cp.x - mem.x, cp.y - mem.y) > 2) {
+          STAR_LEAN_MEM.set(key, { x: cp.x, y: cp.y, t: nowB, vx: 0, vy: 0 });
+        } else if (nowB > mem.t) {
+          const dt = nowB - mem.t, k = 1 - Math.exp(-dt / 140);
+          mem.vx += ((cp.x - mem.x) * 1000 / dt - mem.vx) * k;
+          mem.vy += ((cp.y - mem.y) * 1000 / dt - mem.vy) * k;
+          mem.x = cp.x; mem.y = cp.y; mem.t = nowB;
+          const sp = Math.min(1, Math.hypot(mem.vx, mem.vy) / C.PLAYER_SPEED);
+          if (sp > 0.12) {
+            const hx = Math.max(-1, Math.min(1, mem.vx / C.PLAYER_SPEED));
+            live = sprites.starWispLive(cp.pose & 3, cp.state, cp.queen ? "yellow" : (cp.color || "yellow"), !!cp.queen, false, {
+              roll: hx * 0.34,                            // la tête part devant
+              yaw: hx * 0.45,                             // de trois quarts, vers où elle va
+              stretch: sp * 0.20,                         // étirée le long du chemin : la traîne
+              dir: Math.atan2(mem.vy, mem.vx),
+            });
+          }
+        }
+      }
+      const img = live || im;
       if (jsc !== 1) {
-        const w2 = Math.max(1, Math.round(im.width * jsc)), h2 = Math.max(1, Math.round(im.height * jsc));
-        ctx.drawImage(im, Math.round(cx - w2 / 2), Math.round(cy - h2 / 2), w2, h2);
-      } else ctx.drawImage(im, Math.round(cx - im.width / 2), Math.round(cy - im.height / 2));
+        const w2 = Math.max(1, Math.round(img.width * jsc)), h2 = Math.max(1, Math.round(img.height * jsc));
+        ctx.drawImage(img, Math.round(cx - w2 / 2), Math.round(cy - h2 / 2), w2, h2);
+      } else ctx.drawImage(img, Math.round(cx - img.width / 2), Math.round(cy - img.height / 2));
       ctx.restore();
     }
     /* La bulle de l'étoile : le texte courant, s'il n'a pas expiré. Rendue par
