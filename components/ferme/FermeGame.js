@@ -147,8 +147,16 @@ function migrateHorses(saved) {
   // format à cheval unique) n'ont pas de champ `coat` -> "bay" (robe
   // d'origine), jamais un tirage au hasard qui changerait une monture déjà
   // possédée d'une session à l'autre.
-  if (Array.isArray(saved.horses)) return saved.horses.map(h => (h.coat ? h : { ...h, coat: "bay" }));
-  if (saved.horse && saved.horse.owned) return [{ x: saved.horse.x, y: saved.horse.y, rider: null, rider2: null, coat: "bay" }];
+  // 2026-09-12 : revente au tiers du prix payé (`boughtPrice`). Les chevaux
+  // sauvegardés avant cette fonctionnalité n'ont pas ce champ ; comme aucune
+  // vente n'existait avant elle, la position dans le tableau EST l'ordre
+  // d'achat, donc le rang y donne le vrai prix payé (C.HORSE_COSTS[i]) —
+  // jamais un prix arbitraire.
+  if (Array.isArray(saved.horses)) return saved.horses.map((h, i) => {
+    const withCoat = h.coat ? h : { ...h, coat: "bay" };
+    return withCoat.boughtPrice != null ? withCoat : { ...withCoat, boughtPrice: C.HORSE_COSTS[Math.min(i, C.HORSE_COSTS.length - 1)] };
+  });
+  if (saved.horse && saved.horse.owned) return [{ x: saved.horse.x, y: saved.horse.y, rider: null, rider2: null, coat: "bay", boughtPrice: C.HORSE_COSTS[0] }];
   return [];
 }
 
@@ -4681,11 +4689,36 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // pas (client modifié, ancienne version).
           const coat = C.HORSE_COATS.includes(req.coat) ? req.coat : "bay";
           s.money -= cost;
-          hs.push({ x: C.SPAWN.x + 2 + hs.length * 2, y: C.SPAWN.y, rider: null, rider2: null, coat });
+          hs.push({ x: C.SPAWN.x + 2 + hs.length * 2, y: C.SPAWN.y, rider: null, rider2: null, coat, boughtPrice: cost });
           out.state = shareState(); out.horses = hs;
           out.chat = { from: "🐴", msg: L.chatAnimalBought(lang === "en" ? "Horse" : "Cheval") };
         } else out.toast = { id: f.id, key: "noGold" };
       }
+    } else if (req.kind === "sellHorse") {
+      // 2026-09-12 (demande Guillaume) : revendre un cheval déjà possédé pour
+      // libérer une place et racheter une autre robe — un tiers du prix
+      // RÉELLEMENT payé (`boughtPrice`, posé à l'achat ci-dessus), jamais du
+      // prix catalogue du rang courant : HORSE_COSTS est indexé par rang
+      // d'achat, pas par cheval, donc vendre puis racheter changerait le
+      // rang des chevaux restants si on relisait le catalogue à la vente.
+      // Déclenchée depuis la boutique (pas d'interaction de proximité,
+      // horses est une ressource de la FERME partagée, pas d'un joueur) ;
+      // refusée si un cavalier est dessus (mêmes places rider/rider2 que le
+      // mount/dismount plus bas) — vendre sous quelqu'un serait le pire des
+      // deux mondes du piège "porte jamais la caisse" (§4 CLAUDE.md), ici à
+      // l'envers. Retrait par `splice`, même limite acceptée que sellAnimal
+      // (aucun autre endroit ne garde une référence par INDEX à un cheval,
+      // seul `rider`/`rider2` porte un id de fermier sur l'objet lui-même,
+      // donc rien à réconcilier ici).
+      const hs = s.horses, hi = req.horseIndex | 0, h = hs[hi];
+      if (h && !h.rider && !h.rider2) {
+        const price = Math.round((h.boughtPrice || C.HORSE_COSTS[0]) / 3);
+        s.money += price;
+        hs.splice(hi, 1);
+        out.state = shareState(); out.horses = hs;
+        out.fx.push({ k: "sell", x: px, y: py, gain: price });
+        out.chat = { from: "💰", msg: L.chatAnimalSold(lang === "en" ? "Horse" : "Cheval", price) };
+      } else out.toast = { id: f.id, key: "actionFailed" };
     } else if (req.kind === "houseUpgrade") {
       // Maison à niveaux (validation Guillaume 2026-07) : lance les TRAVAUX
       // du palier suivant — or prélevé sur la caisse commune, bois/pierre
@@ -13492,6 +13525,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }, [notifCount]);
 
   const buyHorse = (coat) => sendReq({ kind: "buyHorse", coat });
+  const sellHorse = (horseIndex) => sendReq({ kind: "sellHorse", horseIndex });
   const buyWell = () => sendReq({ kind: "buyWell" });
   const buyJewelry = () => sendReq({ kind: "buyJewelry" });
   const makeJewelry = (design) => sendReq({ kind: "makeJewelry", type: design.type, gemId: design.gemId, shape: design.shape, price: design.price });
@@ -31212,6 +31246,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 </div>
               )}
             </div>
+            {/* 2026-09-12 (demande Guillaume) : revendre un cheval possédé
+                pour 1/3 de son prix payé, libérant une place pour racheter
+                une autre robe. Liste lue directement sur sharedRef (comme
+                les résidents employés plus haut), jamais mise en cache dans
+                `buildings` : l'index de vente doit toujours viser le cheval
+                réellement à cette position au moment du clic. Refusé si
+                monté (`h.rider`/`h.rider2`, mêmes places que mount/dismount)
+                — on ne vend jamais sous un cavalier. */}
+            {(sharedRef.current.horses || []).length > 0 && <div className="ferme-tools-header">{L.shopHorseOwnedHeader}</div>}
+            {(sharedRef.current.horses || []).map((h, hi) => {
+              const paid = h.boughtPrice || C.HORSE_COSTS[0];
+              const mounted = !!(h.rider || h.rider2);
+              return (
+                <div className="ferme-shop-row" key={"hso" + hi}>
+                  <Sprite img={spritesReady ? horseImgSet(spritesRef.current, h.coat).still : null} w={36} h={30} />
+                  <div className="info"><b>{L.horseCoatName(h.coat)}</b><span>{L.horseOwnedSub(paid)}</span></div>
+                  {mounted
+                    ? <button disabled>{L.horseMountedTag}</button>
+                    : <button onClick={() => sellHorse(hi)}>{L.sellHorseBtn(Math.round(paid / 3))}</button>}
+                </div>
+              );
+            })}
             <div className="ferme-tools-header">{L.toolsHeader}</div>
             {C.TOOLS.map(k => {
               const lvl = myTools[k], max = lvl >= C.TOOL_MAX_LEVEL, cost = max ? 0 : C.TOOL_UPGRADE_COST[lvl];

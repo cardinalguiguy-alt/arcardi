@@ -59,6 +59,20 @@ occupé), donc toujours aucune preview possible depuis celle-ci.
 3. **Le gate or/temps** : 300 000 or (débloque tout de suite) ou 1-2 jours réels par pièce
    restante (façon `BUILD_TIMES`), minigame de Tristan pour accélérer — conception posée dans
    `QUETE.md`, pas encore codée.
+4. **Voir en jeu la revente de chevaux** (livraison indépendante du même jour, ci-dessous) —
+   secondaire face aux trois points ci-dessus, mais même blocage de preview.
+
+**Livraison indépendante du même jour (2026-09-12) : revente des chevaux.** Demande Guillaume —
+vendre un cheval possédé, depuis la boutique (à côté d'« acheter »), pour libérer une place et en
+racheter un d'une autre robe. Chaque cheval mémorise désormais son prix payé (`h.boughtPrice`,
+posé à l'achat) : `HORSE_COSTS` est indexé par RANG d'achat, pas par cheval, donc relire le
+catalogue au rang courant à la revente aurait rendu un montant faux dès qu'un cheval change de
+position dans le tableau. Revente à 1/3 de ce prix, arrondi (même règle que `sellAnimal`),
+refusée si le cheval est monté. Migration des sauvegardes anciennes : le rang dans le tableau EST
+l'ordre d'achat (aucune vente n'existait avant), donc `C.HORSE_COSTS[rang]` y est le vrai prix,
+jamais une valeur arbitraire. `verify-strings` 1131 clés, `verify-scope` propre, bundle esbuild
+propre (seul `G_SOIL`, préexistant). ⚠️ **JAMAIS VUE EN JEU — même blocage de preview que
+ci-dessus** (§10, port 3000 occupé par une autre session).
 
 Chantiers indépendants, non touchés aujourd'hui : la compagne redessinée (§12.3 bis de
 `QUETE.md`) attend toujours que Guillaume la regarde en jeu — rien à corriger tant que ce retour

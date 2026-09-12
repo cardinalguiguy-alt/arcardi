@@ -352,6 +352,15 @@ const STAR_FR = {
       timberOrder:    "Commande les pièces à Tristan (menu Employés). Il peut tout mener.",
       timberWait:     "Tristan scie. Le bois ira sur la cale du lac, à Valley Town.",
       timberRaise:    "Une pièce t'attend sur la cale du lac. Va la monter (E).",
+      /* ⚠️ AUTORITÉ 2026-09-12 — LA SCÈNE DU VANDALE. Quatre phrases pour
+         quatre états (même discipline que `craterFeed`/`craterWake` etc.) :
+         d'abord aller voir Kerguélen, puis suivre la silhouette en ville, puis
+         à la ferme, puis l'épilogue une fois qu'il a filé. PLAFOND DE 80
+         SIGNES, tenu par le TEXTE. */
+      kerguelenBack:   "Va voir Kerguélen sur le quai du chantier (E).",
+      vandalChaseTown: "Quelqu'un fuit vers la gare — regarde autour de toi !",
+      vandalChaseFarm: "Il a filé jusqu'à la ferme. Où est-il passé ?",
+      vandalEscaped:   "Il nous a semés… Mais qui est ce vandale ?",
     },
     /* Hors-zip — REPLI DU CHEVRON QUAND LE CHAUDRON N'EST PAS ENCORE RAMASSÉ
        (demande de Guillaume, dictée mot pour mot). ⚠️ SEULE PHRASE DE `goal`
@@ -1049,6 +1058,17 @@ const STAR_FR = {
     away: (d) => `Eduardo emmène le bateau des étoiles au large. Il veut voir ce qu'il y a de l'autre côté (retour dans ${d}).`,
     back: (goods) => `Le bateau des étoiles est rentré. Eduardo rapporte : ${goods}.`,
   },
+  /* ⚠️ AUTORITÉ 2026-09-12 — LE VANDALE. Le toast est vu par toute la salle
+     (`broadcastGlobalToast`, FermeGame.js) au moment où la reine sort ; les
+     trois répliques se lisent l'une après l'autre (`starTell`) quand on
+     s'approche de Kerguélen sur le quai. Jamais de nom, jamais de visage —
+     QUETE.md l'interdit explicitement pour cette quête. */
+  vandal: {
+    toast: "Nouvelles du chantier : va voir Kerguélen sur le quai.",
+    say1: "Kerguélen se retourne, la mine sombre.",
+    say2: "« La coque a été abîmée pendant la nuit. Quelqu'un s'en est pris à elle — je ne sais pas qui. »",
+    say3: "« Il faudra la renforcer. La plaque refroidie du cratère devrait suffire. »",
+  },
   /* ⚠️⚠️⚠️ 2026-08-31 — LA PHRASE DU CHAT SORT DU MENU DÉVELOPPEUR, PARCE QU'ELLE
      N'EST PAS UN OUTIL. `STAR_FR.dev` POINTE SUR `STAR_EN.dev` (voir sa note) et
      c'est un choix assumé : un outil ne se traduit pas. Mais `dev.chat` était
@@ -1371,6 +1391,11 @@ const STAR_EN = {
       timberOrder:    "Order the pieces from Tristan (Employees menu). He can run all five.",
       timberWait:     "Tristan is sawing. The timber goes to the lake slipway, Valley Town.",
       timberRaise:    "A piece is waiting on the lake slipway. Go raise it (E).",
+      // AUTORITÉ 2026-09-12 mirror — see the FR block for context.
+      kerguelenBack:   "Go see Kerguélen at the shipyard dock (E).",
+      vandalChaseTown: "Someone's fleeing toward the station — look around!",
+      vandalChaseFarm: "He made it to the farm. Where did he go?",
+      vandalEscaped:   "He gave us the slip… But who is this vandal?",
     },
     // Chevron fallback while the cauldron hasn't been picked up yet — see the
     // FR block for why this one line is allowed to run past the usual 80-char cap.
@@ -1772,6 +1797,13 @@ const STAR_EN = {
   sail: {
     away: (d) => `Eduardo takes the star boat out to sea. He wants to see what's on the other side (back in ${d}).`,
     back: (goods) => `The star boat is back. Eduardo brings: ${goods}.`,
+  },
+  // AUTORITÉ 2026-09-12 mirror — see the FR block for context.
+  vandal: {
+    toast: "News from the shipyard: go see Kerguélen at the dock.",
+    say1: "Kerguélen turns around, grim-faced.",
+    say2: "\"The hull was damaged overnight. Someone got to it — I don't know who.\"",
+    say3: "\"It'll need reinforcing. The cooled plate from the crater should do it.\"",
   },
   /* ── CE QUE LA VILLE GARDE. */
   devChat: (who, what) => `${who} touched the star quest: ${what}.`,
