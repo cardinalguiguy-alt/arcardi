@@ -4204,6 +4204,31 @@ export const STAR_ENG_FEE_FISH = 12;                // poissons, toutes espèces
    balayage du générateur (450), une coordonnée recopiée mentirait au premier
    déplacement de la rive. Seul l'ÉCART est une constante. */
 export const STAR_ENG_DX = 4, STAR_ENG_DY = 1;
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ AUTORITÉ 2026-09-12 — LE VANDALE : UN SEUL HORODATAGE (e.vandal.at, quete.js),
+   ║ TOUT LE RESTE DÉRIVÉ.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   Quatre durées bornent les quatre phases de la scène (ville → trajet
+   implicite → ferme → épilogue du bandeau) ; aucune ne dépend de la distance
+   réelle du chemin trouvé en ville — la fuite dure toujours VANDAL_TOWN_MS,
+   quel que soit le trajet que `townFindPath` rend (voir `vandalPhase`,
+   quete.js, et le calcul de position, FermeGame.js). Premiers réglages, à
+   ajuster par Guillaume en jouant — comme les trois nombres de la scierie
+   (§13 de CLAUDE.md), rien ici n'est définitif avant d'avoir été vu à l'écran. */
+export const VANDAL_TOWN_MS = 45000;     // fuite du quai à la gare de Valley Town
+export const VANDAL_GAP_MS = 60000;      // hors-vue : il file par le train, comme les visiteurs
+export const VANDAL_FARM_MS = 20000;     // repéré une dernière fois, près de la gare de la ferme
+export const VANDAL_ESCAPED_MS = 30000;  // fenêtre du bandeau « mais qui est-ce ? » avant de rendre la main
+/* Trajet à la ferme, COURT ET FIXE (pas de `townFindPath` ici : les deux
+   cartes n'ont pas de repère commun, §4 de CLAUDE.md). Part du point
+   d'arrivée des visiteurs (`STATION_PLATFORM`), s'éloigne dans la zone que
+   `STATION_CLEAR` garde déjà dégagée, puis disparaît — pas besoin d'une
+   lisière de bois qui n'existe pas côté ferme (voir la note de `QUETE.md`). */
+export const VANDAL_FARM_PATH = [
+  { x: STATION_PLATFORM.x + 1, y: STATION.y + STATION.h + 1.5 },
+  { x: STATION_PLATFORM.x + 5, y: STATION.y + STATION.h + 3 },
+  { x: STATION_PLATFORM.x + 9, y: STATION.y + STATION.h + 5.5 },
+];
 /* ⚠️ « À CÔTÉ DU LAC » A UN RAYON, ET IL EST GÉNÉREUX EXPRÈS. Demande de
    Guillaume : « si on ouvre le plan à côté du lac, on verra effectivement le
    fantôme virtuel du bateau ». Trop serré, le joueur ouvre le plan à trois pas de

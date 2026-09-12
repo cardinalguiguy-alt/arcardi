@@ -352,6 +352,15 @@ const STAR_FR = {
       timberOrder:    "Commande les pièces à Tristan (menu Employés). Il peut tout mener.",
       timberWait:     "Tristan scie. Le bois ira sur la cale du lac, à Valley Town.",
       timberRaise:    "Une pièce t'attend sur la cale du lac. Va la monter (E).",
+      /* ⚠️ AUTORITÉ 2026-09-12 — LA SCÈNE DU VANDALE. Quatre phrases pour
+         quatre états (même discipline que `craterFeed`/`craterWake` etc.) :
+         d'abord aller voir Kerguélen, puis suivre la silhouette en ville, puis
+         à la ferme, puis l'épilogue une fois qu'il a filé. PLAFOND DE 80
+         SIGNES, tenu par le TEXTE. */
+      kerguelenBack:   "Va voir Kerguélen sur le quai du chantier (E).",
+      vandalChaseTown: "Quelqu'un fuit vers la gare — regarde autour de toi !",
+      vandalChaseFarm: "Il a filé jusqu'à la ferme. Où est-il passé ?",
+      vandalEscaped:   "Il nous a semés… Mais qui est ce vandale ?",
     },
     /* Hors-zip — REPLI DU CHEVRON QUAND LE CHAUDRON N'EST PAS ENCORE RAMASSÉ
        (demande de Guillaume, dictée mot pour mot). ⚠️ SEULE PHRASE DE `goal`
@@ -543,26 +552,33 @@ const STAR_FR = {
      toujours la même chose, donc on peut retourner le voir. Un tirage à chaque
      approche aurait fait une machine à phrases dont personne ne retient rien. */
   warn: {
-    /* L'INVITE DE L'HÔTE. ⚠️ ELLE EST À LUI SEUL — c'est le seul panneau du jeu
-       qui décide de quelque chose pour tout le monde, et le §3 est formel sur qui
-       arbitre.
+    /* ⚠️⚠️ AUTORITÉ 2026-09-12 — CE N'EST PLUS UN CHOIX POSÉ HORS CONTEXTE, C'EST
+       UN PANNEAU QU'ON LIT. Le chantier naval se motive indépendamment des
+       étoiles : l'ancien pop-up « Commencer la quête ? Oui/Plus tard »
+       supposait qu'on démarre une histoire magique de son plein gré ; l'avis de
+       l'observatoire est maintenant un désastre qui s'abat SUR un chantier déjà
+       réel, pas un choix. Le chevron mène au tableau des nouvelles ; ces trois
+       clés habillent l'avis « à lire » qui y apparaît (host seul, §3 de
+       `CLAUDE.md`), et le clic envoie `{kind:"starWarn"}`.
        ⚠️⚠️ ZIP 478 (audit 477, défaut #13) — « ENQUÊTE » DEVIENT « QUÊTE », ET CE
        N'EST PAS UN SYNONYME. Le libellé d'origine était celui de Guillaume mot pour
        mot, mais il datait de la quête CADASTRALE du 442, supprimée au 444 : on
        n'enquête sur rien ici, on répare un bateau. Un mot qui survit à la mécanique
        qu'il nommait ne décrit plus le jeu — il décrit le jeu d'avant, et le joueur
        est le seul à ne pas savoir lequel des deux il joue. */
-    askTitle: "Commencer la quête « La Belle Étoile » ?",
-    askBody: "Des astronomes annoncent une pluie d'astéroïdes au-dessus de la vallée. Si tu dis oui, la nouvelle se répand ce soir — et la nuit qui suit, quelque chose tombera.",
-    askNote: "Tu peux dire non. On te le redemandera au crépuscule.",
-    yes: "Oui",
-    later: "Plus tard",
-    laterToast: "Plus tard, alors. On te le redemandera au crépuscule.",
+    boardNewTitle: "☄ Un avis vient d'être affiché",
+    boardNewBody: "Des astronomes annoncent une pluie d'astéroïdes au-dessus de la vallée, cette nuit ou la prochaine.",
+    boardNewCta: "Lire l'avis",
     /* LA CARTE D'ANNONCE, plein écran, sur fondu enchaîné. ⚠️ Elle ne dit PAS
        « quête commencée » : elle dit ce que la vallée apprend. Un panneau qui
-       annonce une quête transforme une histoire en tâche. */
-    cardTitle: "La Belle Étoile",
-    cardSub: "Les astronomes ont prévenu. La vallée regarde le ciel.",
+       annonce une quête transforme une histoire en tâche.
+       ⚠️ AUTORITÉ 2026-09-12 — RENOMMÉE « LA PANIQUE » (`QUETE.md`, tête de
+       fichier, chapitre 2) : elle titrait encore « La Belle Étoile », un nom de
+       quête qui n'existe plus nulle part ailleurs (le titre par défaut est
+       « Le Bateau des Étoiles », `L.star.title`). Ce bandeau couvre exactement
+       la fenêtre entre l'avis lu et la chute — les PNJ nerveux, les rumeurs. */
+    cardTitle: "La Panique",
+    cardSub: "Les astronomes ont prévenu. La vallée regarde le ciel, inquiète.",
     chat: "Les astronomes ont prévenu la vallée : une pluie d'astéroïdes, cette nuit ou la prochaine.",
     /* L'AFFICHE. ⚠️ Elle se lit sur le tableau des nouvelles de Valley Town, qui
        existe depuis le 427 : zéro dessin, zéro message, et une raison d'aller en
@@ -1042,6 +1058,17 @@ const STAR_FR = {
     away: (d) => `Eduardo emmène le bateau des étoiles au large. Il veut voir ce qu'il y a de l'autre côté (retour dans ${d}).`,
     back: (goods) => `Le bateau des étoiles est rentré. Eduardo rapporte : ${goods}.`,
   },
+  /* ⚠️ AUTORITÉ 2026-09-12 — LE VANDALE. Le toast est vu par toute la salle
+     (`broadcastGlobalToast`, FermeGame.js) au moment où la reine sort ; les
+     trois répliques se lisent l'une après l'autre (`starTell`) quand on
+     s'approche de Kerguélen sur le quai. Jamais de nom, jamais de visage —
+     QUETE.md l'interdit explicitement pour cette quête. */
+  vandal: {
+    toast: "Nouvelles du chantier : va voir Kerguélen sur le quai.",
+    say1: "Kerguélen se retourne, la mine sombre.",
+    say2: "« La coque a été abîmée pendant la nuit. Quelqu'un s'en est pris à elle — je ne sais pas qui. »",
+    say3: "« Il faudra la renforcer. La plaque refroidie du cratère devrait suffire. »",
+  },
   /* ⚠️⚠️⚠️ 2026-08-31 — LA PHRASE DU CHAT SORT DU MENU DÉVELOPPEUR, PARCE QU'ELLE
      N'EST PAS UN OUTIL. `STAR_FR.dev` POINTE SUR `STAR_EN.dev` (voir sa note) et
      c'est un choix assumé : un outil ne se traduit pas. Mais `dev.chat` était
@@ -1364,6 +1391,11 @@ const STAR_EN = {
       timberOrder:    "Order the pieces from Tristan (Employees menu). He can run all five.",
       timberWait:     "Tristan is sawing. The timber goes to the lake slipway, Valley Town.",
       timberRaise:    "A piece is waiting on the lake slipway. Go raise it (E).",
+      // AUTORITÉ 2026-09-12 mirror — see the FR block for context.
+      kerguelenBack:   "Go see Kerguélen at the shipyard dock (E).",
+      vandalChaseTown: "Someone's fleeing toward the station — look around!",
+      vandalChaseFarm: "He made it to the farm. Where did he go?",
+      vandalEscaped:   "He gave us the slip… But who is this vandal?",
     },
     // Chevron fallback while the cauldron hasn't been picked up yet — see the
     // FR block for why this one line is allowed to run past the usual 80-char cap.
@@ -1491,14 +1523,11 @@ const STAR_EN = {
      toujours la même chose, donc on peut retourner le voir. Un tirage à chaque
      approche aurait fait une machine à phrases dont personne ne retient rien. */
   warn: {
-    askTitle: "Begin the “Beautiful Star” quest?",
-    askBody: "Astronomers are announcing a shower of asteroids over the valley. Say yes and the news spreads tonight — and the night after that, something will fall.",
-    askNote: "You can say no. We'll ask again at dusk.",
-    yes: "Yes",
-    later: "Later",
-    laterToast: "Later, then. We'll ask again at dusk.",
-    cardTitle: "The Beautiful Star",
-    cardSub: "The astronomers have warned us. The valley is watching the sky.",
+    boardNewTitle: "☄ A new notice is posted",
+    boardNewBody: "Astronomers are announcing a shower of asteroids over the valley, tonight or the next.",
+    boardNewCta: "Read the notice",
+    cardTitle: "The Panic",
+    cardSub: "The astronomers have warned us. The valley is watching the sky, uneasy.",
     chat: "The astronomers have warned the valley: a shower of asteroids, tonight or the next.",
     boardTitle: "OBSERVATORY NOTICE",
     boardBody: "A shower of asteroids is expected over the valley. The risk is judged HIGH. Bring your animals in. Do not stand under tall trees. Do not look straight at the light.",
@@ -1768,6 +1797,13 @@ const STAR_EN = {
   sail: {
     away: (d) => `Eduardo takes the star boat out to sea. He wants to see what's on the other side (back in ${d}).`,
     back: (goods) => `The star boat is back. Eduardo brings: ${goods}.`,
+  },
+  // AUTORITÉ 2026-09-12 mirror — see the FR block for context.
+  vandal: {
+    toast: "News from the shipyard: go see Kerguélen at the dock.",
+    say1: "Kerguélen turns around, grim-faced.",
+    say2: "\"The hull was damaged overnight. Someone got to it — I don't know who.\"",
+    say3: "\"It'll need reinforcing. The cooled plate from the crater should do it.\"",
   },
   /* ── CE QUE LA VILLE GARDE. */
   devChat: (who, what) => `${who} touched the star quest: ${what}.`,

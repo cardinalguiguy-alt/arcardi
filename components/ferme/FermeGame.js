@@ -727,12 +727,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [starBump, setStarBump] = useState(0);
   const [starBumpOn, setStarBumpOn] = useState(false);
   const starRibbonSeqRef = useRef(0);
-  /* ⚠️ ZIP 455 — L'INVITE DE L'HÔTE, ET LE JOUR OÙ IL A DIT « PLUS TARD ». Le
-     refus n'est PAS un état partagé : c'est le confort d'un joueur, il ne concerne
-     personne d'autre, et persisté il aurait fallu le réconcilier (§3). Déduit du
-     jour courant, il expire tout seul au crépuscule suivant. */
-  const [starOffer, setStarOffer] = useState(false);
-  const starOfferSkipRef = useRef(-1);
   const [starRecap, setStarRecap] = useState(false);// le rappel « où on en était »
   /* ⚠️ ZIP 478 (audit 477, défaut #11) — les deux formes du panneau « À faire » (déplié et
      replié en pastille). On les tient par un ref pour leur poser une CLASSE :
@@ -1563,6 +1557,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const townFishDistrustUntilRef = useRef(0);
   const evilFoundPingRef = useRef(0); // 2026-09-03 (lot C) : throttle du sendReq("evilFound") pendant qu'on reste dans le rayon (drawEvilFrame)
   const evilCastRef = useRef(null); // 2026-09-03 (lot C) : {t0,tx,ty} pendant l'anim de lancer spécial (startFishingEvil), null sinon — voir evilCastNow()
+  /* AUTORITÉ 2026-09-12 — LE CHEMIN DE FUITE DU VANDALE EN VILLE, MÉMOÏSÉ UNE
+     FOIS. La ville a une graine FIXE (§10 de CLAUDE.md) : le trajet du quai à
+     la gare ne change jamais d'une session à l'autre, donc `E.townFindPath`
+     (un A* sur 224×168 cases) n'a besoin de tourner qu'une seule fois, pas à
+     chaque frame — voir vandalTownPos() plus bas. */
+  const vandalTownPathRef = useRef(null);
   const evilCatchRef = useRef(null); // 2026-09-03 (lot C) : {t0,fx,fy,sx,sy,color} pendant qu'une prise ambiante saute de l'eau vers la rive (fishWon), null sinon — voir evilCatchNow()
   /* 2026-09-04 — LE HALAGE, PUREMENT LOCAL, COMME evilCastRef CI-DESSUS.
      phase: "waiting" (elle va mordre) -> "active" (on tire, evilHaulStep
@@ -1700,8 +1700,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      tenir le joueur immobile pendant qu'il lit. Il reste un état React
      ordinaire, juste plus lu par personne d'autre : voir sa nouvelle carte
      flottante (§ rendu), qui ne capte de clic que sur elle-même. */
-  useEffect(() => { starUiOpenRef.current = !!(starMini || starCard || starOffer || starFind || mayorTalk || mayorWatch || sawScene); },
-            [starMini, starCard, starOffer, starFind, mayorTalk, mayorWatch, sawScene]);   // zip 444/469/480/481 + lot E
+  useEffect(() => { starUiOpenRef.current = !!(starMini || starCard || starFind || mayorTalk || mayorWatch || sawScene); },
+            [starMini, starCard, starFind, mayorTalk, mayorWatch, sawScene]);   // zip 444/469/480/481 + lot E
   useEffect(() => { planOpenRef.current = planOpen; }, [planOpen]);                     // zip 454
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ZIP 449 — LE DÉPART SPONTANÉ DU GUIDE. Une veille d'une seconde, et elle
@@ -3567,6 +3567,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         broadcastChat("⭐", r.site === "crater"
           ? (mate ? L.star.chat.craterBoth(who, mate) : L.star.chat.crater(who))
           : (mate ? L.star.chat.tamedBoth(who, mate) : L.star.chat.tamed(who)));
+        /* ⚠️ AUTORITÉ 2026-09-12 — LA LIGNE DE KERGUÉLEN. Point d'accroche
+           unique et déjà idempotent (`resolveStarFound` refuse tout doublon,
+           voir `starHas(e,target)` en tête de `resolveStarCalm`) : c'est
+           l'instant EXACT où `shipSiteOk` (quete.js) fait régresser la coque —
+           « la régression EST la révélation », jusqu'ici sans message. Vu par
+           toute la salle, pas seulement l'acteur (même mécanisme que le
+           chantier Tristan/Jérôme). */
+        if (r.site === "crater") broadcastGlobalToast(L.star.vandal.toast);
       }
       /* ⚠️ ZIP 469 — L'ANNONCE DE FOUILLE NE DIT PAS CE QU'IL Y AVAIT DEDANS. Le
          second joueur apprend qu'un trou est retourné et combien il en reste ; il
@@ -4132,6 +4140,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         dirtyRef.current = true;
         persistFnRef.current && persistFnRef.current();
         hostSend({ type: "broadcast", event: "apply", payload: { star: e } });
+      }
+    } else if (req.kind === "vandalReveal") {
+      /* AUTORITÉ 2026-09-12 — LA FUITE COMMENCE, POUR TOUT LE MONDE. Même
+         contrat de confiance que "evilFound" juste au-dessus :
+         `resolveVandalReveal` est idempotent, un seul horodatage écrit
+         (`e.vandal.at`), et tout le reste (position, bandeau) s'en dérive
+         chez chaque client sans un `send()` de plus. */
+      const ev = (sharedRef.current.star = Q.migrateStar(sharedRef.current.star));
+      const rv = Q.resolveVandalReveal(ev, Date.now());
+      if (rv.ok && !rv.already) {
+        dirtyRef.current = true;
+        persistFnRef.current && persistFnRef.current();
+        hostSend({ type: "broadcast", event: "apply", payload: { star: ev } });
       }
     } else if (req.kind === "evilRescueStar") {
       /* 2026-09-04 — LE HALAGE EST GAGNÉ, POUR TOUT LE MONDE. Même contrat de
@@ -17031,6 +17052,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             C.FISH[h.fish] && C.FISH[h.fish].color) });
         }
       }
+      /* AUTORITÉ 2026-09-12 — LE VANDALE, REPÉRÉ UNE DERNIÈRE FOIS PRÈS DE LA
+         GARE DE LA FERME. Même raison que la lutte du Brochet juste au-dessus :
+         poussé ici, hors de la boucle de tuiles, parce que le tri par `y` ne
+         dépend pas de l'ordre d'insertion. Position ENTIÈREMENT dérivée
+         (`Q.vandalFarmPos`, quete.js — chemin fixe, aucune collision posée,
+         même leçon que Kerguélen sur la grève). */
+      { const vp = Q.vandalFarmPos(sharedRef.current.star, now);
+        if (vp) {
+          const vk2 = Math.min(1, Q.vandalFarmK(sharedRef.current.star, now) + 0.01);
+          const vp2 = Q.pathAtFraction(C.VANDAL_FARM_PATH, vk2);
+          const vdx = vp2.x - vp.x, vdy = vp2.y - vp.y;
+          const vdir = (Math.abs(vdx) > Math.abs(vdy)) ? (vdx > 0 ? 3 : 2) : (vdy > 0 ? 0 : 1);
+          const vat = (sharedRef.current.star.vandal && sharedRef.current.star.vandal.at) || 0;
+          draws.push({ y: (vp.y + 1) * T, fn: () => {
+            drawCharacter({ id: "star:vandal", x: vp.x, y: vp.y, dir: vdir, moving: true,
+                            animT: (now - vat) / 100,
+                            gender: "m", outfit: 0, overalls: false, cap: false, look: "vandal" }, false);
+          } });
+        }
+      }
       draws.sort((a, b) => a.y - b.y);
       // Zip 253 (audit) : on isole chaque draw en try/catch, exactement comme
       // la boucle de rendu de la ville (fix zip 250 "les maisons disparaissent
@@ -19546,6 +19587,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             if ((Math.floor(now / 9000) % 2) === 0)
               queueTownBubble(ex * T + 8, ey * T - 6, L.star.plan.engBubble, "star");   // zip 455
           }
+        }
+      }
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ AUTORITÉ 2026-09-12 — LE VANDALE, EN FUITE À TRAVERS VALLEY TOWN.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️ INDÉPENDANT DU CADRE DE LA CALE (`smar` plus haut) : le vandale s'en
+         éloigne jusqu'à la gare, donc sa propre visibilité se juge sur SA
+         position, jamais sur celle du chantier. Aucune collision posée (même
+         leçon que Kerguélen lui-même, juste au-dessus) : il ne bloque rien,
+         il ne se fait pas bloquer non plus. */
+      if (Q.vandalPhase(sharedRef.current.star, now) === "town") {
+        const vpath = vandalTownWaypoints(tw);
+        const vk = Q.vandalTownK(sharedRef.current.star, now);
+        const vp = vpath && Q.pathAtFraction(vpath, vk);
+        if (vp && vp.x >= x0 - 2 && vp.x <= x1 + 2 && vp.y >= y0 - 2 && vp.y <= yBot + 2) {
+          const vp2 = Q.pathAtFraction(vpath, Math.min(1, vk + 0.01));
+          const vdx = vp2.x - vp.x, vdy = vp2.y - vp.y;
+          const vdir = (Math.abs(vdx) > Math.abs(vdy)) ? (vdx > 0 ? 3 : 2) : (vdy > 0 ? 0 : 1);
+          const vat = (sharedRef.current.star.vandal && sharedRef.current.star.vandal.at) || 0;
+          pushE((vp.y + 1) * T, elAt(vp.x, vp.y), () => {
+            drawCharacter({ id: "star:vandal", x: vp.x, y: vp.y, dir: vdir, moving: true,
+                            animT: (now - vat) / 100,
+                            gender: "m", outfit: 0, overalls: false, cap: false, look: "vandal" }, false);
+          });
         }
       }
       /* ══════════════════════════════════════════════════════════════════════
@@ -24926,6 +24991,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function townWorldNow() {
     return townWorldRef.current || (townWorldRef.current = getTownWorldCached(E));
   }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ AUTORITÉ 2026-09-12 — LE TRAJET DE FUITE, DU QUAI À LA GARE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️ CALCULÉ UNE SEULE FOIS (`vandalTownPathRef`), PAS À CHAQUE IMAGE : la
+     ville a une graine fixe, la cale et la gare ne bougent pas d'une session à
+     l'autre, donc l'A* de `E.townFindPath` n'a rien de plus à apprendre la
+     deuxième fois qu'on le lui demande. Le calcul de POSITION, lui, reste une
+     fonction pure de `now` (`Q.vandalTownK`/`Q.pathAtFraction`, quete.js) —
+     seul le CHEMIN (une carte) est mis en cache ici, jamais un état diffusé. */
+  function vandalTownWaypoints(tw) {
+    if (vandalTownPathRef.current) return vandalTownPathRef.current;
+    if (!tw || !tw.shipX) return null;
+    const gx = C.TOWN_STATION.x + C.TOWN_STATION.w + 1, gy = C.TOWN_STATION.y + 1;
+    const found = E.townFindPath(tw, tw.shipX, tw.shipY, gx, gy, 40000);
+    /* ⚠️ REPLI EN LIGNE DROITE SI L'A* ÉCHOUE (poches différentes, cible hors
+       carte) : le §4 de CLAUDE.md est formel, un test qui manque de carte doit
+       ACCEPTER, jamais refuser en silence — mieux vaut un vandale qui coupe au
+       plus court qu'un vandale qui ne fuit jamais. */
+    vandalTownPathRef.current = (found && found.length >= 2)
+      ? found : [{ x: tw.shipX, y: tw.shipY }, { x: gx, y: gy }];
+    return vandalTownPathRef.current;
+  }
+  function vandalTownPos(tw, now) {
+    const path = vandalTownWaypoints(tw);
+    if (!path) return null;
+    return Q.pathAtFraction(path, Q.vandalTownK(sharedRef.current.star, now));
+  }
   function townBlockedAt(tw, x, y) {
     const fx = Math.floor(x), fy = Math.floor(y);
     if (fx < 0 || fy < 0 || fx >= tw.w || fy >= tw.h) return true;
@@ -26500,29 +26592,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     return Q.starNerveDir(rid, Q.starNerveTic(rid, since));
   }
 
-  function starOfferPump() {
-    if (!isHost || starOffer) return;
-    const s0 = sharedRef.current;
-    const e = s0.star;
-    if (!Q.starWarnOffer(e, s0.day, {
-      skills: C.STAR_GATE_SKILLS.filter(sk => E.residentActiveSkill(s0.station, sk, Date.now())),
-      artisans: E.countSkilledResidents(s0.station),
-    })) return;
-    if (starOfferSkipRef.current === (s0.day | 0)) return;
-    if (!E.isNightTime(E.gameTimeMin(s0.dayStartAt, Date.now()))) return;
-    /* ⚠️ PAS PAR-DESSUS UN AUTRE PANNEAU NI UNE CINÉMATIQUE — mais SANS la
-       condition de ciel : voir la note de `starPanelsClear`. Une question posée
-       par-dessus une boutique ouverte serait un panneau qui en cache un autre ;
-       une question qu'on ne pose jamais parce que l'hôte est dans une église
-       serait une quête qui ne commence pas. */
-    const me0 = meRef.current;
-    if (!me0 || me0.sleeping) return;
-    if (!starPanelsClear()) return;
-    setStarOffer(true);
-  }
-
+  /* ⚠️⚠️ AUTORITÉ 2026-09-12 — `starOfferPump` (le pop-up « Commencer la
+     quête ? ») EST RETIRÉE. Le chantier naval se motive indépendamment des
+     étoiles : l'avis de l'observatoire n'est plus un choix qu'on POSE au
+     joueur hors contexte, c'est un panneau qu'on LIT — le chevron mène au
+     tableau des nouvelles (`starGuideTarget`), et c'est la lecture qui
+     déclenche `resolveStarWarn` (voir le clic sur l'avis dans le panneau
+     `newsBoard`). `Q.starWarnOffer` reste la même porte, juste appelée d'un
+     endroit différent — jamais assouplie. */
   function starScenePump() {
-    starOfferPump();
     const e = sharedRef.current.star;
     if (!e || !Q.starFallen(e)) return;
     const zone = (meRef.current && (meRef.current.zone || "farm")) || "farm";
@@ -26622,6 +26700,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        si elle n'est pas bâtie. Pas de chevron vaut mieux qu'un chevron qui pointe
        un champ vide — le `|| clé` du 444, en géométrie. */
     if (id === "townHall") return { zone: "town", x: C.TOWN_HALL.x + (C.TOWN_HALL.w >> 1), y: C.TOWN_HALL.y + C.TOWN_HALL.h };
+    /* ⚠️⚠️ AUTORITÉ 2026-09-12 — LE TABLEAU DES NOUVELLES, MÊME CONTRAT QUE LA
+       MAIRIE JUSTE AU-DESSUS : une adresse hors-table, jamais un lieu de
+       `STAR_SITES` (on n'y FOUILLE rien, on y VA lire). Position dérivée du
+       générateur (`fermeEngine.js`, `addProp(C.TOWN_PLAZA.x+10, ...+1,
+       "newsBoard")`), jamais recopiée. */
+    if (id === "newsBoard") return { zone: "town", x: C.TOWN_PLAZA.x + 10, y: C.TOWN_PLAZA.y + 1 };
     /* ⚠️ ZIP 478 — LA CALE. Sa position est DÉRIVÉE du monde de ville (`shipX`),
        jamais recopiée de `C.STAR_SHIP_X/Y` : le générateur la recale sur la rive
        (voir `fermeEngine.js`, « la position est dérivée ici et stockée sur le
@@ -26731,6 +26815,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      où aller (§ `starTargetSite` dans `quete.js`). */
   function starGuideTarget() {
     const e = sharedRef.current.star;
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ AUTORITÉ 2026-09-12 — AVANT LA MOINDRE ÉTOILE, LE CHEVRON GUIDE VERS
+       ║ LE TABLEAU DES NOUVELLES.
+       ╚══════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ CETTE BRANCHE PASSE AVANT `!Q.starFallen(e)`, ET C'EST LE POINT
+       ENTIER : le chantier naval (maire, ingénieur) se joue AVANT la chute, et
+       `starGoalKey`/`starTargetSite` — toute la table `STAR_SITES` — ne
+       s'activent qu'APRÈS elle (leur toute première ligne le dit). Le tableau
+       des nouvelles n'est donc pas un lieu de cette table, exactement comme la
+       mairie et la scierie (`starTargetPos`, juste au-dessus) : c'est une
+       adresse hors-table, un endroit où l'on VA, pas un cratère qu'on FOUILLE.
+       ⚠️ RÉSERVÉ À L'HÔTE, comme l'ancienne invite qu'il remplace (« l'invite
+       est aujourd'hui réservée à l'hôte », zip 455) : seul son client calcule
+       le contexte de ferme (compétences/artisans) nécessaire à `starWarnOffer`. */
+    if (isHost && e && !Q.starWarning(e) && !Q.starFallen(e)) {
+      const s0 = sharedRef.current;
+      if (Q.starWarnOffer(e, s0.day, {
+        skills: C.STAR_GATE_SKILLS.filter(sk => E.residentActiveSkill(s0.station, sk, Date.now())),
+        artisans: E.countSkilledResidents(s0.station),
+      })) return starTargetPos("newsBoard");
+    }
     /* ⚠️ ZIP 448 — MÊME RAISON QUE `starNearby` : le chevron ne peut pas désigner
        un cratère qui n'est pas encore creusé. Il était déjà masqué PENDANT la
        scène (`starSceneRef`), mais pas pendant qu'elle attendait de se jouer. */
@@ -28405,7 +28510,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const tw0 = townWorldNow();
         if (tw0 && tw0.shipX && Q.starEngineerHere(e, Date.now())) {
           const ex = tw0.shipX + C.STAR_ENG_DX, ey = tw0.shipY + C.STAR_ENG_DY;
-          if (Math.hypot(m.x - ex, m.y - ey) <= 1.8)
+          if (Math.hypot(m.x - ex, m.y - ey) <= 1.8) {
+            /* ⚠️ AUTORITÉ 2026-09-12 — LA SECONDE FENÊTRE (voir `starEngineerHere`) :
+               même PNJ, même position, mais la reine est déjà sortie et le
+               joueur ne lui a pas encore parlé (`!e.vandal`). Le dialogue
+               remplace celui des plans — les deux fenêtres ne se recouvrent
+               jamais dans la trame cible (voir la note de `starEngineerHere`). */
+            if (Q.starHas(e, "crater") && !e.vandal) {
+              return { p: "kerguelenVandal", act: () => {
+                sendReq({ kind: "vandalReveal" });
+                starTell([L.star.vandal.say1, L.star.vandal.say2, L.star.vandal.say3], 2600);
+              } };
+            }
             /* ⚠️ IL SE PRÉSENTE, ET ÇA N'EST PAS DE LA POLITESSE : c'est le seul
                endroit où le joueur apprend son nom et son métier. Le panneau de la
                mairie le nomme, mais on peut très bien tomber sur lui d'abord. */
@@ -28413,6 +28529,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                      `${L.star.plan.engName} — ${L.star.plan.engRole}`,
                      L.star.plan.engHello,
                      L.star.plan.engWork(fmtDuration(Q.starPlanRemainMs(e, Date.now())))], 2400) };
+          }
         }
       }
       /* ╔════════════════════════════════════════════════════════════════════════
@@ -33607,49 +33724,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         );
       })()}
 
-      {/* ╔══════════════════════════════════════════════════════════════════════
-          ║ ZIP 455 — L'INVITE DE L'HÔTE. LE SEUL PANNEAU DU JEU QUI DÉMARRE UNE
-          ║ HISTOIRE.
-          ╚══════════════════════════════════════════════════════════════════════
-          ⚠️⚠️ ELLE NE S'OUVRE QUE SI LA QUÊTE EST RÉELLEMENT DÉBLOCABLE
-          (`Q.starWarnOffer` : le jour minimum ET la porte des habitants), et c'est
-          la demande de Guillaume au mot (« ne s'affichant que lorsque la quête est
-          débloquée par les conditions de ferme déjà discutées »). Un panneau qui
-          s'ouvre puis un résolveur qui refuse, c'est « le jeu propose et refuse »
-          (426) — le seul défaut que ce dépôt ait payé quatre fois.
-          ⚠️ ELLE NE SE FERME PAS TOUTE SEULE, contrairement aux cartes : elle
-          DEMANDE quelque chose. Une question qui s'efface est une question qu'on
-          n'a pas posée.
-          ⚠️⚠️ ET « PLUS TARD » NE TRAVERSE PAS LE RÉSEAU. Le refus est un confort
-          d'interface pour UN joueur, pas un fait du monde : `starOfferSkipRef`
-          garde le jour de jeu refusé, l'invite revient au crépuscule suivant, et
-          il n'y a RIEN à persister ni à réconcilier (§3). Un champ de plus dans
-          `ferme_saves` pour « il a dit non tout à l'heure » aurait été le genre
-          d'état qu'on traîne pendant dix zips. */}
-      {starOffer && (() => {
-        const later = () => {
-          starOfferSkipRef.current = sharedRef.current.day | 0;
-          setStarOffer(false);
-          pushToast(L.star.warn.laterToast);
-        };
-        return (
-          <div className="ferme-modal open ferme-star-offer" onClick={later} data-tick={starTick}>
-            <div className="panel ferme-modal-panel ferme-star-panel" onClick={ev => ev.stopPropagation()}>
-              <div className="ferme-star-offer-mark">☄</div>
-              <h2>{L.star.warn.askTitle}</h2>
-              <div style={{ marginTop: 8, lineHeight: 1.45 }}>{L.star.warn.askBody}</div>
-              <div className="ferme-hint" style={{ marginTop: 10 }}>{L.star.warn.askNote}</div>
-              <div className="ferme-star-offer-btns">
-                <button className="ferme-btn ferme-star-offer-yes"
-                        onClick={() => { setStarOffer(false); sendReq({ kind: "starWarn" }); }}>
-                  {L.star.warn.yes}
-                </button>
-                <button className="ferme-btn" onClick={later}>{L.star.warn.later}</button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      {/* ⚠️⚠️ AUTORITÉ 2026-09-12 — LE POP-UP « COMMENCER LA QUÊTE ? » EST
+          RETIRÉ. L'avis de l'observatoire se lit maintenant au tableau des
+          nouvelles (`newsBoard`, plus bas dans ce fichier) : le chevron y mène
+          (`starGuideTarget`), et c'est la lecture qui envoie `{kind:"starWarn"}`
+          — jamais un choix posé hors contexte. */}
 
       {/* ╔══════════════════════════════════════════════════════════════════════
           ║ ZIP 454 — LE PLAN DÉPLIÉ (P). LE SEUL PANNEAU AJOUTÉ PAR CE ZIP.
@@ -33896,6 +33975,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   ⚠️ IL NE S'AFFICHE QUE PENDANT LE TAMPON (`starWarning`) : une
                   affiche qui annonce une pluie d'astéroïdes trois semaines après
                   la chute est le genre de texte qui reste et qui ment. */}
+              {/* ╔══════════════════════════════════════════════════════════════
+                  ║ AUTORITÉ 2026-09-12 — L'AVIS SE LIT ICI, IL NE SE POSE PLUS
+                  ║ EN POP-UP.
+                  ╚══════════════════════════════════════════════════════════════
+                  ⚠️⚠️ RÉSERVÉ À L'HÔTE (même règle que l'ancienne invite, zip
+                  455) : lui seul calcule le contexte de ferme qu'exige
+                  `Q.starWarnOffer`, donc lui seul peut faire apparaître ce
+                  bloc. Le clic envoie `{kind:"starWarn"}` ; l'hôte tranche
+                  (`resolveStarWarn`), comme toujours — un panneau qui donnerait
+                  lui-même serait « le jeu propose et refuse » (426). */}
+              {isHost && !Q.starWarning(sharedRef.current.star) && (() => {
+                const s0 = sharedRef.current;
+                const offered = Q.starWarnOffer(s0.star, s0.day, {
+                  skills: C.STAR_GATE_SKILLS.filter(sk => E.residentActiveSkill(s0.station, sk, Date.now())),
+                  artisans: E.countSkilledResidents(s0.station),
+                });
+                if (!offered) return null;
+                return (
+                  <div className="ferme-star-notice ferme-star-notice-new"
+                       onClick={() => sendReq({ kind: "starWarn" })} style={{ cursor: "pointer" }}>
+                    <b>{L.star.warn.boardNewTitle}</b>
+                    <div style={{ marginTop: 4 }}>{L.star.warn.boardNewBody}</div>
+                    <button className="ferme-btn" style={{ marginTop: 8 }}>{L.star.warn.boardNewCta}</button>
+                  </div>
+                );
+              })()}
               {Q.starWarning(sharedRef.current.star) && (
                 <div className="ferme-star-notice">
                   <b>☄ {L.star.warn.boardTitle}</b>

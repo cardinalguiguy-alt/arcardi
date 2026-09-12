@@ -91,63 +91,26 @@ const pickIdeal = (choices, s) => {
    `resolveStarTimberTick`/`resolveStarTimberRaise`. Si l'un de ces noms change de
    forme, ce banc casse à la compilation — jamais en silence.
    ═══════════════════════════════════════════════════════════════════════════ */
+/* ⚠️⚠️⚠️ AUTORITÉ 2026-09-12 — LA TRAME DE CE BANC EST RÉORDONNÉE, PAS SES
+   RÉSOLVEURS. Avant, le maire ne pouvait être rencontré qu'APRÈS le cratère
+   (l'étoile envoyait chercher un ingénieur pour l'épave). Le chantier naval se
+   motive maintenant indépendamment des étoiles (`QUETE.md`, tête de fichier) :
+   le maire est rencontré et l'ingénieur commandé AVANT le premier impact,
+   jamais après. Les jalons du chantier passent donc en tête ; les impacts de la
+   ferme et le cratère suivent, dans n'importe quel ordre relatif — le protège
+   toujours §3 plus bas (rien ne doit avancer SANS le maire). */
 section("§1 la trame réelle, jalon par jalon");
 let now = 1_700_000_000_000; // une vraie date (§10 : ne jamais tester des dates avec `at: 1000`)
 const e = Q.newStar();
 
-ok("jalon 0 — quête vierge, chapitre « field »", Q.starChapterKey(e) === "field" && !MA.mayorSigned(e));
+ok("jalon 0 — quête vierge, chapitre « field », rien du chantier naval",
+   Q.starChapterKey(e) === "field" && !MA.mayorSigned(e) && !Q.starPlanAsked(e));
 
-// ── Jalon 1 : les huit impacts de la ferme sont fouillés.
-for (const site of Q.STAR_FARM_IMPACTS) Q.resolveStarFound(e, site.id, "banc", now);
-ok("jalon 1 — chapitre 1 clos, chapitre « crater » ouvert",
-   Q.starChapterKey(e) === "crater", `e.ch=${e.ch}`);
-ok("…et aucune trace de bateau n'existe encore (rien à attendre du maire)",
-   !Q.starPlanAsked(e) && !MA.mayorSigned(e));
-
-// ── Jalon 2 : le cratère (reine, discrète, verte) est refermé.
-Q.resolveStarFound(e, "crater", "banc", now);
-Q.resolveStarFound(e, "townShy", "banc", now);
-Q.resolveStarFound(e, "townGreen", "banc", now);
-ok("jalon 2 — chapitre 2 clos, chapitre « build » ouvert (final)",
-   Q.starChapterKey(e) === "build" && Q.STAR_CHAPTERS[e.ch].final, `e.ch=${e.ch}`);
-for (const k of Q.STAR_SHIP_KEYS)
-  ok(`…« ${k} » n'a encore RIEN à attendre du chantier (plans pas demandés)`,
-     Q.starTimberBlock(e, k) === "noPlan", Q.starTimberBlock(e, k));
-
-// ── Jalon 3 : les plans sont demandés (résolveur réel, pas une écriture directe).
-{
-  const ask = Q.resolveStarPlanAsk(e, "banc", now);
-  ok("jalon 3a — l'ingénieur accepte la commande de plans", ask.ok === true);
-  Q.commitStarPlan(e, "banc", now);
-  ok("…« plans demandés » vrai, « prêts » toujours faux (le train n'est pas arrivé)",
-     Q.starPlanAsked(e) && !Q.starPlanReady(e));
-  for (const k of Q.STAR_SHIP_KEYS)
-    ok(`…« ${k} » attend toujours les plans, pas le maire`,
-       Q.starTimberBlock(e, k) === "noPlan", Q.starTimberBlock(e, k));
-}
-
-// ── Jalon 4 : le temps passe (voyage + dessin), les plans arrivent.
-now += C.STAR_ENG_TRAVEL_MS + C.STAR_ENG_WORK_MS + 1000;
-{
-  const tick = Q.resolveStarPlanTick(e, now);
-  ok("jalon 4 — les plans sont rendus", tick.ok === true && Q.starPlanReady(e));
-}
-
-/* ⚠️⚠️⚠️ LE JALON QUI TIENT TOUT LE RESTE — celui que Guillaume a trouvé cassé.
-   Plans en main, maire jamais rencontré : AUCUNE pièce ne doit s'ouvrir. Si ce
-   contrôle passe au rouge un jour, c'est que la garde de `starTimberBlock` (ou
-   ce qui l'appelle) a divergé de ce que le menu dev pose — exactement la faute
-   du 2026-09-05. */
-for (const k of Q.STAR_SHIP_KEYS)
-  ok(`jalon 5 — « ${k} » refuse la commande tant que le maire n'a pas signé`,
-     Q.starTimberBlock(e, k) === "noMayor", Q.starTimberBlock(e, k));
-ok("…et c'est un état QUE LA PARTIE RÉELLE PEUT PRODUIRE : `e.wood` est encore vide",
-   Object.keys(e.wood).length === 0);
-
-// ── Jalon 6 : l'audience — un vrai rendez-vous, une vraie négociation gagnée.
+// ── Jalon 1 : l'audience — un vrai rendez-vous, une vraie négociation gagnée,
+//    AVANT tout impact (le chantier se motive indépendamment des étoiles).
 {
   const askMayor = MA.resolveMayorAsk(e, "banc", "🤖 Testeur", now, () => 0.5, false);
-  ok("jalon 6a — le rendez-vous est pris", askMayor === "mayorBooked", String(askMayor));
+  ok("jalon 1a — le rendez-vous est pris", askMayor === "mayorBooked", String(askMayor));
   const due = MA.mayorAppt(e).due;
   ok("…et il tient une échéance dans le futur (pas signé sur-le-champ)", due > now);
   now = due;
@@ -160,18 +123,66 @@ ok("…et c'est un état QUE LA PARTIE RÉELLE PEUT PRODUIRE : `e.wood` est enco
     mood: MA.mayorAppt(e).mood || "mid", burnt: MA.mayorBurnt(e),
   };
   const s = playMayor(ctx, pickIdeal);
-  ok("jalon 6b — l'entretien idéal se conclut par une signature",
+  ok("jalon 1b — l'entretien idéal se conclut par une signature (mains vides, sans plans)",
      s.over === "signed", `over=${s.over}`);
   const verdict = MA.resolveMayor(e, "banc", "🤖 Testeur", s.log, ctx, now);
-  ok("jalon 6c — l'hôte rejoue la transcription et signe pour de bon",
+  ok("jalon 1c — l'hôte rejoue la transcription et signe pour de bon",
      verdict === "mayorSigned" && MA.mayorSigned(e), String(verdict));
 }
 
-// ── Jalon 7 : le chantier — cinq commandes, cinq livraisons, cinq montages.
+// ── Jalon 2 : les plans sont demandés (résolveur réel, pas une écriture
+//    directe) — possible maintenant que le maire a validé le projet.
+{
+  const ask = Q.resolveStarPlanAsk(e, "banc", now);
+  ok("jalon 2a — l'ingénieur accepte la commande de plans (le maire a signé)", ask.ok === true);
+  Q.commitStarPlan(e, "banc", now);
+  ok("…« plans demandés » vrai, « prêts » toujours faux (le train n'est pas arrivé)",
+     Q.starPlanAsked(e) && !Q.starPlanReady(e));
+  for (const k of Q.STAR_SHIP_KEYS)
+    ok(`…« ${k} » attend toujours les plans (maire signé, mais pas encore de plans)`,
+       Q.starTimberBlock(e, k) === "noPlan", Q.starTimberBlock(e, k));
+}
+
+// ── Jalon 3 : le temps passe (voyage + dessin), les plans arrivent.
+now += C.STAR_ENG_TRAVEL_MS + C.STAR_ENG_WORK_MS + 1000;
+{
+  const tick = Q.resolveStarPlanTick(e, now);
+  ok("jalon 3 — les plans sont rendus", tick.ok === true && Q.starPlanReady(e));
+}
+
+/* ⚠️⚠️⚠️ LE CHANTIER S'OUVRE AVANT LA MOINDRE ÉTOILE — C'EST LE POINT ENTIER DU
+   RECENTRAGE, ET C'EST MAINTENANT MESURABLE. Maire signé (jalon 1) et plans
+   rendus (jalon 3) suffisent : les quatre pièces sans lieu (`rudder`/`mast`/
+   `sail`/`bell`) ET la coque (site conditionnel, voir `shipSiteOk` dans
+   `quete.js`) sont commandables AVANT tout impact — aucun `e.found` n'existe
+   encore à cet instant. */
 for (const k of Q.STAR_SHIP_KEYS)
-  ok(`jalon 7 — « ${k} » est maintenant commandable (le maire ne bloque plus)`,
-     Q.starTimberBlock(e, k) !== "noMayor" && Q.starTimberBlock(e, k) !== "noPlan",
-     Q.starTimberBlock(e, k) || "débloqué");
+  ok(`jalon 3 bis — « ${k} » est commandable AVANT tout impact (chantier indépendant des étoiles)`,
+     Q.starTimberBlock(e, k) === null, Q.starTimberBlock(e, k) || "débloqué");
+
+// ── Jalon 4 : les huit impacts de la ferme sont fouillés — le chantier tourne déjà.
+for (const site of Q.STAR_FARM_IMPACTS) Q.resolveStarFound(e, site.id, "banc", now);
+ok("jalon 4 — chapitre 1 clos, chapitre « crater » ouvert",
+   Q.starChapterKey(e) === "crater", `e.ch=${e.ch}`);
+
+// ── Jalon 5 : le cratère (reine, discrète, verte) est refermé.
+Q.resolveStarFound(e, "crater", "banc", now);
+Q.resolveStarFound(e, "townShy", "banc", now);
+Q.resolveStarFound(e, "townGreen", "banc", now);
+ok("jalon 5 — chapitre 2 clos, chapitre « build » ouvert (final)",
+   Q.starChapterKey(e) === "build" && Q.STAR_CHAPTERS[e.ch].final, `e.ch=${e.ch}`);
+/* ⚠️ AUTORITÉ 2026-09-12 — DANS CETTE TRAME PRÉCISE, LA COQUE NE RÉGRESSE PAS :
+   `farmMaterial` fait partie des huit impacts fouillés au jalon 4, donc le
+   renfort de Kerguélen est déjà en poche avant même que la reine ne sorte. La
+   régression (coque bloquée tant que le renfort manque) est une règle réelle
+   de `shipSiteOk`, mais elle ne se voit QUE si le joueur atteint le cratère
+   sans avoir fini de fouiller la ferme — testée isolément par
+   `tools/render-navire.mjs` (§1, trois contrôles dédiés à `shipSiteOk`). */
+for (const k of Q.STAR_SHIP_KEYS)
+  ok(`…« ${k} » reste commandable après le cratère (renfort déjà en poche)`,
+     Q.starTimberBlock(e, k) === null, Q.starTimberBlock(e, k));
+
+// ── Jalon 6 : le chantier — cinq commandes, cinq livraisons, cinq montages.
 for (const k of Q.STAR_SHIP_KEYS) {
   const order = Q.resolveStarTimberOrder(e, k, "banc", now);
   ok(`…« ${k} » : la commande est acceptée`, order.ok === true, order.why || "");
@@ -187,7 +198,7 @@ for (const k of Q.STAR_SHIP_KEYS) {
   const raise = Q.resolveStarTimberRaise(e, k, "banc", now);
   ok(`…« ${k} » : montée au marteau`, raise.ok === true);
 }
-ok("jalon 8 — LE NAVIRE EST ACHEVÉ", Q.starShipComplete(e));
+ok("jalon 7 — LE NAVIRE EST ACHEVÉ", Q.starShipComplete(e));
 
 /* ═══════════════════════════════════════════════════════════════════════════
    §2 — LE MENU DÉVELOPPEUR REJOUE LA MÊME TRAME, EN RACCOURCI, ET S'ARRÊTE AUX

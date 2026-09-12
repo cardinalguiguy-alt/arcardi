@@ -7,44 +7,64 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### ACTION SUIVANTE — LA QUÊTE DE L'ÉTOILE : GUILLAUME REGARDE LA COMPAGNE REDESSINÉE
+### ACTION SUIVANTE — VOIR EN JEU (DEUX LIVRAISONS QUI ATTENDENT), PUIS LA 2ᵉ NÉGOCIATION DU MAIRE
 
-**Fait et vérifié le 2026-09-12** : la petite étoile compagne (les sept sœurs et la reine) a été
-redessinée — Guillaume, en jouant : « ça ne ressemble plus du tout à une étoile ». Détail complet,
-daté, dans `components/ferme/QUETE.md` §12.3 bis. En bref :
+**Conception tranchée le 2026-09-12** (discussion complète avec Guillaume), **codée en deux
+livraisons le même jour**. Texte de référence complet : `components/ferme/QUETE.md`, autorité en
+tête de fichier (« LE CHANTIER D'ABORD, LA PLUIE ENSUITE »). Le chantier naval se motive et se
+lance indépendamment des étoiles ; la pluie d'astéroïdes l'interrompt au lieu de l'ouvrir ; les
+deux histoires se rejoignent à la fin par la navigation (Eduardo suit la Brebis), pas par
+l'origine du bois. Un vandale anonyme y est semé, jamais élucidé ici — réservé à une quête future.
 
-1. **Un seul dessin, pour les trois états ET la reine** — avant : un masque dessiné à la main
-   scopé à un seul état sur trois (07/09), et pour le reste un polygone que le code lui-même
-   jugeait « masse à bosses ». Cinq branches CHANFREINÉES (deux sommets serrés par pointe, jamais
-   un coin vif) sur un cœur large : dodue et mignonne, façon Mario Party, comme demandé.
-2. **La cause n'était pas le rayon, c'était le coin** : le cerne par dilatation rebouche toute
-   échancrure de moins de trois pixels, et un coin vif ne laisse jamais trois pixels à
-   l'échancrure voisine — chanfreiner suffit. Testé aux deux tailles déjà en place (18 et 28 px) :
-   **aucune n'a eu besoin de grandir**, contrairement à l'hypothèse de départ.
-3. **Deux bogues trouvés en VÉRIFIANT, pas en relisant** (banc §16, la discrète déguisée) : une
-   boucle bornée sur la LARGEUR du canevas au lieu de sa HAUTEUR rognait son bas en silence — le
-   piège n°1 du §4, ici même, reproduit par l'auteur de cette note ; et geler la respiration d'un
-   seul des deux corps qu'on compare les décroche l'un de l'autre exactement comme n'en geler
-   aucun.
+**Codé et vérifié :**
+1. **La coque quitte `SHIP_SITE_OF`** (`quete.js`) : commande Tristan comme les quatre autres
+   pièces. `shipSiteOk` la fait redevenir conditionnelle à `farmMaterial` UNE FOIS la reine
+   trouvée — zéro champ ajouté, la régression EST la révélation.
+2. **`resolveStarPlanAsk`/`resolveStarWarn`** exigent `MA.mayorSigned(e)` au lieu de
+   `starHas(e,"crater")` : l'ingénieur se commande avant toute étoile.
+3. **Le pop-up « Commencer la quête ? » est retiré** : l'avis se lit au tableau des nouvelles
+   (`newsBoard`), chevron dédié, bandeau renommé « La Panique ».
+4. **La ligne de Kerguélen — LA SCÈNE ENTIÈRE, PAS QU'UN TOAST** (demande précisée par Guillaume
+   en jouant à ce qui n'était encore qu'une idée). Au moment où la reine sort : un toast vu par
+   toute la salle (« va voir Kerguélen ») ; il repasse au quai — même PNJ, même position dérivée,
+   `starEngineerHere` gagne une seconde fenêtre plutôt qu'un second PNJ — explique la coque
+   fragilisée par un vandale (3 répliques, `starTell`). `e.vandal = { at }`, UN SEUL CHAMP,
+   déclenche une fuite ENTIÈREMENT dérivée de `now - e.vandal.at` en deux segments scriptés
+   indépendants (ville : quai → gare via `townFindPath`, mémoïsé une fois ; ferme : trajet court
+   et fixe autour de `STATION_PLATFORM` — les deux cartes n'ont pas de repère commun, §4), avec un
+   sprite neuf procédural (`fermeArt.js`, overlay `look:"vandal"` sur `drawCharFrame`, même
+   famille que la combinaison d'apiculteur : capuche pleine, aucun trait de visage, conforme à
+   « jamais élucidé »). Le bandeau permanent porte quatre états dérivés
+   (`kerguelenBack`→`vandalChaseTown`→`vandalChaseFarm`→`vandalEscaped`→retombe pour toujours).
+   Détail, textes et durées (premiers réglages, jamais vus en jeu) : `QUETE.md`, « Ce qui est
+   fait — 2026-09-12, l'ouverture du chapitre 5 ».
 
-`tools/render-etoile.mjs` : **186/186**. `tools/verify-quete.mjs` : **792/792**. `npx next build`
-dans un worktree isolé (un `npm run dev` d'une autre session tournait sur le dépôt principal —
-§10) : `✓ Compiled successfully`, 9/9 pages.
+`verify-quete` 839/839 (section 13 neuve, falsifiée à l'écriture), `verify-jalons` 51/51,
+`render-navire` tout vert, `verify-maire` 119/119, `verify-strings` 1126 clés, `verify-vallee`
+223/223, `verify-collision` tout passe, bundle esbuild propre (seul `G_SOIL`, préexistant).
+⚠️⚠️ **RIEN DE TOUT ÇA N'A ÉTÉ VU EN JEU, DEUX LIVRAISONS DE SUITE** — un `npm run dev` d'une
+autre session tournait sur ce dépôt (§10) pendant la première ET la seconde (port 3000 vérifié
+occupé), donc toujours aucune preview possible depuis celle-ci.
 
-⚠️⚠️ **PAS ENCORE REGARDÉE EN JEU, PAR PERSONNE** — le port 3000 était déjà pris par cette autre
-session, donc aucune vérification à l'écran n'était possible depuis celle-ci. Les bancs mesurent
-la mécanique (silhouette, cerne, respiration, déguisement) ; ils ne disent jamais si c'est MIGNON,
-BEAU ou FLUIDE — c'est la limite du §13, en toutes lettres.
+**Reste à faire, dans cet ordre :**
+1. **Voir en jeu, en priorité absolue avant d'ajouter quoi que ce soit de plus** : le chevron
+   mène-t-il au tableau, l'avis se lit-il bien, la négociation maire fonctionne-t-elle avant
+   toute étoile — ET, du point 4 ci-dessus, jamais vus à l'écran : le sprite du vandale
+   (silhouette, capuche), sa fuite en ville puis à la ferme, le dialogue de Kerguélen, les
+   quatre phrases du bandeau. Les quatre durées de `fermeConstants.js`
+   (`VANDAL_TOWN_MS`/`GAP_MS`/`FARM_MS`/`ESCAPED_MS`) sont un premier réglage à ajuster une fois
+   vues, comme les trois nombres de la scierie (§13).
+2. **La 2ᵉ négociation du maire** (`maire.js`) : budget dérapé par la réparation/le vandale,
+   table à ajouter (le système le permet en une table de plus, §16.1 de `QUETE.md`).
+3. **Le gate or/temps** : 300 000 or (débloque tout de suite) ou 1-2 jours réels par pièce
+   restante (façon `BUILD_TIMES`), minigame de Tristan pour accélérer — conception posée dans
+   `QUETE.md`, pas encore codée.
 
-**Reste à faire :**
-1. **Guillaume regarde la compagne en jeu** (une session tourne déjà) : la forme dodue à cinq
-   branches sur les sept couleurs, la reine, la discrète déguisée, et la respiration resserrée
-   (±2 à 6 % au lieu de ±12 à 30 % — moins d'à-coup toutes les 250 ms). Rien à corriger ni à
-   étendre tant que ce retour n'est pas là.
-
-Chantiers indépendants, non touchés aujourd'hui : où's that attend toujours le retour de jeu de
-Guillaume sur typographie/urgence/palette (`components/ousthat/README.md`) ; ferme/ville/tribunal
-voir §13 (bancs eau/parc, audience du maire, recentrage bateau/astéroïdes).
+Chantiers indépendants, non touchés aujourd'hui : la compagne redessinée (§12.3 bis de
+`QUETE.md`) attend toujours que Guillaume la regarde en jeu — rien à corriger tant que ce retour
+n'est pas là. Où's that attend le retour de jeu de Guillaume sur typographie/urgence/palette
+(`components/ousthat/README.md`) ; ferme/ville/tribunal voir §13 (bancs eau/parc, audience du
+maire).
 
 ---
 
@@ -1009,49 +1029,16 @@ le même défaut que le cratère muet du 456, et il se paie à chaque nouveau sy
   comportement de PNJ jamais éprouvé à plusieurs serait fabriquer la mauvaise abstraction, comme
   le dit déjà l'avertissement sur `MAYOR_NODE` plus haut dans ce fichier.
 
-⚠️⚠️⚠️ **DETTE DE CONCEPTION, PROPOSÉE PAR GUILLAUME LE 2026-09-03 : RECENTRER LA QUÊTE DE
-L'ÉTOILE AUTOUR DE LA CONSTRUCTION DU BATEAU, MÊME LA PLUIE D'ASTÉROÏDES.** Question posée par
-Guillaume, **PAS ENCORE TRANCHÉE** : le bateau deviendrait le PROJET moteur, la pluie d'astéroïdes
-une conséquence qui le traverse plutôt qu'un chapitre à part. Trame proposée, à discuter avec
-Guillaume avant tout code :
-1. **Prologue** — négociation avec le maire pour le financement, les plans, une discussion avec
-   Eduardo qui exige un VRAI bateau (pas un simulacre). Suppose que l'enjeu de la PREMIÈRE
-   rencontre avec le maire devient explicitement d'obtenir ce financement.
-2. **L'événement qui casse tout** — les astronomes de l'université de Valley Town se sont
-   trompés : une pluie d'astéroïdes est prévue bientôt, annoncée dans la GAZETTE, avec le nombre
-   d'impacts et leur lieu — la ferme pour les nombreux petits impacts, la ville pour le gros
-   cratère. Il survient PENDANT le chantier du bateau, pas avant.
-3. **Les missions s'articulent avec le chantier** : une seconde négociation avec le maire (qui
-   doit mentionner le coût des réparations après la chute des astéroïdes sur sa ville) et la
-   découpe de planches à la scierie s'entremêlent.
-4. **Le choix qui bloque ou débloque le projet** — le maire annonce que le chantier est mis en
-   pause, SAUF si le joueur avance 300 000 or pour le poursuivre tout de suite : accepter permet
-   de continuer, refuser bloque le projet.
-5. **Nouvelle main-d'œuvre à inventer** — ouvriers spécialisés, ingénieurs ; un temps de
-   construction avec animation des ouvriers autour du bateau, CONTRAIGNANT (un jour ou deux
-   réels), sauf bypass via le menu développeur — pour justifier ces coûts.
-6. **La mission des étoiles doit pouvoir se jouer vers la FIN de cette quête**, pas au début.
-⚠️⚠️ **CE QUI COMPTE LE PLUS DANS CETTE DETTE, DIT PAR GUILLAUME LE 2026-09-03 : L'ORDRE DES
-CHAPITRES ET L'IMPACT NARRATIF DE CE RÉORDONNANCEMENT — PAS LA LISTE DES SIX POINTS CI-DESSUS
-PRISE ISOLÉMENT.** La trame actuelle (`QUETE.md` §17.2, cinq actes : la pluie courte, la reine,
-le port sous le lac, les trois chantiers, la route) place la chute d'astéroïdes en ACTE I,
-AVANT toute construction — c'est elle qui déclenche la chasse aux sœurs et révèle le bateau
-brisé. Le recentrage proposé INVERSE ce rapport : le financement et le chantier viennent
-D'ABORD (prologue), la pluie devient un événement qui **traverse** un chantier déjà en cours
-plutôt que son déclencheur. **Ce basculement change ce que le joueur croit poursuivre** — dans
-la version actuelle il répare un bateau cassé par un cataclysme déjà arrivé ; dans la version
-proposée il construit un projet municipal qu'un cataclysme vient perturber en cours de route.
-Les deux ne racontent pas la même histoire, et le retournement du §17.1 (« la ville croit
-rouvrir un port, les joueurs suivent une reine ») doit être rejoué phrase par phrase contre le
-nouvel ordre avant tout code : à quel acte les joueurs apprennent-ils qu'il y a une reine et des
-sœurs, si la pluie n'ouvre plus la quête ? **C'est cette comparaison acte-par-acte, entre les
-cinq lignes de §17.2 et la nouvelle trame, qui est le vrai livrable de la discussion à venir —
-pas seulement le calage des six points de mécanique.**
-⚠️ Toucherait `quete.js` (chronologie, `STAR_FARM_IMPACTS`), `maire.js` (une ou deux
-négociations de plus), `scierie.js`/`scierieAtelier.js` (le chantier du bateau) et `QUETE.md` en
-entier, à commencer par son §17.2 (le tableau des cinq actes, à réécrire ou à confronter à un
-nouveau) — **à discuter et acter avec Guillaume avant d'écrire une ligne**, sur le modèle du §2
-(« lister les décisions structurantes et attendre »). Pas encore commencé.
+✅ **RECENTRAGE DE LA QUÊTE AUTOUR DU BATEAU — TRANCHÉ LE 2026-09-12, PAS ENCORE CODÉ.** Le
+chantier naval se motive et se lance indépendamment des étoiles (négociation maire, plans de
+Kerguélen, premières commandes chez Tristan) ; la pluie d'astéroïdes interrompt ce chantier au
+lieu de l'ouvrir ; les deux histoires se rejoignent à la fin par la navigation, pas par
+l'origine du bois (Eduardo suit la constellation de la Brebis). Texte de référence complet,
+séquence en cinq chapitres et ce qui change dans le code : `QUETE.md`, autorité 2026-09-12, en
+tête de fichier. ⚠️ **Un vandale anonyme y est semé, jamais élucidé dans cette quête** — réservé
+à une quête future (ex. qui tague la mairie) ; ne jamais lui donner d'identité avant qu'une
+quête future ne le décide. Pas encore commencé : `quete.js`, `maire.js`,
+`scierie.js`/`scierieAtelier.js`, `fermeConstants.js`, `fermeStrings.js`.
 
 ✅ **CHAÎNE DE TRANSPORT DU BOIS DU BATEAU — DIRECTION TRANCHÉE, NON CONSTRUITE (2026-09-01).**
 Quatre décisions actées avec Guillaume, à respecter le jour où ce chantier s'ouvre :

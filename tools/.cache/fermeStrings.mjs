@@ -543,26 +543,33 @@ const STAR_FR = {
      toujours la même chose, donc on peut retourner le voir. Un tirage à chaque
      approche aurait fait une machine à phrases dont personne ne retient rien. */
   warn: {
-    /* L'INVITE DE L'HÔTE. ⚠️ ELLE EST À LUI SEUL — c'est le seul panneau du jeu
-       qui décide de quelque chose pour tout le monde, et le §3 est formel sur qui
-       arbitre.
+    /* ⚠️⚠️ AUTORITÉ 2026-09-12 — CE N'EST PLUS UN CHOIX POSÉ HORS CONTEXTE, C'EST
+       UN PANNEAU QU'ON LIT. Le chantier naval se motive indépendamment des
+       étoiles : l'ancien pop-up « Commencer la quête ? Oui/Plus tard »
+       supposait qu'on démarre une histoire magique de son plein gré ; l'avis de
+       l'observatoire est maintenant un désastre qui s'abat SUR un chantier déjà
+       réel, pas un choix. Le chevron mène au tableau des nouvelles ; ces trois
+       clés habillent l'avis « à lire » qui y apparaît (host seul, §3 de
+       `CLAUDE.md`), et le clic envoie `{kind:"starWarn"}`.
        ⚠️⚠️ ZIP 478 (audit 477, défaut #13) — « ENQUÊTE » DEVIENT « QUÊTE », ET CE
        N'EST PAS UN SYNONYME. Le libellé d'origine était celui de Guillaume mot pour
        mot, mais il datait de la quête CADASTRALE du 442, supprimée au 444 : on
        n'enquête sur rien ici, on répare un bateau. Un mot qui survit à la mécanique
        qu'il nommait ne décrit plus le jeu — il décrit le jeu d'avant, et le joueur
        est le seul à ne pas savoir lequel des deux il joue. */
-    askTitle: "Commencer la quête « La Belle Étoile » ?",
-    askBody: "Des astronomes annoncent une pluie d'astéroïdes au-dessus de la vallée. Si tu dis oui, la nouvelle se répand ce soir — et la nuit qui suit, quelque chose tombera.",
-    askNote: "Tu peux dire non. On te le redemandera au crépuscule.",
-    yes: "Oui",
-    later: "Plus tard",
-    laterToast: "Plus tard, alors. On te le redemandera au crépuscule.",
+    boardNewTitle: "☄ Un avis vient d'être affiché",
+    boardNewBody: "Des astronomes annoncent une pluie d'astéroïdes au-dessus de la vallée, cette nuit ou la prochaine.",
+    boardNewCta: "Lire l'avis",
     /* LA CARTE D'ANNONCE, plein écran, sur fondu enchaîné. ⚠️ Elle ne dit PAS
        « quête commencée » : elle dit ce que la vallée apprend. Un panneau qui
-       annonce une quête transforme une histoire en tâche. */
-    cardTitle: "La Belle Étoile",
-    cardSub: "Les astronomes ont prévenu. La vallée regarde le ciel.",
+       annonce une quête transforme une histoire en tâche.
+       ⚠️ AUTORITÉ 2026-09-12 — RENOMMÉE « LA PANIQUE » (`QUETE.md`, tête de
+       fichier, chapitre 2) : elle titrait encore « La Belle Étoile », un nom de
+       quête qui n'existe plus nulle part ailleurs (le titre par défaut est
+       « Le Bateau des Étoiles », `L.star.title`). Ce bandeau couvre exactement
+       la fenêtre entre l'avis lu et la chute — les PNJ nerveux, les rumeurs. */
+    cardTitle: "La Panique",
+    cardSub: "Les astronomes ont prévenu. La vallée regarde le ciel, inquiète.",
     chat: "Les astronomes ont prévenu la vallée : une pluie d'astéroïdes, cette nuit ou la prochaine.",
     /* L'AFFICHE. ⚠️ Elle se lit sur le tableau des nouvelles de Valley Town, qui
        existe depuis le 427 : zéro dessin, zéro message, et une raison d'aller en
@@ -1491,14 +1498,11 @@ const STAR_EN = {
      toujours la même chose, donc on peut retourner le voir. Un tirage à chaque
      approche aurait fait une machine à phrases dont personne ne retient rien. */
   warn: {
-    askTitle: "Begin the “Beautiful Star” quest?",
-    askBody: "Astronomers are announcing a shower of asteroids over the valley. Say yes and the news spreads tonight — and the night after that, something will fall.",
-    askNote: "You can say no. We'll ask again at dusk.",
-    yes: "Yes",
-    later: "Later",
-    laterToast: "Later, then. We'll ask again at dusk.",
-    cardTitle: "The Beautiful Star",
-    cardSub: "The astronomers have warned us. The valley is watching the sky.",
+    boardNewTitle: "☄ A new notice is posted",
+    boardNewBody: "Astronomers are announcing a shower of asteroids over the valley, tonight or the next.",
+    boardNewCta: "Read the notice",
+    cardTitle: "The Panic",
+    cardSub: "The astronomers have warned us. The valley is watching the sky, uneasy.",
     chat: "The astronomers have warned the valley: a shower of asteroids, tonight or the next.",
     boardTitle: "OBSERVATORY NOTICE",
     boardBody: "A shower of asteroids is expected over the valley. The risk is judged HIGH. Bring your animals in. Do not stand under tall trees. Do not look straight at the light.",

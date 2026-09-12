@@ -178,19 +178,21 @@ console.log(`  morceaux        : ${C.STAR_SHIP_ORDER.join(", ")}\n`);
      "la table de quete.js suit C.STAR_SHIP_ORDER, dans l'ordre",
      `${fromQ.length} clés lues`);
   /* ╔═══════════════════════════════════════════════════════════════════════════
-     ║ ZIP 469 — UN MORCEAU PEUT N'AVOIR AUCUN LIEU, ET C'EST DÉSORMAIS LE CAS DE
-     ║ QUATRE SUR CINQ.
+     ║ ZIP 469 — UN MORCEAU PEUT N'AVOIR AUCUN LIEU. AUTORITÉ 2026-09-12 — MÊME
+     ║ LA COQUE, MAIS CONDITIONNELLEMENT.
      ╚═══════════════════════════════════════════════════════════════════════════
-     ⚠️⚠️ CE CONTRÔLE EXIGEAIT « chaque morceau s'accroche à un lieu qui existe » et
-     « chaque morceau vient d'un lieu DISTINCT ». Les deux étaient justes tant que
-     les cinq morceaux se TROUVAIENT dehors. Le déchant retire les chapitres 3, 4 et
-     5 : le safran, le mât, la voile et la cloche ne se ramassent plus, ils se
-     FABRIQUENT (voir `SHIP_SITE_OF` dans `quete.js`). Un `site: null` n'est plus
-     une erreur, c'est la règle.
-     ⚠️ CE QUI RESTE VRAI, ET QU'ON MESURE MAINTENANT : un morceau qui NOMME un lieu
-     doit nommer un lieu qui existe (sinon la cale attend pour toujours un éclat
-     introuvable — la cascade silencieuse du 468), et deux morceaux ne peuvent pas
-     se partager le même lieu (l'un des deux ne se poserait jamais). */
+     ⚠️⚠️ Le recentrage du bateau (`QUETE.md`, tête de fichier) retire le dernier
+     lieu statique : la coque n'est plus « ramassée » à la plaque météorique, elle
+     est taillée par Tristan comme les quatre autres — le chantier se motive
+     indépendamment des étoiles. `STAR_SHIP_PARTS` a donc CINQ `site: null`
+     aujourd'hui, et ce n'est plus une erreur, la règle du 469 vient de gagner sa
+     cinquième pièce.
+     ⚠️ CE QUI REMPLACE LE PLANCHER « au moins un morceau se ramasse » : la coque
+     garde un lien au monde, mais DÉRIVÉ et CONDITIONNEL — `shipSiteOk` (privée à
+     `quete.js`) la fait dépendre de `farmMaterial` UNIQUEMENT une fois la reine
+     trouvée (`starHas(e,"crater")`). On le mesure en jouant `starShipHas`, pas en
+     lisant la table statique — sinon ce garde-fou mesurerait un champ qui n'existe
+     plus et manquerait la vraie règle. */
   const siteIds = new Set(Q.STAR_SITES.map(s => s.id));
   const named = Q.STAR_SHIP_PARTS.filter(p => p.site);
   const orphans = named.filter(p => !siteIds.has(p.site));
@@ -199,13 +201,21 @@ console.log(`  morceaux        : ${C.STAR_SHIP_ORDER.join(", ")}\n`);
   const carried = new Set(named.map(p => p.site));
   ok(carried.size === named.length, "⚠️ …et deux morceaux ne se partagent pas le même lieu",
      `${carried.size} lieux pour ${named.length} morceau(x) ramassé(s)`);
-  /* ⚠️⚠️ ET IL EN RESTE AU MOINS UN QUI SE RAMASSE. Sans ce plancher, le contrôle
-     ci-dessus passerait au vert sur un navire dont AUCUN morceau ne vient du monde
-     — c'est-à-dire un bateau entièrement offert par un panneau de commande, et la
-     fin de la quête n'aurait plus rien à voir avec l'étoile. C'est le garde-fou
-     qui empêche le pansement du 469 de devenir la charpente définitive. */
-  ok(named.length >= 1, "⚠️⚠️ au moins un morceau se RAMASSE dans le monde (la coque)",
-     named.map(p => `${p.key}←${p.site}`).join(" ") || "AUCUN");
+  {
+    const e0 = Q.newStar();
+    e0.wood.hull = { done: true };
+    const preStorm = Q.starShipHas(e0, "hull");
+    Q.resolveStarFound(e0, "crater", "banc", Date.now());
+    const postStormNoMat = Q.starShipHas(e0, "hull");
+    Q.resolveStarFound(e0, "farmMaterial", "banc", Date.now());
+    const postStormRepaired = Q.starShipHas(e0, "hull");
+    ok(preStorm === true, "⚠️⚠️ AVANT la reine, une coque taillée suffit (chantier indépendant des étoiles)",
+       `hull=${preStorm}`);
+    ok(postStormNoMat === false, "⚠️⚠️ APRÈS la reine et SANS le renfort, la coque régresse (Kerguélen : elle est fragile)",
+       `hull=${postStormNoMat}`);
+    ok(postStormRepaired === true, "⚠️⚠️ le renfort (farmMaterial, refroidissement) répare la coque",
+       `hull=${postStormRepaired}`);
+  }
   ok(Q.STAR_SHIP_TOTAL === N, "STAR_SHIP_TOTAL est dérivé, pas écrit", `${Q.STAR_SHIP_TOTAL}`);
 }
 

@@ -1,5 +1,118 @@
 # LA QUÊTE DE L'ÉTOILE — « LE BATEAU DES ÉTOILES » / « THE STAR BOAT »
 
+## ⚠️⚠️⚠️ AUTORITÉ 2026-09-12 — LE CHANTIER D'ABORD, LA PLUIE ENSUITE
+
+**Décision de Guillaume, structurante, tranchée après discussion : elle remplace l'ordre des
+actes du §17.2 et la trame en trois lignes de l'autorité 469, partout où les deux la
+contredisent.** Elle répond à la dette du §13 de `CLAUDE.md` (« recentrer la quête autour du
+bateau »), désormais **tranchée** — ce chapitre-ci en est le texte de référence.
+
+### Le principe
+
+**Le chantier naval se motive et se lance INDÉPENDAMMENT des étoiles.** Guillaume, mot pour
+mot : *« la construction du bateau doit être motivée indépendamment des étoiles. Le chantier
+doit être lancé, étudié avec le maire, avec l'ingénieur, etc. »* La pluie d'astéroïdes n'ouvre
+plus la quête : elle **interrompt** un chantier municipal déjà réel. Les deux histoires se
+rejoignent à la toute fin, par la navigation, pas par l'origine du bois : *« les matelots
+prenant la mer avec le bateau […] suivront la constellation de la Brebis pour s'orienter en
+mer »* — ce n'est plus le bateau qui est magique, c'est sa boussole.
+
+### Ce qui NE change pas — tout est réutilisé tel quel
+
+- Les huit impacts, la fouille, le cratère, l'apprivoisement de la reine : mécaniques
+  intactes, seulement retimées plus tard dans la soirée.
+- Les sœurs 5 (verte, quais), 6 (orange, Tristan), 7 (violette, voyage d'Eduardo) : conception
+  et code inchangés (§17.5–§17.7 bis).
+- La négociation maire (`maire.js`) : le rendez-vous « mains vides » existe déjà (§16.1), une
+  deuxième négociation s'ajoute en une table de plus (4ᵉ arbitrage du §16.1).
+- Le chevron de quête (`drawStarChevron`, zip 445), le tableau des nouvelles (`newsBoard`,
+  place de Valley Town), les PNJ nerveux (`starNerveSay`, déjà gagnés sur la seule fenêtre
+  `Q.starWarning`) : réutilisés, pas réécrits.
+- Le mini-jeu de refroidissement (le seul survivant du déchant 469) : garde sa mécanique,
+  change de récompense (voir plus bas).
+
+### La nouvelle séquence
+
+| # | chapitre | contenu | déclencheur | état |
+|---|---|---|---|---|
+| 1 | **Le chantier naval** | négociation maire n°1 (validation, jouable mains vides) ; plans commandés à Kerguélen — le retournement « ce n'était pas un lac » (§17.5) s'y trouve déjà, entièrement mundane ; premières commandes chez Tristan, **coque comprise** | lancé par le joueur | à écrire |
+| 2 | **La Panique** *(bandeau dérivé, PAS un cran de `e.ch`/`STAR_CHAPTERS` — même mécanisme que `warn` qui remplace déjà le titre de la carte aujourd'hui, zéro risque sur les seuils existants)* | chevron → `newsBoard` → lire l'avis = déclenche `resolveStarWarn` (remplace le pop-up « Commencer la quête ? Oui/Plus tard ») ; PNJ nerveux et rumeurs, déjà automatiques sur la fenêtre `Q.starWarning` | porte ouverte au jalon « Bassin reconnu » de Kerguélen (3/5, §17.5) — **hypothèse posée ici, jamais encore vue en jeu par Guillaume, à confirmer/ajuster en jouant** | à écrire |
+| 3 | Les huit impacts | inchangé | délai réel existant (`STAR_WARN_FLOOR_MS`, 5 min mini) après la lecture | inchangé |
+| 4 | Le cratère | inchangé — la reine place les sœurs 5/6/7 sur le chantier déjà en cours | comme aujourd'hui | inchangé |
+| 5 | **Le chantier (reprend)** | Kerguélen repasse : la coque est fragile, un vandale s'en est pris à elle. Réparation = matériau du refroidissement de la plaque météorique (chapitre 3), qui gagne ainsi un vrai usage. 2ᵉ négociation maire (le budget a dérapé) → **300 000 or** (débloque tout de suite) ou **1-2 jours réels par pièce restante** (façon `BUILD_TIMES`/`buildReady`, minigame de Tristan pour accélérer une pièce pendant que les autres patientent). Sciage/voyage désormais habités par les sœurs 6/7 | comme aujourd'hui + nouveau gate | à écrire |
+| — | Fin | mise à l'eau, constellation complète, Eduardo navigue au large **en suivant la Brebis** | comme aujourd'hui | ligne de narration à écrire |
+
+### Ce qui change concrètement dans le code
+
+- **La coque ne vient plus de `SHIP_SITE_OF` → la plaque météorique.** Elle s'aligne sur
+  `rudder`/`mast`/`sail`/`bell` : plus aucun lieu physique, une commande Tristan comme les
+  quatre autres. `render-navire` a un contrôle qui exige aujourd'hui cette origine — à corriger
+  avec le code, jamais laissé rouge ni assoupli en douce.
+- **`resolveStarWarn` change de déclencheur.** Aujourd'hui : pop-up gated par `starFallGate`
+  (compétences/artisans) et `STAR_FALL_MIN_DAY`. Demain : ces deux portes restent (elles
+  protègent un invariant réel — ne pas lancer la chasse avant une ferme fonctionnelle), **et
+  s'ajoute** la condition du jalon Kerguélen ci-dessus ; l'action qui résout `resolveStarWarn`
+  devient l'interaction avec `newsBoard`, plus un simple bouton « Oui ».
+- **Un vandale anonyme est semé, jamais élucidé dans cette quête.** Guillaume : *« le vandale
+  est non élucidé pendant cette quête. Mais il sera réutilisé pour des quêtes futures (exemple
+  qui a tagué la mairie ou etc.) »* — ⚠️ ne JAMAIS lui donner un nom, un visage ou un mobile
+  dans ce chantier-ci : la vraie décision revient à la quête future qui le résout ; en prendre
+  une ici serait une dette qu'il faudrait défaire.
+
+### Ce qui est fait — 2026-09-12, l'ouverture du chapitre 5
+
+**Le tout premier geste du chapitre 5** (« Kerguélen repasse : la coque est fragile, un
+vandale s'en est pris à elle ») est codé et vérifié — pas le reste (2ᵉ négociation maire,
+gate or/temps, ci-dessous). Un seul champ neuf dans l'état partagé, `e.vandal = { at }` :
+tout le reste (quelle phase, où il se trouve) est une fonction pure de `now - e.vandal.at`,
+même principe que le voyage d'Eduardo ou l'arrivée des visiteurs en gare.
+
+1. **Le toast** (`broadcastGlobalToast`, vu par toute la salle) part au moment exact de la
+   régression déjà en place (`shipSiteOk`, quete.js) : quand `starHas(e,"crater")` devient
+   vrai (`req.kind === "starCalm" && r.opened && r.site === "crater"`, `FermeGame.js`).
+2. **Kerguélen repasse au même endroit** que sa première visite (`starEngineerHere` a
+   maintenant deux fenêtres — même PNJ, même position dérivée de `shipX/shipY`, pas de
+   duplication). Il ne réapparaît que « reine ET six étoiles » (même garde que l'ancien
+   `engineer`) **et** `starPlanReady(e)` — il ne peut revenir que s'il est déjà venu.
+   S'en approcher déclenche `resolveVandalReveal` (idempotent) et trois répliques
+   (`starTell`, `L.star.vandal.say1/2/3`).
+3. **La fuite du vandale** : un sprite neuf, procédural (`fermeArt.js`, `look:"vandal"` —
+   overlay ajouté à `drawCharFrame`, même famille que la combinaison d'apiculteur ; capuche
+   pleine, aucun trait de visage, conforme à « jamais élucidé »). Deux segments scriptés
+   indépendants — ville (quai → gare, via `townFindPath`, mémoïsé une fois) puis ferme (un
+   trajet court et fixe, `C.VANDAL_FARM_PATH`, autour de `STATION_PLATFORM`) — jamais une
+   seule trajectoire continue (§4 de CLAUDE.md, les deux cartes n'ont pas de repère commun).
+   Quatre durées dans `fermeConstants.js` (`VANDAL_TOWN_MS`/`GAP_MS`/`FARM_MS`/`ESCAPED_MS`) :
+   **premiers réglages, jamais vus en jeu, à ajuster par Guillaume comme les trois nombres de
+   la scierie**.
+4. **Le bandeau permanent** porte quatre états neufs (`kerguelenBack` → `vandalChaseTown` →
+   `vandalChaseFarm` → `vandalEscaped` → retombe pour toujours sur la chaîne normale),
+   dérivés de `vandalPhase`/`e.vandal.at`, jamais un état écrit à part.
+
+`verify-quete` 839/839 (section 13 neuve : révélation, quatre phases, `pathAtFraction` pure,
+la chaîne complète du bandeau rejouée), `verify-strings` 1126 clés, `verify-jalons` 51/51,
+`verify-maire` 119/119, `render-navire` tout vert, bundle esbuild propre.
+⚠️⚠️ **RIEN DE TOUT ÇA N'A ÉTÉ VU EN JEU** — un `npm run dev` d'une autre session tournait sur
+ce dépôt pendant toute cette livraison (port 3000 déjà occupé, vérifié), donc aucune preview
+n'était possible depuis celle-ci (§10). Le sprite, la fuite en deux segments et le texte du
+bandeau sont donc à regarder à l'écran en priorité — c'est la seule chose que ce zip n'a pas
+pu faire lui-même.
+
+### Ce qui n'est PAS fait
+
+- **La 2ᵉ négociation du maire** (`maire.js`) : budget dérapé par la réparation/le vandale,
+  table à ajouter (le système le permet en une table de plus, §16.1).
+- **Le gate or/temps** : 300 000 or (débloque tout de suite) ou 1-2 jours réels par pièce
+  restante (façon `BUILD_TIMES`), minigame de Tristan pour accélérer — conception posée
+  plus haut, pas codée.
+- **La réparation elle-même** : `farmMaterial` est déjà redemandé par `shipSiteOk` une fois
+  la reine sortie (régression déjà en place, voir Contexte plus haut) — mais rien ne dit
+  encore au joueur QUOI poser où une fois qu'il a la plaque en poche ; c'est le panneau de
+  la cale (« monter la pièce ») qui devra le faire, à vérifier une fois la 2ᵉ négociation et
+  le gate posés.
+
+---
+
 ## ⚠️⚠️⚠️ MASTER PROMPT 2026-09-02 — LA REINE NOURRIE-MARTELÉE, ET LA SEPTIÈME SŒUR AU LAC MALÉFIQUE
 
 ⚠️⚠️⚠️ **LES SEPT QUESTIONS DU §6 ONT ÉTÉ POSÉES ET TRANCHÉES AVEC GUILLAUME LE 2026-09-02 ; LES

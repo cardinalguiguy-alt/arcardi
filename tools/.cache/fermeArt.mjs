@@ -12873,6 +12873,43 @@ export function buildSprites() {
         P(g, bx + 11, 17 + bob, 1, 1, skin);
       }
     }
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ AUTORITÉ 2026-09-12 — LE VANDALE : AUCUN TRAIT DE VISAGE, VOLONTAIREMENT.
+       ╚══════════════════════════════════════════════════════════════════════
+       Même famille que l'apiculteur juste au-dessus (un overlay qui recouvre
+       le skin de base jusqu'à la tête), mais poussé plus loin : QUETE.md
+       l'exige noir sur blanc (« jamais élucidé, jamais de visage ni de nom
+       dans cette quête ») — une silhouette identifiable serait une identité
+       qu'aucune quête future n'a encore le droit de choisir. Réservé au PNJ
+       éphémère de la fuite du chantier (`look:"vandal"`, FermeGame.js),
+       jamais un résident : pas d'entrée dans `C.TOWN_CANDIDATES` ni ailleurs. */
+    if (look === "vandal" && !beeSuit) {
+      const CLOAK = "#242024", CLOAK_D = shade(CLOAK), CLOAK_L = tint(CLOAK);
+      const HOOD = "#141215", HOOD_L = tint(HOOD);
+      const GLOVE = "#100f11";
+      // Jambes : recouvrent entièrement o.pants, bottes sombres (pas de
+      // brun qui trancherait — tout le vandale est de la même nuit).
+      P(g, x + 5, 15 + bob, 3, 6, CLOAK);
+      P(g, x + 8, 15 + bob, 3, 6, CLOAK_D);
+      P(g, x + 5 + step, 21 + bob, 3, 3 - bob, GLOVE);
+      P(g, x + 8 - step, 21 + bob, 3, 3 - bob, GLOVE);
+      // Torse : cape montant jusqu'au col, recouvre o.shirt.
+      P(g, x + 4, 9 + bob, 8, 7, CLOAK);
+      P(g, x + 4, 9 + bob, 8, 1, CLOAK_L);
+      // Bras : manches sombres, gants aux poignets (recouvrent la peau nue).
+      if (dir === 2) {
+        P(g, x + 7 + step, 10 + bob, 2, 6, CLOAK_D);
+        P(g, x + 7 + step, 15 + bob, 2, 1, GLOVE);
+      } else {
+        P(g, x + 3, 10 + bob, 2, 6, CLOAK); P(g, x + 11, 10 + bob, 2, 6, CLOAK_D);
+        P(g, x + 3, 15 + bob, 2, 1, GLOVE); P(g, x + 11, 15 + bob, 2, 1, GLOVE);
+      }
+      // Capuche : recouvre intégralement tête ET cheveux, aucune peau visible
+      // — c'est elle qui rend le personnage anonyme, pas un choix de teinte.
+      P(g, x + 3, 1 + bob, 10, 9, HOOD);
+      P(g, x + 3, 1 + bob, 10, 1, HOOD_L);
+      P(g, x + 4, 9 + bob, 8, 1, CLOAK_D); // ombre du bord de capuche sur les épaules
+    }
     /* ══════════════════════════════════════════════════════════════════════
        ZIP 427 — LA GARDE-ROBE DE LA MAISON GARFIELD.
        ──────────────────────────────────────────────────────────────────────

@@ -17,29 +17,24 @@
    ───────────────────────────────────────────────────────────────────────────
    L'HISTOIRE, EN SIX LIGNES (le détail est dans `QUETE.md`)
 
-   ⚠️⚠️ RÉÉCRITE AU 452. Ce bloc racontait encore la LYRE — « une lyre à qui il
-   manque une corde » — deux zips après que le 450 l'a remplacée par le BATEAU
-   (voir le bloc ZIP 450 plus bas, qui, lui, était juste). C'est le même défaut
-   qu'au §1 de `QUETE.md` : **quand la fiction change, tout ce qui la RACONTE
-   fait partie de la livraison**, y compris les commentaires — un en-tête faux
-   est lu par le prochain qui ouvre le fichier, et il le croit.
+   ⚠️⚠️ RÉÉCRITE LE 2026-09-12 (autorité en tête de `QUETE.md`). Ce bloc racontait
+   encore un bateau né du ciel — vrai jusqu'au recentrage, faux depuis : **quand
+   la fiction change, tout ce qui la RACONTE fait partie de la livraison**, y
+   compris les commentaires (leçon du 452, reprise ici pour la même raison).
 
-   Les étoiles naviguent. L'une d'elles fait naufrage au-dessus de la vallée :
-   SON BATEAU SE CASSE EN TOMBANT, en cinq morceaux. Le gros de l'épave — et
-   l'étoile avec — creuse un cratère dans un pré à l'est de Valley Town ; LA
-   COQUE dépasse la ville et se plante dans le champ de la ferme.
-   ⚠️ ZIP 453 — CE PARAGRAPHE DISAIT « le gros de la COQUE creuse un cratère »,
-   ce qui contredisait `SHIP_SITE_OF` trois cents lignes plus bas (`hull` vient
-   de `furrow`, le champ de la FERME). Une seule table dit où est quoi ; un
-   commentaire qui dit autre chose est un second récit, et c'est celui-là qu'on
-   lit en ouvrant le fichier.
-   L'étoile est vivante, plus petite qu'une
-   poule, terrifiée : sans son bateau, elle ne rentre pas. Chaque morceau CHANTE
-   UNE NOTE quand on le touche. Les joueurs les retrouvent, et quand les quatre
-   chantent enfin ensemble la phrase s'arrête net : **le bateau n'a pas de
-   cloche, et un bateau qui ne peut pas sonner ne traverse pas**. Alors la cloche
-   de l'église — fondue il y a cent ans dans une étoile tombée qui n'est jamais
-   repartie, trop lourde pour rentrer, jamais allée en mer — demande à embarquer.
+   Valley Town construit un navire, un vrai projet municipal, SANS AUCUN
+   RAPPORT avec les étoiles : le maire le valide, l'ingénieur Kerguélen dessine
+   les plans, Tristan taille les pièces. Pendant ce chantier, des astronomes se
+   trompent : une pluie de pierres s'abat sur la ferme (huit impacts) puis sur
+   la ville (un gros, dans un pré à l'est). Parmi les impacts de la ferme, une
+   ÉTOILE vivante, plus petite qu'une poule, terrifiée ; le gros impact de
+   ville en révèle une seconde, la reine. Plus tard, l'ingénieur repasse : la
+   coque du navire est fragile, un vandale s'en est pris à elle — jamais
+   élucidé ici, réservé à une quête future. Sa réparation vient du même ciel
+   qui a failli tout arrêter : le métal refroidi de la plaque météorique de la
+   ferme. **Les deux histoires ne se rejoignent qu'à la toute fin** : le navire
+   prend la mer et ses matelots s'orientent sur la constellation que la reine a
+   révélée en partant — la Brebis. La ville n'apprend jamais rien des étoiles.
 
    ───────────────────────────────────────────────────────────────────────────
    ⚠️ LA COOPÉRATION N'EST PAS UNE SERRURE, C'EST UNE CONSÉQUENCE : on ne peut
@@ -320,13 +315,16 @@ export function starFollowerAdded(previousIds, e) {
    BLOC. Les cinq morceaux du navire sont une LECTURE des cinq trouvailles qui
    existaient déjà, pas une seconde comptabilité :
 
-       la coque   ← `farmMaterial` (chapitre 1, la plaque du troisième cratère)
-       ⚠️ ZIP 469 — LES QUATRE AUTRES N'ONT PLUS DE LIEU (voir `SHIP_SITE_OF`) :
+       ⚠️ ZIP 469 — QUATRE MORCEAUX N'ONT PLUS DE LIEU (voir `SHIP_SITE_OF`) :
        le safran, le mât, la voile et la cloche venaient des chapitres 3, 4 et 5,
-       supprimés par le déchant. Ils ne dépendent plus que du bois de Tristan. Le
-       paragraphe qui suit reste vrai mot pour mot pour la coque, et il explique
-       pourquoi la table est restée une table — c'est en la modifiant à un seul
-       endroit qu'on a pu retirer quatre chapitres sans toucher au dessin du navire.
+       supprimés par le déchant. Ils ne dépendent plus que du bois de Tristan.
+       ⚠️⚠️ AUTORITÉ 2026-09-12 — LA COQUE LES A REJOINTS. Elle venait de
+       `farmMaterial` (la plaque du troisième cratère) tant que le navire
+       naissait du ciel ; le chantier se motive maintenant indépendamment des
+       étoiles, donc elle aussi n'est plus qu'une commande Tristan. `farmMaterial`
+       n'est pas perdue : `shipSiteOk` la redemande pour LA COQUE SEULE, et
+       seulement après que la reine est trouvée (Kerguélen la déclare fragile) —
+       le paragraphe qui suit reste vrai pour les quatre autres pièces.
 
    Un compteur `ship: 3` dans l'état partagé aurait été le réflexe, et il aurait
    été le doublon du §8 de `CLAUDE.md` — « un paramètre qui double un autre est une
@@ -367,15 +365,20 @@ export function starFollowerAdded(previousIds, e) {
    ⚠️ LA RÉPONSE MINIMALE, ET ELLE EST CELLE DE LA TRAME CIBLE : un morceau sans
    lieu est un morceau qu'on **fabrique** au lieu de le trouver. Il ne dépend plus
    que de la commande passée à Tristan (`starTimberDone`), qui existe depuis le 454
-   et qui marche. La coque, elle, garde son lieu : la plaque météorique du
-   troisième cratère de la ferme est la seule pièce qu'on RAMASSE.
+   et qui marche.
+   ⚠️⚠️ AUTORITÉ 2026-09-12 — LA COQUE NE GARDE PLUS SON LIEU. Elle rejoint les
+   quatre autres : une commande Tristan, rien à ramasser. `farmMaterial` (la
+   plaque météorique) sert désormais de matériau de RENFORT, demandé une fois
+   la reine trouvée (`shipSiteOk` juste plus bas porte toute la règle) — le
+   chantier se motive indépendamment des étoiles, la coque n'a plus besoin de
+   naître du ciel pour exister.
    ⚠️⚠️ CE N'EST PAS LA CHARPENTE DÉFINITIVE — c'est le pansement qui garde la
    quête finissable pendant qu'elle attend son arbitrage (voir §14 de `QUETE.md`,
    D3). Ce qui manque est la FICTION : d'où vient la voile (Eduardo), d'où vient la
    cloche. Tant qu'elle n'est pas tranchée, le bois de Tristan répond tout seul,
    et le joueur ne voit ni trou ni logement noir sur la cale. */
 const SHIP_SITE_OF = {
-  hull: "farmMaterial", rudder: null, mast: null, sail: null, bell: null,
+  hull: null, rudder: null, mast: null, sail: null, bell: null,
 };
 export const STAR_SHIP_PARTS = C.STAR_SHIP_ORDER.map(key => ({ key, site: SHIP_SITE_OF[key] }));
 export const STAR_SHIP_TOTAL = STAR_SHIP_PARTS.length;   // 5 — jamais écrit en dur ailleurs
@@ -482,8 +485,20 @@ export function starTimberProgress(e, now) {
 /* ⚠️ ZIP 469 — `p.site` PEUT ÊTRE `null`, ET LE TEST EST ÉCRIT UNE SEULE FOIS.
    Un morceau sans lieu n'attend que le bois ; un morceau avec lieu attend les
    deux. Deux écritures de cette condition (ici et dans `starShipHas`) ont déjà
-   divergé une fois dans ce dépôt — on la dérive donc d'une fonction unique. */
-function shipSiteOk(e, p) { return !p.site || starHas(e, p.site); }
+   divergé une fois dans ce dépôt — on la dérive donc d'une fonction unique.
+   ⚠️⚠️ AUTORITÉ 2026-09-12 — LA COQUE EST UN CAS À PART, ET C'EST DÉRIVÉ, PAS
+   UN CHAMP DE PLUS. Avant la tempête (reine pas encore trouvée), une coque
+   taillée par Tristan suffit — même règle que les quatre autres pièces. Après
+   (`starHas(e,"crater")` devient vrai), Kerguélen la déclare fragile : elle ne
+   redevient valide qu'avec le matériau de la plaque météorique
+   (`farmMaterial`, le refroidissement — inchangé, seule sa RAISON D'ÊTRE
+   change). Zéro champ ajouté : si le joueur avait déjà fini la coque avant la
+   tempête, ce test la fait régresser tout seul le jour où la reine sort — la
+   régression EST la révélation, aucun message dédié ne la porte. */
+function shipSiteOk(e, p) {
+  if (p.key === "hull" && starHas(e, "crater")) return starHas(e, "farmMaterial");
+  return !p.site || starHas(e, p.site);
+}
 export function starShipHas(e, key) {
   const p = STAR_SHIP_PARTS.find(q => q.key === key);
   return !!(p && shipSiteOk(e, p) && starTimberDone(e, key));
@@ -557,9 +572,31 @@ export function starPlanReady(e) { return !!(e && e.plan && e.plan.done); }
    MINUTE DE PLUS : un PNJ qui ne bouge plus une fois son travail rendu devient un
    décor, et un décor qui a une réplique de quête est un mensonge poli. Il repart
    avec le train du soir, et le plan reste. */
+/* ⚠️⚠️ AUTORITÉ 2026-09-12 — DEUX FENÊTRES, PAS DEUX PNJ. Kerguélen repasse
+   une fois la reine trouvée (la coque est fragile, un vandale s'en est pris
+   à elle — voir QUETE.md, « le chantier d'abord »), et c'est le MÊME décor
+   qui parle (`drawCharacter({id:"star:engineer",...})`, FermeGame.js), à la
+   MÊME position dérivée de `shipX/shipY` : dupliquer le PNJ pour une seconde
+   apparition aurait recopié la garde de position et le point de rendu, une
+   divergence en attente (§8 de CLAUDE.md) le jour où la cale se déplace.
+   ⚠️ LES DEUX FENÊTRES NE SE RECOUVRENT JAMAIS DANS LA TRAME CIBLE (le
+   chantier naval se motive avant la pluie d'étoiles, donc les plans sont déjà
+   rendus quand la reine sort) — mais l'ordre du test reste défensif : la
+   PREMIÈRE fenêtre (plans en cours) passe devant, comme avant ce zip. */
 export function starEngineerHere(e, now) {
-  if (!starPlanAsked(e) || starPlanReady(e)) return false;
-  return (+now || 0) >= (e.plan.at + C.STAR_ENG_TRAVEL_MS);
+  if (starPlanAsked(e) && !starPlanReady(e))
+    return (+now || 0) >= (e.plan.at + C.STAR_ENG_TRAVEL_MS);
+  /* ⚠️ MÊME GARDE QUE L'ANCIEN `engineer` : « reine ET six étoiles » (§6 de
+     QUETE.md), pas la reine seule — sinon Kerguélen apparaîtrait au quai
+     pendant que la discrète ou la verte restent encore à trouver, avant même
+     que le bandeau n'ait fini de les réclamer.
+     ⚠️⚠️ ET `starPlanReady(e)` : IL NE PEUT REVENIR QUE S'IL EST DÉJÀ VENU. Un
+     Kerguélen qui repasse alors qu'il n'a même pas encore livré ses plans
+     n'a rien à faire au quai — cette garde n'est pas un détour pour les bancs,
+     c'est l'invariant réel de la trame cible (le chantier, chapitre 1, se
+     termine toujours avant que la reine ne sorte, chapitre 4). */
+  if (starHas(e, "crater") && !starMissing(e).length && starPlanReady(e) && !(e && e.vandal)) return true;
+  return false;
 }
 export function starPlanPhase(e, now) {
   if (!starPlanAsked(e)) return "none";
@@ -2086,6 +2123,12 @@ export const STAR_GOAL_TARGET = { craterHot: "crater", craterAlone: "crater",
      le chevron y mène déjà, il n'y a pas d'adresse neuve à inventer. */
   mayor: "townHall",
   timberOrder: "sawmill", timberWait: "sawmill", timberRaise: "shipyard",
+  /* AUTORITÉ 2026-09-12 — Kerguélen repasse au même endroit que sa première
+     visite (voir `starEngineerHere`) : rien de neuf à résoudre, la cible
+     existe déjà. `vandalChaseTown`/`vandalChaseFarm`/`vandalEscaped` n'ont
+     volontairement PAS d'entrée : on suit le sprite à l'œil, comme
+     `craterAlone` (voir la liste `NOWHERE` de `tools/verify-quete.mjs`). */
+  kerguelenBack: "shipyard",
   /* ⚠️ HORS-ZIP — `farmImpactLure` REJOINT LE TRIO CI-DESSOUS. Il était classé
      avec les objectifs qui pointent vers le TROU de l'impact (voir plus bas
      dans `starTargetSite`), alors que le geste qu'il demande — préparer
@@ -3526,6 +3569,80 @@ export function resolveStarEvilFound(e, now) {
   return { ok: true };
 }
 /* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ AUTORITÉ 2026-09-12 — LE VANDALE : LA RÉVÉLATION, PUIS LA FUITE DÉRIVÉE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ UN SEUL CHAMP (`e.vandal = { at }`), ÉCRIT UNE FOIS. Tout le reste —
+   quelle phase, où il se trouve — est une fonction pure de `now - e.vandal.at`
+   et des quatre durées de `fermeConstants.js` (même principe que le voyage
+   d'Eduardo ou l'arrivée des visiteurs en gare : UN horodatage, zéro `send()`
+   de plus une fois diffusé dans `out.star = e`, qui part déjà). Idempotent,
+   comme `resolveStarEvilFound` juste au-dessus : deux joueurs qui parlent à
+   Kerguélen dans la même seconde ne déclenchent la fuite qu'une fois. */
+export function resolveVandalReveal(e, now) {
+  if (!starHas(e, "crater")) return { ok: false };
+  if (e.vandal) return { ok: false, already: true };
+  e.vandal = { at: +now || 0 };
+  return { ok: true };
+}
+/* Les phases, dans l'ordre — "none" avant la révélation, "gone" après la
+   fenêtre d'épilogue du bandeau (il rend alors la main à la chaîne normale,
+   voir `starGoalKey`). */
+export function vandalPhase(e, now) {
+  if (!e || !e.vandal) return "none";
+  const t = (+now || 0) - (+e.vandal.at || 0);
+  if (t < 0) return "none";
+  if (t < C.VANDAL_TOWN_MS) return "town";
+  if (t < C.VANDAL_TOWN_MS + C.VANDAL_GAP_MS) return "gap";
+  if (t < C.VANDAL_TOWN_MS + C.VANDAL_GAP_MS + C.VANDAL_FARM_MS) return "farm";
+  if (t < C.VANDAL_TOWN_MS + C.VANDAL_GAP_MS + C.VANDAL_FARM_MS + C.VANDAL_ESCAPED_MS) return "escaped";
+  return "gone";
+}
+/* Avancement (0..1) le long du segment ACTIF — la ville pour "town", la ferme
+   pour "farm". Hors de ces deux phases, rend 0 : l'appelant ne dessine rien
+   dans ce cas, ce n'est donc jamais lu pour de vrai. */
+export function vandalTownK(e, now) {
+  if (vandalPhase(e, now) !== "town") return 0;
+  const t = (+now || 0) - (+(e && e.vandal && e.vandal.at) || 0);
+  return Math.max(0, Math.min(1, t / C.VANDAL_TOWN_MS));
+}
+export function vandalFarmK(e, now) {
+  if (vandalPhase(e, now) !== "farm") return 0;
+  const t = (+now || 0) - (+(e && e.vandal && e.vandal.at) || 0) - C.VANDAL_TOWN_MS - C.VANDAL_GAP_MS;
+  return Math.max(0, Math.min(1, t / C.VANDAL_FARM_MS));
+}
+/* Position le long d'une liste de points de passage, par FRACTION DE LA
+   DISTANCE PARCOURUE (pas par index de segment) : la vitesse reste
+   visuellement constante même si les tronçons n'ont pas la même longueur —
+   même principe que `starGreenPos` (FermeGame.js), généralisé de deux points
+   à N. Pure, sans dépendance à `tw` : c'est pour ça qu'elle vit ici et pas
+   dans FermeGame.js. Le chemin de VILLE, lui, a besoin de `townFindPath` (une
+   carte que ce fichier ne connaît jamais, §4 de CLAUDE.md) et reste donc
+   calculé côté FermeGame.js, qui appelle cette même fonction avec SES points. */
+export function pathAtFraction(waypoints, k) {
+  if (!waypoints || waypoints.length === 0) return null;
+  if (waypoints.length === 1) return { x: waypoints[0].x, y: waypoints[0].y };
+  const kk = Math.max(0, Math.min(1, +k || 0));
+  const legs = [];
+  let total = 0;
+  for (let i = 0; i < waypoints.length - 1; i++) {
+    const d = Math.hypot(waypoints[i + 1].x - waypoints[i].x, waypoints[i + 1].y - waypoints[i].y);
+    legs.push(d); total += d;
+  }
+  if (total <= 0) return { x: waypoints[0].x, y: waypoints[0].y };
+  let target = kk * total, i = 0;
+  while (i < legs.length - 1 && target > legs[i]) { target -= legs[i]; i++; }
+  const leg = legs[i] || 1, lk = Math.max(0, Math.min(1, target / leg));
+  const a = waypoints[i], b = waypoints[i + 1];
+  return { x: a.x + (b.x - a.x) * lk, y: a.y + (b.y - a.y) * lk };
+}
+/* La position à la ferme est ENTIÈREMENT dérivable ici : chemin fixe
+   (`C.VANDAL_FARM_PATH`), pas de `townFindPath` en jeu. Rend `null` hors de
+   la phase "farm" — l'appelant (FermeGame.js) ne dessine alors rien. */
+export function vandalFarmPos(e, now) {
+  if (vandalPhase(e, now) !== "farm") return null;
+  return pathAtFraction(C.VANDAL_FARM_PATH, vandalFarmK(e, now));
+}
+/* ╔═════════════════════════════════════════════════════════════════════════════
    ║ 2026-09-04 — LE HALAGE : LA SIMULATION PURE, ET LE FAIT QU'ELLE A ATTEINT
    ║ LA RIVE.
    ╚═════════════════════════════════════════════════════════════════════════════
@@ -3698,6 +3815,30 @@ export function starGoalKey(e, ctx) {
      `engineer` : une clé qui n'a plus rien à dire cède la place. */
   if (starEvilUnlocked(e) && !starEvilFound(e)) return "evilSeek";
   if (starHas(e, "crater") && !missing.length && !starPlanAsked(e)) return "engineer";
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ AUTORITÉ 2026-09-12 — LE VANDALE PREND LE PAS SUR LE CHANTIER, LE TEMPS
+     ║ DE LA SCÈNE, MÊME FAMILLE QUE `evilSeek` JUSTE AU-DESSUS.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️ TESTÉ AVANT `!first` : dans la trame cible, les plans sont déjà rendus
+     quand la reine sort (le chantier se motive avant la pluie d'étoiles), donc
+     `starPlanAsked(e)` est déjà vrai et la branche `engineer` ci-dessus ne se
+     déclenche plus ici — c'est cette place, juste en dessous, qui reste
+     libre pour la voix de Kerguélen.
+     ⚠️⚠️ MÊME GARDE `!missing.length` QUE `engineer` : « reine ET six
+     étoiles » (§6 de QUETE.md), jamais la reine seule — sinon le bandeau
+     sauterait la discrète ou la verte pendant qu'elles attendent encore
+     d'être trouvées (voir la même garde dans `starEngineerHere`, qui décide
+     si Kerguélen est physiquement là pour qu'on lui parle). ⚠️⚠️ ET
+     `starPlanReady(e)` : il ne peut revenir que s'il est déjà venu — même
+     invariant que `starEngineerHere`, tenu une seconde fois ici. */
+  if (starHas(e, "crater") && !missing.length && starPlanReady(e) && !e.vandal) return "kerguelenBack";
+  if (e.vandal) {
+    const ph = vandalPhase(e, ctx && ctx.now);
+    if (ph === "town" || ph === "gap") return "vandalChaseTown";
+    if (ph === "farm") return "vandalChaseFarm";
+    if (ph === "escaped") return "vandalEscaped";
+    // ph === "gone" : rien à dire de plus, on retombe sur la chaîne normale.
+  }
   if (!first) {
     if (!starPlanReady(e)) return (ctx && ctx.engineerHere) ? "engineerWork" : "engineerTravel";
     /* ⚠️ ZIP 480 — LA PASSE MAIRE PREND SA PLACE DANS LE BANDEAU, entre les plans
@@ -3905,6 +4046,11 @@ export const STAR_GOAL_KEYS = (() => {
      `resolveStarEvilFound`), c'est une ÉTAPE. Cette liste n'existe que pour
      obliger le banc à réclamer sa phrase dans les deux langues. */
   out.push("evilSeek");
+  /* AUTORITÉ 2026-09-12 — même raison que les deux blocs juste au-dessus :
+     ce ne sont pas des LIEUX de `STAR_SITES`, ce sont des ÉTAPES de la scène
+     du vandale (voir `starGoalKey`). Cette liste n'existe que pour obliger
+     le banc à réclamer leur phrase dans les deux langues. */
+  out.push("kerguelenBack", "vandalChaseTown", "vandalChaseFarm", "vandalEscaped");
   return out;
 })();
 
@@ -3962,11 +4108,25 @@ export function starAdvance(e) {
    ne redatent pas le tampon, donc ne repoussent pas la nuit.
    ⚠️ ET IL N'ENCAISSE RIEN, comme les dix autres : il écrit une date et rend
    `{ ok, scene }`. C'est `FermeGame` qui diffuse — la règle du 431 sur le double
-   crédit, tenue depuis. */
+   crédit, tenue depuis.
+   ⚠️⚠️⚠️ AUTORITÉ 2026-09-12 — DEUX PORTES DE PLUS, ET LES ANCIENNES RESTENT.
+   Le chantier naval se motive et se lance indépendamment des étoiles : l'avis
+   de l'observatoire (et donc toute la quête) n'a plus sa place tant que ce
+   chantier n'existe pas encore. `MA.mayorSigned(e)` (le maire a validé le
+   projet) ET `e.plan.at` (l'ingénieur est commandé, `resolveStarPlanAsk`) sont
+   donc exigés en plus — jamais à la place — de `starFallGate`. ⚠️ Le vrai
+   milieu du chantier serait le jalon « Bassin reconnu » de Kerguélen (3 sur 5,
+   `QUETE.md` §17.5), JAMAIS CODÉ : ce dépôt n'a que deux phases (voyage/travail,
+   `STAR_ENG_TRAVEL_MS`/`STAR_ENG_WORK_MS`). `e.plan.at` (la commande, pas
+   l'achèvement) est le remplaçant pragmatique le plus proche du texte de
+   `QUETE.md` tant que les cinq jalons ne sont pas construits — **à confirmer en
+   jouant**, comme QUETE.md le dit déjà. */
 export function resolveStarWarn(e, who, day, now, ctx) {
   if (e.warn && e.warn.at) return { ok: false, already: true };
   if (e.fall) return { ok: false, already: true };
   if ((day | 0) < STAR_FALL_MIN_DAY) return { ok: false, tooEarly: true };
+  if (!MA.mayorSigned(e)) return { ok: false, needMayor: true };
+  if (!(e.plan && e.plan.at)) return { ok: false, needEngineer: true };
   const gate = starFallGate(ctx);
   if (!gate.ok) return { ok: false, gated: true, ...gate };
   e.warn = { at: +now || 0, by: String(who || "?").slice(0, 24) };
@@ -3976,10 +4136,17 @@ export function resolveStarWarn(e, who, day, now, ctx) {
    POUR LA RAISON DE TOUT CE FICHIER : c'est elle qui décide si un joueur voit un
    panneau annoncer une histoire secrète, et c'est donc elle qu'un banc doit
    pouvoir balayer. Elle ne dit RIEN du « plus tard » — le refus est un confort
-   d'interface pour UN joueur, il ne traverse pas et il n'a rien à faire ici. */
+   d'interface pour UN joueur, il ne traverse pas et il n'a rien à faire ici.
+   ⚠️ AUTORITÉ 2026-09-12 — DEPUIS LE RECENTRAGE, C'EST AUSSI ELLE QUI DÉCIDE SI
+   LE CHEVRON DE QUÊTE POINTE VERS LE TABLEAU DES NOUVELLES (`newsBoard`) : le
+   pop-up « Commencer la quête ? » disparaît, mais la porte qui l'ouvrait reste
+   la même — même règle du 426 (« le jeu propose et refuse »), appliquée
+   maintenant à un chevron plutôt qu'à un bouton. */
 export function starWarnOffer(e, day, ctx) {
   if (!e || e.fall || starWarned(e)) return false;
   if ((day | 0) < STAR_FALL_MIN_DAY) return false;
+  if (!MA.mayorSigned(e)) return false;
+  if (!(e.plan && e.plan.at)) return false;
   return starFallGate(ctx).ok;
 }
 
@@ -4015,12 +4182,15 @@ export function resolveStarFall(e, day, now, ctx) {
    bois. C'est la règle du 431 (le double crédit) tenue depuis, et le banc la
    vérifie par un scan de source — rien dans ce fichier ne touche à une pièce. */
 
-/* La demande à la mairie. ⚠️ ELLE EXIGE LA RENCONTRE (`crater`) ET RIEN D'AUTRE :
-   c'est l'étoile qui envoie, donc il faut l'avoir vue. Le PAIEMENT est vérifié par
-   l'hôte avec ce que rend `cost` — un client qui forgerait la requête ne
-   court-circuite rien. */
+/* La demande à la mairie. ⚠️⚠️ AUTORITÉ 2026-09-12 — ELLE EXIGEAIT LA RENCONTRE
+   (`crater`) : c'était l'étoile qui envoyait chercher un ingénieur pour l'épave.
+   Le chantier se motive maintenant indépendamment des étoiles — Kerguélen est
+   commandé pour un navire municipal ordinaire, avant toute chute. La porte
+   devient donc `MA.mayorSigned(e)` : le maire a validé le projet, pas la reine
+   qui a envoyé. Le PAIEMENT est vérifié par l'hôte avec ce que rend `cost` — un
+   client qui forgerait la requête ne court-circuite rien. */
 export function resolveStarPlanAsk(e, who, now) {
-  if (!starHas(e, "crater")) return { ok: false, tooEarly: true };
+  if (!MA.mayorSigned(e)) return { ok: false, needMayor: true };
   if (starPlanAsked(e)) return { ok: false, already: true };
   return { ok: true, cost: { gold: C.STAR_ENG_FEE_GOLD, crops: C.STAR_ENG_FEE_CROPS, fish: C.STAR_ENG_FEE_FISH } };
 }
