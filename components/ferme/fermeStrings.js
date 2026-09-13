@@ -333,9 +333,13 @@ const STAR_FR = {
          du pier et rendra son plan bientôt. */
       engineerTravel: "Kerguélen a été prévenu. Il arrive bientôt à Valley Town.",
       engineerWork:   "Kerguélen dessine près du ponton. Il rendra ses plans bientôt.",
-      /* ⚠️ ZIP 480 — LA PASSE MAIRE. Le bandeau désigne l'action la plus proche :
-         les plans sont rendus, la cale attend une signature. */
-      mayor:          "Les plans sont prêts. Demande une audience au maire (mairie).",
+      /* ⚠️ ZIP 480 — LA PASSE MAIRE. ⚠️⚠️ 2026-09-13 — ELLE OUVRE LA QUÊTE : le
+         chantier se lance chez le maire AVANT les plans (autorité 2026-09-12). La
+         phrase disait « les plans sont prêts » — vrai dans l'ancienne trame, faux
+         dans la nouvelle, et c'est la première phrase que le joueur lit. */
+      mayor:          "Le chantier naval passe par le maire : demande une audience (mairie).",
+      // 2026-09-13 — le rendez-vous est pris : ne pas le redemander (voir `starYardKey`).
+      mayorBooked:    "Rendez-vous pris : monte au bureau du maire à l'heure dite (mairie).",
       /* ⚠️⚠️ ZIP 475 (audit 472, défaut #20) — LA COMMANDE N'EST PAS UN
          DÉPLACEMENT. Cette phrase disait « à la ferme », ce qui laisse croire
          qu'un lieu existe à rejoindre — or la commande passe par le bouton
@@ -361,6 +365,20 @@ const STAR_FR = {
       vandalChaseTown: "Quelqu'un fuit vers la gare — regarde autour de toi !",
       vandalChaseFarm: "Il a filé jusqu'à la ferme. Où est-il passé ?",
       vandalEscaped:   "Il nous a semés… Mais qui est ce vandale ?",
+      /* ⚠️⚠️ 2026-09-13 — LE PRÉLUDE A ENFIN SA VOIX. Le bandeau restait masqué
+         jusqu'à la chute : maire, plans, coque et gouvernail se jouaient sans une
+         ligne pour dire où l'on en était. Quatre états, un par attente réelle
+         (`starPreludeKey`, quete.js). PLAFOND DE 80 SIGNES, tenu par le TEXTE. */
+      yardGrow:  "Coque et gouvernail posés. Recrute Eduardo, Tristan et des artisans.",
+      yardCalm:  "Coque et gouvernail posés. Laisse passer quelques jours.",
+      warnRead:  "L'observatoire a affiché un avis au tableau des nouvelles de Valley Town.",
+      warnWait:  "Pluie d'astéroïdes annoncée cette nuit ou la suivante. La vallée attend.",
+      /* ⚠️⚠️ 2026-09-13 — LA SEPTIÈME SŒUR NE DISPARAISSAIT PLUS DU BANDEAU QUE POUR
+         Y LAISSER UN TROU : `evilSeek` se taisait dès qu'on l'avait vue, alors que
+         la fin l'exige désormais réanimée (décision de Guillaume). Deux gestes, deux
+         phrases : la haler, puis la porter et la réanimer. */
+      evilHaul:   "Lance ta ligne sur la lueur du lac maléfique et hale-la jusqu'à la rive.",
+      evilRevive: "Porte la septième étoile à la ferme, pose-la, puis réanime-la (E).",
     },
     /* Hors-zip — REPLI DU CHEVRON QUAND LE CHAUDRON N'EST PAS ENCORE RAMASSÉ
        (demande de Guillaume, dictée mot pour mot). ⚠️ SEULE PHRASE DE `goal`
@@ -932,9 +950,9 @@ const STAR_FR = {
       : state === "available" ? detail
       : detail === "noPlan" ? "Plans nécessaires."
       : detail === "noMayor" ? "Accord du maire nécessaire."
-      : detail === "noShard" ? "Éclat correspondant à retrouver."
-      // AUTORITÉ 2026-09-12 (repasse) — le verrou provisoire, voir starTimberBlock.
-      : detail === "needStars" ? "Un signe du ciel, d'abord."
+      // 2026-09-13 — les deux verrous du chantier en deux moitiés, voir starTimberBlock.
+      : detail === "repair" ? "La coque attend sa réparation avec Kerguélen."
+      : detail === "hullFirst" ? "Plus tard : Kerguélen veut d'abord voir la coque tenir l'eau."
       : "Étape encore verrouillée.",
     /* ⚠️ AUDIT 2026-09-12 — LA MÊME RAISON, DITE EN TOAST. Le plan déplié
        explique déjà chaque verrou (`progressDetail`) ; l'invite de la cale en a
@@ -996,13 +1014,12 @@ const STAR_FR = {
        Sa place est prise par l'état qui la remplace : le bois est arrivé, il attend
        un marteau sur la cale. */
     blockRaise: "🔨 Livrée — va la monter sur la cale",
-    blockNoShard: "🔒 Cette pièce n'est pas encore disponible",
-    /* ⚠️⚠️ AUTORITÉ 2026-09-12 (repasse) — LE VERROU PROVISOIRE SUR LA DERNIÈRE
-       PIÈCE (`starTimberBlock`, quete.js, raison "needStars"). Volontairement
-       vague — le jeu ne dit jamais « attends le chapitre 3 », il parle le
-       langage de sa propre fiction (les étoiles qui guident le chantier, zip
-       454). À retirer le jour où la 2ᵉ négociation/le gate or-temps existent. */
-    blockNeedStars: "🔒 Il faut d'abord un signe du ciel",
+    /* ⚠️⚠️ 2026-09-13 — LES DEUX VERROUS DU CHANTIER EN DEUX MOITIÉS
+       (`starTimberBlock`). `blockNoShard` (un éclat qui n'existe plus depuis le
+       469) et `blockNeedStars` (un verrou qui ne gardait rien) sont partis avec
+       leurs raisons. Ils parlent le langage du chantier, jamais « chapitre 3 ». */
+    blockRepair: "🔒 La coque attend sa réparation",
+    blockHullFirst: "🔒 Plus tard : la coque doit d'abord tenir l'eau",
     /* ⚠️ ZIP 478 — LIVRER N'EST PLUS POSER. Tristan dépose le bois au pied de la
        cale ; c'est le joueur qui monte la pièce, au marteau. Les deux phrases sont
        donc deux ÉVÉNEMENTS distincts, à deux moments différents et souvent par deux
@@ -1431,7 +1448,8 @@ const STAR_EN = {
       engineer:       "Ask the town hall for a naval engineer (E).",
       engineerTravel: "Kerguélen has been notified. He'll reach Valley Town shortly.",
       engineerWork:   "Kerguélen is drawing by the pier. He'll hand over his plans soon.",
-      mayor:          "The plans are ready. Ask the town hall for an audience with the mayor.",
+      mayor:          "The shipyard starts with the mayor: ask for an audience (town hall).",
+      mayorBooked:    "Audience booked: go up to the mayor's office on time (town hall).",
       /* ⚠️ ZIP 475 — voir la note française : la commande passe par le menu
          Employés, pas par un lieu. */
       timberOrder:    "Order the pieces from Tristan (Employees menu). He can run all five.",
@@ -1442,6 +1460,13 @@ const STAR_EN = {
       vandalChaseTown: "Someone's fleeing toward the station — look around!",
       vandalChaseFarm: "He made it to the farm. Where did he go?",
       vandalEscaped:   "He gave us the slip… But who is this vandal?",
+      // 2026-09-13 mirror — the prelude before the rain, and the seventh sister's two gestures.
+      yardGrow:  "Hull and rudder are in. Recruit Eduardo, Tristan and some artisans.",
+      yardCalm:  "Hull and rudder are in. Let a few days go by.",
+      warnRead:  "The observatory posted a notice on the Valley Town news board.",
+      warnWait:  "An asteroid shower is due tonight or the next. The valley waits.",
+      evilHaul:   "Cast at the glow in the evil lake and haul her to the shore.",
+      evilRevive: "Carry the seventh star to the farm, set her down, revive her (E).",
     },
     // Chevron fallback while the cauldron hasn't been picked up yet — see the
     // FR block for why this one line is allowed to run past the usual 80-char cap.
@@ -1766,9 +1791,9 @@ const STAR_EN = {
       : state === "available" ? detail
       : detail === "noPlan" ? "Plans required."
       : detail === "noMayor" ? "The mayor's approval is required."
-      : detail === "noShard" ? "Find the matching shard."
-      // AUTORITÉ 2026-09-12 (repasse) mirror — see the FR block for context.
-      : detail === "needStars" ? "A sign from the sky, first."
+      // 2026-09-13 mirror — the two locks of the two-halves shipyard, see starTimberBlock.
+      : detail === "repair" ? "The hull is waiting to be repaired with Kerguélen."
+      : detail === "hullFirst" ? "Later: Kerguélen first wants to see the hull hold the water."
       : "This step is still locked.",
     /* ⚠️ AUDIT 2026-09-12 — LA MÊME RAISON, DITE EN TOAST. Le plan déplié
        explique déjà chaque verrou (`progressDetail`) ; l'invite de la cale en a
@@ -1803,9 +1828,9 @@ const STAR_EN = {
     blockNoPlan: "🔒 You need the plans first",
     blockNoMayor: "🔒 The quay is public: you need the mayor's approval",
     blockRaise: "🔨 Delivered — go raise it on the slipway",
-    blockNoShard: "🔒 This piece isn't available yet",
+    blockRepair: "🔒 The hull is waiting to be repaired",
     // AUTORITÉ 2026-09-12 (repasse) mirror — see the FR block for context.
-    blockNeedStars: "🔒 A sign from the sky comes first",
+    blockHullFirst: "🔒 Later: the hull must hold the water first",
     delivered: (part) => `${part} — the timber is on the slipway. All it needs is a hammer.`,
     raised: (part, who) => `${part} — ${who} just raised it. The boat is growing for real now.`,
     raiseTitle: (part) => `🔨 Raise ${part}`,
@@ -1879,9 +1904,20 @@ const STAR_EN = {
      ne se traduit pas, et le 442 le laissait déjà bilingue pour rien. */
   dev: {
     section: "⭐ Star — The Star Boat",
-    hint: "Start it, push it, replay a scene. ⚠️ None of these gives anything: you skip the playing, you don't earn a thing.",
+    /* ⚠️ 2026-09-13 — le menu suit la nouvelle trame (voir `devYard`, quete.js) : le
+       dire ici évite qu'un bouton qui s'arrête au maire passe pour un bouton cassé. */
+    hint: "Start it, push it, replay a scene. ⚠️ None of these gives anything: you skip the playing, you don't earn a thing. Every button follows the timeline — shipyard (mayor → plans → hull + rudder), then the rain, then the stars. Without the mayor's signature, a button books the appointment and stops there.",
     notStarted: "Not started",
     chapterAt: (k, n, total) => `Chapter ${k} · ${n}/${total} pieces`,
+    // 2026-09-13 — before the rain the quest has no chapter number, but it has a state.
+    phaseYard: (n, total) => `Shipyard, before the rain · ${n}/${total} pieces`,
+    phaseWarn: "The Panic · the rain has been announced",
+    blocked: (why) => ({
+      needMayor: "blocked: the mayor's audience comes first (appointment booked)",
+      hullFirst: "blocked: mast, sail and bell wait for the hull repair with Kerguélen",
+      repair: "blocked: the hull waits for its repair with Kerguélen",
+      allRaised: "nothing left: every piece is already on the slipway",
+    }[why] || "blocked: " + why),
     op: (op) => ({
       reset: "↺ Wipe it",
       start: "▶ Start (the fall)",
@@ -1910,7 +1946,8 @@ const STAR_EN = {
          marteau (c'est le seul moyen de juger le mini-jeu de montage sans huit
          minutes de scie), « timber » pose les cinq pièces. */
       deliver: "🔨 Timber delivered, not yet raised",
-      timber: "🪵 Deliver all the timber",
+      // 2026-09-13 — before the repair, only hull and rudder are allowed (see devStar).
+      timber: "🪵 Raise every piece the shipyard allows now",
       appt: "🎩 An appointment with the Mayor, right now",
       unslam: "🚪 Make him forget the slammed door",
       /* ⚠️ ZIP 479 — les deux raccourcis des nouveaux verbes. Ils sautent la

@@ -59,6 +59,53 @@ mer »* — ce n'est plus le bateau qui est magique, c'est sa boussole.
   dans ce chantier-ci : la vraie décision revient à la quête future qui le résout ; en prendre
   une ici serait une dette qu'il faudrait défaire.
 
+### ⚠️⚠️⚠️ Ce qui est fait — 2026-09-13, la chronologie tranchée (audit de chronologie)
+
+**Quatre décisions de Guillaume, codées et tenues par `verify-jalons` (106/106), qui joue la trame
+entière sous-partie par sous-partie en lisant le bandeau à chaque pas.** Elles remplacent, partout
+où elles le contredisent, ce que dit la section du 2026-09-12 juste en dessous.
+
+**1. Le chantier se lance vraiment en jeu.** La quête était **infinissable depuis le 2026-09-12** :
+l'annonce exigeait le maire, et le rendez-vous du maire comme le sujet « architecte naval »
+exigeaient le cratère — donc la chute, donc l'annonce. Le rendez-vous s'ouvre à tous ; le sujet de
+l'architecte s'ouvre quand le maire a signé. Le bandeau parle dès le prélude (s'il a quelque chose à
+dire et que la ferme est prête), le chevron le suit, et l'avis du tableau est ouvert à l'invité.
+
+**2. La fin est l'état complet de la quête** (`starQuestComplete`) : le navire achevé ET la septième
+réanimée. Le bandeau accompagne la septième jusqu'au bout (`evilHaul`, `evilRevive`), et la
+réanimation retente le don comme le marteau et la réparation.
+
+**3. Les grands chapitres ne bougent pas (trois), les sous-parties s'organisent** :
+
+| grand moment | sous-parties, dans l'ordre | ce qui ouvre la suivante |
+|---|---|---|
+| **Prélude — le chantier** | maire (`mayor` → `mayorBooked`) → plans (`engineer` → `engineerTravel`/`engineerWork`) → **coque et gouvernail** (`C.STAR_SHIP_YARD`) | les deux pièces posées |
+| **Prélude — la panique** | la ferme doit grandir (`yardGrow`/`yardCalm`) → l'avis au tableau (`warnRead`) → la vallée attend (`warnWait`) | la nuit, le tampon passé |
+| **Ch. 1 — le champ** | inchangé | les huit impacts |
+| **Ch. 2 — le cratère** | le météore → la reine → la discrète → la verte | les six sœurs |
+| **Ch. 3 — le chantier reprend** | la fuite / `evilSeek` → Kerguélen affolé, la réparation → **mâture, voile, cloche** → la septième halée, réanimée → la fin | tout |
+
+La coupe est celle d'un chantier naval : on met d'abord à l'eau ce qui flotte et gouverne ; ce qui
+monte vers le ciel attend que la coque ait « tenu l'eau » (`hullFirst`). Elle ferme deux défauts de
+l'audit : **la quête ne peut plus se conclure avant la reine** (cinq coups de marteau pendant que le
+cratère refroidissait suffisaient), et **le vandale trouve toujours une coque à abîmer**. Le verrou
+`needStars` a disparu : il ne gardait rien. La réparation est aussi refusée par l'hôte tant que
+Kerguélen n'est pas affolé (six sœurs, plans rendus).
+
+**4. Le menu dev suit la trame** : trois marches partagées (`devYard`, `devRain`, `devTownFall`).
+Sans signature du maire, tout bouton pose le rendez-vous et s'arrête sans rien écrire d'autre ; le
+météore de Valley Town tombe toujours avant qu'un bouton trouve la reine ; `bois`/`livrer` ne posent
+que ce que le chantier permet ; `all` va jusqu'à la septième réanimée. Liste rangée dans l'ordre du
+jeu ; le libellé d'état dit « Shipyard » ou « The Panic » avant la pluie.
+
+**Vu à l'écran** (un client, faux Supabase) : sur une ferme neuve, pas de bandeau ; « ▶ Start »
+s'arrête au maire et le dit dans le chat ; le bandeau du prélude « Rendez-vous pris » s'affiche avant
+toute chute ; aucune erreur console. **Pas vu** : le guichet du maire dans le hall sans cratère (le
+trajet jusqu'à Léonie n'a pas été fait), et toute la suite du prélude jouée à la main.
+
+**Ce qui n'est toujours PAS fait** : la 2ᵉ négociation du maire et le gate or/temps (plus bas) ; la
+finale propre à la septième (lot F : jetée, constellation) — la scène de fin actuelle se joue.
+
 ### Ce qui est fait — 2026-09-12, l'ouverture du chapitre 5 (réécrit le même jour, seconde passe)
 
 **Le tout premier geste du chapitre 5** est codé et vérifié — pas le reste (2ᵉ négociation
@@ -1837,18 +1884,26 @@ avant d'être considérés finis.
 Structure **reprise exactement** de la section « 🔍 Enquête » (⌘⇧X → `devEnq`), renommée
 **« ⭐ Star »** :
 
+⚠️⚠️ **TABLE RÉÉCRITE LE 2026-09-13** : l'ancienne décrivait « Give a hint », le beffroi, le duo et le
+retournement — quatre choses supprimées au 469. Ordre = celui du menu, donc celui du jeu.
+
 | bouton | ce qu'il fait |
 |---|---|
 | **Reset** | `newStar()` — un objet neuf, jamais un défaire pièce à pièce |
-| ⚠️ **Hand me the plans** (454) | donne le sillon, le cratère et **les plans rendus** — sans quoi juger le plan et le fantôme coûte dix-huit minutes d'attente |
-| ⚠️ **Deliver all the timber** (454) | livre les cinq pièces de bois **et rien d'autre** : les deux moitiés (souvenir / bois) restent distinctes, sinon on ne saurait plus laquelle manque à l'écran |
-| **Start** | joue la chute et ouvre le chapitre 1 |
-| **Finish chapter** | donne exactement ce qui manque au chapitre COURANT |
-| **Skip ahead** | avance d'un chapitre entier, scène comprise |
-| **Give a hint** | rejoue le marquage du lieu courant |
-| **All but the end** | tout jusqu'au pied du beffroi — s'arrête avant le duo |
-| **Play scene…** | rejoue une cinématique isolée (chute · retournement · finale) — **c'est ce bouton qui rend la boucle de qualité tenable** |
-| **+ arrêt de téléport** | `churchTower` (et le banc compare les deux listes) |
+| **Appt / Unslam** | un rendez-vous dû maintenant / lever la porte claquée — l'audience reste à jouer |
+| **Plans** | le chantier jusqu'aux plans rendus, sans étoile ni pluie |
+| **Deliver / Timber** | livre / pose ce que le chantier permet MAINTENANT : coque + gouvernail avant la pluie, mâture/voile/cloche après la réparation |
+| **Warn / Start** | coque et gouvernail posés, puis l'avis seul / l'avis et la chute |
+| **Candy / Dish / Lure** | la pluie, puis la préparation d'un verbe de la ferme — le geste reste à jouer |
+| **Queen / Shy / Green / Vandal** | le champ et le météore, puis la reine à nourrir / la discrète / la verte / Kerguélen affolé |
+| **Evil / Hook / Rescue** | les six sœurs, puis la septième débloquée / vue / halée |
+| **Chapter / Skip** | ce qui manque au chapitre courant / un chapitre entier — le météore tombe avant la reine |
+| **All** | toute la trame, septième réanimée comprise ; l'hôte joue la scène finale |
+| **Play scene…** | rejoue une cinématique isolée (annonce · chute · météore · fin) — **c'est ce bouton qui rend la boucle de qualité tenable** |
+
+⚠️⚠️ **SANS SIGNATURE DU MAIRE, TOUT BOUTON D'ÉTOILE POSE LE RENDEZ-VOUS ET S'ARRÊTE, SANS RIEN ÉCRIRE
+D'AUTRE** (2026-09-13, décision de Guillaume). `verify-jalons` §3 le falsifie bouton par bouton, et §2 bis
+vérifie qu'aucun bouton, maire signé, ne fabrique un état que la partie réelle ne peut pas atteindre.
 
 ⚠️⚠️ **AUCUN NE DONNE RIEN.** Le menu s'ouvre à tout joueur qui connaît le raccourci (398). Le
 chemin développeur appelle **les mêmes résolveurs** et **jette** ce qu'ils rendent, `resolveStarGift`

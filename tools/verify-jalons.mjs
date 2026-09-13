@@ -1,31 +1,43 @@
 /* =============================================================================
-   verify-jalons.mjs — LE BANC D'ATTEIGNABILITÉ (P1 bis, 2026-09-07)
+   verify-jalons.mjs — LE BANC D'ATTEIGNABILITÉ (P1 bis, 2026-09-07 ; refait le
+   2026-09-13 sur la chronologie tranchée par Guillaume)
    -----------------------------------------------------------------------------
    ⚠️⚠️⚠️ POURQUOI CE BANC EXISTE, MOT POUR MOT DEPUIS `QUETE.md` §12.2 (« A moins
    un ») : Guillaume a signalé le 2026-09-05 que le menu développeur de la quête
    de l'étoile a DEUX PISTES D'ÉTAT PARALLÈLES — les ÉTOILES (`e.found`, `e.ch`)
    et le BATEAU/MAIRE (`e.plan`, `e.wood`, `MA.mayorSigned`) — et qu'aucun bouton
    ne les avançait ensemble : un raccourci pouvait poser un bateau fini devant un
-   maire jamais rencontré, **un état que la partie réelle ne peut pas produire**
-   (`Q.starTimberBlock` refuse « noMayor » avant la toute première commande de
-   bois). La parade n'est pas de sauter la scène du maire (la ligne rouge du 444
-   tient) — c'est de poser des jalons COHÉRENTS, et de le PROUVER en rejouant une
-   vraie partie, du premier impact météorique jusqu'au navire achevé.
+   maire jamais rencontré, **un état que la partie réelle ne peut pas produire**.
+   La parade n'est pas de sauter la scène du maire (la ligne rouge du 444 tient) —
+   c'est de poser des jalons COHÉRENTS, et de le PROUVER en rejouant une vraie
+   partie.
 
-   ⚠️⚠️ CE BANC NE RELIT PAS UNE TABLE, IL JOUE LA TRAME ENTIÈRE — même méthode
-   que `verify-maire.mjs` (l'audience) et `verify-quete.mjs` (les fenêtres
-   solo) : appeler le vrai code, jouer la vraie chaîne, mesurer au lieu de
-   relire. La négociation avec le maire est simulée avec les résolveurs RÉELS de
-   `maire.js` (`mayorOpen`/`mayorChoices`/`mayorPlay`), en choisissant partout la
-   réponse idéale — exactement la technique de `verify-maire.mjs`, reprise ici
-   pour ne pas ré-inventer une seconde façon de gagner une audience.
+   ⚠️⚠️⚠️ 2026-09-13 — L'AUDIT DE CHRONOLOGIE A MONTRÉ QUE CE BANC, VERT, TENAIT UNE
+   TRAME QUI N'EXISTAIT PLUS. Il jouait « maire → plans → impacts → cratère → cinq
+   pièces » et déclarait les cinq pièces commandables avant la moindre étoile :
+   exactement l'état qui laissait finir la quête avant la reine. Il ne pouvait pas
+   non plus voir que la quête ne DÉMARRAIT plus en jeu réel — il appelle les
+   résolveurs, jamais les écrans. Il joue maintenant la trame tranchée avec
+   Guillaume, sous-partie par sous-partie :
+     prélude   — le chantier : maire → plans → coque et gouvernail posés ;
+                 la panique : l'avis au tableau, puis l'attente de la pluie ;
+     chap. 1   — les huit impacts de la ferme ;
+     chap. 2   — le météore de Valley Town, la reine, la discrète, la verte ;
+     chap. 3   — Kerguélen affolé, la réparation, la mâture / la voile / la cloche,
+                 la septième sœur vue, halée, réanimée — PUIS la fin.
+   Et à chaque sous-partie il lit AUSSI la phrase du bandeau (`starGoalKey`) : un
+   jalon atteignable dont le bandeau ne dit rien est un jalon qu'on ne trouve pas.
 
-   ⚠️ ET IL SE FALSIFIE : §3 rejoue `Q.devStar("timber"/"deliver"/"all")` AVANT
-   la signature du maire et exige qu'AUCUNE pièce de bois ne devienne "ready" ou
-   "done" — c'est exactement l'état que Guillaume a trouvé possible, et c'est
-   exactement ce que ce banc doit voir devenir IMPOSSIBLE. Un banc qui n'a jamais
-   pu échouer ne vaut rien (§10 de `CLAUDE.md`) : ce contrôle est celui qui
-   aurait rougi sur le code d'avant cette passe.
+   ⚠️⚠️ CE BANC NE RELIT PAS UNE TABLE, IL JOUE LA TRAME ENTIÈRE — même méthode que
+   `verify-maire.mjs` : la négociation est simulée avec les résolveurs RÉELS de
+   `maire.js`, en choisissant partout la réponse idéale.
+
+   ⚠️ ET IL SE FALSIFIE : §3 clique CHAQUE bouton du menu dev avant la signature du
+   maire et exige que RIEN d'autre que le rendez-vous ne bouge ; §2 bis clique
+   chaque bouton après la signature et exige qu'aucun ne produise un état que la
+   partie réelle ne peut pas atteindre (pluie sans chantier, reine sans météore,
+   mâture avant la réparation, septième suivie sans avoir été vue). Sur le code
+   d'avant le 2026-09-13, §3 rougissait sur 17 boutons et §2 bis sur 4.
 
    Usage : node tools/verify-jalons.mjs
    ========================================================================== */
@@ -56,12 +68,10 @@ const MA = await import(pathToFileURL(path.join(tmp, "maire.js")).href);
 let fails = 0, total = 0;
 const ok = (n, c, x) => { total++; console.log(`${c ? "  OK  " : "ÉCHEC "} ${n}${x ? "  —  " + x : ""}`); if (!c) fails++; };
 const section = (t) => console.log(`\n=== ${t} ===\n`);
+const clone = (o) => JSON.parse(JSON.stringify(o));
 
 /* ── JOUER UNE AUDIENCE GAGNANTE, AVEC LES VRAIS RÉSOLVEURS DE `maire.js` ────
-   Reprise de `verify-maire.mjs` (`play`/`pickIdeal`) : le joueur idéal répond
-   toujours la meilleure réplique, et pose les plans dès que la table le permet.
-   On ne réinvente pas une seconde façon de gagner une audience — celle-ci EST
-   celle que `verify-maire.mjs` vérifie déjà, à fond, séparément. */
+   Reprise de `verify-maire.mjs` (`play`/`pickIdeal`). */
 function playMayor(ctx, pick, dt = 2600) {
   const s = MA.mayorOpen(ctx);
   let guard = 0;
@@ -82,208 +92,240 @@ const pickIdeal = (choices, s) => {
   if (s.node === "m5" && choices.some(c => c.kind === "plans")) return "__plans";
   return pickGrade("ideal")(choices);
 };
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   §1 — LA TRAME RÉELLE, DU PREMIER IMPACT AU NAVIRE ACHEVÉ.
-   Chaque étape n'avance qu'AVEC les résolveurs que le jeu appelle vraiment :
-   `resolveStarFound`, `resolveStarPlanAsk`/`commitStarPlan`/`resolveStarPlanTick`,
-   `resolveMayorAsk`/`resolveMayor`, `resolveStarTimberOrder`/`commitStarTimber`/
-   `resolveStarTimberTick`/`resolveStarTimberRaise`. Si l'un de ces noms change de
-   forme, ce banc casse à la compilation — jamais en silence.
-   ═══════════════════════════════════════════════════════════════════════════ */
-/* ⚠️⚠️⚠️ AUTORITÉ 2026-09-12 — LA TRAME DE CE BANC EST RÉORDONNÉE, PAS SES
-   RÉSOLVEURS. Avant, le maire ne pouvait être rencontré qu'APRÈS le cratère
-   (l'étoile envoyait chercher un ingénieur pour l'épave). Le chantier naval se
-   motive maintenant indépendamment des étoiles (`QUETE.md`, tête de fichier) :
-   le maire est rencontré et l'ingénieur commandé AVANT le premier impact,
-   jamais après. Les jalons du chantier passent donc en tête ; les impacts de la
-   ferme et le cratère suivent, dans n'importe quel ordre relatif — le protège
-   toujours §3 plus bas (rien ne doit avancer SANS le maire). */
-section("§1 la trame réelle, jalon par jalon");
-let now = 1_700_000_000_000; // une vraie date (§10 : ne jamais tester des dates avec `at: 1000`)
-const e = Q.newStar();
-
-ok("jalon 0 — quête vierge, chapitre « field », rien du chantier naval",
-   Q.starChapterKey(e) === "field" && !MA.mayorSigned(e) && !Q.starPlanAsked(e));
-
-// ── Jalon 1 : l'audience — un vrai rendez-vous, une vraie négociation gagnée,
-//    AVANT tout impact (le chantier se motive indépendamment des étoiles).
-{
-  const askMayor = MA.resolveMayorAsk(e, "banc", "🤖 Testeur", now, () => 0.5, false);
-  ok("jalon 1a — le rendez-vous est pris", askMayor === "mayorBooked", String(askMayor));
-  const due = MA.mayorAppt(e).due;
-  ok("…et il tient une échéance dans le futur (pas signé sur-le-champ)", due > now);
-  now = due;
-  ok("…arrivé pile à l'heure, le rendez-vous est bien le mien",
-     MA.mayorApptReady(e, "banc", now));
-
+/* Une signature gagnée pour de bon : rendez-vous, entretien idéal, arbitrage. */
+function signForReal(e, at) {
+  MA.migrateMayor(e);
   const ctx = {
     mayorKey: C.TOWN_CANDIDATES[0].key, day: 12, nextElection: 30,
     audience: false, plans: Q.starPlanReady(e), trust: MA.mayorTrust(e),
-    mood: MA.mayorAppt(e).mood || "mid", burnt: MA.mayorBurnt(e),
+    mood: "mid", burnt: MA.mayorBurnt(e),
   };
   const s = playMayor(ctx, pickIdeal);
-  ok("jalon 1b — l'entretien idéal se conclut par une signature (mains vides, sans plans)",
-     s.over === "signed", `over=${s.over}`);
-  const verdict = MA.resolveMayor(e, "banc", "🤖 Testeur", s.log, ctx, now);
-  ok("jalon 1c — l'hôte rejoue la transcription et signe pour de bon",
-     verdict === "mayorSigned" && MA.mayorSigned(e), String(verdict));
+  return MA.resolveMayor(e, "banc", "🤖 Testeur", s.log, ctx, at);
 }
 
-// ── Jalon 2 : les plans sont demandés (résolveur réel, pas une écriture
-//    directe) — possible maintenant que le maire a validé le projet.
+/* ═══════════════════════════════════════════════════════════════════════════
+   §1 — LA TRAME RÉELLE, SOUS-PARTIE PAR SOUS-PARTIE.
+   Chaque étape n'avance qu'AVEC les résolveurs que le jeu appelle vraiment. Si
+   l'un de ces noms change de forme, ce banc casse — jamais en silence.
+   ═══════════════════════════════════════════════════════════════════════════ */
+section("§1 la trame réelle — prélude, trois chapitres, la fin");
+let now = 1_700_000_000_000; // une vraie date (§10 : ne jamais tester des dates avec `at: 1000`)
+const GATE = { skills: C.STAR_GATE_SKILLS, artisans: C.STAR_GATE_ARTISANS };
+const DAY = Q.STAR_FALL_MIN_DAY + 1;
+const LATER = 30 * 24 * 3600 * 1000;   // assez loin pour que la fuite du vandale soit finie
+const READY = { yardOpen: true, gateOk: true };
+const e = Q.newStar();
+
+ok("jalon 0 — quête vierge : chapitre « field », rien du chantier",
+   Q.starChapterKey(e) === "field" && !MA.mayorSigned(e) && !Q.starPlanAsked(e));
+ok("⚠️⚠️⚠️ …l'avis de l'observatoire refuse tant que le maire n'a pas signé",
+   Q.resolveStarWarn(clone(e), "banc", DAY, now, GATE).needMayor === true);
+ok("…le bandeau se tait pour une ferme pas prête, et parle pour une ferme prête",
+   Q.starGoalKey(e, { yardOpen: false }) === null && Q.starGoalKey(e, READY) === "mayor",
+   `${Q.starGoalKey(e, { yardOpen: false })} / ${Q.starGoalKey(e, READY)}`);
+ok("⚠️⚠️⚠️ …et le sujet « architecte naval » de la mairie ne propose rien avant le maire",
+   !C.HALL_TOPICS.find(t => t.key === "engineer").when({ shared: { star: e } }));
+
+// ── Prélude, le chantier 1/3 : le maire.
+{
+  const askMayor = MA.resolveMayorAsk(e, "banc", "🤖 Testeur", now, () => 0.5, false);
+  ok("prélude 1a — le rendez-vous est pris", askMayor === "mayorBooked", String(askMayor));
+  ok("…et le bandeau ne redemande pas un rendez-vous déjà pris",
+     Q.starGoalKey(e, { yardOpen: false, now }) === "mayorBooked", Q.starGoalKey(e, { yardOpen: false, now }));
+  now = MA.mayorAppt(e).due;
+  const verdict = signForReal(e, now);
+  ok("prélude 1b — l'entretien idéal se conclut par une signature (mains vides, sans plans)",
+     verdict === "mayorSigned" && MA.mayorSigned(e), String(verdict));
+  ok("⚠️⚠️ …et le sujet « architecte naval » s'ouvre à la mairie",
+     !!C.HALL_TOPICS.find(t => t.key === "engineer").when({ shared: { star: e } }));
+  ok("…et le bandeau envoie chercher l'ingénieur", Q.starGoalKey(e, READY) === "engineer");
+}
+
+// ── Prélude, le chantier 2/3 : les plans.
 {
   const ask = Q.resolveStarPlanAsk(e, "banc", now);
-  ok("jalon 2a — l'ingénieur accepte la commande de plans (le maire a signé)", ask.ok === true);
+  ok("prélude 2a — l'ingénieur accepte la commande (le maire a signé)", ask.ok === true);
   Q.commitStarPlan(e, "banc", now);
-  ok("…« plans demandés » vrai, « prêts » toujours faux (le train n'est pas arrivé)",
-     Q.starPlanAsked(e) && !Q.starPlanReady(e));
+  ok("…« en route », puis « au travail » : deux phrases", Q.starGoalKey(e, READY) === "engineerTravel"
+     && Q.starGoalKey(e, { ...READY, engineerHere: true }) === "engineerWork");
   for (const k of Q.STAR_SHIP_KEYS)
-    ok(`…« ${k} » attend toujours les plans (maire signé, mais pas encore de plans)`,
-       Q.starTimberBlock(e, k) === "noPlan", Q.starTimberBlock(e, k));
+    ok(`…« ${k} » attend les plans`, Q.starTimberBlock(e, k) === "noPlan", Q.starTimberBlock(e, k));
+  now += C.STAR_ENG_TRAVEL_MS + C.STAR_ENG_WORK_MS + 1000;
+  ok("prélude 2b — les plans sont rendus", Q.resolveStarPlanTick(e, now).ok === true && Q.starPlanReady(e));
 }
 
-// ── Jalon 3 : le temps passe (voyage + dessin), les plans arrivent.
-now += C.STAR_ENG_TRAVEL_MS + C.STAR_ENG_WORK_MS + 1000;
+// ── Prélude, le chantier 3/3 : ce qui touche l'eau.
 {
-  const tick = Q.resolveStarPlanTick(e, now);
-  ok("jalon 3 — les plans sont rendus", tick.ok === true && Q.starPlanReady(e));
+  for (const k of Q.STAR_SHIP_KEYS)
+    ok(Q.starYardPiece(k)
+         ? `prélude 3a — « ${k} » est commandable avant la pluie (il touche l'eau)`
+         : `⚠️⚠️⚠️ prélude 3a — « ${k} » attend la coque réparée (« hullFirst »)`,
+       Q.starTimberBlock(e, k) === (Q.starYardPiece(k) ? null : "hullFirst"), Q.starTimberBlock(e, k) || "commandable");
+  ok("…et le bandeau dit de commander", Q.starGoalKey(e, READY) === "timberOrder");
+  ok("⚠️ …l'avis refuse tant que la coque et le gouvernail ne sont pas posés",
+     Q.resolveStarWarn(clone(e), "banc", DAY, now, GATE).needYard === true);
+  for (const k of Q.STAR_YARD_KEYS) {
+    const order = Q.resolveStarTimberOrder(e, k, "banc", now);
+    ok(`…« ${k} » : commande acceptée`, order.ok === true, order.why || "");
+    Q.commitStarTimber(e, k, "banc", now, order.ms);
+  }
+  ok("…« Tristan scie »", Q.starGoalKey(e, READY) === "timberWait");
+  now += 10 * 60 * 1000;
+  Q.resolveStarTimberTick(e, now);
+  ok("…« une pièce t'attend sur la cale »", Q.starGoalKey(e, READY) === "timberRaise");
+  for (const k of Q.STAR_YARD_KEYS)
+    ok(`…« ${k} » : montée au marteau`, Q.resolveStarTimberRaise(e, k, "banc", now).ok === true);
+  ok("prélude 3b — coque et gouvernail posés, et rien d'autre",
+     Q.starYardBuilt(e) && Q.starShipBuilt(e) === Q.STAR_YARD_KEYS.length, `${Q.starShipBuilt(e)}/${Q.STAR_SHIP_TOTAL}`);
+  const legacy = clone(e);
+  legacy.wood.mast = { at: now, readyAt: now, done: false, ready: true, by: "vieille sauvegarde" };
+  ok("⚠️ …une mâture livrée par une sauvegarde d'avant ne se monte pas avant la réparation",
+     Q.starRaiseBlock(legacy, "mast") === "hullFirst");
 }
 
-/* ⚠️⚠️⚠️ LE CHANTIER S'OUVRE AVANT LA MOINDRE ÉTOILE — C'EST LE POINT ENTIER DU
-   RECENTRAGE, ET C'EST MAINTENANT MESURABLE. Maire signé (jalon 1) et plans
-   rendus (jalon 3) suffisent : les quatre pièces sans lieu (`rudder`/`mast`/
-   `sail`/`bell`) ET la coque (site conditionnel, voir `shipSiteOk` dans
-   `quete.js`) sont commandables AVANT tout impact — aucun `e.found` n'existe
-   encore à cet instant. */
-for (const k of Q.STAR_SHIP_KEYS)
-  ok(`jalon 3 bis — « ${k} » est commandable AVANT tout impact (chantier indépendant des étoiles)`,
-     Q.starTimberBlock(e, k) === null, Q.starTimberBlock(e, k) || "débloqué");
+// ── Prélude, la panique : l'avis, puis l'attente.
+{
+  ok("panique 1 — la ferme trop jeune : « laisse passer quelques jours »",
+     Q.starGoalKey(e, { yardOpen: false, gateOk: true, warnOffer: Q.starWarnOffer(e, 1, GATE) }) === "yardCalm");
+  ok("…la ferme sans ses habitants : « recrute »",
+     Q.starGoalKey(e, { yardOpen: false, gateOk: false, warnOffer: Q.starWarnOffer(e, DAY, {}) }) === "yardGrow");
+  ok("…la ferme prête : « un avis au tableau des nouvelles »",
+     Q.starWarnOffer(e, DAY, GATE) && Q.starGoalKey(e, { ...READY, warnOffer: true }) === "warnRead"
+     && Q.starTargetSite(e, { ...READY, warnOffer: true }) === "newsBoard");
+  ok("panique 2 — l'avis se lit", Q.resolveStarWarn(e, "banc", DAY, now, GATE).ok === true);
+  ok("…« la vallée attend »", Q.starGoalKey(e, READY) === "warnWait");
+}
 
-// ── Jalon 4 : les huit impacts de la ferme sont fouillés — le chantier tourne déjà.
+// ── Chapitre 1 : la pluie, les huit impacts. (La nuit est simulée : l'hôte pose
+//    la chute à la nuit tombée ; `resolveStarFall` et son tampon sont tenus par
+//    `verify-quete.mjs`.)
+e.fall = now;
 for (const site of Q.STAR_FARM_IMPACTS) Q.resolveStarFound(e, site.id, "banc", now);
-ok("jalon 4 — chapitre 1 clos, chapitre « crater » ouvert",
-   Q.starChapterKey(e) === "crater", `e.ch=${e.ch}`);
+ok("chapitre 1 clos — chapitre « crater » ouvert", Q.starChapterKey(e) === "crater", `e.ch=${e.ch}`);
+ok("⚠️⚠️⚠️ LE DÉFAUT DE L'AUDIT : rien ne peut conclure la quête avant la reine",
+   !Q.starShipComplete(e) && Q.resolveStarGift(clone(e), ["banc"], now).ok === false
+   && Q.STAR_SHIP_KEYS.every(k => Q.starYardPiece(k) || Q.starTimberBlock(e, k) === "hullFirst"));
 
-// ── Jalon 5 : le cratère (reine, discrète, verte) est refermé.
-Q.resolveStarFound(e, "crater", "banc", now);
-Q.resolveStarFound(e, "townShy", "banc", now);
-Q.resolveStarFound(e, "townGreen", "banc", now);
-ok("jalon 5 — chapitre 2 clos, chapitre « build » ouvert (final)",
-   Q.starChapterKey(e) === "build" && Q.STAR_CHAPTERS[e.ch].final, `e.ch=${e.ch}`);
-/* ⚠️⚠️⚠️ AUTORITÉ 2026-09-12 (repasse) — DANS CETTE TRAME PRÉCISE, LA COQUE
-   RÉGRESSE MAINTENANT POUR DE VRAI. La première version de cette passe disait
-   l'inverse : « farmMaterial fait partie des huit impacts fouillés au jalon 4,
-   donc le renfort est déjà en poche ». C'était vrai — et c'est justement ce
-   qui rendait `farmMaterial` MORT comme garde-fou (vérifié par un test direct,
-   hors banc : au moment où `crater` peut devenir vrai, `farmMaterial` l'est
-   TOUJOURS déjà — `field` en est un préalable structurel). Le garde-fou est
-   donc devenu `e.vandal` (posé par `resolveVandalReveal`, désormais appelé
-   APRÈS le mini-jeu du marteau, plus jamais au premier contact) — garanti FAUX
-   à cet instant précis, donc une vraie régression, visible dans CETTE trame et
-   pas seulement dans le cas limite que `render-navire.mjs` isolait. */
-ok("…« hull » régresse après le cratère : la réparation n'a pas encore été jouée",
-   Q.starTimberBlock(e, "hull") === "noShard");
-for (const k of Q.STAR_SHIP_KEYS.filter(k => k !== "hull"))
-  ok(`…« ${k} » reste commandable après le cratère (aucun lieu ne le concerne)`,
-     Q.starTimberBlock(e, k) === null, Q.starTimberBlock(e, k));
-/* Le marteau, avec Kerguélen — la coque redevient commandable. */
-Q.resolveVandalReveal(e, now);
-ok("…et la réparation jouée, « hull » redevient commandable",
-   Q.starTimberBlock(e, "hull") === null, Q.starTimberBlock(e, "hull"));
-
-// ── Jalon 6 : le chantier — cinq commandes, cinq livraisons, cinq montages.
-for (const k of Q.STAR_SHIP_KEYS) {
-  const order = Q.resolveStarTimberOrder(e, k, "banc", now);
-  ok(`…« ${k} » : la commande est acceptée`, order.ok === true, order.why || "");
-  Q.commitStarTimber(e, k, "banc", now, order.ms);
-}
-now += 10 * 60 * 1000; // largement au-delà de la plus longue pièce (8 min, la coque)
+// ── Chapitre 2 : le météore, la reine, les deux sœurs.
 {
-  const tick = Q.resolveStarTimberTick(e, now);
-  ok("…les cinq pièces sont livrées (prêtes à monter)", tick.keys.length === Q.STAR_SHIP_KEYS.length,
-     `${tick.keys.length}/${Q.STAR_SHIP_KEYS.length}`);
+  ok("chapitre 2a — le météore de Valley Town tombe", Q.resolveStarTownFall(e, now).ok === true);
+  Q.resolveStarFound(e, "crater", "banc", now);
+  ok("chapitre 2b — la reine sortie, la coque se déclare fragile", !Q.starShipHas(e, "hull"));
+  ok("…et la coque « attend sa réparation » plutôt qu'un éclat qui n'existe plus",
+     (() => { const x = clone(e); delete x.wood.hull; return Q.starTimberBlock(x, "hull") === "repair"; })());
+  ok("⚠️⚠️ …la réparation est REFUSÉE tant que deux sœurs manquent (l'hôte tient la même porte que l'invite)",
+     Q.resolveVandalReveal(clone(e), now).ok === false);
+  Q.resolveStarFound(e, "townShy", "banc", now);
+  Q.resolveStarFound(e, "townGreen", "banc", now);
+  ok("chapitre 2 clos — chapitre « build » ouvert (final)",
+     Q.starChapterKey(e) === "build" && Q.STAR_CHAPTERS[e.ch].final, `e.ch=${e.ch}`);
+  ok("…Kerguélen s'affole au quai", Q.starEngineerUrgent(e, now));
 }
-for (const k of Q.STAR_SHIP_KEYS) {
-  const raise = Q.resolveStarTimberRaise(e, k, "banc", now);
-  ok(`…« ${k} » : montée au marteau`, raise.ok === true);
+
+// ── Chapitre 3 : la réparation, la seconde moitié du navire, la septième.
+{
+  ok("chapitre 3a — la septième passe devant (une lumière s'éteint)",
+     Q.starGoalKey(e, { ...READY, now }) === "evilSeek");
+  ok("…la réparation jouée avec Kerguélen", Q.resolveVandalReveal(e, now).ok === true && Q.starShipHas(e, "hull"));
+  for (const k of Q.STAR_SHIP_KEYS.filter(k => !Q.starYardPiece(k)))
+    ok(`chapitre 3b — « ${k} » est commandable une fois la coque réparée`, Q.starTimberBlock(e, k) === null, Q.starTimberBlock(e, k) || "commandable");
+  for (const k of Q.STAR_SHIP_KEYS.filter(k => !Q.starYardPiece(k))) {
+    const order = Q.resolveStarTimberOrder(e, k, "banc", now);
+    Q.commitStarTimber(e, k, "banc", now, order.ms);
+  }
+  now += 10 * 60 * 1000;
+  Q.resolveStarTimberTick(e, now);
+  for (const k of Q.STAR_SHIP_KEYS.filter(k => !Q.starYardPiece(k)))
+    ok(`…« ${k} » : montée au marteau`, Q.resolveStarTimberRaise(e, k, "banc", now).ok === true);
+  ok("chapitre 3c — LE NAVIRE EST ACHEVÉ", Q.starShipComplete(e));
+  ok("⚠️⚠️⚠️ …mais la quête n'est pas finie : la septième manque",
+     Q.resolveStarGift(clone(e), ["banc"], now).sisterMissing === true && !Q.starQuestComplete(e));
+  Q.resolveStarEvilFound(e, now);
+  ok("chapitre 3d — vue : « hale-la jusqu'à la rive »", Q.starGoalKey(e, { ...READY, now: now + LATER }) === "evilHaul"
+     && Q.starTargetSite(e, { ...READY, now: now + LATER }) === "evilLake");
+  Q.resolveStarEvilRescue(e, now);
+  ok("…halée : « porte-la et réanime-la »", Q.starGoalKey(e, { ...READY, now: now + LATER }) === "evilRevive");
+  Q.resolveStarFound(e, Q.STAR_EVIL_ID, "banc", now);
+  ok("chapitre 3e — réanimée : la quête est complète", Q.starQuestComplete(e));
+  const g = Q.resolveStarGift(e, ["banc"], now);
+  ok("LA FIN — le don se fait, la scène finale se joue", g.ok === true && g.scene === "end" && Q.starDone(e));
 }
-ok("jalon 7 — LE NAVIRE EST ACHEVÉ", Q.starShipComplete(e));
 
 /* ═══════════════════════════════════════════════════════════════════════════
    §2 — LE MENU DÉVELOPPEUR REJOUE LA MÊME TRAME, EN RACCOURCI, ET S'ARRÊTE AUX
-   MÊMES ENDROITS. C'est la moitié que `QUETE.md` réclame : pas seulement « la
-   partie réelle peut y arriver », mais « le menu dev pose exactement ce que la
-   partie réelle pourrait avoir posé — jamais plus ».
+   MÊMES ENDROITS. Pas seulement « la partie réelle peut y arriver », mais « le
+   menu dev pose exactement ce que la partie réelle pourrait avoir posé ».
    ═══════════════════════════════════════════════════════════════════════════ */
-section("§2 le menu dev, jalon par jalon — même trame, en raccourci");
+section("§2 le menu dev, sous-partie par sous-partie");
 {
   const e2 = Q.newStar();
-  const t0 = 1_800_000_000_000;
-  const r1 = Q.devStar(e2, "plans", t0, "hote");
-  /* ⚠️ « plans » ne ferme QUE le champ + la reine (`resolveStarFound(e,"crater",…)`),
-     jamais la discrète ni la verte : `resolveStarPlanAsk` ne réclame que la reine
-     (`starHas(e,"crater")`), donc un vrai joueur PEUT demander les plans avant
-     d'avoir fini le chapitre 2 — le chapitre reste donc « crater », pas « build ».
-     C'est un état atteignable, pas un bug : le contrôle vérifie qu'il reste
-     cohérent (plans prêts, bateau/maire encore vierges), pas qu'il ferme le
-     chapitre à sa place. */
-  ok("« plans » pose le champ + la reine, laisse le chapitre ouvert, jamais le bateau/maire",
-     r1.ok && Q.starChapterKey(e2) === "crater" && Q.starPlanReady(e2)
-     && !MA.mayorSigned(e2) && Object.keys(e2.wood).length === 0);
-
-  const r2 = Q.devStar(e2, "all", t0, "hote");
-  ok("« all » AVANT le maire : ok, mais `blocked:\"needMayor\"` — rien sur la cale",
-     r2.ok === true && r2.blocked === "needMayor" && Object.keys(e2.wood).length === 0);
-  ok("…et il a quand même posé le rendez-vous, comme le bouton « appt » l'aurait fait",
-     !!MA.mayorAppt(e2));
-  ok("…jamais de bateau achevé sans signature : c'est le jalon qui a manqué le 2026-09-05",
-     !Q.starShipComplete(e2));
-
-  const r3 = Q.devStar(e2, "timber", t0, "hote");
-  ok("« timber » AVANT le maire refuse aussi, pour la même raison",
-     r3.ok === true && r3.blocked === "needMayor" && Object.keys(e2.wood).length === 0);
-  const r4 = Q.devStar(e2, "deliver", t0, "hote");
-  ok("« deliver » AVANT le maire refuse aussi, pour la même raison",
-     r4.ok === true && r4.blocked === "needMayor" && Object.keys(e2.wood).length === 0);
-
-  // On signe pour de bon, avec la même audience idéale qu'au §1.
-  MA.migrateMayor(e2);
-  const ctx2 = {
-    mayorKey: C.TOWN_CANDIDATES[0].key, day: 12, nextElection: 30,
-    audience: false, plans: true, trust: 0, mood: "mid", burnt: [],
-  };
-  const s2 = playMayor(ctx2, pickIdeal);
-  MA.resolveMayor(e2, "hote", "🤖 Testeur", s2.log, ctx2, t0 + 1000);
-  ok("le maire est signé (même méthode qu'au §1)", MA.mayorSigned(e2));
-
-  const r5 = Q.devStar(e2, "all", t0 + 2000, "hote");
-  ok("« all » APRÈS la signature termine le navire, sans blocage",
-     r5.ok === true && !r5.blocked && Q.starShipComplete(e2));
+  let t = 1_800_000_000_000;
+  const r1 = Q.devStar(e2, "plans", t, "hote");
+  ok("« plans » sans le maire : bloqué, rendez-vous posé, et rien d'autre",
+     r1.blocked === "needMayor" && !!MA.mayorAppt(e2) && !Q.starPlanAsked(e2) && !Q.starWarned(e2) && !Q.starFallen(e2));
+  ok("…signé pour de bon (même méthode qu'au §1)", signForReal(e2, t += 1000) === "mayorSigned");
+  Q.devStar(e2, "plans", t += 1000, "hote");
+  ok("« plans » après la signature : plans rendus, AUCUNE étoile ni pluie",
+     Q.starPlanReady(e2) && !Q.starFallen(e2) && Object.keys(e2.found).length === 0);
+  const r3 = Q.devStar(e2, "timber", t += 1000, "hote");
+  ok("« bois » avant la pluie : la coque et le gouvernail, pas la mâture",
+     !r3.blocked && Q.starYardBuilt(e2) && Q.starShipBuilt(e2) === Q.STAR_YARD_KEYS.length && !Q.starFallen(e2));
+  const before = JSON.stringify(e2.wood);
+  const r4 = Q.devStar(e2, "timber", t += 1000, "hote");
+  ok("…re-cliqué : « hullFirst », rien ne bouge", r4.blocked === "hullFirst" && JSON.stringify(e2.wood) === before, String(r4.blocked));
+  const r5 = Q.devStar(e2, "start", t += 1000, "hote");
+  ok("« start » : l'avis puis la chute, avec sa scène", Q.starWarned(e2) && Q.starFallen(e2) && r5.scene === "fall");
+  Q.devStar(e2, "shy", t += 1000, "hote");
+  ok("⚠️⚠️ « la discrète » : le météore est tombé AVANT que la reine soit trouvée",
+     Q.starTownFallen(e2) && Q.starHas(e2, "crater") && e2.townFall < e2.found.crater.at, `${e2.townFall} < ${e2.found.crater.at}`);
+  Q.devStar(e2, "all", t += 1000, "hote");
+  ok("« tout sauf la fin » : la quête est complète, la scène reste à jouer",
+     Q.starQuestComplete(e2) && !Q.starDone(e2) && Q.starEvilFound(e2) && Q.starEvilRescued(e2));
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   §3 — LA FALSIFICATION. On isole le cas exact que Guillaume a trouvé et on
-   exige qu'il soit devenu IMPOSSIBLE : « deliver » AVANT le maire ne doit
-   JAMAIS écrire une seule ligne dans `e.wood`, quel que soit l'ordre des
-   boutons cliqués juste avant. Un banc qui n'a jamais pu échouer ne vaut rien
-   (§10 de `CLAUDE.md`) — celui-ci aurait rougi sur le code d'avant cette passe :
-   `deliver` y écrivait `e.wood[k] = { ready: true, … }` pour les cinq clés,
-   sans un seul regard vers `MA.mayorSigned`. */
-section("§3 falsification — l'état que Guillaume a trouvé doit être IMPOSSIBLE");
+   §2 bis — CHAQUE BOUTON, DEPUIS UN MAIRE SIGNÉ, NE PRODUIT QUE DES ÉTATS QUE LA
+   PARTIE RÉELLE PEUT ATTEINDRE.
+   ═══════════════════════════════════════════════════════════════════════════ */
+section("§2 bis — chaque bouton, maire signé : aucun état impossible");
+for (const op of Q.STAR_DEV_OPS) {
+  const s = Q.newStar();
+  const t = 1_900_000_000_000;
+  signForReal(s, t - 5000);
+  const r = Q.devStar(s, op, t, "hote");
+  const x = r.star || s;
+  const bad = [];
+  if (Q.starWarned(x) && !Q.starYardBuilt(x)) bad.push("pluie annoncée sans coque ni gouvernail");
+  if (Q.starFallen(x) && !Q.starPlanReady(x)) bad.push("chute sans plans");
+  if (Q.starHas(x, "crater") && !Q.starTownFallen(x)) bad.push("reine sans météore");
+  if (Q.STAR_SHIP_KEYS.some(k => !Q.starYardPiece(k) && (Q.starTimberDone(x, k) || Q.starTimberReady(x, k))) && !Q.starHullRepaired(x))
+    bad.push("mâture/voile/cloche avant la réparation");
+  if (Q.starHas(x, Q.STAR_EVIL_ID) && !Q.starEvilRescued(x)) bad.push("septième suivie sans avoir été halée");
+  if (x.vandal && !Q.STAR_CHAPTERS[Math.min(x.ch, Q.STAR_CH_DONE - 1)].final) bad.push("réparation avant les six sœurs");
+  ok(`« ${op} » ne fabrique aucun état impossible`, bad.length === 0, bad.join(" · ") || (r.blocked ? "arrêté : " + r.blocked : "ok"));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   §3 — LA FALSIFICATION. Avant la signature du maire, AUCUN bouton (hors remise à
+   zéro et boutons de l'audience) ne doit écrire autre chose que le rendez-vous.
+   Sur le code d'avant le 2026-09-13, dix-sept rougissaient : ils faisaient tomber
+   la pluie, trouvaient des étoiles ou rendaient des plans avant de s'arrêter.
+   ═══════════════════════════════════════════════════════════════════════════ */
+section("§3 falsification — sans le maire, un bouton ne pose que le rendez-vous");
 {
-  const e3 = Q.newStar();
-  Q.devStar(e3, "plans", now, "hote");
-  ok("point de départ : plans prêts, maire jamais rencontré", Q.starPlanReady(e3) && !MA.mayorSigned(e3));
-  for (const op of ["deliver", "timber", "all"]) {
-    const before = JSON.stringify(e3.wood);
-    const r = Q.devStar(e3, op, now, "hote");
-    const after = JSON.stringify(e3.wood);
-    ok(`« ${op} » sans le maire : \`e.wood\` INCHANGÉ (${before === "{}" ? "vide" : before} → ${after})`,
-       before === after && r.blocked === "needMayor");
+  const AUDIENCE = ["reset", "appt", "unslam"];
+  for (const op of Q.STAR_DEV_OPS.filter(o => !AUDIENCE.includes(o))) {
+    const s = Q.newStar();
+    const t = 2_000_000_000_000;
+    const strip = (o) => { const c = clone(o); delete c.mayor; return JSON.stringify(c); };
+    const before = strip(s);
+    const r = Q.devStar(s, op, t, "hote");
+    const after = strip(r.star || s);
+    ok(`« ${op} » sans le maire : \`blocked:"needMayor"\`, rendez-vous posé, rien d'autre`,
+       r.blocked === "needMayor" && before === after && !!MA.mayorAppt(r.star || s),
+       before === after ? String(r.blocked) : "état modifié");
   }
-  ok("…aucune pièce n'est « ready », aucune n'est « done » — c'est le seul verdict qui compte",
-     Q.STAR_SHIP_KEYS.every(k => !Q.starTimberReady(e3, k) && !Q.starTimberDone(e3, k)));
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

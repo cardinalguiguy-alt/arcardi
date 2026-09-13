@@ -212,8 +212,15 @@ console.log(`  morceaux        : ${C.STAR_SHIP_ORDER.join(", ")}\n`);
     const e0 = Q.newStar();
     e0.wood.hull = { done: true };
     const preStorm = Q.starShipHas(e0, "hull");
+    /* 2026-09-13 — la réparation exige Kerguélen affolé (`starEngineerUrgent` : la
+       reine, les six sœurs, les plans rendus) : le banc pose ces faits plutôt qu'un
+       raccourci, sinon il mesurerait une réparation que le jeu refuse désormais. */
+    e0.plan = { at: 1, by: "banc", done: 1 };
+    for (const s of Q.STAR_FARM_IMPACTS) Q.resolveStarFound(e0, s.id, "banc", Date.now());
     Q.resolveStarFound(e0, "crater", "banc", Date.now());
     const postStormBroken = Q.starShipHas(e0, "hull");
+    Q.resolveStarFound(e0, "townShy", "banc", Date.now());
+    Q.resolveStarFound(e0, "townGreen", "banc", Date.now());
     Q.resolveVandalReveal(e0, Date.now());
     const postStormRepaired = Q.starShipHas(e0, "hull");
     ok(preStorm === true, "⚠️⚠️ AVANT la reine, une coque taillée suffit (chantier indépendant des étoiles)",

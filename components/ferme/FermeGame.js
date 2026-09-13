@@ -1784,7 +1784,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          se pose pas). Local et cosmétique, comme le focus lui-même : rien
          n'est arbitré, rien n'est diffusé, juste indépendant de la boucle du
          guide plus bas (qui ne tourne que si un objectif chevron existe). */
-      if (!starFocusHintRef.current && e && Q.starChapterKey(e) === "field" && playersRef.current.size > 0) {
+      /* 2026-09-13 — `Q.starFallen(e)` : avant la chute `e.ch` vaut 0, donc « field »,
+         et l'annonce des puces cliquables partait pendant le prélude, sur des trous
+         qui n'étaient pas encore tombés. */
+      if (!starFocusHintRef.current && e && Q.starFallen(e) && Q.starChapterKey(e) === "field" && playersRef.current.size > 0) {
         starFocusHintRef.current = true;
         pushToast(L.star.hud.focusHint);
       }
@@ -3929,8 +3932,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          `r.ok` reste vrai (le rendez-vous EST posé), mais rien sur la cale n'a
          changé, et un silence à cet endroit précis se lirait comme un bouton
          cassé plutôt que comme une piste qui s'arrête où elle doit. */
+      /* 2026-09-13 — trois raisons de s'arrêter au lieu d'une (le maire, la mâture
+         qui attend la réparation, la coque qui l'attend), dites par une seule table. */
       broadcastChat("🛠️", L.star.devChat(f.name, L.star.dev.op(op) +
-        (r.blocked === "needMayor" ? " — blocked: the mayor's audience comes first (appointment booked)" : "")));
+        (r.blocked ? " — " + L.star.dev.blocked(r.blocked) : "")));
       persistFnRef.current && persistFnRef.current();
       hostFlushOut(out, f, null);
       return;
@@ -4258,11 +4263,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          « qu'est-ce que ça donne », c'est la même jointure que les six autres. */
       const e3 = (sharedRef.current.star = Q.migrateStar(sharedRef.current.star));
       if (Q.starEvilRescued(e3)) {
-        const r3 = Q.resolveStarFound(e3, Q.STAR_EVIL_ID, req.name, Date.now());
+        const nowR3 = Date.now();
+        const r3 = Q.resolveStarFound(e3, Q.STAR_EVIL_ID, req.name, nowR3);
         if (r3.ok && !r3.already) {
           dirtyRef.current = true;
+          const outR3 = { star: e3 };
+          /* ⚠️⚠️⚠️ 2026-09-13 — LA SEPTIÈME RÉANIMÉE PEUT CONCLURE LA QUÊTE, DONC ON
+             RETENTE LE DON ICI. Décision de Guillaume : la fin est l'état COMPLET de
+             la quête, la scène finale APRÈS la septième étoile (`starQuestComplete`).
+             Si le navire est déjà fini, c'est ce geste-ci — et lui seul — qui rend la
+             fin accordable : c'est la leçon du 473/478/2026-09-12, *un résolveur
+             appelé d'un seul endroit ne s'exécute que si cet endroit est atteint*,
+             rejouée une quatrième fois avant la faute plutôt qu'après.
+             `resolveStarGift` est idempotent : un essai qui échoue ne coûte rien. */
+          if (Q.starQuestComplete(e3)) {
+            const rgR3 = Q.resolveStarGift(e3, starRoomPlayerIds(), nowR3);
+            if (rgR3.ok) { outR3.starScene = { key: "end" }; broadcastChat("⭐", L.star.chat.done); }
+          }
           persistFnRef.current && persistFnRef.current();
-          hostSend({ type: "broadcast", event: "apply", payload: { star: e3 } });
+          hostSend({ type: "broadcast", event: "apply", payload: outR3 });
         }
       }
     } else if (req.kind === "runFailed") {
@@ -26373,11 +26392,36 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      CHEVRON. C'est la parade du 449 dans sa forme la plus littérale : deux
      contextes différents, ce sont deux réponses à « où vais-je », et elles seraient
      vertes toutes les deux. */
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-13 — LE CONSTAT DE LA FERME, ÉCRIT UNE FOIS.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️ « Eduardo et Tristan actifs, assez d'artisans » se fabriquait INLINE à
+     trois endroits (l'avis du tableau, le chevron, la requête de l'hôte). Le
+     bandeau du prélude en a besoin aussi : une quatrième copie aurait été la
+     divergence du §8 — on écrit le constat ici, la RÈGLE reste `Q.starFallGate`. */
+  function starGateCtxNow() {
+    const s0 = sharedRef.current, now = Date.now();
+    return {
+      skills: C.STAR_GATE_SKILLS.filter(sk => E.residentActiveSkill(s0.station, sk, now)),
+      artisans: E.countSkilledResidents(s0.station),
+    };
+  }
   function starGoalCtx() {
     const e = sharedRef.current.star;
     const m = meRef.current;
     const now = Date.now();
+    const gate = starGateCtxNow();
+    const day = sharedRef.current.day | 0;
+    const gateOk = Q.starFallGate(gate).ok;
     return {
+      /* ⚠️⚠️ 2026-09-13 — LE PRÉLUDE (avant la pluie) LIT TROIS FAITS DE PLUS, tous
+         dérivés de l'état PARTAGÉ (jour, résidents) — donc les deux clients lisent
+         la même chose. `yardOpen` : la ferme est prête pour qu'on lui PROPOSE le
+         chantier (le bandeau se tait sinon, comme l'ancienne invite de quête) ;
+         `gateOk` sépare « recrute » de « patiente » ; `warnOffer` est l'avis du
+         tableau, la même porte que le panneau et l'hôte. */
+      gateOk, yardOpen: gateOk && day >= Q.STAR_FALL_MIN_DAY,
+      warnOffer: Q.starWarnOffer(e, day, gate),
       craterHot: !starCraterCoolNow(), engineerHere: Q.starEngineerHere(e, now),
       landed: starImpactLandedNow(),
       /* hors-zip — signalé par Guillaume : le bandeau redisait « prends le
@@ -27067,17 +27111,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        ⚠️ RÉSERVÉ À L'HÔTE, comme l'ancienne invite qu'il remplace (« l'invite
        est aujourd'hui réservée à l'hôte », zip 455) : seul son client calcule
        le contexte de ferme (compétences/artisans) nécessaire à `starWarnOffer`. */
-    if (isHost && e && !Q.starWarning(e) && !Q.starFallen(e)) {
-      const s0 = sharedRef.current;
-      if (Q.starWarnOffer(e, s0.day, {
-        skills: C.STAR_GATE_SKILLS.filter(sk => E.residentActiveSkill(s0.station, sk, Date.now())),
-        artisans: E.countSkilledResidents(s0.station),
-      })) return starTargetPos("newsBoard");
-    }
-    /* ⚠️ ZIP 448 — MÊME RAISON QUE `starNearby` : le chevron ne peut pas désigner
-       un cratère qui n'est pas encore creusé. Il était déjà masqué PENDANT la
-       scène (`starSceneRef`), mais pas pendant qu'elle attendait de se jouer. */
-    if (!e || !Q.starFallen(e) || Q.starDone(e)) return null;
+    /* ⚠️⚠️ 2026-09-13 — LA BRANCHE « AVIS DU TABLEAU » QUI VIVAIT ICI EST PARTIE :
+       elle était devenue un cas particulier. Le chevron du prélude DÉRIVE de
+       l'objectif comme tout le reste (`warnRead` → `newsBoard`, `mayor`/`engineer`
+       → la mairie, le bois → la scierie ou la cale) — une seule réponse à « où
+       vais-je », jamais deux (449). Elle était réservée à l'hôte ; le prélude se lit
+       sur l'état PARTAGÉ (jour, résidents, chantier), donc l'invité a son chevron.
+       ⚠️ ZIP 448 — le chevron ne désigne toujours pas un cratère pas encore creusé :
+       voir les deux gardes `starImpactLandedNow` plus bas. */
+    if (!e || Q.starDone(e)) return null;
     if (starUiOpenRef.current || starSceneRef.current) return null;
     /* ⚠️ ZIP 454 — LE CONTEXTE EST LE MÊME QUE CELUI DU BANDEAU, et c'est
        obligatoire depuis que le chevron DÉRIVE de l'objectif : lui passer `{}`
@@ -27100,7 +27142,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!id) return null;
     const site = Q.STAR_SITE[id];
     if (site && site.spot === "starFarmImpact" && !starFarmImpactLandedNow(site.impact)) return null;
-    if ((id === "crater" || id === "townHall") && !starImpactLandedNow()) return null;
+    /* 2026-09-13 — la mairie ne se masque que PENDANT le météore : avant la chute,
+       `starImpactLandedNow` est toujours faux, et le chevron du maire (le premier
+       du prélude) n'aurait jamais existé. */
+    if ((id === "crater" || (id === "townHall" && Q.starTownFallen(e))) && !starImpactLandedNow()) return null;
     const pos = starTargetPos(id);
     return pos ? { ...pos, id } : null;
   }
@@ -28608,8 +28653,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        une seule d'entre elles laissée ouverte suffit à raconter la fin avant le
        début. C'est le pendant exact de « une porte sans chemin de code ment »
        (444) — ici, un chemin de code sans décor. */
-    if (!e || !Q.starFallen(e) || Q.starDone(e)) return null;
+    if (!e || Q.starDone(e)) return null;
     const zone = m.zone || "farm";
+    /* ⚠️⚠️ 2026-09-13 — AVANT LA CHUTE, SEULE LA CALE PARLE. Le chantier (Kerguélen
+       qui dessine, la pièce à monter, la plaque) se joue maintenant AVANT la pluie ;
+       la garde `starFallen` d'ici les rendait muets pendant tout le prélude — on
+       pouvait commander la coque à Tristan et jamais la monter. Le reste (les trous,
+       la reine, les sœurs) attend toujours la chute, zone par zone. */
+    if (!Q.starFallen(e) && zone !== "town") return null;
 
     if (zone === "farm") {
       /* ╔════════════════════════════════════════════════════════════════════════
@@ -28737,7 +28788,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
 
     if (zone === "town") {
-      if (!starImpactLandedNow()) return null;
+      /* ⚠️⚠️ 2026-09-13 — LA CALE PARLE AUSSI QUAND RIEN N'EST TOMBÉ. Cette garde
+         rendait TOUTE la ville muette tant que le météore n'avait pas atterri : juste
+         pour le cratère, faux pour le chantier, qui se joue désormais avant la pluie.
+         On ne se tait donc que PENDANT la cinématique du météore ; hors d'elle, les
+         trois invites de la cale (Kerguélen, le marteau, la plaque) passent, et le
+         reste de la ville attend toujours l'atterrissage (`yardOnly`, plus bas). */
+      const yardOnly = !starImpactLandedNow();
+      if (yardOnly && Q.starTownFallen(e)) return null;
       /* ⚠️⚠️ ZIP 454 — L'INGÉNIEUR PASSE EN PREMIER, ET C'EST LA RÈGLE DU 427 (du
          plus PRÉCIS au plus large) : il se tient à quatre cases de la cale, donc
          dans une zone où rien d'autre ne se déclenche, et il n'est là que quinze
@@ -28831,7 +28889,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              joueur ouvre le marteau, GAGNE la manche, et l'hôte refuse en
              silence — « le jeu propose et refuse » du 426, sur le geste qui
              conclut le chantier. On refuse AVANT le mini-jeu, et on dit pourquoi
-             (le libellé `needStars` existe déjà, il sert au plan déplié). */
+             (le libellé existe déjà, il sert au plan déplié). ⚠️ 2026-09-13 — la
+             raison n'est plus `needStars` mais `hullFirst` : une mâture livrée
+             d'une sauvegarde d'avant attend la réparation de la coque. */
           const noRaise = Q.starRaiseBlock(e, raise);
           if (noRaise) return { p: "raiseWait", act: () => pushToast(L.star.plan.blockWhy(noRaise)) };
           return { p: "raise", act: () => setStarRaise({ part: raise }) };
@@ -28856,6 +28916,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                           C.STAR_SHIP_DRAW_W, C.STAR_SHIP_DRAW_H + C.STAR_SHIP_INTERACT_S_PAD))
           return { p: "plaque", act: () => setStarPlaqueOpen(true) };
       }
+      /* 2026-09-13 — tout ce qui suit (la verte, le cratère) attend le météore. */
+      if (yardOnly) return null;
       /* ⚠️ HORS-ZIP 2026-09-03 — LA DISCRÈTE N'A PLUS D'INVITE ICI : elle se
          capture AU CONTACT, dans `updateMeTown` (voir `starShyAutoRef`), pas au
          bouton E. Sa zone est trop peuplée de passants pour viser une touche au
@@ -30075,7 +30137,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           vais-je », pas deux qui peuvent se contredire. */}
       {(() => {
         const e = sharedRef.current.star;
-        if (!e || !Q.starFallen(e) || Q.starDone(e) || starMini || starCard) return null;
+        /* ⚠️⚠️ 2026-09-13 — IL S'AFFICHE AVANT LA CHUTE, DÈS QU'IL A QUELQUE CHOSE À
+           DIRE. « Il ne s'affiche pas avant la chute » protégeait une quête SECRÈTE
+           qui tombait du ciel ; depuis l'autorité 2026-09-12 elle commence par un
+           chantier MUNICIPAL (maire, plans, coque, gouvernail) qui n'a rien de
+           secret — et qui se jouait sans une ligne. `starGoalKey` rend `null`
+           avant que la ferme soit prête (`yardOpen`), donc rien ne s'affiche pour
+           qui n'a pas encore la ferme de la quête. */
+        if (!e || Q.starDone(e) || starMini || starCard) return null;
+        if (!Q.starFallen(e) && !Q.starGoalKey(e, starGoalCtx())) return null;
         /* ⚠️⚠️ ZIP 453 — LES PASTILLES SONT LES LOGEMENTS DU NAVIRE, LITTÉRALEMENT.
            Elles comptaient quatre « éclats » à côté d'un bateau à cinq morceaux,
            et le dernier chapitre montrait UNE pastille vide seule — une mise en
@@ -30083,7 +30153,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            disaient plus rien. Avec les cinq morceaux, « quatre pleines, une
            vide » dit exactement ce que la cale montre : *une jointure, jamais
            deux listes* (449). Le cas particulier disparaît avec sa cause. */
-        const huntingImpacts = Q.starChapterKey(e) === "field";
+        /* 2026-09-13 — `Q.starFallen(e)` d'abord : avant la chute, `e.ch` vaut 0 donc
+           « field », et le bandeau du prélude aurait montré huit trous cliquables
+           qui ne sont pas encore tombés. Avant la pluie, les pastilles sont le navire. */
+        const huntingImpacts = Q.starFallen(e) && Q.starChapterKey(e) === "field";
         /* ⚠️⚠️ ZIP 475 (audit 472, défaut #8) — LA PASTILLE COMPTE LA FOUILLE,
            PAS LA TROUVAILLE. `starHas` ne bascule qu'une fois l'étoile
            apprivoisée ou la plaque retravaillée — deux gestes qui viennent
@@ -31035,11 +31108,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                           {why === "done" ? L.star.plan.orderDone
                             : why === "raise" ? L.star.plan.blockRaise
                             : why === "busy" ? L.star.plan.orderWait(fmtDuration((ord || {}).readyAt - Date.now()))
-                            : why === "noShard" ? L.star.plan.blockNoShard
                             : why === "noMayor" ? L.star.plan.blockNoMayor
-                            /* ⚠️ AUTORITÉ 2026-09-12 (repasse) — le verrou provisoire
-                               de `starTimberBlock` (voir sa note, quete.js). */
-                            : why === "needStars" ? L.star.plan.blockNeedStars
+                            /* ⚠️ 2026-09-13 — le chantier en deux moitiés (voir
+                               `starTimberBlock`, quete.js) : la coque qui attend sa
+                               réparation, la mâture qui attend la coque réparée. */
+                            : why === "repair" ? L.star.plan.blockRepair
+                            : why === "hullFirst" ? L.star.plan.blockHullFirst
                             : L.star.plan.blockNoPlan}
                         </span>}
                   </div>
@@ -33562,7 +33636,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                           La porte n'est pas la caisse. */}
                       {(() => {
                         const eA = Q.migrateStar(sharedRef.current.star);
-                        if (!Q.starHas(eA, "crater")) return null;
+                        /* ⚠️⚠️⚠️ 2026-09-13 — UNE GARDE « CRATÈRE TROUVÉ » VIVAIT ICI (25 août),
+                           ET ELLE BLOQUAIT TOUTE LA QUÊTE DEPUIS LE 2026-09-12. Le chantier
+                           se lance chez le maire AVANT la pluie ; l'annonce exige sa
+                           signature ; ce bouton exigeait la reine, donc la chute, donc
+                           l'annonce. Aucun banc ne le voyait : ils appellent les
+                           résolveurs, jamais ce bloc. Le rendez-vous s'ouvre à tous, et
+                           le secret tient : on négocie un navire municipal, pas une étoile. */
                         const signed = MR.mayorSigned(eA);
                         const trust = MR.mayorTrust(eA);
                         const tries = MR.mayorTries(eA);
@@ -34302,12 +34382,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   bloc. Le clic envoie `{kind:"starWarn"}` ; l'hôte tranche
                   (`resolveStarWarn`), comme toujours — un panneau qui donnerait
                   lui-même serait « le jeu propose et refuse » (426). */}
-              {isHost && !Q.starWarning(sharedRef.current.star) && (() => {
+              {!Q.starWarning(sharedRef.current.star) && (() => {
                 const s0 = sharedRef.current;
-                const offered = Q.starWarnOffer(s0.star, s0.day, {
-                  skills: C.STAR_GATE_SKILLS.filter(sk => E.residentActiveSkill(s0.station, sk, Date.now())),
-                  artisans: E.countSkilledResidents(s0.station),
-                });
+                /* ⚠️⚠️ 2026-09-13 — OUVERT À TOUS LES JOUEURS. La réserve « hôte
+                   seulement » venait du pop-up « Commencer la quête ? » du 455, qui
+                   n'existe plus ; elle tenait parce que seul l'hôte fabriquait le
+                   constat de ferme. Il se lit sur l'état partagé (`starGateCtxNow`),
+                   le bandeau du prélude envoie maintenant TOUT LE MONDE lire cet avis,
+                   et l'hôte tranche toujours (`resolveStarWarn`) — l'invité qui clique
+                   n'écrit rien lui-même. */
+                const offered = Q.starWarnOffer(s0.star, s0.day, starGateCtxNow());
                 if (!offered) return null;
                 return (
                   <div className="ferme-star-notice ferme-star-notice-new"
@@ -34457,6 +34541,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                       <div className="ferme-dev-hint">
                         {Q.starStarted(e)
                           ? L.star.dev.chapterAt(L.star.chapter[chKey] || chKey, Q.starShipBuilt(e), Q.STAR_SHIP_TOTAL)
+                          /* 2026-09-13 — avant la pluie la quête n'a pas de chapitre, mais elle
+                             a un état : « Not started » s'affichait devant un maire signé et
+                             une coque posée, c'est-à-dire devant la moitié du prélude. */
+                          : Q.starWarned(e) ? L.star.dev.phaseWarn
+                          : (MR.mayorSigned(e) || Q.starPlanAsked(e)) ? L.star.dev.phaseYard(Q.starShipBuilt(e), Q.STAR_SHIP_TOTAL)
                           : L.star.dev.notStarted}
                       </div>
                       <div className="ferme-dev-grid">

@@ -7,60 +7,36 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### ACTION SUIVANTE — VOIR EN JEU LA FUITE DU VANDALE, PUIS LA 2ᵉ NÉGOCIATION DU MAIRE
+### ACTION SUIVANTE — JOUER LE PRÉLUDE EN VRAI, PUIS LA 2ᵉ NÉGOCIATION DU MAIRE
 
-**Audit complet de la quête demandé par Guillaume le 2026-09-12 (« teste tout à deux joueurs,
-vois les bugs potentiels, corrige-les »). Sept défauts trouvés, sept corrigés.** Le blocage de
-preview des trois livraisons précédentes est LEVÉ : `npm run dev` **et** `node
-tools/fake-supabase.mjs` tournaient déjà sur ce dépôt, donc la séance à deux clients a enfin eu
-lieu. Cinq correctifs ont été **vus à l'écran** ; trois attendent un œil humain (ci-dessous).
+**Chronologie de la quête tranchée par Guillaume et codée le 2026-09-13.** Le détail et le tableau
+des sous-parties vivent dans `QUETE.md` (« Ce qui est fait — 2026-09-13 », autorité). En bref :
+1. **La quête redémarre en jeu** — elle était infinissable depuis le 2026-09-12 (annonce ⇐ maire ⇐
+   cratère ⇐ annonce). Rendez-vous du maire ouvert à tous, sujet « architecte naval » ouvert après la
+   signature, bandeau et chevron dès le prélude, avis du tableau ouvert à l'invité.
+2. **La fin = `starQuestComplete`** : navire achevé ET septième réanimée. Le bandeau la suit
+   (`evilHaul`/`evilRevive`) ; la réanimation retente le don.
+3. **Chantier en deux moitiés** (`C.STAR_SHIP_YARD`) : coque + gouvernail avant la pluie (c'est la
+   condition de l'avis) ; mâture/voile/cloche après la réparation (`hullFirst`). `needStars` est
+   supprimé ; l'hôte refuse la réparation tant que Kerguélen n'est pas affolé.
+4. **Menu dev dans la trame** (`devYard`/`devRain`/`devTownFall`) : sans maire, un bouton pose le
+   rendez-vous et n'écrit rien d'autre ; le météore tombe toujours avant la reine.
 
-**⚠️⚠️⚠️ LE DÉFAUT RACINE, ET IL EXPLIQUE POURQUOI RIEN N'AVAIT JAMAIS PU SE VOIR EN TROIS
-LIVRAISONS : `migrateStar` NE CONNAISSAIT PAS `e.vandal`.** Elle ne répare pas un objet, elle en
-construit un NEUF (`newStar()`) et y recopie les champs qu'elle connaît — donc tout champ qu'elle
-ignore est **supprimé**. Et elle est appelée en tête de CHAQUE `req` d'étoile et de CHAQUE
-`apply` : la réparation de la coque s'effaçait dans la milliseconde. Conséquences, aucune ne
-levant d'erreur : la fuite (4 phases, 2 min 35, un sprite, 4 phrases de bandeau) ne pouvait
-**jamais** partir ; et depuis que `shipSiteOk` lit `e.vandal`, la coque régressait à la sortie de
-la reine **sans pouvoir revenir** — `starShipComplete` restait faux pour toujours, donc **la quête
-n'avait plus de fin**. Corrigé : `vandal: null` dans `newStar`, recopie dans `migrateStar`.
-
-**Les sept défauts, tous prouvés par test exécutable avant correction :**
-1. **La quête était infinissable** si la dernière pièce était montée pendant la régression de la
-   coque : `resolveStarTimberRaise` est la seule voie qui appelle `resolveStarGift`, et une fois
-   les cinq pièces posées `starTimberToRaise` rend `null`. La réparation chez Kerguélen tente
-   maintenant le don elle aussi (`FermeGame.js`, branche `vandalReveal`).
-2. **Le garde-fou `needStars` ne gardait rien** : il refusait une COMMANDE si quatre pièces étaient
-   déjà posées, or les cinq commandes tournent en parallèle depuis le 478 — on les passait toutes
-   à zéro pièce posée. Testé : maire signé, plans, cinq montages, `e.ch=0`, `e.found={}` → fin
-   accordée, **zéro étoile tombée**. Le garde-fou est passé sur le MONTAGE (`starRaiseBlock` /
-   `starRaiseCompletes`, `quete.js`), lu par le client ET l'hôte.
-3. **La branche du marteau testait `crater && !vandal` au lieu de `starEngineerUrgent`** : un
-   joueur qui trouvait le cratère avant de payer les plans se voyait ouvrir le marteau par le
-   Kerguélen venu livrer ses plans, deux sœurs encore manquantes — et `e.vandal` posé là rendait
-   la vraie scène d'urgence définitivement invisible. Le DESSIN appelait déjà le prédicat : les
-   deux endroits avaient divergé pour de vrai.
-4. **L'invite du marteau n'avait aucune phrase** (`kerguelenVandal`) : le repli `|| "E"` de la
-   table rendait un « E » nu. Vu à l'écran, invisible pour tout banc.
-5. **Le bandeau ne pouvait jamais annoncer la fuite** : `evilSeek` devient vrai au même instant
-   que `!missing.length`, donc les quatre phrases de la chasse étaient injoignables. La fuite (une
-   scène MINUTÉE) passe maintenant devant l'objectif permanent ; `kerguelenBack` reste après,
-   comme `engineer` — décision assumée, tenue par `verify-quete`.
-6. **L'invité affichait « 1 joueur en ligne » pour toujours** : le compteur n'était rafraîchi que
-   par `join`/`leave`, et l'hôte est là AVANT lui. Corrigé dans `ensureRemote`, le seul endroit
-   qui fasse entrer un joueur distant. **Vu à deux clients.**
-7. **Le téléport dev « Stand at Kerguélen » se taisait hors de la ville** — indiscernable d'un
-   bouton cassé, là où son frère `devStandAtMayorDesk` prévient depuis toujours.
+**Bancs** : `verify-quete` 871/871, `verify-jalons` 106/106 (réécrit : trame complète + bandeau à
+chaque pas + falsification des 21 boutons), les 20 autres `verify-*` verts, les 20 `render-*`
+exécutables verts (`render-eau`/`render-parc` : dette antérieure), bundle esbuild propre (seul
+`G_SOIL`). **Vu à l'écran** (un client) : ferme neuve sans bandeau, « Start » arrêté au maire et dit
+dans le chat, bandeau « Rendez-vous pris » avant la chute, zéro erreur console. **Pas vu** : le
+guichet du hall sans cratère, le prélude joué à la main jusqu'à la pluie. Aucune manipulation
+Supabase.
 
 **Reste à faire, dans cet ordre :**
-1. **VOIR EN JEU les trois morceaux que l'automatisation n'a pas pu regarder** (volet du navigateur
-   masqué, file de scènes) : **la fuite du vandale** (sprite, deux segments ville/ferme, les quatre
-   phrases du bandeau, et les quatre durées `VANDAL_TOWN_MS`/`GAP_MS`/`FARM_MS`/`ESCAPED_MS` qui
-   restent un premier réglage) ; **le refus `needStars`** sur la dernière pièce ; **la scène finale
-   déclenchée par la réparation**. Recette : « ⭐ Star → 🥷 Kerguélen ready to talk », puis la gare
-   de Valley Town, **puis laisser la cinématique du météore jouer sans rien toucher** (sinon
-   `starImpactLandedNow` reste faux et TOUTE l'interaction d'étoile en ville est muette), puis
-   « Stand at Kerguélen », puis E.
+1. **JOUER LE PRÉLUDE EN VRAI** sur une ferme éligible (maire → plans → coque + gouvernail → avis →
+   pluie) : c'est la première fois qu'il a une voix, et les phrases du bandeau comme l'enchaînement
+   sont un premier réglage. **Puis VOIR la fuite du vandale et la fin** : « 🎩 appointment » → jouer
+   l'audience → « 🥷 Kerguélen ready to talk » → gare de Valley Town → **laisser jouer la cinématique
+   du météore sans rien toucher** (sinon la ville reste muette) → « Stand at Kerguélen » → E ; la fin
+   exige maintenant aussi la septième (« 🌊➡️🏖️ Hauled » puis la réanimer, ou « ⏭⏭ All »).
 2. **L'étoile est un PETIT MODÈLE 3D depuis la nuit du 2026-09-12** (`starWispRender`,
    `fermeArt.js`) — à juger EN JEU, seules les planches l'ont vue. Demande de Guillaume, après un
    masque au pixel refusé (« comme avant, souple et dodue, vraiment en 3D », référence : le dessin
@@ -360,6 +336,14 @@ dépôt.
   la soirée : le compte ne bougeait que sur `join`/`leave`, et l'hôte était là AVANT. *Un compteur
   se met à jour là où la CARTE change (l'unique fonction qui fait entrer une entité), jamais à côté
   d'un message particulier* — et il se DÉDUIT, il ne se diffuse pas (§3).
+- ⚠️⚠️⚠️ **DÉPLACER UNE PORTE DE CHRONOLOGIE DANS UN RÉSOLVEUR SANS RELIRE LES PORTES D'INTERFACE
+  QUI Y MÈNENT FERME UN CERCLE QUE TOUS LES BANCS VOIENT VERT** (audit 2026-09-13). L'annonce a exigé
+  le maire ; le bouton du maire, écrit trois semaines plus tôt, exigeait le cratère — donc l'annonce.
+  La quête ne démarrait plus et 870 contrôles passaient : ils appellent les résolveurs, jamais le JSX
+  qui décide si un bouton existe. *Une porte se déplace avec toutes celles qui y mènent, JSX compris.*
+  ⚠️ Même audit : **un seuil chiffré (`e.ch >= 1`) posé sur un geste qu'on n'atteint qu'après ce seuil
+  ne garde rien.** Un verrou qui protège un moment de l'histoire s'écrit en morceau d'histoire (ce qui
+  touche l'eau avant la pluie, le reste après la réparation), jamais en numéro de chapitre.
 
 **JavaScript / three.js / canevas**
 - ⚠️⚠️⚠️ **UN BOOLÉEN MIS EN CACHE POUR UNE VALEUR NATIVE VOLATILE (`document.hidden`) NE SE

@@ -4039,6 +4039,22 @@ export const STAR_SHIP_Y = TOWN_PIER.y + 2;
    copie. Le jour où un sixième morceau s'ajoute, il s'ajoute ICI et les trois
    suivent — ou aucun ne suit, et le banc le dit. */
 export const STAR_SHIP_ORDER = ["hull", "rudder", "mast", "sail", "bell"];
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-13 — LE CHANTIER AVANT LA PLUIE : CE QUI TOUCHE L'EAU.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ DÉCISION DE GUILLAUME (audit de chronologie) : « équilibrer intelligemment
+   de manière cohérente pour le récit ». Avant cette ligne, les cinq pièces se
+   commandaient toutes dès le chapitre 1 (commandes parallèles du 478) : le navire
+   était quasi fini avant la première étoile, et le chantier « qui reprend » après
+   la reine n'avait plus rien à reprendre.
+   ⚠️ LA COUPE EST CELLE D'UN VRAI CHANTIER NAVAL : on met d'abord à l'eau ce qui
+   flotte et gouverne (la coque, le gouvernail) ; la mâture, la toile et la cloche
+   attendent que la coque ait « tenu l'eau ». La pluie tombe entre les deux, le
+   vandale s'en prend à la coque, et c'est la réparation qui ouvre la seconde
+   moitié — ce qui monte vers le ciel, là où l'on finira par lire la Brebis.
+   ⚠️ UN SOUS-ENSEMBLE DE `STAR_SHIP_ORDER`, JAMAIS UNE SECONDE LISTE : `verify-quete`
+   exige que chaque clé d'ici soit dans l'ordre du navire. */
+export const STAR_SHIP_YARD = ["hull", "rudder"];
 export const STAR_SHIP_DRAW_W = 9;      // cases peintes en largeur (coque + beaupré)
 export const STAR_SHIP_DRAW_H = 7;      // cases peintes en hauteur (jusqu'au haut du mât)
 /* ⚠️⚠️⚠️ 2026-09-01 — LE RECTANGLE D'INTERACTION S'ARRÊTAIT AU RAS DE L'ANCRE,
@@ -5260,8 +5276,16 @@ export const HALL_TOPICS = [
      panneau dit « aucun sujet ne donne rien » et il reste vrai : celui-ci ne
      DONNE pas, il PREND (24 000 or, des récoltes, des poissons) et c'est l'hôte
      qui arbitre. La porte n'est toujours pas la caisse. */
+  /* ⚠️⚠️⚠️ 2026-09-13 — LA GARDE « CRATÈRE TROUVÉ » EST PARTIE, ET ELLE FERMAIT LA
+     QUÊTE. Depuis l'autorité 2026-09-12, l'annonce exige maire signé + chantier
+     posé ; or ce sujet n'apparaissait qu'après la reine — qui exige la chute, qui
+     exige l'annonce. Un cercle que tous les bancs voyaient vert : ils appellent les
+     résolveurs, jamais cette table. Le sujet s'ouvre maintenant quand le MAIRE a
+     signé, la seule porte de `resolveStarPlanAsk` : le panneau ne propose jamais ce
+     que l'hôte refuserait. Le secret de l'étoile tient toujours — Léonie parle d'un
+     architecte pour un chantier municipal, pas d'une étoile. */
   { key: "engineer", emoji: "📐", panel: "engineer",
-    when: (c) => !!(c.shared && c.shared.star && c.shared.star.found && c.shared.star.found.crater) },
+    when: (c) => !!(c.shared && c.shared.star && c.shared.star.mayor && c.shared.star.mayor.ok) },
   /* 2026-09-04 — LE PERMIS DE PÊCHE. Toujours visible (pas de garde) : c'est
      un vrai service civique, pas un secret de quête. Comme "mayor"/"engineer",
      le sujet OUVRE une conversation, jamais il ne donne : la `req`

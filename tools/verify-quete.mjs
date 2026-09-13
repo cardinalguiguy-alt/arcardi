@@ -76,6 +76,11 @@ const payBlue = (e, who, at) => {
    ⚠️ La négociation elle-même est mesurée par `tools/verify-maire.mjs`, qui en
    joue quatre cents. Ici on ne fait que la GAGNER. */
 const MA = await import(pathToFileURL(path.join(tmp, "maire.js")).href);
+/* 2026-09-13 — LE MENU DEV SUIT LA NOUVELLE TRAME : sans maire signé, tout bouton
+   d'étoile s'arrête au rendez-vous (`devYard`, quete.js). Les contrôles qui ont
+   besoin d'une chute, d'un cratère ou d'un navire partent donc d'un maire gagné
+   pour de bon, jamais d'un raccourci qui signerait à sa place. */
+function signedStar() { const s = Q.newStar(); signMayor(s, 1); return s; }
 const signMayor = (e, at = 1) => {
   const ctx = { mayorKey: "vasseur", day: 12, nextElection: 30, plans: true, trust: 0, audience: false };
   const s = MA.mayorOpen(ctx);
@@ -114,9 +119,16 @@ const gateCtx = (extra) => ({ skills: C.STAR_GATE_SKILLS, artisans: C.STAR_GATE_
    étoiles, donc plus aucune chute n'arme sans lui. On les pose ici UNE fois
    plutôt que dans chacun des appelants — même raison que le tampon lui-même
    (leçon du 387, citée juste au-dessus). Rend le résultat de la CHUTE. */
+/* ⚠️⚠️ 2026-09-13 — LE CHANTIER RÉEL AVANT LA PLUIE : la coque et le gouvernail posés
+   (`starYardBuilt`), donc des plans RENDUS — on ne commande rien sans eux. Écrit une
+   fois, lu par `armFall` et par tous les contrôles qui armaient l'annonce à la main. */
+const buildYard = (e) => {
+  e.plan = { at: 1, by: "banc", done: 1 };
+  for (const k of Q.STAR_YARD_KEYS) e.wood[k] = { at: 1, readyAt: 1, done: true, by: "banc" };
+};
 const armFall = (e, day, now) => {
   signMayor(e, 1);
-  Q.commitStarPlan(e, "banc", 1);
+  buildYard(e);
   Q.resolveStarWarn(e, "banc", day === undefined ? Q.STAR_FALL_MIN_DAY : day, 1, gateCtx());
   return Q.resolveStarFall(e, day === undefined ? Q.STAR_FALL_MIN_DAY : day, now === undefined ? NIGHT0 + 1 : now, gateCtx());
 };
@@ -167,6 +179,13 @@ const openTownCrater = (e, at = 10) => {
 const findSisters = (e, t = 1) => {
   const r = Q.resolveStarSpot(e, "banc", t, "banc").ok && Q.resolveStarTrack(e, "banc", t, "banc").ok;
   Q.resolveStarEvilFound(e, t);
+  /* ⚠️ 2026-09-13 — ET LA SEPTIÈME VA JUSQU'AU BOUT : la fin l'exige réanimée
+     (`starQuestComplete`), et le bandeau parle d'elle (`evilHaul`/`evilRevive`)
+     tant qu'elle ne l'est pas. Ce raccourci existe pour sortir la septième du
+     chemin des contrôles du CHANTIER : il la sort donc entièrement, comme la
+     partie réelle le ferait avant de revenir au bois. */
+  Q.resolveStarEvilRescue(e, t);
+  Q.resolveStarFound(e, Q.STAR_EVIL_ID, "banc", t);
   return r;
 };
 const queenReady = (e, who, t) => {
@@ -694,7 +713,7 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
      que ses CONSTANTES. C'est le premier visage du défaut de CLAUDE.md — *il
      mesure la carte, pas l'interaction* — et il aura tenu deux zips. */
   {
-    const e = Q.devStar(Q.newStar(), "start", 1).star;
+    const e = Q.devStar(signedStar(), "start", 1).star;
     const t0 = openTownCrater(e, e.fall + 10);
     ok("⚠️ tant que ça fume, la tenue ne donne RIEN",
        !Q.resolveStarCalm(e, "j1", t0 + 1000, true).ok && !Q.starHas(e, "crater"));
@@ -720,7 +739,7 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
     /* ── LA CHALEUR, LA COURBE QU'ON VOIT. Trois bornes, et la troisième est
        celle du modèle : le cratère refroidi FUME ENCORE tant que l'étoile est
        dedans, et il s'éteint quand elle en sort. */
-    const e2 = Q.devStar(Q.newStar(), "start", 1).star; openTownCrater(e2, e2.fall + 10);
+    const e2 = Q.devStar(signedStar(), "start", 1).star; openTownCrater(e2, e2.fall + 10);
     const h0 = Q.starCraterHeat(e2, 0), hM = Q.starCraterHeat(e2, Q.STAR_CRATER_COOL_MS / 2);
     const hE = Q.starCraterHeat(e2, Q.STAR_CRATER_COOL_MS * 3);
     ok("à l'instant de la chute, la chaleur est pleine", Math.abs(h0 - 1) < 0.001, h0.toFixed(2));
@@ -741,7 +760,7 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
      dernière ligne du bloc vérifie que les deux moitiés ne se sont pas données
      deux seuils au lieu d'un. */
   {
-    const e = Q.devStar(Q.newStar(), "start", 1).star; openTownCrater(e, e.fall + 10);
+    const e = Q.devStar(signedStar(), "start", 1).star; openTownCrater(e, e.fall + 10);
     const FOND = 1, MILIEU = Q.STAR_BURN_DEPTH_K * 0.99, LEVRE = -0.2;
     ok("⚠️ au fond du trou en fusion, on brûle", Q.starCraterBurns(e, 1000, FOND));
     ok("…une seconde avant la fin du refroidissement, encore",
@@ -754,7 +773,7 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
        !Q.starCraterBurns(e, 0, LEVRE));
     ok("⚠️ un trou pas encore creusé ne brûle personne (quête neuve)",
        !Q.starCraterBurns(Q.newStar(), 0, FOND));
-    const e3 = Q.devStar(Q.newStar(), "start", 1).star; openTownCrater(e3, e3.fall + 10);
+    const e3 = Q.devStar(signedStar(), "start", 1).star; openTownCrater(e3, e3.fall + 10);
     Q.resolveStarFound(e3, "crater", "banc", 9); findSisters(e3, 9);
     ok("⚠️⚠️ …et le trou s'éteint le jour où l'étoile en sort : on peut y descendre",
        !Q.starCraterBurns(e3, 0, FOND));
@@ -797,7 +816,7 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
      plus commode ne mesure pas une mécanique, il mesure son propre réglage.*
      On balaie donc les DEUX valeurs sur les DEUX gestes. */
   for (const flag of [true, false]) {
-    const e = Q.devStar(Q.newStar(), "start", 1).star;
+    const e = Q.devStar(signedStar(), "start", 1).star;
     openTownCrater(e, e.fall + 10);
     let t = e.townFall + Q.STAR_CRATER_COOL_MS + 500;
     queenReady(e, "j1", t);
@@ -812,7 +831,7 @@ const stands0 = (t) => t !== undefined && t !== C.CT_VOID && t !== C.CT_WALL && 
   {
     /* Le raccourci à deux reste un raccourci : deux tenues simultanées ouvrent le
        trou en `STAR_CALM_MS`, c'est-à-dire bien avant le plancher solo. */
-    const e = Q.devStar(Q.newStar(), "start", 1).star;
+    const e = Q.devStar(signedStar(), "start", 1).star;
     openTownCrater(e, e.fall + 10);
     const t0 = e.townFall + Q.STAR_CRATER_COOL_MS + 500;
     /* ⚠️ UN SEUL DES DEUX PAIE, ET C'EST VOLONTAIRE : l'offrande et le réveil sont
@@ -1035,7 +1054,7 @@ section("La quête ne paie rien (scan de source)");
   ok("aucun chapitre ne porte de récompense", Q.STAR_CHAPTERS.every(c => c.reward === undefined));
   /* ⚠️ ET LE MENU DÉVELOPPEUR NE DONNE RIEN NON PLUS : on rejoue « tout » et on
      vérifie que le `gift` reste vide (il ne s'écrit qu'au don, arbitré). */
-  const dev = Q.devStar(Q.newStar(), "all", 1).star;
+  const dev = Q.devStar(signedStar(), "all", 1).star;
   ok("⚠️ le raccourci développeur n'accorde aucun cadeau", Object.keys(dev.gift).length === 0);
 }
 
@@ -1580,8 +1599,10 @@ section("La chute est vue, et le chevron désigne (445)");
       const e2 = Q.newStar(); e2.fall = 1; e2.warn = { at: 1, by: "banc" };
       findFarmImpacts(e2, "banc", 2000);
       Q.resolveStarTownFall(e2, 2500); Q.resolveStarFound(e2, "crater", "banc", 3000); findSisters(e2, 3000);
-      ok("⚠️ repli : reine trouvée sans ingénieur jamais commandé (dev/migration) → chevron vers la mairie",
-         Q.starGoalKey(e2, {}) === "engineer" && Q.starTargetSite(e2, {}) === "townHall",
+      /* 2026-09-13 — ET LA PREMIÈRE MARCHE EST LE MAIRE, plus l'ingénieur : l'ordre du
+         chantier s'est inversé avec la trame (autorité 2026-09-12). */
+      ok("⚠️ repli : reine trouvée sans chantier jamais lancé (dev/migration) → chevron vers la mairie, pour le maire",
+         Q.starGoalKey(e2, {}) === "mayor" && Q.starTargetSite(e2, {}) === "townHall",
          `${Q.starGoalKey(e2, {})} → ${Q.starTargetSite(e2, {})}`);
     }
     /* ⚠️ TOUTE CIBLE RENDUE A UN `spot` NOMMÉ. Un lieu sans `spot` ne se
@@ -1974,8 +1995,10 @@ section("L'objectif courant (bandeau) et le guide");
       ok("⚠️⚠️ …et une fois les deux trouvées, LA REINE PARLE DE LA SEPTIÈME AVANT L'INGÉNIEUR",
          Q.starGoalKey(q, { inTown: true }) === "evilSeek");
       Q.resolveStarEvilFound(q, q.townFall + 5000);
-      ok("⚠️ …et une fois qu'on l'a vue, l'ingénieur reprend enfin la parole exactement où il l'avait",
-         Q.starGoalKey(q, { inTown: true }) === "engineer");
+      /* 2026-09-13 — `q` n'a jamais lancé le chantier : ce qui reprend la parole est
+         sa PREMIÈRE marche, le maire (l'ingénieur vient après lui désormais). */
+      ok("⚠️ …et une fois qu'on l'a vue, le chantier reprend enfin la parole, par sa première marche",
+         Q.starGoalKey(q, { inTown: true }) === "mayor");
     }
     /* ── 3. LE CRÉNEAU. Deux clients qui comptent depuis la MÊME date de l'hôte
        tombent sur la même planque ; c'est ce qui permet de ne rien diffuser. */
@@ -2411,8 +2434,16 @@ section("Lot A3 — la verte : sa marche, ses indices, sa trouvaille");
      TOUT LE RESTE. C'est la consigne « le rôle des étoiles est de nous guider dans
      le projet » réduite à sa plus petite forme vérifiable : au sortir du cratère,
      et tant que personne n'a demandé l'ingénieur, l'objectif EST l'ingénieur. */
-  ok("⚠️⚠️ à peine sortie du trou, l'étoile envoie chercher un ingénieur",
-     Q.starGoalKey(e, {}) === "engineer");
+  /* ⚠️⚠️⚠️ 2026-09-13 — L'ORDRE S'EST INVERSÉ AVEC LA TRAME : le maire, PUIS
+     l'ingénieur. Cet état (la reine trouvée sans chantier) n'arrive plus en jeu
+     réel — l'annonce exige le chantier — mais une sauvegarde d'avant, ou un état
+     posé à la main, doit tomber sur la PREMIÈRE marche du chantier, jamais sur la
+     deuxième. */
+  ok("⚠️⚠️ reine trouvée sans chantier (sauvegarde d'avant) : le bandeau envoie d'abord au maire",
+     Q.starGoalKey(e, {}) === "mayor" && Q.starTargetSite(e, {}) === "townHall",
+     `${Q.starGoalKey(e, {})} → ${Q.starTargetSite(e, {})}`);
+  signMayor(e, 1002);
+  ok("⚠️⚠️ …puis, le maire signé, chercher l'ingénieur", Q.starGoalKey(e, {}) === "engineer");
   /* ⚠️⚠️ ZIP 469 — L'OBJECTIF SUIT LE CHANTIER, PLUS LES OMBRES. Ce contrôle
      mesurait « le bandeau change à l'intérieur d'un chapitre » sur les deux
      écoutes d'ombres, supprimées ; la même propriété se mesure maintenant sur les
@@ -2448,12 +2479,16 @@ section("Lot A3 — la verte : sa marche, ses indices, sa trouvaille");
      suivante est l'audience. On le VÉRIFIE au lieu de le contourner — c'était
      exactement le piège du 472 (une chaîne dont le banc saute un maillon ne peut
      plus voir ce que ce maillon casse). */
-  ok("⚠️⚠️ ZIP 480 — les plans rendus renvoient d'abord à la MAIRIE, pas chez Tristan",
-     Q.starGoalKey(e, {}) === "mayor" && Q.starTargetSite(e, {}) === "townHall",
-     `${Q.starGoalKey(e, {})} → ${Q.starTargetSite(e, {})}`);
-  ok("…et aucune pièce n'est commandable tant que personne n'a signé",
-     Q.STAR_SHIP_KEYS.every(k => Q.starTimberBlock(e, k) === "noMayor"));
-  signMayor(e, 1003);
+  {
+    /* 2026-09-13 — la signature est acquise plus haut (le maire vient avant les
+       plans) ; ce que ce contrôle tient reste vrai sur la même partie, sans elle. */
+    const unsigned = JSON.parse(JSON.stringify(e)); delete unsigned.mayor;
+    ok("⚠️⚠️ ZIP 480 — sans signature, le bandeau renvoie à la MAIRIE, pas chez Tristan",
+       Q.starGoalKey(unsigned, {}) === "mayor" && Q.starTargetSite(unsigned, {}) === "townHall",
+       `${Q.starGoalKey(unsigned, {})} → ${Q.starTargetSite(unsigned, {})}`);
+    ok("…et aucune pièce n'est commandable tant que personne n'a signé",
+       Q.STAR_SHIP_KEYS.every(k => Q.starTimberBlock(unsigned, k) === "noMayor"));
+  }
   /* ⚠️⚠️ ZIP 478 — TROIS ÉTATS, TROIS CLÉS, ET ON LES REJOUE DANS L'ORDRE OÙ ELLES
      ARRIVENT plutôt que d'en tester une seule : c'est le contrôle qui aurait manqué
      au 475 si `farmImpacts` avait été scindé sans rejouer la suite. */
@@ -2529,7 +2564,10 @@ section("Lot A3 — la verte : sa marche, ses indices, sa trouvaille");
          on suit le vandale à l'œil, comme la discrète et la verte avant leur
          indice, jamais par une adresse qui gâcherait la chasse. */
       const NOWHERE = ["townWait", "townWaitThere", "engineerTravel", "engineerWork", "craterFeed", "townGreenAway",
-                        "vandalChaseTown", "vandalChaseFarm", "vandalEscaped"];   // 469 — les deux écoutes d'ombres sont parties ; 470 — une clé d'attente devient deux ; hors-zip — townWait se scinde en deux phrases, ni l'une ni l'autre n'a de lieu
+                        "vandalChaseTown", "vandalChaseFarm", "vandalEscaped",
+                        /* 2026-09-13 — le prélude qui attend (la ferme, les jours, la pluie) et la
+                           septième qu'on porte à la main : aucun lieu où aller */
+                        "yardGrow", "yardCalm", "warnWait", "evilRevive"];   // 469 — les deux écoutes d'ombres sont parties ; 470 — une clé d'attente devient deux ; hors-zip — townWait se scinde en deux phrases, ni l'une ni l'autre n'a de lieu
       const orphan = Q.STAR_GOAL_KEYS.filter(k => {
         /* ⚠️ ZIP 475 — `farmImpactTame`/`farmImpactCool` DÉSIGNENT LE MÊME
            TROU QUE `farmImpacts` (voir `starTargetSite`) : les trois clés
@@ -2551,6 +2589,7 @@ section("Lot A3 — la verte : sa marche, ses indices, sa trouvaille");
        minutes réelles pendant lesquelles il n'y a nulle part où aller). La règle
        est la même : quand le chevron se tait, le bandeau doit parler. */
     const e3 = Q.newStar(); e3.fall = 1;
+    signMayor(e3, 1);   // 2026-09-13 — le maire d'abord : sans lui, le bandeau parle de lui, pas de l'ingénieur
     e3.plan = { at: 1, by: "j1", done: 0 };
     findFarmImpacts(e3, "j1", 2); Q.resolveStarTownFall(e3, 5); Q.resolveStarFound(e3, "crater", "j1", 10); findSisters(e3, 10);
     ok("⚠️ pas de chevron pendant que l'ingénieur voyage…", Q.starTargetSite(e3, {}) === null);
@@ -2705,8 +2744,11 @@ section("Lot C — le lac maléfique (découverte, chevron, hasard de la canne)"
        `engineer`. C'est toujours « le chantier naval reprend le bandeau » — la
        clé change parce que l'état qu'`armFall` construit est plus avancé
        qu'avant ce zip, pas parce que la règle a changé. */
+    /* 2026-09-13 — `armFall` pose désormais le chantier RÉEL (plans rendus, coque et
+       gouvernail) : ce qui reprend le bandeau est Kerguélen affolé, la marche
+       suivante du chantier. */
     ok("⚠️⚠️⚠️ une fois vue, la clé ne revient JAMAIS : le chantier naval reprend le bandeau",
-       Q.starGoalKey(e, {}) === "engineerTravel",
+       Q.starGoalKey(e, {}) === "kerguelenBack",
        Q.starGoalKey(e, {}));
     /* Falsification : sans le garde `!starEvilFound(e)` dans starGoalKey, cette
        dernière assertion redeviendrait "evilSeek" pour toujours — vérifié en
@@ -2848,7 +2890,9 @@ section("Le halage — elle a atteint la rive");
      Q.resolveStarEvilRescue(e, 1).tooEarly === true && !Q.starEvilRescued(e));
   armFall(e); findFarmImpacts(e, "banc", 2); Q.resolveStarTownFall(e, 10);
   Q.resolveStarFound(e, "crater", "banc", 11);
-  findSisters(e, 12);
+  /* 2026-09-13 — PAS `findSisters` : il va désormais jusqu'à la septième réanimée,
+     et ce bloc mesure justement le halage — on pose les deux sœurs à la main. */
+  Q.resolveStarSpot(e, "banc", 12, "banc"); Q.resolveStarTrack(e, "banc", 12, "banc");
   Q.resolveStarEvilFound(e, 999);
   const r1 = Q.resolveStarEvilRescue(e, 5000);
   ok("⚠️⚠️ vue puis halée : acceptée, datée", r1.ok && !r1.already && e.evilRescued === 5000);
@@ -2877,7 +2921,7 @@ section("La construction du navire (454)");
      ingénieur commandé) est désormais un PRÉALABLE à cette porte, jamais un
      substitut : on l'arme ici pour isoler la question du fichier, la porte de
      la ferme. */
-  const e0Gate = Q.newStar(); signMayor(e0Gate, 1); Q.commitStarPlan(e0Gate, "banc", 1);
+  const e0Gate = Q.newStar(); signMayor(e0Gate, 1); buildYard(e0Gate);
   ok("⚠️ une ferme sans personne ne reçoit pas d'étoile",
      Q.resolveStarWarn(e0Gate, "b", 9, 1, { skills: [], artisans: 9 }).gated === true);
   /* ⚠️ ZIP 455 — ET C'EST L'ANNONCE QU'ELLE FERME MAINTENANT, pas seulement la
@@ -2932,7 +2976,7 @@ section("La construction du navire (454)");
   {
     /* ⚠️ AUCUNE PIÈCE NE SE COMMANDE SANS PLANS, et c'est la porte que Guillaume
        demande explicitement (« seulement à partir de ce moment là »). */
-    const e0 = Q.devStar(Q.newStar(), "all", 1).star;
+    const e0 = Q.devStar(signedStar(), "all", 1).star;
     e0.plan = { at: 0, by: "", done: 0 };
     for (const k of Q.STAR_SHIP_KEYS) e0.wood = {};
     ok("⚠️ sans les plans, Tristan ne coupe rien",
@@ -2986,7 +3030,10 @@ section("La construction du navire (454)");
       const blocked = Q.STAR_SHIP_KEYS.filter((kk) => {
         if (Q.starTimberDone(e, kk) || Q.starTimberReady(e, kk) || Q.starTimberOrder(e, kk)) return false;
         const why = Q.starTimberBlock(e, kk);
-        return why !== null && why !== "noShard" && why !== "noPlan" && why !== "noMayor" && why !== "needStars";
+        /* 2026-09-13 — `noShard`/`needStars` sont partis ; les deux verrous légitimes du
+           chantier en deux moitiés sont `repair` (la coque attend Kerguélen) et
+           `hullFirst` (la mâture attend la coque réparée). */
+        return why !== null && why !== "repair" && why !== "noPlan" && why !== "noMayor" && why !== "hullFirst";
       });
       if (blocked.length) stuck.push("bloqué " + blocked.join());
       Q.resolveStarFound(e, miss[0], "j1", 200 + guard);
@@ -2997,7 +3044,9 @@ section("La construction du navire (454)");
          l'arrivée » plus bas deviendrait faux pour une raison qui n'a rien à
          voir avec ce que ce test mesure — la mécanique du marteau elle-même
          est testée séparément, juste après ce bloc. */
-      if (miss[0] === "crater" && !e.vandal) Q.resolveVandalReveal(e, 200 + guard);
+      /* 2026-09-13 — la réparation exige Kerguélen affolé (les six sœurs, pas la reine
+         seule) : on la joue à l'instant où il l'est, comme le joueur. */
+      if (!e.vandal && Q.starEngineerUrgent(e, 200 + guard)) Q.resolveVandalReveal(e, 200 + guard);
     }
     ok("⚠️⚠️ la chaîne du bûcheron ne se bloque JAMAIS, à aucun état de la quête",
        stuck.length === 0 && ordered === Q.STAR_SHIP_TOTAL,
@@ -3047,6 +3096,9 @@ section("La construction du navire (454)");
        Q.starShipBuilt(e2) === 0 && !Q.starShipHas(e2, "hull"));
     ok("…et le renfort météorique n'y est pour rien (déjà trouvé bien avant, structurellement)",
        Q.starHas(e2, "farmMaterial") === false /* pas trouvé dans CE test, et ça n'a aucune importance ici */);
+    /* 2026-09-13 — la réparation exige Kerguélen affolé (le champ, la reine, les deux
+       sœurs) : on pose ces faits avant, comme une vraie partie. */
+    findFarmImpacts(e2, "j1", 2); findSisters(e2, 5);
     Q.resolveVandalReveal(e2, 6);
     ok("…et la réparation jouée (le marteau, avec Kerguélen), elle repart",
        Q.starShipBuilt(e2) === 1 && Q.starShipHas(e2, "hull"));
@@ -3089,24 +3141,33 @@ section("La construction du navire (454)");
      le test direct (`node`, hors banc) qui a servi à diagnostiquer la faille : maire
      signé, plans prêts, cinq pièces montées, AUCUNE étoile trouvée. */
   {
+    /* ⚠️⚠️⚠️ 2026-09-13 — CE BLOC TENAIT `needStars` ET IL AFFIRMAIT LE DÉFAUT QUE
+       L'AUDIT DE CHRONOLOGIE A TROUVÉ : son dernier contrôle exigeait que la dernière
+       pièce se débloque dès le champ trouvé — c'est-à-dire AVANT la reine, pendant
+       que le cratère refroidit. Il tient maintenant le chantier en deux moitiés.
+       FALSIFIÉ À L'ÉCRITURE : sans la ligne `hullFirst` de `starTimberBlock`, les
+       deuxième et troisième contrôles rougissent. */
     const e = Q.newStar();
     signMayor(e, 1);
     e.plan = { at: 1, by: "j1", done: 1 };
     ok("⚠️ maire signé, plans prêts, AUCUNE étoile trouvée (e.ch=0, e.found={})",
        MA.mayorSigned(e) && Q.starPlanReady(e) && e.ch === 0 && Object.keys(e.found).length === 0);
-    for (const k of Q.STAR_SHIP_KEYS.slice(0, 4)) e.wood[k] = { at: 1, readyAt: 1, done: true, by: "j1" };
-    const lastKey = Q.STAR_SHIP_KEYS[4];
-    ok("⚠️⚠️⚠️ SANS AUCUNE ÉTOILE, LA DERNIÈRE PIÈCE EST BLOQUÉE — c'est le garde-fou",
-       Q.starTimberBlock(e, lastKey) === "needStars");
-    /* ⚠️ ET ELLE SE DÉBLOQUE DÈS QUE LE CHAMP EST TROUVÉ — le verrou porte sur
-       `e.ch < 1`, pas sur une étoile précise : demander « toutes » les huit,
-       pas seulement une, serait le défaut inverse (un verrou qu'on ne peut
-       jamais lever en jouant normalement). */
-    for (const site of ["farmStarBlue", "farmEmptyA", "farmMaterial", "farmStarRose",
-                         "farmEmptyB", "farmEmptyC", "farmStarWhite", "farmMaterialB"])
-      Q.resolveStarFound(e, site, "j1", 2);
-    ok("…et le champ trouvé (e.ch >= 1), la dernière pièce redevient commandable",
-       e.ch >= 1 && Q.starTimberBlock(e, lastKey) === null);
+    ok("⚠️⚠️⚠️ SANS AUCUNE ÉTOILE, SEULES LA COQUE ET LE GOUVERNAIL SE COMMANDENT",
+       Q.STAR_SHIP_KEYS.every(k => Q.starTimberBlock(e, k) === (Q.starYardPiece(k) ? null : "hullFirst")),
+       Q.STAR_SHIP_KEYS.map(k => k + "=" + Q.starTimberBlock(e, k)).join(" "));
+    for (const site of Q.STAR_FARM_IMPACTS) Q.resolveStarFound(e, site.id, "j1", 2);
+    Q.resolveStarFound(e, "crater", "j1", 3);
+    ok("⚠️⚠️⚠️ …ni le champ ni la reine ne suffisent : la mâture attend la réparation",
+       e.ch >= 1 && Q.STAR_SHIP_KEYS.filter(k => !Q.starYardPiece(k)).every(k => Q.starTimberBlock(e, k) === "hullFirst"));
+    Q.resolveStarFound(e, "townShy", "j1", 4);
+    Q.resolveStarFound(e, "townGreen", "j1", 4);
+    Q.resolveVandalReveal(e, 5);
+    ok("…et la coque réparée avec Kerguélen, la seconde moitié s'ouvre",
+       Q.starHullRepaired(e) && Q.STAR_SHIP_KEYS.every(k => Q.starTimberBlock(e, k) === null),
+       Q.STAR_SHIP_KEYS.map(k => k + "=" + Q.starTimberBlock(e, k)).join(" "));
+    ok("⚠️ …et `C.STAR_SHIP_YARD` est un sous-ensemble du navire, jamais une seconde liste",
+       Q.STAR_YARD_KEYS.length > 0 && Q.STAR_YARD_KEYS.length < Q.STAR_SHIP_TOTAL
+       && Q.STAR_YARD_KEYS.every(k => Q.STAR_SHIP_KEYS.includes(k)));
   }
 
   /* ── LA TABLE DE BOIS EST LA MÊME LISTE QUE LE NAVIRE (la leçon du 452). */
@@ -3119,7 +3180,7 @@ section("La construction du navire (454)");
 
   /* ── LA FIN ATTEND LE BATEAU. */
   {
-    const e = Q.devStar(Q.newStar(), "all", 1).star;
+    const e = Q.devStar(signedStar(), "all", 1).star;
     for (const k of Q.STAR_SHIP_KEYS) delete e.wood[k];
     const r = Q.resolveStarGift(e, ["j1"], 3);
     /* ⚠️ ZIP 469 — TOUT EST TROUVÉ, ET UN CHANTIER NE PART TOUJOURS PAS EN MER.
@@ -3135,7 +3196,7 @@ section("La construction du navire (454)");
 
   /* ── LE MENU DÉVELOPPEUR NE PROMET PAS CE QU'IL NE DONNE PAS. */
   {
-    const d = Q.devStar(Q.newStar(), "plans", 5).star;
+    const d = Q.devStar(signedStar(), "plans", 5).star;
     ok("⚠️ le bouton « plans » rend vraiment des plans", Q.starPlanReady(d) === true);
     ok("…sans construire le bateau à notre place", Q.starTimberBuilt(d) === 0);
     /* ⚠️⚠️ P1 BIS (2026-09-07) — « timber » S'ARRÊTE AU RENDEZ-VOUS DU MAIRE. Un
@@ -3149,20 +3210,23 @@ section("La construction du navire (454)");
        && !!MA.mayorAppt(dBlocked.star));
     const seedD2 = Q.newStar(); signMayor(seedD2, 4);
     const d2 = Q.devStar(seedD2, "timber", 5).star;
-    ok("⚠️ le bouton « bois » livre les cinq pièces, une fois le maire signé",
-       Q.starTimberBuilt(d2) === Q.STAR_SHIP_TOTAL);
+    /* ⚠️⚠️ 2026-09-13 — AVANT LA PLUIE, LE BOUTON NE POSE QUE CE QUI TOUCHE L'EAU : la
+       coque et le gouvernail. Il en posait cinq, c'est-à-dire l'état qui laissait la
+       quête se conclure avant la reine (audit de chronologie). */
+    ok("⚠️ le bouton « bois » pose la coque et le gouvernail, une fois le maire signé — pas la mâture",
+       Q.starTimberBuilt(d2) === Q.STAR_YARD_KEYS.length, `${Q.starTimberBuilt(d2)}/${Q.STAR_SHIP_TOTAL}`);
     /* ⚠️⚠️ AUTORITÉ 2026-09-12 — AVANT LA REINE, PLUS AUCUN MORCEAU NE DÉPEND D'UN
        LIEU : le chantier se motive indépendamment des étoiles, la coque en profite
        comme les quatre autres. `seedD2` n'a pas trouvé la reine ici. */
-    ok("…et avant la reine, les cinq comptent, coque comprise (chantier indépendant des étoiles)",
-       Q.starShipBuilt(d2) === Q.STAR_SHIP_TOTAL && Q.starShipHas(d2, "hull"),
+    ok("…et avant la reine, elles comptent, coque comprise (chantier indépendant des étoiles)",
+       Q.starShipBuilt(d2) === Q.STAR_YARD_KEYS.length && Q.starShipHas(d2, "hull"),
        `${Q.starShipBuilt(d2)}/${Q.STAR_SHIP_TOTAL}`);
     /* ⚠️ …ET APRÈS LA REINE, LA COQUE REDEVIENT LE SEUL MORCEAU QUI DÉPENDE D'UN
        LIEU — le renfort météorique (`farmMaterial`), que ce bouton ne donne jamais.
        Le bouton « bois » ne promet toujours QUE le bois. */
     Q.resolveStarFound(d2, "crater", "j1", 6);
-    ok("…et après la reine, sans le renfort, la coque seule redescend",
-       Q.starShipBuilt(d2) === Q.STAR_SHIP_TOTAL - 1 && !Q.starShipHas(d2, "hull"),
+    ok("…et après la reine, sans la réparation, la coque seule redescend",
+       Q.starShipBuilt(d2) === Q.STAR_YARD_KEYS.length - 1 && !Q.starShipHas(d2, "hull"),
        `${Q.starShipBuilt(d2)}/${Q.STAR_SHIP_TOTAL}`);
     const seedD3 = Q.newStar(); signMayor(seedD3, 4);
     const d3 = Q.devStar(seedD3, "all", 5).star;
@@ -3550,7 +3614,7 @@ section("Le tampon d'annonce (455)");
        d'annoncer à l'instant zéro de l'univers. */
     for (let off = STEP; off < C.DAY_REAL_MS; off += STEP) {
       const e = Q.newStar();
-      signMayor(e, 1); Q.commitStarPlan(e, "banc", 1);
+      signMayor(e, 1); buildYard(e);
       Q.resolveStarWarn(e, "banc", Q.STAR_FALL_MIN_DAY, off, gateCtx());
       /* On avance minute par minute jusqu'à trouver l'instant où elle tombe. Le
          jour de jeu SUIVANT a son propre `dayStartAt` — c'est ce que fait l'hôte
@@ -3578,7 +3642,7 @@ section("Le tampon d'annonce (455)");
        nuit ne doit pas faire tomber la comète dans la minute — c'est « la comète
        ne doit pas arriver comme ça », mot pour mot. */
     const e = Q.newStar();
-    signMayor(e, 1); Q.commitStarPlan(e, "banc", 1);
+    signMayor(e, 1); buildYard(e);
     const atNight = NIGHT0 + 60000;                       // une minute après le crépuscule
     Q.resolveStarWarn(e, "banc", Q.STAR_FALL_MIN_DAY, atNight, gateCtx());
     ok("⚠️⚠️ annoncer DE NUIT ne fait pas tomber la comète cette nuit-là",
@@ -3589,7 +3653,7 @@ section("Le tampon d'annonce (455)");
   {
     const e = Q.newStar();
     ok("une quête neuve n'est pas annoncée", !Q.starWarned(e) && !Q.starWarning(e));
-    signMayor(e, 1); Q.commitStarPlan(e, "banc", 1);
+    signMayor(e, 1); buildYard(e);
     Q.resolveStarWarn(e, "j1", Q.STAR_FALL_MIN_DAY, 5000, gateCtx());
     ok("…annoncée, elle est en tampon", Q.starWarning(e) && Q.starWarnAt(e) === 5000);
     ok("⚠️ …et deux « oui » ne repoussent pas la nuit",
@@ -4488,7 +4552,7 @@ section("12. LES QUATRE VERBES (479, 480 bis)");
     }
     /* ── LE FIGURANT. */
     {
-      const e = Q.devStar(Q.newStar(), "start", 1).star;
+      const e = Q.devStar(signedStar(), "start", 1).star;
       ok("⚠️ on ne plante pas l'épouvantail au fond du trou",
          Q.resolveStarEffigy(e, "j1", CX, CY, CX, CY, R, 10).offEdge === true);
       ok("…ni à trois cases du cratère",
@@ -4501,7 +4565,7 @@ section("12. LES QUATRE VERBES (479, 480 bis)");
       /* ⚠️⚠️ ET LE SOLO VA JUSQU'AU BOUT : soixante secondes avec le figurant, et
          la reine sort. C'est la règle 458 rejouée sur le geste le plus exigeant du
          chantier — aucune configuration de joueurs ne peut bloquer. */
-      let e2 = Q.devStar(Q.newStar(), "start", 1).star;
+      let e2 = Q.devStar(signedStar(), "start", 1).star;
       e2.townFall = e2.fall + 10;
       Q.resolveStarEffigy(e2, "j1", CX, CY + R * 0.9, CX, CY, R, 20);
       let t = e2.townFall + Q.STAR_CRATER_COOL_MS + 500;
@@ -4521,7 +4585,7 @@ section("12. LES QUATRE VERBES (479, 480 bis)");
     }
     /* ⚠️ À DEUX, ELLE SORT ENTIÈRE, ET LE SECOND EST NOMMÉ. */
     {
-      const e = Q.devStar(Q.newStar(), "start", 1).star;
+      const e = Q.devStar(signedStar(), "start", 1).star;
       e.townFall = e.fall + 10;
       let t = e.townFall + Q.STAR_CRATER_COOL_MS + 500, opened = null;
       queenReady(e, "j1", t);
@@ -4542,7 +4606,7 @@ section("12. LES QUATRE VERBES (479, 480 bis)");
          depuis le 469 : avec « j1 » des deux côtés, il ne pouvait pas tomber. */
       {
         const uuid = "3f2b9c14-7a5e-4d0b-8c61-9e2af4d17b05";
-        const e3 = Q.devStar(Q.newStar(), "start", 1).star;
+        const e3 = Q.devStar(signedStar(), "start", 1).star;
         e3.townFall = e3.fall + 10;
         let t3 = e3.townFall + Q.STAR_CRATER_COOL_MS + 500, op3 = null;
         queenReady(e3, uuid, t3);

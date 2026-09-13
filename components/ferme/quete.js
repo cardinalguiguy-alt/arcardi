@@ -517,6 +517,13 @@ export function starShipBuilt(e) { return starShipParts(e).filter(Boolean).lengt
    navire s'achever à l'écran pendant la résolution, au lieu d'apparaître d'un coup
    sur un fondu — et `starDone` reste le seul témoin de la fin. */
 export function starShipComplete(e) { return starShipBuilt(e) === STAR_SHIP_TOTAL; }
+/* ⚠️⚠️⚠️ 2026-09-13 — L'ÉTAT COMPLET DE LA QUÊTE : LE NAVIRE ET LA SEPTIÈME
+   RÉANIMÉE. Décision de Guillaume (« la fin doit être l'état complet de la quête,
+   la scène finale après la septième étoile »). `starShipComplete` reste ce qu'il
+   est — le dessin et le compte des pièces le lisent — et ce prédicat-ci est ce que
+   la FIN lit (`resolveStarGift`, et les trois appelants de `FermeGame.js` qui
+   retentent le don). */
+export function starQuestComplete(e) { return starShipComplete(e) && starHas(e, STAR_EVIL_ID); }
 
 /* ╔═════════════════════════════════════════════════════════════════════════════
    ║ ZIP 453 — QUI PREND LE LARGE, ET POURQUOI CE N'EST PAS L'ÉTOILE.
@@ -670,26 +677,30 @@ export function starTimberBlock(e, key) {
   if (starTimberReady(e, key)) return "raise";  // 478 — le bois est là, il manque le marteau
   if (starTimberOrder(e, key)) return "busy";
   const part = STAR_SHIP_PARTS[idx];
-  if (!shipSiteOk(e, part)) return "noShard";   // 469 — un morceau sans lieu n'a rien à attendre
+  /* ⚠️ 2026-09-13 — `noShard` DEVIENT `repair`. Depuis le 469 aucun morceau ne
+     nomme plus de lieu : la seule façon que `shipSiteOk` refuse est la coque
+     APRÈS la reine et AVANT la réparation. Le panneau affichait « Éclat
+     correspondant à retrouver » — un objet qui n'existe plus — devant une coque
+     qui attend en fait Kerguélen et son marteau (audit de chronologie). */
+  if (!shipSiteOk(e, part)) return "repair";
   /* ╔═════════════════════════════════════════════════════════════════════════════
-     ║ AUTORITÉ 2026-09-12 — GARDE-FOU PROVISOIRE : LA DERNIÈRE PIÈCE ATTEND LA PLUIE.
+     ║ 2026-09-13 — LE CHANTIER EN DEUX MOITIÉS. LA SECONDE ATTEND LA RÉPARATION.
      ╚═════════════════════════════════════════════════════════════════════════════
-     ⚠️⚠️⚠️ SANS ELLE, LE CHANTIER SE FINIT SANS UNE SEULE ÉTOILE — vérifié par un
-     test direct (maire signé, plans, cinq pièces montées, `e.ch=0`, `e.found={}` :
-     `starShipComplete` rendait déjà `true`). Rien dans `starTimberBlock` ne dépend
-     du chapitre `field` ; `resolveStarTimberRaise` est la seule voie qui déclenche
-     `resolveStarGift` en jeu réel (zip 478) — donc un joueur pressé pouvait obtenir
-     la fin sans jamais voir tomber la pluie d'astéroïdes.
-     ⚠️ LA VRAIE PORTE EST « 2ᵉ négociation maire + gate or/temps » (`QUETE.md`
-     §« Ce qui n'est PAS fait »), PAS ENCORE ÉCRITE. En attendant, on bloque la
-     SEULE pièce qui resterait à commander (`starTimberBuilt(e) === STAR_SHIP_KEYS.
-     length - 1`, c'est-à-dire les quatre autres déjà posées) tant que `e.ch < 1` —
-     le champ complet de la ferme, pas encore trouvé. Les quatre premières pièces
-     restent commandables sans limite, exactement comme le veut « le chantier se
-     lance indépendamment des étoiles » : seule la CONCLUSION du chantier attend un
-     signe du ciel, jamais son démarrage. À retirer le jour où le vrai système
-     existe — ce verrou n'en est qu'un ersatz. */
-  if (e.ch < 1 && starTimberBuilt(e) >= STAR_SHIP_KEYS.length - 1) return "needStars";
+     ⚠️⚠️⚠️ CE QUI VIVAIT ICI (`needStars`, « la dernière pièce attend la pluie ») NE
+     GARDAIT RIEN, ET L'AUDIT DE CHRONOLOGIE L'A PROUVÉ DEUX FOIS. Posé sur la
+     COMMANDE, il ne refusait rien quand les commandes partent ensemble ; recopié
+     sur le MONTAGE, il se levait à `e.ch >= 1` — or on ne monte une pièce qu'en
+     ville APRÈS le météore, donc toujours à `e.ch >= 1` : pendant les trois minutes
+     où le cratère refroidit, cinq coups de marteau finissaient la quête avant la
+     reine.
+     ⚠️ LA PARADE N'EST PAS UN SEUIL DE CHAPITRE, C'EST LE RÉCIT (Guillaume :
+     « équilibrer intelligemment, de manière cohérente pour le récit ») : avant la
+     pluie on ne pose que ce qui touche l'eau (`C.STAR_SHIP_YARD`, la coque et le
+     gouvernail) ; la mâture, la toile et la cloche attendent que Kerguélen ait
+     réparé la coque avec le joueur (`e.vandal`, qui n'arrive qu'après la reine et
+     les six sœurs). La fin exige en plus la septième (`starQuestComplete`). *Une
+     porte qui est un morceau d'histoire ne se contourne pas par un ordre de clics.* */
+  if (!starYardPiece(key) && !starHullRepaired(e)) return "hullFirst";
   /* ⚠️⚠️⚠️ ZIP 478 — LA GARDE « LA PIÈCE PRÉCÉDENTE DOIT ÊTRE LIVRÉE » EST PARTIE,
      ET C'EST LE PLUS GROS GAIN DE TOUTE LA REFONTE POUR LE PLUS PETIT GESTE.
      Elle sérialisait 8 + 3 + 6 + 4 + 3 minutes : **24 minutes d'horloge réelle
@@ -742,6 +753,23 @@ export function starTimberNext(e) {
   return null;
 }
 export function starTimberBuilt(e) { return STAR_SHIP_KEYS.filter(k => starTimberDone(e, k)).length; }
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-13 — LE CHANTIER AVANT LA PLUIE (voir `C.STAR_SHIP_YARD`).
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️ TROIS LECTURES, AUCUN ÉTAT : la moitié du navire qu'on pose avant la pluie
+   est une LISTE de constantes, « posée » se lit sur `wood`, « réparée » sur
+   `e.vandal`. Rien ne se persiste de plus, donc rien ne se migre de plus — la
+   leçon de `migrateStar` (audit 2026-09-12) appliquée avant la faute. */
+export const STAR_YARD_KEYS = C.STAR_SHIP_YARD;
+export function starYardPiece(key) { return STAR_YARD_KEYS.includes(key); }
+/* La condition de l'avis de l'observatoire : la coque ET le gouvernail posés.
+   ⚠️ C'est aussi ce qui garantit que le vandale trouve une coque à abîmer — la
+   scène « un vandale s'en est pris à la coque » se jouait même sur une cale vide. */
+export function starYardBuilt(e) { return STAR_YARD_KEYS.every(k => starTimberDone(e, k)); }
+/* La réparation jouée avec Kerguélen. ⚠️ `e.vandal` en est l'UNIQUE témoin (voir
+   `shipSiteOk`) : ce nom n'existe que pour que ses lecteurs disent ce qu'ils
+   attendent au lieu de lire un champ nommé d'après un personnage. */
+export function starHullRepaired(e) { return !!(e && e.vandal); }
 
 /* ───────────────────────────────────────────────────────────────────────────
    2. LES CHAPITRES.
@@ -2202,7 +2230,12 @@ export const STAR_GOAL_TARGET = { craterHot: "crater", craterAlone: "crater",
      un peu plus haut). `starTargetPos` (FermeGame.js) la résout vivante depuis
      `ew.lake`, ou replie sur le passage sombre tant qu'on n'est pas dans le monde
      maléfique — exactement le repli déjà écrit pour le chaudron. */
-  evilSeek: "evilLake" };
+  evilSeek: "evilLake",
+  /* 2026-09-13 — haler se fait au même point du lac ; `evilRevive` n'a VOLONTAIREMENT
+     pas d'adresse (on la porte, elle est là où on la pose — liste `NOWHERE` du banc).
+     `mayorBooked` va à la même mairie que `mayor` ; `warnRead` au tableau des
+     nouvelles, qui était déjà la cible du chevron de l'avis. */
+  evilHaul: "evilLake", mayorBooked: "townHall", warnRead: "newsBoard" };
 /* ⚠️⚠️ 2026-09-02 (lot A2) — LE CHEVRON DE LA DISCRÈTE POINTE LA PLACE, PAS ELLE.
    C'est la seule décision de conception de ce lot, et elle se joue là : un chevron
    posé sur sa tête supprime la chasse — il resterait à marcher jusqu'à une flèche,
@@ -2211,7 +2244,7 @@ export const STAR_GOAL_TARGET = { craterHot: "crater", craterAlone: "crater",
    ⚠️ `shyPlaza` EST UNE ADRESSE HORS TABLE, comme `sawmill` ou `cauldron` : ce
    n'est pas un lieu d'étoile, c'est un endroit de la ville. `FermeGame.js` la
    résout depuis `C.TOWN_PLAZA`, seule source de « où est la place ». */
-export const STAR_OFF_TABLE_TARGETS = ["townHall", "sawmill", "shipyard", "cauldron", "shyPlaza", "evilLake"];
+export const STAR_OFF_TABLE_TARGETS = ["townHall", "sawmill", "shipyard", "cauldron", "shyPlaza", "evilLake", "newsBoard"];
 export function starTargetSite(e, ctx) {
   const goal = starGoalKey(e, ctx);
   if (!goal) return null;
@@ -3655,8 +3688,15 @@ export function resolveStarEvilFound(e, now) {
    comme `resolveStarEvilFound` juste au-dessus : deux joueurs qui parlent à
    Kerguélen dans la même seconde ne déclenchent la fuite qu'une fois. */
 export function resolveVandalReveal(e, now) {
-  if (!starHas(e, "crater")) return { ok: false };
-  if (e.vandal) return { ok: true, already: true };
+  if (e && e.vandal) return { ok: true, already: true };
+  /* ⚠️⚠️ 2026-09-13 — L'HÔTE EXIGE LE MÊME ÉTAT QUE LE CLIENT : Kerguélen affolé
+     (`starEngineerUrgent` : la reine, les six sœurs, les plans rendus). Il ne
+     demandait que la reine ; or depuis que la réparation ouvre la seconde moitié du
+     navire (`hullFirst`), une `req` reçue trop tôt — un client d'une version
+     d'avant, un paquet rejoué — aurait ouvert la mâture avant la discrète et la
+     verte. Le client ne l'envoie qu'après le marteau, lui-même proposé dans cet état
+     seulement : ceci est la ceinture, l'invite est la bretelle. */
+  if (!starEngineerUrgent(e, now)) return { ok: false };
   e.vandal = { at: +now || 0 };
   return { ok: true };
 }
@@ -3820,7 +3860,13 @@ export function starChapterKey(e) {
    ⚠️ ELLE REND `null` QUAND IL N'Y A RIEN À DIRE (pas tombée, ou finie), jamais
    une clé de repli : le repli poli du 444 n'échoue pas, il AFFICHE la clé. */
 export function starGoalKey(e, ctx) {
-  if (!e || !starFallen(e) || starDone(e)) return null;
+  if (!e || starDone(e)) return null;
+  /* ⚠️⚠️⚠️ 2026-09-13 — AVANT LA CHUTE, LE BANDEAU A QUELQUE CHOSE À DIRE. Il rendait
+     `null` tant que rien n'était tombé : c'était juste quand la quête commençait
+     par le ciel, faux depuis qu'elle commence par un chantier (autorité 2026-09-12).
+     Le maire, les plans, la coque et le gouvernail se jouaient sans une ligne. Voir
+     `starPreludeKey`, plus bas. */
+  if (!starFallen(e)) return starPreludeKey(e, ctx);
   const missing = starMissing(e);
   /* hors-zip — LE FOCUS PERSONNEL, ET C'EST LE SEUL ENDROIT OÙ IL JOUE. Demande
      de Guillaume : le chapitre 1 ne suit aucun ordre imposé, donc un joueur qui
@@ -3916,7 +3962,10 @@ export function starGoalKey(e, ctx) {
     // ph === "gone" : rien à dire de plus, on retombe sur la chaîne normale.
   }
   if (starEvilUnlocked(e) && !starEvilFound(e)) return "evilSeek";
-  if (starHas(e, "crater") && !missing.length && !starPlanAsked(e)) return "engineer";
+  /* ⚠️ 2026-09-13 — `engineer` (« plans pas encore demandés ») NE VIT PLUS ICI : il
+     passait devant le maire, dans l'ordre de l'ancienne trame. Il est désormais une
+     marche de `starYardKey`, APRÈS `mayor` — la même fonction avant et après la
+     chute, donc un seul ordre possible. */
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ AUTORITÉ 2026-09-12 — LE VANDALE PREND LE PAS SUR LE CHANTIER, LE TEMPS
      ║ DE LA SCÈNE, MÊME FAMILLE QUE `evilSeek` JUSTE AU-DESSUS.
@@ -3941,13 +3990,13 @@ export function starGoalKey(e, ctx) {
      si Kerguélen est physiquement là pour qu'on lui parle). ⚠️⚠️ ET
      `starPlanReady(e)` : il ne peut revenir que s'il est déjà venu — même
      invariant que `starEngineerHere`, tenu une seconde fois ici. */
-  if (starHas(e, "crater") && !missing.length && starPlanReady(e) && !e.vandal) return "kerguelenBack";
+  /* 2026-09-13 — ON APPELLE LE PRÉDICAT, ON NE LE RECOPIE PLUS : la condition écrite
+     ici était mot pour mot `starEngineerUrgent`, et la leçon du 2026-09-12 (le dessin
+     et l'invite avaient divergé sur ce même PNJ) vaut pour le bandeau aussi. */
+  if (starEngineerUrgent(e, ctx && ctx.now)) return "kerguelenBack";
   if (!first) {
-    if (!starPlanReady(e)) return (ctx && ctx.engineerHere) ? "engineerWork" : "engineerTravel";
-    /* ⚠️ ZIP 480 — LA PASSE MAIRE PREND SA PLACE DANS LE BANDEAU, entre les plans
-       rendus et la première commande de bois. Sans cette clé, le joueur lirait
-       « commande la première pièce à Tristan » devant un bouton qui refuse. */
-    if (!MA.mayorSigned(e)) return "mayor";
+    /* ⚠️ ZIP 480 → 2026-09-13 — le maire, PUIS les plans (ordre inversé par
+       l'autorité 2026-09-12) : les deux marches vivent dans `starYardKey`, plus bas. */
     /* ╔══════════════════════════════════════════════════════════════════════════
        ║ ZIP 478 — `timber` COUVRAIT TROIS ÉTATS. C'EST LE DÉFAUT DU 475, REJOUÉ
        ║ PAR LA PASSE QUI L'AVAIT CORRIGÉ.
@@ -3963,9 +4012,17 @@ export function starGoalKey(e, ctx) {
        qui attend un geste passe devant ce qui attend une horloge, qui passe devant
        ce qui attend une décision. Un bandeau doit répondre à « qu'est-ce que je
        peux faire MAINTENANT », jamais à « où en est le chantier ». */
-    if (starTimberToRaise(e)) return "timberRaise";
-    if (starTimberBusyCount(e) > 0) return "timberWait";
-    return starTimberNext(e) ? "timberOrder" : null;
+    /* ⚠️ 2026-09-13 — CES TROIS MARCHES VIVENT DANS `starYardKey` (plus bas), qui
+       les joue dans le même ordre avant ET après la chute. Et « commander » ne se
+       dit plus qu'à propos d'une pièce VRAIMENT commandable : l'ancienne ligne le
+       disait dès qu'une pièce n'était pas posée, y compris une mâture qui attend
+       la réparation — l'objectif qui ment du 448. */
+    const yard = starYardKey(e, ctx, STAR_SHIP_KEYS);
+    if (yard && yard !== "timberWait" && yard !== "timberOrder") return yard;
+    /* ⚠️ LA SEPTIÈME PASSE ENTRE LE GESTE DU CHANTIER (monter) ET SON HORLOGE : un
+       joueur qui peut aller haler une étoile ne doit pas lire « Tristan scie », ni
+       « commande » — le geste passe devant l'horloge et la décision (478). */
+    return starEvilGoalKey(e) || yard;
   }
   /* ⚠️⚠️ ZIP 475 (audit 472, défaut #8) — « farmImpacts » COUVRAIT TROIS ÉTATS
      SOUS UNE SEULE PHRASE. Le premier impact manquant peut être : pas encore
@@ -4086,6 +4143,55 @@ export function starTameGoalKey(e, id, ctx) {
   if (verb === "lure") return (ctx && ctx.potion) ? "farmImpactLureGive" : "farmImpactLure";
   return "farmImpactTame";
 }
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-13 — LE PRÉLUDE : CE QUE DIT LE BANDEAU AVANT LA PLUIE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ L'ORDRE EST CELUI DU RÉCIT DE L'AUTORITÉ 2026-09-12, SOUS-PARTIE PAR
+   SOUS-PARTIE (Guillaume : « les grands chapitres ne doivent pas être trop
+   nombreux, mais les petites sous-parties sont à organiser intelligemment ») :
+   le chantier (maire → plans → coque et gouvernail), puis la panique (l'avis au
+   tableau, puis l'attente de la pluie). AUCUN CRAN DE `e.ch` DE PLUS : le prélude
+   se DÉRIVE, comme `warn` le faisait déjà — les seuils des trois chapitres ne
+   bougent pas d'une ligne, donc rien à migrer.
+   ⚠️ IL SE TAIT POUR QUI N'A RIEN COMMENCÉ ET DONT LA FERME N'EST PAS PRÊTE
+   (`ctx.yardOpen` faux) : c'est la règle de l'ancienne invite de quête, qui ne se
+   montrait qu'aux fermes capables de la mener. Un rendez-vous pris, une signature,
+   des plans commandés : la quête a commencé, il parle. */
+function starPreludeKey(e, ctx) {
+  if (starWarned(e)) return "warnWait";
+  const started = MA.mayorSigned(e) || !!MA.mayorAppt(e) || starPlanAsked(e);
+  if (!started && !(ctx && ctx.yardOpen)) return null;
+  const yard = starYardKey(e, ctx, STAR_YARD_KEYS);
+  if (yard) return yard;
+  if (ctx && ctx.warnOffer) return "warnRead";
+  return (ctx && ctx.gateOk) ? "yardCalm" : "yardGrow";
+}
+/* Les marches du chantier. D'abord le maire puis les plans — sans eux rien d'autre
+   n'a de sens —, ensuite l'ordre de l'ACTION LA PLUS PROCHE tranché au 478 : le
+   geste (monter) passe devant l'horloge (Tristan scie), qui passe devant la
+   décision (commander). `keys` borne les pièces dont on parle : la moitié qui touche
+   l'eau avant la pluie, tout le navire après.
+   ⚠️ `mayorBooked` DISTINGUE « demande une audience » de « tu as rendez-vous » : la
+   même phrase pour les deux redemanderait un rendez-vous déjà pris — le défaut de
+   `townWait`, qui redemandait le train à qui était déjà arrivé. */
+function starYardKey(e, ctx, keys) {
+  if (!MA.mayorSigned(e))
+    return (MA.mayorAppt(e) && !MA.mayorApptStale(e, ctx && ctx.now)) ? "mayorBooked" : "mayor";
+  if (!starPlanAsked(e)) return "engineer";
+  if (!starPlanReady(e)) return (ctx && ctx.engineerHere) ? "engineerWork" : "engineerTravel";
+  if (keys.some(k => starTimberReady(e, k) && !starRaiseBlock(e, k))) return "timberRaise";
+  if (keys.some(k => !!starTimberOrder(e, k))) return "timberWait";
+  if (keys.some(k => starTimberBlock(e, k) === null)) return "timberOrder";
+  return null;
+}
+/* La septième sœur, une fois VUE (`evilSeek` a parlé avant). Deux gestes : la haler
+   hors du lac, puis la porter à la ferme et la réanimer. ⚠️ Elle n'est dans aucun
+   `need`, et c'est toujours voulu (voir sa note dans `STAR_SITES`) : sa voix passe
+   par ces deux clés, jamais par `starMissing`. */
+function starEvilGoalKey(e) {
+  if (!starEvilFound(e) || starHas(e, STAR_EVIL_ID)) return null;
+  return starEvilRescued(e) ? "evilRevive" : "evilHaul";
+}
 /* Toutes les clés que `starGoalKey` peut rendre — DÉRIVÉES de la table, pour que
    le banc vérifie qu'aucune n'est orpheline de texte. ⚠️ C'est le contrôle qui
    manquait aux libellés de téléport (444) : une clé sans phrase ne plante pas,
@@ -4154,6 +4260,10 @@ export const STAR_GOAL_KEYS = (() => {
      du vandale (voir `starGoalKey`). Cette liste n'existe que pour obliger
      le banc à réclamer leur phrase dans les deux langues. */
   out.push("kerguelenBack", "vandalChaseTown", "vandalChaseFarm", "vandalEscaped");
+  /* 2026-09-13 — même raison : les ÉTAPES du prélude (le rendez-vous pris, la ferme
+     qui doit grandir ou patienter, l'avis à lire, la pluie attendue) et les deux
+     gestes de la septième sœur une fois vue. Aucune n'est un lieu de la table. */
+  out.push("mayorBooked", "yardGrow", "yardCalm", "warnRead", "warnWait", "evilHaul", "evilRevive");
   return out;
 })();
 
@@ -4229,7 +4339,14 @@ export function resolveStarWarn(e, who, day, now, ctx) {
   if (e.fall) return { ok: false, already: true };
   if ((day | 0) < STAR_FALL_MIN_DAY) return { ok: false, tooEarly: true };
   if (!MA.mayorSigned(e)) return { ok: false, needMayor: true };
-  if (!(e.plan && e.plan.at)) return { ok: false, needEngineer: true };
+  /* ⚠️⚠️ 2026-09-13 — LE JALON EST POSÉ : LA COQUE ET LE GOUVERNAIL SUR LA CALE
+     (`starYardBuilt`), plus « les plans commandés ». L'hypothèse du 2026-09-12
+     (« Bassin reconnu », faute de jalons codés) ouvrait l'avis alors qu'aucune
+     planche n'était posée : la pluie interrompait un chantier qui n'existait que
+     sur papier, et le vandale s'en prenait ensuite à une coque absente. Guillaume a
+     tranché : un chantier réel d'abord, la pluie ensuite. Les plans sont impliqués
+     (on ne commande rien sans eux). */
+  if (!starYardBuilt(e)) return { ok: false, needYard: true };
   const gate = starFallGate(ctx);
   if (!gate.ok) return { ok: false, gated: true, ...gate };
   e.warn = { at: +now || 0, by: String(who || "?").slice(0, 24) };
@@ -4249,7 +4366,7 @@ export function starWarnOffer(e, day, ctx) {
   if (!e || e.fall || starWarned(e)) return false;
   if ((day | 0) < STAR_FALL_MIN_DAY) return false;
   if (!MA.mayorSigned(e)) return false;
-  if (!(e.plan && e.plan.at)) return false;
+  if (!starYardBuilt(e)) return false;   // 2026-09-13 — même jalon que `resolveStarWarn`, juste au-dessus
   return starFallGate(ctx).ok;
 }
 
@@ -4404,22 +4521,22 @@ export function resolveStarTimberTick(e, now) {
    courante comptée comme posée. Un compte (`starTimberBuilt === 4`) aurait
    ignoré la régression de la coque, qui est justement ce qui rend le navire
    incomplet avec cinq bois posés. */
-export function starRaiseCompletes(e, key) {
-  const idx = STAR_SHIP_KEYS.indexOf(key);
-  if (idx < 0) return false;
-  for (const p of STAR_SHIP_PARTS) {
-    if (!shipSiteOk(e, p)) return false;                     // la coque non réparée, par exemple
-    if (p.key !== key && !starTimberDone(e, p.key)) return false;
-  }
-  return true;
-}
+/* ⚠️⚠️⚠️ 2026-09-13 — `starRaiseCompletes` ET LE `needStars` DU MONTAGE SONT PARTIS.
+   La leçon ci-dessus reste juste (un garde-fou se pose sur l'événement), mais
+   l'événement choisi n'était pas le bon : le verrou se levait à `e.ch >= 1`, et on
+   ne monte une pièce qu'en ville APRÈS le météore — donc toujours à `e.ch >= 1`.
+   L'audit de chronologie l'a rejoué : cinq coups de marteau pendant que le cratère
+   refroidit, et la quête se concluait avant la reine. La garde est devenue un
+   morceau du RÉCIT (`hullFirst`, voir `starTimberBlock`) et la fin exige l'état
+   complet de la quête (`starQuestComplete`). */
 /* La raison de refuser un MONTAGE, ou `null`. ⚠️ UNE SEULE ÉCRITURE, LUE PAR LE
-   CLIENT (qui choisit l'invite) ET PAR L'HÔTE (qui tranche) : c'est la parade du
-   §8 de CLAUDE.md, et elle est écrite ici parce que la divergence entre ces deux
-   endroits vient de coûter la scène d'urgence de Kerguélen le jour même. */
+   CLIENT (qui choisit l'invite) ET PAR L'HÔTE (qui tranche) : la parade du §8 de
+   CLAUDE.md. ⚠️ `hullFirst` y est redit pour une pièce DÉJÀ LIVRÉE : une sauvegarde
+   d'avant ce jour peut porter une mâture livrée avant la pluie, et le marteau ne
+   doit pas la poser avant la réparation. */
 export function starRaiseBlock(e, key) {
   if (!starTimberReady(e, key)) return "notReady";
-  if ((e ? e.ch | 0 : 0) < 1 && starRaiseCompletes(e, key)) return "needStars";
+  if (!starYardPiece(key) && !starHullRepaired(e)) return "hullFirst";
   return null;
 }
 export function resolveStarTimberRaise(e, key, who, now) {
@@ -4863,6 +4980,14 @@ export function resolveStarGift(e, playerIds, now) {
      résolveur quand la dernière pièce tombe, donc la fin arrive toute seule au
      moment où le navire s'achève. */
   if (!starShipComplete(e)) return { ok: false, unbuilt: true, built: starShipBuilt(e), total: STAR_SHIP_TOTAL };
+  /* ⚠️⚠️⚠️ 2026-09-13 — ET LA SEPTIÈME DOIT ÊTRE RÉANIMÉE. Décision de Guillaume :
+     « la fin doit être l'état complet de la quête, la scène finale après la septième
+     étoile ». Le navire seul concluait : on pouvait partir en mer avec six sœurs et
+     la septième qui s'éteignait au fond du lac. Les deux moitiés sont désormais les
+     deux conditions d'un seul prédicat (`starQuestComplete`) ; le refus reste
+     silencieux et rejouable — la réanimation (`evilStarRevive`, `FermeGame.js`)
+     retente le don comme le marteau et la réparation le font déjà. */
+  if (!starHas(e, STAR_EVIL_ID)) return { ok: false, sisterMissing: true };
   e.doneAt = now;
   e.ch = STAR_CH_DONE;
   const granted = [];
@@ -4878,183 +5003,139 @@ export function resolveStarGift(e, playerIds, now) {
    7. LE MENU DÉVELOPPEUR — LANCER, AVANCER, REVOIR.
 
    ⚠️⚠️ IL EST CONSTRUIT EN PREMIER, AVANT LA PREMIÈRE SCÈNE, et c'est une
-   décision de méthode. Ce chantier a cinq chapitres et trois cinématiques ; voir
-   la finale coûte cinquante minutes de jeu. *Un outil de test dont le coût
-   dépasse ce qu'il fait gagner cesse d'être utilisé, et c'est comme ça qu'on
-   finit par livrer sans regarder.* Sans ces boutons — et surtout sans « Play
-   scene », qui n'existait pas au 442 — la boucle « faire → regarder → juger →
-   refaire » demandée par le chantier n'est pas tenable.
+   décision de méthode. Voir la finale coûte près d'une heure de jeu. *Un outil de
+   test dont le coût dépasse ce qu'il fait gagner cesse d'être utilisé, et c'est
+   comme ça qu'on finit par livrer sans regarder.* Sans ces boutons — et surtout
+   sans « Play scene », qui n'existait pas au 442 — la boucle « faire → regarder →
+   juger → refaire » demandée par le chantier n'est pas tenable.
 
    ⚠️⚠️ ET AUCUNE DE CES OPÉRATIONS NE DONNE RIEN. Le menu s'ouvre à tout joueur
    qui connaît le raccourci (398). Le chemin développeur appelle les MÊMES
    résolveurs — la chaîne reste cohérente, les prérequis d'information sont
-   respectés — et **jette** ce qu'ils rendent, `resolveStarGift` compris : le
-   `gift` est écrit puis effacé. On saute la lecture, on ne gagne rien.
+   respectés — et **jette** ce qu'ils rendent. On saute la lecture, on ne gagne
+   rien.
    ⚠️ `reset` REMET UN OBJET NEUF, il ne « défait » pas : une remise à zéro qui
    effacerait clé par clé finirait par laisser un état à moitié propre le jour où
    l'on ajoute un champ. `newStar()` ne peut pas mentir.
+
+   ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-13 — LE MENU SUIT LA NOUVELLE TRAME, ET AUCUN BOUTON NE LA SAUTE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️⚠️ L'AUDIT DE CHRONOLOGIE L'A CHIFFRÉ : depuis une quête vierge, 17 boutons
+   sur 21 faisaient tomber la pluie sans maire signé (12 sans plans non plus) —
+   des états que le jeu réel ne peut plus produire depuis que le chantier précède
+   les étoiles (autorité 2026-09-12 de `QUETE.md`). On jugeait des scènes dans un
+   monde que personne ne jouera : le bandeau réclamait l'ingénieur, la mairie
+   refusait en silence. Décision de Guillaume : « respecter la nouvelle trame dans
+   le menu dev ».
+   ⚠️ TROIS MARCHES, ÉCRITES UNE FOIS ET PARTAGÉES PAR TOUS LES BOUTONS (§8 de
+   `CLAUDE.md` — vingt copies de « si pas encore annoncé, annonce » avaient déjà
+   divergé en trois graphies du même emoji) :
+     · `devYard`     — le chantier : le MAIRE, jamais signé à la place du joueur
+                       (la ligne rouge du 444 tient : on pose le rendez-vous et on
+                       s'arrête, `blocked:"needMayor"`), puis les PLANS (une
+                       attente, pas une scène), puis, si demandé, la coque et le
+                       gouvernail posés (`STAR_YARD_KEYS`) ;
+     · `devRain`     — le chantier, puis l'annonce, puis la chute ;
+     · `devTownFall` — le météore de Valley Town, AVANT tout bouton qui trouve la
+                       reine. Sans lui, `plans`/`chapter`/`skip`/`all` trouvaient le
+                       cratère sur une ville où rien n'était tombé :
+                       `starImpactLandedNow` restait faux côté client, et TOUTE
+                       l'interaction d'étoile en ville se taisait — Kerguélen, le
+                       marteau de la cale, la plaque.
+   ⚠️⚠️ UN BOUTON BLOQUÉ N'ÉCRIT RIEN D'AUTRE QUE LE RENDEZ-VOUS. Le P1 bis du
+   2026-09-07 posait déjà le verrou du maire sur le bois, mais APRÈS avoir écrit
+   l'annonce, la chute et les plans : un clic sur « livrer » lançait la pluie en
+   silence, sans scène. Les marches passent donc toutes en TÊTE de chaque bouton.
    ─────────────────────────────────────────────────────────────────────────── */
-/* ⚠️ ZIP 469 — `hint` EST SORTI DE LA LISTE : il rejouait le croisement d'ombres,
-   qui n'existe plus. Un bouton de menu dev qui appelle un résolveur supprimé ne
-   plante pas, il ne fait RIEN — et on cherche le bogue ailleurs. */
-/* ⚠️ ZIP 478 — « deliver » S'INSÈRE AVANT « timber », dans l'ordre où ça se joue :
-   les plans, puis le bois livré (à monter), puis le bois posé. Un menu rangé dans
-   l'ordre du jeu se lit sans le connaître. */
-/* ⚠️ ZIP 479 — DEUX OPS DE PLUS, UNE PAR VERBE COÛTEUX. Le troisième (l'épouvantail
-   de la reine) n'en a PAS besoin et c'est délibéré : il ne coûte qu'un objet à 400
-   or, que le bouton « Argent » du menu dev sait déjà donner. Un bouton par geste
-   aurait été un bouton de plus à tenir pour rien. */
-/* ⚠️⚠️ AUTORITÉ 2026-09-12 — « vandal » REJOINT LA LISTE, MÊME FAMILLE QUE
-   `queen`..`rescue` : IL POSE LE DÉCOR ET LAISSE LE GESTE. Sans lui, atteindre
-   la seconde fenêtre de Kerguélen (`starEngineerHere`, voir sa note) demande de
-   gagner les six chasses ET les quinze minutes de plans avant de pouvoir
-   REGARDER la révélation — c'est-à-dire qu'on ne la regarderait qu'une fois par
-   soirée de test, exactement le défaut que ce menu existe pour corriger. Il ne
-   pose PAS `e.vandal` : la révélation reste le geste (marcher jusqu'au quai —
-   `standKerguelen` juste au-dessus dans le menu — et appuyer sur E). */
-export const STAR_DEV_OPS = ["reset", "warn", "start", "candy", "dish", "lure", "queen", "shy", "green", "evil", "hook", "rescue", "chapter", "skip", "all", "plans", "vandal", "deliver", "timber", "appt", "unslam"];
-/* ⚠️ ZIP 469 — `turn` (le retournement) sort de la liste : sa scène est supprimée
-   dans `FermeGame`, et un bouton qui rejoue une scène qui n'existe plus ouvre un
-   voile noir de sept secondes sur rien. */
+/* ⚠️ ZIP 469 — `hint` (le croisement d'ombres) et `turn` (le retournement) sont
+   sortis de la liste : un bouton qui appelle un résolveur supprimé ne plante pas,
+   il ne fait RIEN — et on cherche le bogue ailleurs.
+   ⚠️ 2026-09-13 — LA LISTE EST RANGÉE DANS L'ORDRE DU JEU (règle du 478, « un menu
+   rangé dans l'ordre du jeu se lit sans le connaître ») : le maire, le chantier,
+   la pluie, les étoiles de la ferme, les sœurs de la ville, la réparation, le lac
+   maléfique, puis les raccourcis de chapitre. */
+export const STAR_DEV_OPS = ["reset", "appt", "unslam", "plans", "deliver", "timber", "warn", "start",
+  "candy", "dish", "lure", "queen", "shy", "green", "vandal", "evil", "hook", "rescue",
+  "chapter", "skip", "all"];
 export const STAR_DEV_SCENES = ["warn", "fall", "townFall", "end"];
-/* ⚠️⚠️ ZIP 454 — LE MENU DEV FRANCHIT LA PORTE DES DEUX HABITANTS, ET C'EST LE
-   SEUL ENDROIT QUI EN A LE DROIT. Recruter Eduardo, Tristan et quatre artisans
-   avant de pouvoir REGARDER une cinématique de douze secondes, c'est une demi-
-   heure de jeu par essai — c'est-à-dire une scène qu'on ne regarde qu'une fois,
-   donc qu'on ne juge qu'une fois (§10 de `CLAUDE.md`, la raison d'être du bouton
-   « rejouer une scène »). Le contexte est FABRIQUÉ ici, il n'est pas lu : la porte
-   reste entière pour tout le monde, y compris pour l'hôte qui arme la chute. */
-const DEV_GATE = { skills: C.STAR_GATE_SKILLS, artisans: C.STAR_GATE_ARTISANS };
+/* ⚠️ 2026-09-13 — `DEV_GATE` (le constat « Eduardo + Tristan + artisans » fabriqué
+   pour franchir la porte des habitants) est SUPPRIMÉ : plus aucun bouton ne le
+   lisait depuis que la chute se pose directement (`e.fall`). Une constante que
+   personne ne lit est le pendant exact de la fonction que personne n'appelle (448). */
 
 /* ╔═════════════════════════════════════════════════════════════════════════════
    ║ P1 BIS (2026-09-07) — LA MOITIÉ BATEAU NE S'ÉCRIT JAMAIS SANS LE MAIRE.
    ╚═════════════════════════════════════════════════════════════════════════════
-   ⚠️⚠️⚠️ Signalé par Guillaume le 2026-09-05 (`QUETE.md` §12.2, « A moins un ») :
-   `timber`/`deliver`/`all` écrivaient `e.wood` sans jamais regarder `e.mayor`,
-   donc un clic pouvait poser un bateau fini devant un maire jamais rencontré —
-   un état que la partie réelle ne peut pas produire (`starTimberBlock` refuse
-   « noMayor » avant la toute première commande). **La parade n'est pas de
-   signer à sa place** — la ligne rouge du 444 tient, ce menu ne saute aucune
-   scène — mais de poser le même rendez-vous que le bouton `appt`, et de
-   renvoyer `blocked:"needMayor"` pour que l'appelant explique qu'il reste à
-   monter jouer l'audience. Écrite UNE fois : les trois boutons partagent le
-   même geste, jamais trois copies qui divergeraient au premier réglage (§8 de
-   `CLAUDE.md`). */
+   ⚠️⚠️⚠️ Signalé par Guillaume le 2026-09-05 : un clic pouvait poser un bateau fini
+   devant un maire jamais rencontré. **La parade n'est pas de signer à sa place**
+   — mais de poser le même rendez-vous que le bouton `appt`, et de renvoyer
+   `blocked:"needMayor"` pour que l'appelant explique qu'il reste à monter jouer
+   l'audience. Depuis le 2026-09-13, TOUS les boutons passent par ici (`devYard`). */
 function starDevBoatGate(e, who, t) {
   if (MA.mayorSigned(e)) return true;
   MA.migrateMayor(e);
   e.mayor.block = 0;
   if (!e.mayor.appt) {
-    e.mayor.appt = { by: String(who || ""), name: "🛠️", at: t, due: t,
+    e.mayor.appt = { by: String(who || ""), name: DEV_BY, at: t, due: t,
                       mood: MA.mayorPickMood(Math.random, false, !!e.mayor.sour) };
   }
   e.mayor.sour = 0;
   return false;
 }
-/* ⚠️ ZIP 479 — UN QUATRIÈME PARAMÈTRE, `who`, ET UN SEUL BOUTON S'EN SERT. La
-   bourse de lumière bleue est indexée PAR JOUEUR (`e.candy`, comme
-   `f.inv.candies`) : un raccourci de développeur qui ne saurait pas qui clique
-   remplirait la poche de personne. Les autres opérations l'ignorent. */
+const DEV_BY = "\u{1F6E0}️";
+function devBlocked(e, why) { return { star: e, ok: true, blocked: why || "needMayor" }; }
+/* Le chantier. ⚠️ `raiseYard` POSE LA COQUE ET LE GOUVERNAIL — c'est la condition
+   de l'annonce depuis le 2026-09-13 (`starYardBuilt`), donc tout bouton qui fait
+   tomber la pluie doit la remplir, sinon il fabriquerait une pluie que le jeu
+   n'aurait jamais annoncée. `plans`, `deliver` et `timber` ne la demandent PAS :
+   ils existent pour juger le chantier lui-même, pièce par pièce. */
+function devYard(e, who, t, raiseYard) {
+  if (!starDevBoatGate(e, who, t)) return false;
+  if (!starPlanAsked(e)) e.plan = { at: t - C.STAR_ENG_TRAVEL_MS - C.STAR_ENG_WORK_MS, by: DEV_BY, done: t };
+  else if (!starPlanReady(e)) e.plan.done = t;
+  if (raiseYard)
+    for (const k of STAR_YARD_KEYS)
+      if (!starTimberDone(e, k)) e.wood[k] = { at: t, readyAt: t, done: true, ready: false, by: DEV_BY };
+  return true;
+}
+/* ⚠️ ZIP 455 — L'ANNONCE EST ANTIDATÉE D'UN TAMPON ENTIER : sans ça, regarder la
+   chute coûterait cinq minutes d'attente réelle par essai. Le tampon a son propre
+   bouton (`warn`), pour qui veut le juger. */
+function devRain(e, who, t) {
+  if (!devYard(e, who, t, true)) return false;
+  if (!starWarned(e)) e.warn = { at: t - C.STAR_WARN_FLOOR_MS - 1000, by: DEV_BY };
+  if (!e.fall) e.fall = t;
+  return true;
+}
+function devFarm(e, t) { for (const s of STAR_FARM_IMPACTS) resolveStarFound(e, s.id, DEV_BY, t); }
+/* ⚠️ LE TROU FROID : on recule SA date de chute, jamais on n'avance une horloge de
+   client (§3). ⚠️⚠️ 2026-09-13 — ET SEULEMENT QUAND CE BOUTON VIENT DE LA POSER.
+   L'ancienne écriture réantidatait `townFall` à CHAQUE clic : la marque « vue »
+   de chaque client (`starFallSeen("townFall")`) ne correspondait plus, et la ville
+   se taisait de nouveau jusqu'à ce que la cinématique rejoue. */
+function devTownFall(e, t) {
+  const fresh = !starTownFallen(e);
+  resolveStarTownFall(e, t);
+  if (fresh && starTownFallen(e)) e.townFall = t - STAR_CRATER_COOL_MS - 1000;
+}
+/* ⚠️ ZIP 479 — `who` NE SERT QU'AUX BOUTONS QUI REMPLISSENT UNE BOURSE INDEXÉE PAR
+   JOUEUR (`e.candy`) — et, depuis le 2026-09-13, au rendez-vous du maire. */
 export function devStar(e, op, now, who) {
   const t = now || Date.now();
   if (op === "reset") return { star: newStar(), ok: true };
-  /* ⚠️⚠️ ZIP 455 — « ▶ START » SAUTE LE TAMPON, ET C'EST SA RAISON D'ÊTRE. Il
-     annonce et fait tomber dans le même geste : sans ça, regarder la chute
-     coûterait cinq minutes d'attente réelle par essai, c'est-à-dire qu'on ne la
-     regarderait plus (§10 de `CLAUDE.md`, la raison d'être du bouton « rejouer une
-     scène »). Le tampon a son propre bouton juste dessous, pour qui veut le juger. */
-  if (op === "start") {
-    if (!e.warn || !e.warn.at) e.warn = { at: t - C.STAR_WARN_FLOOR_MS - 1000, by: "🛠️" };
-    if (!e.fall) e.fall = t;
-    return { star: e, ok: true, scene: "fall" };
-  }
-  /* ⚠️ LE TAMPON SEUL. C'est le seul moyen de juger les PNJ nerveux et leurs
-     phrases sans attendre qu'une ferme atteigne quatre artisans — et sans que la
-     comète tombe cinq minutes plus tard au milieu de l'observation. */
-  if (op === "warn") {
-    if (e.fall) return { ok: false };
-    e.warn = { at: t, by: "🛠️" };
-    return { star: e, ok: true, scene: "warn" };
-  }
-  /* ── ZIP 454 : les deux étapes qui se comptent en MINUTES RÉELLES. Sans ces
-     boutons, juger le plan et le fantôme demanderait dix-huit minutes d'attente,
-     et juger le navire fini, quarante — c'est-à-dire qu'on ne les jugerait pas. */
-  if (op === "plans") {
-    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "🛠️" };
-    if (!e.fall) e.fall = t;
-    for (const site of STAR_FARM_IMPACTS) resolveStarFound(e, site.id, "🛠️", t);
-    resolveStarFound(e, "crater", "🛠️", t);
-    e.plan = { at: t - C.STAR_ENG_TRAVEL_MS - C.STAR_ENG_WORK_MS, by: "🛠️", done: t };
-    return { star: e, ok: true };
-  }
   /* ╔═════════════════════════════════════════════════════════════════════════════
-     ║ AUTORITÉ 2026-09-12 — LE BOUTON DE LA RÉVÉLATION, MÊME FAMILLE QUE
-     ║ `queen`..`rescue` : ON POSE LE DÉCOR, ON LAISSE LE GESTE.
+     ║ ZIP 481 — DEUX BOUTONS POUR L'AUDIENCE. ILS NE SAUTENT PAS LA SCÈNE.
      ╚═════════════════════════════════════════════════════════════════════════════
-     ⚠️⚠️ SANS LUI, ATTEINDRE LA SECONDE FENÊTRE DE KERGUÉLEN (`starEngineerHere`,
-     voir sa note) DEMANDE DE GAGNER LES SIX CHASSES ET LES QUINZE MINUTES DE
-     PLANS avant de pouvoir REGARDER la fuite — c'est-à-dire qu'on ne la
-     regarderait qu'une fois par soirée de test, exactement le défaut que ce menu
-     existe pour corriger (444). Autonome comme `rescue` : il refait sa propre
-     préparation plutôt que de supposer qu'un autre bouton a déjà tourné.
-     ⚠️ IL NE POSE PAS `e.vandal` : la révélation reste LE GESTE — marcher jusqu'au
-     quai (« Stand at Kerguélen », FermeGame.js, même famille que
-     `devStandAtMayorDesk`) et appuyer sur E déclenche la vraie `req:
-     "vandalReveal"`, donc `resolveVandalReveal`, exactement comme un joueur. */
-  if (op === "vandal") {
-    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "🛠️" };
-    if (!e.fall) e.fall = t;
-    for (const site of STAR_FARM_IMPACTS) resolveStarFound(e, site.id, "🛠️", t);
-    resolveStarTownFall(e, t);
-    if (e.townFall) e.townFall = t - STAR_CRATER_COOL_MS - 1000;
-    resolveStarFound(e, "crater", "🛠️", t);
-    resolveStarFound(e, "townShy", "🛠️", t);
-    resolveStarFound(e, "townGreen", "🛠️", t);
-    if (!starPlanAsked(e)) e.plan = { at: t, by: "🛠️", done: t };
-    else if (!starPlanReady(e)) e.plan.done = t;
-    return { star: e, ok: true };
-  }
-  if (op === "timber") {
-    /* ⚠️ IL NE DONNE QUE LE BOIS, jamais les morceaux d'étoile : les deux moitiés
-       restent distinctes, sinon ce bouton effacerait la quête au lieu de la
-       raccourcir — et on ne saurait plus lequel des deux manque à l'écran. */
-    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "🛠️" };
-    if (!e.fall) e.fall = t;
-    if (!starPlanAsked(e)) e.plan = { at: t, by: "🛠️", done: t };
-    else if (!starPlanReady(e)) e.plan.done = t;
-    if (!starDevBoatGate(e, who, t)) return { star: e, ok: true, blocked: "needMayor" };
-    for (const k of STAR_SHIP_KEYS) e.wood[k] = { at: t, readyAt: t, done: true, ready: false, by: "🛠️" };
-    return { star: e, ok: true };
-  }
-  /* ╔═════════════════════════════════════════════════════════════════════════════
-     ║ ZIP 478 — « LIVRER SANS MONTER », POUR POUVOIR JUGER LE MARTEAU.
-     ╚═════════════════════════════════════════════════════════════════════════════
-     ⚠️⚠️ SANS CE BOUTON, LE MINI-JEU DE MONTAGE N'EST ATTEIGNABLE QU'APRÈS HUIT
-     MINUTES DE SCIE — c'est-à-dire qu'on ne le jugerait qu'une fois, et le §15.3 de
-     QUETE.md dit depuis le 444 ce que ça coûte (le mini-jeu de refroidissement n'a
-     jamais été joué jusqu'à la victoire pendant vingt-cinq zips, faute d'un moyen
-     de le rejouer).
-     ⚠️ IL S'ARRÊTE EXACTEMENT OÙ LE JEU S'ARRÊTE : les cinq pièces livrées, aucune
-     posée. Un raccourci qui poserait aussi les pièces, c'est « timber » ; celui-ci
-     existe pour l'ÉTAT D'AVANT, le seul qu'aucun autre bouton ne sait produire. */
-  /* ╔═════════════════════════════════════════════════════════════════════════════
-     ║ ZIP 481 — DEUX BOUTONS POUR L'AUDIENCE, ET C'EST LA MÊME RAISON QUE TOUS LES
-     ║ AUTRES : sans eux, chaque essai de la scène du maire coûte TROIS À CINQ
-     ║ MINUTES RÉELLES d'attente, ou un quart d'heure si on vient de claquer la
-     ║ porte pour voir ce que ça fait.
-     ╚═════════════════════════════════════════════════════════════════════════════
-     ⚠️⚠️ ET ILS NE SAUTENT PAS LA SCÈNE — c'est la ligne rouge de ce menu depuis le
-     444. `appt` pose un rendez-vous DÛ MAINTENANT : il reste à monter à l'étage, à
+     `appt` pose un rendez-vous DÛ MAINTENANT : il reste à monter à l'étage, à
      trouver le bureau, à appuyer sur E et à mener l'entretien en entier. `unslam`
      lève la punition, il ne signe rien. On saute l'ATTENTE, jamais le geste.
-     ⚠️ `appt` tire l'humeur comme l'hôte le ferait, par `mayorPickMood` : un
-     raccourci qui poserait « moyenne » en dur ferait juger la scène dans un seul
-     des cinq mondes — c'est-à-dire qu'on ne jugerait jamais la difficulté, qui est
-     très exactement ce que cette passe ajoute. */
+     ⚠️ `appt` tire l'humeur comme l'hôte le ferait (`mayorPickMood`) : un raccourci
+     qui poserait « moyenne » en dur ferait juger la scène dans un seul des mondes. */
   if (op === "appt") {
     MA.migrateMayor(e);
     e.mayor.block = 0;
-    e.mayor.appt = { by: String(who || ""), name: "\u{1F6E0}\uFE0F", at: t, due: t,
+    e.mayor.appt = { by: String(who || ""), name: DEV_BY, at: t, due: t,
                      mood: MA.mayorPickMood(Math.random, false, !!e.mayor.sour) };
     e.mayor.sour = 0;
     return { star: e, ok: true };
@@ -5064,244 +5145,156 @@ export function devStar(e, op, now, who) {
     e.mayor.block = 0; e.mayor.sour = 0;
     return { star: e, ok: true };
   }
-  if (op === "deliver") {
-    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "\u{1F6E0}\uFE0F" };
-    if (!e.fall) e.fall = t;
-    if (!starPlanAsked(e)) e.plan = { at: t, by: "\u{1F6E0}\uFE0F", done: t };
-    else if (!starPlanReady(e)) e.plan.done = t;
-    if (!starDevBoatGate(e, who, t)) return { star: e, ok: true, blocked: "needMayor" };
-    for (const k of STAR_SHIP_KEYS) e.wood[k] = { at: t, readyAt: t, done: false, ready: true, by: "\u{1F6E0}\uFE0F" };
+  /* ⚠️ 2026-09-13 — « LES PLANS » NE TOUCHENT PLUS AUX ÉTOILES. Ils trouvaient le
+     champ ET la reine pour avoir le droit de rendre des plans : c'était l'ancienne
+     trame (l'étoile envoyait chercher l'ingénieur). Les plans se commandent
+     maintenant juste après le maire, avant toute pluie. */
+  if (op === "plans") {
+    if (!devYard(e, who, t, false)) return devBlocked(e);
     return { star: e, ok: true };
   }
   /* ╔═════════════════════════════════════════════════════════════════════════════
-     ║ ZIP 479 — TROIS BOUTONS POUR TROIS VERBES, ET C'EST LA MÊME RAISON QU'AU 478.
+     ║ ZIP 478 — « LIVRER SANS MONTER », POUR POUVOIR JUGER LE MARTEAU ; « BOIS »
+     ║ POUR POSER. 2026-09-13 : SEULEMENT CE QUE LE CHANTIER PERMET MAINTENANT.
      ╚═════════════════════════════════════════════════════════════════════════════
-     ⚠️⚠️ SANS EUX, CHACUN DES TROIS GESTES COÛTE UNE COURSE, UNE CUISSON OU UN
-     ACHAT AVANT LA PREMIÈRE SECONDE DE JEU — c'est-à-dire qu'on ne les jugerait
-     qu'une fois, ce qui est exactement ce qui est arrivé au mini-jeu de
-     refroidissement pendant vingt-cinq zips (§15.3 de `QUETE.md`).
-     ⚠️⚠️ ET AUCUN NE SAUTE LE GESTE QU'IL SERT À JUGER : `candy` remplit la bourse
-     et laisse l'offrande à faire ; `dish` pose un plat chaud dans les mains et
-     laisse tout le TRAJET, qui est le verbe ; `effigy` plante le figurant et laisse
-     la minute de tenue. On saute la préparation, jamais la scène — c'est la ligne
-     que le menu dev tient depuis le 444 (« on saute la lecture, on ne gagne rien »).
-     ⚠️ LES TROUS SONT FOUILLÉS AU PASSAGE parce que les trois résolveurs le
-     réclament : un bouton qui rendrait un état impossible (une bourse pleine devant
-     un cratère intact) ferait juger un jeu que personne ne peut atteindre. */
+     ⚠️⚠️ Avant la pluie, ça veut dire la coque et le gouvernail ; après la
+     réparation, la mâture, la voile et la cloche. Un bouton qui poserait la cloche
+     avant la pluie fabriquerait exactement l'état que l'audit a mesuré (un navire
+     fini avant la première étoile). Rien à faire → `blocked` porte la raison du
+     chantier (`hullFirst`, `repair`) ou `allRaised`, que l'appelant affiche. */
+  if (op === "deliver" || op === "timber") {
+    if (!devYard(e, who, t, false)) return devBlocked(e);
+    const keys = STAR_SHIP_KEYS.filter(k => !starTimberDone(e, k)
+      && (starTimberReady(e, k) || !!starTimberOrder(e, k) || starTimberBlock(e, k) === null));
+    if (!keys.length) {
+      const left = STAR_SHIP_KEYS.find(k => !starTimberDone(e, k));
+      return devBlocked(e, left ? starTimberBlock(e, left) : "allRaised");
+    }
+    for (const k of keys) e.wood[k] = op === "timber"
+      ? { at: t, readyAt: t, done: true, ready: false, by: DEV_BY }
+      : { at: t, readyAt: t, done: false, ready: true, by: DEV_BY };
+    return { star: e, ok: true };
+  }
+  /* ⚠️ LE TAMPON SEUL. C'est le seul moyen de juger les PNJ nerveux et leurs
+     phrases sans que la comète tombe cinq minutes plus tard au milieu de
+     l'observation. Il pose le chantier d'abord : sans coque ni gouvernail, le jeu
+     n'aurait jamais affiché l'avis. */
+  if (op === "warn") {
+    if (e.fall) return { ok: false };
+    if (!devYard(e, who, t, true)) return devBlocked(e);
+    e.warn = { at: t, by: DEV_BY };
+    return { star: e, ok: true, scene: "warn" };
+  }
+  /* ⚠️⚠️ ZIP 455 — « ▶ START » SAUTE LE TAMPON, ET C'EST SA RAISON D'ÊTRE. */
+  if (op === "start") {
+    if (!devRain(e, who, t)) return devBlocked(e);
+    return { star: e, ok: true, scene: "fall" };
+  }
+  /* ╔═════════════════════════════════════════════════════════════════════════════
+     ║ ZIP 479 / 480 BIS — UN BOUTON PAR VERBE COÛTEUX. ON SAUTE LA PRÉPARATION,
+     ║ JAMAIS LA SCÈNE.
+     ╚═════════════════════════════════════════════════════════════════════════════
+     `candy` remplit le FLUX (pas le sac) et laisse l'offrande ; `dish` pose un plat
+     chaud à prendre et laisse le TRAJET ; `lure` crédite la fiole (lu par
+     l'appelant : `devStar` ne touche jamais à `f`) et laisse la tenue.
+     ⚠️ LES TROUS SONT FOUILLÉS AU PASSAGE parce que les résolveurs le réclament :
+     une bourse pleine devant un cratère intact serait un état que personne
+     n'atteint. */
   if (op === "candy") {
-    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "\u{1F6E0}️" };
-    if (!e.fall) e.fall = t;
-    if (STAR_LIGHT_SITE) resolveStarDig(e, STAR_LIGHT_SITE, "\u{1F6E0}️", t);
-    /* ⚠️ ET IL NE DONNE PAS DE BONBONS AU FERMIER : il remplit le FLUX (« rapporté
-       depuis la chute »), pas le stock. Le sac reste ce qu'il est, donc l'offrande
-       échouera si le joueur n'a vraiment rien — ce qui est le bon comportement, et
-       ce qui permet de juger le refus autant que la réussite. */
+    if (!devRain(e, who, t)) return devBlocked(e);
+    if (STAR_LIGHT_SITE) resolveStarDig(e, STAR_LIGHT_SITE, DEV_BY, t);
     resolveStarCandy(e, String(who || ""), STAR_CANDY_PRICE, t);
     return { star: e, ok: true };
   }
   if (op === "dish") {
-    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "\u{1F6E0}️" };
-    if (!e.fall) e.fall = t;
-    if (STAR_WARM_SITE) resolveStarDig(e, STAR_WARM_SITE, "\u{1F6E0}️", t);
+    if (!devRain(e, who, t)) return devBlocked(e);
+    if (STAR_WARM_SITE) resolveStarDig(e, STAR_WARM_SITE, DEV_BY, t);
     e.dish = { by: "", at: t - STAR_DISH_COOK_MS, phase: "cook", from: "" };
     return { star: e, ok: true };
   }
-  /* 480 bis — MÊME FAMILLE QUE `candy`/`dish` : on fouille son trou et on
-     saute la préparation (mine + chaudron), jamais la scène (le geste de la
-     tenue). `grantLure` est lu par l'appelant côté FermeGame.js, seul endroit
-     qui touche à l'inventaire personnel — `devStar` ne touche jamais à `f`. */
   if (op === "lure") {
-    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "\u{1F6E0}️" };
-    if (!e.fall) e.fall = t;
+    if (!devRain(e, who, t)) return devBlocked(e);
     const site = STAR_VERB_SITE.lure;
-    if (site) resolveStarDig(e, site, "\u{1F6E0}️", t);
+    if (site) resolveStarDig(e, site, DEV_BY, t);
     return { star: e, ok: true, grantLure: true };
   }
-  /* ╔══════════════════════════════════════════════════════════════════════════
-     ║ 2026-09-02 (lot A) — LE BOUTON DE LA REINE. MÊME FAMILLE QUE `candy`/`dish`/
-     ║ `lure` : ON SAUTE LA CORVÉE, JAMAIS LE GESTE.
-     ╚══════════════════════════════════════════════════════════════════════════
-     ⚠️⚠️ IL FAIT TROIS CHOSES ET PAS UNE DE PLUS : le météore tombe, le trou est
-     déjà froid, et le FLUX de lumière contient les 80 unités. Restent à jouer
-     l'offrande (E au bord), le réveil au rythme, et la posture — c'est-à-dire
-     exactement les trois choses que ce lot ajoute, donc les trois seules qui
-     méritent d'être regardées.
-     ⚠️ SANS CE BOUTON, JUGER LE RÉVEIL DEMANDERAIT UNE COURSE DE TEMPLE RUN ET
-     TROIS MINUTES DE REFROIDISSEMENT PAR ESSAI — c'est-à-dire qu'on ne le
-     jugerait qu'une fois, ce qui est le défaut que « rejouer une scène » avait
-     été écrit pour corriger (444).
-     ⚠️ ET IL NE DONNE RIEN AU FERMIER, comme `candy` : il remplit le flux, pas le
-     sac. La règle du §10 de `CLAUDE.md` tient — le chemin développeur appelle les
-     mêmes résolveurs et ne rend personne plus riche. */
+  /* ╔═════════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-02 → 2026-09-04 — LA FAMILLE DE LA VILLE : CHAQUE BOUTON POSE LE
+     ║ DÉCOR D'UNE SŒUR ET LAISSE SON GESTE.
+     ╚═════════════════════════════════════════════════════════════════════════════
+     `queen` : le trou froid et ses 80 lumières (offrande, réveil, posture à jouer).
+     `shy` : la reine apprivoisée, la discrète à trouver. `green` : la reine et la
+     discrète, la verte à pister (indices intacts). `vandal` : les six sœurs et les
+     plans — Kerguélen s'affole au quai, la réparation reste le geste (« Stand at
+     Kerguélen » puis E). `evil` : idem, et la canne remise intacte (`unbreakRod`).
+     `hook` : la septième vue, prête à haler. `rescue` : halée sur la rive, prête
+     à porter et réanimer.
+     ⚠️ Aucun ne déplace une planque : elles sont des fonctions pures du temps. */
+  const townChain = (ids) => {
+    if (!devRain(e, who, t)) return false;
+    devFarm(e, t);
+    devTownFall(e, t);
+    for (const id of ids) resolveStarFound(e, id, DEV_BY, t);
+    return true;
+  };
   if (op === "queen") {
-    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "\u{1F6E0}️" };
-    if (!e.fall) e.fall = t;
-    /* ⚠️ LE MÉTÉORE DOIT ÊTRE TOMBÉ AVANT QU'ON PUISSE ANTIDATER SON TROU :
-       `resolveStarTownFall` refuse si le chapitre 1 n'est pas clos, donc on le
-       clôt d'abord — c'est ce que fait déjà `plans`, deux ops plus haut. */
-    for (const site of STAR_FARM_IMPACTS) resolveStarFound(e, site.id, "\u{1F6E0}️", t);
-    resolveStarTownFall(e, t);
-    /* Le trou froid : on recule SA date de chute, jamais on n'avance une horloge
-       de client (§3 de `CLAUDE.md` — une horloge, jamais deux). */
-    if (e.townFall) e.townFall = t - STAR_CRATER_COOL_MS - 1000;
+    if (!townChain([])) return devBlocked(e);
     resolveStarCandy(e, String(who || ""), STAR_QUEEN_PRICE, t);
     return { star: e, ok: true };
   }
-  /* ⚠️ 2026-09-02 (lot A2) — LE BOUTON DE LA DISCRÈTE. Même famille que `queen` :
-     il pose le décor et LAISSE LE GESTE. Ici le geste est de la TROUVER, donc ce
-     bouton ne la trouve surtout pas — il apprivoise la reine (la seule condition
-     que l'arbitre tienne) et laisse la chasse entière. Sans lui, juger la chasse
-     demanderait de refaire les trois temps de la reine à chaque essai.
-     ⚠️ IL NE DÉPLACE PAS SA PLANQUE : elle est une pure fonction du temps
-     (`starShySlot`), donc « la remettre ailleurs » n'a pas de sens — il suffit
-     d'attendre cinquante secondes, ce qui est aussi ce que fait le joueur. */
-  if (op === "shy") {
-    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "\u{1F6E0}️" };
-    if (!e.fall) e.fall = t;
-    for (const site of STAR_FARM_IMPACTS) resolveStarFound(e, site.id, "\u{1F6E0}️", t);
-    resolveStarTownFall(e, t);
-    if (e.townFall) e.townFall = t - STAR_CRATER_COOL_MS - 1000;
-    resolveStarFound(e, "crater", "\u{1F6E0}️", t);
-    return { star: e, ok: true };
-  }
-  /* ⚠️ 2026-09-03 (lot A3) — LE BOUTON DE LA VERTE, ET IL EN FAUT UN SÉPARÉ DE
-     `shy` : sans lui, juger SA chasse obligerait d'abord à gagner celle de la
-     discrète, c'est-à-dire à chercher dix minutes avant de commencer à regarder ce
-     que ce lot ajoute. Il apprivoise donc la reine ET la discrète, et laisse la
-     verte entière — indices compris (`hints` reste à zéro).
-     ⚠️ COMME `shy`, IL NE DÉPLACE PAS SA PLANQUE : elle est une pure fonction du
-     temps (`starGreenSlot`), donc « la remettre ailleurs » n'a pas de sens — on
-     attend un créneau, exactement comme le joueur. */
-  if (op === "green") {
-    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "\u{1F6E0}️" };
-    if (!e.fall) e.fall = t;
-    for (const site of STAR_FARM_IMPACTS) resolveStarFound(e, site.id, "\u{1F6E0}️", t);
-    resolveStarTownFall(e, t);
-    if (e.townFall) e.townFall = t - STAR_CRATER_COOL_MS - 1000;
-    resolveStarFound(e, "crater", "\u{1F6E0}️", t);
-    resolveStarFound(e, "townShy", "\u{1F6E0}️", t);
-    return { star: e, ok: true };
-  }
-  /* ╔══════════════════════════════════════════════════════════════════════════
-     ║ 2026-09-03 (lot C) — LE BOUTON DU LAC MALÉFIQUE. MÊME FAMILLE QUE `green` :
-     ║ IL FERME LE CHAPITRE 2 ENTIER (les six compagnes) ET LAISSE LE GESTE.
-     ╚══════════════════════════════════════════════════════════════════════════
-     ⚠️⚠️ SANS LUI, JUGER LA DÉCOUVERTE/LE CHEVRON/LE HASARD DE LA CANNE DEMANDE
-     D'ABORD DE GAGNER LES CINQ AUTRES CHASSES — c'est-à-dire qu'on ne les
-     jugerait qu'une fois par soirée de test, exactement le défaut que ce menu
-     existe pour corriger partout ailleurs (444).
-     ⚠️ IL REMET AUSSI LA CANNE INTACTE (`unbreakRod`, lu par l'appelant côté
-     FermeGame.js — `devStar` ne touche jamais à `f`, comme `grantLure`) : le lot
-     D (protection au chaudron) n'existe pas encore, donc RIEN d'autre ne peut la
-     réparer. Sans ce nettoyage, un premier essai du hasard épuiserait le seul
-     moyen de le retester. Il NE remet PAS `e.evilFound` à zéro : la révélation
-     est un fait du monde qu'on ne « annule » pas à la légère — un « reset »
-     complet reste la voie pour tout rejouer depuis le début. */
-  if (op === "evil") {
-    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "\u{1F6E0}️" };
-    if (!e.fall) e.fall = t;
-    for (const site of STAR_FARM_IMPACTS) resolveStarFound(e, site.id, "\u{1F6E0}️", t);
-    resolveStarTownFall(e, t);
-    if (e.townFall) e.townFall = t - STAR_CRATER_COOL_MS - 1000;
-    resolveStarFound(e, "crater", "\u{1F6E0}️", t);
-    resolveStarFound(e, "townShy", "\u{1F6E0}️", t);
-    resolveStarFound(e, "townGreen", "\u{1F6E0}️", t);
+  if (op === "shy") return townChain(["crater"]) ? { star: e, ok: true } : devBlocked(e);
+  if (op === "green") return townChain(["crater", "townShy"]) ? { star: e, ok: true } : devBlocked(e);
+  if (op === "vandal") return townChain(["crater", "townShy", "townGreen"]) ? { star: e, ok: true } : devBlocked(e);
+  if (op === "evil" || op === "hook" || op === "rescue") {
+    if (!townChain(["crater", "townShy", "townGreen"])) return devBlocked(e);
+    if (op !== "evil") resolveStarEvilFound(e, t);
+    if (op === "rescue") resolveStarEvilRescue(e, t);
     return { star: e, ok: true, unbreakRod: true };
   }
-  /* 2026-09-04 — LE BOUTON DU HALAGE. Même famille que `evil`, un cran plus
-     loin : pose aussi `evilFound` (elle a été vue — sans quoi le halage
-     n'aurait rien à ramener) pour qu'un seul clic ouvre directement le
-     geste à juger, sans repasser par le lancer spécial à chaque essai. Ne
-     déclenche PAS le halage lui-même (état purement local, voir
-     `evilHaulRef` dans FermeGame.js) : ce bouton pose le décor, comme tous
-     les autres de cette famille, et laisse le geste. */
-  if (op === "hook") {
-    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "\u{1F6E0}️" };
-    if (!e.fall) e.fall = t;
-    for (const site of STAR_FARM_IMPACTS) resolveStarFound(e, site.id, "\u{1F6E0}️", t);
-    resolveStarTownFall(e, t);
-    if (e.townFall) e.townFall = t - STAR_CRATER_COOL_MS - 1000;
-    resolveStarFound(e, "crater", "\u{1F6E0}️", t);
-    resolveStarFound(e, "townShy", "\u{1F6E0}️", t);
-    resolveStarFound(e, "townGreen", "\u{1F6E0}️", t);
-    resolveStarEvilFound(e, t);
-    return { star: e, ok: true, unbreakRod: true };
-  }
-  /* 2026-09-04 (lot E) — MÊME FAMILLE QUE `hook`, UN CRAN PLUS LOIN : pose
-     aussi `evilRescued` (elle est halée jusqu'à la rive) pour qu'un seul clic
-     ouvre directement le ramassage/la réanimation à juger, sans rejouer le
-     halage à chaque essai. Ne touche à rien du halage lui-même (état
-     purement local, `evilHaulRef`) — ce bouton pose le décor, comme tous les
-     autres de cette famille, et laisse le geste. */
-  if (op === "rescue") {
-    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "\u{1F6E0}️" };
-    if (!e.fall) e.fall = t;
-    for (const site of STAR_FARM_IMPACTS) resolveStarFound(e, site.id, "\u{1F6E0}️", t);
-    resolveStarTownFall(e, t);
-    if (e.townFall) e.townFall = t - STAR_CRATER_COOL_MS - 1000;
-    resolveStarFound(e, "crater", "\u{1F6E0}️", t);
-    resolveStarFound(e, "townShy", "\u{1F6E0}️", t);
-    resolveStarFound(e, "townGreen", "\u{1F6E0}️", t);
-    resolveStarEvilFound(e, t);
-    resolveStarEvilRescue(e, t);
-    return { star: e, ok: true, unbreakRod: true };
-  }
+  /* On donne exactement ce qui manque au chapitre COURANT, pas un de plus.
+     `starAdvance` fait le reste. ⚠️ 2026-09-13 — le météore de la ville tombe
+     AVANT qu'on trouve la reine (voir `devTownFall`). */
   if (op === "chapter") {
-    /* On donne exactement ce qui manque au chapitre COURANT, pas un de plus.
-       `starAdvance` fait le reste, et il peut en franchir deux d'un coup si le
-       suivant était déjà complet : c'est sa raison d'être. */
-    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "🛠️" };
-    if (!e.fall) e.fall = t;
-    for (const id of starMissing(e)) resolveStarFound(e, id, "🛠️", t);
+    if (!devRain(e, who, t)) return devBlocked(e);
+    if (starChapterKey(e) === "crater") devTownFall(e, t);
+    for (const id of starMissing(e)) resolveStarFound(e, id, DEV_BY, t);
     return { star: e, ok: true };
   }
   if (op === "skip") {
-    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "🛠️" };
-    if (!e.fall) e.fall = t;
+    if (!devRain(e, who, t)) return devBlocked(e);
     const before = e.ch;
     for (let guard = 0; guard < STAR_CH_DONE + 2 && e.ch === before; guard++) {
-      for (const id of starMissing(e)) resolveStarFound(e, id, "🛠️", t);
       if (STAR_CHAPTERS[e.ch] && STAR_CHAPTERS[e.ch].final) break;
+      if (starChapterKey(e) === "crater") devTownFall(e, t);
+      for (const id of starMissing(e)) resolveStarFound(e, id, DEV_BY, t);
     }
     return { star: e, ok: true };
   }
+  /* ╔═════════════════════════════════════════════════════════════════════════════
+     ║ « TOUT SAUF LA FIN ». 2026-09-13 : DANS L'ORDRE DU RÉCIT, SEPTIÈME SŒUR
+     ║ COMPRISE.
+     ╚═════════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ La fin exige désormais l'état COMPLET de la quête (`starQuestComplete` :
+     le navire ET la septième réanimée — décision de Guillaume). Le bouton rejoue
+     donc la trame entière — chantier, pluie, chapitres, météore avant la reine,
+     septième vue puis halée puis réanimée, réparation, seconde moitié du navire —
+     et laisse l'hôte jouer la scène finale (`resolveStarGift`, appelé par
+     `FermeGame` après chaque bouton).
+     ⚠️ La septième ne passe plus par la boucle `STAR_SITES` : elle y était trouvée
+     sans avoir jamais été VUE (`evilFound` faux), et le bandeau pouvait ensuite
+     envoyer chercher une étoile qui volait déjà dans la formation. */
   if (op === "all") {
-    /* ⚠️ DEUX PASSES, PARCE QUE LES PRÉREQUIS SONT RÉELS (`site.req`). Une seule
-       boucle dans l'ordre de la table sauterait tout lieu dont le prérequis est
-       accordé après lui, le chapitre resterait ouvert, et on conclurait que la
-       scène finale est cassée alors que c'est le raccourci qui l'était. Le banc le
-       vérifie — c'est le contrôle que le 442 avait dû ajouter pour la même raison.
-       ⚠️ ZIP 469 — IL NE S'ARRÊTE PLUS « AVANT LE CHANT » : il n'y a plus de chant.
-       La seule chose qu'il laisse à faire est la scène finale, que l'hôte joue. */
-    if (!e.warn || !e.warn.at) e.warn = { at: t, by: "🛠️" };
-    if (!e.fall) e.fall = t;
-    for (let pass = 0; pass < 2; pass++)
-      for (const st of STAR_SITES) resolveStarFound(e, st.id, "🛠️", t);
-    /* ⚠️⚠️ AUTORITÉ 2026-09-12 (repasse) — ET IL DOIT DIRE LA RÉPARATION, À CÔTÉ DE
-       LA TROUVAILLE QUI LA DÉCLENCHE, PAS APRÈS LE VERROU DU MAIRE. `STAR_SITES`
-       trouve `crater` dans la boucle juste au-dessus, sans dépendre du bois ni du
-       maire : sans cette ligne AU MÊME ENDROIT, `shipSiteOk` regarderait `e.vandal`
-       (encore vide) et ferait redescendre la coque à 4/5 dès qu'un test ou un
-       joueur pressé appelle « all » sans avoir d'abord signé — exactement le
-       défaut inverse de celui que P1 BIS a corrigé ici même (le bois posé sans
-       le maire). Placée APRÈS `starDevBoatGate`, elle aurait hérité du même
-       retour anticipé que le bois — et le trouver a coûté un test qui a rougi
-       avant que cette note ne soit écrite. */
+    if (!devRain(e, who, t)) return devBlocked(e);
+    for (const ch of STAR_CHAPTERS) {
+      if (ch.need.includes("crater")) devTownFall(e, t);
+      for (const id of ch.need) resolveStarFound(e, id, DEV_BY, t);
+    }
+    resolveStarEvilFound(e, t);
+    resolveStarEvilRescue(e, t);
+    resolveStarFound(e, STAR_EVIL_ID, DEV_BY, t);
     resolveVandalReveal(e, t);
-    /* ⚠️ ZIP 454 — LE RACCOURCI DOIT AUSSI DIRE LE BOIS, sans quoi la résolution
-       n'arriverait jamais (`resolveStarGift` exige un navire fini) : le bouton
-       promettrait « c'est tout » et le jeu, lui, attendrait quarante minutes de
-       sciage. Un raccourci qui ment est pire que pas de raccourci. */
-    if (!starPlanAsked(e)) e.plan = { at: t, by: "🛠️", done: t };
-    else if (!starPlanReady(e)) e.plan.done = t;
-    /* ⚠️⚠️⚠️ P1 BIS — ET IL DOIT DIRE LE MAIRE, EXACTEMENT COMME IL DIT LE BOIS.
-       Avant cette passe, ce bouton posait un navire achevé sans jamais poser la
-       question au maire : un état qu'aucune partie réelle ne peut produire (voir
-       `starDevBoatGate`, juste au-dessus de `devStar`). Il s'arrête maintenant
-       au même point que le ferait un vrai joueur pressé — plans en main,
-       rendez-vous pris — et laisse l'audience à jouer. */
-    if (!starDevBoatGate(e, who, t)) return { star: e, ok: true, blocked: "needMayor" };
-    for (const k of STAR_SHIP_KEYS) e.wood[k] = { at: t, readyAt: t, done: true, by: "🛠️" };
+    for (const k of STAR_SHIP_KEYS)
+      if (!starTimberDone(e, k)) e.wood[k] = { at: t, readyAt: t, done: true, ready: false, by: DEV_BY };
     return { star: e, ok: true };
   }
   return { ok: false };
