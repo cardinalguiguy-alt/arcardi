@@ -71,9 +71,14 @@ n'avait plus de fin**. Corrigé : `vandal: null` dans `newStar`, recopie dans `m
    module) et affiche `starWispLive` : penchée, de trois quarts, étirée le long du chemin (cache
    borné à 96 canevas). ⚠️ Les petites ont leurs propres réglages (creux plus francs, coussin plus
    mince, ombrage lissé 3×3 avant quantification) : avec ceux de la reine, onze pixels rendaient un
-   caillou. `render-etoile` tout vert, `verify-quete` 847/847, bundle propre. **Reste à voir** : la
-   traîne en jeu (amplitudes `roll` 0,34 / `yaw` 0,45 / `stretch` 0,20 = premier réglage), et si
-   la reine (non rétrécie, §3 du banc) doit l'être.
+   caillou. **Reste à voir** : la traîne en jeu (amplitudes `roll` 0,34 / `yaw` 0,45 / `stretch`
+   0,20 = premier réglage). ⚠️ **2026-09-13 — LA REINE ET LA LUMIÈRE DES ÉTOILES** (« ressemble à une fleur », « réduis un
+   peu », « branches pas identiques », « bords trop arrondis », « lumière plus progressive, comme
+   la torche mais pas exactement ») : reine aux réglages des petites sauf creux (`RIN` 0,52) et
+   POINTE (`SHARP` 0,8 : profil triangulaire mêlé au `cos`, seul moyen d'avoir un angle au sommet),
+   taille 0,33 (17 px de matière) ; halo du sprite en atténuation douce au lieu de deux disques, et
+   halo en jeu (`drawStarWisp`) en dégradé radial à cinq paliers qui respire. **Rien de ça n'a été
+   vu en jeu** — le dégradé ne se rastérise pas hors navigateur.
 3. **La 2ᵉ négociation du maire** (`maire.js`) : budget dérapé par la réparation, une table de plus
    (§16.1 de `QUETE.md`). C'est elle qui doit remplacer le garde-fou `needStars`, qui n'est qu'un
    ersatz.
@@ -424,6 +429,11 @@ dépôt.
   viewport plus étroit que la constante soustraite — c'est-à-dire tous les téléphones — et rien ne
   le signale : la règle est valide, juste toujours à zéro. La parade est `min(Npx, calc(100vw -
   margePx))` : un plafond ferme plutôt qu'une soustraction qui peut changer de signe.
+- ⚠️⚠️ **UN CONTRÔLE DE TAILLE QUI COMPTE L'ALPHA MESURE LE HALO, PAS L'OBJET** (2026-09-13).
+  `render-etoile` bornait la reine à « 21 à 28 px » en comptant l'alpha > 40 — seuil que le halo
+  plat (alpha 51) franchissait partout. Le jour où le halo est devenu progressif, la reine a
+  « rétréci » de six pixels sans qu'un pixel de matière bouge. *Une source de lumière se mesure
+  sur sa MATIÈRE ; son halo est un autre objet, avec sa propre grandeur.*
 - ⚠️⚠️ **UN BANC QUI CHERCHE UN NOM D'APPEL MESURE UNE ÉCRITURE, PAS UN AFFICHAGE** (2026-09-02).
   `verify-quete` déclare morte toute phrase du maire qu'aucun fichier ne lit — il les cherchait par
   `L.maire.<clé>`. Le jour où les appels sont devenus `LM.` et `maireL().` (le texte se décline

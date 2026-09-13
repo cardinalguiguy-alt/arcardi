@@ -22871,10 +22871,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     le bleu et la rose. */
                  : cp.color === "violet" ? ["195,140,255", "225,195,255"]
                  : ["255,226,148", "255,240,190"];
-      ctx.fillStyle = `rgba(${halo[0]},${(0.10 + 0.05 * puls).toFixed(3)})`;
-      ctx.beginPath(); ctx.arc(cx, cy, 15 * (cp.scale || 1), 0, 7); ctx.fill();
-      ctx.fillStyle = `rgba(${halo[1]},${(0.14 + 0.06 * puls).toFixed(3)})`;
-      ctx.beginPath(); ctx.arc(cx, cy, 8.5 * (cp.scale || 1), 0, 7); ctx.fill();
+      /* ⚠️ 2026-09-13 — UN DÉGRADÉ, PLUS DEUX DISQUES. « Plus progressive, comme
+         la torche mais pas exactement » : la torche perce le voile de nuit en
+         0 → 0,7 → 1 (un plateau puis une chute) ; l'étoile, elle, rayonne — le
+         cœur clair tient à peine, puis la teinte s'éteint en longue queue
+         (cinq paliers), et le RAYON respire avec elle au lieu de l'alpha seul. */
+      const hs = cp.scale || 1, hr = (19 + 2.5 * puls) * hs;
+      const hg = ctx.createRadialGradient(cx, cy, 0, cx, cy, hr);
+      const ha = 0.26 + 0.06 * puls;
+      hg.addColorStop(0, `rgba(${halo[1]},${ha.toFixed(3)})`);
+      hg.addColorStop(0.22, `rgba(${halo[1]},${(ha * 0.78).toFixed(3)})`);
+      hg.addColorStop(0.45, `rgba(${halo[0]},${(ha * 0.42).toFixed(3)})`);
+      hg.addColorStop(0.70, `rgba(${halo[0]},${(ha * 0.14).toFixed(3)})`);
+      hg.addColorStop(1, `rgba(${halo[0]},0)`);
+      ctx.fillStyle = hg;
+      ctx.beginPath(); ctx.arc(cx, cy, hr, 0, 7); ctx.fill();
       /* ╔════════════════════════════════════════════════════════════════════
          ║ 2026-09-12 (nuit) — LA TRAÎNE : ELLE SE PENCHE VERS OÙ ELLE VA.
          ╚════════════════════════════════════════════════════════════════════

@@ -387,9 +387,21 @@ console.log("\n3. L'ÉCHELLE — contre le fermier, jamais contre d'autres déco
   const wisp = inkHeight(S.starWisp[0][0]);
   ok(wisp >= 10 && wisp <= 15, "la compagne est « plus petite qu'une poule »",
      `${wisp} px = ×${(wisp / FARMER).toFixed(2)} d'un fermier`);
-  const queen = inkHeight(S.starWispQueen[0][0]);
-  ok(queen >= 21 && queen <= 28, "⚠️ la reine garde sa grande silhouette en pixels NATIFS",
-     `${queen} px natifs contre ${wisp} px pour une petite`);
+  /* ⚠️⚠️ 2026-09-13 — CE CONTRÔLE MESURAIT LE HALO. `inkHeight` compte l'alpha > 40,
+     et le halo en disques plats (alpha 51) le dépassait partout : les « 21 à 28 px »
+     étaient la hauteur du DISQUE. Le jour où le halo est devenu une atténuation
+     douce, la reine a « rétréci » de six pixels sans qu'un pixel de matière bouge.
+     On mesure donc la MATIÈRE (alpha > 150) : 21 px sur l'ancienne reine, 17 après
+     « réduis un peu sa taille ». Bornes : 15 à 24, et au moins 1,5 petite. */
+  const matterHeight = (cv) => {
+    const d = px(cv); let top = -1, bot = -1;
+    for (let y = 0; y < cv.height; y++) for (let x = 0; x < cv.width; x++)
+      if (d[((y * cv.width + x) * 4) + 3] > 150) { if (top < 0) top = y; bot = y; break; }
+    return bot - top + 1;
+  };
+  const queen = matterHeight(S.starWispQueen[0][0]), wispM = matterHeight(S.starWisp[0][0]);
+  ok(queen >= 15 && queen <= 24 && queen >= wispM * 1.5, "⚠️ la reine garde sa grande silhouette en pixels NATIFS",
+     `${queen} px de matière contre ${wispM} px pour une petite`);
   const smallMatter = matter(S.starWisp[0][0]).reduce((a, b) => a + b, 0);
   const queenMatter = matter(S.starWispQueen[0][0]).reduce((a, b) => a + b, 0);
   ok(queenMatter >= smallMatter * 2, "⚠️⚠️ la reine contient réellement plus de détail, pas des pixels agrandis",

@@ -6931,10 +6931,11 @@ export function buildSprites() {
     // d'onze pixels il ne restait plus assez de matière pour lire cinq branches.
     const shrink = state === 1 ? (queen ? 0.80 : 0.84) : 1;
     /* ⚠️ LA TAILLE : 0,30 d'un canevas de 16 pour une compagne (~11 px avec le
-       cerne, « réduis un peu », 2026-09-12) ; la reine garde 0,38 d'un canevas de
-       28 — `render-etoile` §3 lui impose 21 à 28 px natifs et deux fois la
-       matière d'une petite. */
-    const BODY_K = queen ? 0.38 : 0.30;
+       cerne, « réduis un peu », 2026-09-12) ; la reine 0,33 d'un canevas de 28
+       (0,38 jusqu'au 2026-09-13, « réduis un peu sa taille » : 23 px d'encre au
+       lieu de ~26) — `render-etoile` §3 lui impose 21 à 28 px natifs et deux
+       fois la matière d'une petite. */
+    const BODY_K = queen ? 0.33 : 0.30;
     const R0 = S * BODY_K * shrink;                   // au repos : le chapeau et le halo s'y calent
     const R = R0 * [1.00, 1.04, 0.97, 0.95][p];       // le souffle
     // La gelée : large quand elle s'écrase, haute quand elle s'étire.
@@ -6948,8 +6949,27 @@ export function buildSprites() {
     /* Dodue : lobes ronds et larges, creux assez francs pour que le cerne ne les
        rebouche pas. ⚠️ LES PETITES CREUSENT PLUS ET GONFLENT MOINS : à onze pixels,
        les réglages de la reine rendaient un caillou (vu sur la planche) — un
-       coussin épais montre ses flancs au moindre pivot et comble les échancrures. */
-    const RIN = queen ? 0.50 : 0.40, PLUMP = queen ? 0.90 : 0.75, HGT = queen ? 0.50 : 0.36;
+       coussin épais montre ses flancs au moindre pivot et comble les échancrures.
+       ⚠️⚠️ 2026-09-13 — LA REINE A LES MÊMES BRANCHES QUE SES SŒURS. Guillaume :
+       « elle ressemble plus à une fleur », puis, sur un premier essai aux branches
+       effilées, « pas identiques à celles des autres ». Même contour, même coussin,
+       même seuil de couverture, même lissage, mêmes seuils de ton — une seule
+       exception, et elle SERT l'identité : le creux. À onze pixels, les échancrures
+       d'une petite tombent sous le pixel et ses branches se LISENT courtes et
+       trapues ; recopié tel quel sur vingt-trois pixels, `RIN` 0,40 se résout en
+       cinq lobes profonds, c'est-à-dire en pétales. 0,52 rend à la grande ce que
+       l'œil voit chez les petites (0,40 et 0,62 comparés sur la même planche).
+       Seconde exception, pour la même raison : `PLUMP` 1,30. Les pointes d'une
+       petite sont arrondies par ses pixels, pas par sa courbe ; à 0,75 la reine
+       gardait des bouts ronds que ses sœurs n'ont pas (« bords un peu trop
+       arrondis encore »). 1,0 changeait à peine, 1,7 donnait une étoile de Noël. */
+    const RIN = queen ? 0.52 : 0.40, PLUMP = queen ? 1.0 : 0.75, HGT = 0.36;
+    /* ⚠️ 2026-09-13 — « TOUJOURS DES BORDS TROP ARRONDIS ». Durcir l'exposant ne
+       suffisait pas : `cos` a une dérivée NULLE en son sommet, donc toute puissance
+       de `cos` garde un bout rond. Seul un profil qui a un ANGLE au sommet fait une
+       pointe — le triangle `1 − |d|/SECT`, mêlé à 80 % (0,5 restait mou). Réservé à
+       la reine : à onze pixels, ce sont les pixels qui arrondissent les petites. */
+    const SHARP = queen ? 0.8 : 0;
     const SECT = Math.PI / 5;
     const radius = (th) => {
       let best = RIN;
@@ -6957,7 +6977,8 @@ export function buildSprites() {
         const d0 = th - (rot + k * 2 * SECT);
         const d = Math.atan2(Math.sin(d0), Math.cos(d0));
         if (Math.abs(d) >= SECT) continue;
-        const b = Math.pow(Math.cos(d * 2.5), PLUMP);
+        const tri = 1 - Math.abs(d) / SECT;
+        const b = Math.pow(Math.cos(d * 2.5), PLUMP) * (1 - SHARP) + tri * SHARP;
         best = Math.max(best, RIN + (STAR_ARMS[k] - RIN) * b);
       }
       return best;
@@ -6993,10 +7014,29 @@ export function buildSprites() {
     let Hx = Lx, Hy = Ly, Hz = Lz + 1;
     { const n = Math.hypot(Hx, Hy, Hz); Hx /= n; Hy /= n; Hz /= n; }
     // 1. Le halo, autour, en deux couronnes — jamais par-dessus la source.
+    /* ⚠️ 2026-09-13 — UNE ATTÉNUATION, PLUS DEUX DISQUES PLATS. Guillaume : « la
+       lumière doit être plus progressive (comme la torche mais pas exactement) ».
+       Les deux disques superposés faisaient deux marches nettes ; ici l'alpha
+       tombe en douceur (courbe au carré, plus lente près du corps qu'un dégradé
+       linéaire de torche), quantifiée par pas de 0,02 pour rester du pixel. Le
+       pic reproduit la somme des deux anciens disques (≈ 1,8 × l'alpha de HALO). */
+    // ⚠️ R0 + 2,2 comme les anciens disques : plus large, il passait sous le chapeau
+    // de la discrète, qui REMPLAÇAIT alors du halo au lieu de s'ajouter (§16 du banc).
     const haloR = Math.min(R0 + 2.2, S / 2 - 1);
-    g.fillStyle = HALO;
-    g.beginPath(); g.arc(cx, cy, haloR, 0, 7); g.fill();
-    g.beginPath(); g.arc(cx, cy, R0 * 0.75, 0, 7); g.fill();
+    const hm = /rgba?\(([^)]+)\)/.exec(HALO), hp = hm ? hm[1].split(",").map(Number) : [255, 230, 150, 0.2];
+    /* ⚠️ La chute COMMENCE AU BORD DU CORPS, pas au centre : partie du centre,
+       une courbe au carré était déjà éteinte au ras de la matière — le halo passait
+       tout entier sous l'étoile (vu sur la planche). */
+    const hIn = R0 * 0.85;
+    for (let y = 0; y < SH; y++) for (let x = 0; x < S; x++) {
+      const dd = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
+      if (dd >= haloR) continue;
+      const k = dd <= hIn ? 1 : 1 - (dd - hIn) / (haloR - hIn);
+      const a = Math.round(hp[3] * 1.6 * Math.pow(k, 1.6) * 50) / 50;
+      if (a <= 0) continue;
+      g.fillStyle = `rgba(${hp[0]},${hp[1]},${hp[2]},${a})`;
+      g.fillRect(x, y, 1, 1);
+    }
     // 2. Le tampon de profondeur, ×4.
     const SS = 4, BW = S * SS, BH = SH * SS;
     const zb = new Float32Array(BW * BH).fill(-1e9);
@@ -7031,13 +7071,14 @@ export function buildSprites() {
         const i = (y * SS + b) * BW + x * SS + a;
         if (zb[i] > -1e8) { n++; sum += lb[i]; }
       }
-      if (n >= (queen ? 7 : 9)) { inside[y * S + x] = 1; tone[y * S + x] = sum / n; }
+      if (n >= 9) { inside[y * S + x] = 1; tone[y * S + x] = sum / n; }
     }
-    /* ⚠️ LES PETITES LISSENT LEUR OMBRAGE AVANT DE LE QUANTIFIER : à onze pixels,
+    /* ⚠️ ELLES LISSENT LEUR OMBRAGE AVANT DE LE QUANTIFIER (la reine aussi depuis le
+       2026-09-13 — sans lissage, ses tons ne ressemblaient pas à ceux des petites) : à onze pixels,
        la moyenne d'un pixel seul oscille autour des seuils et sème des points
        clairs et sombres isolés (le « grésillement » vu sur la planche). Un flou
        3×3 limité à la matière garde la lumière et retire le poivre. */
-    if (!queen) {
+    {
       const t2 = new Float32Array(tone);
       for (let y = 0; y < SH; y++) for (let x = 0; x < S; x++) {
         if (!inside[y * S + x]) continue;
@@ -7052,7 +7093,7 @@ export function buildSprites() {
       }
       tone.set(t2);
     }
-    const T_CORE = queen ? 1.03 : 0.98, T_BODY = queen ? 0.72 : 0.74, T_EDGE = queen ? 0.50 : 0.56;
+    const T_CORE = 0.98, T_BODY = 0.74, T_EDGE = 0.56;
     for (let y = 0; y < SH; y++) for (let x = 0; x < S; x++) {
       const i = y * S + x;
       if (inside[i]) {
