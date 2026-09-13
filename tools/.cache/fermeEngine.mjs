@@ -127,8 +127,11 @@ export function generateWorld(seed) {
   for (let i = 0; i < 260; i++) placeObj(Math.floor(rnd() * W), Math.floor(rnd() * H), rnd() < 0.3 ? C.O_TREE2 : C.O_TREE, C.TREE_HP);
   for (let i = 0; i < 340; i++) placeObj(Math.floor(rnd() * W), Math.floor(rnd() * H), C.O_ROCK, C.ROCK_HP);
   // Dégager les abords de la ferme
-  for (let y = C.HOUSE.y - 4; y < C.HOUSE.y + C.HOUSE.h + 14; y++)
-    for (let x = C.HOUSE.x - 8; x < C.HOUSE.x + C.HOUSE.w + 14; x++) {
+  // ⚠️ 2026-09-13 : le rectangle vient de `farmYardZone()`, que les buissons
+  // lisent aussi — mêmes bornes qu'avant, au bit près (verify-buissons).
+  const YARD = farmYardZone();
+  for (let y = YARD.y; y < YARD.y + YARD.h; y++)
+    for (let x = YARD.x; x < YARD.x + YARD.w; x++) {
       if (!inMap(x, y)) continue;
       const o = objects[idx(x, y)];
       if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK) { objects[idx(x, y)] = C.O_NONE; objHp.delete(idx(x, y)); }
@@ -146,8 +149,9 @@ export function generateWorld(seed) {
   // par là) et arbres/rochers retirés, sur une zone assez large pour
   // accueillir le palier 3 (le plus grand bâtiment du jeu, voir
   // barnSprite() dans fermeArt.js).
-  for (let y = C.BARN_SITE.y - 15; y < C.BARN_SITE.y + 5; y++)
-    for (let x = C.BARN_SITE.x - 10; x < C.BARN_SITE.x + 10; x++) {
+  const BARNZ = farmBarnZone(); // 2026-09-13 : mêmes bornes, partagées avec les buissons
+  for (let y = BARNZ.y; y < BARNZ.y + BARNZ.h; y++)
+    for (let x = BARNZ.x; x < BARNZ.x + BARNZ.w; x++) {
       if (!inMap(x, y)) continue;
       const i = idx(x, y);
       ground[i] = C.G_GRASS;
@@ -229,7 +233,117 @@ export function generateWorld(seed) {
      COMPLET de son constructeur. Le réparer côté chargement, c'était rendre la
      validité du monde dépendante de qui l'a fabriqué — exactement la faute que
      `serializeOrchards` se donne du mal à éviter dix lignes plus bas. */
-  return { w: W, h: H, ground, objects, objHp, crops, mills, sucreries: new Map(), orchards: new Map(), bridgeSites, bridgeLeverPos, riverCenter, darkPassage };
+  const world = { w: W, h: H, ground, objects, objHp, crops, mills, sucreries: new Map(), orchards: new Map(), bridgeSites, bridgeLeverPos, riverCenter, darkPassage };
+  /* ⚠️⚠️ 2026-09-13 — LES BUISSONS SE POSENT EN DERNIER, ET SANS UN SEUL `rnd()`.
+     Une ferme n'est jamais sauvegardée entière : on la REGÉNÈRE depuis sa graine,
+     puis on rejoue par-dessus les cases modifiées (`applyOverrides`, indexées par
+     case). Un tirage de plus n'importe où avant la fin décalerait tous les
+     suivants : les rochers d'une ferme existante changeraient de place et les
+     arbres qu'on y a coupés « repousseraient » ailleurs. Le placement lit donc
+     un HACHAGE de la case — la carte d'hier sort au bit près, buissons en plus
+     (`verify-buissons` compare l'empreinte). Et sur une vieille sauvegarde, toute
+     case déjà touchée par un joueur (labourée, pavée, bâtie) porte un override
+     qui écrase le buisson : rien à migrer. */
+  seedFarmBushes(world);
+  return world;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2026-09-13 — LES BUISSONS SAUVAGES DE LA FERME.
+   ───────────────────────────────────────────────────────────────────────────
+   Deux rectangles de la génération sortis en fonctions : les abords de la
+   maison (le coin qu'on cultive) et l'emprise de la grange. Les buissons les
+   évitent, et les écrire une seconde fois ici aurait été la recopie qui diverge
+   au premier réglage (§8). */
+export function farmYardZone() {
+  return { x: C.HOUSE.x - 8, y: C.HOUSE.y - 4, w: C.HOUSE.w + 22, h: C.HOUSE.h + 18 };
+}
+export function farmBarnZone() {
+  return { x: C.BARN_SITE.x - 10, y: C.BARN_SITE.y - 15, w: 20, h: 20 };
+}
+/* Les champs de l'ouest (le puits, et la tournée de labour de Greg) : un rayon
+   de terre qu'on cultive, donc pas de broussaille. */
+const BUSH_FIELD_R = 9;
+/* Ce qui est INTERDIT par le lieu, calculé une fois par carte (WeakMap : la
+   carte change à chaque ferme chargée, un cache global désignerait les cases
+   d'une autre). Ce qui dépend de l'état vivant (culture, objet, bâtiment
+   déplaçable) se relit à chaque appel dans `farmBushAllowed`. */
+const BUSH_BAN = new WeakMap();
+function farmBushBan(world) {
+  let ban = BUSH_BAN.get(world);
+  if (ban) return ban;
+  const W = C.MAP_W, H = C.MAP_H;
+  ban = new Uint8Array(W * H);
+  const rect = (R, m = 0) => {
+    for (let y = R.y - m; y < R.y + R.h + m; y++) for (let x = R.x - m; x < R.x + R.w + m; x++) if (inMap(x, y)) ban[idx(x, y)] = 1;
+  };
+  const around = (p, r) => rect({ x: p.x, y: p.y, w: 1, h: 1 }, r);
+  // Le bord de la carte, et les rails avec la case qui les longe de chaque côté.
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (x < 2 || y < 2 || x >= W - 2 || y >= H - 2 || x <= C.STATION_RAIL_X + 2) ban[idx(x, y)] = 1;
+  }
+  rect(farmYardZone()); rect(farmBarnZone()); rect(C.STATION_CLEAR); rect(C.PEN, 1);
+  around(C.WELL, BUSH_FIELD_R); around(C.GREG_ANCHOR, BUSH_FIELD_R);
+  if (world.darkPassage) around(world.darkPassage, 3);
+  for (const lp of (world.bridgeLeverPos || [])) around({ x: xOf(lp), y: yOf(lp) }, 2);
+  // Les abords des deux ponts : on doit voir où la traversée commence.
+  for (const sites of (world.bridgeSites || [])) for (const si of sites) around({ x: xOf(si), y: yOf(si) }, 2);
+  BUSH_BAN.set(world, ban);
+  return ban;
+}
+const isTreeObj = (o) => o === C.O_TREE || o === C.O_TREE2;
+/* Une case peut-elle porter un buisson MAINTENANT ?
+   ⚠️ « PAS SUR UN ARBRE » VEUT AUSSI DIRE « PAS SOUS SON FEUILLAGE » : le chêne de
+   la ferme fait 32×48, ancré au pied, donc sa couronne recouvre les deux cases au
+   nord de son tronc (et la moitié des voisines). Un buisson posé là serait
+   dessiné AVANT l'arbre dans la file triée en y — c'est-à-dire invisible, et
+   pourtant là : on ralentirait dans un décor qu'on ne voit pas. */
+export function farmBushAllowed(world, x, y) {
+  if (!inMap(x, y)) return false;
+  const i = idx(x, y);
+  if (farmBushBan(world)[i]) return false;
+  if (world.ground[i] !== C.G_GRASS || world.objects[i] !== C.O_NONE) return false;
+  if (world.crops && world.crops.has(i)) return false;
+  const o = (dx, dy) => inMap(x + dx, y + dy) ? world.objects[idx(x + dx, y + dy)] : C.O_NONE;
+  if (isTreeObj(o(0, 1)) || isTreeObj(o(0, 2)) || isTreeObj(o(-1, 1)) || isTreeObj(o(1, 1))) return false;
+  if (solidBuildingAt(world, x, y)) return false;
+  return true;
+}
+/* La densité : presque rien en plein pré, beaucoup en LISIÈRE (là où un
+   bosquet s'arrête), un peu le long de la rivière — et modulée par un bruit
+   lent pour que les buissons fassent des TOUFFES au lieu d'un semis régulier.
+   ⚠️ Au cœur d'un bosquet la densité RETOMBE : le sous-bois y est déjà caché par
+   les couronnes, et c'est la lisière qui se lit comme une lisière. */
+export function farmBushChance(world, x, y) {
+  let n = 0;
+  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+    if (inMap(x + dx, y + dy) && isTreeObj(world.objects[idx(x + dx, y + dy)])) n++;
+  }
+  const edge = n === 0 ? 0 : n <= 5 ? 1 : 0.3;
+  const rc = world.riverCenter ? riverCenterAtRow(world.riverCenter, y) : -99;
+  const d = Math.abs(x - rc), bank = d < 10 ? 1 - d / 10 : 0;
+  const clump = Math.max(0, Math.min(1, 0.45 + 0.9 * townNoise(x, y, 6, 23)));
+  // Réglé en comptant (verify-buissons) : ~400 buissons par ferme, 1,6 % de l'herbe.
+  return (0.001 + 0.075 * edge + 0.028 * bank) * (0.2 + 1.6 * clump);
+}
+export function seedFarmBushes(world) {
+  let n = 0;
+  for (let y = 0; y < C.MAP_H; y++) for (let x = 0; x < C.MAP_W; x++) {
+    if (!farmBushAllowed(world, x, y)) continue;
+    if (townHash2(x * 7 + 3, y * 13 + 5) >= farmBushChance(world, x, y)) continue;
+    const i = idx(x, y);
+    world.objects[i] = C.O_BUSH; world.objHp.set(i, 1);
+    n++;
+  }
+  return n;
+}
+/* Le pas ralenti. ⚠️ ON LIT LA CASE SOUS LES PIEDS (`bodyFootTile`), comme la
+   ville (`townSoftAt`) : c'est la même semelle que la collision. Seul le buisson
+   SAUVAGE retient ; un buisson taillé est une haie basse qu'on enjambe. */
+export function farmBushSoftAt(world, x, y) {
+  if (!world) return false;
+  const ft = C.bodyFootTile(x, y);
+  return inMap(ft.x, ft.y) && world.objects[idx(ft.x, ft.y)] === C.O_BUSH;
 }
 
 function riverCenterAtRow(riverCenter, y) {
@@ -1397,6 +1511,25 @@ export function resolveAct(world, f, m) {
           }
         } else world.objHp.set(i, hp);
         res.invChanged = true;
+      }
+      break;
+    /* 2026-09-13 — LA FAUX. Un coup TAILLE le buisson sauvage, un second coup
+       RETIRE le buisson taillé (quelques branchages). Deux gestes plutôt qu'un :
+       tailler est un choix en soi — on garde une haie basse qu'on traverse sans
+       ralentir — et le retrait ne vient qu'après, sur ce qu'on a déjà taillé. */
+    case "scythe":
+      if (o === C.O_BUSH || o === C.O_BUSH_TRIM) {
+        if (!useEnergy(f, "scythe", "scythe")) { res.toast = "tired"; return res; }
+        if (o === C.O_BUSH) {
+          world.objects[i] = C.O_BUSH_TRIM; world.objHp.set(i, 1);
+          res.fx.push({ k: "trim", x, y });
+        } else {
+          world.objects[i] = C.O_NONE; world.objHp.delete(i);
+          const wood = toolYield(C.BUSH_WOOD, f.tools.scythe);
+          f.inv.wood += wood;
+          res.fx.push({ k: "trim", x, y }, { k: "treedown", x, y, wood });
+        }
+        res.tiles.push(i); res.invChanged = true;
       }
       break;
     case "bridge": {
@@ -3122,6 +3255,13 @@ export function newDay(world, farmers, day, seed) {
     if (world.ground[i] === C.G_GRASS && world.objects[i] === C.O_NONE && !world.crops.has(i)
       && Math.abs(x - C.SPAWN.x) + Math.abs(y - C.SPAWN.y) > 18) {
       const type = rnd() < 0.5 ? C.O_ROCK : (rnd() < 0.35 ? C.O_TREE2 : C.O_TREE);
+      /* 2026-09-13 — UN ARBRE NE REPOUSSE PAS JUSTE AU SUD D'UN BUISSON : sa
+         couronne le recouvrirait (la règle « pas sous un arbre » de
+         `farmBushAllowed`, prise par l'autre bout). ⚠️ Le test vient APRÈS le
+         tirage du type : on renonce à la case sans décaler les tirages suivants.
+         Trouvé par verify-buissons, qui rejouait 400 jours. */
+      if (type !== C.O_ROCK && [[0, -1], [0, -2], [-1, -1], [1, -1]].some(([dx, dy]) =>
+        inMap(x + dx, y + dy) && (world.objects[idx(x + dx, y + dy)] === C.O_BUSH || world.objects[idx(x + dx, y + dy)] === C.O_BUSH_TRIM))) continue;
       world.objects[i] = type; world.objHp.set(i, type === C.O_ROCK ? C.ROCK_HP : C.TREE_HP);
       tiles.push(i);
     }
@@ -3175,6 +3315,21 @@ export function newDay(world, farmers, day, seed) {
       tiles.push(si);
       n--;
     }
+  }
+  /* 2026-09-13 — LA BROUSSAILLE REPOUSSE, UN PEU. ⚠️ APRÈS TOUS LES TIRAGES QUI
+     EXISTAIENT : ceux-là gardent exactement leurs valeurs d'hier (même graine de
+     jour), les buissons ne font que consommer la suite. Mêmes interdits qu'à la
+     génération (`farmBushAllowed` : jamais sur un champ, une culture, un
+     bâtiment, les rails), plus la règle du repop des arbres (loin du spawn). On
+     tire une case, puis la CHANCE du lieu : la repousse suit donc les lisières
+     comme la génération, au lieu de semer au milieu des prés. */
+  for (let k = 0; k < C.BUSH_REGROW_PER_DAY; k++) {
+    const x = Math.floor(rnd() * W), y = Math.floor(rnd() * H), roll = rnd();
+    if (Math.abs(x - C.SPAWN.x) + Math.abs(y - C.SPAWN.y) <= 18) continue;
+    if (!farmBushAllowed(world, x, y) || roll >= farmBushChance(world, x, y) * 4) continue;
+    const i = idx(x, y);
+    world.objects[i] = C.O_BUSH; world.objHp.set(i, 1);
+    tiles.push(i);
   }
   for (const id in farmers) { farmers[id].energy = C.MAX_ENERGY; farmers[id].sleepStartedAt = null; farmers[id].sleepStartEnergy = 0; }
   return { tiles, cropTiles: [] };

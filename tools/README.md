@@ -16,8 +16,9 @@ maire), et la livraison du **2026-08-27 une** (`verify-ludo`, le solo contre un 
 La livraison de **Où's that ?** ajoute `verify-ousthat.mjs`. Son nouveau banc passe
 **57/57** après une falsification volontaire qui a bien produit **3 échecs**.
 La livraison **P1 bis** (2026-09-07) ajoute `verify-jalons.mjs` — 58/58, falsifié à 9 échecs sur le
-code d'avant la passe. L'inventaire présent sur disque compte désormais **22 bancs de contrôle et
-22 bancs de rendu** ; les bancs antérieurs n'ont pas été renommés ni supprimés par ces livraisons.
+code d'avant la passe. L'inventaire présent sur disque compte désormais **23 bancs de contrôle et
+24 bancs de rendu** (compté en listant `tools/` le 2026-09-13, après `render-gare` et les deux bancs
+des buissons, `verify-buissons` et `render-buissons`) ; les bancs antérieurs n'ont pas été renommés ni supprimés par ces livraisons.
 
 ⚠️⚠️ **ET LE 444 A APPRIS QUELQUE CHOSE QUI VAUT POUR TOUS LES BANCS DE CE DOSSIER : SIX BANCS AU
 VERT N'ONT PAS VU DIX DÉFAUTS QU'UNE SEULE SÉANCE DE JEU A TROUVÉS EN VINGT MINUTES**, dont cinq
@@ -1400,6 +1401,43 @@ onglet d'arrière-plan) est en §10 de `CLAUDE.md`, avec ses trois pièges.
 binaires suivantes ne répètent pas cette option : l'ancienne boucle imposait donc `self:false` et
 empêchait le Ludo solo, à client unique, de recevoir son propre `match_start`. `verify-ludo` tient
 ce chemin de source ; le navigateur a tenu l'enchaînement réel.
+
+---
+
+## `verify-buissons.mjs` — LES BUISSONS DE LA FERME ET LA FAUX (2026-09-13)
+
+`node tools/verify-buissons.mjs` — **42 contrôles, 42/42**. Six familles : (1) l'**empreinte** de
+`generateWorld` (sol, objet, hp de chaque case), buissons retirés, sur cinq graines, contre celle
+relevée sur `e0785ff` avant leur ajout — c'est ce qui garantit qu'aucune ferme existante n'a bougé ;
+(2) les **interdits**, réécrits depuis les constantes et non en rappelant `farmBushAllowed` (1 929
+buissons relus), plus une auto-falsification qui injecte cinq buissons interdits et exige les cinq
+signalements ; (3) la **faux** (taille, retire, rien sur un arbre, hors de portée ni sans énergie ;
+houe, hache, pioche, arrosoir et récolte ne touchent pas un buisson) ; (4) la **migration**
+(`tools.scythe`, overrides taillé / retiré / case labourée d'une vieille sauvegarde) ; (5) **on
+traverse** (aucun blocage, à pied ni à cheval ; seul le sauvage ralentit, lu à la semelle) ; (6) la
+**repousse** sur 400 jours (0,34 buisson/jour sur la graine 2026).
+⚠️ **Falsifié contre le moteur le jour de son écriture** : retirer l'interdit « sous un arbre » →
+7 échecs ; retirer les rails → 7 échecs ; un `rnd()` inséré avant les bosquets → les 5 empreintes
+rougissent. ⚠️ Un `rnd()` inséré APRÈS le dernier tirage ne rougit rien, et c'est juste : il ne
+décale aucune case — une première falsification écrite là ne prouvait donc rien.
+⚠️ **Il a trouvé un défaut avant d'être fini** : des buissons nés en règle, recouverts 400 jours plus
+tard par un ARBRE repoussé juste au sud — `newDay` refuse désormais ces cases aux arbres.
+⚠️ **Ce qu'il ne voit pas** : le dessin (`render-buissons`), le frisson et le ralentissement à l'œil,
+et le nettoyage des buissons sous un bâtiment (il vit dans le tick de l'hôte, `FermeGame.js`).
+
+---
+
+## `render-buissons.mjs` — REGARDER LES BUISSONS ET LA FAUX (2026-09-13)
+
+`node tools/render-buissons.mjs` — **11 contrôles, 11/11**, deux planches : `buissons-planche.png`
+(sauvage / taillé × 3 saisons × 3 variantes, plus l'icône de la faux) et `buissons-ferme.png` — **le
+premier morceau de FERME regardé par un banc** : la lisière la plus fournie de la graine 42, herbe,
+arbres, rochers et buissons triés en y. Il appelle `A.drawFarmBush`. Contrôles : aucun pixel au bord
+des 18 cases d'atlas ni de l'icône ; mêmes silhouettes d'une saison à l'autre ; trois variantes
+distinctes ; taillé plus bas que le sauvage (13 contre 18 px de matière) ; au moins 5 et 4 tons ;
+ancrage au pied de la case, centré.
+⚠️ **Le premier taillé passait ce banc et a été refusé sur la planche** (une savonnette : couvercle
+lisse, arête continue) : le banc tient la hauteur, le volume et l'ancrage, il ne dit pas si ça se lit.
 
 ---
 

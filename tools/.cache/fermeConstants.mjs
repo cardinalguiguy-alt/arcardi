@@ -328,9 +328,15 @@ export const ROD_PROMPT_RANGE = 2.5;
 export const ROD_PROMPT_IDLE_MS = 300;
 
 // --- Outils ---
-export const TOOLS = ["hoe", "can", "axe", "pick"];
-export const TOOL_NAMES = { hoe: "Houe", can: "Arrosoir", axe: "Hache", pick: "Pioche" };
-export const TOOL_NAMES_EN = { hoe: "Hoe", can: "Watering can", axe: "Axe", pick: "Pickaxe" };
+/* ⚠️ 2026-09-13 — LA FAUX (`scythe`) S'AJOUTE EN QUEUE, JAMAIS AU MILIEU.
+   `normalizeFarmer` parcourt cette liste et pose `f.tools[k] = 1` pour toute
+   clé absente : c'est ce qui MIGRE les fermiers déjà sauvegardés dans le même
+   geste que la déclaration (CLAUDE.md §4, « un champ neuf se livre avec sa
+   migration »). La boutique d'amélioration et le menu d'outils la lisent aussi,
+   donc elle y apparaît sans une ligne de plus. */
+export const TOOLS = ["hoe", "can", "axe", "pick", "scythe"];
+export const TOOL_NAMES = { hoe: "Houe", can: "Arrosoir", axe: "Hache", pick: "Pioche", scythe: "Faux" };
+export const TOOL_NAMES_EN = { hoe: "Hoe", can: "Watering can", axe: "Axe", pick: "Pickaxe", scythe: "Scythe" };
 export const TOOL_MAX_LEVEL = 3;
 export const TOOL_UPGRADE_COST = [0, 500, 2000]; // coût pour passer au niveau 2, puis 3
 // Bonus de RESSOURCES récoltées (pas seulement la vitesse déjà existante via
@@ -343,7 +349,7 @@ export const TOOL_YIELD_MULT = 1.5;
 
 // Énergie
 export const MAX_ENERGY = 100;
-export const ENERGY_COST = { till: 2, water: 1, chop: 3, mine: 3, harvest: 0, plant: 0, fish: 1 };
+export const ENERGY_COST = { till: 2, water: 1, chop: 3, mine: 3, harvest: 0, plant: 0, fish: 1, scythe: 1 };
 
 // --- Quêtes de découverte (checklist guidée) ---
 // Chaque quête se valide la PREMIÈRE fois que le joueur réussit l'action
@@ -5578,6 +5584,30 @@ export const BERRY_SELL = 25;        // prix de vente d'une baie au bac
 export const FRUIT_PICK_N = 2;       // pommes par cueillette d'arbre
 export const FRUIT_SELL = 18;        // prix de vente d'une pomme au bac
 export const FRUIT_TREE_MOD = 3;     // 1 chêne sur FRUIT_TREE_MOD (hash de case) porte des fruits au printemps
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2026-09-13 — LES BUISSONS SAUVAGES DE LA FERME, ET LA FAUX QUI LES TAILLE.
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume : des buissons sur la ferme, jamais sur un champ, un
+   arbre, l'eau, les rails ou un bâtiment ; on doit pouvoir les tailler et les
+   retirer à la faux.
+   ⚠️ DEUX OBJETS ET PAS UN OBJET + UN `objHp` : l'état « taillé » change le
+   dessin ET le pas (un buisson sauvage retient, un buisson taillé non). Le lire
+   dans `objHp` aurait fait porter deux sens au même nombre — et `applyNewDay`
+   écrase déjà `objHp` à `TREE_HP` pour tout objet reçu (§4 : une grandeur qui
+   sert deux rôles).
+   ⚠️ ILS NE BLOQUENT PAS, comme les buissons à baies (zip 401) et les touffes
+   de Valley Town : on les TRAVERSE en ralentissant (`TOWN_BUSH_SLOW`, le même
+   nombre qu'en ville — pas une seconde constante qui divergerait). Retirer un
+   buisson sert donc à LIBÉRER LA CASE : on ne laboure, ne sème, ne bâtit rien
+   sur une case occupée.
+   ⚠️ AUCUNE MIGRATION SUPABASE : ce sont des valeurs de l'instantané JSON, et
+   la carte les POSE à la génération sans toucher au tirage (`seedFarmBushes`).
+   ⚠️ 20 et 21 sont pris (baies, verger) ; `verify-objects` tient l'unicité. */
+export const O_BUSH = 22;            // buisson sauvage — se traverse en ralentissant, la faux le TAILLE
+export const O_BUSH_TRIM = 23;       // buisson taillé — se traverse librement, la faux le RETIRE
+export const BUSH_WOOD = 1;          // branchages rendus en retirant un buisson taillé (×1,5 par niveau de faux)
+export const BUSH_REGROW_PER_DAY = 4; // tentatives de repousse par jour de jeu (`newDay`), mêmes interdits qu'à la génération
 
 // --- Mondes tournants du passage sombre (zip 235, demande Guillaume :
 // "every new week (game time) it rotates to a new land, similar to Folk of

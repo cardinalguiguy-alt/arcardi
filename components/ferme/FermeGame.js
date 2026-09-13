@@ -971,6 +971,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      ce qui peut se déduire ne se diffuse pas ; ici ça se déduit des positions
      qui circulent déjà). */
   const bushSwayRef = useRef(new Map());
+  // 2026-09-13 : le même frisson pour les buissons de la FERME. Une table à part,
+  // parce que ses index sont ceux d'une autre carte (§4, deux cartes sans repère commun).
+  const farmBushSwayRef = useRef(new Map());
   const channelRef = useRef(null);
   const spritesRef = useRef(null);
   const worldRef = useRef(null);
@@ -2386,6 +2389,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else if (gr === C.G_BRIDGE_STONE_CLOSED) col = [176, 74, 58];
       else if (gr === C.G_DARK_PASSAGE) col = [150, 90, 220]; // passage sombre repérable sur la carte (demande Guillaume 2026-07)
       if (o === C.O_TREE || o === C.O_TREE2) col = [46, 106, 40];
+      else if (o === C.O_BUSH || o === C.O_BUSH_TRIM) col = [70, 128, 56];
       else if (o === C.O_ROCK || o === C.O_WALL) col = [130, 130, 138];
       else if (o === C.O_LAMP) col = [230, 200, 100];
       else if (o === C.O_SCARECROW) col = [212, 178, 90];
@@ -8190,6 +8194,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
         }
       }
+      /* 2026-09-13 — PAS DE BUISSON SOUS UN BÂTIMENT. La génération évite les
+         emplacements fixes (abords de la maison, grange, gare, rails), mais les
+         bâtiments d'artisans et la grange se DÉPLACENT, et une vieille ferme a
+         pu en construire là où la carte pose aujourd'hui un buisson. L'hôte
+         nettoie donc leurs emprises à chaque tick : quelques rectangles, rien à
+         migrer, et l'override part avec la sauvegarde comme `clearStationArea`. */
+      {
+        const bt = [];
+        for (const R of farmBuildingRects()) for (let yy = R.y; yy < R.y + R.h; yy++) for (let xx = R.x; xx < R.x + R.w; xx++) {
+          if (xx < 0 || yy < 0 || xx >= C.MAP_W || yy >= C.MAP_H) continue;
+          const bi = yy * C.MAP_W + xx, bo = w.objects[bi];
+          if (bo !== C.O_BUSH && bo !== C.O_BUSH_TRIM) continue;
+          w.objects[bi] = C.O_NONE; w.objHp.delete(bi); recordTileOverride(bi);
+          bt.push({ i: bi, g: w.ground[bi], o: C.O_NONE });
+        }
+        if (bt.length) {
+          minimapDirtyRef.current = true; dirtyRef.current = true;
+          channelRef.current?.send({ type: "broadcast", event: "apply", payload: { tiles: bt } });
+        }
+      }
       /* ====================================================================
          ZIP 398 — LE TICK DES VERGERS.
          --------------------------------------------------------------------
@@ -9659,7 +9683,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // regroupées, l'action dépend de toolKindRef.current (choisi via la
       // touche 1 en rotation, ou le mini-menu au clic).
       const tk = toolKindRef.current;
-      const action = tk === "axe" ? "chop" : tk === "pick" ? "mine" : "till";
+      const action = tk === "axe" ? "chop" : tk === "pick" ? "mine" : tk === "scythe" ? "scythe" : "till";
       sendReq({ kind: "act", action, x: tt.x, y: tt.y });
     }
     else if (sl === SLOT.can) sendReq({ kind: "act", action: "water", x: tt.x, y: tt.y });
@@ -11307,6 +11331,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
   // Rectangle de collision de la grange à sa position/palier COURANTS (undefined
   // si palier 0, rien construit). Même forme que world.artisanBlocks.
+  /* Les emprises SOLIDES des bâtiments déplaçables de la ferme (artisans +
+     grange), relues sur l'état partagé. ⚠️ On ne lit pas le miroir de collision
+     rafraîchi par la boucle de ferme : l'hôte peut être en ville ou dans un
+     onglet masqué, précisément quand ce miroir n'a aucune raison d'être récent.
+     2026-09-13 : sortie de `starFarmImpactSites`, que les buissons lisent aussi. */
+  function farmBuildingRects() {
+    const out = [], crafts = sharedRef.current.crafts || {};
+    for (const bid of Object.keys(C.ARTISAN_BUILDINGS)) {
+      if (!crafts[bid] || !crafts[bid].built) continue;
+      const def = C.ARTISAN_BUILDINGS[bid], p = artisanPos(bid);
+      out.push({ x: Math.round(p.x), y: Math.round(p.y), w: def.w, h: def.h });
+    }
+    const barn = barnBlockRectNow(); if (barn) out.push(barn);
+    return out;
+  }
   function barnBlockRectNow() {
     const bn = sharedRef.current.barn, lvl = bn ? (bn.level | 0) : 0;
     if (lvl <= 0) return null;
@@ -15651,6 +15690,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
         else if (o === C.O_WALL) ctx.drawImage(sprites.wall, x * T, y * T);
         else if (o === C.O_BERRY_BUSH) draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.berryBush, x * T, y * T - 2) });
+        /* 2026-09-13 — LE BUISSON SAUVAGE / TAILLÉ. Dans la file triée en y, ancré
+           au pied comme le verger : marcher dedans fait passer le feuillage devant
+           les bottes. Le dessin et l'ancrage vivent dans `A.drawFarmBush`, que
+           `render-buissons` appelle — rien de réglé ici. */
+        else if (o === C.O_BUSH || o === C.O_BUSH_TRIM) {
+          const lean = bushSpringLean(farmBushSwayRef.current, i, now);
+          draws.push({ y: (y + 1) * T, fn: () => A.drawFarmBush(ctx, sprites, o, i, x * T, y * T, E.seasonOf().key, lean) });
+        }
         /* ZIP 398 — LE VERGER. Le stade vient de `E.orchardStage`, la même
            fonction pure que lisent le moteur et les contrôles : personne ne
            peut donc dessiner un arbre chargé de fruits qui n'en porte pas.
@@ -16797,7 +16844,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           } });
         }
       }
-      for (const p of playersRef.current.values()) if (!p.sleeping && (p.zone || "farm") === "farm") { draws.push({ y: (p.y + 0.9) * T, fn: () => drawRemotePets(p, dt) }); draws.push({ y: (p.y + 1) * T, fn: () => drawRemote(p) }); } // zip 234: town players are drawn on the town map, not here — zip 247: their pets follow them here too
+      // 2026-09-13 : les autres joueurs couchent eux aussi les buissons de la ferme (leur vitesse circule déjà, §3).
+      for (const p of playersRef.current.values()) if (!p.sleeping && (p.zone || "farm") === "farm") { farmBushPress(w, p.x, p.y, p.vx || 0, p.vy || 0); draws.push({ y: (p.y + 0.9) * T, fn: () => drawRemotePets(p, dt) }); draws.push({ y: (p.y + 1) * T, fn: () => drawRemote(p) }); } // zip 234: town players are drawn on the town map, not here — zip 247: their pets follow them here too
       /* ╔══════════════════════════════════════════════════════════════════════
          ║ ZIP 479 — LE PLAT SE VOIT DANS LES MAINS DE L'AUTRE, ET IL LE FAUT.
          ╚══════════════════════════════════════════════════════════════════════
@@ -18578,14 +18626,39 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (ft.x < 0 || ft.y < 0 || ft.x >= tw.w || ft.y >= tw.h) return;
       const i = ft.y * tw.w + ft.x;
       if (!tw.soft[i]) return;
-      const e = bushSwayRef.current.get(i) || { last: 0, dir: 1 };
+      bushPressEntry(bushSwayRef.current, i, vx, vy);
+    }
+    /* 2026-09-13 — LE RESSORT, SORTI DE `townBushPress`/`townBushLean` LE JOUR OÙ
+       LA FERME A EU SES BUISSONS. Deux copies du même ressort auraient divergé au
+       premier réglage (§8) ; seules les tables diffèrent (deux cartes, deux jeux
+       d'index). */
+    function bushPressEntry(map, i, vx, vy) {
+      const e = map.get(i) || { last: 0, dir: 1 };
       e.last = performance.now();
       /* Un pas de côté couche le buisson franchement ; un pas vers le nord ou
          le sud ne peut le coucher que « un peu de biais » — il n'y a pas de
          troisième dimension pour le montrer, et un buisson qui s'écarterait à
          fond quand on le traverse du nord au sud aurait l'air de fuir. */
       if (vx || vy) e.dir = Math.abs(vx) >= Math.abs(vy) ? (vx < 0 ? -1 : 1) : (vy < 0 ? -0.55 : 0.55);
-      bushSwayRef.current.set(i, e);
+      map.set(i, e);
+    }
+    function bushSpringLean(map, i, now) {
+      const e = map.get(i);
+      if (!e) return 0;
+      const age = now - e.last;
+      const k = Math.exp(-age / C.TOWN_BUSH_SWAY_FADE_MS);
+      if (k < 0.01) { map.delete(i); return 0; }
+      return C.TOWN_BUSH_SWAY_PX * e.dir * k * Math.cos((2 * Math.PI * age) / C.TOWN_BUSH_SWAY_MS);
+    }
+    /* La ferme : même semelle (`bodyFootTile`), sauvage ou taillé — le dessin
+       réduit lui-même l'amplitude d'un buisson taillé (`drawFarmBush`). */
+    function farmBushPress(w, x, y, vx, vy) {
+      if (!w) return;
+      const ft = C.bodyFootTile(x, y);
+      if (ft.x < 0 || ft.y < 0 || ft.x >= w.w || ft.y >= w.h) return;
+      const i = ft.y * w.w + ft.x, o = w.objects[i];
+      if (o !== C.O_BUSH && o !== C.O_BUSH_TRIM) return;
+      bushPressEntry(farmBushSwayRef.current, i, vx, vy);
     }
     /* Le décalage du SOMMET du sprite, en pixels, à l'instant `now`. Zéro quand
        la case n'a jamais été touchée ou que le ressort est retombé. */
@@ -18613,12 +18686,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          (le ternaire court-circuite) : une fois par image, pas deux cent
          quatre-vingt-trois. */
       const star = starGreenTileNow() === i ? Q.starGreenSway(Date.now()) : 0;
-      const e = bushSwayRef.current.get(i);
-      if (!e) return star;
-      const age = now - e.last;
-      const k = Math.exp(-age / C.TOWN_BUSH_SWAY_FADE_MS);
-      if (k < 0.01) { bushSwayRef.current.delete(i); return star; }
-      return star + C.TOWN_BUSH_SWAY_PX * e.dir * k * Math.cos((2 * Math.PI * age) / C.TOWN_BUSH_SWAY_MS);
+      return star + bushSpringLean(bushSwayRef.current, i, now);
     }
     /* L'altitude sous un point (425). Hors carte : 0 — c'est le niveau de la
        rue, donc le choix qui ne crée pas de falaise fantôme au bord du monde. */
@@ -22129,7 +22197,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            ferait traverser la carte en quelques secondes, et surtout ferait
            payer de l'énergie pour un gain qu'on a déjà acheté 800 or. */
         const running = !mounted && isRunningNow(dt, uiBlocked);
-        const spSec = C.PLAYER_SPEED * (mounted ? C.HORSE_SPEED_MULT : (running ? C.RUN_SPEED_MULT : 1)) / (swimming ? C.HORSE_WATER_SLOW : 1);
+        let spSec = C.PLAYER_SPEED * (mounted ? C.HORSE_SPEED_MULT : (running ? C.RUN_SPEED_MULT : 1)) / (swimming ? C.HORSE_WATER_SLOW : 1);
+        /* 2026-09-13 — LE BUISSON SAUVAGE RETIENT LE PAS, comme les touffes de
+           Valley Town et avec le MÊME nombre (`TOWN_BUSH_SLOW`) : ici et pas
+           dans la collision (§4, une grandeur de décor n'entre pas dans
+           `canStand`). Il se cumule au galop, comme en ville. */
+        if (E.farmBushSoftAt(w, m.x, m.y)) spSec *= C.TOWN_BUSH_SLOW;
         const sp = spSec * dt;
         m.vx = dx * spSec; m.vy = dy * spSec;
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
@@ -22148,6 +22221,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       } else { m.animT = 0; m.vx = 0; m.vy = 0; }
       m.moving = !!moving;
       markWaterIdle(m.moving);
+      // 2026-09-13 : couché sur la PRÉSENCE, comme en ville (voir `townBushPress`).
+      farmBushPress(w, m.x, m.y, m.vx, m.vy);
       const now = performance.now();
       maybeSendPos();
     }
@@ -26135,18 +26210,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const w = worldRef.current; if (!w) return [];
     if (starFarmImpactsRef.current.w === w && starFarmImpactsRef.current.pos) return starFarmImpactsRef.current.pos;
     const used = [];
-    const natural = new Set([C.O_NONE, C.O_TREE, C.O_TREE2, C.O_TREE_DEAD, C.O_ROCK, C.O_STUMP]);
-    const blocks = [];
-    /* On relit l'état partagé, pas le miroir de collision rafraîchi par la
-       boucle de ferme : l'hôte peut armer la chute depuis la ville ou un onglet
-       masqué, précisément quand ce miroir n'a aucune raison d'être récent. */
-    const crafts = sharedRef.current.crafts || {};
-    for (const bid of Object.keys(C.ARTISAN_BUILDINGS)) {
-      if (!crafts[bid] || !crafts[bid].built) continue;
-      const def = C.ARTISAN_BUILDINGS[bid], p = artisanPos(bid);
-      blocks.push({ x: Math.round(p.x), y: Math.round(p.y), w: def.w, h: def.h });
-    }
-    const barn = barnBlockRectNow(); if (barn) blocks.push(barn);
+    // 2026-09-13 : les buissons sont du décor naturel, l'onde les souffle comme le reste.
+    const natural = new Set([C.O_NONE, C.O_TREE, C.O_TREE2, C.O_TREE_DEAD, C.O_ROCK, C.O_STUMP, C.O_BUSH, C.O_BUSH_TRIM]);
+    const blocks = farmBuildingRects();
     const inBlock = (x, y) => blocks.some(b => x >= b.x && y >= b.y && x < b.x + b.w && y < b.y + b.h);
     const free = (cx, cy) => {
       const r = C.STAR_FARM_CRATER_FREE_R;
@@ -26191,7 +26257,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const w = worldRef.current; if (!w) return;
     const memo = starImpactClearRef.current;
     if (memo.fall !== e.fall) { memo.fall = e.fall; memo.mask = 0; }
-    const elapsed = Math.max(0, now - e.fall), natural = new Set([C.O_TREE, C.O_TREE2, C.O_TREE_DEAD, C.O_ROCK, C.O_STUMP]);
+    const elapsed = Math.max(0, now - e.fall), natural = new Set([C.O_TREE, C.O_TREE2, C.O_TREE_DEAD, C.O_ROCK, C.O_STUMP, C.O_BUSH, C.O_BUSH_TRIM]);
     const tiles = [];
     for (const p of starFarmImpactSites()) {
       const bit = 1 << (p.impact | 0);
@@ -29526,6 +29592,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       case "water": for (let i = 0; i < 6; i++) fx.push({ ...base, kind: "p", col: "#5a9be0", vx: (Math.random() - .5) * 2, vy: -Math.random() * 2, life: .5 }); break;
       case "till": for (let i = 0; i < 6; i++) fx.push({ ...base, kind: "p", col: "#8a5c35", vx: (Math.random() - .5) * 2, vy: -Math.random() * 2.5, life: .5 }); break;
       case "chop": for (let i = 0; i < 5; i++) fx.push({ ...base, kind: "p", col: i % 2 ? "#3e8a34" : "#a87745", vx: (Math.random() - .5) * 3, vy: -Math.random() * 3, life: .6 }); break;
+      // 2026-09-13 : un coup de faux — des feuilles, pas des copeaux.
+      case "trim": for (let i = 0; i < 7; i++) fx.push({ ...base, kind: "p", col: i % 3 ? "#4a9240" : "#8ccd66", vx: (Math.random() - .5) * 3.4, vy: -Math.random() * 2.6, life: .55 }); break;
       case "mine": for (let i = 0; i < 5; i++) fx.push({ ...base, kind: "p", col: "#a2a2aa", vx: (Math.random() - .5) * 3, vy: -Math.random() * 3, life: .6 }); break;
       // Chantier "rivalité Tristan/Jérôme" (2026-07) : impact de bagarre —
       // "étoiles de choc" en éclatement radial (même famille que chop/mine,
@@ -29717,7 +29785,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
   /* Idem pour la case outils, qui tourne depuis le zip 251 sans jamais l'avoir
      dit non plus. L'arrosoir n'en fait PAS partie : il a sa propre case. */
-  function toolCycle() { return ["hoe", "axe", "pick"]; }
+  function toolCycle() { return ["hoe", "axe", "pick", "scythe"]; }
   /* zip 403 : le cycle de la case fusionnée. Même forme que les deux autres,
      donc l'affichage le lit de la même façon et ne peut pas en diverger. */
   function carryCycle() { return CARRY_MODES; }

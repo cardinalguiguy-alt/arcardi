@@ -1,6 +1,8 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "arcardi", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev"], "port": 3000 }
+    { "name": "arcardi", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev"], "port": 3000 },
+    { "name": "fake-supabase", "runtimeExecutable": "node", "runtimeArgs": ["tools/fake-supabase.mjs"], "port": 54321 },
+    { "name": "arcardi-local", "runtimeExecutable": "env", "runtimeArgs": ["NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321", "NEXT_PUBLIC_SUPABASE_ANON_KEY=local-test", "npx", "next", "dev", "-p", "3100"], "port": 3100 }
   ]
 }

@@ -153,6 +153,12 @@ eux-mêmes ; `tools/README.md` pour les bancs qui les regardent.
   `globalAlpha` donnent un dessin **juste en jeu et faux au banc** — le stub menteur du §10, dans
   l'outil censé nous en protéger. On taille par un CHAMP (une couleur par rayon et par angle) et
   on module l'alpha **dans la couleur**, jamais par l'état du contexte.
+- ⚠️⚠️ **UN OUVRAGE TAILLÉ DANS UNE MATIÈRE VIVANTE GARDE SA MATIÈRE ; CE QUI CHANGE EST LE CONTOUR**
+  (2026-09-13, le buisson taillé de la ferme). Premier jet : un couvercle lisse et une face en
+  cylindre sous une arête claire continue — une **savonnette**, que le banc (hauteur, tons, ancrage)
+  laissait passer. Un buisson tondu reste des touffes éclairées une à une ; la taille se lit dans un
+  contour NET (une superellipse) et un plat plus clair au sommet. ⚠️ Même séance : une fleur faite de
+  deux pixels en diagonale se lit comme une **rayure** — à cette échelle, une fleur est un 2×2.
 
 ---
 

@@ -1695,6 +1695,33 @@ export function drawTownTree(ctx, S, tw, x, y, px, py, seasonKey, obj, now) {
   return true;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   2026-09-13 — LE BUISSON DE LA FERME, ANCRAGE ET FRISSON COMPRIS.
+   ──────────────────────────────────────────────────────────────────────────
+   ⚠️ HORS DE LA CLOSURE DU RENDU, pour que `render-buissons` dessine ce que le
+   jeu dessine (CLAUDE.md §10 : un dessin qu'aucun banc n'appelle vieillit).
+   ⚠️ LA VARIANTE SE DÉDUIT DE LA CASE, rien ne circule (§3).
+   ⚠️ LE FRISSON EST UN CISAILLEMENT AUTOUR DU PIED, comme les touffes de la
+   ville : l'ombre dessinée ne glisse pas sous la plante. Un buisson taillé ne
+   plie presque pas — c'est une masse serrée, pas une touffe. */
+export function farmBushVariant(i) { return ((Math.imul(i | 0, 2654435761) >>> 0) >>> 16) % 3; }
+export function drawFarmBush(ctx, S, obj, i, px, py, seasonKey, lean) {
+  const FB = S && S.farmBush;
+  if (!FB || (obj !== C.O_BUSH && obj !== C.O_BUSH_TRIM)) return false;
+  const st = obj === C.O_BUSH_TRIM ? FB.trim : FB.wild;
+  const se = seasonKey === "autumn" ? "autumn" : seasonKey === "spring" ? "spring" : "summer";
+  const cell = st[se][farmBushVariant(i)];
+  const dx = px + (SPR_T - st.w) / 2, dy = py + SPR_T - 2 - st.base;
+  const k = obj === C.O_BUSH_TRIM ? 0.3 : 1;
+  if (!lean) { blitCell(ctx, cell, dx, dy); return true; }
+  ctx.save();
+  ctx.translate(dx + st.w / 2, dy + st.base + 1);
+  ctx.transform(1, 0, -lean * k / (st.base + 1), 1, 0, 0);
+  blitCell(ctx, cell, -st.w / 2, -(st.base + 1));
+  ctx.restore();
+  return true;
+}
+
 /* La berge, sur la TERRE. Elle se pose après le sol et avant l'eau : le trait
    d'eau vient mordre dessus, donc l'ordre est ce qui donne la rive mouillée. */
 export function drawTownShoreTile(ctx, S, tw, x, y, px, py) {
@@ -4349,6 +4376,179 @@ export function buildSprites() {
 
   // Buisson à baies (printemps) : petite touffe verte foncée piquée de baies
   // rouges. Occupe une seule tuile (16x16).
+  /* ══════════════════════════════════════════════════════════════════════════
+     2026-09-13 — LE BUISSON SAUVAGE DE LA FERME, ET LE MÊME TAILLÉ À LA FAUX.
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️ ON ASSEMBLE DES TOUFFES, ON NE TEXTURE PAS UNE SILHOUETTE (DESSIN.md) :
+     une quinzaine de boules de feuillage réparties par une suite R2 (pas deux
+     suites d'or, qui aligneraient les centres), chacune éclairée en HAUT À
+     GAUCHE par sa propre normale mêlée à celle du dôme entier, triées du fond
+     vers l'avant, avec un pli d'ombre juste derrière le bord de celle qui passe
+     devant. La silhouette festonnée sort de l'union — aucun pixel tiré au hasard.
+     ⚠️ LE TAILLÉ EST UN OUVRAGE, DONC IL EST DROIT : un couvercle plat et clair
+     (la coupe), une face avant en cylindre, des flancs raides. C'est l'opposition
+     d'une ligne construite à une ligne qui ne l'est pas qui fait lire le geste.
+     ⚠️ LE CANEVAS EST DIMENSIONNÉ PAR CE QUI DÉPASSE (§4) : festons, cerne et
+     brindilles tiennent à deux pixels du bord — `render-buissons` le vérifie. */
+  const FB_PAL = {
+    summer: { cerne: "#1c3a1d", twig: "#4a3520", t: ["#28552a", "#367330", "#4a9240", "#66b04e", "#8ccd66"] },
+    spring: { cerne: "#1d3d1f", twig: "#4d3722", t: ["#2c5e2c", "#3d8236", "#55a245", "#76c052", "#9edc72"], bloom: ["#f6eef2", "#e79fc2"] },
+    autumn: { cerne: "#3a2412", twig: "#3e2a16", t: ["#5e3818", "#86501f", "#b06f28", "#d39538", "#ecbd5c"],
+              alt: ["#3f4418", "#5b6024", "#7a7d30", "#9c9a40", "#bdb65a"] },
+  };
+  const FB_WILD_W = 24, FB_WILD_H = 21, FB_WILD_BASE = 18;
+  const FB_TRIM_W = 20, FB_TRIM_H = 16, FB_TRIM_BASE = 13;
+  // ⚠️ Préfixées : `R2A`/`R2B` existent déjà plus bas dans `buildSprites` (le bundle l'a refusé).
+  const FB_R2A = 0.7548776662466927, FB_R2B = 0.5698402909980532;
+  /* Le cerne (un pixel sombre à l'extérieur de la matière) puis l'ombre portée,
+     posée seulement là où il n'y a rien : l'ombre ne salit ni la matière ni le
+     cerne. ⚠️ L'alpha est DANS la couleur, jamais dans l'état du contexte. */
+  function fbFinish(g, W, H, tone, pal, shadow) {
+    const on = (x, y) => x >= 0 && y >= 0 && x < W && y < H && tone[y * W + x] >= 0;
+    const ring = [];
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (on(x, y)) continue;
+      if (on(x + 1, y) || on(x - 1, y) || on(x, y + 1) || on(x, y - 1)) ring.push([x, y]);
+    }
+    for (const [x, y] of ring) { P(g, x, y, 1, 1, pal.cerne); tone[y * W + x] = 9; }
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (tone[y * W + x] !== -1) continue;
+      const u = (x + 0.5 - shadow.cx) / shadow.rx, v = (y + 0.5 - shadow.cy) / shadow.ry;
+      if (u * u + v * v <= 1) P(g, x, y, 1, 1, "rgba(16,30,12,0.34)");
+    }
+  }
+  function farmBushWildSprite(vr, season) {
+    const pal = FB_PAL[season], W = FB_WILD_W, H = FB_WILD_H;
+    const [c, g] = cv(W, H);
+    const V = [{ cx: 12, cy: 11.9, A: 8.6, B: 6.5, n: 15, off: 0.11 },
+               { cx: 12, cy: 11.4, A: 7.6, B: 7.0, n: 14, off: 0.47 },
+               { cx: 11.7, cy: 12.1, A: 8.8, B: 6.2, n: 16, off: 0.73 }][vr % 3];
+    const clumps = [];
+    for (let k = 0; k < V.n; k++) {
+      const u = (V.off + FB_R2A * (k + 1)) % 1, w = (V.off * 1.7 + FB_R2B * (k + 1)) % 1;
+      const rad = Math.sqrt(u), th = w * Math.PI * 2;
+      const r = 2.6 + 1.2 * ((k * 0.618 + V.off) % 1) + 1.0 * (1 - rad);   // plus grosses au cœur
+      clumps.push({ cx: V.cx + Math.cos(th) * rad * (V.A - r * 1.12), cy: V.cy + Math.sin(th) * rad * (V.B - r * 1.12), r, k });
+    }
+    // Le pied : deux touffes larges qui posent le buisson au sol au lieu de le faire flotter.
+    for (const s of [-1, 1]) clumps.push({ cx: V.cx + s * V.A * 0.42, cy: V.cy + V.B * 0.52, r: 3.3, k: V.n + (s > 0 ? 1 : 0) });
+    clumps.sort((p, q) => p.cy - q.cy || p.k - q.k);                           // du fond vers l'avant
+    const rOf = (cl, px, py) => cl.r * (1 + 0.11 * Math.sin(Math.atan2(py - cl.cy, px - cl.cx) * 6 + cl.k * 1.9));
+    const L = [-0.52, -0.62, 0.59];
+    const tone = new Int8Array(W * H).fill(-1), owner = new Int16Array(W * H).fill(-1);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const px = x + 0.5, py = y + 0.5;
+      let front = -1;
+      for (let j = clumps.length - 1; j >= 0; j--) {
+        const cl = clumps[j], rr = rOf(cl, px, py);
+        if ((px - cl.cx) ** 2 + (py - cl.cy) ** 2 <= rr * rr) { front = j; break; }
+      }
+      if (front < 0 || x < 2 || y < 2 || x > W - 3 || y > H - 3) continue;
+      const cl = clumps[front];
+      const lx = (px - cl.cx) / cl.r, ly = (py - cl.cy) / cl.r, lz = Math.sqrt(Math.max(0, 1 - lx * lx - ly * ly));
+      const gx = (px - V.cx) / V.A, gy = (py - V.cy) / V.B, gz = Math.sqrt(Math.max(0, 1 - gx * gx - gy * gy));
+      const nx = 0.55 * lx + 0.45 * gx, ny = 0.55 * ly + 0.45 * gy, nz = 0.55 * lz + 0.45 * gz;
+      let v = (nx * L[0] + ny * L[1] + nz * L[2]) / (Math.hypot(nx, ny, nz) || 1);
+      // Le pli : juste au-dessus du bord d'une touffe placée devant.
+      for (let j = front + 1; j < clumps.length; j++) {
+        const q = clumps[j];
+        if (py < q.cy + q.r * 0.3 && Math.hypot(px - q.cx, py - q.cy) < q.r * 1.12 + 1.3) { v -= 0.28; break; }
+      }
+      // Le bas du buisson est dans sa propre ombre.
+      const foot = V.cy + V.B * 0.3;
+      if (py > foot) v -= 0.32 * (py - foot) / (V.B * 0.7);
+      tone[y * W + x] = v < -0.05 ? 0 : v < 0.24 ? 1 : v < 0.5 ? 2 : v < 0.76 ? 3 : 4;
+      owner[y * W + x] = cl.k;
+    }
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const t = tone[y * W + x]; if (t < 0) continue;
+      // Une touffe sur QUATRE garde son vert d'automne : une sur trois faisait un camouflage.
+      const ramp = (season === "autumn" && owner[y * W + x] % 4 === 1) ? pal.alt : pal.t;
+      P(g, x, y, 1, 1, ramp[t]);
+    }
+    /* Printemps : quelques fleurs, au sommet éclairé des touffes du haut.
+       ⚠️ 2×2 ET PAS DEUX PIXELS EN DIAGONALE : le premier jet faisait des
+       rayures (des traits de griffe roses), pas des fleurs. */
+    if (pal.bloom) {
+      let nb = 0;
+      for (const cl of clumps) {
+        if (nb >= 4) break;
+        const bx = Math.round(cl.cx - cl.r * 0.3), by = Math.round(cl.cy - cl.r * 0.4);
+        if (bx < 3 || by < 3 || bx > W - 5 || by > H - 5) continue;
+        if ([0, 1, W, W + 1].some(d => tone[by * W + bx + d] < 1)) continue;
+        P(g, bx, by, 2, 2, pal.bloom[1]); P(g, bx, by, 1, 1, pal.bloom[0]);
+        nb++;
+      }
+    }
+    fbFinish(g, W, H, tone, pal, { cx: V.cx, cy: FB_WILD_BASE + 0.4, rx: V.A * 0.95, ry: 1.7 });
+    /* Deux brindilles qui dépassent : c'est ce qui dit « sauvage » avant la
+       couleur. Peintes APRÈS le cerne — un trait d'un pixel posé avant serait
+       pincé des deux côtés (DESSIN.md, la branche que le cerne mange). */
+    const tops = clumps.slice().sort((p, q) => (p.cy - p.r) - (q.cy - q.r)).slice(0, 2);
+    tops.forEach((cl, n) => {
+      const s = n === 0 ? -1 : 1;
+      const x0 = Math.round(cl.cx), y0 = Math.max(3, Math.round(cl.cy - cl.r) - 1);
+      P(g, x0, y0, 1, 1, pal.twig); P(g, x0 + s, y0 - 1, 1, 1, pal.twig);
+      P(g, x0 + s, y0 - 2 >= 1 ? y0 - 2 : 1, 1, 1, pal.t[3]);
+    });
+    return c;
+  }
+  /* ⚠️ PREMIER JET REFUSÉ SUR PLANCHE (même jour) : un couvercle lisse et une
+     face en cylindre donnaient une SAVONNETTE — une arête claire continue en
+     travers, aucune feuille. Un buisson taillé reste du feuillage : ce qui
+     change est le CONTOUR (net, un dôme tondu) et le PLAT de la coupe au sommet,
+     pas la matière. On garde donc des touffes, plus petites, découpées par une
+     superellipse. */
+  function farmBushTrimSprite(vr, season) {
+    const pal = FB_PAL[season], W = FB_TRIM_W, H = FB_TRIM_H;
+    const [c, g] = cv(W, H);
+    const V = [{ a: 7.2, b: 5.4, off: 0.21 }, { a: 6.4, b: 5.8, off: 0.58 }, { a: 7.6, b: 5.0, off: 0.83 }][vr % 3];
+    const CX = 10, CY = FB_TRIM_BASE + 0.3 - V.b;          // le pied du dôme sur la ligne d'ancrage
+    const clumps = [];
+    for (let k = 0; k < 12; k++) {
+      const u = (V.off + FB_R2A * (k + 1)) % 1, w = (V.off * 1.3 + FB_R2B * (k + 1)) % 1;
+      const rad = Math.sqrt(u), th = w * Math.PI * 2;
+      clumps.push({ cx: CX + Math.cos(th) * rad * V.a, cy: CY + Math.sin(th) * rad * V.b, r: 2.2 + 0.9 * ((k * 0.618 + V.off) % 1), k });
+    }
+    clumps.sort((p, q) => p.cy - q.cy || p.k - q.k);
+    const L = [-0.52, -0.62, 0.59];
+    const tone = new Int8Array(W * H).fill(-1);
+    for (let y = 2; y < H - 2; y++) for (let x = 2; x < W - 2; x++) {
+      const px = x + 0.5, py = y + 0.5, ex = (px - CX) / V.a, ey = (py - CY) / V.b;
+      if (Math.pow(Math.abs(ex), 2.6) + Math.pow(Math.abs(ey), 2.6) > 1) continue;   // la coupe : un contour net
+      let nx = ex, ny = ey, nz = Math.sqrt(Math.max(0, 1 - ex * ex - ey * ey));
+      let front = -1;
+      for (let j = clumps.length - 1; j >= 0; j--) if (Math.hypot(px - clumps[j].cx, py - clumps[j].cy) <= clumps[j].r) { front = j; break; }
+      if (front >= 0) {
+        const cl = clumps[front], lx = (px - cl.cx) / cl.r, ly = (py - cl.cy) / cl.r;
+        nx = 0.6 * ex + 0.4 * lx; ny = 0.6 * ey + 0.4 * ly; nz = 0.6 * nz + 0.4 * Math.sqrt(Math.max(0, 1 - lx * lx - ly * ly));
+      }
+      let v = (nx * L[0] + ny * L[1] + nz * L[2]) / (Math.hypot(nx, ny, nz) || 1);
+      for (let j = front + 1; j < clumps.length; j++) {
+        const q = clumps[j];
+        if (py < q.cy + q.r * 0.3 && Math.hypot(px - q.cx, py - q.cy) < q.r + 1.1) { v -= 0.22; break; }
+      }
+      if (ey < -0.52) v = Math.max(v, 0.52) + 0.08;                    // le plat tondu du sommet
+      if (ey > 0.3) v -= 0.36 * (ey - 0.3) / 0.7;                      // le pied dans son ombre
+      tone[y * W + x] = v < -0.05 ? 0 : v < 0.24 ? 1 : v < 0.5 ? 2 : v < 0.76 ? 3 : 4;
+    }
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const t = tone[y * W + x]; if (t >= 0) P(g, x, y, 1, 1, pal.t[t]); }
+    fbFinish(g, W, H, tone, pal, { cx: CX, cy: FB_TRIM_BASE + 0.5, rx: V.a + 0.6, ry: 1.4 });
+    return c;
+  }
+  /* Deux atlas (sauvage, taillé) au lieu de dix-huit canevas retenus : c'est la
+     règle de `makeAtlas` (CLAUDE.md §10, le nombre de canevas qui tue l'iPad). */
+  function farmBushAtlas() {
+    const out = {};
+    for (const [key, fn, w, h, base] of [["wild", farmBushWildSprite, FB_WILD_W, FB_WILD_H, FB_WILD_BASE],
+                                          ["trim", farmBushTrimSprite, FB_TRIM_W, FB_TRIM_H, FB_TRIM_BASE]]) {
+      const put = makeAtlas(w, h, 9, 3), st = { w, h, base };
+      for (const se of ["summer", "spring", "autumn"]) st[se] = [0, 1, 2].map(v => put(fn(v, se)));
+      out[key] = st;
+    }
+    return out;
+  }
+
   function berryBushSprite() {
     const [c, g] = cv(T, T);
     P(g, 2, 6, 12, 8, "#2d6a2a"); P(g, 1, 8, 14, 5, "#2d6a2a");
@@ -14539,6 +14739,17 @@ export function buildSprites() {
         P(g, 8, 3, 2, 11, "#8a6340"); P(g, 4, 3, 5, 4, "#a8a8b0"); P(g, 3, 4, 2, 2, "#c8c8d0"); break;
       case "pick":
         P(g, 8, 3, 2, 11, "#8a6340"); P(g, 3, 3, 10, 2, "#a8a8b0"); P(g, 3, 5, 2, 2, "#88888f"); P(g, 11, 5, 2, 2, "#88888f"); break;
+      case "scythe": // 2026-09-13 : la faux — manche en diagonale, sa poignée, la lame courbe en haut
+        for (const [x, y] of [[4, 14], [5, 13], [5, 12], [6, 11], [6, 10], [7, 9], [7, 8], [8, 7], [8, 6], [9, 5], [9, 4], [10, 3]]) {
+          P(g, x, y, 2, 1, "#7a5330"); P(g, x, y, 1, 1, "#a87745");
+        }
+        P(g, 4, 9, 3, 1, "#6a4528"); P(g, 3, 8, 1, 2, "#6a4528");           // la poignée
+        P(g, 6, 1, 5, 1, "#88888f");                                         // dos de la lame
+        P(g, 3, 2, 9, 1, "#a8a8b0");
+        P(g, 1, 3, 5, 1, "#a8a8b0"); P(g, 6, 3, 4, 1, "#d8d8e0");           // le fil prend la lumière
+        P(g, 1, 4, 2, 1, "#d8d8e0"); P(g, 1, 5, 1, 1, "#88888f");           // la pointe
+        P(g, 10, 2, 2, 2, "#5e5e66");                                        // la bague au talon
+        break;
       case "seeds":
         P(g, 3, 3, 10, 10, "#d8b878"); P(g, 4, 4, 8, 3, "#c04a3c"); P(g, 6, 8, 1, 2, "#5a3a1e"); P(g, 9, 9, 1, 2, "#5a3a1e"); P(g, 7, 11, 1, 2, "#5a3a1e"); break;
       case "wood":
@@ -16344,6 +16555,7 @@ house: house(),
     // Zip 235: winter swap. Same 4 frames, same anim, different pelt.
     snowLeopard: [snowLeopardSprite(0), snowLeopardSprite(1), snowLeopardSprite(2), snowLeopardSprite(3)],
     berryBush: berryBushSprite(),
+    farmBush: farmBushAtlas(),   // 2026-09-13 : buissons sauvages / taillés de la ferme, voir drawFarmBush
     /* ZIP 398 — les fruits, les barquettes et les vergers. Tous indexés par
        IDENTIFIANT (et non par position dans un tableau) : ajouter un fruit un
        jour ne doit pas décaler les autres. */
@@ -16504,7 +16716,7 @@ house: house(),
     S.crops[t] = [];
     for (let s = 0; s < C.CROP_STAGES; s++) S.crops[t][s] = cropSprite(t, s);
   }
-  for (const k of ["hoe", "can", "axe", "pick", "seeds", "wood", "stone", "food", "gold", "energy", "rod", "ready", "thirst", "herd", "hand", "flour", "sugar", "bag", "check", "cross", "coin2", "speech", "swap", "bell", "ban", "release"]) S.icons[k] = icon(k);
+  for (const k of ["hoe", "can", "axe", "pick", "scythe", "seeds", "wood", "stone", "food", "gold", "energy", "rod", "ready", "thirst", "herd", "hand", "flour", "sugar", "bag", "check", "cross", "coin2", "speech", "swap", "bell", "ban", "release"]) S.icons[k] = icon(k);
   // Zip 251: sprites des décorations déployables (cadeaux). Dessinés sur ~28px
   // de haut, ancrés par le bas au rendu (comme les petites structures).
   S.decor = {}; for (const d of C.UNIQUE_DECORATIONS) S.decor[d.id] = decorSprite(d.id);

@@ -7,9 +7,33 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### ACTION SUIVANTE — JOUER LE PRÉLUDE EN VRAI, PUIS LA 2ᵉ NÉGOCIATION DU MAIRE
+### ACTION SUIVANTE — JUGER LES BUISSONS EN JEU (DENSITÉ, TAILLÉ, RALENTISSEMENT), PUIS JOUER LE PRÉLUDE
 
-**Chronologie de la quête tranchée par Guillaume et codée le 2026-09-13.** Le détail et le tableau
+**Buissons sauvages + faux, livrés le 2026-09-13** (demande : jamais sur un champ, un arbre, l'eau,
+les rails, un bâtiment ; taillables et retirables à la faux). En bref :
+- `O_BUSH` (22, sauvage : ralentit ×`TOWN_BUSH_SLOW`, frissonne) / `O_BUSH_TRIM` (23, taillé : ne
+  ralentit pas). **Aucun ne bloque.** La **faux** (`scythe`, 5ᵉ de `C.TOOLS`, touche 1 en rotation) :
+  1er coup taille, 2ᵉ retire (+1 bois ×1,5/niveau), 1 d'énergie ; tout fermier la reçoit au niveau 1.
+- **Placement sans aucun `rnd()`** (`seedFarmBushes`, hachage de case, en fin de `generateWorld`) :
+  la carte d'avant sort au bit près, donc les fermes existantes gagnent leurs buissons sans migration
+  et toute case déjà touchée (override) les écrase. ~380-400 par ferme, en lisière et le long de la
+  rivière. Interdits (`farmBushAllowed`) : abords de la maison, grange, gare, rails ±1, enclos, champs
+  de l'ouest (puits/Greg, r 9), ponts, leviers, passage sombre, sous la couronne d'un arbre,
+  bâtiments. L'hôte retire à chaque tick tout buisson sous un bâtiment d'artisan ou la grange
+  (déplaçables). `newDay` en fait repousser ~0,3/jour et n'y fait plus pousser d'arbre au sud d'un buisson.
+- Dessin procédural (`farmBushAtlas` → 2 atlas, `A.drawFarmBush`) ; le taillé est un dôme tondu (le
+  premier jet, une « savonnette », a été refusé sur planche).
+**Vu en jeu, puis relu au pixel** (hôte + invité, `fake-supabase`) : buissons en lisière ; faux
+équipée, taille puis retrait ; le TAILLÉ en jeu (dôme tondu), **aussi chez l'invité** ; le frisson
+(sommet décalé d'~9 px écran quand on est dedans, 0 au repos) ; printemps (fleurs) et automne (ocre) ;
+une **ANCIENNE ferme** servie par un faux serveur : case labourée avant les buissons → terre nue, ruche
+bâtie sur un buisson → herbe dessous sur la minimap (deux buissons témoins restent verts). Zéro
+erreur console. **Pas vérifiable ici** : le frisson causé par un AUTRE joueur (un onglet masqué ne
+diffuse pas sa position) ; le ralentissement n'est mesuré qu'à la louche (~6 px par pas dedans contre
+8-9 dehors). **À juger par Guillaume** : la densité, le taillé, le frisson (discret), et si le
+ralentissement agace. Aucune manipulation Supabase.
+
+**Quête — chronologie tranchée par Guillaume et codée le 2026-09-13.** Le détail et le tableau
 des sous-parties vivent dans `QUETE.md` (« Ce qui est fait — 2026-09-13 », autorité). En bref :
 1. **La quête redémarre en jeu** — elle était infinissable depuis le 2026-09-12 (annonce ⇐ maire ⇐
    cratère ⇐ annonce). Rendez-vous du maire ouvert à tous, sujet « architecte naval » ouvert après la
@@ -22,10 +46,8 @@ des sous-parties vivent dans `QUETE.md` (« Ce qui est fait — 2026-09-13 », a
 4. **Menu dev dans la trame** (`devYard`/`devRain`/`devTownFall`) : sans maire, un bouton pose le
    rendez-vous et n'écrit rien d'autre ; le météore tombe toujours avant la reine.
 
-**Bancs** : `verify-quete` 871/871, `verify-jalons` 106/106 (réécrit : trame complète + bandeau à
-chaque pas + falsification des 21 boutons), les 20 autres `verify-*` verts, les 20 `render-*`
-exécutables verts (`render-eau`/`render-parc` : dette antérieure), bundle esbuild propre (seul
-`G_SOIL`). **Vu à l'écran** (un client) : ferme neuve sans bandeau, « Start » arrêté au maire et dit
+`verify-jalons` a été réécrit (trame complète + bandeau à chaque pas + falsification des 21
+boutons) ; chiffres des bancs : un seul endroit, plus bas. **Vu à l'écran** (un client) : ferme neuve sans bandeau, « Start » arrêté au maire et dit
 dans le chat, bandeau « Rendez-vous pris » avant la chute, zéro erreur console. **Pas vu** : le
 guichet du hall sans cratère, le prélude joué à la main jusqu'à la pluie. Aucune manipulation
 Supabase.
@@ -69,13 +91,14 @@ Supabase.
    possédé depuis la boutique, à 1/3 du prix payé (`h.boughtPrice`, posé à l'achat — `HORSE_COSTS`
    est indexé par RANG, donc relire le catalogue à la revente rendait un montant faux).
 
-**Bancs relancés après correction : les 22 `verify-*` verts** (`verify-quete` 847/847,
-`verify-jalons` 52/52, `verify-maire` 119/119, `verify-vallee` 223/223, `verify-strings` 1131 clés,
-`verify-collision` tout passe, `verify-scierie` 34/34, `verify-taxi` 15/15, `verify-ludo` 30/30,
-`verify-ousthat` 144/144, plus `verify-gates`/`syntax`/`scope`/`constants`/`cycle`/`compo`/
-`objects`/`orchards`/`portee`/`pont`/`sol2`/`vergers`), **les 20 `render-*` exécutables verts**
-(`render-eau`/`render-parc` ne s'exécutent toujours pas, dette antérieure), bundle esbuild propre
-(seul `G_SOIL`, préexistant).
+**Bancs relancés le 2026-09-13 après les buissons — tous, en listant `tools/`** : les **23
+`verify-*` verts** (`verify-quete` 871/871, `verify-jalons` 106/106, `verify-maire` 119/119,
+`verify-vallee` 223/223, `verify-buissons` 42/42, `verify-ousthat` 144/144, `verify-scierie` 34/34,
+`verify-ludo` 30/30, `verify-taxi` 15/15, `verify-strings` 1131 = 1131 clés, `verify-collision` tout
+passe, et `compo`/`constants`/`cycle`/`gates`/`objects`/`orchards`/`pont`/`portee`/`scope`/`sol2`/
+`syntax`/`vergers`), **22 des 24 `render-*` verts** (`render-maire` 86/86, `render-scierie` 58/58,
+`render-buissons` 11/11 ; `render-eau`/`render-parc` ne s'exécutent toujours pas, dette antérieure),
+bundle esbuild propre (seul `G_SOIL`, préexistant).
 
 Chantiers indépendants, non touchés : Où's that attend le retour de jeu de Guillaume
 (`components/ousthat/README.md`) ; ferme/ville/tribunal voir §13 (bancs eau/parc, audience du maire,
@@ -349,6 +372,14 @@ dépôt.
   ⚠️ Même audit : **un seuil chiffré (`e.ch >= 1`) posé sur un geste qu'on n'atteint qu'après ce seuil
   ne garde rien.** Un verrou qui protège un moment de l'histoire s'écrit en morceau d'histoire (ce qui
   touche l'eau avant la pluie, le reste après la réparation), jamais en numéro de chapitre.
+- ⚠️⚠️ **UNE CARTE QU'ON REGÉNÈRE DEPUIS SA GRAINE NE SUPPORTE AUCUN TIRAGE DE PLUS, ET UN INTERDIT DE
+  PLACEMENT SE TIENT DES DEUX CÔTÉS** (2026-09-13, buissons de la ferme). La ferme n'est pas
+  sauvegardée : elle est regénérée puis rejouée case par case — un `rnd()` inséré au milieu de la
+  génération déplace les rochers de TOUTES les fermes existantes et fait « repousser » ailleurs les
+  arbres coupés, sans une erreur. Un décor neuf s'y pose par HACHAGE de case, en dernier, et un banc
+  compare l'empreinte d'avant. ⚠️ Et « pas de buisson sous un arbre », tenu à la génération, a été
+  violé 400 jours plus tard par la repousse des ARBRES : *une règle entre deux objets se vérifie chez
+  les deux qui peuvent naître*, pas seulement chez le nouveau venu.
 
 **JavaScript / three.js / canevas**
 - ⚠️⚠️⚠️ **UN BOOLÉEN MIS EN CACHE POUR UNE VALEUR NATIVE VOLATILE (`document.hidden`) NE SE
@@ -699,13 +730,11 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 `✓ Compiled successfully` juste avant.**
 
 ⚠️⚠️ **LES BANCS SONT DANS `tools/README.md` DEPUIS LE 432, ET CE CHAPITRE A ÉTÉ ÉLAGUÉ AU 444
-SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 442** (reporté deux fois). **20 bancs de contrôle et 22 bancs
-de rendu**, comptés en listant `tools/`. **LES VINGT RELANCÉS LE 2026-09-05, ET C'EST LA PREMIÈRE
-FOIS QUE LES VINGT LE SONT** : `verify-quete` **790/790**, `verify-strings` **1 126 clés
-appariées**, `verify-maire` **119/119**, `verify-vallee` **223/223**, `verify-scierie` **34/34**,
-`verify-ludo` **30/30**, `verify-taxi` **15/15**, `verify-collision` **TOUT PASSE**, les douze
-autres verts. Les bancs de RENDU n'ont pas été relancés ce jour-là (aucun sprite n'a bougé), et
-**vingt sur vingt-deux** seulement s'exécutent (`render-eau` / `render-parc`, entrée dédiée plus bas).
+SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 442** (reporté deux fois). ⚠️ **LE COMPTE ET LES CHIFFRES DU JOUR VIVENT
+EN UN SEUL ENDROIT : le bloc ⏭️ REPRISE** (relancés le 2026-09-13 : 23 `verify-*` verts, 22 des 24
+`render-*` ; `render-eau` / `render-parc`, entrée dédiée plus bas). Les recopier ici leur donnait un
+second endroit où mentir (§14.2, leçon n°2) — ils y étaient restés au 2026-09-05, premier jour où
+tous les bancs de contrôle avaient été relancés.
 ⚠️⚠️⚠️ **ET C'EST CE JOUR-LÀ QU'ON A APPRIS CE QUE « TOUS RELANCÉS » VALAIT : DEUX BANCS ÉTAIENT
 ROUGES DEPUIS DES JOURS.** La phrase précédente disait « TOUS RELANCÉS LE 2026-09-03 » et en
 nommait **huit sur vingt** — `verify-compo` et `verify-cycle` n'étaient dans aucune des deux
@@ -830,7 +859,9 @@ vérifie jamais — c'est elle, et elle seule, qui protège du banc imaginaire (
   closure et n'a donc AUCUN banc** : les BÂTIMENTS de la ville, les PERSONNAGES, et **tous les
   props** — c'est-à-dire le belvédère refait le même jour, dont `verify-vallee` et `verify-compo`
   tiennent l'emprise mais dont personne ne voit le dessin.
-- ⚠️ **AUCUN BANC NE REGARDE LA FERME EN IMAGE** : les vingt-deux bancs de rendu ne dessinent que
+- ⚠️ **AUCUN BANC NE REGARDE LA FERME EN IMAGE — SAUF UNE LISIÈRE DEPUIS LE 2026-09-13**
+  (`render-buissons` peint un morceau généré : herbe, arbres, rochers, buissons ; le reste de la
+  ferme n'a toujours aucun banc) : les autres bancs de rendu ne dessinent que
   Valley Town, ses intérieurs, ses habitants et sa quête. Un décor de la ferme mal proportionné
   n'a, à ce jour, aucun endroit où se voir. ⚠️ **Et le SOL de la ferme non plus** : `render-rues`
   peint les rues de la ville, pas les chemins de la ferme, restés sur la tuile unique de 16 px du
@@ -898,7 +929,9 @@ texte voit tout se connecter et rien passer. Depuis le 2026-08-27, le relais mé
 
 **Jouer en local** — deux échafaudages TEMPORAIRES, **à supprimer après** (recette resservie telle
 quelle au 454 puis au 456) :
-1. un `.env.local` pointant sur `http://127.0.0.1:54321` ; sans lui on reste bloqué à l'écran
+1. l'URL factice `http://127.0.0.1:54321` — ⚠️ **SANS RÉÉCRIRE `.env.local`, qui porte les vraies
+   clés** : lancer `fake-supabase` puis `arcardi-local` (port 3100) depuis `.claude/launch.json`, qui
+   passe l'URL en variable de PROCESSUS, prioritaire sur `.env.local` (2026-09-13) ; sans elle on reste bloqué à l'écran
    « code de ferme » ;
 2. une page jetable `app/<nom>/page.js` montant `<FermeGame room={{id}} me={{id,username}}
    players={[{profile_id, username, joined_at}]} isHost savedCode="XXXX" />`.
@@ -951,12 +984,15 @@ parade est un WORKER, qui n'est pas étranglé** :
 message vide une file de callbacks `requestAnimationFrame`. C'est le frein du 446 (une file, pas un
 relais qui se repose un message) avec une horloge qui ne dort pas. ⚠️ **Il a resservi tel quel au
 456**, où il a fait tourner toute la séance.
-⚠️⚠️ **MAIS `getImageData` RESTE MENTEUR DANS UN ONGLET MASQUÉ — MESURÉ AU 456.** Avec le worker en
-place, l'horloge avançait, les résidents se déplaçaient, et **le hachage de l'écran entier ne
-changeait pas d'une image à l'autre** : on aurait conclu « les PNJ sont arrêtés » sur un monde qui
-bougeait. **La capture d'écran, elle, est juste** : c'est elle qu'il faut échantillonner, pas les
-pixels du canevas. *Deux mesures de suite qui rendent le même nombre ne prouvent rien ; deux
-CAPTURES qui rendent la même image, si.*
+⚠️⚠️ **RELIRE LE CANEVAS D'UN ONGLET MASQUÉ : MENTEUR AU 456, JUSTE LE 2026-09-13 — CE QUI SÉPARE LES
+DEUX EST UN TÉMOIN.** Au 456, le hachage de l'écran entier ne bougeait pas sur un monde qui bougeait.
+Le 2026-09-13, pane masqué (la capture d'écran REFUSE alors de s'exécuter), `toDataURL` du canevas de
+jeu, worker en place, a suivi chaque pas d'une rafale de douze images. *Une relecture de canevas ne se
+croit que si elle contient quelque chose qui DOIT changer* (le décor qui défile, un buisson témoin sur
+la minimap). Recette : une route jetable `app/api/<nom>/route.js` qui écrit le PNG reçu dans le
+scratchpad, puis PIL (`python3`) pour recadrer, aligner et mesurer — supprimée avec la page jetable.
+⚠️ Deux onglets du même pane masqué ne se voient pas BOUGER : `netCanBroadcast` coupe la position
+d'un onglet masqué (l'état partagé, lui, passe).
 ⚠️⚠️ **NE JAMAIS `terminate()` CE WORKER POUR « GELER » UNE IMAGE — MESURÉ LE 2026-09-04.** La
 boucle de rendu se réarme elle-même via `requestAnimationFrame(loop)` à chaque image ; couper le
 worker qui vide la file orpheline la toute dernière inscription, et en créer un SECOND ensuite ne

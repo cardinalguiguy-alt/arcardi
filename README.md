@@ -1,5 +1,15 @@
 # ARCARDI 🎪
 
+> **LIVRAISON 2026-09-13 — DES BUISSONS SAUVAGES SUR LA FERME, ET UNE FAUX POUR LES TAILLER.**
+>
+> Environ 400 buissons par ferme, en lisière des bosquets et le long de la rivière — jamais sur les
+> abords cultivés de la maison, les champs de l'ouest, un arbre (ni sous sa couronne), l'eau, les
+> rails, la gare, la grange, l'enclos ou un bâtiment. On les traverse : le sauvage ralentit et
+> frissonne, le taillé non. La faux (5ᵉ outil, touche 1) taille au premier coup et retire au second
+> (+1 bois). Posés par hachage de case, sans un tirage de plus : les fermes existantes les reçoivent
+> sans que rien d'autre ne bouge. Deux bancs neufs (`verify-buissons`, `render-buissons`). Aucun
+> changement Supabase.
+
 > **AUDIT 2026-09-11 — OÙ'S THAT : JOUABILITÉ ET FLUIDITÉ.**
 >
 > Comparaison documentée avec GeoGuessr, lecture du jeu et vérification à deux
