@@ -70,6 +70,10 @@ export function mayorCtxOf(shared, star, E) {
     plans: Q.starPlanReady(e),
     trust: MR.mayorTrust(e),
     burnt: MR.mayorBurnt(e),
+    /* 2026-09-13 (lot 2) — LE SUJET VIENT DU RENDEZ-VOUS, ARBITRÉ PAR L'HÔTE (le
+       chantier, ou le budget après le saccage). Même raison que l'humeur : lu des
+       deux côtés, jamais choisi par le client. */
+    topic: MR.mayorApptTopic(e),
   };
 }
 
@@ -515,8 +519,11 @@ export function MayorAudience({ ctx, L, onDone, onLive }) {
   const LM = useMemo(() => L.maireFor(C.mayorIsFem(cand.key)), [L, cand.key]);
   const node = s.node;
   const choices = useMemo(() => MR.mayorChoices(s), [node, phase]);   // eslint-disable-line react-hooks/exhaustive-deps
+  /* 2026-09-13 (lot 2) — le libellé de la carte dépend du sujet : au budget, on pose
+     les plans CHIFFRÉS sur la liasse du cratère. */
+  const layLabel = s.topic === "budget" ? LM.layPlansBudget : LM.layPlans;
   const says = useMemo(() => shuffled(choices.filter(c => c.kind === "say"),
-                                      (MR.MAYOR_NODE_IDS.indexOf(node) + 1) * 7 + (ctx.day | 0)),
+                                      (MR.mayorNodeIdsOf(s.topic).indexOf(node) + 1) * 7 + (ctx.day | 0)),
                        [choices, node, ctx.day]);
   /* ⚠️⚠️⚠️ MÉMOÏSÉ, ET CE N'EST PAS UNE OPTIMISATION : C'EST CE QUI FAIT QUE
      L'ENTRETIEN DÉMARRE. Écrit `choices.filter(...)` à même le rendu, ce tableau
@@ -565,7 +572,7 @@ export function MayorAudience({ ctx, L, onDone, onLive }) {
      NOMBRE plutôt que par les listes qui l'ont produit met l'effet à l'abri du
      défaut ci-dessus pour de bon, et pas seulement aujourd'hui. */
   const askChars = useMemo(() => lenOf(ask, tint, ...says.map(c => LM.say[c.k]),
-      ...gestures.map(c => c.kind === "plans" ? LM.layPlans : c.kind === "settle" ? LM.settle : "")),
+      ...gestures.map(c => c.kind === "plans" ? layLabel : c.kind === "settle" ? LM.settle : "")),
     [ask, tint, says, gestures, L]);
 
   useEffect(() => {
@@ -680,7 +687,7 @@ export function MayorAudience({ ctx, L, onDone, onLive }) {
   const winPct = (C.MAYOR_ADH_WIN / C.MAYOR_ADH_MAX) * 100;
   const grade = MR.mayorGrade(s);
   const streakOn = s.streak >= C.MAYOR_STREAK_HOLD;
-  const bubble = phase === "over" ? { text: LM.end[grade] || LM.end.out }
+  const bubble = phase === "over" ? { text: (s.topic === "budget" && LM.endBudget && LM.endBudget[grade]) || LM.end[grade] || LM.end.out }
                : phase === "react" && react && react.tell ? { text: react.tell }
                : ask ? { text: ask, tint } : null;
 
@@ -691,7 +698,9 @@ export function MayorAudience({ ctx, L, onDone, onLive }) {
          la silhouette, la coiffure, la coupe du costume et le sexe. C'est la
          MÊME clé que la plaque et que les répliques `tint` — trois choses qui
          doivent parler du même élu (`verify-maire`, « les trois tables »). */
-      opts={{ plateLabel: LM.title, mayorName: L.candName(cand.key), mayorKey: cand.key }}
+      /* 2026-09-13 (lot 2) — `topic` pose la liasse du cratère sur le bureau à la
+         place du dossier du pont sud (`buildOffice`) : le décor dit le sujet. */
+      opts={{ plateLabel: LM.title, mayorName: L.candName(cand.key), mayorKey: cand.key, topic: s.topic }}
       bubble={bubble}
       head={
         <>
@@ -762,7 +771,7 @@ export function MayorAudience({ ctx, L, onDone, onLive }) {
               <div className="maire-gestures">
                 {gestures.map(c => (
                   <button className={"maire-gesture" + (c.kind === "slam" ? " slam" : "")} key={c.k} onClick={() => answer(c.k)}>
-                    {c.kind === "plans" ? LM.layPlans : c.kind === "settle" ? LM.settle : LM.slam}
+                    {c.kind === "plans" ? layLabel : c.kind === "settle" ? LM.settle : LM.slam}
                     <span>{c.kind === "settle" ? LM.settleHint : c.kind === "slam" ? LM.slamHint : ""}</span>
                   </button>
                 ))}
@@ -774,7 +783,7 @@ export function MayorAudience({ ctx, L, onDone, onLive }) {
             <div className="maire-end">
               {s.over === "signed" && (
                 <>
-                  <div>{LM.after.signed}</div>
+                  <div>{s.topic === "budget" ? LM.after.budgetSigned : LM.after.signed}</div>
                   {MR.mayorTrustGain(s) > 0 && <div className="maire-dim">{LM.after["trust" + MR.mayorTrustGain(s)]}</div>}
                 </>
               )}

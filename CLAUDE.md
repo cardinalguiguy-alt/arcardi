@@ -7,102 +7,145 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### ACTION SUIVANTE — JUGER LES BUISSONS EN JEU (DENSITÉ, TAILLÉ, RALENTISSEMENT), PUIS JOUER LE PRÉLUDE
+### ACTION SUIVANTE — FINIR LA QUÊTE DE L'ÉTOILE : IL NE RESTE QUE D11 ET D13
 
-**Buissons sauvages + faux, livrés le 2026-09-13** (demande : jamais sur un champ, un arbre, l'eau,
-les rails, un bâtiment ; taillables et retirables à la faux). En bref :
-- `O_BUSH` (22, sauvage : ralentit ×`TOWN_BUSH_SLOW`, frissonne) / `O_BUSH_TRIM` (23, taillé : ne
-  ralentit pas). **Aucun ne bloque.** La **faux** (`scythe`, 5ᵉ de `C.TOOLS`, touche 1 en rotation) :
-  1er coup taille, 2ᵉ retire (+1 bois ×1,5/niveau), 1 d'énergie ; tout fermier la reçoit au niveau 1.
-- **Placement sans aucun `rnd()`** (`seedFarmBushes`, hachage de case, en fin de `generateWorld`) :
-  la carte d'avant sort au bit près, donc les fermes existantes gagnent leurs buissons sans migration
-  et toute case déjà touchée (override) les écrase. ~380-400 par ferme, en lisière et le long de la
-  rivière. Interdits (`farmBushAllowed`) : abords de la maison, grange, gare, rails ±1, enclos, champs
-  de l'ouest (puits/Greg, r 9), ponts, leviers, passage sombre, sous la couronne d'un arbre,
-  bâtiments. L'hôte retire à chaque tick tout buisson sous un bâtiment d'artisan ou la grange
-  (déplaçables). `newDay` en fait repousser ~0,3/jour et n'y fait plus pousser d'arbre au sud d'un buisson.
-- Dessin procédural (`farmBushAtlas` → 2 atlas, `A.drawFarmBush`) ; le taillé est un dôme tondu (le
-  premier jet, une « savonnette », a été refusé sur planche).
-**Vu en jeu, puis relu au pixel** (hôte + invité, `fake-supabase`) : buissons en lisière ; faux
-équipée, taille puis retrait ; le TAILLÉ en jeu (dôme tondu), **aussi chez l'invité** ; le frisson
-(sommet décalé d'~9 px écran quand on est dedans, 0 au repos) ; printemps (fleurs) et automne (ocre) ;
-une **ANCIENNE ferme** servie par un faux serveur : case labourée avant les buissons → terre nue, ruche
-bâtie sur un buisson → herbe dessous sur la minimap (deux buissons témoins restent verts). Zéro
-erreur console. **Pas vérifiable ici** : le frisson causé par un AUTRE joueur (un onglet masqué ne
-diffuse pas sa position) ; le ralentissement n'est mesuré qu'à la louche (~6 px par pas dedans contre
-8-9 dehors). **À juger par Guillaume** : la densité, le taillé, le frisson (discret), et si le
-ralentissement agace. Aucune manipulation Supabase.
+**Le 2026-09-13, Guillaume a tranché tout ce qui manquait à la quête (D1–D15).** Le texte de
+référence, décision par décision avec son état, est **`components/ferme/QUETE.md`, section
+« AUTORITÉ 2026-09-13 bis » en tête de fichier** — la lire en entier avant de toucher au code.
+Guillaume est en « caveman on » : exécuter, sans questions.
 
-**Quête — chronologie tranchée par Guillaume et codée le 2026-09-13.** Le détail et le tableau
-des sous-parties vivent dans `QUETE.md` (« Ce qui est fait — 2026-09-13 », autorité). En bref :
-1. **La quête redémarre en jeu** — elle était infinissable depuis le 2026-09-12 (annonce ⇐ maire ⇐
-   cratère ⇐ annonce). Rendez-vous du maire ouvert à tous, sujet « architecte naval » ouvert après la
-   signature, bandeau et chevron dès le prélude, avis du tableau ouvert à l'invité.
-2. **La fin = `starQuestComplete`** : navire achevé ET septième réanimée. Le bandeau la suit
-   (`evilHaul`/`evilRevive`) ; la réanimation retente le don.
-3. **Chantier en deux moitiés** (`C.STAR_SHIP_YARD`) : coque + gouvernail avant la pluie (c'est la
-   condition de l'avis) ; mâture/voile/cloche après la réparation (`hullFirst`). `needStars` est
-   supprimé ; l'hôte refuse la réparation tant que Kerguélen n'est pas affolé.
-4. **Menu dev dans la trame** (`devYard`/`devRain`/`devTownFall`) : sans maire, un bouton pose le
-   rendez-vous et n'écrit rien d'autre ; le météore tombe toujours avant la reine.
+**Livré le 2026-09-13, en trois passes (lots 1-2, puis un audit en jeu du lot 2, puis D10/D12) :**
+- Lots 1-2 (prélude sans spoil, proposition du chantier, saccage déduit, 2ᵉ négociation budget,
+  reconstruction payer/attendre/aider Tristan) — détail inchangé, voir le tableau D1-D9 de `QUETE.md`.
+- ⚠️⚠️⚠️ **UN BUG BLOQUAIT LA QUÊTE À VIE, TROUVÉ EN LA JOUANT** : la porte du bureau du maire
+  (`tryMayorDoor`, `FermeGame.js`) décidait « déjà signé » en lisant `MR.mayorSigned` SEUL — vrai
+  pour toujours dès la 1ʳᵉ négociation (le chantier). La 2ᵉ audience (le budget, après le saccage)
+  ne s'ouvrait donc **plus jamais**, quel que soit le rendez-vous pris : la quête ne pouvait plus se
+  conclure. Même défaut dans le bouton dev de rendez-vous (`Q.devStar`, op `"appt"` — celui qui
+  saute l'attente réelle). Corrigés en lisant le SUJET courant (`MR.mayorApptTopic`/
+  `Q.starBudgetNeeded`) avant de décider si c'est signé — même lecture que le guichet d'accueil, qui
+  avait juste. `verify-jalons` **129/129**, un test neuf falsifié (126/129 sans le correctif).
+- **D10 — la protection de la canne, puis 3 à 6 poissons-squelettes.** `f.evilRodProtectedAt`
+  (déclaré/migré), enduit gratuit au chaudron (troisième recette, sans ingrédient), fenêtre de 10
+  min réelles ; `startFishingEvil` distingue canne nue (casse en 3 s, inchangé) de canne protégée
+  (ratés tirés une fois puis le lancer suivant arme le halage) ; fumerolle violette sur la case de
+  la canne dans la barre d'objets. `verify-quete` **893/893**, 7 tests neufs falsifiés.
+- **D12 — la Brebis reste allumée durablement, dynamique au survol.** Sortie de `FermeGame.js` vers
+  `fermeArt.js` (`A.drawStarConstellation`/`A.starConstellationHit`) pour qu'un banc la regarde :
+  visible la nuit comme avant, **et** de jour une fois `Q.starDone` vrai (plus discrète, jamais
+  éteinte), le survol double la vivacité du pouls. `render-etoile` §17, 5 tests neufs falsifiés.
 
-`verify-jalons` a été réécrit (trame complète + bandeau à chaque pas + falsification des 21
-boutons) ; chiffres des bancs : un seul endroit, plus bas. **Vu à l'écran** (un client) : ferme neuve sans bandeau, « Start » arrêté au maire et dit
-dans le chat, bandeau « Rendez-vous pris » avant la chute, zéro erreur console. **Pas vu** : le
-guichet du hall sans cratère, le prélude joué à la main jusqu'à la pluie. Aucune manipulation
-Supabase.
+**Vu en jeu** (un client, faux Supabase, ce jour-là) : la 1ʳᵉ audience jouée à l'adhésion 93,
+l'épave sur la cale, la 2ᵉ audience jouée à l'adhésion 100 (le correctif ci-dessus confirmé), le
+panneau de Tristan (« La mairie prend 40 % du prix à sa charge », payer/attendre grisés faute de
+bois en réserve). **À deux clients** : rejoint correctement (compteur à 2), la 2ᵉ audience regardée
+en direct par l'invité (bouton « Voir la scène de Guillaume »), aucune erreur console des deux
+côtés. La Brebis vue de nuit avant la fin (comportement inchangé). **PAS VU** : la carte « Budget
+voté ! » elle-même (passée entre deux captures) ; une transaction payer/attendre réelle avec de
+l'or qui bouge (aucun bois en réserve atteint cette session) ; D10 en action (la fenêtre pour
+VISER le point de sauvetage à la canne est étroite — le point est en pleine eau, ~3,16 cases de la
+rive la plus proche — non déclenchée par automatisation, à confirmer à la souris) ; D12 dans son
+régime « après la fin, de jour » (jamais atteint cette session).
 
 **Reste à faire, dans cet ordre :**
-0. **REGARDER LA GARE** (refaite le 2026-09-13, `render-gare.mjs`) : voie en pavé de 2×4 cases
-   (gravier gris clair, traverses brunes cernées), quai de ferme en planches brutes avec face avant,
-   quai de ville en acajou verni entre deux margelles de pierre et un jonc de laiton. La première
-   version a été jugée « pas belle » (trop de détails, aucune épaisseur) ; la seconde a été vue en
-   jeu côté ville seulement, côté ferme sur la planche.
-1. **JOUER LE PRÉLUDE EN VRAI** sur une ferme éligible (maire → plans → coque + gouvernail → avis →
-   pluie) : c'est la première fois qu'il a une voix, et les phrases du bandeau comme l'enchaînement
-   sont un premier réglage. **Puis VOIR la fuite du vandale et la fin** : « 🎩 appointment » → jouer
-   l'audience → « 🥷 Kerguélen ready to talk » → gare de Valley Town → **laisser jouer la cinématique
-   du météore sans rien toucher** (sinon la ville reste muette) → « Stand at Kerguélen » → E ; la fin
-   exige maintenant aussi la septième (« 🌊➡️🏖️ Hauled » puis la réanimer, ou « ⏭⏭ All »).
-2. **L'étoile est un PETIT MODÈLE 3D depuis la nuit du 2026-09-12** (`starWispRender`,
-   `fermeArt.js`) — à juger EN JEU, seules les planches l'ont vue. Demande de Guillaume, après un
-   masque au pixel refusé (« comme avant, souple et dodue, vraiment en 3D », référence : le dessin
-   du 16 août) : contour à cinq lobes ronds inégaux et penchés, gonflé en coussin, deux faces,
-   tourné/projeté/tamponné en profondeur ×4, éclairé haut-gauche, quantifié sur la palette ; visage
-   ancré sur la surface (il pivote avec elle). Poses = gelée + petit lacet. **En marche**,
-   `drawStarWisp` (`FermeGame.js`) déduit la vitesse de chaque compagne (`STAR_LEAN_MEM`, niveau
-   module) et affiche `starWispLive` : penchée, de trois quarts, étirée le long du chemin (cache
-   borné à 96 canevas). ⚠️ Les petites ont leurs propres réglages (creux plus francs, coussin plus
-   mince, ombrage lissé 3×3 avant quantification) : avec ceux de la reine, onze pixels rendaient un
-   caillou. **Reste à voir** : la traîne en jeu (amplitudes `roll` 0,34 / `yaw` 0,45 / `stretch`
-   0,20 = premier réglage). ⚠️ **2026-09-13 — LA REINE ET LA LUMIÈRE DES ÉTOILES** (« ressemble à une fleur », « réduis un
-   peu », « branches pas identiques », « bords trop arrondis », « lumière plus progressive, comme
-   la torche mais pas exactement ») : reine aux réglages des petites sauf creux (`RIN` 0,52) et
-   POINTE (`SHARP` 0,8 : profil triangulaire mêlé au `cos`, seul moyen d'avoir un angle au sommet),
-   taille 0,33 (17 px de matière) ; halo du sprite en atténuation douce au lieu de deux disques, et
-   halo en jeu (`drawStarWisp`) en dégradé radial à cinq paliers qui respire. **Rien de ça n'a été
-   vu en jeu** — le dégradé ne se rastérise pas hors navigateur.
-3. **La 2ᵉ négociation du maire** (`maire.js`) : budget dérapé par la réparation, une table de plus
-   (§16.1 de `QUETE.md`). C'est elle qui doit remplacer le garde-fou `needStars`, qui n'est qu'un
-   ersatz.
-4. **Le gate or/temps** : 300 000 or ou 1-2 jours réels par pièce (façon `BUILD_TIMES`), minigame de
-   Tristan pour accélérer — conçu dans `QUETE.md`, pas codé.
-5. **Voir en jeu la revente de chevaux** (livraison du 2026-09-12, jamais vue) : vendre un cheval
-   possédé depuis la boutique, à 1/3 du prix payé (`h.boughtPrice`, posé à l'achat — `HORSE_COSTS`
-   est indexé par RANG, donc relire le catalogue à la revente rendait un montant faux).
+1. **D11 — la finale**, en entier (voir le détail au prompt de reprise plus bas) : le maire
+   CONVOQUE → baptême « La Belle Étoile » → inauguration publique avec tous les résidents → mise en
+   mer → montée des étoiles → texte blanc sur bleu nuit, FR/EN. Elle REMPLACE la scène `end`
+   actuelle ; la condition reste `starQuestComplete`.
+2. **D13** — la convocation/l'inauguration jouable seule si un seul fermier est connecté ; sinon
+   exige tous les fermiers connectés, en disant qui manque. **Rien à construire tant que D11
+   n'existe pas** : c'est une porte SUR une scène qui n'a pas encore de porte.
+3. **D14 (la récompense `starlight`) : « on tranchera ça plus tard »** — ne rien inventer.
 
-**Bancs relancés le 2026-09-13 après les buissons — tous, en listant `tools/`** : les **23
-`verify-*` verts** (`verify-quete` 871/871, `verify-jalons` 106/106, `verify-maire` 119/119,
-`verify-vallee` 223/223, `verify-buissons` 42/42, `verify-ousthat` 144/144, `verify-scierie` 34/34,
-`verify-ludo` 30/30, `verify-taxi` 15/15, `verify-strings` 1131 = 1131 clés, `verify-collision` tout
-passe, et `compo`/`constants`/`cycle`/`gates`/`objects`/`orchards`/`pont`/`portee`/`scope`/`sol2`/
-`syntax`/`vergers`), **22 des 24 `render-*` verts** (`render-maire` 86/86, `render-scierie` 58/58,
-`render-buissons` 11/11 ; `render-eau`/`render-parc` ne s'exécutent toujours pas, dette antérieure),
-bundle esbuild propre (seul `G_SOIL`, préexistant).
+**Pièges pour qui reprend :**
+- Un champ neuf de `star`/`mayor`/farmer se déclare ET se migre dans le même geste (`newFarmer`/
+  `normalizeFarmer`, `newStar`/`migrateStar`, `migrateMayor`).
+- ⚠️⚠️⚠️ **UN CONTRÔLE « EST-CE SIGNÉ ? » DOIT LIRE LE SUJET COURANT, JAMAIS UN DRAPEAU UNIQUE**,
+  dès qu'une même porte (bureau du maire, bouton dev de rendez-vous) sert deux négociations
+  successives (`yard` puis `budget`) — la leçon de cette session, payée par une quête infinissable.
+  Chercher `MR.mayorApptTopic`/`Q.starBudgetNeeded` avant tout nouveau `MR.mayorSigned` isolé.
+- `quete.js` ne doit contenir aucune ligne d'argent (`verify-quete` scanne : la valeur de
+  financement s'appelle `"paid"`, jamais `"gold"`).
+- Les bancs signent le budget avec `signBudget`/`devAll` (`verify-quete`) et `signBudgetForReal`
+  (`verify-jalons`) ; une substitution en masse dans un banc réécrit aussi l'aide qu'on vient d'y
+  écrire (payé : `devAll` s'appelait lui-même).
+- Un `*/` ajouté au milieu d'un commentaire le referme (§4).
+- Le bouton dev « An appointment with the Mayor, right now » (op `"appt"`) pose un rendez-vous DÛ
+  MAINTENANT, mais un double-toggle du menu dev (deux clics rapprochés sur ⌘⇧X) l'annule : rouvrir
+  et vérifier `!!document.querySelector('.ferme-modal')` avant de cliquer un bouton dedans.
+- Le point de sauvetage de la 7ᵉ sœur (et donc le point d'ancrage géométrique de D10) est en pleine
+  eau, hors de portée à pied (voir le grand commentaire dans `updateMeEvil`, `FermeGame.js`) : viser
+  au clic depuis la rive la plus proche, jamais s'attendre à marcher jusque-là.
 
-Chantiers indépendants, non touchés : Où's that attend le retour de jeu de Guillaume
-(`components/ousthat/README.md`) ; ferme/ville/tribunal voir §13 (bancs eau/parc, audience du maire,
-sprites tribunal/église).
+**À juger par Guillaume, hors quête (livraisons précédentes, toujours valables) :** densité, taille et
+ralentissement des buissons de la ferme ; la gare refaite ; l'étoile en petit modèle 3D et sa lumière
+(jamais vues en jeu) ; la revente de chevaux à 1/3 du prix payé.
+
+**Bancs relancés le 2026-09-13 (après D10/D12 et le correctif de la porte du maire) :** les **22
+`verify-*` verts** (`verify-quete` 893/893, `verify-jalons` 129/129, `verify-maire` 133/133,
+`verify-vallee` 223/223, `verify-taxi` 15/15, `verify-scierie` 34/34, `verify-strings` 1131 clés,
+les quinze autres au code de sortie 0) ; **22 des 24 `render-*`** (`render-etoile` 17 sections,
+`render-maire` 86/86, `render-scierie` 58/58, `render-navire` vert ; `render-eau`/`render-parc`
+échouent toujours sur `createLinearGradient`, dette antérieure) ; `next build` propre (page/`.next`
+compilés, seul `G_SOIL` en avertissement, préexistant) ; bundle esbuild propre. Falsifié à
+l'écriture : sans le correctif de la porte du maire, `verify-jalons` tombe à 126/129 ; sans le
+garde `now >= protectedAt` dans `E.evilRodProtected`, `verify-quete` tombe de 2 contrôles ; sans le
+facteur `alpha` sur chaque canal de la Brebis, `render-etoile` §17 tombe de 1 contrôle. **Aucune
+migration SQL, aucune manipulation Supabase.** Page jetable `app/tmp-star-finale` supprimée.
+
+**PROMPT DE REPRISE (à coller tel quel) :** le texte ci-dessous, identique à celui donné à Guillaume.
+
+```text
+Tu reprends Arcardi pour FINIR la quête de l'étoile. Lis CLAUDE.md en entier, puis la section
+« AUTORITÉ 2026-09-13 bis » de components/ferme/QUETE.md : c'est la seule référence. Les décisions
+D1–D15 de Guillaume sont tranchées, ne les rediscute pas. Guillaume est en « caveman on » : exécute
+sans poser de questions.
+
+Le lot 2 (saccage, budget, reconstruction), D10 (protection de la canne) et D12 (constellation
+durable/dynamique) sont FAITS et bancés — D10 et D12 n'ont pas pu être confirmés à l'écran cette
+session (détail dans le bloc ⏭️ REPRISE de CLAUDE.md) : regarde-les en jeu en premier, corrige ce
+qui se voit, puis enchaîne sur D11 sans revenir en arrière sur leur conception.
+
+FINI veut dire, tout à la fois :
+1. D11 et D13 sont codés, couverts par des bancs FALSIFIÉS, et vus en jeu à un et à deux clients
+   (tools/fake-supabase.mjs), sans erreur console.
+2. Une partie se joue sans blocage jusqu'au texte final, et tools/verify-jalons.mjs rejoue toute la
+   trame, finale comprise.
+3. Tous les verify-* et render-* sont relancés et verts (hors dette connue render-eau/render-parc),
+   la page jetable est supprimée, le bloc ⏭️ REPRISE de CLAUDE.md et QUETE.md sont à jour, aucune
+   migration SQL.
+
+D11, la finale, qui REMPLACE la scène « end » actuelle :
+a. Quand starQuestComplete devient vrai, le maire CONVOQUE les joueurs : toast à toute la salle,
+   phrase de bandeau, chevron vers la mairie. E devant son bureau ouvre directement une courte
+   scène 3D courtoise (MaireScene/maireBureau, sans jauge ni rendez-vous) où l'on convient d'une
+   fête d'inauguration et de mise en mer.
+b. Baptême du navire « La Belle Étoile » : écrit e.baptism (déjà déclaré et migré), si bien que
+   Q.starShipName rend enfin le nom ; animation sur la cale, le nom apparaît sur la coque.
+c. Inauguration publique sur le quai de la cale, à Valley Town : fanions, guirlandes, confettis,
+   TOUS les résidents rassemblés (déplacements animés, jamais de téléportation), le maire présent,
+   puis la mise en mer du navire.
+d. Les étoiles compagnes montent au ciel, puis une scène courte : texte blanc sur fond bleu nuit
+   (fondu enchaîné, ou montée fluide vers le ciel puis le texte), en français et en anglais : les
+   étoiles rejoignent la constellation de la Brebis ; ensemble elles nous ont guidés, et elles
+   guideront les matelots futurs.
+L'hôte arbitre tout, resolveStarGift et doneAt restent la conclusion, jamais un send() par image,
+et aucun habitant ne nomme les étoiles.
+
+D13 : la convocation et l'inauguration se jouent seul si un seul fermier est connecté ; sinon elles
+exigent que tous les fermiers connectés soient présents sur le quai, et l'écran dit qui manque.
+
+D14, la récompense : n'y touche pas.
+
+CONTRAINTES : exigence visuelle et jouabilité maximales, animations travaillées ; plusieurs
+changements visuels par livraison sont permis ; tout champ neuf est déclaré ET migré dans le même
+geste ; les dessins vivent dans fermeArt.js pour qu'un banc puisse les regarder ; teste en jeu avant
+de dire livré. Un contrôle « est-ce signé ? » sur une porte à deux sujets lit le sujet courant,
+jamais un drapeau unique (voir les pièges du bloc ⏭️ REPRISE).
+
+Si tout ne tient pas en une session : arrête-toi à la fin d'une étape complète, bancs verts, et
+réécris le bloc ⏭️ REPRISE avec ce même prompt, amputé de ce qui est fait.
+```
 ---
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure
@@ -523,7 +566,7 @@ dépôt.
 | `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **35 477 l.** (compté le 2026-09-05 ; il était annoncé « ~20 500 » depuis assez longtemps pour qu'on planifie sur un fichier deux fois plus petit que le vrai) |
 | `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** · **`townRoadNav()` / `taxiStep()`** · **`townFlocks()` / `flockStep()`** · **2026-09-03 (lot C) `evilRodBroken(f, now)`** : dérive la casse de la canne d'un seul horodatage hôte (`f.evilRodArmedAt`), jamais un second champ · **2026-09-04 `resolveTownFish`/`resolveTownFishPermit`** : permis de pêche en ville — trois horodatages sur le fermier (voir bloc REPRISE) |
 | `components/ferme/quete.js` | **LA QUÊTE DE L'ÉTOILE : table, chronologies et résolveurs purs.** ⚠️ **469 — la FOUILLE (`STAR_DIG_MS`, `starDug`, `resolveStarDig`, `starDigResult`) et TROIS chapitres au lieu de cinq.** `STAR_FARM_IMPACTS` porte les **huit** cratères (3 étoiles / 2 matières / 3 vides — compté en important le module le 2026-08-30 ; il annonçait « cinq (2/1/2) » depuis le 480 bis), `resolveStarCalm` tient le barème 60/10 s et `resolveStarTownFall` sépare le gros météore. `STAR_FOLLOWER_SITES` dérive toutes les compagnes de `content:"star"`, `starFollowerAdded` identifie celle qui doit jouer son arrivée, `starFarmFlightPath` tient le cap stable des fragments et `queen` désigne l'unique reine. `starShipProgress` joint les cinq états du plan aux commandes et à la cale sans persistance supplémentaire. ⚠️ **2026-09-02 (lot A) — LA REINE SE NOURRIT PUIS SE RÉVEILLE** : `starOfferPrice` est le SEUL endroit qui dise ce que coûte une étoile (60 pour la bleue, `STAR_QUEEN_PRICE` = 80 pour la reine), `resolveStarLight` sert désormais les deux, et `starWakeAdvance`/`starWakeStrike` portent les deux décisions du réveil au rythme — sorties de `FermeGame.js` **pour qu'un banc puisse les jouer**, comme `maire.js` et `scierie.js`. ⚠️ **2026-09-02 (lot A2) — LA SIXIÈME SŒUR, `townShy`, verbe `spot`** : `starShySlot`/`starShyPick`/`starShySits` disent OÙ elle se cache — une pure fonction du temps partagé, jamais un état diffusé (le patron du jour de marché et des élections) ; `resolveStarSpot` tient la seule règle qui compte (pas avant la reine). ⚠️⚠️ **2026-09-03 (lot A3) — LA CINQUIÈME, `townGreen`, verbe `track`** : `starGreenWalk` la fait MARCHER de buisson en buisson sur une table d'adjacence que `FermeGame.js` lui passe (elle ne se téléporte jamais, et ce fichier ne connaît toujours pas la carte), `starGreenSlot` sépare le vol du repos, `starGreenSway` fait remuer le buisson occupé, `resolveStarHint` tient le compte d'indices **partagé entre les joueurs**, `starGreenTemp`/`starGreenBearing` traduisent une distance en « chaud/froid » et en cap. Aucun React, aucun dessin — `verify-quete.mjs` l'importe et la fait marcher quatre cents créneaux. ⚠️ **2026-09-03 (lot C)** : `starEvilUnlocked`/`starEvilFound`/`resolveStarEvilFound` vivent sur `e.evilFound` (un fait du monde, partagé — pas indexé par joueur, contrairement au hasard de la canne qui vit sur le fermier, `fermeEngine.js`). `starGoalKey` teste `evilSeek` AVANT `engineer` — correctif trouvé en écrivant `verify-quete`, voir sa section « Lot C ». ⚠️ **2026-09-04 `haulStep(state, dt, holding, rates)`** : généralisation d'`evilHaulStep` (alias conservé) par PROFIL de vitesses — `C.EVIL_HAUL_RATES`/`C.FISH_HAUL_RATES`, voir bloc REPRISE (lutte du Brochet). ⚠️⚠️ **2026-09-04 (lot E) — LA SEPTIÈME SŒUR REJOINT ENFIN `STAR_SITES`** (`Q.STAR_EVIL_ID`, verbe neuf `revive`, hors de tout chapitre par construction — voir sa note dans le fichier) : `content:"star"` suffit à la faire apparaître dans `starFollowers` dès que `resolveStarFound` écrit son id, exactement comme les six autres. `starWakeAdvance`/`starWakeStrike`/`starWakeGlow`/`starWakeCompanionState`/`starWakeCompanionPulse` prennent un `profile` optionnel (`STAR_WAKE_PROFILE_DEFAULT` pour la reine, `STAR_REVIVE_PROFILE` pour elle) — même geste que `haulStep` juste au-dessus, un jour plus tôt. |
-| `components/ferme/maire.js` | **L'AUDIENCE CHEZ LE MAIRE (480) : la table des battements et les résolveurs purs.** Douze nœuds, cinq actes, cinq familles d'argument, la jauge d'adhésion qui FUIT, l'élan, la rejouabilité côté hôte (`mayorReplay` : le client envoie sa TRANSCRIPTION, l'hôte la rejoue). Aucun React, aucun dessin — `verify-maire.mjs` l'importe. ⚠️ **C'est un système de NÉGOCIATION, pas une scène** : la confiance gagnée sert les audiences futures, donc une commission ou le cadastre s'y ajouteront en une table de plus. |
+| `components/ferme/maire.js` | **L'AUDIENCE CHEZ LE MAIRE (480) : les tables de battements et les résolveurs purs.** Cinq familles d'argument, la jauge d'adhésion qui FUIT, l'élan, la rejouabilité côté hôte (`mayorReplay` : le client envoie sa TRANSCRIPTION, l'hôte la rejoue). Aucun React, aucun dessin — `verify-maire.mjs` l'importe. ⚠️ **C'est un système de NÉGOCIATION, pas une scène**, et la promesse est tenue depuis le 2026-09-13 : **deux sujets** (`MAYOR_TOPICS` : `yard` douze nœuds, `budget` huit), le sujet porté par le rendez-vous (`appt.topic`, arbitré par l'hôte), un dossier par sujet (`e.mayor` / `e.mayor.budget`), la confiance commune. Une commission ou le cadastre = une table de plus. |
 | `components/ferme/MaireScene.js` | **la VUE de l'audience — le seul morceau de 3D du monde partagé.** Écran PLEIN, à la PREMIÈRE PERSONNE, caméra libre dans la pièce, bulles projetées, réponses en jaune, **mode spectateur** (`MayorWatch`), repli plat si WebGL manque. ⚠️ Il porte `mayorCtxOf`, **la fonction de contexte que le CLIENT et l'HÔTE appellent tous les deux** : leur accord est une propriété du code, pas une coïncidence. |
 | `components/ferme/scierie.js` | **LA SCIE DE TRISTAN (lot E) : la simulation pure, à PAS FIXE.** Une lame qui a de l'inertie, un partenaire qui RÉPOND au lieu de mener, un mou qui referme la fenêtre parfaite, une contrainte qui fend la planche. ⚠️ **Aucune fonction transcendante dans le chemin de simulation** (`sin`/`pow`/`random` sont laissés à l'implémentation par la norme) : le hasard passe par un hachage entier, ce qui rend la manche rejouable **au bit près** par l'hôte à partir d'une liste de numéros de pas. Aucun React, aucun dessin — `verify-scierie.mjs` en joue des centaines. ⚠️ `sawPull(s, side)` est déjà symétrique : la seconde poignée du §17.6 s'ajoutera sans rouvrir la mécanique. |
 | `components/ferme/scierieAtelier.js` | **L'ATELIER DE TRISTAN, EN CODE.** Le hangar et sa charpente apparente, les grumes, les piles de planches, l'établi, le poêle, les rais de poussière — et Tristan : pieds PLANTÉS, jambes et bras résolus en cinématique inverse, buste dont l'inclinaison est CALCULÉE pour que la main tombe à portée. La lame est **segmentée**, donc elle plie (ventre du coincement, fouet de la vitesse, affaissement du mou). ⚠️ Procédural comme `maireBureau.js`, `THREE` passé en paramètre, rien dans la closure de la boucle. |
@@ -1152,16 +1195,9 @@ le même défaut que le cratère muet du 456, et il se paie à chaque nouveau sy
   comportement de PNJ jamais éprouvé à plusieurs serait fabriquer la mauvaise abstraction, comme
   le dit déjà l'avertissement sur `MAYOR_NODE` plus haut dans ce fichier.
 
-✅ **RECENTRAGE DE LA QUÊTE AUTOUR DU BATEAU — TRANCHÉ LE 2026-09-12, PAS ENCORE CODÉ.** Le
-chantier naval se motive et se lance indépendamment des étoiles (négociation maire, plans de
-Kerguélen, premières commandes chez Tristan) ; la pluie d'astéroïdes interrompt ce chantier au
-lieu de l'ouvrir ; les deux histoires se rejoignent à la fin par la navigation, pas par
-l'origine du bois (Eduardo suit la constellation de la Brebis). Texte de référence complet,
-séquence en cinq chapitres et ce qui change dans le code : `QUETE.md`, autorité 2026-09-12, en
-tête de fichier. ⚠️ **Un vandale anonyme y est semé, jamais élucidé dans cette quête** — réservé
-à une quête future (ex. qui tague la mairie) ; ne jamais lui donner d'identité avant qu'une
-quête future ne le décide. Pas encore commencé : `quete.js`, `maire.js`,
-`scierie.js`/`scierieAtelier.js`, `fermeConstants.js`, `fermeStrings.js`.
+✅ **RECENTRAGE DE LA QUÊTE AUTOUR DU BATEAU — TRANCHÉ ET CODÉ** (2026-09-12/13 ; ce qui reste :
+bloc ⏭️ REPRISE et `QUETE.md`, autorité 2026-09-13 bis). ⚠️ **Le vandale reste anonyme, jamais
+élucidé dans cette quête** — réservé à une quête future ; ne jamais lui donner d'identité.
 
 ✅ **CHAÎNE DE TRANSPORT DU BOIS DU BATEAU — DIRECTION TRANCHÉE, NON CONSTRUITE (2026-09-01).**
 Quatre décisions actées avec Guillaume, à respecter le jour où ce chantier s'ouvre :

@@ -104,6 +104,19 @@ function signForReal(e, at) {
   return MA.resolveMayor(e, "banc", "🤖 Testeur", s.log, ctx, at);
 }
 
+/* 2026-09-13 (lot 2) — LE BUDGET, gagné pour de bon : même méthode, la seconde table,
+   les plans chiffrés posés au nœud `b5`. */
+function signBudgetForReal(e, at) {
+  MA.migrateMayor(e);
+  const ctx = {
+    mayorKey: C.TOWN_CANDIDATES[0].key, day: 12, nextElection: 30, audience: false, plans: true,
+    trust: MA.mayorTrust(e), mood: "mid", burnt: MA.mayorBurnt(e), topic: "budget",
+  };
+  const s = playMayor(ctx, (choices, st) =>
+    (st.node === "b5" && choices.some(c => c.kind === "plans")) ? "__plans" : pickGrade("ideal")(choices));
+  return MA.resolveMayor(e, "banc", "🤖 Testeur", s.log, ctx, at);
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    §1 — LA TRAME RÉELLE, SOUS-PARTIE PAR SOUS-PARTIE.
    Chaque étape n'avance qu'AVEC les résolveurs que le jeu appelle vraiment. Si
@@ -121,9 +134,27 @@ ok("jalon 0 — quête vierge : chapitre « field », rien du chantier",
    Q.starChapterKey(e) === "field" && !MA.mayorSigned(e) && !Q.starPlanAsked(e));
 ok("⚠️⚠️⚠️ …l'avis de l'observatoire refuse tant que le maire n'a pas signé",
    Q.resolveStarWarn(clone(e), "banc", DAY, now, GATE).needMayor === true);
-ok("…le bandeau se tait pour une ferme pas prête, et parle pour une ferme prête",
-   Q.starGoalKey(e, { yardOpen: false }) === null && Q.starGoalKey(e, READY) === "mayor",
-   `${Q.starGoalKey(e, { yardOpen: false })} / ${Q.starGoalKey(e, READY)}`);
+/* ⚠️⚠️ 2026-09-13 (lot 1) — LE BANDEAU SE TAIT TANT QUE PERSONNE N'A DIT OUI (D3 de
+   Guillaume : « la décision de lancer ou non la quête dépend de notre envie »). Il
+   parlait dès que la ferme était prête ; la mairie et Eduardo PROPOSENT désormais. */
+ok("⚠️⚠️ lot 1 — une ferme prête mais sans « oui » : le bandeau se tait",
+   Q.starGoalKey(e, READY) === null && Q.starGoalKey(e, { yardOpen: false }) === null, String(Q.starGoalKey(e, READY)));
+ok("…la proposition n'est faite ni à une ferme trop jeune, ni sans ses habitants — et l'est à une ferme prête",
+   !Q.starYardOffer(e, 1, GATE) && !Q.starYardOffer(e, DAY, {}) && Q.starYardOffer(e, DAY, GATE));
+ok("…un « oui » sans proposition est refusé",
+   Q.resolveStarYardAccept(clone(e), "banc", 1, now, GATE).locked === true);
+{
+  const y = clone(e);
+  ok("lot 1 — « on s'en occupe » : le chantier est accepté",
+     Q.resolveStarYardAccept(y, "banc", DAY, now, GATE).ok === true && Q.starYardAccepted(y));
+  ok("…et le bandeau envoie au maire", Q.starGoalKey(y, { yardOpen: false }) === "mayor", String(Q.starGoalKey(y, {})));
+  ok("⚠️⚠️⚠️ …le « oui » survit à une migration (poser, migrer, relire)", Q.starYardAccepted(Q.migrateStar(clone(y))));
+  ok("…la proposition cesse une fois acceptée, et un second « oui » ne réécrit rien",
+     !Q.starYardOffer(y, DAY, GATE) && Q.resolveStarYardAccept(y, "autre", DAY, now + 5, GATE).already === true && y.yard.by === "banc");
+  ok("…le navire n'a pas de nom avant son baptême, et le baptême survit à une migration",
+     Q.starShipName(y) === null
+     && Q.starShipName(Q.migrateStar({ ...clone(y), baptism: { at: now, by: "banc" } })) === C.STAR_SHIP_NAME);
+}
 ok("⚠️⚠️⚠️ …et le sujet « architecte naval » de la mairie ne propose rien avant le maire",
    !C.HALL_TOPICS.find(t => t.key === "engineer").when({ shared: { star: e } }));
 
@@ -211,9 +242,8 @@ ok("⚠️⚠️⚠️ LE DÉFAUT DE L'AUDIT : rien ne peut conclure la quête a
 {
   ok("chapitre 2a — le météore de Valley Town tombe", Q.resolveStarTownFall(e, now).ok === true);
   Q.resolveStarFound(e, "crater", "banc", now);
-  ok("chapitre 2b — la reine sortie, la coque se déclare fragile", !Q.starShipHas(e, "hull"));
-  ok("…et la coque « attend sa réparation » plutôt qu'un éclat qui n'existe plus",
-     (() => { const x = clone(e); delete x.wood.hull; return Q.starTimberBlock(x, "hull") === "repair"; })());
+  /* ⚠️⚠️ 2026-09-13 (lot 2) — la reine seule ne détruit rien : le saccage attend la nuit des six sœurs. */
+  ok("chapitre 2b — la reine sortie, rien n'est encore détruit", Q.starYardBuilt(e) && !Q.starSabotageAt(e));
   ok("⚠️⚠️ …la réparation est REFUSÉE tant que deux sœurs manquent (l'hôte tient la même porte que l'invite)",
      Q.resolveVandalReveal(clone(e), now).ok === false);
   Q.resolveStarFound(e, "townShy", "banc", now);
@@ -221,24 +251,55 @@ ok("⚠️⚠️⚠️ LE DÉFAUT DE L'AUDIT : rien ne peut conclure la quête a
   ok("chapitre 2 clos — chapitre « build » ouvert (final)",
      Q.starChapterKey(e) === "build" && Q.STAR_CHAPTERS[e.ch].final, `e.ch=${e.ch}`);
   ok("…Kerguélen s'affole au quai", Q.starEngineerUrgent(e, now));
+  ok("⚠️⚠️⚠️ lot 2 — la nuit des six sœurs, le saccage détruit TOUT ce qui était posé",
+     Q.starShipBuilt(e) === 0 && Q.starShipWrecked(e) && Q.STAR_SHIP_KEYS.every(k => Q.starTimberBlock(e, k) === "repair"),
+     Q.STAR_SHIP_KEYS.map(k => k + "=" + Q.starTimberBlock(e, k)).join(" "));
 }
 
 // ── Chapitre 3 : la réparation, la seconde moitié du navire, la septième.
 {
   ok("chapitre 3a — la septième passe devant (une lumière s'éteint)",
      Q.starGoalKey(e, { ...READY, now }) === "evilSeek");
-  ok("…la réparation jouée avec Kerguélen", Q.resolveVandalReveal(e, now).ok === true && Q.starShipHas(e, "hull"));
-  for (const k of Q.STAR_SHIP_KEYS.filter(k => !Q.starYardPiece(k)))
-    ok(`chapitre 3b — « ${k} » est commandable une fois la coque réparée`, Q.starTimberBlock(e, k) === null, Q.starTimberBlock(e, k) || "commandable");
-  for (const k of Q.STAR_SHIP_KEYS.filter(k => !Q.starYardPiece(k))) {
-    const order = Q.resolveStarTimberOrder(e, k, "banc", now);
-    Q.commitStarTimber(e, k, "banc", now, order.ms);
+  ok("…l'épave sauvée avec Kerguélen (le marteau ne répare rien)", Q.resolveVandalReveal(e, now).ok === true && Q.starShipBuilt(e) === 0);
+  ok("⚠️⚠️ lot 2 — tout attend le budget", Q.starBudgetNeeded(e) && Q.STAR_SHIP_KEYS.every(k => Q.starTimberBlock(e, k) === "noBudget"));
+  {
+    const x = clone(e); Q.resolveStarEvilFound(x, now);
+    const at = { ...READY, now: now + LATER };
+    ok("…le vandale enfui, le bandeau envoie négocier le budget à la mairie",
+       Q.starGoalKey(x, at) === "budget" && Q.starTargetSite(x, at) === "townHall", String(Q.starGoalKey(x, at)));
   }
-  now += 10 * 60 * 1000;
+  ok("lot 2 — rendez-vous pris, et c'est le BUDGET",
+     MA.resolveMayorAsk(e, "banc", "🤖 Testeur", now, () => 0.5, false, "budget") === "mayorBooked" && MA.mayorApptTopic(e) === "budget");
+  now = MA.mayorAppt(e).due;
+  ok("…l'entretien idéal du budget se conclut par une signature",
+     signBudgetForReal(e, now) === "mayorSigned" && MA.mayorBudgetSigned(e) && MA.mayorSigned(e));
+  ok("…la mairie prend une part : le prix payé est inférieur au prix plein",
+     Q.starBudgetShare(e) > 0 && Q.starRebuildPrice(e, "hull") < C.STAR_REBUILD_GOLD.hull, `${Q.starRebuildPrice(e, "hull")} / ${C.STAR_REBUILD_GOLD.hull}`);
+  ok("⚠️ …et le prix plein du navire reste 300 000 or",
+     Object.values(C.STAR_REBUILD_GOLD).reduce((a, b) => a + b, 0) === 300000);
+  now += 1000;
+  for (const k of Q.STAR_SHIP_KEYS)
+    ok(`chapitre 3b — « ${k} » se recommande une fois le budget voté`, Q.starTimberBlock(e, k) === null, Q.starTimberBlock(e, k) || "commandable");
+  for (const k of Q.STAR_SHIP_KEYS.filter(k => k !== "bell")) {
+    const order = Q.resolveStarTimberOrder(e, k, "banc", now);
+    Q.commitStarTimber(e, k, "banc", now, order.ms, "paid");
+  }
+  Q.commitStarTimber(e, "bell", "banc", now, Q.starRebuildWaitMs("bell"), "wait");
+  ok("⚠️ lot 2 — une pièce qui attend les fonds s'aide à la scie, trois fois au plus",
+     Q.starHurryLeft(e, "bell") === C.STAR_REBUILD_HURRY_MAX && Q.starHurryLeft(e, "hull") === 0);
+  {
+    const before = e.wood.bell.readyAt;
+    const h = Q.resolveStarTimberHurry(e, "bell", 3, now);
+    ok("…une manche à trois étoiles retire son temps, et en consomme une",
+       h.ok && e.wood.bell.readyAt === before - C.STAR_REBUILD_HURRY_CUT_MS[3] && Q.starHurryLeft(e, "bell") === C.STAR_REBUILD_HURRY_MAX - 1);
+    ok("⚠️⚠️⚠️ …et le financement survit à une migration (poser, migrer, relire)",
+       (() => { const m = Q.migrateStar(clone(e)); return m.wood.bell.fund === "wait" && m.wood.bell.hurry === 1 && m.wood.hull.fund === "paid"; })());
+  }
+  now += Q.starRebuildWaitMs("bell") + 60 * 1000;
   Q.resolveStarTimberTick(e, now);
-  for (const k of Q.STAR_SHIP_KEYS.filter(k => !Q.starYardPiece(k)))
+  for (const k of Q.STAR_SHIP_KEYS)
     ok(`…« ${k} » : montée au marteau`, Q.resolveStarTimberRaise(e, k, "banc", now).ok === true);
-  ok("chapitre 3c — LE NAVIRE EST ACHEVÉ", Q.starShipComplete(e));
+  ok("chapitre 3c — LE NAVIRE EST ACHEVÉ, et l'épave a disparu", Q.starShipComplete(e) && !Q.starShipWrecked(e));
   ok("⚠️⚠️⚠️ …mais la quête n'est pas finie : la septième manque",
      Q.resolveStarGift(clone(e), ["banc"], now).sisterMissing === true && !Q.starQuestComplete(e));
   Q.resolveStarEvilFound(e, now);
@@ -279,6 +340,24 @@ section("§2 le menu dev, sous-partie par sous-partie");
   Q.devStar(e2, "shy", t += 1000, "hote");
   ok("⚠️⚠️ « la discrète » : le météore est tombé AVANT que la reine soit trouvée",
      Q.starTownFallen(e2) && Q.starHas(e2, "crater") && e2.townFall < e2.found.crater.at, `${e2.townFall} < ${e2.found.crater.at}`);
+  const r6 = Q.devStar(e2, "all", t += 1000, "hote");
+  ok("⚠️⚠️ lot 2 — « tout sauf la fin » s'arrête au rendez-vous du BUDGET, sans rien reconstruire",
+     r6.blocked === "needBudget" && MA.mayorApptTopic(e2) === "budget" && Q.starShipBuilt(e2) === 0 && !MA.mayorBudgetSigned(e2),
+     String(r6.blocked));
+  /* ⚠️⚠️⚠️ 2026-09-13 (D11, audit en jeu) — « appt », LE BOUTON QUI SAUTE
+     L'ATTENTE, PAS LA MÊME PORTE QUE « all ». `starDevBudgetGate` (utilisé par
+     « all » juste au-dessus) posait déjà `topic: "budget"` correctement ; le
+     bouton solo « appt » avait sa PROPRE écriture de `e.mayor.appt`, qui
+     omettait `topic` — donc `MA.mayorApptTopic` retombait sur « yard » par
+     défaut, et la porte du bureau (FermeGame.js, tryMayorDoor) répondait « déjà
+     signé » pour toujours après le saccage. Rejoué ici : sans le sujet lu via
+     `starBudgetNeeded` dans l'op « appt » lui-même, cette assertion rougirait
+     alors que « all » juste au-dessus, lui, resterait vert — la preuve que les
+     deux portes divergeaient. */
+  const r6b = Q.devStar(e2, "appt", t += 1000, "hote");
+  ok("⚠️⚠️⚠️ « appt » APRÈS LE SACCAGE pose un rendez-vous BUDGET, jamais chantier — même si le chantier, LUI, reste signé",
+     r6b.ok && MA.mayorApptTopic(e2) === "budget" && MA.mayorSigned(e2) && !MA.mayorBudgetSigned(e2));
+  ok("…le budget signé pour de bon", signBudgetForReal(e2, t += 1000) === "mayorSigned");
   Q.devStar(e2, "all", t += 1000, "hote");
   ok("« tout sauf la fin » : la quête est complète, la scène reste à jouer",
      Q.starQuestComplete(e2) && !Q.starDone(e2) && Q.starEvilFound(e2) && Q.starEvilRescued(e2));
@@ -296,7 +375,11 @@ for (const op of Q.STAR_DEV_OPS) {
   const r = Q.devStar(s, op, t, "hote");
   const x = r.star || s;
   const bad = [];
-  if (Q.starWarned(x) && !Q.starYardBuilt(x)) bad.push("pluie annoncée sans coque ni gouvernail");
+  // 2026-09-13 (lot 2) — après le saccage la coque a disparu : ce n'est plus un état impossible.
+  if (Q.starWarned(x) && !Q.starYardBuilt(x) && !Q.starRebuildGate(x)) bad.push("pluie annoncée sans coque ni gouvernail");
+  if (Q.starRebuildGate(x) && !MA.mayorBudgetSigned(x)
+      && Q.STAR_SHIP_KEYS.some(k => Q.starTimberDone(x, k) || Q.starTimberReady(x, k) || Q.starTimberOrder(x, k)))
+    bad.push("reconstruction sans budget");
   if (Q.starFallen(x) && !Q.starPlanReady(x)) bad.push("chute sans plans");
   if (Q.starHas(x, "crater") && !Q.starTownFallen(x)) bad.push("reine sans météore");
   if (Q.STAR_SHIP_KEYS.some(k => !Q.starYardPiece(k) && (Q.starTimberDone(x, k) || Q.starTimberReady(x, k))) && !Q.starHullRepaired(x))

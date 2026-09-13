@@ -1121,6 +1121,24 @@ export const EVIL_ROD_BREAK_MS = 3000;
    spécial. Réutilise la valeur de ROD_PROMPT_RANGE, déjà éprouvée comme
    « généreuse » dans ce fichier — plutôt qu'inventer un troisième rayon. */
 export const EVIL_ROD_HAZARD_R = 2.5; // cases autour du point de sauvetage (élargi 2026-09-04, était 1,6)
+/* ══════════════════════════════════════════════════════════════════════════
+   2026-09-13 (D10) — LA PROTECTION DE LA CANNE, ET LA PÊCHE DIFFICILE.
+   ══════════════════════════════════════════════════════════════════════════
+   Points 5-7 du §3 de QUETE.md, jamais construits jusqu'ici : le premier
+   lancer nu mordait direct sur l'étoile. Décision de Guillaume (D10, autorité
+   2026-09-13 bis) : il faut d'abord enduire la canne au chaudron (déjà prête,
+   aucun ingrédient), puis 3 à 6 poissons-squelettes avant que l'étoile morde.
+   ⚠️ MÊME DISCIPLINE QUE `EVIL_ROD_BREAK_MS` : un seul horodatage HÔTE
+   (`f.evilRodProtectedAt`), dérivé par `E.evilRodProtected()`, jamais un
+   second champ « protected ». Voir `fermeEngine.js`. */
+export const EVIL_ROD_PROTECT_MS = 10 * 60000; // 10 minutes RÉELLES, comme l'attente du maire (mayorPickWait)
+/* Le compte de ratés est tiré côté CLIENT (Math.random), jamais arbitré par
+   l'hôte : contrairement au halage (qui crédite quelque chose), un poisson-
+   squelette ne rapporte RIEN et ne va dans aucun `inv` — donc rien à
+   réconcilier entre deux joueurs (§3 de CLAUDE.md, « ce qui peut se déduire
+   ne se diffuse pas », appliqué à ce qui ne se CRÉDITE pas du tout). */
+export const EVIL_ROD_MISS_MIN = 3;
+export const EVIL_ROD_MISS_MAX = 6;
 /* 2026-09-03 (lot C) — L'ANIMATION SPÉCIALE DU PREMIER LANCER (saut + élan,
    voir drawStarCast dans fermeArt.js et startFishingEvil dans FermeGame.js) :
    UNE seule durée, lue par le verrou de mouvement (actAnimRef) ET par la pose
@@ -2643,6 +2661,11 @@ export function worldGoodUnitCost(good) {
 }
 export const VOYAGE_DAY_MS = DAY_REAL_MS;   // 1 jour de jeu = durée réelle d'un jour
 export const VOYAGE_MAX_QTY = 30;           // garde-fou : quantité max par produit et par commande
+/* 2026-09-13 (lot 1) — CE QU'EDUARDO GAGNE À AVOIR SON PROPRE NAVIRE. Guillaume :
+   « il aimerait juste avoir son propre bateau pour contrôler mieux ses stocks =
+   limites par produit augmentées ×2 ». Lu par `Q.starVoyageMaxQty`, une fois la
+   quête achevée (le navire lancé) — jamais recopié à côté de `VOYAGE_MAX_QTY`. */
+export const VOYAGER_SHIP_LIMIT_K = 2;
 export const VOYAGE_SURPRISE_CHANCE = 0.5;  // probabilité qu'Eduardo ramène une surprise en plus
 export const VOYAGE_SURPRISE_MIN = 1, VOYAGE_SURPRISE_MAX = 3; // quantité de la surprise
 // Ancre de rôdaille d'Eduardo quand il est au village (près de la gare/mairie).
@@ -4155,6 +4178,8 @@ export const STAR_GATE_ARTISANS = CARLA_MIN_ARTISANS;        // dérivé, jamais
    la nuit d'après. Sans ce test, un « oui » cliqué de nuit donnait très exactement
    ce que cette demande refuse — la comète qui arrive comme ça. */
 export const STAR_WARN_FLOOR_MS = 5 * 60 * 1000;   // 5 min réelles minimum entre l'annonce et la chute
+// 2026-09-13 (lot 1) — le « ! » d'Eduardo quand le chantier est à proposer : un sursaut par période, jamais une étiquette fixe.
+export const STAR_YARD_HOOK_PERIOD_MS = 2600;
 
 /* ── LES PNJ NERVEUX. ⚠️⚠️ TOUT EST DÉRIVÉ, RIEN NE CIRCULE. « Ce PNJ est-il
    nerveux » est une fonction de son `rid` seul ; « où en est son tic » une
@@ -4334,6 +4359,31 @@ export const STAR_TIMBER = {
    tableau arrière, dans la langue de qui l'a baptisé. C'est la même règle que
    « Valley Town », qui n'est pas « La ville de la vallée » en français. */
 export const STAR_SHIP_NAME = "La Belle Étoile";
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-13 (lot 2) — LA RECONSTRUCTION : PAYER, OU ATTENDRE LES FONDS.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   Décisions de Guillaume : D5 (la mairie paie une part selon l'entretien), D7 (le
+   prix se paie PAR PIÈCE), D8 (« il faut un temps d'attente réel, mais pas aussi
+   long [qu'un à deux jours] ; tu jugeras »), D9 (la scie de Tristan raccourcit
+   l'attente).
+   ⚠️ LE PRIX ENTIER DU NAVIRE RESTE LES 300 000 OR de la conception, réparti au
+   poids de bois de chaque pièce (la coque est la plus chère, la cloche la moins) —
+   `verify-quete` tient la somme.
+   ⚠️ L'ATTENTE SE COMPTE EN MINUTES RÉELLES, pas en jours : les pièces courent en
+   parallèle (478), donc le chantier entier attend la plus longue, quarante minutes,
+   c'est-à-dire une soirée. Trois manches de scie retirent jusqu'à trente minutes
+   sur une pièce, jamais plus bas que `STAR_REBUILD_HURRY_FLOOR_MS` : aider Tristan
+   compte, et ne rend pas l'attente décorative. Premiers réglages, à jouer. */
+export const STAR_REBUILD_GOLD = { hull: 120000, rudder: 40000, mast: 80000, sail: 40000, bell: 20000 };
+export const STAR_REBUILD_WAIT_MS = {
+  hull: 40 * 60 * 1000, rudder: 15 * 60 * 1000, mast: 30 * 60 * 1000, sail: 20 * 60 * 1000, bell: 12 * 60 * 1000,
+};
+/* La part que la mairie prend à sa charge, selon la QUALITÉ de la signature
+   (`mayorGrade` : une signature simple, bonne, pleine). */
+export const STAR_BUDGET_SHARE = { plain: 0.25, good: 0.40, full: 0.55 };
+export const STAR_REBUILD_HURRY_MAX = 3;                                        // manches d'aide par pièce
+export const STAR_REBUILD_HURRY_CUT_MS = [0, 3 * 60 * 1000, 6 * 60 * 1000, 10 * 60 * 1000];   // par nombre d'étoiles de la manche
+export const STAR_REBUILD_HURRY_FLOOR_MS = 30 * 1000;                           // jamais livrée « dans le passé »
 /* ⚠️ ZIP 459 — CE QUE DURE SON « JE M'Y METS ». Six secondes : le temps de
    traverser la ferme pour aller le voir si l'on n'était pas à côté, pas assez pour
    qu'une phrase reste plantée au-dessus de quelqu'un qui travaille. Ensuite, c'est
@@ -6741,6 +6791,12 @@ export const MAYOR_ADH_FLOOR = 0;          // en dessous, il met fin à l'entret
    y aller tout de suite, ou attendre d'avoir de quoi montrer. */
 export const MAYOR_START_PLANS = 24;       // plans en main : réticent, pas hostile
 export const MAYOR_START_BARE = 18;        // les mains vides : très difficile
+/* 2026-09-13 (lot 2) — LE BUDGET, APRÈS LE SACCAGE. Plus bas que « plans en main » :
+   il vient de payer le cratère et vous revenez demander de l'argent. La confiance
+   gagnée à la première signature (`MAYOR_TRUST_START_BONUS` par cran) le remonte —
+   c'est la récompense promise d'un bon premier entretien. Premier réglage, mesuré
+   par `verify-maire` (un sans-faute signe, une partie tiède non). */
+export const MAYOR_START_BUDGET = 20;
 
 /* La fuite nue, en points par seconde. À 2,0 la jauge pleine se vide en
    cinquante secondes : c'est court, et c'est voulu — on ne rêvasse pas devant

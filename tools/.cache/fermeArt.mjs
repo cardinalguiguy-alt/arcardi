@@ -3723,6 +3723,68 @@ export function drawStarPlate(ctx, cx, cy, R, tMs) {
   px(cx + r * 0.02, cy + r * 0.44, 2, 2, `rgba(226,214,196,${(0.75 - sp * 0.5).toFixed(2)})`);
 }
 
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ D12 (autorité 2026-09-13 bis) — LA BREBIS, SORTIE DE FermeGame.js.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️ LES SEPT POINTS ET LES SIX SEGMENTS NE BOUGENT PAS D'UN PIXEL (zip 2026-09-01,
+   voir son commentaire d'origine plus bas dans ce fichier — non, il vivait dans
+   FermeGame.js ; il est ICI maintenant, pour qu'un banc de rendu puisse la
+   regarder, comme le demande la consigne de cette livraison). Nez et tête
+   baissés, un dos PLAT (garrot/croupe presque au même niveau), deux pattes qui
+   PENDENT du dos plutôt que de prolonger une polyligne — d'où l'arbre à six
+   segments plutôt qu'une simple chaîne de sept points.
+   ⚠️ CE QUI EST NEUF (D12) : `opt.alpha` (1 la nuit, réduit une fois la quête
+   finie et qu'on la regarde EN PLEIN JOUR — « durablement, mais plus discrète »)
+   et `opt.hover` (0..1, dérivé d'une DISTANCE par l'appelant via
+   `starConstellationHit`, jamais stocké) qui avive le pouls, la taille des
+   points et l'épaisseur des traits. Deux grandeurs simples, PAS un second
+   dessin : c'est le même arbre, juste plus ou moins vif. */
+export const STAR_CONST_POINTS = [
+  [0, 14],   // 0 nez (tête baissée)
+  [7, 10],   // 1 tête / encolure
+  [16, 2],   // 2 dos avant (garrot)
+  [34, 3],   // 3 dos arrière (croupe) — presque au même niveau que 2 : dos PLAT
+  [42, 8],   // 4 queue (petit moignon)
+  [14, 22],  // 5 patte avant (pend du garrot)
+  [32, 24],  // 6 patte arrière (pend de la croupe)
+];
+export const STAR_CONST_EDGES = [[0, 1], [1, 2], [2, 3], [3, 4], [2, 5], [3, 6]];
+export function drawStarConstellation(ctx, sx, sy, now, opt) {
+  const o = opt || {};
+  const alpha = Math.max(0, Math.min(1, o.alpha != null ? o.alpha : 1));
+  const hover = Math.max(0, Math.min(1, o.hover || 0));
+  ctx.save();
+  for (let i = 0; i < STAR_CONST_POINTS.length; i++) {
+    const px = sx + STAR_CONST_POINTS[i][0], py = sy + STAR_CONST_POINTS[i][1];
+    const coreSize = 2.5 + hover * 1.3;
+    ctx.fillStyle = `rgba(255,246,214,${((0.92 + hover * 0.08) * alpha).toFixed(3)})`;
+    ctx.fillRect(px - coreSize / 2, py - coreSize / 2, coreSize, coreSize);
+    ctx.fillStyle = `rgba(255,236,180,${((0.20 + hover * 0.30) * alpha).toFixed(3)})`;
+    const pulseHz = 700 - hover * 380; // le pouls s'accélère au survol
+    ctx.beginPath(); ctx.arc(px, py, (5 + hover * 2.4) + Math.sin(now / pulseHz + i) * 1.2, 0, 7); ctx.fill();
+  }
+  ctx.strokeStyle = `rgba(200,220,255,${((0.16 + hover * 0.32) * alpha).toFixed(3)})`;
+  ctx.lineWidth = 1 + hover * 0.7;
+  ctx.beginPath();
+  for (const [a, b] of STAR_CONST_EDGES) {
+    ctx.moveTo(sx + STAR_CONST_POINTS[a][0], sy + STAR_CONST_POINTS[a][1]);
+    ctx.lineTo(sx + STAR_CONST_POINTS[b][0], sy + STAR_CONST_POINTS[b][1]);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+/* Survol : une seule distance, point le plus proche — jamais recalculée deux
+   fois (l'appelant lit CE résultat pour choisir `opt.hover`, il ne refait pas
+   le test lui-même). Rayon un peu plus large que le point lui-même : viser la
+   Brebis au pixel près serait invisible pour qui ne sait pas déjà où cliquer. */
+export function starConstellationHit(sx, sy, mx, my, r) {
+  const rr = r || 9;
+  for (const [ox, oy] of STAR_CONST_POINTS) {
+    if (Math.hypot(mx - (sx + ox), my - (sy + oy)) <= rr) return true;
+  }
+  return false;
+}
+
 export function buildSprites() {
   const T = 16;
 
@@ -9174,6 +9236,70 @@ export function buildSprites() {
     shipCache.set(key, c);
     return c;
   }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-13 (lot 2) — L'ÉPAVE : CE QUE LE VANDALE A LAISSÉ SUR LA CALE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     Décision de Guillaume (D4) : le saccage a « complètement détruit notre
+     progression ». Une cale propre dirait « rien n'a jamais été construit » ; il
+     faut qu'on LISE la destruction : le mât brisé couché en travers du ber, sa
+     toile arrachée, les bordages arrachés jetés de part et d'autre, une membrure
+     tordue, la cloche tombée et fendue.
+     ⚠️ MÊME BOÎTE, MÊME ORIGINE ET MÊME PALETTE QUE LE NAVIRE (`shipBake`) : les
+     débris sont le bois de CE bateau, et ils tombent exactement là où il était.
+     ⚠️ AUCUN `rotate` : le faux canevas des bancs l'ignore (§4). Les pièces
+     couchées sont peintes en ESCALIER, colonne par colonne — c'est aussi ce qui les
+     garde franches au gros pixel. Un cerne commun pour finir (`outlineSprite`),
+     sinon le bois brun se perd dans la terre de la grève. */
+  const wreckCache = new Map();
+  function shipWreckBake(T2) {
+    const key = T2 | 0;
+    const hit = wreckCache.get(key);
+    if (hit) return hit;
+    const u = T2 / 16, W = Math.round(SHIP_W() * u), H = Math.round(SHIP_H() * u);
+    const [c, g] = cv(W, H);
+    const S = SHIP_PAL;
+    /* Une planche couchée, en escalier, et l'éclat clair de son bout cassé. */
+    const plank = (x, y, len, slope, tone) => {
+      for (let i = 0; i < len; i++) {
+        const yy = y + Math.round(i * slope);
+        shipR(g, u, x + i, yy, 1, 3, S.wood[tone]);
+        shipR(g, u, x + i, yy, 1, 1, S.wood[Math.min(5, tone + 2)]);
+      }
+      shipR(g, u, x + len - 1, y + Math.round((len - 1) * slope) - 1, 2, 2, S.wood[Math.min(5, tone + 3)]);
+    };
+    // le mât brisé, couché en travers du ber, et sa cassure
+    for (let i = 0; i < 68; i++) {
+      const x = 30 + i, y = 72 + Math.round(i * 0.30);
+      shipR(g, u, x, y, 1, 4, S.wood[2]);
+      shipR(g, u, x, y, 1, 1, S.wood[4]);
+    }
+    shipR(g, u, 97, 90, 3, 5, S.wood[5]);
+    shipR(g, u, 99, 93, 2, 2, S.wood[1]);
+    // la toile arrachée, qui pend encore au mât en lambeaux inégaux
+    for (let i = 0; i < 18; i++) {
+      const h = 3 + ((i * 7) % 6);
+      shipR(g, u, 42 + i, 76 + Math.round(i * 0.30), 1, h, S.sail[(i % 3) + 1]);
+      if (i % 4 === 1) shipR(g, u, 42 + i, 76 + Math.round(i * 0.30) + h, 1, 1, S.sail[0]);
+    }
+    // les bordages arrachés, jetés au sol de part et d'autre
+    plank(3, 96, 22, 0.10, 1); plank(8, 90, 16, -0.18, 2);
+    plank(111, 95, 24, -0.06, 1); plank(119, 89, 18, 0.22, 3);
+    plank(56, 97, 20, 0, 2);
+    // une membrure arrachée, dressée de travers
+    for (let i = 0; i < 18; i++) shipR(g, u, 125 - Math.round(i * 0.35), 81 + i, 2, 1, S.rib);
+    // les éclats
+    for (const [x, y] of [[26, 99], [40, 101], [83, 100], [104, 99], [132, 101], [17, 87], [138, 93]])
+      shipR(g, u, x, y, 2, 1, S.wood[4]);
+    // la cloche tombée, fendue
+    shipR(g, u, 70, 92, 7, 6, S.metal[1]);
+    shipR(g, u, 70, 92, 2, 6, S.metal[3]);
+    shipR(g, u, 73, 92, 1, 6, S.dark);
+    shipR(g, u, 69, 98, 9, 1, S.metal[0]);
+    outlineSprite(g, W, H, S.dark);
+    c.ox = W >> 1; c.oy = Math.round((SHIP_GROUND + 1) * u);
+    wreckCache.set(key, c);
+    return c;
+  }
 
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ZIP 454 — LA FEUILLE DE PLAN. « on verra le plan virtuel du bateau. »
@@ -9397,6 +9523,14 @@ export function buildSprites() {
     }
     const cr = shipBake(T2, "cradle", false);
     g2.drawImage(cr, Math.round(cx) - cr.ox, Math.round(cy) - cr.oy);
+    /* 2026-09-13 (lot 2) — L'ÉPAVE. `opt.wreck` vient de l'appelant (`Q.starShipWrecked`) :
+       `fermeArt` ne sait toujours rien de la quête. Peinte sur le ber, SOUS les pièces
+       reconstruites — une coque neuve montée recouvre les débris, et l'appelant cesse
+       alors de la demander. */
+    if (o.wreck) {
+      const wr = shipWreckBake(T2);
+      g2.drawImage(wr, Math.round(cx) - wr.ox, Math.round(cy) - wr.oy);
+    }
     for (const key of SHIP_Z) {
       const idx = C.STAR_SHIP_ORDER.indexOf(key);
       const has = idx >= 0 && !!P5[idx];

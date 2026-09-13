@@ -497,6 +497,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [evilBite, setEvilBite] = useState(null); // {monsterId} pendant le mini-jeu de morsure d'une créature maléfique (chantier 2026-07), sinon null
   const [injuredUntil, setInjuredUntil] = useState(0); // horodatage de fin d'indisponibilité (0 = pas blessé), survit à un refresh (voir farmer.injuredUntil)
   const [evilRodArmedAt, setEvilRodArmedAt] = useState(0); // 2026-09-03 (lot C) : horodatage HÔTE du premier lancer nu au point de sauvetage (0 = canne intacte), survit à un refresh (voir farmer.evilRodArmedAt)
+  const [evilRodProtectedAt, setEvilRodProtectedAt] = useState(0); // 2026-09-13 (D10) : horodatage HÔTE de l'enduit protecteur (0 = canne nue), même famille qu'evilRodArmedAt (voir farmer.evilRodProtectedAt)
   // 2026-09-04 — permis de pêche en ville : trois horodatages HÔTE, même
   // famille qu'evilRodArmedAt juste au-dessus (survivent à un refresh, voir
   // farmer.townFish*). Lus par rideTrain() (bannissement) et le guichet de
@@ -1586,6 +1587,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const sleepTimerRef = useRef(null); // setTimeout de sortie automatique après C.SLEEP_MS
   const injuredUntilRef = useRef(0); // miroir synchrone de injuredUntil (lu dans la boucle de rendu/déplacement)
   const evilRodArmedAtRef = useRef(0); // 2026-09-03 (lot C) : miroir synchrone de evilRodArmedAt (lu dans doActionEvil/startFishingEvil)
+  const evilRodProtectedAtRef = useRef(0); // 2026-09-13 (D10) : miroir synchrone de evilRodProtectedAt (lu dans startFishingEvil)
+  const evilRodMissesRef = useRef(null); // 2026-09-13 (D10) : ratés restants avant que l'étoile morde, PUREMENT LOCAL — un poisson-squelette ne rapporte rien, rien à réconcilier entre clients (§3 de CLAUDE.md)
   const townFishPermitUntilRef = useRef(0); // 2026-09-04 : miroir synchrone de townFishPermitUntil (lu dans le guichet de Léonie)
   const townFishBanUntilRef = useRef(0);    // idem, lu dans rideTrain() — c'est LUI qui bloque l'embarquement
   const townFishDistrustUntilRef = useRef(0);
@@ -1892,6 +1895,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const t = setTimeout(() => pushToast(L.star.evil.rodBroken), left);
     return () => clearTimeout(t);
   }, [evilRodArmedAt]);
+  /* 2026-09-13 (D10) — MÊME PATRON, POUR LA FIN DE LA PROTECTION (dix minutes
+     plutôt que trois secondes) : sans ce toast, le badge de la case disparaît
+     en silence et le joueur ne comprend qu'au prochain lancer nu pourquoi sa
+     canne recommence à casser. */
+  useEffect(() => {
+    if (!evilRodProtectedAt) return;
+    const left = evilRodProtectedAt + C.EVIL_ROD_PROTECT_MS - Date.now();
+    if (left <= 0) return; // déjà expirée avant ce montage (reprise) : rien à annoncer
+    const t = setTimeout(() => pushToast(L.star.evil.rodProtectExpired), left);
+    return () => clearTimeout(t);
+  }, [evilRodProtectedAt]);
   /* ⚠️ LE RAPPEL « PREVIOUSLY », UNE FOIS PAR SESSION ET JAMAIS DEUX. Il ne
      s'ouvre que si la quête est COMMENCÉE et pas finie : sur une ferme neuve il
      n'a rien à dire, et après la fin il redirait une histoire close. La marque
@@ -2497,6 +2511,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // 2026-09-03 (lot C) — même reprise que injuredUntil : une canne cassée
       // avant un rechargement doit le rester après.
       evilRodArmedAtRef.current = mine.evilRodArmedAt || 0; setEvilRodArmedAt(evilRodArmedAtRef.current);
+      // 2026-09-13 (D10) — même reprise : la protection posée au chaudron survit à un rechargement.
+      evilRodProtectedAtRef.current = mine.evilRodProtectedAt || 0; setEvilRodProtectedAt(evilRodProtectedAtRef.current);
       // 2026-09-04 — permis de pêche en ville : même reprise après rechargement.
       townFishPermitUntilRef.current = mine.townFishPermitUntil || 0; setTownFishPermitUntil(townFishPermitUntilRef.current);
       townFishBanUntilRef.current = mine.townFishBanUntil || 0; setTownFishBanUntil(townFishBanUntilRef.current);
@@ -3453,8 +3469,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const eA = (sA.star = Q.migrateStar(sA.star));
       const whoA = String(req.name || f.name || "?");
       const dayA = sA.day || 1;
+      /* 2026-09-13 (lot 2) — LE SUJET EST DÉCIDÉ ICI, PAR L'HÔTE, SUR L'ÉTAT DE LA
+         QUÊTE : après le saccage et la fuite, c'est le budget. Le client ne le choisit
+         pas — il demande « une audience », l'arbitre sait laquelle. */
+      const topicA = Q.starBudgetNeeded(eA) ? "budget" : "yard";
       const rA = MR.resolveMayorAsk(eA, f.id, whoA, Date.now(), Math.random,
-                                    E.mayorAudienceDay(dayA) === dayA);
+                                    E.mayorAudienceDay(dayA) === dayA, topicA);
       if (!rA) return;
       /* ⚠️ ON NE DIFFUSE QUE QUAND QUELQUE CHOSE A CHANGÉ. « déjà pris », « déjà
          signé » et « il ne veut pas vous voir » n'écrivent rien : les rediffuser
@@ -3473,11 +3493,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const whoM = String(req.name || f.name || "?");
       const ctxM = mayorCtxOf(sM, eM, E);
       const log = Array.isArray(req.log) ? req.log.slice(0, 64) : [];
+      // 2026-09-13 (lot 2) — le sujet se lit AVANT l'arbitrage, qui consomme le rendez-vous.
+      const topicM = MR.mayorApptTopic(eM);
       const rM = MR.resolveMayor(eM, f.id, whoM, log, ctxM, Date.now());
       if (!rM) return;                       // déjà signé : rien à rejouer, rien à diffuser
       out.star = eM;
       dirtyRef.current = true;
-      if (rM === "mayorSigned") broadcastChat("🎩", maireL().chat.signed(whoM));
+      if (rM === "mayorSigned" && topicM === "budget") broadcastChat("🎩", maireL().chat.budgetSigned(whoM));
+      else if (rM === "mayorSigned") broadcastChat("🎩", maireL().chat.signed(whoM));
       else if (rM === "mayorThrown") broadcastChat("🎩", maireL().chat.thrown(whoM));
       else if (rM === "mayorSlam") broadcastChat("🎩", maireL().chat.slam(whoM));
       else broadcastChat("🎩", maireL().chat.failed(whoM));
@@ -3489,7 +3512,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          un simple message de chat s'y noyait. Diffusée à toute la salle,
          comme la carte de chapitre : c'est le chantier naval de TOUT LE MONDE
          qui vient de s'ouvrir, pas seulement celui du joueur qui négociait. */
-      if (rM === "mayorSigned") { out.starScene = { key: "mayorWin" }; persistFnRef.current && persistFnRef.current(); }
+      if (rM === "mayorSigned") { out.starScene = { key: topicM === "budget" ? "budgetWin" : "mayorWin" }; persistFnRef.current && persistFnRef.current(); }
       hostFlushOut(out, f, null);
       return;
     }
@@ -3500,6 +3523,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const now = Date.now();
       const who = String(req.name || f.name || "?");
       const wasStarted = Q.starStarted(e);
+      const sabBefore = Q.starSabotageAt(e);   // 2026-09-13 (lot 2) — voir le toast du saccage, plus bas
       /* ⚠️ ZIP 453 — LE COMPTE EST CELUI DU NAVIRE, ET C'EST LE SEUL. Il lisait
          `starShards` (quatre « notes »), donc le chat annonçait « n sur 4 »
          devant un bateau à cinq emplacements. Voir la note de `STAR_SITES`. */
@@ -3625,15 +3649,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         broadcastChat("⭐", r.site === "crater"
           ? (mate ? L.star.chat.craterBoth(who, mate) : L.star.chat.crater(who))
           : (mate ? L.star.chat.tamedBoth(who, mate) : L.star.chat.tamed(who)));
-        /* ⚠️ AUTORITÉ 2026-09-12 — LA LIGNE DE KERGUÉLEN. Point d'accroche
-           unique et déjà idempotent (`resolveStarFound` refuse tout doublon,
-           voir `starHas(e,target)` en tête de `resolveStarCalm`) : c'est
-           l'instant EXACT où `shipSiteOk` (quete.js) fait régresser la coque —
-           « la régression EST la révélation », jusqu'ici sans message. Vu par
-           toute la salle, pas seulement l'acteur (même mécanisme que le
-           chantier Tristan/Jérôme). */
-        if (r.site === "crater") broadcastGlobalToast(L.star.vandal.toast);
       }
+      /* ⚠️⚠️ 2026-09-13 (lot 2) — LE TOAST DU SACCAGE PART À LA NUIT DES SIX SŒURS,
+         PLUS À LA SORTIE DE LA REINE. Il partait quand la coque régressait (la reine) ;
+         le vandale détruit maintenant TOUT quand la dernière sœur est trouvée
+         (`Q.starSabotageAt`), et la reine, la discrète et la verte se trouvent dans
+         n'importe quel ordre. On compare donc AVANT/APRÈS, ici ET dans le bloc des
+         gestes plus bas — les deux endroits où une sœur du cratère se trouve. */
+      if (!sabBefore && Q.starSabotageAt(e)) broadcastGlobalToast(L.star.vandal.toast);
       /* ⚠️ ZIP 469 — L'ANNONCE DE FOUILLE NE DIT PAS CE QU'IL Y AVAIT DEDANS. Le
          second joueur apprend qu'un trou est retourné et combien il en reste ; il
          va voir. Dire « une étoile ! » dans le chat lui volerait le seul moment
@@ -3697,6 +3720,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const e = (s3.star = Q.migrateStar(s3.star));
       const now = Date.now();
       const who = String(req.name || f.name || "?");
+      const sabBefore3 = Q.starSabotageAt(e);   // 2026-09-13 (lot 2) — la discrète ou la verte peut être la dernière des six
       let r = { ok: false };
       if (req.kind === "starLight") {
         /* ⚠️ LA ZONE AVANT TOUT (§4 de `CLAUDE.md`, le piège des deux cartes) : les
@@ -3822,6 +3846,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // 2026-09-03 (lot A3) — même raison que la ligne du dessus : la chasse
       // s'arrête pour tout le monde, l'autre joueur doit cesser de fouiller.
       if (req.kind === "starTrack") broadcastChat("\u{1F33F}", L.star.chat.greenTracked(who));
+      if (!sabBefore3 && Q.starSabotageAt(e)) broadcastGlobalToast(L.star.vandal.toast);   // 2026-09-13 (lot 2) — voir le bloc des trouvailles
       if ((r.crossed || []).length) {
         const nowCh = Q.STAR_CHAPTERS[Math.min(e.ch, Q.STAR_CH_DONE - 1)];
         broadcastChat("\u{1F4D6}", L.star.chat.chapter(L.star.chapter[nowCh.key] || nowCh.key));
@@ -3874,6 +3899,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       out.star = s2.star;
       out.starScene = { key: "warn" };
       broadcastChat("\u{1F52D}", L.star.warn.chat);
+      persistFnRef.current && persistFnRef.current();
+      hostFlushOut(out, f, null);
+      return;
+    }
+    /* ╔══════════════════════════════════════════════════════════════════════════
+       ║ 2026-09-13 (lot 1) — « ON S'EN OCCUPE » : LE CHANTIER NAVAL EST ACCEPTÉ.
+       ╚══════════════════════════════════════════════════════════════════════════
+       Deux boutons y mènent (l'avis de la mairie au tableau des nouvelles, la fiche
+       d'Eduardo) et un seul arbitre : l'hôte relit la MÊME porte que l'affichage
+       (`Q.starYardOffer`, sur l'état partagé), donc un invité ne peut pas lancer un
+       chantier que l'écran ne lui proposait pas. ⚠️ Même forme que `starWarn` juste
+       au-dessus : il date, il ne donne rien. */
+    if (req.kind === "starYardAccept") {
+      const s2 = sharedRef.current;
+      const e = (s2.star = Q.migrateStar(s2.star));
+      const r = Q.resolveStarYardAccept(e, f.name || f.id, s2.day, Date.now(), starGateCtxNow());
+      if (!r.ok || r.already) { out.star = s2.star; hostFlushOut(out, f, null); return; }
+      dirtyRef.current = true;
+      out.star = s2.star;
+      broadcastChat("⚓", L.star.yard.chat(f.name || "?"));
       persistFnRef.current && persistFnRef.current();
       hostFlushOut(out, f, null);
       return;
@@ -4189,6 +4234,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, evilRodArmedAt: f.evilRodArmedAt } },
         });
       }
+    } else if (req.kind === "evilRodProtect") {
+      /* 2026-09-13 (D10) — L'ENDUIT PROTECTEUR, AU CHAUDRON, DÉJÀ PRÊT (§3 de
+         QUETE.md, point 5 : « pas d'ingrédients à rassembler pour cette étape
+         précise »). Rejoué à volonté (la concoction ne s'épuise jamais) : on
+         reécrit l'horodatage à CHAQUE demande, contrairement à `evilRodCast`
+         qui s'arme une seule fois — ici, prolonger la protection est le point
+         (un joueur qui repasse au chaudron avant l'expiration doit repartir
+         pour dix minutes pleines, pas garder le reste de l'ancienne fenêtre).
+         Poser l'enduit guérit aussi une canne en train de casser : `evilRodArmedAt`
+         retombe à 0, la ceinture-bretelle qui empêche un armement en cours de
+         casser la canne sous les pieds d'un joueur qui vient de se protéger. */
+      f.evilRodProtectedAt = Date.now();
+      f.evilRodArmedAt = 0;
+      dirtyRef.current = true;
+      hostSend({
+        type: "broadcast", event: "apply",
+        payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, evilRodProtectedAt: f.evilRodProtectedAt, evilRodArmedAt: 0 } },
+      });
     } else if (req.kind === "evilFound") {
       /* 2026-09-03 (lot C) — LA SEPTIÈME SŒUR EST VUE, POUR TOUT LE MONDE.
          Fait du MONDE, pas confidence par joueur (voir la note de `e.evilFound`,
@@ -6756,6 +6819,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: f.id, key: "starSawRefused" } } });
         return true;
       }
+      /* ╔══════════════════════════════════════════════════════════════════════════
+         ║ 2026-09-13 (lot 2) — APRÈS LE SACCAGE, LA COMMANDE SE FINANCE.
+         ╚══════════════════════════════════════════════════════════════════════════
+         ⚠️ L'HÔTE RELIT LE PRIX (`Q.starRebuildPrice`, part de la mairie déduite) et la
+         caisse commune ; le client n'envoie qu'une intention (`fund`). Contrôlé AVANT
+         le bois, pour la même raison que la chose en plus : aucun débit partiel. */
+      const rebuild = Q.starRebuildGate(e);
+      const fund = rebuild ? (req.fund === "paid" ? "paid" : "wait") : "";
+      const price = fund === "paid" ? Q.starRebuildPrice(e, String(req.part || "")) : 0;
+      if (price > 0 && (s2.money | 0) < price) {
+        hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: f.id, key: "starNoGold", n: price } } });
+        return true;
+      }
       const stock = s2.gregStock || (s2.gregStock = { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
       /* ⚠️ LE SUPPLÉMENT EST DU BOIS QU'ON A RÉELLEMENT FENDU, pas une amende :
          la sanction dit ce qui s'est passé au lieu d'inventer un prix. C'est la
@@ -6784,12 +6860,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          PLUTÔT QUE D'ÊTRE RÉÉCRITE ICI : la commande garde UN seul endroit qui
          sache écrire `e.wood[key]`, sinon deux formes du même état finiraient par
          diverger (§8). Le facteur est borné par construction dans `sawResult`. */
-      const ms = Math.max(30000, Math.round(r.ms * sw.msScale));
-      Q.commitStarTimber(e, req.part, f.name, now, ms);
+      /* 2026-09-13 (lot 2) — attendre les fonds remplace la durée de Tristan par
+         l'attente de la mairie ; la note de la manche joue sur les deux. */
+      const baseMs = fund === "wait" ? Q.starRebuildWaitMs(String(req.part || "")) : r.ms;
+      const ms = Math.max(30000, Math.round(baseMs * sw.msScale));
+      if (price > 0) { s2.money -= price; setHud(h => ({ ...h, money: s2.money })); }
+      Q.commitStarTimber(e, req.part, f.name, now, ms, fund);
       dirtyRef.current = true;
       hostSend({ type: "broadcast", event: "apply", payload: {
         star: e, gregStock: stock,
         farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets },
+        // ⚠️ l'or payé voyage dans le MÊME message (`state` porte la caisse commune) : zéro `send()` de plus (§3)
+        ...(price > 0 ? { state: shareState() } : {}),
       } });
       broadcastChat("\u{1FA9A}", L.star.saw.win(L.star.plan.part(req.part), fmtDuration(ms)));
       persistFnRef.current && persistFnRef.current();
@@ -6811,6 +6893,34 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        plus dans le battement de Tristan (leçon 474). La scène part dans le MÊME
        `apply` que la pièce : deux messages laisseraient une image où le bateau est
        fini et la scène pas encore jouée. */
+    /* ╔══════════════════════════════════════════════════════════════════════════
+       ║ 2026-09-13 (lot 2) — AIDER TRISTAN SUR UNE PIÈCE QUI ATTEND LES FONDS (D9).
+       ╚══════════════════════════════════════════════════════════════════════════
+       Même contrat que la commande : le client joue la manche, l'hôte la REJOUE
+       (`SAW.sawRun`) et lit les étoiles lui-même ; `resolveStarTimberHurry` retire le
+       temps, borné par pièce. Rien n'est prélevé, rien n'est donné d'autre. */
+    if (req.kind === "starTimberHurry") {
+      const s2 = sharedRef.current;
+      const e = (s2.star = Q.migrateStar(s2.star));
+      const now = Date.now();
+      const key = String(req.part || "");
+      if (Q.starHurryLeft(e, key) <= 0) {
+        hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: f.id, key: "starHurryNone" } } });
+        return true;
+      }
+      const sw = SAW.sawResult(SAW.sawRun(req.log, { part: key }));
+      if (!sw.ok) {
+        hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: f.id, key: "starSawRefused" } } });
+        return true;
+      }
+      const rh = Q.resolveStarTimberHurry(e, key, sw.stars | 0, now);
+      if (!rh.ok) return true;
+      dirtyRef.current = true;
+      hostSend({ type: "broadcast", event: "apply", payload: { star: e } });
+      broadcastChat("\u{1FA9A}", L.star.plan.hurryChat(f.name || "?", L.star.plan.part(key), fmtDuration(rh.cut)));
+      persistFnRef.current && persistFnRef.current();
+      return true;
+    }
     if (req.kind === "starTimberRaise") {
       const s2 = sharedRef.current;
       const e = (s2.star = Q.migrateStar(s2.star));
@@ -6844,7 +6954,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       for (const line of order) {
         const good = C.WORLD_GOODS.find(g => g.key === (line && line.key));
         if (!good) continue;
-        const qty = Math.max(0, Math.min(C.VOYAGE_MAX_QTY, (line.qty | 0)));
+        const qty = Math.max(0, Math.min(Q.starVoyageMaxQty(s.star), (line.qty | 0)));   // 2026-09-13 — doublée avec son navire
         if (qty <= 0) continue;
         cost += C.worldGoodUnitCost(good) * qty;
         maxDays = Math.max(maxDays, (C.VOYAGE_TIERS[good.tier] || C.VOYAGE_TIERS.proche).days);
@@ -7708,6 +7818,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (typeof p.farmer.evilRodArmedAt === "number" && p.farmer.evilRodArmedAt !== evilRodArmedAtRef.current) {
         evilRodArmedAtRef.current = p.farmer.evilRodArmedAt; setEvilRodArmedAt(p.farmer.evilRodArmedAt);
       }
+      // 2026-09-13 (D10) — même miroir simple pour la protection posée au chaudron.
+      if (typeof p.farmer.evilRodProtectedAt === "number" && p.farmer.evilRodProtectedAt !== evilRodProtectedAtRef.current) {
+        evilRodProtectedAtRef.current = p.farmer.evilRodProtectedAt; setEvilRodProtectedAt(p.farmer.evilRodProtectedAt);
+      }
       // 2026-09-04 — permis de pêche en ville : même miroir simple, sans effet
       // de bord (voir evilRodArmedAt juste au-dessus). Les trois voyagent
       // ENSEMBLE dans chaque `out.farmer` qui les touche (townFish, req dédiée
@@ -8036,6 +8150,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       return out.length ? out.join(" ") : P.hallPoor;
     }
     if (key === "starNoWood") return L.star.plan.orderPoor(n | 0);
+    if (key === "starNoGold") return L.star.plan.rebuildPoor(n | 0);      // 2026-09-13 (lot 2)
+    if (key === "starHurryNone") return L.star.plan.hurryNone;             // 2026-09-13 (lot 2)
     /* ⚠️ ZIP 478 — `n` PORTE ICI UN OBJET, comme `starShort` juste au-dessus : le
        refus doit nommer CE QUI manque, pas seulement combien. */
     if (key === "starNoExtra") { const t = n || {}; return L.star.plan.orderPoorExtra(t.n | 0, t.what || ""); }
@@ -10045,15 +10161,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      aurait contredit sa demande ; le confiner au point de sauvetage raconte la
      même chose (l'eau qui la retient est hostile) sans éteindre la pêche
      ordinaire.
-     ⚠️ 2026-09-04 — LE PREMIER LANCER NU MORD DÉSORMAIS (voir le halage,
-     `evilHaulRef` plus bas) : la protection au chaudron (points 5-6 de §3 de
-     QUETE.md, table des lots) reste À CONSTRUIRE — ce n'est donc pas encore
-     elle qui rend ce lancer possible, c'est la simplification honnête de ce
-     lot : on saute la pêche ambiante dédiée (poissons-squelettes, point 7,
-     également non construite) et on va direct de l'appât spécial au halage.
-     Le hasard de la canne nue (`evilRodBroken`) reste posé tel quel derrière
-     ce premier lancer — il continuera de compter une fois la vraie
-     protection écrite. */
+     ⚠️⚠️⚠️ 2026-09-13 (D10) — LA PROTECTION ÉCRITE, LE LANCER NU N'ARME PLUS LE
+     HALAGE DIRECTEMENT. Deux régimes au point de sauvetage, choisis par
+     `E.evilRodProtected` (fermeEngine.js, dérivé du même horodatage HÔTE que
+     `evilRodBroken`, jamais un second champ) :
+       - CANNE NUE : le piège d'origine, inchangé (casse en 3 s) — il pousse
+         maintenant vers le chaudron plutôt que vers un halage qu'il n'arme
+         plus jamais.
+       - CANNE PROTÉGÉE : le lancer ne casse rien, mais ne mord pas non plus
+         tout de suite. `evilRodMissesRef` (purement local, jamais réconcilié —
+         un poisson-squelette ne rapporte rien) compte 3 à 6 ratés, tirés une
+         seule fois à la première tentative protégée ; chaque lancer tant
+         qu'il reste des ratés rejoue la pêche AMBIANTE existante
+         (`C.EVIL_LAKE_FISH`) sur ce même point, et seul le lancer qui vide le
+         compte arme enfin le halage. */
   function startFishingEvil(tt) {
     const ew = evilWorldRef.current, m = meRef.current; if (!ew || !m) return;
     if (!inMapEvil(tt.x, tt.y) || ew.ground[tt.y * ew.w + tt.x] !== C.G_WATER) { pushToast(L.toastNeedWater); return; }
@@ -10062,35 +10183,63 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // sans cette garde, un second lancer y rejouerait tout le geste pour rien.
     const nearSpot = Q.starEvilFound(e) && !Q.starEvilRescued(e) && evilSpotDist(ew, tt) <= C.EVIL_ROD_HAZARD_R;
     if (nearSpot) {
-      const armed = evilRodArmedAtRef.current;
-      if (armed && Date.now() - armed >= C.EVIL_ROD_BREAK_MS) { pushToast(L.star.evil.rodStillBroken); return; }
-      if (!armed && !evilHaulRef.current) {
-        /* 2026-09-03 (lot C) — L'ANIMATION SPÉCIALE, UNE SEULE FOIS PAR ARMEMENT.
-           C'est LE geste qui compte (Guillaume : « pêcher l'étoile… saute un
-           peu, prend de l'élan… envoie l'appât bien loin dans le lac »), pas
-           chaque pression sur E pendant les 3 s d'armement qui suivent : elle
-           vit sur `!armed` (le tout premier lancer), jamais sur `nearSpot`
-           seul, sans quoi marteler E rejouerait le saut en boucle pour rien. */
-        evilCastRef.current = { t0: performance.now(), tx: tt.x, ty: tt.y };
-        actAnimRef.current = C.EVIL_CAST_ANIM_MS / 1000;
-        pushToast(L.star.evil.rodArming); sendReq({ kind: "evilRodCast" });
-        /* 2026-09-04 — LE HALAGE S'ARME EN MÊME TEMPS QUE LE LANCER. Elle
-           mordra `EVIL_HAUL_BITE_DELAY_MS` après la fin de l'animation
-           (`updateMeEvil` fait la transition waiting -> active). Position de
-           départ et rive d'arrivée FIGÉES ici, une fois pour toute la scène —
-           `evilRescueSpot`/`evilNearestShore` ne varient jamais dans une
-           session (le lac est fixe), mais figer évite de les rappeler à
-           chaque image pour rien. */
-        const spot = evilRescueSpot(ew);
-        const shore = spot && evilNearestShore(ew, spot.x, spot.y);
-        if (spot && shore) {
-          evilHaulRef.current = {
-            phase: "waiting", startAt: performance.now() + C.EVIL_CAST_ANIM_MS + C.EVIL_HAUL_BITE_DELAY_MS,
-            fx: spot.x, fy: spot.y, sx: shore.x, sy: shore.y,
-            progress: 0, tension: 0, lockMs: 0, holding: false, lastSlipAt: -1, wonAt: 0,
-          };
-          setEvilHaulActive(true);
+      const protectedNow = E.evilRodProtected({ evilRodProtectedAt: evilRodProtectedAtRef.current }, Date.now());
+      if (!protectedNow) {
+        const armed = evilRodArmedAtRef.current;
+        if (armed && Date.now() - armed >= C.EVIL_ROD_BREAK_MS) { pushToast(L.star.evil.rodStillBroken); return; }
+        if (!armed && !evilHaulRef.current) {
+          /* 2026-09-03 (lot C) — L'ANIMATION SPÉCIALE, UNE SEULE FOIS PAR ARMEMENT.
+             C'est LE geste qui compte (Guillaume : « pêcher l'étoile… saute un
+             peu, prend de l'élan… envoie l'appât bien loin dans le lac »), pas
+             chaque pression sur E pendant les 3 s d'armement qui suivent : elle
+             vit sur `!armed` (le tout premier lancer), jamais sur `nearSpot`
+             seul, sans quoi marteler E rejouerait le saut en boucle pour rien. */
+          evilCastRef.current = { t0: performance.now(), tx: tt.x, ty: tt.y };
+          actAnimRef.current = C.EVIL_CAST_ANIM_MS / 1000;
+          pushToast(L.star.evil.rodArming); sendReq({ kind: "evilRodCast" });
+          // D10 — la canne nue ne mord plus jamais : le seul geste qui reste
+          // possible d'ici est d'aller se protéger au chaudron.
+          pushToast(L.star.evil.rodNeedsProtect);
         }
+        return;
+      }
+      // Protégée : plus de casse possible, mais l'étoile ne mord pas au
+      // premier lancer — voir le grand commentaire ci-dessus.
+      if (evilHaulRef.current) return; // halage déjà en cours
+      if (evilRodMissesRef.current == null) {
+        evilRodMissesRef.current = C.EVIL_ROD_MISS_MIN
+          + Math.floor(Math.random() * (C.EVIL_ROD_MISS_MAX - C.EVIL_ROD_MISS_MIN + 1));
+      }
+      evilCastRef.current = { t0: performance.now(), tx: tt.x, ty: tt.y };
+      actAnimRef.current = C.EVIL_CAST_ANIM_MS / 1000;
+      if (evilRodMissesRef.current > 0) {
+        evilRodMissesRef.current -= 1;
+        // Même tirage que la pêche ambiante plus bas : un poisson-squelette,
+        // jamais stockable, jamais crédité — voir C.EVIL_LAKE_FISH.
+        let total = 0; for (const fs of C.EVIL_LAKE_FISH) total += fs.weight;
+        let r = Math.random() * total, fi = 0;
+        for (let i = 0; i < C.EVIL_LAKE_FISH.length; i++) { r -= C.EVIL_LAKE_FISH[i].weight; if (r <= 0) { fi = i; break; } }
+        fishTileRef.current = { x: tt.x, y: tt.y };
+        pushToast(L.star.evil.rodMiss);
+        setFishMini({ mode: fi % 3, fish: 0, evil: fi });
+        return;
+      }
+      /* 2026-09-04 — LE HALAGE S'ARME EN MÊME TEMPS QUE LE LANCER. Elle
+         mordra `EVIL_HAUL_BITE_DELAY_MS` après la fin de l'animation
+         (`updateMeEvil` fait la transition waiting -> active). Position de
+         départ et rive d'arrivée FIGÉES ici, une fois pour toute la scène —
+         `evilRescueSpot`/`evilNearestShore` ne varient jamais dans une
+         session (le lac est fixe), mais figer évite de les rappeler à
+         chaque image pour rien. */
+      const spot = evilRescueSpot(ew);
+      const shore = spot && evilNearestShore(ew, spot.x, spot.y);
+      if (spot && shore) {
+        evilHaulRef.current = {
+          phase: "waiting", startAt: performance.now() + C.EVIL_CAST_ANIM_MS + C.EVIL_HAUL_BITE_DELAY_MS,
+          fx: spot.x, fy: spot.y, sx: shore.x, sy: shore.y,
+          progress: 0, tension: 0, lockMs: 0, holding: false, lastSlipAt: -1, wonAt: 0,
+        };
+        setEvilHaulActive(true);
       }
       return;
     }
@@ -13781,7 +13930,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // Zip 258 : commande de voyage à Eduardo. Envoie la liste { key, qty } non
   // vide au host (voyagerOrder), puis referme le panneau et remet le brouillon
   // à zéro. Le coût/durée sont recalculés et vérifiés côté hôte (autoritaire).
-  const setDraftQty = (key, qty) => setVoyagerDraft(d => ({ ...d, [key]: Math.max(0, Math.min(C.VOYAGE_MAX_QTY, qty | 0)) }));
+  const setDraftQty = (key, qty) => setVoyagerDraft(d => ({ ...d, [key]: Math.max(0, Math.min(Q.starVoyageMaxQty(sharedRef.current.star), qty | 0)) }));
   const voyagerDraftLines = () => C.WORLD_GOODS.map(g => ({ key: g.key, qty: voyagerDraft[g.key] | 0 })).filter(l => l.qty > 0);
   const voyagerDraftCost = () => voyagerDraftLines().reduce((sum, l) => { const g = C.WORLD_GOODS.find(x => x.key === l.key); return sum + (g ? C.worldGoodUnitCost(g) * l.qty : 0); }, 0);
   const voyagerDraftDays = () => voyagerDraftLines().reduce((mx, l) => { const g = C.WORLD_GOODS.find(x => x.key === l.key); return g ? Math.max(mx, (C.VOYAGE_TIERS[g.tier] || C.VOYAGE_TIERS.proche).days) : mx; }, 0);
@@ -19794,7 +19943,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const sghost = starGhostsOn();
           pushE((tw.shipY + 1) * T, se, () =>
             sprites.drawStarShip(ctx, (tw.shipX + 0.5) * T, (tw.shipY + 1) * T, T, sparts, now,
-                                 { night: snight, gone: sgone, ghosts: sghost }));
+                                 { night: snight, gone: sgone, ghosts: sghost,
+                                   // 2026-09-13 (lot 2) — l'épave sur la cale, tant que la nouvelle coque n'est pas montée
+                                   wreck: Q.starShipWrecked(sharedRef.current.star) }));
           /* ⚠️⚠️ AUTORITÉ 2026-09-12 (repasse) — LA LUEUR DE RÉPARATION, JOUÉE UNE
              FOIS. `sprites.drawStarHullFixGlow` (fermeArt.js) est une fonction pure
              de `now - e.vandal.at` (§8 de CLAUDE.md : rien de plus à faire vieillir),
@@ -23135,47 +23286,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          mairie, église) : sans ce test elle se peignait par-dessus `drawCourtFrame`. Même source
          et même pattern que `drawStarChevron` un peu plus bas dans ce fichier. */
       const skyZone = meRef.current && meRef.current.zone;
-      if (E.isNightTime(tmin) && skyZone !== "court") {
+      /* ⚠️⚠️ D12 (autorité 2026-09-13 bis) — « TOUTES LES ÉTOILES AU CIEL » : LA
+         BREBIS RESTE ALLUMÉE DURABLEMENT UNE FOIS LA QUÊTE FINIE, ET DEVIENT
+         DYNAMIQUE AU SURVOL. Avant la fin, rien ne change (nuit + dehors,
+         comme depuis toujours). Après (`Q.starDone`), elle se voit aussi de
+         JOUR — mais plus discrète (`dayA`), pour rester un ciel et pas un
+         logo. Le dessin lui-même vit dans `fermeArt.js` (`A.drawStarConstellation`)
+         pour qu'un banc puisse le regarder ; ce bloc ne fait plus que décider
+         QUAND et À QUELLE INTENSITÉ, jamais COMMENT. */
+      const questDone = Q.starDone(sharedRef.current.star);
+      const isNight = E.isNightTime(tmin);
+      if (skyZone !== "court" && (isNight || questDone)) {
         const sx = W - 134, sy = 60;
-        /* ⚠️⚠️ HORS-ZIP 2026-09-01 — LA BREBIS, PAS SEPT POINTS AU HASARD (QUETE.md §17.7,
-           §17.7 bis). Nez et tête baissés (elle broute), un DOS PLAT entre garrot et
-           croupe (presque au même y — un dos bombé en triangle ressemblait à un oiseau,
-           pas à un mouton, à l'écran), une petite queue en moignon ; les deux pattes
-           PENDENT du dos et de la croupe au lieu de prolonger la ligne — sept points, six
-           segments, un ARBRE et pas une simple polyligne, sinon aucune patte n'est
-           possible avec une seule ligne continue. Rejoué à l'écran (échafaudage jetable,
-           supprimé) avant d'écrire ces coordonnées dans le jeu.
-           ⚠️ ELLE DOIT RESTER LISIBLE COMME UNE CONSTELLATION ORDINAIRE tant qu'on ne
-           sait pas ce qu'elle dessine — Guillaume : « ressemblent toujours à une simple
-           constellation ». Même déclencheur qu'avant (nuit + dehors) : les 7 points sont
-           TOUJOURS ensemble, aucune révélation progressive par sœur — 4 des 7 compagnes
-           (blanche, verte, orange, violette) n'existent pas encore en code. */
-        const CONST = [
-          [0, 14],   // 0 nez (tête baissée)
-          [7, 10],   // 1 tête / encolure
-          [16, 2],   // 2 dos avant (garrot)
-          [34, 3],   // 3 dos arrière (croupe) — presque au même niveau que 2 : dos PLAT
-          [42, 8],   // 4 queue (petit moignon)
-          [14, 22],  // 5 patte avant (pend du garrot)
-          [32, 24],  // 6 patte arrière (pend de la croupe)
-        ];
-        const EDGES = [[0, 1], [1, 2], [2, 3], [3, 4], [2, 5], [3, 6]];
-        ctx.save();
-        for (let i = 0; i < CONST.length; i++) {
-          const px = sx + CONST[i][0], py = sy + CONST[i][1];
-          ctx.fillStyle = "rgba(255,246,214,0.92)";
-          ctx.fillRect(px - 1, py - 1, 2.5, 2.5);
-          ctx.fillStyle = "rgba(255,236,180,0.20)";
-          ctx.beginPath(); ctx.arc(px, py, 5 + Math.sin(now / 700 + i) * 1.2, 0, 7); ctx.fill();
+        /* Survol : une seule mesure, jamais recalculée pour le dessin ET pour
+           la décision — `A.starConstellationHit` est LA fonction qui répond
+           « est-ce assez près ? », lue une fois ici. */
+        const rect = canvas.getBoundingClientRect();
+        let hoverNow = false;
+        if (rect.width && rect.height) {
+          const mx = (mouseRef.current.x - rect.left) * canvas.width / rect.width;
+          const my = (mouseRef.current.y - rect.top) * canvas.height / rect.height;
+          hoverNow = A.starConstellationHit(sx, sy, mx, my, 11);
         }
-        ctx.strokeStyle = "rgba(200,220,255,0.16)"; ctx.lineWidth = 1;
-        ctx.beginPath();
-        for (const [a, b] of EDGES) {
-          ctx.moveTo(sx + CONST[a][0], sy + CONST[a][1]);
-          ctx.lineTo(sx + CONST[b][0], sy + CONST[b][1]);
-        }
-        ctx.stroke();
-        ctx.restore();
+        const dayA = isNight ? 1 : 0.38; // « plus discrète » de jour, jamais éteinte
+        A.drawStarConstellation(ctx, sx, sy, now, { alpha: dayA, hover: hoverNow ? 1 : 0 });
       }
       /* ── LES TROIS SCÈNES. */
       const sc0 = starSceneRef.current;
@@ -25689,7 +25823,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      conversation ; tout ce qui compte part en `req` à la fin. */
   function tryMayorDoor() {
     const eA = Q.migrateStar(sharedRef.current.star);
-    if (MR.mayorSigned(eA)) { pushToast(maireL().after.signed); return; }
+    /* ⚠️⚠️⚠️ 2026-09-13 (lot 2, audit en jeu) — LE SIGNÉ SE LIT PAR SUJET, PAS PAR
+       UN DRAPEAU UNIQUE. Cette porte appelait `MR.mayorSigned` seule : une fois le
+       chantier (yard) signé, `e.mayor.ok` reste vrai pour toujours, donc la porte
+       répondait « déjà signé » à VIE — y compris après un rendez-vous flambant
+       neuf pour le BUDGET (2ᵉ négociation, saccage). La quête entière restait
+       bloquée à la porte du bureau : aucun banc ne le voyait (ils appellent les
+       résolveurs, jamais cette fonction). Même lecture que le panneau d'accueil
+       plus bas dans ce fichier (`topicH`/`signed`, recherche « Q.starBudgetNeeded »). */
+    const topicA = MR.mayorAppt(eA) ? MR.mayorApptTopic(eA) : (Q.starBudgetNeeded(eA) ? "budget" : "yard");
+    const signedA = topicA === "budget" ? MR.mayorBudgetSigned(eA) : MR.mayorSigned(eA);
+    if (signedA) { pushToast(topicA === "budget" ? maireL().after.budgetSigned : maireL().after.signed); return; }
     const now = Date.now();
     if (MR.mayorApptReady(eA, me.id, now)) { openAudience(eA); return; }
     const a = MR.mayorAppt(eA);
@@ -26910,6 +27054,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function starNpcEmote(zone, rid, x, y) {
     const bang = starBangNow();
     if (bang > 0) return { a: bang };
+    /* 2026-09-13 (lot 1, D3) — EDUARDO PROPOSE LE CHANTIER. Un « ! » qui sursaute
+       tant que la proposition est à faire, sa phrase quand on s'approche ; Q ouvre
+       sa fiche, où l'on accepte. ⚠️ La MÊME porte que l'avis de la mairie
+       (`Q.starYardOffer`) : jamais une seconde condition. */
+    if (zone === "farm") {
+      const ro = rosterOf(rid);
+      const s0 = sharedRef.current;
+      if (ro && ro.skill === "voyager" && Q.starYardOffer(s0.star, s0.day, starGateCtxNow())) {
+        if (starNerveNear(zone, x, y)) return { say: L.star.yard.eduHook };
+        const k = (Date.now() % C.STAR_YARD_HOOK_PERIOD_MS) / C.STAR_YARD_HOOK_PERIOD_MS;
+        return k < 0.45 ? { a: Math.min(1, (1 - k / 0.45) * 2.2) } : null;
+      }
+    }
     const since = starNerveSince();
     if (since < 0 || !Q.starNerveHas(rid)) return null;
     if (starNerveNear(zone, x, y) && starTalkerRef.current === rid) {
@@ -30255,7 +30412,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            pas d'horloge (§3 de CLAUDE.md, encore). */
         return (
           <div className={"ferme-star-hud" + (settingsOpen ? " ui-menu-open" : "") + (starBumpOn ? " bump" : "")} data-tick={starTick}>
-            <span className="ico">{huntingImpacts ? "☄" : "✦"}</span>
+            {/* 2026-09-13 (lot 1, D2) — ⚓ tant que l'observatoire n'a rien annoncé : le
+                ✦ était une étoile dessinée sur un chantier municipal. ☄ de l'avis à la
+                fin des impacts, ✦ ensuite. */}
+            <span className="ico">{!Q.starWarned(e) ? "⚓" : (huntingImpacts || !Q.starFallen(e)) ? "☄" : "✦"}</span>
             {/* hors-zip — LES PUCES DU CHAPITRE 1 DEVIENNENT CLIQUABLES.
                 Demande de Guillaume : à plusieurs, viser des trous différents
                 plutôt que suivre tous le même chevron. ⚠️ « CLAIMABLE » SE LIT
@@ -30359,8 +30519,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
         const eA = Q.migrateStar(e);
         const appt = MR.mayorAppt(eA);
+        /* ⚠️⚠️ 2026-09-13 (lot 2, audit en jeu) — MÊME DÉFAUT QUE `tryMayorDoor` :
+           `MR.mayorSigned` reste vrai pour toujours après le chantier (yard), donc
+           cette pastille d'attente ne s'affichait plus JAMAIS pour le rendez-vous
+           du BUDGET — le joueur avait un rendez-vous réel, sans aucun rappel à
+           l'écran. Lu par sujet, comme la porte et le panneau d'accueil. */
+        const apptSignedA = appt && MR.mayorApptTopic(eA) === "budget" ? MR.mayorBudgetSigned(eA) : MR.mayorSigned(eA);
         if (appt && appt.due && String(appt.by) === String(me.id)
-            && !MR.mayorSigned(eA) && !MR.mayorApptStale(eA, Date.now())) {
+            && !apptSignedA && !MR.mayorApptStale(eA, Date.now())) {
           const wait = MR.mayorApptWaitMs(eA, Date.now());
           if (wait > 0) {
             return (
@@ -30616,13 +30782,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 ? L.cycleHint(i + 1) + "\n" + L.cycleList(cyc.map(nameOf), curName)
                 : L.cycleAlone)
             : title;
+          /* 2026-09-13 (D10) — L'ENDUIT PROTECTEUR SE VOIT SUR LA CASE DE LA
+             CANNE, PAS SEULEMENT SUR LE SPRITE EN MAIN (demande explicite de
+             Guillaume, §3 de QUETE.md point 6 : « icône d'état à prévoir dans
+             la barre d'objet équipé »). Dérivé du même horodatage que le monde,
+             jamais un second booléen. */
+          const rodProtectedNow = s.key === "can" && evilRodProtectedAt > 0 && (Date.now() - evilRodProtectedAt) < C.EVIL_ROD_PROTECT_MS;
           return (
-            <div key={s.key} className={"ferme-slot" + (i === slot ? " sel" : "")} onClick={() => selectSlot(i)} title={fullTitle}>
+            <div key={s.key} className={"ferme-slot" + (i === slot ? " sel" : "") + (rodProtectedNow ? " ferme-slot-rodprotect" : "")} onClick={() => selectSlot(i)} title={rodProtectedNow ? title + "\n" + L.star.evil.rodSlotTip : fullTitle}>
               <span className="ferme-slot-key">{i + 1}</span>
               <Sprite img={img} w={32} h={32} />
               {count !== "" && <span className="ferme-slot-count">{count}</span>}
               {lvl && <span className="ferme-slot-lvl">{lvl}</span>}
               {cyc && cyc.length > 1 && <span className="ferme-slot-cyc">⟳</span>}
+              {rodProtectedNow && <span className="ferme-slot-badge-rodprotect" aria-hidden="true">🟣💨</span>}
               {i === slot && curName && <span className="ferme-slot-name">{curName}</span>}
             </div>
           );
@@ -30914,6 +31087,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   </div>
                   {isVoyager ? (
                     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      {/* 2026-09-13 (lot 1) — sa vieille carte se lit aussi d'ici : sans ce
+                          bouton, la proposition d'Eduardo n'existait qu'en marchant jusqu'à
+                          lui (Q), et sa ligne d'employé n'a pas de « Voir ». Même porte. */}
+                      {Q.starYardOffer(sharedRef.current.star, sharedRef.current.day, starGateCtxNow()) && (
+                        <button onClick={() => { setEmployeesOpen(false); setResidentCard(res.rid); }}>{L.star.yard.eduMapBtn}</button>
+                      )}
                       <button disabled={away} onClick={() => { setVoyagerDraft({}); setVoyagerOrderOpen(true); }}>{L.voyagerOrderBtn}</button>
                       {worldTotal > 0 && <button onClick={() => setVoyagerSellOpen(true)}>{L.voyagerSellBtn}</button>}
                     </div>
@@ -31090,6 +31269,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             <button className="ferme-close-x" onClick={() => setVoyagerOrderOpen(false)}>✕</button>
             <h2>{L.voyagerOrderTitle}</h2>
             <div className="ferme-hint">{L.voyagerOrderHint}</div>
+            {/* 2026-09-13 — la récompense qu'Eduardo annonçait, dite là où elle sert. */}
+            {Q.starDone(sharedRef.current.star) && (
+              <div className="ferme-hint">{L.star.yard.eduShipLimit(Q.starVoyageMaxQty(sharedRef.current.star))}</div>
+            )}
             {C.WORLD_GOODS.map(g => {
               const qty = voyagerDraft[g.key] | 0;
               const unit = C.worldGoodUnitCost(g);
@@ -31103,7 +31286,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <button onClick={() => setDraftQty(g.key, qty - 1)} disabled={qty <= 0}>−</button>
                     <span style={{ minWidth: 22, textAlign: "center" }}>{qty}</span>
-                    <button onClick={() => setDraftQty(g.key, qty + 1)} disabled={qty >= C.VOYAGE_MAX_QTY}>+</button>
+                    <button onClick={() => setDraftQty(g.key, qty + 1)} disabled={qty >= Q.starVoyageMaxQty(sharedRef.current.star)}>+</button>
                   </div>
                 </div>
               );
@@ -31146,6 +31329,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   (règle du 431, et le 453 l'a réappliquée sur Eduardo). */}
               <h2>{L.star.plan.orderTitle((C.VISITOR_ROSTER.find(v => v.skill === "lumberjack") || {}).name || "")}</h2>
               <div className="ferme-hint">{L.star.plan.orderHint}</div>
+              {/* 2026-09-13 (lot 2) — après le saccage, le choix de chaque pièce : payer
+                  (part de la mairie déduite) ou attendre les fonds, et aider Tristan. */}
+              {Q.starRebuildGate(e) && Q.starBudgetShare(e) >= 0 && MR.mayorBudgetSigned(e) && (
+                <div className="ferme-hint" style={{ marginTop: 4 }}>{L.star.plan.rebuildHint(Math.round(Q.starBudgetShare(e) * 100))}</div>
+              )}
               {Q.STAR_SHIP_KEYS.map((k, i) => {
                 const why = Q.starTimberBlock(e, k);
                 const ord = Q.starTimberOrder(e, k);
@@ -31155,7 +31343,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     <div className="info">
                       <b>{parts[i] ? "✅ " : Q.starTimberReady(e, k) ? "🔨 " : ord ? "🪚 " : "◻ "}{L.star.plan.part(k)}</b>
                       <span className="ferme-usage">
-                        {ord ? L.star.plan.orderWait(fmtDuration(ord.readyAt - Date.now()))
+                        {ord ? (ord.fund === "wait" ? L.star.plan.orderWaitFund(fmtDuration(ord.readyAt - Date.now()))
+                                                    : L.star.plan.orderWait(fmtDuration(ord.readyAt - Date.now())))
                              : L.star.plan.orderCost(t.wood, fmtDuration(t.ms), L.star.plan.extraName(t.extra))}
                         {/* ⚠️ ZIP 478 — LE POURQUOI DE LA CHOSE EN PLUS, SUR LA MÊME LIGNE.
                             Une liste de courses sans raison est une corvée ; « 24 laine »
@@ -31171,18 +31360,50 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                         de grisage ne bougent pas d'un pixel — un panneau qui changerait
                         en même temps que la scène rendrait impossible de juger laquelle
                         a produit quoi (règle du 424). */}
-                    {why === null
+                    {why === null && Q.starRebuildGate(e)
+                      /* ╔══════════════════════════════════════════════════════════
+                         ║ 2026-09-13 (lot 2) — APRÈS LE SACCAGE : PAYER OU ATTENDRE.
+                         ╚══════════════════════════════════════════════════════════
+                         Les deux ouvrent la même scie (la commande reste un GESTE,
+                         lot E) ; seule la façon de financer change. Le bois et la
+                         chose en plus restent dus dans les deux cas : Tristan en a
+                         besoin quoi qu'il arrive. */
+                      ? (() => {
+                          const price = Q.starRebuildPrice(e, k);
+                          const lack = wood < t.wood ? L.star.plan.orderPoor(t.wood)
+                            : starExtraShort(t.extra) ? L.star.plan.orderPoorExtra(t.extra.n | 0, L.star.plan.extraName(t.extra)) : null;
+                          const poor = (sharedRef.current.money | 0) < price;
+                          return (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                              <button disabled={!!lack || poor} title={poor ? L.star.plan.rebuildPoor(price) : undefined}
+                                      onClick={() => { setSawScene({ part: k, fund: "paid" }); close(); }}>
+                                {lack || L.star.plan.rebuildPay(price)}
+                              </button>
+                              <button disabled={!!lack} onClick={() => { setSawScene({ part: k, fund: "wait" }); close(); }}>
+                                {L.star.plan.rebuildWaitBtn(fmtDuration(Q.starRebuildWaitMs(k)))}
+                              </button>
+                            </div>
+                          );
+                        })()
+                    : why === null
                       ? <button disabled={wood < t.wood || starExtraShort(t.extra)}
                                 onClick={() => { setSawScene({ part: k }); close(); }}>
                           {wood < t.wood ? L.star.plan.orderPoor(t.wood)
                             : starExtraShort(t.extra) ? L.star.plan.orderPoorExtra(t.extra.n | 0, L.star.plan.extraName(t.extra))
                             : L.star.plan.orderBtn}
                         </button>
+                      : why === "busy" && Q.starHurryLeft(e, k) > 0
+                      /* 2026-09-13 (lot 2) — une pièce qui attend les fonds s'accélère
+                         en aidant Tristan à la scie (D9) : trois manches au plus. */
+                      ? <button onClick={() => { setSawScene({ part: k, hurry: true }); close(); }}>
+                          {L.star.plan.hurryBtn(Q.starHurryLeft(e, k), fmtDuration((ord || {}).readyAt - Date.now()))}
+                        </button>
                       : <span className="ferme-usage" style={{ whiteSpace: "nowrap" }}>
                           {why === "done" ? L.star.plan.orderDone
                             : why === "raise" ? L.star.plan.blockRaise
                             : why === "busy" ? L.star.plan.orderWait(fmtDuration((ord || {}).readyAt - Date.now()))
                             : why === "noMayor" ? L.star.plan.blockNoMayor
+                            : why === "noBudget" ? L.star.plan.blockNoBudget
                             /* ⚠️ 2026-09-13 — le chantier en deux moitiés (voir
                                `starTimberBlock`, quete.js) : la coque qui attend sa
                                réparation, la mâture qui attend la coque réparée. */
@@ -31922,6 +32143,39 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   <Sprite img={spritesReady ? spritesRef.current.torch : null} w={16} h={22} /> {L.cauldronIgniteHint}
                 </div>
               )}
+              {/* ╔══════════════════════════════════════════════════════════════
+                  ║ 2026-09-13 (D10) — LA PROTECTION DE LA CANNE, TROISIÈME
+                  ║ RECETTE DU MÊME CHAUDRON.
+                  ╚══════════════════════════════════════════════════════════════
+                  ⚠️ N'APPARAÎT QUE QUAND ELLE SERT (même règle que le plat de
+                  l'étoile rose, tout en haut de ce menu) : la septième sœur a
+                  été vue, elle n'est pas encore sur la rive.
+                  ⚠️ AUCUN INGRÉDIENT, PAS DE PARCHEMIN : Guillaume a été
+                  explicite (§3 de QUETE.md, point 5) — « la concoction y est
+                  déjà prête en arrivant ». Un parchemin à remplir aurait promis
+                  une collecte qui n'existe pas ; un bouton seul dit exactement
+                  ce que ce geste est. Rejouable à volonté (chaque clic reporte
+                  l'horodatage — voir resolveMayorAsk pour la même idée
+                  appliquée à un rendez-vous). */}
+              {(() => {
+                const e0 = sharedRef.current.star;
+                if (!(e0 && Q.starEvilFound(e0) && !Q.starEvilRescued(e0))) return null;
+                const left = evilRodProtectedAt ? Math.max(0, evilRodProtectedAt + C.EVIL_ROD_PROTECT_MS - Date.now()) : 0;
+                return (
+                  <div className="ferme-parchment ferme-parchment-rodfix">
+                    <div className="ferme-parchment-title">{L.star.evil.cauldronRodTitle}</div>
+                    <div className="ferme-parchment-effect">{L.star.evil.cauldronRodEffect}</div>
+                    {left > 0 ? (
+                      <div className="ferme-hint">{L.star.evil.cauldronRodReady(msClock(left))}</div>
+                    ) : (
+                      <button className="ferme-cauldron-ready-btn"
+                              onClick={() => { setCauldronMenuOpen(false); sendReq({ kind: "evilRodProtect" }); pushToast(L.star.evil.rodProtected); }}>
+                        {L.star.evil.cauldronRodBtn}
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         );
@@ -32229,6 +32483,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   <PixBtn sprites={spritesReady ? spritesRef.current : null} disabled={Date.now() < (res.superCooldownUntil || 0) || !hasCoffeeStock()} label={L.tristanCoffeeBtn} onClick={tristanCoffee} />
                 </div>
               )}
+              {/* 2026-09-13 (lot 1, D3) — LA VIEILLE CARTE D'EDUARDO. La proposition
+                  PERSONNELLE du chantier (la mairie en fait la publique, au tableau des
+                  nouvelles). Même porte, même requête : `Q.starYardOffer`,
+                  `starYardAccept`. Une fois accepté, il remercie jusqu'à l'avis de
+                  l'observatoire. */}
+              {ro.skill === "voyager" && (() => {
+                const s0 = sharedRef.current;
+                const offer = Q.starYardOffer(s0.star, s0.day, starGateCtxNow());
+                const taken = Q.starYardAccepted(s0.star) && !Q.starWarned(s0.star);
+                if (!offer && !taken) return null;
+                return (
+                  <div className="ferme-star-notice" style={{ marginTop: 10 }}>
+                    <b>{L.star.yard.eduTitle}</b>
+                    <div style={{ marginTop: 4 }}>{offer ? L.star.yard.eduPitch : L.star.yard.eduThanks}</div>
+                    {offer && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                        <PixBtn sprites={spritesReady ? spritesRef.current : null} label={L.star.yard.eduYes} onClick={() => sendReq({ kind: "starYardAccept" })} />
+                        <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="plain" label={L.star.yard.eduNo} onClick={() => setResidentCard(null)} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               {/* Zip 301 (demande Guillaume) : réglage du ratio fromage/beurre
                   de la fromagerie d'Ingrid, par paliers de 10 %. */}
               {ro.skill === "cheesemaker" && built && (() => {
@@ -33717,9 +33994,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                            l'annonce. Aucun banc ne le voyait : ils appellent les
                            résolveurs, jamais ce bloc. Le rendez-vous s'ouvre à tous, et
                            le secret tient : on négocie un navire municipal, pas une étoile. */
-                        const signed = MR.mayorSigned(eA);
+                        /* 2026-09-13 (lot 2) — DEUX SUJETS, UNE PORTE : après le saccage,
+                           l'accueil prend rendez-vous pour le BUDGET (même lecture que
+                           l'hôte, `Q.starBudgetNeeded`). */
+                        const topicH = Q.starBudgetNeeded(eA) ? "budget" : "yard";
+                        const signed = topicH === "budget" ? MR.mayorBudgetSigned(eA) : MR.mayorSigned(eA);
                         const trust = MR.mayorTrust(eA);
-                        const tries = MR.mayorTries(eA);
+                        const tries = topicH === "budget" ? MR.mayorBudgetTries(eA) : MR.mayorTries(eA);
                         const cA = mayorCtxOf(sharedRef.current, eA, E);
                         const now = Date.now();
                         const appt = MR.mayorAppt(eA);
@@ -33732,7 +34013,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                           <div style={{ marginTop: 12, borderTop: "1px solid rgba(255,255,255,.15)", paddingTop: 10 }}>
                             {signed ? (
                               <>
-                                <div>{maireL().after.signed}</div>
+                                <div>{MR.mayorBudgetSigned(eA) ? maireL().after.budgetSigned : maireL().after.signed}</div>
                                 {trust > 0 && <div className="ferme-hint" style={{ marginTop: 4 }}>{maireL().after["trust" + trust]}</div>}
                               </>
                             ) : blocked > 0 ? (
@@ -33759,6 +34040,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                               </>
                             ) : (
                               <>
+                                {topicH === "budget" && <div style={{ marginBottom: 6 }}>{maireL().budgetTopic}</div>}
                                 <div className="ferme-hint">{cA.audience ? maireL().audienceDay : maireL().busyDay}</div>
                                 {!cA.plans && <div className="ferme-hint" style={{ marginTop: 4 }}>{maireL().bare}</div>}
                                 {tries > 0 && <div className="ferme-hint" style={{ marginTop: 4 }}>{maireL().triesAt(tries)}</div>}
@@ -34074,6 +34356,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ne dépense pas un message pour dire « je suis entré puis ressorti ». */}
       {sawScene && (() => {
         const part = sawScene.part;
+        /* 2026-09-13 (lot 2) — la même manche sert trois intentions : commander avant le
+           saccage, commander une pièce reconstruite (payée ou en attente des fonds), ou
+           aider Tristan sur une pièce qui attend. */
+        const fund = sawScene.fund || "";
+        const hurry = !!sawScene.hurry;
         const partName = L.star.plan.part(part);
         return (
           <SawScene
@@ -34095,11 +34382,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                  « comment ai-je scié », donc un jour deux réponses différentes
                  (défaut du 449). Ici les deux côtés lisent la même. */
               const rr = SAW.sawResult(SAW.sawRun(log, { part }));
+              if (hurry) {
+                pushToast(`${L.star.saw.stars(rr.stars)} ${L.star.saw.grade(rr.stars)}`);
+                sendReq({ kind: "starTimberHurry", part, log });
+                return;
+              }
               const pct = Math.round(Math.abs(1 - rr.msScale) * 100);
               pushToast(`${L.star.saw.stars(rr.stars)} ${L.star.saw.grade(rr.stars)} `
                 + (rr.msScale < 1 ? L.star.saw.faster(pct) : L.star.saw.slower(pct))
                 + (rr.woodExtra > 0 ? " " + L.star.saw.extraWood(rr.woodExtra) : ""));
-              sendReq({ kind: "starTimberSaw", part, log });
+              sendReq({ kind: "starTimberSaw", part, log, fund });
             }}
           />
         );
@@ -34178,9 +34470,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            `fermeStrings.js` est affichée quelque part, et il ne peut pas
            suivre un index calculé — seul un `L.star.win.mayor.title` écrit en
            toutes lettres compte comme une lecture. */
-        const win = key === "mayorWin" || key === "engDone";
-        const winTitle = key === "mayorWin" ? L.star.win.mayor.title : key === "engDone" ? L.star.win.engineer.title : null;
-        const winSub   = key === "mayorWin" ? L.star.win.mayor.sub   : key === "engDone" ? L.star.win.engineer.sub   : null;
+        /* 2026-09-13 (lot 2) — le budget voté a sa carte, comme la première signature. */
+        const win = key === "mayorWin" || key === "engDone" || key === "budgetWin";
+        const winTitle = key === "mayorWin" ? L.star.win.mayor.title : key === "engDone" ? L.star.win.engineer.title
+                       : key === "budgetWin" ? L.star.win.budget.title : null;
+        const winSub   = key === "mayorWin" ? L.star.win.mayor.sub   : key === "engDone" ? L.star.win.engineer.sub
+                       : key === "budgetWin" ? L.star.win.budget.sub : null;
         return (
           <div className={"ferme-star-card" + (win ? " win" : "")} data-tick={starTick}>
             <div className="ferme-star-card-in">
@@ -34228,7 +34523,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           <div className="ferme-modal open" onClick={close} data-tick={starTick}>
             <div className="panel ferme-modal-panel ferme-star-panel" onClick={ev => ev.stopPropagation()}>
               <button className="ferme-close-x" onClick={close}>✕</button>
-              <h2>{L.star.plan.panelTitle(C.STAR_SHIP_NAME)}</h2>
+              <h2>{L.star.plan.panelTitle(Q.starShipName(e))}</h2>
               <div className="ferme-hint">{L.star.plan.panelHint(Q.STAR_SHIP_TOTAL)}</div>
               {sheet && <div style={{ margin: "10px 0", textAlign: "center" }}><Sprite img={sheet} w={432} h={288} /></div>}
               <div className="ferme-ship-progress-head">
@@ -34278,7 +34573,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           <div className="ferme-modal open" onClick={close}>
             <div className="panel ferme-modal-panel" onClick={ev => ev.stopPropagation()}>
               <button className="ferme-close-x" onClick={close}>✕</button>
-              <h2>{L.star.plan.plaqueTitle(C.STAR_SHIP_NAME)}</h2>
+              <h2>{L.star.plan.plaqueTitle(Q.starShipName(sharedRef.current.star))}</h2>
               <div className="ferme-hint">{L.star.plan.plaqueIntro}</div>
               <div className="ferme-plaque-parts">
                 {Q.STAR_SHIP_KEYS.map((k, i) => (
@@ -34312,9 +34607,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           <div className="ferme-star-recap" onClick={ev => ev.stopPropagation()}
                style={{ animationDuration: (C.STAR_RECAP_MS / 1000) + "s" }}>
             <button className="ferme-star-recap-x" onClick={close} aria-label={L.star.hud.againClose}>✕</button>
-            <div className="ferme-star-recap-kicker">{L.star.title}</div>
+            {/* 2026-09-13 (lot 1) — le titre de la quête et « les étoiles restent avec
+                toi » attendent qu'une étoile ait rejoint le joueur : le rappel s'ouvre
+                dès la pluie tombée, avant la première fouille. */}
+            <div className="ferme-star-recap-kicker">{Q.starFollowers(e).length ? L.star.title : L.star.yard.title}</div>
             <div className="ferme-star-recap-title">✦ {L.star.hud.againTitle}</div>
-            <div className="ferme-star-recap-sub">{L.star.hud.again(Q.starShipBuilt(e), Q.STAR_SHIP_TOTAL)}</div>
+            <div className="ferme-star-recap-sub">{L.star.hud.again(Q.starShipBuilt(e), Q.STAR_SHIP_TOTAL, Q.starFollowers(e).length > 0)}</div>
             {/* ⚠️ ZIP 449 — MÊME SOURCE QUE LE BANDEAU. Le rappel de reprise
                 affichait lui aussi la phrase du CHAPITRE : on revenait trois
                 jours plus tard et le jeu redisait un objectif déjà atteint,
@@ -34456,6 +34754,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   bloc. Le clic envoie `{kind:"starWarn"}` ; l'hôte tranche
                   (`resolveStarWarn`), comme toujours — un panneau qui donnerait
                   lui-même serait « le jeu propose et refuse » (426). */}
+              {/* ╔══════════════════════════════════════════════════════════════
+                  ║ 2026-09-13 (lot 1) — L'AVIS DE LA MAIRIE : ROUVRIR LE PORT.
+                  ╚══════════════════════════════════════════════════════════════
+                  La proposition PUBLIQUE du chantier (D3 de Guillaume). Il ne
+                  parle que du port ensablé — rien du ciel avant l'avis de
+                  l'observatoire. Une fois le chantier accepté, il laisse une ligne
+                  d'état jusqu'à l'avis, puis s'efface. */}
+              {(() => {
+                const s0 = sharedRef.current;
+                if (Q.starYardOffer(s0.star, s0.day, starGateCtxNow())) return (
+                  <div className="ferme-star-notice ferme-star-notice-new">
+                    <b>{L.star.yard.boardTitle}</b>
+                    <div style={{ marginTop: 4 }}>{L.star.yard.boardBody}</div>
+                    <button className="ferme-btn" style={{ marginTop: 8 }} onClick={() => sendReq({ kind: "starYardAccept" })}>{L.star.yard.boardCta}</button>
+                  </div>
+                );
+                if (Q.starYardAccepted(s0.star) && !Q.starWarned(s0.star)) return (
+                  <div className="ferme-star-notice">{L.star.yard.boardTaken(s0.star.yard.by)}</div>
+                );
+                return null;
+              })()}
               {!Q.starWarning(sharedRef.current.star) && (() => {
                 const s0 = sharedRef.current;
                 /* ⚠️⚠️ 2026-09-13 — OUVERT À TOUS LES JOUEURS. La réserve « hôte

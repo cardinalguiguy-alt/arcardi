@@ -354,6 +354,31 @@ function texBang(THREE) {
   const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
 }
 
+/* ── 2026-09-13 (lot 2) — LA FACTURE DU CRATÈRE, POUR LE SECOND ENTRETIEN. Une
+   feuille de devis (lignes, colonne des montants) et un TAMPON ROUGE penché qui
+   dessine un cratère : « tamponnée CRATÈRE EST », dit le texte (`b1`). ⚠️ AUCUN
+   `fillText` : le mot est dit par la réplique, le tampon le montre en image — un
+   texte cuit ne se traduirait pas (§4 de CLAUDE.md). ── */
+function texInvoice(THREE) {
+  const W = 128, H = 160, [c, g] = cv(W, H), r = rnd(4471);
+  g.fillStyle = "#efe7d4"; g.fillRect(0, 0, W, H);
+  g.fillStyle = "#8a7d64"; g.fillRect(12, 10, 58, 5); g.fillRect(12, 18, 34, 3);
+  g.fillStyle = "#b7ab92";
+  for (let y = 30; y < H - 18; y += 9) {
+    g.fillRect(12, y, 56 + ((r() * 26) | 0), 2);          // l'intitulé d'une ligne
+    g.fillRect(W - 32, y, 18, 2);                           // son montant
+  }
+  g.fillStyle = "#5c5140"; g.fillRect(W - 40, H - 16, 26, 3);   // le total, souligné
+  /* le tampon : un cadre, et dedans la lèvre d'un cratère et ses éclats */
+  g.save(); g.translate(76, 106); g.rotate(-0.30);
+  g.strokeStyle = "rgba(168,32,28,.86)"; g.lineWidth = 4; g.strokeRect(-36, -21, 72, 42);
+  g.lineWidth = 3; g.beginPath(); g.arc(0, 8, 13, Math.PI, 0); g.stroke();
+  g.fillStyle = "rgba(168,32,28,.86)";
+  for (let i = 0; i < 5; i++) g.fillRect(-15 + i * 7, -13 + (i % 2) * 4, 3, 5);
+  g.restore();
+  return texOf(THREE, c, 1, 1);
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    2. LES BRIQUES. Six fonctions, et tout le bureau est bâti avec.
    ───────────────────────────────────────────────────────────────────────────
@@ -747,6 +772,26 @@ function buildDesk(THREE, K, tex, plateTex) {
   K.at(paper, 0.06, top + 0.006, zc + 0.06, -Math.PI / 2, 0, 0.08, desk);
 
   return { desk, pen, roll, sheet, stamp, paper, lamp, files, seat, door: null };
+}
+
+/* ── 2026-09-13 (lot 2) — LA LIASSE DU CRATÈRE, À LA PLACE DU PONT SUD. « Sur le
+   bureau, à la place du dossier du pont sud, une liasse neuve, ficelée de rouge »
+   (`b1`) : même endroit, à portée de son index, pour que le geste de tapoter reste
+   juste. Plus haute et plus blanche que la pile du pont — neuve, pas oubliée. ── */
+function buildInvoices(THREE, K, tex, parent) {
+  const { lam, texMat, box, pln, grp } = K;
+  const R = ROOM, top = R.deskTop, zc = R.deskC;
+  const g = grp(0.72, top, zc - 0.18, parent);
+  const N = 9;
+  for (let i = 0; i < N; i++) {
+    box(0.30 - i * 0.003, 0.012, 0.36 - i * 0.004, lam([0xefe7d4, 0xe6dcc5, 0xf3ecdb][i % 3]),
+        (i % 2 ? 0.006 : -0.005), 0.006 + i * 0.013, (i % 3 - 1) * 0.004, 0, (i % 2 ? 0.05 : -0.04), 0, g);
+  }
+  pln(0.27, 0.33, texMat("invoice", tex.invoice), 0, 0.006 + N * 0.013 + 0.001, 0, -Math.PI / 2, 0, 0.05, g);
+  /* la ficelle rouge, en croix, aussi fine que celle du pont sud (voir sa note) */
+  box(0.012, 0.13, 0.38, lam(0xa8201c), 0, 0.062, 0, 0, 0, 0, g);
+  box(0.32, 0.13, 0.012, lam(0xa8201c), 0, 0.062, 0, 0, 0, 0, g);
+  return g;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1751,12 +1796,16 @@ export function buildOffice(THREE, opts) {
     arms: texArms(THREE), paintA: texPaint(THREE, "hist"), paintB: texPaint(THREE, "allegory"),
     bang: texBang(THREE),
   };
+  if (o.topic === "budget") tex.invoice = texInvoice(THREE);   // 2026-09-13 (lot 2)
   for (const k in tex) junk.push(tex[k]);
   const plate = texPlate(THREE, o.plateLabel || "MAIRE", o.mayorName || "");
   junk.push(plate);
 
   const room = buildRoom(THREE, K, tex);
   const desk = buildDesk(THREE, K, tex, plate);
+  /* 2026-09-13 (lot 2) — le second entretien : la liasse du cratère remplace le
+     dossier du pont sud, au même endroit (voir `buildInvoices`). */
+  if (o.topic === "budget") { desk.files.visible = false; buildInvoices(THREE, K, tex, desk.desk); }
   /* ⚠️ HORS-ZIP 2026-09-02 — LE CORPS DÉPEND DU MAIRE ÉLU. `o.mayorKey` vient de
      la vue (`MaireScene`), qui le tient de `E.mayorOf(day)` : c'est la MÊME clé
      que la plaque du bureau et que les répliques `tint`. Absente, on retombe sur

@@ -218,17 +218,23 @@ console.log(`  morceaux        : ${C.STAR_SHIP_ORDER.join(", ")}\n`);
     e0.plan = { at: 1, by: "banc", done: 1 };
     for (const s of Q.STAR_FARM_IMPACTS) Q.resolveStarFound(e0, s.id, "banc", Date.now());
     Q.resolveStarFound(e0, "crater", "banc", Date.now());
-    const postStormBroken = Q.starShipHas(e0, "hull");
+    /* ⚠️⚠️⚠️ 2026-09-13 (lot 2) — LE SACCAGE EST TOTAL, ET IL ATTEND LA NUIT DES SIX
+       SŒURS (décision de Guillaume, D4) : la reine seule ne détruit rien, la dernière
+       sœur trouvée emporte TOUT ce qui était posé, et le marteau de Kerguélen sauve
+       l'épave sans rien réparer — la reconstruction passe par le budget du maire. */
+    const afterQueen = Q.starShipHas(e0, "hull");
     Q.resolveStarFound(e0, "townShy", "banc", Date.now());
     Q.resolveStarFound(e0, "townGreen", "banc", Date.now());
+    const afterSisters = Q.starShipHas(e0, "hull");
     Q.resolveVandalReveal(e0, Date.now());
-    const postStormRepaired = Q.starShipHas(e0, "hull");
+    const afterHammer = Q.starShipHas(e0, "hull");
     ok(preStorm === true, "⚠️⚠️ AVANT la reine, une coque taillée suffit (chantier indépendant des étoiles)",
        `hull=${preStorm}`);
-    ok(postStormBroken === false, "⚠️⚠️ APRÈS la reine et SANS réparation, la coque régresse (Kerguélen : elle est fragile)",
-       `hull=${postStormBroken}`);
-    ok(postStormRepaired === true, "⚠️⚠️ la réparation (le marteau, avec Kerguélen) répare la coque",
-       `hull=${postStormRepaired}`);
+    ok(afterQueen === true, "⚠️⚠️ la reine seule ne détruit rien (le saccage attend la nuit des six sœurs)",
+       `hull=${afterQueen}`);
+    ok(afterSisters === false && afterHammer === false && Q.starShipWrecked(e0),
+       "⚠️⚠️ la nuit des six sœurs, le saccage emporte la coque, et le marteau ne la rend pas",
+       `hull=${afterSisters}/${afterHammer}, épave=${Q.starShipWrecked(e0)}`);
   }
   ok(Q.STAR_SHIP_TOTAL === N, "STAR_SHIP_TOTAL est dérivé, pas écrit", `${Q.STAR_SHIP_TOTAL}`);
 }

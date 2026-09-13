@@ -1049,6 +1049,7 @@ export function newFarmer(id, name, gender, outfit) {
     sleepStartedAt: null, sleepStartEnergy: 0, // dort actuellement ? (voir resolveSleepStart/End)
     injuredUntil: 0, // horodatage de fin d'indisponibilité après une morsure de loup (0 = pas blessé)
     evilRodArmedAt: 0, // 2026-09-03 (lot C) : horodatage HÔTE du premier lancer nu au point de sauvetage du lac maléfique (0 = canne intacte) — voir evilRodBroken()
+    evilRodProtectedAt: 0, // 2026-09-13 (D10) : horodatage HÔTE de l'enduit protecteur posé au chaudron (0 = canne nue) — voir evilRodProtected()
     townFishPermitUntil: 0, townFishBanUntil: 0, townFishDistrustUntil: 0, // 2026-09-04 : permis de pêche en ville — voir normalizeFarmer()
     tools: { hoe: 1, can: 1, axe: 1, pick: 1 },
     inv: {
@@ -1097,6 +1098,15 @@ export function evilRodBroken(f, now) {
   return !!(f && f.evilRodArmedAt) && (now || Date.now()) - f.evilRodArmedAt >= C.EVIL_ROD_BREAK_MS;
 }
 
+/* 2026-09-13 (D10) — LA CANNE EST-ELLE PROTÉGÉE, LÀ, EN CE MOMENT ? Même
+   discipline que `evilRodBroken` juste au-dessus : un seul horodatage HÔTE
+   (`f.evilRodProtectedAt`, posé en enduisant la canne au chaudron), jamais un
+   second champ « protected ». `now` doit être l'horloge de QUI LIT. */
+export function evilRodProtected(f, now) {
+  const t = now || Date.now();
+  return !!(f && f.evilRodProtectedAt) && t >= f.evilRodProtectedAt && t - f.evilRodProtectedAt < C.EVIL_ROD_PROTECT_MS;
+}
+
 // Complète un tableau numérique à la longueur attendue (préserve les valeurs
 // déjà présentes). Sert à faire évoluer le schéma d'inventaire sans jamais
 // perdre ce qu'un fermier possède déjà.
@@ -1124,6 +1134,7 @@ export function normalizeFarmer(f) {
   if (typeof f.sleepStartEnergy !== "number") f.sleepStartEnergy = 0;
   if (typeof f.injuredUntil !== "number") f.injuredUntil = 0;
   if (typeof f.evilRodArmedAt !== "number") f.evilRodArmedAt = 0; // 2026-09-03 (lot C)
+  if (typeof f.evilRodProtectedAt !== "number") f.evilRodProtectedAt = 0; // 2026-09-13 (D10)
   // 2026-09-04 — permis de pêche en ville (C.TOWN_FISH_*, fermeConstants.js) :
   // trois horodatages HÔTE, jamais un champ "banned"/"hasPermit" booléen — un
   // booléen ne dit pas QUAND ça finit, et chaque écran qui doit l'afficher

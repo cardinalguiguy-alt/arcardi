@@ -96,6 +96,34 @@ const signMayor = (e, at = 1) => {
   MA.resolveMayor(e, "j1", "j1", s.log, ctx, at);
   return e;
 };
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-13 (lot 2) — LE SECOND ENTRETIEN (LE BUDGET), GAGNÉ POUR DE BON.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   Le saccage détruit tout à la nuit des six sœurs, et rien ne se reconstruit sans le
+   budget du maire. Même méthode que `signMayor` : les vrais résolveurs, la réponse
+   idéale partout, les plans chiffrés posés au nœud où il demande si l'argument tient.
+   `devAll` rejoue « tout sauf la fin », qui s'arrête désormais au rendez-vous du
+   budget (`starDevBudgetGate`), signe, et reprend. */
+const signBudget = (e, at = 1) => {
+  const ctx = { mayorKey: "vasseur", day: 12, nextElection: 30, plans: true, trust: MA.mayorTrust(e), audience: false, topic: "budget" };
+  const s = MA.mayorOpen(ctx);
+  let guard = 0;
+  while (!s.over && guard++ < 40) {
+    const cs = MA.mayorChoices(s);
+    if (!cs.length) break;
+    if (s.node === "b5" && cs.some(c => c.kind === "plans")) { MA.mayorPlay(s, "__plans", 0); continue; }
+    const best = cs.find(c => c.kind === "say" && c.grade === "ideal");
+    if (!best) break;
+    MA.mayorPlay(s, best.k, 0);
+  }
+  MA.resolveMayor(e, "j1", "j1", s.log, ctx, at);
+  return e;
+};
+const devAll = (e, at) => {
+  let r = Q.devStar(e, "all", at);
+  if (r.blocked === "needBudget") { signBudget(r.star || e, at); r = Q.devStar(r.star || e, "all", at); }
+  return r;
+};
 
 let fails = 0, total = 0;
 const ok = (n, c, x) => { total++; console.log(`${c ? "  OK  " : "ÉCHEC "} ${n}${x ? "  —  " + x : ""}`); if (!c) fails++; };
@@ -217,7 +245,7 @@ section("La chaîne des chapitres");
      Voir `tools/verify-jalons.mjs`, le banc dédié à cette cohérence. */
   const seed2 = Q.newStar();
   signMayor(seed2, 500);
-  const r = Q.devStar(seed2, "all", 1000);
+  const r = devAll(seed2, 1000);
   const e2 = r.star;
   ok("…le bois ne s'écrit qu'une fois le maire signé", !r.blocked && MA.mayorSigned(e2));
   ok("« tout sauf la fin » franchit tous les chapitres sauf le dernier",
@@ -327,13 +355,13 @@ section("La chaîne des chapitres");
        PASSERAIT POUR LA MAUVAISE RAISON (un navire vide, pas un navire à qui il
        manque la cloche). */
     const eUn = Q.newStar(); signMayor(eUn, 9);
-    Q.devStar(eUn, "all", 10);
+    devAll(eUn, 10);
     delete eUn.wood.bell;                       // une pièce manque sur la cale
     ok("⚠️ un navire inachevé ne peut pas déclencher la fin",
        Q.resolveStarGift(eUn, ["j1"], 11).unbuilt === true);
 
     const e7 = Q.newStar(); signMayor(e7, 9);
-    Q.devStar(e7, "all", 10);
+    devAll(e7, 10);
     ok("…et un navire fini le peut", Q.starShipComplete(e7));
     const g = Q.resolveStarGift(e7, ["j1", "j2"], 99);
     ok("le don se fait une fois, aux joueurs PRÉSENTS", g.ok && g.granted.length === 2 && e7.doneAt === 99);
@@ -1054,7 +1082,7 @@ section("La quête ne paie rien (scan de source)");
   ok("aucun chapitre ne porte de récompense", Q.STAR_CHAPTERS.every(c => c.reward === undefined));
   /* ⚠️ ET LE MENU DÉVELOPPEUR NE DONNE RIEN NON PLUS : on rejoue « tout » et on
      vérifie que le `gift` reste vide (il ne s'écrit qu'au don, arbitré). */
-  const dev = Q.devStar(signedStar(), "all", 1).star;
+  const dev = devAll(signedStar(), 1).star;
   ok("⚠️ le raccourci développeur n'accorde aucun cadeau", Object.keys(dev.gift).length === 0);
 }
 
@@ -1582,8 +1610,13 @@ section("La chute est vue, et le chevron désigne (445)");
     /* ⚠️ ZIP 480 — le chantier commence par une signature : on gagne l'audience
        ici comme le joueur la gagne, par le vrai résolveur. */
     signMayor(e, 5);
-    ok("⚠️⚠️ …mais le chantier prend le relais, et il a une adresse",
-       Q.starGoalKey(e, {}) === "timberOrder" && Q.starTargetSite(e, {}) === "sawmill",
+    /* 2026-09-13 (lot 2) — le saccage a tout détruit : le chantier reprend par le BUDGET. */
+    ok("⚠️⚠️ …mais le chantier prend le relais, et il a une adresse : d'abord le budget",
+       Q.starGoalKey(e, {}) === "budget" && Q.starTargetSite(e, {}) === "townHall",
+       `${Q.starGoalKey(e, {})} → ${Q.starTargetSite(e, {})}`);
+    signBudget(e, 6);
+    ok("…puis, le budget voté, la reconstruction chez Tristan",
+       Q.starGoalKey(e, {}) === "rebuildOrder" && Q.starTargetSite(e, {}) === "sawmill",
        `${Q.starGoalKey(e, {})} → ${Q.starTargetSite(e, {})}`);
     /* ⚠️ ET SANS LES PLANS, C'EST LA MAIRIE. Deux états, deux adresses : c'est la
        seule chose qui empêche le bandeau de dire « va scier » à quelqu'un qui n'a
@@ -2492,7 +2525,9 @@ section("Lot A3 — la verte : sa marche, ses indices, sa trouvaille");
   /* ⚠️⚠️ ZIP 478 — TROIS ÉTATS, TROIS CLÉS, ET ON LES REJOUE DANS L'ORDRE OÙ ELLES
      ARRIVENT plutôt que d'en tester une seule : c'est le contrôle qui aurait manqué
      au 475 si `farmImpacts` avait été scindé sans rejouer la suite. */
-  ok("…et les plans rendus renvoient chez le bûcheron", Q.starGoalKey(e, {}) === "timberOrder");
+  /* 2026-09-13 (lot 2) — cet état est après le saccage : le budget d'abord, puis la reconstruction. */
+  signBudget(e, 1003);
+  ok("…et les plans rendus renvoient chez le bûcheron (reconstruction : payer ou attendre)", Q.starGoalKey(e, {}) === "rebuildOrder");
   Q.commitStarTimber(e, "hull", "j1", 1100);
   ok("⚠️ …puis le bandeau dit qu'il scie, et il ne renvoie plus commander",
      Q.starGoalKey(e, {}) === "timberWait");
@@ -2501,7 +2536,7 @@ section("Lot A3 — la verte : sa marche, ses indices, sa trouvaille");
      Q.starGoalKey(e, {}) === "timberRaise" && Q.STAR_GOAL_TARGET.timberRaise === "shipyard",
      `${Q.starGoalKey(e, {})} -> ${Q.STAR_GOAL_TARGET[Q.starGoalKey(e, {})]}`);
   Q.resolveStarTimberRaise(e, "hull", "j1", 1200 + C.STAR_TIMBER.hull.ms);
-  ok("…et une fois posée, il renvoie commander la suite", Q.starGoalKey(e, {}) === "timberOrder");
+  ok("…et une fois posée, il renvoie commander la suite", Q.starGoalKey(e, {}) === "rebuildOrder");
 
   /* ⚠️⚠️ LA JOINTURE, ET C'EST LE CONTRÔLE QUI JUSTIFIE TOUTE LA SECTION : quand
      le chevron désigne un lieu, le bandeau doit parler DE CE LIEU. Deux sources
@@ -2768,6 +2803,25 @@ section("Lot C — le lac maléfique (découverte, chevron, hasard de la canne)"
     ok("⚠️⚠️⚠️ `now` PLUS PETIT QUE l'armement ne casse RIEN (repli sûr, pas une horloge qui recule)",
        !E.evilRodBroken({ evilRodArmedAt: 5000 }, 100));
   }
+  /* ── D10 (2026-09-13) — LA PROTECTION DE LA CANNE (E.evilRodProtected,
+     fermeEngine.js) : même discipline que le hasard juste au-dessus, un seul
+     horodatage HÔTE, jamais un second champ « protected ». */
+  {
+    ok("⚠️ une canne jamais enduite n'est jamais protégée", !E.evilRodProtected({ evilRodProtectedAt: 0 }, 999999));
+    ok("⚠️ juste enduite, elle tient encore", E.evilRodProtected({ evilRodProtectedAt: 1000 }, 1000 + C.EVIL_ROD_PROTECT_MS - 1));
+    ok("⚠️⚠️ PILE au délai, la protection est tombée (<, pas <=)", !E.evilRodProtected({ evilRodProtectedAt: 1000 }, 1000 + C.EVIL_ROD_PROTECT_MS));
+    ok("…et elle reste tombée bien après", !E.evilRodProtected({ evilRodProtectedAt: 1000 }, 1000 + C.EVIL_ROD_PROTECT_MS * 50));
+    ok("⚠️⚠️⚠️ `now` PLUS PETIT QUE l'enduit NE PROTÈGE RIEN (repli sûr, pas une horloge qui recule)",
+       !E.evilRodProtected({ evilRodProtectedAt: 5000 }, 100));
+    /* Falsification : sans le test `< C.EVIL_ROD_PROTECT_MS`, une valeur de
+       remplacement (`true` inconditionnel, ou `>=` au lieu de `<`) aurait
+       laissé passer la deuxième assertion — vérifié en substituant `<=` le
+       temps de l'écrire : la troisième assertion (PILE au délai) rougissait
+       bien, ce qui confirme que le banc distingue les deux bords. */
+    ok("⚠️⚠️⚠️ LES DEUX HORODATAGES SONT INDÉPENDANTS : les deux dérivations peuvent être vraies ensemble sans se marcher dessus",
+       E.evilRodProtected({ evilRodArmedAt: 1000, evilRodProtectedAt: 2000 }, 5000)
+       && E.evilRodBroken({ evilRodArmedAt: 1000, evilRodProtectedAt: 2000 }, 5000));
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -2976,7 +3030,7 @@ section("La construction du navire (454)");
   {
     /* ⚠️ AUCUNE PIÈCE NE SE COMMANDE SANS PLANS, et c'est la porte que Guillaume
        demande explicitement (« seulement à partir de ce moment là »). */
-    const e0 = Q.devStar(signedStar(), "all", 1).star;
+    const e0 = devAll(signedStar(), 1).star;
     e0.plan = { at: 0, by: "", done: 0 };
     for (const k of Q.STAR_SHIP_KEYS) e0.wood = {};
     ok("⚠️ sans les plans, Tristan ne coupe rien",
@@ -2990,15 +3044,20 @@ section("La construction du navire (454)");
     e.plan = { at: 1, by: "j1", done: 1 };
     signMayor(e, 2);          // 480 — la cale est autorisée, comme dans le vrai jeu
     let stuck = [], steps = 0, ordered = 0;
+    /* ⚠️ 2026-09-13 (lot 2) — UNE SEULE HORLOGE MONOTONE : le saccage compare la date
+       d'une commande à celle de la dernière sœur trouvée. Commandes à `T0 + g·1000`,
+       trouvailles à `+500` : ce qui est commandé avant la nuit des six sœurs est
+       détruit, ce qui l'est après compte. */
+    const T0 = 10_000;
     for (let guard = 0; guard < 60; guard++) {
       /* On livre tout ce qui est commandable avant d'avancer d'un cran : c'est ce
          qu'un joueur fait, et c'est ce qui rend le blocage visible s'il existe. */
       for (let inner = 0; inner < 8; inner++) {
         const k = Q.STAR_SHIP_KEYS.find(kk => Q.starTimberCan(e, kk));
         if (!k) break;
-        const ro = Q.resolveStarTimberOrder(e, k, "j1", 100 + guard);
+        const ro = Q.resolveStarTimberOrder(e, k, "j1", T0 + guard * 1000);
         if (!ro.ok || ro.wood <= 0 || ro.ms <= 0) { stuck.push("commande " + k); break; }
-        Q.commitStarTimber(e, k, "j1", 100 + guard);
+        Q.commitStarTimber(e, k, "j1", T0 + guard * 1000);
         ordered++;
         /* ⚠️⚠️ ZIP 478 — DEUX GESTES, PAS UN. Tristan LIVRE (`resolveStarTimberTick`
            pose `ready`) et le joueur MONTE (`resolveStarTimberRaise` pose `done`).
@@ -3006,9 +3065,9 @@ section("La construction du navire (454)");
            milieu — et c'est exactement ce qu'il a fait la première fois qu'on l'a
            relancé après la refonte, ce qui est le comportement voulu : un banc qui
            ne voit pas qu'un geste est apparu est un banc qui ment. */
-        Q.resolveStarTimberTick(e, 100 + guard + C.STAR_TIMBER[k].ms);
+        Q.resolveStarTimberTick(e, T0 + guard * 1000 + C.STAR_TIMBER[k].ms);
         const raise = Q.starTimberToRaise(e);
-        if (raise) Q.resolveStarTimberRaise(e, raise, "j1", 100 + guard + C.STAR_TIMBER[k].ms + 1);
+        if (raise) Q.resolveStarTimberRaise(e, raise, "j1", T0 + guard * 1000 + C.STAR_TIMBER[k].ms + 1);
       }
       steps++;
       const miss = Q.starMissing(e);
@@ -3033,10 +3092,10 @@ section("La construction du navire (454)");
         /* 2026-09-13 — `noShard`/`needStars` sont partis ; les deux verrous légitimes du
            chantier en deux moitiés sont `repair` (la coque attend Kerguélen) et
            `hullFirst` (la mâture attend la coque réparée). */
-        return why !== null && why !== "repair" && why !== "noPlan" && why !== "noMayor" && why !== "hullFirst";
+        return why !== null && why !== "repair" && why !== "noPlan" && why !== "noMayor" && why !== "hullFirst" && why !== "noBudget";
       });
       if (blocked.length) stuck.push("bloqué " + blocked.join());
-      Q.resolveStarFound(e, miss[0], "j1", 200 + guard);
+      Q.resolveStarFound(e, miss[0], "j1", T0 + guard * 1000 + 500);
       /* ⚠️⚠️ AUTORITÉ 2026-09-12 (repasse) — LA RÉPARATION FAIT PARTIE DU CHEMIN
          NORMAL. Ce balayage rejoue toute la quête réelle ; sans le marteau
          simulé ici, la coque resterait régressée pour toujours dès que la
@@ -3046,10 +3105,11 @@ section("La construction du navire (454)");
          est testée séparément, juste après ce bloc. */
       /* 2026-09-13 — la réparation exige Kerguélen affolé (les six sœurs, pas la reine
          seule) : on la joue à l'instant où il l'est, comme le joueur. */
-      if (!e.vandal && Q.starEngineerUrgent(e, 200 + guard)) Q.resolveVandalReveal(e, 200 + guard);
+      if (!e.vandal && Q.starEngineerUrgent(e, T0 + guard * 1000 + 500)) Q.resolveVandalReveal(e, T0 + guard * 1000 + 500);
+      if (Q.starBudgetNeeded(e)) signBudget(e, T0 + guard * 1000 + 600);   // 2026-09-13 (lot 2) — comme le joueur
     }
     ok("⚠️⚠️ la chaîne du bûcheron ne se bloque JAMAIS, à aucun état de la quête",
-       stuck.length === 0 && ordered === Q.STAR_SHIP_TOTAL,
+       stuck.length === 0 && ordered >= Q.STAR_SHIP_TOTAL,   // lot 2 — la coque et le gouvernail sont recommandés après le saccage
        stuck.join(" | ") || `${steps} états balayés, ${ordered} pièces commandées`);
     ok("…et le navire est entier à l'arrivée", Q.starShipComplete(e) === true);
   }
@@ -3092,16 +3152,21 @@ section("La construction du navire (454)");
     ok("⚠️ AVANT la reine, du bois seul construit la coque (chantier indépendant des étoiles)",
        Q.starShipBuilt(e2) === 1 && Q.starShipHas(e2, "hull"));
     Q.resolveStarFound(e2, "crater", "j1", 5);
-    ok("⚠️⚠️ APRÈS la reine, ce même bois ne suffit plus : la coque réclame la réparation",
-       Q.starShipBuilt(e2) === 0 && !Q.starShipHas(e2, "hull"));
-    ok("…et le renfort météorique n'y est pour rien (déjà trouvé bien avant, structurellement)",
+    /* ⚠️⚠️⚠️ 2026-09-13 (lot 2) — LA COQUE NE RÉGRESSE PLUS SEULE À LA SORTIE DE LA
+       REINE : le vandale saccage TOUT, la nuit où la dernière des six sœurs est
+       trouvée (décision de Guillaume, D4). FALSIFIÉ À L'ÉCRITURE : sans `woodLive`
+       dans `starTimberDone`, le troisième contrôle rougit. */
+    ok("⚠️⚠️ la reine seule ne détruit rien : le saccage attend la nuit des six sœurs",
+       Q.starShipBuilt(e2) === 1 && Q.starShipHas(e2, "hull") && !Q.starSabotageAt(e2));
+    ok("…et le renfort météorique n'y est pour rien",
        Q.starHas(e2, "farmMaterial") === false /* pas trouvé dans CE test, et ça n'a aucune importance ici */);
-    /* 2026-09-13 — la réparation exige Kerguélen affolé (le champ, la reine, les deux
-       sœurs) : on pose ces faits avant, comme une vraie partie. */
     findFarmImpacts(e2, "j1", 2); findSisters(e2, 5);
+    ok("⚠️⚠️⚠️ la dernière sœur trouvée, le saccage détruit TOUT ce qui était posé — sans effacer `e.wood`",
+       Q.starShipBuilt(e2) === 0 && !Q.starShipHas(e2, "hull") && !!e2.wood.hull && Q.starShipWrecked(e2));
     Q.resolveVandalReveal(e2, 6);
-    ok("…et la réparation jouée (le marteau, avec Kerguélen), elle repart",
-       Q.starShipBuilt(e2) === 1 && Q.starShipHas(e2, "hull"));
+    signMayor(e2, 7);
+    ok("…le marteau sauve l'épave mais ne répare rien, et la reconstruction attend le budget",
+       Q.starShipBuilt(e2) === 0 && Q.starTimberBlock(e2, "hull") === "noBudget", String(Q.starTimberBlock(e2, "hull")));
   }
 
   /* ╔═════════════════════════════════════════════════════════════════════════════
@@ -3162,8 +3227,13 @@ section("La construction du navire (454)");
     Q.resolveStarFound(e, "townShy", "j1", 4);
     Q.resolveStarFound(e, "townGreen", "j1", 4);
     Q.resolveVandalReveal(e, 5);
-    ok("…et la coque réparée avec Kerguélen, la seconde moitié s'ouvre",
-       Q.starHullRepaired(e) && Q.STAR_SHIP_KEYS.every(k => Q.starTimberBlock(e, k) === null),
+    /* 2026-09-13 (lot 2) — après le saccage, TOUT attend le budget, puis tout se recommande. */
+    ok("…et l'épave sauvée avec Kerguélen, les cinq pièces attendent le budget",
+       Q.starHullRepaired(e) && Q.STAR_SHIP_KEYS.every(k => Q.starTimberBlock(e, k) === "noBudget"),
+       Q.STAR_SHIP_KEYS.map(k => k + "=" + Q.starTimberBlock(e, k)).join(" "));
+    signBudget(e, 6);
+    ok("…et le budget voté, les cinq pièces se commandent",
+       Q.STAR_SHIP_KEYS.every(k => Q.starTimberBlock(e, k) === null),
        Q.STAR_SHIP_KEYS.map(k => k + "=" + Q.starTimberBlock(e, k)).join(" "));
     ok("⚠️ …et `C.STAR_SHIP_YARD` est un sous-ensemble du navire, jamais une seconde liste",
        Q.STAR_YARD_KEYS.length > 0 && Q.STAR_YARD_KEYS.length < Q.STAR_SHIP_TOTAL
@@ -3180,7 +3250,7 @@ section("La construction du navire (454)");
 
   /* ── LA FIN ATTEND LE BATEAU. */
   {
-    const e = Q.devStar(signedStar(), "all", 1).star;
+    const e = devAll(signedStar(), 1).star;
     for (const k of Q.STAR_SHIP_KEYS) delete e.wood[k];
     const r = Q.resolveStarGift(e, ["j1"], 3);
     /* ⚠️ ZIP 469 — TOUT EST TROUVÉ, ET UN CHANTIER NE PART TOUJOURS PAS EN MER.
@@ -3189,7 +3259,7 @@ section("La construction du navire (454)");
        importante du fichier — voir la note de `resolveStarGift`. */
     ok("⚠️⚠️ tout est trouvé, mais un chantier ne part pas en mer",
        r.ok === false && r.unbuilt === true, `${r.built}/${r.total} morceaux posés`);
-    for (const k of Q.STAR_SHIP_KEYS) e.wood[k] = { at: 1, readyAt: 1, done: true, by: "j1" };
+    for (const k of Q.STAR_SHIP_KEYS) e.wood[k] = { at: 2, readyAt: 2, done: true, by: "j1" };   // lot 2 — daté APRÈS le saccage
     ok("…et la résolution part dès que la dernière pièce est livrée",
        Q.resolveStarGift(e, ["j1"], 4).scene === "end" && Q.starDone(e));
   }
@@ -3225,11 +3295,14 @@ section("La construction du navire (454)");
        LIEU — le renfort météorique (`farmMaterial`), que ce bouton ne donne jamais.
        Le bouton « bois » ne promet toujours QUE le bois. */
     Q.resolveStarFound(d2, "crater", "j1", 6);
-    ok("…et après la reine, sans la réparation, la coque seule redescend",
-       Q.starShipBuilt(d2) === Q.STAR_YARD_KEYS.length - 1 && !Q.starShipHas(d2, "hull"),
+    /* 2026-09-13 (lot 2) — la reine seule ne détruit rien ; la nuit des six sœurs emporte tout. */
+    ok("…et après la reine seule, rien n'est encore détruit",
+       Q.starShipBuilt(d2) === Q.STAR_YARD_KEYS.length, `${Q.starShipBuilt(d2)}/${Q.STAR_SHIP_TOTAL}`);
+    Q.resolveStarFound(d2, "townShy", "j1", 7); Q.resolveStarFound(d2, "townGreen", "j1", 7);
+    ok("…mais la nuit des six sœurs, le saccage emporte tout", Q.starShipBuilt(d2) === 0,
        `${Q.starShipBuilt(d2)}/${Q.STAR_SHIP_TOTAL}`);
     const seedD3 = Q.newStar(); signMayor(seedD3, 4);
-    const d3 = Q.devStar(seedD3, "all", 5).star;
+    const d3 = devAll(seedD3, 5).star;
     ok("⚠️⚠️ « tout sauf la fin » tient sa promesse : il ne manque QUE la scène",
        Q.starMissing(d3).length === 0 && Q.starTimberBuilt(d3) === Q.STAR_SHIP_TOTAL && !Q.starDone(d3),
        Q.starMissing(d3).join() || "rien à trouver");
@@ -3570,7 +3643,7 @@ section("Les textes disent-ils la même chose que le monde ?");
      partagent ; écrite dans la boucle de rendu, aucun des deux ne l'aurait vue. */
   {
     const seed = Q.newStar(); signMayor(seed, 999);
-    const e = Q.devStar(seed, "all", 1000).star;
+    const e = devAll(seed, 1000).star;
     Q.resolveStarGift(e, ["banc"], 1000);
     ok("la quête finie, le navire est entier", Q.starShipComplete(e) && Q.starDone(e),
        `${Q.starShipBuilt(e)}/${Q.STAR_SHIP_TOTAL}`);

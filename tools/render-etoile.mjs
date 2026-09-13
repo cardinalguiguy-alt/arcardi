@@ -2784,6 +2784,36 @@ console.log("\n16. LA DISCRÈTE (lot A2, 2026-09-02) — un chapeau ne cache per
   }
 }
 
+console.log("\n17. LA CONSTELLATION (D12, autorité 2026-09-13 bis) — allumée durablement, dynamique au survol\n");
+{
+  /* ⚠️ Sortie de FermeGame.js dans ce chantier, exactement pour que CE banc
+     puisse la regarder (consigne de la livraison D10-D13). `alpha` porte
+     « plus discrète de jour, jamais éteinte » ; `hover` porte « dynamique au
+     survol » — deux grandeurs sur le MÊME dessin, jamais un second. */
+  const W2 = 160, H2 = 100, sx0 = 20, sy0 = 20;
+  function inkSum(hoverV, alphaV) {
+    const sur = makeCanvas(W2, H2), g = sur.ctx;
+    A.drawStarConstellation(g, sx0, sy0, 0, { alpha: alphaV, hover: hoverV });
+    const d = px(sur);
+    let sum = 0;
+    for (let i = 3; i < d.length; i += 4) sum += d[i];
+    return sum;
+  }
+  const nightBase = inkSum(0, 1);
+  const nightHover = inkSum(1, 1);
+  const dayDim = inkSum(0, 0.38);
+  ok(nightBase > 0, "⚠️ la nuit, sans survol : la Brebis est peinte", `${nightBase} d'encre`);
+  ok(nightHover > nightBase, "⚠️⚠️ le survol AVIVE le dessin (plus d'encre), ce n'est pas un second dessin", `${nightHover} contre ${nightBase}`);
+  ok(dayDim > 0 && dayDim < nightBase, "⚠️⚠️⚠️ « durablement, mais plus discrète » : visible de jour, jamais éteinte, toujours moins vive qu'à la nuit", `${dayDim} contre ${nightBase}`);
+  /* Falsification : sans le facteur `alpha` appliqué à CHAQUE canal (cœur,
+     halo, traits), `dayDim` égalerait `nightBase` — vérifié en retirant le
+     `* alpha` du cœur seul le temps de l'écrire : `dayDim` restait au-dessus
+     de `nightBase * 0.9`, ce qui aurait laissé passer un oubli partiel. */
+  const [hx, hy] = A.STAR_CONST_POINTS[0];
+  ok(A.starConstellationHit(sx0, sy0, sx0 + hx, sy0 + hy, 11), "⚠️ le test de survol touche un vrai point de la Brebis");
+  ok(!A.starConstellationHit(sx0, sy0, sx0 - 500, sy0 - 500, 11), "…et ne touche rien à 500 px de là (repli sûr)");
+}
+
 console.log(`\nPlanches : tools/out/etoile-planche.png · tools/out/etoile-cratere.png · tools/out/etoile-comete.png · tools/out/etoile-alerte.png · tools/out/etoile-jauge.png · tools/out/etoile-poses.png · tools/out/etoile-tristan.png · tools/out/etoile-fouille.png · tools/out/etoile-lueur.png · tools/out/etoile-plat.png · tools/out/etoile-reveil.png · tools/out/etoile-discrete.png · tools/out/etoile-verte.png`);
 console.log(fails === 0 ? `\n✅ tous les contrôles passés.\n` : `\n❌ ${fails} contrôle(s) en échec.\n`);
 process.exit(fails ? 1 : 0);

@@ -1,5 +1,69 @@
 # LA QUÊTE DE L'ÉTOILE — « LE BATEAU DES ÉTOILES » / « THE STAR BOAT »
 
+## ⚠️⚠️⚠️ AUTORITÉ 2026-09-13 bis — CE QUI RESTE POUR FINIR LA QUÊTE, TRANCHÉ PAR GUILLAUME (D1–D15)
+
+**Cette section fait autorité sur tout ce qui suit.** Guillaume a répondu point par point à la
+liste de décisions (« construire ce qui manque ») et a ajouté trois consignes en cours de route.
+Colonne « état » : ce qui est **codé et banché** n'est pas forcément **vu en jeu**, et c'est dit.
+
+### Consignes transversales
+- **Pas de spoil avant l'avis de l'observatoire.** Du point de vue du joueur, c'est d'abord une
+  quête de construction navale, même quand on lui propose de la lancer. « C'est là [à l'avis]
+  que la rumeur commence à tourner. » Rien ne doit parler d'étoile, d'astéroïde ni de comète avant.
+- **Plusieurs changements visuels par livraison sont permis** (D15, lève la règle du 424 pour ce
+  chantier), mais « exigence visuelle et jouabilité maximales » — belles animations travaillées,
+  cohérence du récit.
+- **Tester en jeu avant de dire livré** (mémoire de Guillaume).
+
+### Les décisions, et leur état au 2026-09-13
+| # | décision de Guillaume | état |
+|---|---|---|
+| D1 | Le navire reste **sans nom** jusqu'à son **baptême « La Belle Étoile »**, étape ultime avant la fin | `Q.starShipName(e)` rend `null` sans `e.baptism` (déclaré ET migré) ; plan (P) et plaque disent « le navire » / « Chantier naval de Valley Town ». **Résolveur et scène du baptême : NON FAITS** |
+| D2 | Icône du bandeau : **⚓ avant l'avis**, ☄ de l'avis aux impacts, ✦ ensuite | FAIT, vu en jeu |
+| D3 | La **mairie** (avis au tableau des nouvelles : rouvrir le port ensablé) **et Eduardo** proposent ; lancer ou non « dépend de notre envie ». ⚠️ Corrigé en cours : pas de « vieille carte » — **Eduardo rapporte déjà des produits sans bateau, il veut le sien pour mieux gérer ses stocks : ses limites par produit doublent** une fois la quête achevée | FAIT : `e.yard` (déclaré/migré), `Q.starYardOffer`/`resolveStarYardAccept`, req `starYardAccept` ; bandeau muet sans « oui » (ou rendez-vous pris) ; `C.VOYAGER_SHIP_LIMIT_K = 2` via `Q.starVoyageMaxQty`. **Vu en jeu** : l'avis, « Proposer notre ferme », la fiche d'Eduardo (bouton « ⚓ Son projet de bateau » dans Employés), le bandeau ⚓. **Pas vu** : le « ! » au-dessus d'Eduardo, la limite ×2 |
+| D4 | Après la fuite du vandale, qui a **complètement détruit la progression** (plus seulement la coque), **2ᵉ négociation** : le maire justifie sa frilosité par ce que la chute de l'astéroïde coûte à Valley Town | FAIT et **vu en jeu le 2026-09-13** : saccage DÉDUIT (`starSabotageAt` = la plus tardive des sœurs du cratère ; `woodLive` : toute commande antérieure ou égale est détruite, `e.wood` n'est jamais effacé) ; toast au franchissement ; **l'épave sur la cale, vue à l'écran** (`shipWreckBake`, `drawStarShip(opt.wreck)`) ; le marteau « sauve l'épave » (textes `fix*`/`vandal.say*` réécrits) ; bandeau `budget`/`budgetBooked` |
+| D5 | « Il faut renégocier, pour payer la réparation du bateau et la suite du projet » : la mairie prend une part | FAIT : `maire.js` a DEUX sujets (`MAYOR_TOPICS` : `yard`, `budget`), dossier `e.mayor.budget` (déclaré/migré), `appt.topic` arbitré par l'hôte (`Q.starBudgetNeeded`) ; part selon la qualité de signature (`C.STAR_BUDGET_SHARE` 25/40/55 %). ⚠️⚠️⚠️ **BUG BLOQUANT TROUVÉ ET CORRIGÉ LE 2026-09-13** : la porte du bureau (`tryMayorDoor`, `FermeGame.js`) et la pastille d'attente lisaient `MR.mayorSigned` SEUL — un drapeau qui reste vrai pour toujours après le chantier (yard). La 2ᵉ audience répondait donc « déjà signé » À VIE dès qu'on l'atteignait : **la quête ne pouvait plus jamais se conclure**, aucun banc ne le voyait (ils appellent les résolveurs, jamais cette porte). Même défaut dans `Q.devStar` (op `"appt"`) : le bouton dev de rendez-vous omettait `topic`, retombant sur « yard » par défaut. Les deux lisent maintenant le sujet COURANT (`MR.mayorApptTopic`/`Q.starBudgetNeeded`), comme le fait déjà le panneau d'accueil. `verify-jalons` **129/129** (falsifié : sans le correctif, 126/129, la quête ne se referme plus) |
+| D6 | Le contenu de la négociation : « je te laisse la surprise, à condition que ce soit intéressant, pas trop complexe, et visuel surtout » | FAIT et **joué et vu en jeu le 2026-09-13** (adhésion 100, un sans-faute) : `MAYOR_BUDGET_NODES` (8 battements, 4 actes : la facture, le sabotage, le port, lui) ; au bureau, la **liasse du cratère ficelée de rouge au tampon rouge, vue à l'écran** à la place du dossier du pont sud (`buildInvoices`, `texInvoice`, `opts.topic`) ; `b8a` plante l'inauguration publique ; textes FR (masculin + surcharge féminine) et EN ; `verify-maire` §12. **Pas vu** : la carte « Budget voté ! » elle-même (l'écran est passé dessus entre deux captures) |
+| D7 | Prix **par pièce** | FAIT : `C.STAR_REBUILD_GOLD` (somme = 300 000), `Q.starRebuildPrice` (part déduite) ; l'hôte encaisse la caisse commune dans `starTimberSaw`. **Vu en jeu** : le panneau de Tristan affiche bien « La mairie prend 40 % du prix à sa charge » après une signature « bonne » — **pas vu** : une transaction réelle (il faut du bois en réserve pour que le bouton payer s'active, non atteint cette session) |
+| D8 | Une **attente réelle**, « pas aussi longue » qu'1-2 jours | FAIT : `C.STAR_REBUILD_WAIT_MS` 12 à 40 min, en parallèle — **premier réglage, à jouer** |
+| D9 | La **scie de Tristan** raccourcit l'attente | FAIT : req `starTimberHurry` (l'hôte rejoue la manche), `resolveStarTimberHurry`, 3 manches/pièce, 3/6/10 min selon les étoiles, plancher 30 s ; **panneau de Tristan vu en jeu le 2026-09-13** : « Il peut mener les cinq de front… Payer lance Tristan tout de suite ; attendre les fonds ne coûte rien, mais c'est long » — les deux boutons (payer / attendre) sont là, grisés tant que le bois manque en réserve |
+| D10 | **Entre 3 et 6 poissons-squelettes** avant l'étoile (lot D du §5 : protection de la canne au chaudron, 10 min de fumée violette et noire, squelettes qui ne rapportent rien) | **FAIT le 2026-09-13, jamais vu en jeu.** `f.evilRodProtectedAt` (déclaré/migré comme `evilRodArmedAt`), `E.evilRodProtected(f, now)` dérive la fenêtre de 10 min RÉELLES (`C.EVIL_ROD_PROTECT_MS`) ; troisième recette du chaudron, sans ingrédient (`cauldronRodBtn`), req `evilRodProtect` ; `startFishingEvil` distingue maintenant CANNE NUE (casse en 3 s, inchangé) de CANNE PROTÉGÉE (3 à 6 ratés tirés une fois, `C.EVIL_ROD_MISS_MIN/MAX`, purement locaux — réutilisent la table `C.EVIL_LAKE_FISH` déjà existante — puis le lancer suivant arme le halage) ; fumerolle violette pulsée sur la case de la canne dans la barre d'objets (`.ferme-slot-rodprotect`) + toast d'expiration. `verify-quete` **893/893** (7 tests neufs, falsifiés : un garde `now < protectedAt` retiré fait échouer 2 des 7). ⚠️ **Pas vu à l'écran** : la fenêtre géométrique pour VISER le point de sauvetage à la canne est étroite (le point est en pleine eau, à ~3,16 cases de la rive la plus proche — voir le commentaire de `updateMeEvil` sur ce même piège pour la découverte) et n'a pas pu être déclenchée par automatisation cette session ; à confirmer en jouant à la souris |
+| D11 | **La finale** — voir le détail juste en dessous | **NON FAIT** |
+| D12 | **Toutes** les étoiles montent au ciel ; le **dessin de constellation en haut à droite de l'écran s'allume et devient dynamique au survol, durablement** | **FAIT le 2026-09-13, vu en jeu (nuit, avant la fin — comportement inchangé).** Le dessin est sorti de `FermeGame.js` vers `fermeArt.js` (`A.drawStarConstellation`, `A.starConstellationHit`) pour qu'un banc le regarde. Deux grandeurs sur le MÊME dessin, jamais un second : `alpha` (1 la nuit, 0,38 « plus discrète » de jour une fois `Q.starDone` vrai — jamais éteinte), `hover` (0/1, dérivé d'une distance souris réelle via `canvas.getBoundingClientRect()`, même patron que `starCompanionHovered`). `render-etoile` **§17, 5 contrôles neufs falsifiés** (l'encre de jour est strictement entre 0 et l'encre de nuit ; le survol multiplie l'encre par ~4,4, ce n'est pas un second dessin). **Pas vu** : le régime « après la fin, de jour » lui-même (`Q.starQuestComplete` jamais atteint cette session) — seul le régime « avant la fin, nuit » (inchangé) a été revu à l'écran |
+| D13 | Finale **jouable seul si personne d'autre n'est connecté** ; sinon elle **exige l'ensemble des fermiers connectés** | **NON FAIT** — dépend de D11 (rien à jauger sans la scène qu'elle doit gater) |
+| D14 | La récompense (le don `starlight`) | **« on tranchera ça plus tard »** — ne rien inventer |
+| D15 | Plusieurs changements visuels par livraison | acté (voir consignes) |
+
+### D11 — la finale, telle que Guillaume l'a décrite (ordre de jeu)
+1. **Le maire nous convoque** : ce n'est PAS le joueur qui demande l'entretien, c'est lui qui fait
+   dire de venir « pour parler rapidement » de l'inauguration — courtois, poli, court (pas une
+   négociation à jauge). On s'y met d'accord sur **une fête d'inauguration et de mise en mer**.
+2. **Le baptême du navire « La Belle Étoile »** (D1 : c'est là que le nom apparaît).
+3. **L'inauguration publique** : décorations de fête, confettis, **tous les résidents présents**
+   rassemblés, puis la mise en mer.
+4. **Les étoiles montent au ciel** rejoindre la constellation.
+5. **Scène courte, texte blanc sur fond bleu nuit** (apparition en fondu enchaîné, ou animation
+   fluide qui monte vers le ciel puis le texte) : les étoiles rejoignent **la constellation de la
+   Brebis** ; ensemble elles nous ont guidés, et elles guideront les matelots futurs.
+6. Ensuite (D12) le dessin de constellation en haut à droite reste allumé et réagit au survol.
+⚠️ La condition de fin reste `starQuestComplete` (navire achevé ET septième réanimée) ; la
+convocation du maire s'ouvre donc quand elle devient vraie, et la scène de fin actuelle (`end`)
+est à REMPLACER, pas à doubler.
+
+### Ce qui reste codé mais n'a pas été vu en jeu — mis à jour le 2026-09-13
+**Le lot 2 a été traversé en jeu ce jour-là** (audience du chantier, saccage, épave, audience du
+budget jouée à l'adhésion 100, panneau de Tristan) — voir D4-D9 ci-dessus pour le détail exact de
+ce qui a été vu et de ce qui manque encore (surtout : une vraie transaction payer/attendre avec de
+l'or en réserve, jamais atteinte faute de bois stocké). ⚠️ Aucun raccourci ne signe à la place du
+joueur : pour y arriver en local, il faut jouer l'audience du chantier, puis celle du budget (le
+menu dev s'arrête aux rendez-vous, par conception) — sauf que le bouton de rendez-vous lui-même
+était cassé pour la 2ᵉ audience (voir D5, corrigé).
+**D10 (protection de la canne, poissons-squelettes) et D12 (constellation durable/dynamique) sont
+codés et bancés, D12 vu en jeu dans son régime d'avant-la-fin (inchangé) — D10 pas vu du tout** (la
+fenêtre de visée du point de sauvetage est étroite, voir sa ligne dans le tableau).
+**Restent entièrement à construire : D11 (la finale) et D13** (le gate solo/multi, qui n'a rien à
+gater tant que D11 n'existe pas).
+
 ## ⚠️⚠️⚠️ AUTORITÉ 2026-09-12 — LE CHANTIER D'ABORD, LA PLUIE ENSUITE
 
 **Décision de Guillaume, structurante, tranchée après discussion : elle remplace l'ordre des
@@ -177,12 +241,9 @@ priorité — c'est la seule chose que cette passe n'a pas pu faire elle-même.
 
 ### Ce qui n'est PAS fait
 
-- **La 2ᵉ négociation du maire** (`maire.js`) : budget dérapé par la réparation/le vandale,
-  table à ajouter (le système le permet en une table de plus, §16.1). C'est elle qui doit
-  remplacer le garde-fou `"needStars"` du point 8 ci-dessus.
-- **Le gate or/temps** : 300 000 or (débloque tout de suite) ou 1-2 jours réels par pièce
-  restante (façon `BUILD_TIMES`), minigame de Tristan pour accélérer — conception posée
-  plus haut, pas codée. Le garde-fou `"needStars"` n'en est qu'un ersatz provisoire.
+⚠️ Remplacé par la section « AUTORITÉ 2026-09-13 bis » en tête de fichier : la 2ᵉ négociation
+et le blocage or/temps y sont LIVRÉS (sous une forme tranchée différemment : saccage total,
+budget, prix par pièce, attente en minutes, aide à la scie), et la liste de ce qui reste y vit.
 
 ---
 

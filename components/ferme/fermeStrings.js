@@ -379,6 +379,11 @@ const STAR_FR = {
          phrases : la haler, puis la porter et la réanimer. */
       evilHaul:   "Lance ta ligne sur la lueur du lac maléfique et hale-la jusqu'à la rive.",
       evilRevive: "Porte la septième étoile à la ferme, pose-la, puis réanime-la (E).",
+      /* 2026-09-13 (lot 2) — le budget après le saccage, et la reconstruction. PLAFOND DE 80 SIGNES. */
+      budget:       "Chantier détruit. Il faut un budget : demande une audience au maire.",
+      budgetBooked: "Rendez-vous pris pour le budget : monte au bureau du maire à l'heure dite.",
+      rebuildOrder: "Relance les pièces chez Tristan : payer, ou attendre les fonds (Employés).",
+      rebuildWait:  "Les fonds arrivent. Aide Tristan à la scie pour accélérer (Employés).",
     },
     /* Hors-zip — REPLI DU CHEVRON QUAND LE CHAUDRON N'EST PAS ENCORE RAMASSÉ
        (demande de Guillaume, dictée mot pour mot). ⚠️ SEULE PHRASE DE `goal`
@@ -414,9 +419,14 @@ const STAR_FR = {
     /* Le rappel nomme l'objet construit et traite zéro comme un vrai cas :
        « zéro morceau » était grammatical mais ne disait pas ce que le compteur
        changeait dans le monde. */
-    again: (n, total) => n <= 0
-      ? `Aucune des ${nfr(total)} pièces du bateau n'est encore montée. Les étoiles restent avec toi.`
-      : `${nfr(n)} pièce${n > 1 ? "s" : ""} du bateau montée${n > 1 ? "s" : ""} sur ${nfr(total)}. Les étoiles restent avec toi.`,
+    /* 2026-09-13 (lot 1) — « LES ÉTOILES RESTENT AVEC TOI » NE SE DIT QU'À QUI EN A
+       UNE. Le rappel s'ouvre dès la pluie tombée, avant la moindre fouille : la
+       phrase affirmait une compagne qui n'existait pas encore (le défaut « un texte
+       affirme », 448), et nommait l'étoile avant qu'on l'ait vue. */
+    again: (n, total, stars) => (n <= 0
+      ? `Aucune des ${nfr(total)} pièces du bateau n'est encore montée.`
+      : `${nfr(n)} pièce${n > 1 ? "s" : ""} du bateau montée${n > 1 ? "s" : ""} sur ${nfr(total)}.`)
+      + (stars ? " Les étoiles restent avec toi." : ""),
   },
   /* ╔═══════════════════════════════════════════════════════════════════════════
      ║ AUDIT 2026-08-31 — CE QU'ELLE DIT PENDANT QU'ON JOUE. LE POSTE ÉTAIT VIDE
@@ -516,6 +526,7 @@ const STAR_FR = {
   win: {
     mayor:    { title: "Félicitations !", sub: "Le maire soutient votre projet." },
     engineer: { title: "Les plans sont prêts !", sub: "Kerguélen a dessiné le navire." },
+    budget: { title: "Budget voté !", sub: "La mairie finance une part de la reconstruction." },   // 2026-09-13 (lot 2)
   },
   fall: {
     agency: "L’Agence nationale d’astronomie avait prévu huit sites sur la ferme.",
@@ -913,7 +924,9 @@ const STAR_FR = {
     /* ── LE PLAN. */
     ready: "Les plans sont à toi. Ouvre-les (P) pour voir le bateau.",
     openBtn: "📐 Le plan",
-    panelTitle: (name) => `📐 Plans de construction — ${name}`,
+    /* 2026-09-13 (lot 1) — `name` vaut `null` tant que le navire n'est pas baptisé
+       (`Q.starShipName`, D1 b) : le plan ne dit pas « La Belle Étoile » avant la fin. */
+    panelTitle: (name) => name ? `📐 Plans de construction — ${name}` : "📐 Plans de construction du navire",
     panelHint: (total) => `${Nfr(total)} pièces. Leur état suit directement les commandes de Tristan et la cale.`,
     panelAtLake: "Déplie-le au bord du lac : le bateau apparaîtra sur sa cale.",
     lakeToast: "Tu déplies le plan devant la cale. Le bateau se dessine dans l'air, en entier.",
@@ -934,7 +947,7 @@ const STAR_FR = {
        une jointure, jamais deux listes (449). Lisible dès qu'on s'approche de
        la cale, avec ou sans les plans en poche : c'est un DÉCOR, pas une étape,
        donc rien ici ne dépend de l'avancement de la quête. */
-    plaqueTitle: (name) => `⚓ Chantier naval — ${name}`,
+    plaqueTitle: (name) => name ? `⚓ Chantier naval — ${name}` : "⚓ Chantier naval de Valley Town",
     plaqueIntro: "Une main a gravé les noms des pièces à venir, dans l'ordre où la coque prendra forme.",
     progressTitle: "Progression de la construction",
     progressPart: (k) => ({
@@ -951,7 +964,9 @@ const STAR_FR = {
       : detail === "noPlan" ? "Plans nécessaires."
       : detail === "noMayor" ? "Accord du maire nécessaire."
       // 2026-09-13 — les deux verrous du chantier en deux moitiés, voir starTimberBlock.
-      : detail === "repair" ? "La coque attend sa réparation avec Kerguélen."
+      // 2026-09-13 (lot 2) — le saccage a tout détruit : le chantier attend Kerguélen, puis le budget.
+      : detail === "repair" ? "Le chantier attend Kerguélen."
+      : detail === "noBudget" ? "Le budget attend l'accord du maire."
       : detail === "hullFirst" ? "Plus tard : Kerguélen veut d'abord voir la coque tenir l'eau."
       : "Étape encore verrouillée.",
     /* ⚠️ AUDIT 2026-09-12 — LA MÊME RAISON, DITE EN TOAST. Le plan déplié
@@ -1018,8 +1033,21 @@ const STAR_FR = {
        (`starTimberBlock`). `blockNoShard` (un éclat qui n'existe plus depuis le
        469) et `blockNeedStars` (un verrou qui ne gardait rien) sont partis avec
        leurs raisons. Ils parlent le langage du chantier, jamais « chapitre 3 ». */
-    blockRepair: "🔒 La coque attend sa réparation",
+    blockRepair: "🔒 Le chantier attend Kerguélen",
     blockHullFirst: "🔒 Plus tard : la coque doit d'abord tenir l'eau",
+    /* ╔═══════════════════════════════════════════════════════════════════════
+       ║ 2026-09-13 (lot 2) — LA RECONSTRUCTION : PAYER, OU ATTENDRE ET AIDER.
+       ╚═══════════════════════════════════════════════════════════════════════ */
+    blockNoBudget: "🔒 Le budget attend l'accord du maire",
+    rebuildHint: (pct) => (pct > 0 ? `La mairie prend ${pct} % du prix à sa charge. ` : "")
+      + "Payer lance Tristan tout de suite ; attendre les fonds ne coûte rien, mais c'est long.",
+    rebuildPay: (gold) => `💰 Payer ${gold} or`,
+    rebuildWaitBtn: (d) => `⏳ Attendre les fonds (${d})`,
+    rebuildPoor: (gold) => `Il faut ${gold} or dans la caisse commune.`,
+    orderWaitFund: (d) => `fonds de la mairie — ${d}`,
+    hurryBtn: (left, d) => `🪚 Aider Tristan (${left}×) — ${d}`,
+    hurryNone: "Tristan n'a plus besoin d'aide sur cette pièce.",
+    hurryChat: (who, part, d) => `${who} aide Tristan à la scie : ${part}, ${d} de gagnées.`,
     /* ⚠️ ZIP 478 — LIVRER N'EST PLUS POSER. Tristan dépose le bois au pied de la
        cale ; c'est le joueur qui monte la pièce, au marteau. Les deux phrases sont
        donc deux ÉVÉNEMENTS distincts, à deux moments différents et souvent par deux
@@ -1037,10 +1065,10 @@ const STAR_FR = {
        478 : « le même mini jeu marteau que pour l'amélioration de la grange »),
        textes distincts pour un geste distinct : on ne MONTE pas une pièce
        neuve, on RETIENT une coque qui prend l'eau, avec Kerguélen à côté. */
-    fixTitle: "🔨 Réparer la coque, avec Kerguélen",
+    fixTitle: "🔨 Sauver l'épave, avec Kerguélen",   // 2026-09-13 (lot 2) — le saccage a tout détruit : le marteau retient ce qui reste
     fixSub: (n, total) => `coup ${n} sur ${total}`,
     fixHint: "Frappe en rythme avec lui : vise la zone claire, vite mais juste.",
-    fixWin: "La coque tient bon. Kerguélen souffle, soulagé.",
+    fixWin: "L'épave ne coulera pas. Kerguélen souffle — mais tout est à refaire.",
     fixFail: "Le maillet a raté sa prise. Kerguélen serre les dents — on recommence.",
     lastOne: "La dernière pièce est en place. Le bateau est fini.",
     noTristan: "Personne à la ferme ne sait travailler le bois comme ça.",
@@ -1110,11 +1138,43 @@ const STAR_FR = {
      pas d'abord. Jamais de nom, jamais de visage — QUETE.md l'interdit
      explicitement pour cette quête. */
   vandal: {
-    toast: "Nouvelles du chantier : la coque a été sabotée cette nuit — Kerguélen a besoin d'aide, VITE, sur le quai !",
+    // 2026-09-13 (lot 2) — le saccage est TOTAL (D4 de Guillaume) : le marteau sauve l'épave, il ne répare rien.
+    toast: "Nouvelles du chantier : le navire a été saccagé cette nuit — Kerguélen a besoin d'aide, VITE, sur le quai !",
     urgentBubble: "VITE !! VITE !! Venez m'aider, le bateau va couler !!",
     say1: "Kerguélen essuie son front, encore essoufflé.",
-    say2: "« Merci… on l'a tenue à temps. Quelqu'un s'en est pris à la coque cette nuit — je ne sais pas qui. »",
-    say3: "« Tout de noir vêtu, capuche rabattue. Je n'ai pas eu le temps de voir son visage. »",
+    say2: "« Merci… on a sauvé la quille de la noyade. Mais le reste… quelqu'un a tout cassé cette nuit. Tout. »",
+    say3: "« Tout de noir vêtu, capuche rabattue. Je n'ai pas vu son visage. Il faudra tout refaire — et je ne sais pas avec quel argent. »",
+  },
+  /* ╔═══════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-13 (lot 1) — LA PROPOSITION DU CHANTIER : LA MAIRIE ET EDUARDO.
+     ╚═══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ DÉCISION DE GUILLAUME : « du point de vue du joueur, la quête doit être une
+     quête de construction navale dans un premier temps, même quand il lui est
+     proposé de la lancer. Pas de spoil trop rapide » — et ce, « tant que l'annonce
+     de l'observatoire n'est pas tombée ». AUCUNE DE CES PHRASES NE PARLE DU CIEL :
+     un port ensablé, une vieille carte, trois îles. La rumeur commence avec l'avis.
+     ⚠️ Deux voix, une seule porte (`Q.starYardOffer`) : la mairie donne la raison
+     PUBLIQUE (rouvrir le port), Eduardo la raison PRATIQUE.
+     ⚠️⚠️ CORRIGÉ LE JOUR MÊME PAR GUILLAUME (« un peu wtf la vieille carte ? Fais
+     simple ») : Eduardo rapporte DÉJÀ des produits sans bateau ; il veut le sien pour
+     tenir ses stocks — et c'est une vraie récompense de jeu, pas une promesse : le
+     navire achevé, ses limites par produit doublent (`C.VOYAGER_SHIP_LIMIT_K`). */
+  yard: {
+    title: "Le chantier naval",
+    boardTitle: "⚓ Avis de la mairie — rouvrir le port",
+    boardBody: "La passe du lac est ensablée depuis vingt ans : plus aucun bateau ne sort de Valley Town. La mairie étudie la réouverture du port et cherche une ferme pour relancer le chantier naval de la vieille cale.",
+    boardCta: "Proposer notre ferme",
+    boardTaken: (who) => `⚓ Chantier naval : confié à la ferme (${who}). Le maire attend votre visite.`,
+    // La bulle au-dessus d'Eduardo quand on s'approche. ⚠️ Courte : une bulle se lit d'un regard.
+    eduHook: "Un bateau à moi… je rapporterais deux fois plus de chaque produit.",
+    eduTitle: "⚓ Le bateau d'Eduardo",
+    eduMapBtn: "⚓ Son projet de bateau",
+    eduPitch: "« Je vous rapporte déjà ce que vous voulez, mais je loue une place sur les bateaux des autres, et c'est eux qui décident combien j'embarque. Avec mon propre navire, je rapporterais deux fois plus de chaque produit. Si la ferme relançait le chantier naval du lac… »",
+    eduShipLimit: (n) => `⛵ Avec son propre navire, Eduardo embarque jusqu'à ${n} de chaque produit.`,
+    eduYes: "⚓ On s'en occupe",
+    eduNo: "Pas maintenant",
+    eduThanks: "« Merci. Commencez par le maire : la cale est sur son quai. »",
+    chat: (who) => `${who} a accepté de relancer le chantier naval de Valley Town.`,
   },
   /* ⚠️⚠️⚠️ 2026-08-31 — LA PHRASE DU CHAT SORT DU MENU DÉVELOPPEUR, PARCE QU'ELLE
      N'EST PAS UN OUTIL. `STAR_FR.dev` POINTE SUR `STAR_EN.dev` (voir sa note) et
@@ -1190,6 +1250,20 @@ const STAR_FR = {
     rodArming: "L'eau corrompue s'infiltre dans ta ligne...",
     rodBroken: "Ta canne s'est brisée dans cette eau maudite.",
     rodStillBroken: "Ta canne est cassée ici. Protège-la avant de retenter.",
+    /* 2026-09-13 (D10) — LA PROTECTION AU CHAUDRON. `rodNeedsProtect` suit
+       `rodArming` au tout premier lancer nu (elle annonce ce qui va se
+       passer dans 3 s) ; `rodMiss` accompagne chaque poisson-squelette une
+       fois protégée, sans jamais nommer l'espèce à l'avance (même pudeur que
+       `evilFishBite`, qui ne dit pas non plus ce qu'on va sortir de l'eau). */
+    rodNeedsProtect: "Il faudra d'abord la protéger — direction le chaudron.",
+    rodProtected: "Un enduit violet et noir recouvre ta ligne. Elle tiendra dix minutes.",
+    rodProtectExpired: "L'enduit protecteur s'est dissipé.",
+    rodMiss: "La ligne se tend, puis mollit d'un coup — ce n'est encore qu'un débris.",
+    cauldronRodTitle: "Enduit protecteur",
+    cauldronRodEffect: "Protège la canne, dix minutes durant, de l'eau qui la corrompt.",
+    cauldronRodBtn: "Enduire la canne",
+    cauldronRodReady: (mmss) => `Ta canne est protégée encore ${mmss}.`,
+    rodSlotTip: "Canne protégée contre l'eau corrompue.",
     /* 2026-09-04 — LE HALAGE. `hookToast` remplace le silence qui suivait le
        lancer spécial (rien à pêcher là, avant ce lot) : elle mord, et le
        geste commence. `haulHint` reste affiché tout du long (HUD, pas un
@@ -1467,6 +1541,10 @@ const STAR_EN = {
       warnWait:  "An asteroid shower is due tonight or the next. The valley waits.",
       evilHaul:   "Cast at the glow in the evil lake and haul her to the shore.",
       evilRevive: "Carry the seventh star to the farm, set her down, revive her (E).",
+      budget:       "The shipyard is wrecked. It needs a budget: ask the mayor for an audience.",
+      budgetBooked: "Budget appointment booked: go up to the mayor's office at the set time.",
+      rebuildOrder: "Restart the pieces with Tristan: pay, or wait for the funds (Staff).",
+      rebuildWait:  "The funds are coming. Help Tristan at the saw to speed up (Staff).",
     },
     // Chevron fallback while the cauldron hasn't been picked up yet — see the
     // FR block for why this one line is allowed to run past the usual 80-char cap.
@@ -1482,9 +1560,10 @@ const STAR_EN = {
        étions-nous » qui revient à chaque écran est une notification. */
     againTitle: "Your next step",
     againClose: "Resume the quest",
-    again: (n, total) => n <= 0
-      ? `None of the ship's ${nen(total)} parts has been installed yet. The stars are still with you.`
-      : `${nen(n)} of the ship's ${nen(total)} parts ${n === 1 ? "is" : "are"} installed. The stars are still with you.`,
+    again: (n, total, stars) => (n <= 0
+      ? `None of the ship's ${nen(total)} parts has been installed yet.`
+      : `${nen(n)} of the ship's ${nen(total)} parts ${n === 1 ? "is" : "are"} installed.`)
+      + (stars ? " The stars are still with you." : ""),
   },
   /* ╔═══════════════════════════════════════════════════════════════════════════
      ║ ZIP 449 — LE FAMILIER QUI MÈNE. Trois lignes, pas une de plus.
@@ -1553,6 +1632,7 @@ const STAR_EN = {
   win: {
     mayor:    { title: "Congratulations!", sub: "The mayor supports your project." },
     engineer: { title: "The plans are ready!", sub: "Kerguélen has drawn up the ship." },
+    budget: { title: "Budget voted!", sub: "The town hall funds part of the rebuild." },
   },
   /* ── LA CHUTE. Personne d'autre ne la commente : c'est le thème (§3 de
      QUETE.md). Le silence de la ville EST la première chose étrange. */
@@ -1765,7 +1845,7 @@ const STAR_EN = {
     engGone: "He folded his sheets and left without looking back.",
     ready: "The plans are yours. Open them (P) to see the boat.",
     openBtn: "📐 The plan",
-    panelTitle: (name) => `📐 Building plans — ${name}`,
+    panelTitle: (name) => name ? `📐 Building plans — ${name}` : "📐 Building plans for the ship",
     panelHint: (total) => `${Nen(total)} pieces. Their status comes straight from Tristan's orders and the slipway.`,
     panelAtLake: "Unfold it by the lake and the boat will stand on its slipway.",
     lakeToast: "You unfold the plan in front of the slipway. The whole boat draws itself in the air.",
@@ -1775,7 +1855,7 @@ const STAR_EN = {
       hull: "Hull planking", rudder: "Rudder and tiller",
       mast: "The mast", sail: "The yard", bell: "The bell cradle",
     }[k] || k),
-    plaqueTitle: (name) => `⚓ Shipyard — ${name}`,
+    plaqueTitle: (name) => name ? `⚓ Shipyard — ${name}` : "⚓ Valley Town shipyard",
     plaqueIntro: "A hand carved the names of the pieces to come, in the order the hull will take shape.",
     progressTitle: "Construction progress",
     progressPart: (k) => ({
@@ -1792,7 +1872,8 @@ const STAR_EN = {
       : detail === "noPlan" ? "Plans required."
       : detail === "noMayor" ? "The mayor's approval is required."
       // 2026-09-13 mirror — the two locks of the two-halves shipyard, see starTimberBlock.
-      : detail === "repair" ? "The hull is waiting to be repaired with Kerguélen."
+      : detail === "repair" ? "The shipyard is waiting for Kerguélen."
+      : detail === "noBudget" ? "The budget is waiting for the mayor's approval."
       : detail === "hullFirst" ? "Later: Kerguélen first wants to see the hull hold the water."
       : "This step is still locked.",
     /* ⚠️ AUDIT 2026-09-12 — LA MÊME RAISON, DITE EN TOAST. Le plan déplié
@@ -1828,7 +1909,17 @@ const STAR_EN = {
     blockNoPlan: "🔒 You need the plans first",
     blockNoMayor: "🔒 The quay is public: you need the mayor's approval",
     blockRaise: "🔨 Delivered — go raise it on the slipway",
-    blockRepair: "🔒 The hull is waiting to be repaired",
+    blockRepair: "🔒 The shipyard is waiting for Kerguélen",
+    blockNoBudget: "🔒 The budget is waiting for the mayor's approval",
+    rebuildHint: (pct) => (pct > 0 ? `The town hall covers ${pct}% of the price. ` : "")
+      + "Paying starts Tristan right away; waiting for the funds costs nothing, but it takes a while.",
+    rebuildPay: (gold) => `💰 Pay ${gold} gold`,
+    rebuildWaitBtn: (d) => `⏳ Wait for the funds (${d})`,
+    rebuildPoor: (gold) => `You need ${gold} gold in the shared purse.`,
+    orderWaitFund: (d) => `town hall funds — ${d}`,
+    hurryBtn: (left, d) => `🪚 Help Tristan (${left}×) — ${d}`,
+    hurryNone: "Tristan doesn't need more help on this piece.",
+    hurryChat: (who, part, d) => `${who} helps Tristan at the saw: ${part}, ${d} saved.`,
     // AUTORITÉ 2026-09-12 (repasse) mirror — see the FR block for context.
     blockHullFirst: "🔒 Later: the hull must hold the water first",
     delivered: (part) => `${part} — the timber is on the slipway. All it needs is a hammer.`,
@@ -1839,10 +1930,10 @@ const STAR_EN = {
     raiseWin: "The piece is home. It won't move again.",
     raiseFail: "The timber slipped. Take it up again, calmly.",
     // AUTORITÉ 2026-09-12 (repasse) mirror — see the FR block for context.
-    fixTitle: "🔨 Repair the hull, with Kerguélen",
+    fixTitle: "🔨 Save the wreck, with Kerguélen",
     fixSub: (n, total) => `blow ${n} of ${total}`,
     fixHint: "Strike in rhythm with him: aim for the bright band, fast but true.",
-    fixWin: "The hull holds. Kerguélen breathes out, relieved.",
+    fixWin: "The wreck won't sink. Kerguélen breathes out — but everything has to be redone.",
     fixFail: "The mallet missed its mark. Kerguélen grits his teeth — again.",
     lastOne: "The last piece is in place. The boat is finished.",
     noTristan: "Nobody on the farm can work timber like that.",
@@ -1887,11 +1978,28 @@ const STAR_EN = {
   },
   // AUTORITÉ 2026-09-12 (repasse) mirror — see the FR block for context.
   vandal: {
-    toast: "News from the shipyard: the hull was sabotaged overnight — Kerguélen needs help, FAST, at the dock!",
+    toast: "News from the shipyard: the ship was wrecked overnight — Kerguélen needs help, FAST, at the dock!",
     urgentBubble: "QUICK !! QUICK !! Come help me, the boat's going to sink !!",
     say1: "Kerguélen wipes his brow, still out of breath.",
-    say2: "\"Thanks… we held it in time. Someone got to the hull last night — I don't know who.\"",
-    say3: "\"Dressed all in black, hood up. I didn't get a look at their face.\"",
+    say2: "\"Thanks… we kept the keel from sinking. But the rest… someone smashed everything last night. Everything.\"",
+    say3: "\"Dressed all in black, hood up. I didn't see their face. It all has to be rebuilt — and I don't know with what money.\"",
+  },
+  // 2026-09-13 (lot 1) — the shipyard offer: the town hall and Eduardo. Nothing about the sky before the observatory notice (see the FR block).
+  yard: {
+    title: "The Shipyard",
+    boardTitle: "⚓ Town hall notice — reopening the port",
+    boardBody: "The lake channel has been silted up for twenty years: no boat leaves Valley Town anymore. The town hall is looking into reopening the port and wants a farm to restart the shipyard on the old slipway.",
+    boardCta: "Offer our farm",
+    boardTaken: (who) => `⚓ Shipyard: entrusted to the farm (${who}). The mayor is expecting you.`,
+    eduHook: "A boat of my own… I'd bring back twice as much of every good.",
+    eduTitle: "⚓ Eduardo's boat",
+    eduMapBtn: "⚓ His boat project",
+    eduPitch: "\"I already bring you whatever you want, but I rent space on other people's boats, and they decide how much I can load. With my own ship I'd bring back twice as much of every good. If the farm restarted the lake shipyard…\"",
+    eduShipLimit: (n) => `⛵ With his own ship, Eduardo can load up to ${n} of each good.`,
+    eduYes: "⚓ We'll handle it",
+    eduNo: "Not now",
+    eduThanks: "\"Thank you. Start with the mayor: the slipway is on his quay.\"",
+    chat: (who) => `${who} agreed to restart Valley Town's shipyard.`,
   },
   /* ── CE QUE LA VILLE GARDE. */
   devChat: (who, what) => `${who} touched the star quest: ${what}.`,
@@ -2043,6 +2151,15 @@ const STAR_EN = {
     rodArming: "The corrupted water seeps into your line...",
     rodBroken: "Your rod snapped in this cursed water.",
     rodStillBroken: "Your rod is broken here. Protect it before trying again.",
+    rodNeedsProtect: "It will need protecting first — head for the cauldron.",
+    rodProtected: "A purple and black coating covers your line. It will hold for ten minutes.",
+    rodProtectExpired: "The protective coating has worn off.",
+    rodMiss: "The line goes taut, then slack all at once — just debris, still.",
+    cauldronRodTitle: "Protective coating",
+    cauldronRodEffect: "Protects the rod, for ten minutes, from the water that corrupts it.",
+    cauldronRodBtn: "Coat the rod",
+    cauldronRodReady: (mmss) => `Your rod is protected for ${mmss} more.`,
+    rodSlotTip: "Rod protected against the corrupted water.",
     hookToast: "Something bites hard — it's her! Hold on.",
     haulHint: "Hold Space to pull. Release before the line snaps.",
     haulSlip: "She's pulling hard... you're losing ground!",
@@ -2196,6 +2313,9 @@ const MAIRE_FR = {
   settle: "🤝 « Je crois qu'on s'est compris. »",
   settleHint: "Signer maintenant. Vous ne saurez jamais jusqu'où il serait allé.",
   leave: "Se lever et partir",
+  /* ── 2026-09-13 (lot 2) — LE SECOND ENTRETIEN : LE BUDGET, APRÈS LE SACCAGE. ── */
+  layPlansBudget: "📐 Déplier les plans chiffrés sur la liasse",
+  budgetTopic: "Objet : le budget du chantier naval, après la chute et le saccage.",
 
   /* ── hors-zip — LA REPRISE, UNE FOIS PAR AUDIENCE. Demande de Guillaume :
      « si on déconne et on le vexe, permettre une seconde chance ». Offerte
@@ -2238,6 +2358,15 @@ const MAIRE_FR = {
     m10: "« Bon. Admettons que je signe. Qu'est-ce que la ville y gagne, elle ? »",
     m11: "Il ne sourit pas. « Et moi ? Vous n'avez pas fait la route pour le bien de Valley Town. Qu'est-ce que vous voulez de moi, exactement ? »",
     m12: "Il se lève, va à la fenêtre, et reste là, dos à vous. « Vous voyez le quai, d'ici ? »",
+    /* 2026-09-13 (lot 2) — le budget. La liasse du cratère a pris la place du pont sud. */
+    b1: "Il ne vous fait pas asseoir tout de suite. Sur le bureau, à la place du dossier du pont sud, une liasse neuve, ficelée de rouge, tamponnée CRATÈRE EST. « Vous revenez pour votre bateau. Moi, j'ai un trou de trente mètres à reboucher à l'entrée de ma ville. »",
+    b2: "Il fait glisser la liasse vers vous, sans la lâcher. « Voirie, conduites d'eau, la fontaine fêlée, les vitres du beffroi. Trente et un mille. Et vous voulez que la commune rachète des planches ? »",
+    b3: "« Kerguélen m'a écrit. Un saboteur, sur un quai municipal, en pleine nuit. Si je remets de l'argent là-dessus, qui me dit qu'il ne reviendra pas ? »",
+    b4: "Il se frotte les yeux. « Et vous ne savez toujours pas qui c'est. »",
+    b5: "Il déplie une vieille carte de la vallée sur la liasse, un doigt sur la passe ensablée. « Rouvrir le port. C'était votre argument, la première fois. Il tient encore, après tout ça ? »",
+    b6: "« Imaginons que je trouve une part. Laquelle ? La moitié ? Le quart ? Vous savez ce que pèse un quart, en conseil municipal, l'année d'un cratère ? »",
+    b7: "Il va à la fenêtre. À l'est, les échafaudages du cratère dépassent des toits. « Les gens me demandent de reboucher le trou. Personne ne me demande un bateau. »",
+    b8: "Il revient s'asseoir, prend son stylo, et ne signe pas encore. « Si je fais ça, je veux quelque chose en échange. »",
   },
 
   /* ── la phrase que le maire élu ajoute, et lui seul ────────────────────── */
@@ -2262,6 +2391,13 @@ const MAIRE_FR = {
       bonnefoy:  "« Il figure à l'inventaire comme équipement portuaire. Il n'y a pas de port. »",
       delaunay:  "« Quand j'étais petite, il y avait des voiles. Trois, quatre. Plus maintenant. »",
       toussaint: "« Il existe une photo de 1911 aux archives. On y voit un mât. Un seul, mais un mât. »",
+    },
+    b7: {
+      vasseur:   "« Mon père disait qu'un village qui ne regarde que ses trous finit par tomber dedans. »",
+      lantier:   "« J'ai reconstruit deux ponts après la crue de 98. On m'a remercié pour le premier. Personne ne se souvient du second. »",
+      bonnefoy:  "« Le cratère est au budget. Le bateau, lui, n'est nulle part. Un budget, c'est ce qu'on choisit de voir. »",
+      delaunay:  "« Ma mère a vu la dernière voile quitter le lac. Elle ne m'a jamais dit où elle allait. »",
+      toussaint: "« Il y a aux archives une lettre de 1911 qui demande un bateau pour le lac. Elle n'a jamais reçu de réponse. »",
     },
   },
 
@@ -2317,6 +2453,38 @@ const MAIRE_FR = {
     m12a: "« Je le vois. C'est pour ça que j'ai demandé ce rendez-vous, et pas un autre. »",
     m12b: "« On le verrait de la place, un mât. Même de loin. »",
     m12c: "« De là, on doit bien voir le pont sud, aussi. »",
+
+    b1a: "« Je reviens pour la ville. Ce chantier est la seule chose qu'on a commencée ensemble, et quelqu'un vient de le détruire. »",
+    b1b: "« On a tout perdu en une nuit. Je ne savais pas à qui d'autre venir le dire. »",
+    b1c: "« Le trou n'est pas sur mon quai. Ça ne me regarde pas. »",
+
+    b2a: "« Pas des planches : un port qui rapporte. Un bassin rouvert paie des taxes. Un cratère, jamais. »",
+    b2b: "« Je ne demande pas tout. Une part, et un calendrier. »",
+    b2c: "« Vous avez bien trouvé trente et un mille pour un trou. Vous en trouverez pour un bateau. »",
+
+    b3a: "« La cale sera fermée et éclairée, et Kerguélen dort sur le quai jusqu'au lancement. Le prochain qui vient, on le verra arriver. »",
+    b3b: "« Justement : un chantier à l'abandon, c'est ce qui attire ce genre de visite. »",
+    b3c: "« Il ne reviendra pas. Il a eu ce qu'il voulait. »",
+
+    b4a: "« Non. Mais toute la ville l'a vu courir vers la gare. Un chantier qui repart, c'est la seule réponse qu'ils verront tous. »",
+    b4b: "« Non. C'est pour ça que je veux reconstruire vite, et sous vos fenêtres. »",
+    b4c: "« Ce n'est pas plutôt à la mairie de le trouver ? »",
+
+    b5a: "« Plus que jamais. On a appris le prix exact de chaque pièce en la construisant. Tout est sur les plans, ligne par ligne. »",
+    b5b: "« Eduardo n'attend que ça : son propre navire, pour ne plus louer de place sur ceux des autres. »",
+    b5c: "« Le port, c'est surtout pour l'image. Ce qui compte, c'est le bateau. »",
+
+    b6a: "« Assez pour que ce soit le bateau de Valley Town. Le reste, la ferme le paiera, ou l'attendra. »",
+    b6b: "« Ce que vous pourrez. On attendra les fonds pour le reste. »",
+    b6c: "« Tout. Après ce qui s'est passé, c'est la moindre des choses. »",
+
+    b7a: "« Parce que personne n'ose. Le trou, n'importe qui l'aurait rebouché. Le bateau, c'est vous qu'on retiendra. »",
+    b7b: "« Ils vous le demanderont quand ils le verront franchir la passe. »",
+    b7c: "« Mettez la différence sur ma note. Entre nous, personne n'en saura rien. »",
+
+    b8a: "« Le lancement. Une inauguration sur le quai, avec toute la ville. Ce sera votre bateau autant que le nôtre. »",
+    b8b: "« Tout ce que vous voudrez, dans la limite du raisonnable. »",
+    b8c: "« Je me doutais que ça viendrait. Combien ? »",
   },
 
   /* ── pourquoi il réagit comme ça. Une par réplique, sans exception. ────── */
@@ -2371,6 +2539,38 @@ const MAIRE_FR = {
     m12a: "Il ne se retourne pas tout de suite. Vous venez de lui dire que vous étiez venu le voir lui, pour ça, et il n'a aucune raison d'en douter.",
     m12b: "Il aime l'image. Il aimerait aussi savoir combien elle coûte.",
     m12c: "Il rêvait. Vous venez de lui rappeler, au mot près, la seule chose qu'il n'a pas réussi à faire en deux ans.",
+
+    b1a: "Il vous regarde enfin. Vous n'êtes pas venu réclamer votre dû : vous êtes venu lui annoncer une perte commune. Ça, il sait l'entendre.",
+    b1b: "C'est sincère, et il le voit. Mais il a lui-même trente et un mille de mauvaises nouvelles sur le bureau.",
+    b1c: "Le trou est à l'entrée de SA ville. Vous venez de lui dire que ses problèmes ne vous concernent pas, dans le bureau où il les règle.",
+
+    b2a: "Il lâche la liasse. Vous avez mis un chiffre qui entre en face d'un chiffre qui sort, et c'est la seule langue que parle un conseil municipal.",
+    b2b: "Raisonnable. Un peu court : il attendait une raison de dépenser, pas une manière de dépenser moins.",
+    b2c: "Vous venez de lui dire qu'il sait trouver de l'argent quand il veut. C'est exactement ce que son opposition répète depuis la chute.",
+
+    b3a: "Des barrières, une lumière, un homme sur place. Il n'a plus d'objection à formuler, seulement une signature à envisager.",
+    b3b: "L'argument est juste, mais il le retourne en une seconde : un chantier qu'on abandonne ne coûte rien, un chantier qu'on relance coûte tout.",
+    b3c: "Vous parlez du saboteur comme de quelqu'un que vous connaissez. Il le note, et il ne l'oubliera pas.",
+
+    b4a: "Il n'y avait pas pensé : ce ne sont pas des planches qu'il finance, c'est une réponse publique. Et une réponse publique se signe.",
+    b4b: "Il apprécie la franchise. « Sous mes fenêtres » l'inquiète un peu, quand même.",
+    b4c: "Vous venez de lui confier une enquête qu'il n'a ni les moyens ni l'envie de mener. C'est le piège qu'il vous tendait.",
+
+    b5a: "Il pose le doigt sur la carte, puis sur vos plans. Un projet qui connaît son prix au centime n'est plus un rêve, c'est un devis.",
+    b5b: "C'est vrai, et c'est l'affaire d'Eduardo. Pas celle de la commune.",
+    b5c: "Il a défendu le port devant le conseil, la première fois. Vous venez de lui dire que c'était une façade.",
+
+    b6a: "Vous ne lui demandez pas un chiffre, vous lui proposez un titre : « le bateau de Valley Town ». Le chiffre, il le trouvera tout seul.",
+    b6b: "Il aime qu'on ne l'accule pas. Il aurait aimé savoir ce que « ce que vous pourrez » veut dire.",
+    b6c: "« Tout », l'année d'un cratère. Il vous regarde comme on regarde quelqu'un qui n'a jamais lu un budget.",
+
+    b7a: "Il ne se retourne pas. C'est le seul moment de l'entretien où parler de lui répond à sa question, et vous lui offrez ce qu'aucun trou rebouché ne donne : qu'on se souvienne.",
+    b7b: "Il sourit à moitié. C'est une promesse, et il en a déjà beaucoup sur le bureau.",
+    b7c: "Il se retourne lentement, ouvre la porte, et attend. Proposer une enveloppe à un maire, dans son bureau, l'année d'un cratère.",
+
+    b8a: "Il pose le stylo et vous tend la main par-dessus la liasse. Une inauguration, c'est une photo, un discours et une ville réunie : il vient d'obtenir plus qu'il ne demandait.",
+    b8b: "Il n'aime pas les chèques en blanc, même quand c'est lui qui les reçoit.",
+    b8c: "Il ne demandait pas d'argent. Vous venez de supposer qu'il en voulait, et c'est pire que de refuser.",
   },
 
   /* ── comment ça finit ──────────────────────────────────────────────────── */
@@ -2383,11 +2583,19 @@ const MAIRE_FR = {
     slam: "Vous vous levez au milieu de sa phrase. La porte claque assez fort pour que la vitre du trumeau tremble. Dans le couloir, on a entendu.",
     thrown: "Il se lève, ouvre la porte de son bureau, et attend, la main sur la poignée, sans un mot.",
   },
+  /* 2026-09-13 (lot 2) — les trois signatures du BUDGET. Les fins sans signature
+     (`out`, `walked`, `slam`, `thrown`) restent celles de `end`, communes aux deux sujets. */
+  endBudget: {
+    plain: "Il tamponne la délibération sans enthousiasme. « Une part sera prise sur le budget du cratère. Ne revenez pas me voir pour la même chose. »",
+    good: "Il signe, relit, puis ajoute une ligne à la main en bas de la feuille. « J'ai mis la commune un peu plus loin que prévu. Tenez vos délais. »",
+    full: "Il signe sans relire. « Le conseil suivra. Et le jour du lancement, je veux être sur le quai. »",
+  },
   /* ⚠️ CE QUE LE JEU DIT APRÈS, ET C'EST LÀ QUE LA CONFIANCE DEVIENT VISIBLE.
      Une récompense qui ne se lit nulle part n'existe pas (leçon du 453 : chaque
      chose qu'un document dit visible doit avoir un chemin de code qui l'affiche). */
   after: {
     signed: "Le chantier naval est autorisé. Tristan peut commencer à débiter.",
+    budgetSigned: "Le budget est voté. Tristan peut reprendre : payez les pièces, ou attendez les fonds de la mairie.",
     trust1: "Le maire se souviendra de vous.",
     trust2: "Le maire vous a à la bonne. La prochaine fois sera plus courte.",
     trust3: "Vous avez ses coudées franches. La prochaine fois, il écoutera avant de compter.",
@@ -2406,6 +2614,7 @@ const MAIRE_FR = {
     thrown: (n) => `${n} s'est fait raccompagner à la porte du bureau du maire.`,
     slam: (n) => `${n} a claqué la porte du bureau du maire.`,
     booked: (n) => `${n} a obtenu un rendez-vous avec le maire.`,
+    budgetSigned: (n) => `${n} a obtenu le budget du maire : le chantier naval peut reprendre.`,
   },
 };
 
@@ -2481,6 +2690,12 @@ const MAIRE_FR_F = {
     m7: "Elle tapote le sous-main, deux fois, du plat de la main. « Et si ça coule ? Qui signe, en bas de la page ? »",
     m11: "Elle ne sourit pas. « Et moi ? Vous n'avez pas fait la route pour le bien de Valley Town. Qu'est-ce que vous voulez de moi, exactement ? »",
     m12: "Elle se lève, va à la fenêtre, et reste là, dos à vous. « Vous voyez le quai, d'ici ? »",
+    b1: "Elle ne vous fait pas asseoir tout de suite. Sur le bureau, à la place du dossier du pont sud, une liasse neuve, ficelée de rouge, tamponnée CRATÈRE EST. « Vous revenez pour votre bateau. Moi, j'ai un trou de trente mètres à reboucher à l'entrée de ma ville. »",
+    b2: "Elle fait glisser la liasse vers vous, sans la lâcher. « Voirie, conduites d'eau, la fontaine fêlée, les vitres du beffroi. Trente et un mille. Et vous voulez que la commune rachète des planches ? »",
+    b4: "Elle se frotte les yeux. « Et vous ne savez toujours pas qui c'est. »",
+    b5: "Elle déplie une vieille carte de la vallée sur la liasse, un doigt sur la passe ensablée. « Rouvrir le port. C'était votre argument, la première fois. Il tient encore, après tout ça ? »",
+    b7: "Elle va à la fenêtre. À l'est, les échafaudages du cratère dépassent des toits. « Les gens me demandent de reboucher le trou. Personne ne me demande un bateau. »",
+    b8: "Elle revient s'asseoir, prend son stylo, et ne signe pas encore. « Si je fais ça, je veux quelque chose en échange. »",
   },
   tell: {
     m1a: "Vous êtes le premier de la matinée à ne pas demander une faveur. Elle en a refusé quatre avant vous.",
@@ -2519,6 +2734,29 @@ const MAIRE_FR_F = {
     m12a: "Elle ne se retourne pas tout de suite. Vous venez de lui dire que vous étiez venu la voir elle, pour ça, et elle n'a aucune raison d'en douter.",
     m12b: "Elle aime l'image. Elle aimerait aussi savoir combien elle coûte.",
     m12c: "Elle rêvait. Vous venez de lui rappeler, au mot près, la seule chose qu'elle n'a pas réussi à faire en deux ans.",
+    b1a: "Elle vous regarde enfin. Vous n'êtes pas venu réclamer votre dû : vous êtes venu lui annoncer une perte commune. Ça, elle sait l'entendre.",
+    b1b: "C'est sincère, et elle le voit. Mais elle a elle-même trente et un mille de mauvaises nouvelles sur le bureau.",
+    b1c: "Le trou est à l'entrée de SA ville. Vous venez de lui dire que ses problèmes ne vous concernent pas, dans le bureau où elle les règle.",
+    b2a: "Elle lâche la liasse. Vous avez mis un chiffre qui entre en face d'un chiffre qui sort, et c'est la seule langue que parle un conseil municipal.",
+    b2b: "Raisonnable. Un peu court : elle attendait une raison de dépenser, pas une manière de dépenser moins.",
+    b2c: "Vous venez de lui dire qu'elle sait trouver de l'argent quand elle veut. C'est exactement ce que son opposition répète depuis la chute.",
+    b3a: "Des barrières, une lumière, un homme sur place. Elle n'a plus d'objection à formuler, seulement une signature à envisager.",
+    b3b: "L'argument est juste, mais elle le retourne en une seconde : un chantier qu'on abandonne ne coûte rien, un chantier qu'on relance coûte tout.",
+    b3c: "Vous parlez du saboteur comme de quelqu'un que vous connaissez. Elle le note, et elle ne l'oubliera pas.",
+    b4a: "Elle n'y avait pas pensé : ce ne sont pas des planches qu'elle finance, c'est une réponse publique. Et une réponse publique se signe.",
+    b4b: "Elle apprécie la franchise. « Sous mes fenêtres » l'inquiète un peu, quand même.",
+    b4c: "Vous venez de lui confier une enquête qu'elle n'a ni les moyens ni l'envie de mener. C'est le piège qu'elle vous tendait.",
+    b5a: "Elle pose le doigt sur la carte, puis sur vos plans. Un projet qui connaît son prix au centime n'est plus un rêve, c'est un devis.",
+    b5c: "Elle a défendu le port devant le conseil, la première fois. Vous venez de lui dire que c'était une façade.",
+    b6a: "Vous ne lui demandez pas un chiffre, vous lui proposez un titre : « le bateau de Valley Town ». Le chiffre, elle le trouvera toute seule.",
+    b6b: "Elle aime qu'on ne l'accule pas. Elle aurait aimé savoir ce que « ce que vous pourrez » veut dire.",
+    b6c: "« Tout », l'année d'un cratère. Elle vous regarde comme on regarde quelqu'un qui n'a jamais lu un budget.",
+    b7a: "Elle ne se retourne pas. C'est le seul moment de l'entretien où parler d'elle répond à sa question, et vous lui offrez ce qu'aucun trou rebouché ne donne : qu'on se souvienne.",
+    b7b: "Elle sourit à moitié. C'est une promesse, et elle en a déjà beaucoup sur le bureau.",
+    b7c: "Elle se retourne lentement, ouvre la porte, et attend. Proposer une enveloppe à une maire, dans son bureau, l'année d'un cratère.",
+    b8a: "Elle pose le stylo et vous tend la main par-dessus la liasse. Une inauguration, c'est une photo, un discours et une ville réunie : elle vient d'obtenir plus qu'elle ne demandait.",
+    b8b: "Elle n'aime pas les chèques en blanc, même quand c'est elle qui les reçoit.",
+    b8c: "Elle ne demandait pas d'argent. Vous venez de supposer qu'elle en voulait, et c'est pire que de refuser.",
   },
   end: {
     plain: "Elle tire le tampon vers elle, souffle dessus par habitude, et l'abat sur le coin de la feuille. « C'est un chantier de la commune. Ne me le faites pas regretter. »",
@@ -2527,6 +2765,11 @@ const MAIRE_FR_F = {
     out: "Elle consulte l'horloge de la cheminée, se lève, et vous tend la main. « J'ai un conseil dans dix minutes. Repassez me voir. Je ne dis pas non, je dis pas aujourd'hui. »",
     walked: "Elle ne dit plus rien depuis un moment. Elle repousse le rouleau vers vous, du bout des doigts, et rouvre son dossier. L'entretien est fini, personne ne l'a annoncé.",
     thrown: "Elle se lève, ouvre la porte de son bureau, et attend, la main sur la poignée, sans un mot.",
+  },
+  endBudget: {
+    plain: "Elle tamponne la délibération sans enthousiasme. « Une part sera prise sur le budget du cratère. Ne revenez pas me voir pour la même chose. »",
+    good: "Elle signe, relit, puis ajoute une ligne à la main en bas de la feuille. « J'ai mis la commune un peu plus loin que prévu. Tenez vos délais. »",
+    full: "Elle signe sans relire. « Le conseil suivra. Et le jour du lancement, je veux être sur le quai. »",
   },
   after: {
     trust1: "La maire se souviendra de vous.",
@@ -2540,6 +2783,7 @@ const MAIRE_FR_F = {
     thrown: (n) => `${n} s'est fait raccompagner à la porte du bureau de la maire.`,
     slam: (n) => `${n} a claqué la porte du bureau de la maire.`,
     booked: (n) => `${n} a obtenu un rendez-vous avec la maire.`,
+    budgetSigned: (n) => `${n} a obtenu le budget de la maire : le chantier naval peut reprendre.`,
   },
 };
 
@@ -2632,6 +2876,8 @@ const MAIRE_EN = {
   settle: "🤝 \"I think we understand each other.\"",
   settleHint: "Sign now. You will never know how far he would have gone.",
   leave: "Stand up and leave",
+  layPlansBudget: "📐 Spread the costed plans over the bundle",
+  budgetTopic: "Subject: the shipyard's budget, after the fall and the wrecking.",
 
   redoOffer: "You've upset the mayor. Do you want to take that back?",
   redoYes: "↩️ Yes, take it back",
@@ -2666,6 +2912,14 @@ const MAIRE_EN = {
     m10: "\"Right. Say I sign. What does the town get out of it?\"",
     m11: "He does not smile. \"And me? You did not make that journey for the good of Valley Town. What is it you want from me, exactly?\"",
     m12: "He stands, walks to the window, and stays there with his back to you. \"Can you see the quay from here?\"",
+    b1: "He does not ask you to sit straight away. On the desk, where the south-bridge file used to be, a new bundle tied with red string, stamped EAST CRATER. \"You are back for your boat. I have a thirty-metre hole to fill at the entrance to my town.\"",
+    b2: "He slides the bundle towards you without letting go of it. \"Roads, water mains, the cracked fountain, the belfry windows. Thirty-one thousand. And you want the commune to buy back planks?\"",
+    b3: "\"Kerguélen wrote to me. A saboteur, on a municipal quay, in the middle of the night. If I put money back into that, who tells me he won't come back?\"",
+    b4: "He rubs his eyes. \"And you still do not know who it was.\"",
+    b5: "He unfolds an old map of the valley over the bundle, one finger on the silted channel. \"Reopening the port. That was your argument, the first time. Does it still hold, after all this?\"",
+    b6: "\"Say I find a share. Which one? Half? A quarter? Do you know what a quarter weighs in a council meeting, the year of a crater?\"",
+    b7: "He walks to the window. To the east, the crater's scaffolding shows above the roofs. \"People ask me to fill the hole. Nobody asks me for a boat.\"",
+    b8: "He sits back down, picks up his pen, and does not sign yet. \"If I do this, I want something in return.\"",
   },
 
   tint: {
@@ -2689,6 +2943,13 @@ const MAIRE_EN = {
       bonnefoy:  "\"It is listed in the inventory as harbour equipment. There is no harbour.\"",
       delaunay:  "\"When I was small there were sails on it. Three, four of them. Not any more.\"",
       toussaint: "\"There is a photograph from 1911 in the archive. You can see a mast in it. One mast, but a mast.\"",
+    },
+    b7: {
+      vasseur:   "\"My father used to say a village that only looks at its holes ends up falling into them.\"",
+      lantier:   "\"I rebuilt two bridges after the flood of ninety-eight. They thanked me for the first. Nobody remembers the second.\"",
+      bonnefoy:  "\"The crater is in the budget. The boat is nowhere. A budget is what you choose to see.\"",
+      delaunay:  "\"My mother saw the last sail leave the lake. She never told me where it went.\"",
+      toussaint: "\"There is a letter from 1911 in the archive asking for a boat for the lake. It never got an answer.\"",
     },
   },
 
@@ -2743,6 +3004,31 @@ const MAIRE_EN = {
     m12a: "\"I can see it. That is why I asked for this meeting and not another one.\"",
     m12b: "\"You would see a mast from the square. Even from that far.\"",
     m12c: "\"You must be able to see the south bridge from up here too.\"",
+
+    b1a: "\"I am back for the town. This shipyard is the only thing we started together, and someone has just destroyed it.\"",
+    b1b: "\"We lost everything in one night. I did not know who else to tell.\"",
+    b1c: "\"The hole isn't on my quay. It's not my problem.\"",
+    b2a: "\"Not planks: a port that pays. A reopened harbour pays taxes. A crater never does.\"",
+    b2b: "\"I'm not asking for everything. A share, and a schedule.\"",
+    b2c: "\"You found thirty-one thousand for a hole. You'll find it for a boat.\"",
+    b3a: "\"The slipway will be fenced and lit, and Kerguélen sleeps on the quay until the launch. We'll see the next one coming.\"",
+    b3b: "\"Exactly: an abandoned site is what attracts that kind of visit.\"",
+    b3c: "\"He won't be back. He got what he wanted.\"",
+    b4a: "\"No. But the whole town saw him run for the station. A shipyard that starts again is the only answer they'll all see.\"",
+    b4b: "\"No. That's why I want to rebuild fast, under your windows.\"",
+    b4c: "\"Isn't it rather the town hall's job to find him?\"",
+    b5a: "\"More than ever. We learned the exact price of every piece by building it. It's all on the plans, line by line.\"",
+    b5b: "\"Eduardo is waiting for exactly that: his own ship, so he stops renting space on other people's.\"",
+    b5c: "\"The port is mostly for show. The boat is what matters.\"",
+    b6a: "\"Enough for it to be Valley Town's boat. The rest, the farm will pay for, or wait for.\"",
+    b6b: "\"Whatever you can. We'll wait for the funds for the rest.\"",
+    b6c: "\"All of it. After what happened, it's the least you can do.\"",
+    b7a: "\"Because nobody dares. Anyone would have filled the hole. The boat is what they'll remember you for.\"",
+    b7b: "\"They will, when they see it cross the channel.\"",
+    b7c: "\"Put the difference on my account. Between us, nobody will ever know.\"",
+    b8a: "\"The launch. An inauguration on the quay, with the whole town. It will be your boat as much as ours.\"",
+    b8b: "\"Whatever you like, within reason.\"",
+    b8c: "\"I thought this was coming. How much?\"",
   },
 
   tell: {
@@ -2796,6 +3082,31 @@ const MAIRE_EN = {
     m12a: "He does not turn round straight away. You have just told him you came to see him, for this, and he has no reason to doubt it.",
     m12b: "He likes the picture. He would also like to know what it costs.",
     m12c: "He was daydreaming. You have just reminded him, word for word, of the one thing he failed to do in two years.",
+
+    b1a: "He finally looks at you. You did not come to claim what you are owed: you came to report a shared loss. That, he knows how to hear.",
+    b1b: "It is sincere, and he can see it. But he has thirty-one thousand worth of bad news on his own desk.",
+    b1c: "The hole is at the entrance to HIS town. You have just told him his problems don't concern you, in the office where he solves them.",
+    b2a: "He lets go of the bundle. You put a figure coming in against a figure going out, and that is the only language a town council speaks.",
+    b2b: "Reasonable. A little short: he was waiting for a reason to spend, not a way to spend less.",
+    b2c: "You have just told him he can find money whenever he wants. That is exactly what his opponents have been saying since the fall.",
+    b3a: "Fences, a light, a man on site. He has no objection left to raise, only a signature to consider.",
+    b3b: "The argument is fair, but he turns it around in a second: an abandoned site costs nothing, a restarted one costs everything.",
+    b3c: "You talk about the saboteur like someone you know. He notes it, and he will not forget.",
+    b4a: "He had not thought of it: it is not planks he is funding, it is a public answer. And a public answer gets signed.",
+    b4b: "He appreciates the honesty. \"Under your windows\" worries him a little, all the same.",
+    b4c: "You have just handed him an investigation he has neither the means nor the wish to run. That was the trap he was laying.",
+    b5a: "He puts a finger on the map, then on your plans. A project that knows its price to the penny is no longer a dream, it's a quote.",
+    b5b: "True, and that's Eduardo's business. Not the commune's.",
+    b5c: "He defended the port in front of the council, the first time. You have just told him it was a facade.",
+    b6a: "You are not asking him for a figure, you are offering him a title: \"Valley Town's boat\". He will find the figure on his own.",
+    b6b: "He likes not being cornered. He would have liked to know what \"whatever you can\" means.",
+    b6c: "\"All of it\", the year of a crater. He looks at you the way you look at someone who has never read a budget.",
+    b7a: "He does not turn around. It is the only moment of the meeting where talking about him answers his question, and you offer him what no filled hole gives: being remembered.",
+    b7b: "He half smiles. It is a promise, and he already has plenty on his desk.",
+    b7c: "He turns slowly, opens the door, and waits. Offering an envelope to a mayor, in his office, the year of a crater.",
+    b8a: "He puts down his pen and reaches across the bundle to shake your hand. An inauguration is a photograph, a speech and a town gathered together: he has just got more than he asked for.",
+    b8b: "He does not like blank cheques, even when he is the one receiving them.",
+    b8c: "He was not asking for money. You have just assumed he wanted some, and that is worse than refusing.",
   },
 
   end: {
@@ -2807,8 +3118,14 @@ const MAIRE_EN = {
     slam: "You stand up in the middle of his sentence. The door slams hard enough to rattle the glass in the pier mirror. They heard it in the corridor.",
     thrown: "He stands, opens his office door, and waits with his hand on the handle, without a word.",
   },
+  endBudget: {
+    plain: "He stamps the resolution without enthusiasm. \"A share will come out of the crater budget. Do not come back to me for the same thing.\"",
+    good: "He signs, rereads, then adds a handwritten line at the bottom of the sheet. \"I have put the commune a little further in than planned. Keep to your deadlines.\"",
+    full: "He signs without rereading. \"The council will follow. And on launch day, I want to be on the quay.\"",
+  },
   after: {
     signed: "The shipyard is authorised. Tristan can start cutting.",
+    budgetSigned: "The budget is voted. Tristan can start again: pay for the pieces, or wait for the town hall's funds.",
     trust1: "The mayor will remember you.",
     trust2: "The mayor has taken to you. Next time will be shorter.",
     trust3: "You have a free hand with him. Next time he will listen before he counts.",
@@ -2821,6 +3138,7 @@ const MAIRE_EN = {
     thrown: (n) => `${n} was shown the door of the mayor's office.`,
     slam: (n) => `${n} slammed the door of the Mayor's office.`,
     booked: (n) => `${n} got an appointment with the Mayor.`,
+    budgetSigned: (n) => `${n} secured the mayor's budget: the shipyard can start again.`,
   },
 };
 

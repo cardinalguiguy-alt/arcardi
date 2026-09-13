@@ -1065,6 +1065,62 @@ section("les trois tables du même personnage — nom, corps, texte");
   ok("le masculin, lui, n'a pas bougé", base === FERME_STR.fr.maire);
 }
 
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ §12 — LA SECONDE TABLE : LE BUDGET, APRÈS LE SACCAGE (2026-09-13, lot 2).
+   ╚═════════════════════════════════════════════════════════════════════════════
+   Les mêmes promesses de conception que la première table, balayées sur la seconde,
+   et la même méthode : on JOUE. La confiance vaut au moins 1 dans tout état réel (la
+   première signature en rapporte toujours un cran), d'où les crans 1 et 3. */
+section("§12 la seconde table : le budget");
+{
+  const N = M.MAYOR_BUDGET_NODES;
+  const bad = [];
+  for (const n of N) {
+    const p = M.mayorPlayable(n.id, true);
+    const g = p.map(a => a.grade).sort().join(",");
+    if (p.length !== 3 || g !== "fault,ideal,warm") bad.push(`${n.id}:${g}`);
+  }
+  ok("⚠️⚠️ budget — trois réponses par nœud : une idéale, une tiède, une faute", bad.length === 0, bad.join(" ") || `${N.length} nœuds`);
+  const faults = N.flatMap(n => n.answers.filter(a => a.grade === "fault"));
+  const rude = faults.filter(a => a.flavour === "rude");
+  const fatal = N.flatMap(n => n.answers.filter(a => a.fatal));
+  ok("budget — chaque faute a une saveur, une seule est caricaturale, et c'est la seule fatale",
+     faults.every(a => ["rude", "tact", "trap"].includes(a.flavour)) && rude.length === 1 && fatal.length === 1 && fatal[0] === rude[0]);
+  const selfIdeal = N.filter(n => n.answers.some(a => a.grade === "ideal" && a.type === "self"));
+  ok("budget — la flatterie n'est juste qu'à un seul endroit", selfIdeal.length === 1, selfIdeal.map(n => n.id).join(","));
+  ok("budget — les cinq familles d'argument servent", new Set(N.flatMap(n => n.answers.map(a => a.type))).size === M.MAYOR_TYPES.length);
+  for (const [lang, L] of [["fr", FERME_STR.fr.maire], ["en", FERME_STR.en.maire]]) {
+    const miss = M.MAYOR_BUDGET_NODE_IDS.filter(id => !L.ask[id]);
+    ok(`[${lang}] budget — chaque nœud a sa question`, miss.length === 0, miss.join(","));
+    ok(`[${lang}] budget — les trois signatures ont leur fin, la ligne d'après et le chat`,
+       ["plain", "good", "full"].every(k => L.endBudget && L.endBudget[k]) && !!L.after.budgetSigned
+       && typeof L.chat.budgetSigned === "function" && !!L.layPlansBudget && !!L.budgetTopic);
+  }
+  const ideal = (choices, s) => (s.node === "b5" && choices.some(c => c.kind === "plans")) ? "__plans" : pickGrade("ideal")(choices);
+  const lost = [], won = [];
+  for (const mk of MAIRES) for (const trust of [1, 3]) for (const dt of [0, 3000, 6000]) {
+    const a = play({ ...ctxOf({ mayorKey: mk, trust }), topic: "budget" }, ideal, dt).s;
+    if (a.over !== "signed") lost.push(`${mk}/t${trust}/${dt}:${a.over}`);
+    const w = play({ ...ctxOf({ mayorKey: mk, trust }), topic: "budget" }, pickGrade("warm"), dt).s;
+    if (w.over === "signed") won.push(`${mk}/t${trust}/${dt}`);
+  }
+  ok("⚠️⚠️ budget — un sans-faute signe chez les cinq maires, à toute confiance et tout rythme", lost.length === 0, lost.join(" ") || "30/30");
+  ok("⚠️⚠️ budget — une partie tiède ne signe jamais", won.length === 0, won.join(" ") || "0/30");
+  const log = play({ ...ctxOf({}), trust: 1, topic: "budget" }, ideal, 2600).s.log;
+  ok("budget — l'hôte rejoue la transcription et trouve le même verdict",
+     M.mayorReplay(log, { ...ctxOf({}), trust: 1, topic: "budget" }).over === "signed");
+  const blank = {}; M.migrateMayor(blank);
+  ok("budget — pas d'audience de budget avant la première signature",
+     M.resolveMayorAsk(blank, "j1", "j1", 1.8e12, () => 0.5, false, "budget") === "mayorAlready");
+  const e = { mayor: { ok: 1.7e12, trust: 1 } }; M.migrateMayor(e);
+  ok("budget — la demande porte le sujet jusque dans le rendez-vous",
+     M.resolveMayorAsk(e, "j1", "j1", 1.8e12, () => 0.5, false, "budget") === "mayorBooked" && M.mayorApptTopic(e) === "budget");
+  const r = M.resolveMayor(e, "j1", "j1", log, { ...ctxOf({}), trust: 1 }, 1.8e12 + 1);
+  ok("⚠️⚠️⚠️ budget — la signature s'écrit au dossier du budget, et survit à la migration (poser, migrer, relire)",
+     r === "mayorSigned" && M.mayorBudgetSigned(e) && M.mayorSigned(e)
+     && (() => { const c = JSON.parse(JSON.stringify(e)); M.migrateMayor(c); return M.mayorBudgetSigned(c) && !!c.mayor.budget.grade; })());
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(`\n${fails === 0 ? "✅" : "❌"} ${total - fails}/${total} contrôles passés.\n`);
 process.exit(fails === 0 ? 0 : 1);

@@ -406,8 +406,44 @@ export const STAR_SHIP_KEYS = C.STAR_SHIP_ORDER;
    pièces Tristan a livrées », indexé par les MÊMES clés que le navire. Rien ne
    peut afficher quatre morceaux pour trois pièces : il n'y a qu'un `ET` entre
    deux lectures, jamais une addition tenue à part. */
-export function starTimberDone(e, key) {
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-13 (lot 2) — LE SACCAGE : TOUT CE QUI A ÉTÉ POSÉ AVANT EST DÉTRUIT.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   Décision de Guillaume (D4) : le vandale « aura complètement détruit notre
+   progression, plus seulement une partie du bateau ». Il frappe la nuit où la
+   dernière des six sœurs est trouvée — l'instant où Kerguélen s'affole
+   (`starEngineerUrgent`).
+   ⚠️⚠️ AUCUN CHAMP DE PLUS, ET AUCUN EFFACEMENT : la date du saccage SE DÉDUIT des
+   trouvailles (la plus tardive des sœurs du chapitre du cratère), et une pièce est
+   détruite quand sa commande est ANTÉRIEURE OU ÉGALE à cette date (`woodLive`).
+   On n'efface pas `e.wood` : un effacement est un événement à ne pas rater (l'hôte
+   pourrait être absent à l'instant exact), une déduction est vraie pour tout le
+   monde, tout le temps, et une sauvegarde d'avant ce lot se lit sans migration.
+   ⚠️ « ÉGALE » ET PAS SEULEMENT « ANTÉRIEURE » : le menu dev pose trouvailles et
+   pièces à la même milliseconde ; la reconstruction qu'il pose ensuite est datée
+   `t + 1`. En jeu réel les deux dates sont séparées par des minutes.
+   ⚠️ UN SEUL ENDROIT QUI LISE `e.wood[key]` pour décider si une pièce existe :
+   les trois lecteurs ci-dessous et le battement de Tristan passent par lui. */
+export function starSabotageAt(e) {
+  if (!e || !e.found) return 0;
+  const ch = STAR_CHAPTERS.find(c => c.key === "crater");
+  if (!ch) return 0;
+  let t = 0;
+  for (const id of ch.need) {
+    const f = e.found[id];
+    if (!f) return 0;
+    t = Math.max(t, +f.at || 0);
+  }
+  return t || 1;
+}
+function woodLive(e, key) {
   const w = e && e.wood && e.wood[key];
+  if (!w) return null;
+  const s = starSabotageAt(e);
+  return s && (+w.at || 0) <= s ? null : w;
+}
+export function starTimberDone(e, key) {
+  const w = woodLive(e, key);
   return !!(w && w.done);
 }
 /* ╔═════════════════════════════════════════════════════════════════════════════
@@ -426,12 +462,12 @@ export function starTimberDone(e, key) {
    relire quinze appelants — et une sauvegarde d'avant ce zip, où `ready` n'existe
    pas, se comporte exactement comme avant pour tout ce qui est déjà `done`. */
 export function starTimberOrder(e, key) {
-  const w = e && e.wood && e.wood[key];
+  const w = woodLive(e, key);                    // 2026-09-13 (lot 2) — une commande saccagée n'existe plus
   return w && !w.done && !w.ready ? w : null;   // 478 — chez Tristan, et pas encore livrée
 }
 /* Livrée par Tristan, pas encore posée : c'est ce qui attend un marteau. */
 export function starTimberReady(e, key) {
-  const w = e && e.wood && e.wood[key];
+  const w = woodLive(e, key);
   return !!(w && w.ready && !w.done);
 }
 /* La première pièce à monter. ⚠️ UNE JOINTURE, PAS UNE SECONDE LISTE (449) : elle
@@ -502,8 +538,12 @@ export function starTimberProgress(e, now) {
    coque avant la tempête, ce test la fait régresser tout seul le jour où la
    reine sort, et elle ne revient qu'une fois la réparation jouée — la
    régression EST la révélation, et cette fois elle est atteignable. */
+/* ⚠️⚠️ 2026-09-13 (lot 2) — LA RÉGRESSION DE LA SEULE COQUE EST PARTIE. Elle
+   faisait disparaître la coque à la sortie de la reine jusqu'au marteau ; le
+   saccage détruit maintenant TOUT, à la nuit des six sœurs (`woodLive`), et le
+   marteau ne répare plus rien — il sauve l'épave de la noyade. Garder cette ligne
+   aurait fait réapparaître au marteau une coque que le récit dit détruite. */
 function shipSiteOk(e, p) {
-  if (p.key === "hull" && starHas(e, "crater")) return !!(e && e.vandal);
   return !p.site || starHas(e, p.site);
 }
 export function starShipHas(e, key) {
@@ -550,6 +590,11 @@ export function starQuestComplete(e) { return starShipComplete(e) && starHas(e, 
 export function starShipGone(e, voyagerAway) {
   return !!(starDone(e) && voyagerAway);
 }
+/* 2026-09-13 (lot 1) — LA LIMITE PAR PRODUIT D'UNE COMMANDE À EDUARDO. Doublée quand
+   il a son propre navire (la quête achevée) : c'est la raison qu'il donne pour
+   vouloir le chantier (`L.star.yard.eduPitch`). ⚠️ LUE PAR L'HÔTE (qui borne la
+   commande) ET PAR LE PANNEAU (qui grise le « + ») : une seule écriture. */
+export function starVoyageMaxQty(e) { return C.VOYAGE_MAX_QTY * (starDone(e) ? C.VOYAGER_SHIP_LIMIT_K : 1); }
 
 /* ╔═════════════════════════════════════════════════════════════════════════════
    ║ ZIP 454 — LES PLANS. « ON NE CONSTRUIT PAS UN BATEAU EN LE REGARDANT. »
@@ -676,13 +721,14 @@ export function starTimberBlock(e, key) {
   if (starTimberDone(e, key)) return "done";
   if (starTimberReady(e, key)) return "raise";  // 478 — le bois est là, il manque le marteau
   if (starTimberOrder(e, key)) return "busy";
-  const part = STAR_SHIP_PARTS[idx];
-  /* ⚠️ 2026-09-13 — `noShard` DEVIENT `repair`. Depuis le 469 aucun morceau ne
-     nomme plus de lieu : la seule façon que `shipSiteOk` refuse est la coque
-     APRÈS la reine et AVANT la réparation. Le panneau affichait « Éclat
-     correspondant à retrouver » — un objet qui n'existe plus — devant une coque
-     qui attend en fait Kerguélen et son marteau (audit de chronologie). */
-  if (!shipSiteOk(e, part)) return "repair";
+  /* ⚠️⚠️ 2026-09-13 (lot 2) — APRÈS LE SACCAGE, DEUX PORTES DANS L'ORDRE DU RÉCIT.
+     `repair` : le chantier attend Kerguélen (le marteau qui sauve l'épave, puis la
+     fuite du vandale). `noBudget` : tout est à refaire, et « il faut renégocier,
+     pour payer la réparation du bateau et la suite du projet » (D5). Même forme que
+     `noMayor` — une lecture, jamais un état de plus. */
+  const sab = starSabotageAt(e);
+  if (sab && !starHullRepaired(e)) return "repair";
+  if (sab && !MA.mayorBudgetSigned(e)) return "noBudget";
   /* ╔═════════════════════════════════════════════════════════════════════════════
      ║ 2026-09-13 — LE CHANTIER EN DEUX MOITIÉS. LA SECONDE ATTEND LA RÉPARATION.
      ╚═════════════════════════════════════════════════════════════════════════════
@@ -770,6 +816,59 @@ export function starYardBuilt(e) { return STAR_YARD_KEYS.every(k => starTimberDo
    `shipSiteOk`) : ce nom n'existe que pour que ses lecteurs disent ce qu'ils
    attendent au lieu de lire un champ nommé d'après un personnage. */
 export function starHullRepaired(e) { return !!(e && e.vandal); }
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-13 (lot 2) — L'ÉPAVE, LE BUDGET, ET LE PRIX DE LA RECONSTRUCTION.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️ TOUT EST DÉRIVÉ : saccage (`starSabotageAt`), signature du budget (`e.mayor.
+   budget`, porté par `migrateMayor`), qualité de cette signature. Seules deux
+   données s'ajoutent, sur la commande elle-même (`fund`, `hurry` — déclarées dans
+   `commitStarTimber` ET `migrateStar` dans le même geste). */
+/* L'épave se voit sur la cale tant que la nouvelle coque n'est pas montée. */
+export function starShipWrecked(e) {
+  const s = starSabotageAt(e);
+  if (!s || starTimberDone(e, "hull")) return false;
+  return STAR_SHIP_KEYS.some(k => { const w = e.wood && e.wood[k]; return !!w && (+w.at || 0) <= s; });
+}
+export function starRebuildGate(e) { return !!starSabotageAt(e); }
+/* Le budget est-il l'étape en cours ? Après la fuite du vandale, pas avant : c'est
+   la scène qui l'amène. */
+/* ⚠️ `MA.mayorSigned` d'abord : le budget est une SECONDE négociation, jamais la
+   première (un état sans signature — migration, menu dev — renvoie au maire du chantier). */
+export function starBudgetNeeded(e) {
+  return !!(e && e.vandal && MA.mayorSigned(e) && starRebuildGate(e) && !MA.mayorBudgetSigned(e));
+}
+export function starBudgetShare(e) {
+  if (!MA.mayorBudgetSigned(e)) return 0;
+  return C.STAR_BUDGET_SHARE[MA.mayorBudgetGrade(e)] || C.STAR_BUDGET_SHARE.plain;
+}
+/* Le prix d'une pièce payée comptant, part de la mairie déduite, arrondi à la
+   centaine — un devis ne se chiffre pas à l'or près. */
+export function starRebuildPrice(e, key) {
+  const base = C.STAR_REBUILD_GOLD[key] || 0;
+  return Math.round(base * (1 - starBudgetShare(e)) / 100) * 100;
+}
+export function starRebuildWaitMs(key) { return C.STAR_REBUILD_WAIT_MS[key] || 0; }
+/* Combien de manches d'aide restent sur une pièce qui attend les fonds. */
+export function starHurryLeft(e, key) {
+  const w = starTimberOrder(e, key);
+  if (!w || w.fund !== "wait") return 0;
+  return Math.max(0, C.STAR_REBUILD_HURRY_MAX - (w.hurry | 0));
+}
+/* ⚠️ L'AIDE À TRISTAN (D9) : une manche de scie retire du temps selon ses étoiles.
+   Elle ne donne rien d'autre et n'encaisse rien ; l'hôte rejoue la manche avant
+   d'appeler ceci (comme pour la commande). Bornée par pièce, et jamais une
+   livraison « dans le passé ». */
+export function resolveStarTimberHurry(e, key, stars, now) {
+  const w = starTimberOrder(e, key);
+  if (!w || w.fund !== "wait") return { ok: false, why: "notWaiting" };
+  if ((w.hurry | 0) >= C.STAR_REBUILD_HURRY_MAX) return { ok: false, why: "hurryMax" };
+  const cut = C.STAR_REBUILD_HURRY_CUT_MS[Math.max(0, Math.min(3, stars | 0))] || 0;
+  const before = +w.readyAt || 0;
+  w.readyAt = Math.max((+now || 0) + C.STAR_REBUILD_HURRY_FLOOR_MS, before - cut);
+  if (w.readyAt > before) w.readyAt = before;
+  w.hurry = (w.hurry | 0) + 1;
+  return { ok: true, cut: before - w.readyAt };
+}
 
 /* ───────────────────────────────────────────────────────────────────────────
    2. LES CHAPITRES.
@@ -2195,6 +2294,8 @@ export const STAR_GOAL_TARGET = { craterHot: "crater", craterAlone: "crater",
      le chevron y mène déjà, il n'y a pas d'adresse neuve à inventer. */
   mayor: "townHall",
   timberOrder: "sawmill", timberWait: "sawmill", timberRaise: "shipyard",
+  // 2026-09-13 (lot 2) — le budget se négocie à la mairie ; la reconstruction se commande et s'aide chez Tristan.
+  budget: "townHall", budgetBooked: "townHall", rebuildOrder: "sawmill", rebuildWait: "sawmill",
   /* AUTORITÉ 2026-09-12 — Kerguélen repasse au même endroit que sa première
      visite (voir `starEngineerHere`) : rien de neuf à résoudre, la cible
      existe déjà. `vandalChaseTown`/`vandalChaseFarm`/`vandalEscaped` n'ont
@@ -3296,6 +3397,21 @@ export function newStar() {
        voisins ci-dessus (`evilFound`, `evilRescued`, `plan`) sont le modèle :
        déclarés ici, recopiés là-bas, jamais l'un sans l'autre. */
     vandal: null,   // { at } — la coque réparée avec Kerguélen ; la fuite s'en dérive
+    /* ╔══════════════════════════════════════════════════════════════════════════
+       ║ 2026-09-13 (lot 1) — LE CHANTIER ACCEPTÉ. DÉCLARÉ ICI ET RECOPIÉ DANS
+       ║ `migrateStar` DANS LE MÊME GESTE QUE SON RÉSOLVEUR (la leçon de `vandal`).
+       ╚══════════════════════════════════════════════════════════════════════════
+       Décision de Guillaume (D3) : « la décision de lancer ou non la quête dépend
+       de notre envie ». La mairie (un avis au tableau des nouvelles) et Eduardo
+       (sa vieille carte) PROPOSENT le chantier naval ; le bandeau se tait tant que
+       personne n'a dit oui. ⚠️ Un horodatage HÔTE et un nom, pas un booléen : la
+       même forme que `warn`, et « qui a accepté » se dit dans le chat. */
+    yard: null,     // { at, by } — le chantier naval accepté (voir `resolveStarYardAccept`)
+    /* 2026-09-13 (lot 1) — LE BAPTÊME DU NAVIRE (D1 b). Déclaré et migré dès
+       maintenant parce que `starShipName` le lit : le nom ne s'affiche qu'une fois
+       le navire baptisé. Son résolveur arrive avec la scène du baptême (lot 4) —
+       d'ici là il reste `null`, et le navire reste « le navire ». */
+    baptism: null,  // { at, by } — le navire a reçu son nom
   };
 }
 /* ⚠️ LA REPRISE EST TOLÉRANTE, PAS CONFIANTE. Une sauvegarde d'avant ce zip n'a
@@ -3432,6 +3548,9 @@ export function migrateStar(saved) {
      chaque requête. ⚠️ On RECONSTRUIT le sous-objet au lieu de faire confiance
      à sa forme, comme tous les autres ici (« tolérante, pas confiante »). */
   e.vandal = saved.vandal && +saved.vandal.at ? { at: +saved.vandal.at } : null;
+  // 2026-09-13 (lot 1) — voir la note de `yard` dans `newStar` : sans cette ligne, le « oui » s'effacerait à la requête suivante.
+  e.yard = saved.yard && +saved.yard.at ? { at: +saved.yard.at, by: String(saved.yard.by || "").slice(0, 24) } : null;
+  e.baptism = saved.baptism && +saved.baptism.at ? { at: +saved.baptism.at, by: String(saved.baptism.by || "").slice(0, 24) } : null;
   /* ── ZIP 479 : les trois verbes. ⚠️⚠️ MÊME DISCIPLINE QUE PARTOUT AILLEURS ICI —
      on RECONSTRUIT chaque sous-objet au lieu de faire confiance à sa forme, et un
      lieu inconnu est « une version d'après » qu'on ignore. Une sauvegarde d'avant
@@ -3524,6 +3643,9 @@ export function migrateStar(saved) {
         ready: !done && !!v.ready,
         by: String(v.by || "?").slice(0, 24),
         raisedBy: String(v.raisedBy || "").slice(0, 24), raisedAt: +v.raisedAt || 0,
+        // 2026-09-13 (lot 2) — voir `commitStarTimber` : sans ces deux lignes, le financement et l'aide s'effaceraient à la requête suivante.
+        fund: v.fund === "paid" || v.fund === "wait" ? v.fund : "",
+        hurry: Math.max(0, Math.min(99, v.hurry | 0)),
       };
     }
   }
@@ -4017,8 +4139,17 @@ export function starGoalKey(e, ctx) {
        dit plus qu'à propos d'une pièce VRAIMENT commandable : l'ancienne ligne le
        disait dès qu'une pièce n'était pas posée, y compris une mâture qui attend
        la réparation — l'objectif qui ment du 448. */
+    /* ⚠️⚠️ 2026-09-13 (lot 2) — LE BUDGET, APRÈS LA FUITE DU VANDALE. C'est l'étape
+       en cours tant qu'il n'est pas signé : rien d'autre du chantier n'est faisable
+       (tout est détruit). Pendant l'attente du rendez-vous, un geste de la septième
+       passe devant — le geste avant l'horloge (478). */
+    if (starBudgetNeeded(e)) {
+      const appt = MA.mayorAppt(e);
+      const booked = !!(appt && appt.due && MA.mayorApptTopic(e) === "budget" && !MA.mayorApptStale(e, ctx && ctx.now));
+      return booked ? (starEvilGoalKey(e) || "budgetBooked") : "budget";
+    }
     const yard = starYardKey(e, ctx, STAR_SHIP_KEYS);
-    if (yard && yard !== "timberWait" && yard !== "timberOrder") return yard;
+    if (yard && !["timberWait", "timberOrder", "rebuildWait", "rebuildOrder"].includes(yard)) return yard;
     /* ⚠️ LA SEPTIÈME PASSE ENTRE LE GESTE DU CHANTIER (monter) ET SON HORLOGE : un
        joueur qui peut aller haler une étoile ne doit pas lire « Tristan scie », ni
        « commande » — le geste passe devant l'horloge et la décision (478). */
@@ -4144,6 +4275,50 @@ export function starTameGoalKey(e, id, ctx) {
   return "farmImpactTame";
 }
 /* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-13 (lot 1) — LA PROPOSITION DU CHANTIER, ET LE « OUI ».
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ DÉCISION DE GUILLAUME (D3) : la mairie ET Eduardo proposent, le joueur
+   choisit. Trois lectures et un résolveur, dans cet ordre :
+     · `starYardAccepted` — quelqu'un a dit oui (l'avis de la mairie ou Eduardo) ;
+     · `starYardStarted`  — la quête a commencé, par le oui OU par un geste qui le
+       vaut (rendez-vous pris chez le maire, signature, plans commandés : aller voir
+       le maire de soi-même, c'est aussi choisir) ;
+     · `starYardOffer`    — la proposition est-elle à faire ? Même porte que
+       l'ancienne invite (`yardOpen` : Eduardo et Tristan actifs, les artisans, le
+       jour minimal), et rien tant qu'il reste une pluie à venir ou tombée.
+   ⚠️ UNE SEULE PORTE POUR LES DEUX PROPOSITIONS : l'avis du tableau et la bulle
+   d'Eduardo appellent la MÊME fonction — deux conditions recopiées auraient fini
+   par proposer le chantier à un endroit et pas à l'autre (leçon de
+   `starEngineerUrgent`, audit 2026-09-12). */
+export function starYardAccepted(e) { return !!(e && e.yard && e.yard.at); }
+export function starYardStarted(e) {
+  return starYardAccepted(e) || MA.mayorSigned(e) || !!MA.mayorAppt(e) || starPlanAsked(e);
+}
+export function starYardOffer(e, day, gate) {
+  if (!e || starYardStarted(e) || starWarned(e) || starFallen(e)) return false;
+  if ((day | 0) < STAR_FALL_MIN_DAY) return false;
+  return starFallGate(gate).ok;
+}
+/* ⚠️ IL NE DONNE RIEN ET N'ENCAISSE RIEN : il date un choix (§4 de `CLAUDE.md`, « la
+   porte n'est jamais la caisse »). Idempotent — deux joueurs qui cliquent au même
+   instant, ou un « oui » après un rendez-vous déjà pris, ne réécrivent rien. */
+export function resolveStarYardAccept(e, who, day, now, gate) {
+  if (!e) return { ok: false };
+  if (starYardStarted(e)) return { ok: true, already: true };
+  if (!starYardOffer(e, day, gate)) return { ok: false, locked: true };
+  e.yard = { at: +now || 1, by: String(who || "?").slice(0, 24) };
+  return { ok: true };
+}
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-13 (lot 1) — LE NOM DU NAVIRE NE SE DIT QU'AU BAPTÊME.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   Décision de Guillaume (D1 b) : « La Belle Étoile » s'affichait sur le plan (P) et
+   la plaque du chantier dès le prélude — c'est-à-dire qu'un chantier « municipal »
+   annonçait les étoiles avant la moindre rumeur. Le navire reste sans nom jusqu'à
+   son baptême, étape ultime avant la fin. ⚠️ `null` veut dire « pas encore
+   baptisé » : les phrases qui le nomment savent dire « le navire » à la place. */
+export function starShipName(e) { return e && e.baptism && e.baptism.at ? C.STAR_SHIP_NAME : null; }
+/* ╔═════════════════════════════════════════════════════════════════════════════
    ║ 2026-09-13 — LE PRÉLUDE : CE QUE DIT LE BANDEAU AVANT LA PLUIE.
    ╚═════════════════════════════════════════════════════════════════════════════
    ⚠️⚠️ L'ORDRE EST CELUI DU RÉCIT DE L'AUTORITÉ 2026-09-12, SOUS-PARTIE PAR
@@ -4153,14 +4328,16 @@ export function starTameGoalKey(e, id, ctx) {
    tableau, puis l'attente de la pluie). AUCUN CRAN DE `e.ch` DE PLUS : le prélude
    se DÉRIVE, comme `warn` le faisait déjà — les seuils des trois chapitres ne
    bougent pas d'une ligne, donc rien à migrer.
-   ⚠️ IL SE TAIT POUR QUI N'A RIEN COMMENCÉ ET DONT LA FERME N'EST PAS PRÊTE
-   (`ctx.yardOpen` faux) : c'est la règle de l'ancienne invite de quête, qui ne se
-   montrait qu'aux fermes capables de la mener. Un rendez-vous pris, une signature,
-   des plans commandés : la quête a commencé, il parle. */
+   ⚠️⚠️ 2026-09-13 (lot 1) — IL SE TAIT POUR QUI N'A PAS DIT OUI, MÊME SUR UNE FERME
+   PRÊTE. Il parlait dès que la ferme était capable de mener le chantier
+   (`ctx.yardOpen`) : c'était pousser le joueur dans une quête qu'il n'avait pas
+   choisie. Décision de Guillaume (D3) : la mairie et Eduardo PROPOSENT
+   (`starYardOffer`), le joueur accepte ou non (`resolveStarYardAccept`). Un « oui »,
+   un rendez-vous pris, une signature, des plans commandés : la quête a commencé, il
+   parle. */
 function starPreludeKey(e, ctx) {
   if (starWarned(e)) return "warnWait";
-  const started = MA.mayorSigned(e) || !!MA.mayorAppt(e) || starPlanAsked(e);
-  if (!started && !(ctx && ctx.yardOpen)) return null;
+  if (!starYardStarted(e)) return null;
   const yard = starYardKey(e, ctx, STAR_YARD_KEYS);
   if (yard) return yard;
   if (ctx && ctx.warnOffer) return "warnRead";
@@ -4180,8 +4357,12 @@ function starYardKey(e, ctx, keys) {
   if (!starPlanAsked(e)) return "engineer";
   if (!starPlanReady(e)) return (ctx && ctx.engineerHere) ? "engineerWork" : "engineerTravel";
   if (keys.some(k => starTimberReady(e, k) && !starRaiseBlock(e, k))) return "timberRaise";
-  if (keys.some(k => !!starTimberOrder(e, k))) return "timberWait";
-  if (keys.some(k => starTimberBlock(e, k) === null)) return "timberOrder";
+  /* 2026-09-13 (lot 2) — après le saccage, deux phrases de plus : une pièce qui
+     attend les fonds se RACCOURCIT en aidant Tristan (c'est un geste), et commander
+     demande de choisir entre payer et attendre. */
+  if (keys.some(k => !!starTimberOrder(e, k)))
+    return starRebuildGate(e) && keys.some(k => starHurryLeft(e, k) > 0) ? "rebuildWait" : "timberWait";
+  if (keys.some(k => starTimberBlock(e, k) === null)) return starRebuildGate(e) ? "rebuildOrder" : "timberOrder";
   return null;
 }
 /* La septième sœur, une fois VUE (`evilSeek` a parlé avant). Deux gestes : la haler
@@ -4264,6 +4445,8 @@ export const STAR_GOAL_KEYS = (() => {
      qui doit grandir ou patienter, l'avis à lire, la pluie attendue) et les deux
      gestes de la septième sœur une fois vue. Aucune n'est un lieu de la table. */
   out.push("mayorBooked", "yardGrow", "yardCalm", "warnRead", "warnWait", "evilHaul", "evilRevive");
+  // 2026-09-13 (lot 2) — le budget après le saccage, et la reconstruction (payer / attendre et aider Tristan).
+  out.push("budget", "budgetBooked", "rebuildOrder", "rebuildWait");
   return out;
 })();
 
@@ -4449,10 +4632,16 @@ export function resolveStarTimberOrder(e, key, who, now) {
    celle de la retouche —, qui divergent au premier champ ajouté (§8 de
    `CLAUDE.md`). Sans argument, le comportement est celui d'avant, au champ près :
    c'est ce qui rend la passe sûre pour le menu développeur et les migrations. */
-export function commitStarTimber(e, key, who, now, ms) {
+/* ⚠️ 2026-09-13 (lot 2) — `fund` : comment la pièce est financée après le saccage
+   (`"paid"` payée comptant, `"wait"` les fonds de la mairie, `""` avant le saccage).
+   ⚠️ « paid » et pas « gold » : `verify-quete` interdit à ce fichier toute ligne qui
+   touche à l'argent (la quête ne paie rien) — le PRIX se lit ici, l'hôte encaisse.
+   `hurry` : les manches d'aide déjà jouées. Tous deux recopiés par `migrateStar`. */
+export function commitStarTimber(e, key, who, now, ms, fund) {
   const t = C.STAR_TIMBER[key];
   const d = ms > 0 ? Math.round(ms) : t.ms;
-  e.wood[key] = { at: now, readyAt: now + d, done: false, by: String(who || "?").slice(0, 24) };
+  e.wood[key] = { at: now, readyAt: now + d, done: false, by: String(who || "?").slice(0, 24),
+                  fund: fund === "paid" || fund === "wait" ? fund : "", hurry: 0 };
   return { ok: true };
 }
 /* ╔═════════════════════════════════════════════════════════════════════════════
@@ -4476,7 +4665,7 @@ export function commitStarTimber(e, key, who, now, ms) {
 export function resolveStarTimberTick(e, now) {
   const keys = [];
   for (const k of STAR_SHIP_KEYS) {
-    const w = e.wood && e.wood[k];
+    const w = woodLive(e, k);                     // 2026-09-13 (lot 2) — on ne livre pas une commande saccagée
     if (!w || w.done || w.ready) continue;
     if ((+now || 0) < w.readyAt) continue;
     w.ready = true;
@@ -5083,6 +5272,20 @@ function starDevBoatGate(e, who, t) {
   e.mayor.sour = 0;
   return false;
 }
+/* 2026-09-13 (lot 2) — LE BUDGET, MÊME FORME QUE `starDevBoatGate` : un bouton ne
+   signe jamais à la place du joueur, il pose le rendez-vous (sujet « budget ») et
+   rend la main. */
+function starDevBudgetGate(e, who, t) {
+  if (MA.mayorBudgetSigned(e)) return true;
+  MA.migrateMayor(e);
+  e.mayor.block = 0;
+  if (!e.mayor.appt) {
+    e.mayor.appt = { by: String(who || ""), name: DEV_BY, at: t, due: t,
+                      mood: MA.mayorPickMood(Math.random, false, !!e.mayor.sour), topic: "budget" };
+  }
+  e.mayor.sour = 0;
+  return false;
+}
 const DEV_BY = "\u{1F6E0}️";
 function devBlocked(e, why) { return { star: e, ok: true, blocked: why || "needMayor" }; }
 /* Le chantier. ⚠️ `raiseYard` POSE LA COQUE ET LE GOUVERNAIL — c'est la condition
@@ -5094,7 +5297,10 @@ function devYard(e, who, t, raiseYard) {
   if (!starDevBoatGate(e, who, t)) return false;
   if (!starPlanAsked(e)) e.plan = { at: t - C.STAR_ENG_TRAVEL_MS - C.STAR_ENG_WORK_MS, by: DEV_BY, done: t };
   else if (!starPlanReady(e)) e.plan.done = t;
-  if (raiseYard)
+  /* ⚠️ 2026-09-13 (lot 2) — JAMAIS APRÈS LE SACCAGE : reposer la coque ici aurait
+     reconstruit le navire sans budget, c'est-à-dire un état que la partie réelle ne
+     peut pas produire (le §2 bis de `verify-jalons` le cherche). */
+  if (raiseYard && !starRebuildGate(e))
     for (const k of STAR_YARD_KEYS)
       if (!starTimberDone(e, k)) e.wood[k] = { at: t, readyAt: t, done: true, ready: false, by: DEV_BY };
   return true;
@@ -5131,11 +5337,19 @@ export function devStar(e, op, now, who) {
      trouver le bureau, à appuyer sur E et à mener l'entretien en entier. `unslam`
      lève la punition, il ne signe rien. On saute l'ATTENTE, jamais le geste.
      ⚠️ `appt` tire l'humeur comme l'hôte le ferait (`mayorPickMood`) : un raccourci
-     qui poserait « moyenne » en dur ferait juger la scène dans un seul des mondes. */
+     qui poserait « moyenne » en dur ferait juger la scène dans un seul des mondes.
+     ⚠️⚠️⚠️ 2026-09-13 (D11, audit en jeu) — LE SUJET SE LIT, IL NE SE DEVINE PAS.
+     Cette écriture omettait `topic` : `MA.mayorApptTopic` retombait alors sur son
+     repli « yard » par défaut, pour TOUJOURS — un rendez-vous posé par ce bouton
+     APRÈS le saccage restait étiqueté « chantier », donc `MA.mayorSigned` (déjà
+     vrai) faisait dire « déjà signé » à la porte du bureau, qui n'ouvrait plus
+     jamais la seconde négociation. Même lecture que le guichet d'accueil et que
+     `resolveMayorAsk` (`Q.starBudgetNeeded`) : LA SEULE écriture qui compte. */
   if (op === "appt") {
     MA.migrateMayor(e);
     e.mayor.block = 0;
-    e.mayor.appt = { by: String(who || ""), name: DEV_BY, at: t, due: t,
+    const topic = starBudgetNeeded(e) ? "budget" : "yard";
+    e.mayor.appt = { by: String(who || ""), name: DEV_BY, at: t, due: t, topic,
                      mood: MA.mayorPickMood(Math.random, false, !!e.mayor.sour) };
     e.mayor.sour = 0;
     return { star: e, ok: true };
@@ -5293,8 +5507,12 @@ export function devStar(e, op, now, who) {
     resolveStarEvilRescue(e, t);
     resolveStarFound(e, STAR_EVIL_ID, DEV_BY, t);
     resolveVandalReveal(e, t);
+    /* ⚠️ 2026-09-13 (lot 2) — MÊME DISCIPLINE QUE LE MAIRE : sans budget signé, le
+       bouton prend le rendez-vous et s'arrête. La reconstruction qu'il pose ensuite
+       est datée `t + 1`, après le saccage (voir `woodLive`). */
+    if (!starDevBudgetGate(e, who, t)) return devBlocked(e, "needBudget");
     for (const k of STAR_SHIP_KEYS)
-      if (!starTimberDone(e, k)) e.wood[k] = { at: t, readyAt: t, done: true, ready: false, by: DEV_BY };
+      if (!starTimberDone(e, k)) e.wood[k] = { at: t + 1, readyAt: t + 1, done: true, ready: false, by: DEV_BY };
     return { star: e, ok: true };
   }
   return { ok: false };

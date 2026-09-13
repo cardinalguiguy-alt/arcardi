@@ -279,15 +279,106 @@ export const MAYOR_NODES = [
   ] },
 ];
 
-export const MAYOR_NODE = Object.fromEntries(MAYOR_NODES.map(n => [n.id, n]));
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-13 (lot 2) — LA SECONDE TABLE : LE BUDGET, APRÈS LE SACCAGE.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   Décisions de Guillaume (D4, D5, D6) : le vandale a TOUT détruit ; il faut
+   renégocier « pour payer la réparation du bateau et la suite du projet » ; et le
+   maire justifie sa frilosité par ce que la chute de l'astéroïde coûte à Valley
+   Town. « Intéressant, pas trop complexe, et visuel surtout. »
+   ⚠️⚠️ C'EST LA PROMESSE DE L'EN-TÊTE, TENUE : une seconde négociation est UNE
+   TABLE DE PLUS et zéro ligne de mécanique — la jauge, la fuite, l'élan, la
+   confiance, le rendez-vous, la porte claquée et la rejouabilité hôte sont les
+   mêmes fonctions. Seul `topic` dit laquelle des deux tables on joue.
+   ⚠️ PLUS COURTE (huit battements, quatre actes) : c'est une seconde visite, il
+   vous connaît, et la confiance gagnée la première fois démarre plus haut.
+   ⚠️ LES MÊMES RÈGLES DE TABLE que la première, et `verify-maire` les balaie sur
+   les DEUX : exactement trois réponses, une idéale / une tiède / une faute, une
+   seule `rude` (et c'est la seule `fatal`), la flatterie juste à UN endroit.
+   ⚠️ PAS DE `when` : les plans existent forcément à ce stade (on a déjà construit
+   la coque), donc il n'y a qu'un monde. La CARTE, elle, reste : les plans chiffrés
+   posés au moment où il demande si l'argument tient encore (`b5`).
+   ⚠️⚠️ `b8a` ANNONCE L'INAUGURATION PUBLIQUE, et ce n'est pas une coïncidence :
+   c'est le maire qui convoquera les joueurs pour l'organiser à la fin (D11). La
+   bonne réponse ici plante la graine de la dernière scène. */
+export const MAYOR_BUDGET_NODES = [
+  /* ── ACTE I — LA FACTURE. La liasse ficelée de rouge a pris la place du pont sud. ── */
+  { id: "b1", act: 1, plansAt: 3, answers: [
+    { k: "b1a", type: "town",  base:   6, grade: "ideal" },
+    { k: "b1b", type: "heart", base:   4, grade: "warm"  },
+    /* « Le trou n'est pas sur mon quai » : vrai, et c'est l'entrée de SA ville. */
+    { k: "b1c", type: "money", base:  -8, grade: "fault", flavour: "tact" },
+  ] },
+  { id: "b2", act: 1, plansAt: 4, answers: [
+    { k: "b2a", type: "money", base:   7, grade: "ideal" },
+    { k: "b2b", type: "risk",  base:   4, grade: "warm"  },
+    /* ⚠️ Le piège : « vous avez bien trouvé l'argent pour le trou » a l'air d'un
+       argument imparable, et c'est mot pour mot ce que répète son opposition. */
+    { k: "b2c", type: "self",  base:  -9, grade: "fault", flavour: "trap" },
+  ] },
+  /* ── ACTE II — LE SABOTAGE. Remettre de l'argent sur un quai où l'on casse. ── */
+  { id: "b3", act: 2, plansAt: 6, answers: [
+    { k: "b3a", type: "risk",  base:   8, grade: "ideal" },
+    { k: "b3b", type: "town",  base:   4, grade: "warm"  },
+    /* « Il ne reviendra pas » : on parle du saboteur comme de quelqu'un qu'on connaît. */
+    { k: "b3c", type: "heart", base: -10, grade: "fault", flavour: "tact" },
+  ] },
+  { id: "b4", act: 2, plansAt: 4, answers: [
+    { k: "b4a", type: "town",  base:   8, grade: "ideal" },
+    { k: "b4b", type: "risk",  base:   4, grade: "warm"  },
+    { k: "b4c", type: "self",  base: -10, grade: "fault", flavour: "trap" },
+  ] },
+  /* ── ACTE III — LE PORT. La vieille carte dépliée sur la liasse ; c'est ICI que
+     les plans chiffrés valent leur prix. ── */
+  { id: "b5", act: 3, plansAt: 13, answers: [
+    { k: "b5a", type: "money", base:   8, grade: "ideal" },
+    { k: "b5b", type: "heart", base:   5, grade: "warm"  },
+    /* Il a défendu le port devant son conseil, la première fois. « C'est pour l'image. » */
+    { k: "b5c", type: "town",  base: -10, grade: "fault", flavour: "tact" },
+  ] },
+  { id: "b6", act: 3, plansAt: 6, answers: [
+    { k: "b6a", type: "town",  base:   9, grade: "ideal" },
+    { k: "b6b", type: "money", base:   5, grade: "warm"  },
+    /* « Tout. » La réponse la plus généreuse, l'année d'un cratère : c'est lui
+       demander de se faire battre aux prochaines élections. */
+    { k: "b6c", type: "money", base: -11, grade: "fault", flavour: "trap" },
+  ] },
+  /* ── ACTE IV — LUI. ── */
+  { id: "b7", act: 4, tint: true, plansAt: 3, answers: [
+    /* ⚠️ LA SEULE FLATTERIE JUSTE DE CETTE TABLE : il demande pourquoi personne ne
+       lui réclame un bateau — c'est lui qu'il faut faire parler. */
+    { k: "b7a", type: "self",  base:   9, grade: "ideal" },
+    { k: "b7b", type: "heart", base:   5, grade: "warm"  },
+    /* ⚠️ L'UNIQUE `rude` ET L'UNIQUE `fatal` : l'enveloppe, dans son bureau. */
+    { k: "b7c", type: "money", base: -26, grade: "fault", flavour: "rude", fatal: true },
+  ] },
+  { id: "b8", act: 4, plansAt: 3, answers: [
+    { k: "b8a", type: "heart", base:   9, grade: "ideal" },
+    { k: "b8b", type: "town",  base:   6, grade: "warm"  },
+    { k: "b8c", type: "self",  base:  -8, grade: "fault", flavour: "tact" },
+  ] },
+];
+/* Les deux tables, par sujet. ⚠️ `topic` INCONNU = le chantier, jamais le budget :
+   il vient du réseau (le rendez-vous), et on échoue fermé (règle du 431). */
+export const MAYOR_TOPICS = { yard: MAYOR_NODES, budget: MAYOR_BUDGET_NODES };
+export function mayorTopicOf(t) { return t === "budget" ? "budget" : "yard"; }
+const MAYOR_ALL_NODES = [...MAYOR_NODES, ...MAYOR_BUDGET_NODES];
+/* ⚠️ L'INDEX DES NŒUDS COUVRE LES DEUX TABLES : les identifiants ne se recouvrent
+   pas (`m…` / `b…`), donc `mayorAnswerOf`/`mayorPlayable` n'ont rien à apprendre. */
+export const MAYOR_NODE = Object.fromEntries(MAYOR_ALL_NODES.map(n => [n.id, n]));
 export const MAYOR_NODE_IDS = MAYOR_NODES.map(n => n.id);
+export const MAYOR_BUDGET_NODE_IDS = MAYOR_BUDGET_NODES.map(n => n.id);
+const MAYOR_TOPIC_IDS = { yard: MAYOR_NODE_IDS, budget: MAYOR_BUDGET_NODE_IDS };
+export function mayorNodeIdsOf(topic) { return MAYOR_TOPIC_IDS[mayorTopicOf(topic)]; }
 export const MAYOR_ACTS = [...new Set(MAYOR_NODES.map(n => n.act))];
 /* ⚠️ TOUTES LES CLÉS DE RÉPLIQUE, DÉRIVÉES DE LA TABLE ET JAMAIS RECOPIÉES. Le
    banc s'en sert pour exiger un texte ET une justification par réplique : une
    clé orpheline de texte échoue, un texte orphelin de clé aussi (449 : une
    jointure, jamais deux listes). */
-export const MAYOR_SAY_KEYS = MAYOR_NODES.flatMap(n => n.answers.map(a => a.k));
-export const MAYOR_TINT_NODES = MAYOR_NODES.filter(n => n.tint).map(n => n.id);
+/* ⚠️ 2026-09-13 (lot 2) — LES DEUX TABLES : une réplique du budget sans texte
+   échoue au banc exactement comme une réplique du chantier. */
+export const MAYOR_SAY_KEYS = MAYOR_ALL_NODES.flatMap(n => n.answers.map(a => a.k));
+export const MAYOR_TINT_NODES = MAYOR_ALL_NODES.filter(n => n.tint).map(n => n.id);
 
 /* ═══════════════════════════════════════════════════════════════════════════
    4. LE CALCUL D'UNE RÉPONSE
@@ -479,7 +570,10 @@ export function mayorAdvance(s, ms) {
    ═══════════════════════════════════════════════════════════════════════════ */
 export function mayorOpen(ctx) {
   const trust = Math.max(0, Math.min(C.MAYOR_TRUST_MAX, ctx.trust | 0));
-  const plans = !!ctx.plans;
+  /* 2026-09-13 (lot 2) — le sujet de l'audience. ⚠️ Au budget, les plans existent
+     forcément (la coque a déjà été construite une fois) : il n'y a qu'un monde. */
+  const topic = mayorTopicOf(ctx.topic);
+  const plans = topic === "budget" ? true : !!ctx.plans;
   /* ⚠️⚠️ ZIP 481 — L'HUMEUR EST BORNÉE PAR LA TABLE, JAMAIS CRUE SUR PAROLE.
      Elle vient de l'état partagé, donc du réseau, donc elle n'est pas de
      confiance : une humeur inconnue retombe sur « moyenne », qui est le cas
@@ -494,9 +588,10 @@ export function mayorOpen(ctx) {
     mood,
     plans, trust,
     burnt: Array.isArray(ctx.burnt) ? ctx.burnt.slice() : [],
-    adh: (plans ? C.MAYOR_START_PLANS : C.MAYOR_START_BARE) + trust * C.MAYOR_TRUST_START_BONUS
-         + (C.MAYOR_MOOD_START[mood] || 0),
-    node: MAYOR_NODE_IDS[0],
+    adh: (topic === "budget" ? C.MAYOR_START_BUDGET : plans ? C.MAYOR_START_PLANS : C.MAYOR_START_BARE)
+         + trust * C.MAYOR_TRUST_START_BONUS + (C.MAYOR_MOOD_START[mood] || 0),
+    topic,
+    node: mayorNodeIdsOf(topic)[0],
     streak: 0,
     lastType: null,
     used: {},
@@ -542,8 +637,9 @@ function bump(s, delta) {
 }
 
 function step(s) {
-  const i = MAYOR_NODE_IDS.indexOf(s.node);
-  s.node = i >= 0 && i + 1 < MAYOR_NODE_IDS.length ? MAYOR_NODE_IDS[i + 1] : null;
+  const ids = mayorNodeIdsOf(s.topic);     // 2026-09-13 (lot 2) — la table du sujet joué
+  const i = ids.indexOf(s.node);
+  s.node = i >= 0 && i + 1 < ids.length ? ids[i + 1] : null;
   /* Il n'a plus de question. À partir de là c'est la jauge qui décide, et elle
      seule : il signe s'il est convaincu, il raccompagne sinon. */
   if (!s.node && !s.over) s.over = s.adh >= C.MAYOR_ADH_WIN ? "signed" : "out";
@@ -744,6 +840,22 @@ export function migrateMayor(e) {
     burnt: Array.isArray(m.burnt)
       ? m.burnt.filter(k => MAYOR_SAY_KEYS.includes(k)).slice(0, MAYOR_SAY_KEYS.length)
       : [],
+    /* ⚠️⚠️ 2026-09-13 (lot 2) — LE BUDGET A SON PROPRE DOSSIER, DÉCLARÉ ICI DANS LE
+       MÊME GESTE QUE `resolveMayor` QUI L'ÉCRIT (la leçon de `vandal`, audit
+       2026-09-12 : un champ qu'une migration ignore est supprimé à la requête
+       suivante). Même forme que la signature du chantier — date, nom, qualité,
+       tentatives, meilleur sommet. La confiance, elle, reste COMMUNE : c'est tout
+       son sens (« plus facile de le convaincre pour les futures missions »). */
+    budget: (() => {
+      const b = m.budget && typeof m.budget === "object" ? m.budget : {};
+      return {
+        ok: Math.max(0, +b.ok || 0),
+        by: typeof b.by === "string" ? b.by.slice(0, 24) : "",
+        grade: typeof b.grade === "string" ? b.grade.slice(0, 8) : "",
+        tries: Math.max(0, Math.min(999, b.tries | 0)),
+        best: Math.max(0, Math.min(C.MAYOR_ADH_MAX, b.best | 0)),
+      };
+    })(),
     /* ╔══════════════════════════════════════════════════════════════════════
        ║ ZIP 481 — TROIS CHAMPS DE PLUS, ET PAS UN DE TROP.
        ╚══════════════════════════════════════════════════════════════════════
@@ -787,6 +899,8 @@ export function migrateMayor(e) {
          seconde. Un champ ajouté à un objet migré s'ajoute à sa migration dans le
          même geste, ou il n'existe pas. */
       sour: m.appt.sour ? 1 : 0,
+      // 2026-09-13 (lot 2) — le sujet du rendez-vous, arbitré par l'hôte : il décide de la table jouée.
+      topic: mayorTopicOf(m.appt.topic),
     } : null,
     block: Math.max(0, +m.block || 0),
     sour: m.sour ? 1 : 0,
@@ -903,10 +1017,14 @@ export function mayorApptStale(e, now) {
 /* ⚠️⚠️ L'ARBITRAGE DE LA DEMANDE. Hôte seulement, comme `resolveMayor`, et il
    rend une CLÉ — il n'affiche rien lui-même, donc le chemin du menu développeur
    peut jeter ce qu'il rend (règle du 398). */
-export function resolveMayorAsk(e, who, name, at, rnd, audienceDay) {
+export function resolveMayorAsk(e, who, name, at, rnd, audienceDay, topic) {
   if (!e) return null;
   migrateMayor(e);
-  if (e.mayor.ok) return "mayorAlready";
+  /* 2026-09-13 (lot 2) — `topic` est décidé par l'HÔTE à partir de l'état de la
+     quête (`Q.starBudgetNeeded`), jamais par la requête du client. Le budget ne se
+     demande qu'une fois le chantier signé. */
+  const tp = mayorTopicOf(topic);
+  if (tp === "yard" ? e.mayor.ok : (e.mayor.budget.ok || !e.mayor.ok)) return "mayorAlready";
   const t = msOf(at);
   if (mayorBlockedMs(e, t) > 0) return "mayorBlocked";
   /* Un rendez-vous en cours ne se re-tire pas : sans ça, on redemanderait
@@ -950,11 +1068,18 @@ export function resolveMayorAsk(e, who, name, at, rnd, audienceDay) {
     due: t + (retry && !sour ? C.MAYOR_RETRY_WAIT_MS : mayorPickWait(r)),
     mood,
     sour,
+    topic: tp,
   };
   return "mayorBooked";
 }
 
 export function mayorSigned(e) { return !!(e && e.mayor && e.mayor.ok); }
+/* 2026-09-13 (lot 2) — la seconde signature, et ce qu'elle vaut (la part que la
+   mairie prend à sa charge se lit sur sa QUALITÉ, voir `Q.starBudgetShare`). */
+export function mayorBudgetSigned(e) { return !!(e && e.mayor && e.mayor.budget && e.mayor.budget.ok); }
+export function mayorBudgetGrade(e) { return (e && e.mayor && e.mayor.budget && e.mayor.budget.grade) || ""; }
+export function mayorBudgetTries(e) { return (e && e.mayor && e.mayor.budget) ? (e.mayor.budget.tries | 0) : 0; }
+export function mayorApptTopic(e) { const a = mayorAppt(e); return a ? mayorTopicOf(a.topic) : "yard"; }
 export function mayorTrust(e) { return e && e.mayor ? Math.max(0, Math.min(C.MAYOR_TRUST_MAX, e.mayor.trust | 0)) : 0; }
 export function mayorTries(e) { return e && e.mayor ? (e.mayor.tries | 0) : 0; }
 export function mayorBurnt(e) { return e && e.mayor && Array.isArray(e.mayor.burnt) ? e.mayor.burnt : []; }
@@ -966,10 +1091,17 @@ export function mayorBurnt(e) { return e && e.mayor && Array.isArray(e.mayor.bur
 export function resolveMayor(e, who, name, log, ctx, at) {
   if (!e) return null;
   migrateMayor(e);
-  if (e.mayor.ok) return null;                       // déjà signé : rien à rejouer
-  const s = mayorReplay(log, { ...ctx, burnt: e.mayor.burnt, trust: e.mayor.trust });
-  e.mayor.tries = Math.min(999, e.mayor.tries + 1);
-  e.mayor.best = Math.max(e.mayor.best, Math.round(s.peak));
+  /* ⚠️⚠️ 2026-09-13 (lot 2) — LE SUJET SE LIT SUR LE RENDEZ-VOUS QUE L'HÔTE A ÉCRIT,
+     pas sur le contexte : c'est le rendez-vous qui a décidé de la table, et une
+     transcription rejouée sur l'autre table donnerait un autre verdict. Le dossier
+     écrit (`rec`) a la même forme pour les deux sujets — `ok/by/grade/tries/best`. */
+  const topic = mayorTopicOf((e.mayor.appt && e.mayor.appt.topic) || (ctx && ctx.topic));
+  const rec = topic === "budget" ? e.mayor.budget : e.mayor;
+  if (rec.ok) return null;                           // déjà signé : rien à rejouer
+  if (topic === "budget" && !e.mayor.ok) return null;
+  const s = mayorReplay(log, { ...ctx, topic, burnt: e.mayor.burnt, trust: e.mayor.trust });
+  rec.tries = Math.min(999, rec.tries + 1);
+  rec.best = Math.max(rec.best, Math.round(s.peak));
   for (const l of s.log) if (l.k[0] !== "_" && !e.mayor.burnt.includes(l.k)) e.mayor.burnt.push(l.k);
   /* ⚠️⚠️ ZIP 481 — LE RENDEZ-VOUS EST CONSOMMÉ PAR L'ENTRETIEN, QUOI QU'IL
      ARRIVE. Le laisser en place ferait d'une audience ratée un droit de rentrer
@@ -991,9 +1123,9 @@ export function resolveMayor(e, who, name, log, ctx, at) {
     e.mayor.retry = 1;
     return s.over === "thrown" ? "mayorThrown" : "mayorFailed";
   }
-  e.mayor.ok = msOf(at);          // 481 — voir la note de `msOf` : jamais `| 0` sur une date
-  e.mayor.by = typeof name === "string" ? name.slice(0, 24) : "";
-  e.mayor.grade = mayorGrade(s);
+  rec.ok = msOf(at);              // 481 — voir la note de `msOf` : jamais `| 0` sur une date
+  rec.by = typeof name === "string" ? name.slice(0, 24) : "";
+  rec.grade = mayorGrade(s);
   e.mayor.trust = Math.max(e.mayor.trust, mayorTrustGain(s));
   return "mayorSigned";
 }

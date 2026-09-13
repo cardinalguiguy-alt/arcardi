@@ -7916,6 +7916,39 @@ div.ferme-usage{ margin-bottom:10px; }
 @media (max-width:520px){ .ferme-star-find{ bottom:140px; } .ferme-star-find-cv{ width:176px; height:134px; } }
 
 /* ══════════════════════════════════════════════════════════════════════════
+   2026-09-13 (D10) — LA CANNE PROTÉGÉE : FUMEROLLE VIOLETTE ET NOIRE.
+   ══════════════════════════════════════════════════════════════════════════
+   Demande de Guillaume (§3 de QUETE.md, point 6) : « icône d'état à prévoir
+   dans la barre d'objet équipé, pas seulement sur le sprite en main ». La
+   case de la canne respire d'une lueur violet/noir tant que la protection
+   tient (dix minutes réelles) — jamais un halo fixe, qui se lirait comme un
+   décor plutôt que comme un ÉTAT qui va finir par s'éteindre. */
+.ferme-slot-rodprotect{
+  animation: fermeRodProtectPulse 1.8s ease-in-out infinite;
+}
+@keyframes fermeRodProtectPulse{
+  0%, 100% { box-shadow: 0 0 0 2px rgba(150,60,220,.8), 0 0 8px 2px rgba(18,8,26,.55); }
+  50%      { box-shadow: 0 0 0 3px rgba(196,120,255,1), 0 0 15px 5px rgba(58,18,86,.78); }
+}
+.ferme-slot-badge-rodprotect{
+  position:absolute; top:-10px; left:50%; transform:translateX(-50%);
+  font-size:11px; line-height:1; pointer-events:none;
+  animation: fermeRodProtectBadge 1.6s ease-in-out infinite;
+}
+@keyframes fermeRodProtectBadge{
+  0%, 100% { opacity:.7; transform:translateX(-50%) translateY(0); }
+  50%      { opacity:1;  transform:translateX(-50%) translateY(-3px); }
+}
+/* Le parchemin de la troisième recette du chaudron (l'enduit) : même papier
+   que les deux autres (on ne touche pas au fond), une teinte violette en
+   PLUS — c'est une magie sombre, pas une pommade de soin — pour qu'il se
+   distingue d'un coup d'œil sans perdre le grain du vieux parchemin. */
+.ferme-parchment-rodfix{
+  border-color:rgba(150,60,220,.55);
+  box-shadow: inset 0 0 22px rgba(110,76,26,.38), inset 0 0 30px rgba(90,20,140,.22), 0 2px 6px rgba(0,0,0,.35);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
    2026-09-04 — LE HALAGE : LA JAUGE DE TENSION, LE VOILE D'ALERTE.
    ══════════════════════════════════════════════════════════════════════════
    Guillaume : « le rendu doit être digne des meilleurs jeux ». La jauge se
