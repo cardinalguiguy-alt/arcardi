@@ -16337,15 +16337,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // (pushed with very low sort keys so they land first in `draws`).
         draws.push({ y: -1000, fn: () => {
           // One wide track (zip 232): left/right half tiles, full border.
+          /* 2026-09-13 — la voie est un pavé de 2×4 cases qui boucle, et le quai un
+             dessin d'un seul tenant : tous deux se posent par `A.drawStationTile`,
+             la même fonction que la ville et que `render-gare.mjs`. */
           for (let yy = C.STATION_RAIL_Y0; yy <= C.STATION_RAIL_Y1; yy++) {
-            ctx.drawImage(sprites.railL, C.STATION_RAIL_X * T, yy * T);
-            ctx.drawImage(sprites.railR, (C.STATION_RAIL_X + 1) * T, yy * T);
+            A.drawStationTile(ctx, sprites, "rail", 0, yy, C.STATION_RAIL_X * T, yy * T);
+            A.drawStationTile(ctx, sprites, "rail", 1, yy, (C.STATION_RAIL_X + 1) * T, yy * T);
           }
         } });
         draws.push({ y: -999, fn: () => {
           for (let yy = C.STATION_PLATFORM.y; yy < C.STATION_PLATFORM.y + C.STATION_PLATFORM.h; yy++)
             for (let xx = C.STATION_PLATFORM.x; xx < C.STATION_PLATFORM.x + C.STATION_PLATFORM.w; xx++)
-              ctx.drawImage(sprites.platform, xx * T, yy * T);
+              A.drawStationTile(ctx, sprites, "platformFarm", xx - C.STATION_PLATFORM.x, yy - C.STATION_PLATFORM.y, xx * T, yy * T);
         } });
         // The train slides in from the north while visitors arrive, and
         // back out when they depart. Timestamps are already relocated onto
@@ -19438,12 +19441,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            attention graphique ... pour cohérence visuelle ».
            On ne dessine donc plus une seconde voie : on pose la première.
            Zéro sprite nouveau, et la divergence redevient impossible. */
+        /* ⚠️ 2026-09-13 — LA VOIE RESTE CELLE DE LA FERME (même pavé, même fonction) ;
+           LE QUAI, LUI, NE L'EST PLUS. Demande de Guillaume : « ultra chic côté ville,
+           plus élémentaire côté ferme ». Le 427 voulait « la même forme » pour la
+           cohérence ; la cohérence tient désormais par le SOIN, pas par le sprite. */
         if (x >= C.TOWN_RAIL_X && x <= C.TOWN_RAIL_X + 1) {
-          ctx.drawImage(x === C.TOWN_RAIL_X ? sprites.railL : sprites.railR, px, py);
+          A.drawStationTile(ctx, sprites, "rail", x - C.TOWN_RAIL_X, y, px, py);
         }
-        // Le quai : les planches bordées de pierre de la ferme (platformTile).
         if (x >= C.TOWN_PLATFORM.x && x < C.TOWN_PLATFORM.x + C.TOWN_PLATFORM.w && y >= C.TOWN_PLATFORM.y && y < C.TOWN_PLATFORM.y + C.TOWN_PLATFORM.h) {
-          ctx.drawImage(sprites.platform, px, py);
+          A.drawStationTile(ctx, sprites, "platformTown", x - C.TOWN_PLATFORM.x, y - C.TOWN_PLATFORM.y, px, py);
         }
         /* ⚠️ ZIP 435 — LE « REFLET RESPIRANT » DU 425 EST SUPPRIMÉ, PAS
            DÉPLACÉ. C'était `rgba(190,225,255, 0.25 + sin(now/900 + (x+y))·0.12)`

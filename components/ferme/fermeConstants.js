@@ -6654,9 +6654,13 @@ export const TOWN_KIOSK_NOTE_MS = 380;         // cadence des notes de musique a
    du §8, et il a donné exactement ce qu'un doublon donne : le même objet, deux
    fois moins soigné d'un côté, et personne pour s'en apercevoir avant qu'on
    compare les deux écrans.
-   La ville réutilise donc `railL`/`railR`/`platform` TELS QUELS, et le bâtiment
-   `station` tel quel. Zéro sprite nouveau, zéro divergence possible, et le
-   « même soin » est garanti par construction plutôt que par relecture.
+   La ville réutilise donc la VOIE telle quelle, et le bâtiment `station` tel quel.
+   ⚠️ 2026-09-13 — LE QUAI, LUI, N'EST PLUS PARTAGÉ, ET C'EST VOULU : Guillaume veut
+   « un quai en bois, ultra chic côté ville, plus élémentaire côté ferme ». La voie
+   reste un seul pavé (`railPatch`), les deux quais sont deux dessins
+   (`platformFarm`/`platformTown`, `fermeArt.js`), posés par la même fonction
+   (`drawStationTile`) et regardés par le même banc (`render-gare.mjs`) : le
+   « même soin » tient par le banc, plus par le sprite.
 
    ⚠️ ET LE BÂTIMENT DOIT ÊTRE BLOQUANT DANS LE GÉNÉRATEUR. Un décor massif qui
    ne bloque pas, c'est la réciproque du mur invisible du 425 — on traverse une

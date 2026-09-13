@@ -31,6 +31,11 @@ guichet du hall sans cratère, le prélude joué à la main jusqu'à la pluie. A
 Supabase.
 
 **Reste à faire, dans cet ordre :**
+0. **REGARDER LA GARE** (refaite le 2026-09-13, `render-gare.mjs`) : voie en pavé de 2×4 cases
+   (gravier gris clair, traverses brunes cernées), quai de ferme en planches brutes avec face avant,
+   quai de ville en acajou verni entre deux margelles de pierre et un jonc de laiton. La première
+   version a été jugée « pas belle » (trop de détails, aucune épaisseur) ; la seconde a été vue en
+   jeu côté ville seulement, côté ferme sur la planche.
 1. **JOUER LE PRÉLUDE EN VRAI** sur une ferme éligible (maire → plans → coque + gouvernail → avis →
    pluie) : c'est la première fois qu'il a une voix, et les phrases du bandeau comme l'enchaînement
    sont un premier réglage. **Puis VOIR la fuite du vandale et la fin** : « 🎩 appointment » → jouer
@@ -1213,6 +1218,17 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
   or. Le 442 lui a donné **deux inscriptions à lire** dans la tribune (la cloche et la plaque du
   facteur d'orgues) : c'est la première fois qu'on y monte pour autre chose que la vue, et ça n'a
   rien coûté — les deux se lisent sur des décors qui étaient déjà là.
+- ⚠️⚠️ **DETTE GRAPHIQUE (2026-09-13) : LE MAIRE DU BUREAU EST « IMMONDE ET INCOHÉRENT
+  ANATOMIQUEMENT »** (Guillaume, capture de l'audience, à corriger un autre jour).
+  `maireBureau.js`, vue 3D de `MaireScene.js`. Ce qui se voit sur la capture : les
+  épaules sont deux gros cylindres arrondis posés PLUS HAUT que la base du cou, d'où les
+  bras sortent comme des pinces de crabe croisées devant le buste ; les mains sont des
+  boîtes plus larges que les avant-bras, avec des manchettes blanches en cube ; la tête
+  est un pavé posé sans cou sur le col, visage peint à plat ; le buste est étroit sous
+  des bras énormes. ⚠️ **Les bancs étaient verts** (`render-maire` 86/86 : stature,
+  tête/carrure, mains à leur cible) — c'est la leçon du §4 sur les proportions, repayée :
+  aucun contrôle ne mesure où un bras s'ATTACHE ni la largeur d'une main contre son
+  avant-bras. Demander une référence à Guillaume avant de reprendre.
 - ⚠️ **NOUVELLE DETTE GRAPHIQUE (2026-09-03) : LE TRIBUNAL ET L'ÉGLISE MÉRITENT UN SPRITE PLUS
   MAJESTUEUX.** Jugement de Guillaume en jouant — les deux bâtiments civiques les plus imposants
   de Valley Town restent en dessous de ce que leur rôle demande. **Demander à Guillaume un JPG de

@@ -1134,6 +1134,26 @@ export function drawTownStairRiser(ctx, S, tw, x, y, px, py, fh) {
    ⚠️ LA FACE EST DESSINÉE, PAS TEINTÉE. Teinter aurait été le piège du §4
    (« teinter un sprite avec un fillRect dessine une boîte ») : ce qu'on veut
    n'est pas de l'herbe assombrie, c'est de la pierre vue de côté. */
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-13 — LA VOIE ET LES QUAIS SE POSENT PAR UNE SEULE FONCTION.
+   ╚═════════════════════════════════════════════════════════════════════════════
+   Lue par le jeu (la gare de la ferme ET celle de la ville) et par
+   `tools/render-gare.mjs` — jamais deux copies du découpage (§8 de CLAUDE.md).
+   `col`/`row` se comptent depuis l'origine de l'ouvrage : pour la voie, sa colonne
+   de rails et la rangée de la CARTE (le pavé boucle tous les quatre cases, donc
+   les deux gares tombent sur la même phase) ; pour un quai, son coin nord-ouest
+   (dessiné d'un seul tenant, il ne boucle pas : une rangée hors du quai se borne).
+   ⚠️ Forme à 9 arguments : le rectangle source est dans le repère NATIF du pavé,
+   jamais dans celui du monde (CLAUDE.md §4, payé sur une étoile invisible). */
+export function drawStationTile(ctx, S, kind, col, row, dx, dy) {
+  const T = C.TILE;
+  const img = kind === "rail" ? S.railPatch : kind === "platformTown" ? S.platformTown : S.platformFarm;
+  if (!img) return;
+  const rows = Math.round(img.height / T), cols = Math.round(img.width / T);
+  const r = kind === "rail" ? ((row % rows) + rows) % rows : Math.max(0, Math.min(rows - 1, row));
+  const c = Math.max(0, Math.min(cols - 1, col));
+  ctx.drawImage(img, c * T, r * T, T, T, dx, dy, T, T);
+}
 export function drawTownStairCheek(ctx, S, tw, x, y, px, py, bx, bw, drop) {
   const ST = S && S.townStone;
   if (!ST) return false;
@@ -14672,28 +14692,194 @@ export function buildSprites() {
     P(g, 3, 12 + dy, 10, 1, "rgba(168,212,240,0.8)"); // ripple
     return c;
   }
-  // Rail tiles (vertical track), tiled along the ENTIRE west border.
-  // Zip 232 redesign: the two columns used to each carry their own narrow
-  // track (looked like two parallel toy tracks); they now form ONE wide
-  // track — left half (rail on the right of the tile) + right half (rail on
-  // the left), with wooden sleepers spanning both tiles.
-  function railHalf(side) {
-    const [c, g] = cv(T, T), r = makeRnd(413 + side);
-    P(g, 0, 0, T, T, "#8a795e");                                   // ballast
-    for (let i = 0; i < 12; i++) P(g, (r() * T) | 0, (r() * T) | 0, 1, 1, r() < 0.5 ? "#7a6a52" : "#97866b");
-    for (const sy of [2, 9]) {                                     // sleepers (span the full 2-tile track)
-      P(g, 0, sy, T, 3, "#5a4630"); P(g, 0, sy, T, 1, "#6b5238");
+  /* ╔═════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-13 — LA VOIE ET LES DEUX QUAIS, REDESSINÉS. Demande de Guillaume :
+     ║ « le quai doit être en bois, ultra chic côté ville, plus élémentaire côté
+     ║ ferme. Et les rails aussi un peu plus détaillés et texturés. »
+     ╚═════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ CE QUI A CHANGÉ DE FORME, ET POURQUOI (règles de DESSIN.md) :
+     · LA VOIE n'est plus deux tuiles de 16 px répétées (`railL`/`railR` du 232)
+       mais UN PAVÉ de 2×4 cases qui boucle sur lui-même. Ses traverses tombaient
+       tous les 8 px pile, deux par case : c'était la grille elle-même, dessinée en
+       bois. Elles sont six par pavé, au pas de 10/11 px, et leur départ ne retombe
+       jamais deux fois au même endroit de la case (`render-gare` le compte) ;
+     · LE BALLAST n'est plus douze pixels tirés au hasard (le « poivre » du 438)
+       mais des cailloux ASSEMBLÉS — une masse de deux ou trois pixels avec son
+       éclat en haut à gauche et son ombre en bas à droite — posés par la suite R2,
+       la seule faite pour le plan, et recopiés à ±64 px pour que le pavé boucle ;
+     · CHAQUE QUAI EST UN DESSIN de 2×8 cases, pas une tuile : il a deux bouts, une
+       rive côté voie, une rive côté terre, et aucune de ses cases ne se répète.
+       ⚠️ La ferme et la ville NE PARTAGENT PLUS le même quai : c'est la demande, et
+       c'est l'inverse assumé du 427 (« la même forme et attention graphique ») —
+       la VOIE reste unique et commune aux deux cartes, les QUAIS disent chacun
+       leur monde. Le soin, lui, reste le même des deux côtés.
+     ⚠️ Lumière du projet en HAUT À GAUCHE partout : éclat sur l'arête gauche ou
+     haute, ombre à droite ou en bas. Aucun `translate`, aucun `fillText` : le faux
+     canevas des bancs doit pouvoir les regarder. On les pose par
+     `drawStationTile` (niveau module), lue par le jeu ET par `render-gare.mjs`. */
+  const R2A = 0.7548776662466927, R2B = 0.5698402909980532;   // suite R2 (DESSIN.md, 438)
+  function railPatch() {
+    const W = 2 * T, H = 4 * T;
+    const [c, g] = cv(W, H);
+    /* ⚠️ 2026-09-13 (seconde passe) — LE BALLAST PASSE AU GRIS FROID ET CLAIR, LES
+       TRAVERSES AU BRUN SOMBRE CERNÉ. Guillaume : « plus de contraste entre le bois des
+       rails et le gravier en dessous ». Le premier jet mettait un gravier BRUN sous un
+       bois BRUN : la valeur séparait un peu, la teinte pas du tout. On sépare les deux à
+       la fois — pierre froide et claire, bois chaud et sombre — et le cerne fait le
+       reste (DESSIN.md 441 : un cerne sert aussi contre un fond clair). */
+    P(g, 0, 0, W, H, "#9d978c");
+    P(g, 0, 0, 2, H, "#aca69b");                    // épaule gauche au soleil
+    P(g, W - 2, 0, 2, H, "#827c72");                // épaule droite à l'ombre
+    const STONES = ["#b3ada2", "#8c867c", "#a39d92"];
+    for (let i = 0; i < 70; i++) {
+      const sx = Math.floor(((0.5 + i * R2A) % 1) * W);
+      const sy = Math.floor(((0.5 + i * R2B) % 1) * H);
+      const w = 2 + (i % 2);
+      for (const oy of [-H, 0, H]) {                 // recopié au-dessus et en dessous : le pavé boucle
+        P(g, sx, sy + oy, w, 2, STONES[i % 3]);
+        P(g, sx, sy + oy, 1, 1, "#c7c1b6");
+        P(g, sx + w - 1, sy + oy + 1, 1, 1, "#6f6a62");
+      }
     }
-    const rx = side === 0 ? 6 : T - 8;                             // one rail per half tile
-    P(g, rx, 0, 2, T, "#8f9aa5"); P(g, rx, 0, 1, T, "#b9c2cc");
+    // Les traverses. ⚠️ Le pas de 11/10 px est ce qui efface la grille : jamais 8, jamais 16.
+    const SLEEPERS = [2, 13, 23, 34, 45, 55];
+    const WOOD = [["#5a3b25", "#78513a", "#3b2416"], ["#523522", "#6f4a33", "#352013"]]; // corps, arête au soleil, arête basse
+    const INK = "#24160c";
+    SLEEPERS.forEach((sy, i) => {
+      const [body, hi, lo] = WOOD[i % 2];
+      const x0 = 1 + (i % 3 === 1 ? 1 : 0), x1 = W - 1 - (i % 3 === 2 ? 1 : 0);   // posées à la main, pas au cordeau
+      P(g, x0, sy + 5, x1 - x0, 1, "#6e685f");       // son ombre sur le gravier
+      P(g, x0, sy, x1 - x0, 5, INK);                 // le cerne
+      P(g, x0 + 1, sy, x1 - x0 - 2, 4, body);
+      P(g, x0 + 1, sy, x1 - x0 - 2, 1, hi);
+      P(g, x0 + 1, sy + 3, x1 - x0 - 2, 1, lo);
+      const v = 3 + (i * 7) % 9;                     // le fil du bois, jamais au même endroit
+      P(g, x0 + v, sy + 1, 7, 1, lo);
+      P(g, x0 + 5 + (i * 13) % 13, sy + 2, 5, 1, lo);
+      if (i % 2 === 0) P(g, x0 + 1, sy + 1, 2, 1, INK); else P(g, x1 - 3, sy + 2, 2, 1, INK); // gerce au bout
+    });
+    // Les selles d'acier et leurs tire-fonds, sous chaque file de rail.
+    const RAILS = [6, T + 8];                        // l'écartement du 232 : le train s'y cale (`STATION_RAIL_X * T + 4`)
+    for (const sy of SLEEPERS) for (const rx of RAILS) {
+      P(g, rx - 2, sy, 6, 4, "#45484d");
+      P(g, rx - 2, sy, 6, 1, "#686d74");
+      P(g, rx - 2, sy + 1, 1, 1, "#1f2124"); P(g, rx + 3, sy + 2, 1, 1, "#1f2124");
+    }
+    // Les rails : patin rouillé, champignon poli, patin à l'ombre, et l'ombre portée EN TRAIT
+    // (un ouvrage continu porte son ombre dans son dessin, DESSIN.md 441).
+    for (const rx of RAILS) {
+      P(g, rx - 1, 0, 1, H, "#6a5a4c");
+      P(g, rx, 0, 1, H, "#dde3e8");
+      P(g, rx + 1, 0, 1, H, "#96a1ab");
+      P(g, rx + 2, 0, 1, H, "#4a423b");
+      P(g, rx + 3, 0, 1, H, "rgba(30,22,14,0.30)");
+    }
+    // Un joint éclissé par file, décalés, et chacun ENTRE deux traverses.
+    [[RAILS[0], 30], [RAILS[1], 51]].forEach(([rx, jy]) => {
+      P(g, rx - 2, jy - 3, 1, 7, "#5a5f66"); P(g, rx + 3, jy - 3, 1, 7, "#5a5f66");
+      for (const ey of [jy - 2, jy + 2]) { P(g, rx - 2, ey, 1, 1, "#1f2124"); P(g, rx + 3, ey, 1, 1, "#1f2124"); }
+      P(g, rx, jy, 2, 1, "#3a3a3c");
+    });
     return c;
   }
-  // Platform tile (stone-edged planks).
-  function platformTile() {
-    const [c, g] = cv(T, T);
-    P(g, 0, 0, T, T, "#b8a888");
-    P(g, 0, 4, T, 1, "#a89878"); P(g, 0, 9, T, 1, "#a89878"); P(g, 0, 14, T, 1, "#a89878");
-    P(g, 0, 0, T, 1, "#cfc0a0");
+  /* ╔═════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-13 (seconde passe) — LES DEUX QUAIS, REFAITS. Guillaume : « le quai
+     ║ est pas beau comme ça ».
+     ╚═════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ CE QUI N'ALLAIT PAS, ET C'EST LA MÊME CHOSE DES DEUX CÔTÉS : DU DÉTAIL À LA
+     PLACE D'UNE FORME. Côté ferme, deux colonnes de clous faisaient une échelle et une
+     planche neuve criait au milieu ; côté ville, un filet d'ivoire, un damier de
+     marqueterie et une rose des vents à pointes d'un pixel se disputaient trente-deux
+     pixels de large. Aucun des deux ne se lisait comme un QUAI : ils étaient à plat
+     sur le sol, sans épaisseur.
+     ⚠️ LA SORTIE VIENT DU JEU LUI-MÊME, PAS D'UNE IDÉE NEUVE. Le ponton du lac et
+     l'esplanade de Valley Town (`tools/out/lac-quai.png`) sont déjà ce que ce projet
+     sait faire de beau en bois et en pierre : des lames aux tons SERRÉS où le JOINT
+     fait le dessin (le parquet du tribunal, même leçon), une margelle claire à arête
+     franche, et rien d'autre. Les deux quais en reprennent la langue, et gagnent ce
+     qui leur manquait : une FACE AVANT au bout sud (la vue est de trois quarts, le
+     sud se voit), qui pose le plancher au-dessus du sol au lieu de le peindre dessus.
+     ⚠️ Ferme et ville restent deux mondes, par la matière et non par l'ornement :
+     bois grisé, poutre brute et face en planches à la ferme ; acajou verni, margelles
+     de pierre de taille et un seul jonc de laiton côté voie à la ville. */
+  function farmPlatform() {
+    const W = C.STATION_PLATFORM.w * T, H = C.STATION_PLATFORM.h * T;
+    const [c, g] = cv(W, H);
+    const INK = "#2e2016", SEAM = "#4e3a29";
+    const FACE = 5;                                  // la face avant, au bout sud
+    const D0 = 3, D1 = H - FACE - 2;                 // le plancher, entre la poutre nord et la poutre sud
+    // Le plancher : des lames EN TRAVERS de la voie, tons serrés, joints marqués.
+    P(g, 0, 0, W, H, SEAM);
+    const TONES = ["#8a6a4c", "#86664a", "#8e6e50", "#836348"];
+    const LENS = [23, 19, 29];                       // longueurs premières : les abouts ne s'alignent pas
+    for (let y = D0, row = 0; y < D1; y += 5, row++) {
+      const hh = Math.min(4, D1 - y);
+      let x = 3 - ((row * 11) % 17);
+      for (let k = row; x < W - 1; k++) {
+        const len = LENS[k % LENS.length];
+        const a = Math.max(3, x), b = Math.min(W - 1, x + len - 1);
+        if (b > a) {
+          P(g, a, y, b - a, hh, TONES[(k * 3 + row) % TONES.length]);
+          P(g, a, y, b - a, 1, "#9a7a5a");           // l'arête au soleil
+          if (hh >= 4) P(g, a + ((k * 7) % Math.max(1, b - a - 6)), y + 2, 6, 1, "#7a5c41"); // le fil
+        }
+        x += len;
+      }
+    }
+    // La poutre côté voie : brute, sombre, cernée.
+    P(g, 0, 0, 3, H, "#5a4230"); P(g, 1, 0, 1, H, "#6f5440"); P(g, 0, 0, 1, H, INK);
+    // La poutre du bout nord.
+    P(g, 0, 0, W, 3, "#5a4230"); P(g, 0, 0, W, 1, INK); P(g, 0, 1, W, 1, "#6f5440");
+    // Le bout sud : la poutre (au soleil), puis la face avant en planches debout.
+    P(g, 0, D1, W, 2, "#6f5440"); P(g, 0, D1, W, 1, "#83674f");
+    P(g, 0, H - FACE, W, FACE, "#4f3a29");
+    for (let fx = 4; fx < W; fx += 6) P(g, fx, H - FACE, 1, FACE, "#3b2b1e");
+    P(g, 0, H - 1, W, 1, INK);
+    P(g, W - 1, 0, 1, H, INK);                       // le cerne côté terre
+    return c;
+  }
+  function townPlatform() {
+    const W = C.TOWN_PLATFORM.w * T, H = C.TOWN_PLATFORM.h * T;
+    const [c, g] = cv(W, H);
+    const INK = "#5d5648";                           // l'arête de la pierre qui plonge
+    const STONE = "#e4dcc8", STONE_SH = "#d2c9b4", JOINT = "#bdb4a0";
+    const BRASS = "#caa24a", BRASS_HI = "#efd27c";
+    const FACE = 5;
+    const X0 = 6, X1 = W - 4;                        // le plancher, entre les deux margelles
+    const Y0 = 4, Y1 = H - FACE - 3;
+    // Le plancher : acajou verni, lames en travers, tons serrés, le joint fait le dessin.
+    P(g, X0, Y0, X1 - X0, Y1 - Y0, "#5a321d");
+    /* ⚠️ DES LAMES D'UNE SEULE PIÈCE, d'une margelle à l'autre, sans about : avec des
+       coupes décalées sur vingt-deux pixels de large, le plancher se lisait comme un mur
+       de briques (vu sur la planche de `render-gare`). Un quai de prestige se pose en
+       lames entières, comme le ponton du lac ; c'est la ferme qui rabote des chutes. */
+    const TONES = ["#94593a", "#8f5537", "#98603f", "#8b5335"];
+    for (let y = Y0, row = 0; y < Y1; y += 5, row++) {
+      const hh = Math.min(4, Y1 - y);
+      P(g, X0, y, X1 - X0, hh, TONES[(row * 7 + (row >> 2)) % TONES.length]);
+      P(g, X0, y, X1 - X0, 1, "#a86c48");            // le vernis prend la lumière sur l'arête haute
+      if (hh >= 4) P(g, X0 + 2 + (row * 7) % 9, y + 2, 7 + (row % 3) * 2, 1, "#81492c");   // le fil, discret
+    }
+    // Les margelles : pierre de taille claire, joints à pas premier, arête franche.
+    const coping = (x, w) => {
+      P(g, x, 0, w, H, STONE);
+      P(g, x + w - 1, 0, 1, H, STONE_SH);
+      for (let jy = 7; jy < H; jy += 13) P(g, x, jy, w, 1, JOINT);
+    };
+    coping(0, 5); P(g, 0, 0, 1, H, INK);             // côté voie
+    coping(X1, W - X1); P(g, W - 1, 0, 1, H, INK);   // côté ville
+    // Le seul ornement : un jonc de laiton qui borde le plancher côté voie.
+    P(g, 5, 0, 1, H, BRASS); P(g, 5, 0, 1, 1, BRASS_HI);
+    // Les margelles des deux bouts, en travers.
+    P(g, 0, 0, W, Y0, STONE); P(g, 0, Y0 - 1, W, 1, STONE_SH); P(g, 0, 0, W, 1, INK);
+    for (let jx = 9; jx < W; jx += 11) P(g, jx, 0, 1, Y0, JOINT);
+    P(g, 0, Y1, W, 3, STONE); P(g, 0, Y1 + 2, W, 1, STONE_SH);
+    for (let jx = 4; jx < W; jx += 11) P(g, jx, Y1, 1, 3, JOINT);
+    // La face avant, au bout sud : pierre de taille à l'ombre, appareillée.
+    P(g, 0, H - FACE, W, FACE, "#b8af9d");
+    P(g, 0, H - FACE, W, 1, "#a39a88");
+    for (let fx = 7; fx < W; fx += 12) P(g, fx, H - FACE + 1, 1, FACE - 2, "#9a917f");
+    P(g, 0, H - 1, W, 1, INK);
     return c;
   }
   // The station building. Zip 232 full redesign (Guillaume: "right now it
@@ -16299,8 +16485,11 @@ house: house(),
     unicorn: [unicornSprite(0), unicornSprite(1)],                  // zip 386
     seaIcons: [],
     duck: [duckSprite(0), duckSprite(1)],
-    railL: railHalf(0), railR: railHalf(1), // one wide track (zip 232)
-    platform: platformTile(),
+    // 2026-09-13 — un pavé de voie qui boucle et deux quais d'un seul tenant (voir `railPatch`) :
+    // trois canevas à la place des trois d'avant (`railL`, `railR`, `platform`).
+    railPatch: railPatch(),
+    platformFarm: farmPlatform(),
+    platformTown: townPlatform(),
     station: stationSprite(),
     signBoard: signBoardSprite(),
     train: trainSprite(),

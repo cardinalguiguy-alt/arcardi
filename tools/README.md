@@ -1403,6 +1403,30 @@ ce chemin de source ; le navigateur a tenu l'enchaînement réel.
 
 ---
 
+## `render-gare.mjs` — LA VOIE ET LES DEUX QUAIS (2026-09-13)
+
+Né le jour où Guillaume a demandé « un quai en bois, ultra chic côté ville, plus élémentaire côté
+ferme, et des rails plus détaillés » — la voie longeait tout le bord ouest des deux cartes depuis le
+232 sans qu'aucun banc ne la dessine, et ses traverses tombaient tous les 8 px pile (la grille,
+dessinée en bois). Il appelle `A.drawStationTile`, la fonction des deux gares.
+
+`node tools/render-gare.mjs` — **11 contrôles**, planche `tools/out/gare.png` (voie + quai de la
+ferme | voie + quai de la ville). Opacité des trois dessins ; la voie boucle (couture ≤ 3ᵉ quartile
+des transitions intérieures) ; les traverses, repérées dans les PIXELS, partent à au moins trois
+hauteurs différentes de la case ; aucune case d'un quai ne se répète ; le laiton n'existe que côté
+ville ; le plancher de la ville est plus saturé que celui de la ferme (mesuré sur le plancher seul) ;
+chaque quai a une face avant au bout sud, à l'ombre de sa propre arête.
+⚠️ **Deux contrôles ont rougi pour la mauvaise raison à l'écriture, et c'est la leçon du §8 de
+`CLAUDE.md` repayée deux fois dans le même banc** : « rouge moins bleu » prenait une planche neuve
+pour du laiton, et « face plus sombre que le plancher » déclarait absente une face de pierre claire
+sous un plancher d'acajou. Dans les deux cas, il fallait nommer ce qui SÉPARE (un jaune saturé ; une
+face à l'ombre de son arête), pas une grandeur voisine.
+⚠️ **La première version des deux quais passait déjà ce banc et Guillaume l'a jugée « pas belle »** :
+trop de détails à la place d'une forme, et aucune épaisseur. Le banc tient ce qui a été corrigé
+(l'épaisseur, les briques évitées), il ne dit pas si c'est beau.
+
+---
+
 ## `render-navire.mjs` — LE NAVIRE DES ÉTOILES (451, étendu au 454)
 
 ⚠️⚠️ **ZIP 454 — CE BANC A REGARDÉ CE NAVIRE SOUS TRENTE-DEUX MASQUES PENDANT TROIS ZIPS SANS
