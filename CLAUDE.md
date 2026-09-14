@@ -70,6 +70,34 @@ jugement ; parmi les candidats les plus visibles, sans en privilégier un :
 - **le n°1 de la liste hors-quête** : la ferme peuplée en vraie séance à deux clients, socle de
   toute décision sociale à venir (relations résident-résident, densification, mariage).
 
+### 2026-09-14 — trois correctifs sans rapport avec la trame de la quête
+
+**Le menu développeur suit maintenant la chronologie du récit.** « Open Tristan's saw » et « Stand
+at Kerguélen » ouvraient leur scène sans rien valider en amont (maire jamais signé, six sœurs
+jamais trouvées) : la commande passée dans la scène se faisait ensuite refuser par l'hôte,
+silencieusement — le geste se jouait pour rien. Un op neuf, `Q.devStar(e, "prep", …)`, relit
+`starTimberBlock` sur la pièce courante et résout, avec les MÊMES briques que les boutons déjà là
+(jamais un raccourci inventé), chaque porte qui la bloque encore — sans jamais signer une
+négociation à la place du joueur ni compléter la pièce elle-même : le geste reste à jouer. Détail
+dans `quete.js` (chercher « PRÉPARER TRISTAN »).
+
+**Le ponton de Valley Town était planté à neuf cases de l'artère centrale.** `TOWN_PIER.x` valait
+100 ; `TOWN_CROSS_ST_X` (l'avenue nord-sud) et `TOWN_FOUNTAIN` (la Grand-Place) s'accordent tous
+deux sur l'axe 93, et le commentaire du ponton affirmait pourtant depuis toujours qu'il y était
+« dans l'axe de l'artère centrale ». **Aucun banc ne le mesurait** — vu sur la carte (`M`) : le
+marqueur du joueur tombait visiblement à côté de la colonne qui descend de la Grand-Place.
+`TOWN_PIER.x` corrigé à 91 ; tout le reste (promenade, mobilier, la scène composée du pêcheur,
+`STAR_SHIP_X`) en dérive et a suivi sans y toucher. `verify-collision`, `verify-vallee` (223/223),
+`verify-quete` (930/930), `verify-jalons` (135/135) et `render-navire` verts après coup, et la
+carte re-vérifiée à l'écran, avant et après. ⚠️ **La leçon dépasse ce quai** : un invariant de
+position affirmé seulement dans un commentaire (« dans l'axe de… ») n'est vérifié par rien tant
+qu'aucun banc ne compare les deux grandeurs — la même famille que le §4 (deux cartes sans repère
+commun) sous une forme qu'aucun banc de ce dépôt ne cherche encore.
+
+**Le titre de la carte plein écran suit la zone.** `L.mapTitle` est devenue une fonction (comme
+`taxiStop`) : « Carte de la vallée » sur la ferme, **« Carte de la ville » à Valley Town**, « Plan
+du bâtiment » en intérieur — le dessin (`drawFullMap`) le faisait déjà depuis le 426, pas le titre.
+
 ---
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure

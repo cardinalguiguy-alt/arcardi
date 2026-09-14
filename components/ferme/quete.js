@@ -5653,5 +5653,62 @@ export function devStar(e, op, now, who) {
       if (!starTimberDone(e, k)) e.wood[k] = { at: t + 1, readyAt: t + 1, done: true, ready: false, by: DEV_BY };
     return { star: e, ok: true };
   }
+  /* ╔═════════════════════════════════════════════════════════════════════════════
+     ║ 2026-09-14 — « PRÉPARER TRISTAN » : LE RATTRAPAGE CHRONOLOGIQUE, PAS UN
+     ║ RACCOURCI DE PLUS.
+     ╚═════════════════════════════════════════════════════════════════════════════
+     Demande de Guillaume : rouvrir la scie ne doit jamais déposer le joueur dans
+     un monde halluciné (Kerguélen jamais engagé, cloche commandable avant la
+     coque…). Elle relit `starTimberBlock` sur LA PIÈCE COURANTE
+     (`starTimberNext`) et résout, dans l'ORDRE où `starTimberBlock` les teste
+     déjà, chaque porte qui la bloque — jamais un raccourci qui devinerait
+     l'état, toujours les mêmes briques que les boutons ci-dessus (`devYard`,
+     `townChain`, `starDevBudgetGate`, `resolveVandalReveal`).
+     ⚠️ `noPlan`/`noMayor` passent par `devYard(…, false)` : JAMAIS `true`, qui
+     poserait la pièce elle-même — on rattrape ce qui la PRÉCÈDE, pas elle.
+     `hullFirst` passe par `devYard(…, true)` sans risque : cette raison n'existe
+     que pour une pièce hors `STAR_YARD_KEYS` (voir sa garde), donc `raiseYard`
+     ne peut y compléter que la coque et le gouvernail, jamais la cible.
+     S'arrête sur "busy"/"raise"/"done" (déjà en chantier, prête ou posée : rien
+     à rattraper) ou sur une raison qu'aucune brique ne sait lever, plutôt que de
+     deviner et de fabriquer un état que la partie réelle ne peut pas produire. */
+  if (op === "prep") {
+    const key = starTimberNext(e);
+    if (!key) return devBlocked(e, "allRaised");
+    for (let guard = 0; guard < 6; guard++) {
+      const reason = starTimberBlock(e, key);
+      if (reason === null || reason === "busy" || reason === "raise" || reason === "done") break;
+      if (reason === "noPlan" || reason === "noMayor") {
+        if (!devYard(e, who, t, false)) return devBlocked(e);
+        continue;
+      }
+      if (reason === "hullFirst") {
+        /* ⚠️ « hullFirst » est ambigu, et le confondre boucle sans jamais
+           avancer : elle se lève aussi bien quand la coque et le gouvernail
+           ne sont pas encore montés QUE quand ils le sont déjà mais que le
+           cratère n'a pas encore livré ses sœurs (`starSabotageAt` encore à
+           0 — voir sa garde dans `starTimberBlock`). Les deux se distinguent
+           en relisant directement `STAR_YARD_KEYS`, jamais en redevinant sur
+           la seule chaîne de raison. */
+        if (!STAR_YARD_KEYS.every(k => starTimberDone(e, k))) {
+          if (!devYard(e, who, t, true)) return devBlocked(e);
+        } else if (!townChain(["crater", "townShy", "townGreen"])) {
+          return devBlocked(e);
+        }
+        continue;
+      }
+      if (reason === "repair") {
+        if (!townChain(["crater", "townShy", "townGreen"])) return devBlocked(e);
+        resolveVandalReveal(e, t);
+        continue;
+      }
+      if (reason === "noBudget") {
+        if (!starDevBudgetGate(e, who, t)) return devBlocked(e, "needBudget");
+        continue;
+      }
+      return devBlocked(e, reason);
+    }
+    return { star: e, ok: true };
+  }
   return { ok: false };
 }

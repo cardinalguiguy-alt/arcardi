@@ -13833,6 +13833,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!m || (m.zone || "farm") !== "town") { pushToast(L.star.dev.standKerguelenFar); return; }
     const tw = townWorldNow();
     if (!tw || !tw.shipX) { pushToast(L.star.dev.standKerguelenFar); return; }
+    /* 2026-09-14 — RATTRAPAGE CHRONOLOGIQUE, DEMANDÉ PAR GUILLAUME : se planter
+       devant Kerguélen pour rejuger sa scène (agitation, marteau, fuite) doit
+       d'abord amener le récit à l'endroit où elle EXISTE — sinon on se plante
+       devant un PNJ qui n'a encore rien à jouer, exactement le défaut de « Open
+       Tristan's saw » juste au-dessus. Même brique que le bouton « vandal » du
+       menu (`Q.devStar`) : six sœurs, maire signé, plans rendus — le geste (E,
+       le marteau) reste entier, on ne fait que remettre le monde à l'heure. */
+    sendReq({ kind: "devStar", op: "vandal" });
     keysRef.current = {};
     /* ⚠️⚠️⚠️ AUDIT 2026-09-12 — LE `+ 1` EST VOLONTAIRE, NE PAS LE RETIRER. Il a
        été enlevé pendant cet audit sur une mauvaise lecture d'écran (le fermier
@@ -35263,9 +35271,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                             ⚠️ IL N'ACCORDE RIEN : il ouvre la scène, et la commande
                             passe par la même `req` arbitrée que d'habitude. L'hôte
                             refusera si la pièce n'est pas commandable, exactement
-                            comme il refuse au joueur (§ menu développeur, 398). */}
+                            comme il refuse au joueur (§ menu développeur, 398).
+                            ⚠️⚠️ 2026-09-14 — ET IL RATTRAPE D'ABORD LA TRAME, DEMANDE
+                            DE GUILLAUME : sans l'op « prep » (`Q.devStar`), ce bouton
+                            pouvait ouvrir la scie sur une pièce dont le monde autour
+                            (maire jamais signé, Kerguélen jamais affolé) ne racontait
+                            pas encore l'histoire qui la rend commandable — la scène
+                            s'ouvrait sur un décor halluciné. `prep` relit
+                            `starTimberBlock` sur LA MÊME pièce et pose exactement ce
+                            qui lui manque, jamais plus (voir son commentaire dans
+                            `quete.js`) ; elle ne complète QUE ce qui précède la
+                            pièce — le montage lui-même reste le geste à jouer. */}
                         <button className="ferme-dev-btn"
-                                onClick={() => { setSawScene({ part: Q.starTimberNext(e) || "hull" }); setDevMenuOpen(false); }}>
+                                onClick={() => { sendReq({ kind: "devStar", op: "prep" }); setSawScene({ part: Q.starTimberNext(e) || "hull" }); setDevMenuOpen(false); }}>
                           {L.star.dev.saw}
                         </button>
                       </div>
@@ -35375,7 +35393,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {mapOpen && (
         <div className="ferme-map-ov" onClick={() => setMapOpen(false)}>
           <div className="ferme-map-box panel" onClick={e => e.stopPropagation()}>
-            <h2>{L.mapTitle}</h2>
+            <h2>{L.mapTitle((meRef.current && meRef.current.zone) || "farm")}</h2>
             {/* ⚠️ ZIP 429 — LE CLIC POSE LA DESTINATION, ET LE CURSEUR LE DIT.
                 Sans `cursor: crosshair`, rien n'indique qu'une carte est
                 cliquable : on l'ouvre, on la lit, on la referme, et la boussole

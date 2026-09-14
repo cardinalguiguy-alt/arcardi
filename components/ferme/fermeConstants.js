@@ -3500,7 +3500,17 @@ export const TOWN_CEMETERY = { x: 46, y: 40, w: 14, h: 16 };  // l'enclos de l'�
    plus est entré avec ce zip (voir `tools/render-parc.mjs`). */
 export const TOWN_LAKE = { x: 56, y: 154, w: 96, h: 14 };     // le lac du sud + sa promenade (voir TOWN_QUAY_H)
 export const TOWN_QUAY_H = 2;                                 // rangées de dallage entre l'avenue du sud et l'eau
-export const TOWN_PIER = { x: 100, y: 154, w: 4, h: 8 };      // le ponton de bois, plein sud, dans l'axe de l'artère centrale
+/* ⚠️⚠️⚠️ 2026-09-14 — CORRIGÉ : `x` VALAIT 100, ET « DANS L'AXE DE L'ARTÈRE
+   CENTRALE » (le commentaire ci-dessous, déjà présent) ÉTAIT FAUX DEPUIS LE
+   DÉBUT. `TOWN_CROSS_ST_X = 92` (l'artère nord-sud, colonnes 92-93, centre
+   93.0) ET `TOWN_FOUNTAIN = {x:92,…}` (la fontaine de la Grand-Place, centre
+   93.0 aussi) s'accordent déjà entre eux ; le ponton, lui, se centrait à
+   102.0 — NEUF cases à l'est du vrai axe. Vu sur la carte de la vallée
+   (`M`) : le marqueur du joueur planté sur le quai tombe visiblement à côté
+   de la colonne qui descend de la Grand-Place, pas dessous. `axis` (plus
+   bas dans `fermeEngine.js`, `quayMix`) se DÉDUIT de `x` : rien d'autre à
+   toucher ici, et `STAR_SHIP_X` (`= TOWN_PIER.x - 11`) suit tout seul. */
+export const TOWN_PIER = { x: 91, y: 154, w: 4, h: 8 };       // le ponton de bois, plein sud, dans l'axe de l'artère centrale (x = TOWN_CROSS_ST_X - 1, centré sur 93)
 /* ═══════════════════════════════════════════════════════════════════════════
    ZIP 437 — LE RIVAGE DU LAC DU SUD. UN CHAMP, PAS UNE LIGNE.
    ───────────────────────────────────────────────────────────────────────────
