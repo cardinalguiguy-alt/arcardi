@@ -310,7 +310,40 @@ ok("⚠️⚠️⚠️ LE DÉFAUT DE L'AUDIT : rien ne peut conclure la quête a
   Q.resolveStarFound(e, Q.STAR_EVIL_ID, "banc", now);
   ok("chapitre 3e — réanimée : la quête est complète", Q.starQuestComplete(e));
   const g = Q.resolveStarGift(e, ["banc"], now);
-  ok("LA FIN — le don se fait, la scène finale se joue", g.ok === true && g.scene === "end" && Q.starDone(e));
+  /* ⚠️ D11 — LE DON CONVOQUE, IL NE JOUE PLUS « end » LUI-MÊME. `doneAt` reste
+     la conclusion de la quête ; ce qui suit (le maire, le baptême, l'inauguration)
+     est l'épilogue, jamais sauté par ce banc (la ligne rouge du 444 : on ne
+     saute pas la scène du maire, et D11 en ajoute deux de plus du même métal). */
+  ok("LA FIN DU CHANTIER — le don se fait, le maire convoque",
+     g.ok === true && g.scene === "summon" && Q.starDone(e) && Q.starGoalKey(e, {}) === "finaleSummon");
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   D11 — L'ÉPILOGUE : LE MAIRE, LE BAPTÊME, L'INAUGURATION, PUIS LA FIN RÉELLE.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️⚠️ CE BANC REJOUE TOUTE LA TRAME, FINALE COMPRISE (consigne du chantier) :
+   sans cette section, `starDone(e)` marquerait la fin pour ce banc alors que le
+   joueur, lui, a encore trois portes à ouvrir avant l'écran final. */
+{
+  now += 1000;
+  const ra = Q.resolveStarFinaleAgree(e, "banc", now);
+  ok("D11a — le maire accorde la fête (sans jauge ni rendez-vous)",
+     ra.ok === true && Q.starFinaleAgreed(e) && Q.starGoalKey(e, {}) === "finaleBaptize");
+  now += 1000;
+  const rb = Q.resolveStarBaptize(e, "banc", now);
+  ok("D11b — le baptême : `starShipName` rend enfin le nom",
+     rb.ok === true && Q.starShipName(e) === C.STAR_SHIP_NAME && Q.starGoalKey(e, {}) === "finaleInaugurate");
+  now += 1000;
+  const ri = Q.resolveStarFinaleInaugurate(e, "banc", now);
+  ok("D11c — l'inauguration publique : la mise en mer est lancée",
+     ri.ok === true && Q.starFinaleInaugurated(e) && Q.starGoalKey(e, {}) === null);
+  ok("⚠️ …la fenêtre de cérémonie est active tout de suite après",
+     Q.starFinaleInaugActive(e, now + 1));
+  ok("⚠️⚠️ D11d — LA CINÉMATIQUE FINALE (étoiles + texte) EST DUE, PAS AVANT",
+     !Q.starFinaleEndDue(e, now + Q.STAR_FINALE_END_AT_MS - 1)
+     && Q.starFinaleEndDue(e, now + Q.STAR_FINALE_END_AT_MS + 1));
+  ok("⚠️⚠️⚠️ LA FIN RÉELLE : LES TROIS PORTES DE L'ÉPILOGUE SONT TOUTES FRANCHIES",
+     Q.starFinaleAgreed(e) && Q.starFinaleBaptized(e) && Q.starFinaleInaugurated(e) && Q.starDone(e));
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

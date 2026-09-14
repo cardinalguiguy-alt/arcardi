@@ -48,7 +48,7 @@ import * as Q from "./quete";
    `maire.js`, vue 3D dans `MaireScene.js` : ce fichier ne fait que la porte et
    l'arbitrage. Voir l'en-tête de `maire.js` pour le contrat réseau. */
 import * as MR from "./maire";
-import { MayorAudience, MayorWatch, mayorCtxOf } from "./MaireScene";
+import { MayorAudience, MayorWatch, MayorFinale, mayorCtxOf } from "./MaireScene";
 /* ⚠️ LOT E — LA SCIE DE TRISTAN. Même découpage que l'audience : la mécanique
    pure est dans `scierie.js` (l'hôte la REJOUE, il ne croit pas le client), la
    vue et l'atelier 3D dans `ScierieScene.js` / `scierieAtelier.js`. Ce fichier
@@ -673,6 +673,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      derrière — un maire qu'on écoute pendant qu'un sanglier mange les carottes
      ne serait pas une scène, ce serait une fenêtre. */
   const [mayorTalk, setMayorTalk] = useState(null);
+  /* D11 — la convocation, ou `null`. ⚠️ UN ÉTAT DISTINCT DE `mayorTalk`, PAS UN
+     DRAPEAU DESSUS : cette scène n'a ni jauge ni transcription à rejouer côté
+     hôte, donc rien à partager avec le branchement réseau (`onLive`, le bouton
+     spectateur) que `mayorTalk` porte. Un drapeau sur le même état aurait
+     obligé chaque lecteur de `mayorTalk` à se demander lequel des deux modes
+     il regarde — deux scènes, deux états, comme `sawScene` et `mayorTalk`
+     eux-mêmes. */
+  const [mayorFinaleTalk, setMayorFinaleTalk] = useState(null);
   /* LOT E — la manche de sciage en cours, ou `null`. ⚠️ ELLE NE PORTE QUE LA
      PIÈCE : tout le reste (graine, planches, tempo) se DÉDUIT de son nom des
      deux côtés du réseau (`sawSeed`), donc rien ne circule (§3). */
@@ -1737,8 +1745,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      tenir le joueur immobile pendant qu'il lit. Il reste un état React
      ordinaire, juste plus lu par personne d'autre : voir sa nouvelle carte
      flottante (§ rendu), qui ne capte de clic que sur elle-même. */
-  useEffect(() => { starUiOpenRef.current = !!(starMini || starCard || starFind || mayorTalk || mayorWatch || sawScene); },
-            [starMini, starCard, starFind, mayorTalk, mayorWatch, sawScene]);   // zip 444/469/480/481 + lot E
+  useEffect(() => { starUiOpenRef.current = !!(starMini || starCard || starFind || mayorTalk || mayorFinaleTalk || mayorWatch || sawScene); },
+            [starMini, starCard, starFind, mayorTalk, mayorFinaleTalk, mayorWatch, sawScene]);   // zip 444/469/480/481 + lot E + D11
   useEffect(() => { planOpenRef.current = planOpen; }, [planOpen]);                     // zip 454
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ZIP 449 — LE DÉPART SPONTANÉ DU GUIDE. Une veille d'une seconde, et elle
@@ -2383,6 +2391,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function broadcastGlobalToast(msg) {
     pushToast(msg);
     channelRef.current?.send({ type: "broadcast", event: "apply", payload: { toast: { broadcast: true, key: "raw", n: msg } } });
+  }
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ D11 — LE MAIRE CONVOQUE. APPELÉE PAR LES CINQ ENDROITS QUI FONT RÉUSSIR
+     ║ `resolveStarGift`, À LA PLACE DE L'ANCIENNE SCÈNE « end » IMMÉDIATE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ `resolveStarGift`/`e.doneAt` RESTENT LA CONCLUSION DE LA QUÊTE (D11,
+     consigne de Guillaume) : cette fonction ne fait QUE l'annoncer. Elle ne pose
+     ni scène ni rendez-vous — le bandeau (`starFinaleGoalKey`) et le chevron
+     (`starTargetPos("townHall")`) se déclenchent tout seuls dès que `doneAt` est
+     vrai et que `e.finale.agreedAt` ne l'est pas encore, dérivés de l'état déjà
+     diffusé dans le MÊME `apply`. Un seul message de plus (le toast, comme celui
+     du vandale) — jamais un par image (§3 de CLAUDE.md).
+     ⚠️ IDEMPOTENTE PAR CONSTRUCTION : les cinq appelants ne l'invoquent que quand
+     `resolveStarGift` vient de réussir, ce qui n'arrive qu'une fois (`e.doneAt`). */
+  function announceFinaleSummon() {
+    broadcastGlobalToast(L.star.finale.summonToast);
+    broadcastChat("⭐", L.star.chat.done);
   }
 
   function buildMinimapBase() {
@@ -3689,7 +3715,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            nomme une scène inconnue laisse un voile noir sur rien. */
         out.starScene = { key: "card", ch: nowCh.key };
       }
-      if (r.scene === "end") { out.starScene = { key: "end" }; broadcastChat("⭐", L.star.chat.done); }
+      if (r.scene === "summon") announceFinaleSummon();
       persistFnRef.current && persistFnRef.current();
       hostFlushOut(out, f, null);
       return;
@@ -3971,7 +3997,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          chaque op ne coûte rien de plus qu'un contrôle qui échoue en silence. */
       if (Q.starShipComplete(s2.star)) {
         const rg = Q.resolveStarGift(s2.star, starRoomPlayerIds(), Date.now());
-        if (rg.ok) { out.starScene = { key: "end" }; broadcastChat("⭐", L.star.chat.done); }
+        if (rg.ok) announceFinaleSummon();
       }
       dirtyRef.current = true;
       /* ⚠️⚠️ P1 BIS (2026-09-07) — `r.blocked` DIT POURQUOI LE BOIS N'A PAS BOUGÉ.
@@ -4302,7 +4328,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            jouée (même raison qu'au 478, §3 — seul le NOMBRE de `send()` compte). */
         if (Q.starShipComplete(ev)) {
           const rgV = Q.resolveStarGift(ev, starRoomPlayerIds(), nowV);
-          if (rgV.ok) { outV.starScene = { key: "end" }; broadcastChat("⭐", L.star.chat.done); }
+          if (rgV.ok) announceFinaleSummon();
         }
         persistFnRef.current && persistFnRef.current();
         hostSend({ type: "broadcast", event: "apply", payload: outV });
@@ -4345,7 +4371,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              `resolveStarGift` est idempotent : un essai qui échoue ne coûte rien. */
           if (Q.starQuestComplete(e3)) {
             const rgR3 = Q.resolveStarGift(e3, starRoomPlayerIds(), nowR3);
-            if (rgR3.ok) { outR3.starScene = { key: "end" }; broadcastChat("⭐", L.star.chat.done); }
+            if (rgR3.ok) announceFinaleSummon();
           }
           persistFnRef.current && persistFnRef.current();
           hostSend({ type: "broadcast", event: "apply", payload: outR3 });
@@ -6932,10 +6958,54 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const out = { star: e };
       if (rr.complete) {
         const rg = Q.resolveStarGift(e, starRoomPlayerIds(), now);
-        if (rg.ok) { out.starScene = { key: "end" }; broadcastChat("\u2B50", L.star.chat.done); }
+        if (rg.ok) announceFinaleSummon();
       }
       hostSend({ type: "broadcast", event: "apply", payload: out });
       broadcastChat("\u{1F528}", L.star.plan.raised(L.star.plan.part(rr.key), f.name));
+      persistFnRef.current && persistFnRef.current();
+      return true;
+    }
+    /* ╔══════════════════════════════════════════════════════════════════════════
+       ║ D11 — LES TROIS REQUÊTES DE L'ÉPILOGUE. LA PORTE D13 EST CÔTÉ CLIENT,
+       ║ COMME `starAlone`/le dos-à-dos DE LA REINE : UNE COURTOISIE PARTAGÉE,
+       ║ PAS UN RATIONNEMENT DE RESSOURCE — LE MODÈLE DE CONFIANCE DU §0.
+       ╚══════════════════════════════════════════════════════════════════════════
+       ⚠️ CHAQUE RÉSOLVEUR EST IDEMPOTENT (`already: true`) : un double-clic ou
+       une seconde requête réseau ne rejoue rien, exactement comme `resolveStarGift`
+       plus haut. Trois requêtes, trois arbitrages, un seul `apply` chacune. */
+    if (req.kind === "starFinaleAgree") {
+      const s2 = sharedRef.current;
+      const e = (s2.star = Q.migrateStar(s2.star));
+      const r = Q.resolveStarFinaleAgree(e, f.name, Date.now());
+      if (!r.ok || r.already) return true;
+      dirtyRef.current = true;
+      hostSend({ type: "broadcast", event: "apply", payload: { star: e } });
+      persistFnRef.current && persistFnRef.current();
+      return true;
+    }
+    if (req.kind === "starFinaleBaptize") {
+      const s2 = sharedRef.current;
+      const e = (s2.star = Q.migrateStar(s2.star));
+      if (req.pz !== "town") return true;
+      const r = Q.resolveStarBaptize(e, f.name, Date.now());
+      if (!r.ok || r.already) return true;
+      dirtyRef.current = true;
+      hostSend({ type: "broadcast", event: "apply", payload: { star: e } });
+      broadcastGlobalToast(L.star.finale.baptizeToast(Q.starShipName(e)));
+      broadcastChat("⚓", L.star.chat.baptized(f.name, Q.starShipName(e)));
+      persistFnRef.current && persistFnRef.current();
+      return true;
+    }
+    if (req.kind === "starFinaleInaugurate") {
+      const s2 = sharedRef.current;
+      const e = (s2.star = Q.migrateStar(s2.star));
+      if (req.pz !== "town") return true;
+      const r = Q.resolveStarFinaleInaugurate(e, f.name, Date.now());
+      if (!r.ok || r.already) return true;
+      dirtyRef.current = true;
+      hostSend({ type: "broadcast", event: "apply", payload: { star: e } });
+      broadcastGlobalToast(L.star.finale.inaugToast);
+      broadcastChat("\u{1F389}", L.star.chat.inaugurated(f.name));
       persistFnRef.current && persistFnRef.current();
       return true;
     }
@@ -12648,9 +12718,41 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       } else { res.stuckT = 0; res.repath = 0; }
       return;
     }
+    /* ⚠️⚠️ D11 (c) — L'INAUGURATION APPELLE TOUT LE MONDE. Testée ICI, à l'endroit
+       EXACT où un résident libre choisit sa prochaine destination : la marche
+       normale (règles 1 et 2 ci-dessus, arrivée, collision, garde anti-blocage)
+       reste identique, seul le CHOIX change — jamais une téléportation, jamais
+       un second système de déplacement à tenir d'accord avec celui-ci (§8 de
+       CLAUDE.md). Un résident déjà occupé (`res.act`) finit son geste avant de
+       s'y mettre : rien n'interrompt une activité en cours (règle 1). */
+    if (Q.starFinaleInaugActive(sharedRef.current.star, now)) { townDecideGatherDestination(res, tw, now); return; }
     // 3. Rien à faire : on choisit une destination.
     if (now >= (res.nextRoamAt || 0)) townDecideDestination(res, ro, tw, now, peers);
     else res.moving = false;
+  }
+  /* D11 (c) — MÊME FORME QUE `townDecideDestination`, UN SEUL CHANGEMENT : LA
+     CIBLE. Chaque résident vise un point DIFFÉRENT autour de la cale — un angle
+     dérivé de son `rid` (nombre d'or, dispersion stable sans tirage aléatoire
+     ni état de plus) — pour que la foule s'étale en arc plutôt que de
+     s'empiler sur une case. `townAct: "watch"` les fait rester tournés vers le
+     navire une fois arrivés (voir `C.TOWN_ACTS.watch`, fermeConstants.js). */
+  function townDecideGatherDestination(res, tw, now) {
+    if (!tw.shipX) { res.nextRoamAt = now + 2000; return; }
+    const ring = 3.4 + (res.rid % 4) * 0.9;
+    const ang = (res.rid * 2.399963) % (Math.PI * 2);   // angle doré
+    const gx = Math.round(tw.shipX + Math.cos(ang) * ring);
+    const gy = Math.round(tw.shipY + Math.sin(ang) * ring * 0.6) - 1;
+    if (res.lastSpot && res.lastSpot.x === gx && res.lastSpot.y === gy && !res.roamTarget) {
+      // Déjà là : on reprend juste la posture, sans repartir marcher pour rien.
+      if (!res.act) { res.act = "watch"; res.actAt = now; res.actUntil = now + 15000; }
+      res.moving = false;
+      return;
+    }
+    const legs = E.townFindPath(tw, res.x, res.y, gx, gy);
+    if (!legs || !legs.length) { res.nextRoamAt = now + 1500; return; }
+    res.townPath = legs; res.roamTarget = legs[0]; res.lastSpot = { x: gx, y: gy };
+    res.townAct = "watch"; res.townSpot = null; res.stuckT = 0;
+    queueTownResidentPath(res, legs);
   }
   /* ---- LES RENCONTRES. L'architecture sociale tient dans cette fonction, et
      elle est volontairement courte : deux résidents assez proches, pas déjà
@@ -19941,11 +20043,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              composant — écrite dans cette closure, elle aurait été invisible au
              banc, qui la mesure depuis `render-navire`. */
           const sghost = starGhostsOn();
-          pushE((tw.shipY + 1) * T, se, () =>
-            sprites.drawStarShip(ctx, (tw.shipX + 0.5) * T, (tw.shipY + 1) * T, T, sparts, now,
+          /* ╔══════════════════════════════════════════════════════════════════
+             ║ D11 (b/c) — LE NOM VIVANT, ET LE DÉPART POUR L'INAUGURATION.
+             ╚══════════════════════════════════════════════════════════════════
+             ⚠️ `sLaunchK` NE VAUT JAMAIS AUTRE CHOSE QUE 0 HORS DE LA FENÊTRE DE
+             L'INAUGURATION (`starFinaleInaugActive`) : sans cette garde, le
+             navire resterait invisible pour toujours passé la mise en mer —
+             or Eduardo continue de l'emprunter normalement après coup
+             (`Q.starShipGone`), c'est ce mécanisme-là qui reste la vérité une
+             fois la fête finie, jamais un booléen qu'on oublierait de baisser. */
+          const sFinaleActive = Q.starFinaleInaugActive(sharedRef.current.star, now);
+          const sLaunchK = sFinaleActive ? Q.starFinaleLaunchK(sharedRef.current.star, now) : 0;
+          const sShipName = Q.starShipName(sharedRef.current.star);
+          pushE((tw.shipY + 1) * T, se, () => {
+            ctx.save();
+            if (sLaunchK > 0) ctx.globalAlpha = Math.max(0, 1 - sLaunchK);
+            const ssy = (tw.shipY + 1) * T + sLaunchK * T * 3.2;     // glisse vers le sud, vers l'eau
+            sprites.drawStarShip(ctx, (tw.shipX + 0.5) * T, ssy, T, sparts, now,
                                  { night: snight, gone: sgone, ghosts: sghost,
                                    // 2026-09-13 (lot 2) — l'épave sur la cale, tant que la nouvelle coque n'est pas montée
-                                   wreck: Q.starShipWrecked(sharedRef.current.star) }));
+                                   wreck: Q.starShipWrecked(sharedRef.current.star) });
+            /* D11 (b) — LE NOM, PERSISTANT, TANT QUE LA COQUE EST LÀ (jamais sur
+               un fantôme ni sur l'épave : `!sgone && !ghost-only && !wreck-only`
+               se lit tout seul via `parts` — un bateau au moins commencé). */
+            if (sShipName && sprites.drawStarShipName && !sgone && sparts.some(Boolean))
+              sprites.drawStarShipName(ctx, (tw.shipX + 0.5) * T, ssy, T, sShipName);
+            ctx.restore();
+          });
           /* ⚠️⚠️ AUTORITÉ 2026-09-12 (repasse) — LA LUEUR DE RÉPARATION, JOUÉE UNE
              FOIS. `sprites.drawStarHullFixGlow` (fermeArt.js) est une fonction pure
              de `now - e.vandal.at` (§8 de CLAUDE.md : rien de plus à faire vieillir),
@@ -19959,6 +20083,39 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               pushE((tw.shipY + 1) * T + 1, se, () =>
                 sprites.drawStarHullFixGlow(ctx, (tw.shipX + 0.5) * T, (tw.shipY + 1) * T, T, vandalAge));
             }
+          }
+          /* ╔══════════════════════════════════════════════════════════════════
+             ║ D11 (c) — LES DÉCORATIONS DE L'INAUGURATION.
+             ╚══════════════════════════════════════════════════════════════════
+             ⚠️ LA GUIRLANDE RESTE — une fois la fête accordée par le maire, le
+             chantier se pare pour de bon : c'est un souvenir de la quête, pas un
+             décor qui doit s'éteindre (même choix que le navire lui-même, 450).
+             LES CONFETTIS ET LE MAIRE, EUX, NE DURENT QUE LA FENÊTRE DE LA
+             CÉRÉMONIE (`Q.starFinaleInaugActive`), dérivée de `e.finale.inaugAt`
+             — zéro état local, zéro message de plus (§3 de CLAUDE.md). */
+          if (Q.starFinaleAgreed(sharedRef.current.star) && sprites.drawFestivalBunting) {
+            pushE((tw.shipY + 1) * T - C.STAR_SHIP_DRAW_H * T, se, () =>
+              sprites.drawFestivalBunting(ctx, (tw.shipX + 0.5) * T, (tw.shipY + 1) * T, T, now));
+          }
+          if (sFinaleActive) {
+            if (sprites.drawStarConfetti) {
+              const BURST_MS = 3200;
+              const inaugAt = sharedRef.current.star.finale.inaugAt;
+              const burstAt = inaugAt + Math.floor((now - inaugAt) / BURST_MS) * BURST_MS;
+              pushE((tw.shipY + 1) * T + 2, se, () =>
+                sprites.drawStarConfetti(ctx, (tw.shipX + 0.5) * T, (tw.shipY - 2) * T, T, now, burstAt));
+            }
+            /* ⚠️ LE MAIRE, PRÉSENT. Même repère que Kerguélen (`STAR_ENG_DX/DY`,
+               réutilisé — les deux ne se croisent jamais : Kerguélen n'est plus
+               « ici » (`starEngineerHere`) une fois le chantier terminé depuis
+               longtemps). Il n'est pas un résident : même statut que Léonie
+               Sarrazin ou Kerguélen lui-même, un décor qui parle, sans collision. */
+            const mKey = (E.mayorOf(sharedRef.current.day) || {}).key || "vasseur";
+            const mx = tw.shipX + C.STAR_ENG_DX, my = tw.shipY + C.STAR_ENG_DY + 1;
+            pushE((my + 1) * T, elAt(mx, my), () =>
+              drawCharacter({ id: "star:mayor", x: mx, y: my, dir: 0, moving: false, animT: 0,
+                              gender: C.mayorIsFem(mKey) ? "f" : "m", outfit: 3, overalls: false, cap: false,
+                              name: L.candName(mKey) }, false));
           }
           /* ╔══════════════════════════════════════════════════════════════════
              ║ ZIP 454 — CÉLESTIN KERGUÉLEN, SUR LA GRÈVE, PENDANT QU'IL DESSINE.
@@ -23711,14 +23868,36 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           try {
             spr0.drawStarShip(ctx, cx2, sy3, T2,
               new Array(Q.STAR_SHIP_TOTAL).fill(true), now, {});
+            /* ⚠️⚠️ D11 (b) — LE NOM, LIVE, JAMAIS BAKÉ (§4 de CLAUDE.md :
+               `ctx.fillText` ne se rastérise pas depuis un cache dans le faux
+               canevas des bancs). Il partage l'alpha du navire : les deux
+               s'installent ensemble, aucun second minuteur à tenir d'accord. */
+            if (spr0.drawStarShipName) {
+              const nm = Q.starShipName(sharedRef.current.star);
+              if (nm) spr0.drawStarShipName(ctx, cx2, sy3, T2, nm);
+            }
           } catch (err) { /* jamais au prix de la scène : voir la note de `line()` */ }
           ctx.restore();
         }
-        if (t > 10) { ctx.fillStyle = `rgba(255,255,255,${Math.min(1, (t - 10) / 1.6).toFixed(3)})`; ctx.fillRect(0, 0, W, H); }
-        if (t > 12) { ctx.fillStyle = `rgba(255,244,224,${Math.max(0, 1 - (t - 12) / 1.6).toFixed(3)})`; ctx.fillRect(0, 0, W, H); }
+        /* ╔══════════════════════════════════════════════════════════════════════
+           ║ D11 (d) — TEXTE BLANC SUR FOND BLEU NUIT, PAS UN FLASH DORÉ.
+           ╚══════════════════════════════════════════════════════════════════════
+           ⚠️⚠️ L'ANCIEN FONDU (blanc plein écran puis chaud) DATE D'AVANT D11 : il
+           terminait sur une aube dorée, ce qui contredit « texte blanc sur fond
+           bleu nuit » (consigne de Guillaume, mot pour mot). Le voile est déjà
+           bleu nuit depuis `t > 0` (`veil`, en tête de cette branche) ; on ne fait
+           plus que l'approfondir jusqu'au noir, jamais vers le blanc ou l'or. */
+        if (t > 13) { ctx.fillStyle = `rgba(6,8,20,${Math.min(0.94, (t - 13) * 0.28).toFixed(3)})`; ctx.fillRect(0, 0, W, H); }
         line(L.star.end.end1, t > 4.2 && t < 6.6 ? 1 : 0, H * 0.82);
-        line(L.star.end.end2, t > 6.8 && t < 9.2 ? 1 : 0, H * 0.82);
-        line(L.star.end.end3, t > 9.4 && t < 10.6 ? 1 : 0, H * 0.82);
+        /* ⚠️ D11 (b/d) — QUATRE LIGNES, PLUS TROIS : le nom du navire (D1/D11 b),
+           puis les deux moitiés du message de la Brebis (D11 d — « ensemble elles
+           nous ont guidés » / « elles guideront les matelots à venir »), jamais
+           fondues en une seule phrase trop longue pour le cadre (§ CLAUDE.md,
+           « une phrase trop longue se coupe en silence »). */
+        line(L.star.end.end2(Q.starShipName(sharedRef.current.star) || C.STAR_SHIP_NAME),
+             t > 6.8 && t < 9.2 ? 1 : 0, H * 0.82);
+        line(L.star.end.end3, t > 9.4 && t < 11.8 ? 1 : 0, H * 0.82);
+        line(L.star.end.end4, t > 12.0 && t < 14.4 ? 1 : 0, H * 0.82);
       }
       ctx.restore();
     }
@@ -25823,6 +26002,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      conversation ; tout ce qui compte part en `req` à la fin. */
   function tryMayorDoor() {
     const eA = Q.migrateStar(sharedRef.current.star);
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ D11 — L'ÉPILOGUE PASSE EN PREMIER, ET IL NE NÉGOCIE PLUS RIEN.
+       ╚══════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ « SANS JAUGE NI RENDEZ-VOUS » (D11, mot pour mot) : une fois la
+       quête complète et tant que le maire n'a pas encore convoqué-accepté, E
+       devant son bureau ouvre DIRECTEMENT la scène courte de `MayorFinale` —
+       jamais `openAudience`, qui suppose un rendez-vous pris et une jauge.
+       ⚠️ D13 — LA PORTE EST GARDÉE : seul si personne d'autre n'est connecté ;
+       sinon, tous les fermiers connectés doivent être dans la pièce. Le refus
+       DIT qui manque (même discipline que « la porte n'est pas la caisse »,
+       §4 de CLAUDE.md : elle ne donne rien, mais elle explique). */
+    if (Q.starDone(eA) && !Q.starFinaleAgreed(eA)) {
+      const desk = (courtWorldRef.current && courtWorldRef.current.props || [])
+        .find(p => p.of === "mayorDesk");
+      const missing = desk ? starFinaleMissing("court", desk.x, desk.y, C.STAR_FINALE_GATHER_R) : [];
+      if (missing.length) { pushToast(L.star.finale.missing(missing.join(", "))); return; }
+      openMayorFinale(eA);
+      return;
+    }
     /* ⚠️⚠️⚠️ 2026-09-13 (lot 2, audit en jeu) — LE SIGNÉ SE LIT PAR SUJET, PAS PAR
        UN DRAPEAU UNIQUE. Cette porte appelait `MR.mayorSigned` seule : une fois le
        chantier (yard) signé, `e.mayor.ok` reste vrai pour toujours, donc la porte
@@ -25852,6 +26050,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setMayorFade(1);
     const cA = mayorCtxOf(sharedRef.current, eA, E);
     setTimeout(() => { setMayorTalk({ ctx: cA }); setMayorFade(0); }, 520);
+  }
+  /* D11 — MÊME FONDU, MÊME CONTEXTE (`mayorCtxOf`), AUTRE ÉTAT (`mayorFinaleTalk`) :
+     voir la note de sa déclaration. */
+  function openMayorFinale(eA) {
+    setMayorFade(1);
+    const cA = mayorCtxOf(sharedRef.current, eA, E);
+    setTimeout(() => { setMayorFinaleTalk({ ctx: cA }); setMayorFade(0); }, 520);
   }
   const msClock = (ms) => {
     const t = Math.max(0, Math.ceil(ms / 1000));
@@ -26076,6 +26281,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      ligne ». Elle ne décide plus d'aucune mécanique ; elle sert au libellé du
      menu dev et de garde-fou dans les bancs. */
   function starSoloRoom() { return (playersRef.current ? playersRef.current.size : 0) <= 0; }
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ D13 — QUI MANQUE AU RASSEMBLEMENT. LA MÊME PORTE, POUR LES DEUX GESTES
+     ║ QUE GUILLAUME NOMME (« la convocation et l'inauguration »).
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️ SOLO PASSE TOUJOURS (clause exacte de D13 : « seul si un seul fermier
+     est connecté »), `starSoloRoom` déjà écrite pour ça. Sinon, TOUS les
+     fermiers connectés (moi compris) doivent être à portée du point donné —
+     le bureau du maire pour la convocation, la cale pour l'inauguration.
+     ⚠️ ELLE LIT LES POSITIONS DÉJÀ DIFFUSÉES (`playersRef`), ZÉRO CHAMP DE
+     PLUS : « qui est là » se DÉDUIT des positions que le jeu diffuse déjà à
+     dix messages par seconde (§3 de CLAUDE.md), jamais un état à part. */
+  function starFinaleMissing(zone, x, y, r) {
+    if (starSoloRoom()) return [];
+    const near = (p) => p && (p.zone || "farm") === zone
+      && Number.isFinite(p.x) && Number.isFinite(p.y) && Math.hypot(p.x - x, p.y - y) <= r;
+    const missing = [];
+    const me0 = meRef.current;
+    if (me0 && !near(me0)) missing.push(me0.name || "?");
+    if (playersRef.current) for (const p of playersRef.current.values()) if (!near(p)) missing.push((p && p.name) || "?");
+    return missing;
+  }
 
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ZIP 458 — CE QUE LA TRANSACTION DE LA MAIRIE A SOUS LES YEUX.
@@ -26765,7 +26992,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
   function starMarkFallSeen(kind) {
     const e = sharedRef.current.star;
-    const at = e && (kind === "townFall" ? e.townFall : e.fall);
+    const at = e && (kind === "townFall" ? e.townFall
+      : kind === "finaleEnd" ? (e.finale && e.finale.inaugAt) : e.fall);
     try { window.localStorage.setItem(starFallSeenKey(kind), String(at || 0)); } catch (err) { /* localStorage indispo */ }
   }
 
@@ -26909,6 +27137,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       setTimeout(() => starShowCard(Q.starChapterKey(sharedRef.current.star)), Q.STAR_FALL_MS - 3000);
     } else {
       starCamRef.current = null; starHitRef.current = null;
+      /* D11 — MARQUÉE ICI, PAS DANS `starScenePump` : la scène peut aussi partir
+         par le menu dev (« Rejouer une scène »), qui appelle directement
+         `starPlayScene` sans jamais passer par la file. Sans cette marque, le
+         pompe la remettrait en file à l'image suivante dès que `starFinaleEndDue`
+         redevient vrai. */
+      if (key === "end") starMarkFallSeen("finaleEnd");
     }
   }
 
@@ -27115,9 +27349,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const e = sharedRef.current.star;
     if (!e || !Q.starFallen(e)) return;
     const zone = (meRef.current && (meRef.current.zone || "farm")) || "farm";
-    if (!starScenePendRef.current && !starSceneRef.current && !Q.starDone(e)) {
-      if (zone === "town" && Q.starTownFallen(e) && starFallSeen("townFall") !== e.townFall) starQueueScene("townFall");
-      else if (zone === "farm" && starFallSeen("fall") !== e.fall) starQueueScene("fall");
+    if (!starScenePendRef.current && !starSceneRef.current) {
+      if (!Q.starDone(e)) {
+        if (zone === "town" && Q.starTownFallen(e) && starFallSeen("townFall") !== e.townFall) starQueueScene("townFall");
+        else if (zone === "farm" && starFallSeen("fall") !== e.fall) starQueueScene("fall");
+      } else if (Q.starFinaleEndDue(e, Date.now()) && starFallSeen("finaleEnd") !== e.finale.inaugAt) {
+        /* ⚠️⚠️ D11 — LA CINÉMATIQUE FINALE ARRIVE TOUTE SEULE, `STAR_FINALE_END_AT_MS`
+           APRÈS L'INAUGURATION — ZÉRO MESSAGE DE PLUS (§3 de CLAUDE.md) : `e.finale.inaugAt`
+           est DÉJÀ diffusé, chaque client compare sa propre horloge à cette même date,
+           exactement comme `fall`/`townFall` le font déjà pour la chute. Elle joue
+           n'importe où (`starSceneCanPlay("end")` n'a pas de garde de zone). */
+        starQueueScene("end");
+      }
     }
     const pend = starScenePendRef.current;
     /* ⚠️ LA CARTE EN ATTENTE PASSE APRÈS LA SCÈNE EN ATTENTE, et jamais pendant :
@@ -28882,8 +29125,43 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        une seule d'entre elles laissée ouverte suffit à raconter la fin avant le
        début. C'est le pendant exact de « une porte sans chemin de code ment »
        (444) — ici, un chemin de code sans décor. */
-    if (!e || Q.starDone(e)) return null;
+    if (!e) return null;
     const zone = m.zone || "farm";
+    /* ╔══════════════════════════════════════════════════════════════════════════
+       ║ D11 — L'ÉPILOGUE. `Q.starDone(e)` COUPAIT COURT ICI DEPUIS TOUJOURS
+       ║ (« plus rien à faire une fois la quête finie ») — FAUX DEPUIS D11.
+       ╚══════════════════════════════════════════════════════════════════════════
+       ⚠️⚠️⚠️ TROUVÉ EN JEU, PAS EN RELISANT (leçon du §14.2 de CLAUDE.md, « un
+       défaut qu'aucun banc ne peut voir ») : le garde-fou `if (!e || Q.starDone(e))
+       return null;` d'origine rendait TOUT LE RESTE DE CETTE FONCTION — donc mes
+       deux nouvelles invites, posées plus bas près de « raise »/« plaque » — mort
+       de naissance dès que `doneAt` se pose, c'est-à-dire exactement l'instant où
+       l'épilogue commence. `verify-quete`/`verify-jalons` ne pouvaient pas le voir
+       (ils appellent les résolveurs, jamais cette fonction) ; seule une vraie
+       partie, jusqu'à la cale, l'a montré — un « E » qui ne répond plus rien du
+       tout, sans le moindre message d'erreur.
+       ⚠️ ELLE REND `null` DE LA MÊME FAÇON QU'AVANT POUR TOUT CE QUI N'EST PAS LA
+       CALE (la chasse aux étoiles, les trous, la reine : tout ça, une fois la
+       quête finie, n'a plus rien à dire — le garde-fou d'origine reste juste
+       PARTOUT AILLEURS). Seule la cale, en ville, garde une porte ouverte. */
+    if (Q.starDone(e)) {
+      if (zone !== "town" || !Q.starFinaleAgreed(e)) return null;
+      const tw3 = townWorldNow();
+      if (!tw3 || !tw3.shipX) return null;
+      if (!nearTownRect(tw3.shipX - (C.STAR_SHIP_DRAW_W >> 1), tw3.shipY - C.STAR_SHIP_DRAW_H,
+                         C.STAR_SHIP_DRAW_W, C.STAR_SHIP_DRAW_H + C.STAR_SHIP_INTERACT_S_PAD)) return null;
+      /* ⚠️ LE BAPTÊME N'A PAS DE PORTE D13 (Guillaume ne le nomme pas dans sa
+         décision) ; L'INAUGURATION EN A UNE, MÊME RAYON QUE LE BUREAU DU MAIRE
+         (`C.STAR_FINALE_GATHER_R`). Un refus DIT qui manque, jamais un silence. */
+      if (!Q.starFinaleBaptized(e))
+        return { p: "finaleBaptize", act: () => sendReq({ kind: "starFinaleBaptize" }) };
+      if (!Q.starFinaleInaugurated(e)) {
+        const missing = starFinaleMissing("town", tw3.shipX, tw3.shipY, C.STAR_FINALE_GATHER_R);
+        if (missing.length) return { p: "finaleGather", act: () => pushToast(L.star.finale.missing(missing.join(", "))) };
+        return { p: "finaleInaugurate", act: () => sendReq({ kind: "starFinaleInaugurate" }) };
+      }
+      return null;
+    }
     /* ⚠️⚠️ 2026-09-13 — AVANT LA CHUTE, SEULE LA CALE PARLE. Le chantier (Kerguélen
        qui dessine, la pièce à monter, la plaque) se joue maintenant AVANT la pluie ;
        la garde `starFallen` d'ici les rendait muets pendant tout le prélude — on
@@ -34426,6 +34704,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                          mayorKey: mayorTalk.ctx.mayorKey, state: { over: over || "out" } } });
             if (Array.isArray(log) && log.length) sendReq({ kind: "mayorTalk", log });
           }}
+        />
+      )}
+
+      {/* ╔════════════════════════════════════════════════════════════════════
+          ║ D11 — LA CONVOCATION. Aucun `onLive`, aucun spectateur : c'est une
+          ║ scène courte que quelqu'un lit seul, pas une négociation qu'on
+          ║ regarde se jouer. `onDone` envoie ALORS la requête — la scène ne
+          ║ fait que raconter (voir la note de `MayorFinale`, MaireScene.js).
+          ╚════════════════════════════════════════════════════════════════════ */}
+      {mayorFinaleTalk && (
+        <MayorFinale
+          ctx={mayorFinaleTalk.ctx}
+          L={L}
+          onDone={() => { setMayorFinaleTalk(null); sendReq({ kind: "starFinaleAgree" }); }}
         />
       )}
 

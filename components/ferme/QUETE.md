@@ -28,9 +28,9 @@ Colonne « état » : ce qui est **codé et banché** n'est pas forcément **vu 
 | D8 | Une **attente réelle**, « pas aussi longue » qu'1-2 jours | FAIT : `C.STAR_REBUILD_WAIT_MS` 12 à 40 min, en parallèle — **premier réglage, à jouer** |
 | D9 | La **scie de Tristan** raccourcit l'attente | FAIT : req `starTimberHurry` (l'hôte rejoue la manche), `resolveStarTimberHurry`, 3 manches/pièce, 3/6/10 min selon les étoiles, plancher 30 s ; **panneau de Tristan vu en jeu le 2026-09-13** : « Il peut mener les cinq de front… Payer lance Tristan tout de suite ; attendre les fonds ne coûte rien, mais c'est long » — les deux boutons (payer / attendre) sont là, grisés tant que le bois manque en réserve |
 | D10 | **Entre 3 et 6 poissons-squelettes** avant l'étoile (lot D du §5 : protection de la canne au chaudron, 10 min de fumée violette et noire, squelettes qui ne rapportent rien) | **FAIT le 2026-09-13, jamais vu en jeu.** `f.evilRodProtectedAt` (déclaré/migré comme `evilRodArmedAt`), `E.evilRodProtected(f, now)` dérive la fenêtre de 10 min RÉELLES (`C.EVIL_ROD_PROTECT_MS`) ; troisième recette du chaudron, sans ingrédient (`cauldronRodBtn`), req `evilRodProtect` ; `startFishingEvil` distingue maintenant CANNE NUE (casse en 3 s, inchangé) de CANNE PROTÉGÉE (3 à 6 ratés tirés une fois, `C.EVIL_ROD_MISS_MIN/MAX`, purement locaux — réutilisent la table `C.EVIL_LAKE_FISH` déjà existante — puis le lancer suivant arme le halage) ; fumerolle violette pulsée sur la case de la canne dans la barre d'objets (`.ferme-slot-rodprotect`) + toast d'expiration. `verify-quete` **893/893** (7 tests neufs, falsifiés : un garde `now < protectedAt` retiré fait échouer 2 des 7). ⚠️ **Pas vu à l'écran** : la fenêtre géométrique pour VISER le point de sauvetage à la canne est étroite (le point est en pleine eau, à ~3,16 cases de la rive la plus proche — voir le commentaire de `updateMeEvil` sur ce même piège pour la découverte) et n'a pas pu être déclenchée par automatisation cette session ; à confirmer en jouant à la souris |
-| D11 | **La finale** — voir le détail juste en dessous | **NON FAIT** |
-| D12 | **Toutes** les étoiles montent au ciel ; le **dessin de constellation en haut à droite de l'écran s'allume et devient dynamique au survol, durablement** | **FAIT le 2026-09-13, vu en jeu (nuit, avant la fin — comportement inchangé).** Le dessin est sorti de `FermeGame.js` vers `fermeArt.js` (`A.drawStarConstellation`, `A.starConstellationHit`) pour qu'un banc le regarde. Deux grandeurs sur le MÊME dessin, jamais un second : `alpha` (1 la nuit, 0,38 « plus discrète » de jour une fois `Q.starDone` vrai — jamais éteinte), `hover` (0/1, dérivé d'une distance souris réelle via `canvas.getBoundingClientRect()`, même patron que `starCompanionHovered`). `render-etoile` **§17, 5 contrôles neufs falsifiés** (l'encre de jour est strictement entre 0 et l'encre de nuit ; le survol multiplie l'encre par ~4,4, ce n'est pas un second dessin). **Pas vu** : le régime « après la fin, de jour » lui-même (`Q.starQuestComplete` jamais atteint cette session) — seul le régime « avant la fin, nuit » (inchangé) a été revu à l'écran |
-| D13 | Finale **jouable seul si personne d'autre n'est connecté** ; sinon elle **exige l'ensemble des fermiers connectés** | **NON FAIT** — dépend de D11 (rien à jauger sans la scène qu'elle doit gater) |
+| D11 | **La finale** — voir le détail juste en dessous | **FAIT le 2026-09-13 ter, codé, banché ET vu en jeu à un ET à deux clients, sans erreur console.** Voir le compte-rendu de livraison plus bas |
+| D12 | **Toutes** les étoiles montent au ciel ; le **dessin de constellation en haut à droite de l'écran s'allume et devient dynamique au survol, durablement** | FAIT le 2026-09-13, vu en jeu (nuit, avant la fin — comportement inchangé). Le dessin est sorti de `FermeGame.js` vers `fermeArt.js` (`A.drawStarConstellation`, `A.starConstellationHit`) pour qu'un banc le regarde. Deux grandeurs sur le MÊME dessin, jamais un second : `alpha` (1 la nuit, 0,38 « plus discrète » de jour une fois `Q.starDone` vrai — jamais éteinte), `hover` (0/1, dérivé d'une distance souris réelle via `canvas.getBoundingClientRect()`, même patron que `starCompanionHovered`). `render-etoile` **§17, 5 contrôles neufs falsifiés** (l'encre de jour est strictement entre 0 et l'encre de nuit ; le survol multiplie l'encre par ~4,4, ce n'est pas un second dessin). ⚠️ **2026-09-13 ter — le régime « après la fin, de jour » entrevu, pas vérifié à la souris** : `Q.starQuestComplete` a été atteint cette session (la finale D11 l'exige), et de petits points scintillants sont visibles en haut à droite pendant la journée sur les captures prises après — cohérent avec `dayA = 0.38`, mais le survol interactif (`hover`) n'a pas été testé à la souris |
+| D13 | Finale **jouable seul si personne d'autre n'est connecté** ; sinon elle **exige l'ensemble des fermiers connectés** | **FAIT le 2026-09-13 ter** (`starFinaleMissing`, `FermeGame.js`) : même porte pour la convocation (bureau du maire) et l'inauguration (cale), rayon `C.STAR_FINALE_GATHER_R`. **Codé et cohérent avec le reste du fichier** (même patron que `starAlone`/le dos-à-dos de la reine) ; **la branche solo a été jouée** (session à un client, aucun autre joueur : la convocation et l'inauguration s'ouvrent directement) ; **la branche « il manque quelqu'un » n'a PAS été déclenchée en jeu** cette session (le second client a rejoint après que tout était déjà signé/baptisé/inauguré) — à confirmer en faisant rejoindre le second AVANT de parler au maire, une prochaine fois |
 | D14 | La récompense (le don `starlight`) | **« on tranchera ça plus tard »** — ne rien inventer |
 | D15 | Plusieurs changements visuels par livraison | acté (voir consignes) |
 
@@ -50,19 +50,94 @@ Colonne « état » : ce qui est **codé et banché** n'est pas forcément **vu 
 convocation du maire s'ouvre donc quand elle devient vraie, et la scène de fin actuelle (`end`)
 est à REMPLACER, pas à doubler.
 
-### Ce qui reste codé mais n'a pas été vu en jeu — mis à jour le 2026-09-13
-**Le lot 2 a été traversé en jeu ce jour-là** (audience du chantier, saccage, épave, audience du
-budget jouée à l'adhésion 100, panneau de Tristan) — voir D4-D9 ci-dessus pour le détail exact de
-ce qui a été vu et de ce qui manque encore (surtout : une vraie transaction payer/attendre avec de
-l'or en réserve, jamais atteinte faute de bois stocké). ⚠️ Aucun raccourci ne signe à la place du
-joueur : pour y arriver en local, il faut jouer l'audience du chantier, puis celle du budget (le
-menu dev s'arrête aux rendez-vous, par conception) — sauf que le bouton de rendez-vous lui-même
-était cassé pour la 2ᵉ audience (voir D5, corrigé).
-**D10 (protection de la canne, poissons-squelettes) et D12 (constellation durable/dynamique) sont
-codés et bancés, D12 vu en jeu dans son régime d'avant-la-fin (inchangé) — D10 pas vu du tout** (la
-fenêtre de visée du point de sauvetage est étroite, voir sa ligne dans le tableau).
-**Restent entièrement à construire : D11 (la finale) et D13** (le gate solo/multi, qui n'a rien à
-gater tant que D11 n'existe pas).
+### Ce qui reste codé mais n'a pas été vu en jeu — mis à jour le 2026-09-13 ter
+
+⚠️⚠️⚠️ **LA QUÊTE DE L'ÉTOILE EST FINIE. D1 À D13 ET D15 SONT LIVRÉS ; D14 RESTE VOLONTAIREMENT DE
+CÔTÉ** (« on tranchera ça plus tard », consigne inchangée de Guillaume — ne rien y inventer). Cette
+passe (2026-09-13 ter) a fermé D11 (la finale) et D13 (le gate solo/multi), les deux derniers
+chantiers ouverts. Le détail complet — ce qui a été codé, ce qui a été banché, ce qui a été vu à
+l'écran à un et à deux clients — est au bloc **D11 — le compte-rendu de livraison**, juste après ce
+paragraphe.
+
+**Le lot 2 avait été traversé en jeu au 2026-09-13 bis** (audience du chantier, saccage, épave,
+audience du budget jouée à l'adhésion 100, panneau de Tristan) — voir D4-D9 ci-dessus pour le détail
+exact de ce qui a été vu et de ce qui manque encore (surtout : une vraie transaction payer/attendre
+avec de l'or en réserve, jamais atteinte faute de bois stocké — **toujours pas atteinte cette
+passe-ci non plus**, la fabrication du bois n'était pas son sujet). ⚠️ Aucun raccourci ne signe à la
+place du joueur : pour y arriver en local, il faut jouer l'audience du chantier, puis celle du
+budget (le menu dev s'arrête aux rendez-vous, par conception).
+**D10 (protection de la canne, poissons-squelettes) reste codé et banché, jamais vu en jeu** (la
+fenêtre de visée du point de sauvetage est étroite, voir sa ligne dans le tableau) — **hors sujet de
+cette passe**, non retouché.
+
+### D11 — le compte-rendu de livraison (2026-09-13 ter)
+
+**Codé** : trois résolveurs purs dans `quete.js` (`resolveStarFinaleAgree`, `resolveStarBaptize`,
+`resolveStarFinaleInaugurate`), un champ neuf déclaré ET migré dans le même geste
+(`e.finale = {agreedAt, inaugAt}`, `baptism` existait déjà depuis le lot 1) ; un banc `starFinaleGoalKey`
+qui donne les trois phrases de bandeau de l'épilogue (`finaleSummon`/`finaleBaptize`/`finaleInaugurate`) ;
+une scène courte SANS JAUGE (`MayorFinale`, `MaireScene.js`) qui réutilise la coque `Stage` de
+l'audience mais aucune de sa mécanique de négociation ; trois dessins neufs dans `fermeArt.js`
+(`drawStarShipName` — le nom peint VIVANT sur la coque, jamais baké, §4 de CLAUDE.md — `drawFestivalBunting`,
+`drawStarConfetti`) ; le glissement du navire vers le large pendant les trois secondes du départ
+(`starFinaleLaunchK`, dérivé d'une seule date) ; la cinématique finale (étoiles + texte, réutilise la
+scène `end` existante) désormais déclenchée par `starFinaleEndDue` — une horloge dérivée de
+`e.finale.inaugAt`, plus jamais de `doneAt` — et son texte réécrit pour nommer le navire et la Brebis
+(`L.star.end.end2/3/4`, D11 d).
+
+⚠️⚠️⚠️ **UN BUG BLOQUANT TROUVÉ EN JOUANT, PAS EN RELISANT** (même famille que le bug de la porte du
+maire du 2026-09-13 bis) : `starNearby()` (`FermeGame.js`) commençait par
+`if (!e || Q.starDone(e)) return null;` — un garde-fou qui a toujours voulu dire « plus rien à faire
+une fois la quête finie », vrai jusqu'à ce zip et FAUX depuis que D11 ajoute un épilogue JOUABLE
+après `doneAt`. Les deux invites du baptême et de l'inauguration, posées plus bas dans la même
+fonction, étaient donc mortes dès l'instant où l'épilogue commence — exactement l'instant où on en a
+besoin. Aucun banc ne pouvait le voir (`verify-quete`/`verify-jalons` appellent les résolveurs,
+jamais cette fonction) : une vraie partie, jusqu'à la cale, l'a montré (un « E » qui ne répond plus
+rien, sans la moindre erreur). **Corrigé** en sortant le cas `Q.starDone(e)` de la garde générale et
+en lui donnant sa propre branche (zone ville, `starFinaleAgreed`, rectangle de la cale) — la leçon
+vaut pour toute future porte qui gagnerait un épilogue : *un garde-fou « rien à faire une fois fini »
+doit être repris à l'endroit exact où il coupe, le jour où « fini » gagne une suite.*
+
+⚠️ **UN SECOND PIÈGE, MINEUR, POUR QUI REPREND** : les téléports du menu dev qui déplacent le joueur
+DANS une zone qu'on vient de rejoindre (« Stand at the Mayor's desk », « Stand at Kerguélen ») ratent
+leur coup si on les enchaîne trop vite après le changement de zone — le monde de la nouvelle zone
+n'a pas fini de s'installer. Une pause d'une à deux secondes entre le teleport de zone et le
+teleport de position suffit ; sans elle, le bouton ne fait rien, silencieusement, et on croit
+l'interaction cassée alors que c'est le bouton dev qui a été trop pressé.
+
+**Bancs** : `verify-quete` **930/930** (28 contrôles neufs pour D11 : l'ordre des trois portes,
+l'idempotence de chacune, les trois phrases de bandeau, la survie à `migrateStar`, la fenêtre de
+cérémonie et le départ du navire dérivés d'une seule date — falsifiés un par un, retirer n'importe
+quelle garde fait tomber une cascade de contrôles) ; `verify-jalons` **135/135** (la trame rejoue
+maintenant le maire, le baptême et l'inauguration APRÈS la fin du chantier, jusqu'à la cinématique
+due) ; `render-navire` a trois contrôles neufs sur la guirlande et les confettis (le nom du navire
+n'y est PAS mesuré, et c'est délibéré : `drawStarShipName` appelle `ctx.measureText`/`ctx.fillText`,
+que le faux canevas des bancs n'implémente pas — voir §4 de CLAUDE.md, « le faux canevas ne connaît
+pas fillText ») ; les **22 autres `verify-*`** et **22 des 24 `render-*`** restent verts
+(`render-eau`/`render-parc`, dette antérieure inchangée) ; `npx next build` propre (seul `G_SOIL` en
+avertissement, préexistant) ; bundle esbuild propre.
+
+**Vu en jeu, à un client** (`tools/fake-supabase.mjs`) : toute la chaîne, du chantier neuf jusqu'à la
+fin — négociation du chantier (adhésion 100), saccage, négociation du budget (adhésion 100, la maire
+dit elle-même « le jour du lancement, je veux être sur le quai »), cinq pièces montées, **la
+convocation ouvre directement `MayorFinale`** (sans jauge, sans rendez-vous, comme demandé), les
+trois répliques puis l'accord, **le baptême** (« E : baptiser le navire » → le nom « La Belle Étoile »
+peint sur la coque, vivant, persistant dans le monde normal), **l'inauguration** (« E : lancer
+l'inauguration », toast et chat confirmés), puis **la cinématique finale se déclenche TOUTE SEULE**
+quelques dizaines de secondes plus tard (`starFinaleEndDue`), texte compris — **aucune erreur
+console du début à la fin**.
+**Vu en jeu, à deux clients** : un second joueur qui rejoint APRÈS l'inauguration **rattrape
+correctement la cinématique finale** — il la voit jouer chez lui au moment où il la reçoit, le même
+patron que le rattrapage de la chute (`fall`/`townFall`) — « 2 joueurs en ligne » confirmé, **aucune
+erreur console des deux côtés**.
+**Pas vu à l'écran cette session** : les décorations de l'inauguration elle-même (la guirlande, les
+confettis, le maire présent sur le quai) — la fenêtre de 30 s a tourné pendant que la caméra était
+trop près de la coque pour les voir toutes les trois à la fois ; elles sont mesurées par
+`render-navire` (encre + mouvement) mais méritent un coup d'œil direct à la prochaine session. Le
+rassemblement des résidents (`townDecideGatherDestination`) n'a pas non plus été confirmé à l'écran
+(les résidents mettent un moment à finir leur activité en cours avant de se diriger vers la cale —
+voir sa note dans `FermeGame.js`). La branche D13 « il manque quelqu'un » (le refus, pas l'ouverture)
+n'a pas été déclenchée non plus, voir sa ligne dans le tableau plus haut.
 
 ## ⚠️⚠️⚠️ AUTORITÉ 2026-09-12 — LE CHANTIER D'ABORD, LA PLUIE ENSUITE
 

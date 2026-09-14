@@ -865,3 +865,50 @@ export function MayorWatch({ live, L, onClose }) {
     />
   );
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   D11 — LA CONVOCATION : LA MÊME COQUE, AUCUNE JAUGE.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ CE N'EST PAS UNE TROISIÈME NÉGOCIATION. `MayorAudience` existe pour
+   UNE jauge qui fuit et un arbitrage rejouable côté hôte ; cette scène-ci n'a
+   ni l'une ni l'autre — D11 le dit mot pour mot, « sans jauge ni rendez-vous ».
+   Elle réutilise `Stage` (la même pièce, les mêmes trois attitudes de caméra)
+   pour que le décor reste cohérent avec le reste de l'audience, mais son
+   propre `foot` ne montre qu'un bouton « Continuer » puis « C'est entendu ! » :
+   trois répliques lues à son rythme, une issue, toujours la même.
+   ⚠️ AUCUN RÉSEAU ICI : elle ne pose ni ne lit d'état partagé. `onDone` est
+   appelé une seule fois, à la fin ; c'est `FermeGame.js` qui envoie ALORS la
+   `req` (`starFinaleAgree`), exactement comme `onDone` de `MayorAudience`
+   envoie sa transcription — la scène ne fait que RACONTER, jamais arbitrer. */
+export function MayorFinale({ ctx, L, onDone }) {
+  const cand = C.TOWN_CANDIDATES.find(c => c.key === ctx.mayorKey) || C.TOWN_CANDIDATES[0];
+  const LM = useMemo(() => L.maireFor(C.mayorIsFem(cand.key)), [L, cand.key]);
+  const [step, setStep] = useState(0);
+  const lines = [LM.finale.line1, LM.finale.line2, LM.finale.line3];
+  const last = step >= lines.length;
+  const viewRef = useRef({ pose: "lean", emote: "warm", talking: true, bang: false });
+
+  useEffect(() => {
+    viewRef.current.pose = last ? "window" : "lean";
+    viewRef.current.emote = last ? "won" : "warm";
+    viewRef.current.talking = true;
+  }, [step, last]);
+
+  return (
+    <Stage
+      L={L} cand={cand} view={viewRef}
+      opts={{ plateLabel: LM.title, mayorName: L.candName(cand.key), mayorKey: cand.key }}
+      bubble={{ text: last ? LM.finale.agree : lines[step] }}
+      head={<div className="maire-sub">{LM.finale.head}</div>}
+      foot={
+        <div className="maire-foot">
+          <div className="maire-says">
+            {!last
+              ? <button className="maire-say" onClick={() => setStep(s => s + 1)}>{LM.finale.next}</button>
+              : <button className="maire-say" onClick={onDone}>{LM.finale.done}</button>}
+          </div>
+        </div>
+      }
+    />
+  );
+}

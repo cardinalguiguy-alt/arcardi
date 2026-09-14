@@ -10449,6 +10449,117 @@ export function buildSprites() {
     }
   }
 
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ D11 (b) — LE NOM DU NAVIRE, PEINT SUR SA COQUE, VIVANT.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ `ctx.fillText` NE SE RASTÉRISE PAS DEPUIS UN CACHE dans le faux canevas
+     des bancs (§4 de CLAUDE.md) : contrairement au reste du navire (`shipBake`),
+     ce nom se peint EN DIRECT, à chaque appel — la même discipline que les
+     enseignes de Valley Town, qui restent vivantes pour être bilingues. */
+  function drawStarShipName(g2, cx, cy, T2, name) {
+    if (!name) return;
+    const u = T2 / 16;
+    const fs = Math.max(9, Math.round(9 * u));
+    g2.save();
+    g2.font = `bold ${fs}px monospace`;
+    g2.textAlign = "center"; g2.textBaseline = "middle";
+    const w = g2.measureText(name).width;
+    const px = 5 * u, py = 3 * u;
+    const by = cy - Math.round(24 * u);           // à hauteur de plat-bord, sous le mât
+    g2.fillStyle = "rgba(18,14,10,0.72)";
+    g2.fillRect(Math.round(cx - w / 2 - px), Math.round(by - fs / 2 - py), Math.round(w + px * 2), Math.round(fs + py * 2));
+    g2.strokeStyle = "rgba(216,180,90,0.85)"; g2.lineWidth = Math.max(1, u);
+    g2.strokeRect(Math.round(cx - w / 2 - px) + 0.5, Math.round(by - fs / 2 - py) + 0.5,
+                  Math.round(w + px * 2) - 1, Math.round(fs + py * 2) - 1);
+    g2.fillStyle = "#f4ecd8";
+    g2.fillText(name, cx, by + 1);
+    g2.restore();
+  }
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ D11 (c) — LA GUIRLANDE DE FANIONS DE L'INAUGURATION, MÊME RECETTE QUE
+     ║ CELLE DU MARCHÉ (zip 431, FermeGame.js) : DEUX MÂTS, UNE CORDE QUI PEND.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️ ELLE VIT ICI ET PAS DANS `FermeGame.js` : contrairement à celle du
+     marché (qui RELIE deux étals dont la position dérive du monde généré),
+     celle-ci est fixe par rapport au chantier — un dessin, donc `fermeArt.js`,
+     pour qu'un banc puisse la regarder (§10 de CLAUDE.md). */
+  function drawFestivalBunting(g2, cx, cy, T2, t) {
+    const u = T2 / 16;
+    const FLAGS = ["#c05442", "#e0c463", "#4a9a58", "#3f79c0", "#c05c96", "#e08a3a"];
+    const half = 4.4 * T2;
+    const topY = cy - 44 * u;
+    const ax = cx - half, bx = cx + half;
+    const sway = Math.sin(t / 1400) * 2 * u;
+    g2.fillStyle = "#6a4726";
+    for (const mx of [ax, bx]) g2.fillRect(Math.round(mx - u), Math.round(topY), Math.round(2 * u), Math.round(50 * u));
+    g2.fillStyle = "#d8b45a";
+    for (const mx of [ax, bx]) g2.fillRect(Math.round(mx - u), Math.round(topY - 2 * u), Math.round(2 * u), Math.round(2 * u));
+    g2.strokeStyle = "rgba(80,66,44,0.85)"; g2.lineWidth = Math.max(1, u);
+    const seg = 16, sag = 10 * u;
+    const py = (k) => topY + Math.sin(k * Math.PI) * sag + sway * Math.sin(k * Math.PI * 2 + 1);
+    g2.beginPath();
+    for (let i = 0; i <= seg; i++) {
+      const k = i / seg, x = ax + (bx - ax) * k, y = py(k);
+      if (i === 0) g2.moveTo(x, y); else g2.lineTo(x, y);
+    }
+    g2.stroke();
+    for (let i = 0; i < seg; i++) {
+      const k = (i + 0.5) / seg, x = ax + (bx - ax) * k, y = py(k);
+      g2.fillStyle = FLAGS[i % FLAGS.length];
+      g2.beginPath();
+      g2.moveTo(x - 4 * u, y); g2.lineTo(x + 4 * u, y); g2.lineTo(x, y + 8 * u);
+      g2.closePath(); g2.fill();
+    }
+  }
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ D11 (c) — LES CONFETTIS DE L'INAUGURATION, UNE BOUFFÉE À LA FOIS.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ CHAQUE PARTICULE EST UNE FONCTION PURE DE `now - burstAt` ET DE SON
+     INDICE (`makeRnd`, la même discipline que `drawStarHullFixGlow` juste
+     au-dessus) : rien à faire vieillir dans une closure, rien à réinitialiser
+     au remontage. L'appelant choisit `burstAt` (une bouffée toutes les
+     quelques secondes) ; cette fonction ne sait rien du calendrier. */
+  /* ⚠️⚠️ AUCUN `translate`/`rotate` ICI, ET C'EST UNE CORRECTION, PAS UN STYLE :
+     le faux canevas des bancs les ignore tous les deux (§4 de CLAUDE.md — la
+     même leçon que la comète, `restore()` n'y rend que la transformation).
+     Chaque coin du carré tourné est donc calculé À LA MAIN, en coordonnées
+     absolues, et rejoint par un chemin — ce qui rend vrai dans le navigateur
+     ET dans `render-navire.mjs`, qui le mesure. */
+  function drawStarConfetti(g2, cx, cy, T2, now, burstAt) {
+    const age = now - burstAt;
+    if (age < 0) return;
+    const u = T2 / 16;
+    const rnd = makeRnd(90210 + ((Math.floor(burstAt / 977) % 9973) | 0));
+    const CONF = ["#e05c54", "#e0c463", "#4a9a58", "#3f79c0", "#c05c96", "#f4ecd8"];
+    const N = 28, DUR = 2200, hw = 1.6 * u;
+    for (let i = 0; i < N; i++) {
+      const seed = rnd(), a0 = rnd() * Math.PI * 2, sp = 0.55 + rnd() * 0.9;
+      const t0 = (i / N) * 420;
+      const ta = age - t0;
+      if (ta < 0 || ta > DUR) continue;
+      const vx = Math.cos(a0) * sp, vy = Math.sin(a0) * sp - 1.7;
+      const x = cx + vx * ta * 0.09 * u, y = cy + (vy * ta * 0.09 + 0.00028 * ta * ta) * u;
+      const rot = ta / 140 + seed * 6, cs = Math.cos(rot), sn = Math.sin(rot);
+      const a = Math.max(0, 1 - ta / DUR);
+      if (a <= 0.02) continue;
+      const pt = (px, py) => [x + px * cs - py * sn, y + px * sn + py * cs];
+      const [x0, y0] = pt(-hw, -hw), [x1, y1] = pt(hw, -hw), [x2, y2] = pt(hw, hw), [x3, y3] = pt(-hw, hw);
+      g2.globalAlpha = a;
+      g2.fillStyle = CONF[i % CONF.length];
+      g2.beginPath();
+      g2.moveTo(x0, y0); g2.lineTo(x1, y1); g2.lineTo(x2, y2); g2.lineTo(x3, y3);
+      g2.closePath();
+      g2.fill();
+    }
+    /* `globalAlpha` N'EST PAS RENDU PAR `restore()` DANS LE FAUX CANEVAS (il ne
+       rend que la transformation) : on le remet à 1 nous-mêmes, sans quoi tout
+       ce qui se peint APRÈS ce dessin hériterait de la transparence du dernier
+       confetti. */
+    g2.globalAlpha = 1;
+  }
+
   // ----- 10 façades de maison basiques pour Valley Town (zip 235). Toutes
   // au même canevas 96x96 que la maison de ferme, ancrées par leur bord bas.
   function townHouseVariant(styleIdx) {
@@ -16795,6 +16906,8 @@ house: house(),
     drawStarCraterAir,
     drawStarDust,
     drawStarShip,          // 450 — le navire des étoiles, sur la grève du lac
+    drawStarShipName,      // D11 (b) — son nom, peint vivant sur la coque
+    drawFestivalBunting, drawStarConfetti,   // D11 (c) — l'inauguration
     drawBoatBack, drawBoatFront, boatSeatDy, BOAT_SIT_CROP,   // 2026-08-31 — la coque qu'on monte dedans
     drawStarPlan,          // 454 — la feuille de plan de Kerguélen
     starCraterSink,

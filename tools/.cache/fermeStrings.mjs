@@ -384,6 +384,10 @@ const STAR_FR = {
       budgetBooked: "Rendez-vous pris pour le budget : monte au bureau du maire à l'heure dite.",
       rebuildOrder: "Relance les pièces chez Tristan : payer, ou attendre les fonds (Employés).",
       rebuildWait:  "Les fonds arrivent. Aide Tristan à la scie pour accélérer (Employés).",
+      /* D11 — les trois étapes de l'épilogue. PLAFOND DE 80 SIGNES, tenu par le TEXTE. */
+      finaleSummon: "Le maire veut vous voir. Montez à son bureau et appuyez sur E.",
+      finaleBaptize: "Le maire a son accord. Baptise le navire sur la cale (E).",
+      finaleInaugurate: "Le navire a un nom. Lance l'inauguration sur la cale (E).",
     },
     /* Hors-zip — REPLI DU CHEVRON QUAND LE CHAUDRON N'EST PAS ENCORE RAMASSÉ
        (demande de Guillaume, dictée mot pour mot). ⚠️ SEULE PHRASE DE `goal`
@@ -851,8 +855,21 @@ const STAR_FR = {
        ne le met jamais à l'eau. On lisait donc, au moment le plus important de
        la quête, une phrase que l'écran contredisait. La coque prête à descendre
        dit la même fierté sans mentir — et elle prépare le départ d'Eduardo. */
-    end2: "En bas, le bateau est entier, calé sur la grève, prêt à descendre. Il attend quelqu'un qui sache partir.",
-    end3: "Le vent tombe. Plus personne ne dit rien.",
+    /* ⚠️⚠️ D11 — RÉÉCRITE : LE BATEAU N'ATTEND PLUS, IL EST PARTI. L'ancienne
+       phrase (« calé sur la grève, prêt à descendre ») décrivait un chantier
+       fini ; l'inauguration publique de D11 vient de le mettre à l'eau devant
+       tout le monde quelques minutes plus tôt — la garder aurait affirmé le
+       contraire de ce que le joueur vient de voir (§4 de CLAUDE.md, « un texte
+       n'est pas un décor : il AFFIRME »). Fonction, pas chaîne : le nom vient du
+       baptême (D1), jamais recopié en dur (§8). */
+    end2: (name) => `Au loin, ${name} fend déjà l'eau sombre, ses voiles gonflées vers le large.`,
+    end3: "Ensemble, elles nous ont guidés jusqu'ici.",
+    /* D11 (d) — le message de la Brebis, en français dans le texte de Guillaume :
+       « les étoiles rejoignent la constellation de la Brebis ; ensemble elles
+       nous ont guidés, et elles guideront les matelots futurs ». Aucun habitant
+       ne les nomme (consigne D11) : c'est la narration de la scène qui parle,
+       jamais une réplique de PNJ. */
+    end4: "Elles rejoignent la Brebis, là-haut. Elles guideront les matelots qui viendront après nous.",
     gift: "Quelque chose d'elle est resté avec toi.",
     /* ⚠️ ZIP 479 — LA SEULE PHRASE DU JEU QUI NOMME DEUX JOUEURS. Elle ne se dit
        que si quelqu'un a vraiment tenu l'autre bord (ou porté le plat la moitié du
@@ -1230,6 +1247,23 @@ const STAR_FR = {
     /* ⚠️ ZIP 453 — « Le bateau a pris la mer » ÉTAIT FAUX : il restait à quai.
        Il est fini ; il partira avec Eduardo (voir `sail`). */
     done: "Le bateau est fini. L'étoile est rentrée.",
+    // D11 — les trois annonces de l'épilogue, une par étape franchie.
+    baptized: (who, name) => `${who} a baptisé le navire : il s'appelle désormais ${name}.`,
+    inaugurated: (who) => `${who} a lancé l'inauguration : tout le monde est attendu sur le quai !`,
+  },
+  /* ═══════════════════════════════════════════════════════════════════════
+     D11 — LA FINALE : LE MAIRE CONVOQUE, LE BAPTÊME, L'INAUGURATION.
+     ───────────────────────────────────────────────────────────────────────
+     ⚠️ `summonToast`/`missing` accompagnent le bandeau et le chevron (dérivés
+     de l'état, jamais un message de plus — voir `announceFinaleSummon` et
+     `starFinaleGoalKey`) ; les trois `hud.goal.*` vivent dans leur table
+     habituelle plus bas, comme tous les autres objectifs de la quête. */
+  finale: {
+    summonToast: "Le maire vous fait dire de passer le voir — rien d'urgent, juste pour parler du bateau.",
+    /* Qui manque, pour la porte gardée par D13 (le bureau du maire, la cale). */
+    missing: (names) => `Pas sans tout le monde : il manque ${names}.`,
+    baptizeToast: (name) => `Le navire s'appelle désormais ${name}.`,
+    inaugToast: "L'inauguration commence : rendez-vous sur le quai !",
   },
   /* 2026-09-03 (lot C) — LA SEPTIÈME SŒUR. Deux voix distinctes, comme le reste
      de la quête (§4 de `CLAUDE.md` : chaque geste dit pourquoi il compte) :
@@ -1376,6 +1410,12 @@ const STAR_FR = {
        mais E reste branché pour DIRE pourquoi (`plan.blockWhy`). */
     raiseWait: "La cale attend un signe du ciel (E : pourquoi ?)",
     plaque: "E : lire la plaque du chantier",
+    // D11 — le baptême et l'inauguration, à la cale. `finaleGather` reste sans
+    // « E : » quand la porte D13 refuse : E ne fait alors que DIRE qui manque
+    // (même discipline que `raiseWait`, un CONSTAT, pas une promesse).
+    finaleBaptize: "E : baptiser le navire",
+    finaleInaugurate: "E : lancer l'inauguration",
+    finaleGather: "Il manque du monde (E : qui ?)",
   })[k] || "E",
 };
 
@@ -1545,6 +1585,10 @@ const STAR_EN = {
       budgetBooked: "Budget appointment booked: go up to the mayor's office at the set time.",
       rebuildOrder: "Restart the pieces with Tristan: pay, or wait for the funds (Staff).",
       rebuildWait:  "The funds are coming. Help Tristan at the saw to speed up (Staff).",
+      // D11 — the epilogue's three steps. 80-character ceiling, held by the text.
+      finaleSummon: "The mayor wants to see you. Head up to their office and press E.",
+      finaleBaptize: "The mayor has agreed. Name the ship on the slipway (E).",
+      finaleInaugurate: "The ship has a name. Start the inauguration on the slipway (E).",
     },
     // Chevron fallback while the cauldron hasn't been picked up yet — see the
     // FR block for why this one line is allowed to run past the usual 80-char cap.
@@ -1800,8 +1844,13 @@ const STAR_EN = {
   },
   end: {
     end1: "It goes up the way a balloon does. Slowly. Like it has all night.",
-    end2: "Down by the water, the boat is whole, cradled on the shore, ready to go down. It is waiting for someone who can sail.",
-    end3: "The wind drops. Nobody says anything else.",
+    /* D11 — see the French note: the boat has already sailed by this point
+       (the public inauguration just launched it), so the line names it
+       instead of describing a launch that already happened off-screen. */
+    end2: (name) => `Out on the water, ${name} is already cutting through the dark, sails full toward the open sea.`,
+    end3: "Together, they have guided us this far.",
+    // D11 (d) — no resident ever names them; this is the scene's own narration.
+    end4: "They join the Ewe, up above. They will guide the sailors who come after us.",
     gift: "Something of it stayed with you.",
     /* ⚠️ ZIP 479 — voir la note française : la seule phrase qui nomme deux joueurs. */
     together: (names) => `What it was given, it was given by more than one pair of hands: ${names}.`,
@@ -2140,6 +2189,15 @@ const STAR_EN = {
       : `${who} searched the last crater on the farm.`,
     /* ⚠️ ZIP 453 — « The boat sailed » était faux : il restait à quai. */
     done: "The boat is finished. The star went home.",
+    // D11 — the epilogue's three announcements, one per step reached.
+    baptized: (who, name) => `${who} named the ship: it is now called ${name}.`,
+    inaugurated: (who) => `${who} kicked off the inauguration — everyone is expected on the quay!`,
+  },
+  finale: {
+    summonToast: "The mayor sends word to come see them — nothing urgent, just to talk about the boat.",
+    missing: (names) => `Not without everyone: still missing ${names}.`,
+    baptizeToast: (name) => `The ship is now named ${name}.`,
+    inaugToast: "The inauguration is starting: meet on the quay!",
   },
   // 2026-09-03 (lot C) — see the French note: two distinct voices, fired once
   // for the whole table on the e.evilFound transition (starWatch).
@@ -2211,6 +2269,10 @@ const STAR_EN = {
     kerguelenVandal: "E: repair the hull with him",
     raiseWait: "The slipway is waiting for a sign from the sky (E: why?)",
     plaque: "E: read the shipyard plaque",
+    // D11 — see the French note: same discipline as `raiseWait` when D13 refuses.
+    finaleBaptize: "E: name the ship",
+    finaleInaugurate: "E: start the inauguration",
+    finaleGather: "Some are missing (E: who?)",
   })[k] || "E",
 };
 /* ⚠️ LE MENU DÉVELOPPEUR EST LA MÊME TABLE DES DEUX CÔTÉS — pointée, jamais
@@ -2616,6 +2678,22 @@ const MAIRE_FR = {
     booked: (n) => `${n} a obtenu un rendez-vous avec le maire.`,
     budgetSigned: (n) => `${n} a obtenu le budget du maire : le chantier naval peut reprendre.`,
   },
+  /* ═══════════════════════════════════════════════════════════════════════
+     D11 — LA CONVOCATION : UNE SCÈNE COURTE, SANS JAUGE NI RENDEZ-VOUS.
+     ───────────────────────────────────────────────────────────────────────
+     Trois répliques qu'on lit à son rythme (`next`), puis l'accord (`agree`),
+     jamais un score : D11 le dit mot pour mot, « sans jauge ni rendez-vous ».
+     `line1` est repris par la surcharge féminine (MAIRE_FR_F) pour le seul mot
+     qui change de genre ; les deux autres ne désignent personne par un pronom. */
+  finale: {
+    head: "L'inauguration",
+    line1: "Il se lève dès que vous passez la porte, un sourire aux lèvres. « Enfin ! Toute la ville ne parle que de votre bateau. »",
+    line2: "« Il faut fêter ça comme il se doit : une inauguration publique, sur le quai, avec tous les habitants. Et la mise en mer, bien sûr. »",
+    line3: "« Je vous laisse le baptiser vous-même — c'est à vous de choisir son nom. Retrouvez-moi là-bas dès que vous êtes prêt. »",
+    next: "Continuer",
+    agree: "« Alors, on est d'accord ! » Il vous raccompagne déjà vers la porte, pressé d'aller prévenir le crieur public.",
+    done: "C'est entendu !",
+  },
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -2784,6 +2862,12 @@ const MAIRE_FR_F = {
     slam: (n) => `${n} a claqué la porte du bureau de la maire.`,
     booked: (n) => `${n} a obtenu un rendez-vous avec la maire.`,
     budgetSigned: (n) => `${n} a obtenu le budget de la maire : le chantier naval peut reprendre.`,
+  },
+  // D11 — seuls les deux pronoms qui la désignent changent ; les guillemets
+  // (ce qu'elle DIT) sont identiques dans MAIRE_FR, ligne pour ligne.
+  finale: {
+    line1: "Elle se lève dès que vous passez la porte, un sourire aux lèvres. « Enfin ! Toute la ville ne parle que de votre bateau. »",
+    agree: "« Alors, on est d'accord ! » Elle vous raccompagne déjà vers la porte, pressée d'aller prévenir le crieur public.",
   },
 };
 
@@ -3139,6 +3223,18 @@ const MAIRE_EN = {
     slam: (n) => `${n} slammed the door of the Mayor's office.`,
     booked: (n) => `${n} got an appointment with the Mayor.`,
     budgetSigned: (n) => `${n} secured the mayor's budget: the shipyard can start again.`,
+  },
+  // D11 — see the French note: three lines read at your own pace, then the
+  // agreement — never a score. Gender-neutral throughout ("they"), matching
+  // the rest of this table (`maireFor` always returns MAIRE_EN).
+  finale: {
+    head: "The inauguration",
+    line1: "They stand up the moment you step in, beaming. \"At last! The whole town is talking about your ship.\"",
+    line2: "\"We must celebrate properly: a public inauguration, right on the quay, with every resident there. And the launch, of course.\"",
+    line3: "\"I'll let you name it yourself — that part is yours. Meet me down there whenever you're ready.\"",
+    next: "Continue",
+    agree: "\"Then it's settled!\" They're already walking you to the door, eager to send word to the town crier.",
+    done: "Agreed!",
   },
 };
 

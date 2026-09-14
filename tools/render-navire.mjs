@@ -774,5 +774,51 @@ ok(C.STAR_SHIP_BLOCK_W < C.STAR_SHIP_DRAW_W && C.STAR_SHIP_BLOCK_H < C.STAR_SHIP
   console.log("\n  planche : tools/out/barque.png — les quatre vues, occupant compris");
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   D11 — TROIS DESSINS NEUFS DE LA FINALE : LE NOM, LA GUIRLANDE, LES CONFETTIS.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️ MÊME DISCIPLINE QUE LE RESTE DE CE BANC (§4 de CLAUDE.md, posée avant le
+   premier `fillRect`) : ces trois dessins vivent dans `fermeArt.js` pour
+   qu'un banc puisse les regarder, jamais dans la closure de la boucle de
+   rendu — voir leurs notes dans `fermeArt.js`. */
+{
+  const ink = (cv) => { let n = 0; for (let i = 3; i < cv.px.length; i += 4) if (cv.px[i] > 10) n++; return n; };
+
+  /* ⚠️⚠️ LE NOM DU NAVIRE (D11 b) N'EST PAS MESURÉ ICI, ET C'EST DÉLIBÉRÉ —
+     PAS UN OUBLI. `drawStarShipName` appelle `ctx.font`/`ctx.measureText`/
+     `ctx.fillText` : le faux canevas de `lib-canvas.mjs` ne les implémente
+     PAS DU TOUT (§4 de CLAUDE.md, « `ctx.fillText` n'est pas rastérisable hors
+     navigateur ») — exactement comme les enseignes de Valley Town, qui
+     restent vivantes et bilingues pour cette même raison. Une tentative de
+     l'appeler ici lève `Error: fermeArt.js utilise ctx.measureText`, ce qui a
+     été vérifié en l'écrivant : ce n'est pas un test qu'on a oublié d'ajouter,
+     c'est un test que ce banc ne peut pas rendre. Le nom se juge à l'écran. */
+
+  /* 2. LA GUIRLANDE DE L'INAUGURATION (D11 c) : de l'encre, et elle BOUGE — un
+     fanion qui ne bouge jamais serait un décor mort (même famille que la
+     guirlande du marché, zip 431, qui balance déjà). */
+  {
+    const a = makeCanvas(240, 80); S.drawFestivalBunting(a.ctx, 120, 60, T, 0);
+    const b = makeCanvas(240, 80); S.drawFestivalBunting(b.ctx, 120, 60, T, 700);
+    ok(ink(a) > 40, "D11 — la guirlande de l'inauguration peint quelque chose", `${ink(a)} px d'encre`);
+    let moved = false;
+    for (let i = 0; i < a.px.length; i++) if (a.px[i] !== b.px[i]) { moved = true; break; }
+    ok(moved, "⚠️ …et elle balance dans le temps (t=0 ≠ t=700 ms)");
+  }
+
+  /* 3. LES CONFETTIS (D11 c) : rien avant la bouffée, de l'encre pendant, plus
+     rien longtemps après — une fonction pure de `now - burstAt` et rien
+     d'autre (même discipline que `drawStarHullFixGlow`, juste à côté dans
+     `fermeArt.js`). */
+  {
+    const before = makeCanvas(240, 240); S.drawStarConfetti(before.ctx, 120, 120, T, 500, 1000);
+    ok(ink(before) === 0, "D11 — les confettis n'existent pas avant leur bouffée", `${ink(before)} px`);
+    const during = makeCanvas(240, 240); S.drawStarConfetti(during.ctx, 120, 120, T, 1600, 1000);
+    ok(ink(during) > 10, "…de l'encre pendant la bouffée", `${ink(during)} px d'encre`);
+    const after = makeCanvas(240, 240); S.drawStarConfetti(after.ctx, 120, 120, T, 5000, 1000);
+    ok(ink(after) === 0, "…et plus rien longtemps après (la bouffée s'éteint toute seule)", `${ink(after)} px`);
+  }
+}
+
 console.log(`\n${fails ? `❌ ${fails} contrôle(s) en échec` : "✅ tout est vert"}\n`);
 process.exit(fails ? 1 : 0);

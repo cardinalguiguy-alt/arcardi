@@ -2041,7 +2041,11 @@ export const STAR_FALL_TAIL_MS = 5800;  // ce qui suit le contact : gerbe, onde,
 /* ⚠️ ZIP 469 — `STAR_TURN_MS` est supprimée avec la scène du retournement. Une
    constante que plus personne ne lit est débranchée (leçon du 448, et le 453 l'a
    repayée en gardant une constante « en réserve »). */
-export const STAR_END_MS = 14000;      // durée de la résolution
+/* ⚠️ D11 — 16 500 ms, PAS 14 000 : la scène porte maintenant QUATRE lignes
+   (le nom du navire, puis les deux moitiés du message de la Brebis) au lieu de
+   trois, et la dernière doit avoir le temps de s'éteindre sur du bleu nuit
+   avant que la scène ne se referme (voir le fondu `t > 13` dans FermeGame.js). */
+export const STAR_END_MS = 16500;      // durée de la résolution
 /* ⚠️ LA CARTE DE CHAPITRE SE FERME TOUTE SEULE, et sa durée est ici plutôt que
    dans le composant pour la raison de tout ce paragraphe : le banc doit pouvoir
    vérifier qu'elle ne dépasse pas la scène qui la précède. Une carte qui reste
@@ -2336,7 +2340,10 @@ export const STAR_GOAL_TARGET = { craterHot: "crater", craterAlone: "crater",
      pas d'adresse (on la porte, elle est là où on la pose — liste `NOWHERE` du banc).
      `mayorBooked` va à la même mairie que `mayor` ; `warnRead` au tableau des
      nouvelles, qui était déjà la cible du chevron de l'avis. */
-  evilHaul: "evilLake", mayorBooked: "townHall", warnRead: "newsBoard" };
+  evilHaul: "evilLake", mayorBooked: "townHall", warnRead: "newsBoard",
+  /* D11 — les trois étapes de l'épilogue : le maire (même porte que `mayor`),
+     puis la cale pour le baptême et l'inauguration (même porte que `raise`). */
+  finaleSummon: "townHall", finaleBaptize: "shipyard", finaleInaugurate: "shipyard" };
 /* ⚠️⚠️ 2026-09-02 (lot A2) — LE CHEVRON DE LA DISCRÈTE POINTE LA PLACE, PAS ELLE.
    C'est la seule décision de conception de ce lot, et elle se joue là : un chevron
    posé sur sa tête supprime la chasse — il resterait à marcher jusqu'à une flèche,
@@ -3412,6 +3419,21 @@ export function newStar() {
        le navire baptisé. Son résolveur arrive avec la scène du baptême (lot 4) —
        d'ici là il reste `null`, et le navire reste « le navire ». */
     baptism: null,  // { at, by } — le navire a reçu son nom
+    /* ╔══════════════════════════════════════════════════════════════════════════
+       ║ 2026-09-13 (D11) — LA FINALE. DEUX INSTANTS, DÉCLARÉS ET MIGRÉS DANS LE
+       ║ MÊME GESTE QUE LEURS RÉSOLVEURS (la leçon de `vandal`, payée une fois).
+       ╚══════════════════════════════════════════════════════════════════════════
+       ⚠️ `doneAt` (au-dessus) reste LA conclusion de la quête — c'est lui qui
+       arrête le bandeau general et qui a toujours déclenché `resolveStarGift`.
+       Ce que ces deux dates portent est la SUITE, épilogue jouable une fois la
+       quête déjà complète :
+         · `agreedAt` — le maire et le joueur se sont mis d'accord sur la fête
+           d'inauguration et la mise en mer (scène courte, sans jauge) ;
+         · `inaugAt`  — l'inauguration a été lancée : décorations, résidents
+           rassemblés, mise en mer. Sa date sert aussi d'horloge à la scène finale
+           (étoiles + texte), qui se déclenche toute seule un peu plus tard —
+           jamais un troisième champ pour « a-t-on déjà vu la fin ». */
+    finale: { agreedAt: 0, inaugAt: 0 },
   };
 }
 /* ⚠️ LA REPRISE EST TOLÉRANTE, PAS CONFIANTE. Une sauvegarde d'avant ce zip n'a
@@ -3551,6 +3573,9 @@ export function migrateStar(saved) {
   // 2026-09-13 (lot 1) — voir la note de `yard` dans `newStar` : sans cette ligne, le « oui » s'effacerait à la requête suivante.
   e.yard = saved.yard && +saved.yard.at ? { at: +saved.yard.at, by: String(saved.yard.by || "").slice(0, 24) } : null;
   e.baptism = saved.baptism && +saved.baptism.at ? { at: +saved.baptism.at, by: String(saved.baptism.by || "").slice(0, 24) } : null;
+  // 2026-09-13 (D11) — voir la note de `finale` dans `newStar` : reconstruit, jamais fait confiance.
+  e.finale = { agreedAt: +(saved.finale && saved.finale.agreedAt) || 0,
+               inaugAt: +(saved.finale && saved.finale.inaugAt) || 0 };
   /* ── ZIP 479 : les trois verbes. ⚠️⚠️ MÊME DISCIPLINE QUE PARTOUT AILLEURS ICI —
      on RECONSTRUIT chaque sous-objet au lieu de faire confiance à sa forme, et un
      lieu inconnu est « une version d'après » qu'on ignore. Une sauvegarde d'avant
@@ -3704,8 +3729,11 @@ export function starTownActivityStep(a, e, now, active) {
    Le faux Supabase rejoue volontairement deux profils dans deux onglets du même
    navigateur : sans `who`, le premier qui voyait la chute la masquait au second. */
 export function starFallSeenStorageKey(kind, seed, who) {
-  return "ferme_star_" + (kind === "townFall" ? "town_fall" : "farm_fall")
-    + ":" + ((seed | 0) >>> 0) + ":" + String(who || "?").slice(0, 128);
+  /* D11 — TROISIÈME NATURE, MÊME FAMILLE : « ai-je déjà vu la scène finale
+     pour CETTE inauguration-là ? ». Sans elle, `starScenePump` la remettrait en
+     file à chaque image une fois `starFinaleEndDue` vrai. */
+  const kk = kind === "townFall" ? "town_fall" : kind === "finaleEnd" ? "finale_end" : "farm_fall";
+  return "ferme_star_" + kk + ":" + ((seed | 0) >>> 0) + ":" + String(who || "?").slice(0, 128);
 }
 export function starStarted(e) { return !!(e && (e.ch > 0 || Object.keys(e.found || {}).length)); }
 export function starDone(e) { return !!(e && e.doneAt); }
@@ -3981,8 +4009,27 @@ export function starChapterKey(e) {
        une à faire » plutôt que de répéter la même phrase.
    ⚠️ ELLE REND `null` QUAND IL N'Y A RIEN À DIRE (pas tombée, ou finie), jamais
    une clé de repli : le repli poli du 444 n'échoue pas, il AFFICHE la clé. */
+/* D11 — LES TROIS ÉTAPES DE L'ÉPILOGUE, DANS L'ORDRE FIXE QUE LES RÉSOLVEURS
+   FONT DÉJÀ RESPECTER (`resolveStarFinaleAgree`/`resolveStarBaptize`/
+   `resolveStarFinaleInaugurate`, ci-dessus). Trois `if`, pas une table : trois
+   états d'une même petite séquence, comme `engineerTravel`/`engineerWork` plus
+   bas — une table de plus pour trois lignes serait l'abstraction inventée que
+   le §0 de CLAUDE.md interdit. */
+function starFinaleGoalKey(e) {
+  if (!starFinaleAgreed(e)) return "finaleSummon";
+  if (!starFinaleBaptized(e)) return "finaleBaptize";
+  if (!starFinaleInaugurated(e)) return "finaleInaugurate";
+  return null;
+}
 export function starGoalKey(e, ctx) {
-  if (!e || starDone(e)) return null;
+  if (!e) return null;
+  /* ⚠️⚠️⚠️ D11 — LA FIN N'EST PLUS LE SILENCE, C'EST L'ÉPILOGUE. `starDone(e)`
+     (= `e.doneAt`) reste la conclusion de la quête ; le bandeau a maintenant
+     trois phrases de plus À DIRE une fois qu'elle est vraie, tant que le maire,
+     le baptême et l'inauguration n'ont pas tous les trois eu lieu. Une fois les
+     trois faits, `starFinaleGoalKey` rend `null` et le bandeau se tait pour de
+     bon — exactement le silence qu'il gardait déjà avant D11. */
+  if (starDone(e)) return starFinaleGoalKey(e);
   /* ⚠️⚠️⚠️ 2026-09-13 — AVANT LA CHUTE, LE BANDEAU A QUELQUE CHOSE À DIRE. Il rendait
      `null` tant que rien n'était tombé : c'était juste quand la quête commençait
      par le ciel, faux depuis qu'elle commence par un chantier (autorité 2026-09-12).
@@ -4447,6 +4494,8 @@ export const STAR_GOAL_KEYS = (() => {
   out.push("mayorBooked", "yardGrow", "yardCalm", "warnRead", "warnWait", "evilHaul", "evilRevive");
   // 2026-09-13 (lot 2) — le budget après le saccage, et la reconstruction (payer / attendre et aider Tristan).
   out.push("budget", "budgetBooked", "rebuildOrder", "rebuildWait");
+  // D11 — les trois étapes de l'épilogue (voir `starFinaleGoalKey`).
+  out.push("finaleSummon", "finaleBaptize", "finaleInaugurate");
   return out;
 })();
 
@@ -5185,7 +5234,96 @@ export function resolveStarGift(e, playerIds, now) {
     e.gift[id] = { at: now, kind: "starlight" };
     granted.push(id);
   }
-  return { ok: true, granted, scene: "end" };
+  /* ⚠️ 2026-09-13 (D11) — `scene` VAUT « summon », PLUS « end » : le don ne
+     déclenche plus la cinématique finale (étoiles + texte), il déclenche la
+     CONVOCATION du maire. La cinématique elle-même part beaucoup plus tard,
+     à la fin de l'inauguration (voir `starFinaleEndDue`), sur une horloge
+     dérivée de `e.finale.inaugAt` — jamais de ce `doneAt`-ci. */
+  return { ok: true, granted, scene: "summon" };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   6 bis. D11 — LA FINALE : LE MAIRE, LE BAPTÊME, L'INAUGURATION.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️⚠️ TROIS RÉSOLVEURS, TROIS PORTES QUI S'ENCHAÎNENT, AUCUNE JAUGE.
+   `resolveStarGift` (au-dessus) reste LA conclusion de la quête (`doneAt`) ;
+   ce qui suit est un ÉPILOGUE jouable une fois qu'elle l'a déjà accordée —
+   D11 le dit mot pour mot : « la condition de fin reste `starQuestComplete` ».
+   L'ordre est fixe et chaque porte le fait respecter (la leçon du §6 de
+   QUETE.md, « chaque étoile son verbe, et l'arbitre le tient ») :
+     1. `resolveStarFinaleAgree` — le maire et le joueur s'accordent sur la
+        fête. Aucune jauge (D11 : « sans jauge ni rendez-vous ») : une scène
+        COURTE, à prendre ou à laisser, jamais un score.
+     2. `resolveStarBaptize` — le navire reçoit son nom. `e.baptism` existe
+        depuis le lot 1 (`Q.starShipName`) ; ce résolveur est simplement celui
+        qui manquait pour l'écrire.
+     3. `resolveStarFinaleInaugurate` — l'inauguration publique et la mise en
+        mer. Sa date sert D13 (déjà écrite par l'appelant, `FermeGame.js`, qui
+        seul connaît les positions des joueurs — §3 : « ce qui peut se déduire
+        ne se diffuse pas », mais WHO EST LÀ ne se déduit d'aucun champ que ce
+        fichier connaisse) et sert d'horloge à la cinématique finale
+        (`starFinaleEndDue`, plus bas), jamais un quatrième champ pour « a-t-on
+        déjà vu la fin ».
+   Les trois sont IDEMPOTENTS PAR CONSTRUCTION (`already: true`), exactement
+   comme `resolveStarGift` : un essai qui échoue ne coûte rien, ce qui couvre
+   le menu dev ET un double-clic réseau de la même façon (§8 de CLAUDE.md). */
+export function starFinaleAgreed(e) { return !!(e && e.finale && e.finale.agreedAt); }
+export function starFinaleBaptized(e) { return !!(e && e.baptism && e.baptism.at); }
+export function starFinaleInaugurated(e) { return !!(e && e.finale && e.finale.inaugAt); }
+
+export function resolveStarFinaleAgree(e, who, now) {
+  if (!starDone(e)) return { ok: false, notDone: true };
+  if (starFinaleAgreed(e)) return { ok: true, already: true };
+  e.finale.agreedAt = now;
+  return { ok: true };
+}
+
+/* ⚠️ LE BAPTÊME N'A PAS DE PORTE D13 : Guillaume ne le nomme pas dans sa
+   décision (« la convocation et l'inauguration se jouent seul si… ») — seuls
+   ces deux-là exigent le rassemblement. Baptiser reste un geste D'UN joueur,
+   comme monter une pièce sur la cale. */
+export function resolveStarBaptize(e, who, now) {
+  if (!starFinaleAgreed(e)) return { ok: false, needAgree: true };
+  if (starFinaleBaptized(e)) return { ok: true, already: true };
+  e.baptism = { at: now, by: String(who || "?").slice(0, 24) };
+  return { ok: true };
+}
+
+export function resolveStarFinaleInaugurate(e, who, now) {
+  if (!starFinaleBaptized(e)) return { ok: false, needBaptism: true };
+  if (starFinaleInaugurated(e)) return { ok: true, already: true };
+  e.finale.inaugAt = now;
+  return { ok: true };
+}
+
+/* ⚠️⚠️ LA FENÊTRE DE L'INAUGURATION, EN TROIS PALIERS DÉRIVÉS D'UNE SEULE DATE
+   (`e.finale.inaugAt`) — la même discipline que la chute (`STAR_FALL_MS`) et
+   la fin d'avant (`STAR_END_MS`) : un paramètre qui doublerait `inaugAt` serait
+   une divergence en attente (§8 de CLAUDE.md), donc tout se lit en écart. */
+export const STAR_FINALE_LAUNCH_AT_MS = 22000;   // le navire quitte le quai
+export const STAR_FINALE_INAUG_MS = 30000;       // fanions, foule, confettis
+export const STAR_FINALE_END_AT_MS = 32000;      // la cinématique (étoiles+texte) part
+
+export function starFinaleInaugActive(e, now) {
+  return !!(e && e.finale && e.finale.inaugAt) && (now - e.finale.inaugAt) >= 0
+      && (now - e.finale.inaugAt) < STAR_FINALE_INAUG_MS;
+}
+/* Progression 0→1 du départ du navire, purement dérivée : `0` avant le départ,
+   `1` une fois parti — l'appelant (`FermeGame.js`) s'en sert pour glisser et
+   estomper le dessin existant du navire, jamais un second dessin. */
+export function starFinaleLaunchK(e, now) {
+  if (!e || !e.finale || !e.finale.inaugAt) return 0;
+  const t = now - e.finale.inaugAt;
+  if (t < STAR_FINALE_LAUNCH_AT_MS) return 0;
+  return Math.max(0, Math.min(1, (t - STAR_FINALE_LAUNCH_AT_MS) / 3000));
+}
+/* La cinématique finale (étoiles qui montent + texte) est due UNE FOIS,
+   `STAR_FINALE_END_AT_MS` après l'inauguration — jamais reliée à `doneAt`,
+   qui a pu être accordé une soirée entière avant que l'inauguration ne soit
+   jouée. `FermeGame.js` compare ce booléen à sa propre marque locale « déjà
+   vue » (même patron que `starFallSeen` pour « fall »/« townFall »). */
+export function starFinaleEndDue(e, now) {
+  return !!(e && e.finale && e.finale.inaugAt) && (now - e.finale.inaugAt) >= STAR_FINALE_END_AT_MS;
 }
 
 /* ───────────────────────────────────────────────────────────────────────────

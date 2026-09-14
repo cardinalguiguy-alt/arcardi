@@ -7,145 +7,69 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### ACTION SUIVANTE — FINIR LA QUÊTE DE L'ÉTOILE : IL NE RESTE QUE D11 ET D13
+### LA QUÊTE DE L'ÉTOILE EST FINIE (D1–D13 et D15 livrés ; D14 volontairement de côté)
 
-**Le 2026-09-13, Guillaume a tranché tout ce qui manquait à la quête (D1–D15).** Le texte de
-référence, décision par décision avec son état, est **`components/ferme/QUETE.md`, section
-« AUTORITÉ 2026-09-13 bis » en tête de fichier** — la lire en entier avant de toucher au code.
-Guillaume est en « caveman on » : exécuter, sans questions.
+**Le 2026-09-13 (passe « ter »), D11 (la finale) et D13 (le gate solo/multi) — les deux derniers
+chantiers ouverts de la quête — ont été codés, banchés ET vus en jeu à un et à deux clients, sans
+erreur console.** Le texte de référence, décision par décision, est **`components/ferme/QUETE.md`,
+section « AUTORITÉ 2026-09-13 bis » en tête de fichier (tableau D1–D15), puis le bloc « D11 — le
+compte-rendu de livraison »** juste en dessous — à lire avant de retoucher au moindre bout de cette
+quête.
 
-**Livré le 2026-09-13, en trois passes (lots 1-2, puis un audit en jeu du lot 2, puis D10/D12) :**
-- Lots 1-2 (prélude sans spoil, proposition du chantier, saccage déduit, 2ᵉ négociation budget,
-  reconstruction payer/attendre/aider Tristan) — détail inchangé, voir le tableau D1-D9 de `QUETE.md`.
-- ⚠️⚠️⚠️ **UN BUG BLOQUAIT LA QUÊTE À VIE, TROUVÉ EN LA JOUANT** : la porte du bureau du maire
-  (`tryMayorDoor`, `FermeGame.js`) décidait « déjà signé » en lisant `MR.mayorSigned` SEUL — vrai
-  pour toujours dès la 1ʳᵉ négociation (le chantier). La 2ᵉ audience (le budget, après le saccage)
-  ne s'ouvrait donc **plus jamais**, quel que soit le rendez-vous pris : la quête ne pouvait plus se
-  conclure. Même défaut dans le bouton dev de rendez-vous (`Q.devStar`, op `"appt"` — celui qui
-  saute l'attente réelle). Corrigés en lisant le SUJET courant (`MR.mayorApptTopic`/
-  `Q.starBudgetNeeded`) avant de décider si c'est signé — même lecture que le guichet d'accueil, qui
-  avait juste. `verify-jalons` **129/129**, un test neuf falsifié (126/129 sans le correctif).
-- **D10 — la protection de la canne, puis 3 à 6 poissons-squelettes.** `f.evilRodProtectedAt`
-  (déclaré/migré), enduit gratuit au chaudron (troisième recette, sans ingrédient), fenêtre de 10
-  min réelles ; `startFishingEvil` distingue canne nue (casse en 3 s, inchangé) de canne protégée
-  (ratés tirés une fois puis le lancer suivant arme le halage) ; fumerolle violette sur la case de
-  la canne dans la barre d'objets. `verify-quete` **893/893**, 7 tests neufs falsifiés.
-- **D12 — la Brebis reste allumée durablement, dynamique au survol.** Sortie de `FermeGame.js` vers
-  `fermeArt.js` (`A.drawStarConstellation`/`A.starConstellationHit`) pour qu'un banc la regarde :
-  visible la nuit comme avant, **et** de jour une fois `Q.starDone` vrai (plus discrète, jamais
-  éteinte), le survol double la vivacité du pouls. `render-etoile` §17, 5 tests neufs falsifiés.
+**Ce qui a été livré, en une phrase par étape :** le maire CONVOQUE dès que le navire est fini et la
+septième sœur réanimée (`starQuestComplete`) ; E devant son bureau ouvre directement une scène
+courte SANS jauge ni rendez-vous (`MayorFinale`, `MaireScene.js`) où l'on convient de la fête ; E à
+la cale baptise le navire (« La Belle Étoile », peinte VIVANTE sur la coque, `drawStarShipName`,
+jamais bakée) puis lance l'inauguration (fanions, confettis, résidents rassemblés vers la cale,
+`fermeArt.js`/`FermeGame.js`) ; le navire glisse vers le large trois secondes durant ; la cinématique
+finale (étoiles + texte, la Brebis nommée) se déclenche TOUTE SEULE une trentaine de secondes plus
+tard, dérivée d'une seule date (`e.finale.inaugAt`), jamais de `doneAt`. `verify-quete` **930/930**
+(28 contrôles neufs, tous falsifiés), `verify-jalons` **135/135** (la trame rejoue tout, cinématique
+comprise), les **22 autres `verify-*`** et **22 des 24 `render-*`** verts (`render-eau`/`render-parc`,
+dette antérieure inchangée), `next build` propre, bundle esbuild propre. Aucune migration SQL.
 
-**Vu en jeu** (un client, faux Supabase, ce jour-là) : la 1ʳᵉ audience jouée à l'adhésion 93,
-l'épave sur la cale, la 2ᵉ audience jouée à l'adhésion 100 (le correctif ci-dessus confirmé), le
-panneau de Tristan (« La mairie prend 40 % du prix à sa charge », payer/attendre grisés faute de
-bois en réserve). **À deux clients** : rejoint correctement (compteur à 2), la 2ᵉ audience regardée
-en direct par l'invité (bouton « Voir la scène de Guillaume »), aucune erreur console des deux
-côtés. La Brebis vue de nuit avant la fin (comportement inchangé). **PAS VU** : la carte « Budget
-voté ! » elle-même (passée entre deux captures) ; une transaction payer/attendre réelle avec de
-l'or qui bouge (aucun bois en réserve atteint cette session) ; D10 en action (la fenêtre pour
-VISER le point de sauvetage à la canne est étroite — le point est en pleine eau, ~3,16 cases de la
-rive la plus proche — non déclenchée par automatisation, à confirmer à la souris) ; D12 dans son
-régime « après la fin, de jour » (jamais atteint cette session).
+**Vu en jeu** : toute la chaîne à un client, du chantier neuf jusqu'à la cinématique finale, sans une
+erreur console ; un second client qui rejoint APRÈS l'inauguration rattrape correctement la
+cinématique (même patron que la chute), « 2 joueurs en ligne » confirmé, aucune erreur des deux
+côtés. **Pas vu** : les décorations de l'inauguration à l'écran (guirlande, confettis, le maire —
+mesurées par banc, jamais regardées en jeu) ; le rassemblement des résidents sur le quai ; la
+branche D13 « il manque quelqu'un » (le refus, jamais déclenché — la branche solo, elle, l'a été).
+Détail complet, y compris ce qui reste à confirmer, dans `QUETE.md`.
 
-**Reste à faire, dans cet ordre :**
-1. **D11 — la finale**, en entier (voir le détail au prompt de reprise plus bas) : le maire
-   CONVOQUE → baptême « La Belle Étoile » → inauguration publique avec tous les résidents → mise en
-   mer → montée des étoiles → texte blanc sur bleu nuit, FR/EN. Elle REMPLACE la scène `end`
-   actuelle ; la condition reste `starQuestComplete`.
-2. **D13** — la convocation/l'inauguration jouable seule si un seul fermier est connecté ; sinon
-   exige tous les fermiers connectés, en disant qui manque. **Rien à construire tant que D11
-   n'existe pas** : c'est une porte SUR une scène qui n'a pas encore de porte.
-3. **D14 (la récompense `starlight`) : « on tranchera ça plus tard »** — ne rien inventer.
+⚠️⚠️⚠️ **LA LEÇON LA PLUS CHÈRE DE CETTE PASSE, TROUVÉE EN JOUANT, PAS EN RELISANT** :
+`starNearby()` (`FermeGame.js`) commençait par `if (!e || Q.starDone(e)) return null;` — un
+garde-fou qui voulait dire « plus rien à faire une fois la quête finie », vrai jusqu'ici et FAUX
+depuis que D11 ajoute un épilogue jouable APRÈS `doneAt` : les deux invites du baptême et de
+l'inauguration, posées plus loin dans la même fonction, étaient mortes dès l'instant où on en a
+besoin. Aucun banc ne pouvait le voir (ils appellent les résolveurs, jamais cette fonction) — seule
+une vraie partie, jusqu'à la cale, l'a montré (un « E » qui ne répond plus rien, sans la moindre
+erreur). **La leçon, générale, au-delà de cette quête : un garde-fou « rien à faire une fois fini »
+doit être repris à l'endroit exact où il coupe, le jour où « fini » gagne une suite.**
+⚠️ Piège mineur pour qui reteste : les téléports du menu dev qui posent le joueur DANS une zone
+qu'on vient de rejoindre (« Stand at the Mayor's desk », « Stand at Kerguélen ») ratent leur coup
+s'ils sont enchaînés sans une seconde ou deux de pause après le changement de zone — le monde n'a
+pas fini de s'installer, et le bouton ne fait rien, silencieusement.
 
-**Pièges pour qui reprend :**
-- Un champ neuf de `star`/`mayor`/farmer se déclare ET se migre dans le même geste (`newFarmer`/
-  `normalizeFarmer`, `newStar`/`migrateStar`, `migrateMayor`).
-- ⚠️⚠️⚠️ **UN CONTRÔLE « EST-CE SIGNÉ ? » DOIT LIRE LE SUJET COURANT, JAMAIS UN DRAPEAU UNIQUE**,
-  dès qu'une même porte (bureau du maire, bouton dev de rendez-vous) sert deux négociations
-  successives (`yard` puis `budget`) — la leçon de cette session, payée par une quête infinissable.
-  Chercher `MR.mayorApptTopic`/`Q.starBudgetNeeded` avant tout nouveau `MR.mayorSigned` isolé.
-- `quete.js` ne doit contenir aucune ligne d'argent (`verify-quete` scanne : la valeur de
-  financement s'appelle `"paid"`, jamais `"gold"`).
-- Les bancs signent le budget avec `signBudget`/`devAll` (`verify-quete`) et `signBudgetForReal`
-  (`verify-jalons`) ; une substitution en masse dans un banc réécrit aussi l'aide qu'on vient d'y
-  écrire (payé : `devAll` s'appelait lui-même).
-- Un `*/` ajouté au milieu d'un commentaire le referme (§4).
-- Le bouton dev « An appointment with the Mayor, right now » (op `"appt"`) pose un rendez-vous DÛ
-  MAINTENANT, mais un double-toggle du menu dev (deux clics rapprochés sur ⌘⇧X) l'annule : rouvrir
-  et vérifier `!!document.querySelector('.ferme-modal')` avant de cliquer un bouton dedans.
-- Le point de sauvetage de la 7ᵉ sœur (et donc le point d'ancrage géométrique de D10) est en pleine
-  eau, hors de portée à pied (voir le grand commentaire dans `updateMeEvil`, `FermeGame.js`) : viser
-  au clic depuis la rive la plus proche, jamais s'attendre à marcher jusque-là.
+**D14 (la récompense `starlight`) reste « on tranchera ça plus tard »** — ne rien y inventer.
 
-**À juger par Guillaume, hors quête (livraisons précédentes, toujours valables) :** densité, taille et
-ralentissement des buissons de la ferme ; la gare refaite ; l'étoile en petit modèle 3D et sa lumière
-(jamais vues en jeu) ; la revente de chevaux à 1/3 du prix payé.
+### ⏭️ ACTION SUIVANTE : IL N'Y EN A PLUS DE PRESCRITE — DEMANDER À GUILLAUME
 
-**Bancs relancés le 2026-09-13 (après D10/D12 et le correctif de la porte du maire) :** les **22
-`verify-*` verts** (`verify-quete` 893/893, `verify-jalons` 129/129, `verify-maire` 133/133,
-`verify-vallee` 223/223, `verify-taxi` 15/15, `verify-scierie` 34/34, `verify-strings` 1131 clés,
-les quinze autres au code de sortie 0) ; **22 des 24 `render-*`** (`render-etoile` 17 sections,
-`render-maire` 86/86, `render-scierie` 58/58, `render-navire` vert ; `render-eau`/`render-parc`
-échouent toujours sur `createLinearGradient`, dette antérieure) ; `next build` propre (page/`.next`
-compilés, seul `G_SOIL` en avertissement, préexistant) ; bundle esbuild propre. Falsifié à
-l'écriture : sans le correctif de la porte du maire, `verify-jalons` tombe à 126/129 ; sans le
-garde `now >= protectedAt` dans `E.evilRodProtected`, `verify-quete` tombe de 2 contrôles ; sans le
-facteur `alpha` sur chaque canal de la Brebis, `render-etoile` §17 tombe de 1 contrôle. **Aucune
-migration SQL, aucune manipulation Supabase.** Page jetable `app/tmp-star-finale` supprimée.
+La quête de l'étoile n'impose plus de chantier. **La bonne première action d'une prochaine session
+est donc de LUI DEMANDER quoi ouvrir ensuite**, pas d'en choisir un — c'est la règle du §2 (« avant
+toute production créative, poser des questions »). Le §13 tient la liste de ce qui attend son
+jugement ; parmi les candidats les plus visibles, sans en privilégier un :
+- **les îles** — le navire promet maintenant un ailleurs, par la voix d'Eduardo ; rien ne dit encore
+  ce qu'on y trouve (§13, le lac-océan) ;
+- **la chaîne de transport du bois du bateau** — direction tranchée avec Guillaume, jamais construite ;
+- **le mariage, le cadastre, le salon de coiffure** — des guichets ou décors déjà posés, sans le
+  contenu qui les fait servir à quelque chose ;
+- **les dettes graphiques du maire du bureau** (« immonde et incohérent anatomiquement », capture du
+  2026-09-13) et du tribunal/de l'église (« méritent un sprite plus majestueux ») — chacune attend
+  une référence de Guillaume avant tout travail (§2 : un prompt Gemini avec image de référence,
+  jamais un appel API automatisé) ;
+- **le n°1 de la liste hors-quête** : la ferme peuplée en vraie séance à deux clients, socle de
+  toute décision sociale à venir (relations résident-résident, densification, mariage).
 
-**PROMPT DE REPRISE (à coller tel quel) :** le texte ci-dessous, identique à celui donné à Guillaume.
-
-```text
-Tu reprends Arcardi pour FINIR la quête de l'étoile. Lis CLAUDE.md en entier, puis la section
-« AUTORITÉ 2026-09-13 bis » de components/ferme/QUETE.md : c'est la seule référence. Les décisions
-D1–D15 de Guillaume sont tranchées, ne les rediscute pas. Guillaume est en « caveman on » : exécute
-sans poser de questions.
-
-Le lot 2 (saccage, budget, reconstruction), D10 (protection de la canne) et D12 (constellation
-durable/dynamique) sont FAITS et bancés — D10 et D12 n'ont pas pu être confirmés à l'écran cette
-session (détail dans le bloc ⏭️ REPRISE de CLAUDE.md) : regarde-les en jeu en premier, corrige ce
-qui se voit, puis enchaîne sur D11 sans revenir en arrière sur leur conception.
-
-FINI veut dire, tout à la fois :
-1. D11 et D13 sont codés, couverts par des bancs FALSIFIÉS, et vus en jeu à un et à deux clients
-   (tools/fake-supabase.mjs), sans erreur console.
-2. Une partie se joue sans blocage jusqu'au texte final, et tools/verify-jalons.mjs rejoue toute la
-   trame, finale comprise.
-3. Tous les verify-* et render-* sont relancés et verts (hors dette connue render-eau/render-parc),
-   la page jetable est supprimée, le bloc ⏭️ REPRISE de CLAUDE.md et QUETE.md sont à jour, aucune
-   migration SQL.
-
-D11, la finale, qui REMPLACE la scène « end » actuelle :
-a. Quand starQuestComplete devient vrai, le maire CONVOQUE les joueurs : toast à toute la salle,
-   phrase de bandeau, chevron vers la mairie. E devant son bureau ouvre directement une courte
-   scène 3D courtoise (MaireScene/maireBureau, sans jauge ni rendez-vous) où l'on convient d'une
-   fête d'inauguration et de mise en mer.
-b. Baptême du navire « La Belle Étoile » : écrit e.baptism (déjà déclaré et migré), si bien que
-   Q.starShipName rend enfin le nom ; animation sur la cale, le nom apparaît sur la coque.
-c. Inauguration publique sur le quai de la cale, à Valley Town : fanions, guirlandes, confettis,
-   TOUS les résidents rassemblés (déplacements animés, jamais de téléportation), le maire présent,
-   puis la mise en mer du navire.
-d. Les étoiles compagnes montent au ciel, puis une scène courte : texte blanc sur fond bleu nuit
-   (fondu enchaîné, ou montée fluide vers le ciel puis le texte), en français et en anglais : les
-   étoiles rejoignent la constellation de la Brebis ; ensemble elles nous ont guidés, et elles
-   guideront les matelots futurs.
-L'hôte arbitre tout, resolveStarGift et doneAt restent la conclusion, jamais un send() par image,
-et aucun habitant ne nomme les étoiles.
-
-D13 : la convocation et l'inauguration se jouent seul si un seul fermier est connecté ; sinon elles
-exigent que tous les fermiers connectés soient présents sur le quai, et l'écran dit qui manque.
-
-D14, la récompense : n'y touche pas.
-
-CONTRAINTES : exigence visuelle et jouabilité maximales, animations travaillées ; plusieurs
-changements visuels par livraison sont permis ; tout champ neuf est déclaré ET migré dans le même
-geste ; les dessins vivent dans fermeArt.js pour qu'un banc puisse les regarder ; teste en jeu avant
-de dire livré. Un contrôle « est-ce signé ? » sur une porte à deux sujets lit le sujet courant,
-jamais un drapeau unique (voir les pièges du bloc ⏭️ REPRISE).
-
-Si tout ne tient pas en une session : arrête-toi à la fin d'une étape complète, bancs verts, et
-réécris le bloc ⏭️ REPRISE avec ce même prompt, amputé de ce qui est fait.
-```
 ---
 
 ## 0. L'objectif de Guillaume — ce à quoi tout se mesure

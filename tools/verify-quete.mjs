@@ -3260,9 +3260,109 @@ section("La construction du navire (454)");
     ok("⚠️⚠️ tout est trouvé, mais un chantier ne part pas en mer",
        r.ok === false && r.unbuilt === true, `${r.built}/${r.total} morceaux posés`);
     for (const k of Q.STAR_SHIP_KEYS) e.wood[k] = { at: 2, readyAt: 2, done: true, by: "j1" };   // lot 2 — daté APRÈS le saccage
+    /* ⚠️ D11 — `scene` VAUT « summon », PLUS « end » : le don déclenche
+       maintenant la CONVOCATION du maire (l'épilogue), pas la cinématique
+       finale elle-même, qui n'arrive qu'après l'inauguration (voir plus bas,
+       section D11). */
     ok("…et la résolution part dès que la dernière pièce est livrée",
-       Q.resolveStarGift(e, ["j1"], 4).scene === "end" && Q.starDone(e));
+       Q.resolveStarGift(e, ["j1"], 4).scene === "summon" && Q.starDone(e));
   }
+
+  /* ╔═════════════════════════════════════════════════════════════════════════
+     ║ D11 — LA FINALE : LE MAIRE, LE BAPTÊME, L'INAUGURATION.
+     ╚═════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ TROIS PORTES, UN SEUL ORDRE POSSIBLE : chaque résolveur refuse tant que
+     le précédent n'a pas eu lieu — falsifié ci-dessous (retirer une garde fait
+     tomber le contrôle qui la falsifie). Chacun est idempotent, comme
+     `resolveStarGift` : un second appel rend `already: true` sans rien
+     réécrire. */
+  section("D11 — la finale : le maire, le baptême, l'inauguration");
+  {
+    const e = devAll(signedStar(), 1).star;
+    ok("⚠️ tant que le navire n'est pas fini, la finale n'a rien à dire",
+       Q.starGoalKey(e, {}) !== "finaleSummon" && !Q.starFinaleAgreed(e));
+    /* ⚠️⚠️ ON NE PEUT PAS S'ACCORDER AVEC LE MAIRE AVANT `doneAt` (falsifié :
+       sans le garde `starDone`, `resolveStarFinaleAgree` accorderait la fête
+       à un chantier encore ouvert). */
+    ok("⚠️⚠️ le maire n'a rien à accorder avant la fin de la quête",
+       Q.resolveStarFinaleAgree(e, "j1", 2).ok === false);
+    const rg = Q.resolveStarGift(e, ["j1"], 3);
+    ok("le navire est fini : le don réussit, et la finale commence", rg.ok && Q.starDone(e));
+    ok("⚠️ …et le bandeau/chevron convoquent aussitôt, à la mairie",
+       Q.starGoalKey(e, {}) === "finaleSummon" && Q.starTargetSite(e, {}) === "townHall");
+    /* ⚠️⚠️⚠️ LE BAPTÊME REFUSE SANS L'ACCORD DU MAIRE (falsifié : sans le garde
+       `starFinaleAgreed`, on pourrait nommer le navire avant même d'avoir
+       parlé au maire — l'ordre du récit D11 ne tiendrait plus). */
+    ok("⚠️⚠️⚠️ le baptême refuse tant que le maire n'a pas convoqué-accepté",
+       Q.resolveStarBaptize(e, "j1", 4).ok === false && !Q.starShipName(e));
+    ok("⚠️⚠️ …et l'inauguration refuse aussi, pour la même raison",
+       Q.resolveStarFinaleInaugurate(e, "j1", 4).ok === false);
+    const ra = Q.resolveStarFinaleAgree(e, "j1", 5);
+    ok("le maire accorde la fête", ra.ok && Q.starFinaleAgreed(e));
+    const ra2 = Q.resolveStarFinaleAgree(e, "j2", 6);
+    ok("⚠️ …et un second « oui » ne réécrit rien (idempotent)",
+       ra2.ok && ra2.already === true && e.finale.agreedAt === 5);
+    ok("⚠️ le bandeau passe au baptême, à la cale",
+       Q.starGoalKey(e, {}) === "finaleBaptize" && Q.starTargetSite(e, {}) === "shipyard");
+    /* ⚠️⚠️ L'INAUGURATION REFUSE ENCORE, TANT QUE LE NAVIRE N'A PAS DE NOM
+       (falsifié : sans le garde `starFinaleBaptized`, on pourrait inaugurer un
+       bateau jamais baptisé — D11 exige l'ordre baptême PUIS inauguration). */
+    ok("⚠️⚠️⚠️ l'inauguration refuse tant que le navire n'a pas de nom",
+       Q.resolveStarFinaleInaugurate(e, "j1", 7).ok === false);
+    const rb = Q.resolveStarBaptize(e, "j1", 8);
+    ok("le baptême réussit, et `starShipName` rend enfin le nom (D1)",
+       rb.ok && Q.starShipName(e) === C.STAR_SHIP_NAME);
+    const rb2 = Q.resolveStarBaptize(e, "j2", 9);
+    ok("⚠️ …et un second baptême ne réécrit rien (idempotent)",
+       rb2.ok && rb2.already === true && e.baptism.at === 8 && e.baptism.by === "j1");
+    ok("⚠️ le bandeau passe à l'inauguration, toujours à la cale",
+       Q.starGoalKey(e, {}) === "finaleInaugurate" && Q.starTargetSite(e, {}) === "shipyard");
+    const ri = Q.resolveStarFinaleInaugurate(e, "j1", 10);
+    ok("l'inauguration réussit", ri.ok && Q.starFinaleInaugurated(e));
+    const ri2 = Q.resolveStarFinaleInaugurate(e, "j2", 11);
+    ok("⚠️ …et une seconde inauguration ne réécrit rien (idempotent)",
+       ri2.ok && ri2.already === true && e.finale.inaugAt === 10);
+    ok("⚠️⚠️ LES TROIS ÉTAPES FRANCHIES : LE BANDEAU SE TAIT POUR DE BON",
+       Q.starGoalKey(e, {}) === null);
+    /* ── LA FENÊTRE DE LA CÉRÉMONIE, ET LE DÉPART DU NAVIRE, DÉRIVÉS D'UNE
+       SEULE DATE (`e.finale.inaugAt` = 10) — jamais un second champ. */
+    ok("⚠️⚠️ la fenêtre de la cérémonie est active juste après l'inauguration",
+       Q.starFinaleInaugActive(e, 11));
+    ok("…et elle se referme toute seule, `STAR_FINALE_INAUG_MS` plus tard",
+       !Q.starFinaleInaugActive(e, 10 + Q.STAR_FINALE_INAUG_MS + 1));
+    ok("⚠️ le départ du navire (`starFinaleLaunchK`) vaut 0 avant l'heure du départ",
+       Q.starFinaleLaunchK(e, 10 + Q.STAR_FINALE_LAUNCH_AT_MS - 1) === 0);
+    const kMid = Q.starFinaleLaunchK(e, 10 + Q.STAR_FINALE_LAUNCH_AT_MS + 1500);
+    ok("⚠️⚠️ …puis progresse strictement entre 0 et 1 pendant les trois secondes du départ",
+       kMid > 0 && kMid < 1, `k=${kMid}`);
+    ok("…et atteint 1 (parti) à la fin de ce court trajet",
+       Q.starFinaleLaunchK(e, 10 + Q.STAR_FINALE_LAUNCH_AT_MS + 3000) === 1);
+    ok("⚠️⚠️ la cinématique finale (étoiles + texte) N'EST PAS due tout de suite",
+       !Q.starFinaleEndDue(e, 10 + Q.STAR_FINALE_END_AT_MS - 1));
+    ok("⚠️⚠️⚠️ …mais elle L'EST, `STAR_FINALE_END_AT_MS` après l'inauguration — jamais après `doneAt`",
+       Q.starFinaleEndDue(e, 10 + Q.STAR_FINALE_END_AT_MS + 1)
+       && !Q.starFinaleEndDue(e, 3 + Q.STAR_FINALE_END_AT_MS + 1));
+  }
+  /* ── LES TROIS CHAMPS SURVIVENT À LA MIGRATION (la leçon de `vandal`, §14.2
+     de CLAUDE.md : un champ écrit par un résolveur et absent de `migrateStar`
+     disparaît en silence à la requête suivante). */
+  {
+    const e = devAll(signedStar(), 1).star;
+    Q.resolveStarGift(e, ["j1"], 2);
+    Q.resolveStarFinaleAgree(e, "j1", 3);
+    Q.resolveStarBaptize(e, "j1", 4);
+    Q.resolveStarFinaleInaugurate(e, "j1", 5);
+    const round = JSON.parse(JSON.stringify(e));
+    const e2 = Q.migrateStar(round);
+    ok("⚠️⚠️⚠️ `finale.agreedAt`/`finale.inaugAt` et `baptism` survivent à `migrateStar`",
+       e2.finale.agreedAt === 3 && e2.finale.inaugAt === 5
+       && e2.baptism && e2.baptism.at === 4 && e2.baptism.by === "j1");
+  }
+  /* ── LES TROIS OBJECTIFS ONT LEUR ADRESSE, COMME TOUS LES AUTRES (§ « chaque
+     objectif a une adresse, ou une raison écrite de n'en pas avoir »). */
+  ok("⚠️ les trois objectifs de la finale visent un lieu réel de la table hors-lieux",
+     ["finaleSummon", "finaleBaptize", "finaleInaugurate"].every(k =>
+       Q.STAR_OFF_TABLE_TARGETS.includes(Q.STAR_GOAL_TARGET[k])));
 
   /* ── LE MENU DÉVELOPPEUR NE PROMET PAS CE QU'IL NE DONNE PAS. */
   {
@@ -3382,7 +3482,10 @@ section("Les textes de la quête");
      invite du jeu qui décrive un geste EN COURS ; sans texte, la barre du bas
      resterait sur « E : fouiller » pendant qu'on gratte, c'est-à-dire qu'elle
      proposerait ce qu'on est en train de faire. */
-  for (const p of ["impact", "impactDig", "impactSeen", "material", "tame", "crater", "craterHot", "engineer"])
+  // D11 — les trois invites de la finale, même discipline (voir la note ci-dessus
+  // sur le repli menteur « || E » : la clé qui manque n'échoue jamais toute seule).
+  for (const p of ["impact", "impactDig", "impactSeen", "material", "tame", "crater", "craterHot", "engineer",
+                    "finaleBaptize", "finaleInaugurate", "finaleGather"])
     ok(`l'invite « ${p} » a son texte`, typeof st.prompt(p) === "string" && st.prompt(p) !== "E");
   /* ⚠️⚠️ UN TITRE DE MINI-JEU EST UN NOM, PAS UNE PHRASE, ET LE BANC LE MESURE
      EN CARACTÈRES. Le premier jet passait `rackHint` (« One of these beads used

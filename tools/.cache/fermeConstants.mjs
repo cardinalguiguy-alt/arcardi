@@ -4359,6 +4359,11 @@ export const STAR_TIMBER = {
    tableau arrière, dans la langue de qui l'a baptisé. C'est la même règle que
    « Valley Town », qui n'est pas « La ville de la vallée » en français. */
 export const STAR_SHIP_NAME = "La Belle Étoile";
+/* 2026-09-13 (D11) — LE RASSEMBLEMENT DE LA FINALE (D13). Rayon de présence
+   partagé par les deux portes gardées (le bureau du maire, la cale) : assez
+   large pour tenir toute la pièce/le quai, pas assez pour compter quelqu'un
+   resté au marché. Un seul nombre, jamais deux rayons à tenir d'accord. */
+export const STAR_FINALE_GATHER_R = 10;
 /* ╔═════════════════════════════════════════════════════════════════════════════
    ║ 2026-09-13 (lot 2) — LA RECONSTRUCTION : PAYER, OU ATTENDRE LES FONDS.
    ╚═════════════════════════════════════════════════════════════════════════════
@@ -6526,6 +6531,8 @@ export const TOWN_ACTS = {
   board:    { ms: [6000, 12000] },              // lire le tableau des nouvelles
   statue:   { ms: [6000, 12000] },
   pray:     { ms: [8000, 16000] },              // le parvis de l'église
+  // D11 — l'inauguration : la foule rassemblée, tournée vers la cale.
+  watch:    { ms: [15000, 15000] },
   /* ZIP 428 — LES SIX QUARTIERS QUI N'AVAIENT AUCUNE ACTIVITÉ. Voir la longue
      note de E.townSpots : 33 des 48 blocs ouverts de la ville n'avaient aucun
      endroit de vie, et un quart des endroits existants étaient des tombes.
