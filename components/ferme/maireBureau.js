@@ -548,9 +548,15 @@ function buildRoom(THREE, K, tex) {
     box(0.60, 0.07, 0.60, mGild, 0, 1.16, 0, 0, 0, 0, g);
     const mMar = pho(COL.marble, 24);
     cyl(0.16, 0.20, 0.20, mMar, 0, 1.28, 0, 0, 0, 0, g, 12);
-    box(0.30, 0.34, 0.24, mMar, 0, 1.53, 0, 0, 0, 0, g);
-    sph(0.155, mMar, 0, 1.80, 0.01, g, 14);
-    box(0.20, 0.16, 0.10, mMar, 0, 1.86, -0.06, 0, 0, 0, g);           // le chignon
+    box(0.30, 0.34, 0.24, mMar, 0, 1.53, 0, 0, 0, 0, g);               // les épaules — sommet à 1,70
+    /* ⚠️ CORRIGÉ LE 2026-09-15, MÊME DÉFAUT QUE LE COU DU MAIRE (voir plus bas,
+       « LE COU ET LA TÊTE ») : la sphère de tête (rayon 0,155, centrée à 1,80)
+       descendait jusqu'à 1,645 — 5,5 cm SOUS le sommet des épaules (1,70). Le
+       buste avait donc lui aussi une tête posée à même le buste, sans cou,
+       trouvé en cherchant si le même défaut existait ailleurs dans ce fichier. */
+    cyl(0.06, 0.07, 0.10, mMar, 0, 1.75, 0, 0, 0, 0, g, 12);
+    sph(0.155, mMar, 0, 1.935, 0.01, g, 14);
+    box(0.20, 0.16, 0.10, mMar, 0, 1.995, -0.06, 0, 0, 0, g);          // le chignon
   }
 
   /* ── LE MUR DE DROITE : la bibliothèque, l'écusson, et la pendule. ── */

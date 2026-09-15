@@ -137,13 +137,17 @@ Vérifié en jeu : les six bascules, le contenu masqué (`display:none`, confirm
 sans rien laisser fuir d'une section à l'autre.
 
 **Le maire et Tristan ont été regardés en jeu, à la demande de Guillaume, pour lister où la scène
-du maire s'écarte d'un réalisme sérieux.** Prompt Gemini rédigé et soumis par Guillaume dans la
-foulée (deux planches : proportions, puis expressions) — **son retour a servi de référence
-d'INTENTION pour une première correction du cou, faite et vérifiée par le banc le jour même**
-(le cou n'avançait jamais jusque sous le menton, invisible sur les cinq maires — détail dans
-`maireBureau.js` et le §13, qui tient la suite : ce qui reste ouvert, ce qui a déjà été essayé
-et rejeté). **PAS ENCORE REVU DANS LE VRAI JEU** (fait via le banc `tools/render-maire.mjs`,
-pas via une session navigateur) — c'est la prochaine chose à confirmer à l'écran.
+du maire s'écarte d'un réalisme sérieux — puis Guillaume a demandé d'aller jusqu'à un résultat
+« bluffant de réalisme ».** Prompt Gemini rédigé et soumis par Guillaume (deux planches :
+proportions, puis expressions), retour convaincant, utilisé comme référence d'INTENTION (jamais
+d'échelle, §12) pour deux corrections géométriques : **le cou du maire** (n'avançait jamais
+jusque sous le menton, invisible sur les cinq maires — vérifié au banc ET dans le vrai jeu, capture
+du canevas WebGL en direct) **et le même défaut sur le buste marbre de la pièce** (tête enfoncée
+dans les épaules). Le reste de la liste critiquée le matin même (mains, manchettes, coude, globe,
+fauteuil) s'est révélé, en y regardant vraiment de près avant d'y toucher, déjà correct — un
+travail antérieur non vérifié à l'œil. **Ce qui reste ouvert, volontairement** : le buste (le
+personnage) qui pivote en un seul bloc rigide depuis la taille — écarté d'un rig à restructurer à
+l'aveugle sans référence dynamique à viser, voir le §13 pour le raisonnement complet.
 
 ---
 
@@ -1328,17 +1332,42 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
   falsification (0,004 → aucun changement visible ; 0,150 → cou qui flotte devant le col,
   détaché ; 0,100 → cou lisible et rattaché, sur les cinq maires ET la scène du bureau
   complète, `render-maire` toujours 86/86 donc aucune cible de main ni stature déplacée).
-  ⚠️ **PAS ENCORE REVÉRIFIÉ DANS LE VRAI JEU** (fait via `tools/render-maire.mjs`, qui
-  partage le même rendu three.js que `MaireScene.js` — fiable pour une question de
-  géométrie/occlusion, contrairement à la lumière ou aux matières, §10) : à confirmer à
-  l'écran dès la prochaine séance.
+  ✅ **REVÉRIFIÉ DANS LE VRAI JEU LE 2026-09-15** (capture du canevas WebGL en direct,
+  audience jouée jusqu'à Ninon Delaunay, pas seulement le banc) : le cou se voit bien à
+  l'écran, pas seulement dans `tools/render-maire.mjs`.
 
-  **CE QUI RESTE, NON TOUCHÉ** : le buste qui bascule en bloc (courbure de colonne), le
-  fauteuil qui ne suit pas le corps, les épaules (leur largeur/rondeur n'a pas encore été
-  comparée à la référence), les mains, et tout le décor de la pièce (buste, globe, fenêtre).
+  **LE MÊME DÉFAUT, TROUVÉ ET CORRIGÉ SUR LE BUSTE DE LA PIÈCE** : la sphère de tête du
+  buste marbre (§ « LE MUR DE GAUCHE ») s'enfonçait de 5,5 cm dans le bloc des épaules —
+  exactement le défaut du cou, en plus petit. Un cylindre de cou ajouté, tête remontée
+  d'autant ; sans risque pour le rig du maire, c'est un objet de décor isolé. Vérifié en
+  image (`tools/out/maire-bureau.png`).
+
+  **RÉEXAMEN DU RESTE DE LA LISTE, EN GROS PLAN, AVANT D'Y TOUCHER — ET LA MOITIÉ N'AVAIT
+  PLUS BESOIN DE RIEN.** Trois choses que la critique du matin avait reprises telles quelles
+  depuis l'ancien texte de ce fichier se sont révélées déjà corrigées par un travail
+  antérieur (les commentaires « CORRIGÉE LE 2026-09-14 » déjà dans le code, jamais vérifiés
+  à l'œil avant aujourd'hui) : les mains ne sont plus des pagaies, les manchettes ne sont
+  plus des cubes, le coude a un arrondi visible bras tendu. Le globe a bel et bien des
+  continents (trois sphères vertes) et un anneau — pas un ballon uni. ⚠️ **La leçon : une
+  critique écrite avant d'avoir zoomé peut recopier un défaut qui n'existe plus.** Et le
+  fauteuil qui « ne suit pas le corps » n'est pas un défaut : un dossier de chaise ne bouge
+  pas quand on se penche, c'est la physique, pas un bug — le vérifier en gros plan (`lean`)
+  montre un écart tout à fait normal entre le dos et le dossier.
+
+  **CE QUI RESTE VRAIMENT, ET POURQUOI ÇA N'A PAS ÉTÉ TOUCHÉ AUJOURD'HUI** : le buste (le
+  personnage, pas la statue) bascule encore en un seul bloc rigide depuis la taille, sans
+  courbure de colonne. ⚠️ **Écarté volontairement, pas oublié** : `torso` est UN SEUL groupe
+  qui porte tout le haut du corps (poitrine, épaules, bras, cou, tête), et `solveArm`
+  résout les deux bras à partir de sa matrice monde (§8bis) — le séparer en deux pivots
+  (bas du dos / haut du dos) toucherait exactement la chaîne que quatre correctifs
+  précédents (2026-08-31, 2026-09-02) ont payée cher à stabiliser, pour un gain que je ne
+  peux même pas cibler précisément : les deux planches Gemini ne montrent que des poses
+  statiques neutres, aucune référence de penché dynamique à viser. Un rig à toucher un autre
+  jour, avec une vraie mesure de ce qu'on cherche à obtenir — pas à l'aveugle.
+
   Les expressions (`FACE`, huit états à six paramètres continus) couvrent déjà largement les
   quatre de la planche Gemini (joie≈warm/won, colère≈angry, tristesse≈weary, réflexion≈doubt)
-  — rien à construire côté mécanique ; seule la ÉPAISSEUR des sourcils (boîtes plates de
+  — rien à construire côté mécanique ; seule l'ÉPAISSEUR des sourcils (boîtes plates de
   1,6 cm) pourrait gagner à se rapprocher du trait plus marqué de la référence, pas encore
   fait.
 - ⚠️ **NOUVELLE DETTE GRAPHIQUE (2026-09-03) : LE TRIBUNAL ET L'ÉGLISE MÉRITENT UN SPRITE PLUS
