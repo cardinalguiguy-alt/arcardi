@@ -1097,8 +1097,28 @@ function buildMayor(THREE, K, look) {
      sépare un costume d'une armure. Les deux anciennes boîtes de 13,5 cm posées
      à plat au sommet lisaient comme des épaulettes — signalé par personne, vu
      sur la planche du banc. */
-  box(M.bidelt - M.deltoid, 0.10, M.chestD * 0.96, mSuit, 0, shY - 0.040, 0.004, 0, 0, 0, torso);
-  box(M.bidelt * 0.58, 0.075, M.chestD * 0.84, mSuit, 0, shY + 0.030, 0.000, 0, 0, 0, torso);
+  /* ⚠️⚠️ DETTE GRAPHIQUE CORRIGÉE LE 2026-09-15 : LES DEUX PLAQUES CI-DESSOUS
+     ÉTAIENT IDENTIQUES POUR LES DEUX SEXES — seul `bidelt` (la largeur totale
+     de la carrure) suivait `M.fem`, jamais la PART de cette largeur donnée à
+     la plaque PLATE contre celle laissée au deltoïde ROND. Sur une carrure
+     déjà plus étroite (§ `mensurations`), la même plaque plate lit comme une
+     épaulette de costume masculin — signalé par Guillaume (« les épaules
+     carrées c'est bizarre sur une femme »). Un trapèze féminin est moins
+     bâti : la plaque rétrécit et s'aplatit, et c'est le ROND du deltoïde (déjà
+     dessiné en sphère plus bas) qui domine davantage la silhouette — jamais
+     réglé à l'œil, dérivé de `M.fem` comme la jupe ou le chemisier. */
+  const shPlateW = M.fem ? 0.80 : 1, shPlateH = M.fem ? 0.70 : 1;
+  box((M.bidelt - M.deltoid) * shPlateW, 0.10 * shPlateH, M.chestD * 0.96, mSuit, 0, shY - 0.040, 0.004, 0, 0, 0, torso);
+  /* ⚠️⚠️ DETTE GRAPHIQUE 2026-09-13 CORRIGÉE LE 2026-09-14 : CETTE PLAQUE MONTAIT
+     À `shY + 0,030`, SOIT SIX CENTIMÈTRES AU-DESSUS DE L'ATTACHE DU COU
+     (`shY + 0,005`, voir plus bas). Le trapèze recouvrait donc toute la base du
+     cou sur toute sa largeur (0,58 × bidelt, soit ~26 cm) : vu de face, les
+     épaules « avalaient » le cou au lieu de le laisser émerger — exactement le
+     signalement de Guillaume (« épaules plus hautes que la base du cou »).
+     Aucun banc ne le mesure (`render-maire` compare des cibles de main, pas un
+     recouvrement de silhouette). Descendue pour que son sommet s'arrête AU
+     NIVEAU de l'attache du cou, jamais au-dessus. */
+  box(M.bidelt * 0.58 * shPlateW, 0.05 * shPlateH, M.chestD * 0.84, mSuit, 0, shY - 0.022, 0.000, 0, 0, 0, torso);
   /* ⚠️ LA CARRURE DESSINÉE DOIT FAIRE `bidelt`, PAS L'ÉCART DES JOINTS. Premier
      jet : la plaque d'épaule faisait la largeur des deux articulations et les
      deltoïdes pendaient DESSOUS — vu de face, deux boules sous une planche, et
@@ -1182,17 +1202,38 @@ function buildMayor(THREE, K, look) {
     sph(M.deltoid, mSuit, 0, 0.008, 0, sh, 12);
     cyl(M.armR, M.armR * 0.90, M.armUp, mSuit, 0, -M.armUp / 2, 0, 0, 0, 0, sh, 16);
     const el = grp(0, -M.armUp, 0, sh);
+    /* ⚠️⚠️ DETTE GRAPHIQUE 2026-09-13 CORRIGÉE LE 2026-09-14 : LE COUDE N'AVAIT
+       AUCUN ARRONDI — deux cylindres bout à bout (haut de bras Ø à `armR*0,90`,
+       avant-bras Ø à `armR*0,88`) se rencontraient sur une arête nette, comme
+       deux tuyaux boulonnés. C'est la moitié de « anatomie carrée » qui restait
+       après le passage de l'épaule en sphère (voir plus haut) : le même défaut,
+       à l'articulation suivante. Une sphère qui comble la jointure fait ce que
+       l'épaule fait déjà — une articulation ronde ne montre pas d'arête. */
+    sph(M.armR * 0.87, mSuit, 0, 0, 0, el, 12);
     cyl(M.armR * 0.88, M.armR * 0.78, M.armFore, mSuit, 0, -M.armFore / 2, 0, 0, 0, 0, el, 16);
-    box(0.095, 0.042, 0.095, mShirt, 0, -M.armFore + 0.022, 0, 0, 0, 0, el);      // la manchette
+    /* ⚠️⚠️ DETTE GRAPHIQUE 2026-09-13 CORRIGÉE LE 2026-09-14 : LA MANCHETTE
+       ÉTAIT UN CUBE (`box` aux trois dimensions égales, 0,095 partout) —
+       littéralement le défaut nommé par Guillaume. Une manchette de chemise est
+       un anneau autour du poignet, pas un bloc : un cylindre qui reprend le
+       rayon de l'avant-bras à sa base et s'évase à peine vers la main (comme un
+       vrai poignet de chemise qui dépasse de la manche) donne la même lecture
+       pour un coût de dessin identique. Les rayons dérivent de `M.armR`, comme
+       le reste du bras, pour rester justes sur les cinq maires. */
+    cyl(M.armR * 0.68, M.armR * 0.78, 0.042, mShirt, 0, -M.armFore + 0.022, 0, 0, 0, 0, el, 12);
     const hd = grp(0, -M.armFore, 0, el);
     /* ⚠️ LA MAIN EST PLUS FINE QU'AVANT ET PLUS LONGUE : une main d'adulte fait
        11 % de la stature, la sienne en faisait 6 % pour une largeur de 7,2 cm —
        c'est-à-dire une moufle. Quatre doigts et un pouce, comme chez Tristan,
        et pas un de plus : à cette distance le cinquième doigt est un pixel. */
     box(0.062, 0.040, 0.098, mSkin, 0, -0.016, 0.016, 0, 0, 0, hd);
-    for (let i = 0; i < 4; i++) box(0.013, 0.022, 0.058, mSkin, -0.021 + i * 0.014, -0.024, 0.058, 0.30, 0, 0, hd);
-    box(0.020, 0.022, 0.044, mSkin, sx * 0.033, -0.010, 0.032, 0, 0, sx * 0.6, hd);
-    return { sh, el, hd };
+    /* ⚠️ `fingers`/`thumb` SONT GARDÉS (pas juste dessinés) DEPUIS LE
+       2026-09-15 : `applyPose` doit pouvoir les refermer sur le stylo — voir
+       sa note plus bas. Avant, ces boîtes étaient dessinées puis oubliées,
+       donc figées dans leur pose de repos, stylo en main ou non. */
+    const fingers = [];
+    for (let i = 0; i < 4; i++) fingers.push(box(0.013, 0.022, 0.058, mSkin, -0.021 + i * 0.014, -0.024, 0.058, 0.30, 0, 0, hd));
+    const thumb = box(0.020, 0.022, 0.044, mSkin, sx * 0.033, -0.010, 0.032, 0, 0, sx * 0.6, hd);
+    return { sh, el, hd, fingers, thumb };
   };
   const armL = arm(-1), armR = arm(1);
 
@@ -1211,6 +1252,17 @@ function buildMayor(THREE, K, look) {
   const head = grp(0, M.headY, 0.010, torso);
   head.scale.set(M.headK[0], M.headK[1], M.headK[2]);
   box(0.212, 0.245, 0.220, mSkin, 0, 0, 0, 0, 0, 0, head);
+  /* ⚠️⚠️ DETTE GRAPHIQUE CORRIGÉE LE 2026-09-15 : LE CRÂNE (0,212 DE LARGE)
+     TOMBAIT DIRECTEMENT SUR LE MENTON (0,188), SANS RIEN ENTRE LES DEUX — un
+     seul palier de 1,2 cm de chaque côté, exactement à la hauteur où l'œil
+     cherche une mâchoire. Signalé par Guillaume (« le visage manque de
+     réalisme anatomique, c'est des blocs perpendiculaires »). Le buste évite
+     déjà ce défaut avec trois étages qui se resserrent (poitrine, ceinture,
+     taille, voir plus haut) ; la tête n'avait que deux. Une boîte de mâchoire,
+     intercalée, chevauche le bas du crâne ET le haut du menton (aucun vide
+     entre les trois) et coupe le seul grand palier en deux petits — le même
+     principe que le buste, appliqué à l'endroit qui manquait. */
+  box(0.196, 0.075, 0.205, mSkin, 0, -0.095, 0.002, 0, 0, 0, head);            // la mâchoire, palier intermédiaire
   box(0.188, 0.050, 0.195, mSkin, 0, -0.122, 0.004, 0, 0, 0, head);              // le menton
   for (const sx of [-1, 1]) box(0.026, 0.072, 0.058, mSkin, sx * 0.112, 0.000, -0.008, 0, 0, 0, head);
   /* ⚠️⚠️ LES CHEVEUX SONT UNE COIFFURE, PAS UNE CALOTTE, ET LE PREMIER JET AVAIT
@@ -1555,16 +1607,41 @@ export function applyPose(rig, cur, t) {
      écoute plus » sans une ligne de texte. ── */
   const p = rig.pen, k = cur.pen;
   const restY = ROOM.deskTop + 0.010, restZ = ROOM.deskC + 0.14;
+  /* ⚠️⚠️ DETTE GRAPHIQUE CORRIGÉE LE 2026-09-15 : LES DOIGTS NE BOUGEAIENT
+     JAMAIS — `fingers`/`thumb` étaient dessinés une fois dans leur pose de
+     repos et le stylo se contentait de flotter à un décalage fixe de la MAIN
+     (`hd`), stylo présent ou non. Signalé par Guillaume (« pas connecté,
+     manipulé de manière incohérente par les doigts »). L'index (le doigt le
+     plus proche du pouce — sur la main DROITE, construite avec `sx=+1`, c'est
+     `fingers[3]`, celui posé du côté du pouce, pas `fingers[0]`) se referme
+     avec le pouce à mesure que `k` monte, et c'est LUI — pas `hd` — qui ancre
+     le stylo : la prise se voit, elle n'est plus supposée. */
+  const idxF = m.armR.fingers[3], thumbF = m.armR.thumb;
+  idxF.rotation.x = 0.30 + 0.55 * k;
+  thumbF.rotation.z = 0.6 + 0.30 * k;
   m.armR.hd.updateMatrixWorld(true);
-  const hand = rig._v.setFromMatrixPosition(m.armR.hd.matrixWorld);
+  const hand = rig._v.setFromMatrixPosition(idxF.matrixWorld);
   p.position.set(
-    (-0.30) * (1 - k) + (hand.x + 0.02) * k,
-    restY * (1 - k) + (hand.y - 0.02) * k,
-    restZ * (1 - k) + (hand.z + 0.09) * k);
+    (-0.30) * (1 - k) + (hand.x + 0.006) * k,
+    restY * (1 - k) + (hand.y + 0.010) * k,
+    restZ * (1 - k) + (hand.z + 0.006) * k);
+  /* ⚠️⚠️ DETTE GRAPHIQUE 2026-09-13 CORRIGÉE LE 2026-09-14 : LA ROTATION CONTINUE
+     ÉTAIT ÉCRITE SUR `z`, PAS SUR `y` — ET LE STYLO EST BÂTI LE LONG DE SON `y`
+     LOCAL (`cyl(...)` sans rotation, plus haut dans ce fichier : trois cylindres
+     empilés sur l'axe Y). Avec l'ordre d'Euler par défaut de three.js (« XYZ »,
+     intrinsèque), le canal `y` tourne autour de l'axe propre de l'objet — donc
+     autour de SA LONGUEUR, comme un stylo qu'on roule entre les doigts. Le canal
+     `z` tourne autour d'un axe perpendiculaire à cette longueur : le stylo
+     culbutait sur lui-même comme un bâton lancé en l'air, jamais comme un objet
+     roulé. Signalé par Guillaume (« tourner le stylo pas réaliste »). La
+     correction est un simple échange de canal — aucun nombre ne change, le
+     roulis continu (`t * 3.4`) va sur `y`, le petit balancement (`sin(t*2.1)`)
+     reste sur l'axe perpendiculaire, qui décide de l'angle où le stylo penche
+     pendant qu'il roule. */
   p.rotation.set(
     (Math.PI / 2) * (1 - k) + (-0.5) * k,
-    (0.32) * (1 - k) + Math.sin(t * 2.1) * 0.35 * k,
-    (Math.PI / 2) * (1 - k) + (t * 3.4 % (Math.PI * 2)) * k);
+    (0.32) * (1 - k) + (t * 3.4 % (Math.PI * 2)) * k,
+    (Math.PI / 2) * (1 - k) + Math.sin(t * 2.1) * 0.35 * k);
 
   /* le rouleau : posé en bout de bureau, ou déroulé au milieu du sous-main */
   const r = cur.roll;

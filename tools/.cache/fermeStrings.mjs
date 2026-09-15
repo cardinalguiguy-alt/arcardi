@@ -4480,7 +4480,12 @@ export const FERME_STR = {
     stoneRowTitle: (n) => `Pierre × ${n}`,
     sellAll: "Tout vendre",
     // Carte plein écran
-    mapTitle: "🗺️ Carte de la vallée",
+    /* ⚠️ 2026-09-14 — LE TITRE SUIT LA ZONE, COMME LE DESSIN LA SUIT DÉJÀ
+       (`drawFullMap`, FermeGame.js : `town` → `drawTownMap`, `court` →
+       `drawCourtMap`). Une carte qui montre la ville en s'appelant « Carte de
+       la vallée » est le même défaut que deux cartes sans repère commun (§4
+       de CLAUDE.md) — juste sur le TITRE plutôt que sur les coordonnées. */
+    mapTitle: (zone) => ({ town: "🗺️ Carte de la ville", court: "🗺️ Plan du bâtiment" }[zone] || "🗺️ Carte de la vallée"),
     mapClose: "Clique n'importe où ou appuie sur Échap ou M pour fermer",
     mapYou: "toi",
     // Boutons flottants
@@ -6228,7 +6233,7 @@ export const FERME_STR = {
     woodRowTitle: (n) => `Wood × ${n}`,
     stoneRowTitle: (n) => `Stone × ${n}`,
     sellAll: "Sell all",
-    mapTitle: "🗺️ Valley map",
+    mapTitle: (zone) => ({ town: "🗺️ Town map", court: "🗺️ Building plan" }[zone] || "🗺️ Valley map"),
     mapClose: "Click anywhere or press Esc or M to close",
     mapYou: "you",
     btnSettings: "Settings",

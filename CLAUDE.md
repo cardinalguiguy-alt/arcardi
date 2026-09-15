@@ -52,12 +52,22 @@ pas fini de s'installer, et le bouton ne fait rien, silencieusement.
 
 **D14 (la récompense `starlight`) reste « on tranchera ça plus tard »** — ne rien y inventer.
 
-### ⏭️ ACTION SUIVANTE : IL N'Y EN A PLUS DE PRESCRITE — DEMANDER À GUILLAUME
+### ⏭️ ACTION SUIVANTE : VÉRIFIER LA CONFIGURATION GOOGLE CLOUD DE OÙ'S THAT
 
-La quête de l'étoile n'impose plus de chantier. **La bonne première action d'une prochaine session
-est donc de LUI DEMANDER quoi ouvrir ensuite**, pas d'en choisir un — c'est la règle du §2 (« avant
-toute production créative, poser des questions »). Le §13 tient la liste de ce qui attend son
-jugement ; parmi les candidats les plus visibles, sans en privilégier un :
+⚠️ **DETTE IMMÉDIATE, À FAIRE AVEC CODEX ET GUILLAUME DEVANT LA CONSOLE GOOGLE CLOUD** : le code
+n'appelle que Maps Embed API, gratuite et illimitée au 2026-09-14, mais le dépôt ne peut pas prouver
+la configuration du compte réel. Guillaume se connecte lui-même — aucun identifiant transmis à
+l'agent (§2) — puis Codex guide la vérification : adresse de facturation dans l'EEE ; clé dédiée à
+Où's That ; restriction d'API sur **Maps Embed API seulement** ; référents limités aux domaines
+Arcardi nécessaires ; aucune API payante ni autre service Cloud utilisant cette clé ou ce projet ;
+rapport de facturation à zéro. ⚠️ Un budget d'alerte ne constitue pas un plafond de dépense. Cette
+vérification est CLOSE seulement après lecture des écrans réels, jamais par déduction depuis
+`NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY`.
+
+La quête de l'étoile n'impose plus de chantier. **Après cette vérification non créative, la bonne
+première action est donc de DEMANDER À GUILLAUME quoi ouvrir ensuite**, pas d'en choisir un — c'est
+la règle du §2 (« avant toute production créative, poser des questions »). Le §13 tient la liste de
+ce qui attend son jugement ; parmi les candidats les plus visibles, sans en privilégier un :
 - **les îles** — le navire promet maintenant un ailleurs, par la voix d'Eduardo ; rien ne dit encore
   ce qu'on y trouve (§13, le lac-océan) ;
 - **la chaîne de transport du bois du bateau** — direction tranchée avec Guillaume, jamais construite ;
