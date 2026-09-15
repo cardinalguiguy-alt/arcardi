@@ -1351,8 +1351,14 @@ function buildMayor(THREE, K, look) {
     return { g, iris, lid };
   };
   const eyeL = eye(-1), eyeR = eye(1);
-  const browL = box(0.072, 0.019, 0.016, lam(L.brow), -0.054, 0.070, 0.012, 0, 0, 0, face);
-  const browR = box(0.072, 0.019, 0.016, lam(L.brow), 0.054, 0.070, 0.012, 0, 0, 0, face);
+  /* ⚠️ ÉPAISSEUR RELEVÉE DE 0,019 À 0,027 M LE 2026-09-15, SUR LA PLANCHE
+     D'EXPRESSIONS GEMINI (§13 de CLAUDE.md) : le trait y est net et large,
+     visible même en plan large, alors que la boîte d'origine s'effaçait dès
+     que la caméra recule. Seule la HAUTEUR bouge (le trait épaissit, il ne
+     s'allonge pas) : la largeur et la profondeur restent celles qui plaçaient
+     déjà juste les coins par rapport à l'arcade et aux tempes. */
+  const browL = box(0.072, 0.027, 0.016, lam(L.brow), -0.054, 0.070, 0.012, 0, 0, 0, face);
+  const browR = box(0.072, 0.027, 0.016, lam(L.brow), 0.054, 0.070, 0.012, 0, 0, 0, face);
   /* ⚠️ LES LUNETTES SONT DEUX CERCLES ET UN PONT, ET RIEN D'AUTRE. Des branches
      modélisées disparaîtraient derrière les tempes à toutes les caméras du jeu
      et coûteraient quatre maillages par maire pour zéro pixel. */
@@ -1777,6 +1783,40 @@ export function talkEnvelope(t) {
 export function blinkAt(t) {
   const p = (t * 0.31 + Math.sin(t * 0.17) * 0.5) % 1;
   return p < 0.045 ? Math.sin((p / 0.045) * Math.PI) : 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   7 ter. LE SURSAUT POSITIF — 2026-09-15, SYMÉTRIQUE DE `push`/`annoyed`
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ SEULE UNE FAUTE AVAIT UNE RÉACTION IMMÉDIATE (`mayorPose`/`mayorEmote`,
+   `maire.js` : `lastGrade==="fault"` force `push`/`annoyed`) ; une réponse
+   "ideal" ne faisait que continuer à suivre la jauge, un cran plus tard —
+   invisible tant qu'on n'a pas franchi un seuil. Guillaume veut une réaction
+   ÉMOTIONNELLE marquée aux DEUX bouts.
+   ⚠️⚠️⚠️ ET C'EST UN SURSAUT, PAS UN ÉTAT : `MAYOR_EMOTES`/`MAYOR_POSES` sont
+   ordonnés du pire au meilleur, et `verify-maire` §6/§11 EXIGE qu'ils ne
+   reculent jamais quand la jauge monte. Faire de "ideal" un troisième cas de
+   `mayorPose`/`mayorEmote` (comme "fault") aurait fait sauter le visage à
+   "won" pour UNE image puis retomber au palier réel de la jauge l'image
+   suivante — c'est-à-dire exactement le défaut que la règle interdit, rejoué
+   en sens inverse. Ce sursaut ne touche donc JAMAIS `pose`/`face` (les cibles
+   lissées vers lesquelles `ease` glisse) : il s'AJOUTE, une fois par image,
+   sur la copie qu'on envoie au rig — sourcils, sourire, un bref hochement de
+   tête — puis s'efface tout seul. La jauge et son palier n'ont jamais bougé ;
+   personne ne peut donc jamais le voir « reculer ».
+   ⚠️ ENVELOPPE, PAS ALÉA (même règle que `talkEnvelope`) : une forme fixe
+   plutôt qu'un nombre tiré, pour qu'un rejeu à l'identique (le banc, le
+   spectateur) montre le même sursaut. Monte en 0,18 s (le temps qu'un hochement
+   de tête parte), redescend en 0,67 s. ⚠️ BORNÉE DES DEUX CÔTÉS : `u` vient
+   d'une soustraction de deux horloges de scène (`t - déclenchement`), et une
+   enveloppe qui ne retomberait jamais à zéro laisserait un sursaut collé au
+   visage pour le reste de l'audience. */
+export const MAYOR_WIN_PULSE_MS = 850;
+const MAYOR_WIN_PULSE_S = MAYOR_WIN_PULSE_MS / 1000, MAYOR_WIN_RISE_S = 0.18;
+export function winPulse(u) {
+  if (!(u >= 0) || u > MAYOR_WIN_PULSE_S) return 0;
+  return u < MAYOR_WIN_RISE_S ? u / MAYOR_WIN_RISE_S
+    : Math.max(0, 1 - (u - MAYOR_WIN_RISE_S) / (MAYOR_WIN_PULSE_S - MAYOR_WIN_RISE_S));
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

@@ -199,7 +199,7 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   Ce banc ne juge toujours ni le plaisir d'une partie entière, ni le
   niveau stratégique des bots.
 
-- **`tools/verify-maire.mjs` — 113 contrôles, 113/113 (480, étendu au 481).** L'AUDIENCE CHEZ LE MAIRE, JOUÉE.
+- **`tools/verify-maire.mjs` — 137 contrôles, 137/137 (480, étendu au 481, 2026-09-15).** L'AUDIENCE CHEZ LE MAIRE, JOUÉE.
   ⚠️⚠️⚠️ **C'est le premier banc du dépôt qui JOUE une mécanique de bout en bout au lieu de la
   relire** — quatre cents entretiens par propriété, balayés sur cinq maires × deux mondes (plans en
   main / mains vides) × quatre crans de confiance × dix vitesses de réflexion, de zéro à neuf

@@ -7,147 +7,74 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### LA QUÊTE DE L'ÉTOILE EST FINIE (D1–D13 et D15 livrés ; D14 volontairement de côté)
+**La quête de l'étoile est finie** (D1–D13 et D15 livrés, D14 volontairement de côté). Texte de
+référence : `components/ferme/QUETE.md`, section « AUTORITÉ 2026-09-13 bis ». Rien n'y a bougé
+depuis — ce fichier n'en garde plus le détail, périmé dès la livraison suivante.
 
-**Le 2026-09-13 (passe « ter »), D11 (la finale) et D13 (le gate solo/multi) — les deux derniers
-chantiers ouverts de la quête — ont été codés, banchés ET vus en jeu à un et à deux clients, sans
-erreur console.** Le texte de référence, décision par décision, est **`components/ferme/QUETE.md`,
-section « AUTORITÉ 2026-09-13 bis » en tête de fichier (tableau D1–D15), puis le bloc « D11 — le
-compte-rendu de livraison »** juste en dessous — à lire avant de retoucher au moindre bout de cette
-quête.
+### 2026-09-15 — la scène du maire, passe de réalisme (« bluffant », pour un studio)
 
-**Ce qui a été livré, en une phrase par étape :** le maire CONVOQUE dès que le navire est fini et la
-septième sœur réanimée (`starQuestComplete`) ; E devant son bureau ouvre directement une scène
-courte SANS jauge ni rendez-vous (`MayorFinale`, `MaireScene.js`) où l'on convient de la fête ; E à
-la cale baptise le navire (« La Belle Étoile », peinte VIVANTE sur la coque, `drawStarShipName`,
-jamais bakée) puis lance l'inauguration (fanions, confettis, résidents rassemblés vers la cale,
-`fermeArt.js`/`FermeGame.js`) ; le navire glisse vers le large trois secondes durant ; la cinématique
-finale (étoiles + texte, la Brebis nommée) se déclenche TOUTE SEULE une trentaine de secondes plus
-tard, dérivée d'une seule date (`e.finale.inaugAt`), jamais de `doneAt`. `verify-quete` **930/930**
-(28 contrôles neufs, tous falsifiés), `verify-jalons` **135/135** (la trame rejoue tout, cinématique
-comprise), les **22 autres `verify-*`** et **22 des 24 `render-*`** verts (`render-eau`/`render-parc`,
-dette antérieure inchangée), `next build` propre, bundle esbuild propre. Aucune migration SQL.
+**Demande de Guillaume : la scène du maire (`maireBureau.js`, `MaireScene.js`, `rig3d.js`) doit
+être présentable à un grand studio de jeu vidéo.** Quatre défauts trouvés en jouant, corrigés,
+vérifiés au banc (`node tools/render-maire.mjs` **86/86**, `node tools/verify-maire.mjs`
+**137/137**, falsifiés) ET en jeu (`fake-supabase` + `arcardi-local`, page jetable supprimée après) :
 
-**Vu en jeu** : toute la chaîne à un client, du chantier neuf jusqu'à la cinématique finale, sans une
-erreur console ; un second client qui rejoint APRÈS l'inauguration rattrape correctement la
-cinématique (même patron que la chute), « 2 joueurs en ligne » confirmé, aucune erreur des deux
-côtés. **Pas vu** : les décorations de l'inauguration à l'écran (guirlande, confettis, le maire —
-mesurées par banc, jamais regardées en jeu) ; le rassemblement des résidents sur le quai ; la
-branche D13 « il manque quelqu'un » (le refus, jamais déclenché — la branche solo, elle, l'a été).
-Détail complet, y compris ce qui reste à confirmer, dans `QUETE.md`.
+1. **Le cou n'avançait jamais jusque sous le menton** (tête centrée sur la colonne, menton en
+   avant de 9 cm une fois l'échelle appliquée) — corrigé sur le maire ET le buste en marbre de la
+   pièce (même défaut, même cause).
+2. **Un vrai bug d'animation** : une faute pouvait tordre les bras en X au bassin, sans se
+   corriger seule. `MayorAudience` relançait sa boucle de fuite sans jamais relire `phase` —
+   l'image de trop écrasait la pose de la faute par `mayorPose(s, null)`, et `closed`/`push`
+   n'ont pas le même signe de `out` (`rig3d.js` bascule le PLAN du coude sur ce signe, jamais en
+   continu). Corrigé par `phaseRef`/`goPhase`, relus à CHAQUE image plutôt que fermés dans la
+   closure de l'effet.
+3. **Seule une faute avait une réaction immédiate** (`push`/`annoyed`) ; une réponse "ideal"
+   n'avait aucun sursaut positif. `B.winPulse` (`maireBureau.js`) l'ajoute — mais en OVERLAY sur
+   une copie envoyée au rig pour l'image courante, jamais sur `pose`/`face` (les cibles lissées
+   que `verify-maire` §6/§11 exige monotones) : sinon un sursaut à "won" retombant au palier réel
+   de la jauge L'IMAGE SUIVANTE aurait été le recul que la règle interdit, rejoué à l'envers.
+   Déclenché par un COMPTEUR (`viewRef.current.winTick`), jamais un booléen — un booléen déjà vrai
+   ne redéclenche pas deux "ideal" de suite (même piège que l'animation CSS du §4).
+4. **Les sourcils étaient trop fins pour porter le trait de la planche Gemini** (0,019 m → 0,027 m
+   de hauteur, rien d'autre ne bouge).
+   ⚠️ **Audit de sécurité fait, rien trouvé** : `applyPose`/`ease(pose, …)` n'a qu'UN site d'appel
+   dans tout le dépôt (`useBureau`, partagé par `MayorAudience`/`MayorWatch`/`MayorFinale`), et
+   `pose.out = B.poseTarget(V.pose).out` s'y exécute À CHAQUE image, sans condition sur la
+   transition — le correctif du point 2 protège donc TOUTE bascule de pose, pas seulement
+   faute→push. Confirmé en jouant une audience jusqu'à la perte (pose `push` finale, bras propres).
 
-⚠️⚠️⚠️ **LA LEÇON LA PLUS CHÈRE DE CETTE PASSE, TROUVÉE EN JOUANT, PAS EN RELISANT** :
-`starNearby()` (`FermeGame.js`) commençait par `if (!e || Q.starDone(e)) return null;` — un
-garde-fou qui voulait dire « plus rien à faire une fois la quête finie », vrai jusqu'ici et FAUX
-depuis que D11 ajoute un épilogue jouable APRÈS `doneAt` : les deux invites du baptême et de
-l'inauguration, posées plus loin dans la même fonction, étaient mortes dès l'instant où on en a
-besoin. Aucun banc ne pouvait le voir (ils appellent les résolveurs, jamais cette fonction) — seule
-une vraie partie, jusqu'à la cale, l'a montré (un « E » qui ne répond plus rien, sans la moindre
-erreur). **La leçon, générale, au-delà de cette quête : un garde-fou « rien à faire une fois fini »
-doit être repris à l'endroit exact où il coupe, le jour où « fini » gagne une suite.**
-⚠️ Piège mineur pour qui reteste : les téléports du menu dev qui posent le joueur DANS une zone
-qu'on vient de rejoindre (« Stand at the Mayor's desk », « Stand at Kerguélen ») ratent leur coup
-s'ils sont enchaînés sans une seconde ou deux de pause après le changement de zone — le monde n'a
-pas fini de s'installer, et le bouton ne fait rien, silencieusement.
+**Écarté à dessein, pas oublié : le buste pivote en un seul bloc rigide depuis la taille**
+(`torso` porte tout le haut du corps, `solveArm` résout les deux bras depuis sa matrice monde).
+Le scinder en deux pivots toucherait le solveur partagé avec Tristan (`scierieAtelier.js`) sans
+référence dynamique à viser — les planches Gemini ne montrent que des poses statiques neutres.
+⚠️ **Ne pas deviner une courbure « qui a l'air bien »** : rédiger un prompt Gemini demandant une
+pose PENCHÉE dynamique (référence de mouvement, pas de proportions) avant d'y toucher, règle du §2.
 
-**D14 (la récompense `starlight`) reste « on tranchera ça plus tard »** — ne rien y inventer.
+**Fin de la passe : à Guillaume de juger en jouant si c'est « bluffant »** — pas un chiffre de
+banc qui puisse le dire. Le sursaut positif n'a pas pu être vu à l'écran pendant cette passe (une
+fenêtre de 0,85 s, plus courte que l'aller-retour d'une capture d'écran) : sa forme est vérifiée
+par falsification au banc (§11 bis de `verify-maire.mjs`, cassée exprès puis recorrigée), pas à
+l'œil — à confirmer par Guillaume en jouant.
 
 ### ⏭️ ACTION SUIVANTE : VÉRIFIER LA CONFIGURATION GOOGLE CLOUD DE OÙ'S THAT
 
-⚠️ **DETTE IMMÉDIATE, À FAIRE AVEC CODEX ET GUILLAUME DEVANT LA CONSOLE GOOGLE CLOUD** : le code
-n'appelle que Maps Embed API, gratuite et illimitée au 2026-09-14, mais le dépôt ne peut pas prouver
-la configuration du compte réel. Guillaume se connecte lui-même — aucun identifiant transmis à
-l'agent (§2) — puis Codex guide la vérification : adresse de facturation dans l'EEE ; clé dédiée à
-Où's That ; restriction d'API sur **Maps Embed API seulement** ; référents limités aux domaines
-Arcardi nécessaires ; aucune API payante ni autre service Cloud utilisant cette clé ou ce projet ;
-rapport de facturation à zéro. ⚠️ Un budget d'alerte ne constitue pas un plafond de dépense. Cette
-vérification est CLOSE seulement après lecture des écrans réels, jamais par déduction depuis
-`NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY`.
+⚠️ **DETTE IMMÉDIATE TOUJOURS OUVERTE, À FAIRE AVEC CODEX ET GUILLAUME DEVANT LA CONSOLE GOOGLE
+CLOUD** (inchangée depuis le 2026-09-14) : le code n'appelle que Maps Embed API, gratuite et
+illimitée, mais le dépôt ne peut pas prouver la configuration du compte réel. Guillaume se connecte
+lui-même — aucun identifiant transmis à l'agent (§2) — puis Codex guide la vérification : adresse
+de facturation dans l'EEE ; clé dédiée à Où's That ; restriction d'API sur **Maps Embed API
+seulement** ; référents limités aux domaines Arcardi nécessaires ; aucune API payante ni autre
+service Cloud utilisant cette clé ou ce projet ; rapport de facturation à zéro. ⚠️ Un budget
+d'alerte ne constitue pas un plafond de dépense. Cette vérification est CLOSE seulement après
+lecture des écrans réels, jamais par déduction depuis `NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY`.
 
-La quête de l'étoile n'impose plus de chantier. **Après cette vérification non créative, la bonne
-première action est donc de DEMANDER À GUILLAUME quoi ouvrir ensuite**, pas d'en choisir un — c'est
-la règle du §2 (« avant toute production créative, poser des questions »). Le §13 tient la liste de
-ce qui attend son jugement ; parmi les candidats les plus visibles, sans en privilégier un :
-- **les îles** — le navire promet maintenant un ailleurs, par la voix d'Eduardo ; rien ne dit encore
-  ce qu'on y trouve (§13, le lac-océan) ;
-- **la chaîne de transport du bois du bateau** — direction tranchée avec Guillaume, jamais construite ;
-- **le mariage, le cadastre, le salon de coiffure** — des guichets ou décors déjà posés, sans le
-  contenu qui les fait servir à quelque chose ;
-- **les dettes graphiques du maire du bureau** (« immonde et incohérent anatomiquement », capture du
-  2026-09-13, précisée en jeu le 2026-09-15 — voir §13, prompt Gemini déjà rédigé et remis à
-  Guillaume, en attente de son retour) et du tribunal/de l'église (« méritent un sprite plus
-  majestueux ») — chacune attend une référence de Guillaume avant tout travail (§2) ;
-- **le n°1 de la liste hors-quête** : la ferme peuplée en vraie séance à deux clients, socle de
-  toute décision sociale à venir (relations résident-résident, densification, mariage).
-
-### 2026-09-14 — trois correctifs sans rapport avec la trame de la quête
-
-**Le menu développeur suit maintenant la chronologie du récit.** « Open Tristan's saw » et « Stand
-at Kerguélen » ouvraient leur scène sans rien valider en amont (maire jamais signé, six sœurs
-jamais trouvées) : la commande passée dans la scène se faisait ensuite refuser par l'hôte,
-silencieusement — le geste se jouait pour rien. Un op neuf, `Q.devStar(e, "prep", …)`, relit
-`starTimberBlock` sur la pièce courante et résout, avec les MÊMES briques que les boutons déjà là
-(jamais un raccourci inventé), chaque porte qui la bloque encore — sans jamais signer une
-négociation à la place du joueur ni compléter la pièce elle-même : le geste reste à jouer. Détail
-dans `quete.js` (chercher « PRÉPARER TRISTAN »).
-
-**Le ponton de Valley Town était planté à neuf cases de l'artère centrale.** `TOWN_PIER.x` valait
-100 ; `TOWN_CROSS_ST_X` (l'avenue nord-sud) et `TOWN_FOUNTAIN` (la Grand-Place) s'accordent tous
-deux sur l'axe 93, et le commentaire du ponton affirmait pourtant depuis toujours qu'il y était
-« dans l'axe de l'artère centrale ». **Aucun banc ne le mesurait** — vu sur la carte (`M`) : le
-marqueur du joueur tombait visiblement à côté de la colonne qui descend de la Grand-Place.
-`TOWN_PIER.x` corrigé à 91 ; tout le reste (promenade, mobilier, la scène composée du pêcheur,
-`STAR_SHIP_X`) en dérive et a suivi sans y toucher. `verify-collision`, `verify-vallee` (223/223),
-`verify-quete` (930/930), `verify-jalons` (135/135) et `render-navire` verts après coup, et la
-carte re-vérifiée à l'écran, avant et après. ⚠️ **La leçon dépasse ce quai** : un invariant de
-position affirmé seulement dans un commentaire (« dans l'axe de… ») n'est vérifié par rien tant
-qu'aucun banc ne compare les deux grandeurs — la même famille que le §4 (deux cartes sans repère
-commun) sous une forme qu'aucun banc de ce dépôt ne cherche encore.
-
-**Le titre de la carte plein écran suit la zone.** `L.mapTitle` est devenue une fonction (comme
-`taxiStop`) : « Carte de la vallée » sur la ferme, **« Carte de la ville » à Valley Town**, « Plan
-du bâtiment » en intérieur — le dessin (`drawFullMap`) le faisait déjà depuis le 426, pas le titre.
-
-### 2026-09-15 — la canne du joueur redevient visible, la boutique se replie, le maire revu en jeu
-
-**LE JOUEUR N'A JAMAIS EU DE CANNE VISIBLE, SUR LA FERME COMME EN VILLE — SEUL SOAN (LE PNJ
-EMBAUCHÉ) L'AVAIT.** Signalé par Guillaume comme « pas d'animation pêche sur Valley Town », mais la
-lecture du code a montré que ce n'était pas un défaut de la ville : `p.fishing` /
-`sprites.fishingRodHeld` n'existaient QUE dans la branche `p.id === "soan"` de `drawCharacter`
-(zip 246) — le fermier lui-même n'a jamais rien affiché de différent d'une position debout,
-armé ou non, ferme ou ville. ⚠️ **LA LEÇON : un champ qui existe pour un PNJ codé à la main ne
-prouve pas que le mécanisme existe pour le joueur — il faut vérifier QUI porte le champ, pas
-seulement qu'il existe.** Corrigé en réutilisant le même sprite (déjà approuvé, sans le tabouret,
-le joueur reste debout) : affiché tant que `rodArmedRef` est vrai (donc tout le cycle armé → mordu
-→ minijeu, sans état de plus), diffusé aux autres joueurs exactement comme la torche
-(`pub.fishing`/`r.fishing`, même patron que `pub.torch`/`r.torch`). Vérifié EN JEU des deux côtés
-(ferme et Valley Town, un seul client) : la canne apparaît identiquement aux deux endroits, comme
-attendu puisque `drawCharacter` est déjà partagé entre les deux zones. ⚠️ Non testé à deux clients
-réels (broadcast ajouté par analogie stricte avec la torche, jamais rejoué avec un second
-onglet) — si Guillaume le remarque à une prochaine séance à deux, c'est le premier endroit à
-regarder.
-
-**La boutique de Pierre se replie par catégorie** (demande de Guillaume, lisibilité — six sections
-empilées sans repli). `shopCatOpen` (état simple, même famille que `devTeleportExpanded`, zip 431)
-: chaque en-tête (Graines, Animaux, Outils, Constructions, Consommables, Employés) est cliquable
-en entier (pas un petit « + », plus sûr au tactile), un chevron pivote pour indiquer l'état.
-**Ouvertes par défaut** (clé absente = ouverte) : rien ne se cache au premier arrivage, seul un
-repli délibéré du joueur masque une section, et ce repli tient tant que la ferme reste montée.
-Vérifié en jeu : les six bascules, le contenu masqué (`display:none`, confirmé hors du DOM visible)
-sans rien laisser fuir d'une section à l'autre.
-
-**Le maire et Tristan ont été regardés en jeu, à la demande de Guillaume, pour lister où la scène
-du maire s'écarte d'un réalisme sérieux — puis Guillaume a demandé d'aller jusqu'à un résultat
-« bluffant de réalisme ».** Prompt Gemini rédigé et soumis par Guillaume (deux planches :
-proportions, puis expressions), retour convaincant, utilisé comme référence d'INTENTION (jamais
-d'échelle, §12) pour deux corrections géométriques : **le cou du maire** (n'avançait jamais
-jusque sous le menton, invisible sur les cinq maires — vérifié au banc ET dans le vrai jeu, capture
-du canevas WebGL en direct) **et le même défaut sur le buste marbre de la pièce** (tête enfoncée
-dans les épaules). Le reste de la liste critiquée le matin même (mains, manchettes, coude, globe,
-fauteuil) s'est révélé, en y regardant vraiment de près avant d'y toucher, déjà correct — un
-travail antérieur non vérifié à l'œil. **Ce qui reste ouvert, volontairement** : le buste (le
-personnage) qui pivote en un seul bloc rigide depuis la taille — écarté d'un rig à restructurer à
-l'aveugle sans référence dynamique à viser, voir le §13 pour le raisonnement complet.
+Une fois cette vérification faite et le jugement de Guillaume sur le maire reçu, **la bonne action
+est de lui DEMANDER quoi ouvrir ensuite**, pas d'en choisir un (§2). Le §13 tient la liste de ce qui
+attend son jugement ; parmi les candidats les plus visibles, sans en privilégier un : les îles
+(le navire promet un ailleurs, rien ne dit ce qu'on y trouve) · la chaîne de transport du bois du
+bateau (direction tranchée, jamais construite) · le mariage, le cadastre, le salon de coiffure
+(guichets posés, sans contenu) · le tribunal/l'église (« méritent un sprite plus majestueux »,
+attend une référence de Guillaume) · le n°1 de la liste hors-quête : la ferme peuplée en vraie
+séance à deux clients, socle de toute décision sociale à venir.
 
 ---
 
@@ -426,6 +353,13 @@ dépôt.
   compare l'empreinte d'avant. ⚠️ Et « pas de buisson sous un arbre », tenu à la génération, a été
   violé 400 jours plus tard par la repousse des ARBRES : *une règle entre deux objets se vérifie chez
   les deux qui peuvent naître*, pas seulement chez le nouveau venu.
+- ⚠️⚠️⚠️ **UN GARDE-FOU « RIEN À FAIRE UNE FOIS FINI » DOIT ÊTRE REPRIS À L'ENDROIT EXACT OÙ IL
+  COUPE, LE JOUR OÙ « FINI » GAGNE UNE SUITE** (2026-09-13, `starNearby()` de `FermeGame.js`).
+  `if (!e || Q.starDone(e)) return null;` voulait dire « plus rien à faire une fois la quête finie » —
+  vrai jusque-là, faux dès qu'un épilogue jouable existe APRÈS `doneAt` : les invites posées plus loin
+  dans la même fonction étaient mortes dès l'instant où on en a besoin. Trouvé en jouant une vraie
+  partie jusqu'au bout, jamais au banc — aucun banc n'appelle cette fonction, ils appellent les
+  résolveurs directement.
 
 **JavaScript / three.js / canevas**
 - ⚠️⚠️⚠️ **UN BOOLÉEN MIS EN CACHE POUR UNE VALEUR NATIVE VOLATILE (`document.hidden`) NE SE
@@ -991,6 +925,10 @@ beffroi), **« Peupler la ferme »** et **« ⭐ Star »** (444 : effacer · lan
 cran · marquer le lieu suivant · tout sauf le duo · **et REJOUER UNE SCÈNE isolée**).
 ⚠️ « Rejouer une scène » est le bouton qui change tout : sans lui, revoir une cinématique oblige à
 remettre la quête à zéro, donc on ne la revoit qu'une fois, donc on ne la juge qu'une fois.
+⚠️ **UN TÉLÉPORT DU MENU DEV QUI POSE LE JOUEUR DANS UNE ZONE QU'ON VIENT DE REJOINDRE RATE SON
+COUP S'IL EST ENCHAÎNÉ SANS PAUSE** (« Stand at the Mayor's desk », « Stand at Kerguélen ») : le
+monde n'a pas fini de s'installer, et le bouton ne fait rien, silencieusement — laisser une seconde
+ou deux après le changement de zone avant de l'utiliser.
 ⚠️ **AUCUN BOUTON DE QUÊTE NE DONNE QUOI QUE CE SOIT** : le menu s'ouvre à tout joueur qui connaît
 le raccourci (398). Le chemin développeur appelle les mêmes résolveurs et JETTE ce qu'ils rendent.
 ⚠️ **DEPUIS 2026-08, DEUX BOUTONS DU MENU DONNENT VOLONTAIREMENT QUELQUE CHOSE** — exception
@@ -1366,10 +1304,13 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
   jour, avec une vraie mesure de ce qu'on cherche à obtenir — pas à l'aveugle.
 
   Les expressions (`FACE`, huit états à six paramètres continus) couvrent déjà largement les
-  quatre de la planche Gemini (joie≈warm/won, colère≈angry, tristesse≈weary, réflexion≈doubt)
-  — rien à construire côté mécanique ; seule l'ÉPAISSEUR des sourcils (boîtes plates de
-  1,6 cm) pourrait gagner à se rapprocher du trait plus marqué de la référence, pas encore
-  fait.
+  quatre de la planche Gemini (joie≈warm/won, colère≈angry, tristesse≈weary, réflexion≈doubt).
+  ✅ **L'ÉPAISSEUR DES SOURCILS, CORRIGÉE LE 2026-09-15** (0,019 → 0,027 m de hauteur, seule la
+  géométrie bouge) : le trait est net sur les huit visages, `render-maire` toujours 86/86.
+  ✅ **UN SURSAUT ÉMOTIONNEL À UNE RÉPONSE "ideal" ET UN AUDIT DE SÉCURITÉ DES TRANSITIONS DE
+  POSE, AJOUTÉS LE 2026-09-15** — détail, méthode et ce qui reste (le buste toujours rigide)
+  dans le bloc ⏭️ REPRISE en tête de fichier ; rien à recopier ici, une seule histoire du jour
+  ne doit vivre qu'à un seul endroit (§14.2).
 - ⚠️ **NOUVELLE DETTE GRAPHIQUE (2026-09-03) : LE TRIBUNAL ET L'ÉGLISE MÉRITENT UN SPRITE PLUS
   MAJESTUEUX.** Jugement de Guillaume en jouant — les deux bâtiments civiques les plus imposants
   de Valley Town restent en dessous de ce que leur rôle demande. **Demander à Guillaume un JPG de

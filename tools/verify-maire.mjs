@@ -990,6 +990,46 @@ section("§11 la vue, remplie pour de vrai");
      bad.length === 0, bad.slice(0, 3).join(" | ") || `${produced.size} raisons rendues`);
 }
 
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ §11 bis — LE SURSAUT POSITIF (2026-09-15), ET POURQUOI IL NE PEUT PAS
+   ║ CASSER LA MONOTONIE DU §6/§11 CI-DESSUS
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ `B.winPulse` NE REND JAMAIS UN NOM DE POSTURE NI DE VISAGE — IL REND UNE
+   AMPLITUDE, AJOUTÉE PAR LA VUE SUR UNE COPIE, JAMAIS SUR `pose`/`face`
+   ELLES-MÊMES (voir la note dans `maireBureau.js` et dans `MaireScene.js`). Ce
+   qui doit rester vrai, et qui se falsifie : bornée à [0,1], nulle avant et
+   après sa fenêtre, et elle ne remonte jamais une fois retombée — sinon un
+   sursaut « rebondirait » et laisserait croire à un second bon coup. */
+section("§11 bis le sursaut positif ne recule ni ne ressurgit");
+{
+  const samples = [];
+  for (let ms = -200; ms <= 1200; ms += 5) samples.push(B.winPulse(ms / 1000));
+  ok("⚠️ bornée à [0,1] sur toute la plage", samples.every(v => v >= 0 && v <= 1),
+     `min ${Math.min(...samples)} max ${Math.max(...samples)}`);
+  ok("⚠️ nulle avant le déclenchement et bien retombée à zéro après sa fenêtre",
+     B.winPulse(-0.001) === 0 && B.winPulse(2) === 0);
+  ok("⚠️ elle monte puis redescend UNE fois, jamais un second pic (pas de rebond)",
+     (() => {
+       let rising = true, peaks = 0, prev = 0;
+       for (let ms = 0; ms <= 900; ms += 5) {
+         const v = B.winPulse(ms / 1000);
+         if (rising && v < prev) { rising = false; peaks++; }
+         if (!rising && v > prev + 1e-9) return false;   // remontée après être retombé
+         prev = v;
+       }
+       return peaks <= 1;
+     })());
+  /* ⚠️⚠️ FALSIFICATION : UN "ideal" QUI REDÉCLENCHERAIT SUR UN BOOLÉEN DÉJÀ VRAI
+     NE REDÉCLENCHERAIT PAS DU TOUT (§4 CLAUDE.md, l'animation CSS qui ne repart
+     pas sur un nœud déjà monté). `winTick` doit donc être un COMPTEUR : deux
+     incréments de suite sont deux valeurs différentes, jamais la même deux fois. */
+  let winTick = 0;
+  const bump = () => { winTick += 1; };
+  const before = winTick; bump(); const mid = winTick; bump(); const after = winTick;
+  ok("⚠️⚠️⚠️ le déclencheur est un COMPTEUR, pas un booléen : deux « ideal » de suite changent deux fois",
+     before !== mid && mid !== after, `${before} → ${mid} → ${after}`);
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    HORS-ZIP 2026-09-02 — LES TROIS TABLES DU MÊME PERSONNAGE.
    ───────────────────────────────────────────────────────────────────────────

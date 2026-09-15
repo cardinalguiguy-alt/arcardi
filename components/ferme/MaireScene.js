@@ -289,6 +289,15 @@ function useBureau(canvasRef, viewRef, bubbleRef, opts) {
         const pose = B.poseState("closed");
         const face = { ...B.faceTarget("cold") };
         let t0 = performance.now(), t = 0, doorT = 0;
+        /* ⚠️ LE SURSAUT POSITIF (2026-09-15, `B.winPulse`) — VOIR SA NOTE DANS
+           `maireBureau.js`. `winTick` est un COMPTEUR, pas un booléen : deux
+           "ideal" d'affilée doivent redéclencher le sursaut, et un booléen déjà
+           vrai ne change pas de valeur (même piège que l'animation CSS du §4
+           de CLAUDE.md — il faut un jeton qui change à CHAQUE occurrence, pas
+           un drapeau). `winSeen`/`winAt` sont locaux à CETTE boucle, comme
+           `doorT` : ils suivent l'horloge de scène `t`, jamais `performance.now()`,
+           sinon l'écart entre les deux horloges fausserait l'enveloppe. */
+        let winSeen = 0, winAt = -10;
 
         const tick = (now) => {
           if (dead) return;
@@ -297,9 +306,49 @@ function useBureau(canvasRef, viewRef, bubbleRef, opts) {
 
           /* ── ON GLISSE VERS LA POSE ET VERS LE VISAGE, jamais on ne saute ── */
           B.ease(pose, B.poseTarget(V.pose), dt, 2.6);
+          /* ⚠️⚠️⚠️ CORRIGÉ LE 2026-09-15 — « TOUJOURS UN PROBLÈME SUR LA POSITION
+             INITIALE » (Guillaume, capture à l'appui, reproduit à l'identique en
+             jouant : bras qui se tordent en X basculé au niveau du bassin, jamais
+             vu au banc). `out` décide de quel côté sort le coude (§7 de
+             `maireBureau.js`, table `POSE`) — mais c'est un CHANGEMENT DE PLAN,
+             pas une longueur : `rig3d.js` bascule `hint` (donc tout le plan du
+             coude) au signe de `out`, ligne par ligne, PAS en continu. Glisser
+             `out` comme les autres canaux fait donc TRAVERSER ce plan par
+             `closed` (out −0,55, bras croisés) → `push` (out +0,32, la réaction
+             d'une faute) — exactement le trajet joué à l'écran — et le coude
+             bascule EN PLEIN GLISSEMENT, pendant que la main continue sa
+             trajectoire en ligne droite : les deux ensemble tordent le bras au
+             travers du buste. Aucune des sept poses prise seule n'est en cause
+             (`render-maire` les rend toutes justes, cible par cible) — c'est la
+             TRANSITION qui n'a pas de plan continu à suivre.
+             ⚠️ LA PARADE N'EST PAS DE LISSER `hint` (§8 de CLAUDE.md : on
+             n'invente pas une valeur entre deux MODES — bras croisés et bras
+             ouverts ne sont pas un dégradé l'un de l'autre) : c'est de ne plus
+             glisser SUR le seuil qui bascule le mode. `out` décide seul de ce
+             plan, donc lui seul saute — tout de suite, dès que la cible change —
+             pendant que hL/hR/lean/tout le reste continuent de glisser sans
+             changement. Le coude choisit son côté à la première image de la
+             nouvelle pose, la main met encore la fraction de seconde habituelle
+             à l'y rejoindre : c'est cette dernière qu'on regarde bouger, pas le
+             coude qui hésite. */
+          pose.out = B.poseTarget(V.pose).out;
           B.ease(face, B.faceTarget(V.emote), dt, 3.4);
-          B.applyPose(office, pose, t);
-          B.applyFace(office, face, t, V.talking ? B.talkEnvelope(t) : 0, B.blinkAt(t));
+
+          /* ⚠️ LE SURSAUT NE TOUCHE NI `pose` NI `face` : ce sont les cibles
+             LISSÉES que `mayorPose`/`mayorEmote` font avancer, et sur
+             lesquelles `verify-maire` §6/§11 vérifie la monotonie. On calcule
+             une COPIE pour cette seule image (§8 de CLAUDE.md : `poseCopy`,
+             jamais `{ ...POSE.x }` — ici `hL`/`hR` ne sont que LUS par
+             `solveArm`, donc l'étalement superficiel est sûr, contrairement à
+             la table de référence qu'il ne faut jamais étaler). */
+          const win = (viewRef.current || {}).winTick || 0;
+          if (win !== winSeen) { winSeen = win; winAt = t; }
+          const wp = B.winPulse(t - winAt);
+          const poseR = wp > 0 ? { ...pose, headX: pose.headX + wp * 0.09 } : pose;
+          const faceR = wp > 0 ? { ...face, curve: Math.min(1, face.curve + wp * 0.40),
+                                    brow: face.brow + wp * 0.012, lid: Math.max(0, face.lid - wp * 0.06) } : face;
+          B.applyPose(office, poseR, t);
+          B.applyFace(office, faceR, t, V.talking ? B.talkEnvelope(t) : 0, B.blinkAt(t));
           office.bang.visible = !!V.bang;
           if (V.bang) office.bang.scale.setScalar(0.30 + Math.sin(t * 9) * 0.03);
 
@@ -498,9 +547,22 @@ export function MayorAudience({ ctx, L, onDone, onLive }) {
   const [, force] = useState(0);
   const [phase, setPhase] = useState("ask");        // ask (grâce) | live (la fuite court) | react | over
   const [react, setReact] = useState(null);
-  const viewRef = useRef({ pose: "closed", emote: "cold", talking: true, bang: false });
+  const viewRef = useRef({ pose: "closed", emote: "cold", talking: true, bang: false, winTick: 0 });
   const liveAtRef = useRef(0);
   const sentRef = useRef(false);
+  /* ⚠️⚠️⚠️ CORRIGÉ LE 2026-09-15 — « TOUJOURS UN PROBLÈME SUR LA POSITION
+     INITIALE » (Guillaume, capture à l'appui, reproduit en jouant : les bras se
+     tordent en X au niveau du bassin, juste après une faute). Cette
+     réf EST la garde du tick « live » ci-dessous — voir sa note. `phase`
+     (l'état React) ne suffit pas : il ne se met à jour, et donc ne fait tourner
+     le nettoyage de l'effet (`cancelAnimationFrame`), qu'au rendu SUIVANT —
+     jamais avant. Entre les deux, la boucle déjà lancée tourne encore avec
+     l'ANCIENNE valeur de `phase` fermée dans sa closure, et se replanifie
+     elle-même sans jamais la relire. `phaseRef` est donc écrite AU MÊME
+     INSTANT que chaque `setPhase`, jamais dérivée d'un effet — c'est elle que
+     la boucle relit à chaque image, pas la fermeture. */
+  const phaseRef = useRef("ask");
+  function goPhase(p) { phaseRef.current = p; setPhase(p); }
   /* hors-zip — LA REPRISE : UN JETON, DÉPENSÉ SEULEMENT S'IL SERT. `s` n'est
      jamais touché tant que le joueur n'a pas confirmé qu'il GARDE sa réponse
      fautive — décliner l'offre ne consomme rien, exactement comme poser puis
@@ -588,16 +650,32 @@ export function MayorAudience({ ctx, L, onDone, onLive }) {
        joueur « à toi » sans une ligne d'interface, et une bouche qui bouge encore
        pendant qu'on choisit fait bavard. */
     const mute = setTimeout(() => { viewRef.current.talking = false; pushRef.current(); }, grace * 0.7);
-    const t = setTimeout(() => { liveAtRef.current = performance.now(); setPhase("live"); }, grace);
+    const t = setTimeout(() => { liveAtRef.current = performance.now(); goPhase("live"); }, grace);
     return () => { clearTimeout(t); clearTimeout(mute); };
   }, [phase, node, askChars, s]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   /* La fuite, en temps réel. ⚠️ Elle ne court QUE pendant `live` : jamais
-     pendant qu'on lit, jamais pendant qu'il répond. */
+     pendant qu'on lit, jamais pendant qu'il répond.
+     ⚠️⚠️⚠️ CORRIGÉ LE 2026-09-15 — `if (phase !== "live") return;` NE GARDE
+     QUE LE LANCEMENT DE L'EFFET, JAMAIS SES IMAGES SUIVANTES : `tick` se
+     replanifie tout seul via `requestAnimationFrame(tick)`, sans jamais
+     relire `phase`, qui de toute façon resterait figé à sa valeur de fermeture
+     ("live") même après un `setPhase` ailleurs — React ne démonte l'effet
+     (`cancelAnimationFrame`) qu'au rendu SUIVANT. Entre les deux, cette image
+     de trop appelle `mayorPose(s, null)` — SANS la faute qu'on vient de jouer
+     — et écrase la pose que `commitAnswer` venait de poser À L'INSTANT avec
+     `mayorPose(s, r.grade)`. Les deux poses peuvent tenir des `out` de signe
+     opposé (`closed` −0,55, `push` +0,32, table `POSE` de `maireBureau.js`) :
+     l'articulation du coude bascule de plan d'une image à l'autre pendant que
+     la main est encore en plein vol — d'où le bras qui se tord en X, vu par
+     Guillaume ET reproduit en jouant. `phaseRef` (déclarée plus haut, écrite
+     par `goPhase` au même instant que chaque `setPhase`) est la valeur
+     fraîche que `tick` relit désormais À CHAQUE image, pas la fermeture. */
   useEffect(() => {
     if (phase !== "live") return;
     let raf = 0, prev = performance.now();
     const tick = (now) => {
+      if (phaseRef.current !== "live") return;   // la vraie garde : relue à CHAQUE image
       const dt = now - prev; prev = now;
       MR.mayorAdvance(s, dt);
       viewRef.current.pose = MR.mayorPose(s, null);
@@ -613,7 +691,7 @@ export function MayorAudience({ ctx, L, onDone, onLive }) {
   function finish() {
     if (sentRef.current) return;
     sentRef.current = true;
-    setPhase("over");
+    goPhase("over");
     viewRef.current.pose = MR.mayorPose(s, null);
     viewRef.current.emote = MR.mayorEmote(s, null);
     viewRef.current.talking = false;
@@ -662,12 +740,18 @@ export function MayorAudience({ ctx, L, onDone, onLive }) {
     const r = MR.mayorPlay(s, key, dt);
     viewRef.current.pose = MR.mayorPose(s, r.grade);
     viewRef.current.emote = MR.mayorEmote(s, r.grade);
+    /* ⚠️ LE SURSAUT POSITIF (2026-09-15) — SYMÉTRIQUE DE `push`/`annoyed` CI-DESSUS,
+       MAIS IL N'EST PAS UN TROISIÈME CAS DE `mayorPose`/`mayorEmote` : voir la
+       note de `B.winPulse`. Un compteur qui change à chaque "ideal" — jamais un
+       booléen, qui ne redéclencherait pas deux coups d'affilée (§4 CLAUDE.md,
+       le piège de l'animation CSS qui ne repart pas). */
+    if (r.grade === "ideal") viewRef.current.winTick = (viewRef.current.winTick || 0) + 1;
     /* ⚠️ LA PORTE CLAQUÉE NE PASSE PAS PAR LA RÉACTION : il n'a rien à répondre,
        on est déjà dans le couloir. Le « ! » et le battant qui rebondit sont toute
        la réponse, et ils tiennent le temps qu'il faut pour les voir. */
     if (r.grade === "slam") {
       viewRef.current.bang = true; viewRef.current.talking = false;
-      setReact(null); setPhase("react"); pushRef.current();
+      setReact(null); goPhase("react"); pushRef.current();
       setTimeout(finish, C.MAYOR_SLAM_HOLD_MS);
       return;
     }
@@ -675,12 +759,12 @@ export function MayorAudience({ ctx, L, onDone, onLive }) {
     setReact({ tell, why: r.why, delta: r.delta, grade: r.grade });
     viewRef.current.talking = !!tell;
     pushRef.current({ said: key });
-    if (s.over) { setPhase("react"); setTimeout(finish, 2600); return; }
-    setPhase("react");
+    if (s.over) { goPhase("react"); setTimeout(finish, 2600); return; }
+    goPhase("react");
     /* ⚠️ IL PARLE, DONC RIEN NE FUIT. Le temps qu'il met à répondre est déjà
        compté par `MAYOR_BEAT_MS` à l'intérieur du résolveur : le compter une
        seconde fois ici serait le doublon du §8, et il se verrait à peine. */
-    setTimeout(() => { viewRef.current.talking = false; setReact(null); setPhase("ask"); }, 2400);
+    setTimeout(() => { viewRef.current.talking = false; setReact(null); goPhase("ask"); }, 2400);
   }
 
   const adh = Math.max(0, Math.min(C.MAYOR_ADH_MAX, s.adh));
