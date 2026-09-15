@@ -1242,7 +1242,19 @@ function buildMayor(THREE, K, look) {
      est le premier signe qu'on regarde un jouet. Sa longueur vient de la table
      (`RATIO.neck`), sa hauteur d'attache aussi — le menton se pose au bout du
      cou par construction (`M.headY`), il ne se règle plus à l'œil. */
-  const neck = grp(0, shY + 0.005, 0.004, torso);
+  /* ⚠️⚠️ DETTE GRAPHIQUE CORRIGÉE LE 2026-09-15 (suite) : LE COU ÉTAIT PRESQUE À
+     LA VERTICALE DE LA COLONNE (z=0,004), ALORS QUE LE MENTON — poussé en avant
+     par le crâne, lui-même centré sur la colonne et donc à moitié devant elle —
+     RESSORT À ~8-9 CM DEVANT LE TORSE une fois l'échelle de la tête appliquée
+     (`headK[2]`, le facteur de profondeur). Le cylindre du cou n'avançait donc
+     jamais jusque sous le menton : vu de face, aucun pixel de peau entre la
+     mâchoire et le col de chemise, sur les sept postures ET les cinq maires —
+     mesuré en découpant `maire-postures.png` à la loupe, un défaut qu'aucun banc
+     ne peut voir (`verify-maire` compare des cibles de main, jamais un
+     recouvrement de silhouette, même leçon que le trapèze du 2026-09-14).
+     Avancé pour que sa face avant rejoigne le dessous du menton avec un léger
+     recouvrement, comme une vraie gorge. */
+  const neck = grp(0, shY + 0.005, 0.100, torso);
   cyl(M.neckR, M.neckR * 1.14, M.neck * 1.05, mSkin, 0, M.neck * 0.34, 0, 0, 0, 0, neck, 12);
   /* ⚠️ LE COL DE LA VESTE MONTE AUTOUR DU COU, ET C'EST LUI QUI DIT OÙ S'ARRÊTE
      LA PEAU. Sans lui, la colonne claire du cou courait du menton jusqu'aux

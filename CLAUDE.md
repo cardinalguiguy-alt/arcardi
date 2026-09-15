@@ -74,9 +74,9 @@ ce qui attend son jugement ; parmi les candidats les plus visibles, sans en priv
 - **le mariage, le cadastre, le salon de coiffure** — des guichets ou décors déjà posés, sans le
   contenu qui les fait servir à quelque chose ;
 - **les dettes graphiques du maire du bureau** (« immonde et incohérent anatomiquement », capture du
-  2026-09-13) et du tribunal/de l'église (« méritent un sprite plus majestueux ») — chacune attend
-  une référence de Guillaume avant tout travail (§2 : un prompt Gemini avec image de référence,
-  jamais un appel API automatisé) ;
+  2026-09-13, précisée en jeu le 2026-09-15 — voir §13, prompt Gemini déjà rédigé et remis à
+  Guillaume, en attente de son retour) et du tribunal/de l'église (« méritent un sprite plus
+  majestueux ») — chacune attend une référence de Guillaume avant tout travail (§2) ;
 - **le n°1 de la liste hors-quête** : la ferme peuplée en vraie séance à deux clients, socle de
   toute décision sociale à venir (relations résident-résident, densification, mariage).
 
@@ -107,6 +107,43 @@ commun) sous une forme qu'aucun banc de ce dépôt ne cherche encore.
 **Le titre de la carte plein écran suit la zone.** `L.mapTitle` est devenue une fonction (comme
 `taxiStop`) : « Carte de la vallée » sur la ferme, **« Carte de la ville » à Valley Town**, « Plan
 du bâtiment » en intérieur — le dessin (`drawFullMap`) le faisait déjà depuis le 426, pas le titre.
+
+### 2026-09-15 — la canne du joueur redevient visible, la boutique se replie, le maire revu en jeu
+
+**LE JOUEUR N'A JAMAIS EU DE CANNE VISIBLE, SUR LA FERME COMME EN VILLE — SEUL SOAN (LE PNJ
+EMBAUCHÉ) L'AVAIT.** Signalé par Guillaume comme « pas d'animation pêche sur Valley Town », mais la
+lecture du code a montré que ce n'était pas un défaut de la ville : `p.fishing` /
+`sprites.fishingRodHeld` n'existaient QUE dans la branche `p.id === "soan"` de `drawCharacter`
+(zip 246) — le fermier lui-même n'a jamais rien affiché de différent d'une position debout,
+armé ou non, ferme ou ville. ⚠️ **LA LEÇON : un champ qui existe pour un PNJ codé à la main ne
+prouve pas que le mécanisme existe pour le joueur — il faut vérifier QUI porte le champ, pas
+seulement qu'il existe.** Corrigé en réutilisant le même sprite (déjà approuvé, sans le tabouret,
+le joueur reste debout) : affiché tant que `rodArmedRef` est vrai (donc tout le cycle armé → mordu
+→ minijeu, sans état de plus), diffusé aux autres joueurs exactement comme la torche
+(`pub.fishing`/`r.fishing`, même patron que `pub.torch`/`r.torch`). Vérifié EN JEU des deux côtés
+(ferme et Valley Town, un seul client) : la canne apparaît identiquement aux deux endroits, comme
+attendu puisque `drawCharacter` est déjà partagé entre les deux zones. ⚠️ Non testé à deux clients
+réels (broadcast ajouté par analogie stricte avec la torche, jamais rejoué avec un second
+onglet) — si Guillaume le remarque à une prochaine séance à deux, c'est le premier endroit à
+regarder.
+
+**La boutique de Pierre se replie par catégorie** (demande de Guillaume, lisibilité — six sections
+empilées sans repli). `shopCatOpen` (état simple, même famille que `devTeleportExpanded`, zip 431)
+: chaque en-tête (Graines, Animaux, Outils, Constructions, Consommables, Employés) est cliquable
+en entier (pas un petit « + », plus sûr au tactile), un chevron pivote pour indiquer l'état.
+**Ouvertes par défaut** (clé absente = ouverte) : rien ne se cache au premier arrivage, seul un
+repli délibéré du joueur masque une section, et ce repli tient tant que la ferme reste montée.
+Vérifié en jeu : les six bascules, le contenu masqué (`display:none`, confirmé hors du DOM visible)
+sans rien laisser fuir d'une section à l'autre.
+
+**Le maire et Tristan ont été regardés en jeu, à la demande de Guillaume, pour lister où la scène
+du maire s'écarte d'un réalisme sérieux.** Prompt Gemini rédigé et soumis par Guillaume dans la
+foulée (deux planches : proportions, puis expressions) — **son retour a servi de référence
+d'INTENTION pour une première correction du cou, faite et vérifiée par le banc le jour même**
+(le cou n'avançait jamais jusque sous le menton, invisible sur les cinq maires — détail dans
+`maireBureau.js` et le §13, qui tient la suite : ce qui reste ouvert, ce qui a déjà été essayé
+et rejeté). **PAS ENCORE REVU DANS LE VRAI JEU** (fait via le banc `tools/render-maire.mjs`,
+pas via une session navigateur) — c'est la prochaine chose à confirmer à l'écran.
 
 ---
 
@@ -1262,7 +1299,48 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
   des bras énormes. ⚠️ **Les bancs étaient verts** (`render-maire` 86/86 : stature,
   tête/carrure, mains à leur cible) — c'est la leçon du §4 sur les proportions, repayée :
   aucun contrôle ne mesure où un bras s'ATTACHE ni la largeur d'une main contre son
-  avant-bras. Demander une référence à Guillaume avant de reprendre.
+  avant-bras.
+  ⚠️ **CONFIRMÉ ET PRÉCISÉ EN JEU LE 2026-09-15** (audience jouée jusqu'au bout, trois
+  postures regardées de face/du bureau/de la pièce) : à cela s'ajoutent un buste qui
+  bascule EN UN SEUL BLOC rigide depuis la taille (aucune courbure de colonne, les trois
+  postures pivotent pareil) et un fauteuil qui ne suit pas le corps quand le maire se
+  penche (il reste droit derrière elle). Le DÉCOR, lui, tient déjà en silhouette mais pas
+  en gros plan : le buste de la pièce est une sphère blanche sur un socle (un bonhomme de
+  neige, pas un visage), le globe une sphère bleue unie sans continents (un ballon), et la
+  ville par la fenêtre un aplat gris sans profondeur.
+
+  **PROMPT GEMINI SOUMIS PAR GUILLAUME LE 2026-09-15, RÉSULTAT CONVAINCANT** (deux planches :
+  proportions de face/trois-quarts, puis quatre expressions — joie/colère/tristesse/réflexion).
+  ⚠️ **Elles font autorité sur l'INTENTION, jamais sur l'échelle** (rappel de Guillaume, §12) :
+  le maire y paraît bien plus grand que son bureau, une dérive normale d'une image générée —
+  aucune longueur du corps n'a été touchée, seule la PROFONDEUR du cou a bougé.
+
+  **PREMIÈRE CORRECTION FAITE ET VÉRIFIÉE LE 2026-09-15 : LE COU, ENFIN VISIBLE.** La cause
+  exacte, trouvée en découpant `tools/out/maire-postures.png` à la loupe (`python3`/PIL,
+  jamais à l'œil sur le rendu entier) : le cylindre du cou était posé à z≈0,004 (quasi sur la
+  colonne), alors que le menton — poussé en avant par un crâne centré SUR la colonne, donc à
+  moitié devant elle — ressort à 8-9 cm devant le torse une fois l'échelle de la tête
+  appliquée (`headK[2]`). Le cou n'avançait donc jamais jusque sous le menton : zéro pixel de
+  peau visible entre la mâchoire et le col, sur les sept postures ET les cinq maires, et
+  **aucun banc ne peut le voir** (`verify-maire` compare des cibles de main, jamais un
+  recouvrement de silhouette — même famille que le trapèze du 2026-09-14). Corrigé en avançant
+  le groupe du cou (`maireBureau.js`, recherche « LE COU ET LA TÊTE »), vérifié par
+  falsification (0,004 → aucun changement visible ; 0,150 → cou qui flotte devant le col,
+  détaché ; 0,100 → cou lisible et rattaché, sur les cinq maires ET la scène du bureau
+  complète, `render-maire` toujours 86/86 donc aucune cible de main ni stature déplacée).
+  ⚠️ **PAS ENCORE REVÉRIFIÉ DANS LE VRAI JEU** (fait via `tools/render-maire.mjs`, qui
+  partage le même rendu three.js que `MaireScene.js` — fiable pour une question de
+  géométrie/occlusion, contrairement à la lumière ou aux matières, §10) : à confirmer à
+  l'écran dès la prochaine séance.
+
+  **CE QUI RESTE, NON TOUCHÉ** : le buste qui bascule en bloc (courbure de colonne), le
+  fauteuil qui ne suit pas le corps, les épaules (leur largeur/rondeur n'a pas encore été
+  comparée à la référence), les mains, et tout le décor de la pièce (buste, globe, fenêtre).
+  Les expressions (`FACE`, huit états à six paramètres continus) couvrent déjà largement les
+  quatre de la planche Gemini (joie≈warm/won, colère≈angry, tristesse≈weary, réflexion≈doubt)
+  — rien à construire côté mécanique ; seule la ÉPAISSEUR des sourcils (boîtes plates de
+  1,6 cm) pourrait gagner à se rapprocher du trait plus marqué de la référence, pas encore
+  fait.
 - ⚠️ **NOUVELLE DETTE GRAPHIQUE (2026-09-03) : LE TRIBUNAL ET L'ÉGLISE MÉRITENT UN SPRITE PLUS
   MAJESTUEUX.** Jugement de Guillaume en jouant — les deux bâtiments civiques les plus imposants
   de Valley Town restent en dessous de ce que leur rôle demande. **Demander à Guillaume un JPG de

@@ -507,6 +507,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [townFishDistrustUntil, setTownFishDistrustUntil] = useState(0);
   const [immunityUntil, setImmunityUntil] = useState(0); // pommade de protection (chantier 2026-07) : horodatage de fin d'immunité/répulsion aux créatures maléfiques (0 = inactif), effet purement local, ne survit pas à un refresh
   const [shopOpen, setShopOpen] = useState(false);
+  const [shopCatOpen, setShopCatOpen] = useState({}); // 2026-09-15 (demande Guillaume) : six sections empilées sans repli, illisible — catégories pliables, ouvertes par défaut (clé absente = ouverte) pour ne rien cacher au premier arrivage ; repli persistant tant que la ferme reste montée, même précédent que devTeleportExpanded (zip 431)
   const [marketOpen, setMarketOpen] = useState(false);   // zip 430 : le marché du champ de foire
   /* ⚠️ ZIP 431 — LE PANIER DU MARCHÉ, ET IL EST PUREMENT LOCAL. `{ clé: n }`,
      rien de plus : il ne voyage pas, ne se sauvegarde pas, et se vide à la
@@ -2792,7 +2793,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // chantier supprime.
       if (r.tx === undefined) { r.tx = payload.x; r.ty = payload.y; r.x = payload.x; r.y = payload.y; }
       r.gender = payload.gender; r.outfit = payload.outfit; r.name = payload.name; r.sleeping = !!payload.sleeping;
-      r.torch = !!payload.torch; r.zone = payload.zone || "farm";
+      r.torch = !!payload.torch; r.fishing = !!payload.fishing; r.zone = payload.zone || "farm";
       r.starFocus = payload.starFocus || null;   // hors-zip — le focus personnel de CE camarade, pour l'indice discret de chevauchement
       /* ⚠️ ZIP SUIVANT — L'ASSISE ÉTAIT ÉMISE ET JAMAIS LUE. `pubMe` pose
          `pub.sit = [x, y, place]` depuis le 428 (« à deux, personne n'aurait
@@ -3046,7 +3047,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function ensureRemote(p) {
     if (p.id === me.id) return;
     if (!playersRef.current.has(p.id)) {
-      playersRef.current.set(p.id, { id: p.id, name: p.name, gender: p.gender || "m", outfit: p.outfit || 0, x: p.x ?? C.SPAWN.x, y: p.y ?? C.SPAWN.y, tx: p.x ?? C.SPAWN.x, ty: p.y ?? C.SPAWN.y, dir: p.dir || 0, moving: false, tool: 0, animT: 0, sleeping: false, torch: false, starFocus: null, hatUntil: (farmersRef.current[p.id] && farmersRef.current[p.id].hatUntil) || 0, pets: (p.pets) || (farmersRef.current[p.id] && farmersRef.current[p.id].pets) || [], zone: "farm", lastSeenAt: Date.now() });
+      playersRef.current.set(p.id, { id: p.id, name: p.name, gender: p.gender || "m", outfit: p.outfit || 0, x: p.x ?? C.SPAWN.x, y: p.y ?? C.SPAWN.y, tx: p.x ?? C.SPAWN.x, ty: p.y ?? C.SPAWN.y, dir: p.dir || 0, moving: false, tool: 0, animT: 0, sleeping: false, torch: false, fishing: false, starFocus: null, hatUntil: (farmersRef.current[p.id] && farmersRef.current[p.id].hatUntil) || 0, pets: (p.pets) || (farmersRef.current[p.id] && farmersRef.current[p.id].pets) || [], zone: "farm", lastSeenAt: Date.now() });
       /* ╔══════════════════════════════════════════════════════════════════════
          ║ AUDIT 2026-09-12 — « 👥 1 JOUEUR EN LIGNE » CHEZ L'INVITÉ, POUR TOUJOURS.
          ╚══════════════════════════════════════════════════════════════════════
@@ -8867,7 +8868,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // sur leur écran) — voir aussi le filtre zone!=="farm" au rendu (draws
     // ci-dessous), qui masque carrément son personnage pendant ce temps.
     const px = m.zone === "evil" ? m.farmX : m.x, py = m.zone === "evil" ? m.farmY : m.y;
-    const pub = { id: m.id, name: m.name, gender: m.gender, outfit: m.outfit, x: +px.toFixed(2), y: +py.toFixed(2), dir: m.dir, moving: m.zone === "evil" ? false : m.moving, tool: slotRef.current, sleeping: !!m.sleeping, torch: !!torchOnRef.current, zone: m.zone || "farm", pets: petIdsPub() };
+    const pub = { id: m.id, name: m.name, gender: m.gender, outfit: m.outfit, x: +px.toFixed(2), y: +py.toFixed(2), dir: m.dir, moving: m.zone === "evil" ? false : m.moving, tool: slotRef.current, sleeping: !!m.sleeping, torch: !!torchOnRef.current, fishing: !!rodArmedRef.current, zone: m.zone || "farm", pets: petIdsPub() };
     pub.starEngaged = starPlayerEngaged();
     pub.starFocus = myStarFocusRef.current || null;   // hors-zip — confort de lecture, jamais arbitré
     // ------------------------------------------------------------------
@@ -24194,6 +24195,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const flicker = Math.sin(performance.now() / 90 + px) * 1;
         ctx.drawImage(sprites.torch, tx + flicker, ty);
       }
+      /* 2026-09-15 (demande Guillaume : « pas d'animation pêche ») — jusqu'ici
+         seul Soan (NPC embauché) recevait le tabouret + la canne tenue
+         (voir p.id === "soan" plus bas) : le JOUEUR armé de sa canne
+         (armRod(), rodArmedRef — reste vrai tant qu'on ne change pas de case
+         d'outil, donc couvre déjà tout le cycle mordu/minijeu sans état de
+         plus) ne montrait jamais rien de différent d'un fermier immobile, sur
+         la ferme comme en ville. Même sprite déjà approuvé
+         (sprites.fishingRodHeld), sans le tabouret — le joueur reste debout,
+         il ne s'assoit pas. Diffusé comme la torche (pub.fishing / r.fishing)
+         pour que l'autre joueur le voie aussi, pas seulement soi-même. */
+      const holdingRod = isSelf ? rodArmedRef.current : !!p.fishing;
+      if (holdingRod && !carryingTorch) {
+        ctx.save();
+        if (flip) { ctx.translate(px + 16, py - 4 - lift); ctx.scale(-1, 1); ctx.drawImage(sprites.fishingRodHeld, 0, 0); }
+        else ctx.drawImage(sprites.fishingRodHeld, px, py - 4 - lift);
+        ctx.restore();
+      }
       ctx.font = "bold 7px monospace"; ctx.textAlign = "center";
       ctx.fillStyle = "#00000090"; ctx.fillText(p.name, px + 8 + 1, py - 10 + 1);
       ctx.fillStyle = isSelf ? "#ffffff" : "#ffe9a8"; ctx.fillText(p.name, px + 8, py - 10);
@@ -32029,7 +32047,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 Consommables & soins, Employés. Chaque ligne est STRICTEMENT la
                 même qu'avant (mêmes libellés/actions/gardes), seuls l'ordre et
                 les en-têtes de section changent. */}
-            <div className="ferme-tools-header">{L.shopSeedsHeader}</div>
+            <div className="ferme-tools-header ferme-shop-cat" onClick={() => setShopCatOpen(s => ({ ...s, seeds: s.seeds === false ? true : false }))}>
+              <span className="ferme-shop-cat-chevron" style={{ transform: shopCatOpen.seeds === false ? "rotate(-90deg)" : "rotate(0deg)" }}>▾</span>{L.shopSeedsHeader}
+            </div>
+            <div style={{ display: shopCatOpen.seeds === false ? "none" : undefined }}>
             <div className="ferme-usage">{L.seedsUsageHint}</div>
             {C.CROPS.filter(cr => !cr.unique).map(cr => (
               <div className="ferme-shop-row" key={"s" + cr.id}>
@@ -32098,7 +32119,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <button disabled={hud.money < o.saplingCost} onClick={() => buySapling(o.id, 1)}>{L.buy1}</button>
               </div>
             ))}
-            <div className="ferme-tools-header">{L.shopAnimalsHeader}</div>
+            </div>
+            <div className="ferme-tools-header ferme-shop-cat" onClick={() => setShopCatOpen(s => ({ ...s, animals: s.animals === false ? true : false }))}>
+              <span className="ferme-shop-cat-chevron" style={{ transform: shopCatOpen.animals === false ? "rotate(-90deg)" : "rotate(0deg)" }}>▾</span>{L.shopAnimalsHeader}
+            </div>
+            <div style={{ display: shopCatOpen.animals === false ? "none" : undefined }}>
             {C.ANIMALS.map(a => (
               <div className="ferme-shop-row" key={"an" + a.id}>
                 {/* Zip 369 : le tableau de sprites a gagné un niveau (type,
@@ -32160,7 +32185,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 </div>
               );
             })}
-            <div className="ferme-tools-header">{L.toolsHeader}</div>
+            </div>
+            <div className="ferme-tools-header ferme-shop-cat" onClick={() => setShopCatOpen(s => ({ ...s, tools: s.tools === false ? true : false }))}>
+              <span className="ferme-shop-cat-chevron" style={{ transform: shopCatOpen.tools === false ? "rotate(-90deg)" : "rotate(0deg)" }}>▾</span>{L.toolsHeader}
+            </div>
+            <div style={{ display: shopCatOpen.tools === false ? "none" : undefined }}>
             {C.TOOLS.map(k => {
               const lvl = myTools[k], max = lvl >= C.TOOL_MAX_LEVEL, cost = max ? 0 : C.TOOL_UPGRADE_COST[lvl];
               return (
@@ -32171,7 +32200,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 </div>
               );
             })}
-            <div className="ferme-tools-header">{L.shopBuildHeader}</div>
+            </div>
+            <div className="ferme-tools-header ferme-shop-cat" onClick={() => setShopCatOpen(s => ({ ...s, build: s.build === false ? true : false }))}>
+              <span className="ferme-shop-cat-chevron" style={{ transform: shopCatOpen.build === false ? "rotate(-90deg)" : "rotate(0deg)" }}>▾</span>{L.shopBuildHeader}
+            </div>
+            <div style={{ display: shopCatOpen.build === false ? "none" : undefined }}>
             {/* Maison à niveaux (validation Guillaume 2026-07) : lancer les
                 travaux du palier suivant depuis la boutique — statut/compte à
                 rebours pendant les travaux, MAX au niveau 3. */}
@@ -32261,7 +32294,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 })}
               </>);
             })()}
-            <div className="ferme-tools-header">{L.shopConsumablesHeader}</div>
+            </div>
+            <div className="ferme-tools-header ferme-shop-cat" onClick={() => setShopCatOpen(s => ({ ...s, consumables: s.consumables === false ? true : false }))}>
+              <span className="ferme-shop-cat-chevron" style={{ transform: shopCatOpen.consumables === false ? "rotate(-90deg)" : "rotate(0deg)" }}>▾</span>{L.shopConsumablesHeader}
+            </div>
+            <div style={{ display: shopCatOpen.consumables === false ? "none" : undefined }}>
             <div className="ferme-shop-row">
               <Sprite img={spritesReady ? spritesRef.current.icons.food : null} w={32} h={32} />
               <div className="info"><b>{L.foodRowTitle(C.FOOD_COST)}</b><span>{L.foodRowSub(C.FOOD_ENERGY, myInv ? myInv.food : 0)}</span></div>
@@ -32277,7 +32314,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <div className="info"><b>{L.salveRowTitle}</b><span>{L.salveRowSub(myInv ? (myInv.salve || 0) : 0)}</span></div>
               <button disabled={!myInv || !(myInv.salve > 0)} onClick={useSalve}>{L.salveUseLabel}</button>
             </div>
-            <div className="ferme-tools-header">{L.shopStaffHeader}</div>
+            </div>
+            <div className="ferme-tools-header ferme-shop-cat" onClick={() => setShopCatOpen(s => ({ ...s, staff: s.staff === false ? true : false }))}>
+              <span className="ferme-shop-cat-chevron" style={{ transform: shopCatOpen.staff === false ? "rotate(-90deg)" : "rotate(0deg)" }}>▾</span>{L.shopStaffHeader}
+            </div>
+            <div style={{ display: shopCatOpen.staff === false ? "none" : undefined }}>
             <div className="ferme-shop-row">
               <Sprite img={spritesReady ? spritesRef.current.getChar("m", 0) : null} w={26} h={32} />
               <div className="info">
@@ -32319,6 +32360,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               {sharedRef.current.harald
                 ? <button disabled>{L.haraldWorkingBtn}</button>
                 : <button disabled={hud.money < C.HARALD_HIRE_COST} onClick={hireHarald}>{L.hireLabel}</button>}
+            </div>
             </div>
           </div>
         </div>
