@@ -5673,6 +5673,13 @@ export const O_BUSH = 22;            // buisson sauvage — se traverse en ralen
 export const O_BUSH_TRIM = 23;       // buisson taillé — se traverse librement, la faux le RETIRE
 export const BUSH_WOOD = 1;          // branchages rendus en retirant un buisson taillé (×1,5 par niveau de faux)
 export const BUSH_REGROW_PER_DAY = 4; // tentatives de repousse par jour de jeu (`newDay`), mêmes interdits qu'à la génération
+// 2026-09-16 (demande Guillaume) : un buisson TAILLÉ oublié (jamais retiré à
+// la faux une seconde fois) redevient SAUVAGE tout seul après ce délai RÉEL.
+// ⚠️ HORS DE `objHp` (voir "DEUX OBJETS" ci-dessus, § une grandeur ne sert
+// pas deux rôles) : l'échéance vit dans le dictionnaire partagé `bushTrim`
+// (FermeGame.js), même forme que `townChop` — purgé dès la repousse, donc
+// toujours petit quel que soit le nombre de buissons de la carte.
+export const BUSH_TRIM_REGROW_MS = 3 * 24 * 60 * 60 * 1000; // 3 jours réels (demande Guillaume)
 
 // --- Mondes tournants du passage sombre (zip 235, demande Guillaume :
 // "every new week (game time) it rotates to a new land, similar to Folk of

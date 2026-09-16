@@ -662,6 +662,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [courtBoardOpen, setCourtBoardOpen] = useState(false); // zip 426 : le panneau d'affichage du tribunal
   const [priceBoardOpen, setPriceBoardOpen] = useState(false); // zip 438 : le tableau des cours, à la mairie
   const [starPlaqueOpen, setStarPlaqueOpen] = useState(false); // 2026-09-07 : la plaque du chantier naval (QUETE.md §12.2, « 0 bis »)
+  const [starYardPrompt, setStarYardPrompt] = useState(false); // 2026-09-16 : overlay Oui/Non du chantier, déclenché en approchant du quai
   /* ⚠️ ZIP 439 — L'ACCUEIL DE LA MAIRIE. `null` = fermé ; sinon `{ topic }`,
      où `topic` vaut `null` (elle attend qu'on parle) ou la clé du sujet en
      cours. Un seul état pour les deux écrans du dialogue : le menu des
@@ -1409,7 +1410,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const meRef = useRef(null);
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
-  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, sugar: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], greg: null, soan: null, harald: null, station: E.newStationState(), decor: [], crafts: E.newCrafts(), craftStock: E.newCraftStock(), townChop: {}, wardrobe: {}, star: Q.newStar() });
+  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, sugar: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], greg: null, soan: null, harald: null, station: E.newStationState(), decor: [], crafts: E.newCrafts(), craftStock: E.newCraftStock(), townChop: {}, bushTrim: {}, wardrobe: {}, star: Q.newStar() });
   const invRef = useRef(null);
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
@@ -2225,6 +2226,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            ANTÉRIEURE = ville intacte, et c'est le bon comportement — aucune
            migration à écrire, exactement comme `forcedWorld` au 392. */
         townChop: (saved && saved.townChop) || {},
+        // 2026-09-16 : repousse des buissons taillés — même chemin que townChop
+        // (426)/wardrobe (427) : un champ de plus dans le JSON, aucune migration.
+        bushTrim: (saved && saved.bushTrim) || {},
         /* ZIP 427 — LA GARDE-ROBE ACHETÉE À LA MAISON GARFIELD, par joueur.
            ⚠️ AUCUNE MIGRATION SQL : c'est un champ de plus dans le JSON de
            `ferme_saves`, exactement comme `townChop` au 426 et `forcedWorld` au
@@ -3103,6 +3107,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          chemin à lui finirait par ne pas être sauvegardé le jour où l'on touche
          à l'autre (leçon des vergers, zip 398). */
       townChop: s.townChop || {},
+      bushTrim: s.bushTrim || {},
       // Zip 427 : la garde-robe suit le même chemin, pour la même raison.
       wardrobe: s.wardrobe || {},
       // Zip 444 : la quête de l'étoile aussi. Un état partagé qui prendrait un
@@ -4571,6 +4576,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const gs2 = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
         gs2.gold = (gs2.gold | 0) + r.goldFound;
         out.gregStock = gs2;
+      }
+      // 2026-09-16 — buisson taillé : programme sa repousse (voir farmBushTrimRegrow).
+      if (r.bushTrimSet) {
+        if (!s.bushTrim) s.bushTrim = {};
+        s.bushTrim[r.bushTrimSet.i] = r.bushTrimSet.at;
+        out.bushTrim = { [r.bushTrimSet.i]: r.bushTrimSet.at };
       }
       // Moulin (chantier 2026-07) : dépôt de blé -> remonte le nouveau stock
       // de la/des tuile(s) de moulin touchée(s) à tout le monde (même
@@ -7839,6 +7850,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         starQueueScene(sc.key, sc.ch);
       }
     }
+    // 2026-09-16 — repousse des buissons taillés : même forme que townChop
+    // juste en dessous (dictionnaire d'EXCEPTIONS, purgé dès la repousse).
+    if (p.bushTrim) {
+      const s4 = sharedRef.current;
+      if (!s4.bushTrim) s4.bushTrim = {};
+      for (const k of Object.keys(p.bushTrim)) {
+        const v = p.bushTrim[k];
+        if (v) s4.bushTrim[k] = v; else delete s4.bushTrim[k];
+      }
+    }
     if (p.townChop) {
       const s3 = sharedRef.current;
       if (!s3.townChop) s3.townChop = {};
@@ -8356,6 +8377,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (grassTiles.length) {
           minimapDirtyRef.current = true; dirtyRef.current = true;
           channelRef.current?.send({ type: "broadcast", event: "apply", payload: { tiles: grassTiles } });
+        }
+      }
+      // 2026-09-16 (demande Guillaume) : repousse des buissons TAILLÉS oubliés,
+      // même granularité (tick 1 Hz) et même famille que l'herbe ci-dessus —
+      // voir farmBushTrimRegrow (fermeEngine.js) et sa note sur `objHp`.
+      {
+        const s5 = sharedRef.current;
+        const bushBack = E.farmBushTrimRegrow(w, s5.bushTrim || (s5.bushTrim = {}), Date.now());
+        if (bushBack.length) {
+          const bushTiles = [];
+          for (const bi of bushBack) { recordTileOverride(bi); bushTiles.push({ i: bi, g: w.ground[bi], o: w.objects[bi], hp: w.objHp.get(bi) }); }
+          const bushDelta = {};
+          for (const bi of bushBack) bushDelta[bi] = null; // repoussé, oublie cette case (comme townChop)
+          minimapDirtyRef.current = true; dirtyRef.current = true;
+          channelRef.current?.send({ type: "broadcast", event: "apply", payload: { tiles: bushTiles, bushTrim: bushDelta } });
         }
       }
       // Zip 235 — Spring: seed a few berry bushes across the farm and keep
@@ -29321,6 +29357,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
 
     if (zone === "town") {
+      /* ╔════════════════════════════════════════════════════════════════════════
+         ║ 2026-09-16 (demande Guillaume) — LE CHANTIER SE PROPOSE AUSSI AU QUAI.
+         ╚════════════════════════════════════════════════════════════════════════
+         Troisième porte vers la MÊME requête que le tableau du maire et la carte
+         d'Eduardo (`Q.starYardOffer` → `starYardAccept`) : rien de neuf côté hôte,
+         une occasion de plus de la rencontrer. Overlay Oui/Non affiché UNE fois
+         par session (`starSeenRef.current.dockOffer`, même famille que
+         `starLureAutoToldRef` — jamais une par image, jamais deux fois de suite) ;
+         ensuite, indice « E » classique, jamais de fenêtre qui revient au passage
+         suivant. Indépendant de la chute de l'étoile, comme le veut l'autorité
+         2026-09-12 : « le chantier naval se motive et se lance INDÉPENDAMMENT
+         des étoiles » — donc placé AVANT `yardOnly` ci-dessous, pas après. */
+      {
+        const s9 = sharedRef.current;
+        if (Q.starYardOffer(s9.star, s9.day, starGateCtxNow())
+          && nearTownRect(C.TOWN_PIER.x, C.TOWN_PIER.y, C.TOWN_PIER.w, C.TOWN_PIER.h)) {
+          if (!starSeenRef.current.dockOffer) {
+            starSeenRef.current.dockOffer = true;
+            setStarYardPrompt(true);
+          }
+          return { p: "dock", act: () => setStarYardPrompt(true) };
+        }
+      }
       /* ⚠️⚠️ 2026-09-13 — LA CALE PARLE AUSSI QUAND RIEN N'EST TOMBÉ. Cette garde
          rendait TOUTE la ville muette tant que le météore n'avait pas atterri : juste
          pour le cratère, faux pour le chantier, qui se joue désormais avant la pluie.
@@ -34924,6 +34983,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     <span>{L.star.plan.part(k)}</span>
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+      {/* 2026-09-16 (demande Guillaume) — L'OFFRE DU QUAI. Même porte que le
+          tableau du maire et la carte d'Eduardo (`starYardAccept`), affichée
+          UNE fois en approchant du ponton (voir `starNearby`, zone "town").
+          Oui/Non explicites : c'est le seul des trois chemins qui demande une
+          réponse au moment même plutôt que de la proposer en passant. */}
+      {starYardPrompt && (() => {
+        const close = () => setStarYardPrompt(false);
+        return (
+          <div className="ferme-modal open" onClick={close}>
+            <div className="panel ferme-modal-panel" onClick={ev => ev.stopPropagation()}>
+              <button className="ferme-close-x" onClick={close}>✕</button>
+              <h2>{L.star.yard.dockTitle}</h2>
+              <div className="ferme-hint">{L.star.yard.dockBody}</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+                <button className="ferme-btn" onClick={() => { sendReq({ kind: "starYardAccept" }); close(); }}>{L.star.yard.eduYes}</button>
+                <button className="ferme-btn" onClick={close}>{L.star.yard.eduNo}</button>
               </div>
             </div>
           </div>

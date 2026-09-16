@@ -1181,6 +1181,10 @@ const STAR_FR = {
     boardTitle: "⚓ Avis de la mairie — rouvrir le port",
     boardBody: "La passe du lac est ensablée depuis vingt ans : plus aucun bateau ne sort de Valley Town. La mairie étudie la réouverture du port et cherche une ferme pour relancer le chantier naval de la vieille cale.",
     boardCta: "Proposer notre ferme",
+    // 2026-09-16 (demande Guillaume) : troisième porte vers la même offre,
+    // affichée en approchant du quai (voir starNearby, FermeGame.js).
+    dockTitle: "⚓ La vieille cale",
+    dockBody: "La passe du lac est ensablée depuis vingt ans. Relancer le chantier naval ici, sur ce quai ?",
     boardTaken: (who) => `⚓ Chantier naval : confié à la ferme (${who}). Le maire attend votre visite.`,
     // La bulle au-dessus d'Eduardo quand on s'approche. ⚠️ Courte : une bulle se lit d'un regard.
     eduHook: "Un bateau à moi… je rapporterais deux fois plus de chaque produit.",
@@ -2039,6 +2043,9 @@ const STAR_EN = {
     boardTitle: "⚓ Town hall notice — reopening the port",
     boardBody: "The lake channel has been silted up for twenty years: no boat leaves Valley Town anymore. The town hall is looking into reopening the port and wants a farm to restart the shipyard on the old slipway.",
     boardCta: "Offer our farm",
+    // 2026-09-16 — third door to the same offer, shown near the dock.
+    dockTitle: "⚓ The old slipway",
+    dockBody: "The lake channel has been silted up for twenty years. Restart the shipyard here, on this quay?",
     boardTaken: (who) => `⚓ Shipyard: entrusted to the farm (${who}). The mayor is expecting you.`,
     eduHook: "A boat of my own… I'd bring back twice as much of every good.",
     eduTitle: "⚓ Eduardo's boat",

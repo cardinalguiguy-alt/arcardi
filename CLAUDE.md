@@ -11,49 +11,35 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 référence : `components/ferme/QUETE.md`, section « AUTORITÉ 2026-09-13 bis ». Rien n'y a bougé
 depuis — ce fichier n'en garde plus le détail, périmé dès la livraison suivante.
 
-### 2026-09-15 — la scène du maire, passe de réalisme (« bluffant », pour un studio)
+### 2026-09-16 — le chantier au quai, la repousse des buissons, plus de verdure à Valley Town
 
-**Demande de Guillaume : la scène du maire (`maireBureau.js`, `MaireScene.js`, `rig3d.js`) doit
-être présentable à un grand studio de jeu vidéo.** Quatre défauts trouvés en jouant, corrigés,
-vérifiés au banc (`node tools/render-maire.mjs` **86/86**, `node tools/verify-maire.mjs`
-**137/137**, falsifiés) ET en jeu (`fake-supabase` + `arcardi-local`, page jetable supprimée après) :
+**Trois demandes de Guillaume, livrées ensemble** (changements disjoints — quête en ville,
+buissons de ferme, décor de Valley Town — donc pas de conflit d'attribution malgré la livraison
+unique ; règle du §2 sur les changements visuels mêlés jugée non applicable ici pour cette raison) :
 
-1. **Le cou n'avançait jamais jusque sous le menton** (tête centrée sur la colonne, menton en
-   avant de 9 cm une fois l'échelle appliquée) — corrigé sur le maire ET le buste en marbre de la
-   pièce (même défaut, même cause).
-2. **Un vrai bug d'animation** : une faute pouvait tordre les bras en X au bassin, sans se
-   corriger seule. `MayorAudience` relançait sa boucle de fuite sans jamais relire `phase` —
-   l'image de trop écrasait la pose de la faute par `mayorPose(s, null)`, et `closed`/`push`
-   n'ont pas le même signe de `out` (`rig3d.js` bascule le PLAN du coude sur ce signe, jamais en
-   continu). Corrigé par `phaseRef`/`goPhase`, relus à CHAQUE image plutôt que fermés dans la
-   closure de l'effet.
-3. **Seule une faute avait une réaction immédiate** (`push`/`annoyed`) ; une réponse "ideal"
-   n'avait aucun sursaut positif. `B.winPulse` (`maireBureau.js`) l'ajoute — mais en OVERLAY sur
-   une copie envoyée au rig pour l'image courante, jamais sur `pose`/`face` (les cibles lissées
-   que `verify-maire` §6/§11 exige monotones) : sinon un sursaut à "won" retombant au palier réel
-   de la jauge L'IMAGE SUIVANTE aurait été le recul que la règle interdit, rejoué à l'envers.
-   Déclenché par un COMPTEUR (`viewRef.current.winTick`), jamais un booléen — un booléen déjà vrai
-   ne redéclenche pas deux "ideal" de suite (même piège que l'animation CSS du §4).
-4. **Les sourcils étaient trop fins pour porter le trait de la planche Gemini** (0,019 m → 0,027 m
-   de hauteur, rien d'autre ne bouge).
-   ⚠️ **Audit de sécurité fait, rien trouvé** : `applyPose`/`ease(pose, …)` n'a qu'UN site d'appel
-   dans tout le dépôt (`useBureau`, partagé par `MayorAudience`/`MayorWatch`/`MayorFinale`), et
-   `pose.out = B.poseTarget(V.pose).out` s'y exécute À CHAQUE image, sans condition sur la
-   transition — le correctif du point 2 protège donc TOUTE bascule de pose, pas seulement
-   faute→push. Confirmé en jouant une audience jusqu'à la perte (pose `push` finale, bras propres).
+1. **Le chantier naval se propose aussi en approchant du quai** (`starNearby`, zone "town",
+   `TOWN_PIER`), pas seulement au tableau du maire ou sur la carte d'Eduardo : une fenêtre Oui/Non
+   s'affiche UNE fois par session (`starSeenRef.current.dockOffer`), puis un simple indice « E »
+   ensuite — jamais de fenêtre qui revient à chaque passage. Même requête existante
+   (`starYardAccept`), rien de neuf côté hôte.
+2. **Un buisson TAILLÉ oublié redevient sauvage après 3 jours réels** (`BUSH_TRIM_REGROW_MS`,
+   `farmBushTrimRegrow`). ⚠️ **L'ÉCHÉANCE NE VIT PAS DANS `objHp`** : un commentaire déjà en place
+   l'interdisait explicitement (§4, une grandeur qui porte déjà l'identité sauvage/taillé ne doit
+   pas porter une deuxième signification). Elle vit dans un nouveau dictionnaire `bushTrim`, même
+   forme que `townChop` (les arbres de Valley Town) : ne garde que les EXCEPTIONS, purgé dès la
+   repousse — persistance/diffusion/tick hôte branchés par le même chemin que `townChop`.
+3. **Plus de verdure à Valley Town** : densité du semis natif (`shrub`/`goldBush`/`clump`…) montée
+   de ×1,8 (`TOWN_SCATTER_DENSITY`). Vérifié en lisant le générateur avant d'y toucher : Valley
+   Town n'a jamais généré le buisson de ferme (`O_BUSH`), donc rien à démêler entre les deux.
 
-**Écarté à dessein, pas oublié : le buste pivote en un seul bloc rigide depuis la taille**
-(`torso` porte tout le haut du corps, `solveArm` résout les deux bras depuis sa matrice monde).
-Le scinder en deux pivots toucherait le solveur partagé avec Tristan (`scierieAtelier.js`) sans
-référence dynamique à viser — les planches Gemini ne montrent que des poses statiques neutres.
-⚠️ **Ne pas deviner une courbure « qui a l'air bien »** : rédiger un prompt Gemini demandant une
-pose PENCHÉE dynamique (référence de mouvement, pas de proportions) avant d'y toucher, règle du §2.
-
-**Fin de la passe : à Guillaume de juger en jouant si c'est « bluffant »** — pas un chiffre de
-banc qui puisse le dire. Le sursaut positif n'a pas pu être vu à l'écran pendant cette passe (une
-fenêtre de 0,85 s, plus courte que l'aller-retour d'une capture d'écran) : sa forme est vérifiée
-par falsification au banc (§11 bis de `verify-maire.mjs`, cassée exprès puis recorrigée), pas à
-l'œil — à confirmer par Guillaume en jouant.
+⚠️ **VÉRIFIÉ : syntaxe + bundle esbuild (181 ms, aucune erreur neuve — seul l'avertissement
+`G_SOIL` préexistant). PAS VÉRIFIÉ EN JEU** (livraison sous contrainte de temps, Guillaume devait
+partir) — reste à confirmer par Guillaume : la fenêtre du quai (rapide à tester), la densité de
+Valley Town (à l'œil), et la repousse des buissons (3 jours réels : aucun raccourci de test posé
+côté menu développeur « Tout terminer » — à ajouter si Guillaume veut la vérifier sans attendre).
+⚠️ **Passe d'élagage du §14.2 NON FAITE cette fois** (même contrainte de temps) : le fichier reste
+à 1499+ lignes, largement au-delà du seuil de 200 — à faire à la prochaine livraison, avant d'y
+ajouter quoi que ce soit d'autre (règle du §14.2, pas une option).
 
 ### ⏭️ ACTION SUIVANTE : VÉRIFIER LA CONFIGURATION GOOGLE CLOUD DE OÙ'S THAT
 
