@@ -11,35 +11,32 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 référence : `components/ferme/QUETE.md`, section « AUTORITÉ 2026-09-13 bis ». Rien n'y a bougé
 depuis — ce fichier n'en garde plus le détail, périmé dès la livraison suivante.
 
-### 2026-09-16 — le chantier au quai, la repousse des buissons, plus de verdure à Valley Town
+### 2026-09-19 — Où's that : bogues B1–B8 (et M1–M3) corrigés, vérifiés en jeu à deux clients
 
-**Trois demandes de Guillaume, livrées ensemble** (changements disjoints — quête en ville,
-buissons de ferme, décor de Valley Town — donc pas de conflit d'attribution malgré la livraison
-unique ; règle du §2 sur les changements visuels mêlés jugée non applicable ici pour cette raison) :
+Mesures avant/après et preuves : **`components/ousthat/README.md`, section « Corrections du
+2026-09-19 »**, sous l'audit du matin qui les avait reproduits. `verify-ousthat` 162/162, `--falsify`
+3 échecs, 32 falsifications ciblées rouges, `next build` vert ; aucune manipulation Supabase.
+**Attend le regard de Guillaume**, écran par écran dans ce README : les barres d'actions collées en
+bas (réglages, révélation), « 10 s (duel) » à la place du champ à deux, Australie grisée en mode
+Pays, la pastille « Lieu réel » enfin visible avec un cadrage de révélation un peu plus reculé,
+l'urgence en ambre (8 px) dans l'en-tête de la carte ouverte. ✅ **Pastille d'alerte sur la bulle
+Pays, corrigée le 2026-09-19** (même jour, hors périmètre B1–B8/M1–M3) : elle recouvrait
+entièrement la bulle repliée de l'invité pendant les 10 s, donc impossible à ouvrir au doigt ; même
+règle et même 78 px que le toast « Réponse verrouillée » (M2, `app/globals.css`). Vérifié sans
+recouvrement vertical à 1280×800 et 375×812, le centre de la bulle répond de nouveau au tap ;
+`verify-ousthat` toujours 162/162, `next build` vert. ⚠️ Le navigateur
+intégré peut GELER la page entre deux actions (audit du matin) ou brider `requestAnimationFrame` à
+1–2 images/s quand son volet est masqué (l'après-midi) : le worker du §10 a suffi, et la capture
+d'écran refuse de s'exécuter tant que le volet n'est pas affiché.
 
-1. **Le chantier naval se propose aussi en approchant du quai** (`starNearby`, zone "town",
-   `TOWN_PIER`), pas seulement au tableau du maire ou sur la carte d'Eduardo : une fenêtre Oui/Non
-   s'affiche UNE fois par session (`starSeenRef.current.dockOffer`), puis un simple indice « E »
-   ensuite — jamais de fenêtre qui revient à chaque passage. Même requête existante
-   (`starYardAccept`), rien de neuf côté hôte.
-2. **Un buisson TAILLÉ oublié redevient sauvage après 3 jours réels** (`BUSH_TRIM_REGROW_MS`,
-   `farmBushTrimRegrow`). ⚠️ **L'ÉCHÉANCE NE VIT PAS DANS `objHp`** : un commentaire déjà en place
-   l'interdisait explicitement (§4, une grandeur qui porte déjà l'identité sauvage/taillé ne doit
-   pas porter une deuxième signification). Elle vit dans un nouveau dictionnaire `bushTrim`, même
-   forme que `townChop` (les arbres de Valley Town) : ne garde que les EXCEPTIONS, purgé dès la
-   repousse — persistance/diffusion/tick hôte branchés par le même chemin que `townChop`.
-3. **Plus de verdure à Valley Town** : densité du semis natif (`shrub`/`goldBush`/`clump`…) montée
-   de ×1,8 (`TOWN_SCATTER_DENSITY`). Vérifié en lisant le générateur avant d'y toucher : Valley
-   Town n'a jamais généré le buisson de ferme (`O_BUSH`), donc rien à démêler entre les deux.
+### Toujours ouvert depuis le 2026-09-16 (livré, jamais vu en jeu)
 
-⚠️ **VÉRIFIÉ : syntaxe + bundle esbuild (181 ms, aucune erreur neuve — seul l'avertissement
-`G_SOIL` préexistant). PAS VÉRIFIÉ EN JEU** (livraison sous contrainte de temps, Guillaume devait
-partir) — reste à confirmer par Guillaume : la fenêtre du quai (rapide à tester), la densité de
-Valley Town (à l'œil), et la repousse des buissons (3 jours réels : aucun raccourci de test posé
-côté menu développeur « Tout terminer » — à ajouter si Guillaume veut la vérifier sans attendre).
-⚠️ **Passe d'élagage du §14.2 NON FAITE cette fois** (même contrainte de temps) : le fichier reste
-à 1499+ lignes, largement au-delà du seuil de 200 — à faire à la prochaine livraison, avant d'y
-ajouter quoi que ce soit d'autre (règle du §14.2, pas une option).
+Le chantier naval proposé au quai (fenêtre Oui/Non une fois par session), la repousse des buissons
+taillés après 3 jours réels (`bushTrim`, aucun raccourci dans le menu dev) et la verdure ×1,8 de
+Valley Town (`TOWN_SCATTER_DENSITY`) attendent le regard de Guillaume ; le pourquoi de chaque choix
+est en commentaire à côté du code. ⚠️ **Passe d'élagage du §14.2 toujours NON FAITE** (1 482 lignes) :
+elle passe avant tout ajout hors de ce bloc — cette session n'y a donc encore rien ajouté ailleurs
+(la pastille corrigée ci-dessus ne compte pas : c'est ce bloc lui-même, qui se remplace toujours).
 
 ### ⏭️ ACTION SUIVANTE : VÉRIFIER LA CONFIGURATION GOOGLE CLOUD DE OÙ'S THAT
 
@@ -60,7 +57,8 @@ attend son jugement ; parmi les candidats les plus visibles, sans en privilégie
 bateau (direction tranchée, jamais construite) · le mariage, le cadastre, le salon de coiffure
 (guichets posés, sans contenu) · le tribunal/l'église (« méritent un sprite plus majestueux »,
 attend une référence de Guillaume) · le n°1 de la liste hors-quête : la ferme peuplée en vraie
-séance à deux clients, socle de toute décision sociale à venir.
+séance à deux clients, socle de toute décision sociale à venir · la suite de l'audit d'Où's that
+(rythme, mini-carte, fin de partie, contenu, modes : ordre proposé dans son README).
 
 ---
 

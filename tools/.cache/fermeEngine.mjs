@@ -856,6 +856,25 @@ export function buildRemainingMs(readyAt, now) {
   return Math.max(0, (readyAt || 0) - now);
 }
 
+/* 2026-09-16 (demande Guillaume) — REPOUSSE D'UN BUISSON TAILLÉ OUBLIÉ.
+   Même famille que `townTreeRegrow` juste au-dessus dans ce fichier : un
+   dictionnaire qui ne garde que les EXCEPTIONS (les buissons en attente),
+   purgé dès qu'ils repoussent. ⚠️ HORS DE `objHp` par construction (voir la
+   note "DEUX OBJETS" de `BUSH_TRIM_REGROW_MS`, fermeConstants.js) : l'échéance
+   vit dans `trim` (`shared.bushTrim`), jamais dans le champ qui porte déjà
+   l'identité sauvage/taillé. Auto-nettoyante : une entrée dont la case n'est
+   plus C.O_BUSH_TRIM (retirée entre-temps à la faux) est purgée sans agir. */
+export function farmBushTrimRegrow(world, trim, now) {
+  const back = [];
+  if (!world || !trim) return back;
+  for (const k in trim) {
+    const i = +k;
+    if (world.objects[i] !== C.O_BUSH_TRIM) { delete trim[k]; continue; }
+    if (now >= trim[k]) { world.objects[i] = C.O_BUSH; delete trim[k]; back.push(i); }
+  }
+  return back;
+}
+
 // Production continue d'un moulin (chantier 2026-07, transformation
 // artisanale demandée par Guillaume) : consomme C.MILL_WHEAT_PER_SACK blé
 // toutes les C.MILL_BATCH_MS ms tant qu'il reste assez de blé en stock,
@@ -1534,6 +1553,9 @@ export function resolveAct(world, f, m) {
         if (o === C.O_BUSH) {
           world.objects[i] = C.O_BUSH_TRIM; world.objHp.set(i, 1);
           res.fx.push({ k: "trim", x, y });
+          // 2026-09-16 : programme la repousse en sauvage, hors de `objHp` (voir
+          // la note de BUSH_TRIM_REGROW_MS) — appliqué par le caller (FermeGame.js).
+          res.bushTrimSet = { i, at: now + C.BUSH_TRIM_REGROW_MS };
         } else {
           world.objects[i] = C.O_NONE; world.objHp.delete(i);
           const wood = toolYield(C.BUSH_WOOD, f.tools.scythe);
@@ -7045,7 +7067,7 @@ export function generateTownWorld() {
         sur trois cases dans les quatre directions, pas seulement sous le
         pied du décor. */
   {
-    const TOWN_SCATTER_DENSITY = 0.01;
+    const TOWN_SCATTER_DENSITY = 0.018; // 2026-09-16 (demande Guillaume, "un peu plus") : ×1,8 — à confirmer à l'œil, en jeu
     // `topiary` est un arbuste TAILLÉ (la place et les monuments civils le
     // portent déjà) : plus rare ici, sinon la ville entière prend un air de
     // jardin à la française au lieu d'une pelouse qui verdit.

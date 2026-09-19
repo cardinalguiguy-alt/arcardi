@@ -70,6 +70,28 @@ export function locationOrder(seed, mode = "pinpoint", mapId = "beautiful-world"
   return ids;
 }
 
+// B6 (audit 2026-09-19) : « Devinez le pays » n'a de sens que si le tirage
+// Pays de la carte contient au moins DEUX pays. L'Australie en contient un :
+// 29 896 lieux AU et 271 sans pays, donc la réponse était toujours
+// « Australie », et la partie démarrait quand même (locationOrder n'était pas
+// vide). Dérivé des DONNÉES, jamais d'une liste de cartes écrite à la main :
+// une carte future mono-pays sera écartée sans qu'on y pense. Même repli que
+// locationOrder pour un id inconnu. Mémoïsé : 30 000 lieux, parcourus une fois
+// par carte et par session, s'arrête au deuxième pays trouvé.
+const countryModeByMap = new Map();
+export function countryModeAvailable(mapId) {
+  const map = MAP_BY_ID[mapId] || MAP_BY_ID["beautiful-world"];
+  if (!countryModeByMap.has(map.id)) {
+    const countries = new Set();
+    for (const location of map.locations) {
+      if (COUNTRY_BY_CODE[location.country]) countries.add(location.country);
+      if (countries.size >= 2) break;
+    }
+    countryModeByMap.set(map.id, countries.size >= 2);
+  }
+  return countryModeByMap.get(map.id);
+}
+
 // Audit 2026-09-11 (P0) : sur l'Australie, locationOrder tire dans 30 167
 // identifiants — 533 008 octets en JSON, au-dessus de la limite de broadcast
 // Supabase Free (256 Ko). Le tirage est une fonction PURE de (seed, mode,

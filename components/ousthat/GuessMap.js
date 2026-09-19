@@ -78,6 +78,56 @@ function whenStyleReady(map, callback) {
 const REVEAL_SOURCE_ID = "ot-reveal-lines";
 const REVEAL_LAYER_ID = "ot-reveal-lines-layer";
 const EMPTY_SEATS = Object.freeze([]);
+// B1 (audit 2026-09-19) — marges du cadrage de révélation. 46 px partout
+// jusqu'ici, or une épingle se dessine AU-DESSUS de son point d'ancrage
+// (54 px pour la cible, drapeau compris) et jusqu'à 35 px à sa droite (le
+// drapeau) — mesuré en jeu le 2026-09-19, pas déduit du CSS. En haut, 46 px
+// rognaient donc la tête d'une épingle ; à droite, une épingle tombait sous
+// les boutons +/− (vu en jeu : une épingle sous le « + »). La colonne +/−
+// se LIT dans le DOM (41 px : 31 de boutons + 10 de marge MapLibre) plutôt
+// que d'être recopiée ici, pour qu'un réglage de ces boutons ne rouvre pas le
+// défaut en silence (§8 CLAUDE.md : dériver, jamais régler deux fois).
+const REVEAL_MARGIN = 46;
+const PIN_ABOVE_ANCHOR = 54;
+const REVEAL_FLIGHT_MS = 1100;
+const REVEAL_POINT_ZOOM = 15;
+
+// ⚠️ Même geste en haut, trouvé EN JOUANT après B2 (2026-09-19) : la pastille
+// « Lieu réel », enfin visible, recouvrait la tête de l'épingle cible cadrée
+// dans le coin haut-gauche (pastille 12→40 px de haut, épingle 23→77). Tout ce
+// que MapPortal superpose à la carte (`overlay`, frère de ce conteneur) est lu
+// de la même façon : une épingle doit finir SOUS lui. On réserve la hauteur
+// plutôt que la largeur : mesuré sur les deux cartes de révélation (444×302,
+// 319×242), c'est la réserve qui coûte le moins de zoom.
+function revealPadding(map) {
+  const container = map.getContainer();
+  const controls = container.querySelector(".maplibregl-ctrl-top-right");
+  let overlayBottom = 0;
+  for (const el of container.parentElement?.children || []) {
+    if (el !== container) overlayBottom = Math.max(overlayBottom, el.offsetTop + el.offsetHeight);
+  }
+  return {
+    top: Math.max(REVEAL_MARGIN, PIN_ABOVE_ANCHOR + 10, overlayBottom ? overlayBottom + PIN_ABOVE_ANCHOR + 6 : 0),
+    right: REVEAL_MARGIN + (controls ? controls.offsetWidth : 0),
+    bottom: REVEAL_MARGIN,
+    left: REVEAL_MARGIN,
+  };
+}
+
+function containerSizeKey(map) {
+  const el = map.getContainer();
+  return `${el.clientWidth}x${el.clientHeight}`;
+}
+
+// Un cadrage de révélation se calcule pour la taille du conteneur AU MOMENT
+// de l'appel (fitBounds en déduit centre et zoom une fois pour toutes) :
+// fittedSize retient cette taille, pour savoir plus tard s'il faut recadrer.
+function fitRevealView(map, view, duration) {
+  view.fittedSize = containerSizeKey(map);
+  if (view.bounds) map.fitBounds(view.bounds, { padding: revealPadding(map), maxZoom: 18, duration });
+  else if (duration) map.flyTo({ center: view.center, zoom: REVEAL_POINT_ZOOM, duration });
+  else map.jumpTo({ center: view.center, zoom: REVEAL_POINT_ZOOM });
+}
 const PLAYER_COLORS = ["#ffca5f", "#68d9ff", "#ff7fa4", "#86e39a", "#bda0ff", "#ff9f68", "#78e4da", "#e4de78"];
 
 function pinElement(kind, label = "", color = "", number = null) {
@@ -147,6 +197,10 @@ function GuessMap({ marker, onChange, locked = false, reveal = null, avatar = "�
   const mapRef = useRef(null);
   const markerRef = useRef(null);
   const revealMarkersRef = useRef([]);
+  // B1 (2026-09-19) : la révélation affichée — ses bornes (ou son point
+  // seul), la taille pour laquelle elle a été cadrée, et si le joueur a
+  // repris la main depuis. null hors révélation.
+  const revealViewRef = useRef(null);
   const [mapError, setMapError] = useState(false);
   // MapLibre peint son propre canevas en blanc tant que le style n'a pas
   // fini de charger — visible sur la révélation, qui recrée une carte à
@@ -222,7 +276,33 @@ function GuessMap({ marker, onChange, locked = false, reveal = null, avatar = "�
     // n'importe quelle cause de redimensionnement, au lieu d'un délai fixe
     // deviné après UN SEUL déclencheur (l'ancien prop "expanded", qui ne
     // couvrait que l'ouverture/fermeture du dock de jeu).
-    const resizeObserver = new ResizeObserver(() => map.resize());
+    // B1 (audit 2026-09-19, reproduit : carte agrandie puis point confirmé →
+    // canevas 444×302, cible à x=556 et réponse à x=−114, toutes deux hors
+    // champ) : map.resize() GARDE le centre et le zoom. Une révélation cadrée
+    // pour l'ancienne taille du portail (le dock agrandi, 1176×587) restait donc
+    // cadrée pour elle une fois le portail réduit à la révélation. Tant qu'une
+    // révélation est affichée, chaque redimensionnement la recadre (duration:0,
+    // aucun nouveau vol) — sauf si le joueur a déjà bougé ou zoomé la carte
+    // lui-même : ses gestes (glisser, molette, +/−, clavier) portent
+    // originalEvent, nos propres recadrages jamais.
+    // ⚠️ Jamais PENDANT le vol de révélation (map.isMoving()) : un recadrage à
+    // duration:0 l'aurait coupé net à la première image, et ce travelling est
+    // le geste voulu (voir drawReveal). moveend rattrape alors à l'atterrissage
+    // un redimensionnement survenu en vol (fenêtre retaillée, dock replié).
+    const refitReveal = () => {
+      const view = revealViewRef.current;
+      if (!view || view.userMoved || map.isMoving()) return;
+      if (containerSizeKey(map) === view.fittedSize) return;
+      fitRevealView(map, view, 0);
+    };
+    map.on("movestart", (event) => {
+      if (event.originalEvent && revealViewRef.current) revealViewRef.current.userMoved = true;
+    });
+    map.on("moveend", refitReveal);
+    const resizeObserver = new ResizeObserver(() => {
+      map.resize();
+      refitReveal();
+    });
     resizeObserver.observe(rootRef.current);
     return () => {
       resizeObserver.disconnect();
@@ -272,6 +352,7 @@ function GuessMap({ marker, onChange, locked = false, reveal = null, avatar = "�
     const drawReveal = () => {
       if (cancelled || mapRef.current !== map) return;
       removeReveal(map, revealMarkersRef.current);
+      revealViewRef.current = null;
       if (!reveal?.target) return;
       markerRef.current?.remove();
       markerRef.current = null;
@@ -318,13 +399,22 @@ function GuessMap({ marker, onChange, locked = false, reveal = null, avatar = "�
           layout: { "line-cap": "round", "line-join": "round" },
           paint: { "line-color": ["get", "color"], "line-width": 3, "line-opacity": 0.82, "line-dasharray": [2, 2] },
         });
-        // Travelling animé plutôt qu'un saut sec (duration:0) : c'est le geste
-        // qui rend une révélation GeoGuessr satisfaisante — la ligne se
-        // découvre pendant que la caméra recule, pas après (2026-09-06).
-        map.fitBounds(bounds, { padding: 46, maxZoom: 18, duration: 1100 });
-      } else {
-        map.flyTo({ center: [target.lng, target.lat], zoom: 15, duration: 1100 });
       }
+      // B1 (2026-09-19) : resize() AVANT de cadrer. MapLibre ne relit la taille
+      // de son conteneur que sur resize() ; le portail vient d'être posé sur
+      // l'ancre de révélation (MapPortal.js, avant cet effet), mais la carte
+      // croyait encore avoir la taille de l'ancre précédente — le dock
+      // agrandi, ou 0×0 si le joueur n'avait jamais ouvert la carte, auquel
+      // cas fitBounds ne bougeait même pas la caméra.
+      map.resize();
+      const view = lines.length
+        ? { bounds, userMoved: false, fittedSize: null }
+        : { center: [target.lng, target.lat], userMoved: false, fittedSize: null };
+      revealViewRef.current = view;
+      // Travelling animé plutôt qu'un saut sec (duration:0) : c'est le geste
+      // qui rend une révélation GeoGuessr satisfaisante — la ligne se
+      // découvre pendant que la caméra recule, pas après (2026-09-06).
+      fitRevealView(map, view, REVEAL_FLIGHT_MS);
     };
 
     removeReveal(map, revealMarkersRef.current);
@@ -332,6 +422,7 @@ function GuessMap({ marker, onChange, locked = false, reveal = null, avatar = "�
     return () => {
       cancelled = true;
       stopWaiting();
+      revealViewRef.current = null;
       if (mapRef.current === map) removeReveal(map, revealMarkersRef.current);
     };
   }, [reveal, seats]);

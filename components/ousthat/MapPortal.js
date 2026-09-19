@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import GuessMap from "./GuessMap";
 
@@ -13,7 +13,14 @@ import GuessMap from "./GuessMap";
 // ce portail. Un seul <GuessMap> vit dans une couche position:fixed dont le
 // rectangle est resynchronisé à chaque image sur l'ancre active (measure,
 // jamais un calcul CSS statique — §8 CLAUDE.md, mesuré pas supposé).
-export default function MapPortal({ anchorRef, active, ...guessMapProps }) {
+//
+// `overlay` (B2, audit 2026-09-19) : ce qui doit s'afficher PAR-DESSUS la
+// carte vit ici, dans le portail, jamais dans l'ancre. Le portail
+// (z-index:85, enfant de body) recouvre tout ce que contient .ot-root
+// (contexte d'empilement à z-index:80) : la pastille « drapeau + Lieu réel »,
+// posée dans l'ancre depuis le 2026-09-12, n'a jamais été visible —
+// elementFromPoint en son centre renvoyait le canevas MapLibre.
+export default function MapPortal({ anchorRef, active, overlay = null, ...guessMapProps }) {
   const containerRef = useRef(null);
   if (typeof document !== "undefined" && !containerRef.current) {
     containerRef.current = document.createElement("div");
@@ -27,7 +34,16 @@ export default function MapPortal({ anchorRef, active, ...guessMapProps }) {
     return () => { container.remove(); };
   }, []);
 
-  useEffect(() => {
+  // B1 (audit 2026-09-19) : useLayoutEffect, et un premier sync IMMÉDIAT,
+  // plus seulement à l'image suivante. Avant, au passage jeu → révélation,
+  // GuessMap cadrait la révélation (effet passif) alors que le portail avait
+  // encore la taille de l'ancre précédente — le dock agrandi, 1176×587 — et
+  // map.resize() garde centre et zoom : la cible finissait hors du canevas de
+  // 444×302. Un effet de mise en page passe avant TOUS les effets passifs,
+  // donc avant le cadrage. ⚠️ Il ne voit l'ancre que si elle est déjà
+  // attachée : React attache les refs des frères dans l'ordre du JSX, d'où
+  // <MapPortal> rendu APRÈS les docks dans OusThatGame.js.
+  useLayoutEffect(() => {
     const container = containerRef.current;
     if (!container) return;
     let frame;
@@ -45,19 +61,29 @@ export default function MapPortal({ anchorRef, active, ...guessMapProps }) {
         container.style.left = "-99999px";
         container.style.top = "-99999px";
       } else {
+        // B1 (2026-09-19) : la TAILLE vient de la mise en page de l'ancre
+        // (offsetWidth/offsetHeight, insensibles aux transform de ses
+        // ancêtres), la POSITION de son rectangle visuel, centrée dessus. Le
+        // dock de révélation entre en scale(.94) → 1 (otRevealIn, 0,38 s) : un
+        // conteneur calé sur le rectangle visuel grandissait de 6 % pendant le
+        // vol de révélation, cadré pour la taille de départ — il fallait donc
+        // recadrer à l'atterrissage, un saut visible. Hors de cette entrée, les
+        // deux mesures coïncident (au demi-pixel d'arrondi près).
+        const width = anchor.offsetWidth;
+        const height = anchor.offsetHeight;
         container.style.pointerEvents = "auto";
-        container.style.top = `${rect.top}px`;
-        container.style.left = `${rect.left}px`;
-        container.style.width = `${rect.width}px`;
-        container.style.height = `${rect.height}px`;
+        container.style.top = `${rect.top + (rect.height - height) / 2}px`;
+        container.style.left = `${rect.left + (rect.width - width) / 2}px`;
+        container.style.width = `${width}px`;
+        container.style.height = `${height}px`;
         container.style.borderRadius = getComputedStyle(anchor).borderRadius;
       }
       frame = requestAnimationFrame(sync);
     };
-    frame = requestAnimationFrame(sync);
+    sync();
     return () => cancelAnimationFrame(frame);
   }, [active, anchorRef]);
 
   if (!containerRef.current) return null;
-  return createPortal(<GuessMap {...guessMapProps} />, containerRef.current);
+  return createPortal(<><GuessMap {...guessMapProps} />{overlay}</>, containerRef.current);
 }

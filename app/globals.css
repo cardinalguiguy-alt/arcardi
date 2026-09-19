@@ -6586,7 +6586,8 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
   --ot-gold-13:rgba(255,202,95,.13); --ot-gold-15:rgba(255,202,95,.15);
   --ot-gold-18:rgba(255,202,95,.18); --ot-gold-2:rgba(255,202,95,.2);
   --ot-gold-3:rgba(255,202,95,.3);
-  overflow:auto; display:grid; place-items:center; padding:clamp(18px,4vw,46px); font-family:'Outfit',sans-serif; color:var(--ot-cream); background:radial-gradient(circle at 72% 15%,rgba(168,100,40,.28),transparent 32%),linear-gradient(145deg,#100a06,#241a10 58%,#120c07);
+  --ot-setup-pad:clamp(18px,4vw,46px);
+  overflow:auto; display:grid; place-items:center; padding:var(--ot-setup-pad); font-family:'Outfit',sans-serif; color:var(--ot-cream); background:radial-gradient(circle at 72% 15%,rgba(168,100,40,.28),transparent 32%),linear-gradient(145deg,#100a06,#241a10 58%,#120c07);
 }
 .ot-setup-root::before{ content:""; position:fixed; inset:0; opacity:.22; pointer-events:none; background-image:radial-gradient(circle,#f0d9a8 0 1px,transparent 1.5px); background-size:31px 31px; mask-image:linear-gradient(to bottom,#000,transparent 70%); }
 .ot-setup-globe{ position:fixed; width:min(68vw,760px); aspect-ratio:1; right:-24vw; top:-34vw; border:1px solid var(--ot-gold-15); border-radius:50%; box-shadow:inset 0 0 90px var(--ot-gold-05),0 0 100px rgba(120,65,15,.18); background:repeating-radial-gradient(ellipse at center,transparent 0 46px,var(--ot-gold-05) 47px 48px); }
@@ -6602,6 +6603,10 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
 .ot-field.invalid{ border-color:#ff647d; box-shadow:0 0 0 2px rgba(255,100,125,.1); }
 .ot-field.dimmed{ opacity:.5; }
 .ot-field-hint{ color:var(--ot-cream-mute); font-weight:600; }
+/* B7 (audit 2026-09-19) : délai fixe du duel, affiché comme une valeur de
+   champ (même corps et même graisse que le texte d'un .ot-input-wrap input),
+   sans case à éditer puisque l'hôte ne lit pas finalSeconds à deux. */
+.ot-field-fixed strong{ padding:9px 0; color:var(--ot-cream); font-size:14px; font-weight:900; }
 .ot-field-slider{ grid-column:1 / -1; }
 .ot-slider-wrap{ display:flex; align-items:center; gap:12px; }
 .ot-slider-wrap input[type="range"]{ flex:1; min-width:0; accent-color:var(--ot-cyan); height:4px; cursor:pointer; }
@@ -6630,6 +6635,19 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
 .ot-key-warning{ display:flex; flex-direction:column; gap:4px; margin-top:12px; padding:12px 14px; border:1px solid rgba(255,202,95,.35); border-radius:13px; color:#ffe0a0; background:rgba(255,190,70,.075); font-size:12px; line-height:1.55; }
 .ot-key-warning b{ font-size:13px; }.ot-form-error{ color:#ff8ba0; margin-top:10px !important; font-size:12.5px; }
 .ot-setup-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:18px; }
+/* B5 (audit 2026-09-19, reproduit : multi Pinpoint à 1280×800, « Lancer la
+   partie » à y=815–858 ; volet avancé ouvert, sous le pli à TOUTES les tailles
+   essayées) : le resserrement de la media query max-height:780px ne couvrait
+   qu'une bande de hauteurs. Le pied d'actions reste collé au bas de la zone
+   qui défile (.ot-setup-root), sur le fond de la carte, quelle que soit la
+   hauteur ; en fin de défilement il reprend sa place, donc aucun champ ne
+   reste caché dessous. La media query plus bas est gardée ; elle règle
+   désormais --ot-setup-pad au lieu de padding (mêmes valeurs).
+   ⚠️ Mesuré en jeu : un sticky bottom:0 s'arrête à la marge INTÉRIEURE de
+   .ot-setup-root (46 px à 1280 de large) et les champs défilaient visibles
+   sous la barre. bottom:-marge la colle au vrai bord de l'écran ; la marge
+   vient de --ot-setup-pad, la variable qui POSE cette marge, jamais une copie. */
+.ot-setup-actions{ position:sticky; bottom:calc(-1 * var(--ot-setup-pad, 0px)); z-index:1; padding:12px 0; border-top:1px solid var(--ot-line); background:rgb(27,19,11); }
 .ot-setup-card>.ot-text-button{ display:block; margin:10px auto -12px; }
 .ot-wait-card{ display:flex; align-items:center; justify-content:center; gap:14px; min-height:180px; color:var(--ot-cream-dim); }
 .ot-wait-card .ot-orbit{ width:24px;height:24px; }
@@ -6700,6 +6718,10 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
 .ot-map-peek{ position:absolute; inset:0; z-index:3; display:grid; place-items:center; border:0; border-radius:50%; color:#fff; background:radial-gradient(circle at 35% 28%,#25476d,#091226 72%); cursor:pointer; transition:opacity .16s ease,transform .2s ease,box-shadow .2s ease; }.ot-map-peek:hover{ transform:scale(.96); box-shadow:inset 0 0 0 2px rgba(104,217,255,.35); }.ot-map-peek span{ font-size:25px; filter:drop-shadow(0 3px 5px rgba(0,0,0,.35)); }.ot-map-peek i{ position:absolute; right:1px; top:1px; display:grid; place-items:center; width:18px; height:18px; border:2px solid #081020; border-radius:50%; color:#07101d; background:#62e7af; font-size:9px; font-style:normal; font-weight:1000; }.ot-map-dock.open .ot-map-peek{ opacity:0; transform:scale(.72); pointer-events:none; }
 .ot-map-dock.collapsed>.ot-map-head,.ot-map-dock.collapsed>.ot-map-canvas,.ot-map-dock.collapsed>.ot-map-actions{ visibility:hidden; pointer-events:none; }
 .ot-map-head{ min-width:0; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 11px 9px 14px; border-bottom:1px solid var(--ot-line); }.ot-map-head>div:first-child{ min-width:0; }.ot-map-head b{ display:block; font-size:11px; }.ot-map-head small{ display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#8f9bb7; font-size:8px; margin-top:2px; }.ot-map-head-controls{ display:flex; flex:none; gap:5px; }.ot-map-head-controls button{ width:32px;height:32px;flex:none;border:1px solid var(--ot-line);border-radius:9px;color:#fff;background:rgba(255,255,255,.06);cursor:pointer; }
+/* B4 (audit 2026-09-19) : le délai après la première réponse, affiché dans
+   l'en-tête du dock ouvert à la place de l'aide — la couleur « urgent » du
+   chrono (.ot-round-clock strong.urgent), seule. Taille inchangée. */
+.ot-map-head small.urgent{ color:#ffca5f; }
 .ot-map-canvas{ width:100%; height:100%; min-height:0; cursor:crosshair; background:#0b1326; touch-action:none; }
 /* Rythme des tours (2026-09-11) : couche du <GuessMap> persistant
    (MapPortal.js) — parquée hors écran par défaut, repositionnée en JS
@@ -6748,6 +6770,16 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
    toujours, sur les deux modes (§ audit 2026-09-06 bis). */
 .ot-final-alert,.ot-locked-toast{ position:absolute; z-index:10; left:50%; transform:translateX(-50%); bottom:20px; max-width:min(420px,calc(100vw - 32px)); padding:9px 13px; border-radius:99px; font-size:9px; font-weight:900; background:rgba(8,13,29,.88); border:1px solid rgba(255,202,95,.35); box-shadow:0 8px 25px rgba(0,0,0,.4); }
 .ot-locked-toast{ color:#a7f0d1; border-color:rgba(98,231,175,.35); }
+/* M2 (audit 2026-09-19, mesuré : toast y=749–780 posé sur la bulle du pays
+   repliée, y=730–786) : en mode Pays, la bulle repliée (.ot-country-picker
+   .collapsed : 56 px de haut, à 14 px du bas — 9 px sous 800 px de large)
+   occupe le bas-centre ; le toast se pose au-dessus (14 + 56 + 8). ⚠️ Ce
+   78 px dépend de ces deux valeurs : les changer, c'est changer celui-ci.
+   Trouvé en vérifiant M2 le même jour, corrigé le 2026-09-19 : .ot-final-alert
+   vit dans le même coin (règle du dessus) et recouvrait la même bulle, donc
+   au doigt on ne pouvait plus l'ouvrir pendant les 10 s (souris épargnée par
+   le survol des bords). Même bulle, même 78 px. */
+.ot-arena.country .ot-final-alert,.ot-arena.country .ot-locked-toast{ bottom:78px; }
 /* Urgence/résultats (audit 2026-09-11 §P1, livré 2026-09-12) : ce message
    porte désormais un nom et une durée ("Robin a joué — 10 s") au lieu d'une
    phrase générique — 9px le rendait illisible, un défaut que le texte fixe
@@ -6796,6 +6828,9 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
 .ot-map-picker-list>button{ display:flex; align-items:center; gap:8px; min-width:0; padding:8px 12px; text-align:left; color:var(--ot-cream); border:1px solid var(--ot-line); border-radius:12px; background:rgba(255,235,210,.035); cursor:pointer; }
 .ot-map-picker-list>button>span{ font-size:19px; }.ot-map-picker-list>button>b{ display:block; font-size:13px; }.ot-map-picker-list>button>small{ display:block; color:var(--ot-cream-mute); font-size:12px; }
 .ot-map-picker-list>button.selected{ border-color:var(--ot-gold); background:var(--ot-gold-1); box-shadow:inset 0 0 0 1px var(--ot-gold-18); }
+/* B6 (audit 2026-09-19) : carte à un seul pays, grisée en mode Pays — même
+   opacité que .ot-btn:disabled. */
+.ot-map-picker-list>button:disabled{ opacity:.38; cursor:not-allowed; }
 .ot-answer-picker{ display:flex; align-items:center; flex-wrap:wrap; gap:7px; margin-bottom:12px; padding:9px 11px; border:1px solid var(--ot-line); border-radius:13px; background:rgba(255,235,210,.025); }
 .ot-answer-picker>b{ margin-right:auto; color:var(--ot-cream-mute); font-size:12px; }.ot-answer-picker button{ border:1px solid transparent; border-radius:9px; padding:7px 10px; color:var(--ot-cream-dim); background:#1c150c; cursor:pointer; font-size:12.5px; }.ot-answer-picker button.selected{ color:#241c14; border-color:var(--ot-gold); background:var(--ot-gold); font-weight:900; }
 
@@ -6841,7 +6876,7 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
    apparaissait d'un coup, sans transition d'entrée). */
 .ot-reveal-dock{ position:absolute; z-index:11; right:82px; bottom:14px; width:220px; height:58px; overflow:hidden; box-sizing:border-box; padding:0; border:1px solid rgba(220,235,255,.25); border-radius:29px; background:rgba(6,11,26,.94); box-shadow:0 24px 80px rgba(0,0,0,.55); backdrop-filter:blur(16px) saturate(1.2); transition:width .24s ease,height .24s ease,border-radius .24s ease,padding .24s ease; animation:otRevealIn .38s cubic-bezier(.2,.8,.2,1); }
 @keyframes otRevealIn{ from{ opacity:0; transform:translateY(10px) scale(.94); } }
-.ot-reveal-dock.open{ width:min(480px,44vw); height:min(600px,78vh); padding:16px; border-radius:22px; overflow-y:auto; display:flex; flex-direction:column; gap:10px; }
+.ot-reveal-dock.open{ --ot-reveal-pad:16px; width:min(480px,44vw); height:min(600px,78vh); padding:var(--ot-reveal-pad); border-radius:22px; overflow-y:auto; display:flex; flex-direction:column; gap:10px; }
 .ot-reveal-dock.collapsed>*:not(.ot-reveal-peek){ visibility:hidden; pointer-events:none; }
 .ot-reveal-peek{ position:absolute; inset:0; z-index:3; display:flex; align-items:center; justify-content:center; gap:8px; border:0; border-radius:29px; color:#eef4ff; background:radial-gradient(circle at 30% 24%,#2d5a3f,#091226 74%); cursor:pointer; font-size:12px; font-weight:800; opacity:0; pointer-events:none; transition:opacity .16s ease,transform .2s ease; }
 .ot-reveal-dock.country .ot-reveal-peek{ background:radial-gradient(circle at 30% 24%,#25476d,#091226 74%); }
@@ -6856,6 +6891,19 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
 .ot-reveal-streak{ flex:none; padding:8px 12px; border-radius:99px; font-size:10px; font-weight:900; }.ot-reveal-streak.correct{ color:#9ff2cf; background:rgba(98,231,175,.1); }.ot-reveal-streak.wrong{ color:#ff9eb0; background:rgba(255,100,125,.1); }
 .ot-reveal-dock .ot-scoreboard{ flex:none; }
 .ot-reveal-dock .ot-reveal-actions{ flex:none; margin-top:0; }
+/* B3 (audit 2026-09-19, reproduit à 1280×800 : panneau de 598 px pour 758 px
+   de contenu en duel Pinpoint, « Manche suivante » à y=886, l'hôte devait
+   faire défiler le panneau pour lancer la suite) : le pied d'actions reste
+   collé au bas du panneau, sur son fond, sous un fin séparateur ; le reste
+   défile dessous. Rien d'autre ne bouge dans la mise en page.
+   ⚠️ Mesuré en jeu : un sticky bottom:0 s'arrête à la marge INTÉRIEURE du
+   conteneur qui défile (16 px ici), et le contenu défilait visible sous la
+   barre — et Chrome borne la boîte de BORDURE, une marge négative n'y change
+   rien. D'où bottom:-marge, qui la colle au vrai bord du panneau ; le pied y
+   prolonge son fond (padding-bottom), annulé dans le flux par une marge
+   négative : même place qu'avant en fin de défilement. --ot-reveal-pad est LA
+   marge du panneau (.ot-reveal-dock.open), jamais une copie de sa valeur. */
+.ot-reveal-dock .ot-reveal-actions{ position:sticky; bottom:calc(-1 * var(--ot-reveal-pad, 0px)); z-index:1; margin-bottom:calc(-1 * var(--ot-reveal-pad, 0px)); padding:10px 0 var(--ot-reveal-pad, 0px); border-top:1px solid var(--ot-line); background:rgb(6,11,26); }
 .ot-country-choices{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
 .ot-country-choices>button{ min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; min-height:94px; padding:9px; border:1px solid var(--ot-line); border-radius:14px; color:#eef4ff; background:rgba(255,255,255,.045); cursor:pointer; transition:transform .14s ease,border-color .14s ease,background .14s ease; }
 .ot-country-choices>button:hover:not(:disabled){ transform:translateY(-2px); border-color:rgba(104,217,255,.6); }.ot-country-choices>button.selected{ border-color:var(--ot-gold); background:rgba(255,202,95,.14); box-shadow:inset 0 0 0 1px rgba(255,202,95,.22); }
@@ -6896,7 +6944,7 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
   .ot-reveal-grid{ grid-template-columns:1fr; min-height:0; }.ot-reveal-map,.ot-country-reveal{ min-height:55vh; }.ot-scoreboard{ padding-bottom:20px; }
 }
 @media (max-width:540px){
-  .ot-setup-root{ display:block; padding:8px; }.ot-setup-card{ width:100%; padding:20px 16px; border-radius:20px; }.ot-versus{ gap:34px; margin:18px 0; }.ot-versus>div{ padding:8px; }.ot-versus span{ font-size:21px; }.ot-versus b{ font-size:10px; }.ot-mode-picker{ grid-template-columns:1fr; }.ot-settings{ grid-template-columns:1fr; gap:7px; }.ot-field{ padding:9px; }.ot-summary{ grid-template-columns:1fr; }.ot-summary>span{ text-align:left; }.ot-setup-actions{ flex-direction:column-reverse; }.ot-setup-actions .ot-btn{ width:100%; }
+  .ot-setup-root{ display:block; --ot-setup-pad:8px; }.ot-setup-card{ width:100%; padding:20px 16px; border-radius:20px; }.ot-versus{ gap:34px; margin:18px 0; }.ot-versus>div{ padding:8px; }.ot-versus span{ font-size:21px; }.ot-versus b{ font-size:10px; }.ot-mode-picker{ grid-template-columns:1fr; }.ot-settings{ grid-template-columns:1fr; gap:7px; }.ot-field{ padding:9px; }.ot-summary{ grid-template-columns:1fr; }.ot-summary>span{ text-align:left; }.ot-setup-actions{ flex-direction:column-reverse; }.ot-setup-actions .ot-btn{ width:100%; }
   .ot-map-head small{ max-width:74vw; }.ot-map-actions{ align-items:stretch; }.ot-map-actions>span{ display:none; }.ot-map-actions .ot-btn{ width:100%; }
   .ot-country-picker{ padding:11px; }.ot-country-title{ align-items:flex-start; flex-direction:column; }.ot-country-submit{ align-items:stretch; flex-direction:column; }.ot-country-submit .ot-btn{ width:100%; }.ot-country-choices>button b{ text-align:left; }.ot-country-results{ max-height:20vh; }
   .ot-reveal-root{ padding:14px 8px; }.ot-reveal-head{ align-items:center; }.ot-damage-burst strong{ font-size:34px; }.ot-reveal-map,.ot-country-reveal{ min-height:48vh; }.ot-country-target{ padding:5px 8px; }.ot-country-target>span{ font-size:28px; }.ot-history{ grid-template-columns:repeat(2,1fr); }.ot-final-actions{ flex-direction:column; }.ot-final-actions .ot-btn{ width:100%; }
@@ -6915,7 +6963,7 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
   .ot-corner-actions button{ padding:5px 7px; font-size:7px; }
 }
 @media (max-height:780px) and (min-width:541px){
-  .ot-setup-root{ padding:10px; align-items:start; }
+  .ot-setup-root{ --ot-setup-pad:10px; align-items:start; }
   .ot-setup-card{ padding:18px 28px; border-radius:22px; }
   .ot-setup-card>h1{ font-size:44px; }
   .ot-setup-lead{ margin-top:7px !important; line-height:1.45; }

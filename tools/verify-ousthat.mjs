@@ -44,9 +44,14 @@ const locationsSrc = fs.readFileSync(path.join(ROOT, "components", "ousthat", "l
   .replaceAll('from "./maps"', 'from "./maps.mjs"');
 fs.writeFileSync(path.join(tmp, "locations.mjs"), locationsSrc);
 
+// strings.js n'importe rien : chargé tel quel, pour lire les textes du module
+// lui-même plutôt que de les chercher par motif dans le source (2026-09-19).
+fs.writeFileSync(path.join(tmp, "strings.mjs"), fs.readFileSync(path.join(ROOT, "components", "ousthat", "strings.js"), "utf8"));
+
 const R = await import(pathToFileURL(path.join(tmp, "rules.mjs")).href);
 const C = await import(pathToFileURL(path.join(tmp, "countries.mjs")).href);
 const L = await import(pathToFileURL(path.join(tmp, "locations.mjs")).href);
+const S = await import(pathToFileURL(path.join(tmp, "strings.mjs")).href);
 let fails = 0, total = 0;
 const ok = (name, condition, detail = "") => {
   total++;
@@ -235,7 +240,12 @@ ok("le HUD affiche ∞ en manche illimitée au lieu d'un compte à rebours tromp
 // fixes même en durée illimitée (voir DUEL_FINAL_SECONDS) — le HUD bascule
 // alors de "∞" au compte à rebours réel, plutôt que de mentir sur l'illimité.
 ok("un duel illimité arme un délai final fixe, jamais les parties à 3+", R.DUEL_FINAL_SECONDS === 10 && game.includes("isDuel && current.deadline === null") && game.includes("now + DUEL_FINAL_SECONDS * 1000") && game.includes("isDuel ? DUEL_FINAL_SECONDS : current.config.finalSeconds"));
-ok("le délai final se grise et s'explique dans le setup quand la durée est illimitée", game.includes("finalTimeDisabledHint") && game.includes("dimmed={isUnlimitedRound(draftConfig)}"));
+// B7 (audit 2026-09-19) : l'intention reste « le réglage dit ce que l'hôte
+// fait ». À deux sièges, l'hôte applique toujours DUEL_FINAL_SECONDS : plus de
+// champ, une valeur fixe. À 3+, le champ reste et se grise en illimité ; son
+// aide mentionne les deux joueurs restants en Pinpoint (seul mode où l'on est
+// éliminé), l'ancienne aide reste vraie en mode Pays.
+ok("le délai final dit ce que l'hôte fait : ligne fixe de 10 s à deux, champ grisé à 3+ en illimité avec l'exception des deux derniers en Pinpoint", /state\.seats\.length === 2\s*\?\s*<div className="ot-field ot-field-fixed"><span>\{c\.finalTime\}<\/span><strong>\{c\.duelFinalTime\(DUEL_FINAL_SECONDS\)\}<\/strong><\/div>/.test(game) && game.includes("dimmed={isUnlimitedRound(draftConfig)}") && game.includes('hint={isUnlimitedRound(draftConfig) ? (draftConfig.mode === "pinpoint" ? c.finalTimeLastTwoHint(DUEL_FINAL_SECONDS) : c.finalTimeDisabledHint) : ""}'));
 
 section("audit 2026-09-06 — masque Google, signalement et cartes");
 ok("l'iframe Street View n'a plus allowFullScreen et sort de la navigation Tab", !/^\s*allowFullScreen\b/m.test(frame) && /tabIndex=\{-1\}/.test(frame));
@@ -266,7 +276,10 @@ ok("le plein écran est piloté par Arcardi sur l'arène, pas délégué à l'if
 // de confort. Les deux formes d'échec doivent être couvertes.
 ok("le bouton plein écran ne peut pas planter le jeu si l'API est refusée (try/catch + .catch())", /const toggleFullscreen = useCallback\(\(\) => \{\s*try \{[\s\S]{0,300}\} catch \(error\) \{/.test(game) && game.includes("requestFullscreen?.()?.catch(() => {})"));
 ok("la fin de partie s'incruste sur le dernier panorama au lieu d'une page séparée", !game.includes('if (state.phase === "finished") {') && /state\.phase === "finished" && <FinishedDock/.test(game) && game.includes('"ot-finished-overlay"'));
-ok("FinishedDock reçoit bien location (pays de repli) et déclenche next/lobby via les requêtes existantes", /<FinishedDock state=\{state\} result=\{state\.result\} mode=\{mode\} solo=\{solo\} lang=\{lang\} c=\{c\} revealTarget=\{revealTarget\} location=\{location\}/.test(game) && game.includes('onRematch={() => sendRequest("rematch")}'));
+// 2026-09-19 (B2) : revealTarget ne passe plus par FinishedDock — il ne servait
+// qu'à la pastille « Lieu réel », qui vit désormais dans le portail. L'intention
+// du contrôle (location de repli + requêtes existantes) est inchangée.
+ok("FinishedDock reçoit bien location (pays de repli) et déclenche next/lobby via les requêtes existantes", /<FinishedDock state=\{state\} result=\{state\.result\} mode=\{mode\} solo=\{solo\} lang=\{lang\} c=\{c\} location=\{location\}/.test(game) && game.includes('onRematch={() => sendRequest("rematch")}'));
 
 section("audit 2026-09-11 — typographie de l'écran de réglages, coordonnées, signalement illimité");
 // L'audit demandait de retirer "le texte technique sur l'iframe et les
@@ -307,7 +320,9 @@ ok("trois ancres distinctes (jeu, révélation, fin) désignent où la carte per
 ok("le portail ne s'active qu'en Pinpoint, playing/reveal/finished — jamais en country ni pendant la transition", /const mapActive = mode === "pinpoint" && \(state\.phase === "playing" \|\| state\.phase === "reveal" \|\| state\.phase === "finished"\)/.test(game));
 ok("le portail mesure l'ancre à chaque image (measure, pas un calcul CSS statique) et respecte un dock replié (visibility:hidden garde ses dimensions, contrairement à display:none)", portal.includes("requestAnimationFrame(sync)") && portal.includes("getBoundingClientRect()") && portal.includes('getComputedStyle(anchor).visibility === "hidden"'));
 ok("hors ancre active, la carte est parquée hors écran plutôt que démontée (elle garde son contexte WebGL et son pan/zoom)", portal.includes('container.style.left = "-99999px"') && !/if \(!active\)[\s\S]{0,40}return null/.test(portal));
-ok("GuessMap n'a plus besoin d'un prop expanded : un ResizeObserver réagit à n'importe quelle cause de redimensionnement du portail", !/function GuessMap\(\{[^}]*\bexpanded\b/.test(map) && map.includes("new ResizeObserver(() => map.resize())") && map.includes("resizeObserver.observe(rootRef.current)") && map.includes("resizeObserver.disconnect()"));
+// 2026-09-19 (B1) : le rappel du ResizeObserver fait toujours map.resize(),
+// puis recadre une révélation affichée — même intention, une ligne de plus.
+ok("GuessMap n'a plus besoin d'un prop expanded : un ResizeObserver réagit à n'importe quelle cause de redimensionnement du portail", !/function GuessMap\(\{[^}]*\bexpanded\b/.test(map) && /new ResizeObserver\(\(\) => \{\s*map\.resize\(\);/.test(map) && map.includes("resizeObserver.observe(rootRef.current)") && map.includes("resizeObserver.disconnect()"));
 
 // Préchargement pendant la révélation : déduit sans requête réseau, jamais
 // pour un signalement de lieu (tirage imprévisible côté client).
@@ -341,6 +356,42 @@ ok("le son est une préférence par spectateur (localStorage), jamais un champ d
 ok("le bip ne sonne que pour qui doit se presser, jamais en solo, jamais deux fois pour la même échéance", game.includes("if (!soundOn || solo || !state?.finalDeadline) return;") && game.includes("if (pingedFinalDeadlineRef.current === state.finalDeadline) return;") && game.includes("if (state.firstConfirmedBy !== me.id) playPing();"));
 ok("le bip est synthétisé (aucun fichier audio à livrer) et un échec de l'API reste silencieux, jamais bloquant", game.includes("window.AudioContext || window.webkitAudioContext") && /playPing = useCallback\(\(\) => \{\s*try \{/.test(game));
 ok("le chrono garde sa police et son mécanisme : rien dans cette livraison ne touche pausedCountdownMs ni transitionPaused", /state\.transitionPaused\s*\n?\s*\? Math\.max\(1, Math\.ceil\(\(state\.pausedCountdownMs \?\? COUNTDOWN_MS\) \/ 1000\)\)/.test(game) && /\.ot-round-clock\{[^}]*font-family:'Space Mono'/.test(css));
+
+section("audit 2026-09-19 — bogues B1 à B8 (reproduits en jeu, puis corrigés)");
+// B6 — fonction PURE, jouée ici : « Devinez le pays » exige au moins deux pays
+// dans le tirage Pays de la carte. L'attendu est recalculé ici depuis les
+// données, indépendamment de countryModeAvailable.
+const countryPoolSize = (m) => new Set(m.locations.filter((p) => C.COUNTRY_BY_CODE[p.country]).map((p) => p.country)).size;
+ok("B6 — l'Australie (un seul pays) est refusée en mode Pays, Beautiful World acceptée", L.countryModeAvailable("australie") === false && L.countryModeAvailable("beautiful-world") === true, `${countryPoolSize(L.MAP_BY_ID.australie)} pays contre ${countryPoolSize(L.MAP_BY_ID["beautiful-world"])}`);
+ok("B6 — pour chaque carte du registre, l'éligibilité vaut « au moins deux pays distincts dans son tirage Pays »", L.MAPS.every((m) => L.countryModeAvailable(m.id) === (countryPoolSize(m) >= 2)), L.MAPS.map((m) => `${m.id}:${L.countryModeAvailable(m.id)}`).join(" "));
+ok("B6 — un id de carte inconnu suit le même repli que locationOrder (la carte par défaut)", L.countryModeAvailable("carte-imaginaire") === L.countryModeAvailable(R.DEFAULT_CONFIG.mapId));
+ok("B6 — rules.js reste pur : il n'importe ni le catalogue ni le registre des cartes", !/from ["']\.\/(locations|maps|locationsData|mapData\.[a-z0-9-]+)["']/.test(fs.readFileSync(path.join(ROOT, "components", "ousthat", "rules.js"), "utf8")));
+ok("B6 — l'écran de réglages grise ces cartes en mode Pays (raison FR/EN), et passer en mode Pays ramène à la carte par défaut", game.includes('const countryBlocked = draftConfig.mode === "country" && !countryModeAvailable(map.id);') && game.includes("disabled={countryBlocked}") && game.includes("countryBlocked ? c.mapCountryUnavailable") && game.includes('mode: "country", mapId: countryModeAvailable(old.mapId) ? old.mapId : DEFAULT_CONFIG.mapId') && typeof S.COPY.fr.mapCountryUnavailable === "string" && typeof S.COPY.en.mapCountryUnavailable === "string" && S.COPY.fr.mapCountryUnavailable !== S.COPY.en.mapCountryUnavailable);
+ok("B6 — l'hôte refuse aussi la combinaison (défense en profondeur) et le client l'annonce avant d'envoyer", /request\.kind === "start"[\s\S]{0,700}if \(checked\.value\.mode === "country" && !countryModeAvailable\(checked\.value\.mapId\)\) return;/.test(game) && game.includes('if (checked.value.mode === "country" && !countryModeAvailable(checked.value.mapId)) { setNotice(c.mapCountryUnavailable); return; }'));
+// B7 — les textes, lus dans le module et remplis avec la vraie constante.
+// Appelés avec DUEL_FINAL_SECONDS ET avec une autre valeur : un texte figé sur
+// « 10 » passait avec la seule constante (falsification du 2026-09-19).
+const b7Values = [R.DUEL_FINAL_SECONDS, R.DUEL_FINAL_SECONDS + 3];
+ok("B7 — la ligne fixe et la nouvelle aide existent dans les deux langues et affichent la valeur qu'on leur passe", b7Values.every((n) => S.COPY.fr.duelFinalTime(n) === `${n} s (duel)` && S.COPY.en.duelFinalTime(n) === `${n}s (duel)` && S.COPY.fr.finalTimeLastTwoHint(n) === `Sans effet en durée illimitée, sauf à deux joueurs restants : ${n} s` && S.COPY.en.finalTimeLastTwoHint(n).endsWith(`${n}s`)), `${S.COPY.fr.duelFinalTime(R.DUEL_FINAL_SECONDS)} · ${S.COPY.fr.finalTimeLastTwoHint(R.DUEL_FINAL_SECONDS)}`);
+// B8 — tick rafraîchi à la réception, dans le même lot que les échéances.
+ok("B8 — à la réception d'un décompte ou d'une manche, tick est rafraîchi AVANT les échéances locales, dans le même appel", /const applyIncoming = useCallback\(\(next, transport = \{\}\) => \{[\s\S]{0,1500}if \(next\.phase === "countdown" \|\| next\.phase === "playing"\) setTick\(Date\.now\(\)\);[\s\S]{0,1500}setLocalDeadline\([\s\S]{0,1500}setLocalCountdown\(/.test(game));
+// B1 — recadrage au redimensionnement, cadrage sur la taille courante,
+// portail posé avant le cadrage, révélation mémoïsée, marges.
+ok("B1 — une révélation affichée est recadrée (duration:0) à chaque redimensionnement, jamais en plein vol ni après un geste du joueur", /new ResizeObserver\(\(\) => \{\s*map\.resize\(\);\s*refitReveal\(\);\s*\}\)/.test(map) && map.includes("if (!view || view.userMoved || map.isMoving()) return;") && map.includes("if (containerSizeKey(map) === view.fittedSize) return;") && map.includes("fitRevealView(map, view, 0);") && map.includes('map.on("moveend", refitReveal);') && /map\.on\("movestart", \(event\) => \{\s*if \(event\.originalEvent && revealViewRef\.current\) revealViewRef\.current\.userMoved = true;/.test(map));
+ok("B1 — la révélation se cadre sur la taille COURANTE du conteneur (resize juste avant) et garde son vol animé", /map\.resize\(\);\s*const view = lines\.length/.test(map) && map.includes("fitRevealView(map, view, REVEAL_FLIGHT_MS);") && /const REVEAL_FLIGHT_MS = 1100;/.test(map));
+ok("B1 — le portail se pose sur son ancre dès la mise en page (sync immédiat) et il est rendu APRÈS les docks, dont il lit les refs", portal.includes("useLayoutEffect(() => {") && /\n\s*sync\(\);\n\s*return \(\) => cancelAnimationFrame\(frame\);/.test(portal) && game.indexOf("<MapPortal") > game.indexOf("<RevealDock") && game.indexOf("<MapPortal") > game.indexOf("<FinishedDock"));
+ok("B1 — la taille du portail vient de la mise en page de l'ancre (insensible au scale d'entrée du dock), centrée sur son rectangle visuel", portal.includes("const width = anchor.offsetWidth;") && portal.includes("const height = anchor.offsetHeight;") && portal.includes("rect.left + (rect.width - width) / 2") && portal.includes("rect.top + (rect.height - height) / 2"));
+ok("B1 — l'objet reveal est mémoïsé sur la manche résolue et le résultat, plus recréé à chaque rendu", /const mapReveal = useMemo\([\s\S]{0,300}\[revealRoundKey, location, state\?\.result\]\)/.test(game) && game.includes("reveal: mapReveal") && !game.includes("reveal: { target: revealTarget"));
+ok("B1 (c) — le cadrage réserve la colonne +/− (lue dans le DOM) et la hauteur de ce que le portail superpose", map.includes('container.querySelector(".maplibregl-ctrl-top-right")') && map.includes("right: REVEAL_MARGIN + (controls ? controls.offsetWidth : 0)") && map.includes("overlayBottom + PIN_ABOVE_ANCHOR + 6") && map.includes("padding: revealPadding(map)") && !/padding:\s*46\b/.test(map));
+// B2 — la pastille dans le portail.
+ok("B2 — la pastille « Lieu réel » vit dans le portail (overlay), plus dans l'ancre qu'il recouvre", portal.includes("overlay = null") && portal.includes("<GuessMap {...guessMapProps} />{overlay}") && /overlay=\{state\.phase === "playing" \? null : <span className="ot-actual-chip">\{countryFlag\(revealTarget\?\.country\)\} \{c\.actual\}<\/span>\}/.test(game) && !/className="ot-map-canvas" \/><span className="ot-actual-chip"/.test(game));
+// B3 / B5 — pieds d'actions collants, marges lues dans LEUR variable.
+ok("B3 — le pied d'actions de la révélation reste collé au bord du panneau, sur son fond, sous un fin séparateur", /\.ot-reveal-dock \.ot-reveal-actions\{[^}]*position:sticky; bottom:calc\(-1 \* var\(--ot-reveal-pad, 0px\)\)[^}]*border-top:1px solid[^}]*background:/.test(css) && /\.ot-reveal-dock\.open\{ --ot-reveal-pad:16px;[^}]*padding:var\(--ot-reveal-pad\)/.test(css));
+ok("B5 — le pied d'actions des réglages reste collé au bas de l'écran à toutes les hauteurs ; la media query existante règle la même variable", /\.ot-setup-actions\{ position:sticky; bottom:calc\(-1 \* var\(--ot-setup-pad, 0px\)\)[^}]*background:/.test(css) && /\.ot-setup-root\{[^}]*--ot-setup-pad:clamp\(18px,4vw,46px\);[^}]*padding:var\(--ot-setup-pad\)/.test(css) && /@media \(max-height:780px\) and \(min-width:541px\)\{\s*\.ot-setup-root\{ --ot-setup-pad:10px;/.test(css) && css.includes(".ot-setup-root{ display:block; --ot-setup-pad:8px; }") && !/\.ot-setup-root\{[^}]*padding:(10|8)px/.test(css));
+// B4 — l'urgence dans l'en-tête du dock, même texte, couleur du chrono.
+const urgentClock = /\.ot-round-clock strong\.urgent\{ color:(#[0-9a-f]{3,6});/.exec(css)?.[1];
+const urgentHead = /\.ot-map-head small\.urgent\{ color:(#[0-9a-f]{3,6}); \}/.exec(css)?.[1];
+ok("B4 — dock ouvert ou agrandi, le délai s'affiche dans l'en-tête à la place de l'aide, dans la couleur « urgent » du chrono ; un seul texte pour la pastille et l'en-tête", game.includes("const finalAlertText = state.finalDeadline && state.firstConfirmedBy !== me.id && !locked") && game.includes('<small className={finalAlertText ? "urgent" : undefined}>') && game.includes("finalAlertText ? `⚡ ${finalAlertText}` : c.placeHint") && game.includes('{finalAlertText && <div className="ot-final-alert">⚡ {finalAlertText}</div>}') && !!urgentHead && urgentHead === urgentClock, `en-tête ${urgentHead} · chrono ${urgentClock}`);
 
 console.log(fails ? `\n${fails} ÉCHEC(S) sur ${total} contrôles.\n` : `\n${total}/${total} contrôles verts.\n`);
 if (process.argv.includes("--falsify")) console.log("Mutation active : ce passage ne doit JAMAIS être vert.\n");
