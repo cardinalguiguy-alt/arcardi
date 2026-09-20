@@ -4867,14 +4867,42 @@ export const TOWN_BUSH_SWAY_FADE_MS = 520; // constante de temps de l'amortissem
    plutôt que devant ou derrière (voir `drawTownTallGrass`, FermeGame.js).
    ⚠️ CE QUI EST NEUF : deux familles de touffes plutôt qu'une seule courbe
    réglable. La famille RÉACTIVE (`grass-tall-rest/bend-l/bend-r`) a trois
-   poses PEINTES — un vent ambiant lent qui cycle les trois, comme le
-   souffle des arbres (`TOWN_TREE_SWAY_MS`), et le contact FORCE la pose
-   penchée du bon côté (voir `townTallGrassPose`, fermeArt.js). La famille
-   DÉCORATIVE (`grass-tall-simple/small/big/flat/round`) n'a qu'une pose —
-   « une variante basse qui réagit pas pour l'instant » (Guillaume) — et sert
-   à varier la silhouette au sol sans jamais répéter deux fois le même
-   contour, exactement ce que la version à un seul brin ne pouvait pas faire. */
-export const TOWN_TALLGRASS_WIND_MS = 360; // période d'un pas du cycle de vent (plus vif qu'un arbre : moins de masse)
+   poses PEINTES, et le contact FORCE la pose penchée du bon côté (voir
+   `townTallGrassPose`, fermeArt.js). La famille DÉCORATIVE
+   (`grass-tall-simple/small/big/flat/round`) n'a qu'une pose — « une
+   variante basse qui réagit pas pour l'instant » (Guillaume) — et sert à
+   varier la silhouette au sol sans jamais répéter deux fois le même
+   contour, exactement ce que la version à un seul brin ne pouvait pas faire.
+
+   ⚠️⚠️ 2026-09-20 (v2) — LE VENT AMBIANT A ÉTÉ REJETÉ EN JEU LE JOUR MÊME :
+   « beaucoup trop de mouvement saccadé : on dirait qu'elles dansent […] il
+   faut que ce soit plus discret, et plus coordonné surtout, par zones comme
+   des vagues ». Le premier jet cyclait les trois poses par un SWAP d'image
+   (un remplacement d'un coup, jerky par nature) sur une phase tirée du
+   HACHAGE DE LA CASE — exactement ce qu'il fallait pour les arbres
+   (l'indépendance empêche que la ville entière batte comme un cœur, voir
+   `townTreeImg`) et exactement le contraire de ce qu'une prairie demande :
+   deux brins voisins bougeaient sans rapport l'un avec l'autre, donc un
+   motif qui saute au lieu d'une masse qui ondule. ⚠️ Guillaume proposait de
+   générer « au moins 20 états » pour lisser le mouvement — NON RETENU :
+   vingt poses Gemini coûteraient vingt allers-retours de détourage et
+   vingt occasions de dérive de style/proportion (voir §9 de CLAUDE.md sur
+   le coût d'un bitmap), pour un défaut qui n'est pas un manque de frames
+   mais un manque de COORDINATION SPATIALE et un manque de PLAFOND
+   D'AMPLITUDE — les trois poses déjà peintes suffisent. La parade tient en
+   deux changements, aucun nouvel art :
+   1. **La phase se dérive de la POSITION, projetée sur une direction de
+      vent commune** (`proj`, ci-dessous), jamais d'un hachage — deux cases
+      voisines ont un `proj` presque égal, donc bougent presque en phase :
+      c'est la vague, et sa taille de zone est `TOWN_TALLGRASS_WAVE_LEN`.
+   2. **La pose penchée n'est plus un swap, c'est un FONDU d'opacité** qui
+      suit un sinus lent, plafonné loin de 1 (`TOWN_TALLGRASS_WAVE_AMPLITUDE`)
+      — la pose de repos reste dominante à tout instant, jamais remplacée en
+      entier : c'est le « discret ». */
+export const TOWN_TALLGRASS_WAVE_PERIOD_MS = 4200; // durée d'une oscillation complète EN UN POINT FIXE
+export const TOWN_TALLGRASS_WAVE_LEN = 11;         // longueur d'onde, en cases — la taille d'une "zone" qui bouge ensemble
+export const TOWN_TALLGRASS_WAVE_DIR = 0.6;        // rad — direction du vent, volontairement hors des axes de la carte
+export const TOWN_TALLGRASS_WAVE_AMPLITUDE = 0.32; // plafond du fondu vers la pose penchée — jamais un remplacement complet
 /* Une case sur `TOWN_TALLGRASS_REACTIVE_SHARE` tire la touffe réactive
    (celle qui a des poses de flexion) ; le reste pioche dans la famille
    décorative. ⚠️ HAUT, DÉLIBÉRÉMENT : Guillaume veut « un tapis dense qui

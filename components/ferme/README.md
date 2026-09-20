@@ -1,5 +1,50 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-20
 
+## Hors-zip 2026-09-20 (suite) — LE VENT AMBIANT DE L'HERBE HAUTE, CORRIGÉ EN JEU LE JOUR MÊME
+
+**Guillaume, en rejouant la livraison du dessus dans la même session** : *« beaucoup trop de
+mouvement saccadé : on dirait qu'elles dansent. Il faudrait générer au moins 20 états de la
+plante pour avoir un bon mouvement, il faut que ce soit plus discret, et plus coordonné surtout,
+par zones comme des vagues. »*
+
+**Les 20 poses demandées n'ont PAS été générées** — décision prise en caveman (exécution directe,
+sans aller-retour) mais expliquée ici : le défaut nommé n'était pas un manque de frames, c'était
+un manque de COORDINATION SPATIALE et un manque de PLAFOND D'AMPLITUDE, et vingt allers-retours de
+génération/détourage Gemini auraient coûté vingt occasions de dérive de style ou de proportion
+(§9 de CLAUDE.md) pour ne pas régler le vrai problème.
+
+**Le vrai problème, trouvé en relisant le premier jet** : `townTallGrassPose` cyclait les trois
+poses peintes par un SWAP D'IMAGE (un remplacement d'un coup) sur une phase tirée du HACHAGE DE LA
+CASE — exactement la recette qui sert les arbres (`townTreeImg`), où l'indépendance empêche que
+toute la ville batte comme un cœur au même instant. Sur une prairie, la MÊME recette produit
+l'inverse de ce qu'on veut : deux brins voisins n'ont aucune raison de partager leur hachage, donc
+ils changent de pose sans rapport l'un avec l'autre — un motif qui saute, jamais une masse qui
+ondule.
+
+**La parade, deux changements, aucun nouvel art** (fermeArt.js, fermeConstants.js) :
+1. **La phase se dérive de la POSITION**, projetée sur un axe de vent commun (`proj = x·cos(dir) +
+   y·sin(dir)`), jamais d'un hachage — deux cases voisines ont un `proj` presque égal, donc une
+   phase presque égale, donc bougent ENSEMBLE. `TOWN_TALLGRASS_WAVE_LEN` (11 cases) fixe la taille
+   d'une zone qui bouge de concert ; `TOWN_TALLGRASS_WAVE_DIR` (0,6 rad) l'oriente hors des axes de
+   la carte, pour qu'elle ne se lise pas comme un motif mécanique.
+2. **La pose penchée n'est plus un swap, c'est un fondu d'opacité continu** qui suit un sinus lent
+   (`TOWN_TALLGRASS_WAVE_PERIOD_MS`, 4,2 s pour une oscillation complète en un point fixe),
+   plafonné à `TOWN_TALLGRASS_WAVE_AMPLITUDE` (0,32) — la pose de repos reste dominante à tout
+   instant, jamais remplacée en entier. C'est le sens exact de « discret » : pas une question de
+   vitesse, une question d'amplitude.
+
+La réaction au contact (un joueur qui marche dedans) n'a pas changé — elle reste un fondu depuis
+`e.dir` (le ressort partagé des buissons) vers une pose franche, qui écrase la vague le temps du
+contact : Guillaume ne s'est plaint que du mouvement AMBIANT, pas de la réaction.
+
+**Vérifié en jeu** : deux captures du canevas réel, espacées de 2,1 s (la moitié de la période),
+sur une zone avec deux touffes voisines — les deux évoluent ENSEMBLE (identiques ou changées
+ensemble selon la capture), jamais l'une figée pendant que l'autre bouge, et le changement lui-même
+est à peine perceptible d'une capture à l'autre. **Bancs** : `next build` **✓ Compiled
+successfully**, `verify-collision` **TOUT PASSE**, `verify-compo` **tous les contrôles passent**,
+`verify-syntax` propre. Aucune manipulation Supabase. **Attend le regard de Guillaume** : plus
+saccadé à corriger a priori, reste à juger *agréable* en vraie séance (§13).
+
 ## Hors-zip 2026-09-20 — L'HERBE HAUTE, EN BITMAP GEMINI (remplace la version en courbe de la veille)
 
 **Guillaume, en jouant la livraison du 2026-09-19** (les herbes hautes en quadratiques

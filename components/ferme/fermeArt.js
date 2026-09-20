@@ -1716,30 +1716,35 @@ export function townTallGrassVariant(x, y) {
   if ((h % 1000) / 1000 < C.TOWN_TALLGRASS_REACTIVE_SHARE) return "reactive";
   return TALLGRASS_DECOR[(h >>> 3) % TALLGRASS_DECOR.length];
 }
-// 0 = penche à gauche, 1 = repos, 2 = penche à droite — même lecture à quatre
-// pas pour trois images que TREE_SWAY, juste au-dessus.
-const TALLGRASS_WIND_SEQ = [1, 2, 1, 0];
-/* La pose de la touffe RÉACTIVE : un vent ambiant lent (cycle les trois poses
-   peintes, comme le souffle des arbres) qu'un contact récent ÉCRASE.
+/* La pose de la touffe RÉACTIVE : la pose de repos, toujours dessinée pleine,
+   PLUS un fondu léger vers une pose penchée — le vent ambiant (une vague
+   spatiale, voir la note de fermeConstants.js pour le rejet du premier jet
+   par Guillaume) tant que rien ne la touche, un contact récent SINON.
    ⚠️ LA DIRECTION DE CONTACT EST FIXE (`e.dir`), JAMAIS L'OSCILLATION DU
    RESSORT PARTAGÉ (`bushLeanFormula`, FermeGame.js) : ce ressort sert un
    CISAILLEMENT continu (les buissons), où sonner avant de s'arrêter se voit
-   comme un rebond. Une pose peinte, elle, ne peut pas s'interpoler — la
-   même oscillation, rejouée en swap d'image, clignoterait entre gauche et
-   droite au lieu de sonner, exactement ce que Guillaume vient de reprocher
-   à la version précédente (« l'animation doit être fluide »). On reprend
-   donc seulement le SIGNE (quel côté) et `TOWN_BUSH_SWAY_FADE_MS` (quand
-   lâcher), et on relâche par un fondu d'opacité continu, pas par un second
-   swap — c'est la manière fluide de faire moins qu'une interpolation de
-   forme. Rend `{ base, overlay?, overlayAlpha? }` : l'appelant dessine
-   `base` puis, si présent, `overlay` par-dessus à `overlayAlpha`. */
+   comme un rebond — une pose peinte, elle, ne s'interpole pas, donc rejouer
+   la même oscillation en fondu clignoterait entre gauche et droite au lieu
+   de sonner. On reprend donc seulement le SIGNE (quel côté) et
+   `TOWN_BUSH_SWAY_FADE_MS` (quand lâcher), et on relâche par un fondu
+   d'opacité continu — la manière fluide de faire moins qu'une interpolation
+   de forme. Rend `{ base, overlay, overlayAlpha }` : l'appelant dessine
+   `base` (toujours "rest") puis `overlay` par-dessus à `overlayAlpha`. */
 export function townTallGrassPose(x, y, now, e, age) {
-  const ph = (waterHash(x * 53 + 19, y * 31 + 41) % 1000) / 1000;
-  const step = TALLGRASS_WIND_SEQ[Math.floor(now / C.TOWN_TALLGRASS_WIND_MS + ph * 4) & 3];
-  const basePose = step === 0 ? "bend-l" : step === 2 ? "bend-r" : "rest";
-  if (!e || age < 0 || age >= C.TOWN_BUSH_SWAY_FADE_MS) return { base: basePose };
-  const contactPose = e.dir < 0 ? "bend-l" : "bend-r";
-  return { base: basePose, overlay: contactPose, overlayAlpha: 1 - age / C.TOWN_BUSH_SWAY_FADE_MS };
+  if (e && age >= 0 && age < C.TOWN_BUSH_SWAY_FADE_MS) {
+    const contactPose = e.dir < 0 ? "bend-l" : "bend-r";
+    return { base: "rest", overlay: contactPose, overlayAlpha: 1 - age / C.TOWN_BUSH_SWAY_FADE_MS };
+  }
+  /* La vague : `proj` est la position projetée sur l'axe du vent — deux
+     cases voisines ont un `proj` presque égal, donc une phase presque
+     égale, donc bougent ENSEMBLE (§4 de CLAUDE.md, la leçon du 2026-09-20
+     sur la coordination spatiale). `s` est un sinus continu dans le temps
+     ET dans l'espace : pas de palier, pas de saut — juste une masse qui
+     ondule, plafonnée loin de 1 par `TOWN_TALLGRASS_WAVE_AMPLITUDE`. */
+  const proj = x * Math.cos(C.TOWN_TALLGRASS_WAVE_DIR) + y * Math.sin(C.TOWN_TALLGRASS_WAVE_DIR);
+  const phase = proj / C.TOWN_TALLGRASS_WAVE_LEN - now / C.TOWN_TALLGRASS_WAVE_PERIOD_MS;
+  const s = Math.sin(phase * Math.PI * 2);
+  return { base: "rest", overlay: s < 0 ? "bend-l" : "bend-r", overlayAlpha: Math.abs(s) * C.TOWN_TALLGRASS_WAVE_AMPLITUDE };
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

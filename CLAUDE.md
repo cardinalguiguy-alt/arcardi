@@ -7,26 +7,34 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-20 — Les herbes hautes du sous-bois sud-est, remplacées par du bitmap Gemini
+### 2026-09-20 — Les herbes hautes du sous-bois sud-est, bitmap Gemini + vent en vague spatiale
 
 La version procédurale en courbe de la veille a été jugée EN JEU par Guillaume : « pas bon […] on
-dirait des cornes », trop peu de brins, trop clairsemée — « le but est d'avoir un sol comblé
-d'herbes ». Remplacée par un import Pipeline C (§9/§2 de CLAUDE.md, un prompt Gemini proposé avec
-deux images de référence, jamais un appel automatisé) : trois JPEG collés par Guillaume dans
-`refs/`, détourés par `tools/import-herbe.mjs` en huit PNG (`public/town/grass-tall-*.png`).
-Récit complet, le prompt, les décisions (deux familles de touffes — réactive à trois poses
-peintes/vent ambiant/contact par fondu d'opacité, vs cinq silhouettes décoratives — et la densité
-relevée de 0,65 à 0,92) et preuves écran par écran : **`components/ferme/README.md`, section
-« Hors-zip 2026-09-20 — L'HERBE HAUTE, EN BITMAP GEMINI ».** `next build` vert, `verify-collision`
-(102 cases d'herbe, contre 75) et `verify-compo` TOUT PASSE, `verify-syntax` et le bundle esbuild
-propres, aucune manipulation Supabase. ⚠️ **LEÇON À RETENIR, AU-DELÀ DE CETTE HERBE** : un
-redimensionnement par moyenne de zone NON prémultipliée par alpha repeint la couleur du fond dans
-le bord de chaque forme — invisible à un rapport de réduction ×4 (l'hôtel de ville), flagrant à
-×15-30 (ces touffes) ; et un fin volute qui ne tient plus que par une colonne de pixels dans la
-source peut s'en trouver coupé par le même redimensionnement, sans qu'aucune diffusion de
-détourage n'y soit pour quelque chose — corrigé en ne gardant que la plus grande composante
-connexe de chaque PNG de sortie. **Attend le regard de Guillaume** : le mécanisme est vérifié
-correct (dense, réactif au contact, animé par le vent), pas encore jugé *agréable* (§13).
+dirait des cornes » → remplacée par un import Pipeline C (§9/§2 de CLAUDE.md, un prompt Gemini
+proposé avec deux images de référence, jamais un appel automatisé) : trois JPEG collés par
+Guillaume dans `refs/`, détourés par `tools/import-herbe.mjs` en huit PNG
+(`public/town/grass-tall-*.png`). Rejoué EN JEU dans la foulée : « beaucoup trop de mouvement
+saccadé : on dirait qu'elles dansent […] plus discret, et plus coordonné surtout, par zones comme
+des vagues » — le vent ambiant swapait trois poses peintes sur un hachage PAR CASE (juste pour des
+arbres indépendants, faux pour une prairie qui doit bouger EN MASSE). Corrigé sans nouvel art :
+phase dérivée de la POSITION projetée sur un axe de vent commun (cases voisines ≈ même phase ⇒
+bougent ensemble) et pose penchée en fondu d'opacité plafonné (`TOWN_TALLGRASS_WAVE_*`,
+fermeConstants.js), pas en swap. Guillaume proposait « au moins 20 états » de la plante — NON
+RETENU, décision prise et expliquée en caveman (le défaut était la coordination spatiale et le
+plafond d'amplitude, pas le nombre de frames ; vingt allers-retours Gemini auraient coûté vingt
+dérives de style pour rien, §9 de CLAUDE.md). Récit complet, le prompt, toutes les décisions et
+preuves écran par écran : **`components/ferme/README.md`, sections « Hors-zip 2026-09-20 » et
+« Hors-zip 2026-09-20 (suite) — LE VENT AMBIANT […] CORRIGÉ ».** `next build` vert,
+`verify-collision` (102 cases d'herbe, contre 75) et `verify-compo` TOUT PASSE, `verify-syntax` et
+le bundle esbuild propres, aucune manipulation Supabase. ⚠️ **LEÇON À RETENIR, AU-DELÀ DE CETTE
+HERBE** : (1) un redimensionnement par moyenne de zone NON prémultipliée par alpha repeint la
+couleur du fond dans le bord de chaque forme — invisible à ×4 (l'hôtel de ville), flagrant à ×15-30
+(ces touffes), corrigé en sommant `rgb×alpha` ; (2) une phase d'animation tirée du HACHAGE DE LA
+CASE est le bon outil pour éviter qu'un décor nombreux batte comme un cœur (les arbres), et le
+MAUVAIS outil dès que le décor doit au contraire bouger EN MASSE (une prairie) — la dériver de la
+POSITION (projetée sur un axe commun) donne la coordination spatiale dans les deux sens sans
+changer autre chose. **Attend le regard de Guillaume** : le mécanisme est vérifié correct (dense,
+réactif au contact, vent coordonné et discret), pas encore jugé *agréable* (§13).
 
 ### 2026-09-19 — Où's that : bogues B1–B8 (et M1–M3) corrigés, vérifiés en jeu à deux clients
 
