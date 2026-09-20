@@ -7,6 +7,44 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
+### 2026-09-20 — Le navire tangue un peu sur l'eau
+
+Demande de Guillaume : « le bateau doit tanguer un peu sur le lac/eau. » Piège trouvé avant
+d'écrire une ligne : `tools/lib-canvas.mjs` (le faux canevas des bancs) n'honore NI `rotate` NI
+`transform` NI `translate` (vérifié dans le fichier — les quatre sont des corps vides, malgré un
+commentaire local qui dit le contraire pour la translation) — un tangage en `ctx.rotate` aurait
+donc été invisible sur les planches que `render-navire.mjs` produit pour le regarder sans
+navigateur. Implémenté en deux décalages PIXELS (jamais une rotation) dans `drawStarShip`
+(fermeArt.js) : un pilon (sinus) partagé par toute la coque, plus un tangage différentiel (cosinus
+en quadrature de phase) réparti par pièce selon sa position proue/poupe réelle — safran à
+l'étambot, mât/voile amidships, cloche vers l'avant. Même famille de période que la houle de l'eau
+(`TOWN_WATER_SWELL_*`), réutilisée plutôt qu'inventée (§8). La cale (ber de pierre) et l'épave ne
+tanguent pas ; le nom peint sur la coque et les étincelles de chaque pièce suivent leur pièce.
+Récit complet et preuves : **`components/ferme/README.md`, section « Hors-zip 2026-09-20 — LE
+NAVIRE TANGUE UN PEU SUR L'EAU ».** `next build` vert, `render-navire.mjs` **tout est vert**
+(aucune régression), et un script dédié mesure la boîte englobante du navire à huit instants d'un
+cycle de houle — le sommet du mât se déplace bien de 2 px, la motion est réelle. Aucune
+manipulation Supabase. **Attend le regard de Guillaume** : le calcul et la planche du banc
+prouvent le mécanisme, pas encore rejoué EN JEU (la scène du rendez-vous chez le maire, préalable
+du chantier naval, n'a pas été traversée pendant cette vérification) — §13.
+
+### 2026-09-20 — Les buissons de ville, en clusters, concentrés dans les espaces verts
+
+Demande de Guillaume : « agencer [les buissons] de manière esthétique dans les espaces verts,
+parcs, et en clusters si possible. » Le semis de ville tirait un buisson par case éligible,
+indépendamment, cyclé sur neuf espèces — deux voisins n'avaient qu'une chance sur neuf d'être de la
+même espèce, et rien ne distinguait un jardin d'un pré. Remplacé par des clusters monospécifiques
+(3 à 6 buissons, une ancre + un rayon de 2 cases), ancrés très majoritairement sur `G_TOWN_LAWN` —
+le champ que le générateur peint déjà sur tout ce qu'il traite comme un jardin dessiné (parc,
+parterres de la place, verger), réutilisé tel quel plutôt qu'un second zonage (§4 de CLAUDE.md).
+Récit complet, le code, et la preuve — une carte de la ville rejouée en Node (position + espèce de
+chaque buisson, sans navigateur) qui montre les clusters massés dans le parc : **`components/ferme/
+README.md`, section « Hors-zip 2026-09-20 — LES BUISSONS DE VILLE ».** `verify-collision` (554
+cases, 449 sur les six espèces de cette passe) et `verify-compo` TOUT PASSE, `verify-syntax` propre,
+aucune manipulation Supabase. **Attend le regard de Guillaume** : la carte prouve que l'algorithme
+fait ce qui a été demandé (clusters, concentration en espace vert), pas encore rejoué EN JEU, à
+hauteur de personnage (§13).
+
 ### 2026-09-20 — Les herbes hautes du sous-bois sud-est : bitmap Gemini, vague spatiale, cisaillement
 
 Trois jugements EN JEU de Guillaume le même jour, chacun corrigé dans la foulée : (1) la version

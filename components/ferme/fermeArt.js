@@ -9564,6 +9564,31 @@ export function buildSprites() {
      revient quand Eduardo rentre : c'est le même bateau, pas un décor de plus.
      ⚠️ ET IL NE DESSINE PAS DE FANTÔMES DANS CE CAS — un fantôme dit « ça
      viendra », or ici c'est parti. */
+  /* 2026-09-20 — LA POSITION LE LONG DE LA COQUE, PROUE (+1) → POUPE (−1),
+     DÉRIVÉE DES MÊMES COORDONNÉES QUE LE DESSIN (`SHIP_X0`/`SHIP_X1`, `mx` du
+     mât, `bx` de la cloche) — jamais une seconde estimation à l'œil, qui
+     aurait pu diverger de la coque qu'elle est censée suivre (§8). Le safran
+     est à l'étambot (poupe franche, −1) ; mât et voile sont quasi sur l'axe
+     de roulis (amidships) ; la cloche est montée bien avant du centre. La
+     coque elle-même vaut 0 : c'est une seule image sur toute sa longueur,
+     elle ne peut recevoir qu'un pilon partagé, pas un tangage différentiel
+     (voir le commentaire de `drawStarShip`). */
+  const SHIP_MID_X = (SHIP_X0 + SHIP_X1) / 2, SHIP_HALF_X = (SHIP_X1 - SHIP_X0) / 2;
+  const SHIP_ROCK_ALONG = {
+    hull: 0, sail: (74 - SHIP_MID_X) / SHIP_HALF_X, mast: (74 - SHIP_MID_X) / SHIP_HALF_X,
+    rudder: -1, bell: (118 - SHIP_MID_X) / SHIP_HALF_X,
+  };
+  /* ⚠️ LA PHASE, ÉCRITE UNE SEULE FOIS : `drawStarShip` ET `drawStarShipName`
+     doivent tanguer DU MÊME PILON (le nom est peint sur la coque, dont
+     `SHIP_ROCK_ALONG.hull = 0`) — deux formules de phase recopiées auraient
+     divergé au premier réglage de période (§8 de CLAUDE.md), et le symptôme
+     aurait été un nom qui glisse hors de sa plaque à chaque houle. */
+  function shipRockPhase(cx, tMs) {
+    return (cx / (C.TOWN_WATER_SWELL_WAVELEN_CASES * 16) - (tMs || 0) / C.TOWN_WATER_SWELL_PERIOD_NEAR_MS) * Math.PI * 2;
+  }
+  function shipHullBob(cx, tMs, u) {
+    return Math.sin(shipRockPhase(cx, tMs)) * C.STAR_SHIP_ROCK_BOB_PX * u;
+  }
   function drawStarShip(g2, cx, cy, T2, parts, tMs, opt) {
     const o = opt || {}, t = tMs || 0, u = T2 / 16;
     const P5 = Array.isArray(parts) ? parts : [];
@@ -9573,12 +9598,38 @@ export function buildSprites() {
       g2.drawImage(sl, Math.round(cx) - sl.ox, Math.round(cy) - sl.oy);
       return;
     }
+    /* ⚠️⚠️⚠️ LE TANGAGE : DEUX DÉCALAGES EN PIXELS, JAMAIS UNE ROTATION.
+       Demande de Guillaume : « le bateau doit tanguer un peu sur le lac/eau ».
+       `tools/lib-canvas.mjs` (le faux canevas des bancs) n'honore NI `rotate`
+       NI `transform` NI même `translate`, malgré ce que dit son propre
+       commentaire (vérifié : les quatre méthodes sont vides) — un tangage
+       écrit avec `ctx.rotate`/`ctx.transform` serait invisible sur la planche
+       que `render-navire.mjs` produit, donc vrai dans le jeu et FAUX sur
+       l'outil censé nous permettre de le regarder sans navigateur (le stub
+       menteur du §10 de CLAUDE.md, pris par l'autre bout — la même leçon que
+       le cisaillement de l'herbe haute et des buissons, qui vivent eux hors
+       de `fermeArt.js` et n'ont donc jamais eu ce problème).
+       ⚠️ MÊME FAMILLE DE PÉRIODE QUE LA HOULE DE L'EAU (`TOWN_WATER_SWELL_*`)
+       plutôt qu'une troisième cadence inventée (§8) — le navire est au bord
+       de l'eau (`STAR_SHIP_WATER_MAX`), il bat au même rythme qu'elle.
+       `rockBob` est le pilon, partagé par toute la coque ; `rockPitch` est en
+       QUADRATURE de phase (un cosinus contre le sinus du pilon, jamais la
+       même valeur redite) et réparti par pièce via `SHIP_ROCK_ALONG` — la
+       poupe et la proue s'écartent l'une de l'autre pendant que le milieu de
+       la coque reste presque immobile, ce qui est la définition même du
+       tangage (par opposition au roulis ou au pilonnement seuls). */
+    const rockPhase = shipRockPhase(cx, t);
+    const rockBob = shipHullBob(cx, t, u);
+    const rockPitch = Math.cos(rockPhase) * C.STAR_SHIP_ROCK_PITCH_PX * u;
+    const rockAt = (along) => rockBob + rockPitch * (along == null ? 0 : along);
+    // La cale (le ber de pierre) NE TANGUE PAS : elle est fixée au quai.
     const cr = shipBake(T2, "cradle", false);
     g2.drawImage(cr, Math.round(cx) - cr.ox, Math.round(cy) - cr.oy);
     /* 2026-09-13 (lot 2) — L'ÉPAVE. `opt.wreck` vient de l'appelant (`Q.starShipWrecked`) :
        `fermeArt` ne sait toujours rien de la quête. Peinte sur le ber, SOUS les pièces
        reconstruites — une coque neuve montée recouvre les débris, et l'appelant cesse
-       alors de la demander. */
+       alors de la demander. ⚠️ Elle non plus ne tangue pas : des débris posés sur un
+       ber ne flottent pas. */
     if (o.wreck) {
       const wr = shipWreckBake(T2);
       g2.drawImage(wr, Math.round(cx) - wr.ox, Math.round(cy) - wr.oy);
@@ -9605,17 +9656,20 @@ export function buildSprites() {
          ni fantôme, la grève garde un chantier naval — un endroit de vie, pas un
          trou dans le décor. */
       if (!has && !o.ghosts) continue;
+      const cy2 = cy + rockAt(SHIP_ROCK_ALONG[key]);
       /* ⚠️ LE FANTÔME PULSE, LA PIÈCE NON. Une pièce posée qui respirerait dirait
-         « pas encore fini » : ce qui bouge est ce qui MANQUE, jamais l'inverse. */
+         « pas encore fini » : ce qui bouge est ce qui MANQUE, jamais l'inverse.
+         Elle tangue quand même, comme toute pièce montée : le tangage n'est pas
+         l'avancement, c'est l'eau. */
       const c2 = shipBake(T2, key, !has);
-      if (has) g2.drawImage(c2, Math.round(cx) - c2.ox, Math.round(cy) - c2.oy);
+      if (has) g2.drawImage(c2, Math.round(cx) - c2.ox, Math.round(cy2) - c2.oy);
       else {
         /* Le battement du fantôme, peint en repassant la pièce une seconde fois
            aux instants clairs — jamais par `globalAlpha`, que le faux canevas des
            bancs ne restitue pas (448). */
-        g2.drawImage(c2, Math.round(cx) - c2.ox, Math.round(cy) - c2.oy);
+        g2.drawImage(c2, Math.round(cx) - c2.ox, Math.round(cy2) - c2.oy);
         if (Math.sin(t / 700 + idx * 1.1) > 0.35)
-          g2.drawImage(c2, Math.round(cx) - c2.ox, Math.round(cy) - c2.oy);
+          g2.drawImage(c2, Math.round(cx) - c2.ox, Math.round(cy2) - c2.oy);
       }
     }
     /* ╔══════════════════════════════════════════════════════════════════════════
@@ -9646,7 +9700,8 @@ export function buildSprites() {
         if (!sp) continue;
         const b = 0.5 + 0.5 * Math.sin(t / 1150 + i * 1.7);
         const sx = cx + Math.round((sp[0] - SHIP_W() / 2) * u);
-        const sy = cy - Math.round((SHIP_GROUND + 1 - sp[1]) * u);
+        // L'étincelle tangue AVEC sa pièce, sinon elle se détache d'elle à l'œil.
+        const sy = cy + rockAt(SHIP_ROCK_ALONG[C.STAR_SHIP_ORDER[i]]) - Math.round((SHIP_GROUND + 1 - sp[1]) * u);
         /* Six paliers, le dernier presque rien — la recette du 448. ⚠️ ET SERRÉS :
            le premier jet montait à 14 px de rayon et faisait, sur la planche, une
            buée blanche large comme trois cases. Une étincelle est petite ; ce qui
@@ -9664,7 +9719,8 @@ export function buildSprites() {
        doit se voir d'un coup. */
     if (built === C.STAR_SHIP_ORDER.length) {
       const p = 0.5 + 0.5 * Math.sin(t / 620);
-      const sx = cx + Math.round((78 - SHIP_W() / 2) * u), sy = cy - Math.round((SHIP_GROUND + 1 - 49) * u);
+      const sx = cx + Math.round((78 - SHIP_W() / 2) * u);
+      const sy = cy + rockAt(SHIP_ROCK_ALONG.sail) - Math.round((SHIP_GROUND + 1 - 49) * u);
       for (let s = 4; s >= 0; s--)
         craterDisc(g2, sx, sy, (5 + s * 3.4) * u,
                    `rgba(255,255,255,${(0.11 - s * 0.021 + 0.03 * p).toFixed(3)})`, 1);
@@ -10508,7 +10564,7 @@ export function buildSprites() {
      des bancs (§4 de CLAUDE.md) : contrairement au reste du navire (`shipBake`),
      ce nom se peint EN DIRECT, à chaque appel — la même discipline que les
      enseignes de Valley Town, qui restent vivantes pour être bilingues. */
-  function drawStarShipName(g2, cx, cy, T2, name) {
+  function drawStarShipName(g2, cx, cy, T2, name, tMs) {
     if (!name) return;
     const u = T2 / 16;
     const fs = Math.max(9, Math.round(9 * u));
@@ -10517,7 +10573,10 @@ export function buildSprites() {
     g2.textAlign = "center"; g2.textBaseline = "middle";
     const w = g2.measureText(name).width;
     const px = 5 * u, py = 3 * u;
-    const by = cy - Math.round(24 * u);           // à hauteur de plat-bord, sous le mât
+    // Le même pilon que la coque (`SHIP_ROCK_ALONG.hull = 0`) — voir `shipHullBob` :
+    // le nom est peint SUR le bordé, il ne doit jamais s'en détacher.
+    const cy2 = cy + shipHullBob(cx, tMs, u);
+    const by = cy2 - Math.round(24 * u);           // à hauteur de plat-bord, sous le mât
     g2.fillStyle = "rgba(18,14,10,0.72)";
     g2.fillRect(Math.round(cx - w / 2 - px), Math.round(by - fs / 2 - py), Math.round(w + px * 2), Math.round(fs + py * 2));
     g2.strokeStyle = "rgba(216,180,90,0.85)"; g2.lineWidth = Math.max(1, u);

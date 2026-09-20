@@ -20123,7 +20123,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                un fantôme ni sur l'épave : `!sgone && !ghost-only && !wreck-only`
                se lit tout seul via `parts` — un bateau au moins commencé). */
             if (sShipName && sprites.drawStarShipName && !sgone && sparts.some(Boolean))
-              sprites.drawStarShipName(ctx, (tw.shipX + 0.5) * T, ssy, T, sShipName);
+              sprites.drawStarShipName(ctx, (tw.shipX + 0.5) * T, ssy, T, sShipName, now);
             ctx.restore();
           });
           /* ⚠️⚠️ AUTORITÉ 2026-09-12 (repasse) — LA LUEUR DE RÉPARATION, JOUÉE UNE
@@ -23976,7 +23976,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                s'installent ensemble, aucun second minuteur à tenir d'accord. */
             if (spr0.drawStarShipName) {
               const nm = Q.starShipName(sharedRef.current.star);
-              if (nm) spr0.drawStarShipName(ctx, cx2, sy3, T2, nm);
+              if (nm) spr0.drawStarShipName(ctx, cx2, sy3, T2, nm, now);
             }
           } catch (err) { /* jamais au prix de la scène : voir la note de `line()` */ }
           ctx.restore();

@@ -1,5 +1,99 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-20
 
+## Hors-zip 2026-09-20 — LE NAVIRE TANGUE UN PEU SUR L'EAU
+
+**Demande de Guillaume** : *« le bateau doit tanguer un peu sur le lac/eau. »*
+
+**Le piège, trouvé avant d'écrire une ligne** : `tools/lib-canvas.mjs`, le faux canevas qui permet
+aux bancs de regarder un dessin sans navigateur, n'honore NI `ctx.rotate` NI `ctx.transform` NI
+même `ctx.translate` — vérifié directement dans le fichier (les quatre méthodes sont des corps
+vides), malgré un commentaire local qui affirme le contraire pour la translation. Un tangage écrit
+avec une rotation de canevas aurait donc été vrai dans le jeu et invisible sur `tools/out/navire.png`
+et `tools/out/navire-ruban.png`, les planches que `render-navire.mjs` produit pour qu'on puisse le
+regarder sans lancer le jeu — le stub menteur du §10 de CLAUDE.md, pris par l'autre bout : pas un
+outil qui ment sur un dessin faux, un dessin vrai qu'un outil rendrait faussement muet.
+
+**La parade : deux décalages en pixels, jamais une rotation** — la même discipline que le
+cisaillement de l'herbe haute et des buissons (voir les sections plus bas dans ce fichier), qui
+eux n'ont jamais eu ce problème parce qu'ils vivent hors de `fermeArt.js`. `drawStarShip`
+(fermeArt.js) calcule désormais :
+- **`rockBob`** : un pilon (sinus) partagé par toute la coque — la même famille de période que la
+  houle de l'eau (`TOWN_WATER_SWELL_PERIOD_NEAR_MS`/`TOWN_WATER_SWELL_WAVELEN_CASES`), réutilisée
+  telle quelle plutôt qu'une troisième cadence inventée (§8 de CLAUDE.md) : le navire est au bord
+  de l'eau (`STAR_SHIP_WATER_MAX`), il a du sens qu'il batte au même rythme qu'elle.
+- **`rockPitch`** : un second décalage, en QUADRATURE de phase (cosinus contre le sinus du pilon —
+  jamais la même valeur redite), réparti par pièce selon sa position proue/poupe
+  (`SHIP_ROCK_ALONG`, dérivée des coordonnées réelles du dessin — safran à l'étambot, mât/voile
+  amidships, cloche bien avant du centre, jamais une seconde estimation à l'œil qui aurait pu
+  diverger de la coque qu'elle est censée suivre). C'est ce qui distingue un vrai TANGAGE (proue et
+  poupe qui s'écartent) d'un simple pilonnement (tout qui monte et descend ensemble).
+- **La cale (le ber de pierre) et l'épave ne tanguent PAS** : un ber fixé au quai ne flotte pas,
+  seul ce qui est monté sur la coque (bordé, safran, mât, voile, cloche) reçoit le décalage — et
+  les étincelles de chaque pièce, ainsi que le nom peint sur la coque (`drawStarShipName`), suivent
+  leur pièce plutôt que de s'en détacher visuellement.
+- **La phase est calculée UNE fois** (`shipRockPhase`) et l'amplitude du pilon partagée
+  (`shipHullBob`) entre `drawStarShip` et `drawStarShipName` — deux formules recopiées auraient
+  divergé au premier réglage de période (§8), et le nom aurait glissé hors de sa plaque à chaque
+  houle.
+
+**Vérifié** : `verify-syntax` propre, `next build` **✓ Compiled successfully**,
+`render-navire.mjs` **tout est vert** (aucune régression sur les invariants de fantôme, de
+recouvrement ou de débord de bord — les nouveaux décalages restent assez petits pour ne jamais
+pousser une pièce hors du canevas). **Vérifié EN MOUVEMENT, pas seulement au dessin statique** :
+un script mesure la boîte englobante du navire complet à huit instants sur un cycle de houle
+complet — le sommet du mât se déplace bien de 2 px d'un instant à l'autre, le résultat n'est donc
+pas qu'une formule qui s'annule silencieusement. Aucune manipulation Supabase nécessaire.
+⚠️ **CE QUI N'EST PAS FAIT** : pas encore rejoué EN JEU par Guillaume, écran réel, navire construit
+— la scène de rendez-vous chez le maire (préalable du chantier) n'a pas été traversée pendant cette
+séance de vérification ; le mouvement est prouvé correct par le calcul et par la planche du banc,
+pas encore jugé *agréable* à l'œil, en jouant (§13 de CLAUDE.md).
+
+## Hors-zip 2026-09-20 — LES BUISSONS DE VILLE, EN CLUSTERS, CONCENTRÉS DANS LES ESPACES VERTS
+
+**Demande de Guillaume** : *« pour les buissons, les agencer de manière esthétique dans les
+espaces verts, parcs, et en clusters si possible. »*
+
+**Ce qui existait** : une seule passe (`fermeEngine.js`, dernière passe de décor de
+`generateTownWorld`, voir son historique 2026-09-02/09-16 juste en dessous) tirait UN buisson par
+case herbeuse éligible, indépendamment, cyclé sur neuf entrées de `SCATTER_KINDS` au fil du
+balayage — `TOWN_SCATTER_DENSITY = 0,018` partout en ville, herbe sauvage et pelouse entretenue
+traitées à l'identique. Résultat mesuré : deux buissons voisins n'avaient qu'une chance sur neuf
+d'être de la même espèce, et rien ne distinguait un jardin dessiné d'un pré. Un SEMIS, jamais un
+AMÉNAGEMENT — exactement ce que Guillaume vient de nommer.
+
+**Ce qui change, sans nouveau zonage** : « espace vert » se lit sur `G_TOWN_LAWN`, le champ que le
+générateur peint déjà sur tout ce qu'il traite comme un jardin dessiné — le parc entier
+(`TOWN_PARK`), les parterres de la place, le verger, les abords du tribunal — quand `G_GRASS` reste
+l'herbe sauvage ordinaire. Inventer un second zonage pour redire ce que ce champ dit déjà aurait
+été « deux cartes sans repère commun » (§4 de CLAUDE.md). La passe devient :
+1. **Une case éligible tire une ANCRE de cluster**, avec une chance nettement plus haute sur
+   `G_TOWN_LAWN` (5 %) que sur `G_GRASS` (0,25 %, ×20 plus rare) — les clusters se voient d'abord
+   là où la ville a déjà décidé qu'il y avait un jardin, et restent rares, jamais absents, ailleurs.
+2. **Une ancre acceptée plante 3 à 6 buissons d'UNE SEULE espèce**, l'ancre elle-même en premier
+   puis le reste dispersé dans un rayon de 2 cases — un cluster monospécifique se lit comme
+   « quelqu'un a planté ça », la même idée que les parterres du parc (`parterre`, dans ce fichier),
+   en semis plutôt qu'en massif dessiné.
+3. **`addGarden` fait tout le travail de sécurité, inchangé** : herbe/pelouse uniquement, jamais
+   solide/haie/voisin déjà posé — un buisson du cluster qui retombe sur une case prise est
+   silencieusement refusé, comme avant.
+
+Tout le reste de la passe d'origine survit tel quel : dernière passe de `rnd()` (rien après elle
+n'en dépend), rails/façades civiles/relief plat exclus, `reedTuft` hors du semis (un roseau n'a de
+sens qu'au bord de l'eau).
+
+**Vérifié** : `verify-collision` **TOUT PASSE** (554 cases de végétation basse, dont 449 sur les
+six espèces de cette passe — topiary×81 lavender×26 goldBush×82 clump×89 shrub×127 grassTuft×44,
+même ordre de grandeur qu'avant, 487), `verify-compo` **tous les contrôles passent**,
+`verify-syntax` propre. **Vérifié EN IMAGE, pas seulement au chiffre** — `generateTownWorld` a été
+rejoué directement en Node (même mécanisme que les bancs de rendu, sans navigateur) pour cartographier
+la position et l'espèce de chaque buisson sur toute la ville, avec les cases `G_TOWN_LAWN` en
+surbrillance : les clusters monospécifiques se voient nettement, et ils se massent dans le parc et
+les autres rectangles de pelouse entretenue — un gros plan sur `TOWN_PARK` montre quatre à cinq
+clusters distincts, un par quadrant, chacun d'une espèce. Aucune manipulation Supabase nécessaire.
+⚠️ **CE QUI N'EST PAS FAIT** : pas encore rejoué EN JEU par Guillaume (§13 de CLAUDE.md) — la
+cartographie prouve que l'algorithme fait ce qui a été demandé, pas que le résultat est *agréable*
+à hauteur de personnage.
+
 ## Hors-zip 2026-09-20 (v3) — L'HERBE HAUTE SE CISAILLE, ELLE NE SWAPE ET NE FOND PLUS
 
 **Guillaume, sur le fondu d'opacité de la version précédente (le vent en vague spatiale, encore

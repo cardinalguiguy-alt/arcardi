@@ -4146,6 +4146,28 @@ export const STAR_SHIP_BLOCK_H = 1;
    dans un pré. La grandeur juste est la DISTANCE, et elle est ici pour que le
    générateur et le banc lisent le même nombre. */
 export const STAR_SHIP_WATER_MAX = 3;
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-20 — LE TANGAGE. « le bateau doit tanguer un peu sur le lac/eau. »
+   ╚═════════════════════════════════════════════════════════════════════════════
+   ⚠️ DEUX DÉCALAGES EN PIXELS, JAMAIS UNE ROTATION — voir le commentaire de
+   `drawStarShip` (fermeArt.js) : `tools/lib-canvas.mjs`, le faux canevas des
+   bancs, ignore `rotate`/`transform`/`translate` (aucune des quatre n'est
+   honorée, malgré ce que dit son propre commentaire) — un tangage qui en
+   dépendrait serait invisible sur la planche que `render-navire.mjs` produit
+   pour le regarder, donc vrai dans le jeu et FAUX sur l'outil censé nous en
+   protéger (le stub menteur du §10 de CLAUDE.md, pris par l'autre bout).
+   ⚠️ MÊME FAMILLE DE PÉRIODE QUE LA HOULE DE L'EAU (`TOWN_WATER_SWELL_*`,
+   plus haut) — pas une troisième cadence inventée : le navire est au bord de
+   l'eau (`STAR_SHIP_WATER_MAX`), il a du sens qu'il batte au même rythme que
+   ce qui l'entoure plutôt qu'à un tempo qui lui serait propre (§8).
+   `BOB` est le décalage vertical partagé par toute la coque (le pilon) ;
+   `PITCH` est un second décalage, en quadrature de phase (donc distinct du
+   premier, jamais redondant), réparti par pièce selon sa position proue/poupe
+   — voir `SHIP_ROCK_ALONG` dans fermeArt.js. La cale (`shipPartCradle`) et
+   l'épave n'en reçoivent AUCUN : un ber de pierre est fixé au quai, seul ce
+   qui flotte tangue. */
+export const STAR_SHIP_ROCK_BOB_PX = 1.3;   // px de référence (tuile 16), le pilon partagé
+export const STAR_SHIP_ROCK_PITCH_PX = 1.7; // px de référence, l'écart proue/poupe au maximum
 /* ⚠️⚠️⚠️ ZIP 453 — `STAR_SHIP_NEAR_R` EST SUPPRIMÉE, ET LE 452 AVAIT EU TORT DE
    LA GARDER. Elle valait 5,0 et **aucun code de jeu ne la lisait** : seul
    `render-navire.mjs` la citait, dans un contrôle qui ne pouvait donc mesurer

@@ -7088,11 +7088,44 @@ export function generateTownWorld() {
         sur trois cases dans les quatre directions, pas seulement sous le
         pied du décor. */
   {
-    const TOWN_SCATTER_DENSITY = 0.018; // 2026-09-16 (demande Guillaume, "un peu plus") : ×1,8 — à confirmer à l'œil, en jeu
+    /* ⚠️⚠️ 2026-09-20 — EN CLUSTERS, ET CONCENTRÉS DANS LES ESPACES VERTS.
+       Demande de Guillaume : « agencer [les buissons] de manière esthétique
+       dans les espaces verts, parcs, et en clusters si possible ». Le semis
+       d'origine (ci-dessus dans l'historique) tirait UN buisson par case
+       éligible, indépendamment, cyclé sur neuf espèces au fil du balayage —
+       exactement « un semis », jamais « un aménagement » : deux buissons
+       voisins n'avaient qu'une chance sur neuf d'être de la même espèce, et
+       rien ne distinguait une pelouse entretenue d'un pré sauvage.
+       ⚠️ « ESPACE VERT » SE LIT SUR `G_TOWN_LAWN`, PAS SUR UN NOUVEAU
+       ZONAGE : c'est déjà le signal que le générateur peint sur tout ce qu'il
+       considère comme un jardin dessiné — le parc entier, les parterres de la
+       place, le verger, les abords du tribunal (voir les passes qui peignent
+       `G_TOWN_LAWN` plus haut dans ce fichier) — quand `G_GRASS` reste
+       l'herbe sauvage ordinaire. Inventer un second zonage aurait été deux
+       cartes sans repère commun (§4 de CLAUDE.md) pour redire ce que ce champ
+       dit déjà. `LAWN_CLUSTER_CHANCE` est donc net au-dessus de
+       `WILD_CLUSTER_CHANCE` : les clusters se voient d'abord là où la ville a
+       déjà décidé qu'il y avait un jardin, et restent rares — jamais absents
+       — sur le reste de l'herbe, pour ne pas donner une ville à deux vitesses.
+       ⚠️ UN CLUSTER = UNE SEULE ESPÈCE, semée autour d'une case ancre plutôt
+       qu'une case sur deux d'une espèce différente : c'est ce qui fait lire
+       « quelqu'un a planté ça » plutôt que « le hasard a semé ça » — la même
+       idée que les parterres du parc (`parterre`, plus haut), en semis plutôt
+       qu'en massif dessiné.
+       ⚠️ TOUT LE RESTE DE LA NOTE CI-DESSUS RESTE VRAI TEL QUEL : dernière
+       passe (aucun tirage suivant n'en dépend), `addGarden` fait toute la
+       sécurité (herbe/pelouse, jamais solide/haie/voisin), `soft` ne fait que
+       ralentir (§ TOWN_BUSH_SLOW), rails/façades civiles/relief plat exclus,
+       `reedTuft` reste hors de ce semis (un roseau n'a de sens qu'au bord de
+       l'eau, déjà semé par la rive sauvage). */
     // `topiary` est un arbuste TAILLÉ (la place et les monuments civils le
     // portent déjà) : plus rare ici, sinon la ville entière prend un air de
     // jardin à la française au lieu d'une pelouse qui verdit.
-    const SCATTER_KINDS = ["clump", "shrub", "grassTuft", "goldBush", "lavender", "clump", "shrub", "goldBush", "topiary"];
+    const CLUSTER_KINDS = ["clump", "shrub", "grassTuft", "goldBush", "lavender", "clump", "shrub", "goldBush", "topiary"];
+    const LAWN_CLUSTER_CHANCE = 0.05;   // par case de pelouse ENTRETENUE (G_TOWN_LAWN) éligible
+    const WILD_CLUSTER_CHANCE = 0.0025; // par case d'herbe SAUVAGE (G_GRASS) éligible — ×20 plus rare
+    const CLUSTER_MIN = 3, CLUSTER_MAX = 6; // buissons par cluster, ancre comprise
+    const CLUSTER_RADIUS = 2;               // cases, autour de l'ancre
     const CIVIC_RECTS = [C.TOWN_CHURCH, C.TOWN_HALL, C.TOWN_COURT, C.TOWN_BOUTIQUE, C.TOWN_SALON].filter(Boolean);
     const inCivicRect = (x, y) => CIVIC_RECTS.some(r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
     const flatAround = (x, y) => {
@@ -7105,15 +7138,28 @@ export function generateTownWorld() {
       }
       return true;
     };
-    let sk = 0;
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
       const i = id(x, y);
-      if (ground[i] !== C.G_GRASS && ground[i] !== C.G_TOWN_LAWN) continue;
+      const isLawn = ground[i] === C.G_TOWN_LAWN;
+      if (!isLawn && ground[i] !== C.G_GRASS) continue;
       if (solid[i] || hedge[i] || objects[i] !== C.O_NONE) continue;
       if (x <= C.TOWN_RAIL_X + 1 || inCivicRect(x, y)) continue;
-      if (rnd() > TOWN_SCATTER_DENSITY) continue;
+      if (rnd() > (isLawn ? LAWN_CLUSTER_CHANCE : WILD_CLUSTER_CHANCE)) continue;
       if (!flatAround(x, y)) continue;
-      addGarden(x, y, SCATTER_KINDS[sk++ % SCATTER_KINDS.length]);
+      // Une ancre acceptée plante un cluster d'une seule espèce — l'ancre
+      // elle-même d'abord (garantit un cœur visible même si le reste du
+      // cluster se fait tout refuser par `addGarden`), puis le reste dispersé
+      // autour, chaque case revérifiée par `addGarden` (elle peut retomber
+      // sur du solide, une haie ou un voisin déjà planté : refusée en
+      // silence, comme le semis d'origine).
+      const kind = CLUSTER_KINDS[(rnd() * CLUSTER_KINDS.length) | 0];
+      const n = CLUSTER_MIN + ((rnd() * (CLUSTER_MAX - CLUSTER_MIN + 1)) | 0);
+      addGarden(x, y, kind);
+      for (let k = 1; k < n; k++) {
+        const dx = ((rnd() * (CLUSTER_RADIUS * 2 + 1)) | 0) - CLUSTER_RADIUS;
+        const dy = ((rnd() * (CLUSTER_RADIUS * 2 + 1)) | 0) - CLUSTER_RADIUS;
+        addGarden(x + dx, y + dy, kind);
+      }
     }
   }
 
