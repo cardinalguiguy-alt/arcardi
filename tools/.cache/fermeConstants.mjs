@@ -4755,6 +4755,31 @@ export const MAX_RESIDENTS = 20;
 /* ═══════════════════════════════════════════════════════════════════════════
    LES TROIS MONUMENTS (425).
    ───────────────────────────────────────────────────────────────────────────
+   ⚠️ L'ANCIENNE MAIRIE DEVENUE L'ÉGLISE (zip 235, garder-et-renommer) A ENFIN
+   SON PROPRE DESSIN (2026-09-20) — pipeline C (§9 CLAUDE.md), deuxième usage :
+   `refs/eglise-nouvelle.jpg`, importé par `tools/build-eglise-sprite.mjs` en
+   `public/town/eglise-day.png` / `eglise-glow.png`, dessiné par
+   `drawChurchBitmap` (FermeGame.js), sur le modèle exact de l'hôtel de ville.
+   ⚠️ CETTE FOIS, GEMINI N'A PAS REÇU L'ANCIEN SPRITE EN RÉFÉRENCE — demande
+   explicite de Guillaume : « l'hôtel de ville est réussi car il est très
+   différent de l'original ». `townhallSprite()` (fermeArt.js) et sa clé
+   `church` dans `buildSprites()` restent en place, MORTES, exactement comme
+   `townHall2Sprite()`/`townHall2` depuis la mairie : c'est le même précédent,
+   appliqué deux fois de la même façon plutôt que réglé au cas par cas.
+   ⚠️ LARGEUR PORTÉE DE 8 À 12 CASES (192 px, croissance symétrique autour de
+   l'ancien centre x=70, donc x passe de 66 à 64) : le nouveau dessin est un
+   portail à trois flèches, sensiblement plus large que l'ancien pignon à un
+   seul clocher, et 12 cases aligne enfin l'église sur la MÊME largeur que
+   `TOWN_HALL` et `TOWN_COURT` — les trois monuments civiques partagent
+   maintenant une échelle de façade commune, ce qui n'était vrai d'aucune
+   paire avant ce zip. Marge vérifiée : `TOWN_CEMETERY` (x finit à 60) laisse
+   4 cases avant le nouveau bord ouest (64) ; `TOWN_PLAZA` (x commence à 78)
+   en laisse 2 après le nouveau bord est (76) — `verify-collision` et
+   `verify-vallee` tournés après ce changement, aucune régression.
+   ⚠️ `h` NE CHANGE PAS : c'est l'emprise SOLIDE (collision), pas la hauteur du
+   sprite — le dessin, comme l'ancien, monte librement au-dessus d'elle,
+   ancré par son bord bas (`drawChurchBitmap`, comme `drawTownHallBitmap`).
+
    ⚠️ L'ANCIENNE MAIRIE DEVIENT L'ÉGLISE, ET ON NE TOUCHE PAS À SON DESSIN.
    Demande de Guillaume : « garder l'actuel townhall et le renommer église ».
    Le sprite `townhallSprite()` de fermeArt.js reste mot pour mot celui du
@@ -4770,7 +4795,7 @@ export const MAX_RESIDENTS = 20;
    l'artère nord-sud, qu'elle bouchait ; on ne s'en apercevait pas parce que
    cette artère s'arrêtait avant. Sur une carte trois fois plus longue, une rue
    interrompue par un bâtiment se voit tout de suite. */
-export const TOWN_CHURCH = { x: 66, y: 46, w: 8, h: 5 };   // ex-TOWN_HALL du zip 235, sprite 128×128
+export const TOWN_CHURCH = { x: 64, y: 46, w: 12, h: 5 };   // sprite bitmap 192×183 (2026-09-20) ; ex-8 cases/128×128 procédural (zip 235)
 
 /* LE NOUVEL HÔTEL DE VILLE. Demande : « un nouveau bâtiment townhall différent
    des autres quelque part au centre ». Il borde la place à l'est, face à la
@@ -6048,6 +6073,7 @@ export const DEV_TELEPORTS = [
   { key: "townPlaza",     zone: "town" },  // la place centrale, devant la fontaine
   { key: "townCourt",     zone: "town" },  // le parvis du tribunal, en Haute-Ville
   { key: "townHall",      zone: "town" },  // 2026-09-02 : le perron de l'hôtel de ville (test PNG) — pour juger le sprite/les marches/l'horloge sans traverser la ville à chaque rechargement
+  { key: "townChurch",    zone: "town" },  // 2026-09-20 : le parvis de l'église (test PNG) — jusqu'ici seule sa nef avait un arrêt ; sans façade directe, un rechargement pour juger la nouvelle façade demandait de deviner sa dernière position en ville (§10 CLAUDE.md, la leçon payée sur townHall)
   { key: "townBelvedere", zone: "town" },  // le second palier
   { key: "townMarket",    zone: "town" },  // zip 426 : le champ de foire, enfin occupé
   { key: "townLake",      zone: "town" },  // zip 426 : la promenade du lac, au sud

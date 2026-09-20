@@ -15092,6 +15092,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
           else if (dk === "townCourt") { m.x = C.TOWN_COURT.x + C.TOWN_COURT.w / 2; m.y = C.TOWN_COURT.y + C.TOWN_COURT.h + 2; }
           else if (dk === "townHall") { m.x = C.TOWN_HALL.x + C.TOWN_HALL.w / 2; m.y = C.TOWN_HALL.y + C.TOWN_HALL.h + 2; }
+          else if (dk === "townChurch") { m.x = C.TOWN_CHURCH.x + C.TOWN_CHURCH.w / 2; m.y = C.TOWN_CHURCH.y + C.TOWN_CHURCH.h + 2; }
           else if (dk === "townBelvedere") { m.x = C.TOWN_BELVEDERE.x + C.TOWN_BELVEDERE.w / 2; m.y = C.TOWN_BELVEDERE.y + C.TOWN_BELVEDERE.h - 3; }
           /* Zip 427 : la Haute-Ville commerçante. ⚠️ ELLE MÉRITE SON ARRÊT parce
              qu'elle est le seul endroit de la ville qu'on n'atteint qu'en
@@ -20399,9 +20400,91 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.restore();
         });
       };
-      // L'ÉGLISE : le bâtiment du zip 235, dessin inchangé, nom corrigé.
-      // Sa marge basse (4 px sur 128) est celle relevée au zip 279.
-      drawCivic(C.TOWN_CHURCH, sprites.church, 4, 1.1);
+      /* L'ÉGLISE (2026-09-20) : DEUXIÈME bâtiment en PNG importé, sur le
+         modèle exact de l'hôtel de ville ci-dessous (même pipeline C, même
+         paire jour/lueur, même GROW, même embase) — voir la note de
+         `TOWN_CHURCH` dans fermeConstants.js pour ce qui a changé côté
+         emprise. ⚠️ Pas d'horloge à dessiner ici, contrairement à la mairie :
+         rien n'est gravé à repeindre en direct sur ce bâtiment. */
+      const drawChurchBitmap = (b) => {
+        const day = loadBitmap("/town/eglise-day.png");
+        if (!day) return; // pas encore chargé : rien à dessiner cette frame
+        const by = (b.y + b.h) * T;
+        const e = elAt(b.x, b.y + b.h - 1);
+        pushE(by, e, () => {
+          const cx2 = b.x * T + b.w * T / 2;
+          const GROW = 1.1; // même grossissement que les deux autres monuments
+          ctx.save();
+          ctx.translate(cx2, by); ctx.scale(GROW, GROW); ctx.translate(-cx2, -by);
+          const dx = b.x * T + (b.w * T - day.width) / 2, dy = by - day.height;
+          const shx = cx2 + day.width * 0.16, shy = by - 3;
+          ctx.save();
+          for (let k = 0; k < 3; k++) {
+            ctx.fillStyle = `rgba(20,16,12,${0.16 - k * 0.045})`;
+            ctx.beginPath();
+            ctx.ellipse(shx, shy, day.width * (0.42 - k * 0.06), day.height * (0.10 - k * 0.02), 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+          ctx.drawImage(day, dx, dy);
+          const glow = loadBitmap("/town/eglise-glow.png");
+          const na = nightAlpha();
+          if (glow && na > 0.01) {
+            ctx.globalAlpha = na;
+            ctx.drawImage(glow, dx, dy);
+            ctx.globalAlpha = 1;
+          }
+          drawBuildingFooting(ctx, cx2, by, day.width / 2);
+          /* ⚠️ LES PIGEONS QUI TOURNENT AUTOUR DES FLÈCHES (demande de
+             Guillaume, 2026-09-20). Ce n'est PAS le vol du 433 (E.flockStep,
+             newBird) : ces oiseaux-là fuient les joueurs et se posent, avec un
+             état partagé par site (`townBirdsRef`) qui n'a aucun sens à onze
+             cases d'altitude au-dessus d'un toit. Un vol d'ambiance, purement
+             décoratif, n'a besoin d'aucun état — chaque image se calcule à
+             partir de `now`, exactement comme le pain § les colombes du parc
+             ne sont PAS partagées entre joueurs (décision de Guillaume, 433) :
+             deux clients verront deux vols différents, et c'est très bien.
+             Sprites RÉUTILISÉS (S.birds.pigeon/dove, poses de vol du 433) :
+             un vol de plus ne mérite pas un nouveau dessin.
+             ⚠️ LE CENTRE N'EST PAS AUX POINTES DES FLÈCHES (y local ≈ 0-5 sur
+             183) MAIS UN PEU PLUS BAS (y local ≈ 110, la rosace/le sommet des
+             clochers) — mesuré EN JEU, pas sur le PNG seul : à la distance où
+             la caméra se pose devant le parvis, le zoom du monument (jusqu'à
+             ×2,2 mesuré) laisse le sommet des trois flèches AU-DESSUS du haut
+             du canevas. Un banc qui n'aurait comparé que des pixels sur le
+             PNG ne l'aurait jamais vu — seul un test en jeu, écran réel, l'a
+             montré (deux carrés de repère déplacés jusqu'à trouver la limite
+             visible). Le vol tourne donc autour du clocher, sous les flèches
+             elles-mêmes, ce qui reste conforme à la demande. */
+          const scaleK = day.width / 192;
+          const spireCx = dx + 96 * scaleK, spireCy = dy + 125 * scaleK;
+          const N_PIGEONS = 5;
+          for (let i = 0; i < N_PIGEONS; i++) {
+            const seed = i * 1.6180339887; // nombre d'or : phases sans motif répétitif à l'œil
+            const rx = (40 + (i % 3) * 8) * scaleK, ry = (9 + (i % 2) * 3) * scaleK;
+            const spd = 0.34 + (i % 3) * 0.05;               // rad/s : légère variation, pas un métronome
+            const ang = seed + (now / 1000) * spd;
+            const bx = spireCx + Math.cos(ang) * rx;
+            const bob = Math.sin(now / 1000 * spd * 2 + seed) * 3 * scaleK;
+            const byy = spireCy + Math.sin(ang) * ry + bob;
+            const kind = (i * 37) % 100 < 14 ? "dove" : "pigeon"; // même part que C.BIRD_DOVE_SHARE
+            const set = sprites.birds && sprites.birds[kind];
+            if (!set) continue;
+            const wingHz = 2.1 + (i % 3) * 0.3;
+            const wk = Math.floor((now / 1000 * wingHz + seed) * 2) % 4;
+            const im = [set.down, set.mid, set.up, set.mid][wk] || set.glide;
+            const BIRD_SCALE = (1 / 1.5) * scaleK;
+            const dw = im.width * BIRD_SCALE, dh = im.height * BIRD_SCALE;
+            const faceLeft = Math.cos(ang) < 0; // survole vers l'ouest : tête à gauche
+            ctx.save();
+            if (faceLeft) { ctx.translate(bx + dw / 2, byy); ctx.scale(-1, 1); ctx.drawImage(im, -dw / 2, -dh / 2, dw, dh); }
+            else ctx.drawImage(im, bx - dw / 2, byy - dh / 2, dw, dh);
+            ctx.restore();
+          }
+          ctx.restore();
+        });
+      };
+      drawChurchBitmap(C.TOWN_CHURCH);
       /* L'HÔTEL DE VILLE (2026-09-02) : PREMIER bâtiment en PNG importé
          (pipeline C, §9 CLAUDE.md) plutôt qu'en canevas procédural —
          test demandé par Guillaume, à partir d'une référence Gemini

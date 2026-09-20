@@ -7,188 +7,85 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-20 — Le navire tangue un peu sur l'eau
+### 2026-09-20 — Audit visuel des bâtiments civiques, puis l'église reçoit un sprite Gemini « belle et impressionnante »
 
-Demande de Guillaume : « le bateau doit tanguer un peu sur le lac/eau. » Piège trouvé avant
-d'écrire une ligne : `tools/lib-canvas.mjs` (le faux canevas des bancs) n'honore NI `rotate` NI
-`transform` NI `translate` (vérifié dans le fichier — les quatre sont des corps vides, malgré un
-commentaire local qui dit le contraire pour la translation) — un tangage en `ctx.rotate` aurait
-donc été invisible sur les planches que `render-navire.mjs` produit pour le regarder sans
-navigateur. Implémenté en deux décalages PIXELS (jamais une rotation) dans `drawStarShip`
-(fermeArt.js) : un pilon (sinus) partagé par toute la coque, plus un tangage différentiel (cosinus
-en quadrature de phase) réparti par pièce selon sa position proue/poupe réelle — safran à
-l'étambot, mât/voile amidships, cloche vers l'avant. Même famille de période que la houle de l'eau
-(`TOWN_WATER_SWELL_*`), réutilisée plutôt qu'inventée (§8). La cale (ber de pierre) et l'épave ne
-tanguent pas ; le nom peint sur la coque et les étincelles de chaque pièce suivent leur pièce.
-Récit complet et preuves : **`components/ferme/README.md`, section « Hors-zip 2026-09-20 — LE
-NAVIRE TANGUE UN PEU SUR L'EAU ».** `next build` vert, `render-navire.mjs` **tout est vert**
-(aucune régression), et un script dédié mesure la boîte englobante du navire à huit instants d'un
-cycle de houle — le sommet du mât se déplace bien de 2 px, la motion est réelle. Aucune
-manipulation Supabase. **Attend le regard de Guillaume** : le calcul et la planche du banc
-prouvent le mécanisme, pas encore rejoué EN JEU (la scène du rendez-vous chez le maire, préalable
-du chantier naval, n'a pas été traversée pendant cette vérification) — §13.
+Demande de Guillaume : aller voir en jeu le tribunal, l'hôtel de ville et l'église (et leurs
+alentours) pour juger honnêtement la cohérence visuelle. **Trouvé, avant tout code** : la mairie
+(bitmap Gemini, 2026-09-02) est nettement au-dessus du tribunal et de l'ancienne église
+(procéduraux, zip 235/425) en niveau de détail — l'écart visuel n'est pas entre bâtiments et décor,
+il est entre la mairie et tout le reste. ⚠️ **Bug fonctionnel trouvé EN PASSANT, PAS CORRIGÉ** : le
+métier des 31 résidents (`job` dans `TOWN_RESIDENTS`, fermeConstants.js) est écrit UNIQUEMENT en
+anglais et s'affiche brut dans au moins six phrases françaises (`residentStarted`, `residentTag`,
+`residentGreet`, `stayProposal`, le tableau des nouvelles…) — vu 3 fois sans le chercher
+(« bake fresh bread and viennoiseries », « sail the world… », « sew and dye clothes »). Aucune table
+`job` en français n'existe. **Reste à faire.**
 
-### 2026-09-20 — Les buissons de ville, en clusters, concentrés dans les espaces verts
+Guillaume a ensuite demandé le même traitement que la mairie pour l'église : **« l'hôtel de ville
+est réussi car il est très différent de l'original » → « je veux que Gemini produise une église
+belle et impressionnante ».** Un premier prompt fidèle à l'ancien sprite (clocher-à-gauche imposé)
+aurait reproduit l'erreur de la mairie d'avant Gemini (comparé en rendant `townHall2Sprite`, la
+maquette abandonnée : même famille de dessin que l'ancienne église, aplat et simple) — le second
+prompt, envoyé par Guillaume SANS l'ancien sprite en référence et sans contrainte de composition
+(seules limites : vue de face sur damier, teinte hors brique/gris pour rester distincte des deux
+autres monuments, lisible comme une église), a rendu une cathédrale à trois flèches très supérieure
+— reçue dans `refs/eglise-nouvelle.jpg`.
 
-Demande de Guillaume : « agencer [les buissons] de manière esthétique dans les espaces verts,
-parcs, et en clusters si possible. » Le semis de ville tirait un buisson par case éligible,
-indépendamment, cyclé sur neuf espèces — deux voisins n'avaient qu'une chance sur neuf d'être de la
-même espèce, et rien ne distinguait un jardin d'un pré. Remplacé par des clusters monospécifiques
-(3 à 6 buissons, une ancre + un rayon de 2 cases), ancrés très majoritairement sur `G_TOWN_LAWN` —
-le champ que le générateur peint déjà sur tout ce qu'il traite comme un jardin dessiné (parc,
-parterres de la place, verger), réutilisé tel quel plutôt qu'un second zonage (§4 de CLAUDE.md).
-`verify-collision` (554 cases, 449 sur les six espèces de cette passe) et `verify-compo` TOUT PASSE
-à cette étape.
+**Livré** : `tools/build-eglise-sprite.mjs` (pipeline C, deuxième usage — modèle exact de
+`build-townhall-sprite.mjs`, damier→alpha PROPRE à cette image après calibrage — voir ⚠️ ci-dessous
+—, vitraux allumés détectés par région et séparés en calque `glow`) produit
+`public/town/eglise-day.png`/`eglise-glow.png` (192×183). `drawChurchBitmap` (FermeGame.js) les
+dessine comme `drawTownHallBitmap` (ombre, embase, superposition `nightAlpha()`), et remplace
+l'appel `drawCivic(C.TOWN_CHURCH, sprites.church, …)` — `townhallSprite()`/`sprites.church` restent
+en place, MORTS, même précédent que `townHall2Sprite()` pour la mairie. `TOWN_CHURCH` passe de 8 à
+12 cases (croissance symétrique, x 66→64) pour aligner les trois monuments civiques sur la même
+largeur de façade ; marge vérifiée sans recoupement (`TOWN_CEMETERY`/`TOWN_PLAZA`), `verify-collision`
+et `verify-vallee` (223/223) tournés après coup, aucune régression. Un arrêt de téléport dev direct
+« Valley Town — l'église (parvis) » a été ajouté (`DEV_TELEPORTS`) : elle n'en avait aucun, seule la
+mairie avait ce confort. Guillaume a demandé en plus des **pigeons qui tournent autour des flèches
+et clochers** : vol d'ambiance PUREMENT DÉCORATIF (aucun état, aucun message réseau — comme les
+colombes du parc, non partagées entre joueurs, décision déjà actée au 433), 5 oiseaux réutilisant
+les sprites `S.birds.pigeon`/`dove` du 433 sur une orbite elliptique autour du clocher.
 
-### 2026-09-20 (suite du jour) — La ferme reprend les buissons de ville, la place gagne son collier, le buis gagne des couleurs
+⚠️⚠️ **DEUX PIÈGES PAYÉS EN LE CONSTRUISANT, UTILES AU PROCHAIN IMPORT PIPELINE C** :
+1. **Le damier n'a pas la même couleur d'une image Gemini à l'autre.** Le seuil de `hdv.jpg`
+   (luminosité > 150) ratait la moitié des cases de `eglise-nouvelle.jpg` (case sombre ≈ 151,143,135,
+   sous le seuil). La bonne mesure n'est ni la luminosité seule ni deux couleurs de référence
+   exactes, c'est la SATURATION (`max-min < 22`) : le damier est toujours neutre, la pierre du
+   bâtiment toujours chaude, quel que soit le ton exact du gris choisi par le rendu. Il a aussi fallu
+   ponter les faux négatifs isolés du bruit JPEG (repêchage sur 4 voisins sur 8) ET ne garder que la
+   PLUS GRANDE composante connexe de « contenu » pour le recadrage (un grain de bruit isolé dans le
+   damier, non connecté au bâtiment, gonflait sinon la boîte à l'image entière).
+2. **Le zoom de caméra sur un monument peut laisser sa pointe AU-DESSUS du canevas, et rien sur le
+   PNG seul ne le montre.** Debout sur le parvis, le zoom mesuré (jusqu'à ×2,2, après un
+   ralentissement de 3,3 à 2,2 sur ~2 s) laisse le sommet d'une flèche haute hors du cadre — vérifié
+   en injectant un repère de couleur à la position calculée et en LISANT le pixel réellement rendu,
+   jamais en regardant une capture prise trop tôt (le zoom bouge encore). Les pigeons sont donc
+   ancrés au niveau de la rosace/du sommet des clochers (y local ≈ 125 sur 183), pas à la pointe des
+   flèches (y ≈ 0-5) : plus bas que la demande au pixel près, mais visible en permanence, ce qui
+   sert mieux l'intention. **Détail complet dans la note de `TOWN_CHURCH`, fermeConstants.js.**
 
-Trois demandes de plus, dans la foulée : « les buissons [de la ferme] sont cheap, je veux les mêmes
-que sur valley town » · « sur la place centrale, les buissons doivent être disposés de manière
-régulière autour des arbres des carrés, effet taillé et travaillé, propre » · « varier les couleurs
-des fleurs des buis […] en ajouter deux, les jaunes resteront les plus répandues ». Trois
-changements, un seul système : (1) `drawFarmBush` (fermeArt.js) dessine désormais, pour l'état
-sauvage, les MÊMES sprites que la ville (quatre espèces tirées par hachage de case) au lieu de son
-propre dessin à une seule silhouette — l'ancien dessin (`farmBushWildSprite`, son atlas) est
-SUPPRIMÉ, pas laissé mort à côté ; le taillé (faux) garde son dôme procédural, un ouvrage sans
-équivalent en ville ; (2) les quatre buis taillés des parterres de coin de la place reçoivent chacun
-un collier RÉGULIER de quatre buissons (un par côté), posé explicitement plutôt qu'abandonné à la
-passe de clusters aléatoires ci-dessus qui pouvait très bien n'y rien poser ; (3) `townShrubSprite`
-passe de trois couleurs à six (jaune répété — reste le plus fréquent —, rose, blanc, corail, bleu
-pâle), même technique de pondération par répétition que `CLUSTER_KINDS` (§8, jamais un second
-système de poids). Récit complet, le code, et pourquoi l'ancien dessin sauvage n'a pas été gardé à
-côté : **`components/ferme/README.md`, section « Hors-zip 2026-09-20 (suite du jour) — LA FERME
-REJOINT LA VILLE ».** `next build` **✓**, `verify-collision`/`verify-compo`/`verify-vallee`
-(223/223)/`verify-buissons` (42/42, moteur de la ferme intact) **TOUT PASSE**, `verify-syntax`
-propre. `tools/render-buissons.mjs` a été RÉÉCRIT (l'ancien testait l'atlas sauvage qui n'existe
-plus — un banc qui n'aurait plus rien pu attraper, §10 à l'envers) : **17/17**, planches dans
-`tools/out/buissons-*.png`. **Vérifié EN JEU** (harnais `fake-supabase`/page jetable, supprimée
-avant la fin de la livraison) : les quatre espèces et les couleurs neuves (corail, bleu) se voient
-à l'écran, le collier de la place aussi — trois de ses quatre buissons nettement visibles autour du
-tronc, le quatrième (nord) probablement masqué par le feuillage du buis lui-même, à confirmer sans
-obstruction. ⚠️ **CE QUI SE PERD, ASSUMÉ** : le buisson sauvage de la ferme ne change plus de couleur
-avec les saisons (les sprites de ville sont fixes toute l'année) — fidèle au mot « les MÊMES », mais
-un vrai renoncement, à confirmer que ça convient une fois vu par Guillaume sur une saison entière.
-**Attend le regard de Guillaume** : pas encore rejoué à deux clients, les trois autres parterres de
-la place pas inspectés d'aussi près que le premier (§13).
-
-### 2026-09-20 (suite du jour) — Les herbes hautes du sous-bois : la zone s'étend, le cœur se densifie
-
-Après le cisaillement (section suivante) : « les hautes herbes sont réussies, étendre leur
-répartition un peu plus dans le sud-est » puis « peut-être + de densité […] dans les zones super
-denses. Dégradé. » **Mesuré avant de choisir un chiffre (§8), jamais au jugé** : un balayage Node de
-`townWoodDepth(x,y)` (champ continu, fermeEngine.js) montre que la profondeur positive continue bien
-au-delà du rectangle `TOWN_WOOD`, presque uniquement vers l'OUEST (pente Y cinq fois plus raide que
-la pente X) — élargir de 40 cases à l'ouest et 8 au nord capture la quasi-totalité de la frange
-encore positive (719 → 774 cases, plateau atteint). ⚠️ **SEUL LE BALAYAGE DE L'HERBE S'ÉLARGIT** :
-la futaie garde le rectangle `TOWN_WOOD` d'hier tel quel, ses pentes/origine/bruit balayés et
-vérifiés à zéro clairière enfermée restent intouchés — l'herbe est un décor MOU
-(`TOWN_SOFT_PROPS`), elle ne peut fermer aucun passage. Le plafond de densité
-(`TOWN_WOOD_GRASS_DENSITY`) monte de 0,92 à 0,97 ; la rampe du dégradé elle-même ne change pas,
-Guillaume y tenait explicitement.
-
-**Puis, même jour** : « n'hésite pas à étendre la zone d'herbes folles. » Élargir encore la fenêtre
-de balayage ne pouvait plus rien donner — mesuré : au-delà de +40 ouest/+8 nord, le compte de cases
-à profondeur positive reste PILE 774, jusqu'à +200/+80 testés ; ce n'est pas la fenêtre qui était
-petite, c'est le CHAMP qui s'arrête là. `TOWN_WOOD_GRASS_FRINGE` (= 10, fermeConstants.js) ajoute une
-profondeur VIRTUELLE avant le seuil, pour l'herbe SEULEMENT (`wood(x,y) + FRINGE` ; les arbres
-restent sur `wood(x,y)` nu, aucune ligne touchée dans la futaie) — un flou du bord, pas un second
-bois, et le plafond du cœur véritable retombe à l'identique de tout à l'heure. Mesuré : 774 → 1984
-cases atteignables (×2,6), `tallGrass` 110 → 340 dans une ferme témoin rejouée en Node. Récit et
-calcul : **`components/ferme/README.md`, section « Hors-zip 2026-09-20 (re-suite, même jour) — N'HÉSITE
-PAS À ÉTENDRE ».** `next build` **✓**, `verify-syntax` propre,
-`verify-collision`/`verify-compo`/`verify-vallee` (223/223) **TOUT PASSE** (arbres inchangés).
-**Attend le regard de Guillaume** : pas encore rejoué EN JEU au coin sud-est (loin de tout téléport
-du menu développeur) — calcul et bancs prouvent l'extension et la densité, la marge de 10 n'est pas
-encore jugée *agréable* à l'œil (§13).
-
-### 2026-09-20 — Jérôme Martial reste figé sur certaines fermes : cause trouvée et corrigée
-
-Guillaume, en jeu : « jerome martial qui est figé sur certaines fermes. impossible de le soigner. »
-Fausse piste écartée d'abord : `injuredUntil` (la bagarre Tristan/Jérôme) — rien dans la capture
-n'indique une blessure, et le mécanisme de soin sur ce champ est déjà correct et déjà vérifié
-ailleurs. **Cause réelle, dans `residentRoam` (FermeGame.js)** : un artisan posté (Jérôme compris)
-cherche son prochain point de rôdaille dans un rayon RESSERRÉ autour de son poste (1,4 case, 24
-tirages aléatoires) ; si le joueur a planté des arbres/rochers/décor tout autour de la sucrerie —
-un agencement de ferme parfaitement légitime, juste dense à cet endroit précis — cette recherche
-échoue à CHAQUE tentative, indéfiniment : `roamTarget` ne se pose jamais, l'artisan ne bouge plus
-JAMAIS sur cette ferme précise (« certaines fermes » = celles dont l'agencement sature ce petit
-rayon). Rien à soigner : ce n'est pas une blessure, c'est un pathing qui n'a plus une case où
-aboutir — d'où l'échec de la trousse de soins. **Corrigé** : la recherche s'élargit désormais au
-rayon complet de l'artisan, puis au double, avant d'abandonner — l'artisan reste posté près de son
-atelier dans l'immense majorité des cas (le petit rayon suffit déjà), et ne reste bloqué que si la
-zone est saturée sur plusieurs cases dans toutes les directions, un cas qui doit maintenant rester
-rarissime. `next build` **✓**, `verify-syntax` propre — le changement est un simple repli en
-cascade (`||`) qui n'altère aucun chemin déjà vert. ⚠️ **CE QUI N'EST PAS FAIT** : pas de séance en
-jeu dédiée à reproduire le blocage (planter des arbres autour d'une sucrerie, attendre, vérifier
-qu'il se libère) — le raisonnement est solide et le risque de régression est nul (aucun
-comportement existant n'est modifié, seul un cas d'échec gagne un repli), mais seul Guillaume peut
-confirmer que Jérôme bouge de nouveau sur SA ferme précise où le blocage a été vu.
-
-### 2026-09-20 — Les herbes hautes du sous-bois sud-est : bitmap Gemini, vague spatiale, cisaillement
-
-Trois jugements EN JEU de Guillaume le même jour, chacun corrigé dans la foulée : (1) la version
-procédurale en courbe « pas bon […] on dirait des cornes » → remplacée par un import Pipeline C
-(§9/§2 de CLAUDE.md, un prompt Gemini proposé avec deux images de référence, jamais un appel
-automatisé) — trois JPEG collés par Guillaume dans `refs/`, détourés par `tools/import-herbe.mjs`
-en huit PNG (`public/town/grass-tall-*.png`) ; (2) le vent ambiant en swap de poses sur hachage par
-case « on dirait qu'elles dansent […] plus coordonné, par zones comme des vagues » → phase dérivée
-de la POSITION (projetée sur un axe de vent commun : cases voisines ≈ même phase ⇒ bougent
-ensemble) ; (3) le fondu d'opacité entre poses peintes qui a remplacé le swap « je veux un
-étirement […] progressif et fluide, parfaitement calculé […] cohérent physiquement avec une brise »
-→ un FONDU superpose deux images (un fantôme), un étirement en déforme une seule : remplacé par un
-cisaillement (le mécanisme déjà éprouvé des buissons, `bushLeanFormula`, réutilisé tel quel pour le
-contact — zéro second ressort, §8 — plus une version ambiante en pixels de la même vague spatiale),
-amplitude MESURÉE sur les poses peintes plutôt que devinée (5,4 px de flexion complète, à quelques
-centièmes du `TOWN_BUSH_SWAY_PX` des buissons — deux dessins indépendants qui convergent). Guillaume
-proposait aussi « au moins 20 états » de la plante pour la fluidité — NON RETENU (décision prise et
-expliquée en caveman) : un cisaillement n'a besoin que d'UNE image pour être parfaitement fluide,
-puisqu'il en déforme une plutôt que de choisir entre plusieurs — vingt allers-retours Gemini
-auraient coûté vingt dérives de style pour ne pas régler le vrai défaut. Récit complet, le prompt,
-toutes les décisions et preuves écran par écran : **`components/ferme/README.md`, les trois
-sections « Hors-zip 2026-09-20 » du jour (v1, vent en vague, v3 le cisaillement).** `next build`
-vert, `verify-collision` (102 cases d'herbe, contre 75) et `verify-compo` TOUT PASSE, `verify-syntax`
-propre, aucune manipulation Supabase. ⚠️ **LEÇONS À RETENIR, AU-DELÀ DE CETTE HERBE** : (1) un
-redimensionnement par moyenne de zone NON prémultipliée par alpha repeint la couleur du fond dans
-le bord de chaque forme — invisible à ×4 (l'hôtel de ville), flagrant à ×15-30 (ces touffes),
-corrigé en sommant `rgb×alpha` ; (2) une phase d'animation tirée du HACHAGE DE LA CASE est le bon
-outil pour éviter qu'un décor nombreux batte comme un cœur (les arbres), et le MAUVAIS outil dès
-que le décor doit au contraire bouger EN MASSE (une prairie) — la dériver de la POSITION donne la
-coordination dans les deux sens ; (3) un FONDU entre deux images et un ÉTIREMENT d'une seule image
-ne sont pas deux réglages du même mécanisme, ce sont deux mécanismes différents — le premier ne
-devient jamais fluide en ajustant son amplitude ou sa vitesse, il faut changer de mécanisme (ici,
-un cisaillement ancré au pied, déplacement proportionnel à la hauteur — le modèle le plus simple
-d'une tige qui plie, déjà éprouvé sur les buissons). **Attend le regard de Guillaume** : le
-mécanisme est vérifié correct et conforme à la demande, reste à juger *agréable* (§13).
-
-### 2026-09-19 — Où's that : bogues B1–B8 (et M1–M3) corrigés, vérifiés en jeu à deux clients
-
-Mesures avant/après et preuves : **`components/ousthat/README.md`, section « Corrections du
-2026-09-19 »**, sous l'audit du matin qui les avait reproduits. `verify-ousthat` 162/162, `--falsify`
-3 échecs, 32 falsifications ciblées rouges, `next build` vert ; aucune manipulation Supabase.
-**Attend le regard de Guillaume**, écran par écran dans ce README : les barres d'actions collées en
-bas (réglages, révélation), « 10 s (duel) » à la place du champ à deux, Australie grisée en mode
-Pays, la pastille « Lieu réel » enfin visible avec un cadrage de révélation un peu plus reculé,
-l'urgence en ambre (8 px) dans l'en-tête de la carte ouverte. ✅ **Pastille d'alerte sur la bulle
-Pays, corrigée le 2026-09-19** (même jour, hors périmètre B1–B8/M1–M3) : elle recouvrait
-entièrement la bulle repliée de l'invité pendant les 10 s, donc impossible à ouvrir au doigt ; même
-règle et même 78 px que le toast « Réponse verrouillée » (M2, `app/globals.css`). Vérifié sans
-recouvrement vertical à 1280×800 et 375×812, le centre de la bulle répond de nouveau au tap ;
-`verify-ousthat` toujours 162/162, `next build` vert. ⚠️ Le navigateur
-intégré peut GELER la page entre deux actions (audit du matin) ou brider `requestAnimationFrame` à
-1–2 images/s quand son volet est masqué (l'après-midi) : le worker du §10 a suffi, et la capture
-d'écran refuse de s'exécuter tant que le volet n'est pas affiché.
+`next build`/`verify-syntax` propres, `verify-collision`/`verify-vallee`/`verify-compo` TOUT PASSE.
+Aucune manipulation Supabase. **Attend le regard de Guillaume** : il a suivi le rendu en direct
+pendant cette session (église + pigeons vus à l'écran), mais le jugement « agréable/impressionnant »
+et la hauteur du vol des pigeons restent siens — §13.
 
 ### Toujours ouvert depuis le 2026-09-16 (livré, jamais vu en jeu)
 
 Le chantier naval proposé au quai (fenêtre Oui/Non une fois par session), la repousse des buissons
 taillés après 3 jours réels (`bushTrim`, aucun raccourci dans le menu dev) et la verdure ×1,8 de
 Valley Town (`TOWN_SCATTER_DENSITY`) attendent le regard de Guillaume ; le pourquoi de chaque choix
-est en commentaire à côté du code. ⚠️ **Passe d'élagage du §14.2 toujours NON FAITE** (1 494 lignes) :
-elle passe avant tout ajout hors de ce bloc — cette session n'y a donc rien ajouté ailleurs DANS CE
-FICHIER (le récit des herbes hautes est dans `components/ferme/README.md`, pas ici — seule sa
-LEÇON tient dans le bloc ci-dessus, qui se remplace toujours).
+est en commentaire à côté du code.
 
-### ⏭️ ACTION SUIVANTE : VÉRIFIER LA CONFIGURATION GOOGLE CLOUD DE OÙ'S THAT
+### ⏭️ ACTION SUIVANTE : CORRIGER LA TRADUCTION DES MÉTIERS, PUIS LE MÊME TRAITEMENT GEMINI POUR LE TRIBUNAL
+
+Deux candidats concrets, issus directement de la session du jour, avant toute nouvelle idée :
+1. **Le bug de traduction des métiers** (voir plus haut) — correctif de taille connue et bornée :
+   une table `jobFr`/équivalent pour les 31 entrées de `TOWN_RESIDENTS`, ou une clé de traduction
+   par métier, branchée partout où `ro.job` est lu en français.
+2. **Le tribunal mérite le même sprite Gemini que l'église** (§13) — la méthode est maintenant
+   éprouvée : prompt SANS référence à la colonnade actuelle, sans contrainte de composition, juste
+   un thème (néoclassique, imposant, pierre froide pour rester distinct des deux autres) et la
+   consigne de liberté totale.
 
 ⚠️ **DETTE IMMÉDIATE TOUJOURS OUVERTE, À FAIRE AVEC CODEX ET GUILLAUME DEVANT LA CONSOLE GOOGLE
 CLOUD** (inchangée depuis le 2026-09-14) : le code n'appelle que Maps Embed API, gratuite et
@@ -200,15 +97,13 @@ service Cloud utilisant cette clé ou ce projet ; rapport de facturation à zér
 d'alerte ne constitue pas un plafond de dépense. Cette vérification est CLOSE seulement après
 lecture des écrans réels, jamais par déduction depuis `NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY`.
 
-Une fois cette vérification faite et le jugement de Guillaume sur le maire reçu, **la bonne action
-est de lui DEMANDER quoi ouvrir ensuite**, pas d'en choisir un (§2). Le §13 tient la liste de ce qui
-attend son jugement ; parmi les candidats les plus visibles, sans en privilégier un : les îles
-(le navire promet un ailleurs, rien ne dit ce qu'on y trouve) · la chaîne de transport du bois du
-bateau (direction tranchée, jamais construite) · le mariage, le cadastre, le salon de coiffure
-(guichets posés, sans contenu) · le tribunal/l'église (« méritent un sprite plus majestueux »,
-attend une référence de Guillaume) · le n°1 de la liste hors-quête : la ferme peuplée en vraie
-séance à deux clients, socle de toute décision sociale à venir · la suite de l'audit d'Où's that
-(rythme, mini-carte, fin de partie, contenu, modes : ordre proposé dans son README).
+Au-delà de ces trois items, **la bonne action est de DEMANDER à Guillaume quoi ouvrir ensuite**, pas
+d'en choisir un (§2). Le §13 tient la liste complète ; parmi les candidats les plus visibles, sans en
+privilégier un : les îles (le navire promet un ailleurs, rien ne dit ce qu'on y trouve) · la chaîne
+de transport du bois du bateau (direction tranchée, jamais construite) · le mariage, le cadastre, le
+salon de coiffure (guichets posés, sans contenu) · le n°1 de la liste hors-quête : la ferme peuplée
+en vraie séance à deux clients, socle de toute décision sociale à venir · la suite de l'audit d'Où's
+that (rythme, mini-carte, fin de partie, contenu, modes : ordre proposé dans son README).
 
 ---
 
@@ -1445,11 +1340,26 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
   POSE, AJOUTÉS LE 2026-09-15** — détail, méthode et ce qui reste (le buste toujours rigide)
   dans le bloc ⏭️ REPRISE en tête de fichier ; rien à recopier ici, une seule histoire du jour
   ne doit vivre qu'à un seul endroit (§14.2).
-- ⚠️ **NOUVELLE DETTE GRAPHIQUE (2026-09-03) : LE TRIBUNAL ET L'ÉGLISE MÉRITENT UN SPRITE PLUS
-  MAJESTUEUX.** Jugement de Guillaume en jouant — les deux bâtiments civiques les plus imposants
-  de Valley Town restent en dessous de ce que leur rôle demande. **Demander à Guillaume un JPG de
-  référence avant tout travail** (règle du §2 : Claude rédige un prompt Gemini prêt à coller,
-  accompagné de la référence — jamais d'appel API automatisé). Pas encore commencé.
+- ✅ **L'ÉGLISE A SON SPRITE MAJESTUEUX (2026-09-20) — LE TRIBUNAL, LUI, ATTEND ENCORE.** Dette
+  ouverte au 2026-09-03 (« le tribunal et l'église méritent un sprite plus majestueux »). Pipeline C,
+  deuxième usage (§9) : `refs/eglise-nouvelle.jpg`, importé par `tools/build-eglise-sprite.mjs` en
+  `public/town/eglise-day.png`/`eglise-glow.png`, dessiné par `drawChurchBitmap` (FermeGame.js).
+  ⚠️ **LEÇON RETENUE, À RÉUTILISER POUR LE TRIBUNAL** : le premier prompt (fidèle à l'ancien sprite,
+  clocher-à-gauche imposé) a produit une église correcte mais pas impressionnante ; Guillaume a
+  corrigé le tir lui-même — « l'hôtel de ville est réussi car il est très différent de l'original »
+  — et le second prompt, sans référence à l'ancien sprite, sans contrainte de composition (seules
+  restent : vue de face sur damier, teinte distincte des deux autres monuments, lisible comme une
+  église), a rendu une cathédrale à trois flèches nettement supérieure. **Le tribunal doit suivre la
+  même méthode : pas de prompt qui décrit sa colonnade actuelle, un thème et une ambition, la
+  liberté sur le reste.** `TOWN_CHURCH` est passée de 8 à 12 cases (192 px, alignée sur
+  `TOWN_HALL`/`TOWN_COURT`) ; un nouvel arrêt de téléport dev existe désormais (« l'église (parvis) »)
+  pour juger un sprite de monument sans traverser la ville — jusqu'ici seule la mairie l'avait.
+  ⚠️ **PIÈGE PAYÉ EN LE CONSTRUISANT, UTILE AU PROCHAIN IMPORT** : à la distance où la caméra se pose
+  devant le parvis, le zoom de monument (mesuré jusqu'à ×2,2) laisse le sommet d'une flèche haute
+  AU-DESSUS du bord du canevas — vérifié en jeu, jamais visible sur le PNG seul ni sur une capture
+  prise trop tôt après un téléport (le zoom continue de bouger 2 à 3 s). Tout ce qui doit rester
+  visible en permanence (ici : les pigeons qui tournent autour du clocher, demande du jour) doit être
+  ancré plus bas que la pointe du dessin, pas au pixel le plus haut du PNG.
 - **Valley Town : qui HABITE la ville à demeure ?** Les résidents ne font qu'y passer. Le 439 y
   pose **Léonie Sarrazin** à l'accueil de la mairie — mais c'est un décor qui parle, pas une
   habitante : elle ne bouge pas, et `res.zone` ne connaît toujours que « farm » et « town ».
