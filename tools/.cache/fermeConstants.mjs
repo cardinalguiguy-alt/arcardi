@@ -3776,6 +3776,25 @@ export const TOWN_WOOD_DENSITY = 0.50;  // part d'arbres au cœur de la futaie
    cœur du bois (d ≥ DEPTH). Le monter resserre le cœur sans aplatir la rampe —
    la lisière reste clairsemée, seul le taillis profond se comble davantage. */
 export const TOWN_WOOD_GRASS_DENSITY = 0.97;
+/* 2026-09-20 (suite, Guillaume : « n'hésite pas à étendre la zone d'herbes
+   folles ») : élargir la fenêtre de balayage de generateTownWorld ne pouvait
+   plus rien donner — mesuré (script Node sur `townWoodDepth`, jamais au jugé,
+   §8 de CLAUDE.md) : au-delà de 40 cases à l'ouest / 8 au nord de `TOWN_WOOD`,
+   le nombre de cases à profondeur positive reste PILE 774, jusqu'à 200/80
+   testés. La fenêtre n'était pas trop petite, c'est le CHAMP qui s'arrête là.
+   ⚠️ CETTE PROFONDEUR VIRTUELLE, AJOUTÉE AVANT LE SEUIL, ÉTEND LE CHAMP SANS EN
+   INVENTER UN SECOND (même `townWoodDepth`, voir la note au-dessus) et SANS
+   TOUCHER LA FUTAIE : `d_herbe = wood(x,y) + TOWN_WOOD_GRASS_FRINGE`, alors que
+   les arbres restent sur `wood(x,y)` nu — c'est le point exact qui distingue
+   « étendre la zone d'herbe » de « étendre le bois », et Guillaume n'a demandé
+   que la première. Au cœur véritable (d ≥ TOWN_WOOD_DEPTH), le plafond
+   ci-dessus est retrouvé À L'IDENTIQUE (voir `GRASS_DEPTH_EFF` au dénominateur
+   dans generateTownWorld) : rien ne change dans ce que Guillaume a déjà vu.
+   10 cases de frange portent le compte de cases atteignables de 774 à 1984
+   (×2,6, mesuré), plateau atteint avec la fenêtre élargie en conséquence
+   (+80 ouest/+20 nord, contre +40/+8 pour la frange précédente) — aucun gain
+   mesuré au-delà, jusqu'à +160/+80 testés. */
+export const TOWN_WOOD_GRASS_FRINGE = 10;
 /* ⚠️ LE SENTIER NE RÉTRÉCIT PAS, IL SE TROUE. C'est la parade au piège payé
    quatre fois au 437 (« une allée d'une case de large ne montre que ses
    marches ») : un chemin qui s'efface en passant de deux cases à une redevient

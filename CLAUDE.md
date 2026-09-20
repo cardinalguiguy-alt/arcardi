@@ -84,12 +84,22 @@ la futaie garde le rectangle `TOWN_WOOD` d'hier tel quel, ses pentes/origine/bru
 vérifiés à zéro clairière enfermée restent intouchés — l'herbe est un décor MOU
 (`TOWN_SOFT_PROPS`), elle ne peut fermer aucun passage. Le plafond de densité
 (`TOWN_WOOD_GRASS_DENSITY`) monte de 0,92 à 0,97 ; la rampe du dégradé elle-même ne change pas,
-Guillaume y tenait explicitement. Récit et calcul : **`components/ferme/README.md`, section
-« Hors-zip 2026-09-20 (suite) — LES HERBES HAUTES DU SOUS-BOIS : LA ZONE S'ÉTEND ».** `next build`
-**✓**, `verify-collision`/`verify-compo`/`verify-vallee` (223/223) **TOUT PASSE** (aucune régression
-sur les arbres). **Attend le regard de Guillaume** : pas encore rejoué EN JEU au coin sud-est
-précisément (loin de tout téléport du menu développeur) — calcul et bancs prouvent l'extension et la
-densité, pas encore vus à hauteur de personnage (§13).
+Guillaume y tenait explicitement.
+
+**Puis, même jour** : « n'hésite pas à étendre la zone d'herbes folles. » Élargir encore la fenêtre
+de balayage ne pouvait plus rien donner — mesuré : au-delà de +40 ouest/+8 nord, le compte de cases
+à profondeur positive reste PILE 774, jusqu'à +200/+80 testés ; ce n'est pas la fenêtre qui était
+petite, c'est le CHAMP qui s'arrête là. `TOWN_WOOD_GRASS_FRINGE` (= 10, fermeConstants.js) ajoute une
+profondeur VIRTUELLE avant le seuil, pour l'herbe SEULEMENT (`wood(x,y) + FRINGE` ; les arbres
+restent sur `wood(x,y)` nu, aucune ligne touchée dans la futaie) — un flou du bord, pas un second
+bois, et le plafond du cœur véritable retombe à l'identique de tout à l'heure. Mesuré : 774 → 1984
+cases atteignables (×2,6), `tallGrass` 110 → 340 dans une ferme témoin rejouée en Node. Récit et
+calcul : **`components/ferme/README.md`, section « Hors-zip 2026-09-20 (re-suite, même jour) — N'HÉSITE
+PAS À ÉTENDRE ».** `next build` **✓**, `verify-syntax` propre,
+`verify-collision`/`verify-compo`/`verify-vallee` (223/223) **TOUT PASSE** (arbres inchangés).
+**Attend le regard de Guillaume** : pas encore rejoué EN JEU au coin sud-est (loin de tout téléport
+du menu développeur) — calcul et bancs prouvent l'extension et la densité, la marge de 10 n'est pas
+encore jugée *agréable* à l'œil (§13).
 
 ### 2026-09-20 — Jérôme Martial reste figé sur certaines fermes : cause trouvée et corrigée
 

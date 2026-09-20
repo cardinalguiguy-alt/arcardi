@@ -6231,19 +6231,40 @@ export function generateTownWorld() {
          futaie ci-dessus garde `wb` tel quel, donc les quatre mesures de
          `render-parc`/`verify-vallee` sur les ARBRES (balayées et vérifiées à
          zéro clairière enfermée) restent exactement celles d'hier — l'herbe est
-         un décor MOU (TOWN_SOFT_PROPS), elle ne peut fermer aucun passage. */
-      const gwb = { x: Math.max(0, wb.x - 40), y: Math.max(0, wb.y - 8), w: wb.w + 40, h: wb.h + 8 };
+         un décor MOU (TOWN_SOFT_PROPS), elle ne peut fermer aucun passage.
+         ⚠️⚠️ 2026-09-20 (suite, Guillaume : « n'hésite pas à étendre la zone
+         d'herbes folles ») : LE PLATEAU CI-DESSUS (766-774 cases) EST LA VRAIE
+         LIMITE DU CHAMP TEL QUEL — au-delà de `dw=40`, un balayage plus large
+         n'ajoute STRICTEMENT RIEN (mesuré : 774 cases, identique de dw=40 à
+         dw=200 et dh=8 à dh=80). Élargir encore la fenêtre de lecture était
+         donc inutile ; ce qui manquait pour « oser plus » est une VRAIE
+         extension du champ, pas une fenêtre plus grande sur le même champ.
+         `TOWN_WOOD_GRASS_FRINGE` (fermeConstants) ajoute une profondeur
+         VIRTUELLE avant que l'herbe s'arrête, comme si la lisière de l'herbe
+         (mais pas celle des arbres) avait dix cases de champ de plus que la
+         vraie — un flou du bord, pas un second bois : à l'ancien bord (d=0),
+         la densité vaut maintenant 10/(5+10) ≈ 65 % du plafond, puis continue
+         de descendre en dégradé jusqu'au nouveau bord (d=-10). Mesuré : cette
+         marge porte le compte de cases atteignables de 774 à 1984 (×2,6),
+         plateau atteint avec `dw=80 dh=20` (aucun gain au-delà, jusqu'à
+         dw=160/dh=80 testés) — la fenêtre de lecture est donc élargie une
+         seconde fois pour suivre le champ élargi, pas au hasard. */
+      const GRASS_DEPTH_EFF = C.TOWN_WOOD_DEPTH + C.TOWN_WOOD_GRASS_FRINGE;
+      const gwb = { x: Math.max(0, wb.x - 80), y: Math.max(0, wb.y - 20), w: wb.w + 80, h: wb.h + 20 };
       for (let y = gwb.y; y < Math.min(H - 1, gwb.y + gwb.h); y++) {
         for (let x = gwb.x; x < Math.min(W - 1, gwb.x + gwb.w); x++) {
-          const d = wood(x, y);
+          const d = wood(x, y) + C.TOWN_WOOD_GRASS_FRINGE;
           if (d <= 0) continue;
           /* ⚠️ 2026-09-20 (Guillaume, en jeu : « peut-être + de densité, qu'on
              voie un peu moins le sol vert clair classique entre les herbes
              hautes dans les zones super denses. Dégradé ») : le DÉGRADÉ reste
-             la même rampe `min(1, d/DEPTH)` — seul le PLAFOND monte (0,92 →
+             la même rampe `min(1, d/profondeur)` — seul le PLAFOND monte (0,92 →
              0,97, TOWN_WOOD_GRASS_DENSITY), donc chaque tranche de profondeur
-             se peuple un peu plus, la plus forte en tête, sans rien aplatir. */
-          const dens = Math.min(1, d / C.TOWN_WOOD_DEPTH) * C.TOWN_WOOD_GRASS_DENSITY;
+             se peuple un peu plus, la plus forte en tête, sans rien aplatir.
+             `GRASS_DEPTH_EFF` (profondeur + frange) au dénominateur : au cœur
+             véritable (d ≥ DEPTH), l'ancien plafond est retrouvé À L'IDENTIQUE
+             (rien ne change dans la partie déjà vue par Guillaume). */
+          const dens = Math.min(1, d / GRASS_DEPTH_EFF) * C.TOWN_WOOD_GRASS_DENSITY;
           // ⚠️ Hachage décalé de celui des arbres (41/43/13/17 contre 13/11/7/3) :
           // la même paire aurait tiré l'herbe et l'arbre du même coup, donc
           // jamais l'un sans l'autre — deux couches qui se seraient lues comme

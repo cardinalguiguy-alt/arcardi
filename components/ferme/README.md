@@ -138,6 +138,33 @@ pas encore rejoué EN JEU à l'endroit précis de l'extension (le coin sud-est, 
 téléport du menu développeur) — le calcul et les bancs prouvent l'extension et la densité, pas
 encore vus à hauteur de personnage.
 
+### Hors-zip 2026-09-20 (re-suite, même jour) — « N'hésite pas à étendre la zone d'herbes folles »
+
+**Élargir encore la fenêtre de balayage (le levier de la section précédente) ne pouvait plus rien
+donner** : mesuré avant d'agir (encore un script Node sur `townWoodDepth`, §8 de CLAUDE.md) — au-delà
+de +40 ouest/+8 nord, le nombre de cases à profondeur positive reste **PILE 774**, testé jusqu'à
++200 ouest / +80 nord. La fenêtre n'était pas trop petite ; c'est le CHAMP lui-même qui s'arrête là.
+« Oser plus » demandait donc d'étendre le champ, pas la fenêtre qui le lit.
+
+**`TOWN_WOOD_GRASS_FRINGE` (= 10, fermeConstants.js)** : une profondeur VIRTUELLE ajoutée avant le
+seuil, pour l'herbe SEULEMENT — `d_herbe = wood(x,y) + FRINGE`, alors que les arbres restent sur
+`wood(x,y)` nu (aucune ligne touchée dans la futaie). C'est un flou du bord, pas un second bois :
+à l'ancien bord (profondeur vraie = 0), la densité vaut maintenant `10/(5+10) ≈ 65 %` du plafond
+plutôt que 0, puis redescend en dégradé jusqu'au nouveau bord (profondeur vraie = −10). Au cœur
+véritable (profondeur ≥ `TOWN_WOOD_DEPTH`), le plafond retombe À L'IDENTIQUE de la section
+précédente — rien ne change dans ce que Guillaume a déjà vu et jugé « réussi ».
+
+**Mesuré, pas deviné** : cette frange porte le compte de cases atteignables de 774 à **1984** (×2,6),
+plateau franchi avec une fenêtre élargie en conséquence (+80 ouest / +20 nord, contre +40/+8 avant)
+— aucun gain mesuré au-delà, testé jusqu'à +160/+80. **Rejoué en Node** (`generateTownWorld`
+complet, pas seulement le champ nu) : `tallGrass` passe de 110 à **340** cases dans une ferme témoin.
+
+**Vérifié** : `next build` **✓**, `verify-syntax` propre, `verify-collision`/`verify-compo`/
+`verify-vallee` (223/223) **TOUT PASSE** (arbres inchangés — la futaie ne lit toujours que
+`wood(x,y)` nu, jamais la frange). ⚠️ **CE QUI N'EST PAS FAIT** : comme la section précédente, pas
+encore rejoué EN JEU à hauteur de personnage sur la zone étendue — la marge de 10 est un choix
+raisonné (elle capture le plateau mesuré) mais pas encore jugée *agréable* à l'œil (§13).
+
 ## Hors-zip 2026-09-20 — LE NAVIRE TANGUE UN PEU SUR L'EAU
 
 **Demande de Guillaume** : *« le bateau doit tanguer un peu sur le lac/eau. »*
