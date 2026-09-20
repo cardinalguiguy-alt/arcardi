@@ -3767,8 +3767,15 @@ export const TOWN_WOOD_DENSITY = 0.50;  // part d'arbres au cœur de la futaie
    case restante, et une des cinq silhouettes (`townTallGrassVariant`,
    fermeArt.js) porte déjà, à elle seule, autant de brins qu'un ancien bouquet
    entier. Vérifié à l'écran après coup (§8/§10 de CLAUDE.md), pas au premier
-   jet — voir la reprise de la même journée en tête de ce fichier. */
-export const TOWN_WOOD_GRASS_DENSITY = 0.92;
+   jet — voir la reprise de la même journée en tête de ce fichier.
+   ⚠️ RELEVÉ DE 0,92 À 0,97 LE 2026-09-20 (même journée, second retour en jeu) :
+   « peut-être + de densité, qu'on voie un peu moins le sol vert clair
+   classique entre les herbes hautes dans les zones super denses. Dégradé » —
+   Guillaume tient explicitement au DÉGRADÉ (`min(1, d/DEPTH)` inchangé, voir
+   generateTownWorld) : ce nombre n'en est que le PLAFOND, atteint seulement au
+   cœur du bois (d ≥ DEPTH). Le monter resserre le cœur sans aplatir la rampe —
+   la lisière reste clairsemée, seul le taillis profond se comble davantage. */
+export const TOWN_WOOD_GRASS_DENSITY = 0.97;
 /* ⚠️ LE SENTIER NE RÉTRÉCIT PAS, IL SE TROUE. C'est la parade au piège payé
    quatre fois au 437 (« une allée d'une case de large ne montre que ses
    marches ») : un chemin qui s'efface en passant de deux cases à une redevient

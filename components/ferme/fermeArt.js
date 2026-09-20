@@ -1755,21 +1755,49 @@ export function townTallGrassWaveLean(x, y, now) {
    ⚠️ LA VARIANTE SE DÉDUIT DE LA CASE, rien ne circule (§3).
    ⚠️ LE FRISSON EST UN CISAILLEMENT AUTOUR DU PIED, comme les touffes de la
    ville : l'ombre dessinée ne glisse pas sous la plante. Un buisson taillé ne
-   plie presque pas — c'est une masse serrée, pas une touffe. */
+   plie presque pas — c'est une masse serrée, pas une touffe.
+   ⚠️⚠️ 2026-09-20 (demande Guillaume : « les buissons sont cheap, je veux les
+   mêmes que sur Valley Town ») : L'ÉTAT SAUVAGE (O_BUSH) NE DESSINE PLUS SA
+   PROPRE SILHOUETTE — il pioche parmi les QUATRE espèces déjà peintes pour la
+   ville (`townShrub`/`townGoldBush`/`townLavender`/`townFlowerClump`,
+   `buildSprites` plus bas), tirées par hachage de la case comme la variante
+   ci-dessous, avec le MÊME ancrage bas-centré et le MÊME cisaillement que la
+   ville (`townBushLean`, FermeGame.js) — `lean` voyage déjà dans la même unité
+   des deux côtés (pixels au sommet, `C.TOWN_BUSH_SWAY_PX`), donc diviser par
+   la hauteur RÉELLE de chaque sprite (au lieu d'une base fixe de 24×21)
+   suffit à faire plier chaque espèce à sa propre échelle, sans réglage de plus.
+   L'état TAILLÉ (O_BUSH_TRIM), lui, garde le dôme procédural de la ferme
+   (`S.farmBush.trim`) : c'est un ouvrage (une coupe nette à la faux), pas une
+   espèce — rien d'équivalent n'existe côté ville. */
+const FARM_BUSH_SPECIES = ["shrub", "goldBush", "lavender", "clump"];
 export function farmBushVariant(i) { return ((Math.imul(i | 0, 2654435761) >>> 0) >>> 16) % 3; }
+export function farmBushSpeciesIdx(i) { return ((Math.imul(i | 0, 2246822519) >>> 0) >>> 16) % FARM_BUSH_SPECIES.length; }
 export function drawFarmBush(ctx, S, obj, i, px, py, seasonKey, lean) {
-  const FB = S && S.farmBush;
-  if (!FB || (obj !== C.O_BUSH && obj !== C.O_BUSH_TRIM)) return false;
-  const st = obj === C.O_BUSH_TRIM ? FB.trim : FB.wild;
-  const se = seasonKey === "autumn" ? "autumn" : seasonKey === "spring" ? "spring" : "summer";
-  const cell = st[se][farmBushVariant(i)];
-  const dx = px + (SPR_T - st.w) / 2, dy = py + SPR_T - 2 - st.base;
-  const k = obj === C.O_BUSH_TRIM ? 0.3 : 1;
-  if (!lean) { blitCell(ctx, cell, dx, dy); return true; }
+  if (!S || (obj !== C.O_BUSH && obj !== C.O_BUSH_TRIM)) return false;
+  const ax = px + SPR_T / 2, ay = py + SPR_T - 2; // ancre (sol), identique pour les deux états
+  if (obj === C.O_BUSH_TRIM) {
+    const FB = S.farmBush; if (!FB) return false;
+    const se = seasonKey === "autumn" ? "autumn" : seasonKey === "spring" ? "spring" : "summer";
+    const st = FB.trim, cell = st[se][farmBushVariant(i)];
+    const dx = px + (SPR_T - st.w) / 2, dy = py + SPR_T - 2 - st.base;
+    if (!lean) { blitCell(ctx, cell, dx, dy); return true; }
+    ctx.save();
+    ctx.translate(dx + st.w / 2, dy + st.base + 1);
+    ctx.transform(1, 0, -lean * 0.3 / (st.base + 1), 1, 0, 0);
+    blitCell(ctx, cell, -st.w / 2, -(st.base + 1));
+    ctx.restore();
+    return true;
+  }
+  const sp = FARM_BUSH_SPECIES[farmBushSpeciesIdx(i)], vr = farmBushVariant(i);
+  const arr = sp === "shrub" ? S.townShrub : sp === "goldBush" ? S.townGoldBush
+            : sp === "lavender" ? S.townLavender : S.townFlowerClump;
+  const img = arr && arr[vr % Math.max(1, arr.length)];
+  if (!img) return false;
+  if (!lean) { ctx.drawImage(img, ax - img.width / 2, ay - img.height); return true; }
   ctx.save();
-  ctx.translate(dx + st.w / 2, dy + st.base + 1);
-  ctx.transform(1, 0, -lean * k / (st.base + 1), 1, 0, 0);
-  blitCell(ctx, cell, -st.w / 2, -(st.base + 1));
+  ctx.translate(ax, ay);
+  ctx.transform(1, 0, -lean / Math.max(1, img.height), 1, 0, 0);
+  ctx.drawImage(img, -img.width / 2, -img.height);
   ctx.restore();
   return true;
 }
@@ -4491,7 +4519,7 @@ export function buildSprites() {
   // Buisson à baies (printemps) : petite touffe verte foncée piquée de baies
   // rouges. Occupe une seule tuile (16x16).
   /* ══════════════════════════════════════════════════════════════════════════
-     2026-09-13 — LE BUISSON SAUVAGE DE LA FERME, ET LE MÊME TAILLÉ À LA FAUX.
+     2026-09-13 — LE BUISSON TAILLÉ À LA FAUX, SUR LA FERME.
      ──────────────────────────────────────────────────────────────────────────
      ⚠️ ON ASSEMBLE DES TOUFFES, ON NE TEXTURE PAS UNE SILHOUETTE (DESSIN.md) :
      une quinzaine de boules de feuillage réparties par une suite R2 (pas deux
@@ -4503,14 +4531,23 @@ export function buildSprites() {
      (la coupe), une face avant en cylindre, des flancs raides. C'est l'opposition
      d'une ligne construite à une ligne qui ne l'est pas qui fait lire le geste.
      ⚠️ LE CANEVAS EST DIMENSIONNÉ PAR CE QUI DÉPASSE (§4) : festons, cerne et
-     brindilles tiennent à deux pixels du bord — `render-buissons` le vérifie. */
+     brindilles tiennent à deux pixels du bord — `render-buissons` le vérifie.
+     ⚠️⚠️ 2026-09-20 (demande Guillaume : « les buissons [sauvages] sont cheap,
+     je veux les mêmes que sur Valley Town ») : LE BUISSON SAUVAGE (`FB_WILD_*`,
+     `farmBushWildSprite`) A ÉTÉ SUPPRIMÉ D'ICI, PAS REMPLACÉ SUR PLACE.
+     `drawFarmBush`, plus bas, dessine désormais directement les sprites de
+     ville (`townShrub`/`townGoldBush`/`townLavender`/`townFlowerClump`) pour
+     l'état sauvage — les redessiner en double dans l'atlas de la ferme aurait
+     été exactement le paramètre qui double un paramètre du §8 de CLAUDE.md :
+     deux dessins de « buisson doré », l'un qui diverge de l'autre au premier
+     réglage. Le TAILLÉ, lui, reste ici : c'est un ouvrage (une coupe nette),
+     pas une espèce, et rien d'équivalent n'existe côté ville. */
   const FB_PAL = {
     summer: { cerne: "#1c3a1d", twig: "#4a3520", t: ["#28552a", "#367330", "#4a9240", "#66b04e", "#8ccd66"] },
     spring: { cerne: "#1d3d1f", twig: "#4d3722", t: ["#2c5e2c", "#3d8236", "#55a245", "#76c052", "#9edc72"], bloom: ["#f6eef2", "#e79fc2"] },
     autumn: { cerne: "#3a2412", twig: "#3e2a16", t: ["#5e3818", "#86501f", "#b06f28", "#d39538", "#ecbd5c"],
               alt: ["#3f4418", "#5b6024", "#7a7d30", "#9c9a40", "#bdb65a"] },
   };
-  const FB_WILD_W = 24, FB_WILD_H = 21, FB_WILD_BASE = 18;
   const FB_TRIM_W = 20, FB_TRIM_H = 16, FB_TRIM_BASE = 13;
   // ⚠️ Préfixées : `R2A`/`R2B` existent déjà plus bas dans `buildSprites` (le bundle l'a refusé).
   const FB_R2A = 0.7548776662466927, FB_R2B = 0.5698402909980532;
@@ -4530,82 +4567,6 @@ export function buildSprites() {
       const u = (x + 0.5 - shadow.cx) / shadow.rx, v = (y + 0.5 - shadow.cy) / shadow.ry;
       if (u * u + v * v <= 1) P(g, x, y, 1, 1, "rgba(16,30,12,0.34)");
     }
-  }
-  function farmBushWildSprite(vr, season) {
-    const pal = FB_PAL[season], W = FB_WILD_W, H = FB_WILD_H;
-    const [c, g] = cv(W, H);
-    const V = [{ cx: 12, cy: 11.9, A: 8.6, B: 6.5, n: 15, off: 0.11 },
-               { cx: 12, cy: 11.4, A: 7.6, B: 7.0, n: 14, off: 0.47 },
-               { cx: 11.7, cy: 12.1, A: 8.8, B: 6.2, n: 16, off: 0.73 }][vr % 3];
-    const clumps = [];
-    for (let k = 0; k < V.n; k++) {
-      const u = (V.off + FB_R2A * (k + 1)) % 1, w = (V.off * 1.7 + FB_R2B * (k + 1)) % 1;
-      const rad = Math.sqrt(u), th = w * Math.PI * 2;
-      const r = 2.6 + 1.2 * ((k * 0.618 + V.off) % 1) + 1.0 * (1 - rad);   // plus grosses au cœur
-      clumps.push({ cx: V.cx + Math.cos(th) * rad * (V.A - r * 1.12), cy: V.cy + Math.sin(th) * rad * (V.B - r * 1.12), r, k });
-    }
-    // Le pied : deux touffes larges qui posent le buisson au sol au lieu de le faire flotter.
-    for (const s of [-1, 1]) clumps.push({ cx: V.cx + s * V.A * 0.42, cy: V.cy + V.B * 0.52, r: 3.3, k: V.n + (s > 0 ? 1 : 0) });
-    clumps.sort((p, q) => p.cy - q.cy || p.k - q.k);                           // du fond vers l'avant
-    const rOf = (cl, px, py) => cl.r * (1 + 0.11 * Math.sin(Math.atan2(py - cl.cy, px - cl.cx) * 6 + cl.k * 1.9));
-    const L = [-0.52, -0.62, 0.59];
-    const tone = new Int8Array(W * H).fill(-1), owner = new Int16Array(W * H).fill(-1);
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-      const px = x + 0.5, py = y + 0.5;
-      let front = -1;
-      for (let j = clumps.length - 1; j >= 0; j--) {
-        const cl = clumps[j], rr = rOf(cl, px, py);
-        if ((px - cl.cx) ** 2 + (py - cl.cy) ** 2 <= rr * rr) { front = j; break; }
-      }
-      if (front < 0 || x < 2 || y < 2 || x > W - 3 || y > H - 3) continue;
-      const cl = clumps[front];
-      const lx = (px - cl.cx) / cl.r, ly = (py - cl.cy) / cl.r, lz = Math.sqrt(Math.max(0, 1 - lx * lx - ly * ly));
-      const gx = (px - V.cx) / V.A, gy = (py - V.cy) / V.B, gz = Math.sqrt(Math.max(0, 1 - gx * gx - gy * gy));
-      const nx = 0.55 * lx + 0.45 * gx, ny = 0.55 * ly + 0.45 * gy, nz = 0.55 * lz + 0.45 * gz;
-      let v = (nx * L[0] + ny * L[1] + nz * L[2]) / (Math.hypot(nx, ny, nz) || 1);
-      // Le pli : juste au-dessus du bord d'une touffe placée devant.
-      for (let j = front + 1; j < clumps.length; j++) {
-        const q = clumps[j];
-        if (py < q.cy + q.r * 0.3 && Math.hypot(px - q.cx, py - q.cy) < q.r * 1.12 + 1.3) { v -= 0.28; break; }
-      }
-      // Le bas du buisson est dans sa propre ombre.
-      const foot = V.cy + V.B * 0.3;
-      if (py > foot) v -= 0.32 * (py - foot) / (V.B * 0.7);
-      tone[y * W + x] = v < -0.05 ? 0 : v < 0.24 ? 1 : v < 0.5 ? 2 : v < 0.76 ? 3 : 4;
-      owner[y * W + x] = cl.k;
-    }
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-      const t = tone[y * W + x]; if (t < 0) continue;
-      // Une touffe sur QUATRE garde son vert d'automne : une sur trois faisait un camouflage.
-      const ramp = (season === "autumn" && owner[y * W + x] % 4 === 1) ? pal.alt : pal.t;
-      P(g, x, y, 1, 1, ramp[t]);
-    }
-    /* Printemps : quelques fleurs, au sommet éclairé des touffes du haut.
-       ⚠️ 2×2 ET PAS DEUX PIXELS EN DIAGONALE : le premier jet faisait des
-       rayures (des traits de griffe roses), pas des fleurs. */
-    if (pal.bloom) {
-      let nb = 0;
-      for (const cl of clumps) {
-        if (nb >= 4) break;
-        const bx = Math.round(cl.cx - cl.r * 0.3), by = Math.round(cl.cy - cl.r * 0.4);
-        if (bx < 3 || by < 3 || bx > W - 5 || by > H - 5) continue;
-        if ([0, 1, W, W + 1].some(d => tone[by * W + bx + d] < 1)) continue;
-        P(g, bx, by, 2, 2, pal.bloom[1]); P(g, bx, by, 1, 1, pal.bloom[0]);
-        nb++;
-      }
-    }
-    fbFinish(g, W, H, tone, pal, { cx: V.cx, cy: FB_WILD_BASE + 0.4, rx: V.A * 0.95, ry: 1.7 });
-    /* Deux brindilles qui dépassent : c'est ce qui dit « sauvage » avant la
-       couleur. Peintes APRÈS le cerne — un trait d'un pixel posé avant serait
-       pincé des deux côtés (DESSIN.md, la branche que le cerne mange). */
-    const tops = clumps.slice().sort((p, q) => (p.cy - p.r) - (q.cy - q.r)).slice(0, 2);
-    tops.forEach((cl, n) => {
-      const s = n === 0 ? -1 : 1;
-      const x0 = Math.round(cl.cx), y0 = Math.max(3, Math.round(cl.cy - cl.r) - 1);
-      P(g, x0, y0, 1, 1, pal.twig); P(g, x0 + s, y0 - 1, 1, 1, pal.twig);
-      P(g, x0 + s, y0 - 2 >= 1 ? y0 - 2 : 1, 1, 1, pal.t[3]);
-    });
-    return c;
   }
   /* ⚠️ PREMIER JET REFUSÉ SUR PLANCHE (même jour) : un couvercle lisse et une
      face en cylindre donnaient une SAVONNETTE — une arête claire continue en
@@ -4650,12 +4611,13 @@ export function buildSprites() {
     fbFinish(g, W, H, tone, pal, { cx: CX, cy: FB_TRIM_BASE + 0.5, rx: V.a + 0.6, ry: 1.4 });
     return c;
   }
-  /* Deux atlas (sauvage, taillé) au lieu de dix-huit canevas retenus : c'est la
-     règle de `makeAtlas` (CLAUDE.md §10, le nombre de canevas qui tue l'iPad). */
+  /* Un seul atlas désormais (le taillé) — le sauvage a été retiré le 2026-09-20,
+     voir la note plus haut : `drawFarmBush` dessine directement les sprites de
+     ville pour cet état, rien à atlasser ici (CLAUDE.md §10, le nombre de
+     canevas qui tue l'iPad — un atlas de moins plutôt qu'un atlas mort). */
   function farmBushAtlas() {
     const out = {};
-    for (const [key, fn, w, h, base] of [["wild", farmBushWildSprite, FB_WILD_W, FB_WILD_H, FB_WILD_BASE],
-                                          ["trim", farmBushTrimSprite, FB_TRIM_W, FB_TRIM_H, FB_TRIM_BASE]]) {
+    for (const [key, fn, w, h, base] of [["trim", farmBushTrimSprite, FB_TRIM_W, FB_TRIM_H, FB_TRIM_BASE]]) {
       const put = makeAtlas(w, h, 9, 3), st = { w, h, base };
       for (const se of ["summer", "spring", "autumn"]) st[se] = [0, 1, 2].map(v => put(fn(v, se)));
       out[key] = st;
@@ -11071,13 +11033,24 @@ export function buildSprites() {
   /* Le buisson fleuri. ⚠️ 24 px DE HAUT POUR UNE CASE DE 16 : il DÉBORDE vers
      le nord, comme la haie du 425, et c'est ce débord qui lui donne du volume.
      Le rendu l'ancre par le bas (voir la file de props). */
+  /* 2026-09-20 (demande Guillaume : « varier les couleurs des fleurs des buis,
+     pour avoir plus de variété […] en ajouter deux, les jaunes seront toujours
+     les plus répandues ») : la palette passe de trois à six entrées — deux
+     couleurs neuves (corail, bleu pâle) plus le jaune RÉPÉTÉ une deuxième fois.
+     La répétition, pas un poids séparé à tenir d'accord avec le tirage
+     (§8 de CLAUDE.md) : c'est déjà la technique de `CLUSTER_KINDS`
+     (fermeEngine.js) pour favoriser une espèce sans écrire un second système de
+     pondération. Jaune tombe donc 2 fois sur 6, chaque autre couleur 1 fois. */
   function townShrubSprite(vr) {
     const [c, g] = cv(20, 22), r = makeRnd(0x51d3 + vr * 97);
     const PAL = [
-      { l: ["#3f8a37", "#57a84c", "#265e22"], f: "#f2ce3c", fl: "#ffe873" },
-      { l: ["#417f4a", "#589a5f", "#28572f"], f: "#e07aa8", fl: "#f7aecb" },
-      { l: ["#4a8a3a", "#65a850", "#2c5f24"], f: "#f0efe2", fl: "#ffffff" },
-    ][vr % 3];
+      { l: ["#3f8a37", "#57a84c", "#265e22"], f: "#f2ce3c", fl: "#ffe873" },  // jaune
+      { l: ["#417f4a", "#589a5f", "#28572f"], f: "#e07aa8", fl: "#f7aecb" },  // rose
+      { l: ["#4a8a3a", "#65a850", "#2c5f24"], f: "#f0efe2", fl: "#ffffff" },  // blanc
+      { l: ["#3f8a37", "#57a84c", "#265e22"], f: "#f2ce3c", fl: "#ffe873" },  // jaune (2e fois : reste le plus répandu)
+      { l: ["#458a44", "#5fa457", "#2a5c2c"], f: "#e2833c", fl: "#f6b06a" },  // corail
+      { l: ["#3f8557", "#579f6c", "#265e3e"], f: "#5f9bd4", fl: "#a8d6f2" },  // bleu pâle
+    ][vr % 6];
     const m = new Uint8Array(20 * 22);
     for (const [bx, by, rx, ry] of [[10, 13, 8.5, 7.5], [6, 10, 5.5, 5], [14, 11, 5.5, 5]]) {
       for (let y = 1; y < 21; y++) for (let x = 1; x < 19; x++) {
@@ -16645,7 +16618,7 @@ export function buildSprites() {
        note de `townBloomSurface`). `sup` voyage avec les images, comme pour
        `townRoad` : le jour où la période change, le rendu n'a rien à savoir. */
     townBloom: { sup: ROAD_SUP, surf: Array.from({ length: C.BL_KINDS }, (_, k) => townBloomSurface(k + 1)) },
-    townShrub: [0, 1, 2].map(v => townShrubSprite(v)),
+    townShrub: [0, 1, 2, 3, 4, 5].map(v => townShrubSprite(v)),
     townBoulder: [0, 1, 2].map(v => townBoulderSprite(v)),
     /* ══ ZIP 439 — LES SPRITES DE LA PLANCHE, TELS QUELS ══
        ⚠️ LES CLÉS N'ONT PAS CHANGÉ quand les dessins ont changé de source :

@@ -1,5 +1,143 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-20
 
+## Hors-zip 2026-09-20 (suite du jour) — LA FERME REJOINT LA VILLE : LES BUISSONS, LA PLACE, LES COULEURS DU BUIS
+
+**Quatre demandes de Guillaume, le même jour, en continu** : *« les buissons [de la ferme] sont
+cheap. Je veux les mêmes que sur valley town »* · *« sur la place centrale, les buissons doivent
+être disposés de manière régulière autour des arbres des carrés. Effet taillé et travaillé sur la
+zone. propre »* · *« varier les couleurs des fleurs des buis, pour avoir plus de variété »* · *« en
+gros en ajouter deux, les jaunes seront toujours les plus répandues »*.
+
+### 1. Le buisson SAUVAGE de la ferme dessine maintenant les sprites de ville
+
+`drawFarmBush` (fermeArt.js) avait son propre dessin (`farmBushWildSprite`, un atlas de neuf
+cellules par état×saison) — sophistiqué dans le code (quinze touffes SDF, éclairage, ombre portée)
+mais UNE SEULE silhouette, recolorée par saison, quand la ville en a six (`townShrub`, `townGoldBush`,
+`townLavender`, `townFlowerClump`, `townGrassTuft`, `plazaTopiary`). Vu à l'écran, une seule espèce
+répétée se lit comme un décor pauvre — c'est le sens exact de « cheap ».
+
+⚠️ **PAS UN SECOND DESSIN À CÔTÉ : LE MÊME.** `drawFarmBush`, pour l'état sauvage (`O_BUSH`), pioche
+maintenant directement dans les tableaux de sprites déjà construits pour la ville
+(`S.townShrub`/`S.townGoldBush`/`S.townLavender`/`S.townFlowerClump`), quatre espèces choisies par
+hachage de la case (comme `farmBushVariant` choisissait déjà la variante), avec le MÊME ancrage
+bas-centré et le MÊME cisaillement au contact que la ville (`lean / img.height`, la même unité des
+deux côtés — `TOWN_BUSH_SWAY_PX`/`bushLeanFormula`, déjà partagés, §8 de CLAUDE.md). Redessiner ces
+quatre espèces une seconde fois dans l'atlas de la ferme aurait été exactement « un paramètre qui
+double un paramètre » : deux buissons dorés, l'un qui diverge de l'autre au premier réglage.
+
+**L'état TAILLÉ (`O_BUSH_TRIM`, à la faux) garde son dôme procédural** (`farmBushTrimSprite`,
+FB_TRIM_*) : c'est un OUVRAGE (une coupe nette), pas une espèce — rien d'équivalent n'existe côté
+ville, et le mécanisme de taille/repousse de la ferme ne change pas.
+
+**L'ancien dessin sauvage est SUPPRIMÉ, pas laissé mort à côté** : `farmBushWildSprite`, `FB_WILD_W/
+H/BASE` et l'entrée « wild » de `farmBushAtlas()` n'existent plus. Un dessin qu'aucun banc n'appelle
+vieillit (§10) — celui-ci n'était plus appelé du tout.
+
+⚠️ **CE QUI SE PERD, ASSUMÉ, À CONFIRMER** : le buisson sauvage de la ferme ne change plus de
+couleur avec les saisons (rosissait au printemps, orangeait à l'automne) — les sprites de ville sont
+fixes toute l'année, comme en ville. Fidèle au mot « les MÊMES », mais c'est un renoncement réel ;
+si Guillaume le regrette en jouant une saison complète, la palette saisonnière peut revenir en
+teinte (`ctx.filter`, jamais un second dessin).
+
+### 2. La place centrale : un collier régulier autour de chaque buis taillé, pas un pari sur le hasard
+
+Les quatre buis taillés des parterres de coin (« arbres taillés au centre de chaque parterre »,
+posés au générateur depuis longtemps) n'étaient entourés de RIEN de systématique : la passe de
+clusters de ce matin (section suivante) traite leur parterre comme n'importe quel `G_TOWN_LAWN` —
+5 % de chance d'ancre par case, donc elle pouvait très bien n'y poser aucun buisson, ou les masser
+d'un seul côté. Une place symétrique par construction (quatre lampadaires, deux bancs en miroir,
+voir plus bas dans ce fichier) mérite mieux qu'un hasard sur ses seuls parterres.
+
+`generateTownWorld` plante désormais, pour chacun des quatre buis taillés, quatre buissons `shrub`
+aux quatre cases directement adjacentes (nord/sud/est/ouest) — un collier fixe, la même espèce pour
+les quatre côtés. `addGarden` fait tout le travail de sécurité (refuse une case déjà prise par un
+banc ou un lampadaire voisin) : « régulier » se lit dans le SEMIS lui-même, jamais dans l'espoir
+qu'un tirage aléatoire retombe bien.
+
+⚠️ **CE BLOC NE POUVAIT PAS VIVRE À CÔTÉ DU RESTE DE LA PLACE** (au tout début de
+`generateTownWorld`) : `addGarden` n'est déclarée que plus bas dans le même fichier — l'appeler plus
+tôt aurait levé « Cannot access before initialization ». Posé après, dans le bloc qui complète déjà
+le mobilier de la place (jardinières, panneaux, statue), comme tous les autres appels `addGarden` du
+fichier.
+
+**Vérifié EN JEU** (harnais local, section « Vérification » plus bas) : capture du canevas réel sur
+un des quatre parterres — trois des quatre buissons du collier bien visibles, symétriques autour du
+tronc (le quatrième, au nord, est probablement masqué par le débord du feuillage du buis taillé lui-
+même, qui déborde largement au-dessus de sa case — à confirmer une fois vu sans obstruction).
+
+### 3. `townShrub` : de trois couleurs à six, le jaune reste le plus fréquent
+
+La palette de `townShrubSprite` (fermeArt.js) n'avait que trois entrées (jaune/rose/blanc), tirées
+`vr % 3`. Deux couleurs ajoutées — corail et bleu pâle — et le jaune RÉPÉTÉ une deuxième fois dans
+le tableau plutôt qu'un poids séparé à tenir d'accord avec le tirage (§8 de CLAUDE.md) : c'est déjà
+la technique de `CLUSTER_KINDS` (fermeEngine.js) pour favoriser une espèce sans écrire un second
+système de pondération. Le tableau `townShrub` passe de trois canevas retenus à six
+(`[0,1,2,3,4,5].map(...)`) ; le jaune tombe 2 fois sur 6, chaque autre couleur 1 fois sur 6.
+
+### Vérification
+
+`next build` **✓ Compiled successfully** (l'avertissement `G_SOIL` est préexistant, §10). `node
+tools/verify-collision.mjs`, `node tools/verify-compo.mjs`, `node tools/verify-vallee.mjs` (223/223)
+et `node tools/verify-buissons.mjs` (42/42, moteur de la ferme intact — aucun n'a touché à
+`fermeEngine.js` côté ferme) **TOUT PASSE**. `node tools/verify-syntax.mjs` propre.
+
+`tools/render-buissons.mjs` a été RÉÉCRIT plutôt que laissé rouge : ses anciens contrôles
+comparaient l'atlas sauvage qui n'existe plus (un banc qui n'a jamais pu échouer parce qu'il ne
+teste plus rien de réel, §10, à l'envers — il aurait continué de dire « OK » sur un dessin mort). Il
+teste désormais ce que `drawFarmBush` dessine RÉELLEMENT pour l'état sauvage : les quatre espèces
+sortent bien du hachage de case sur un échantillon de 64 cases, chacune se peint, l'ancrage reste au
+pied de la case pour les deux états. **17/17.** Ses deux planches (`tools/out/buissons-planche.png`,
+`tools/out/buissons-ferme.png`) montrent les quatre espèces côte à côte et un vrai morceau de ferme
+généré, buissons et arbres mêlés.
+
+**Vérifié EN JEU, pas seulement au banc** : harnais local `node tools/fake-supabase.mjs` +
+`arcardi-local` (port 3100, §10 de CLAUDE.md), page jetable montant `<FermeGame>` en solo hôte,
+**supprimée avant la fin de cette livraison**. Peuplé la ferme (menu développeur, 20 résidents),
+téléporté à Valley Town, marché jusqu'à la Grand-Place : les quatre espèces et leurs nouvelles
+couleurs (dont le corail et le bleu pâle, neufs) se voient bien à l'écran, dans les jardins comme
+autour d'un buis taillé de parterre. Aucune manipulation Supabase.
+
+⚠️ **CE QUI N'EST PAS FAIT** : la ferme peuplée n'a pas été rejouée à DEUX clients avec ce nouveau
+décor (§13 de CLAUDE.md — toujours le même chantier en attente) ; les trois autres parterres de la
+place n'ont pas été inspectés d'aussi près que le premier.
+
+## Hors-zip 2026-09-20 (suite) — LES HERBES HAUTES DU SOUS-BOIS : LA ZONE S'ÉTEND, LE CŒUR SE DENSIFIE
+
+**Guillaume, après avoir vu le cisaillement (section suivante, livré plus tôt le même jour)** :
+*« les hautes herbes sont réussies, étendre leur répartition un peu plus dans le sud-est de la map
+valley town »*, puis *« peut être + de densité (qu'on voie un peu moins le sol vert clair classique
+entre les herbes hautes dans les zones super denses. Dégradé »*.
+
+**Mesuré avant de choisir un chiffre (§8 de CLAUDE.md), jamais au jugé** : `townWoodDepth(x,y)`
+(fermeEngine.js) est un champ CONTINU (pente + bruit), défini sur toute la carte — le rectangle
+`TOWN_WOOD` n'est qu'une fenêtre où le générateur va le LIRE, pas une limite du champ lui-même. Un
+balayage direct de la fonction exportée (script Node, aucun navigateur) montre que la profondeur
+positive continue bien au-delà de ce rectangle, presque uniquement vers l'OUEST : la pente Y vaut
+1,00 (la profondeur tombe d'un cran par case remontée vers le nord) contre une pente X de 0,19 (cinq
+fois plus lente vers l'ouest). Élargir le rectangle de 40 cases à l'ouest capture 43 cases de
+profondeur positive de plus (719 → 762, plateau à 766 dès +60) ; l'élargir de 8 au nord en capture 8
+de plus (719 → 727), PLUS RIEN au-delà. **+40 ouest / +8 nord** est donc le point où la frange encore
+positive est presque entièrement couverte, sans aller chercher des cases à profondeur nulle pour
+rien.
+
+⚠️ **SEUL LE BALAYAGE DE L'HERBE S'ÉLARGIT, PAS CELUI DES ARBRES** : la futaie garde exactement le
+rectangle `TOWN_WOOD` d'hier — les pentes, l'origine et le bruit qui le règlent ont été balayés et
+vérifiés à zéro clairière enfermée (`verify-vallee`), et les toucher aurait remis en jeu quatre
+mesures accordées ensemble pour rien (voir leur historique dans fermeConstants.js). L'herbe est un
+décor MOU (`TOWN_SOFT_PROPS`) : elle ne peut fermer aucun passage, donc l'étendre ne remet rien en
+cause côté circulation — confirmé par `verify-vallee` (223/223, inchangé) et `verify-collision`
+après le changement.
+
+**La densité** : le PLAFOND (`TOWN_WOOD_GRASS_DENSITY`) passe de 0,92 à 0,97 — la rampe elle-même
+(`min(1, profondeur/DEPTH)`) ne change pas, Guillaume tenait explicitement au dégradé. Monter le
+plafond resserre le cœur du bois sans aplatir la lisière, qui reste clairsemée.
+
+**Vérifié** : `next build` **✓**, `verify-collision`/`verify-compo`/`verify-vallee` (223/223) **TOUT
+PASSE** (aucune régression sur les arbres, la futaie n'a pas bougé). ⚠️ **CE QUI N'EST PAS FAIT** :
+pas encore rejoué EN JEU à l'endroit précis de l'extension (le coin sud-est, loin de tout point de
+téléport du menu développeur) — le calcul et les bancs prouvent l'extension et la densité, pas
+encore vus à hauteur de personnage.
+
 ## Hors-zip 2026-09-20 — LE NAVIRE TANGUE UN PEU SUR L'EAU
 
 **Demande de Guillaume** : *« le bateau doit tanguer un peu sur le lac/eau. »*

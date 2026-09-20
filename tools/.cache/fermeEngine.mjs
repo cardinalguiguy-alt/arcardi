@@ -6205,16 +6205,44 @@ export function generateTownWorld() {
       }
       /* 2026-09-19 — LE SOUS-BOIS. Demande de Guillaume, en prolongement de la
          mécanique des buissons interactifs : « étendre à des herbes hautes […]
-         je vois la partie sud-est ». ⚠️ MÊME CHAMP `wood`, MÊME RECTANGLE `wb`
+         je vois la partie sud-est ». ⚠️ MÊME CHAMP `wood`, MÊME ORIGINE/PENTES
          QUE LA FUTAIE CI-DESSUS — voir TOWN_WOOD_GRASS_DENSITY (fermeConstants)
          pour le pourquoi de ne pas inventer un second champ. Passe posée APRÈS
          la futaie : `addGarden` refuse déjà toute case où un arbre vient d'être
          planté (`objects[i] !== O_NONE`), donc « pas de buisson sous un arbre »
-         (§4 de CLAUDE.md) est tenu sans une ligne de garde de plus ici. */
-      for (let y = wb.y; y < Math.min(H - 1, wb.y + wb.h); y++) {
-        for (let x = wb.x; x < Math.min(W - 1, wb.x + wb.w); x++) {
+         (§4 de CLAUDE.md) est tenu sans une ligne de garde de plus ici.
+         ⚠️⚠️ 2026-09-20 (Guillaume, en jeu : « les hautes herbes sont réussies,
+         étendre leur répartition un peu plus dans le sud-est ») : LE RECTANGLE
+         DE BALAYAGE DE L'HERBE N'EST PLUS `wb`, CELUI DES ARBRES. `wood(x,y)`
+         est un champ CONTINU (pente + bruit, `townWoodDepth`, fermeEngine.js),
+         défini sur toute la carte — `wb` n'était que la fenêtre où on allait le
+         LIRE, pas une limite du champ lui-même. Mesuré avant de choisir un
+         chiffre (§8 de CLAUDE.md, jamais au jugé) : un balayage de la carte
+         entière avec `townWoodDepth` montre que la profondeur positive continue
+         BIEN AU-DELÀ de `wb`, essentiellement vers l'OUEST (pente Y de 1,00
+         contre pente X de 0,19 — la profondeur tombe cinq fois plus vite si on
+         remonte au nord que si on s'éloigne à l'ouest) : élargir `wb` de 40
+         cases à l'ouest ajoute 43 cases de profondeur positive (719 → 762),
+         encore 4 à +60 (plateau à 766) ; élargir de 8 au nord en ajoute 8
+         (719 → 727), PLUS RIEN au-delà (plateau à 727 dès +8). +40 ouest / +8
+         nord est donc le point où quasi TOUTE la frange encore positive est
+         couverte, sans aller chercher des cases à profondeur nulle pour rien —
+         « un peu plus », pas un second bois. ⚠️ SEUL CE RECTANGLE CHANGE : la
+         futaie ci-dessus garde `wb` tel quel, donc les quatre mesures de
+         `render-parc`/`verify-vallee` sur les ARBRES (balayées et vérifiées à
+         zéro clairière enfermée) restent exactement celles d'hier — l'herbe est
+         un décor MOU (TOWN_SOFT_PROPS), elle ne peut fermer aucun passage. */
+      const gwb = { x: Math.max(0, wb.x - 40), y: Math.max(0, wb.y - 8), w: wb.w + 40, h: wb.h + 8 };
+      for (let y = gwb.y; y < Math.min(H - 1, gwb.y + gwb.h); y++) {
+        for (let x = gwb.x; x < Math.min(W - 1, gwb.x + gwb.w); x++) {
           const d = wood(x, y);
           if (d <= 0) continue;
+          /* ⚠️ 2026-09-20 (Guillaume, en jeu : « peut-être + de densité, qu'on
+             voie un peu moins le sol vert clair classique entre les herbes
+             hautes dans les zones super denses. Dégradé ») : le DÉGRADÉ reste
+             la même rampe `min(1, d/DEPTH)` — seul le PLAFOND monte (0,92 →
+             0,97, TOWN_WOOD_GRASS_DENSITY), donc chaque tranche de profondeur
+             se peuple un peu plus, la plus forte en tête, sans rien aplatir. */
           const dens = Math.min(1, d / C.TOWN_WOOD_DEPTH) * C.TOWN_WOOD_GRASS_DENSITY;
           // ⚠️ Hachage décalé de celui des arbres (41/43/13/17 contre 13/11/7/3) :
           // la même paire aurait tiré l'herbe et l'arbre du même coup, donc
@@ -6267,6 +6295,28 @@ export function generateTownWorld() {
     // La statue du belvédère reste ; sous le tribunal, la composition 467 a
     // autorité et ne contient pas de statue.
     addProp(C.TOWN_BELVEDERE.x + (C.TOWN_BELVEDERE.w >> 1), C.TOWN_BELVEDERE.y + 5, "statue", true);
+    /* Hors-zip 2026-09-20 (demande Guillaume : « sur la place centrale, les
+       buissons doivent être disposés de manière régulière autour des arbres
+       des carrés. Effet taillé et travaillé sur la zone. propre ») : les
+       quatre buis taillés de la place (juste au-dessus, « arbres taillés au
+       centre de chaque parterre ») ne sont entourés de RIEN — la passe de
+       clusters du §15 bis (components/ferme/README.md) traite leur parterre
+       comme n'importe quel G_TOWN_LAWN, donc peut très bien n'y poser aucun
+       buisson, ou les masser d'un seul côté. Une place SYMÉTRIQUE par
+       construction (le bloc plus haut : quatre lampadaires, deux bancs en
+       miroir) mérite mieux qu'un hasard sur ses seuls parterres : un COLLIER
+       régulier de quatre buissons fleuris, un de chaque côté du buis, la même
+       espèce pour les quatre — « taillé et travaillé » se lit dans la
+       RÉGULARITÉ du semis, pas dans un nouveau dessin.
+       ⚠️ Ne peut pas être fait plus haut, à côté du reste de la place
+       (§4438-4500) : `addGarden` n'existe pas encore à cet endroit du fichier
+       (déclaré juste en dessous, ligne ~4729) — l'appeler avant lèverait
+       « Cannot access before initialization ». Ce bloc-ci tourne après, comme
+       toutes les jardinières `addGarden` de ce fichier. */
+    for (const [ox, oy] of [[5, 5], [pz2.w - 6, 5], [5, pz2.h - 6], [pz2.w - 6, pz2.h - 6]]) {
+      const tx = pz2.x + ox, ty = pz2.y + oy;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) addGarden(tx + dx, ty + dy, "shrub");
+    }
   }
   /* ═══ ZIP 427 — LE MOBILIER DE LA VIE SOCIALE ═══
      Trois ajouts, et chacun répond à une mécanique de ce zip plutôt qu'à un

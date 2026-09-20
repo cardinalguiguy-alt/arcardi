@@ -37,13 +37,82 @@ même espèce, et rien ne distinguait un jardin d'un pré. Remplacé par des clu
 (3 à 6 buissons, une ancre + un rayon de 2 cases), ancrés très majoritairement sur `G_TOWN_LAWN` —
 le champ que le générateur peint déjà sur tout ce qu'il traite comme un jardin dessiné (parc,
 parterres de la place, verger), réutilisé tel quel plutôt qu'un second zonage (§4 de CLAUDE.md).
-Récit complet, le code, et la preuve — une carte de la ville rejouée en Node (position + espèce de
-chaque buisson, sans navigateur) qui montre les clusters massés dans le parc : **`components/ferme/
-README.md`, section « Hors-zip 2026-09-20 — LES BUISSONS DE VILLE ».** `verify-collision` (554
-cases, 449 sur les six espèces de cette passe) et `verify-compo` TOUT PASSE, `verify-syntax` propre,
-aucune manipulation Supabase. **Attend le regard de Guillaume** : la carte prouve que l'algorithme
-fait ce qui a été demandé (clusters, concentration en espace vert), pas encore rejoué EN JEU, à
-hauteur de personnage (§13).
+`verify-collision` (554 cases, 449 sur les six espèces de cette passe) et `verify-compo` TOUT PASSE
+à cette étape.
+
+### 2026-09-20 (suite du jour) — La ferme reprend les buissons de ville, la place gagne son collier, le buis gagne des couleurs
+
+Trois demandes de plus, dans la foulée : « les buissons [de la ferme] sont cheap, je veux les mêmes
+que sur valley town » · « sur la place centrale, les buissons doivent être disposés de manière
+régulière autour des arbres des carrés, effet taillé et travaillé, propre » · « varier les couleurs
+des fleurs des buis […] en ajouter deux, les jaunes resteront les plus répandues ». Trois
+changements, un seul système : (1) `drawFarmBush` (fermeArt.js) dessine désormais, pour l'état
+sauvage, les MÊMES sprites que la ville (quatre espèces tirées par hachage de case) au lieu de son
+propre dessin à une seule silhouette — l'ancien dessin (`farmBushWildSprite`, son atlas) est
+SUPPRIMÉ, pas laissé mort à côté ; le taillé (faux) garde son dôme procédural, un ouvrage sans
+équivalent en ville ; (2) les quatre buis taillés des parterres de coin de la place reçoivent chacun
+un collier RÉGULIER de quatre buissons (un par côté), posé explicitement plutôt qu'abandonné à la
+passe de clusters aléatoires ci-dessus qui pouvait très bien n'y rien poser ; (3) `townShrubSprite`
+passe de trois couleurs à six (jaune répété — reste le plus fréquent —, rose, blanc, corail, bleu
+pâle), même technique de pondération par répétition que `CLUSTER_KINDS` (§8, jamais un second
+système de poids). Récit complet, le code, et pourquoi l'ancien dessin sauvage n'a pas été gardé à
+côté : **`components/ferme/README.md`, section « Hors-zip 2026-09-20 (suite du jour) — LA FERME
+REJOINT LA VILLE ».** `next build` **✓**, `verify-collision`/`verify-compo`/`verify-vallee`
+(223/223)/`verify-buissons` (42/42, moteur de la ferme intact) **TOUT PASSE**, `verify-syntax`
+propre. `tools/render-buissons.mjs` a été RÉÉCRIT (l'ancien testait l'atlas sauvage qui n'existe
+plus — un banc qui n'aurait plus rien pu attraper, §10 à l'envers) : **17/17**, planches dans
+`tools/out/buissons-*.png`. **Vérifié EN JEU** (harnais `fake-supabase`/page jetable, supprimée
+avant la fin de la livraison) : les quatre espèces et les couleurs neuves (corail, bleu) se voient
+à l'écran, le collier de la place aussi — trois de ses quatre buissons nettement visibles autour du
+tronc, le quatrième (nord) probablement masqué par le feuillage du buis lui-même, à confirmer sans
+obstruction. ⚠️ **CE QUI SE PERD, ASSUMÉ** : le buisson sauvage de la ferme ne change plus de couleur
+avec les saisons (les sprites de ville sont fixes toute l'année) — fidèle au mot « les MÊMES », mais
+un vrai renoncement, à confirmer que ça convient une fois vu par Guillaume sur une saison entière.
+**Attend le regard de Guillaume** : pas encore rejoué à deux clients, les trois autres parterres de
+la place pas inspectés d'aussi près que le premier (§13).
+
+### 2026-09-20 (suite du jour) — Les herbes hautes du sous-bois : la zone s'étend, le cœur se densifie
+
+Après le cisaillement (section suivante) : « les hautes herbes sont réussies, étendre leur
+répartition un peu plus dans le sud-est » puis « peut-être + de densité […] dans les zones super
+denses. Dégradé. » **Mesuré avant de choisir un chiffre (§8), jamais au jugé** : un balayage Node de
+`townWoodDepth(x,y)` (champ continu, fermeEngine.js) montre que la profondeur positive continue bien
+au-delà du rectangle `TOWN_WOOD`, presque uniquement vers l'OUEST (pente Y cinq fois plus raide que
+la pente X) — élargir de 40 cases à l'ouest et 8 au nord capture la quasi-totalité de la frange
+encore positive (719 → 774 cases, plateau atteint). ⚠️ **SEUL LE BALAYAGE DE L'HERBE S'ÉLARGIT** :
+la futaie garde le rectangle `TOWN_WOOD` d'hier tel quel, ses pentes/origine/bruit balayés et
+vérifiés à zéro clairière enfermée restent intouchés — l'herbe est un décor MOU
+(`TOWN_SOFT_PROPS`), elle ne peut fermer aucun passage. Le plafond de densité
+(`TOWN_WOOD_GRASS_DENSITY`) monte de 0,92 à 0,97 ; la rampe du dégradé elle-même ne change pas,
+Guillaume y tenait explicitement. Récit et calcul : **`components/ferme/README.md`, section
+« Hors-zip 2026-09-20 (suite) — LES HERBES HAUTES DU SOUS-BOIS : LA ZONE S'ÉTEND ».** `next build`
+**✓**, `verify-collision`/`verify-compo`/`verify-vallee` (223/223) **TOUT PASSE** (aucune régression
+sur les arbres). **Attend le regard de Guillaume** : pas encore rejoué EN JEU au coin sud-est
+précisément (loin de tout téléport du menu développeur) — calcul et bancs prouvent l'extension et la
+densité, pas encore vus à hauteur de personnage (§13).
+
+### 2026-09-20 — Jérôme Martial reste figé sur certaines fermes : cause trouvée et corrigée
+
+Guillaume, en jeu : « jerome martial qui est figé sur certaines fermes. impossible de le soigner. »
+Fausse piste écartée d'abord : `injuredUntil` (la bagarre Tristan/Jérôme) — rien dans la capture
+n'indique une blessure, et le mécanisme de soin sur ce champ est déjà correct et déjà vérifié
+ailleurs. **Cause réelle, dans `residentRoam` (FermeGame.js)** : un artisan posté (Jérôme compris)
+cherche son prochain point de rôdaille dans un rayon RESSERRÉ autour de son poste (1,4 case, 24
+tirages aléatoires) ; si le joueur a planté des arbres/rochers/décor tout autour de la sucrerie —
+un agencement de ferme parfaitement légitime, juste dense à cet endroit précis — cette recherche
+échoue à CHAQUE tentative, indéfiniment : `roamTarget` ne se pose jamais, l'artisan ne bouge plus
+JAMAIS sur cette ferme précise (« certaines fermes » = celles dont l'agencement sature ce petit
+rayon). Rien à soigner : ce n'est pas une blessure, c'est un pathing qui n'a plus une case où
+aboutir — d'où l'échec de la trousse de soins. **Corrigé** : la recherche s'élargit désormais au
+rayon complet de l'artisan, puis au double, avant d'abandonner — l'artisan reste posté près de son
+atelier dans l'immense majorité des cas (le petit rayon suffit déjà), et ne reste bloqué que si la
+zone est saturée sur plusieurs cases dans toutes les directions, un cas qui doit maintenant rester
+rarissime. `next build` **✓**, `verify-syntax` propre — le changement est un simple repli en
+cascade (`||`) qui n'altère aucun chemin déjà vert. ⚠️ **CE QUI N'EST PAS FAIT** : pas de séance en
+jeu dédiée à reproduire le blocage (planter des arbres autour d'une sucrerie, attendre, vérifier
+qu'il se libère) — le raisonnement est solide et le risque de régression est nul (aucun
+comportement existant n'est modifié, seul un cas d'échec gagne un repli), mais seul Guillaume peut
+confirmer que Jérôme bouge de nouveau sur SA ferme précise où le blocage a été vu.
 
 ### 2026-09-20 — Les herbes hautes du sous-bois sud-est : bitmap Gemini, vague spatiale, cisaillement
 

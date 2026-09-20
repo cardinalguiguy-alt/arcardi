@@ -12075,7 +12075,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             if (ro && ro.skill === "beekeeper") res.smoking = false;
             const rMul = 0.3;
             const arx = Math.max(1.4, rx * rMul), ary = Math.max(1.4, ry * rMul);
-            const t = pickRoamTarget(w, anchor.x, anchor.y, arx, ary, allowTilled);
+            /* 2026-09-20 (bug remonté par Guillaume, « Jérôme reste figé sur
+               certaines fermes, impossible de le soigner ») : pickRoamTarget
+               tire 24 points dans ce rayon resserré et renvoie null si AUCUN
+               n'est libre — ce qui arrive vraiment quand le joueur a planté
+               des arbres/rochers/décor juste autour du poste de l'artisan
+               (rayon de 1,4 case seulement, très facile à saturer). Avant ce
+               correctif, un échec ici rejouait la MÊME tentative 800 ms plus
+               tard, sur la même géométrie bloquée : `roamTarget` ne se posait
+               jamais, l'artisan ne bougeait plus JAMAIS sur cette ferme — pas
+               une blessure (rien à soigner, d'où l'échec du pansement), un
+               pathing qui n'a plus une seule case où aboutir. On élargit donc
+               la recherche (rayon complet de l'ancre, puis ×2) avant
+               d'abandonner : l'artisan reste posté dans l'immense majorité des
+               cas (le rayon resserré suffit), et ne se retrouve coincé à vie
+               que si la zone est saturée sur plusieurs cases dans toutes les
+               directions — un cas qui doit maintenant rester rarissime. */
+            const t = pickRoamTarget(w, anchor.x, anchor.y, arx, ary, allowTilled)
+              || pickRoamTarget(w, anchor.x, anchor.y, rx, ry, allowTilled)
+              || pickRoamTarget(w, anchor.x, anchor.y, rx * 2, ry * 2, allowTilled);
             if (t) { res.roamTarget = t; res.roamMeet = null; res.nextRoamAt = now + 5000 + Math.random() * 7000; }
             else { res.roamTarget = null; res.roamMeet = null; res.nextRoamAt = now + 800; }
           }
