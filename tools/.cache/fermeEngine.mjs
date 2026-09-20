@@ -6203,6 +6203,27 @@ export function generateTownWorld() {
           objHp.set(i, C.TREE_HP);
         }
       }
+      /* 2026-09-19 — LE SOUS-BOIS. Demande de Guillaume, en prolongement de la
+         mécanique des buissons interactifs : « étendre à des herbes hautes […]
+         je vois la partie sud-est ». ⚠️ MÊME CHAMP `wood`, MÊME RECTANGLE `wb`
+         QUE LA FUTAIE CI-DESSUS — voir TOWN_WOOD_GRASS_DENSITY (fermeConstants)
+         pour le pourquoi de ne pas inventer un second champ. Passe posée APRÈS
+         la futaie : `addGarden` refuse déjà toute case où un arbre vient d'être
+         planté (`objects[i] !== O_NONE`), donc « pas de buisson sous un arbre »
+         (§4 de CLAUDE.md) est tenu sans une ligne de garde de plus ici. */
+      for (let y = wb.y; y < Math.min(H - 1, wb.y + wb.h); y++) {
+        for (let x = wb.x; x < Math.min(W - 1, wb.x + wb.w); x++) {
+          const d = wood(x, y);
+          if (d <= 0) continue;
+          const dens = Math.min(1, d / C.TOWN_WOOD_DEPTH) * C.TOWN_WOOD_GRASS_DENSITY;
+          // ⚠️ Hachage décalé de celui des arbres (41/43/13/17 contre 13/11/7/3) :
+          // la même paire aurait tiré l'herbe et l'arbre du même coup, donc
+          // jamais l'un sans l'autre — deux couches qui se seraient lues comme
+          // un seul décor plutôt que deux motifs indépendants.
+          if (townHash2(x * 41 + 13, y * 43 + 17) >= dens) continue;
+          addGarden(x, y, "tallGrass");
+        }
+      }
     }
   }
   // ---- LE QUARTIER DES ARTISANS, à l'est. Trois parcelles (TOWN_HOUSES) plus

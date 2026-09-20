@@ -1,4 +1,93 @@
-# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-03
+# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-19
+
+## Hors-zip 2026-09-19 — LES HERBES HAUTES DU SOUS-BOIS SUD-EST, EN COURBE
+
+**Demande de Guillaume, en prolongement direct des buissons interactifs de la ferme** : *« il faut
+que ce soit étendu à des herbes hautes […] je vois la partie sud-est de la map valley town »*, puis
+*« dessiner de vraies herbes hautes, denses, arrivant à mi hauteur du perso, et réagissant au
+contact du perso. très important que ce soit hyper soigné »*, puis, en cours de dessin, sur le
+défaut précis à éviter : *« il faut que les herbes soient courbes, pas des tiges géométriques
+nulles […] l'animation doit être fluide. Elles doivent se plier ».*
+
+⚠️⚠️ **DEUX DÉCISIONS DEMANDÉES AVANT DE DESSINER (§2 de CLAUDE.md), ET LES DEUX RECOMMANDATIONS ONT
+ÉTÉ SUIVIES** : un vrai découpage avant/arrière (l'herbe recouvre réellement les jambes, pas un
+sprite plus grand posé en bloc devant ou derrière) et un rendu procédural (canevas, comme le reste
+de la ville) plutôt qu'un import Gemini — la végétation est pourtant citée en exemple au §2, mais le
+découpage avant/arrière voulu est bien plus simple à obtenir sur des courbes qu'on dessine
+soi-même que sur un bitmap unique.
+
+### Ce qui est réutilisé, et pourquoi rien n'est dupliqué
+
+- **Le champ de densité est celui du bois** (`townWoodDepth`, `TOWN_WOOD_DEPTH`), pas un second
+  champ : `TOWN_WOOD_GRASS_DENSITY` (0,65) le rescale, mais c'est le MÊME gradient que celui des
+  arbres — sinon on aurait pu dessiner une clairière nue en plein cœur du bois. Le hachage de
+  placement est décalé de celui des arbres (`x*41+13` contre `x*13+7`) pour que les deux motifs
+  restent indépendants au lieu de toujours tomber ensemble.
+- **`addGarden` refuse déjà une case où un arbre vient d'être planté** (`objects[i] !== O_NONE`) :
+  aucune garde neuve à écrire pour tenir « pas de buisson sous un arbre » (§4 de CLAUDE.md) — la
+  passe d'herbe est simplement posée APRÈS la futaie dans `generateTownWorld` (fermeEngine.js).
+- **Le ressort est celui des buissons** (`bushSwayRef`, l'unique table partagée par TOUT décor mou
+  de la ville). `bushSpringLean` a été refactorée pour exposer sa formule pure
+  (`bushLeanFormula(dir, age, mul, phase)`) sans changer son comportement pour les buissons
+  existants ; l'herbe l'appelle par brin avec une dispersion (`mul` 0,7–1,3, `phase` ±90 ms) pour
+  que le bouquet se redresse en ondulant plutôt qu'en bloc. **Zéro second ressort.**
+- **Le ralentissement et la traversée sont ceux des buissons** : `"tallGrass"` ajouté à
+  `TOWN_SOFT_PROPS` suffit — la dérivation `tw.soft` (fermeEngine.js) et le test d'exemption dans
+  `blockedTown` (FermeGame.js) ne connaissent que la LISTE, jamais un `kind` en dur.
+
+### Ce qui est nouveau : le tri en avant-plan, et pourquoi un simple `+ε` ne suffisait pas
+
+Le personnage occupe sa case avec un **y continu** (de `pr.y` à `pr.y+1`), donc sa clé de marcheur
+balaie tout l'intervalle `[(pr.y+1)·T, (pr.y+2)·T)` selon l'endroit exact où il se tient dans la
+case. Un epsilon au sens du pont (deux moitiés ancrées à la même rangée, `TOWN_SORT_EPS`) aurait été
+mangé dès qu'il avance vers le sud de la case, et l'herbe serait repassée derrière lui à
+mi-traversée. La clé, quand quelqu'un occupe la case **maintenant** (voir plus bas), est donc
+poussée jusqu'au bord sud de cet intervalle moins l'epsilon — plus grande que celle de n'importe
+quel marcheur encore dans cette case, mais toujours sous la clé naturelle de la rangée suivante,
+donc sans jamais recouvrir un décor qui appartient à la case d'après.
+
+⚠️ **« OCCUPÉ MAINTENANT » N'EST PAS « LE RESSORT N'EST PAS ENCORE RETOMBÉ »** : celui-ci reste non
+nul jusqu'à 520 ms après le départ (`TOWN_BUSH_SWAY_FADE_MS`) — le lire tel quel aurait affiché
+l'herbe devant un personnage déjà reparti. `TOWN_TALLGRASS_OCCUPIED_MS` (120 ms) ne regarde que
+l'ÂGE de la dernière pression, qui reste proche de zéro tant que quelqu'un se tient dans la case
+(`townBushPress` est appelé chaque image, qu'on marche ou non — hors-zip 2026-09-02, voir plus
+haut).
+
+### Deux défauts trouvés EN JEU, pas au banc — et c'est le point de cette livraison
+
+⚠️⚠️⚠️ **PREMIER BROUILLON, INVISIBLE : LA PALETTE SE CONFONDAIT AVEC LE GAZON.** La première
+palette (`#2c5a26`/`#3f7a34`/`#5a9c48`) est à moins de dix points de luminance des tons du gazon lui
+-même (`townGrassSurface`, BASE `#5e9251`, P1 `#689b58` — fermeArt.js) : exactement la mesure de
+couleur muette du §8 de CLAUDE.md, appliquée cette fois à un CONTOUR plutôt qu'à une statistique. Le
+brin se fondait dans sa pelouse au lieu de s'en détacher. Trouvé en comparant les deux palettes
+après une capture en jeu qui ne montrait RIEN de nouveau à l'endroit exact où 75 touffes venaient
+d'être plantées. **Palette reprise plus sombre à la base (`#1e4318`) et plus saturée à la pointe
+(`#3f8f2e`/`#6fc247`), cerne opaque (`#12280d`)** — la forme courbe, seule, ne garantissait rien.
+
+⚠️⚠️⚠️ **SECOND BROUILLON, DROIT : LA « COURBE » ÉTAIT UNE DROITE DÉGUISÉE.** Une quadratique dont le
+point de contrôle tombe (à peu près) SUR la droite base→pointe rend… une droite. Le premier jet
+plaçait ce point à `bend × 0,55` — à moins de 5 % de la droite base-pointe pour les valeurs de
+penchant réellement observées — donnant exactement « une tige géométrique nulle », le défaut que
+Guillaume venait de nommer par avance. Trouvé en rendant les brins en magenta uni (diagnostic
+temporaire, jamais livré) pour éliminer toute ambiguïté de couleur avec le décor existant, puis en
+zoomant sur le rendu réel. **`TOWN_TALLGRASS_BOW` (2,4–4,4 px) écarte maintenant le point de
+contrôle PERPENDICULAIREMENT à cette droite, indépendamment du penchant** : à penchant nul (aucun
+contact), le brin est déjà arqué — une vraie faucille, pas un piquet incliné.
+
+**Vérifié en jeu, écran par écran**, pas seulement au banc : bouquet visible et net à la lisière du
+bois (rive de la passe, `x≈167,y≈163`), courbe en faucille confirmée par zoom sur le canevas réel,
+et le personnage debout dans une touffe montre l'herbe REDESSINÉE PAR-DESSUS ses jambes tout en
+laissant le buste dégagé — l'effet « on marche dedans » demandé, pas une illusion de hauteur seule.
+**Bancs** : `next build` **✓ Compiled successfully**, `verify-collision` **TOUT PASSE** (tallGrass
+listé explicitement — 75 cases, traversées dans les quatre sens, ralenties ×0,72 comme tout décor
+mou, aucun mur invisible), `verify-compo` **tous les contrôles passent** (comptée comme les autres
+décors procéduraux, une case). Aucune manipulation Supabase nécessaire.
+
+⚠️ **CE QUI N'EST PAS FAIT** : aucun arrêt du menu dev ne pose directement dans le sous-bois (il a
+fallu téléporter à « la passe » puis marcher) — à ajouter le jour où ce coin de carte redemande
+d'être regardé souvent. Et surtout, per §13 de CLAUDE.md : ce qui précède prouve que le mécanisme
+MARCHE et que rien n'est cassé — seul Guillaume, en y jouant pour de vrai, peut juger si le résultat
+est *agréable*, ce qu'aucun banc ne mesure.
 
 ## Hors-zip 2026-09-03 — LOT A3 : la cinquième sœur se cache dans les buissons, et on la PISTE
 

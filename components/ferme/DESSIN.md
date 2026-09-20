@@ -197,3 +197,28 @@ coordonnées calées à la main : sinon chaque changement de taille — ou un é
 corps — repose la question pour chaque trait, et les sourcils finissent sur du vide. Même famille
 que le chapeau et les éclats de la reine, qui étaient en offsets absolus « natifs à leur trame »
 et sont devenus faux dès que la trame a bougé.
+
+---
+
+## 2026-09-19 — LES HERBES HAUTES : UNE QUADRATIQUE N'EST COURBE QUE SI ON LUI DEMANDE DE L'ÊTRE
+
+⚠️⚠️⚠️ **UN POINT DE CONTRÔLE POSÉ SUR LA DROITE BASE→POINTE REND UNE DROITE**, quel que soit le
+nombre de `quadraticCurveTo` qu'on empile. Le premier brin d'herbe de Valley Town plaçait son point
+de contrôle à `bend × 0,55` — c'est-à-dire à moins de 5 % de la droite qui va du pied à la pointe,
+pour les penchants réellement observés en jeu. Le rendu était un piquet incliné, pas un brin courbé
+: exactement le défaut que Guillaume avait nommé par avance (« pas des tiges géométriques nulles »).
+Personne ne l'aurait vu à la lecture du code — la ligne APPELLE bien `quadraticCurveTo`, deux fois,
+avec un `bend` qui varie ; rien n'y dit « ceci rend une droite ». Il a fallu le voir en jeu, en zoom,
+avec une couleur diagnostique (magenta) pour éliminer toute confusion avec le décor existant.
+⚠️ **LA PARADE : SÉPARER LE PENCHANT DE LA POINTE ET LA COURBURE DU VENTRE.** Un `bow` écarte le
+point de contrôle PERPENDICULAIREMENT à la droite base→pointe, indépendamment d'où la pointe
+atterrit (`bend`) — à penchant nul (aucun contact), le brin reste déjà arqué. *Un point de contrôle
+qui suit la même formule que les deux extrémités qu'il relie ne courbe rien : il les recopie.*
+
+⚠️⚠️ **COROLLAIRE, MÊME LIVRAISON : UNE COULEUR SE MESURE CONTRE CE QU'ELLE DOIT RECOUVRIR, PAS
+DANS L'ABSOLU.** La palette du même brin (`#2c5a26`/`#3f7a34`/`#5a9c48`) était, prise seule, un vert
+tout à fait raisonnable — et à moins de dix points de luminance du gazon qu'il devait pourtant
+dominer visuellement (`townGrassSurface`, `#5e9251`/`#689b58`, fermeArt.js). Le brin existait, sa
+forme était correcte, et il restait malgré tout invisible : la mesure de couleur du §8 de CLAUDE.md
+(« l'écart, pas la moyenne ») s'applique aussi à un contour posé sur un fond, pas seulement à une
+image entière.

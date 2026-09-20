@@ -7,9 +7,20 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-**La quête de l'étoile est finie** (D1–D13 et D15 livrés, D14 volontairement de côté). Texte de
-référence : `components/ferme/QUETE.md`, section « AUTORITÉ 2026-09-13 bis ». Rien n'y a bougé
-depuis — ce fichier n'en garde plus le détail, périmé dès la livraison suivante.
+### 2026-09-19 — Les herbes hautes du sous-bois sud-est, courbes, vérifiées en jeu
+
+Demande de Guillaume, en prolongement des buissons interactifs : des herbes hautes, denses,
+à mi-hauteur du personnage, qui réagissent au contact — « hyper soigné », puis, en cours de
+dessin : « courbes, pas des tiges géométriques nulles […] l'animation doit être fluide ».
+Récit complet, décisions (découpage avant/arrière + procédural, les deux recommandées et suivies)
+et preuves écran par écran : **`components/ferme/README.md`, section « Hors-zip 2026-09-19 — LES
+HERBES HAUTES DU SOUS-BOIS SUD-EST ».** `next build` vert, `verify-collision` et `verify-compo`
+TOUT PASSE, aucune manipulation Supabase. ⚠️ **LEÇON À RETENIR, AU-DELÀ DE CETTE HERBE** : deux
+défauts invisibles au code et aux bancs n'ont été trouvés qu'EN JEU — une palette à moins de dix
+points de luminance du gazon qu'elle est censée couvrir (même famille que la mesure de couleur
+muette du §8), et une quadratique dont le point de contrôle tombait presque SUR la droite
+base→pointe, donc rendait une droite déguisée en courbe. **Attend le regard de Guillaume** : le
+mécanisme est vérifié correct, pas encore jugé *agréable* (§13).
 
 ### 2026-09-19 — Où's that : bogues B1–B8 (et M1–M3) corrigés, vérifiés en jeu à deux clients
 
@@ -34,9 +45,10 @@ d'écran refuse de s'exécuter tant que le volet n'est pas affiché.
 Le chantier naval proposé au quai (fenêtre Oui/Non une fois par session), la repousse des buissons
 taillés après 3 jours réels (`bushTrim`, aucun raccourci dans le menu dev) et la verdure ×1,8 de
 Valley Town (`TOWN_SCATTER_DENSITY`) attendent le regard de Guillaume ; le pourquoi de chaque choix
-est en commentaire à côté du code. ⚠️ **Passe d'élagage du §14.2 toujours NON FAITE** (1 482 lignes) :
-elle passe avant tout ajout hors de ce bloc — cette session n'y a donc encore rien ajouté ailleurs
-(la pastille corrigée ci-dessus ne compte pas : c'est ce bloc lui-même, qui se remplace toujours).
+est en commentaire à côté du code. ⚠️ **Passe d'élagage du §14.2 toujours NON FAITE** (1 494 lignes) :
+elle passe avant tout ajout hors de ce bloc — cette session n'y a donc rien ajouté ailleurs DANS CE
+FICHIER (le récit des herbes hautes est dans `components/ferme/README.md`, pas ici — seule sa
+LEÇON tient dans le bloc ci-dessus, qui se remplace toujours).
 
 ### ⏭️ ACTION SUIVANTE : VÉRIFIER LA CONFIGURATION GOOGLE CLOUD DE OÙ'S THAT
 
