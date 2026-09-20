@@ -1707,44 +1707,44 @@ export function drawTownTree(ctx, S, tw, x, y, px, py, seasonKey, obj, now) {
    (voir sa note plus haut, « les quatre cases qui se le partagent »). Un
    hachage à un seul nombre reconstruit depuis x/y aurait été une occasion de
    plus de faire dériver ville et bancs (§4 de CLAUDE.md). */
-export const TALLGRASS_DECOR = ["grass-tall-simple", "grass-tall-small", "grass-tall-big", "grass-tall-flat", "grass-tall-round"];
-/* Quelle FAMILLE pour cette case : la touffe réactive (poses de flexion) ou
-   l'une des cinq silhouettes décoratives — jamais deux fois la même à la
-   suite, puisque le choix est un hachage de la case, pas un tirage. */
+/* 2026-09-20 (v3) — Guillaume, sur le fondu d'opacité du v2 : « je veux un
+   étirement de l'état de base vers les états penchés, progressif et fluide,
+   parfaitement calculé pour qu'il soit fluide et cohérent physiquement avec
+   une brise ». Un fondu superpose deux images (un fantôme qui apparaît),
+   un ÉTIREMENT en déforme une seule — c'est un cisaillement, exactement le
+   mécanisme déjà éprouvé des buissons (`drawFarmBush`, plus bas, et
+   `bushLeanFormula`, FermeGame.js) : ancré au pied, déplacement PROPORTIONNEL
+   à la hauteur, donc nul à la base et maximal à la pointe — le modèle le plus
+   simple d'une tige fixée au sol qui plie, et c'est exactement ce qu'un
+   cisaillement calcule. Les six silhouettes n'ont donc plus besoin de poses
+   séparées pour se pencher : UNE image suffit, cisaillée à l'image.
+   ⚠️ LES POSES PEINTES `bend-l`/`bend-r` NE SONT PLUS DESSINÉES, MAIS ELLES
+   N'ONT PAS SERVI POUR RIEN : elles calibrent l'amplitude (voir
+   `TOWN_TALLGRASS_WAVE_LEAN_PX`, fermeConstants.js — mesuré, pas deviné) et
+   restent disponibles si un jour une pose distincte redevient utile. */
+export const TALLGRASS_VARIANTS = ["grass-tall-rest", "grass-tall-simple", "grass-tall-small", "grass-tall-big", "grass-tall-flat", "grass-tall-round"];
+/* Quelle silhouette pour cette case — jamais deux fois la même à la suite,
+   puisque le choix est un hachage de la case, pas un tirage (§3 de
+   CLAUDE.md : deux joueurs doivent voir la même touffe). */
 export function townTallGrassVariant(x, y) {
   const h = waterHash(x * 97 + 11, y * 71 + 5);
-  if ((h % 1000) / 1000 < C.TOWN_TALLGRASS_REACTIVE_SHARE) return "reactive";
-  return TALLGRASS_DECOR[(h >>> 3) % TALLGRASS_DECOR.length];
+  return TALLGRASS_VARIANTS[h % TALLGRASS_VARIANTS.length];
 }
-/* La pose de la touffe RÉACTIVE : la pose de repos, toujours dessinée pleine,
-   PLUS un fondu léger vers une pose penchée — le vent ambiant (une vague
-   spatiale, voir la note de fermeConstants.js pour le rejet du premier jet
-   par Guillaume) tant que rien ne la touche, un contact récent SINON.
-   ⚠️ LA DIRECTION DE CONTACT EST FIXE (`e.dir`), JAMAIS L'OSCILLATION DU
-   RESSORT PARTAGÉ (`bushLeanFormula`, FermeGame.js) : ce ressort sert un
-   CISAILLEMENT continu (les buissons), où sonner avant de s'arrêter se voit
-   comme un rebond — une pose peinte, elle, ne s'interpole pas, donc rejouer
-   la même oscillation en fondu clignoterait entre gauche et droite au lieu
-   de sonner. On reprend donc seulement le SIGNE (quel côté) et
-   `TOWN_BUSH_SWAY_FADE_MS` (quand lâcher), et on relâche par un fondu
-   d'opacité continu — la manière fluide de faire moins qu'une interpolation
-   de forme. Rend `{ base, overlay, overlayAlpha }` : l'appelant dessine
-   `base` (toujours "rest") puis `overlay` par-dessus à `overlayAlpha`. */
-export function townTallGrassPose(x, y, now, e, age) {
-  if (e && age >= 0 && age < C.TOWN_BUSH_SWAY_FADE_MS) {
-    const contactPose = e.dir < 0 ? "bend-l" : "bend-r";
-    return { base: "rest", overlay: contactPose, overlayAlpha: 1 - age / C.TOWN_BUSH_SWAY_FADE_MS };
-  }
-  /* La vague : `proj` est la position projetée sur l'axe du vent — deux
-     cases voisines ont un `proj` presque égal, donc une phase presque
-     égale, donc bougent ENSEMBLE (§4 de CLAUDE.md, la leçon du 2026-09-20
-     sur la coordination spatiale). `s` est un sinus continu dans le temps
-     ET dans l'espace : pas de palier, pas de saut — juste une masse qui
-     ondule, plafonnée loin de 1 par `TOWN_TALLGRASS_WAVE_AMPLITUDE`. */
+/* Le vent AMBIANT seul (en pixels de décalage au sommet du sprite) : une
+   VAGUE SPATIALE, pas un hachage par case — voir la note de
+   fermeConstants.js sur le rejet du v1 par Guillaume (« on dirait qu'elles
+   dansent »). `proj` est la position projetée sur l'axe du vent : deux cases
+   voisines ont un `proj` presque égal, donc une phase presque égale, donc
+   bougent ENSEMBLE. `s` est un sinus continu dans le temps ET dans l'espace
+   — pas de palier, pas de saut, juste une masse qui ondule. Le CONTACT n'est
+   PAS ici : `bushLeanFormula` (FermeGame.js) vit dans la closure du rendu et
+   sert déjà exactement ce rôle (le même ressort partagé que les buissons,
+   §8 de CLAUDE.md — zéro second ressort) ; l'appelant additionne les deux
+   décalages avant de cisailler, une seule fois. */
+export function townTallGrassWaveLean(x, y, now) {
   const proj = x * Math.cos(C.TOWN_TALLGRASS_WAVE_DIR) + y * Math.sin(C.TOWN_TALLGRASS_WAVE_DIR);
   const phase = proj / C.TOWN_TALLGRASS_WAVE_LEN - now / C.TOWN_TALLGRASS_WAVE_PERIOD_MS;
-  const s = Math.sin(phase * Math.PI * 2);
-  return { base: "rest", overlay: s < 0 ? "bend-l" : "bend-r", overlayAlpha: Math.abs(s) * C.TOWN_TALLGRASS_WAVE_AMPLITUDE };
+  return Math.sin(phase * Math.PI * 2) * C.TOWN_TALLGRASS_WAVE_LEAN_PX;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

@@ -20573,10 +20573,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          planter les bancs de rendu hors navigateur (§4 de CLAUDE.md), et un
          texte cuit ne pourrait pas être bilingue. C'est la règle des plaques de
          bâtiments du 427, appliquée telle quelle. */
-      /* 2026-09-20 — LES HERBES HAUTES DU SOUS-BOIS SUD-EST, EN BITMAP GEMINI
-         (voir fermeConstants.js pour le pourquoi du remplacement, et
-         `townTallGrassVariant`/`townTallGrassPose` dans fermeArt.js pour les
-         deux fonctions pures qui choisissent la silhouette et la pose).
+      /* 2026-09-20 (v3) — LES HERBES HAUTES DU SOUS-BOIS SUD-EST, EN BITMAP
+         GEMINI CISAILLÉ (voir fermeConstants.js pour l'historique complet du
+         jour — v1 « cornes », v2 « ça danse », v3 l'étirement demandé par
+         Guillaume, et la mesure qui calibre l'amplitude ci-dessous).
          ⚠️⚠️ LE TRI EN AVANT-PLAN N'EST PAS UN SIMPLE ±TOWN_SORT_EPS. Le
          personnage occupe la case avec un y CONTINU (de pr.y à pr.y+1), donc
          sa clé de marcheur (`townWalkerDepthKey`) balaie tout l'intervalle
@@ -20588,9 +20588,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          n'importe quel marcheur encore dans cette case, tout en restant sous
          la clé naturelle de la rangée suivante — donc sans jamais recouvrir un
          décor qui appartient, lui, à la case d'après. Ce mécanisme n'a pas
-         changé : il ne sait pas si ce qu'il repasse par-dessus est un chemin
-         de canevas ou une image, et c'est pour ça qu'il a survécu tel quel au
-         remplacement du dessin. */
+         changé depuis le dessin procédural d'origine : il ne sait pas si ce
+         qu'il repasse par-dessus est un chemin de canevas ou une image. */
       const drawTownTallGrass = (pr) => {
         const i = pr.y * tw.w + pr.x;
         const by = (pr.y + 1) * T;
@@ -20603,23 +20602,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const occupiedKey = (pr.y + 2) * T - C.TOWN_SORT_EPS;
         const variant = A.townTallGrassVariant(pr.x, pr.y);
         pushE(occupiedNow ? occupiedKey : by, elAt(pr.x, pr.y), () => {
+          const img = loadBitmap(`/town/${variant}.png`); if (!img) return;
           const cx = pr.x * T + T / 2;
-          if (variant !== "reactive") {
-            const img = loadBitmap(`/town/${variant}.png`); if (!img) return;
-            ctx.drawImage(img, cx - img.width / 2, by - img.height);
-            return;
-          }
-          const pose = A.townTallGrassPose(pr.x, pr.y, now, e, age);
-          const base = loadBitmap(`/town/grass-tall-${pose.base}.png`);
-          if (base) ctx.drawImage(base, cx - base.width / 2, by - base.height);
-          if (pose.overlay && pose.overlayAlpha > 0.01) {
-            const ov = loadBitmap(`/town/grass-tall-${pose.overlay}.png`);
-            if (ov) {
-              ctx.globalAlpha = pose.overlayAlpha;
-              ctx.drawImage(ov, cx - ov.width / 2, by - ov.height);
-              ctx.globalAlpha = 1;
-            }
-          }
+          /* Vent ambiant (vague spatiale, fonction PURE de fermeArt.js) +
+             contact (le ressort PARTAGÉ des buissons, déjà dans cette
+             closure — zéro second ressort, §8 de CLAUDE.md). Une seule
+             somme, un seul cisaillement : c'est « l'étirement de l'état de
+             base vers les états penchés » demandé, jamais un choix entre
+             deux images. */
+          const lean = A.townTallGrassWaveLean(pr.x, pr.y, now) + (e ? bushLeanFormula(e.dir, age) : 0);
+          ctx.save();
+          ctx.translate(cx, by);
+          ctx.transform(1, 0, -lean / img.height, 1, 0, 0);
+          ctx.drawImage(img, -img.width / 2, -img.height);
+          ctx.restore();
         });
       };
       const drawMarketArch = (pr) => {

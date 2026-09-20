@@ -7,34 +7,41 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-20 — Les herbes hautes du sous-bois sud-est, bitmap Gemini + vent en vague spatiale
+### 2026-09-20 — Les herbes hautes du sous-bois sud-est : bitmap Gemini, vague spatiale, cisaillement
 
-La version procédurale en courbe de la veille a été jugée EN JEU par Guillaume : « pas bon […] on
-dirait des cornes » → remplacée par un import Pipeline C (§9/§2 de CLAUDE.md, un prompt Gemini
-proposé avec deux images de référence, jamais un appel automatisé) : trois JPEG collés par
-Guillaume dans `refs/`, détourés par `tools/import-herbe.mjs` en huit PNG
-(`public/town/grass-tall-*.png`). Rejoué EN JEU dans la foulée : « beaucoup trop de mouvement
-saccadé : on dirait qu'elles dansent […] plus discret, et plus coordonné surtout, par zones comme
-des vagues » — le vent ambiant swapait trois poses peintes sur un hachage PAR CASE (juste pour des
-arbres indépendants, faux pour une prairie qui doit bouger EN MASSE). Corrigé sans nouvel art :
-phase dérivée de la POSITION projetée sur un axe de vent commun (cases voisines ≈ même phase ⇒
-bougent ensemble) et pose penchée en fondu d'opacité plafonné (`TOWN_TALLGRASS_WAVE_*`,
-fermeConstants.js), pas en swap. Guillaume proposait « au moins 20 états » de la plante — NON
-RETENU, décision prise et expliquée en caveman (le défaut était la coordination spatiale et le
-plafond d'amplitude, pas le nombre de frames ; vingt allers-retours Gemini auraient coûté vingt
-dérives de style pour rien, §9 de CLAUDE.md). Récit complet, le prompt, toutes les décisions et
-preuves écran par écran : **`components/ferme/README.md`, sections « Hors-zip 2026-09-20 » et
-« Hors-zip 2026-09-20 (suite) — LE VENT AMBIANT […] CORRIGÉ ».** `next build` vert,
-`verify-collision` (102 cases d'herbe, contre 75) et `verify-compo` TOUT PASSE, `verify-syntax` et
-le bundle esbuild propres, aucune manipulation Supabase. ⚠️ **LEÇON À RETENIR, AU-DELÀ DE CETTE
-HERBE** : (1) un redimensionnement par moyenne de zone NON prémultipliée par alpha repeint la
-couleur du fond dans le bord de chaque forme — invisible à ×4 (l'hôtel de ville), flagrant à ×15-30
-(ces touffes), corrigé en sommant `rgb×alpha` ; (2) une phase d'animation tirée du HACHAGE DE LA
-CASE est le bon outil pour éviter qu'un décor nombreux batte comme un cœur (les arbres), et le
-MAUVAIS outil dès que le décor doit au contraire bouger EN MASSE (une prairie) — la dériver de la
-POSITION (projetée sur un axe commun) donne la coordination spatiale dans les deux sens sans
-changer autre chose. **Attend le regard de Guillaume** : le mécanisme est vérifié correct (dense,
-réactif au contact, vent coordonné et discret), pas encore jugé *agréable* (§13).
+Trois jugements EN JEU de Guillaume le même jour, chacun corrigé dans la foulée : (1) la version
+procédurale en courbe « pas bon […] on dirait des cornes » → remplacée par un import Pipeline C
+(§9/§2 de CLAUDE.md, un prompt Gemini proposé avec deux images de référence, jamais un appel
+automatisé) — trois JPEG collés par Guillaume dans `refs/`, détourés par `tools/import-herbe.mjs`
+en huit PNG (`public/town/grass-tall-*.png`) ; (2) le vent ambiant en swap de poses sur hachage par
+case « on dirait qu'elles dansent […] plus coordonné, par zones comme des vagues » → phase dérivée
+de la POSITION (projetée sur un axe de vent commun : cases voisines ≈ même phase ⇒ bougent
+ensemble) ; (3) le fondu d'opacité entre poses peintes qui a remplacé le swap « je veux un
+étirement […] progressif et fluide, parfaitement calculé […] cohérent physiquement avec une brise »
+→ un FONDU superpose deux images (un fantôme), un étirement en déforme une seule : remplacé par un
+cisaillement (le mécanisme déjà éprouvé des buissons, `bushLeanFormula`, réutilisé tel quel pour le
+contact — zéro second ressort, §8 — plus une version ambiante en pixels de la même vague spatiale),
+amplitude MESURÉE sur les poses peintes plutôt que devinée (5,4 px de flexion complète, à quelques
+centièmes du `TOWN_BUSH_SWAY_PX` des buissons — deux dessins indépendants qui convergent). Guillaume
+proposait aussi « au moins 20 états » de la plante pour la fluidité — NON RETENU (décision prise et
+expliquée en caveman) : un cisaillement n'a besoin que d'UNE image pour être parfaitement fluide,
+puisqu'il en déforme une plutôt que de choisir entre plusieurs — vingt allers-retours Gemini
+auraient coûté vingt dérives de style pour ne pas régler le vrai défaut. Récit complet, le prompt,
+toutes les décisions et preuves écran par écran : **`components/ferme/README.md`, les trois
+sections « Hors-zip 2026-09-20 » du jour (v1, vent en vague, v3 le cisaillement).** `next build`
+vert, `verify-collision` (102 cases d'herbe, contre 75) et `verify-compo` TOUT PASSE, `verify-syntax`
+propre, aucune manipulation Supabase. ⚠️ **LEÇONS À RETENIR, AU-DELÀ DE CETTE HERBE** : (1) un
+redimensionnement par moyenne de zone NON prémultipliée par alpha repeint la couleur du fond dans
+le bord de chaque forme — invisible à ×4 (l'hôtel de ville), flagrant à ×15-30 (ces touffes),
+corrigé en sommant `rgb×alpha` ; (2) une phase d'animation tirée du HACHAGE DE LA CASE est le bon
+outil pour éviter qu'un décor nombreux batte comme un cœur (les arbres), et le MAUVAIS outil dès
+que le décor doit au contraire bouger EN MASSE (une prairie) — la dériver de la POSITION donne la
+coordination dans les deux sens ; (3) un FONDU entre deux images et un ÉTIREMENT d'une seule image
+ne sont pas deux réglages du même mécanisme, ce sont deux mécanismes différents — le premier ne
+devient jamais fluide en ajustant son amplitude ou sa vitesse, il faut changer de mécanisme (ici,
+un cisaillement ancré au pied, déplacement proportionnel à la hauteur — le modèle le plus simple
+d'une tige qui plie, déjà éprouvé sur les buissons). **Attend le regard de Guillaume** : le
+mécanisme est vérifié correct et conforme à la demande, reste à juger *agréable* (§13).
 
 ### 2026-09-19 — Où's that : bogues B1–B8 (et M1–M3) corrigés, vérifiés en jeu à deux clients
 

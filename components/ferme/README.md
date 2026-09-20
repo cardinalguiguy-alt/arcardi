@@ -1,5 +1,59 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-20
 
+## Hors-zip 2026-09-20 (v3) — L'HERBE HAUTE SE CISAILLE, ELLE NE SWAPE ET NE FOND PLUS
+
+**Guillaume, sur le fondu d'opacité de la version précédente (le vent en vague spatiale, encore
+juste au moment d'être livré)** : *« oui en fait je veux un étirement de l'état de base vers les
+états penchés, progressif et fluide, parfaitement calculé pour qu'il soit fluide et cohérent
+physiquement avec une brise. »*
+
+**Ce que « oui, en fait » voulait dire** : la vague spatiale (coordination par zone) était la bonne
+correction, mais le MÉCANISME de flexion restait celui du v2 — un fondu d'opacité qui superpose
+la pose de repos et une pose penchée peinte. Un fondu fait APPARAÎTRE une seconde image en
+transparence (un fantôme), ce n'est pas un étirement : Guillaume demandait une DÉFORMATION d'une
+seule image, continue et progressive.
+
+**La parade — retour au cisaillement, comme les buissons, mais sur le bon dessin cette fois** :
+`drawFarmBush`/`bushLeanFormula` (FermeGame.js) font déjà exactement ça pour les buissons depuis
+des mois — un décalage horizontal PROPORTIONNEL à la hauteur au-dessus du pied (nul à la base,
+maximal à la pointe : le modèle le plus simple d'une tige fixée au sol qui plie). La version
+procédurale de l'herbe (2026-09-19) utilisait déjà ce même ressort pour faire plier ses
+quadratiques ; le v2 (bitmap Gemini) l'avait perdu en passant au fondu entre poses peintes. Le v3
+le retrouve, appliqué cette fois à une SEULE image bitmap cisaillée à l'écran :
+- `townTallGrassWaveLean(x, y, now)` (fermeArt.js, fonction PURE) rend le vent ambiant en PIXELS
+  (pas en opacité) — même vague spatiale que le v2 (`proj` projeté sur un axe de vent commun,
+  cases voisines en phase quasi égale), mais le résultat est un décalage à additionner, pas un
+  choix d'image.
+- Le CONTACT réutilise directement `bushLeanFormula(e.dir, age)` — le ressort PARTAGÉ des
+  buissons, déjà dans la closure du rendu, zéro second ressort (§8 de CLAUDE.md).
+- `drawTownTallGrass` additionne les deux (`lean = vent + contact`) et cisaille l'image UNIQUE de
+  la case en un seul `ctx.transform`, ancré au pied — exactement `drawFarmBush`, appliqué à un
+  bitmap au lieu d'un canevas caché.
+
+**« Parfaitement calculé », pas deviné** : l'amplitude n'est pas un nombre choisi à l'œil.
+`grass-tall-bend-l.png`/`grass-tall-bend-r.png` (les poses peintes du v1/v2, plus dessinées mais
+pas jetées) ont été mesurées — décalage horizontal du centroïde pondéré par alpha de la bande du
+haut, extrapolé au sommet — et donnent 4,4 et 6,4 px de décalage sur des touffes de 20-28 px de
+haut, moyenne 5,4 px. `TOWN_BUSH_SWAY_PX` (l'amplitude de contact des buissons) vaut 5,0 px : deux
+dessins indépendants, l'un peint par Gemini sur consigne, l'autre réglé à l'œil des mois plus tôt
+pour un tout autre décor, convergent vers la même grandeur pour « une plante qui plie sous un
+coup ». Le contact reprend donc `TOWN_BUSH_SWAY_PX` tel quel ; l'ambiant, qui doit rester discret,
+en prend une fraction (`TOWN_TALLGRASS_WAVE_LEAN_PX` = 1,6 px, ≈30 %).
+
+**Simplification en cascade** : puisque le cisaillement ne demande plus de pose peinte de
+substitution, la distinction « famille réactive / famille décorative » disparaît — les six
+silhouettes (`TALLGRASS_VARIANTS`, fermeArt.js : rest, simple, small, big, flat, round) partagent
+toutes le même mécanisme et bougent TOUTES au vent et au contact, pas seulement 70 % d'entre elles.
+`TOWN_TALLGRASS_REACTIVE_SHARE` disparaît avec elle.
+
+**Vérifié en jeu** : deux captures du canevas réel, espacées de 2,1 s, sur deux touffes voisines —
+le cisaillement se voit comme une vraie déformation continue de la même image (comparaison
+écran par écran dans cette section), pas un remplacement ni un fantôme en transparence. **Bancs** :
+`next build` **✓ Compiled successfully**, `verify-collision` **TOUT PASSE**, `verify-compo`
+**tous les contrôles passent**, `verify-syntax` propre. Aucune manipulation Supabase. **Attend le
+regard de Guillaume** : le mécanisme est vérifié correct et conforme à la demande, reste à juger
+*agréable* en vraie séance (§13).
+
 ## Hors-zip 2026-09-20 (suite) — LE VENT AMBIANT DE L'HERBE HAUTE, CORRIGÉ EN JEU LE JOUR MÊME
 
 **Guillaume, en rejouant la livraison du dessus dans la même session** : *« beaucoup trop de

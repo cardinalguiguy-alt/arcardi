@@ -4865,50 +4865,52 @@ export const TOWN_BUSH_SWAY_FADE_MS = 520; // constante de temps de l'amortissem
    second ressort (§8 de CLAUDE.md) — et le tri en avant-plan par
    `TOWN_TALLGRASS_OCCUPIED_MS` reste ce qui fait « marcher DANS » l'herbe
    plutôt que devant ou derrière (voir `drawTownTallGrass`, FermeGame.js).
-   ⚠️ CE QUI EST NEUF : deux familles de touffes plutôt qu'une seule courbe
-   réglable. La famille RÉACTIVE (`grass-tall-rest/bend-l/bend-r`) a trois
-   poses PEINTES, et le contact FORCE la pose penchée du bon côté (voir
-   `townTallGrassPose`, fermeArt.js). La famille DÉCORATIVE
-   (`grass-tall-simple/small/big/flat/round`) n'a qu'une pose — « une
-   variante basse qui réagit pas pour l'instant » (Guillaume) — et sert à
-   varier la silhouette au sol sans jamais répéter deux fois le même
-   contour, exactement ce que la version à un seul brin ne pouvait pas faire.
+   ⚠️ CE QUI ÉTAIT NEUF AU PREMIER JET (v1, dépassé) : deux familles de
+   touffes, l'une à poses peintes, l'autre à silhouette fixe. ⚠️ CE QUI L'A
+   REMPLACÉ (v2) : un vent ambiant en fondu d'opacité entre poses peintes,
+   rejeté EN JEU LE JOUR MÊME — « beaucoup trop de mouvement saccadé : on
+   dirait qu'elles dansent […] il faut que ce soit plus discret, et plus
+   coordonné surtout, par zones comme des vagues ». Deux défauts dans ce v2,
+   corrigés dans le même mouvement que le rejet du v1 :
+   - **La phase venait du HACHAGE DE LA CASE**, pas de la position — juste
+     pour des arbres (l'indépendance empêche que la ville entière batte comme
+     un cœur, voir `townTreeImg`), faux pour une prairie qui doit onduler EN
+     MASSE : deux brins voisins changeaient de pose sans rapport l'un avec
+     l'autre.
+   - **Le fondu superposait deux images** (repos + penchée en transparence) :
+     Guillaume, sur ce point précis, a demandé mieux — « un étirement de
+     l'état de base vers les états penchés, progressif et fluide, parfaitement
+     calculé pour qu'il soit fluide et cohérent physiquement avec une brise ».
+     Un fondu est un fantôme qui apparaît, pas un étirement.
 
-   ⚠️⚠️ 2026-09-20 (v2) — LE VENT AMBIANT A ÉTÉ REJETÉ EN JEU LE JOUR MÊME :
-   « beaucoup trop de mouvement saccadé : on dirait qu'elles dansent […] il
-   faut que ce soit plus discret, et plus coordonné surtout, par zones comme
-   des vagues ». Le premier jet cyclait les trois poses par un SWAP d'image
-   (un remplacement d'un coup, jerky par nature) sur une phase tirée du
-   HACHAGE DE LA CASE — exactement ce qu'il fallait pour les arbres
-   (l'indépendance empêche que la ville entière batte comme un cœur, voir
-   `townTreeImg`) et exactement le contraire de ce qu'une prairie demande :
-   deux brins voisins bougeaient sans rapport l'un avec l'autre, donc un
-   motif qui saute au lieu d'une masse qui ondule. ⚠️ Guillaume proposait de
-   générer « au moins 20 états » pour lisser le mouvement — NON RETENU :
-   vingt poses Gemini coûteraient vingt allers-retours de détourage et
-   vingt occasions de dérive de style/proportion (voir §9 de CLAUDE.md sur
-   le coût d'un bitmap), pour un défaut qui n'est pas un manque de frames
-   mais un manque de COORDINATION SPATIALE et un manque de PLAFOND
-   D'AMPLITUDE — les trois poses déjà peintes suffisent. La parade tient en
-   deux changements, aucun nouvel art :
-   1. **La phase se dérive de la POSITION, projetée sur une direction de
-      vent commune** (`proj`, ci-dessous), jamais d'un hachage — deux cases
-      voisines ont un `proj` presque égal, donc bougent presque en phase :
-      c'est la vague, et sa taille de zone est `TOWN_TALLGRASS_WAVE_LEN`.
-   2. **La pose penchée n'est plus un swap, c'est un FONDU d'opacité** qui
-      suit un sinus lent, plafonné loin de 1 (`TOWN_TALLGRASS_WAVE_AMPLITUDE`)
-      — la pose de repos reste dominante à tout instant, jamais remplacée en
-      entier : c'est le « discret ». */
+   ⚠️⚠️ 2026-09-20 (v3) — CE QUI TOURNE MAINTENANT : UN CISAILLEMENT, PAS UN
+   FONDU NI UN SWAP. Exactement le mécanisme déjà éprouvé des buissons
+   (`drawFarmBush`/`bushLeanFormula`, ancré au pied, déplacement
+   PROPORTIONNEL à la hauteur — nul à la base, maximal à la pointe : le
+   modèle le plus simple d'une tige fixée au sol qui plie), appliqué à
+   UNE SEULE image cisaillée à l'écran plutôt qu'à un choix entre plusieurs.
+   Les six silhouettes (`TALLGRASS_VARIANTS`, fermeArt.js) partagent donc
+   toutes le même mécanisme, sans avoir besoin d'une pose penchée chacune.
+   Guillaume proposait de générer « au moins 20 états » pour lisser le
+   mouvement — NON RETENU (décision prise et expliquée en caveman) : le
+   défaut n'était pas un manque de frames, c'était le choix du SWAP/FONDU
+   comme mécanisme et une phase mal choisie ; un cisaillement n'a besoin que
+   d'UNE image pour être parfaitement fluide, puisqu'il ne choisit jamais
+   entre deux images — il en déforme une.
+   ⚠️ L'AMPLITUDE EST MESURÉE, PAS DEVINÉE — « parfaitement calculé », le mot
+   de Guillaume : le décalage horizontal du haut de `grass-tall-bend-l/r.png`
+   par rapport à `grass-tall-rest.png` (bande du haut, centroïde pondéré par
+   alpha, extrapolé au sommet) vaut 4,4 et 6,4 px sur des touffes de 20-28 px
+   de haut — moyenne 5,4 px, à quelques centièmes du `TOWN_BUSH_SWAY_PX` des
+   buissons (5,0 px) : les deux dessins, indépendants, convergent vers la
+   même grandeur pour « une plante qui plie sous un coup ». `TOWN_BUSH_SWAY_PX`
+   sert tel quel pour le CONTACT (repris directement, zéro second ressort,
+   §8 de CLAUDE.md) ; l'AMBIANT, lui, doit rester « discret » — une fraction
+   de cette même grandeur, pas une grandeur inventée à part. */
 export const TOWN_TALLGRASS_WAVE_PERIOD_MS = 4200; // durée d'une oscillation complète EN UN POINT FIXE
 export const TOWN_TALLGRASS_WAVE_LEN = 11;         // longueur d'onde, en cases — la taille d'une "zone" qui bouge ensemble
 export const TOWN_TALLGRASS_WAVE_DIR = 0.6;        // rad — direction du vent, volontairement hors des axes de la carte
-export const TOWN_TALLGRASS_WAVE_AMPLITUDE = 0.32; // plafond du fondu vers la pose penchée — jamais un remplacement complet
-/* Une case sur `TOWN_TALLGRASS_REACTIVE_SHARE` tire la touffe réactive
-   (celle qui a des poses de flexion) ; le reste pioche dans la famille
-   décorative. ⚠️ HAUT, DÉLIBÉRÉMENT : Guillaume veut « un tapis dense qui
-   réagit intelligemment au mouvement » — la majorité du sol doit donc
-   pouvoir réagir, la variété de silhouette reste un COMPLÉMENT. */
-export const TOWN_TALLGRASS_REACTIVE_SHARE = 0.7;
+export const TOWN_TALLGRASS_WAVE_LEAN_PX = 1.6;    // px au sommet — ≈30 % de la flexion de contact mesurée (5,4 px), pour rester discret
 /* « Quelqu'un est dedans MAINTENANT », pas « le ressort n'est pas encore
    retombé » (jusqu'à TOWN_BUSH_SWAY_FADE_MS = 520 ms plus tard, bien après
    qu'il soit reparti) — voir le tri en avant-plan dans `drawTownTallGrass`. */
