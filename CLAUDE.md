@@ -7,20 +7,26 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-19 — Les herbes hautes du sous-bois sud-est, courbes, vérifiées en jeu
+### 2026-09-20 — Les herbes hautes du sous-bois sud-est, remplacées par du bitmap Gemini
 
-Demande de Guillaume, en prolongement des buissons interactifs : des herbes hautes, denses,
-à mi-hauteur du personnage, qui réagissent au contact — « hyper soigné », puis, en cours de
-dessin : « courbes, pas des tiges géométriques nulles […] l'animation doit être fluide ».
-Récit complet, décisions (découpage avant/arrière + procédural, les deux recommandées et suivies)
-et preuves écran par écran : **`components/ferme/README.md`, section « Hors-zip 2026-09-19 — LES
-HERBES HAUTES DU SOUS-BOIS SUD-EST ».** `next build` vert, `verify-collision` et `verify-compo`
-TOUT PASSE, aucune manipulation Supabase. ⚠️ **LEÇON À RETENIR, AU-DELÀ DE CETTE HERBE** : deux
-défauts invisibles au code et aux bancs n'ont été trouvés qu'EN JEU — une palette à moins de dix
-points de luminance du gazon qu'elle est censée couvrir (même famille que la mesure de couleur
-muette du §8), et une quadratique dont le point de contrôle tombait presque SUR la droite
-base→pointe, donc rendait une droite déguisée en courbe. **Attend le regard de Guillaume** : le
-mécanisme est vérifié correct, pas encore jugé *agréable* (§13).
+La version procédurale en courbe de la veille a été jugée EN JEU par Guillaume : « pas bon […] on
+dirait des cornes », trop peu de brins, trop clairsemée — « le but est d'avoir un sol comblé
+d'herbes ». Remplacée par un import Pipeline C (§9/§2 de CLAUDE.md, un prompt Gemini proposé avec
+deux images de référence, jamais un appel automatisé) : trois JPEG collés par Guillaume dans
+`refs/`, détourés par `tools/import-herbe.mjs` en huit PNG (`public/town/grass-tall-*.png`).
+Récit complet, le prompt, les décisions (deux familles de touffes — réactive à trois poses
+peintes/vent ambiant/contact par fondu d'opacité, vs cinq silhouettes décoratives — et la densité
+relevée de 0,65 à 0,92) et preuves écran par écran : **`components/ferme/README.md`, section
+« Hors-zip 2026-09-20 — L'HERBE HAUTE, EN BITMAP GEMINI ».** `next build` vert, `verify-collision`
+(102 cases d'herbe, contre 75) et `verify-compo` TOUT PASSE, `verify-syntax` et le bundle esbuild
+propres, aucune manipulation Supabase. ⚠️ **LEÇON À RETENIR, AU-DELÀ DE CETTE HERBE** : un
+redimensionnement par moyenne de zone NON prémultipliée par alpha repeint la couleur du fond dans
+le bord de chaque forme — invisible à un rapport de réduction ×4 (l'hôtel de ville), flagrant à
+×15-30 (ces touffes) ; et un fin volute qui ne tient plus que par une colonne de pixels dans la
+source peut s'en trouver coupé par le même redimensionnement, sans qu'aucune diffusion de
+détourage n'y soit pour quelque chose — corrigé en ne gardant que la plus grande composante
+connexe de chaque PNG de sortie. **Attend le regard de Guillaume** : le mécanisme est vérifié
+correct (dense, réactif au contact, animé par le vent), pas encore jugé *agréable* (§13).
 
 ### 2026-09-19 — Où's that : bogues B1–B8 (et M1–M3) corrigés, vérifiés en jeu à deux clients
 

@@ -1,4 +1,105 @@
-# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-19
+# Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-20
+
+## Hors-zip 2026-09-20 — L'HERBE HAUTE, EN BITMAP GEMINI (remplace la version en courbe de la veille)
+
+**Guillaume, en jouant la livraison du 2026-09-19** (les herbes hautes en quadratiques
+procédurales, section suivante) : *« l'ajout des hautes herbes est pas bon : 1) qualité
+différente des arbres de valley town ; 2) pas de mouvement complexe, et peu de densité […] on
+dirait des cornes. Je crois qu'il faut qu'on les remplace par des générations par gemini »*, puis,
+sur l'effet cherché : *« l'effet doit être comme un tapis d'herbes denses réagissant
+intelligemment au mouvement »*.
+
+**Diagnostic avant d'écrire un seul prompt** : une capture en jeu (canevas réel, zoomé) a confirmé
+le mot de Guillaume au pixel près — deux brins épais et lisses, recourbés l'un vers l'autre,
+lisibles comme une paire de cornes plutôt que comme de l'herbe, sur un fond de gazon qui restait
+majoritairement nu autour.
+
+**§2 de CLAUDE.md appliqué à la lettre** (sprite de végétation neuf → un prompt Gemini proposé,
+jamais un appel automatisé) : le prompt et deux images de référence (la planche d'essences de
+`tools/out/arbres-essences.png` pour le niveau de finition à atteindre, une capture du personnage
+à côté du défaut à corriger pour l'échelle) ont été remis à Guillaume, qui a lui-même collé le
+prompt dans Gemini et déposé trois JPEG dans `refs/` : `herbe haute simple.jpg`,
+`herbe-haute-tailles.jpg` (quatre silhouettes sur une planche), `herbe-haute-pliage.jpg` (une pose
+de repos et deux poses penchées, peintes).
+
+### L'import — `tools/import-herbe.mjs`, pipeline C
+
+Même famille que `import-townhall.mjs` (§9 de CLAUDE.md — un PNG livré au jeu, chargé par
+`bitmapAssets.js`, jamais l'imitation en `fillRect` que Guillaume a déjà refusée sur la planche),
+avec deux différences mesurées avant d'écrire le code :
+- **Le fond n'est pas un damier gris mais un magenta peint** (Gemini ne propose pas l'export PNG
+  dans cette interface). Il dérive légèrement d'un fichier à l'autre et d'un coin à l'autre du
+  même fichier (compression JPEG) — `isMagentaish` teste une famille de teinte (R et B nettement
+  au-dessus de G), jamais une valeur figée.
+- ⚠️ **PAS DE DIFFUSION DEPUIS LES BORDS**, à la différence du damier de l'hôtel de ville : ce
+  dernier pouvait légitimement réapparaître DANS le bâtiment (pierre claire), donc seule la
+  connexité au bord distinguait fond et sujet. Le magenta n'a aucune raison d'apparaître dans une
+  touffe d'herbe (mesuré sur les trois JPEG : tous les verts ont G ≥ R) — un test PAR PIXEL suffit,
+  et il rebouche en prime les poches de fond enfermées ENTRE deux brins qui se croisent, que la
+  diffusion depuis le bord ne peut pas atteindre (trouvé sur `pliage[1]` : un triangle magenta pris
+  au piège, invisible tant qu'on ne regarde que le masque des bords).
+- Les planches `tailles`/`pliage` portent plusieurs touffes sur le même fond : chacune est isolée
+  par composantes connexes (quatre par planche, comme attendu), vérifiées à l'œil une par une
+  (`tools/out/herbe-*-alpha.png`) avant d'être figées dans un tableau écrit à la main — jamais
+  recalculées à chaque exécution, pour ne pas faire dériver un NOM de fichier au hasard d'un pixel
+  de JPEG en plus ou en moins (même famille que « le repli qui ment » du §4).
+
+⚠️⚠️ **DEUX DÉFAUTS TROUVÉS EN REGARDANT LE RÉSULTAT À 10×, PAS AU PREMIER JET** :
+1. **Un redimensionnement par moyenne de zone NON prémultipliée par alpha repeint le fond dans le
+   bord de chaque brin.** Invisible sur l'hôtel de ville (rapport de réduction ×4, la même moyenne
+   brute que `build-townhall-sprite.mjs`) ; flagrant ici (×15 à ×30 — huit touffes ramenées à 11-28
+   px de haut depuis des recadrages de 130 à 730 px) : un liseré rose entourait chaque brin.
+   Corrigé en sommant `rgb×alpha` plutôt que `rgb` (`resizeAlpha`) — le fond à alpha nul n'apporte
+   plus rien à la couleur du pixel de sortie qui le recouvre partiellement.
+2. **Un fin volute de brin qui ne tient plus que par une colonne de pixels dans la source peut s'en
+   trouver coupé après un redimensionnement aussi agressif** : la pointe survit, la colonne qui la
+   reliait à la touffe disparaît en arrondissant la boîte d'échantillonnage. Trouvé sur
+   `grass-tall-bend-r`, une tache verte flottant sous la touffe — absent des trois planches
+   d'origine, donc un artefact du REDIMENSIONNEMENT, pas du détourage. Corrigé en ne gardant que la
+   plus grande composante connexe de chaque PNG de sortie (`dropIslands`).
+
+### L'intégration — deux familles de touffes, jamais un second ressort
+
+`drawTownTallGrass` (FermeGame.js) perd ses quadratiques mais garde EXACTEMENT le tri en
+avant-plan de la veille (la clé `occupiedKey` qui redessine la touffe par-dessus le personnage
+« maintenant » dans la case) — ce mécanisme ne sait pas s'il repasse par-dessus un chemin de
+canevas ou une image, et c'est pour ça qu'il a survécu tel quel. Le choix de silhouette et de pose
+vit dans deux fonctions PURES (`townTallGrassVariant`, `townTallGrassPose`, fermeArt.js), hors de
+la closure du rendu — même discipline que `townTreeKind`/`townTreeImg`, juste au-dessus dans le
+même fichier :
+- **70 % des cases tirent la famille RÉACTIVE** (`grass-tall-rest/bend-l/bend-r`, les trois poses
+  peintes de `pliage`) : un vent ambiant cycle les trois lentement, comme le souffle des arbres
+  (`TOWN_TALLGRASS_WIND_MS`, même table à quatre pas pour trois images que `TREE_SWAY`). Le
+  contact ÉCRASE ce cycle — mais PAS avec l'oscillation du ressort partagé des buissons
+  (`bushLeanFormula`) : ce ressort sert un cisaillement CONTINU, où sonner avant de s'arrêter se
+  lit comme un rebond ; une pose peinte ne s'interpole pas, donc rejouer la même oscillation en
+  swap d'image aurait clignoté entre gauche et droite — l'inverse de « fluide ». On reprend donc
+  seulement le SIGNE du dernier contact (`e.dir`) et la fenêtre `TOWN_BUSH_SWAY_FADE_MS`, et on
+  relâche par un fondu d'opacité continu (`ctx.globalAlpha`) entre la pose de vent et la pose de
+  contact — fluide sans avoir besoin d'interpoler une forme.
+- **Les 30 % restants et un sixième de la famille réactive tirent une des cinq silhouettes
+  DÉCORATIVES** (`grass-tall-simple/small/big/flat/round` — la dernière est la « variante basse qui
+  réagit pas pour l'instant » de la réponse de Guillaume, littéralement le même pixel que la
+  touffe de repos réactive, dédupliquée). Zéro répétition de silhouette d'une case à l'autre,
+  puisque le choix est un hachage de la case, jamais un tirage.
+- **`TOWN_WOOD_GRASS_DENSITY` relevée de 0,65 à 0,92** pour « un sol comblé d'herbes » — voir la
+  note à côté de la constante (fermeConstants.js) pour pourquoi ni 1 ni un second champ.
+
+**Vérifié en jeu, écran par écran** (teleport « la passe », marche dans le sous-bois, avant/après
+capturées sur le canevas réel) : les cornes ont disparu, les touffes sont visiblement plus denses
+et variées, le personnage entre dans une touffe et la voit redessinée devant ses jambes, une
+touffe éloignée change lentement de pose (vent) sur deux captures espacées d'1,3 s. **Bancs** :
+`next build` **✓ Compiled successfully** (seul l'avertissement préexistant `G_SOIL`),
+`verify-collision` **TOUT PASSE** (102 cases `tallGrass`, contre 75 avant — traversées dans les
+quatre sens, ralenties ×0,72, aucun mur invisible), `verify-compo` **tous les contrôles passent**,
+`verify-syntax` et le bundle esbuild propres (aucun symbole introuvable côté `fermeArt`/`FermeGame`).
+Aucune manipulation Supabase nécessaire.
+
+⚠️ **CE QUI N'EST PAS FAIT** : les cinq silhouettes décoratives n'ont pas de pose de flexion (la
+réponse de Guillaume dit « pour l'instant ») — le jour où on leur en donne une, le même mécanisme
+de fondu s'applique sans rien changer d'autre. Et surtout, per §13 de CLAUDE.md : ce qui précède
+prouve que le mécanisme MARCHE (dense, réactif, animé) — seul Guillaume, en y jouant pour de vrai,
+peut juger si le résultat est *agréable*.
 
 ## Hors-zip 2026-09-19 — LES HERBES HAUTES DU SOUS-BOIS SUD-EST, EN COURBE
 

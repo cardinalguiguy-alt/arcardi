@@ -3757,8 +3757,18 @@ export const TOWN_WOOD_DENSITY = 0.50;  // part d'arbres au cœur de la futaie
    cœur du bois, ou l'inverse — le §8 de CLAUDE.md (« un paramètre qui double
    un autre est une divergence en attente ») pris sur un CHAMP plutôt qu'un
    nombre. Seule la densité diffère, et elle est volontairement plus haute que
-   celle des arbres : « denses » était explicite. */
-export const TOWN_WOOD_GRASS_DENSITY = 0.65;
+   celle des arbres : « denses » était explicite.
+   ⚠️ RELEVÉ DE 0,65 À 0,92 LE 2026-09-20, au remplacement des brins
+   procéduraux par les touffes Gemini : Guillaume, en jeu, jugeait le sous-bois
+   « peu dense », « le but est d'avoir un sol comblé d'herbes entre les arbres ».
+   Pas 1 (max théorique) : `objects[i] !== O_NONE` exclut déjà la moitié des
+   cases profondes (les arbres, tirés juste au-dessus avec `TOWN_WOOD_DENSITY`
+   à 50 %) — un sol qui semble « comblé » n'a jamais besoin de tirer sur CHAQUE
+   case restante, et une des cinq silhouettes (`townTallGrassVariant`,
+   fermeArt.js) porte déjà, à elle seule, autant de brins qu'un ancien bouquet
+   entier. Vérifié à l'écran après coup (§8/§10 de CLAUDE.md), pas au premier
+   jet — voir la reprise de la même journée en tête de ce fichier. */
+export const TOWN_WOOD_GRASS_DENSITY = 0.92;
 /* ⚠️ LE SENTIER NE RÉTRÉCIT PAS, IL SE TROUE. C'est la parade au piège payé
    quatre fois au 437 (« une allée d'une case de large ne montre que ses
    marches ») : un chemin qui s'efface en passant de deux cases à une redevient
@@ -4835,50 +4845,42 @@ export const TOWN_BUSH_SWAY_PX = 5.0;      // décalage du sommet, au premier te
 export const TOWN_BUSH_SWAY_MS = 260;      // période de l'oscillation
 export const TOWN_BUSH_SWAY_FADE_MS = 520; // constante de temps de l'amortissement
 
-/* ═══ 2026-09-19 — LES HERBES HAUTES DU SOUS-BOIS. Guillaume : « de vraies
-   herbes hautes, denses, arrivant à mi-hauteur du perso, qui réagissent au
-   contact » — puis, en cours de dessin : « courbes, pas des tiges
-   géométriques nulles […] l'animation doit être fluide, elles doivent se
-   plier ». ⚠️ CE N'EST PAS UN SPRITE DE PLUS : c'est le premier décor de
-   Valley Town peint EN COURBE, À CHAQUE IMAGE, plutôt qu'une image cisaillée
-   (le frisson des buissons ci-dessus). Un cisaillement de sprite entier — ce
-   que Guillaume vient précisément d'écarter — fait pencher un bloc d'un seul
-   tenant ; invisible sur une touffe de 23 px, ça l'aurait été beaucoup moins
-   sur une herbe qui monte à la ceinture. Voir `drawTownTallGrass`,
-   FermeGame.js, qui réutilise le ressort des buissons (même table
-   `bushSwayRef`) : seule la façon de PEINDRE le résultat change.
-   ⚠️ LA HAUTEUR SE DÉRIVE DU PERSONNAGE, ELLE NE SE RÈGLE PAS : la feuille de
-   pose fait 16×24 px (CLAUDE.md §4 — « une feuille de personnage fait 16×24
-   par pose » ; POSE_TORSO_Y=10/POSE_LEG_Y=16 dans fermeArt.js placent la
-   ceinture à 24−16=8 px des pieds, la taille vers 24−10=14 px). Les brins
-   varient autour de cette bande plutôt que de dessiner une haie plate à une
-   seule hauteur. */
-export const TOWN_TALLGRASS_BLADES_MIN = 6;
-export const TOWN_TALLGRASS_BLADES_MAX = 9;
-export const TOWN_TALLGRASS_H_MIN = 7;    // px — le plus petit brin du bouquet
-export const TOWN_TALLGRASS_H_MAX = 13;   // px — juste sous la taille (14 px, voir ci-dessus)
-export const TOWN_TALLGRASS_W_BASE = 1.4; // demi-largeur au pied, px
-export const TOWN_TALLGRASS_W_TIP = 0.3;  // demi-largeur à la pointe, px
-/* Courbe de repos : sans elle, un brin immobile est un trait droit — exactement
-   « une tige géométrique nulle ». Chaque brin penche un peu, dans un sens tiré
-   de sa propre case, AVANT même tout contact. */
-export const TOWN_TALLGRASS_REST_BEND = 1.6; // px
-/* ⚠️⚠️⚠️ 2026-09-19 — CE QUI FAIT LA COURBE N'EST PAS `REST_BEND`, C'EST CE
-   NOMBRE-CI, ET ÇA A ÉTÉ VU EN JEU, PAS DEVINÉ. Une quadratique dont le point
-   de contrôle tombe (à peu près) SUR la droite base→pointe rend une droite —
-   au premier essai, `REST_BEND` seul (1,6 px) plaçait le point de contrôle à
-   moins de 5 % de cette droite, donc un brin qui a l'air d'un piquet incliné,
-   pas d'un brin d'herbe. `TOWN_TALLGRASS_BOW` écarte le point de contrôle du
-   CÔTÉ, perpendiculairement à cette droite, INDÉPENDAMMENT du penchant : à
-   penchant nul (repos, aucun contact), le brin est déjà arqué. */
-export const TOWN_TALLGRASS_BOW_MIN = 2.4; // px, écart du point de contrôle
-export const TOWN_TALLGRASS_BOW_MAX = 4.4;
-/* Dispersion appliquée au ressort PARTAGÉ des buissons (pas un second ressort,
-   §8) : chaque brin en reçoit une fraction différente, avec un léger
-   déphasage, pour que le bouquet se redresse en ondulant plutôt qu'en bloc. */
-export const TOWN_TALLGRASS_BEND_MIN = 0.7;
-export const TOWN_TALLGRASS_BEND_MAX = 1.3;
-export const TOWN_TALLGRASS_PHASE_MS = 90; // écart de déphasage maximal entre deux brins du même bouquet
+/* ═══ 2026-09-19 → 2026-09-20 — LES HERBES HAUTES DU SOUS-BOIS.
+   Guillaume : « de vraies herbes hautes, denses, arrivant à mi-hauteur du
+   perso, qui réagissent au contact » — puis, en cours de dessin : « courbes,
+   pas des tiges géométriques nulles […] l'animation doit être fluide, elles
+   doivent se plier ». La PREMIÈRE version (procédurale, quadratiques
+   dessinées à chaque image) a été jugée EN JEU par Guillaume le lendemain :
+   « pas bon […] on dirait des cornes », trop peu de brins, trop lisse, trop
+   clairsemée pour « un sol comblé d'herbes ». ⚠️ ELLE EST REMPLACÉE PAR DU
+   BITMAP GEMINI (pipeline C, §9 de CLAUDE.md — la végétation était citée en
+   exemple au §2) : `tools/import-herbe.mjs` détoure trois JPEG de
+   `refs/` et livre huit PNG (`public/town/grass-tall-*.png`). Toutes les
+   constantes de courbe procédurale (largeurs, points de contrôle, bornes de
+   penchant) disparaissent avec elle — un banc ou un commentaire qui les
+   citerait encore mentirait (§14.2 de CLAUDE.md, « un piège périmé recopié
+   ailleurs est pire qu'un piège supprimé »).
+   ⚠️ CE QUI NE CHANGE PAS : le ressort PARTAGÉ des buissons (`bushSwayRef`,
+   `bushLeanFormula`) reste l'unique source de la direction de contact — zéro
+   second ressort (§8 de CLAUDE.md) — et le tri en avant-plan par
+   `TOWN_TALLGRASS_OCCUPIED_MS` reste ce qui fait « marcher DANS » l'herbe
+   plutôt que devant ou derrière (voir `drawTownTallGrass`, FermeGame.js).
+   ⚠️ CE QUI EST NEUF : deux familles de touffes plutôt qu'une seule courbe
+   réglable. La famille RÉACTIVE (`grass-tall-rest/bend-l/bend-r`) a trois
+   poses PEINTES — un vent ambiant lent qui cycle les trois, comme le
+   souffle des arbres (`TOWN_TREE_SWAY_MS`), et le contact FORCE la pose
+   penchée du bon côté (voir `townTallGrassPose`, fermeArt.js). La famille
+   DÉCORATIVE (`grass-tall-simple/small/big/flat/round`) n'a qu'une pose —
+   « une variante basse qui réagit pas pour l'instant » (Guillaume) — et sert
+   à varier la silhouette au sol sans jamais répéter deux fois le même
+   contour, exactement ce que la version à un seul brin ne pouvait pas faire. */
+export const TOWN_TALLGRASS_WIND_MS = 360; // période d'un pas du cycle de vent (plus vif qu'un arbre : moins de masse)
+/* Une case sur `TOWN_TALLGRASS_REACTIVE_SHARE` tire la touffe réactive
+   (celle qui a des poses de flexion) ; le reste pioche dans la famille
+   décorative. ⚠️ HAUT, DÉLIBÉRÉMENT : Guillaume veut « un tapis dense qui
+   réagit intelligemment au mouvement » — la majorité du sol doit donc
+   pouvoir réagir, la variété de silhouette reste un COMPLÉMENT. */
+export const TOWN_TALLGRASS_REACTIVE_SHARE = 0.7;
 /* « Quelqu'un est dedans MAINTENANT », pas « le ressort n'est pas encore
    retombé » (jusqu'à TOWN_BUSH_SWAY_FADE_MS = 520 ms plus tard, bien après
    qu'il soit reparti) — voir le tri en avant-plan dans `drawTownTallGrass`. */

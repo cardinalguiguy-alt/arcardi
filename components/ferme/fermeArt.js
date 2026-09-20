@@ -1696,6 +1696,53 @@ export function drawTownTree(ctx, S, tw, x, y, px, py, seasonKey, obj, now) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
+   2026-09-20 — L'HERBE HAUTE DU SOUS-BOIS, EN BITMAP GEMINI.
+   ──────────────────────────────────────────────────────────────────────────
+   Remplace les quadratiques procédurales du 2026-09-19 (jugées « cornes » en
+   jeu par Guillaume, voir la note complète dans fermeConstants.js à côté des
+   constantes). Deux fonctions PURES, hors de la closure du rendu — même
+   discipline que `townTreeKind`/`townTreeImg` juste au-dessus : un jour, un
+   `render-*.mjs` pourra les rejouer sans navigateur.
+   ⚠️ `x, y`, PAS UN INDEX DE CASE `i` : `waterHash` attend deux coordonnées
+   (voir sa note plus haut, « les quatre cases qui se le partagent »). Un
+   hachage à un seul nombre reconstruit depuis x/y aurait été une occasion de
+   plus de faire dériver ville et bancs (§4 de CLAUDE.md). */
+export const TALLGRASS_DECOR = ["grass-tall-simple", "grass-tall-small", "grass-tall-big", "grass-tall-flat", "grass-tall-round"];
+/* Quelle FAMILLE pour cette case : la touffe réactive (poses de flexion) ou
+   l'une des cinq silhouettes décoratives — jamais deux fois la même à la
+   suite, puisque le choix est un hachage de la case, pas un tirage. */
+export function townTallGrassVariant(x, y) {
+  const h = waterHash(x * 97 + 11, y * 71 + 5);
+  if ((h % 1000) / 1000 < C.TOWN_TALLGRASS_REACTIVE_SHARE) return "reactive";
+  return TALLGRASS_DECOR[(h >>> 3) % TALLGRASS_DECOR.length];
+}
+// 0 = penche à gauche, 1 = repos, 2 = penche à droite — même lecture à quatre
+// pas pour trois images que TREE_SWAY, juste au-dessus.
+const TALLGRASS_WIND_SEQ = [1, 2, 1, 0];
+/* La pose de la touffe RÉACTIVE : un vent ambiant lent (cycle les trois poses
+   peintes, comme le souffle des arbres) qu'un contact récent ÉCRASE.
+   ⚠️ LA DIRECTION DE CONTACT EST FIXE (`e.dir`), JAMAIS L'OSCILLATION DU
+   RESSORT PARTAGÉ (`bushLeanFormula`, FermeGame.js) : ce ressort sert un
+   CISAILLEMENT continu (les buissons), où sonner avant de s'arrêter se voit
+   comme un rebond. Une pose peinte, elle, ne peut pas s'interpoler — la
+   même oscillation, rejouée en swap d'image, clignoterait entre gauche et
+   droite au lieu de sonner, exactement ce que Guillaume vient de reprocher
+   à la version précédente (« l'animation doit être fluide »). On reprend
+   donc seulement le SIGNE (quel côté) et `TOWN_BUSH_SWAY_FADE_MS` (quand
+   lâcher), et on relâche par un fondu d'opacité continu, pas par un second
+   swap — c'est la manière fluide de faire moins qu'une interpolation de
+   forme. Rend `{ base, overlay?, overlayAlpha? }` : l'appelant dessine
+   `base` puis, si présent, `overlay` par-dessus à `overlayAlpha`. */
+export function townTallGrassPose(x, y, now, e, age) {
+  const ph = (waterHash(x * 53 + 19, y * 31 + 41) % 1000) / 1000;
+  const step = TALLGRASS_WIND_SEQ[Math.floor(now / C.TOWN_TALLGRASS_WIND_MS + ph * 4) & 3];
+  const basePose = step === 0 ? "bend-l" : step === 2 ? "bend-r" : "rest";
+  if (!e || age < 0 || age >= C.TOWN_BUSH_SWAY_FADE_MS) return { base: basePose };
+  const contactPose = e.dir < 0 ? "bend-l" : "bend-r";
+  return { base: basePose, overlay: contactPose, overlayAlpha: 1 - age / C.TOWN_BUSH_SWAY_FADE_MS };
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
    2026-09-13 — LE BUISSON DE LA FERME, ANCRAGE ET FRISSON COMPRIS.
    ──────────────────────────────────────────────────────────────────────────
    ⚠️ HORS DE LA CLOSURE DU RENDU, pour que `render-buissons` dessine ce que le

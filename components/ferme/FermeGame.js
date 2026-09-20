@@ -20573,20 +20573,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          planter les bancs de rendu hors navigateur (§4 de CLAUDE.md), et un
          texte cuit ne pourrait pas être bilingue. C'est la règle des plaques de
          bâtiments du 427, appliquée telle quelle. */
-      /* 2026-09-19 — LES HERBES HAUTES DU SOUS-BOIS SUD-EST (voir
-         fermeConstants.js pour le pourquoi de chaque nombre, et le générateur
-         pour leur placement). ⚠️ DESSINÉE EN COURBE, PAS EN SPRITE CISAILLÉ —
-         demande explicite de Guillaume après avoir vu le frisson des buissons
-         : « courbes, pas des tiges géométriques nulles […] l'animation doit
-         être fluide, elles doivent se plier ». Elle réutilise pourtant EXACTEMENT
-         le ressort des buissons (`bushSwayRef`, `bushLeanFormula`) : seule la
-         façon de PEINDRE le résultat change, pas la physique du contact —
-         même précédent que la guirlande du marché (431), le seul autre décor
-         de ce fichier dessiné en vecteur à chaque image plutôt que blitté
-         depuis un canevas caché.
-         ⚠️ LA MISE EN PAGE DU BOUQUET SE DÉDUIT DU HACHAGE DE LA CASE, jamais
-         d'un tirage : deux joueurs doivent voir le même bouquet, à l'arrêt il
-         ne doit pas changer de forme d'une image à l'autre (§3 de CLAUDE.md).
+      /* 2026-09-20 — LES HERBES HAUTES DU SOUS-BOIS SUD-EST, EN BITMAP GEMINI
+         (voir fermeConstants.js pour le pourquoi du remplacement, et
+         `townTallGrassVariant`/`townTallGrassPose` dans fermeArt.js pour les
+         deux fonctions pures qui choisissent la silhouette et la pose).
          ⚠️⚠️ LE TRI EN AVANT-PLAN N'EST PAS UN SIMPLE ±TOWN_SORT_EPS. Le
          personnage occupe la case avec un y CONTINU (de pr.y à pr.y+1), donc
          sa clé de marcheur (`townWalkerDepthKey`) balaie tout l'intervalle
@@ -20597,7 +20587,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          cet intervalle (moins l'epsilon), garantie plus grande que celle de
          n'importe quel marcheur encore dans cette case, tout en restant sous
          la clé naturelle de la rangée suivante — donc sans jamais recouvrir un
-         décor qui appartient, lui, à la case d'après. */
+         décor qui appartient, lui, à la case d'après. Ce mécanisme n'a pas
+         changé : il ne sait pas si ce qu'il repasse par-dessus est un chemin
+         de canevas ou une image, et c'est pour ça qu'il a survécu tel quel au
+         remplacement du dessin. */
       const drawTownTallGrass = (pr) => {
         const i = pr.y * tw.w + pr.x;
         const by = (pr.y + 1) * T;
@@ -20608,54 +20601,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            quel aurait affiché l'herbe devant un personnage déjà reparti. */
         const occupiedNow = !!e && age >= 0 && age < C.TOWN_TALLGRASS_OCCUPIED_MS;
         const occupiedKey = (pr.y + 2) * T - C.TOWN_SORT_EPS;
-        // Hachage de la case, jamais un tirage — voir la note ci-dessus.
-        const rnd1 = (k) => (((pr.x * 92821 + pr.y * 68917 + k * 40507) >>> 0) % 1000) / 1000;
-        const nBlades = C.TOWN_TALLGRASS_BLADES_MIN +
-          Math.floor(rnd1(0) * (C.TOWN_TALLGRASS_BLADES_MAX - C.TOWN_TALLGRASS_BLADES_MIN + 1));
+        const variant = A.townTallGrassVariant(pr.x, pr.y);
         pushE(occupiedNow ? occupiedKey : by, elAt(pr.x, pr.y), () => {
           const cx = pr.x * T + T / 2;
-          for (let b = 0; b < nBlades; b++) {
-            const bx = cx + (rnd1(b + 1) - 0.5) * (T - 3);
-            const h = C.TOWN_TALLGRASS_H_MIN + rnd1(b + 2) * (C.TOWN_TALLGRASS_H_MAX - C.TOWN_TALLGRASS_H_MIN);
-            const restDir = rnd1(b + 3) < 0.5 ? -1 : 1;
-            const restBend = restDir * C.TOWN_TALLGRASS_REST_BEND * (0.4 + 0.6 * rnd1(b + 4));
-            const mul = C.TOWN_TALLGRASS_BEND_MIN + rnd1(b + 5) * (C.TOWN_TALLGRASS_BEND_MAX - C.TOWN_TALLGRASS_BEND_MIN);
-            const phase = (rnd1(b + 6) - 0.5) * 2 * C.TOWN_TALLGRASS_PHASE_MS;
-            const bend = restBend + (e ? bushLeanFormula(e.dir, age, mul, phase) : 0);
-            const wBase = C.TOWN_TALLGRASS_W_BASE, wTip = C.TOWN_TALLGRASS_W_TIP;
-            /* ⚠️⚠️⚠️ LA COURBE, PAS LE PENCHANT — voir TOWN_TALLGRASS_BOW dans
-               fermeConstants.js. `bow` écarte le point de contrôle de la droite
-               base→pointe ; sans lui (`midX = bend * 0.55`), le point de
-               contrôle reste à moins de 5 % de cette droite et le brin rend
-               comme un piquet incliné — vérifié en jeu, capture à l'appui,
-               avant cette correction. */
-            const bow = restDir * (C.TOWN_TALLGRASS_BOW_MIN + rnd1(b + 8) * (C.TOWN_TALLGRASS_BOW_MAX - C.TOWN_TALLGRASS_BOW_MIN));
-            const midX = bend * 0.5 + bow, midY = -h * 0.55;
-            ctx.save(); ctx.translate(bx, by);
-            ctx.beginPath();
-            ctx.moveTo(-wBase, 0);
-            ctx.quadraticCurveTo(midX - wTip, midY, bend, -h);
-            ctx.quadraticCurveTo(midX + wTip, midY, wBase, 0);
-            ctx.closePath();
-            /* ⚠️⚠️ 2026-09-19 — VÉRIFIÉ EN JEU, PAS SEULEMENT AU BANC : la première
-               palette (#2c5a26/#3f7a34/#5a9c48) est à moins de dix points de
-               luminance des tons du GAZON lui-même (townGrassSurface, BASE
-               #5e9251, P1 #689b58 — fermeArt.js) — la même famille de vert
-               MUETTE que la mesure de couleur du §8 de CLAUDE.md. Le brin se
-               fondait dans sa pelouse au lieu de s'en détacher : « hyper soigné »
-               et invisible ne vont pas ensemble. Palette reprise plus SATURÉE et
-               plus SOMBRE à la base, pour une masse qui se voit — ce que la
-               forme courbe, seule, ne suffisait pas à garantir. */
-            const g = ctx.createLinearGradient(0, 0, 0, -h);
-            g.addColorStop(0, "#1e4318");
-            g.addColorStop(1, rnd1(b + 7) < 0.5 ? "#3f8f2e" : "#6fc247");
-            ctx.fillStyle = g; ctx.fill();
-            // ⚠️ Le cerne sert aussi sur fond clair (DESSIN.md) — la lisière du
-            // bois touche la prairie et le sentier de terre, deux fonds clairs.
-            // Opaque et sombre : c'est lui qui sépare le brin de son fond, pas
-            // le remplissage (même famille de vert que le gazon, voir ci-dessus).
-            ctx.strokeStyle = "#12280d"; ctx.lineWidth = 0.7; ctx.stroke();
-            ctx.restore();
+          if (variant !== "reactive") {
+            const img = loadBitmap(`/town/${variant}.png`); if (!img) return;
+            ctx.drawImage(img, cx - img.width / 2, by - img.height);
+            return;
+          }
+          const pose = A.townTallGrassPose(pr.x, pr.y, now, e, age);
+          const base = loadBitmap(`/town/grass-tall-${pose.base}.png`);
+          if (base) ctx.drawImage(base, cx - base.width / 2, by - base.height);
+          if (pose.overlay && pose.overlayAlpha > 0.01) {
+            const ov = loadBitmap(`/town/grass-tall-${pose.overlay}.png`);
+            if (ov) {
+              ctx.globalAlpha = pose.overlayAlpha;
+              ctx.drawImage(ov, cx - ov.width / 2, by - ov.height);
+              ctx.globalAlpha = 1;
+            }
           }
         });
       };
