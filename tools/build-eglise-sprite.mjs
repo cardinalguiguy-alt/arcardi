@@ -28,7 +28,12 @@ const SRC = "refs/eglise-nouvelle.jpg";
 // l'ancienne église (8 cases, héritée du zip 235). TOWN_CHURCH est élargie
 // en conséquence dans fermeConstants.js (croissance symétrique, comme le
 // TOWN_HALL du 2026-09-02).
-const TARGET_W = 192;
+// 2026-09-20 (retouche définition) : la largeur AFFICHÉE en jeu reste 192 —
+// voir CHURCH_DISP_W dans drawChurchBitmap (FermeGame.js), qui redimensionne
+// explicitement à l'affichage — mais la source STOCKÉE double, pour donner à
+// la mise à l'échelle (zoom caméra, lissage activé pour ce bâtiment précis)
+// de vraies données au lieu d'agrandir un pixel art déjà petit.
+const TARGET_W = 384;
 const OUT_DAY = "public/town/eglise-day.png";
 const OUT_GLOW = "public/town/eglise-glow.png";
 

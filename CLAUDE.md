@@ -7,103 +7,92 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-20 — Audit visuel des bâtiments civiques, puis l'église reçoit un sprite Gemini « belle et impressionnante »
+### 2026-09-21 — Retouche du sprite de l'église (hauteur, définition, parvis) et refonte du vol des pigeons
 
-Demande de Guillaume : aller voir en jeu le tribunal, l'hôtel de ville et l'église (et leurs
-alentours) pour juger honnêtement la cohérence visuelle. **Trouvé, avant tout code** : la mairie
-(bitmap Gemini, 2026-09-02) est nettement au-dessus du tribunal et de l'ancienne église
-(procéduraux, zip 235/425) en niveau de détail — l'écart visuel n'est pas entre bâtiments et décor,
-il est entre la mairie et tout le reste. ⚠️ **Bug fonctionnel trouvé EN PASSANT, PAS CORRIGÉ** : le
-métier des 31 résidents (`job` dans `TOWN_RESIDENTS`, fermeConstants.js) est écrit UNIQUEMENT en
-anglais et s'affiche brut dans au moins six phrases françaises (`residentStarted`, `residentTag`,
-`residentGreet`, `stayProposal`, le tableau des nouvelles…) — vu 3 fois sans le chercher
-(« bake fresh bread and viennoiseries », « sail the world… », « sew and dye clothes »). Aucune table
-`job` en français n'existe. **Reste à faire.**
+Guillaume, en jeu, sur la livraison de la veille (église Gemini + pigeons, voir §13) : « l'église
+doit être plus haute et en meilleure définition si possible. Et le parvis doit pas être totalement
+dans un autre style. aussi les pigeons ont un vol trop régulier. » Puis, en cours de session :
+« délivre vite » — les quatre points sont traités par du code, sans nouvel appel Gemini.
 
-Guillaume a ensuite demandé le même traitement que la mairie pour l'église : **« l'hôtel de ville
-est réussi car il est très différent de l'original » → « je veux que Gemini produise une église
-belle et impressionnante ».** Un premier prompt fidèle à l'ancien sprite (clocher-à-gauche imposé)
-aurait reproduit l'erreur de la mairie d'avant Gemini (comparé en rendant `townHall2Sprite`, la
-maquette abandonnée : même famille de dessin que l'ancienne église, aplat et simple) — le second
-prompt, envoyé par Guillaume SANS l'ancien sprite en référence et sans contrainte de composition
-(seules limites : vue de face sur damier, teinte hors brique/gris pour rester distincte des deux
-autres monuments, lisible comme une église), a rendu une cathédrale à trois flèches très supérieure
-— reçue dans `refs/eglise-nouvelle.jpg`.
+**Hauteur** : la caméra centrait le joueur pile au milieu de l'écran ; au pied du monument, seule la
+moitié supérieure de la fenêtre montrait le bâtiment — sur une fenêtre réduite (mesuré à 550×750 et
+au format par défaut du panneau de prévisualisation, 524×714), les trois flèches sortaient par le
+haut. `townZoomTarget` (FermeGame.js) porte désormais un `headroom` par monument (0 par défaut,
+tribunal/mairie/etc. non touchés — un seul changement visuel à la fois, §2), et
+`TOWN_ZOOM_HEADROOM_TALL` (fermeConstants.js, 0,17) décale le cadrage vers le haut UNIQUEMENT près
+de l'église. Vérifié en jeu à 550×750, 900×650 et 1440×900 : les trois flèches et leurs croix
+tiennent désormais dans le cadre aux trois tailles.
 
-**Livré** : `tools/build-eglise-sprite.mjs` (pipeline C, deuxième usage — modèle exact de
-`build-townhall-sprite.mjs`, damier→alpha PROPRE à cette image après calibrage — voir ⚠️ ci-dessous
-—, vitraux allumés détectés par région et séparés en calque `glow`) produit
-`public/town/eglise-day.png`/`eglise-glow.png` (192×183). `drawChurchBitmap` (FermeGame.js) les
-dessine comme `drawTownHallBitmap` (ombre, embase, superposition `nightAlpha()`), et remplace
-l'appel `drawCivic(C.TOWN_CHURCH, sprites.church, …)` — `townhallSprite()`/`sprites.church` restent
-en place, MORTS, même précédent que `townHall2Sprite()` pour la mairie. `TOWN_CHURCH` passe de 8 à
-12 cases (croissance symétrique, x 66→64) pour aligner les trois monuments civiques sur la même
-largeur de façade ; marge vérifiée sans recoupement (`TOWN_CEMETERY`/`TOWN_PLAZA`), `verify-collision`
-et `verify-vallee` (223/223) tournés après coup, aucune régression. Un arrêt de téléport dev direct
-« Valley Town — l'église (parvis) » a été ajouté (`DEV_TELEPORTS`) : elle n'en avait aucun, seule la
-mairie avait ce confort. Guillaume a demandé en plus des **pigeons qui tournent autour des flèches
-et clochers** : vol d'ambiance PUREMENT DÉCORATIF (aucun état, aucun message réseau — comme les
-colombes du parc, non partagées entre joueurs, décision déjà actée au 433), 5 oiseaux réutilisant
-les sprites `S.birds.pigeon`/`dove` du 433 sur une orbite elliptique autour du clocher.
+**Définition** : `eglise-day.png`/`eglise-glow.png` passent de 192 à 384 px de large en STOCKAGE
+(`tools/build-eglise-sprite.mjs`, même `refs/eglise-nouvelle.jpg`) ; la taille AFFICHÉE reste 192
+(`dispScale` dans `drawChurchBitmap`, rien d'autre ne bouge). Le lissage
+(`ctx.imageSmoothingEnabled`) est activé UNIQUEMENT pour ce dessin, remis à `false` juste après :
+c'est le seul bitmap peint/photographique du jeu, tout le reste reste au plus proche voisin. ⚠️ Un
+petit artefact noir (un pixel de damier mal résorbé) existe sur le clocher droit DEPUIS LA LIVRAISON
+D'ORIGINE (vérifié dans le PNG du commit `church`) — vu en cherchant autre chose, pas corrigé, hors
+demande du jour.
 
-⚠️⚠️ **DEUX PIÈGES PAYÉS EN LE CONSTRUISANT, UTILES AU PROCHAIN IMPORT PIPELINE C** :
-1. **Le damier n'a pas la même couleur d'une image Gemini à l'autre.** Le seuil de `hdv.jpg`
-   (luminosité > 150) ratait la moitié des cases de `eglise-nouvelle.jpg` (case sombre ≈ 151,143,135,
-   sous le seuil). La bonne mesure n'est ni la luminosité seule ni deux couleurs de référence
-   exactes, c'est la SATURATION (`max-min < 22`) : le damier est toujours neutre, la pierre du
-   bâtiment toujours chaude, quel que soit le ton exact du gris choisi par le rendu. Il a aussi fallu
-   ponter les faux négatifs isolés du bruit JPEG (repêchage sur 4 voisins sur 8) ET ne garder que la
-   PLUS GRANDE composante connexe de « contenu » pour le recadrage (un grain de bruit isolé dans le
-   damier, non connecté au bâtiment, gonflait sinon la boîte à l'image entière).
-2. **Le zoom de caméra sur un monument peut laisser sa pointe AU-DESSUS du canevas, et rien sur le
-   PNG seul ne le montre.** Debout sur le parvis, le zoom mesuré (jusqu'à ×2,2, après un
-   ralentissement de 3,3 à 2,2 sur ~2 s) laisse le sommet d'une flèche haute hors du cadre — vérifié
-   en injectant un repère de couleur à la position calculée et en LISANT le pixel réellement rendu,
-   jamais en regardant une capture prise trop tôt (le zoom bouge encore). Les pigeons sont donc
-   ancrés au niveau de la rosace/du sommet des clochers (y local ≈ 125 sur 183), pas à la pointe des
-   flèches (y ≈ 0-5) : plus bas que la demande au pixel près, mais visible en permanence, ce qui
-   sert mieux l'intention. **Détail complet dans la note de `TOWN_CHURCH`, fermeConstants.js.**
+**Parvis** : le dallage reste `G_PATH_STONE`, partagé par cinq places de la ville — le redessiner
+aurait été un second changement visuel (§2). Un halo chaud en dégradé radial, dans la teinte de la
+pierre du bâtiment, adoucit la coupure entre l'image peinte et le pixel art plat, posé juste avant
+l'embase. Amélioration réelle mais partielle : **le jugement « ça suffit ou pas » reste à
+Guillaume.**
 
-`next build`/`verify-syntax` propres, `verify-collision`/`verify-vallee`/`verify-compo` TOUT PASSE.
-Aucune manipulation Supabase. **Attend le regard de Guillaume** : il a suivi le rendu en direct
-pendant cette session (église + pigeons vus à l'écran), mais le jugement « agréable/impressionnant »
-et la hauteur du vol des pigeons restent siens — §13.
+**Pigeons** : trois orbites (une par clocher) au lieu d'une ellipse unique partagée sur toute la
+façade ; une profondeur (`Math.sin(ang)`) fait peindre chaque oiseau AVANT ou APRÈS le bâtiment selon
+sa position sur son orbite — il passe donc devant ET derrière les flèches ; un cycle propre à chaque
+oiseau (24 à 40 s, dérivé de son index) alterne vol et pose sur l'un de huit perchoirs fixes
+(corniches/pinacles du bâtiment ou dalles du parvis), atterrissage et envol interpolés en douceur
+(smoothstep), jamais un saut. Toujours SANS ÉTAT PARTAGÉ (décision du 433, inchangée). ⚠️ Piège payé
+EN L'ÉCRIVANT, jamais livré : scinder le dessin en une passe « derrière » et une passe « devant » a
+d'abord dupliqué le `ctx.translate/scale/translate` du grossissement — composé deux fois (1,1×1,1),
+il aurait décalé et sur-agrandi l'église en silence. Un seul `ctx.save()` ouvert en haut de
+`drawChurchBitmap`, un seul `ctx.restore()` en bas ; les deux passes de pigeons vivent SOUS CE MÊME
+état de transform.
 
-### Toujours ouvert depuis le 2026-09-16 (livré, jamais vu en jeu)
+⚠️⚠️ **TROUVÉ EN VÉRIFIANT, PAS CORRIGÉ, ET C'EST PLUS GROS QUE L'ÉGLISE** : `resize()`
+(FermeGame.js) fixe `canvas.width = window.innerWidth` SANS jamais multiplier par
+`window.devicePixelRatio`. Sur un écran Retina (dpr=2 — le cas de tout Mac récent, mesuré dpr=2 dans
+le panneau de test), TOUT le canevas, pas seulement l'église, se dessine à moitié résolution puis
+s'étire au double par le navigateur : c'est probablement la vraie source du flou perçu, bien au-delà
+du sprite de l'église. Corriger ça touche `resize()` et tout calcul qui lit `canvas.width/height`
+comme repère écran (coordonnées souris comprises) — mérite sa PROPRE livraison, testée seule (§2).
+**Pas fait ici.**
 
-Le chantier naval proposé au quai (fenêtre Oui/Non une fois par session), la repousse des buissons
-taillés après 3 jours réels (`bushTrim`, aucun raccourci dans le menu dev) et la verdure ×1,8 de
-Valley Town (`TOWN_SCATTER_DENSITY`) attendent le regard de Guillaume ; le pourquoi de chaque choix
-est en commentaire à côté du code.
+`verify-vallee` (223/223) et `verify-collision` (TOUT PASSE) rejoués après coup, aucune régression.
+Pas de `next build` (dev tournait — §10). Aucune manipulation Supabase. **Attend le regard de
+Guillaume** : hauteur, définition, parvis, pigeons — aucun banc ne peut juger « agréable », seule une
+vraie séance le peut (§13).
 
-### ⏭️ ACTION SUIVANTE : CORRIGER LA TRADUCTION DES MÉTIERS, PUIS LE MÊME TRAITEMENT GEMINI POUR LE TRIBUNAL
+### Toujours ouvert
 
-Deux candidats concrets, issus directement de la session du jour, avant toute nouvelle idée :
-1. **Le bug de traduction des métiers** (voir plus haut) — correctif de taille connue et bornée :
-   une table `jobFr`/équivalent pour les 31 entrées de `TOWN_RESIDENTS`, ou une clé de traduction
-   par métier, branchée partout où `ro.job` est lu en français.
-2. **Le tribunal mérite le même sprite Gemini que l'église** (§13) — la méthode est maintenant
-   éprouvée : prompt SANS référence à la colonnade actuelle, sans contrainte de composition, juste
-   un thème (néoclassique, imposant, pierre froide pour rester distinct des deux autres) et la
-   consigne de liberté totale.
+- **Traduction des métiers** (trouvé le 2026-09-20, jamais corrigé) : `job` dans `TOWN_RESIDENTS`
+  (fermeConstants.js) est écrit en anglais et s'affiche brut dans au moins six phrases françaises.
+  Correctif borné : une table `jobFr`/équivalent, ou une clé de traduction par métier.
+- **Le tribunal mérite le même sprite Gemini que l'église** (§13) — méthode éprouvée : prompt SANS
+  référence à la colonnade actuelle, sans contrainte de composition, un thème et la liberté totale.
+- **Le canevas hors `devicePixelRatio`, ci-dessus** — candidat sérieux, mais son propre chantier.
+- Chantier naval du quai, repousse des buissons taillés, verdure ×1,8 de Valley Town (livrés le
+  2026-09-16, jamais vus en jeu) : le pourquoi de chaque choix est en commentaire à côté du code.
+- ⚠️ Dette Google Cloud (Où's That, inchangée depuis le 2026-09-14), À FAIRE AVEC CODEX ET GUILLAUME
+  DEVANT LA CONSOLE : le code n'appelle que Maps Embed API, gratuite et illimitée, mais le dépôt ne
+  peut pas prouver la configuration du compte réel. Guillaume se connecte lui-même — aucun
+  identifiant transmis à l'agent (§2) — puis Codex guide la vérification : adresse de facturation
+  dans l'EEE ; clé dédiée à Où's That ; restriction d'API sur **Maps Embed API seulement** ;
+  référents limités aux domaines Arcardi nécessaires ; aucune API payante ni autre service Cloud sur
+  cette clé/ce projet ; rapport de facturation à zéro. ⚠️ Un budget d'alerte n'est pas un plafond de
+  dépense. Close seulement après lecture des écrans réels, jamais par déduction depuis
+  `NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY`.
 
-⚠️ **DETTE IMMÉDIATE TOUJOURS OUVERTE, À FAIRE AVEC CODEX ET GUILLAUME DEVANT LA CONSOLE GOOGLE
-CLOUD** (inchangée depuis le 2026-09-14) : le code n'appelle que Maps Embed API, gratuite et
-illimitée, mais le dépôt ne peut pas prouver la configuration du compte réel. Guillaume se connecte
-lui-même — aucun identifiant transmis à l'agent (§2) — puis Codex guide la vérification : adresse
-de facturation dans l'EEE ; clé dédiée à Où's That ; restriction d'API sur **Maps Embed API
-seulement** ; référents limités aux domaines Arcardi nécessaires ; aucune API payante ni autre
-service Cloud utilisant cette clé ou ce projet ; rapport de facturation à zéro. ⚠️ Un budget
-d'alerte ne constitue pas un plafond de dépense. Cette vérification est CLOSE seulement après
-lecture des écrans réels, jamais par déduction depuis `NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY`.
+Au-delà de ces items, **la bonne action est de DEMANDER à Guillaume quoi ouvrir ensuite**, pas d'en
+choisir un (§2) — §13 tient la liste complète (îles, transport du bois, mariage/cadastre/coiffure,
+ferme peuplée à deux clients, suite de l'audit d'Où's that).
 
-Au-delà de ces trois items, **la bonne action est de DEMANDER à Guillaume quoi ouvrir ensuite**, pas
-d'en choisir un (§2). Le §13 tient la liste complète ; parmi les candidats les plus visibles, sans en
-privilégier un : les îles (le navire promet un ailleurs, rien ne dit ce qu'on y trouve) · la chaîne
-de transport du bois du bateau (direction tranchée, jamais construite) · le mariage, le cadastre, le
-salon de coiffure (guichets posés, sans contenu) · le n°1 de la liste hors-quête : la ferme peuplée
-en vraie séance à deux clients, socle de toute décision sociale à venir · la suite de l'audit d'Où's
-that (rythme, mini-carte, fin de partie, contenu, modes : ordre proposé dans son README).
+### ⏭️ ACTION SUIVANTE
+
+Si Guillaume n'a pas encore de retour sur la retouche du jour (église/pigeons) : **corriger la
+traduction des métiers** — bug borné, connu depuis le 2026-09-20, jamais traité. Sinon : suivre son
+verdict sur l'église et les pigeons en premier.
 
 ---
 

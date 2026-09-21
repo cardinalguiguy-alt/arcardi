@@ -18795,33 +18795,49 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        resterait à 2,004 pour toujours, donc fractionnaire pour toujours. On
        accroche donc la valeur dès qu'elle est assez proche. */
     function townZoomTarget(m) {
-      if (!m) return ZOOM;
+      if (!m) return { zoom: ZOOM, headroom: 0 };
       /* Les lieux qui MÉRITENT d'être vus en entier. ⚠️ LA LISTE EST DÉRIVÉE
          DES CONSTANTES DE BÂTIMENTS, jamais réécrite : ajouter un monument à la
          ville, c'est l'ajouter ici en une ligne qui NOMME la constante, et le
          jour où on le déplace il se déplace tout seul (§8). Les points de vue
          (belvédère, ponton, place) y figurent parce que la demande était « en
          profiter » : un belvédère dont on ne voit pas la vallée ne sert à rien,
-         et c'est très exactement le même défaut que le fronton coupé. */
-      for (const b of [C.TOWN_COURT, C.TOWN_HALL, C.TOWN_CHURCH, C.TOWN_BOUTIQUE, C.TOWN_SALON,
-                       C.TOWN_BELVEDERE, C.TOWN_PLAZA, C.TOWN_PIER,
-                       { x: C.TOWN_KIOSK.x, y: C.TOWN_KIOSK.y, w: 3, h: 3 }]) {
-        if (!b) continue;
+         et c'est très exactement le même défaut que le fronton coupé.
+         ⚠️ 2026-09-20 — `headroom` (0 par défaut) : fraction de la vue rendue
+         EN PLUS au-dessus du joueur pour un monument taggé "tall". Seule
+         l'église le porte : ses trois flèches sortent du cadrage pensé pour
+         l'ancienne église procédurale (8 cases de haut) — vu en jeu (fenêtre
+         réduite), pas sur le PNG seul (§10 CLAUDE.md), les pointes des flèches
+         restaient AU-DESSUS du canevas. Les autres monuments gardent 0 : ils
+         étaient déjà jugés bien cadrés par Guillaume, et toucher leur cadrage
+         sans le demander serait un second changement visuel caché dans
+         celui-ci (§2 CLAUDE.md). */
+      for (const spec of [
+        { b: C.TOWN_COURT }, { b: C.TOWN_HALL },
+        { b: C.TOWN_CHURCH, headroom: C.TOWN_ZOOM_HEADROOM_TALL },
+        { b: C.TOWN_BOUTIQUE }, { b: C.TOWN_SALON },
+        { b: C.TOWN_BELVEDERE }, { b: C.TOWN_PLAZA }, { b: C.TOWN_PIER },
+        { b: { x: C.TOWN_KIOSK.x, y: C.TOWN_KIOSK.y, w: 3, h: 3 } },
+      ]) {
+        const b = spec.b; if (!b) continue;
         const w = b.w || 3, h = b.h || 3;
         // Marge en CASES autour de l'emprise : on veut que le dézoom soit déjà
         // fini quand on arrive au pied, pas qu'il se déclenche une fois collé.
         if (m.x >= b.x - C.TOWN_ZOOM_MARGIN && m.x <= b.x + w + C.TOWN_ZOOM_MARGIN
-         && m.y >= b.y - C.TOWN_ZOOM_MARGIN && m.y <= b.y + h + C.TOWN_ZOOM_MARGIN + 2) return C.TOWN_ZOOM_NEAR;
+         && m.y >= b.y - C.TOWN_ZOOM_MARGIN && m.y <= b.y + h + C.TOWN_ZOOM_MARGIN + 2)
+          return { zoom: C.TOWN_ZOOM_NEAR, headroom: spec.headroom || 0 };
       }
-      return ZOOM;
+      return { zoom: ZOOM, headroom: 0 };
     }
     function townZoomNow(dt) {
       const z = townZoomRef.current;
       const want = townZoomTarget(meRef.current);
-      if (z.v === 0) z.v = want;                       // première image : pas de fondu
+      if (z.v === 0) { z.v = want.zoom; z.h = want.headroom; }  // première image : pas de fondu
       const k = Math.min(1, (dt || 0.016) / C.TOWN_ZOOM_MS * 1000);
-      z.v += (want - z.v) * k;
-      if (Math.abs(want - z.v) < 0.01) z.v = want;     // l'accrochage : voir la note
+      z.v += (want.zoom - z.v) * k;
+      z.h = (z.h || 0) + (want.headroom - (z.h || 0)) * k;
+      if (Math.abs(want.zoom - z.v) < 0.01) z.v = want.zoom;     // l'accrochage : voir la note
+      if (Math.abs(want.headroom - z.h) < 0.002) z.h = want.headroom;
       return z.v;
     }
     function getCamTown() {
@@ -18836,6 +18852,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const fx = sc0 ? m.x + (sc0.x - m.x) * sc0.k : m.x;
       const fy = sc0 ? m.y + (sc0.y - m.y) * sc0.k : m.y;
       let cx = (fx + 0.5) * T - vw / 2, cy = (fy + 0.5) * T - vh / 2;
+      // Le HEADROOM (voir townZoomTarget) : décale le cadre vers le haut, donc
+      // montre plus de ciel/bâtiment au-dessus du joueur et un peu moins de
+      // parvis en dessous — jamais l'inverse, jamais une case de plus des
+      // deux côtés (rien en cases ne bouge, seul le cadrage RGB le fait).
+      cy -= (townZoomRef.current.h || 0) * vh;
       /* ⚠️ LE RECADRAGE SUR LES BORDS N'EST PLUS INCONDITIONNEL. Dézoomé, la
          vue peut devenir plus LARGE que la carte ; `Math.min(tw.w*T - vw, …)`
          rendrait alors une borne négative et collerait la caméra hors du monde,
@@ -20414,73 +20435,202 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         pushE(by, e, () => {
           const cx2 = b.x * T + b.w * T / 2;
           const GROW = 1.1; // même grossissement que les deux autres monuments
+          /* ⚠️ 2026-09-20 (retouche définition) — L'AFFICHAGE RESTE CALÉ SUR
+             192 px, INDÉPENDAMMENT DE LA RÉSOLUTION SOURCE. `eglise-day.png`
+             est passée à 384 (voir build-eglise-sprite.mjs) pour donner à la
+             mise à l'échelle de vraies données, mais la TAILLE À L'ÉCRAN — et
+             donc l'emprise, l'embase, les ancres des pigeons — ne doit pas
+             bouger d'un pixel : `dispScale` ramène toujours l'image à 192 de
+             large, quelle que soit sa résolution native. `scaleK` (ancres des
+             pigeons plus bas) redevient donc 1 par construction. */
+          const dispScale = 192 / day.width;
+          const dw = day.width * dispScale, dh = day.height * dispScale;
           ctx.save();
           ctx.translate(cx2, by); ctx.scale(GROW, GROW); ctx.translate(-cx2, -by);
-          const dx = b.x * T + (b.w * T - day.width) / 2, dy = by - day.height;
-          const shx = cx2 + day.width * 0.16, shy = by - 3;
+          const dx = b.x * T + (b.w * T - dw) / 2, dy = by - dh;
+          const shx = cx2 + dw * 0.16, shy = by - 3;
           ctx.save();
           for (let k = 0; k < 3; k++) {
             ctx.fillStyle = `rgba(20,16,12,${0.16 - k * 0.045})`;
             ctx.beginPath();
-            ctx.ellipse(shx, shy, day.width * (0.42 - k * 0.06), day.height * (0.10 - k * 0.02), 0, 0, Math.PI * 2);
+            ctx.ellipse(shx, shy, dw * (0.42 - k * 0.06), dh * (0.10 - k * 0.02), 0, 0, Math.PI * 2);
             ctx.fill();
           }
           ctx.restore();
-          ctx.drawImage(day, dx, dy);
+          /* ⚠️ LES PIGEONS QUI TOURNENT AUTOUR DES FLÈCHES (demande de
+             Guillaume, 2026-09-20, PUIS retouche le même jour : vol jugé trop
+             régulier). Ce n'est PAS le vol du 433 (E.flockStep, newBird) : ces
+             oiseaux-là fuient les joueurs et se posent au sol de la place,
+             avec un état partagé par site (`townBirdsRef`) qui n'a aucun sens
+             à onze cases d'altitude au-dessus d'un toit. Un vol d'ambiance,
+             purement décoratif, n'a besoin d'aucun état — chaque image se
+             calcule à partir de `now`, exactement comme le pain § les
+             colombes du parc ne sont PAS partagées entre joueurs (décision de
+             Guillaume, 433) : deux clients verront deux vols différents.
+             Sprites RÉUTILISÉS (S.birds.pigeon/dove, poses de vol du 433,
+             poses au sol du 439) : un vol de plus ne mérite pas un nouveau
+             dessin.
+             ⚠️ TROIS CLOCHERS, TROIS ORBITES — pas une seule ellipse partagée
+             sur toute la façade : "tourner autour DES flèches" (pluriel) se
+             lit mal si les cinq oiseaux dessinent le même grand cercle. Les
+             centres sont posés sur les tours-clochers (gauche/droite) et sur
+             la base de la flèche centrale — mesurés à la loupe sur
+             `eglise-day.png` (grille 192×183, voir le repère de coordonnées
+             utilisé pour la retouche), PAS à la pointe des flèches (y≈0-5) :
+             au zoom du monument, une orbite ancrée si haut sortait déjà du
+             canevas AVANT le correctif de cadrage ci-dessus (`TOWN_ZOOM_
+             HEADROOM_TALL`) — elle reste sagement plus bas, sous les
+             pointes, ce qui est toujours conforme à la demande et ne dépend
+             plus d'un cadrage particulier.
+             ⚠️ DEVANT / DERRIÈRE : chaque oiseau porte une PROFONDEUR
+             (`Math.sin(ang)`, -1 au sommet de son orbite, +1 en bas). Sous un
+             seuil, il est peint AVANT le bâtiment (donc caché par la pierre
+             quand son orbite le place derrière un clocher) ; au-dessus, APRÈS
+             — comme avant. Aucun état à réconcilier : la profondeur ne dépend
+             que de l'angle du moment, recalculée identiquement des deux
+             côtés du `drawImage`.
+             ⚠️ SE POSER : un cycle propre à chaque oiseau (période dérivée de
+             son index, jamais la même seconde pour deux oiseaux) alterne vol
+             et pose, sur un perchoir tiré (pigeon i, cycle n) parmi des
+             points fixes — corniches/rebords de pierre sur le bâtiment, ou le
+             pavé du parvis. Les phases d'atterrissage/envol interpolent entre
+             la position d'orbite au bord du créneau de vol et le perchoir :
+             pure fonction du temps, donc parfaitement déterministe sans
+             jamais rien stocker. */
+          const SPIRE_ORBITS = [
+            { cx: dx + 65, cy: dy + 94, rx: 21, ry: 8 },   // clocher gauche
+            { cx: dx + 96, cy: dy + 54, rx: 15, ry: 6.5 }, // base de la flèche centrale
+            { cx: dx + 128, cy: dy + 94, rx: 21, ry: 8 },  // clocher droit
+          ];
+          const PERCH_POINTS = [
+            { x: dx + 65, y: dy + 65 },                          // corniche, clocher gauche
+            { x: dx + 128, y: dy + 65 },                         // corniche, clocher droit
+            { x: dx + 96, y: dy + 98 },                          // balustrade de la rosace
+            { x: dx + 54, y: dy + 88 },                          // base du pinacle gauche
+            { x: dx + 138, y: dy + 88 },                         // base du pinacle droit
+            { x: (b.x + 3.2) * T, y: (b.y + b.h + 1.4) * T },    // parvis, à gauche du porche
+            { x: (b.x + 8.8) * T, y: (b.y + b.h + 1.4) * T },    // parvis, à droite du porche
+            { x: (b.x + 6) * T, y: (b.y + b.h + 3) * T },        // parvis, plus au sud
+          ];
+          function hash01(n) { const s = Math.sin(n * 12.9898) * 43758.5453; return s - Math.floor(s); }
+          function pigeonState(i) {
+            const seed = i * 1.6180339887; // nombre d'or : phases sans motif répétitif à l'œil
+            const orbit = SPIRE_ORBITS[i % SPIRE_ORBITS.length];
+            const spd = 0.3 + (i % 3) * 0.045;                 // rad/s : légère variation, pas un métronome
+            const CYCLE = 24 + (i % 4) * 5.5;                  // 24..40 s, propre à chaque oiseau
+            const PERCH_DUR = 6 + (i % 3) * 2.5;               // 6..11 s posé
+            const TRANS = 1.3;                                 // atterrissage/envol
+            const FLY_DUR = CYCLE - PERCH_DUR - 2 * TRANS;
+            const tAbs = nowS + seed * 11.3;
+            const cycleN = Math.floor(tAbs / CYCLE);
+            const t = tAbs - cycleN * CYCLE;                   // position dans le cycle, 0..CYCLE
+            const perch = PERCH_POINTS[Math.floor(hash01(i * 7.1 + cycleN * 3.7) * PERCH_POINTS.length)];
+            const flyPoint = (tt) => {
+              const ang = seed + tt * spd;
+              const bob = Math.sin(tt * spd * 2 + seed) * 2.4;
+              return { x: orbit.cx + Math.cos(ang) * orbit.rx, y: orbit.cy + Math.sin(ang) * orbit.ry + bob, ang, depth: Math.sin(ang) };
+            };
+            let x, y, ang, depth, grounded = false, wingRate = 1;
+            if (t < FLY_DUR) {
+              const f = flyPoint(t); x = f.x; y = f.y; ang = f.ang; depth = f.depth;
+            } else if (t < FLY_DUR + TRANS) {
+              const f = flyPoint(FLY_DUR), k = (t - FLY_DUR) / TRANS, ek = k * k * (3 - 2 * k); // smoothstep : approche freinée, pas linéaire
+              x = f.x + (perch.x - f.x) * ek; y = f.y + (perch.y - f.y) * ek - Math.sin(k * Math.PI) * 6; // petit arrondi de descente
+              ang = f.ang; depth = 1; wingRate = 1 - ek * 0.4;
+            } else if (t < FLY_DUR + TRANS + PERCH_DUR) {
+              grounded = true; x = perch.x; y = perch.y; depth = 1;
+              ang = Math.PI / 2; wingRate = 0;
+            } else {
+              /* ⚠️ le point visé par le décollage est `flyPoint(0)`, PAS
+                 `flyPoint(CYCLE)` : `t` retombe à 0 au prochain cycle (ligne
+                 `t = tAbs - cycleN*CYCLE`), donc c'est flyPoint(0) que la
+                 branche `t < FLY_DUR` réévaluera en premier. Viser CYCLE
+                 aurait laissé un saut net à la couture — même angle de
+                 seed, mais tourné de `CYCLE*spd` radians de plus. */
+              const k = (t - FLY_DUR - TRANS - PERCH_DUR) / TRANS, ek = k * k * (3 - 2 * k);
+              const fEnd = flyPoint(0);
+              x = perch.x + (fEnd.x - perch.x) * ek; y = perch.y + (fEnd.y - perch.y) * ek - Math.sin(k * Math.PI) * 5;
+              ang = fEnd.ang; depth = 1; wingRate = 0.3 + ek * 0.7;
+            }
+            const seatedIdle = grounded ? Math.sin(tAbs * 1.6 + seed) * 0.6 : 0;
+            return { x, y: y + seatedIdle, ang, depth, grounded, wingRate, seed, i };
+          }
+          const nowS = now / 1000;
+          const birdStates = [];
+          for (let i = 0; i < 5; i++) birdStates.push(pigeonState(i));
+          function paintPigeon(bb) {
+            const kind = (bb.i * 37) % 100 < 14 ? "dove" : "pigeon"; // même part que C.BIRD_DOVE_SHARE
+            const set = sprites.birds && sprites.birds[kind];
+            if (!set) return;
+            let im;
+            if (bb.grounded) im = (Math.floor(nowS * 1.4 + bb.seed) % 5 === 0) ? (set.peck || set.stand) : set.stand;
+            else if (bb.wingRate < 0.18) im = set.glide;
+            else {
+              const wingHz = 2.1 + (bb.i % 3) * 0.3;
+              const wk = Math.floor((nowS * wingHz * bb.wingRate + bb.seed) * 2) % 4;
+              im = [set.down, set.mid, set.up, set.mid][wk] || set.glide;
+            }
+            if (!im) return;
+            const BIRD_SCALE = 1 / 1.5;
+            const bdw = im.width * BIRD_SCALE, bdh = im.height * BIRD_SCALE;
+            const behindK = bb.grounded ? 1 : 0.82 + 0.18 * Math.max(0, bb.depth); // un peu plus petit côté "loin"
+            const dwB = bdw * behindK, dhB = bdh * behindK;
+            const faceLeft = Math.cos(bb.ang) < 0 && !bb.grounded; // survole vers l'ouest : tête à gauche
+            ctx.save();
+            ctx.globalAlpha = bb.grounded ? 1 : Math.min(1, 0.75 + 0.25 * Math.max(0, bb.depth));
+            if (faceLeft) { ctx.translate(bb.x + dwB / 2, bb.y); ctx.scale(-1, 1); ctx.drawImage(im, -dwB / 2, -dhB / 2, dwB, dhB); }
+            else ctx.drawImage(im, bb.x - dwB / 2, bb.y - dhB / 2, dwB, dhB);
+            ctx.restore();
+          }
+          // Derrière : uniquement les oiseaux en vol, sur la moitié "loin" de leur orbite.
+          for (const bb of birdStates) if (!bb.grounded && bb.depth < -0.1) paintPigeon(bb);
+          /* ⚠️ LISSAGE ACTIVÉ POUR CE SEUL DESSIN. Le reste du jeu est du pixel
+             art (nearest-neighbor partout, `ctx.imageSmoothingEnabled = false`
+             posé une fois pour tout le canevas dans `resize()`) — juste pour
+             cette image peinte/photographique, le lissage évite l'effet
+             "blocs" qu'un agrandissement au plus proche voisin donne à un
+             dégradé continu (vitraux, pierre). Remis à `false` juste après :
+             aucune autre passe de rendu ne doit hériter de ce choix.
+             ⚠️ TOUJOURS SOUS LE MÊME `ctx.save()` DE GROW (ouvert plus haut,
+             restauré une seule fois en bas) : un second save/translate/scale
+             ici COMPOSERAIT le grossissement avec lui-même (1,1×1,1 = 1,21),
+             décalant en plus l'ancrage — piège payé en écrivant cette passe. */
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+          ctx.drawImage(day, dx, dy, dw, dh);
           const glow = loadBitmap("/town/eglise-glow.png");
           const na = nightAlpha();
           if (glow && na > 0.01) {
             ctx.globalAlpha = na;
-            ctx.drawImage(glow, dx, dy);
+            ctx.drawImage(glow, dx, dy, dw, dh);
             ctx.globalAlpha = 1;
           }
-          drawBuildingFooting(ctx, cx2, by, day.width / 2);
-          /* ⚠️ LES PIGEONS QUI TOURNENT AUTOUR DES FLÈCHES (demande de
-             Guillaume, 2026-09-20). Ce n'est PAS le vol du 433 (E.flockStep,
-             newBird) : ces oiseaux-là fuient les joueurs et se posent, avec un
-             état partagé par site (`townBirdsRef`) qui n'a aucun sens à onze
-             cases d'altitude au-dessus d'un toit. Un vol d'ambiance, purement
-             décoratif, n'a besoin d'aucun état — chaque image se calcule à
-             partir de `now`, exactement comme le pain § les colombes du parc
-             ne sont PAS partagées entre joueurs (décision de Guillaume, 433) :
-             deux clients verront deux vols différents, et c'est très bien.
-             Sprites RÉUTILISÉS (S.birds.pigeon/dove, poses de vol du 433) :
-             un vol de plus ne mérite pas un nouveau dessin.
-             ⚠️ LE CENTRE N'EST PAS AUX POINTES DES FLÈCHES (y local ≈ 0-5 sur
-             183) MAIS UN PEU PLUS BAS (y local ≈ 110, la rosace/le sommet des
-             clochers) — mesuré EN JEU, pas sur le PNG seul : à la distance où
-             la caméra se pose devant le parvis, le zoom du monument (jusqu'à
-             ×2,2 mesuré) laisse le sommet des trois flèches AU-DESSUS du haut
-             du canevas. Un banc qui n'aurait comparé que des pixels sur le
-             PNG ne l'aurait jamais vu — seul un test en jeu, écran réel, l'a
-             montré (deux carrés de repère déplacés jusqu'à trouver la limite
-             visible). Le vol tourne donc autour du clocher, sous les flèches
-             elles-mêmes, ce qui reste conforme à la demande. */
-          const scaleK = day.width / 192;
-          const spireCx = dx + 96 * scaleK, spireCy = dy + 125 * scaleK;
-          const N_PIGEONS = 5;
-          for (let i = 0; i < N_PIGEONS; i++) {
-            const seed = i * 1.6180339887; // nombre d'or : phases sans motif répétitif à l'œil
-            const rx = (40 + (i % 3) * 8) * scaleK, ry = (9 + (i % 2) * 3) * scaleK;
-            const spd = 0.34 + (i % 3) * 0.05;               // rad/s : légère variation, pas un métronome
-            const ang = seed + (now / 1000) * spd;
-            const bx = spireCx + Math.cos(ang) * rx;
-            const bob = Math.sin(now / 1000 * spd * 2 + seed) * 3 * scaleK;
-            const byy = spireCy + Math.sin(ang) * ry + bob;
-            const kind = (i * 37) % 100 < 14 ? "dove" : "pigeon"; // même part que C.BIRD_DOVE_SHARE
-            const set = sprites.birds && sprites.birds[kind];
-            if (!set) continue;
-            const wingHz = 2.1 + (i % 3) * 0.3;
-            const wk = Math.floor((now / 1000 * wingHz + seed) * 2) % 4;
-            const im = [set.down, set.mid, set.up, set.mid][wk] || set.glide;
-            const BIRD_SCALE = (1 / 1.5) * scaleK;
-            const dw = im.width * BIRD_SCALE, dh = im.height * BIRD_SCALE;
-            const faceLeft = Math.cos(ang) < 0; // survole vers l'ouest : tête à gauche
-            ctx.save();
-            if (faceLeft) { ctx.translate(bx + dw / 2, byy); ctx.scale(-1, 1); ctx.drawImage(im, -dw / 2, -dh / 2, dw, dh); }
-            else ctx.drawImage(im, bx - dw / 2, byy - dh / 2, dw, dh);
-            ctx.restore();
-          }
+          ctx.imageSmoothingEnabled = false;
+          /* ⚠️ 2026-09-20 (retouche) — LE POINT DE COUTURE ENTRE LE BÂTIMENT
+             PEINT ET LE DALLAGE PROCÉDURAL DU PARVIS. Guillaume : « le parvis
+             doit pas être totalement dans un autre style ». Le dallage
+             lui-même reste `G_PATH_STONE`, PARTAGÉ par cinq places de la
+             ville (place, marché, quai, tribunal, ici) — le redessiner
+             changerait plus que l'église, contre la règle du §2 (pas deux
+             changements visuels dans la même livraison). Un halo chaud, dans
+             la teinte de la pierre du bâtiment, adoucit la coupure nette
+             entre l'image peinte et le pixel art plat, exactement comme un
+             REBORD adoucit déjà la rive eau/terre ailleurs dans le jeu (§4
+             CLAUDE.md) : un dégradé radial, jamais un second système de sol. */
+          const aura = ctx.createRadialGradient(cx2, by + 6, dw * 0.08, cx2, by + 6, dw * 0.64);
+          aura.addColorStop(0, "rgba(198,158,104,0.32)");
+          aura.addColorStop(0.55, "rgba(198,158,104,0.15)");
+          aura.addColorStop(1, "rgba(198,158,104,0)");
+          ctx.save();
+          ctx.fillStyle = aura;
+          ctx.beginPath();
+          ctx.ellipse(cx2, by + 6, dw * 0.64, dw * 0.64 * 0.32, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+          drawBuildingFooting(ctx, cx2, by, dw / 2);
+          // Devant : le reste des oiseaux en vol, plus tout ce qui est posé
+          // (jamais "derrière" quelque chose sur lequel il est assis).
+          for (const bb of birdStates) if (bb.grounded || bb.depth >= -0.1) paintPigeon(bb);
           ctx.restore();
         });
       };

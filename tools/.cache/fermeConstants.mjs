@@ -6687,6 +6687,14 @@ export const TOWN_SEAT_SPACING = 0.69;   // 11 px sur les 52 du sprite (voir pla
    au prix des gens qui l'habitent. */
 export const TOWN_ZOOM_NEAR = 2;
 export const TOWN_ZOOM_MS = 520;      // durée du fondu d'échelle
+/* 2026-09-20 — décalage vertical du cadrage, en fraction de la hauteur de vue,
+   RÉSERVÉ à l'église (voir son usage dans `townZoomTarget`, FermeGame.js). Le
+   joueur se tient forcément au pied du monument, au CENTRE de l'écran ; à ce
+   cadrage-là les trois flèches de l'église sortaient par le haut sur une
+   fenêtre réduite (mesuré en jeu, jamais sur le PNG seul — §10 CLAUDE.md).
+   0,17 montre nettement plus de ciel au-dessus du joueur sans le pousser vers
+   le bas de l'écran (vérifié en jeu à 900 px de haut ET à 714 px). */
+export const TOWN_ZOOM_HEADROOM_TALL = 0.17;
 /* Marge en CASES autour de l'emprise d'un monument. ⚠️ Elle est GÉNÉREUSE
    exprès : le dézoom doit être TERMINÉ quand on arrive au pied du bâtiment. Un
    fondu qui démarre au moment où l'on se colle à la porte donne l'impression
