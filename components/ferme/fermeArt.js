@@ -6091,7 +6091,11 @@ export function buildSprites() {
      jailli VINGT PIXELS AU-DESSUS de sa colonne, sans la moindre erreur.
      Les cotes sont comptées DEPUIS LE BAS du sprite, parce que c'est par le bas
      qu'il est ancré des deux côtés : changer H ne les déplace plus. */
-  const FOUNTAIN_GEO = { basinY: 16, basinRX: 19, basinRY: 8, bowlY: 27, bowlRX: 8, bowlRY: 3.5, jetY: 39 };
+  /* `spillX` (2026-09-21) : LE POINT OÙ LA VASQUE DÉBORDE, PARTAGÉ ENTRE CE
+     FICHIER (la tache de calcaire, statique) ET drawTownFrame (le filet
+     animé) — la même règle que basinY/bowlY juste au-dessus : une seule
+     source, jamais deux cotes qui pourraient un jour ne plus s'accorder. */
+  const FOUNTAIN_GEO = { basinY: 16, basinRX: 19, basinRY: 8, bowlY: 27, bowlRX: 8, bowlRY: 3.5, jetY: 39, spillX: 9 };
   /* ⚠️⚠️ ZIP 429 — LA FONTAINE A ÉTÉ RABAISSÉE, ET C'EST UNE MESURE. Elle
      faisait 54 px peints pour un personnage de 23, soit **2,35 fois sa taille** ;
      une fontaine de place, vasque haute comprise, fait environ 1,6 fois un
@@ -6114,10 +6118,22 @@ export function buildSprites() {
     // ---- La margelle octogonale, vue de trois quarts : deux ellipses de
     // pierre et un anneau d'ombre entre les deux.
     const ring = (ry, rx, col) => { g.fillStyle = col; g.beginPath(); g.ellipse(cx, ry, rx, rx * 0.42, 0, 0, 7); g.fill(); };
+    /* Arête éclairée haut-gauche / ombrée bas-droit (2026-09-21) — la lumière
+       de TOUT le projet vient de là (DESSIN.md, le cratère). Un anneau plein
+       dit « rebord » ; cet arc en plus dit « rebord COURBE, sous une vraie
+       lumière », sans toucher à la silhouette empilée juste au-dessus. */
+    const edgeLight = (ry, rx) => {
+      const rry = rx * 0.42;
+      g.lineWidth = 1.2; g.strokeStyle = "rgba(255,250,235,0.55)";
+      g.beginPath(); g.ellipse(cx, ry, rx, rry, 0, Math.PI, Math.PI * 1.5); g.stroke();
+      g.strokeStyle = "rgba(48,44,38,0.30)";
+      g.beginPath(); g.ellipse(cx, ry, rx, rry, 0, 0, Math.PI * 0.5); g.stroke();
+    };
     ring(H - F.basinY + 4, 26, SXD);   // socle, un peu débordant
     ring(H - F.basinY + 2, 25, SD);
     ring(H - F.basinY, 24, S);
     ring(H - F.basinY - 1, 23, SL);    // arête éclairée de la margelle
+    edgeLight(H - F.basinY - 1, 23);
     /* Le bassin lui-même : on DÉCOUPE, on ne peint pas du bleu. `destination-out`
        rend la zone transparente, l'eau animée des tuiles apparaît au travers. */
     g.globalCompositeOperation = "destination-out";
@@ -6132,11 +6148,22 @@ export function buildSprites() {
     // que la fontaine était trop haute, et c'est la partie la moins parlante.
     P(g, cx - 4, H - F.bowlY + 2, 8, 11, S); P(g, cx - 4, H - F.bowlY + 2, 3, 11, SL); P(g, cx + 2, H - F.bowlY + 2, 2, 11, SD);
     ring(H - F.bowlY + 2, 13, SD); ring(H - F.bowlY, 12, S); ring(H - F.bowlY - 1, 11, SL);
+    edgeLight(H - F.bowlY - 1, 11);
     g.globalCompositeOperation = "destination-out";
     g.beginPath(); g.ellipse(cx, H - F.bowlY, F.bowlRX, F.bowlRY, 0, 0, 7); g.fill();
     g.globalCompositeOperation = "source-over";
     g.strokeStyle = "rgba(40,44,38,0.40)"; g.lineWidth = 1;
     g.beginPath(); g.ellipse(cx, H - F.bowlY, F.bowlRX, F.bowlRY, 0, 0, 7); g.stroke();
+    /* Les deux taches de calcaire, là où la vasque déborde (`F.spillX`, lu
+       aussi par drawTownFrame pour le filet animé — même point, une seule
+       cote). Posées SUR l'anneau du rebord, jamais dans le vide en dessous :
+       le fût qui suit n'a que 8 px de large, bien plus étroit que ces deux
+       points. */
+    const rimStain = (ry, rx, dx, col) => {
+      const dy = rx * 0.42 * Math.sqrt(Math.max(0, 1 - (dx / rx) ** 2));
+      g.fillStyle = col; g.beginPath(); g.ellipse(cx + dx, ry + dy * 0.85, 2.3, 1.4, 0, 0, 7); g.fill();
+    };
+    for (const sgn of [-1, 1]) rimStain(H - F.bowlY, 12, sgn * F.spillX, "rgba(72,92,58,0.45)");
     // ---- La colonne et le bouton d'où sort le jet (le jet lui-même est animé
     // dans drawTownFrame : il bouge, donc il ne peut pas vivre dans un canevas).
     P(g, cx - 2, H - F.jetY + 1, 4, 12, S); P(g, cx - 2, H - F.jetY + 1, 1, 12, SL);
@@ -16919,6 +16946,7 @@ house: house(),
     plazaMonument: plazaMonumentSprite(),
     plazaFountain: plazaFountainSprite(),
     fountainGeo: FOUNTAIN_GEO,        // zip 429 : lue par drawTownFrame pour l'eau et le jet
+    waterRamp: WAT_RAMP,              // 2026-09-21 : la fontaine reprend la même rampe de profondeur que les rivières/le lac
     /* Zip 426 — le mobilier de l'agrandissement. ⚠️ Les étals sont un TABLEAU
        (quatre bâches) et non quatre clés : le rendu choisit par hachage de la
        position, ce qui restait impossible avec des noms distincts. */

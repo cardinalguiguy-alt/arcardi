@@ -7,7 +7,7 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-21 (session suivante) — Damier résiduel de l'église, vol des pigeons ENCORE retouché, bancs à pain devant le parvis, bouton « changer de ferme », et le cœur de ville réorganisé autour de la fontaine
+### 2026-09-21 (session suivante) — Damier résiduel de l'église, vol des pigeons ENCORE retouché, bancs à pain devant le parvis, bouton « changer de ferme », le cœur de ville réorganisé autour de la fontaine, et la fontaine elle-même refaite
 
 Guillaume, en jeu, a d'abord pointé le reste du damier de la veille (§ session précédente,
 « l'église a encore le damier caractéristique des png entre les arcs »), puis a enchaîné en rafale
@@ -87,6 +87,26 @@ au 2026-09-20 : pas de référence à la colonnade actuelle, pas de contrainte d
 et la liberté totale. Prompt prêt, donné dans la même session ; attend que Guillaume le colle dans
 Gemini et rapporte le résultat.
 
+**La fontaine de la place, refaite** (demande explicite : « hyper soigné, réaliste, fluide »).
+Guillaume a demandé si Gemini serait nécessaire — non : le grain que laissent ses assets une fois
+intégrés ne se pose jamais sur un canevas dessiné à la main, et la fontaine a des parties qui
+BOUGENT (jet, gouttes, reflets, débordement) qu'un bitmap ne peut pas porter — elle reste 100 %
+procédurale, comme l'obélisque et les bancs de la même place. Trois défauts dans l'ancien dessin :
+l'eau était un bleu plat sans rapport avec la rampe de profondeur des rivières/du lac (`WAT_RAMP`),
+le jet un simple rectangle qui pulsait en largeur, et les deux vasques ne communiquaient pas — une
+fontaine à étages DÉBORDE. Ajouté (`FermeGame.js`, `fermeArt.js`) : l'eau reprend `WAT_RAMP` en
+bandes concentriques + un reflet directionnel haut-gauche qui dérive doucement ; un remous permanent
+là où le jet retombe ; un filet de débordement animé aux deux points `FOUNTAIN_GEO.spillX` (une
+seule cote, partagée entre la tache de calcaire statique du sprite et le filet animé — la même
+règle que `basinY`/`bowlY` juste au-dessus) ; un jet en colonne fuselée avec éclatement en aigrette
+au sommet ; des gouttes qui rétrécissent en tombant. ⚠️ Corrigé au passage, trouvé en écrivant : le
+rectangle du jet et l'origine des gouttes utilisaient deux hauteurs de crête différentes (`9+jet`
+contre `7`) — recopiées, elles avaient déjà divergé en silence (§8). Une seule variable `peak` sert
+désormais aux deux. Vérifié en jeu (fake-supabase + harnais jetable, supprimé, téléport dev
+« Valley Town — la place ») : eau, remous, débordement et jet capturés sur plusieurs images
+successives, tout bouge, aucune erreur console. Pas de `next build` (dev tournait déjà, partagé
+avec une autre session sur ce dépôt).
+
 ### Toujours ouvert
 
 - **La refonte graphique des bâtiments, au sens large** (demande du jour : « détailler la majorité
@@ -116,11 +136,12 @@ ferme peuplée à deux clients, suite de l'audit d'Où's that).
 
 ### ⏭️ ACTION SUIVANTE
 
-Attendre le retour de Guillaume sur la réorganisation du jour (église sans damier, pigeons, bancs à
-pain, hôtel de ville sur l'axe de la fontaine, jardin nord) — aucun banc ne juge « agréable ». S'il
-valide : coller le prompt Gemini du tribunal (déjà préparé) est le prochain geste concret de la
-refonte graphique ; **choisir ensuite quel bâtiment vient après le tribunal se demande à Guillaume**,
-ça ne se décide pas seul.
+Attendre le retour de Guillaume sur deux livraisons de la même session : la réorganisation du cœur
+de ville (église sans damier, pigeons, bancs à pain, hôtel de ville sur l'axe de la fontaine, jardin
+nord) ET la fontaine refaite (eau en bandes de profondeur, débordement, jet fuselé) — aucun banc ne
+juge « agréable » ni « soigné ». S'il valide : coller le prompt Gemini du tribunal (déjà préparé) est
+le prochain geste concret de la refonte graphique ; **choisir ensuite quel bâtiment vient après le
+tribunal se demande à Guillaume**, ça ne se décide pas seul.
 
 ---
 

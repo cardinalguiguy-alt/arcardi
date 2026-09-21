@@ -20301,49 +20301,130 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
       /* ══════════════════════════════════════════════════════════════════════
-         LA FONTAINE (425). Le bassin de pierre est un SPRITE (voir
-         plazaFountainSprite), le jet et les gouttes restent dessinés ici.
+         LA FONTAINE (425, refaite le 2026-09-21). Le bassin de pierre est un
+         SPRITE (voir plazaFountainSprite), tout ce qui BOUGE — eau, reflet,
+         remous, débordement, jet, gouttes — reste dessiné ici.
          ⚠️ LE PARTAGE N'EST PAS ARBITRAIRE : ce qui ne bouge pas va dans le
          canevas (dessiné une fois pour toute la partie), ce qui bouge reste du
          code. L'ancienne margelle « quatre rectangles » était du code pour
          quelque chose d'immobile — c'est-à-dire du travail refait soixante fois
-         par seconde, et surtout un dessin qu'on ne pouvait pas soigner. */
+         par seconde, et surtout un dessin qu'on ne pouvait pas soigner.
+         ⚠️ REPRISE 2026-09-21, sur demande de Guillaume (« hyper soigné,
+         réaliste, fluide ») : l'eau était un bleu plat sans rapport avec la
+         rampe de profondeur des rivières et du lac, le jet un simple rectangle
+         qui pulsait en largeur, et les deux vasques ne communiquaient pas —
+         une fontaine à étages DÉBORDE. Tout ce qui suit reste une fonction
+         PURE de `now` (aucun état, aucun `Math.random`, même règle que le
+         jitter des pigeons) : l'eau reprend `WAT_RAMP` (fermeArt.js), le jet
+         et l'origine des gouttes partagent désormais UNE seule variable de
+         crête (`peak`) — recopiée, elle divergeait déjà silencieusement dans
+         l'ancien code (le rectangle montait à `9+jet`, la goutte partait de
+         `7`, deux chiffres pour la même hauteur, §8 CLAUDE.md) — et un filet
+         de débordement tombe aux deux points `FOUNTAIN_GEO.spillX`, là où la
+         margelle porte déjà sa tache de calcaire (fermeArt.js, même géométrie
+         des deux côtés). */
       if (sprites.plazaFountain) {
         const fo = C.TOWN_FOUNTAIN, fBy = (fo.y + 2) * T, fCx = fo.x * T + T;
         pushE(fBy, elAt(fo.x, fo.y), () => {
           const im = sprites.plazaFountain;
-          ctx.fillStyle = "rgba(20,26,16,0.20)";
-          ctx.beginPath(); ctx.ellipse(fCx, fBy - 4, 27, 7, 0, 0, 7); ctx.fill();
-          /* L'EAU, à la forme du bassin, sous la margelle. Deux ellipses (le
-             grand bassin, la vasque haute) et un reflet qui respire — la même
-             pulsation lente que la rivière de la ferme, pour que les deux eaux
-             du jeu se ressemblent. */
+          const FG = sprites.fountainGeo, WR = sprites.waterRamp;
           const wob = 0.5 + Math.sin(now / 900) * 0.5;
-          /* ⚠️ ZIP 429 — LES COTES VIENNENT DU SPRITE, ELLES NE SONT PLUS
-             RECOPIÉES ICI. Elles l'étaient, et rabaisser la fontaine aurait
-             laissé l'eau à mi-hauteur de l'air et le jet vingt pixels au-dessus
-             de sa colonne — sans erreur, comme toujours. Voir FOUNTAIN_GEO. */
-          const FG = sprites.fountainGeo;
-          for (const [wy, wrx, wry] of [[fBy - FG.basinY, FG.basinRX, FG.basinRY], [fBy - FG.bowlY, FG.bowlRX, FG.bowlRY]]) {
-            ctx.fillStyle = "#3f7fd0";
-            ctx.beginPath(); ctx.ellipse(fCx, wy, wrx, wry, 0, 0, 7); ctx.fill();
-            ctx.fillStyle = `rgba(190, 225, 255, ${0.22 + wob * 0.16})`;
-            ctx.beginPath(); ctx.ellipse(fCx, wy - wry * 0.25, wrx * 0.72, wry * 0.5, 0, 0, 7); ctx.fill();
+          // Ombre au sol : deux disques, pour un bord qui s'éteint au lieu de
+          // s'arrêter net.
+          ctx.fillStyle = "rgba(20,26,16,0.22)";
+          ctx.beginPath(); ctx.ellipse(fCx, fBy - 4, 27, 7, 0, 0, 7); ctx.fill();
+          ctx.fillStyle = "rgba(20,26,16,0.11)";
+          ctx.beginPath(); ctx.ellipse(fCx, fBy - 4, 31, 9, 0, 0, 7); ctx.fill();
+          // Un anneau d'ondulation qui s'éteint en s'élargissant — réutilisé
+          // pour le remous du jet et pour l'arrivée du débordement.
+          const ripple = (rx0, ry0, period, n, maxR, squashY, baseA) => {
+            for (let i = 0; i < n; i++) {
+              const ph = ((now / period) + i / n) % 1;
+              const a = baseA * (1 - ph);
+              if (a < 0.02) continue;
+              ctx.strokeStyle = `rgba(232,247,255,${a.toFixed(3)})`;
+              ctx.lineWidth = 1;
+              ctx.beginPath(); ctx.ellipse(rx0, ry0, ph * maxR, ph * maxR * squashY, 0, 0, 7); ctx.stroke();
+            }
+          };
+          /* ---- L'EAU : la même rampe de profondeur que les rivières et le
+             lac (WAT_RAMP), en bandes concentriques — pas un dégradé continu,
+             pour rester dans les paliers que le reste de la ville quantifie
+             déjà (§8 DESSIN.md). La vasque haute reste dans le clair (peu
+             profonde, brassée par le jet) ; le bassin bas plonge dans le
+             foncé (calme et large). Le reflet est DÉCENTRÉ en haut-gauche,
+             comme toute la lumière du projet, et dérive doucement au lieu de
+             pulser sur place. */
+          const basins = [
+            { wy: fBy - FG.basinY, rx: FG.basinRX, ry: FG.basinRY, bands: [WR[2], WR[6], WR[10], WR[13]] },
+            { wy: fBy - FG.bowlY, rx: FG.bowlRX, ry: FG.bowlRY, bands: [WR[0], WR[2], WR[4], WR[6]] },
+          ];
+          const spillY0 = fBy - FG.bowlY + FG.bowlRY * 1.1, spillY1 = fBy - FG.basinY - FG.basinRY * 0.15;
+          for (const b of basins) {
+            for (let i = 0; i < b.bands.length; i++) {
+              const t = i / (b.bands.length - 1);
+              ctx.fillStyle = b.bands[i];
+              ctx.beginPath();
+              ctx.ellipse(fCx, b.wy, Math.max(1, b.rx * (1 - t * 0.76)), Math.max(1, b.ry * (1 - t * 0.76)), 0, 0, 7);
+              ctx.fill();
+            }
+            const drift = Math.sin(now / 1500) * b.rx * 0.05;
+            ctx.fillStyle = `rgba(236,249,255,${(0.20 + wob * 0.14).toFixed(3)})`;
+            ctx.beginPath();
+            ctx.ellipse(fCx - b.rx * 0.30 + drift, b.wy - b.ry * 0.36, b.rx * 0.26, b.ry * 0.22, -0.4, 0, 7);
+            ctx.fill();
           }
+          // Le remous permanent là où le jet retombe dans la vasque haute...
+          ripple(fCx, fBy - FG.bowlY, 950, 3, FG.bowlRX * 0.85, FG.bowlRY / FG.bowlRX, 0.45);
+          // ...et l'arrivée du débordement dans le bassin bas, aux deux mêmes
+          // points que le filet tombant plus bas (dessiné après la pierre :
+          // il tombe dans l'air, à côté de la colonne, pas dans l'eau).
+          for (const sgn of [-1, 1]) ripple(fCx + sgn * FG.spillX, spillY1, 1100, 2, 6, FG.basinRY / FG.basinRX, 0.4);
+
           ctx.drawImage(im, fCx - im.width / 2, fBy - im.height);
-          // Le JET : il part du bouton de la colonne et retombe dans la vasque.
-          const jet = 3 + Math.sin(now / 260) * 2;
-          ctx.fillStyle = "rgba(226, 244, 255, 0.92)";
-          ctx.fillRect(fCx - 1, fBy - FG.jetY - 9 - jet, 2, 10 + jet);
-          // ... et les gouttes, qui retombent en cloche des deux côtés.
+
+          // Le FILET DE DÉBORDEMENT : il tombe dans l'air, entre la colonne
+          // (trop étroite pour porter ces deux points) et le bassin bas —
+          // c'est la seule chose qui relie visuellement les deux vasques.
+          for (const sgn of [-1, 1]) {
+            const sx = fCx + sgn * FG.spillX;
+            const flow = ((now / 480) + (sgn > 0 ? 0.5 : 0)) % 1;
+            ctx.strokeStyle = "rgba(224,241,255,0.5)";
+            ctx.lineWidth = 1.4;
+            ctx.beginPath(); ctx.moveTo(sx, spillY0); ctx.lineTo(sx, spillY1); ctx.stroke();
+            const gy = spillY0 + (spillY1 - spillY0) * flow;
+            ctx.fillStyle = "rgba(255,255,255,0.55)";
+            ctx.fillRect(sx - 0.5, gy - 1.5, 1, 3);
+          }
+
+          /* ---- LE JET ET LES GOUTTES : `peak`, la hauteur de la crête
+             au-dessus du bouton, est lue UNE FOIS et sert aux deux. */
+          const peak = 12 + Math.sin(now / 260) * 2;
+          const topY = fBy - FG.jetY - peak, botY = fBy - FG.jetY + 1;
+          ctx.fillStyle = "rgba(200, 228, 250, 0.35)";
+          ctx.fillRect(fCx - 2, topY, 4, botY - topY);          // halo large, l'air entraîné
+          ctx.fillStyle = "rgba(230, 246, 255, 0.92)";
+          ctx.fillRect(fCx - 1, topY, 2, botY - topY);          // cœur clair
+          // L'éclatement en aigrette au sommet : des traits fixes, une
+          // amplitude qui respire — jamais de tirage, ce dessin reste une
+          // fonction pure du temps (même règle que le vol des pigeons).
+          for (let s = -2; s <= 2; s++) {
+            const amp = 2 + Math.sin(now / 180 + s) * 1.2;
+            ctx.strokeStyle = `rgba(235,248,255,${0.5 - Math.abs(s) * 0.08})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(fCx, topY); ctx.lineTo(fCx + s * 1.6, topY - amp); ctx.stroke();
+          }
+          // ... et les gouttes, qui partent de la MÊME crête et retombent en
+          // cloche dans la vasque, chacune rétrécissant en tombant.
+          const dropRange = peak + FG.jetY - FG.bowlY;
           for (let d = 0; d < 8; d++) {
             const ph = ((now / 620) + d * 0.125) % 1;
             const sgn = d % 2 ? 1 : -1;
-            // Les gouttes partent du bouton et retombent DANS la vasque : les
-            // deux cotes viennent donc de FOUNTAIN_GEO, comme le jet.
-            const dx2 = sgn * (2 + ph * 11), dy2 = -FG.jetY - 7 + ph * ph * (FG.jetY - FG.bowlY + 7);
-            ctx.fillStyle = `rgba(226, 244, 255, ${0.85 * (1 - ph * 0.7)})`;
-            ctx.fillRect(fCx + dx2, fBy + dy2, 2, 2);
+            const dx2 = sgn * (2 + ph * 11);
+            const dy2 = -FG.jetY - peak + ph * ph * dropRange;
+            const size = 2.2 - ph * 0.9;
+            ctx.fillStyle = `rgba(226, 244, 255, ${Math.pow(1 - ph, 1.4).toFixed(3)})`;
+            ctx.fillRect(fCx + dx2 - size / 2, fBy + dy2 - size / 2, size, size);
           }
         });
       }
