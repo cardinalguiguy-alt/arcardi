@@ -249,6 +249,20 @@ section("Valley Town — géométrie");
       .map((b, k) => [["église", "mairie", "tribunal", "boutique", "salon", "gare"][k], b]),
     ...C.TOWN_HOUSES.map((h, k) => [`maison#${k}`, { x: h.x, y: h.y, w: C.TOWN_HOUSE_W, h: C.TOWN_HOUSE_H }]),
   ];
+  /* ⚠️⚠️ 2026-09-21 — UNE EXCEPTION NOMMÉE, MÊME FAMILLE QUE `WALKABLE`
+     JUSTE AU-DESSUS : desserrer un contrôle sans dire pourquoi est le geste
+     qui le tue (§10 CLAUDE.md). La mairie est désormais posée SUR l'axe de la
+     rue x=92 — demande explicite de Guillaume : « aligné, dans l'axe de la
+     fontaine », qui est sur cette même colonne. Ce test lit les coordonnées
+     BRUTES de la rue, pas le sol réellement peint : il ne peut pas savoir que
+     `surface()` (fermeEngine.js) ne texture le pavé de rue QUE sur ce qui est
+     encore `G_PATH` — exactement le mécanisme qui empêche déjà la Grand-Place
+     de se faire traverser par cette même rue, un peu plus au sud. Un bâtiment
+     qui *mange* une rue pour en faire son parvis n'est pas le bogue que ce
+     test cherchait (un bâtiment posé PAR ACCIDENT en travers d'une rue) — seul
+     l'hôtel de ville a cette raison nommée ; les cinq autres bâtiments et
+     toutes les maisons restent tenus au mot. */
+  const STREET_OK = new Set(["mairie"]);
   for (const [name, b] of allB) {
     let e0 = null, mixed = false, onStreet = false, onStair = false;
     for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) {
@@ -258,6 +272,7 @@ section("Valley Town — géométrie");
       for (const ry of C.TOWN_ST_ROWS) if (y === ry || y === ry + 1) onStreet = true;
       for (const cx of C.TOWN_ST_COLS) if (x === cx || x === cx + 1) onStreet = true;
     }
+    if (onStreet && STREET_OK.has(name)) onStreet = false;
     if (mixed || onStreet || onStair) bad.push(`${name}${mixed ? " (2 altitudes)" : ""}${onStreet ? " (sur une rue)" : ""}${onStair ? " (sur un escalier)" : ""}`);
   }
   ok("aucun bâtiment sur une rue, un escalier ou à cheval sur deux altitudes", bad.length === 0, bad.join(" · "));

@@ -1239,7 +1239,7 @@ export default function Room() {
                     <PuzzleGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "ferme" && (
-                    <FermeGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} savedCode={fermeCodeRef.current} onCodeLoaded={(c) => { fermeCodeRef.current = c; }} />
+                    <FermeGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} savedCode={fermeCodeRef.current} onCodeLoaded={(c) => { fermeCodeRef.current = c; }} onChangeFarm={leaveRoom} />
                   )}
                 </StageComponent>
                 </GameErrorBoundary>

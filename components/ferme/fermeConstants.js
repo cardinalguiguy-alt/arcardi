@@ -3293,6 +3293,22 @@ export const TOWN_MONUMENT = { x: 92, y: 78 };      // 2x2, obélisque + vasques
    CLAUDE.md), et un déménagement du parc aurait laissé son étang et son kiosque
    sur place, dans l'herbe, sans qu'aucune erreur ne le dise. */
 export const TOWN_PARK = { x: 116, y: 74, w: 34, h: 26 };     // le parc et son étang
+/* 2026-09-21 — L'AGRANDISSEMENT DU JARDIN FLEURI, DANS L'ESPACE LIBÉRÉ PAR LE
+   DÉMÉNAGEMENT DE `TOWN_HALL` (voir sa note plus bas). Demande de Guillaume :
+   « l'espace libéré... sera investi d'un agrandissement de la partie jardin
+   fleuri, plus au nord de l'actuel, SANS RETIRER quoi que ce soit à l'actuel ».
+   ⚠️⚠️ UN NOUVEAU RECTANGLE, JAMAIS UN AGRANDISSEMENT DE `TOWN_PARK` LUI-MÊME —
+   et c'est la leçon du commentaire juste au-dessus, appliquée à la lettre :
+   l'étang ET le kiosque sont DÉRIVÉS du centre de `TOWN_PARK` (`cx,cy` dans le
+   générateur). Étirer `TOWN_PARK.h` vers le nord aurait déplacé ce centre,
+   donc réécrit la position de l'étang, du kiosque et des SIX parterres
+   existants — l'inverse exact de « sans rien retirer à l'actuel ». Un second
+   rectangle, à côté, laisse `TOWN_PARK` intact au bit près.
+   ⚠️ ARRÊTÉ AVANT LA RUE PRINCIPALE (`TOWN_MAIN_ST_Y0`..+`TOWN_MAIN_ST_W`,
+   soit les rangées 69-72) : `TOWN_PARK` s'arrête lui aussi une case avant
+   cette même rue, côté sud (74, une case après 72) — un jardin qui avale une
+   rue de traversée casserait la seule route est-ouest qui longe le parc. */
+export const TOWN_PARK_NORTH = { x: 116, y: 52, w: 34, h: 15 };
 /* ═══════════════════════════════════════════════════════════════════════════
    ZIP 435 — L'ÉTANG DU PARC : UN CONTOUR, PAS UNE ÉQUATION.
    ───────────────────────────────────────────────────────────────────────────
@@ -4798,19 +4814,49 @@ export const MAX_RESIDENTS = 20;
 export const TOWN_CHURCH = { x: 64, y: 46, w: 12, h: 5 };   // sprite bitmap 192×183 (2026-09-20) ; ex-8 cases/128×128 procédural (zip 235)
 
 /* LE NOUVEL HÔTEL DE VILLE. Demande : « un nouveau bâtiment townhall différent
-   des autres quelque part au centre ». Il borde la place à l'est, face à la
-   fontaine — la position d'une mairie sur une place de village. Brique et
-   pierre, beffroi à horloge : rien de commun avec le portique blanc de
-   l'église ni avec le péristyle du tribunal, pour qu'aucun des trois ne puisse
-   être confondu avec un autre à distance.
+   des autres quelque part au centre ». Brique et pierre, beffroi à horloge :
+   rien de commun avec le portique blanc de l'église ni avec le péristyle du
+   tribunal, pour qu'aucun des trois ne puisse être confondu avec un autre à
+   distance.
    ⚠️ 2026-09-02 — ÉLARGI de 10 à 12 cases (croissance symétrique autour de
    l'ancien centre x=117, donc x passe de 112 à 111) pour le sprite PNG importé
    (townhall-day.png/townhall-glow.png, voir FermeGame.js/drawTownHallBitmap) :
    Guillaume voulait plus de largeur et plus de fenêtres pour que le bâtiment
-   se lise comme un hôtel de ville. Largeur vérifiée sans chevauchement — le
-   voisin le plus proche (TOWN_COURT, x=136) laisse encore 13 cases de marge.
-   6 rangées bloquantes, inchangé (la profondeur du bâtiment n'a pas grandi). */
-export const TOWN_HALL = { x: 111, y: 52, w: 12, h: 6 };
+   se lise comme un hôtel de ville. 6 rangées bloquantes, inchangé (la
+   profondeur du bâtiment n'a pas grandi).
+   ⚠️⚠️ 2026-09-21 — DÉPLACÉ DE L'EST DE LA PLACE À SON NORD (x : 111 → 79).
+   Demande de Guillaume, inspirée de la mairie de Bordeaux, accolée à la
+   cathédrale sur la place Pey-Berland et à son propre jardin : « la proximité
+   HDV, église et square doit être plus évidente ». Bordait la place à l'est
+   (face à la fontaine), à 36 cases de l'église (x=64-75) de l'autre côté de la
+   place — les deux monuments ne se lisaient jamais ensemble à l'écran.
+   ⚠️⚠️ RETOUCHE IMMÉDIATE DE GUILLAUME, EN REGARDANT LE PREMIER JET (posé à
+   côté de l'église, x=79) : « dégage les routes, réorganise tout pour que
+   l'hôtel de ville soit pas sur la place mais au nord. alignée. dans l'axe de
+   la fontaine. » Posé maintenant pour que sa PORTE (x+w/2-1 = 92) tombe
+   exactement sur `TOWN_FOUNTAIN.x` (92) — et donc sur la rue nord-sud x=92
+   (`TOWN_ST_COLS`) qui passait déjà par cet axe : la rue ne CONTOURNE plus le
+   bâtiment, elle y MÈNE, et s'arrête à son parvis — la composition classique
+   d'un monument qui ferme une perspective, plutôt qu'un évitement.
+   ⚠️ « DÉGAGER LA ROUTE » N'A DEMANDÉ AUCUN CODE : le mécanisme existe déjà,
+   posé pour la place elle-même (voir `surface()` dans `generateTownWorld`,
+   fermeEngine.js — « elle ne peint le pavé de rue que sur ce qui est encore
+   G_PATH ; tout ce qu'une esplanade a déjà recouvert de G_PATH_STONE n'en est
+   plus une, littéralement la réponse à la demande de Guillaume : la rue ne
+   doit pas couper l'esplanade »). Le parvis du nouvel hôtel de ville peint sa
+   propre bande de pierre PAR-DESSUS la rue (paveCol pave AVANT que les
+   parvis n'existent, voir l'ordre des appels) exactement comme la place le
+   fait déjà pour cette même colonne un peu plus au sud — la rue s'arrête
+   donc au parvis sans qu'aucune règle nouvelle ne le lui dise.
+   ⚠️⚠️ SEULE VRAIE RETOUCHE : L'ALLÉE DE `forecourt()` VA DÉSORMAIS TOUT DROIT
+   DANS LA PLACE (la porte, x=92, tombe dans `TOWN_PLAZA` x=78..107) — l'allée
+   qui relie chaque bâtiment civique à la rue la plus proche aurait peint une
+   bande de terre battue en plein milieu du dallage de la place. Corrigé DANS
+   `forecourt()` (fermeEngine.js) : elle s'arrête dès qu'elle touche un sol
+   DÉJÀ pavé en pierre — la place est peinte avant les bâtiments civiques,
+   donc la coupure est immédiate, et aucun des quatre autres appels de
+   `forecourt` (jamais voisins d'une place) n'en voit la différence. */
+export const TOWN_HALL = { x: 87, y: 52, w: 12, h: 6 };
 // Nombre de rangées, au sud de l'emprise, laissées TRAVERSABLES pour le
 // perron (fermeEngine.js, boucle de solidité des bâtiments civils) — partagé
 // avec FermeGame.js/drawTownHallBitmap, qui doit ancrer la clé de tri de

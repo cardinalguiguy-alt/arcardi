@@ -7,71 +7,97 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-21 — Retouche du sprite de l'église (hauteur, définition, parvis) et refonte du vol des pigeons
+### 2026-09-21 (session suivante) — Damier résiduel de l'église, vol des pigeons ENCORE retouché, bancs à pain devant le parvis, bouton « changer de ferme », et le cœur de ville réorganisé autour de la fontaine
 
-Guillaume, en jeu, sur la livraison de la veille (église Gemini + pigeons, voir §13) : « l'église
-doit être plus haute et en meilleure définition si possible. Et le parvis doit pas être totalement
-dans un autre style. aussi les pigeons ont un vol trop régulier. » Puis, en cours de session :
-« délivre vite » — les quatre points sont traités par du code, sans nouvel appel Gemini.
+Guillaume, en jeu, a d'abord pointé le reste du damier de la veille (§ session précédente,
+« l'église a encore le damier caractéristique des png entre les arcs »), puis a enchaîné en rafale
+sur les pigeons, un bouton de changement de ferme, et une réorganisation du cœur de ville — «
+caveman on » a coupé court aux questions en cours de route : tout ce qui suit est exécuté, pas
+proposé.
 
-**Hauteur** : la caméra centrait le joueur pile au milieu de l'écran ; au pied du monument, seule la
-moitié supérieure de la fenêtre montrait le bâtiment — sur une fenêtre réduite (mesuré à 550×750 et
-au format par défaut du panneau de prévisualisation, 524×714), les trois flèches sortaient par le
-haut. `townZoomTarget` (FermeGame.js) porte désormais un `headroom` par monument (0 par défaut,
-tribunal/mairie/etc. non touchés — un seul changement visuel à la fois, §2), et
-`TOWN_ZOOM_HEADROOM_TALL` (fermeConstants.js, 0,17) décale le cadrage vers le haut UNIQUEMENT près
-de l'église. Vérifié en jeu à 550×750, 900×650 et 1440×900 : les trois flèches et leurs croix
-tiennent désormais dans le cadre aux trois tailles.
+**Damier résiduel** : le flood fill de `build-eglise-sprite.mjs` ne partait QUE des quatre bords de
+l'image — un damier ENCLAVÉ (le vide sous une arche-boutant, entouré de pierre des quatre côtés,
+jamais touché par un bord) restait donc en pixels bruts. Mesuré : quatre poches de 2 339 à 2 732 px,
+une par arche-boutant (gauche et droite, haute et basse). ⚠️ Repêchées par une passe qui cherche
+TOUTE composante connexe de damier, où qu'elle soit, mais seulement au-delà de 1 000 px : le pignon
+central porte un VRAI bandeau de pierre en damier (150 px, mesuré) que la même passe aurait effacé
+sans ce seuil — rien n'existe entre 150 et 2 339, la marge est large. Le petit artefact noir du
+clocher droit (connu depuis la veille) résiste toujours : sa couleur est trop sombre pour le test de
+damier, et une règle plus large aurait mangé de vrais reliefs sombres ailleurs sur le bâtiment — laissé
+tel quel, invisible à l'échelle d'affichage.
 
-**Définition** : `eglise-day.png`/`eglise-glow.png` passent de 192 à 384 px de large en STOCKAGE
-(`tools/build-eglise-sprite.mjs`, même `refs/eglise-nouvelle.jpg`) ; la taille AFFICHÉE reste 192
-(`dispScale` dans `drawChurchBitmap`, rien d'autre ne bouge). Le lissage
-(`ctx.imageSmoothingEnabled`) est activé UNIQUEMENT pour ce dessin, remis à `false` juste après :
-c'est le seul bitmap peint/photographique du jeu, tout le reste reste au plus proche voisin. ⚠️ Un
-petit artefact noir (un pixel de damier mal résorbé) existe sur le clocher droit DEPUIS LA LIVRAISON
-D'ORIGINE (vérifié dans le PNG du commit `church`) — vu en cherchant autre chose, pas corrigé, hors
-demande du jour.
+**Pigeons, deuxième retouche** : trois défauts nommés par Guillaume — vol trop mécanique, jamais
+posé sur une croix, jamais vraiment « autour » des clochers. `pigeonState` (FermeGame.js,
+`drawChurchBitmap`) gagne un jitter par oiseau (rayon et centre d'orbite dérivés de `hash01(i)`,
+jamais `Math.random` — ce dessin reste une fonction pure du temps) et une vitesse angulaire qui
+respire (deux sinusoïdes de fréquence différente, amplitude bornée pour ne JAMAIS annuler la vitesse
+— un vol qui rebrousse chemin se lit comme un bogue, pas comme un vol naturel). Rayon vertical des
+clochers doublé (8→15) : c'est lui, pas la vitesse, qui faisait lire « flotte devant la façade »
+plutôt que « tourne autour ». Répartition 2/1/2 (gauche/centre/droite) au lieu de 2/2/1 : les
+CLOCHERS d'abord, la base de flèche ensuite. Trois nouveaux perchoirs sur les barres des croix
+(mesurées à la loupe, pas la pointe — un pixel unique n'accueille rien).
 
-**Parvis** : le dallage reste `G_PATH_STONE`, partagé par cinq places de la ville — le redessiner
-aurait été un second changement visuel (§2). Un halo chaud en dégradé radial, dans la teinte de la
-pierre du bâtiment, adoucit la coupure entre l'image peinte et le pixel art plat, posé juste avant
-l'embase. Amélioration réelle mais partielle : **le jugement « ça suffit ou pas » reste à
-Guillaume.**
+**Deux bancs devant le parvis** (`fermeEngine.js`) : jetés du pain, ils attirent désormais de VRAIS
+pigeons au sol — pas ceux qui tournent autour des flèches (système décoratif sans état, inchangé),
+mais une nouvelle entrée dans `townFlocks()` (le même mécanisme que la place et le tribunal). ⚠️ La
+leçon qui a coûté un aller-retour : **un banc seul ne suffit pas**, `throwCrumbs()` marche depuis
+n'importe quel banc de la ville mais n'attire personne s'il n'y a pas de SITE de volée à proximité
+(la Boutique et le Salon en ont déjà fait les frais, silencieusement, avant aujourd'hui). Vérifié en
+jeu de bout en bout : assis, pain jeté, pigeons accourus au sol.
 
-**Pigeons** : trois orbites (une par clocher) au lieu d'une ellipse unique partagée sur toute la
-façade ; une profondeur (`Math.sin(ang)`) fait peindre chaque oiseau AVANT ou APRÈS le bâtiment selon
-sa position sur son orbite — il passe donc devant ET derrière les flèches ; un cycle propre à chaque
-oiseau (24 à 40 s, dérivé de son index) alterne vol et pose sur l'un de huit perchoirs fixes
-(corniches/pinacles du bâtiment ou dalles du parvis), atterrissage et envol interpolés en douceur
-(smoothstep), jamais un saut. Toujours SANS ÉTAT PARTAGÉ (décision du 433, inchangée). ⚠️ Piège payé
-EN L'ÉCRIVANT, jamais livré : scinder le dessin en une passe « derrière » et une passe « devant » a
-d'abord dupliqué le `ctx.translate/scale/translate` du grossissement — composé deux fois (1,1×1,1),
-il aurait décalé et sur-agrandi l'église en silence. Un seul `ctx.save()` ouvert en haut de
-`drawChurchBitmap`, un seul `ctx.restore()` en bas ; les deux passes de pigeons vivent SOUS CE MÊME
-état de transform.
+**Bouton « 🚜 Changer de ferme »** dans la roue paramètres (FermeGame.js) : chaque salon porte SA
+propre ferme, donc changer de ferme, c'est changer de salon. Réutilise TEL QUEL `leaveRoom` de
+`app/room/[code]/page.js` (passé en prop `onChangeFarm`) — handoff d'hôte compris, aucune logique
+nouvelle écrite. Vérifié : le bouton apparaît, le clic déclenche bien le callback.
 
-⚠️⚠️ **TROUVÉ EN VÉRIFIANT, PAS CORRIGÉ, ET C'EST PLUS GROS QUE L'ÉGLISE** : `resize()`
-(FermeGame.js) fixe `canvas.width = window.innerWidth` SANS jamais multiplier par
-`window.devicePixelRatio`. Sur un écran Retina (dpr=2 — le cas de tout Mac récent, mesuré dpr=2 dans
-le panneau de test), TOUT le canevas, pas seulement l'église, se dessine à moitié résolution puis
-s'étire au double par le navigateur : c'est probablement la vraie source du flou perçu, bien au-delà
-du sprite de l'église. Corriger ça touche `resize()` et tout calcul qui lit `canvas.width/height`
-comme repère écran (coordonnées souris comprises) — mérite sa PROPRE livraison, testée seule (§2).
-**Pas fait ici.**
+**Le cœur de ville réorganisé** — trois demandes de Guillaume, la dernière corrigeant la première en
+la regardant : (1) « la proximité HDV/église/square doit être plus évidente », (2) puis, en voyant le
+premier jet posé à côté de l'église : « dégage les routes, aligné, dans l'axe de la fontaine ».
+`TOWN_HALL` quitte l'est de la place (x=111, à 36 cases de l'église) pour x=87 : sa porte (x+5=92)
+tombe EXACTEMENT sur `TOWN_FOUNTAIN.x` — la rue nord-sud x=92 qui passait déjà par cet axe ne la
+contourne plus, elle y MÈNE, et s'arrête à son parvis (perspective classique d'un monument qui ferme
+un axe, jamais codée avant aujourd'hui dans cette ville).
+⚠️⚠️ **« DÉGAGER LA ROUTE » N'A DEMANDÉ AUCUN CODE NOUVEAU** — le mécanisme existait déjà, écrit pour
+la Grand-Place elle-même : `surface()` (fermeEngine.js) ne peint le pavé de rue que sur ce qui est
+ENCORE `G_PATH` ; tout ce qu'une esplanade a déjà recouvert de `G_PATH_STONE` n'en est plus une. Le
+parvis du nouvel hôtel de ville peint sa propre pierre par-dessus la rue avant que `surface()` ne
+passe — la rue s'arrête donc au parvis sans qu'aucune règle neuve ne le lui dise. ⚠️ Deux vrais
+correctifs, eux : `forecourt()` peignait une allée de terre battue en plein milieu du dallage de la
+place dès qu'une porte tombait DANS une esplanade (jamais arrivé avant ce déplacement) — elle
+s'arrête maintenant dès qu'elle touche du sol déjà pavé en pierre. Et `verify-vallee` avait un
+contrôle géométrique (« aucun bâtiment sur une rue ») qui ne pouvait pas savoir que le sol change
+après coup : une exception NOMMÉE (`STREET_OK`, même famille que `WALKABLE` plus haut dans le même
+fichier), pas un seuil desserré.
+**L'espace libéré au nord de la place** (l'ancien emplacement de la mairie) porte désormais
+`TOWN_PARK_NORTH`, un jardin fleuri neuf — ⚠️ un rectangle À CÔTÉ, jamais `TOWN_PARK` agrandi : son
+étang et son kiosque sont DÉRIVÉS du centre du parc principal (leçon déjà écrite au-dessus de
+`TOWN_PARK`), l'étirer aurait tout redéplacé. Quatre parterres (même palette que le parc principal),
+une allée dans le même axe, deux bancs, une jardinière et un lampadaire — arrêté avant la rue
+principale, jamais dessus.
 
-`verify-vallee` (223/223) et `verify-collision` (TOUT PASSE) rejoués après coup, aucune régression.
-Pas de `next build` (dev tournait — §10). Aucune manipulation Supabase. **Attend le regard de
-Guillaume** : hauteur, définition, parvis, pigeons — aucun banc ne peut juger « agréable », seule une
-vraie séance le peut (§13).
+`verify-vallee` (223/223), `verify-collision` (TOUT PASSE) et `verify-compo` (tout passe) rejoués
+après CHAQUE étape du déplacement, pas seulement à la fin — la première position (à côté de l'église)
+avait déjà 223/223 avant que Guillaume ne demande l'axe de la fontaine, ce qui a tout redéplacé une
+seconde fois. Vérifié en jeu (fake-supabase + harnais jetable, supprimé) : les trois flèches, le
+damier disparu, les deux bancs, l'hôtel de ville centré sur la fontaine vue depuis son perron, le
+jardin nord en fleurs. Aucune manipulation Supabase, pas de `next build` (dev tournait).
+
+**Le tribunal** (prompt Gemini préparé, PAS encore collé par Guillaume) — même méthode que l'église
+au 2026-09-20 : pas de référence à la colonnade actuelle, pas de contrainte de composition, un thème
+et la liberté totale. Prompt prêt, donné dans la même session ; attend que Guillaume le colle dans
+Gemini et rapporte le résultat.
 
 ### Toujours ouvert
 
+- **La refonte graphique des bâtiments, au sens large** (demande du jour : « détailler la majorité
+  des bâtiments sur le modèle de l'église, de l'hdv, pour une refonte graphique », AVEC Gemini). Le
+  tribunal est le seul prompt préparé pour l'instant — **aucun ordre pour les bâtiments suivants n'a
+  été arbitré avec Guillaume** ; ne pas en choisir un sans lui (§2).
 - **Traduction des métiers** (trouvé le 2026-09-20, jamais corrigé) : `job` dans `TOWN_RESIDENTS`
   (fermeConstants.js) est écrit en anglais et s'affiche brut dans au moins six phrases françaises.
   Correctif borné : une table `jobFr`/équivalent, ou une clé de traduction par métier.
-- **Le tribunal mérite le même sprite Gemini que l'église** (§13) — méthode éprouvée : prompt SANS
-  référence à la colonnade actuelle, sans contrainte de composition, un thème et la liberté totale.
-- **Le canevas hors `devicePixelRatio`, ci-dessus** — candidat sérieux, mais son propre chantier.
+- **Le canevas hors `devicePixelRatio`** (trouvé le 2026-09-20) — candidat sérieux pour la source du
+  flou perçu sur tout le jeu, pas seulement l'église ; son propre chantier, testé seul (§2).
 - Chantier naval du quai, repousse des buissons taillés, verdure ×1,8 de Valley Town (livrés le
   2026-09-16, jamais vus en jeu) : le pourquoi de chaque choix est en commentaire à côté du code.
 - ⚠️ Dette Google Cloud (Où's That, inchangée depuis le 2026-09-14), À FAIRE AVEC CODEX ET GUILLAUME
@@ -90,9 +116,11 @@ ferme peuplée à deux clients, suite de l'audit d'Où's that).
 
 ### ⏭️ ACTION SUIVANTE
 
-Si Guillaume n'a pas encore de retour sur la retouche du jour (église/pigeons) : **corriger la
-traduction des métiers** — bug borné, connu depuis le 2026-09-20, jamais traité. Sinon : suivre son
-verdict sur l'église et les pigeons en premier.
+Attendre le retour de Guillaume sur la réorganisation du jour (église sans damier, pigeons, bancs à
+pain, hôtel de ville sur l'axe de la fontaine, jardin nord) — aucun banc ne juge « agréable ». S'il
+valide : coller le prompt Gemini du tribunal (déjà préparé) est le prochain geste concret de la
+refonte graphique ; **choisir ensuite quel bâtiment vient après le tribunal se demande à Guillaume**,
+ça ne se décide pas seul.
 
 ---
 

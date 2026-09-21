@@ -401,7 +401,7 @@ const STAR_FIND_MS = 5200;
    CLAUDE.md), comme les six du réveil de la reine. */
 const STAR_MISSION_MS = 6000;
 
-export default function FermeGame({ room, me, isHost, players, t, lang, onFinish, savedCode, onCodeLoaded, hidden }) {
+export default function FermeGame({ room, me, isHost, players, t, lang, onFinish, savedCode, onCodeLoaded, hidden, onChangeFarm }) {
   const L = fstr(lang);
 
   // -------- État React (piloté par évènements, basse fréquence) --------
@@ -20496,12 +20496,44 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              pavé du parvis. Les phases d'atterrissage/envol interpolent entre
              la position d'orbite au bord du créneau de vol et le perchoir :
              pure fonction du temps, donc parfaitement déterministe sans
-             jamais rien stocker. */
+             jamais rien stocker.
+             ⚠️⚠️ RETOUCHE 2026-09-21 (Guillaume, en jeu : « le vol est trop
+             régulier ») — TROIS CHANGEMENTS, TOUJOURS SANS ÉTAT PARTAGÉ (rien
+             de neuf à stocker, tout reste une fonction pure de `i` et de
+             `now`) :
+             1. VITESSE ANGULAIRE NON CONSTANTE. `ang` n'est plus `seed+tt*spd`
+                mais cette même rampe PLUS deux sinusoïdes lentes de fréquence
+                différente (`wobPhase`) : la dérivée (la vitesse perçue) varie
+                entre ~40 % et ~160 % de `spd` SANS jamais s'annuler — un
+                oiseau qui accélère et flâne, jamais un qui rebrousse chemin en
+                vol (ça se lirait comme un bogue, pas comme un vol naturel).
+                Le RAYON respire aussi (`rxk`/`ryk`), lentement et
+                déphasé par oiseau : l'anneau n'est plus une ellipse figée qui
+                boucle à l'identique.
+             2. RAYON VERTICAL AGRANDI (8→15 sur les clochers) ET CENTRE/RAYON
+                LÉGÈREMENT DIFFÉRENTS PAR OISEAU (jitter dérivé de `hash01`,
+                jamais `Math.random` — ce dessin doit rester rejouable à
+                l'identique d'une frame à l'autre). Avec l'ancien rayon
+                vertical, la moitié « derrière » de l'orbite ne différait de
+                la moitié « devant » que de quelques pixels : vu en jeu, ça se
+                lisait comme un vol qui plane devant la façade, jamais comme un
+                vol qui en fait le tour. Un rayon deux fois plus grand, PLUS un
+                anneau propre à chaque oiseau (pas cinq oiseaux sur trois
+                cercles identiques), donne un vrai tour de clocher : on passe
+                nettement au-dessus de la corniche puis nettement en dessous,
+                et « derrière » (`depth = sin(ang)`, inchangé) dure aussi
+                longtemps que « devant ».
+             3. RÉPARTITION 2/1/2 (gauche/centre/droite) au lieu de 2/2/1 :
+                « autour DES clochers » (pluriel) doit favoriser les deux vraies
+                tours à cloche, pas la base de la flèche centrale qui n'en est
+                pas une. */
           const SPIRE_ORBITS = [
-            { cx: dx + 65, cy: dy + 94, rx: 21, ry: 8 },   // clocher gauche
-            { cx: dx + 96, cy: dy + 54, rx: 15, ry: 6.5 }, // base de la flèche centrale
-            { cx: dx + 128, cy: dy + 94, rx: 21, ry: 8 },  // clocher droit
+            { cx: dx + 65, cy: dy + 92, rx: 23, ry: 15 },   // clocher gauche
+            { cx: dx + 96, cy: dy + 54, rx: 16, ry: 9 },    // base de la flèche centrale
+            { cx: dx + 128, cy: dy + 92, rx: 23, ry: 15 },  // clocher droit
           ];
+          // 2/1/2 : deux oiseaux par clocher, un seul sur la flèche centrale.
+          const ORBIT_OF = [0, 2, 0, 1, 2];
           const PERCH_POINTS = [
             { x: dx + 65, y: dy + 65 },                          // corniche, clocher gauche
             { x: dx + 128, y: dy + 65 },                         // corniche, clocher droit
@@ -20511,12 +20543,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             { x: (b.x + 3.2) * T, y: (b.y + b.h + 1.4) * T },    // parvis, à gauche du porche
             { x: (b.x + 8.8) * T, y: (b.y + b.h + 1.4) * T },    // parvis, à droite du porche
             { x: (b.x + 6) * T, y: (b.y + b.h + 3) * T },        // parvis, plus au sud
+            /* 2026-09-21 (demande de Guillaume : « les pigeons peuvent se poser
+               au sommet d'une croix sur les flèches ») — les trois croix,
+               mesurées à la loupe sur eglise-day.png ramenée à 192 de large
+               (grille du dessin, §ci-dessus) : la barre transversale de
+               chaque croix, pas la pointe (la pointe est un pixel unique,
+               rien pour poser deux pattes). */
+            { x: dx + 63, y: dy + 4 },                           // croix, clocher gauche
+            { x: dx + 96, y: dy + 8 },                           // croix, flèche centrale
+            { x: dx + 129, y: dy + 4 },                          // croix, clocher droit
           ];
           function hash01(n) { const s = Math.sin(n * 12.9898) * 43758.5453; return s - Math.floor(s); }
           function pigeonState(i) {
             const seed = i * 1.6180339887; // nombre d'or : phases sans motif répétitif à l'œil
-            const orbit = SPIRE_ORBITS[i % SPIRE_ORBITS.length];
-            const spd = 0.3 + (i % 3) * 0.045;                 // rad/s : légère variation, pas un métronome
+            const orbit0 = SPIRE_ORBITS[ORBIT_OF[i % ORBIT_OF.length]];
+            // Jitter stable par oiseau (hash, pas Math.random) : deux oiseaux
+            // sur le même clocher ne dessinent plus le même anneau.
+            const jcx = (hash01(i * 4.1 + 1) - 0.5) * 8;
+            const jcy = (hash01(i * 6.7 + 2) - 0.5) * 12;
+            const jrx = 0.8 + hash01(i * 3.3 + 3) * 0.5;   // 0.8..1.3
+            const jry = 0.8 + hash01(i * 5.9 + 4) * 0.5;   // 0.8..1.3
+            const orbit = { cx: orbit0.cx + jcx, cy: orbit0.cy + jcy, rx: orbit0.rx * jrx, ry: orbit0.ry * jry };
+            const spd = 0.3 + (i % 3) * 0.045;                 // rad/s : rampe de base (voir wobble ci-dessous)
             const CYCLE = 24 + (i % 4) * 5.5;                  // 24..40 s, propre à chaque oiseau
             const PERCH_DUR = 6 + (i % 3) * 2.5;               // 6..11 s posé
             const TRANS = 1.3;                                 // atterrissage/envol
@@ -20525,10 +20573,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const cycleN = Math.floor(tAbs / CYCLE);
             const t = tAbs - cycleN * CYCLE;                   // position dans le cycle, 0..CYCLE
             const perch = PERCH_POINTS[Math.floor(hash01(i * 7.1 + cycleN * 3.7) * PERCH_POINTS.length)];
+            // Vol non constant : la rampe `tt*spd` reçoit deux sinusoïdes de
+            // fréquence différente, déphasées par oiseau (`seed`). Dérivée
+            // toujours positive (voir le calcul dans le commentaire du 2026-
+            // 09-21 plus haut) : jamais de vol en marche arrière.
+            const wobPhase = (tt) => 0.6 * Math.sin(tt * 0.13 + seed * 4) + 0.35 * Math.sin(tt * 0.31 + seed * 9);
             const flyPoint = (tt) => {
-              const ang = seed + tt * spd;
+              const ang = seed + tt * spd + wobPhase(tt);
+              const rxk = 0.85 + 0.15 * Math.sin(tt * 0.09 + seed * 6);
+              const ryk = 0.85 + 0.15 * Math.sin(tt * 0.12 + seed * 3 + 1.7);
               const bob = Math.sin(tt * spd * 2 + seed) * 2.4;
-              return { x: orbit.cx + Math.cos(ang) * orbit.rx, y: orbit.cy + Math.sin(ang) * orbit.ry + bob, ang, depth: Math.sin(ang) };
+              return { x: orbit.cx + Math.cos(ang) * orbit.rx * rxk, y: orbit.cy + Math.sin(ang) * orbit.ry * ryk + bob, ang, depth: Math.sin(ang) };
             };
             let x, y, ang, depth, grounded = false, wingRate = 1;
             if (t < FLY_DUR) {
@@ -31347,6 +31402,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         <button className="ferme-btn" onClick={() => { setSettingsOpen(false); teleportHome(); }}>{L.btnHome}</button>
         {buildings.wellBuilt && <button className="ferme-btn" onClick={() => { setSettingsOpen(false); teleportWell(); }}>{L.btnWell}</button>}
         <button className="ferme-btn ferme-btn-ghost" onClick={() => { setSettingsOpen(false); changeCharacter(); }}>{L.btnChangeChar}</button>
+        {/* 2026-09-21 (demande de Guillaume) — CHAQUE SALON A SA PROPRE FERME
+            (une ligne `rooms`, un monde persistant à elle) : « changer de
+            ferme », c'est donc changer de SALON. Le bouton réutilise TEL QUEL
+            `leaveRoom` de app/room/[code]/page.js (passé en prop) — la même
+            fonction que le bouton "sortie" déjà posé au coin du salon,
+            handoff d'hôte compris (`leaveRoomAndHandoff`). Aucune logique
+            nouvelle : FermeGame ne sait pas ce qu'est un salon, il ne fait
+            qu'appeler ce qu'on lui passe. */}
+        {onChangeFarm && <button className="ferme-btn ferme-btn-ghost" onClick={() => { setSettingsOpen(false); onChangeFarm(); }}>{L.btnChangeFarm}</button>}
         <button className="ferme-btn ferme-btn-ghost" onClick={() => { setSettingsOpen(false); leaveGame(); }}>{L.btnLeave}</button>
       </div>
 

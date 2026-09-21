@@ -115,6 +115,39 @@ for (let x = 0; x < SW; x++) { push(x, 0); push(x, SH - 1); }
 for (let y = 0; y < SH; y++) { push(0, y); push(SW - 1, y); }
 while (stack.length) { const [x, y] = stack.pop(); push(x + 1, y); push(x - 1, y); push(x, y + 1); push(x, y - 1); }
 
+// ⚠️⚠️ CE FLOOD FILL NE PART QUE DES QUATRE BORDS DE L'IMAGE — LE DAMIER SOUS
+// UNE ARCHE-BOUTANT EST ENTOURÉ DE PIERRE DE TOUS LES CÔTÉS, DONC INVISIBLE
+// POUR LUI (trouvé le 2026-09-21, demande de Guillaume : « le damier
+// caractéristique des png entre les arcs »). Mesuré (tools/_tmp-debug3.mjs,
+// jeté après usage) : 4 poches enclavées de 2 339 à 2 732 px, une par arche-
+// boutant. On cherche ici TOUTE composante connexe de damier encore marquée
+// "contenu" (peu importe où), et on ne la rend transparente que si elle est
+// assez grande pour être un vrai vide d'arche plutôt qu'un motif décoratif
+// EN DAMIER (le bandeau de pierre du pignon central en est un, mesuré à
+// 150 px — une vraie pierre, pas un artefact). Le seuil separe les deux avec
+// une marge large : rien n'existe entre 150 et 2 339.
+const MIN_HOLE_PX = 1000;
+{
+  const seen = new Uint8Array(SW * SH);
+  for (let y0 = 0; y0 < SH; y0++) for (let x0 = 0; x0 < SW; x0++) {
+    const i0 = y0 * SW + x0;
+    if (seen[i0] || alpha0[i0] === 0 || !passable(x0, y0)) continue;
+    const pts = [i0]; seen[i0] = 1;
+    const q = [i0];
+    while (q.length) {
+      const ci = q.pop();
+      const cy = (ci / SW) | 0, cx = ci - cy * SW;
+      for (const [nx, ny] of [[cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]]) {
+        if (nx < 0 || ny < 0 || nx >= SW || ny >= SH) continue;
+        const ni = ny * SW + nx;
+        if (seen[ni] || alpha0[ni] === 0 || !passable(nx, ny)) continue;
+        seen[ni] = 1; q.push(ni); pts.push(ni);
+      }
+    }
+    if (pts.length >= MIN_HOLE_PX) for (const p of pts) alpha0[p] = 0;
+  }
+}
+
 let removed = 0;
 for (let i = 0; i < SW * SH; i++) if (alpha0[i] === 0) removed++;
 console.log(`damier retiré : ${removed}/${SW * SH} px (${(100 * removed / (SW * SH)).toFixed(1)}%)`);

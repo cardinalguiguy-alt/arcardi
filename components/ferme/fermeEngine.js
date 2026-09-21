@@ -4569,6 +4569,18 @@ export function generateTownWorld() {
     if (street !== undefined) {
       for (let y = y0; y <= street + 1; y++) {
         if (!inMap(doorX, y) || elev[id(doorX, y)] !== e0) break;
+        /* ⚠️⚠️ 2026-09-21 — DÉJÀ DU DALLAGE PUBLIC : DÉJÀ RELIÉ, ON S'ARRÊTE.
+           Posé pour le nouveau TOWN_HALL (voir sa note dans fermeConstants.js),
+           dont la porte tombe désormais DANS `TOWN_PLAZA` — sans ce test,
+           l'allée aurait peint une bande de terre battue (G_PATH) en plein
+           milieu du dallage de pierre de la place, jusqu'à la rue, quinze
+           cases plus loin. La place est peinte AVANT tous les parvis (plus
+           haut dans ce fichier) : si la case est déjà `G_PATH_STONE`, on a
+           déjà atteint un espace public pavé, donc déjà la circulation — rien
+           à ajouter par-dessus. Sans porte tombant dans une place, ce test ne
+           déclenche jamais (vérifié pour les quatre autres appels de
+           `forecourt` : aucun ne longe une place ou un parc). */
+        if (ground[id(doorX, y)] === C.G_PATH_STONE) break;
         ground[id(doorX, y)] = C.G_PATH; ground[id(doorX + 1, y)] = C.G_PATH;
         alleys.push(doorX, y, doorX + 1, y);   // 434 : elles seront pavées comme les rues
       }
@@ -4596,6 +4608,21 @@ export function generateTownWorld() {
   for (const b of [C.TOWN_CHURCH, C.TOWN_HALL, C.TOWN_COURT, C.TOWN_BOUTIQUE, C.TOWN_SALON]) {
     const stepRows = b === C.TOWN_HALL ? C.TOWN_HALL_STEP_ROWS : 0;
     rect(b, (x, y, i) => { if (y < b.y + b.h - stepRows) solid[i] = 1; });
+  }
+
+  /* LES DEUX BANCS DU PARVIS DE L'ÉGLISE (2026-09-21, demande de Guillaume :
+     « jeter du pain pour les attirer, et les faire descendre au sol »). Même
+     geste que les bancs de la Boutique/du Salon plus bas (ZIP 427) : décalés
+     de l'axe de la porte (l'allée pavée tombe sur `x + w/2 - 1` et
+     `x + w/2`, voir `forecourt`), à l'intérieur du parvis dallé posé juste
+     au-dessus (profondeur 5). ⚠️ Ils n'attirent des pigeons que parce que
+     `townFlocks()` (plus bas dans ce fichier) leur donne un site au sol —
+     un banc sans site voisin jetterait du pain dans le vide, comme devant la
+     Boutique. */
+  {
+    const eg = C.TOWN_CHURCH;
+    addProp(eg.x + 2, eg.y + eg.h + 3, "bench", true);
+    addProp(eg.x + eg.w - 3, eg.y + eg.h + 3, "bench", true);
   }
 
   /* --------------------------------------------------------- LES MAISONS
@@ -5266,6 +5293,43 @@ export function generateTownWorld() {
          place assise (voir le belvédère). Six est confortable. */
       addGarden(p.x + 6, cy - 1, "bench"); addGarden(p.x + 6 + 6, cy + 2, "bench");
     }
+  }
+  /* LE JARDIN DU NORD (2026-09-21) — l'agrandissement demandé par Guillaume,
+     dans l'espace libéré par le déménagement de `TOWN_HALL` (voir sa note
+     dans fermeConstants.js). ⚠️ UN BLOC À CÔTÉ, JAMAIS UN `TOWN_PARK` ÉTIRÉ —
+     la raison est dans la note de `TOWN_PARK_NORTH` : étang et kiosque sont
+     DÉRIVÉS du centre du parc principal, l'étirer aurait tout redéplacé.
+     Volontairement plus simple que le parc principal (pas d'étang, pas de
+     kiosque : les redessiner ici les DUPLIQUERait, pas les agrandirait) —
+     quatre parterres de la même palette (`BL_TULIP`/`BL_LAVENDER`/`BL_GOLD`,
+     mêmes constantes que `parterre` plus haut, pour que les deux blocs se
+     lisent comme UN SEUL jardin) et une allée centrale, alignée sur celle du
+     parc principal (`cx` du parc = 133 = centre de ce bloc aussi) pour que
+     les deux tronçons continuent le même axe de part et d'autre de la rue
+     principale. */
+  {
+    const pn = C.TOWN_PARK_NORTH;
+    rect(pn, (x, y, i) => { if (ground[i] === C.G_GRASS) ground[i] = C.G_TOWN_LAWN; });
+    const pcx = pn.x + (pn.w >> 1);   // 133 : même colonne que `cx` du parc principal
+    for (let y = pn.y; y < pn.y + pn.h; y++) for (const dx of [0, 1]) {
+      const i = id(pcx + dx, y);
+      if (inMap(pcx + dx, y) && !solid[i]) { ground[i] = C.G_PATH; objects[i] = C.O_NONE; objHp.delete(i); gravel.push(pcx + dx, y); }
+    }
+    beds.push({ x: pn.x + 3, y: pn.y + 3, w: 6, h: 4, kind: C.BL_GOLD });
+    beds.push({ x: pn.x + pn.w - 9, y: pn.y + 3, w: 6, h: 4, kind: C.BL_TULIP });
+    beds.push({ x: pn.x + 3, y: pn.y + pn.h - 7, w: 6, h: 4, kind: C.BL_LAVENDER });
+    beds.push({ x: pn.x + pn.w - 9, y: pn.y + pn.h - 7, w: 6, h: 4, kind: C.BL_GOLD });
+    /* ⚠️ 2026-09-21 — UNE JARDINIÈRE, PAS DEUX LAMPADAIRES, CÔTÉ NORD.
+       `verify-vallee` (« chaque quartier bâti a une raison qu'on y aille »)
+       découpe la carte en blocs de 28×28 : la rangée nord de ce jardin
+       (y=52-55) tombe dans un bloc DIFFÉRENT des deux bancs du sud (y=64-65,
+       un bloc plus bas). Un lampadaire n'est pas une destination pour
+       `townSpots()` (seuls bancs/jardinières/kiosque le sont, voir la note à
+       `addBench` plus haut) : sans jardinière ici, ce bloc-là restait bâti
+       (le dallage de l'allée suffit à passer le seuil) mais sans raison d'y
+       aller. Trouvé en LANÇANT le banc, pas en le devinant. */
+    addGarden(pn.x + 14, pn.y + 1, "flowerTrough"); addGarden(pn.x + 20, pn.y + 1, "lamp");
+    addGarden(pn.x + 14, pn.y + pn.h - 2, "bench"); addGarden(pn.x + 20, pn.y + pn.h - 2, "bench");
   }
   // LE VERGER : des arbres EN RANGS. C'est l'alignement qui dit « planté par
   // quelqu'un » — un semis aléatoire, à deux pas d'une rue, dit « friche ».
@@ -8332,6 +8396,9 @@ export function townFlocks(tw) {
     { key: "plaza", rect: C.TOWN_PLAZA, n: 14 },
     // Le parvis du tribunal : la bande dallée devant sa façade sud.
     { key: "court", rect: { x: C.TOWN_COURT.x - 3, y: C.TOWN_COURT.y + C.TOWN_COURT.h, w: C.TOWN_COURT.w + 6, h: 6 }, n: 9 },
+    // Le parvis de l'église (2026-09-21) : mêmes deux bancs, même geste — voir
+    // leur pose plus haut dans ce fichier. Profondeur 5, comme `forecourt`.
+    { key: "church", rect: { x: C.TOWN_CHURCH.x - 3, y: C.TOWN_CHURCH.y + C.TOWN_CHURCH.h, w: C.TOWN_CHURCH.w + 6, h: 5 }, n: 10 },
   ];
   const list = [];
   for (const site of sites) {
