@@ -2681,6 +2681,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // d'attente explicite chez l'invité, effacé dès qu'un snapshot arrive.
       if (!isHost && !worldReadyRef.current) setHostPreparing(true);
     });
+    // 2026-09-21 bis — L'hôte abandonne la ferme en cours pour en choisir une
+    // autre (changeFarm(), bouton "Changer de ferme"). Sans ce signal, un
+    // invité DÉJÀ rejoint ne renvoie plus jamais de `hello` (l'effet de
+    // retente, plus bas, ne tourne que tant que `worldReady` est faux) et
+    // resterait donc figé sur la dernière image de la ferme abandonnée, POUR
+    // TOUJOURS — aucun instantané ne viendra jamais le corriger tout seul.
+    // On le remet exactement dans l'état d'un tout premier accès (comme
+    // `nofarm` juste au-dessus) : l'effet de retente redémarre tout seul dès
+    // que `worldReady` repasse à faux (il en dépend), et le prochain
+    // instantané (la nouvelle ferme de l'hôte) l'en sortira normalement.
+    ch.on("broadcast", { event: "farmReset" }, () => {
+      if (isHost) return;
+      setWorldReady(false);
+      joinedRef.current = false;
+      setHostPreparing(true);
+      setPhase("select");
+    });
     ch.on("broadcast", { event: "snapshot" }, ({ payload }) => {
       // L'hôte ignore l'écho de son propre snapshot (il a déjà le monde).
       if (isHost && worldRef.current) return;
@@ -8857,6 +8874,40 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
   // "Changer de perso" en jeu : revient à l'écran de choix sans quitter la ferme.
   function changeCharacter() { autoJoinTriedRef.current = true; joinedRef.current = false; setPhase("select"); }
+  // "Changer de ferme" (2026-09-21 bis, correctif de Guillaume) : MÊME
+  // PRINCIPE que changeCharacter ci-dessus, un cran au-dessus — revient à
+  // l'écran de CODE sans quitter le SALON (voir le commentaire du bouton,
+  // plus bas dans le rendu, pour le pourquoi de ce revirement).
+  // ⚠️ Hôte seulement : l'écran "code" n'existe que pour lui. Un invité qui
+  // l'appellerait n'a aucune ferme à choisir ; il garde l'ancien
+  // comportement (`onChangeFarm`, quitter le salon).
+  // `loadFarmByCode` (déclenché quand l'hôte valide un nouveau code) refait
+  // TOUT le travail de réinitialisation lui-même — c'est le même chemin
+  // qu'au tout premier chargement de la ferme (monde, fermiers, or, jour...)
+  // — donc rien à réinitialiser ici à la main, à trois exceptions près :
+  //  - `persistFarm()` d'abord : la ferme qu'on quitte a droit à sa dernière
+  //    sauvegarde, comme une fermeture propre plutôt qu'un abandon ;
+  //  - `worldRef.current = null` : sinon un invité qui se reconnecte pendant
+  //    que l'hôte hésite sur le nouveau code recevrait un instantané de la
+  //    ferme qu'on est en train de quitter (voir le handler `hello`, plus
+  //    haut, qui répond `nofarm` précisément quand `worldRef.current` est
+  //    vide) ;
+  //  - le signal `farmReset` : un invité DÉJÀ connecté ne renvoie un `hello`
+  //    que tant qu'il n'a jamais reçu de premier instantané (voir l'effet de
+  //    retente, plus bas, qui ne tourne que tant que `worldReady` est faux) —
+  //    sans ce signal il resterait figé sur la dernière image de la ferme
+  //    abandonnée, pour toujours.
+  function changeFarm() {
+    if (!isHost) { onChangeFarm && onChangeFarm(); return; }
+    if (worldRef.current) persistFarm();
+    channelRef.current?.send({ type: "broadcast", event: "farmReset", payload: {} });
+    worldRef.current = null;
+    setWorldReady(false);
+    joinedRef.current = false;
+    autoJoinTriedRef.current = false;
+    setCodeInput(""); setCodeError("");
+    setPhase("code");
+  }
   // Zip 367 — corollaire quota de MAX_PETS 2 -> 4. Le champ `pets` voyage dans
   // CHAQUE paquet `pos` (~1,5 msg/s par joueur, le flux le plus fréquent du
   // jeu) et transportait les objets complets {id, at} : doubler la limite
@@ -26180,7 +26231,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (fx < 0 || fy < 0 || fx >= tw.w || fy >= tw.h) return true;
     if (fx <= C.TOWN_RAIL_X + 1 && !(fy >= C.TOWN_PLATFORM.y && fy < C.TOWN_PLATFORM.y + C.TOWN_PLATFORM.h)) return true;
     const i = fy * tw.w + fx;
-    if (tw.solid && tw.solid[i]) return true;
+    /* ⚠️⚠️ 2026-09-21 — MÊME EXCEPTION QUE `blockedTown` (le test du joueur,
+       plus haut dans ce fichier) ET `townNav` (fermeEngine.js), OUBLIÉE ICI :
+       la végétation basse (`tw.soft`) ne bloque personne depuis le hors-zip
+       2026-09-02, résidents COMPRIS (le commentaire de `townNav` le dit en
+       toutes lettres : « LES RÉSIDENTS TRAVERSENT AUSSI »). Cette fonction-ci
+       n'avait jamais reçu la clause : `townFindPath`/`townBoxFree` (qui la
+       respectent) pouvaient donc tracer un chemin de résident À TRAVERS un
+       buisson que ce test-ci refusait ensuite, pas à pas — le résident
+       restait planté juste devant, sans la moindre erreur, signalé par
+       Guillaume en jeu. */
+    if (tw.solid && tw.solid[i] && !(tw.soft && tw.soft[i])) return true;
     if (tw.ground[i] === C.G_WATER) return true;
     const o = tw.objects[i];
     if (o !== C.O_TREE && o !== C.O_TREE2 && o !== C.O_STUMP) return false;
@@ -31483,15 +31544,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         <button className="ferme-btn" onClick={() => { setSettingsOpen(false); teleportHome(); }}>{L.btnHome}</button>
         {buildings.wellBuilt && <button className="ferme-btn" onClick={() => { setSettingsOpen(false); teleportWell(); }}>{L.btnWell}</button>}
         <button className="ferme-btn ferme-btn-ghost" onClick={() => { setSettingsOpen(false); changeCharacter(); }}>{L.btnChangeChar}</button>
-        {/* 2026-09-21 (demande de Guillaume) — CHAQUE SALON A SA PROPRE FERME
-            (une ligne `rooms`, un monde persistant à elle) : « changer de
-            ferme », c'est donc changer de SALON. Le bouton réutilise TEL QUEL
-            `leaveRoom` de app/room/[code]/page.js (passé en prop) — la même
-            fonction que le bouton "sortie" déjà posé au coin du salon,
-            handoff d'hôte compris (`leaveRoomAndHandoff`). Aucune logique
-            nouvelle : FermeGame ne sait pas ce qu'est un salon, il ne fait
-            qu'appeler ce qu'on lui passe. */}
-        {onChangeFarm && <button className="ferme-btn ferme-btn-ghost" onClick={() => { setSettingsOpen(false); onChangeFarm(); }}>{L.btnChangeFarm}</button>}
+        {/* 2026-09-21 bis (correctif de Guillaume, même jour) — LA PREMIÈRE
+            VERSION DE CE BOUTON (voir l'historique juste ici) renvoyait à la
+            page d'accueil Arcardi (`onChangeFarm`=`leaveRoom`, quitter le
+            salon) au lieu du choix de nom de ferme : « changer de ferme,
+            c'est changer de salon » supposait à tort qu'une ferme est LIÉE à
+            son salon. Faux : `loadFarmByCode` identifie une ferme par son
+            propre code (`ferme_saves.code`), indépendant de `room.id`. Rien
+            n'oblige donc à quitter le salon — `changeFarm()` (juste
+            au-dessus, hôte seulement) revient à l'écran "code" SANS quitter,
+            sur le même principe que `changeCharacter()` pour l'écran de
+            personnage. Un invité n'a rien à y choisir (l'écran "code" est
+            hôte uniquement) : il garde l'ancien comportement. */}
+        {onChangeFarm && <button className="ferme-btn ferme-btn-ghost" onClick={() => { setSettingsOpen(false); changeFarm(); }}>{L.btnChangeFarm}</button>}
         <button className="ferme-btn ferme-btn-ghost" onClick={() => { setSettingsOpen(false); leaveGame(); }}>{L.btnLeave}</button>
       </div>
 

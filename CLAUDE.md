@@ -7,7 +7,7 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-21 (session suivante) — Damier résiduel de l'église, vol des pigeons ENCORE retouché, bancs à pain devant le parvis, bouton « changer de ferme », le cœur de ville réorganisé autour de la fontaine, et la fontaine elle-même refaite
+### 2026-09-21 (session suivante) — Damier résiduel de l'église, vol des pigeons ENCORE retouché, bancs à pain devant le parvis, bouton « changer de ferme » (puis CORRIGÉ en relisant ce fichier), le cœur de ville réorganisé autour de la fontaine, la fontaine elle-même refaite, et la collision résidents/buissons corrigée
 
 Guillaume, en jeu, a d'abord pointé le reste du damier de la veille (§ session précédente,
 « l'église a encore le damier caractéristique des png entre les arcs »), puis a enchaîné en rafale
@@ -45,10 +45,41 @@ n'importe quel banc de la ville mais n'attire personne s'il n'y a pas de SITE de
 (la Boutique et le Salon en ont déjà fait les frais, silencieusement, avant aujourd'hui). Vérifié en
 jeu de bout en bout : assis, pain jeté, pigeons accourus au sol.
 
-**Bouton « 🚜 Changer de ferme »** dans la roue paramètres (FermeGame.js) : chaque salon porte SA
-propre ferme, donc changer de ferme, c'est changer de salon. Réutilise TEL QUEL `leaveRoom` de
-`app/room/[code]/page.js` (passé en prop `onChangeFarm`) — handoff d'hôte compris, aucune logique
-nouvelle écrite. Vérifié : le bouton apparaît, le clic déclenche bien le callback.
+**Bouton « 🚜 Changer de ferme », CORRIGÉ dans la foulée** (Guillaume, en relisant ce fichier : « doit
+pas renvoyer vers la page d'accueil arcardi, mais vers le choix de nom de ferme »). La version du
+matin (paragraphe ci-dessus dans l'historique de ce fichier) avait tranché trop vite : « chaque
+salon a sa propre ferme, donc changer de ferme = changer de salon » supposait un lien entre les deux
+qui n'existe pas dans le code — `loadFarmByCode` identifie une ferme par son propre code
+(`ferme_saves.code`), indépendant de `room.id`. `changeFarm()` (FermeGame.js, HÔTE SEULEMENT) revient
+donc à l'écran "code" SANS quitter le salon, sur le modèle de `changeCharacter()` pour l'écran de
+personnage. `loadFarmByCode` (déclenché quand l'hôte valide un nouveau code) refait tout le travail
+de réinitialisation lui-même — même chemin qu'au tout premier chargement — à trois exceptions
+près : une dernière sauvegarde de la ferme qu'on quitte ; `worldRef.current` remis à vide (sinon un
+invité qui se reconnecte pendant l'hésitation de l'hôte recevrait un instantané de la ferme
+abandonnée) ; et un signal `farmReset` pour les invités DÉJÀ connectés, qui ne renvoient plus jamais
+de `hello` une fois rejoints — sans ce signal ils resteraient figés sur la dernière image pour
+toujours. Un invité, lui, garde l'ancien comportement (quitter le salon) : l'écran "code" n'existe
+que pour l'hôte. ⚠️ Vérifié plus sérieusement que la première fois (« le bouton apparaît » ne
+prouvait rien) : harnais jetable hôte seul, le clic ne déclenche plus `onChangeFarm`/`leaveRoom`
+(compteur resté à 0), l'écran "🌾 Ferme Vallée" revient, et un second code différent charge une
+ferme neuve et indépendante (jour 1, 500 or, checklist vide). ⚠️ Pas testé à deux clients (l'invité
+qui se resynchronise sur la nouvelle ferme via `farmReset`) — prochaine séance à deux.
+
+**Collision résidents/buissons, corrigée dans la même relecture** (Guillaume : « attention aussi aux
+collisions avec les résidents sur les buissons, ça les bloque actuellement »). La ville a DEUX tests
+de collision distincts et nommés presque pareil — piège déjà connu du §4, la « semelle » y liste
+`canStandTown` et `townCanStand` parmi les sept copies à risque : `blockedTown`/`canStandTown` pour
+le JOUEUR, `townBlockedAt`/`townCanStand` pour les RÉSIDENTS (`townResidentRoam`). L'exception de la
+végétation basse (`tw.soft`, hors-zip 2026-09-02 — « LES RÉSIDENTS TRAVERSENT AUSSI », déjà écrit
+noir sur blanc dans le commentaire de `townNav`) n'avait jamais été portée dans `townBlockedAt` :
+`townFindPath`/`townBoxFree` traçaient donc un chemin de résident À TRAVERS un buisson que ce test-ci
+refusait ensuite, pas à pas — le résident restait planté juste devant, sans la moindre erreur. Même
+clause qu'à `blockedTown`, copiée mot pour mot (les deux fonctions sont maintenant identiques, hormis
+un helper nommé côté résident). ⚠️ Vérifié en console sur la VRAIE carte de ville (harnais jetable),
+pas seulement à l'écran — un résident arrêté ne se distingue pas d'un résident qui contemple (§4,
+leçon des haies) : les 822 cases molles de la ville (bien plus que les 28 d'origine, la ville en a
+gagné beaucoup depuis) passent TOUTES de bloqué à libre, et un échantillon de cases dures voisines
+(bâtiments) reste bloqué à l'identique — le correctif ne touche que la végétation, rien d'autre.
 
 **Le cœur de ville réorganisé** — trois demandes de Guillaume, la dernière corrigeant la première en
 la regardant : (1) « la proximité HDV/église/square doit être plus évidente », (2) puis, en voyant le
@@ -136,12 +167,16 @@ ferme peuplée à deux clients, suite de l'audit d'Où's that).
 
 ### ⏭️ ACTION SUIVANTE
 
-Attendre le retour de Guillaume sur deux livraisons de la même session : la réorganisation du cœur
+Attendre le retour de Guillaume sur trois livraisons de la même session : la réorganisation du cœur
 de ville (église sans damier, pigeons, bancs à pain, hôtel de ville sur l'axe de la fontaine, jardin
-nord) ET la fontaine refaite (eau en bandes de profondeur, débordement, jet fuselé) — aucun banc ne
-juge « agréable » ni « soigné ». S'il valide : coller le prompt Gemini du tribunal (déjà préparé) est
-le prochain geste concret de la refonte graphique ; **choisir ensuite quel bâtiment vient après le
-tribunal se demande à Guillaume**, ça ne se décide pas seul.
+nord), la fontaine refaite (eau en bandes de profondeur, débordement, jet fuselé) — aucun banc ne
+juge « agréable » ni « soigné » — ET les deux correctifs trouvés en relisant ce fichier (bouton
+« changer de ferme », collision résidents/buissons) : ceux-ci sont vérifiés CORRECTS (harnais jetable,
+console), mais ni la FERME à deux clients (l'invité qui se resynchronise via `farmReset`) ni le
+RESSENTI en jeu (le bouton, le mouvement des résidents en mouvement réel) n'ont été rejoués par
+Guillaume. S'il valide le tout : coller le prompt Gemini du tribunal (déjà préparé) est le prochain
+geste concret de la refonte graphique ; **choisir ensuite quel bâtiment vient après le tribunal se
+demande à Guillaume**, ça ne se décide pas seul.
 
 ---
 
