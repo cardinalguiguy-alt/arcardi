@@ -4957,6 +4957,110 @@ export const TOWN_COURT = { x: 136, y: 14, w: 12, h: 7 };
    celui de la mairie, un joueur qui ne pourrait fouler que la dernière
    marche buterait visiblement sur les autres. */
 export const TOWN_COURT_STEP_ROWS = 3;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2026-09-22 bis — LE SPRITE DU TRIBUNAL MESURÉ, ET TOUT CE QUI EN DÉCOULE.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️⚠️ CE BLOC EXISTE PARCE QUE LA VEILLE, LE DESSIN ET LA COLLISION
+   DÉCRIVAIENT DEUX BÂTIMENTS DIFFÉRENTS. Le PNG est affiché sur 256 px de
+   large (×1,1 de GROW) = 17,6 cases, pour une emprise `TOWN_COURT` de 12 : les
+   deux ailes débordaient de 2,5 cases de chaque côté, sans une case solide
+   dessous — on traversait le bâtiment par les flancs. Verticalement, même
+   divorce : le perron peint couvre cinq rangées d'écran, la grille n'en
+   rendait que trois, et le palier du péristyle tombait deux rangées au-dessus
+   de la dernière case foulable — donc on butait SOUS la porte au lieu d'être
+   devant (les deux signalés en jeu par Guillaume).
+
+   ⚠️ LA PARADE N'EST PAS UN DÉCALAGE DE PLUS, C'EST UNE SOURCE UNIQUE. On
+   mesure SIX repères dans le PNG, une fois, en pixels de son image native, et
+   le dessin comme la collision se dérivent de ces six nombres. Le jour où le
+   sprite change, on re-mesure ici et rien d'autre ne bouge — au lieu des trois
+   endroits (ancrage, solidité, relief) qui devaient s'accorder de mémoire.
+   C'est la règle déjà appliquée à `planche.js` (une portée de pont se dérive
+   du sprite, elle ne se recopie pas) — et c'est l'inverse du piège du §4
+   « une grandeur de dessin ne doit pas entrer dans la collision » : ici on ne
+   glisse pas un arc de dessin dans une fonction de physique, on DÉCLARE une
+   fois où le bâtiment pose les pieds.
+
+   Mesurés à la loupe sur public/town/courthouse-day.png (384×356 natifs), en
+   comparant à l'alpha et à la silhouette — voir les commentaires de chaque
+   ligne pour ce que chaque repère désigne exactement.
+   ═══════════════════════════════════════════════════════════════════════════ */
+export const TOWN_COURT_SPRITE = {
+  iw: 384, ih: 356,          // dimensions natives du PNG
+  disp: 256,                 // largeur d'affichage avant GROW (voir drawCourthouseBitmap)
+  grow: 1.1,                 // le même grossissement que les deux autres monuments
+  /* Les trois repères VERTICAUX, du bas vers le haut. */
+  iyFoot: 346,               // le pied de la volée : la ligne où la première marche touche le parvis
+  iyLanding: 253,            // le palier du péristyle — seuil de la porte, base des colonnes
+  iyWingBase: 330,           // le pied des murs latéraux (les ailes s'arrêtent plus HAUT que la volée : elles sont en retrait)
+  /* Les repères HORIZONTAUX. Le corps est un rectangle ; la volée est un
+     TRAPÈZE (elle s'évase vers le bas, bordée de deux balustrades en biais) —
+     c'est cet évasement qui interdit de décrire le perron par un rectangle. */
+  ixL: 16, ixR: 368,                     // emprise du corps (ailes comprises)
+  ixStairFootL: 62, ixStairFootR: 322,   // la volée, à son pied
+  ixStairTopL: 104, ixStairTopR: 280,    // la volée, au palier
+};
+
+/* px d'image -> abscisse monde, en tenant compte du cadrage et du GROW. */
+export function courtSpriteX(ix) {
+  const S = TOWN_COURT_SPRITE, b = TOWN_COURT;
+  const cx = b.x * TILE + b.w * TILE / 2;
+  const dx = b.x * TILE + (b.w * TILE - S.disp) / 2;
+  return cx + (dx + ix * (S.disp / S.iw) - cx) * S.grow;
+}
+/* Combien de px d'écran vaut un px d'image, une fois affiché. */
+export function courtSpriteK() { const S = TOWN_COURT_SPRITE; return (S.disp / S.iw) * S.grow; }
+/* ⚠️ UNE SEULE RÈGLE D'ARRONDI DANS TOUT CE BLOC, ET C'EST CE QUI LE REND
+   VÉRIFIABLE : une case appartient à ce qu'elle recouvre si son CENTRE y est.
+   Deux règles (« entièrement dedans » d'un côté, « touchée » de l'autre)
+   auraient décalé la volée d'une case par rapport à ses balustrades. */
+const courtCell0 = (wx) => Math.ceil(wx / TILE - 0.5);
+const courtCell1 = (wx) => Math.floor(wx / TILE - 0.5);
+
+/* ⚠️⚠️ LA MARCHE N'EST PLUS UN NOMBRE CHOISI, ELLE EST MESURÉE. L'escalier
+   peint monte de (iyFoot − iyLanding) px d'image à l'écran ; le joueur, lui,
+   monte de STEP_ROWS rangées de TILE px, plus ce que lui donne l'élévation
+   (TOWN_ELEV_PX par unité). Égaler les deux donne la hauteur d'une marche —
+   et c'est exactement ce que Guillaume demandait en disant « que l'effet de
+   profondeur se ressente davantage » : la valeur posée à la main la veille
+   (0,06) ne rendait que les trois quarts de la montée dessinée, le reste
+   était mangé en silence. ⚠️ Reste très en dessous de TOWN_STEP_MAX (0,34),
+   donc aucun cas particulier dans `canStandTown`. */
+export const TOWN_COURT_STEP_RISE =
+  ((TOWN_COURT_SPRITE.iyFoot - TOWN_COURT_SPRITE.iyLanding) * courtSpriteK() - TOWN_COURT_STEP_ROWS * TILE)
+  / (TOWN_COURT_STEP_ROWS * TOWN_ELEV_PX);
+
+/* L'emprise SOLIDE du corps, en cases — dérivée des flancs du dessin, donc
+   bien plus large que `TOWN_COURT` (qui reste l'emprise LOGIQUE : porte, zoom,
+   parvis, services). Les deux ne décrivent pas la même chose et c'est voulu. */
+export const TOWN_COURT_COLL = { x0: courtCell0(courtSpriteX(TOWN_COURT_SPRITE.ixL)), x1: courtCell1(courtSpriteX(TOWN_COURT_SPRITE.ixR)) };
+/* La dernière rangée solide sur les FLANCS. Les ailes s'arrêtent plus haut que
+   la volée (elles sont en retrait) : bloquer jusqu'au bas du perron mettrait un
+   mur invisible d'une case devant leur soubassement peint. */
+export const TOWN_COURT_WING_ROW = Math.floor(
+  (TOWN_COURT.y + TOWN_COURT.h) + (TOWN_COURT_SPRITE.iyWingBase - TOWN_COURT_SPRITE.iyFoot) * courtSpriteK() / TILE - 0.5);
+
+/* L'intervalle de cases FOULABLES de la volée, pour une rangée donnée. Le
+   trapèze est interpolé sur le milieu de la rangée — pris au bord nord, on
+   perdrait une demi-marche de largeur à chaque étage. */
+export function courtStairSpan(y) {
+  const S = TOWN_COURT_SPRITE, b = TOWN_COURT;
+  const t = ((b.y + b.h) - y - 0.5) / TOWN_COURT_STEP_ROWS;
+  if (t < 0 || t > 1) return null;
+  return {
+    x0: courtCell0(courtSpriteX(S.ixStairFootL + (S.ixStairTopL - S.ixStairFootL) * t)),
+    x1: courtCell1(courtSpriteX(S.ixStairFootR + (S.ixStairTopR - S.ixStairFootR) * t)),
+  };
+}
+/* L'altitude d'une rangée du perron (la plus au sud = une marche au-dessus du
+   parvis, la plus au nord = le palier). Lue par le générateur ET par l'ancrage
+   du sprite, pour que le dessin se pose exactement sur la grille qu'il décrit. */
+export function courtStepElev(y, apron = 1) {
+  const b = TOWN_COURT;
+  return apron + TOWN_COURT_STEP_RISE * ((b.y + b.h) - y);
+}
+
 export const TRAIN_BOARD = { x: 5, y: 30 };         // farm-side boarding spot on the platform (E to ride)
 
 /* ═══════════════════════════════════════════════════════════════════════════

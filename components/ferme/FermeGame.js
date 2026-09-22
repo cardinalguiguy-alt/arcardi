@@ -18845,6 +18845,39 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        que smoothNpc) n'atteint jamais tout à fait sa cible : l'échelle
        resterait à 2,004 pour toujours, donc fractionnaire pour toujours. On
        accroche donc la valeur dès qu'elle est assez proche. */
+    /* ⚠️⚠️⚠️ 2026-09-22 bis — LE TRIBUNAL NE PEUT PAS ÊTRE CADRÉ PAR UN HEADROOM
+       CONSTANT, ET C'EST UNE IMPOSSIBILITÉ, PAS UN RÉGLAGE RATÉ. Signalé en jeu
+       par Guillaume : « le dézoom ne permet pas de voir toute la structure ».
+       Son dessin fait 16,3 cases de haut (le plus grand du jeu, contre 8 pour
+       l'ancienne église qui a servi à calibrer TOWN_ZOOM_NEAR) ; la part de vue
+       qu'il faut récupérer au-dessus du joueur vaut « hauteur du monument ÷
+       hauteur de la fenêtre » — elle DÉPEND donc de la fenêtre, et une fraction
+       figée est juste pour une seule taille d'écran. L'église s'en tire avec
+       0,17 parce qu'elle est deux fois plus basse ; lui, non.
+
+       ⚠️ CE QUE FAIT CETTE FONCTION, DIT SIMPLEMENT : tant qu'elle n'est pas
+       bornée, elle rend la valeur qui ancre la vue sur le SOMMET du monument —
+       la caméra cesse de suivre le joueur verticalement et garde le bâtiment
+       entier à l'écran pendant qu'on monte vers lui. Quand on s'en éloigne trop
+       pour que les deux tiennent, la borne reprend la main et la caméra
+       redevient suiveuse, plutôt que d'expulser le joueur par le bas.
+       ⚠️ On ne touche PAS au cadrage des autres monuments : ils ont été jugés
+       bons par Guillaume, et les changer ici serait un second changement visuel
+       caché dans celui-ci (§2 CLAUDE.md). */
+    function courtHeadroom(m) {
+      const S = C.TOWN_COURT_SPRITE, b = C.TOWN_COURT;
+      const vh = canvas.height / C.TOWN_ZOOM_NEAR;
+      if (!(vh > 0)) return 0;
+      /* ⚠️ L'ALTITUDE DU PARVIS SE LIT DANS LE MONDE (comme à l'ancrage du
+         sprite), mais PAS via `elAt` : celui-ci est un `const` fléché déclaré
+         plus bas dans la boucle de rendu, donc invisible ici — le piège du §4,
+         qui a déjà coûté deux `ReferenceError` muets (tryTownJump, canStandTown). */
+      const tw = townWorldRef.current;
+      const apron = tw ? (tw.elev[(b.y + b.h) * tw.w + (b.x + (b.w >> 1))] || 0) : 1;
+      // le sommet du dessin, en px monde-écran — même dérivation que drawCourthouseBitmap
+      const top = (b.y + b.h) * T - apron * C.TOWN_ELEV_PX - S.iyFoot * (S.disp / S.iw) * S.grow;
+      return Math.max(0, Math.min(0.34, ((m.y + 0.5) * T - top) / vh - 0.5));
+    }
     function townZoomTarget(m) {
       if (!m) return { zoom: ZOOM, headroom: 0 };
       /* Les lieux qui MÉRITENT d'être vus en entier. ⚠️ LA LISTE EST DÉRIVÉE
@@ -18864,7 +18897,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          sans le demander serait un second changement visuel caché dans
          celui-ci (§2 CLAUDE.md). */
       for (const spec of [
-        { b: C.TOWN_COURT }, { b: C.TOWN_HALL },
+        { b: C.TOWN_COURT, headroom: courtHeadroom },   // calculé, pas constant — voir courtHeadroom
+        { b: C.TOWN_HALL },
         { b: C.TOWN_CHURCH, headroom: C.TOWN_ZOOM_HEADROOM_TALL },
         { b: C.TOWN_BOUTIQUE }, { b: C.TOWN_SALON },
         { b: C.TOWN_BELVEDERE }, { b: C.TOWN_PLAZA }, { b: C.TOWN_PIER },
@@ -18876,7 +18910,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // fini quand on arrive au pied, pas qu'il se déclenche une fois collé.
         if (m.x >= b.x - C.TOWN_ZOOM_MARGIN && m.x <= b.x + w + C.TOWN_ZOOM_MARGIN
          && m.y >= b.y - C.TOWN_ZOOM_MARGIN && m.y <= b.y + h + C.TOWN_ZOOM_MARGIN + 2)
-          return { zoom: C.TOWN_ZOOM_NEAR, headroom: spec.headroom || 0 };
+          return { zoom: C.TOWN_ZOOM_NEAR, headroom: (typeof spec.headroom === "function" ? spec.headroom(m) : spec.headroom) || 0 };
       }
       return { zoom: ZOOM, headroom: 0 };
     }
@@ -20937,10 +20971,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            marches), pas sur le bord de l'image — sinon un joueur planté sur
            les marches se ferait dessiner DESSOUS le sprite. */
         const sortY = (b.y + b.h - C.TOWN_COURT_STEP_ROWS) * T;
-        const e = elAt(b.x, b.y + b.h - 1);
-        pushE(sortY, e, () => {
+        const S = C.TOWN_COURT_SPRITE;
+        /* ⚠️⚠️⚠️ 2026-09-22 bis — DEUX ALTITUDES, ET C'EST TOUT LE CORRECTIF DE
+           PROFONDEUR. Le sprite était poussé à l'altitude de la PREMIÈRE MARCHE
+           (`elAt(b.x, b.y+b.h-1)`), ce qui a deux conséquences que Guillaume a
+           vues en jeu sans pouvoir les nommer :
+             · la clé de tri tombait SOUS celle d'un joueur monté au palier,
+               donc le bâtiment se dessinait par-dessus lui — il disparaissait
+               en arrivant devant la porte ;
+             · le dessin se calait sur le bas de son image, jamais sur un
+               repère du dessin, d'où le pied de l'escalier flottant ~9 px
+               au-dessus du parvis (« regarde bien l'alignement au sol »).
+           On sépare donc ce qui était confondu : `eFacade` (le palier, au pied
+           du mur) porte le TRI — c'est la profondeur réelle du bâtiment, et
+           elle laisse passer devant lui quiconque est sur le perron ; `eApron`
+           (le parvis) porte l'ANCRAGE — le pied de la volée peinte se pose
+           exactement sur la limite parvis/escalier. Les deux se LISENT dans le
+           monde, elles ne se recopient pas : le générateur est seul maître des
+           altitudes (fermeEngine.js, section RELIEF). */
+        const eApron = elAt(b.x + (b.w >> 1), b.y + b.h);
+        const eFacade = elAt(b.x + (b.w >> 1), b.y + b.h - C.TOWN_COURT_STEP_ROWS);
+        pushE(sortY, eFacade, () => {
           const cx2 = b.x * T + b.w * T / 2;
-          const GROW = 1.1; // même grossissement que les deux autres monuments
+          const GROW = S.grow; // même grossissement que les deux autres monuments
           /* ⚠️ 2026-09-22 — 256 px, PAS 192 COMME SES DEUX VOISINS. Demande de
              Guillaume, en jeu : « respecter l'échelle naturelle rapport entre
              taille perso et église ». Mesuré sur les deux PNG ramenés à 192 de
@@ -20956,22 +21009,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              bâtiment voisin. Visuel seul : l'emprise, la porte (nearCivicDoor)
              et la clé de tri ne bougent pas, comme pour les +10 % (§ ci-dessus,
              « LE GROSSISSEMENT NE TOUCHE QUE CE QUI SE PEINT »). */
-          const dispScale = 256 / day.width;
+          const dispScale = S.disp / day.width;
           const dw = day.width * dispScale, dh = day.height * dispScale;
           ctx.save();
           ctx.translate(cx2, by); ctx.scale(GROW, GROW); ctx.translate(-cx2, -by);
-          const dx = b.x * T + (b.w * T - dw) / 2, dy = by - dh;
-          const shx = cx2 + dw * 0.16, shy = by - 3;
+          const dx = b.x * T + (b.w * T - dw) / 2;
+          /* ⚠️ L'ANCRAGE PART DU PIED DE LA VOLÉE, PAS DU BAS DE L'IMAGE. Le PNG
+             garde quelques pixels de marge sous sa dernière marche, et le
+             contexte est déjà décalé de eFacade par `pushE` : on remonte donc
+             de ce que le perron fait gagner (÷ GROW, qui s'applique après). */
+          const dy = by + (eFacade - eApron) * C.TOWN_ELEV_PX / GROW - S.iyFoot * dispScale;
+          /* L'OMBRE PORTÉE ET L'EMBASE SE POSENT AU PIED DES AILES, pas au bas
+             de l'emprise : les ailes sont en retrait de la volée, donc elles
+             touchent le sol plus HAUT à l'écran. Posées sur `by` comme avant,
+             elles se retrouvaient 20 px sous la pierre, à flotter sur le
+             parvis. La largeur suit le corps mesuré (ixL..ixR), pas l'image
+             entière — le PNG a de la marge transparente sur ses deux bords. */
+          const footY = dy + S.iyWingBase * dispScale;
+          const bodyW = (S.ixR - S.ixL) * dispScale;
+          const shx = cx2 + bodyW * 0.16;
           ctx.save();
           for (let k = 0; k < 3; k++) {
             ctx.fillStyle = `rgba(20,16,12,${0.16 - k * 0.045})`;
             ctx.beginPath();
-            ctx.ellipse(shx, shy, dw * (0.42 - k * 0.06), dh * (0.10 - k * 0.02), 0, 0, Math.PI * 2);
+            ctx.ellipse(shx, footY - 3, bodyW * (0.46 - k * 0.07), dh * (0.10 - k * 0.02), 0, 0, Math.PI * 2);
             ctx.fill();
           }
           ctx.restore();
           ctx.drawImage(day, dx, dy, dw, dh);
-          drawBuildingFooting(ctx, cx2, by, dw / 2);
+          drawBuildingFooting(ctx, cx2, footY, bodyW / 2);
           /* 2026-09-22 — LES PIGEONS DU TRIBUNAL (demande de Guillaume, en jeu :
              hauteurs variables et cohérentes avec la taille des marches, pose
              possible au sommet, quelques-uns qui se suivent). Même moule que
@@ -21065,7 +21131,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               im = [set.down, set.mid, set.up, set.mid][wk] || set.glide;
             }
             if (!im) return;
-            const BIRD_SCALE = 1.333 / 1.5; // le tribunal s'affiche 1,33× plus grand que l'église (256 vs 192) : les oiseaux suivent
+            /* ⚠️⚠️ 2026-09-22 bis — 1/1,5, L'ÉCHELLE DU MONDE, ET SÛREMENT PAS
+               CELLE DU BÂTIMENT. La veille, ce facteur valait 1,333/1,5 « parce
+               que le tribunal s'affiche 1,33× plus grand que l'église » : c'est
+               le raisonnement retourné, et Guillaume l'a vu tout de suite (« la
+               taille des pigeons, pas du tout à l'échelle »). Un pigeon a une
+               taille dans le MONDE, la même sur une place, sur une église ou
+               sur un fronton ; c'est justement lui, posé sur la corniche, qui
+               DONNE l'échelle du bâtiment. Le faire grossir avec son perchoir
+               revient à supprimer le seul repère qui disait que le monument est
+               grand. Même valeur que les pigeons de la place (BIRD_DRAW_SCALE)
+               et que ceux de l'église : un seul oiseau, partout. */
+            const BIRD_SCALE = 1 / 1.5;
             const bdw = im.width * BIRD_SCALE, bdh = im.height * BIRD_SCALE;
             const behindK = bb.grounded ? 1 : 0.82 + 0.18 * Math.max(0, bb.depth);
             const dwB = bdw * behindK, dhB = bdh * behindK;

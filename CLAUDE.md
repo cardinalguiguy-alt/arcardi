@@ -7,66 +7,86 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-22 (session suivante) — Le tribunal est en jeu : sprite Gemini, escalier réel, pigeons, échelle corrigée
+### 2026-09-22 bis — Le tribunal repris sur cinq défauts vus en jeu : le dessin et la collision décrivaient deux bâtiments
 
-Guillaume a rapporté `refs/tributribu.jpg` (résultat du prompt préparé la veille) avec deux
-consignes fermes, données en regardant le rendu : « les escaliers devront être praticables, vraie
-physique à prévoir », « sensation d'altitude et de profondeur un peu ». Question posée (perron
-juste traversable, comme la mairie, VS vrai palier avec dénivelé) — Guillaume a choisi le vrai
-palier, malgré le risque plus élevé (ça touche `canStandTown`/`elev`, fragiles par nature). Puis,
-en observant le rendu en direct dans le navigateur : « respecter l'échelle naturelle […] taille
-perso et église », et des hauteurs de pigeons à revoir sur l'escalier.
+Guillaume a joué la livraison de la veille et rapporté **cinq défauts**, dont deux graves : « le
+dézoom ne permet pas de voir toute la structure » ; « la collision quand le joueur monte les
+marches n'est pas satisfaisante » (1 — plus de profondeur, 2 — « que la collision opère quand le
+perso est face à la porte, pas en dessous […] ce n'est pas le haut de la tête qui entre en
+collision avec les colonnes, mais son corps : vue en 3D où le perso est DEVANT l'obstacle. on a eu
+le même problème multiple times ») ; « l'emplacement doit être raffiné, regarde bien l'alignement
+au sol » ; « revoir la taille des pigeons, pas du tout à l'échelle » ; et **« énorme problème de
+collision sur les côtés de la structure, on passe à travers »**.
 
-**Le sprite.** `tools/build-tribunal-sprite.mjs` (nouveau, sur le modèle de
-`build-eglise-sprite.mjs`) → `public/town/courthouse-day.png`. ⚠️ Détourage RETRAVAILLÉ : la
-pierre « froide, presque du marbre » du prompt tombe dans la même plage neutre que le damier — le
-test « neutre + clair » des deux scripts précédents mangeait le fronton sculpté (mesuré : 36 % de
-l'image partaient au lieu des ~34 % réels, le trou mordait le bas-relief). Remplacé par un test de
-PÉRIODE (le damier alterne tous les ~13 px pile, la pierre jamais) : propre, vérifié à l'œil à
-l'échelle réelle.
+**La cause est unique, et c'est la leçon.** Le sprite s'affiche sur **17,6 × 16,3 cases** quand
+`TOWN_COURT` en fait **12 × 7** : plus rien ne se correspondait. Les deux ailes débordaient de 2,5
+cases de chaque côté au-dessus d'un sol resté libre (d'où la traversée) ; le palier peint tombait
+deux rangées au-dessus de la dernière case foulable (d'où le blocage sous la porte) ; l'escalier
+peint montait de 68 px à l'écran quand la grille n'en rendait que 53 (d'où le manque de
+profondeur) ; le pied de la volée flottait 9 px au-dessus du parvis. **Quatre symptômes, un seul
+défaut : personne n'avait jamais mesuré le dessin.**
 
-**L'escalier.** `C.TOWN_COURT_STEP_ROWS = 3` (fermeConstants.js) : les trois rangées sud du perron
-sortent de `solid` ET gagnent un `elev` réel (+0,06/rangée), posé DANS la section RELIEF de
-`generateTownWorld`, avant tout ce qui lit `elev` (§4 — mon premier jet l'avait posé trop tard,
-après `forecourt`, corrigé avant de tester). `ground` ne bouge pas : l'escalier est déjà peint dans
-le bitmap, un `G_TOWN_STAIR` ici en aurait doublé un. `verify-vallee` a aussitôt accusé « tribunal
-(2 altitudes) » : exception NOMMÉE ajoutée (`MIXED_OK`, même famille que `STREET_OK` de la
-mairie), qui vérifie que les paliers sont EXACTEMENT ceux attendus plutôt que de désarmer le
-contrôle. ⚠️⚠️ Vérifié en jeu, à la main : monter toute la volée peinte s'arrête pile au péristyle
-(porte + `E` fonctionnent depuis là), redescendre marche. Un test au clavier synthétique trop
-rapide (bourrasques sans le throttle naturel d'une vraie frappe) a fait UNE FOIS traverser le mur
-plein en un pas et grimper jusqu'au fronton, sous les yeux de Guillaume — pas un bogue du jeu, un
-artefact du harnais (§10 : un joueur réel avance ~1 px/frame, jamais assez pour tunneler dans un
-mur de quatre cases). Reconfirmé ensuite par petits pas lents, cinq essais : bloqué au même
-endroit à chaque fois.
+**La parade est une source unique**, `C.TOWN_COURT_SPRITE` (fermeConstants.js) : **six repères
+mesurés dans le PNG** (pied de la volée, palier, pied des ailes, bords du corps, volée en haut et
+en bas), d'où se dérivent `TOWN_COURT_STEP_RISE` (la marche vaut 0,1403 — **calculée**, plus
+choisie), `TOWN_COURT_COLL` (x=134..149), `TOWN_COURT_WING_ROW`, `courtStairSpan(y)` et
+`courtStepElev(y)`. La volée est un **trapèze** (12 → 10 → 8 cases en montant), parce que ses deux
+balustrades se resserrent ; l'altitude ne se pose plus que **sur elle**, jamais sur toute la
+largeur. ⚠️ **Deux altitudes distinctes là où il n'y en avait qu'une** : `eFacade` (le palier)
+porte la **clé de tri** — sans quoi le joueur arrivé devant la porte se faisait recouvrir par le
+bâtiment et **disparaissait** — et `eApron` (le parvis) porte l'**ancrage**. Les deux se LISENT
+dans le monde généré, elles ne se recopient pas. Le cadrage, lui, ne pouvait pas être une
+constante : la part de vue à récupérer au-dessus du joueur vaut « hauteur du monument ÷ hauteur de
+la fenêtre », donc `courtHeadroom(m)` la **calcule** et ancre la vue sur le sommet du dôme tant
+qu'elle n'est pas bornée. Les pigeons repassent à `1/1,5` — **l'échelle du monde** : la veille ils
+suivaient celle du bâtiment, ce qui est le raisonnement retourné (c'est le pigeon posé sur la
+corniche qui DIT que le monument est grand).
 
-**L'échelle.** Deux défauts trouvés en jeu, pas à la lecture : (1) `ctx.drawImage(day, dx, dy)`
-avait perdu `dw, dh` en route — le sprite se dessinait à sa résolution NATIVE (384 px) au lieu de
-la taille prévue ; corrigé. (2) Une fois corrigé, mesuré contre l'église (les deux PNG ramenés à
-192 de large) : porte de l'église ~42 px, porte du tribunal ~25 px — l'escalier peint y occupe une
-part de l'image que l'église, avec son parvis modeste, n'a pas, donc la porte et les colonnes s'y
-retrouvent compressées d'autant. Parité complète (×1,68) dépasserait la marge est du site, mesurée
-FRAÎCHE sur la vraie carte générée (4 cases = 64 px, la plus courte des quatre, cohérent avec le
-O5/E4 documenté) une fois le `GROW` ×1,1 appliqué. Réglé à 256 px d'affichage (×1,33 par rapport
-aux deux voisins, encore ×1,1 avec `GROW`) : ~45 px de marge consommée sur 64 disponibles de
-chaque côté, vérifié en jeu — colonnes et porte nettement plus lisibles, aucun chevauchement.
-`sprites.courthouse`/`courthouseSprite()` restent construits mais ne sont plus dessinés (même sort
-que `sprites.church`) — rien supprimé.
+⚠️ **`TOWN_COURT` n'a PAS été agrandi** : cette emprise sert de repère à `nearCivicDoor`, à
+`townZoomTarget` et à `forecourt`, qui parlent du bâtiment comme LIEU, pas de la place qu'il occupe
+au sol. Deux grandeurs différentes, deux noms (§4). La solidité élargie est posée **tard**, avec
+les autres bâtiments : déclarée plus tôt, elle aurait changé le compte de tirages des passes de
+décor et déplacé des arbres à l'autre bout de la ville (§4, la carte regénérée depuis sa graine).
 
-**Les pigeons.** Même moule que ceux de l'église (`drawChurchBitmap`) : pure fonction du temps,
-aucun état partagé. Treize points de pose mesurés sur le bitmap à 256 px (plusieurs hauteurs de
-marche, vasques de la balustrade, corniches des ailes, faîte du fronton, sommet du dôme), une
-orbite de vol autour du dôme, et deux oiseaux qui REJOUENT le vol de l'oiseau meneur décalés de
-quelques secondes pour « se suivre » sans état à réconcilier. Pas de passe « derrière » comme à
-l'église (un dôme est un solide plein, pas une flèche fine à contourner). Vu en jeu : vol et
-oiseaux au sol présents, aucune erreur console.
+**Vérification.** `verify-vallee` **231/231** (223 avant : +8 contrôles neufs sur le perron, dont
+« le palier tombe sur le seuil peint » — pieds 219,8 px contre seuil 219,8 px — et « les flancs
+bloquent sur toute la largeur du dessin »), **falsifiés tous les deux avant d'être crus** (l'ancien
+0,06 fait rougir le premier, les ailes rouvertes le second) ; `verify-collision` TOUT PASSE ;
+`verify-syntax` tout se parse ; bundle esbuild propre ; `next build` ✓ Compiled successfully.
+⚠️⚠️ **ET SURTOUT EN JEU, les cinq points un par un** : le dôme entier tient dans le cadre ; on
+monte la volée et on s'arrête **face à la porte, visible, l'invite affichée** ; on est bloqué net
+au pied de l'aile **gauche et droite** ; les pigeons sont à la taille des pigeons de la place.
 
-`verify-vallee` 223/223, `verify-collision` TOUT PASSE, `verify-syntax` propre, `next build`
-✓ Compiled successfully — **et regardé en direct par Guillaume pendant la session** (stairs,
-échelle, pigeons tous ajustés sur son retour en jeu, pas seulement aux bancs). Reste : une vraie
-soirée de jeu, à tête reposée, pour juger si « ça rend bien » au sens large.
+⚠️ **LA LEÇON, ET ELLE EST GÉNÉRALE** (elle vaut pour le prochain bâtiment de la refonte) : *un
+sprite importé n'apporte pas son emprise — il faut la MESURER, et la mesurer une fois pour que le
+dessin et la collision lisent le même nombre.* Six bancs au vert n'avaient rien vu de ce qu'une
+séance de jeu a trouvé, parce qu'aucun ne comparait la grille au DESSIN (§10).
+
+### 2026-09-22 — Le sprite du tribunal lui-même (livraison de la veille, ce qui en reste vrai)
+
+`tools/build-tribunal-sprite.mjs` (sur le modèle de `build-eglise-sprite.mjs`) →
+`public/town/courthouse-day.png`, dessiné par `drawCourthouseBitmap`. `sprites.courthouse` reste
+construit mais n'est plus dessiné (même sort que `sprites.church`). Affiché sur **256 px** de large
+et non 192 comme ses deux voisins — demande d'échelle de Guillaume (« respecter l'échelle
+naturelle, rapport entre taille perso et église ») : l'escalier peint occupe une part de l'image
+que l'église, avec son parvis modeste, n'a pas, donc à 192 la porte et les colonnes se retrouvaient
+compressées (porte mesurée ~25 px contre ~42 à l'église).
+⚠️ **LA LEÇON DE DÉTOURAGE, À REPRENDRE AU PROCHAIN SPRITE GEMINI** : la pierre « froide, presque
+du marbre » tombe dans la même plage neutre que le damier de fond, donc le test « neutre + clair »
+des deux scripts précédents mangeait le fronton sculpté (36 % de l'image partaient au lieu des
+~34 % réels, le trou mordait le bas-relief). Remplacé par un test de **PÉRIODE** : le damier
+alterne tous les ~13 px pile, la pierre jamais.
+⚠️ **ET UNE LEÇON DE HARNAIS (§10)** : un test au clavier synthétique en longues bourrasques (sans
+le throttle d'une vraie frappe) a fait traverser un mur plein en un pas, sous les yeux de
+Guillaume — artefact du harnais, pas du jeu (un joueur réel avance ~1 px/frame). **Toute
+vérification de collision se fait par petits pas répétés, jamais par une longue rafale.**
 
 ### Toujours en attente du retour de Guillaume en jeu (hors tribunal, ci-dessus)
+
+⚠️ **Le tribunal lui-même a été vu par Guillaume, corrigé sur son retour, et revérifié en jeu
+point par point** (bloc du 2026-09-22 bis). Ce qui reste à juger là-dessus n'est plus un défaut
+mesurable mais le RESSENTI : la montée est-elle agréable, le monument impressionne-t-il, la
+caméra qui s'ancre sur le dôme gêne-t-elle en circulant ? Rien de tout ça ne se mesure (§10).
 
 Cinq livraisons jamais rejouées par Guillaume, dans l'ordre : le tronc du pin (`richTrunk` sur la
 seule fiche `pine`, `render-arbres` 9/9, jamais vu en jeu à l'échelle réelle) ; le bois du sud-est
@@ -105,10 +125,13 @@ ferme peuplée à deux clients, suite de l'audit d'Où's that).
 
 ### ⏭️ ACTION SUIVANTE
 
-Attendre le retour de Guillaume après une vraie soirée de jeu : verdict sur le tribunal (au calme,
-pas seulement l'aperçu pendant la session) et sur les cinq livraisons plus anciennes du bloc
-ci-dessus. **Choisir quel bâtiment vient après le tribunal, et où continuer le bois si Guillaume en
-veut encore, se demandent à lui** — ça ne se décide pas seul (§2).
+Attendre que Guillaume rejoue le tribunal à tête reposée : les cinq défauts qu'il a signalés sont
+corrigés, mesurés et revus en jeu, mais **le ressenti de la montée et du cadrage n'a été jugé par
+personne sur une vraie partie** — et c'est la seule chose qui reste. Les cinq livraisons plus
+anciennes du bloc ci-dessus attendent toujours la même chose.
+**Choisir quel bâtiment vient après le tribunal se demande à lui** — ça ne se décide pas seul (§2).
+⚠️ Le jour où ce bâtiment-là arrive, **mesurer son sprite AVANT de poser sa collision** : c'est la
+leçon du 2026-09-22 bis, et elle coûtera le même prix si on l'oublie.
 
 ---
 
@@ -803,7 +826,7 @@ contrôle du dépôt qui voie une liaison entre deux fichiers.
 ⚠️ **`verify-ludo` est le deuxième banc qui joue une mécanique de mini-jeu** : il balaie 1 000
 plans légaux et tient les cinq chemins bot vers les arbitres de l'hôte. Son détail et ses limites
 sont dans `tools/README.md`.
-⚠️ **Le seul qui touche à de l'ARGENT est `verify-vallee`** (**223/223** au 2026-08-31 ; 208 avant le fleuve et la barque) : il joue des ventes,
+⚠️ **Le seul qui touche à de l'ARGENT est `verify-vallee`** (son compte du jour vit dans le bloc ⏭️ REPRISE, et NULLE PART AILLEURS — §14.2, leçon n°2 : ce chiffre a déjà eu deux endroits où mentir) : il joue des ventes,
 compte les pièces, et vérifie que **le cours est bit à bit celui du 430** — contrôle hérité de
 `verify-enquete`, sauvé de sa suppression parce qu'il protégeait le marché, pas l'enquête.
 **Tout chiffre écrit là-bas a été obtenu en lançant le banc**, c'est sa règle d'entrée.

@@ -189,6 +189,18 @@ for (let i = 0; i < W * H; i++) {
    et de la gare, bloquantes et pas encore rendues. C'est exactement le défaut
    des six cents haies du 425, attrapé cette fois AVANT d'aller en jeu. */
 for (const b of [C.TOWN_CHURCH, C.TOWN_HALL, C.TOWN_COURT, C.TOWN_BOUTIQUE, C.TOWN_SALON, C.TOWN_STATION]) markRect(b);
+/* ⚠️⚠️ 2026-09-22 bis — LE TRIBUNAL EST PLUS LARGE QUE SON EMPRISE, ET CE BANC
+   L'A RÉCLAMÉ TOUT SEUL : 24 cases bloquantes orphelines au premier lancement
+   après l'élargissement, exactement comme les trois bâtiments du 427 ci-dessus.
+   Ce ne sont pas des murs invisibles — ce sont les deux AILES du sprite, qui
+   débordent de 2,5 cases de chaque côté de `TOWN_COURT` et qu'on traversait
+   jusqu'ici faute de sol solide dessous (signalé en jeu par Guillaume).
+   ⚠️ ON MARQUE L'EMPRISE DÉRIVÉE DU SPRITE (`TOWN_COURT_COLL`), PAS UN
+   RECTANGLE RECOPIÉ : si le dessin change, le banc suit le même nombre que le
+   générateur et que le rendu — sinon il redeviendrait l'accusateur d'un défaut
+   qui n'existe plus, ou le complice d'un qui apparaît. */
+for (let y = C.TOWN_COURT.y; y <= C.TOWN_COURT_WING_ROW; y++)
+  for (let x = C.TOWN_COURT_COLL.x0; x <= C.TOWN_COURT_COLL.x1; x++) mark(x, y);
 for (const h of C.TOWN_HOUSES) markRect({ x: h.x, y: h.y }, C.TOWN_HOUSE_W, C.TOWN_HOUSE_H);
 for (const p of tw.props) mark(p.x, p.y);
 /* ZIP 467 — ces obstacles sont visibles dans le bloc unique, pas dans `props`.
@@ -266,8 +278,10 @@ section("Valley Town — géométrie");
   /* ⚠️⚠️ 2026-09-22 — MÊME FAMILLE QUE `STREET_OK` CI-DESSUS, MÊME RAISON
      D'ÊTRE : une exception NOMMÉE, jamais un seuil desserré en silence (§10
      CLAUDE.md). Le tribunal porte désormais un vrai petit perron en paliers
-     (`TOWN_COURT_STEP_ROWS`, fermeConstants.js) — trois marches, chacune
-     +0,06, donc « deux altitudes » dans son emprise EST le but, pas un
+     (`TOWN_COURT_STEP_ROWS`, fermeConstants.js) — trois marches, chacune de
+     `TOWN_COURT_STEP_RISE` (dérivée du sprite, 2026-09-22 bis : surtout pas un
+     nombre recopié ici, il a déjà changé une fois et ce commentaire l'avait
+     gardé faux), donc « deux altitudes » dans son emprise EST le but, pas un
      bâtiment posé par accident à cheval sur une falaise. Le test se refait
      précis plutôt que de renoncer à ce qu'il cherchait : il exige que le
      tribunal ne porte QUE les paliers attendus (une valeur par rangée, un pas
@@ -294,6 +308,100 @@ section("Valley Town — géométrie");
     if (mixed || onStreet || onStair) bad.push(`${name}${mixed ? " (2 altitudes)" : ""}${onStreet ? " (sur une rue)" : ""}${onStair ? " (sur un escalier)" : ""}`);
   }
   ok("aucun bâtiment sur une rue, un escalier ou à cheval sur deux altitudes", bad.length === 0, bad.join(" · "));
+}
+
+/* ╔═════════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-22 bis — LE PERRON DU TRIBUNAL, MESURÉ CONTRE SON DESSIN.
+   ║ ─────────────────────────────────────────────────────────────────────────────
+   ║ ⚠️⚠️ CES CONTRÔLES EXISTENT PARCE QUE SIX BANCS AU VERT N'AVAIENT RIEN VU DE
+   ║ CE QUE GUILLAUME A TROUVÉ EN VINGT MINUTES DE JEU : on traversait les ailes,
+   ║ on butait deux rangées sous la porte, l'escalier ne « se ressentait » pas.
+   ║ Aucun d'eux ne mesurait la seule chose qui compte ici — l'ACCORD entre ce
+   ║ que le sprite montre et ce que la grille fait (§10 CLAUDE.md, « un banc
+   ║ protège de ce qu'on a déjà compris »). Ils comparent donc systématiquement
+   ║ la collision aux repères mesurés du PNG (TOWN_COURT_SPRITE), jamais à des
+   ║ nombres recopiés : c'est la seule écriture qui reste vraie si le dessin
+   ║ change.
+   ╚═════════════════════════════════════════════════════════════════════════════ */
+section("Valley Town — le perron du tribunal");
+{
+  const b = C.TOWN_COURT, K = C.TOWN_COURT_COLL, S = C.TOWN_COURT_SPRITE;
+  const landing = b.y + b.h - C.TOWN_COURT_STEP_ROWS;      // la rangée du palier
+  const apron = tw.elev[idx(b.x + (b.w >> 1), b.y + b.h)];
+  const k = (S.disp / S.iw) * S.grow;
+
+  ok("la marche tient sous TOWN_STEP_MAX", C.TOWN_COURT_STEP_RISE > 0 && C.TOWN_COURT_STEP_RISE <= C.TOWN_STEP_MAX,
+     `${C.TOWN_COURT_STEP_RISE.toFixed(4)} ≤ ${C.TOWN_STEP_MAX}`);
+
+  /* ⚠️ LE CONTRÔLE QUI TIENT LE SYMPTÔME DE GUILLAUME (« la collision doit
+     opérer quand le perso est face à la porte, pas en dessous »). Le joueur
+     debout au bord nord du palier doit avoir les pieds EXACTEMENT au niveau du
+     seuil peint. Un écart d'une case ici, c'est un joueur qui bute sous la
+     porte — et c'est invisible partout ailleurs. */
+  const feetAtLanding = landing * C.TILE - tw.elev[idx(b.x + (b.w >> 1), landing)] * C.TOWN_ELEV_PX;
+  const paintedSill = (b.y + b.h) * C.TILE - apron * C.TOWN_ELEV_PX + (S.iyLanding - S.iyFoot) * k;
+  ok("le palier tombe sur le seuil peint", Math.abs(feetAtLanding - paintedSill) < 1,
+     `pieds ${feetAtLanding.toFixed(1)} px · seuil ${paintedSill.toFixed(1)} px`);
+
+  // On monte VRAIMENT jusque-là : sans ça, tout le reste est décoratif.
+  const spanTop = C.courtStairSpan(landing);
+  let unreachable = [];
+  for (let x = spanTop.x0; x <= spanTop.x1; x++) if (!reach(x, landing)) unreachable.push(`(${x},${landing})`);
+  ok("tout le palier s'atteint à pied depuis le parvis", unreachable.length === 0, unreachable.join(" ") || `${spanTop.x1 - spanTop.x0 + 1} cases`);
+
+  // Et on s'y trouve devant la porte, au sens exact de nearCivicDoor.
+  {
+    const doorX = b.x + b.w / 2, doorY = b.y + b.h - C.TOWN_COURT_STEP_ROWS + 0.5;
+    const mid = (spanTop.x0 + spanTop.x1) >> 1;
+    ok("le palier est dans la zone de la porte (E)",
+       Math.abs(mid + 0.5 - doorX) <= b.w / 2 && Math.abs(landing - doorY) <= 1.6,
+       `depuis (${mid},${landing}) vers (${doorX},${doorY})`);
+  }
+
+  /* ⚠️ LE CONTRÔLE DE LA TRAVERSÉE LATÉRALE. Tout ce que le sprite peint en
+     pierre — c'est-à-dire l'emprise du corps moins la volée — doit bloquer. */
+  let holes = [];
+  for (let y = b.y; y <= C.TOWN_COURT_WING_ROW; y++) {
+    const span = C.courtStairSpan(y);
+    for (let x = K.x0; x <= K.x1; x++) {
+      if (span && x >= span.x0 && x <= span.x1) continue;
+      if (!tw.solid[idx(x, y)]) holes.push(`(${x},${y})`);
+    }
+  }
+  ok("les flancs du tribunal bloquent sur toute la largeur du dessin", holes.length === 0,
+     holes.slice(0, 10).join(" ") || `x=${K.x0}..${K.x1}, y=${b.y}..${C.TOWN_COURT_WING_ROW}`);
+
+  // La volée est un TRAPÈZE : elle rétrécit en montant, comme ses balustrades.
+  {
+    const w = [];
+    for (let y = b.y + b.h - 1; y >= landing; y--) { const s = C.courtStairSpan(y); w.push(s.x1 - s.x0 + 1); }
+    ok("la volée rétrécit à chaque marche", w.every((v, i) => i === 0 || v < w[i - 1]), w.join(" → ") + " cases");
+  }
+
+  // Chaque marche porte l'altitude dérivée du dessin, et elle seule.
+  {
+    let wrong = [];
+    for (let y = b.y + b.h - 1; y >= landing; y--) {
+      const s = C.courtStairSpan(y), want = C.courtStepElev(y, apron);
+      for (let x = s.x0; x <= s.x1; x++) if (Math.abs(tw.elev[idx(x, y)] - want) > 0.001) wrong.push(`(${x},${y})`);
+    }
+    ok("chaque marche porte l'altitude dérivée du sprite", wrong.length === 0, wrong.slice(0, 8).join(" ") || "3 rangées");
+  }
+
+  /* ⚠️ ET L'INVERSE, qui est le défaut qu'on vient de corriger : AUCUNE case
+     hors de la volée ne doit avoir gagné une altitude de perron. C'est elle qui
+     faisait monter le joueur dans le soubassement des ailes. */
+  {
+    let stray = [];
+    for (let y = b.y; y <= b.y + b.h; y++) {
+      const s = C.courtStairSpan(y);
+      for (let x = K.x0; x <= K.x1; x++) {
+        if (s && x >= s.x0 && x <= s.x1) continue;
+        if (Math.abs(tw.elev[idx(x, y)] - apron) > 0.001) stray.push(`(${x},${y})`);
+      }
+    }
+    ok("aucune altitude de perron hors de la volée", stray.length === 0, stray.slice(0, 8).join(" ") || `parvis à ${apron}`);
+  }
 }
 /* ╔═════════════════════════════════════════════════════════════════════════════
    ║ ZIP 450 — LE CHANTIER NAVAL. TROIS CONTRÔLES, ET LE DEUXIÈME EST CELUI DU 444.

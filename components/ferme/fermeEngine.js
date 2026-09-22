@@ -4377,18 +4377,32 @@ export function generateTownWorld() {
   }
   /* 2026-09-22 — LE PERRON DU TRIBUNAL, AVEC LE RESTE DU RELIEF ET DANS LE MÊME
      ORDRE STRICT QUE LUI (voir la note ci-dessus : posé plus tard, un parvis ou
-     un décor l'aurait lu à plat). Trois petites marches, chacune +0,06 — loin
-     sous TOWN_STEP_MAX (0,34), franchissables sans aucun cas particulier dans
-     `canStandTown`, exactement comme TOWN_STAIRS (voir TOWN_COURT_STEP_ROWS,
-     fermeConstants.js). ⚠️ `ground` NE BOUGE PAS : l'escalier est déjà peint
-     dans le sprite bitmap (courthouse-day.png) — un `G_TOWN_STAIR` ici
-     doublerait un escalier déjà visible. */
+     un décor l'aurait lu à plat). ⚠️ `ground` NE BOUGE PAS : l'escalier est
+     déjà peint dans le sprite bitmap (courthouse-day.png) — un `G_TOWN_STAIR`
+     ici doublerait un escalier déjà visible.
+     ⚠️⚠️ 2026-09-22 bis — L'ALTITUDE ET LA LARGEUR SONT MAINTENANT MESURÉES SUR
+     LE SPRITE, PAS CHOISIES (voir TOWN_COURT_SPRITE, fermeConstants.js). Deux
+     choses changent, toutes deux signalées en jeu par Guillaume :
+       · la marche vaut TOWN_COURT_STEP_RISE (~0,14) et non 0,06 — la valeur
+         posée à la main ne rendait que les trois quarts de la montée peinte,
+         d'où un escalier qui « ne se ressentait pas » ;
+       · l'altitude ne couvre plus toute la largeur de l'emprise mais la seule
+         VOLÉE (`courtStairSpan`), qui est un trapèze : au-delà de ses deux
+         balustrades, ce que le sprite montre n'est pas une marche mais le
+         soubassement des ailes, et une case de perron posée dessous faisait
+         monter le joueur DANS le mur. */
+  /* ⚠️ L'ALTITUDE DU PARVIS SE LIT, ELLE NE SE SUPPOSE PAS : le perron part de
+     ce qui est SOUS lui (la Haute-Ville, posée quelques lignes plus haut). Une
+     constante « 1 » recopiée ici mentirait le jour où le plateau bougerait, et
+     le joueur monterait une marche de travers sans qu'une seule erreur sorte. */
+  const courtApron = elev[id(C.TOWN_COURT.x + (C.TOWN_COURT.w >> 1), C.TOWN_COURT.y + C.TOWN_COURT.h)] || 1;
   for (let k = 0; k < C.TOWN_COURT_STEP_ROWS; k++) {
     const y = C.TOWN_COURT.y + C.TOWN_COURT.h - 1 - k;
-    const h = 1 + 0.06 * (k + 1);
-    for (let x = C.TOWN_COURT.x; x < C.TOWN_COURT.x + C.TOWN_COURT.w; x++) {
+    const span = C.courtStairSpan(y);
+    if (!span) continue;
+    for (let x = span.x0; x <= span.x1; x++) {
       if (!inMap(x, y)) continue;
-      elev[id(x, y)] = h;
+      elev[id(x, y)] = C.courtStepElev(y, courtApron);
     }
   }
   /* ⚠️ LES GARDE-CORPS SONT POSÉS ICI, AVEC LE RELIEF, ET PAS AVEC LES DÉCORS.
@@ -4624,6 +4638,36 @@ export function generateTownWorld() {
   for (const b of [C.TOWN_CHURCH, C.TOWN_HALL, C.TOWN_COURT, C.TOWN_BOUTIQUE, C.TOWN_SALON]) {
     const stepRows = b === C.TOWN_HALL ? C.TOWN_HALL_STEP_ROWS : b === C.TOWN_COURT ? C.TOWN_COURT_STEP_ROWS : 0;
     rect(b, (x, y, i) => { if (y < b.y + b.h - stepRows) solid[i] = 1; });
+  }
+  /* ⚠️⚠️⚠️ 2026-09-22 bis — LE TRIBUNAL EST PLUS LARGE QUE SON EMPRISE, ET ÇA SE
+     TRAVERSAIT. Signalé en jeu par Guillaume (« énorme problème de collision sur
+     les côtés de la structure, on passe à travers »). Le sprite s'affiche sur
+     17,6 cases quand `TOWN_COURT` en fait 12 : ses deux ailes débordaient de
+     2,5 cases de chaque côté, au-dessus d'un sol resté libre. La boucle
+     ci-dessus ne peut pas le voir — elle raisonne sur l'emprise logique, la
+     seule que connaissent la porte, le zoom et le parvis.
+     ⚠️ ON NE CORRIGE PAS EN GROSSISSANT `TOWN_COURT` : cette emprise sert de
+     repère à `nearCivicDoor`, à `townZoomTarget` et à `forecourt`, qui parlent
+     tous du bâtiment comme LIEU, pas de la place qu'il occupe au sol. Les deux
+     grandeurs sont différentes ; elles portent donc deux noms (§4).
+     ⚠️ POSÉ ICI, APRÈS LES DÉCORS ET AVEC LES AUTRES BÂTIMENTS, VOLONTAIREMENT :
+     la carte de Valley Town se regénère depuis une graine fixe, et une case
+     déclarée occupée plus TÔT changerait le compte de tirages des passes de
+     décor — donc déplacerait des arbres à l'autre bout de la ville pour une
+     correction qui ne concerne que ce bâtiment (le piège de la repousse, §4).
+     On vérifie en contrepartie qu'aucun décor n'est resté dessous : c'est le
+     rôle du contrôle « rien sous les ailes » de verify-vallee. */
+  {
+    const b = C.TOWN_COURT, K = C.TOWN_COURT_COLL;
+    for (let y = b.y; y <= C.TOWN_COURT_WING_ROW; y++) {
+      const span = C.courtStairSpan(y);
+      for (let x = K.x0; x <= K.x1; x++) {
+        if (!inMap(x, y)) continue;
+        // la volée reste foulable ; tout le reste du dessin est de la pierre
+        if (span && x >= span.x0 && x <= span.x1) continue;
+        solid[id(x, y)] = 1;
+      }
+    }
   }
 
   /* LES DEUX BANCS DU PARVIS DE L'ÉGLISE (2026-09-21, demande de Guillaume :
