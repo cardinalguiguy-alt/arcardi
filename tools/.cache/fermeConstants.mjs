@@ -3718,6 +3718,50 @@ export const BOAT_SEATS = 2;         // le pilote, et un passager — comme la m
    taillis, puis la futaie. C'est ce gradient, et lui seul, qui rend lisible
    « le chemin s'arrête avant que ça devienne trop dense ». */
 export const TOWN_WOOD = { x: 156, y: 152, w: 68, h: 16 };  // l'emprise où le bois a le droit de pousser
+/* ⚠️⚠️⚠️ 2026-09-21 — LE PROLONGEMENT NORD N'EST PAS CE RECTANGLE ÉLARGI, ET ÇA
+   A COÛTÉ UN ALLER-RETOUR DE LE DÉCOUVRIR. Demande de Guillaume : « même
+   grande densité que le coin sud-est, étends ça encore un peu plus, toujours à
+   l'est de la map, l'extrémité, et la partie sud ». Mesuré avant d'écrire une
+   ligne (§8) : `TOWN_WOOD` touche déjà les deux bords vrais de la carte
+   (x=224, y=168) — rien à gagner à l'est ou au sud, c'est déjà la frontière.
+   Le seul agrandissement qui ajoute de la vraie terre plantable est vers le
+   NORD : la bande y:132-152 (x:156-224) est mesurée à 60-80 cases d'herbe sur
+   68 à chaque rangée, encore entièrement libre. 132 n'est pas rond : c'est
+   `TOWN_ARTISANS.y + TOWN_ARTISANS.h` (36+96), le bord sud du quartier des
+   artisans — la bande s'arrête pile là où commence un quartier qui a sa propre
+   identité, pas de forêt sauvage.
+   ⚠️⚠️ PREMIER JET : ÉLARGIR `TOWN_WOOD` LUI-MÊME (`y:132,h:36`), ET C'ÉTAIT UNE
+   ERREUR TROUVÉE PAR `verify-collision`, PAS PAR RELECTURE. La futaie du coin
+   sud-est se plante dans la MÊME passe que le sentier de la rive est, LONGTEMPS
+   avant la fin du générateur — avant le semis d'arbres épars de bordure
+   (`put`, plus bas) et avant les buissons en amas (le cluster de fin de
+   fonction). Élargir `TOWN_WOOD` faisait planter la nouvelle bande d'arbres
+   DANS CETTE MÊME PASSE PRÉCOCE : les cases qu'elle occupe ne sont plus
+   libres quand `put()` (le semis de bordure, colonne est) et le cluster de fin
+   de fonction les atteignent PLUS TARD dans la MÊME exécution — et un refus de
+   `put()`/du cluster ne consomme AUCUN tirage de `rnd()` (§8 de CLAUDE.md, déjà
+   payé sur `plantTree`/`compoFree` juste au-dessus) : tout ce que `rnd()` place
+   ensuite se décale. Résultat mesuré : une touffe d'herbe ambiante (`grassTuft`)
+   déplacée à (151,10) — à l'AUTRE BOUT DE LA CARTE, sans aucun rapport
+   géographique avec le bois — et coincée contre un bâtiment voisin, où
+   `verify-collision` refusait de la traverser au sud. Vérifié sur 189 valeurs
+   de bruit différentes pour la nouvelle bande (`TOWN_WOOD_NORTH_SALT`) : LA
+   MÊME collision revient à chaque fois (151,10) ou (148,10) — ce n'est pas un
+   tirage malchanceux qu'un autre sel éviterait, c'est la même quantité de
+   cases nouvellement occupées qui décale le compte de `rnd()` d'à peu près
+   toujours le même nombre de crans. *Le sel ne pouvait pas réparer un défaut
+   d'ORDRE.*
+   ⚠️ LA PARADE EST DONC DE NE JAMAIS TOUCHER `TOWN_WOOD` NI SA PASSE : le
+   prolongement nord est un rectangle À PART (`TOWN_WOOD_NORTH_AREA`), planté
+   par son propre bloc, à la TOUTE FIN de `generateTownWorld` — après le
+   dernier `rnd()` qui compte (le cluster de buissons, dont le commentaire dit
+   lui-même « dernière passe, aucun tirage suivant n'en dépend »). Ainsi TOUT
+   ce qui existait avant (le semis de bordure, le cluster, et tout ce que
+   `rnd()` y tire) tourne à l'IDENTIQUE de la carte d'avant ce zip, bit pour
+   bit — la nouvelle futaie ne fait que REMPLIR ce qui est encore libre une
+   fois tout le reste posé, exactement comme `TOWN_WOOD` coexiste déjà avec le
+   mobilier qui le précède dans sa propre passe. */
+export const TOWN_WOOD_NORTH_AREA = { x: 156, y: 132, w: 68, h: TOWN_WOOD.y - 132 };  // h dérivé : atteint pile la jonction, quel que soit TOWN_WOOD.y
 /* Le fond du champ : la profondeur croît vers le SUD-EST, donc vers le coin de
    la carte. Les deux pentes sont en cases de profondeur par case parcourue. */
 /* ⚠️⚠️ LES DEUX PENTES ET L'ORIGINE ONT ÉTÉ REPRISES ENSEMBLE LE 2026-08-31,
@@ -3811,6 +3855,33 @@ export const TOWN_WOOD_GRASS_DENSITY = 0.97;
    (+80 ouest/+20 nord, contre +40/+8 pour la frange précédente) — aucun gain
    mesuré au-delà, jusqu'à +160/+80 testés. */
 export const TOWN_WOOD_GRASS_FRINGE = 10;
+/* ⚠️⚠️⚠️ 2026-09-21 — LE PROLONGEMENT NORD, LUI, N'EST PAS CE FICHIER-CI. La
+   forme naturelle (« étendre le champ existant ») a été essayée deux fois et
+   défaite deux fois — les deux histoires sont sur `TOWN_WOOD` et sur
+   `townWoodDepth`/`townWoodNorthDepth` (fermeEngine.js), pas ici, pour ne pas
+   les raconter à deux endroits (§14.2 de CLAUDE.md). Ce qui reste VRAI ici,
+   et qui a sa place dans ce fichier de réglages : la FORME du second champ,
+   et le chiffre qui la rend sûre.
+   ⚠️ ORIGINE AU COIN NORD-EST DE LA BANDE (`TOWN_WOOD_NORTH_AREA`), PAS AU
+   MÊME POINT QUE L'ANCIEN CHAMP : les deux pentes (est dominant, nord
+   secondaire) dessinent un coin qui s'évase en approchant la vraie lisière
+   est (x=224) et la jonction avec l'ancien bois — une pointe étroite tout en
+   haut (quelques cases contre le bord est, à y=132) qui s'élargit en
+   descendant, jamais un mur tiré à la règle (§4 de CLAUDE.md).
+   ⚠️⚠️ LE BRUIT SEUL PEUT ENFERMER UNE CLAIRIÈRE, INDÉPENDAMMENT DE TOUT LE
+   RESTE (ET DE L'ORDRE DES PASSES, DÉJÀ RÉGLÉ PAR LE BLOC QUI PLANTE CETTE
+   BANDE — voir `generateTownWorld`). Balayé sur 124 tirages (3 à 249, pair),
+   contre `townNav` RÉEL, jamais réglé à l'œil (§8) : la plupart enferment une
+   poche de 67 cases toujours à la même géométrie (la lisière du quartier des
+   artisans referme un angle), certains une seconde de 20. Cinq tirages
+   rendent zéro poche de plus de 8 cases (43, 51, 105, 141, 219) ; `salt=141`
+   est retenu, densité d'arbres 160/1192 (13,4 %) de la bande — du même ordre
+   que les autres tirages propres, un tirage moyen plutôt qu'un extrême choisi
+   pour forcer le passage. */
+export const TOWN_WOOD_NORTH_ORIGIN = { x: 205, y: 132 };
+export const TOWN_WOOD_NORTH_SLOPE_X = 0.55;
+export const TOWN_WOOD_NORTH_SLOPE_Y = 0.35;
+export const TOWN_WOOD_NORTH_SALT = 141;
 /* ⚠️ LE SENTIER NE RÉTRÉCIT PAS, IL SE TROUE. C'est la parade au piège payé
    quatre fois au 437 (« une allée d'une case de large ne montre que ses
    marches ») : un chemin qui s'efface en passant de deux cases à une redevient

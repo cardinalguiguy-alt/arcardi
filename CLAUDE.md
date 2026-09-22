@@ -7,136 +7,60 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-21 (session suivante) — Damier résiduel de l'église, vol des pigeons ENCORE retouché, bancs à pain devant le parvis, bouton « changer de ferme » (puis CORRIGÉ en relisant ce fichier), le cœur de ville réorganisé autour de la fontaine, la fontaine elle-même refaite, et la collision résidents/buissons corrigée
+### 2026-09-21 (session suivante) — Le bois du sud-est étendu vers le nord, tout le long du bord est
 
-Guillaume, en jeu, a d'abord pointé le reste du damier de la veille (§ session précédente,
-« l'église a encore le damier caractéristique des png entre les arcs »), puis a enchaîné en rafale
-sur les pigeons, un bouton de changement de ferme, et une réorganisation du cœur de ville — «
-caveman on » a coupé court aux questions en cours de route : tout ce qui suit est exécuté, pas
-proposé.
+Guillaume : « ajoute des arbres et de l'herbe, même grande densité que le coin sud-est de valley
+town, mais étends ça encore un peu plus toujours à l'est de la map, l'extrémité, et la partie sud ».
 
-**Damier résiduel** : le flood fill de `build-eglise-sprite.mjs` ne partait QUE des quatre bords de
-l'image — un damier ENCLAVÉ (le vide sous une arche-boutant, entouré de pierre des quatre côtés,
-jamais touché par un bord) restait donc en pixels bruts. Mesuré : quatre poches de 2 339 à 2 732 px,
-une par arche-boutant (gauche et droite, haute et basse). ⚠️ Repêchées par une passe qui cherche
-TOUTE composante connexe de damier, où qu'elle soit, mais seulement au-delà de 1 000 px : le pignon
-central porte un VRAI bandeau de pierre en damier (150 px, mesuré) que la même passe aurait effacé
-sans ce seuil — rien n'existe entre 150 et 2 339, la marge est large. Le petit artefact noir du
-clocher droit (connu depuis la veille) résiste toujours : sa couleur est trop sombre pour le test de
-damier, et une règle plus large aurait mangé de vrais reliefs sombres ailleurs sur le bâtiment — laissé
-tel quel, invisible à l'échelle d'affichage.
+Mesuré avant d'écrire une ligne (§8) : `TOWN_WOOD` touchait déjà les deux bords vrais de la carte
+(x=224, y=168) — rien à gagner à l'est ou au sud, c'est déjà la frontière. La seule vraie terre
+encore libre est au NORD, entre le bois et le quartier des artisans (y:132-152, 60-80 cases d'herbe
+libres par rangée). Le prolongement est donc un second champ de densité, indépendant
+(`townWoodNorthDepth`, fermeEngine.js ; origine/pentes/sel dans `TOWN_WOOD_NORTH_*`,
+fermeConstants.js) — jamais une modification du champ ni du rectangle d'origine.
 
-**Pigeons, deuxième retouche** : trois défauts nommés par Guillaume — vol trop mécanique, jamais
-posé sur une croix, jamais vraiment « autour » des clochers. `pigeonState` (FermeGame.js,
-`drawChurchBitmap`) gagne un jitter par oiseau (rayon et centre d'orbite dérivés de `hash01(i)`,
-jamais `Math.random` — ce dessin reste une fonction pure du temps) et une vitesse angulaire qui
-respire (deux sinusoïdes de fréquence différente, amplitude bornée pour ne JAMAIS annuler la vitesse
-— un vol qui rebrousse chemin se lit comme un bogue, pas comme un vol naturel). Rayon vertical des
-clochers doublé (8→15) : c'est lui, pas la vitesse, qui faisait lire « flotte devant la façade »
-plutôt que « tourne autour ». Répartition 2/1/2 (gauche/centre/droite) au lieu de 2/2/1 : les
-CLOCHERS d'abord, la base de flèche ensuite. Trois nouveaux perchoirs sur les barres des croix
-(mesurées à la loupe, pas la pointe — un pixel unique n'accueille rien).
+⚠️⚠️ **DEUX VRAIS DÉFAUTS TROUVÉS PAR LES BANCS, AUCUN PAR RELECTURE :**
+1. Un premier jet fondait les deux champs par `Math.max` sans frontière entre les deux : le nouveau
+   terme grandit avec `y` sans redescendre, et finissait par DÉPASSER l'ancien champ au sud de la
+   jonction — changeant la densité du coin déjà approuvé trois fois. `verify-vallee` a trouvé deux
+   clairières enfermées DANS L'ANCIEN BOIS, à quinze cases du nouveau. Corrigé en séparant
+   complètement les deux : `townWoodDepth` n'a plus bougé d'un bit, le nouveau terme vit dans sa
+   propre fonction.
+2. Une fois ça corrigé, planter la nouvelle bande AU MÊME ENDROIT DU GÉNÉRATEUR que l'ancien bois
+   (une passe précoce, avant le semis d'arbres épars et le cluster de buissons de fin de fonction)
+   occupait des cases que ces passes-là auraient sondées PLUS TARD dans la même exécution — et un
+   refus ne consomme aucun tirage de `rnd()` (§4 de CLAUDE.md, leçon déjà payée sur `plantTree`) :
+   tout ce que `rnd()` place ensuite se décale. Résultat mesuré : une touffe d'herbe ambiante
+   déplacée à (151,10), À L'AUTRE BOUT DE LA CARTE, coincée contre un bâtiment — `verify-collision`
+   l'a trouvé, rien d'autre n'aurait pu. Corrigé en déplaçant le bloc qui plante la nouvelle bande à
+   la TOUTE FIN de `generateTownWorld`, après le dernier `rnd()` qui compte : aucune passe antérieure
+   n'est plus perturbée, la carte d'avant ce zip est reproduite bit pour bit jusque-là.
+⚠️ **Leçon générale pour la prochaine extension de ce genre** : une carte à graine unique ne tolère
+aucune case nouvellement occupée AVANT la fin des passes qui lisent encore `rnd()` — même un ajout
+purement déterministe (hachage, jamais `rnd()`) peut décaler tout le reste s'il occupe une case
+qu'une passe `rnd()` ultérieure aurait sondée. *Le sel ne répare pas un défaut d'ordre.*
 
-**Deux bancs devant le parvis** (`fermeEngine.js`) : jetés du pain, ils attirent désormais de VRAIS
-pigeons au sol — pas ceux qui tournent autour des flèches (système décoratif sans état, inchangé),
-mais une nouvelle entrée dans `townFlocks()` (le même mécanisme que la place et le tribunal). ⚠️ La
-leçon qui a coûté un aller-retour : **un banc seul ne suffit pas**, `throwCrumbs()` marche depuis
-n'importe quel banc de la ville mais n'attire personne s'il n'y a pas de SITE de volée à proximité
-(la Boutique et le Salon en ont déjà fait les frais, silencieusement, avant aujourd'hui). Vérifié en
-jeu de bout en bout : assis, pain jeté, pigeons accourus au sol.
+`verify-vallee` (223/223), `verify-collision` (TOUT PASSE), `verify-compo` et `verify-syntax`
+rejoués après le correctif final. Vérifié en jeu (fake-supabase + harnais jetable, supprimé,
+téléport dev « la passe » puis marche) : le bois hachure maintenant tout le bord est depuis le
+quartier des artisans jusqu'à la rive — mélange de conifères/feuillus et sous-bois dense, comme le
+coin d'origine —, lisière ouest en dégradé organique (aucun mur droit), transition propre contre le
+mur du quartier des artisans au nord. Aucun banc ne juge « agréable » : ça reste à Guillaume.
+Aucune manipulation Supabase, pas de `next build` (aucun serveur ne tournait avant, arrêté après).
 
-**Bouton « 🚜 Changer de ferme », CORRIGÉ dans la foulée** (Guillaume, en relisant ce fichier : « doit
-pas renvoyer vers la page d'accueil arcardi, mais vers le choix de nom de ferme »). La version du
-matin (paragraphe ci-dessus dans l'historique de ce fichier) avait tranché trop vite : « chaque
-salon a sa propre ferme, donc changer de ferme = changer de salon » supposait un lien entre les deux
-qui n'existe pas dans le code — `loadFarmByCode` identifie une ferme par son propre code
-(`ferme_saves.code`), indépendant de `room.id`. `changeFarm()` (FermeGame.js, HÔTE SEULEMENT) revient
-donc à l'écran "code" SANS quitter le salon, sur le modèle de `changeCharacter()` pour l'écran de
-personnage. `loadFarmByCode` (déclenché quand l'hôte valide un nouveau code) refait tout le travail
-de réinitialisation lui-même — même chemin qu'au tout premier chargement — à trois exceptions
-près : une dernière sauvegarde de la ferme qu'on quitte ; `worldRef.current` remis à vide (sinon un
-invité qui se reconnecte pendant l'hésitation de l'hôte recevrait un instantané de la ferme
-abandonnée) ; et un signal `farmReset` pour les invités DÉJÀ connectés, qui ne renvoient plus jamais
-de `hello` une fois rejoints — sans ce signal ils resteraient figés sur la dernière image pour
-toujours. Un invité, lui, garde l'ancien comportement (quitter le salon) : l'écran "code" n'existe
-que pour l'hôte. ⚠️ Vérifié plus sérieusement que la première fois (« le bouton apparaît » ne
-prouvait rien) : harnais jetable hôte seul, le clic ne déclenche plus `onChangeFarm`/`leaveRoom`
-(compteur resté à 0), l'écran "🌾 Ferme Vallée" revient, et un second code différent charge une
-ferme neuve et indépendante (jour 1, 500 or, checklist vide). ⚠️ Pas testé à deux clients (l'invité
-qui se resynchronise sur la nouvelle ferme via `farmReset`) — prochaine séance à deux.
+### Toujours en attente du retour de Guillaume (livraisons de la session précédente, même journée)
 
-**Collision résidents/buissons, corrigée dans la même relecture** (Guillaume : « attention aussi aux
-collisions avec les résidents sur les buissons, ça les bloque actuellement »). La ville a DEUX tests
-de collision distincts et nommés presque pareil — piège déjà connu du §4, la « semelle » y liste
-`canStandTown` et `townCanStand` parmi les sept copies à risque : `blockedTown`/`canStandTown` pour
-le JOUEUR, `townBlockedAt`/`townCanStand` pour les RÉSIDENTS (`townResidentRoam`). L'exception de la
-végétation basse (`tw.soft`, hors-zip 2026-09-02 — « LES RÉSIDENTS TRAVERSENT AUSSI », déjà écrit
-noir sur blanc dans le commentaire de `townNav`) n'avait jamais été portée dans `townBlockedAt` :
-`townFindPath`/`townBoxFree` traçaient donc un chemin de résident À TRAVERS un buisson que ce test-ci
-refusait ensuite, pas à pas — le résident restait planté juste devant, sans la moindre erreur. Même
-clause qu'à `blockedTown`, copiée mot pour mot (les deux fonctions sont maintenant identiques, hormis
-un helper nommé côté résident). ⚠️ Vérifié en console sur la VRAIE carte de ville (harnais jetable),
-pas seulement à l'écran — un résident arrêté ne se distingue pas d'un résident qui contemple (§4,
-leçon des haies) : les 822 cases molles de la ville (bien plus que les 28 d'origine, la ville en a
-gagné beaucoup depuis) passent TOUTES de bloqué à libre, et un échantillon de cases dures voisines
-(bâtiments) reste bloqué à l'identique — le correctif ne touche que la végétation, rien d'autre.
-
-**Le cœur de ville réorganisé** — trois demandes de Guillaume, la dernière corrigeant la première en
-la regardant : (1) « la proximité HDV/église/square doit être plus évidente », (2) puis, en voyant le
-premier jet posé à côté de l'église : « dégage les routes, aligné, dans l'axe de la fontaine ».
-`TOWN_HALL` quitte l'est de la place (x=111, à 36 cases de l'église) pour x=87 : sa porte (x+5=92)
-tombe EXACTEMENT sur `TOWN_FOUNTAIN.x` — la rue nord-sud x=92 qui passait déjà par cet axe ne la
-contourne plus, elle y MÈNE, et s'arrête à son parvis (perspective classique d'un monument qui ferme
-un axe, jamais codée avant aujourd'hui dans cette ville).
-⚠️⚠️ **« DÉGAGER LA ROUTE » N'A DEMANDÉ AUCUN CODE NOUVEAU** — le mécanisme existait déjà, écrit pour
-la Grand-Place elle-même : `surface()` (fermeEngine.js) ne peint le pavé de rue que sur ce qui est
-ENCORE `G_PATH` ; tout ce qu'une esplanade a déjà recouvert de `G_PATH_STONE` n'en est plus une. Le
-parvis du nouvel hôtel de ville peint sa propre pierre par-dessus la rue avant que `surface()` ne
-passe — la rue s'arrête donc au parvis sans qu'aucune règle neuve ne le lui dise. ⚠️ Deux vrais
-correctifs, eux : `forecourt()` peignait une allée de terre battue en plein milieu du dallage de la
-place dès qu'une porte tombait DANS une esplanade (jamais arrivé avant ce déplacement) — elle
-s'arrête maintenant dès qu'elle touche du sol déjà pavé en pierre. Et `verify-vallee` avait un
-contrôle géométrique (« aucun bâtiment sur une rue ») qui ne pouvait pas savoir que le sol change
-après coup : une exception NOMMÉE (`STREET_OK`, même famille que `WALKABLE` plus haut dans le même
-fichier), pas un seuil desserré.
-**L'espace libéré au nord de la place** (l'ancien emplacement de la mairie) porte désormais
-`TOWN_PARK_NORTH`, un jardin fleuri neuf — ⚠️ un rectangle À CÔTÉ, jamais `TOWN_PARK` agrandi : son
-étang et son kiosque sont DÉRIVÉS du centre du parc principal (leçon déjà écrite au-dessus de
-`TOWN_PARK`), l'étirer aurait tout redéplacé. Quatre parterres (même palette que le parc principal),
-une allée dans le même axe, deux bancs, une jardinière et un lampadaire — arrêté avant la rue
-principale, jamais dessus.
-
-`verify-vallee` (223/223), `verify-collision` (TOUT PASSE) et `verify-compo` (tout passe) rejoués
-après CHAQUE étape du déplacement, pas seulement à la fin — la première position (à côté de l'église)
-avait déjà 223/223 avant que Guillaume ne demande l'axe de la fontaine, ce qui a tout redéplacé une
-seconde fois. Vérifié en jeu (fake-supabase + harnais jetable, supprimé) : les trois flèches, le
-damier disparu, les deux bancs, l'hôtel de ville centré sur la fontaine vue depuis son perron, le
-jardin nord en fleurs. Aucune manipulation Supabase, pas de `next build` (dev tournait).
-
-**Le tribunal** (prompt Gemini préparé, PAS encore collé par Guillaume) — même méthode que l'église
-au 2026-09-20 : pas de référence à la colonnade actuelle, pas de contrainte de composition, un thème
-et la liberté totale. Prompt prêt, donné dans la même session ; attend que Guillaume le colle dans
-Gemini et rapporte le résultat.
-
-**La fontaine de la place, refaite** (demande explicite : « hyper soigné, réaliste, fluide »).
-Guillaume a demandé si Gemini serait nécessaire — non : le grain que laissent ses assets une fois
-intégrés ne se pose jamais sur un canevas dessiné à la main, et la fontaine a des parties qui
-BOUGENT (jet, gouttes, reflets, débordement) qu'un bitmap ne peut pas porter — elle reste 100 %
-procédurale, comme l'obélisque et les bancs de la même place. Trois défauts dans l'ancien dessin :
-l'eau était un bleu plat sans rapport avec la rampe de profondeur des rivières/du lac (`WAT_RAMP`),
-le jet un simple rectangle qui pulsait en largeur, et les deux vasques ne communiquaient pas — une
-fontaine à étages DÉBORDE. Ajouté (`FermeGame.js`, `fermeArt.js`) : l'eau reprend `WAT_RAMP` en
-bandes concentriques + un reflet directionnel haut-gauche qui dérive doucement ; un remous permanent
-là où le jet retombe ; un filet de débordement animé aux deux points `FOUNTAIN_GEO.spillX` (une
-seule cote, partagée entre la tache de calcaire statique du sprite et le filet animé — la même
-règle que `basinY`/`bowlY` juste au-dessus) ; un jet en colonne fuselée avec éclatement en aigrette
-au sommet ; des gouttes qui rétrécissent en tombant. ⚠️ Corrigé au passage, trouvé en écrivant : le
-rectangle du jet et l'origine des gouttes utilisaient deux hauteurs de crête différentes (`9+jet`
-contre `7`) — recopiées, elles avaient déjà divergé en silence (§8). Une seule variable `peak` sert
-désormais aux deux. Vérifié en jeu (fake-supabase + harnais jetable, supprimé, téléport dev
-« Valley Town — la place ») : eau, remous, débordement et jet capturés sur plusieurs images
-successives, tout bouge, aucune erreur console. Pas de `next build` (dev tournait déjà, partagé
-avec une autre session sur ce dépôt).
+Trois livraisons antérieures dans la même journée, jamais rejouées par Guillaume depuis : la
+réorganisation du cœur de ville (église sans damier, pigeons retouchés, deux bancs à pain devant le
+parvis, hôtel de ville déplacé sur l'axe de la fontaine, jardin nord), la fontaine de la place
+refaite (eau en bandes de profondeur `WAT_RAMP`, débordement animé, jet fuselé), et deux correctifs
+trouvés en relisant ce fichier (bouton « changer de ferme » qui revient à l'écran code sans quitter
+le salon ; collision résidents/buissons dans `townBlockedAt`). Le détail de chacun est dans l'historique
+git (commits du jour) et dans les commentaires de code cités par eux — pas la peine de le redire ici.
+Vérifiés au harnais jetable et aux bancs (`verify-vallee` 223/223, `verify-collision` TOUT PASSE),
+**mais pas au ressenti réel** : ni la ferme à deux clients (l'invité qui se resynchronise via
+`farmReset`), ni le mouvement des résidents en jeu, ni si la fontaine/le cœur de ville « rendent
+bien » n'ont été rejoués par Guillaume.
 
 ### Toujours ouvert
 
@@ -167,16 +91,14 @@ ferme peuplée à deux clients, suite de l'audit d'Où's that).
 
 ### ⏭️ ACTION SUIVANTE
 
-Attendre le retour de Guillaume sur trois livraisons de la même session : la réorganisation du cœur
-de ville (église sans damier, pigeons, bancs à pain, hôtel de ville sur l'axe de la fontaine, jardin
-nord), la fontaine refaite (eau en bandes de profondeur, débordement, jet fuselé) — aucun banc ne
-juge « agréable » ni « soigné » — ET les deux correctifs trouvés en relisant ce fichier (bouton
-« changer de ferme », collision résidents/buissons) : ceux-ci sont vérifiés CORRECTS (harnais jetable,
-console), mais ni la FERME à deux clients (l'invité qui se resynchronise via `farmReset`) ni le
-RESSENTI en jeu (le bouton, le mouvement des résidents en mouvement réel) n'ont été rejoués par
-Guillaume. S'il valide le tout : coller le prompt Gemini du tribunal (déjà préparé) est le prochain
-geste concret de la refonte graphique ; **choisir ensuite quel bâtiment vient après le tribunal se
-demande à Guillaume**, ça ne se décide pas seul.
+Attendre le retour de Guillaume, en jeu, sur QUATRE livraisons de la même journée : le bois du
+sud-est étendu (ci-dessus — densité, organicité de la lisière, transition contre le quartier des
+artisans), la réorganisation du cœur de ville, la fontaine refaite, et les deux correctifs de
+relecture (bouton « changer de ferme », collision résidents/buissons). Toutes vérifiées aux bancs et
+au harnais jetable, aucune au ressenti réel ni à la ferme à deux clients. S'il valide le tout :
+coller le prompt Gemini du tribunal (déjà préparé, § « toujours ouvert » de la refonte graphique) est
+le prochain geste concret ; **choisir quel bâtiment vient après le tribunal, et où continuer le bois
+si Guillaume en veut encore, se demandent à lui** — ça ne se décide pas seul (§2).
 
 ---
 

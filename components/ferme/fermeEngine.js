@@ -7299,6 +7299,58 @@ export function generateTownWorld() {
   }
 
   /* ═══════════════════════════════════════════════════════════════════════
+     2026-09-21 — LE PROLONGEMENT NORD DU BOIS DU SUD-EST, PLANTÉ ICI ET NULLE
+     PART AILLEURS. Voir `TOWN_WOOD_NORTH_AREA` (fermeConstants) pour le
+     pourquoi de la POSITION de ce bloc : APRÈS le cluster ci-dessus, jamais
+     avant, parce qu'un premier jet planté dans la passe du sentier de la rive
+     est (bien plus tôt dans cette même fonction) décalait tous les `rnd()`
+     qui suivent — jusqu'à une touffe d'herbe déplacée à l'autre bout de la
+     carte, attrapé par `verify-collision` et par rien d'autre. Ici, tout ce
+     qui précède (le semis de bordure, ce cluster) a déjà tourné à
+     l'identique d'avant ce zip : cette futaie ne fait que REMPLIR ce qui est
+     encore libre, sans qu'aucun tirage suivant n'existe pour en souffrir —
+     c'est le dernier bloc de `generateTownWorld` qui pose du décor.
+     Même structure que la futaie/le sous-bois du coin sud-est (§ ZIP 440
+     ci-dessus), volontairement recopiée plutôt que factorisée : les deux
+     lisent des CHAMPS différents (`townWoodDepth` contre
+     `townWoodNorthDepth`) et vivent à des endroits différents du générateur
+     pour la raison qu'on vient de lire — les fondre en une fonction commune
+     aurait recréé un couplage entre deux passes qui doivent rester
+     indépendantes. */
+  {
+    const nb = C.TOWN_WOOD_NORTH_AREA;
+    for (let y = nb.y; y < Math.min(H - 1, nb.y + nb.h); y++) {
+      for (let x = nb.x; x < Math.min(W - 1, nb.x + nb.w); x++) {
+        const d = townWoodNorthDepth(x, y);
+        if (d <= 0) continue;
+        const dens = Math.min(1, d / C.TOWN_WOOD_DEPTH) * C.TOWN_WOOD_DENSITY;
+        if (townHash2(x * 31 + 5, y * 37 + 9) >= dens) continue;
+        const i = id(x, y);
+        if (solid[i] || hedge[i] || objects[i] !== C.O_NONE) continue;
+        if (ground[i] !== C.G_GRASS && ground[i] !== C.G_TOWN_LAWN) continue;
+        if (propCover(x, y)) continue;
+        objects[i] = townHash2(x * 13 + 7, y * 11 + 3) < 0.42 ? C.O_TREE2 : C.O_TREE;
+        objHp.set(i, C.TREE_HP);
+      }
+    }
+    /* Le sous-bois, même fringe que le coin sud-est (`TOWN_WOOD_GRASS_FRINGE`) :
+       il déborde un peu plus loin vers le nord que les arbres, pour une
+       lisière qui s'éteint en dégradé contre le quartier des artisans plutôt
+       que de s'arrêter net au bord du rectangle plantable. */
+    const GRASS_DEPTH_EFF = C.TOWN_WOOD_DEPTH + C.TOWN_WOOD_GRASS_FRINGE;
+    const gnb = { x: nb.x, y: Math.max(0, nb.y - 15), w: nb.w, h: nb.h + 15 };
+    for (let y = gnb.y; y < Math.min(H - 1, gnb.y + gnb.h); y++) {
+      for (let x = gnb.x; x < Math.min(W - 1, gnb.x + gnb.w); x++) {
+        const d = townWoodNorthDepth(x, y) + C.TOWN_WOOD_GRASS_FRINGE;
+        if (d <= 0) continue;
+        const dens = Math.min(1, d / GRASS_DEPTH_EFF) * C.TOWN_WOOD_GRASS_DENSITY;
+        if (townHash2(x * 41 + 13, y * 43 + 17) >= dens) continue;
+        addGarden(x, y, "tallGrass");
+      }
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
      HORS-ZIP 2026-09-02 — `soft` : LES CASES QU'ON TRAVERSE EN COUCHANT LE
      FEUILLAGE. Dérivée, jamais posée.
      ───────────────────────────────────────────────────────────────────────
@@ -9120,6 +9172,15 @@ export function mayorOf(day) {
    ───────────────────────────────────────────────────────────────────────────
    Le fond est une rampe vers le coin sud-est de la carte ; le bruit lui donne
    ses golfes de prairie et ses caps de futaie (voir `TOWN_WOOD_*`).
+   ⚠️⚠️⚠️ 2026-09-21 — CETTE FONCTION N'A PAS BOUGÉ D'UN BIT, ET C'EST
+   DÉLIBÉRÉ : voir `TOWN_WOOD_NORTH_AREA` (fermeConstants) pour l'histoire
+   complète d'un premier jet qui la modifiait (un `Math.max` avec un second
+   champ) et qui décalait `rnd()` pour tout ce qui se plante APRÈS elle dans
+   `generateTownWorld` — jusqu'à une touffe d'herbe déplacée à l'autre bout de
+   la carte. Le prolongement nord vit dans `townWoodNorthDepth`, une fonction
+   SÉPARÉE, appelée depuis un bloc à part, planté à la toute fin du générateur.
+   Aucun appelant existant de `townWoodDepth` (le sentier, la futaie et
+   l'herbe du coin sud-est) ne voit une seule case bouger.
    ⚠️ Aucun `rnd()` : `generateTownWorld` partage UN seul générateur, y puiser
    déplacerait tout le mobilier posé après le lac. C'est un hachage pur, donc
    identique chez les deux joueurs et stable d'une image à l'autre (§3).
@@ -9137,6 +9198,18 @@ export function townWoodDepth(x, y) {
         + (y - C.TOWN_WOOD_ORIGIN.y) * C.TOWN_WOOD_SLOPE_Y;
   for (const o of C.TOWN_WOOD_NOISE) d += o.a * townNoise(x, y, o.p, 11);
   return d;
+}
+/* ⚠️⚠️ 2026-09-21 — LE PROLONGEMENT NORD, EN FONCTION À PART. Voir
+   `TOWN_WOOD_NORTH_AREA` (fermeConstants) : origine au coin nord-est de la
+   bande, pentes est dominante / nord secondaire, mêmes trois octaves que
+   `townWoodDepth` mais un sel différent (`TOWN_WOOD_NORTH_SALT`) pour ne pas
+   redessiner la même lisière décalée — même hachage pur, donc aucun `rnd()`,
+   pour la même raison que ci-dessus. */
+export function townWoodNorthDepth(x, y) {
+  let dn = (x - C.TOWN_WOOD_NORTH_ORIGIN.x) * C.TOWN_WOOD_NORTH_SLOPE_X
+         + (y - C.TOWN_WOOD_NORTH_ORIGIN.y) * C.TOWN_WOOD_NORTH_SLOPE_Y;
+  for (const o of C.TOWN_WOOD_NOISE) dn += o.a * townNoise(x, y, o.p, C.TOWN_WOOD_NORTH_SALT);
+  return dn;
 }
 export function townArchRise(tw) {
   if (!tw) return null;
