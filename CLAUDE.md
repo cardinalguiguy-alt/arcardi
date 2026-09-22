@@ -7,67 +7,58 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-21 (session suivante) — Le bois du sud-est étendu vers le nord, tout le long du bord est
+### 2026-09-22 (session suivante) — Le tronc du pin réutilise treeTrunk(), et le prompt Gemini du tribunal est prêt à coller
 
-Guillaume : « ajoute des arbres et de l'herbe, même grande densité que le coin sud-est de valley
-town, mais étends ça encore un peu plus toujours à l'est de la map, l'extrémité, et la partie sud ».
+Guillaume : « les troncs des arbres sur vt [soient] moins géométriques (pas pour toutes les
+espèces, certaines sont déjà correctes). Mais certains pins ont un tronc trop simple et peu
+réaliste » + proposer un prompt/références Gemini pour un tribunal impressionnant.
 
-Mesuré avant d'écrire une ligne (§8) : `TOWN_WOOD` touchait déjà les deux bords vrais de la carte
-(x=224, y=168) — rien à gagner à l'est ou au sud, c'est déjà la frontière. La seule vraie terre
-encore libre est au NORD, entre le bois et le quartier des artisans (y:132-152, 60-80 cases d'herbe
-libres par rangée). Le prolongement est donc un second champ de densité, indépendant
-(`townWoodNorthDepth`, fermeEngine.js ; origine/pentes/sel dans `TOWN_WOOD_NORTH_*`,
-fermeConstants.js) — jamais une modification du champ ni du rectangle d'origine.
+**Le tronc du pin.** Les huit feuillus passaient déjà par `treeTrunk()` (amincissement vers le
+haut, trois racines de longueurs différentes, écorce en crêtes qui montent en hélice, face claire
+au nord-ouest — depuis zip 439) : c'est pour ça qu'ils étaient « déjà corrects ». Les trois
+conifères, eux, ne passaient PAS par cette fonction : `townConifer()` leur dessinait un simple
+rectangle (une couleur pleine + deux colonnes sombres + une barre d'ombre fixe au sol), sans
+jamais lire la teinte claire pourtant déjà écrite dans `sp.trunk[1]` pour chacun des trois. Seul
+`pine` (`bare: 22`, fermeArt.js) expose assez de tronc pour que le rectangle se voie — `fir`
+(`bare: 6`) et `cypress` (`bare: 4`) sont presque entièrement sous les branches. Question posée,
+Guillaume a confirmé : correctif porté SEULEMENT sur `pine`, `fir`/`cypress` n'ont pas bougé.
+Fait en réutilisant `treeTrunk()` telle quelle — `trunkTop` calculé depuis `bare` au lieu d'être
+codé en dur — derrière un flag `richTrunk` posé sur la seule fiche `pine` : zéro nouvelle logique
+de dessin à faire diverger un jour (§4).
+`render-arbres.mjs` **9/9 (« Tout est bon »)**, `next build` **✓ Compiled successfully**, planche
+regardée au zoom (tronc conique, racines, écorce en crêtes, face claire visibles) — **pas encore
+vu en jeu à l'échelle réelle**, seulement sur la planche du banc et au zoom PIL.
 
-⚠️⚠️ **DEUX VRAIS DÉFAUTS TROUVÉS PAR LES BANCS, AUCUN PAR RELECTURE :**
-1. Un premier jet fondait les deux champs par `Math.max` sans frontière entre les deux : le nouveau
-   terme grandit avec `y` sans redescendre, et finissait par DÉPASSER l'ancien champ au sud de la
-   jonction — changeant la densité du coin déjà approuvé trois fois. `verify-vallee` a trouvé deux
-   clairières enfermées DANS L'ANCIEN BOIS, à quinze cases du nouveau. Corrigé en séparant
-   complètement les deux : `townWoodDepth` n'a plus bougé d'un bit, le nouveau terme vit dans sa
-   propre fonction.
-2. Une fois ça corrigé, planter la nouvelle bande AU MÊME ENDROIT DU GÉNÉRATEUR que l'ancien bois
-   (une passe précoce, avant le semis d'arbres épars et le cluster de buissons de fin de fonction)
-   occupait des cases que ces passes-là auraient sondées PLUS TARD dans la même exécution — et un
-   refus ne consomme aucun tirage de `rnd()` (§4 de CLAUDE.md, leçon déjà payée sur `plantTree`) :
-   tout ce que `rnd()` place ensuite se décale. Résultat mesuré : une touffe d'herbe ambiante
-   déplacée à (151,10), À L'AUTRE BOUT DE LA CARTE, coincée contre un bâtiment — `verify-collision`
-   l'a trouvé, rien d'autre n'aurait pu. Corrigé en déplaçant le bloc qui plante la nouvelle bande à
-   la TOUTE FIN de `generateTownWorld`, après le dernier `rnd()` qui compte : aucune passe antérieure
-   n'est plus perturbée, la carte d'avant ce zip est reproduite bit pour bit jusque-là.
-⚠️ **Leçon générale pour la prochaine extension de ce genre** : une carte à graine unique ne tolère
-aucune case nouvellement occupée AVANT la fin des passes qui lisent encore `rnd()` — même un ajout
-purement déterministe (hachage, jamais `rnd()`) peut décaler tout le reste s'il occupe une case
-qu'une passe `rnd()` ultérieure aurait sondée. *Le sel ne répare pas un défaut d'ordre.*
+**Le prompt Gemini du tribunal.** Remis à Guillaume dans la conversation (texte, pas un fichier
+du dépôt) : mêmes trois exigences qu'au zip 425 (perron pleine largeur, péristyle EN PROFONDEUR
+avec vraie ombre portée — pas des demi-colonnes plaquées —, fronton sculpté à la balance), pierre
+froide expressément distincte du crème de l'église et de la brique de l'hôtel de ville, composition
+verticale et resserrée parce que le tribunal est le plus à l'étroit des trois monuments (marges
+N14/S6/O5/E4 cases, contre N39/S22/O6/E39 pour l'église). Référence d'ambition suggérée à
+Guillaume : la Cour suprême des États-Unis (perron + péristyle profond + fronton sculpté + marbre
+blanc, les trois exigences à la fois). Rien codé, rien dans `refs/` — c'est Guillaume qui colle le
+prompt dans Gemini et rapporte le résultat.
 
-`verify-vallee` (223/223), `verify-collision` (TOUT PASSE), `verify-compo` et `verify-syntax`
-rejoués après le correctif final. Vérifié en jeu (fake-supabase + harnais jetable, supprimé,
-téléport dev « la passe » puis marche) : le bois hachure maintenant tout le bord est depuis le
-quartier des artisans jusqu'à la rive — mélange de conifères/feuillus et sous-bois dense, comme le
-coin d'origine —, lisière ouest en dégradé organique (aucun mur droit), transition propre contre le
-mur du quartier des artisans au nord. Aucun banc ne juge « agréable » : ça reste à Guillaume.
-Aucune manipulation Supabase, pas de `next build` (aucun serveur ne tournait avant, arrêté après).
+### Toujours en attente du retour de Guillaume en jeu (rien de rejoué depuis)
 
-### Toujours en attente du retour de Guillaume (livraisons de la session précédente, même journée)
-
-Trois livraisons antérieures dans la même journée, jamais rejouées par Guillaume depuis : la
-réorganisation du cœur de ville (église sans damier, pigeons retouchés, deux bancs à pain devant le
-parvis, hôtel de ville déplacé sur l'axe de la fontaine, jardin nord), la fontaine de la place
-refaite (eau en bandes de profondeur `WAT_RAMP`, débordement animé, jet fuselé), et deux correctifs
-trouvés en relisant ce fichier (bouton « changer de ferme » qui revient à l'écran code sans quitter
-le salon ; collision résidents/buissons dans `townBlockedAt`). Le détail de chacun est dans l'historique
-git (commits du jour) et dans les commentaires de code cités par eux — pas la peine de le redire ici.
-Vérifiés au harnais jetable et aux bancs (`verify-vallee` 223/223, `verify-collision` TOUT PASSE),
-**mais pas au ressenti réel** : ni la ferme à deux clients (l'invité qui se resynchronise via
-`farmReset`), ni le mouvement des résidents en jeu, ni si la fontaine/le cœur de ville « rendent
-bien » n'ont été rejoués par Guillaume.
+Cinq livraisons jamais rejouées par Guillaume, dans l'ordre : le tronc du pin (ci-dessus) ; le bois
+du sud-est étendu vers le nord (densité, organicité de la lisière, transition contre le quartier
+des artisans) ; la réorganisation du cœur de ville, la fontaine de la place refaite et deux
+correctifs de relecture (bouton « changer de ferme », collision résidents/buissons) — ces quatre
+derniers du 2026-09-21, détail dans l'historique git (commits du jour) et les commentaires de code
+cités par eux, pas la peine de le redire ici. Toutes vérifiées aux bancs disponibles pour chacune
+(`verify-vallee` 223/223, `verify-collision` TOUT PASSE, `render-arbres` 9/9 selon le cas),
+**aucune au ressenti réel** : ni la ferme à deux clients, ni le mouvement des résidents, ni si le
+bois/la fontaine/le cœur de ville/le tronc du pin « rendent bien » n'ont été jugés par Guillaume
+en jeu.
 
 ### Toujours ouvert
 
-- **La refonte graphique des bâtiments, au sens large** (demande du jour : « détailler la majorité
-  des bâtiments sur le modèle de l'église, de l'hdv, pour une refonte graphique », AVEC Gemini). Le
-  tribunal est le seul prompt préparé pour l'instant — **aucun ordre pour les bâtiments suivants n'a
-  été arbitré avec Guillaume** ; ne pas en choisir un sans lui (§2).
+- **La refonte graphique des bâtiments, au sens large** (demande du 2026-09-21 : « détailler la
+  majorité des bâtiments sur le modèle de l'église, de l'hdv, pour une refonte graphique », AVEC
+  Gemini). Le prompt du tribunal est désormais PRÊT (ci-dessus, bloc REPRISE du 2026-09-22) —
+  reste à Guillaume de le passer dans Gemini. **Aucun ordre pour les bâtiments suivants n'a été
+  arbitré avec Guillaume** ; ne pas en choisir un sans lui (§2).
 - **Traduction des métiers** (trouvé le 2026-09-20, jamais corrigé) : `job` dans `TOWN_RESIDENTS`
   (fermeConstants.js) est écrit en anglais et s'affiche brut dans au moins six phrases françaises.
   Correctif borné : une table `jobFr`/équivalent, ou une clé de traduction par métier.
@@ -91,14 +82,14 @@ ferme peuplée à deux clients, suite de l'audit d'Où's that).
 
 ### ⏭️ ACTION SUIVANTE
 
-Attendre le retour de Guillaume, en jeu, sur QUATRE livraisons de la même journée : le bois du
-sud-est étendu (ci-dessus — densité, organicité de la lisière, transition contre le quartier des
-artisans), la réorganisation du cœur de ville, la fontaine refaite, et les deux correctifs de
-relecture (bouton « changer de ferme », collision résidents/buissons). Toutes vérifiées aux bancs et
-au harnais jetable, aucune au ressenti réel ni à la ferme à deux clients. S'il valide le tout :
-coller le prompt Gemini du tribunal (déjà préparé, § « toujours ouvert » de la refonte graphique) est
-le prochain geste concret ; **choisir quel bâtiment vient après le tribunal, et où continuer le bois
-si Guillaume en veut encore, se demandent à lui** — ça ne se décide pas seul (§2).
+Deux retours attendus de Guillaume, indépendants : (1) son verdict EN JEU sur les cinq livraisons
+ci-dessus (tronc du pin compris) — aucune n'a été jugée « agréable » par lui, seulement par des
+bancs ; (2) le résultat de son passage du prompt tribunal dans Gemini. Si le tribunal rend bien :
+suivre le même pipeline d'import que l'église (`build-eglise-sprite.mjs` comme modèle), largeur
+cible 192 px, et vérifier en jeu qu'aucun détail ne dépasse le cadre côté est/ouest (marges
+serrées, leçon du clocher de l'église qui sortait du canevas). **Choisir quel bâtiment vient après
+le tribunal, et où continuer le bois si Guillaume en veut encore, se demandent à lui** — ça ne se
+décide pas seul (§2).
 
 ---
 

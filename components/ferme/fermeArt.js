@@ -12787,10 +12787,24 @@ export function buildSprites() {
   function townConifer(g, sp, pal, frame) {
     const [nd, ndL, ndD] = pal.leaf;
     const bot = TBASE_, top = sp.crownTop, tiers = sp.tiers;
-    P(g, 24 - (sp.tw >> 1), bot - sp.bare, sp.tw, sp.bare, sp.trunk[0]);
-    P(g, 24 - (sp.tw >> 1), bot - sp.bare, 1, sp.bare, sp.trunk[2]);
-    P(g, 24 - (sp.tw >> 1) + sp.tw - 1, bot - sp.bare, 1, sp.bare, sp.trunk[2]);
-    P(g, 19, bot - 2, 10, 2, sp.trunk[2]);
+    /* ⚠️ 2026-09-22 — LE PIN RÉUTILISE `treeTrunk()` (retour de Guillaume : le
+       tronc du pin est trop simple, peu réaliste). Les trois conifères
+       dessinaient un rectangle plein — sans amincissement, sans racines, sans
+       écorce, et sans la teinte claire de `sp.trunk[1]`, jamais lue ici alors
+       qu'elle existe déjà pour les trois. Seul le pin a une base exposée
+       (`bare`) assez haute pour que le rectangle se voie (22 px, contre 6
+       pour le sapin et 4 pour le cyprès, presque entièrement sous les
+       branches) — portée limitée à lui seul, décision de Guillaume. On passe
+       juste la hauteur exposée à la place de `trunkTop` : aucune seconde
+       version de la logique de tronc à faire diverger un jour (§4). */
+    if (sp.richTrunk) {
+      treeTrunk(g, Object.assign({}, sp, { trunkTop: bot - sp.bare }));
+    } else {
+      P(g, 24 - (sp.tw >> 1), bot - sp.bare, sp.tw, sp.bare, sp.trunk[0]);
+      P(g, 24 - (sp.tw >> 1), bot - sp.bare, 1, sp.bare, sp.trunk[2]);
+      P(g, 24 - (sp.tw >> 1) + sp.tw - 1, bot - sp.bare, 1, sp.bare, sp.trunk[2]);
+      P(g, 19, bot - 2, 10, 2, sp.trunk[2]);
+    }
     const span = bot - sp.bare - top;
     const mask = new Uint8Array(TW_ * TH_);
     for (let i = 0; i < tiers; i++) {
@@ -12942,7 +12956,7 @@ export function buildSprites() {
       leaf: ["#2f6c4c", "#489c70", "#194030"], edge: "#123528", out: "#0a2118", cone: "#6a5334",
       autumn: { leaf: ["#2c6446", "#438f66", "#173a2b"], edge: "#0f2e22", out: "#081c14" },
       spring: { leaf: ["#357a56", "#54ae7d", "#1d4b37"], edge: "#153c2c", out: "#0b261b" } },
-    { id: "pine", conifer: true, tw: 6, bare: 22, crownTop: 4, tiers: 3,
+    { id: "pine", conifer: true, richTrunk: true, tw: 6, bare: 22, crownTop: 4, tiers: 3,
       halfTop: 5.0, halfBot: 15.0, overlap: 3,
       trunk: ["#7c5531", "#9a6d42", "#4e3320"],
       leaf: ["#356b3c", "#519d5b", "#1c4423"], edge: "#123020", out: "#0a1c12", cone: "#6f5230",
