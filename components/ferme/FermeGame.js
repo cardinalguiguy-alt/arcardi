@@ -20916,8 +20916,171 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         });
       };
       drawTownHallBitmap(C.TOWN_HALL);
-      // LE TRIBUNAL (425) : idem, le perron touche le bas du canevas.
-      drawCivic(C.TOWN_COURT, sprites.courthouse, 0, 1.1);
+      /* LE TRIBUNAL (2026-09-22) : PNG importé (pipeline C, §9 CLAUDE.md), sur
+         le modèle exact de `drawTownHallBitmap` ci-dessus — même sauvegarde/
+         translation/échelle, même embase, même ombre dérivée de la taille du
+         sprite. Remplace `drawCivic(C.TOWN_COURT, sprites.courthouse, 0, 1.1)`
+         (425, procédural) : Guillaume a fourni une référence Gemini
+         (refs/tributribu.jpg → tools/build-tribunal-sprite.mjs). `sprites.
+         courthouse` reste construit (voir fermeArt.js) mais n'est plus
+         dessiné — même sort que `sprites.church` depuis l'église.
+         ⚠️ PAS DE CALQUE DE LUEUR : contrairement à la mairie (horloge vivante)
+         et à l'église (vitraux), rien ne s'allume la nuit ici — parité avec
+         l'ancien sprite procédural, qui n'en avait pas non plus. */
+      const drawCourthouseBitmap = (b) => {
+        const day = loadBitmap("/town/courthouse-day.png");
+        if (!day) return; // pas encore chargé : rien à dessiner cette frame
+        const by = (b.y + b.h) * T;
+        /* ⚠️ MÊME RAISON QUE L'HÔTEL DE VILLE : depuis que le perron est
+           traversable (C.TOWN_COURT_STEP_ROWS), la clé de tri doit se caler
+           sur la limite réelle du plein (le pied du mur, derrière les
+           marches), pas sur le bord de l'image — sinon un joueur planté sur
+           les marches se ferait dessiner DESSOUS le sprite. */
+        const sortY = (b.y + b.h - C.TOWN_COURT_STEP_ROWS) * T;
+        const e = elAt(b.x, b.y + b.h - 1);
+        pushE(sortY, e, () => {
+          const cx2 = b.x * T + b.w * T / 2;
+          const GROW = 1.1; // même grossissement que les deux autres monuments
+          /* ⚠️ 2026-09-22 — 256 px, PAS 192 COMME SES DEUX VOISINS. Demande de
+             Guillaume, en jeu : « respecter l'échelle naturelle rapport entre
+             taille perso et église ». Mesuré sur les deux PNG ramenés à 192 de
+             large : la porte de l'église y fait ~42 px, celle du tribunal ~25 —
+             parce que l'escalier peint mange une part de l'image bien plus
+             grande que le parvis modeste de l'église, la porte et les colonnes
+             se retrouvent compressées d'autant. Une pleine parité (×1,68)
+             dépasserait la marge est du site (mesurée fraîche : 4 cases = 64 px,
+             la plus courte des quatre — voir TOWN_COURT_STEP_ROWS) une fois le
+             GROW ×1,1 appliqué. 256 px (×1,33) est le compromis sûr : marge
+             consommée ~45 px sur 64 disponibles de chaque côté, porte et
+             colonnes sensiblement plus lisibles, aucun risque de chevaucher un
+             bâtiment voisin. Visuel seul : l'emprise, la porte (nearCivicDoor)
+             et la clé de tri ne bougent pas, comme pour les +10 % (§ ci-dessus,
+             « LE GROSSISSEMENT NE TOUCHE QUE CE QUI SE PEINT »). */
+          const dispScale = 256 / day.width;
+          const dw = day.width * dispScale, dh = day.height * dispScale;
+          ctx.save();
+          ctx.translate(cx2, by); ctx.scale(GROW, GROW); ctx.translate(-cx2, -by);
+          const dx = b.x * T + (b.w * T - dw) / 2, dy = by - dh;
+          const shx = cx2 + dw * 0.16, shy = by - 3;
+          ctx.save();
+          for (let k = 0; k < 3; k++) {
+            ctx.fillStyle = `rgba(20,16,12,${0.16 - k * 0.045})`;
+            ctx.beginPath();
+            ctx.ellipse(shx, shy, dw * (0.42 - k * 0.06), dh * (0.10 - k * 0.02), 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+          ctx.drawImage(day, dx, dy, dw, dh);
+          drawBuildingFooting(ctx, cx2, by, dw / 2);
+          /* 2026-09-22 — LES PIGEONS DU TRIBUNAL (demande de Guillaume, en jeu :
+             hauteurs variables et cohérentes avec la taille des marches, pose
+             possible au sommet, quelques-uns qui se suivent). Même moule que
+             les pigeons de l'église (drawChurchBitmap, plus haut) : pure
+             fonction du temps, aucun état partagé, rejouable à l'identique
+             chez les deux joueurs sans un octet de réseau (§3 CLAUDE.md).
+             ⚠️ PAS DE PASSE « DERRIÈRE » ICI, contrairement aux clochers de
+             l'église : un dôme est un solide plein, pas une flèche fine à
+             contourner visuellement — les cinq oiseaux se peignent tous APRÈS
+             le bâtiment, en une seule passe. */
+          function hash01T(n) { const s = Math.sin(n * 12.9898) * 43758.5453; return s - Math.floor(s); }
+          // Mesurés à la loupe sur courthouse-day.png ramené à 256 de large
+          // (l'échelle réelle d'affichage, voir dispScale ci-dessus).
+          const SUMMIT_ORBIT = { cx: dx + 128, cy: dy + 27, rx: 24, ry: 13 };
+          const PERCH_POINTS_T = [
+            { x: dx + 37, y: dy + 229 },   // marche basse, gauche
+            { x: dx + 224, y: dy + 224 },  // marche basse, droite
+            { x: dx + 64, y: dy + 208 },   // marche intermédiaire, gauche
+            { x: dx + 200, y: dy + 203 },  // marche intermédiaire, droite
+            { x: dx + 128, y: dy + 193 },  // marche haute, centre
+            { x: dx + 47, y: dy + 181 },   // marche du haut, près de la balustrade, gauche
+            { x: dx + 213, y: dy + 177 },  // marche du haut, près de la balustrade, droite
+            { x: dx + 27, y: dy + 187 },   // vasque de la balustrade, gauche
+            { x: dx + 233, y: dy + 184 },  // vasque de la balustrade, droite
+            { x: dx + 33, y: dy + 77 },    // corniche de l'aile gauche
+            { x: dx + 224, y: dy + 77 },   // corniche de l'aile droite
+            { x: dx + 128, y: dy + 56 },   // faîte du fronton
+            { x: dx + 128, y: dy + 7 },    // sommet du dôme
+          ];
+          function pigeonStateT(i, tOverride) {
+            const seed = i * 1.6180339887; // nombre d'or : phases sans motif répétitif à l'œil
+            const jcx = (hash01T(i * 4.1 + 1) - 0.5) * 10;
+            const jcy = (hash01T(i * 6.7 + 2) - 0.5) * 8;
+            const jrx = 0.8 + hash01T(i * 3.3 + 3) * 0.5;
+            const jry = 0.8 + hash01T(i * 5.9 + 4) * 0.5;
+            const orbit = { cx: SUMMIT_ORBIT.cx + jcx, cy: SUMMIT_ORBIT.cy + jcy, rx: SUMMIT_ORBIT.rx * jrx, ry: SUMMIT_ORBIT.ry * jry };
+            const spd = 0.28 + (i % 3) * 0.04;
+            const CYCLE = 26 + (i % 4) * 6;
+            const PERCH_DUR = 6 + (i % 3) * 2.5;
+            const TRANS = 1.3;
+            const FLY_DUR = CYCLE - PERCH_DUR - 2 * TRANS;
+            const tAbs = (tOverride ?? (now / 1000)) + seed * 11.3;
+            const cycleN = Math.floor(tAbs / CYCLE);
+            const t = tAbs - cycleN * CYCLE;
+            const perch = PERCH_POINTS_T[Math.floor(hash01T(i * 7.1 + cycleN * 3.7) * PERCH_POINTS_T.length)];
+            const wobPhase = (tt) => 0.6 * Math.sin(tt * 0.13 + seed * 4) + 0.35 * Math.sin(tt * 0.31 + seed * 9);
+            const flyPoint = (tt) => {
+              const ang = seed + tt * spd + wobPhase(tt);
+              const rxk = 0.85 + 0.15 * Math.sin(tt * 0.09 + seed * 6);
+              const ryk = 0.85 + 0.15 * Math.sin(tt * 0.12 + seed * 3 + 1.7);
+              const bob = Math.sin(tt * spd * 2 + seed) * 2.4;
+              return { x: orbit.cx + Math.cos(ang) * orbit.rx * rxk, y: orbit.cy + Math.sin(ang) * orbit.ry * ryk + bob, ang, depth: Math.sin(ang) };
+            };
+            let x, y, ang, depth, grounded = false, wingRate = 1;
+            if (t < FLY_DUR) {
+              const f = flyPoint(t); x = f.x; y = f.y; ang = f.ang; depth = f.depth;
+            } else if (t < FLY_DUR + TRANS) {
+              const f = flyPoint(FLY_DUR), k = (t - FLY_DUR) / TRANS, ek = k * k * (3 - 2 * k);
+              x = f.x + (perch.x - f.x) * ek; y = f.y + (perch.y - f.y) * ek - Math.sin(k * Math.PI) * 6;
+              ang = f.ang; depth = 1; wingRate = 1 - ek * 0.4;
+            } else if (t < FLY_DUR + TRANS + PERCH_DUR) {
+              grounded = true; x = perch.x; y = perch.y; depth = 1; ang = Math.PI / 2; wingRate = 0;
+            } else {
+              const k = (t - FLY_DUR - TRANS - PERCH_DUR) / TRANS, ek = k * k * (3 - 2 * k);
+              const fEnd = flyPoint(0);
+              x = perch.x + (fEnd.x - perch.x) * ek; y = perch.y + (fEnd.y - perch.y) * ek - Math.sin(k * Math.PI) * 5;
+              ang = fEnd.ang; depth = 1; wingRate = 0.3 + ek * 0.7;
+            }
+            const seatedIdle = grounded ? Math.sin(tAbs * 1.6 + seed) * 0.6 : 0;
+            return { x, y: y + seatedIdle, ang, depth, grounded, wingRate, seed, i };
+          }
+          const nowST = now / 1000;
+          const birdStatesT = [];
+          for (let i = 0; i < 3; i++) birdStatesT.push(pigeonStateT(i, nowST));
+          /* « SE SUIVRE » (demande de Guillaume) : deux oiseaux REJOUENT le vol
+             de l'oiseau 0 (même orbite, même horloge), juste décalés de
+             quelques secondes — une file, pas cinq trajectoires indépendantes.
+             Toujours une fonction pure de i et de l'heure : rien à stocker. */
+          birdStatesT.push({ ...pigeonStateT(0, nowST - 2.4), i: 3 });
+          birdStatesT.push({ ...pigeonStateT(0, nowST - 4.8), i: 4 });
+          function paintPigeonT(bb) {
+            const kind = (bb.i * 37) % 100 < 14 ? "dove" : "pigeon"; // même part que C.BIRD_DOVE_SHARE
+            const set = sprites.birds && sprites.birds[kind];
+            if (!set) return;
+            let im;
+            if (bb.grounded) im = (Math.floor(nowST * 1.4 + bb.seed) % 5 === 0) ? (set.peck || set.stand) : set.stand;
+            else if (bb.wingRate < 0.18) im = set.glide;
+            else {
+              const wingHz = 2.1 + (bb.i % 3) * 0.3;
+              const wk = Math.floor((nowST * wingHz * bb.wingRate + bb.seed) * 2) % 4;
+              im = [set.down, set.mid, set.up, set.mid][wk] || set.glide;
+            }
+            if (!im) return;
+            const BIRD_SCALE = 1.333 / 1.5; // le tribunal s'affiche 1,33× plus grand que l'église (256 vs 192) : les oiseaux suivent
+            const bdw = im.width * BIRD_SCALE, bdh = im.height * BIRD_SCALE;
+            const behindK = bb.grounded ? 1 : 0.82 + 0.18 * Math.max(0, bb.depth);
+            const dwB = bdw * behindK, dhB = bdh * behindK;
+            const faceLeft = Math.cos(bb.ang) < 0 && !bb.grounded;
+            ctx.save();
+            ctx.globalAlpha = bb.grounded ? 1 : Math.min(1, 0.75 + 0.25 * Math.max(0, bb.depth));
+            if (faceLeft) { ctx.translate(bb.x + dwB / 2, bb.y); ctx.scale(-1, 1); ctx.drawImage(im, -dwB / 2, -dhB / 2, dwB, dhB); }
+            else ctx.drawImage(im, bb.x - dwB / 2, bb.y - dhB / 2, dwB, dhB);
+            ctx.restore();
+          }
+          for (const bb of birdStatesT) paintPigeonT(bb);
+          ctx.restore();
+        });
+      };
+      drawCourthouseBitmap(C.TOWN_COURT);
       /* ZIP 427 — LES DEUX COMMERCES DE LA HAUTE-VILLE. Ils passent par le MÊME
          `drawCivic` que les trois monuments : même ancrage par le bas, même
          embase, même règle de porte au milieu de la façade sud — donc
@@ -30277,7 +30440,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // porte peinte) : la case retirée par le perron doit aussi sortir d'ici.
   function nearCivicDoor(b) {
     const m = meRef.current; if (!m) return false;
-    const stepRows = b === C.TOWN_HALL ? C.TOWN_HALL_STEP_ROWS : 0;
+    const stepRows = b === C.TOWN_HALL ? C.TOWN_HALL_STEP_ROWS : b === C.TOWN_COURT ? C.TOWN_COURT_STEP_ROWS : 0;
     const doorX = b.x + b.w / 2, doorY = b.y + b.h - stepRows + 0.5;
     return Math.abs(m.x + 0.5 - doorX) <= b.w / 2 && Math.abs(m.y - doorY) <= 1.6;
   }

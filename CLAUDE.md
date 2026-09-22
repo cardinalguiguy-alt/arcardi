@@ -7,57 +7,80 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-22 (session suivante) — Le tronc du pin réutilise treeTrunk(), et le prompt Gemini du tribunal est prêt à coller
+### 2026-09-22 (session suivante) — Le tribunal est en jeu : sprite Gemini, escalier réel, pigeons, échelle corrigée
 
-Guillaume : « les troncs des arbres sur vt [soient] moins géométriques (pas pour toutes les
-espèces, certaines sont déjà correctes). Mais certains pins ont un tronc trop simple et peu
-réaliste » + proposer un prompt/références Gemini pour un tribunal impressionnant.
+Guillaume a rapporté `refs/tributribu.jpg` (résultat du prompt préparé la veille) avec deux
+consignes fermes, données en regardant le rendu : « les escaliers devront être praticables, vraie
+physique à prévoir », « sensation d'altitude et de profondeur un peu ». Question posée (perron
+juste traversable, comme la mairie, VS vrai palier avec dénivelé) — Guillaume a choisi le vrai
+palier, malgré le risque plus élevé (ça touche `canStandTown`/`elev`, fragiles par nature). Puis,
+en observant le rendu en direct dans le navigateur : « respecter l'échelle naturelle […] taille
+perso et église », et des hauteurs de pigeons à revoir sur l'escalier.
 
-**Le tronc du pin.** Les huit feuillus passaient déjà par `treeTrunk()` (amincissement vers le
-haut, trois racines de longueurs différentes, écorce en crêtes qui montent en hélice, face claire
-au nord-ouest — depuis zip 439) : c'est pour ça qu'ils étaient « déjà corrects ». Les trois
-conifères, eux, ne passaient PAS par cette fonction : `townConifer()` leur dessinait un simple
-rectangle (une couleur pleine + deux colonnes sombres + une barre d'ombre fixe au sol), sans
-jamais lire la teinte claire pourtant déjà écrite dans `sp.trunk[1]` pour chacun des trois. Seul
-`pine` (`bare: 22`, fermeArt.js) expose assez de tronc pour que le rectangle se voie — `fir`
-(`bare: 6`) et `cypress` (`bare: 4`) sont presque entièrement sous les branches. Question posée,
-Guillaume a confirmé : correctif porté SEULEMENT sur `pine`, `fir`/`cypress` n'ont pas bougé.
-Fait en réutilisant `treeTrunk()` telle quelle — `trunkTop` calculé depuis `bare` au lieu d'être
-codé en dur — derrière un flag `richTrunk` posé sur la seule fiche `pine` : zéro nouvelle logique
-de dessin à faire diverger un jour (§4).
-`render-arbres.mjs` **9/9 (« Tout est bon »)**, `next build` **✓ Compiled successfully**, planche
-regardée au zoom (tronc conique, racines, écorce en crêtes, face claire visibles) — **pas encore
-vu en jeu à l'échelle réelle**, seulement sur la planche du banc et au zoom PIL.
+**Le sprite.** `tools/build-tribunal-sprite.mjs` (nouveau, sur le modèle de
+`build-eglise-sprite.mjs`) → `public/town/courthouse-day.png`. ⚠️ Détourage RETRAVAILLÉ : la
+pierre « froide, presque du marbre » du prompt tombe dans la même plage neutre que le damier — le
+test « neutre + clair » des deux scripts précédents mangeait le fronton sculpté (mesuré : 36 % de
+l'image partaient au lieu des ~34 % réels, le trou mordait le bas-relief). Remplacé par un test de
+PÉRIODE (le damier alterne tous les ~13 px pile, la pierre jamais) : propre, vérifié à l'œil à
+l'échelle réelle.
 
-**Le prompt Gemini du tribunal.** Remis à Guillaume dans la conversation (texte, pas un fichier
-du dépôt) : mêmes trois exigences qu'au zip 425 (perron pleine largeur, péristyle EN PROFONDEUR
-avec vraie ombre portée — pas des demi-colonnes plaquées —, fronton sculpté à la balance), pierre
-froide expressément distincte du crème de l'église et de la brique de l'hôtel de ville, composition
-verticale et resserrée parce que le tribunal est le plus à l'étroit des trois monuments (marges
-N14/S6/O5/E4 cases, contre N39/S22/O6/E39 pour l'église). Référence d'ambition suggérée à
-Guillaume : la Cour suprême des États-Unis (perron + péristyle profond + fronton sculpté + marbre
-blanc, les trois exigences à la fois). Rien codé, rien dans `refs/` — c'est Guillaume qui colle le
-prompt dans Gemini et rapporte le résultat.
+**L'escalier.** `C.TOWN_COURT_STEP_ROWS = 3` (fermeConstants.js) : les trois rangées sud du perron
+sortent de `solid` ET gagnent un `elev` réel (+0,06/rangée), posé DANS la section RELIEF de
+`generateTownWorld`, avant tout ce qui lit `elev` (§4 — mon premier jet l'avait posé trop tard,
+après `forecourt`, corrigé avant de tester). `ground` ne bouge pas : l'escalier est déjà peint dans
+le bitmap, un `G_TOWN_STAIR` ici en aurait doublé un. `verify-vallee` a aussitôt accusé « tribunal
+(2 altitudes) » : exception NOMMÉE ajoutée (`MIXED_OK`, même famille que `STREET_OK` de la
+mairie), qui vérifie que les paliers sont EXACTEMENT ceux attendus plutôt que de désarmer le
+contrôle. ⚠️⚠️ Vérifié en jeu, à la main : monter toute la volée peinte s'arrête pile au péristyle
+(porte + `E` fonctionnent depuis là), redescendre marche. Un test au clavier synthétique trop
+rapide (bourrasques sans le throttle naturel d'une vraie frappe) a fait UNE FOIS traverser le mur
+plein en un pas et grimper jusqu'au fronton, sous les yeux de Guillaume — pas un bogue du jeu, un
+artefact du harnais (§10 : un joueur réel avance ~1 px/frame, jamais assez pour tunneler dans un
+mur de quatre cases). Reconfirmé ensuite par petits pas lents, cinq essais : bloqué au même
+endroit à chaque fois.
 
-### Toujours en attente du retour de Guillaume en jeu (rien de rejoué depuis)
+**L'échelle.** Deux défauts trouvés en jeu, pas à la lecture : (1) `ctx.drawImage(day, dx, dy)`
+avait perdu `dw, dh` en route — le sprite se dessinait à sa résolution NATIVE (384 px) au lieu de
+la taille prévue ; corrigé. (2) Une fois corrigé, mesuré contre l'église (les deux PNG ramenés à
+192 de large) : porte de l'église ~42 px, porte du tribunal ~25 px — l'escalier peint y occupe une
+part de l'image que l'église, avec son parvis modeste, n'a pas, donc la porte et les colonnes s'y
+retrouvent compressées d'autant. Parité complète (×1,68) dépasserait la marge est du site, mesurée
+FRAÎCHE sur la vraie carte générée (4 cases = 64 px, la plus courte des quatre, cohérent avec le
+O5/E4 documenté) une fois le `GROW` ×1,1 appliqué. Réglé à 256 px d'affichage (×1,33 par rapport
+aux deux voisins, encore ×1,1 avec `GROW`) : ~45 px de marge consommée sur 64 disponibles de
+chaque côté, vérifié en jeu — colonnes et porte nettement plus lisibles, aucun chevauchement.
+`sprites.courthouse`/`courthouseSprite()` restent construits mais ne sont plus dessinés (même sort
+que `sprites.church`) — rien supprimé.
 
-Cinq livraisons jamais rejouées par Guillaume, dans l'ordre : le tronc du pin (ci-dessus) ; le bois
-du sud-est étendu vers le nord (densité, organicité de la lisière, transition contre le quartier
-des artisans) ; la réorganisation du cœur de ville, la fontaine de la place refaite et deux
+**Les pigeons.** Même moule que ceux de l'église (`drawChurchBitmap`) : pure fonction du temps,
+aucun état partagé. Treize points de pose mesurés sur le bitmap à 256 px (plusieurs hauteurs de
+marche, vasques de la balustrade, corniches des ailes, faîte du fronton, sommet du dôme), une
+orbite de vol autour du dôme, et deux oiseaux qui REJOUENT le vol de l'oiseau meneur décalés de
+quelques secondes pour « se suivre » sans état à réconcilier. Pas de passe « derrière » comme à
+l'église (un dôme est un solide plein, pas une flèche fine à contourner). Vu en jeu : vol et
+oiseaux au sol présents, aucune erreur console.
+
+`verify-vallee` 223/223, `verify-collision` TOUT PASSE, `verify-syntax` propre, `next build`
+✓ Compiled successfully — **et regardé en direct par Guillaume pendant la session** (stairs,
+échelle, pigeons tous ajustés sur son retour en jeu, pas seulement aux bancs). Reste : une vraie
+soirée de jeu, à tête reposée, pour juger si « ça rend bien » au sens large.
+
+### Toujours en attente du retour de Guillaume en jeu (hors tribunal, ci-dessus)
+
+Cinq livraisons jamais rejouées par Guillaume, dans l'ordre : le tronc du pin (`richTrunk` sur la
+seule fiche `pine`, `render-arbres` 9/9, jamais vu en jeu à l'échelle réelle) ; le bois du sud-est
+étendu vers le nord ; la réorganisation du cœur de ville, la fontaine de la place refaite et deux
 correctifs de relecture (bouton « changer de ferme », collision résidents/buissons) — ces quatre
 derniers du 2026-09-21, détail dans l'historique git (commits du jour) et les commentaires de code
-cités par eux, pas la peine de le redire ici. Toutes vérifiées aux bancs disponibles pour chacune
-(`verify-vallee` 223/223, `verify-collision` TOUT PASSE, `render-arbres` 9/9 selon le cas),
-**aucune au ressenti réel** : ni la ferme à deux clients, ni le mouvement des résidents, ni si le
-bois/la fontaine/le cœur de ville/le tronc du pin « rendent bien » n'ont été jugés par Guillaume
-en jeu.
+cités par eux, pas la peine de le redire ici. Toutes vérifiées aux bancs disponibles pour chacune,
+**aucune au ressenti réel** en dehors de ce que Guillaume a déjà vu du tribunal ci-dessus.
 
 ### Toujours ouvert
 
 - **La refonte graphique des bâtiments, au sens large** (demande du 2026-09-21 : « détailler la
   majorité des bâtiments sur le modèle de l'église, de l'hdv, pour une refonte graphique », AVEC
-  Gemini). Le prompt du tribunal est désormais PRÊT (ci-dessus, bloc REPRISE du 2026-09-22) —
-  reste à Guillaume de le passer dans Gemini. **Aucun ordre pour les bâtiments suivants n'a été
+  Gemini). Le tribunal est fait (ci-dessus). **Aucun ordre pour les bâtiments suivants n'a été
   arbitré avec Guillaume** ; ne pas en choisir un sans lui (§2).
 - **Traduction des métiers** (trouvé le 2026-09-20, jamais corrigé) : `job` dans `TOWN_RESIDENTS`
   (fermeConstants.js) est écrit en anglais et s'affiche brut dans au moins six phrases françaises.
@@ -82,14 +105,10 @@ ferme peuplée à deux clients, suite de l'audit d'Où's that).
 
 ### ⏭️ ACTION SUIVANTE
 
-Deux retours attendus de Guillaume, indépendants : (1) son verdict EN JEU sur les cinq livraisons
-ci-dessus (tronc du pin compris) — aucune n'a été jugée « agréable » par lui, seulement par des
-bancs ; (2) le résultat de son passage du prompt tribunal dans Gemini. Si le tribunal rend bien :
-suivre le même pipeline d'import que l'église (`build-eglise-sprite.mjs` comme modèle), largeur
-cible 192 px, et vérifier en jeu qu'aucun détail ne dépasse le cadre côté est/ouest (marges
-serrées, leçon du clocher de l'église qui sortait du canevas). **Choisir quel bâtiment vient après
-le tribunal, et où continuer le bois si Guillaume en veut encore, se demandent à lui** — ça ne se
-décide pas seul (§2).
+Attendre le retour de Guillaume après une vraie soirée de jeu : verdict sur le tribunal (au calme,
+pas seulement l'aperçu pendant la session) et sur les cinq livraisons plus anciennes du bloc
+ci-dessus. **Choisir quel bâtiment vient après le tribunal, et où continuer le bois si Guillaume en
+veut encore, se demandent à lui** — ça ne se décide pas seul (§2).
 
 ---
 

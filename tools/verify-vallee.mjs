@@ -263,16 +263,34 @@ section("Valley Town — géométrie");
      l'hôtel de ville a cette raison nommée ; les cinq autres bâtiments et
      toutes les maisons restent tenus au mot. */
   const STREET_OK = new Set(["mairie"]);
+  /* ⚠️⚠️ 2026-09-22 — MÊME FAMILLE QUE `STREET_OK` CI-DESSUS, MÊME RAISON
+     D'ÊTRE : une exception NOMMÉE, jamais un seuil desserré en silence (§10
+     CLAUDE.md). Le tribunal porte désormais un vrai petit perron en paliers
+     (`TOWN_COURT_STEP_ROWS`, fermeConstants.js) — trois marches, chacune
+     +0,06, donc « deux altitudes » dans son emprise EST le but, pas un
+     bâtiment posé par accident à cheval sur une falaise. Le test se refait
+     précis plutôt que de renoncer à ce qu'il cherchait : il exige que le
+     tribunal ne porte QUE les paliers attendus (une valeur par rangée, un pas
+     borné par TOWN_STEP_MAX), sinon il continue d'accuser un vrai défaut. */
+  const MIXED_OK = new Set(["tribunal"]);
   for (const [name, b] of allB) {
     let e0 = null, mixed = false, onStreet = false, onStair = false;
+    const elevs = new Set();
     for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) {
       const i = idx(x, y);
+      elevs.add(tw.elev[i]);
       if (e0 === null) e0 = tw.elev[i]; else if (Math.abs(tw.elev[i] - e0) > 0.001) mixed = true;
       if (tw.ground[i] === C.G_TOWN_STAIR) onStair = true;
       for (const ry of C.TOWN_ST_ROWS) if (y === ry || y === ry + 1) onStreet = true;
       for (const cx of C.TOWN_ST_COLS) if (x === cx || x === cx + 1) onStreet = true;
     }
     if (onStreet && STREET_OK.has(name)) onStreet = false;
+    if (mixed && MIXED_OK.has(name)) {
+      const sorted = [...elevs].sort((a, z) => a - z);
+      const stepsOk = sorted.length === C.TOWN_COURT_STEP_ROWS + 1
+        && sorted.every((v, k) => k === 0 || v - sorted[k - 1] <= C.TOWN_STEP_MAX + 0.001);
+      if (stepsOk) mixed = false;
+    }
     if (mixed || onStreet || onStair) bad.push(`${name}${mixed ? " (2 altitudes)" : ""}${onStreet ? " (sur une rue)" : ""}${onStair ? " (sur un escalier)" : ""}`);
   }
   ok("aucun bâtiment sur une rue, un escalier ou à cheval sur deux altitudes", bad.length === 0, bad.join(" · "));

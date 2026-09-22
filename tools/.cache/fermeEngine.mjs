@@ -4375,6 +4375,22 @@ export function generateTownWorld() {
   for (const lg of (C.TOWN_STAIR_LANDINGS || [])) {
     rect(lg, (x, y, i) => { elev[i] = lg.elev; ground[i] = C.G_PATH_STONE; });
   }
+  /* 2026-09-22 — LE PERRON DU TRIBUNAL, AVEC LE RESTE DU RELIEF ET DANS LE MÊME
+     ORDRE STRICT QUE LUI (voir la note ci-dessus : posé plus tard, un parvis ou
+     un décor l'aurait lu à plat). Trois petites marches, chacune +0,06 — loin
+     sous TOWN_STEP_MAX (0,34), franchissables sans aucun cas particulier dans
+     `canStandTown`, exactement comme TOWN_STAIRS (voir TOWN_COURT_STEP_ROWS,
+     fermeConstants.js). ⚠️ `ground` NE BOUGE PAS : l'escalier est déjà peint
+     dans le sprite bitmap (courthouse-day.png) — un `G_TOWN_STAIR` ici
+     doublerait un escalier déjà visible. */
+  for (let k = 0; k < C.TOWN_COURT_STEP_ROWS; k++) {
+    const y = C.TOWN_COURT.y + C.TOWN_COURT.h - 1 - k;
+    const h = 1 + 0.06 * (k + 1);
+    for (let x = C.TOWN_COURT.x; x < C.TOWN_COURT.x + C.TOWN_COURT.w; x++) {
+      if (!inMap(x, y)) continue;
+      elev[id(x, y)] = h;
+    }
+  }
   /* ⚠️ LES GARDE-CORPS SONT POSÉS ICI, AVEC LE RELIEF, ET PAS AVEC LES DÉCORS.
      Ils appartiennent à la forme du terrain — ils bordent un dénivelé — donc
      tout ce qui suit (rues, arbres, semis) doit déjà les voir comme occupés.
@@ -4606,7 +4622,7 @@ export function generateTownWorld() {
      porte) suffisait déjà à interagir, mais le joueur butait sur un mur
      invisible une case avant les marches au lieu de les monter. */
   for (const b of [C.TOWN_CHURCH, C.TOWN_HALL, C.TOWN_COURT, C.TOWN_BOUTIQUE, C.TOWN_SALON]) {
-    const stepRows = b === C.TOWN_HALL ? C.TOWN_HALL_STEP_ROWS : 0;
+    const stepRows = b === C.TOWN_HALL ? C.TOWN_HALL_STEP_ROWS : b === C.TOWN_COURT ? C.TOWN_COURT_STEP_ROWS : 0;
     rect(b, (x, y, i) => { if (y < b.y + b.h - stepRows) solid[i] = 1; });
   }
 

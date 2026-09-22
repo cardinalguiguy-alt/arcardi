@@ -4946,6 +4946,17 @@ export const TOWN_HALL_STEP_ROWS = 1;
    Guillaume, au lieu d'un escalier-démonstration qui ne mène nulle part.
    Sprite 192×176 (12×11 cases), 7 rangées bloquantes. */
 export const TOWN_COURT = { x: 136, y: 14, w: 12, h: 7 };
+/* 2026-09-22 — LE PERRON DU TRIBUNAL, RÉELLEMENT EN PALIERS (demande de
+   Guillaume, sur le nouveau sprite Gemini : « les escaliers devront être
+   praticables, vraie physique à prévoir », « sensation d'altitude et de
+   profondeur un peu »). Même principe que TOWN_HALL_STEP_ROWS (rangées
+   traversables au sud de l'emprise, partagé avec FermeGame.js pour la clé de
+   tri) — MAIS ici ces rangées gagnent aussi un vrai `elev` progressif
+   (fermeEngine.js, section RELIEF), pas seulement `solid`. Trois rangées,
+   pas une seule : le perron peint dans le sprite est bien plus profond que
+   celui de la mairie, un joueur qui ne pourrait fouler que la dernière
+   marche buterait visiblement sur les autres. */
+export const TOWN_COURT_STEP_ROWS = 3;
 export const TRAIN_BOARD = { x: 5, y: 30 };         // farm-side boarding spot on the platform (E to ride)
 
 /* ═══════════════════════════════════════════════════════════════════════════
