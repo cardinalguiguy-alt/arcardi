@@ -21168,23 +21168,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              contourner visuellement — les cinq oiseaux se peignent tous APRÈS
              le bâtiment, en une seule passe. */
           function hash01T(n) { const s = Math.sin(n * 12.9898) * 43758.5453; return s - Math.floor(s); }
-          // Mesurés à la loupe sur courthouse-day.png ramené à 256 de large
-          // (l'échelle réelle d'affichage, voir dispScale ci-dessus).
+          /* ⚠️⚠️ 2026-09-23 — REMESURÉS À LA GRILLE (python3/PIL, un repère tous
+             les 10 px), PAS À L'ŒIL COMME LA PREMIÈRE FOIS. Signalé en jeu par
+             Guillaume, capture à l'appui : « des pigeons se posent à des
+             endroits impossibles ». La cause : les points d'origine (27,187)
+             et (233,184) pour les vasques, entre autres, n'étaient pas mesurés
+             sur le PNG ramené à 256 malgré ce que disait le commentaire — posés
+             sur le mur de l'aile droite, à un tiers de case du pas de la
+             fenêtre, sans support visible. Reposés à la grille : les deux
+             vasques (63,201)/(191,199) tombent maintenant pile sur les deux
+             urnes peintes, symétriques autour du centre (128) à un pixel près —
+             le test qui manquait la première fois. */
           const SUMMIT_ORBIT = { cx: dx + 128, cy: dy + 27, rx: 24, ry: 13 };
           const PERCH_POINTS_T = [
-            { x: dx + 37, y: dy + 229 },   // marche basse, gauche
-            { x: dx + 224, y: dy + 224 },  // marche basse, droite
-            { x: dx + 64, y: dy + 208 },   // marche intermédiaire, gauche
-            { x: dx + 200, y: dy + 203 },  // marche intermédiaire, droite
-            { x: dx + 128, y: dy + 193 },  // marche haute, centre
-            { x: dx + 47, y: dy + 181 },   // marche du haut, près de la balustrade, gauche
-            { x: dx + 213, y: dy + 177 },  // marche du haut, près de la balustrade, droite
-            { x: dx + 27, y: dy + 187 },   // vasque de la balustrade, gauche
-            { x: dx + 233, y: dy + 184 },  // vasque de la balustrade, droite
-            { x: dx + 33, y: dy + 77 },    // corniche de l'aile gauche
-            { x: dx + 224, y: dy + 77 },   // corniche de l'aile droite
-            { x: dx + 128, y: dy + 56 },   // faîte du fronton
-            { x: dx + 128, y: dy + 7 },    // sommet du dôme
+            { x: dx + 30, y: dy + 217 },   // marche basse, gauche
+            { x: dx + 225, y: dy + 216 },  // marche basse, droite
+            { x: dx + 45, y: dy + 195 },   // marche intermédiaire, gauche
+            { x: dx + 211, y: dy + 193 },  // marche intermédiaire, droite
+            { x: dx + 128, y: dy + 175 },  // marche haute, centre
+            { x: dx + 52, y: dy + 175 },   // marche du haut, près de la balustrade, gauche
+            { x: dx + 204, y: dy + 173 },  // marche du haut, près de la balustrade, droite
+            { x: dx + 63, y: dy + 201 },   // vasque de la balustrade, gauche
+            { x: dx + 191, y: dy + 199 },  // vasque de la balustrade, droite
+            { x: dx + 20, y: dy + 69 },    // corniche de l'aile gauche
+            { x: dx + 233, y: dy + 69 },   // corniche de l'aile droite
+            { x: dx + 125, y: dy + 42 },   // faîte du fronton
+            { x: dx + 125, y: dy + 7 },    // sommet du dôme
           ];
           function pigeonStateT(i, tOverride) {
             const seed = i * 1.6180339887; // nombre d'or : phases sans motif répétitif à l'œil

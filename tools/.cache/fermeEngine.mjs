@@ -4689,6 +4689,16 @@ export function generateTownWorld() {
       }
     }
   }
+  /* 2026-09-23 — LES DEUX VASQUES DE LA BALUSTRADE (voir la note de
+     `TOWN_COURT_URN_ROW`, fermeConstants.js). Deux cases, jamais plus : le
+     reste de la volée à cette rangée doit rester foulable. */
+  {
+    const y = C.TOWN_COURT_URN_ROW, span = C.courtStairSpan(y);
+    if (span) {
+      if (inMap(span.x0, y)) solid[id(span.x0, y)] = 1;
+      if (inMap(span.x1, y)) solid[id(span.x1, y)] = 1;
+    }
+  }
 
   /* LES DEUX BANCS DU PARVIS DE L'ÉGLISE (2026-09-21, demande de Guillaume :
      « jeter du pain pour les attirer, et les faire descendre au sol »). Même

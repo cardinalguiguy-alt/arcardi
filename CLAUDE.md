@@ -7,6 +7,58 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
+### 2026-09-23 bis — Quatre retours en jeu sur le même perron : la montée encore ralentie, les vasques enfin solides, les pigeons remesurés, un artefact ôté du toit
+
+Guillaume a rejoué le perron et signalé QUATRE choses dans la même séance, sur des sujets tous
+différents : « le perso gravit les marches trop vite […] un peu moins rapide à mesure qu'il monte
+mais pas trop » ; « les pots sur l'escalier n'ont pas de collision, c'est dommage quand tout le
+reste est travaillé » ; « des pigeons se posent à des endroits impossibles », capture à l'appui ;
+« le haut du bâtiment semble mal fini », capture à l'appui.
+
+**La vitesse.** Le fondu était déjà progressif (`courtDepthFrac`, linéaire du pied au palier —
+c'est exactement « à mesure qu'il monte », rien à changer à la forme). Seul le plancher a bougé,
+d'un cran modéré : `TOWN_COURT_STAIR_SLOW` 0,6 → 0,5 (fermeConstants.js). Chiffre encore choisi
+par Claude, pas mesuré par Guillaume — à rejuger à la prochaine montée.
+
+**Les vasques.** Les deux urnes qui encadrent la balustrade, au resserrement de la volée, n'avaient
+jamais été déclarées dans le générateur — exactement le piège nommé au §4 de ce fichier (« un
+décor ajouté plus tard doit être marqué DANS le générateur, sans quoi on le traversera —
+silencieusement »), payé ici pour la première fois sur un décor peint dans un BITMAP plutôt que
+dessiné en procédural. Mesurées à la loupe sur `courthouse-day.png` (python3/PIL, grille de
+10 px) : les deux bases tombent PILE sur les deux bords de `courtStairSpan` à la rangée 19 — la
+trapèze fait donc doublement foi, dessin et collision. `TOWN_COURT_URN_ROW` (fermeConstants.js)
+porte la rangée mesurée ; les deux colonnes se LISENT dans `courtStairSpan`, elles ne se recopient
+pas. Solidité posée dans `generateTownWorld` (fermeEngine.js), juste après le bloc des rampes —
+deux cases, jamais plus, vérifié en jeu (le personnage bute net sur l'urne droite au lieu de la
+traverser).
+
+**Les pigeons.** Cause trouvée en remesurant à la grille : les treize points de perchoir
+(`PERCH_POINTS_T`, FermeGame.js) affirmaient avoir été « mesurés à la loupe sur courthouse-day.png
+ramené à 256 de large », mais ne l'avaient pas été — au moins deux d'entre eux (les deux vasques)
+tombaient sur le MUR de l'aile, à un tiers de case d'une fenêtre, sans rien sous les pattes. Les
+treize ont été repris un par un à la grille (python3/PIL, repère tous les 10 px) et vérifiés
+contre le dessin réel ; les deux vasques tombent maintenant pile sur les deux urnes, symétriques
+au pixel près. ⚠️ Aucun banc ne pouvait le voir — un point de perchoir n'est vérifié nulle part,
+seul l'œil (ou la grille) le peut, même famille que le §10 (« aucun banc ne regarde un bitmap »).
+
+**Le toit.** Un artefact du rendu Gemini — un poteau segmenté, flottant, détaché de la corniche de
+l'aile droite — vivait dans `courthouse-day.png` depuis son import, jamais vu parce que personne
+n'avait zoomé sur ce coin précis. Effacé (alpha mis à 0 sur son rectangle, python3/PIL) ; rien
+d'autre dans l'image n'y touche. Une trace bien plus faible et éparse existe aussi côté gauche
+(quelques pixels isolés, alpha bas) — laissée en l'état : elle ne forme pas de silhouette et ne
+correspond à rien de ce que Guillaume a montré.
+
+**Vérification.** `verify-syntax`, `verify-collision` (TOUT PASSE), `verify-vallee` (231/231,
+inchangé) relancés. `next build` : ✓ Compiled successfully (même avertissement préexistant
+`G_SOIL`). ⚠️⚠️ **EN JEU** (harnais worker-rAF + dev menu, §10, plus un ref temporaire posé sur
+`meRef`/`canStandTown` pour lire les positions et tester la collision au vol, retiré après usage) :
+montée mesurée, l'urne droite bloque bien le passage, le toit est propre sur capture, un pigeon vu
+posé sur une marche haute. ⚠️⚠️ **PAS LES TREIZE POINTS DE PERCHOIR UN PAR UN** : le cycle de vol
+dure 26 à 50 s par oiseau, trop long pour les épuiser en séance — la mesure à la grille contre le
+dessin réel est la seule vérification faite pour l'instant.
+⚠️ **PAS DE MANIPULATION SUPABASE** : aucun schéma touché, uniquement des constantes, un bloc du
+générateur et un PNG retouché.
+
 ### 2026-09-23 — Le perron corrigé sur un vrai bug de saut, la montée ralentie, les pets alignés
 
 Guillaume a rejoué le perron du ter et signalé trois choses dans la même séance : un vrai bug
@@ -48,10 +100,11 @@ mi-volée — le couperet est bien devenu un fondu.
 geste ni nouvelle interface, donc pas de séance dédiée lancée par Claude (§13 : Guillaume seul
 joue) — mais rien ici ne remplace sa prochaine partie pour confirmer à l'œil que le saut a
 vraiment disparu.
-⚠️ **DEUX NOMBRES CHOISIS PAR CLAUDE, PAS PRÉCISÉS PAR GUILLAUME** : `TOWN_COURT_STAIR_SLOW = 0,6`
-(40 % plus lent au palier, rien entre les deux n'a été chiffré par lui) et
-`TOWN_COURT_DEPTH_MARGIN = 1` case de fondu latéral. Les deux sont trivialement ajustables
-(fermeConstants.js, à côté de `courtDepthScale`).
+⚠️ **DEUX NOMBRES CHOISIS PAR CLAUDE, PAS PRÉCISÉS PAR GUILLAUME** : `TOWN_COURT_STAIR_SLOW`
+(rien entre 0 et 1 n'a été chiffré par lui — porté à 0,5 le 2026-09-23 bis ci-dessus, après un
+premier retour « encore trop vite » sur le 0,6 initial) et `TOWN_COURT_DEPTH_MARGIN = 1` case de
+fondu latéral. Les deux sont trivialement ajustables (fermeConstants.js, à côté de
+`courtDepthScale`).
 
 ### 2026-09-22 ter — Le perron rejoué : rampes traversables, joueur qui ne rétrécit pas, plus un zoom manuel demandé au passage
 
@@ -180,10 +233,11 @@ circulant ? Rien de tout ça ne se mesure (§10).
 le SCHÉMA DE COMMANDE (molette + `+`/`-`/pavé numérique + deux boutons tactiles), le NOMBRE de crans
 (cinq) et leur AMPLITUDE (`ZOOM_LEVELS = [1,2,3,4,5]`, `ZOOM` = 3 au milieu) — rien de tout ça n'a
 été validé en jeu par lui, et tout est trivialement ajustable (une seule table dans `FermeGame.js`).
-⚠️ **LA VITESSE DE MONTÉE ET LE RÉTRÉCISSEMENT DES PETS (2026-09-23) SONT NEUFS EUX AUSSI** : « plus
-lent » et « accordingly » n'étaient pas chiffrés, donc `TOWN_COURT_STAIR_SLOW = 0,6` et l'ancrage du
-rétrécissement des pets sur la position du maître (pas la leur propre) sont des choix de Claude —
-à confirmer ou corriger dès la prochaine montée.
+⚠️ **LE RÉTRÉCISSEMENT DES PETS (2026-09-23) EST NEUF** : « accordingly » n'était pas chiffré, donc
+l'ancrage du rétrécissement des pets sur la position du maître (pas la leur propre) est un choix
+de Claude — à confirmer ou corriger dès la prochaine montée. La vitesse de montée, elle, a déjà eu
+un second réglage (0,6 → 0,5, 2026-09-23 bis ci-dessus) après un premier retour « encore trop
+vite » ; toujours pas confirmée.
 
 Cinq livraisons jamais rejouées par Guillaume, dans l'ordre : le tronc du pin (`richTrunk` sur la
 seule fiche `pine`, `render-arbres` 9/9, jamais vu en jeu à l'échelle réelle) ; le bois du sud-est
@@ -222,13 +276,16 @@ ferme peuplée à deux clients, suite de l'audit d'Où's that).
 
 ### ⏭️ ACTION SUIVANTE
 
-Attendre le retour de Guillaume sur TROIS choses distinctes, pour ne pas les mélanger (§2) : (1) le
-RESSENTI du perron du tribunal (montée, cadrage — mesuré et corrigé trois fois, jamais jugé au
+Attendre le retour de Guillaume sur QUATRE choses distinctes, pour ne pas les mélanger (§2) : (1) le
+RESSENTI du perron du tribunal (montée, cadrage — mesuré et corrigé plusieurs fois, jamais jugé au
 plaisir) ; (2) le ZOOM MANUEL lui-même — le schéma de commande et les cinq crans sont un choix de
 Claude, pas une demande précise de Guillaume ; (3) le correctif du 2026-09-23 — le saut de taille a-t-il
-vraiment disparu à l'œil en longeant les côtés du bâtiment, la vitesse ×0,6 en haut du perron
-paraît-elle « plus lente » comme demandé ou faudrait-il un autre chiffre, et le rétrécissement des
-pets suivant le maître (plutôt que leur propre position) se voit-il ou se remarque-t-il en mal.
+vraiment disparu à l'œil en longeant les côtés du bâtiment, et le rétrécissement des pets suivant le
+maître (plutôt que leur propre position) se voit-il ou se remarque-t-il en mal ; (4) les QUATRE points
+du 2026-09-23 bis ci-dessus — la vitesse ×0,5 est-elle enfin celle demandée (« un peu moins rapide
+[…] mais pas trop »), les deux urnes bloquent-elles proprement sans gêner le passage entre elles, les
+pigeons se posent-ils désormais partout où on les voit (les treize points n'ont pas tous été vus en
+séance), et le haut du bâtiment est-il net une fois l'artefact ôté.
 Les cinq livraisons plus anciennes du bloc ci-dessus attendent toujours la même chose.
 **Choisir quel bâtiment vient après le tribunal se demande à lui** — ça ne se décide pas seul (§2).
 ⚠️ Le jour où ce bâtiment-là arrive, **mesurer son sprite AVANT de poser sa collision** : c'est la

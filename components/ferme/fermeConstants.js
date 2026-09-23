@@ -5057,6 +5057,21 @@ export const TOWN_COURT_WING_ROW = Math.floor(
    `TOWN_COURT_WING_ROW` vient d'écarter, un cran plus loin seulement. */
 export const TOWN_COURT_RAMP_MARGIN = 1;
 
+/* ⚠️⚠️ 2026-09-23 — LES DEUX VASQUES DE LA BALUSTRADE N'AVAIENT AUCUNE
+   COLLISION. Signalé en jeu par Guillaume : « les pots sur l'escalier n'ont
+   pas de collision, c'est dommage quand tout le reste est travaillé ».
+   Mesurées à la loupe sur courthouse-day.png (PIL, ix/iy natifs) : la vasque
+   gauche pose sa base en (95, 301), la droite en (287, 299). Passées par la
+   MÊME conversion que `courtDepthScale`/le reste du bloc (t d'après
+   `iyFoot`/`iyLanding`, jamais choisi à part), les deux tombent PILE sur les
+   deux bords de `courtStairSpan` à la rangée 19 — parce que c'est
+   exactement là que le dessin les pose, sur le chapeau de la balustrade, à
+   l'endroit où elle se resserre. La rangée est donc un nombre mesuré comme
+   les autres de ce bloc ; les deux colonnes, elles, ne se recopient pas —
+   elles se LISENT dans `courtStairSpan`, pour rester justes si la trapèze
+   est un jour remesurée. */
+export const TOWN_COURT_URN_ROW = 19;
+
 /* L'intervalle de cases FOULABLES de la volée, pour une rangée donnée. Le
    trapèze est interpolé sur le milieu de la rangée — pris au bord nord, on
    perdrait une demi-marche de largeur à chaque étage. */
@@ -5126,7 +5141,13 @@ const TOWN_COURT_DEPTH_MARGIN = 1; // case de fondu latéral hors de K, même or
 const TOWN_COURT_DEPTH_MIN =
   (TOWN_COURT_SPRITE.ixStairTopR - TOWN_COURT_SPRITE.ixStairTopL)
   / (TOWN_COURT_SPRITE.ixStairFootR - TOWN_COURT_SPRITE.ixStairFootL); // ~0,68, voir « le rapport… » ci-dessus
-export const TOWN_COURT_STAIR_SLOW = 0.6; // vitesse au palier ; pleine vitesse au pied, fondu entre les deux
+/* ⚠️ 2026-09-23 — RETOUR EN JEU APRÈS LE PREMIER RÉGLAGE (0,6) : « le perso
+   gravit les marches trop vite […] un peu moins rapide à mesure qu'il monte
+   mais pas trop ». Le fondu reste le même (`courtDepthFrac`, linéaire du
+   pied au palier — c'est déjà « à mesure qu'il monte », rien à changer là) ;
+   seul le plancher descend, d'un cran modéré (0,6 → 0,5 : moitié moins vite
+   au palier plutôt que 40 %) pour ne pas retomber dans l'excès inverse. */
+export const TOWN_COURT_STAIR_SLOW = 0.5; // vitesse au palier ; pleine vitesse au pied, fondu entre les deux
 
 function courtDepthFrac(x, y) {
   const b = TOWN_COURT, K = TOWN_COURT_COLL;
