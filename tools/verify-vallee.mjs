@@ -201,6 +201,18 @@ for (const b of [C.TOWN_CHURCH, C.TOWN_HALL, C.TOWN_COURT, C.TOWN_BOUTIQUE, C.TO
    qui n'existe plus, ou le complice d'un qui apparaît. */
 for (let y = C.TOWN_COURT.y; y <= C.TOWN_COURT_WING_ROW; y++)
   for (let x = C.TOWN_COURT_COLL.x0; x <= C.TOWN_COURT_COLL.x1; x++) mark(x, y);
+/* ⚠️⚠️ 2026-09-22 ter — LES RAMPES, SOUS LA MÊME RANGÉE DES AILES : ce banc
+   les a réclamées tout seul aussi (deux cases orphelines au premier lancement
+   après le correctif « les rampes ne sont pas solides », Guillaume, en jeu).
+   Même règle qu'au-dessus : on marque ce que `courtStairSpan` et
+   `TOWN_COURT_RAMP_MARGIN` disent solide, jamais un rectangle recopié —
+   sinon ce contrôle redevient l'accusateur d'un défaut qui n'existe plus le
+   jour où la volée change de forme. */
+for (let y = C.TOWN_COURT_WING_ROW + 1; y <= C.TOWN_COURT.y + C.TOWN_COURT.h - 1; y++) {
+  const span = C.courtStairSpan(y);
+  if (!span) continue;
+  for (let k = 1; k <= C.TOWN_COURT_RAMP_MARGIN; k++) { mark(span.x0 - k, y); mark(span.x1 + k, y); }
+}
 for (const h of C.TOWN_HOUSES) markRect({ x: h.x, y: h.y }, C.TOWN_HOUSE_W, C.TOWN_HOUSE_H);
 for (const p of tw.props) mark(p.x, p.y);
 /* ZIP 467 — ces obstacles sont visibles dans le bloc unique, pas dans `props`.

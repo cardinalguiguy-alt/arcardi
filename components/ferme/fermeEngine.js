@@ -4669,6 +4669,26 @@ export function generateTownWorld() {
       }
     }
   }
+  /* ⚠️⚠️ 2026-09-22 ter — LES RAMPES, SOUS LA RANGÉE DES AILES. Signalé en jeu
+     par Guillaume : « les rampes ne sont pas solides ». La boucle ci-dessus
+     s'arrête à `TOWN_COURT_WING_ROW` par construction — au-delà, l'aile a
+     cédé la place au pavé du parvis (voir sa note). Mais elle s'arrête TROP
+     TÔT pour la RAMPE elle-même : le socle qui termine chaque balustrade
+     (mesuré sur le PNG, voir `TOWN_COURT_RAMP_MARGIN`) tient encore une case
+     de plus de chaque côté de la volée, avant de rendre vraiment la main au
+     parvis ouvert. Sans cette case, on longe un mur peint en marchant dans
+     le vide juste à côté de lui — exactement ce que Guillaume vient de voir. */
+  {
+    const b = C.TOWN_COURT, M = C.TOWN_COURT_RAMP_MARGIN;
+    for (let y = C.TOWN_COURT_WING_ROW + 1; y <= b.y + b.h - 1; y++) {
+      const span = C.courtStairSpan(y);
+      if (!span) continue;
+      for (let k = 1; k <= M; k++) {
+        if (inMap(span.x0 - k, y)) solid[id(span.x0 - k, y)] = 1;
+        if (inMap(span.x1 + k, y)) solid[id(span.x1 + k, y)] = 1;
+      }
+    }
+  }
 
   /* LES DEUX BANCS DU PARVIS DE L'ÉGLISE (2026-09-21, demande de Guillaume :
      « jeter du pain pour les attirer, et les faire descendre au sol »). Même

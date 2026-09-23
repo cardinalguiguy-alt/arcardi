@@ -5041,6 +5041,22 @@ export const TOWN_COURT_COLL = { x0: courtCell0(courtSpriteX(TOWN_COURT_SPRITE.i
 export const TOWN_COURT_WING_ROW = Math.floor(
   (TOWN_COURT.y + TOWN_COURT.h) + (TOWN_COURT_SPRITE.iyWingBase - TOWN_COURT_SPRITE.iyFoot) * courtSpriteK() / TILE - 0.5);
 
+/* ⚠️⚠️ 2026-09-22 ter — SOUS `TOWN_COURT_WING_ROW`, LA RAMPE TIENT ENCORE UNE
+   CASE. Signalé en jeu par Guillaume : « les rampes ne sont pas solides ».
+   L'aile a cédé la place au-delà de cette rangée (c'est tout le sens de
+   `TOWN_COURT_WING_ROW`, voir sa note), mais le socle qui termine chaque
+   balustrade, lui, descend encore un peu plus bas avant de rendre vraiment la
+   main au parvis ouvert — mesuré sur `courthouse-day.png` (canal alpha,
+   lignes 322 à 340 : la volée seule y mesurerait ~62-70 px de large selon la
+   rangée, le dessin réel en fait ~120 de plus, pierre comprise des deux
+   côtés) puis converti en cases par la même règle de CENTRE que tout ce
+   bloc : au-delà de `TOWN_COURT_WING_ROW`, la case immédiatement voisine de
+   la volée a son centre sur de la pierre, celle d'après sur du vide.
+   ⚠️ CE N'EST PAS `TOWN_COURT_COLL` ENCORE UNE FOIS : bloquer toute la
+   largeur du corps à ces rangées-là referait le mur invisible que la note de
+   `TOWN_COURT_WING_ROW` vient d'écarter, un cran plus loin seulement. */
+export const TOWN_COURT_RAMP_MARGIN = 1;
+
 /* L'intervalle de cases FOULABLES de la volée, pour une rangée donnée. Le
    trapèze est interpolé sur le milieu de la rangée — pris au bord nord, on
    perdrait une demi-marche de largeur à chaque étage. */
@@ -5059,6 +5075,46 @@ export function courtStairSpan(y) {
 export function courtStepElev(y, apron = 1) {
   const b = TOWN_COURT;
   return apron + TOWN_COURT_STEP_RISE * ((b.y + b.h) - y);
+}
+
+/* ⚠️⚠️ 2026-09-22 ter — LE PERSONNAGE RÉTRÉCIT EN MONTANT, COMME LE DESSIN LE
+   FAIT DÉJÀ. Retour de Guillaume, en jeu : « il est toujours aussi grand au
+   lieu de rétrécir pour évoquer la profondeur ». La volée est un TRAPÈZE
+   (§ REPRISE 2026-09-22 bis, `courtStairSpan`) — elle se resserre en montant
+   parce que ses deux balustrades convergent — et c'est cette même
+   convergence qui doit rapetisser le personnage : sans elle, le décor dit
+   « on s'éloigne » et le joueur dit le contraire, au même pas.
+   ⚠️ LE FACTEUR SE DÉRIVE DE LA MÊME LARGEUR QUE LA COLLISION, IL NE SE
+   CHOISIT PAS À PART (§4 : « une grandeur de dessin, une grandeur de
+   collision, deux endroits où mentir » — ici c'est l'inverse, un troisième
+   usage de LA MÊME mesure). Le rapport (largeur au palier ÷ largeur au pied)
+   vaut ~0,68 : un personnage arrivé en haut fait donc les deux tiers de sa
+   taille au pied de la volée, jamais moins (t est borné à [0,1]) et jamais
+   plus (1 partout ailleurs en ville).
+   ⚠️ `x` FILTRE D'ABORD, ET C'EST CE QUI ÉVITE UN FAUX POSITIF AILLEURS EN
+   VILLE : la formule de `t` ne connaît que `y`, donc un point pris n'importe
+   où dans la ville à la même hauteur DE RANGÉE que la volée (un simple
+   nombre, pas une position) matcherait `t` sans y être. Restreindre `x` à
+   `TOWN_COURT_COLL` — l'emprise du dessin, pas `TOWN_COURT` — borne le test à
+   la largeur réelle du bâtiment, seul endroit où `y` seul suffit à situer un
+   pas sur la volée.
+   ⚠️⚠️ FALSIFIÉ EN JEU LE 2026-09-22 ter — LA PREMIÈRE ÉCRITURE RENVOYAIT `1`
+   POUR `t > 1`, PAS LE MINIMUM. Elle semblait juste sur le papier (« borné à
+   [0,1] », lu ci-dessus) mais un PREMIER RETOUR ANTICIPÉ n'est pas un
+   BORNAGE : mesuré en jeu, le palier devant la porte (le seuil réel, une
+   fraction de case AU-DELÀ du dernier repère de la trapèze) donne `t≈1,03`,
+   et l'ancien code y RENDAIT LA TAILLE PLEINE — pile là où le joueur vient de
+   finir sa montée, l'effet s'annulait sous ses yeux. Seul `t < 0` (sous le
+   pied de la volée, sur le parvis ouvert) doit rendre 1 sans transition : à
+   l'autre bout, on RESTE au plus petit, on ne regrandit jamais. */
+export function courtDepthScale(x, y) {
+  const b = TOWN_COURT, K = TOWN_COURT_COLL, S = TOWN_COURT_SPRITE;
+  if (x < K.x0 || x > K.x1) return 1;
+  const t = ((b.y + b.h) - y - 0.5) / TOWN_COURT_STEP_ROWS;
+  if (t < 0) return 1;
+  const tc = Math.min(1, t); // au-delà du palier, on reste au plus petit — voir la note de falsification
+  const wFoot = S.ixStairFootR - S.ixStairFootL, wTop = S.ixStairTopR - S.ixStairTopL;
+  return (wFoot + (wTop - wFoot) * tc) / wFoot;
 }
 
 export const TRAIN_BOARD = { x: 5, y: 30 };         // farm-side boarding spot on the platform (E to ride)

@@ -7,6 +7,65 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
+### 2026-09-22 ter — Le perron rejoué : rampes traversables, joueur qui ne rétrécit pas, plus un zoom manuel demandé au passage
+
+Guillaume a rejoué le perron livré la veille (bis) : « excellente physique de collisions pour
+l'escalier » mais « souci d'échelle avec le player… il est toujours aussi grand au lieu de
+rétrécir pour évoquer la profondeur », et séparément, en observant les côtés de la volée :
+« attention aux rampes qui ne sont pas solides actuellement ». Il a aussi demandé, dans la même
+session, un zoom manuel (« niveaux de zoom et dezoom, commande activable et désactivable à tout
+moment, garde le dézoom auto sur certaines zones »).
+
+**Les rampes.** Le blocage des ailes (`TOWN_COURT_COLL` moins `courtStairSpan`) s'arrête à
+`TOWN_COURT_WING_ROW` par construction — l'aile cède la place au parvis plus tôt que la volée. Mais
+la balustrade, elle, se termine sur un socle de pierre qui descend UNE case DE PLUS avant de rendre
+la main au pavé ouvert (mesuré sur `courthouse-day.png`, canal alpha, lignes 322-340) — case que
+plus rien ne bloquait. `TOWN_COURT_RAMP_MARGIN = 1` (fermeConstants.js) comble exactement cette
+case, des deux côtés de la volée, sur la seule rangée concernée — jamais toute la largeur du corps
+(ce serait remettre le mur invisible que `TOWN_COURT_WING_ROW` existe pour éviter, un cran plus
+loin). `verify-vallee` l'a réclamé tout seul (2 cases orphelines) : la marge s'enregistre au même
+endroit que la collision (§14.2, leçon n°2 — un chiffre, un seul endroit où mentir).
+
+**Le rétrécissement.** `courtDepthScale(x, y)` (fermeConstants.js) dérive le facteur de la MÊME
+largeur de trapèze que la collision (`courtStairSpan`) : ~0,68 au palier contre 1 au pied — jamais
+choisi à part. Appliqué dans `drawCharacter` (l'entonnoir unique) par un `ctx.scale` centré sur les
+pieds, ouvert avant le tout premier dessin du personnage et refermé à la toute fin de la fonction.
+⚠️⚠️ **LA PREMIÈRE ÉCRITURE ÉTAIT FAUSSE, ET LES BANCS NE POUVAIENT PAS LE VOIR** : elle rendait `1`
+(taille pleine) dès que `t > 1` — or le palier RÉEL, devant la porte, mesure `t ≈ 1,03` en jeu (une
+fraction de case au-delà du dernier repère de la trapèze). Le commentaire disait « borné à [0,1] »
+; le code, lui, faisait un retour anticipé — **un premier retour n'est pas un bornage**. Résultat
+avant correction : le joueur regrandissait pile à l'endroit où il vient de finir sa montée, sous
+les yeux de qui regarde. Trouvé en rejouant avec un `window.__depthDebug` temporaire (jamais par un
+banc, qui ne mesure pas des pixels de rendu) ; corrigé en clampant `t` à 1 au lieu de rejeter.
+
+**Le zoom manuel.** `manualZoomRef` (un cran parmi `ZOOM_LEVELS = [1,2,3,4,5]`, TOUJOURS un entier —
+c'est la même règle que `townZoomNow` sur le grouillement du pixel art à échelle fractionnaire,
+vraie ici aussi) : molette (`onWheel`, enfin branché — le point d'entrée existait à vide depuis
+longtemps), `+`/`-`/pavé numérique, `0` pour revenir d'un coup au cran du milieu (« désactivable à
+tout moment », demande de Guillaume mot pour mot), deux boutons tactiles. Persisté en
+localStorage (`ferme_zoom_level`), jamais diffusé (réglage de vue, pas un fait du monde, §3).
+Ferme/lac maléfique/tribunal partagent un fondu générique (`viewZoomNow`, calqué sur `townZoomNow`
+sans le dézoom de monument) ; la ville garde le sien, dont la cible de repos devient le cran manuel
+— et près d'un monument, `Math.min(TOWN_ZOOM_NEAR, manuel)` **garde le dézoom automatique en
+plancher** : on peut zoomer encore plus loin que lui, jamais moins loin.
+
+**Vérification.** `verify-vallee` **231/231** (dont les 2 cases de rampe, falsifiées : la marge à 0
+les rend orphelines) ; `verify-collision` TOUT PASSE ; `verify-strings` 1133 clés appariées (2
+neuves, les boutons de zoom tactile) ; `verify-syntax`, bundle esbuild, `next build` propres.
+⚠️⚠️ **ET EN JEU, LES TROIS POINTS**, avec le harnais worker-`requestAnimationFrame` du §10 (sans
+lui, aucune touche n'avait d'effet — symptôme identique au piège documenté, panneau masqué) :
+capture du canevas au pied et au palier, mesure en pixels de la chemise du personnage — **12 px de
+haut au pied, 8 px au palier, rapport 0,67 contre 0,677 attendu** ; on butte net sur le socle de la
+rampe côté ouest ; la molette et `+`/`-` changent bien la taille du monde sur cinq crans en ferme
+ET en ville, `0` revient au cran du milieu, et **au pied du tribunal, forcer le zoom avant ne change
+rien à l'écran** — le plancher automatique tient.
+
+⚠️ **LA LEÇON, GÉNÉRALE** : *un commentaire qui affirme un bornage doit être vérifié contre le CODE,
+pas contre lui-même* — c'est la même famille que le §4 sur les conditions recopiées à la main
+(« un commentaire qui affirme une équivalence est l'endroit exact où il faut appeler la fonction »),
+version bornage : un premier retour anticipé pour chaque extrémité n'est pas la même chose qu'un
+`Math.min`/`Math.max` qui clampe, et seule la seconde forme dit ce qu'elle prétend dire.
+
 ### 2026-09-22 bis — Le tribunal repris sur cinq défauts vus en jeu : le dessin et la collision décrivaient deux bâtiments
 
 Guillaume a joué la livraison de la veille et rapporté **cinq défauts**, dont deux graves : « le
@@ -62,31 +121,17 @@ sprite importé n'apporte pas son emprise — il faut la MESURER, et la mesurer 
 dessin et la collision lisent le même nombre.* Six bancs au vert n'avaient rien vu de ce qu'une
 séance de jeu a trouvé, parce qu'aucun ne comparait la grille au DESSIN (§10).
 
-### 2026-09-22 — Le sprite du tribunal lui-même (livraison de la veille, ce qui en reste vrai)
-
-`tools/build-tribunal-sprite.mjs` (sur le modèle de `build-eglise-sprite.mjs`) →
-`public/town/courthouse-day.png`, dessiné par `drawCourthouseBitmap`. `sprites.courthouse` reste
-construit mais n'est plus dessiné (même sort que `sprites.church`). Affiché sur **256 px** de large
-et non 192 comme ses deux voisins — demande d'échelle de Guillaume (« respecter l'échelle
-naturelle, rapport entre taille perso et église ») : l'escalier peint occupe une part de l'image
-que l'église, avec son parvis modeste, n'a pas, donc à 192 la porte et les colonnes se retrouvaient
-compressées (porte mesurée ~25 px contre ~42 à l'église).
-⚠️ **LA LEÇON DE DÉTOURAGE, À REPRENDRE AU PROCHAIN SPRITE GEMINI** : la pierre « froide, presque
-du marbre » tombe dans la même plage neutre que le damier de fond, donc le test « neutre + clair »
-des deux scripts précédents mangeait le fronton sculpté (36 % de l'image partaient au lieu des
-~34 % réels, le trou mordait le bas-relief). Remplacé par un test de **PÉRIODE** : le damier
-alterne tous les ~13 px pile, la pierre jamais.
-⚠️ **ET UNE LEÇON DE HARNAIS (§10)** : un test au clavier synthétique en longues bourrasques (sans
-le throttle d'une vraie frappe) a fait traverser un mur plein en un pas, sous les yeux de
-Guillaume — artefact du harnais, pas du jeu (un joueur réel avance ~1 px/frame). **Toute
-vérification de collision se fait par petits pas répétés, jamais par une longue rafale.**
-
 ### Toujours en attente du retour de Guillaume en jeu (hors tribunal, ci-dessus)
 
-⚠️ **Le tribunal lui-même a été vu par Guillaume, corrigé sur son retour, et revérifié en jeu
-point par point** (bloc du 2026-09-22 bis). Ce qui reste à juger là-dessus n'est plus un défaut
-mesurable mais le RESSENTI : la montée est-elle agréable, le monument impressionne-t-il, la
-caméra qui s'ancre sur le dôme gêne-t-elle en circulant ? Rien de tout ça ne se mesure (§10).
+⚠️ **Le tribunal lui-même a été vu par Guillaume, corrigé sur DEUX retours successifs (bis puis
+ter), et revérifié en jeu point par point à chaque fois.** Ce qui reste à juger là-dessus n'est plus
+un défaut mesurable mais le RESSENTI : la montée est-elle agréable, le monument impressionne-t-il,
+la caméra qui s'ancre sur le dôme gêne-t-elle en circulant ? Rien de tout ça ne se mesure (§10).
+⚠️ **LE ZOOM MANUEL (ter) EST NEUF ET N'A JAMAIS ÉTÉ JUGÉ PAR GUILLAUME** : la demande était ouverte
+(« niveaux de zoom… commande activable et désactivable ») et Claude a choisi seul, faute de mieux,
+le SCHÉMA DE COMMANDE (molette + `+`/`-`/pavé numérique + deux boutons tactiles), le NOMBRE de crans
+(cinq) et leur AMPLITUDE (`ZOOM_LEVELS = [1,2,3,4,5]`, `ZOOM` = 3 au milieu) — rien de tout ça n'a
+été validé en jeu par lui, et tout est trivialement ajustable (une seule table dans `FermeGame.js`).
 
 Cinq livraisons jamais rejouées par Guillaume, dans l'ordre : le tronc du pin (`richTrunk` sur la
 seule fiche `pine`, `render-arbres` 9/9, jamais vu en jeu à l'échelle réelle) ; le bois du sud-est
@@ -125,13 +170,17 @@ ferme peuplée à deux clients, suite de l'audit d'Où's that).
 
 ### ⏭️ ACTION SUIVANTE
 
-Attendre que Guillaume rejoue le tribunal à tête reposée : les cinq défauts qu'il a signalés sont
-corrigés, mesurés et revus en jeu, mais **le ressenti de la montée et du cadrage n'a été jugé par
-personne sur une vraie partie** — et c'est la seule chose qui reste. Les cinq livraisons plus
-anciennes du bloc ci-dessus attendent toujours la même chose.
+Attendre le retour de Guillaume sur DEUX choses distinctes, pour ne pas les mélanger (§2) : (1) le
+RESSENTI du perron du tribunal (montée, cadrage — mesuré et corrigé deux fois, jamais jugé au
+plaisir) ; (2) le ZOOM MANUEL lui-même — le schéma de commande et les cinq crans sont un choix de
+Claude, pas une demande précise de Guillaume, donc à confirmer ou à corriger en premier lieu. Les
+cinq livraisons plus anciennes du bloc ci-dessus attendent toujours la même chose.
 **Choisir quel bâtiment vient après le tribunal se demande à lui** — ça ne se décide pas seul (§2).
 ⚠️ Le jour où ce bâtiment-là arrive, **mesurer son sprite AVANT de poser sa collision** : c'est la
 leçon du 2026-09-22 bis, et elle coûtera le même prix si on l'oublie.
+⚠️ **ET CELLE DU TER, POUR LE PROCHAIN FACTEUR D'ÉCHELLE OU BORNAGE ÉCRIT DANS CE DÉPÔT** : un
+commentaire qui dit « borné à [0,1] » n'est vrai que si le CODE clampe — un retour anticipé à
+chaque extrémité n'est pas la même chose, et rien ne le distingue au premier coup d'œil.
 
 ---
 
@@ -1004,6 +1053,11 @@ en cours » sans rien casser quand il n'y a rien à finir.
 (les frappes envoyées par l'outil, non). Le menu dev ouvert BLOQUE les déplacements (`if
 (devMenuOpenRef.current …) return`) — il faut `Escape` avant de marcher. La capture d'écran
 fonctionne.
+⚠️⚠️ **UN CLAVIER SYNTHÉTIQUE EN LONGUE BOURRASQUE TRAVERSE UN MUR PLEIN EN UN PAS** (2026-09-22,
+confirmé de nouveau le 2026-09-22 ter) : sans le throttle d'une vraie frappe, un `keydown` maintenu
+programmatique fait avancer bien plus qu'un pas par image — artefact du harnais, pas du jeu (un
+joueur réel avance ~1 px/frame). **Toute vérification de collision se fait par petits pas répétés
+(`keydown` court, `keyup`, ré-essayer), jamais par une longue rafale.**
 ⚠️⚠️⚠️ **DANS UN ONGLET MASQUÉ, `requestAnimationFrame` NE SE DÉCLENCHE JAMAIS**
 (`document.visibilityState === "hidden"`) : le monde ne tourne pas, le fermier ne bouge pas d'un
 pixel, et **`getImageData` relit la dernière image composée** — deux mesures de suite rendent le

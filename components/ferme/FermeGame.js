@@ -70,6 +70,28 @@ import { playFile as sfxPlayFile, stopSound as sfxStopSound } from "@/lib/sfx";
 
 const GAME_ID = "ferme";
 const ZOOM = 3;
+/* ⚠️⚠️ 2026-09-22 ter — LE ZOOM MANUEL, DEMANDÉ PAR GUILLAUME : « ajouter des
+   niveaux de zoom et dezoom avec commande activable et désactivable à tout
+   moment ». CINQ CRANS, TOUJOURS DES ENTIERS — jamais un pas fractionnaire :
+   `townZoomNow` l'explique déjà plus bas (« un zoom fractionnaire sur du pixel
+   art fait grouiller la trame »), et ce n'est pas une règle de la ville, c'est
+   une règle du PIXEL, donc vraie ici aussi. `ZOOM` (3) reste le cran du milieu,
+   donc le réglage par défaut ne change RIEN à ce qui existait avant cette
+   livraison tant qu'on n'y touche pas — c'est ce qui permet de juger ce
+   correctif SÉPARÉMENT des deux autres de la même session (§2 CLAUDE.md).
+   `TOWN_ZOOM_NEAR` (2) est déjà dans la table : le dézoom manuel le plus fort
+   tombe donc exactement sur le même cran que le dézoom automatique des
+   monuments, jamais un second nombre qui pourrait diverger de lui. */
+const ZOOM_LEVELS = [1, 2, 3, 4, 5];
+// Lu UNE fois, à la création du ref qui le porte (voir manualZoomRef) — même
+// convention que `ferme_lastcode` (essai/catch, préférence par machine).
+function readSavedZoomLevel() {
+  try {
+    const v = +window.localStorage.getItem("ferme_zoom_level");
+    if (ZOOM_LEVELS.includes(v)) return v;
+  } catch (e) { /* localStorage indispo */ }
+  return ZOOM;
+}
 /* hors-zip (Codex, 2026-08-26) — DÉCISION EN ATTENTE DE GUILLAUME : sans
    pointeur à portée, le label de salle suit pour l'instant la case devant le
    joueur, comme les pips de graines. La constante isole ce repli pour qu'un
@@ -1403,6 +1425,60 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const taxiMenuRef = useRef(false);
   const [taxiPhase, setTaxiPhase] = useState(null);  // miroir React, pour le bouton
   const townZoomRef = useRef({ v: 0 });
+  /* ⚠️⚠️ 2026-09-22 ter — LE ZOOM MANUEL. `manualZoomRef` est le CRAN choisi
+     (un des `ZOOM_LEVELS`, jamais autre chose) ; c'est un réglage de VUE, pas
+     un fait du monde — il ne se diffuse pas (§3 CLAUDE.md), et il est
+     PERSISTÉ EN LOCALSTORAGE comme `ferme_lastcode` (préférence par machine).
+     `viewZoomRef` est le fondu générique qui COURT après ce cran, pour la
+     ferme, le lac maléfique et le tribunal — la ville garde le sien
+     (`townZoomRef`), plus riche (il compose aussi le dézoom automatique des
+     monuments), voir `townZoomTarget`. Un seul et même `manualZoomRef` nourrit
+     les deux, jamais deux préférences séparées à tenir d'accord. */
+  const manualZoomRef = useRef(readSavedZoomLevel());
+  const viewZoomRef = useRef(0);
+  /* ⚠️⚠️ 2026-09-22 ter — QUATRE FONCTIONS DE ZOOM, ICI ET PAS DANS LA BOUCLE
+     DE RENDU : la boucle (`loop`, `getCam`, `drawTownFrame`…) vit dans la
+     closure d'un `useEffect` plus bas, invisible depuis le JSX — exactement
+     le piège du §4 (« une fonction déclarée dans la closure de la boucle de
+     rendu n'existe pas pour le composant »), déjà payé deux fois sur
+     `canStandTown`/`tryTownJump`. Les boutons tactiles du JSX ET la molette/le
+     clavier de la boucle doivent appeler LES MÊMES fonctions ; les poser ici,
+     au niveau du composant, les rend visibles des deux côtés (une fonction
+     déclarée ici est hissée dans TOUTE la closure du composant, boucle
+     comprise) au lieu d'écrire une seconde copie qui diverge au premier
+     réglage. */
+  function changeZoomBy(delta) {
+    const i = ZOOM_LEVELS.indexOf(manualZoomRef.current);
+    const ni = Math.max(0, Math.min(ZOOM_LEVELS.length - 1, (i < 0 ? ZOOM_LEVELS.indexOf(ZOOM) : i) + delta));
+    manualZoomRef.current = ZOOM_LEVELS[ni];
+    try { window.localStorage.setItem("ferme_zoom_level", String(manualZoomRef.current)); } catch (e) { /* localStorage indispo */ }
+  }
+  // « désactivable à tout moment » (demande de Guillaume, mot pour mot) : un
+  // seul geste qui rend exactement le cran du milieu, sans repasser par tous
+  // les crans intermédiaires un par un.
+  function resetZoom() {
+    manualZoomRef.current = ZOOM;
+    try { window.localStorage.setItem("ferme_zoom_level", String(ZOOM)); } catch (e) { /* localStorage indispo */ }
+  }
+  /* Le fondu générique (ferme / lac maléfique / tribunal) : même patron que
+     `townZoomNow` (dans la boucle, plus bas) — accroche dès que l'écart passe
+     sous 0,01, jamais de valeur fractionnaire pour toujours, voir sa note sur
+     le grouillement du pixel art — mais SANS le dézoom de monument, qui n'a
+     de sens qu'en ville et reste entièrement dans `townZoomNow`/`townZoomTarget`. */
+  function viewZoomNow(dt) {
+    const want = manualZoomRef.current || ZOOM;
+    if (!viewZoomRef.current) { viewZoomRef.current = want; return want; }
+    const k = Math.min(1, (dt || 0.016) / C.TOWN_ZOOM_MS * 1000);
+    let v = viewZoomRef.current + (want - viewZoomRef.current) * k;
+    if (Math.abs(want - v) < 0.01) v = want;
+    viewZoomRef.current = v;
+    return v;
+  }
+  // Lu par tout ce qui, hors ville, doit dessiner ou viser à l'échelle
+  // COURANTE (jamais `ZOOM` tout nu) : la caméra et le pointeur de souris
+  // doivent s'accorder sur le même nombre, sans quoi le clic tombe à côté de
+  // ce que l'œil vise (même piège que celui déjà réglé sur `targetTileTown`).
+  function curZoom() { return viewZoomRef.current || ZOOM; }
   // Transition en fondu au noir (aller ET retour) : { active, t0, toEvil,
   // swapped }. `swapped` marque le moment (mi-fondu, écran totalement noir)
   // où la téléportation réelle a lieu, pour qu'elle soit invisible.
@@ -9072,7 +9148,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      résidents disparaissent — c'est-à-dire qu'on aurait rendu visible un vide
      qu'on ne voyait pas avant. C'est le §8 dans sa forme la plus littérale : ce
      rayon DOUBLE l'échelle de la caméra, donc il doit en être dérivé. */
-  function townZoomScale() { const m = meRef.current; return (m && m.zone === "town" && townZoomRef.current.v) || ZOOM; }
+  function townZoomScale() { const m = meRef.current; return (m && m.zone === "town" && townZoomRef.current.v) || curZoom(); }
   function aoiRadiusTiles() { const c = canvasRef.current; if (!c) return 40; return Math.hypot(c.width, c.height) / (townZoomScale() * C.TILE) / 2 + C.AOI_MARGIN_TILES; }
   // Distance (tuiles) au plus proche AUTRE joueur de la même zone ; Infinity si personne.
   function nearestOtherDist() { const m = meRef.current; if (!m) return Infinity; let best = Infinity; for (const p of playersRef.current.values()) { if (!p || (p.zone || "farm") !== m.zone) continue; const d = Math.hypot(p.x - m.x, p.y - m.y); if (d < best) best = d; } return best; }
@@ -15603,6 +15679,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          sauf une fois, si la quête est en cours, pour qu'on n'apprenne pas le
          raccourci dans le vide. */
       if (e.code === "KeyP" && !e.repeat && !uiOpen) togglePlan();
+      /* ⚠️⚠️ 2026-09-22 ter — LE ZOOM MANUEL AU CLAVIER, EN PLUS DE LA MOLETTE
+         (voir `onWheel` juste plus bas). Deux touches par sens (la principale
+         ET le pavé numérique), parce que + et - se tapent différemment selon
+         le clavier (AZERTY exige Maj pour «+»). `Digit0` REND LA MAIN d'un
+         coup — c'est le « désactivable à tout moment » demandé par Guillaume,
+         mot pour mot, sans repasser par les crans intermédiaires un par un. */
+      if (e.code === "Equal" || e.code === "NumpadAdd") changeZoomBy(1);
+      if (e.code === "Minus" || e.code === "NumpadSubtract") changeZoomBy(-1);
+      if (e.code === "Digit0" || e.code === "Numpad0") resetZoom();
       /* ⚠️⚠️ ZIP 476 (audit 2026-08-24, défaut #6) — `setStarFind(null)` EST ENTRÉ
          ICI. L'overlay de fouille gelait le joueur 5,2 s SANS AUCUN MOYEN de
          l'écourter : ni déplacement, ni action (les deux sont coupés par
@@ -15618,7 +15703,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function onKeyUp(e) { keysRef.current[e.code] = false; }
     function onMove(e) { mouseRef.current.x = e.clientX; mouseRef.current.y = e.clientY; }
     function onDown(e) { if (e.button === 0 && !marketOpenRef.current && !mapOpenRef.current && !shopOpenRef.current && !binOpenRef.current && !bagOpenRef.current && !cauldronMenuOpenRef.current && !fishMiniRef.current && !adsOpenRef.current && !visitorOpenRef.current && !gregCardOpenRef.current && !devMenuOpenRef.current /* zip 392 */ && !isInjured()) doAction(); }
-    function onWheel() { }
+    /* ⚠️⚠️ 2026-09-22 ter — LA MOLETTE ZOOME, ENFIN : ce point d'entrée existait
+       depuis longtemps (branché, `passive:true`, corps vide) sans qu'aucune
+       livraison ne s'en serve — voir la modification de l'écouteur plus bas,
+       `passive:false` DEVIENT nécessaire ici : sans lui, `preventDefault` est
+       ignoré et la page défile derrière le jeu à chaque cran.
+       ⚠️ UN CRAN PAR ÉVÉNEMENT, JAMAIS `deltaY` LUI-MÊME : la valeur varie
+       d'un pilote de souris/trackpad à l'autre (parfois ±1, parfois ±120) —
+       seul son SIGNE est fiable, et `changeZoomBy` avance d'un cran ENTIER à
+       la fois de toute façon (voir la note sur `ZOOM_LEVELS`). */
+    function onWheel(e) { e.preventDefault(); changeZoomBy(e.deltaY < 0 ? 1 : -1); }
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
     /* ⚠️⚠️ ZIP 430 — LE PREMIER CONTACT ALLUME LES COMMANDES, ET IL EST ÉCOUTÉ
@@ -15635,7 +15729,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     window.addEventListener("touchstart", onFirstTouch, { passive: true });
     canvas.addEventListener("mousemove", onMove);
     canvas.addEventListener("mousedown", onDown);
-    canvas.addEventListener("wheel", onWheel, { passive: true });
+    canvas.addEventListener("wheel", onWheel, { passive: false });
 
     let raf = 0, last = performance.now();
     function loop() {
@@ -15643,6 +15737,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const now = performance.now();
       const epochNow = Date.now(); // pousse/arrosage/production animale sont en temps réel (horloge murale)
       const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      // 2026-09-22 ter : fait avancer le fondu du zoom manuel, UNE fois par
+      // image, avant toute branche de zone — `curZoom()` lira sa valeur du
+      // jour partout en dessous (ferme, lac maléfique, tribunal ; la ville
+      // garde son propre fondu, voir townZoomNow).
+      viewZoomNow(dt);
       const w = worldRef.current, m = meRef.current, sprites = spritesRef.current;
       if (!w || !m || !sprites) return;
 
@@ -15875,7 +15974,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (overlayUp) return;
 
       const cam = getCam();
-      ctx.setTransform(ZOOM, 0, 0, ZOOM, -Math.round(cam.x * ZOOM), -Math.round(cam.y * ZOOM));
+      const zmF = curZoom(); // 2026-09-22 ter — le zoom manuel de la ferme, voir viewZoomNow
+      ctx.setTransform(zmF, 0, 0, zmF, -Math.round(cam.x * zmF), -Math.round(cam.y * zmF));
       ctx.clearRect(cam.x, cam.y, cam.vw, cam.vh);
       const x0 = Math.max(0, Math.floor(cam.x / T)), x1 = Math.min(w.w - 1, Math.ceil((cam.x + cam.vw) / T));
       const y0 = Math.max(0, Math.floor(cam.y / T)), y1 = Math.min(w.h - 1, Math.ceil((cam.y + cam.vh) / T));
@@ -17784,10 +17884,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          tenir d'accord), c'est de le SORTIR : `drawNightVeil` prend la caméra,
          l'échelle et ses sources de lumière ; `drawWeatherVeil` ne prend rien du
          tout, puisqu'il travaille en espace écran. */
-      drawNightVeil(cam, ZOOM, lampsInView, balloonGlowRef.current);
+      drawNightVeil(cam, curZoom(), lampsInView, balloonGlowRef.current);
       drawWeatherVeil(dt);
-      drawGpsMarker(cam, ZOOM);   // zip 429 — après le voile : une boussole ne s'assombrit pas
-      drawStarChevron(cam, ZOOM); // zip 445 — et le chevron de la quête, même règle
+      drawGpsMarker(cam, curZoom());   // zip 429 — après le voile : une boussole ne s'assombrit pas
+      drawStarChevron(cam, curZoom()); // zip 445 — et le chevron de la quête, même règle
       gpsCheckArrival();
 
       // Invite boutique/bac
@@ -17850,7 +17950,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function inMapLocal() {}
     function getCam() {
       const w = worldRef.current, m = meRef.current;
-      const vw = canvas.width / ZOOM, vh = canvas.height / ZOOM;
+      const zmF = curZoom(); // 2026-09-22 ter — le zoom manuel de la ferme
+      const vw = canvas.width / zmF, vh = canvas.height / zmF;
       /* ⚠️ ZIP 445 — LE SEUL ENDROIT DE LA FERME OÙ LA CAMÉRA QUITTE LE JOUEUR :
          la chute. `starCamNow` vit au niveau du COMPOSANT (voir sa note) ; on
          l'appelle vers l'extérieur, on n'en recopie pas une seconde version ici. */
@@ -17860,7 +17961,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       let cx = (fx + 0.5) * T - vw / 2, cy = (fy + 0.5) * T - vh / 2;
       cx = Math.max(0, Math.min(w.w * T - vw, cx)); cy = Math.max(0, Math.min(w.h * T - vh, cy));
       const out = { x: cx, y: cy, vw, vh };
-      starViewRef.current = { cam: out, zoom: ZOOM };   // zip 445 : la scène en a besoin pour situer l'impact
+      starViewRef.current = { cam: out, zoom: zmF };   // zip 445 : la scène en a besoin pour situer l'impact
       return out;
     }
     // Récolte automatique en marchant sur une culture mûre (en plus du
@@ -17916,7 +18017,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // inutilisables telles quelles sur une carte 70x70 — voir generateEvilWorld.
     function getCamEvil() {
       const ew = evilWorldRef.current, m = meRef.current;
-      const vw = canvas.width / ZOOM, vh = canvas.height / ZOOM;
+      const vw = canvas.width / curZoom(), vh = canvas.height / curZoom(); // 2026-09-22 ter
       let cx = (m.x + 0.5) * T - vw / 2, cy = (m.y + 0.5) * T - vh / 2;
       cx = Math.max(0, Math.min(ew.w * T - vw, cx)); cy = Math.max(0, Math.min(ew.h * T - vh, cy));
       return { x: cx, y: cy, vw, vh };
@@ -17932,7 +18033,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const ew = evilWorldRef.current, m = meRef.current, sprites = spritesRef.current;
       if (!ew || !sprites) return;
       const cam = getCamEvil();
-      ctx.setTransform(ZOOM, 0, 0, ZOOM, -Math.round(cam.x * ZOOM), -Math.round(cam.y * ZOOM));
+      const zmE = curZoom(); // 2026-09-22 ter — le zoom manuel du lac maléfique
+      ctx.setTransform(zmE, 0, 0, zmE, -Math.round(cam.x * zmE), -Math.round(cam.y * zmE));
       ctx.fillStyle = "#0b120c";
       ctx.fillRect(cam.x, cam.y, cam.vw, cam.vh);
       const x0 = Math.max(0, Math.floor(cam.x / T)), x1 = Math.min(ew.w - 1, Math.ceil((cam.x + cam.vw) / T));
@@ -18581,7 +18683,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const candyHere = !!(ew.spec && ew.spec.key === "candy");
       ctx.fillStyle = candyHere ? "rgba(255,215,235,0.16)" : "rgba(0,0,10,0.35)";
       ctx.fillRect(cam.x, cam.y, cam.vw, cam.vh);
-      drawStarChevron(cam, ZOOM); // 2026-09-03 (lot C) — APRÈS le voile permanent, même règle que la boussole/le voile de nuit en ferme (« après le voile : rien ne s'assombrit »)
+      drawStarChevron(cam, curZoom()); // 2026-09-03 (lot C) — APRÈS le voile permanent, même règle que la boussole/le voile de nuit en ferme (« après le voile : rien ne s'assombrit »)
       // Invite E pour ramasser le chaudron-artéfact (chantier 2026-07).
       const already = sharedRef.current.salveCraft && sharedRef.current.salveCraft.cauldronUnlocked;
       // Zip 235: passage-world pickups (breloques). Only shown for worlds
@@ -18838,9 +18940,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        ⚠️ LA VALEUR AU REPOS EST UN ENTIER, TOUJOURS. Un zoom fractionnaire sur
        du pixel art fait grouiller la trame (des pixels de tailles inégales qui
        changent de taille quand la caméra bouge). Ici l'échelle vaut exactement
-       TOWN_ZOOM_NEAR ou exactement ZOOM dès que le fondu est terminé : le
-       grouillement n'existe que pendant la demi-seconde de transition, où
-       l'image bouge de toute façon.
+       TOWN_ZOOM_NEAR ou exactement le cran manuel choisi (`manualZoomRef`,
+       2026-09-22 ter — TOUJOURS l'un des `ZOOM_LEVELS`, donc toujours un
+       entier lui aussi) dès que le fondu est terminé : le grouillement
+       n'existe que pendant la demi-seconde de transition, où l'image bouge
+       de toute façon.
        ⚠️ ET ON N'INTERPOLE PAS EN LIGNE DROITE. Un lissage exponentiel (le même
        que smoothNpc) n'atteint jamais tout à fait sa cible : l'échelle
        resterait à 2,004 pour toujours, donc fractionnaire pour toujours. On
@@ -18879,7 +18983,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       return Math.max(0, Math.min(0.34, ((m.y + 0.5) * T - top) / vh - 0.5));
     }
     function townZoomTarget(m) {
-      if (!m) return { zoom: ZOOM, headroom: 0 };
+      if (!m) return { zoom: manualZoomRef.current, headroom: 0 };
       /* Les lieux qui MÉRITENT d'être vus en entier. ⚠️ LA LISTE EST DÉRIVÉE
          DES CONSTANTES DE BÂTIMENTS, jamais réécrite : ajouter un monument à la
          ville, c'est l'ajouter ici en une ligne qui NOMME la constante, et le
@@ -18910,9 +19014,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // fini quand on arrive au pied, pas qu'il se déclenche une fois collé.
         if (m.x >= b.x - C.TOWN_ZOOM_MARGIN && m.x <= b.x + w + C.TOWN_ZOOM_MARGIN
          && m.y >= b.y - C.TOWN_ZOOM_MARGIN && m.y <= b.y + h + C.TOWN_ZOOM_MARGIN + 2)
-          return { zoom: C.TOWN_ZOOM_NEAR, headroom: (typeof spec.headroom === "function" ? spec.headroom(m) : spec.headroom) || 0 };
+          /* ⚠️⚠️ 2026-09-22 ter — « GARDE LE DÉZOOM AUTO SUR CERTAINES ZONES »
+             (demande de Guillaume, mot pour mot) : le monument impose un
+             PLAFOND (jamais plus près que `TOWN_ZOOM_NEAR`), il n'impose pas
+             un PLANCHER. Un joueur déjà réglé plus loin (cran manuel < 2)
+             reste aussi loin ; `Math.min` ne resserre jamais un dézoom
+             manuel plus généreux que le sien, il ne fait qu'empêcher l'inverse. */
+          return { zoom: Math.min(C.TOWN_ZOOM_NEAR, manualZoomRef.current), headroom: (typeof spec.headroom === "function" ? spec.headroom(m) : spec.headroom) || 0 };
       }
-      return { zoom: ZOOM, headroom: 0 };
+      return { zoom: manualZoomRef.current, headroom: 0 };
     }
     function townZoomNow(dt) {
       const z = townZoomRef.current;
@@ -18927,7 +19037,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     function getCamTown() {
       const tw = townWorldRef.current, m = meRef.current;
-      const zm = townZoomRef.current.v || ZOOM;
+      const zm = townZoomRef.current.v || manualZoomRef.current; // 2026-09-22 ter
       const vw = canvas.width / zm, vh = canvas.height / zm;
       /* ⚠️ ZIP 445 — MÊME JOINTURE QU'À LA FERME, ET C'EST TOUT L'INTÉRÊT : une
          seule description du « où regarde la caméra pendant la chute », lue par
@@ -22435,7 +22545,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     function getCamCourt() {
       const m = meRef.current;
-      const vw = canvas.width / ZOOM, vh = canvas.height / ZOOM;
+      const vw = canvas.width / curZoom(), vh = canvas.height / curZoom(); // 2026-09-22 ter
       const fr = courtFloorRect(E.courtFloorOf(m.y));
       const fw = (fr.x1 - fr.x0) * T, fh = (fr.y1 - fr.y0) * T;
       /* ⚠️ LA CAMÉRA EST BORNÉE AU NIVEAU COURANT, PAS À LA GRILLE ENTIÈRE.
@@ -22558,13 +22668,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          coordonnées du monde. Le libellé travaille sur le point continu (sa
          zone sensible déborde volontairement de la porte) ; les outils gardent
          ensuite leur case entière via `pointerTargetTile`. */
-      const pointerWorld = pointerWorldAt(m, cw.w, cw.h, cam, ZOOM, C.ACT_RANGE + 1.25);
+      const zmC = curZoom(); // 2026-09-22 ter — le zoom manuel du tribunal
+      const pointerWorld = pointerWorldAt(m, cw.w, cw.h, cam, zmC, C.ACT_RANGE + 1.25);
       const pointerTile = pointerWorld && { x: Math.floor(pointerWorld.x), y: Math.floor(pointerWorld.y) };
       const roomLabelTile = pointerTile || (COURT_LABEL_FALLBACK_TO_FACING_TILE ? facingTile() : null);
-      starViewRef.current = { cam, zoom: ZOOM };      // 465 — survol des étoiles à l'intérieur aussi
+      starViewRef.current = { cam, zoom: zmC };      // 465 — survol des étoiles à l'intérieur aussi
       const myFloor = E.courtFloorOf(C.footY(m.y));
       const fr = courtFloorRect(myFloor);
-      ctx.setTransform(ZOOM, 0, 0, ZOOM, -Math.round(cam.x * ZOOM), -Math.round(cam.y * ZOOM));
+      ctx.setTransform(zmC, 0, 0, zmC, -Math.round(cam.x * zmC), -Math.round(cam.y * zmC));
       // Le dehors : un gris très sombre. ⚠️ PAS DU NOIR PUR — le noir se
       // confond avec le voile de transition de zone, et l'on ne sait plus si
       // l'image est en train de charger ou si le bâtiment s'arrête là.
@@ -23037,8 +23148,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          l'étage est simplement « plus haut sur la grille », et la distance
          affichée reste juste. Une boussole qui aurait dû connaître les étages
          aurait été le signe que l'empilement était une mauvaise idée. */
-      drawGpsMarker(cam, ZOOM);
-      drawStarChevron(cam, ZOOM); // zip 445 — dans le tribunal aussi : il filtre sur l'ÉTAGE
+      drawGpsMarker(cam, curZoom());
+      drawStarChevron(cam, curZoom()); // zip 445 — dans le tribunal aussi : il filtre sur l'ÉTAGE
       gpsCheckArrival();
 
       // ---- Le bandeau d'étage, en espace ÉCRAN (il ne suit pas la caméra).
@@ -24754,6 +24865,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // pattes immergées + vaguelettes (drawSwimOverlay), pas d'ombre portée.
       const wSwim = worldRef.current;
       const swimmingHere = riding && wSwim && p.zone !== "evil" && E.isWaterTile(wSwim, p.x, p.y);
+      /* ⚠️⚠️ 2026-09-22 ter — LE PERSONNAGE RÉTRÉCIT SUR LA VOLÉE DU TRIBUNAL,
+         COMME LE DESSIN LE FAIT DÉJÀ. Retour de Guillaume, en jeu : « il est
+         toujours aussi grand au lieu de rétrécir pour évoquer la profondeur ».
+         `C.courtDepthScale` DÉRIVE le facteur de la même largeur de trapèze que
+         la collision (`courtStairSpan`) — voir sa note, fermeConstants.js —
+         jamais choisi à part.
+         ⚠️ GATÉ SUR MA PROPRE ZONE, PAS SUR `p.zone` : `drawCharacter` est LE
+         SEUL ENTONNOIR (moi, les distants, les résidents — voir le
+         commentaire sur `sinkPx` juste au-dessus, même famille de piège), et
+         un résident n'a pas toujours de `.zone` renseigné. Savoir que MOI je
+         regarde la ville revient au même, puisque cette fonction ne dessine
+         que ce que l'écran sous mes yeux affiche déjà.
+         ⚠️ TOUT CE QUI SUIT (ombre, sprite, monture, accessoires) DOIT
+         RÉTRÉCIR ENSEMBLE : la transform s'ouvre ICI, avant la première chose
+         dessinée pour ce personnage, et se referme à la toute fin de la
+         fonction — qui ne sort jamais avant (aucun `return` entre les deux). */
+      const depthK = ((meRef.current && (meRef.current.zone || "farm")) === "town")
+        ? C.courtDepthScale(p.x, p.y) : 1;
+      if (depthK !== 1) {
+        const dax = px + C.CHAR_SPRITE_W / 2, day = py + C.CHAR_SHADOW_PY;
+        ctx.save();
+        ctx.translate(dax, day); ctx.scale(depthK, depthK); ctx.translate(-dax, -day);
+      }
       /* ⚠️ 2026-09-01 — CETTE ELLIPSE EST LA DÉFINITION DE LA SEMELLE, pas une
          décoration : `C.bodyPoints` en dérive sa ligne de contact et sa
          profondeur. Les nombres viennent donc des constantes, sans quoi on
@@ -25040,6 +25174,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         else ctx.drawImage(sprites.fishingRodHeld, px, py - 4 - lift);
         ctx.restore();
       }
+      if (depthK !== 1) ctx.restore(); // referme le rétrécissement de la volée ouvert plus haut (2026-09-22 ter)
     }
     // Rendu du loup maléfique (chantier 2026-07) : extrait tel quel de
     // l'ancien rendu inline (voir drawEvilFrame) au moment de l'introduction
@@ -25791,10 +25926,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function targetTileEvil() {
     const m = meRef.current, ew = evilWorldRef.current; if (!m || !ew) return { x: 0, y: 0 };
     const canvas = canvasRef.current;
-    const vw = canvas.width / ZOOM, vh = canvas.height / ZOOM;
+    const zmE = curZoom(); // 2026-09-22 ter — même échelle que getCamEvil, voir sa note
+    const vw = canvas.width / zmE, vh = canvas.height / zmE;
     let cx = (m.x + 0.5) * C.TILE - vw / 2, cy = (m.y + 0.5) * C.TILE - vh / 2;
     cx = Math.max(0, Math.min(ew.w * C.TILE - vw, cx)); cy = Math.max(0, Math.min(ew.h * C.TILE - vh, cy));
-    const wx = (mouseRef.current.x / ZOOM + cx) / C.TILE, wy = (mouseRef.current.y / ZOOM + cy) / C.TILE;
+    const wx = (mouseRef.current.x / zmE + cx) / C.TILE, wy = (mouseRef.current.y / zmE + cy) / C.TILE;
     const tx = Math.floor(wx), ty = Math.floor(wy);
     if (inMapEvil(tx, ty) && Math.abs(wx - C.footX(m.x)) <= C.ACT_RANGE + 0.5 && Math.abs(wy - C.footY(m.y)) <= C.ACT_RANGE + 0.5) return { x: tx, y: ty };
     return facingTile();
@@ -25842,11 +25978,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const m = meRef.current, w = worldRef.current; if (!m || !w) return { x: 0, y: 0 };
     const cam = { x: 0, y: 0 };
     const canvas = canvasRef.current;
-    const vw = canvas.width / ZOOM, vh = canvas.height / ZOOM;
+    const zmF = curZoom(); // 2026-09-22 ter — même échelle que getCam, voir sa note
+    const vw = canvas.width / zmF, vh = canvas.height / zmF;
     let cx = (m.x + 0.5) * C.TILE - vw / 2, cy = (m.y + 0.5) * C.TILE - vh / 2;
     cx = Math.max(0, Math.min(w.w * C.TILE - vw, cx)); cy = Math.max(0, Math.min(w.h * C.TILE - vh, cy));
     cam.x = cx; cam.y = cy;
-    return pointerTargetTile(m, w.w, w.h, cam, ZOOM) || facingTile();
+    return pointerTargetTile(m, w.w, w.h, cam, zmF) || facingTile();
   }
   /* ---- LA BOUSSOLE GPS, CÔTÉ JEU (429) --------------------------------------
      ⚠️ L'ÉCHELLE DE LA CARTE EST RELUE SUR LE CANEVAS, PAS RECOPIÉE. Les trois
@@ -26050,7 +26187,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        tenable est que les deux lisent la MÊME source d'échelle — d'où le ref
        plutôt qu'une variable locale de la boucle. Le clamp est recopié à
        l'identique, cas « la vue est plus large que la carte » compris. */
-    const zm = townZoomRef.current.v || ZOOM;
+    const zm = townZoomRef.current.v || manualZoomRef.current; // 2026-09-22 ter
     const vw = canvas.width / zm, vh = canvas.height / zm;
     let cx = (m.x + 0.5) * C.TILE - vw / 2, cy = (m.y + 0.5) * C.TILE - vh / 2;
     cx = tw.w * C.TILE <= vw ? (tw.w * C.TILE - vw) / 2 : Math.max(0, Math.min(tw.w * C.TILE - vw, cx));
@@ -33968,6 +34105,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 devant soi, comme Espace au clavier. */}
             <button className="ferme-touch-mini"
                     onPointerDown={e => { e.preventDefault(); pressJumpOrAct(); }} title={L.touchAct}>✋</button>
+            {/* ⚠️⚠️ 2026-09-22 ter — LE ZOOM TACTILE. Pas de molette au doigt, et le
+                pincement à deux doigts entrerait en conflit avec le pavé de
+                déplacement (TouchPad) tenu de l'autre main — deux boutons, comme
+                courir/carte/agir juste à côté, sont la seule commande qui reste
+                sans ambiguïté sur un écran déjà occupé par les deux pouces. */}
+            <button className="ferme-touch-mini"
+                    onPointerDown={e => { e.preventDefault(); changeZoomBy(-1); }} title={L.touchZoomOut}>🔍-</button>
+            <button className="ferme-touch-mini"
+                    onPointerDown={e => { e.preventDefault(); changeZoomBy(1); }} title={L.touchZoomIn}>🔍+</button>
           </div>
         </div>
       )}

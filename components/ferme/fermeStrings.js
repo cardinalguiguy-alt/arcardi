@@ -5274,6 +5274,7 @@ export const FERME_STR = {
     marketBonus: (b) => "· +" + b + " par pièce",
     promptTownMarket: "E : vendre au marché",
     touchRun: "Courir (bascule)", touchMap: "Carte", touchAct: "Agir / sauter",
+    touchZoomIn: "Zoom avant", touchZoomOut: "Zoom arrière", // 2026-09-22 ter
     /* Zip 430 — Carla est plus libre que les autres. ⚠️ Les deux messages
        DISENT la règle : un refus muet et une porte close sans raison passent
        tous les deux pour des bogues. */
@@ -6915,6 +6916,7 @@ export const FERME_STR = {
     marketBonus: (b) => "· +" + b + " each",
     promptTownMarket: "E: sell at the market",
     touchRun: "Run (toggle)", touchMap: "Map", touchAct: "Act / jump",
+    touchZoomIn: "Zoom in", touchZoomOut: "Zoom out", // 2026-09-22 ter
     kickRefused: "💅 Carla Garfield works for nobody here. She'll leave when she chooses to.",
     boutiqueClosedToast: (d) => d === 0
       ? "💅 Maison Garfield opens today — Carla hasn't arrived yet."
