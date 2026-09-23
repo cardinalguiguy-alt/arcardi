@@ -5275,6 +5275,7 @@ export const FERME_STR = {
     promptTownMarket: "E : vendre au marché",
     touchRun: "Courir (bascule)", touchMap: "Carte", touchAct: "Agir / sauter",
     touchZoomIn: "Zoom avant", touchZoomOut: "Zoom arrière", // 2026-09-22 ter
+    btnZoomReset: "🔍 Zoom normal", // 2026-09-23 — bouton permanent, retour au cran du milieu
     /* Zip 430 — Carla est plus libre que les autres. ⚠️ Les deux messages
        DISENT la règle : un refus muet et une porte close sans raison passent
        tous les deux pour des bogues. */

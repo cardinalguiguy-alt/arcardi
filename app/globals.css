@@ -7107,6 +7107,7 @@ body.ousthat-active .door-content{ position:static; animation:none; transform:no
 .ferme-quick-fab:active{ transform:translateY(2px); box-shadow:0 1px 0 var(--f-wood-d); }
 .ferme-map-fab{ right:58px; }
 .ferme-employees-fab{ right:106px; }
+.ferme-zoom-fab{ right:154px; }
 .ferme-actions{
   position:fixed; top:54px; right:10px; z-index:41; display:flex; flex-direction:column;
   align-items:flex-end; gap:8px; max-width:min(66vw, 260px);

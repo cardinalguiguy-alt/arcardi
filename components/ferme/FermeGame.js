@@ -31949,6 +31949,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         <button className="ferme-quick-fab ferme-employees-fab" title={L.btnEmployees} onClick={() => setEmployeesOpen(true)}>👥</button>
       )}
       <button className="ferme-quick-fab ferme-map-fab" title={L.btnMap} onClick={() => setMapOpen(true)}>🗺️</button>
+      {/* 2026-09-23 — LE BOUTON DE ZOOM NORMAL. Guillaume, après avoir joué avec
+          le zoom manuel du ter (molette, +/-, `0`) : « j'aime bien pouvoir
+          zoomer mais il faut pouvoir revenir à un paramètre normal ». La
+          touche `0` le fait déjà (`resetZoom`, voir sa note plus haut), mais
+          rien ne le montrait à l'écran — un raccourci qu'on ne connaît pas
+          n'existe pas. Même famille visuelle que carte/employés, toujours
+          visible (comme eux) : cliquer dessus quand on est déjà au cran du
+          milieu ne fait rien, ce n'est pas une raison de le cacher. */}
+      <button className="ferme-quick-fab ferme-zoom-fab" title={L.btnZoomReset} onClick={resetZoom}>🔍</button>
       {/* Roue "paramètres" : ce qui reste (maison, puits, changer de perso,
           quitter) — actions rares ou qui ont déjà leur propre porte d'entrée
           ailleurs (le puits se rejoint aussi à pied). Dépliée au clic sur la

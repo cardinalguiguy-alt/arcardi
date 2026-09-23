@@ -7,6 +7,32 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
+### 2026-09-23 ter — Le bouton de zoom normal, sur retour direct de Guillaume
+
+Guillaume, après avoir essayé le zoom manuel du 2026-09-22 ter (molette, `+`/`-`, `0`) : « j'aime
+bien pouvoir zoomer mais il faut pouvoir revenir à un paramètre normal ». Confirmation implicite
+que le zoom lui-même plaît ; le manque nommé est précis, l'affordance de RETOUR, pas le schéma. La
+touche `0` (`resetZoom`, voir sa note dans `FermeGame.js`) le faisait déjà, mais rien à l'écran ne
+le montrait — un raccourci qu'on ne connaît pas n'existe pas.
+
+**Parade : un bouton PERMANENT, pas un de plus dans la roue de paramètres.** `ferme-quick-fab
+ferme-zoom-fab` (🔍, `title` = `L.btnZoomReset`), même famille visuelle et même emplacement que
+carte/employés (`right:154px` dans `app/globals.css`, à côté d'eux) — toujours visible, comme eux,
+plutôt que caché derrière un clic de plus : appuyer dessus au cran du milieu ne fait rien, ce n'est
+pas une raison de le cacher. Il appelle directement `resetZoom()`, la même fonction que la touche
+`0` — aucune seconde logique à tenir d'accord.
+
+**Vérifié en jeu**, harnais du §10 (`fake-supabase` + `arcardi-local` + page jetable, supprimée
+après usage) : le profil de navigateur avait un cran de zoom à 5 (maximum) resté d'une séance
+précédente — l'occasion parfaite de voir le bouton travailler pour de vrai. Un clic dessus a bien
+ramené la vue du cran 5 (très rapprochée, le toit de la maison hors cadre) au cran 3 par défaut
+(la maison entière, l'étal et les clôtures visibles) — capture avant/après comparée à l'écran, pas
+seulement `localStorage.ferme_zoom_level` (qui, lui aussi, est passé de "5" à "3"). `verify-strings`
+(1134/1134, la clé neuve appariée FR/EN) et `verify-syntax` relancés, tout vert.
+⚠️ Ce correctif ne répond qu'à la moitié de l'ACTION SUIVANTE n°2 ci-dessous (le manque de retour) :
+si CINQ crans avec cette amplitude sont le bon réglage reste entièrement à confirmer par Guillaume,
+rien ici ne le tranche.
+
 ### 2026-09-23 bis — Quatre retours en jeu sur le même perron : la montée encore ralentie, les vasques enfin solides, les pigeons remesurés, un artefact ôté du toit
 
 Guillaume a rejoué le perron et signalé QUATRE choses dans la même séance, sur des sujets tous
@@ -228,11 +254,13 @@ mais le troisième retour, ci-dessus, n'a été revérifié qu'au banc et par un
 en jeu.** Ce qui reste à juger sur le ressenti n'est plus un défaut mesurable : la montée est-elle
 agréable, le monument impressionne-t-il, la caméra qui s'ancre sur le dôme gêne-t-elle en
 circulant ? Rien de tout ça ne se mesure (§10).
-⚠️ **LE ZOOM MANUEL (ter) EST NEUF ET N'A JAMAIS ÉTÉ JUGÉ PAR GUILLAUME** : la demande était ouverte
-(« niveaux de zoom… commande activable et désactivable ») et Claude a choisi seul, faute de mieux,
-le SCHÉMA DE COMMANDE (molette + `+`/`-`/pavé numérique + deux boutons tactiles), le NOMBRE de crans
-(cinq) et leur AMPLITUDE (`ZOOM_LEVELS = [1,2,3,4,5]`, `ZOOM` = 3 au milieu) — rien de tout ça n'a
-été validé en jeu par lui, et tout est trivialement ajustable (une seule table dans `FermeGame.js`).
+⚠️ **LE ZOOM MANUEL (ter) A EU UN PREMIER RETOUR RÉEL (2026-09-23 ter ci-dessus)** : « j'aime bien
+pouvoir zoomer » confirme que le principe plaît, et « il faut pouvoir revenir à un paramètre
+normal » a désigné un manque précis — corrigé par un bouton permanent. **Ce qui reste NEUF et non
+jugé** : le SCHÉMA DE COMMANDE (molette + `+`/`-`/pavé numérique + deux boutons tactiles), le
+NOMBRE de crans (cinq) et leur AMPLITUDE (`ZOOM_LEVELS = [1,2,3,4,5]`, `ZOOM` = 3 au milieu) —
+Guillaume n'a validé ni l'un ni l'autre, et tout reste trivialement ajustable (une seule table
+dans `FermeGame.js`).
 ⚠️ **LE RÉTRÉCISSEMENT DES PETS (2026-09-23) EST NEUF** : « accordingly » n'était pas chiffré, donc
 l'ancrage du rétrécissement des pets sur la position du maître (pas la leur propre) est un choix
 de Claude — à confirmer ou corriger dès la prochaine montée. La vitesse de montée, elle, a déjà eu
@@ -278,8 +306,9 @@ ferme peuplée à deux clients, suite de l'audit d'Où's that).
 
 Attendre le retour de Guillaume sur QUATRE choses distinctes, pour ne pas les mélanger (§2) : (1) le
 RESSENTI du perron du tribunal (montée, cadrage — mesuré et corrigé plusieurs fois, jamais jugé au
-plaisir) ; (2) le ZOOM MANUEL lui-même — le schéma de commande et les cinq crans sont un choix de
-Claude, pas une demande précise de Guillaume ; (3) le correctif du 2026-09-23 — le saut de taille a-t-il
+plaisir) ; (2) le ZOOM MANUEL lui-même — le manque de retour visible est corrigé (bouton permanent,
+2026-09-23 ter ci-dessus), mais le schéma de commande et les cinq crans restent un choix de
+Claude, jamais confirmés par Guillaume comme le bon réglage ; (3) le correctif du 2026-09-23 — le saut de taille a-t-il
 vraiment disparu à l'œil en longeant les côtés du bâtiment, et le rétrécissement des pets suivant le
 maître (plutôt que leur propre position) se voit-il ou se remarque-t-il en mal ; (4) les QUATRE points
 du 2026-09-23 bis ci-dessus — la vitesse ×0,5 est-elle enfin celle demandée (« un peu moins rapide
