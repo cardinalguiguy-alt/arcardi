@@ -7,280 +7,85 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-23 ter — Le bouton de zoom normal, sur retour direct de Guillaume
+### Le perron du tribunal — quatre allers-retours, jamais rejoué en vraie séance
 
-Guillaume, après avoir essayé le zoom manuel du 2026-09-22 ter (molette, `+`/`-`, `0`) : « j'aime
-bien pouvoir zoomer mais il faut pouvoir revenir à un paramètre normal ». Confirmation implicite
-que le zoom lui-même plaît ; le manque nommé est précis, l'affordance de RETOUR, pas le schéma. La
-touche `0` (`resetZoom`, voir sa note dans `FermeGame.js`) le faisait déjà, mais rien à l'écran ne
-le montrait — un raccourci qu'on ne connaît pas n'existe pas.
+Guillaume a joué la livraison initiale du tribunal, puis trois fois de suite le perron corrigé, et
+signalé un nouveau défaut à chaque fois (le récit complet, zip par zip, vit en commentaire à côté
+du code qu'il décrit — `courtDepthScale`/`courtDepthFrac`/`courtStairSlowMul`/
+`TOWN_COURT_DEPTH_MARGIN`/`TOWN_COURT_RAMP_MARGIN` dans `fermeConstants.js`, le bloc des urnes et
+`PERCH_POINTS_T` dans `FermeGame.js` — rien n'est recopié ici, §14.2). État atteint : rampes et
+urnes solides (mesurées sur le PNG, jamais devinées), joueur qui rétrécit en montant sans plus
+« sauter » de taille sur aucun des deux axes, montée ralentie (×0,5), treize points de perchoir
+recalés à la grille, un artefact de rendu Gemini effacé sur le toit, les pets qui rétrécissent avec
+leur maître, et un zoom manuel à cinq crans (molette, `+`/`-`, `0`, plus un bouton permanent de
+réinitialisation). Deux leçons générales sorties de ce chantier vivent maintenant au §4 (bornage
+vs retour anticipé, un axe corrigé ne dit rien de l'autre) — ne pas les rechercher ici.
 
-**Parade : un bouton PERMANENT, pas un de plus dans la roue de paramètres.** `ferme-quick-fab
-ferme-zoom-fab` (🔍, `title` = `L.btnZoomReset`), même famille visuelle et même emplacement que
-carte/employés (`right:154px` dans `app/globals.css`, à côté d'eux) — toujours visible, comme eux,
-plutôt que caché derrière un clic de plus : appuyer dessus au cran du milieu ne fait rien, ce n'est
-pas une raison de le cacher. Il appelle directement `resetZoom()`, la même fonction que la touche
-`0` — aucune seconde logique à tenir d'accord.
+⚠️⚠️ **TOUT CECI EST VÉRIFIÉ AU BANC ET AU HARNAIS PAR CLAUDE, JAMAIS EN VRAIE SÉANCE PAR
+GUILLAUME.** Ce qui reste à juger n'est plus mesurable : la montée est-elle agréable, le schéma de
+zoom (cinq crans, cette amplitude) est-il le bon, le rétrécissement des pets ancré sur le maître
+plutôt que leur propre position se remarque-t-il en mal (§10 — un banc ne mesure pas le plaisir).
 
-**Vérifié en jeu**, harnais du §10 (`fake-supabase` + `arcardi-local` + page jetable, supprimée
-après usage) : le profil de navigateur avait un cran de zoom à 5 (maximum) resté d'une séance
-précédente — l'occasion parfaite de voir le bouton travailler pour de vrai. Un clic dessus a bien
-ramené la vue du cran 5 (très rapprochée, le toit de la maison hors cadre) au cran 3 par défaut
-(la maison entière, l'étal et les clôtures visibles) — capture avant/après comparée à l'écran, pas
-seulement `localStorage.ferme_zoom_level` (qui, lui aussi, est passé de "5" à "3"). `verify-strings`
-(1134/1134, la clé neuve appariée FR/EN) et `verify-syntax` relancés, tout vert.
-⚠️ Ce correctif ne répond qu'à la moitié de l'ACTION SUIVANTE n°2 ci-dessous (le manque de retour) :
-si CINQ crans avec cette amplitude sont le bon réglage reste entièrement à confirmer par Guillaume,
-rien ici ne le tranche.
+### 2026-09-23 — Eduardo s'arrête pour parler, et le belvédère est enrichi
 
-### 2026-09-23 bis — Quatre retours en jeu sur le même perron : la montée encore ralentie, les vasques enfin solides, les pigeons remesurés, un artefact ôté du toit
+Deux demandes séparées de Guillaume dans la même séance, traitées comme deux livraisons (§2 : ne
+pas mêler deux changements).
 
-Guillaume a rejoué le perron et signalé QUATRE choses dans la même séance, sur des sujets tous
-différents : « le perso gravit les marches trop vite […] un peu moins rapide à mesure qu'il monte
-mais pas trop » ; « les pots sur l'escalier n'ont pas de collision, c'est dommage quand tout le
-reste est travaillé » ; « des pigeons se posent à des endroits impossibles », capture à l'appui ;
-« le haut du bâtiment semble mal fini », capture à l'appui.
+**Eduardo.** « Approcher Eduardo doit l'arrêter de bouger […] il doit nous dire quelque chose sans
+bouger, et nous expliquer où aller pour construire son bateau — un truc du genre vas voir en
+ville, au port, pour te faire une idée. » Vérifié d'abord : la quête a déjà TROIS portes
+équivalentes vers l'offre du chantier (le tableau de la mairie, Eduardo, l'approche du quai —
+toutes câblées sur le même `starYardAccept`), la troisième existant sans être mise en avant depuis
+le 2026-09-16.
+- `starNerveHalt`/`starNerveDirOf` (FermeGame.js) — jusqu'ici réservées aux résidents « nerveux »
+  de l'annonce météore — sont généralisées via un nouveau `starYardHookActive(rid)`, factorisé
+  hors de `starNpcEmote` pour qu'une seule condition explique le « ! », l'arrêt ET l'orientation
+  (§4 : une condition recopiée finit par mentir). Eduardo se fige et te fait face désormais tant
+  qu'il a sa réplique d'accroche à délivrer — jamais en dehors, sa balade à cheval sur toute la
+  ferme reste le choix assumé de toujours.
+- Sa fiche (touche Q) ne propose plus Oui/Non : il redit juste `eduHook`, réécrite pour rediriger
+  (« va jeter un œil au vieux quai, en ville, tu t'en feras une idée »), et pointe vers le port. Le
+  vrai choix reste au tableau de la mairie et à l'approche du quai, inchangés. `eduPitch` (devenu
+  mort) est supprimé, pas laissé en orphelin.
+- Vérifié : `verify-syntax`, `verify-strings` (1134/1134), `verify-quete` (**930/930**). ⚠️⚠️ **PAS
+  REJOUÉ EN JEU** : atteindre `starYardOffer` demande Eduardo ET Tristan recrutés, ≥4 artisans et
+  jour ≥3 — hors de portée d'une séance de vérification courte. Le mécanisme de gel réutilise tel
+  quel celui déjà éprouvé pour les résidents nerveux, mais personne n'a encore VU Eduardo s'arrêter
+  et parler à l'écran.
 
-**La vitesse.** Le fondu était déjà progressif (`courtDepthFrac`, linéaire du pied au palier —
-c'est exactement « à mesure qu'il monte », rien à changer à la forme). Seul le plancher a bougé,
-d'un cran modéré : `TOWN_COURT_STAIR_SLOW` 0,6 → 0,5 (fermeConstants.js). Chiffre encore choisi
-par Claude, pas mesuré par Guillaume — à rejuger à la prochaine montée.
-
-**Les vasques.** Les deux urnes qui encadrent la balustrade, au resserrement de la volée, n'avaient
-jamais été déclarées dans le générateur — exactement le piège nommé au §4 de ce fichier (« un
-décor ajouté plus tard doit être marqué DANS le générateur, sans quoi on le traversera —
-silencieusement »), payé ici pour la première fois sur un décor peint dans un BITMAP plutôt que
-dessiné en procédural. Mesurées à la loupe sur `courthouse-day.png` (python3/PIL, grille de
-10 px) : les deux bases tombent PILE sur les deux bords de `courtStairSpan` à la rangée 19 — la
-trapèze fait donc doublement foi, dessin et collision. `TOWN_COURT_URN_ROW` (fermeConstants.js)
-porte la rangée mesurée ; les deux colonnes se LISENT dans `courtStairSpan`, elles ne se recopient
-pas. Solidité posée dans `generateTownWorld` (fermeEngine.js), juste après le bloc des rampes —
-deux cases, jamais plus, vérifié en jeu (le personnage bute net sur l'urne droite au lieu de la
-traverser).
-
-**Les pigeons.** Cause trouvée en remesurant à la grille : les treize points de perchoir
-(`PERCH_POINTS_T`, FermeGame.js) affirmaient avoir été « mesurés à la loupe sur courthouse-day.png
-ramené à 256 de large », mais ne l'avaient pas été — au moins deux d'entre eux (les deux vasques)
-tombaient sur le MUR de l'aile, à un tiers de case d'une fenêtre, sans rien sous les pattes. Les
-treize ont été repris un par un à la grille (python3/PIL, repère tous les 10 px) et vérifiés
-contre le dessin réel ; les deux vasques tombent maintenant pile sur les deux urnes, symétriques
-au pixel près. ⚠️ Aucun banc ne pouvait le voir — un point de perchoir n'est vérifié nulle part,
-seul l'œil (ou la grille) le peut, même famille que le §10 (« aucun banc ne regarde un bitmap »).
-
-**Le toit.** Un artefact du rendu Gemini — un poteau segmenté, flottant, détaché de la corniche de
-l'aile droite — vivait dans `courthouse-day.png` depuis son import, jamais vu parce que personne
-n'avait zoomé sur ce coin précis. Effacé (alpha mis à 0 sur son rectangle, python3/PIL) ; rien
-d'autre dans l'image n'y touche. Une trace bien plus faible et éparse existe aussi côté gauche
-(quelques pixels isolés, alpha bas) — laissée en l'état : elle ne forme pas de silhouette et ne
-correspond à rien de ce que Guillaume a montré.
-
-**Vérification.** `verify-syntax`, `verify-collision` (TOUT PASSE), `verify-vallee` (231/231,
-inchangé) relancés. `next build` : ✓ Compiled successfully (même avertissement préexistant
-`G_SOIL`). ⚠️⚠️ **EN JEU** (harnais worker-rAF + dev menu, §10, plus un ref temporaire posé sur
-`meRef`/`canStandTown` pour lire les positions et tester la collision au vol, retiré après usage) :
-montée mesurée, l'urne droite bloque bien le passage, le toit est propre sur capture, un pigeon vu
-posé sur une marche haute. ⚠️⚠️ **PAS LES TREIZE POINTS DE PERCHOIR UN PAR UN** : le cycle de vol
-dure 26 à 50 s par oiseau, trop long pour les épuiser en séance — la mesure à la grille contre le
-dessin réel est la seule vérification faite pour l'instant.
-⚠️ **PAS DE MANIPULATION SUPABASE** : aucun schéma touché, uniquement des constantes, un bloc du
-générateur et un PNG retouché.
-
-### 2026-09-23 — Le perron corrigé sur un vrai bug de saut, la montée ralentie, les pets alignés
-
-Guillaume a rejoué le perron du ter et signalé trois choses dans la même séance : un vrai bug
-(« attention qd on passe derrière, rupture de taille du perso brutale ») et deux demandes
-(« pour la montée des marches du tribunal, plus lent », « rétrécir les pets qui nous suivent
-accordingly »).
-
-**Le bug.** `courtDepthScale` filtrait `x` en tout-ou-rien contre `TOWN_COURT_COLL` (`K`, quatre
-cases plus large que la volée elle-même — le socle des ailes, voir la note du bis). En longeant ce
-socle (dans `K`, hors marches, déjà rétréci par la seule formule de `y`) puis en continuant vers
-l'arrière du bâtiment, `x` sortait de `K` d'un pas et le facteur retombait de 0,84 à 1 D'UN COUP —
-mesuré : 0,1615 de saut instantané au palier, contre 0,0032 après correctif. La parade fond `x` sur
-une case de marge de part et d'autre de `K` (`TOWN_COURT_DEPTH_MARGIN`, même ordre que
-`TOWN_COURT_RAMP_MARGIN`) au lieu d'un couperet : continu à `K.x0`/`K.x1`, 1 une case plus loin,
-jamais avant. Le même défaut sur `y` avait déjà été corrigé au ter ; celui sur `x` ne l'avait pas
-été — deux axes, un seul et même piège.
-
-**La dérivation partagée.** `courtDepthFrac(x,y)` (fermeConstants.js) porte désormais la SEULE
-mesure (position + fondu), dont dérivent `courtDepthScale` (la taille, plancher
-`TOWN_COURT_DEPTH_MIN` ≈ 0,68, calculé depuis `TOWN_COURT_SPRITE` comme avant) ET
-`courtStairSlowMul` (la vitesse, plancher `TOWN_COURT_STAIR_SLOW` = 0,6). La montée ralentit
-exactement là où le personnage rapetisse, au même rythme — jamais un pas avant ou après, jamais
-deux formes de la même courbe qui pourraient diverger. Appliqué dans la mise à jour de vitesse de
-la ville (`FermeGame.js`, à côté de `TOWN_BUSH_SLOW`), sans garde nécessaire : la fonction rend 1
-partout ailleurs en ville.
-
-**Les pets.** `drawPetsFor` calcule `depthK` une fois par appel sur la position du MAÎTRE (les
-familiers suivent à moins d'une case, une profondeur commune suffit), sous la même garde que
-`drawCharacter` (ma zone, jamais celle du propriétaire dessiné — la fonction sert aussi la ferme et
-l'intérieur du tribunal, où les coordonnées n'ont rien à voir avec celles de la ville). La
-transform s'ouvre par pet, ancrée sur SON propre point de contact au sol (pas celui du maître,
-pour qu'aucun pet ne glisse vers lui en rapetissant), ombre et émote comprises.
-
-**Vérification.** `verify-syntax`, `verify-vallee` (231/231, inchangé) et `verify-collision` (TOUT
-PASSE) relancés, aucune régression. ⚠️ Un script de falsification jetable (scratchpad, hors dépôt)
-a mesuré le saut avant/après aux mêmes coordonnées : 0,1615 → 0,0032 au palier, 0,0808 → 0,0016 à
-mi-volée — le couperet est bien devenu un fondu.
-⚠️⚠️ **PAS REJOUÉ EN JEU** : ce chantier n'a touché que des nombres et une continuité, sans nouveau
-geste ni nouvelle interface, donc pas de séance dédiée lancée par Claude (§13 : Guillaume seul
-joue) — mais rien ici ne remplace sa prochaine partie pour confirmer à l'œil que le saut a
-vraiment disparu.
-⚠️ **DEUX NOMBRES CHOISIS PAR CLAUDE, PAS PRÉCISÉS PAR GUILLAUME** : `TOWN_COURT_STAIR_SLOW`
-(rien entre 0 et 1 n'a été chiffré par lui — porté à 0,5 le 2026-09-23 bis ci-dessus, après un
-premier retour « encore trop vite » sur le 0,6 initial) et `TOWN_COURT_DEPTH_MARGIN = 1` case de
-fondu latéral. Les deux sont trivialement ajustables (fermeConstants.js, à côté de
-`courtDepthScale`).
-
-### 2026-09-22 ter — Le perron rejoué : rampes traversables, joueur qui ne rétrécit pas, plus un zoom manuel demandé au passage
-
-Guillaume a rejoué le perron livré la veille (bis) : « excellente physique de collisions pour
-l'escalier » mais « souci d'échelle avec le player… il est toujours aussi grand au lieu de
-rétrécir pour évoquer la profondeur », et séparément, en observant les côtés de la volée :
-« attention aux rampes qui ne sont pas solides actuellement ». Il a aussi demandé, dans la même
-session, un zoom manuel (« niveaux de zoom et dezoom, commande activable et désactivable à tout
-moment, garde le dézoom auto sur certaines zones »).
-
-**Les rampes.** Le blocage des ailes (`TOWN_COURT_COLL` moins `courtStairSpan`) s'arrête à
-`TOWN_COURT_WING_ROW` par construction — l'aile cède la place au parvis plus tôt que la volée. Mais
-la balustrade, elle, se termine sur un socle de pierre qui descend UNE case DE PLUS avant de rendre
-la main au pavé ouvert (mesuré sur `courthouse-day.png`, canal alpha, lignes 322-340) — case que
-plus rien ne bloquait. `TOWN_COURT_RAMP_MARGIN = 1` (fermeConstants.js) comble exactement cette
-case, des deux côtés de la volée, sur la seule rangée concernée — jamais toute la largeur du corps
-(ce serait remettre le mur invisible que `TOWN_COURT_WING_ROW` existe pour éviter, un cran plus
-loin). `verify-vallee` l'a réclamé tout seul (2 cases orphelines) : la marge s'enregistre au même
-endroit que la collision (§14.2, leçon n°2 — un chiffre, un seul endroit où mentir).
-
-**Le rétrécissement.** `courtDepthScale(x, y)` (fermeConstants.js) dérive le facteur de la MÊME
-largeur de trapèze que la collision (`courtStairSpan`) : ~0,68 au palier contre 1 au pied — jamais
-choisi à part. Appliqué dans `drawCharacter` (l'entonnoir unique) par un `ctx.scale` centré sur les
-pieds, ouvert avant le tout premier dessin du personnage et refermé à la toute fin de la fonction.
-⚠️⚠️ **LA PREMIÈRE ÉCRITURE ÉTAIT FAUSSE, ET LES BANCS NE POUVAIENT PAS LE VOIR** : elle rendait `1`
-(taille pleine) dès que `t > 1` — or le palier RÉEL, devant la porte, mesure `t ≈ 1,03` en jeu (une
-fraction de case au-delà du dernier repère de la trapèze). Le commentaire disait « borné à [0,1] »
-; le code, lui, faisait un retour anticipé — **un premier retour n'est pas un bornage**. Résultat
-avant correction : le joueur regrandissait pile à l'endroit où il vient de finir sa montée, sous
-les yeux de qui regarde. Trouvé en rejouant avec un `window.__depthDebug` temporaire (jamais par un
-banc, qui ne mesure pas des pixels de rendu) ; corrigé en clampant `t` à 1 au lieu de rejeter.
-
-**Le zoom manuel.** `manualZoomRef` (un cran parmi `ZOOM_LEVELS = [1,2,3,4,5]`, TOUJOURS un entier —
-c'est la même règle que `townZoomNow` sur le grouillement du pixel art à échelle fractionnaire,
-vraie ici aussi) : molette (`onWheel`, enfin branché — le point d'entrée existait à vide depuis
-longtemps), `+`/`-`/pavé numérique, `0` pour revenir d'un coup au cran du milieu (« désactivable à
-tout moment », demande de Guillaume mot pour mot), deux boutons tactiles. Persisté en
-localStorage (`ferme_zoom_level`), jamais diffusé (réglage de vue, pas un fait du monde, §3).
-Ferme/lac maléfique/tribunal partagent un fondu générique (`viewZoomNow`, calqué sur `townZoomNow`
-sans le dézoom de monument) ; la ville garde le sien, dont la cible de repos devient le cran manuel
-— et près d'un monument, `Math.min(TOWN_ZOOM_NEAR, manuel)` **garde le dézoom automatique en
-plancher** : on peut zoomer encore plus loin que lui, jamais moins loin.
-
-**Vérification.** `verify-vallee` **231/231** (dont les 2 cases de rampe, falsifiées : la marge à 0
-les rend orphelines) ; `verify-collision` TOUT PASSE ; `verify-strings` 1133 clés appariées (2
-neuves, les boutons de zoom tactile) ; `verify-syntax`, bundle esbuild, `next build` propres.
-⚠️⚠️ **ET EN JEU, LES TROIS POINTS**, avec le harnais worker-`requestAnimationFrame` du §10 (sans
-lui, aucune touche n'avait d'effet — symptôme identique au piège documenté, panneau masqué) :
-capture du canevas au pied et au palier, mesure en pixels de la chemise du personnage — **12 px de
-haut au pied, 8 px au palier, rapport 0,67 contre 0,677 attendu** ; on butte net sur le socle de la
-rampe côté ouest ; la molette et `+`/`-` changent bien la taille du monde sur cinq crans en ferme
-ET en ville, `0` revient au cran du milieu, et **au pied du tribunal, forcer le zoom avant ne change
-rien à l'écran** — le plancher automatique tient.
-
-⚠️ **LA LEÇON, GÉNÉRALE** : *un commentaire qui affirme un bornage doit être vérifié contre le CODE,
-pas contre lui-même* — c'est la même famille que le §4 sur les conditions recopiées à la main
-(« un commentaire qui affirme une équivalence est l'endroit exact où il faut appeler la fonction »),
-version bornage : un premier retour anticipé pour chaque extrémité n'est pas la même chose qu'un
-`Math.min`/`Math.max` qui clampe, et seule la seconde forme dit ce qu'elle prétend dire.
-
-### 2026-09-22 bis — Le tribunal repris sur cinq défauts vus en jeu : le dessin et la collision décrivaient deux bâtiments
-
-Guillaume a joué la livraison de la veille et rapporté **cinq défauts**, dont deux graves : « le
-dézoom ne permet pas de voir toute la structure » ; « la collision quand le joueur monte les
-marches n'est pas satisfaisante » (1 — plus de profondeur, 2 — « que la collision opère quand le
-perso est face à la porte, pas en dessous […] ce n'est pas le haut de la tête qui entre en
-collision avec les colonnes, mais son corps : vue en 3D où le perso est DEVANT l'obstacle. on a eu
-le même problème multiple times ») ; « l'emplacement doit être raffiné, regarde bien l'alignement
-au sol » ; « revoir la taille des pigeons, pas du tout à l'échelle » ; et **« énorme problème de
-collision sur les côtés de la structure, on passe à travers »**.
-
-**La cause est unique, et c'est la leçon.** Le sprite s'affiche sur **17,6 × 16,3 cases** quand
-`TOWN_COURT` en fait **12 × 7** : plus rien ne se correspondait. Les deux ailes débordaient de 2,5
-cases de chaque côté au-dessus d'un sol resté libre (d'où la traversée) ; le palier peint tombait
-deux rangées au-dessus de la dernière case foulable (d'où le blocage sous la porte) ; l'escalier
-peint montait de 68 px à l'écran quand la grille n'en rendait que 53 (d'où le manque de
-profondeur) ; le pied de la volée flottait 9 px au-dessus du parvis. **Quatre symptômes, un seul
-défaut : personne n'avait jamais mesuré le dessin.**
-
-**La parade est une source unique**, `C.TOWN_COURT_SPRITE` (fermeConstants.js) : **six repères
-mesurés dans le PNG** (pied de la volée, palier, pied des ailes, bords du corps, volée en haut et
-en bas), d'où se dérivent `TOWN_COURT_STEP_RISE` (la marche vaut 0,1403 — **calculée**, plus
-choisie), `TOWN_COURT_COLL` (x=134..149), `TOWN_COURT_WING_ROW`, `courtStairSpan(y)` et
-`courtStepElev(y)`. La volée est un **trapèze** (12 → 10 → 8 cases en montant), parce que ses deux
-balustrades se resserrent ; l'altitude ne se pose plus que **sur elle**, jamais sur toute la
-largeur. ⚠️ **Deux altitudes distinctes là où il n'y en avait qu'une** : `eFacade` (le palier)
-porte la **clé de tri** — sans quoi le joueur arrivé devant la porte se faisait recouvrir par le
-bâtiment et **disparaissait** — et `eApron` (le parvis) porte l'**ancrage**. Les deux se LISENT
-dans le monde généré, elles ne se recopient pas. Le cadrage, lui, ne pouvait pas être une
-constante : la part de vue à récupérer au-dessus du joueur vaut « hauteur du monument ÷ hauteur de
-la fenêtre », donc `courtHeadroom(m)` la **calcule** et ancre la vue sur le sommet du dôme tant
-qu'elle n'est pas bornée. Les pigeons repassent à `1/1,5` — **l'échelle du monde** : la veille ils
-suivaient celle du bâtiment, ce qui est le raisonnement retourné (c'est le pigeon posé sur la
-corniche qui DIT que le monument est grand).
-
-⚠️ **`TOWN_COURT` n'a PAS été agrandi** : cette emprise sert de repère à `nearCivicDoor`, à
-`townZoomTarget` et à `forecourt`, qui parlent du bâtiment comme LIEU, pas de la place qu'il occupe
-au sol. Deux grandeurs différentes, deux noms (§4). La solidité élargie est posée **tard**, avec
-les autres bâtiments : déclarée plus tôt, elle aurait changé le compte de tirages des passes de
-décor et déplacé des arbres à l'autre bout de la ville (§4, la carte regénérée depuis sa graine).
-
-**Vérification.** `verify-vallee` **231/231** (223 avant : +8 contrôles neufs sur le perron, dont
-« le palier tombe sur le seuil peint » — pieds 219,8 px contre seuil 219,8 px — et « les flancs
-bloquent sur toute la largeur du dessin »), **falsifiés tous les deux avant d'être crus** (l'ancien
-0,06 fait rougir le premier, les ailes rouvertes le second) ; `verify-collision` TOUT PASSE ;
-`verify-syntax` tout se parse ; bundle esbuild propre ; `next build` ✓ Compiled successfully.
-⚠️⚠️ **ET SURTOUT EN JEU, les cinq points un par un** : le dôme entier tient dans le cadre ; on
-monte la volée et on s'arrête **face à la porte, visible, l'invite affichée** ; on est bloqué net
-au pied de l'aile **gauche et droite** ; les pigeons sont à la taille des pigeons de la place.
-
-⚠️ **LA LEÇON, ET ELLE EST GÉNÉRALE** (elle vaut pour le prochain bâtiment de la refonte) : *un
-sprite importé n'apporte pas son emprise — il faut la MESURER, et la mesurer une fois pour que le
-dessin et la collision lisent le même nombre.* Six bancs au vert n'avaient rien vu de ce qu'une
-séance de jeu a trouvé, parce qu'aucun ne comparait la grille au DESSIN (§10).
-
-### Toujours en attente du retour de Guillaume en jeu (hors tribunal, ci-dessus)
-
-⚠️ **Le tribunal lui-même a été vu par Guillaume, corrigé sur TROIS retours successifs (bis, ter,
-puis un troisième sur un vrai bug de saut de taille), et revérifié point par point à chaque fois —
-mais le troisième retour, ci-dessus, n'a été revérifié qu'au banc et par un script de mesure, PAS
-en jeu.** Ce qui reste à juger sur le ressenti n'est plus un défaut mesurable : la montée est-elle
-agréable, le monument impressionne-t-il, la caméra qui s'ancre sur le dôme gêne-t-elle en
-circulant ? Rien de tout ça ne se mesure (§10).
-⚠️ **LE ZOOM MANUEL (ter) A EU UN PREMIER RETOUR RÉEL (2026-09-23 ter ci-dessus)** : « j'aime bien
-pouvoir zoomer » confirme que le principe plaît, et « il faut pouvoir revenir à un paramètre
-normal » a désigné un manque précis — corrigé par un bouton permanent. **Ce qui reste NEUF et non
-jugé** : le SCHÉMA DE COMMANDE (molette + `+`/`-`/pavé numérique + deux boutons tactiles), le
-NOMBRE de crans (cinq) et leur AMPLITUDE (`ZOOM_LEVELS = [1,2,3,4,5]`, `ZOOM` = 3 au milieu) —
-Guillaume n'a validé ni l'un ni l'autre, et tout reste trivialement ajustable (une seule table
-dans `FermeGame.js`).
-⚠️ **LE RÉTRÉCISSEMENT DES PETS (2026-09-23) EST NEUF** : « accordingly » n'était pas chiffré, donc
-l'ancrage du rétrécissement des pets sur la position du maître (pas la leur propre) est un choix
-de Claude — à confirmer ou corriger dès la prochaine montée. La vitesse de montée, elle, a déjà eu
-un second réglage (0,6 → 0,5, 2026-09-23 bis ci-dessus) après un premier retour « encore trop
-vite » ; toujours pas confirmée.
-
-Cinq livraisons jamais rejouées par Guillaume, dans l'ordre : le tronc du pin (`richTrunk` sur la
-seule fiche `pine`, `render-arbres` 9/9, jamais vu en jeu à l'échelle réelle) ; le bois du sud-est
-étendu vers le nord ; la réorganisation du cœur de ville, la fontaine de la place refaite et deux
-correctifs de relecture (bouton « changer de ferme », collision résidents/buissons) — ces quatre
-derniers du 2026-09-21, détail dans l'historique git (commits du jour) et les commentaires de code
-cités par eux, pas la peine de le redire ici. Toutes vérifiées aux bancs disponibles pour chacune,
-**aucune au ressenti réel** en dehors de ce que Guillaume a déjà vu du tribunal ci-dessus.
+**Le belvédère.** « Faut améliorer drastiquement le belvédère » → questions posées, réponses de
+Guillaume : le problème est qu'il est « trop modeste, pas assez marquant », et la direction
+choisie est d'enrichir la terrasse EN PROCÉDURAL (pas de nouveau bitmap Gemini). Trois ajouts,
+tous dérivés du rectangle `TOWN_BELVEDERE` comme le reste du bloc (fermeEngine.js, juste après les
+lampadaires) :
+1. **Quatre piliers d'angle** (`townPierSprite`, fermeArt.js) — coiffent les blocs de parapet de
+   la planche (qu'on ne peut pas redessiner) d'une pierre travaillée à boule sommitale, même
+   principe que les lampadaires aux quatre angles de la grande place. Donnent enfin un contour
+   reconnaissable de loin.
+2. **Un télescope** (`townTelescopeSprite`) sur le poste de contemplation ouest — le seul de la
+   ville, ce qui justifie enfin le « E : regarder la vallée ». Le poste est, lui, gardé simple —
+   juste son banc, pas de second télescope.
+3. **Quatre jardinières** (`"planter"`, déjà utilisé place et parc, aucun sprite de plus) en bande
+   à hauteur de la statue.
+   Vérifié : `verify-syntax`, `verify-vallee` (**231/231**, inchangé), `verify-collision` (TOUT
+   PASSE). ⚠️⚠️ **ET EN JEU** (harnais du §10, page jetable supprimée après usage) : les deux
+   piliers, les jardinières fleuries et le télescope se voient et se lisent bien à l'écran,
+   screenshots à l'appui — mais Guillaume ne l'a pas encore vu lui-même.
+⚠️ **PAS DE MANIPULATION SUPABASE** dans les deux livraisons : aucun schéma touché.
 
 ### Toujours ouvert
 
+Cinq livraisons plus anciennes jamais rejouées par Guillaume, dans l'ordre : le tronc du pin
+(`richTrunk` sur la seule fiche `pine`, `render-arbres` 9/9, jamais vu en jeu à l'échelle réelle) ;
+le bois du sud-est étendu vers le nord ; la réorganisation du cœur de ville, la fontaine de la
+place refaite et deux correctifs de relecture (bouton « changer de ferme », collision
+résidents/buissons) — ces quatre derniers du 2026-09-21, détail dans l'historique git et les
+commentaires de code cités par eux.
+
 - **La refonte graphique des bâtiments, au sens large** (demande du 2026-09-21 : « détailler la
   majorité des bâtiments sur le modèle de l'église, de l'hdv, pour une refonte graphique », AVEC
-  Gemini). Le tribunal est fait (ci-dessus). **Aucun ordre pour les bâtiments suivants n'a été
-  arbitré avec Guillaume** ; ne pas en choisir un sans lui (§2).
+  Gemini). Le tribunal est fait. **Aucun ordre pour les bâtiments suivants n'a été arbitré avec
+  Guillaume** ; ne pas en choisir un sans lui (§2).
 - **Traduction des métiers** (trouvé le 2026-09-20, jamais corrigé) : `job` dans `TOWN_RESIDENTS`
   (fermeConstants.js) est écrit en anglais et s'affiche brut dans au moins six phrases françaises.
   Correctif borné : une table `jobFr`/équivalent, ou une clé de traduction par métier.
@@ -304,27 +109,18 @@ ferme peuplée à deux clients, suite de l'audit d'Où's that).
 
 ### ⏭️ ACTION SUIVANTE
 
-Attendre le retour de Guillaume sur QUATRE choses distinctes, pour ne pas les mélanger (§2) : (1) le
-RESSENTI du perron du tribunal (montée, cadrage — mesuré et corrigé plusieurs fois, jamais jugé au
-plaisir) ; (2) le ZOOM MANUEL lui-même — le manque de retour visible est corrigé (bouton permanent,
-2026-09-23 ter ci-dessus), mais le schéma de commande et les cinq crans restent un choix de
-Claude, jamais confirmés par Guillaume comme le bon réglage ; (3) le correctif du 2026-09-23 — le saut de taille a-t-il
-vraiment disparu à l'œil en longeant les côtés du bâtiment, et le rétrécissement des pets suivant le
-maître (plutôt que leur propre position) se voit-il ou se remarque-t-il en mal ; (4) les QUATRE points
-du 2026-09-23 bis ci-dessus — la vitesse ×0,5 est-elle enfin celle demandée (« un peu moins rapide
-[…] mais pas trop »), les deux urnes bloquent-elles proprement sans gêner le passage entre elles, les
-pigeons se posent-ils désormais partout où on les voit (les treize points n'ont pas tous été vus en
-séance), et le haut du bâtiment est-il net une fois l'artefact ôté.
-Les cinq livraisons plus anciennes du bloc ci-dessus attendent toujours la même chose.
-**Choisir quel bâtiment vient après le tribunal se demande à lui** — ça ne se décide pas seul (§2).
-⚠️ Le jour où ce bâtiment-là arrive, **mesurer son sprite AVANT de poser sa collision** : c'est la
-leçon du 2026-09-22 bis, et elle coûtera le même prix si on l'oublie.
-⚠️ **ET CELLE DU TER, POUR LE PROCHAIN FACTEUR D'ÉCHELLE OU BORNAGE ÉCRIT DANS CE DÉPÔT** : un
-commentaire qui dit « borné à [0,1] » n'est vrai que si le CODE clampe — un retour anticipé à
-chaque extrémité n'est pas la même chose, et rien ne le distingue au premier coup d'œil.
-⚠️ **ET CELLE DU 2026-09-23, QUI EST LA MÊME LEÇON SUR UN AUTRE AXE** : un bornage vérifié sur `y`
-ne dit rien de `x` — les DEUX bords d'une même zone à effet (fondu, palier, seuil) doivent être
-contrôlés séparément, jamais supposés symétriques parce que l'un des deux a déjà été corrigé.
+Attendre le retour de Guillaume sur SIX choses distinctes, pour ne pas les mélanger (§2) : (1) le
+RESSENTI du perron du tribunal, jamais jugé au plaisir malgré quatre correctifs mesurés ; (2) le
+SCHÉMA du zoom manuel (commande, cinq crans, amplitude) — jamais confirmé comme le bon réglage ;
+(3) le rétrécissement des pets ancré sur le maître — se voit-il, se remarque-t-il en mal ; (4)
+EDUARDO — le gel et sa nouvelle réplique, jamais vus en vraie partie (la fenêtre d'apparition est
+étroite : lui + Tristan + 4 artisans + jour ≥3) ; (5) LE BELVÉDÈRE enrichi — vu par Claude à
+l'écran, jamais par Guillaume ; (6) **choisir quel bâtiment vient après le tribunal** — ne se
+décide pas seul (§2). Les cinq livraisons plus anciennes du bloc ci-dessus attendent toujours la
+même chose.
+⚠️ Le jour où un nouveau bâtiment/sprite bitmap arrive, **mesurer son sprite AVANT de poser sa
+collision**, et vérifier tout bornage sur les DEUX axes séparément — les deux leçons du perron,
+maintenant au §4.
 
 ---
 
@@ -612,6 +408,19 @@ dépôt.
   résolveurs directement.
 
 **JavaScript / three.js / canevas**
+- ⚠️⚠️⚠️ **UN COMMENTAIRE QUI DIT « BORNÉ À [0,1] » N'EST VRAI QUE SI LE CODE CLAMPE — UN
+  RETOUR ANTICIPÉ À CHAQUE EXTRÉMITÉ N'EST PAS LA MÊME CHOSE** (perron du tribunal, 2026-09-22
+  ter). `courtDepthScale` rendait `1` (taille pleine) dès qu'un `if (t > 1) return 1` était
+  franchi — sauf que le palier RÉEL dépassait `t=1` d'une fraction de case, donc le joueur
+  regrandissait pile devant la porte, sous les yeux de qui regarde. Rien ne distingue au premier
+  coup d'œil un `Math.min`/`Math.max` (qui clampe vraiment) d'un premier retour par extrémité
+  (qui rejette au lieu de borner) : le second se lit aussi bien que le premier, et seul le fait
+  de REJOUER la zone limite le révèle. ⚠️ **Corollaire, payé un jour plus tard sur le même
+  bâtiment (2026-09-23), et c'est la même leçon sur un autre axe** : un bornage vérifié sur `y`
+  ne dit rien de `x` — `courtDepthScale` fondait déjà `y` en continu mais coupait encore `x` en
+  tout-ou-rien (0,84 → 1 d'un coup en longeant le socle des ailes), parce que corriger un axe ne
+  corrige pas l'autre. **Les deux bords d'une même zone à effet (fondu, palier, seuil) se
+  contrôlent séparément, jamais supposés symétriques parce que l'un des deux a déjà été corrigé.**
 - ⚠️⚠️⚠️ **UN BOOLÉEN MIS EN CACHE POUR UNE VALEUR NATIVE VOLATILE (`document.hidden`) NE SE
   RESYNCHRONISE QUE SUR L'ÉVÉNEMENT QUI LE MET À JOUR — JAMAIS TOUT SEUL** (hors-zip, 2026-09-01,
   bug « gels de PNJ chez l'invité », §13 item n°1, six tentatives, jamais diagnostiqué avant).

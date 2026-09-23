@@ -6918,6 +6918,7 @@ export const FERME_STR = {
     promptTownMarket: "E: sell at the market",
     touchRun: "Run (toggle)", touchMap: "Map", touchAct: "Act / jump",
     touchZoomIn: "Zoom in", touchZoomOut: "Zoom out", // 2026-09-22 ter
+    btnZoomReset: "🔍 Reset zoom", // 2026-09-23 — always-on button, back to the middle notch
     kickRefused: "💅 Carla Garfield works for nobody here. She'll leave when she chooses to.",
     boutiqueClosedToast: (d) => d === 0
       ? "💅 Maison Garfield opens today — Carla hasn't arrived yet."

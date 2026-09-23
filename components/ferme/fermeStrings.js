@@ -1186,11 +1186,15 @@ const STAR_FR = {
     dockTitle: "⚓ La vieille cale",
     dockBody: "La passe du lac est ensablée depuis vingt ans. Relancer le chantier naval ici, sur ce quai ?",
     boardTaken: (who) => `⚓ Chantier naval : confié à la ferme (${who}). Le maire attend votre visite.`,
-    // La bulle au-dessus d'Eduardo quand on s'approche. ⚠️ Courte : une bulle se lit d'un regard.
-    eduHook: "Un bateau à moi… je rapporterais deux fois plus de chaque produit.",
+    // La bulle au-dessus d'Eduardo quand on s'approche — et, depuis le
+    // 2026-09-23, ce qui l'arrête et le tourne vers toi pendant qu'il la dit
+    // (voir `starYardHookActive`/`starNerveHalt`, FermeGame.js). ⚠️ Courte :
+    // une bulle se lit d'un regard. Il ne propose plus Oui/Non lui-même — il
+    // renvoie au quai, où l'offre (`dockTitle`/`dockBody`) et celle de la
+    // mairie (`boardTitle`/`boardBody`) portent la vraie décision.
+    eduHook: "Un bateau à moi, ça changerait tout pour mes voyages… Va donc jeter un œil au vieux quai, en ville : tu t'en feras une idée.",
     eduTitle: "⚓ Le bateau d'Eduardo",
     eduMapBtn: "⚓ Son projet de bateau",
-    eduPitch: "« Je vous rapporte déjà ce que vous voulez, mais je loue une place sur les bateaux des autres, et c'est eux qui décident combien j'embarque. Avec mon propre navire, je rapporterais deux fois plus de chaque produit. Si la ferme relançait le chantier naval du lac… »",
     eduShipLimit: (n) => `⛵ Avec son propre navire, Eduardo embarque jusqu'à ${n} de chaque produit.`,
     eduYes: "⚓ On s'en occupe",
     eduNo: "Pas maintenant",
@@ -2047,10 +2051,9 @@ const STAR_EN = {
     dockTitle: "⚓ The old slipway",
     dockBody: "The lake channel has been silted up for twenty years. Restart the shipyard here, on this quay?",
     boardTaken: (who) => `⚓ Shipyard: entrusted to the farm (${who}). The mayor is expecting you.`,
-    eduHook: "A boat of my own… I'd bring back twice as much of every good.",
+    eduHook: "A boat of my own would change everything for my trips… Go take a look at the old quay, in town — you'll get an idea there.",
     eduTitle: "⚓ Eduardo's boat",
     eduMapBtn: "⚓ His boat project",
-    eduPitch: "\"I already bring you whatever you want, but I rent space on other people's boats, and they decide how much I can load. With my own ship I'd bring back twice as much of every good. If the farm restarted the lake shipyard…\"",
     eduShipLimit: (n) => `⛵ With his own ship, Eduardo can load up to ${n} of each good.`,
     eduYes: "⚓ We'll handle it",
     eduNo: "Not now",

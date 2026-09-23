@@ -6956,6 +6956,42 @@ export function generateTownWorld() {
       const ly = by1 - 2;
       if (inMap(lx, ly) && !solid[id(lx, ly)] && objects[id(lx, ly)] === C.O_NONE) addProp(lx, ly, "lamp", true);
     }
+    /* 2026-09-23 (demande Guillaume, en jeu : « améliorer drastiquement le
+       belvédère » — « trop modeste, pas assez marquant ») : trois ajouts,
+       tous DÉRIVÉS de `B` comme le reste du bloc ci-dessus, jamais posés à la
+       main. Direction choisie avec lui : rester en PROCÉDURAL (§9 de
+       CLAUDE.md), rien de nouveau à importer.
+
+       4. QUATRE PILIERS D'ANGLE (`townPierSprite`, fermeArt.js) — même schéma
+          que les quatre lampadaires de la GRANDE place. Ils ne remplacent
+          PAS le bloc de parapet de la planche (`stoneBlock`, on ne peut pas
+          la redessiner) : ils le COIFFENT, un prop de PLUS sur la même case,
+          `blocks:false` puisque le bloc dessous explique déjà la case
+          solide — exactement la règle du bloc lui-même, un paragraphe plus
+          haut (« une case, un seul prop qui en RÉPOND »), sans quoi
+          `verify-vallee` aurait deux raisons pour une seule case.
+       5. UN TÉLESCOPE (`townTelescopeSprite`), sur le poste de contemplation
+          OUEST, une case en retrait du parapet — le seul de la ville. Le
+          poste EST garde son simple banc : deux nooks de nature différente
+          valent mieux que deux copies. Enfin un objet qui justifie le
+          « E : regarder la vallée ».
+       6. QUATRE JARDINIÈRES (`"planter"`, déjà posé place et parc — aucun
+          sprite de plus), en bande à la hauteur de la statue : le centre de
+          la terrasse, resté nu depuis le 2026-09-01, reçoit de la couleur. */
+    for (const [px, py] of [[bx0, by0], [bx1, by0], [bx0, by1], [bx1, by1]]) {
+      if (inMap(px, py)) addProp(px, py, "pier", false);
+    }
+    {
+      const tx = B.x + 4, ty = by1 - 1;
+      if (inMap(tx, ty) && !solid[id(tx, ty)] && objects[id(tx, ty)] === C.O_NONE) addProp(tx, ty, "telescope", true);
+    }
+    const midx = B.x + (B.w >> 1);
+    for (const [px, py] of [
+      [midx - 3, B.y + 5], [midx + 3, B.y + 5],
+      [bx0 + 1, B.y + (B.h >> 1)], [bx1 - 1, B.y + (B.h >> 1)],
+    ]) {
+      if (inMap(px, py) && !solid[id(px, py)] && objects[id(px, py)] === C.O_NONE) addProp(px, py, "planter", true);
+    }
   }
   const bloom = new Uint8Array(W * H);
   for (const b of beds) {

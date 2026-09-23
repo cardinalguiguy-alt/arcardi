@@ -21545,6 +21545,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   : pr.kind === "statue" ? sprites.townStatue
                   : pr.kind === "townWell" ? sprites.townWell
                   : pr.kind === "crate" ? sprites.townCrate
+                  // 2026-09-23 — le belvédère : pilier d'angle (coiffe le
+                  // bloc de la planche, voir sa note) et télescope du poste
+                  // ouest (fermeEngine.js, bloc "LE BELVÉDÈRE DEVIENT UN
+                  // BELVÉDÈRE").
+                  : pr.kind === "pier" ? sprites.townPier
+                  : pr.kind === "telescope" ? sprites.townTelescope
                   /* ZIP 437 — le buisson fleuri du parc et le bloc erratique de
                      la rive sauvage. La variante vient de la POSITION (hachage),
                      jamais d'un tirage : trois buissons alignés tirés au sort
@@ -28238,6 +28244,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!m) return false;
     return Q.starNerveNearTo(m.zone || "farm", m.x, m.y, zone, x, y);
   }
+  // 2026-09-23 (demande Guillaume : « approcher Eduardo doit l'arrêter de
+  // bouger ») — LA MÊME condition que sa bulle/son "!" dans `starNpcEmote`,
+  // sortie ici pour que le gel du déplacement et l'accroche affichée ne
+  // puissent jamais diverger (§4 de CLAUDE.md : une condition recopiée finit
+  // par mentir).
+  function starYardHookActive(rid) {
+    const ro = rosterOf(rid);
+    const s0 = sharedRef.current;
+    return !!(ro && ro.skill === "voyager" && Q.starYardOffer(s0.star, s0.day, starGateCtxNow()));
+  }
+  // Un joueur, tous confondus, est-il à portée de parole de cette case ?
+  // Factorisé hors de `starNerveHalt` : le chantier naval d'Eduardo doit lui
+  // aussi arrêter le PNJ pour TOUS les joueurs, pas seulement le local — même
+  // raison que le paragraphe juste en dessous.
+  function starNerveAnyoneNear(zone, x, y) {
+    const m = meRef.current;
+    if (m && Q.starNerveNearTo(m.zone || "farm", m.x, m.y, zone, x, y)) return true;
+    for (const p of playersRef.current.values())
+      if (p && Q.starNerveNearTo(p.zone || "farm", p.x, p.y, zone, x, y)) return true;
+    return false;
+  }
   /* ⚠️⚠️ CELLE-CI EST LA SEULE À TOURNER CHEZ L'HÔTE, ET C'EST ELLE QUI ARRÊTE
      VRAIMENT LE PNJ : le déplacement des résidents et des visiteurs est simulé
      par l'hôte et diffusé (§3), donc un arrêt décidé chez l'invité aurait fait
@@ -28245,15 +28272,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      les joueurs, pas seulement le local : quelqu'un qui parle à un habitant ne
      doit pas le voir détaler parce que c'est l'autre qui s'est approché.
      ⚠️ ZÉRO MESSAGE, ZÉRO CHAMP : les positions des joueurs sont déjà là, la date
-     de l'annonce voyageait déjà dans `star`. */
+     de l'annonce voyageait déjà dans `star`.
+     ⚠️ DEUX RAISONS DE FIGER UN RÉSIDENT, PAS UNE : le système « nerveux » de
+     l'annonce météore (`Q.starNerveHas`), et Eduardo tant qu'il a quelque chose
+     de spécial à dire (aujourd'hui : la seule proposition du chantier naval).
+     Les deux se DÉRIVENT, jamais un champ de plus. */
   function starNerveHalt(zone, rid, x, y) {
     const since = starNerveSince();
-    if (since < 0 || !Q.starNerveHas(rid)) return false;
-    const m = meRef.current;
-    if (m && Q.starNerveNearTo(m.zone || "farm", m.x, m.y, zone, x, y)) return true;
-    for (const p of playersRef.current.values())
-      if (p && Q.starNerveNearTo(p.zone || "farm", p.x, p.y, zone, x, y)) return true;
-    return false;
+    const nervous = since >= 0 && Q.starNerveHas(rid);
+    const yard = zone === "farm" && starYardHookActive(rid);
+    if (!nervous && !yard) return false;
+    return starNerveAnyoneNear(zone, x, y);
   }
   /* ⚠️ LE « ! » DE L'IMPACT. Il lit la scène en cours, comme `starImpactLandedNow`
      — donc il tombe au même instant que la secousse chez tout le monde, et il ne
@@ -28273,17 +28302,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const bang = starBangNow();
     if (bang > 0) return { a: bang };
     /* 2026-09-13 (lot 1, D3) — EDUARDO PROPOSE LE CHANTIER. Un « ! » qui sursaute
-       tant que la proposition est à faire, sa phrase quand on s'approche ; Q ouvre
-       sa fiche, où l'on accepte. ⚠️ La MÊME porte que l'avis de la mairie
-       (`Q.starYardOffer`) : jamais une seconde condition. */
-    if (zone === "farm") {
-      const ro = rosterOf(rid);
-      const s0 = sharedRef.current;
-      if (ro && ro.skill === "voyager" && Q.starYardOffer(s0.star, s0.day, starGateCtxNow())) {
-        if (starNerveNear(zone, x, y)) return { say: L.star.yard.eduHook };
-        const k = (Date.now() % C.STAR_YARD_HOOK_PERIOD_MS) / C.STAR_YARD_HOOK_PERIOD_MS;
-        return k < 0.45 ? { a: Math.min(1, (1 - k / 0.45) * 2.2) } : null;
-      }
+       tant que la proposition est à faire, sa phrase quand on s'approche — et
+       depuis le 2026-09-23, `starNerveHalt`/`starNerveDirOf` lisent la MÊME
+       condition (`starYardHookActive`) pour l'arrêter et le tourner vers toi
+       pendant qu'il parle. Q ouvre sa fiche, qui redit juste cette réplique et
+       pointe vers le quai — la vraie proposition Oui/Non s'est déplacée à
+       l'approche du port (`dockTitle`/`dockBody`) et au tableau de la mairie.
+       ⚠️ La MÊME porte que l'avis de la mairie (`Q.starYardOffer`) : jamais une
+       seconde condition. */
+    if (zone === "farm" && starYardHookActive(rid)) {
+      if (starNerveNear(zone, x, y)) return { say: L.star.yard.eduHook };
+      const k = (Date.now() % C.STAR_YARD_HOOK_PERIOD_MS) / C.STAR_YARD_HOOK_PERIOD_MS;
+      return k < 0.45 ? { a: Math.min(1, (1 - k / 0.45) * 2.2) } : null;
     }
     const since = starNerveSince();
     if (since < 0 || !Q.starNerveHas(rid)) return null;
@@ -28310,7 +28340,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      l'invité sur une humeur, c'est-à-dire réconcilier une agitation. */
   function starNerveDirOf(zone, rid, x, y) {
     const since = starNerveSince();
-    if (since < 0 || !Q.starNerveHas(rid)) return null;
+    const nervous = since >= 0 && Q.starNerveHas(rid);
+    const yard = zone === "farm" && starYardHookActive(rid);
+    if (!nervous && !yard) return null;
     /* ⚠️⚠️ ZIP 456 — À PORTÉE, IL SE TOURNE VERS TOI. Le 455 rendait `null` ici
        (« on le laisse tranquille ») : il te parlait donc de dos, ou de profil, en
        marchant. Se tourner vers son interlocuteur est ce qui transforme une
@@ -28318,7 +28350,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        parole — et c'est gratuit, la direction se déduit des deux positions. */
     const m = meRef.current;
     if (m && starNerveNear(zone, x, y)) return Q.starNerveFace(m.x - x, m.y - y);
-    return Q.starNerveDir(rid, Q.starNerveTic(rid, since));
+    // Le balancement/tour sur soi (tic) n'existe que pour le système « nerveux »
+    // de l'annonce météore. Eduardo n'a pas cette animation : hors de portée de
+    // parole, on ne force rien, il continue simplement sa route.
+    return nervous ? Q.starNerveDir(rid, Q.starNerveTic(rid, since)) : null;
   }
 
   /* ⚠️⚠️ AUTORITÉ 2026-09-12 — `starOfferPump` (le pop-up « Commencer la
@@ -33814,11 +33849,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   <PixBtn sprites={spritesReady ? spritesRef.current : null} disabled={Date.now() < (res.superCooldownUntil || 0) || !hasCoffeeStock()} label={L.tristanCoffeeBtn} onClick={tristanCoffee} />
                 </div>
               )}
-              {/* 2026-09-13 (lot 1, D3) — LA VIEILLE CARTE D'EDUARDO. La proposition
-                  PERSONNELLE du chantier (la mairie en fait la publique, au tableau des
-                  nouvelles). Même porte, même requête : `Q.starYardOffer`,
-                  `starYardAccept`. Une fois accepté, il remercie jusqu'à l'avis de
-                  l'observatoire. */}
+              {/* 2026-09-13 (lot 1, D3) — LA FICHE D'EDUARDO.
+                  ⚠️ 2026-09-23 (demande Guillaume) : IL NE PROPOSE PLUS RIEN ICI.
+                  Il n'est plus qu'un INDICE qui redit sa réplique d'accroche et
+                  pointe vers le port — exactement `L.star.yard.eduHook`, jamais une
+                  seconde phrase qui pourrait un jour dire autre chose que la bulle.
+                  La vraie proposition Oui/Non vit désormais à deux endroits, tous
+                  deux déjà arbitrés par l'hôte via la même `starYardAccept` :
+                  le tableau de la mairie et l'approche du quai (`dockTitle`/
+                  `dockBody`, plus bas dans ce fichier). Une fois accepté, il
+                  remercie jusqu'à l'avis de l'observatoire, comme avant. */}
               {ro.skill === "voyager" && (() => {
                 const s0 = sharedRef.current;
                 const offer = Q.starYardOffer(s0.star, s0.day, starGateCtxNow());
@@ -33827,13 +33867,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 return (
                   <div className="ferme-star-notice" style={{ marginTop: 10 }}>
                     <b>{L.star.yard.eduTitle}</b>
-                    <div style={{ marginTop: 4 }}>{offer ? L.star.yard.eduPitch : L.star.yard.eduThanks}</div>
-                    {offer && (
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-                        <PixBtn sprites={spritesReady ? spritesRef.current : null} label={L.star.yard.eduYes} onClick={() => sendReq({ kind: "starYardAccept" })} />
-                        <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="plain" label={L.star.yard.eduNo} onClick={() => setResidentCard(null)} />
-                      </div>
-                    )}
+                    <div style={{ marginTop: 4 }}>{offer ? L.star.yard.eduHook : L.star.yard.eduThanks}</div>
                   </div>
                 );
               })()}
