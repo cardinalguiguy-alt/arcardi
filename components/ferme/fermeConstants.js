@@ -5106,15 +5106,47 @@ export function courtStepElev(y, apron = 1) {
    et l'ancien code y RENDAIT LA TAILLE PLEINE — pile là où le joueur vient de
    finir sa montée, l'effet s'annulait sous ses yeux. Seul `t < 0` (sous le
    pied de la volée, sur le parvis ouvert) doit rendre 1 sans transition : à
-   l'autre bout, on RESTE au plus petit, on ne regrandit jamais. */
-export function courtDepthScale(x, y) {
-  const b = TOWN_COURT, K = TOWN_COURT_COLL, S = TOWN_COURT_SPRITE;
-  if (x < K.x0 || x > K.x1) return 1;
+   l'autre bout, on RESTE au plus petit, on ne regrandit jamais.
+   ⚠️⚠️ 2026-09-23 — LE MÊME DÉFAUT VIVAIT ENCORE SUR `x`, ET C'ÉTAIT PIRE : PAS
+   DE TRANSITION DU TOUT. Signalé par Guillaume en jeu : « quand on passe
+   derrière, rupture de taille du perso brutale ». `K` déborde exprès de la
+   volée (voir « x FILTRE D'ABORD » ci-dessus : quatre cases de plus que le
+   trapèze, pour couvrir le socle des ailes) — donc on peut longer ce socle,
+   hors marches mais encore DANS `K`, déjà rétréci par la seule formule de `y` ;
+   au pas suivant, en continuant vers l'arrière du bâtiment, `x` sortait de `K`
+   et le facteur retombait à 1 D'UN COUP. La parade fond `x` sur une case de
+   marge de part et d'autre de `K` (même ordre que `TOWN_COURT_RAMP_MARGIN`) :
+   à `K.x0`/`K.x1` pile, le facteur vaut encore celui de l'intérieur — continu —
+   et il n'atteint 1 qu'une case plus loin, jamais avant.
+   ⚠️ `courtDepthFrac` PORTE DÉSORMAIS LA SEULE MESURE (position + fondu),
+   D'OÙ DÉRIVENT `courtDepthScale` (la taille) ET `courtStairSlowMul` (la
+   vitesse, demande du même jour : « plus lent » pour monter le perron) — un
+   couple de plus qui n'a pas deux endroits où mentir (§4 de CLAUDE.md). */
+const TOWN_COURT_DEPTH_MARGIN = 1; // case de fondu latéral hors de K, même ordre que TOWN_COURT_RAMP_MARGIN
+const TOWN_COURT_DEPTH_MIN =
+  (TOWN_COURT_SPRITE.ixStairTopR - TOWN_COURT_SPRITE.ixStairTopL)
+  / (TOWN_COURT_SPRITE.ixStairFootR - TOWN_COURT_SPRITE.ixStairFootL); // ~0,68, voir « le rapport… » ci-dessus
+export const TOWN_COURT_STAIR_SLOW = 0.6; // vitesse au palier ; pleine vitesse au pied, fondu entre les deux
+
+function courtDepthFrac(x, y) {
+  const b = TOWN_COURT, K = TOWN_COURT_COLL;
   const t = ((b.y + b.h) - y - 0.5) / TOWN_COURT_STEP_ROWS;
-  if (t < 0) return 1;
-  const tc = Math.min(1, t); // au-delà du palier, on reste au plus petit — voir la note de falsification
-  const wFoot = S.ixStairFootR - S.ixStairFootL, wTop = S.ixStairTopR - S.ixStairTopL;
-  return (wFoot + (wTop - wFoot) * tc) / wFoot;
+  if (t < 0) return 0;
+  const tc = Math.min(1, t); // au-delà du palier, on reste au plus profond — voir la note de falsification du ter
+  const dOut = x < K.x0 ? K.x0 - x : (x > K.x1 ? x - K.x1 : 0);
+  if (dOut >= TOWN_COURT_DEPTH_MARGIN) return 0;
+  const fade = dOut <= 0 ? 1 : 1 - dOut / TOWN_COURT_DEPTH_MARGIN;
+  return tc * fade;
+}
+export function courtDepthScale(x, y) {
+  const f = courtDepthFrac(x, y);
+  return f <= 0 ? 1 : 1 - f * (1 - TOWN_COURT_DEPTH_MIN);
+}
+/* Même fraction, autre plancher : la vitesse ralentit exactement là où le
+   personnage rapetisse, au même rythme — jamais un pas avant ou après. */
+export function courtStairSlowMul(x, y) {
+  const f = courtDepthFrac(x, y);
+  return f <= 0 ? 1 : 1 - f * (1 - TOWN_COURT_STAIR_SLOW);
 }
 
 export const TRAIN_BOARD = { x: 5, y: 30 };         // farm-side boarding spot on the platform (E to ride)

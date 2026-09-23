@@ -7,6 +7,52 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
+### 2026-09-23 — Le perron corrigé sur un vrai bug de saut, la montée ralentie, les pets alignés
+
+Guillaume a rejoué le perron du ter et signalé trois choses dans la même séance : un vrai bug
+(« attention qd on passe derrière, rupture de taille du perso brutale ») et deux demandes
+(« pour la montée des marches du tribunal, plus lent », « rétrécir les pets qui nous suivent
+accordingly »).
+
+**Le bug.** `courtDepthScale` filtrait `x` en tout-ou-rien contre `TOWN_COURT_COLL` (`K`, quatre
+cases plus large que la volée elle-même — le socle des ailes, voir la note du bis). En longeant ce
+socle (dans `K`, hors marches, déjà rétréci par la seule formule de `y`) puis en continuant vers
+l'arrière du bâtiment, `x` sortait de `K` d'un pas et le facteur retombait de 0,84 à 1 D'UN COUP —
+mesuré : 0,1615 de saut instantané au palier, contre 0,0032 après correctif. La parade fond `x` sur
+une case de marge de part et d'autre de `K` (`TOWN_COURT_DEPTH_MARGIN`, même ordre que
+`TOWN_COURT_RAMP_MARGIN`) au lieu d'un couperet : continu à `K.x0`/`K.x1`, 1 une case plus loin,
+jamais avant. Le même défaut sur `y` avait déjà été corrigé au ter ; celui sur `x` ne l'avait pas
+été — deux axes, un seul et même piège.
+
+**La dérivation partagée.** `courtDepthFrac(x,y)` (fermeConstants.js) porte désormais la SEULE
+mesure (position + fondu), dont dérivent `courtDepthScale` (la taille, plancher
+`TOWN_COURT_DEPTH_MIN` ≈ 0,68, calculé depuis `TOWN_COURT_SPRITE` comme avant) ET
+`courtStairSlowMul` (la vitesse, plancher `TOWN_COURT_STAIR_SLOW` = 0,6). La montée ralentit
+exactement là où le personnage rapetisse, au même rythme — jamais un pas avant ou après, jamais
+deux formes de la même courbe qui pourraient diverger. Appliqué dans la mise à jour de vitesse de
+la ville (`FermeGame.js`, à côté de `TOWN_BUSH_SLOW`), sans garde nécessaire : la fonction rend 1
+partout ailleurs en ville.
+
+**Les pets.** `drawPetsFor` calcule `depthK` une fois par appel sur la position du MAÎTRE (les
+familiers suivent à moins d'une case, une profondeur commune suffit), sous la même garde que
+`drawCharacter` (ma zone, jamais celle du propriétaire dessiné — la fonction sert aussi la ferme et
+l'intérieur du tribunal, où les coordonnées n'ont rien à voir avec celles de la ville). La
+transform s'ouvre par pet, ancrée sur SON propre point de contact au sol (pas celui du maître,
+pour qu'aucun pet ne glisse vers lui en rapetissant), ombre et émote comprises.
+
+**Vérification.** `verify-syntax`, `verify-vallee` (231/231, inchangé) et `verify-collision` (TOUT
+PASSE) relancés, aucune régression. ⚠️ Un script de falsification jetable (scratchpad, hors dépôt)
+a mesuré le saut avant/après aux mêmes coordonnées : 0,1615 → 0,0032 au palier, 0,0808 → 0,0016 à
+mi-volée — le couperet est bien devenu un fondu.
+⚠️⚠️ **PAS REJOUÉ EN JEU** : ce chantier n'a touché que des nombres et une continuité, sans nouveau
+geste ni nouvelle interface, donc pas de séance dédiée lancée par Claude (§13 : Guillaume seul
+joue) — mais rien ici ne remplace sa prochaine partie pour confirmer à l'œil que le saut a
+vraiment disparu.
+⚠️ **DEUX NOMBRES CHOISIS PAR CLAUDE, PAS PRÉCISÉS PAR GUILLAUME** : `TOWN_COURT_STAIR_SLOW = 0,6`
+(40 % plus lent au palier, rien entre les deux n'a été chiffré par lui) et
+`TOWN_COURT_DEPTH_MARGIN = 1` case de fondu latéral. Les deux sont trivialement ajustables
+(fermeConstants.js, à côté de `courtDepthScale`).
+
 ### 2026-09-22 ter — Le perron rejoué : rampes traversables, joueur qui ne rétrécit pas, plus un zoom manuel demandé au passage
 
 Guillaume a rejoué le perron livré la veille (bis) : « excellente physique de collisions pour
@@ -123,15 +169,21 @@ séance de jeu a trouvé, parce qu'aucun ne comparait la grille au DESSIN (§10)
 
 ### Toujours en attente du retour de Guillaume en jeu (hors tribunal, ci-dessus)
 
-⚠️ **Le tribunal lui-même a été vu par Guillaume, corrigé sur DEUX retours successifs (bis puis
-ter), et revérifié en jeu point par point à chaque fois.** Ce qui reste à juger là-dessus n'est plus
-un défaut mesurable mais le RESSENTI : la montée est-elle agréable, le monument impressionne-t-il,
-la caméra qui s'ancre sur le dôme gêne-t-elle en circulant ? Rien de tout ça ne se mesure (§10).
+⚠️ **Le tribunal lui-même a été vu par Guillaume, corrigé sur TROIS retours successifs (bis, ter,
+puis un troisième sur un vrai bug de saut de taille), et revérifié point par point à chaque fois —
+mais le troisième retour, ci-dessus, n'a été revérifié qu'au banc et par un script de mesure, PAS
+en jeu.** Ce qui reste à juger sur le ressenti n'est plus un défaut mesurable : la montée est-elle
+agréable, le monument impressionne-t-il, la caméra qui s'ancre sur le dôme gêne-t-elle en
+circulant ? Rien de tout ça ne se mesure (§10).
 ⚠️ **LE ZOOM MANUEL (ter) EST NEUF ET N'A JAMAIS ÉTÉ JUGÉ PAR GUILLAUME** : la demande était ouverte
 (« niveaux de zoom… commande activable et désactivable ») et Claude a choisi seul, faute de mieux,
 le SCHÉMA DE COMMANDE (molette + `+`/`-`/pavé numérique + deux boutons tactiles), le NOMBRE de crans
 (cinq) et leur AMPLITUDE (`ZOOM_LEVELS = [1,2,3,4,5]`, `ZOOM` = 3 au milieu) — rien de tout ça n'a
 été validé en jeu par lui, et tout est trivialement ajustable (une seule table dans `FermeGame.js`).
+⚠️ **LA VITESSE DE MONTÉE ET LE RÉTRÉCISSEMENT DES PETS (2026-09-23) SONT NEUFS EUX AUSSI** : « plus
+lent » et « accordingly » n'étaient pas chiffrés, donc `TOWN_COURT_STAIR_SLOW = 0,6` et l'ancrage du
+rétrécissement des pets sur la position du maître (pas la leur propre) sont des choix de Claude —
+à confirmer ou corriger dès la prochaine montée.
 
 Cinq livraisons jamais rejouées par Guillaume, dans l'ordre : le tronc du pin (`richTrunk` sur la
 seule fiche `pine`, `render-arbres` 9/9, jamais vu en jeu à l'échelle réelle) ; le bois du sud-est
@@ -170,17 +222,23 @@ ferme peuplée à deux clients, suite de l'audit d'Où's that).
 
 ### ⏭️ ACTION SUIVANTE
 
-Attendre le retour de Guillaume sur DEUX choses distinctes, pour ne pas les mélanger (§2) : (1) le
-RESSENTI du perron du tribunal (montée, cadrage — mesuré et corrigé deux fois, jamais jugé au
+Attendre le retour de Guillaume sur TROIS choses distinctes, pour ne pas les mélanger (§2) : (1) le
+RESSENTI du perron du tribunal (montée, cadrage — mesuré et corrigé trois fois, jamais jugé au
 plaisir) ; (2) le ZOOM MANUEL lui-même — le schéma de commande et les cinq crans sont un choix de
-Claude, pas une demande précise de Guillaume, donc à confirmer ou à corriger en premier lieu. Les
-cinq livraisons plus anciennes du bloc ci-dessus attendent toujours la même chose.
+Claude, pas une demande précise de Guillaume ; (3) le correctif du 2026-09-23 — le saut de taille a-t-il
+vraiment disparu à l'œil en longeant les côtés du bâtiment, la vitesse ×0,6 en haut du perron
+paraît-elle « plus lente » comme demandé ou faudrait-il un autre chiffre, et le rétrécissement des
+pets suivant le maître (plutôt que leur propre position) se voit-il ou se remarque-t-il en mal.
+Les cinq livraisons plus anciennes du bloc ci-dessus attendent toujours la même chose.
 **Choisir quel bâtiment vient après le tribunal se demande à lui** — ça ne se décide pas seul (§2).
 ⚠️ Le jour où ce bâtiment-là arrive, **mesurer son sprite AVANT de poser sa collision** : c'est la
 leçon du 2026-09-22 bis, et elle coûtera le même prix si on l'oublie.
 ⚠️ **ET CELLE DU TER, POUR LE PROCHAIN FACTEUR D'ÉCHELLE OU BORNAGE ÉCRIT DANS CE DÉPÔT** : un
 commentaire qui dit « borné à [0,1] » n'est vrai que si le CODE clampe — un retour anticipé à
 chaque extrémité n'est pas la même chose, et rien ne le distingue au premier coup d'œil.
+⚠️ **ET CELLE DU 2026-09-23, QUI EST LA MÊME LEÇON SUR UN AUTRE AXE** : un bornage vérifié sur `y`
+ne dit rien de `x` — les DEUX bords d'une même zone à effet (fondu, palier, seuil) doivent être
+contrôlés séparément, jamais supposés symétriques parce que l'un des deux a déjà été corrigé.
 
 ---
 

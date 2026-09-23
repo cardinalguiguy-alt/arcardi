@@ -19625,6 +19625,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            donc on ralentit exactement quand le feuillage frissonne — et pas un
            demi-pas avant, ce qui se serait senti sans se voir. */
         if (townSoftAt(tw, m.x, m.y)) spSec *= C.TOWN_BUSH_SLOW;
+        /* ⚠️ 2026-09-23 — LE PERRON DU TRIBUNAL RALENTIT AUSSI LA MARCHE, PAS
+           SEULEMENT LA TAILLE. Demande de Guillaume, en jeu : « pour la montée
+           des marches du tribunal, plus lent ». `courtStairSlowMul` dérive de
+           LA MÊME fraction de profondeur que `courtDepthScale` (fermeConstants.js) :
+           on ralentit exactement là où l'on rapetisse, au même rythme — sinon
+           la volée dirait deux vitesses de profondeur différentes selon qu'on
+           la regarde ou qu'on la marche. Rend 1 (aucun effet) partout ailleurs
+           en ville, donc s'applique sans garde ici. */
+        spSec *= C.courtStairSlowMul(m.x, m.y);
         const sp = spSec * dt;
         m.vx = dx * spSec; m.vy = dy * spSec;
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
@@ -23482,6 +23491,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const idleSince = petIdleRef.current.get(id);
       const idleFor = idleSince === undefined ? 0 : now3 - idleSince;
       const mayPlay = !riding && idleFor >= C.PET_PLAY_IDLE_MS;
+      /* ⚠️ 2026-09-23 — LES PETS RÉTRÉCISSENT COMME LEUR MAÎTRE SUR LE PERRON DU
+         TRIBUNAL. Demande de Guillaume, en jeu : « rétrécir les pets qui nous
+         suivent accordingly ». Calculé UNE FOIS ici sur la position du MAÎTRE
+         (`m`, pas chaque `f2` de pet) : ils suivent à moins d'une case, une
+         profondeur commune suffit — même simplification que `courtStairSlowMul`
+         juste au-dessus dans le fichier.
+         ⚠️ MÊME GARDE QUE `drawCharacter` (voir sa note, plus bas dans ce
+         fichier, juste avant son appel à `C.courtDepthScale`) : sur MA zone,
+         jamais sur celle du propriétaire dessiné — `drawPetsFor` sert aussi la
+         ferme et l'intérieur du tribunal, où `m.x`/`m.y` n'ont rien à voir avec
+         les coordonnées de la ville. */
+      const depthK = ((meRef.current && (meRef.current.zone || "farm")) === "town")
+        ? C.courtDepthScale(m.x, m.y) : 1;
       for (let i = 0; i < pets.length; i++) {
         // Zip 367 : l'id du pet peut arriver sous DEUX formes — objet
         // {id, at} pour MES pets (f.pets, persiste tel quel), simple chaîne
@@ -23635,6 +23657,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // BAS (les pattes restent au sol) et centré horizontalement.
         const ps = C.PET_DRAW_SCALE, dw = 16 * ps, dh = 16 * ps;
         const dxp = f2.x * T + (16 - dw) / 2, dyp = f2.y * T - 2 + (16 - dh) + bob + hop;
+        /* Transform de profondeur ouverte ICI, avant la première chose dessinée
+           pour CE pet (ombre comprise), refermée à la toute fin de l'itération —
+           même discipline que `courtDepthScale` dans `drawCharacter`. Ancrée sur
+           le point de contact au sol du pet (le centre de son ombre juste en
+           dessous), pas sur celui du maître : chaque pet garde sa place dans la
+           formation au lieu de glisser vers lui en rapetissant. */
+        const petAx = dxp + dw / 2, petAy = f2.y * T - 2 + 16 - 1;
+        if (depthK !== 1) { ctx.save(); ctx.translate(petAx, petAy); ctx.scale(depthK, depthK); ctx.translate(-petAx, -petAy); }
         /* OMBRE AU SOL. Elle ne suit PAS le saut : elle reste collée au sol et
            rétrécit, c'est elle qui dit qu'il y a un saut. Une ombre qui monte
            avec la bête annulerait tout l'effet. Dessinée ici et non dans le
@@ -23664,6 +23694,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const float = -Math.min(4, play.t * C.PET_PLAY_PERIOD_MS * C.PET_PLAY_ACTIVE / 220);
           ctx.drawImage(sprites.petEmotes[emo], Math.round(dxp + dw - 3), Math.round(dyp - 7 + float), 8, 8);
         }
+        if (depthK !== 1) ctx.restore();
       }
     }
     // Zip 368 : seuls les familiers EN BALADE sont dessinés (walkPetsRef) ;
