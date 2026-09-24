@@ -93,6 +93,10 @@ commentaires de code cités par eux.
   flou perçu sur tout le jeu, pas seulement l'église ; son propre chantier, testé seul (§2).
 - Chantier naval du quai, repousse des buissons taillés, verdure ×1,8 de Valley Town (livrés le
   2026-09-16, jamais vus en jeu) : le pourquoi de chaque choix est en commentaire à côté du code.
+- ⚠️ **Sécurité et synchro multi de la ferme** (audit du 2026-09-24, RIEN CODÉ) : `ferme_saves`
+  écrasable par tout compte connecté (mot de passe de ferme vérifié en base + historique des
+  versions envisagés — migration à valider), saccades probablement dues au plafond de 10 msg/s
+  partagé. Tout le dossier, les décisions prises et l'ordre proposé : `components/ferme/SECURITE.md`.
 - ⚠️ Dette Google Cloud (Où's That, inchangée depuis le 2026-09-14), À FAIRE AVEC CODEX ET GUILLAUME
   DEVANT LA CONSOLE : le code n'appelle que Maps Embed API, gratuite et illimitée, mais le dépôt ne
   peut pas prouver la configuration du compte réel. Guillaume se connecte lui-même — aucun
@@ -572,6 +576,7 @@ dépôt.
 | `components/ferme/QUETE.md` | **la quête de l'étoile — autorité. Le §17 est le dossier cible « Port des Sept Sœurs » : une soirée, chronologie 5 + 3, sept étoiles, attentes actives, ancien port et lots A–G ; il distingue explicitement conception et code livré** |
 | `components/ferme/README.md` | **Valley Town, le tribunal, l'HÔTEL DE VILLE, l'ÉGLISE, le BEFFROI, les habitants, la VENTE, les OISEAUX, les ÉLECTIONS et les PIÈGES de ces zones — autorité (428-444)** |
 | `components/ferme/DESSIN.md` | **les règles de DESSIN, vraies partout — autorité (441, sorties du §4)** |
+| `components/ferme/SECURITE.md` | **sécurité et synchro multi de la ferme — autorité (audit 2026-09-24, RIEN CODÉ)** : qui peut écrire `ferme_saves`, mot de passe de ferme, historique des sauvegardes, saccades, idées de jeu à plusieurs |
 | `tools/README.md` | **les bancs, ce qu'ils attrapent et leurs chiffres — autorité (432-439)** |
 | `tools/render-navire.mjs` | **LE NAVIRE, ET DEPUIS LE 2026-09-01 LA VIGNETTE DU RUBAN DE JALON** (§5 bis). Il rastérise les deux images que le ruban superpose — le navire AVANT et APRÈS, fantômes compris — et mesure en LUMINANCE ce que leur clignotement montre vraiment, pièce par pièce. C'est lui qui tient l'invariant « chaque morceau est soit assez large pour se voir seul, soit assez ramassé pour être cerclé par le halo », et c'est lui qui a exigé le halo. Sa planche `tools/out/navire-ruban.png` met les cinq paires côte à côte. |
 | `tools/verify-scierie.mjs` · `tools/render-scierie.mjs` | **LES DEUX BANCS DE LA SCIE.** Le premier JOUE (déterminisme, accord direct/rejeu sur des images irrégulières, courbe de difficulté en fonction de la latence, martèlement, bornes, journaux malformés) ; le second RASTÉRISE l'atelier sans GPU et balaie la posture de Tristan sur **course de lame × profondeur de trait** — un carré, pas une liste, parce que sa posture est une fonction continue de deux variables. |
