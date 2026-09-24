@@ -19,6 +19,8 @@ La livraison **P1 bis** (2026-09-07) ajoute `verify-jalons.mjs` — 58/58, falsi
 code d'avant la passe. L'inventaire présent sur disque compte désormais **23 bancs de contrôle et
 24 bancs de rendu** (compté en listant `tools/` le 2026-09-13, après `render-gare` et les deux bancs
 des buissons, `verify-buissons` et `render-buissons`) ; les bancs antérieurs n'ont pas été renommés ni supprimés par ces livraisons.
+L'audit des **échecs (2026-09-24)** ajoute `verify-echecs.mjs` — **68/68**, falsifié deux fois (voir
+son entrée) : **24 bancs de contrôle** sur disque ce jour-là (compté en listant `tools/`).
 
 ⚠️⚠️ **ET LE 444 A APPRIS QUELQUE CHOSE QUI VAUT POUR TOUS LES BANCS DE CE DOSSIER : SIX BANCS AU
 VERT N'ONT PAS VU DIX DÉFAUTS QU'UNE SEULE SÉANCE DE JEU A TROUVÉS EN VINGT MINUTES**, dont cinq
@@ -198,6 +200,24 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   les trois choix sont exclusifs, ils produisent 2, 3 et 4 camps, et Bot Soleil joue dans le duel.
   Ce banc ne juge toujours ni le plaisir d'une partie entière, ni le
   niveau stratégique des bots.
+
+- **`tools/verify-echecs.mjs` — 68 contrôles, 68/68 (2026-09-24, audit échecs).** Les décisions
+  du jeu d'échecs vivaient dans `ChessGame.js`, du JSX qu'aucun banc ne peut appeler — et c'est là
+  que dormaient la moitié des défauts de l'audit. Elles sont passées dans des modules purs
+  (`components/chess/rules.js`, `clock.js`, `engine.js`) que ce banc JOUE : raisons de nulle,
+  drapeau contre un roi seul, avantage matériel lu sur le plateau (promotion comprise : l'ancien
+  calcul affichait +5 au lieu de +13), reprise de coup (l'ordinateur figé, reproduit en jeu),
+  pré-coups, rejeu qui garde la triple répétition, PGN ; la pendule horodatée (au coup près sur 400
+  coups, là où l'ancien modèle à tops se trompait de 932 ms) ; l'ordinateur, sur une HORLOGE
+  SIMULÉE (chaque appel à `now()` avance d'un cran) : le coup rendu est exactement celui d'une
+  recherche complète limitée aux coups finis, 54/54 ; les douze SVG et leur notice BSD ; la parité
+  FR/EN des clés `chess*`, sans clé manquante ni morte.
+  ⚠️ **Falsifié le jour de son écriture** : remettre l'ancienne comparaison du moteur le fait
+  tomber à 37/54 ; remettre l'ancienne formule de reprise fait rougir le contrôle de l'ordinateur
+  figé. ⚠️ **Il a failli coûter 80 s** : une recherche complète à profondeur 2 prend 50 à 860 ms
+  avec chess.js (≈ 0,7 ms par nœud) — les budgets de l'horloge simulée sont courts exprès, il tourne
+  en ~4 s. ⚠️ **Ce qu'il ne voit pas** : le plateau (clics, glisser, animations) et le réseau à deux
+  clients, jugés dans le navigateur le 2026-09-24 (voir le bloc ⏭️ REPRISE de `CLAUDE.md`).
 
 - **`tools/verify-maire.mjs` — 137 contrôles, 137/137 (480, étendu au 481, 2026-09-15).** L'AUDIENCE CHEZ LE MAIRE, JOUÉE.
   ⚠️⚠️⚠️ **C'est le premier banc du dépôt qui JOUE une mécanique de bout en bout au lieu de la

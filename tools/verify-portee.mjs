@@ -96,6 +96,10 @@ const GLOBALS = new Set([
   "MouseEvent", "PointerEvent", "TouchEvent", "DOMParser", "crypto", "matchMedia",
   "alert", "confirm", "prompt", "atob", "btoa", "getComputedStyle", "devicePixelRatio",
   "performance",
+  // Ajoutés le 2026-09-24 (audit échecs) : l'ordinateur calcule dans un
+  // worker (components/chess/engine.worker.js) — `Worker` pour le créer,
+  // `self` pour y répondre (le global d'un worker, qui existe aussi côté page).
+  "Worker", "self",
   // Node / bundler (les modules partagés entre serveur et client en lisent)
   "process", "Buffer", "require", "module", "exports", "__dirname", "__filename",
 ]);

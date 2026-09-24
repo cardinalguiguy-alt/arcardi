@@ -5,6 +5,13 @@
 // (MVV-LVA) + approfondissement itératif borné en temps. Tourne côté hôte
 // (autorité), dans le thread principal, appelé après un court délai pour que
 // l'indicateur "réfléchit" s'affiche d'abord.
+//
+// ⚠️ Audit 2026-09-24 : il tourne désormais dans un WORKER
+// (engine.worker.js) — sur le fil principal, chaque coup de l'ordinateur
+// gelait la page de l'hôte 0,5 à 1 s (plateau, pendules, glisser-déposer).
+// Le fil principal ne le rappelle plus qu'en secours, si le worker échoue.
+// Toute date passe par `now` (Date.now par défaut) pour qu'un banc puisse
+// couper la recherche à un instant choisi (tools/verify-echecs.mjs).
 import { Chess } from "chess.js";
 
 const VAL = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 0 };
@@ -118,15 +125,15 @@ function orderedMoves(game, capturesOnly) {
 // Recherche de quiescence : ne s'arrête que sur une position "calme" (plus de
 // capture avantageuse), pour éviter l'effet d'horizon (croire gagner une
 // pièce juste avant de la reperdre).
-function quiesce(game, alpha, beta, deadline) {
+function quiesce(game, alpha, beta, deadline, now) {
   const standPat = signed(game) ;
   if (standPat >= beta) return beta;
   if (standPat > alpha) alpha = standPat;
-  if (Date.now() > deadline) return alpha;
+  if (now() > deadline) return alpha;
   const caps = orderedMoves(game, true);
   for (const m of caps) {
     game.move(m);
-    const sc = -quiesce(game, -beta, -alpha, deadline);
+    const sc = -quiesce(game, -beta, -alpha, deadline, now);
     game.undo();
     if (sc >= beta) return beta;
     if (sc > alpha) alpha = sc;
@@ -140,16 +147,16 @@ function signed(game) {
   return game.turn() === "w" ? e : -e;
 }
 
-function negamax(game, depth, alpha, beta, deadline) {
+export function negamax(game, depth, alpha, beta, deadline, now = Date.now) {
   if (game.isCheckmate()) return -MATE + (50 - depth); // mat proche = mieux
   if (game.isDraw() || game.isStalemate() || game.isThreefoldRepetition?.()) return 0;
-  if (depth === 0) return quiesce(game, alpha, beta, deadline);
-  if (Date.now() > deadline) return signed(game);
+  if (depth === 0) return quiesce(game, alpha, beta, deadline, now);
+  if (now() > deadline) return signed(game);
   const moves = orderedMoves(game, false);
   let best = -Infinity;
   for (const m of moves) {
     game.move(m);
-    const sc = -negamax(game, depth - 1, -beta, -alpha, deadline);
+    const sc = -negamax(game, depth - 1, -beta, -alpha, deadline, now);
     game.undo();
     if (sc > best) best = sc;
     if (best > alpha) alpha = best;
@@ -158,38 +165,59 @@ function negamax(game, depth, alpha, beta, deadline) {
   return best;
 }
 
+// Une itération à la racine, à profondeur fixe.
+// ⚠️ Audit 2026-09-24 — LE DÉFAUT QUE CETTE FONCTION CORRIGE, MESURÉ : quand
+// l'échéance tombait PENDANT la recherche d'un coup, negamax rendait des
+// évaluations statiques à la volée (« if (now() > deadline) return
+// signed(game) »), et ce score tronqué était comparé aux scores COMPLETS des
+// coups précédents — il pouvait gagner, donc l'ordinateur jouait un coup
+// choisi sur une recherche coupée. Sonde de l'audit : dans 2 positions de
+// milieu de partie sur 40, le coup retenu REMPLAÇAIT le meilleur coup déjà
+// établi par un coup à la recherche coupée. Désormais un coup dont la
+// recherche a dépassé l'échéance n'est JAMAIS comparé : l'itération s'arrête
+// et ne rend que le meilleur des coups entièrement cherchés.
+export function searchRoot(game, rootMoves, depth, deadline, now = Date.now) {
+  let alpha = -Infinity;
+  const beta = Infinity;
+  let best = null, score = -Infinity, complete = true, searched = 0;
+  for (const m of rootMoves) {
+    game.move(m);
+    const sc = -negamax(game, depth - 1, -beta, -alpha, deadline, now);
+    game.undo();
+    if (now() > deadline) { complete = false; break; } // score non fiable : jamais retenu
+    searched++;
+    if (sc > score) { score = sc; best = m; }
+    if (sc > alpha) alpha = sc;
+  }
+  // `searched` = nombre de coups racine ENTIÈREMENT cherchés (le banc s'en
+  // sert pour prouver que le coup rendu est l'un d'eux).
+  return { best, score, complete, searched };
+}
+
 // Choisit le meilleur coup pour le camp au trait dans le FEN donné.
 // Approfondissement itératif borné par timeMs. Renvoie { from, to, promotion }
 // ou null si aucun coup légal (mat/pat).
 export function chooseBotMove(fen, opts = {}) {
   const timeMs = opts.timeMs ?? 1000;
   const maxDepth = opts.maxDepth ?? 4;
+  const now = opts.now || Date.now;
   const game = new Chess(fen);
   const rootMoves = orderedMoves(game, false);
   if (rootMoves.length === 0) return null;
-  const deadline = Date.now() + timeMs;
+  const deadline = now() + timeMs;
   let best = rootMoves[0];
 
   for (let depth = 1; depth <= maxDepth; depth++) {
-    let alpha = -Infinity, beta = Infinity;
-    let localBest = null, localScore = -Infinity;
-    for (const m of rootMoves) {
-      game.move(m);
-      const sc = -negamax(game, depth - 1, -beta, -alpha, deadline);
-      game.undo();
-      if (sc > localScore) { localScore = sc; localBest = m; }
-      if (sc > alpha) alpha = sc;
-      if (Date.now() > deadline) break;
+    const r = searchRoot(game, rootMoves, depth, deadline, now);
+    // Une itération interrompue ne rend que des coups ENTIÈREMENT cherchés ;
+    // comme le meilleur coup précédent est cherché en premier, son résultat
+    // vaut au moins celui de l'itération d'avant.
+    if (r.best) {
+      best = r.best;
+      rootMoves.sort((a, b) => (a === r.best ? -1 : b === r.best ? 1 : 0));
     }
-    // On ne retient un résultat que si l'itération a produit un meilleur coup ;
-    // même interrompue, elle a exploré les coups les mieux triés d'abord.
-    if (localBest) {
-      best = localBest;
-      // Remonter le coup choisi en tête pour la prochaine profondeur.
-      rootMoves.sort((a, b) => (a === localBest ? -1 : b === localBest ? 1 : 0));
-    }
-    if (Date.now() > deadline) break;
-    if (localScore >= MATE - 100) break; // mat trouvé, inutile de creuser
+    if (!r.complete) break;
+    if (r.score >= MATE - 100) break; // mat trouvé, inutile de creuser
   }
   return { from: best.from, to: best.to, promotion: best.promotion || undefined };
 }

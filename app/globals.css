@@ -5661,100 +5661,210 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 }
 
 /* ==========================================================================
-   ÉCHECS (jeu n°17, components/chess/ChessGame.js). Plateau CSS sur-mesure
-   piloté par chess.js (règles). Cadre noyer + feutrine repris de la
-   signature du plateau Ludo ; cases ivoire/noyer, pièces en glyphes Unicode
-   coloriées, pendules Space Mono, historique bilingue. Harmonisé au thème
-   feu de camp du site (accent --acc-chess, or --p2).
+   ÉCHECS (jeu n°17, components/chess/) — refonte de l'audit 2026-09-24.
+   Plateau : ChessBoard.js (pièces SVG Cburnett, calques placés en transform,
+   glisser-déposer, pré-coups, flèches). Mise en page à la lichess : grand
+   plateau à gauche, colonne à droite (joueur du haut, coups, actions, joueur
+   du bas) ; sur téléphone, une seule colonne et le plateau pleine largeur.
+   Le cadre noyer et les cases ivoire/noyer restent la signature « feu de
+   camp » du site ; les REPÈRES DE JEU (sélection verte, points de
+   destination, pré-coups bleus, échec rouge) reprennent les conventions de
+   lichess, que tout joueur d'échecs lit sans apprendre.
+   ⚠️ Les anciens sélecteurs (.chess-grid, .chess-sq, .chess-piece.t-k à
+   85 px…) sont SUPPRIMÉS, pas laissés : ils réglaient des glyphes Unicode que
+   plus rien n'affiche.
    ========================================================================== */
-.chess-panel{ max-width:min(1080px, 96vw); }
-.chess-layout{ position:relative; display:flex; flex-direction:column; align-items:center; gap:14px; }
-.chess-side-top{ width:min(560px, 86vw); }
-.chess-side-bot{ width:min(560px, 86vw); display:flex; flex-direction:column; gap:12px; }
+/* width:100% : .game-stage est un conteneur FLEX, où un panneau prend la
+   largeur de son contenu — or le plateau est en pourcentage, il n'en a pas
+   (mesuré : panneau de 243 px sur une scène de 488). */
+.chess-panel{ width:100%; max-width:min(1180px, 97vw); }
 
-.chess-pcard{ display:flex; align-items:center; gap:10px; background:linear-gradient(180deg,var(--card2),var(--card)); border:1px solid var(--line); border-radius:14px; padding:10px 14px; box-shadow:0 6px 18px -8px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.05); }
-.chess-pcard.active{ border-color:rgba(255,209,102,.55); box-shadow:0 0 0 1px rgba(255,209,102,.35), 0 8px 22px -8px rgba(0,0,0,.6); }
-.chess-pname{ display:flex; align-items:center; gap:8px; font-weight:800; font-size:14px; color:var(--ink); min-width:0; }
-.chess-avatar{ font-size:20px; }
-.chess-pname-txt{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:120px; }
-.chess-side{ font-size:11px; font-weight:800; letter-spacing:1px; text-transform:uppercase; color:var(--muted); }
-.chess-clock{ margin-left:auto; font-family:'Space Mono'; font-weight:700; font-size:26px; letter-spacing:.06em; font-variant-numeric:tabular-nums; color:var(--ink); padding:4px 12px; border-radius:10px; background:rgba(0,0,0,.2); }
-.chess-clock.on{ color:var(--ink-on-accent); background:linear-gradient(180deg,#FFDE8A,var(--p2)); box-shadow:0 3px 0 #b98a26; }
-.chess-clock.low{ color:#FF6B57; }
-.chess-clock.on.low{ color:#7a1a10; background:linear-gradient(180deg,#ffb0a2,#ff6b57); box-shadow:0 3px 0 #a3301f; }
-.chess-captrow{ display:flex; flex-wrap:wrap; align-items:center; gap:1px; margin-left:8px; font-size:18px; line-height:1; }
-.chess-cap.w{ color:#FBF3E3; text-shadow:0 1px 1px rgba(0,0,0,.6); }
-.chess-cap.b{ color:#241206; text-shadow:0 1px 0 rgba(255,255,255,.12); }
-.chess-adv{ font-family:'Space Mono'; font-weight:700; font-size:12px; color:var(--p2); margin-left:4px; }
+.chess-layout{
+  position:relative; display:grid; gap:10px 22px; justify-content:center; align-items:start;
+  /* Le plateau prend tout ce que l'écran permet, en hauteur comme en largeur
+     (≈ 230 px d'en-tête de salon et de titre ; ≈ 400 px de colonne, marges
+     et bordures du panneau). */
+  --cb-size:clamp(300px, min(calc(100vh - 230px), calc(97vw - 400px)), 760px);
+  grid-template-columns:var(--cb-size) minmax(250px, 300px);
+  grid-template-rows:auto auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "board status"
+    "board top"
+    "board moves"
+    "board actions"
+    "board bot";
+}
+body.stage-focus .chess-layout{ --cb-size:clamp(300px, min(calc(100vh - 120px), calc(97vw - 400px)), 860px); }
+.chess-a-status{ grid-area:status; }
+.chess-a-top{ grid-area:top; }
+.chess-a-board{ grid-area:board; width:var(--cb-size); }
+.chess-a-bot{ grid-area:bot; }
+.chess-a-actions{ grid-area:actions; }
+/* La liste des coups ne doit JAMAIS agrandir la grille : elle remplit ce
+   qui reste à côté du plateau et défile dedans (cadre absolu = aucune
+   contribution à la hauteur de la ligne). */
+.chess-a-moves{ grid-area:moves; position:relative; min-height:150px; align-self:stretch; }
+.chess-moves-box{
+  position:absolute; inset:0; display:flex; flex-direction:column;
+  background:rgba(0,0,0,.18); border:1px solid var(--line); border-radius:12px; overflow:hidden;
+}
+.chess-status{ text-align:center; font-family:'Bungee'; font-size:13px; line-height:1.35; color:var(--acc-chess); min-height:18px; }
 
-.chess-board-wrap{ position:relative; width:min(560px, 86vw); }
-.chess-status{ text-align:center; font-family:'Bungee'; font-size:13px; color:var(--acc-chess); margin-bottom:10px; min-height:18px; }
+@media (max-width: 860px){
+  .chess-layout{
+    --cb-size:min(100%, max(290px, calc(100svh - 250px)));
+    grid-template-columns:minmax(0, 1fr);
+    grid-template-rows:none;
+    grid-template-areas: "status" "top" "board" "bot" "actions" "moves";
+    gap:8px;
+  }
+  .chess-a-board, .chess-a-top, .chess-a-bot{ justify-self:center; width:var(--cb-size); }
+  .chess-a-moves{ min-height:0; }
+  .chess-moves-box{ position:static; }
+  .chess-moves{ max-height:170px; }
+}
+@media (max-width: 560px){
+  /* Téléphone : le panneau rend sa marge au plateau, qui va d'un bord à l'autre. */
+  .chess-panel{ padding:14px 4px 16px; border-width:2px; }
+  .chess-panel > h1{ padding-left:10px; }
+  .chess-layout{ --cb-size:100%; }
+}
+
+/* ---- Cadre noyer ---------------------------------------------------------- */
 .chess-board-frame{
-  position:relative; width:100%; aspect-ratio:1;
-  border:13px solid transparent; border-radius:16px; overflow:hidden;
+  position:relative; border:12px solid transparent; border-radius:14px;
   background:
-    radial-gradient(ellipse at 50% 36%, rgba(255,220,160,.05) 0%, rgba(0,0,0,0) 46%, rgba(0,0,0,.30) 100%) padding-box,
-    linear-gradient(180deg,#241a10,#1c130a 60%,#170f07) padding-box,
+    linear-gradient(180deg,#241a10,#170f07) padding-box,
     repeating-linear-gradient(92deg, rgba(0,0,0,.24) 0px, rgba(0,0,0,.24) 2px, transparent 2px, transparent 6px, rgba(255,231,190,.05) 6px, rgba(255,231,190,.05) 8px, transparent 8px, transparent 15px) border-box,
     linear-gradient(160deg,#96682f 0%,#6e4a20 42%,#7f5526 68%,#563a18 100%) border-box;
-  box-shadow:inset 0 0 0 2px rgba(0,0,0,.6), inset 0 4px 12px rgba(0,0,0,.5), 0 16px 40px -14px rgba(0,0,0,.7);
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.55), 0 18px 44px -16px rgba(0,0,0,.75), 0 0 0 1px rgba(255,220,160,.07);
 }
-.chess-grid{ position:absolute; inset:0; display:grid; grid-template-columns:repeat(8,1fr); grid-template-rows:repeat(8,1fr); box-shadow:0 0 0 2px #0B0704; }
-/* CORRECTIF (signalé 2026-07, "les cases se déforment en jouant") : sans
-   min-width/height:0, une case CSS Grid ne peut jamais être réduite
-   en dessous de la taille intrinsèque de son contenu (comportement par
-   défaut min-width/height:auto des éléments de grille). Or certains
-   glyphes de pièces (Roi jusqu'à 85px, Dame 76px) dépassent la taille
-   nominale d'une case sur un plateau serré : sans ce correctif, la
-   LIGNE/COLONNE entière contenant la pièce était forcée à grossir pour
-   l'accueillir, déformant le carré — et comme Roi/Dame changent de case
-   à chaque coup (roque, promotion, captures), la déformation "se
-   recalibrait" en cours de partie. Même correctif déjà appliqué à
-   .gm-cell (Gold Mines) pour le même type de grille carrée 1fr. */
-.chess-sq{ position:relative; display:flex; align-items:center; justify-content:center; min-width:0; min-height:0; }
-.chess-sq.l{ background:linear-gradient(145deg,#EAD3AB,#E0C79A); box-shadow:inset 1px 1px 0 rgba(255,255,255,.18), inset -1px -1px 2px rgba(0,0,0,.13); }
-.chess-sq.d{ background:linear-gradient(145deg,#916034,#7F5024); box-shadow:inset 1px 1px 0 rgba(255,255,255,.09), inset -1px -1px 2px rgba(0,0,0,.22); }
-.chess-sq.last::before{ content:''; position:absolute; inset:0; background:rgba(255,209,102,.26); }
-.chess-sq.sel::before{ content:''; position:absolute; inset:0; background:rgba(255,209,102,.5); }
-.chess-sq.check::before{ content:''; position:absolute; inset:0; background:rgba(214,60,40,.5); }
-/* Correctif mobile (signalé 2026-07) : sur certains téléphones, la police
-   emoji couleur du système (Apple Color Emoji notamment) essaie de reprendre
-   la main sur les glyphes d'échecs Unicode malgré le sélecteur de variation
-   texte (voir VS_TEXT dans ChessGame.js). `font-variant-emoji:text` est le
-   filet de sécurité CSS correspondant (dégradation silencieuse si non
-   supporté par le navigateur). */
-.chess-piece, .chess-cap, .chess-promo-btn{ font-variant-emoji:text; }
-.chess-piece{ position:relative; font-size:min(9.6vw,57px); line-height:1; pointer-events:none; }
-.chess-piece.w{
-  color:#F4EAD2;
-  text-shadow:
-    1px 0 0 #3a2412, -1px 0 0 #3a2412, 0 1px 0 #3a2412, 0 -1px 0 #3a2412,
-    1px 1px 0 #3a2412, -1px -1px 0 #3a2412, 1px -1px 0 #3a2412, -1px 1px 0 #3a2412,
-    0 3px 4px rgba(0,0,0,.42);
-}
-.chess-piece.b{
-  color:#1B0F05;
-  text-shadow:0 1px 0 rgba(255,255,255,.16), 0 3px 4px rgba(0,0,0,.4);
-}
-/* Le glyphe du fou est naturellement plus fin : on l'agrandit un peu et on
-   épaissit légèrement son tracé (text-stroke dans sa propre couleur) pour
-   qu'il ne paraisse pas "maigre" à côté des autres pièces. */
-.chess-piece.t-b{ font-size:min(10.4vw,62px); -webkit-text-stroke:1px currentColor; }
-/* Roi et dame : pièces maîtresses, proportionnellement plus grandes. Le glyphe
-   Unicode du roi est rendu petit par la police -> on l'agrandit nettement. */
-.chess-piece.t-q{ font-size:min(12.6vw,76px); }
-.chess-piece.t-k{ font-size:min(13.8vw,85px); }
-.chess-dot{ position:absolute; width:26%; height:26%; border-radius:50%; background:rgba(20,10,0,.34); pointer-events:none; }
-.chess-ring{ position:absolute; inset:8%; border-radius:12%; box-shadow:inset 0 0 0 4px rgba(20,10,0,.4); pointer-events:none; }
-.chess-coords-files{ display:grid; grid-template-columns:repeat(8,1fr); margin-top:4px; padding:0 13px; }
-.chess-coords-files span{ text-align:center; font-family:'Space Mono'; font-size:11px; color:var(--muted); }
+@media (max-width: 560px){ .chess-board-frame{ border-width:6px; border-radius:9px; } }
 
-/* Numéro de rangée (1-8) dans le coin haut-gauche de la colonne de gauche. */
-.chess-coord-rank{ position:absolute; top:2px; left:3px; font-family:'Space Mono'; font-size:10px; line-height:1; font-weight:700; pointer-events:none; opacity:.85; }
-.chess-sq.l .chess-coord-rank{ color:#8A5A32; }
-.chess-sq.d .chess-coord-rank{ color:#EAD3AB; }
+/* ---- Plateau (ChessBoard.js) --------------------------------------------- */
+.cb-board{
+  position:relative; width:100%; aspect-ratio:1 / 1; container-type:inline-size;
+  user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;
+  /* Le doigt qui glisse une pièce ne doit pas faire défiler la page. */
+  touch-action:none; -webkit-tap-highlight-color:transparent;
+  box-shadow:0 0 0 2px #0B0704;
+}
+.cb-squares{ position:absolute; inset:0; display:grid; grid-template-columns:repeat(8,1fr); grid-template-rows:repeat(8,1fr); overflow:hidden; border-radius:2px; }
+.cb-sq{ min-width:0; min-height:0; }
+.cb-sq.l{ background:linear-gradient(145deg,#EAD3AB,#E0C79A); box-shadow:inset 1px 1px 0 rgba(255,255,255,.18), inset -1px -1px 2px rgba(0,0,0,.13); }
+.cb-sq.d{ background:linear-gradient(145deg,#916034,#7F5024); box-shadow:inset 1px 1px 0 rgba(255,255,255,.09), inset -1px -1px 2px rgba(0,0,0,.22); }
+.cb-sq.can{ cursor:pointer; }
+.cb-board.dragging, .cb-board.dragging .cb-sq{ cursor:grabbing; }
+/* Tous les calques font une case et se placent par `transform` (100 % =
+   une case) : aucun ne reçoit d'événement, c'est la case statique en dessous
+   que lit le test de collision. */
+.cb-hl, .cb-dest, .cb-piece, .cb-ghost{ position:absolute; left:0; top:0; width:12.5%; height:12.5%; pointer-events:none; }
+.cb-hl, .cb-dest{ z-index:1; }
+.cb-hl.last{ background:rgba(222,190,60,.46); }
+.cb-hl.sel{ background:rgba(20,85,30,.5); }
+.cb-hl.sel.pre, .cb-hl.premove{ background:rgba(20,30,85,.45); }
+.cb-hl.check{ background:radial-gradient(ellipse at center, rgba(255,0,0,1) 0%, rgba(231,0,0,1) 25%, rgba(169,0,0,0) 89%, rgba(158,0,0,0) 100%); }
+.cb-hl.over{ box-shadow:inset 0 0 0 max(2px, .45cqw) rgba(255,255,255,.72); }
+/* Au doigt, la case visée est cachée sous la main : un grand disque la montre. */
+.cb-hl.over.touch::after{ content:''; position:absolute; inset:-50%; border-radius:50%; background:rgba(20,85,30,.28); }
+.cb-dest{ background:radial-gradient(rgba(20,85,30,.5) 19%, rgba(0,0,0,0) 20%); }
+.cb-dest.occ{ background:radial-gradient(transparent 0%, transparent 79%, rgba(20,85,0,.36) 80%); }
+.cb-dest.pre{ background:radial-gradient(rgba(20,30,85,.5) 19%, rgba(0,0,0,0) 20%); }
+.cb-dest.pre.occ{ background:radial-gradient(transparent 0%, transparent 79%, rgba(20,30,85,.32) 80%); }
+.cb-dest.hover{ background:rgba(20,85,30,.3); }
+.cb-dest.pre.hover{ background:rgba(20,30,85,.25); }
+.cb-coord{ position:absolute; z-index:1; pointer-events:none; font-family:'Space Mono', ui-monospace, monospace; font-weight:700; font-size:max(9px, 2.1cqw); line-height:1; }
+.cb-coord.rank{ left:.55cqw; margin-top:.5cqw; }
+.cb-coord.file{ bottom:.5cqw; transform:translateX(calc(-100% - .6cqw)); }
+.cb-coord.on-l{ color:#8A5A32; }
+.cb-coord.on-d{ color:#EAD3AB; }
+.cb-fx{ position:absolute; inset:0; z-index:2; pointer-events:none; }
+.cb-piece{ z-index:2; background-size:100% 100%; background-repeat:no-repeat; will-change:transform; filter:drop-shadow(0 max(1px, .28cqw) max(1px, .32cqw) rgba(0,0,0,.35)); }
+.cb-piece.origin{ opacity:.3; }
+.cb-shapes{ position:absolute; inset:0; width:100%; height:100%; z-index:5; pointer-events:none; }
+.cb-ghost{ z-index:20; display:none; background-size:100% 100%; transform:translate(-50%,-50%) scale(1.08); filter:drop-shadow(0 6px 8px rgba(0,0,0,.45)); }
+.cb-ghost.on{ display:block; }
+.cb-ghost.touch{ transform:translate(-50%,-78%) scale(1.55); }
+.cb-promo-veil{ position:absolute; inset:0; z-index:30; background:rgba(24,15,8,.58); }
+.cb-promo-btn{
+  position:absolute; width:12.5%; height:12.5%; padding:0; border:0; border-radius:50%; cursor:pointer;
+  background:radial-gradient(circle at 50% 42%, #FFF9EC 0%, #E7D6B4 62%, #C9AE80 100%);
+  box-shadow:0 .5cqw 1.2cqw rgba(0,0,0,.5); transition:border-radius .12s ease, background .12s ease;
+}
+.cb-promo-btn span{ position:absolute; inset:9%; background-size:100% 100%; transition:inset .12s ease; }
+.cb-promo-btn:hover, .cb-promo-btn:focus-visible{ border-radius:10%; outline:none; background:radial-gradient(circle at 50% 42%, #FFE9A8 0%, #E8B75A 100%); }
+.cb-promo-btn:hover span{ inset:2%; }
 
-/* Écran de choix de cadence (hôte). */
+/* ---- Joueurs et pendules --------------------------------------------------- */
+.chess-pbar{
+  display:flex; align-items:center; gap:10px; padding:8px 8px 8px 12px;
+  background:linear-gradient(180deg,var(--card2),var(--card)); border:1px solid var(--line); border-radius:12px;
+  box-shadow:0 6px 18px -10px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.05);
+  transition:border-color .2s ease, box-shadow .2s ease;
+}
+.chess-pbar.active{ border-color:rgba(255,209,102,.55); box-shadow:0 0 0 1px rgba(255,209,102,.3), 0 8px 22px -10px rgba(0,0,0,.6); }
+.chess-avatar{ font-size:22px; line-height:1; }
+.chess-pbar-main{ flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
+.chess-pname{ display:flex; align-items:center; gap:7px; font-weight:800; font-size:14px; color:var(--ink); min-width:0; }
+.chess-swatch{ width:11px; height:11px; border-radius:3px; flex:none; box-shadow:0 0 0 1px rgba(0,0,0,.55); }
+.chess-swatch.w{ background:#F7EFDD; }
+.chess-swatch.b{ background:#1B120A; box-shadow:0 0 0 1px rgba(255,255,255,.28); }
+.chess-pname-txt{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.chess-thinking{ display:inline-flex; gap:3px; margin-left:2px; }
+.chess-thinking i{ width:5px; height:5px; border-radius:50%; background:var(--acc-chess); animation:chessThink 1s ease-in-out infinite; }
+.chess-thinking i:nth-child(2){ animation-delay:.15s; }
+.chess-thinking i:nth-child(3){ animation-delay:.3s; }
+@keyframes chessThink{ 0%,100%{ opacity:.25; transform:translateY(0); } 50%{ opacity:1; transform:translateY(-2px); } }
+.chess-mat{ display:flex; align-items:center; min-height:18px; }
+.chess-mat-p{ width:19px; height:19px; background-size:100% 100%; margin-right:-2px; }
+.chess-mat-p.same{ margin-left:-9px; }
+.chess-mat b{ margin-left:7px; font-family:'Space Mono'; font-size:12px; color:var(--p2); }
+.chess-clock{
+  font-family:'Space Mono'; font-weight:700; font-size:26px; letter-spacing:.03em; font-variant-numeric:tabular-nums;
+  color:var(--muted); background:rgba(0,0,0,.28); padding:5px 12px; border-radius:9px; min-width:98px; text-align:right;
+  transition:background .2s ease, color .2s ease;
+}
+.chess-clock.on{ color:var(--ink-on-accent); background:linear-gradient(180deg,#FFDE8A,var(--p2)); box-shadow:0 3px 0 #b98a26; }
+.chess-clock.low{ color:#FF8A78; }
+.chess-clock.on.low{ color:#6e1409; background:linear-gradient(180deg,#ffc2b6,#ff7a66); box-shadow:0 3px 0 #a3301f; }
+.chess-clock.on.crit{ animation:chessCrit 1s steps(2, end) infinite; }
+@keyframes chessCrit{ 50%{ filter:brightness(1.2); } }
+@media (max-width: 560px){
+  .chess-clock{ font-size:21px; min-width:80px; padding:4px 9px; }
+  .chess-pbar{ padding:6px 6px 6px 10px; }
+}
+
+/* ---- Liste des coups et navigation ---------------------------------------- */
+.chess-moves{ flex:1; min-height:0; overflow-y:auto; position:relative; padding:4px 0; scrollbar-width:thin; }
+.chess-mrow{ display:grid; grid-template-columns:34px 1fr 1fr; font-family:'Space Mono'; font-size:13px; }
+.chess-mrow:nth-child(even){ background:rgba(255,255,255,.028); }
+.chess-mnum{ color:var(--muted); opacity:.75; text-align:right; padding:4px 8px 4px 0; background:rgba(0,0,0,.12); }
+.chess-mv{ padding:4px 10px; color:var(--ink); }
+.chess-mv.clk{ cursor:pointer; }
+.chess-mv.clk:hover{ background:rgba(232,183,90,.16); }
+.chess-mv.cur{ background:var(--acc-chess); color:#2B1B12; font-weight:800; }
+.chess-moves-empty{ color:var(--muted); font-size:12px; text-align:center; padding:14px 8px; }
+.chess-result{ display:flex; flex-direction:column; align-items:center; gap:2px; padding:10px 8px 8px; border-top:1px solid var(--line); text-align:center; }
+.chess-result b{ font-family:'Space Mono'; font-size:15px; color:var(--p2); }
+.chess-result span{ font-size:12px; color:var(--muted); }
+.chess-nav{ display:flex; border-top:1px solid var(--line); flex:none; }
+.chess-navbtn{ flex:1; padding:8px 0; background:transparent; border:0; color:var(--ink); font-size:14px; cursor:pointer; }
+.chess-navbtn:hover:not(:disabled){ background:rgba(232,183,90,.14); }
+.chess-navbtn:disabled{ opacity:.3; cursor:default; }
+.chess-navbtn.flip{ flex:0 0 46px; border-left:1px solid var(--line); }
+
+/* ---- Actions, offres ------------------------------------------------------- */
+.chess-actions{ display:flex; flex-direction:column; gap:8px; align-items:stretch; }
+.chess-btnrow{ display:flex; gap:6px; flex-wrap:wrap; justify-content:center; }
+.chess-btn{ font-family:'Outfit'; font-weight:800; font-size:12.5px; padding:9px 14px; border-radius:10px; border:1px solid var(--line); background:linear-gradient(180deg,var(--card2),var(--card)); color:var(--ink); box-shadow:0 3px 0 rgba(0,0,0,.35); cursor:pointer; }
+.chess-btn:disabled{ opacity:.4; cursor:default; box-shadow:none; }
+.chess-btn.primary{ background:linear-gradient(180deg,#FFDE8A,var(--p2)); color:var(--ink-on-accent); border:none; box-shadow:0 4px 0 #b98a26; }
+.chess-btn.danger{ background:linear-gradient(180deg,#ff8f7c,#e24b4a); color:#fff; border:none; box-shadow:0 4px 0 #9a2a24; }
+.chess-offer{ display:flex; flex-direction:column; gap:8px; align-items:center; text-align:center; background:rgba(255,209,102,.1); border:1px solid rgba(255,209,102,.35); border-radius:12px; padding:10px 12px; font-size:13px; color:var(--ink); animation:chessOfferIn .25s ease both; }
+.chess-offer.mine{ flex-direction:row; justify-content:space-between; text-align:left; background:rgba(0,0,0,.18); border-color:var(--line); color:var(--muted); }
+@keyframes chessOfferIn{ from{ opacity:0; transform:translateY(-4px); } to{ opacity:1; transform:none; } }
+
+/* ---- Écran de choix (hôte) --------------------------------------------------- */
 .chess-setup{ display:flex; flex-direction:column; align-items:center; padding:14px 6px 6px; }
 .chess-setup-title{ font-family:'Bungee'; font-size:16px; color:var(--acc-chess); margin-bottom:16px; text-align:center; }
 .chess-cadence-grid{ display:grid; grid-template-columns:repeat(2, minmax(120px,150px)); gap:12px; }
@@ -5762,14 +5872,14 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .chess-cad:hover{ filter:brightness(1.1); transform:translateY(-1px); }
 .chess-cad:active{ transform:translateY(0); }
 .chess-cad-n{ font-family:'Space Mono'; font-weight:700; font-size:26px; line-height:1; color:var(--p2); }
-.chess-cad-unit{ font-family:'Space Mono'; font-size:11px; color:var(--muted); margin-top:-2px; }
+.chess-cad-unit{ font-family:'Space Mono'; font-size:10.5px; color:var(--muted); margin-top:1px; }
 .chess-cad-tag{ font-size:12px; color:#caa876; margin-top:4px; }
 .chess-cad.analysis{ background:rgba(232,183,90,.13); border-color:var(--acc-chess); }
-.chess-cad.analysis .chess-cad-ico{ font-size:26px; line-height:1; color:var(--acc-chess); }
+.chess-cad.analysis .chess-cad-ico{ width:34px; height:34px; background-size:100% 100%; }
 .chess-cad.analysis .chess-cad-tag{ color:var(--acc-chess); }
 
-/* Panneau de permissions du mode analyse. */
-.chess-perms{ background:rgba(0,0,0,.22); border:1px solid #4a3220; border-radius:12px; padding:10px 10px 8px; margin-bottom:10px; }
+/* ---- Échiquier d'analyse : qui peut toucher les pièces ---------------------- */
+.chess-perms{ background:rgba(0,0,0,.22); border:1px solid #4a3220; border-radius:12px; padding:10px 10px 8px; }
 .chess-perms-head{ font-size:13px; color:var(--acc-chess); margin-bottom:8px; }
 .chess-perm-row{ display:flex; align-items:center; gap:9px; padding:7px 9px; border-radius:9px; background:#2a1a0f; border:1px solid #4a3220; margin-bottom:6px; }
 .chess-perm-row.on{ background:#3a2414; border-color:#6e4a20; }
@@ -5777,30 +5887,11 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .chess-check{ width:20px; height:20px; border-radius:5px; border:1px solid #6e4a20; background:transparent; display:flex; align-items:center; justify-content:center; font-size:13px; color:#241206; }
 .chess-check.on{ background:var(--acc-chess); border-color:var(--acc-chess); }
 
-.chess-actions{ display:flex; flex-direction:column; gap:8px; align-items:center; }
-.chess-btnrow{ display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
-.chess-btn{ font-family:'Outfit'; font-weight:800; font-size:12.5px; padding:10px 16px; border-radius:10px; border:1px solid var(--line); background:linear-gradient(180deg,var(--card2),var(--card)); color:var(--ink); box-shadow:0 3px 0 rgba(0,0,0,.35); cursor:pointer; }
-.chess-btn:disabled{ opacity:.4; cursor:default; box-shadow:none; }
-.chess-btn.primary{ background:linear-gradient(180deg,#FFDE8A,var(--p2)); color:var(--ink-on-accent); border:none; box-shadow:0 4px 0 #b98a26; }
-.chess-btn.danger{ background:linear-gradient(180deg,#ff8f7c,#e24b4a); color:#fff; border:none; box-shadow:0 4px 0 #9a2a24; }
-.chess-takeback-ask{ display:flex; flex-direction:column; gap:8px; align-items:center; background:rgba(255,209,102,.1); border:1px solid rgba(255,209,102,.3); border-radius:12px; padding:10px 14px; font-size:13px; color:var(--ink); }
-.chess-takeback-btns{ display:flex; gap:8px; }
-
-.chess-histbox{ width:100%; background:rgba(0,0,0,.16); border:1px solid var(--line); border-radius:12px; padding:8px 6px; max-height:200px; overflow-y:auto; }
-.chess-histhead{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; padding:4px 8px 8px; }
-.chess-hrow{ display:grid; grid-template-columns:28px 1fr 1fr; gap:6px; padding:3px 8px; border-radius:6px; font-family:'Space Mono'; font-size:12.5px; color:var(--ink); }
-.chess-hrow:nth-child(even){ background:rgba(255,255,255,.03); }
-.chess-hrow.empty{ color:var(--muted); text-align:center; }
-.chess-hnum{ color:var(--muted); opacity:.7; }
-
-.chess-overlay{ position:absolute; inset:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; z-index:40; border-radius:16px; }
-.chess-promo{ background:linear-gradient(180deg,var(--card2),var(--card)); border:1px solid var(--line); border-radius:14px; padding:18px 20px; display:flex; flex-direction:column; gap:12px; align-items:center; }
-.chess-promo-title{ font-family:'Bungee'; font-size:13px; color:var(--ink); }
-.chess-promo-row{ display:flex; gap:10px; }
-.chess-promo-btn{ font-size:34px; width:60px; height:60px; border-radius:12px; background:#E8CFA6; border:2px solid #6e4a20; color:#241206; cursor:pointer; line-height:1; }
-.chess-promo-btn:hover{ filter:brightness(1.06); }
-
 .game-countdown.chess .game-countdown-digit{ color:var(--acc-chess); }
+
+@media (prefers-reduced-motion: reduce){
+  .chess-thinking i, .chess-clock.on.crit, .chess-offer{ animation:none; }
+}
 
 /* ==========================================================================
    RAMI (jeu de cartes n°18) — refonte visuelle 2026-07 d'après les captures
@@ -6033,14 +6124,6 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
    sont désormais les boutons carrés empilés à droite de la main). */
 .rami-hand-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px; padding:0 4px; }
 .rami-hand-lbl{ font-size:12px; font-weight:800; color:#f3d9cd; opacity:.9; font-family:'Space Mono'; }
-
-/* Échecs : revue de partie (rejeu coup par coup + liste cliquable). */
-.chess-review-nav{ display:flex; align-items:center; justify-content:center; gap:6px; margin-top:12px; flex-wrap:wrap; }
-.chess-review-nav .chess-btn{ min-width:40px; padding:8px 10px; }
-.chess-review-ply{ font-family:'Space Mono'; font-size:13px; color:var(--muted); min-width:104px; text-align:center; }
-.chess-hcell.clk{ cursor:pointer; border-radius:5px; transition:background .12s ease; }
-.chess-hcell.clk:hover{ background:rgba(232,183,90,.16); }
-.chess-hcell.cur{ background:var(--acc-chess); color:#2B1B12; font-weight:800; border-radius:5px; }
 
 /* ============================================================
    BATAILLE NAVALE (jeu n°19, 2026-07 ; refonte SVG 2026)

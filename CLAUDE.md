@@ -7,124 +7,70 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### Le perron du tribunal — quatre allers-retours, jamais rejoué en vraie séance
+### 2026-09-24 — Les échecs : audit, puis refonte « à la lichess », trois lots d'un coup
 
-Guillaume a joué la livraison initiale du tribunal, puis trois fois de suite le perron corrigé, et
-signalé un nouveau défaut à chaque fois (le récit complet, zip par zip, vit en commentaire à côté
-du code qu'il décrit — `courtDepthScale`/`courtDepthFrac`/`courtStairSlowMul`/
-`TOWN_COURT_DEPTH_MARGIN`/`TOWN_COURT_RAMP_MARGIN` dans `fermeConstants.js`, le bloc des urnes et
-`PERCH_POINTS_T` dans `FermeGame.js` — rien n'est recopié ici, §14.2). État atteint : rampes et
-urnes solides (mesurées sur le PNG, jamais devinées), joueur qui rétrécit en montant sans plus
-« sauter » de taille sur aucun des deux axes, montée ralentie (×0,5), treize points de perchoir
-recalés à la grille, un artefact de rendu Gemini effacé sur le toit, les pets qui rétrécissent avec
-leur maître, et un zoom manuel à cinq crans (molette, `+`/`-`, `0`, plus un bouton permanent de
-réinitialisation). Deux leçons générales sorties de ce chantier vivent maintenant au §4 (bornage
-vs retour anticipé, un axe corrigé ne dit rien de l'autre) — ne pas les rechercher ici.
+Demande : « jouabilité équivalente à lichess, pas de bug de sélection au clic, beauté visuelle,
+précision ». Audit d'abord, mesuré en jeu (plateau recréé à chaque seconde de pendule : **13 % des
+appuis perdus** ; ordinateur figé après une reprise ; « Annuler » de l'analyse désynchronisé ;
+revanche toujours en 10 min ; ordinateur qui jouait parfois un coup choisi sur une recherche
+coupée…). Guillaume a validé les recommandations et ordonné « lance tous les lots » : bugs,
+jouabilité ET visuel sont donc livrés ENSEMBLE — contre le §2 (ne pas mêler deux changements
+visuels), par son arbitrage explicite, pas par oubli.
+- Où vit quoi : `components/chess/` (voir §5). Le pourquoi de chaque correctif est en commentaire à
+  côté du code, avec la mesure qui l'a motivé ; rien n'en est recopié ici.
+- Vérifié : `verify-echecs` **68/68** (nouveau, falsifié deux fois) ; les **24** `verify-*` verts le
+  2026-09-24 (`verify-portee` a appris `Worker` et `self`) ; `render-*` non relancés (aucun dessin
+  de ferme ni de ville touché) ; `next build` compile, worker empaqueté. ET EN JEU (page jetable
+  supprimée) : 0 appui perdu sur 60, clic-clic, glisser-déposer, pré-coup contre l'ordinateur et à
+  deux clients, coup affiché chez l'invitée en 17 ms, pendules cohérentes d'un onglet à l'autre,
+  nulle et reprise proposées/refusées/acceptées, abandon, annulation, revanche (même cadence,
+  couleurs inversées), resynchronisation après rechargement, promotion en colonne, flèches, drapeau
+  (dixièmes puis 0:00.0), bureau 1280×800 et téléphone 375 px.
+- ⚠️⚠️ **JAMAIS JOUÉ PAR GUILLAUME, NI SUR LE VRAI SUPABASE** (latence réelle, deux machines). Reste
+  à juger ce qu'aucun banc ne mesure : le glisser au doigt, la lisibilité des repères (sélection
+  verte, dernier coup doré sur le noyer), l'intérêt de l'ordinateur.
+- Connu, non traité : l'ordinateur joue les mêmes ouvertures (recherche déterministe) et ne voit
+  qu'à 3-4 demi-coups (chess.js ≈ 0,7 ms par nœud, mesuré) — un niveau réglable serait un chantier.
+- ⚠️ **PAS DE MANIPULATION SUPABASE** : `rooms.game_state` reste un JSON libre (format v2, et les
+  sauvegardes v1 d'avant se relisent).
+- **Même jour, même défaut ailleurs, corrigé** : le bocal d'Échos (`Jar`, `EchoesRoom.js`) était
+  déclaré dans le rendu de l'énigme des jarres — l'eau sautait au lieu de couler. Sorti au niveau
+  du module, rendu inchangé ; vérifié en jeu (partie restaurée sur le chapitre 14 par une page
+  jetable, supprimée) : même nœud, 0 → 90 px en ~350 ms, contre-épreuve sur l'ancien code (saut
+  net). Bundle et `verify-portee` verts. Aucune manipulation Supabase.
 
-⚠️⚠️ **TOUT CECI EST VÉRIFIÉ AU BANC ET AU HARNAIS PAR CLAUDE, JAMAIS EN VRAIE SÉANCE PAR
-GUILLAUME.** Ce qui reste à juger n'est plus mesurable : la montée est-elle agréable, le schéma de
-zoom (cinq crans, cette amplitude) est-il le bon, le rétrécissement des pets ancré sur le maître
-plutôt que leur propre position se remarque-t-il en mal (§10 — un banc ne mesure pas le plaisir).
+### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
-### 2026-09-23 — Eduardo s'arrête pour parler, et le belvédère est enrichi
-
-Deux demandes séparées de Guillaume dans la même séance, traitées comme deux livraisons (§2 : ne
-pas mêler deux changements).
-
-**Eduardo.** « Approcher Eduardo doit l'arrêter de bouger […] il doit nous dire quelque chose sans
-bouger, et nous expliquer où aller pour construire son bateau — un truc du genre vas voir en
-ville, au port, pour te faire une idée. » Vérifié d'abord : la quête a déjà TROIS portes
-équivalentes vers l'offre du chantier (le tableau de la mairie, Eduardo, l'approche du quai —
-toutes câblées sur le même `starYardAccept`), la troisième existant sans être mise en avant depuis
-le 2026-09-16.
-- `starNerveHalt`/`starNerveDirOf` (FermeGame.js) — jusqu'ici réservées aux résidents « nerveux »
-  de l'annonce météore — sont généralisées via un nouveau `starYardHookActive(rid)`, factorisé
-  hors de `starNpcEmote` pour qu'une seule condition explique le « ! », l'arrêt ET l'orientation
-  (§4 : une condition recopiée finit par mentir). Eduardo se fige et te fait face désormais tant
-  qu'il a sa réplique d'accroche à délivrer — jamais en dehors, sa balade à cheval sur toute la
-  ferme reste le choix assumé de toujours.
-- Sa fiche (touche Q) ne propose plus Oui/Non : il redit juste `eduHook`, réécrite pour rediriger
-  (« va jeter un œil au vieux quai, en ville, tu t'en feras une idée »), et pointe vers le port. Le
-  vrai choix reste au tableau de la mairie et à l'approche du quai, inchangés. `eduPitch` (devenu
-  mort) est supprimé, pas laissé en orphelin.
-- Vérifié : `verify-syntax`, `verify-strings` (1134/1134), `verify-quete` (**930/930**). ⚠️⚠️ **PAS
-  REJOUÉ EN JEU** : atteindre `starYardOffer` demande Eduardo ET Tristan recrutés, ≥4 artisans et
-  jour ≥3 — hors de portée d'une séance de vérification courte. Le mécanisme de gel réutilise tel
-  quel celui déjà éprouvé pour les résidents nerveux, mais personne n'a encore VU Eduardo s'arrêter
-  et parler à l'écran.
-
-**Le belvédère.** « Faut améliorer drastiquement le belvédère » → questions posées, réponses de
-Guillaume : le problème est qu'il est « trop modeste, pas assez marquant », et la direction
-choisie est d'enrichir la terrasse EN PROCÉDURAL (pas de nouveau bitmap Gemini). Trois ajouts,
-tous dérivés du rectangle `TOWN_BELVEDERE` comme le reste du bloc (fermeEngine.js, juste après les
-lampadaires) :
-1. **Quatre piliers d'angle** (`townPierSprite`, fermeArt.js) — coiffent les blocs de parapet de
-   la planche (qu'on ne peut pas redessiner) d'une pierre travaillée à boule sommitale, même
-   principe que les lampadaires aux quatre angles de la grande place. Donnent enfin un contour
-   reconnaissable de loin.
-2. **Un télescope** (`townTelescopeSprite`) sur le poste de contemplation ouest — le seul de la
-   ville, ce qui justifie enfin le « E : regarder la vallée ». Le poste est, lui, gardé simple —
-   juste son banc, pas de second télescope.
-3. **Quatre jardinières** (`"planter"`, déjà utilisé place et parc, aucun sprite de plus) en bande
-   à hauteur de la statue.
-   Vérifié : `verify-syntax`, `verify-vallee` (**231/231**, inchangé), `verify-collision` (TOUT
-   PASSE). ⚠️⚠️ **ET EN JEU** (harnais du §10, page jetable supprimée après usage) : les deux
-   piliers, les jardinières fleuries et le télescope se voient et se lisent bien à l'écran,
-   screenshots à l'appui — mais Guillaume ne l'a pas encore vu lui-même.
-⚠️ **PAS DE MANIPULATION SUPABASE** dans les deux livraisons : aucun schéma touché.
-
-### Toujours ouvert
-
-Cinq livraisons plus anciennes jamais rejouées par Guillaume, dans l'ordre : le tronc du pin
-(`richTrunk` sur la seule fiche `pine`, `render-arbres` 9/9, jamais vu en jeu à l'échelle réelle) ;
-le bois du sud-est étendu vers le nord ; la réorganisation du cœur de ville, la fontaine de la
-place refaite et deux correctifs de relecture (bouton « changer de ferme », collision
-résidents/buissons) — ces quatre derniers du 2026-09-21, détail dans l'historique git et les
-commentaires de code cités par eux.
-
-- **La refonte graphique des bâtiments, au sens large** (demande du 2026-09-21 : « détailler la
-  majorité des bâtiments sur le modèle de l'église, de l'hdv, pour une refonte graphique », AVEC
-  Gemini). Le tribunal est fait. **Aucun ordre pour les bâtiments suivants n'a été arbitré avec
-  Guillaume** ; ne pas en choisir un sans lui (§2).
-- **Traduction des métiers** (trouvé le 2026-09-20, jamais corrigé) : `job` dans `TOWN_RESIDENTS`
-  (fermeConstants.js) est écrit en anglais et s'affiche brut dans au moins six phrases françaises.
-  Correctif borné : une table `jobFr`/équivalent, ou une clé de traduction par métier.
-- **Le canevas hors `devicePixelRatio`** (trouvé le 2026-09-20) — candidat sérieux pour la source du
-  flou perçu sur tout le jeu, pas seulement l'église ; son propre chantier, testé seul (§2).
-- Chantier naval du quai, repousse des buissons taillés, verdure ×1,8 de Valley Town (livrés le
-  2026-09-16, jamais vus en jeu) : le pourquoi de chaque choix est en commentaire à côté du code.
-- ⚠️ **Sécurité et synchro multi de la ferme** (audit du 2026-09-24, RIEN CODÉ) : `ferme_saves`
-  écrasable par tout compte connecté (mot de passe de ferme vérifié en base + historique des
-  versions envisagés — migration à valider), saccades probablement dues au plafond de 10 msg/s
-  partagé. Tout le dossier, les décisions prises et l'ordre proposé : `components/ferme/SECURITE.md`.
-- ⚠️ Dette Google Cloud (Où's That, inchangée depuis le 2026-09-14), À FAIRE AVEC CODEX ET GUILLAUME
-  DEVANT LA CONSOLE : le code n'appelle que Maps Embed API, gratuite et illimitée, mais le dépôt ne
-  peut pas prouver la configuration du compte réel. Guillaume se connecte lui-même — aucun
-  identifiant transmis à l'agent (§2) — puis Codex guide la vérification : adresse de facturation
-  dans l'EEE ; clé dédiée à Où's That ; restriction d'API sur **Maps Embed API seulement** ;
-  référents limités aux domaines Arcardi nécessaires ; aucune API payante ni autre service Cloud sur
-  cette clé/ce projet ; rapport de facturation à zéro. ⚠️ Un budget d'alerte n'est pas un plafond de
-  dépense. Close seulement après lecture des écrans réels, jamais par déduction depuis
-  `NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY`.
-
-Au-delà de ces items, **la bonne action est de DEMANDER à Guillaume quoi ouvrir ensuite**, pas d'en
-choisir un (§2) — §13 tient la liste complète (îles, transport du bois, mariage/cadastre/coiffure,
-ferme peuplée à deux clients, suite de l'audit d'Où's that).
+- Le perron du tribunal (ressenti de la montée), le schéma du zoom manuel (cinq crans, cette
+  amplitude), le rétrécissement des pets ancré sur le maître — le récit vit autour de
+  `courtDepthScale`/`TOWN_COURT_DEPTH_MARGIN` (fermeConstants.js) et `PERCH_POINTS_T` (FermeGame.js).
+- Eduardo qui s'arrête et redirige vers le port (`starYardHookActive`, FermeGame.js), jamais vu en
+  partie : fenêtre étroite (lui + Tristan + 4 artisans + jour ≥3).
+- Le belvédère enrichi (piliers, télescope, jardinières ; fermeEngine.js après les lampadaires) —
+  vu à l'écran par Claude seulement.
+- Plus anciens : tronc du pin (`richTrunk`), bois du sud-est, cœur de ville et fontaine, bouton
+  « changer de ferme », collision résidents/buissons (2026-09-21) ; chantier naval, repousse des
+  buissons, verdure ×1,8 de Valley Town (2026-09-16).
+- **À décider avec lui, jamais seul (§2)** : quel bâtiment après le tribunal (refonte graphique
+  avec Gemini) ; traduction des métiers (`job` de `TOWN_RESIDENTS` affiché brut en anglais — une
+  table `jobFr` suffit) ; le canevas hors `devicePixelRatio` (flou perçu, son propre chantier) ;
+  sécurité et synchro multi de la ferme (`components/ferme/SECURITE.md`, RIEN codé, migration à
+  valider).
+- ⚠️ Dette Google Cloud d'Où's That, À FAIRE AVEC CODEX ET GUILLAUME DEVANT LA CONSOLE (il se
+  connecte lui-même, aucun identifiant transmis) : facturation dans l'EEE ; clé dédiée ; restriction
+  à **Maps Embed API seule** ; référents limités aux domaines Arcardi ; aucune API payante sur ce
+  projet ; rapport de facturation à zéro. Un budget d'alerte n'est pas un plafond. Close seulement
+  après lecture des écrans réels, jamais par déduction depuis `NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY`.
+- §13 tient le reste (îles, transport du bois, mariage/cadastre/coiffure, ferme peuplée à deux).
 
 ### ⏭️ ACTION SUIVANTE
 
-Attendre le retour de Guillaume sur SIX choses distinctes, pour ne pas les mélanger (§2) : (1) le
-RESSENTI du perron du tribunal, jamais jugé au plaisir malgré quatre correctifs mesurés ; (2) le
-SCHÉMA du zoom manuel (commande, cinq crans, amplitude) — jamais confirmé comme le bon réglage ;
-(3) le rétrécissement des pets ancré sur le maître — se voit-il, se remarque-t-il en mal ; (4)
-EDUARDO — le gel et sa nouvelle réplique, jamais vus en vraie partie (la fenêtre d'apparition est
-étroite : lui + Tristan + 4 artisans + jour ≥3) ; (5) LE BELVÉDÈRE enrichi — vu par Claude à
-l'écran, jamais par Guillaume ; (6) **choisir quel bâtiment vient après le tribunal** — ne se
-décide pas seul (§2). Les cinq livraisons plus anciennes du bloc ci-dessus attendent toujours la
-même chose.
-⚠️ Le jour où un nouveau bâtiment/sprite bitmap arrive, **mesurer son sprite AVANT de poser sa
-collision**, et vérifier tout bornage sur les DEUX axes séparément — les deux leçons du perron,
-maintenant au §4.
+Guillaume a annoncé un **autre jeu** juste après les échecs : attendre qu'il le nomme, puis LISTER
+les décisions structurantes et attendre avant de produire (§2). Les jugements « au plaisir »
+ci-dessus, échecs compris, ne se tranchent qu'en jouant : les lui rappeler, ne jamais les supposer
+acquis.
+⚠️ Le jour où un nouveau bâtiment/sprite bitmap arrive, mesurer son sprite AVANT de poser sa
+collision, et vérifier tout bornage sur les DEUX axes séparément (§4).
 
 ---
 
@@ -255,6 +201,10 @@ chargeur/cache/nommage posés au premier usage.
 - ⚠️ **CE QUI PEUT SE DÉDUIRE NE SE DIFFUSE PAS.** L'altitude d'un joueur en ville se lit
   sous ses pieds ; son ÉTAGE dans le tribunal se lit dans son `y` (§6). Un champ de plus,
   c'est surtout un champ à réconcilier.
+- ⚠️ **UNE PENDULE SE DIFFUSE COMME UN ÉTAT — ce qui reste, qui est au trait, depuis quand — DANS
+  LE MESSAGE QUI PART DÉJÀ À CHAQUE COUP, jamais en tops périodiques** (échecs, 2026-09-24 : plus
+  aucun message `clock`, et la précision passe de ±1 s par coup à la milliseconde). Seules des
+  DURÉES traversent le réseau ; chaque client date à la réception.
 
 ---
 
@@ -441,6 +391,19 @@ dépôt.
   peut ne jamais se reproduire.* ⚠️ La parade : `document.hidden` est un getter natif, aussi bon
   marché qu'une ref — on le LIT DIRECTEMENT à chaque appel au lieu de le mettre en cache. Rien ne
   peut plus désynchroniser une valeur de sa source si on ne la copie jamais.
+- ⚠️⚠️⚠️ **UN COMPOSANT DÉCLARÉ DANS LE RENDU D'UN AUTRE EST UN TYPE NEUF À CHAQUE RENDU : REACT
+  REMPLACE TOUS SES NŒUDS DOM** (échecs, 2026-09-24). Un clic n'existe que si l'appui et le
+  relâchement tombent sur le MÊME nœud : le plateau, recréé à chaque seconde de pendule, perdait
+  13 % des appuis — mesuré, invisible en relisant, et rapporté comme « bug de sélection ». Même
+  famille : une transition CSS ne joue jamais sur un nœud recréé (le bocal d'Échos, même jour).
+  ⚠️ Chercher ce motif ailleurs coûte une ligne : `grep -rnE "^ {2,}const [A-Z]\w* = \("` et
+  `"^ {2,}function [A-Z]"` dans `components/`. Parade : composant au niveau du
+  module, et ce qui tique (une pendule) dans SON propre composant, pour ne rien re-rendre d'autre.
+- ⚠️⚠️ **UN EFFET MONTÉ UNE FOIS (le canal réseau) VOIT POUR TOUJOURS L'ÉTAT DE SON PREMIER RENDU**
+  (échecs, 2026-09-24 : la sauvegarde y lisait `winner` — toujours null). Parade : l'effet n'appelle
+  que `H.current.x(...)`, des gestionnaires réassignés à chaque rendu ; ce qu'arbitre l'hôte vit
+  dans des refs. Et un GESTE (glisser, tracé) se suit dans une ref : deux événements rapprochés
+  lisent un état React en retard d'un rendu.
 - ⚠️⚠️⚠️ **UNE FONCTION DÉCLARÉE DANS LA CLOSURE DE LA BOUCLE DE RENDU N'EXISTE PAS POUR LE
   COMPOSANT** — payé au 430 (`tryTownJump`, saut de rebord mort) puis au 431
   (`canStandTown` appelée par `advanceRemote`, Valley Town injouable à deux). Le hissage des
@@ -586,6 +549,7 @@ dépôt.
 | `components/ferme/planche.js` · `components/ferme/planche2.js` | **GÉNÉRÉS** par `tools/import-planche.mjs` / `import-planche2.mjs` — les sprites des DEUX planches de Guillaume, en données. Ne pas éditer à la main. ⚠️ `planche2` était absente de cette carte jusqu'au 2026-09-05 : son échelle (une case = 62 px image) est DÉRIVÉE de cinq gabarits du jeu, pas mesurée dans l'image — la planche n'a pas de pas natif franc |
 | `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural. `starWispColors` décline le vivant en jaune, bleu et rose ; `drawStarFragmentMeteor` fait tourner le petit caillou incandescent sur un centre stable et `drawStarFragmentImpact` dessine son choc de terre/poussière/braises, sans réutiliser la boule de feu de Valley Town. Les gros dessins de quête (`drawStarCrater`, comète, navire, jauge, poses) vivent ici pour rester regardables par les bancs. |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
+| `components/chess/` | **Échecs (2026-09-24).** `ChessBoard.js` le plateau (pointeur, pré-coups, animations, flèches) · `rules.js`, `clock.js`, `engine.js` purs, tenus par `verify-echecs` · `engine.worker.js` l'ordinateur hors du fil principal · `pieces.js` SVG Cburnett (⚠️ notice BSD à garder, crédit dans `lib/gameRules.js`) · `ChessGame.js` réseau, arbitrage, interface |
 | `components/PetitsChevaux.js` · `components/ludoBot.js` | **Ludo 2–4 humains ou 1 humain + 1 à 3 bots choisis avant le départ.** `ludoBot.js` ne connaît aucune règle de déplacement : il classe seulement le plan légal et les simulations que l'arbitre hôte lui remet |
 | `public/candyluge/README.md` | **la dette et les 18 règles de la luge — autorité (427)** |
 | `public/candyluge/js/` | `config.js` (tous les nombres) · `slope.js` (la piste) · `sled.js` · `world.js` |
@@ -981,7 +945,9 @@ quelle au 454 puis au 456) :
    players={[{profile_id, username, joined_at}]} isHost savedCode="XXXX" />`.
    ⚠️ **`players` EST OBLIGATOIRE** (`[...players]` plante sans lui). ⚠️ **Un dossier `app/`
    préfixé par `_` n'est PAS une route.** ⚠️ **La supprimer avant de livrer** : en production
-   elle ouvre une ferme sans authentification.
+   elle ouvre une ferme sans authentification — et commitée, elle peut arrêter TOUS les
+   déploiements (2026-09-12 : un `useSearchParams()` sans `<Suspense>` a cassé le build Vercel
+   entier, pas seulement sa route).
 
 Puis ⌘⇧X → menu développeur → **20 arrêts** (ferme, passage, Valley Town ×7 dont **le cratère**
 depuis le 446, et les **huit niveaux d'intérieur** : tribunal ×3, mairie ×2, église ×3 dont le
@@ -1074,6 +1040,14 @@ donné 753×858, une capture d'écran prise au même instant 800×911 : caler un
 marche** : ne jamais recalculer soi-même une coordonnée depuis une capture — utiliser l'outil de
 clic du navigateur avec les coordonnées de LA CAPTURE (il fait la conversion), ou mieux, chercher
 l'élément DOM et l'appeler directement (`element.click()`, qui ne dépend d'aucune coordonnée).
+⚠️⚠️ **UN ONGLET MASQUÉ QU'ON VIENT DE CHARGER N'A PAS D'HORLOGE D'ANIMATION — MESURÉ LE
+2026-09-24** : `document.timeline.currentTime` reste à 0, une transition CSS existe (`getAnimations()`)
+mais ne progresse jamais, et on croit la transition cassée. Une capture d'écran force une image et
+relance l'horloge ; vérifier `document.timeline.currentTime > 0` AVANT de mesurer une transition.
+⚠️⚠️ **`resize_window` À UNE TAILLE ÉMULÉE FAUSSE LES CLICS DE L'OUTIL — MESURÉ LE 2026-09-24** :
+un clic visé en (321, 341) sur la capture est arrivé en (1255, 1333) dans la page. La capture reste
+juste, le clic non. Pour cliquer : taille native du volet, ou `PointerEvent` scriptés sur l'élément
+(`dispatchEvent`, avec bulles), espacés de quelques millisecondes.
 ⚠️⚠️⚠️ **UNE ÉDITION DE `FermeGame.js` PENDANT QUE `npm run dev` TOURNE PEUT COMPILER SANS QUE
 LE COMPOSANT MONTÉ NE CHANGE DE COMPORTEMENT — MESURÉ LE 2026-09-04.** Le terminal annonce
 `[Fast Refresh] done`, l'état du composant (position, inventaire) survit à l'édition — signe
@@ -1443,10 +1417,11 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
   et au 439 les **élections municipales** + le jour d'audience du maire) : **une pure fonction du
   numéro de jour, jamais un état**. Les élections sont le premier de ces rendez-vous qui ait un
   RÉSULTAT visible dans le monde (le portrait officiel) — c'est le modèle à copier.
-- ⚠️⚠️ **LE TACTILE NE COUVRE QUE LA FERME, LA VILLE ET LE TRIBUNAL** (430). Les 22 autres jeux
-  de la plateforme n'ont pas été audités au doigt. Certains ont déjà des `pointer*` (puzzle,
-  naval, yahtzee), d'autres non — **personne ne sait lesquels**, et c'est exactement l'angle
-  mort qui a laissé la ferme injouable pendant des années.
+- ⚠️⚠️ **LE TACTILE NE COUVRE QUE LA FERME, LA VILLE, LE TRIBUNAL ET LES ÉCHECS** (430 ; échecs
+  2026-09-24, Pointer Events : clic-clic et glisser au doigt). Les 21 autres jeux de la plateforme
+  n'ont pas été audités au doigt. Certains ont déjà des `pointer*` (puzzle, naval, yahtzee),
+  d'autres non — **personne ne sait lesquels**, et c'est exactement l'angle mort qui a laissé la
+  ferme injouable pendant des années.
 - ⚠️ **LE PAIN DES PIGEONS EST GRATUIT (433) — ARBITRAGE TOUJOURS À TRANCHER**, mais la scène
   MARCHE depuis le 439 (assis, treize pigeons viennent manger ; se lever en fait partir dix sur
   quatorze). L'objection « un joueur qui appuie sans rien voir se passer croit que la touche est
@@ -1500,15 +1475,6 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
   manque est de CONCEPTION (le bonbon empoisonné), pas de technique.
 - **`crystal`** : le chapitre a **deux** segments jouables (`play run` et `play walk`).
   Retirer le second retire le seul endroit où l'on ramasse des éclats.
-- ✅ **PANNE VERCEL DU 2026-09-12 — CLOSE.** `app/tmp-ousthat-audit/page.js`, une page jetable
-  commitée au lieu d'être supprimée, utilisait `useSearchParams()` sans `<Suspense>` : Next.js
-  refuse de prérendre une page pareille et casse **tout le build**, pas seulement cette route.
-  Vérifié le 2026-09-12 : le fichier n'est plus dans le dépôt (`git cat-file -e HEAD:…` échoue).
-  ⚠️ **LA LEÇON, ELLE, RESTE** : une page jetable non supprimée ne casse pas un test local oublié
-  — commitée, elle **arrête tous les déploiements de production**. « La supprimer avant de livrer »
-  (§10) n'est pas de l'hygiène, c'est un point de panne pour tout le monde. L'audit du 2026-09-12
-  en a recréé deux (`app/tmp-audit-h`, `app/tmp-audit-g`) et les a supprimées dans la même
-  livraison.
 
 ---
 

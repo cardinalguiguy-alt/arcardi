@@ -1,5 +1,24 @@
 # ARCARDI 🎪
 
+> **CORRECTIF 2026-09-24 — ÉCHOS : L'EAU DES JARRES COULE ENFIN.**
+>
+> Le bocal était déclaré dans le rendu de l'énigme : chaque transvasement le recréait, et l'eau
+> sautait au lieu de couler (sa transition de 0,35 s ne jouait jamais). Sorti au niveau du module,
+> rendu inchangé. Mesuré en jeu : même nœud, l'eau monte 0 → 90 px en ~350 ms ; l'ancien code remis
+> pour contre-épreuve saute bien d'un coup. Aucun changement Supabase.
+
+> **LIVRAISON 2026-09-24 — ÉCHECS : AUDIT PUIS REFONTE « À LA LICHESS ».**
+>
+> L'audit a mesuré le bug de sélection au clic : le plateau était recréé à chaque seconde de
+> pendule, et **13 % des appuis** tombaient dans le vide. Refonte en trois lots : bugs (ordinateur
+> figé après une reprise, « Annuler » de l'analyse désynchronisé, revanche toujours en 10 min,
+> vainqueur sauvegardé vide, drapeau contre un roi seul, avantage sans les promotions), jouabilité
+> (coup affiché au doigt sans attendre le réseau, glisser-déposer, pré-coups, pendule horodatée
+> avec incrément 3+2 / 5+3 et dixièmes, nulle proposée, partie annulée, navigation ← → pendant la
+> partie, ordinateur dans un worker), visuel (pièces SVG Cburnett sous licence BSD, grand plateau
+> et colonne à droite, animations, promotion en colonne, flèches au clic droit). Nouveau banc
+> `verify-echecs` (68/68). Aucun changement Supabase.
+
 > **LIVRAISON 2026-09-13 — DES BUISSONS SAUVAGES SUR LA FERME, ET UNE FAUX POUR LES TAILLER.**
 >
 > Environ 400 buissons par ferme, en lisière des bosquets et le long de la rivière — jamais sur les

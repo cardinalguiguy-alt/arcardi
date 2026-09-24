@@ -1174,6 +1174,24 @@ function JarsInfo({ jars, t }) {
   );
 }
 
+// ----- Une jarre (eau NON graduée) -----
+// ⚠️ 2026-09-24 : AU NIVEAU DU MODULE, et pas dans JarsBoard. Déclarée dans
+// son rendu, elle était un NOUVEAU type de composant à chaque rendu : React
+// recréait le nœud de l'eau à chaque transvasement, donc la transition
+// `.echo-jar-water{ transition:height .35s }` ne jouait jamais — l'eau
+// sautait au lieu de couler. Même défaut que l'ancien plateau d'échecs (voir
+// l'en-tête de components/chess/ChessBoard.js).
+function Jar({ value, capacity, label }) {
+  return (
+    <div className="echo-jar">
+      <div className="echo-jar-body">
+        <div className="echo-jar-water" style={{ height: (value / capacity * 100) + "%" }} />
+      </div>
+      <span className="echo-jar-label">{label}</span>
+    </div>
+  );
+}
+
 // ----- Les Jarres : côté action (A), jarres NON graduées à manipuler -----
 function JarsBoard({ jars, onPour, t }) {
   const [small, setSmall] = useState(0);
@@ -1187,14 +1205,6 @@ function JarsBoard({ jars, onPour, t }) {
       setBig(big - amount); setSmall(small + amount);
     }
   }
-  const Jar = ({ value, capacity, label }) => (
-    <div className="echo-jar">
-      <div className="echo-jar-body">
-        <div className="echo-jar-water" style={{ height: (value / capacity * 100) + "%" }} />
-      </div>
-      <span className="echo-jar-label">{label}</span>
-    </div>
-  );
   return (
     <div style={{ textAlign: "center" }}>
       <div style={{ display: "flex", gap: 26, justifyContent: "center", margin: "12px 0" }}>
