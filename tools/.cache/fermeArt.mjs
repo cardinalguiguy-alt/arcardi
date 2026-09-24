@@ -5753,6 +5753,49 @@ export function buildSprites() {
     P(g, 12, 20, 8, 5, W1); P(g, 12, 20, 8, 1, "#a37448");
     return c;
   }
+  /* 2026-09-23 (demande Guillaume : « améliorer drastiquement le belvédère »)
+     — DEUX NOUVEAUX DÉCORS, POUR LUI SEUL. Même famille que le puits ou la
+     statue juste au-dessus (un ouvrage maçonné, éclairé en haut à gauche,
+     assemblé en masses pleines — DESSIN.md), pas de sprite de la planche : ce
+     ne sont pas des retouches d'un dessin existant, ce sont deux meubles de
+     plus dans le même atelier procédural. */
+  // Pilier d'angle : coiffe le bloc de parapet (`stoneBlock`, importé de la
+  // planche, qu'on ne peut pas redessiner) d'une pierre travaillée — le même
+  // principe que les quatre lampadaires aux angles de la GRANDE place, pour
+  // que le belvédère ait enfin un contour reconnaissable de loin, pas
+  // seulement un muret plat.
+  function townPierSprite() {
+    const [c, g] = cv(22, 46);
+    const S = "#b0aa9a", SL = "#cfcabc", SD = "#8f8a80";
+    P(g, 2, 38, 18, 6, SD); P(g, 2, 38, 18, 2, S);                        // socle
+    P(g, 4, 15, 14, 24, S); P(g, 4, 15, 3, 24, SL); P(g, 15, 15, 3, 24, SD); // fût
+    P(g, 2, 11, 18, 5, SD); P(g, 2, 11, 18, 2, S);                        // corniche
+    g.fillStyle = S; g.beginPath(); g.arc(11, 7, 6, 0, 7); g.fill();      // boule sommitale
+    g.fillStyle = SL; g.beginPath(); g.arc(9, 5, 3, 0, 7); g.fill();      // reflet
+    return c;
+  }
+  // Le télescope du belvédère : le seul de la ville. Un point de vue qui ne
+  // montre qu'un parapet ne se distingue en rien d'une terrasse quelconque —
+  // l'instrument est ce qui dit « on vient ici pour REGARDER », posé sur le
+  // poste de contemplation que `townSpots` marquait déjà, sans rien à côté.
+  function townTelescopeSprite() {
+    const [c, g] = cv(24, 38);
+    const LEG = "#3c3c44", LEG_L = "#5e5e68";                            // même métal que le lampadaire
+    const BR = "#9a7a42", BR_L = "#c2a05c";                              // le tube, en laiton
+    P(g, 10, 28, 3, 8, LEG); P(g, 10, 28, 1, 8, LEG_L);                  // pied central du trépied
+    g.fillStyle = LEG; g.beginPath(); g.moveTo(10, 29); g.lineTo(2, 36); g.lineTo(5, 36); g.lineTo(11, 30); g.fill();
+    g.fillStyle = LEG; g.beginPath(); g.moveTo(13, 29); g.lineTo(21, 36); g.lineTo(18, 36); g.lineTo(12, 30); g.fill();
+    P(g, 7, 25, 9, 4, LEG); P(g, 7, 25, 9, 1, LEG_L);                    // le pivot, en tête de trépied
+    // Le tube, effilé de l'oculaire (bas) vers l'objectif (haut) : un
+    // polygone rempli, la même technique que le pan de toit du kiosque —
+    // jamais un rectangle tourné (DESSIN.md).
+    g.fillStyle = BR; g.beginPath(); g.moveTo(14, 26); g.lineTo(9, 26); g.lineTo(4, 3); g.lineTo(7, 3); g.fill();
+    g.fillStyle = BR_L; g.beginPath(); g.moveTo(12, 26); g.lineTo(9, 26); g.lineTo(5, 4); g.lineTo(6, 4); g.fill();
+    P(g, 3, 3, 5, 3, "#6e5430");                                        // bague de l'objectif
+    g.fillStyle = "#2e2e36"; g.beginPath(); g.arc(11, 26, 3, 0, 7); g.fill();   // oculaire
+    g.fillStyle = "#50505a"; g.beginPath(); g.arc(10, 25, 1.2, 0, 7); g.fill(); // reflet du verre
+    return c;
+  }
 
   /* ══════════════════════════════════════════════════════════════════════════
      ZIP 425 — LE MOBILIER DE LA PLACE ET LES MARCHES.
@@ -16982,6 +17025,8 @@ house: house(),
     townStatue: townStatueSprite(),
     townWell: townWellSprite(),
     townCrate: crateSprite(),
+    townPier: townPierSprite(),             // 2026-09-23 : le belvédère, angles
+    townTelescope: townTelescopeSprite(),   // 2026-09-23 : le belvédère, poste ouest
     /* Zip 427 — les deux commerces de la Haute-Ville + le tableau des nouvelles
        de la place. Le tableau est le seul décor de ce zip qui porte une
        MÉCANIQUE (il se lit à la touche E) ; il est donc dans `props`, comme les
