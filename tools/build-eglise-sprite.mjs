@@ -288,4 +288,7 @@ for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) {
   dP[0][di] = dayR[si] * a; dP[1][di] = dayG[si] * a; dP[2][di] = dayB[si] * a; dP[3][di] = a;
   gP[0][di] = glowR[si] * ga; gP[1][di] = glowG[si] * ga; gP[2][di] = glowB[si] * ga; gP[3][di] = ga;
 }
+// ⚠️ 2026-09-25 (phase 3) : le calque de nuit écrit ici ne garde que les pixels DÉJÀ chauds de la
+// peinture (quelques fragments). `tools/build-monument-glow.mjs` le reprend et y ajoute les baies
+// entières : le relancer JUSTE APRÈS ce script, sans quoi la nuit retombe aux fragments.
 for (const line of writeMips(ROOT, SB, C.townBitmapMip, dP, gP, CW, CH)) console.log(line);

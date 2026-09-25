@@ -202,4 +202,7 @@ function repaintDial(png, mip, kind) {
     }
   }
 }
+// ⚠️ 2026-09-25 (phase 3) : le calque de nuit écrit ici ne garde que les pixels DÉJÀ chauds de la
+// peinture (quelques fragments). `tools/build-monument-glow.mjs` le reprend et y ajoute les baies
+// entières : le relancer JUSTE APRÈS ce script, sans quoi la nuit retombe aux fragments.
 for (const line of writeMips(ROOT, SB, C.townBitmapMip, dP, gP, CW, CH, repaintDial)) console.log(line);

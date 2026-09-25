@@ -905,6 +905,16 @@ export function candySyrupColor(dp) {
 export const SPR_T = 16;
 const SPR_PUPIL = "#16161a", SPR_OUT = "#241f1c";
 
+/* 2026-09-25 (phase 3, la lumière) — LA FENÊTRE DES MAISONS, EN DONNÉES.
+   ⚠️ Le carreau (14 × 11, croisillon en 7 et en 5) et la place des deux
+   fenêtres d'une maison de Valley Town étaient écrits en dur dans `bWindow` et
+   à chaque appel. La fenêtre ALLUMÉE (`townHouseWindowGlow`) doit tomber sur
+   ces pixels-là exactement : les deux dessins lisent donc la même table, et
+   le rendu (FermeGame.js) aussi — une fenêtre allumée à côté de sa vitre
+   serait le §8 en une ligne. */
+export const HOUSE_WINDOW = { w: 14, h: 11, mx: 7, my: 5 };
+export const TOWN_HOUSE_WINDOWS = [[16, 58], [70, 58]];
+
 /* ══════════════════════════════════════════════════════════════════════════
    ZIP 434 — PEINDRE UNE CASE DE RUE DE VALLEY TOWN.
    ──────────────────────────────────────────────────────────────────────────
@@ -10827,7 +10837,7 @@ export function buildSprites() {
       P(g, 0, 46, 96, 3, tl.e);
       bChimney(g);
       P(g, 38, 56, 22, 3, "#8a3028"); P(g, 39, 59, 2, 4, "#6a4a2c"); P(g, 56, 59, 2, 4, "#6a4a2c"); // auvent
-      bDoor(g, 42, 62); bWindow(g, 16, 58); bWindow(g, 70, 58);
+      bDoor(g, 42, 62); for (const [wx, wy] of TOWN_HOUSE_WINDOWS) bWindow(g, wx, wy);
     } else {
       // Famille niv.2 : colombages + toit de chaume + soubassement pierre.
       const pl = plasters[(styleIdx >> 1) % plasters.length];
@@ -10841,7 +10851,7 @@ export function buildSprites() {
       for (let i = 0; i < 38; i++) { const half = Math.floor(44 * i / 38); const col = i % 3 === 0 ? pl.tA : (i % 2 ? pl.tB : pl.tC); P(g, 48 - half, 8 + i, Math.max(1, half * 2), 1, col); }
       for (let i = 0; i < 30; i++) P(g, 6 + Math.floor(r() * 84), 45 + Math.floor(r() * 2), 1, 1, pl.tA);
       P(g, 44, 5, 8, 4, pl.ridge);
-      bChimney(g); bDoor(g, 42, 62); bWindow(g, 16, 58); bWindow(g, 70, 58);
+      bChimney(g); bDoor(g, 42, 62); for (const [wx, wy] of TOWN_HOUSE_WINDOWS) bWindow(g, wx, wy);
     }
     return c;
   }
@@ -13140,12 +13150,60 @@ export function buildSprites() {
   }
   // Fenêtre à croisillons + jardinière fleurie, 16x15 posée en (x,y).
   function bWindow(g, x, y) {
-    P(g, x - 1, y - 1, 16, 13, "#4a3826");
-    P(g, x, y, 14, 11, "#a8d4e8");
-    P(g, x, y, 14, 3, "#d0ecf6");
-    P(g, x + 7, y, 1, 11, "#4a3826"); P(g, x, y + 5, 14, 1, "#4a3826");
+    const W = HOUSE_WINDOW;
+    P(g, x - 1, y - 1, W.w + 2, W.h + 2, "#4a3826");
+    P(g, x, y, W.w, W.h, "#a8d4e8");
+    P(g, x, y, W.w, 3, "#d0ecf6");
+    P(g, x + W.mx, y, 1, W.h, "#4a3826"); P(g, x, y + W.my, W.w, 1, "#4a3826");
     P(g, x - 2, y + 12, 18, 2, "#6a4a2c");
     for (let i = 0; i < 3; i++) { P(g, x + 2 + i * 4, y + 11, 1, 1, "#d4504a"); P(g, x + 3 + i * 4, y + 11, 1, 1, "#e8842a"); }
+  }
+  /* 2026-09-25 (phase 3) — LA MÊME FENÊTRE, ALLUMÉE DE L'INTÉRIEUR. Seuls les
+     quatre carreaux : le croisillon et le cadre restent ceux de `bWindow`, qui
+     transparaissent (le calque se pose PAR-DESSUS la vitre de jour). Plus
+     chaud en bas qu'en haut — la lampe est posée dans la pièce, pas au
+     plafond — et un pixel plus sombre sur les bords extérieurs : les rideaux,
+     ce qui fait lire « une pièce » plutôt qu'« un carré jaune ». */
+  function townHouseWindowGlow() {
+    const W = HOUSE_WINDOW, [c, g] = cv(W.w, W.h);
+    for (let y = 0; y < W.h; y++) {
+      if (y === W.my) continue;
+      const col = y < 2 ? "#ffe7ad" : y < W.my ? "#ffd27c" : y < W.my + 3 ? "#f6bd60" : "#e8a44f";
+      P(g, 0, y, W.mx, 1, col); P(g, W.mx + 1, y, W.w - W.mx - 1, 1, col);
+      if (y > 0) { P(g, 0, y, 1, 1, "#c7874a"); P(g, W.w - 1, y, 1, 1, "#c7874a"); }
+    }
+    return c;
+  }
+  function wallFootOf(img) {
+    if (!img) return null;
+    const W = img.width, H = img.height, d = img.getContext("2d").getImageData(0, 0, W, H).data;
+    let base = -1;
+    for (let y = H - 1; y >= 0 && base < 0; y--) for (let x = 0; x < W; x++) if (d[(y * W + x) * 4 + 3] > 128) { base = y + 1; break; }
+    if (base < 3) return null;
+    const row = base - 3;
+    let x0 = W, x1 = -1;
+    for (let x = 0; x < W; x++) if (d[(row * W + x) * 4 + 3] > 128) { if (x < x0) x0 = x; x1 = x + 1; }
+    return x1 > x0 ? { x0, x1, base } : null;
+  }
+  /* Le verre allumé d'une lanterne : les pixels qui changent entre `on` et
+     `off`, ou, sans version éteinte, les pixels chauds et clairs. Voir
+     `S.lampGlass`. */
+  function litGlassOf(on, off) {
+    if (!on) return null;
+    const W = on.width, H = on.height, a = on.getContext("2d").getImageData(0, 0, W, H).data;
+    const b = off ? off.getContext("2d").getImageData(0, 0, W, H).data : null;
+    let n = 0, sx = 0, sy = 0, x0 = W, x1 = -1, y0 = H, y1 = -1;
+    for (let i = 0; i < W * H; i++) {
+      const o = i * 4;
+      const hit = b ? (a[o] !== b[o] || a[o + 1] !== b[o + 1] || a[o + 2] !== b[o + 2])
+                    : (a[o + 3] > 200 && a[o] > 200 && a[o + 1] > 150 && a[o] - a[o + 2] > 90);
+      if (!hit) continue;
+      const x = i % W, y = (i / W) | 0;
+      n++; sx += x; sy += y;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    if (!n) return null;
+    return { x: sx / n + 0.5, y: sy / n + 0.5, r: Math.max(2, Math.hypot(x1 - x0 + 1, y1 - y0 + 1) / 2) };
   }
   // Rangée de moellons irréguliers (pierre) : rangs décalés, tons variés.
   function bStones(g, x, y, w, h, r, tones, bh) {
@@ -17213,6 +17271,26 @@ house: house(),
   // hors-zip — le calque de premier plan de la rambarde 'iron' (voir la
   // fonction), découpé dans le bloc UNE FOIS ici plutôt qu'à chaque frame.
   S.townCourtStairIronRail = courtStairIronRailLayer(S.townCourtStairBlock, S.townCourtStairBlockRaw);
+  /* 2026-09-25 (phase 3, la lumière) — OÙ BRILLE LE VERRE D'UNE LANTERNE.
+     ⚠️ DÉRIVÉ DU DESSIN, JAMAIS MESURÉ À LA MAIN : c'est la différence entre
+     la lanterne allumée et la même éteinte (phase 2), donc exactement les
+     pixels que l'allumage change. Le lampadaire de la ferme n'a pas de
+     version éteinte (son verre est jaune de jour, dette connue) : on y lit
+     ses pixels chauds. { x, y } = centre dans le sprite, `r` = demi-diagonale
+     de la zone, en px d'art. Retoucher un dessin déplace son point lumineux
+     avec lui. */
+  S.lampGlass = {
+    plazaLamp: litGlassOf(S.plazaLamp, S.plazaLampOff),
+    townHangLamp: litGlassOf(S.townHangLamp, S.townHangLampOff),
+    townOilLamp: litGlassOf(S.townOilLamp, S.townOilLampOff),
+    lamp: litGlassOf(S.lamp, null),
+  };
+  S.townHouseWindowGlow = townHouseWindowGlow();
+  /* L'emprise DESSINÉE d'une maison de ville : la largeur de son mur au ras du
+     sol et la rangée de sa base (le canevas de 96 garde une marge transparente
+     dessous, voir la note du zip 272 dans FermeGame.js). Les dix façades
+     partagent ce gabarit ; lu sur la première, jamais recopié. */
+  S.townHouseWall = wallFootOf(S.townHouses[0]);
   for (let t = 0; t < C.CROPS.length; t++) {
     S.crops[t] = [];
     for (let s = 0; s < C.CROP_STAGES; s++) S.crops[t][s] = cropSprite(t, s);

@@ -7,31 +7,38 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-25 — Valley Town : PHASES 0, 1 ET 2 de la feuille de route graphique livrées
+### 2026-09-25 — Valley Town : PHASES 0 À 3 de la feuille de route graphique livrées
 
 Checklist (✅/⬜) en tête de `components/ferme/README.md`, avec le récit de chaque phase — Guillaume :
 « à chaque livraison, rappelle ce qui reste à faire ». Cadre : personnages ÉVOCATEURS (on ne les
 détaille pas) ; monde, végétation, faune, bâtiments soignés à fond. ⚠️ **Pour ce chantier, Guillaume a
 LEVÉ la règle « un seul changement visuel par livraison »** : une phase se livre d'un bloc.
-- **Phases 0-1** : outillage (`verify-densite`, `TOWN_BITMAPS`), monuments en une image par cran de zoom,
-  posés à 1 px d'image = 1 px d'écran (décision « pas de perte de qualité »).
-- **Phase 2** (tout vu en jeu, 524×714, crans 1 à 3, jour et nuit) : détourage du tribunal refait
-  (lanternon, fronton, corniche, piédestal), église cadrée sur écran étroit (`churchHeadroom`), noms en
-  police pixel (`pixelFont.js`) dessinés APRÈS le décor, avec priorité et fondu (personnages + cartes),
-  lanternes éteintes le jour, fontaine sur son dallage, aucun feuillu devant une lanterne (passe finale
-  du générateur, sans tirage), couture verte du fondu de zoom supprimée, dix étals différents.
-- Bancs le 2026-09-25 : **26/26 `verify-*`** (`verify-noms` 13/13, neuf, falsifié 4 fois), **24/24
-  `render-*`** (`render-parc`, `render-foire`, `render-rues` gagnent des contrôles, chacun falsifié),
-  `no-undef` (eslint) propre sur les fichiers touchés, bundle et `next build` compilent.
-- ⚠️ **Poids** : 11,7 Mo de PNG de monuments sur disque, seul le cran affiché se télécharge. **Jamais vu
-  sur un vrai iPad** (§10, plafond de mémoire WebKit).
+**Reste : 4 sols et eau · 5 faune · 6 bâtiments courants · 7 composition · 8 intérieurs.**
+- **Phases 0-2** : outillage, monuments à 1 px d'image = 1 px d'écran, correctifs sans parti pris
+  (détourage du tribunal, noms en police pixel, lanternes éteintes le jour…).
+- **Phase 3, la lumière** (`components/ferme/lumiere.js`, pur) — décisions de Guillaume : UNE nuit pour
+  ferme et ville, nuit de LUNE lisible, murs qui arrêtent la lumière, fenêtres selon l'heure et SEULEMENT
+  dans les maisons habitées, calque du tribunal tiré de sa peinture, éclairs. Le ciel MULTIPLIE la scène
+  selon l'heure ; les lampes s'ajoutent en cinq paliers tramés à la grille de l'art ; ombres des bâtiments ;
+  calques de nuit des trois monuments refaits par `tools/build-monument-glow.mjs` depuis leurs images de
+  JOUR ; lanternes suspendues et lampes à huile qui éclairent enfin ; pluie, neige et éclairs au pixel
+  d'art ; noms et bulles au-dessus de la nuit. Tout vu en jeu (524×714, crans 1 à 5, midi → 1h, aube,
+  orage, torche à la ferme).
+- Bancs le 2026-09-25 : **27/27 `verify-*`** (`verify-lumiere` 71/71, neuf, falsifié 5 fois), **24/24
+  `render-*`**, `no-undef` propre sur les fichiers touchés, bundle et `next build` complet.
+- ⚠️ **Poids** : 12,95 Mo de PNG de monuments sur disque (calques de nuit : 0,88 Mo), seul le cran
+  affiché se télécharge. **Coût de la lumière mesuré sur Mac seulement** (+1,3 ms par image au cran 1,
+  pluie comprise). **Rien de tout ça n'a été vu sur un vrai iPad** (§10, plafond de mémoire WebKit).
 - **Pas de manipulation Supabase.** Échecs (2026-09-24) : toujours jamais joués par Guillaume.
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
-- **Les phases 1 et 2 de Valley Town elles-mêmes** : monuments à 1:1, police des noms, fondu du
-  masquage. ⚠️ Un personnage caché derrière un bâtiment garde son nom visible (voulu, pour retrouver un
-  ami) — à confirmer avec lui.
+- **Les phases 1 à 3 de Valley Town elles-mêmes**. Phase 3, à juger en jouant : la profondeur de la
+  nuit (`SKY_NIGHT`), la teinte des heures, la force des lampes, le tribunal allumé une fenêtre sur
+  deux, la fréquence des éclairs (un toutes les ~26 s), une ville presque noire tant qu'elle est peu
+  peuplée. ⚠️ **Limite connue** : un personnage ou un arbre DEVANT une fenêtre allumée s'éclaire à la
+  forme de la fenêtre (le tampon ignore l'ordre de dessin). ⚠️ Phase 2 : un personnage caché derrière
+  un bâtiment garde son nom visible (voulu, pour retrouver un ami) — à confirmer avec lui.
 - Le perron du tribunal (ressenti de la montée), le schéma du zoom manuel (cinq crans, cette
   amplitude), le rétrécissement des pets ancré sur le maître — le récit vit autour de
   `courtDepthScale`/`TOWN_COURT_DEPTH_MARGIN` (fermeConstants.js) et `PERCH_POINTS_T` (FermeGame.js).
@@ -56,12 +63,13 @@ LEVÉ la règle « un seul changement visuel par livraison »** : une phase se l
 
 ### ⏭️ ACTION SUIVANTE
 
-**Phase 3 de la feuille de route graphique de Valley Town : la lumière** (teinte selon l'heure, lumières
-chaudes additives en paliers et occultées, fenêtres allumées — dont les calques `-glow` des monuments,
-invisibles sous le voile —, pluie à l'échelle du pixel, et les noms, qui passent aujourd'hui sous le
-voile). C'est de la production créative : **LISTER LES DÉCISIONS STRUCTURANTES ET ATTENDRE (§2)** avant
-d'écrire. Rappeler à Guillaume de jouer les phases 1-2 en vraie séance. L'« autre jeu » annoncé après
-les échecs attend toujours qu'il le nomme.
+**Phase 4 de la feuille de route graphique de Valley Town : sols et eau** (paliers de profondeur, bord
+de quai, reflets, rampe de l'étang — la dette du §13 —, sable, période du gazon, dallages et leurs
+jonctions — la couture du §13 —, murs de soutènement). C'est de la production créative : **LISTER LES
+DÉCISIONS STRUCTURANTES ET ATTENDRE (§2)** avant d'écrire, puis **poser les questions au fil du
+travail** (demande de Guillaume, 2026-09-25). ⚠️ L'eau se juge AUSSI de nuit maintenant : un reflet de
+lampe sur l'eau est une décision de cette phase, pas de la précédente. Rappeler à Guillaume de jouer les
+phases 1-3 en vraie séance. L'« autre jeu » annoncé après les échecs attend toujours qu'il le nomme.
 ⚠️ Le jour où un nouveau bâtiment/sprite bitmap arrive, mesurer son sprite AVANT de poser sa
 collision, et vérifier tout bornage sur les DEUX axes séparément (§4).
 
@@ -217,8 +225,9 @@ boucle de nuages tourne à vide (`SKY_CLOUD_COUNT: 0`) » ne correspondait plus 
 symbole n'existe nulle part dans le dépôt. Le §14.2 le disait : *un piège périmé recopié
 ailleurs est pire qu'un piège supprimé.*
 
-⚠️⚠️ **ET UN SEUL EST RESTÉ ICI BIEN QU'IL PARLE DES CARTES, parce qu'il a été payé QUATRE
-fois** (425, 427, 430, 431) et qu'il touche l'architecture entière : **DEUX CARTES SANS REPÈRE
+⚠️⚠️ **ET UN SEUL EST RESTÉ ICI BIEN QU'IL PARLE DES CARTES, parce qu'il a été payé CINQ
+fois** (425, 427, 430, 431, et le 2026-09-25 dans une LISTE DE LUMIÈRES : deux halos de la mairie,
+posés aux coordonnées de la ville, éclairaient chaque nuit un pré de la ferme) et qu'il touche l'architecture entière : **DEUX CARTES SANS REPÈRE
 COMMUN FINISSENT PAR SE MÉLANGER, et ça ne se voit que quand la plus petite ne tient plus dans
 la grande.** Dernière occurrence au 431, la plus chère : le rectangle du marché de la VILLE
 tombe aussi au milieu des champs de la FERME, donc le contrôle « je suis au marché » passait
@@ -549,6 +558,7 @@ dépôt.
 | `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** · **`TOWN_SOFT_PROPS`, `TOWN_BUSH_SLOW` et les trois nombres du frisson** (2026-09-02 : la végétation basse qu'on traverse) · **`mayorIsFem`, l'unique endroit qui sache lesquels des cinq maires sont des femmes** · **et depuis le 2026-09-01 LA SEMELLE (`bodyPoints`, `footX`/`footY`, `bodyFootTile`, `tileAnchor`) : l'unique description de l'empreinte au sol d'un personnage, dérivée de son ombre portée et lue par le jeu, le moteur ET les bancs** · depuis le 440 il **importe `planche.js`** : une portée de pont et une emprise de décor sont des grandeurs de DESSIN, on les dérive du sprite au lieu de les recopier · **2026-09-03 (lot C) `EVIL_LAKE_FISH`** (poissons mutants/squelettes du lac maléfique, jamais stockés), `EVIL_ROD_BREAK_MS`/`EVIL_ROD_HAZARD_R` (le hasard de la canne, confiné au point de sauvetage — voir `QUETE.md` §3) — **aucune constante de position du lac** : le vrai lac vient de `ew.lake`, vivant, voir `evilRescueSpot()` dans `FermeGame.js` |
 | `components/ferme/planche.js` · `components/ferme/planche2.js` | **GÉNÉRÉS** par `tools/import-planche.mjs` / `import-planche2.mjs` — les sprites des DEUX planches de Guillaume, en données. Ne pas éditer à la main. ⚠️ `planche2` était absente de cette carte jusqu'au 2026-09-05 : son échelle (une case = 62 px image) est DÉRIVÉE de cinq gabarits du jeu, pas mesurée dans l'image — la planche n'a pas de pas natif franc |
 | `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural. `starWispColors` décline le vivant en jaune, bleu et rose ; `drawStarFragmentMeteor` fait tourner le petit caillou incandescent sur un centre stable et `drawStarFragmentImpact` dessine son choc de terre/poussière/braises, sans réutiliser la boule de feu de Valley Town. Les gros dessins de quête (`drawStarCrater`, comète, navire, jauge, poses) vivent ici pour rester regardables par les bancs. |
+| `components/ferme/lumiere.js` | **LA LUMIÈRE (phase 3, 2026-09-25), pure** : le ciel selon l'heure (`skyAt`, qui MULTIPLIE la scène ; `nightFromSky` en déduit l'ancienne `nightAlpha`), l'orage et ses éclairs (`skyLight`, `flashAt`), qui s'allume (`lampLit`, `windowLit`), les anneaux en paliers (`ringPixels`), les ombres (`shadowQuads`), et le rendu (`makeLightRenderer`, trois canevas pour tout le jeu). Les scènes déclarent bâtiments, calques et lampes peintes depuis leurs fermetures (`lightBuilding`, `lightGlow`, `lightMonument`, FermeGame.js). Banc : `verify-lumiere` ; calques des monuments : `tools/build-monument-glow.mjs` |
 | `components/ferme/pixelFont.js` | **la police pixel des NOMS (personnages, cartes) et leur masquage** (2026-09-25) : glyphes en données, feuilles par couleur (jamais un canevas par étiquette, §10), `pixelLabelMask` (priorité, inertie, fondu). La mise en file et la passe finale vivent dans `queueNameTag`/`flushNameTags` (FermeGame.js). Banc : `verify-noms` |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
 | `components/chess/` | **Échecs (2026-09-24).** `ChessBoard.js` le plateau (pointeur, pré-coups, animations, flèches) · `rules.js`, `clock.js`, `engine.js` purs, tenus par `verify-echecs` · `engine.worker.js` l'ordinateur hors du fil principal · `pieces.js` SVG Cburnett (⚠️ notice BSD à garder, crédit dans `lib/gameRules.js`) · `ChessGame.js` réseau, arbitrage, interface |
@@ -716,6 +726,11 @@ seule ni par un test local** (tribunal, 2026-09-25). « Neutre et clair » mange
 avec son voisin à ±1 case » la mange aussi dès qu'elle touche une case sombre. La grille est régulière,
 donc chaque pixel a UNE couleur de fond attendue — mais la PARITÉ se lit case par case (Gemini peint des
 coutures). Méthode dans `tools/build-tribunal-sprite.mjs`.
+⚠️ **UNE IMAGE DE JOUR DONT UN SCRIPT A ÉTEINT DES PIXELS NE SE RELIT PAS SEULE** (2026-09-25) : les
+scripts de l'église et de la mairie grisent dans le JOUR les vitres qu'ils mettent dans la NUIT — la
+vraie couleur de ces pixels n'est plus que dans le calque de nuit. Relire le jour seul donnait des
+carrés gris au milieu des vitraux. Chaîne : `build-eglise-sprite` / `build-townhall-sprite`, PUIS
+`build-monument-glow` (qui lit les images de jour versionnées, donc garde toute retouche à la main).
 ⚠️ **`verify-densite` tient les TAILLES et la DENSITÉ des bitmaps, pas leur ASPECT** : un PNG importé
 se regarde toujours dans le jeu (§10), jamais par un `tools/render-*.mjs`.
 
@@ -907,6 +922,13 @@ vérifie jamais — c'est elle, et elle seule, qui protège du banc imaginaire (
   animées de 48×64 et un gazon au pavé de 64 px. C'est délibéré (décision du 424 : ne pas mêler
   deux changements visuels) et c'est **la dette la plus visible du projet** — un joueur qui prend
   le train voit deux niveaux de finition.
+- ⚠️ **AUCUN BANC NE COMPOSE LA LUMIÈRE** (phase 3) : le faux canevas ne sait ni `multiply` ni
+  `lighter` ni `destination-out`. `verify-lumiere` tient la DONNÉE (ciel, horaires, anneaux) et la
+  GÉOMÉTRIE (ombres) ; le rendu lui-même — calage sur le pixel d'art, teintes, lisibilité — ne se juge
+  qu'en jeu. ⚠️ **Pour le tester en jeu** : l'heure se déplace en décalant `Date.now` dans la page (le
+  jeu la lit ; 800 ms réelles = 1 min de jeu) ; le changement de JOUR, lui, dépend du minuteur de
+  l'hôte, qu'un onglet masqué étrangle — pour voir un orage, passer `STORM_EVERY_N_DAYS` à 1 le temps
+  du test, et le REMETTRE à 7.
 - ⚠️ **AUCUN BANC NE REGARDE UNE FENÊTRE COMPLÈTE DE VALLEY TOWN.** `render-mairie` (439) et
   `render-beffroi` (444) **appellent** les sols au lieu de les repeindre, donc ils jugent ce que
   le jeu dessine vraiment ; **ce qui manque est ce qui reste dans la closure : les BÂTIMENTS de la
@@ -1295,106 +1317,22 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
   or. Le 442 lui a donné **deux inscriptions à lire** dans la tribune (la cloche et la plaque du
   facteur d'orgues) : c'est la première fois qu'on y monte pour autre chose que la vue, et ça n'a
   rien coûté — les deux se lisent sur des décors qui étaient déjà là.
-- ⚠️⚠️ **DETTE GRAPHIQUE (2026-09-13) : LE MAIRE DU BUREAU EST « IMMONDE ET INCOHÉRENT
-  ANATOMIQUEMENT »** (Guillaume, capture de l'audience, à corriger un autre jour).
-  `maireBureau.js`, vue 3D de `MaireScene.js`. Ce qui se voit sur la capture : les
-  épaules sont deux gros cylindres arrondis posés PLUS HAUT que la base du cou, d'où les
-  bras sortent comme des pinces de crabe croisées devant le buste ; les mains sont des
-  boîtes plus larges que les avant-bras, avec des manchettes blanches en cube ; la tête
-  est un pavé posé sans cou sur le col, visage peint à plat ; le buste est étroit sous
-  des bras énormes. ⚠️ **Les bancs étaient verts** (`render-maire` 86/86 : stature,
-  tête/carrure, mains à leur cible) — c'est la leçon du §4 sur les proportions, repayée :
-  aucun contrôle ne mesure où un bras s'ATTACHE ni la largeur d'une main contre son
-  avant-bras.
-  ⚠️ **CONFIRMÉ ET PRÉCISÉ EN JEU LE 2026-09-15** (audience jouée jusqu'au bout, trois
-  postures regardées de face/du bureau/de la pièce) : à cela s'ajoutent un buste qui
-  bascule EN UN SEUL BLOC rigide depuis la taille (aucune courbure de colonne, les trois
-  postures pivotent pareil) et un fauteuil qui ne suit pas le corps quand le maire se
-  penche (il reste droit derrière elle). Le DÉCOR, lui, tient déjà en silhouette mais pas
-  en gros plan : le buste de la pièce est une sphère blanche sur un socle (un bonhomme de
-  neige, pas un visage), le globe une sphère bleue unie sans continents (un ballon), et la
-  ville par la fenêtre un aplat gris sans profondeur.
-
-  **PROMPT GEMINI SOUMIS PAR GUILLAUME LE 2026-09-15, RÉSULTAT CONVAINCANT** (deux planches :
-  proportions de face/trois-quarts, puis quatre expressions — joie/colère/tristesse/réflexion).
-  ⚠️ **Elles font autorité sur l'INTENTION, jamais sur l'échelle** (rappel de Guillaume, §12) :
-  le maire y paraît bien plus grand que son bureau, une dérive normale d'une image générée —
-  aucune longueur du corps n'a été touchée, seule la PROFONDEUR du cou a bougé.
-
-  **PREMIÈRE CORRECTION FAITE ET VÉRIFIÉE LE 2026-09-15 : LE COU, ENFIN VISIBLE.** La cause
-  exacte, trouvée en découpant `tools/out/maire-postures.png` à la loupe (`python3`/PIL,
-  jamais à l'œil sur le rendu entier) : le cylindre du cou était posé à z≈0,004 (quasi sur la
-  colonne), alors que le menton — poussé en avant par un crâne centré SUR la colonne, donc à
-  moitié devant elle — ressort à 8-9 cm devant le torse une fois l'échelle de la tête
-  appliquée (`headK[2]`). Le cou n'avançait donc jamais jusque sous le menton : zéro pixel de
-  peau visible entre la mâchoire et le col, sur les sept postures ET les cinq maires, et
-  **aucun banc ne peut le voir** (`verify-maire` compare des cibles de main, jamais un
-  recouvrement de silhouette — même famille que le trapèze du 2026-09-14). Corrigé en avançant
-  le groupe du cou (`maireBureau.js`, recherche « LE COU ET LA TÊTE »), vérifié par
-  falsification (0,004 → aucun changement visible ; 0,150 → cou qui flotte devant le col,
-  détaché ; 0,100 → cou lisible et rattaché, sur les cinq maires ET la scène du bureau
-  complète, `render-maire` toujours 86/86 donc aucune cible de main ni stature déplacée).
-  ✅ **REVÉRIFIÉ DANS LE VRAI JEU LE 2026-09-15** (capture du canevas WebGL en direct,
-  audience jouée jusqu'à Ninon Delaunay, pas seulement le banc) : le cou se voit bien à
-  l'écran, pas seulement dans `tools/render-maire.mjs`.
-
-  **LE MÊME DÉFAUT, TROUVÉ ET CORRIGÉ SUR LE BUSTE DE LA PIÈCE** : la sphère de tête du
-  buste marbre (§ « LE MUR DE GAUCHE ») s'enfonçait de 5,5 cm dans le bloc des épaules —
-  exactement le défaut du cou, en plus petit. Un cylindre de cou ajouté, tête remontée
-  d'autant ; sans risque pour le rig du maire, c'est un objet de décor isolé. Vérifié en
-  image (`tools/out/maire-bureau.png`).
-
-  **RÉEXAMEN DU RESTE DE LA LISTE, EN GROS PLAN, AVANT D'Y TOUCHER — ET LA MOITIÉ N'AVAIT
-  PLUS BESOIN DE RIEN.** Trois choses que la critique du matin avait reprises telles quelles
-  depuis l'ancien texte de ce fichier se sont révélées déjà corrigées par un travail
-  antérieur (les commentaires « CORRIGÉE LE 2026-09-14 » déjà dans le code, jamais vérifiés
-  à l'œil avant aujourd'hui) : les mains ne sont plus des pagaies, les manchettes ne sont
-  plus des cubes, le coude a un arrondi visible bras tendu. Le globe a bel et bien des
-  continents (trois sphères vertes) et un anneau — pas un ballon uni. ⚠️ **La leçon : une
-  critique écrite avant d'avoir zoomé peut recopier un défaut qui n'existe plus.** Et le
-  fauteuil qui « ne suit pas le corps » n'est pas un défaut : un dossier de chaise ne bouge
-  pas quand on se penche, c'est la physique, pas un bug — le vérifier en gros plan (`lean`)
-  montre un écart tout à fait normal entre le dos et le dossier.
-
-  **CE QUI RESTE VRAIMENT, ET POURQUOI ÇA N'A PAS ÉTÉ TOUCHÉ AUJOURD'HUI** : le buste (le
-  personnage, pas la statue) bascule encore en un seul bloc rigide depuis la taille, sans
-  courbure de colonne. ⚠️ **Écarté volontairement, pas oublié** : `torso` est UN SEUL groupe
-  qui porte tout le haut du corps (poitrine, épaules, bras, cou, tête), et `solveArm`
-  résout les deux bras à partir de sa matrice monde (§8bis) — le séparer en deux pivots
-  (bas du dos / haut du dos) toucherait exactement la chaîne que quatre correctifs
-  précédents (2026-08-31, 2026-09-02) ont payée cher à stabiliser, pour un gain que je ne
-  peux même pas cibler précisément : les deux planches Gemini ne montrent que des poses
-  statiques neutres, aucune référence de penché dynamique à viser. Un rig à toucher un autre
-  jour, avec une vraie mesure de ce qu'on cherche à obtenir — pas à l'aveugle.
-
-  Les expressions (`FACE`, huit états à six paramètres continus) couvrent déjà largement les
-  quatre de la planche Gemini (joie≈warm/won, colère≈angry, tristesse≈weary, réflexion≈doubt).
-  ✅ **L'ÉPAISSEUR DES SOURCILS, CORRIGÉE LE 2026-09-15** (0,019 → 0,027 m de hauteur, seule la
-  géométrie bouge) : le trait est net sur les huit visages, `render-maire` toujours 86/86.
-  ✅ **UN SURSAUT ÉMOTIONNEL À UNE RÉPONSE "ideal" ET UN AUDIT DE SÉCURITÉ DES TRANSITIONS DE
-  POSE, AJOUTÉS LE 2026-09-15** — détail, méthode et ce qui reste (le buste toujours rigide)
-  dans le bloc ⏭️ REPRISE en tête de fichier ; rien à recopier ici, une seule histoire du jour
-  ne doit vivre qu'à un seul endroit (§14.2).
-- ✅ **L'ÉGLISE A SON SPRITE MAJESTUEUX (2026-09-20) — LE TRIBUNAL, LUI, ATTEND ENCORE.** Dette
-  ouverte au 2026-09-03 (« le tribunal et l'église méritent un sprite plus majestueux »). Pipeline C,
-  deuxième usage (§9) : `refs/eglise-nouvelle.jpg`, importé par `tools/build-eglise-sprite.mjs` en
-  `public/town/eglise-day-z<N>.png`/`eglise-glow-z<N>.png` (un par cran depuis le 2026-09-25), dessiné par `drawChurchBitmap` (FermeGame.js).
-  ⚠️ **LEÇON RETENUE, À RÉUTILISER POUR LE TRIBUNAL** : le premier prompt (fidèle à l'ancien sprite,
-  clocher-à-gauche imposé) a produit une église correcte mais pas impressionnante ; Guillaume a
-  corrigé le tir lui-même — « l'hôtel de ville est réussi car il est très différent de l'original »
-  — et le second prompt, sans référence à l'ancien sprite, sans contrainte de composition (seules
-  restent : vue de face sur damier, teinte distincte des deux autres monuments, lisible comme une
-  église), a rendu une cathédrale à trois flèches nettement supérieure. **Le tribunal doit suivre la
-  même méthode : pas de prompt qui décrit sa colonnade actuelle, un thème et une ambition, la
-  liberté sur le reste.** `TOWN_CHURCH` est passée de 8 à 12 cases (192 px, alignée sur
-  `TOWN_HALL`/`TOWN_COURT`) ; un nouvel arrêt de téléport dev existe désormais (« l'église (parvis) »)
-  pour juger un sprite de monument sans traverser la ville — jusqu'ici seule la mairie l'avait.
-  ⚠️ **PIÈGE PAYÉ EN LE CONSTRUISANT, UTILE AU PROCHAIN IMPORT** : à la distance où la caméra se pose
-  devant le parvis, le zoom de monument (mesuré jusqu'à ×2,2) laisse le sommet d'une flèche haute
-  AU-DESSUS du bord du canevas — vérifié en jeu, jamais visible sur le PNG seul ni sur une capture
-  prise trop tôt après un téléport (le zoom continue de bouger 2 à 3 s). Tout ce qui doit rester
-  visible en permanence (ici : les pigeons qui tournent autour du clocher, demande du jour) doit être
-  ancré plus bas que la pointe du dessin, pas au pixel le plus haut du PNG.
+- ⚠️ **DETTE GRAPHIQUE : LE MAIRE DU BUREAU** (`maireBureau.js`, vue 3D de `MaireScene.js` ;
+  Guillaume, 2026-09-13 : « immonde et incohérent anatomiquement »). Repris et revu en jeu le
+  2026-09-15 : le cou (il n'avançait pas jusque sous le menton), le buste de la pièce, les sourcils, un
+  sursaut à une réponse « ideal » — le détail vit dans les commentaires de `maireBureau.js`. **Reste** :
+  le buste du personnage bascule en UN bloc depuis la taille. ⚠️ Écarté exprès : `torso` porte toute
+  la chaîne que `solveArm` lit (§8bis du fichier), payée cher à stabiliser ; à reprendre avec une vraie
+  référence de penché, pas à l'aveugle. Les planches Gemini du 2026-09-15 font autorité sur
+  l'INTENTION, jamais sur l'échelle. ⚠️ **Leçon : une critique écrite avant d'avoir zoomé peut
+  recopier un défaut qui n'existe plus** (trois des griefs du matin étaient déjà corrigés).
+- ✅ **LES TROIS MONUMENTS ONT LEUR SPRITE PEINT** (église 2026-09-20, tribunal ensuite ; pipeline C,
+  §9). ⚠️ **LA MÉTHODE DE PROMPT QUI A MARCHÉ, POUR LE PROCHAIN BÂTIMENT** : pas de prompt qui décrit
+  l'ancien sprite ni sa composition — un thème, une ambition, une teinte distincte des voisins, vue de
+  face sur damier ; Guillaume : « l'hôtel de ville est réussi car il est très différent de
+  l'original ». ⚠️ **Piège d'import** : au zoom de monument, le sommet d'un dessin haut sort du canevas
+  (vu en jeu, jamais sur le PNG seul, et le zoom bouge encore 2 à 3 s après un téléport) — ce qui doit
+  rester visible s'ancre sous la pointe du dessin.
 - **Valley Town : qui HABITE la ville à demeure ?** Les résidents ne font qu'y passer. Le 439 y
   pose **Léonie Sarrazin** à l'accueil de la mairie — mais c'est un décor qui parle, pas une
   habitante : elle ne bouge pas, et `res.zone` ne connaît toujours que « farm » et « town ».

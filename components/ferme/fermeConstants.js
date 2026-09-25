@@ -1212,6 +1212,12 @@ export const FENCE_COST = 15; // prix d'une section de clôture à la boutique (
 // par Guillaume), à ajuster librement.
 export const LAMP_COST = 5000;         // prix d'un lampadaire à la boutique (or)
 export const LAMP_LIGHT_RADIUS = 4.5;  // rayon éclairé autour du lampadaire, en tuiles
+/* 2026-09-25 (phase 3, la lumière — lumiere.js) : les petites sources de la
+   ville. Une lanterne suspendue et une lampe à huile éclairent un coin de
+   table, pas une rue ; la fenêtre allumée pose une flaque devant la façade. */
+export const TOWN_HANGLAMP_LIGHT_RADIUS = 2.6;
+export const TOWN_OILLAMP_LIGHT_RADIUS = 2.0;
+export const TOWN_WINDOW_LIGHT_RADIUS = 1.9;
 
 // --- Épouvantail (chantier 2026-07, demandé par Guillaume) ---
 // Achetable à la boutique (payé en or, même principe que le lampadaire) puis
@@ -1668,10 +1674,20 @@ export const DUSK_START_MIN = 17 * 60, DUSK_MID_MIN = 20 * 60, DEEP_END_MIN = 23
 // de chat dédié au lever du jour (L.chatStormyDay), en plus du message
 // "Jour N" habituel.
 export const STORM_EVERY_N_DAYS = 7;      // 1 jour orageux tous les N jours (0 = désactivé)
-export const STORM_TINT_ALPHA = 0.28;     // opacité du voile gris (composé AVANT le voile nocturne, s'additionne la nuit)
-export const STORM_RAIN_COUNT = 70;       // nombre de traits de pluie affichés simultanément
-export const STORM_RAIN_SPEED = 420;      // vitesse de chute, px/seconde (écran, indépendant du zoom)
-export const STORM_RAIN_LEN = 14;         // longueur d'un trait de pluie, px
+/* ⚠️ 2026-09-25 (phase 3 de la feuille de route graphique) — LA PLUIE PASSE À
+   L'ÉCHELLE DU PIXEL D'ART, ET LE VOILE GRIS DISPARAÎT. `STORM_TINT_ALPHA`
+   (un aplat gris par-dessus tout, lampes comprises) est remplacé par un ciel
+   assombri (`STORM_SKY`, lumiere.js) : une lampe reste vive sous l'orage. Les
+   gouttes sont des traits de pixels d'art (1 de large, `STORM_RAIN_LEN` de
+   long) et leur nombre suit la SURFACE vue en pixels d'art — une goutte pour
+   `STORM_RAIN_ART_AREA` — plafonné à `STORM_RAIN_MAX` (au cran le plus
+   éloigné d'un grand écran, la surface vue est énorme). */
+export const STORM_RAIN_ART_AREA = 600;   // px d'art² par goutte (900 au premier jet : clairsemé, vu en jeu)
+export const STORM_RAIN_MAX = 380;        // plafond de gouttes simultanées
+export const STORM_RAIN_SPEED = 150;      // vitesse de chute, px d'ART par seconde
+export const STORM_RAIN_LEN = 5;          // longueur d'une goutte, px d'art
+export const STORM_SPLASH_RATE = 5;       // éclaboussures par seconde et par 10 000 px d'art²
+export const STORM_SPLASH_MS = 210;       // durée d'une éclaboussure (trois images)
 
 // --- Loups (chantier 2026-07, demande Guillaume : "loups assez détaillés,
 // rive droite de la rivière, ponts non fermés, torche pour les éloigner") ---
@@ -5047,17 +5063,40 @@ export const TOWN_COURT_SPRITE = {
 export const TOWN_BITMAPS = {
   church:     { grid: "screen", day: "/town/eglise-day", glow: "/town/eglise-glow", zooms: [1, 2, 3, 4, 5],
                 disp: 192, dispH: 183, grow: 1.1, smooth: false,
+                lights: [
+                  { x: 318 / 634, y: 560 / 604, ground: 598 / 604, r: 2.4, c: "door", k: 0.6 },
+                  { x: 212 / 634, y: 520 / 604, ground: 598 / 604, r: 1.9, c: "window", k: 0.55 },
+                  { x: 426 / 634, y: 520 / 604, ground: 598 / 604, r: 1.9, c: "window", k: 0.55 },
+                ],
                 ref: "refs/eglise-nouvelle.jpg", build: "tools/build-eglise-sprite.mjs" },
   townhall:   { grid: "screen", day: "/town/townhall-day", glow: "/town/townhall-glow", zooms: [1, 2, 3, 4, 5],
                 disp: 192, dispH: 173, grow: 1.1, smooth: false,
+                lights: [
+                  { x: 241 / 634, y: 424 / 571, ground: 500 / 571, r: 2.6, head: 2.6 },
+                  { x: 388 / 634, y: 424 / 571, ground: 500 / 571, r: 2.6, head: 2.6 },
+                  { x: 133 / 634, y: 420 / 571, ground: 500 / 571, r: 1.9, c: "window", k: 0.55 },
+                  { x: 491 / 634, y: 420 / 571, ground: 500 / 571, r: 1.9, c: "window", k: 0.55 },
+                ],
                 ref: "refs/hdv.jpg", build: "tools/build-townhall-sprite.mjs" },
   /* Le tribunal garde `TOWN_COURT_SPRITE` comme GRILLE DE REPÈRES (384 × 356) :
      `courtSpriteX` en dérive la COLLISION, et les pigeons, l'embase et le pied
      de la volée y sont mesurés. Les images par cran n'en sont que des
      agrandissements — `dispH` est donc `ih × disp / iw`, jamais une mesure. */
-  courthouse: { grid: "screen", day: "/town/courthouse-day", glow: null, zooms: [1, 2, 3, 4, 5],
+  /* ⚠️ 2026-09-25 (phase 3) : le tribunal a enfin son calque de nuit, et les
+     deux autres un calque complet — `tools/build-monument-glow.mjs` les tire
+     des images de JOUR versionnées (voir son en-tête). `lights` : les lampes
+     et la porte PEINTES, en fractions de l'image — `x`, `y` le verre,
+     `ground` le sol sous lui (où se pose la flaque), `r` en cases, `head` le
+     rayon du verre en px de la grille d'affichage. Relevées sur la peinture au
+     cran 3, comme les perchoirs des pigeons. */
+  courthouse: { grid: "screen", day: "/town/courthouse-day", glow: "/town/courthouse-glow", zooms: [1, 2, 3, 4, 5],
                 disp: TOWN_COURT_SPRITE.disp, dispH: TOWN_COURT_SPRITE.ih * TOWN_COURT_SPRITE.disp / TOWN_COURT_SPRITE.iw,
                 grow: TOWN_COURT_SPRITE.grow, smooth: false,
+                lights: [
+                  { x: 202 / 845, y: 488 / 783, ground: 552 / 783, r: 3.2, head: 2.6 },
+                  { x: 645 / 845, y: 488 / 783, ground: 552 / 783, r: 3.2, head: 2.6 },
+                  { x: 423 / 845, y: 520 / 783, ground: 556 / 783, r: 2.2, c: "door", k: 0.7 },
+                ],
                 ref: "refs/tributribu.jpg", build: "tools/build-tribunal-sprite.mjs" },
   /* Les herbes hautes (Gemini, 2026-09-20) : une famille de PNG tirée par
      `townTallGrassVariant` (fermeArt.js), dessinés À LEUR TAILLE NATIVE — donc
@@ -6177,8 +6216,11 @@ export const SEASON_EPOCH = Date.UTC(2026, 0, 5); // lundi 5 janvier 2026, 00:00
 // Hiver : il neige (flocons plein écran, même mécanique que la pluie d'orage)
 // et les léopards des neiges REMPLACENT les loups (même comportement, sprite
 // reteinté blanc à rosettes, voir snowLeopardSprite/fermeArt.js).
-export const SNOW_COUNT = 90;        // flocons affichés simultanément
-export const SNOW_SPEED = 60;        // vitesse de chute, px/s écran
+// ⚠️ 2026-09-25 (phase 3) : un flocon est UN pixel d'art, et leur nombre suit
+// la surface vue, comme la pluie (voir `STORM_RAIN_ART_AREA`).
+export const SNOW_ART_AREA = 520;    // px d'art² par flocon
+export const SNOW_MAX = 380;         // plafond de flocons simultanés
+export const SNOW_SPEED = 20;        // vitesse de chute, px d'ART par seconde
 // Automne : les visiteurs veulent plus de citrouilles (biais de tirage de la
 // culture demandée, voir classifyBuyOffer) ; feuillages orange (variantes de
 // sprites, voir fermeArt.js).

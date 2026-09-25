@@ -63,6 +63,7 @@ import { buildSprites, charPalette, drawBridgeTile, drawBridgeOverlay, drawCandy
 const STAR_LEAN_MEM = new Map();
 import { loadBitmap, peekBitmap } from "./bitmapAssets";
 import * as PF from "./pixelFont";
+import * as LUM from "./lumiere";   // 2026-09-25 (phase 3) — la lumière : ciel, lampes, fenêtres, ombres
 import { fstr } from "./fermeStrings";
 // ZIP 441 — l'orgue de l'église. Le lecteur de fichiers existe depuis longtemps
 // (bruit de caisse, de porte, de pioche) : on ne monte pas un second pipeline
@@ -130,12 +131,18 @@ function screenBitmapPick(SB, zoom) {
   return null;
 }
 /* `cxW` : l'abscisse du CENTRE de l'image, `byW` : l'ordonnée de son BORD BAS,
-   dans le repère courant (celui du `save()` du grossissement). */
+   dans le repère courant (celui du `save()` du grossissement).
+   ⚠️ 2026-09-25 (phase 3) : `nightA` est la force du calque de nuit (0 à 1),
+   et la fonction REND ce qu'elle a posé à l'écran — l'image, son calque de
+   nuit et leur rectangle en px écran — pour que le monument déclare sa
+   silhouette et ses vitres à la lumière (`lightBuilding`, `lightScreenGlow`)
+   sans recalculer une position qu'elle seule connaît (le cran choisi, les
+   arrondis). `null` si rien n'est chargé. */
 function drawScreenExactBitmap(ctx, SB, cxW, byW, nightA) {
   const M = ctx.getTransform();
   const zoom = M.a / SB.grow;
   const pick = screenBitmapPick(SB, zoom);
-  if (!pick) return false;
+  if (!pick) return null;
   const sx = M.a * cxW + M.c * byW + M.e, sy = M.b * cxW + M.d * byW + M.f;
   const { mip, img, exact } = pick;
   // Taille d'écran EXACTE si le cran est le bon ; sinon la taille réelle, flottante.
@@ -147,12 +154,13 @@ function drawScreenExactBitmap(ctx, SB, cxW, byW, nightA) {
   ctx.imageSmoothingEnabled = !exact;   // transitoire seulement — voir la note
   if (!exact) ctx.imageSmoothingQuality = "high";
   ctx.drawImage(img, left, top, dw, dh);
+  let glowImg = null;
   if (mip.glow && nightA > 0.01) {
-    const g = loadBitmap(mip.glow);
-    if (g) { ctx.globalAlpha = nightA; ctx.drawImage(g, left, top, dw, dh); }
+    glowImg = loadBitmap(mip.glow);
+    if (glowImg) { ctx.globalAlpha = nightA; ctx.drawImage(glowImg, left, top, dw, dh); }
   }
   ctx.restore(); // rend la transformation, l'alpha ET le lissage (false) d'avant
-  return true;
+  return { img, glowImg, left, top, dw, dh };
 }
 // Lu UNE fois, à la création du ref qui le porte (voir manualZoomRef) — même
 // convention que `ferme_lastcode` (essai/catch, préférence par machine).
@@ -1032,17 +1040,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const gpsRef = useRef(null);            // { zone, x, y } — jamais diffusé
   const runDebtRef = useRef(0);           // zip 429 : fraction de point d'énergie non encore dépensée (voir isRunningNow)
   const [gpsMark, setGpsMark] = useState(null);   // le même, pour que la carte et le HUD se redessinent
-  // Canvas hors-écran dédié à l'overlay nocturne (correctif chantier
-  // 2026-07, voir nightAlpha/lampsInView) : le voile sombre + les halos
-  // "destination-out" des lampadaires sont composés ICI, séparément du
-  // canvas principal, puis le résultat est plaqué par-dessus en une seule
-  // fois (drawImage, composite normal). Sans ce détour, appliquer
-  // "destination-out" directement sur le canvas principal n'aurait pas
-  // seulement percé le voile sombre : ça aurait aussi effacé le terrain/les
-  // sprites déjà dessinés dessous dans le rayon du lampadaire, laissant un
-  // trou transparent (fond de la page visible) plutôt qu'un cercle éclairé
-  // — c'était la cause du bug "les lampadaires restent éteints la nuit".
-  const nightCanvasRef = useRef(null);
+  /* 2026-09-25 (phase 3) — LA LUMIÈRE REMPLACE LE VOILE. L'ancien canevas
+     hors-écran du voile (`nightCanvasRef`) est supprimé : le rendu de
+     `lumiere.js` tient ses trois canevas lui-même, créés une fois. `lightFrameRef` porte ce que la scène
+     DÉCLARE pendant sa passe de dessin (emprises des bâtiments, calques de
+     nuit) : ce sont les fermetures de dessin qui connaissent la position
+     exacte d'un bâtiment à l'écran — altitude, grossissement, cran d'image —,
+     elles la publient au lieu qu'on la recalcule à côté (§8). */
+  const lightRendererRef = useRef(null);
+  const lightFrameRef = useRef(null);
+  const rainSplashRef = useRef([]);
   // Zip 302 (demande Guillaume) : montgolfière — position MONDE (en tuiles,
   // même unité que lampsInView) du brûleur, remplie par drawBalloon() à
   // chaque frame où le business tourne, lue par le voile de nuit un peu plus
@@ -16523,26 +16530,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // mini-jauges bois/pierre étaient ici. Partis avec la mission d'équipe.
       // Le marqueur 🛖 de la grange au niveau 0 (juste au-dessus) utilise la
       // même oscillation et la CONSERVE : la grange, elle, reste.
-      const lampsInView = []; // positions des lampadaires visibles, pour percer l'overlay nocturne
+      const lampsInView = []; // les sources de lumière de l'image (en cases), pour `drawLight`
+      const lampHeads = [];   // 2026-09-25 (phase 3) : les verres allumés, en px monde
       // Torches portées par les fermiers (chantier 2026-07) : même mécanique
       // de halo que les lampadaires, rayon plus modeste (C.TORCH_LIGHT_RADIUS),
-      // et qui SUIT le porteur au lieu d'être fixe.
-      if (torchOnRef.current) lampsInView.push({ x: m.x + 0.5, y: m.y + 0.5, r: C.TORCH_LIGHT_RADIUS });
-      for (const p of playersRef.current.values()) if (p.torch) lampsInView.push({ x: p.x + 0.5, y: p.y + 0.5, r: C.TORCH_LIGHT_RADIUS });
-      /* ⚠️ 2026-09-02 — L'HÔTEL DE VILLE EN PNG (drawTownHallBitmap, plus bas)
-         dessine ses fenêtres/lanternes allumées AVANT que le voile de nuit ne
-         soit composé — donc sans un point de lumière ICI, `drawNightVeil`
-         écrase cette lueur dans le même noir que le reste (mesuré : chaleur
-         de couleur ~7 sur 175 possibles, invisible à l'écran). Un lampadaire
-         perce le voile parce qu'il s'enregistre ici, AVANT l'appel à
-         `drawNightVeil` (16369 ci-dessous) — un bâtiment lumineux a besoin de
-         la même déclaration. Deux points plutôt qu'un : l'aile gauche et
-         l'aile droite du bâtiment (12 cases de large), pour que le halo
-         couvre toute la façade sans laisser le centre retomber dans le noir. */
-      if (nightAlpha() > 0.05) {
-        lampsInView.push({ x: C.TOWN_HALL.x + C.TOWN_HALL.w * 0.28, y: C.TOWN_HALL.y + 1, r: 5 });
-        lampsInView.push({ x: C.TOWN_HALL.x + C.TOWN_HALL.w * 0.72, y: C.TOWN_HALL.y + 1, r: 5 });
-      }
+      // et qui SUIT le porteur au lieu d'être fixe. Depuis la phase 3, elle
+      // vacille (`torchFlicker`) et sa lumière est plus orangée qu'un réverbère.
+      if (torchOnRef.current) lampsInView.push({ x: m.x + 0.5, y: m.y + 0.5, r: C.TORCH_LIGHT_RADIUS, c: "torch", k: torchFlicker(1) });
+      for (const p of playersRef.current.values()) if (p.torch) lampsInView.push({ x: p.x + 0.5, y: p.y + 0.5, r: C.TORCH_LIGHT_RADIUS, c: "torch", k: torchFlicker(String(p.id).length * 3.7) });
+      /* ⚠️⚠️ 2026-09-25 (phase 3) — DEUX HALOS FANTÔMES SUPPRIMÉS D'ICI. Le
+         2026-09-02 avait posé, dans la liste des lumières de la FERME, deux
+         points calés sur `C.TOWN_HALL` — des coordonnées de la VILLE — pour
+         que la lueur de l'hôtel de ville traverse le voile. Mais la ville a sa
+         propre boucle : ces deux halos éclairaient chaque nuit un bout de pré
+         de la ferme, vers (90, 53) et (96, 53), et rien à Valley Town. C'est le
+         piège des deux cartes (§4 de CLAUDE.md), dans une liste de lumières.
+         La mairie déclare désormais son calque de nuit depuis SON dessin
+         (`lightScreenGlow`, drawTownHallBitmap). */
       for (let y = y0 - 1; y <= Math.min(w.h - 1, y1 + 2); y++) for (let x = x0 - 1; x <= Math.min(w.w - 1, x1 + 1); x++) {
         if (!inMap(x, y)) continue;
         const o = w.objects[idxOf(x, y)];
@@ -16552,10 +16556,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const readyAt = w.objHp.get(idxOf(x, y));
           const ready = E.buildReady(readyAt, epochNow);
           if (ready) {
-            lampsInView.push({ x: x + 0.5, y: y + 0.5 });
+            /* ⚠️ 2026-09-25 (phase 3) — LE MÊME PRÉDICAT ALLUME LE VERRE ET LA
+               LUMIÈRE (`LUM.lampLit`, échelonné par case) ; avant, le verre
+               suivait `nightAlpha() > 0.05` et le halo partait sans condition. */
+            const farmLampLit = LUM.lampLit(x, y, nightAlpha());
+            if (farmLampLit) {
+              lampsInView.push({ x: x + 0.5, y: y + 0.5 });
+              const gl = sprites.lampGlass && sprites.lampGlass.lamp;
+              if (gl) lampHeads.push({ x: x * T + gl.x, y: (y + 1) * T - 32 + gl.y, r: gl.r });
+            }
             draws.push({ y: (y + 1) * T, fn: () => {
               ctx.drawImage(sprites.lamp, x * T, (y + 1) * T - 32);
-              if (nightAlpha() > 0.05) {
+              if (farmLampLit) {
                 // Lanterne allumée : petit point lumineux sur la vitre, en plus
                 // du halo percé dans l'overlay nocturne (voir plus bas).
                 ctx.save(); ctx.globalAlpha = 0.9; ctx.fillStyle = "#ffe27a";
@@ -17846,29 +17858,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // fraîchement arrivé, sprite manquant, résident/atelier mal formé)
       // interrompait TOUTE la frame triée -> moitié basse de la ferme non
       // dessinée. La ferme étant la zone principale, ce filet manquait.
+      openLightFrame();   // 2026-09-25 (phase 3) : les dessins déclarent leurs bâtiments et leurs calques de nuit
       openNameTags();   // 2026-09-25 (phase 2) : les noms passent après tout le décor — voir queueNameTag
       for (const d of draws) { try { d.fn(); } catch (e) { console.error("[FERME] farm draw ignoré", e); } }
-      flushNameTags();
-      // Passe finale des bulles (voir déclaration de bubbleQueue plus haut) :
-      // toujours rendues APRÈS tout le reste de la scène (bâtiments compris),
-      // donc jamais recouvertes. On les trie aussi par y pour qu'une bulle
-      // plus basse à l'écran (personnage au premier plan) passe par-dessus
-      // celle d'un personnage plus en arrière-plan, comme avant ce correctif.
-      bubbleQueue.sort((a, b) => a.by - b.by);
-      /* ⚠️ ZIP 455 — LA MÊME FILE PORTE LES DEUX, ET C'EST CE QUI GARANTIT QU'UN
-         « ! » NE PASSE PAS SOUS UNE BULLE. Une seconde passe pour les signes se
-         serait ordonnée toute seule par rapport à la première, et l'ordre aurait
-         dépendu de l'endroit où on l'écrit — le genre de chose qui a l'air juste
-         chez celui qui la pose et faux chez l'autre. */
-      for (const bq of bubbleQueue) {
-        try {
-          if (bq.emote) spritesRef.current.drawEmoteBubble(ctx, bq.cx, bq.by, bq.emote.a);
-          else if (bq.work) spritesRef.current.drawWorkBubble(ctx, bq.cx, bq.by, bq.work.k, performance.now());   // zip 459
-          else if (bq.meter) spritesRef.current.drawCalmMeter(ctx, bq.cx, bq.by, bq.meter.k, bq.meter);
-          else { ctx.save(); ctx.globalAlpha *= bq.alpha === undefined ? 1 : bq.alpha; drawSpeechBubble(ctx, bq.cx, bq.by, bq.text, bq.major, bq.reveal); ctx.restore(); }
-        } catch (e) { console.error("[FERME] bulle ignorée", e); }
-      }
-
       const fx = fxRef.current;
       for (let i = fx.length - 1; i >= 0; i--) {
         const f = fx[i]; f.t += dt;
@@ -17888,6 +17880,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const bst = sharedRef.current?.station?.balloon;
         if (bst && bst.pilotRid != null) drawBalloon(bst, epochNow);
         else balloonGlowRef.current = null; // pas de business actif : rien à percer dans le voile de nuit
+      }
+
+      /* ⚠️ 2026-09-25 (phase 3) — LA LUMIÈRE PASSE ICI, JUSTE APRÈS TOUT CE QUI
+         APPARTIENT AU MONDE (le décor trié, les particules, la montgolfière),
+         et AVANT ce qui appartient à l'interface : les NOMS, les BULLES et le
+         fantôme de pose restent lisibles la nuit (ils passaient sous le voile —
+         l'audit du 2026-09-25 l'a relevé pour les noms). La montgolfière allume
+         sa propre lumière : son brûleur éclaire la toile. */
+      {
+        const bg = balloonGlowRef.current;
+        if (bg) lampsInView.push({ x: bg.x, y: bg.y, r: bg.radiusTiles * 1.6, c: "torch", k: 0.95 });
+        drawLight(lampsInView, lampHeads);
+      }
+      flushNameTags();
+      // Passe finale des bulles (voir déclaration de bubbleQueue plus haut) :
+      // toujours rendues APRÈS tout le reste de la scène (bâtiments compris),
+      // donc jamais recouvertes. On les trie aussi par y pour qu'une bulle
+      // plus basse à l'écran (personnage au premier plan) passe par-dessus
+      // celle d'un personnage plus en arrière-plan, comme avant ce correctif.
+      bubbleQueue.sort((a, b) => a.by - b.by);
+      /* ⚠️ ZIP 455 — LA MÊME FILE PORTE LES DEUX, ET C'EST CE QUI GARANTIT QU'UN
+         « ! » NE PASSE PAS SOUS UNE BULLE. Une seconde passe pour les signes se
+         serait ordonnée toute seule par rapport à la première, et l'ordre aurait
+         dépendu de l'endroit où on l'écrit — le genre de chose qui a l'air juste
+         chez celui qui la pose et faux chez l'autre. */
+      for (const bq of bubbleQueue) {
+        try {
+          if (bq.emote) spritesRef.current.drawEmoteBubble(ctx, bq.cx, bq.by, bq.emote.a);
+          else if (bq.work) spritesRef.current.drawWorkBubble(ctx, bq.cx, bq.by, bq.work.k, performance.now());   // zip 459
+          else if (bq.meter) spritesRef.current.drawCalmMeter(ctx, bq.cx, bq.by, bq.meter.k, bq.meter);
+          else { ctx.save(); ctx.globalAlpha *= bq.alpha === undefined ? 1 : bq.alpha; drawSpeechBubble(ctx, bq.cx, bq.by, bq.text, bq.major, bq.reveal); ctx.restore(); }
+        } catch (e) { console.error("[FERME] bulle ignorée", e); }
       }
 
       // Chantier "prévisualisation + validation avant pose" (2026-07, demande
@@ -17961,10 +17985,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          une zone gagne sa propre boucle de rendu, elle hérite de tout ce que la
          boucle commune faisait pour elle ».
          La parade n'est pas de recopier le bloc là-bas (ce serait deux nuits à
-         tenir d'accord), c'est de le SORTIR : `drawNightVeil` prend la caméra,
-         l'échelle et ses sources de lumière ; `drawWeatherVeil` ne prend rien du
-         tout, puisqu'il travaille en espace écran. */
-      drawNightVeil(cam, curZoom(), lampsInView, balloonGlowRef.current);
+         tenir d'accord), c'est de le SORTIR. ⚠️ 2026-09-25 (phase 3) : le voile
+         est devenu `drawLight` (plus haut, avant les noms), et `drawWeatherVeil`
+         lit maintenant la transformation de la caméra — la pluie se cale sur le
+         pixel d'art du monde. */
       drawWeatherVeil(dt);
       drawGpsMarker(cam, curZoom());   // zip 429 — après le voile : une boussole ne s'assombrit pas
       drawStarChevron(cam, curZoom()); // zip 445 — et le chevron de la quête, même règle
@@ -20833,6 +20857,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              de taille ne tient pas. */
           ctx.drawImage(img, b.x * T + (b.w * T - img.width) / 2, by - img.height);
           drawBuildingFooting(ctx, cx2, gy, img.width / 2);
+          /* 2026-09-25 (phase 3) : la boutique et le salon arrêtent la lumière.
+             Leurs vitrines restent éteintes la nuit — une boutique FERMÉE ;
+             leur calque de nuit naîtra avec leur redessin (phase 6). */
+          lightBuilding(b.x * T + (b.w * T - img.width) / 2, b.y * T, b.x * T + (b.w * T + img.width) / 2, gy, img,
+            b.x * T + (b.w * T - img.width) / 2, by - img.height, img.width, img.height);
           ctx.restore();
         });
       };
@@ -21076,7 +21105,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              (une image lissée à l'affichage), gardé pour l'histoire du SAVE
              unique du grossissement, qui reste vrai : le point d'ancrage passé
              ici est le centre de ce grossissement. */
-          drawScreenExactBitmap(ctx, SB, cx2, by, nightAlpha());
+          /* 2026-09-25 (phase 3) : le monument déclare sa silhouette, ses vitres
+             et sa porte à la lumière, depuis ce qu'il vient de poser à l'écran. */
+          lightMonument(b.x * T, b.y * T, (b.x + b.w) * T, by, drawScreenExactBitmap(ctx, SB, cx2, by, monumentLit()), SB);
           /* ⚠️ 2026-09-20 (retouche) — LE POINT DE COUTURE ENTRE LE BÂTIMENT
              PEINT ET LE DALLAGE PROCÉDURAL DU PARVIS. Guillaume : « le parvis
              doit pas être totalement dans un autre style ». Le dallage
@@ -21173,7 +21204,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.restore();
           // 2026-09-25 (phase 1) : 1 px d'image = 1 px d'écran, une image par
           // cran — voir `drawScreenExactBitmap` (haut du fichier).
-          drawScreenExactBitmap(ctx, SB, cx2, by, nightAlpha());
+          // 2026-09-25 (phase 3) : l'emprise s'arrête au pied du mur, pas au bas du perron.
+          lightMonument(b.x * T, b.y * T, (b.x + b.w) * T, (b.y + b.h - C.TOWN_HALL_STEP_ROWS) * T,
+            drawScreenExactBitmap(ctx, SB, cx2, by, monumentLit()), SB);
           // L'horloge : centre et rayon mesurés à la main sur le PNG (192 px
           // de large), voir tools/build-townhall-sprite.mjs pour l'origine
           // des mêmes nombres côté cadran repeint. ⚠️ 2026-09-25 : ces nombres
@@ -21297,7 +21330,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           /* 2026-09-25 (phase 1) : 1 px d'image = 1 px d'écran. L'ancrage est le
              BAS de l'image (`dy + dh`) au centre de l'emprise — pas `by` : le
              tribunal pose le pied de sa volée sur le parvis (voir `dy`). */
-          drawScreenExactBitmap(ctx, SB, cx2, dy + dh, 0);
+          /* 2026-09-25 (phase 3) : l'emprise est le CORPS mesuré (les ailes), du
+             fond de l'image au pied des ailes — la volée, devant, se traverse. */
+          lightMonument(cx2 - bodyW / 2, Math.min(b.y * T, footY - 4 * T), cx2 + bodyW / 2, footY,
+            drawScreenExactBitmap(ctx, SB, cx2, dy + dh, monumentLit()), SB);
           drawBuildingFooting(ctx, cx2, footY, bodyW / 2);
           /* 2026-09-22 — LES PIGEONS DU TRIBUNAL (demande de Guillaume, en jeu :
              hauteurs variables et cohérentes avec la taille des marches, pose
@@ -21491,6 +21527,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              appliqué à l'église, à la mairie et au tribunal. */
           ctx.drawImage(sprites.station, ts.x * T, tsBy - sprites.station.height);
           drawBuildingFooting(ctx, tcx, tsBy, sprites.station.width / 2);
+          // 2026-09-25 (phase 3) : la gare arrête la lumière (lumiere.js).
+          lightBuilding(ts.x * T, ts.y * T, ts.x * T + sprites.station.width, tsBy, sprites.station,
+            ts.x * T, tsBy - sprites.station.height, sprites.station.width, sprites.station.height);
         });
       }
 
@@ -21624,7 +21663,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          début du crépuscule — et elles s'éteignent dans l'ordre inverse à
          l'aube. Aucune n'est un état : deux joueurs voient les mêmes (§3). */
       const lampNa = nightAlpha();
-      const townLampLit = (pr) => lampNa > 0.02 + 0.03 * (((pr.x * 7 + pr.y * 13) >>> 0) % 5);
+      // 2026-09-25 (phase 3) : le seuil vit dans `LUM.lampLit`, que la lumière lit aussi.
+      const townLampLit = (pr) => LUM.lampLit(pr.x, pr.y, lampNa);
       for (const pr of (tw.props || [])) {
         if (pr.x < x0 - 2 || pr.x > x1 + 2 || pr.y < y0 - 3 || pr.y > yBot + 2) continue;
         if (pr.kind === "marketArch") { drawMarketArch(pr); continue; }
@@ -21934,6 +21974,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const sleepingOwnerIds = new Set();
       if (m.sleeping) sleepingOwnerIds.add(me.id);
       for (const p of playersRef.current.values()) if (p.sleeping && (p.zone || "farm") === "town") sleepingOwnerIds.add(p.id);
+      /* 2026-09-25 (phase 3) — LES FENÊTRES DES MAISONS, ET LA FLAQUE DE LUMIÈRE
+         QU'ELLES POSENT DEVANT ELLES. Décision de Guillaume : seules les maisons
+         HABITÉES (un fermier ou un résident) s'allument — une maison à vendre
+         reste noire, et la ville s'illumine à mesure qu'elle se peuple. L'heure
+         de chaque pièce est une pure fonction du temps et de la maison
+         (`LUM.windowLit`) ; un propriétaire qui dort a ses fenêtres noires. */
+      const townWinLights = [];
+      const winNa = nightAlpha(), winTmin = E.gameTimeMin(sharedRef.current.dayStartAt, Date.now());
+      const houseWall = sprites.townHouseWall;
       for (let hi = 0; hi < owners.length; hi++) {
         const hsn = owners[hi];
         // Style: owner's saved choice if any, else deterministic default.
@@ -21944,8 +21993,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // drawImage) — voir aussi le try/catch par-draw plus bas.
         const img = (sprites.townHouses && sprites.townHouses[styleIdx % C.TOWN_HOUSE_STYLES]) || (sprites.houses && sprites.houses[hi % sprites.houses.length]) || null;
         const bx = hsn.x * T, by = (hsn.y + C.TOWN_HOUSE_H) * T;
+        const houseE = elAt(hsn.x, hsn.y + C.TOWN_HOUSE_H - 1);
+        const litWins = [];
+        if (hsn.ownerId && winNa > 0) {
+          const asleep = sleepingOwnerIds.has(hsn.ownerId);
+          A.TOWN_HOUSE_WINDOWS.forEach(([wx0, wy0], wi) => {
+            if (!LUM.windowLit(hi, wi, winTmin, winNa, asleep)) return;
+            litWins.push([wx0, wy0]);
+            if (houseWall) townWinLights.push({
+              x: (bx + wx0 + A.HOUSE_WINDOW.w / 2) / T,
+              y: (by - 96 + houseWall.base) / T + 0.35 - houseE * EP / T,
+              r: C.TOWN_WINDOW_LIGHT_RADIUS, c: "window", k: 0.6,
+            });
+          });
+        }
         // 425 : deux parcelles sont sur la terrasse — elles suivent son altitude.
-        pushE(by, elAt(hsn.x, hsn.y + C.TOWN_HOUSE_H - 1), () => {
+        pushE(by, houseE, () => {
           if (img) {
             const hCx = bx + img.width / 2;
             // Zip 272 (demande Guillaume, screenshots à l'appui) : les
@@ -21959,6 +22022,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             drawBuildingShadowConnected(ctx, hCx, houseShadowGy, img.width / 2);
             ctx.drawImage(img, bx, by - 96);
             drawBuildingFooting(ctx, hCx, houseShadowGy, img.width / 2);
+            // 2026-09-25 (phase 3) : l'emprise du MUR (pas celle des six cases :
+            // le toit déborde, le mur non) et la silhouette, pour la lumière.
+            if (houseWall) lightBuilding(bx + houseWall.x0, hsn.y * T, bx + houseWall.x1, by - 96 + houseWall.base,
+              img, bx, by - 96, img.width, img.height);
+            const wg = sprites.townHouseWindowGlow;
+            if (wg) for (const [wx0, wy0] of litWins) {
+              ctx.drawImage(wg, bx + wx0, by - 96 + wy0);
+              lightGlow(wg, bx + wx0, by - 96 + wy0, wg.width, wg.height, 1);
+            }
           }
           const label = hsn.ownerName || L.townSaleSign;
           ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
@@ -22523,8 +22595,60 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // un joueur distant fraîchement arrivé, une image manquante), TOUS les
       // draws suivants (dont des maisons plus bas à l'écran) n'étaient plus
       // dessinés. On isole chaque draw : une frame ne peut plus être amputée.
+      openLightFrame();   // 2026-09-25 (phase 3) : les dessins déclarent leurs bâtiments, calques de nuit et lampes peintes
       openNameTags();   // 2026-09-25 (phase 2) : plus aucun lampadaire devant un nom — voir queueNameTag
       for (const d of draws) { try { d.fn(); } catch (e) { console.error("[FERME] town draw ignoré", e); } }
+      /* ⚠️ 2026-09-25 (phase 3) — LA LUMIÈRE PASSE ICI : après tout ce qui
+         appartient au monde (la boucle triée), avant les NOMS et les BULLES,
+         qui restent lisibles la nuit (ils passaient sous le voile). */
+      {
+        const lights = [], heads = [];
+        /* hors-zip — LA TORCHE PORTÉE SUIT AUSSI LA CASE EN HAUTEUR. Signalé
+           par Guillaume : « le rayon de la zone éclairée par la torche bug
+           quand il y a le dézoom ». Le halo d'un lampadaire est déjà corrigé de
+           `elev × TOWN_ELEV_PX` (note ci-dessous) depuis son écriture ; celui
+           du PORTEUR de la torche — soi-même ou un camarade — ne l'a jamais
+           été, alors que son sprite, lui, est dessiné plus haut sur toute case
+           élevée (`myE`/`pushE`, voir plus haut). Le halo restait donc posé au
+           sol tandis que le porteur montait avec la case, un écart qui grandit
+           avec l'altitude — invisible sur le plat de la rue, flagrant au pied
+           des marches d'un monument, c'est-à-dire très exactement là où le
+           dézoom de proximité (`TOWN_ZOOM_NEAR`) se déclenche : les deux
+           défauts ne se voient qu'au même endroit, ce qui les a fait passer
+           pour un seul. */
+        if (torchOnRef.current) lights.push({ x: m.x + 0.5, y: m.y + 0.5 - myE * EP / T, r: C.TORCH_LIGHT_RADIUS, c: "torch", k: torchFlicker(1) });
+        for (const p of playersRef.current.values()) {
+          if (p.torch && (p.zone || "farm") === "town")
+            lights.push({ x: p.x + 0.5, y: p.y + 0.5 - playerElevTown(tw, p) * EP / T, r: C.TORCH_LIGHT_RADIUS, c: "torch", k: torchFlicker(String(p.id).length * 3.7) });
+        }
+        /* Les trois lanternes de la ville. ⚠️ 2026-09-25 (phase 3) : le MÊME
+           prédicat que leur dessin (`LUM.lampLit`) — avant, tous les
+           lampadaires éclairaient dès la tombée du jour, verre éteint ou non ;
+           et les lanternes suspendues et les lampes à huile, allumées depuis la
+           phase 2, n'éclairaient rien. La flaque se pose SOUS le verre (une
+           lanterne suspendue pend à côté de son poteau), et le verre lui-même
+           est déclaré (`heads`) : c'est lui qui brille. */
+        const LAMP_KINDS = { lamp: ["plazaLamp", C.LAMP_LIGHT_RADIUS], hangLamp: ["townHangLamp", C.TOWN_HANGLAMP_LIGHT_RADIUS], oilLamp: ["townOilLamp", C.TOWN_OILLAMP_LIGHT_RADIUS] };
+        for (const pr of (tw.props || [])) {
+          const lk = LAMP_KINDS[pr.kind];
+          if (!lk) continue;
+          if (pr.x < x0 - 6 || pr.x > x1 + 6 || pr.y < y0 - 6 || pr.y > yBot + 6) continue;
+          if (!LUM.lampLit(pr.x, pr.y, lampNa)) continue;
+          /* ⚠️ LE HALO SUIT LA CASE EN HAUTEUR. Un lampadaire de la Haute-Ville
+             est DESSINÉ `elev × TOWN_ELEV_PX` plus haut ; un halo posé sur sa
+             coordonnée brute serait resté trente pixels sous son propre
+             réverbère, en pleine rue. C'est le même décalage que tout le reste
+             du rendu de la ville, et il ne s'applique pas tout seul ici parce
+             que le voile nocturne travaille en espace écran. */
+          const lift = elAt(pr.x, pr.y) * EP;
+          const img = sprites[lk[0]], gl = sprites.lampGlass && sprites.lampGlass[lk[0]];
+          const hx = img && gl ? pr.x * T + T / 2 - img.width / 2 + gl.x : (pr.x + 0.5) * T;
+          lights.push({ x: hx / T, y: pr.y + 0.5 - lift / T, r: lk[1] });
+          if (img && gl) heads.push({ x: hx, y: (pr.y + 1) * T - img.height + gl.y - lift, r: gl.r });
+        }
+        for (const wl of townWinLights) lights.push(wl);
+        drawLight(lights, heads);
+      }
       flushNameTags();
       // Zip 427 : la passe finale des bulles (voir queueTownBubble).
       townBubbles.sort((a, b) => a.by - b.by);
@@ -22582,47 +22706,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
       {
-        const lights = [];
-        /* hors-zip — LA TORCHE PORTÉE SUIT AUSSI LA CASE EN HAUTEUR. Signalé
-           par Guillaume : « le rayon de la zone éclairée par la torche bug
-           quand il y a le dézoom ». Le halo d'un lampadaire est déjà corrigé de
-           `elev × TOWN_ELEV_PX` (note ci-dessous) depuis son écriture ; celui
-           du PORTEUR de la torche — soi-même ou un camarade — ne l'a jamais
-           été, alors que son sprite, lui, est dessiné plus haut sur toute case
-           élevée (`myE`/`pushE`, voir plus haut). Le halo restait donc posé au
-           sol tandis que le porteur montait avec la case, un écart qui grandit
-           avec l'altitude — invisible sur le plat de la rue, flagrant au pied
-           des marches d'un monument, c'est-à-dire très exactement là où le
-           dézoom de proximité (`TOWN_ZOOM_NEAR`) se déclenche : les deux
-           défauts ne se voient qu'au même endroit, ce qui les a fait passer
-           pour un seul. */
-        if (torchOnRef.current) lights.push({ x: m.x + 0.5, y: m.y + 0.5 - myE * EP / T, r: C.TORCH_LIGHT_RADIUS });
-        for (const p of playersRef.current.values()) {
-          if (p.torch && (p.zone || "farm") === "town")
-            lights.push({ x: p.x + 0.5, y: p.y + 0.5 - playerElevTown(tw, p) * EP / T, r: C.TORCH_LIGHT_RADIUS });
-        }
-        for (const pr of (tw.props || [])) {
-          if (pr.kind !== "lamp") continue;
-          if (pr.x < x0 - 6 || pr.x > x1 + 6 || pr.y < y0 - 6 || pr.y > yBot + 6) continue;
-          /* ⚠️ LE HALO SUIT LA CASE EN HAUTEUR. Un lampadaire de la Haute-Ville
-             est DESSINÉ `elev × TOWN_ELEV_PX` plus haut ; un halo posé sur sa
-             coordonnée brute serait resté trente pixels sous son propre
-             réverbère, en pleine rue. C'est le même décalage que tout le reste
-             du rendu de la ville, et il ne s'applique pas tout seul ici parce
-             que le voile nocturne travaille en espace écran. */
-          lights.push({ x: pr.x + 0.5, y: pr.y + 0.5 - elAt(pr.x, pr.y) * EP / T });
-        }
         /* ⚠️ LA MONTGOLFIÈRE NE VOLE PAS AU-DESSUS DE LA VILLE : son halo est
            en coordonnées de FERME, l'y passer dessinerait une tache lumineuse
            à un point au hasard de Valley Town. C'est très exactement le piège
            des deux cartes (§4), et il se glisse jusque dans un éclairage.
-           ⚠️ ET LE CIEL EST POSÉ APRÈS LE CURSEUR DE VISÉE, PAS AVANT. Ces deux
-           fonctions remettent la transformation à l'identité (elles travaillent
-           en espace écran) : appelées plus haut, elles laissaient le liseré de
-           visée se dessiner ensuite à des coordonnées de MONDE dans un repère
-           d'ÉCRAN — un rectangle blanc dans un coin, sans rapport avec la case
-           visée. Rien n'aurait planté. */
-        drawNightVeil(cam, zm, lights, null);
+           ⚠️ ET LA MÉTÉO EST POSÉE APRÈS LE CURSEUR DE VISÉE, PAS AVANT. Le
+           voile de 429 remettait la transformation à l'identité : appelé plus
+           haut, il laissait le liseré de visée se dessiner ensuite à des
+           coordonnées de MONDE dans un repère d'ÉCRAN — un rectangle blanc dans
+           un coin. ⚠️ Depuis la phase 3, `drawLight` et `drawWeatherVeil` RENDENT
+           la transformation (save/restore), et la lumière passe AVANT les noms
+           et les bulles (plus haut, juste après la boucle de dessin). */
         drawWeatherVeil(dt);
         drawGpsMarker(cam, zm);   // zip 429
         drawStarChevron(cam, zm); // zip 445
@@ -25509,123 +25603,207 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     /* ══════════════════════════════════════════════════════════════════════
        ZIP 429 — LE CIEL, POUR TOUTES LES ZONES QUI EN ONT UN.
        ──────────────────────────────────────────────────────────────────────
-       ⚠️ CES DEUX FONCTIONS SONT LE MÊME CODE QU'AVANT, DÉPLACÉ — pas réécrit.
-       Elles étaient enfermées dans le rendu de la ferme ; la ville ne pouvait
-       donc ni faire nuit, ni pleuvoir, ni neiger. Le déplacement est la
-       correction : il n'y a toujours qu'UNE nuit et UNE météo dans le jeu.
+       ⚠️ Le voile et la météo étaient enfermés dans le rendu de la ferme ; la
+       ville ne pouvait donc ni faire nuit, ni pleuvoir, ni neiger. Les SORTIR
+       a été la correction : il n'y a toujours qu'UNE nuit et UNE météo dans le
+       jeu — et la phase 3 (2026-09-25) les a réécrites sans rompre ce contrat.
        ⚠️ L'INTÉRIEUR DU TRIBUNAL N'EN APPELLE AUCUNE, et c'est délibéré : il
        n'a pas de ciel. Une pluie qui tombe dans les archives du sous-sol serait
        la version météo du « bâtiment muet » du 426. */
-    function drawNightVeil(cam, zoom, lights, balloonGlow) {
-      const na = nightAlpha();
-      if (na <= 0) return;
-      // Correctif chantier 2026-07 ("les lampadaires restent éteints la
-      // nuit") : le voile sombre + les halos sont composés sur un canvas
-      // HORS-ÉCRAN dédié, PAS directement sur le canvas principal. Raison :
-      // "destination-out" efface les pixels sur lesquels il est appliqué ;
-      // utilisé directement, il n'aurait pas seulement percé le voile mais
-      // aussi le terrain et les sprites déjà dessinés dessous, laissant un
-      // trou transparent (fond de page visible) au lieu d'un cercle éclairé.
-      let nc = nightCanvasRef.current;
-      if (!nc) { nc = document.createElement("canvas"); nightCanvasRef.current = nc; }
-      if (nc.width !== canvas.width || nc.height !== canvas.height) { nc.width = canvas.width; nc.height = canvas.height; }
-      const nctx = nc.getContext("2d");
-      nctx.setTransform(1, 0, 0, 1, 0, 0);
-      nctx.globalCompositeOperation = "source-over";
-      nctx.clearRect(0, 0, nc.width, nc.height);
-      nctx.fillStyle = `rgba(8,10,30,${na})`;
-      nctx.fillRect(0, 0, nc.width, nc.height);
-      /* ⚠️ LE HALO EST EN PIXELS ÉCRAN, DONC IL DÉPEND DE L'ÉCHELLE — et c'est
-         pour ça que `zoom` est un ARGUMENT et non la constante `ZOOM`. Depuis
-         le dézoom des monuments (428), la ville ne dessine plus toujours à 3 :
-         un rayon calculé avec la constante aurait donné, près du tribunal, des
-         halos une fois et demie trop grands, glissant sur leur lampadaire à
-         mesure que la caméra recule. */
-      const pierce = (x, y, rTiles, soft) => {
-        const radiusPx = rTiles * T * zoom;
-        const sx = (x * T - cam.x) * zoom, sy = (y * T - cam.y) * zoom;
-        const grad = nctx.createRadialGradient(sx, sy, 0, sx, sy, radiusPx);
-        grad.addColorStop(0, `rgba(0,0,0,${na})`);
-        grad.addColorStop(0.7, `rgba(0,0,0,${na * soft})`);
-        grad.addColorStop(1, "rgba(0,0,0,0)");
-        nctx.fillStyle = grad;
-        nctx.beginPath(); nctx.arc(sx, sy, radiusPx, 0, Math.PI * 2); nctx.fill();
-      };
-      if (lights && lights.length) {
-        nctx.save();
-        nctx.globalCompositeOperation = "destination-out";
-        for (const lamp of lights) pierce(lamp.x, lamp.y, lamp.r || C.LAMP_LIGHT_RADIUS, 0.9);
-        nctx.restore();
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ 2026-09-25 (phase 3 de la feuille de route graphique) — LA LUMIÈRE.
+       ╚══════════════════════════════════════════════════════════════════════
+       Remplace `drawNightVeil` (429) : un voile `rgba(8,10,30)` percé de cercles
+       de plein jour. Le modèle et ses décisions sont en tête de `lumiere.js`.
+       Ici, seulement le branchement :
+       - la scène OUVRE un cadre (`openLightFrame`) avant sa boucle de dessin ;
+       - chaque bâtiment y DÉCLARE son emprise et sa silhouette, chaque calque
+         de nuit sa place, DEPUIS sa fermeture de dessin (`lightBuilding`,
+         `lightGlow`, `lightScreenGlow`) — c'est elle qui connaît la vraie
+         position à l'écran (altitude, grossissement, cran d'image) ;
+       - `drawLight` convertit tout en px monde et appelle le rendu.
+       ⚠️ TOUT S'ENREGISTRE EN PX ÉCRAN, avec la transformation du moment, puis
+       se ramène au repère de la caméra : c'est la même prise que les noms
+       (`queueNameTag`), et la seule qui survive à un `translate` d'altitude ou
+       à un `scale` de monument sans qu'on recopie leur calcul ici.
+       ⚠️ L'INTÉRIEUR DU TRIBUNAL N'EN APPELLE AUCUNE, toujours : il n'a pas de
+       ciel (429). */
+    function openLightFrame() { lightFrameRef.current = { occluders: [], glows: [], screenGlows: [], lights: [], heads: [] }; }
+    const scrRect = (x, y, w, h) => {
+      const M = ctx.getTransform();
+      return { sx: M.a * x + M.e, sy: M.d * y + M.f, sw: M.a * w, sh: M.d * h };
+    };
+    /* Une emprise au sol (x0,y0)-(x1,y1) et la silhouette qui la surmonte
+       (image, et son rectangle de dessin), dans le repère COURANT du contexte.
+       `maskScreen` : la silhouette est déjà en px écran (monuments à 1:1). */
+    function lightBuilding(x0, y0, x1, y1, img, ix, iy, iw, ih, maskScreen) {
+      const lf = lightFrameRef.current; if (!lf) return;
+      const f = scrRect(x0, y0, x1 - x0, y1 - y0);
+      const m = !img ? null : maskScreen ? { img, sx: ix, sy: iy, sw: iw, sh: ih } : { img, ...scrRect(ix, iy, iw, ih) };
+      lf.occluders.push({ f, m });
+    }
+    /* Un calque de nuit à la grille de l'art (une fenêtre de maison) : ajouté
+       au TAMPON de lumière, pour que la scène ne l'assombrisse pas. */
+    function lightGlow(img, x, y, w, h, k) {
+      const lf = lightFrameRef.current; if (!lf || !(k > 0.01)) return;
+      lf.glows.push({ img, k, ...scrRect(x, y, w, h) });
+    }
+    /* Un calque de nuit à 1 px d'image = 1 px d'écran (monuments, phase 1). */
+    function lightScreenGlow(img, sx, sy, sw, sh, k) {
+      const lf = lightFrameRef.current; if (!lf || !(k > 0.01)) return;
+      lf.screenGlows.push({ img, sx, sy, sw, sh, k });
+    }
+    /* Une source déclarée depuis une fermeture de dessin, en px ÉCRAN : `sx, sy`
+       le point au sol, `r` en cases ; `head` (facultatif) : le verre allumé,
+       `{ sx, sy, rs, k }`, tout en px écran (rayon compris). */
+    function lightScreenSource(sx, sy, r, c, k, head) {
+      const lf = lightFrameRef.current; if (!lf) return;
+      lf.lights.push({ sx, sy, r, c, k });
+      if (head) lf.heads.push(head);
+    }
+    /* La force des vitraux et des fenêtres des monuments : allumés tout à fait
+       dès que la pénombre atteint 0,3 (20h), et jamais au-dessus de 1 — ce
+       nombre est un ALPHA, l'ancien appel passait `nightAlpha()` tel quel,
+       donc des vitres jamais allumées au-delà de 85 %. */
+    function monumentLit() { return Math.min(1, nightAlpha() / 0.3); }
+    /* Un monument peint (phase 1 : une image par cran, à 1:1) : son emprise
+       (repère courant), sa silhouette et son calque de nuit (ce que
+       `drawScreenExactBitmap` vient de poser, en px écran), et ses lampes
+       peintes — `SB.lights`, en FRACTIONS de l'image, mesurées sur la
+       peinture comme les perchoirs des pigeons. */
+    function lightMonument(x0, y0, x1, y1, r, SB) {
+      if (!r) return;
+      lightBuilding(x0, y0, x1, y1, r.img, r.left, r.top, r.dw, r.dh, true);
+      const lit = monumentLit();
+      if (r.glowImg) lightScreenGlow(r.glowImg, r.left, r.top, r.dw, r.dh, lit);
+      if (lit <= 0.01) return;
+      for (const l of (SB && SB.lights) || []) {
+        const sx = r.left + l.x * r.dw;
+        lightScreenSource(sx, r.top + l.ground * r.dh, l.r, l.c || "lamp", (l.k == null ? 1 : l.k) * lit,
+          l.head ? { sx, sy: r.top + l.y * r.dh, rs: l.head * r.dw / SB.disp, k: lit } : null);
       }
-      // Zip 302 : le brûleur allumé de la montgolfière perce le voile
-      // EXACTEMENT comme un lampadaire (bug corrigé : la lanterne restait
-      // assombrie comme le reste malgré son halo).
-      if (balloonGlow) {
-        nctx.save();
-        nctx.globalCompositeOperation = "destination-out";
-        pierce(balloonGlow.x, balloonGlow.y, balloonGlow.radiusTiles, 0.85);
-        nctx.restore();
+    }
+    /* Le ciel de cette image : l'heure, l'orage, l'éclair (lumiere.js). */
+    function skyNow() {
+      const day = sharedRef.current.day || 1;
+      const stormy = E.isStormyDay(day);
+      const tmin = E.gameTimeMin(sharedRef.current.dayStartAt, Date.now());
+      return LUM.skyLight(tmin, stormy, stormy ? LUM.flashAt(Date.now(), day) : 0);
+    }
+    /* `lights` : { x, y (CASES, déjà remontées de l'altitude), r (cases), c, k }.
+       `heads` : verres allumés { x, y (px monde), r (px d'art), k }.
+       À appeler avec la transformation de la CAMÉRA en place (celle de la
+       boucle de dessin) ; elle est rendue telle quelle. */
+    function drawLight(lights, heads) {
+      const lf = lightFrameRef.current || { occluders: [], glows: [], screenGlows: [], lights: [], heads: [] };
+      lightFrameRef.current = null;
+      const sky = skyNow();
+      if (sky[0] >= 0.999 && sky[1] >= 0.999 && sky[2] >= 0.999) return;
+      if (!lightRendererRef.current) {
+        lightRendererRef.current = LUM.makeLightRenderer((w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; });
       }
+      const M = ctx.getTransform();
+      const zm = M.a, Rx = -M.e, Ry = -M.f;
+      const wx = (sx) => (sx + Rx) / zm, wy = (sy) => (sy + Ry) / zm;
+      const occluders = lf.occluders.map(({ f, m }) => ({
+        x0: wx(f.sx), y0: wy(f.sy), x1: wx(f.sx + f.sw), y1: wy(f.sy + f.sh),
+        mask: m ? { img: m.img, x: wx(m.sx), y: wy(m.sy), w: m.sw / zm, h: m.sh / zm } : null,
+      }));
+      const glows = lf.glows.map((g) => ({ img: g.img, k: g.k, x: wx(g.sx), y: wy(g.sy), w: g.sw / zm, h: g.sh / zm }));
+      const screenGlows = lf.screenGlows.map((g) => ({ img: g.img, k: g.k, x: g.sx, y: g.sy, w: g.sw, h: g.sh }));
+      const T = C.TILE;
+      const allLights = (lights || []).map((l) => ({ x: l.x * T, y: l.y * T, r: l.r || C.LAMP_LIGHT_RADIUS, c: l.c || "lamp", k: l.k }));
+      for (const l of lf.lights) allLights.push({ x: wx(l.sx), y: wy(l.sy), r: l.r, c: l.c, k: l.k });
+      const allHeads = (heads || []).slice();
+      for (const h of lf.heads) allHeads.push({ x: wx(h.sx), y: wy(h.sy), r: h.rs / zm, k: h.k });
+      lightRendererRef.current.draw(ctx, { zm, Rx, Ry, W: canvas.width, H: canvas.height }, {
+        sky, night: nightAlpha() / LUM.NIGHT_MAX, lights: allLights, heads: allHeads, occluders, glows, screenGlows,
+      });
+    }
+    /* La torche vacille : une pure fonction du temps et du porteur, donc deux
+       torches côte à côte ne battent pas ensemble. */
+    function torchFlicker(seed) {
+      const t = performance.now() / 1000;
+      return 0.9 + 0.06 * Math.sin(t * 11.3 + seed) + 0.04 * Math.sin(t * 27.1 + seed * 2.3);
+    }
+    /* La météo et la saison, APRÈS la lumière. ⚠️ À appeler avec la
+       transformation de la caméra en place : la pluie et la neige se calent sur
+       le pixel d'art du monde (phase 3), elles ont donc besoin de l'échelle et
+       du décalage. Purement visuel — aucun effet sur la pousse, l'énergie ou
+       les animaux, ni ici ni ailleurs. */
+    function drawWeatherVeil(dt) {
+      const M = ctx.getTransform();
+      const zm = Math.max(1, M.a), phx = ((M.e % zm) + zm) % zm, phy = ((M.f % zm) + zm) % zm;
+      const Wa = canvas.width / zm, Ha = canvas.height / zm;   // l'écran, en px d'art
+      ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalCompositeOperation = "source-over";
-      ctx.drawImage(nc, 0, 0);
-    }
-    /* La météo et la saison. ⚠️ TOUT EST EN ESPACE ÉCRAN, donc cette fonction
-       ne prend ni caméra ni échelle : c'est ce qui la rend utilisable telle
-       quelle par n'importe quelle zone à ciel ouvert. Purement visuel — aucun
-       effet sur la pousse, l'énergie ou les animaux, ni ici ni ailleurs. */
-    function drawWeatherVeil(dt) {
-      // Jour orageux (chantier 2026-07, demande Guillaume : "des journées
-      // grises d'orages et pluie, une toutes les 7"). S'ajoute au voile
-      // nocturne s'il fait aussi nuit : les deux se cumulent, sans logique
-      // spéciale de mélange.
+      const px = (ax, ay) => ctx.fillRect(Math.floor(ax) * zm + phx, Math.floor(ay) * zm + phy, zm, zm);
+      /* Jour orageux (chantier 2026-07, « une journée grise d'orage sur sept ») :
+         le gris est désormais dans le CIEL (`LUM.STORM_SKY`) ; ici, la pluie.
+         Une goutte est un trait de pixels d'art, penché d'un pixel tous les
+         trois, plus vive en tête ; au sol, des éclaboussures de trois images,
+         ancrées au MONDE (elles ne glissent pas quand la caméra bouge). La
+         couleur suit la lumière du ciel : la nuit, la pluie est sombre. */
       if (E.isStormyDay(sharedRef.current.day || 1)) {
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.globalCompositeOperation = "source-over";
-        ctx.fillStyle = `rgba(70,74,86,${C.STORM_TINT_ALPHA})`;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        if (!rainDropsRef.current || rainDropsRef.current.length !== C.STORM_RAIN_COUNT) {
-          rainDropsRef.current = Array.from({ length: C.STORM_RAIN_COUNT }, () => ({
-            x: Math.random(), y: Math.random(), sp: 0.7 + Math.random() * 0.6,
-          }));
+        const sky = skyNow(), sl = LUM.lum(sky);
+        const want = Math.min(C.STORM_RAIN_MAX, Math.round(Wa * Ha / C.STORM_RAIN_ART_AREA));
+        let drops = rainDropsRef.current;
+        if (!drops || drops.length !== want) {
+          drops = rainDropsRef.current = Array.from({ length: want }, () => ({ x: Math.random() * Wa, y: Math.random() * Ha, sp: 0.75 + Math.random() * 0.5 }));
         }
-        ctx.strokeStyle = "rgba(210,220,235,0.35)";
-        ctx.lineWidth = 1;
-        for (const d of rainDropsRef.current) {
-          d.y += (C.STORM_RAIN_SPEED / canvas.height) * dt * d.sp;
-          if (d.y > 1.05) { d.y = -0.05; d.x = Math.random(); }
-          const sx = d.x * canvas.width, sy = d.y * canvas.height;
-          ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx - 4, sy + C.STORM_RAIN_LEN); ctx.stroke();
+        const cr = Math.round(150 + 80 * sl), cg = Math.round(165 + 75 * sl), cb = Math.round(195 + 55 * sl);
+        const LEN = C.STORM_RAIN_LEN;
+        for (let i = 0; i < LEN; i++) {
+          ctx.fillStyle = `rgba(${cr},${cg},${cb},${(0.55 * (1 - i / LEN) + 0.12).toFixed(3)})`;
+          for (const d of drops) px(d.x + i / 3, d.y - i);
         }
-      }
-      // Teinte de saison, empilée exactement comme le voile d'orage, et la
-      // neige d'hiver (zip 235, Guillaume : "when it's winter, it snows").
+        for (const d of drops) {
+          d.y += C.STORM_RAIN_SPEED * dt * d.sp; d.x -= C.STORM_RAIN_SPEED * dt * d.sp / 3;
+          if (d.y > Ha + LEN) { d.y = -Math.random() * 8; d.x = Math.random() * (Wa + Ha / 3); }
+        }
+        // Les éclaboussures, en px monde.
+        const sp = rainSplashRef.current, now2 = performance.now();
+        let n = Wa * Ha / 10000 * C.STORM_SPLASH_RATE * dt;
+        while (n > 0) {
+          if (n >= 1 || Math.random() < n) sp.push({ x: Math.floor((Math.random() * canvas.width - M.e) / M.a), y: Math.floor((Math.random() * canvas.height - M.f) / M.a), t: now2 });
+          n -= 1;
+        }
+        const SPL = [[[0, 0]], [[-1, -1], [1, -1], [0, 0]], [[-2, 0], [2, 0], [-1, -2], [1, -2]]];
+        for (let i = sp.length - 1; i >= 0; i--) {
+          const age = now2 - sp[i].t;
+          if (age >= C.STORM_SPLASH_MS || sp.length > 400) { sp.splice(i, 1); continue; }
+          const fr = Math.min(2, Math.floor(age / (C.STORM_SPLASH_MS / 3)));
+          ctx.fillStyle = `rgba(${cr + 15},${cg + 15},${cb + 10},${(0.6 - fr * 0.15).toFixed(2)})`;
+          for (const [ox, oy] of SPL[fr]) ctx.fillRect((sp[i].x + ox) * zm + M.e, (sp[i].y + oy) * zm + M.f, zm, zm);
+        }
+      } else if (rainSplashRef.current.length) rainSplashRef.current.length = 0;
+      // Teinte de saison, et la neige d'hiver (zip 235, Guillaume : « when it's
+      // winter, it snows ») — un flocon est un pixel d'art depuis la phase 3.
       const se = E.seasonOf();
       if (se.tint) {
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.globalCompositeOperation = "source-over";
         ctx.fillStyle = se.tint;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
       if (se.key === "winter") {
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        if (!snowFlakesRef.current || snowFlakesRef.current.length !== C.SNOW_COUNT) {
-          snowFlakesRef.current = Array.from({ length: C.SNOW_COUNT }, () => ({
-            x: Math.random(), y: Math.random(), sp: 0.6 + Math.random() * 0.9, sw: (Math.random() * 2 - 1) * 0.02,
-          }));
+        const want = Math.min(C.SNOW_MAX, Math.round(Wa * Ha / C.SNOW_ART_AREA));
+        let fl = snowFlakesRef.current;
+        if (!fl || fl.length !== want) {
+          fl = snowFlakesRef.current = Array.from({ length: want }, () => ({ x: Math.random() * Wa, y: Math.random() * Ha, sp: 0.6 + Math.random() * 0.9, sw: (Math.random() * 2 - 1) * 6 }));
         }
-        ctx.fillStyle = "rgba(240, 246, 255, 0.9)";
-        for (const d of snowFlakesRef.current) {
-          d.y += (C.SNOW_SPEED / canvas.height) * dt * d.sp;
+        const sl = LUM.lum(skyNow());
+        ctx.fillStyle = `rgba(${Math.round(170 + 70 * sl)},${Math.round(178 + 68 * sl)},${Math.round(200 + 55 * sl)},0.9)`;
+        for (const d of fl) {
+          d.y += C.SNOW_SPEED * dt * d.sp;
           d.x += d.sw * dt;
-          if (d.y > 1.05) { d.y = -0.05; d.x = Math.random(); }
-          const sx = d.x * canvas.width, sy = d.y * canvas.height;
-          ctx.fillRect(sx, sy, 2, 2);
+          if (d.y > Ha + 1) { d.y = -1; d.x = Math.random() * Wa; }
+          px(d.x, d.y);
         }
         // Fin voile blanc, pour vendre un peu de couverture au sol.
         ctx.fillStyle = "rgba(240, 246, 255, 0.09)";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
+      ctx.restore();
     }
     /* ══════════════════════════════════════════════════════════════════════
        ZIP 429 — LE MARQUEUR DE LA BOUSSOLE, EN ESPACE ÉCRAN.
@@ -25803,24 +25981,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       ctx.textAlign = "left";
     }
     function nightAlpha() {
-      // Demande Guillaume (chantier 2026-07) : lumière du jour qui revient
-      // PROGRESSIVEMENT à l'aube (5h30-6h30, fondu symétrique au coucher de
-      // soleil) plutôt qu'un retour instantané au jour. L'obscurité doit
-      // rester quasi totale (plafond 0.85) tout le cœur de la nuit, du pic
-      // atteint vers 23h jusqu'au début de l'aube à 5h30 — seules les zones
-      // éclairées par les lampadaires (halo percé plus bas) restent visibles
-      // pendant ce palier. Mêmes paliers de tombée du jour qu'avant (17h-20h
-      // amorce, 20h-23h approfondissement jusqu'au plafond).
+      /* ⚠️ 2026-09-25 (phase 3) — UNE LECTURE DU CIEL, PLUS UNE SECONDE COURBE.
+         Elle disait « l'obscurité » avec ses propres paliers (17h-20h amorce,
+         20h-23h approfondissement, aube 5h30-6h30, plafond 0,85) à côté du voile
+         qu'on voyait. Le ciel (`LUM.skyAt`) est maintenant la seule courbe de la
+         journée ; celle-ci en rend la pénombre, sur la même échelle (0 en plein
+         jour, 0,85 sous la lune), pour que ses lecteurs — lanternes, vitraux,
+         fenêtres — gardent leurs seuils. L'orage n'y compte pas : une lanterne
+         ne s'allume pas à midi parce qu'il pleut. */
       const tmin = E.gameTimeMin(sharedRef.current.dayStartAt, Date.now());
-      const NIGHT_MAX = 0.85;
-      const DAWN_START = C.DAWN_START_MIN, DAWN_END = C.DAWN_END_MIN;
-      const DUSK_START = C.DUSK_START_MIN, DUSK_MID = C.DUSK_MID_MIN, DEEP_END = C.DEEP_END_MIN;
-      if (tmin < DAWN_START) return NIGHT_MAX; // cœur de nuit, avant l'aube
-      if (tmin < DAWN_END) return NIGHT_MAX * (1 - (tmin - DAWN_START) / (DAWN_END - DAWN_START)); // aube progressive
-      if (tmin < DUSK_START) return 0; // plein jour
-      if (tmin < DUSK_MID) return ((tmin - DUSK_START) / (DUSK_MID - DUSK_START)) * 0.3; // tombée du jour amorcée
-      if (tmin < DEEP_END) return 0.3 + Math.min(1, (tmin - DUSK_MID) / (DEEP_END - DUSK_MID)) * (NIGHT_MAX - 0.3); // approfondissement
-      return NIGHT_MAX; // cœur de nuit jusqu'au lendemain matin
+      return LUM.nightFromSky(LUM.skyAt(tmin));
     }
     /* ══════════════════════════════════════════════════════════════════════
        ZIP 426 — LA CARTE MARCHE DANS LES TROIS ZONES.

@@ -232,6 +232,28 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   le perdant s'efface en fondu (0,88 après une image, 0 avant une seconde), la mémoire oublie les
   absents. ⚠️ **Falsifié 4 fois** (accents recollés, tiret retiré, masquage coupé, boîte serrée).
   ⚠️ Ne juge pas l'ORDRE de dessin (passe finale après le décor, `queueNameTag`) : vu en jeu seulement.
+- **`tools/verify-lumiere.mjs` — 71 contrôles, 71/71 (2026-09-25, phase 3 : la lumière).** Le cœur
+  pur de `components/ferme/lumiere.js`. Il tient : le CIEL continu sur toute la journée (pas max
+  0,0127 par minute, vers 6h01, 4 800 instants lus), blanc à midi, lune bleue et lisible la nuit, une soirée qui ne
+  fait que s'assombrir et une aube qui ne fait que s'éclaircir, des instants-clés DÉRIVÉS des bornes
+  `DAWN_*`/`DUSK_*` ; l'obscurité bornée et continue ; les LANTERNES (une allumée le reste quand la nuit
+  s'épaissit, 3 600 cases ; allumage échelonné) ; les FENÊTRES (noires chez un dormeur, à midi et après
+  1h30, toutes allumées à 21h, lève-tôt minoritaires, échelonnées) ; les ANNEAUX (palier qui ne remonte
+  jamais, symétrie, cinq paliers et le noir, tramage) ; les OMBRES — l'union des quadrilatères de
+  `shadowQuads` et `pointInShadow` confrontés à un test INDÉPENDANT (échantillonnage du segment lampe →
+  point) sur 17 886 points dont 2 056 dans l'ombre, 0 désaccord ; l'ORAGE (plus sombre à toute heure, éclair qui éclaircit,
+  ≈ 43 éclairs par jour d'orage, rejouable) ; les trois CALQUES DE NUIT des monuments (présents aux cinq
+  crans, à la taille du jour, rien d'allumé hors du bâtiment, ni aplat ni vide) et leurs lampes peintes ;
+  la FENÊTRE des maisons (2 600 pixels allumés, tous sur une vitre, dans les dix façades ; croisillon
+  transparent) ; l'ancre du VERRE des quatre lanternes sur un pixel chaud du sprite allumé.
+  ⚠️ **Falsifié 5 fois** (bord d'ombre inversé → 754 désaccords ; tramage retiré ; un instant-clé écrit
+  en dur ; dormeur ignoré → 54 fenêtres ; croisillon repeint). ⚠️ Premier passage : 1 désaccord sur les
+  ombres — un rayon qui RASAIT un coin de 0,005 px, que l'échantillonnage de référence manquait ; les
+  deux écritures exactes avaient raison, le test écarte désormais ces rayons.
+  ⚠️ **Ne juge pas le RENDU** (composition `multiply`/`lighter`, calage sur le pixel d'art, lisibilité) :
+  le faux canevas ne compose pas — vu en jeu seulement (§10 de `CLAUDE.md`). La planche
+  `tools/out/monuments-nuit.png` (écrite par `tools/build-monument-glow.mjs`) montre les trois monuments
+  de jour et de nuit : c'est elle qu'on regarde avant le jeu.
 - **Ajouts de la phase 2 à trois bancs existants** : `render-parc` (les trois lanternes ÉTEINTES n'ont
   plus un pixel de lumière et ne changent QUE des pixels de lumière ; aucun arbre ne cache plus de 10 %
   d'une lanterne, mesuré sur les vrais sprites dans le vrai monde — le magnolia du parc en cachait 55 % ;

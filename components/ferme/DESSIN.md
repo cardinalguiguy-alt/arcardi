@@ -159,6 +159,12 @@ eux-mêmes ; `tools/README.md` pour les bancs qui les regardent.
   laissait passer. Un buisson tondu reste des touffes éclairées une à une ; la taille se lit dans un
   contour NET (une superellipse) et un plat plus clair au sommet. ⚠️ Même séance : une fleur faite de
   deux pixels en diagonale se lit comme une **rayure** — à cette échelle, une fleur est un 2×2.
+- ⚠️⚠️ **UNE LUMIÈRE QUI S'AJOUTE SE RÈGLE SOUS LE CIEL LE PLUS SATURÉ, PAS SOUS LA NUIT** (phase 3,
+  2026-09-25). Réglée sur la lune bleue, la flaque d'un réverbère était belle ; sous le ciel orange du
+  coucher, le rouge était déjà au plafond, seul le vert montait, et la même flaque virait au **vert
+  citron**. Un ajout sature canal par canal : il faut le regarder sous chaque ciel de la journée, et sa
+  force doit suivre l'obscurité (une lampe ne se voit presque pas au soleil couchant). Même séance :
+  une lampe dont le vert égale presque le rouge éclaire en **sodium** (jaune-vert), pas en flamme.
 
 ---
 

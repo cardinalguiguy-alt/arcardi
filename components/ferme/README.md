@@ -1,5 +1,47 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-20
 
+## 2026-09-25 (fin de journée) — PHASE 3 : LA LUMIÈRE
+
+Décisions de Guillaume (« reco partout », plus une en cours de route) : **une seule nuit** pour la ferme
+et la ville ; **nuit de lune**, bleue et lisible ; **les murs arrêtent la lumière** (ombres des
+bâtiments, pas des arbres) ; **fenêtres selon l'heure**, et **seules les maisons habitées** s'allument
+(une maison à vendre reste noire — la ville s'illumine à mesure qu'elle se peuple) ; **calque de nuit
+du tribunal tiré de sa peinture** ; **éclairs** les jours d'orage. Tout vu en jeu (échafaudage local,
+524×714, crans 1 à 5, de midi à 1h, aube, orage de jour et de nuit, éclair, ferme à la torche).
+- **`lumiere.js`, module pur** (le banc l'importe) : le ciel est une couleur qui MULTIPLIE la scène
+  (aube rose, midi neutre, heure dorée, coucher, mauve, heure bleue, lune), ses instants-clés dérivés
+  de `DAWN_*`/`DUSK_*` ; `nightAlpha()` n'est plus une seconde courbe, c'est une lecture du ciel. Les
+  lampes s'ajoutent dans un tampon **à la résolution de l'art**, en cinq paliers tramés d'un pixel,
+  agrandi au plus proche voisin et calé sur la grille du monde. Trois canevas pour tout le jeu, plus un
+  par anneau en cache.
+- **Ombres** : chaque bâtiment déclare son emprise et sa silhouette depuis sa fermeture de dessin
+  (`lightBuilding`) ; un bord qui tourne le dos à la lampe projette un quadrilatère d'ombre ; une lampe
+  derrière ou à côté efface la silhouette (le toit ne s'allume plus par-derrière). Maisons (emprise du
+  MUR, lue sur le sprite), gare, boutique, salon, trois monuments.
+- **Lanternes** : le verre et la lumière lisent le MÊME prédicat (`LUM.lampLit`) — avant, tout
+  lampadaire éclairait dès la tombée du jour, verre éteint ou non ; les lanternes suspendues et les
+  lampes à huile éclairent enfin. Le point lumineux est TIRÉ DU DESSIN (différence allumé/éteint).
+  Leur force suit l'obscurité (sinon, sous le ciel orange du coucher, la flaque virait au vert citron).
+- **Fenêtres des maisons** : un calque par carreau (`townHouseWindowGlow`, sur la géométrie partagée
+  `HOUSE_WINDOW`/`TOWN_HOUSE_WINDOWS`), une flaque chaude devant la façade, noires si le propriétaire dort.
+- **Monuments** : `tools/build-monument-glow.mjs` fabrique les trois calques de nuit depuis les IMAGES DE
+  JOUR versionnées (aucune retouche perdue), cran par cran, par régions posées sur la peinture et un
+  prédicat de verre propre à chaque bâtiment : vitraux et rosace de l'église, baies à rideaux, lanternes,
+  lanternon et **cadran éclairé** de la mairie, fenêtres du tribunal **une sur deux** (croisillons en
+  silhouette), imposte, lampadaires peints. Leurs lampes et portes peintes posent leur flaque
+  (`TOWN_BITMAPS.*.lights`). 880 Ko de PNG pour les quinze calques.
+- **Orage** : le voile gris devient un ciel assombri (les lampes restent vives), gouttes en pixels
+  d'art, éclaboussures ancrées au monde, éclairs (pure fonction du temps : deux joueurs voient le même).
+  La neige passe aussi au pixel d'art.
+- **Noms et bulles** : passent APRÈS la lumière, lisibles la nuit.
+- **Un piège des deux cartes supprimé** : la ferme posait chaque nuit deux halos aux coordonnées de
+  `TOWN_HALL`, au milieu de son pré.
+⚠️ **Limites connues** : un personnage ou un arbre DEVANT une fenêtre allumée s'éclaire à la forme de la
+fenêtre (le tampon est en espace écran, il ne connaît pas l'ordre de dessin) — rare, les fenêtres sont
+hautes ; les boutiques restent noires la nuit (fermées ; leur calque naîtra en phase 6) ; la ferme n'a
+ni fenêtres allumées ni ombres (après la phase 4) ; **jamais vu sur un vrai iPad** (mesuré sur Mac :
++1,3 ms par image au cran 1, pluie comprise).
+
 ## 2026-09-25 (suite) — PHASE 2 : LES CORRECTIFS SANS PARTI PRIS
 
 Livrés ensemble : Guillaume a levé pour ce chantier la règle « un seul changement visuel par
@@ -30,7 +72,7 @@ livraison ». Tous vus en jeu (échafaudage local, 524×714, cran 1 à 3, jour e
   dessin retourné) — dix dessins pour dix étals.
 ⚠️ **Vu, pas corrigé, hors liste** : le dallage du parvis visible entre les arcs-boutants de l'église
 (combler ces jours, c'est peindre — un parti pris) ; le lampadaire de la FERME a toujours son verre jaune
-de jour (la ferme suit après la phase 4) ; les noms passent sous le voile de nuit (phase 3).
+de jour (la ferme suit après la phase 4) ; les noms passent sous le voile de nuit (phase 3 — réglé : ils passent après la lumière).
 
 ## 2026-09-25 — AUDIT GRAPHIQUE DE VALLEY TOWN (constat seul, RIEN CODÉ)
 
@@ -73,7 +115,7 @@ visuel » LEVÉE pour ce chantier par Guillaume (2026-09-25, phase 2) : une phas
 | ✅ | 0 | Outillage (livrée le 2026-09-25, plus `TOWN_BITMAPS` prouvée identique en jeu) : dégradés dans `lib-canvas` (ranime `render-eau`/`render-parc`), banc « densité » (tout bitmap à échelle entière, sans lissage) | rien de la suite ne se juge sans |
 | ✅ | 1 | Échelle unique — **livrée le 2026-09-25, RÈGLE CHANGÉE en cours de route** (Guillaume : « je veux pas de perte de qualité » ; mesuré, les références Gemini sont des peintures sans grille de pixels, les ramener à la grille d'art détruisait du détail). Les trois monuments passent en `grid: "screen"` : une image par cran de zoom, fabriquée depuis la référence d'origine (`tools/lib-mip.mjs`, Lanczos-3 prémultiplié) et posée à 1 px d'image = 1 px d'écran, sans lissage (`drawScreenExactBitmap`). Mesuré : 1,5 à 4,2 fois plus de détail qu'avant, 100 % des pixels exacts en jeu hors surimpressions voulues (halo, embase, pigeons). Escalier détouré et herbes hautes : déjà à 1:1 d'art, conformes. ⚠️ Reste vrai : le monument est plus FIN que le décor en gros pixels (prix accepté). | fondation posée |
 | ✅ | 2 | Correctifs sans parti pris — **livrée le 2026-09-25** (récit juste au-dessus) : détourage du tribunal refait (lanternon, fronton, corniche, piédestal), église cadrée sur écran étroit, noms en police pixel avec priorité et fondu (personnages + cartes), lanternes éteintes le jour, fontaine sur son dallage, aucun feuillu devant une lanterne, couture verte du fondu de zoom, dix étals différents | fait |
-| ⬜ | 3 | Lumière (⚠️ constaté en phase 0 : les calques `-glow` existants sont INVISIBLES la nuit, le voile passe par-dessus) : teinte selon l'heure, lumières chaudes additives en paliers, occultées, fenêtres allumées, pluie à l'échelle du pixel | les bâtiments refaits en 6 naîtront avec leur calque de nuit |
+| ✅ | 3 | Lumière — **livrée le 2026-09-25** (récit juste au-dessus) : ciel qui multiplie la scène selon l'heure, lampes additives en paliers tramés à la grille de l'art, ombres des bâtiments, fenêtres des maisons habitées, calques de nuit des trois monuments refaits depuis leurs images de jour, lanternes suspendues et lampes à huile qui éclairent, pluie et neige au pixel d'art, éclairs, noms au-dessus de la nuit | les bâtiments refaits en 6 naîtront avec leur calque de nuit |
 | ⬜ | 4 | Sols et eau : paliers de profondeur, bord de quai, reflets, rampe de l'étang, sable, période du gazon, dallages et leurs jonctions, murs de soutènement | le tapis sous tout le reste, avant de recomposer |
 | ⬜ | 5 | Faune : canards, poissons, papillons, chats, mouettes, lucioles — fonctions du temps, non diffusées (règle des pigeons, 433) | a besoin de l'eau (4) et de la nuit (3) |
 | ⬜ | 6 | Bâtiments courants : gare et quai, dix façades, boutiques, variantes mitoyennes et d'angle — sortis de la closure pour qu'un banc les voie | après la grille (1) et la lumière (3), avant la composition |
