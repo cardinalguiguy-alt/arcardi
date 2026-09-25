@@ -1046,9 +1046,18 @@ export function drawTownFlagTile(ctx, S, tw, x, y, px, py) {
   if (!RS || !RS.flag) return false;
   const T = SPR_T, sup = RS.sup;
   ctx.drawImage(RS.flag, (x % sup) * T, (y % sup) * T, T, T, px, py, T, T);
+  /* ⚠️⚠️ 2026-09-25 (phase 2) — LES DEUX CASES DE LA FONTAINE SONT DU DALLAGE
+     POUR LE DESSIN. Elles sont de l'EAU pour la collision (voir le rendu du
+     sol, FermeGame.js), et ce test les prenait donc pour un bord de place :
+     les dalles voisines traçaient leur pierre de bordure claire tout autour,
+     et le jeu peignait les deux cases d'un aplat gris — ensemble, le
+     « rectangle clair derrière la fontaine » de l'audit. La vasque se pose
+     désormais sur la même dalle que le reste de la place. */
+  const ftn = (xx, yy) => xx >= C.TOWN_FOUNTAIN.x && xx < C.TOWN_FOUNTAIN.x + 2
+                       && yy >= C.TOWN_FOUNTAIN.y && yy < C.TOWN_FOUNTAIN.y + 2;
   const st4 = (xx, yy) => {
     if (xx < 0 || yy < 0 || xx >= tw.w || yy >= tw.h) return false;
-    return tw.ground[yy * tw.w + xx] === C.G_PATH_STONE;
+    return tw.ground[yy * tw.w + xx] === C.G_PATH_STONE || ftn(xx, yy);
   };
   ctx.fillStyle = "#cfcabb";
   if (!st4(x, y - 1)) ctx.fillRect(px, py, T, 3);
@@ -4061,7 +4070,10 @@ export function buildSprites() {
     return c;
   }
 
-  function plancheSprite(name) {
+  /* `swap` (2026-09-25, phase 2) : une couleur de la palette → une autre. Sert
+     aux versions ÉTEINTES des lanternes de la planche : même dessin, verre
+     sans lumière — voir `LAMP_OFF_SWAP`. */
+  function plancheSprite(name, swap) {
     const d = PLANCHE[name];
     if (!d) throw new Error("sprite de planche inconnu : " + name);
     const [c, g] = cv(d.w, d.h);
@@ -4073,13 +4085,30 @@ export function buildSprites() {
         if (ch === ".") { x++; continue; }
         let n = 1;
         while (x + n < d.w && r[x + n] === ch) n++;
-        g.fillStyle = d.pal[r.charCodeAt(x) - 48];
+        const col = d.pal[r.charCodeAt(x) - 48];
+        g.fillStyle = (swap && swap[col]) || col;
         g.fillRect(x, y, n, 1);
         x += n;
       }
     }
     return c;
   }
+  /* ⚠️⚠️ 2026-09-25 (phase 2 de la feuille de route graphique) — LES LANTERNES
+     ÉTEINTES. L'audit l'a relevé en plein midi : trois lanternes de la ville
+     brillaient le jour, leur lumière étant PEINTE dans le sprite (le verre
+     crème du lampadaire de la place, la lanterne suspendue et la flamme de la
+     lampe à huile de la planche). Le jeu choisit désormais la version éteinte
+     de jour et l'allumée la nuit (`townLampLit`, FermeGame.js).
+     ⚠️ ÉTEINT NE VEUT PAS DIRE GRIS : un verre de jour renvoie le ciel — un
+     bleu-gris sombre et UN reflet clair, sinon on lit une boîte vide. Les
+     couleurs remplacées sont exactement celles de la lumière (relevées pixel à
+     pixel sur la planche), rien d'autre ne bouge. */
+  const LAMP_OFF_SWAP = {
+    hangLamp: { "#f8dd9f": "#6c7a82", "#eec07b": "#56646c", "#fff3ba": "#a3b4bb" },
+    // La lampe à huile : la flamme sort du verre de la cheminée, qui reste —
+    // clair, froid, avec son reflet.
+    oilLamp: { "#e2a25d": "#8e9ca2", "#f8d183": "#aebcc1", "#b97c4b": "#6f7d84", "#fef5be": "#d3dde0" },
+  };
 
   /* ⚠️⚠️ ZIP 447 — LE MÊME REJOUEUR, POUR LA SECONDE PLANCHE. Il est écrit à
      part et non fondu avec `plancheSprite` parce qu'une seule fonction à deux
@@ -5298,7 +5327,21 @@ export function buildSprites() {
      l'indice (voir le champ de foire dans fermeEngine), le rendu ne devine
      rien. Règle du 426 — la bâche vient du générateur, pas d'un hachage. */
   const STALL_TRADES = C.TOWN_STALL_TRADES;
-  function townStallSprite(variant) {
+  /* ⚠️⚠️ 2026-09-25 (phase 2 de la feuille de route graphique) — LA SECONDE
+     RANGÉE A SA VARIANTE (`alt`). Dix étals pour six métiers : quatre métiers
+     revenaient deux fois AU PIXEL PRÈS, et l'audit l'a vu (« étals copiés deux
+     fois à l'identique »). Le décalage de trois entre les rangées (fermeEngine)
+     empêche deux voisins ou deux vis-à-vis identiques — il n'empêche pas l'œil
+     de reconnaître le même dessin trois étals plus loin.
+     ⚠️ LE MÉTIER RESTE LE MÊME, c'est la marchandise qui change : la bâche et
+     la silhouette des pendus disent toujours « poissonnier », mais celui-ci
+     vend des rougets et un homard, l'autre des bars et un crabe. Plus une nappe
+     RAYÉE au lieu de carreaux, et le dessin retourné (l'ardoise passe à
+     droite) — trois différences qu'on lit à trois distances différentes.
+     ⚠️ Le retournement se fait PIXEL À PIXEL (`getImageData`), pas par
+     `scale(-1, 1)` : le faux canevas des bancs ignore les transformations, et
+     les bancs verraient un étal que le jeu ne dessine pas. */
+  function townStallSprite(variant, alt) {
     const W = 52, H = 50;
     const [c, g] = cv(W, H);
     const tr = STALL_TRADES[((variant | 0) % STALL_TRADES.length + STALL_TRADES.length) % STALL_TRADES.length];
@@ -5344,7 +5387,8 @@ export function buildSprites() {
     const CL = AW, CL_L = AW_L, CL_W = "#f6ecda";
     for (let y = TOP + 4; y < H - 2; y += 3) {
       for (let x = 3; x < W - 3; x += 4) {
-        const k = (((x / 4) | 0) + ((y / 3) | 0)) % 2;
+        // La variante : des rayures verticales au lieu du damier.
+        const k = alt ? ((x / 4) | 0) % 2 : (((x / 4) | 0) + ((y / 3) | 0)) % 2;
         P(g, x, y, 4, 3, k ? CL_W : CL);
       }
     }
@@ -5372,11 +5416,15 @@ export function buildSprites() {
         P(g, hx - 1, 26, 3, 1, "#c9bda0");
       }
       hangCord(26, 3);
-      for (let k = 0; k < 3; k++) { P(g, 24, 16 + k * 3, 5, 3, "#b8763a"); P(g, 24, 16 + k * 3, 2, 3, "#d6924f"); }
+      // La variante : des oignons ROUGES.
+      for (let k = 0; k < 3; k++) { P(g, 24, 16 + k * 3, 5, 3, alt ? "#8e3446" : "#b8763a"); P(g, 24, 16 + k * 3, 2, 3, alt ? "#b8586a" : "#d6924f"); }
     } else if (tr.key === "fish") {
       // Trois poissons pendus par la queue, tête en bas — la silhouette la plus
       // reconnaissable du marché.
-      for (const [hx, col, lig] of [[12, "#8fa8bc", "#c2d4e2"], [26, "#7e9bb2", "#b4c9da"], [40, "#8fa8bc", "#c2d4e2"]]) {
+      // La variante : des rougets.
+      const hung = alt ? [[12, "#c8705a", "#e8a48e"], [26, "#b8604e", "#dc927e"], [40, "#c8705a", "#e8a48e"]]
+                       : [[12, "#8fa8bc", "#c2d4e2"], [26, "#7e9bb2", "#b4c9da"], [40, "#8fa8bc", "#c2d4e2"]];
+      for (const [hx, col, lig] of hung) {
         hangCord(hx, 3);
         P(g, hx - 3, 17, 7, 9, col); P(g, hx - 3, 17, 7, 3, lig);
         P(g, hx - 2, 26, 5, 2, col);
@@ -5399,7 +5447,7 @@ export function buildSprites() {
     } else if (tr.key === "flower") {
       // Bouquets séchés, la tête en bas : c'est comme ça qu'on les sèche, et ça
       // donne une silhouette en cône que rien d'autre du marché n'a.
-      for (const [hx, col] of [[11, "#b06ad0"], [26, "#e0a04a"], [41, "#d05a7a"]]) {
+      for (const [hx, col] of (alt ? [[11, "#e0c040"], [26, "#5a86d0"], [41, "#e07a4a"]] : [[11, "#b06ad0"], [26, "#e0a04a"], [41, "#d05a7a"]])) {
         hangCord(hx, 4);
         P(g, hx - 1, 18, 3, 5, "#6f8a4a");
         g.fillStyle = col; g.beginPath(); g.moveTo(hx - 5, 30); g.lineTo(hx + 5, 30); g.lineTo(hx, 21); g.fill();
@@ -5422,11 +5470,13 @@ export function buildSprites() {
          appliquée au petit : une couleur ne se juge pas seule, elle se juge
          contre son fond. La croûte brune règle les deux d'un coup — elle sépare
          du fond ET donne aux meules leur silhouette de meule. */
+      // La variante : des tommes, croûte grise et pâte blanche.
+      const RIND = alt ? "#5e5448" : "#8a5f22", PASTE = alt ? "#efe8d2" : "#e8c463", PASTE_L = alt ? "#fbf7ea" : "#f6dd94";
       for (const [hx, rr] of [[13, 6], [39, 5]]) {
         hangCord(hx, 3);
-        g.fillStyle = "#8a5f22"; g.beginPath(); g.arc(hx, 17 + rr, rr, 0, 7); g.fill();       // la croûte
-        g.fillStyle = "#e8c463"; g.beginPath(); g.arc(hx, 17 + rr, rr - 1.5, 0, 7); g.fill(); // la pâte
-        g.fillStyle = "#f6dd94"; g.beginPath(); g.arc(hx - 1, 16 + rr, rr - 3, 0, 7); g.fill();
+        g.fillStyle = RIND; g.beginPath(); g.arc(hx, 17 + rr, rr, 0, 7); g.fill();       // la croûte
+        g.fillStyle = PASTE; g.beginPath(); g.arc(hx, 17 + rr, rr - 1.5, 0, 7); g.fill(); // la pâte
+        g.fillStyle = PASTE_L; g.beginPath(); g.arc(hx - 1, 16 + rr, rr - 3, 0, 7); g.fill();
         // Le filet : deux croisillons suffisent à dire « suspendu », et sans eux
         // la meule a l'air de flotter.
         for (const s of [-1, 1]) P(g, hx + s * ((rr / 2) | 0), 17 + rr - rr, 1, rr * 2, "rgba(60,44,18,0.45)");
@@ -5434,7 +5484,10 @@ export function buildSprites() {
     } else {
       // Le potier pend ses jarres à la barre : trois profils différents, parce
       // qu'un potier qui ferait trois fois le même pot ne serait pas un potier.
-      for (const [hx, wd, ht, col, lig] of [[12, 8, 9, "#a85e42", "#c87c5c"], [26, 6, 11, "#8a6a9a", "#a888b6"], [40, 9, 7, "#5e8a7a", "#7cae9c"]]) {
+      // La variante : d'autres émaux (bleu, ocre, sang-de-bœuf).
+      const jars = alt ? [[12, 8, 9, "#3f6a9a", "#6a92c2"], [26, 6, 11, "#c8913a", "#e2b464"], [40, 9, 7, "#9a4a3a", "#b8685a"]]
+                       : [[12, 8, 9, "#a85e42", "#c87c5c"], [26, 6, 11, "#8a6a9a", "#a888b6"], [40, 9, 7, "#5e8a7a", "#7cae9c"]];
+      for (const [hx, wd, ht, col, lig] of jars) {
         hangCord(hx, 3);
         P(g, hx - (wd >> 1), 17, wd, ht, col);
         P(g, hx - (wd >> 1), 17, 2, ht, lig);
@@ -5455,29 +5508,36 @@ export function buildSprites() {
     if (tr.key === "veg") {
       crate(4, 13, 5); crate(19, 13, 5); crate(34, 13, 5);
       // Carottes en bottes, choux, tomates : trois formes, trois couleurs.
-      for (let k = 0; k < 3; k++) { P(g, 6 + k * 4, TOP - 9, 2, 5, "#e08234"); P(g, 5 + k * 4, TOP - 11, 4, 2, "#4f9a41"); }
-      for (let k = 0; k < 2; k++) { g.fillStyle = "#77b84e"; g.beginPath(); g.arc(23 + k * 6, TOP - 8, 3.5, 0, 7); g.fill(); P(g, 22 + k * 6, TOP - 10, 2, 2, "#9ad46e"); }
-      for (let k = 0; k < 3; k++) { g.fillStyle = "#cf4436"; g.beginPath(); g.arc(37 + k * 4, TOP - 8, 2.2, 0, 7); g.fill(); P(g, 36 + k * 4, TOP - 10, 2, 1, "#3f8a36"); }
+      // La variante : radis, salades, aubergines.
+      for (let k = 0; k < 3; k++) { P(g, 6 + k * 4, TOP - 9, 2, 5, alt ? "#d64a6a" : "#e08234"); P(g, 5 + k * 4, TOP - 11, 4, 2, "#4f9a41"); }
+      for (let k = 0; k < 2; k++) { g.fillStyle = alt ? "#8ccc5e" : "#77b84e"; g.beginPath(); g.arc(23 + k * 6, TOP - 8, 3.5, 0, 7); g.fill(); P(g, 22 + k * 6, TOP - 10, 2, 2, alt ? "#c2ea8e" : "#9ad46e"); }
+      for (let k = 0; k < 3; k++) { g.fillStyle = alt ? "#5a2e6a" : "#cf4436"; g.beginPath(); g.arc(37 + k * 4, TOP - 8, 2.2, 0, 7); g.fill(); P(g, 36 + k * 4, TOP - 10, 2, 1, "#3f8a36"); }
     } else if (tr.key === "fish") {
       // Le lit de glace : un bac gris pâle, et les poissons couchés dessus.
       P(g, 4, TOP - 6, 44, 6, "#9fb6c6"); P(g, 4, TOP - 6, 44, 2, "#cfe0ea");
       for (let k = 0; k < 6; k++) P(g, 6 + k * 7, TOP - 5, 3, 2, "#eaf4fa");
+      const FA = alt ? "#b8604e" : "#7e9bb2", FB = alt ? "#d07a64" : "#93aec2", FL = alt ? "#eab4a4" : "#c6d8e6";
       for (let k = 0; k < 4; k++) {
         const fx = 7 + k * 11;
-        P(g, fx, TOP - 10, 8, 4, k % 2 ? "#7e9bb2" : "#93aec2");
-        P(g, fx, TOP - 10, 8, 1, "#c6d8e6");
-        g.fillStyle = k % 2 ? "#7e9bb2" : "#93aec2"; g.beginPath(); g.moveTo(fx + 8, TOP - 10); g.lineTo(fx + 11, TOP - 12); g.lineTo(fx + 11, TOP - 5); g.fill();
+        P(g, fx, TOP - 10, 8, 4, k % 2 ? FA : FB);
+        P(g, fx, TOP - 10, 8, 1, FL);
+        g.fillStyle = k % 2 ? FA : FB; g.beginPath(); g.moveTo(fx + 8, TOP - 10); g.lineTo(fx + 11, TOP - 12); g.lineTo(fx + 11, TOP - 5); g.fill();
         P(g, fx + 2, TOP - 9, 1, 1, "#2e3238");
       }
-      P(g, 40, TOP - 12, 7, 4, "#cf5a44"); P(g, 39, TOP - 13, 2, 2, "#cf5a44"); P(g, 46, TOP - 13, 2, 2, "#cf5a44"); // un crabe
+      if (alt) {
+        // Un homard : plus long que le crabe, deux pinces devant.
+        P(g, 38, TOP - 11, 10, 3, "#a8321e"); P(g, 38, TOP - 11, 10, 1, "#d0583e");
+        P(g, 36, TOP - 13, 3, 2, "#a8321e"); P(g, 36, TOP - 9, 3, 2, "#a8321e");
+      } else { P(g, 40, TOP - 12, 7, 4, "#cf5a44"); P(g, 39, TOP - 13, 2, 2, "#cf5a44"); P(g, 46, TOP - 13, 2, 2, "#cf5a44"); } // un crabe
     } else if (tr.key === "bread") {
       // Un panier de baguettes DEBOUT (la seule verticale du marché) et trois
       // miches rondes farinées.
       P(g, 5, TOP - 7, 12, 7, "#a8794a"); P(g, 5, TOP - 7, 12, 1, "#c49a66");
       for (let k = 0; k < 4; k++) { P(g, 6 + k * 3, TOP - 18, 2, 12, k % 2 ? "#c9924e" : "#dda861"); P(g, 6 + k * 3, TOP - 18, 2, 2, "#e8bd7e"); }
+      // La variante : des pains de campagne, plus bruns.
       for (let k = 0; k < 3; k++) {
-        g.fillStyle = "#c9924e"; g.beginPath(); g.ellipse(24 + k * 9, TOP - 4, 4.5, 3.5, 0, 0, 7); g.fill();
-        g.fillStyle = "#e2ae6a"; g.beginPath(); g.ellipse(24 + k * 9, TOP - 5, 4, 2.5, 0, 0, 7); g.fill();
+        g.fillStyle = alt ? "#94602e" : "#c9924e"; g.beginPath(); g.ellipse(24 + k * 9, TOP - 4, 4.5, 3.5, 0, 0, 7); g.fill();
+        g.fillStyle = alt ? "#b27a40" : "#e2ae6a"; g.beginPath(); g.ellipse(24 + k * 9, TOP - 5, 4, 2.5, 0, 0, 7); g.fill();
         P(g, 22 + k * 9, TOP - 6, 5, 1, "#f6e2c0");         // le coup de lame fariné
       }
     } else if (tr.key === "flower") {
@@ -5486,7 +5546,8 @@ export function buildSprites() {
       /* ⚠️ LE BLANC A UNE OMBRE, sinon il fait une tache. Un pétale « blanc pur
          sur blanc pur » n'a aucun contour à cette taille : au banc, le quatrième
          seau devenait un pâté informe pendant que les trois autres se lisaient. */
-      const cols = [["#d0455e", "#f07d92"], ["#e0a832", "#f6cd6a"], ["#8a5cc0", "#b78ae0"], ["#cfd0dc", "#ffffff"]];
+      const cols = alt ? [["#f0c830", "#fff09a"], ["#4a76d0", "#8ab0f0"], ["#e0583a", "#f8987a"], ["#d05ab0", "#f09ad8"]]
+                       : [["#d0455e", "#f07d92"], ["#e0a832", "#f6cd6a"], ["#8a5cc0", "#b78ae0"], ["#cfd0dc", "#ffffff"]];
       for (let k = 0; k < 4; k++) {
         const bx = 5 + k * 11;
         P(g, bx, TOP - 7, 9, 7, "#9aa2ac"); P(g, bx, TOP - 7, 9, 2, "#c2c8d0"); P(g, bx, TOP - 1, 9, 1, "#7a828c");
@@ -5502,23 +5563,27 @@ export function buildSprites() {
       // « tonneau ».
       /* Même remède qu'aux meules pendues : une CROÛTE brune autour de tout ce
          qui est jaune, sans quoi la marchandise se noie dans la bâche. */
+      // La variante : des tommes (croûte grise, pâte blanche, pas d'yeux).
+      const RD = alt ? "#5e5448" : "#8a5f22", PA = alt ? "#efe8d2" : "#e8c463", PL = alt ? "#fbf7ea" : "#f6dd94", CUT = alt ? "#f8f4e6" : "#f3e0a4";
       for (const [cx2, cy2, rr] of [[14, TOP - 5, 8], [14, TOP - 12, 8]]) {
-        g.fillStyle = "#8a5f22"; g.beginPath(); g.ellipse(cx2, cy2, rr, rr * 0.45, 0, 0, 7); g.fill();
-        P(g, cx2 - rr, cy2 - 4, rr * 2, 4, "#8a5f22");
-        P(g, cx2 - rr + 1, cy2 - 3, rr * 2 - 2, 3, "#e8c463");
-        P(g, cx2 - rr + 1, cy2 - 4, rr * 2 - 2, 1, "#f6dd94");
+        g.fillStyle = RD; g.beginPath(); g.ellipse(cx2, cy2, rr, rr * 0.45, 0, 0, 7); g.fill();
+        P(g, cx2 - rr, cy2 - 4, rr * 2, 4, RD);
+        P(g, cx2 - rr + 1, cy2 - 3, rr * 2 - 2, 3, PA);
+        P(g, cx2 - rr + 1, cy2 - 4, rr * 2 - 2, 1, PL);
       }
-      g.fillStyle = "#f3e0a4"; g.beginPath(); g.moveTo(14, TOP - 16); g.lineTo(22, TOP - 12); g.lineTo(14, TOP - 12); g.fill();
+      g.fillStyle = CUT; g.beginPath(); g.moveTo(14, TOP - 16); g.lineTo(22, TOP - 12); g.lineTo(14, TOP - 12); g.fill();
       for (let k = 0; k < 3; k++) {
         const wx = 28 + k * 7;
-        g.fillStyle = "#8a5f22"; g.beginPath(); g.moveTo(wx - 1, TOP - 1); g.lineTo(wx + 7, TOP - 1); g.lineTo(wx + 3, TOP - 9); g.fill();
-        g.fillStyle = "#f3e0a4"; g.beginPath(); g.moveTo(wx + 1, TOP - 2); g.lineTo(wx + 5, TOP - 2); g.lineTo(wx + 3, TOP - 7); g.fill();
-        P(g, wx + 2, TOP - 4, 1, 1, "#c9a13a"); P(g, wx + 3, TOP - 6, 1, 1, "#c9a13a");   // les yeux du fromage
+        g.fillStyle = RD; g.beginPath(); g.moveTo(wx - 1, TOP - 1); g.lineTo(wx + 7, TOP - 1); g.lineTo(wx + 3, TOP - 9); g.fill();
+        g.fillStyle = CUT; g.beginPath(); g.moveTo(wx + 1, TOP - 2); g.lineTo(wx + 5, TOP - 2); g.lineTo(wx + 3, TOP - 7); g.fill();
+        if (!alt) { P(g, wx + 2, TOP - 4, 1, 1, "#c9a13a"); P(g, wx + 3, TOP - 6, 1, 1, "#c9a13a"); }   // les yeux du fromage
       }
     } else {
       // Poterie : jarres, bols empilés, une amphore. Trois hauteurs, sinon la
       // rangée fait une palissade.
-      for (const [px2, wd, ht, col, lig] of [[5, 10, 12, "#a85e42", "#c87c5c"], [18, 8, 8, "#8a6a9a", "#a888b6"], [29, 12, 6, "#5e8a7a", "#7cae9c"]]) {
+      const pots = alt ? [[5, 10, 12, "#3f6a9a", "#6a92c2"], [18, 8, 8, "#c8913a", "#e2b464"], [29, 12, 6, "#9a4a3a", "#b8685a"]]
+                       : [[5, 10, 12, "#a85e42", "#c87c5c"], [18, 8, 8, "#8a6a9a", "#a888b6"], [29, 12, 6, "#5e8a7a", "#7cae9c"]];
+      for (const [px2, wd, ht, col, lig] of pots) {
         P(g, px2, TOP - ht, wd, ht, col);
         P(g, px2, TOP - ht, 3, ht, lig);
         P(g, px2 - 1, TOP - ht, wd + 2, 2, lig);
@@ -5535,6 +5600,15 @@ export function buildSprites() {
     P(g, 2, H - 12, 9, 10, "#2e3a34");
     P(g, 1, H - 13, 11, 1, "#6a5442");
     for (let k = 0; k < 3; k++) { P(g, 3, H - 10 + k * 3, 5, 1, "rgba(240,240,225,0.75)"); P(g, 9, H - 10 + k * 3, 2, 1, "rgba(240,225,180,0.85)"); }
+    if (alt) {
+      // Le retournement, pixel à pixel (voir l'en-tête de la variante).
+      const im = g.getImageData(0, 0, W, H), d = im.data;
+      for (let y = 0; y < H; y++) for (let x = 0; x < (W >> 1); x++) {
+        const a = (y * W + x) * 4, b = (y * W + (W - 1 - x)) * 4;
+        for (let k = 0; k < 4; k++) { const t = d[a + k]; d[a + k] = d[b + k]; d[b + k] = t; }
+      }
+      g.putImageData(im, 0, 0);
+    }
     return c;
   }
   /* ══════════════════════════════════════════════════════════════════════════
@@ -5806,13 +5880,18 @@ export function buildSprites() {
      c'est exactement ce qui lui donne du volume. C'est déjà le contrat de
      `decor` et des maisons — on ne réinvente rien.
      ══════════════════════════════════════════════════════════════════════════ */
-  function plazaLampSprite() {
+  function plazaLampSprite(lit) {
     const [c, g] = cv(32, 48);
     P(g, 12, 42, 8, 5, "#4a4a52"); P(g, 12, 42, 8, 1, "#6a6a74");   // socle
     P(g, 14, 12, 4, 31, "#3c3c44"); P(g, 14, 12, 1, 31, "#5e5e68"); // fût
     P(g, 10, 20, 12, 2, "#3c3c44");                                  // bague
     P(g, 11, 6, 10, 8, "#2e2e36");                                   // lanterne
-    P(g, 12, 7, 8, 6, "#ffe9a8"); P(g, 13, 8, 6, 4, "#fff6d4");      // verre allumé
+    if (lit) { P(g, 12, 7, 8, 6, "#ffe9a8"); P(g, 13, 8, 6, 4, "#fff6d4"); }   // verre allumé
+    else {
+      // 2026-09-25 (phase 2) — le verre ÉTEINT, de jour : voir `LAMP_OFF_SWAP`.
+      P(g, 12, 7, 8, 6, "#56646c"); P(g, 13, 8, 6, 4, "#6f8088");
+      P(g, 13, 8, 2, 1, "#aebfc6"); P(g, 13, 9, 1, 1, "#aebfc6");   // le reflet du ciel
+    }
     g.fillStyle = "#2e2e36"; g.beginPath(); g.moveTo(9, 6); g.lineTo(16, 0); g.lineTo(23, 6); g.fill();
     P(g, 15, 0, 2, 2, "#2e2e36");
     return c;
@@ -16719,6 +16798,7 @@ export function buildSprites() {
     townStoneBench: plancheSprite("benchStone"),
     townBenchWall: plancheSprite("benchWall"),
     townHangLamp: plancheSprite("hangLamp"),
+    townHangLampOff: plancheSprite("hangLamp", LAMP_OFF_SWAP.hangLamp),   // 2026-09-25 : éteinte, de jour
     townStepStones: plancheSprite("stones"),
     townChest: plancheSprite("chest"),
     townBucket: plancheSprite("bucket"),
@@ -16729,6 +16809,7 @@ export function buildSprites() {
     townRoseBox: plancheSprite("roseBox"),
     townPotPink: plancheSprite("potPink"),
     townOilLamp: plancheSprite("oilLamp"),
+    townOilLampOff: plancheSprite("oilLamp", LAMP_OFF_SWAP.oilLamp),       // 2026-09-25 : éteinte, de jour
     /* La table et ses deux tabourets sont UN SEUL sprite sur la planche, et on
        les garde ainsi : les séparer demanderait de réinventer leur écartement,
        c'est-à-dire de régler à la main une position que le dessin donne déjà
@@ -16986,7 +17067,8 @@ house: house(),
     church: townhallSprite(),
     courthouse: courthouseSprite(),    // 425 : le tribunal néoclassique
     townHall2: townHall2Sprite(),      // 425 : le NOUVEL hôtel de ville (brique + beffroi)
-    plazaLamp: plazaLampSprite(),      // 425 : mobilier de la place
+    plazaLamp: plazaLampSprite(true),      // 425 : mobilier de la place
+    plazaLampOff: plazaLampSprite(false),  // 2026-09-25 : le même, éteint, de jour
     /* ⚠️⚠️ ZIP 439 — LE BANC DE BOIS EST CELUI DE LA PLANCHE, ET IL A COÛTÉ UNE
        PLACE ASSISE. Le banc du 429 faisait 52 px pour porter trois occupants
        (« on doit pouvoir s'asseoir à deux, ou trois sur le même banc ») ; celui
@@ -17014,6 +17096,7 @@ house: house(),
        donné un étal manquant (donc invisible) sur une case pourtant solide —
        le mur invisible du 425, en négatif. */
     townStalls: STALL_TRADES.map((_, i) => townStallSprite(i)),
+    townStallsAlt: STALL_TRADES.map((_, i) => townStallSprite(i, true)),   // 2026-09-25 : la seconde rangée — voir townStallSprite
     townMarketArch: townMarketArchSprite(),   // zip 431
     townFlowerCart: townFlowerCartSprite(),   // zip 431
     townBarrel: townBarrelSprite(),           // zip 431

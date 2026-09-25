@@ -220,6 +220,28 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   relu, cran posé à une position entière, pixels opaques du monument comparés au PNG sous la teinte de
   saison — 100 % exacts hors surimpressions voulues (halo du parvis, embase, pigeons), aux cinq crans,
   pour les trois monuments. Recette : page jetable + route qui écrit le canevas en PNG (§10).
+
+- **`tools/verify-noms.mjs` — 13 contrôles, 13/13 (2026-09-25, phase 2 de la feuille de route
+  graphique).** La police pixel des noms (`components/ferme/pixelFont.js`) et leur masquage. Il tient :
+  la COUVERTURE sans repli (87 noms et libellés que le jeu écrit lui-même, fr et en — un nom dont une
+  lettre manque retombe en silence sur l'ancienne écriture ; le premier passage a trouvé le tiret
+  cadratin de « Impact 3 — fouillé »), la boîte de masquage qui contient tout le dessin (ombre comprise,
+  échelles 1 à 3), la largeur annoncée = la largeur peinte, une rangée d'air entre chaque accent et sa
+  lettre (la leçon de « Jér8me », vue à l'écran), et le masquage : moi d'abord, un nom affiché garde sa
+  place face à un égal qui arrive, deux noms affichés qui se rencontrent ne s'échangent pas à chaque pas,
+  le perdant s'efface en fondu (0,88 après une image, 0 avant une seconde), la mémoire oublie les
+  absents. ⚠️ **Falsifié 4 fois** (accents recollés, tiret retiré, masquage coupé, boîte serrée).
+  ⚠️ Ne juge pas l'ORDRE de dessin (passe finale après le décor, `queueNameTag`) : vu en jeu seulement.
+- **Ajouts de la phase 2 à trois bancs existants** : `render-parc` (les trois lanternes ÉTEINTES n'ont
+  plus un pixel de lumière et ne changent QUE des pixels de lumière ; aucun arbre ne cache plus de 10 %
+  d'une lanterne, mesuré sur les vrais sprites dans le vrai monde — le magnolia du parc en cachait 55 % ;
+  la planche est désormais de JOUR, lanternes éteintes, comme le jeu), `render-foire` (les dix étals du
+  vrai champ de foire sont dix dessins différents, comparés pixel à pixel ; planche
+  `foire-deux-rangees.png` ; ce banc n'avait aucun contrôle et sortait toujours à 0), `render-rues` (la
+  fontaine posée sur le dallage : ni pierre de bordure ni aplat gris sous la vasque). Chacun falsifié
+  une fois (55 %, 24 px de lumière, 6 dessins pour 10, 652 px de bordure).
+  ⚠️ **Le « trait vert » de la chaussée n'a pas de banc** : c'est une couture de lissage du navigateur
+  pendant un fondu de zoom, le faux canevas ne lisse rien — vu et revu en jeu seulement.
   ⚠️ **Phase 0, même jour : `lib-canvas.mjs` a appris les dégradés** : `render-eau` (16/16) et
   `render-parc` (31/31) plantaient depuis le 2026-09-02 ; les PNG de cinq autres bancs sortent bit à bit
   identiques. Deux comptes figés corrigés en les relançant : `render-eau` (« 4 massifs » → les quatre

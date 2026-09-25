@@ -5527,7 +5527,12 @@ export function generateTownWorld() {
       for (let k = 0; k < NS; k++) {
         const sx = AX - (((NS - 1) * GAP) >> 1) + k * GAP;
         if (!inMap(sx, row) || solid[id(sx, row)]) continue;
-        props.push({ x: sx, y: row, kind: "stall", v: (k + shift) % NT });
+        // `alt` (2026-09-25, phase 2) : la seconde rangée prend la VARIANTE de
+        // chaque métier (voir `townStallSprite`, fermeArt.js) — sans elle,
+        // quatre métiers revenaient deux fois au pixel près. Aucun tirage : la
+        // carte se regénère depuis sa graine, un `rnd()` de plus déplacerait
+        // tout ce qui suit.
+        props.push({ x: sx, y: row, kind: "stall", v: (k + shift) % NT, alt: stall });
         solid[id(sx, row)] = 1;
       }
       stall++;
@@ -7504,6 +7509,37 @@ export function generateTownWorld() {
      ci-dessus) : un buisson retiré de `props` ne doit pas laisser derrière lui
      une case molle sans dessin, c'est-à-dire l'inverse exact d'un mur
      invisible — un trou invisible. */
+  /* ═══════════════════════════════════════════════════════════════════════
+     2026-09-25 (phase 2 de la feuille de route graphique) — AUCUN FEUILLU
+     DEVANT UNE LANTERNE.
+     ───────────────────────────────────────────────────────────────────────
+     L'audit l'a vu au coin nord-ouest du parc : un magnolia planté sur la
+     rangée juste au sud d'un lampadaire, donc dessiné DEVANT lui, avalait
+     55 % de son fût — seule la lanterne dépassait du feuillage. Mesuré sur les
+     vrais sprites le même jour : six lanternes de la rue nord du parc et de la
+     rue de l'est dans ce cas (16 à 55 % du lampadaire caché), toujours par un
+     feuillu posé une ou deux rangées plus bas, à une colonne près. Les
+     conifères, étroits, n'en cachent rien (0 à 7 %) : ils restent.
+     ⚠️ UNE PASSE FINALE, ET AUCUN TIRAGE : la ville se regénère depuis sa
+     graine, un `rnd()` de plus déplacerait tout ce qui suit (§4). On retire
+     l'arbre après coup, exactement comme la vague de suppression du navire
+     retire des décors déjà posés.
+     ⚠️ La règle se tient ici, chez l'arbre, parce que c'est lui qui arrive en
+     dernier : une lanterne posée après un arbre n'existe pas dans ce
+     générateur (les lanternes sont posées avec leurs rues et leurs allées). */
+  {
+    for (const p of props) {
+      if (p.kind !== "lamp" && p.kind !== "hangLamp" && p.kind !== "oilLamp") continue;
+      for (let dy = 1; dy <= 2; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const x = p.x + dx, y = p.y + dy;
+        if (!inMap(x, y)) continue;
+        const i = id(x, y);
+        if (objects[i] !== C.O_TREE) continue;
+        objects[i] = C.O_NONE; objHp.delete(i);
+      }
+    }
+  }
+
   const soft = new Uint8Array(W * H);
   {
     const hard = new Uint8Array(W * H);

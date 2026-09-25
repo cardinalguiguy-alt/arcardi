@@ -1,5 +1,37 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-20
 
+## 2026-09-25 (suite) — PHASE 2 : LES CORRECTIFS SANS PARTI PRIS
+
+Livrés ensemble : Guillaume a levé pour ce chantier la règle « un seul changement visuel par
+livraison ». Tous vus en jeu (échafaudage local, 524×714, cran 1 à 3, jour et nuit).
+- **Tribunal, détourage refait** (`tools/build-tribunal-sprite.mjs`). Le test de période mangeait toute
+  pierre claire posée à 13 px d'une case sombre du damier : lanternon presque entier, corniche gauche,
+  rampants du fronton, un quart du piédestal gauche — 23 837 px de bâtiment. Nouvelle règle : chaque pixel
+  a UNE couleur de damier prévue (grille de 13,6 px mesurée), et la parité se lit case par case parce que
+  Gemini a peint des coutures. Les îlots neutres restants s'effacent tous (le bâtiment est d'un seul
+  tenant) ; les trois baies du lanternon, peintes à jour, sont foncées vers l'ombre de leurs arcs.
+- **Église coupée sur écran étroit** : `churchHeadroom` reprend le calcul du tribunal
+  (`monumentHeadroom`, FermeGame.js), 0,17 en plancher ; la croix garde de l'air à 524×714.
+- **Noms** : police pixel dessinée en code (`pixelFont.js`, ombre portée d'un pixel d'art — un liseré
+  sur huit voisins, premier jet, faisait un bandeau noir), passe finale après le décor (plus rien ne
+  passe devant un nom), priorité moi > joueurs > le plus proche, perdant effacé en fondu, un nom affiché
+  garde sa place face à un égal. Personnages ET cartes (M). Un pseudo hors police garde l'ancienne
+  écriture. ⚠️ Un personnage caché par un bâtiment garde son nom visible (voulu : on retrouve un ami).
+- **Lanternes éteintes le jour** (lampadaire de la place, lanterne suspendue, lampe à huile) :
+  allumées avec le voile de nuit, échelonnées par hachage de case au crépuscule.
+- **Fontaine** : ses deux cases (eau pour la collision) se peignent en dalle, et les dalles voisines ne
+  les prennent plus pour un bord de place — l'aplat gris et sa bordure claire étaient le « rectangle ».
+- **Arbres sur lanterne** : passe finale du générateur, aucun feuillu dans les deux rangées devant une
+  lanterne (6 retirés, dont le magnolia qui cachait 55 % d'un fût) ; les conifères restent (≤ 7 %).
+- **Trait vert** : une couture de lissage pendant un FONDU de zoom (échelle non entière : le navigateur
+  lisse les bords des tuiles et le vert du fond transparaît). Pendant un fondu, chaque tuile du sol est
+  calée sur des pixels d'écran entiers ; à échelle entière, rien ne change au pixel près.
+- **Étals** : la seconde rangée prend une variante de chaque métier (autre marchandise, nappe rayée,
+  dessin retourné) — dix dessins pour dix étals.
+⚠️ **Vu, pas corrigé, hors liste** : le dallage du parvis visible entre les arcs-boutants de l'église
+(combler ces jours, c'est peindre — un parti pris) ; le lampadaire de la FERME a toujours son verre jaune
+de jour (la ferme suit après la phase 4) ; les noms passent sous le voile de nuit (phase 3).
+
 ## 2026-09-25 — AUDIT GRAPHIQUE DE VALLEY TOWN (constat seul, RIEN CODÉ)
 
 Fait en jeu (échafaudage local, 12 arrêts extérieurs, 8 intérieurs, nuit à 18h48/21h51/0h53, carte
@@ -34,12 +66,13 @@ entière, gros plans au pixel). Aucun fichier du jeu touché. Constats, par grav
    lampadaire ; étals de foire copiés deux fois à l'identique ; gazon dont la période se lit sur
    les grandes prairies ; canevas hors `devicePixelRatio` (flou sur Retina).
 **FEUILLE DE ROUTE — CHECKLIST, À COCHER À CHAQUE LIVRAISON (2026-09-25, cadre de Guillaume : personnages ÉVOCATEURS, on ne les détaille
-pas ; monde, végétation, faune et bâtiments soignés à fond).** Une livraison = un changement visuel.
+pas ; monde, végétation, faune et bâtiments soignés à fond).** ⚠️ Règle « une livraison = un changement
+visuel » LEVÉE pour ce chantier par Guillaume (2026-09-25, phase 2) : une phase se livre d'un bloc.
 | ✓ | # | Phase | Pourquoi à ce rang |
 |---|---|---|---|
 | ✅ | 0 | Outillage (livrée le 2026-09-25, plus `TOWN_BITMAPS` prouvée identique en jeu) : dégradés dans `lib-canvas` (ranime `render-eau`/`render-parc`), banc « densité » (tout bitmap à échelle entière, sans lissage) | rien de la suite ne se juge sans |
 | ✅ | 1 | Échelle unique — **livrée le 2026-09-25, RÈGLE CHANGÉE en cours de route** (Guillaume : « je veux pas de perte de qualité » ; mesuré, les références Gemini sont des peintures sans grille de pixels, les ramener à la grille d'art détruisait du détail). Les trois monuments passent en `grid: "screen"` : une image par cran de zoom, fabriquée depuis la référence d'origine (`tools/lib-mip.mjs`, Lanczos-3 prémultiplié) et posée à 1 px d'image = 1 px d'écran, sans lissage (`drawScreenExactBitmap`). Mesuré : 1,5 à 4,2 fois plus de détail qu'avant, 100 % des pixels exacts en jeu hors surimpressions voulues (halo, embase, pigeons). Escalier détouré et herbes hautes : déjà à 1:1 d'art, conformes. ⚠️ Reste vrai : le monument est plus FIN que le décor en gros pixels (prix accepté). | fondation posée |
-| ⬜ | 2 | Correctifs sans parti pris (+ trouvés en phase 1 : le LANTERNON du dôme du tribunal est troué par le détourage — ses parties claires passent pour du damier, défaut d'origine ; le zoom des monuments coupe le haut de l'église de 5 px sur un écran étroit, 524×714) : noms (chevauchement, occultation, police pixel), lampadaires de jour, rectangle de la fontaine, arbres qui avalent un lampadaire, trait vert de la chaussée, contenu des étals | petits, indépendants — à glisser pendant les attentes d'images Gemini |
+| ✅ | 2 | Correctifs sans parti pris — **livrée le 2026-09-25** (récit juste au-dessus) : détourage du tribunal refait (lanternon, fronton, corniche, piédestal), église cadrée sur écran étroit, noms en police pixel avec priorité et fondu (personnages + cartes), lanternes éteintes le jour, fontaine sur son dallage, aucun feuillu devant une lanterne, couture verte du fondu de zoom, dix étals différents | fait |
 | ⬜ | 3 | Lumière (⚠️ constaté en phase 0 : les calques `-glow` existants sont INVISIBLES la nuit, le voile passe par-dessus) : teinte selon l'heure, lumières chaudes additives en paliers, occultées, fenêtres allumées, pluie à l'échelle du pixel | les bâtiments refaits en 6 naîtront avec leur calque de nuit |
 | ⬜ | 4 | Sols et eau : paliers de profondeur, bord de quai, reflets, rampe de l'étang, sable, période du gazon, dallages et leurs jonctions, murs de soutènement | le tapis sous tout le reste, avant de recomposer |
 | ⬜ | 5 | Faune : canards, poissons, papillons, chats, mouettes, lucioles — fonctions du temps, non diffusées (règle des pigeons, 433) | a besoin de l'eau (4) et de la nuit (3) |

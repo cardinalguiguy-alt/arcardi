@@ -39,9 +39,10 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = path.join(ROOT, "tools", "out");
 
 installFakeDOM();
-const mods = await loadFerme(ROOT, ["fermeConstants", "fermeArt"]);
+const mods = await loadFerme(ROOT, ["fermeConstants", "fermeArt", "fermeEngine"]);
 const A = mods.fermeArt;
 const C = mods.fermeConstants;
+const E = mods.fermeEngine;
 const S = A.buildSprites();
 const T = 16;
 
@@ -166,6 +167,46 @@ function bunting(g, ax, bx, topY, k, mastTo) {
   writePNG(path.join(OUT, "foire-metiers-431.png"), up.px, up.W, up.H);
 }
 
+/* ---- 2026-09-25 (phase 2) — LES DIX ÉTALS DU VRAI CHAMP DE FOIRE SONT TOUS
+   DIFFÉRENTS. L'audit l'a vu : six métiers pour dix étals, donc quatre métiers
+   deux fois au pixel près. La seconde rangée prend la variante (`alt`). Le
+   contrôle lit le VRAI générateur et choisit le sprite exactement comme le jeu
+   (`pr.alt ? townStallsAlt : townStalls`), puis compare les images pixel à
+   pixel — une égalité de NOM de métier ne dit rien, deux dessins égaux si. */
+let fail = 0;
+const ok = (cond, label, detail) => {
+  console.log((cond ? "  OK   " : "  FAIL ") + label + (detail ? "  —  " + detail : ""));
+  if (!cond) fail++;
+};
+{
+  const tw = E.generateTownWorld();
+  const stalls = tw.props.filter((p) => p.kind === "stall");
+  const imgOf = (p) => (p.alt ? S.townStallsAlt : S.townStalls)[(p.v | 0) % S.townStalls.length];
+  const sig = (c) => { const d = c.__px || c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let h = 2166136261; for (let i = 0; i < d.length; i++) h = Math.imul(h ^ d[i], 16777619) >>> 0; return c.width + "x" + c.height + ":" + h; };
+  const seen = new Map();
+  let dup = 0;
+  for (const p of stalls) { const k = sig(imgOf(p)); if (seen.has(k)) dup++; seen.set(k, (seen.get(k) || 0) + 1); }
+  ok(stalls.length >= 10, "les étals du champ de foire sont bien lus", `${stalls.length} lus`);
+  ok(dup === 0, "aucun étal n'est la copie d'un autre", `${seen.size} dessins pour ${stalls.length} étals`);
+  // La planche : les deux rangées telles que le générateur les pose.
+  const rows = [...new Set(stalls.map((p) => p.y))].sort((a, b) => a - b);
+  const xs = stalls.map((p) => p.x), minX = Math.min(...xs), maxX = Math.max(...xs);
+  const W = (maxX - minX + 4) * T, H = 150;
+  const v = makeCanvas(W, H);
+  paveStone(v.ctx, W, H);
+  rows.forEach((ry, r) => {
+    for (const p of stalls.filter((q) => q.y === ry)) {
+      const im = imgOf(p), x = (p.x - minX + 2) * T, ground = 64 + r * 70;
+      shadow(v.ctx, x, ground, im.width * 0.28);
+      v.ctx.drawImage(im, x - im.width / 2, ground - im.height);
+    }
+  });
+  const up = scale(v.px, W, H, 3);
+  writePNG(path.join(OUT, "foire-deux-rangees.png"), up.px, up.W, up.H);
+}
+
 console.log("\n=== zip 431 — le champ de foire ===\n");
 console.log(`${S.townStalls.length} métiers d'étal · arche ${S.townMarketArch.width}×${S.townMarketArch.height}`);
-console.log("Écrit : foire-rangee-431.png · foire-arche-431.png · foire-metiers-431.png\n");
+console.log("Écrit : foire-rangee-431.png · foire-arche-431.png · foire-metiers-431.png · foire-deux-rangees.png\n");
+console.log(fail ? fail + " CONTRÔLE(S) EN ÉCHEC\n" : "Tout est bon.\n");
+process.exit(fail ? 1 : 0);

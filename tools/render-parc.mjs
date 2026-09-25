@@ -61,7 +61,9 @@ const ok = (cond, label, detail) => {
    TRIAGE, pas de dessin — un tri qui se trompe se voit ici comme dans le jeu. */
 const PROP_IMG = (p) => (
   p.kind === "bench" ? S.plazaBench :
-  p.kind === "lamp" ? S.plazaLamp :
+  // 2026-09-25 (phase 2) : la planche est de JOUR, donc les lanternes ÉTEINTES —
+  // comme le jeu (`townLampLit`, FermeGame.js).
+  p.kind === "lamp" ? S.plazaLampOff :
   p.kind === "topiary" ? S.plazaTopiary :
   p.kind === "planter" ? S.townPlanter :
   p.kind === "kiosk" ? S.townKiosk :
@@ -76,10 +78,10 @@ const PROP_IMG = (p) => (
   ((k) => k ? k : null)(
     { archBridge: S.townArchBridge, fence: S.townFence, woodBox: S.townWoodBox,
       lowWall: S.townLowWall, stoneBlock: S.townStoneBlock, stoneBench: S.townStoneBench,
-      benchWall: S.townBenchWall, hangLamp: S.townHangLamp, stepStones: S.townStepStones,
+      benchWall: S.townBenchWall, hangLamp: S.townHangLampOff, stepStones: S.townStepStones,
       chest: S.townChest, bucket: S.townBucket, rod: S.townRod, potReeds: S.townPotReeds,
       flowerTrough: S.townFlowerTrough, bonsai: S.townBonsai, roseBox: S.townRoseBox,
-      potPink: S.townPotPink, oilLamp: S.townOilLamp, table: S.townTable,
+      potPink: S.townPotPink, oilLamp: S.townOilLampOff, table: S.townTable,
       reedTuft: S.townReedTuft, reedsWater: S.townReedsWater, hedgeRow: S.townHedgeRow,
       grassTuft: S.townGrassTuft, flatStone: S.townFlatStone }[p.kind]
     || ({ goldBush: S.townGoldBush, lavender: S.townLavender,
@@ -590,6 +592,69 @@ console.log("\n=== 6. le sentier de la rive est se perd dans le bois ===\n");
   shot("fleuve-entier", { x: lk.x - 2, y: lk.y - 8, w: tw.w - lk.x + 2, h: 24 }, 1);
   shot("fleuve-passe", { x: C.TOWN_RIVER_NECK_X - 18, y: lk.y - 2, w: 36, h: 16 }, 3);
   shot("fleuve-sortie", { x: tw.w - 30, y: lk.y - 2, w: 30, h: 16 }, 3);
+}
+
+/* ═══════════════ 2026-09-25 (phase 2) — LES LANTERNES ═══════════════════════
+   Deux défauts de l'audit du jour, deux contrôles.
+   1. LES LANTERNES ÉTEINTES LE SONT VRAIMENT. La version de jour ne doit garder
+      AUCUN pixel de la lumière peinte, et ne rien changer d'autre que le verre
+      ou la flamme : la comparaison se fait pixel à pixel avec la version
+      allumée, et CHAQUE pixel qui diffère doit avoir été un pixel de lumière
+      (chaud et clair). ⚠️ Premier jet : « la zone qui change tient dans 20 % du
+      sprite » — faux sur un dessin juste, la flamme de la petite lampe à huile
+      en occupe 30 %. Une surface n'est pas une nature (§8).
+   2. AUCUN FEUILLU NE MANGE UNE LANTERNE. Mesuré sur les VRAIS sprites, dans le
+      VRAI monde : la part du lampadaire recouverte par un arbre dessiné devant
+      lui. Le magnolia du coin nord-ouest du parc en couvrait 55 %. */
+{
+  const px = (c) => c.__px || c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+  const lit = (r, g, b) => r > 200 && g > 150 && b < 200 && r - b > 40;   // crème / jaune / flamme
+  for (const [on, off, nm] of [[S.plazaLamp, S.plazaLampOff, "lampadaire de la place"], [S.townHangLamp, S.townHangLampOff, "lanterne suspendue"], [S.townOilLamp, S.townOilLampOff, "lampe à huile"]]) {
+    const a = px(on), b = px(off);
+    const warm = (r, g, b2) => r > 150 && r - b2 > 40;   // tout ce que la lumière peint : verre crème, flamme, et ses bords orangés
+    let litOn = 0, litOff = 0, diff = 0, stray = 0;
+    for (let i = 0; i < a.length; i += 4) {
+      if (a[i + 3] > 20 && lit(a[i], a[i + 1], a[i + 2])) litOn++;
+      if (b[i + 3] > 20 && lit(b[i], b[i + 1], b[i + 2])) litOff++;
+      if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2] || a[i + 3] !== b[i + 3]) {
+        diff++;
+        if (!(a[i + 3] > 20 && warm(a[i], a[i + 1], a[i + 2]))) stray++;
+      }
+    }
+    ok(litOn > 0 && litOff === 0, `${nm} : éteinte, plus un pixel de lumière`, `allumée ${litOn} px · éteinte ${litOff} px`);
+    ok(diff > 0 && stray === 0, `${nm} : seule la lumière change`, `${diff} px changés, dont ${stray} hors de la lumière`);
+  }
+  const trees = [];
+  for (let y = 0; y < tw.h; y++) for (let x = 0; x < tw.w; x++) {
+    const o = tw.objects[y * tw.w + x];
+    if (o === C.O_TREE || o === C.O_TREE2) trees.push({ x, y, o });
+  }
+  const m0 = S.townTrees[0];
+  let lamps = 0, worst = 0, worstAt = "";
+  for (const l of tw.props) {
+    const img = l.kind === "lamp" ? S.plazaLamp : l.kind === "hangLamp" ? S.townHangLamp : l.kind === "oilLamp" ? S.townOilLamp : null;
+    if (!img) continue;
+    lamps++;
+    const la = px(img), lpx = l.x * T + T / 2 - img.width / 2, lpy = (l.y + 1) * T - img.height;
+    let n = 0; const cov = new Uint8Array(img.width * img.height);
+    for (const t of trees) {
+      if (t.y < l.y || t.y - l.y > 4 || Math.abs(t.x - l.x) > 2) continue;   // derrière elle, il ne la couvre pas
+      const k = A.townTreeKind(tw, t.x, t.y, t.o), ti = S.townTrees[k] && S.townTrees[k].summer[1];
+      if (!ti) continue;
+      const ta = px(ti), tpx = t.x * T + T / 2 - m0.w / 2, tpy = t.y * T + T - m0.base;
+      for (let y = 0; y < img.height; y++) for (let x = 0; x < img.width; x++) {
+        if (la[(y * img.width + x) * 4 + 3] < 30) continue;
+        const wx = lpx + x - tpx, wy = lpy + y - tpy;
+        if (wx >= 0 && wy >= 0 && wx < ti.width && wy < ti.height && ta[(wy * ti.width + wx) * 4 + 3] > 128) cov[y * img.width + x] = 1;
+      }
+    }
+    let tot = 0;
+    for (let i = 0; i < cov.length; i++) { if (la[i * 4 + 3] >= 30) { tot++; n += cov[i]; } }
+    const f = n / Math.max(1, tot);
+    if (f > worst) { worst = f; worstAt = `(${l.x},${l.y}) ${l.kind}`; }
+  }
+  ok(lamps >= 40, "les lanternes de la ville sont bien lues", `${lamps} lues`);
+  ok(worst <= 0.10, "aucun arbre ne cache plus de 10 % d'une lanterne", `pire : ${(worst * 100).toFixed(0)} % ${worstAt}`);
 }
 
 console.log("\nImages : tools/out/parc-ensemble.png, parc-etang.png, lac-rive-ouest.png, lac-rive-est.png, lac-quai.png, sentier-est.png, sentier-bois.png, fleuve-passe.png, fleuve-sortie.png\n");

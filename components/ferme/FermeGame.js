@@ -62,6 +62,7 @@ import { buildSprites, charPalette, drawBridgeTile, drawBridgeOverlay, drawCandy
    resterait nulle — une traîne qui ne se déclenche jamais, sans aucune erreur. */
 const STAR_LEAN_MEM = new Map();
 import { loadBitmap, peekBitmap } from "./bitmapAssets";
+import * as PF from "./pixelFont";
 import { fstr } from "./fermeStrings";
 // ZIP 441 — l'orgue de l'église. Le lecteur de fichiers existe depuis longtemps
 // (bruit de caisse, de porte, de pioche) : on ne monte pas un second pipeline
@@ -1495,6 +1496,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const taxiMenuRef = useRef(false);
   const [taxiPhase, setTaxiPhase] = useState(null);  // miroir React, pour le bouton
   const townZoomRef = useRef({ v: 0 });
+  /* 2026-09-25 (phase 2) — LES NOMS AU-DESSUS DES TÊTES : la file de l'image en
+     cours (`queue`, ouverte par chaque scène juste avant sa boucle de dessin),
+     l'opacité de chaque étiquette d'une image à l'autre (`fade`, pour le fondu
+     du masquage) et celle des étiquettes des cartes (`mapFade`). Voir
+     `queueNameTag`. */
+  const nameTagRef = useRef({ queue: null, dt: 0.016, fade: new Map(), mapFade: new Map(), mapT: 0 });
   /* ⚠️⚠️ 2026-09-22 ter — LE ZOOM MANUEL. `manualZoomRef` est le CRAN choisi
      (un des `ZOOM_LEVELS`, jamais autre chose) ; c'est un réglage de VUE, pas
      un fait du monde — il ne se diffuse pas (§3 CLAUDE.md), et il est
@@ -15812,6 +15819,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // jour partout en dessous (ferme, lac maléfique, tribunal ; la ville
       // garde son propre fondu, voir townZoomNow).
       viewZoomNow(dt);
+      nameTagRef.current.dt = dt;   // 2026-09-25 : le pas du fondu des noms (voir queueNameTag)
       const w = worldRef.current, m = meRef.current, sprites = spritesRef.current;
       if (!w || !m || !sprites) return;
 
@@ -17838,7 +17846,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // fraîchement arrivé, sprite manquant, résident/atelier mal formé)
       // interrompait TOUTE la frame triée -> moitié basse de la ferme non
       // dessinée. La ferme étant la zone principale, ce filet manquait.
+      openNameTags();   // 2026-09-25 (phase 2) : les noms passent après tout le décor — voir queueNameTag
       for (const d of draws) { try { d.fn(); } catch (e) { console.error("[FERME] farm draw ignoré", e); } }
+      flushNameTags();
       // Passe finale des bulles (voir déclaration de bubbleQueue plus haut) :
       // toujours rendues APRÈS tout le reste de la scène (bâtiments compris),
       // donc jamais recouvertes. On les trie aussi par y pour qu'une bulle
@@ -18740,7 +18750,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          de la pose (evilHaulDraw l'écrit, cette ligne l'efface). */
       if (!(evilHaulRef.current && evilHaulRef.current.phase === "active") && canvas.style.transform) canvas.style.transform = "";
       draws.sort((a, b) => a.y - b.y);
+      openNameTags();   // 2026-09-25 (phase 2) — voir queueNameTag
       for (const d of draws) d.fn();
+      flushNameTags();
       /* Voile permanent (ambiance, indépendant du cycle jour/nuit de la ferme,
          jamais retiré ici).
 
@@ -19038,19 +19050,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        ⚠️ On ne touche PAS au cadrage des autres monuments : ils ont été jugés
        bons par Guillaume, et les changer ici serait un second changement visuel
        caché dans celui-ci (§2 CLAUDE.md). */
-    function courtHeadroom(m) {
-      const S = C.TOWN_COURT_SPRITE, b = C.TOWN_COURT;
+    /* ⚠️⚠️ 2026-09-25 (phase 2 de la feuille de route graphique) — LE CALCUL
+       DU TRIBUNAL SERT DÉSORMAIS AUSSI À L'ÉGLISE. Son 0,17 fixe coupait la
+       croix de la flèche centrale de 5 px sur une fenêtre de 524×714 (vu en jeu
+       en phase 1) : c'est exactement l'impossibilité décrite ci-dessus, qui
+       avait seulement moins de marge chez elle. Elle garde 0,17 en PLANCHER,
+       donc rien ne bouge là où son cadrage était déjà juste ; le calcul ne
+       reprend la main que quand le sommet sortirait. `topAbove` = hauteur du
+       dessin au-dessus de sa ligne de pied, en px monde ; `rowElev` = la case
+       dont l'altitude soulève le dessin (celle que lit son `pushE`) ; `margin`
+       = de l'air au-dessus de la pointe, pour qu'une croix ne colle pas au
+       bord. */
+    function monumentHeadroom(m, b, topAbove, rowElev, floor, margin) {
       const vh = canvas.height / C.TOWN_ZOOM_NEAR;
-      if (!(vh > 0)) return 0;
+      if (!(vh > 0)) return floor;
       /* ⚠️ L'ALTITUDE DU PARVIS SE LIT DANS LE MONDE (comme à l'ancrage du
          sprite), mais PAS via `elAt` : celui-ci est un `const` fléché déclaré
          plus bas dans la boucle de rendu, donc invisible ici — le piège du §4,
          qui a déjà coûté deux `ReferenceError` muets (tryTownJump, canStandTown). */
       const tw = townWorldRef.current;
-      const apron = tw ? (tw.elev[(b.y + b.h) * tw.w + (b.x + (b.w >> 1))] || 0) : 1;
-      // le sommet du dessin, en px monde-écran — même dérivation que drawCourthouseBitmap
-      const top = (b.y + b.h) * T - apron * C.TOWN_ELEV_PX - S.iyFoot * (S.disp / S.iw) * S.grow;
-      return Math.max(0, Math.min(0.34, ((m.y + 0.5) * T - top) / vh - 0.5));
+      const apron = tw ? (tw.elev[rowElev.y * tw.w + rowElev.x] || 0) : 1;
+      // le sommet du dessin, en px monde-écran — même dérivation que son dessin
+      const top = (b.y + b.h) * T - apron * C.TOWN_ELEV_PX - topAbove - margin;
+      return Math.max(floor, Math.min(0.34, ((m.y + 0.5) * T - top) / vh - 0.5));
+    }
+    function courtHeadroom(m) {
+      const S = C.TOWN_COURT_SPRITE, b = C.TOWN_COURT;
+      return monumentHeadroom(m, b, S.iyFoot * (S.disp / S.iw) * S.grow, { x: b.x + (b.w >> 1), y: b.y + b.h }, 0, 0);
+    }
+    function churchHeadroom(m) {
+      const SB = C.TOWN_BITMAPS.church, b = C.TOWN_CHURCH;
+      // `drawChurchBitmap` pose le pied du dessin sur `(b.y + b.h) × T`, soulevé par `elAt(b.x, b.y + b.h - 1)`
+      return monumentHeadroom(m, b, SB.dispH * SB.grow, { x: b.x, y: b.y + b.h - 1 }, C.TOWN_ZOOM_HEADROOM_TALL, 6);
     }
     function townZoomTarget(m) {
       if (!m) return { zoom: manualZoomRef.current, headroom: 0 };
@@ -19073,7 +19104,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       for (const spec of [
         { b: C.TOWN_COURT, headroom: courtHeadroom },   // calculé, pas constant — voir courtHeadroom
         { b: C.TOWN_HALL },
-        { b: C.TOWN_CHURCH, headroom: C.TOWN_ZOOM_HEADROOM_TALL },
+        { b: C.TOWN_CHURCH, headroom: churchHeadroom }, // 0,17 en plancher, calculé au-delà — voir monumentHeadroom
         { b: C.TOWN_BOUTIQUE }, { b: C.TOWN_SALON },
         { b: C.TOWN_BELVEDERE }, { b: C.TOWN_PLAZA }, { b: C.TOWN_PIER },
         { b: { x: C.TOWN_KIOSK.x, y: C.TOWN_KIOSK.y, w: 3, h: 3 } },
@@ -19858,11 +19889,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          par l'appelant, une fois, au moment de la mise en file. */
       const townBubbles = [];
       const queueTownBubble = (cx, by, text, major, alpha, reveal) => townBubbles.push({ cx, by, text, major, alpha, reveal });
+      /* ⚠️⚠️ 2026-09-25 (phase 2) — LE « TRAIT VERT EN TRAVERS DE LA CHAUSSÉE ».
+         Vu par l'audit près du parc, retrouvé en jeu le même jour : il n'existe
+         QUE pendant un fondu de zoom (on entre ou sort de la zone de dézoom de
+         la place en longeant le parc). À échelle non entière, le bord d'une
+         tuile tombe sur un demi-pixel d'écran ; le navigateur le LISSE même
+         `imageSmoothingEnabled` coupé (c'est la géométrie qui est lissée, pas
+         l'image), deux tuiles voisines couvrent chacune la moitié du pixel de
+         jointure, et le vert du fond (`#4c8f40`, juste au-dessus) transparaît :
+         une couture d'un pixel, verdâtre, tous les quelques mètres.
+         La parade : pendant un fondu seulement, chaque tuile reçoit sa propre
+         transformation, calée sur des pixels d'écran ENTIERS — deux voisines
+         partagent exactement le même bord arrondi, il n'y a plus de pixel à
+         moitié couvert. Les tuiles font alors 17 ou 18 px au lieu de 17,6 : le
+         grouillement déjà accepté du fondu (note de `townZoomNow`), sans trou.
+         ⚠️ À ÉCHELLE ENTIÈRE, RIEN NE CHANGE AU PIXEL PRÈS : `zmFrac` est faux,
+         la transformation reste celle posée plus haut. */
+      const zmFrac = Math.abs(zm - Math.round(zm)) > 1e-6;
+      const camSx = Math.round(cam.x * zm), camSy = Math.round(cam.y * zm);
       for (let y = y0; y <= yBot; y++) for (let x = x0; x <= x1; x++) {
         const i = y * tw.w + x, g = tw.ground[i];
         const bakedCourtStair = C.townCourtMainStairCell(x, y);
         const e = tw.elev[i], oy = -e * EP;
         const px = x * T, py = y * T + oy;
+        if (zmFrac) {
+          const L = Math.round(px * zm) - camSx, R = Math.round((px + T) * zm) - camSx;
+          const Tp = Math.round(py * zm) - camSy, B = Math.round((py + T) * zm) - camSy;
+          const sx = (R - L) / T, sy = (B - Tp) / T;
+          ctx.setTransform(sx, 0, 0, sy, L - px * sx, Tp - py * sy);
+        }
         // Zip 235: use the real farm sprite tiles for a match with the farm
         // look (grass/path/stone), keeping the fountain water for the pool.
         /* ⚠️ ZIP 431 — L'HERBE DE LA VILLE N'EST PLUS CELLE DE LA FERME. Même
@@ -19981,7 +20036,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              vase de `drawTownShoreTile` par-dessus, puis l'eau. L'ancien
              `fillRect` bleu pleine case est précisément ce qui dessinait
              l'escalier de 16 px. */
-          if (inFtn) { ctx.fillStyle = "#adacb3"; ctx.fillRect(px, py, T, T); }
+          /* ⚠️ 2026-09-25 (phase 2) : la DALLE de la place, plus un aplat gris
+             (`#adacb3`) — c'était, avec la bordure que les dalles voisines
+             traçaient autour, le rectangle clair que l'audit a vu derrière la
+             vasque. Voir `drawTownFlagTile`. L'aplat reste en repli. */
+          if (inFtn) { if (!A.drawTownFlagTile(ctx, sprites, tw, x, y, px, py)) { ctx.fillStyle = "#adacb3"; ctx.fillRect(px, py, T, T); } }
           else if (!A.drawTownGrassTile(ctx, sprites, tw, x, y, px, py)) ctx.drawImage(gTiles[(x * 37 + y * 17) % gTiles.length], px, py);
         }
         else if (g === C.G_BRIDGE) {
@@ -20241,6 +20300,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
         }
       }
+      if (zmFrac) ctx.setTransform(zm, 0, 0, zm, -camSx, -camSy);   // la transformation commune, rendue — voir la note du trait vert
       /* ══════════════════════════════════════════════════════════════════════
          ZIP 444 — LE CRATÈRE, DANS LE PRÉ DE L'EST.
          ──────────────────────────────────────────────────────────────────────
@@ -21557,6 +21617,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          tomber le buisson d'or et le buisson fleuri sur la même variante à
          chaque case, et les deux se retrouveraient toujours appariés. */
       const pick = (arr, pr) => (arr || [])[((pr.x * 11 + pr.y * 17) >>> 0) % Math.max(1, (arr || []).length)];
+      /* ⚠️ 2026-09-25 (phase 2) — LES LANTERNES S'ÉTEIGNENT LE JOUR. Leur lumière
+         était peinte dans le sprite, donc allumée à midi (audit du même jour).
+         Elles s'allument avec le voile de nuit (`nightAlpha`), et pas toutes
+         d'un coup : un seuil tiré du HACHAGE de leur case les échelonne sur le
+         début du crépuscule — et elles s'éteignent dans l'ordre inverse à
+         l'aube. Aucune n'est un état : deux joueurs voient les mêmes (§3). */
+      const lampNa = nightAlpha();
+      const townLampLit = (pr) => lampNa > 0.02 + 0.03 * (((pr.x * 7 + pr.y * 13) >>> 0) % 5);
       for (const pr of (tw.props || [])) {
         if (pr.x < x0 - 2 || pr.x > x1 + 2 || pr.y < y0 - 3 || pr.y > yBot + 2) continue;
         if (pr.kind === "marketArch") { drawMarketArch(pr); continue; }
@@ -21612,14 +21680,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            étant posés tous les quatre pas, TOUTE LA RANGÉE sortait de la même
            couleur (vu au banc de rendu). Le générateur, lui, connaît l'indice de
            l'étal : il n'a rien à deviner. Voir la note du champ de foire. */
-        const img = pr.kind === "lamp" ? sprites.plazaLamp
+        const img = pr.kind === "lamp" ? (townLampLit(pr) ? sprites.plazaLamp : sprites.plazaLampOff)
                   : pr.kind === "bench" ? sprites.plazaBench
                   : pr.kind === "topiary" ? sprites.plazaTopiary
                   /* ⚠️ ZIP 431 — LE MODULO SUIT LA TABLE, il n'est plus écrit en
                      dur. `% 4` sur six métiers aurait rendu deux étals invisibles
                      tout en laissant leur case solide : un mur invisible, le
                      défaut du 425, créé par une constante recopiée. */
-                  : pr.kind === "stall" ? (sprites.townStalls || [])[(pr.v | 0) % Math.max(1, (sprites.townStalls || []).length)]
+                  : pr.kind === "stall" ? ((pr.alt ? sprites.townStallsAlt : sprites.townStalls) || [])[(pr.v | 0) % Math.max(1, (sprites.townStalls || []).length)]
                   : pr.kind === "kiosk" ? sprites.townKiosk
                   : pr.kind === "grave" ? sprites.townGrave
                   : pr.kind === "planter" ? sprites.townPlanter
@@ -21652,7 +21720,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   : pr.kind === "stoneBlock" ? sprites.townStoneBlock
                   : pr.kind === "stoneBench" ? sprites.townStoneBench
                   : pr.kind === "benchWall" ? sprites.townBenchWall
-                  : pr.kind === "hangLamp" ? sprites.townHangLamp
+                  : pr.kind === "hangLamp" ? (townLampLit(pr) ? sprites.townHangLamp : sprites.townHangLampOff)
                   : pr.kind === "stepStones" ? sprites.townStepStones
                   : pr.kind === "chest" ? sprites.townChest
                   : pr.kind === "bucket" ? sprites.townBucket
@@ -21662,7 +21730,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   : pr.kind === "bonsai" ? sprites.townBonsai
                   : pr.kind === "roseBox" ? sprites.townRoseBox
                   : pr.kind === "potPink" ? sprites.townPotPink
-                  : pr.kind === "oilLamp" ? sprites.townOilLamp
+                  : pr.kind === "oilLamp" ? (townLampLit(pr) ? sprites.townOilLamp : sprites.townOilLampOff)
                   : pr.kind === "table" ? sprites.townTable
                   : pr.kind === "reedTuft" ? sprites.townReedTuft
                   : pr.kind === "reedsWater" ? sprites.townReedsWater
@@ -22455,7 +22523,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // un joueur distant fraîchement arrivé, une image manquante), TOUS les
       // draws suivants (dont des maisons plus bas à l'écran) n'étaient plus
       // dessinés. On isole chaque draw : une frame ne peut plus être amputée.
+      openNameTags();   // 2026-09-25 (phase 2) : plus aucun lampadaire devant un nom — voir queueNameTag
       for (const d of draws) { try { d.fn(); } catch (e) { console.error("[FERME] town draw ignoré", e); } }
+      flushNameTags();
       // Zip 427 : la passe finale des bulles (voir queueTownBubble).
       townBubbles.sort((a, b) => a.by - b.by);
       for (const bq of townBubbles) {
@@ -23208,7 +23278,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       draws.sort((a, b) => a.y - b.y);
       // Même isolation qu'en ville (zip 250) : un draw qui lève n'ampute plus
       // toute la fin de l'image.
+      openNameTags();   // 2026-09-25 (phase 2) — voir queueNameTag
       for (const d of draws) { try { d.fn(); } catch (e) { console.error("[FERME] court draw ignoré", e); } }
+      flushNameTags();
 
       /* L'AMBIANCE. Une vignette chaude, plus dense au sous-sol : c'est le seul
          effet du bâtiment, et il fait tout le travail que la lumière du jour
@@ -24920,6 +24992,77 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       ctx.restore();
     }
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ 2026-09-25 (phase 2 de la feuille de route graphique) — LES NOMS
+       ║ AU-DESSUS DES TÊTES : POLICE PIXEL, PASSE FINALE, PRIORITÉ.
+       ╚══════════════════════════════════════════════════════════════════════
+       Ce que l'audit du jour a relevé : à la gare et à la foire, les noms des
+       résidents s'empilaient jusqu'à l'illisible ; un lampadaire passait
+       DEVANT un nom (il était écrit dans le dessin trié du personnage, donc
+       recouvert par tout ce qui est plus bas à l'écran) ; et le texte était
+       lissé au milieu d'un monde en gros pixels.
+       ⚠️ Les trois se règlent au même endroit : `drawCharacter` ne dessine plus
+       le nom, il le MET EN FILE avec sa position ÉCRAN (la transformation du
+       moment — altitude, caméra, décalage d'un cavalier — y est déjà), et la
+       scène vide la file après sa boucle de dessin : plus rien ne passe devant.
+       Le masquage suit la décision de Guillaume : moi d'abord, puis les autres
+       joueurs, puis le personnage le plus proche de moi ; le perdant s'efface
+       en fondu, et un nom déjà affiché garde sa place face à un égal (sinon
+       deux résidents qui se croisent échangeraient leurs noms à chaque pas).
+       ⚠️ SANS FILE OUVERTE (un personnage dessiné hors d'une boucle de scène),
+       le nom s'écrit aussitôt, en police pixel, sans masquage : on ne perd
+       jamais un nom parce qu'une scène oublierait de vider sa file.
+       ⚠️ Un pseudo qui contient un caractère hors police (cyrillique, emoji…)
+       garde l'ancienne écriture, dans la même file et avec la même priorité. */
+    function mkLabelCanvas(w, h) { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; }
+    function queueNameTag(p, isSelf, wx, wy) {
+      if (!p.name) return;
+      const M = ctx.getTransform(), m = meRef.current;
+      const tag = {
+        key: p.id || p.name, name: String(p.name), color: isSelf ? "#ffffff" : "#ffe9a8",
+        sx: M.a * wx + M.c * wy + M.e, sy: M.b * wx + M.d * wy + M.f,
+        s: Math.max(1, Math.round(Math.abs(M.a))), alpha: ctx.globalAlpha,
+        tier: isSelf ? 0 : playersRef.current.has(p.id) ? 1 : 2,
+        d: m && Number.isFinite(p.x) ? Math.hypot(p.x - m.x, p.y - m.y) : 0,
+      };
+      const st = nameTagRef.current;
+      if (st.queue) st.queue.push(tag); else paintLabels(ctx, [tag], null, 0);
+    }
+    /* La boîte à l'écran d'une étiquette — celle du masquage. */
+    function labelBox(g, t) {
+      if (PF.pixelTextSupported(t.name)) return PF.pixelTextBox(t.name, t.sx, t.sy, t.s);
+      g.font = `bold ${7 * t.s}px monospace`;
+      const w = g.measureText(t.name).width;
+      return { x: t.sx - w / 2 - t.s, y: t.sy - 6 * t.s, w: w + 2 * t.s, h: 8 * t.s };
+    }
+    /* Peint des étiquettes en coordonnées ÉCRAN (`sx`, `sy` = centre, ligne de
+       base). `fade` nul : sans masquage. Sert aussi aux cartes. */
+    function paintLabels(g, tags, fade, dt) {
+      if (!tags.length) return;
+      const items = tags.map((t) => ({ key: t.key, box: labelBox(g, t), rank: [t.tier, fade && fade.get(t.key) > 0.5 ? 0 : 1, t.d] }));
+      const alphas = fade ? PF.pixelLabelMask(items, fade, dt) : tags.map(() => 1);
+      const order = tags.map((t, i) => i).sort((a, b) => alphas[a] - alphas[b]);   // le plus opaque par-dessus
+      g.save();
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      for (const i of order) {
+        const t = tags[i], a = alphas[i] * (t.alpha === undefined ? 1 : t.alpha);
+        if (a <= 0.01) continue;
+        g.globalAlpha = a;
+        if (PF.pixelTextSupported(t.name)) PF.drawPixelText(g, mkLabelCanvas, t.name, t.sx, t.sy, t.s, t.color, "#1a120c");
+        else {
+          g.font = `bold ${7 * t.s}px monospace`; g.textAlign = "center";
+          g.fillStyle = "#00000090"; g.fillText(t.name, t.sx + t.s, t.sy + t.s);
+          g.fillStyle = t.color; g.fillText(t.name, t.sx, t.sy);
+        }
+      }
+      g.restore();
+    }
+    function openNameTags() { nameTagRef.current.queue = []; }
+    function flushNameTags() {
+      const st = nameTagRef.current, q = st.queue;
+      st.queue = null;
+      if (q) paintLabels(ctx, q, st.fade, st.dt);
+    }
     function drawCharacter(p, isSelf) {
       const sprites = spritesRef.current;
       const sheet = sprites.getChar(p.gender, p.outfit, p.overalls, p.cap, p.beeSuit, p.plaid, p.cheeseHat, p.sugarWorker, p.look);
@@ -25245,9 +25388,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         else ctx.drawImage(sprites.fishingRodHeld, px, py - 4 - lift);
         ctx.restore();
       }
+      queueNameTag(p, isSelf, px + 8, py - 10);   // 2026-09-25 (phase 2) : police pixel, passe finale, priorité
+      // ⚠️ L'état du contexte que laissait l'ancienne écriture du nom : les
+      // icônes ci-dessous (🩹, 🏆) comptaient sur son `textAlign` centré.
       ctx.font = "bold 7px monospace"; ctx.textAlign = "center";
-      ctx.fillStyle = "#00000090"; ctx.fillText(p.name, px + 8 + 1, py - 10 + 1);
-      ctx.fillStyle = isSelf ? "#ffffff" : "#ffe9a8"; ctx.fillText(p.name, px + 8, py - 10);
       // Icône de blessure (chantier 2026-07) : visible au-dessus de TOUT
       // fermier blessé, soi-même ou distant (voir p.injuredUntil, propagé à
       // tous via applyDeltas/p.injured), pour qu'un autre joueur repère qui
@@ -25691,6 +25835,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        Ici c'était la carte ; c'est le genre d'oubli qui ne se voit qu'en
        ouvrant l'écran concerné depuis cette zone-là.
        ══════════════════════════════════════════════════════════════════════ */
+    /* 2026-09-25 (phase 2) — LES ÉTIQUETTES DES CARTES passent par la même police
+       pixel et le même masquage que les noms au-dessus des têtes (voir
+       `queueNameTag`) : on les COLLECTE pendant qu'on pose points et emojis, et
+       on les peint à la fin, par-dessus tout. Rangs : moi, les autres joueurs,
+       les lieux, les résidents — le plus proche de moi d'abord à rang égal.
+       Échelle 1 : la carte est un canevas à sa taille d'affichage, et la police
+       y fait la hauteur de l'ancien texte de 9-10 px. */
+    function mapTag(tags, key, name, color, x, y, tier) {
+      tags.push({ key, name: String(name), color, sx: x, sy: y, s: 1, tier, d: 0 });   // `d` : posé par paintMapLabels
+    }
+    function paintMapLabels(g, tags, meX, meY) {
+      const st = nameTagRef.current, now = performance.now();
+      const dt = st.mapT ? Math.min(0.1, (now - st.mapT) / 1000) : 0;
+      st.mapT = now;
+      for (const t of tags) t.d = Math.hypot(t.sx - meX, t.sy - meY);
+      paintLabels(g, tags, st.mapFade, dt);
+    }
     function drawFullMap() {
       const mz = (meRef.current && meRef.current.zone) || "farm";
       if (mz === "town") return drawTownMap();
@@ -25707,6 +25868,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       g.clearRect(0, 0, dispW, dispH);
       g.drawImage(base, 0, 0, w.w, w.h, 0, 0, dispW, dispH);
       drawGpsOnMap(g, scale);
+      const tags = [];   // 2026-09-25 : peintes à la fin — voir mapTag
       /* 461 — les cinq impacts sont des objectifs d'exploration publics : la
          carte les montre tous dès la chute, sans révéler leur contenu. */
       if (Q.starFallen(sharedRef.current.star)) {
@@ -25720,10 +25882,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           g.beginPath(); g.arc(px, py, pulse + 2, 0, 7); g.fill();
           g.fillStyle = seen ? "#c9beb6" : "#fff0c4";
           g.beginPath(); g.arc(px, py, 2.4, 0, 7); g.fill();
-          g.font = "bold 9px monospace"; g.textAlign = "center";
           const label = seen ? L.star.farm.mapImpactSeen(p.impact + 1) : L.star.farm.mapImpact(p.impact + 1);   // 2026-08-31 : l'état ne passait que par la couleur
-          g.fillStyle = "#19120e"; g.fillText(label, px + 1, py - 9 + 1);
-          g.fillStyle = seen ? "#c9beb6" : "#ffe4b4"; g.fillText(label, px, py - 9);
+          mapTag(tags, "impact" + p.impact, label, seen ? "#c9beb6" : "#ffe4b4", px, py - 9, 2);
         }
       }
       // Joueurs (moi + distants), point + nom, actualisés en direct.
@@ -25734,9 +25894,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const self = p.id === me.id;
         g.fillStyle = "#000"; g.beginPath(); g.arc(px, py, 4.5, 0, 7); g.fill();
         g.fillStyle = self ? "#ffffff" : "#ffe060"; g.beginPath(); g.arc(px, py, 3, 0, 7); g.fill();
-        g.font = "bold 10px monospace"; g.textAlign = "center";
-        g.fillStyle = "#000"; g.fillText(self ? L.mapYou : p.name, px + 1, py - 6 + 1);
-        g.fillStyle = self ? "#fff" : "#ffe9a8"; g.fillText(self ? L.mapYou : p.name, px, py - 6);
+        mapTag(tags, "p:" + p.id, self ? L.mapYou : p.name, self ? "#fff" : "#ffe9a8", px, py - 6, self ? 0 : 1);
       }
       // Passage sombre (demande Guillaume 2026-07 : "on ne trouve pas la
       // case noire") : marqueur violet pulsant + libellé sur la carte.
@@ -25745,10 +25903,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const pulse = 4 + Math.sin(performance.now() / 300) * 1.5;
         g.fillStyle = "rgba(150, 90, 220, 0.85)"; g.beginPath(); g.arc(dpx, dpy, pulse + 2, 0, 7); g.fill();
         g.fillStyle = "#e8d8ff"; g.beginPath(); g.arc(dpx, dpy, 2.5, 0, 7); g.fill();
-        g.font = "bold 10px monospace"; g.textAlign = "center";
-        g.fillStyle = "#000"; g.fillText(L.mapDarkPassage, dpx + 1, dpy - 9 + 1);
-        g.fillStyle = "#d9c2ff"; g.fillText(L.mapDarkPassage, dpx, dpy - 9);
+        mapTag(tags, "dark", L.mapDarkPassage, "#d9c2ff", dpx, dpy - 9, 2);
       }
+      paintMapLabels(g, tags, (meRef.current ? meRef.current.x : 0) * scale, (meRef.current ? meRef.current.y : 0) * scale);
     }
 
     /* ══════════════════════════════════════════════════════════════════════
@@ -25832,13 +25989,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         [C.TOWN_SALON.x + C.TOWN_SALON.w / 2, C.TOWN_SALON.y + C.TOWN_SALON.h, "💈", L.mapTownSalon],
       ];
       g.textAlign = "center";
+      const tags = [];   // 2026-09-25 : peintes à la fin — voir mapTag
       for (const [mx, my, emo, label] of marks) {
         const px = mx * scale, py = my * scale;
         g.font = "11px monospace";
         g.fillText(emo, px, py + 4);
-        g.font = "bold 9px monospace";
-        g.fillStyle = "#000"; g.fillText(label, px + 1, py - 7 + 1);
-        g.fillStyle = "#ffeec8"; g.fillText(label, px, py - 7);
+        mapTag(tags, "place:" + label, label, "#ffeec8", px, py - 7, 2);
       }
       /* Zip 427 — LES RÉSIDENTS EN VILLE, sur le plan. ⚠️ MÊME FILTRE DE ZONE
          QUE LES JOUEURS, et pour la même raison exactement : afficher les
@@ -25851,9 +26007,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const px = res.x * scale, py = res.y * scale;
         g.fillStyle = "#000"; g.beginPath(); g.arc(px, py, 4, 0, 7); g.fill();
         g.fillStyle = "#8fd8a0"; g.beginPath(); g.arc(px, py, 2.5, 0, 7); g.fill();
-        g.font = "bold 9px monospace";
-        g.fillStyle = "#000"; g.fillText(ro.name, px + 1, py - 6 + 1);
-        g.fillStyle = "#cdf0d6"; g.fillText(ro.name, px, py - 6);
+        mapTag(tags, "res:" + res.rid, ro.name, "#cdf0d6", px, py - 6, 3);
       }
       drawGpsOnMap(g, scale);
       // Les joueurs présents EN VILLE (les autres sont ailleurs : les dessiner
@@ -25865,10 +26019,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const self = p.id === me.id;
         g.fillStyle = "#000"; g.beginPath(); g.arc(px, py, 4.5, 0, 7); g.fill();
         g.fillStyle = self ? "#ffffff" : "#ffe060"; g.beginPath(); g.arc(px, py, 3, 0, 7); g.fill();
-        g.font = "bold 10px monospace";
-        g.fillStyle = "#000"; g.fillText(self ? L.mapYou : p.name, px + 1, py - 6 + 1);
-        g.fillStyle = self ? "#fff" : "#ffe9a8"; g.fillText(self ? L.mapYou : p.name, px, py - 6);
+        mapTag(tags, "p:" + p.id, self ? L.mapYou : p.name, self ? "#fff" : "#ffe9a8", px, py - 6, self ? 0 : 1);
       }
+      paintMapLabels(g, tags, (meRef.current ? meRef.current.x : 0) * scale, (meRef.current ? meRef.current.y : 0) * scale);
       g.textAlign = "left";
     }
 
@@ -25947,6 +26100,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         drawGpsOnMap(g, scale, 0, OY - E.courtFloorY0(f) * scale);
       }
       // Les visiteurs du MÊME étage. Les autres sont réellement ailleurs.
+      const courtTags = [];   // 2026-09-25 : peintes à la fin — voir mapTag
       const all = [meRef.current, ...playersRef.current.values()];
       for (const p of all) {
         if (!p || (p.zone || "farm") !== "court") continue;
@@ -25955,10 +26109,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const self = p.id === me.id;
         g.fillStyle = "#000"; g.beginPath(); g.arc(px, py, 4.5, 0, 7); g.fill();
         g.fillStyle = self ? "#ffffff" : "#ffe060"; g.beginPath(); g.arc(px, py, 3, 0, 7); g.fill();
-        g.font = "bold 10px monospace"; g.textAlign = "center";
-        g.fillStyle = "#000"; g.fillText(self ? L.mapYou : p.name, px + 1, py - 6 + 1);
-        g.fillStyle = self ? "#fff" : "#ffe9a8"; g.fillText(self ? L.mapYou : p.name, px, py - 6);
+        mapTag(courtTags, "p:" + p.id, self ? L.mapYou : p.name, self ? "#fff" : "#ffe9a8", px, py - 6, self ? 0 : 1);
       }
+      paintMapLabels(g, courtTags, (meRef.current ? meRef.current.x : 0) * scale, OY + ((meRef.current ? meRef.current.y : 0) - fy0) * scale);
       g.textAlign = "left";
     }
 

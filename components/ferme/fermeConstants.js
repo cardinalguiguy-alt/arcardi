@@ -7108,7 +7108,11 @@ export const TOWN_ZOOM_MS = 520;      // durée du fondu d'échelle
    cadrage-là les trois flèches de l'église sortaient par le haut sur une
    fenêtre réduite (mesuré en jeu, jamais sur le PNG seul — §10 CLAUDE.md).
    0,17 montre nettement plus de ciel au-dessus du joueur sans le pousser vers
-   le bas de l'écran (vérifié en jeu à 900 px de haut ET à 714 px). */
+   le bas de l'écran (vérifié en jeu à 900 px de haut ET à 714 px).
+   ⚠️ 2026-09-25 (phase 2) : ce n'est plus qu'un PLANCHER. À 524×714, la croix
+   sortait encore de 5 px : `churchHeadroom` (FermeGame.js) calcule désormais
+   ce qu'il faut pour garder le sommet dans le cadre, comme au tribunal, et
+   n'emploie ce nombre que là où il suffisait déjà. */
 export const TOWN_ZOOM_HEADROOM_TALL = 0.17;
 /* Marge en CASES autour de l'emprise d'un monument. ⚠️ Elle est GÉNÉREUSE
    exprès : le dézoom doit être TERMINÉ quand on arrive au pied du bâtiment. Un

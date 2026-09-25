@@ -7,29 +7,31 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-25 — Valley Town : audit graphique, feuille de route, PHASES 0 ET 1 livrées
+### 2026-09-25 — Valley Town : PHASES 0, 1 ET 2 de la feuille de route graphique livrées
 
-Feuille de route en 9 phases, tenue en CHECKLIST (✅/⬜) en tête de `components/ferme/README.md` —
-Guillaume : « à chaque livraison, rappelle ce qui reste à faire ». Cadre : personnages ÉVOCATEURS (on
-ne les détaille pas) ; monde, végétation, faune, bâtiments soignés à fond.
-- **Phase 0** (outillage) : dégradés dans `lib-canvas.mjs` (`render-eau`/`render-parc` revivent),
-  table `TOWN_BITMAPS`, banc `verify-densite`.
-- **Phase 1** (une seule densité) : **RÈGLE CHANGÉE** sur l'ordre de Guillaume (« je veux pas de perte
-  de qualité ») — les références Gemini sont des peintures sans grille de pixels (mesuré), les ramener à
-  la grille d'art détruisait du détail. Église, hôtel de ville, tribunal : une image PAR CRAN DE ZOOM,
-  fabriquée depuis la référence (`tools/lib-mip.mjs`), posée à 1 px d'image = 1 px d'écran sans lissage
-  (`drawScreenExactBitmap`, FermeGame.js). 1,5 à 4,2 fois plus de détail ; en jeu, 100 % des pixels
-  exacts hors surimpressions voulues, aux cinq crans ; fondu de zoom sans trou. Le tribunal avait une
-  retouche MANUELLE (colonne de damier gommée) que son script ne reproduisait pas : elle vit dans le
-  script maintenant. Collision, porte, horloge, pigeons : géométrie monde inchangée.
-- Bancs le 2026-09-25 : **25/25 `verify-*`** (`verify-densite` 43/43, falsifié 11 fois), **24/24
-  `render-*`**, bundle, `no-undef` (eslint, ponctuel), `next build` compilent.
-- ⚠️ **Poids** : 11,7 Mo de PNG sur disque, mais seul le cran affiché se télécharge (~1 Mo pour les trois
-  monuments au zoom des monuments). **Jamais vu sur un vrai iPad** (§10, plafond de mémoire WebKit).
+Checklist (✅/⬜) en tête de `components/ferme/README.md`, avec le récit de chaque phase — Guillaume :
+« à chaque livraison, rappelle ce qui reste à faire ». Cadre : personnages ÉVOCATEURS (on ne les
+détaille pas) ; monde, végétation, faune, bâtiments soignés à fond. ⚠️ **Pour ce chantier, Guillaume a
+LEVÉ la règle « un seul changement visuel par livraison »** : une phase se livre d'un bloc.
+- **Phases 0-1** : outillage (`verify-densite`, `TOWN_BITMAPS`), monuments en une image par cran de zoom,
+  posés à 1 px d'image = 1 px d'écran (décision « pas de perte de qualité »).
+- **Phase 2** (tout vu en jeu, 524×714, crans 1 à 3, jour et nuit) : détourage du tribunal refait
+  (lanternon, fronton, corniche, piédestal), église cadrée sur écran étroit (`churchHeadroom`), noms en
+  police pixel (`pixelFont.js`) dessinés APRÈS le décor, avec priorité et fondu (personnages + cartes),
+  lanternes éteintes le jour, fontaine sur son dallage, aucun feuillu devant une lanterne (passe finale
+  du générateur, sans tirage), couture verte du fondu de zoom supprimée, dix étals différents.
+- Bancs le 2026-09-25 : **26/26 `verify-*`** (`verify-noms` 13/13, neuf, falsifié 4 fois), **24/24
+  `render-*`** (`render-parc`, `render-foire`, `render-rues` gagnent des contrôles, chacun falsifié),
+  `no-undef` (eslint) propre sur les fichiers touchés, bundle et `next build` compilent.
+- ⚠️ **Poids** : 11,7 Mo de PNG de monuments sur disque, seul le cran affiché se télécharge. **Jamais vu
+  sur un vrai iPad** (§10, plafond de mémoire WebKit).
 - **Pas de manipulation Supabase.** Échecs (2026-09-24) : toujours jamais joués par Guillaume.
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
+- **Les phases 1 et 2 de Valley Town elles-mêmes** : monuments à 1:1, police des noms, fondu du
+  masquage. ⚠️ Un personnage caché derrière un bâtiment garde son nom visible (voulu, pour retrouver un
+  ami) — à confirmer avec lui.
 - Le perron du tribunal (ressenti de la montée), le schéma du zoom manuel (cinq crans, cette
   amplitude), le rétrécissement des pets ancré sur le maître — le récit vit autour de
   `courtDepthScale`/`TOWN_COURT_DEPTH_MARGIN` (fermeConstants.js) et `PERCH_POINTS_T` (FermeGame.js).
@@ -42,9 +44,9 @@ ne les détaille pas) ; monde, végétation, faune, bâtiments soignés à fond.
   buissons, verdure ×1,8 de Valley Town (2026-09-16).
 - **À décider avec lui, jamais seul (§2)** : quel bâtiment après le tribunal (refonte graphique
   avec Gemini) ; traduction des métiers (`job` de `TOWN_RESIDENTS` affiché brut en anglais — une
-  table `jobFr` suffit) ; le canevas hors `devicePixelRatio` (flou perçu, son propre chantier) ;
-  sécurité et synchro multi de la ferme (`components/ferme/SECURITE.md`, RIEN codé, migration à
-  valider).
+  table `jobFr` suffit) ; combler ou non le jour entre les arcs-boutants de l'église (on y voit le
+  dallage du parvis — c'est peindre, donc un parti pris) ; sécurité et synchro multi de la ferme
+  (`components/ferme/SECURITE.md`, RIEN codé, migration à valider).
 - ⚠️ Dette Google Cloud d'Où's That, À FAIRE AVEC CODEX ET GUILLAUME DEVANT LA CONSOLE (il se
   connecte lui-même, aucun identifiant transmis) : facturation dans l'EEE ; clé dédiée ; restriction
   à **Maps Embed API seule** ; référents limités aux domaines Arcardi ; aucune API payante sur ce
@@ -54,13 +56,12 @@ ne les détaille pas) ; monde, végétation, faune, bâtiments soignés à fond.
 
 ### ⏭️ ACTION SUIVANTE
 
-**Phase 2 de la feuille de route graphique de Valley Town** (checklist en tête du README de la ferme) :
-les correctifs sans parti pris, dont les deux trouvés en phase 1 (lanternon du tribunal troué par le
-détourage, haut de l'église coupé sur écran étroit). Guillaume n'a pas encore vu les monuments à 1:1 en
-jeu : le lui rappeler. Personnages : on n'y touche pas (décision du 2026-09-25, ils restent évocateurs).
-L'« autre jeu » annoncé après les échecs attend toujours qu'il le nomme. Les jugements « au plaisir »
-ci-dessus, échecs compris, ne se tranchent qu'en jouant : les lui rappeler, ne jamais les supposer
-acquis.
+**Phase 3 de la feuille de route graphique de Valley Town : la lumière** (teinte selon l'heure, lumières
+chaudes additives en paliers et occultées, fenêtres allumées — dont les calques `-glow` des monuments,
+invisibles sous le voile —, pluie à l'échelle du pixel, et les noms, qui passent aujourd'hui sous le
+voile). C'est de la production créative : **LISTER LES DÉCISIONS STRUCTURANTES ET ATTENDRE (§2)** avant
+d'écrire. Rappeler à Guillaume de jouer les phases 1-2 en vraie séance. L'« autre jeu » annoncé après
+les échecs attend toujours qu'il le nomme.
 ⚠️ Le jour où un nouveau bâtiment/sprite bitmap arrive, mesurer son sprite AVANT de poser sa
 collision, et vérifier tout bornage sur les DEUX axes séparément (§4).
 
@@ -102,7 +103,8 @@ tribunal** en est la troisième. **`candyluge`** est une descente 3D solo en thr
 - ⚠️ **NE PAS SAISIR SES IDENTIFIANTS**, même proposés. Ils ne débloquent d'ailleurs rien en
   local : le Supabase local est factice (§10).
 - **Ne pas mêler deux changements visuels dans la même livraison** (décision du 424) : il ne
-  peut plus juger lequel a produit quoi.
+  peut plus juger lequel a produit quoi. ⚠️ **Levée par lui pour la feuille de route graphique de
+  Valley Town (2026-09-25)** : là, une phase se livre d'un bloc. Partout ailleurs, la règle tient.
 - **Commentaires systématiques** partout où il y a un *pourquoi*, une hypothèse écartée, un
   piège — avec le numéro de zip. C'est la mémoire longue du projet.
 - **« caveman on »** inverse le contrat : exécuter, vite et bien, sans questions ni
@@ -487,7 +489,14 @@ dépôt.
   sprite fait planter `tools/render-*.mjs`, c'est-à-dire qu'on perd le seul moyen de REGARDER
   ce dessin. Les textes des bâtiments s'écrivent VIVANTS, au rendu — ce qui les rend en plus
   bilingues, ce qu'un sprite baké ne peut pas être. Idem `translate`/`rotate` : le faux canvas
-  les ignore, un sprite qui en dépend se juge faux.
+  les ignore, un sprite qui en dépend se juge faux. Depuis le 2026-09-25, les NOMS s'écrivent en
+  police pixel dessinée en code (`pixelFont.js`) : rastérisable, donc tenue par un banc (`verify-noms`).
+- ⚠️⚠️ **À ÉCHELLE NON ENTIÈRE, LE NAVIGATEUR LISSE LES BORDS D'UN `drawImage`, MÊME
+  `imageSmoothingEnabled` COUPÉ** (2026-09-25) : c'est la GÉOMÉTRIE qui est lissée, pas l'image. Deux
+  tuiles voisines dont la jointure tombe sur un demi-pixel d'écran le couvrent chacune à moitié, et le
+  fond transparaît : une couture d'un pixel (le « trait vert » de Valley Town, pendant chaque fondu de
+  zoom). Invisible au repos, invisible au banc (le faux canvas ne lisse rien). Parade : pendant le
+  fondu, caler chaque tuile sur des pixels d'écran ENTIERS (ses deux bords arrondis, pas sa taille).
 - ⚠️⚠️ **UN `onLoad` D'IFRAME PROUVE QUE LE DOCUMENT S'EST OUVERT, JAMAIS QUE SON CONTENU EST
   VALIDE** (Où's that ?, 2026-09-06). Un panoId Street View retiré par Google sert quand même une
   page qui charge normalement — `onLoad` se déclenche à l'identique d'un vrai panorama, en
@@ -540,6 +549,7 @@ dépôt.
 | `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** · **`TOWN_SOFT_PROPS`, `TOWN_BUSH_SLOW` et les trois nombres du frisson** (2026-09-02 : la végétation basse qu'on traverse) · **`mayorIsFem`, l'unique endroit qui sache lesquels des cinq maires sont des femmes** · **et depuis le 2026-09-01 LA SEMELLE (`bodyPoints`, `footX`/`footY`, `bodyFootTile`, `tileAnchor`) : l'unique description de l'empreinte au sol d'un personnage, dérivée de son ombre portée et lue par le jeu, le moteur ET les bancs** · depuis le 440 il **importe `planche.js`** : une portée de pont et une emprise de décor sont des grandeurs de DESSIN, on les dérive du sprite au lieu de les recopier · **2026-09-03 (lot C) `EVIL_LAKE_FISH`** (poissons mutants/squelettes du lac maléfique, jamais stockés), `EVIL_ROD_BREAK_MS`/`EVIL_ROD_HAZARD_R` (le hasard de la canne, confiné au point de sauvetage — voir `QUETE.md` §3) — **aucune constante de position du lac** : le vrai lac vient de `ew.lake`, vivant, voir `evilRescueSpot()` dans `FermeGame.js` |
 | `components/ferme/planche.js` · `components/ferme/planche2.js` | **GÉNÉRÉS** par `tools/import-planche.mjs` / `import-planche2.mjs` — les sprites des DEUX planches de Guillaume, en données. Ne pas éditer à la main. ⚠️ `planche2` était absente de cette carte jusqu'au 2026-09-05 : son échelle (une case = 62 px image) est DÉRIVÉE de cinq gabarits du jeu, pas mesurée dans l'image — la planche n'a pas de pas natif franc |
 | `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural. `starWispColors` décline le vivant en jaune, bleu et rose ; `drawStarFragmentMeteor` fait tourner le petit caillou incandescent sur un centre stable et `drawStarFragmentImpact` dessine son choc de terre/poussière/braises, sans réutiliser la boule de feu de Valley Town. Les gros dessins de quête (`drawStarCrater`, comète, navire, jauge, poses) vivent ici pour rester regardables par les bancs. |
+| `components/ferme/pixelFont.js` | **la police pixel des NOMS (personnages, cartes) et leur masquage** (2026-09-25) : glyphes en données, feuilles par couleur (jamais un canevas par étiquette, §10), `pixelLabelMask` (priorité, inertie, fondu). La mise en file et la passe finale vivent dans `queueNameTag`/`flushNameTags` (FermeGame.js). Banc : `verify-noms` |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
 | `components/chess/` | **Échecs (2026-09-24).** `ChessBoard.js` le plateau (pointeur, pré-coups, animations, flèches) · `rules.js`, `clock.js`, `engine.js` purs, tenus par `verify-echecs` · `engine.worker.js` l'ordinateur hors du fil principal · `pieces.js` SVG Cburnett (⚠️ notice BSD à garder, crédit dans `lib/gameRules.js`) · `ChessGame.js` réseau, arbitrage, interface |
 | `components/PetitsChevaux.js` · `components/ludoBot.js` | **Ludo 2–4 humains ou 1 humain + 1 à 3 bots choisis avant le départ.** `ludoBot.js` ne connaît aucune règle de déplacement : il classe seulement le plan légal et les simulations que l'arbitre hôte lui remet |
@@ -701,6 +711,11 @@ l'écran. ⚠️ **Le prix, accepté par Guillaume** (« pas de perte de qualit�
 FIN que le décor en gros pixels. ⚠️ **Un PNG importé peut avoir été retouché À LA MAIN après son
 script** (le tribunal l'était : une colonne de damier gommée) — regénérer depuis la référence sans
 comparer d'abord au fichier versionné efface la retouche en silence.
+⚠️ **Détourer un damier peint (Gemini) : par la couleur PRÉVUE à cet endroit, jamais par la couleur
+seule ni par un test local** (tribunal, 2026-09-25). « Neutre et clair » mange la pierre claire ; « alterne
+avec son voisin à ±1 case » la mange aussi dès qu'elle touche une case sombre. La grille est régulière,
+donc chaque pixel a UNE couleur de fond attendue — mais la PARITÉ se lit case par case (Gemini peint des
+coutures). Méthode dans `tools/build-tribunal-sprite.mjs`.
 ⚠️ **`verify-densite` tient les TAILLES et la DENSITÉ des bitmaps, pas leur ASPECT** : un PNG importé
 se regarde toujours dans le jeu (§10), jamais par un `tools/render-*.mjs`.
 

@@ -315,6 +315,31 @@ console.log("\n=== la ligne blanche ===\n");
   ok(n === 0, "aucun marquage blanc résiduel sur la chaussée", `${n} pixel(s) trouvé(s)`);
 }
 
+/* ═══════════════ 2026-09-25 (phase 2) — LA FONTAINE POSÉE SUR LE DALLAGE ═════
+   Ses deux cases sont de l'EAU pour la collision : `drawTownFlagTile` les
+   prenait donc pour un bord de place, les dalles voisines traçaient leur
+   pierre de bordure claire (`#cfcabb`) tout autour, et le jeu peignait les
+   deux cases d'un aplat gris — le « rectangle clair derrière la fontaine » de
+   l'audit. On peint le carré de 4×4 cases qui l'entoure EXACTEMENT comme le jeu
+   (les deux cases de la fontaine comprises), et on exige : aucune pierre de
+   bordure, et plus un pixel de l'ancien aplat (`#adacb3`). */
+{
+  const fo = C.TOWN_FOUNTAIN, sh = makeCanvas(4 * T, 4 * T);
+  let painted = 0;
+  for (let y = fo.y - 1; y <= fo.y + 2; y++) for (let x = fo.x - 1; x <= fo.x + 2; x++) {
+    const g = tw.ground[y * tw.w + x];
+    const inFtn = x >= fo.x && x < fo.x + 2 && y >= fo.y && y < fo.y + 2;
+    if (g === C.G_PATH_STONE || inFtn) { if (A.drawTownFlagTile(sh.ctx, S, tw, x, y, (x - fo.x + 1) * T, (y - fo.y + 1) * T)) painted++; }
+  }
+  let edge = 0, flat = 0;
+  for (let i = 0; i < sh.px.length; i += 4) {
+    if (sh.px[i] === 0xcf && sh.px[i + 1] === 0xca && sh.px[i + 2] === 0xbb) edge++;
+    if (sh.px[i] === 0xad && sh.px[i + 1] === 0xac && sh.px[i + 2] === 0xb3) flat++;
+  }
+  ok(painted === 16, "les seize cases autour de la fontaine sont du dallage, les siennes comprises", `${painted}/16 peintes`);
+  ok(edge === 0 && flat === 0, "aucune bordure ni aplat gris sous la vasque", `${edge} px de bordure · ${flat} px d'aplat`);
+}
+
 console.log("\nImages : tools/out/rues-surfaces.png, rues-artere.png, rues-carrefour.png, rues-cimetiere.png, rues-esplanade.png");
 console.log(fail ? `\n${fail} CONTRÔLE(S) EN ÉCHEC\n` : "\nTout est bon.\n");
 process.exit(fail ? 1 : 0);
