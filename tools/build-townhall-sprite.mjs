@@ -1,8 +1,8 @@
 // Pipeline C (§9 CLAUDE.md) — PREMIER USAGE, l'outillage n'existait pas avant
 // ce test. Transforme refs/hdv.jpg (JPEG sans alpha, damier peint en pixels)
 // en DEUX PNG prêts pour le jeu :
-//   - townhall-day.png   : le bâtiment, fenêtres/lanternes ÉTEINTES
-//   - townhall-glow.png  : UNIQUEMENT les fenêtres/lanternes allumées, sur
+//   - townhall-day-z<N>.png  (un par cran de zoom, 2026-09-25) : le bâtiment, fenêtres/lanternes ÉTEINTES
+//   - townhall-glow-z<N>.png : UNIQUEMENT les fenêtres/lanternes allumées, sur
 //                          fond transparent, à superposer avec
 //                          globalAlpha = nightAlpha() (même fonction que le
 //                          voile de nuit du jeu, FermeGame.js) pour que
@@ -20,9 +20,22 @@ import jpeg from "jpeg-js";
 import { PNG } from "pngjs";
 
 const SRC = "refs/hdv.jpg";
-const TARGET_W = 192; // 12 cases de 16px — largeur d'emprise choisie (voir CLAUDE.md / conversation)
-const OUT_DAY = "public/town/townhall-day.png";
-const OUT_GLOW = "public/town/townhall-glow.png";
+// ⚠️⚠️ 2026-09-25 (phase 1 de la feuille de route graphique) — PLUS UNE IMAGE
+// DE 192 px AGRANDIE ×1,1 PAR LE JEU (un pixel sur dix doublé), MAIS UNE IMAGE
+// PAR CRAN DE ZOOM, À SA TAILLE D'ÉCRAN EXACTE, rééchantillonnée depuis la
+// référence d'origine par `tools/lib-mip.mjs` — même procédé que l'église (voir
+// son en-tête et `TOWN_BITMAPS` dans fermeConstants.js). Guillaume : « je veux
+// pas de perte de qualité ». Les tailles se lisent dans la table.
+// ⚠️ LA GRILLE DE 192 × 173 RESTE LE REPÈRE DES MESURES (cadran ci-dessous,
+// horloge dessinée par le jeu) : chaque cran est cette grille agrandie.
+const GRID_W = 192, GRID_H = 173;
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { loadFerme } from "./lib-canvas.mjs";
+import { writeMips } from "./lib-mip.mjs";
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+const { fermeConstants: C } = await loadFerme(ROOT, ["fermeConstants"]);
+const SB = C.TOWN_BITMAPS.townhall;
 
 // Teinte "vitre éteinte" reprise de l'hôtel de ville procédural existant
 // (townHall2Sprite, fermeArt.js) — #3d5c78 — pour que ce bâtiment reste
@@ -147,61 +160,46 @@ for (let y = minY; y <= maxY; y++) for (let x = minX; x <= maxX; x++) {
   glowA[i] = pw * (alpha0[i] / 255);
 }
 
-const scale = TARGET_W / CW;
-const DW = TARGET_W, DH = Math.round(CH * scale);
-const dayPng = new PNG({ width: DW, height: DH });
-const glowPng = new PNG({ width: DW, height: DH });
-
-for (let dy = 0; dy < DH; dy++) {
-  const sy0 = minY + Math.floor(dy / scale), sy1 = minY + Math.floor((dy + 1) / scale);
-  for (let dx = 0; dx < DW; dx++) {
-    const sx0 = minX + Math.floor(dx / scale), sx1 = minX + Math.floor((dx + 1) / scale);
-    let dRs = 0, dGs = 0, dBs = 0, aSum = 0;
-    let gRs = 0, gGs = 0, gBs = 0, gAs = 0;
-    let n = 0;
-    for (let sy = sy0; sy < Math.max(sy1, sy0 + 1) && sy <= maxY; sy++) {
-      for (let sx = sx0; sx < Math.max(sx1, sx0 + 1) && sx <= maxX; sx++) {
-        const si = sy * SW + sx;
-        const a = alpha0[si];
-        dRs += dayR[si]; dGs += dayG[si]; dBs += dayB[si]; aSum += a; n++;
-        const ga = glowA[si];
-        gRs += glowR[si] * ga; gGs += glowG[si] * ga; gBs += glowB[si] * ga; gAs += ga;
-      }
-    }
-    n = Math.max(1, n);
-    const di = (dy * DW + dx) * 4;
-    dayPng.data[di] = Math.round(dRs / n); dayPng.data[di + 1] = Math.round(dGs / n); dayPng.data[di + 2] = Math.round(dBs / n);
-    dayPng.data[di + 3] = Math.round(aSum / n);
-    const galpha = Math.round((gAs / n) * 255);
-    glowPng.data[di] = galpha > 0 ? Math.round(gRs / gAs) : 0;
-    glowPng.data[di + 1] = galpha > 0 ? Math.round(gGs / gAs) : 0;
-    glowPng.data[di + 2] = galpha > 0 ? Math.round(gBs / gAs) : 0;
-    glowPng.data[di + 3] = galpha;
-  }
+// ---- 5. Plans prémultipliés, recadrés au contenu, puis `writeMips`.
+const N = CW * CH;
+const dP = [new Float32Array(N), new Float32Array(N), new Float32Array(N), new Float32Array(N)];
+const gP = [new Float32Array(N), new Float32Array(N), new Float32Array(N), new Float32Array(N)];
+for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) {
+  const si = (minY + y) * SW + (minX + x), di = y * CW + x;
+  const a = alpha0[si] / 255, ga = glowA[si];
+  dP[0][di] = dayR[si] * a; dP[1][di] = dayG[si] * a; dP[2][di] = dayB[si] * a; dP[3][di] = a;
+  gP[0][di] = glowR[si] * ga; gP[1][di] = glowG[si] * ga; gP[2][di] = glowB[si] * ga; gP[3][di] = ga;
 }
+// ⚠️ La grille de mesure (192 × 173) doit avoir les proportions du contenu :
+// sinon l'horloge du jeu et le cadran repeint ne tomberaient plus au même point.
+console.log(`contenu ${CW}x${CH}, grille ${GRID_W}x${GRID_H} (écart de proportion ${(100 * Math.abs(CH / CW - GRID_H / GRID_W) / (GRID_H / GRID_W)).toFixed(2)} %)`);
 
-/* ---- 5. L'HORLOGE : Guillaume veut les aiguilles liées à l'heure du jeu
+/* ---- 6. L'HORLOGE : Guillaume veut les aiguilles liées à l'heure du jeu
    (FermeGame.js les dessine chaque frame, voir drawTownHallBitmap) — donc
    les aiguilles GRAVÉES par Gemini doivent disparaître d'ici, sinon deux
-   horloges se superposeraient. Centre et rayon mesurés à la main sur
-   townhall-day.png (192 px de large) : (95.5, 74), cadran plein à 6 px,
-   lunette de pierre sombre jusqu'à 8 px. */
+   horloges se superposeraient. Centre et rayon mesurés à la main dans la
+   grille de 192 px : (95.5, 74), cadran plein à 6 px, lunette de pierre
+   sombre jusqu'à 8 px. ⚠️ 2026-09-25 : repeint À LA RÉSOLUTION DE CHAQUE CRAN,
+   bord ANTICRÉNELÉ (couverture mesurée sur 4×4 échantillons par pixel) — au
+   cran 5 le cadran fait 40 px de large, un disque en escalier s'y verrait. */
 const CLOCK_CX = 95.5, CLOCK_CY = 74, CLOCK_R_FACE = 6, CLOCK_R_BEZEL = 8;
 const BEZEL = [0x2e, 0x2a, 0x24], FACE = [0xfe, 0xf0, 0xce];
-for (let y = Math.floor(CLOCK_CY - CLOCK_R_BEZEL); y <= Math.ceil(CLOCK_CY + CLOCK_R_BEZEL); y++) {
-  for (let x = Math.floor(CLOCK_CX - CLOCK_R_BEZEL); x <= Math.ceil(CLOCK_CX + CLOCK_R_BEZEL); x++) {
-    if (x < 0 || y < 0 || x >= DW || y >= DH) continue;
-    const d = Math.hypot(x - CLOCK_CX, y - CLOCK_CY);
-    if (d > CLOCK_R_BEZEL) continue;
-    const col = d <= CLOCK_R_FACE ? FACE : BEZEL;
-    const di = (y * DW + x) * 4;
-    dayPng.data[di] = col[0]; dayPng.data[di + 1] = col[1]; dayPng.data[di + 2] = col[2];
+function repaintDial(png, mip, kind) {
+  if (kind !== "day") return;
+  const fx = mip.w / GRID_W, fy = mip.h / GRID_H;
+  const cx = CLOCK_CX * fx, cy = CLOCK_CY * fy, rF = CLOCK_R_FACE * fx, rB = CLOCK_R_BEZEL * fx;
+  for (let y = Math.floor(cy - rB - 1); y <= Math.ceil(cy + rB + 1); y++) {
+    for (let x = Math.floor(cx - rB - 1); x <= Math.ceil(cx + rB + 1); x++) {
+      if (x < 0 || y < 0 || x >= mip.w || y >= mip.h) continue;
+      let nF = 0, nB = 0;
+      for (let sy = 0; sy < 4; sy++) for (let sx = 0; sx < 4; sx++) {
+        const d = Math.hypot(x + (sx + 0.5) / 4 - cx, y + (sy + 0.5) / 4 - cy);
+        if (d <= rF) nF++; else if (d <= rB) nB++;
+      }
+      if (!nF && !nB) continue;
+      const kF = nF / 16, kB = nB / 16, kO = 1 - kF - kB, di = (y * mip.w + x) * 4;
+      for (let c = 0; c < 3; c++) png.data[di + c] = Math.round(FACE[c] * kF + BEZEL[c] * kB + png.data[di + c] * kO);
+    }
   }
 }
-
-writeFileSync(OUT_DAY, PNG.sync.write(dayPng));
-writeFileSync(OUT_GLOW, PNG.sync.write(glowPng));
-console.log(`Source recadrée : ${CW}x${CH} (depuis ${SW}x${SH})`);
-console.log(`Sortie : ${DW}x${DH}`);
-console.log(`Écrit : ${OUT_DAY}`);
-console.log(`Écrit : ${OUT_GLOW}`);
+for (const line of writeMips(ROOT, SB, C.townBitmapMip, dP, gP, CW, CH, repaintDial)) console.log(line);

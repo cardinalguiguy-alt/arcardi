@@ -2,8 +2,8 @@
 // build-townhall-sprite.mjs (hôtel de ville, 2026-09-02). Transforme
 // refs/eglise-nouvelle.jpg (JPEG sans alpha, damier peint en pixels) en DEUX
 // PNG prêts pour le jeu :
-//   - eglise-day.png   : le bâtiment, vitraux ÉTEINTS
-//   - eglise-glow.png  : UNIQUEMENT les vitraux allumés, sur fond
+//   - eglise-day-z<N>.png  (un par cran de zoom, 2026-09-25) : le bâtiment, vitraux ÉTEINTS
+//   - eglise-glow-z<N>.png : UNIQUEMENT les vitraux allumés, sur fond
 //                        transparent, à superposer avec globalAlpha =
 //                        nightAlpha() (voir drawChurchBitmap, FermeGame.js).
 //
@@ -33,9 +33,25 @@ const SRC = "refs/eglise-nouvelle.jpg";
 // explicitement à l'affichage — mais la source STOCKÉE double, pour donner à
 // la mise à l'échelle (zoom caméra, lissage activé pour ce bâtiment précis)
 // de vraies données au lieu d'agrandir un pixel art déjà petit.
-const TARGET_W = 384;
-const OUT_DAY = "public/town/eglise-day.png";
-const OUT_GLOW = "public/town/eglise-glow.png";
+// ⚠️⚠️ 2026-09-25 (phase 1 de la feuille de route graphique) — PLUS UNE IMAGE
+// DE 384 px LISSÉE À L'AFFICHAGE, MAIS UNE IMAGE PAR CRAN DE ZOOM, À SA TAILLE
+// D'ÉCRAN EXACTE. Guillaume : « je veux pas de perte de qualité ». L'ancienne
+// sortie (384 px, moyennée par boîtes, puis agrandie ×1,1 à ×2,75 AVEC lissage
+// par le jeu) était floue à tous les crans ; ramener l'image à la grille d'art
+// (212 px) aurait détruit du détail — mesuré, la référence n'a aucune grille de
+// pixels interne. Chaque image est donc rééchantillonnée UNE fois, depuis la
+// référence d'origine, en Lanczos-3 sur alpha PRÉMULTIPLIÉ (sans quoi le damier
+// retiré, noir transparent, bave en liseré sombre autour de la silhouette), à la
+// taille que `townBitmapMip` (fermeConstants.js) lui assigne — le jeu la pose à
+// 1 px d'image = 1 px d'écran, sans lissage (`drawScreenExactBitmap`).
+// Les tailles ne sont PAS écrites ici : elles se lisent dans la table.
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { loadFerme } from "./lib-canvas.mjs";
+import { writeMips } from "./lib-mip.mjs";
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+const { fermeConstants: C } = await loadFerme(ROOT, ["fermeConstants"]);
+const SB = C.TOWN_BITMAPS.church;
 
 // Vitrail éteint : sans lumière derrière, un vitrail au plomb se lit presque
 // noir, avec juste un soupçon du même froid que la pierre — jamais la
@@ -248,8 +264,8 @@ function paneWeight(x, y) {
   return best;
 }
 
-// ---- 4. Correction pleine résolution, PUIS redimensionnement en une seule
-// passe commune aux deux calques (jamais deux redimensionnements séparés).
+// ---- 4. Correction pleine résolution (vitraux éteints dans le calque de
+// jour, vitraux seuls dans le calque de nuit) — inchangée depuis le 2026-09-20.
 const dayR = new Float32Array(SW * SH), dayG = new Float32Array(SW * SH), dayB = new Float32Array(SW * SH);
 const glowR = new Float32Array(SW * SH), glowG = new Float32Array(SW * SH), glowB = new Float32Array(SW * SH), glowA = new Float32Array(SW * SH);
 for (let y = minY; y <= maxY; y++) for (let x = minX; x <= maxX; x++) {
@@ -260,41 +276,16 @@ for (let y = minY; y <= maxY; y++) for (let x = minX; x <= maxX; x++) {
   glowA[i] = pw * (alpha0[i] / 255);
 }
 
-const scale = TARGET_W / CW;
-const DW = TARGET_W, DH = Math.round(CH * scale);
-const dayPng = new PNG({ width: DW, height: DH });
-const glowPng = new PNG({ width: DW, height: DH });
-
-for (let dy = 0; dy < DH; dy++) {
-  const sy0 = minY + Math.floor(dy / scale), sy1 = minY + Math.floor((dy + 1) / scale);
-  for (let dx = 0; dx < DW; dx++) {
-    const sx0 = minX + Math.floor(dx / scale), sx1 = minX + Math.floor((dx + 1) / scale);
-    let dRs = 0, dGs = 0, dBs = 0, aSum = 0;
-    let gRs = 0, gGs = 0, gBs = 0, gAs = 0;
-    let n = 0;
-    for (let sy = sy0; sy < Math.max(sy1, sy0 + 1) && sy <= maxY; sy++) {
-      for (let sx = sx0; sx < Math.max(sx1, sx0 + 1) && sx <= maxX; sx++) {
-        const si = sy * SW + sx;
-        const a = alpha0[si];
-        dRs += dayR[si]; dGs += dayG[si]; dBs += dayB[si]; aSum += a; n++;
-        const ga = glowA[si];
-        gRs += glowR[si] * ga; gGs += glowG[si] * ga; gBs += glowB[si] * ga; gAs += ga;
-      }
-    }
-    n = Math.max(1, n);
-    const di = (dy * DW + dx) * 4;
-    dayPng.data[di] = Math.round(dRs / n); dayPng.data[di + 1] = Math.round(dGs / n); dayPng.data[di + 2] = Math.round(dBs / n);
-    dayPng.data[di + 3] = Math.round(aSum / n);
-    const galpha = Math.round((gAs / n) * 255);
-    glowPng.data[di] = galpha > 0 ? Math.round(gRs / gAs) : 0;
-    glowPng.data[di + 1] = galpha > 0 ? Math.round(gGs / gAs) : 0;
-    glowPng.data[di + 2] = galpha > 0 ? Math.round(gBs / gAs) : 0;
-    glowPng.data[di + 3] = galpha;
-  }
+// ---- 5. Rééchantillonnage : `tools/lib-mip.mjs` (Lanczos-3 sur alpha
+// prémultiplié), écrit UNE fois pour les trois monuments.
+// Les plans prémultipliés, recadrés au contenu.
+const N = CW * CH;
+const dP = [new Float32Array(N), new Float32Array(N), new Float32Array(N), new Float32Array(N)];
+const gP = [new Float32Array(N), new Float32Array(N), new Float32Array(N), new Float32Array(N)];
+for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) {
+  const si = (minY + y) * SW + (minX + x), di = y * CW + x;
+  const a = alpha0[si] / 255, ga = glowA[si];
+  dP[0][di] = dayR[si] * a; dP[1][di] = dayG[si] * a; dP[2][di] = dayB[si] * a; dP[3][di] = a;
+  gP[0][di] = glowR[si] * ga; gP[1][di] = glowG[si] * ga; gP[2][di] = glowB[si] * ga; gP[3][di] = ga;
 }
-
-writeFileSync(OUT_DAY, PNG.sync.write(dayPng));
-writeFileSync(OUT_GLOW, PNG.sync.write(glowPng));
-console.log(`Sortie : ${DW}x${DH}`);
-console.log(`Écrit : ${OUT_DAY}`);
-console.log(`Écrit : ${OUT_GLOW}`);
+for (const line of writeMips(ROOT, SB, C.townBitmapMip, dP, gP, CW, CH)) console.log(line);

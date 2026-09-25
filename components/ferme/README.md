@@ -1,5 +1,55 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-20
 
+## 2026-09-25 — AUDIT GRAPHIQUE DE VALLEY TOWN (constat seul, RIEN CODÉ)
+
+Fait en jeu (échafaudage local, 12 arrêts extérieurs, 8 intérieurs, nuit à 18h48/21h51/0h53, carte
+entière, gros plans au pixel). Aucun fichier du jeu touché. Constats, par gravité :
+1. **Trois densités de pixel à l'écran.** Procédural : 1 px d'art = ZOOM px d'écran. Hôtel de ville
+   (192 px source × GROW 1,1) : 1,1 px d'art par px source, donc un pixel sur dix doublé. Église (384 px
+   source, lissée) : 0,55, donc floue. Tribunal (384 px, plus proche voisin) : 0,73, donc un pixel sur
+   quatre SAUTÉ (⚠️ l'audit l'avait d'abord dit lissé : c'est `verify-densite`, le jour de la phase 0,
+   qui a donné les vrais chiffres). Le dessin peint à côté du dessin en
+   gros pixels se voit comme une image collée (DESSIN.md, « un dessin qui se peint par-dessus le
+   monde doit emprunter son gros pixel », 448 : la même règle, jamais appliquée aux bâtiments).
+2. **Écart de finition entre les couches** : monuments peints (Gemini) > arbres, herbes, étals >
+   maisons, gare, boutiques > PERSONNAGES (≈10 rectangles, sans cerne ni ombrage, bras figés, pas
+   de marche = pieds décalés de 1 px). Ce qu'on regarde le plus est le moins fini.
+3. **La nuit est un voile, pas une lumière** (`drawNightVeil`) : `rgba(8,10,30)` uniforme, halos
+   percés en `destination-out` = cercles de plein jour, gris neutre, dégradé lisse (non quantifié),
+   qui traversent les murs. Crépuscule sans teinte chaude. Fenêtres des maisons jamais allumées ;
+   seule l'église a un calque `-glow`. Lampadaires allumés en plein jour. Pluie = voile gris + traits
+   de 1 px d'écran (`drawWeatherVeil`) : pas de flaques, pas d'éclaboussures, pas de sol mouillé.
+4. **Composition** : la carte est un quadrillage orthogonal de parcelles identiques (maison dans un
+   carré de haie) séparées par de grandes prairies vides ; aucun cœur de ville dense, aucune ruelle,
+   façades mitoyennes inexistantes. Arbres alignés à pas constant (même sprite, même taille).
+5. **Intérieurs très en dessous des façades** : le palais du tribunal et la cathédrale ouvrent sur
+   des dalles grises, des colonnes identiques et des escaliers en bandes blanches ; aucune lumière
+   de vitrail, aucun mur vu de face (plan pur) — autre projection que les extérieurs.
+6. **Défauts ponctuels vus au pixel** : dallage du parvis de l'église visible DERRIÈRE les
+   arcs-boutants ; un rectangle clair derrière la fontaine ; étiquettes de noms empilées illisibles
+   (gare, foire, carte) et masquées par un lampadaire ; texte de nom lissé, non pixel ; eau du fleuve
+   en carrés de profondeur de 16 px visibles et bruit « sel et poivre » au bord du quai ; reflets en
+   tirets à pas régulier ; chemin de sable du sud-est en marches de case ; trait vert d'un pixel
+   d'écran en travers de la chaussée près du parc (non identifié) ; cerisiers qui avalent un
+   lampadaire ; étals de foire copiés deux fois à l'identique ; gazon dont la période se lit sur
+   les grandes prairies ; canevas hors `devicePixelRatio` (flou sur Retina).
+**FEUILLE DE ROUTE — CHECKLIST, À COCHER À CHAQUE LIVRAISON (2026-09-25, cadre de Guillaume : personnages ÉVOCATEURS, on ne les détaille
+pas ; monde, végétation, faune et bâtiments soignés à fond).** Une livraison = un changement visuel.
+| ✓ | # | Phase | Pourquoi à ce rang |
+|---|---|---|---|
+| ✅ | 0 | Outillage (livrée le 2026-09-25, plus `TOWN_BITMAPS` prouvée identique en jeu) : dégradés dans `lib-canvas` (ranime `render-eau`/`render-parc`), banc « densité » (tout bitmap à échelle entière, sans lissage) | rien de la suite ne se juge sans |
+| ✅ | 1 | Échelle unique — **livrée le 2026-09-25, RÈGLE CHANGÉE en cours de route** (Guillaume : « je veux pas de perte de qualité » ; mesuré, les références Gemini sont des peintures sans grille de pixels, les ramener à la grille d'art détruisait du détail). Les trois monuments passent en `grid: "screen"` : une image par cran de zoom, fabriquée depuis la référence d'origine (`tools/lib-mip.mjs`, Lanczos-3 prémultiplié) et posée à 1 px d'image = 1 px d'écran, sans lissage (`drawScreenExactBitmap`). Mesuré : 1,5 à 4,2 fois plus de détail qu'avant, 100 % des pixels exacts en jeu hors surimpressions voulues (halo, embase, pigeons). Escalier détouré et herbes hautes : déjà à 1:1 d'art, conformes. ⚠️ Reste vrai : le monument est plus FIN que le décor en gros pixels (prix accepté). | fondation posée |
+| ⬜ | 2 | Correctifs sans parti pris (+ trouvés en phase 1 : le LANTERNON du dôme du tribunal est troué par le détourage — ses parties claires passent pour du damier, défaut d'origine ; le zoom des monuments coupe le haut de l'église de 5 px sur un écran étroit, 524×714) : noms (chevauchement, occultation, police pixel), lampadaires de jour, rectangle de la fontaine, arbres qui avalent un lampadaire, trait vert de la chaussée, contenu des étals | petits, indépendants — à glisser pendant les attentes d'images Gemini |
+| ⬜ | 3 | Lumière (⚠️ constaté en phase 0 : les calques `-glow` existants sont INVISIBLES la nuit, le voile passe par-dessus) : teinte selon l'heure, lumières chaudes additives en paliers, occultées, fenêtres allumées, pluie à l'échelle du pixel | les bâtiments refaits en 6 naîtront avec leur calque de nuit |
+| ⬜ | 4 | Sols et eau : paliers de profondeur, bord de quai, reflets, rampe de l'étang, sable, période du gazon, dallages et leurs jonctions, murs de soutènement | le tapis sous tout le reste, avant de recomposer |
+| ⬜ | 5 | Faune : canards, poissons, papillons, chats, mouettes, lucioles — fonctions du temps, non diffusées (règle des pigeons, 433) | a besoin de l'eau (4) et de la nuit (3) |
+| ⬜ | 6 | Bâtiments courants : gare et quai, dix façades, boutiques, variantes mitoyennes et d'angle — sortis de la closure pour qu'un banc les voie | après la grille (1) et la lumière (3), avant la composition |
+| ⬜ | 7 | Composition : cœur dense autour de la place, parcelles irrégulières, arbres non alignés, sort de chaque prairie | la plus risquée (quête, chemins, bancs) ; les propriétaires tiennent par le RANG dans `TOWN_HOUSES`, donc aucune migration |
+| ⬜ | 8 | Intérieurs au niveau des façades (murs vus de face, lumière de vitrail) | le moins vu, le plus gros ; réutilise 3 |
+Reporté exprès : détail des personnages (non voulu ; un cerne seulement si, après 7, ils se perdent),
+canevas `devicePixelRatio` (le flou ne touche que le texte, réglé en 2), neige au sol et flaques
+réfléchissantes (après 3–4), mise à niveau de la FERME (après 4, elle réutilisera les sols).
+
 ## Hors-zip 2026-09-20 (suite du jour) — LA FERME REJOINT LA VILLE : LES BUISSONS, LA PLACE, LES COULEURS DU BUIS
 
 **Quatre demandes de Guillaume, le même jour, en continu** : *« les buissons [de la ferme] sont

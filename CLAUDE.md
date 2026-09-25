@@ -7,37 +7,26 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-24 — Les échecs : audit, puis refonte « à la lichess », trois lots d'un coup
+### 2026-09-25 — Valley Town : audit graphique, feuille de route, PHASES 0 ET 1 livrées
 
-Demande : « jouabilité équivalente à lichess, pas de bug de sélection au clic, beauté visuelle,
-précision ». Audit d'abord, mesuré en jeu (plateau recréé à chaque seconde de pendule : **13 % des
-appuis perdus** ; ordinateur figé après une reprise ; « Annuler » de l'analyse désynchronisé ;
-revanche toujours en 10 min ; ordinateur qui jouait parfois un coup choisi sur une recherche
-coupée…). Guillaume a validé les recommandations et ordonné « lance tous les lots » : bugs,
-jouabilité ET visuel sont donc livrés ENSEMBLE — contre le §2 (ne pas mêler deux changements
-visuels), par son arbitrage explicite, pas par oubli.
-- Où vit quoi : `components/chess/` (voir §5). Le pourquoi de chaque correctif est en commentaire à
-  côté du code, avec la mesure qui l'a motivé ; rien n'en est recopié ici.
-- Vérifié : `verify-echecs` **68/68** (nouveau, falsifié deux fois) ; les **24** `verify-*` verts le
-  2026-09-24 (`verify-portee` a appris `Worker` et `self`) ; `render-*` non relancés (aucun dessin
-  de ferme ni de ville touché) ; `next build` compile, worker empaqueté. ET EN JEU (page jetable
-  supprimée) : 0 appui perdu sur 60, clic-clic, glisser-déposer, pré-coup contre l'ordinateur et à
-  deux clients, coup affiché chez l'invitée en 17 ms, pendules cohérentes d'un onglet à l'autre,
-  nulle et reprise proposées/refusées/acceptées, abandon, annulation, revanche (même cadence,
-  couleurs inversées), resynchronisation après rechargement, promotion en colonne, flèches, drapeau
-  (dixièmes puis 0:00.0), bureau 1280×800 et téléphone 375 px.
-- ⚠️⚠️ **JAMAIS JOUÉ PAR GUILLAUME, NI SUR LE VRAI SUPABASE** (latence réelle, deux machines). Reste
-  à juger ce qu'aucun banc ne mesure : le glisser au doigt, la lisibilité des repères (sélection
-  verte, dernier coup doré sur le noyer), l'intérêt de l'ordinateur.
-- Connu, non traité : l'ordinateur joue les mêmes ouvertures (recherche déterministe) et ne voit
-  qu'à 3-4 demi-coups (chess.js ≈ 0,7 ms par nœud, mesuré) — un niveau réglable serait un chantier.
-- ⚠️ **PAS DE MANIPULATION SUPABASE** : `rooms.game_state` reste un JSON libre (format v2, et les
-  sauvegardes v1 d'avant se relisent).
-- **Même jour, même défaut ailleurs, corrigé** : le bocal d'Échos (`Jar`, `EchoesRoom.js`) était
-  déclaré dans le rendu de l'énigme des jarres — l'eau sautait au lieu de couler. Sorti au niveau
-  du module, rendu inchangé ; vérifié en jeu (partie restaurée sur le chapitre 14 par une page
-  jetable, supprimée) : même nœud, 0 → 90 px en ~350 ms, contre-épreuve sur l'ancien code (saut
-  net). Bundle et `verify-portee` verts. Aucune manipulation Supabase.
+Feuille de route en 9 phases, tenue en CHECKLIST (✅/⬜) en tête de `components/ferme/README.md` —
+Guillaume : « à chaque livraison, rappelle ce qui reste à faire ». Cadre : personnages ÉVOCATEURS (on
+ne les détaille pas) ; monde, végétation, faune, bâtiments soignés à fond.
+- **Phase 0** (outillage) : dégradés dans `lib-canvas.mjs` (`render-eau`/`render-parc` revivent),
+  table `TOWN_BITMAPS`, banc `verify-densite`.
+- **Phase 1** (une seule densité) : **RÈGLE CHANGÉE** sur l'ordre de Guillaume (« je veux pas de perte
+  de qualité ») — les références Gemini sont des peintures sans grille de pixels (mesuré), les ramener à
+  la grille d'art détruisait du détail. Église, hôtel de ville, tribunal : une image PAR CRAN DE ZOOM,
+  fabriquée depuis la référence (`tools/lib-mip.mjs`), posée à 1 px d'image = 1 px d'écran sans lissage
+  (`drawScreenExactBitmap`, FermeGame.js). 1,5 à 4,2 fois plus de détail ; en jeu, 100 % des pixels
+  exacts hors surimpressions voulues, aux cinq crans ; fondu de zoom sans trou. Le tribunal avait une
+  retouche MANUELLE (colonne de damier gommée) que son script ne reproduisait pas : elle vit dans le
+  script maintenant. Collision, porte, horloge, pigeons : géométrie monde inchangée.
+- Bancs le 2026-09-25 : **25/25 `verify-*`** (`verify-densite` 43/43, falsifié 11 fois), **24/24
+  `render-*`**, bundle, `no-undef` (eslint, ponctuel), `next build` compilent.
+- ⚠️ **Poids** : 11,7 Mo de PNG sur disque, mais seul le cran affiché se télécharge (~1 Mo pour les trois
+  monuments au zoom des monuments). **Jamais vu sur un vrai iPad** (§10, plafond de mémoire WebKit).
+- **Pas de manipulation Supabase.** Échecs (2026-09-24) : toujours jamais joués par Guillaume.
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
@@ -65,8 +54,11 @@ visuels), par son arbitrage explicite, pas par oubli.
 
 ### ⏭️ ACTION SUIVANTE
 
-Guillaume a annoncé un **autre jeu** juste après les échecs : attendre qu'il le nomme, puis LISTER
-les décisions structurantes et attendre avant de produire (§2). Les jugements « au plaisir »
+**Phase 2 de la feuille de route graphique de Valley Town** (checklist en tête du README de la ferme) :
+les correctifs sans parti pris, dont les deux trouvés en phase 1 (lanternon du tribunal troué par le
+détourage, haut de l'église coupé sur écran étroit). Guillaume n'a pas encore vu les monuments à 1:1 en
+jeu : le lui rappeler. Personnages : on n'y touche pas (décision du 2026-09-25, ils restent évocateurs).
+L'« autre jeu » annoncé après les échecs attend toujours qu'il le nomme. Les jugements « au plaisir »
 ci-dessus, échecs compris, ne se tranchent qu'en jouant : les lui rappeler, ne jamais les supposer
 acquis.
 ⚠️ Le jour où un nouveau bâtiment/sprite bitmap arrive, mesurer son sprite AVANT de poser sa
@@ -698,10 +690,19 @@ triangles) ; **C, ouvert au 443** — rendu Blender → **PNG / feuille de sprit
 jeu. ⚠️ **C a eu son premier usage le 2026-09-02 — pas depuis Blender, depuis Gemini** (l'hôtel de
 ville de Valley Town, voir le bloc ⏭️ REPRISE en tête de fichier) : le chargeur/cache existent
 maintenant (`components/ferme/bitmapAssets.js`), la source de l'image importe moins que le fait
-qu'elle soit un PNG avec vraie transparence. Convention de nommage amorcée
-(`public/town/<bâtiment>-day.png` / `-glow.png`), pas encore éprouvée sur un second bâtiment.
-⚠️ **AUCUN BANC NE REGARDE UN BITMAP** : toujours vrai, et ça n'a pas changé — un PNG importé se
-vérifie en le regardant dans le jeu (§10), jamais par un `tools/render-*.mjs`.
+qu'elle soit un PNG avec vraie transparence.
+⚠️⚠️ **DEPUIS LE 2026-09-25, UN MONUMENT PEINT N'EST PLUS UNE IMAGE MAIS UNE PAR CRAN DE ZOOM**
+(`public/town/<bâtiment>-day-z<N>.png` / `-glow-z<N>.png`), fabriquée hors ligne depuis la référence à
+sa taille d'écran exacte (`tools/lib-mip.mjs`) et posée à 1 px d'image = 1 px d'écran, sans lissage.
+Tout bitmap se déclare dans `TOWN_BITMAPS` (fermeConstants.js). ⚠️ **La leçon qui l'a imposé** :
+*une peinture ramenée à la grille d'art perd du vrai détail ; une peinture agrandie ou réduite au
+dessin, lissée ou non, est floue ou a des pixels doublés* — la seule pose sans perte est 1:1 à
+l'écran. ⚠️ **Le prix, accepté par Guillaume** (« pas de perte de qualité ») : le monument reste plus
+FIN que le décor en gros pixels. ⚠️ **Un PNG importé peut avoir été retouché À LA MAIN après son
+script** (le tribunal l'était : une colonne de damier gommée) — regénérer depuis la référence sans
+comparer d'abord au fichier versionné efface la retouche en silence.
+⚠️ **`verify-densite` tient les TAILLES et la DENSITÉ des bitmaps, pas leur ASPECT** : un PNG importé
+se regarde toujours dans le jeu (§10), jamais par un `tools/render-*.mjs`.
 
 ⚠️ **BLENDER EST Z-UP, THREE.JS Y-UP, ET L'EXPORTEUR CONVERTIT FIDÈLEMENT UNE ORIENTATION
 FAUSSE** (`yup_authoring()`).
@@ -739,8 +740,8 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 
 ⚠️⚠️ **LES BANCS SONT DANS `tools/README.md` DEPUIS LE 432, ET CE CHAPITRE A ÉTÉ ÉLAGUÉ AU 444
 SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 442** (reporté deux fois). ⚠️ **LE COMPTE ET LES CHIFFRES DU JOUR VIVENT
-EN UN SEUL ENDROIT : le bloc ⏭️ REPRISE** (relancés le 2026-09-13 : 23 `verify-*` verts, 22 des 24
-`render-*` ; `render-eau` / `render-parc`, entrée dédiée plus bas). Les recopier ici leur donnait un
+EN UN SEUL ENDROIT : le bloc ⏭️ REPRISE** (⚠️ 2026-09-25 : cette parenthèse en recopiait encore
+un, périmé de douze jours — supprimé). Les recopier ici leur donnait un
 second endroit où mentir (§14.2, leçon n°2) — ils y étaient restés au 2026-09-05, premier jour où
 tous les bancs de contrôle avaient été relancés.
 ⚠️⚠️⚠️ **ET C'EST CE JOUR-LÀ QU'ON A APPRIS CE QUE « TOUS RELANCÉS » VALAIT : DEUX BANCS ÉTAIENT
@@ -794,6 +795,13 @@ FICHIER, DONC IL NE PEUT PAS VOIR UN IMPORT QUI NE RÉSOUT PAS.** Un **bundle** 
 de deux zips** (le piège n°1 de ce fichier, dans le zip même qui livrait la fonctionnalité). Ça ne
 remplace pas `next build`, mais ça se lance PENDANT qu'un `next dev` tourne, et c'est le seul
 contrôle du dépôt qui voie une liaison entre deux fichiers.
+⚠️⚠️ **ET DEPUIS LE 2026-09-25, LE PIÈGE N°1 (`ReferenceError` à l'exécution) A UN CONTRÔLE — PONCTUEL,
+PAS UN BANC** : `npx --yes eslint@8.57.0 --no-eslintrc --no-inline-config --parser-options=ecmaVersion:2022
+--parser-options=sourceType:module --parser-options=ecmaFeatures:{jsx:true} --env browser,es2022,node
+--rule 'no-undef: error' <fichiers>` — zéro configuration, zéro dépendance ajoutée, ~20 s sur
+`FermeGame.js`. Il a attrapé en phase 1 un `day.width` resté dans le dessin de l'hôtel de ville, qui
+aurait emporté toute l'image de la ville ; falsifié deux fois. **À lancer sur tout fichier du jeu
+touché**, jusqu'à ce qu'il devienne un banc.
 ⚠️ **`verify-ludo` est le deuxième banc qui joue une mécanique de mini-jeu** : il balaie 1 000
 plans légaux et tient les cinq chemins bot vers les arbitres de l'hôte. Son détail et ses limites
 sont dans `tools/README.md`.
@@ -852,15 +860,13 @@ vérifie jamais — c'est elle, et elle seule, qui protège du banc imaginaire (
   humaine.* ⚠️ Restent non pavés `S.pets` (39 portraits — `Sprite` découpe depuis (0,0) et ne sait
   pas lire un rectangle source, donc les paver demanderait de toucher six appelants pour un gain
   négligeable) et tout le reste des 779, jamais mesuré famille par famille.
-- ⚠️⚠️⚠️ **DEUX BANCS DE RENDU SUR VINGT-DEUX NE S'EXÉCUTENT PAS — RELANCÉS LE 2026-09-02 (lot A),
-  CE SONT TOUJOURS `render-eau.mjs` ET `render-parc.mjs`.** ⚠️ **CETTE LISTE SE RELANCE, ELLE NE SE
-  RECOPIE PAS** : le couple avait déjà changé entre le matin et le soir du même jour sans que
-  personne ne touche à ces fichiers. Les deux plantent sur `ctx.createLinearGradient` — non
-  implémenté par le faux canevas de `lib-canvas.mjs` — levé par `drawTownWaterSwellBand`. C'est une
-  dette ANTÉRIEURE, reproduite sur `HEAD` avant toute modification. ⚠️ **NON CORRIGÉ** :
-  `lib-canvas.mjs` sert des dizaines de bancs, et une implémentation hâtive du dégradé y
-  introduirait un risque plus large que le gain. **À corriger séparément**, jamais en même temps
-  qu'un changement visuel.
+- ⚠️⚠️ **LE FAUX CANEVAS DES BANCS (`lib-canvas.mjs`) SAIT LES DÉGRADÉS DEPUIS LE 2026-09-25** (linéaire
+  et radial, tenus par `verify-densite`) : `render-eau` et `render-parc`, morts depuis le 2026-09-02,
+  tournent de nouveau, et les **24** `render-*` sont verts ce jour-là. ⚠️ **La leçon qui reste** : deux
+  bancs rouges pour une raison d'OUTIL ont laissé l'eau sans aucun banc pendant trois semaines — et le
+  jour où ils sont revenus, `render-eau` ET `render-oiseaux` avaient chacun un compte figé (4 massifs,
+  2 volées) qu'une livraison voulue avait dépassé. *Un compte exact dans un banc vieillit à la première
+  addition voulue ; on vérifie ce qui existe, pas combien il y en a.*
 - ⚠️⚠️ **CE QUI N'EST PLUS VRAI DEPUIS LE 2026-09-01, ET IL FAUT LE DIRE** : la HAIE était le plus
   gros décor que personne ne regardait — 839 cases, le pourtour des vingt-sept parcelles, dessiné
   dans la closure du rendu depuis le 425. `render-haies` la regarde. ⚠️ **Ce qui reste dans la
@@ -1357,7 +1363,7 @@ commandes) — ce chantier remplace justement le mécanisme que le n°5 doit d'a
 - ✅ **L'ÉGLISE A SON SPRITE MAJESTUEUX (2026-09-20) — LE TRIBUNAL, LUI, ATTEND ENCORE.** Dette
   ouverte au 2026-09-03 (« le tribunal et l'église méritent un sprite plus majestueux »). Pipeline C,
   deuxième usage (§9) : `refs/eglise-nouvelle.jpg`, importé par `tools/build-eglise-sprite.mjs` en
-  `public/town/eglise-day.png`/`eglise-glow.png`, dessiné par `drawChurchBitmap` (FermeGame.js).
+  `public/town/eglise-day-z<N>.png`/`eglise-glow-z<N>.png` (un par cran depuis le 2026-09-25), dessiné par `drawChurchBitmap` (FermeGame.js).
   ⚠️ **LEÇON RETENUE, À RÉUTILISER POUR LE TRIBUNAL** : le premier prompt (fidèle à l'ancien sprite,
   clocher-à-gauche imposé) a produit une église correcte mais pas impressionnante ; Guillaume a
   corrigé le tir lui-même — « l'hôtel de ville est réussi car il est très différent de l'original »

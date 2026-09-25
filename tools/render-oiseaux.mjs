@@ -140,7 +140,20 @@ console.log("\n=== le dessin ===\n");
 console.log("\n=== les emplacements ===\n");
 const tw = E.generateTownWorld();
 const flocks = E.townFlocks(tw);
-ok(flocks.length === 2, "deux volées", flocks.map(f => f.key + " (max " + f.max + ", rayon " + f.r.toFixed(1) + ")").join(", "));
+/* ⚠️⚠️ 2026-09-25 — « DEUX VOLÉES » ÉTAIT UN COMPTE FIGÉ, ET IL ROUGISSAIT DEPUIS
+   QUE L'ÉGLISE A REÇU LA SIENNE (pigeons du parvis, 2026-09-20/22) : un ajout
+   VOULU, sur un banc dont la règle n'avait pas suivi — le banc était rouge sur
+   `HEAD` avant la phase 0 de la feuille de route graphique, donc muet sur tout le
+   reste de ce fichier (CLAUDE.md §10). Ce qu'il protège n'est pas un nombre :
+   c'est que les deux volées d'ORIGINE (place, parvis du tribunal) existent
+   toujours, et qu'aucune volée n'est vide. Ajouter un site reste permis. */
+{
+  const keys = flocks.map(f => f.key);
+  const empty = flocks.filter(f => !(f.max > 0) || !f.spots || !f.spots.length).map(f => f.key);
+  ok(keys.includes("plaza") && keys.includes("court") && empty.length === 0,
+     "les volées d'origine existent, et aucune n'est vide",
+     flocks.map(f => f.key + " (max " + f.max + ", rayon " + f.r.toFixed(1) + ")").join(", ") + (empty.length ? " — VIDES : " + empty.join(", ") : ""));
+}
 {
   const nav = E.townNav(tw);
   let offPave = 0, n = 0;

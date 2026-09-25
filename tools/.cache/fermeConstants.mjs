@@ -4982,7 +4982,9 @@ export const TOWN_COURT_STEP_ROWS = 3;
    glisse pas un arc de dessin dans une fonction de physique, on DÉCLARE une
    fois où le bâtiment pose les pieds.
 
-   Mesurés à la loupe sur public/town/courthouse-day.png (384×356 natifs), en
+   Mesurés à la loupe sur public/town/courthouse-day.png (384×356 natifs — ⚠️ ce fichier est
+   remplacé depuis le 2026-09-25 par les crans `courthouse-day-z<N>.png`, agrandissements de la
+   MÊME grille : ces repères restent vrais, voir `TOWN_BITMAPS`), en
    comparant à l'alpha et à la silhouette — voir les commentaires de chaque
    ligne pour ce que chaque repère désigne exactement.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -5001,6 +5003,78 @@ export const TOWN_COURT_SPRITE = {
   ixStairFootL: 62, ixStairFootR: 322,   // la volée, à son pied
   ixStairTopL: 104, ixStairTopR: 280,    // la volée, au palier
 };
+
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-25 (phase 0 de la feuille de route graphique) — LES BITMAPS DE LA
+   ║ VILLE, DÉCLARÉS À UN SEUL ENDROIT.
+   ╚══════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ AVANT CETTE TABLE, L'ÉCHELLE DE CHAQUE MONUMENT ÉTAIT ÉCRITE DANS SA
+   FONCTION DE DESSIN (`const GROW = 1.1` deux fois, `192 / day.width` une fois,
+   le lissage une fois), et aucun banc ne pouvait dire à quelle densité de pixel
+   un bitmap sortait à l'écran. L'audit du 2026-09-25 l'a mesuré en jeu : TROIS
+   densités coexistent — c'est le défaut n°1 de Valley Town. Cette table ne
+   change AUCUN nombre (vérifié en jeu, capture identique au pixel) : elle rend
+   la densité LISIBLE, par le dessin ET par `tools/verify-densite.mjs`.
+   Champs : `day`/`glow` (URL), `iw`/`ih` (taille native du PNG, que le banc
+   compare au fichier — un PNG regénéré sans mettre ses repères à jour est
+   attrapé), `disp` (largeur d'affichage en px d'ART avant `grow`), `grow`,
+   `smooth` (lissage à l'affichage).
+   ⚠️ LA RÈGLE QUE LE BANC TIENT : un px source = un nombre ENTIER de px d'art
+   (`disp × grow / iw` entier), et jamais de lissage. Les trois monuments la
+   violent AUJOURD'HUI — ils sont la phase 1, listés comme tels dans le banc,
+   qui rougit si un quatrième la viole ou si l'un d'eux la respecte sans avoir
+   été retiré de la liste.
+   ⚠️ PHASE 1 : `courtSpriteX`/`courtSpriteK` DÉRIVENT LA COLLISION DU TRIBUNAL
+   de `disp`, `grow` et des repères `ix*`/`iy*` — requantifier le PNG sans
+   garder `disp × grow` constant DÉPLACE LES MURS.
+
+   ⚠️⚠️⚠️ PHASE 1 (2026-09-25) — DEUX GRILLES, ET LE CHOIX EST DE GUILLAUME :
+   « je veux pas de perte de qualité ». Ramener une peinture Gemini à la grille
+   d'ART (1 px d'art = ZOOM px d'écran) aurait détruit du vrai détail — MESURÉ :
+   la référence de l'église n'a aucune grille de pixels interne (autocorrélation
+   du gradient sur la façade, aucune période de 2 à 6 px), c'est une peinture
+   continue. D'où `grid` :
+     · `"art"` (défaut) : un px source = un nombre entier de px d'ART ;
+     · `"screen"` : UNE IMAGE PAR CRAN DE ZOOM (`zooms`), fabriquée hors ligne
+       depuis la référence d'origine à la taille EXACTE qu'elle occupe à
+       l'écran — `townBitmapMip` — et dessinée à 1 px d'image = 1 px d'écran,
+       sans lissage (`drawScreenExactBitmap`, FermeGame.js). Ni flou, ni pixel
+       doublé ou sauté, et plus de détail qu'avant à tous les crans.
+   ⚠️ CE QUE `"screen"` NE RÈGLE PAS, ET IL FAUT LE DIRE : le monument reste
+   plus FIN que le décor en gros pixels qui l'entoure. C'est le prix, accepté,
+   de « aucune perte de qualité ». La géométrie monde (`disp`, `dispH`, `grow`)
+   ne bouge pas d'un pixel : pigeons, embase, halo du parvis restent calés. */
+export const TOWN_BITMAPS = {
+  church:     { grid: "screen", day: "/town/eglise-day", glow: "/town/eglise-glow", zooms: [1, 2, 3, 4, 5],
+                disp: 192, dispH: 183, grow: 1.1, smooth: false,
+                ref: "refs/eglise-nouvelle.jpg", build: "tools/build-eglise-sprite.mjs" },
+  townhall:   { grid: "screen", day: "/town/townhall-day", glow: "/town/townhall-glow", zooms: [1, 2, 3, 4, 5],
+                disp: 192, dispH: 173, grow: 1.1, smooth: false,
+                ref: "refs/hdv.jpg", build: "tools/build-townhall-sprite.mjs" },
+  /* Le tribunal garde `TOWN_COURT_SPRITE` comme GRILLE DE REPÈRES (384 × 356) :
+     `courtSpriteX` en dérive la COLLISION, et les pigeons, l'embase et le pied
+     de la volée y sont mesurés. Les images par cran n'en sont que des
+     agrandissements — `dispH` est donc `ih × disp / iw`, jamais une mesure. */
+  courthouse: { grid: "screen", day: "/town/courthouse-day", glow: null, zooms: [1, 2, 3, 4, 5],
+                disp: TOWN_COURT_SPRITE.disp, dispH: TOWN_COURT_SPRITE.ih * TOWN_COURT_SPRITE.disp / TOWN_COURT_SPRITE.iw,
+                grow: TOWN_COURT_SPRITE.grow, smooth: false,
+                ref: "refs/tributribu.jpg", build: "tools/build-tribunal-sprite.mjs" },
+  /* Les herbes hautes (Gemini, 2026-09-20) : une famille de PNG tirée par
+     `townTallGrassVariant` (fermeArt.js), dessinés À LEUR TAILLE NATIVE — donc
+     conformes par construction (`disp` nul = natif). Le cisaillement du vent
+     n'est pas une échelle : c'est une animation, et il reste permis. */
+  tallGrass:  { prefix: "/town/grass-tall-", disp: null, grow: 1, smooth: false },
+};
+/* L'image d'un bitmap `grid: "screen"` pour le cran de zoom `z` : ses URL et sa
+   taille EXACTE en px d'écran. ⚠️ LA SEULE DÉFINITION de cette taille — le
+   script de fabrication, le dessin et `verify-densite` l'appellent tous les
+   trois ; une taille recopiée serait fausse d'un pixel au premier arrondi. */
+export function townBitmapMip(b, z) {
+  return {
+    z, day: `${b.day}-z${z}.png`, glow: b.glow ? `${b.glow}-z${z}.png` : null,
+    w: Math.round(b.disp * b.grow * z), h: Math.round(b.dispH * b.grow * z),
+  };
+}
 
 /* px d'image -> abscisse monde, en tenant compte du cadrage et du GROW. */
 export function courtSpriteX(ix) {

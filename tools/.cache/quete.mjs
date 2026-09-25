@@ -592,7 +592,7 @@ export function starShipGone(e, voyagerAway) {
 }
 /* 2026-09-13 (lot 1) — LA LIMITE PAR PRODUIT D'UNE COMMANDE À EDUARDO. Doublée quand
    il a son propre navire (la quête achevée) : c'est la raison qu'il donne pour
-   vouloir le chantier (`L.star.yard.eduPitch`). ⚠️ LUE PAR L'HÔTE (qui borne la
+   vouloir le chantier (`L.star.yard.eduHook`). ⚠️ LUE PAR L'HÔTE (qui borne la
    commande) ET PAR LE PANNEAU (qui grise le « + ») : une seule écriture. */
 export function starVoyageMaxQty(e) { return C.VOYAGE_MAX_QTY * (starDone(e) ? C.VOYAGER_SHIP_LIMIT_K : 1); }
 

@@ -201,6 +201,36 @@ d'échantillon. **On agrandit l'échantillon, on ne desserre pas la mesure.**
   Ce banc ne juge toujours ni le plaisir d'une partie entière, ni le
   niveau stratégique des bots.
 
+- **`tools/verify-densite.mjs` — 43 contrôles, 43/43 (2026-09-25, phases 0 et 1 de la feuille de route
+  graphique de Valley Town).** Tout bitmap de la ville se déclare dans `TOWN_BITMAPS` (fermeConstants.js),
+  en deux classes. `grid: "art"` : 1 px source = un nombre ENTIER de px d'art, sans lissage (les herbes
+  hautes). `grid: "screen"` (les trois monuments depuis la phase 1, décision « pas de perte de qualité »
+  de Guillaume) : UNE IMAGE PAR CRAN DE ZOOM, à la taille d'écran exacte que `townBitmapMip` assigne,
+  posée à 1 px d'image = 1 px d'écran par `drawScreenExactBitmap` (FermeGame.js). Il tient : chaque
+  `loadBitmap` passe par la table (argument lu en ÉQUILIBRANT les parenthèses — un motif `[^)]*` coupait
+  `C.townBitmapMip(SB, z).day`), aucun `GROW` ni lissage littéral, chaque cran existe à sa taille (calque
+  de nuit compris), les crans couvrent tous les `ZOOM_LEVELS` du jeu (lus dans le source), le dessin ne
+  lisse QUE hors cran exact (fondu de zoom, cran pas encore chargé), **aucun PNG orphelin** dans
+  `public/town/`, et les dégradés du faux canevas. ⚠️ **CLIQUET** `EN_ATTENTE` : vide depuis la fin de la
+  phase 1 ; toute entrée ajoutée est un retour en arrière. ⚠️ **Falsifié 11 fois** (phase 0 : URL en dur,
+  taille PNG, attente devenue conforme, nouvelle violation, dégradé cassé, lissage littéral, `GROW` en
+  dur ; phase 1 : cran absent, cran oublié dans la table, PNG orphelin, lissage permanent) : 11
+  rougissements. Ne juge PAS l'aspect d'un bitmap : ça se regarde en jeu (§10 de `CLAUDE.md`).
+  ⚠️ **La preuve en jeu de la phase 1 ne vit dans aucun banc** (elle demande le navigateur) : canevas
+  relu, cran posé à une position entière, pixels opaques du monument comparés au PNG sous la teinte de
+  saison — 100 % exacts hors surimpressions voulues (halo du parvis, embase, pigeons), aux cinq crans,
+  pour les trois monuments. Recette : page jetable + route qui écrit le canevas en PNG (§10).
+  ⚠️ **Phase 0, même jour : `lib-canvas.mjs` a appris les dégradés** : `render-eau` (16/16) et
+  `render-parc` (31/31) plantaient depuis le 2026-09-02 ; les PNG de cinq autres bancs sortent bit à bit
+  identiques. Deux comptes figés corrigés en les relançant : `render-eau` (« 4 massifs » → les quatre
+  quadrants) et `render-oiseaux` (« 2 volées » → les volées d'origine présentes et non vides), falsifié.
+- **`tools/lib-mip.mjs` (2026-09-25) — le rééchantillonnage des monuments, écrit UNE fois** (Lanczos-3
+  séparable sur alpha prémultiplié, `writeMips`). Les trois `build-*-sprite.mjs` gardent leur propre
+  détourage et lui passent des plans pleine résolution ; les tailles se lisent dans `TOWN_BITMAPS`.
+  ⚠️ Avant de réécrire un script de fabrication, regénérer l'ANCIEN et le comparer au PNG versionné :
+  le 2026-09-25, l'église et l'hôtel de ville se reproduisaient au pixel près, le tribunal NON (388 px
+  gommés à la main) — la gomme vit maintenant dans son script.
+
 - **`tools/verify-echecs.mjs` — 68 contrôles, 68/68 (2026-09-24, audit échecs).** Les décisions
   du jeu d'échecs vivaient dans `ChessGame.js`, du JSX qu'aucun banc ne peut appeler — et c'est là
   que dormaient la moitié des défauts de l'audit. Elles sont passées dans des modules purs

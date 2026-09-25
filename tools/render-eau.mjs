@@ -363,7 +363,20 @@ console.log("\n=== 5. l'étang n'a rien noyé ===\n");
      générateur refuse poliment de poser un décor dans l'eau, donc rien n'a
      levé — il y avait juste trois massifs au lieu de quatre, et il aurait fallu
      les compter pour s'en apercevoir. C'est ce que fait cette ligne. */
-  ok(kinds.topiary === 4, "les quatre massifs taillés sont posés", `${kinds.topiary || 0} massif(s)`);
+  /* ⚠️⚠️ 2026-09-25 — LE COMPTE EXACT AVAIT VIEILLI, PAS LE PARC. Depuis le
+     semis en clusters du 2026-09-20 (fin de `generateTownWorld`), `topiary`
+     est aussi une espèce de cluster : le parc en porte onze, dont les quatre
+     de construction. `=== 4` rougissait donc sur un parc JUSTE — et ce banc
+     était de toute façon muet (il plantait sur le dégradé de la houle), si
+     bien que personne ne l'a vu. Ce que la ligne protège n'a jamais été un
+     NOMBRE mais « le massif de chaque quadrant existe » : on regarde les
+     quatre cases où le générateur les pose (`cx ± 3|4`, `cy ± 4`), qui ne
+     peuvent être prises par aucun cluster puisque le massif les rend solides
+     AVANT. Ça attrape toujours l'étang qui mange un massif (le défaut d'origine). */
+  const pcx = p.x + (p.w >> 1), pcy = p.y + (p.h >> 1);
+  const quad = [[pcx - 3, pcy + 4], [pcx + 4, pcy + 4], [pcx - 3, pcy - 4], [pcx + 4, pcy - 4]];
+  const quadOk = quad.filter(([qx, qy]) => tw.props.some(q => q.kind === "topiary" && q.x === qx && q.y === qy)).length;
+  ok(quadOk === 4, "les quatre massifs taillés sont posés", `${quadOk}/4 aux quatre quadrants (${kinds.topiary || 0} massif(s) en tout dans le parc, clusters compris)`);
   /* ⚠️ 437 — « AU MOINS DEUX » ET PLUS « EXACTEMENT DEUX ». Le parc a gagné un
      belvédère et deux bancs d'allée ; un contrôle qui fige un NOMBRE interdit
      d'en ajouter, alors que ce qu'on veut savoir est « peut-on s'asseoir au

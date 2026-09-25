@@ -24,3 +24,13 @@ export function loadBitmap(url) {
   im.src = url;
   return null;
 }
+
+// 2026-09-25 (phase 1) — LIRE LE CACHE SANS CHARGER. Un monument `grid:
+// "screen"` a une image par cran de zoom (cinq, jusqu'à 2 Mo pour la plus
+// grande) : on ne télécharge que celle du cran courant, et pendant qu'elle
+// arrive on dessine avec une image DÉJÀ chargée d'un autre cran. `loadBitmap`
+// en boucle sur les cinq aurait tout téléchargé à la première image.
+export function peekBitmap(url) {
+  const entry = cache.get(url);
+  return entry ? entry.img : null;
+}

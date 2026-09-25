@@ -45,11 +45,102 @@ function parseColor(s) {
   throw new Error("fillStyle non reconnu : " + s);
 }
 
+/* ⚠️⚠️ 2026-09-25 (phase 0 de la feuille de route graphique) — LES DÉGRADÉS.
+   `drawTownWaterSwellBand` (fermeArt.js, la houle de l'eau de la ville) pose un
+   `createLinearGradient` depuis le 2026-09-20 ; le faux canvas jetait, et
+   `render-eau` / `render-parc` plantaient depuis — deux bancs rouges pour une
+   raison d'OUTIL, donc plus aucun banc ne regardait l'eau (CLAUDE.md §10 : « un
+   banc déjà rouge ne peut plus rien dire du défaut suivant »). La phase 4 (sols
+   et eau) ne pouvait pas se faire sans eux.
+   CE QUI EST FAIT, ET RIEN DE PLUS : dégradés linéaire et radial (deux cercles,
+   forme générale du navigateur), arrêts triés, couleur évaluée AU CENTRE DU
+   PIXEL (x+0,5, y+0,5) dans le même repère que `fillRect`/`fill` (donc SANS la
+   translation, que ce faux canvas ignore partout — même contrat que le reste).
+   Interpolation linéaire en RVBA NON PRÉMULTIPLIÉ, bornée aux arrêts extrêmes
+   (« pad », le seul mode d'extension du canvas 2D).
+   ⚠️ CE QU'IL NE PROUVE PAS : le navigateur tramera/anticrénelera
+   différemment d'un niveau de gris ; l'outil montre la FORME du dégradé et son
+   ALPHA, pas une capture. `createPattern` et `createConicGradient` restent non
+   implémentés — ils JETTENT, c'est le contrat du fichier. */
+function makeGradient(kind, args) {
+  const stops = [];
+  return {
+    __grad: kind, args, stops,
+    addColorStop(t, c) {
+      if (!(t >= 0 && t <= 1)) throw new Error("addColorStop hors de [0,1] : " + t);
+      stops.push([t, parseColor(c)]);
+      stops.sort((a, b) => a[0] - b[0]);
+    },
+  };
+}
+function gradientT(g, x, y) {
+  const a = g.args;
+  if (g.__grad === "linear") {
+    const [x0, y0, x1, y1] = a, dx = x1 - x0, dy = y1 - y0, L2 = dx * dx + dy * dy;
+    return L2 > 0 ? ((x - x0) * dx + (y - y0) * dy) / L2 : 0;
+  }
+  /* Radial à deux cercles : on cherche le plus grand t tel que le point soit
+     sur le cercle c(t) = c0 + t (c1 - c0), r(t) = r0 + t (r1 - r0), r(t) ≥ 0.
+     C'est la définition du canvas 2D ; le cas courant (cercles concentriques,
+     r0 = 0) redonne simplement distance / r1. */
+  const [x0, y0, r0, x1, y1, r1] = a;
+  const cdx = x1 - x0, cdy = y1 - y0, dr = r1 - r0;
+  const px0 = x - x0, py0 = y - y0;
+  const A = cdx * cdx + cdy * cdy - dr * dr;
+  const B = px0 * cdx + py0 * cdy + r0 * dr;
+  const Cc = px0 * px0 + py0 * py0 - r0 * r0;
+  let t;
+  if (Math.abs(A) < 1e-9) t = B !== 0 ? Cc / (2 * B) : 0;
+  else {
+    const disc = B * B - A * Cc;
+    if (disc < 0) return NaN;              // hors du cône : rien n'est peint, comme le navigateur
+    const s = Math.sqrt(disc);
+    t = (B + s) / A;
+    if (r0 + t * dr < 0) t = (B - s) / A;
+  }
+  return r0 + t * dr < 0 ? NaN : t;
+}
+function gradientColor(g, x, y) {
+  const st = g.stops;
+  if (!st.length) return [0, 0, 0, 0];
+  const t = gradientT(g, x, y);
+  if (Number.isNaN(t)) return [0, 0, 0, 0];
+  if (t <= st[0][0]) return st[0][1];
+  if (t >= st[st.length - 1][0]) return st[st.length - 1][1];
+  for (let i = 1; i < st.length; i++) {
+    if (t <= st[i][0]) {
+      const [ta, ca] = st[i - 1], [tb, cb] = st[i];
+      const k = tb > ta ? (t - ta) / (tb - ta) : 1;
+      return [ca[0] + (cb[0] - ca[0]) * k, ca[1] + (cb[1] - ca[1]) * k, ca[2] + (cb[2] - ca[2]) * k, ca[3] + (cb[3] - ca[3]) * k];
+    }
+  }
+  return st[st.length - 1][1];
+}
+// Une couleur de remplissage : unie (tableau) ou dégradée (évaluée par pixel).
+function paintOf(style) {
+  if (style && typeof style === "object" && style.__grad) return (x, y) => gradientColor(style, x + 0.5, y + 0.5);
+  const c = parseColor(style);
+  return () => c;
+}
+
 export function makeCanvas(W, H) {
   const px = new Uint8ClampedArray(W * H * 4);
   const state = { fillStyle: "#000000", strokeStyle: "#000000", lineWidth: 1, globalAlpha: 1,
                   imageSmoothingEnabled: false, globalCompositeOperation: "source-over",
                   path: [], sub: null, tr: { x: 0, y: 0 }, stack: [], font: "", textAlign: "" };
+  /* Le mélange « source-over » d'UN pixel, écrit une fois pour `fillRect` et
+     `fill` (2026-09-25 : il était recopié dans les deux ; l'arrivée des
+     dégradés aurait demandé une troisième copie). Arithmétique INCHANGÉE pour
+     une couleur unie — les PNG des bancs existants sortent bit à bit pareils. */
+  function blend(xx, yy, c) {
+    const a = (c[3] / 255) * state.globalAlpha;
+    if (a <= 0) return;
+    const i = (yy * W + xx) * 4;
+    if (a >= 1) { px[i] = c[0]; px[i + 1] = c[1]; px[i + 2] = c[2]; px[i + 3] = 255; return; }
+    const ia = 1 - a;
+    px[i] = c[0] * a + px[i] * ia; px[i + 1] = c[1] * a + px[i + 1] * ia;
+    px[i + 2] = c[2] * a + px[i + 2] * ia; px[i + 3] = Math.max(px[i + 3], 255 * a);
+  }
 
   const ctx = {
     /* ⚠️ UNE COULEUR ILLISIBLE EST IGNORÉE, ET C'EST LE COMPORTEMENT DU
@@ -63,7 +154,12 @@ export function makeCanvas(W, H) {
        précédente — ce n'est pas ce que l'auteur croyait écrire, mais c'est ce
        que le joueur voit, et c'est ce que l'outil doit montrer. */
     get fillStyle() { return state.fillStyle; },
-    set fillStyle(v) { try { parseColor(v); state.fillStyle = v; } catch (e) { /* refusée, comme dans un canvas réel */ } },
+    set fillStyle(v) {
+      if (v && typeof v === "object" && v.__grad) { state.fillStyle = v; return; }
+      try { parseColor(v); state.fillStyle = v; } catch (e) { /* refusée, comme dans un canvas réel */ }
+    },
+    createLinearGradient(x0, y0, x1, y1) { return makeGradient("linear", [x0, y0, x1, y1]); },
+    createRadialGradient(x0, y0, r0, x1, y1, r1) { return makeGradient("radial", [x0, y0, r0, x1, y1, r1]); },
     get globalAlpha() { return state.globalAlpha; }, set globalAlpha(v) { state.globalAlpha = v; },
     get imageSmoothingEnabled() { return state.imageSmoothingEnabled; }, set imageSmoothingEnabled(v) { state.imageSmoothingEnabled = v; },
     get globalCompositeOperation() { return state.globalCompositeOperation; }, set globalCompositeOperation(v) { state.globalCompositeOperation = v; },
@@ -75,20 +171,12 @@ export function makeCanvas(W, H) {
     get lineJoin() { return state.lineJoin; }, set lineJoin(v) { state.lineJoin = v; },
 
     fillRect(x, y, w, h) {
-      const [r, g, b, a0] = parseColor(state.fillStyle);
-      const a = (a0 / 255) * state.globalAlpha;
-      if (a <= 0) return;
+      const paint = paintOf(state.fillStyle);
       let x0 = Math.round(x), y0 = Math.round(y), x1 = Math.round(x + w), y1 = Math.round(y + h);
       if (x1 < x0) { const t = x0; x0 = x1; x1 = t; }
       if (y1 < y0) { const t = y0; y0 = y1; y1 = t; }
       x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(W, x1); y1 = Math.min(H, y1);
-      for (let yy = y0; yy < y1; yy++) for (let xx = x0; xx < x1; xx++) {
-        const i = (yy * W + xx) * 4;
-        if (a >= 1) { px[i] = r; px[i + 1] = g; px[i + 2] = b; px[i + 3] = 255; continue; }
-        const ia = 1 - a;
-        px[i] = r * a + px[i] * ia; px[i + 1] = g * a + px[i + 1] * ia;
-        px[i + 2] = b * a + px[i + 2] * ia; px[i + 3] = Math.max(px[i + 3], 255 * a);
-      }
+      for (let yy = y0; yy < y1; yy++) for (let xx = x0; xx < x1; xx++) blend(xx, yy, paint(xx, yy));
     },
     clearRect(x, y, w, h) {
       const x0 = Math.max(0, Math.round(x)), y0 = Math.max(0, Math.round(y));
@@ -159,9 +247,8 @@ export function makeCanvas(W, H) {
       state.sub = pts; state.path.push(state.sub);
     },
     fill() {
-      const [r, g, b, a0] = parseColor(state.fillStyle);
-      const a = (a0 / 255) * state.globalAlpha;
-      if (a <= 0 || !state.path.length) return;
+      const paint = paintOf(state.fillStyle);
+      if (!state.path.length) return;
       const edges = [];
       for (const sub of state.path) for (let i = 0; i < sub.length; i++) {
         const p = sub[i], q = sub[(i + 1) % sub.length];
@@ -180,11 +267,7 @@ export function makeCanvas(W, H) {
         xs.sort((u, v) => u - v);
         for (let k = 0; k + 1 < xs.length; k += 2) {
           const xa = Math.max(0, Math.round(xs[k])), xb = Math.min(W, Math.round(xs[k + 1]));
-          for (let x = xa; x < xb; x++) {
-            const i = (y * W + x) * 4, ia = 1 - a;
-            px[i] = r * a + px[i] * ia; px[i + 1] = g * a + px[i + 1] * ia;
-            px[i + 2] = b * a + px[i + 2] * ia; px[i + 3] = Math.max(px[i + 3], 255 * a);
-          }
+          for (let x = xa; x < xb; x++) blend(x, y, paint(x, y));
         }
       }
     },

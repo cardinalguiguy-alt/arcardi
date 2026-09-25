@@ -61,7 +61,7 @@ import { buildSprites, charPalette, drawBridgeTile, drawBridgeOverlay, drawCandy
    `Map` recréée à chaque image oublierait la position précédente et la vitesse
    resterait nulle — une traîne qui ne se déclenche jamais, sans aucune erreur. */
 const STAR_LEAN_MEM = new Map();
-import { loadBitmap } from "./bitmapAssets";
+import { loadBitmap, peekBitmap } from "./bitmapAssets";
 import { fstr } from "./fermeStrings";
 // ZIP 441 — l'orgue de l'église. Le lecteur de fichiers existe depuis longtemps
 // (bruit de caisse, de porte, de pioche) : on ne monte pas un second pipeline
@@ -83,6 +83,76 @@ const ZOOM = 3;
    tombe donc exactement sur le même cran que le dézoom automatique des
    monuments, jamais un second nombre qui pourrait diverger de lui. */
 const ZOOM_LEVELS = [1, 2, 3, 4, 5];
+
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-25 (phase 1 de la feuille de route graphique) — UN MONUMENT PEINT,
+   ║ POSÉ À 1 PX D'IMAGE = 1 PX D'ÉCRAN.
+   ╚══════════════════════════════════════════════════════════════════════════
+   Pour un bitmap `grid: "screen"` de `C.TOWN_BITMAPS` : choisit l'image du cran
+   de zoom courant (`C.townBitmapMip`, fabriquée hors ligne à sa taille d'écran
+   EXACTE) et la pose en coordonnées d'ÉCRAN, bord gauche et bas arrondis au
+   pixel, sans lissage. Avant : une seule image de 384 px, agrandie ×1,1 à
+   ×2,75 AVEC lissage — floue à tous les crans (mesuré : 1,5 à 4,2 fois moins de
+   détail que maintenant, `tools/build-eglise-sprite.mjs`).
+   ⚠️ APPELÉE DANS LE `save()` DU GROSSISSEMENT (`GROW`) : le point d'ancrage
+   (`cxW`, `byW`) est le CENTRE de ce grossissement, donc invariant, et le zoom
+   se lit dans la matrice (`a / grow`). Tout le reste du monument (ombre, embase,
+   halo, pigeons) garde sa géométrie monde à la virgule près — `disp × dispH`.
+   ⚠️ DEUX CAS SEULEMENT OÙ L'IMAGE EST MISE À L'ÉCHELLE, ET ILS SONT
+   TRANSITOIRES : le fondu de zoom (520 ms, le zoom est fractionnaire — tout le
+   monde grouille à ce moment-là) et les quelques images où le cran voulu
+   n'est pas encore téléchargé (on prend le cran chargé le plus proche). Alors,
+   et seulement alors, le lissage est allumé. Hors transition : aucun.
+   Rend `false` si aucune image n'est encore chargée (rien n'est dessiné). */
+function screenBitmapPick(SB, zoom) {
+  const zs = SB.zooms;
+  const zi = Math.round(zoom);
+  const exact = Math.abs(zoom - zi) < 1e-3 && zs.includes(zi);
+  const zWant = exact ? zi : Math.max(zs[0], Math.min(zs[zs.length - 1], Math.ceil(zoom - 1e-3)));
+  const want = C.townBitmapMip(SB, zWant);
+  const img = loadBitmap(want.day); // le cran qu'on affiche
+  /* Pendant un fondu (zoom fractionnaire), le cran d'ARRIVÉE est l'un des deux
+     crans entiers qui l'encadrent : on précharge aussi l'autre, sinon l'arrivée
+     montre quelques images le cran voisin mis à l'échelle. Deux crans au plus,
+     jamais les cinq. */
+  if (!exact) {
+    const zOther = Math.max(zs[0], Math.min(zs[zs.length - 1], Math.floor(zoom + 1e-3)));
+    if (zOther !== zWant) loadBitmap(C.townBitmapMip(SB, zOther).day);
+  }
+  if (img) return { mip: want, img, exact };
+  // En attendant : le cran déjà chargé le plus proche (le plus grand à égalité).
+  const order = zs.filter(z => z !== zWant).sort((a, b) => Math.abs(a - zWant) - Math.abs(b - zWant) || b - a);
+  for (const z of order) {
+    const m = C.townBitmapMip(SB, z), im = peekBitmap(m.day);
+    if (im) return { mip: m, img: im, exact: false };
+  }
+  return null;
+}
+/* `cxW` : l'abscisse du CENTRE de l'image, `byW` : l'ordonnée de son BORD BAS,
+   dans le repère courant (celui du `save()` du grossissement). */
+function drawScreenExactBitmap(ctx, SB, cxW, byW, nightA) {
+  const M = ctx.getTransform();
+  const zoom = M.a / SB.grow;
+  const pick = screenBitmapPick(SB, zoom);
+  if (!pick) return false;
+  const sx = M.a * cxW + M.c * byW + M.e, sy = M.b * cxW + M.d * byW + M.f;
+  const { mip, img, exact } = pick;
+  // Taille d'écran EXACTE si le cran est le bon ; sinon la taille réelle, flottante.
+  const dw = exact ? mip.w : SB.disp * SB.grow * zoom, dh = exact ? mip.h : SB.dispH * SB.grow * zoom;
+  const left = exact ? Math.round(sx - mip.w / 2) : sx - dw / 2;
+  const top = exact ? Math.round(sy) - mip.h : sy - dh;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.imageSmoothingEnabled = !exact;   // transitoire seulement — voir la note
+  if (!exact) ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, left, top, dw, dh);
+  if (mip.glow && nightA > 0.01) {
+    const g = loadBitmap(mip.glow);
+    if (g) { ctx.globalAlpha = nightA; ctx.drawImage(g, left, top, dw, dh); }
+  }
+  ctx.restore(); // rend la transformation, l'alpha ET le lissage (false) d'avant
+  return true;
+}
 // Lu UNE fois, à la création du ref qui le porte (voir manualZoomRef) — même
 // convention que `ferme_lastcode` (essai/catch, préférence par machine).
 function readSavedZoomLevel() {
@@ -20713,13 +20783,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          emprise. ⚠️ Pas d'horloge à dessiner ici, contrairement à la mairie :
          rien n'est gravé à repeindre en direct sur ce bâtiment. */
       const drawChurchBitmap = (b) => {
-        const day = loadBitmap("/town/eglise-day.png");
-        if (!day) return; // pas encore chargé : rien à dessiner cette frame
+        const SB = C.TOWN_BITMAPS.church; // 2026-09-25 : échelle, lissage et URL déclarés à UN endroit (fermeConstants.js)
+        /* Rien n'est chargé à aucun cran : rien à dessiner cette frame (ni
+           l'ombre ni les pigeons autour d'un bâtiment absent). */
+        if (!screenBitmapPick(SB, townZoomRef.current.v || manualZoomRef.current)) return;
         const by = (b.y + b.h) * T;
         const e = elAt(b.x, b.y + b.h - 1);
         pushE(by, e, () => {
           const cx2 = b.x * T + b.w * T / 2;
-          const GROW = 1.1; // même grossissement que les deux autres monuments
+          const GROW = SB.grow; // même grossissement que les deux autres monuments
           /* ⚠️ 2026-09-20 (retouche définition) — L'AFFICHAGE RESTE CALÉ SUR
              192 px, INDÉPENDAMMENT DE LA RÉSOLUTION SOURCE. `eglise-day.png`
              est passée à 384 (voir build-eglise-sprite.mjs) pour donner à la
@@ -20728,8 +20800,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              bouger d'un pixel : `dispScale` ramène toujours l'image à 192 de
              large, quelle que soit sa résolution native. `scaleK` (ancres des
              pigeons plus bas) redevient donc 1 par construction. */
-          const dispScale = 192 / day.width;
-          const dw = day.width * dispScale, dh = day.height * dispScale;
+          /* ⚠️ 2026-09-25 (phase 1) : la géométrie monde se lit dans la table
+             (`disp` × `dispH` = 192 × 183, exactement ce que rendait l'ancien
+             `day.width × dispScale`) — plus dans une image, puisqu'il y en a
+             désormais une par cran de zoom. Pigeons, ombre, embase : inchangés. */
+          const dw = SB.disp, dh = SB.dispH;
           ctx.save();
           ctx.translate(cx2, by); ctx.scale(GROW, GROW); ctx.translate(-cx2, -by);
           const dx = b.x * T + (b.w * T - dw) / 2, dy = by - dh;
@@ -20935,17 +21010,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              restauré une seule fois en bas) : un second save/translate/scale
              ici COMPOSERAIT le grossissement avec lui-même (1,1×1,1 = 1,21),
              décalant en plus l'ancrage — piège payé en écrivant cette passe. */
-          ctx.imageSmoothingEnabled = true;
-          ctx.imageSmoothingQuality = "high";
-          ctx.drawImage(day, dx, dy, dw, dh);
-          const glow = loadBitmap("/town/eglise-glow.png");
-          const na = nightAlpha();
-          if (glow && na > 0.01) {
-            ctx.globalAlpha = na;
-            ctx.drawImage(glow, dx, dy, dw, dh);
-            ctx.globalAlpha = 1;
-          }
-          ctx.imageSmoothingEnabled = false;
+          /* ⚠️ 2026-09-25 (phase 1) — 1 PX D'IMAGE = 1 PX D'ÉCRAN, une image par
+             cran de zoom, plus aucun lissage : voir `drawScreenExactBitmap`
+             (haut du fichier). Le paragraphe ci-dessus décrit l'ancien choix
+             (une image lissée à l'affichage), gardé pour l'histoire du SAVE
+             unique du grossissement, qui reste vrai : le point d'ancrage passé
+             ici est le centre de ce grossissement. */
+          drawScreenExactBitmap(ctx, SB, cx2, by, nightAlpha());
           /* ⚠️ 2026-09-20 (retouche) — LE POINT DE COUTURE ENTRE LE BÂTIMENT
              PEINT ET LE DALLAGE PROCÉDURAL DU PARVIS. Guillaume : « le parvis
              doit pas être totalement dans un autre style ». Le dallage
@@ -20980,8 +21051,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          test demandé par Guillaume, à partir d'une référence Gemini
          (refs/hdv.jpg). Deux calques alignés au pixel près
          (tools/build-townhall-sprite.mjs) : les fenêtres/lanternes sont
-         ÉTEINTES dans le premier (townhall-day.png) et existent SEULES,
-         fond transparent, dans le second (townhall-glow.png) — posé
+         ÉTEINTES dans le premier (townhall-day-z<N>.png) et existent SEULES,
+         fond transparent, dans le second (townhall-glow-z<N>.png) — posé
          par-dessus avec `nightAlpha()`, la même fonction que le voile de
          nuit du jeu, pour que l'allumage suive le même fondu que le reste
          du monde plutôt qu'un bâtiment cuit "allumé" en permanence.
@@ -20996,8 +21067,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          jeu (`E.gameTimeMin`) — Guillaume : « l'horloge devra être liée à
          l'heure de la journée ». */
       const drawTownHallBitmap = (b) => {
-        const day = loadBitmap("/town/townhall-day.png");
-        if (!day) return; // pas encore chargé : rien à dessiner cette frame
+        const SB = C.TOWN_BITMAPS.townhall; // 2026-09-25 : voir TOWN_BITMAPS (fermeConstants.js)
+        // Aucun cran chargé : rien à dessiner cette frame (ni ombre ni horloge).
+        if (!screenBitmapPick(SB, townZoomRef.current.v || manualZoomRef.current)) return;
         const by = (b.y + b.h) * T; // bas de l'IMAGE : reste au vrai bord de l'emprise
         /* ⚠️ 2026-09-02 — LA CLÉ DE TRI, ELLE, NE PEUT PAS ÊTRE `by` : depuis
            que le perron est traversable (C.TOWN_HALL_STEP_ROWS), un joueur
@@ -21014,10 +21086,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              note), autour du même point d'ancrage (cx2, by) : l'emprise, la
              clé de tri et la porte ne bougent pas, seul ce qui est peint entre
              `save()` et `restore()` grandit de 10 %. */
-          const GROW = 1.1;
+          const GROW = SB.grow;
           ctx.save();
           ctx.translate(cx2, by); ctx.scale(GROW, GROW); ctx.translate(-cx2, -by);
-          const dx = b.x * T + (b.w * T - day.width) / 2, dy = by - day.height;
+          /* 2026-09-25 — `dw`/`dh` : la géométrie MONDE vient de la table
+             (192 × 173, la grille des mesures), plus d'une image — il y en a
+             une par cran de zoom depuis la phase 1. Porte, horloge, ombre :
+             inchangées au pixel. */
+          const dw = SB.disp, dh = SB.dispH;
+          const dx = b.x * T + (b.w * T - dw) / 2, dy = by - dh;
           /* Ombre portée, soleil en haut à gauche (convention du reste de la
              ville) : sans elle le bâtiment se lit comme une image collée sur
              l'herbe plutôt que comme un volume posé dessus — demande de
@@ -21025,27 +21102,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              ombres »). Longueur DÉRIVÉE de la taille du sprite (pas un
              nombre choisi au jugé) ; trois ellipses emboîtées pour un bord
              dégradé plutôt qu'une flaque nette. */
-          const shx = cx2 + day.width * 0.16, shy = by - 3;
+          const shx = cx2 + dw * 0.16, shy = by - 3;
           ctx.save();
           for (let k = 0; k < 3; k++) {
             ctx.fillStyle = `rgba(20,16,12,${0.16 - k * 0.045})`;
             ctx.beginPath();
-            ctx.ellipse(shx, shy, day.width * (0.42 - k * 0.06), day.height * (0.10 - k * 0.02), 0, 0, Math.PI * 2);
+            ctx.ellipse(shx, shy, dw * (0.42 - k * 0.06), dh * (0.10 - k * 0.02), 0, 0, Math.PI * 2);
             ctx.fill();
           }
           ctx.restore();
-          ctx.drawImage(day, dx, dy);
-          const glow = loadBitmap("/town/townhall-glow.png");
-          const na = nightAlpha();
-          if (glow && na > 0.01) {
-            ctx.globalAlpha = na;
-            ctx.drawImage(glow, dx, dy);
-            ctx.globalAlpha = 1;
-          }
+          // 2026-09-25 (phase 1) : 1 px d'image = 1 px d'écran, une image par
+          // cran — voir `drawScreenExactBitmap` (haut du fichier).
+          drawScreenExactBitmap(ctx, SB, cx2, by, nightAlpha());
           // L'horloge : centre et rayon mesurés à la main sur le PNG (192 px
           // de large), voir tools/build-townhall-sprite.mjs pour l'origine
-          // des mêmes nombres côté cadran repeint.
-          const scaleK = day.width / 192;
+          // des mêmes nombres côté cadran repeint. ⚠️ 2026-09-25 : ces nombres
+          // sont dans la grille d'AFFICHAGE de 192 px, donc l'échelle suit
+          // `dw`, plus la définition du PNG (identique aujourd'hui).
+          const scaleK = dw / 192;
           const clockX = dx + 95.5 * scaleK, clockY = dy + 74 * scaleK;
           const tmin = E.gameTimeMin(sharedRef.current.dayStartAt, Date.now());
           const hourAngle = ((tmin % 720) / 720) * Math.PI * 2 - Math.PI / 2;
@@ -21064,7 +21138,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.lineTo(clockX + Math.cos(minAngle) * 4.6 * scaleK, clockY + Math.sin(minAngle) * 4.6 * scaleK);
           ctx.stroke();
           ctx.restore();
-          drawBuildingFooting(ctx, cx2, by, day.width / 2);
+          drawBuildingFooting(ctx, cx2, by, dw / 2);
           ctx.restore();
         });
       };
@@ -21081,8 +21155,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          et à l'église (vitraux), rien ne s'allume la nuit ici — parité avec
          l'ancien sprite procédural, qui n'en avait pas non plus. */
       const drawCourthouseBitmap = (b) => {
-        const day = loadBitmap("/town/courthouse-day.png");
-        if (!day) return; // pas encore chargé : rien à dessiner cette frame
+        const SB = C.TOWN_BITMAPS.courthouse; // 2026-09-25 : échelle et URL dans TOWN_BITMAPS, repères dans TOWN_COURT_SPRITE
+        // Aucun cran chargé : rien à dessiner cette frame.
+        if (!screenBitmapPick(SB, townZoomRef.current.v || manualZoomRef.current)) return;
         const by = (b.y + b.h) * T;
         /* ⚠️ MÊME RAISON QUE L'HÔTEL DE VILLE : depuis que le perron est
            traversable (C.TOWN_COURT_STEP_ROWS), la clé de tri doit se caler
@@ -21128,8 +21203,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              bâtiment voisin. Visuel seul : l'emprise, la porte (nearCivicDoor)
              et la clé de tri ne bougent pas, comme pour les +10 % (§ ci-dessus,
              « LE GROSSISSEMENT NE TOUCHE QUE CE QUI SE PEINT »). */
-          const dispScale = S.disp / day.width;
-          const dw = day.width * dispScale, dh = day.height * dispScale;
+          /* ⚠️ 2026-09-25 (phase 1) : l'échelle se lit sur la GRILLE DE REPÈRES
+             (`S.iw` = 384), plus sur la largeur d'une image — il y en a une par
+             cran. C'est la même que `courtSpriteX` (collision) : les deux ne
+             peuvent plus se séparer. */
+          const dispScale = S.disp / S.iw;
+          const dw = S.disp, dh = S.ih * dispScale;
           ctx.save();
           ctx.translate(cx2, by); ctx.scale(GROW, GROW); ctx.translate(-cx2, -by);
           const dx = b.x * T + (b.w * T - dw) / 2;
@@ -21155,7 +21234,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             ctx.fill();
           }
           ctx.restore();
-          ctx.drawImage(day, dx, dy, dw, dh);
+          /* 2026-09-25 (phase 1) : 1 px d'image = 1 px d'écran. L'ancrage est le
+             BAS de l'image (`dy + dh`) au centre de l'emprise — pas `by` : le
+             tribunal pose le pied de sa volée sur le parvis (voir `dy`). */
+          drawScreenExactBitmap(ctx, SB, cx2, dy + dh, 0);
           drawBuildingFooting(ctx, cx2, footY, bodyW / 2);
           /* 2026-09-22 — LES PIGEONS DU TRIBUNAL (demande de Guillaume, en jeu :
              hauteurs variables et cohérentes avec la taille des marches, pose
