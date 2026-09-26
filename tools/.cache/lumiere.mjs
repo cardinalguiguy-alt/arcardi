@@ -179,6 +179,141 @@ export function windowLit(house, win, tmin, nightA, asleep) {
   return tmin < offAt;
 }
 
+/* ── 2 bis. LES FENÊTRES DES MONUMENTS (phase 6c, 2026-09-26) ─────────────
+   Guillaume : « l'éclairage des fenêtres des grands bâtiments doit être plus
+   travaillé, plus réaliste, plus beau » — puis « un peu tout ça » (fenêtres
+   inégales, profondeur, vie selon l'heure, vitraux colorés).
+   ⚠️ UNE SEULE DESCRIPTION DES BAIES, LUE PAR DEUX PROGRAMMES : le script qui
+   CUIT le calque de nuit (`tools/build-monument-glow.mjs` : teinte, profondeur,
+   silhouettes — ce qui ne change pas) et le jeu qui ÉTEINT, à l'heure, les baies
+   dont la pièce est vide (`monumentWindowLevel` + `monumentWindowPath`). Avant,
+   les régions vivaient dans le script seul, et « une fenêtre sur deux éteinte »
+   y était CUITE : la même pièce restait vide toutes les nuits de la partie.
+   Coordonnées en px du CRAN 3 (`W3`×`H3`), où elles ont été relevées sur la
+   peinture ; chaque cran les rapporte par proportion. `room` : la pièce (les
+   baies d'une même pièce s'allument ensemble), `kind` : la recette du script,
+   `maxL` : le plafond de luminance du verre (vitres sombres). */
+export const MONUMENT_WINDOWS = {
+  church: {
+    W3: 634, H3: 604,
+    wins: [
+      { k: "disc", cx: 318, cy: 311, r: 47, kind: "stained", room: "nave" },                 // la rosace
+      { k: "rect", x0: 268, y0: 343, x1: 368, y1: 408, kind: "stained", room: "nave" },      // l'arcature sous la rosace
+      { k: "arch", x0: 191, x1: 229, y0: 324, y1: 428, kind: "stained", room: "nave" },      // grande lancette ouest
+      { k: "arch", x0: 407, x1: 445, y0: 324, y1: 428, kind: "stained", room: "nave" },      // grande lancette est
+      { k: "arch", x0: 196, x1: 228, y0: 476, y1: 558, kind: "stained", room: "aisle" },     // lancette basse ouest (bas-côté)
+      { k: "arch", x0: 409, x1: 441, y0: 476, y1: 558, kind: "stained", room: "aisle" },     // lancette basse est
+    ],
+  },
+  townhall: {
+    W3: 634, H3: 571,
+    wins: [
+      // Les baies relevées sur leur cadre de fer (colonnes sombres mesurées à
+      // la rangée 420) : la peinture n'est pas symétrique au pixel.
+      { k: "arch", x0: 108, x1: 160, y0: 336, y1: 461, kind: "curtain", room: "office-w" },  // grande baie ouest (état civil)
+      { k: "arch", x0: 466, x1: 518, y0: 336, y1: 461, kind: "curtain", room: "office-e" },  // grande baie est (bureau du maire)
+      { k: "arch", x0: 28, x1: 50, y0: 346, y1: 461, kind: "curtain", room: "stair-w" },     // baie étroite ouest
+      { k: "arch", x0: 577, x1: 601, y0: 346, y1: 461, kind: "curtain", room: "stair-e" },   // baie étroite est
+      { k: "rect", x0: 280, y0: 98, x1: 356, y1: 142, kind: "pane", maxL: 120, room: "always" }, // le lanternon
+      { k: "disc", cx: 241, cy: 424, r: 13, kind: "lantern", room: "always" },               // lanterne murale ouest
+      { k: "disc", cx: 388, cy: 424, r: 13, kind: "lantern", room: "always" },               // lanterne murale est
+      { k: "disc", cx: 316, cy: 240, r: 24, kind: "clock", room: "always" },                 // le cadran
+    ],
+  },
+  courthouse: {
+    W3: 845, H3: 783,
+    wins: [
+      // Les ailes, deux étages, deux fenêtres par aile : huit bureaux, chacun
+      // sa soirée (plus de quinconce cuit — voir l'en-tête).
+      ...[[79, 111], [167, 199], [652, 680], [740, 768]].flatMap(([x0, x1], i) => [
+        { k: "rect", x0, y0: 342, x1, y1: 406, kind: "pane", maxL: 118, room: "wing" + i + "u" },
+        { k: "rect", x0, y0: 467, x1, y1: 536, kind: "pane", maxL: 118, room: "wing" + i + "d" },
+      ]),
+      // Les cinq baies du portique — la salle des pas perdus.
+      ...[[252, 283], [332, 363], [410, 436], [487, 515], [567, 592]].map(([x0, x1]) =>
+        ({ k: "rect", x0, y0: 347, x1, y1: 405, kind: "pane", maxL: 104, room: "hall" })),
+      // Les deux fenêtres cintrées du soubassement : la loge du gardien à
+      // l'ouest, le greffe à l'est.
+      { k: "arch", x0: 79, x1: 109, y0: 600, y1: 676, kind: "pane", maxL: 112, room: "lodge" },
+      { k: "arch", x0: 739, x1: 769, y0: 600, y1: 676, kind: "pane", maxL: 112, room: "clerk" },
+      // L'imposte au-dessus de la porte (un demi-disque : les claveaux sont de la pierre).
+      { k: "arch", x0: 403, x1: 445, y0: 453, y1: 477, kind: "pane", maxL: 96, room: "hall" },
+      // Les deux lampadaires peints en haut de la volée.
+      { k: "disc", cx: 202, cy: 488, r: 14, kind: "lantern", room: "always" },
+      { k: "disc", cx: 645, cy: 488, r: 14, kind: "lantern", room: "always" },
+    ],
+  },
+};
+/* Un point (px du cran 3) est-il dans la baie ? Une `arch` est un rectangle
+   coiffé d'un demi-cercle, pour ne pas allumer la pierre des écoinçons. */
+export function monumentWindowHas(w, x, y) {
+  if (w.k === "rect") return x >= w.x0 && x < w.x1 && y >= w.y0 && y < w.y1;
+  if (w.k === "arch") {
+    if (x < w.x0 || x >= w.x1 || y >= w.y1) return false;
+    const R = (w.x1 - w.x0) / 2, cy = w.y0 + R;
+    return y >= cy || Math.hypot(x - (w.x0 + R), y - cy) <= R;
+  }
+  return Math.hypot(x - w.cx, y - w.cy) <= w.r;
+}
+/* Le tracé de la baie dans un contexte 2D, à l'échelle `s` (px du cran → px
+   du canevas visé), agrandi de `pad` px pour couvrir le bord tramé. */
+export function monumentWindowPath(ctx, w, sx, sy, pad = 1) {
+  ctx.beginPath();
+  if (w.k === "disc") { ctx.ellipse(w.cx * sx, w.cy * sy, w.r * sx + pad, w.r * sy + pad, 0, 0, Math.PI * 2); return; }
+  const x0 = w.x0 * sx - pad, x1 = w.x1 * sx + pad, y1 = w.y1 * sy + pad;
+  if (w.k === "rect") { ctx.rect(x0, w.y0 * sy - pad, x1 - x0, y1 - (w.y0 * sy - pad)); return; }
+  const R = (x1 - x0) / 2, cy = w.y0 * sy - pad + R;
+  ctx.moveTo(x0, y1); ctx.lineTo(x0, cy);
+  ctx.ellipse(x0 + R, cy, R, R * sy / sx, 0, Math.PI, 0);
+  ctx.lineTo(x1, y1); ctx.closePath();
+}
+/* ⚠️ LA VIE DES PIÈCES, UNE PURE FONCTION DE L'HEURE ET DU JOUR (le patron du
+   jour de marché et des élections) : les deux joueurs voient la même mairie
+   s'éteindre à la même minute, sans un message. `tmin` : l'heure du jeu
+   (`E.gameTimeMin`, de 360 à 1560 — au-delà de 1440, après minuit), `day` : le
+   numéro du jour, qui change la soirée de chaque bureau d'une nuit à l'autre.
+   Rend la force de la baie (0 éteinte, 1 pleine) ; le crépuscule lui-même
+   (`nightA`) est appliqué par l'appelant, comme avant. */
+const MIN_ = (h, m = 0) => h * 60 + m;
+export function monumentWindowLevel(key, w, tmin, day) {
+  const room = w.room;
+  if (room === "always") return 1;
+  const h = hash32(day * 97 + key.length * 13, room.split("").reduce((a, c) => a * 31 + c.charCodeAt(0), 7));
+  const early = tmin < MIN_(12);                      // le petit matin, avant qu'il fasse jour
+  if (key === "church") {
+    /* Vêpres de 18h à 21h, un office du soir tiré certains jours jusqu'à 23h ;
+       ensuite la lampe du sanctuaire et quelques cierges : la nef reste à
+       peine lumineuse toute la nuit. Les bas-côtés s'éteignent après l'office.
+       Messe du matin à 6h30. */
+    const vig = (hash32(day * 131 + 5, 71) % 5) === 0 ? MIN_(23) : MIN_(21, 15);
+    if (early) return tmin >= MIN_(6, 30) ? 1 : (room === "nave" ? 0.3 : 0);
+    if (tmin < vig) return 1;
+    return room === "nave" ? 0.3 : 0.12;
+  }
+  if (key === "townhall") {
+    if (early) return (room === "stair-w" && tmin >= MIN_(6, 15)) ? 1 : 0;  // le concierge ouvre
+    /* Les bureaux ferment à 19h ; chacun tire son heure supplémentaire du soir
+       (0 à 3h), et un soir sur quatre le bureau du maire veille jusqu'à 23h30. */
+    if (room === "office-e" && (h % 4) === 0) return tmin < MIN_(23, 30) ? 1 : 0;
+    if (room.startsWith("office")) return tmin < MIN_(19) + (h >>> 4) % 181 ? 1 : 0;
+    return tmin < MIN_(21, 30) + (h >>> 6) % 60 ? 0.85 : 0;             // les escaliers, veilleuse plus pâle
+  }
+  // Le tribunal.
+  if (room === "hall") return tmin < MIN_(21) ? 1 : (tmin < MIN_(24) ? 0.28 : 0);   // la veilleuse des pas perdus
+  if (room === "lodge") return early ? (tmin >= MIN_(6) ? 1 : 0) : (tmin < MIN_(23, 30) ? 1 : 0);
+  if (room === "clerk") return !early && tmin < MIN_(19, 30) + (h >>> 5) % 90 ? 0.9 : 0;
+  // Les huit bureaux des ailes : trois sur cinq occupés ce soir, chacun jusqu'à sa propre heure.
+  if (early || (h % 5) >= 3) return 0;
+  return tmin < MIN_(19) + (h >>> 7) % 271 ? 1 : 0;
+}
+/* Le vacillement des cierges de l'église (appliqué à tout le calque : une
+   nef éclairée à la bougie bouge d'un seul souffle). Somme de sinus lents,
+   ±7 % : visible sans clignoter. `t` en ms réelles. */
+export function candleFlicker(t) {
+  const s = t / 1000;
+  return 1 + 0.035 * Math.sin(s * 2.1) + 0.022 * Math.sin(s * 5.3 + 1.7) + 0.013 * Math.sin(s * 11.9 + 0.4);
+}
+
 /* ── 3. UNE SOURCE : DES ANNEAUX EN PALIERS ─────────────────────────────────
    Le profil continu, puis cinq paliers ; le haut de chaque palier est tramé
    en damier sur un pixel de large (`LIGHT_DITHER`), la manière dont le pixel

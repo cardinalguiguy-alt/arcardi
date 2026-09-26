@@ -22,8 +22,10 @@
 // sont gardés tels quels) et y AJOUTE les baies, lues dans des régions posées
 // à la main sur la peinture — un parti pris de dessin, comme les perchoirs
 // des pigeons. ⚠️ Donc : relancer build-eglise-sprite ou build-townhall-sprite
-// réécrit leur calque « fragments » ; relancer CE script ensuite. Il est
-// idempotent (sa propre sortie relue comme base redonne la même sortie).
+// réécrit leur calque « fragments » ; relancer CE script ensuite.
+// ⚠️ 2026-09-26 : il se disait idempotent en relisant sa propre sortie comme
+// base — c'était faux (voir `readGitPng` plus bas). La base est désormais lue
+// au commit 1539fe7 : deux passages donnent la même sortie.
 //
 // Les régions sont en px du CRAN 3 (la taille où elles ont été relevées) et
 // rapportées à chaque cran par proportion. Pour chaque pixel d'une région, un
@@ -36,9 +38,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PNG } from "pngjs";
 import { loadFerme } from "./lib-canvas.mjs";
+import { execFileSync } from "node:child_process";
+// Un PNG tel qu'il était à un commit (`rev:chemin`), ou null s'il n'existait pas.
+function readGitPng(spec) {
+  try { return PNG.sync.read(execFileSync("git", ["show", spec], { cwd: ROOT, maxBuffer: 1 << 28, stdio: ["ignore", "pipe", "ignore"] })); }
+  catch { return null; }
+}
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-const { fermeConstants: C } = await loadFerme(ROOT, ["fermeConstants"]);
+const { fermeConstants: C, lumiere: LM } = await loadFerme(ROOT, ["fermeConstants", "lumiere"]);
 
 const lum = (r, g, b) => 0.299 * r + 0.587 * g + 0.114 * b;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -109,73 +117,109 @@ function clockFace(r, g, b) {
 }
 const pane = (maxL) => Object.assign((r, g, b, fy, med) => darkPane(r, g, b, fy, maxL, med), { maxL });
 
-/* ── Les régions, en px du cran 3 ───────────────────────────────────────────
-   { k: "rect", x0, y0, x1, y1 } · { k: "disc", cx, cy, r } · { k: "arch", x0,
-   x1, y0 (le sommet de l'arc), y1 } — une baie cintrée : un rectangle coiffé
-   d'un demi-cercle, pour ne pas allumer la brique ou la pierre des écoinçons.
-   `off: true` : une fenêtre qui reste éteinte (le tribunal n'est pas une
-   boîte de nuit : une pièce sur deux est vide). */
-const MONUMENTS = [
-  {
-    key: "church", name: "eglise", W3: 634, H3: 604,
-    regions: [
-      { k: "disc", cx: 318, cy: 311, r: 47, f: stainedGlass },                 // la rosace
-      { k: "rect", x0: 268, y0: 343, x1: 368, y1: 408, f: stainedGlass },      // l'arcature sous la rosace
-      { k: "arch", x0: 191, x1: 229, y0: 324, y1: 428, f: stainedGlass },      // grande lancette ouest
-      { k: "arch", x0: 407, x1: 445, y0: 324, y1: 428, f: stainedGlass },      // grande lancette est
-      { k: "arch", x0: 196, x1: 228, y0: 476, y1: 558, f: stainedGlass },      // lancette basse ouest
-      { k: "arch", x0: 409, x1: 441, y0: 476, y1: 558, f: stainedGlass },      // lancette basse est
-    ],
-  },
-  {
-    key: "townhall", name: "townhall", W3: 634, H3: 571,
-    regions: [
-      // Les baies relevées sur leur cadre de fer (colonnes sombres mesurées à
-      // la rangée 420) : la peinture n'est pas symétrique au pixel.
-      { k: "arch", x0: 108, x1: 160, y0: 336, y1: 461, f: curtainWindow },     // grande baie ouest
-      { k: "arch", x0: 466, x1: 518, y0: 336, y1: 461, f: curtainWindow },     // grande baie est
-      { k: "arch", x0: 28, x1: 50, y0: 346, y1: 461, f: curtainWindow },       // baie étroite ouest
-      { k: "arch", x0: 577, x1: 601, y0: 346, y1: 461, f: curtainWindow },     // baie étroite est
-      { k: "rect", x0: 280, y0: 98, x1: 356, y1: 142, f: pane(120) },          // le lanternon
-      { k: "disc", cx: 241, cy: 424, r: 13, f: lanternGlass },                 // lanterne murale ouest
-      { k: "disc", cx: 388, cy: 424, r: 13, f: lanternGlass },                 // lanterne murale est
-      { k: "disc", cx: 316, cy: 240, r: 24, f: clockFace },                    // le cadran
-    ],
-  },
-  {
-    key: "courthouse", name: "courthouse", W3: 845, H3: 783,
-    regions: [
-      // Les ailes, deux étages, deux fenêtres par aile — une sur deux allumée,
-      // en quinconce d'un étage à l'autre.
-      ...[[79, 111], [167, 199], [652, 680], [740, 768]].flatMap(([x0, x1], i) => [
-        { k: "rect", x0, y0: 342, x1, y1: 406, f: pane(118), off: i % 2 === 1 },
-        { k: "rect", x0, y0: 467, x1, y1: 536, f: pane(118), off: i % 2 === 0 },
-      ]),
-      // Les cinq baies du portique — la salle des pas perdus, allumée.
-      ...[[252, 283], [332, 363], [410, 436], [487, 515], [567, 592]].map(([x0, x1]) =>
-        ({ k: "rect", x0, y0: 347, x1, y1: 405, f: pane(104) })),
-      // Les deux fenêtres cintrées du soubassement (la loge du gardien, à l'ouest).
-      { k: "arch", x0: 79, x1: 109, y0: 600, y1: 676, f: pane(112) },
-      { k: "arch", x0: 739, x1: 769, y0: 600, y1: 676, f: pane(112), off: true },
-      // L'imposte au-dessus de la porte : un demi-disque (les claveaux autour
-      // sont de la pierre, pas du verre).
-      { k: "arch", x0: 403, x1: 445, y0: 453, y1: 477, f: pane(96) },
-      // Les deux lampadaires peints en haut de la volée.
-      { k: "disc", cx: 202, cy: 488, r: 14, f: lanternGlass },
-      { k: "disc", cx: 645, cy: 488, r: 14, f: lanternGlass },
-    ],
-  },
+/* ── Les baies : `MONUMENT_WINDOWS` (lumiere.js) ─────────────────────────────
+   ⚠️ 2026-09-26 (phase 6c) : les régions ont quitté ce script pour lumiere.js,
+   parce que le JEU doit maintenant les connaître aussi (il éteint à l'heure
+   les pièces vides). Ici, elles sont CUITES toutes allumées — l'ancien
+   `off: true` (une fenêtre sur deux du tribunal, pour toujours) est parti :
+   c'est l'heure qui décide, pas le script.
+   Ce que le script ajoute, et qui ne change pas d'une nuit à l'autre :
+     · l'INÉGALITÉ : chaque baie tire sa lampe (ambre chaud, blanc cassé,
+       orangé) et sa force (0,78 à 1) — une façade n'est pas une rampe ;
+     · la PROFONDEUR : plus chaud et plus fort en bas (la lampe est posée sur
+       une table, pas au plafond), assombri contre les montants (les rideaux
+       tirés sur les côtés), le haut de la vitre plus froid ;
+     · des SILHOUETTES : une baie sur trois montre, en contre-jour, le dos
+       d'un fauteuil, une plante ou le bord d'une étagère — tirées par baie ;
+     · les VITRAUX gardent leur couleur, plus saturée, avec une chaleur de
+       cierges qui monte du bas. */
+const KIND = { stained: () => stainedGlass, curtain: () => curtainWindow, lantern: () => lanternGlass, clock: () => clockFace, pane: (w) => pane(w.maxL) };
+const hashi = (a, b) => { let h = (Math.imul(a | 0, 0x9e3779b1) ^ Math.imul((b | 0) + 0x632be5ab, 0x85ebca77)) >>> 0; h ^= h >>> 15; h = Math.imul(h, 0x2c1b3c6d) >>> 0; h ^= h >>> 13; return h >>> 0; };
+const LAMPS = [[255, 206, 128], [255, 226, 176], [255, 188, 104], [250, 214, 150]];
+// Les silhouettes, en coordonnées de la baie (u de 0 à 1 de gauche à droite,
+// v de 0 à 1 de haut en bas). Rend vrai si le pixel est DERRIÈRE l'objet.
+const SILS = [
+  (u, v) => v > 0.66 && u > 0.18 && u < 0.62 && (v > 0.8 || u < 0.26 || u > 0.54),        // dos de fauteuil
+  (u, v) => (v > 0.84 && u > 0.56 && u < 0.84) || (Math.hypot((u - 0.7) / 0.2, (v - 0.72) / 0.16) < 1), // plante en pot
+  (u, v) => u < 0.2 && v > 0.3,                                                              // le montant d'une étagère
 ];
-
-function inRegion(rg, x, y) {
-  if (rg.k === "rect") return x >= rg.x0 && x < rg.x1 && y >= rg.y0 && y < rg.y1;
-  if (rg.k === "arch") {
-    if (x < rg.x0 || x >= rg.x1 || y >= rg.y1) return false;
-    const R = (rg.x1 - rg.x0) / 2, cy = rg.y0 + R;
-    return y >= cy || Math.hypot(x - (rg.x0 + R), y - cy) <= R;
-  }
-  return Math.hypot(x - rg.cx, y - rg.cy) <= rg.r;
+function windowStyle(key, i) {
+  const h = hashi(key.length * 1009 + i * 7, i * 131 + 3);
+  return { lamp: LAMPS[h % LAMPS.length], k: 0.78 + 0.22 * ((h >>> 3) % 100) / 99, sil: (h >>> 10) % 3 === 0 ? SILS[(h >>> 12) % SILS.length] : null };
 }
+function regionBox(rg) {
+  return rg.k === "disc" ? { x0: rg.cx - rg.r, y0: rg.cy - rg.r, x1: rg.cx + rg.r, y1: rg.cy + rg.r } : rg;
+}
+// Profondeur et teinte d'une vitre allumée (recettes `pane` et le verre de `curtain`).
+function shadePane(g, st, u, v, isRoom) {
+  const lampMix = 0.55;
+  let c = [0, 1, 2].map((q) => g[q] * (1 - lampMix) + st.lamp[q] * lampMix);
+  let k = st.k * (0.8 + 0.2 * v);                         // plus fort en bas
+  if (isRoom) k *= 0.78 + 0.22 * Math.min(1, Math.min(u, 1 - u) / 0.22); // rideaux sur les côtés
+  c = c.map((x, q) => x * k * (q === 2 ? 1 - 0.1 * v : 1));
+  let a = g[3];
+  if (isRoom && st.sil && st.sil(u, v)) { c = c.map((x) => x * 0.42); a *= 0.9; }
+  return [c[0], c[1], c[2], a];
+}
+const MONUMENTS = [
+  { key: "church", name: "eglise" },
+  { key: "townhall", name: "townhall" },
+  { key: "courthouse", name: "courthouse" },
+].map((m) => {
+  const D = LM.MONUMENT_WINDOWS[m.key];
+  return { ...m, W3: D.W3, H3: D.H3, regions: D.wins.map((w, i) => ({ ...w, f: KIND[w.kind](w), st: windowStyle(m.key, i), box: regionBox(w) })) };
+});
+
+const inRegion = (rg, x, y) => LM.monumentWindowHas(rg, x, y);
+/* ── Les VITRAUX EN COULEURS (phase 6c) ─────────────────────────────────────
+   La peinture de l'église a des vitraux AMBRÉS d'un bout à l'autre : allumés,
+   ils sortaient en plaques orange (vu sur la planche).
+   ⚠️ PREMIER JET ÉCARTÉ, À NE PAS REFAIRE : découper le verre en composantes
+   connexes entre les plombs et tirer une couleur par morceau. Les plombs peints
+   NE FERMENT PAS les morceaux (la peinture est continue) ; les grandes plaques
+   recoupées en carreaux ont donné un damier de couleurs criardes — un écran de
+   télévision, pas un vitrail.
+   Ce qui marche : une COMPOSITION, comme un maître verrier — dans les
+   lancettes, un fond bleu, une bordure rubis, deux médaillons (or, émeraude)
+   cerclés de rouge ; dans la rosace, un cœur d'or, douze pétales alternés
+   bleu/rubis, une couronne bleue piquée d'or ; sous la rosace, des lancettes
+   étroites alternées. La couleur est MÊLÉE à la lumière ambrée (pas posée
+   dessus) et modulée par la luminance de la peinture, qui garde les plombs
+   et les figures. */
+const G_BLUE = [40, 86, 236], G_RUBY = [200, 44, 58], G_GOLD = [238, 186, 70], G_EMER = [52, 156, 96], G_VIOL = [136, 72, 180];
+function glassColor(rg, X, Y) {
+  if (rg.k === "disc") {
+    const dx = X - rg.cx, dy = Y - rg.cy, r = Math.hypot(dx, dy) / rg.r;
+    const sec = Math.floor(((Math.atan2(dy, dx) + Math.PI) / (2 * Math.PI)) * 12) % 12;
+    if (r < 0.2) return G_GOLD;
+    if (r < 0.26) return G_RUBY;
+    if (r < 0.72) return sec % 2 ? G_BLUE : G_RUBY;
+    return sec % 3 === 0 ? G_GOLD : (sec % 3 === 1 ? G_BLUE : G_VIOL);
+  }
+  const B = regionBox(rg), w = B.x1 - B.x0, u = (X - B.x0) / w, v = (Y - B.y0) / (B.y1 - B.y0);
+  if (rg.k === "rect") {                                  // l'arcature : lancettes étroites
+    const col = Math.floor(u * 7);
+    if (v < 0.12) return G_GOLD;
+    return col % 2 ? G_RUBY : G_BLUE;
+  }
+  const R = w / 2;
+  const edge = Math.min(u, 1 - u) * w;                     // distance au montant, en px
+  const top = Y < B.y0 + R ? R - Math.hypot(X - (B.x0 + R), Y - (B.y0 + R)) : Infinity;
+  if (Math.min(edge, top) < w * 0.14) return G_RUBY;       // la bordure
+  for (const [mv, c] of [[0.34, G_GOLD], [0.7, G_EMER]]) { // les deux médaillons
+    const d = Math.hypot(u - 0.5, (v - mv) * (B.y1 - B.y0) / w) / 0.24;
+    if (d < 0.72) return c;
+    if (d < 1) return G_RUBY;
+  }
+  return G_BLUE;
+}
+function tintGlass(g, c, srcL) {
+  // Mêlée à l'ambre (86 % de verre — à 60 %, bleu + ambre donnait du lilas grisé, vu sur la planche), modulée par la luminance de la peinture :
+  // les plombs sombres restent sombres, les clairs de la peinture éclairent.
+  const k = 0.5 + 0.72 * clamp(srcL / 150, 0, 1);
+  return [0, 1, 2].map((q) => clamp((c[q] * 0.86 + g[q] * 0.14) * k, 0, 255)).concat([g[3]]);
+}
+
 function regionFy(rg, y) {
   if (rg.k === "disc") return clamp((y - (rg.cy - rg.r)) / (2 * rg.r), 0, 1);
   return clamp((y - rg.y0) / Math.max(1, rg.y1 - rg.y0), 0, 1);
@@ -192,7 +236,15 @@ for (const M of MONUMENTS) {
     const W = day.width, H = day.height;
     if (W !== mip.w || H !== mip.h) throw new Error(`${mip.day} : ${W}x${H}, attendu ${mip.w}x${mip.h}`);
     const glowPath = path.join(ROOT, "public", mip.glow);
-    const base = existsSync(glowPath) ? PNG.sync.read(readFileSync(glowPath)) : null;
+    /* ⚠️ 2026-09-26 (phase 6c) — LA BASE EST LU DANS GIT, PAS DANS LE FICHIER
+       COURANT. L'en-tête promettait l'idempotence en relisant sa propre
+       sortie ; c'était faux pour les vitres sombres : relue comme « base »,
+       une vitre déjà allumée (alpha ~1) faisait de la couleur source une
+       lumière CLAIRE, que `darkPane` refuse — un second passage éteignait
+       toutes les fenêtres. Les calques « fragments » d'origine (vitraux et
+       lueurs peintes, avant la phase 3) sont figés au commit 1539fe7 ; on les
+       relit de là, donc le script donne la même sortie à chaque passage. */
+    const base = readGitPng(`1539fe7:public${mip.glow}`);
     const out = new PNG({ width: W, height: H });
     const sx = M.W3 / W, sy = M.H3 / H;   // px du cran → px du cran 3
     let lit = 0, kept = 0;
@@ -232,9 +284,23 @@ for (const M of MONUMENTS) {
         if (ba > 0) { for (let c = 0; c < 4; c++) out.data[o + c] = base.data[o + c]; kept++; }
         continue;
       }
-      if (rg.off) continue;
-      const g = rg.f(src[0], src[1], src[2], regionFy(rg, Y), med.get(rg));
+      let g = rg.f(src[0], src[1], src[2], regionFy(rg, Y), med.get(rg));
       if (!g || g[3] <= 0.01) continue;
+      {
+        const B = rg.box, u = clamp((X - B.x0) / Math.max(1, B.x1 - B.x0), 0, 1), v = clamp((Y - B.y0) / Math.max(1, B.y1 - B.y0), 0, 1);
+        if (rg.kind === "pane") g = shadePane(g, rg.st, u, v, rg.room !== "always");
+        else if (rg.kind === "curtain" && g[3] >= 0.5 && g[0] > 200 && g[2] < 190) g = shadePane(g, rg.st, u, v, false);
+        else if (rg.kind === "stained") {
+          if (lum(src[0], src[1], src[2]) >= 30) g = tintGlass(g, glassColor(rg, X, Y), lum(src[0], src[1], src[2]));
+          // Des cierges en bas de la nef : la chaleur monte du bas, le haut
+          // garde le bleu et le rouge du verre, plus saturés.
+          const m = (g[0] + g[1] + g[2]) / 3, sat = 1.08;
+          g = [m + (g[0] - m) * sat, m + (g[1] - m) * sat, m + (g[2] - m) * sat, g[3]];
+          const w = 0.22 * v;
+          g = [g[0] * (1 - w) + 255 * w, g[1] * (1 - w) + 196 * w, g[2] * (1 - w) + 120 * w, g[3] * (0.88 + 0.12 * v)];
+          if (rg.k === "disc") { const d = Math.hypot(X - rg.cx, Y - rg.cy) / rg.r; g = [g[0], g[1], g[2], g[3] * (1 - 0.25 * d * d)]; }
+        }
+      }
       out.data[o] = clamp(Math.round(g[0]), 0, 255); out.data[o + 1] = clamp(Math.round(g[1]), 0, 255);
       out.data[o + 2] = clamp(Math.round(g[2]), 0, 255); out.data[o + 3] = clamp(Math.round(g[3] * 255), 0, 255);
       lit++;

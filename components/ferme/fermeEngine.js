@@ -1173,6 +1173,20 @@ export function normalizeFarmer(f) {
   f.inv = f.inv || {};
   if (typeof f.inv.wood !== "number") f.inv.wood = 0;
   if (typeof f.inv.stone !== "number") f.inv.stone = 0;
+  /* 2026-09-26 — l'épuisette, le lait des chats, le carnet (voir CAT_* /
+     NET_* dans fermeConstants.js). Déclarés ICI pour ne pas s'effacer (§4 de
+     CLAUDE.md : « poser le champ, migrer, relire » — tenu par verify-vallee). */
+  if (typeof f.inv.net !== "number") f.inv.net = 0;
+  if (!f.inv.catMilk || typeof f.inv.catMilk !== "object") f.inv.catMilk = {};
+  for (const k of Object.keys(f.inv.catMilk)) {
+    const e = f.inv.catMilk[k];
+    if (!C.CAT_COATS.includes(k) || !e || typeof e !== "object") { delete f.inv.catMilk[k]; continue; }
+    e.n = Math.max(0, e.n | 0); e.last = e.last | 0; e.gift = e.gift | 0;
+  }
+  if (!f.inv.netLog || typeof f.inv.netLog !== "object") f.inv.netLog = {};
+  f.inv.netLog.carp = Math.max(0, f.inv.netLog.carp | 0);
+  if (!f.inv.netLog.bfly || typeof f.inv.netLog.bfly !== "object") f.inv.netLog.bfly = {};
+  if (typeof f.inv.netAt !== "number") f.inv.netAt = 0;
   if (typeof f.inv.magicOre !== "number") f.inv.magicOre = 0;
   if (typeof f.inv.candies !== "number") f.inv.candies = 0; // zip 372 : défi de fuite
   if (typeof f.inv.runBest !== "number") f.inv.runBest = 0; // zip 372 : meilleur score au défi
@@ -1423,6 +1437,82 @@ export function resolveTownFishPermit(f, money, now, rnd) {
   res.ok = true; res.until = f.townFishPermitUntil; res.moneyDelta = -C.TOWN_FISH_PERMIT_PRICE;
   return res;
 }
+
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-26 — LE CHAT QU'ON NOURRIT ET L'ÉPUISETTE, CÔTÉ HÔTE.
+   ╚══════════════════════════════════════════════════════════════════════════
+   Quatre résolveurs purs, qui ne mutent que `f` (l'or passe par
+   `moneyDelta`, comme `resolveTownFishPermit`) ; `day` est le numéro du jour
+   de jeu, `rnd` est injecté pour que `verify-vallee` rejoue les tirages.
+   ⚠️ L'HÔTE NE VÉRIFIE PAS LA DISTANCE À LA BÊTE : sa position est une pure
+   fonction du temps chez chaque client (faune.js), plus un décalage LOCAL de
+   réaction qu'il ne connaît pas. Ce qu'il tient, c'est ce qui compte : le
+   lait se dépense, le cadeau est une fois par jour et par chat, le coup
+   d'épuisette a un délai. Un client qui mentirait sur la distance gagnerait…
+   un papillon relâché dans son carnet. */
+export function catBond(inv, coat) {
+  const e = inv && inv.catMilk && inv.catMilk[coat];
+  return e ? e.n | 0 : 0;
+}
+export function catLoyal(inv, coat) { return catBond(inv, coat) >= C.CAT_BOND_DAYS; }
+export function resolveCatMilk(f, coat, day) {
+  normalizeFarmer(f);
+  const res = { ok: false, reason: null, n: 0, loyal: false };
+  if (!C.CAT_COATS.includes(coat)) { res.reason = "cat"; return res; }
+  const e = f.inv.catMilk[coat] || (f.inv.catMilk[coat] = { n: 0, last: 0, gift: 0 });
+  if (e.last === (day | 0)) { res.reason = "today"; res.n = e.n; return res; }
+  if (milkStock(f) < 1) { res.reason = "noMilk"; return res; }
+  takeMilk(f, 1);                                     // le même lait que la cuisine : vache d'abord, puis chèvre
+  e.n += 1; e.last = day | 0;
+  res.ok = true; res.n = e.n; res.loyal = e.n >= C.CAT_BOND_DAYS;
+  return res;
+}
+export function resolveCatGift(f, coat, day, rnd) {
+  normalizeFarmer(f);
+  const res = { ok: false, fish: null };
+  const e = f.inv.catMilk[coat];
+  if (!e || e.n < C.CAT_BOND_DAYS || e.gift === (day | 0)) return res;
+  e.gift = day | 0;                                   // un essai par jour et par chat, cadeau ou pas
+  res.ok = true;
+  if ((rnd ? rnd() : Math.random()) < C.CAT_GIFT_ODDS) {
+    f.inv.fish[C.CAT_GIFT_FISH] = (f.inv.fish[C.CAT_GIFT_FISH] | 0) + 1;
+    res.fish = C.CAT_GIFT_FISH;
+  }
+  return res;
+}
+export function resolveBuyNet(f, money) {
+  normalizeFarmer(f);
+  if (f.inv.net > 0) return { ok: false, reason: "have", moneyDelta: 0 };
+  if ((money | 0) < C.NET_PRICE) return { ok: false, reason: "noGold", moneyDelta: 0 };
+  f.inv.net = 1;
+  return { ok: true, moneyDelta: -C.NET_PRICE };
+}
+export function resolveNetCatch(f, kind, sp, now, rnd) {
+  normalizeFarmer(f);
+  const res = { ok: false, caught: false, reason: null, kind, sp: null, first: false };
+  if (!(f.inv.net > 0)) { res.reason = "noNet"; return res; }
+  if (kind !== "carp" && kind !== "bfly") { res.reason = "kind"; return res; }
+  if (kind === "bfly" && !FAUNA_BFLY_SPECIES.includes(sp)) { res.reason = "kind"; return res; }
+  const t = now || Date.now();
+  if (t - f.inv.netAt < C.NET_COOLDOWN_MS) { res.reason = "cooldown"; return res; }
+  f.inv.netAt = t;
+  res.ok = true;
+  if ((rnd ? rnd() : Math.random()) >= C.NET_ODDS[kind]) return res;
+  res.caught = true;
+  if (kind === "carp") { f.inv.netLog.carp += 1; res.n = f.inv.netLog.carp; }
+  else {
+    res.sp = sp; res.first = !(f.inv.netLog.bfly[sp] > 0);
+    f.inv.netLog.bfly[sp] = (f.inv.netLog.bfly[sp] | 0) + 1;
+    res.n = f.inv.netLog.bfly[sp];
+    res.species = FAUNA_BFLY_SPECIES.filter(k => f.inv.netLog.bfly[k] > 0).length;
+  }
+  return res;
+}
+/* Les six espèces de papillons de la ville — recopiées de `BFLY_SPECIES`
+   (faune.js), que ce fichier n'importe pas (faune.js est un module de rendu
+   pur, fermeEngine ne dépend d'aucun module de dessin). ⚠️ UNE COPIE, DONC UN
+   CONTRÔLE : verify-faune compare les deux listes. */
+export const FAUNA_BFLY_SPECIES = ["pieride", "citron", "azure", "vulcain", "paon", "machaon"];
 
 /* -------------------------------------------------------------------------
    Résolution d'une action sur le monde (hôte). MUTE world + farmer et renvoie

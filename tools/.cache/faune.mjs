@@ -1529,16 +1529,37 @@ function l2alt(g, o) {
    un joueur immobile (un chat « ami » de ce créneau vient se frotter à ses
    jambes, puis s'assoit à côté). `walkable(x, y)` : la case (pieds) est-elle
    praticable. */
+/* ⚠️ 2026-09-26 — LE CHAT FIDÈLE (Guillaume : « le fidéliser : le chat errant
+   revient ensuite nous voir régulièrement »). Un joueur dont `loyal` (Set de
+   robes, posé par le jeu à partir de `E.catLoyal`) contient la robe de ce chat
+   ne le fait jamais fuir ; et quand il passe à moins de `CAT_VISIT_R` cases, le
+   chat vient à lui — même s'il marche — le suit un moment (`follow`), se frotte
+   s'il s'arrête, puis retourne à sa routine. Une visite au plus toutes les
+   `CAT_VISIT_GAP` s de jeu local. `c.gift` monte UNE image à la fin d'un
+   frottement fidèle : le jeu en fait une `req` (le cadeau, une fois par jour,
+   arbitré par l'hôte). Local, comme toutes les réactions : chez l'autre
+   joueur, le chat de ce joueur-là ne vient voir que lui. */
+const CAT_VISIT_R = 7, CAT_VISIT_GAP = 45, CAT_FOLLOW_MAX = 16;
 export function faunaReactCats(S, cats, threats, dt, walkable, rnd) {
   const M = S.cats || (S.cats = new Map());
+  S.catClock = (S.catClock || 0) + dt;
+  const visitAt = S.catVisitAt || (S.catVisitAt = {});
+  const loyalOf = (c) => threats.find((q) => q.loyal && q.loyal.has(c.coat)) || null;
   for (const c of cats) {
     let o = M.get(c.id);
     if (!o) {
       let near = null, nd = Infinity;
       for (const q of threats) { const l = Math.hypot(c.x - q.x, c.y - q.y); if (l < nd) { nd = l; near = q; } }
       if (!near) continue;
+      const lq = loyalOf(c);
+      const sleeping = c.pose === "sleep0" || c.pose === "sleep1";
+      if (lq && !sleeping && S.catClock - (visitAt[c.coat] ?? -1e9) > CAT_VISIT_GAP && Math.hypot(c.x - lq.x, c.y - lq.y) < CAT_VISIT_R) {
+        o = { mode: "approach", t: 0, x: c.x, y: c.y, face: c.face, who: lq, side: rnd() < 0.5 ? -1 : 1, heart: false, loyal: true };
+        M.set(c.id, o);
+      }
+      else if (lq && near === lq) continue;          // un joueur fidèle ne fait jamais fuir son chat
       // Un chat « ami » se laisse approcher de plus près avant de filer.
-      if (nd < (c.friendly ? 0.8 : 1.3) && near.moving) {
+      else if (nd < (c.friendly ? 0.8 : 1.3) && near.moving) {
         o = { mode: "startle", t: 0, x: c.x, y: c.y, face: c.face, tx: 0, ty: 0 };
         const dx = c.x - near.x, dy = c.y - near.y, l = Math.hypot(dx, dy) || 1;
         for (let k = 0; k < 8; k++) {
@@ -1553,6 +1574,7 @@ export function faunaReactCats(S, cats, threats, dt, walkable, rnd) {
       M.set(c.id, o);
     }
     o.t += dt;
+    c.gift = false;
     const step = (tx, ty, v) => {
       const dx = tx - o.x, dy = ty - o.y, l = Math.hypot(dx, dy);
       if (l < 1e-3) return 0;
@@ -1572,6 +1594,26 @@ export function faunaReactCats(S, cats, threats, dt, walkable, rnd) {
     if (o.mode === "startle") { c.pose = "arch"; if (o.t > 0.4) { o.mode = "flee"; o.t = 0; } }
     else if (o.mode === "flee") { const l = step(o.tx, o.ty, 3.4); c.pose = walkPose(3.4); if (l < 0.1 || o.t > 3) { o.mode = "watch"; o.t = 0; } }
     else if (o.mode === "watch") { c.pose = o.t < 3 ? "front" : o.t < 6 ? "groom" + (Math.floor(o.t * 2.6) & 1) : "sit"; if (o.t > 8) { o.mode = "back"; o.t = 0; } }
+    else if (o.mode === "approach" && o.loyal) {
+      // Le fidèle trotte jusqu'à son joueur, qu'il marche ou non.
+      if (!who) { o.mode = "back"; o.t = 0; }
+      else {
+        const far = Math.hypot(who.x - o.x, who.y - o.y), v = far > 2.5 ? 2.6 : 1.3;
+        const l = step(who.x + o.side * 0.5, who.y + 0.12, v);
+        c.pose = walkPose(v);
+        if (l < 0.3) { o.mode = who.still > 0.3 ? "rub" : "follow"; o.t = 0; }
+        if (o.t > 14) { o.mode = "back"; o.t = 0; }
+      }
+    } else if (o.mode === "follow") {
+      // Il suit, un pas derrière, du côté qu'il a choisi ; si on s'arrête, il se frotte.
+      if (!who || o.t > CAT_FOLLOW_MAX) { o.mode = "back"; o.t = 0; }
+      else if (who.still > 0.8) { o.mode = "rub"; o.t = 0; }
+      else {
+        const far = Math.hypot(who.x - o.x, who.y - o.y), v = far > 1.6 ? 3 : far > 0.9 ? 1.6 : 0.6;
+        step(who.x + o.side * 0.7, who.y + 0.35, v);
+        c.pose = far > 0.8 ? walkPose(v) : "sit";
+      }
+    }
     else if (o.mode === "approach") {
       if (!who || !(who.still > 0.6)) { o.mode = "back"; o.t = 0; }
       else {
@@ -1581,14 +1623,14 @@ export function faunaReactCats(S, cats, threats, dt, walkable, rnd) {
         if (o.t > 9) { o.mode = "back"; o.t = 0; }
       }
     } else if (o.mode === "rub") {
-      if (!who || !(who.still > 0.3)) { o.mode = "back"; o.t = 0; }
+      if (!who || !(who.still > 0.3)) { o.mode = o.loyal && who && o.t < 4.5 ? "follow" : "back"; o.t = 0; }
       else {
         // Le huit autour des jambes : il passe devant, se retourne, repasse.
         const a = o.t * 1.6;
         step(who.x + Math.sin(a) * 0.55, who.y + 0.12 + Math.sin(2 * a) * 0.12, 1.0);
         c.pose = Math.floor(o.t * 2) % 3 === 2 ? "walk1" : "rub";
         if (!o.heart) { o.heart = true; c.heart = true; }
-        if (o.t > 4.5) { o.mode = "stay"; o.t = 0; o.face = who.x > o.x ? 1 : -1; }
+        if (o.t > 4.5) { if (o.loyal && !o.gave) { o.gave = true; c.gift = true; } o.mode = "stay"; o.t = 0; o.face = who.x > o.x ? 1 : -1; }
       }
     } else if (o.mode === "stay") {
       c.pose = o.t < 5 ? "front" : o.t < 9 ? "sit" : "loaf";
@@ -1597,7 +1639,7 @@ export function faunaReactCats(S, cats, threats, dt, walkable, rnd) {
       // On rejoint la routine, qui peut marcher pendant ce temps : on la vise.
       const l = step(c.x, c.y, 1.3);
       c.pose = walkPose(1.3);
-      if (l < 0.12 || o.t > 25) { M.delete(c.id); continue; }
+      if (l < 0.12 || o.t > 25) { if (o.loyal) visitAt[c.coat] = S.catClock; M.delete(c.id); continue; }
     }
     c.x = o.x; c.y = o.y; c.face = o.face; c.react = o.mode;
   }

@@ -142,7 +142,46 @@ function screenBitmapPick(SB, zoom) {
    silhouette et ses vitres à la lumière (`lightBuilding`, `lightScreenGlow`)
    sans recalculer une position qu'elle seule connaît (le cran choisi, les
    arrondis). `null` si rien n'est chargé. */
-function drawScreenExactBitmap(ctx, SB, cxW, byW, nightA) {
+/* ⚠️ 2026-09-26 (phase 6c) — LES PIÈCES VIDES S'ÉTEIGNENT À L'HEURE. Le calque
+   de nuit est cuit toutes baies allumées (`tools/build-monument-glow.mjs`) ;
+   ici, on en retire les baies dont la pièce est vide ou en veilleuse
+   (`LUM.monumentWindowLevel`, pure fonction de l'heure et du jour : les deux
+   joueurs voient la même mairie s'éteindre, sans un message). On compose dans
+   UN canevas par monument (§10 : c'est le NOMBRE de canevas qui compte), et
+   on ne recompose que quand une baie change d'état — quelques fois par nuit,
+   plus un changement de cran de zoom ; jamais à chaque image. */
+const monumentGlowCache = new Map();
+function composeMonumentGlow(key, glowImg, mip, tmin, day) {
+  const D = LUM.MONUMENT_WINDOWS[key];
+  if (!D || typeof document === "undefined") return glowImg;
+  const levels = D.wins.map(w => LUM.monumentWindowLevel(key, w, tmin, day));
+  const sig = mip.glow + "|" + levels.map(l => Math.round(l * 20)).join(",");
+  let e = monumentGlowCache.get(key);
+  if (e && e.sig === sig) return e.canvas;
+  if (!e) { e = { canvas: document.createElement("canvas"), sig: "" }; monumentGlowCache.set(key, e); }
+  const W = glowImg.naturalWidth || glowImg.width, H = glowImg.naturalHeight || glowImg.height;
+  const cv = e.canvas;
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  const g = cv.getContext("2d");
+  g.globalCompositeOperation = "source-over";
+  g.clearRect(0, 0, W, H);
+  g.drawImage(glowImg, 0, 0);
+  g.globalCompositeOperation = "destination-out";
+  D.wins.forEach((w, i) => {
+    const l = levels[i];
+    if (l >= 0.999) return;
+    g.fillStyle = `rgba(0,0,0,${(1 - l).toFixed(3)})`;
+    LUM.monumentWindowPath(g, w, W / D.W3, H / D.H3, 1.5);
+    g.fill();
+  });
+  g.globalCompositeOperation = "source-over";
+  e.sig = sig;
+  return cv;
+}
+/* `glowOpts` (facultatif) : `{ key, tmin, day, flick }` — le monument, l'heure
+   et le jour du jeu (pour éteindre ses pièces vides) et le vacillement des
+   cierges (1 hors de l'église). */
+function drawScreenExactBitmap(ctx, SB, cxW, byW, nightA, glowOpts) {
   const M = ctx.getTransform();
   const zoom = M.a / SB.grow;
   const pick = screenBitmapPick(SB, zoom);
@@ -161,7 +200,8 @@ function drawScreenExactBitmap(ctx, SB, cxW, byW, nightA) {
   let glowImg = null;
   if (mip.glow && nightA > 0.01) {
     glowImg = loadBitmap(mip.glow);
-    if (glowImg) { ctx.globalAlpha = nightA; ctx.drawImage(glowImg, left, top, dw, dh); }
+    if (glowImg && glowOpts) glowImg = composeMonumentGlow(glowOpts.key, glowImg, mip, glowOpts.tmin, glowOpts.day);
+    if (glowImg) { ctx.globalAlpha = Math.min(1, nightA * (glowOpts ? glowOpts.flick : 1)); ctx.drawImage(glowImg, left, top, dw, dh); }
   }
   ctx.restore(); // rend la transformation, l'alpha ET le lissage (false) d'avant
   return { img, glowImg, left, top, dw, dh };
@@ -1238,6 +1278,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const faunaLocalRef = useRef({});
   const faunaThreatRef = useRef(new Map());
   const faunaFxRef = useRef([]);
+  const faunaSnapRef = useRef(null);      // 2026-09-26 — la faune de la dernière image (voir `faunaNearby`)
+  const catGiftAskedRef = useRef({});     // 2026-09-26 — le jour où l'on a déjà demandé le cadeau de chaque chat
+  const netSwingRef = useRef(null);       // 2026-09-26 — le coup d'épuisette en cours (dessin local)
   const thunderRef = useRef({ last: 0, day: 0 }); // 2026-09-26 : le dernier instant où l'on a cherché des éclairs (voir thunderTick)
   const crumbNextRef = useRef(0);   // zip 439 : anti-rafale du pain (voir throwCrumbs)
   /* ZIP 441 — L'ÉGLISE. ⚠️ CES TROIS-LÀ SONT DES REFS ET PAS DES ÉTATS : ils
@@ -4990,6 +5033,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         out.toast = { id: f.id, key: back > 0 ? "wishBack" : "wishNothing", n: back };
         dirtyRef.current = true;
       }
+    } else if (req.kind === "catMilk") {
+      /* 2026-09-26 — UN BOL DE LAIT AU CHAT (retour de Guillaume). Voir les
+         résolveurs `resolveCatMilk`/`resolveCatGift` (fermeEngine.js) : le
+         lait se dépense ici, la fidélité se lit ensuite chez le client
+         (`E.catLoyal`), aucun message de plus. */
+      const r = E.resolveCatMilk(f, req.coat, s.day || 1);
+      if (r.ok) { out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv }; dirtyRef.current = true; }
+      out.toast = { id: f.id, key: r.ok ? (r.loyal && r.n === C.CAT_BOND_DAYS ? "catAdopted" : "catMilk") : "catMilk_" + r.reason, n: { coat: req.coat, n: r.n } };
+    } else if (req.kind === "catGift") {
+      const r = E.resolveCatGift(f, req.coat, s.day || 1, Math.random);
+      if (r.ok) { out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv }; dirtyRef.current = true; }
+      if (r.fish != null) out.toast = { id: f.id, key: "catGift", n: { coat: req.coat } };
+    } else if (req.kind === "buyNet") {
+      const r = E.resolveBuyNet(f, s.money);
+      if (r.ok) { s.money += r.moneyDelta; out.state = shareState(); out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv }; dirtyRef.current = true; }
+      out.toast = { id: f.id, key: r.ok ? "netBought" : "net_" + r.reason, n: C.NET_PRICE };
+    } else if (req.kind === "netCatch") {
+      const r = E.resolveNetCatch(f, req.what, req.sp, Date.now(), Math.random);
+      if (r.ok) {
+        out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+        out.toast = { id: f.id, key: r.caught ? (r.kind === "carp" ? "netCarp" : "netBfly") : "netMiss", n: { sp: r.sp, n: r.n, first: r.first, species: r.species, what: r.kind } };
+        if (r.caught) dirtyRef.current = true;
+      }
     } else if (req.kind === "buy") {
       const r = E.resolveBuy(f, s.money, req);
       if (r.moneyDelta) { s.money += r.moneyDelta; out.state = shareState(); }
@@ -8488,6 +8554,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const it = (C.wardrobeCatalog(t.slot) || [])[(t.idx | 0) - 1];
       return L.boutiqueBought(it ? (lang === "en" ? it.nameEn : it.name) : "?");
     }
+    // 2026-09-26 — le chat qu'on nourrit, l'épuisette (voir les requêtes `catMilk`, `netCatch`…).
+    if (key === "catMilk" || key === "catAdopted" || key === "catGift" || key.startsWith("catMilk_")) {
+      const t = n || {}, nm = L.catName(t.coat);
+      if (key === "catMilk") return L.catMilkToast(nm, t.n | 0, C.CAT_BOND_DAYS);
+      if (key === "catAdopted") return L.catAdoptedToast(nm);
+      if (key === "catGift") return L.catGiftToast(nm, lang === "en" ? C.FISH[C.CAT_GIFT_FISH].nameEn : C.FISH[C.CAT_GIFT_FISH].name);
+      if (key === "catMilk_today") return L.catMilkToday(nm);
+      if (key === "catMilk_noMilk") return L.catMilkNone;
+      return L.catMilkNone;
+    }
+    if (key === "netBought") return L.netBoughtToast(n | 0);
+    if (key === "net_have") return L.netHaveToast;
+    if (key === "net_noGold") return L.netNoGoldToast(n | 0);
+    if (key === "netMiss") return L.netMissToast((n || {}).what === "carp");
+    if (key === "netCarp") return L.netCarpToast((n || {}).n | 0);
+    if (key === "netBfly") { const t = n || {}; return L.netBflyToast(L.bflyName(t.sp), !!t.first, t.species | 0, C.FAUNA_BFLY_COUNT); }
     if (key === "wishCooldown")  return L.wishCooldown;
     if (key === "wishNoGold")    return L.wishNoGold(n | 0);
     if (key === "wishBack")      return L.wishBack(n | 0);
@@ -20042,6 +20124,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const yBot = Math.min(tw.h - 1, y1 + Math.ceil((MAXE * EP) / T) + 1);
       const elAt = (x, y) => (x < 0 || y < 0 || x >= tw.w || y >= tw.h ? 0 : tw.elev[y * tw.w + x]);
       const draws = [];
+      /* 2026-09-26 — des entrées qui ne se dessinent QUE dans la passe des
+         reflets (jamais dans la boucle triée) : la face d'un pont, dont l'axe
+         de miroir n'est pas sa clé de tri (voir le pont en arc, plus bas).
+         `axisOff` : l'axe est déjà la ligne d'eau, aucun décalage de rive. */
+      const reflOnly = [];
       /* Pose un dessin en tenant compte de l'altitude : `wy` est sa profondeur
          de tri AU SOL, `ey` son altitude. Une seule porte d'entrée pour les
          deux corrections — on ne peut pas décaler l'un en oubliant l'autre.
@@ -21290,7 +21377,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              ici est le centre de ce grossissement. */
           /* 2026-09-25 (phase 3) : le monument déclare sa silhouette, ses vitres
              et sa porte à la lumière, depuis ce qu'il vient de poser à l'écran. */
-          lightMonument(b.x * T, b.y * T, (b.x + b.w) * T, by, drawScreenExactBitmap(ctx, SB, cx2, by, monumentLit()), SB);
+          lightMonument(b.x * T, b.y * T, (b.x + b.w) * T, by, drawScreenExactBitmap(ctx, SB, cx2, by, monumentLit(), monumentGlowOpts("church")), SB);
           /* ⚠️ 2026-09-20 (retouche) — LE POINT DE COUTURE ENTRE LE BÂTIMENT
              PEINT ET LE DALLAGE PROCÉDURAL DU PARVIS. Guillaume : « le parvis
              doit pas être totalement dans un autre style ». Le dallage
@@ -21389,7 +21476,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // cran — voir `drawScreenExactBitmap` (haut du fichier).
           // 2026-09-25 (phase 3) : l'emprise s'arrête au pied du mur, pas au bas du perron.
           lightMonument(b.x * T, b.y * T, (b.x + b.w) * T, (b.y + b.h - C.TOWN_HALL_STEP_ROWS) * T,
-            drawScreenExactBitmap(ctx, SB, cx2, by, monumentLit()), SB);
+            drawScreenExactBitmap(ctx, SB, cx2, by, monumentLit(), monumentGlowOpts("townhall")), SB);
           // L'horloge : centre et rayon mesurés à la main sur le PNG (192 px
           // de large), voir tools/build-townhall-sprite.mjs pour l'origine
           // des mêmes nombres côté cadran repeint. ⚠️ 2026-09-25 : ces nombres
@@ -21516,7 +21603,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           /* 2026-09-25 (phase 3) : l'emprise est le CORPS mesuré (les ailes), du
              fond de l'image au pied des ailes — la volée, devant, se traverse. */
           lightMonument(cx2 - bodyW / 2, Math.min(b.y * T, footY - 4 * T), cx2 + bodyW / 2, footY,
-            drawScreenExactBitmap(ctx, SB, cx2, dy + dh, monumentLit()), SB);
+            drawScreenExactBitmap(ctx, SB, cx2, dy + dh, monumentLit(), monumentGlowOpts("courthouse")), SB);
           drawBuildingFooting(ctx, cx2, footY, bodyW / 2);
           /* 2026-09-22 — LES PIGEONS DU TRIBUNAL (demande de Guillaume, en jeu :
              hauteurs variables et cohérentes avec la taille des marches, pose
@@ -21891,6 +21978,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               ctx.drawImage(bimg, 0, 0, bimg.width, SP, bx, bby - rise, bimg.width, SP));
             pushE(bk.near, be, () =>
               ctx.drawImage(bimg, 0, SP, bimg.width, LO, bx, bby - rise + SP, bimg.width, LO));
+            /* 2026-09-26 — LE REFLET DU PONT (Guillaume, en jouant : reste de
+               la phase 4). Seule la face PROCHE (l'arche et le garde-corps sud)
+               se reflète : c'est elle que l'eau voit, au sud du pont — la
+               moitié du fond passerait derrière. L'axe est la ligne d'eau au
+               pied de l'arche, `TOWN_BRIDGE_REFL_UP` px au-dessus du bas du
+               sprite (sa bande grise est l'eau dans l'ombre du tablier) : le
+               miroir retombe donc SOUS le pont, là où il y a de l'eau, et la
+               passe des reflets le découpe à l'eau. Pas sur une terrasse. */
+            if (be < 0.01) {
+              const axis = bby - rise + bimg.height - C.TOWN_BRIDGE_REFL_UP;
+              reflOnly.push({ rb: axis, axisOff: 0, rx: pr.x, re: 0,
+                fn: () => ctx.drawImage(bimg, 0, SP, bimg.width, LO, bx, bby - rise + SP, bimg.width, LO) });
+            }
           }
           continue;
         }
@@ -22521,7 +22621,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             r.x = fx; r.y = fy;
             threats.push({ id, x: fx, y: fy, moving: moved || nowP - r.since < 300, still: (nowP - r.since) / 1000 });
           };
-          if (!m.sleeping) track("me", m.x, m.y);
+          if (!m.sleeping) {
+            track("me", m.x, m.y);
+            /* 2026-09-26 — les chats qui m'ont adopté (`E.catLoyal`, lu dans mon
+               inventaire) : ils ne me fuient plus et viennent me voir (faune.js). */
+            const inv0 = myInvRef.current, loyal = new Set();
+            for (const k of C.CAT_COATS) if (E.catLoyal(inv0, k)) loyal.add(k);
+            if (loyal.size) threats[threats.length - 1].loyal = loyal;
+          }
           for (const p of playersRef.current.values()) if (p.zone === "town" && !p.sleeping) track(p.id, p.x, p.y);
           const SL = faunaLocalRef.current;
           const foodF = townFoodRef.current && townFoodRef.current.until > nowP ? townFoodRef.current : null;
@@ -22657,6 +22764,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           };
           const cats = FAU.faunaCats(fw, env, tw);
           FAU.faunaReactCats(SL, cats, threats, fdt, walkableF, Math.random);
+          /* 2026-09-26 — le cadeau du chat fidèle : une `req` par chat et par
+             jour au plus (l'hôte tranche, `E.resolveCatGift`) ; la garde locale
+             évite seulement d'envoyer pour rien. */
+          for (const c of cats) if (c.gift) {
+            const dNow = sharedRef.current.day || 1, asked = catGiftAskedRef.current;
+            if (asked[c.coat] !== dNow) { asked[c.coat] = dNow; sendReq({ kind: "catGift", coat: c.coat }); }
+          }
+          /* Ce que la touche E doit pouvoir viser (le lait, l'épuisette) : les
+             positions de CETTE image, réactions comprises — lues par
+             `faunaNearby`, hors de la boucle. */
+          faunaSnapRef.current = { cats, fish, bfl, at: nowP };
           for (const c of cats) {
             if (c.heart) faunaFxRef.current.push({ kind: "heart", x: c.x, y: c.y, t0: nowP });
             if (!inView(c.x, c.y, 2)) continue;
@@ -22666,7 +22784,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
           // ── Les petits effets : le cœur du chat qui dit bonjour.
           faunaFxRef.current = faunaFxRef.current.filter((fx) => nowP - fx.t0 < 1400);
+          /* 2026-09-26 — le coup d'épuisette : un arc du haut de l'épaule vers la
+             bête, en 0,45 s, et le cercle du filet au bout. */
+          {
+            const ns = netSwingRef.current;
+            // 0,6 s d'arc, puis 0,25 s tenu sur la bête (on voit où il a frappé) ;
+            // trié loin devant le joueur (+14 px), pour passer devant un garde-corps.
+            if (ns && nowP - ns.t0 < 850) {
+              const u = Math.min(1, (nowP - ns.t0) / 600), me2 = elAt(Math.floor(ns.x), Math.floor(ns.y));
+              pushE(ns.y * T + 14, me2, () => FART.drawNetSwing(ctx, ns.x * T, ns.y * T - 9, ns.tx * T, ns.ty * T, u));
+            }
+          }
           for (const fx of faunaFxRef.current) {
+            if (fx.kind === "ring") {
+              const u = (nowP - fx.t0) / 1400;
+              pushE(fx.y * T - 3, 0, () => { FART.drawRipple(ctx, fx.x * T, fx.y * T, 1 + u * 9, (1 - u) * 0.7); if (u > 0.25) FART.drawRipple(ctx, fx.x * T, fx.y * T, 1 + (u - 0.25) * 6, (1 - u) * 0.5); });
+              continue;
+            }
             const u = (nowP - fx.t0) / 1400, fe = elAt(Math.floor(fx.x), Math.floor(fx.y));
             pushE(fx.y * T + 0.5, fe, () => {
               const hx = Math.round(fx.x * T), hy = Math.round(fx.y * T - 14 - u * 8);
@@ -23037,9 +23171,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (!waterReflRef.current) waterReflRef.current = EAU.makeWaterReflector((w2, h2) => { const c = document.createElement("canvas"); c.width = w2; c.height = h2; return c; });
           const items = [];
           for (const d of draws) if (d.rb != null && d.re < 0.01) items.push(d);
+          for (const d of reflOnly) items.push(d);
           if (items.length) {
             const M0 = ctx.getTransform();
-            const axisOffOf = (d) => EAU.waterAxisOffset(tw, d.rx, Math.floor((d.rb - 1) / T));
+            const axisOffOf = (d) => d.axisOff != null ? d.axisOff : EAU.waterAxisOffset(tw, d.rx, Math.floor((d.rb - 1) / T));
             waterReflRef.current.draw(ctx, { zm: M0.a, Rx: -M0.e, Ry: -M0.f, W: canvas.width, H: canvas.height }, bakeR, items, now, axisOffOf, (d, g) => {
               const saved = ctx;
               ctx = g; reflecting = true;
@@ -23265,6 +23400,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else if (nearBuildingDoor(C.TOWN_SALON)) tpk = "townSalon";
       else if (nearMarket()) tpk = "townMarket";
       else if (nearTownProp("newsBoard", 1.7)) tpk = "townNews";
+      else if (faunaNearby()) tpk = faunaNearby().key;         // 2026-09-26 — avant le banc, même ordre que la touche E
       else if (nearTownProp("bench", 1.2)) tpk = "townBench";
       else if (starNearby()) tpk = "star:" + starNearby().p;   // zip 444 — même ordre que la touche E
       else if (nearTownRect(C.TOWN_FOUNTAIN.x - 1, C.TOWN_FOUNTAIN.y - 1, 4, 4)) tpk = "townWish";
@@ -26170,6 +26306,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        nombre est un ALPHA, l'ancien appel passait `nightAlpha()` tel quel,
        donc des vitres jamais allumées au-delà de 85 %. */
     function monumentLit() { return Math.min(1, nightAlpha() / 0.3); }
+    /* 2026-09-26 (phase 6c) : l'heure et le jour qui éteignent les pièces vides
+       d'un monument, et le souffle des cierges de l'église (voir
+       `composeMonumentGlow`, haut du fichier). */
+    function monumentGlowOpts(key) {
+      const sh = sharedRef.current;
+      return { key, tmin: E.gameTimeMin(sh.dayStartAt, Date.now()), day: sh.day || 1,
+        flick: key === "church" ? LUM.candleFlicker(Date.now()) : 1 };
+    }
     /* Un monument peint (phase 1 : une image par cran, à 1:1) : son emprise
        (repère courant), sa silhouette et son calque de nuit (ce que
        `drawScreenExactBitmap` vient de poser, en px écran), et ses lampes
@@ -26179,11 +26323,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!r) return;
       lightBuilding(x0, y0, x1, y1, r.img, r.left, r.top, r.dw, r.dh, true);
       const lit = monumentLit();
-      if (r.glowImg) lightScreenGlow(r.glowImg, r.left, r.top, r.dw, r.dh, lit);
+      /* 2026-09-26 (phase 6c) : la flaque devant une baie suit SA pièce (`room`
+         dans `SB.lights`) — une mairie éteinte ne pose plus de lumière sur le
+         parvis — et l'église respire au rythme de ses cierges. */
+      const key = Object.keys(C.TOWN_BITMAPS).find(k => C.TOWN_BITMAPS[k] === SB);
+      const go = key ? monumentGlowOpts(key) : null;
+      const D = key && LUM.MONUMENT_WINDOWS[key];
+      const roomLevel = (room) => {
+        if (!room || !D) return 1;
+        let m = 0;
+        for (const w of D.wins) if (w.room === room) m = Math.max(m, LUM.monumentWindowLevel(key, w, go.tmin, go.day));
+        return m;
+      };
+      const flick = go ? go.flick : 1;
+      if (r.glowImg) lightScreenGlow(r.glowImg, r.left, r.top, r.dw, r.dh, Math.min(1, lit * flick));
       if (lit <= 0.01) return;
       for (const l of (SB && SB.lights) || []) {
         const sx = r.left + l.x * r.dw;
-        lightScreenSource(sx, r.top + l.ground * r.dh, l.r, l.c || "lamp", (l.k == null ? 1 : l.k) * lit,
+        const rk = roomLevel(l.room) * (l.room === "nave" || l.room === "aisle" ? flick : 1);
+        if (rk <= 0.01) continue;
+        lightScreenSource(sx, r.top + l.ground * r.dh, l.r, l.c || "lamp", (l.k == null ? 1 : l.k) * lit * rk,
           l.head ? { sx, sy: r.top + l.y * r.dh, rs: l.head * r.dw / SB.disp, k: lit } : null);
       }
     }
@@ -31783,6 +31942,58 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const doorX = b.x + b.w / 2, doorY = b.y + b.h - stepRows + 0.5;
     return Math.abs(m.x + 0.5 - doorX) <= b.w / 2 && Math.abs(m.y - doorY) <= 1.6;
   }
+  /* ╔══════════════════════════════════════════════════════════════════════
+     ║ 2026-09-26 — LA FAUNE À PORTÉE DE E : le lait du chat, l'épuisette.
+     ╚══════════════════════════════════════════════════════════════════════
+     ⚠️ UNE SEULE FONCTION POUR L'INVITE ET POUR LA TOUCHE (la règle du 427,
+     comme `starNearby`) : l'invite promet ce que la touche fait. Elle lit la
+     faune de la DERNIÈRE IMAGE (`faunaSnapRef`, réactions comprises) — les
+     bêtes bougent, une position recalculée ici divergerait de ce qu'on voit.
+     ⚠️ Pas d'invite sans de quoi agir : sans lait, pas de « donner du lait »
+     (le « propose puis refuse » du 426). */
+  function faunaNearby() {
+    const m = meRef.current;
+    if (!m || m.zone !== "town" || m.sitOn || m.sleeping) return null;
+    const snap = faunaSnapRef.current, nowP = performance.now();
+    if (!snap || nowP - snap.at > 600) return null;
+    const inv = myInvRef.current || {};
+    const fx = C.footX(m.x), fy = C.footY(m.y), day = sharedRef.current.day || 1;
+    if (C.ANIMAL_MILK.some(i => ((inv.products || [])[i] | 0) > 0)) {
+      for (const c of snap.cats) {
+        if (Math.hypot(c.x - fx, c.y - fy) > 1.4 || c.react === "flee" || c.react === "startle") continue;
+        const e = (inv.catMilk || {})[c.coat];
+        if (!e || e.last !== day) return { key: "catMilk", act: () => { sendReq({ kind: "catMilk", coat: c.coat }); faunaFxRef.current.push({ kind: "heart", x: c.x, y: c.y, t0: nowP }); } };
+      }
+    }
+    if ((inv.net | 0) > 0 && !(netSwingRef.current && nowP - netSwingRef.current.t0 < 900)) {
+      let best = null, bd = Infinity;
+      for (const b of snap.bfl) {
+        const l = Math.hypot(b.x - fx, b.y - fy);
+        if (b.a > 0.5 && b.alt < 2.2 && l < C.NET_REACH.bfly && l < bd) { bd = l; best = { what: "bfly", id: b.id, sp: b.sp, x: b.x, y: b.y - b.alt }; }
+      }
+      if (!best) for (const f of snap.fish) {
+        const l = Math.hypot(f.x - fx, f.y - fy);
+        if (f.z < 0.7 && l < C.NET_REACH.carp && l < bd) { bd = l; best = { what: "carp", id: f.id, x: f.x, y: f.y }; }
+      }
+      if (best) return { key: best.what === "bfly" ? "netBfly" : "netCarp", act: () => swingNet(best) };
+    }
+    return null;
+  }
+  /* Le coup d'épuisette : le geste se dessine tout de suite (local), l'hôte
+     tranche la prise (`netCatch`, E.resolveNetCatch) — la bête, elle, s'enfuit
+     dans tous les cas : relâchée si on l'a eue, ratée sinon. */
+  function swingNet(tg) {
+    const m = meRef.current; if (!m) return;
+    const nowP = performance.now();
+    netSwingRef.current = { t0: nowP, x: C.footX(m.x), y: C.footY(m.y), tx: tg.x, ty: tg.y };
+    sendReq({ kind: "netCatch", what: tg.what, sp: tg.sp || null });
+    const SL = faunaLocalRef.current;
+    if (tg.what === "bfly" && SL.bfly) { const o = SL.bfly.get(tg.id); if (o) { o.oa = 3; o.oy -= 1.2; } }
+    if (tg.what === "carp") {
+      if (SL.fish) { const o = SL.fish.get(tg.id); if (o) o.z = 1; }
+      faunaFxRef.current.push({ kind: "ring", x: tg.x, y: tg.y, t0: nowP });
+    }
+  }
   function tryOpenNearby() {
     const m0 = meRef.current;
     /* ⚠️⚠️ ZIP SUIVANT — E RÉVEILLE, ET ÇA N'AVAIT JAMAIS ÉTÉ BRANCHÉ. Le
@@ -31972,6 +32183,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          sur onze interactions de la ville, quatre n'étaient qu'un toast, et
          celle-ci était la plus frustrante — un banc est la seule chose au monde
          dont l'usage est évident. */
+      /* 2026-09-26 — LA FAUNE À PORTÉE PASSE AVANT LE BANC : une bête qui bouge
+         est l'éphémère de la règle du 425 (le banc sera encore là dans dix
+         secondes, le papillon non) — et l'étang est bordé de bancs : testée
+         après, l'épuisette n'y aurait jamais eu la touche (vu en jeu). */
+      { const fn = faunaNearby(); if (fn) { fn.act(); return; } }
       { const bn = nearTownProp("bench", 1.2); if (bn) { sitOnBench(bn); return; } }
       /* ZIP 442 — les bornes de l'arpenteur et la tombe sans nom. Placées ici :
          après le mobilier à rayon étroit, avant les LIEUX (fontaine, kiosque,
@@ -33076,7 +33292,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           expression que le bandeau, et pas ailleurs. Deux traductions du même
           `promptKey` finiraient par diverger d'un libellé, et la divergence
           tomberait sur l'appareil du joueur qui n'a QUE ce bouton. */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "evilShardsPickup" ? L.promptEvilShardsPickup : promptKey === "evilStarPickup" ? L.promptEvilStarPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : promptKey === "rod" ? L.promptRod : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townHallEnter" ? L.promptTownHallEnter : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "catMilk" ? L.promptCatMilk : promptKey === "netBfly" ? L.promptNetBfly : promptKey === "netCarp" ? L.promptNetCarp : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "churchStand" ? L.promptChurchStand : promptKey === "churchOrgan" ? L.promptChurchOrgan : promptKey === "churchCandle" ? L.promptChurchCandle : promptKey === "churchPew" ? L.promptChurchPew : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey === "priceBoard" ? L.promptPriceBoard : promptKey === "hallClerk" ? L.promptHallClerk : promptKey === "mayorDoor" ? L.promptMayorDoor : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("star:") ? L.star.prompt(promptKey.slice(5)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "evilShardsPickup" ? L.promptEvilShardsPickup : promptKey === "evilStarPickup" ? L.promptEvilStarPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : promptKey === "rod" ? L.promptRod : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (
@@ -35407,6 +35623,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             <button className="ferme-close-x" onClick={() => { setMarketOpen(false); setMarketCart({}); }}>✕</button>
             <h2>🎪 {L.marketTitle}</h2>
             <div className="ferme-hint">{E.isMarketDay(day) ? L.marketDayHint : L.marketHint}</div>
+            {/* 2026-09-26 — L'ÉPUISETTE, « pour l'instant au marché » (Guillaume :
+                une boutique d'objets de plage viendra). Un achat, donc une `req`
+                arbitrée par l'hôte (`buyNet`) ; une fois achetée, la ligne
+                devient le CARNET — de l'information, rien à gagner (§4). */}
+            {(() => {
+              const inv = myInv || {}, owned = (inv.net | 0) > 0, log = inv.netLog || {}, bf = log.bfly || {};
+              const k = E.FAUNA_BFLY_SPECIES.filter(sp => bf[sp] > 0).length;
+              return (
+                <div className="ferme-shop-row" style={{ alignItems: "flex-start" }}>
+                  <span style={{ width: 32, height: 32, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{owned ? "📓" : "🥅"}</span>
+                  <div className="info">
+                    <b>{owned ? L.netLogTitle : L.marketNetTitle}</b>
+                    {!owned && <span>{L.marketNetDesc}</span>}
+                    {owned && <span>{L.netLogBfly(k, C.FAUNA_BFLY_COUNT)} — {E.FAUNA_BFLY_SPECIES.map(sp => (bf[sp] > 0 ? "✓ " : "· ") + L.bflyShort(sp) + (bf[sp] > 1 ? " ×" + bf[sp] : "")).join("  ")}</span>}
+                    {owned && <span>{L.netLogCarp(log.carp | 0)}</span>}
+                  </div>
+                  {owned ? <span className="ferme-hint" style={{ margin: 0 }}>{L.marketNetOwned}</span>
+                    : <button disabled={(hud.money | 0) < C.NET_PRICE} onClick={() => sendReq({ kind: "buyNet" })}>{L.marketNetBuy(C.NET_PRICE)}</button>}
+                </div>
+              );
+            })()}
             {/* Les cours du jour — et le filtre, d'un même geste. */}
             <div className="ferme-shop-row" style={{ flexWrap: "wrap", gap: 6 }}>
               <button onClick={() => setMarketFam("all")}

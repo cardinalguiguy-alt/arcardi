@@ -1,5 +1,41 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-26
 
+## 2026-09-26 (soir, suite) — 6c : LA VIE DES MONUMENTS LA NUIT ; LE REFLET DU PONT ; LE CHAT QU'ON NOURRIT ; L'ÉPUISETTE
+
+Guillaume : « continue les phases » ; la 6a (maisons) et la 6b (gare, commerces) attendent ses images
+Gemini (prompts dans `refs/prompts-maisons.md`) ; en attendant, « TOUT ça » : 6c, reflet du pont, lait et
+épuisette. Décisions : bitmaps Gemini pour les maisons, pierre et colombages, trois tailles (4/6/8 cases),
+chat « fidèle et utile » par joueur, épuisette au marché « pour l'instant ».
+- **6c — les fenêtres des monuments** : les baies vivent dans `lumiere.js` (`MONUMENT_WINDOWS`, une table
+  lue par le script de cuisson ET par le jeu). Cuit (`build-monument-glow`) : une lampe et une force par
+  baie, plus chaud en bas, rideaux sur les côtés, une silhouette (fauteuil, plante, étagère) une baie sur
+  trois ; les VITRAUX de l'église en COULEURS (fond bleu, bordure rubis, médaillons or et émeraude, rosace
+  en pétales). Au jeu : `monumentWindowLevel` éteint à l'heure les pièces vides — vêpres puis veilleuse à
+  l'église, bureaux de la mairie jusqu'à 19 h + heures sup (le maire veille un soir sur quatre), bureaux du
+  tribunal tirés chaque soir, loge du gardien, veilleuse des pas perdus ; les cierges vacillent
+  (`candleFlicker`) ; les flaques de lumière suivent leur pièce (`room` dans `TOWN_BITMAPS.*.lights`). Un
+  canevas par monument, recomposé seulement quand une baie change. ⚠️ Deux défauts trouvés en chemin : le
+  script ne donnait PAS la même sortie deux fois (sa propre sortie relue éteignait les vitres sombres) — la
+  base est désormais lue au commit 1539fe7 ; et les vitraux sortaient orange uni (peinture ambrée).
+  ⚠️ Premier jet écarté : une couleur par morceau de verre entre deux plombs — les plombs peints ne
+  ferment rien, damier criard.
+- **Le reflet du pont** : la face proche du pont en arc (garde-corps sud) se reflète sous lui
+  (`reflOnly`, `TOWN_BRIDGE_REFL_UP`) ; à 6 px l'axe ne laissait que 4 px de reflet dans l'eau visible.
+- **Le chat qu'on nourrit** : E près d'un chat, avec du lait (vache ou chèvre, `takeMilk`), une fois par
+  jour et par chat (`catMilk`) ; trois jours différents → il vous a ADOPTÉ (`E.catLoyal`) : il ne vous
+  fuit plus, vient à vous en ville même si vous marchez, vous suit, se frotte quand vous vous arrêtez, et
+  rapporte un gardon un jour sur deux (`catGift`, une fois par jour et par chat, arbitré par l'hôte).
+- **L'épuisette** : 300 or au marché (`buyNet`) ; E près d'un papillon (1,3 case) ou d'une carpe (2,6)
+  → un coup (`netCatch`, 2,2 s de délai, 55 % / 40 %, tiré par l'hôte), la bête est relâchée ; le CARNET
+  (ligne du marché) compte les six espèces de papillons et les carpes. Aucun or à la clé. La faune passe
+  AVANT le banc dans l'ordre de E (l'étang est bordé de bancs : vu en jeu).
+- Tout vit dans `f.inv` (`net`, `catMilk`, `netLog`, `netAt`), déclaré dans `normalizeFarmer`. **Pas de
+  manipulation Supabase.**
+- **Vu en jeu** : l'église à 19 h 30 (vitraux pleins) et à 22 h (veilleuse), la mairie à 22 h 44 (le
+  bureau du maire seul allumé), le tribunal à 23 h (loge, un bureau, veilleuse) ; le reflet du pont ;
+  l'achat, le carnet, un coup raté puis une carpe prise au pont. **Pas vu** : le lait (la traite
+  scriptée n'a pas abouti), le chat adopté en jeu (tenu au banc seulement), un papillon attrapé.
+
 ## 2026-09-26 (suite) — LA MÉTÉO : DES ÉPISODES QUI MONTENT, SELON LA SAISON ; LA SAISON FORCÉE PARTAGÉE
 
 Forme proposée puis validée par Guillaume (« reco partout », plus trois réponses : l'hiver en ÉPISODES
@@ -329,12 +365,12 @@ visuel » LEVÉE pour ce chantier par Guillaume (2026-09-25, phase 2) : une phas
 | ✅ | 3 | Lumière — **livrée le 2026-09-25** (récit juste au-dessus) : ciel qui multiplie la scène selon l'heure, lampes additives en paliers tramés à la grille de l'art, ombres des bâtiments, fenêtres des maisons habitées, calques de nuit des trois monuments refaits depuis leurs images de jour, lanternes suspendues et lampes à huile qui éclairent, pluie et neige au pixel d'art, éclairs, noms au-dessus de la nuit | les bâtiments refaits en 6 naîtront avec leur calque de nuit |
 | ✅ | 4 | Sols et eau — **livrée le 2026-09-25** (récit en tête) : eau cuite au pixel (`eau.js`), une eau par plan d'eau (étang clair, port profond, passe ensablée, plages), reflets de jour et de nuit, quai et ponton, houle à deux trains, gazon sans période, sentiers à contour libre, terre battue, bordures entre revêtements, murs habillés ; pluie tenue pendant le zoom. Pas fait : bittes, reflets ponts/navire/fenêtres, chemins de désir | le tapis sous tout le reste, avant de recomposer |
 | ✅ | 5 | Faune — **livrée le 2026-09-26** (récit en tête) : colverts, carpes, sauts au port, goélands et mouettes rieuses, trois chats, papillons, lucioles ; routines partagées sans message, réactions locales ; pigeons redessinés au pixel natif. Réservé pour plus tard : le gameplay (bocal de lucioles, chat adopté, carpes pêchées à vue) | a besoin de l'eau (4) et de la nuit (3) |
-| ⬜ | 6 | **Décidé le 2026-09-26 : trois livraisons (6a maisons, 6b gare/quai/boutiques, 6c nuit des monuments) ; maisons en bitmap Gemini, pierre et colombages, trois tailles (4/6/8 cases) ; prompts remis, PNG attendus.** Bâtiments courants : gare et quai, dix façades, boutiques, variantes mitoyennes et d'angle — sortis de la closure pour qu'un banc les voie. ⚠️ **Guillaume, 2026-09-26 : « les maisons de Valley Town sont cheap »** — à retravailler pour qu'elles soient DIFFÉRENTES et plus DÉTAILLÉES ; l'éclairage de leurs fenêtres (phase 3, `townHouseWindowGlow`) sera refait avec elles. **Et l'éclairage des fenêtres des GRANDS bâtiments (calques de nuit des monuments) doit être plus travaillé, plus réaliste, plus beau** | après la grille (1) et la lumière (3), avant la composition |
+| ⬜ | 6 | **Décidé le 2026-09-26 : trois livraisons (6a maisons, 6b gare/quai/boutiques, 6c nuit des monuments) ; maisons en bitmap Gemini, pierre et colombages, trois tailles (4/6/8 cases). ✅ 6c livrée (récit en tête). ⬜ 6a et 6b attendent les PNG de Guillaume (prompts : `refs/prompts-maisons.md`).** Bâtiments courants : gare et quai, dix façades, boutiques, variantes mitoyennes et d'angle — sortis de la closure pour qu'un banc les voie. ⚠️ **Guillaume, 2026-09-26 : « les maisons de Valley Town sont cheap »** — à retravailler pour qu'elles soient DIFFÉRENTES et plus DÉTAILLÉES ; l'éclairage de leurs fenêtres (phase 3, `townHouseWindowGlow`) sera refait avec elles. **Et l'éclairage des fenêtres des GRANDS bâtiments (calques de nuit des monuments) doit être plus travaillé, plus réaliste, plus beau** | après la grille (1) et la lumière (3), avant la composition |
 | ⬜ | 7 | Composition : cœur dense autour de la place, parcelles irrégulières, arbres non alignés, sort de chaque prairie | la plus risquée (quête, chemins, bancs) ; les propriétaires tiennent par le RANG dans `TOWN_HOUSES`, donc aucune migration |
 | ⬜ | 8 | Intérieurs au niveau des façades (murs vus de face, lumière de vitrail) | le moins vu, le plus gros ; réutilise 3 |
 ✅ **Météo, demandée par Guillaume le 2026-09-26 (après la phase 5) — livrée le même jour** (récit en tête) : épisodes qui montent, orages secs, pluie d'automne, neige en épisodes de trois intensités, grêle, tonnerre, commande au menu dev. **Reste** : le son de la pluie et du vent (chantier son dédié, décision de Guillaume).
 **Retours de Guillaume après 20 min de jeu (2026-09-26, nuit) — à faire, rien de codé** :
-- ✅ **Chat moins saccadé** (fait, voir le récit en tête). ⬜ Il n'est pas forcément peureux, ça dépend de
+- ✅ **Chat moins saccadé** (fait, voir le récit en tête). ✅ Lait et fidélité livrés le 2026-09-26 (soir). Il n'est pas forcément peureux, ça dépend de
   la façon dont on l'approche (le câlin quand on reste calme à côté plaît, à garder). **Lui donner du
   lait** (si on en a) et le **fidéliser** : le chat errant revient ensuite nous voir régulièrement.
 - ✅ **Papillons** : population divisée par 3 hors des parcs et jardins, par 2 dedans.
@@ -342,11 +378,11 @@ visuel » LEVÉE pour ce chantier par Guillaume (2026-09-25, phase 2) : une phas
   passant ; ✅ la nuit, beaucoup (pas tous) **dorment sur la berge, le bec dans le dos**.
 - ✅ **Goélands et mouettes** : moins nombreux (10 → 6).
 - ✅ **Insectes des lampadaires** : sept robes, du jaune-blanc au brun-noir.
-- ⬜ **Épuisette** à acheter (chez Pierre ou au marché) : tenter d'attraper les carpes (à relâcher, la
+- ✅ **Épuisette** (livrée le 2026-09-26, soir ; au marché en attendant la boutique de plage) à acheter (chez Pierre ou au marché) : tenter d'attraper les carpes (à relâcher, la
   mairie en interdit la pêche) ou chasser les papillons, avec un **compteur de papillons** (collection).
-- ⬜ **Reflet du pont** (déjà dans les restes de la phase 4, ci-dessous : re-demandé en jouant).
+- ✅ **Reflet du pont** (livré le 2026-09-26, soir) (déjà dans les restes de la phase 4, ci-dessous : re-demandé en jouant).
 - ✅ **Menu dev : la saison forcée change réellement la saison**, pour tout le monde (livré avec la météo).
-**Restes de la phase 4, à reprendre (Guillaume, 2026-09-26 : « pour y revenir plus tard »)** : bittes d'amarrage ; reflets des ponts, du navire et des fenêtres ; « chemins de désir » (l'usure suit les allées, pas les trajets) ; reflet de la torche et éclats de lune jamais regardés de près.
+**Restes de la phase 4, à reprendre (Guillaume, 2026-09-26 : « pour y revenir plus tard »)** : bittes d'amarrage ; reflets du navire et des fenêtres (le pont : fait le 2026-09-26) ; « chemins de désir » (l'usure suit les allées, pas les trajets) ; reflet de la torche et éclats de lune jamais regardés de près.
 Reporté exprès : détail des personnages (non voulu ; un cerne seulement si, après 7, ils se perdent),
 canevas `devicePixelRatio` (le flou ne touche que le texte, réglé en 2), neige au sol et flaques
 réfléchissantes (après 3–4), mise à niveau de la FERME (après 4, elle réutilisera les sols).

@@ -275,6 +275,55 @@ for (const key of ["church", "townhall", "courthouse"]) {
   }
 }
 
+/* ═══════════════════════════════════════ 8 bis. LA VIE DES MONUMENTS (phase 6c) */
+{
+  const MW = LM.MONUMENT_WINDOWS;
+  // Chaque baie est ALLUMÉE dans le calque cuit (au cran 3) : sinon l'éteindre à
+  // l'heure ne voudrait rien dire, et une baie oubliée resterait noire toujours.
+  for (const key of ["church", "townhall", "courthouse"]) {
+    const D = MW[key], SB = C.TOWN_BITMAPS[key], mip = C.townBitmapMip(SB, 3);
+    const glow = PNG.sync.read(readFileSync(path.join(ROOT, "public", mip.glow)));
+    ok(glow.width === D.W3 && glow.height === D.H3, `${key} : la table des baies est relevée au cran 3 (${D.W3}×${D.H3})`, `${glow.width}×${glow.height}`);
+    const dead = [];
+    D.wins.forEach((w, i) => {
+      let lit = 0, read = 0;
+      for (let y = 0; y < glow.height; y++) for (let x = 0; x < glow.width; x++) {
+        if (!LM.monumentWindowHas(w, x + 0.5, y + 0.5)) continue;
+        read++; if (glow.data[(y * glow.width + x) * 4 + 3] > 60) lit++;
+      }
+      if (lit < Math.max(6, read * 0.08)) dead.push(`baie ${i} (${w.room}) : ${lit}/${read}`);
+    });
+    ok(dead.length === 0, `${key} : les ${D.wins.length} baies sont allumées dans le calque cuit`, dead.join(" ; "));
+  }
+  // Les pièces « always » ne s'éteignent jamais ; tout le reste s'éteint à 1h30.
+  let alwaysOff = 0, lateOn = [], read = 0;
+  for (let day = 1; day <= 60; day++) for (const key of Object.keys(MW)) for (const w of MW[key].wins) {
+    read++;
+    for (const t of [18 * 60, 21 * 60, 23 * 60, 25 * 60 + 30]) if (w.room === "always" && LM.monumentWindowLevel(key, w, t, day) !== 1) alwaysOff++;
+    const late = LM.monumentWindowLevel(key, w, 25 * 60 + 30, day);
+    if (w.room !== "always" && late > 0.31) lateOn.push(`${key}/${w.room} j${day} ${late}`);
+  }
+  ok(alwaysOff === 0, "lanternes, cadran et lanternon restent allumés toute la nuit", `${alwaysOff} extinctions sur ${read} baies-jours`);
+  ok(lateOn.length === 0, "à 1h30, plus aucune pièce pleine (au plus une veilleuse)", lateOn.slice(0, 3).join(" ; "));
+  // La soirée CHANGE d'un jour à l'autre (sinon « inégal » serait cuit) : les
+  // bureaux du tribunal allumés à 21h ne forment pas le même ensemble chaque soir.
+  const sets = new Set();
+  for (let day = 1; day <= 30; day++) sets.add(MW.courthouse.wins.map((w) => LM.monumentWindowLevel("courthouse", w, 21 * 60, day) > 0 ? 1 : 0).join(""));
+  ok(sets.size >= 10, "les bureaux du tribunal allumés à 21h changent d'un soir à l'autre", `${sets.size} soirées différentes sur 30`);
+  let offices = 0, officesLit = 0;
+  for (let day = 1; day <= 200; day++) for (const w of MW.courthouse.wins) if (w.room.startsWith("wing")) { offices++; if (LM.monumentWindowLevel("courthouse", w, 20 * 60, day) > 0) officesLit++; }
+  const share = officesLit / offices;
+  ok(share > 0.35 && share < 0.75, "à 20h, entre un tiers et trois quarts des bureaux du tribunal sont occupés", `${(100 * share).toFixed(0)} %`);
+  // L'église : pleine aux vêpres, en veilleuse la nuit, jamais noire dans la nef.
+  const nave = MW.church.wins.find((w) => w.room === "nave");
+  ok(LM.monumentWindowLevel("church", nave, 19 * 60, 3) === 1 && LM.monumentWindowLevel("church", nave, 25 * 60, 3) === 0.3,
+    "la nef est pleine aux vêpres (19h) et en veilleuse à 1h");
+  // Le vacillement : visible, borné, et lent (pas un clignotement).
+  let lo = 9, hi = 0, jump = 0;
+  for (let t = 0; t < 60000; t += 16) { const f = LM.candleFlicker(t); lo = Math.min(lo, f); hi = Math.max(hi, f); jump = Math.max(jump, Math.abs(f - LM.candleFlicker(t + 16))); }
+  ok(lo > 0.9 && hi < 1.1 && hi - lo > 0.06 && jump < 0.01, "les cierges vacillent de quelques pour cent, sans saut d'une image à l'autre", `de ${lo.toFixed(3)} à ${hi.toFixed(3)}, pas max ${jump.toFixed(4)}`);
+}
+
 /* ═══════════════════════════════════════════════ 9. LA FENÊTRE DES MAISONS */
 const S = A.buildSprites();
 {

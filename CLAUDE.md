@@ -7,26 +7,30 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-26 (suite) — Valley Town : phases 0 à 5, retouches de la faune, puis LA MÉTÉO
+### 2026-09-26 (soir) — Valley Town : phases 0 à 5, météo, puis 6c, reflet du pont, lait du chat, épuisette
 
 Checklist (✅/⬜) en tête de `components/ferme/README.md`, avec sous elle la liste des retours de Guillaume ;
 récit de chaque livraison juste au-dessus. Cadre : personnages ÉVOCATEURS ; monde, végétation, faune,
 bâtiments soignés à fond. ⚠️ **Pour ce chantier, la règle « un seul changement visuel par livraison » est
-LEVÉE.** **Reste : 6 bâtiments courants · 7 composition · 8 intérieurs.**
-- **Dernière livraison : la météo** (`meteo.js`, pure) — épisodes qui MONTENT selon la saison (averse,
-  pluie, orage, orage sec, grêle, neige en trois intensités et trois tailles de flocons), tonnerre du
-  monde maléfique, faune qui lit le temps à l'heure de chaque créneau, prévision dans « Jour N », menu
-  dev « Météo et saison » PARTAGÉ (commande du jour + saison forcée que suit tout `E.seasonOf()`).
-  `E.isStormyDay`/`STORM_EVERY_N_DAYS` n'existent plus. En chemin : la tricolore du port sans abri,
-  le bandeau de l'hôte bloqué sur l'ancien jour — corrigés.
-- Bancs ce jour-là : **29/29 `verify-*`** (`verify-meteo` neuf 40/40, falsifié deux fois), **24/24
-  `render-*`**, `no-undef` propre, bundle, `next build` (`✓ Compiled`). Vu en jeu (orage qui monte,
-  neige, grêle, port sous la pluie, prévision) ; **son pas écouté** (coupé au test), **rien sur un vrai
-  iPad**. **Pas de manipulation Supabase** (deux champs de plus dans le JSON de `ferme_saves` :
-  `forcedWeather`, `forcedSeason` — aucune migration).
+LEVÉE.** **Reste : 6a maisons · 6b gare/quai/commerces (les deux attendent les PNG Gemini de Guillaume,
+prompts dans `refs/prompts-maisons.md`) · 7 composition · 8 intérieurs.**
+- **Dernière livraison, d'un bloc** : **6c** (baies des monuments dans `lumiere.js` — `MONUMENT_WINDOWS`,
+  lue par le script de cuisson ET par le jeu ; vitraux en couleurs ; pièces qui s'éteignent à l'heure ;
+  cierges qui vacillent) ; **reflet du pont** ; **le chat qu'on nourrit** (lait une fois par jour et par
+  chat, adopté après trois jours, vient à vous, rapporte un gardon) ; **l'épuisette** (300 or au marché,
+  carpes et papillons relâchés, carnet par joueur). Tout l'état neuf vit dans `f.inv`.
+- Bancs ce jour-là : **29/29 `verify-*`** (`verify-lumiere` 83, `verify-vallee` 255, `verify-faune` 74 —
+  les ajouts falsifiés), **24/24 `render-*`**, `no-undef` propre, bundle, `next build` (`✓ Compiled`).
+  Vu en jeu : les trois monuments de nuit, le reflet, l'achat, le carnet, une carpe prise. **Pas vu** : le
+  lait (la traite scriptée n'a pas abouti), le chat adopté (banc seulement), un papillon attrapé. **Pas de
+  manipulation Supabase** (champs de plus dans le JSON du fermier ; aucune migration).
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
+- **Le soir du 2026-09-26** : les vitraux en couleurs (composition dessinée : fond bleu, bordure rubis,
+  médaillons ; à juger à l'écran), les horaires des pièces (`monumentWindowLevel`), le reflet du pont
+  (`TOWN_BRIDGE_REFL_UP`), la portée de l'épuisette (1,3 papillon / 2,6 carpe), les chances (55 / 40 %),
+  le prix (300), le chat adopté en trois jours et son gardon un jour sur deux.
 - **La météo** : les fréquences par saison (`SEASON_ODDS`, parts imprimées par `verify-meteo`), la durée
   de montée d'un orage (~1 min 30 réelle), la densité de la neige forte et de la grêle, le volume du
   tonnerre (0,35 loin → 0,9 près), le ciel d'orage ~23 % plus sombre.
@@ -39,8 +43,7 @@ LEVÉE.** **Reste : 6 bâtiments courants · 7 composition · 8 intérieurs.**
   bêtes, la fréquence des gestes gratuits (le chat qui salue, les goélands du pêcheur), les papillons
   (assez visibles ?), la synchronisation des lucioles certaines nuits. **Pas fait en phase 5** : l'éclat
   des yeux des chats la nuit, les papillons en couple, les chats face aux chiens des joueurs, la faune de
-  la ferme. Phase 4, pas fait : bittes d'amarrage ; reflets des ponts, du navire, des fenêtres ; chemins
-  de désir. Phase 3 : ⚠️ un personnage DEVANT une fenêtre allumée s'éclaire à sa forme (limite connue).
+  la ferme. Phase 4, pas fait : bittes d'amarrage ; reflets du navire et des fenêtres ; chemins de désir. Phase 3 : ⚠️ un personnage DEVANT une fenêtre allumée s'éclaire à sa forme (limite connue).
 - Le perron du tribunal, le zoom manuel, les pets ancrés sur le maître, Eduardo et le port
   (`starYardHookActive`), le belvédère enrichi ; plus anciens : pin, bois du sud-est, cœur de ville,
   « changer de ferme », chantier naval, repousse des buissons.
@@ -57,21 +60,15 @@ LEVÉE.** **Reste : 6 bâtiments courants · 7 composition · 8 intérieurs.**
 
 ### ⏭️ ACTION SUIVANTE
 
-**PHASE 6a — LES MAISONS, EN COURS (2026-09-26, Guillaume : « continue les phases »).** Décisions :
-maisons en **bitmap Gemini** (comme les monuments, `grid: "screen"`), **pierre et colombages** gardés,
-**tailles variées dès maintenant** (étroite 4, standard 6, large 8 cases), phase 6 en **trois
-livraisons** (6a maisons + leurs fenêtres de nuit · 6b gare, quai, boutiques · 6c fenêtres de nuit des
-monuments). Dix prompts Gemini remis (fond magenta uni, vue de face comme `refs/hdv.jpg`) : **on attend
-les PNG de Guillaume**. À leur arrivée : détourage, repères (pied, porte, emprise) mesurés sur le PNG,
-`TOWN_BITMAPS`, taille par parcelle (par RANG, aucune migration), générateur et collision, calque de nuit
-par `build-monument-glow`, R à la porte qui tourne DANS la famille de taille. Ensuite seulement :
-**la suite des retours de Guillaume** (liste sous la checklist de `components/ferme/README.md`), dans
-l'ordre accepté (« reco partout ») : (1) les nouveautés à état sauvegardé — lait et fidélité du chat,
-épuisette (carpes à relâcher, papillons, collection) — une `req` arbitrée par l'hôte chacune, aucune
-migration SQL ; **proposer la forme (fidélité par joueur ou commune, prix, boutique) avant de coder** ;
-(2) le reflet du pont. Puis **phase 6** (maisons « cheap » à refaire, éclairage des fenêtres, grands
-bâtiments compris). Rappeler à Guillaume de jouer les phases 1-5 et la météo. L'« autre jeu » annoncé
-après les échecs attend qu'il le nomme. Le son de la pluie et du vent attend un chantier son dédié.
+**Les PNG Gemini de Guillaume décident de la suite.** S'ils sont là (`refs/maison-<code>.png`) : **6a** —
+détourage, repères (pied, porte, emprise) mesurés sur le PNG, `TOWN_BITMAPS` `grid: "screen"`, taille par
+parcelle (étroite 4 / standard 6 / large 8, par RANG, aucune migration), générateur et collision, calque
+de nuit par `build-monument-glow` (ajouter les maisons à `MONUMENT_WINDOWS` ou une table sœur), R à la
+porte qui tourne DANS la famille de taille ; puis **6b** (gare, quai, commerces, enseignes VIERGES — le
+nom s'écrit au rendu). S'ils ne sont pas là : lui rappeler de jouer phases 1-5, météo et les nouveautés du
+soir, et proposer la **phase 7 (composition)** — la plus risquée, à cadrer avec lui avant tout code.
+L'« autre jeu » annoncé après les échecs attend qu'il le nomme ; le son de la pluie et du vent attend un
+chantier son dédié ; la boutique d'objets de plage (moyen terme) reprendra l'épuisette.
 ⚠️ Le jour où un nouveau sprite bitmap arrive, mesurer son sprite AVANT de poser sa collision, et
 vérifier tout bornage sur les DEUX axes séparément (§4).
 
@@ -1252,7 +1249,7 @@ le même défaut que le cratère muet du 456, et il se paie à chaque nouveau sy
 ⚠️ **PROJETS MIS EN RÉSERVE PAR GUILLAUME LE 2026-09-26, À NE PAS PERDRE** : (1) le GAMEPLAY de la
 faune — bocal de lucioles, chat adopté, carpes pêchées à vue (« intéressant pour le futur ») ; (2) les
 MAISONS de Valley Town, « cheap » : à refaire différentes et détaillées, avec l'éclairage de leurs
-fenêtres (phase 6) ; (3) l'éclairage des fenêtres des GRANDS bâtiments, plus travaillé, réaliste, beau ;
+fenêtres (phase 6) ; (3) ✅ l'éclairage des fenêtres des GRANDS bâtiments (6c, 2026-09-26 soir) ;
 (4) les restes de la phase 4 (liste dans le bloc ⏭️ REPRISE).
 
 ✅ **RECENTRAGE DE LA QUÊTE AUTOUR DU BATEAU — TRANCHÉ ET CODÉ** (2026-09-12/13 ; ce qui reste :

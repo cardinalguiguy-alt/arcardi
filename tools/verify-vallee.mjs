@@ -1770,6 +1770,69 @@ section("Valley Town — LA BARQUE : la mécanique, tenue à la barre");
   }
 }
 
+/* ═══ 2026-09-26 — LE CHAT QU'ON NOURRIT ET L'ÉPUISETTE (fermeEngine.js) ═══ */
+{
+  console.log("\n— Le lait des chats, l'épuisette, le carnet —");
+  const mk = () => { const f = E.newFarmer("p1", "Test", "m", 0); E.normalizeFarmer(f); return f; };
+  // Poser le champ, migrer, relire (§4 de CLAUDE.md) : un champ non déclaré s'effacerait ici.
+  {
+    const f = mk();
+    f.inv.net = 1; f.inv.catMilk = { noir: { n: 2, last: 5, gift: 0 }, fantome: { n: 9 } };
+    f.inv.netLog = { carp: 3, bfly: { paon: 2 } }; f.inv.netAt = 123;
+    const g = JSON.parse(JSON.stringify(f)); E.normalizeFarmer(g); E.normalizeFarmer(g);
+    ok("les champs de l'épuisette et du lait survivent à la migration", g.inv.net === 1 && g.inv.catMilk.noir.n === 2 && g.inv.netLog.carp === 3 && g.inv.netLog.bfly.paon === 2 && g.inv.netAt === 123,
+      JSON.stringify({ net: g.inv.net, cat: g.inv.catMilk.noir, log: g.inv.netLog }));
+    ok("un chat inconnu est retiré du lait (pas d'entrée fantôme)", !("fantome" in g.inv.catMilk));
+    const old = mk(); delete old.inv.net; delete old.inv.catMilk; delete old.inv.netLog;
+    E.normalizeFarmer(old);
+    ok("un vieux fermier reçoit les champs neufs à zéro", old.inv.net === 0 && typeof old.inv.catMilk === "object" && old.inv.netLog.carp === 0);
+  }
+  // Le lait : un par jour et par chat, trois jours différents pour l'adoption.
+  {
+    const f = mk(); f.inv.products[4] = 1; f.inv.products[1] = 5;
+    const r1 = E.resolveCatMilk(f, "roux", 1);
+    ok("le premier lait se prend à la vache d'abord", r1.ok && f.inv.products[4] === 0 && f.inv.products[1] === 5);
+    ok("le même jour, le même chat refuse", E.resolveCatMilk(f, "roux", 1).reason === "today" && f.inv.products[1] === 5);
+    ok("un autre chat, le même jour, accepte", E.resolveCatMilk(f, "noir", 1).ok);
+    E.resolveCatMilk(f, "roux", 2);
+    ok("deux jours : pas encore fidèle", !E.catLoyal(f.inv, "roux"));
+    const r3 = E.resolveCatMilk(f, "roux", 3);
+    ok("trois jours différents : fidèle", r3.ok && r3.loyal && E.catLoyal(f.inv, "roux") && !E.catLoyal(f.inv, "noir"));
+    const g = mk();
+    ok("sans lait, aucun effet", E.resolveCatMilk(g, "roux", 1).reason === "noMilk" && !g.inv.catMilk.roux?.n);
+    ok("un chat inconnu est refusé", E.resolveCatMilk(f, "tigre", 9).reason === "cat");
+    // Le cadeau : fidèle seulement, une fois par jour et par chat.
+    const fish0 = f.inv.fish[C.CAT_GIFT_FISH] | 0;
+    ok("pas de cadeau d'un chat qui n'est pas fidèle", !E.resolveCatGift(f, "noir", 4, () => 0).ok);
+    const gg = E.resolveCatGift(f, "roux", 4, () => 0);
+    ok("le chat fidèle rapporte un gardon", gg.ok && gg.fish === C.CAT_GIFT_FISH && f.inv.fish[C.CAT_GIFT_FISH] === fish0 + 1);
+    ok("une seule fois par jour, même si l'on redemande", !E.resolveCatGift(f, "roux", 4, () => 0).ok && f.inv.fish[C.CAT_GIFT_FISH] === fish0 + 1);
+    const miss = E.resolveCatGift(f, "roux", 5, () => 0.99);
+    ok("un jour sans cadeau consomme l'essai du jour", miss.ok && miss.fish == null && !E.resolveCatGift(f, "roux", 5, () => 0).ok);
+    let got = 0; const h = mk(); h.inv.catMilk.tricolore = { n: 3, last: 0, gift: 0 };
+    for (let d = 1; d <= 400; d++) if (E.resolveCatGift(h, "tricolore", d, Math.random).fish != null) got++;
+    ok("un cadeau un jour sur deux environ", got > 160 && got < 240, `${got}/400`);
+  }
+  // L'épuisette : l'achat, le délai, le carnet.
+  {
+    const f = mk();
+    ok("sans or, pas d'épuisette", E.resolveBuyNet(f, C.NET_PRICE - 1).reason === "noGold" && f.inv.net === 0);
+    const b = E.resolveBuyNet(f, C.NET_PRICE);
+    ok("l'achat coûte le prix affiché", b.ok && b.moneyDelta === -C.NET_PRICE && f.inv.net === 1);
+    ok("on n'en achète pas deux", E.resolveBuyNet(f, 1e9).reason === "have");
+    ok("sans épuisette, aucun coup", E.resolveNetCatch(mk(), "carp", null, 1e12, () => 0).reason === "noNet");
+    const t0 = 1.78e12;
+    const c1 = E.resolveNetCatch(f, "bfly", "paon", t0, () => 0);
+    ok("un papillon attrapé entre au carnet, nouvelle espèce", c1.caught && c1.first && f.inv.netLog.bfly.paon === 1 && c1.species === 1);
+    ok("le délai entre deux coups est tenu par l'hôte", E.resolveNetCatch(f, "bfly", "paon", t0 + 1000, () => 0).reason === "cooldown");
+    const c2 = E.resolveNetCatch(f, "carp", null, t0 + C.NET_COOLDOWN_MS, () => 0);
+    ok("une carpe attrapée se compte (et reste relâchée : rien d'autre ne change)", c2.caught && f.inv.netLog.carp === 1 && (f.inv.fish[0] | 0) === 0);
+    ok("une espèce inventée est refusée", E.resolveNetCatch(f, "bfly", "dragon", t0 + 1e6, () => 0).reason === "kind");
+    const miss = E.resolveNetCatch(f, "carp", null, t0 + 2e6, () => 0.99);
+    ok("un coup raté ne compte rien", miss.ok && !miss.caught && f.inv.netLog.carp === 1);
+  }
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(`\n${fails === 0 ? "✅" : "❌"} ${total - fails}/${total} contrôles passés.\n`);
 process.exit(fails === 0 ? 0 : 1);

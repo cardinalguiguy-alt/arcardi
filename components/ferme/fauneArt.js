@@ -1307,6 +1307,40 @@ export function drawFlyShadow(ctx, x, y, span, alt, alpha) {
   ctx.fillRect(Math.round(x - w / 6), Math.round(y - h / 2) - 1, Math.max(1, Math.round(w / 3)), h + 2);
   ctx.globalAlpha = a0;
 }
+/* 2026-09-26 — LE COUP D'ÉPUISETTE (dessin local, `swingNet` dans
+   FermeGame.js). De l'épaule (`sx, sy`) vers la bête (`tx, ty`), en px d'art ;
+   `u` de 0 à 1 : le filet part levé derrière la tête, décrit un arc et tombe
+   sur la cible (fin en douceur). Un manche de frêne d'un pixel, un cerceau vu
+   de biais, et la poche du filet qui traîne derrière le cerceau. */
+export function drawNetSwing(ctx, sx, sy, tx, ty, u) {
+  const e = 1 - Math.pow(1 - Math.min(1, u), 2.2);
+  const dir = tx >= sx ? 1 : -1;
+  // L'arc : départ levé derrière l'épaule, point haut au-dessus du milieu, arrivée sur la bête.
+  const x0 = sx - dir * 5, y0 = sy - 11, cx = (sx + tx) / 2, cy = Math.min(sy, ty) - 16;
+  const q = (a, b, c) => (1 - e) * (1 - e) * a + 2 * (1 - e) * e * b + e * e * c;
+  const hx = q(x0, cx, tx), hy = q(y0, cy, ty);
+  const a0 = ctx.globalAlpha;
+  // Le manche : de la main (un peu devant l'épaule) au cerceau.
+  const mx = sx + dir * 2, my = sy + 2, L = Math.max(1, Math.ceil(Math.hypot(hx - mx, hy - my)));
+  ctx.fillStyle = "#7a5230";
+  for (let i = 0; i <= L; i++) ctx.fillRect(Math.round(mx + (hx - mx) * i / L), Math.round(my + (hy - my) * i / L), 1, 1);
+  // La poche du filet : un pan clair qui traîne derrière le mouvement.
+  const bx = Math.round(hx - dir * 2), by = Math.round(hy + 2);
+  ctx.globalAlpha = a0 * 0.6; ctx.fillStyle = "#ece6d8";
+  ctx.fillRect(bx - 2, by, 5, 2); ctx.fillRect(bx - 1 - dir, by + 2, 3, 2); ctx.fillRect(bx - dir * 2, by + 4, 2, 1);
+  // Le cerceau, vu de biais : une ellipse de pixels, cerclée de sombre dessous.
+  // ⚠️ R = 3,2 au premier jet : vu en jeu, à peine un point clair au-dessus de
+  // la tête pendant un geste d'un demi-seconde — un geste doit se LIRE.
+  ctx.globalAlpha = a0;
+  const R = 4.6, done = new Set();
+  for (let i = 0; i < 28; i++) {
+    const ang = (i / 28) * 6.283, px = Math.round(hx + Math.cos(ang) * R), py = Math.round(hy + Math.sin(ang) * R * 0.55);
+    const k = px * 4096 + py; if (done.has(k)) continue; done.add(k);
+    ctx.fillStyle = Math.sin(ang) > 0.3 ? "#6a5a48" : "#d6ccb8";
+    ctx.fillRect(px, py, 1, 1);
+  }
+  ctx.globalAlpha = a0;
+}
 /* Un rond dans l'eau : une ellipse de pixels (l'eau est vue de biais). */
 export function drawRipple(ctx, x, y, r, alpha, col) {
   if (r <= 0 || alpha <= 0.01) return;

@@ -5068,9 +5068,9 @@ export const TOWN_BITMAPS = {
   church:     { grid: "screen", day: "/town/eglise-day", glow: "/town/eglise-glow", zooms: [1, 2, 3, 4, 5],
                 disp: 192, dispH: 183, grow: 1.1, smooth: false,
                 lights: [
-                  { x: 318 / 634, y: 560 / 604, ground: 598 / 604, r: 2.4, c: "door", k: 0.6 },
-                  { x: 212 / 634, y: 520 / 604, ground: 598 / 604, r: 1.9, c: "window", k: 0.55 },
-                  { x: 426 / 634, y: 520 / 604, ground: 598 / 604, r: 1.9, c: "window", k: 0.55 },
+                  { x: 318 / 634, y: 560 / 604, ground: 598 / 604, r: 2.4, c: "door", k: 0.6, room: "nave" },
+                  { x: 212 / 634, y: 520 / 604, ground: 598 / 604, r: 1.9, c: "window", k: 0.55, room: "aisle" },
+                  { x: 426 / 634, y: 520 / 604, ground: 598 / 604, r: 1.9, c: "window", k: 0.55, room: "aisle" },
                 ],
                 ref: "refs/eglise-nouvelle.jpg", build: "tools/build-eglise-sprite.mjs" },
   townhall:   { grid: "screen", day: "/town/townhall-day", glow: "/town/townhall-glow", zooms: [1, 2, 3, 4, 5],
@@ -5078,8 +5078,8 @@ export const TOWN_BITMAPS = {
                 lights: [
                   { x: 241 / 634, y: 424 / 571, ground: 500 / 571, r: 2.6, head: 2.6 },
                   { x: 388 / 634, y: 424 / 571, ground: 500 / 571, r: 2.6, head: 2.6 },
-                  { x: 133 / 634, y: 420 / 571, ground: 500 / 571, r: 1.9, c: "window", k: 0.55 },
-                  { x: 491 / 634, y: 420 / 571, ground: 500 / 571, r: 1.9, c: "window", k: 0.55 },
+                  { x: 133 / 634, y: 420 / 571, ground: 500 / 571, r: 1.9, c: "window", k: 0.55, room: "office-w" },
+                  { x: 491 / 634, y: 420 / 571, ground: 500 / 571, r: 1.9, c: "window", k: 0.55, room: "office-e" },
                 ],
                 ref: "refs/hdv.jpg", build: "tools/build-townhall-sprite.mjs" },
   /* Le tribunal garde `TOWN_COURT_SPRITE` comme GRILLE DE REPÈRES (384 × 356) :
@@ -5092,14 +5092,16 @@ export const TOWN_BITMAPS = {
      et la porte PEINTES, en fractions de l'image — `x`, `y` le verre,
      `ground` le sol sous lui (où se pose la flaque), `r` en cases, `head` le
      rayon du verre en px de la grille d'affichage. Relevées sur la peinture au
-     cran 3, comme les perchoirs des pigeons. */
+     cran 3, comme les perchoirs des pigeons. `room` (phase 6c) : la pièce de
+     `LUM.MONUMENT_WINDOWS` dont la flaque suit l'heure — sans elle, allumée
+     toute la nuit (lanternes). */
   courthouse: { grid: "screen", day: "/town/courthouse-day", glow: "/town/courthouse-glow", zooms: [1, 2, 3, 4, 5],
                 disp: TOWN_COURT_SPRITE.disp, dispH: TOWN_COURT_SPRITE.ih * TOWN_COURT_SPRITE.disp / TOWN_COURT_SPRITE.iw,
                 grow: TOWN_COURT_SPRITE.grow, smooth: false,
                 lights: [
                   { x: 202 / 845, y: 488 / 783, ground: 552 / 783, r: 3.2, head: 2.6 },
                   { x: 645 / 845, y: 488 / 783, ground: 552 / 783, r: 3.2, head: 2.6 },
-                  { x: 423 / 845, y: 520 / 783, ground: 556 / 783, r: 2.2, c: "door", k: 0.7 },
+                  { x: 423 / 845, y: 520 / 783, ground: 556 / 783, r: 2.2, c: "door", k: 0.7, room: "hall" },
                 ],
                 ref: "refs/tributribu.jpg", build: "tools/build-tribunal-sprite.mjs" },
   /* Les herbes hautes (Gemini, 2026-09-20) : une famille de PNG tirée par
@@ -6075,6 +6077,12 @@ export const TOWN_BRIDGE_SPLIT_Y = 38;
    l'écran. Le personnage se retrouve alors DANS l'ouvrage, entre les deux
    garde-corps, ce qui est précisément ce qu'on cherchait. */
 export const TOWN_BRIDGE_DROP_PX = 16;
+/* 2026-09-26 — le reflet du pont : l'axe du miroir (la ligne d'eau au pied de
+   l'arche) est à tant de px au-dessus du bas du sprite. Réglé en jeu : à 6, le
+   miroir retombait presque tout entier sous le sprite (la moitié proche ne
+   fait que 16 px, dont la bande grise du dessous) et seuls 4 px de garde-corps
+   atteignaient l'eau visible — un filet sombre, pas un reflet. */
+export const TOWN_BRIDGE_REFL_UP = 3;
 
 /* ═══════════════════════════════════════════════════════════════════════════
    ZIP 441 — LA PROFONDEUR SORT DE LA CLOSURE, PARCE QU'ELLE ÉTAIT FAUSSE ET
@@ -7378,6 +7386,29 @@ export const LEO_UPSELL_MS = 5200;
    par une `req` déjà existante (l'or est arbitré par l'hôte, comme tout achat) ;
    le reste est purement local et dérivé du temps de jeu partagé, comme les
    rembarrages de Carla à Leo (CARLA_SCOLD_MS). */
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ 2026-09-26 — LE CHAT QU'ON NOURRIT, ET L'ÉPUISETTE (retours de Guillaume
+   ║ après vingt minutes de jeu).
+   ╚══════════════════════════════════════════════════════════════════════════
+   Formes validées par Guillaume : le chat devient fidèle À CHAQUE JOUEUR et
+   « utile » (il rapporte parfois un petit poisson) ; l'épuisette s'achète au
+   marché « pour l'instant » (une boutique d'objets de plage viendra), les
+   prises sont relâchées, un carnet par joueur compte les papillons par espèce
+   et les carpes. Aucun or à la clé du carnet.
+   ⚠️ TOUT VIT DANS `f.inv` (net, catMilk, netLog) : c'est la partie du fermier
+   qui voyage déjà vers son client à chaque `apply` (setMyInv), et elle est
+   déclarée dans `normalizeFarmer` — un champ non déclaré s'y perdrait. Aucune
+   migration SQL : c'est le JSON de `ferme_saves`. */
+export const CAT_COATS = ["roux", "noir", "tricolore"];   // les trois chats de la ville (faune.js, FAUNA_CATS) : la clé de fidélité
+export const CAT_BOND_DAYS = 3;          // trois jours DIFFÉRENTS de lait : le chat vous a adopté
+// (le lait qu'il accepte : `ANIMAL_MILK`, pris par `takeMilk` — vache, puis chèvre ; pas de seconde liste)
+export const CAT_GIFT_ODDS = 0.5;        // un chat fidèle qui vient vous voir rapporte un gardon une fois sur deux…
+export const CAT_GIFT_FISH = 0;          // … le gardon (FISH[0]) : un geste, pas une rente — une fois par jour et par chat
+export const NET_PRICE = 300;            // l'épuisette, au marché (or de la caisse commune, comme tout achat)
+export const NET_COOLDOWN_MS = 2200;     // un coup d'épuisette toutes les 2,2 s au plus (arbitré par l'hôte)
+export const NET_ODDS = { carp: 0.4, bfly: 0.55 };   // chance d'attraper (tirée par l'hôte)
+export const NET_REACH = { carp: 2.6, bfly: 1.3 };   // portée, en cases, du pied du joueur à la bête (carpe : 1,9 au premier jet — vu en jeu, les carpes gardent le large, jamais à portée depuis la berge)
+export const FAUNA_BFLY_COUNT = 6;     // les espèces du carnet (BFLY_SPECIES, faune.js — comparé par verify-faune)
 export const TOWN_WISH_COST = 25;              // pièce jetée dans la fontaine
 export const TOWN_WISH_COOLDOWN_MS = DAY_REAL_MS; // un vœu par jour de jeu et par joueur
 export const TOWN_WISH_GOLD_MIN = 0, TOWN_WISH_GOLD_MAX = 400; // ce que la fontaine rend, parfois

@@ -393,5 +393,34 @@ console.log("§6 — Les dessins : tailles et rapports (l'échelle unique, déci
   ok("pigeons : aucun pixel au bord (le piège du 433)", pe === 0, `${pe} poses`);
 }
 
+/* ═══ 2026-09-26 — LE CHAT FIDÈLE, ET LA LISTE DES PAPILLONS DU CARNET ═══ */
+{
+  ok("le carnet connaît les mêmes papillons que la faune", JSON.stringify(E.FAUNA_BFLY_SPECIES) === JSON.stringify(F.BFLY_SPECIES) && C.FAUNA_BFLY_COUNT === F.BFLY_SPECIES.length,
+    `${E.FAUNA_BFLY_SPECIES.join(",")} / ${F.BFLY_SPECIES.join(",")}`);
+  ok("les chats du lait sont les chats de la ville", JSON.stringify([...C.CAT_COATS].sort()) === JSON.stringify(["noir", "roux", "tricolore"]));
+  // Un chat fidèle, un joueur qui MARCHE à 5 cases : le chat vient, le suit, se frotte quand il s'arrête.
+  const run = (loyal) => {
+    const S = {}, walk = () => true, rnd = () => 0.3;
+    let px = 10, py = 10, moving = true, minD = 99, rubbed = false, gift = 0, fled = false, still = 0;
+    const cat = () => ({ id: "k0", idx: 0, coat: "roux", x: 15, y: 10, face: 1, pose: "sit", moving: false, friendly: false, resting: true, restT: 9 });
+    for (let i = 0; i < 1200; i++) {
+      const dt = 0.05;
+      if (i < 200) { px += 0.8 * dt; moving = true; still = 0; } else { moving = false; still += dt; }
+      const c = cat(); const o = S.cats && S.cats.get("k0"); if (o) { c.x = o.x; c.y = o.y; }
+      const th = [{ id: "me", x: px, y: py, moving, still, loyal: loyal ? new Set(["roux"]) : null }];
+      F.faunaReactCats(S, [c], th, dt, walk, rnd);
+      minD = Math.min(minD, Math.hypot(c.x - px, c.y - py));
+      if (c.react === "rub") rubbed = true;
+      if (c.react === "flee") fled = true;
+      if (c.gift) gift++;
+    }
+    return { minD, rubbed, gift, fled };
+  };
+  const L1 = run(true), L0 = run(false);
+  ok("le chat fidèle vient au joueur qui marche, et se frotte quand il s'arrête", L1.minD < 0.8 && L1.rubbed && !L1.fled, JSON.stringify(L1));
+  ok("…et demande son cadeau UNE fois par visite", L1.gift === 1, `${L1.gift}`);
+  ok("sans fidélité, le même chat ne vient pas (il est trop loin et le joueur marche)", !L0.rubbed && L0.gift === 0, JSON.stringify(L0));
+}
+
 console.log(`\nverify-faune : ${n - fail}/${n}`);
 process.exit(fail ? 1 : 0);
