@@ -61,12 +61,16 @@ W1 à W3) · 6b gare/quai/commerces · 7 composition · 8 intérieurs.**
 
 ### ⏭️ ACTION SUIVANTE
 
-**Continuer la 6a avec les images de Guillaume** : N3, puis S2 à S4, W1 à W3 (prompts prêts,
-`refs/prompts-maisons.md` ; étroites avec `maison-n1.jpg` en 4e référence). Chaque modèle : relever porte /
+**Continuer la 6a avec les images de Guillaume**, qui remplit `refs/` petit à petit, dans l'ordre du
+tableau en tête de `refs/prompts-maisons.md` (réécrit le 2026-09-26 : BASE commune 6a/6b, porte imposée
+au tiers gauche — une porte centrée sort de l'emprise standard —, N3 sans enrichie, W2/W3 sur W1). Chaque
+modèle : relever porte /
 pied / mur / vitres sur l'image simple (vitre = verre mesuré + 4 px ; lanterne = son verre seul) → entrée
 de `TOWN_HOUSE_MODELS` → `build-maison-sprites` → planche → jeu. ⚠️ Tous les modèles d'une largeur ont
 la MÊME emprise (tenu par `verify-vallee`) : sinon, arbitrer avec lui. Les parcelles LARGES n'existent pas
-encore : les créer (par position, comme les étroites) le jour où W1 arrive. Puis **6b**. Le cheval de
+encore : les créer (par position, comme les étroites, en passe FINALE du générateur) le jour où W1 arrive.
+⚠️ Les larges ne tiennent pas à l'échelle commune (8 cases = 1 221 px de référence, Gemini rend en 1 085) :
+échelle par modèle DÉRIVÉE DE SA PORTE. Puis **6b** (gare, Garfield, salon ; le quai en procédural). Le cheval de
 bataille reste : lui faire JOUER phases 1-5, météo, 6c et 6a en vraie séance.
 ⚠️ Dette laissée : les dix façades procédurales (`townHouseVariant`, `S.townHouses`, fermeArt.js) sont
 encore fabriquées au chargement sans plus être dessinées en ville — `verify-lumiere` lit leurs fenêtres ;

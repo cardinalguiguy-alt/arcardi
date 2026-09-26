@@ -1,105 +1,167 @@
-# Prompts Gemini — les maisons de Valley Town (phase 6a, 2026-09-26)
+# Prompts Gemini — les maisons de Valley Town (6a) et la gare, les boutiques (6b)
 
 Une maison par image (une planche de dix ferait ~300 px par maison, flou au zoom 5).
 
-⚠️ **DÉCIDÉ AVEC GUILLAUME LE 2026-09-26 : TROIS VERSIONS POUR CHACUNE DES DIX MAISONS** — simple, enrichie (plus de caractère, JAMAIS plus pauvre), riche —
-(trente images), répartis **PAR QUARTIER** — riches autour de la place et de la mairie, enrichies vers le
-port et les bords, simples entre les deux. Une pure fonction de la position de la parcelle : rien de
-sauvegardé, rien de diffusé. Les trois variantes d'une maison ont la MÊME silhouette (porte, fenêtres,
-lucarnes, cheminée, emprise au même endroit) : un seul relevé de repères et une seule collision par
-maison ; chaque variante n'apporte que son image et son calque de nuit.
+## CE QUI RESTE À PRODUIRE (réécrit le 2026-09-26, nuit — dans cet ordre)
 
-**Nommage** : `refs/maison-<code>.jpg` (simple), `refs/maison-<code>-enrichie.jpg`, `refs/maison-<code>-riche.jpg`.
-Le modèle de tout le reste est S1 : `maison-s1.jpg`, `maison-s1-enrichie.jpg`, `maison-s1-riche.jpg`.
-⚠️ **UNE SEULE ÉCHELLE POUR TOUTES LES MAISONS** (`TOWN_HOUSE_SCALE`, déduite de la porte des anciennes
-maisons : 26 px d'art pour le cadre de porte de S1), jamais une échelle par maison ajustée à sa parcelle.
-Gemini dessine toutes les maisons à ~970 px de haut, donc chaque image se mesure à cette échelle commune.
-N1 (rapport 0,91 au lieu des 0,55 demandés) y a un rez-de-chaussée de 4 cases — elle tient une parcelle
-étroite, ses étages débordent au-dessus du jardin.
-**Intégrer une nouvelle maison** : une entrée dans `TOWN_HOUSE_MODELS` (fermeConstants.js — porte, pied du
-mur, mur, cadre et vitres relevés sur l'image simple), puis `node tools/build-maison-sprites.mjs`, puis la
-planche `tools/out/maisons.png`, puis le jeu (menu dev, « les maisons de la vieille ville »).
+| # | Modèle | 4e image jointe | À enregistrer dans `refs/` |
+|---|---|---|---|
+| 1 | N3 | `maison-n1.jpg` | `maison-n3.jpg`, `maison-n3-riche.jpg` — **pas d'enrichie** |
+| 2 | S2 | `maison-s1.jpg` | `maison-s2.jpg`, `maison-s2-enrichie.jpg`, `maison-s2-riche.jpg` |
+| 3 | S3 | `maison-s1.jpg` | idem en `s3` |
+| 4 | S4 | `maison-s1.jpg` | idem en `s4` |
+| 5 | W1 | `maison-s1.jpg` | idem en `w1` |
+| 6 | W2 | **`maison-w1.jpg`** (W1 validée en jeu d'abord) | idem en `w2` |
+| 7 | W3 | **`maison-w1.jpg`** | idem en `w3` |
+| 8 | GARE, MAISON GARFIELD, SALON | `maison-s1.jpg` | `gare.jpg`, `boutique-garfield.jpg`, `salon.jpg` — une image chacun |
 
-**Méthode, par maison, UNE conversation Gemini neuve :**
+⚠️ **Les étroites n'ont pas d'enrichie** : compté le 2026-09-26, les 8 parcelles étroites tombent en
+4 simples + 4 riches, aucune dans le quartier enrichi (le lac, les artisans). Les standard : 8 simples,
+4 riches, 7 enrichies — les trois versions servent.
+⚠️ **Le QUAI n'a plus de prompt** : `TOWN_PLATFORM` est une bande NORD-SUD de 2×8 cases, vue d'en haut
+le long des rails. Une façade peinte « vue de face, cinq fois plus large que haute » n'a aucun endroit où
+se poser (§4 de `CLAUDE.md` : un sprite a un sens dessiné). Il se fait en procédural, comme le quai du
+port (phase 4). ⚠️ **La BOUTIQUE DE PLAGE attend un emplacement sur la carte** : son prompt est gardé
+plus bas, à ne lancer que le jour où on lui a trouvé une place.
+
+## MÉTHODE — par maison, UNE conversation Gemini neuve
+
 1. **Simple** — joindre, dans cet ordre, `refs/hdv.jpg`, `refs/eglise-nouvelle.jpg`,
-   `refs/tributribu.jpg` (les trois monuments du jeu, TOUS DE FACE) et `refs/maison-s1.jpg` en 4e ;
-   prompt = BASE avec la ligne de la maison à la place de `<HOUSE>`.
-   ⚠️ **Étroites (N2, N3) : `refs/maison-n1.jpg` en 4e à la place de S1** (2026-09-26). Tous les modèles
-   d'une largeur doivent avoir la même emprise (`townHouseModelFoot`, tenu par `verify-vallee`) : elle
-   dépend de la largeur du mur ET de la place de la porte dans ce mur. Pour retomber sur celle de N1
-   (cases 2..5), la porte doit être au quart gauche de la façade — d'où « exactly as wide as the fourth
-   image » et « door on the LEFT » dans les lignes N2/N3.
-2. **Enrichie** — dans la même conversation, la passe ENRICHIE ci-dessous.
-3. **Riche** — dans la même conversation, en RE-JOIGNANT l'image simple (sinon Gemini part de
-   l'enrichie), la passe RICHE ci-dessous.
+   `refs/tributribu.jpg` (les trois monuments, TOUS DE FACE), puis la 4e image du tableau ; coller la
+   BASE, puis **la ligne de la maison juste après, dans le même message** (la BASE finit par
+   « THE BUILDING: »).
+2. **Enrichie** — même conversation, la passe ENRICHIE. (Pas pour N3.)
+3. **Riche** — même conversation, en RE-JOIGNANT l'image simple (sinon Gemini part de l'enrichie), la
+   passe RICHE.
 
-⚠️ Plus de `duplex.png` : premier essai (2026-09-26), Gemini a recopié son angle isométrique et rendu
-une maison de trois quarts ; les matériaux sont décrits dans le texte. S1 en 4e image sert l'échelle,
-le détail et le rendu — PAS ses couleurs, sinon les dix maisons prennent la même teinte.
-⚠️ N2 riche est sortie sur fond BLANC (2026-09-26) : `build-maison-sprites` sait la détourer (remplissage
-depuis le bord), mais le magenta reste la demande — un fond blanc mange les pâquerettes qui le touchent.
-Si une image sort encore de trois quarts, relance dans la même conversation :
-`Same house, but strictly from the front like the references: only the front façade, no side wall, no corner, no perspective.`
+Si une image sort de trois quarts, relancer dans la même conversation :
+`Same building, but strictly from the front like the references: only the front façade, no side wall, no corner, no perspective.`
+Si elle sort sur fond blanc : `Same image, but with a flat pure magenta #FF00FF background.` (N2 riche est
+sortie sur fond BLANC : `build-maison-sprites` sait la détourer par remplissage depuis le bord, mais un
+fond blanc mange les pâquerettes qui le touchent.)
 
-## ENRICHIE (2e image de chaque maison)
-⚠️ Guillaume, 2026-09-26 : PAS une maison plus vieille ni plus pauvre. La version du milieu est la même
-maison avec plus de CARACTÈRE et de détail — une patine qui a du charme (c'est ce qu'a donné
-`maison-s1-enrichie.jpg`), jamais une ruine : ni carreau cassé, ni ardoise manquante, ni rouille.
-```
-Keep exactly this house: same angle, same silhouette, same size and same position of every opening (door, windows, dormers, chimney). Only the finish changes. Make it richer in detail and full of character, a well-loved home with a charming patina, closer to the rendering depth of the reference buildings: slates with subtle colour variation, soft shading under the eaves and the jetty, timber with visible grain and gentle wear, walls with a soft painted finish and slight tonal variation, a little moss at the foot of the walls and on the plinth, a little ivy climbing from the ground at one corner, one more small flower box. Not older, not poorer, nothing broken, nothing missing, no rust, no dirt stains. Keep the same colours. Keep the pure magenta #FF00FF background.
-```
+## POURQUOI CHAQUE LIGNE IMPOSE LA PLACE DE LA PORTE (pour l'intégration)
 
-## RICHE (3e image de chaque maison, en re-joignant l'image simple)
-```
-Start again from this attached image (the plain version of the house). Keep exactly this house: same angle, same silhouette, same size and same position of every opening (door, windows, dormers, chimney). Only the finish changes. Make it the home of a well-off family, clean and well kept: fresh paint on the timber and woodwork, discreet decorative painted motifs, wooden shutters and curtains behind the upper windows, a finer panelled front door with brass fittings and a carved stone surround, a copper gutter, generous flower boxes, two potted plants or small stone statues on the plinth beside the door, a flowering climber at one corner. No dirt, no moss. Flowers in white, yellow, red and blue only: no pink, no purple, no magenta anywhere on the house. Keep the pure magenta #FF00FF background.
-```
+La collision d'une parcelle vient de sa LARGEUR, jamais du modèle : tous les modèles d'une largeur ont la
+même emprise (`townHouseModelFoot`, tenu par `verify-vallee`). Elle dépend de la largeur du mur du
+rez-de-chaussée ET de la place de la porte dans ce mur (l'image se cale sur la porte).
+- **Standard** (S1 : mur 102..998, porte 399) : la porte est au **tiers gauche** du mur. Tolérance à
+  l'échelle commune : de la porte au bord gauche du mur 245..397 px de référence, au bord droit
+  520..671 px — soit une porte entre 27 % et 43 % du mur. **Une porte centrée tombe hors tolérance**
+  (d'où S3, qui était « symétrique », réécrite).
+- **Étroite** (N1 : mur 206..882, porte 393) : la porte au **quart gauche** — « door on the LEFT ».
+- **Large** : la PREMIÈRE, W1, fixe la règle (porte au tiers gauche, imposée dans sa ligne) ; W2 et W3
+  la copient en prenant W1 en 4e image.
+⚠️⚠️ **LES LARGES NE TIENNENT PAS À L'ÉCHELLE COMMUNE** (`TOWN_HOUSE_SCALE` = 26/248) : 8 cases y font
+1 221 px de référence, et Gemini rend en 1 085 px de large. À l'arrivée de W1, une échelle PAR MODÈLE,
+**dérivée de sa porte** (26 px d'art / hauteur du cadre de porte), à défaut de la commune — le principe
+de l'échelle unique est que la PORTE garde la même hauteur partout, et c'est exactement ce que ça tient.
+**Intégrer une nouvelle maison** : une entrée dans `TOWN_HOUSE_MODELS` (fermeConstants.js — porte, pied du
+mur, mur, cadre et vitres relevés sur l'image simple ; vitre = verre mesuré + 4 px, lanterne = son verre
+seul), puis `node tools/build-maison-sprites.mjs`, puis la planche `tools/out/maisons.png`, puis le jeu
+(menu dev, « les maisons de la vieille ville »).
 
-## BASE
-```
-Detailed pixel-art painting of ONE modest village house, for a 2D top-down town game.
+⚠️ **DÉCIDÉ AVEC GUILLAUME LE 2026-09-26 : trois versions par maison** — simple, enrichie (plus de
+caractère, JAMAIS plus pauvre), riche — réparties **PAR QUARTIER** (riches autour de la place et de la
+mairie, enrichies vers le lac et les artisans, simples entre les deux ; pure fonction de la position).
+Les trois versions d'une maison ont la MÊME silhouette : un seul relevé de repères, une seule collision.
+⚠️ Plus de `duplex.png` : premier essai, Gemini a recopié son angle isométrique. La 4e image sert
+l'échelle, le détail et le rendu — PAS ses couleurs ni sa forme, sinon toutes les maisons se ressemblent.
 
-REFERENCES: the three attached images are buildings from the same game. Match them exactly for camera angle, rendering style, pixel finesse, outline thickness, colour richness and lighting. Use them ONLY for style and angle: the house must be a humble two-storey dwelling, much smaller and simpler than these monuments. If a fourth image is attached (another house of the same town), match its scale, level of detail, weathering and lighting exactly too, but NOT its colours: this house has its own materials and colours, described below.
+## BASE (maisons ET bâtiments de la 6b ; la ligne du bâtiment se colle juste après)
+```
+Detailed pixel-art painting of ONE modest building of a village, for a 2D top-down town game.
+
+REFERENCES: the first three attached images are buildings from the same game. Match them exactly for camera angle, rendering style, pixel finesse, outline thickness, colour richness and lighting. Use them ONLY for style and angle: this building is modest, much smaller and simpler than these monuments. The fourth attached image is another building of the same town: match its scale, door size, level of detail, weathering and lighting exactly too, but NOT its colours and NOT its shape: this building has its own shape, materials and colours, described at the end.
 
 CAMERA: strictly the same as the references, a FRONT ELEVATION. The front façade is flat and parallel to the picture plane. The side walls are completely hidden: no building corner, no second façade, no perspective, no vanishing lines; every vertical line perfectly vertical, every horizontal line perfectly horizontal. The only depth cue is a slight top-down tilt that shows the front slope of the roof. NOT isometric, NOT three-quarter view, NOT seen from a corner.
 
-THE HOUSE: <HOUSE>
+DETAILS: an old European harbour town. This is the ORDINARY version of the building: lived-in and decently kept, neither neglected nor luxurious (no moss, no broken parts, no ornaments). A gutter and drainpipe, window sills, a flower box with white and yellow flowers, a small wall lamp beside the door, a doormat.
 
-DETAILS: an old European harbour town. This is the ORDINARY version of the house: lived-in and decently kept, neither neglected nor luxurious (no moss, no broken parts, no ornaments). A gutter and drainpipe, window sills, a flower box with white and yellow flowers, a small wall lamp beside the door, a doormat.
-
-FRAMING: the whole building is visible and centred, nothing cropped (chimneys included), standing on a thin strip of stone plinth. No ground, no garden, no trees, no hedges, no fence, no people, no text, no signs.
+FRAMING: the whole building is visible and centred, nothing cropped (chimneys included), standing on a thin strip of stone plinth. No ground, no garden, no trees, no hedges, no fence, no people. No text and no letters anywhere: any signboard stays blank.
 
 LIGHT: daytime. Windows: dark blue-grey glass, unlit. Light comes from the upper left.
 
-BACKGROUND: flat, uniform, pure magenta #FF00FF everywhere around the house. No checkerboard (even though the references have one), no gradient, no floor, no cast shadow on the background. No pink or magenta anywhere on the house itself. High resolution.
+BACKGROUND: flat, uniform, pure magenta #FF00FF everywhere around the building. No checkerboard (even though the references have one), no gradient, no floor, no cast shadow on the background. No pink or magenta anywhere on the building itself. High resolution.
+
+THE BUILDING (this description wins over everything above):
 ```
 
-## Étroites (4 cases)
-- **N1** a tall narrow house, about 55% as wide as it is tall. Its gable end faces the street, under a steep dark slate roof. Stone ground floor with an arched wooden front door. Two jettied half-timbered upper floors (dark oak beams, warm ochre infill), each overhanging the one below. One small chimney.
-- **N2** a tall narrow house squeezed between two neighbours, in pale dressed stone, clearly taller than wide and exactly as wide as the house in the fourth image. Two windows wide on the upper floors. On the ground floor the front door is on the LEFT, under the left column of windows, with one window on the right: the door is NOT centred. Hipped roof in brown flat tiles with a single dormer. Sage-green wooden shutters on every window. Half-timbering only in the small attic gable of the dormer. A plain wooden door with a stone lintel. Do not copy the shape of the fourth house: no jetty, no gable facing the street.
-- **N3** a tall narrow stone house squeezed between two neighbours, clearly taller than wide and exactly as wide as the house in the fourth image, two windows wide, with a small round stair turret on its front RIGHT corner topped by a pointed conical slate cap with a little iron finial. Narrow slit windows climbing the turret. On the ground floor the front door is on the LEFT, not centred. The top floor is half-timbered with grey-green beams and cream infill. Dark slate roof, one chimney. Do not copy the shape of the fourth house: no jetty, no gable facing the street.
+## ENRICHIE (2e image de chaque maison, sauf les étroites)
+⚠️ Guillaume, 2026-09-26 : PAS une maison plus vieille ni plus pauvre. La même maison avec plus de
+CARACTÈRE et de détail — une patine qui a du charme, jamais une ruine. ⚠️ L'ancienne version parlait
+d'« ardoises » et d'« encorbellement » : sur une chaumière ou une maison sans encorbellement, Gemini
+risquait d'en AJOUTER un. Elle dit maintenant « la couverture » et « chaque débord ».
+```
+Keep exactly this house: same angle, same silhouette, same size and same position of every opening (door, windows, dormers, chimney). Only the finish changes. Make it richer in detail and full of character, a well-loved home with a charming patina, closer to the rendering depth of the reference buildings: a roof covering with subtle colour variation, soft shading under the eaves and every overhang, timber with visible grain and gentle wear, walls with slight tonal variation (stone stays stone, timber stays timber), a little moss at the foot of the walls and on the plinth, a little ivy climbing from the ground at one corner, one more small flower box. Add no architectural element: no new jetty, gable, dormer, window or chimney. Not older, not poorer, nothing broken, nothing missing, no rust, no dirt stains. Keep the same colours. Keep the flat pure magenta #FF00FF background.
+```
 
-## Standard (6 cases)
-- **S1** about as wide as it is tall. Its eaves run parallel to the street, so the roof ridge is a horizontal line seen from the front. Rubble-stone ground floor. Half-timbered upper floor with Saint Andrew's crosses (oxblood-red beams, ochre infill). Blue-grey slate roof with two dormers, and a stone chimney rising at the right end of the roof. Wooden front door slightly left of centre.
-- **S2** a stone cottage, about as wide as it is tall, under a thick rounded thatched roof with a grassy ridge and neatly trimmed eaves. One eyebrow dormer set into the thatch. Low wooden door under a heavy stone lintel, small deep-set windows with wooden frames, a stone chimney rising through the thatch.
-- **S3** a small manor-like house, about as wide as it is tall, in light stone. Red-brown tiled roof with gently flared eaves. Stone mullioned windows, symmetrical façade, three stone steps up to a panelled front door with a small fanlight. Half-timbering limited to a small side gable. Two chimneys.
-- **S4** an asymmetrical house, about as wide as it is tall. Stone ground floor. Half-timbered upper floor (dark brown beams, pale ochre infill) with a projecting wooden bay window resting on carved wooden corbels. Off-centre gable facing the street, dark slate roof, a small slate canopy over the front door on two wooden brackets.
+## RICHE (3e image de chaque maison, en re-joignant l'image simple)
+⚠️ « Keep the small wall lamp » : N2 riche l'avait remplacée par une plaque de laiton — rien ne s'allumait
+plus à sa porte la nuit.
+```
+Start again from this attached image (the plain version of the house). Keep exactly this house: same angle, same silhouette, same size and same position of every opening (door, windows, dormers, chimney). Only the finish changes. Make it the home of a well-off family, clean and well kept: fresh paint on the timber and woodwork, discreet decorative painted motifs, wooden shutters and curtains behind the upper windows, a finer panelled front door with brass fittings and a carved stone surround, a copper gutter if the roof has a gutter, generous flower boxes, two potted plants or small stone statues on the plinth beside the door, a flowering climber at one corner. Keep the small wall lamp beside the door. Add no architectural element: no new dormer, gable, window or chimney. No dirt, no moss. Flowers in white, yellow, red and blue only: no pink, no purple, no magenta anywhere on the house. Keep the flat pure magenta #FF00FF background, not white.
+```
 
-## Larges (8 cases)
-- **W1** a long, low stone farmhouse (a Breton-style "longère"), about 1.3 times as wide as it is tall. One storey plus attic, dark slate roof with three dormers, stone chimneys at both gable ends. On one side, a lower attached barn wing with a big double wooden door. The front door of the house is in the main body, not in the barn.
-- **W2** an L-shaped house, about 1.3 times as wide as it is tall. A stone main body with its long side to the street. A half-timbered wing (grey-green beams, cream infill) whose gable faces the street. A covered wooden gallery with a balustrade on the upper floor, running along the stone body. Blue-grey slate roofs, one front door at ground level in the stone body.
-- **W3** a large half-timbered house, about 1.3 times as wide as it is tall, with two twin steep gables facing the street. Stone ground floor, jettied half-timbered upper floor (dark oak beams, warm ochre infill), dark slate roof. A covered wooden porch over the single front door, centred between the two gables.
+## Étroites (4 cases) — 4e image : `maison-n1.jpg`
+- **N1** (en jeu) a tall narrow house, about 55% as wide as it is tall. Its gable end faces the street, under a steep dark slate roof. Stone ground floor with an arched wooden front door. Two jettied half-timbered upper floors (dark oak beams, warm ochre infill), each overhanging the one below. One small chimney.
+- **N2** (en jeu) a tall narrow house squeezed between two neighbours, in pale dressed stone, clearly taller than wide and exactly as wide as the house in the fourth image. Two windows wide on the upper floors. On the ground floor the front door is on the LEFT, under the left column of windows, with one window on the right: the door is NOT centred. Hipped roof in brown flat tiles with a single dormer. Sage-green wooden shutters on every window. Half-timbering only in the small attic gable of the dormer. A plain wooden door with a stone lintel. Do not copy the shape of the fourth house: no jetty, no gable facing the street.
+- **N3**
+```
+a tall narrow stone house squeezed between two neighbours, clearly taller than wide and exactly as wide as the house in the fourth image, two windows wide on the upper floors. A small round stair turret on its front RIGHT corner, topped by a pointed conical slate cap with a little iron finial, with narrow slit windows climbing it. On the ground floor the front door is on the LEFT, at the same place and the same size as the door of the fourth house: NOT centred. The top floor is half-timbered with grey-green beams and cream infill. Dark slate roof, one chimney. No jetty, no gable facing the street.
+```
+
+## Standard (6 cases) — 4e image : `maison-s1.jpg`
+- **S1** (en jeu) about as wide as it is tall. Its eaves run parallel to the street, so the roof ridge is a horizontal line seen from the front. Rubble-stone ground floor. Half-timbered upper floor with Saint Andrew's crosses (oxblood-red beams, ochre infill). Blue-grey slate roof with two dormers, and a stone chimney rising at the right end of the roof. Wooden front door slightly left of centre.
+- **S2**
+```
+a stone cottage, about as wide as it is tall and exactly as wide as the house in the fourth image, under a thick rounded thatched roof with a grassy ridge and neatly trimmed eaves. One eyebrow dormer set into the thatch. The front door is a sturdy wooden door under a heavy stone lintel, left of centre at about one third of the façade from the left, at the same place and the same size as the door of the fourth house. One small deep-set window to the left of the door and two to its right, with wooden frames. A stone chimney rising through the thatch. No gutter and no drainpipe: the thatch overhangs instead.
+```
+- **S3**
+```
+a small "maison de maître" in light dressed stone, about as wide as it is tall and exactly as wide as the house in the fourth image, orderly and well proportioned. Two storeys of tall stone-mullioned windows in four regular columns. Three stone steps lead up to a panelled front door with a small fanlight: the door takes the place of the ground-floor window in the SECOND column from the left, so it stands left of centre, at the same place and the same size as the door of the fourth house. Red-brown flat-tiled roof with gently flared eaves, two chimneys, and a small half-timbered dormer gable on the right of the roof.
+```
+- **S4**
+```
+an asymmetrical house, about as wide as it is tall and exactly as wide as the house in the fourth image. Stone ground floor; half-timbered upper floor with dark brown beams and pale ochre infill. The front door is left of centre, at about one third of the façade from the left, at the same place and the same size as the door of the fourth house, under a small slate canopy on two wooden brackets. On the right half, an off-centre gable facing the street, with a projecting wooden bay window on the upper floor resting on carved wooden corbels. Dark slate roof.
+```
+
+## Larges (8 cases) — 4e image : `maison-s1.jpg` pour W1, puis `maison-w1.jpg` pour W2 et W3
+- **W1**
+```
+a long, low stone farmhouse (a Breton-style "longère"), about 1.6 times as wide as it is tall, one storey plus attic. The main house takes the LEFT two thirds of the façade, with its front door in the middle of that part, so the door stands at about one third of the whole façade from the left, NOT centred; one window on each side of the door and three dormers in the dark slate roof above. The RIGHT third is a lower attached barn wing with a big double wooden barn door (not the entrance). Stone chimneys at both gable ends of the main house.
+```
+- **W2**
+```
+an L-shaped house, exactly as wide as the house in the fourth image, with its front door at the same place and the same size, at about one third of the façade from the left, NOT centred. The LEFT two thirds: a two-storey stone main body with its long side to the street, the front door in the middle of it at ground level, and a covered wooden gallery with a balustrade running along its upper floor. The RIGHT third: a half-timbered wing with grey-green beams and cream infill, whose steep gable faces the street. Blue-grey slate roofs.
+```
+- **W3**
+```
+a large half-timbered house, exactly as wide as the house in the fourth image, with its front door at the same place and the same size, at about one third of the façade from the left, NOT centred. Two twin steep gables facing the street, side by side. Stone ground floor, jettied half-timbered upper floor with dark oak beams and warm ochre infill, dark slate roof. A covered wooden porch over the single front door, which stands under the LEFT gable, towards its right side.
+```
 
 ---
 
-# Phase 6b — la gare, le quai et les commerces (mêmes références, même méthode)
+# Phase 6b — la gare et les commerces (même BASE, même méthode, une seule image chacun)
 
-Même BASE que les maisons, en remplaçant « ONE village house » par « ONE building » et la ligne
-`The house:` par celle du bâtiment. ⚠️ **Enseignes VIERGES** (« a blank signboard, no letters ») :
-le jeu écrit les noms lui-même, dans les deux langues — un texte cuit dans l'image ne se traduit pas.
-Joindre aussi, en 3e image, une maison 6a validée si elle existe (échelle et palette communes).
+⚠️ **Enseignes VIERGES** : le jeu écrit les noms lui-même, dans les deux langues — un texte cuit dans
+l'image ne se traduit pas (§4 de `CLAUDE.md`). 4e image : `maison-s1.jpg` (échelle et porte communes).
+Emprises sur la carte : gare 4×3 (`TOWN_STATION`), Maison Garfield 8×5 (`TOWN_BOUTIQUE`), salon 7×4
+(`TOWN_SALON`) — l'image se calera sur leur porte, comme les maisons.
 
-- **GARE** (≈ 1,6 fois plus large que haute) — `a small country railway station: a single-storey stone building with a slate roof and a wide timber canopy on cast-iron columns over the platform side, a round station clock under the gable, a ticket window, a bench and a luggage trolley under the canopy, a blank signboard (no letters) on the gable, the edge of a stone platform at its foot. No tracks, no train.`
-- **QUAI** (bande très large, ≈ 5 fois plus large que haute) — `a long stone railway platform seen from the front: dressed stone edge with a white painted safety line, two cast-iron lamp posts, a wooden bench, a few crates and milk churns. Nothing else, no tracks, no building.`
-- **MAISON GARFIELD, chapelier et tailleur** (≈ 1,6 fois plus large que haute) — `an elegant little clothing and hat shop in stone and dark green painted wood: a large shop window with small panes showing hats on stands and a tailor's dummy, a glazed shop door with a bell, a striped fabric awning (green and cream), a blank hanging signboard (no letters), flower boxes, an upper floor with one half-timbered gable.`
-- **SALON DE COIFFURE** (≈ 1,75 fois plus large que haute) — `a small barber and hairdresser shop: stone ground floor, a red-white-blue striped barber's pole beside the door, a shop window with a mirror and a leather chair visible inside, a short blue awning, a blank signboard (no letters), a half-timbered upper floor with one window.`
-- **BOUTIQUE D'OBJETS DE PLAGE** (moyen terme, Guillaume ; ≈ 1,4 fois plus large que haute) — `a seaside shop in whitewashed stone and sea-blue wood: nets, buckets, spades, fishing nets on poles and a rack of straw hats displayed outside, a striped blue-white awning, a blank signboard (no letters), a small balcony above.`
+- **GARE**
+```
+a small country railway station, about 1.6 times as wide as it is tall: a single-storey stone building with a slate roof and a wide timber canopy on cast-iron columns along its front, a round station clock under the gable, a ticket window, a bench and a luggage trolley under the canopy, a blank signboard with no letters on the gable. No tracks, no train, no platform.
+```
+- **MAISON GARFIELD, chapelier et tailleur**
+```
+an elegant little clothing and hat shop, about 1.6 times as wide as it is tall, in stone and dark green painted wood: a large shop window with small panes showing hats on stands and a tailor's dummy, a glazed shop door with a bell, a striped fabric awning in green and cream, a blank hanging signboard with no letters, flower boxes, an upper floor with one half-timbered gable.
+```
+- **SALON DE COIFFURE**
+```
+a small barber and hairdresser shop, about 1.75 times as wide as it is tall: stone ground floor, a red-white-blue striped barber's pole beside the door, a shop window with a mirror and a leather chair visible inside, a short blue awning, a blank signboard with no letters, a half-timbered upper floor with one window.
+```
+- **BOUTIQUE D'OBJETS DE PLAGE** — ⚠️ à ne lancer qu'une fois son emplacement choisi (moyen terme, Guillaume)
+```
+a seaside shop, about 1.4 times as wide as it is tall, in whitewashed stone and sea-blue wood: nets, buckets, spades, fishing nets on poles and a rack of straw hats displayed outside, a striped blue-white awning, a blank signboard with no letters, a small balcony above.
+```
