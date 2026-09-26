@@ -22441,11 +22441,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           };
           // ── Les colverts.
           const ducks = FAU.faunaDucks(fw, env);
-          FAU.faunaReactDucks(SL, fw, ducks, threats, foodF, fdt);
+          FAU.faunaReactDucks(SL, fw, ducks, threats, foodF, fdt, env.t);
           for (const d of ducks) {
             if (!inView(d.x, d.y, 2)) continue;
             const cell = d.kind === "duck" ? (FAS.duck[d.robe] && FAS.duck[d.robe][d.pose]) : FAS.duckling[d.pose];
             const gx = d.x * T, gy = d.y * T;
+            /* 2026-09-26 — À TERRE (les colverts sortent sur la berge) : ni
+               sillage ni ligne d'eau, une ombre au sol, l'altitude de la case. */
+            if (d.land) {
+              const de = elAt(Math.floor(d.x), Math.floor(d.y));
+              pushE(gy, de, () => { groundShadow(gx, gy, d.kind === "duck" ? 9 : 4, 0.16); blitF(cell, gx, gy, d.face); }, 0, Math.floor(d.x));
+              continue;
+            }
             const hx = d.face, spd = d.moving ? Math.min(1, 0.4 + (d.spd || 0.5)) : 0;
             const ring = d.ring;
             pushE(gy - 3, 0, () => {
@@ -23032,7 +23039,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         /* 2026-09-26 (phase 5) — les lucioles : une lumière minuscule au sol (au
            plus faible), et leur éclat (`sparks`) posé après le ciel. */
         for (const g of faunaGlow) if (!g.refl) lights.push({ x: g.x / T, y: g.y / T, r: 0.32, c: "firefly", k: g.k * 0.5 });
-        drawLight(lights, heads, waterNight, faunaGlow);
+        drawLight(lights, heads, waterNight, faunaGlow, faunaEnvNow);
       }
       flushNameTags();
       // Zip 427 : la passe finale des bulles (voir queueTownBubble).
@@ -26079,7 +26086,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        `heads` : verres allumés { x, y (px monde), r (px d'art), k }.
        À appeler avec la transformation de la CAMÉRA en place (celle de la
        boucle de dessin) ; elle est rendue telle quelle. */
-    function drawLight(lights, heads, waterNight, sparks) {
+    function drawLight(lights, heads, waterNight, sparks, motesEnv) {
       const lf = lightFrameRef.current || { occluders: [], glows: [], screenGlows: [], lights: [], heads: [] };
       lightFrameRef.current = null;
       const sky = skyNow();
@@ -26101,6 +26108,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       for (const l of lf.lights) allLights.push({ x: wx(l.sx), y: wy(l.sy), r: l.r, c: l.c, k: l.k });
       const allHeads = (heads || []).slice();
       for (const h of lf.heads) allHeads.push({ x: wx(h.sx), y: wy(h.sy), r: h.rs / zm, k: h.k });
+      /* 2026-09-26 — les insectes autour des verres allumés (Valley Town
+         seulement : `motesEnv` est l'environnement de la faune de la ville). */
+      if (motesEnv) sparks = (sparks || []).concat(FAU.lampMotes(motesEnv, allHeads));
       lightRendererRef.current.draw(ctx, { zm, Rx, Ry, W: canvas.width, H: canvas.height }, {
         sky, night: nightAlpha() / LUM.NIGHT_MAX, lights: allLights, heads: allHeads, occluders, glows, screenGlows, sparks: sparks || [],
       });

@@ -1,5 +1,33 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-26
 
+## 2026-09-26 (soir) — RETOUCHES DE LA FAUNE (hors phases)
+
+Trois demandes de Guillaume après avoir vu la phase 5, livrées ensemble (vu en jeu, échafaudage local :
+étang de 7h à 8h, étang et bois du sud-est à 23h).
+- **Colverts redessinés sur photos** (Wikimedia Commons : un couple sur une berge, un mâle qui nage, une
+  cane dans une flaque) : 14 px de corps, 16 cerne compris — la longueur du goéland argenté, vrai rapport.
+  Mâle : tête verte à reflet, collier étroit, poitrail châtain, flancs pâles vermiculés sous les tertiaires,
+  miroir bleu, arrière noir, queue blanche, boucle. Cane : chamois à chevrons clairsemés, calotte et raie
+  de l'œil sombres, joue claire, bec orange à selle noire. Cerne teinté (le noir mangeait le dessin).
+- **Ils sortent de l'étang** : un créneau sur cinq, de 7h à 20h, hors orage, la cane mène le groupe sur la
+  BERGE (`faunaWorld` : cases praticables à plat, ni dallées ni pontées, à moins de 2,6 cases de l'eau,
+  `odist` = distance au bord de l'eau ∪ berge) et les suiveurs la suivent ; trajet par l'eau jusqu'à la
+  « porte » de la place, puis à pied. Six poses à terre (marche en deux temps, brouter, se tenir, se
+  coucher) et les canetons à pattes. Une réaction ne les pousse jamais hors de l'eau ni de la berge. Les
+  quatre groupes sortent (9 % du temps compté par le banc).
+- **Lucioles** : le parc passe de 34 à 22 ; le bois du sud-est reçoit douze essaims (15 à 20) posés dans
+  ses CLAIRIÈRES, lues sur la carte (les arbres de la ville sont `tw.objects`, pas des props). Le premier
+  se synchronise certaines nuits.
+- **Insectes des lampadaires** (`lampMotes`, faune.js ; dessinés dans la passe de lumière, lumiere.js) :
+  des points qui tournent autour de chaque verre allumé, avec de temps en temps une « fusée » (l'orbite
+  s'étire et revient, avec une traînée d'un pixel) ; densité par lampe fondue sur des fenêtres de 40 s
+  (certaines lampes rien, d'autres un nuage de 8) ; pas l'hiver ni sous l'orage, peu à l'automne. Pure
+  fonction du temps : les deux joueurs voient le même nuage.
+⚠️ **À juger en jeu** : la taille du colvert (16 px, après « trop grand » à 17 et « pas assez détaillé » à
+14), la cane qui broute (la tête se lit mal brun sur brun), la fréquence des sorties, la visibilité des
+insectes (volontairement discrets). Le passage eau → berge change de sprite d'un coup (le corps « monte »
+de trois pixels : il sort de l'eau). **Pas de manipulation Supabase.**
+
 ## 2026-09-26 — PHASE 5 : LA FAUNE
 
 Décisions de Guillaume : routines PARTAGÉES sans message + réactions locales ; six espèces aux lieux

@@ -197,6 +197,67 @@ export function faunaWorld(tw) {
   if (pond[0]) duckSites.push({ key: "pondN", cells: zone(pond[0].cells, null, 0.7), family: false });
   reedZones.forEach((r, i) => duckSites.push({ key: "reeds" + i, cells: zone(lakeCells, r, 1.0), family: false, lake: true }));
   for (const s of duckSites) s.roost = roostCells(s.cells, sd, W, tw);
+
+  /* LA BERGE DES COLVERTS (2026-09-26, Guillaume : « ils doivent pouvoir
+     sortir et entrer dans l'étang librement »). Les cases de terre où un
+     canard a le droit de marcher : praticables, à plat (altitude 0 : un quai
+     ou un mur de soutènement ne se gravit pas en se dandinant), ni dallées ni
+     pontées, sans décor posé, et à moins de 2,6 cases de l'eau. `duckOk` =
+     l'eau ∪ cette berge ; `odist` est la distance au bord de cet ensemble
+     (même construction que `sd`), c'est elle qui retient un canard à terre
+     comme `wdist` le retient dans l'eau. */
+  const navB = E.townNav(tw);
+  const propB = new Set((tw.props || []).map((p) => p.y * W + p.x));
+  const duckLand = new Uint8Array(N);
+  for (let i = 0; i < N; i++) {
+    if (wet[i] || sd[i] < -2.6) continue;
+    const g = tw.ground[i];
+    if (g === C.G_PATH_STONE || g === C.G_BRIDGE || tw.solid[i] || propB.has(i)) continue;
+    if (tw.elev && tw.elev[i]) continue;
+    if (!navB || !navB.walk[i]) continue;
+    duckLand[i] = 1;
+  }
+  const okAt = (x, y) => (x < 0 || y < 0 || x >= W || y >= H ? 0 : wet[y * W + x] || duckLand[y * W + x]);
+  const od = new Float32Array(N);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = y * W + x;
+    if (!okAt(x, y)) { od[i] = -0.5; continue; }
+    let best = 3;
+    for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (!okAt(x + dx, y + dy)) best = Math.min(best, Math.hypot(dx, dy));
+    od[i] = best - 0.5;
+  }
+  const odAt = (x, y) => (x < 0 || y < 0 || x >= W || y >= H ? -0.5 : od[y * W + x]);
+  const odist = (x, y) => {
+    const fx = x - 0.5, fy = y - 0.5, x0 = Math.floor(fx), y0 = Math.floor(fy), ax = fx - x0, ay = fy - y0;
+    return (odAt(x0, y0) * (1 - ax) + odAt(x0 + 1, y0) * ax) * (1 - ay) + (odAt(x0, y0 + 1) * (1 - ax) + odAt(x0 + 1, y0 + 1) * ax) * ay;
+  };
+  /* Les places de berge d'un groupe : une case de berge assez loin de tout
+     obstacle (`odist`), sa porte d'eau (la case de la zone la plus proche) et
+     un trajet porte → place qui ne quitte jamais l'ensemble `duckOk`. */
+  for (const s of duckSites) {
+    s.bank = [];
+    if (!s.cells.length) continue;
+    const near = new Set();
+    for (const j of s.cells) {
+      const x = j % W, y = (j / W) | 0;
+      for (let dy = -5; dy <= 5; dy++) for (let dx = -5; dx <= 5; dx++) {
+        const xx = x + dx, yy = y + dy;
+        if (xx >= 0 && yy >= 0 && xx < W && yy < H && duckLand[yy * W + xx]) near.add(yy * W + xx);
+      }
+    }
+    for (const j of [...near].sort((a, b) => a - b)) {
+      const L = { x: j % W + 0.5, y: ((j / W) | 0) + 0.5 };
+      if (odist(L.x, L.y) < 0.9) continue;
+      let e = -1, ed = 1e9;
+      for (const c of s.cells) { const d = Math.hypot(c % W + 0.5 - L.x, ((c / W) | 0) + 0.5 - L.y); if (d < ed) { ed = d; e = c; } }
+      if (ed > 4.5) continue;
+      const Ep = { x: e % W + 0.5, y: ((e / W) | 0) + 0.5 };
+      const n = Math.ceil(ed / 0.2);
+      let clear = true;
+      for (let k = 0; k <= n && clear; k++) { const u = k / n; if (odist(Ep.x + (L.x - Ep.x) * u, Ep.y + (L.y - Ep.y) * u) < 0.35) clear = false; }
+      if (clear) s.bank.push({ x: L.x, y: L.y, land: true, ex: Ep.x, ey: Ep.y });
+    }
+  }
   const fishSites = pond.map((p, i) => ({ key: i ? "pondS" : "pondN", cells: zone(p.cells, null, 0.5) })).filter((s) => s.cells.length);
 
   /* LE PORT : le quai de pierre au bord du lac (les cases dallées dont la
@@ -237,9 +298,47 @@ export function faunaWorld(tw) {
 
   // Les lucioles : l'étang, les roselières, la lisière du bois, le cimetière.
   const ffZones = [];
-  if (pond.length) ffZones.push({ key: "pond", x: C.TOWN_POND.cx + 0.5, y: C.TOWN_POND.cy + 0.5, rx: 6.5, ry: 5.5, n: 34, sync: true });
+  /* ⚠️ 2026-09-26, Guillaume : « plus grand nombre dans la zone sauvage sud-est,
+     un peu moins dans le parc ». Le parc passe de 34 à 22 ; le bois reçoit
+     des ESSAIMS dans ses clairières, lus sur la carte (voir plus bas). */
+  if (pond.length) ffZones.push({ key: "pond", x: C.TOWN_POND.cx + 0.5, y: C.TOWN_POND.cy + 0.5, rx: 6.5, ry: 5.5, n: 22, sync: true });
   reedZones.forEach((r, i) => ffZones.push({ key: "reeds" + i, x: r.x + r.w / 2, y: lakeTop - 1.5, rx: 7, ry: 3, n: 18 }));
-  for (let k = 0; k < 3; k++) ffZones.push({ key: "wood" + k, x: C.TOWN_WOOD.x + 8 + k * 20, y: C.TOWN_WOOD.y - 1, rx: 8, ry: 3.5, n: 18 });
+  /* LE BOIS DU SUD-EST : l'emprise des deux bois (`TOWN_WOOD` et sa moitié
+     nord). Une luciole vit au ras du sol, dans les CLAIRIÈRES et les lisières
+     plus qu'au cœur des fourrés : on note chaque point d'une grille de 3 cases
+     par l'ouverture de son voisinage (cases sans arbre, sans eau, sans mur),
+     puis on garde les meilleures, espacées d'au moins 7 cases. La première
+     est l'essaim « qui se synchronise » certaines nuits, comme l'étang. */
+  {
+    const WA = C.TOWN_WOOD_NORTH_AREA, WB = C.TOWN_WOOD;
+    const x0 = Math.min(WA.x, WB.x), y0 = Math.min(WA.y, WB.y), x1 = Math.max(WA.x + WA.w, WB.x + WB.w), y1 = Math.max(WA.y + WA.h, WB.y + WB.h);
+    // Les arbres de la ville sont des OBJETS de case (`tw.objects`), pas des props.
+    const tree = tw.objects || new Uint8Array(N);
+    const cand = [];
+    for (let y = y0 + 1; y < y1 - 1; y += 3) for (let x = x0 + 1; x < x1 - 1; x += 3) {
+      let open = 0, trees = 0, bad = 0;
+      for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
+        const xx = x + dx, yy = y + dy;
+        if (xx < 0 || yy < 0 || xx >= W || yy >= H) { bad++; continue; }
+        const i = yy * W + xx;
+        // Un tronc occupe plus d'une case solide : toute case solide du bois compte comme du bois.
+        if (wet[i]) bad++;
+        else if (tree[i] || tw.solid[i]) trees++;
+        else open++;
+      }
+      // Il faut du bois autour (sinon ce n'est pas une clairière, c'est un pré) et de l'air au milieu.
+      if (trees < 6 || bad > 12) continue;
+      cand.push({ x: x + 0.5, y: y + 0.5, sc: open - bad * 2 + (fh(x, y, 83) % 5) });
+    }
+    cand.sort((a, b) => b.sc - a.sc || a.y - b.y || a.x - b.x);
+    const picked = [];
+    for (const c of cand) {
+      if (picked.length >= 12) break;
+      if (picked.some((q) => Math.hypot(q.x - c.x, q.y - c.y) < 7)) continue;
+      picked.push(c);
+    }
+    picked.forEach((c, k) => ffZones.push({ key: "wood" + k, x: c.x, y: c.y, rx: 4.5, ry: 3.2, n: k < 4 ? 20 : 15, sync: k === 0 }));
+  }
   const graves = (tw.props || []).filter((p) => p.kind === "grave");
   if (graves.length) {
     let gx = 0, gy = 0; for (const g of graves) { gx += g.x; gy += g.y; }
@@ -249,7 +348,7 @@ export function faunaWorld(tw) {
   // Les sauts de poisson : au port et dans la passe, en eau profonde.
   const deep = zone(lakeCells, null, 2.2);
 
-  const v = { W, H, wet, sd, wdist, comp, pond, duckSites, fishSites, quay, pier, floats, soar, portRect, fishStalls,
+  const v = { W, H, wet, sd, wdist, odist, duckLand, comp, pond, duckSites, fishSites, quay, pier, floats, soar, portRect, fishStalls,
               cats, flowers, flowerGrid, bflyHomes, ffZones, deep, pathCache: new Map() };
   FW_CACHE.w = tw; FW_CACHE.v = v;
   return v;
@@ -385,6 +484,16 @@ function duckLeader(fw, env, site, si, t) {
   const targetOf = (k) => {
     const tm = tminAt(env, (k * DUCK_SLOT) * 1000);
     const asleep = duckAsleep(tm) && site.roost.length;
+    /* À TERRE, un créneau sur cinq environ, de jour et hors orage : la place
+       est tirée sur la berge du groupe (voir faunaWorld). Tirage INDÉPENDANT
+       par créneau, comme tout le reste — un canard peut enchaîner deux
+       créneaux à terre, ou replonger aussitôt. */
+    if (!asleep && !env.stormy && site.bank && site.bank.length && tm >= DUCK_LAND_FROM && tm < DUCK_LAND_TO && fh(seed, k, 61) % 100 < DUCK_LAND_PCT) {
+      const b = site.bank[fh(seed, k, 63) % site.bank.length];
+      const j = ((fh(seed, k, 67) >>> 4) % 100) / 100 - 0.5, j2 = ((fh(seed, k, 67) >>> 12) % 100) / 100 - 0.5;
+      const P = { x: b.x + j * 0.5, y: b.y + j2 * 0.5, land: true, ex: b.ex, ey: b.ey };
+      return fw.odist(P.x, P.y) >= 0.6 ? P : b;
+    }
     const cells = asleep ? site.roost : site.cells;
     // La nuit, la place ne change qu'une fois toutes les onze minutes : on dort.
     const kk = asleep ? 100000 + Math.floor(k / 40) : k;
@@ -392,7 +501,53 @@ function duckLeader(fw, env, site, si, t) {
     if (fw.wdist(P.x, P.y) < margin) { const j = cells[fh(seed, kk, 5) % cells.length]; return { x: j % W + 0.5, y: ((j / W) | 0) + 0.5 }; }
     return P;
   };
-  return slotMove(t, DUCK_SLOT, targetOf, (A, B) => waterPath(fw, site.cells, A, B, margin), DUCK_SPEED, 0.6);
+  /* Le trajet : par l'eau jusqu'à la « porte » de la place de berge, puis à
+     pied, tout droit (le tracé porte → place a été vérifié à la construction).
+     Deux places de berge voisines se rejoignent à pied sans repasser par l'eau. */
+  const wp = (A, B) => waterPath(fw, site.cells, A, B, margin);
+  const pathOf = (A, B) => {
+    if (!A.land && !B.land) return wp(A, B);
+    if (A.land && B.land && segOk(fw, A, B)) return [A, B];
+    const pre = A.land ? [A] : [], post = B.land ? [B] : [];
+    const a2 = A.land ? { x: A.ex, y: A.ey } : A, b2 = B.land ? { x: B.ex, y: B.ey } : B;
+    return [...pre, ...wp(a2, b2), ...post];
+  };
+  return slotMove(t, DUCK_SLOT, targetOf, pathOf, DUCK_SPEED, 0.6);
+}
+function segOk(fw, A, B) {
+  const L = Math.hypot(B.x - A.x, B.y - A.y), n = Math.max(1, Math.ceil(L / 0.2));
+  for (let i = 0; i <= n; i++) { const u = i / n; if (fw.odist(A.x + (B.x - A.x) * u, A.y + (B.y - A.y) * u) < 0.35) return false; }
+  return true;
+}
+/* Sortir de l'eau : un créneau sur cinq, de 7h à 20h. */
+const DUCK_LAND_PCT = 20, DUCK_LAND_FROM = 7 * 60, DUCK_LAND_TO = 20 * 60;
+/* Est-on à terre ? La flottaison se lit sur la distance à la rive : un canard
+   dont le corps touche le fond de la berge (moins de 0,15 case d'eau) marche. */
+export const duckOnLand = (fw, x, y) => fw.wdist(x, y) < 0.15;
+/* Les poses à terre : brouter (le plus souvent), se tenir, se coucher dans
+   l'herbe, et le coup d'œil. Par fenêtres de 4 s, comme sur l'eau. */
+function duckLandRestPose(seed, t) {
+  const w = Math.floor(t / 4), u = t - w * 4, h = fh(seed, w, 53) % 100;
+  if (h < 45) return (Math.floor(u / 0.35) + (fh(seed, w, 57) & 1)) % 3 === 0 ? "graze2" : "graze";
+  if (h < 70) return "stand";
+  return "rest";
+}
+/* La démarche : les pattes alternent, avec un temps d'appui entre deux pas. */
+function duckWalkPose(t, mi) { const ph = Math.floor(t * 6 + mi) & 3; return ph === 0 ? "walk" : ph === 2 ? "walk2" : "stand"; }
+/* La pose d'un canard qui a CHANGÉ de milieu après sa réaction (poussé sur la
+   berge ou rentré dans l'eau par un écart) : on ne garde jamais une pose de
+   l'autre milieu. */
+export function duckFixPose(d, t) {
+  if (d.kind === "duck") {
+    const landPose = d.pose === "stand" || d.pose === "walk" || d.pose === "walk2" || d.pose === "graze" || d.pose === "graze2" || d.pose === "rest";
+    // Un canard qui se déplace à terre (routine ou écart de réaction) marche toujours.
+    if (d.land && (d.moving || !landPose)) d.pose = d.moving ? duckWalkPose(t || 0, d.id.length) : "stand";
+    else if (!d.land && landPose) d.pose = "swim";
+  } else {
+    const base = d.kind, walkP = d.pose.includes("W");
+    if (d.land && !walkP) d.pose = base + (Math.floor((t || 0) * 5) & 1 ? "W2" : "W");
+    else if (!d.land && walkP) d.pose = base;
+  }
 }
 /* L'activité d'un canard au repos, par tranches de 3 s : nager sur place
    (la plupart du temps), barboter, se lisser les plumes, regarder. */
@@ -454,21 +609,31 @@ export function faunaDucks(fw, env) {
         const ox = Math.cos(a) * ring * g, oy = Math.sin(a) * ring * 0.8 * g;
         /* ⚠️ Trop près de la rive, l'écart RÉTRÉCIT — continûment (un seuil
            ferait sauter le caneton d'un demi-pas : trouvé par verify-faune §1). */
-        const q = clamp((fw.wdist(st.x + ox, st.y + oy) - 0.45) / 0.3, 0, 1);
+        /* À terre, c'est le bord de la berge (`odist`) qui resserre l'écart, pas la rive. */
+        const q = st.B && st.B.land && duckOnLand(fw, st.x, st.y)
+          ? clamp((fw.odist(st.x + ox, st.y + oy) - 0.4) / 0.3, 0, 1)
+          : clamp((fw.wdist(st.x + ox, st.y + oy) - 0.45) / 0.3, 0, 1);
         x = st.x + ox * q; y = st.y + oy * q;
       }
       const seed = fh(si, mi, 7);
       const kind = robe === "tiny" || robe === "young" ? robe : "duck";
+      const land = duckOnLand(fw, x, y);
       let pose;
-      // En nageant : le coup de patte au rythme de la vitesse (≈ 2 Hz en croisière).
-      if (st.moving) pose = kind === "duck" ? ((Math.floor(t * (1.4 + 1.5 * Math.min(1, st.spd / DUCK_SPEED)) + mi) & 1) ? "swim2" : "swim") : (Math.floor(t * 3.2 + mi) & 1 ? kind + "2" : kind);
       let splash = -1;
-      if (!st.moving) {
-        if (kind === "duck") { const rp = duckRestPose(seed, t, asleep); pose = rp.pose; splash = rp.ring; }
-        else pose = asleep ? kind : (Math.floor(t * 1.1 + mi) & 1 ? kind + "2" : kind);
+      if (land) {
+        // À terre : la démarche en marchant, et au repos brouter, se tenir, se coucher.
+        if (kind === "duck") pose = st.moving ? duckWalkPose(t, mi) : duckLandRestPose(seed, t);
+        else pose = kind + ((st.moving ? Math.floor(t * 5 + mi) : Math.floor(t * 0.8 + mi)) & 1 ? "W2" : "W");
+      } else {
+        // En nageant : le coup de patte au rythme de la vitesse (≈ 2 Hz en croisière).
+        if (st.moving) pose = kind === "duck" ? ((Math.floor(t * (1.4 + 1.5 * Math.min(1, st.spd / DUCK_SPEED)) + mi) & 1) ? "swim2" : "swim") : (Math.floor(t * 3.2 + mi) & 1 ? kind + "2" : kind);
+        if (!st.moving) {
+          if (kind === "duck") { const rp = duckRestPose(seed, t, asleep); pose = rp.pose; splash = rp.ring; }
+          else pose = asleep ? kind : (Math.floor(t * 1.1 + mi) & 1 ? kind + "2" : kind);
+        }
       }
       out.push({ id, site: si, robe, kind, x, y, face: st.hx < -0.05 ? -1 : st.hx > 0.05 ? 1 : (fh(seed, st.k, 3) & 1 ? 1 : -1),
-                 moving: st.moving, spd: st.spd, pose, ring: splash, lake: !!site.lake });
+                 moving: st.moving, spd: st.spd, pose, ring: splash, lake: !!site.lake, land });
     });
   });
   return out;
@@ -610,6 +775,66 @@ export function faunaFireflies(fw, env, view) {
       out.push({ id: "f" + zi + "." + i, x, y, alt, k });
     }
   });
+  return out;
+}
+
+/* ── 7 bis. LES INSECTES DES LAMPADAIRES (2026-09-26) ─────────────────────
+   Guillaume : « des petits insectes autour des lampadaires allumés — toutes
+   petites fusées de lumière, parfois, pas toujours, et pas toujours avec la
+   même densité » ; « convaincant mais pas trop détaillé ».
+   Ce qui fait un nuage de papillons de nuit sous une lampe, à cette échelle :
+   - des points qui TOURNENT autour du verre, vite (2 à 5 rad/s), chacun sur
+     son orbite aplatie, dans les deux sens ;
+   - de temps en temps un ÉCART brusque (l'insecte file puis revient) : c'est
+     la « fusée », un point qui laisse une traînée d'un pixel ;
+   - ils ne brillent que dans la lumière : plus loin du verre, plus ternes ;
+     et le battement d'ailes les fait scintiller.
+   La densité est une pure fonction du temps et de la lampe (fenêtres de 40 s
+   fondues l'une dans l'autre) : certaines lampes n'ont rien, d'autres trois
+   insectes, d'autres un vrai nuage — et ça change au fil de la nuit. Pas de
+   bête l'hiver, peu à l'automne, aucune sous la pluie d'orage. Rien de
+   partagé à régler : les deux joueurs voient le même nuage (même heure).
+   `heads` : les verres allumés { x, y (px d'art), r } ; rend des points
+   { x, y, x2, y2 (la traînée), k } en px d'art, pour la passe de lumière. */
+const MOTH_SEASON = { spring: 0.6, summer: 1, autumn: 0.35, winter: 0 };
+const MOTH_WIN = 40, MOTH_MAX = 8;
+export function lampMotes(env, heads) {
+  const out = [];
+  if (!env || env.stormy) return out;
+  const sf = MOTH_SEASON[env.season] || 0;
+  if (sf <= 0) return out;
+  const t = env.t;
+  for (const hd of heads || []) {
+    const lx = Math.round(hd.x), ly = Math.round(hd.y);
+    const seed = (lx * 73856093) ^ (ly * 19349663);
+    // L'activité de cette lampe : deux tirages voisins fondus (jamais un saut).
+    const w = Math.floor(t / MOTH_WIN), u = smooth(0.7, 1, t / MOTH_WIN - w);
+    const act = (k) => { const h = fh(seed, k, 131) % 100; return h < 38 ? 0 : h < 70 ? 0.3 : h < 90 ? 0.6 : 1; };
+    const a = (act(w) * (1 - u) + act(w + 1) * u) * sf;
+    const n = a * MOTH_MAX;
+    if (n < 0.05) continue;
+    const R0 = Math.max(4, (hd.r || 2) * 2.2);
+    for (let i = 0; i < Math.ceil(n); i++) {
+      const vis = clamp(n - i, 0, 1);
+      const h = fh(seed, i, 137);
+      const dir = h & 1 ? 1 : -1;
+      const om = (2 + ((h >>> 2) % 100) / 100 * 3) * dir;
+      const rr = R0 * (0.6 + ((h >>> 9) % 100) / 100 * 1.2);
+      const ph = ((h >>> 16) % 628) / 100;
+      const pos = (tt) => {
+        // La fusée : toutes les 3 à 7 s, l'orbite s'étire d'un coup puis revient.
+        const P = 3 + (h % 5), q = ((tt + ph) % P) / P;
+        const dart = q < 0.12 ? Math.sin(Math.PI * q / 0.12) : 0;
+        const r = rr * (1 + 0.3 * Math.sin(tt * 1.7 + i) + 1.4 * dart);
+        const ang = tt * om + ph + Math.sin(tt * 2.3 + i * 1.9) * 0.6;
+        return { x: lx + Math.cos(ang) * r, y: ly + Math.sin(ang) * r * 0.7 + Math.sin(tt * 3.1 + i) * 1.2, r };
+      };
+      const p = pos(t), q = pos(t - 0.045);
+      const near = clamp(1 - p.r / (R0 * 3.2), 0.15, 1);
+      const flick = Math.sin(t * 38 + i * 2.7) > -0.3 ? 1 : 0.45;
+      out.push({ id: seed + ":" + i, x: p.x, y: p.y, x2: q.x, y2: q.y, k: vis * near * flick, mote: true });
+    }
+  }
   return out;
 }
 
@@ -905,7 +1130,7 @@ function springTo(o, tx, ty, dt, k, vmax) {
 }
 /* Les canards s'écartent en nageant d'un joueur qui s'approche de la rive ;
    ils viennent aux miettes tombées près de l'eau. Toujours dans l'eau. */
-export function faunaReactDucks(S, fw, ducks, threats, food, dt) {
+export function faunaReactDucks(S, fw, ducks, threats, food, dt, t) {
   const M = S.ducks || (S.ducks = new Map());
   /* ⚠️ L'ESPACE VITAL : au repos contre une rive, l'écart des suiveurs se
      resserre (voir faunaDucks) et la famille s'EMPILAIT — cinq canards dans le
@@ -940,17 +1165,23 @@ export function faunaReactDucks(S, fw, ducks, threats, food, dt) {
     if (pl > 1e-4) { const st = Math.min(pl, 0.35) * dt; o.ox += px / pl * st; o.oy += py / pl * st; }
     // Sans voisin trop près ni menace, l'écart revient doucement à zéro (la routine reprend la main).
     // ⚠️ Jamais hors de l'eau : on recule le pas qui mordrait la rive.
+    /* ⚠️ Jamais hors de l'eau NI hors de la berge (2026-09-26 : les canards
+       sortent à terre) : un pas est permis s'il reste dans l'eau libre, ou
+       dans l'ensemble eau ∪ berge assez loin de son bord (`odist`). */
     const m = d.kind === "tiny" ? 0.4 : 0.55;
-    if (fw.wdist(d.x + o.ox, d.y + o.oy) < m) {
+    const okP = (x, y) => fw.wdist(x, y) >= m || fw.odist(x, y) >= 0.4;
+    if (!okP(d.x + o.ox, d.y + o.oy)) {
       o.ox = ox0; o.oy = oy0;
-      if (fw.wdist(d.x + o.ox, d.y + o.oy) < m) { o.ox *= 0.9; o.oy *= 0.9; }
+      if (!okP(d.x + o.ox, d.y + o.oy)) { o.ox *= 0.9; o.oy *= 0.9; }
     }
     o.alarm += (alarm - o.alarm) * Math.min(1, dt * 4);
     d.x += o.ox; d.y += o.oy;
     const vx = o.ox - ox0;
     if (Math.abs(vx) > 0.004) d.face = vx > 0 ? 1 : -1;
-    if (o.alarm > 0.35 && d.kind === "duck" && d.pose !== "sleep") d.pose = "alert";
     if (Math.hypot(o.ox - ox0, o.oy - oy0) > 0.006) d.moving = true;
+    d.land = duckOnLand(fw, d.x, d.y);
+    if (o.alarm > 0.35 && d.kind === "duck" && d.pose !== "sleep" && !d.land) d.pose = "alert";
+    duckFixPose(d, t);
   });
 }
 /* Les carpes montent aux miettes près de l'eau (et gobent). */

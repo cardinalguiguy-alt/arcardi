@@ -375,6 +375,17 @@ export function makeLightRenderer(makeCanvas) {
     if (nk > 0.02) for (const sp of frame.sparks || []) {
       const k = Math.max(0, Math.min(1, sp.k)) * nk;
       if (k < 0.02) continue;
+      /* 2026-09-26 — les insectes des lampadaires (`lampMotes`, faune.js) : un
+         pixel d'art et, quand il file, sa traînée d'un pixel. Pas de halo : ils
+         ne brillent pas, ils ACCROCHENT la lumière de la lampe. */
+      if (sp.mote) {
+        const X = Math.round(sp.x), Y = Math.round(sp.y), X2 = Math.round(sp.x2), Y2 = Math.round(sp.y2);
+        ctx.fillStyle = "#fff0c4";
+        if (X2 !== X || Y2 !== Y) { ctx.globalAlpha = 0.35 * k; ctx.fillRect(X2 * zm - view.Rx, Y2 * zm - view.Ry, zm, zm); }
+        ctx.globalAlpha = 0.85 * k;
+        ctx.fillRect(X * zm - view.Rx, Y * zm - view.Ry, zm, zm);
+        continue;
+      }
       const R = sp.refl ? 1 : 2;
       const hx = Math.round(sp.x) - R, hy = Math.round(sp.y) - R;
       ctx.globalAlpha = 0.55 * k;

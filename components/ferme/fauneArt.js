@@ -12,8 +12,8 @@
    ⚠️⚠️ L'ÉCHELLE (décision n° 5 de Guillaume, 2026-09-26 : « le travail sur
    l'échelle est nécessaire pour un rendu réaliste ») : UNE seule échelle pour
    toutes les bêtes, calée sur le chat familier que les joueurs promènent déjà
-   en ville (≈ 11 px affichés). Chat ≈ 12 px tête comprise, colvert ≈ 13 bec
-   compris, goéland ≈ 13, pigeon ≈ 9, carpe ≈ 10. Seuls les insectes sont
+   en ville (≈ 11 px affichés). Chat ≈ 12 px tête comprise, colvert ≈ 16 bec
+   compris (troisième jet, voir § 1), goéland ≈ 13, pigeon ≈ 9, carpe ≈ 10. Seuls les insectes sont
    agrandis pour qu'on les voie. ⚠️ Et TOUT EST AU PIXEL NATIF : les pigeons
    étaient dessinés en 16 px puis réduits aux deux tiers au rendu, ce qui
    sautait un pixel sur trois — exactement ce que la phase 1 a banni des
@@ -147,187 +147,356 @@ function packAtlas(items) {
    la tête qui se tourne, la tête plongée d'un coup, le barbotage en trois
    temps (on bascule, on reste cul en l'air en pédalant, on se redresse), la
    toilette en deux gestes, le battement d'ailes dressé sur l'eau, le sommeil
-   qui respire. Les ENCHAÎNEMENTS sont dans `faune.js` (duckRestPose). */
+   qui respire. Les ENCHAÎNEMENTS sont dans `faune.js` (duckRestPose).
+   ⚠️ 2026-09-26, TROISIÈME JET, Guillaume : « il n'est pas assez détaillé,
+   cherche des photos de mâles et femelles ». Redessiné sur photos (voir
+   `DUCK_PAL`) : 14 px de corps (16 cerne compris, la longueur du goéland
+   argenté — le vrai rapport), une tête ronde à reflet, les flancs pâles
+   vermiculés sous les tertiaires, la boucle et la queue blanche du mâle, la
+   joue claire et la raie de l'œil de la cane, un cerne teinté au lieu du noir.
+   Et six poses À TERRE (marcher, brouter, se tenir, se coucher) : ils sortent
+   de l'étang. ⚠️ Deux retours opposés (« trop grand » à 17, « pas assez
+   détaillé » à 14) : si la taille gêne en jeu, c'est la palette qu'on garde
+   et le dessin qu'on resserre, pas l'inverse. */
 const DUCK_POSES = {
+  /* ── SUR L'EAU. La ligne de flottaison est sous la dernière rangée. */
   swim: [
-    ".......GG...",
-    "......GgGE..",
-    "......GGGYY.",
-    "......WCC...",
-    "KKBBBBBCCC..",
-    "WKSUSsSSC...",
-    ".KSSSSSSC...",
+    ".........gGG..",
+    "........gGhhG.",
+    "........GGeEG.",
+    ".........jjYYy",
+    ".........WW...",
+    "..q.bbBBBBCCc.",
+    "TKKPPPPUwsCCC.",
+    ".KSSsSSSsSSCC.",
+    "..SVSSVSSVSC..",
   ],
   swim2: [
-    "........GG..",
-    ".......GgGE.",
-    ".......GGGYY",
-    "......WCC...",
-    ".KBBBBBCCC..",
-    "KWSUSsSSC...",
-    ".KSSSSSSC...",
+    "..........gGG.",
+    ".........gGhhG",
+    ".........GGeEG",
+    "..........jjYY",
+    ".........WWC..",
+    ".q..bbBBBBCCc.",
+    "TKKPPPPUwsCCC.",
+    ".KSSsSSSsSSCC.",
+    "..SVSSVSSVSC..",
   ],
   look: [
-    ".......GG...",
-    "......EGgG..",
-    ".....YYGGG..",
-    "......WCC...",
-    "KKBBBBBCCC..",
-    "WKSUSsSSC...",
-    ".KSSSSSSC...",
+    ".........gGG..",
+    "........GhhGg.",
+    "......yYYEhGG.",
+    "........YGGG..",
+    ".........WW...",
+    "..q.bbBBBBCCc.",
+    "TKKPPPPUwsCCC.",
+    ".KSSsSSSsSSCC.",
+    "..SVSSVSSVSC..",
   ],
   alert: [
-    "......GG....",
-    ".....GgGE...",
-    ".....GGGYY..",
-    ".....WG.....",
-    ".....WCC....",
-    "KKBBBBCCC...",
-    "WKSUSsSC....",
-    ".KSSSSSC....",
+    "........gGG...",
+    ".......gGhhG..",
+    ".......GGeEG..",
+    "........jjYYy.",
+    "........GG....",
+    "........WW....",
+    "..q.bbBBBCCc..",
+    "TKKPPPPUwsCCC.",
+    ".KSSsSSSsSCC..",
+    "..SVSSVSSVSC..",
   ],
-  // La tête plongée : le cou sous l'eau, le corps à plat.
+  // La tête plongée : le cou sous l'eau, le corps à plat, la queue relevée.
   dip: [
-    "KK.BBBBBB..",
-    "WKSUSsSSCC.",
-    ".KSSSSSSSC.",
+    "T.q...........",
+    "KKbbBBBBBBBc..",
+    ".KPPPPUwsSCCC.",
+    "..SVSSVSSVSCC.",
   ],
   // Le barbotage : il bascule, reste cul en l'air, pédale (pattes orange), se redresse.
   tip: [
-    "K.......",
-    "KKW.....",
-    ".KUBB...",
-    "..SSsBB.",
+    "T.......",
+    "KKq.....",
+    ".KPPB...",
+    "..SUwBB.",
     "...SSSSC",
   ],
   dabble: [
-    "..KW..",
-    ".KKK..",
-    ".KUS..",
-    "..SSB.",
+    "..T...",
+    ".KKq..",
+    ".KPP..",
+    "..SUw.",
     "..SSSB",
     "...SSC",
   ],
   dabble2: [
-    ".OKWO.",
-    ".KKK..",
-    ".KUS..",
-    "..SSB.",
+    ".OTO..",
+    ".KKq..",
+    ".KPP..",
+    "..SUw.",
     "..SSSB",
     "...SSC",
   ],
+  // La toilette : le bec plongé dans les plumes du flanc, puis dans le dos.
   preen: [
-    ".....GG.....",
-    "...YYGEG....",
-    ".....GGW....",
-    "KKBBBBWCC...",
-    "WKSUSsSSC...",
-    ".KSSSSSSC...",
+    ".......gGG....",
+    "......gGhhG...",
+    "......GhEGG...",
+    ".....yYGGWC...",
+    "..q.bbBBBWCCc.",
+    "TKKPPPPUwsCCC.",
+    ".KSSsSSSsSSCC.",
+    "..SVSSVSSVSC..",
   ],
   preen2: [
-    "......BGG...",
-    "KKBBBBGEC...",
-    "WKSUSsSYC...",
-    ".KSSSSSSC...",
+    ".......gGG....",
+    ".....gGhhGC...",
+    "..q.yYEhGGCCc.",
+    "TKKPPPPUwsCCC.",
+    ".KSSsSSSsSSCC.",
+    "..SVSSVSSVSC..",
   ],
   // Le battement d'ailes : dressé sur l'eau, les ailes en haut puis en avant.
   flap: [
-    "...BB.......",
-    "...BBB..GG..",
-    "...SBBBGgGE.",
-    "....BBBGGGYY",
-    "...KBBWCC...",
-    "..WKSSSCC...",
-    "...KSSSSC...",
+    "...bB.........",
+    "..bBBP........",
+    "..bBPPw..gGG..",
+    "...BPUw.gGhhG.",
+    "....PPBBGGeEG.",
+    ".....PBB.jjYYy",
+    "..q..bBWWC....",
+    "TKK.SSSsCCC...",
+    ".KSSsSSSSCC...",
+    "..SVSSVSSC....",
   ],
   flap2: [
-    ".......GG...",
-    "......GgGE..",
-    "......GGGYY.",
-    "..BBBBWCC...",
-    "BUUSBBBCCC..",
-    "..KSSSSSC...",
+    ".........gGG..",
+    "........gGhhG.",
+    "........GGeEG.",
+    ".........jjYYy",
+    "...bBBBBBWW...",
+    "bBBPPPPUwBCCc.",
+    "..TKPsSSsSCCC.",
+    ".KSSsSSSsSSCC.",
+    "..SVSSVSSVSC..",
   ],
+  // Le sommeil : la tête tournée, le bec dans le dos, le corps qui respire.
   sleep: [
-    ".....GG.....",
-    "KKBBBGgGB...",
-    "WKSUSsSSC...",
-    ".KSSSSSSC...",
+    "......GgG.....",
+    ".q.bbBhGGGB...",
+    "TKKPPPUwsSCCc.",
+    ".KSSsSSSsSSCC.",
+    "..SVSSVSSVSC..",
   ],
   sleep2: [
-    "KKBBGGgGB...",
-    "WKSUSsSSC...",
-    ".KSSSSSSC...",
+    "......GgG.....",
+    ".q.bbBhGGGB...",
+    "TKKPPPUwsSCCc.",
+    ".KSSsSSSsSCCC.",
+    "..SVSSVSSVSC..",
+  ],
+  /* ── À TERRE (2026-09-26, second passage de Guillaume : « ils doivent pouvoir
+     sortir et entrer dans l'étang librement »). Même corps, entier cette fois :
+     le ventre (L) et les pattes orange (O/o), posé plus haut, un peu penché
+     vers l'avant. La démarche : les pattes alternent et le corps roule d'un
+     pixel. L'ancrage est entre les pattes, sur la ligne de sol. */
+  stand: [
+    ".........gGG..",
+    "........gGhhG.",
+    "........GGeEG.",
+    ".........jjYYy",
+    ".........WW...",
+    "..q.bbBBBBCCc.",
+    "TKKPPPPUwsCCC.",
+    ".KSSsSSSsSSCC.",
+    "..SVSSVSSVSC..",
+    "...LLLLLLLL...",
+    "......O.O.....",
+    ".....oo.oo....",
+  ],
+  walk: [
+    ".........gGG..",
+    "........gGhhG.",
+    "........GGeEG.",
+    ".........jjYYy",
+    ".........WW...",
+    "..q.bbBBBBCCc.",
+    "TKKPPPPUwsCCC.",
+    ".KSSsSSSsSSCC.",
+    "..SVSSVSSVSC..",
+    "...LLLLLLLL...",
+    ".....O...O....",
+    "....oo....oo..",
+  ],
+  walk2: [
+    "..........gGG.",
+    ".........gGhhG",
+    ".........GGeEG",
+    "..........jjYY",
+    ".........WW...",
+    "..q.bbBBBBCCc.",
+    "TKKPPPPUwsCCC.",
+    ".KSSsSSSsSSCC.",
+    "..SVSSVSSVSC..",
+    "...LLLLLLLL...",
+    ".......O......",
+    "......ooo.....",
+  ],
+  // Brouter l'herbe : la tête au sol, le bec qui fouille (deux temps).
+  graze: [
+    "..q.bbBBBB....",
+    "TKKPPPPUwsCC..",
+    ".KSSsSSSsSSCC.",
+    "..SVSSVSSVSCW.",
+    "...LLLLLLLLgGh",
+    "......O.O..jeE",
+    ".....oo.oo..YY",
+  ],
+  // Le bec enfoncé dans l'herbe : on ne le voit plus.
+  graze2: [
+    "..q.bbBBBB....",
+    "TKKPPPPUwsCC..",
+    ".KSSsSSSsSSCC.",
+    "..SVSSVSSVSCW.",
+    "...LLLLLLLL.W.",
+    "......O.O..gGh",
+    ".....oo.oo.jeE",
+  ],
+  // Couché dans l'herbe : pas de pattes, le ventre au sol.
+  rest: [
+    ".........gGG..",
+    "........gGhhG.",
+    "........GGeEG.",
+    ".........jjYYy",
+    ".........WW...",
+    "..q.bbBBBBCCc.",
+    "TKKPPPPUwsCCC.",
+    ".KSSsSSSsSSCC.",
+    "..LLLLLLLLLL..",
   ],
 };
-/* La femelle : MÊME dessin, autre lecture des caractères (voir `duckPal`),
-   sauf la queue sans boucle — elle n'en a pas. */
+/* LES ROBES, relues sur photos (Wikimedia Commons, 2026-09-26 : un couple posé
+   sur une berge, un mâle qui nage, une cane dans une flaque).
+   · Le MÂLE : tête verte à reflet bleu-vert (h) et calotte plus sombre (g) ;
+     bec JAUNE à onglet sombre ; collier blanc ÉTROIT ; poitrail châtain
+     pourpré ; flancs gris TRÈS PÂLES (presque blancs au soleil, finement
+     vermiculés : V) ; le dos gris-brun (B/b) et les tertiaires brun-gris qui
+     recouvrent le haut du flanc (P) ; le miroir bleu bordé de blanc (U/w) ;
+     l'arrière NOIR, la queue BLANCHE et la boucle noire relevée (q) ; le ventre
+     gris pâle (L) ; les pattes orange vif.
+   · La FEMELLE : brun chamois écaillé de brun sombre (motif au pixel, voir
+     `duckPal`) ; calotte et raie de l'œil sombres (g), joue et gorge chamois
+     pâle (h, W) ; bec ORANGE à selle noire (y) ; même miroir ; queue claire.
+   ⚠️ Le cerne n'est plus noir : un trait noir sur un sprite de 14 px mange la
+     moitié du dessin. Il prend le ton le plus sombre de la robe (`DUCK_LINE`). */
 const DUCK_PAL = {
   drake: {
-    G: "#1d5236", g: "#3f8a4c", Y: "#d8c53f", y: "#8d7f33", E: "#101010", W: "#f2f0e6",
-    C: "#6a3524", c: "#8a4a30", S: "#b4b1a6", s: "#d0cdc2", B: "#5d5549", K: "#1c1c20",
-    U: "#3d52b8", O: "#e8893a",
+    g: "#16402c", G: "#1f5e3c", h: "#3f9a78", e: "#1f5e3c", j: "#1a4a32", E: "#0c0c0c", Y: "#e6cc3c", y: "#6f6a22", W: "#f6f4ec",
+    C: "#6e2f24", c: "#8f4a34", S: "#d3d0c6", s: "#e9e6dd", V: "#b2aea3", B: "#8a7e70", b: "#6b6054",
+    P: "#a08e78", U: "#3346b4", w: "#f4f2ea", K: "#141418", q: "#141418", T: "#f2f0ea", L: "#c6c3ba",
+    O: "#f08a2a", o: "#c8641c",
   },
   hen: {
-    G: "#7a5c3c", g: "#9c7a52", Y: "#d9853a", y: "#4a3a2a", E: "#101010", W: "#8a6a48",
-    C: "#8d6a45", c: "#a8845a", S: "#8f6d47", s: "#b08a5c", B: "#5e4630", K: "#5a4230",
-    U: "#3d52b8", O: "#e8893a",
+    g: "#4a3522", G: "#8a6a48", h: "#cdb08a", e: "#3a2818", j: "#c8a87c", E: "#0c0c0c", Y: "#e8883a", y: "#2a2320", W: "#c8a87c",
+    C: "#a47a4e", c: "#bd9464", S: "#a8804f", s: "#c09560", V: "#5c4028", B: "#7a5a3a", b: "#5a4028",
+    P: "#8c6a44", U: "#3346b4", w: "#f0ece0", K: "#6a4c30", q: null, T: "#d6c2a0", L: "#c4a67c",
+    O: "#e8802c", o: "#b85e1c",
   },
-  // L'éclipse : la robe de la femelle, un peu plus sombre et unie, le bec
-  // jaune-olive du mâle et son dos gris-brun.
+  // L'éclipse : la robe de la femelle, plus sombre et plus unie, le bec
+  // jaune-olive du mâle, le poitrail roussâtre, et pas de boucle.
   drakeEclipse: {
-    G: "#5a4a34", g: "#6f5c40", Y: "#b9ae4a", y: "#6d6530", E: "#101010", W: "#7a6448",
-    C: "#6e5238", c: "#86663f", S: "#7d6546", s: "#9a7d56", B: "#4d4032", K: "#40352a",
-    U: "#3d52b8", O: "#e8893a",
+    g: "#3e3022", G: "#6e5a40", h: "#9a8262", e: "#3e3022", j: "#8a7252", E: "#0c0c0c", Y: "#bdb04a", y: "#5e5828", W: "#8a7050",
+    C: "#7a4e34", c: "#8e6040", S: "#8c7050", s: "#a2845e", V: "#5a4630", B: "#5e4a36", b: "#4a3a2a",
+    P: "#7a6246", U: "#3346b4", w: "#ece8dc", K: "#4a3a2a", q: null, T: "#b8a484", L: "#a89070",
+    O: "#e8802c", o: "#b85e1c",
   },
 };
-/* Les écailles de la femelle : un pixel sombre sur deux, en quinconce, sur les
-   flancs et le dos. À cette taille, c'est ce qui la distingue d'un mâle en
-   éclipse — sans elles, deux canards bruns identiques. */
+export const DUCK_LAND_POSES = new Set(["stand", "walk", "walk2", "graze", "graze2", "rest"]);
+const DUCK_LINE = { drake: "#1c2224", hen: "#2e2016", drakeEclipse: "#2a2018" };
+/* Les écailles de la femelle (et, plus discrètes, de l'éclipse) : un chevron
+   sombre en quinconce sur le corps. À cette taille, c'est ce qui la distingue
+   d'un mâle en éclipse — sans elles, deux canards bruns identiques. */
 function duckPal(robe) {
   const P = DUCK_PAL[robe];
   return (ch, x, y) => {
     const base = P[ch];
     if (!base) return null;
-    if (robe === "hen" && (ch === "S" || ch === "s" || ch === "B" || ch === "C") && ((x + 2 * y) % 3 === 0)) return "#4f3a26";
-    if (robe === "hen" && ch === "G" && y >= 1 && x % 2 === 0) return "#3e2e20";   // la raie de l'œil
+    if (robe !== "drake" && "SsBbCcPL".includes(ch)) {
+      /* Des chevrons CLAIRSEMÉS (un pixel sur quatre, décalé d'une rangée à
+         l'autre) : le premier jet en mettait un sur trois en diagonale, et la
+         cane se lisait comme un damier. */
+      const k = (x * 2 + y) % 4;
+      if (robe === "hen" && k === 0) return ch === "L" ? "#a88a60" : "#5e4228";
+      if (robe === "hen" && k === 2 && (ch === "S" || ch === "C" || ch === "L")) return "#c9a270";
+      if (robe === "drakeEclipse" && k === 0 && y % 2 === 0) return "#4a3826";
+    }
     return base;
   };
 }
-/* Les canetons. Printemps : une boule de duvet jaune et brun, trois fois plus
-   petite que sa mère, qui la suit en file. Été : un jeune à moitié grand, déjà
-   brun comme elle, qu'on distingue à sa taille et à son duvet encore pâle. */
+/* Les canetons. Printemps : une boule de duvet jaune et brun (dos brun, face
+   jaune, la raie de l'œil sombre), trois fois plus petite que sa mère, qui la
+   suit en file. Été : un jeune à moitié grand, déjà brun comme elle. À terre,
+   deux petites pattes, et la même démarche en deux temps. */
 const DUCKLING_POSES = {
   tiny: [
-    "..DDY",
-    ".DdE.",
-    "DDDD.",
-    "dDDd.",
+    "...dD.",
+    "..DdEY",
+    "dddDD.",
+    ".dDDD.",
   ],
   tiny2: [
-    "...DD",
+    "....dD",
+    "...DdEY",
+    "dddDD..",
+    ".dDDD..",
+  ],
+  tinyW: [
+    "...dD.",
     "..DdEY",
-    "DDDD..",
-    "dDDd..",
+    "dddDD.",
+    ".dDDD.",
+    "..O.O.",
+  ],
+  tinyW2: [
+    "....dD",
+    "...DdEY",
+    "dddDD..",
+    ".dDDD..",
+    "...O...",
   ],
   young: [
-    ".....FF.",
-    "....FfEO",
+    ".....fF.",
+    "....FhEO",
     "..FFFFF.",
     "FFsFFFF.",
     ".FFFFF..",
   ],
   young2: [
-    "......FF",
-    ".....FfEO",
+    "......fF",
+    ".....FhEO",
     "..FFFFFF.",
     ".FsFFFF..",
     "FFFFFF...",
   ],
+  youngW: [
+    ".....fF.",
+    "....FhEO",
+    "..FFFFF.",
+    "FFsFFFF.",
+    ".FFFFF..",
+    "...O.O..",
+  ],
+  youngW2: [
+    "......fF",
+    ".....FhEO",
+    "..FFFFFF.",
+    ".FsFFFF..",
+    ".FFFFF...",
+    "....O....",
+  ],
 };
 const DUCKLING_PAL = {
-  D: "#e4c65a", d: "#7c6236", Y: "#d08a3a", E: "#101010",
-  F: "#9a7a52", f: "#7a5c3c", s: "#c4a674", O: "#c9853e",
+  D: "#ecd064", d: "#7c6236", Y: "#6a5a3a", E: "#101010",
+  F: "#9a7a52", f: "#5e4630", h: "#c8ac80", s: "#c4a674", O: "#e08a3a",
 };
 
 /* ╔══════════════════════════════════════════════════════════════════════════
@@ -1141,11 +1310,13 @@ export function buildFaunaSprites() {
   for (const robe of ["drake", "hen", "drakeEclipse"]) {
     const pal = duckPal(robe);
     for (const [pose, rows] of Object.entries(DUCK_POSES)) {
-      add(`duck.${robe}.${pose}`, finish(ascii(rows, pal), pose === "dabble" || pose === "dabble2" || pose === "tip" ? 3 : 5, last(rows) + 1, "#18161a", true));
+      // À terre, le cerne fait le tour (pattes comprises) ; sur l'eau, il s'arrête à la flottaison.
+      const land = DUCK_LAND_POSES.has(pose);
+      add(`duck.${robe}.${pose}`, finish(ascii(rows, pal), pose === "dabble" || pose === "dabble2" || pose === "tip" ? 3 : 6, last(rows) + 1, DUCK_LINE[robe], !land));
     }
   }
   for (const [pose, rows] of Object.entries(DUCKLING_POSES)) {
-    add(`duckling.${pose}`, finish(ascii(rows, (ch) => DUCKLING_PAL[ch] || null), 2, last(rows) + 1, "#221c16", true));
+    add(`duckling.${pose}`, finish(ascii(rows, (ch) => DUCKLING_PAL[ch] || null), 3, last(rows) + 1, "#2e2416", !pose.endsWith("W") && !pose.endsWith("W2")));
   }
   /* Pigeons et colombes : l'ancrage est entre les pattes, sur la ligne de sol.
      ⚠️ ILS RESTENT DES CANEVAS AUTONOMES (pas dans l'atlas), avec `ground` :

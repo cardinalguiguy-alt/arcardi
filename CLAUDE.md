@@ -7,30 +7,27 @@ chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 ---
 ## ⏭️ REPRISE — SI GUILLAUME DIT SEULEMENT « REPRENDS LE TRAVAIL », C'EST ICI
 
-### 2026-09-26 — Valley Town : PHASES 0 À 5 de la feuille de route graphique livrées
+### 2026-09-26 (soir) — Valley Town : phases 0 à 5 livrées, puis RETOUCHES DE LA FAUNE (hors phases)
 
-Checklist (✅/⬜) en tête de `components/ferme/README.md`, avec le récit de chaque phase — Guillaume :
-« à chaque livraison, rappelle ce qui reste à faire ». Cadre : personnages ÉVOCATEURS (on ne les
-détaille pas) ; monde, végétation, faune, bâtiments soignés à fond. ⚠️ **Pour ce chantier, Guillaume a
-LEVÉ la règle « un seul changement visuel par livraison »** : une phase se livre d'un bloc.
-**Reste : 6 bâtiments courants · 7 composition · 8 intérieurs** (+ la météo, ci-dessous).
-- **Phase 5, la faune** — `faune.js` (comportement, pur) + `fauneArt.js` (dessins en données, un atlas) :
-  colverts (4 groupes, 14 poses et leurs enchaînements), carpes sous l'eau claire, sauts au port,
-  goélands et mouettes rieuses (vol vu d'en haut), trois chats (marché, église, port), papillons (six
-  espèces), lucioles qui éclairent et clignotent. **Routines = pures fonctions du temps partagé et de la
-  carte (les deux joueurs voient les mêmes bêtes, zéro message), réactions locales en décalage qui
-  revient à zéro.** Pigeons redessinés au pixel natif (fin du ×2/3 au rendu). Menu dev : saison de la
-  faune forcée (locale), se poser à côté d'un chat. Retours de Guillaume appliqués EN SÉANCE : colverts
-  plus petits et plus animés, carpes et lucioles plus lentes.
-- **Hors phase, fait** : les reflets des arbres au-dessus de l'écran (la file de dessin de la ville
-  commence 6 rangées plus haut que la vue, `TOWN_REFL_ROWS`).
-- Bancs le 2026-09-26 : **28/28 `verify-*`** (`verify-faune` 49/49, neuf, falsifié deux fois), **24/24
-  `render-*`**, `no-undef` propre sur les fichiers touchés, bundle et `next build` (`✓ Compiled`).
-- ⚠️ **Coût** : 0,05 ms/image de simulation (Node), 17 ms une fois au chargement de la ville. **Rien vu
-  sur un vrai iPad** (phases 3 à 5). **Pas de manipulation Supabase.**
+Checklist (✅/⬜) en tête de `components/ferme/README.md`, récit de chaque livraison juste au-dessus —
+Guillaume : « à chaque livraison, rappelle ce qui reste à faire ». Cadre : personnages ÉVOCATEURS ; monde,
+végétation, faune, bâtiments soignés à fond. ⚠️ **Pour ce chantier, la règle « un seul changement visuel
+par livraison » est LEVÉE.** **Reste : 6 bâtiments courants · 7 composition · 8 intérieurs** (+ la météo).
+- **Dernière livraison (hors phases, demandée par Guillaume)** : colverts redessinés sur PHOTOS (16 px
+  cerne compris = le goéland, vrai rapport ; cerne teinté), qui SORTENT de l'étang sur la berge (un créneau
+  sur cinq de 7h à 20h ; `odist`/`duckLand`/`site.bank` dans `faunaWorld`, six poses à terre) ; lucioles
+  34 → 22 au parc, douze essaims dans les clairières du bois du sud-est ; insectes autour des lampadaires
+  allumés (`lampMotes`, densité variable par lampe et dans la nuit). Vu en jeu (étang le matin, étang et
+  bois à 23h).
+- Bancs ce jour-là : **28/28 `verify-*`** (`verify-faune` 57/57, contrôles neufs falsifiés), **24/24
+  `render-*`**, `no-undef` propre, bundle, `next build` (`✓ Compiled`). **Rien vu sur un vrai iPad**
+  (phases 3 à 5). **Pas de manipulation Supabase.**
 
 ### Toujours ouvert — livré, jamais jugé par Guillaume en vraie séance
 
+- **Les retouches de la faune** : la taille du colvert (16 px, après « trop grand » à 17 et « pas assez
+  détaillé » à 14), la cane qui broute (tête brun sur brun), la fréquence des sorties, les insectes des
+  lampes (discrets exprès).
 - **Les phases 1 à 5 de Valley Town**, à jouer. Phase 5 : les enchaînements des colverts, la taille des
   bêtes, la fréquence des gestes gratuits (le chat qui salue, les goélands du pêcheur), les papillons
   (assez visibles ?), la synchronisation des lucioles certaines nuits. **Pas fait en phase 5** : l'éclat

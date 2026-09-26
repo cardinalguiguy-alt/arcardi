@@ -84,12 +84,22 @@ for (const season of ["spring", "summer"]) {
 }
 
 console.log("§2 — Les habitats");
+// La marge d'un canard à son milieu : l'eau libre, ou la berge (le plus favorable des deux).
+const duckHab = (d) => Math.max(fw.wdist(d.x, d.y) - 0.4, fw.odist(d.x, d.y) - 0.3) + 0.4;
 {
-  let dMin = 9, fMin = 9, catBad = 0, perchBad = 0, floatBad = 0, reads = 0;
+  let dMin = 9, fMin = 9, catBad = 0, perchBad = 0, floatBad = 0, reads = 0, dLand = 0, dReads = 0, dPoseBad = 0, dSeen = new Set();
+  const LANDP = new Set(["stand", "walk", "walk2", "graze", "graze2", "rest", "tinyW", "tinyW2", "youngW", "youngW2"]);
   for (let ms = T0; ms < T0 + C.DAY_REAL_MS; ms += 1700) {
     for (const season of ["spring", "winter"]) {
       const env = envAt(ms, season);
-      for (const d of F.faunaDucks(fw, env)) { dMin = Math.min(dMin, fw.wdist(d.x, d.y)); reads++; }
+      /* 2026-09-26 — les colverts SORTENT sur la berge : un canard est soit dans
+         l'eau libre (loin de la rive), soit sur la berge permise (loin de son
+         bord, `odist`) — jamais sur un quai, un mur, une case dallée. */
+      for (const d of F.faunaDucks(fw, env)) {
+        dMin = Math.min(dMin, duckHab(d)); reads++; dReads++;
+        if (d.land) { dLand++; dSeen.add(d.site); }
+        if (d.land !== LANDP.has(d.pose)) dPoseBad++;
+      }
       for (const f of F.faunaFish(fw, env)) { fMin = Math.min(fMin, fw.wdist(f.x, f.y)); reads++; }
       for (const c of F.faunaCats(fw, env, tw)) { if (!walk(c.x, c.y)) catBad++; reads++; }
       for (const g of F.faunaGulls(fw, env)) {
@@ -99,7 +109,9 @@ console.log("§2 — Les habitats");
       }
     }
   }
-  ok("un canard reste à 0,4 case de la rive au moins", dMin >= 0.4, `min ${dMin.toFixed(2)}`);
+  ok("un canard à terre marche : pose de terre à terre, pose d'eau dans l'eau", dPoseBad === 0, `${dPoseBad} écarts sur ${dReads}`);
+  ok("les colverts sortent sur la berge (entre 3 et 30 % du temps), dans au moins trois groupes", dLand / dReads > 0.03 && dLand / dReads < 0.3 && dSeen.size >= 3, `${(100 * dLand / dReads).toFixed(1)} % à terre, groupes ${[...dSeen].join(",")}`);
+  ok("un canard reste à 0,4 case de la rive (ou du bord de sa berge) au moins", dMin >= 0.4, `min ${dMin.toFixed(2)}`);
   ok("une carpe reste à 0,35 case de la rive au moins", fMin >= 0.35, `min ${fMin.toFixed(2)}`);
   ok("un chat marche toujours sur une case praticable", catBad === 0, `${catBad} écarts`);
   ok("un goéland posé est à terre", perchBad === 0, `${perchBad} écarts`);
@@ -116,6 +128,39 @@ console.log("§3 — Les heures, les saisons, l'orage");
   ok("aucun papillon un jour d'orage", nb(envAt(at(12), "summer", null, 7, true)) === 0);
   ok("moins de papillons en automne qu'en été", nb(envAt(at(12), "autumn")) < nb(envAt(at(12), "summer")), `${nb(envAt(at(12), "autumn"))} < ${nb(envAt(at(12), "summer"))}`);
   ok("lucioles à 23h en été", nf(envAt(at(23), "summer")) > 40, `${nf(envAt(at(23), "summer"))}`);
+  /* 2026-09-26 — Guillaume : « plus dans la zone sauvage du sud-est, un peu moins
+     dans le parc ». On compte ce qui VOLE (pas les zones) à 23h en été. */
+  {
+    const ffs = F.faunaFireflies(fw, envAt(at(23), "summer"), BIG);
+    const inR = (f, r) => f.x >= r.x && f.y >= r.y && f.x < r.x + r.w && f.y < r.y + r.h;
+    const wood = ffs.filter((f) => inR(f, C.TOWN_WOOD) || inR(f, C.TOWN_WOOD_NORTH_AREA)).length, park = ffs.filter((f) => inR(f, C.TOWN_PARK)).length;
+    ok("lucioles : le bois du sud-est en a au moins trois fois plus que le parc, et le parc en garde", wood >= 3 * park && park >= 10, `bois ${wood}, parc ${park} (sur ${ffs.length})`);
+    const zw = fw.ffZones.filter((z) => z.key.startsWith("wood")).length;
+    ok("lucioles : au moins huit essaims dans les clairières du bois", zw >= 8, `${zw} essaims`);
+  }
+  /* Les insectes des lampadaires : pas toujours, pas partout la même densité. */
+  {
+    const heads = []; for (let k = 0; k < 40; k++) heads.push({ x: 100 + k * 37, y: 200 + (k % 7) * 23, r: 2 });
+    const counts = (ms, season, stormy) => {
+      const env = envAt(ms, season || "summer", null, 3, stormy);
+      return heads.map((h) => F.lampMotes(env, [h]).filter((p) => p.k > 0.02).length);
+    };
+    const c0 = counts(at(23));
+    const empty = c0.filter((n) => n === 0).length, max = Math.max(...c0);
+    ok("insectes des lampes : certaines lampes n'en ont pas, d'autres un vrai nuage", empty >= 5 && empty <= 30 && max >= 6, `${empty} lampes vides sur 40, max ${max}`);
+    const c1 = counts(at(23) + 200000);
+    const changed = c0.filter((n, i) => n !== c1[i]).length;
+    ok("insectes des lampes : la densité change au fil de la nuit", changed >= 10, `${changed} lampes sur 40 ont changé en 200 s`);
+    ok("insectes des lampes : aucun l'hiver ni sous l'orage", counts(at(23), "winter").every((n) => n === 0) && counts(at(23), "summer", true).every((n) => n === 0));
+    // Pas de saut : d'une image à l'autre (1/60 s), un insecte bouge de moins de 3 px, fusées comprises.
+    let worst = 0, lu = 0;
+    for (let ms = at(23); ms < at(23) + 60000; ms += 1000 / 60) {
+      const a = F.lampMotes(envAt(ms, "summer"), heads.slice(0, 6)), b = F.lampMotes(envAt(ms + 1000 / 60, "summer"), heads.slice(0, 6));
+      const bm = new Map(b.map((p) => [p.id, p]));
+      for (const p of a) { const q = bm.get(p.id); if (!q) continue; worst = Math.max(worst, Math.hypot(p.x - q.x, p.y - q.y)); lu++; }
+    }
+    ok("insectes des lampes : jamais de saut d'une image à l'autre", worst < 3 && lu > 1000, `pire ${worst.toFixed(2)} px sur ${lu} pas lus`);
+  }
   ok("aucune luciole à midi", nf(envAt(at(12), "summer")) === 0);
   ok("aucune luciole en hiver", nf(envAt(at(23), "winter")) === 0);
   // L'éclair : pas continu. Sur 20 s, une luciole passe la plupart du temps éteinte.
@@ -161,7 +206,7 @@ console.log("§5 — Les réactions");
     const hen = ducks[0], o0 = S.ducks && S.ducks.get(hen.id);
     const threat = { id: "me", x: hen.x + (o0 ? o0.ox : 0), y: hen.y + (o0 ? o0.oy : 0) - 0.7, moving: true, still: 0 };
     F.faunaReactDucks(S, fw, ducks, [threat], null, 1 / 30);
-    for (const d of ducks) minW = Math.min(minW, fw.wdist(d.x, d.y));
+    for (const d of ducks) minW = Math.min(minW, duckHab(d));
     for (const o of S.ducks.values()) maxOff = Math.max(maxOff, Math.hypot(o.ox, o.oy));
   }
   let left = 0;
@@ -169,11 +214,11 @@ console.log("§5 — Les réactions");
     const env = envAt(T0 + 410000 + k * 33, "summer");
     const ducks = F.faunaDucks(fw, env).filter((d) => d.site === 0);
     F.faunaReactDucks(S, fw, ducks, [], null, 1 / 30);
-    for (const d of ducks) minW = Math.min(minW, fw.wdist(d.x, d.y));
+    for (const d of ducks) minW = Math.min(minW, duckHab(d));
   }
   for (const o of S.ducks.values()) left = Math.max(left, Math.hypot(o.ox, o.oy));
   ok("canards effrayés : ils s'écartent", maxOff > 0.3, `écart max ${maxOff.toFixed(2)} case`);
-  ok("canards effrayés : jamais hors de l'eau", minW >= 0.35, `min ${minW.toFixed(2)}`);
+  ok("canards effrayés : jamais hors de l'eau ni de la berge", minW >= 0.35, `min ${minW.toFixed(2)}`);
   // Ce qui reste est l'ESPACE VITAL entre canards d'un même groupe (faunaReactDucks) : jamais plus d'un rayon.
   let alarm = 0; for (const o of S.ducks.values()) alarm = Math.max(alarm, o.alarm);
   ok("canards : la fuite se résorbe (20 s après : plus d'alarme, écart ≤ l'espace vital)", left < 0.65 && alarm < 0.02, `reste ${left.toFixed(3)} case, alarme ${alarm.toFixed(3)}`);
@@ -237,8 +282,10 @@ console.log("§6 — Les dessins : tailles et rapports (l'échelle unique, déci
     cat: bbox(S.cat.roux.walk1).w, catSit: bbox(S.cat.roux.front).h, laughing: bbox(S.gull.laughing.stand).w,
   };
   ok("pigeon ≈ 10 px cerne compris (8 à 11)", L.pigeon >= 8 && L.pigeon <= 11, `${L.pigeon} px`);
-  // ⚠️ 1,2 et pas 1,75 (le rapport réel) : Guillaume a jugé en jeu le premier colvert (17 px) « trop grand ».
-  ok("colvert plus long que le pigeon (1,2 à 2 fois), et pas plus de 14 px", L.duck / L.pigeon >= 1.2 && L.duck / L.pigeon <= 2 && L.duck <= 14, `${L.duck} / ${L.pigeon}`);
+  /* ⚠️ Guillaume a jugé le premier colvert (17 px) « trop grand », puis le
+     second (14 px) « pas assez détaillé » (2026-09-26). Le troisième fait 16 px :
+     la longueur du goéland argenté, ce qui est le vrai rapport (58 contre 60 cm). */
+  ok("colvert plus long que le pigeon (1,2 à 2 fois), et pas plus que le goéland", L.duck / L.pigeon >= 1.2 && L.duck / L.pigeon <= 2 && L.duck <= L.gull, `${L.duck} / ${L.pigeon}, goéland ${L.gull}`);
   ok("goéland plus long que la mouette rieuse", L.gull > L.laughing, `${L.gull} > ${L.laughing}`);
   ok("chat assis de face ≈ chat familier (10 à 13 px de haut)", L.catSit >= 10 && L.catSit <= 13, `${L.catSit} px (le familier fait ≈ 11)`);
   let edges = 0, cells = 0;
