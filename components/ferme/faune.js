@@ -361,8 +361,16 @@ export function faunaWorld(tw) {
   // Les sauts de poisson : au port et dans la passe, en eau profonde.
   const deep = zone(lakeCells, null, 2.2);
 
+  /* Les nénuphars que les colverts écartent en passant (2026-09-26, nuit) :
+     les décors `lily` posés par le générateur (l'étang, les roselières). Le
+     centre de la touffe, pas sa case : le sprite (17 à 25 px) est posé pied en
+     bas de case, son milieu tombe à ≈ 0,45 case au-dessus. `id` = la case,
+     c'est ce que le dessin relit. ⚠️ Les petits nénuphars CUITS dans l'eau du
+     port (eau.js § 5) sont des pixels de la cuisson : ils ne bougent pas. */
+  const lilies = (tw.props || []).filter((p) => p.kind === "lily").map((p) => ({ id: p.y * W + p.x, x: p.x + 0.5, y: p.y + 0.55 }));
+
   const v = { W, H, wet, sd, wdist, odist, duckLand, comp, pond, duckSites, fishSites, quay, pier, floats, soar, portRect, fishStalls,
-              cats, flowers, flowerGrid, bflyHomes, ffZones, deep, pathCache: new Map() };
+              cats, flowers, flowerGrid, bflyHomes, ffZones, deep, lilies, pathCache: new Map() };
   FW_CACHE.w = tw; FW_CACHE.v = v;
   return v;
 }
@@ -414,7 +422,16 @@ function endHeading(p) {
    on démarre et on s'arrête en `ramp` secondes, entre les deux on garde
    l'allure. Sans `ramp` (les carpes), rien ne change. Le vrai `B.v`, s'il
    existe, remplace la vitesse de croisière pour ce créneau. */
-export function slotMove(t, slotLen, targetOf, pathOf, speed, maxFrac, ramp) {
+/* `extend` (facultatif, nombre de créneaux) : quand la cible ne change pas
+   d'un créneau à l'autre (la nuit des colverts : une place pour onze minutes),
+   le repos doit courir sur TOUTE la durée où elle reste la même. Sans ça,
+   `restT` repartait de zéro toutes les 17 s : les suiveurs se regroupaient
+   autour de la cane à chaque créneau, en pleine nuit (trouvé en posant le
+   sommeil sur la berge, 2026-09-26). On remonte et on descend les créneaux
+   tant que la cible est la même ; `restK` nomme ce repos (le créneau
+   d'arrivée), pour qu'un choix tiré « pour ce repos » ne change pas en route. */
+const sameSpot = (P, Q) => Math.abs(P.x - Q.x) < 1e-6 && Math.abs(P.y - Q.y) < 1e-6;
+export function slotMove(t, slotLen, targetOf, pathOf, speed, maxFrac, ramp, extend) {
   const k = Math.floor(t / slotLen), u = t - k * slotLen;
   const A = targetOf(k - 1), B = targetOf(k);
   const path = pathOf(A, B);
@@ -439,8 +456,34 @@ export function slotMove(t, slotLen, targetOf, pathOf, speed, maxFrac, ramp) {
     // `dist` : le chemin fait depuis le départ — la foulée s'y lit (voir faunaCats).
     return { x: q.x, y: q.y, hx: q.hx, hy: q.hy, moving: true, spd, dist: sDist, k, restT: -1, restLen: slotLen - Tt, B, A };
   }
-  const h = L > 1e-3 ? endHeading(path) : { hx: A.hx || 1, hy: 0 };
-  return { x: B.x, y: B.y, hx: h.hx, hy: h.hy, moving: false, spd: 0, k, restT: u - Tt, restLen: slotLen - Tt, B, A };
+  let h = L > 1e-3 ? endHeading(path) : { hx: A.hx || 1, hy: 0 };
+  let restT = u - Tt, restLen = slotLen - Tt, restK = k;
+  if (extend && L > 1e-3) {
+    /* ⚠️ Le créneau d'ARRIVÉE aussi : sa fin de repos doit déjà voir les
+       créneaux suivants de même cible, sinon `restLen` saute de « fin de ce
+       créneau » à « fin de la tranche » au créneau suivant — et tout ce qui
+       s'en sert (le regroupement, le dormeur sur l'eau) saute avec (vu par
+       verify-faune §1 : 134 cases d'un coup). */
+    let k1 = k + 1;
+    while (k1 - k < extend && sameSpot(targetOf(k1), B)) k1++;
+    restLen = (k1 - k) * slotLen - Tt;
+  }
+  if (extend && L <= 1e-3) {
+    // Le repos a commencé plus tôt : on remonte jusqu'au créneau d'arrivée.
+    let k0 = k - 1;
+    while (k - k0 < extend && sameSpot(targetOf(k0 - 1), B)) k0--;
+    const A0 = targetOf(k0 - 1), p0 = pathOf(A0, B), L0 = pathLen(p0);
+    let v0 = B.v || speed;
+    if (L0 / v0 + (ramp || 0) > slotLen * maxFrac) v0 = L0 / Math.max(0.5, slotLen * maxFrac - (ramp || 0));
+    const T0 = L0 > 1e-3 ? (ramp && L0 > v0 * ramp ? L0 / v0 + ramp : L0 / v0) : 0;
+    if (L0 > 1e-3) h = endHeading(p0);
+    let k1 = k + 1;
+    while (k1 - k < extend && sameSpot(targetOf(k1), B)) k1++;
+    restK = k0;
+    restT = (k - k0) * slotLen + u - T0;
+    restLen = (k1 - k0) * slotLen - T0;
+  }
+  return { x: B.x, y: B.y, hx: h.hx, hy: h.hy, moving: false, spd: 0, k, restT, restLen, restK, B, A };
 }
 
 /* ── 4. LES CHEMINS SUR L'EAU ──────────────────────────────────────────────
@@ -547,9 +590,22 @@ function duckLeader(fw, env, site, si, t0) {
       const P = { x: b.x + j * 0.5, y: b.y + j2 * 0.5, land: true, ex: b.ex, ey: b.ey };
       return fw.odist(P.x, P.y) >= 0.6 ? P : b;
     }
-    const cells = asleep ? site.roost : site.cells;
     // La nuit, la place ne change qu'une fois toutes les onze minutes : on dort.
     const kk = asleep ? 100000 + Math.floor(k / 40) : k;
+    /* ⚠️ LA NUIT SUR LA BERGE (2026-09-26, nuit, Guillaume en jeu : « la nuit
+       les colverts dorment souvent (pas tous) sur le bord de l'eau, bec dans le
+       cou »). Photos : un colvert qui dort à terre se couche en boule, la tête
+       retournée et le bec glissé dans les plumes du dos, parfois debout sur
+       une patte ; souvent au ras de l'eau, prêt à y rentrer. Trois fois sur
+       quatre (par tranche de onze minutes, comme le reste de la nuit), le
+       groupe choisit une place de berge ; et dans le groupe, certains restent
+       sur l'eau juste devant (voir faunaDucks : `wetSleeper`). Hors orage :
+       sous l'averse, on dort sur l'eau, à l'abri des roseaux. */
+    if (asleep && !env.stormy && site.bank && site.bank.length && fh(seed, kk, 81) % 100 < DUCK_BANK_NIGHT_PCT) {
+      const b = site.bank[fh(seed, kk, 83) % site.bank.length];
+      return { x: b.x, y: b.y, land: true, ex: b.ex, ey: b.ey, night: true };
+    }
+    const cells = asleep ? site.roost : site.cells;
     const P = cellPoint(cells, W, fh(seed, kk, 5), 0.5);
     if (fw.wdist(P.x, P.y) < margin) { const j = cells[fh(seed, kk, 5) % cells.length]; return { x: j % W + 0.5, y: ((j / W) | 0) + 0.5 }; }
     return P;
@@ -565,7 +621,7 @@ function duckLeader(fw, env, site, si, t0) {
     const a2 = A.land ? { x: A.ex, y: A.ey } : A, b2 = B.land ? { x: B.ex, y: B.ey } : B;
     return [...pre, ...wp(a2, b2), ...post];
   };
-  const st = slotMove(t, SL, targetOf, pathOf, DUCK_SPEED, 0.6, 1.4);
+  const st = slotMove(t, SL, targetOf, pathOf, DUCK_SPEED, 0.6, 1.4, 48);
   return duckSway(fw, st, t, seed, st.B.v || DUCK_SPEED);
 }
 function segOk(fw, A, B) {
@@ -573,11 +629,18 @@ function segOk(fw, A, B) {
   for (let i = 0; i <= n; i++) { const u = i / n; if (fw.odist(A.x + (B.x - A.x) * u, A.y + (B.y - A.y) * u) < 0.35) return false; }
   return true;
 }
-/* Sortir de l'eau : un créneau sur cinq, de 7h à 20h. */
+/* Sortir de l'eau : un créneau sur cinq, de 7h à 20h. La nuit, trois fois sur
+   quatre, le groupe dort sur la berge, et un adulte suiveur sur trois reste sur
+   l'eau devant (`DUCK_WET_SLEEPER_PCT`). */
 const DUCK_LAND_PCT = 20, DUCK_LAND_FROM = 7 * 60, DUCK_LAND_TO = 20 * 60;
+const DUCK_BANK_NIGHT_PCT = 75, DUCK_WET_SLEEPER_PCT = 35;
 /* Est-on à terre ? La flottaison se lit sur la distance à la rive : un canard
    dont le corps touche le fond de la berge (moins de 0,15 case d'eau) marche. */
 export const duckOnLand = (fw, x, y) => fw.wdist(x, y) < 0.15;
+/* Les poses À TERRE d'un colvert adulte (tenu d'accord avec `DUCK_LAND_POSES`
+   de fauneArt.js, qui ferme le cerne sous leurs pattes : verify-faune compare
+   les deux). */
+export const DUCK_LAND_POSE_SET = new Set(["stand", "walk", "walk2", "graze", "graze2", "rest", "sleepLand", "sleepLand2", "sleepStand"]);
 /* Les poses à terre : brouter (le plus souvent), se tenir, se coucher dans
    l'herbe, et le coup d'œil. Par fenêtres de 4 s, comme sur l'eau. */
 function duckLandRestPose(seed, t) {
@@ -586,6 +649,19 @@ function duckLandRestPose(seed, t) {
   if (h < 70) return "stand";
   return "rest";
 }
+/* ⚠️ Les choix « pour cette nuit » (qui reste sur l'eau, qui dort sur une
+   patte) se tirent sur la PLACE, pas sur le créneau d'arrivée : à la bascule
+   de jour, les créneaux du soir deviennent « nuit » et le début du repos
+   recule (trouvé par verify-faune §1, un canard qui sautait de 115 cases à
+   minuit). La place, elle, ne bouge pas tant que le repos dure. */
+const spotKey = (B) => (Math.round(B.x * 8) * 73856093) ^ (Math.round(B.y * 8) * 19349663);
+/* Le sommeil à terre : couché en boule (le souffle soulève le flanc), ou
+   debout sur une patte pour un canard sur trois — choisi par canard et par
+   nuit, jamais au hasard d'une image à l'autre. */
+function duckLandSleepPose(seed, t, night) {
+  if (fh(seed, night, 91) % 100 < 30) return "sleepStand";
+  return (Math.floor(t / 1.9 + (seed % 5)) & 1) ? "sleepLand" : "sleepLand2";
+}
 /* La démarche : les pattes alternent, avec un temps d'appui entre deux pas. */
 function duckWalkPose(t, mi) { const ph = Math.floor(t * 6 + mi) & 3; return ph === 0 ? "walk" : ph === 2 ? "walk2" : "stand"; }
 /* La pose d'un canard qui a CHANGÉ de milieu après sa réaction (poussé sur la
@@ -593,14 +669,15 @@ function duckWalkPose(t, mi) { const ph = Math.floor(t * 6 + mi) & 3; return ph 
    l'autre milieu. */
 export function duckFixPose(d, t) {
   if (d.kind === "duck") {
-    const landPose = d.pose === "stand" || d.pose === "walk" || d.pose === "walk2" || d.pose === "graze" || d.pose === "graze2" || d.pose === "rest";
+    const landPose = DUCK_LAND_POSE_SET.has(d.pose);
     // Un canard qui se déplace à terre (routine ou écart de réaction) marche toujours.
     if (d.land && (d.moving || !landPose)) d.pose = d.moving ? duckWalkPose(t || 0, d.id.length) : "stand";
     else if (!d.land && landPose) d.pose = "swim";
   } else {
-    const base = d.kind, walkP = d.pose.includes("W");
-    if (d.land && !walkP) d.pose = base + (Math.floor((t || 0) * 5) & 1 ? "W2" : "W");
-    else if (!d.land && walkP) d.pose = base;
+    // Un caneton qui dort à terre (`tinyS`/`youngS`) y reste couché ; à l'eau, il flotte.
+    const base = d.kind, walkP = d.pose.includes("W"), sleepP = d.pose.endsWith("S");
+    if (d.land && !walkP && !(sleepP && !d.moving)) d.pose = base + (Math.floor((t || 0) * 5) & 1 ? "W2" : "W");
+    else if (!d.land && (walkP || sleepP)) d.pose = base;
   }
 }
 /* L'activité d'un canard au repos, par tranches de 3 s : nager sur place
@@ -650,7 +727,9 @@ export function faunaDucks(fw, env) {
     const members = duckMembers(site, env.season);
     const lead = (tt) => duckLeader(fw, env, site, si, tt);
     const L0 = lead(t);
-    const asleep = duckAsleep(tminAt(env, env.nowMs));
+    const tmN = tminAt(env, env.nowMs);
+    const asleep = duckAsleep(tmN);
+    const sleepK = Math.max(smooth(22 * 60 + 10, 22 * 60 + 30, tmN), 1 - smooth(6 * 60 + 30, 6 * 60 + 50, tmN));
     members.forEach(([robe, lag, ring], mi) => {
       const id = "d" + si + "." + mi;
       let st = L0, x, y;
@@ -659,7 +738,9 @@ export function faunaDucks(fw, env) {
         st = lead(t - lag);
         // Au repos, le suiveur s'écarte autour d'elle ; il se rassemble avant son départ.
         const g = st.moving ? 0 : smooth(0, 1.8, st.restT) * smooth(0, 1.8, st.restLen - st.restT);
-        const a = fr(si, mi, 13) * 6.283 + Math.sin(t * 0.21 + mi) * 0.6;
+        /* La nuit, l'écart ne tourne plus autour de la cane : un canard endormi
+           ne glisse pas (fondu de vingt minutes de jeu, jamais un saut). */
+        const a = fr(si, mi, 13) * 6.283 + Math.sin(t * 0.21 + mi) * 0.6 * (1 - sleepK);
         const ox = Math.cos(a) * ring * g, oy = Math.sin(a) * ring * 0.8 * g;
         /* ⚠️ Trop près de la rive, l'écart RÉTRÉCIT — continûment (un seuil
            ferait sauter le caneton d'un demi-pas : trouvé par verify-faune §1). */
@@ -671,13 +752,32 @@ export function faunaDucks(fw, env) {
       }
       const seed = fh(si, mi, 7);
       const kind = robe === "tiny" || robe === "young" ? robe : "duck";
+      /* Le dormeur sur l'eau : le groupe dort sur la berge (`B.night`), mais cet
+         adulte suiveur-là reste sur l'eau, devant la place, à la « porte » de la
+         berge. Il y va EN MARCHANT une fois le groupe arrivé et en revient
+         avant son départ (`g`, le même fondu que l'écart au repos) : le trajet
+         porte → place est le dernier segment validé du chemin, donc son
+         inverse l'est aussi. Un décalage d'eau le range autour de la porte. */
+      let sliding = false, faceO = 0;
+      if (lag && kind === "duck" && st.B && st.B.night && !st.moving && fh(seed, spotKey(st.B), 97) % 100 < DUCK_WET_SLEEPER_PCT) {
+        const g = smooth(0.4, 3.2, st.restT) * smooth(0.4, 3.2, st.restLen - st.restT);
+        const a = fr(si, mi, 17) * 6.283;
+        let wx = st.B.ex + Math.cos(a) * 0.55, wy = st.B.ey + Math.abs(Math.sin(a)) * 0.45;
+        if (fw.wdist(wx, wy) < 0.55) { wx = st.B.ex; wy = st.B.ey; }
+        // Le regard suit la marche : vers l'eau en arrivant, vers la berge avant de repartir.
+        faceO = (st.restT < st.restLen / 2 ? 1 : -1) * (wx >= x ? 1 : -1);
+        x = x + (wx - x) * g; y = y + (wy - y) * g;
+        sliding = g > 0.02 && g < 0.98;
+      }
       const land = duckOnLand(fw, x, y);
+      const moving = st.moving || sliding;
       let pose;
       let splash = -1;
       if (land) {
-        // À terre : la démarche en marchant, et au repos brouter, se tenir, se coucher.
-        if (kind === "duck") pose = st.moving ? duckWalkPose(t, mi) : duckLandRestPose(seed, t);
-        else pose = kind + ((st.moving ? Math.floor(t * 5 + mi) : Math.floor(t * 0.8 + mi)) & 1 ? "W2" : "W");
+        // À terre : la démarche en marchant, et au repos brouter, se tenir, se coucher — ou dormir.
+        if (kind === "duck") pose = moving ? duckWalkPose(t, mi) : asleep ? duckLandSleepPose(seed, t, spotKey(st.B)) : duckLandRestPose(seed, t);
+        else if (asleep && !moving) pose = kind + "S";
+        else pose = kind + ((moving ? Math.floor(t * 5 + mi) : Math.floor(t * 0.8 + mi)) & 1 ? "W2" : "W");
       } else {
         // En nageant : le coup de patte au rythme de la vitesse (≈ 2 Hz en croisière).
         /* ⚠️ 2026-09-26 (nuit) — LA CADENCE NE MULTIPLIE PLUS LE TEMPS ABSOLU.
@@ -686,14 +786,14 @@ export function faunaDucks(fw, env) {
            pose tirait AU HASARD à chaque image pendant toute l'accélération —
            c'était le « saccadé » vu en jeu. Le coup de patte suit maintenant le
            chemin parcouru (plus une part lente et constante du temps). */
-        if (st.moving) pose = kind === "duck" ? ((Math.floor((st.dist || 0) * 3.2 + t * 1.3 + mi) & 1) ? "swim2" : "swim") : (Math.floor(t * 3.2 + mi) & 1 ? kind + "2" : kind);
-        if (!st.moving) {
+        if (moving) pose = kind === "duck" ? ((Math.floor((st.dist || 0) * 3.2 + t * 1.3 + mi) & 1) ? "swim2" : "swim") : (Math.floor(t * 3.2 + mi) & 1 ? kind + "2" : kind);
+        if (!moving) {
           if (kind === "duck") { const rp = duckRestPose(seed, t, asleep); pose = rp.pose; splash = rp.ring; }
           else pose = asleep ? kind : (Math.floor(t * 1.1 + mi) & 1 ? kind + "2" : kind);
         }
       }
-      out.push({ id, site: si, robe, kind, x, y, face: st.hx < -0.05 ? -1 : st.hx > 0.05 ? 1 : (fh(seed, st.k, 3) & 1 ? 1 : -1),
-                 moving: st.moving, spd: st.spd, pose, ring: splash, lake: !!site.lake, land });
+      out.push({ id, site: si, robe, kind, x, y, face: faceO || (st.hx < -0.05 ? -1 : st.hx > 0.05 ? 1 : (fh(seed, st.k, 3) & 1 ? 1 : -1)),
+                 moving, spd: sliding ? 0.3 : st.spd, pose, ring: splash, lake: !!site.lake, land });
     });
   });
   return out;
@@ -1256,6 +1356,52 @@ export function faunaReactDucks(S, fw, ducks, threats, food, dt, t) {
     if (o.alarm > 0.35 && d.kind === "duck" && d.pose !== "sleep" && !d.land) d.pose = "alert";
     duckFixPose(d, t);
   });
+}
+/* LES NÉNUPHARS QU'ON ÉCARTE (2026-09-26, nuit, Guillaume : « il doit
+   déplacer les nénuphars sur son passage quand il entre en collision avec »).
+   Une feuille de nénuphar est ANCRÉE : sa tige la retient au fond. Poussée par
+   un canard qui nage, elle glisse devant lui, pivote de côté, puis revient
+   lentement à sa place — elle ne dérive jamais au loin. D'où : une poussée
+   quand le corps du canard chevauche la touffe (dans l'axe qui les sépare, et
+   plus fort s'il nage vite), une vitesse amortie (l'eau freine), et un rappel
+   faible vers la place (la tige), borné à 0,6 case d'écart.
+   Locale, comme toutes les réactions : zéro message ; les canards sont les
+   mêmes chez les deux joueurs à la réaction près, donc les feuilles aussi.
+   `S.lily` : Map id → { ox, oy, vx, vy } (en cases), lue par le dessin. */
+export function faunaReactLilies(S, fw, ducks, dt) {
+  if (!fw || !fw.lilies || !fw.lilies.length) return;
+  const M = S.lily || (S.lily = new Map());
+  const LILY_R = 0.5;                 // le rayon de la touffe, en cases (17 à 25 px de large)
+  const MAXO = 0.6, K_STEM = 0.9, DAMP = 2.2;
+  for (const L of fw.lilies) {
+    let o = M.get(L.id);
+    let near = false;
+    for (const d of ducks) {
+      if (d.land) continue;
+      const cx = L.x + (o ? o.ox : 0), cy = L.y + (o ? o.oy : 0);
+      const dx = cx - d.x, dy = cy - (d.y - 0.1), l = Math.hypot(dx, dy);
+      const R = LILY_R + (d.kind === "duck" ? 0.35 : d.kind === "young" ? 0.25 : 0.15);
+      if (l >= R) continue;
+      near = true;
+      if (!o) { o = { ox: 0, oy: 0, vx: 0, vy: 0 }; M.set(L.id, o); }
+      const nx = l > 1e-3 ? dx / l : (d.face || 1), ny = l > 1e-3 ? dy / l : 0;
+      const push = (R - l) * (1.6 + 2.2 * Math.min(1, (d.spd || 0) / 0.5));
+      o.vx += nx * push * dt; o.vy += ny * push * dt * 0.8;
+    }
+    if (!o) continue;
+    // La tige ramène, l'eau freine.
+    o.vx += -o.ox * K_STEM * dt; o.vy += -o.oy * K_STEM * dt;
+    const f = Math.exp(-DAMP * dt); o.vx *= f; o.vy *= f;
+    // ⚠️ Jamais sur la berge : un pas qui l'y pousserait (plus près du bord qu'avant, et à moins d'un quart de case) est refusé.
+    const w0 = fw.wdist(L.x + o.ox, L.y + o.oy);
+    const nx2 = o.ox + o.vx * dt, ny2 = o.oy + o.vy * dt, w1 = fw.wdist(L.x + nx2, L.y + ny2);
+    if (w1 < 0.25 && w1 < w0) { o.vx *= -0.3; o.vy *= -0.3; }
+    else { o.ox = nx2; o.oy = ny2; }
+    const ol = Math.hypot(o.ox, o.oy);
+    if (ol > MAXO) { o.ox *= MAXO / ol; o.oy *= MAXO / ol; o.vx *= 0.5; o.vy *= 0.5; }
+    // Revenue à sa place et immobile : on l'oublie (le dessin retombe sur le décor tel quel).
+    if (!near && ol < 0.01 && Math.hypot(o.vx, o.vy) < 0.01) M.delete(L.id);
+  }
 }
 /* Les carpes montent aux miettes près de l'eau (et gobent). */
 export function faunaReactFish(S, fw, fish, food, dt) {

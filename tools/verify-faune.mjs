@@ -97,7 +97,8 @@ console.log("§2 — Les habitats");
 const duckHab = (d) => Math.max(fw.wdist(d.x, d.y) - 0.4, fw.odist(d.x, d.y) - 0.3) + 0.4;
 {
   let dMin = 9, fMin = 9, catBad = 0, perchBad = 0, floatBad = 0, reads = 0, dLand = 0, dReads = 0, dPoseBad = 0, dSeen = new Set();
-  const LANDP = new Set(["stand", "walk", "walk2", "graze", "graze2", "rest", "tinyW", "tinyW2", "youngW", "youngW2"]);
+  // Les poses à terre de l'adulte viennent du module (le sommeil à terre s'y est ajouté le 2026-09-26) ; celles des petits sont `W`, `W2` et `S`.
+  const LANDP = new Set([...F.DUCK_LAND_POSE_SET, "tinyW", "tinyW2", "youngW", "youngW2", "tinyS", "youngS"]);
   for (let ms = T0; ms < T0 + C.DAY_REAL_MS; ms += 1700) {
     for (const season of ["spring", "winter"]) {
       const env = envAt(ms, season);
@@ -229,6 +230,62 @@ console.log("§4 — Le partage : deux clients, le même instant, les mêmes bê
   ok("colvert : le coup de patte ne tire pas au hasard (moins de 3 % de poses d'une seule image)", rd.runs > 50 && rd.pct < 3, `${rd.one} sur ${rd.runs} poses (${rd.pct.toFixed(1)} %)`);
   const cs = new Set(F.lampMotes(envAt(T0 + 13 * 3600e3, "summer"), Array.from({ length: 40 }, (_, i) => ({ x: i * 50, y: 100, r: 2 }))).map((m) => m.c));
   ok("insectes des lampes : plusieurs robes, du pâle au sombre", cs.size >= 5 && [...cs].every((c) => c >= 0 && c < 7), [...cs].sort().join(","));
+}
+
+/* 2026-09-26 (nuit) — LE SOMMEIL SUR LA BERGE ET LES NÉNUPHARS. */
+console.log("§4 bis — La nuit sur la berge, les nénuphars");
+{
+  const atH = (h) => T0 + ((h * 60 - C.DAY_START_MIN) / (C.DAY_END_MIN - C.DAY_START_MIN)) * C.DAY_REAL_MS;
+  // Sur plusieurs nuits (dayStartAt décalé), à 23h30 : combien d'adultes dorment à terre, combien sur l'eau.
+  let land = 0, wet = 0, landSleep = 0, stand = 0, reads = 0, bad = 0, tinyS = 0;
+  for (let night = 0; night < 12; night++) {
+    const ds = T0 + night * 7919000;
+    const env = envAt(ds + (atH(23.5) - T0), "spring", ds, 3 + night);
+    for (const d of F.faunaDucks(fw, env)) {
+      reads++;
+      if (d.kind === "tiny" && d.land && d.pose === "tinyS") tinyS++;
+      if (d.kind !== "duck" || d.moving) continue;
+      if (d.land) { land++; if (d.pose.startsWith("sleepLand") || d.pose === "sleepStand") landSleep++; if (d.pose === "sleepStand") stand++; else if (!d.pose.startsWith("sleep")) bad++; }
+      else { wet++; if (!d.pose.startsWith("sleep")) bad++; }
+    }
+  }
+  ok("la nuit, des colverts dorment sur la berge — et pas tous", land >= 8 && wet >= 4, `${land} à terre, ${wet} sur l'eau (${reads} bêtes lues, 12 nuits)`);
+  ok("… à terre, ils dorment (couchés ou sur une patte), jamais une pose de jour", landSleep === land && bad === 0 && stand > 0 && stand < land, `${landSleep}/${land} endormis dont ${stand} sur une patte, ${bad} poses fautives`);
+  ok("… les canetons dorment blottis à terre", tinyS > 0, `${tinyS} canetons en boule`);
+  // Le repos de nuit court sur toute la tranche : un suiveur endormi ne bouge pas en cinq minutes.
+  let worst = 0, pairs = 0;
+  for (let night = 0; night < 6; night++) {
+    const ds = T0 + night * 7919000;
+    const a = new Map(F.faunaDucks(fw, envAt(ds + (atH(23.2) - T0), "summer", ds, 3 + night)).map((d) => [d.id, d]));
+    for (let k = 1; k <= 30; k++) {
+      const cur = new Map(F.faunaDucks(fw, envAt(ds + (atH(23.2) - T0) + k * 10000, "summer", ds, 3 + night)).map((d) => [d.id, d]));
+      for (const d of cur.values()) {
+        const d0 = a.get(d.id); if (!d0 || d.moving || d0.moving || d.site !== d0.site) continue;
+        // Seulement si la cane n'a pas changé de place entre-temps (tranches de onze minutes).
+        const l0 = a.get("d" + d.site + ".0"), l1 = cur.get("d" + d.site + ".0");
+        if (!l0 || !l1 || Math.hypot(l1.x - l0.x, l1.y - l0.y) > 0.01) continue;
+        pairs++; worst = Math.max(worst, Math.hypot(d.x - d0.x, d.y - d0.y));
+      }
+    }
+  }
+  ok("la nuit, un canard endormi reste en place (le repos ne repart plus à chaque créneau)", pairs > 100 && worst < 0.05, `pire ${worst.toFixed(2)} case sur ${pairs} paires`);
+  // Les poses à terre : faune.js et fauneArt.js disent la même liste.
+  const A1 = [...F.DUCK_LAND_POSE_SET].sort().join(","), A2 = [...FA.DUCK_LAND_POSES].sort().join(",");
+  ok("poses à terre : la même liste dans faune.js et fauneArt.js", A1 === A2, A1);
+  // Un nénuphar poussé par un canard qui passe : il glisse, reste sur l'eau, revient.
+  const L = fw.lilies.find((q) => fw.wdist(q.x, q.y) > 1.2) || fw.lilies[0];
+  const S = {}; let maxO = 0, onBank = 0;
+  for (let f = 0; f < 90; f++) {
+    const u = f / 90, duck = { kind: "duck", land: false, x: L.x - 1.2 + 2.4 * u, y: L.y + 0.12, spd: 0.55, face: 1 };
+    F.faunaReactLilies(S, fw, [duck], 1 / 30);
+    const o = S.lily && S.lily.get(L.id);
+    if (o) { maxO = Math.max(maxO, Math.hypot(o.ox, o.oy)); if (fw.wdist(L.x + o.ox, L.y + o.oy) < 0.2) onBank++; }
+  }
+  for (let f = 0; f < 30 * 60; f++) F.faunaReactLilies(S, fw, [], 1 / 30);
+  const left = S.lily && S.lily.get(L.id);
+  ok("nénuphars : il y en a à écarter", fw.lilies.length >= 4, `${fw.lilies.length} touffes`);
+  ok("nénuphars : un canard qui passe en écarte un (0,1 à 0,6 case), jamais sur la berge", maxO > 0.1 && maxO <= 0.6 + 1e-6 && onBank === 0, `écart max ${maxO.toFixed(2)} case, ${onBank} images sur la berge`);
+  ok("nénuphars : la tige le ramène à sa place en une minute", !left || Math.hypot(left.ox, left.oy) < 0.02, left ? `reste ${Math.hypot(left.ox, left.oy).toFixed(3)}` : "revenu");
 }
 
 console.log("§5 — Les réactions");

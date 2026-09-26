@@ -21917,7 +21917,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              décors durs de la carte et pour les buissons au repos, donc aucun
              `save`/`restore` n'est payé tant que personne ne marche dedans. */
           const lean = tw.soft ? townBushLean(pr.y * tw.w + pr.x, now) : 0;
-          if (lean) {
+          /* 2026-09-26 (nuit) — UN NÉNUPHAR ÉCARTÉ PAR UN CANARD (`faunaReactLilies`,
+             faune.js) : un décalage local qui revient seul, posé au pixel
+             d'ÉCRAN comme les bêtes (sinon la feuille reviendrait par sauts). */
+          const lo = pr.kind === "lily" && faunaLocalRef.current.lily ? faunaLocalRef.current.lily.get(pr.y * tw.w + pr.x) : null;
+          if (lo) {
+            const snap = zm >= 2 && Math.abs(zm - Math.round(zm)) < 1e-3 ? (v) => Math.round(v * zm) / zm : Math.round;
+            ctx.drawImage(img, snap(cxp + lo.ox * T - img.width / 2), snap(by + lo.oy * T - img.height));
+          } else if (lean) {
             ctx.save();
             ctx.translate(cxp, by);
             ctx.transform(1, 0, -lean / Math.max(1, img.height), 1, 0, 0);
@@ -22450,6 +22457,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // ── Les colverts.
           const ducks = FAU.faunaDucks(fw, env);
           FAU.faunaReactDucks(SL, fw, ducks, threats, foodF, fdt, env.t);
+          // 2026-09-26 (nuit) — les nénuphars que les canards écartent (lus au dessin des décors, via `SL.lily`).
+          FAU.faunaReactLilies(SL, fw, ducks, fdt);
           for (const d of ducks) {
             if (!inView(d.x, d.y, 2)) continue;
             const cell = d.kind === "duck" ? (FAS.duck[d.robe] && FAS.duck[d.robe][d.pose]) : FAS.duckling[d.pose];

@@ -1,5 +1,29 @@
 # Valley Town, le tribunal, l'hôtel de ville, et la vie qui s'y passe — état au 2026-09-26
 
+## 2026-09-26 (fin de nuit) — LES NÉNUPHARS ET LE SOMMEIL DES COLVERTS SUR LA BERGE
+
+- **Nénuphars écartés** (`faunaReactLilies`, faune.js ; lu au dessin des décors) : les 17 touffes `lily`
+  de l'étang et des roselières. Un canard qui nage à travers pousse la touffe dans l'axe qui les sépare
+  (plus fort s'il va vite) ; l'eau freine, la tige la rappelle, écart borné à 0,6 case, jamais sur la
+  berge. Local, zéro message. ⚠️ Les petits nénuphars CUITS dans l'eau du port (eau.js) ne bougent pas.
+- **Le sommeil sur la berge** (photos : tête retournée, bec sous les scapulaires, corps en ovale posé,
+  parfois debout sur une patte) : trois nuits sur quatre (par tranche de onze minutes) le groupe dort sur
+  une place de berge, un adulte suiveur sur trois reste sur l'eau devant (il y va en marchant après
+  l'arrivée, en revient avant le départ) ; hors orage. Trois poses neuves (`sleepLand`, `sleepLand2` qui
+  respire, `sleepStand` sur une patte pour un sur trois, avec un pixel de joue claire sur la bosse — la
+  tête de la cane se perdait brun sur brun) et les canetons en boule (`tinyS`, `youngS`).
+- ⚠️ **Deux défauts de fond trouvés en chemin, corrigés** : (1) quand la cible d'un créneau est la même
+  que la précédente (toute la nuit), `slotMove` remettait le repos à zéro toutes les 17 s — les suiveurs
+  se regroupaient autour de la cane en pleine nuit ; le repos court maintenant sur toute la durée de la
+  même cible (`extend`), y compris dans le créneau d'arrivée ; (2) l'écart des suiveurs tournait
+  lentement autour de la cane en permanence — un canard endormi à terre aurait glissé ; figé la nuit, en
+  fondu. Et les choix « pour la nuit » se tirent sur la PLACE, pas sur le créneau d'arrivée, qui recule à
+  la bascule de jour (un canard sautait de 115 cases à minuit).
+- `verify-faune` 61 → 69 (nuit sur la berge, poses, canetons, immobilité la nuit — falsifiée deux fois —,
+  accord des listes de poses entre faune.js et fauneArt.js, nénuphars). ⚠️ **Vu en jeu** à 6 h 30 (le
+  réveil) et à 23 h 30 à l'étang (famille en boules sur la berge, cane sur une patte) ; un nénuphar poussé
+  lu dans l'état, **pas vu bouger à l'écran**. **Pas de manipulation Supabase.**
+
 ## 2026-09-26 (nuit) — RETOUCHES RAPIDES APRÈS VINGT MINUTES DE JEU
 
 Guillaume a joué vingt minutes et noté ses retours (liste sous la checklist) ; « reco partout, commence par
@@ -269,9 +293,8 @@ visuel » LEVÉE pour ce chantier par Guillaume (2026-09-25, phase 2) : une phas
   la façon dont on l'approche (le câlin quand on reste calme à côté plaît, à garder). **Lui donner du
   lait** (si on en a) et le **fidéliser** : le chat errant revient ensuite nous voir régulièrement.
 - ✅ **Papillons** : population divisée par 3 hors des parcs et jardins, par 2 dedans.
-- ✅ **Colverts moins saccadés et moins réguliers.** ⬜ Ils **écartent les nénuphars** qu'ils heurtent en
-  passant ; ⬜ la nuit, beaucoup (pas tous) **dorment sur la berge, le bec dans le dos** (chercher des
-  références photo).
+- ✅ **Colverts moins saccadés et moins réguliers.** ✅ Ils **écartent les nénuphars** qu'ils heurtent en
+  passant ; ✅ la nuit, beaucoup (pas tous) **dorment sur la berge, le bec dans le dos**.
 - ✅ **Goélands et mouettes** : moins nombreux (10 → 6).
 - ✅ **Insectes des lampadaires** : sept robes, du jaune-blanc au brun-noir.
 - ⬜ **Épuisette** à acheter (chez Pierre ou au marché) : tenter d'attraper les carpes (à relâcher, la

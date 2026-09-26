@@ -13,10 +13,11 @@ Checklist (✅/⬜) en tête de `components/ferme/README.md`, avec sous elle la 
 (2026-09-26, nuit) ; récit de chaque livraison juste au-dessus. Cadre : personnages ÉVOCATEURS ; monde,
 végétation, faune, bâtiments soignés à fond. ⚠️ **Pour ce chantier, la règle « un seul changement visuel
 par livraison » est LEVÉE.** **Reste : 6 bâtiments courants · 7 composition · 8 intérieurs** (+ la météo).
-- **Dernière livraison (retouches rapides, « reco partout »)** : chat et colverts fluides (foulée liée au
-  chemin parcouru, profil de vitesse en trapèze, position au pixel d'écran), colverts moins réguliers,
-  papillons ÷2 au jardin et ÷3 ailleurs, goélands 10 → 6, insectes des lampes en sept robes.
-- Bancs ce jour-là : **28/28 `verify-*`** (`verify-faune` 61/61, contrôle de cadence falsifié), **24/24
+- **Dernière livraison (retouches, « reco partout »)** : chat et colverts fluides, colverts moins
+  réguliers, papillons ÷2/÷3, goélands 10 → 6, insectes des lampes en sept robes ; puis les nénuphars que
+  les colverts écartent, et le sommeil des colverts sur la berge (trois poses neuves, un adulte sur trois
+  reste sur l'eau).
+- Bancs ce jour-là : **28/28 `verify-*`** (`verify-faune` 69/69, contrôles neufs falsifiés), **24/24
   `render-*`**, `no-undef` propre, bundle, `next build` (`✓ Compiled`). **Rien vu sur un vrai iPad.**
   **Pas de manipulation Supabase.**
 - ⚠️ Constaté en vérifiant : la faune lit la saison RÉELLE (`E.seasonOf()`, fin septembre = automne) quand
@@ -27,7 +28,8 @@ par livraison » est LEVÉE.** **Reste : 6 bâtiments courants · 7 composition 
 - **Les retouches de la faune** : la taille du colvert (16 px, après « trop grand » à 17 et « pas assez
   détaillé » à 14), la cane qui broute (tête brun sur brun), la fréquence des sorties, les insectes des
   lampes (discrets exprès) ; et la fluidité du chat et des colverts (2026-09-26, nuit : mesurée au banc,
-  pas à l'écran en mouvement).
+  pas à l'écran en mouvement) ; les nénuphars écartés (jamais vus bouger à l'écran) et le sommeil sur la
+  berge (vu à 23 h 30).
 - **Les phases 1 à 5 de Valley Town**, à jouer. Phase 5 : les enchaînements des colverts, la taille des
   bêtes, la fréquence des gestes gratuits (le chat qui salue, les goélands du pêcheur), les papillons
   (assez visibles ?), la synchronisation des lucioles certaines nuits. **Pas fait en phase 5** : l'éclat
@@ -51,17 +53,15 @@ par livraison » est LEVÉE.** **Reste : 6 bâtiments courants · 7 composition 
 ### ⏭️ ACTION SUIVANTE
 
 **La suite des retours de Guillaume** (liste sous la checklist de `components/ferme/README.md`), dans
-l'ordre accepté (« reco partout ») : (1) les colverts qui écartent les nénuphars (décalage LOCAL qui revient
-seul, zéro message) et qui dorment sur la berge la nuit, bec dans le dos — **chercher des photos avant de
-dessiner** ; (2) **la météo** (note « Météo » sous la checklist : pluie qui MONTE, orages SECS, plus de
-pluie à l'automne, forçage au menu dev — pure fonction du jour, forçage PARTAGÉ arbitré par l'hôte :
-**proposer la forme avant de coder**) ; (3) les nouveautés à état sauvegardé : lait et fidélité du chat,
-épuisette (carpes à relâcher, papillons, collection) — une `req` arbitrée par l'hôte chacune, aucune
-migration SQL ; **proposer la forme (fidélité par joueur ou commune, prix, boutique) avant de coder**.
-Puis **phase 6** (maisons « cheap » à refaire, éclairage des fenêtres, grands bâtiments compris). Rappeler
-à Guillaume de jouer les phases 1-5. L'« autre jeu » annoncé après les échecs attend qu'il le nomme.
-⚠️ Le jour où un nouveau sprite bitmap arrive, mesurer son sprite AVANT de poser sa collision, et
-vérifier tout bornage sur les DEUX axes séparément (§4).
+l'ordre accepté (« reco partout ») : (1) **la météo** (note « Météo » sous la checklist : pluie qui MONTE,
+orages SECS, plus de pluie à l'automne, forçage au menu dev — pure fonction du jour, forçage PARTAGÉ
+arbitré par l'hôte : **proposer la forme avant de coder**) ; (2) les nouveautés à état sauvegardé : lait
+et fidélité du chat, épuisette (carpes à relâcher, papillons, collection) — une `req` arbitrée par l'hôte
+chacune, aucune migration SQL ; **proposer la forme (fidélité par joueur ou commune, prix, boutique) avant
+de coder** ; (3) reflet du pont, saison du menu dev. Puis **phase 6** (maisons « cheap » à refaire,
+éclairage des fenêtres, grands bâtiments compris). Rappeler à Guillaume de jouer les phases 1-5. L'« autre
+jeu » annoncé après les échecs attend qu'il le nomme. ⚠️ Le jour où un nouveau sprite bitmap arrive,
+mesurer son sprite AVANT de poser sa collision, et vérifier tout bornage sur les DEUX axes séparément (§4).
 
 ---
 

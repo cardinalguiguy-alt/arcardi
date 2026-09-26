@@ -361,6 +361,44 @@ const DUCK_POSES = {
     "......O.O..gGh",
     ".....oo.oo.jeE",
   ],
+  /* Le sommeil à terre (2026-09-26, nuit, Guillaume : « la nuit les colverts
+     dorment souvent sur le bord de l'eau, bec dans le cou — cherche des
+     références »). Sur les photos (un mâle endormi sur une berge, une cane
+     roulée en boule dans l'herbe), trois choses se lisent : le cou a
+     DISPARU (la tête est retournée, posée sur le dos, le bec glissé sous les
+     scapulaires — il n'en reste qu'une bosse verte entre les épaules et un
+     éclat du collier) ; le corps est un OVALE posé, plus rond qu'à la nage ;
+     et un canard sur trois dort DEBOUT sur une patte, l'autre repliée sous le
+     ventre. C'est la tête du sommeil sur l'eau, sur le corps entier du canard
+     à terre. Le souffle soulève le flanc (deuxième temps). Un pixel CLAIR
+     (h : la joue chamois de la cane, le reflet du mâle) coiffe la bosse : sans
+     lui, la tête retournée de la cane se perdait brun sur brun. */
+  sleepLand: [
+    "......GhG.....",
+    ".q.bbBhGGGB...",
+    "TKKPPPUwsSCCc.",
+    ".KSSsSSSsSSCC.",
+    "..SVSSVSSVSC..",
+    "..LLLLLLLLLL..",
+  ],
+  sleepLand2: [
+    "......GhG.....",
+    ".q.bbBhGGGB...",
+    "TKKPPPUwsSCCc.",
+    ".KSSsSSSsSCCC.",
+    "..SVSSVSSVSC..",
+    "..LLLLLLLLLL..",
+  ],
+  sleepStand: [
+    "......GhG.....",
+    ".q.bbBhGGGB...",
+    "TKKPPPUwsSCCc.",
+    ".KSSsSSSsSSCC.",
+    "..SVSSVSSVSC..",
+    "...LLLLLLLL...",
+    ".......O......",
+    "......oo......",
+  ],
   // Couché dans l'herbe : pas de pattes, le ventre au sol.
   rest: [
     ".........gGG..",
@@ -410,7 +448,7 @@ const DUCK_PAL = {
     O: "#e8802c", o: "#b85e1c",
   },
 };
-export const DUCK_LAND_POSES = new Set(["stand", "walk", "walk2", "graze", "graze2", "rest"]);
+export const DUCK_LAND_POSES = new Set(["stand", "walk", "walk2", "graze", "graze2", "rest", "sleepLand", "sleepLand2", "sleepStand"]);
 const DUCK_LINE = { drake: "#1c2224", hen: "#2e2016", drakeEclipse: "#2a2018" };
 /* Les écailles de la femelle (et, plus discrètes, de l'éclipse) : un chevron
    sombre en quinconce sur le corps. À cette taille, c'est ce qui la distingue
@@ -476,6 +514,18 @@ const DUCKLING_POSES = {
     "..FFFFFF.",
     ".FsFFFF..",
     "FFFFFF...",
+  ],
+  /* Endormis à terre, blottis contre la cane : une boule de duvet, la tête
+     rentrée — plus de cou, plus de pattes (2026-09-26, nuit). */
+  tinyS: [
+    "..dDd.",
+    "dddDDd",
+    ".dDDD.",
+  ],
+  youngS: [
+    "...FfF..",
+    "FFsFFFFF",
+    ".FFFFFF.",
   ],
   youngW: [
     ".....fF.",
@@ -1316,7 +1366,8 @@ export function buildFaunaSprites() {
     }
   }
   for (const [pose, rows] of Object.entries(DUCKLING_POSES)) {
-    add(`duckling.${pose}`, finish(ascii(rows, (ch) => DUCKLING_PAL[ch] || null), 3, last(rows) + 1, "#2e2416", !pose.endsWith("W") && !pose.endsWith("W2")));
+    // À terre (`W`, `W2`, et le sommeil `S`), le cerne fait le tour ; sur l'eau il s'arrête à la flottaison.
+    add(`duckling.${pose}`, finish(ascii(rows, (ch) => DUCKLING_PAL[ch] || null), 3, last(rows) + 1, "#2e2416", !pose.endsWith("W") && !pose.endsWith("W2") && !pose.endsWith("S")));
   }
   /* Pigeons et colombes : l'ancrage est entre les pattes, sur la ligne de sol.
      ⚠️ ILS RESTENT DES CANEVAS AUTONOMES (pas dans l'atlas), avec `ground` :
